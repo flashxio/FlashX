@@ -17,7 +17,7 @@ int npages;
 int nthreads;
 char *file_name;
 struct timeval global_start;
-char static_buf[PAGE_SIZE] __attribute__((aligned(PAGE_SIZE)));
+char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 
 void permute_offset(off_t *offset, int num)
 {
@@ -40,6 +40,7 @@ float time_diff(struct timeval time1, struct timeval time2)
 struct thread_private
 {
 	pthread_t id;
+	int idx;
 	char *file_name;
 	/* where the data read from the disk is stored */
 	char *buf;
@@ -62,6 +63,7 @@ void rand_read(void *arg)
 	char *buf;
 	off_t *buf_offset;
 	int fd;
+	int idx;
 	
 	fd = open(private->file_name, flags);
 	if (fd < 0) {
@@ -73,6 +75,7 @@ void rand_read(void *arg)
 	end_i = private->end_i;
 	buf = private->buf;
 	buf_offset = private->buf_offset;
+	idx = private->idx;
 
 	gettimeofday(&start_time, NULL);
 	for (i = start_i, j = 0; i < end_i; i++, j++) {
@@ -85,7 +88,7 @@ void rand_read(void *arg)
 		if (j == NUM_PAGES)
 			j = 0;
 		ret = read(fd, buf + buf_offset[j] * PAGE_SIZE, PAGE_SIZE);
-//		ret = read(fd, static_buf, PAGE_SIZE);
+//		ret = read(fd, static_buf + idx * PAGE_SIZE, PAGE_SIZE);
 		if (ret > 0)
 			read_bytes += ret;
 		else
@@ -156,6 +159,7 @@ int main(int argc, char *argv[])
 		permute_offset(buf_offset, NUM_PAGES);
 		
 		threads[j].file_name = file_name;
+		threads[j].idx = j;
 		threads[j].buf = buf;
 		threads[j].buf_offset = buf_offset;
 		threads[j].start_i = npages / nthreads * j;
