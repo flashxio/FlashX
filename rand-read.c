@@ -8,9 +8,15 @@
 #include <stdlib.h>
 #include <sys/resource.h>
 #include <sys/mman.h>
+#include <string.h>
 
 #define NUM_THREADS 8
 #define PAGE_SIZE 4096
+enum {
+	NORMAL,
+	DIRECT,
+	MMAP,
+};
 
 off_t *offset;
 int flags = O_RDONLY;
@@ -19,6 +25,7 @@ int nthreads;
 char *file_name;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
+volatile int first[NUM_THREADS];
 
 void permute_offset(off_t *offset, int num)
 {
@@ -44,6 +51,7 @@ struct thread_private
 	int idx;
 	char *file_name;
 	int fd;
+	void *addr;
 	/* where the data read from the disk is stored */
 	char *buf;
 	/* shows the locations in the array where data has be to stored.*/
@@ -81,6 +89,18 @@ ssize_t single_file_access(struct thread_private *private, char *buf,
 	return ret;
 }
 
+ssize_t mmap_access(struct thread_private *private, char *buf,
+		off_t offset, ssize_t size)
+{
+	int i;
+	char *addr = private->addr + offset;
+	/* I try to avoid gcc optimization eliminating the code below,
+	 * and it works. */
+	first[private->idx] = addr[0];
+	__asm__ __volatile__("" : : "g"(&first[private->idx]));
+	return size;
+}
+
 void rand_read(void *arg)
 {
 #define NUM_PAGES 16384
@@ -94,7 +114,8 @@ void rand_read(void *arg)
 	int fd;
 	int idx;
 
-	private->thread_init(private);
+	if (private->thread_init)
+		private->thread_init(private);
 	start_i = private->start_i;
 	end_i = private->end_i;
 	buf = private->buf;
@@ -131,14 +152,27 @@ int main(int argc, char *argv[])
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
 	struct thread_private threads[NUM_THREADS];
+	int is_mmap = 0;
+	void *addr = NULL;
 
 	if (argc != 5) {
-		fprintf(stderr, "read file is_direct num_pages num_threads\n");
+		fprintf(stderr, "read file option num_pages num_threads\n");
 		exit(1);
 	}
 
-	if (atoi(argv[2]) != 0)
-		flags |= O_DIRECT;
+	switch (atoi(argv[2])) {
+		case NORMAL:
+			break;
+		case DIRECT:
+			flags |= O_DIRECT;
+			break;
+		case MMAP:
+			is_mmap = 1;
+			break;
+		default:
+			fprintf(stderr, "wrong option\n");
+			exit(1);
+	}
 	file_name = argv[1];
 
 	npages = atoi(argv[3]);
@@ -151,6 +185,20 @@ int main(int argc, char *argv[])
 		}
 	}
 	permute_offset(offset, npages);
+
+	if (is_mmap) {
+		int fd = open(file_name, flags);
+		if (fd < 0) {
+			perror("open");
+			exit (1);
+		}
+		addr = mmap(NULL, ((ssize_t) npages) * PAGE_SIZE,
+				PROT_READ, MAP_PRIVATE, fd, 0);
+		if (addr == NULL) {
+			perror("mmap");
+			exit(1);
+		}
+	}
 
 	nthreads = atoi(argv[4]);
 	if (nthreads > NUM_THREADS) {
@@ -182,8 +230,15 @@ int main(int argc, char *argv[])
 		threads[j].buf_offset = buf_offset;
 		threads[j].start_i = npages / nthreads * j;
 		threads[j].end_i = threads[j].start_i + npages / nthreads;
-		threads[j].thread_init = single_file_thread_init;
-		threads[j].access = single_file_access;
+		if (is_mmap) {
+			threads[j].thread_init = NULL;
+			threads[j].access = mmap_access;
+			threads[j].addr = addr;
+		}
+		else {
+			threads[j].thread_init = single_file_thread_init;
+			threads[j].access = single_file_access;
+		}
 	}
 
 	ret = setpriority(PRIO_PROCESS, getpid(), -20);
