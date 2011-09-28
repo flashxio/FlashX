@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <sys/resource.h>
+#include <sys/mman.h>
 
 #define NUM_THREADS 8
 #define PAGE_SIZE 4096
@@ -42,6 +43,7 @@ struct thread_private
 	pthread_t id;
 	int idx;
 	char *file_name;
+	int fd;
 	/* where the data read from the disk is stored */
 	char *buf;
 	/* shows the locations in the array where data has be to stored.*/
@@ -50,7 +52,34 @@ struct thread_private
 	/* the range in the file where we need to read data. */
 	int start_i;
 	int end_i;
+
+	int (*thread_init) (struct thread_private *);
+	ssize_t (*access) (struct thread_private *, char *, off_t, ssize_t);
 };
+
+int single_file_thread_init(struct thread_private *private)
+{
+	private->fd = open(private->file_name, flags);
+	if (private->fd < 0) {
+		perror("open");
+		exit (1);
+	}
+	return 0;
+}
+
+ssize_t single_file_access(struct thread_private *private, char *buf,
+		off_t offset, ssize_t size)
+{
+	off_t ret = lseek(private->fd, offset, SEEK_SET);
+	if (ret < 0) {
+		perror("lseek");
+		printf("%ld\n", offset);
+		exit(1);
+	}
+	ret = read(private->fd, buf, size);
+//	ret = read(fd, static_buf + idx * PAGE_SIZE, PAGE_SIZE);
+	return ret;
+}
 
 void rand_read(void *arg)
 {
@@ -64,13 +93,8 @@ void rand_read(void *arg)
 	off_t *buf_offset;
 	int fd;
 	int idx;
-	
-	fd = open(private->file_name, flags);
-	if (fd < 0) {
-		perror("open");
-		exit (1);
-	}
 
+	private->thread_init(private);
 	start_i = private->start_i;
 	end_i = private->end_i;
 	buf = private->buf;
@@ -79,16 +103,10 @@ void rand_read(void *arg)
 
 	gettimeofday(&start_time, NULL);
 	for (i = start_i, j = 0; i < end_i; i++, j++) {
-		ret = lseek(fd, offset[i], SEEK_SET);
-		if (ret < 0) {
-			perror("lseek");
-			printf("%ld\n", offset[i]);
-			exit(1);
-		}
 		if (j == NUM_PAGES)
 			j = 0;
-		ret = read(fd, buf + buf_offset[j] * PAGE_SIZE, PAGE_SIZE);
-//		ret = read(fd, static_buf + idx * PAGE_SIZE, PAGE_SIZE);
+		ret = private->access(private, buf + buf_offset[j] * PAGE_SIZE,
+				offset[i], PAGE_SIZE);
 		if (ret > 0)
 			read_bytes += ret;
 		else
@@ -164,6 +182,8 @@ int main(int argc, char *argv[])
 		threads[j].buf_offset = buf_offset;
 		threads[j].start_i = npages / nthreads * j;
 		threads[j].end_i = threads[j].start_i + npages / nthreads;
+		threads[j].thread_init = single_file_thread_init;
+		threads[j].access = single_file_access;
 	}
 
 	ret = setpriority(PRIO_PROCESS, getpid(), -20);
