@@ -22,7 +22,6 @@ off_t *offset;
 int flags = O_RDONLY;
 int npages;
 int nthreads;
-char *file_name;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 volatile int first[NUM_THREADS];
@@ -153,14 +152,15 @@ int main(int argc, char *argv[])
 	ssize_t read_bytes = 0;
 	struct thread_private threads[NUM_THREADS];
 	int is_mmap = 0;
-	void *addr = NULL;
+	int num_files = 0;
+	char *file_names[NUM_THREADS];
 
-	if (argc != 5) {
-		fprintf(stderr, "read file option num_pages num_threads\n");
+	if (argc < 5) {
+		fprintf(stderr, "read files option num_pages num_threads\n");
 		exit(1);
 	}
 
-	switch (atoi(argv[2])) {
+	switch (atoi(argv[argc - 3])) {
 		case NORMAL:
 			break;
 		case DIRECT:
@@ -173,9 +173,12 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "wrong option\n");
 			exit(1);
 	}
-	file_name = argv[1];
+	num_files = argc - 4;
+	for (i = 0; i < argc - 4; i++) {
+		file_names[i] = argv[1 + i];
+	}
 
-	npages = atoi(argv[3]);
+	npages = atoi(argv[argc - 2]);
 	offset = malloc(sizeof(*offset) * npages);
 	for(i = 0; i < npages; i++) {
 		offset[i] = ((off_t) i) * 4096L;
@@ -186,25 +189,17 @@ int main(int argc, char *argv[])
 	}
 	permute_offset(offset, npages);
 
-	if (is_mmap) {
-		int fd = open(file_name, flags);
-		if (fd < 0) {
-			perror("open");
-			exit (1);
-		}
-		addr = mmap(NULL, ((ssize_t) npages) * PAGE_SIZE,
-				PROT_READ, MAP_PRIVATE, fd, 0);
-		if (addr == NULL) {
-			perror("mmap");
-			exit(1);
-		}
-	}
-
-	nthreads = atoi(argv[4]);
+	nthreads = atoi(argv[argc - 1]);
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
 		exit(1);
 	}
+	if (num_files > 1 && num_files != nthreads) {
+		fprintf(stderr, "if there are multiple files, \
+				the number of files must be the same as the number of threads\n");
+		exit(1);
+	}
+
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
 		char *buf;
@@ -224,13 +219,33 @@ int main(int argc, char *argv[])
 			buf_offset[i] = i;
 		permute_offset(buf_offset, NUM_PAGES);
 		
-		threads[j].file_name = file_name;
 		threads[j].idx = j;
 		threads[j].buf = buf;
 		threads[j].buf_offset = buf_offset;
-		threads[j].start_i = npages / nthreads * j;
-		threads[j].end_i = threads[j].start_i + npages / nthreads;
+		if (num_files > 1) {
+			threads[j].file_name = file_names[j];
+			threads[j].start_i = 0;
+			threads[j].end_i = npages;
+		}
+		else {
+			threads[j].file_name = file_names[0];
+			threads[j].start_i = npages / nthreads * j;
+			threads[j].end_i = threads[j].start_i + npages / nthreads;
+		}
 		if (is_mmap) {
+			void *addr = NULL;
+			int fd = open(threads[j].file_name, flags);
+
+			if (fd < 0) {
+				perror("open");
+				exit (1);
+			}
+			addr = mmap(NULL, ((ssize_t) npages) * PAGE_SIZE,
+					PROT_READ, MAP_PRIVATE, fd, 0);
+			if (addr == NULL) {
+				perror("mmap");
+				exit(1);
+			}
 			threads[j].thread_init = NULL;
 			threads[j].access = mmap_access;
 			threads[j].addr = addr;
