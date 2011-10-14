@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <string.h>
 
+#define NUM_PAGES 16384
 #define NUM_THREADS 8
 #define PAGE_SIZE 4096
 enum {
@@ -102,7 +103,6 @@ ssize_t mmap_access(struct thread_private *private, char *buf,
 
 void rand_read(void *arg)
 {
-#define NUM_PAGES 16384
 	ssize_t ret;
 	int i, j, start_i, end_i;
 	ssize_t read_bytes = 0;
@@ -123,7 +123,7 @@ void rand_read(void *arg)
 
 	gettimeofday(&start_time, NULL);
 	for (i = start_i, j = 0; i < end_i; i++, j++) {
-		if (j == NUM_PAGES)
+		if (j == NUM_PAGES / nthreads)
 			j = 0;
 		ret = private->access(private, buf + buf_offset[j] * PAGE_SIZE,
 				offset[i], PAGE_SIZE);
@@ -204,20 +204,20 @@ int main(int argc, char *argv[])
 	for (j = 0; j < nthreads; j++) {
 		char *buf;
 		off_t *buf_offset;
-		buf = valloc(PAGE_SIZE * (NUM_PAGES));
-		buf_offset = malloc(sizeof (*buf_offset) * NUM_PAGES);
+		buf = valloc(PAGE_SIZE * (NUM_PAGES / nthreads));
+		buf_offset = malloc(sizeof (*buf_offset) * NUM_PAGES / nthreads);
 
 		if (buf == NULL){
 			fprintf(stderr, "can't allocate buffer\n");
 			exit(1);
 		}
 		/* trigger page faults and bring pages to memory. */
-		for (i = 0; i < NUM_PAGES; i++)
+		for (i = 0; i < NUM_PAGES / nthreads; i++)
 			buf[i * PAGE_SIZE] = 0;
 
-		for (i = 0; i < NUM_PAGES; i++)
+		for (i = 0; i < NUM_PAGES / nthreads; i++)
 			buf_offset[i] = i;
-		permute_offset(buf_offset, NUM_PAGES);
+		permute_offset(buf_offset, NUM_PAGES / nthreads);
 		
 		threads[j].idx = j;
 		threads[j].buf = buf;
