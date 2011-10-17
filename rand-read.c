@@ -67,10 +67,18 @@ struct thread_private
 
 int single_file_thread_init(struct thread_private *private)
 {
+	int ret;
+
 	private->fd = open(private->file_name, flags);
 	if (private->fd < 0) {
 		perror("open");
 		exit (1);
+	}
+	ret = posix_fadvise(private->fd, private->start_i,
+			private->end_i, POSIX_FADV_RANDOM);
+	if (ret < 0) {
+		perror("posix_fadvise");
+		exit(1);
 	}
 	return 0;
 }
@@ -235,10 +243,16 @@ int main(int argc, char *argv[])
 		if (is_mmap) {
 			void *addr = NULL;
 			int fd = open(threads[j].file_name, flags);
+			int ret;
 
 			if (fd < 0) {
 				perror("open");
 				exit (1);
+			}
+			ret = posix_fadvise(fd, 0, ((ssize_t) npages) * PAGE_SIZE, POSIX_FADV_RANDOM);
+			if (ret < 0) {
+				perror("posix_fadvise");
+				exit(1);
 			}
 			addr = mmap(NULL, ((ssize_t) npages) * PAGE_SIZE,
 					PROT_READ, MAP_PRIVATE, fd, 0);
