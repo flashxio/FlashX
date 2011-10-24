@@ -14,7 +14,7 @@
 #define USE_PROCESS
 
 #define NUM_PAGES 16384
-#define NUM_THREADS 8
+#define NUM_THREADS 32
 #define PAGE_SIZE 4096
 enum {
 	NORMAL,
