@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
 			exit(1);
 	}
 	num_files = argc - 4;
-	for (i = 0; i < argc - 4; i++) {
+	for (i = 0; i < num_files; i++) {
 		file_names[i] = argv[1 + i];
 	}
 
