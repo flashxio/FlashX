@@ -9,6 +9,9 @@
 #include <sys/resource.h>
 #include <sys/mman.h>
 #include <string.h>
+#include <errno.h>
+
+#define USE_PROCESS
 
 #define NUM_PAGES 16384
 #define NUM_THREADS 8
@@ -47,7 +50,11 @@ float time_diff(struct timeval time1, struct timeval time2)
 /* this data structure stores the thread-private info. */
 struct thread_private
 {
+#ifdef USE_PROCESS
+	pid_t id;
+#else
 	pthread_t id;
+#endif
 	int idx;
 	char *file_name;
 	int fd;
@@ -149,7 +156,35 @@ void rand_read(void *arg)
 			read_bytes, time_diff(global_start, start_time),
 			time_diff(start_time, end_time));
 	
+#ifdef USE_PROCESS
+	exit(read_bytes);
+#else
 	pthread_exit((void *) read_bytes);
+#endif
+}
+
+int process_create(pid_t *pid, void (*func)(void *), void *private)
+{
+	pid_t id = fork();
+
+	if (id < 0)
+		return -1;
+
+	if (id == 0) {	// child
+		func(private);
+		exit(0);
+	}
+
+	if (id > 0)
+		*pid = id;
+	return 0;
+}
+
+int process_join(pid_t pid)
+{
+	int status;
+	pid_t ret = waitpid(pid, &status, 0);
+	return ret < 0 ? ret : 0;
 }
 
 int main(int argc, char *argv[])
@@ -279,7 +314,11 @@ int main(int argc, char *argv[])
 	gettimeofday(&start_time, NULL);
 	global_start = start_time;
 	for (i = 0; i < nthreads; i++) {
+#ifdef USE_PROCESS
+		ret = process_create(&threads[i].id, rand_read, &threads[i]);
+#else
 		ret = pthread_create(&threads[i].id, NULL, rand_read, &threads[i]);
+#endif
 		if (ret) {
 			perror("pthread_create");
 			exit(1);
@@ -288,7 +327,11 @@ int main(int argc, char *argv[])
 
 	for (i = 0; i < nthreads; i++) {
 		ssize_t size;
+#ifdef USE_PROCESS
+		ret = process_join(threads[i].id);
+#else
 		ret = pthread_join(threads[i].id, (void **) &size);
+#endif
 		if (ret) {
 			perror("pthread_join");
 			exit(1);
