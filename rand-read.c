@@ -276,24 +276,29 @@ int main(int argc, char *argv[])
 			threads[j].end_i = threads[j].start_i + npages / nthreads;
 		}
 		if (is_mmap) {
-			void *addr = NULL;
-			int fd = open(threads[j].file_name, flags);
-			int ret;
+			static void *addr = NULL;
+			static char *file_name = NULL;
+			/* if we are mapping to a different file, do the real mapping. */
+			if (file_name == NULL || strcmp(file_name, threads[j].file_name)) {
+				int fd = open(threads[j].file_name, flags);
+				int ret;
 
-			if (fd < 0) {
-				perror("open");
-				exit (1);
-			}
-			ret = posix_fadvise(fd, 0, ((ssize_t) npages) * PAGE_SIZE, POSIX_FADV_RANDOM);
-			if (ret < 0) {
-				perror("posix_fadvise");
-				exit(1);
-			}
-			addr = mmap(NULL, ((ssize_t) npages) * PAGE_SIZE,
-					PROT_READ, MAP_PRIVATE, fd, 0);
-			if (addr == NULL) {
-				perror("mmap");
-				exit(1);
+				if (fd < 0) {
+					perror("open");
+					exit (1);
+				}
+				addr = mmap(NULL, ((ssize_t) npages) * PAGE_SIZE,
+						PROT_READ, MAP_PRIVATE, fd, 0);
+				if (addr == NULL) {
+					perror("mmap");
+					exit(1);
+				}
+				ret = madvise(addr, ((ssize_t) npages) * PAGE_SIZE, MADV_RANDOM);
+				if (ret < 0) {
+					perror("madvise");
+					exit(1);
+				}
+				file_name == threads[j].file_name;
 			}
 			threads[j].thread_init = NULL;
 			threads[j].access = mmap_access;
