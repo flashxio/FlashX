@@ -1,7 +1,7 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/time.h>
@@ -11,17 +11,19 @@
 #include <string.h>
 #include <errno.h>
 
+#include "cache.h"
+
 #define USE_PROCESS
 
 #define NUM_PAGES 16384
 #define NUM_THREADS 32
-#define PAGE_SIZE 4096
 enum {
 	NORMAL,
 	DIRECT,
 	MMAP,
 };
 
+int cache_hits;
 off_t *offset;
 int flags = O_RDONLY;
 int npages;
@@ -67,22 +69,23 @@ struct thread_private
 	/* the range in the file where we need to read data. */
 	int start_i;
 	int end_i;
+	page_cache *cache;
 
 	int (*thread_init) (struct thread_private *);
 	ssize_t (*access) (struct thread_private *, char *, off_t, ssize_t);
 };
 
-int single_file_thread_init(struct thread_private *private)
+int single_file_thread_init(struct thread_private *priv)
 {
 	int ret;
 
-	private->fd = open(private->file_name, flags);
-	if (private->fd < 0) {
+	priv->fd = open(priv->file_name, flags);
+	if (priv->fd < 0) {
 		perror("open");
 		exit (1);
 	}
-	ret = posix_fadvise(private->fd, private->start_i,
-			private->end_i, POSIX_FADV_RANDOM);
+	ret = posix_fadvise(priv->fd, priv->start_i,
+			priv->end_i, POSIX_FADV_RANDOM);
 	if (ret < 0) {
 		perror("posix_fadvise");
 		exit(1);
@@ -90,30 +93,56 @@ int single_file_thread_init(struct thread_private *private)
 	return 0;
 }
 
-ssize_t single_file_access(struct thread_private *private, char *buf,
+ssize_t single_file_access(struct thread_private *priv, char *buf,
 		off_t offset, ssize_t size)
 {
-	off_t ret = lseek(private->fd, offset, SEEK_SET);
+	off_t ret = lseek(priv->fd, offset, SEEK_SET);
 	if (ret < 0) {
 		perror("lseek");
 		printf("%ld\n", offset);
 		exit(1);
 	}
-	ret = read(private->fd, buf, size);
+	ret = read(priv->fd, buf, size);
 //	ret = read(fd, static_buf + idx * PAGE_SIZE, PAGE_SIZE);
 	return ret;
 }
 
-ssize_t mmap_access(struct thread_private *private, char *buf,
+ssize_t mmap_access(struct thread_private *priv, char *buf,
 		off_t offset, ssize_t size)
 {
 	int i;
-	char *addr = private->addr + offset;
+	char *addr = (char *) priv->addr + offset;
 	/* I try to avoid gcc optimization eliminating the code below,
 	 * and it works. */
-	first[private->idx] = addr[0];
-	__asm__ __volatile__("" : : "g"(&first[private->idx]));
+	first[priv->idx] = addr[0];
+	__asm__ __volatile__("" : : "g"(&first[priv->idx]));
 	return size;
+}
+
+/**
+ * This is used to access cache owned by local threads
+ */
+ssize_t part_cached_access(struct thread_private *priv, char *buf,
+		off_t offset, ssize_t size)
+{
+	page_cache *cache = priv->cache;
+	ssize_t ret = cache->get_from_cache(buf, offset, size);
+	if (ret < 0) {
+		struct page *p = cache->get_empty_page(offset);
+		ret = single_file_access(priv, (char *) p->get_data(),
+				ROUND_PAGE(offset), PAGE_SIZE);
+		if (ret < 0) {
+			perror("read");
+			exit(1);
+		}
+		p->set_offset(offset);
+		offset -= ROUND_PAGE(offset);
+		/* I assume the data I read never crosses the page boundary */
+		memcpy(buf, (char *) p->get_data() + offset, size);
+	}
+	else
+		cache_hits++;
+	return ret;
 }
 
 void rand_read(void *arg)
@@ -122,25 +151,25 @@ void rand_read(void *arg)
 	int i, j, start_i, end_i;
 	ssize_t read_bytes = 0;
 	struct timeval start_time, end_time;
-	struct thread_private *private = arg;
+	struct thread_private *priv = (struct thread_private *) arg;
 	char *buf;
 	off_t *buf_offset;
 	int fd;
 	int idx;
 
-	if (private->thread_init)
-		private->thread_init(private);
-	start_i = private->start_i;
-	end_i = private->end_i;
-	buf = private->buf;
-	buf_offset = private->buf_offset;
-	idx = private->idx;
+	if (priv->thread_init)
+		priv->thread_init(priv);
+	start_i = priv->start_i;
+	end_i = priv->end_i;
+	buf = priv->buf;
+	buf_offset = priv->buf_offset;
+	idx = priv->idx;
 
 	gettimeofday(&start_time, NULL);
 	for (i = start_i, j = 0; i < end_i; i++, j++) {
 		if (j == NUM_PAGES / nthreads)
 			j = 0;
-		ret = private->access(private, buf + buf_offset[j] * PAGE_SIZE,
+		ret = priv->access(priv, buf + buf_offset[j] * PAGE_SIZE,
 				offset[i], PAGE_SIZE);
 		if (ret > 0)
 			read_bytes += ret;
@@ -163,7 +192,7 @@ void rand_read(void *arg)
 #endif
 }
 
-int process_create(pid_t *pid, void (*func)(void *), void *private)
+int process_create(pid_t *pid, void (*func)(void *), void *priv)
 {
 	pid_t id = fork();
 
@@ -171,7 +200,7 @@ int process_create(pid_t *pid, void (*func)(void *), void *private)
 		return -1;
 
 	if (id == 0) {	// child
-		func(private);
+		func(priv);
 		exit(0);
 	}
 
@@ -189,6 +218,8 @@ int process_join(pid_t pid)
 
 int main(int argc, char *argv[])
 {
+	int cache_size = 512 * 1024 * 1024;
+	bool local_cache = true;
 	int ret;
 	int i, j;
 	struct timeval start_time, end_time;
@@ -222,7 +253,7 @@ int main(int argc, char *argv[])
 	}
 
 	npages = atoi(argv[argc - 2]);
-	offset = malloc(sizeof(*offset) * npages);
+	offset = (off_t *) malloc(sizeof(*offset) * npages);
 	for(i = 0; i < npages; i++) {
 		offset[i] = ((off_t) i) * 4096L;
 		if (offset[i] < 0) {
@@ -247,8 +278,8 @@ int main(int argc, char *argv[])
 	for (j = 0; j < nthreads; j++) {
 		char *buf;
 		off_t *buf_offset;
-		buf = valloc(PAGE_SIZE * (NUM_PAGES / nthreads));
-		buf_offset = malloc(sizeof (*buf_offset) * NUM_PAGES / nthreads);
+		buf = (char *) valloc(PAGE_SIZE * (NUM_PAGES / nthreads));
+		buf_offset = (off_t *) malloc(sizeof (*buf_offset) * NUM_PAGES / nthreads);
 
 		if (buf == NULL){
 			fprintf(stderr, "can't allocate buffer\n");
@@ -304,6 +335,11 @@ int main(int argc, char *argv[])
 			threads[j].access = mmap_access;
 			threads[j].addr = addr;
 		}
+		else if (local_cache) {
+			threads[j].cache = new tree_cache(cache_size / nthreads);
+			threads[j].thread_init = single_file_thread_init;
+			threads[j].access = part_cached_access;
+		}
 		else {
 			threads[j].thread_init = single_file_thread_init;
 			threads[j].access = single_file_access;
@@ -347,4 +383,5 @@ int main(int argc, char *argv[])
 	printf("read %ld bytes, takes %f seconds\n",
 			read_bytes, end_time.tv_sec - start_time.tv_sec
 			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
+	printf("there are %d cache hits\n", cache_hits);
 }
