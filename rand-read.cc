@@ -10,10 +10,11 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include "cache.h"
 
-#define USE_PROCESS
+//#define USE_PROCESS
 
 #define NUM_PAGES 16384
 #define NUM_THREADS 32
@@ -50,17 +51,16 @@ float time_diff(struct timeval time1, struct timeval time2)
 }
 
 /* this data structure stores the thread-private info. */
-struct thread_private
+class thread_private
 {
+public:
 #ifdef USE_PROCESS
 	pid_t id;
 #else
 	pthread_t id;
 #endif
+	/* the location in the thread descriptor array. */
 	int idx;
-	char *file_name;
-	int fd;
-	void *addr;
 	/* where the data read from the disk is stored */
 	char *buf;
 	/* shows the locations in the array where data has be to stored.*/
@@ -69,107 +69,178 @@ struct thread_private
 	/* the range in the file where we need to read data. */
 	int start_i;
 	int end_i;
-	page_cache *cache;
 
-	int (*thread_init) (struct thread_private *);
-	ssize_t (*access) (struct thread_private *, char *, off_t, ssize_t);
-};
+	virtual ssize_t access(char *, off_t, ssize_t) = 0;
+	virtual int thread_init() = 0;
 
-int single_file_thread_init(struct thread_private *priv)
-{
-	int ret;
+	thread_private(int idx) {
+		this->idx = idx;
+		buf = (char *) valloc(PAGE_SIZE * (NUM_PAGES / nthreads));
+		buf_offset = (off_t *) malloc(sizeof (*buf_offset) * NUM_PAGES / nthreads);
 
-	priv->fd = open(priv->file_name, flags);
-	if (priv->fd < 0) {
-		perror("open");
-		exit (1);
-	}
-	ret = posix_fadvise(priv->fd, priv->start_i,
-			priv->end_i, POSIX_FADV_RANDOM);
-	if (ret < 0) {
-		perror("posix_fadvise");
-		exit(1);
-	}
-	return 0;
-}
-
-ssize_t single_file_access(struct thread_private *priv, char *buf,
-		off_t offset, ssize_t size)
-{
-	off_t ret = lseek(priv->fd, offset, SEEK_SET);
-	if (ret < 0) {
-		perror("lseek");
-		printf("%ld\n", offset);
-		exit(1);
-	}
-	ret = read(priv->fd, buf, size);
-//	ret = read(fd, static_buf + idx * PAGE_SIZE, PAGE_SIZE);
-	return ret;
-}
-
-ssize_t mmap_access(struct thread_private *priv, char *buf,
-		off_t offset, ssize_t size)
-{
-	int i;
-	char *addr = (char *) priv->addr + offset;
-	/* I try to avoid gcc optimization eliminating the code below,
-	 * and it works. */
-	first[priv->idx] = addr[0];
-	__asm__ __volatile__("" : : "g"(&first[priv->idx]));
-	return size;
-}
-
-/**
- * This is used to access cache owned by local threads
- */
-ssize_t part_cached_access(struct thread_private *priv, char *buf,
-		off_t offset, ssize_t size)
-{
-	page_cache *cache = priv->cache;
-	ssize_t ret = cache->get_from_cache(buf, offset, size);
-	if (ret < 0) {
-		struct page *p = cache->get_empty_page(offset);
-		ret = single_file_access(priv, (char *) p->get_data(),
-				ROUND_PAGE(offset), PAGE_SIZE);
-		if (ret < 0) {
-			perror("read");
+		if (buf == NULL){
+			fprintf(stderr, "can't allocate buffer\n");
 			exit(1);
 		}
-		p->set_offset(offset);
-		offset -= ROUND_PAGE(offset);
-		/* I assume the data I read never crosses the page boundary */
-		memcpy(buf, (char *) p->get_data() + offset, size);
-	}
-	else
-		cache_hits++;
-	return ret;
-}
+		/* trigger page faults and bring pages to memory. */
+		for (int i = 0; i < NUM_PAGES / nthreads; i++)
+			buf[i * PAGE_SIZE] = 0;
 
-void rand_read(void *arg)
+		for (int i = 0; i < NUM_PAGES / nthreads; i++)
+			buf_offset[i] = i;
+		permute_offset(buf_offset, NUM_PAGES / nthreads);
+	}
+};
+
+class read_private: public thread_private
+{
+	char *file_name;
+	int fd;
+public:
+	read_private(char *name, int idx): thread_private(idx) {
+		file_name = name;
+	}
+
+	int thread_init() {
+		int ret;
+
+		fd = open(file_name, flags);
+		if (fd < 0) {
+			perror("open");
+			exit (1);
+		}
+		ret = posix_fadvise(fd, start_i,
+				end_i, POSIX_FADV_RANDOM);
+		if (ret < 0) {
+			perror("posix_fadvise");
+			exit(1);
+		}
+		return 0;
+	}
+
+	ssize_t access(char *buf, off_t offset, ssize_t size) {
+		off_t ret = lseek(fd, offset, SEEK_SET);
+		if (ret < 0) {
+			perror("lseek");
+			printf("%ld\n", offset);
+			exit(1);
+		}
+		ret = read(fd, buf, size);
+		return ret;
+	}
+};
+
+class mmap_private: public thread_private
+{
+	void *addr;
+
+public:
+	mmap_private(char *new_name, int idx): thread_private(idx) {
+		static void *addr = NULL;
+		static char *file_name = NULL;
+		/* if we are mapping to a different file, do the real mapping. */
+		if (file_name == NULL || strcmp(file_name, new_name)) {
+			int fd = open(new_name, flags);
+			int ret;
+
+			if (fd < 0) {
+				perror("open");
+				exit (1);
+			}
+			addr = mmap(NULL, ((ssize_t) npages) * PAGE_SIZE,
+					PROT_READ, MAP_PRIVATE, fd, 0);
+			if (addr == NULL) {
+				perror("mmap");
+				exit(1);
+			}
+			ret = madvise(addr, ((ssize_t) npages) * PAGE_SIZE, MADV_RANDOM);
+			if (ret < 0) {
+				perror("madvise");
+				exit(1);
+			}
+			file_name = new_name;
+		}
+		this->addr = addr;
+	}
+
+	int thread_init() {
+		return 0;
+	}
+
+	ssize_t access(char *buf, off_t offset, ssize_t size) {
+		int i;
+		char *page = (char *) addr + offset;
+		/* I try to avoid gcc optimization eliminating the code below,
+		 * and it works. */
+		first[idx] = page[0];
+		__asm__ __volatile__("" : : "g"(&first[idx]));
+		return size;
+	}
+};
+
+class part_cached_private: public read_private
+{
+	page_cache *cache;
+
+public:
+	part_cached_private(char *name, int idx): read_private(name, idx) { }
+
+	ssize_t access(char *buf, off_t offset, ssize_t size) {
+		ssize_t ret = cache->get_from_cache(buf, offset, size);
+		if (ret < 0) {
+			struct page *p = cache->get_empty_page(offset);
+			ret = read_private::access((char *) p->get_data(),
+					ROUND_PAGE(offset), PAGE_SIZE);
+			if (ret < 0) {
+				perror("read");
+				exit(1);
+			}
+			p->set_offset(offset);
+			offset -= ROUND_PAGE(offset);
+			/* I assume the data I read never crosses the page boundary */
+			memcpy(buf, (char *) p->get_data() + offset, size);
+		}
+		else
+			cache_hits++;
+		return ret;
+	}
+};
+
+class global_cached_private: public read_private
+{
+	page_cache *cache;
+public:
+	global_cached_private(char *name, int idx): read_private(name, idx) { }
+
+	ssize_t access(char *buf, off_t offset, ssize_t size) {
+		return 0;
+	}
+};
+
+thread_private *threads[NUM_THREADS];
+
+void *rand_read(void *arg)
 {
 	ssize_t ret;
 	int i, j, start_i, end_i;
 	ssize_t read_bytes = 0;
 	struct timeval start_time, end_time;
-	struct thread_private *priv = (struct thread_private *) arg;
+	thread_private *priv = threads[(long) arg];
 	char *buf;
 	off_t *buf_offset;
 	int fd;
-	int idx;
 
-	if (priv->thread_init)
-		priv->thread_init(priv);
+	priv->thread_init();
 	start_i = priv->start_i;
 	end_i = priv->end_i;
 	buf = priv->buf;
 	buf_offset = priv->buf_offset;
-	idx = priv->idx;
 
 	gettimeofday(&start_time, NULL);
 	for (i = start_i, j = 0; i < end_i; i++, j++) {
 		if (j == NUM_PAGES / nthreads)
 			j = 0;
-		ret = priv->access(priv, buf + buf_offset[j] * PAGE_SIZE,
+		ret = priv->access(buf + buf_offset[j] * PAGE_SIZE,
 				offset[i], PAGE_SIZE);
 		if (ret > 0)
 			read_bytes += ret;
@@ -216,15 +287,21 @@ int process_join(pid_t pid)
 	return ret < 0 ? ret : 0;
 }
 
+enum {
+	READ_ACCESS,
+	MMAP_ACCESS,
+	LOCAL_CACHE_ACCESS,
+	GLOBAL_CACHE_ACCESS
+};
+
 int main(int argc, char *argv[])
 {
 	int cache_size = 512 * 1024 * 1024;
-	bool local_cache = true;
+	int access_options;
 	int ret;
 	int i, j;
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
-	struct thread_private threads[NUM_THREADS];
 	int is_mmap = 0;
 	int num_files = 0;
 	char *file_names[NUM_THREADS];
@@ -236,12 +313,15 @@ int main(int argc, char *argv[])
 
 	switch (atoi(argv[argc - 3])) {
 		case NORMAL:
+			access_options = READ_ACCESS;
 			break;
 		case DIRECT:
 			flags |= O_DIRECT;
+			access_options = READ_ACCESS;
 			break;
 		case MMAP:
 			is_mmap = 1;
+			access_options = MMAP_ACCESS;
 			break;
 		default:
 			fprintf(stderr, "wrong option\n");
@@ -276,73 +356,38 @@ int main(int argc, char *argv[])
 
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
-		char *buf;
-		off_t *buf_offset;
-		buf = (char *) valloc(PAGE_SIZE * (NUM_PAGES / nthreads));
-		buf_offset = (off_t *) malloc(sizeof (*buf_offset) * NUM_PAGES / nthreads);
-
-		if (buf == NULL){
-			fprintf(stderr, "can't allocate buffer\n");
-			exit(1);
-		}
-		/* trigger page faults and bring pages to memory. */
-		for (i = 0; i < NUM_PAGES / nthreads; i++)
-			buf[i * PAGE_SIZE] = 0;
-
-		for (i = 0; i < NUM_PAGES / nthreads; i++)
-			buf_offset[i] = i;
-		permute_offset(buf_offset, NUM_PAGES / nthreads);
-		
-		threads[j].idx = j;
-		threads[j].buf = buf;
-		threads[j].buf_offset = buf_offset;
+		char *file_name;
 		if (num_files > 1) {
-			threads[j].file_name = file_names[j];
-			threads[j].start_i = 0;
-			threads[j].end_i = npages;
+			file_name = file_names[j];
 		}
 		else {
-			threads[j].file_name = file_names[0];
-			threads[j].start_i = npages / nthreads * j;
-			threads[j].end_i = threads[j].start_i + npages / nthreads;
+			file_name = file_names[0];
 		}
-		if (is_mmap) {
-			static void *addr = NULL;
-			static char *file_name = NULL;
-			/* if we are mapping to a different file, do the real mapping. */
-			if (file_name == NULL || strcmp(file_name, threads[j].file_name)) {
-				int fd = open(threads[j].file_name, flags);
-				int ret;
-
-				if (fd < 0) {
-					perror("open");
-					exit (1);
-				}
-				addr = mmap(NULL, ((ssize_t) npages) * PAGE_SIZE,
-						PROT_READ, MAP_PRIVATE, fd, 0);
-				if (addr == NULL) {
-					perror("mmap");
-					exit(1);
-				}
-				ret = madvise(addr, ((ssize_t) npages) * PAGE_SIZE, MADV_RANDOM);
-				if (ret < 0) {
-					perror("madvise");
-					exit(1);
-				}
-				file_name == threads[j].file_name;
-			}
-			threads[j].thread_init = NULL;
-			threads[j].access = mmap_access;
-			threads[j].addr = addr;
+		switch (access_options) {
+			case READ_ACCESS:
+				threads[j] = new read_private(file_name, j);
+				break;
+			case MMAP_ACCESS:
+				threads[j] = new mmap_private(file_name, j);
+				break;
+			case LOCAL_CACHE_ACCESS:
+				threads[j] = new part_cached_private(file_name, j);
+				break;
+			case GLOBAL_CACHE_ACCESS:
+				threads[j] = new global_cached_private(file_name, j);
+				break;
+			default:
+				fprintf(stderr, "wrong access option\n");
+				exit(1);
 		}
-		else if (local_cache) {
-			threads[j].cache = new tree_cache(cache_size / nthreads);
-			threads[j].thread_init = single_file_thread_init;
-			threads[j].access = part_cached_access;
+		
+		if (num_files > 1) {
+			threads[j]->start_i = 0;
+			threads[j]->end_i = npages;
 		}
 		else {
-			threads[j].thread_init = single_file_thread_init;
-			threads[j].access = single_file_access;
+			threads[j]->start_i = npages / nthreads * j;
+			threads[j]->end_i = threads[j]->start_i + npages / nthreads;
 		}
 	}
 
@@ -356,9 +401,9 @@ int main(int argc, char *argv[])
 	global_start = start_time;
 	for (i = 0; i < nthreads; i++) {
 #ifdef USE_PROCESS
-		ret = process_create(&threads[i].id, rand_read, &threads[i]);
+		ret = process_create(&threads[i]->id, rand_read, (void *) i);
 #else
-		ret = pthread_create(&threads[i].id, NULL, rand_read, &threads[i]);
+		ret = pthread_create(&threads[i]->id, NULL, rand_read, (void *) i);
 #endif
 		if (ret) {
 			perror("pthread_create");
@@ -369,9 +414,9 @@ int main(int argc, char *argv[])
 	for (i = 0; i < nthreads; i++) {
 		ssize_t size;
 #ifdef USE_PROCESS
-		ret = process_join(threads[i].id);
+		ret = process_join(threads[i]->id);
 #else
-		ret = pthread_join(threads[i].id, (void **) &size);
+		ret = pthread_join(threads[i]->id, (void **) &size);
 #endif
 		if (ret) {
 			perror("pthread_join");
