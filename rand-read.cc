@@ -193,7 +193,9 @@ class part_cached_private: public direct_private
 	page_cache *cache;
 
 public:
-	part_cached_private(const char *name, int idx): direct_private(name, idx) {
+	part_cached_private(const char *name, int idx,
+			int cache_size): direct_private(name, idx) {
+		cache = new tree_cache(cache_size);
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
@@ -432,7 +434,7 @@ int main(int argc, char *argv[])
 				threads[j] = new mmap_private(file_name, j);
 				break;
 			case LOCAL_CACHE_ACCESS:
-				threads[j] = new part_cached_private(file_name, j);
+				threads[j] = new part_cached_private(file_name, j, cache_size / nthreads);
 				break;
 			case GLOBAL_CACHE_ACCESS:
 				threads[j] = new global_cached_private(file_name, j);
