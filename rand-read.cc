@@ -12,6 +12,9 @@
 #include <errno.h>
 #include <pthread.h>
 
+#include <iostream>
+#include <string>
+
 #include "cache.h"
 
 //#define USE_PROCESS
@@ -26,9 +29,8 @@ enum {
 
 int cache_hits;
 off_t *offset;
-int flags = O_RDONLY;
 int npages;
-int nthreads;
+int nthreads = 1;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 volatile int first[NUM_THREADS];
@@ -94,11 +96,12 @@ public:
 
 class read_private: public thread_private
 {
-	char *file_name;
+	const char *file_name;
 	int fd;
+	int flags;
 public:
-	read_private(char *name, int idx): thread_private(idx) {
-		file_name = name;
+	read_private(const char *name, int idx, int flags = O_RDONLY): thread_private(idx), file_name(name) {
+		this->flags = flags;
 	}
 
 	int thread_init() {
@@ -130,17 +133,24 @@ public:
 	}
 };
 
+class direct_private: public read_private
+{
+public:
+	direct_private(const char *name, int idx): read_private(name, idx,
+			O_DIRECT | O_RDONLY) {}
+};
+
 class mmap_private: public thread_private
 {
 	void *addr;
 
 public:
-	mmap_private(char *new_name, int idx): thread_private(idx) {
+	mmap_private(const char *new_name, int idx): thread_private(idx) {
 		static void *addr = NULL;
-		static char *file_name = NULL;
+		static const char *file_name = NULL;
 		/* if we are mapping to a different file, do the real mapping. */
 		if (file_name == NULL || strcmp(file_name, new_name)) {
-			int fd = open(new_name, flags);
+			int fd = open(new_name, O_RDONLY);
 			int ret;
 
 			if (fd < 0) {
@@ -178,12 +188,13 @@ public:
 	}
 };
 
-class part_cached_private: public read_private
+class part_cached_private: public direct_private
 {
 	page_cache *cache;
 
 public:
-	part_cached_private(char *name, int idx): read_private(name, idx) { }
+	part_cached_private(const char *name, int idx): direct_private(name, idx) {
+	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
 		ssize_t ret = cache->get_from_cache(buf, offset, size);
@@ -206,11 +217,11 @@ public:
 	}
 };
 
-class global_cached_private: public read_private
+class global_cached_private: public direct_private
 {
 	page_cache *cache;
 public:
-	global_cached_private(char *name, int idx): read_private(name, idx) { }
+	global_cached_private(const char *name, int idx): direct_private(name, idx) { }
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
 		return 0;
@@ -289,50 +300,98 @@ int process_join(pid_t pid)
 
 enum {
 	READ_ACCESS,
+	DIRECT_ACCESS,
 	MMAP_ACCESS,
 	LOCAL_CACHE_ACCESS,
 	GLOBAL_CACHE_ACCESS
 };
 
+struct access_method {
+	std::string name;
+	int access;
+} methods[] = {
+	"normal", READ_ACCESS,
+	"direct", DIRECT_ACCESS,
+	"mmap", MMAP_ACCESS,
+	"local_cache", LOCAL_CACHE_ACCESS,
+	"global_cache", GLOBAL_CACHE_ACCESS
+};
+
+void print_methods() {
+	std::cout<<"available methods: ";
+	int num_methods = sizeof(methods) / sizeof(methods[0]);
+	for (int i = 0; i < num_methods; i++) {
+		std::cout<<methods[i].name;
+		if (i < num_methods - 1)
+			std::cout<<", ";
+	}
+	std::cout<<std::endl;
+}
+
+int map_method(const std::string &method)
+{
+	int num_methods = sizeof(methods) / sizeof(methods[0]);
+	for (int i = 0; i < num_methods; i++) {
+		if (methods[i].name.compare(method) == 0)
+			return i;
+	}
+	return -1;
+}
+
 int main(int argc, char *argv[])
 {
 	int cache_size = 512 * 1024 * 1024;
-	int access_options;
+	int entry_size = 128;
+	int access_option;
 	int ret;
 	int i, j;
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
-	int is_mmap = 0;
 	int num_files = 0;
-	char *file_names[NUM_THREADS];
+	std::string file_names[NUM_THREADS];
 
 	if (argc < 5) {
-		fprintf(stderr, "read files option num_pages num_threads\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size\n");
+		print_methods();
 		exit(1);
 	}
 
-	switch (atoi(argv[argc - 3])) {
-		case NORMAL:
-			access_options = READ_ACCESS;
-			break;
-		case DIRECT:
-			flags |= O_DIRECT;
-			access_options = READ_ACCESS;
-			break;
-		case MMAP:
-			is_mmap = 1;
-			access_options = MMAP_ACCESS;
-			break;
-		default:
+	for (int i = 1; i < argc; i++) {
+		std::string str = argv[i];
+		size_t found = str.find("=");
+		/* if there isn't `=', I assume it's a file name*/
+		if (found == std::string::npos) {
+			file_names[num_files++] = str;
+			continue;
+		}
+
+		std::string value = str.substr(found + 1);
+		std::string key = str.substr(0, found);
+		if (key.compare("option") == 0) {
+			access_option = map_method(value);
+			if (access_option < 0) {
+				fprintf(stderr, "can't find the right option\n");
+				exit(1);
+			}
+		}
+		else if(key.compare("pages") == 0) {
+			npages = atoi(value.c_str());
+		}
+		else if(key.compare("threads") == 0) {
+			nthreads = atoi(value.c_str());
+		}
+		else if(key.compare("cache_size") == 0) {
+			cache_size = atoi(value.c_str());
+		}
+		else if(key.compare("entry_size") == 0) {
+			entry_size = atoi(value.c_str());
+		}
+		else {
 			fprintf(stderr, "wrong option\n");
 			exit(1);
-	}
-	num_files = argc - 4;
-	for (i = 0; i < num_files; i++) {
-		file_names[i] = argv[1 + i];
+		}
 	}
 
-	npages = atoi(argv[argc - 2]);
 	offset = (off_t *) malloc(sizeof(*offset) * npages);
 	for(i = 0; i < npages; i++) {
 		offset[i] = ((off_t) i) * 4096L;
@@ -343,7 +402,6 @@ int main(int argc, char *argv[])
 	}
 	permute_offset(offset, npages);
 
-	nthreads = atoi(argv[argc - 1]);
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
 		exit(1);
@@ -356,16 +414,19 @@ int main(int argc, char *argv[])
 
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
-		char *file_name;
+		const char *file_name;
 		if (num_files > 1) {
-			file_name = file_names[j];
+			file_name = file_names[j].c_str();
 		}
 		else {
-			file_name = file_names[0];
+			file_name = file_names[0].c_str();
 		}
-		switch (access_options) {
+		switch (access_option) {
 			case READ_ACCESS:
 				threads[j] = new read_private(file_name, j);
+				break;
+			case DIRECT_ACCESS:
+				threads[j] = new direct_private(file_name, j);
 				break;
 			case MMAP_ACCESS:
 				threads[j] = new mmap_private(file_name, j);
