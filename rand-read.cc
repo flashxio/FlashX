@@ -11,6 +11,7 @@
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
+#include <assert.h>
 
 #include <iostream>
 #include <string>
@@ -52,6 +53,54 @@ float time_diff(struct timeval time1, struct timeval time2)
 			+ ((float)(time2.tv_usec - time1.tv_usec))/1000000;
 }
 
+class rand_buf
+{
+	/* where the data read from the disk is stored */
+	char *buf;
+	/* shows the locations in the array where data has be to stored.*/
+	off_t *buf_offset;
+	int entry_size;
+	int num_entries;
+
+	int current;
+public:
+	rand_buf(int buf_size, int entry_size) {
+		this->entry_size = entry_size;
+		num_entries = buf_size / entry_size;
+		buf = (char *) valloc(buf_size);
+		buf_offset = (off_t *) malloc(sizeof (*buf_offset) * num_entries);
+
+		if (buf == NULL){
+			fprintf(stderr, "can't allocate buffer\n");
+			exit(1);
+		}
+		/* trigger page faults and bring pages to memory. */
+		for (int i = 0; i < buf_size / PAGE_SIZE; i++)
+			buf[i * PAGE_SIZE] = 0;
+
+		for (int i = 0; i < num_entries; i++)
+			buf_offset[i] = i * entry_size;
+		permute_offset(buf_offset, num_entries);
+
+		current = 0;
+	}
+
+	~rand_buf() {
+		free(buf);
+		free(buf_offset);
+	}
+
+	char *next_entry() {
+		int off = buf_offset[current];
+		current = (current + 1) % num_entries;;
+		return &buf[off];
+	}
+
+	int get_entry_size() {
+		return entry_size;
+	}
+};
+
 /* this data structure stores the thread-private info. */
 class thread_private
 {
@@ -63,34 +112,17 @@ public:
 #endif
 	/* the location in the thread descriptor array. */
 	int idx;
-	/* where the data read from the disk is stored */
-	char *buf;
-	/* shows the locations in the array where data has be to stored.*/
-	off_t *buf_offset;
+	rand_buf buf;
 
 	/* the range in the file where we need to read data. */
-	int start_i;
-	int end_i;
+	int start_i;	// the first entry in the range
+	int end_i;		// the last entry in the range
 
 	virtual ssize_t access(char *, off_t, ssize_t) = 0;
 	virtual int thread_init() = 0;
 
-	thread_private(int idx) {
+	thread_private(int idx, int entry_size): buf(NUM_PAGES / nthreads * PAGE_SIZE, entry_size) {
 		this->idx = idx;
-		buf = (char *) valloc(PAGE_SIZE * (NUM_PAGES / nthreads));
-		buf_offset = (off_t *) malloc(sizeof (*buf_offset) * NUM_PAGES / nthreads);
-
-		if (buf == NULL){
-			fprintf(stderr, "can't allocate buffer\n");
-			exit(1);
-		}
-		/* trigger page faults and bring pages to memory. */
-		for (int i = 0; i < NUM_PAGES / nthreads; i++)
-			buf[i * PAGE_SIZE] = 0;
-
-		for (int i = 0; i < NUM_PAGES / nthreads; i++)
-			buf_offset[i] = i;
-		permute_offset(buf_offset, NUM_PAGES / nthreads);
 	}
 };
 
@@ -100,7 +132,8 @@ class read_private: public thread_private
 	int fd;
 	int flags;
 public:
-	read_private(const char *name, int idx, int flags = O_RDONLY): thread_private(idx), file_name(name) {
+	read_private(const char *name, int idx, int entry_size,
+			int flags = O_RDONLY): thread_private(idx, entry_size), file_name(name) {
 		this->flags = flags;
 	}
 
@@ -112,8 +145,9 @@ public:
 			perror("open");
 			exit (1);
 		}
-		ret = posix_fadvise(fd, start_i,
-				end_i, POSIX_FADV_RANDOM);
+//		ret = posix_fadvise(fd, (off_t) start_i * buf.get_entry_size(),
+//				(off_t) (end_i - start_i) * buf.get_entry_size(), POSIX_FADV_RANDOM);
+		ret = posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
 		if (ret < 0) {
 			perror("posix_fadvise");
 			exit(1);
@@ -136,8 +170,8 @@ public:
 class direct_private: public read_private
 {
 public:
-	direct_private(const char *name, int idx): read_private(name, idx,
-			O_DIRECT | O_RDONLY) {}
+	direct_private(const char *name, int idx, int entry_size): read_private(name, idx,
+			entry_size, O_DIRECT | O_RDONLY) {}
 };
 
 class mmap_private: public thread_private
@@ -145,7 +179,8 @@ class mmap_private: public thread_private
 	void *addr;
 
 public:
-	mmap_private(const char *new_name, int idx): thread_private(idx) {
+	mmap_private(const char *new_name, int idx,
+			int entry_size): thread_private(idx, entry_size) {
 		static void *addr = NULL;
 		static const char *file_name = NULL;
 		/* if we are mapping to a different file, do the real mapping. */
@@ -193,8 +228,8 @@ class part_cached_private: public direct_private
 	page_cache *cache;
 
 public:
-	part_cached_private(const char *name, int idx,
-			int cache_size): direct_private(name, idx) {
+	part_cached_private(const char *name, int idx, int cache_size,
+			int entry_size): direct_private(name, idx, entry_size) {
 		cache = new tree_cache(cache_size);
 	}
 
@@ -223,7 +258,8 @@ class global_cached_private: public direct_private
 {
 	page_cache *cache;
 public:
-	global_cached_private(const char *name, int idx): direct_private(name, idx) { }
+	global_cached_private(const char *name, int idx,
+			int entry_size): direct_private(name, idx, entry_size) { }
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
 		return 0;
@@ -239,22 +275,19 @@ void *rand_read(void *arg)
 	ssize_t read_bytes = 0;
 	struct timeval start_time, end_time;
 	thread_private *priv = threads[(long) arg];
-	char *buf;
-	off_t *buf_offset;
+	rand_buf *buf;
 	int fd;
 
 	priv->thread_init();
 	start_i = priv->start_i;
 	end_i = priv->end_i;
-	buf = priv->buf;
-	buf_offset = priv->buf_offset;
+	buf = &priv->buf;
 
 	gettimeofday(&start_time, NULL);
 	for (i = start_i, j = 0; i < end_i; i++, j++) {
-		if (j == NUM_PAGES / nthreads)
-			j = 0;
-		ret = priv->access(buf + buf_offset[j] * PAGE_SIZE,
-				offset[i], PAGE_SIZE);
+		ret = priv->access(buf->next_entry(),
+				offset[i], buf->get_entry_size());
+		assert(ret == buf->get_entry_size());
 		if (ret > 0)
 			read_bytes += ret;
 		else
@@ -394,15 +427,16 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	offset = (off_t *) malloc(sizeof(*offset) * npages);
-	for(i = 0; i < npages; i++) {
-		offset[i] = ((off_t) i) * 4096L;
+	int num_entries = npages * (PAGE_SIZE / entry_size);
+	offset = (off_t *) malloc(sizeof(*offset) * num_entries);
+	for(i = 0; i < num_entries; i++) {
+		offset[i] = ((off_t) i) * entry_size;
 		if (offset[i] < 0) {
 			printf("offset[%d]: %ld\n", i, offset[i]);
 			exit(1);
 		}
 	}
-	permute_offset(offset, npages);
+	permute_offset(offset, num_entries);
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
@@ -425,19 +459,19 @@ int main(int argc, char *argv[])
 		}
 		switch (access_option) {
 			case READ_ACCESS:
-				threads[j] = new read_private(file_name, j);
+				threads[j] = new read_private(file_name, j, entry_size);
 				break;
 			case DIRECT_ACCESS:
-				threads[j] = new direct_private(file_name, j);
+				threads[j] = new direct_private(file_name, j, entry_size);
 				break;
 			case MMAP_ACCESS:
-				threads[j] = new mmap_private(file_name, j);
+				threads[j] = new mmap_private(file_name, j, entry_size);
 				break;
 			case LOCAL_CACHE_ACCESS:
-				threads[j] = new part_cached_private(file_name, j, cache_size / nthreads);
+				threads[j] = new part_cached_private(file_name, j, cache_size / nthreads, entry_size);
 				break;
 			case GLOBAL_CACHE_ACCESS:
-				threads[j] = new global_cached_private(file_name, j);
+				threads[j] = new global_cached_private(file_name, j, entry_size);
 				break;
 			default:
 				fprintf(stderr, "wrong access option\n");
@@ -446,11 +480,11 @@ int main(int argc, char *argv[])
 		
 		if (num_files > 1) {
 			threads[j]->start_i = 0;
-			threads[j]->end_i = npages;
+			threads[j]->end_i = npages * PAGE_SIZE / entry_size;
 		}
 		else {
-			threads[j]->start_i = npages / nthreads * j;
-			threads[j]->end_i = threads[j]->start_i + npages / nthreads;
+			threads[j]->start_i = npages / nthreads * PAGE_SIZE / entry_size * j;
+			threads[j]->end_i = threads[j]->start_i + npages / nthreads * PAGE_SIZE / entry_size;
 		}
 	}
 
