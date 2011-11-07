@@ -169,9 +169,32 @@ public:
 
 class direct_private: public read_private
 {
+	char *page;
 public:
 	direct_private(const char *name, int idx, int entry_size): read_private(name, idx,
-			entry_size, O_DIRECT | O_RDONLY) {}
+			entry_size, O_DIRECT | O_RDONLY) {
+		page = (char *) valloc(PAGE_SIZE);
+	}
+
+	ssize_t access(char *buf, off_t offset, ssize_t size) {
+		ssize_t ret;
+		/* for simplicity, I assume all request sizes are smaller than a page size */
+		assert(size <= PAGE_SIZE);
+		if (ROUND_PAGE(offset) == offset
+				&& (long) buf == ROUND_PAGE(buf)
+				&& size == PAGE_SIZE) {
+			ret = read_private::access(buf, offset, size);
+		}
+		else {
+			ret = read_private::access(page, ROUND_PAGE(offset), PAGE_SIZE);
+			if (ret < 0)
+				return ret;
+			else
+				memcpy(buf, page + (offset - ROUND_PAGE(offset)), size);
+			ret = size;
+		}
+		return ret;
+	}
 };
 
 class mmap_private: public thread_private
