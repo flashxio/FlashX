@@ -1,0 +1,62 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global num_map_blocks;
+global num_getblk;
+global num_up_read;
+global num_bh_submit_read;
+global num_ext_cache_hits;
+global num_ext_cache_misses;
+
+probe kernel.function("up_read") {
+	if (execname() == "rand-read") {
+		num_up_read++;
+	}
+}
+
+probe kernel.function("bh_submit_read") {
+	if (execname() == "rand-read") {
+		num_bh_submit_read++;
+	}
+}
+
+probe kernel.function("ext4_map_blocks") {
+	if (execname() == "rand-read") {
+		num_map_blocks++;
+	}
+}
+
+probe kernel.function("__getblk") {
+	if (execname() == "rand-read") {
+		num_getblk++;
+	}
+}
+
+probe kernel.function("ext4_ext_check_cache").return {
+	if (execname() == "rand-read") {
+		if ($return)
+			num_ext_cache_hits++;
+		else
+			num_ext_cache_misses++;
+	}
+}
+
+probe kernel.function("ext4_ext_map_blocks") {
+	if (execname() == "rand-read") {
+		if ($flags != 0) {
+			printf ("flags: %d\n", $flags);
+		}
+	}
+}
+
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	printf ("ext4_map_blocks occurs %d times, and __getblk occurs %d times\n", num_map_blocks, num_getblk);
+	printf ("up_read occurs %d times, bh_submit_read occurs %d\n", num_up_read, num_bh_submit_read);
+	printf ("extent cache hits: %d, extent cache misses: %d\n", num_ext_cache_hits, num_ext_cache_misses);
+	exit()
+}

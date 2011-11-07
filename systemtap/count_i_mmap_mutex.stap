@@ -1,0 +1,98 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global num_unlink_file_vma;
+global num_vma_link
+global num_vma_adjust
+global num_mm_take_all_locks
+global num_move_ptes
+global num_page_referenced_file
+global num_page_mkclean_file
+global num_try_to_unmap_file
+global num_rmap_walk_file
+global num_collect_procs_file
+global num_unmap_mapping_range
+global num_unmap_hugepage_range
+global num_unmap_ref_private
+global num_hugetlb_change_protection
+global num_huge_pmd_share
+global num_dup_mmap
+global num_hugetlb_vmtruncate
+
+probe kernel.function("unlink_file_vma") {
+	num_unlink_file_vma++;
+}
+
+probe kernel.function("vma_link") {
+	num_vma_link++;
+}
+probe kernel.function("vma_adjust") {
+	num_vma_adjust++;
+}
+probe kernel.function("mm_take_all_locks") {
+	num_mm_take_all_locks++;
+}
+probe kernel.function("move_ptes") {
+	num_move_ptes++;
+}
+probe kernel.function("page_referenced_file") {
+	num_page_referenced_file++;
+}
+probe kernel.function("page_mkclean_file") {
+	num_page_mkclean_file++;
+}
+probe kernel.function("try_to_unmap_file") {
+	num_try_to_unmap_file++;
+}
+probe kernel.function("rmap_walk_file") {
+	num_rmap_walk_file++;
+}
+probe kernel.function("collect_procs_file") {
+	num_collect_procs_file++;
+}
+probe kernel.function("unmap_mapping_range") {
+	num_unmap_mapping_range++;
+}
+probe kernel.function("unmap_hugepage_range") {
+	num_unmap_hugepage_range++;
+}
+probe kernel.function("unmap_ref_private") {
+	num_unmap_ref_private++;
+}
+probe kernel.function("hugetlb_change_protection") {
+	num_hugetlb_change_protection++;
+}
+probe kernel.function("huge_pmd_share") {
+	num_huge_pmd_share++;
+}
+probe kernel.function("dup_mmap") {
+	num_dup_mmap++;
+}
+probe kernel.function("hugetlb_vmtruncate") {
+	num_hugetlb_vmtruncate++;
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	printf ("%d\n", num_unlink_file_vma);
+	printf ("%d\n", num_vma_link)
+	printf ("%d\n", num_vma_adjust)
+	printf ("%d\n", num_mm_take_all_locks)
+	printf ("%d\n", num_move_ptes)
+	printf ("%d\n", num_page_referenced_file)
+	printf ("%d\n", num_page_mkclean_file)
+	printf ("%d\n", num_try_to_unmap_file)
+	printf ("%d\n", num_rmap_walk_file)
+	printf ("%d\n", num_collect_procs_file)
+	printf ("%d\n", num_unmap_mapping_range)
+	printf ("%d\n", num_unmap_hugepage_range)
+	printf ("%d\n", num_unmap_ref_private)
+	printf ("%d\n", num_hugetlb_change_protection)
+	printf ("%d\n", num_huge_pmd_share)
+	printf ("%d\n", num_dup_mmap)
+	printf ("%d\n", num_hugetlb_vmtruncate)
+	exit()
+}

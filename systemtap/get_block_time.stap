@@ -1,0 +1,23 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global map_blocks_start, map_blocks_time
+
+probe kernel.function("ext4_map_blocks") {
+	time = gettimeofday_ns()
+	map_blocks_start[tid()] = time
+}
+
+probe kernel.function("ext4_map_blocks").return {
+	end = gettimeofday_ns();
+	map_blocks_time += end - map_blocks_start[tid()]
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	printf ("map_blocks takes %d ns\n", map_blocks_time);
+	exit()
+}

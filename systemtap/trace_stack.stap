@@ -1,0 +1,19 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global num;
+
+probe kernel.function(@1) {
+	num++;
+	print_stack(backtrace())
+	print("\n")
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	printf ("%s occurs %d times\n", @1, num);
+	exit()
+}

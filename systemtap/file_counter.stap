@@ -1,0 +1,16 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+probe kernel.function("__fput") {
+	if (execname() == "rand-read")
+		printf ("process: %s, file: %s, counter: %d\n",
+				execname(), kernel_string($file->f_path->dentry->d_name->name), $file->f_count->counter)
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	exit()
+}

@@ -1,0 +1,20 @@
+#! /usr/bin/env stap
+
+global start_time
+
+probe begin {
+start_time = gettimeofday_us()
+printf ("monitor starts at %d\n", start_time)
+}
+
+probe syscall.open {
+curr_time = gettimeofday_us()
+#if (curr_time > start_time + 1000000 * 3)
+printf ("%d: open %s by %s\n", curr_time,
+user_string($filename), execname())
+}
+
+probe timer.s(10) {
+print ("have monitored for 10 seconds\n")
+exit()
+}

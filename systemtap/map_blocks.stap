@@ -1,0 +1,16 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+probe kernel.function("ext4_ext_find_extent") {
+	if (execname() == "rand-read") {
+		printf ("process: %s: ext4_ext_find_extent\n", execname());
+	}
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	exit()
+}

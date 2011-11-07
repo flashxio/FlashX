@@ -1,0 +1,27 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+probe kernel.function("ext4_ext_find_extent").return {
+	if (execname() == "rand-read") {
+		offset = & @cast(0,
+				"ext4_inode_info" /* type name */
+				)->vfs_inode
+		addr = $inode - offset
+		depth = @cast(@cast(addr, "ext4_inode_info")->i_data, "ext4_extent_header")->eh_depth
+		nentries = @cast(@cast(addr, "ext4_inode_info")->i_data, "ext4_extent_header")->eh_entries
+		printf("inode: %x, the depth: %d, number of entries: %d\n", $inode, depth, nentries)
+		if (depth == 1) {
+			size = & @cast(0, "ext4_ext_path")[1]
+			second = $return + size
+			printf ("the second layer has %d entries\n", @cast(second, "ext4_ext_path")->p_hdr->eh_entries)
+		}
+	}
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	exit()
+}

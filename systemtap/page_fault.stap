@@ -1,0 +1,39 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global read_size
+global write_size
+
+probe kernel.function("submit_bio") {
+	if($rw == 0) {
+		read_size += $bio->bi_size
+	}
+	else {
+		write_size += $bio->bi_size
+	}
+}
+
+global prev_flags
+global num_same
+
+probe kernel.function("filemap_fault") {
+	if (prev_flags != $vma->vm_flags) {
+		printf("vma->flags: %x, num: %d\n", prev_flags, num_same)
+		prev_flags = $vma->vm_flags;
+		num_same = 0
+	}
+	else
+		num_same++
+}
+
+probe end {
+	printf("read %d bytes, write %d bytes\n", read_size, write_size)
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	exit()
+}

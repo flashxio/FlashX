@@ -1,0 +1,57 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global num_unmap_file;
+global num_unmap_cluster;
+global num_unmap_ones;
+global num_unmap_move;
+global num_user_mappings;
+global num_shrink;
+
+probe kernel.function("unmap_and_move") {
+	num_unmap_move++;
+}
+
+probe kernel.function("hwpoison_user_mappings") {
+	num_user_mappings++;
+}
+
+probe kernel.function("try_to_unmap_file") {
+	num_unmap_file++
+	num_unmap_ones[pid(), tid()] = 0
+#	if($page->mapping->i_mmap_nonlinear->next == &$page->mapping->i_mmap_nonlinear) {
+#		print("nolinear list is empty\n")
+#	}
+}
+
+probe kernel.function("try_to_unmap_one") {
+	num_unmap_ones[pid(), tid()]++
+}
+
+probe kernel.function("shrink_page_list") {
+	num_shrink++;
+	print_stack(backtrace());
+	print("\n")
+}
+
+#probe kernel.function("try_to_unmap_file").return {
+#	printf("unmap_ones by (%d, %d) are %d\n", pid(), tid(), num_unmap_ones[pid(), tid()])
+#}
+
+probe kernel.function("try_to_unmap_cluster") {
+	num_unmap_cluster++
+}
+
+probe end {
+	printf("unmap_file: %d, unmap_cluster: %d\n", num_unmap_file, num_unmap_cluster);
+	printf("unmap_move: %d, user mappings: %d\n", num_unmap_move, num_user_mappings);
+	printf("shrink: %d\n", num_shrink)
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	exit()
+}

@@ -1,0 +1,28 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global read_size
+global write_size
+
+probe kernel.function("submit_bio") {
+	if (execname() == "rand-read") {
+		if($rw == 0) {
+			read_size += $bio->bi_size
+		}
+		else {
+			write_size += $bio->bi_size
+		}
+	}
+}
+
+probe end {
+	printf("read %d bytes, write %d bytes\n", read_size, write_size)
+}
+
+probe timer.s(10) {
+	print ("have monitored for 10 seconds\n");
+	exit()
+}
