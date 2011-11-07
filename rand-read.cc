@@ -228,7 +228,7 @@ class part_cached_private: public direct_private
 	page_cache *cache;
 
 public:
-	part_cached_private(const char *name, int idx, int cache_size,
+	part_cached_private(const char *name, int idx, long cache_size,
 			int entry_size): direct_private(name, idx, entry_size) {
 		cache = new tree_cache(cache_size);
 	}
@@ -373,9 +373,28 @@ int map_method(const std::string &method)
 	return -1;
 }
 
+long str2size(std::string str)
+{
+	int len = str.length();
+	long multiply = 1;
+	if (str[len - 1] == 'M' || str[len - 1] == 'm') {
+		multiply *= 1024 * 1024;
+		str[len - 1] = 0;
+	}
+	else if (str[len - 1] == 'K' || str[len - 1] == 'k') {
+		multiply *= 1024;
+		str[len - 1] = 0;
+	}
+	else if (str[len - 1] == 'G' || str[len - 1] == 'g') {
+		multiply *= 1024 * 1024 * 1024;
+		str[len - 1] = 0;
+	}
+	return atol(str.c_str()) * multiply;
+}
+
 int main(int argc, char *argv[])
 {
-	int cache_size = 512 * 1024 * 1024;
+	long cache_size = 512 * 1024 * 1024;
 	int entry_size = 128;
 	int access_option;
 	int ret;
@@ -416,10 +435,10 @@ int main(int argc, char *argv[])
 			nthreads = atoi(value.c_str());
 		}
 		else if(key.compare("cache_size") == 0) {
-			cache_size = atoi(value.c_str());
+			cache_size = str2size(value);
 		}
 		else if(key.compare("entry_size") == 0) {
-			entry_size = atoi(value.c_str());
+			entry_size = (int) str2size(value);
 		}
 		else {
 			fprintf(stderr, "wrong option\n");

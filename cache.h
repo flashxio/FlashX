@@ -9,7 +9,7 @@
 #include <map>
 
 #define PAGE_SIZE 4096
-#define ROUND_PAGE(off) ((off) & (~(PAGE_SIZE - 1)))
+#define ROUND_PAGE(off) (((long) off) & (~(PAGE_SIZE - 1)))
 
 class page_cache
 {
@@ -40,14 +40,14 @@ public:
  */
 class page_buffer
 {
-	int size;			// the number of pages that can be buffered
+	long size;			// the number of pages that can be buffered
 	struct page *buf;	// a circular buffer to keep pages.
 	char *pages;		// the pointer to the space for all pages.
 	int beg_idx;		// the index of the beginning of the buffer
 	int end_idx;		// the index of the end of the buffer
 
 public:
-	page_buffer(int size) {
+	page_buffer(long size) {
 		this->size = size;
 		buf = new struct page[size];
 		pages = (char *) valloc(size * PAGE_SIZE);
@@ -109,7 +109,7 @@ class tree_cache: public page_cache
 	std::map<off_t, struct page *> map;
 
 public:
-	tree_cache(int size): map(), buf(size / PAGE_SIZE) { }
+	tree_cache(long size): map(), buf(size / PAGE_SIZE) { }
 	
 	ssize_t get_from_cache(char *buf, const off_t offset,
 			const ssize_t size) {
