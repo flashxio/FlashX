@@ -236,17 +236,17 @@ public:
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
 		ssize_t ret = cache->get_from_cache(buf, offset, size);
 		if (ret < 0) {
-			struct page *p = cache->get_empty_page(offset);
+			struct page *p = cache->get_empty_page(ROUND_PAGE(offset));
 			ret = read_private::access((char *) p->get_data(),
 					ROUND_PAGE(offset), PAGE_SIZE);
 			if (ret < 0) {
 				perror("read");
 				exit(1);
 			}
-			p->set_offset(offset);
 			offset -= ROUND_PAGE(offset);
 			/* I assume the data I read never crosses the page boundary */
 			memcpy(buf, (char *) p->get_data() + offset, size);
+			ret = size;
 		}
 		else
 			cache_hits++;

@@ -113,12 +113,12 @@ public:
 	
 	ssize_t get_from_cache(char *buf, const off_t offset,
 			const ssize_t size) {
-		std::map<off_t, struct page *>::iterator it = map.find(offset
-				& ~(PAGE_SIZE - 1));
+		off_t page_off = ROUND_PAGE(offset);
+		std::map<off_t, struct page *>::iterator it = map.find(page_off);
 		if (it == map.end())
 			return -1;
 		struct page *page = (*it).second;
-		memcpy(buf, page->get_data(), size);
+		memcpy(buf, (char *) page->get_data() + (offset - page_off), size);
 		return size;
 	}
 
