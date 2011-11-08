@@ -169,11 +169,11 @@ public:
 
 class direct_private: public read_private
 {
-	char *page;
+	char *one_page;
 public:
 	direct_private(const char *name, int idx, int entry_size): read_private(name, idx,
 			entry_size, O_DIRECT | O_RDONLY) {
-		page = (char *) valloc(PAGE_SIZE);
+		one_page = (char *) valloc(PAGE_SIZE);
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
@@ -186,11 +186,11 @@ public:
 			ret = read_private::access(buf, offset, size);
 		}
 		else {
-			ret = read_private::access(page, ROUND_PAGE(offset), PAGE_SIZE);
+			ret = read_private::access(one_page, ROUND_PAGE(offset), PAGE_SIZE);
 			if (ret < 0)
 				return ret;
 			else
-				memcpy(buf, page + (offset - ROUND_PAGE(offset)), size);
+				memcpy(buf, one_page + (offset - ROUND_PAGE(offset)), size);
 			ret = size;
 		}
 		return ret;
@@ -257,35 +257,71 @@ public:
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
-		ssize_t ret = cache->get_from_cache(buf, offset, size);
-		if (ret < 0) {
-			struct page *p = cache->get_empty_page(ROUND_PAGE(offset));
+		ssize_t ret;
+		page *p = cache->get_page(ROUND_PAGE(offset));
+		if (p == NULL) {
+			p = cache->get_empty_page(ROUND_PAGE(offset));
 			ret = read_private::access((char *) p->get_data(),
 					ROUND_PAGE(offset), PAGE_SIZE);
 			if (ret < 0) {
 				perror("read");
 				exit(1);
 			}
-			offset -= ROUND_PAGE(offset);
-			/* I assume the data I read never crosses the page boundary */
-			memcpy(buf, (char *) p->get_data() + offset, size);
-			ret = size;
 		}
 		else
 			cache_hits++;
+
+		offset -= ROUND_PAGE(offset);
+		/* I assume the data I read never crosses the page boundary */
+		memcpy(buf, (char *) p->get_data() + offset, size);
+		ret = size;
 		return ret;
 	}
 };
 
+page_cache *global_cache;
 class global_cached_private: public direct_private
 {
-	page_cache *cache;
+//	static page_cache *global_cache;
 public:
-	global_cached_private(const char *name, int idx,
-			int entry_size): direct_private(name, idx, entry_size) { }
+	global_cached_private(const char *name, int idx, long cache_size,
+			int entry_size): direct_private(name, idx, entry_size) {
+		if (global_cache == NULL) {
+			global_cache = new tree_cache(cache_size);
+		}
+	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
-		return 0;
+		ssize_t ret;
+		global_cache->lock();
+		page *p = global_cache->get_page(ROUND_PAGE(offset));
+		if (p == NULL) {
+			p = global_cache->get_empty_page(ROUND_PAGE(offset));
+			p->inc_ref();
+			global_cache->unlock();
+			/* if it is referenced by someone else,
+			 * we should wait for others to finish using it. */
+//			while(p->get_ref() > 1) {}
+			ret = read_private::access((char *) p->get_data(),
+					ROUND_PAGE(offset), PAGE_SIZE);
+			if (ret < 0) {
+				perror("read");
+				exit(1);
+			}
+			p->set_data_ready();
+		}
+		else {
+			p->inc_ref();
+			global_cache->unlock();
+			cache_hits++;
+		}
+		offset -= ROUND_PAGE(offset);
+//		p->wait_ready();
+		/* I assume the data I read never crosses the page boundary */
+		memcpy(buf, (char *) p->get_data() + offset, size);
+		p->dec_ref();
+		ret = size;
+		return ret;
 	}
 };
 
@@ -513,7 +549,7 @@ int main(int argc, char *argv[])
 				threads[j] = new part_cached_private(file_name, j, cache_size / nthreads, entry_size);
 				break;
 			case GLOBAL_CACHE_ACCESS:
-				threads[j] = new global_cached_private(file_name, j, entry_size);
+				threads[j] = new global_cached_private(file_name, j, cache_size, entry_size);
 				break;
 			default:
 				fprintf(stderr, "wrong access option\n");

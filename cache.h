@@ -5,34 +5,72 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdio.h>
+#include <pthread.h>
 
 #include <map>
 
 #define PAGE_SIZE 4096
 #define ROUND_PAGE(off) (((long) off) & (~(PAGE_SIZE - 1)))
 
-class page_cache
-{
-public:
-	virtual ssize_t get_from_cache(char *buf, off_t offset, ssize_t size) = 0;
-	virtual struct page *get_empty_page(off_t off) = 0;
-};
-
 class page
 {
 	off_t offset;
 	void *data;
 	char flags;
+	short refcnt;
 public:
-	page():offset(-1), data(NULL) { }
-	page(off_t off, void *d): offset(off), data(d) { }
+	page():offset(-1), data(NULL), flags(0) { }
+	page(off_t off, void *d): offset(off), data(d), flags(0) { }
 //	page(const page &p) { offset = p.offset; data = p.data; }
-	void set_offset(off_t off) { offset = off; }
+	/* when we set the offset,
+	 * it means the data in the page becomes invalid. */
+	void set_offset(off_t off) {
+		offset = off;
+		__sync_fetch_and_and(&flags, ~0x1);
+	}
+
 	off_t get_offset() const { return offset; }
 	void *get_data() const { return data; }
 	bool is_valid() const { return offset != -1; }
 	bool data_ready() const { return flags & 0x1; }
-	void set_data_ready() { flags = flags | 0x1; }
+	bool wait_ready() const {
+		while (!data_ready()) {}
+	}
+	void set_data_ready() {
+		__sync_fetch_and_or(&flags, 0x1);
+	}
+	void inc_ref() {
+		__sync_fetch_and_add(&refcnt, 1);
+	}
+	void dec_ref() {
+		__sync_fetch_and_sub(&refcnt, 1);
+	}
+	short get_ref() {
+		return refcnt;
+	}
+};
+
+class page_cache
+{
+	pthread_spinlock_t _lock;
+public:
+	page_cache() {
+		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	int lock() {
+		return pthread_spin_lock(&_lock);
+	}
+
+	int unlock() {
+		return pthread_spin_unlock(&_lock);
+	}
+
+	~page_cache() {
+		pthread_spin_destroy(&_lock);
+	}
+	virtual page *get_page(off_t offset) = 0;
+	virtual page *get_empty_page(off_t off) = 0;
 };
 
 /**
@@ -111,15 +149,11 @@ class tree_cache: public page_cache
 public:
 	tree_cache(long size): map(), buf(size / PAGE_SIZE) { }
 	
-	ssize_t get_from_cache(char *buf, const off_t offset,
-			const ssize_t size) {
-		off_t page_off = ROUND_PAGE(offset);
-		std::map<off_t, struct page *>::iterator it = map.find(page_off);
+	page *get_page(const off_t offset) {
+		std::map<off_t, struct page *>::iterator it = map.find(offset);
 		if (it == map.end())
-			return -1;
-		struct page *page = (*it).second;
-		memcpy(buf, (char *) page->get_data() + (offset - page_off), size);
-		return size;
+			return NULL;
+		return (*it).second;
 	}
 
 	/**
@@ -128,7 +162,7 @@ public:
 	 * that the request for this page has been issued.
 	 * If the cache is full, evict a page and return the evicted page
 	 */
-	struct page *get_empty_page(off_t offset) {
+	page *get_empty_page(off_t offset) {
 		struct page *page = buf.get_empty_page();
 		if (page->is_valid()) {
 			map.erase(page->get_offset());
