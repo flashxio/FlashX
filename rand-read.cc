@@ -17,6 +17,8 @@
 #include <string>
 
 #include "cache.h"
+#include "tree_cache.h"
+#include "associative_cache.h"
 
 //#define USE_PROCESS
 
@@ -124,6 +126,8 @@ public:
 	thread_private(int idx, int entry_size): buf(NUM_PAGES / nthreads * PAGE_SIZE, entry_size) {
 		this->idx = idx;
 	}
+
+	virtual void print_stat() { }
 };
 
 class read_private: public thread_private
@@ -258,15 +262,15 @@ public:
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
 		ssize_t ret;
-		page *p = cache->get_page(ROUND_PAGE(offset));
-		if (p == NULL) {
-			p = cache->get_empty_page(ROUND_PAGE(offset));
+		page *p = cache->search(ROUND_PAGE(offset));
+		if (!p->data_ready()) {
 			ret = read_private::access((char *) p->get_data(),
 					ROUND_PAGE(offset), PAGE_SIZE);
 			if (ret < 0) {
 				perror("read");
 				exit(1);
 			}
+			p->set_data_ready(true);
 		}
 		else
 			cache_hits++;
@@ -282,46 +286,57 @@ public:
 page_cache *global_cache;
 class global_cached_private: public direct_private
 {
+	int num_waits;
 //	static page_cache *global_cache;
 public:
 	global_cached_private(const char *name, int idx, long cache_size,
 			int entry_size): direct_private(name, idx, entry_size) {
+		num_waits = 0;
 		if (global_cache == NULL) {
-			global_cache = new tree_cache(cache_size);
+			global_cache = new associative_cache(cache_size);
 		}
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
 		ssize_t ret;
-		global_cache->lock();
-		page *p = global_cache->get_page(ROUND_PAGE(offset));
-		if (p == NULL) {
-			p = global_cache->get_empty_page(ROUND_PAGE(offset));
-			p->inc_ref();
-			global_cache->unlock();
-			/* if it is referenced by someone else,
-			 * we should wait for others to finish using it. */
-//			while(p->get_ref() > 1) {}
-			ret = read_private::access((char *) p->get_data(),
-					ROUND_PAGE(offset), PAGE_SIZE);
-			if (ret < 0) {
-				perror("read");
-				exit(1);
+		thread_safe_page *p = (thread_safe_page *) (global_cache->search(ROUND_PAGE(offset)));
+		if (!p->data_ready()) {
+			/* if the page isn't io pending,
+			 * set it io pending, and return
+			 * original result. otherwise,
+			 * just return the original value.
+			 *
+			 * This is an ugly hack, but with this
+			 * atomic operation, I can avoid using
+			 * locks. */
+			if(!p->test_and_set_io_pending()) {
+				ret = read_private::access((char *) p->get_data(),
+						ROUND_PAGE(offset), PAGE_SIZE);
+				if (ret < 0) {
+					perror("read");
+					exit(1);
+				}
+				p->set_io_pending(false);
+				p->set_data_ready(true);
 			}
-			p->set_data_ready();
+			else {
+				num_waits++;
+				p->wait_ready();
+			}
 		}
 		else {
-			p->inc_ref();
-			global_cache->unlock();
 			cache_hits++;
 		}
 		offset -= ROUND_PAGE(offset);
-//		p->wait_ready();
 		/* I assume the data I read never crosses the page boundary */
 		memcpy(buf, (char *) p->get_data() + offset, size);
 		p->dec_ref();
 		ret = size;
 		return ret;
+	}
+
+	void print_stat() {
+		printf("there are %d waits in thread %d\n", num_waits, idx);
 	}
 };
 
@@ -600,8 +615,13 @@ int main(int argc, char *argv[])
 		read_bytes += size;
 	}
 	gettimeofday(&end_time, NULL);
+	for (int i = 0; i < nthreads; i++) {
+		threads[i]->print_stat();
+	}
 	printf("read %ld bytes, takes %f seconds\n",
 			read_bytes, end_time.tv_sec - start_time.tv_sec
 			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 	printf("there are %d cache hits\n", cache_hits);
+	printf("there are %d cells\n", avail_cells);
+	printf("there are %d waits for unused\n", num_wait_unused);
 }

@@ -17,28 +17,61 @@ class page
 	off_t offset;
 	void *data;
 	char flags;
-	short refcnt;
+
 public:
-	page():offset(-1), data(NULL), flags(0) { }
-	page(off_t off, void *d): offset(off), data(d), flags(0) { }
-//	page(const page &p) { offset = p.offset; data = p.data; }
-	/* when we set the offset,
-	 * it means the data in the page becomes invalid. */
+	page():offset(-1), data(NULL) { }
+
+	page(off_t off, void *d): offset(off), data(d) { }
+
 	void set_offset(off_t off) {
 		offset = off;
-		__sync_fetch_and_and(&flags, ~0x1);
 	}
 
 	off_t get_offset() const { return offset; }
 	void *get_data() const { return data; }
-	bool is_valid() const { return offset != -1; }
+
 	bool data_ready() const { return flags & 0x1; }
-	bool wait_ready() const {
+	void set_data_ready(bool ready) {
+		if (ready)
+			flags |= 0x1;
+		else
+			flags &= ~0x1;
+	}
+};
+
+class thread_safe_page: public page
+{
+	volatile char flags;
+	volatile short refcnt;
+	volatile char io_pending;
+public:
+	thread_safe_page(): page(), flags(0), refcnt(0), io_pending(0) {
+	}
+
+	thread_safe_page(off_t off, void *d): page(off, d), flags(0), refcnt(0), io_pending(0) {
+	}
+
+	/* this is enough for x86 architecture */
+	bool data_ready() const { return flags & 0x1; }
+	void wait_ready() {
 		while (!data_ready()) {}
 	}
-	void set_data_ready() {
-		__sync_fetch_and_or(&flags, 0x1);
+	void set_data_ready(bool ready) {
+		if (ready)
+			__sync_fetch_and_or(&flags, 0x1);
+		else
+			__sync_fetch_and_and(&flags, ~0x1);
 	}
+
+	void set_io_pending(bool pending) {
+		io_pending = pending;
+	}
+	/* we set the status to io pending,
+	 * and return the original status */
+	bool test_and_set_io_pending() {
+		return !__sync_bool_compare_and_swap(&io_pending, false, true);
+	}
+
 	void inc_ref() {
 		__sync_fetch_and_add(&refcnt, 1);
 	}
@@ -47,6 +80,9 @@ public:
 	}
 	short get_ref() {
 		return refcnt;
+	}
+	void wait_unused() {
+		while(get_ref()) {}
 	}
 };
 
@@ -69,17 +105,17 @@ public:
 	~page_cache() {
 		pthread_spin_destroy(&_lock);
 	}
-	virtual page *get_page(off_t offset) = 0;
-	virtual page *get_empty_page(off_t off) = 0;
+	virtual page *search(off_t offset) = 0;
 };
 
 /**
  * This data structure is to implement LRU.
  */
+template<class T>
 class page_buffer
 {
 	long size;			// the number of pages that can be buffered
-	struct page *buf;	// a circular buffer to keep pages.
+	T *buf;			// a circular buffer to keep pages.
 	char *pages;		// the pointer to the space for all pages.
 	int beg_idx;		// the index of the beginning of the buffer
 	int end_idx;		// the index of the end of the buffer
@@ -87,10 +123,10 @@ class page_buffer
 public:
 	page_buffer(long size) {
 		this->size = size;
-		buf = new struct page[size];
+		buf = new T[size];
 		pages = (char *) valloc(size * PAGE_SIZE);
 		for (int i = 0; i < size; i++) {
-			buf[i] = page(-1, &pages[i * PAGE_SIZE]);
+			buf[i] = T(-1, &pages[i * PAGE_SIZE]);
 		}
 		beg_idx = 0;
 		end_idx = 0;
@@ -111,12 +147,24 @@ public:
 	 * I expected the page will be filled with data,
 	 * so I change the begin and end index of the circular buffer.
 	 */
-	struct page *get_empty_page() {
+	T *get_empty_page() {
 		if (is_full()) {
 			beg_idx = (beg_idx + 1) % size;
 		}
-		struct page *ret = &buf[end_idx];
+		T *ret = &buf[end_idx];
 		end_idx = (end_idx + 1) % size;
+		return ret;
+	}
+
+	T *search(off_t off) {
+		T *ret = NULL;
+		for (int i = beg_idx; i != end_idx;
+				i = (i + 1) % size) {
+			if (buf[i].get_offset() == off) {
+				ret = &buf[i];
+				break;
+			}
+		}
 		return ret;
 	}
 
@@ -124,8 +172,8 @@ public:
 	/* push a page to the buffer.
 	 * if the buffer is full, the first page is removed,
 	 * and return the user */
-	struct page *push_back(const struct page &page, struct page &beg) {
-		struct page *ret;
+	page *push_back(const page &page, page &beg) {
+		page *ret;
 		if (is_full()) {
 			beg = buf[beg_idx];
 			beg_idx = (beg_idx + 1) % size;
@@ -134,56 +182,6 @@ public:
 		ret = &buf[end_idx];
 		end_idx = (end_idx + 1) % size;
 		return ret;
-	}
-#endif
-};
-
-/**
- * The tree page cache
- */
-class tree_cache: public page_cache
-{
-	page_buffer buf;
-	std::map<off_t, struct page *> map;
-
-public:
-	tree_cache(long size): map(), buf(size / PAGE_SIZE) { }
-	
-	page *get_page(const off_t offset) {
-		std::map<off_t, struct page *>::iterator it = map.find(offset);
-		if (it == map.end())
-			return NULL;
-		return (*it).second;
-	}
-
-	/**
-	 * get an empty page from the cahce for `offset'.
-	 * we add the page back to the map to tell other threads
-	 * that the request for this page has been issued.
-	 * If the cache is full, evict a page and return the evicted page
-	 */
-	page *get_empty_page(off_t offset) {
-		struct page *page = buf.get_empty_page();
-		if (page->is_valid()) {
-			map.erase(page->get_offset());
-		}
-		page->set_offset(offset);
-		map[offset] = page;
-		return page;
-	}
-
-#if 0
-	int add_page(void *data, const off_t offset) {
-		class page page(offset, data);
-		class page removed;
-		struct page *ret = buf.push_back(page, removed);
-		if (removed.is_valid()) {
-			/* if the page is valid,
-			 * we should remove the page in the map. */
-			map.erase(removed.get_offset());
-		}
-		map[ret->get_offset()] = ret;
-		return 0;
 	}
 #endif
 };

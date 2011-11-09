@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "cache.h"
+#include "tree_cache.h"
 
 int main()
 {
@@ -20,7 +21,7 @@ int main()
 	printf("offset: %ld, data: %p\n", copied_page.get_offset(),
 			copied_page.get_data());
 
-	page_buffer *buffer = new page_buffer(10);
+	page_buffer<page> *buffer = new page_buffer<page> (10);
 	for (int i = 0; i < 15; i++) {
 		bool is_full = buffer->is_full();
 		struct page new_page(i, NULL);
