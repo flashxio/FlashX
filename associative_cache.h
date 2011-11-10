@@ -5,7 +5,7 @@
 
 #define CELL_SIZE 8
 
-static int avail_cells;
+static volatile int avail_cells;
 static int num_wait_unused;
 
 class hash_cell
@@ -56,7 +56,7 @@ public:
 		/* if no page has been added, return immediately. */
 		if (buf == NULL) {
 			buf = new page_buffer<thread_safe_page> (CELL_SIZE);
-			avail_cells++;
+			__sync_fetch_and_add(&avail_cells, 1);
 			ret = get_empty_page();
 			ret->set_offset(off);
 			pthread_spin_unlock(&_lock);
