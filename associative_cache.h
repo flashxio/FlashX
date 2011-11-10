@@ -87,7 +87,7 @@ class associative_cache: public page_cache
 	}
 
 public:
-	associative_cache(int cache_size) {
+	associative_cache(long cache_size) {
 		int npages = cache_size / PAGE_SIZE;
 		ncells = npages / CELL_SIZE;
 		cells = new hash_cell[ncells];
