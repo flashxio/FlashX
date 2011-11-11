@@ -48,7 +48,14 @@ int main(int argc, char *argv[])
 	}
 	printf("create a file of %ld bytes\n", size);
 
-	fd = open(file_name, O_WRONLY | O_CREAT, 00444);
+	/*
+	 * because of my change in the kernel, creating a read-only file
+	 * can crash the kernel because ext4 doesn't grab the semaphore
+	 * when mapping blocks.
+	 * So I have to make the file writable first, and then later
+	 * make it read-only
+	 */
+	fd = open(file_name, O_WRONLY | O_CREAT, 00644);
 	if (fd < 0) {
 		perror("open");
 		exit(1);
