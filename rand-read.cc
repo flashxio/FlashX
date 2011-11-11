@@ -31,23 +31,108 @@ enum {
 };
 
 int cache_hits;
-off_t *offset;
 int npages;
 int nthreads = 1;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 volatile int first[NUM_THREADS];
 
-void permute_offset(off_t *offset, int num)
+class workload_gen
 {
-	int i;
-	for (i = num - 1; i >= 1; i--) {
-		int j = random() % i;
-		off_t tmp = offset[j];
-		offset[j] = offset[i];
-		offset[i] = tmp;
+public:
+	virtual off_t next_offset() = 0;
+	virtual bool has_next() const = 0;
+};
+
+class rand_permute
+{
+	off_t *offset;
+	long num;
+public:
+	rand_permute(long num, int stride) {
+		offset = (off_t *) valloc(num * sizeof(off_t));
+		for (int i = 0; i < num; i++) {
+			offset[i] = ((off_t) i) * stride;
+		}
+
+		for (int i = num - 1; i >= 1; i--) {
+			int j = random() % i;
+			off_t tmp = offset[j];
+			offset[j] = offset[i];
+			offset[i] = tmp;
+		}
 	}
-}
+
+	~rand_permute() {
+		free(offset);
+	}
+
+	off_t get_offset(long idx) const {
+		return offset[idx];
+	}
+};
+
+class local_rand_permute_workload: public workload_gen
+{
+	long start;
+	long end;
+	static const rand_permute *permute;
+public:
+	local_rand_permute_workload(long num, int stride, long start, long end) {
+		if (permute == NULL) {
+			permute = new rand_permute(num, stride);
+		}
+		this->start = start;
+		this->end = end;
+	}
+
+	~local_rand_permute_workload() {
+		if (permute) {
+			delete permute;
+			permute = NULL;
+		}
+	}
+
+	off_t next_offset() {
+		if (start >= end)
+			return -1;
+		return permute->get_offset(start++);
+	}
+
+	bool has_next() const {
+		return start < end;
+	}
+};
+
+class rand_workload: public workload_gen
+{
+	long start;
+	long range;
+	long num;
+	off_t *offsets;
+public:
+	rand_workload(long start, long end, int stride) {
+		this->start = start;
+		this->range = end - start;
+		num = 0;
+		offsets = (off_t *) valloc(sizeof(*offsets) * range);
+		for (int i = 0; i < range; i++) {
+			offsets[i] = (start + random() % range) * stride;
+		}
+	}
+
+	~rand_workload() {
+		free(offsets);
+	}
+
+	off_t next_offset() {
+		return offsets[num++];
+	}
+
+	bool has_next() const {
+		return num < range;
+	}
+};
 
 float time_diff(struct timeval time1, struct timeval time2)
 {
@@ -60,17 +145,16 @@ class rand_buf
 	/* where the data read from the disk is stored */
 	char *buf;
 	/* shows the locations in the array where data has be to stored.*/
-	off_t *buf_offset;
+	rand_permute buf_offset;
 	int entry_size;
 	int num_entries;
 
 	int current;
 public:
-	rand_buf(int buf_size, int entry_size) {
+	rand_buf(int buf_size, int entry_size): buf_offset(buf_size / entry_size, entry_size) {
 		this->entry_size = entry_size;
 		num_entries = buf_size / entry_size;
 		buf = (char *) valloc(buf_size);
-		buf_offset = (off_t *) malloc(sizeof (*buf_offset) * num_entries);
 
 		if (buf == NULL){
 			fprintf(stderr, "can't allocate buffer\n");
@@ -80,20 +164,15 @@ public:
 		for (int i = 0; i < buf_size / PAGE_SIZE; i++)
 			buf[i * PAGE_SIZE] = 0;
 
-		for (int i = 0; i < num_entries; i++)
-			buf_offset[i] = i * entry_size;
-		permute_offset(buf_offset, num_entries);
-
 		current = 0;
 	}
 
 	~rand_buf() {
 		free(buf);
-		free(buf_offset);
 	}
 
 	char *next_entry() {
-		int off = buf_offset[current];
+		int off = buf_offset.get_offset(current);
 		current = (current + 1) % num_entries;;
 		return &buf[off];
 	}
@@ -115,10 +194,7 @@ public:
 	/* the location in the thread descriptor array. */
 	int idx;
 	rand_buf buf;
-
-	/* the range in the file where we need to read data. */
-	int start_i;	// the first entry in the range
-	int end_i;		// the last entry in the range
+	workload_gen *gen;
 
 	virtual ssize_t access(char *, off_t, ssize_t) = 0;
 	virtual int thread_init() = 0;
@@ -149,8 +225,6 @@ public:
 			perror("open");
 			exit (1);
 		}
-//		ret = posix_fadvise(fd, (off_t) start_i * buf.get_entry_size(),
-//				(off_t) (end_i - start_i) * buf.get_entry_size(), POSIX_FADV_RANDOM);
 		ret = posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
 		if (ret < 0) {
 			perror("posix_fadvise");
@@ -345,7 +419,6 @@ thread_private *threads[NUM_THREADS];
 void *rand_read(void *arg)
 {
 	ssize_t ret;
-	int i, j, start_i, end_i;
 	ssize_t read_bytes = 0;
 	struct timeval start_time, end_time;
 	thread_private *priv = threads[(long) arg];
@@ -353,17 +426,15 @@ void *rand_read(void *arg)
 	int fd;
 
 	priv->thread_init();
-	start_i = priv->start_i;
-	end_i = priv->end_i;
 	buf = &priv->buf;
 
 	gettimeofday(&start_time, NULL);
-	for (i = start_i, j = 0; i < end_i; i++, j++) {
+	while (priv->gen->has_next()) {
 		char *entry = buf->next_entry();
-		ret = priv->access(entry,
-				offset[i], buf->get_entry_size());
+		off_t off = priv->gen->next_offset();
+		ret = priv->access(entry, off, buf->get_entry_size());
 		assert(ret == buf->get_entry_size());
-		assert(*(long *) entry == offset[i] / sizeof(long));
+		assert(*(long *) entry == off / sizeof(long));
 		if (ret > 0)
 			read_bytes += ret;
 		else
@@ -409,6 +480,11 @@ int process_join(pid_t pid)
 	return ret < 0 ? ret : 0;
 }
 
+struct str2int {
+	std::string name;
+	int value;
+};
+
 enum {
 	READ_ACCESS,
 	DIRECT_ACCESS,
@@ -417,10 +493,7 @@ enum {
 	GLOBAL_CACHE_ACCESS
 };
 
-struct access_method {
-	std::string name;
-	int access;
-} methods[] = {
+str2int access_methods[] = {
 	"normal", READ_ACCESS,
 	"direct", DIRECT_ACCESS,
 	"mmap", MMAP_ACCESS,
@@ -428,26 +501,43 @@ struct access_method {
 	"global_cache", GLOBAL_CACHE_ACCESS
 };
 
-void print_methods() {
-	std::cout<<"available methods: ";
-	int num_methods = sizeof(methods) / sizeof(methods[0]);
-	for (int i = 0; i < num_methods; i++) {
-		std::cout<<methods[i].name;
-		if (i < num_methods - 1)
-			std::cout<<", ";
-	}
-	std::cout<<std::endl;
-}
+enum {
+	RAND_OFFSET,
+	RAND_PERMUTE,
+};
 
-int map_method(const std::string &method)
-{
-	int num_methods = sizeof(methods) / sizeof(methods[0]);
-	for (int i = 0; i < num_methods; i++) {
-		if (methods[i].name.compare(method) == 0)
-			return i;
+str2int workloads[] = {
+	"RAND", RAND_OFFSET,
+	"RAND_PERMUTE", RAND_PERMUTE,
+};
+
+class str2int_map {
+	str2int *maps;
+	int num;
+public:
+	str2int_map(str2int *maps, int num) {
+		this->maps = maps;
+		this->num = num;
 	}
-	return -1;
-}
+
+	int map(const std::string &str) {
+		for (int i = 0; i < num; i++) {
+			if (maps[i].name.compare(str) == 0)
+				return i;
+		}
+		return -1;
+	}
+
+	void print(const std::string &str) {
+		std::cout<<str;
+		for (int i = 0; i < num; i++) {
+			std::cout<<maps[i].name;
+			if (i < num - 1)
+				std::cout<<", ";
+		}
+		std::cout<<std::endl;
+	}
+};
 
 long str2size(std::string str)
 {
@@ -479,10 +569,16 @@ int main(int argc, char *argv[])
 	ssize_t read_bytes = 0;
 	int num_files = 0;
 	std::string file_names[NUM_THREADS];
+	int workload = RAND_OFFSET;
+	str2int_map access_map(access_methods,
+			sizeof(access_methods) / sizeof(access_methods[0]));
+	str2int_map workload_map(workloads, 
+			sizeof(workloads) / sizeof(workloads[0]));
 
 	if (argc < 5) {
 		fprintf(stderr, "read files option pages threads cache_size entry_size\n");
-		print_methods();
+		access_map.print("available access methods: ");
+		workload_map.print("available workloads: ");
 		exit(1);
 	}
 
@@ -498,7 +594,7 @@ int main(int argc, char *argv[])
 		std::string value = str.substr(found + 1);
 		std::string key = str.substr(0, found);
 		if (key.compare("option") == 0) {
-			access_option = map_method(value);
+			access_option = access_map.map(value);
 			if (access_option < 0) {
 				fprintf(stderr, "can't find the right option\n");
 				exit(1);
@@ -516,22 +612,18 @@ int main(int argc, char *argv[])
 		else if(key.compare("entry_size") == 0) {
 			entry_size = (int) str2size(value);
 		}
+		else if(key.compare("workload") == 0) {
+			workload = workload_map.map(value);
+		}
 		else {
 			fprintf(stderr, "wrong option\n");
 			exit(1);
 		}
 	}
+	printf("access: %d, npages: %d, nthreads: %d, cache_size: %ld, entry_size: %d, workload: %d\n",
+			access_option, npages, nthreads, cache_size, entry_size, workload);
 
 	int num_entries = npages * (PAGE_SIZE / entry_size);
-	offset = (off_t *) malloc(sizeof(*offset) * num_entries);
-	for(i = 0; i < num_entries; i++) {
-		offset[i] = ((off_t) i) * entry_size;
-		if (offset[i] < 0) {
-			printf("offset[%d]: %ld\n", i, offset[i]);
-			exit(1);
-		}
-	}
-	permute_offset(offset, num_entries);
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
@@ -573,14 +665,30 @@ int main(int argc, char *argv[])
 				exit(1);
 		}
 		
+		long start, end;
 		if (num_files > 1) {
-			threads[j]->start_i = 0;
-			threads[j]->end_i = npages * PAGE_SIZE / entry_size;
+			start = 0;
+			end = npages * PAGE_SIZE / entry_size;
 		}
 		else {
-			threads[j]->start_i = npages / nthreads * PAGE_SIZE / entry_size * j;
-			threads[j]->end_i = threads[j]->start_i + npages / nthreads * PAGE_SIZE / entry_size;
+			start = npages / nthreads * PAGE_SIZE / entry_size * j;
+			end = start + npages / nthreads * PAGE_SIZE / entry_size;
 		}
+
+		workload_gen *gen;
+		switch (workload) {
+			case RAND_OFFSET:
+				gen = new rand_workload(start, end, entry_size);
+				break;
+			case RAND_PERMUTE:
+				gen = new local_rand_permute_workload(num_entries,
+						entry_size, start, end);
+				break;
+			default:
+				fprintf(stderr, "unsupported workload\n");
+				exit(1);
+		}
+		threads[j]->gen = gen;
 	}
 
 	ret = setpriority(PRIO_PROCESS, getpid(), -20);
@@ -627,3 +735,5 @@ int main(int argc, char *argv[])
 	printf("there are %d cells\n", avail_cells);
 	printf("there are %d waits for unused\n", num_wait_unused);
 }
+
+const rand_permute *local_rand_permute_workload::permute;
