@@ -1,4 +1,4 @@
-CFLAGS = -g -O3
+CFLAGS = -g -O3 #-DNDEBUG
 CXXFLAGS = -g -O3
 
 all: rand-read rand-memcpy test create_file

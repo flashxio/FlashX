@@ -359,9 +359,11 @@ void *rand_read(void *arg)
 
 	gettimeofday(&start_time, NULL);
 	for (i = start_i, j = 0; i < end_i; i++, j++) {
-		ret = priv->access(buf->next_entry(),
+		char *entry = buf->next_entry();
+		ret = priv->access(entry,
 				offset[i], buf->get_entry_size());
 		assert(ret == buf->get_entry_size());
+		assert(*(long *) entry == offset[i] / sizeof(long));
 		if (ret > 0)
 			read_bytes += ret;
 		else
