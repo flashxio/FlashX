@@ -8,11 +8,17 @@
  */
 class tree_cache: public page_cache
 {
-	page_buffer<page> buf;
+	page_buffer<page> *buf;
 	std::map<off_t, struct page *> map;
 
 public:
-	tree_cache(long size): map(), buf(size / PAGE_SIZE) { }
+	tree_cache(long size, long page_buf) {
+		buf = new page_buffer<page>(size / PAGE_SIZE, page_buf);
+	}
+
+	~tree_cache() {
+		delete buf;
+	}
 	
 	page *search(const off_t offset) {
 		std::map<off_t, struct page *>::iterator it = map.find(offset);
@@ -30,8 +36,8 @@ public:
 	 * If the cache is full, evict a page and return the evicted page
 	 */
 	page *get_empty_page(off_t offset) {
-		struct page *page = buf.get_empty_page();
-		if (page->get_offset() != -1) {
+		struct page *page = buf->get_empty_page();
+		if (page->initialized()) {
 			map.erase(page->get_offset());
 		}
 		page->set_offset(offset);

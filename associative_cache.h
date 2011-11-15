@@ -14,6 +14,7 @@ class hash_cell
 {
 	pthread_spinlock_t _lock;
 	page_buffer<thread_safe_page> *buf;
+	long page_buf;
 
 	/* this function has to be called with lock held */
 	thread_safe_page *get_empty_page() {
@@ -50,6 +51,10 @@ public:
 		pthread_spin_destroy(&_lock);
 	}
 
+	void set_pages(long page_buf) {
+		this->page_buf = page_buf;
+	}
+
 	/**
 	 * search for a page with the offset.
 	 * If the page doesn't exist, return an empty page.
@@ -59,7 +64,7 @@ public:
 		pthread_spin_lock(&_lock);
 		/* if no page has been added, return immediately. */
 		if (buf == NULL) {
-			buf = new page_buffer<thread_safe_page> (CELL_SIZE);
+			buf = new page_buffer<thread_safe_page> (CELL_SIZE, page_buf);
 #ifdef STATISTICS
 			__sync_fetch_and_add(&avail_cells, 1);
 #endif
@@ -97,6 +102,12 @@ public:
 		int npages = cache_size / PAGE_SIZE;
 		ncells = npages / CELL_SIZE;
 		cells = new hash_cell[ncells];
+		for (int i = 0; i < ncells; i++)
+			cells[i].set_pages(i * PAGE_SIZE * CELL_SIZE);
+	}
+
+	~associative_cache() {
+		delete [] cells;
 	}
 
 	page *search(off_t offset) {

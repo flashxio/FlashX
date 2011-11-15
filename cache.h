@@ -10,66 +10,113 @@
 #include <map>
 
 #define PAGE_SIZE 4096
+#define LOG_PAGE_SIZE 12
 #define ROUND_PAGE(off) (((long) off) & (~(PAGE_SIZE - 1)))
+
+enum {
+	DATA_READY_BIT,
+	IO_PENDING_BIT,
+};
 
 class page
 {
-	off_t offset;
-	void *data;
-	char flags;
+	/*
+	 * the offset in the file in pages.
+	 * it can cover a file of 8 TB.
+	 */
+	int offset;
+
+	/* 
+	 * all data in a page is in a buffer,
+	 * so can we use the start of the buffer
+	 * and the offset in the buffer to calculate
+	 * the address of the page.
+	 */
+	static void *data_start;
+	/*
+	 * in pages.
+	 */
+	int buf_offset;
+
+protected:
+	volatile char flags;
 
 public:
-	page():offset(-1), data(NULL) { }
+	page():offset(-1), buf_offset(0), flags(0) { }
 
-	page(off_t off, void *d): offset(off), data(d) { }
-
-	void set_offset(off_t off) {
-		offset = off;
+	page(off_t off, long data) {
+		set_offset(off);
+		flags = 0;
+		buf_offset = data >> LOG_PAGE_SIZE;
 	}
 
-	off_t get_offset() const { return offset; }
-	void *get_data() const { return data; }
+	/* offset in the file in bytes */
+	void set_offset(off_t off) {
+		offset = off >> LOG_PAGE_SIZE;
+	}
 
-	bool data_ready() const { return flags & 0x1; }
+	bool initialized() const {
+		return offset != -1;
+	}
+
+	// TODO is off_t unsigned?
+	off_t get_offset() const { return ((off_t) offset) << LOG_PAGE_SIZE; }
+	void *get_data() const { return (void *) ((long) data_start
+			+ (((long) buf_offset) << LOG_PAGE_SIZE)); }
+
+	bool data_ready() const { return flags & (0x1 << DATA_READY_BIT); }
 	void set_data_ready(bool ready) {
 		if (ready)
-			flags |= 0x1;
+			flags |= 0x1 << DATA_READY_BIT;
 		else
-			flags &= ~0x1;
+			flags &= ~(0x1 << DATA_READY_BIT);
+	}
+
+	static void allocate_cache(long size) {
+		data_start = valloc(size);
 	}
 };
+void *page::data_start;
 
 class thread_safe_page: public page
 {
-	volatile char flags;
-	volatile short refcnt;
-	volatile char io_pending;
-public:
-	thread_safe_page(): page(), flags(0), refcnt(0), io_pending(0) {
+	volatile unsigned char refcnt;
+
+	void set_flags_bit(int i, bool v) {
+		if (v)
+			__sync_fetch_and_or(&flags, 0x1 << i);
+		else
+			__sync_fetch_and_and(&flags, ~(0x1 << i));
 	}
 
-	thread_safe_page(off_t off, void *d): page(off, d), flags(0), refcnt(0), io_pending(0) {
+	bool get_flags_bit(int i) const {
+		return flags & (0x1 << i);
+	}
+
+public:
+	thread_safe_page(): page(), refcnt(0) {
+	}
+
+	thread_safe_page(off_t off, long d): page(off, d), refcnt(0) {
 	}
 
 	/* this is enough for x86 architecture */
-	bool data_ready() const { return flags & 0x1; }
+	bool data_ready() const { return get_flags_bit(DATA_READY_BIT); }
 	void wait_ready() {
 		while (!data_ready()) {}
 	}
 	void set_data_ready(bool ready) {
-		if (ready)
-			__sync_fetch_and_or(&flags, 0x1);
-		else
-			__sync_fetch_and_and(&flags, ~0x1);
+		set_flags_bit(DATA_READY_BIT, ready);
 	}
 
 	void set_io_pending(bool pending) {
-		io_pending = pending;
+		set_flags_bit(IO_PENDING_BIT, pending);
 	}
 	/* we set the status to io pending,
 	 * and return the original status */
 	bool test_and_set_io_pending() {
-		return !__sync_bool_compare_and_swap(&io_pending, false, true);
+		char old = __sync_fetch_and_or(&flags, 0x1 << IO_PENDING_BIT);
+		return old & (0x1 << IO_PENDING_BIT);
 	}
 
 	void inc_ref() {
@@ -116,17 +163,19 @@ class page_buffer
 {
 	long size;			// the number of pages that can be buffered
 	T *buf;			// a circular buffer to keep pages.
-	char *pages;		// the pointer to the space for all pages.
 	int beg_idx;		// the index of the beginning of the buffer
 	int end_idx;		// the index of the end of the buffer
 
 public:
-	page_buffer(long size) {
+	/*
+	 * @size: the size of the page buffer
+	 * @page_buf: the offset of the page array in the global page cache.
+	 */
+	page_buffer(long size, long page_buf) {
 		this->size = size;
 		buf = new T[size];
-		pages = (char *) valloc(size * PAGE_SIZE);
 		for (int i = 0; i < size; i++) {
-			buf[i] = T(-1, &pages[i * PAGE_SIZE]);
+			buf[i] = T(-1, page_buf + i * PAGE_SIZE);
 		}
 		beg_idx = 0;
 		end_idx = 0;
@@ -134,7 +183,6 @@ public:
 
 	~page_buffer() {
 		delete [] buf;
-		free(pages);
 	}
 
 	bool is_full() const {

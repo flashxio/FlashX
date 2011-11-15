@@ -113,7 +113,7 @@ public:
 
 //		/* each thread has a page buffer, and page eviction is done in the local thread. */
 //		bufs = new page_buffer[nthreads](npages / nthreads);
-		buf = new page_buffer<thread_safe_page>(npages);
+		buf = new page_buffer<thread_safe_page>(npages, 0);
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
@@ -137,7 +137,7 @@ public:
 			 * the page has been used,
 			 * it must be in the hash table.
 			 */
-			if (pg->get_offset() >= 0)
+			if (pg->initialized())
 				table.remove(pg->get_offset());
 			pg->set_data_ready(false);
 			pg->set_offset(offset);

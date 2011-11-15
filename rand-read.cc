@@ -346,7 +346,8 @@ class part_cached_private: public direct_private
 public:
 	part_cached_private(const char *name, int idx, long cache_size,
 			int entry_size): direct_private(name, idx, entry_size) {
-		cache = new tree_cache(cache_size);
+		/* all local cache has the same size */
+		cache = new tree_cache(cache_size, idx * cache_size);
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
@@ -658,6 +659,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	page::allocate_cache(cache_size);
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
 		const char *file_name;
