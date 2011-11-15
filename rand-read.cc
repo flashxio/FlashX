@@ -19,6 +19,7 @@
 #include "cache.h"
 #include "tree_cache.h"
 #include "associative_cache.h"
+#include "cuckoo_cache.h"
 
 //#define USE_PROCESS
 
@@ -367,7 +368,7 @@ public:
 			int entry_size): direct_private(name, idx, entry_size) {
 		num_waits = 0;
 		if (global_cache == NULL) {
-			global_cache = new associative_cache(cache_size);
+			global_cache = new cuckoo_cache(cache_size);
 		}
 	}
 
@@ -734,6 +735,7 @@ int main(int argc, char *argv[])
 	printf("there are %d cache hits\n", cache_hits);
 	printf("there are %d cells\n", avail_cells);
 	printf("there are %d waits for unused\n", num_wait_unused);
+	printf("%d keys are evicted from the hash table because of conflicts\n", removed_indices);
 }
 
 const rand_permute *local_rand_permute_workload::permute;

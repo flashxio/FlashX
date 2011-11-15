@@ -5,9 +5,26 @@
 
 #include "cache.h"
 #include "tree_cache.h"
+#include "cuckoo_cache.h"
 
 int main()
 {
+	cuckoo_hash hash(16);
+
+	for (int i = 0; i < 16; i++) {
+		hash.insert(i, new page(i, NULL));
+	}
+	for (int i = 0; i < 16; i++) {
+		page *pg = hash.search(i);
+		if (pg == NULL)
+			printf("page %d doesn't exist in the hash table\n", i);
+		else if (pg->get_offset() == i)
+			printf("find page %d\n", i);
+		else
+			printf("wrong page %ld in the hash table\n", pg->get_offset());
+	}
+
+#if 0
 	page empty_page;
 	printf("offset: %ld, data: %p\n", empty_page.get_offset(),
 			empty_page.get_data());
@@ -33,4 +50,5 @@ int main()
 		*ret = new_page;
 	}
 	page_cache *cache = new tree_cache(10);
+#endif
 }
