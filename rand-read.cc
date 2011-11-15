@@ -31,7 +31,6 @@ enum {
 	MMAP,
 };
 
-int cache_hits;
 int npages;
 int nthreads = 1;
 struct timeval global_start;
@@ -197,14 +196,25 @@ public:
 	rand_buf buf;
 	workload_gen *gen;
 
+#ifdef STATISTICS
+	int cache_hits;
+#endif
+
 	virtual ssize_t access(char *, off_t, ssize_t) = 0;
 	virtual int thread_init() = 0;
 
 	thread_private(int idx, int entry_size): buf(NUM_PAGES / nthreads * PAGE_SIZE, entry_size) {
 		this->idx = idx;
+#ifdef STATISTICS
+		cache_hits = 0;
+#endif
 	}
 
-	virtual void print_stat() { }
+#ifdef STATISTICS
+	virtual void print_stat() {
+		printf("there are %d cache hits in thread %d\n", cache_hits, idx);
+	}
+#endif
 };
 
 class read_private: public thread_private
@@ -347,8 +357,11 @@ public:
 			}
 			p->set_data_ready(true);
 		}
-		else
+		else {
+#ifdef STATISTICS
 			cache_hits++;
+#endif
+		}
 
 		offset -= ROUND_PAGE(offset);
 		/* I assume the data I read never crosses the page boundary */
@@ -400,7 +413,9 @@ public:
 			}
 		}
 		else {
+#ifdef STATISTICS
 			cache_hits++;
+#endif
 		}
 		offset -= ROUND_PAGE(offset);
 		/* I assume the data I read never crosses the page boundary */
@@ -410,9 +425,12 @@ public:
 		return ret;
 	}
 
+#ifdef STATISTICS
 	void print_stat() {
+		direct_private::print_stat();
 		printf("there are %d waits in thread %d\n", num_waits, idx);
 	}
+#endif
 };
 
 thread_private *threads[NUM_THREADS];
@@ -726,16 +744,18 @@ int main(int argc, char *argv[])
 		read_bytes += size;
 	}
 	gettimeofday(&end_time, NULL);
-	for (int i = 0; i < nthreads; i++) {
-		threads[i]->print_stat();
-	}
 	printf("read %ld bytes, takes %f seconds\n",
 			read_bytes, end_time.tv_sec - start_time.tv_sec
 			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
-	printf("there are %d cache hits\n", cache_hits);
+
+#ifdef STATISTICS
+	for (int i = 0; i < nthreads; i++) {
+		threads[i]->print_stat();
+	}
 	printf("there are %d cells\n", avail_cells);
 	printf("there are %d waits for unused\n", num_wait_unused);
 	printf("%d keys are evicted from the hash table because of conflicts\n", removed_indices);
+#endif
 }
 
 const rand_permute *local_rand_permute_workload::permute;

@@ -5,8 +5,10 @@
 
 #define CELL_SIZE 8
 
+#ifdef STATISTICS
 static volatile int avail_cells;
 static int num_wait_unused;
+#endif
 
 class hash_cell
 {
@@ -24,7 +26,9 @@ class hash_cell
 		 */
 		// TODO I assume this situation is rare
 		while (ret->get_ref()) {
+#ifdef STATISTICS
 			num_wait_unused++;
+#endif
 			pthread_spin_unlock(&_lock);
 			ret->wait_unused();
 			pthread_spin_lock(&_lock);
@@ -56,7 +60,9 @@ public:
 		/* if no page has been added, return immediately. */
 		if (buf == NULL) {
 			buf = new page_buffer<thread_safe_page> (CELL_SIZE);
+#ifdef STATISTICS
 			__sync_fetch_and_add(&avail_cells, 1);
+#endif
 			ret = get_empty_page();
 			ret->set_offset(off);
 			pthread_spin_unlock(&_lock);

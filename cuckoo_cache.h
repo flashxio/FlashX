@@ -7,7 +7,10 @@
 #include "cache.h"
 
 #define MAXLOOP 5
+
+#ifdef STATISTICS
 volatile int removed_indices;
+#endif
 
 class cuckoo_hash
 {
@@ -28,7 +31,9 @@ public:
 		log_size = log2(size);
 		a[0] = random();
 		a[1] = random();
+#ifdef STATISTICS
 		removed_indices = 0;
+#endif
 	}
 
 	~cuckoo_hash() {
@@ -61,7 +66,9 @@ public:
 		 * at the moment, and it will be read again from the file. 
 		 * So it doesn't hurt the correctness.
 		 */
+#ifdef STATISTICS
 		__sync_fetch_and_add(&removed_indices, 1);
+#endif
 	}
 
 	void remove(off_t key) {

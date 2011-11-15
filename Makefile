@@ -1,5 +1,5 @@
-CFLAGS = -g -O3 #-DNDEBUG
-CXXFLAGS = -g -O3
+CFLAGS = -g -O3 -DSTATISTICS #-DNDEBUG
+CXXFLAGS = -g -O3 -DSTATISTICS
 
 all: rand-read rand-memcpy test create_file
 
