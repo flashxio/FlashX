@@ -9,6 +9,13 @@
 
 int main()
 {
+	page pg;
+	printf("orig: %p\n", &pg);
+	lockable_pointer<page> pointer(&pg);
+	pointer.lock();
+	printf("lock: %p\n", pointer.operator->());
+	pointer.unlock();
+	printf("unlock: %p\n", pointer.operator->());
 
 #if 0
 	// test cuckoo cache
@@ -28,6 +35,7 @@ int main()
 	}
 #endif
 
+#if 0
 	// test page
 	page::allocate_cache(4096 * 10);
 	page *buf = new page[10];
@@ -80,4 +88,5 @@ int main()
 		*ret = new_page;
 	}
 	page_cache *cache = new tree_cache(10, 0);
+#endif
 }

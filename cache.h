@@ -165,6 +165,7 @@ class page_buffer
 	T *buf;			// a circular buffer to keep pages.
 	int beg_idx;		// the index of the beginning of the buffer
 	int end_idx;		// the index of the end of the buffer
+	pthread_spinlock_t _lock;
 
 public:
 	/*
@@ -172,6 +173,7 @@ public:
 	 * @page_buf: the offset of the page array in the global page cache.
 	 */
 	page_buffer(long size, long page_buf) {
+		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 		this->size = size;
 		buf = new T[size];
 		for (int i = 0; i < size; i++) {
@@ -182,6 +184,7 @@ public:
 	}
 
 	~page_buffer() {
+		pthread_spin_destroy(&_lock);
 		delete [] buf;
 	}
 
@@ -196,11 +199,13 @@ public:
 	 * so I change the begin and end index of the circular buffer.
 	 */
 	T *get_empty_page() {
+		pthread_spin_lock(&_lock);
 		if (is_full()) {
 			beg_idx = (beg_idx + 1) % size;
 		}
 		T *ret = &buf[end_idx];
 		end_idx = (end_idx + 1) % size;
+		pthread_spin_unlock(&_lock);
 		return ret;
 	}
 
