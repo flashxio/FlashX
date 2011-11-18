@@ -386,7 +386,7 @@ public:
 			int entry_size): direct_private(name, idx, entry_size) {
 		num_waits = 0;
 		if (global_cache == NULL) {
-			global_cache = new cuckoo_cache(cache_size);
+			global_cache = new associative_cache(cache_size);
 		}
 	}
 

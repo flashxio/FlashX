@@ -9,6 +9,33 @@
 
 int main()
 {
+	page pg(0, 0x51 * 4096);
+	printf("data: %p\n", pg.get_data());
+	pg.set_data_ready(true);
+	printf("data: %p, ready: %d\n", pg.get_data(), pg.data_ready());
+
+	thread_safe_page tspg(0, 0x52 * 4096);
+	printf("thread_safe_page data: %p, ready: %d, ref: %d\n",
+			tspg.get_data(), tspg.data_ready(), tspg.get_ref());
+	tspg.set_data_ready(true);
+	printf("thread_safe_page data: %p, ready: %d, ref: %d\n",
+			tspg.get_data(), tspg.data_ready(), tspg.get_ref());
+	tspg.inc_ref();
+	printf("thread_safe_page data: %p, ready: %d, ref: %d\n",
+			tspg.get_data(), tspg.data_ready(), tspg.get_ref());
+	tspg.set_data_ready(false);
+	printf("thread_safe_page data: %p, ready: %d, ref: %d\n",
+			tspg.get_data(), tspg.data_ready(), tspg.get_ref());
+	tspg.dec_ref();
+	printf("thread_safe_page data: %p, ready: %d, ref: %d\n",
+			tspg.get_data(), tspg.data_ready(), tspg.get_ref());
+	printf("thread_safe_page data: %p, ready: %d, ref: %d, io pending: %d\n",
+			tspg.get_data(), tspg.data_ready(), tspg.get_ref(), tspg.test_and_set_io_pending());
+	printf("thread_safe_page data: %p, ready: %d, ref: %d, io pending: %d\n",
+			tspg.get_data(), tspg.data_ready(), tspg.get_ref(), tspg.test_and_set_io_pending());
+
+#if 0
+	// test lockable_pointer
 	page pg;
 	printf("orig: %p\n", &pg);
 	lockable_pointer<page> pointer(&pg);
@@ -16,6 +43,7 @@ int main()
 	printf("lock: %p\n", pointer.operator->());
 	pointer.unlock();
 	printf("unlock: %p\n", pointer.operator->());
+#endif
 
 #if 0
 	// test cuckoo cache

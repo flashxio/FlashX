@@ -14,9 +14,13 @@
 #define ROUND_PAGE(off) (((long) off) & (~(PAGE_SIZE - 1)))
 
 enum {
-	DATA_READY_BIT,
-	IO_PENDING_BIT,
+	FLAGS_NBITS = 6,
+	BUF_OFFSET_NBITS = 24,
+	DATA_READY_BIT = 30,
+	IO_PENDING_BIT = 31,
 };
+
+const int BUF_OFFSET_BITS = (1 << BUF_OFFSET_NBITS) - 1;
 
 class page
 {
@@ -36,18 +40,23 @@ class page
 	/*
 	 * in pages.
 	 */
-	int buf_offset;
-
 protected:
-	volatile char flags;
+	volatile int buf_offset;
+
+	int get_buf_offset() const {
+		return buf_offset & BUF_OFFSET_BITS;
+	}
+	void set_buf_offset(int off) {
+		int flags = buf_offset & (~BUF_OFFSET_BITS);
+		buf_offset = flags | (off & BUF_OFFSET_BITS);
+	}
 
 public:
-	page():offset(-1), buf_offset(0), flags(0) { }
+	page():offset(-1), buf_offset(0) { }
 
 	page(off_t off, long data) {
 		set_offset(off);
-		flags = 0;
-		buf_offset = data >> LOG_PAGE_SIZE;
+		set_buf_offset(data >> LOG_PAGE_SIZE);
 	}
 
 	/* offset in the file in bytes */
@@ -62,14 +71,14 @@ public:
 	// TODO is off_t unsigned?
 	off_t get_offset() const { return ((off_t) offset) << LOG_PAGE_SIZE; }
 	void *get_data() const { return (void *) ((long) data_start
-			+ (((long) buf_offset) << LOG_PAGE_SIZE)); }
+			+ (((long) get_buf_offset()) << LOG_PAGE_SIZE)); }
 
-	bool data_ready() const { return flags & (0x1 << DATA_READY_BIT); }
+	bool data_ready() const { return buf_offset & (0x1 << DATA_READY_BIT); }
 	void set_data_ready(bool ready) {
 		if (ready)
-			flags |= 0x1 << DATA_READY_BIT;
+			buf_offset |= 0x1 << DATA_READY_BIT;
 		else
-			flags &= ~(0x1 << DATA_READY_BIT);
+			buf_offset &= ~(0x1 << DATA_READY_BIT);
 	}
 
 	static void allocate_cache(long size) {
@@ -80,30 +89,32 @@ void *page::data_start;
 
 class thread_safe_page: public page
 {
-	volatile unsigned char refcnt;
-
 	void set_flags_bit(int i, bool v) {
 		if (v)
-			__sync_fetch_and_or(&flags, 0x1 << i);
+			__sync_fetch_and_or(&buf_offset, 0x1 << i);
 		else
-			__sync_fetch_and_and(&flags, ~(0x1 << i));
+			__sync_fetch_and_and(&buf_offset, ~(0x1 << i));
 	}
 
 	bool get_flags_bit(int i) const {
-		return flags & (0x1 << i);
+		return buf_offset & (0x1 << i);
 	}
 
 public:
-	thread_safe_page(): page(), refcnt(0) {
+	thread_safe_page(): page() {
 	}
 
-	thread_safe_page(off_t off, long d): page(off, d), refcnt(0) {
+	thread_safe_page(off_t off, long d): page(off, d) {
 	}
 
 	/* this is enough for x86 architecture */
 	bool data_ready() const { return get_flags_bit(DATA_READY_BIT); }
 	void wait_ready() {
-		while (!data_ready()) {}
+		while (!data_ready()) {
+#ifdef DEBUG
+			printf("thread %ld wait for data ready\n", pthread_self());
+#endif
+		}
 	}
 	void set_data_ready(bool ready) {
 		set_flags_bit(DATA_READY_BIT, ready);
@@ -115,21 +126,28 @@ public:
 	/* we set the status to io pending,
 	 * and return the original status */
 	bool test_and_set_io_pending() {
-		char old = __sync_fetch_and_or(&flags, 0x1 << IO_PENDING_BIT);
+		int old = __sync_fetch_and_or(&buf_offset, 0x1 << IO_PENDING_BIT);
 		return old & (0x1 << IO_PENDING_BIT);
 	}
 
 	void inc_ref() {
-		__sync_fetch_and_add(&refcnt, 1);
+		char *refcnt = ((char *) &buf_offset) + 3;
+		__sync_fetch_and_add(refcnt, 1);
 	}
 	void dec_ref() {
-		__sync_fetch_and_sub(&refcnt, 1);
+		char *refcnt = ((char *) &buf_offset) + 3;
+		__sync_fetch_and_sub(refcnt, 1);
 	}
 	short get_ref() {
-		return refcnt;
+		char *refcnt = ((char *) &buf_offset) + 3;
+		return (*refcnt) & ((1 << FLAGS_NBITS) - 1);
 	}
 	void wait_unused() {
-		while(get_ref()) {}
+		while(get_ref()) {
+#ifdef DEBUG
+			printf("thread %ld wait for used\n", pthread_self());
+#endif
+		}
 	}
 };
 
