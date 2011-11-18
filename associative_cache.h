@@ -60,7 +60,7 @@ public:
 	 * If the page doesn't exist, return an empty page.
 	 */
 	page *search(off_t off) {
-		thread_safe_page *ret;
+		thread_safe_page *ret = NULL;
 		pthread_spin_lock(&_lock);
 		/* if no page has been added, return immediately. */
 		if (buf == NULL) {
@@ -74,7 +74,12 @@ public:
 			return ret;
 		}
 
-		ret = buf->search(off);
+		for (int i = 0; i < CELL_SIZE; i++) {
+			if (buf->get_page(i)->get_offset() == off) {
+				ret = buf->get_page(i);
+				break;
+			}
+		}
 		if (ret == NULL) {
 			ret = get_empty_page();
 			ret->set_offset(off);

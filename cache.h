@@ -163,9 +163,7 @@ class page_buffer
 {
 	long size;			// the number of pages that can be buffered
 	T *buf;			// a circular buffer to keep pages.
-	int beg_idx;		// the index of the beginning of the buffer
-	int end_idx;		// the index of the end of the buffer
-	pthread_spinlock_t _lock;
+	volatile unsigned long idx;		// to the point where we can evict a page in the buffer
 
 public:
 	/*
@@ -173,24 +171,16 @@ public:
 	 * @page_buf: the offset of the page array in the global page cache.
 	 */
 	page_buffer(long size, long page_buf) {
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 		this->size = size;
 		buf = new T[size];
 		for (int i = 0; i < size; i++) {
 			buf[i] = T(-1, page_buf + i * PAGE_SIZE);
 		}
-		beg_idx = 0;
-		end_idx = 0;
+		idx = 0;
 	}
 
 	~page_buffer() {
-		pthread_spin_destroy(&_lock);
 		delete [] buf;
-	}
-
-	bool is_full() const {
-		return end_idx - beg_idx == -1
-			|| end_idx - beg_idx == size - 1;
 	}
 
 	/**
@@ -199,26 +189,16 @@ public:
 	 * so I change the begin and end index of the circular buffer.
 	 */
 	T *get_empty_page() {
-		pthread_spin_lock(&_lock);
-		if (is_full()) {
-			beg_idx = (beg_idx + 1) % size;
-		}
-		T *ret = &buf[end_idx];
-		end_idx = (end_idx + 1) % size;
-		pthread_spin_unlock(&_lock);
+		/* TODO I ignore the case of integer overflow */
+		long orig = __sync_fetch_and_add(&idx, 1);
+		T *ret = &buf[orig % size];
 		return ret;
 	}
 
-	T *search(off_t off) {
-		T *ret = NULL;
-		for (int i = beg_idx; i != end_idx;
-				i = (i + 1) % size) {
-			if (buf[i].get_offset() == off) {
-				ret = &buf[i];
-				break;
-			}
-		}
-		return ret;
+	T *get_page(int i) {
+		if (i >= size)
+			return NULL;
+		return &buf[i];
 	}
 
 #if 0
