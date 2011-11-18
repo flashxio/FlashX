@@ -212,7 +212,11 @@ public:
 
 #ifdef STATISTICS
 	virtual void print_stat() {
-		printf("there are %d cache hits in thread %d\n", cache_hits, idx);
+		static int tot_hits = 0;
+		static int seen_threads = 0;
+		seen_threads++;
+		if (seen_threads == nthreads)
+			printf("there are %d cache hits\n", cache_hits);
 	}
 #endif
 };
