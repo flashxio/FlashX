@@ -6,7 +6,7 @@
 
 #include "cache.h"
 
-#define MAXLOOP 5
+#define MAXLOOP 2
 
 #ifdef STATISTICS
 volatile int removed_indices;
@@ -63,20 +63,23 @@ public:
 class cuckoo_hash
 {
 	lockable_pointer<thread_safe_page> *tables[2];
-	int log_size;
+	int log_table_sizes[2];
 	long a[2];
 
-	int hash(off_t key, int a_idx) {
-		int v = ((a[a_idx] * key) & 0xFFFFFFFF) >> (32 - log_size);
-		assert (v < (1 << log_size));
+	int hash(off_t key, int idx) {
+		int v = ((a[idx] * key) & 0xFFFFFFFF) >> (32 - log_table_sizes[idx]);
+		assert (v < (1 << log_table_sizes[idx]));
 		return v;
 	}
 public:
 	cuckoo_hash(int size) {
+		const int table_size0 = size * 4;
+		const int table_size1 = size * 2;
 		/* cuckoo hash needs tables to be half-empty in order to be efficient. */
-		tables[0] = new lockable_pointer<thread_safe_page>[size * 2];
-		tables[1] = new lockable_pointer<thread_safe_page>[size * 2];
-		log_size = log2(size);
+		tables[0] = new lockable_pointer<thread_safe_page>[table_size0];
+		tables[1] = new lockable_pointer<thread_safe_page>[table_size1];
+		log_table_sizes[0] = log2(table_size0);
+		log_table_sizes[1] = log2(table_size1);
 		a[0] = random();
 		a[1] = random();
 #ifdef STATISTICS
