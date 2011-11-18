@@ -173,6 +173,7 @@ class cuckoo_cache: public page_cache
 	cuckoo_hash table;
 public:
 	cuckoo_cache(long cache_size): table(cache_size / PAGE_SIZE) {
+		printf("cuckoo cache is used\n");
 		long npages = cache_size / PAGE_SIZE;
 
 //		/* each thread has a page buffer, and page eviction is done in the local thread. */

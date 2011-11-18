@@ -13,6 +13,7 @@ class tree_cache: public page_cache
 
 public:
 	tree_cache(long size, long page_buf) {
+		printf("tree cache is used\n");
 		buf = new page_buffer<page>(size / PAGE_SIZE, page_buf);
 	}
 

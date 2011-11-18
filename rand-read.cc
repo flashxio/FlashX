@@ -31,6 +31,12 @@ enum {
 	MMAP,
 };
 
+enum {
+	TREE_CACHE,
+	ASSOCIATIVE_CACHE,
+	CUCKOO_CACHE
+};
+
 int npages;
 int nthreads = 1;
 struct timeval global_start;
@@ -383,10 +389,23 @@ class global_cached_private: public direct_private
 //	static page_cache *global_cache;
 public:
 	global_cached_private(const char *name, int idx, long cache_size,
-			int entry_size): direct_private(name, idx, entry_size) {
+			int entry_size, int cache_type): direct_private(name, idx, entry_size) {
 		num_waits = 0;
 		if (global_cache == NULL) {
-			global_cache = new associative_cache(cache_size);
+			switch (cache_type) {
+				case TREE_CACHE:
+					global_cache = new tree_cache(cache_size, 0);
+					break;
+				case ASSOCIATIVE_CACHE:
+					global_cache = new associative_cache(cache_size);
+					break;
+				case CUCKOO_CACHE:
+					global_cache = new cuckoo_cache(cache_size);
+					break;
+				default:
+					fprintf(stderr, "wrong cache type\n");
+					exit(1);
+			}
 		}
 	}
 
@@ -525,6 +544,12 @@ str2int access_methods[] = {
 	"global_cache", GLOBAL_CACHE_ACCESS
 };
 
+str2int cache_types[] = {
+	"tree", TREE_CACHE,
+	"associative", ASSOCIATIVE_CACHE,
+	"cuckoo", CUCKOO_CACHE
+};
+
 enum {
 	RAND_OFFSET,
 	RAND_PERMUTE,
@@ -592,17 +617,21 @@ int main(int argc, char *argv[])
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
 	int num_files = 0;
+	int cache_type;
 	std::string file_names[NUM_THREADS];
 	int workload = RAND_OFFSET;
 	str2int_map access_map(access_methods,
 			sizeof(access_methods) / sizeof(access_methods[0]));
 	str2int_map workload_map(workloads, 
 			sizeof(workloads) / sizeof(workloads[0]));
+	str2int_map cache_map(cache_types, 
+			sizeof(cache_types) / sizeof(cache_types[0]));
 
 	if (argc < 5) {
 		fprintf(stderr, "read files option pages threads cache_size entry_size\n");
 		access_map.print("available access methods: ");
 		workload_map.print("available workloads: ");
+		cache_map.print("available cache types: ");
 		exit(1);
 	}
 
@@ -624,6 +653,9 @@ int main(int argc, char *argv[])
 				exit(1);
 			}
 		}
+		else if(key.compare("cache_type") == 0) {
+			cache_type = cache_map.map(value);
+		}
 		else if(key.compare("pages") == 0) {
 			npages = atoi(value.c_str());
 		}
@@ -644,8 +676,8 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %d, nthreads: %d, cache_size: %ld, entry_size: %d, workload: %d\n",
-			access_option, npages, nthreads, cache_size, entry_size, workload);
+	printf("access: %d, npages: %d, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d\n",
+			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload);
 
 	int num_entries = npages * (PAGE_SIZE / entry_size);
 
@@ -683,7 +715,7 @@ int main(int argc, char *argv[])
 				threads[j] = new part_cached_private(file_name, j, cache_size / nthreads, entry_size);
 				break;
 			case GLOBAL_CACHE_ACCESS:
-				threads[j] = new global_cached_private(file_name, j, cache_size, entry_size);
+				threads[j] = new global_cached_private(file_name, j, cache_size, entry_size, cache_type);
 				break;
 			default:
 				fprintf(stderr, "wrong access option\n");
