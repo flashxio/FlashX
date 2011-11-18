@@ -15,48 +15,40 @@ volatile int removed_indices;
 template <class T>
 class lockable_pointer
 {
-	pthread_spinlock_t _lock;
 	T *p;
 public:
 	lockable_pointer() {
 		this->p = NULL;
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	lockable_pointer(T *p) {
 		this->p = p;
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
-//		assert((((long) p) & 0x1L) == 0);
+		assert((((long) p) & 0x1L) == 0);
 	}
 
 	~lockable_pointer() {
-		pthread_spin_destroy(&_lock);
 	}
 
 	T *operator->() {
-		return p;
-//		return (T *) (((long) p) & ~0x1L);
+		return (T *) (((long) p) & ~0x1L);
 	}
 
 	void lock() {
 #ifdef DEBUG
 		printf("thread %ld lock\n", pthread_self());
 #endif
-		pthread_spin_lock(&_lock);
-//		while (__sync_fetch_and_or((long *) &p, 0x1L)) {}
+		while (__sync_fetch_and_or((long *) &p, 0x1L) & 0x1L) {}
 	}
 
 	void unlock() {
 #ifdef DEBUG
 		printf("thread %ld unlock\n", pthread_self());
 #endif
-		pthread_spin_unlock(&_lock);
-//		__sync_fetch_and_and((long *) &p, ~0x1L);
+		__sync_fetch_and_and((long *) &p, ~0x1L);
 	}
 
 	void set_pointer(T *p) {
-		// TODO I need to keep the lock bit
-		this->p = p;
+		this->p = (T *) (((long) p) | (((long) this->p) & 0x1L));
 	}
 };
 
