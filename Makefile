@@ -13,9 +13,7 @@ rand-read: rand-read.o
 rand-memcpy: rand-memcpy.o
 	gcc -o rand-memcpy rand-memcpy.o -lpthread
 
-test.o: test.cc cache.h
-
-test: test.cc cuckoo_cache.h
+test: test.cc cuckoo_cache.h cache.h associative_cache.h tree_cache.h
 	g++ -o test test.cc -g -lpthread
 
 clean:
