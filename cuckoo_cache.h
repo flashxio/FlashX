@@ -12,49 +12,55 @@
 volatile int removed_indices;
 #endif
 
-template <class T>
 class lockable_pointer
 {
-	T *p;
+	static page_buffer<thread_safe_page> *buf;
+	volatile int buf_idx;
 public:
 	lockable_pointer() {
-		this->p = NULL;
-	}
-
-	lockable_pointer(T *p) {
-		this->p = p;
-		assert((((long) p) & 0x1L) == 0);
+		buf_idx = 0;
 	}
 
 	~lockable_pointer() {
 	}
 
-	T *operator->() {
-		return (T *) (((long) p) & ~0x1L);
+	static void set_buf(page_buffer<thread_safe_page> *b) {
+		buf = b;
+	}
+
+	thread_safe_page *get_pointer() {
+		return buf->get_page(buf_idx >> 1);
 	}
 
 	void lock() {
 #ifdef DEBUG
 		printf("thread %ld lock\n", pthread_self());
 #endif
-		while (__sync_fetch_and_or((long *) &p, 0x1L) & 0x1L) {}
+		while (__sync_fetch_and_or(&buf_idx, 0x1) & 0x1) {}
 	}
 
 	void unlock() {
 #ifdef DEBUG
 		printf("thread %ld unlock\n", pthread_self());
 #endif
-		__sync_fetch_and_and((long *) &p, ~0x1L);
+		__sync_fetch_and_and(&buf_idx, ~0x1);
 	}
 
-	void set_pointer(T *p) {
-		this->p = (T *) (((long) p) | (((long) this->p) & 0x1L));
+	void set_pointer(thread_safe_page *p) {
+		if (p == NULL) {
+			buf_idx = 0;
+		}
+		else {
+			int idx = buf->get_idx(p);
+			buf_idx = idx << 1 | (buf_idx & 0x1);
+		}
 	}
 };
+page_buffer<thread_safe_page> *lockable_pointer::buf;
 
 class cuckoo_hash
 {
-	lockable_pointer<thread_safe_page> *tables[2];
+	lockable_pointer *tables[2];
 	int log_table_sizes[2];
 	long a[2];
 
@@ -68,8 +74,8 @@ public:
 		const int table_size0 = size * 4;
 		const int table_size1 = size * 2;
 		/* cuckoo hash needs tables to be half-empty in order to be efficient. */
-		tables[0] = new lockable_pointer<thread_safe_page>[table_size0];
-		tables[1] = new lockable_pointer<thread_safe_page>[table_size1];
+		tables[0] = new lockable_pointer[table_size0];
+		tables[1] = new lockable_pointer[table_size1];
 		log_table_sizes[0] = log2(table_size0);
 		log_table_sizes[1] = log2(table_size1);
 		a[0] = random();
@@ -89,17 +95,17 @@ public:
 		thread_safe_page *tmp;
 		// TODO I need to test if this atomic operation works
 		tables[i][hash(key, i)].lock();
-		if(tables[i][hash(key, i)].operator->() == NULL) {
+		if(tables[i][hash(key, i)].get_pointer() == NULL) {
 			tables[i][hash(key, i)].set_pointer(value);
 			tables[i][hash(key, i)].unlock();
 			return NULL;
 		}
-		else if(tables[i][hash(key, i)]->get_offset() == key) {
+		else if(tables[i][hash(key, i)].get_pointer()->get_offset() == key) {
 			tables[i][hash(key, i)].unlock();
 			return NULL;
 		}
 		else {
-			tmp = tables[i][hash(key, i)].operator->();
+			tmp = tables[i][hash(key, i)].get_pointer();
 			tables[i][hash(key, i)].set_pointer(value);
 			tables[i][hash(key, i)].unlock();
 		}
@@ -112,11 +118,9 @@ public:
 			value = swap_entry(0, key, value);
 			if (value == NULL)
 				return;
-			key = value->get_offset();
 			value = swap_entry(1, key, value);
 			if (value == NULL)
 				return;
-			key = value->get_offset();
 		}
 		/* 
 		 * we don't need to rehash the table.
@@ -132,7 +136,7 @@ public:
 	bool remove_entry(const int i, const off_t key) {
 		bool ret = false;
 		tables[i][hash(key, i)].lock();
-		thread_safe_page *v = tables[i][hash(key, i)].operator->();
+		thread_safe_page *v = tables[i][hash(key, i)].get_pointer();
 		if (v && v->get_offset() == key) {
 			tables[i][hash(key, i)].set_pointer(NULL);
 			ret = true;
@@ -149,7 +153,7 @@ public:
 	thread_safe_page *search_entry(const int i, const off_t key) {
 		thread_safe_page *ret = NULL;
 		tables[i][hash(key, i)].lock();
-		thread_safe_page *v = tables[i][hash(key, i)].operator->();
+		thread_safe_page *v = tables[i][hash(key, i)].get_pointer();
 		if (v && v->get_offset() == key) {
 			ret = v;
 			v->inc_ref();
@@ -179,6 +183,7 @@ public:
 //		/* each thread has a page buffer, and page eviction is done in the local thread. */
 //		bufs = new page_buffer[nthreads](npages / nthreads);
 		buf = new page_buffer<thread_safe_page>(npages, 0);
+		lockable_pointer::set_buf(buf);
 	}
 
 	~cuckoo_cache() {

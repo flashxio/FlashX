@@ -219,6 +219,10 @@ public:
 		return &buf[i];
 	}
 
+	int get_idx(T *p) {
+		return p - buf;
+	}
+
 #if 0
 	/* push a page to the buffer.
 	 * if the buffer is full, the first page is removed,
