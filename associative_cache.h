@@ -3,7 +3,7 @@
 
 #include "cache.h"
 
-#define CELL_SIZE 8
+#define CELL_SIZE 4
 
 #ifdef STATISTICS
 static volatile int avail_cells;
@@ -70,7 +70,8 @@ class hash_cell
 		 * other threads. We need to wait for other threads
 		 * to finish using it.
 		 */
-		// TODO I assume this situation is rare
+		// TODO I have to improve here.
+		// by removing this part of code, I can get 2s faster.
 		while (ret->get_ref()) {
 #ifdef STATISTICS
 			num_wait_unused++;
