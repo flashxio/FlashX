@@ -10,15 +10,60 @@ static volatile int avail_cells;
 static int num_wait_unused;
 #endif
 
+/**
+ * This data structure is to implement LRU.
+ */
+template<class T, int BUF_SIZE>
+class page_cell
+{
+	unsigned int idx;		// to the point where we can evict a page in the buffer
+	T buf[BUF_SIZE];			// a circular buffer to keep pages.
+
+public:
+	/*
+	 * @size: the size of the page buffer
+	 * @page_buf: the offset of the page array in the global page cache.
+	 */
+	page_cell() {
+		idx = 0;
+	}
+
+	void set_pages(long page_buf) {
+		for (int i = 0; i < BUF_SIZE; i++) {
+			buf[i] = T(-1, page_buf + i * PAGE_SIZE);
+		}
+		idx = 0;
+	}
+
+	/**
+	 * return an empty page.
+	 * I expected the page will be filled with data,
+	 * so I change the begin and end index of the circular buffer.
+	 */
+	T *get_empty_page() {
+		/* TODO I ignore the case of integer overflow */
+		T *ret = &buf[idx % BUF_SIZE];
+		idx++;
+		return ret;
+	}
+
+	T *get_page(int i) {
+		if (i >= BUF_SIZE)
+			return NULL;
+		return &buf[i];
+	}
+};
+
+// TODO the entire cell should be put in the same cache line
+// so each access to the hash table has only one cache miss.
 class hash_cell
 {
 	pthread_spinlock_t _lock;
-	page_buffer<thread_safe_page> *buf;
-	long page_buf;
+	page_cell<thread_safe_page, CELL_SIZE> buf;
 
 	/* this function has to be called with lock held */
 	thread_safe_page *get_empty_page() {
-		thread_safe_page *ret = buf->get_empty_page();
+		thread_safe_page *ret = buf.get_empty_page();
 		/*
 		 * each time we select a page to evict,
 		 * it's possible that it's still used by some
@@ -41,18 +86,15 @@ class hash_cell
 
 public:
 	hash_cell() {
-		buf = NULL;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	~hash_cell() {
-		if (buf)
-			delete buf;
 		pthread_spin_destroy(&_lock);
 	}
 
 	void set_pages(long page_buf) {
-		this->page_buf = page_buf;
+		buf.set_pages(page_buf);
 	}
 
 	/**
@@ -62,21 +104,10 @@ public:
 	page *search(off_t off) {
 		thread_safe_page *ret = NULL;
 		pthread_spin_lock(&_lock);
-		/* if no page has been added, return immediately. */
-		if (buf == NULL) {
-			buf = new page_buffer<thread_safe_page> (CELL_SIZE, page_buf);
-#ifdef STATISTICS
-			__sync_fetch_and_add(&avail_cells, 1);
-#endif
-			ret = get_empty_page();
-			ret->set_offset(off);
-			pthread_spin_unlock(&_lock);
-			return ret;
-		}
 
 		for (int i = 0; i < CELL_SIZE; i++) {
-			if (buf->get_page(i)->get_offset() == off) {
-				ret = buf->get_page(i);
+			if (buf.get_page(i)->get_offset() == off) {
+				ret = buf.get_page(i);
 				break;
 			}
 		}

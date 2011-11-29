@@ -6,9 +6,12 @@
 #include "cache.h"
 #include "tree_cache.h"
 #include "cuckoo_cache.h"
+#include "associative_cache.h"
 
 int main()
 {
+	printf("cell size: %ld\n", sizeof(hash_cell));
+#if 0
 	page pg(0, 0x51 * 4096);
 	printf("data: %p\n", pg.get_data());
 	pg.set_data_ready(true);
@@ -33,6 +36,7 @@ int main()
 			tspg.get_data(), tspg.data_ready(), tspg.get_ref(), tspg.test_and_set_io_pending());
 	printf("thread_safe_page data: %p, ready: %d, ref: %d, io pending: %d\n",
 			tspg.get_data(), tspg.data_ready(), tspg.get_ref(), tspg.test_and_set_io_pending());
+#endif
 
 #if 0
 	// test lockable_pointer
