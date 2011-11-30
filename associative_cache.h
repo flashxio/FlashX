@@ -7,7 +7,8 @@
 
 #ifdef STATISTICS
 static volatile int avail_cells;
-static int num_wait_unused;
+static volatile int num_wait_unused;
+static volatile int lock_contentions;
 #endif
 
 /**
@@ -74,11 +75,18 @@ class hash_cell
 		// by removing this part of code, I can get 2s faster.
 		while (ret->get_ref()) {
 #ifdef STATISTICS
-			num_wait_unused++;
+			__sync_fetch_and_add(&num_wait_unused, 1);
 #endif
 			pthread_spin_unlock(&_lock);
 			ret->wait_unused();
+#ifndef STATISTICS
 			pthread_spin_lock(&_lock);
+#else
+			if (pthread_spin_trylock(&_lock) == EBUSY) {
+				__sync_fetch_and_add(&lock_contentions, 1);
+				pthread_spin_lock(&_lock);
+			}
+#endif
 		}
 		ret->set_data_ready(false);
 		ret->inc_ref();
@@ -104,7 +112,14 @@ public:
 	 */
 	page *search(off_t off) {
 		thread_safe_page *ret = NULL;
+#ifndef STATISTICS
 		pthread_spin_lock(&_lock);
+#else
+		if (pthread_spin_trylock(&_lock) == EBUSY) {
+			__sync_fetch_and_add(&lock_contentions, 1);
+			pthread_spin_lock(&_lock);
+		}
+#endif
 
 		for (int i = 0; i < CELL_SIZE; i++) {
 			if (buf.get_page(i)->get_offset() == off) {

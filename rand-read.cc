@@ -793,6 +793,7 @@ int main(int argc, char *argv[])
 	printf("there are %d cells\n", avail_cells);
 	printf("there are %d waits for unused\n", num_wait_unused);
 	printf("%d keys are evicted from the hash table because of conflicts\n", removed_indices);
+	printf("there are %d lock contentions\n", lock_contentions);
 #endif
 }
 
