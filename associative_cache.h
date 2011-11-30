@@ -68,28 +68,16 @@ class hash_cell
 		/*
 		 * each time we select a page to evict,
 		 * it's possible that it's still used by some
-		 * other threads. We need to wait for other threads
-		 * to finish using it.
+		 * other threads. If it's being used, then we choose
+		 * the next page in the cell.
 		 */
-		// TODO I have to improve here.
-		// by removing this part of code, I can get 2s faster.
 		while (ret->get_ref()) {
+			ret = buf.get_empty_page();
 #ifdef STATISTICS
 			__sync_fetch_and_add(&num_wait_unused, 1);
 #endif
-			pthread_spin_unlock(&_lock);
-			ret->wait_unused();
-#ifndef STATISTICS
-			pthread_spin_lock(&_lock);
-#else
-			if (pthread_spin_trylock(&_lock) == EBUSY) {
-				__sync_fetch_and_add(&lock_contentions, 1);
-				pthread_spin_lock(&_lock);
-			}
-#endif
 		}
 		ret->set_data_ready(false);
-		ret->inc_ref();
 		return ret;
 	}
 
@@ -130,8 +118,6 @@ public:
 		if (ret == NULL) {
 			ret = get_empty_page();
 			ret->set_offset(off);
-			pthread_spin_unlock(&_lock);
-			return ret;
 		}
 		/* it's possible that the data in the page isn't ready */
 		ret->inc_ref();
