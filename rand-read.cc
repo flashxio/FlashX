@@ -314,10 +314,18 @@ class read_private: public thread_private
 	const char *file_name;
 	int fd;
 	int flags;
+#ifdef STATISTICS
+	long read_time; // in us
+	long num_reads;
+#endif
 public:
 	read_private(const char *name, int idx, int entry_size,
 			int flags = O_RDONLY): thread_private(idx, entry_size), file_name(name) {
 		this->flags = flags;
+#ifdef STATISTICS
+		read_time = 0;
+		num_reads = 0;
+#endif
 	}
 
 	int thread_init() {
@@ -337,8 +345,32 @@ public:
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
-		return pread(fd, buf, size, offset);
+#ifdef STATISTICS
+		num_reads++;
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+#endif
+		ssize_t ret = pread(fd, buf, size, offset);
+#ifdef STATISTICS
+		gettimeofday(&end, NULL);
+		read_time += ((long) end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
+#endif
+		return ret;
 	}
+
+#ifdef STATISTICS
+	virtual void print_stat() {
+		thread_private::print_stat();
+		static int seen_threads = 0;
+		static long tot_nreads;
+		static long tot_read_time;
+		tot_nreads += num_reads;
+		tot_read_time += read_time;
+		seen_threads++;
+		if (seen_threads == nthreads)
+			printf("there are %ld reads and takes %ldus\n", tot_nreads, tot_read_time);
+	}
+#endif
 };
 
 class direct_private: public read_private
