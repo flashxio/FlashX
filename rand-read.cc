@@ -337,14 +337,7 @@ public:
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
-		off_t ret = lseek(fd, offset, SEEK_SET);
-		if (ret < 0) {
-			perror("lseek");
-			printf("%ld\n", offset);
-			exit(1);
-		}
-		ret = read(fd, buf, size);
-		return ret;
+		return pread(fd, buf, size, offset);
 	}
 };
 
