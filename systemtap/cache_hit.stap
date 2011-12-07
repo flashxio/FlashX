@@ -1,0 +1,23 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global hits
+global misses
+
+probe kernel.function("find_get_page").return {
+	if (execname() == @1) {
+		if ($return == 0) {
+			misses++
+		}
+		else {
+			hits++
+		}
+	}
+}
+
+probe end {
+	printf("hits: %d, misses: %d\n", hits - misses, misses)
+}

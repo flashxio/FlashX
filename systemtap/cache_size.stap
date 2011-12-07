@@ -1,0 +1,17 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+global last
+
+probe kernel.function("page_cache_sync_readahead") {
+	if (execname() == @1) {
+		diff = $mapping->nrpages - last
+		if (diff > 10000 || diff < -10000) {
+			printf("num of pages: %d\n", $mapping->nrpages);
+			last = $mapping->nrpages
+		}
+	}
+}
