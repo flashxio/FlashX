@@ -375,11 +375,13 @@ public:
 
 class direct_private: public read_private
 {
-	char *one_page;
+	char *pages;
+	int buf_idx;
 public:
 	direct_private(const char *name, int idx, int entry_size): read_private(name, idx,
 			entry_size, O_DIRECT | O_RDONLY) {
-		one_page = (char *) valloc(PAGE_SIZE);
+		pages = (char *) valloc(PAGE_SIZE * 4096);
+		buf_idx = 0;
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
@@ -392,11 +394,15 @@ public:
 			ret = read_private::access(buf, offset, size);
 		}
 		else {
-			ret = read_private::access(one_page, ROUND_PAGE(offset), PAGE_SIZE);
+			buf_idx++;
+			if (buf_idx == 4096)
+				buf_idx = 0;
+			char *page = pages + buf_idx * PAGE_SIZE;
+			ret = read_private::access(page, ROUND_PAGE(offset), PAGE_SIZE);
 			if (ret < 0)
 				return ret;
 			else
-				memcpy(buf, one_page + (offset - ROUND_PAGE(offset)), size);
+				memcpy(buf, page + (offset - ROUND_PAGE(offset)), size);
 			ret = size;
 		}
 		return ret;
