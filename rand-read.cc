@@ -301,8 +301,9 @@ public:
 		static int tot_hits = 0;
 		static int seen_threads = 0;
 		seen_threads++;
+		tot_hits += cache_hits;
 		if (seen_threads == nthreads)
-			printf("there are %d cache hits\n", cache_hits);
+			printf("there are %d cache hits\n", tot_hits);
 	}
 #endif
 };
