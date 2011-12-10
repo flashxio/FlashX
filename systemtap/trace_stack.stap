@@ -6,14 +6,15 @@ probe begin {
 
 global num;
 
-probe kernel.function(@1) {
-	num++;
-	print_stack(backtrace())
-	print("\n")
+probe kernel.function(@2) {
+	if (execname() == @1) {
+		num++;
+		print_stack(backtrace())
+		print("\n")
+	}
 }
 
-probe timer.s(10) {
-	print ("have monitored for 10 seconds\n");
+probe end {
 	printf ("%s occurs %d times\n", @1, num);
 	exit()
 }
