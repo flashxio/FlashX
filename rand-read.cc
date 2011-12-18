@@ -750,7 +750,9 @@ int main(int argc, char *argv[])
 			sizeof(workloads) / sizeof(workloads[0]));
 	str2int_map cache_map(cache_types, 
 			sizeof(cache_types) / sizeof(cache_types[0]));
+#ifdef PROFILER
 	std::string prof_file;
+#endif
 
 	if (argc < 5) {
 		fprintf(stderr, "read files option pages threads cache_size entry_size\n");
@@ -799,9 +801,11 @@ int main(int argc, char *argv[])
 				workload_file = value;
 			}
 		}
+#ifdef PROFILER
 		else if(key.compare("prof") == 0) {
 			prof_file = value;
 		}
+#endif
 		else {
 			fprintf(stderr, "wrong option\n");
 			exit(1);
@@ -890,8 +894,10 @@ int main(int argc, char *argv[])
 
 	gettimeofday(&start_time, NULL);
 	global_start = start_time;
+#ifdef PROFILER
 	if (!prof_file.empty())
 		ProfilerStart(prof_file.c_str());
+#endif
 	for (i = 0; i < nthreads; i++) {
 #ifdef USE_PROCESS
 		ret = process_create(&threads[i]->id, rand_read, (void *) i);
@@ -917,8 +923,10 @@ int main(int argc, char *argv[])
 		}
 		read_bytes += size;
 	}
+#ifdef PROFILER
 	if (!prof_file.empty())
 		ProfilerStop();
+#endif
 	gettimeofday(&end_time, NULL);
 	printf("read %ld bytes, takes %f seconds\n",
 			read_bytes, end_time.tv_sec - start_time.tv_sec
