@@ -938,8 +938,8 @@ int main(int argc, char *argv[])
 			end = npages * PAGE_SIZE / entry_size;
 		}
 		else {
-			start = npages / nthreads * PAGE_SIZE / entry_size * j;
-			end = start + npages / nthreads * PAGE_SIZE / entry_size;
+			start = (long) npages / nthreads * PAGE_SIZE / entry_size * j;
+			end = start + (long) npages / nthreads * PAGE_SIZE / entry_size;
 		}
 		printf("thread %d starts %ld ends %ld\n", j, start, end);
 
