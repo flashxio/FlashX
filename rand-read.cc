@@ -17,6 +17,7 @@
 #include <iostream>
 #include <string>
 
+#include "wpaio.h"
 #include "cache.h"
 #include "tree_cache.h"
 #include "associative_cache.h"
@@ -26,6 +27,7 @@
 
 #define NUM_PAGES 16384
 #define NUM_THREADS 32
+#define AIO_DEPTH 32
 enum {
 	NORMAL,
 	DIRECT,
@@ -318,6 +320,11 @@ class read_private: public thread_private
 	long read_time; // in us
 	long num_reads;
 #endif
+protected:
+	int get_fd() {
+		return fd;
+	}
+
 public:
 	read_private(const char *name, int idx, int entry_size,
 			int flags = O_RDONLY): thread_private(idx, entry_size), file_name(name) {
@@ -406,6 +413,61 @@ public:
 			ret = size;
 		}
 		return ret;
+	}
+};
+
+class aio_private: public read_private
+{
+	char *pages;
+	int buf_idx;
+	io_callback_t cb;
+	struct aio_ctx *ctx;
+
+public:
+	aio_private(const char *name, int idx, int entry_size, io_callback_t cb): read_private(name, idx,
+			entry_size, O_DIRECT | O_RDONLY) {
+		printf("aio is used\n");
+		pages = (char *) valloc(PAGE_SIZE * 4096);
+		buf_idx = 0;
+		this->cb = cb;
+		ctx = create_aio_ctx(AIO_DEPTH);
+	}
+
+	~aio_private() {
+		int slot = max_io_slot(ctx);
+
+		while (slot < AIO_DEPTH) {
+			io_wait(ctx, NULL);
+			slot = max_io_slot(ctx);
+		}
+	}
+
+	ssize_t access(char *buf, off_t offset, ssize_t size) {
+		struct iocb *req;
+		int slot = max_io_slot(ctx);
+
+		if (slot == 0) {
+			io_wait(ctx, NULL);
+		}
+
+		/* for simplicity, I assume all request sizes are smaller than a page size */
+		assert(size <= PAGE_SIZE);
+		if (ROUND_PAGE(offset) == offset
+				&& (long) buf == ROUND_PAGE(buf)
+				&& size == PAGE_SIZE) {
+			req = make_io_request(ctx, get_fd(), PAGE_SIZE, offset,
+					buf, A_READ, cb);
+		}
+		else {
+			buf_idx++;
+			if (buf_idx == 4096)
+				buf_idx = 0;
+			char *page = pages + buf_idx * PAGE_SIZE;
+			req = make_io_request(ctx, get_fd(), PAGE_SIZE, ROUND_PAGE(offset),
+					page, A_READ, cb);
+		}
+		submit_io_request(ctx, &req, 1);
+		return 0;
 	}
 };
 
@@ -582,6 +644,8 @@ void *rand_read(void *arg)
 	int fd;
 	cpu_set_t mask;
 
+	printf("thread %d starts to run\n", priv->idx);
+
 	/* attach the thread to a specific CPU. */
 	CPU_ZERO(&mask);
 	CPU_SET(priv->idx, &mask);
@@ -596,13 +660,16 @@ void *rand_read(void *arg)
 	while (priv->gen->has_next()) {
 		char *entry = buf->next_entry();
 		off_t off = priv->gen->next_offset();
+
 		ret = priv->access(entry, off, buf->get_entry_size());
-		assert(ret == buf->get_entry_size());
-		assert(*(long *) entry == off / sizeof(long));
-		if (ret > 0)
-			read_bytes += ret;
-		else
-			break;
+		if (ret) {
+			assert(ret == buf->get_entry_size());
+			assert(*(long *) entry == off / sizeof(long));
+			if (ret > 0)
+				read_bytes += ret;
+			else
+				break;
+		}
 	}
 	if (ret < 0) {
 		perror("read");
@@ -652,6 +719,7 @@ struct str2int {
 enum {
 	READ_ACCESS,
 	DIRECT_ACCESS,
+	AIO_ACCESS,
 	MMAP_ACCESS,
 	LOCAL_CACHE_ACCESS,
 	GLOBAL_CACHE_ACCESS
@@ -660,6 +728,7 @@ enum {
 str2int access_methods[] = {
 	"normal", READ_ACCESS,
 	"direct", DIRECT_ACCESS,
+	"aio", AIO_ACCESS,
 	"mmap", MMAP_ACCESS,
 	"local_cache", LOCAL_CACHE_ACCESS,
 	"global_cache", GLOBAL_CACHE_ACCESS
@@ -728,6 +797,9 @@ long str2size(std::string str)
 		str[len - 1] = 0;
 	}
 	return atol(str.c_str()) * multiply;
+}
+
+void aio_callback(io_context_t ctx, struct iocb* iocb, long res, long res2) {
 }
 
 int main(int argc, char *argv[])
@@ -843,6 +915,9 @@ int main(int argc, char *argv[])
 			case DIRECT_ACCESS:
 				threads[j] = new direct_private(file_name, j, entry_size);
 				break;
+			case AIO_ACCESS:
+				threads[j] = new aio_private(file_name, j, entry_size, aio_callback);
+				break;
 			case MMAP_ACCESS:
 				threads[j] = new mmap_private(file_name, j, entry_size);
 				break;
@@ -866,6 +941,7 @@ int main(int argc, char *argv[])
 			start = npages / nthreads * PAGE_SIZE / entry_size * j;
 			end = start + npages / nthreads * PAGE_SIZE / entry_size;
 		}
+		printf("thread %d starts %ld ends %ld\n", j, start, end);
 
 		workload_gen *gen;
 		switch (workload) {
