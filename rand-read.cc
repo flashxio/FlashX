@@ -580,6 +580,14 @@ void *rand_read(void *arg)
 	thread_private *priv = threads[(long) arg];
 	rand_buf *buf;
 	int fd;
+	cpu_set_t mask;
+
+	/* attach the thread to a specific CPU. */
+	CPU_ZERO(&mask);
+	CPU_SET(priv->idx, &mask);
+	if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) < 0) {
+		perror("sched_setaffinity");
+	}
 
 	priv->thread_init();
 	buf = &priv->buf;
