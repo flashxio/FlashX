@@ -126,7 +126,7 @@ class file_workload: public workload_gen
 
 		char *src = (char *) &num;
 		char *dst = (char *) &res;
-		for (int i = 0; i < sizeof(long); i++) {
+		for (unsigned int i = 0; i < sizeof(long); i++) {
 			dst[sizeof(long) - 1 - i] = src[i];
 		}
 		return res;
@@ -510,7 +510,6 @@ public:
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
-		int i;
 		char *page = (char *) addr + offset;
 		/* I try to avoid gcc optimization eliminating the code below,
 		 * and it works. */
@@ -636,12 +635,11 @@ thread_private *threads[NUM_THREADS];
 
 void *rand_read(void *arg)
 {
-	ssize_t ret;
+	ssize_t ret = -1;
 	ssize_t read_bytes = 0;
 	struct timeval start_time, end_time;
 	thread_private *priv = threads[(long) arg];
 	rand_buf *buf;
-	int fd;
 	cpu_set_t mask;
 
 	printf("thread %d starts to run\n", priv->idx);
@@ -664,7 +662,7 @@ void *rand_read(void *arg)
 		ret = priv->access(entry, off, buf->get_entry_size());
 		if (ret) {
 			assert(ret == buf->get_entry_size());
-			assert(*(long *) entry == off / sizeof(long));
+			assert(*(unsigned long *) entry == off / sizeof(long));
 			if (ret > 0)
 				read_bytes += ret;
 			else
@@ -726,18 +724,18 @@ enum {
 };
 
 str2int access_methods[] = {
-	"normal", READ_ACCESS,
-	"direct", DIRECT_ACCESS,
-	"aio", AIO_ACCESS,
-	"mmap", MMAP_ACCESS,
-	"local_cache", LOCAL_CACHE_ACCESS,
-	"global_cache", GLOBAL_CACHE_ACCESS
+	{ "normal", READ_ACCESS },
+	{ "direct", DIRECT_ACCESS },
+	{ "aio", AIO_ACCESS },
+	{ "mmap", MMAP_ACCESS },
+	{ "local_cache", LOCAL_CACHE_ACCESS },
+	{ "global_cache", GLOBAL_CACHE_ACCESS },
 };
 
 str2int cache_types[] = {
-	"tree", TREE_CACHE,
-	"associative", ASSOCIATIVE_CACHE,
-	"cuckoo", CUCKOO_CACHE
+	{ "tree", TREE_CACHE } ,
+	{ "associative", ASSOCIATIVE_CACHE },
+	{ "cuckoo", CUCKOO_CACHE },
 };
 
 enum {
@@ -747,9 +745,9 @@ enum {
 };
 
 str2int workloads[] = {
-	"RAND", RAND_OFFSET,
-	"RAND_PERMUTE", RAND_PERMUTE,
-	"user_file", USER_FILE_WORKLOAD,
+	{ "RAND", RAND_OFFSET },
+	{ "RAND_PERMUTE", RAND_PERMUTE },
+	{ "user_file", USER_FILE_WORKLOAD },
 };
 
 class str2int_map {
@@ -806,13 +804,13 @@ int main(int argc, char *argv[])
 {
 	long cache_size = 512 * 1024 * 1024;
 	int entry_size = 128;
-	int access_option;
+	int access_option = -1;
 	int ret;
 	int i, j;
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
 	int num_files = 0;
-	int cache_type;
+	int cache_type = -1;
 	std::string file_names[NUM_THREADS];
 	int workload = RAND_OFFSET;
 	std::string workload_file;
