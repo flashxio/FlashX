@@ -11,6 +11,8 @@ static volatile int num_wait_unused;
 static volatile int lock_contentions;
 #endif
 
+const int CACHE_LINE = 128;
+
 /**
  * This data structure is to implement LRU.
  */
@@ -61,6 +63,7 @@ class hash_cell
 {
 	pthread_spinlock_t _lock;
 	page_cell<thread_safe_page, CELL_SIZE> buf;
+	char stuffing[CACHE_LINE  / 2- sizeof(_lock) - sizeof(buf)];
 
 	/* this function has to be called with lock held */
 	thread_safe_page *get_empty_page() {
@@ -88,6 +91,17 @@ public:
 
 	~hash_cell() {
 		pthread_spin_destroy(&_lock);
+	}
+
+	void *operator new[](size_t size) {
+		printf("allocate %ld bytes\n", size);
+		void *addr = memalign(CACHE_LINE, size + CACHE_LINE);
+		// TODO 8 might be architecture specific. It's 8 for 64-bit machines.
+		return (void *) ((long) addr + CACHE_LINE - 8);
+	}
+
+	void operator delete[](void *p) {
+		free((void *) ((long) p - (CACHE_LINE - 8)));
 	}
 
 	void set_pages(long page_buf) {
@@ -141,6 +155,7 @@ public:
 		int npages = cache_size / PAGE_SIZE;
 		ncells = npages / CELL_SIZE;
 		cells = new hash_cell[ncells];
+		printf("%d cells: %p\n", ncells, cells);
 		for (int i = 0; i < ncells; i++)
 			cells[i].set_pages(i * PAGE_SIZE * CELL_SIZE);
 	}
