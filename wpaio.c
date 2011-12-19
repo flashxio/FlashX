@@ -22,8 +22,6 @@
 //static int aio_blksize = 0;
 //static int aio_maxio = 0;
 
-//typedef void(*io_callback_t)(io_context_t ctx, struct iocb* iocb, long res, long res2);
-
 int f_fd;
 long long f_offset;
 
@@ -92,20 +90,20 @@ inline void put_iocb(struct aio_ctx* a_ctx, struct iocb* io)
 
 
 struct iocb* make_io_request(struct aio_ctx* a_ctx, int fd, size_t iosize, long long offset,
-							 void* buffer, int io_type, io_callback_t func)
+							 void* buffer, int io_type, io_callback_s *cb)
 {
 	struct iocb* a_req = get_iocb(a_ctx);
   if (io_type == A_READ)
   {
     io_prep_pread(a_req, fd, buffer, iosize, offset);
-    io_set_callback(a_req, func);
+    io_set_callback(a_req, (io_callback_t) cb);
   }
   else
   {
     if (io_type == A_WRITE)
     {
       io_prep_pwrite(a_req, fd, buffer, iosize, offset);
-      io_set_callback(a_req, func);
+      io_set_callback(a_req, (io_callback_t) cb);
     }
     else
     {
@@ -129,9 +127,9 @@ int io_wait(struct aio_ctx* a_ctx, struct timespec* to)
   }
   for (ep = events; n-- > 0; ep++)
   {
-    io_callback_t cb = (io_callback_t)ep->data;
+    io_callback_s *cb = (io_callback_s *)ep->data;
     struct iocb* iocb = ep->obj;
-    cb(a_ctx->ctx, iocb, ep->res, ep->res2);
+    cb->func(a_ctx->ctx, iocb, cb, ep->res, ep->res2);
 	a_ctx->busy_aio--;
 	put_iocb(a_ctx, iocb);
   }
@@ -143,7 +141,6 @@ void submit_io_request(struct aio_ctx* a_ctx, struct iocb* ioq[], int num)
 {
   int rc;
   rc = io_submit(a_ctx->ctx, num, ioq);
-  //printf("io_submit rc: %d\n", rc);
   if (rc < 0)
   {
     fprintf(stderr, "io_submit: %s", strerror(-rc));

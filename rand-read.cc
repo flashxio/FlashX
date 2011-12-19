@@ -16,6 +16,7 @@
 
 #include <iostream>
 #include <string>
+#include <deque>
 
 #include "wpaio.h"
 #include "cache.h"
@@ -284,6 +285,9 @@ public:
 	int idx;
 	rand_buf buf;
 	workload_gen *gen;
+	ssize_t read_bytes;
+	struct timeval start_time;
+	struct timeval end_time;
 
 #ifdef STATISTICS
 	int cache_hits;
@@ -294,6 +298,7 @@ public:
 
 	thread_private(int idx, int entry_size): buf(NUM_PAGES / nthreads * PAGE_SIZE, entry_size) {
 		this->idx = idx;
+		read_bytes = 0;
 #ifdef STATISTICS
 		cache_hits = 0;
 #endif
@@ -305,6 +310,9 @@ public:
 		static int seen_threads = 0;
 		seen_threads++;
 		tot_hits += cache_hits;
+		printf("read %ld bytes, start at %f seconds, takes %f seconds\n",
+				read_bytes, time_diff(global_start, start_time),
+				time_diff(start_time, end_time));
 		if (seen_threads == nthreads)
 			printf("there are %d cache hits\n", tot_hits);
 	}
@@ -416,21 +424,33 @@ public:
 	}
 };
 
+class aio_private;
+void aio_callback(io_context_t, struct iocb*,
+		struct io_callback_s *, long, long);
+
+struct thread_callback_s
+{
+	struct io_callback_s cb;
+	aio_private *thread;
+};
+
 class aio_private: public read_private
 {
 	char *pages;
 	int buf_idx;
-	io_callback_t cb;
 	struct aio_ctx *ctx;
+	std::deque<thread_callback_s *> cbs;
 
 public:
-	aio_private(const char *name, int idx, int entry_size, io_callback_t cb): read_private(name, idx,
+	aio_private(const char *name, int idx, int entry_size): read_private(name, idx,
 			entry_size, O_DIRECT | O_RDONLY) {
 		printf("aio is used\n");
 		pages = (char *) valloc(PAGE_SIZE * 4096);
 		buf_idx = 0;
-		this->cb = cb;
 		ctx = create_aio_ctx(AIO_DEPTH);
+		for (int i = 0; i < AIO_DEPTH * 5; i++) {
+			cbs.push_back(new thread_callback_s());
+		}
 	}
 
 	~aio_private() {
@@ -449,6 +469,20 @@ public:
 		if (slot == 0) {
 			io_wait(ctx, NULL);
 		}
+
+		if (cbs.empty()) {
+			fprintf(stderr, "no callback object left\n");
+			return -1;
+		}
+
+		thread_callback_s *tcb = cbs.front();
+		io_callback_s *cb = (io_callback_s *) tcb;
+		cbs.pop_front();
+		cb->buf = buf;
+		cb->offset = offset;
+		cb->size = size;
+		cb->func = aio_callback;
+		tcb->thread = this;
 
 		/* for simplicity, I assume all request sizes are smaller than a page size */
 		assert(size <= PAGE_SIZE);
@@ -469,7 +503,24 @@ public:
 		submit_io_request(ctx, &req, 1);
 		return 0;
 	}
+
+	void return_cb(thread_callback_s *cb) {
+		cbs.push_back(cb);
+	}
 };
+
+void aio_callback(io_context_t ctx, struct iocb* iocb,
+		struct io_callback_s *cb, long res, long res2) {
+	thread_callback_s *tcb = (thread_callback_s *) cb;
+
+	memcpy(cb->buf, ((char *) iocb->u.c.buf)
+			+ (cb->offset - ROUND_PAGE(cb->offset)), cb->size);
+	if(*(unsigned long *) cb->buf != cb->offset / sizeof(long))
+		printf("%ld %ld\n", *(unsigned long *) cb->buf, cb->offset / sizeof(long));
+	assert(*(unsigned long *) cb->buf == cb->offset / sizeof(long));
+	tcb->thread->return_cb(tcb);
+	tcb->thread->read_bytes += cb->size;
+}
 
 class mmap_private: public thread_private
 {
@@ -636,8 +687,6 @@ thread_private *threads[NUM_THREADS];
 void *rand_read(void *arg)
 {
 	ssize_t ret = -1;
-	ssize_t read_bytes = 0;
-	struct timeval start_time, end_time;
 	thread_private *priv = threads[(long) arg];
 	rand_buf *buf;
 	cpu_set_t mask;
@@ -654,7 +703,7 @@ void *rand_read(void *arg)
 	priv->thread_init();
 	buf = &priv->buf;
 
-	gettimeofday(&start_time, NULL);
+	gettimeofday(&priv->start_time, NULL);
 	while (priv->gen->has_next()) {
 		char *entry = buf->next_entry();
 		off_t off = priv->gen->next_offset();
@@ -664,7 +713,7 @@ void *rand_read(void *arg)
 			assert(ret == buf->get_entry_size());
 			assert(*(unsigned long *) entry == off / sizeof(long));
 			if (ret > 0)
-				read_bytes += ret;
+				priv->read_bytes += ret;
 			else
 				break;
 		}
@@ -673,15 +722,12 @@ void *rand_read(void *arg)
 		perror("read");
 		exit(1);
 	}
-	gettimeofday(&end_time, NULL);
-	printf("read %ld bytes, start at %f seconds, takes %f seconds\n",
-			read_bytes, time_diff(global_start, start_time),
-			time_diff(start_time, end_time));
+	gettimeofday(&priv->end_time, NULL);
 	
 #ifdef USE_PROCESS
-	exit(read_bytes);
+	exit(priv->read_bytes);
 #else
-	pthread_exit((void *) read_bytes);
+	pthread_exit((void *) priv->read_bytes);
 #endif
 }
 
@@ -795,9 +841,6 @@ long str2size(std::string str)
 		str[len - 1] = 0;
 	}
 	return atol(str.c_str()) * multiply;
-}
-
-void aio_callback(io_context_t ctx, struct iocb* iocb, long res, long res2) {
 }
 
 int main(int argc, char *argv[])
@@ -914,7 +957,7 @@ int main(int argc, char *argv[])
 				threads[j] = new direct_private(file_name, j, entry_size);
 				break;
 			case AIO_ACCESS:
-				threads[j] = new aio_private(file_name, j, entry_size, aio_callback);
+				threads[j] = new aio_private(file_name, j, entry_size);
 				break;
 			case MMAP_ACCESS:
 				threads[j] = new mmap_private(file_name, j, entry_size);

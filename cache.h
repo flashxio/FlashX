@@ -174,46 +174,35 @@ public:
 };
 
 /**
- * This data structure is to implement LRU.
+ * this is a first-in-first-out queue.
+ * However, the location of an entry in the queue never changes.
  */
 template<class T>
-class page_buffer
+class queue
 {
 	long size;			// the number of pages that can be buffered
-	T *buf;			// a circular buffer to keep pages.
 	volatile unsigned long idx;		// to the point where we can evict a page in the buffer
-
+protected:
+	T *buf;			// a circular buffer to keep pages.
 public:
-	/*
-	 * @size: the size of the page buffer
-	 * @page_buf: the offset of the page array in the global page cache.
-	 */
-	page_buffer(long size, long page_buf) {
+	queue(long size) {
+		idx = 0;
 		this->size = size;
 		buf = new T[size];
-		for (int i = 0; i < size; i++) {
-			buf[i] = T(-1, page_buf + i * PAGE_SIZE);
-		}
-		idx = 0;
 	}
 
-	~page_buffer() {
+	~queue() {
 		delete [] buf;
 	}
 
-	/**
-	 * return an empty page.
-	 * I expected the page will be filled with data,
-	 * so I change the begin and end index of the circular buffer.
-	 */
-	T *get_empty_page() {
+	T *get_empty_entry() {
 		/* TODO I ignore the case of integer overflow */
 		long orig = __sync_fetch_and_add(&idx, 1);
 		T *ret = &buf[orig % size];
 		return ret;
 	}
 
-	T *get_page(int i) {
+	T *get_entry(int i) {
 		if (i >= size)
 			return NULL;
 		return &buf[i];
@@ -222,23 +211,37 @@ public:
 	int get_idx(T *p) {
 		return p - buf;
 	}
+};
 
-#if 0
-	/* push a page to the buffer.
-	 * if the buffer is full, the first page is removed,
-	 * and return the user */
-	page *push_back(const page &page, page &beg) {
-		page *ret;
-		if (is_full()) {
-			beg = buf[beg_idx];
-			beg_idx = (beg_idx + 1) % size;
+/**
+ * This data structure is to implement LRU.
+ */
+template<class T>
+class page_buffer: public queue<T>
+{
+public:
+	/*
+	 * @size: the size of the page buffer
+	 * @page_buf: the offset of the page array in the global page cache.
+	 */
+	page_buffer(long size, long page_buf): queue<T>(size) {
+		for (int i = 0; i < size; i++) {
+			queue<T>::buf[i] = T(-1, page_buf + i * PAGE_SIZE);
 		}
-		buf[end_idx] = page;
-		ret = &buf[end_idx];
-		end_idx = (end_idx + 1) % size;
-		return ret;
 	}
-#endif
+
+	/**
+	 * return an empty page.
+	 * I expected the page will be filled with data,
+	 * so I change the begin and end index of the circular buffer.
+	 */
+	T *get_empty_page() {
+		return queue<T>::get_empty_entry();
+	}
+
+	T *get_page(int i) {
+		return queue<T>::get_entry(i);
+	}
 };
 
 #endif
