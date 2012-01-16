@@ -611,11 +611,13 @@ page_cache *global_cache;
 class global_cached_private: public direct_private
 {
 	int num_waits;
+	long cache_size;
 //	static page_cache *global_cache;
 public:
 	global_cached_private(const char *name, int idx, long cache_size,
 			int entry_size, int cache_type): direct_private(name, idx, entry_size) {
 		num_waits = 0;
+		this->cache_size = cache_size;
 		if (global_cache == NULL) {
 			switch (cache_type) {
 				case TREE_CACHE:
@@ -632,6 +634,29 @@ public:
 					exit(1);
 			}
 		}
+	}
+
+	int preload(off_t start, long size) {
+		if (size > cache_size) {
+			fprintf(stderr, "we can't preload data larger than the cache size\n");
+			exit(1);
+		}
+
+		assert(ROUND_PAGE(start) == start);
+		for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
+			thread_safe_page *p = (thread_safe_page *) (global_cache->search(ROUND_PAGE(offset)));
+			if (!p->data_ready()) {
+				ssize_t ret = read_private::access((char *) p->get_data(),
+						ROUND_PAGE(offset), PAGE_SIZE);
+				if (ret < 0) {
+					perror("read");
+					return ret;
+				}
+				p->set_io_pending(false);
+				p->set_data_ready(true);
+			}
+		}
+		return 0;
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size) {
@@ -709,13 +734,17 @@ void *rand_read(void *arg)
 		off_t off = priv->gen->next_offset();
 
 		ret = priv->access(entry, off, buf->get_entry_size());
-		if (ret) {
+		if (ret > 0) {
 			assert(ret == buf->get_entry_size());
 			assert(*(unsigned long *) entry == off / sizeof(long));
 			if (ret > 0)
 				priv->read_bytes += ret;
 			else
 				break;
+		}
+		if (ret < 0) {
+			perror("access");
+			exit(1);
 		}
 	}
 	if (ret < 0) {
@@ -845,6 +874,7 @@ long str2size(std::string str)
 
 int main(int argc, char *argv[])
 {
+	bool preload = false;
 	long cache_size = 512 * 1024 * 1024;
 	int entry_size = 128;
 	int access_option = -1;
@@ -868,7 +898,8 @@ int main(int argc, char *argv[])
 #endif
 
 	if (argc < 5) {
-		fprintf(stderr, "read files option pages threads cache_size entry_size\n");
+		fprintf(stderr, "there are %d argments\n", argc);
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload\n");
 		access_map.print("available access methods: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -913,6 +944,9 @@ int main(int argc, char *argv[])
 			if (workload == -1) {
 				workload_file = value;
 			}
+		}
+		else if(key.compare("preload") == 0) {
+			preload = true;
 		}
 #ifdef PROFILER
 		else if(key.compare("prof") == 0) {
@@ -966,7 +1000,10 @@ int main(int argc, char *argv[])
 				threads[j] = new part_cached_private(file_name, j, cache_size / nthreads, entry_size);
 				break;
 			case GLOBAL_CACHE_ACCESS:
-				threads[j] = new global_cached_private(file_name, j, cache_size, entry_size, cache_type);
+				threads[j] = new global_cached_private(file_name, j,
+						cache_size, entry_size, cache_type);
+				if (preload)
+					((global_cached_private *) threads[j])->preload(0, npages * PAGE_SIZE);
 				break;
 			default:
 				fprintf(stderr, "wrong access option\n");
