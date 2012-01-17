@@ -82,6 +82,47 @@ public:
 	}
 };
 
+class stride_workload: public workload_gen
+{
+	long first;	// the first entry
+	long last;	// the last entry but it's not included in the range
+	long curr;	// the current location
+	long num;	// the number of entries we have visited
+	int stride;
+	int entry_size;
+public:
+	stride_workload(long first, long last, int entry_size) {
+		this->first = first;
+		this->last = last;
+		curr = first;
+		num = 0;
+		this->entry_size = entry_size;
+		stride = PAGE_SIZE / entry_size;
+	}
+
+	off_t next_offset() {
+		off_t ret = curr;
+		num++; 
+		
+		/*
+		 * we stride with PAGE_SIZE.
+		 * When we reach the end of the range,
+		 * we start over but move one ahead from the last startover.
+		 */
+		curr += stride;
+		if (curr >= last) {
+			curr = first + (curr & (stride - 1));
+			curr++;
+		}
+		ret *= entry_size;
+		return ret;
+	}
+
+	bool has_next() const {
+		return num < (last - first);
+	}
+};
+
 class local_rand_permute_workload: public workload_gen
 {
 	long start;
@@ -816,12 +857,14 @@ str2int cache_types[] = {
 enum {
 	RAND_OFFSET,
 	RAND_PERMUTE,
+	STRIDE,
 	USER_FILE_WORKLOAD = -1
 };
 
 str2int workloads[] = {
 	{ "RAND", RAND_OFFSET },
 	{ "RAND_PERMUTE", RAND_PERMUTE },
+	{ "STRIDE", STRIDE },
 	{ "user_file", USER_FILE_WORKLOAD },
 };
 
@@ -1029,6 +1072,9 @@ int main(int argc, char *argv[])
 			case RAND_PERMUTE:
 				gen = new local_rand_permute_workload(num_entries,
 						entry_size, start, end);
+				break;
+			case STRIDE:
+				gen = new stride_workload(start, end, entry_size);
 				break;
 			case -1:
 				gen = new file_workload(workload_file, nthreads, j);
