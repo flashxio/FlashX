@@ -36,6 +36,11 @@ enum {
 };
 
 enum {
+	READ,
+	WRITE
+};
+
+enum {
 	TREE_CACHE,
 	ASSOCIATIVE_CACHE,
 	CUCKOO_CACHE
@@ -46,6 +51,7 @@ int nthreads = 1;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 volatile int first[NUM_THREADS];
+int access_method = READ;
 
 class workload_gen
 {
@@ -376,7 +382,7 @@ protected:
 
 public:
 	read_private(const char *name, int idx, int entry_size,
-			int flags = O_RDONLY): thread_private(idx, entry_size), file_name(name) {
+			int flags = O_RDWR): thread_private(idx, entry_size), file_name(name) {
 		this->flags = flags;
 #ifdef STATISTICS
 		read_time = 0;
@@ -406,7 +412,12 @@ public:
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 #endif
-		ssize_t ret = pread(fd, buf, size, offset);
+		assert(offset < 0x100000000L);
+		ssize_t ret;
+		if (access_method == WRITE)
+			ret = pwrite(fd, buf, size, offset);
+		else
+			ret = pread(fd, buf, size, offset);
 #ifdef STATISTICS
 		gettimeofday(&end, NULL);
 		read_time += ((long) end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
@@ -435,7 +446,7 @@ class direct_private: public read_private
 	int buf_idx;
 public:
 	direct_private(const char *name, int idx, int entry_size): read_private(name, idx,
-			entry_size, O_DIRECT | O_RDONLY) {
+			entry_size, O_DIRECT | O_RDWR) {
 		pages = (char *) valloc(PAGE_SIZE * 4096);
 		buf_idx = 0;
 	}
@@ -484,7 +495,7 @@ class aio_private: public read_private
 
 public:
 	aio_private(const char *name, int idx, int entry_size): read_private(name, idx,
-			entry_size, O_DIRECT | O_RDONLY) {
+			entry_size, O_DIRECT | O_RDWR) {
 		printf("aio is used\n");
 		pages = (char *) valloc(PAGE_SIZE * 4096);
 		buf_idx = 0;
@@ -574,7 +585,7 @@ public:
 		static const char *file_name = NULL;
 		/* if we are mapping to a different file, do the real mapping. */
 		if (file_name == NULL || strcmp(file_name, new_name)) {
-			int fd = open(new_name, O_RDONLY);
+			int fd = open(new_name, O_RDWR);
 			int ret;
 
 			if (fd < 0) {
@@ -772,7 +783,8 @@ void *rand_read(void *arg)
 		ret = priv->access(entry, off, buf->get_entry_size());
 		if (ret > 0) {
 			assert(ret == buf->get_entry_size());
-			assert(*(unsigned long *) entry == off / sizeof(long));
+			if (access_method == READ)
+				assert(*(unsigned long *) entry == off / sizeof(long));
 			if (ret > 0)
 				priv->read_bytes += ret;
 			else
@@ -981,6 +993,16 @@ int main(int argc, char *argv[])
 			workload = workload_map.map(value);
 			if (workload == -1) {
 				workload_file = value;
+			}
+		}
+		else if(key.compare("access") == 0) {
+			if(value.compare("read") == 0)
+				access_method = READ;
+			else if(value.compare("read") == 0)
+				access_method = WRITE;
+			else {
+				fprintf(stderr, "wrong access method\n");
+				exit(1);
 			}
 		}
 		else if(key.compare("preload") == 0) {
