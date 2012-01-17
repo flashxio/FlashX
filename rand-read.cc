@@ -760,16 +760,6 @@ void *rand_read(void *arg)
 	ssize_t ret = -1;
 	thread_private *priv = threads[(long) arg];
 	rand_buf *buf;
-	cpu_set_t mask;
-
-	printf("thread %d starts to run\n", priv->idx);
-
-	/* attach the thread to a specific CPU. */
-	CPU_ZERO(&mask);
-	CPU_SET(priv->idx, &mask);
-	if (sched_setaffinity(0, sizeof(cpu_set_t), &mask) < 0) {
-		perror("sched_setaffinity");
-	}
 
 	priv->thread_init();
 	buf = &priv->buf;
