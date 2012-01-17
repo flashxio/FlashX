@@ -683,6 +683,9 @@ public:
 			exit(1);
 		}
 
+		/* open the file. It's a hack, but it works for now. */
+		thread_init();
+
 		assert(ROUND_PAGE(start) == start);
 		for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
 			thread_safe_page *p = (thread_safe_page *) (global_cache->search(ROUND_PAGE(offset)));
@@ -697,6 +700,8 @@ public:
 				p->set_data_ready(true);
 			}
 		}
+		/* close the file as it will be opened again in the real workload. */
+		close(get_fd());
 		return 0;
 	}
 
