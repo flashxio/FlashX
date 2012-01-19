@@ -29,6 +29,8 @@
 #define NUM_PAGES 16384
 #define NUM_THREADS 32
 #define AIO_DEPTH 32
+#define CHUNK_SLOTS 1024
+
 enum {
 	NORMAL,
 	DIRECT,
@@ -57,7 +59,7 @@ class workload_gen
 {
 public:
 	virtual off_t next_offset() = 0;
-	virtual bool has_next() const = 0;
+	virtual bool has_next() = 0;
 };
 
 class rand_permute
@@ -124,7 +126,7 @@ public:
 		return ret;
 	}
 
-	bool has_next() const {
+	bool has_next() {
 		return num < (last - first);
 	}
 };
@@ -156,7 +158,7 @@ public:
 		return permute->get_offset(start++);
 	}
 
-	bool has_next() const {
+	bool has_next() {
 		return start < end;
 	}
 };
@@ -235,7 +237,7 @@ public:
 		return swap_bytesl(offsets[curr++]);
 	}
 
-	bool has_next() const {
+	bool has_next() {
 		return curr < end;
 	}
 };
@@ -266,10 +268,116 @@ public:
 		return offsets[num++];
 	}
 
-	bool has_next() const {
+	bool has_next() {
 		return num < range;
 	}
 };
+
+class workload_chunk
+{
+public:
+	virtual bool get_workload(off_t *, int num) = 0;
+};
+
+class stride_workload_chunk: public workload_chunk
+{
+	long first;	// the first entry
+	long last;	// the last entry but it's not included in the range
+	long curr;	// the current location
+	int stride;
+	int entry_size;
+	pthread_spinlock_t _lock;
+public:
+	stride_workload_chunk(long first, long last, int entry_size) {
+		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
+		this->first = first;
+		this->last = last;
+		this->entry_size = entry_size;
+		printf("first: %ld, last: %ld\n", first, last);
+		curr = first;
+		stride = PAGE_SIZE / entry_size;
+	}
+
+	~stride_workload_chunk() {
+		pthread_spin_destroy(&_lock);
+	}
+
+	bool get_workload(off_t *offsets, int num) {
+		long start;
+		long end;
+
+		pthread_spin_lock(&_lock);
+		start = curr;
+		curr += stride * num;
+		end = curr;
+		/*
+		 * if the chunk we try to get is in the range,
+		 * get the chunk. 
+		 */
+		if (end < last + stride)
+			goto unlock;
+
+		/*
+		 * the chunk is out of the range,
+		 * let's start over but move the first entry forward.
+		 */
+		curr = first + (curr & (stride - 1));
+		curr++;
+		/*
+		 * if the first entry is in the second page,
+		 * it means we have accessed all pages, so no more work to do.
+		 */
+		if (curr == first + stride) {
+			pthread_spin_unlock(&_lock);
+			curr = end;
+			return false;
+		}
+		start = curr;
+		curr += stride * num;
+		end = curr;
+unlock:
+		pthread_spin_unlock(&_lock);
+
+		for (long i = 0; start < end; i++, start += stride)
+			offsets[i] = start * entry_size;
+		return true;
+	}
+};
+
+class balanced_workload: public workload_gen
+{
+	off_t offsets[CHUNK_SLOTS];
+	int curr;
+	static workload_chunk *chunks;
+public:
+	balanced_workload(workload_chunk *chunks) {
+		memset(offsets, 0, sizeof(offsets));
+		curr = CHUNK_SLOTS;
+		this->chunks = chunks;
+	}
+
+	~balanced_workload() {
+		if (chunks) {
+			delete chunks;
+			chunks = NULL;
+		}
+	}
+
+	off_t next_offset() {
+		return offsets[curr++];
+	}
+
+	bool has_next() {
+		if (curr < CHUNK_SLOTS)
+			return true;
+		else {
+			bool ret = chunks->get_workload(offsets, CHUNK_SLOTS);
+			curr = 0;
+			return ret;
+		}
+	}
+};
+workload_chunk *balanced_workload::chunks;
 
 float time_diff(struct timeval time1, struct timeval time2)
 {
@@ -865,6 +973,7 @@ enum {
 	RAND_OFFSET,
 	RAND_PERMUTE,
 	STRIDE,
+	BALANCED,
 	USER_FILE_WORKLOAD = -1
 };
 
@@ -872,6 +981,7 @@ str2int workloads[] = {
 	{ "RAND", RAND_OFFSET },
 	{ "RAND_PERMUTE", RAND_PERMUTE },
 	{ "STRIDE", STRIDE },
+	{ "BALANCED", BALANCED },
 	{ "user_file", USER_FILE_WORKLOAD },
 };
 
@@ -1082,6 +1192,7 @@ int main(int argc, char *argv[])
 		printf("thread %d starts %ld ends %ld\n", j, start, end);
 
 		workload_gen *gen;
+		workload_chunk *chunk = NULL;
 		switch (workload) {
 			case RAND_OFFSET:
 				gen = new rand_workload(start, end, entry_size);
@@ -1092,6 +1203,13 @@ int main(int argc, char *argv[])
 				break;
 			case STRIDE:
 				gen = new stride_workload(start, end, entry_size);
+				break;
+			case BALANCED:
+				if (chunk == NULL) {
+					chunk = new stride_workload_chunk(0,
+							(long) npages * PAGE_SIZE / entry_size, entry_size);
+				}
+				gen = new balanced_workload(chunk);
 				break;
 			case -1:
 				gen = new file_workload(workload_file, nthreads, j);
