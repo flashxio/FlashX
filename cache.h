@@ -16,6 +16,7 @@
 enum {
 	DATA_READY_BIT = 0,
 	IO_PENDING_BIT,
+	DIRTY_BIT,
 };
 
 class page
@@ -77,6 +78,13 @@ public:
 		else
 			flags &= ~(0x1 << DATA_READY_BIT);
 	}
+	bool is_dirty() const { return flags & (0x1 << DIRTY_BIT); }
+	void set_dirty(bool dirty) {
+		if (dirty)
+			flags |= 0x1 << DIRTY_BIT;
+		else
+			flags &= ~(0x1 << DIRTY_BIT);
+	}
 
 	static void allocate_cache(long size) {
 		data_start = valloc(size);
@@ -119,6 +127,9 @@ public:
 
 	void set_io_pending(bool pending) {
 		set_flags_bit(IO_PENDING_BIT, pending);
+	}
+	void set_dirty(bool dirty) {
+		set_flags_bit(DIRTY_BIT, dirty);
 	}
 	/* we set the status to io pending,
 	 * and return the original status */
@@ -165,7 +176,7 @@ public:
 	~page_cache() {
 		pthread_spin_destroy(&_lock);
 	}
-	virtual page *search(off_t offset) = 0;
+	virtual page *search(off_t offset, off_t &old_off) = 0;
 };
 
 /**

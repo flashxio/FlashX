@@ -191,7 +191,7 @@ public:
 //		delete [] bufs;
 	}
 
-	page *search(off_t offset) {
+	page *search(off_t offset, off_t &old_off) {
 		thread_safe_page *pg = table.search(offset);
 		if (pg == NULL) {
 			pg = buf->get_empty_page();

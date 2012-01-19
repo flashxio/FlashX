@@ -21,7 +21,7 @@ public:
 		delete buf;
 	}
 	
-	page *search(const off_t offset) {
+	page *search(const off_t offset, off_t &old_off) {
 		std::map<off_t, struct page *>::iterator it = map.find(offset);
 		if (it == map.end()) {
 			page *ret = get_empty_page(offset);

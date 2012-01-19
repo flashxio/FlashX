@@ -448,7 +448,7 @@ public:
 	int cache_hits;
 #endif
 
-	virtual ssize_t access(char *, off_t, ssize_t) = 0;
+	virtual ssize_t access(char *, off_t, ssize_t, int) = 0;
 	virtual int thread_init() = 0;
 
 	thread_private(int idx, int entry_size): buf(NUM_PAGES / nthreads * PAGE_SIZE, entry_size) {
@@ -514,9 +514,10 @@ public:
 		return 0;
 	}
 
-	ssize_t access(char *buf, off_t offset, ssize_t size) {
+	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
 #ifdef STATISTICS
-		num_reads++;
+		if (access_method == READ)
+			num_reads++;
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 #endif
@@ -559,21 +560,22 @@ public:
 		buf_idx = 0;
 	}
 
-	ssize_t access(char *buf, off_t offset, ssize_t size) {
+	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
 		ssize_t ret;
 		/* for simplicity, I assume all request sizes are smaller than a page size */
 		assert(size <= PAGE_SIZE);
 		if (ROUND_PAGE(offset) == offset
 				&& (long) buf == ROUND_PAGE(buf)
 				&& size == PAGE_SIZE) {
-			ret = read_private::access(buf, offset, size);
+			ret = read_private::access(buf, offset, size, access_method);
 		}
 		else {
+			assert(access_method == READ);
 			buf_idx++;
 			if (buf_idx == 4096)
 				buf_idx = 0;
 			char *page = pages + buf_idx * PAGE_SIZE;
-			ret = read_private::access(page, ROUND_PAGE(offset), PAGE_SIZE);
+			ret = read_private::access(page, ROUND_PAGE(offset), PAGE_SIZE, access_method);
 			if (ret < 0)
 				return ret;
 			else
@@ -622,10 +624,11 @@ public:
 		}
 	}
 
-	ssize_t access(char *buf, off_t offset, ssize_t size) {
+	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
 		struct iocb *req;
 		int slot = max_io_slot(ctx);
 
+		assert(access_method == READ);
 		if (slot == 0) {
 			io_wait(ctx, NULL);
 		}
@@ -720,7 +723,7 @@ public:
 		return 0;
 	}
 
-	ssize_t access(char *buf, off_t offset, ssize_t size) {
+	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
 		char *page = (char *) addr + offset;
 		/* I try to avoid gcc optimization eliminating the code below,
 		 * and it works. */
@@ -741,12 +744,16 @@ public:
 		cache = new tree_cache(cache_size, idx * cache_size);
 	}
 
-	ssize_t access(char *buf, off_t offset, ssize_t size) {
+	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
 		ssize_t ret;
-		page *p = cache->search(ROUND_PAGE(offset));
+		off_t old_off = -1;
+		assert(access_method == READ);
+		page *p = cache->search(ROUND_PAGE(offset), old_off);
+
+		assert(p->get_offset() == ROUND_PAGE(offset));
 		if (!p->data_ready()) {
 			ret = read_private::access((char *) p->get_data(),
-					ROUND_PAGE(offset), PAGE_SIZE);
+					ROUND_PAGE(offset), PAGE_SIZE, access_method);
 			if (ret < 0) {
 				perror("read");
 				exit(1);
@@ -807,10 +814,11 @@ public:
 
 		assert(ROUND_PAGE(start) == start);
 		for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
-			thread_safe_page *p = (thread_safe_page *) (global_cache->search(ROUND_PAGE(offset)));
+			off_t old_off = -1;
+			thread_safe_page *p = (thread_safe_page *) (global_cache->search(ROUND_PAGE(offset), old_off));
 			if (!p->data_ready()) {
 				ssize_t ret = read_private::access((char *) p->get_data(),
-						ROUND_PAGE(offset), PAGE_SIZE);
+						ROUND_PAGE(offset), PAGE_SIZE, READ);
 				if (ret < 0) {
 					perror("read");
 					return ret;
@@ -824,9 +832,27 @@ public:
 		return 0;
 	}
 
-	ssize_t access(char *buf, off_t offset, ssize_t size) {
+	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
 		ssize_t ret;
-		thread_safe_page *p = (thread_safe_page *) (global_cache->search(ROUND_PAGE(offset)));
+		off_t old_off = -1;
+		thread_safe_page *p = (thread_safe_page *) (global_cache->search(ROUND_PAGE(offset), old_off));
+
+		/*
+		 * the page isn't in the cache,
+		 * so the cache evict a page and return it to us.
+		 */
+		if (old_off != ROUND_PAGE(offset) && old_off != -1) {
+			/* 
+			 * if the new page we get is dirty,
+			 * we need to write its data back to the file first.
+			 */
+			if (p->is_dirty()) {
+				read_private::access((char *) p->get_data(),
+						old_off, PAGE_SIZE, WRITE);
+				p->set_dirty(false);
+			}
+		}
+
 		if (!p->data_ready()) {
 			/* if the page isn't io pending,
 			 * set it io pending, and return
@@ -838,7 +864,7 @@ public:
 			 * locks. */
 			if(!p->test_and_set_io_pending()) {
 				ret = read_private::access((char *) p->get_data(),
-						ROUND_PAGE(offset), PAGE_SIZE);
+						ROUND_PAGE(offset), PAGE_SIZE, READ);
 				if (ret < 0) {
 					perror("read");
 					exit(1);
@@ -856,9 +882,14 @@ public:
 			cache_hits++;
 #endif
 		}
-		offset -= ROUND_PAGE(offset);
-		/* I assume the data I read never crosses the page boundary */
-		memcpy(buf, (char *) p->get_data() + offset, size);
+		int page_off = offset - ROUND_PAGE(offset);
+		if (access_method == WRITE) {
+			memcpy((char *) p->get_data() + page_off, buf, size);
+			p->set_dirty(true);
+		}
+		else 
+			/* I assume the data I read never crosses the page boundary */
+			memcpy(buf, (char *) p->get_data() + page_off, size);
 		p->dec_ref();
 		ret = size;
 		return ret;
@@ -888,7 +919,19 @@ void *rand_read(void *arg)
 		char *entry = buf->next_entry();
 		off_t off = priv->gen->next_offset();
 
-		ret = priv->access(entry, off, buf->get_entry_size());
+		/*
+		 * generate the data for writing the file,
+		 * so the data in the file isn't changed.
+		 */
+		if (access_method == WRITE) {
+			unsigned long *p = (unsigned long *) entry;
+			long start = off / sizeof(long);
+			unsigned int entry_size = buf->get_entry_size();
+			for (int i = 0; i < entry_size / sizeof(*p); i++)
+				p[i] = start++;
+		}
+
+		ret = priv->access(entry, off, buf->get_entry_size(), access_method);
 		if (ret > 0) {
 			assert(ret == buf->get_entry_size());
 			if (access_method == READ)
@@ -1108,7 +1151,7 @@ int main(int argc, char *argv[])
 		else if(key.compare("access") == 0) {
 			if(value.compare("read") == 0)
 				access_method = READ;
-			else if(value.compare("read") == 0)
+			else if(value.compare("write") == 0)
 				access_method = WRITE;
 			else {
 				fprintf(stderr, "wrong access method\n");

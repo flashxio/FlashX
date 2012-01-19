@@ -112,7 +112,7 @@ public:
 	 * search for a page with the offset.
 	 * If the page doesn't exist, return an empty page.
 	 */
-	page *search(off_t off) {
+	page *search(off_t off, off_t &old_off) {
 		thread_safe_page *ret = NULL;
 #ifndef STATISTICS
 		pthread_spin_lock(&_lock);
@@ -131,12 +131,25 @@ public:
 		}
 		if (ret == NULL) {
 			ret = get_empty_page();
+			old_off = ret->get_offset();
+			/*
+			 * I have to change the offset in the spinlock,
+			 * to make sure when the spinlock is unlocked, 
+			 * the page can be seen by others even though
+			 * it might not have data ready.
+			 */
 			ret->set_offset(off);
 		}
 		/* it's possible that the data in the page isn't ready */
 		ret->inc_ref();
 		pthread_spin_unlock(&_lock);
 		return ret;
+	}
+
+	void print_cell() {
+		for (int i = 0; i < CELL_SIZE; i++)
+			printf("%lx\t", buf.get_page(i)->get_offset());
+		printf("\n");
 	}
 };
 
@@ -164,9 +177,13 @@ public:
 		delete [] cells;
 	}
 
-	page *search(off_t offset) {
+	page *search(off_t offset, off_t &old_off) {
 		hash_cell *cell = &cells[hash(offset)];
-		return cell->search(offset);
+		return cell->search(offset, old_off);
+	}
+
+	void print_cell(off_t off) {
+		cells[hash(off)].print_cell();
 	}
 };
 
