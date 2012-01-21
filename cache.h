@@ -17,6 +17,7 @@ enum {
 	DATA_READY_BIT = 0,
 	IO_PENDING_BIT,
 	DIRTY_BIT,
+	LOCK_BIT,
 };
 
 class page
@@ -136,6 +137,16 @@ public:
 	bool test_and_set_io_pending() {
 		int old = __sync_fetch_and_or(&flags, 0x1 << IO_PENDING_BIT);
 		return old & (0x1 << IO_PENDING_BIT);
+	}
+
+	void lock() {
+		int old;
+		do {
+			old = __sync_fetch_and_or(&flags, 0x1 << LOCK_BIT);
+		} while (old & (0x1 << LOCK_BIT));
+	}
+	void unlock() {
+		set_flags_bit(LOCK_BIT, false);
 	}
 
 	void inc_ref() {
