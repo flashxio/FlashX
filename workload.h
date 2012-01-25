@@ -131,8 +131,12 @@ class file_workload: public workload_gen
 	}
 
 public:
-	file_workload(const std::string &file, int nthreads, int idx) {
+	file_workload(const std::string &file, int nthreads) {
 		static off_t file_size;
+		static int remainings;
+		static int shift = 0;
+		static long start;
+		static long end = 0;
 
 		if (offsets == NULL) {
 			int fd = open(file.c_str(), O_RDONLY);
@@ -149,6 +153,7 @@ public:
 				exit(1);
 			}
 			file_size = stats.st_size;
+			remainings = file_size / sizeof(off_t) % nthreads;
 			assert(file_size % sizeof(off_t) == 0);
 
 			offsets = (off_t *) malloc(file_size);
@@ -168,8 +173,10 @@ public:
 		}
 
 		/* the range in `offsets' */
-		curr = file_size / sizeof(off_t) / nthreads * idx;
-		end = curr + file_size / sizeof(off_t) / nthreads;
+		start = end;
+		end = start + file_size / sizeof(off_t) / nthreads + (shift < remainings);
+		this->curr = start;
+		this->end = end;
 		printf("start at %ld end at %ld\n", curr, end);
 	}
 

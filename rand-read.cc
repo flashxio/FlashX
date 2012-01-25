@@ -956,7 +956,7 @@ int main(int argc, char *argv[])
 				gen = new balanced_workload(chunk);
 				break;
 			case -1:
-				gen = new file_workload(workload_file, nthreads, j);
+				gen = new file_workload(workload_file, nthreads);
 				break;
 			default:
 				fprintf(stderr, "unsupported workload\n");
