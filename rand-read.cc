@@ -883,6 +883,10 @@ int main(int argc, char *argv[])
 	}
 
 	page::allocate_cache(cache_size);
+	int remainings = npages % nthreads;
+	int shift = 0;
+	long start;
+	long end = 0;
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
 		const char *file_name;
@@ -919,14 +923,15 @@ int main(int argc, char *argv[])
 				exit(1);
 		}
 		
-		long start, end;
 		if (num_files > 1) {
 			start = 0;
 			end = npages * PAGE_SIZE / entry_size;
 		}
 		else {
-			start = (long) npages / nthreads * PAGE_SIZE / entry_size * j;
-			end = start + (long) npages / nthreads * PAGE_SIZE / entry_size;
+			start = end;
+			end = start + ((long) npages / nthreads + (shift < remainings)) * PAGE_SIZE / entry_size;
+			if (remainings != shift)
+				shift++;
 		}
 		printf("thread %d starts %ld ends %ld\n", j, start, end);
 
