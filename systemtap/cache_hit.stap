@@ -6,6 +6,7 @@ probe begin {
 
 global hits
 global misses
+global last
 
 probe kernel.function("find_get_page").return {
 	if (execname() == @1) {
@@ -14,6 +15,12 @@ probe kernel.function("find_get_page").return {
 		}
 		else {
 			hits++
+		}
+
+		diff = $mapping->nrpages - last
+		if (diff > 10000 || diff < -10000) {
+			printf("num of pages: %d\n", $mapping->nrpages);
+			last = $mapping->nrpages
 		}
 	}
 }
