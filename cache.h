@@ -41,7 +41,8 @@ class page
 protected:
 	volatile int buf_offset;
 	volatile short refcnt;
-	volatile short flags;
+	volatile char flags;
+	volatile unsigned char hits;
 
 	int get_buf_offset() const {
 		return buf_offset;
@@ -51,11 +52,20 @@ protected:
 	}
 
 public:
-	page():offset(-1), buf_offset(0), refcnt(0), flags(0) { }
+	page() {
+		offset = -1;
+		buf_offset = 0;
+		refcnt = 0;
+		flags = 0;
+		hits = 0;
+	}
 
-	page(off_t off, long data): refcnt(0), flags(0) {
+	page(off_t off, long data) {
 		set_offset(off);
 		set_buf_offset(data >> LOG_PAGE_SIZE);
+		refcnt = 0;
+		flags = 0;
+		hits = 0;
 	}
 
 	/* offset in the file in bytes */
@@ -165,6 +175,17 @@ public:
 			printf("thread %ld wait for used\n", pthread_self());
 #endif
 		}
+	}
+
+	/* the page is accessed */
+	void hit() {
+		__sync_fetch_and_add(&hits, 1);
+	}
+	void reset_hits() {
+		hits = 0;
+	}
+	int get_hits() {
+		return hits;
 	}
 };
 

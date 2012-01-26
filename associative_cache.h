@@ -3,7 +3,7 @@
 
 #include "cache.h"
 
-#define CELL_SIZE 4
+#define CELL_SIZE 8
 
 #ifdef STATISTICS
 static volatile int avail_cells;
@@ -63,23 +63,34 @@ class hash_cell
 {
 	pthread_spinlock_t _lock;
 	page_cell<thread_safe_page, CELL_SIZE> buf;
-	char stuffing[CACHE_LINE  / 2- sizeof(_lock) - sizeof(buf)];
+	char stuffing[CACHE_LINE - sizeof(_lock) - sizeof(buf)];
 
 	/* this function has to be called with lock held */
 	thread_safe_page *get_empty_page() {
-		thread_safe_page *ret = buf.get_empty_page();
-		/*
-		 * each time we select a page to evict,
-		 * it's possible that it's still used by some
-		 * other threads. If it's being used, then we choose
-		 * the next page in the cell.
-		 */
-		while (ret->get_ref()) {
-			ret = buf.get_empty_page();
-#ifdef STATISTICS
-			__sync_fetch_and_add(&num_wait_unused, 1);
-#endif
-		}
+		thread_safe_page *ret = NULL;
+
+		do {
+			int min_hits = 0x7fffffff;
+			for (int i = 0; i < CELL_SIZE; i++) {
+				thread_safe_page *pg = buf.get_page(i);
+				if (pg->get_ref())
+					continue;
+
+				/* 
+				 * refcnt only increases within the lock of the cell,
+				 * so if the page's refcnt is 0 above,
+				 * it'll be always 0 within the lock.
+				 */
+
+				if (min_hits > pg->get_hits()) {
+					min_hits = pg->get_hits();
+					ret = pg;
+				}
+			}
+			/* it happens when all pages in the cell is used currently. */
+		} while (ret == NULL);
+
+		ret->reset_hits();
 		ret->set_data_ready(false);
 		return ret;
 	}
