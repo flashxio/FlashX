@@ -97,6 +97,21 @@ public:
 			flags &= ~(0x1 << DIRTY_BIT);
 	}
 
+	void reset_hits() {
+		hits = 0;
+	}
+	int get_hits() {
+		return hits;
+	}
+	void set_hits(int hits) {
+		assert (hits < 0xff);
+		this->hits = hits;
+	}
+	/* the page is accessed */
+	void hit() {
+		hits++;
+	}
+
 	static void allocate_cache(long size) {
 		data_start = valloc(size);
 	}
@@ -180,12 +195,6 @@ public:
 	/* the page is accessed */
 	void hit() {
 		__sync_fetch_and_add(&hits, 1);
-	}
-	void reset_hits() {
-		hits = 0;
-	}
-	int get_hits() {
-		return hits;
 	}
 };
 

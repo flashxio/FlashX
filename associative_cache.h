@@ -57,13 +57,63 @@ public:
 	}
 };
 
+#define SHADOW_FACTOR 4
+class shadow_cell
+{
+	unsigned int num;
+	page buf[CELL_SIZE * SHADOW_FACTOR];
+public:
+	/*
+	 * add a page to the cell, which is evicted from hash_cell.
+	 * the only thing we need to record is the number of hits
+	 * of this page.
+	 */
+	void add(page &pg) {
+		/* if the cell isn't full */
+		if (num < sizeof (buf) / sizeof (page)) {
+			buf[num] = pg;
+			num++;
+		}
+		else {
+			int idx = -1;
+			int min_hits = 0x7fffffff;
+			for (unsigned int i = 0; i < num; i++)
+				if (buf[i].get_hits() < min_hits) {
+					min_hits = buf[i].get_hits();
+					idx = i;
+				}
+			assert(idx != -1);
+			/*
+			 * If the cell is full and the number of hits of the new page
+			 * is higher than a page in the cell, we need to
+			 * evicted the shadown page from the cell.
+			 */
+			if (min_hits < pg.get_hits())
+				buf[idx] = pg;
+			/*
+			 * If the cell is full and the number of hits of the new page
+			 * is lower than any pages in the cell. It's ignored.
+			 */
+		}
+	}
+
+	page *search(off_t off) {
+		for (unsigned int i = 0; i < sizeof(buf) / sizeof(page); i++) {
+			if (buf[i].get_offset() == off)
+				return &buf[i];
+		}
+		return NULL;
+	}
+};
+
 // TODO the entire cell should be put in the same cache line
 // so each access to the hash table has only one cache miss.
 class hash_cell
 {
 	pthread_spinlock_t _lock;
 	page_cell<thread_safe_page, CELL_SIZE> buf;
-	char stuffing[CACHE_LINE - sizeof(_lock) - sizeof(buf)];
+	shadow_cell shadow;
+//	char stuffing[CACHE_LINE - sizeof(_lock) - sizeof(buf)];
 
 	/* this function has to be called with lock held */
 	thread_safe_page *get_empty_page() {
@@ -89,6 +139,10 @@ class hash_cell
 			}
 			/* it happens when all pages in the cell is used currently. */
 		} while (ret == NULL);
+
+		/* we record the hit info of the page in the shadow cell. */
+		if (ret->get_hits() > 0)
+			shadow.add(*ret);
 
 		ret->reset_hits();
 		ret->set_data_ready(false);
@@ -150,6 +204,13 @@ public:
 			 * it might not have data ready.
 			 */
 			ret->set_offset(off);
+			page *shadow_pg = shadow.search(off);
+			/*
+			 * if the page has been seen before,
+			 * we should set the hits info.
+			 */
+			if (shadow_pg)
+				ret->set_hits(shadow_pg->get_hits());
 		}
 		/* it's possible that the data in the page isn't ready */
 		ret->inc_ref();
