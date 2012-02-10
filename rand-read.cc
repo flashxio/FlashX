@@ -13,6 +13,8 @@
 #include <pthread.h>
 #include <assert.h>
 #include <google/profiler.h>
+#include <sys/syscall.h>
+#define gettid() syscall(__NR_gettid)
 
 #include <iostream>
 #include <string>
@@ -610,6 +612,7 @@ void *rand_read(void *arg)
 	thread_private *priv = threads[(long) arg];
 	rand_buf *buf;
 
+	printf("pid: %d, tid: %ld\n", getpid(), gettid());
 	priv->thread_init();
 	buf = &priv->buf;
 
