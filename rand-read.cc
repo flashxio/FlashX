@@ -262,6 +262,7 @@ public:
 	}
 };
 
+#ifdef ENABLE_AIO
 class aio_private;
 void aio_callback(io_context_t, struct iocb*,
 		struct io_callback_s *, long, long);
@@ -360,6 +361,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb,
 	tcb->thread->return_cb(tcb);
 	tcb->thread->read_bytes += cb->size;
 }
+#endif
 
 class mmap_private: public thread_private
 {
@@ -688,7 +690,9 @@ struct str2int {
 enum {
 	READ_ACCESS,
 	DIRECT_ACCESS,
+#ifdef ENABLE_AIO
 	AIO_ACCESS,
+#endif
 	MMAP_ACCESS,
 	LOCAL_CACHE_ACCESS,
 	GLOBAL_CACHE_ACCESS
@@ -697,7 +701,9 @@ enum {
 str2int access_methods[] = {
 	{ "normal", READ_ACCESS },
 	{ "direct", DIRECT_ACCESS },
+#ifdef ENABLE_AIO
 	{ "aio", AIO_ACCESS },
+#endif
 	{ "mmap", MMAP_ACCESS },
 	{ "local_cache", LOCAL_CACHE_ACCESS },
 	{ "global_cache", GLOBAL_CACHE_ACCESS },
@@ -904,9 +910,11 @@ int main(int argc, char *argv[])
 			case DIRECT_ACCESS:
 				threads[j] = new direct_private(file_name, j, entry_size);
 				break;
+#if ENABLE_AIO
 			case AIO_ACCESS:
 				threads[j] = new aio_private(file_name, j, entry_size);
 				break;
+#endif
 			case MMAP_ACCESS:
 				threads[j] = new mmap_private(file_name, j, entry_size);
 				break;

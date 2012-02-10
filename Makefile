@@ -1,6 +1,6 @@
 CFLAGS = -g -O3 -DSTATISTICS #-DPROFILER
 CXXFLAGS = -g -Wall -O3 -DSTATISTICS #-DPROFILER
-LDFLAGS = -lpthread -laio #-lprofiler
+LDFLAGS = -lpthread #-laio #-lprofiler
 CC = g++
 
 all: rand-read rand-memcpy test create_file
