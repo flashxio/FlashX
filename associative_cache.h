@@ -55,6 +55,12 @@ public:
 			return NULL;
 		return &buf[i];
 	}
+
+	void scale_down_hits() {
+		for (int i = 0; i < BUF_SIZE; i++) {
+			buf[i].set_hits(buf[i].get_hits() / 2);
+		}
+	}
 };
 
 #define SHADOW_FACTOR 4
@@ -103,6 +109,12 @@ public:
 				return &buf[i];
 		}
 		return NULL;
+	}
+
+	void scale_down_hits() {
+		for (int i = 0; i < CELL_SIZE * SHADOW_FACTOR; i++) {
+			buf[i].set_hits(buf[i].get_hits() / 2);
+		}
 	}
 };
 
@@ -214,6 +226,11 @@ public:
 		}
 		/* it's possible that the data in the page isn't ready */
 		ret->inc_ref();
+		if (ret->get_hits() == 0xff) {
+			buf.scale_down_hits();
+			shadow.scale_down_hits();
+		}
+		ret->hit();
 		pthread_spin_unlock(&_lock);
 		return ret;
 	}

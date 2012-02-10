@@ -191,11 +191,6 @@ public:
 #endif
 		}
 	}
-
-	/* the page is accessed */
-	void hit() {
-		__sync_fetch_and_add(&hits, 1);
-	}
 };
 
 class page_cache

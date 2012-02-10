@@ -589,7 +589,6 @@ public:
 		else 
 			/* I assume the data I read never crosses the page boundary */
 			memcpy(buf, (char *) p->get_data() + page_off, size);
-		p->hit();
 		p->unlock();
 		p->dec_ref();
 		ret = size;
