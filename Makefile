@@ -8,7 +8,7 @@ all: rand-read rand-memcpy test create_file
 create_file: create_file.o
 	gcc -o create_file create_file.o
 
-rand-read.o: rand-read.cc cache.h tree_cache.h associative_cache.h cuckoo_cache.h wpaio.h
+rand-read.o: rand-read.cc cache.h tree_cache.h associative_cache.h cuckoo_cache.h wpaio.h LRU2Q.h
 wpaio.o: wpaio.h
 
 rand-read: rand-read.o wpaio.o

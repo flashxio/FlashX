@@ -18,6 +18,8 @@ enum {
 	IO_PENDING_BIT,
 	DIRTY_BIT,
 	LOCK_BIT,
+	ACTIVE_BIT,
+	REFERENCED_BIT,
 };
 
 class page
@@ -97,6 +99,26 @@ public:
 			flags &= ~(0x1 << DIRTY_BIT);
 	}
 
+	void set_referenced(bool referenced) {
+		if (referenced)
+			referenced |= 0x1 << REFERENCED_BIT;
+		else
+			referenced &= ~(0x1 << REFERENCED_BIT);
+	}
+	bool referenced() {
+		return flags & (0x1 << REFERENCED_BIT);
+	}
+
+	void set_active(bool active) {
+		if (active)
+			flags |= 0x1 << ACTIVE_BIT;
+		else
+			flags &= ~(0x1 << ACTIVE_BIT);
+	}
+	bool active() {
+		return flags & (0x1 << ACTIVE_BIT);
+	}
+
 	void reset_hits() {
 		hits = 0;
 	}
@@ -114,6 +136,16 @@ public:
 
 	static void allocate_cache(long size) {
 		data_start = valloc(size);
+	}
+
+	void inc_ref() {
+		refcnt++;
+	}
+	void dec_ref() {
+		refcnt--;
+	}
+	short get_ref() {
+		return refcnt;
 	}
 };
 void *page::data_start;

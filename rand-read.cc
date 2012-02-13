@@ -26,6 +26,7 @@
 #include "associative_cache.h"
 #include "cuckoo_cache.h"
 #include "workload.h"
+#include "LRU2Q.h"
 
 //#define USE_PROCESS
 
@@ -47,7 +48,8 @@ enum {
 enum {
 	TREE_CACHE,
 	ASSOCIATIVE_CACHE,
-	CUCKOO_CACHE
+	CUCKOO_CACHE,
+	LRU2Q_CACHE,
 };
 
 int npages;
@@ -476,6 +478,9 @@ public:
 				case CUCKOO_CACHE:
 					global_cache = new cuckoo_cache(cache_size);
 					break;
+				case LRU2Q_CACHE:
+					global_cache = new LRU2Q_cache(cache_size);
+					break;
 				default:
 					fprintf(stderr, "wrong cache type\n");
 					exit(1);
@@ -715,6 +720,7 @@ str2int cache_types[] = {
 	{ "tree", TREE_CACHE } ,
 	{ "associative", ASSOCIATIVE_CACHE },
 	{ "cuckoo", CUCKOO_CACHE },
+	{ "lru2q", LRU2Q_CACHE },
 };
 
 enum {
