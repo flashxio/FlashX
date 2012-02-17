@@ -815,8 +815,8 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload\n");
-		access_map.print("available access methods: ");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type\n");
+		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
 		exit(1);
