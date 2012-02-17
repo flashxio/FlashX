@@ -14,7 +14,7 @@ wpaio.o: wpaio.h
 rand-read: rand-read.o wpaio.o
 	g++ -o rand-read wpaio.o rand-read.o $(LDFLAGS)
 rand-memcpy: rand-memcpy.c
-	gcc -o rand-memcpy rand-memcpy.c $(LDFLAGS)
+	gcc -o rand-memcpy rand-memcpy.c $(LDFLAGS) -lnuma
 
 test: test.cc cuckoo_cache.h cache.h associative_cache.h tree_cache.h
 	g++ -o test test.cc -g -lpthread

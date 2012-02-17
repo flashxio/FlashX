@@ -7,8 +7,9 @@
 #include <stdlib.h>
 #include <sys/resource.h>
 #include <string.h>
+#include <numa.h>
 
-#define NUM_THREADS 8
+#define NUM_THREADS 64
 #define PAGE_SIZE 4096
 #define ENTRY_SIZE PAGE_SIZE
 #define ARRAY_SIZE 1073741824
@@ -88,49 +89,72 @@ int main(int argc, char *argv[])
 	}
 //	permute_offset(offset, nentries);
 
-	array = malloc(ARRAY_SIZE);
+	int ncpus = numa_num_configured_cpus();
+	printf("there are %d cores in the machine\n", ncpus);
+	for (i = 0; i < ncpus; i++) {
+		printf("cpu %d belongs to node %d\n",
+			i, numa_node_of_cpu(i));
+	}
+	int node = numa_node_of_cpu(0);
+	printf("run on node %d\n", node);
+	if (numa_run_on_node(node) < 0) {
+		perror("numa_run_on_node");
+		exit(1);
+	}
+
+	array = numa_alloc_local(ARRAY_SIZE);
 	/* we need to avoid the cost of page fault. */
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		array[i] = 0;
-	dst_arr = malloc(ARRAY_SIZE);
+	dst_arr = numa_alloc_local(ARRAY_SIZE);
 	/* we need to avoid the cost of page fault. */
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		dst_arr[i] = 0;
 
-	nthreads = atoi(argv[2]);
-	if (nthreads > NUM_THREADS) {
-		fprintf(stderr, "too many threads\n");
-		exit(1);
-	}
-
-	ret = setpriority(PRIO_PROCESS, getpid(), -20);
-	if (ret < 0) {
-		perror("setpriority");
-		exit(1);
-	}
-
-	gettimeofday(&start_time, NULL);
-	global_start = start_time;
-	for (i = 0; i < nthreads; i++) {
-		ret = pthread_create(&threads[i], NULL,
-				rand_read, (void *) (nentries / nthreads * i));
-		if (ret) {
-			perror("pthread_create");
+	int cpu;
+	for (cpu = 0; cpu < 4; cpu++) {
+		node = numa_node_of_cpu(cpu);
+		printf("run on node %d\n", node);
+		if (numa_run_on_node(node) < 0) {
+			perror("numa_run_on_node");
 			exit(1);
 		}
-	}
 
-	for (i = 0; i < nthreads; i++) {
-		ssize_t size;
-		ret = pthread_join(threads[i], (void **) &size);
-		if (ret) {
-			perror("pthread_join");
+		nthreads = atoi(argv[2]);
+		if (nthreads > NUM_THREADS) {
+			fprintf(stderr, "too many threads\n");
 			exit(1);
 		}
-		read_bytes += size;
+
+		ret = setpriority(PRIO_PROCESS, getpid(), -20);
+		if (ret < 0) {
+			perror("setpriority");
+			exit(1);
+		}
+
+		gettimeofday(&start_time, NULL);
+		global_start = start_time;
+		for (i = 0; i < nthreads; i++) {
+			ret = pthread_create(&threads[i], NULL,
+					rand_read, (void *) (nentries / nthreads * i));
+			if (ret) {
+				perror("pthread_create");
+				exit(1);
+			}
+		}
+
+		for (i = 0; i < nthreads; i++) {
+			ssize_t size;
+			ret = pthread_join(threads[i], (void **) &size);
+			if (ret) {
+				perror("pthread_join");
+				exit(1);
+			}
+			read_bytes += size;
+		}
+		gettimeofday(&end_time, NULL);
+		printf("read %ld bytes, takes %f seconds\n",
+				read_bytes, end_time.tv_sec - start_time.tv_sec
+				+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 	}
-	gettimeofday(&end_time, NULL);
-	printf("read %ld bytes, takes %f seconds\n",
-			read_bytes, end_time.tv_sec - start_time.tv_sec
-			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 }
