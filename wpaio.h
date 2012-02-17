@@ -1,6 +1,7 @@
 #ifndef _WPAIO_H_
 #define _WPAIO_H_
 
+#ifdef ENABLE_AIO
 
 # ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -56,5 +57,6 @@ void submit_io_request(struct aio_ctx* a_ctx, struct iocb* ioq[], int num);
 int io_wait(struct aio_ctx* a_ctx, struct timespec* to);
 int max_io_slot(struct aio_ctx* a_ctx);
 
+#endif
 
 #endif

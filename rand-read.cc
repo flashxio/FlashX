@@ -12,7 +12,9 @@
 #include <errno.h>
 #include <pthread.h>
 #include <assert.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 #include <sys/syscall.h>
 #define gettid() syscall(__NR_gettid)
 
