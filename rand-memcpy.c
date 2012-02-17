@@ -111,9 +111,7 @@ int main(int argc, char *argv[])
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		dst_arr[i] = 0;
 
-	int cpu;
-	for (cpu = 0; cpu < 4; cpu++) {
-		node = numa_node_of_cpu(cpu);
+	for (node = 0; node < numa_num_configured_nodes(); node++) {
 		printf("run on node %d\n", node);
 		if (numa_run_on_node(node) < 0) {
 			perror("numa_run_on_node");
