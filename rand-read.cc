@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <pthread.h>
 #include <assert.h>
+#include <numa.h>
+#include <numaif.h>
 #ifdef PROFILER
 #include <google/profiler.h>
 #endif
@@ -819,6 +821,19 @@ int main(int argc, char *argv[])
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
+		exit(1);
+	}
+
+	/* bind to node 0. TODO is it right? */
+	unsigned long nodemask = 1;
+	if (set_mempolicy(MPOL_BIND, &nodemask,
+				numa_num_configured_nodes()) < 0) {
+		perror("set_mempolicy");
+		exit(1);
+	}
+	/* bind the process to node 0. */
+	if (numa_run_on_node(0) < 0) {
+		perror("numa_run_on_node");
 		exit(1);
 	}
 

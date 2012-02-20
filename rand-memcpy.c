@@ -8,6 +8,7 @@
 #include <sys/resource.h>
 #include <string.h>
 #include <numa.h>
+#include <numaif.h>
 
 #define NUM_THREADS 64
 #define PAGE_SIZE 4096
@@ -95,22 +96,29 @@ int main(int argc, char *argv[])
 		printf("cpu %d belongs to node %d\n",
 			i, numa_node_of_cpu(i));
 	}
-	int node = numa_node_of_cpu(0);
-	printf("run on node %d\n", node);
-	if (numa_run_on_node(node) < 0) {
+	/* bind to node 0. TODO is it right? */
+	unsigned long nodemask = 1;
+	if (set_mempolicy(MPOL_BIND, &nodemask,
+				numa_num_configured_nodes()) < 0) {
+		perror("set_mempolicy");
+		exit(1);
+	}
+	printf("run on node 0\n");
+	if (numa_run_on_node(0) < 0) {
 		perror("numa_run_on_node");
 		exit(1);
 	}
 
-	array = numa_alloc_local(ARRAY_SIZE);
+	array = malloc(ARRAY_SIZE);
 	/* we need to avoid the cost of page fault. */
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		array[i] = 0;
-	dst_arr = numa_alloc_local(ARRAY_SIZE);
+	dst_arr = malloc(ARRAY_SIZE);
 	/* we need to avoid the cost of page fault. */
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		dst_arr[i] = 0;
 
+	int node;
 	for (node = 0; node < numa_num_configured_nodes(); node++) {
 		printf("run on node %d\n", node);
 		if (numa_run_on_node(node) < 0) {

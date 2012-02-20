@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <numaif.h>
+#include <numa.h>
 
 /**
  * generate a file filled with a sequence starting from 0.
@@ -47,6 +49,19 @@ int main(int argc, char *argv[])
 			break;
 	}
 	printf("create a file of %ld bytes\n", size);
+
+	/* bind to node 0. TODO is it right? */
+	unsigned long nodemask = 1;
+	if (set_mempolicy(MPOL_BIND, &nodemask,
+				numa_num_configured_nodes()) < 0) {
+		perror("set_mempolicy");
+		exit(1);
+	}
+	/* bind the process to node 0. */
+	if (numa_run_on_node(0) < 0) {
+		perror("numa_run_on_node");
+		exit(1);
+	}
 
 	/*
 	 * because of my change in the kernel, creating a read-only file
