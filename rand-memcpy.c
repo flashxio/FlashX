@@ -96,10 +96,13 @@ int main(int argc, char *argv[])
 		printf("cpu %d belongs to node %d\n",
 			i, numa_node_of_cpu(i));
 	}
-	/* bind to node 0. TODO is it right? */
-	unsigned long nodemask = 1;
-	if (set_mempolicy(MPOL_BIND, &nodemask,
-				numa_num_configured_nodes()) < 0) {
+	/* bind to node 0. */
+	nodemask_t nodemask;
+	nodemask_zero(&nodemask);
+	nodemask_set_compat(&nodemask, 0);
+	unsigned long maxnode = NUMA_NUM_NODES;
+	if (set_mempolicy(MPOL_BIND,
+				(unsigned long *) &nodemask, maxnode) < 0) {
 		perror("set_mempolicy");
 		exit(1);
 	}
