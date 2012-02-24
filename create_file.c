@@ -14,7 +14,8 @@
  * which is 8 bytes in 64-bit architecture.
  */
 
-char buf[1024 * 1024];
+char buf[1024 * 1024]__attribute__((aligned(4096)));
+#define MAX_NODES 32
 
 int main(int argc, char *argv[])
 {
@@ -24,9 +25,11 @@ int main(int argc, char *argv[])
 	char last;
 	long num = 0;
 	ssize_t ret;
+	int node_ids[MAX_NODES];
+	int num_nodes = 0;
 
-	if (argc < 2) {
-		fprintf(stderr, "create_file file_name size\n");
+	if (argc < 3) {
+		fprintf(stderr, "create_file file_name size [node1 node2 ...]\n");
 		exit(1);
 	}
 
@@ -34,6 +37,12 @@ int main(int argc, char *argv[])
 	last = argv[2][strlen(argv[2]) - 1];
 	argv[2][strlen(argv[2]) - 1] = 0;
 	size = atol(argv[2]);
+	if (argc >= 4) {
+		int i;
+		num_nodes = argc - 3;
+		for (i = 0; i < num_nodes; i++)
+			node_ids[i] = atoi(argv[3 + i]);
+	}
 	switch (last) {
 		case 'G':
 		case 'g':
@@ -51,20 +60,16 @@ int main(int argc, char *argv[])
 	printf("create a file of %ld bytes\n", size);
 
 	/* bind to node 0. */
-	nodemask_t nodemask;
-	nodemask_zero(&nodemask);
-	nodemask_set_compat(&nodemask, 0);
-	unsigned long maxnode = NUMA_NUM_NODES;
-	if (set_mempolicy(MPOL_BIND,
-				(unsigned long *) &nodemask, maxnode) < 0) {
-		perror("set_mempolicy");
-		exit(1);
+	struct bitmask *nodemask = numa_allocate_cpumask();
+	numa_bitmask_clearall(nodemask);
+	int i;
+	for (i = 0; i < num_nodes; i++) {
+		printf("run on node %d\n", node_ids[i]);
+		numa_bitmask_setbit(nodemask, node_ids[i]);
 	}
-	/* bind the process to node 0. */
-	if (numa_run_on_node(0) < 0) {
-		perror("numa_run_on_node");
-		exit(1);
-	}
+	numa_bind(nodemask);
+	numa_set_strict(1);
+	numa_set_bind_policy(1);
 
 	/*
 	 * because of my change in the kernel, creating a read-only file
@@ -73,7 +78,7 @@ int main(int argc, char *argv[])
 	 * So I have to make the file writable first, and then later
 	 * make it read-only
 	 */
-	fd = open(file_name, O_WRONLY | O_CREAT, 00644);
+	fd = open(file_name, O_DIRECT | O_WRONLY | O_CREAT, 00644);
 	if (fd < 0) {
 		perror("open");
 		exit(1);
