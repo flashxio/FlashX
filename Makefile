@@ -6,7 +6,7 @@ CC = g++
 all: rand-read rand-memcpy test create_file
 
 create_file: create_file.o
-	gcc -o create_file create_file.o -lnuma
+	g++ -o create_file create_file.o -lnuma
 
 rand-read.o: rand-read.cc cache.h tree_cache.h associative_cache.h cuckoo_cache.h wpaio.h LRU2Q.h
 wpaio.o: wpaio.h
