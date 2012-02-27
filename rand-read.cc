@@ -37,6 +37,7 @@
 #define NUM_PAGES 16384
 #define NUM_THREADS 32
 #define AIO_DEPTH 32
+#define ENTRY_READ_SIZE 128
 
 enum {
 	NORMAL,
@@ -56,7 +57,7 @@ enum {
 	LRU2Q_CACHE,
 };
 
-int npages;
+long npages;
 int nthreads = 1;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
@@ -160,45 +161,71 @@ public:
 
 class read_private: public thread_private
 {
-	const char *file_name;
-	int fd;
+	/* the array of files that it's going to access */
+	const char **file_names;
+	int *fds;
+	/* the number of files */
+	int num;
+	/* the size of data it's going to access, and it'll be divided for each file */
+	long size;
+
 	int flags;
 #ifdef STATISTICS
 	long read_time; // in us
 	long num_reads;
 #endif
-protected:
-	int get_fd() {
-		return fd;
-	}
-
 public:
-	read_private(const char *name, int idx, int entry_size,
-			int flags = O_RDWR): thread_private(idx, entry_size), file_name(name) {
+	read_private(const char *names[], int num, long size, int idx, int entry_size,
+			int flags = O_RDWR): thread_private(idx, entry_size) {
 		this->flags = flags;
 #ifdef STATISTICS
 		read_time = 0;
 		num_reads = 0;
 #endif
+		file_names = new const char *[num];
+		for (int i = 0; i < num; i++)
+			file_names[i] = names[i];
+		fds = new int[num];
+		this->num = num;
+		this->size = size;
+	}
+
+	~read_private() {
+		delete [] file_names;
+		delete [] fds;
 	}
 
 	int thread_init() {
 		int ret;
 
-		fd = open(file_name, flags);
-		if (fd < 0) {
-			perror("open");
-			exit (1);
-		}
-		ret = posix_fadvise(fd, 0, 0, POSIX_FADV_RANDOM);
-		if (ret < 0) {
-			perror("posix_fadvise");
-			exit(1);
+		for (int i = 0; i < num; i++) {
+			fds[i] = open(file_names[i], flags);
+			if (fds[i] < 0) {
+				perror("open");
+				exit (1);
+			}
+			ret = posix_fadvise(fds[i], 0, 0, POSIX_FADV_RANDOM);
+			if (ret < 0) {
+				perror("posix_fadvise");
+				exit(1);
+			}
 		}
 		return 0;
 	}
 
+	int thread_end() {
+		for (int i = 0; i < num; i++)
+			close(fds[i]);
+		return 0;
+	}
+
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
+		int fd_idx = offset / (this->size / num);
+		if (fd_idx >= num) {
+			printf("offset: %ld, fd_idx: %d, size: %ld, num: %d\n", offset, fd_idx, this->size, num);
+		}
+		assert (fd_idx < num);
+		int fd = fds[fd_idx];
 #ifdef STATISTICS
 		if (access_method == READ)
 			num_reads++;
@@ -238,7 +265,8 @@ class direct_private: public read_private
 	char *pages;
 	int buf_idx;
 public:
-	direct_private(const char *name, int idx, int entry_size): read_private(name, idx,
+	direct_private(const char *names[], int num, long size, int idx,
+			int entry_size): read_private(names, num, size, idx,
 			entry_size, O_DIRECT | O_RDWR) {
 		pages = (char *) valloc(PAGE_SIZE * 4096);
 		buf_idx = 0;
@@ -289,7 +317,8 @@ class aio_private: public read_private
 	std::deque<thread_callback_s *> cbs;
 
 public:
-	aio_private(const char *name, int idx, int entry_size): read_private(name, idx,
+	aio_private(const char *names[], int num, long size, int idx,
+			int entry_size): read_private(names, num, size, idx,
 			entry_size, O_DIRECT | O_RDWR) {
 		printf("aio is used\n");
 		pages = (char *) valloc(PAGE_SIZE * 4096);
@@ -424,8 +453,8 @@ class part_cached_private: public direct_private
 	page_cache *cache;
 
 public:
-	part_cached_private(const char *name, int idx, long cache_size,
-			int entry_size): direct_private(name, idx, entry_size) {
+	part_cached_private(const char *names[], int num, long size, int idx, long cache_size,
+			int entry_size): direct_private(names, num, size, idx, entry_size) {
 		/* all local cache has the same size */
 		cache = new tree_cache(cache_size, idx * cache_size);
 	}
@@ -467,8 +496,8 @@ class global_cached_private: public direct_private
 	long cache_size;
 //	static page_cache *global_cache;
 public:
-	global_cached_private(const char *name, int idx, long cache_size,
-			int entry_size, int cache_type): direct_private(name, idx, entry_size) {
+	global_cached_private(const char *names[], int num, long size, int idx, long cache_size,
+			int entry_size, int cache_type): direct_private(names, num, size, idx, entry_size) {
 		num_waits = 0;
 		this->cache_size = cache_size;
 		if (global_cache == NULL) {
@@ -517,7 +546,7 @@ public:
 			}
 		}
 		/* close the file as it will be opened again in the real workload. */
-		close(get_fd());
+		thread_end();
 		return 0;
 	}
 
@@ -637,11 +666,11 @@ void *rand_read(void *arg)
 			unsigned long *p = (unsigned long *) entry;
 			long start = off / sizeof(long);
 			unsigned int entry_size = buf->get_entry_size();
-			for (int i = 0; i < entry_size / sizeof(*p); i++)
+			for (unsigned int i = 0; i < entry_size / sizeof(*p); i++)
 				p[i] = start++;
 		}
 
-		ret = priv->access(entry, off, buf->get_entry_size(), access_method);
+		ret = priv->access(entry, off, ENTRY_READ_SIZE, access_method);
 		if (ret > 0) {
 			assert(ret == buf->get_entry_size());
 			if (access_method == READ)
@@ -824,22 +853,6 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	/* bind to node 0. */
-	nodemask_t nodemask;
-	nodemask_zero(&nodemask);
-	nodemask_set_compat(&nodemask, 0);
-	unsigned long maxnode = NUMA_NUM_NODES;
-	if (set_mempolicy(MPOL_BIND,
-				(unsigned long *) &nodemask, maxnode) < 0) {
-		perror("set_mempolicy");
-		exit(1);
-	}
-	/* bind the process to node 0. */
-	if (numa_run_on_node(0) < 0) {
-		perror("numa_run_on_node");
-		exit(1);
-	}
-
 	for (int i = 1; i < argc; i++) {
 		std::string str = argv[i];
 		size_t found = str.find("=");
@@ -902,7 +915,7 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %d, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d\n",
+	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d\n",
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload);
 
 	int num_entries = npages * (PAGE_SIZE / entry_size);
@@ -911,46 +924,41 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "too many threads\n");
 		exit(1);
 	}
-	if (num_files > 1 && num_files != nthreads) {
-		fprintf(stderr, "if there are multiple files, \
-				the number of files must be the same as the number of threads\n");
-		exit(1);
-	}
 
 	page::allocate_cache(cache_size);
 	int remainings = npages % nthreads;
 	int shift = 0;
 	long start;
 	long end = 0;
+	const char *cnames[num_files];
+	int num;
+	for (int k = 0; k < num_files; k++)
+		cnames[k] = file_names[k].c_str();
+	num = num_files;
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
-		const char *file_name;
-		if (num_files > 1) {
-			file_name = file_names[j].c_str();
-		}
-		else {
-			file_name = file_names[0].c_str();
-		}
 		switch (access_option) {
 			case READ_ACCESS:
-				threads[j] = new read_private(file_name, j, entry_size);
+				threads[j] = new read_private(cnames, num, npages * PAGE_SIZE, j, entry_size);
 				break;
 			case DIRECT_ACCESS:
-				threads[j] = new direct_private(file_name, j, entry_size);
+				threads[j] = new direct_private(cnames, num, npages * PAGE_SIZE, j, entry_size);
 				break;
 #if ENABLE_AIO
 			case AIO_ACCESS:
-				threads[j] = new aio_private(file_name, j, entry_size);
+				threads[j] = new aio_private(cnames, num, npages * PAGE_SIZE, j, entry_size);
 				break;
 #endif
 			case MMAP_ACCESS:
-				threads[j] = new mmap_private(file_name, j, entry_size);
+				/* TODO for now mmap doesn't support accessing multiple files. */
+				threads[j] = new mmap_private(cnames[0], j, entry_size);
 				break;
 			case LOCAL_CACHE_ACCESS:
-				threads[j] = new part_cached_private(file_name, j, cache_size / nthreads, entry_size);
+				threads[j] = new part_cached_private(cnames, num, npages * PAGE_SIZE,
+						j, cache_size / nthreads, entry_size);
 				break;
 			case GLOBAL_CACHE_ACCESS:
-				threads[j] = new global_cached_private(file_name, j,
+				threads[j] = new global_cached_private(cnames, num, npages * PAGE_SIZE, j,
 						cache_size, entry_size, cache_type);
 				if (preload)
 					((global_cached_private *) threads[j])->preload(0, npages * PAGE_SIZE);
