@@ -152,6 +152,11 @@ void *page::data_start;
 
 class thread_safe_page: public page
 {
+#ifdef PTRHEAD_WAIT
+	pthread_cond_t cond;
+	pthread_mutex_t mutex;
+#endif
+
 	void set_flags_bit(int i, bool v) {
 		if (v)
 			__sync_fetch_and_or(&flags, 0x1 << i);
@@ -165,22 +170,53 @@ class thread_safe_page: public page
 
 public:
 	thread_safe_page(): page() {
+#ifdef PTRHEAD_WAIT
+		pthread_cond_init(&cond, NULL);
+		pthread_mutex_init(&mutex, NULL);
+#endif
 	}
 
 	thread_safe_page(off_t off, long d): page(off, d) {
+#ifdef PTRHEAD_WAIT
+		pthread_cond_init(&cond, NULL);
+		pthread_mutex_init(&mutex, NULL);
+#endif
+	}
+
+	~thread_safe_page() {
+#ifdef PTRHEAD_WAIT
+		pthread_mutex_destroy(&mutex);
+		pthread_cond_destroy(&cond);
+#endif
 	}
 
 	/* this is enough for x86 architecture */
 	bool data_ready() const { return get_flags_bit(DATA_READY_BIT); }
 	void wait_ready() {
+#ifdef PTRHEAD_WAIT
+		pthread_mutex_lock(&mutex);
+#endif
 		while (!data_ready()) {
+#ifdef PTRHEAD_WAIT
+			pthread_cond_wait(&cond, &mutex);
+#endif
 #ifdef DEBUG
 			printf("thread %ld wait for data ready\n", pthread_self());
 #endif
 		}
+#ifdef PTRHEAD_WAIT
+		pthread_mutex_unlock(&mutex);
+#endif
 	}
 	void set_data_ready(bool ready) {
+#ifdef PTRHEAD_WAIT
+		pthread_mutex_lock(&mutex);
+#endif
 		set_flags_bit(DATA_READY_BIT, ready);
+#ifdef PTRHEAD_WAIT
+		pthread_cond_signal(&cond);
+		pthread_mutex_unlock(&mutex);
+#endif
 	}
 
 	void set_io_pending(bool pending) {
