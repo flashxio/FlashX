@@ -1,6 +1,12 @@
 #ifndef __WORKLOAD_H__
 #define __WORKLOAD_H__
 
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #define CHUNK_SLOTS 1024
 
 class workload_gen
