@@ -41,30 +41,22 @@ class page
 	 * in pages.
 	 */
 protected:
-	volatile int buf_offset;
+	void *data;
 	volatile short refcnt;
 	volatile char flags;
 	volatile unsigned char hits;
 
-	int get_buf_offset() const {
-		return buf_offset;
-	}
-	void set_buf_offset(int off) {
-		buf_offset = off;
-	}
-
 public:
-	page() {
+	page(): data(NULL) {
 		offset = -1;
-		buf_offset = 0;
 		refcnt = 0;
 		flags = 0;
 		hits = 0;
 	}
 
-	page(off_t off, long data) {
+	page(off_t off, long data_off) {
 		set_offset(off);
-		set_buf_offset(data >> LOG_PAGE_SIZE);
+		data = (void *) ((long) data_start + data_off);
 		refcnt = 0;
 		flags = 0;
 		hits = 0;
@@ -81,8 +73,7 @@ public:
 
 	// TODO is off_t unsigned?
 	off_t get_offset() const { return ((off_t) offset) << LOG_PAGE_SIZE; }
-	void *get_data() const { return (void *) ((long) data_start
-			+ (((long) get_buf_offset()) << LOG_PAGE_SIZE)); }
+	void *get_data() const { return data; }
 
 	bool data_ready() const { return flags & (0x1 << DATA_READY_BIT); }
 	void set_data_ready(bool ready) {
