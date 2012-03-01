@@ -146,7 +146,7 @@ class LRU2Q_cache: public page_cache {
 	}
 
 public:
-	LRU2Q_cache(int cache_size) {
+	LRU2Q_cache(long cache_size) {
 		printf("LRU2Q cache is used\n");
 		npages = cache_size / PAGE_SIZE;
 		pages = new linked_page[npages];
