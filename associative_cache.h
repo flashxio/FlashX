@@ -69,6 +69,10 @@ class shadow_cell
 	unsigned int num;
 	page buf[CELL_SIZE * SHADOW_FACTOR];
 public:
+	shadow_cell() {
+		num = 0;
+	}
+
 	/*
 	 * add a page to the cell, which is evicted from hash_cell.
 	 * the only thing we need to record is the number of hits
