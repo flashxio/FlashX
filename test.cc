@@ -7,10 +7,69 @@
 #include "tree_cache.h"
 #include "cuckoo_cache.h"
 #include "associative_cache.h"
+#include "part_global_cached_private.h"
 
 int main()
 {
-	printf("cell size: %ld\n", sizeof(hash_cell));
+#if 0
+	// test garbage_collection
+	garbage_collection<io_request> gc(10);
+	io_request *reqs = gc.allocate_obj(6);
+	printf("collect entry %d\n", 5);
+	gc.collect(&reqs[5]);
+	printf("collect entry %d\n", 3);
+	gc.collect(&reqs[3]);
+	printf("collect entry %d\n", 2);
+	gc.collect(&reqs[2]);
+	printf("collect entry %d\n", 0);
+	gc.collect(&reqs[0]);
+	io_request *reqs1 = gc.allocate_obj(6);
+	printf("allocate reqs %p\n", reqs1);
+	io_request *reqs2 = gc.allocate_obj(4);
+	printf("allocate reqs %p\n", reqs2);
+	printf("collect entry %d\n", 4);
+	gc.collect(&reqs[4]);
+	printf("collect entry %d\n", 1);
+	gc.collect(&reqs[1]);
+	printf("collect entry %d\n", 1);
+	gc.collect(&reqs2[1]);
+	printf("collect entry %d\n", 3);
+	gc.collect(&reqs2[3]);
+	printf("collect entry %d\n", 0);
+	gc.collect(&reqs2[0]);
+	printf("collect entry %d\n", 2);
+	gc.collect(&reqs2[2]);
+#endif
+#if 0
+	// test the bulk_queue
+	bulk_queue<int> queue(10);
+	int nums[6];
+	for (int i = 0; i < 6; i++)
+		nums[i] = i;
+	int ret = queue.add(nums, 6);
+	printf("add %d numbers in the queue, size: %d\n", ret, queue.get_num_entries());
+	ret = queue.add(nums, 6);
+	printf("add %d numbers in the queue, size: %d\n", ret, queue.get_num_entries());
+	ret = queue.fetch(nums, 6);
+	printf("fetch %d numbers in the queue, size: %d\n", ret, queue.get_num_entries());
+	for (int i = 0; i < 6; i++)
+		printf("%d\t", nums[i]);
+	printf("\n");
+	ret = queue.add(nums, 6);
+	printf("add %d numbers in the queue, size: %d\n", ret, queue.get_num_entries());
+	ret = queue.fetch(nums, 6);
+	printf("fetch %d numbers in the queue, size: %d\n", ret, queue.get_num_entries());
+	for (int i = 0; i < 6; i++)
+		printf("%d\t", nums[i]);
+	printf("\n");
+	int tmp[10];
+	ret = queue.fetch(tmp, 10);
+	printf("fetch %d numbers in the queue, size: %d\n", ret, queue.get_num_entries());
+	for (int i = 0; i < ret; i++)
+		printf("%d\t", tmp[i]);
+	printf("\n");
+#endif
+
 #if 0
 	page pg(0, 0x51 * 4096);
 	printf("data: %p\n", pg.get_data());

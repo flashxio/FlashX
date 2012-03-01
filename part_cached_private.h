@@ -10,8 +10,9 @@ class part_cached_private: public direct_private
 public:
 	part_cached_private(const char *names[], int num, long size, int idx, long cache_size,
 			int entry_size): direct_private(names, num, size, idx, entry_size) {
+		page::allocate_cache(cache_size);
 		/* all local cache has the same size */
-		cache = new tree_cache(cache_size, idx * cache_size);
+		cache = new tree_cache(cache_size, cache_size);
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {

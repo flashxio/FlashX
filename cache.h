@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <numa.h>
 
 #include <map>
 
@@ -127,6 +128,14 @@ public:
 
 	static void allocate_cache(long size) {
 		data_start = valloc(size);
+	}
+
+	static void allocate_cache(long size, int node_id) {
+#ifdef NUMA_ENABLE
+		data_start = numa_alloc_onnode(size, node_id);
+#else
+		data_start = valloc(size);
+#endif
 	}
 
 	void inc_ref() {

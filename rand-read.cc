@@ -38,12 +38,16 @@
 #include "direct_private.h"
 #include "mmap_private.h"
 #include "part_cached_private.h"
+#include "part_global_cached_private.h"
 #include "read_private.h"
 #include "thread_private.h"
 
 //#define USE_PROCESS
 
 #define ENTRY_READ_SIZE 128
+#define NUM_GROUPS 1
+#define GC_SIZE 10000
+#define BULK_SIZE 1000
 
 enum {
 	NORMAL,
@@ -63,48 +67,77 @@ void *rand_read(void *arg)
 {
 	ssize_t ret = -1;
 	thread_private *priv = threads[(long) arg];
-	rand_buf *buf;
+	int entry_size = priv->get_entry_size();
+
+#ifdef NUMA_ENABLE
+	struct bitmask *nodemask = numa_allocate_cpumask();
+	numa_bitmask_clearall(nodemask);
+	part_global_cached_private *part_global = (part_global_cached_private *) priv;
+	numa_bitmask_setbit(nodemask, part_global->get_node_id());
+	numa_bind(nodemask);
+	numa_set_strict(1);
+	numa_set_bind_policy(1);
+#endif
 
 	printf("pid: %d, tid: %ld\n", getpid(), gettid());
 	priv->thread_init();
-	buf = &priv->buf;
+	rand_buf *buf = priv->buf;
 
 	gettimeofday(&priv->start_time, NULL);
 	while (priv->gen->has_next()) {
-		char *entry = buf->next_entry();
-		off_t off = priv->gen->next_offset();
-
-		/*
-		 * generate the data for writing the file,
-		 * so the data in the file isn't changed.
-		 */
-		if (access_method == WRITE) {
-			unsigned long *p = (unsigned long *) entry;
-			long start = off / sizeof(long);
-			unsigned int entry_size = buf->get_entry_size();
-			for (unsigned int i = 0; i < entry_size / sizeof(*p); i++)
-				p[i] = start++;
+		if (priv->support_bulk()) {
+			io_request reqs[BULK_SIZE];
+			int i;
+//			io_request *reqs = gc->allocate_obj(BULK_SIZE);
+			for (i = 0; i < BULK_SIZE
+					&& priv->gen->has_next() && !buf->is_full(); i++) {
+				reqs[i].init(buf->next_entry(),
+						priv->gen->next_offset(), ENTRY_READ_SIZE, READ, priv);
+			}
+			// TODO right now it only support read.
+			ret = priv->access(reqs, i, READ);
+			if (ret < 0) {
+				perror("access_vector");
+				exit(1);
+			}
 		}
+		else {
+			char *entry = buf->next_entry();
+			off_t off = priv->gen->next_offset();
 
-		ret = priv->access(entry, off, ENTRY_READ_SIZE, access_method);
-		if (ret > 0) {
-			assert(ret == buf->get_entry_size());
-			if (access_method == READ)
-				assert(*(unsigned long *) entry == off / sizeof(long));
-			if (ret > 0)
-				priv->read_bytes += ret;
-			else
-				break;
-		}
-		if (ret < 0) {
-			perror("access");
-			exit(1);
+			/*
+			 * generate the data for writing the file,
+			 * so the data in the file isn't changed.
+			 */
+			if (access_method == WRITE) {
+				unsigned long *p = (unsigned long *) entry;
+				long start = off / sizeof(long);
+				for (unsigned int i = 0; i < entry_size / sizeof(*p); i++)
+					p[i] = start++;
+			}
+
+			ret = priv->access(entry, off, ENTRY_READ_SIZE, access_method);
+			if (ret > 0) {
+//				assert(ret == buf->get_entry_size());
+				if (access_method == READ) {
+					if (*(unsigned long *) entry != off / sizeof(long))
+						printf("entry: %ld, off: %ld\n", *(unsigned long *) entry, off / sizeof(long));
+					assert(*(unsigned long *) entry == off / sizeof(long));
+				}
+				if (ret > 0)
+					priv->read_bytes += ret;
+				else
+					break;
+			}
+			buf->free_entry(entry);
+			if (ret < 0) {
+				perror("access");
+				exit(1);
+			}
 		}
 	}
-	if (ret < 0) {
-		perror("read");
-		exit(1);
-	}
+	priv->cleanup();
+	printf("thread %d exits\n", priv->idx);
 	gettimeofday(&priv->end_time, NULL);
 	
 #ifdef USE_PROCESS
@@ -151,7 +184,8 @@ enum {
 #endif
 	MMAP_ACCESS,
 	LOCAL_CACHE_ACCESS,
-	GLOBAL_CACHE_ACCESS
+	GLOBAL_CACHE_ACCESS,
+	PART_GLOBAL_ACCESS,
 };
 
 str2int access_methods[] = {
@@ -163,6 +197,7 @@ str2int access_methods[] = {
 	{ "mmap", MMAP_ACCESS },
 	{ "local_cache", LOCAL_CACHE_ACCESS },
 	{ "global_cache", GLOBAL_CACHE_ACCESS },
+	{ "parted_global", PART_GLOBAL_ACCESS },
 };
 
 str2int cache_types[] = {
@@ -341,7 +376,6 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	page::allocate_cache(cache_size);
 	int remainings = npages % nthreads;
 	int shift = 0;
 	long start;
@@ -378,6 +412,10 @@ int main(int argc, char *argv[])
 						cache_size, entry_size, cache_type);
 				if (preload)
 					((global_cached_private *) threads[j])->preload(0, npages * PAGE_SIZE);
+				break;
+			case PART_GLOBAL_ACCESS:
+				threads[j] = new part_global_cached_private(NUM_GROUPS, cnames, num,
+						npages * PAGE_SIZE, j, cache_size, entry_size, cache_type);
 				break;
 			default:
 				fprintf(stderr, "wrong access option\n");
@@ -442,7 +480,7 @@ int main(int argc, char *argv[])
 #ifdef USE_PROCESS
 		ret = process_create(&threads[i]->id, rand_read, (void *) i);
 #else
-		ret = pthread_create(&threads[i]->id, NULL, rand_read, (void *) i);
+		ret = pthread_create(&threads[i]->id, NULL, rand_read, (void *) (long) i);
 #endif
 		if (ret) {
 			perror("pthread_create");

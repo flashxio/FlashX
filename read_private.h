@@ -3,11 +3,6 @@
 
 #include "thread_private.h"
 
-enum {
-	READ,
-	WRITE
-};
-
 class read_private: public thread_private
 {
 	/* the array of files that it's going to access */
@@ -42,11 +37,13 @@ public:
 	~read_private() {
 		delete [] file_names;
 		delete [] fds;
+		delete buf;
 	}
 
 	int thread_init() {
 		int ret;
 
+		buf = new rand_buf(NUM_PAGES / nthreads * PAGE_SIZE, get_entry_size());
 		for (int i = 0; i < num; i++) {
 			fds[i] = open(file_names[i], flags);
 			if (fds[i] < 0) {

@@ -2,8 +2,14 @@
 #define __THREAD_PRIVATE_H__
 
 #include "rand_buf.h"
+#include "garbage_collection.h"
 
 #define NUM_PAGES 16384
+
+enum {
+	READ,
+	WRITE
+};
 
 extern int nthreads;
 extern struct timeval global_start;
@@ -14,9 +20,57 @@ inline float time_diff(struct timeval time1, struct timeval time2)
 			+ ((float)(time2.tv_usec - time1.tv_usec))/1000000;
 }
 
+class thread_private;
+class io_request
+{
+	char *buf;
+	off_t offset;
+	ssize_t size: 32;
+	int access_method: 1;
+	thread_private *thread;
+public:
+	io_request() {
+		init(NULL, 0, 0, READ, NULL);
+	}
+
+	io_request(char *buf, off_t off, ssize_t size, int access_method, thread_private *t) {
+		init(buf, off, size, access_method, t);
+	}
+
+	void init(char *buf, off_t off, ssize_t size, int access_method, thread_private *t) {
+		assert(off >= 0);
+		this->buf = buf;
+		this->offset = off;
+		this->size = size;
+		this->thread = t;
+		this->access_method = access_method;
+	}
+
+	int get_access_method() {
+		return access_method;
+	}
+
+	thread_private *get_thread() {
+		return thread;
+	}
+
+	char *get_buf() {
+		return buf;
+	}
+
+	off_t get_offset() {
+		return offset;
+	}
+
+	ssize_t get_size() {
+		return size;
+	}
+};
+
 /* this data structure stores the thread-private info. */
 class thread_private
 {
+	int entry_size;
 public:
 #ifdef USE_PROCESS
 	pid_t id;
@@ -25,11 +79,11 @@ public:
 #endif
 	/* the location in the thread descriptor array. */
 	int idx;
-	rand_buf buf;
 	workload_gen *gen;
 	ssize_t read_bytes;
 	struct timeval start_time;
 	struct timeval end_time;
+	rand_buf *buf;
 
 #ifdef STATISTICS
 	int cache_hits;
@@ -38,12 +92,30 @@ public:
 	virtual ssize_t access(char *, off_t, ssize_t, int) = 0;
 	virtual int thread_init() = 0;
 
-	thread_private(int idx, int entry_size): buf(NUM_PAGES / nthreads * PAGE_SIZE, entry_size) {
+	/* by default, the base class doesn't support bulk operations. */
+	virtual bool support_bulk() {
+		return false;
+	}
+
+	virtual void cleanup() {
+	}
+
+	virtual ssize_t access(io_request *requests, int num, int access_method) {
+		return -1;
+	}
+
+	thread_private(int idx, int entry_size) {
 		this->idx = idx;
 		read_bytes = 0;
+		this->entry_size = entry_size;
+		buf = NULL;
 #ifdef STATISTICS
 		cache_hits = 0;
 #endif
+	}
+
+	int get_entry_size() {
+		return entry_size;
 	}
 
 #ifdef STATISTICS

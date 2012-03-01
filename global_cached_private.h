@@ -54,6 +54,7 @@ public:
 		num_waits = 0;
 		this->cache_size = cache_size;
 		if (global_cache == NULL) {
+			page::allocate_cache(cache_size);
 			global_cache = create_cache(cache_type, cache_size);
 		}
 	}
