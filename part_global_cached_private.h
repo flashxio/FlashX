@@ -145,6 +145,10 @@ class part_global_cached_private: public global_cached_private
 	static thread_group *groups;
 	/* this mutex just for helping initialize cache. */
 	static pthread_mutex_t init_mutex;
+	/* indicates the number of threads that finish initialization. */
+	static int num_finish_init;
+	static pthread_mutex_t wait_mutex;
+	static pthread_cond_t cond;
 
 	int num_groups;
 	int group_idx;
@@ -221,18 +225,29 @@ public:
 		memset(nreqs, 0, sizeof(*nreqs) * num_groups);
 		memset(nreplies, 0, sizeof(nreplies) * num_groups);
 
-		thread_group *group = &groups[group_idx];
 		/* 
 		 * there is a global lock for all threads.
 		 * so this lock makes sure cache initialization is serialized
 		 */
 		pthread_mutex_lock(&init_mutex);
+		thread_group *group = &groups[group_idx];
 		if (group->cache == NULL) {
 			/* this allocates all pages for the cache. */
 			page::allocate_cache(cache_size);
 			group->cache = global_cached_private::create_cache(cache_type, cache_size);
 		}
+		num_finish_init++;
 		pthread_mutex_unlock(&init_mutex);
+
+		pthread_mutex_lock(&wait_mutex);
+		while (num_finish_init < nthreads) {
+			pthread_cond_wait(&cond, &wait_mutex);
+		}
+		pthread_mutex_unlock(&wait_mutex);
+		pthread_mutex_lock(&wait_mutex);
+		pthread_cond_broadcast(&cond);
+		pthread_mutex_unlock(&wait_mutex);
+		printf("thread %d finishes initialization\n", idx);
 		return 0;
 	}
 
@@ -252,6 +267,9 @@ public:
 
 		if (groups == NULL) {
 			pthread_mutex_init(&init_mutex, NULL);
+			pthread_mutex_init(&wait_mutex, NULL);
+			pthread_cond_init(&cond, NULL);
+			num_finish_init = 0;
 			groups = new thread_group[num_groups];
 			for (int i = 0; i < num_groups; i++) {
 				groups[i].id = i;
@@ -506,5 +524,8 @@ public:
 };
 thread_group *part_global_cached_private::groups;
 pthread_mutex_t part_global_cached_private::init_mutex;
+int part_global_cached_private::num_finish_init;
+pthread_mutex_t part_global_cached_private::wait_mutex;
+pthread_cond_t part_global_cached_private::cond;
 
 #endif
