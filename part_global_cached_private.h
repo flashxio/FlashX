@@ -209,6 +209,15 @@ public:
 	}
 
 	int thread_init() {
+		/* let's bind the thread to a specific node first. */
+		struct bitmask *nodemask = numa_allocate_cpumask();
+		numa_bitmask_clearall(nodemask);
+		printf("thread %d is associated to node %d\n", idx, get_group_id());
+		numa_bitmask_setbit(nodemask, get_group_id());
+		numa_bind(nodemask);
+		numa_set_strict(1);
+		numa_set_bind_policy(1);
+
 		read_private::thread_init();
 		request_queue = new bulk_queue<io_request>(REQ_QUEUE_SIZE);
 		reply_queue = new bulk_queue<io_reply>(REPLY_QUEUE_SIZE);
