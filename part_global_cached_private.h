@@ -178,6 +178,8 @@ class part_global_cached_private: public global_cached_private
 		return req->get_offset() % num_groups;
 	}
 
+	long processed_requests;
+
 public:
 	static int group_id(int thread_id, int num_groups) {
 		/* number of threads in a group */
@@ -260,6 +262,7 @@ public:
 		this->group_idx = group_id(idx, num_groups);
 		this->cache_size = cache_size / num_groups;
 		this->cache_type = cache_type;
+		processed_requests = 0;
 		finished_threads = 0;
 
 		printf("cache is partitioned\n");
@@ -434,6 +437,7 @@ public:
 			num_processed += num;
 			reply(local_reqs, local_replies, num);
 		}
+		processed_requests += num_processed;
 		return num_processed;
 	}
 
@@ -512,6 +516,7 @@ public:
 			process_replies(200);
 			num++;
 		}
+		printf("thread %d processed %ld requests\n", idx, processed_requests);
 	}
 
 	int get_group_id() {
