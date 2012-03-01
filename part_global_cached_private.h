@@ -143,11 +143,18 @@ public:
 class part_global_cached_private: public global_cached_private
 {
 	static thread_group *groups;
+	/* this mutex just for helping initialize cache. */
+	static pthread_mutex_t init_mutex;
+
 	int num_groups;
 	int group_idx;
+
+	/* the size of the cache associated to the thread. */
+	long cache_size;
+	int cache_type;
 	
-	bulk_queue<io_request> request_queue;
-	bulk_queue<io_reply> reply_queue;
+	bulk_queue<io_request> *request_queue;
+	bulk_queue<io_reply> *reply_queue;
 
 	volatile int finished_threads;
 
@@ -191,18 +198,16 @@ public:
 		}
 		numa_free(thread_reqs, sizeof(thread_reqs[0]) * num_groups);
 		numa_free(thread_replies, sizeof(thread_replies[0]) * num_groups);
+		delete request_queue;
+		delete reply_queue;
 	}
 
-	part_global_cached_private(int num_groups, const char *names[],
-			int num, long size, int idx, long cache_size, int entry_size,
-			int cache_type): global_cached_private(names, num,
-				size, idx, entry_size), request_queue(REQ_QUEUE_SIZE),
-			reply_queue(REPLY_QUEUE_SIZE) {
-		assert(nthreads % num_groups == 0);
-		this->num_groups = num_groups;
-		this->group_idx = group_id(idx, num_groups);
-		finished_threads = 0;
+	int thread_init() {
+		read_private::thread_init();
+		request_queue = new bulk_queue<io_request>(REQ_QUEUE_SIZE);
+		reply_queue = new bulk_queue<io_reply>(REPLY_QUEUE_SIZE);
 
+		/* initialize the request and reply buffer. */
 		thread_reqs = (io_request **) numa_alloc_local(sizeof(thread_reqs[0]) * num_groups);
 		thread_replies = (io_reply **) numa_alloc_local(sizeof(thread_replies[0]) * nthreads);
 		for (int i = 0; i < num_groups; i++) {
@@ -216,21 +221,43 @@ public:
 		memset(nreqs, 0, sizeof(*nreqs) * num_groups);
 		memset(nreplies, 0, sizeof(nreplies) * num_groups);
 
+		thread_group *group = &groups[group_idx];
+		/* 
+		 * there is a global lock for all threads.
+		 * so this lock makes sure cache initialization is serialized
+		 */
+		pthread_mutex_lock(&init_mutex);
+		if (group->cache == NULL) {
+			/* this allocates all pages for the cache. */
+			page::allocate_cache(cache_size);
+			group->cache = global_cached_private::create_cache(cache_type, cache_size);
+		}
+		pthread_mutex_unlock(&init_mutex);
+		return 0;
+	}
+
+	part_global_cached_private(int num_groups, const char *names[],
+			int num, long size, int idx, long cache_size, int entry_size,
+			int cache_type): global_cached_private(names, num,
+				size, idx, entry_size) {
+		assert(nthreads % num_groups == 0);
+		this->num_groups = num_groups;
+		this->group_idx = group_id(idx, num_groups);
+		this->cache_size = cache_size / num_groups;
+		this->cache_type = cache_type;
+		finished_threads = 0;
+
 		printf("cache is partitioned\n");
 		printf("thread id: %d, group id: %d, num groups: %d\n", idx, group_idx, num_groups);
 
 		if (groups == NULL) {
+			pthread_mutex_init(&init_mutex, NULL);
 			groups = new thread_group[num_groups];
 			for (int i = 0; i < num_groups; i++) {
 				groups[i].id = i;
 				groups[i].nthreads = nthreads / num_groups;
 				groups[i].threads = new part_global_cached_private*[groups[i].nthreads];
-				/* this allocates all pages for the cache. */
-				page::allocate_cache(cache_size, group_idx);
-				// TODO how do I make sure other data structure of the cache
-				// are also in the specific node.
-				groups[i].cache = global_cached_private::create_cache(cache_type,
-					cache_size / num_groups);
+				groups[i].cache = NULL;
 				for (int j = 0; j < groups[i].nthreads; j++)
 					groups[i].threads[j] = NULL;
 			}
@@ -269,7 +296,7 @@ public:
 		int base = random() % group->nthreads;
 		for (int i = 0; num > 0 && i < group->nthreads; i++) {
 			part_global_cached_private *thread = group->threads[(base + i) % group->nthreads];
-			bulk_queue<io_request> *q = &thread->request_queue;
+			bulk_queue<io_request> *q = thread->request_queue;
 			/* 
 			 * is_full is pre-check, it can't guarantee
 			 * the queue isn't full.
@@ -300,7 +327,7 @@ public:
 			thread_replies[thread_id][nreplies[thread_id]++] = replies[i];
 			assert(thread == id2thread(thread_id));
 			if (nreplies[thread_id] == BUF_SIZE) {
-				int ret = thread->reply_queue.add(thread_replies[thread_id], BUF_SIZE);
+				int ret = thread->reply_queue->add(thread_replies[thread_id], BUF_SIZE);
 				if (ret != 0 && ret != BUF_SIZE) {
 					memmove(thread_replies[thread_id],
 							&thread_replies[thread_id][ret], BUF_SIZE - ret);
@@ -311,7 +338,7 @@ public:
 		for (int i = 0; i < nthreads; i++)
 			if (nreplies[i] > 0) {
 				part_global_cached_private *thread = id2thread(i);
-				int ret = thread->reply_queue.add(thread_replies[i], nreplies[i]);
+				int ret = thread->reply_queue->add(thread_replies[i], nreplies[i]);
 				if (ret != 0 && ret != nreplies[i]) {
 					memmove(thread_replies[i], &thread_replies[i][ret], nreplies[i] - ret);
 				}
@@ -374,8 +401,8 @@ public:
 		int num_processed = 0;
 		io_request local_reqs[BUF_SIZE];
 		io_reply local_replies[BUF_SIZE];
-		while (!request_queue.is_empty() && num_processed < max_nreqs) {
-			int num = request_queue.fetch(local_reqs, BUF_SIZE);
+		while (!request_queue->is_empty() && num_processed < max_nreqs) {
+			int num = request_queue->fetch(local_reqs, BUF_SIZE);
 			for (int i = 0; i < num; i++) {
 				io_request *req = &local_reqs[i];
 				// TODO will it be better if I collect all data
@@ -400,8 +427,8 @@ public:
 		int num_processed = 0;
 		io_reply local_replies[BUF_SIZE];
 		int size = 0;
-		while(!reply_queue.is_empty() && num_processed < max_nreplies) {
-			int num = reply_queue.fetch(local_replies, BUF_SIZE);
+		while(!reply_queue->is_empty() && num_processed < max_nreplies) {
+			int num = reply_queue->fetch(local_replies, BUF_SIZE);
 			for (int i = 0; i < num; i++) {
 				io_reply *reply = &local_replies[i];
 				int ret = process_reply(reply);
@@ -456,8 +483,8 @@ public:
 			for (int j = 0; j < groups[i].nthreads; j++)
 				__sync_fetch_and_add(&groups[i].threads[j]->finished_threads, 1);
 		}
-		while (!request_queue.is_empty()
-				|| !reply_queue.is_empty()
+		while (!request_queue->is_empty()
+				|| !reply_queue->is_empty()
 				/*
 				 * if finished_threads == nthreads,
 				 * then all threads have reached the point.
@@ -478,5 +505,6 @@ public:
 	}
 };
 thread_group *part_global_cached_private::groups;
+pthread_mutex_t part_global_cached_private::init_mutex;
 
 #endif

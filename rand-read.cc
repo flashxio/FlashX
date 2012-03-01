@@ -69,10 +69,11 @@ void *rand_read(void *arg)
 	thread_private *priv = threads[(long) arg];
 	int entry_size = priv->get_entry_size();
 
-#ifdef NUMA_ENABLE
+#if NUM_GROUPS > 1
 	struct bitmask *nodemask = numa_allocate_cpumask();
 	numa_bitmask_clearall(nodemask);
 	part_global_cached_private *part_global = (part_global_cached_private *) priv;
+	printf("thread %d is associated to node %d\n", part_global->get_node_id());
 	numa_bitmask_setbit(nodemask, part_global->get_node_id());
 	numa_bind(nodemask);
 	numa_set_strict(1);
