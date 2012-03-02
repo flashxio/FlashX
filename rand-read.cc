@@ -412,16 +412,15 @@ int main(int argc, char *argv[])
 				exit(1);
 		}
 		
-		if (num_files > 1) {
-			start = 0;
-			end = npages * PAGE_SIZE / entry_size;
-		}
-		else {
-			start = end;
-			end = start + ((long) npages / nthreads + (shift < remainings)) * PAGE_SIZE / entry_size;
-			if (remainings != shift)
-				shift++;
-		}
+		/*
+		 * we still assign each thread a range regardless of the number
+		 * of threads. read_private will choose the right file descriptor
+		 * according to the offset.
+		 */
+		start = end;
+		end = start + ((long) npages / nthreads + (shift < remainings)) * PAGE_SIZE / entry_size;
+		if (remainings != shift)
+			shift++;
 		printf("thread %d starts %ld ends %ld\n", j, start, end);
 
 		workload_gen *gen;
