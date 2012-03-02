@@ -45,7 +45,6 @@
 //#define USE_PROCESS
 
 #define ENTRY_READ_SIZE 128
-#define NUM_GROUPS 1
 #define GC_SIZE 10000
 #define BULK_SIZE 1000
 
@@ -271,6 +270,7 @@ int main(int argc, char *argv[])
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
 	int num_files = 0;
+	int num_nodes = 1;
 	int cache_type = -1;
 	std::string file_names[NUM_THREADS];
 	int workload = RAND_OFFSET;
@@ -287,7 +287,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -324,6 +324,9 @@ int main(int argc, char *argv[])
 		else if(key.compare("cache_size") == 0) {
 			cache_size = str2size(value);
 		}
+		else if(key.compare("num_nodes") == 0) {
+			num_nodes = str2size(value);
+		}
 		else if(key.compare("entry_size") == 0) {
 			entry_size = (int) str2size(value);
 		}
@@ -356,8 +359,8 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d\n",
-			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload);
+	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d\n",
+			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes);
 
 	int num_entries = npages * (PAGE_SIZE / entry_size);
 
@@ -404,7 +407,7 @@ int main(int argc, char *argv[])
 					((global_cached_private *) threads[j])->preload(0, npages * PAGE_SIZE);
 				break;
 			case PART_GLOBAL_ACCESS:
-				threads[j] = new part_global_cached_private(NUM_GROUPS, cnames, num,
+				threads[j] = new part_global_cached_private(num_nodes, cnames, num,
 						npages * PAGE_SIZE, j, cache_size, entry_size, cache_type);
 				break;
 			default:
