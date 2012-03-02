@@ -82,7 +82,6 @@ public:
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 #endif
-		assert(offset < 0x100000000L);
 		ssize_t ret;
 		if (access_method == WRITE)
 			ret = pwrite(fd, buf, size, offset);
