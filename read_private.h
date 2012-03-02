@@ -40,6 +40,10 @@ public:
 		delete buf;
 	}
 
+	long get_size() {
+		return size;
+	}
+
 	int thread_init() {
 		int ret;
 

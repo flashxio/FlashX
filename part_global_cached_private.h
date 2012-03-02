@@ -175,7 +175,9 @@ class part_global_cached_private: public global_cached_private
 
 	int hash_req(io_request *req)
 	{
-		return req->get_offset() / get_entry_size() % num_groups;
+		/* the size of each group needs to access */
+		long size = get_size() / num_groups;
+		return req->get_offset() / size;
 	}
 
 	long processed_requests;
