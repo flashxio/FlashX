@@ -1,6 +1,8 @@
 #ifndef __ASSOCIATIVE_CACHE_H__
 #define __ASSOCIATIVE_CACHE_H__
 
+#include <vector>
+
 #include "cache.h"
 
 #define CELL_SIZE 8
@@ -54,6 +56,12 @@ public:
 		if (i >= BUF_SIZE)
 			return NULL;
 		return &buf[i];
+	}
+
+	int get_idx(T *page) {
+		int idx = page - buf;
+		assert (idx >= 0 && idx < BUF_SIZE);
+		return idx;
 	}
 
 	void scale_down_hits() {
@@ -128,6 +136,9 @@ class hash_cell
 {
 	pthread_spinlock_t _lock;
 	page_cell<thread_safe_page, CELL_SIZE> buf;
+#ifdef USE_LRU
+	std::vector<int> pos_vec;
+#endif
 	shadow_cell shadow;
 //	char stuffing[CACHE_LINE - sizeof(_lock) - sizeof(buf)];
 
@@ -164,6 +175,43 @@ class hash_cell
 		ret->set_data_ready(false);
 		return ret;
 	}
+
+#ifdef USE_LRU
+	/* 
+	 * the end of the vector points to the pages
+	 * that are most recently accessed.
+	 */
+	thread_safe_page *get_empty_page() {
+		int pos;
+		if (pos_vec.size() < CELL_SIZE) {
+			pos = pos_vec.size();
+		}
+		else {
+			/* evict the first page */
+			pos = pos_vec[0];
+			pos_vec.erase(pos_vec.begin());
+		}
+		thread_safe_page *ret = buf.get_page(pos);
+		while (ret->get_ref()) {}
+		pos_vec.push_back(pos);
+		ret->set_data_ready(false);
+		return ret;
+	}
+#endif
+
+#ifdef USE_FIFO
+    /* this function has to be called with lock held */
+	thread_safe_page *get_empty_page() {
+		thread_safe_page *ret = buf.get_empty_page();
+		// TODO I assume this situation is rare
+		while (ret->get_ref()) {
+			ret = buf.get_empty_page();
+			printf("try another empty page.\n");
+		}
+		ret->set_data_ready(false);
+		return ret;
+	}
+#endif
 
 public:
 	hash_cell() {
@@ -228,6 +276,20 @@ public:
 			if (shadow_pg)
 				ret->set_hits(shadow_pg->get_hits());
 		}
+#ifdef USE_LRU
+		else {
+			/* move the page to the end of the pos vector. */
+			int pos = buf.get_idx(ret);
+			for (std::vector<int>::iterator it = pos_vec.begin();
+					it != pos_vec.end(); it++) {
+				if (*it == pos) {
+					pos_vec.erase(it);
+					break;
+				}
+			}
+			pos_vec.push_back(pos);
+		}
+#endif
 		/* it's possible that the data in the page isn't ready */
 		ret->inc_ref();
 		if (ret->get_hits() == 0xff) {
