@@ -93,9 +93,9 @@ public:
 
 	void set_referenced(bool referenced) {
 		if (referenced)
-			referenced |= 0x1 << REFERENCED_BIT;
+			flags |= 0x1 << REFERENCED_BIT;
 		else
-			referenced &= ~(0x1 << REFERENCED_BIT);
+			flags &= ~(0x1 << REFERENCED_BIT);
 	}
 	bool referenced() {
 		return flags & (0x1 << REFERENCED_BIT);
