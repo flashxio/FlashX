@@ -73,13 +73,15 @@ int main(int argc, char *argv[])
 	pthread_t threads[NUM_THREADS];
 	/* the number of entries the array can contain. */
 	int arr_nentries = ARRAY_SIZE / ENTRY_SIZE;
+	int node;
 
 	if (argc != 3) {
-		fprintf(stderr, "read num_entries num_threads\n");
+		fprintf(stderr, "read node_id num_threads\n");
 		exit(1);
 	}
 
-	nentries = atoi(argv[1]);
+	nentries = 262144;
+	node = atoi(argv[1]);
 	offset = malloc(sizeof(*offset) * nentries);
 	for(i = 0; i < nentries; i++) {
 		offset[i] = (random() % arr_nentries) * ENTRY_SIZE;
@@ -88,14 +90,16 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-//	permute_offset(offset, nentries);
+	permute_offset(offset, nentries);
 
+#if 0
 	int ncpus = numa_num_configured_cpus();
 	printf("there are %d cores in the machine\n", ncpus);
 	for (i = 0; i < ncpus; i++) {
 		printf("cpu %d belongs to node %d\n",
 			i, numa_node_of_cpu(i));
 	}
+#endif
 	/* bind to node 0. */
 	nodemask_t nodemask;
 	nodemask_zero(&nodemask);
@@ -121,49 +125,46 @@ int main(int argc, char *argv[])
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		dst_arr[i] = 0;
 
-	int node;
-	for (node = 0; node < numa_num_configured_nodes(); node++) {
-		printf("run on node %d\n", node);
-		if (numa_run_on_node(node) < 0) {
-			perror("numa_run_on_node");
-			exit(1);
-		}
-
-		nthreads = atoi(argv[2]);
-		if (nthreads > NUM_THREADS) {
-			fprintf(stderr, "too many threads\n");
-			exit(1);
-		}
-
-		ret = setpriority(PRIO_PROCESS, getpid(), -20);
-		if (ret < 0) {
-			perror("setpriority");
-			exit(1);
-		}
-
-		gettimeofday(&start_time, NULL);
-		global_start = start_time;
-		for (i = 0; i < nthreads; i++) {
-			ret = pthread_create(&threads[i], NULL,
-					rand_read, (void *) (nentries / nthreads * i));
-			if (ret) {
-				perror("pthread_create");
-				exit(1);
-			}
-		}
-
-		for (i = 0; i < nthreads; i++) {
-			ssize_t size;
-			ret = pthread_join(threads[i], (void **) &size);
-			if (ret) {
-				perror("pthread_join");
-				exit(1);
-			}
-			read_bytes += size;
-		}
-		gettimeofday(&end_time, NULL);
-		printf("read %ld bytes, takes %f seconds\n",
-				read_bytes, end_time.tv_sec - start_time.tv_sec
-				+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
+	printf("run on node %d\n", node);
+	if (numa_run_on_node(node) < 0) {
+		perror("numa_run_on_node");
+		exit(1);
 	}
+
+	nthreads = atoi(argv[2]);
+	if (nthreads > NUM_THREADS) {
+		fprintf(stderr, "too many threads\n");
+		exit(1);
+	}
+
+	ret = setpriority(PRIO_PROCESS, getpid(), -20);
+	if (ret < 0) {
+		perror("setpriority");
+		exit(1);
+	}
+
+	gettimeofday(&start_time, NULL);
+	global_start = start_time;
+	for (i = 0; i < nthreads; i++) {
+		ret = pthread_create(&threads[i], NULL,
+				rand_read, (void *) (long) (nentries / nthreads * i));
+		if (ret) {
+			perror("pthread_create");
+			exit(1);
+		}
+	}
+
+	for (i = 0; i < nthreads; i++) {
+		ssize_t size;
+		ret = pthread_join(threads[i], (void **) &size);
+		if (ret) {
+			perror("pthread_join");
+			exit(1);
+		}
+		read_bytes += size;
+	}
+	gettimeofday(&end_time, NULL);
+	printf("read %ld bytes, takes %f seconds\n",
+			read_bytes, end_time.tv_sec - start_time.tv_sec
+			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 }
