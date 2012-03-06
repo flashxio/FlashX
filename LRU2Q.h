@@ -61,7 +61,9 @@ class linked_page_queue {
 	linked_page head;
 	int _size;
 public:
-	linked_page_queue() { }
+	linked_page_queue() {
+		_size = 0;
+	}
 
 	void push_back(linked_page *pg) {
 		head.add_back(pg);
