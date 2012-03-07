@@ -13,6 +13,8 @@ static volatile int num_wait_unused;
 static volatile int lock_contentions;
 #endif
 
+#define USE_SHADOW_PAGE
+
 const int CACHE_LINE = 128;
 
 /**
@@ -139,7 +141,9 @@ class hash_cell
 #ifdef USE_LRU
 	std::vector<int> pos_vec;
 #endif
+#ifdef USE_SHADOW_PAGE
 	shadow_cell shadow;
+#endif
 //	char stuffing[CACHE_LINE - sizeof(_lock) - sizeof(buf)];
 
 	/* this function has to be called with lock held */
@@ -168,8 +172,10 @@ class hash_cell
 		} while (ret == NULL);
 
 		/* we record the hit info of the page in the shadow cell. */
+#ifdef USE_SHADOW_PAGE
 		if (ret->get_hits() > 0)
 			shadow.add(*ret);
+#endif
 
 		ret->reset_hits();
 		ret->set_data_ready(false);
@@ -268,6 +274,7 @@ public:
 			 * it might not have data ready.
 			 */
 			ret->set_offset(off);
+#ifdef USE_SHADOW_PAGE
 			page *shadow_pg = shadow.search(off);
 			/*
 			 * if the page has been seen before,
@@ -275,6 +282,7 @@ public:
 			 */
 			if (shadow_pg)
 				ret->set_hits(shadow_pg->get_hits());
+#endif
 		}
 #ifdef USE_LRU
 		else {
@@ -294,7 +302,9 @@ public:
 		ret->inc_ref();
 		if (ret->get_hits() == 0xff) {
 			buf.scale_down_hits();
+#ifdef USE_SHADOW_PAGE
 			shadow.scale_down_hits();
+#endif
 		}
 		ret->hit();
 		pthread_spin_unlock(&_lock);
