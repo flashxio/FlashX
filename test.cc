@@ -9,8 +9,49 @@
 #include "associative_cache.h"
 #include "part_global_cached_private.h"
 
+struct test {
+	generic_queue<long, 10> queue;
+	long buf[10];
+};
+
 int main()
 {
+	printf("size of hash_cell: %ld\n", sizeof(hash_cell));
+#if 0
+	test buf;
+	generic_queue<long, 10> *queue = &buf.queue;
+
+	for (int i = 0; i < 6; i++)
+		queue->push_back(i);
+	printf("push 6 elements\n");
+	queue->print_state();
+	printf("remove element 0\n");
+	queue->remove(0);
+	queue->print_state();
+	printf("remove element 4\n");
+	queue->remove(4);
+	queue->print_state();
+	for (int i = 0; i < 6; i++)
+		queue->push_back(i);
+	printf("push 6 elements\n");
+	queue->print_state();
+	printf("remove element 9\n");
+	queue->remove(9);
+	queue->print_state();
+	printf("remove element 0\n");
+	queue->remove(0);
+	queue->print_state();
+//	printf("remove element 1\n");
+//	queue->remove(1);
+//	queue->print_state();
+	for (int i = 0; i < 2; i++)
+		queue->push_back(i);
+	printf("push 2 elements\n");
+	queue->print_state();
+	printf("remove element 8\n");
+	queue->remove(8);
+	queue->print_state();
+#endif
 #if 0
 	// test garbage_collection
 	garbage_collection<io_request> gc(10);

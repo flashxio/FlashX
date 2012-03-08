@@ -73,14 +73,174 @@ public:
 	}
 };
 
-#define SHADOW_FACTOR 4
+class shadow_page
+{
+	int offset;
+	unsigned char hits;
+public:
+	shadow_page() {
+		offset = 0;
+		hits = 0;
+	}
+	shadow_page(page &pg) {
+		offset = pg.get_offset();
+		hits = pg.get_hits();
+	}
+
+	off_t get_offset() const {
+		return ((off_t) offset) << LOG_PAGE_SIZE;
+	}
+
+	int get_hits() {
+		return hits;
+	}
+
+	void set_hits(int hits) {
+		assert (hits <= 0xff);
+		this->hits = hits;
+	}
+};
+
+template<class T, int SIZE>
+class generic_queue
+{
+	unsigned short start;
+	unsigned short num;
+	/* the size of the buffer is specified by SIZE. */
+	T buf[0];
+public:
+	generic_queue() {
+		assert(SIZE < 0xffff);
+		start = 0;
+		num = 0;
+	}
+
+	void push_back(T v) {
+		assert(num < SIZE);
+		buf[(start + num) % SIZE] = v;
+		num++;
+	}
+
+	void pop_front() {
+		assert(num > 0);
+		start = (start + 1) % SIZE;
+		num--;
+	}
+
+	/*
+	 * remove the idx'th element in the queue.
+	 * idx is the logical position in the queue,
+	 * instead of the physical index in the buffer.
+	 */
+	void remove(int idx) {
+		assert(idx < num);
+		/* the first element in the queue. */
+		if (idx == 0) {
+			printf("remove the first element\n");
+			pop_front();
+		}
+		/* the last element in the queue. */
+		else if (idx == num - 1){
+			printf("remove the last element\n");
+			num--;
+		}
+		/*
+		 * in the middle.
+		 * now we need to move data.
+		 */
+		else {
+			T tmp[num];
+			T *p = tmp;
+			/* if the end of the queue is physically behind the start */
+			if (start + num <= SIZE) {
+				printf("remove the element when the queue doesn't round up\n");
+				/* copy elements in front of the removed element. */
+				memcpy(p, &buf[start], sizeof(T) * idx);
+				p += idx;
+				/* copy elements behind the removed element. */
+				memcpy(p, &buf[start + idx + 1], sizeof(T) * (num - idx - 1));
+			}
+			/* 
+			 * the removed element is between the first element
+			 * and the end of the buffer.
+			 */
+			else if (idx + start < SIZE) {
+				printf("remove the element between the first element and the end of the buffer\n");
+				/* copy elements in front of the removed element. */
+				memcpy(p, &buf[start], sizeof(T) * idx);
+				p += idx;
+				/*
+				 * copy elements behind the removed element
+				 * and before the end of the buffer.
+				 */
+				memcpy(p, &buf[start + idx + 1], sizeof(T) * (SIZE - start - idx - 1));
+				p += (SIZE - start - idx - 1);
+				/* copy the remaining elements in the beginning of the buffer. */
+				memcpy(p, buf, sizeof(T) * (num - (SIZE - start)));
+			}
+			/*
+			 * the removed element is between the beginning of the buffer
+			 * and the last element.
+			 */
+			else {
+				printf("remove the element between the beginning of the buffer and the last element\n");
+				/* copy elements between the first element and the end of the buffer. */
+				memcpy(p, &buf[start], sizeof(T) * (SIZE - start));
+				p += (SIZE - start);
+				/* copy elements between the beginning of the buffer and the removed element. */
+				idx = (idx + start) % SIZE;
+				memcpy(p, buf, sizeof(T) * idx);
+				p += idx;
+				/* copy elements after the removed element and before the last element */
+				memcpy(p, &buf[idx + 1], sizeof(T) * ((start + num) % SIZE - idx - 1));
+			}
+			memcpy(buf, tmp, sizeof(T) * (num - 1));
+			start = 0;
+			num--;
+		}
+	}
+
+	bool is_empty() {
+		return num == 0;
+	}
+
+	bool is_full() {
+		return num == SIZE;
+	}
+
+	int size() {
+		return num;
+	}
+
+	T *back() {
+		assert(num > 0);
+		return &buf[(start + num - 1) % SIZE];
+	}
+
+	T *front() {
+		assert(num > 0);
+		return &buf[start];
+	}
+
+	T *get(int idx) {
+		assert(num > 0);
+		return &buf[(start + idx) % SIZE];
+	}
+
+	void print_state() {
+		printf("start: %d, num: %d\n", start, num);
+		for (int i = 0; i < this->size(); i++)
+			printf("%ld\t", this->get(i));
+		printf("\n");
+	}
+};
+
+template<int SHADOW_SIZE>
 class shadow_cell
 {
-	unsigned int num;
-	page buf[CELL_SIZE * SHADOW_FACTOR];
+	generic_queue<shadow_page, SHADOW_SIZE> queue;
 public:
 	shadow_cell() {
-		num = 0;
 	}
 
 	/*
@@ -88,46 +248,24 @@ public:
 	 * the only thing we need to record is the number of hits
 	 * of this page.
 	 */
-	void add(page &pg) {
-		/* if the cell isn't full */
-		if (num < sizeof (buf) / sizeof (page)) {
-			buf[num] = pg;
-			num++;
-		}
-		else {
-			int idx = -1;
-			int min_hits = 0x7fffffff;
-			for (unsigned int i = 0; i < num; i++)
-				if (buf[i].get_hits() < min_hits) {
-					min_hits = buf[i].get_hits();
-					idx = i;
-				}
-			assert(idx != -1);
-			/*
-			 * If the cell is full and the number of hits of the new page
-			 * is higher than a page in the cell, we need to
-			 * evicted the shadown page from the cell.
-			 */
-			if (min_hits < pg.get_hits())
-				buf[idx] = pg;
-			/*
-			 * If the cell is full and the number of hits of the new page
-			 * is lower than any pages in the cell. It's ignored.
-			 */
-		}
+	void add(shadow_page pg) {
+		if (queue.is_full())
+			queue.pop_front();
+		queue.push_back(pg);
 	}
 
-	page *search(off_t off) {
-		for (unsigned int i = 0; i < sizeof(buf) / sizeof(page); i++) {
-			if (buf[i].get_offset() == off)
-				return &buf[i];
+	shadow_page *search(off_t off) {
+		for (int i = 0; i < queue.size(); i++) {
+			shadow_page *pg = queue.get(i);
+			if (pg->get_offset() == off)
+				return pg;
 		}
 		return NULL;
 	}
 
 	void scale_down_hits() {
-		for (int i = 0; i < CELL_SIZE * SHADOW_FACTOR; i++) {
-			buf[i].set_hits(buf[i].get_hits() / 2);
+		for (int i = 0; i < queue.size(); i++) {
+			queue.get(i)->set_hits(queue.get(i)->get_hits() / 2);
 		}
 	}
 };
@@ -142,9 +280,11 @@ class hash_cell
 	std::vector<int> pos_vec;
 #endif
 #ifdef USE_SHADOW_PAGE
-	shadow_cell shadow;
+#define NUM_SHADOW_PAGES 37
+	shadow_cell<NUM_SHADOW_PAGES> shadow;
+#define STUFFING_SIZE (CACHE_LINE * 4 - sizeof(_lock) - sizeof(buf) - sizeof(shadow) - 8)
+	char stuffing[STUFFING_SIZE];
 #endif
-//	char stuffing[CACHE_LINE - sizeof(_lock) - sizeof(buf)];
 
 	/* this function has to be called with lock held */
 	thread_safe_page *get_empty_page() {
@@ -174,7 +314,7 @@ class hash_cell
 		/* we record the hit info of the page in the shadow cell. */
 #ifdef USE_SHADOW_PAGE
 		if (ret->get_hits() > 0)
-			shadow.add(*ret);
+			shadow.add(shadow_page(*ret));
 #endif
 
 		ret->reset_hits();
@@ -275,7 +415,7 @@ public:
 			 */
 			ret->set_offset(off);
 #ifdef USE_SHADOW_PAGE
-			page *shadow_pg = shadow.search(off);
+			shadow_page *shadow_pg = shadow.search(off);
 			/*
 			 * if the page has been seen before,
 			 * we should set the hits info.
