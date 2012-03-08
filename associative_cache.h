@@ -79,11 +79,11 @@ class shadow_page
 	unsigned char hits;
 public:
 	shadow_page() {
-		offset = 0;
+		offset = -1;
 		hits = 0;
 	}
 	shadow_page(page &pg) {
-		offset = pg.get_offset();
+		offset = pg.get_offset() >> LOG_PAGE_SIZE;
 		hits = pg.get_hits();
 	}
 
@@ -99,7 +99,14 @@ public:
 		assert (hits <= 0xff);
 		this->hits = hits;
 	}
+
+	bool is_valid() {
+		return offset != -1;
+	}
 };
+
+int middle_evicts = 0;
+int end_evicts = 0;
 
 template<class T, int SIZE>
 class generic_queue
@@ -122,6 +129,7 @@ public:
 	}
 
 	void pop_front() {
+		end_evicts++;
 		assert(num > 0);
 		start = (start + 1) % SIZE;
 		num--;
@@ -136,12 +144,12 @@ public:
 		assert(idx < num);
 		/* the first element in the queue. */
 		if (idx == 0) {
-			printf("remove the first element\n");
+			end_evicts++;
 			pop_front();
 		}
 		/* the last element in the queue. */
 		else if (idx == num - 1){
-			printf("remove the last element\n");
+			end_evicts++;
 			num--;
 		}
 		/*
@@ -149,11 +157,11 @@ public:
 		 * now we need to move data.
 		 */
 		else {
+			middle_evicts++;
 			T tmp[num];
 			T *p = tmp;
 			/* if the end of the queue is physically behind the start */
 			if (start + num <= SIZE) {
-				printf("remove the element when the queue doesn't round up\n");
 				/* copy elements in front of the removed element. */
 				memcpy(p, &buf[start], sizeof(T) * idx);
 				p += idx;
@@ -165,7 +173,6 @@ public:
 			 * and the end of the buffer.
 			 */
 			else if (idx + start < SIZE) {
-				printf("remove the element between the first element and the end of the buffer\n");
 				/* copy elements in front of the removed element. */
 				memcpy(p, &buf[start], sizeof(T) * idx);
 				p += idx;
@@ -183,7 +190,6 @@ public:
 			 * and the last element.
 			 */
 			else {
-				printf("remove the element between the beginning of the buffer and the last element\n");
 				/* copy elements between the first element and the end of the buffer. */
 				memcpy(p, &buf[start], sizeof(T) * (SIZE - start));
 				p += (SIZE - start);
@@ -212,19 +218,19 @@ public:
 		return num;
 	}
 
-	T *back() {
+	T &back() {
 		assert(num > 0);
-		return &buf[(start + num - 1) % SIZE];
+		return buf[(start + num - 1) % SIZE];
 	}
 
-	T *front() {
+	T &front() {
 		assert(num > 0);
-		return &buf[start];
+		return buf[start];
 	}
 
-	T *get(int idx) {
+	T &get(int idx) {
 		assert(num > 0);
-		return &buf[(start + idx) % SIZE];
+		return buf[(start + idx) % SIZE];
 	}
 
 	void print_state() {
@@ -254,18 +260,21 @@ public:
 		queue.push_back(pg);
 	}
 
-	shadow_page *search(off_t off) {
+	shadow_page search(off_t off) {
 		for (int i = 0; i < queue.size(); i++) {
-			shadow_page *pg = queue.get(i);
-			if (pg->get_offset() == off)
+			shadow_page pg = queue.get(i);
+			if (pg.get_offset() == off) {
+				queue.remove(i);
+				queue.push_back(pg);
 				return pg;
+			}
 		}
-		return NULL;
+		return shadow_page();
 	}
 
 	void scale_down_hits() {
 		for (int i = 0; i < queue.size(); i++) {
-			queue.get(i)->set_hits(queue.get(i)->get_hits() / 2);
+			queue.get(i).set_hits(queue.get(i).get_hits() / 2);
 		}
 	}
 };
@@ -415,13 +424,13 @@ public:
 			 */
 			ret->set_offset(off);
 #ifdef USE_SHADOW_PAGE
-			shadow_page *shadow_pg = shadow.search(off);
+			shadow_page shadow_pg = shadow.search(off);
 			/*
 			 * if the page has been seen before,
 			 * we should set the hits info.
 			 */
-			if (shadow_pg)
-				ret->set_hits(shadow_pg->get_hits());
+			if (shadow_pg.is_valid())
+				ret->set_hits(shadow_pg.get_hits());
 #endif
 		}
 #ifdef USE_LRU
