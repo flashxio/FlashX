@@ -118,7 +118,7 @@ public:
 		return hits;
 	}
 	void set_hits(int hits) {
-		assert (hits < 0xff);
+		assert (hits <= 0xff);
 		this->hits = hits;
 	}
 	/* the page is accessed */
