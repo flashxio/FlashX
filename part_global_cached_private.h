@@ -183,16 +183,23 @@ class part_global_cached_private: public global_cached_private
 	long processed_requests;
 
 public:
-	static int group_id(int thread_id, int num_groups) {
-		/* number of threads in a group */
-		int num_threads = nthreads / num_groups;
-		return thread_id / num_threads;
+	static inline int group_id(int thread_id, int num_groups) {
+		int remaining = nthreads % num_groups;
+		int group_size = nthreads / num_groups;
+		if (thread_id <= remaining * (group_size + 1))
+			return thread_id / (group_size + 1);
+		else
+			return (thread_id - remaining * (group_size + 1)) / group_size + remaining;
 	}
+
 	/* get the location of a thread in the group. */
-	static int thread_idx(int thread_id, int num_groups) {
-		/* number of threads in a group */
-		int num_threads = nthreads / num_groups;
-		return thread_id % num_threads;
+	static inline int thread_idx(int thread_id, int num_groups) {
+		int remaining = nthreads % num_groups;
+		int group_size = nthreads / num_groups;
+		if (thread_id <= remaining * (group_size + 1))
+			return thread_id % (group_size + 1);
+		else
+			return (thread_id - remaining * (group_size + 1)) % group_size;
 	}
 
 	part_global_cached_private *id2thread(int thread_id) {
@@ -268,7 +275,7 @@ public:
 			int num, long size, int idx, long cache_size, int entry_size,
 			int cache_type): global_cached_private(names, num,
 				size, idx, entry_size) {
-		assert(nthreads % num_groups == 0);
+//		assert(nthreads % num_groups == 0);
 		this->num_groups = num_groups;
 		this->group_idx = group_id(idx, num_groups);
 		this->cache_size = cache_size / num_groups;
@@ -288,6 +295,8 @@ public:
 			for (int i = 0; i < num_groups; i++) {
 				groups[i].id = i;
 				groups[i].nthreads = nthreads / num_groups;
+				if (nthreads % num_groups)
+					groups[i].nthreads++;
 				groups[i].threads = new part_global_cached_private*[groups[i].nthreads];
 				groups[i].cache = NULL;
 				for (int j = 0; j < groups[i].nthreads; j++)
@@ -328,6 +337,9 @@ public:
 		int base = random() % group->nthreads;
 		for (int i = 0; num > 0 && i < group->nthreads; i++) {
 			part_global_cached_private *thread = group->threads[(base + i) % group->nthreads];
+			if (thread == NULL)
+				continue;
+
 			bulk_queue<io_request> *q = thread->request_queue;
 			/* 
 			 * is_full is pre-check, it can't guarantee
@@ -514,7 +526,8 @@ public:
 		printf("thread %d: start to clean up\n", idx);
 		for (int i = 0; i < num_groups; i++) {
 			for (int j = 0; j < groups[i].nthreads; j++)
-				__sync_fetch_and_add(&groups[i].threads[j]->finished_threads, 1);
+				if (groups[i].threads[j])
+					__sync_fetch_and_add(&groups[i].threads[j]->finished_threads, 1);
 		}
 		while (!request_queue->is_empty()
 				|| !reply_queue->is_empty()
