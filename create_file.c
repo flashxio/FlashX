@@ -59,17 +59,19 @@ int main(int argc, char *argv[])
 	}
 	printf("create a file of %ld bytes\n", size);
 
-	/* bind to node 0. */
-	struct bitmask *nodemask = numa_allocate_cpumask();
-	numa_bitmask_clearall(nodemask);
-	int i;
-	for (i = 0; i < num_nodes; i++) {
-		printf("run on node %d\n", node_ids[i]);
-		numa_bitmask_setbit(nodemask, node_ids[i]);
+	if (num_nodes > 0) {
+		/* bind to node 0. */
+		struct bitmask *nodemask = numa_allocate_cpumask();
+		numa_bitmask_clearall(nodemask);
+		int i;
+		for (i = 0; i < num_nodes; i++) {
+			printf("run on node %d\n", node_ids[i]);
+			numa_bitmask_setbit(nodemask, node_ids[i]);
+		}
+		numa_bind(nodemask);
+		numa_set_strict(1);
+		numa_set_bind_policy(1);
 	}
-	numa_bind(nodemask);
-	numa_set_strict(1);
-	numa_set_bind_policy(1);
 
 	/*
 	 * because of my change in the kernel, creating a read-only file
