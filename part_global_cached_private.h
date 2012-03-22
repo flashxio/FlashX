@@ -147,6 +147,7 @@ class part_global_cached_private: public global_cached_private
 	static pthread_mutex_t init_mutex;
 	/* indicates the number of threads that finish initialization. */
 	static int num_finish_init;
+	/* used for thread initialization. */
 	static pthread_mutex_t wait_mutex;
 	static pthread_cond_t cond;
 
@@ -339,7 +340,17 @@ public:
 		thread_group *group = &groups[node_id];
 		if (node_id != get_group_id())
 			remote_reads += num;
-		int base = random() % group->nthreads;
+
+		/*
+		 * if the requests are sent to the local node,
+		 * the local thread will process them.
+		 */
+		int base;
+		if (node_id == get_group_id())
+			base = thread_idx(this->idx, num_groups);
+		else
+			base = random() % group->nthreads;
+
 		for (int i = 0; num > 0 && i < group->nthreads; i++) {
 			part_global_cached_private *thread = group->threads[(base + i) % group->nthreads];
 			if (thread == NULL)
