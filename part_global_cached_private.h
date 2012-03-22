@@ -182,6 +182,8 @@ class part_global_cached_private: public global_cached_private
 
 	long processed_requests;
 
+	long remote_reads;
+
 public:
 	static inline int group_id(int thread_id, int num_groups) {
 		int remaining = nthreads % num_groups;
@@ -275,6 +277,7 @@ public:
 			int num, long size, int idx, long cache_size, int entry_size,
 			int cache_type): global_cached_private(names, num,
 				size, idx, entry_size) {
+		remote_reads = 0;
 //		assert(nthreads % num_groups == 0);
 		this->num_groups = num_groups;
 		this->group_idx = group_id(idx, num_groups);
@@ -334,6 +337,8 @@ public:
 	io_request *send(int node_id, io_request *reqs, int num) {
 		int num_sent = 0;
 		thread_group *group = &groups[node_id];
+		if (node_id != get_group_id())
+			remote_reads += num;
 		int base = random() % group->nthreads;
 		for (int i = 0; num > 0 && i < group->nthreads; i++) {
 			part_global_cached_private *thread = group->threads[(base + i) % group->nthreads];
@@ -550,6 +555,20 @@ public:
 	bool support_bulk() {
 		return true;
 	}
+
+#ifdef STATISTICS
+	virtual void print_stat() {
+		global_cached_private::print_stat();
+		static long tot_remote_reads = 0;
+		static int seen_threads = 0;
+		tot_remote_reads += remote_reads;
+		seen_threads++;
+		if (seen_threads == nthreads) {
+			printf("there are %ld requests sent to the remote nodes\n",
+					tot_remote_reads);
+		}
+	}
+#endif
 };
 thread_group *part_global_cached_private::groups;
 pthread_mutex_t part_global_cached_private::init_mutex;
