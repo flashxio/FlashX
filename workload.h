@@ -16,6 +16,32 @@ public:
 	virtual bool has_next() = 0;
 };
 
+class seq_workload: public workload_gen
+{
+	long start;
+	long end;
+	long cur;
+	int entry_size;
+
+public:
+	seq_workload(long start, long end, int entry_size) {
+		this->start = start;
+		this->end = end;
+		this->cur = start;
+		this->entry_size = entry_size;
+	}
+
+	off_t next_offset() {
+		off_t next = cur;
+		cur++;
+		return next * entry_size;
+	}
+
+	bool has_next() {
+		return cur < end;
+	}
+};
+
 class rand_permute
 {
 	off_t *offset;

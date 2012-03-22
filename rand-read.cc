@@ -24,7 +24,7 @@
 #include <string>
 #include <deque>
 
-#define NUM_THREADS 32
+#define NUM_THREADS 48
 
 #include "wpaio.h"
 #include "cache.h"
@@ -197,6 +197,7 @@ str2int cache_types[] = {
 };
 
 enum {
+	SEQ_OFFSET,
 	RAND_OFFSET,
 	RAND_PERMUTE,
 	STRIDE,
@@ -205,6 +206,7 @@ enum {
 };
 
 str2int workloads[] = {
+	{ "SEQ", SEQ_OFFSET },
 	{ "RAND", RAND_OFFSET },
 	{ "RAND_PERMUTE", RAND_PERMUTE },
 	{ "STRIDE", STRIDE },
@@ -429,6 +431,9 @@ int main(int argc, char *argv[])
 		workload_gen *gen;
 		workload_chunk *chunk = NULL;
 		switch (workload) {
+			case SEQ_OFFSET:
+				gen = new seq_workload(start, end, entry_size);
+				break;
 			case RAND_OFFSET:
 				gen = new rand_workload(start, end, entry_size);
 				break;
