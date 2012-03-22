@@ -104,6 +104,10 @@ public:
 		return -1;
 	}
 
+	virtual int get_group_id() {
+		return 0;
+	}
+
 	thread_private(int idx, int entry_size) {
 		this->idx = idx;
 		read_bytes = 0;

@@ -68,6 +68,17 @@ void *rand_read(void *arg)
 	thread_private *priv = threads[(long) arg];
 	int entry_size = priv->get_entry_size();
 
+#if NUM_NODES > 0
+	struct bitmask *nodemask = numa_allocate_cpumask();
+	numa_bitmask_clearall(nodemask);
+	int node_num = priv->idx / (nthreads / NUM_NODES);
+	printf("thread %d is associated to node %d\n", priv->idx, node_num);
+	numa_bitmask_setbit(nodemask, node_num);
+	numa_bind(nodemask);
+	numa_set_strict(1);
+	numa_set_bind_policy(1);
+#endif
+
 	printf("pid: %d, tid: %ld\n", getpid(), gettid());
 	priv->thread_init();
 	rand_buf *buf = priv->buf;
@@ -516,6 +527,7 @@ int main(int argc, char *argv[])
 	printf("%d keys are evicted from the hash table because of conflicts\n", removed_indices);
 	printf("there are %d lock contentions\n", lock_contentions);
 #endif
+	printf("middle evicts: %d, end evicts: %d\n", middle_evicts, end_evicts);
 }
 
 const rand_permute *local_rand_permute_workload::permute;

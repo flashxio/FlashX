@@ -14,6 +14,7 @@ class read_private: public thread_private
 	long size;
 
 	int flags;
+	long remote_reads;
 #ifdef STATISTICS
 	long read_time; // in us
 	long num_reads;
@@ -26,6 +27,7 @@ public:
 		read_time = 0;
 		num_reads = 0;
 #endif
+		remote_reads = 0;
 		file_names = new const char *[num];
 		for (int i = 0; i < num; i++)
 			file_names[i] = names[i];
@@ -74,6 +76,12 @@ public:
 		if (fd_idx >= num) {
 			printf("offset: %ld, fd_idx: %d, size: %ld, num: %d\n", offset, fd_idx, this->size, num);
 		}
+#if NUM_NODES > 1
+		int node_num = idx / (nthreads / NUM_NODES);
+		if (node_num != fd_idx) {
+			remote_reads++;
+		}
+#endif
 		assert (fd_idx < num);
 		int fd = fds[fd_idx];
 #ifdef STATISTICS
@@ -100,11 +108,17 @@ public:
 		static int seen_threads = 0;
 		static long tot_nreads;
 		static long tot_read_time;
+		static long tot_remote_reads;
+		tot_remote_reads += remote_reads;
 		tot_nreads += num_reads;
 		tot_read_time += read_time;
 		seen_threads++;
-		if (seen_threads == nthreads)
+		if (seen_threads == nthreads) {
 			printf("there are %ld reads and takes %ldus\n", tot_nreads, tot_read_time);
+#if NUM_NODES > 1
+			printf("total remote reads: %ld\n", tot_remote_reads);
+#endif
+		}
 	}
 #endif
 };
