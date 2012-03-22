@@ -211,6 +211,7 @@ enum {
 	SEQ_OFFSET,
 	RAND_OFFSET,
 	RAND_PERMUTE,
+	LOCAL_RAND_PERMUTE,
 	STRIDE,
 	BALANCED,
 	USER_FILE_WORKLOAD = -1
@@ -220,6 +221,7 @@ str2int workloads[] = {
 	{ "SEQ", SEQ_OFFSET },
 	{ "RAND", RAND_OFFSET },
 	{ "RAND_PERMUTE", RAND_PERMUTE },
+	{ "LOCAL_RAND_PERMUTE", LOCAL_RAND_PERMUTE },
 	{ "STRIDE", STRIDE },
 	{ "BALANCED", BALANCED },
 	{ "user_file", USER_FILE_WORKLOAD },
@@ -449,8 +451,11 @@ int main(int argc, char *argv[])
 				gen = new rand_workload(start, end, entry_size);
 				break;
 			case RAND_PERMUTE:
-				gen = new local_rand_permute_workload(num_entries,
+				gen = new global_rand_permute_workload(num_entries,
 						entry_size, start, end);
+				break;
+			case LOCAL_RAND_PERMUTE:
+				gen = new local_rand_permute_workload(start, end, entry_size);
 				break;
 			case STRIDE:
 				gen = new stride_workload(start, end, entry_size);
@@ -530,4 +535,4 @@ int main(int argc, char *argv[])
 	printf("middle evicts: %d, end evicts: %d\n", middle_evicts, end_evicts);
 }
 
-const rand_permute *local_rand_permute_workload::permute;
+const rand_permute *global_rand_permute_workload::permute;

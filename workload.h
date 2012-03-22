@@ -113,11 +113,40 @@ public:
 
 class local_rand_permute_workload: public workload_gen
 {
+	long idx;
+	long num;
+	long start;
+	rand_permute *permute;
+public:
+	local_rand_permute_workload(long start, long end, int entry_size) {
+		permute = new rand_permute(end - start, entry_size);
+		this->start = start * entry_size;
+		idx = 0;
+		num = end - start;
+	}
+
+	~local_rand_permute_workload() {
+		delete permute;
+	}
+
+	off_t next_offset() {
+		if (idx >= num)
+			return -1;
+		return permute->get_offset(idx++) + start;
+	}
+
+	bool has_next() {
+		return idx < num;
+	}
+};
+
+class global_rand_permute_workload: public workload_gen
+{
 	long start;
 	long end;
 	static const rand_permute *permute;
 public:
-	local_rand_permute_workload(long num, int stride, long start, long end) {
+	global_rand_permute_workload(long num, int stride, long start, long end) {
 		if (permute == NULL) {
 			permute = new rand_permute(num, stride);
 		}
@@ -125,7 +154,7 @@ public:
 		this->end = end;
 	}
 
-	~local_rand_permute_workload() {
+	~global_rand_permute_workload() {
 		if (permute) {
 			delete permute;
 			permute = NULL;
