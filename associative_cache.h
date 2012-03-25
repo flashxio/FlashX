@@ -480,6 +480,7 @@ public:
 	associative_cache(long cache_size) {
 		printf("associative cache is used\n");
 		int npages = cache_size / PAGE_SIZE;
+		assert(cache_size >= CELL_SIZE * PAGE_SIZE);
 		ncells = npages / CELL_SIZE;
 		cells = new hash_cell[ncells];
 		printf("%d cells: %p\n", ncells, cells);
