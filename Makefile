@@ -1,7 +1,7 @@
 CFLAGS = -g -O3 -DSTATISTICS #-DPROFILER
 CXXFLAGS = -g -Wall -O3 -DSTATISTICS -DNUM_NODES=8 #-DPROFILER
 LDFLAGS = -lpthread -lnuma #-laio #-lprofiler
-HEADERS = aio_private.h direct_private.h global_cached_private.h mmap_private.h part_cached_private.h part_global_cached_private.h read_private.h thread_private.h workload.h
+HEADERS = aio_private.h direct_private.h global_cached_private.h mmap_private.h part_cached_private.h part_global_cached_private.h read_private.h thread_private.h workload.h rand_buf.h
 CC = g++
 
 all: rand-read rand-memcpy test create_file
