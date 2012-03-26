@@ -127,7 +127,7 @@ public:
 	}
 
 	static void allocate_cache(long size) {
-		data_start = valloc(size);
+		data_start = numa_alloc_local(size);
 	}
 
 	void inc_ref() {

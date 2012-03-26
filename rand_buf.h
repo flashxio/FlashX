@@ -21,8 +21,8 @@ public:
 		num_entries = buf_size / entry_size;
 		printf("there are %d entries in the rand buffer\n", num_entries);
 		used_entries = 0;
-		buf = (char *) valloc(buf_size);
-		marks = (char *) malloc(num_entries);
+		buf = (char *) numa_alloc_local(buf_size);
+		marks = (char *) numa_alloc_local(num_entries);
 		memset(marks, 0, num_entries);
 
 		if (buf == NULL){

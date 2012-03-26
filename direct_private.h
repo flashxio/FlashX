@@ -25,6 +25,7 @@ public:
 			ret = read_private::access(buf, offset, size, access_method);
 		}
 		else {
+			printf("read a buffer smaller than a page size\n");
 			assert(access_method == READ);
 			buf_idx++;
 			if (buf_idx == 4096)
