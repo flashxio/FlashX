@@ -18,7 +18,7 @@ rand-memcpy: rand-memcpy.c
 	gcc -o rand-memcpy rand-memcpy.c $(LDFLAGS)
 
 test: test.cc cuckoo_cache.h cache.h associative_cache.h tree_cache.h $(HEADERS)
-	g++ -o test test.cc -g -lpthread
+	g++ -o test test.cc -g -lpthread -DNUM_NODES=1
 
 clean:
 	rm *.o

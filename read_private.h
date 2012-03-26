@@ -49,7 +49,7 @@ public:
 	int thread_init() {
 		int ret;
 
-		buf = new rand_buf(NUM_PAGES / nthreads * PAGE_SIZE, get_entry_size());
+		buf = new rand_buf(NUM_PAGES / (nthreads / NUM_NODES) * PAGE_SIZE, get_entry_size());
 		for (int i = 0; i < num; i++) {
 			fds[i] = open(file_names[i], flags);
 			if (fds[i] < 0) {
