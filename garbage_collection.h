@@ -1,6 +1,9 @@
 #ifndef __GARBAGE_COLLECTION_H__
 #define __GARBAGE_COLLECTION_H__
 
+#include <stdlib.h>
+#include <stdio.h>
+
 class collectable
 {
 public:

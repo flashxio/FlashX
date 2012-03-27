@@ -54,6 +54,8 @@ enum {
 	MMAP,
 };
 
+void *page::data_start;
+
 long npages;
 int nthreads = 1;
 struct timeval global_start;

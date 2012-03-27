@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <assert.h>
 #include <numa.h>
 
 #include <map>
@@ -140,7 +141,6 @@ public:
 		return refcnt;
 	}
 };
-void *page::data_start;
 
 class thread_safe_page: public page
 {
