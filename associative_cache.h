@@ -77,14 +77,27 @@ class shadow_page
 {
 	int offset;
 	unsigned char hits;
+	char flags;
 public:
 	shadow_page() {
 		offset = -1;
 		hits = 0;
+		flags = 0;
 	}
 	shadow_page(page &pg) {
 		offset = pg.get_offset() >> LOG_PAGE_SIZE;
 		hits = pg.get_hits();
+		flags = 0;
+	}
+
+	void set_referenced(bool referenced) {
+		if (referenced)
+			flags |= 0x1 << REFERENCED_BIT;
+		else
+			flags &= ~(0x1 << REFERENCED_BIT);
+	}
+	bool referenced() {
+		return flags & (0x1 << REFERENCED_BIT);
 	}
 
 	off_t get_offset() const {
@@ -114,7 +127,7 @@ class generic_queue
 	unsigned short start;
 	unsigned short num;
 	/* the size of the buffer is specified by SIZE. */
-	T buf[0];
+	T buf[SIZE];
 public:
 	generic_queue() {
 		assert(SIZE < 0xffff);
@@ -233,6 +246,10 @@ public:
 		return buf[(start + idx) % SIZE];
 	}
 
+	void set(T &v, int idx) {
+		buf[(start + idx) % SIZE] = v;
+	}
+
 	void print_state() {
 		printf("start: %d, num: %d\n", start, num);
 		for (int i = 0; i < this->size(); i++)
@@ -241,12 +258,83 @@ public:
 	}
 };
 
-template<int SHADOW_SIZE>
 class shadow_cell
+{
+public:
+	virtual void add(shadow_page pg) = 0;
+	virtual shadow_page search(off_t off) = 0;
+	virtual void scale_down_hits() = 0;
+};
+
+template<int SHADOW_SIZE>
+class clock_shadow_cell: public shadow_cell
+{
+	int last_idx;
+	generic_queue<shadow_page, SHADOW_SIZE> queue;
+public:
+	clock_shadow_cell() {
+		last_idx = 0;
+	}
+
+	void add(shadow_page pg) {
+		if (!queue.is_full()) {
+			queue.push_back(pg);
+			return;
+		}
+		/*
+		 * We need to evict a page from the set.
+		 * Find the first page whose reference bit isn't set.
+		 */
+		bool inserted = false;
+		do {
+			for (int i = 0; i < queue.size(); i++) {
+				last_idx = (last_idx + 1) % queue.size();
+				shadow_page old = queue.get(last_idx);
+				/* 
+				 * The page has been referenced recently,
+				 * we should spare it.
+				 */
+				if (old.referenced()) {
+					queue.get(last_idx).set_referenced(false);
+					continue;
+				}
+				queue.set(pg, last_idx);
+				inserted = true;
+				break;
+			}
+			/* 
+			 * If we can't insert the page in the for loop above,
+			 * we need to go through the for loop again.
+			 * But for the second time, we will definitely
+			 * insert the page.
+			 */
+		} while (!inserted);
+	}
+
+	shadow_page search(off_t off) {
+		for (int i = 0; i < queue.size(); i++) {
+			shadow_page pg = queue.get(i);
+			if (pg.get_offset() == off) {
+				queue.get(i).set_referenced(true);
+				return pg;
+			}
+		}
+		return shadow_page();
+	}
+
+	void scale_down_hits() {
+		for (int i = 0; i < queue.size(); i++) {
+			queue.get(i).set_hits(queue.get(i).get_hits() / 2);
+		}
+	}
+};
+
+template<int SHADOW_SIZE>
+class LRU_shadow_cell: public shadow_cell
 {
 	generic_queue<shadow_page, SHADOW_SIZE> queue;
 public:
-	shadow_cell() {
+	LRU_shadow_cell() {
 	}
 
 	/*
@@ -289,10 +377,9 @@ class hash_cell
 	std::vector<int> pos_vec;
 #endif
 #ifdef USE_SHADOW_PAGE
-#define NUM_SHADOW_PAGES 37
-	shadow_cell<NUM_SHADOW_PAGES> shadow;
-#define STUFFING_SIZE (CACHE_LINE * 4 - sizeof(_lock) - sizeof(buf) - sizeof(shadow) - 8)
-	char stuffing[STUFFING_SIZE];
+	/* 36 shadow pages makes exactly 4 cache lines. */
+#define NUM_SHADOW_PAGES 36
+	clock_shadow_cell<NUM_SHADOW_PAGES> shadow;
 #endif
 
 	/* this function has to be called with lock held */

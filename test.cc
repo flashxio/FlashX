@@ -16,7 +16,22 @@ struct test {
 
 int main()
 {
-	printf("size of hash_cell: %ld\n", sizeof(hash_cell));
+	char buf[1000];
+	generic_queue<shadow_page, 10> queue;
+	char buf1[1000];
+	for(int i = 0; i < 10; i++) {
+		printf("i1: %d\n", i);
+		page pg = page(i, i);
+		printf("i2: %d\n", i);
+		queue.push_back(shadow_page(pg));
+		printf("i3: %d\n", i);
+	}
+	printf("before: the first shadow page is referenced: %d\n",
+			queue.get(0).referenced());
+	queue.get(0).set_referenced(true);
+	printf("after: the first shadow page is referenced: %d\n",
+			queue.get(0).referenced());
+	printf("hash cell size: %ld\n", sizeof(hash_cell));
 #if 0
 	test buf;
 	generic_queue<long, 10> *queue = &buf.queue;
