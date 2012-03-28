@@ -1,10 +1,13 @@
 #include "rand_buf.h"
 
-rand_buf::rand_buf(int buf_size, int entry_size): buf_offset(buf_size / entry_size, entry_size) {
-	this->entry_size = entry_size;
+rand_buf::rand_buf(int buf_size, int entry_size): free_refs(buf_size / entry_size) {
 	num_entries = buf_size / entry_size;
+	rand_permute buf_offset(num_entries, entry_size);
+	for (int i = 0; i < num_entries; i++)
+		free_refs.push_back(buf_offset.get_offset(i));
+
+	this->entry_size = entry_size;
 	printf("there are %d entries in the rand buffer\n", num_entries);
-	used_entries = 0;
 	buf = (char *) numa_alloc_local(buf_size);
 	marks = (char *) numa_alloc_local(num_entries);
 	memset(marks, 0, num_entries);
@@ -21,25 +24,20 @@ rand_buf::rand_buf(int buf_size, int entry_size): buf_offset(buf_size / entry_si
 }
 
 char *rand_buf::next_entry() {
-	int off;
-	int num = 0;
-	while(1) {
-		off = buf_offset.get_offset(current);
-		current = (current + 1) % num_entries;;
-		if (!marks[off / entry_size])
-			break;
-		num++;
-	}
-	used_entries++;
+	assert(!free_refs.is_empty());
+	int off = free_refs.front();
+	free_refs.pop_front();
+	assert(marks[off / entry_size] == 0);
 	marks[off / entry_size] = 1;
 	return &buf[off];
 }
 
 void rand_buf::free_entry(char *buf) {
-	int off = (buf - this->buf) / entry_size;
+	int off = buf - this->buf;
+	free_refs.push_back(off);
+	off /= entry_size;
 	if (marks[off] == 0)
 		printf("free %p error\n", buf);
 	assert(marks[off]);
 	marks[off] = 0;
-	used_entries--;
 }
