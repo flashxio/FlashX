@@ -6,13 +6,12 @@
 template<class T>
 class dynamic_queue
 {
-	unsigned short start;
-	unsigned short num;
+	int start;
+	int num;
 	T *buf;
 	int size;
 public:
 	dynamic_queue(int size) {
-		assert(size < 0xffff);
 		buf = (T *) numa_alloc_local(sizeof(T) * size);
 		this->size = size;
 		start = 0;
