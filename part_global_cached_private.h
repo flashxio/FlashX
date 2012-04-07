@@ -122,6 +122,7 @@ public:
 
 class part_global_cached_private: public global_cached_private
 {
+	memory_manager *manager;
 	static thread_group *groups;
 	/* this mutex just for helping initialize cache. */
 	static pthread_mutex_t init_mutex;
@@ -204,7 +205,7 @@ public:
 
 	part_global_cached_private(int num_groups, const char *names[],
 			int num, long size, int idx, long cache_size, int entry_size,
-			int cache_type);
+			int cache_type, memory_manager *manager);
 
 	virtual page_cache *get_global_cache() {
 		return groups[group_idx].cache;

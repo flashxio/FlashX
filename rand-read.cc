@@ -395,6 +395,7 @@ int main(int argc, char *argv[])
 	for (int k = 0; k < num_files; k++)
 		cnames[k] = file_names[k].c_str();
 	num = num_files;
+	memory_manager *manager = new memory_manager(npages * PAGE_SIZE);
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
 		switch (access_option) {
@@ -419,13 +420,13 @@ int main(int argc, char *argv[])
 				break;
 			case GLOBAL_CACHE_ACCESS:
 				threads[j] = new global_cached_private(cnames, num, npages * PAGE_SIZE, j,
-						cache_size, entry_size, cache_type);
+						cache_size, entry_size, cache_type, manager);
 				if (preload)
 					((global_cached_private *) threads[j])->preload(0, npages * PAGE_SIZE);
 				break;
 			case PART_GLOBAL_ACCESS:
 				threads[j] = new part_global_cached_private(num_nodes, cnames, num,
-						npages * PAGE_SIZE, j, cache_size, entry_size, cache_type);
+						npages * PAGE_SIZE, j, cache_size, entry_size, cache_type, manager);
 				break;
 			default:
 				fprintf(stderr, "wrong access option\n");

@@ -79,7 +79,7 @@ int part_global_cached_private::thread_init() {
 	if (group->cache == NULL) {
 		/* this allocates all pages for the cache. */
 		page::allocate_cache(cache_size);
-		group->cache = global_cached_private::create_cache(cache_type, cache_size);
+		group->cache = global_cached_private::create_cache(cache_type, cache_size, manager);
 	}
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
@@ -98,8 +98,10 @@ int part_global_cached_private::thread_init() {
 
 part_global_cached_private::part_global_cached_private(int num_groups,
 		const char *names[], int num, long size, int idx,
-		long cache_size, int entry_size, int cache_type): global_cached_private(names,
+		long cache_size, int entry_size, int cache_type,
+		memory_manager *manager): global_cached_private(names,
 			num, size, idx, entry_size) {
+	this->manager = manager;
 	remote_reads = 0;
 	//		assert(nthreads % num_groups == 0);
 	this->num_groups = num_groups;

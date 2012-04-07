@@ -56,6 +56,14 @@ public:
 		hits = 0;
 	}
 
+	page(off_t off, char *data) {
+		set_offset(off);
+		this->data = data;
+		refcnt = 0;
+		flags = 0;
+		hits = 0;
+	}
+
 	page(off_t off, long data_off) {
 		set_offset(off);
 		data = (void *) ((long) data_start + data_off);
@@ -73,7 +81,6 @@ public:
 		return offset != -1;
 	}
 
-	// TODO is off_t unsigned?
 	off_t get_offset() const { return ((off_t) offset) << LOG_PAGE_SIZE; }
 	void *get_data() const { return data; }
 
@@ -169,6 +176,13 @@ public:
 	}
 
 	thread_safe_page(off_t off, long d): page(off, d) {
+#ifdef PTRHEAD_WAIT
+		pthread_cond_init(&cond, NULL);
+		pthread_mutex_init(&mutex, NULL);
+#endif
+	}
+
+	thread_safe_page(off_t off, char *data): page(off, data) {
 #ifdef PTRHEAD_WAIT
 		pthread_cond_init(&cond, NULL);
 		pthread_mutex_init(&mutex, NULL);
@@ -273,6 +287,12 @@ public:
 		pthread_spin_destroy(&_lock);
 	}
 	virtual page *search(off_t offset, off_t &old_off) = 0;
+	virtual long size() {
+		return 0;
+	}
+	virtual bool shrink(int npages, char *pages[]) {
+		return false;
+	}
 };
 
 /**

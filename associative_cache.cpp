@@ -80,6 +80,43 @@ void generic_queue<T, SIZE>::remove(int idx) {
 	}
 }
 
+hash_cell::hash_cell(associative_cache *cache, long hash) {
+	this->hash = hash;
+	overflow = false;
+	pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
+	this->table = cache;
+	char *pages[CELL_SIZE];
+	if (!table->get_manager()->get_free_pages(CELL_SIZE, pages, cache))
+		throw -1;
+	buf.set_pages(pages);
+}
+
+/**
+ * rehash the pages in the current cell 
+ * to the expanded cell.
+ */
+void hash_cell::rehash(hash_cell *expanded) {
+	for (int i = 0, j = 0; i < CELL_SIZE; i++) {
+		thread_safe_page *pg = buf.get_page(i);
+		int hash = table->hash(pg->get_offset());
+		assert(this->hash == hash);
+		int hash1 = table->hash1(pg->get_offset());
+		assert(expanded->hash == hash1);
+		/* 
+		 * if the two hash values don't match,
+		 * it means the page is mapped to the expanded cell.
+		 * we exchange the pages in the two cells.
+		 */
+		if (hash != hash1) {
+			thread_safe_page *expanded_pg = buf.get_page(j);
+			thread_safe_page tmp = *expanded_pg;
+			*expanded_pg = *pg;
+			*pg = tmp;
+			j++;
+		}
+	}
+}
+
 /**
  * search for a page with the offset.
  * If the page doesn't exist, return an empty page.
@@ -152,8 +189,12 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 thread_safe_page *hash_cell::get_empty_page() {
 	thread_safe_page *ret = NULL;
 
+	int min_hits = 0x7fffffff;
+	bool expanded = false;
+search_again:
 	do {
-		int min_hits = 0x7fffffff;
+		// TODO this is busy wait.
+		// maybe we should use pthread_wait
 		for (int i = 0; i < CELL_SIZE; i++) {
 			thread_safe_page *pg = buf.get_page(i);
 			if (pg->get_ref())
@@ -169,9 +210,29 @@ thread_safe_page *hash_cell::get_empty_page() {
 				min_hits = pg->get_hits();
 				ret = pg;
 			}
+
+			/* 
+			 * if a page hasn't been accessed before,
+			 * it's a completely new page, just use it.
+			 */
+			if (min_hits == 0)
+				break;
 		}
 		/* it happens when all pages in the cell is used currently. */
 	} while (ret == NULL);
+
+	/*
+	 * the selected page got hit before,
+	 * we should expand the hash table
+	 * if we haven't done it before.
+	 */
+	if (min_hits)
+		overflow = true;
+	if (min_hits && !expanded) {
+		expanded = true;
+		if (table->expand(this))
+			goto search_again;
+	}
 
 	/* we record the hit info of the page in the shadow cell. */
 #ifdef USE_SHADOW_PAGE
@@ -289,4 +350,93 @@ void LRU_shadow_cell::scale_down_hits() {
 	for (int i = 0; i < queue.size(); i++) {
 		queue.get(i).set_hits(queue.get(i).get_hits() / 2);
 	}
+}
+
+bool associative_cache::expand(hash_cell *cell) {
+	hash_cell *cells = NULL;
+	unsigned int i;
+	pthread_spin_lock(&table_lock);
+	for (i = 0; i < cells_table.size(); i++) {
+		cells = cells_table[i];
+		if (cell >= cells && cell < cells + init_ncells)
+			break;
+	}
+	pthread_spin_unlock(&table_lock);
+	assert(cells);
+	int global_idx = i * init_ncells + (cell - cells);
+
+	/* 
+	 * If we are not expanding the cell pointed by `split',
+	 * don't do anything.
+	 */
+	if (split != global_idx)
+		return false;
+
+	cell = get_cell(split);
+	long size = pow(2, level) * init_ncells;
+	while (cell->is_overflow()) {
+		hash_cell *expanded_cell = get_cell(split + size);
+		/* 
+		 * if we can't expand the table
+		 * because it's out of memory.
+		 */
+		if (expanded_cell == NULL)
+			return false;
+		cell->rehash(expanded_cell);
+		split++;
+		if (split == size) {
+			level++;
+			split = 0;
+			break;
+		}
+	}
+	return true;
+}
+
+hash_cell *associative_cache::get_cell(unsigned int global_idx) {
+	unsigned int cells_idx = global_idx / init_ncells;
+	int idx = global_idx % init_ncells;
+	pthread_spin_lock(&table_lock);
+	unsigned int orig_size = cells_table.size();
+	bool out_of_memory = false;
+	/*
+	 * We need to expand the cells table only when
+	 * get_cell() is called in expand(). 
+	 */
+	if (cells_idx >= orig_size) {
+		if (flags & TABLE_EXPANDING) {
+			// TODO 
+		}
+		flags |= TABLE_EXPANDING;
+		pthread_spin_unlock(&table_lock);
+
+		/* create cells and put them in a temporary table. */
+		std::vector<hash_cell *> table;
+		for (unsigned int i = orig_size; i <= cells_idx; i++) {
+			hash_cell *cells = new hash_cell[init_ncells];
+			printf("create %d cells: %p\n", init_ncells, cells);
+			try {
+				for (int j = 0; j < init_ncells; j++) {
+					cells[j] = hash_cell(this, i * init_ncells + j);
+				}
+				table.push_back(cells);
+			} catch (int e) {
+				out_of_memory = true;
+				delete [] cells;
+				break;
+			}
+		}
+
+		pthread_spin_lock(&table_lock);
+		for (unsigned int i = 0; i < table.size(); i++) {
+			cells_table.push_back(table[i]);
+		}
+		flags &= ~TABLE_EXPANDING;
+	}
+	hash_cell *cells = cells_table[cells_idx];
+	pthread_spin_unlock(&table_lock);
+	if (out_of_memory)
+		return NULL;
+	else
+		return &cells[idx];
 }

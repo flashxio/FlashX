@@ -2,9 +2,11 @@
 #define __ASSOCIATIVE_CACHE_H__
 
 #include <pthread.h>
+#include <math.h>
 
 #include <vector>
 
+#include "memory_manager.h"
 #include "cache.h"
 
 #define CELL_SIZE 8
@@ -42,9 +44,9 @@ public:
 		idx = 0;
 	}
 
-	void set_pages(long page_buf) {
+	void set_pages(char *pages[]) {
 		for (int i = 0; i < BUF_SIZE; i++) {
-			buf[i] = T(-1, page_buf + i * PAGE_SIZE);
+			buf[i] = T(-1, pages[i]);
 		}
 		idx = 0;
 	}
@@ -204,6 +206,7 @@ public:
 class clock_shadow_cell: public shadow_cell
 {
 	int last_idx;
+	// TODO adjust to make it fit in cache lines.
 	generic_queue<shadow_page, NUM_SHADOW_PAGES> queue;
 public:
 	clock_shadow_cell() {
@@ -240,12 +243,17 @@ public:
 	void scale_down_hits();
 };
 
-// TODO the entire cell should be put in the same cache line
-// so each access to the hash table has only one cache miss.
+class associative_cache;
+
 class hash_cell
 {
+	// for testing
+	long hash;
+
 	pthread_spinlock_t _lock;
 	page_cell<thread_safe_page, CELL_SIZE> buf;
+	bool overflow;
+	associative_cache *table;
 #ifdef USE_LRU
 	std::vector<int> pos_vec;
 #endif
@@ -255,18 +263,14 @@ class hash_cell
 
 	thread_safe_page *get_empty_page();
 
-#ifdef USE_LRU
-	thread_safe_page *get_empty_page();
-#endif
-
-#ifdef USE_FIFO
-	thread_safe_page *get_empty_page();
-#endif
-
 public:
 	hash_cell() {
+		overflow = false;
+		table = NULL;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
+
+	hash_cell(associative_cache *cache, long hash);
 
 	~hash_cell() {
 		pthread_spin_destroy(&_lock);
@@ -283,11 +287,16 @@ public:
 		free((void *) ((long) p - (CACHE_LINE - 8)));
 	}
 
-	void set_pages(long page_buf) {
-		buf.set_pages(page_buf);
+	bool is_overflow() {
+		return overflow;
 	}
 
 	page *search(off_t off, off_t &old_off);
+	/* 
+	 * this is to rehash the pages in the current cell
+	 * to the cell in the parameter.
+	 */
+	void rehash(hash_cell *cell);
 
 	void print_cell() {
 		for (int i = 0; i < CELL_SIZE; i++)
@@ -296,38 +305,102 @@ public:
 	}
 };
 
+const long init_cache_size = 512 * 1024 * 1024;
+
 class associative_cache: public page_cache
 {
-	hash_cell *cells;
-	int ncells;
-	// TODO maybe it's not a good hash function
-	int hash(off_t offset) {
-		return offset / PAGE_SIZE % ncells;
+	enum {
+		TABLE_EXPANDING = 1,
+	};
+	/* 
+	 * this table contains cell arrays.
+	 * each array contains N cells;
+	 * TODO we might need to use map to improve performance.
+	 */
+	std::vector<hash_cell*> cells_table;
+	// TODO it might be better to use seq_lock
+	// because the table doesn't change much.
+	pthread_spinlock_t table_lock;
+	int flags;
+	/* the initial number of cells in the table. */
+	int init_ncells;
+
+	memory_manager *manager;
+
+	/* used for linear hashing */
+	int level;
+	int split;
+
+	hash_cell *get_cell(unsigned int global_idx);
+
+	hash_cell *get_cell_offset(off_t offset) {
+		int global_idx;
+		global_idx = hash(offset);
+		if (global_idx < split)
+			global_idx = hash1(offset);
+		unsigned int cells_idx = global_idx / init_ncells;
+		assert(cells_idx < cells_table.size());
+		return get_cell(global_idx);
 	}
 
 public:
-	associative_cache(long cache_size) {
+	associative_cache(memory_manager *manager) {
 		printf("associative cache is used\n");
-		int npages = cache_size / PAGE_SIZE;
-		assert(cache_size >= CELL_SIZE * PAGE_SIZE);
-		ncells = npages / CELL_SIZE;
-		cells = new hash_cell[ncells];
-		printf("%d cells: %p\n", ncells, cells);
-		for (int i = 0; i < ncells; i++)
-			cells[i].set_pages(i * PAGE_SIZE * CELL_SIZE);
+		level = 0;
+		split = 0;
+		flags = 0;
+		this->manager = manager;
+		manager->register_cache(this);
+		pthread_spin_init(&table_lock, PTHREAD_PROCESS_PRIVATE);
+		int npages = init_cache_size / PAGE_SIZE;
+		assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);
+		init_ncells = npages / CELL_SIZE;
+		hash_cell *cells = new hash_cell[init_ncells];
+		printf("%d cells: %p\n", init_ncells, cells);
+		for (int i = 0; i < init_ncells; i++)
+			cells[i] = hash_cell(this, i);
+		cells_table.push_back(cells);
 	}
 
 	~associative_cache() {
-		delete [] cells;
+		pthread_spin_destroy(&table_lock);
+		for (unsigned int i = 0; i < cells_table.size(); i++)
+			delete [] cells_table[i];
+		manager->unregister_cache(this);
+	}
+
+	/* the hash function used for the current level. */
+	int hash(off_t offset) {
+		return offset / PAGE_SIZE % (init_ncells * (long) pow(2, level));
+	}
+
+	/* the hash function used for the next level. */
+	int hash1(off_t offset) {
+		return offset / PAGE_SIZE % (init_ncells * (long) pow(2, level + 1));
 	}
 
 	page *search(off_t offset, off_t &old_off) {
-		hash_cell *cell = &cells[hash(offset)];
-		return cell->search(offset, old_off);
+		return get_cell_offset(offset)->search(offset, old_off);
+	}
+
+	bool expand(hash_cell *cell);
+
+	memory_manager *get_manager() {
+		return manager;
 	}
 
 	void print_cell(off_t off) {
-		cells[hash(off)].print_cell();
+		get_cell(off)->print_cell();
+	}
+
+	long size() {
+		return ((long) cells_table.size())
+			* init_ncells * CELL_SIZE * PAGE_SIZE;
+	}
+
+	bool shrink(int npages, char *pages[]) {
+		// TODO shrink the cache
+		return false;
 	}
 };
 

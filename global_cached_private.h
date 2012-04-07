@@ -27,14 +27,15 @@ public:
 		cache_size = 0;
 	}
 
-	static page_cache *create_cache(int cache_type, long cache_size) {
+	static page_cache *create_cache(int cache_type,
+			long cache_size, memory_manager *manager) {
 		page_cache *global_cache;
 		switch (cache_type) {
 			case TREE_CACHE:
 				global_cache = new tree_cache(cache_size, 0);
 				break;
 			case ASSOCIATIVE_CACHE:
-				global_cache = new associative_cache(cache_size);
+				global_cache = new associative_cache(manager);
 				break;
 			case CUCKOO_CACHE:
 				global_cache = new cuckoo_cache(cache_size);
@@ -49,13 +50,15 @@ public:
 		return global_cache;
 	}
 
-	global_cached_private(const char *names[], int num, long size, int idx, long cache_size,
-			int entry_size, int cache_type): direct_private(names, num, size, idx, entry_size) {
+	global_cached_private(const char *names[], int num, long size,
+			int idx, long cache_size, int entry_size, int cache_type,
+			memory_manager *manager): direct_private(names,
+				num, size, idx, entry_size) {
 		num_waits = 0;
 		this->cache_size = cache_size;
 		if (global_cache == NULL) {
 			page::allocate_cache(cache_size);
-			global_cache = create_cache(cache_type, cache_size);
+			global_cache = create_cache(cache_type, cache_size, manager);
 		}
 	}
 
