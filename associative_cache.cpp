@@ -96,25 +96,57 @@ hash_cell::hash_cell(associative_cache *cache, long hash) {
  * to the expanded cell.
  */
 void hash_cell::rehash(hash_cell *expanded) {
+	pthread_spin_lock(&_lock);
+	pthread_spin_lock(&expanded->_lock);
 	for (int i = 0, j = 0; i < CELL_SIZE; i++) {
 		thread_safe_page *pg = buf.get_page(i);
-		int hash = table->hash(pg->get_offset());
-		assert(this->hash == hash);
-		int hash1 = table->hash1(pg->get_offset());
-		assert(expanded->hash == hash1);
+		int hash1 = table->hash1_locked(pg->get_offset());
+		/*
+		 * It's possible that a page is in a wrong cell.
+		 * It's likely because the page is added to the cell 
+		 * right when `level' is increased.
+		 * But the case is rare, so we can just simple ignore
+		 * the case. It doesn't affect the correctness of 
+		 * the implementation. The only penalty is that
+		 * we might get a cache miss.
+		 * Since the page is in a wrong cell, it won't be 
+		 * accessed any more, so we should shorten the time
+		 * it gets evicted by setting its hit to 1.
+		 */
+		if (hash1 != expanded->hash) {
+			pg->set_hits(1);
+			continue;
+		}
 		/* 
 		 * if the two hash values don't match,
 		 * it means the page is mapped to the expanded cell.
 		 * we exchange the pages in the two cells.
 		 */
-		if (hash != hash1) {
-			thread_safe_page *expanded_pg = buf.get_page(j);
+		if (this->hash != hash1) {
+			thread_safe_page *expanded_pg = expanded->buf.get_page(j);
+			/* 
+			 * we have to make sure no other threads are using them
+			 * before we can exchange them.
+			 * If the pages are in use, skip them.
+			 */
+			if (pg->get_ref()) {
+				continue;
+			}
+			/* 
+			 * the page in the expanded cell shouldn't
+			 * have been initialized.
+			 */
+			assert(!expanded_pg->initialized());
+
 			thread_safe_page tmp = *expanded_pg;
 			*expanded_pg = *pg;
 			*pg = tmp;
 			j++;
 		}
 	}
+	pthread_spin_unlock(&expanded->_lock);
+	pthread_spin_unlock(&_lock);
+	overflow = false;
 }
 
 /**
@@ -189,9 +221,10 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 thread_safe_page *hash_cell::get_empty_page() {
 	thread_safe_page *ret = NULL;
 
-	int min_hits = 0x7fffffff;
+	int min_hits;
 	bool expanded = false;
 search_again:
+	min_hits = 0x7fffffff;
 	do {
 		// TODO this is busy wait.
 		// maybe we should use pthread_wait
@@ -226,12 +259,18 @@ search_again:
 	 * we should expand the hash table
 	 * if we haven't done it before.
 	 */
-	if (min_hits)
+	if (min_hits) {
 		overflow = true;
-	if (min_hits && !expanded) {
-		expanded = true;
-		if (table->expand(this))
+		if (!expanded) {
+			pthread_spin_unlock(&_lock);
+			// TODO I need to do something to reduce the function being called.
+			if (table->expand(this)) {
+				throw expand_exception();
+			}
+			pthread_spin_lock(&_lock);
+			expanded = true;
 			goto search_again;
+		}
 	}
 
 	/* we record the hit info of the page in the shadow cell. */
@@ -242,6 +281,7 @@ search_again:
 
 	ret->reset_hits();
 	ret->set_data_ready(false);
+	memset(ret->get_data(), 0, PAGE_SIZE);
 	return ret;
 }
 
@@ -356,12 +396,16 @@ bool associative_cache::expand(hash_cell *cell) {
 	hash_cell *cells = NULL;
 	unsigned int i;
 	pthread_spin_lock(&table_lock);
+	if (flags.test_flags(TABLE_EXPANDING)) {
+		pthread_spin_unlock(&table_lock);
+		return false;
+	}
+
 	for (i = 0; i < cells_table.size(); i++) {
 		cells = cells_table[i];
 		if (cell >= cells && cell < cells + init_ncells)
 			break;
 	}
-	pthread_spin_unlock(&table_lock);
 	assert(cells);
 	int global_idx = i * init_ncells + (cell - cells);
 
@@ -369,74 +413,106 @@ bool associative_cache::expand(hash_cell *cell) {
 	 * If we are not expanding the cell pointed by `split',
 	 * don't do anything.
 	 */
-	if (split != global_idx)
+	if (split != global_idx) {
+		pthread_spin_unlock(&table_lock);
 		return false;
+	}
+	/* 
+	 * starting from this point, the table
+	 * is expanding.
+	 */
+	flags.set_flags(TABLE_EXPANDING);
+	pthread_spin_unlock(&table_lock);
 
+	/* only one thread can be here. */
+	printf("expand the cells table\n");
 	cell = get_cell(split);
 	long size = pow(2, level) * init_ncells;
 	while (cell->is_overflow()) {
-		hash_cell *expanded_cell = get_cell(split + size);
+		unsigned int cells_idx = (split + size) / init_ncells;
 		/* 
-		 * if we can't expand the table
-		 * because it's out of memory.
+		 * I'm sure only this thread can change the table,
+		 * so it doesn't need to hold a lock when accessing the size.
 		 */
-		if (expanded_cell == NULL)
-			return false;
+		unsigned int orig_size = cells_table.size();
+		if (cells_idx >= orig_size) {
+			bool out_of_memory = false;
+			/* create cells and put them in a temporary table. */
+			std::vector<hash_cell *> table;
+			for (unsigned int i = orig_size; i <= cells_idx; i++) {
+				hash_cell *cells = new hash_cell[init_ncells];
+				printf("create %d cells: %p\n", init_ncells, cells);
+				try {
+					for (int j = 0; j < init_ncells; j++) {
+						cells[j] = hash_cell(this, i * init_ncells + j);
+					}
+					table.push_back(cells);
+				} catch (int e) {
+					out_of_memory = true;
+					delete [] cells;
+					break;
+				}
+			}
+
+			/*
+			 * here we need to hold the lock because other threads
+			 * might be accessing the table.
+			 */
+			pthread_spin_lock(&table_lock);
+			for (unsigned int i = 0; i < table.size(); i++) {
+				cells_table.push_back(table[i]);
+			}
+			pthread_spin_unlock(&table_lock);
+			if (out_of_memory)
+				return false;
+		}
+
+		hash_cell *expanded_cell = get_cell(split + size);
 		cell->rehash(expanded_cell);
+		pthread_spin_lock(&table_lock);
 		split++;
 		if (split == size) {
 			level++;
+			printf("increase level to %d\n", level);
 			split = 0;
+			pthread_spin_unlock(&table_lock);
 			break;
 		}
+		pthread_spin_unlock(&table_lock);
+		cell = get_cell(split);
 	}
+	flags.clear_flags(TABLE_EXPANDING);
 	return true;
 }
 
 hash_cell *associative_cache::get_cell(unsigned int global_idx) {
 	unsigned int cells_idx = global_idx / init_ncells;
 	int idx = global_idx % init_ncells;
-	pthread_spin_lock(&table_lock);
-	unsigned int orig_size = cells_table.size();
-	bool out_of_memory = false;
-	/*
-	 * We need to expand the cells table only when
-	 * get_cell() is called in expand(). 
-	 */
-	if (cells_idx >= orig_size) {
-		if (flags & TABLE_EXPANDING) {
-			// TODO 
-		}
-		flags |= TABLE_EXPANDING;
-		pthread_spin_unlock(&table_lock);
-
-		/* create cells and put them in a temporary table. */
-		std::vector<hash_cell *> table;
-		for (unsigned int i = orig_size; i <= cells_idx; i++) {
-			hash_cell *cells = new hash_cell[init_ncells];
-			printf("create %d cells: %p\n", init_ncells, cells);
-			try {
-				for (int j = 0; j < init_ncells; j++) {
-					cells[j] = hash_cell(this, i * init_ncells + j);
-				}
-				table.push_back(cells);
-			} catch (int e) {
-				out_of_memory = true;
-				delete [] cells;
-				break;
-			}
-		}
-
-		pthread_spin_lock(&table_lock);
-		for (unsigned int i = 0; i < table.size(); i++) {
-			cells_table.push_back(table[i]);
-		}
-		flags &= ~TABLE_EXPANDING;
-	}
+	assert(cells_idx < cells_table.size());
 	hash_cell *cells = cells_table[cells_idx];
-	pthread_spin_unlock(&table_lock);
-	if (out_of_memory)
-		return NULL;
-	else
-		return &cells[idx];
+	return &cells[idx];
+}
+
+page *associative_cache::search(off_t offset, off_t &old_off) {
+	/*
+	 * search might change the structure of the cell,
+	 * and cause the cell table to expand.
+	 * Thus, the page might not be placed in the cell
+	 * we found before. Therefore, we need to research
+	 * for the cell.
+	 */
+	do {
+		try {
+			hash_cell *cell, *tmp;
+			page *ret;
+			do {
+				cell = get_cell_offset(offset);
+				ret = cell->search(offset, old_off);
+				tmp = get_cell_offset(offset);
+			} while (cell != tmp);
+			return ret;
+		} catch (expand_exception e) {
+			printf("the cells table is expanded\n");
+		}
+	} while (true);
 }

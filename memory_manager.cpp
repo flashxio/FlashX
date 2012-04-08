@@ -1,7 +1,7 @@
 #include "memory_manager.h"
 
 const long SHRINK_NPAGES = 1024;
-const long INCREASE_SIZE = 1024 * 1024 * 512;
+const long INCREASE_SIZE = 1024 * 1024 * 128;
 
 /**
  * get `npages' pages for `request_cache'.
@@ -22,8 +22,12 @@ bool memory_manager::get_free_pages(int npages,
 				*header = linked_page();
 				list.add_back(header);
 			}
+			printf("before size: %ld, max size: %ld, num free pages: %ld\n",
+					size, max_size, num_free_pages);
 			size += INCREASE_SIZE;
 			num_free_pages += INCREASE_SIZE / PAGE_SIZE;
+			printf("after size: %ld, max size: %ld, num free pages: %ld\n",
+					size, max_size, num_free_pages);
 		}
 		else {
 			long size = 0;
@@ -42,6 +46,7 @@ bool memory_manager::get_free_pages(int npages,
 			if (request_cache == cache) {
 				return false;
 			}
+			printf("shrink cache\n");
 			int num_shrink = SHRINK_NPAGES;
 			if (num_shrink < npages)
 				num_shrink = npages;
@@ -65,6 +70,7 @@ bool memory_manager::get_free_pages(int npages,
 		p->remove_from_list();
 		pages[i] = (char *) p;
 	}
+	num_free_pages -= npages;
 	pthread_spin_unlock(&lock);
 	return true;
 }

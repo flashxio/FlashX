@@ -395,7 +395,7 @@ int main(int argc, char *argv[])
 	for (int k = 0; k < num_files; k++)
 		cnames[k] = file_names[k].c_str();
 	num = num_files;
-	memory_manager *manager = new memory_manager(npages * PAGE_SIZE);
+	memory_manager *manager = new memory_manager(cache_size);
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
 		switch (access_option) {

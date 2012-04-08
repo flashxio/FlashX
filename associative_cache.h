@@ -26,6 +26,10 @@ extern int middle_evicts;
 
 const int CACHE_LINE = 128;
 
+class expand_exception
+{
+};
+
 /**
  * This data structure is to implement LRU.
  */
@@ -305,12 +309,33 @@ public:
 	}
 };
 
-const long init_cache_size = 512 * 1024 * 1024;
+const long init_cache_size = 128 * 1024 * 1024;
+
+class atomic_flags
+{
+	volatile int flags;
+public:
+	atomic_flags() {
+		flags = 0;
+	}
+
+	void set_flags(int flag) {
+		__sync_fetch_and_or(&flags, 0x1 << flag);
+	}
+
+	void clear_flags(int flag) {
+		__sync_fetch_and_and(&flags, ~(0x1 << flag));
+	}
+
+	bool test_flags(int flag) {
+		return flags & (0x1 << flag);
+	}
+};
 
 class associative_cache: public page_cache
 {
 	enum {
-		TABLE_EXPANDING = 1,
+		TABLE_EXPANDING,
 	};
 	/* 
 	 * this table contains cell arrays.
@@ -321,7 +346,7 @@ class associative_cache: public page_cache
 	// TODO it might be better to use seq_lock
 	// because the table doesn't change much.
 	pthread_spinlock_t table_lock;
-	int flags;
+	atomic_flags flags;
 	/* the initial number of cells in the table. */
 	int init_ncells;
 
@@ -333,22 +358,11 @@ class associative_cache: public page_cache
 
 	hash_cell *get_cell(unsigned int global_idx);
 
-	hash_cell *get_cell_offset(off_t offset) {
-		int global_idx;
-		global_idx = hash(offset);
-		if (global_idx < split)
-			global_idx = hash1(offset);
-		unsigned int cells_idx = global_idx / init_ncells;
-		assert(cells_idx < cells_table.size());
-		return get_cell(global_idx);
-	}
-
 public:
 	associative_cache(memory_manager *manager) {
 		printf("associative cache is used\n");
 		level = 0;
 		split = 0;
-		flags = 0;
 		this->manager = manager;
 		manager->register_cache(this);
 		pthread_spin_init(&table_lock, PTHREAD_PROCESS_PRIVATE);
@@ -379,9 +393,14 @@ public:
 		return offset / PAGE_SIZE % (init_ncells * (long) pow(2, level + 1));
 	}
 
-	page *search(off_t offset, off_t &old_off) {
-		return get_cell_offset(offset)->search(offset, old_off);
+	int hash1_locked(off_t offset) {
+		pthread_spin_lock(&table_lock);
+		int ret = offset / PAGE_SIZE % (init_ncells * (long) pow(2, level + 1));
+		pthread_spin_unlock(&table_lock);
+		return ret;
 	}
+
+	page *search(off_t offset, off_t &old_off);
 
 	bool expand(hash_cell *cell);
 
@@ -401,6 +420,22 @@ public:
 	bool shrink(int npages, char *pages[]) {
 		// TODO shrink the cache
 		return false;
+	}
+
+	hash_cell *get_cell_offset(off_t offset) {
+		int global_idx;
+		pthread_spin_lock(&table_lock);
+		global_idx = hash(offset);
+		if (global_idx < split)
+			global_idx = hash1(offset);
+		unsigned int cells_idx = global_idx / init_ncells;
+		if (cells_idx >= cells_table.size())
+			printf("global idx: %d, cells idx: %d, offset: %ld, table size: %ld\n",
+					global_idx, cells_idx, offset, cells_table.size());
+		assert(cells_idx < cells_table.size());
+		hash_cell *cell = get_cell(global_idx);
+		pthread_spin_unlock(&table_lock);
+		return cell;
 	}
 };
 
