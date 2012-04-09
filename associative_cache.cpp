@@ -282,7 +282,6 @@ search_again:
 
 	ret->reset_hits();
 	ret->set_data_ready(false);
-	memset(ret->get_data(), 0, PAGE_SIZE);
 	return ret;
 }
 
