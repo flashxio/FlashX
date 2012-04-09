@@ -495,14 +495,7 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 	 */
 	do {
 		try {
-			hash_cell *cell, *tmp;
-			page *ret;
-			do {
-				cell = get_cell_offset(offset);
-				ret = cell->search(offset, old_off);
-				tmp = get_cell_offset(offset);
-			} while (cell != tmp);
-			return ret;
+			return get_cell_offset(offset)->search(offset, old_off);
 		} catch (expand_exception e) {
 		}
 	} while (true);
