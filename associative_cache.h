@@ -332,6 +332,34 @@ public:
 	}
 };
 
+class seq_lock
+{
+	volatile unsigned long count;
+	volatile int lock;
+public:
+	seq_lock() {
+		count = 0;
+		lock = 0;
+	}
+
+	void read_lock(unsigned long &count) {
+		count = this->count;
+	}
+
+	bool read_unlock(unsigned long count) {
+		return this->count == count;
+	}
+
+	void write_lock() {
+		while(__sync_fetch_and_or(&lock, 1)) {}
+		__sync_fetch_and_add(&count, 1);
+	}
+
+	void write_unlock() {
+		__sync_fetch_and_and(&lock, 0);
+	}
+};
+
 class associative_cache: public page_cache
 {
 	enum {
@@ -342,10 +370,10 @@ class associative_cache: public page_cache
 	 * each array contains N cells;
 	 * TODO we might need to use map to improve performance.
 	 */
-	std::vector<hash_cell*> cells_table;
+	volatile std::vector<hash_cell*> cells_table;
 	// TODO it might be better to use seq_lock
 	// because the table doesn't change much.
-	pthread_spinlock_t table_lock;
+	seq_lock table_lock;
 	atomic_flags flags;
 	/* the initial number of cells in the table. */
 	int init_ncells;
@@ -353,10 +381,8 @@ class associative_cache: public page_cache
 	memory_manager *manager;
 
 	/* used for linear hashing */
-	int level;
+	volatile int level;
 	int split;
-
-	hash_cell *get_cell(unsigned int global_idx);
 
 public:
 	associative_cache(memory_manager *manager) {
@@ -365,7 +391,6 @@ public:
 		split = 0;
 		this->manager = manager;
 		manager->register_cache(this);
-		pthread_spin_init(&table_lock, PTHREAD_PROCESS_PRIVATE);
 		int npages = init_cache_size / PAGE_SIZE;
 		assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);
 		init_ncells = npages / CELL_SIZE;
@@ -377,7 +402,6 @@ public:
 	}
 
 	~associative_cache() {
-		pthread_spin_destroy(&table_lock);
 		for (unsigned int i = 0; i < cells_table.size(); i++)
 			delete [] cells_table[i];
 		manager->unregister_cache(this);
@@ -394,9 +418,12 @@ public:
 	}
 
 	int hash1_locked(off_t offset) {
-		pthread_spin_lock(&table_lock);
-		int ret = offset / PAGE_SIZE % (init_ncells * (long) pow(2, level + 1));
-		pthread_spin_unlock(&table_lock);
+		unsigned long count;
+		int ret;
+		do {
+			table_lock.read_lock(count);
+			ret = offset / PAGE_SIZE % (init_ncells * (long) pow(2, level + 1));
+		} while (!table_lock.read_unlock(count));
 		return ret;
 	}
 
@@ -422,19 +449,26 @@ public:
 		return false;
 	}
 
+	hash_cell *get_cell(unsigned int global_idx) {
+		unsigned int cells_idx = global_idx / init_ncells;
+		int idx = global_idx % init_ncells;
+		// TODO this check isn't enough after I use seq_lock.
+		assert(cells_idx < cells_table.size());
+		hash_cell *cells = cells_table[cells_idx];
+		return &cells[idx];
+	}
+
 	hash_cell *get_cell_offset(off_t offset) {
 		int global_idx;
-		pthread_spin_lock(&table_lock);
-		global_idx = hash(offset);
-		if (global_idx < split)
-			global_idx = hash1(offset);
-		unsigned int cells_idx = global_idx / init_ncells;
-		if (cells_idx >= cells_table.size())
-			printf("global idx: %d, cells idx: %d, offset: %ld, table size: %ld\n",
-					global_idx, cells_idx, offset, cells_table.size());
-		assert(cells_idx < cells_table.size());
-		hash_cell *cell = get_cell(global_idx);
-		pthread_spin_unlock(&table_lock);
+		unsigned long count;
+		hash_cell *cell;
+		do {
+			table_lock.read_lock(count);
+			global_idx = hash(offset);
+			if (global_idx < split)
+				global_idx = hash1(offset);
+			cell = get_cell(global_idx);
+		} while (!table_lock.read_unlock(count));
 		return cell;
 	}
 };

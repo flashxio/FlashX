@@ -395,9 +395,9 @@ void LRU_shadow_cell::scale_down_hits() {
 bool associative_cache::expand(hash_cell *cell) {
 	hash_cell *cells = NULL;
 	unsigned int i;
-	pthread_spin_lock(&table_lock);
+	table_lock.write_lock();
 	if (flags.test_flags(TABLE_EXPANDING)) {
-		pthread_spin_unlock(&table_lock);
+		table_lock.write_unlock();
 		return false;
 	}
 
@@ -414,7 +414,7 @@ bool associative_cache::expand(hash_cell *cell) {
 	 * is expanding.
 	 */
 	flags.set_flags(TABLE_EXPANDING);
-	pthread_spin_unlock(&table_lock);
+	table_lock.write_unlock();
 
 	/* only one thread can be here. */
 	cell = get_cell(split);
@@ -449,39 +449,31 @@ bool associative_cache::expand(hash_cell *cell) {
 			 * here we need to hold the lock because other threads
 			 * might be accessing the table.
 			 */
-			pthread_spin_lock(&table_lock);
+			table_lock.write_lock();
 			for (unsigned int i = 0; i < table.size(); i++) {
 				cells_table.push_back(table[i]);
 			}
-			pthread_spin_unlock(&table_lock);
+			table_lock.write_unlock();
 			if (out_of_memory)
 				return false;
 		}
 
 		hash_cell *expanded_cell = get_cell(split + size);
 		cell->rehash(expanded_cell);
-		pthread_spin_lock(&table_lock);
+		table_lock.write_lock();
 		split++;
 		if (split == size) {
 			level++;
 			printf("increase level to %d\n", level);
 			split = 0;
-			pthread_spin_unlock(&table_lock);
+			table_lock.write_unlock();
 			break;
 		}
-		pthread_spin_unlock(&table_lock);
+		table_lock.write_unlock();
 		cell = get_cell(split);
 	}
 	flags.clear_flags(TABLE_EXPANDING);
 	return true;
-}
-
-hash_cell *associative_cache::get_cell(unsigned int global_idx) {
-	unsigned int cells_idx = global_idx / init_ncells;
-	int idx = global_idx % init_ncells;
-	assert(cells_idx < cells_table.size());
-	hash_cell *cells = cells_table[cells_idx];
-	return &cells[idx];
 }
 
 page *associative_cache::search(off_t offset, off_t &old_off) {
