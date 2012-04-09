@@ -261,9 +261,10 @@ search_again:
 	 */
 	if (min_hits) {
 		overflow = true;
-		if (!expanded) {
+		long table_size = table->size();
+		long average_size = table->get_manager()->average_cache_size();
+		if (table_size < average_size && !expanded) {
 			pthread_spin_unlock(&_lock);
-			// TODO I need to do something to reduce the function being called.
 			if (table->expand(this)) {
 				throw expand_exception();
 			}
@@ -410,14 +411,6 @@ bool associative_cache::expand(hash_cell *cell) {
 	int global_idx = i * init_ncells + (cell - cells);
 
 	/* 
-	 * If we are not expanding the cell pointed by `split',
-	 * don't do anything.
-	 */
-	if (split != global_idx) {
-		pthread_spin_unlock(&table_lock);
-		return false;
-	}
-	/* 
 	 * starting from this point, the table
 	 * is expanding.
 	 */
@@ -425,10 +418,9 @@ bool associative_cache::expand(hash_cell *cell) {
 	pthread_spin_unlock(&table_lock);
 
 	/* only one thread can be here. */
-	printf("expand the cells table\n");
 	cell = get_cell(split);
 	long size = pow(2, level) * init_ncells;
-	while (cell->is_overflow()) {
+	while (split < global_idx || cell->is_overflow()) {
 		unsigned int cells_idx = (split + size) / init_ncells;
 		/* 
 		 * I'm sure only this thread can change the table,
@@ -512,7 +504,6 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 			} while (cell != tmp);
 			return ret;
 		} catch (expand_exception e) {
-			printf("the cells table is expanded\n");
 		}
 	} while (true);
 }

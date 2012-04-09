@@ -89,6 +89,10 @@ public:
 
 	void free_pages(int npages, char **pages) {
 	}
+
+	long average_cache_size() {
+		return max_size / caches.size();
+	}
 };
 
 #endif

@@ -22,12 +22,8 @@ bool memory_manager::get_free_pages(int npages,
 				*header = linked_page();
 				list.add_back(header);
 			}
-			printf("before size: %ld, max size: %ld, num free pages: %ld\n",
-					size, max_size, num_free_pages);
 			size += INCREASE_SIZE;
 			num_free_pages += INCREASE_SIZE / PAGE_SIZE;
-			printf("after size: %ld, max size: %ld, num free pages: %ld\n",
-					size, max_size, num_free_pages);
 		}
 		else {
 			long size = 0;
@@ -46,7 +42,6 @@ bool memory_manager::get_free_pages(int npages,
 			if (request_cache == cache) {
 				return false;
 			}
-			printf("shrink cache\n");
 			int num_shrink = SHRINK_NPAGES;
 			if (num_shrink < npages)
 				num_shrink = npages;
