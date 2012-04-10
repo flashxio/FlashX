@@ -93,6 +93,10 @@ public:
 	long average_cache_size() {
 		return max_size / caches.size();
 	}
+
+	long get_max_size() {
+		return max_size;
+	}
 };
 
 #endif

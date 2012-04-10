@@ -395,28 +395,26 @@ void LRU_shadow_cell::scale_down_hits() {
 bool associative_cache::expand(hash_cell *cell) {
 	hash_cell *cells = NULL;
 	unsigned int i;
-	table_lock.write_lock();
-	if (flags.test_flags(TABLE_EXPANDING)) {
-		table_lock.write_unlock();
+
+	if (flags.test_and_set_flags(TABLE_EXPANDING)) {
+		/*
+		 * if the flag has been set before,
+		 * it means another thread is expanding the table,
+		 */
 		return false;
 	}
 
+	/* starting from this point, only one thred can be here. */
 	for (i = 0; i < cells_table.size(); i++) {
 		cells = cells_table[i];
+		if (cells == NULL)
+			break;
 		if (cell >= cells && cell < cells + init_ncells)
 			break;
 	}
 	assert(cells);
 	int global_idx = i * init_ncells + (cell - cells);
 
-	/* 
-	 * starting from this point, the table
-	 * is expanding.
-	 */
-	flags.set_flags(TABLE_EXPANDING);
-	table_lock.write_unlock();
-
-	/* only one thread can be here. */
 	cell = get_cell(split);
 	long size = pow(2, level) * init_ncells;
 	while (split < global_idx || cell->is_overflow()) {
@@ -425,7 +423,7 @@ bool associative_cache::expand(hash_cell *cell) {
 		 * I'm sure only this thread can change the table,
 		 * so it doesn't need to hold a lock when accessing the size.
 		 */
-		unsigned int orig_size = cells_table.size();
+		unsigned int orig_size = ncells.get();
 		if (cells_idx >= orig_size) {
 			bool out_of_memory = false;
 			/* create cells and put them in a temporary table. */
@@ -447,12 +445,14 @@ bool associative_cache::expand(hash_cell *cell) {
 
 			/*
 			 * here we need to hold the lock because other threads
-			 * might be accessing the table.
+			 * might be accessing the table. by using the write lock,
+			 * we notify others the table has been changed.
 			 */
 			table_lock.write_lock();
 			for (unsigned int i = 0; i < table.size(); i++) {
-				cells_table.push_back(table[i]);
+				cells_table[orig_size + i] = table[i];
 			}
+			ncells.inc(table.size());
 			table_lock.write_unlock();
 			if (out_of_memory)
 				return false;

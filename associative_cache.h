@@ -8,6 +8,7 @@
 
 #include "memory_manager.h"
 #include "cache.h"
+#include "concurrency.h"
 
 #define CELL_SIZE 8
 
@@ -311,55 +312,6 @@ public:
 
 const long init_cache_size = 128 * 1024 * 1024;
 
-class atomic_flags
-{
-	volatile int flags;
-public:
-	atomic_flags() {
-		flags = 0;
-	}
-
-	void set_flags(int flag) {
-		__sync_fetch_and_or(&flags, 0x1 << flag);
-	}
-
-	void clear_flags(int flag) {
-		__sync_fetch_and_and(&flags, ~(0x1 << flag));
-	}
-
-	bool test_flags(int flag) {
-		return flags & (0x1 << flag);
-	}
-};
-
-class seq_lock
-{
-	volatile unsigned long count;
-	volatile int lock;
-public:
-	seq_lock() {
-		count = 0;
-		lock = 0;
-	}
-
-	void read_lock(unsigned long &count) {
-		count = this->count;
-	}
-
-	bool read_unlock(unsigned long count) {
-		return this->count == count;
-	}
-
-	void write_lock() {
-		while(__sync_fetch_and_or(&lock, 1)) {}
-		__sync_fetch_and_add(&count, 1);
-	}
-
-	void write_unlock() {
-		__sync_fetch_and_and(&lock, 0);
-	}
-};
-
 class associative_cache: public page_cache
 {
 	enum {
@@ -370,9 +322,9 @@ class associative_cache: public page_cache
 	 * each array contains N cells;
 	 * TODO we might need to use map to improve performance.
 	 */
-	volatile std::vector<hash_cell*> cells_table;
-	// TODO it might be better to use seq_lock
-	// because the table doesn't change much.
+	std::vector<hash_cell*> cells_table;
+	atomic_integer ncells;
+	
 	seq_lock table_lock;
 	atomic_flags flags;
 	/* the initial number of cells in the table. */
@@ -381,7 +333,7 @@ class associative_cache: public page_cache
 	memory_manager *manager;
 
 	/* used for linear hashing */
-	volatile int level;
+	int level;
 	int split;
 
 public:
@@ -392,18 +344,25 @@ public:
 		this->manager = manager;
 		manager->register_cache(this);
 		int npages = init_cache_size / PAGE_SIZE;
+		int max_npages = manager->get_max_size() / PAGE_SIZE;
 		assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);
 		init_ncells = npages / CELL_SIZE;
+		int max_ncells = max_npages / CELL_SIZE;
 		hash_cell *cells = new hash_cell[init_ncells];
 		printf("%d cells: %p\n", init_ncells, cells);
 		for (int i = 0; i < init_ncells; i++)
 			cells[i] = hash_cell(this, i);
+
 		cells_table.push_back(cells);
+		ncells.inc(1);
+		for (int i = 1; i < max_ncells / init_ncells; i++)
+			cells_table.push_back(NULL);
 	}
 
 	~associative_cache() {
 		for (unsigned int i = 0; i < cells_table.size(); i++)
-			delete [] cells_table[i];
+			if (cells_table[i])
+				delete [] cells_table[i];
 		manager->unregister_cache(this);
 	}
 
@@ -440,7 +399,7 @@ public:
 	}
 
 	long size() {
-		return ((long) cells_table.size())
+		return ((long) ncells.get())
 			* init_ncells * CELL_SIZE * PAGE_SIZE;
 	}
 
@@ -452,16 +411,18 @@ public:
 	hash_cell *get_cell(unsigned int global_idx) {
 		unsigned int cells_idx = global_idx / init_ncells;
 		int idx = global_idx % init_ncells;
-		// TODO this check isn't enough after I use seq_lock.
 		assert(cells_idx < cells_table.size());
 		hash_cell *cells = cells_table[cells_idx];
-		return &cells[idx];
+		if (cells)
+			return &cells[idx];
+		else
+			return NULL;
 	}
 
 	hash_cell *get_cell_offset(off_t offset) {
 		int global_idx;
 		unsigned long count;
-		hash_cell *cell;
+		hash_cell *cell = NULL;
 		do {
 			table_lock.read_lock(count);
 			global_idx = hash(offset);
@@ -469,6 +430,7 @@ public:
 				global_idx = hash1(offset);
 			cell = get_cell(global_idx);
 		} while (!table_lock.read_unlock(count));
+		assert(cell);
 		return cell;
 	}
 };
