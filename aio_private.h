@@ -74,7 +74,7 @@ public:
 		if (ROUND_PAGE(offset) == offset
 				&& (long) buf == ROUND_PAGE(buf)
 				&& size == PAGE_SIZE) {
-			req = make_io_request(ctx, get_fd(), PAGE_SIZE, offset,
+			req = make_io_request(ctx, get_fd(offset), PAGE_SIZE, offset,
 					buf, A_READ, cb);
 		}
 		else {
@@ -82,7 +82,7 @@ public:
 			if (buf_idx == 4096)
 				buf_idx = 0;
 			char *page = pages + buf_idx * PAGE_SIZE;
-			req = make_io_request(ctx, get_fd(), PAGE_SIZE, ROUND_PAGE(offset),
+			req = make_io_request(ctx, get_fd(offset), PAGE_SIZE, ROUND_PAGE(offset),
 					page, A_READ, cb);
 		}
 		submit_io_request(ctx, &req, 1);

@@ -48,6 +48,22 @@ public:
 		return size;
 	}
 
+	/* get the file descriptor corresponding to the offset. */
+	int get_fd(long offset) {
+		int fd_idx = offset / (this->size / num);
+		if (fd_idx >= num) {
+			printf("offset: %ld, fd_idx: %d, size: %ld, num: %d\n", offset, fd_idx, this->size, num);
+		}
+#if NUM_NODES > 1
+		int node_num = idx / (nthreads / NUM_NODES);
+		if (node_num != fd_idx) {
+			remote_reads++;
+		}
+#endif
+		assert (fd_idx < num);
+		return fds[fd_idx];
+	}
+
 	int thread_init();
 
 	int thread_end() {

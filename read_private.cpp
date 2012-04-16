@@ -20,18 +20,7 @@ int read_private::thread_init() {
 }
 
 ssize_t read_private::access(char *buf, off_t offset, ssize_t size, int access_method) {
-	int fd_idx = offset / (this->size / num);
-	if (fd_idx >= num) {
-		printf("offset: %ld, fd_idx: %d, size: %ld, num: %d\n", offset, fd_idx, this->size, num);
-	}
-#if NUM_NODES > 1
-	int node_num = idx / (nthreads / NUM_NODES);
-	if (node_num != fd_idx) {
-		remote_reads++;
-	}
-#endif
-	assert (fd_idx < num);
-	int fd = fds[fd_idx];
+	int fd = get_fd(offset);
 #ifdef STATISTICS
 	if (access_method == READ)
 		num_reads++;
