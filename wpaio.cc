@@ -115,12 +115,12 @@ struct iocb* make_io_request(struct aio_ctx* a_ctx, int fd, size_t iosize, long 
   return a_req;
 }
 
-int io_wait(struct aio_ctx* a_ctx, struct timespec* to)
+int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num)
 {
   struct io_event events[a_ctx->max_aio];
   struct io_event* ep;
   int ret, n;
-  ret = n = io_getevents(a_ctx->ctx, 1, a_ctx->max_aio, events, to);
+  ret = n = io_getevents(a_ctx->ctx, num, a_ctx->max_aio, events, to);
   if (ret < 0)
   {
     fprintf(stderr, "io_wait: %s", strerror(-ret));

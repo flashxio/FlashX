@@ -34,13 +34,15 @@ struct aio_ctx
 	struct free_list_s* free_list;
 };
 
+typedef void (*callback_t) (io_context_t, struct iocb*,
+		struct io_callback_s *, long, long);
+
 struct io_callback_s
 {
 	char *buf;
 	off_t offset;
 	ssize_t size;
-	void (*func) (io_context_t, struct iocb*,
-			struct io_callback_s *, long, long);
+	callback_t func;
 };
 
 //extern struct aio_ctx* a_ctx;
@@ -54,7 +56,7 @@ struct aio_ctx* create_aio_ctx(int max_aio);
 struct iocb* make_io_request(struct aio_ctx* a_ctx, int fd, size_t iosize, long long offset,
 							 void* buffer, int io_type, io_callback_s *cb);
 void submit_io_request(struct aio_ctx* a_ctx, struct iocb* ioq[], int num);
-int io_wait(struct aio_ctx* a_ctx, struct timespec* to);
+int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num = 1);
 int max_io_slot(struct aio_ctx* a_ctx);
 
 #endif

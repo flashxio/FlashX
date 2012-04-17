@@ -26,7 +26,6 @@
 
 #define NUM_THREADS 48
 
-#include "wpaio.h"
 #include "cache.h"
 #include "tree_cache.h"
 #include "associative_cache.h"
