@@ -27,15 +27,15 @@ int f_fd;
 long long f_offset;
 
 
-static void init_free_list(struct free_list_s* free_list)
+static void init_free_list(struct free_list_s* free_list, int size)
 {
 	int i;
-	free_list->array = (struct iocb**)malloc(FREE_LIST_SIZE * sizeof(struct iocb*));
+	free_list->array = (struct iocb**)malloc(size * sizeof(struct iocb*));
 	if (NULL == free_list->array)
 	{
 		perror("malloc free_list");
 	}
-	for (i = 0; i < FREE_LIST_SIZE; i++)
+	for (i = 0; i < size; i++)
 	{
 		free_list->array[i] = (struct iocb*)malloc(sizeof(struct iocb));
 		if (NULL == free_list->array[i])
@@ -43,7 +43,7 @@ static void init_free_list(struct free_list_s* free_list)
 			perror("malloc free_list[i]");
 		}
 	}
-	free_list->pos = FREE_LIST_SIZE;
+	free_list->pos = size;
 }
 
 
@@ -66,7 +66,7 @@ struct aio_ctx* create_aio_ctx(int max_aio)
 		exit (1);
 	}
 	a_ctx->free_list = (struct free_list_s*)malloc(sizeof(struct free_list_s));
-	init_free_list(a_ctx->free_list);
+	init_free_list(a_ctx->free_list, max_aio);
 	
 	return a_ctx;
 }
