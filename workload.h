@@ -108,6 +108,9 @@ class local_rand_permute_workload: public workload_gen
 	long start;
 	rand_permute *permute;
 public:
+	/**
+	 * `start' and `end' are entry indexes.
+	 */
 	local_rand_permute_workload(long start, long end, int entry_size) {
 		permute = new rand_permute(end - start, entry_size);
 		this->start = start * entry_size;
@@ -128,6 +131,19 @@ public:
 	bool has_next() {
 		return idx < num;
 	}
+};
+
+/**
+ * this make sure requests are evenly distributed among disks in RAID0
+ * as long as the number of threads are multiple of the number of 
+ * disks in RAID0.
+ */
+class RAID0_rand_permute_workload: public local_rand_permute_workload
+{
+public:
+	RAID0_rand_permute_workload(long npages, int entry_size,
+			int nthreads, int thread_id): local_rand_permute_workload(thread_id,
+				npages * PAGE_SIZE / entry_size / nthreads + thread_id, entry_size * nthreads) {}
 };
 
 class global_rand_permute_workload: public workload_gen

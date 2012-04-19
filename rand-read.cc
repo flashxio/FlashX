@@ -24,7 +24,7 @@
 #include <string>
 #include <deque>
 
-#define NUM_THREADS 48
+#define NUM_THREADS 128
 
 #include "cache.h"
 #include "tree_cache.h"
@@ -43,7 +43,7 @@
 
 //#define USE_PROCESS
 
-#define ENTRY_READ_SIZE 128
+#define ENTRY_READ_SIZE 4096
 #define GC_SIZE 10000
 #define BULK_SIZE 1000
 
@@ -215,6 +215,7 @@ enum {
 	LOCAL_RAND_PERMUTE,
 	STRIDE,
 	BALANCED,
+	RAID_RAND,
 	USER_FILE_WORKLOAD = -1
 };
 
@@ -225,6 +226,7 @@ str2int workloads[] = {
 	{ "LOCAL_RAND_PERMUTE", LOCAL_RAND_PERMUTE },
 	{ "STRIDE", STRIDE },
 	{ "BALANCED", BALANCED },
+	{ "RAID_RAND", RAID_RAND},
 	{ "user_file", USER_FILE_WORKLOAD },
 };
 
@@ -468,6 +470,10 @@ int main(int argc, char *argv[])
 							(long) npages * PAGE_SIZE / entry_size, entry_size);
 				}
 				gen = new balanced_workload(chunk);
+				break;
+			case RAID_RAND:
+				/* In this workload each thread starts */
+				gen = new RAID0_rand_permute_workload(npages, entry_size, nthreads, j);
 				break;
 			case -1:
 				gen = new file_workload(workload_file, nthreads);
