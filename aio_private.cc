@@ -108,6 +108,10 @@ ssize_t aio_private::access(io_request *requests, int num, int access_method)
 //	printf("send %d requests\n", num);
 	while (num > 0) {
 		int slot = max_io_slot(ctx);
+		if (slot == 0) {
+			io_wait(ctx, NULL, 10);
+			slot = max_io_slot(ctx);
+		}
 		struct iocb *reqs[slot];
 		int min = slot > num ? num : slot;
 		for (int i = 0; i < min; i++) {
@@ -123,7 +127,6 @@ ssize_t aio_private::access(io_request *requests, int num, int access_method)
 		min = min / 2;
 		if (min == 0)
 			min = 1;
-		int done = io_wait(ctx, NULL, min);
 //		printf("finish %d requests\n", done);
 	}
 //	printf("read %ld bytes\n", ret);
