@@ -18,6 +18,9 @@
 class workload_gen
 {
 public:
+	/**
+	 * The enxt offset in bytes.
+	 */
 	virtual off_t next_offset() = 0;
 	virtual bool has_next() = 0;
 };
@@ -105,7 +108,7 @@ class local_rand_permute_workload: public workload_gen
 {
 	long idx;
 	long num;
-	long start;
+	long start;		// the start offset in bytes
 	rand_permute *permute;
 public:
 	/**
@@ -140,10 +143,18 @@ public:
  */
 class RAID0_rand_permute_workload: public local_rand_permute_workload
 {
+	int start;		// the start offset in bytes
 public:
 	RAID0_rand_permute_workload(long npages, int entry_size,
-			int nthreads, int thread_id): local_rand_permute_workload(thread_id,
-				npages * PAGE_SIZE / entry_size / nthreads + thread_id, entry_size * nthreads) {}
+			int nthreads, int thread_id): local_rand_permute_workload(0,
+				npages * PAGE_SIZE / entry_size / nthreads,
+				entry_size * nthreads) {
+		this->start = thread_id * entry_size;
+	}
+
+	off_t next_offset() {
+		return local_rand_permute_workload::next_offset() + start;
+	}
 };
 
 class global_rand_permute_workload: public workload_gen
