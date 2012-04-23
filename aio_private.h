@@ -24,6 +24,14 @@ class aio_private: public read_private
 	int buf_idx;
 	struct aio_ctx *ctx;
 	std::deque<thread_callback_s *> cbs;
+	/*
+	 * This is to buffer requests, so if the requests
+	 * to a file are more than other files, they will
+	 * be buffered here first.
+	 * This is only needed if the underlying layer reads
+	 * data from multiple files.
+	 */
+	std::deque<io_request> *reqs_array;
 
 public:
 	aio_private(const char *names[], int num, long size, int idx,
@@ -35,6 +43,9 @@ public:
 	ssize_t access(io_request *requests, int num, int access_method);
 	struct iocb *construct_req(char *buf, off_t offset,
 			ssize_t size, int access_method, callback_t callback);
+	ssize_t process_reqs(io_request *requests, int num);
+	void buffer_reqs(io_request *requests, int num);
+	virtual void cleanup();
 
 	bool support_bulk() {
 		return false;

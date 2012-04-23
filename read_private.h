@@ -48,8 +48,7 @@ public:
 		return size;
 	}
 
-	/* get the file descriptor corresponding to the offset. */
-	int get_fd(long offset) {
+	int get_fd_idx(long offset) {
 		int fd_idx = (offset / PAGE_SIZE) % num;
 		if (fd_idx >= num) {
 			printf("offset: %ld, fd_idx: %d, size: %ld, num: %d\n", offset, fd_idx, this->size, num);
@@ -61,7 +60,16 @@ public:
 		}
 #endif
 		assert (fd_idx < num);
-		return fds[fd_idx];
+		return fd_idx;
+	}
+
+	/* get the file descriptor corresponding to the offset. */
+	int get_fd(long offset) {
+		return fds[get_fd_idx(offset)];
+	}
+
+	int num_open_files() {
+		return num;
 	}
 
 	int thread_init();

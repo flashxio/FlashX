@@ -39,6 +39,7 @@ aio_private::aio_private(const char *names[], int num, long size,
 	for (int i = 0; i < AIO_DEPTH * 5; i++) {
 		cbs.push_back(new thread_callback_s());
 	}
+	reqs_array = new std::deque<io_request>[this->num_open_files()];
 }
 
 aio_private::~aio_private()
@@ -104,10 +105,19 @@ ssize_t aio_private::access(char *buf, off_t offset,
 	return 0;
 }
 
-ssize_t aio_private::access(io_request *requests, int num, int access_method)
+void aio_private::buffer_reqs(io_request *requests, int num)
+{
+	for (int i = 0; i < num; i++) {
+		int fd_idx = get_fd_idx(requests->get_offset());
+		reqs_array[fd_idx].push_back(*requests);
+		requests++;
+	}
+}
+
+ssize_t aio_private::process_reqs(io_request *requests, int num)
 {
 	ssize_t ret = 0;
-//	printf("send %d requests\n", num);
+
 	while (num > 0) {
 		int slot = max_io_slot(ctx);
 		if (slot == 0) {
@@ -119,18 +129,81 @@ ssize_t aio_private::access(io_request *requests, int num, int access_method)
 		for (int i = 0; i < min; i++) {
 			reqs[i] = construct_req(requests->get_buf(),
 					requests->get_offset(), requests->get_size(),
-					access_method, aio_callback1);
+					requests->get_access_method(), aio_callback1);
 			requests++;
 			ret += requests->get_size();
 		}
-//		printf("submit %d requests\n", min);
 		submit_io_request(ctx, reqs, min);
 		num -= min;
 		min = min / 2;
 		if (min == 0)
 			min = 1;
-//		printf("finish %d requests\n", done);
 	}
-//	printf("read %ld bytes\n", ret);
 	return ret;
+}
+
+const int MAX_REQ_SIZE = 128;
+
+/**
+ * Random workload may cause some load imbalance at some particular moments
+ * when the requests are distributed to multiple files.
+ * If there is only one file to read, simply submit requests with AIO.
+ * Otherwise, before submitting requests to AIO, I need to rebalance them first.
+ * The way to rebalance requests is to have a queue for each file, and buffer
+ * all requests in queues according to the files where they are submitted to.
+ * Fetch requests from queues in a round-robin fashion, so it's guaranteed that
+ * all requests will be distributed to files evenly.
+ *
+ * If num is 0, the invocation processes up to num_open_files() reuqests.
+ * This is good, so the number of requests in each queue won't be extremely
+ * large if the distribution is highly skewed.
+ */
+ssize_t aio_private::access(io_request *requests, int num, int access_method)
+{
+	if (num_open_files() == 1)
+		return process_reqs(requests, num);
+
+	ssize_t ret = 0;
+	int one_empty = false;
+	buffer_reqs(requests, num);
+	io_request req_buf[MAX_REQ_SIZE];
+	int req_buf_size = 0;
+
+	/* if a request queue for a file is empty, stop processing. */
+	while (!one_empty) {
+		for (int i = 0; i < num_open_files(); i++) {
+			if (reqs_array[i].empty()) {
+				one_empty = true;
+				continue;
+			}
+			req_buf[req_buf_size++] = reqs_array[i].front();
+			reqs_array[i].pop_front();
+			/*
+			 * if the temporary request buffer is full,
+			 * process all requests.
+			 */
+			if (req_buf_size == MAX_REQ_SIZE) {
+				ret += process_reqs(req_buf, req_buf_size);
+				req_buf_size = 0;
+			}
+		}
+	}
+	/* process the remaining requests in the buffer. */
+	if (req_buf_size > 0)
+		ret += process_reqs(req_buf, req_buf_size);
+	return ret;
+}
+
+/* process remaining requests in the queues. */
+void aio_private::cleanup()
+{
+	read_private::cleanup();
+
+	for (int i = 0; i < num_open_files(); i++) {
+		for (unsigned int j = 0; j < reqs_array[i].size(); j++) {
+			io_request req = reqs_array[i][j];
+			access(req.get_buf(), req.get_offset(),
+					req.get_size(), req.get_access_method());
+		}
+	}
 }
