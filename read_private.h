@@ -50,7 +50,7 @@ public:
 
 	/* get the file descriptor corresponding to the offset. */
 	int get_fd(long offset) {
-		int fd_idx = offset / (this->size / num);
+		int fd_idx = (offset / PAGE_SIZE) % num;
 		if (fd_idx >= num) {
 			printf("offset: %ld, fd_idx: %d, size: %ld, num: %d\n", offset, fd_idx, this->size, num);
 		}

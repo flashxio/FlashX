@@ -55,6 +55,7 @@ class rand_permute
 {
 	off_t *offset;
 	long num;
+
 public:
 	rand_permute(long num, int stride) {
 		offset = (off_t *) valloc(num * sizeof(off_t));
@@ -110,6 +111,14 @@ class local_rand_permute_workload: public workload_gen
 	long num;
 	long start;		// the start offset in bytes
 	rand_permute *permute;
+
+	local_rand_permute_workload() {
+		idx = 0;
+		num = 0;
+		start = 0;
+		permute = NULL;
+	}
+
 public:
 	/**
 	 * `start' and `end' are entry indexes.
@@ -134,26 +143,14 @@ public:
 	bool has_next() {
 		return idx < num;
 	}
-};
 
-/**
- * this make sure requests are evenly distributed among disks in RAID0
- * as long as the number of threads are multiple of the number of 
- * disks in RAID0.
- */
-class RAID0_rand_permute_workload: public local_rand_permute_workload
-{
-	int start;		// the start offset in bytes
-public:
-	RAID0_rand_permute_workload(long npages, int entry_size,
-			int nthreads, int thread_id): local_rand_permute_workload(0,
-				npages * PAGE_SIZE / entry_size / nthreads,
-				entry_size * nthreads) {
-		this->start = thread_id * entry_size;
-	}
-
-	off_t next_offset() {
-		return local_rand_permute_workload::next_offset() + start;
+	local_rand_permute_workload *clone() {
+		local_rand_permute_workload *gen = new local_rand_permute_workload();
+		gen->permute = permute;
+		gen->idx = idx;
+		gen->num = num;
+		gen->start = start;
+		return gen;
 	}
 };
 
@@ -255,6 +252,45 @@ public:
 
 	bool has_next() {
 		return num < range;
+	}
+};
+
+/**
+ * this make sure requests are evenly distributed among disks in RAID0
+ * as long as the number of threads are multiple of the number of 
+ * disks in RAID0.
+ */
+class RAID0_rand_permute_workload: public workload_gen
+{
+	int nthreads;
+	int thread_id;
+	int entry_size;
+	local_rand_permute_workload *local_gen;
+	static local_rand_permute_workload *gen;
+public:
+	RAID0_rand_permute_workload(long npages, int entry_size,
+			int nthreads, int thread_id) {
+		this->nthreads = nthreads;
+		this->entry_size = entry_size;
+		this->thread_id = thread_id;
+		if (gen == NULL) {
+			gen = new local_rand_permute_workload(0,
+				npages * PAGE_SIZE / entry_size / nthreads, 1);
+		}
+		local_gen = new local_rand_permute_workload(0,
+				npages * PAGE_SIZE / entry_size / nthreads, 1);
+	}
+
+	~RAID0_rand_permute_workload() {
+		delete local_gen;
+	}
+
+	off_t next_offset() {
+		return (thread_id + local_gen->next_offset() * nthreads) * entry_size;
+	}
+
+	bool has_next() {
+		return local_gen->has_next();
 	}
 };
 

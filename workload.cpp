@@ -111,3 +111,4 @@ unlock:
 }
 
 workload_chunk *balanced_workload::chunks;
+local_rand_permute_workload *RAID0_rand_permute_workload::gen;
