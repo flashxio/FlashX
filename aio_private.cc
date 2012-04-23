@@ -33,7 +33,6 @@ aio_private::aio_private(const char *names[], int num, long size,
 			entry_size, O_DIRECT | O_RDWR)
 {
 	printf("aio is used\n");
-	pages = (char *) valloc(PAGE_SIZE * 4096);
 	buf_idx = 0;
 	ctx = create_aio_ctx(AIO_DEPTH);
 	for (int i = 0; i < AIO_DEPTH * 5; i++) {
@@ -56,7 +55,7 @@ aio_private::~aio_private()
 struct iocb *aio_private::construct_req(char *buf, off_t offset,
 		ssize_t size, int access_method, callback_t cb_func)
 {
-	struct iocb *req;
+	struct iocb *req = NULL;
 
 	if (cbs.empty()) {
 		fprintf(stderr, "no callback object left\n");
@@ -81,12 +80,7 @@ struct iocb *aio_private::construct_req(char *buf, off_t offset,
 				buf, A_READ, cb);
 	}
 	else {
-		buf_idx++;
-		if (buf_idx == 4096)
-			buf_idx = 0;
-		char *page = pages + buf_idx * PAGE_SIZE;
-		req = make_io_request(ctx, get_fd(offset), PAGE_SIZE, ROUND_PAGE(offset),
-				page, A_READ, cb);
+		assert(size == PAGE_SIZE);
 	}
 	return req;
 }

@@ -20,7 +20,6 @@ struct thread_callback_s
 
 class aio_private: public read_private
 {
-	char *pages;
 	int buf_idx;
 	struct aio_ctx *ctx;
 	std::deque<thread_callback_s *> cbs;
