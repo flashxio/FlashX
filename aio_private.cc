@@ -1,5 +1,7 @@
 #include "aio_private.h"
 
+#define AIO_DEPTH 128
+
 void aio_callback(io_context_t ctx, struct iocb* iocb,
 		struct io_callback_s *cb, long res, long res2) {
 	thread_callback_s *tcb = (thread_callback_s *) cb;

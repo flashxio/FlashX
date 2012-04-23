@@ -8,8 +8,6 @@
 
 #ifdef ENABLE_AIO
 
-#define AIO_DEPTH 128
-
 class aio_private;
 void aio_callback(io_context_t, struct iocb*,
 		struct io_callback_s *, long, long);
