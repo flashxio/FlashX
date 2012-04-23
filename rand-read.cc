@@ -24,7 +24,7 @@
 #include <string>
 #include <deque>
 
-#define NUM_THREADS 128
+#define NUM_THREADS 1024
 
 #include "cache.h"
 #include "tree_cache.h"
