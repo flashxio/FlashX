@@ -69,6 +69,20 @@ void *rand_read(void *arg)
 	thread_private *priv = threads[(long) arg];
 	int entry_size = priv->get_entry_size();
 
+#ifdef CPU_AFFINITY
+	cpu_set_t cpuset;
+	pthread_t thread = pthread_self();
+	CPU_ZERO(&cpuset);
+	int cpu_num = priv->idx % NCPUS;
+	CPU_SET(cpu_num, &cpuset);
+	ret = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+	if (ret != 0) {
+		perror("pthread_setaffinity_np");
+		exit(1);
+	}
+	printf("attach thread %d to CPU %d\n", priv->idx, cpu_num);
+#endif
+
 #if NUM_NODES > 0
 	struct bitmask *nodemask = numa_allocate_cpumask();
 	numa_bitmask_clearall(nodemask);
