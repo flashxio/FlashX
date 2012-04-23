@@ -48,8 +48,7 @@ public:
 	virtual void cleanup();
 
 	bool support_bulk() {
-		return false;
-//		return true;
+		return true;
 	}
 
 	void return_cb(thread_callback_s *cb) {
