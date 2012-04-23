@@ -50,6 +50,7 @@ aio_private::~aio_private()
 		io_wait(ctx, NULL);
 		slot = max_io_slot(ctx);
 	}
+	delete [] reqs_array;
 }
 
 struct iocb *aio_private::construct_req(char *buf, off_t offset,
@@ -130,14 +131,11 @@ ssize_t aio_private::process_reqs(io_request *requests, int num)
 			reqs[i] = construct_req(requests->get_buf(),
 					requests->get_offset(), requests->get_size(),
 					requests->get_access_method(), aio_callback1);
-			requests++;
 			ret += requests->get_size();
+			requests++;
 		}
 		submit_io_request(ctx, reqs, min);
 		num -= min;
-		min = min / 2;
-		if (min == 0)
-			min = 1;
 	}
 	return ret;
 }
