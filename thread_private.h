@@ -4,8 +4,6 @@
 #include "rand_buf.h"
 #include "garbage_collection.h"
 
-#define NUM_PAGES 16384
-
 enum {
 	READ,
 	WRITE

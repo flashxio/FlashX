@@ -1,5 +1,7 @@
 #include "read_private.h"
 
+#define NUM_PAGES (4096 * nthreads)
+
 int read_private::thread_init() {
 	int ret;
 
