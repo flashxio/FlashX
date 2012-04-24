@@ -31,6 +31,7 @@ class aio_private: public read_private
 	 * data from multiple files.
 	 */
 	std::deque<io_request> *reqs_array;
+	int *outstanding_nreqs;
 
 public:
 	aio_private(const char *names[], int num, long size, int idx,
@@ -58,6 +59,7 @@ public:
 		cbs.push_back(tcb);
 		io_callback_s *cb = (io_callback_s *) tcb;
 		buf->free_entry(cb->buf);
+		outstanding_nreqs[get_fd_idx(cb->offset)]--;
 	}
 };
 #endif

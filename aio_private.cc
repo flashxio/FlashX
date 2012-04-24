@@ -2,6 +2,13 @@
 
 #define AIO_DEPTH 128
 
+const int MAX_BUF_REQS = 1024 * 3;
+
+/* 
+ * each file gets the same number of outstanding requests.
+ */
+#define MAX_OUTSTANDING_NREQS (AIO_DEPTH / nthreads)
+
 void aio_callback(io_context_t ctx, struct iocb* iocb,
 		struct io_callback_s *cb, long res, long res2) {
 	thread_callback_s *tcb = (thread_callback_s *) cb;
@@ -39,6 +46,8 @@ aio_private::aio_private(const char *names[], int num, long size,
 		cbs.push_back(new thread_callback_s());
 	}
 	reqs_array = new std::deque<io_request>[this->num_open_files()];
+	outstanding_nreqs = new int[this->num_open_files()];
+	memset(outstanding_nreqs, 0, sizeof(int) * this->num_open_files());
 }
 
 aio_private::~aio_private()
@@ -50,6 +59,7 @@ aio_private::~aio_private()
 		slot = max_io_slot(ctx);
 	}
 	delete [] reqs_array;
+	delete [] outstanding_nreqs;
 }
 
 struct iocb *aio_private::construct_req(char *buf, off_t offset,
@@ -137,52 +147,72 @@ ssize_t aio_private::process_reqs(io_request *requests, int num)
 const int MAX_REQ_SIZE = 128;
 
 /**
- * Random workload may cause some load imbalance at some particular moments
- * when the requests are distributed to multiple files.
- * If there is only one file to read, simply submit requests with AIO.
- * Otherwise, before submitting requests to AIO, I need to rebalance them first.
- * The way to rebalance requests is to have a queue for each file, and buffer
- * all requests in queues according to the files where they are submitted to.
- * Fetch requests from queues in a round-robin fashion, so it's guaranteed that
- * all requests will be distributed to files evenly.
- *
- * If num is 0, the invocation processes up to num_open_files() reuqests.
- * This is good, so the number of requests in each queue won't be extremely
- * large if the distribution is highly skewed.
+ * some SSDs can process requests faster than others. 
+ * The idea here is to send more requests to faster SSDs
+ * and send fewer requests to slower SSDs.
+ * To do so, I need to track the number of outstanding requests
+ * to each SSD.
  */
 ssize_t aio_private::access(io_request *requests, int num, int access_method)
 {
 	if (num_open_files() == 1)
 		return process_reqs(requests, num);
 
-	ssize_t ret = 0;
-	int one_empty = false;
+	/* first put all requests in the queues. */
 	buffer_reqs(requests, num);
+
+	ssize_t ret = 0;
 	io_request req_buf[MAX_REQ_SIZE];
 	int req_buf_size = 0;
+	int remaining = 0;	// the number of remaining requests
+	int busy = 0;
 
-	/* if a request queue for a file is empty, stop processing. */
-	while (!one_empty) {
+	while(true) {
+		busy = 0;
+		remaining = 0;
 		for (int i = 0; i < num_open_files(); i++) {
-			if (reqs_array[i].empty()) {
-				one_empty = true;
-				continue;
+			int available = MAX_OUTSTANDING_NREQS - outstanding_nreqs[i];
+			for (int j = 0; j < available && !reqs_array[i].empty(); j++) {
+				req_buf[req_buf_size++] = reqs_array[i].front();
+				reqs_array[i].pop_front();
+				outstanding_nreqs[i]++;
+				/*
+				 * if the temporary request buffer is full,
+				 * process all requests.
+				 */
+				if (req_buf_size == MAX_REQ_SIZE) {
+					ret += process_reqs(req_buf, req_buf_size);
+					req_buf_size = 0;
+				}
 			}
-			req_buf[req_buf_size++] = reqs_array[i].front();
-			reqs_array[i].pop_front();
 			/*
-			 * if the temporary request buffer is full,
-			 * process all requests.
+			 * if there are more requests than we can send to a file,
+			 * we consider it as busy.
 			 */
-			if (req_buf_size == MAX_REQ_SIZE) {
-				ret += process_reqs(req_buf, req_buf_size);
-				req_buf_size = 0;
+			if (outstanding_nreqs[i] == MAX_OUTSTANDING_NREQS
+					&& !reqs_array[i].empty()) {
+				busy++;
 			}
+			remaining += reqs_array[i].size();
 		}
+
+		/* process the remaining requests in the buffer. */
+		if (req_buf_size > 0) {
+			ret += process_reqs(req_buf, req_buf_size);
+			req_buf_size = 0;
+		}
+
+		/*
+		 * if all files are busy or there are too many requests
+		 * buffered, we should wait and then process the remaining
+		 * requests again.
+		 */
+		if (busy == num_open_files() || remaining > MAX_BUF_REQS)
+			io_wait(ctx, NULL, 10);
+		else
+			break;
 	}
-	/* process the remaining requests in the buffer. */
-	if (req_buf_size > 0)
-		ret += process_reqs(req_buf, req_buf_size);
+	
 	return ret;
 }
 
