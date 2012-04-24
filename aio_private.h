@@ -61,6 +61,10 @@ public:
 		buf->free_entry(cb->buf);
 		outstanding_nreqs[get_fd_idx(cb->offset)]--;
 	}
+
+	void drop_req(io_request *req) {
+		buf->free_entry(req->get_buf());
+	}
 };
 #endif
 

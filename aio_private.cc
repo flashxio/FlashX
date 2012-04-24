@@ -2,12 +2,19 @@
 
 #define AIO_DEPTH 128
 
+#define EVEN_DISTRIBUTE
+
 const int MAX_BUF_REQS = 1024 * 3;
 
 /* 
  * each file gets the same number of outstanding requests.
  */
+#ifdef EVEN_DISTRIBUTE
 #define MAX_OUTSTANDING_NREQS (AIO_DEPTH / nthreads)
+#define ALLOW_DROP
+#else
+#define MAX_OUTSTANDING_NREQS (AIO_DEPTH)
+#endif
 
 void aio_callback(io_context_t ctx, struct iocb* iocb,
 		struct io_callback_s *cb, long res, long res2) {
@@ -207,11 +214,41 @@ ssize_t aio_private::access(io_request *requests, int num, int access_method)
 		 * buffered, we should wait and then process the remaining
 		 * requests again.
 		 */
-		if (busy == num_open_files() || remaining > MAX_BUF_REQS)
+		if (busy == num_open_files()
+#ifndef ALLOW_DROP
+				|| remaining > MAX_BUF_REQS
+#endif
+				)
 			io_wait(ctx, NULL, 10);
 		else
 			break;
 	}
+
+#ifdef ALLOW_DROP
+	if (remaining > MAX_BUF_REQS) {
+		unsigned int max = reqs_array[0].size();
+		int max_idx = 0;
+		for (int i = 1; i < num_open_files(); i++)
+			if (max < reqs_array[i].size()) {
+				max = reqs_array[i].size();
+				max_idx = i;
+			}
+		/* 
+		 * there are too many requests for the file accumulated.
+		 * it may be caused by the slow underlying block device.
+		 * drop half of these requests, so we can send more
+		 * requests to other files.
+		 */
+		int num_drops = max / 2;
+		for (int i = 0; i < num_drops; i++) {
+			io_request req = reqs_array[max_idx].front();
+			reqs_array[max_idx].pop_front();
+			drop_req(&req);
+		}
+//		printf("drop %d requests to file %d, max: %d, remaining: %d\n",
+//				num_drops, max_idx, max, remaining);
+	}
+#endif
 	
 	return ret;
 }
