@@ -1,6 +1,6 @@
 #include "aio_private.h"
 
-#define AIO_DEPTH 128
+#define AIO_DEPTH (40 * num_open_files() / nthreads)
 
 #define EVEN_DISTRIBUTE
 
@@ -10,7 +10,7 @@ const int MAX_BUF_REQS = 1024 * 3;
  * each file gets the same number of outstanding requests.
  */
 #ifdef EVEN_DISTRIBUTE
-#define MAX_OUTSTANDING_NREQS (AIO_DEPTH / nthreads)
+#define MAX_OUTSTANDING_NREQS (AIO_DEPTH / num_open_files())
 #define ALLOW_DROP
 #else
 #define MAX_OUTSTANDING_NREQS (AIO_DEPTH)
