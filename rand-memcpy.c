@@ -72,7 +72,6 @@ int main(int argc, char *argv[])
 	ssize_t read_bytes = 0;
 	pthread_t threads[NUM_THREADS];
 	/* the number of entries the array can contain. */
-	int arr_nentries = ARRAY_SIZE / ENTRY_SIZE;
 	int node;
 
 	if (argc != 3) {
@@ -80,15 +79,11 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	nentries = 262144;
+	nentries = ARRAY_SIZE / ENTRY_SIZE;
 	node = atoi(argv[1]);
 	offset = malloc(sizeof(*offset) * nentries);
 	for(i = 0; i < nentries; i++) {
-		offset[i] = (random() % arr_nentries) * ENTRY_SIZE;
-		if (offset[i] < 0) {
-			printf("offset[%d]: %ld\n", i, offset[i]);
-			exit(1);
-		}
+		offset[i] = ((off_t) i) * ENTRY_SIZE;
 	}
 	permute_offset(offset, nentries);
 
