@@ -88,17 +88,11 @@ struct iocb *aio_private::construct_req(char *buf, off_t offset,
 	cb->func = cb_func;
 	tcb->thread = this;
 
-	/* for simplicity, I assume all request sizes are smaller than a page size */
-	assert(size <= PAGE_SIZE);
-	if (ROUND_PAGE(offset) == offset
-			&& (long) buf == ROUND_PAGE(buf)
-			&& size == PAGE_SIZE) {
-		req = make_io_request(ctx, get_fd(offset), PAGE_SIZE, offset,
-				buf, A_READ, cb);
-	}
-	else {
-		assert(size == PAGE_SIZE);
-	}
+	assert(size >= MIN_BLOCK_SIZE);
+	assert(size % MIN_BLOCK_SIZE == 0);
+	assert(offset % MIN_BLOCK_SIZE == 0);
+	assert((long) buf % MIN_BLOCK_SIZE == 0);
+	req = make_io_request(ctx, get_fd(offset), size, offset, buf, A_READ, cb);
 	return req;
 }
 
