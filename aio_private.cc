@@ -12,8 +12,6 @@ const int MAX_BUF_REQS = 1024 * 3;
 #ifdef EVEN_DISTRIBUTE
 #define MAX_OUTSTANDING_NREQS (AIO_DEPTH / num_open_files())
 #define ALLOW_DROP
-#else
-#define MAX_OUTSTANDING_NREQS (AIO_DEPTH)
 #endif
 
 void aio_callback(io_context_t ctx, struct iocb* iocb,
@@ -156,9 +154,12 @@ const int MAX_REQ_SIZE = 128;
  */
 ssize_t aio_private::access(io_request *requests, int num, int access_method)
 {
+#ifdef EVEN_DISTRIBUTE
 	if (num_open_files() == 1)
+#endif
 		return process_reqs(requests, num);
 
+#ifdef EVEN_DISTRIBUTE
 	/* first put all requests in the queues. */
 	buffer_reqs(requests, num);
 
@@ -245,6 +246,7 @@ ssize_t aio_private::access(io_request *requests, int num, int access_method)
 #endif
 	
 	return ret;
+#endif
 }
 
 /* process remaining requests in the queues. */
