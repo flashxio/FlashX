@@ -226,12 +226,14 @@ thread_safe_page *hash_cell::get_empty_page() {
 search_again:
 	min_hits = 0x7fffffff;
 	do {
-		// TODO this is busy wait.
-		// maybe we should use pthread_wait
+		int num_io_pending = 0;
 		for (int i = 0; i < CELL_SIZE; i++) {
 			thread_safe_page *pg = buf.get_page(i);
-			if (pg->get_ref())
+			if (pg->get_ref()) {
+				if (pg->is_io_pending())
+					num_io_pending++;
 				continue;
+			}
 
 			/* 
 			 * refcnt only increases within the lock of the cell,
@@ -250,6 +252,11 @@ search_again:
 			 */
 			if (min_hits == 0)
 				break;
+		}
+		if (num_io_pending == CELL_SIZE) {
+			printf("all pages are at io pending\n");
+			// TODO do something...
+			// maybe we should use pthread_wait
 		}
 		/* it happens when all pages in the cell is used currently. */
 	} while (ret == NULL);
