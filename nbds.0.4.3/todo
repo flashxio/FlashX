@@ -1,0 +1,31 @@
+memory reclamation
+------------------
+- allow threads to dynamically enter and exit rcu's token passing ring
+- augment rcu with heartbeat manager to kill and recover from stalled threads
+- make rcu try yielding when its buffer gets full
+- use alternate memory reclamation schemes: hazard pointers and/or reference counting
+
+quality
+-------
+- verify the memory management of keys in list, skiplist, and hashtable
+- transaction tests
+- validate function arguments in interface functions
+- document usage
+- document algorithms
+
+optimization
+------------
+- investigate 16 byte CAS; ht can store GUIDs inline instead of pointers to actual keys 
+- txn write after write can just update the old update record instead of pushing a new one
+- use a shared scan for write-set validation in txn, similar to ht copy logic
+- experiment with the performance impact of not passing the hash between functions in ht
+- experiment with embedding the nstring keys in the list/skiplist nodes
+- lower skiplist's high_water when the actual number of levels in use drops
+- non-power-of 2 sized hashtables for improved memory usage
+- mem2
+
+features
+--------
+- allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something other than 0)
+- read-committed type transactions
+- recycle free regions across size-classes and between threads
