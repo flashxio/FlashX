@@ -43,7 +43,7 @@ class page
 	 * in pages.
 	 */
 protected:
-	void *data;
+	volatile void *data;
 	volatile short refcnt;
 	volatile char flags;
 	volatile unsigned char hits;
@@ -82,7 +82,7 @@ public:
 	}
 
 	off_t get_offset() const { return ((off_t) offset) << LOG_PAGE_SIZE; }
-	void *get_data() const { return data; }
+	void *get_data() const { return (void *) data; }
 
 	bool data_ready() const { return flags & (0x1 << DATA_READY_BIT); }
 	void set_data_ready(bool ready) {
@@ -138,13 +138,13 @@ public:
 		data_start = numa_alloc_local(size);
 	}
 
-	void inc_ref() {
+	virtual void inc_ref() {
 		refcnt++;
 	}
-	void dec_ref() {
+	virtual void dec_ref() {
 		refcnt--;
 	}
-	short get_ref() {
+	virtual short get_ref() {
 		return refcnt;
 	}
 };

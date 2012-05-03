@@ -6,11 +6,13 @@
 #include "tree_cache.h"
 #include "associative_cache.h"
 #include "cuckoo_cache.h"
+#include "hash_index_cache.h"
 #include "LRU2Q.h"
 
 enum {
 	TREE_CACHE,
 	ASSOCIATIVE_CACHE,
+	HASH_INDEX_CACHE,
 	CUCKOO_CACHE,
 	LRU2Q_CACHE,
 };
@@ -36,6 +38,9 @@ public:
 				break;
 			case ASSOCIATIVE_CACHE:
 				global_cache = new associative_cache(manager);
+				break;
+			case HASH_INDEX_CACHE:
+				global_cache = new hash_index_cache(manager);
 				break;
 			case CUCKOO_CACHE:
 				global_cache = new cuckoo_cache(cache_size);

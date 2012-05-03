@@ -83,12 +83,11 @@ public:
 	}
 
 	void unregister_cache(page_cache *cache) {
+		// TODO
 	}
 
 	bool get_free_pages(int npages, char **pages, page_cache *cache);
-
-	void free_pages(int npages, char **pages) {
-	}
+	void free_pages(int npages, char **pages);
 
 	long average_cache_size() {
 		return max_size / caches.size();

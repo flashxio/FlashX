@@ -1,9 +1,9 @@
 CFLAGS = -g -O3 -DSTATISTICS -DENABLE_AIO #-DPROFILER
-CXXFLAGS = -g -O3 -Wall -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=12 -DCPU_AFFINITY #-DPROFILER
+CXXFLAGS = -g -Inbds.0.4.3/include/ -O3 -Wall -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=12 -DCPU_AFFINITY #-DPROFILER
 LDFLAGS = -lpthread -lnuma -laio #-lprofiler
 HEADERS = aio_private.h direct_private.h global_cached_private.h mmap_private.h part_cached_private.h part_global_cached_private.h read_private.h thread_private.h workload.h rand_buf.h
 CC = g++
-OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o
+OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o hash_index_cache.o 
 
 all: rand-read rand-memcpy create_file
 
@@ -14,7 +14,7 @@ rand-read.o: rand-read.cc cache.h tree_cache.h associative_cache.h cuckoo_cache.
 wpaio.o: wpaio.h
 
 rand-read: $(OBJECTS)
-	g++ -o rand-read $(OBJECTS) $(LDFLAGS)
+	g++ -o rand-read -static $(OBJECTS) $(LDFLAGS) -Lnbds.0.4.3/ -lnbds
 rand-memcpy: rand-memcpy.c
 	gcc -o rand-memcpy rand-memcpy.c $(LDFLAGS)
 

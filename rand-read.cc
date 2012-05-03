@@ -218,6 +218,7 @@ str2int access_methods[] = {
 str2int cache_types[] = {
 	{ "tree", TREE_CACHE } ,
 	{ "associative", ASSOCIATIVE_CACHE },
+	{ "hash-index", HASH_INDEX_CACHE },
 	{ "cuckoo", CUCKOO_CACHE },
 	{ "lru2q", LRU2Q_CACHE },
 };

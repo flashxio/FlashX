@@ -9,16 +9,49 @@ public:
 		v = 0;
 	}
 
-	void inc(int by) {
-		__sync_fetch_and_add(&v, by);
+	atomic_integer(int init) {
+		v = init;
 	}
 
-	void dec(int by) {
-		__sync_fetch_and_sub(&v, by);
+	int inc(int by) {
+		return __sync_add_and_fetch(&v, by);
+	}
+
+	int dec(int by) {
+		return __sync_sub_and_fetch(&v, by);
 	}
 
 	int get() {
 		return v;
+	}
+
+	bool CAS(int expected, int value) {
+		return __sync_bool_compare_and_swap(&v, expected, value);
+	}
+};
+
+template<class T>
+class atomic_array
+{
+	volatile T *arr;
+	int size;
+public:
+	atomic_array(int size) {
+		this->size = size;
+		arr = (T *) numa_alloc_local(sizeof(T) * size);
+		memset((void *) arr, 0, sizeof(T) * size);
+	}
+
+	~atomic_array() {
+		numa_free((void *) arr, sizeof(T) * size);
+	}
+
+	T get(int idx) {
+		return arr[idx];
+	}
+
+	bool CAS(int idx, T expected, T value) {
+		return __sync_bool_compare_and_swap(&arr[idx], expected, value);
 	}
 };
 

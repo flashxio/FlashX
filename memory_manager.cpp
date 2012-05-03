@@ -69,3 +69,14 @@ bool memory_manager::get_free_pages(int npages,
 	pthread_spin_unlock(&lock);
 	return true;
 }
+
+void memory_manager::free_pages(int npages, char **pages) {
+	pthread_spin_lock(&lock);
+	for (int i = 0; i < npages; i++) {
+		linked_page *lp = (linked_page *) pages[i];
+		*lp = linked_page();
+		list.add_front(lp);
+	}
+	num_free_pages += npages;
+	pthread_spin_unlock(&lock);
+}
