@@ -17,7 +17,7 @@ public:
 		static const char *file_name = NULL;
 		/* if we are mapping to a different file, do the real mapping. */
 		if (file_name == NULL || strcmp(file_name, new_name)) {
-			int fd = open(new_name, O_RDWR);
+			int fd = open(new_name, O_RDONLY);
 			int ret;
 
 			if (fd < 0) {

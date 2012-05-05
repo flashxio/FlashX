@@ -44,7 +44,7 @@ void aio_callback1(io_context_t ctx, struct iocb* iocb,
 
 aio_private::aio_private(const char *names[], int num, long size,
 		int idx, int entry_size): read_private(names, num, size, idx,
-			entry_size, O_DIRECT | O_RDWR)
+			entry_size, O_DIRECT | O_RDONLY)
 {
 	printf("aio is used\n");
 	buf_idx = 0;

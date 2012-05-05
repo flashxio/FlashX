@@ -10,7 +10,7 @@ class direct_private: public read_private
 public:
 	direct_private(const char *names[], int num, long size, int idx,
 			int entry_size): read_private(names, num, size, idx,
-			entry_size, O_DIRECT | O_RDWR) {
+			entry_size, O_DIRECT | O_RDONLY) {
 		pages = (char *) valloc(PAGE_SIZE * 4096);
 		buf_idx = 0;
 	}

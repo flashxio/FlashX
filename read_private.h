@@ -23,7 +23,7 @@ class read_private: public thread_private
 #endif
 public:
 	read_private(const char *names[], int num, long size, int idx, int entry_size,
-			int flags = O_RDWR): thread_private(idx, entry_size) {
+			int flags = O_RDONLY): thread_private(idx, entry_size) {
 		this->flags = flags;
 #ifdef STATISTICS
 		read_time = 0;
