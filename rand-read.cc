@@ -24,6 +24,7 @@
 #include <string>
 #include <deque>
 
+#define HIGH_PRIO
 #define NUM_THREADS 1024
 
 #include "cache.h"
@@ -83,7 +84,7 @@ void *rand_read(void *arg)
 	printf("attach thread %d to CPU %d\n", priv->idx, cpu_num);
 #endif
 
-#if NUM_NODES > 0
+#if NUM_NODES > 1
 	struct bitmask *nodemask = numa_allocate_cpumask();
 	numa_bitmask_clearall(nodemask);
 	int node_num = priv->idx / (nthreads / NUM_NODES);
@@ -500,11 +501,13 @@ int main(int argc, char *argv[])
 		threads[j]->gen = gen;
 	}
 
+#ifdef HIGH_PRIO
 	ret = setpriority(PRIO_PROCESS, getpid(), -20);
 	if (ret < 0) {
 		perror("setpriority");
 		exit(1);
 	}
+#endif
 
 	gettimeofday(&start_time, NULL);
 	global_start = start_time;
