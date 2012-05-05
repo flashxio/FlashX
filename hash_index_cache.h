@@ -30,21 +30,33 @@ public:
 	}
 
 	ValueT get(KeyT key) {
+		/*
+		 * key == 0 isn't allowed,
+		 * and 1 doesn't exist in the key space.
+		 */
+		if (key == 0)
+			key = 1;
 		return (ValueT) map_get(map, (map_key_t) key);
 	}
 
 	bool remove(KeyT key, ValueT value) {
-		map_val_t ret = map_cas(map, (map_key_t) key, 
-				(map_val_t) value, DOES_NOT_EXIST);
-		return ret != DOES_NOT_EXIST;
+		if (key == 0)
+			key = 1;
+		map_val_t ret = map_remove(map, (map_key_t) key);
+		// TODO add the value back if 
+		return ret == (map_val_t) value;;
 	}
 
 	ValueT putIfAbsent(KeyT key, ValueT value) {
+		if (key == 0)
+			key = 1;
 		return (ValueT) map_cas(map, (map_key_t) key,
 				0, (map_val_t) value);
 	}
 
 	bool replace(KeyT key, ValueT expect, ValueT new_value) {
+		if (key == 0)
+			key = 1;
 		map_val_t ret = map_cas(map, (map_key_t) key,
 				(map_val_t) expect, (map_val_t) new_value);
 		return ret != DOES_NOT_EXIST;
