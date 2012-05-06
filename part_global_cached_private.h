@@ -7,6 +7,7 @@
 #define REQ_QUEUE_SIZE 100000
 #define REPLY_QUEUE_SIZE REQ_QUEUE_SIZE
 
+#include "messaging.h"
 #include "garbage_collection.h"
 #include "global_cached_private.h"
 
@@ -72,54 +73,6 @@ struct thread_group
 	page_cache *cache;
 };
 
-inline int min(int v1, int v2)
-{
-	return v1 > v2 ? v2 : v1;
-}
-
-/**
- * this is a thread-safe FIFO queue.
- * It supports bulk operations.
- */
-template<class T>
-class bulk_queue
-{
-	T *buf;
-	volatile int size;
-	int start;
-	int num_entries;
-	pthread_spinlock_t _lock;
-public:
-	bulk_queue(int size) {
-		buf = new T[size];
-		this->size = size;
-		start = 0;
-		num_entries = 0;
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
-	}
-
-	~bulk_queue() {
-		pthread_spin_destroy(&_lock);
-		delete [] buf;
-	}
-
-	int fetch(T *entries, int num);
-
-	int add(T *entries, int num);
-
-	int get_num_entries() {
-		return num_entries;
-	}
-
-	bool is_full() {
-		return num_entries == size;
-	}
-
-	bool is_empty() {
-		return num_entries == 0;
-	}
-};
-
 class part_global_cached_private: public global_cached_private
 {
 	memory_manager *manager;
@@ -144,16 +97,11 @@ class part_global_cached_private: public global_cached_private
 
 	volatile int finished_threads;
 
-	/* 
-	 * we have request and reply buffer to distribute requests and replies
-	 * in case we can't send them all.
+	/*
+	 * there is a sender for each node.
 	 */
-	/* there is a request buffer for each group it sends to */
-	io_request **thread_reqs;
-	int *nreqs;
-	/* there is a reply buffer for each thread it sends to */
-	io_reply **thread_replies;
-	int *nreplies;
+	msg_sender<io_request> **req_senders;
+	msg_sender<io_reply> **reply_senders;
 
 	int hash_req(io_request *req)
 	{
@@ -191,12 +139,7 @@ public:
 	}
 
 	~part_global_cached_private() {
-		for (int i = 0; i < num_groups; i++) {
-			numa_free(thread_reqs[i], sizeof(io_request) * BUF_SIZE);
-			numa_free(thread_replies[i], sizeof(io_reply) * BUF_SIZE);
-		}
-		numa_free(thread_reqs, sizeof(thread_reqs[0]) * num_groups);
-		numa_free(thread_replies, sizeof(thread_replies[0]) * num_groups);
+		// TODO delete all senders
 		delete request_queue;
 		delete reply_queue;
 	}
@@ -210,8 +153,6 @@ public:
 	virtual page_cache *get_global_cache() {
 		return groups[group_idx].cache;
 	}
-
-	io_request *send(int node_id, io_request *reqs, int num);
 
 	int reply(io_request *requests, io_reply *replies, int num);
 

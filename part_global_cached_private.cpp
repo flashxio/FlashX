@@ -16,32 +16,6 @@
 #include "global_cached_private.h"
 #include "part_global_cached_private.h"
 
-template<class T>
-int bulk_queue<T>::fetch(T *entries, int num) {
-	pthread_spin_lock(&_lock);
-	int n = min(num, num_entries);
-	for (int i = 0; i < n; i++) {
-		entries[i] = buf[(start + i) % this->size];
-	}
-	start = (start + n) % this->size;
-	num_entries -= n;
-	pthread_spin_unlock(&_lock);
-	return n;
-}
-
-template<class T>
-int bulk_queue<T>::add(T *entries, int num) {
-	pthread_spin_lock(&_lock);
-	int n = min(num, this->size - num_entries);
-	int end = (start + num_entries) % this->size;
-	for (int i = 0; i < n; i++) {
-		buf[(end + i) % this->size] = entries[i];
-	}
-	num_entries += n;
-	pthread_spin_unlock(&_lock);
-	return n;
-}
-
 int part_global_cached_private::thread_init() {
 	/* let's bind the thread to a specific node first. */
 	struct bitmask *nodemask = numa_allocate_cpumask();
@@ -55,20 +29,6 @@ int part_global_cached_private::thread_init() {
 	read_private::thread_init();
 	request_queue = new bulk_queue<io_request>(REQ_QUEUE_SIZE);
 	reply_queue = new bulk_queue<io_reply>(REPLY_QUEUE_SIZE);
-
-	/* initialize the request and reply buffer. */
-	thread_reqs = (io_request **) numa_alloc_local(sizeof(thread_reqs[0]) * num_groups);
-	thread_replies = (io_reply **) numa_alloc_local(sizeof(thread_replies[0]) * nthreads);
-	for (int i = 0; i < num_groups; i++) {
-		thread_reqs[i] = (io_request *) numa_alloc_local(sizeof(io_request) * BUF_SIZE);
-	}
-	for (int i = 0; i < nthreads; i++) {
-		thread_replies[i] = (io_reply *) numa_alloc_local(sizeof(io_reply) * BUF_SIZE);
-	}
-	nreqs = (int *) numa_alloc_local(sizeof(*nreqs) * num_groups);
-	nreplies = (int *) numa_alloc_local(sizeof(*nreplies) * num_groups);
-	memset(nreqs, 0, sizeof(*nreqs) * num_groups);
-	memset(nreplies, 0, sizeof(nreplies) * num_groups);
 
 	/* 
 	 * there is a global lock for all threads.
@@ -93,6 +53,37 @@ int part_global_cached_private::thread_init() {
 	pthread_cond_broadcast(&cond);
 	pthread_mutex_unlock(&wait_mutex);
 	printf("thread %d finishes initialization\n", idx);
+
+	/*
+	 * we have to initialize senders here
+	 * because we need to make sure other threads have 
+	 * initialized all queues.
+	 */
+	/* there is a request sender for each node. */
+	req_senders = (msg_sender<io_request> **) numa_alloc_local(
+			sizeof(msg_sender<io_request> *) * num_groups);
+	for (int i = 0; i < num_groups; i++) {
+		bulk_queue<io_request> *queues[groups[i].nthreads];
+		for (int j = 0; j < groups[i].nthreads; j++)
+			queues[j] = groups[i].threads[j]->request_queue;
+		req_senders[i] = new msg_sender<io_request>(BUF_SIZE, queues, groups[i].nthreads);
+	}
+	/* 
+	 * there is a reply sender for each thread.
+	 * therefore, there is only one queue for a sender.
+	 */
+	reply_senders = (msg_sender<io_reply> **) numa_alloc_local(
+			sizeof(msg_sender<io_reply> *) * nthreads);
+	int idx = 0;
+	for (int i = 0; i < num_groups; i++) {
+		for (int j = 0; j < groups[i].nthreads; j++) {
+			bulk_queue<io_reply> *queues[1];
+			assert(idx == groups[i].threads[j]->idx);
+			queues[0] = groups[i].threads[j]->reply_queue;
+			reply_senders[idx++] = new msg_sender<io_reply>(BUF_SIZE, queues, 1);
+		}
+	}
+
 	return 0;
 }
 
@@ -110,6 +101,8 @@ part_global_cached_private::part_global_cached_private(int num_groups,
 	this->cache_type = cache_type;
 	processed_requests = 0;
 	finished_threads = 0;
+	req_senders = NULL;
+	reply_senders = NULL;
 
 	printf("cache is partitioned\n");
 	printf("thread id: %d, group id: %d, num groups: %d\n", idx, group_idx, num_groups);
@@ -146,54 +139,6 @@ part_global_cached_private::part_global_cached_private(int num_groups,
 	group->threads[i] = this;
 }
 
-
-/**
- * Send the requests to any core in the specified node.
- * To achieve load balancing, I pick a random core
- * in the node, and try to copy requests to its request
- * queue. If its queue is full, try the next core
- * and so on. 
- * Ideally, all requests should be sent after we try 
- * all cores in the node. If not, we return the rest of requests.
- */
-io_request *part_global_cached_private::send(int node_id,
-		io_request *reqs, int num) {
-	int num_sent = 0;
-	thread_group *group = &groups[node_id];
-	if (node_id != get_group_id())
-		remote_reads += num;
-
-	/*
-	 * if the requests are sent to the local node,
-	 * the local thread will process them.
-	 */
-	int base;
-	if (node_id == get_group_id())
-		base = thread_idx(this->idx, num_groups);
-	else
-		base = random() % group->nthreads;
-
-	for (int i = 0; num > 0 && i < group->nthreads; i++) {
-		part_global_cached_private *thread = group->threads[(base + i)
-			% group->nthreads];
-		if (thread == NULL)
-			continue;
-
-		bulk_queue<io_request> *q = thread->request_queue;
-		/* 
-		 * is_full is pre-check, it can't guarantee
-		 * the queue isn't full.
-		 */
-		if (!q->is_full()) {
-			int ret = q->add(reqs, num);
-			reqs += ret;
-			num -= ret;
-			num_sent += ret;
-		}
-	}
-	return reqs;
-}
-
 /**
  * send replies to the thread that sent the requests.
  */
@@ -203,32 +148,16 @@ int part_global_cached_private::reply(io_request *requests,
 		part_global_cached_private *thread
 			= (part_global_cached_private *) requests[i].get_thread();
 		int thread_id = thread->idx;
-		if (nreplies[thread_id] == BUF_SIZE) {
+		int num_sent = reply_senders[thread_id]->send_cached(&replies[i]);
+		if (num_sent == 0) {
 			// TODO the buffer is already full.
 			// discard the request for now.
 			printf("the reply buffer for thread %d is already full\n", thread_id);
 			continue;
 		}
-		thread_replies[thread_id][nreplies[thread_id]++] = replies[i];
-		assert(thread == id2thread(thread_id));
-		if (nreplies[thread_id] == BUF_SIZE) {
-			int ret = thread->reply_queue->add(thread_replies[thread_id], BUF_SIZE);
-			if (ret != 0 && ret != BUF_SIZE) {
-				memmove(thread_replies[thread_id],
-						&thread_replies[thread_id][ret], BUF_SIZE - ret);
-			}
-			nreplies[thread_id] = BUF_SIZE - ret;
-		}
 	}
 	for (int i = 0; i < nthreads; i++)
-		if (nreplies[i] > 0) {
-			part_global_cached_private *thread = id2thread(i);
-			int ret = thread->reply_queue->add(thread_replies[i], nreplies[i]);
-			if (ret != 0 && ret != nreplies[i]) {
-				memmove(thread_replies[i], &thread_replies[i][ret], nreplies[i] - ret);
-			}
-			nreplies[i] -= ret;
-		}
+		reply_senders[i]->flush();
 	return 0;
 }
 
@@ -236,49 +165,21 @@ int part_global_cached_private::reply(io_request *requests,
 void part_global_cached_private::distribute_reqs(io_request *requests, int num) {
 	for (int i = 0; i < num; i++) {
 		int idx = hash_req(&requests[i]);
+		assert (idx < num_groups);
+		if (idx != get_group_id())
+			remote_reads++;
+		int num_sent = req_senders[idx]->send_cached(&requests[i]);
 		// TODO if we fail to send the requests to the specific node,
 		// we should rehash it and give it to another node.
-		assert (idx < num_groups);
-		if (nreqs[idx] == BUF_SIZE) {
+		if (num_sent == 0) {
 			// TODO the buffer is already full.
 			// discard the request for now.
 			printf("the request buffer for group %d is already full\n", idx);
 			continue;
 		}
-		thread_reqs[idx][nreqs[idx]++] = requests[i];
-		if (nreqs[idx] == BUF_SIZE) {
-			io_request *remaining = send(idx, thread_reqs[idx], BUF_SIZE);
-			/*
-			 * if we have some requests we can't send,
-			 * move them to the beginning of the buffer.
-			 */
-			if (remaining != thread_reqs[idx]
-					&& remaining != &thread_reqs[idx][BUF_SIZE]) {
-				printf("there are %ld requests left\n",
-						&thread_reqs[idx][BUF_SIZE] - remaining);
-				memmove(thread_reqs[idx], remaining,
-						((char *) &thread_reqs[idx][BUF_SIZE] - (char *) remaining));
-			}
-			nreqs[idx] = &thread_reqs[idx][BUF_SIZE] - remaining;
-		}
 	}
-	for (int i = 0; i < num_groups; i++) {
-		if (nreqs[i] > 0) {
-			io_request *remaining = send(i, thread_reqs[i], nreqs[i]);
-			/*
-			 * if we have some requests we can't send,
-			 * move them to the beginning of the buffer.
-			 */
-			if (remaining != thread_reqs[i]
-					&& remaining != &thread_reqs[i][nreqs[i]]) {
-				printf("there are %ld requests left\n",
-						&thread_reqs[i][nreqs[i]] - remaining);
-				memmove(thread_reqs[i], remaining,
-						((char *) &thread_reqs[i][nreqs[i]] - (char *) remaining));
-			}
-			nreqs[i] = &thread_reqs[i][nreqs[i]] - remaining;
-		}
-	}
+	for (int i = 0; i < num_groups; i++)
+		req_senders[i]->flush();
 }
 
 /* process the requests sent to this thread */
