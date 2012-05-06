@@ -61,6 +61,7 @@ int nthreads = 1;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 int access_method = READ;
+bool verify_read_content = false;
 
 thread_private *threads[NUM_THREADS];
 
@@ -135,7 +136,7 @@ void *rand_read(void *arg)
 			ret = priv->access(entry, off, ENTRY_READ_SIZE, access_method);
 			if (ret > 0) {
 //				assert(ret == buf->get_entry_size());
-				if (access_method == READ) {
+				if (access_method == READ && verify_read_content) {
 					if (*(unsigned long *) entry != off / sizeof(long))
 						printf("entry: %ld, off: %ld\n", *(unsigned long *) entry, off / sizeof(long));
 					assert(*(unsigned long *) entry == off / sizeof(long));
@@ -321,7 +322,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -383,6 +384,9 @@ int main(int argc, char *argv[])
 		else if(key.compare("preload") == 0) {
 			preload = true;
 		}
+		else if(key.compare("verify_content") == 0) {
+			verify_read_content = true;
+		}
 #ifdef PROFILER
 		else if(key.compare("prof") == 0) {
 			prof_file = value;
@@ -393,8 +397,8 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d\n",
-			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes);
+	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d\n",
+			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content);
 
 	int num_entries = npages * (PAGE_SIZE / entry_size);
 
