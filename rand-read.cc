@@ -24,7 +24,6 @@
 #include <string>
 #include <deque>
 
-#define HIGH_PRIO
 #define NUM_THREADS 1024
 
 #include "cache.h"
@@ -62,6 +61,7 @@ struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 int access_method = READ;
 bool verify_read_content = false;
+bool high_prio = false;
 
 thread_private *threads[NUM_THREADS];
 
@@ -322,7 +322,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -387,6 +387,9 @@ int main(int argc, char *argv[])
 		else if(key.compare("verify_content") == 0) {
 			verify_read_content = true;
 		}
+		else if(key.compare("high_prio") == 0) {
+			high_prio = true;
+		}
 #ifdef PROFILER
 		else if(key.compare("prof") == 0) {
 			prof_file = value;
@@ -397,8 +400,8 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d\n",
-			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content);
+	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d\n",
+			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio);
 
 	int num_entries = npages * (PAGE_SIZE / entry_size);
 
@@ -505,13 +508,13 @@ int main(int argc, char *argv[])
 		threads[j]->gen = gen;
 	}
 
-#ifdef HIGH_PRIO
-	ret = setpriority(PRIO_PROCESS, getpid(), -20);
-	if (ret < 0) {
-		perror("setpriority");
-		exit(1);
+	if (high_prio) {
+		ret = setpriority(PRIO_PROCESS, getpid(), -20);
+		if (ret < 0) {
+			perror("setpriority");
+			exit(1);
+		}
 	}
-#endif
 
 	gettimeofday(&start_time, NULL);
 	global_start = start_time;
