@@ -43,7 +43,6 @@
 
 //#define USE_PROCESS
 
-#define ENTRY_READ_SIZE 4096
 #define GC_SIZE 10000
 #define BULK_SIZE 1000
 
@@ -109,7 +108,7 @@ void *rand_read(void *arg)
 			for (i = 0; i < BULK_SIZE
 					&& priv->gen->has_next() && !buf->is_full(); i++) {
 				reqs[i].init(buf->next_entry(),
-						priv->gen->next_offset(), ENTRY_READ_SIZE, READ, priv);
+						priv->gen->next_offset(), entry_size, READ, priv);
 			}
 			// TODO right now it only support read.
 			ret = priv->access(reqs, i, READ);
@@ -133,7 +132,7 @@ void *rand_read(void *arg)
 					p[i] = start++;
 			}
 
-			ret = priv->access(entry, off, ENTRY_READ_SIZE, access_method);
+			ret = priv->access(entry, off, entry_size, access_method);
 			if (ret > 0) {
 //				assert(ret == buf->get_entry_size());
 				if (access_method == READ && verify_read_content) {
