@@ -12,8 +12,6 @@ const int MAX_BUF_REQS = 1024 * 3;
 #ifdef EVEN_DISTRIBUTE
 #define MAX_OUTSTANDING_NREQS (AIO_DEPTH / num_open_files())
 #define ALLOW_DROP
-#else
-#define MAX_OUTSTANDING_NREQS (AIO_DEPTH)
 #endif
 
 void aio_callback(io_context_t ctx, struct iocb* iocb,
@@ -88,17 +86,11 @@ struct iocb *aio_private::construct_req(char *buf, off_t offset,
 	cb->func = cb_func;
 	tcb->thread = this;
 
-	/* for simplicity, I assume all request sizes are smaller than a page size */
-	assert(size <= PAGE_SIZE);
-	if (ROUND_PAGE(offset) == offset
-			&& (long) buf == ROUND_PAGE(buf)
-			&& size == PAGE_SIZE) {
-		req = make_io_request(ctx, get_fd(offset), PAGE_SIZE, offset,
-				buf, A_READ, cb);
-	}
-	else {
-		assert(size == PAGE_SIZE);
-	}
+	assert(size >= MIN_BLOCK_SIZE);
+	assert(size % MIN_BLOCK_SIZE == 0);
+	assert(offset % MIN_BLOCK_SIZE == 0);
+	assert((long) buf % MIN_BLOCK_SIZE == 0);
+	req = make_io_request(ctx, get_fd(offset), size, offset, buf, A_READ, cb);
 	return req;
 }
 
@@ -162,9 +154,12 @@ const int MAX_REQ_SIZE = 128;
  */
 ssize_t aio_private::access(io_request *requests, int num, int access_method)
 {
+#ifdef EVEN_DISTRIBUTE
 	if (num_open_files() == 1)
+#endif
 		return process_reqs(requests, num);
 
+#ifdef EVEN_DISTRIBUTE
 	/* first put all requests in the queues. */
 	buffer_reqs(requests, num);
 
@@ -251,6 +246,7 @@ ssize_t aio_private::access(io_request *requests, int num, int access_method)
 #endif
 	
 	return ret;
+#endif
 }
 
 /* process remaining requests in the queues. */

@@ -5,6 +5,8 @@
 
 #include "thread_private.h"
 
+#define MIN_BLOCK_SIZE 512
+
 class read_private: public thread_private
 {
 	/* the array of files that it's going to access */

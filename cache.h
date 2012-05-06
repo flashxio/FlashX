@@ -11,6 +11,8 @@
 
 #include <map>
 
+#define PTHREAD_WAIT
+
 #define PAGE_SIZE 4096
 #define LOG_PAGE_SIZE 12
 #define ROUND_PAGE(off) (((long) off) & (~(PAGE_SIZE - 1)))
@@ -151,8 +153,9 @@ public:
 
 class thread_safe_page: public page
 {
-#ifdef PTRHEAD_WAIT
-	pthread_cond_t cond;
+#ifdef PTHREAD_WAIT
+	pthread_cond_t ready_cond;
+	pthread_cond_t dirty_cond;
 	pthread_mutex_t mutex;
 #endif
 
@@ -169,67 +172,96 @@ class thread_safe_page: public page
 
 public:
 	thread_safe_page(): page() {
-#ifdef PTRHEAD_WAIT
-		pthread_cond_init(&cond, NULL);
+#ifdef PTHREAD_WAIT
+		pthread_cond_init(&ready_cond, NULL);
+		pthread_cond_init(&dirty_cond, NULL);
 		pthread_mutex_init(&mutex, NULL);
 #endif
 	}
 
 	thread_safe_page(off_t off, long d): page(off, d) {
-#ifdef PTRHEAD_WAIT
-		pthread_cond_init(&cond, NULL);
+#ifdef PTHREAD_WAIT
+		pthread_cond_init(&ready_cond, NULL);
+		pthread_cond_init(&dirty_cond, NULL);
 		pthread_mutex_init(&mutex, NULL);
 #endif
 	}
 
 	thread_safe_page(off_t off, char *data): page(off, data) {
-#ifdef PTRHEAD_WAIT
-		pthread_cond_init(&cond, NULL);
+#ifdef PTHREAD_WAIT
+		pthread_cond_init(&ready_cond, NULL);
+		pthread_cond_init(&dirty_cond, NULL);
 		pthread_mutex_init(&mutex, NULL);
 #endif
 	}
 
 	~thread_safe_page() {
-#ifdef PTRHEAD_WAIT
+#ifdef PTHREAD_WAIT
 		pthread_mutex_destroy(&mutex);
-		pthread_cond_destroy(&cond);
+		pthread_cond_destroy(&ready_cond);
+		pthread_cond_destroy(&dirty_cond);
 #endif
 	}
 
 	/* this is enough for x86 architecture */
 	bool data_ready() const { return get_flags_bit(DATA_READY_BIT); }
 	void wait_ready() {
-#ifdef PTRHEAD_WAIT
+#ifdef PTHREAD_WAIT
+		printf("wait data to be ready\n");
 		pthread_mutex_lock(&mutex);
 #endif
 		while (!data_ready()) {
-#ifdef PTRHEAD_WAIT
-			pthread_cond_wait(&cond, &mutex);
-#endif
-#ifdef DEBUG
+#ifdef PTHREAD_WAIT
+			pthread_cond_wait(&ready_cond, &mutex);
 			printf("thread %ld wait for data ready\n", pthread_self());
 #endif
 		}
-#ifdef PTRHEAD_WAIT
+#ifdef PTHREAD_WAIT
 		pthread_mutex_unlock(&mutex);
 #endif
 	}
 	void set_data_ready(bool ready) {
-#ifdef PTRHEAD_WAIT
+#ifdef PTHREAD_WAIT
 		pthread_mutex_lock(&mutex);
 #endif
 		set_flags_bit(DATA_READY_BIT, ready);
-#ifdef PTRHEAD_WAIT
-		pthread_cond_signal(&cond);
+#ifdef PTHREAD_WAIT
+		pthread_cond_signal(&ready_cond);
 		pthread_mutex_unlock(&mutex);
 #endif
 	}
 
+	void set_dirty(bool dirty) {
+#ifdef PTHREAD_WAIT
+		pthread_mutex_lock(&mutex);
+#endif
+		set_flags_bit(DIRTY_BIT, dirty);
+#ifdef PTHREAD_WAIT
+		pthread_cond_signal(&dirty_cond);
+		pthread_mutex_unlock(&mutex);
+#endif
+	}
+	void wait_cleaned() {
+#ifdef PTHREAD_WAIT
+		pthread_mutex_lock(&mutex);
+#endif
+		while (is_dirty()) {
+#ifdef PTHREAD_WAIT
+			pthread_cond_wait(&dirty_cond, &mutex);
+			printf("thread %ld wait for the page to be written\n",
+					pthread_self());
+#endif
+		}
+#ifdef PTHREAD_WAIT
+		pthread_mutex_unlock(&mutex);
+#endif
+	}
+
+	bool is_io_pending() {
+		return get_flags_bit(IO_PENDING_BIT);
+	}
 	void set_io_pending(bool pending) {
 		set_flags_bit(IO_PENDING_BIT, pending);
-	}
-	void set_dirty(bool dirty) {
-		set_flags_bit(DIRTY_BIT, dirty);
 	}
 	/* we set the status to io pending,
 	 * and return the original status */

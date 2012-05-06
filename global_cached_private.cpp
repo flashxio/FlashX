@@ -12,46 +12,64 @@ ssize_t global_cached_private::access(char *buf, off_t offset, ssize_t size, int
 	if (old_off != ROUND_PAGE(offset) && old_off != -1) {
 		/* 
 		 * if the new page we get is dirty,
-		 * we need to write its data back to the file first.
+		 * we need to write its data back to the file
+		 * before we can put data in the page. 
+		 * Therefore, the data ready flag is definitely
+		 * not set yet.
 		 */
 		if (p->is_dirty()) {
 			unsigned long *l = (unsigned long *) p->get_data();
 			unsigned long start = old_off / sizeof(long);
 			if (*l != start)
 				printf("start: %ld, l: %ld\n", start, *l);
-			p->lock();
 			read_private::access((char *) p->get_data(),
 					old_off, PAGE_SIZE, WRITE);
 			p->set_dirty(false);
-			p->unlock();
 		}
 	}
 
 	if (!p->data_ready()) {
-		/* if the page isn't io pending,
-		 * set it io pending, and return
-		 * original result. otherwise,
-		 * just return the original value.
+		/* if the page isn't io pending, set it io pending, and return
+		 * original result. otherwise, just return the original value.
 		 *
-		 * This is an ugly hack, but with this
-		 * atomic operation, I can avoid using
-		 * locks. */
+		 * This is an ugly hack, but with this atomic operation,
+		 * I can avoid using locks.
+		 */
 		if(!p->test_and_set_io_pending()) {
-			p->lock();
 			/* 
-			 * we have to make sure the page is clean
-			 * before reading data to the page.
+			 * Because of the atomic operation, it's guaranteed
+			 * that only one thread can enter here.
+			 * If other threads have reference to the page,
+			 * they must be waiting for its data to be ready.
 			 */
-			while(p->is_dirty()) {}
-			ret = read_private::access((char *) p->get_data(),
-					ROUND_PAGE(offset), PAGE_SIZE, READ);
-			p->unlock();
-			if (ret < 0) {
-				perror("read");
-				exit(1);
+			/*
+			 * It's possible that two threads go through here
+			 * sequentially. For example, the second thread already
+			 * sees the data isn't ready, but find io pending isn't
+			 * set when the first thread resets io pending.
+			 *
+			 * However, in any case, when the second thread comes here,
+			 * the data is already ready and the second thread should
+			 * be able to see the data is ready when it comes here.
+			 */
+			if (!p->data_ready()) {
+				/*
+				 * No other threads set the page dirty at this moment,
+				 * because if a thread can set the page dirty,
+				 * it means the page isn't dirty and already has data
+				 * ready at the first place.
+				 */
+				if (p->is_dirty())
+					p->wait_cleaned();
+				ret = read_private::access((char *) p->get_data(),
+						ROUND_PAGE(offset), PAGE_SIZE, READ);
+				if (ret < 0) {
+					perror("read");
+					exit(1);
+				}
 			}
-			p->set_io_pending(false);
 			p->set_data_ready(true);
+			p->set_io_pending(false);
 		}
 		else {
 			num_waits++;
