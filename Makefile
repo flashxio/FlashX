@@ -1,5 +1,5 @@
 CFLAGS = -g -O3 -DSTATISTICS -DENABLE_AIO #-DPROFILER
-CXXFLAGS = -g -Inbds.0.4.3/include/ -O3 -Wall -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=12 -DCPU_AFFINITY #-DPROFILER
+CXXFLAGS = -g -Inbds.0.4.3/include/ -O3 -Wall -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=0 #-DPROFILER
 LDFLAGS = -lpthread -lnuma -laio #-lprofiler
 HEADERS = aio_private.h direct_private.h global_cached_private.h mmap_private.h part_cached_private.h part_global_cached_private.h read_private.h thread_private.h workload.h rand_buf.h
 CC = g++
