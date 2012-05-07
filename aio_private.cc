@@ -51,7 +51,7 @@ aio_private::~aio_private()
 
 struct iocb *aio_private::construct_req(char *buf, off_t offset,
 		ssize_t size, int access_method, callback_t cb_func,
-		thread_private *initiator)
+		thread_private *initiator, void *priv)
 {
 	struct iocb *req = NULL;
 
@@ -68,6 +68,7 @@ struct iocb *aio_private::construct_req(char *buf, off_t offset,
 	cb->size = size;
 	cb->func = cb_func;
 	tcb->thread = this;
+	tcb->priv = priv;
 
 	assert(size >= MIN_BLOCK_SIZE);
 	assert(size % MIN_BLOCK_SIZE == 0);
@@ -88,7 +89,8 @@ ssize_t aio_private::access(char *buf, off_t offset,
 	}
 
 	/* the initiator of the request must be itself. */
-	req = construct_req(buf, offset, size, access_method, aio_callback, this);
+	req = construct_req(buf, offset, size, access_method, aio_callback,
+			this, NULL);
 	submit_io_request(ctx, &req, 1);
 	return 0;
 }
@@ -115,7 +117,7 @@ ssize_t aio_private::access(io_request *requests, int num, int access_method)
 					 * another thread with message passing, 
 					 * it will be another thread.
 					 */
-					requests->get_thread());
+					requests->get_thread(), requests->get_priv());
 			ret += requests->get_size();
 			requests++;
 		}

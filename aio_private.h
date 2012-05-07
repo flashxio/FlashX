@@ -21,6 +21,7 @@ struct thread_callback_s
 	 * it is needed when the request is sent with AIO.
 	 */
 	thread_private *initiator;
+	void *priv;
 };
 
 class aio_private: public read_private
@@ -45,7 +46,8 @@ public:
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
 	ssize_t access(io_request *requests, int num, int access_method);
 	struct iocb *construct_req(char *buf, off_t offset, ssize_t size,
-			int access_method, callback_t callback, thread_private *initiator);
+			int access_method, callback_t callback,
+			thread_private *initiator, void *priv);
 
 	bool support_bulk() {
 		return true;
