@@ -58,17 +58,8 @@ public:
 		return global_cache;
 	}
 
-	global_cached_private(read_private *underlying,
-			int idx, long cache_size, int entry_size, int cache_type,
-			memory_manager *manager): thread_private(idx, entry_size) {
-		this->underlying = underlying;
-		num_waits = 0;
-		this->cache_size = cache_size;
-		if (global_cache == NULL) {
-			page::allocate_cache(cache_size);
-			global_cache = create_cache(cache_type, cache_size, manager);
-		}
-	}
+	global_cached_private(read_private *, int, long, int, int,
+			memory_manager *);
 
 	virtual page_cache *get_global_cache() {
 		return global_cache;
@@ -76,6 +67,7 @@ public:
 
 	int preload(off_t start, long size);
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
+	ssize_t access(io_request *requests, int num, int access_method);
 
 	ssize_t get_size() {
 		return underlying->get_size();
@@ -84,6 +76,10 @@ public:
 	virtual int thread_init() {
 		thread_private::thread_init();
 		return underlying->thread_init();
+	}
+
+	virtual bool support_bulk() {
+		return underlying->support_bulk();
 	}
 
 #ifdef STATISTICS

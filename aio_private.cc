@@ -18,13 +18,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb,
 		struct io_callback_s *cb, long res, long res2) {
 	thread_callback_s *tcb = (thread_callback_s *) cb;
 
-	memcpy(cb->buf, ((char *) iocb->u.c.buf)
-			+ (cb->offset - ROUND_PAGE(cb->offset)), cb->size);
-//	if(*(unsigned long *) cb->buf != cb->offset / sizeof(long))
-//		printf("%ld %ld\n", *(unsigned long *) cb->buf, cb->offset / sizeof(long));
-//	assert(*(unsigned long *) cb->buf == cb->offset / sizeof(long));
 	tcb->thread->return_cb(tcb);
-	tcb->thread->read_bytes += cb->size;
 }
 
 aio_private::aio_private(const char *names[], int num, long size,

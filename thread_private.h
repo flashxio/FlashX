@@ -79,6 +79,12 @@ public:
 	}
 };
 
+class callback
+{
+public:
+	virtual int invoke(io_request *) = 0;
+};
+
 /* this data structure stores the thread-private info. */
 class thread_private
 {
@@ -96,6 +102,7 @@ public:
 	struct timeval start_time;
 	struct timeval end_time;
 	rand_buf *buf;
+	callback *cb;
 
 #ifdef STATISTICS
 	int cache_hits;

@@ -64,6 +64,25 @@ bool high_prio = false;
 
 thread_private *threads[NUM_THREADS];
 
+class cleanup_callback: public callback
+{
+	rand_buf *buf;
+public:
+	cleanup_callback(rand_buf *buf) {
+		this->buf = buf;
+	}
+
+	int invoke(io_request *rq) {
+		if(*(unsigned long *) rq->get_buf() != rq->get_offset() / sizeof(long))
+			printf("%ld %ld\n", *(unsigned long *) rq->get_buf(),
+					rq->get_offset() / sizeof(long));
+		assert(*(unsigned long *) rq->get_buf()
+				== rq->get_offset() / sizeof(long));
+		buf->free_entry(rq->get_buf());
+		return 0;
+	}
+};
+
 void *rand_read(void *arg)
 {
 	ssize_t ret = -1;
@@ -98,6 +117,7 @@ void *rand_read(void *arg)
 	printf("pid: %d, tid: %ld\n", getpid(), gettid());
 	priv->thread_init();
 	rand_buf *buf = priv->buf;
+	priv->cb = new cleanup_callback(buf);
 
 	gettimeofday(&priv->start_time, NULL);
 	while (priv->gen->has_next()) {
@@ -448,7 +468,7 @@ int main(int argc, char *argv[])
 				break;
 			case GLOBAL_CACHE_ACCESS:
 				{
-					read_private *priv = new direct_private(cnames, num,
+					read_private *priv = new aio_private(cnames, num,
 							npages * PAGE_SIZE, j, entry_size);
 					threads[j] = new global_cached_private(priv,
 							j, cache_size, entry_size, cache_type, manager);

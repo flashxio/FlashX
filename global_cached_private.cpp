@@ -1,5 +1,125 @@
 #include "global_cached_private.h"
 
+static void __complete_req(io_request *orig, thread_safe_page *p)
+{
+	int page_off = orig->get_offset() - ROUND_PAGE(orig->get_offset());
+
+	p->lock();
+	if (orig->get_access_method() == WRITE) {
+		unsigned long *l = (unsigned long *) ((char *) p->get_data()
+				+ page_off);
+		unsigned long start = orig->get_offset() / sizeof(long);
+		if (*l != start)
+			printf("write: start: %ld, l: %ld, offset: %ld\n",
+					start, *l, p->get_offset() / sizeof(long));
+		memcpy((char *) p->get_data() + page_off, orig->get_buf(),
+				orig->get_size());
+		p->set_dirty(true);
+	}
+	else 
+		/* I assume the data I read never crosses the page boundary */
+		memcpy(orig->get_buf(), (char *) p->get_data() + page_off,
+				orig->get_size());
+	p->unlock();
+	p->dec_ref();
+}
+
+class read_page_callback: public callback
+{
+	thread_private *priv;
+public:
+	read_page_callback(thread_private *priv) {
+		this->priv = priv;
+	}
+
+	int invoke(io_request *request) {
+		priv->read_bytes += request->get_size();
+		io_request *orig = (io_request *) request->get_priv();
+		thread_safe_page *p = (thread_safe_page *) orig->get_priv();
+		p->set_data_ready(true);
+		p->set_io_pending(false);
+		__complete_req(orig, p);
+		if (priv->cb)
+			priv->cb->invoke(orig);
+		// TODO use my own deallocator.
+		delete orig;
+		return 0;
+	}
+};
+
+global_cached_private::global_cached_private(read_private *underlying,
+		int idx, long cache_size, int entry_size, int cache_type,
+		memory_manager *manager): thread_private(idx, entry_size) {
+	this->underlying = underlying;
+	underlying->cb = new read_page_callback(this);
+	num_waits = 0;
+	this->cache_size = cache_size;
+	if (global_cache == NULL) {
+		page::allocate_cache(cache_size);
+		global_cache = create_cache(cache_type, cache_size, manager);
+	}
+}
+
+ssize_t global_cached_private::access(io_request *requests,
+		int num, int access_method)
+{
+	for (int i = 0; i < num; i++) {
+		ssize_t ret;
+		off_t old_off = -1;
+		off_t offset = requests[i].get_offset();
+		thread_safe_page *p = (thread_safe_page *) (get_global_cache()
+				->search(ROUND_PAGE(offset), old_off));
+
+		/*
+		 * the page isn't in the cache,
+		 * so the cache evict a page and return it to us.
+		 */
+		if (old_off != ROUND_PAGE(offset) && old_off != -1) {
+			// TODO handle dirty pages later.
+		}
+
+		if (!p->data_ready()) {
+			/*
+			 * TODO if two threads want to access the same page,
+			 * both of them will come here and the page will be
+			 * read twice from the file.
+			 * I can't use the IO pending bit because a request
+			 * can't be served immediately when it's issued.
+			 * I just hope the case that two threads access 
+			 * the same page doesn't happen very often.
+			 */
+			/*
+			 * No other threads set the page dirty at this moment,
+			 * because if a thread can set the page dirty,
+			 * it means the page isn't dirty and already has data
+			 * ready at the first place.
+			 */
+			if (p->is_dirty())
+				p->wait_cleaned();
+
+			// TODO I need to my own allocator for this.
+			io_request *orig = new io_request(requests[i]);
+			orig->set_priv((void *) p);
+
+			io_request req((char *) p->get_data(),
+					ROUND_PAGE(offset), PAGE_SIZE, READ,
+					this, (void *) orig);
+			ret = underlying->access(&req, 1, READ);
+			if (ret < 0) {
+				perror("read");
+				exit(1);
+			}
+		}
+		else {
+			__complete_req(&requests[i], p);
+#ifdef STATISTICS
+			cache_hits++;
+#endif
+		}
+	}
+	return 0;
+}
+
 ssize_t global_cached_private::access(char *buf, off_t offset,
 		ssize_t size, int access_method)
 {

@@ -53,10 +53,17 @@ public:
 		return true;
 	}
 
-	virtual void return_cb(thread_callback_s *tcb) {
+	void return_cb(thread_callback_s *tcb) {
 		cbs.push_back(tcb);
 		io_callback_s *cb = (io_callback_s *) tcb;
-		buf->free_entry(cb->buf);
+		read_bytes += cb->size;
+
+		// TODO it only support READ right now.
+		if (this->cb) {
+			io_request req(cb->buf, cb->offset, cb->size, READ,
+					tcb->initiator, tcb->priv);
+			this->cb->invoke(&req);
+		}
 	}
 };
 #endif
