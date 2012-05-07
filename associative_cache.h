@@ -31,6 +31,11 @@ class expand_exception
 {
 };
 
+/* out of memory exception */
+class oom_exception
+{
+};
+
 /**
  * This data structure is to implement LRU.
  */
@@ -337,27 +342,7 @@ class associative_cache: public page_cache
 	int split;
 
 public:
-	associative_cache(memory_manager *manager) {
-		printf("associative cache is used\n");
-		level = 0;
-		split = 0;
-		this->manager = manager;
-		manager->register_cache(this);
-		int npages = init_cache_size / PAGE_SIZE;
-		int max_npages = manager->get_max_size() / PAGE_SIZE;
-		assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);
-		init_ncells = npages / CELL_SIZE;
-		int max_ncells = max_npages / CELL_SIZE;
-		hash_cell *cells = new hash_cell[init_ncells];
-		printf("%d cells: %p\n", init_ncells, cells);
-		for (int i = 0; i < init_ncells; i++)
-			cells[i] = hash_cell(this, i);
-
-		cells_table.push_back(cells);
-		ncells.inc(1);
-		for (int i = 1; i < max_ncells / init_ncells; i++)
-			cells_table.push_back(NULL);
-	}
+	associative_cache(memory_manager *manager);
 
 	~associative_cache() {
 		for (unsigned int i = 0; i < cells_table.size(); i++)

@@ -87,7 +87,7 @@ hash_cell::hash_cell(associative_cache *cache, long hash) {
 	this->table = cache;
 	char *pages[CELL_SIZE];
 	if (!table->get_manager()->get_free_pages(CELL_SIZE, pages, cache))
-		throw -1;
+		throw oom_exception();
 	buf.set_pages(pages);
 }
 
@@ -443,7 +443,7 @@ bool associative_cache::expand(hash_cell *cell) {
 						cells[j] = hash_cell(this, i * init_ncells + j);
 					}
 					table.push_back(cells);
-				} catch (int e) {
+				} catch (oom_exception e) {
 					out_of_memory = true;
 					delete [] cells;
 					break;
@@ -497,4 +497,34 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 		} catch (expand_exception e) {
 		}
 	} while (true);
+}
+
+associative_cache::associative_cache(memory_manager *manager) {
+	printf("associative cache is used\n");
+	level = 0;
+	split = 0;
+	this->manager = manager;
+	manager->register_cache(this);
+	int npages = init_cache_size / PAGE_SIZE;
+	assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);
+	init_ncells = npages / CELL_SIZE;
+	hash_cell *cells = new hash_cell[init_ncells];
+	printf("%d cells: %p\n", init_ncells, cells);
+	int max_npages = manager->get_max_size() / PAGE_SIZE;
+	try {
+		for (int i = 0; i < init_ncells; i++)
+			cells[i] = hash_cell(this, i);
+	} catch (oom_exception e) {
+		fprintf(stderr,
+				"out of memory: max npages: %d, init npages: %d\n",
+				max_npages, npages);
+		exit(1);
+	}
+
+	cells_table.push_back(cells);
+	ncells.inc(1);
+
+	int max_ncells = max_npages / CELL_SIZE;
+	for (int i = 1; i < max_ncells / init_ncells; i++)
+		cells_table.push_back(NULL);
 }

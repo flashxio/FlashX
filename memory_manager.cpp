@@ -47,8 +47,7 @@ bool memory_manager::get_free_pages(int npages,
 				num_shrink = npages;
 			char *buf[num_shrink];
 			if (!cache->shrink(num_shrink, buf)) {
-				// TODO If we can't shrink from the largest cache
-				// we need to do something else.
+				return false;
 			}
 			pthread_spin_lock(&lock);
 			for (int i = 0; i < num_shrink; i++) {
