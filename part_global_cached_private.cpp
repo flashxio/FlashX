@@ -228,11 +228,12 @@ int part_global_cached_private::process_replies(int max_nreplies) {
 }
 
 int part_global_cached_private::process_reply(io_reply *reply) {
+	extern bool verify_read_content;
 	int access_method = reply->get_access_method();
 	int ret = -1;
 	if (reply->is_success()) {
 		read_bytes += reply->get_size();
-		if (access_method == READ) {
+		if (access_method == READ && verify_read_content) {
 			assert(*(unsigned long *) reply->get_buf()
 					== reply->get_offset() / sizeof(long));
 		}
