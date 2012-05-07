@@ -418,19 +418,23 @@ int main(int argc, char *argv[])
 	for (int k = 0; k < num_files; k++)
 		cnames[k] = file_names[k].c_str();
 	num = num_files;
+	// TODO each node should have a memory manager.
 	memory_manager *manager = new memory_manager(cache_size);
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
 		switch (access_option) {
 			case READ_ACCESS:
-				threads[j] = new read_private(cnames, num, npages * PAGE_SIZE, j, entry_size);
+				threads[j] = new read_private(cnames, num,
+						npages * PAGE_SIZE, j, entry_size);
 				break;
 			case DIRECT_ACCESS:
-				threads[j] = new direct_private(cnames, num, npages * PAGE_SIZE, j, entry_size);
+				threads[j] = new direct_private(cnames, num,
+						npages * PAGE_SIZE, j, entry_size);
 				break;
 #if ENABLE_AIO
 			case AIO_ACCESS:
-				threads[j] = new aio_private(cnames, num, npages * PAGE_SIZE, j, entry_size);
+				threads[j] = new aio_private(cnames, num,
+						npages * PAGE_SIZE, j, entry_size);
 				break;
 #endif
 			case MMAP_ACCESS:
@@ -438,18 +442,22 @@ int main(int argc, char *argv[])
 				threads[j] = new mmap_private(cnames[0], j, entry_size);
 				break;
 			case LOCAL_CACHE_ACCESS:
-				threads[j] = new part_cached_private(cnames, num, npages * PAGE_SIZE,
-						j, cache_size / nthreads, entry_size);
+				threads[j] = new part_cached_private(cnames, num,
+						npages * PAGE_SIZE, j,
+						cache_size / nthreads, entry_size);
 				break;
 			case GLOBAL_CACHE_ACCESS:
-				threads[j] = new global_cached_private(cnames, num, npages * PAGE_SIZE, j,
-						cache_size, entry_size, cache_type, manager);
+				threads[j] = new global_cached_private(cnames, num,
+						npages * PAGE_SIZE, j, cache_size,
+						entry_size, cache_type, manager);
 				if (preload)
-					((global_cached_private *) threads[j])->preload(0, npages * PAGE_SIZE);
+					((global_cached_private *) threads[j])->preload(0,
+						npages * PAGE_SIZE);
 				break;
 			case PART_GLOBAL_ACCESS:
-				threads[j] = new part_global_cached_private(num_nodes, cnames, num,
-						npages * PAGE_SIZE, j, cache_size, entry_size, cache_type, manager);
+				threads[j] = new part_global_cached_private(num_nodes,
+						cnames, num, npages * PAGE_SIZE, j, cache_size,
+						entry_size, cache_type, manager);
 				break;
 			default:
 				fprintf(stderr, "wrong access option\n");
@@ -462,7 +470,8 @@ int main(int argc, char *argv[])
 		 * according to the offset.
 		 */
 		start = end;
-		end = start + ((long) npages / nthreads + (shift < remainings)) * PAGE_SIZE / entry_size;
+		end = start + ((long) npages / nthreads + (shift < remainings))
+			* PAGE_SIZE / entry_size;
 		if (remainings != shift)
 			shift++;
 		printf("thread %d starts %ld ends %ld\n", j, start, end);
@@ -495,7 +504,8 @@ int main(int argc, char *argv[])
 				break;
 			case RAID_RAND:
 				/* In this workload each thread starts */
-				gen = new RAID0_rand_permute_workload(npages, entry_size, nthreads, j);
+				gen = new RAID0_rand_permute_workload(npages,
+						entry_size, nthreads, j);
 				break;
 			case -1:
 				gen = new file_workload(workload_file, nthreads);
