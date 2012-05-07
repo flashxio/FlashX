@@ -84,6 +84,10 @@ public:
 
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
 
+	virtual ssize_t access(io_request *requests, int num, int access_method) {
+		return -1;
+	}
+
 #ifdef STATISTICS
 	virtual void print_stat() {
 		thread_private::print_stat();

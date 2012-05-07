@@ -1,7 +1,7 @@
 #ifndef __GLOBAL_CACHED_PRIVATE_H__
 #define __GLOBAL_CACHED_PRIVATE_H__
 
-#include "direct_private.h"
+#include "read_private.h"
 #include "cache.h"
 #include "tree_cache.h"
 #include "associative_cache.h"
@@ -17,14 +17,17 @@ enum {
 	LRU2Q_CACHE,
 };
 
-class global_cached_private: public direct_private
+class global_cached_private: public thread_private
 {
 	int num_waits;
 	long cache_size;
 	static page_cache *global_cache;
+	/* the underlying IO. */
+	read_private *underlying;
 public:
-	inline global_cached_private(const char *names[], int num, long size, int idx,
-			int entry_size): direct_private(names, num, size, idx, entry_size) {
+	inline global_cached_private(read_private *underlying,
+			int idx, int entry_size): thread_private(idx, entry_size) {
+		this->underlying = underlying;
 		num_waits = 0;
 		cache_size = 0;
 	}
@@ -55,10 +58,10 @@ public:
 		return global_cache;
 	}
 
-	global_cached_private(const char *names[], int num, long size,
+	global_cached_private(read_private *underlying,
 			int idx, long cache_size, int entry_size, int cache_type,
-			memory_manager *manager): direct_private(names,
-				num, size, idx, entry_size) {
+			memory_manager *manager): thread_private(idx, entry_size) {
+		this->underlying = underlying;
 		num_waits = 0;
 		this->cache_size = cache_size;
 		if (global_cache == NULL) {
@@ -74,9 +77,18 @@ public:
 	int preload(off_t start, long size);
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
 
+	ssize_t get_size() {
+		return underlying->get_size();
+	}
+
+	virtual int thread_init() {
+		thread_private::thread_init();
+		return underlying->thread_init();
+	}
+
 #ifdef STATISTICS
 	void print_stat() {
-		direct_private::print_stat();
+		thread_private::print_stat();
 		printf("there are %d waits in thread %d\n", num_waits, idx);
 	}
 #endif

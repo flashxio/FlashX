@@ -28,7 +28,7 @@ int part_global_cached_private::thread_init() {
 	numa_set_bind_policy(1);
 #endif
 
-	read_private::thread_init();
+	global_cached_private::thread_init();
 	request_queue = new bulk_queue<io_request>(REQ_QUEUE_SIZE);
 	reply_queue = new bulk_queue<io_reply>(REPLY_QUEUE_SIZE);
 
@@ -90,10 +90,10 @@ int part_global_cached_private::thread_init() {
 }
 
 part_global_cached_private::part_global_cached_private(int num_groups,
-		const char *names[], int num, long size, int idx,
-		long cache_size, int entry_size, int cache_type,
-		memory_manager *manager): global_cached_private(names,
-			num, size, idx, entry_size) {
+		read_private *underlying, int idx, long cache_size,
+		int entry_size, int cache_type,
+		memory_manager *manager): global_cached_private(underlying,
+			idx, entry_size) {
 	this->manager = manager;
 	remote_reads = 0;
 	//		assert(nthreads % num_groups == 0);

@@ -4,6 +4,8 @@
 #include "rand_buf.h"
 #include "garbage_collection.h"
 
+#define NUM_PAGES (4096 * nthreads)
+
 enum {
 	READ,
 	WRITE
@@ -88,7 +90,11 @@ public:
 #endif
 
 	virtual ssize_t access(char *, off_t, ssize_t, int) = 0;
-	virtual int thread_init() = 0;
+	virtual int thread_init() {
+		buf = new rand_buf(NUM_PAGES / (nthreads / NUM_NODES) * PAGE_SIZE,
+				get_entry_size());
+		return 0;
+	}
 
 	/* by default, the base class doesn't support bulk operations. */
 	virtual bool support_bulk() {

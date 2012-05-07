@@ -1,11 +1,10 @@
 #include "read_private.h"
 
-#define NUM_PAGES (4096 * nthreads)
-
 int read_private::thread_init() {
 	int ret;
 
-	buf = new rand_buf(NUM_PAGES / (nthreads / NUM_NODES) * PAGE_SIZE, get_entry_size());
+	thread_private::thread_init();
+
 	for (int i = 0; i < num; i++) {
 		fds[i] = open(file_names[i], flags);
 		if (fds[i] < 0) {

@@ -1,9 +1,12 @@
 #include "global_cached_private.h"
 
-ssize_t global_cached_private::access(char *buf, off_t offset, ssize_t size, int access_method) {
+ssize_t global_cached_private::access(char *buf, off_t offset,
+		ssize_t size, int access_method)
+{
 	ssize_t ret;
 	off_t old_off = -1;
-	thread_safe_page *p = (thread_safe_page *) (get_global_cache()->search(ROUND_PAGE(offset), old_off));
+	thread_safe_page *p = (thread_safe_page *) (get_global_cache()
+			->search(ROUND_PAGE(offset), old_off));
 
 	/*
 	 * the page isn't in the cache,
@@ -22,7 +25,7 @@ ssize_t global_cached_private::access(char *buf, off_t offset, ssize_t size, int
 			unsigned long start = old_off / sizeof(long);
 			if (*l != start)
 				printf("start: %ld, l: %ld\n", start, *l);
-			read_private::access((char *) p->get_data(),
+			underlying->access((char *) p->get_data(),
 					old_off, PAGE_SIZE, WRITE);
 			p->set_dirty(false);
 		}
@@ -61,7 +64,7 @@ ssize_t global_cached_private::access(char *buf, off_t offset, ssize_t size, int
 				 */
 				if (p->is_dirty())
 					p->wait_cleaned();
-				ret = read_private::access((char *) p->get_data(),
+				ret = underlying->access((char *) p->get_data(),
 						ROUND_PAGE(offset), PAGE_SIZE, READ);
 				if (ret < 0) {
 					perror("read");
@@ -108,14 +111,14 @@ int global_cached_private::preload(off_t start, long size) {
 	}
 
 	/* open the file. It's a hack, but it works for now. */
-	thread_init();
+	underlying->thread_init();
 
 	assert(ROUND_PAGE(start) == start);
 	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
 		off_t old_off = -1;
 		thread_safe_page *p = (thread_safe_page *) (get_global_cache()->search(ROUND_PAGE(offset), old_off));
 		if (!p->data_ready()) {
-			ssize_t ret = read_private::access((char *) p->get_data(),
+			ssize_t ret = underlying->access((char *) p->get_data(),
 					ROUND_PAGE(offset), PAGE_SIZE, READ);
 			if (ret < 0) {
 				perror("read");
@@ -126,7 +129,7 @@ int global_cached_private::preload(off_t start, long size) {
 		}
 	}
 	/* close the file as it will be opened again in the real workload. */
-	thread_end();
+	underlying->thread_end();
 	return 0;
 }
 
