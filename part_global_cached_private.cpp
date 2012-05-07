@@ -17,6 +17,7 @@
 #include "part_global_cached_private.h"
 
 int part_global_cached_private::thread_init() {
+#if NUM_NODES > 1
 	/* let's bind the thread to a specific node first. */
 	struct bitmask *nodemask = numa_allocate_cpumask();
 	numa_bitmask_clearall(nodemask);
@@ -25,6 +26,7 @@ int part_global_cached_private::thread_init() {
 	numa_bind(nodemask);
 	numa_set_strict(1);
 	numa_set_bind_policy(1);
+#endif
 
 	read_private::thread_init();
 	request_queue = new bulk_queue<io_request>(REQ_QUEUE_SIZE);
