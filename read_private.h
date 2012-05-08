@@ -76,10 +76,9 @@ public:
 
 	int thread_init();
 
-	int thread_end() {
+	void cleanup() {
 		for (int i = 0; i < num; i++)
 			close(fds[i]);
-		return 0;
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
