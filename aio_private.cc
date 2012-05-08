@@ -68,6 +68,7 @@ struct iocb *aio_private::construct_req(char *buf, off_t offset,
 	cb->size = size;
 	cb->func = cb_func;
 	tcb->thread = this;
+	tcb->initiator = initiator;
 	tcb->priv = priv;
 
 	assert(size >= MIN_BLOCK_SIZE);
