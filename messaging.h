@@ -3,11 +3,120 @@
 
 #include <pthread.h>
 #include <numa.h>
+#include <assert.h>
 
-inline int min(int v1, int v2)
+#include "common.h"
+
+class thread_private;
+class io_request
 {
-	return v1 > v2 ? v2 : v1;
-}
+	char *buf;
+	off_t offset;
+	ssize_t size: 32;
+	int access_method: 1;
+	thread_private *thread;
+	void *priv;
+public:
+	io_request() {
+		init(NULL, 0, 0, READ, NULL);
+	}
+
+	io_request(char *buf, off_t off, ssize_t size,
+			int access_method, thread_private *t, void *priv = NULL) {
+		init(buf, off, size, access_method, t, priv);
+	}
+
+	void init(char *buf, off_t off, ssize_t size,
+			int access_method, thread_private *t, void *priv = NULL) {
+		assert(off >= 0);
+		this->buf = buf;
+		this->offset = off;
+		this->size = size;
+		this->thread = t;
+		this->access_method = access_method;
+		this->priv = priv;
+	}
+
+	int get_access_method() {
+		return access_method;
+	}
+
+	thread_private *get_thread() {
+		return thread;
+	}
+
+	char *get_buf() {
+		return buf;
+	}
+
+	off_t get_offset() {
+		return offset;
+	}
+
+	ssize_t get_size() {
+		return size;
+	}
+
+	void *get_priv() {
+		return priv;
+	}
+
+	void set_priv(void *priv) {
+		this->priv = priv;
+	}
+};
+
+class io_reply
+{
+	char *buf;
+	off_t offset;
+	ssize_t size: 32;
+	int success: 1;
+	int status: 16;
+	int access_method: 1;
+	void init(char *buf, off_t off, ssize_t size, int success,
+			int status, int access_method) {
+		this->buf = buf;
+		this->offset = off;
+		this->size = size;
+		this->success = success;
+		this->status = status;
+		this->access_method = access_method;
+	}
+public:
+	io_reply() {
+		init(NULL, 0, 0, 0, 0, READ);
+	}
+
+	io_reply(io_request *req, int success, int status) {
+		init(req->get_buf(), req->get_offset(), req->get_size(),
+					success, status, req->get_access_method());
+	}
+
+	int get_status() {
+		return status;
+	}
+
+	bool is_success() {
+		return success;
+	}
+
+	char *get_buf() {
+		return buf;
+	}
+
+	off_t get_offset() {
+		return offset;
+	}
+
+	ssize_t get_size() {
+		return size;
+	}
+
+	int get_access_method() {
+		return access_method;
+	}
+};
 
 /**
  * this is a thread-safe FIFO queue.
@@ -35,29 +144,9 @@ public:
 		delete [] buf;
 	}
 
-	int fetch(T *entries, int num) {
-		pthread_spin_lock(&_lock);
-		int n = min(num, num_entries);
-		for (int i = 0; i < n; i++) {
-			entries[i] = buf[(start + i) % this->size];
-		}
-		start = (start + n) % this->size;
-		num_entries -= n;
-		pthread_spin_unlock(&_lock);
-		return n;
-	}
+	int fetch(T *entries, int num);
 
-	int add(T *entries, int num) {
-		pthread_spin_lock(&_lock);
-		int n = min(num, this->size - num_entries);
-		int end = (start + num_entries) % this->size;
-		for (int i = 0; i < n; i++) {
-			buf[(end + i) % this->size] = entries[i];
-		}
-		num_entries += n;
-		pthread_spin_unlock(&_lock);
-		return n;
-	}
+	int add(T *entries, int num);
 
 	int get_num_entries() {
 		return num_entries;
@@ -84,74 +173,16 @@ public:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	msg_sender(int buf_size, bulk_queue<T> **queues, int num_queues) {
-		buf = (T *) numa_alloc_local(sizeof(T) * buf_size);
-		this->buf_size = buf_size;
-		num_current = 0;
-		dest_queues = (bulk_queue<T> **) numa_alloc_local(sizeof(bulk_queue<T> *) * num_queues);
-		memcpy(dest_queues, queues, sizeof(bulk_queue<T> *) * num_queues);
-		this->num_queues = num_queues;
-	}
+	msg_sender(int buf_size, bulk_queue<T> **queues, int num_queues);
 
 	~msg_sender() {
 		numa_free(buf, sizeof(T) * buf_size);
 		numa_free(dest_queues, sizeof(bulk_queue<T> *) * num_queues);
 	}
 
-	/**
-	 * flush the entries in the buffer to the queues.
-	 * A queue is randomly picked. If the queue is full, pick the next queue
-	 * until all queues are tried or all entries in the buffer is flushed.
-	 * return the number of entries that have been flushed.
-	 */
-	int flush() {
-		if (num_current == 0)
-			return 0;
+	int flush();
 
-		int base_idx;
-		if (num_queues == 1)
-			base_idx = 0;
-		else
-			base_idx = random() % num_queues;
-		int num_sent = 0;
-		T *tmp = buf;
-		for (int i = 0; num_current > 0 && i < num_queues; i++) {
-			bulk_queue<T> *q = dest_queues[(base_idx + i) % num_queues];
-			assert(q);
-			/* 
-			 * is_full is pre-check, it can't guarantee
-			 * the queue isn't full.
-			 */
-			if (!q->is_full()) {
-				int ret = q->add(tmp, num_current);
-				tmp += ret;
-				num_current -= ret;
-				num_sent += ret;
-			}
-		}
-
-		/* move the remaining entries to the beginning of the buffer. */
-		if (num_current)
-			memmove(buf, tmp, num_current * sizeof(T));
-
-		return num_sent;
-	}
-
-	int send_cached(T *msg) {
-		/* 
-		 * if the buffer is full, and we can't flush
-		 * any messages, there is nothing we can do.
-		 */
-		if (num_current == buf_size && flush() == 0)
-			return 0;
-
-		buf[num_current++] = *msg;
-		if (num_current == buf_size)
-			return flush();
-		else
-			/* one message has been cached. */
-			return 1;
-	}
+	int send_cached(T *msg);
 };
 
 #endif

@@ -11,58 +11,6 @@
 #include "garbage_collection.h"
 #include "global_cached_private.h"
 
-class io_reply
-{
-	char *buf;
-	off_t offset;
-	ssize_t size: 32;
-	int success: 1;
-	int status: 16;
-	int access_method: 1;
-	void init(char *buf, off_t off, ssize_t size, int success,
-			int status, int access_method) {
-		this->buf = buf;
-		this->offset = off;
-		this->size = size;
-		this->success = success;
-		this->status = status;
-		this->access_method = access_method;
-	}
-public:
-	io_reply() {
-		init(NULL, 0, 0, 0, 0, READ);
-	}
-
-	io_reply(io_request *req, int success, int status) {
-		init(req->get_buf(), req->get_offset(), req->get_size(),
-					success, status, req->get_access_method());
-	}
-
-	int get_status() {
-		return status;
-	}
-
-	bool is_success() {
-		return success;
-	}
-
-	char *get_buf() {
-		return buf;
-	}
-
-	off_t get_offset() {
-		return offset;
-	}
-
-	ssize_t get_size() {
-		return size;
-	}
-
-	int get_access_method() {
-		return access_method;
-	}
-};
-
 class part_global_cached_private;
 
 struct thread_group
