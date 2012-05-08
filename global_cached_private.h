@@ -82,6 +82,10 @@ public:
 		return underlying->support_bulk();
 	}
 
+	virtual void cleanup() {
+		underlying->cleanup();
+	}
+
 #ifdef STATISTICS
 	void print_stat() {
 		thread_private::print_stat();

@@ -249,7 +249,7 @@ int global_cached_private::preload(off_t start, long size) {
 		}
 	}
 	/* close the file as it will be opened again in the real workload. */
-	underlying->thread_end();
+	underlying->cleanup();
 	return 0;
 }
 
