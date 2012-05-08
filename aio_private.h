@@ -53,6 +53,8 @@ public:
 		return true;
 	}
 
+	virtual void cleanup();
+
 	void return_cb(thread_callback_s *tcb) {
 		cbs.push_back(tcb);
 		io_callback_s *cb = (io_callback_s *) tcb;

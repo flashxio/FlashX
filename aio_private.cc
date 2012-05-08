@@ -33,7 +33,7 @@ aio_private::aio_private(const char *names[], int num, long size,
 	}
 }
 
-aio_private::~aio_private()
+void aio_private::cleanup()
 {
 	int slot = max_io_slot(ctx);
 
@@ -41,6 +41,12 @@ aio_private::~aio_private()
 		io_wait(ctx, NULL);
 		slot = max_io_slot(ctx);
 	}
+	read_private::cleanup();
+}
+
+aio_private::~aio_private()
+{
+	cleanup();
 }
 
 struct iocb *aio_private::construct_req(char *buf, off_t offset,
