@@ -33,6 +33,12 @@ char *rand_buf::next_entry() {
 }
 
 void rand_buf::free_entry(char *buf) {
+	int buf_size = num_entries * entry_size;
+	if (!((long) buf >= (long) this->buf
+			&& (long) buf < (long) this->buf + buf_size))
+		printf("fail to free %p\n", buf);
+	assert((long) buf >= (long) this->buf
+			&& (long) buf < (long) this->buf + buf_size);
 	int off = buf - this->buf;
 	free_refs.push_back(off);
 	off /= entry_size;

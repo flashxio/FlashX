@@ -23,9 +23,9 @@ class global_cached_private: public thread_private
 	long cache_size;
 	static page_cache *global_cache;
 	/* the underlying IO. */
-	read_private *underlying;
+	thread_private *underlying;
 public:
-	inline global_cached_private(read_private *underlying,
+	inline global_cached_private(thread_private *underlying,
 			int idx, int entry_size): thread_private(idx, entry_size) {
 		this->underlying = underlying;
 		num_waits = 0;
@@ -58,7 +58,7 @@ public:
 		return global_cache;
 	}
 
-	global_cached_private(read_private *, int, long, int, int,
+	global_cached_private(thread_private *, int, long, int, int,
 			memory_manager *);
 
 	virtual page_cache *get_global_cache() {

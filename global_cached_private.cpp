@@ -47,7 +47,7 @@ public:
 	}
 };
 
-global_cached_private::global_cached_private(read_private *underlying,
+global_cached_private::global_cached_private(thread_private *underlying,
 		int idx, long cache_size, int entry_size, int cache_type,
 		memory_manager *manager): thread_private(idx, entry_size) {
 	this->underlying = underlying;
@@ -103,7 +103,11 @@ ssize_t global_cached_private::access(io_request *requests,
 
 			io_request req((char *) p->get_data(),
 					ROUND_PAGE(offset), PAGE_SIZE, READ,
-					this, (void *) orig);
+					/*
+					 * it will notify the underlying IO,
+					 * which then notifies global_cached_private.
+					 */
+					underlying, (void *) orig);
 			ret = underlying->access(&req, 1, READ);
 			if (ret < 0) {
 				perror("read");

@@ -40,6 +40,8 @@
 #include "part_global_cached_private.h"
 #include "read_private.h"
 #include "thread_private.h"
+#include "remote_access.h"
+#include "disk_read_thread.h"
 
 //#define USE_PROCESS
 
@@ -115,8 +117,10 @@ void *rand_read(void *arg)
 #endif
 
 	printf("pid: %d, tid: %ld\n", getpid(), gettid());
+	rand_buf *buf = new rand_buf(NUM_PAGES / (nthreads
+				/ NUM_NODES) * PAGE_SIZE, priv->get_entry_size());
+	priv->buf = buf;
 	priv->thread_init();
-	rand_buf *buf = priv->buf;
 	priv->cb = new cleanup_callback(buf);
 
 	gettimeofday(&priv->start_time, NULL);
@@ -127,7 +131,8 @@ void *rand_read(void *arg)
 //			io_request *reqs = gc->allocate_obj(BULK_SIZE);
 			for (i = 0; i < BULK_SIZE
 					&& priv->gen->has_next() && !buf->is_full(); i++) {
-				reqs[i].init(buf->next_entry(),
+				char *p = buf->next_entry();
+				reqs[i].init(p,
 						priv->gen->next_offset(), entry_size, READ, priv);
 			}
 			// TODO right now it only support read.
@@ -435,8 +440,12 @@ int main(int argc, char *argv[])
 	long end = 0;
 	const char *cnames[num_files];
 	int num;
-	for (int k = 0; k < num_files; k++)
+	disk_read_thread **read_threads = new disk_read_thread*[num_files];
+	for (int k = 0; k < num_files; k++) {
 		cnames[k] = file_names[k].c_str();
+		read_threads[k] = new disk_read_thread(cnames[k], npages * PAGE_SIZE);
+	}
+
 	num = num_files;
 	// TODO each node should have a memory manager.
 	memory_manager *manager = new memory_manager(cache_size);
@@ -468,8 +477,8 @@ int main(int argc, char *argv[])
 				break;
 			case GLOBAL_CACHE_ACCESS:
 				{
-					read_private *priv = new aio_private(cnames, num,
-							npages * PAGE_SIZE, j, entry_size);
+					thread_private *priv = new remote_disk_access(
+							read_threads, num_files);
 					threads[j] = new global_cached_private(priv,
 							j, cache_size, entry_size, cache_type, manager);
 				}

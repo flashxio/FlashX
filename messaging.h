@@ -144,9 +144,9 @@ public:
 		delete [] buf;
 	}
 
-	int fetch(T *entries, int num);
+	virtual int fetch(T *entries, int num);
 
-	int add(T *entries, int num);
+	virtual int add(T *entries, int num);
 
 	int get_num_entries() {
 		return num_entries;

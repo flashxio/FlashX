@@ -36,16 +36,21 @@ public:
 	int cache_hits;
 #endif
 
-	virtual ssize_t access(char *, off_t, ssize_t, int) = 0;
+	virtual ssize_t access(char *, off_t, ssize_t, int) {
+		return -1;
+	}
+
 	virtual int thread_init() {
-		buf = new rand_buf(NUM_PAGES / (nthreads / NUM_NODES) * PAGE_SIZE,
-				get_entry_size());
 		return 0;
 	}
 
 	/* by default, the base class doesn't support bulk operations. */
 	virtual bool support_bulk() {
 		return false;
+	}
+
+	virtual ssize_t get_size() {
+		return 0;
 	}
 
 	virtual void cleanup() {

@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include "messaging.h"
 
 inline int min(int v1, int v2)
@@ -18,6 +20,12 @@ int bulk_queue<T>::fetch(T *entries, int num) {
 	return n;
 }
 
+/**
+ * this is non-blocking. 
+ * It adds entries to the queue as much as possible,
+ * and returns the number of entries that have been
+ * added.
+ */
 template<class T>
 int bulk_queue<T>::add(T *entries, int num) {
 	pthread_spin_lock(&_lock);
@@ -64,16 +72,14 @@ int msg_sender<T>::flush() {
 	for (int i = 0; num_current > 0 && i < num_queues; i++) {
 		bulk_queue<T> *q = dest_queues[(base_idx + i) % num_queues];
 		assert(q);
-		/* 
-		 * is_full is pre-check, it can't guarantee
-		 * the queue isn't full.
-		 */
-		if (!q->is_full()) {
-			int ret = q->add(tmp, num_current);
-			tmp += ret;
-			num_current -= ret;
-			num_sent += ret;
-		}
+
+		// TODO the thread might be blocked if it's full.
+		// it might hurt performance. We should try other
+		// queues first before being blocked.
+		int ret = q->add(tmp, num_current);
+		tmp += ret;
+		num_current -= ret;
+		num_sent += ret;
 	}
 
 	/* move the remaining entries to the beginning of the buffer. */
@@ -93,8 +99,10 @@ int msg_sender<T>::send_cached(T *msg) {
 		return 0;
 
 	buf[num_current++] = *msg;
-	if (num_current == buf_size)
-		return flush();
+	if (num_current == buf_size) {
+		int ret = flush();
+		return ret;
+	}
 	else
 		/* one message has been cached. */
 		return 1;
