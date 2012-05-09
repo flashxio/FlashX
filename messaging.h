@@ -180,6 +180,10 @@ public:
 		numa_free(dest_queues, sizeof(bulk_queue<T> *) * num_queues);
 	}
 
+	int num_msg() {
+		return num_current;
+	}
+
 	int flush();
 
 	int send_cached(T *msg);
