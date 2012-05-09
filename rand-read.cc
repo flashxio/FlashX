@@ -17,8 +17,6 @@
 #ifdef PROFILER
 #include <google/profiler.h>
 #endif
-#include <sys/syscall.h>
-#define gettid() syscall(__NR_gettid)
 
 #include <iostream>
 #include <string>
@@ -35,8 +33,6 @@
 #include "global_cached_private.h"
 #include "aio_private.h"
 #include "direct_private.h"
-#include "mmap_private.h"
-#include "part_cached_private.h"
 #include "part_global_cached_private.h"
 #include "read_private.h"
 #include "thread_private.h"
@@ -46,7 +42,6 @@
 //#define USE_PROCESS
 
 #define GC_SIZE 10000
-#define BULK_SIZE 1000
 
 enum {
 	NORMAL,
@@ -66,150 +61,11 @@ bool high_prio = false;
 
 thread_private *threads[NUM_THREADS];
 
-class cleanup_callback: public callback
+thread_private *get_thread(int idx)
 {
-	rand_buf *buf;
-public:
-	cleanup_callback(rand_buf *buf) {
-		this->buf = buf;
-	}
-
-	int invoke(io_request *rq) {
-		if(*(unsigned long *) rq->get_buf() != rq->get_offset() / sizeof(long))
-			printf("%ld %ld\n", *(unsigned long *) rq->get_buf(),
-					rq->get_offset() / sizeof(long));
-		assert(*(unsigned long *) rq->get_buf()
-				== rq->get_offset() / sizeof(long));
-		buf->free_entry(rq->get_buf());
-		return 0;
-	}
-};
-
-void *rand_read(void *arg)
-{
-	ssize_t ret = -1;
-	thread_private *priv = threads[(long) arg];
-	int entry_size = priv->get_entry_size();
-
-#if NCPUS > 0
-	cpu_set_t cpuset;
-	pthread_t thread = pthread_self();
-	CPU_ZERO(&cpuset);
-	int cpu_num = priv->idx % NCPUS;
-	CPU_SET(cpu_num, &cpuset);
-	ret = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-	if (ret != 0) {
-		perror("pthread_setaffinity_np");
-		exit(1);
-	}
-	printf("attach thread %d to CPU %d\n", priv->idx, cpu_num);
-#endif
-
-#if NUM_NODES > 1
-	struct bitmask *nodemask = numa_allocate_cpumask();
-	numa_bitmask_clearall(nodemask);
-	int node_num = priv->idx / (nthreads / NUM_NODES);
-	printf("thread %d is associated to node %d\n", priv->idx, node_num);
-	numa_bitmask_setbit(nodemask, node_num);
-	numa_bind(nodemask);
-	numa_set_strict(1);
-	numa_set_bind_policy(1);
-#endif
-
-	printf("pid: %d, tid: %ld\n", getpid(), gettid());
-	rand_buf *buf = new rand_buf(NUM_PAGES / (nthreads
-				/ NUM_NODES) * PAGE_SIZE, priv->get_entry_size());
-	priv->buf = buf;
-	priv->thread_init();
-	priv->cb = new cleanup_callback(buf);
-
-	gettimeofday(&priv->start_time, NULL);
-	while (priv->gen->has_next()) {
-		if (priv->support_bulk()) {
-			io_request reqs[BULK_SIZE];
-			int i;
-//			io_request *reqs = gc->allocate_obj(BULK_SIZE);
-			for (i = 0; i < BULK_SIZE
-					&& priv->gen->has_next() && !buf->is_full(); i++) {
-				char *p = buf->next_entry();
-				reqs[i].init(p,
-						priv->gen->next_offset(), entry_size, READ, priv);
-			}
-			// TODO right now it only support read.
-			ret = priv->access(reqs, i, READ);
-			if (ret < 0) {
-				perror("access_vector");
-				exit(1);
-			}
-		}
-		else {
-			char *entry = buf->next_entry();
-			off_t off = priv->gen->next_offset();
-
-			/*
-			 * generate the data for writing the file,
-			 * so the data in the file isn't changed.
-			 */
-			if (access_method == WRITE) {
-				unsigned long *p = (unsigned long *) entry;
-				long start = off / sizeof(long);
-				for (unsigned int i = 0; i < entry_size / sizeof(*p); i++)
-					p[i] = start++;
-			}
-
-			ret = priv->access(entry, off, entry_size, access_method);
-			if (ret > 0) {
-//				assert(ret == buf->get_entry_size());
-				if (access_method == READ && verify_read_content) {
-					if (*(unsigned long *) entry != off / sizeof(long))
-						printf("entry: %ld, off: %ld\n", *(unsigned long *) entry, off / sizeof(long));
-					assert(*(unsigned long *) entry == off / sizeof(long));
-				}
-				if (ret > 0)
-					priv->read_bytes += ret;
-				else
-					break;
-			}
-			buf->free_entry(entry);
-			if (ret < 0) {
-				perror("access");
-				exit(1);
-			}
-		}
-	}
-	priv->cleanup();
-	printf("thread %d exits\n", priv->idx);
-	gettimeofday(&priv->end_time, NULL);
-	
-#ifdef USE_PROCESS
-	exit(priv->read_bytes);
-#else
-	pthread_exit((void *) priv->read_bytes);
-#endif
-}
-
-int process_create(pid_t *pid, void (*func)(void *), void *priv)
-{
-	pid_t id = fork();
-
-	if (id < 0)
-		return -1;
-
-	if (id == 0) {	// child
-		func(priv);
-		exit(0);
-	}
-
-	if (id > 0)
-		*pid = id;
-	return 0;
-}
-
-int process_join(pid_t pid)
-{
-	int status;
-	pid_t ret = waitpid(pid, &status, 0);
-	return ret < 0 ? ret : 0;
+	thread_private *thread = threads[idx];
+	assert(idx == thread->get_idx());
+	return thread;
 }
 
 struct str2int {
@@ -223,8 +79,6 @@ enum {
 #ifdef ENABLE_AIO
 	AIO_ACCESS,
 #endif
-	MMAP_ACCESS,
-	LOCAL_CACHE_ACCESS,
 	GLOBAL_CACHE_ACCESS,
 	PART_GLOBAL_ACCESS,
 };
@@ -235,8 +89,6 @@ str2int access_methods[] = {
 #ifdef ENABLE_AIO
 	{ "aio", AIO_ACCESS },
 #endif
-	{ "mmap", MMAP_ACCESS },
-	{ "local_cache", LOCAL_CACHE_ACCESS },
 	{ "global_cache", GLOBAL_CACHE_ACCESS },
 	{ "parted_global", PART_GLOBAL_ACCESS },
 };
@@ -453,46 +305,38 @@ int main(int argc, char *argv[])
 	for (j = 0; j < nthreads; j++) {
 		switch (access_option) {
 			case READ_ACCESS:
-				threads[j] = new read_private(cnames, num,
-						npages * PAGE_SIZE, j, entry_size);
+				threads[j] = new thread_private(j, entry_size,
+						new buffered_io(cnames, num, npages * PAGE_SIZE));
 				break;
 			case DIRECT_ACCESS:
-				threads[j] = new direct_private(cnames, num,
-						npages * PAGE_SIZE, j, entry_size);
+				threads[j] = new thread_private(j, entry_size,
+						new direct_io(cnames, num, npages * PAGE_SIZE));
 				break;
 #if ENABLE_AIO
 			case AIO_ACCESS:
-				threads[j] = new aio_private(cnames, num,
-						npages * PAGE_SIZE, j, entry_size);
+				threads[j] = new thread_private(j, entry_size,
+						new async_io(cnames, num, npages * PAGE_SIZE));
 				break;
 #endif
-			case MMAP_ACCESS:
-				/* TODO for now mmap doesn't support accessing multiple files. */
-				threads[j] = new mmap_private(cnames[0], j, entry_size);
-				break;
-			case LOCAL_CACHE_ACCESS:
-				threads[j] = new part_cached_private(cnames, num,
-						npages * PAGE_SIZE, j,
-						cache_size / nthreads, entry_size);
-				break;
 			case GLOBAL_CACHE_ACCESS:
 				{
-					thread_private *priv = new remote_disk_access(
+//					io_interface *underlying = new async_io(cnames, num, npages * PAGE_SIZE);
+					io_interface *underlying = new remote_disk_access(
 							read_threads, num_files);
-					threads[j] = new global_cached_private(priv,
-							j, cache_size, entry_size, cache_type, manager);
+					global_cached_io *io = new global_cached_io(underlying,
+							cache_size, cache_type, manager);
+					if (preload)
+						io->preload(0, npages * PAGE_SIZE);
+					threads[j] = new thread_private(j, entry_size, io);
 				}
-				if (preload)
-					((global_cached_private *) threads[j])->preload(0,
-						npages * PAGE_SIZE);
 				break;
 			case PART_GLOBAL_ACCESS:
 				{
-					read_private *priv = new direct_private(cnames, num,
-							npages * PAGE_SIZE, j, entry_size);
-					threads[j] = new part_global_cached_private(num_nodes,
-							priv, j, cache_size,
-							entry_size, cache_type, manager);
+					io_interface *underlying = new direct_io(cnames, num,
+							npages * PAGE_SIZE);
+					threads[j] = new thread_private(j, entry_size,
+							new part_global_cached_io(num_nodes, underlying,
+								j, cache_size, cache_type, manager));
 				}
 				break;
 			default:
@@ -550,7 +394,7 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "unsupported workload\n");
 				exit(1);
 		}
-		threads[j]->gen = gen;
+		threads[j]->set_workload(gen);
 	}
 
 	if (high_prio) {
@@ -568,11 +412,7 @@ int main(int argc, char *argv[])
 		ProfilerStart(prof_file.c_str());
 #endif
 	for (i = 0; i < nthreads; i++) {
-#ifdef USE_PROCESS
-		ret = process_create(&threads[i]->id, rand_read, (void *) i);
-#else
-		ret = pthread_create(&threads[i]->id, NULL, rand_read, (void *) (long) i);
-#endif
+		ret = threads[i]->start_thread();
 		if (ret) {
 			perror("pthread_create");
 			exit(1);
@@ -580,17 +420,12 @@ int main(int argc, char *argv[])
 	}
 
 	for (i = 0; i < nthreads; i++) {
-		ssize_t size;
-#ifdef USE_PROCESS
-		ret = process_join(threads[i]->id);
-#else
-		ret = pthread_join(threads[i]->id, (void **) &size);
-#endif
+		threads[i]->wait_thread_end();
 		if (ret) {
 			perror("pthread_join");
 			exit(1);
 		}
-		read_bytes += size;
+		read_bytes += threads[i]->get_read_bytes();
 	}
 #ifdef PROFILER
 	if (!prof_file.empty())

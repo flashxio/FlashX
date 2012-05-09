@@ -1,9 +1,7 @@
 #include "read_private.h"
 
-int read_private::thread_init() {
+int buffered_io::init() {
 	int ret;
-
-	thread_private::thread_init();
 
 	for (int i = 0; i < num; i++) {
 		fds[i] = open(file_names[i], flags);
@@ -20,7 +18,7 @@ int read_private::thread_init() {
 	return 0;
 }
 
-ssize_t read_private::access(char *buf, off_t offset, ssize_t size, int access_method) {
+ssize_t buffered_io::access(char *buf, off_t offset, ssize_t size, int access_method) {
 	int fd = get_fd(offset);
 #ifdef STATISTICS
 	if (access_method == READ)

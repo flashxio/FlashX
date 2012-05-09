@@ -18,12 +18,11 @@ void aio_callback(io_context_t ctx, struct iocb* iocb,
 		struct io_callback_s *cb, long res, long res2) {
 	thread_callback_s *tcb = (thread_callback_s *) cb;
 
-	tcb->thread->return_cb(tcb);
+	tcb->aio->return_cb(tcb);
 }
 
-aio_private::aio_private(const char *names[], int num, long size,
-		int idx, int entry_size): read_private(names, num, size, idx,
-			entry_size, O_DIRECT | O_RDONLY)
+async_io::async_io(const char *names[], int num,
+		long size): buffered_io(names, num, size, O_DIRECT | O_RDONLY)
 {
 	printf("aio is used\n");
 	buf_idx = 0;
@@ -31,9 +30,10 @@ aio_private::aio_private(const char *names[], int num, long size,
 	for (int i = 0; i < AIO_DEPTH * 5; i++) {
 		cbs.push_back(new thread_callback_s());
 	}
+	cb = NULL;
 }
 
-void aio_private::cleanup()
+void async_io::cleanup()
 {
 	int slot = max_io_slot(ctx);
 
@@ -41,17 +41,17 @@ void aio_private::cleanup()
 		io_wait(ctx, NULL);
 		slot = max_io_slot(ctx);
 	}
-	read_private::cleanup();
+	buffered_io::cleanup();
 }
 
-aio_private::~aio_private()
+async_io::~async_io()
 {
 	cleanup();
 }
 
-struct iocb *aio_private::construct_req(char *buf, off_t offset,
+struct iocb *async_io::construct_req(char *buf, off_t offset,
 		ssize_t size, int access_method, callback_t cb_func,
-		thread_private *initiator, void *priv)
+		io_interface *initiator, void *priv)
 {
 	struct iocb *req = NULL;
 
@@ -67,7 +67,7 @@ struct iocb *aio_private::construct_req(char *buf, off_t offset,
 	cb->offset = offset;
 	cb->size = size;
 	cb->func = cb_func;
-	tcb->thread = this;
+	tcb->aio = this;
 	tcb->initiator = initiator;
 	tcb->priv = priv;
 
@@ -79,24 +79,7 @@ struct iocb *aio_private::construct_req(char *buf, off_t offset,
 	return req;
 }
 
-ssize_t aio_private::access(char *buf, off_t offset,
-		ssize_t size, int access_method) {
-	struct iocb *req;
-	int slot = max_io_slot(ctx);
-
-	assert(access_method == READ);
-	if (slot == 0) {
-		io_wait(ctx, NULL);
-	}
-
-	/* the initiator of the request must be itself. */
-	req = construct_req(buf, offset, size, access_method, aio_callback,
-			this, NULL);
-	submit_io_request(ctx, &req, 1);
-	return 0;
-}
-
-ssize_t aio_private::access(io_request *requests, int num, int access_method)
+ssize_t async_io::access(io_request *requests, int num)
 {
 	ssize_t ret = 0;
 
@@ -118,7 +101,7 @@ ssize_t aio_private::access(io_request *requests, int num, int access_method)
 					 * another thread with message passing, 
 					 * it will be another thread.
 					 */
-					requests->get_thread(), requests->get_priv());
+					requests->get_io(), requests->get_priv());
 			ret += requests->get_size();
 			requests++;
 		}

@@ -21,18 +21,26 @@ rand_buf::rand_buf(int buf_size, int entry_size): free_refs(buf_size / entry_siz
 		buf[i * PAGE_SIZE] = 0;
 
 	current = 0;
+	// TODO I shouldn't use spin lock here.
+	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 }
 
 char *rand_buf::next_entry() {
+	pthread_spin_lock(&lock);
 	assert(!free_refs.is_empty());
 	int off = free_refs.front();
 	free_refs.pop_front();
+	if (off == free_refs.front())
+		printf("buf: %p\n", &buf[off]);
 	assert(marks[off / entry_size] == 0);
 	marks[off / entry_size] = 1;
-	return &buf[off];
+	char *ret = &buf[off];
+	pthread_spin_unlock(&lock);
+	return ret;
 }
 
 void rand_buf::free_entry(char *buf) {
+	pthread_spin_lock(&lock);
 	int buf_size = num_entries * entry_size;
 	if (!((long) buf >= (long) this->buf
 			&& (long) buf < (long) this->buf + buf_size))
@@ -46,4 +54,5 @@ void rand_buf::free_entry(char *buf) {
 		printf("free %p error\n", buf);
 	assert(marks[off]);
 	marks[off] = 0;
+	pthread_spin_unlock(&lock);
 }

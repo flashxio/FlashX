@@ -7,14 +7,14 @@
 
 #include "common.h"
 
-class thread_private;
+class io_interface;
 class io_request
 {
 	char *buf;
 	off_t offset;
 	ssize_t size: 32;
 	int access_method: 1;
-	thread_private *thread;
+	io_interface *io;
 	void *priv;
 public:
 	io_request() {
@@ -22,17 +22,17 @@ public:
 	}
 
 	io_request(char *buf, off_t off, ssize_t size,
-			int access_method, thread_private *t, void *priv = NULL) {
-		init(buf, off, size, access_method, t, priv);
+			int access_method, io_interface *io, void *priv = NULL) {
+		init(buf, off, size, access_method, io, priv);
 	}
 
 	void init(char *buf, off_t off, ssize_t size,
-			int access_method, thread_private *t, void *priv = NULL) {
+			int access_method, io_interface *io, void *priv = NULL) {
 		assert(off >= 0);
 		this->buf = buf;
 		this->offset = off;
 		this->size = size;
-		this->thread = t;
+		this->io = io;
 		this->access_method = access_method;
 		this->priv = priv;
 	}
@@ -41,8 +41,8 @@ public:
 		return access_method;
 	}
 
-	thread_private *get_thread() {
-		return thread;
+	io_interface *get_io() {
+		return io;
 	}
 
 	char *get_buf() {

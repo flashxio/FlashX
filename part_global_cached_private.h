@@ -11,17 +11,17 @@
 #include "garbage_collection.h"
 #include "global_cached_private.h"
 
-class part_global_cached_private;
+class part_global_cached_io;
 
 struct thread_group
 {
 	int id;
 	int nthreads;
-	part_global_cached_private **threads;
+	part_global_cached_io **ios;
 	page_cache *cache;
 };
 
-class part_global_cached_private: public global_cached_private
+class part_global_cached_io: public global_cached_io
 {
 	memory_manager *manager;
 	static thread_group *groups;
@@ -62,6 +62,10 @@ class part_global_cached_private: public global_cached_private
 
 	long remote_reads;
 
+	int thread_id;
+
+	callback *cb;
+
 public:
 	static inline int group_id(int thread_id, int num_groups) {
 		int remaining = nthreads % num_groups;
@@ -82,24 +86,30 @@ public:
 			return (thread_id - remaining * (group_size + 1)) % group_size;
 	}
 
-	part_global_cached_private *id2thread(int thread_id) {
-		return groups[group_id(thread_id, num_groups)].threads[thread_idx(thread_id, num_groups)];
+	part_global_cached_io *id2thread(int thread_id) {
+		return groups[group_id(thread_id, num_groups)].ios[thread_idx(thread_id, num_groups)];
 	}
 
-	~part_global_cached_private() {
+	~part_global_cached_io() {
 		// TODO delete all senders
 		delete request_queue;
 		delete reply_queue;
 	}
 
-	int thread_init();
+	int init();
 
-	part_global_cached_private(int num_groups, read_private *underlying,
-			int idx, long cache_size, int entry_size, int cache_type,
+	part_global_cached_io(int num_groups, io_interface *underlying,
+			int idx, long cache_size, int cache_type,
 			memory_manager *manager);
 
 	virtual page_cache *get_global_cache() {
 		return groups[group_idx].cache;
+	}
+
+	virtual bool set_callback(callback *cb);
+
+	virtual callback *get_callback() {
+		return cb;
 	}
 
 	int reply(io_request *requests, io_reply *replies, int num);
@@ -112,7 +122,10 @@ public:
 
 	int process_reply(io_reply *reply);
 
-	ssize_t access(io_request *requests, int num, int access_method);
+	ssize_t access(io_request *requests, int num);
+	ssize_t access(char *, off_t, ssize_t, int) {
+		return -1;
+	}
 
 	void cleanup();
 
@@ -120,13 +133,13 @@ public:
 		return group_idx;
 	}
 
-	bool support_bulk() {
+	bool support_aio() {
 		return true;
 	}
 
 #ifdef STATISTICS
 	virtual void print_stat() {
-		global_cached_private::print_stat();
+		global_cached_io::print_stat();
 		static long tot_remote_reads = 0;
 		static int seen_threads = 0;
 		tot_remote_reads += remote_reads;

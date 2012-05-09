@@ -1,9 +1,9 @@
 CFLAGS = -g -O3 -DSTATISTICS -DENABLE_AIO #-DPROFILER
 CXXFLAGS = -g -Inbds.0.4.3/include/ -Wall -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=0 #-DPROFILER
 LDFLAGS = -lpthread -lnuma -laio #-lprofiler
-HEADERS = aio_private.h direct_private.h global_cached_private.h mmap_private.h part_cached_private.h part_global_cached_private.h read_private.h thread_private.h workload.h rand_buf.h
+HEADERS = aio_private.h direct_private.h global_cached_private.h part_global_cached_private.h read_private.h thread_private.h workload.h rand_buf.h
 CC = g++
-OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o hash_index_cache.o messaging.o disk_read_thread.o
+OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o hash_index_cache.o messaging.o disk_read_thread.o thread_private.o
 
 all: rand-read rand-memcpy create_file
 

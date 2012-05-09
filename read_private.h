@@ -7,7 +7,7 @@
 
 #define MIN_BLOCK_SIZE 512
 
-class read_private: public thread_private
+class buffered_io: public io_interface
 {
 	/* the array of files that it's going to access */
 	const char **file_names;
@@ -24,8 +24,8 @@ class read_private: public thread_private
 	long num_reads;
 #endif
 public:
-	read_private(const char *names[], int num, long size, int idx, int entry_size,
-			int flags = O_RDONLY): thread_private(idx, entry_size) {
+	buffered_io(const char *names[], int num,
+			long size, int flags = O_RDONLY) {
 		this->flags = flags;
 #ifdef STATISTICS
 		read_time = 0;
@@ -40,10 +40,9 @@ public:
 		this->size = size;
 	}
 
-	~read_private() {
+	~buffered_io() {
 		delete [] file_names;
 		delete [] fds;
-		delete buf;
 	}
 
 	long get_size() {
@@ -74,7 +73,7 @@ public:
 		return num;
 	}
 
-	int thread_init();
+	int init();
 
 	void cleanup() {
 		for (int i = 0; i < num; i++)
@@ -83,13 +82,8 @@ public:
 
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
 
-	virtual ssize_t access(io_request *requests, int num, int access_method) {
-		return -1;
-	}
-
 #ifdef STATISTICS
 	virtual void print_stat() {
-		thread_private::print_stat();
 		static int seen_threads = 0;
 		static long tot_nreads;
 		static long tot_read_time;

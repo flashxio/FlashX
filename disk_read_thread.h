@@ -34,7 +34,7 @@ class disk_read_thread
 {
 	io_queue<io_request> queue;
 	pthread_t id;
-	aio_private *aio;
+	async_io *aio;
 
 public:
 	disk_read_thread(const char *name, long size);

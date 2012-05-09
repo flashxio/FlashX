@@ -17,19 +17,23 @@ enum {
 	LRU2Q_CACHE,
 };
 
-class global_cached_private: public thread_private
+class global_cached_io: public io_interface
 {
 	int num_waits;
 	long cache_size;
 	static page_cache *global_cache;
 	/* the underlying IO. */
-	thread_private *underlying;
+	io_interface *underlying;
+	callback *cb;
+
+	int cache_hits;
 public:
-	inline global_cached_private(thread_private *underlying,
-			int idx, int entry_size): thread_private(idx, entry_size) {
+	inline global_cached_io(io_interface *underlying) {
 		this->underlying = underlying;
 		num_waits = 0;
 		cache_size = 0;
+		cb = NULL;
+		cache_hits = 0;
 	}
 
 	static page_cache *create_cache(int cache_type,
@@ -58,8 +62,7 @@ public:
 		return global_cache;
 	}
 
-	global_cached_private(thread_private *, int, long, int, int,
-			memory_manager *);
+	global_cached_io(io_interface *, long, int, memory_manager *);
 
 	virtual page_cache *get_global_cache() {
 		return global_cache;
@@ -67,29 +70,47 @@ public:
 
 	int preload(off_t start, long size);
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
-	ssize_t access(io_request *requests, int num, int access_method);
+	ssize_t access(io_request *requests, int num);
 
 	ssize_t get_size() {
 		return underlying->get_size();
 	}
 
-	virtual int thread_init() {
-		thread_private::thread_init();
-		return underlying->thread_init();
+	virtual int init() {
+		return underlying->init();
 	}
 
-	virtual bool support_bulk() {
-		return underlying->support_bulk();
+	virtual bool set_callback(callback *cb) {
+		if (underlying->support_aio())
+			this->cb = cb;
+		return underlying->support_aio();
+	}
+	
+	virtual callback *get_callback() {
+		return cb;
+	}
+
+	virtual bool support_aio() {
+		return underlying->support_aio();
 	}
 
 	virtual void cleanup() {
 		underlying->cleanup();
 	}
 
+	callback *get_cb() {
+		return cb;
+	}
+
 #ifdef STATISTICS
 	void print_stat() {
-		thread_private::print_stat();
-		printf("there are %d waits in thread %d\n", num_waits, idx);
+		static int tot_hits = 0;
+		static int seen_threads = 0;
+		seen_threads++;
+		tot_hits += cache_hits;
+		if (seen_threads == nthreads)
+			printf("there are %d cache hits\n", tot_hits);
+		printf("there are %d waits\n", num_waits);
 	}
 #endif
 };

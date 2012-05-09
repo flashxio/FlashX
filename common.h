@@ -15,4 +15,7 @@ inline float time_diff(struct timeval time1, struct timeval time2)
 			+ ((float)(time2.tv_usec - time1.tv_usec))/1000000;
 }
 
+class thread_private;
+extern thread_private *get_thread(int idx);
+
 #endif

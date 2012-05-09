@@ -5,14 +5,13 @@
 
 extern long npages;
 
-class mmap_private: public thread_private
+class mmap_io: public io_interface
 {
 	void *addr;
 	volatile static int first[NUM_THREADS];
 
 public:
-	mmap_private(const char *new_name, int idx,
-			int entry_size): thread_private(idx, entry_size) {
+	mmap_io(const char *new_name) {
 		static void *addr = NULL;
 		static const char *file_name = NULL;
 		/* if we are mapping to a different file, do the real mapping. */
@@ -53,6 +52,6 @@ public:
 		return size;
 	}
 };
-volatile int mmap_private::first[NUM_THREADS];
+volatile int mmap_io::first[NUM_THREADS];
 
 #endif

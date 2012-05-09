@@ -57,6 +57,7 @@ class rand_buf
 	int entry_size;
 	int num_entries;
 	dynamic_queue<int> free_refs;
+	pthread_spinlock_t lock;
 
 	int current;
 public:

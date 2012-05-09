@@ -26,32 +26,32 @@ static void __complete_req(io_request *orig, thread_safe_page *p)
 
 class read_page_callback: public callback
 {
-	thread_private *priv;
+	global_cached_io *io;
 public:
-	read_page_callback(thread_private *priv) {
-		this->priv = priv;
+	read_page_callback(global_cached_io *io) {
+		this->io = io;
 	}
 
 	int invoke(io_request *request) {
-		priv->read_bytes += request->get_size();
 		io_request *orig = (io_request *) request->get_priv();
 		thread_safe_page *p = (thread_safe_page *) orig->get_priv();
 		p->set_data_ready(true);
 		p->set_io_pending(false);
 		__complete_req(orig, p);
-		if (priv->cb)
-			priv->cb->invoke(orig);
+		if (io->get_cb())
+			io->get_cb()->invoke(orig);
 		// TODO use my own deallocator.
 		delete orig;
 		return 0;
 	}
 };
 
-global_cached_private::global_cached_private(thread_private *underlying,
-		int idx, long cache_size, int entry_size, int cache_type,
-		memory_manager *manager): thread_private(idx, entry_size) {
+global_cached_io::global_cached_io(io_interface *underlying,
+		long cache_size, int cache_type, memory_manager *manager) {
+	cb = NULL;
+	cache_hits = 0;
 	this->underlying = underlying;
-	underlying->cb = new read_page_callback(this);
+	underlying->set_callback(new read_page_callback(this));
 	num_waits = 0;
 	this->cache_size = cache_size;
 	if (global_cache == NULL) {
@@ -60,8 +60,7 @@ global_cached_private::global_cached_private(thread_private *underlying,
 	}
 }
 
-ssize_t global_cached_private::access(io_request *requests,
-		int num, int access_method)
+ssize_t global_cached_io::access(io_request *requests, int num)
 {
 	for (int i = 0; i < num; i++) {
 		ssize_t ret;
@@ -105,10 +104,10 @@ ssize_t global_cached_private::access(io_request *requests,
 					ROUND_PAGE(offset), PAGE_SIZE, READ,
 					/*
 					 * it will notify the underlying IO,
-					 * which then notifies global_cached_private.
+					 * which then notifies global_cached_io.
 					 */
 					underlying, (void *) orig);
-			ret = underlying->access(&req, 1, READ);
+			ret = underlying->access(&req, 1);
 			if (ret < 0) {
 				perror("read");
 				exit(1);
@@ -124,7 +123,7 @@ ssize_t global_cached_private::access(io_request *requests,
 	return 0;
 }
 
-ssize_t global_cached_private::access(char *buf, off_t offset,
+ssize_t global_cached_io::access(char *buf, off_t offset,
 		ssize_t size, int access_method)
 {
 	ssize_t ret;
@@ -228,14 +227,14 @@ ssize_t global_cached_private::access(char *buf, off_t offset,
 	return ret;
 }
 
-int global_cached_private::preload(off_t start, long size) {
+int global_cached_io::preload(off_t start, long size) {
 	if (size > cache_size) {
 		fprintf(stderr, "we can't preload data larger than the cache size\n");
 		exit(1);
 	}
 
 	/* open the file. It's a hack, but it works for now. */
-	underlying->thread_init();
+	underlying->init();
 
 	assert(ROUND_PAGE(start) == start);
 	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
@@ -257,4 +256,4 @@ int global_cached_private::preload(off_t start, long size) {
 	return 0;
 }
 
-page_cache *global_cached_private::global_cache;
+page_cache *global_cached_io::global_cache;

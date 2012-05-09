@@ -4,14 +4,15 @@
 #include "disk_read_thread.h"
 #include "messaging.h"
 
-class remote_disk_access: public thread_private
+class remote_disk_access: public io_interface
 {
 	msg_sender<io_request> *sender;
 	bulk_queue<io_request> **queues;
 	int num_queues;
+	callback *cb;
 public:
 	remote_disk_access(disk_read_thread **remotes,
-			int num_remotes): thread_private(0, 0) {
+			int num_remotes) {
 		queues = new bulk_queue<io_request> *[num_remotes];
 		num_queues = num_remotes;
 		for (int i = 0; i < num_remotes; i++) {
@@ -29,7 +30,7 @@ public:
 		return 0;
 	}
 
-	virtual bool support_bulk() {
+	virtual bool support_aio() {
 		return true;
 	}
 
@@ -53,7 +54,16 @@ public:
 		} while (num > 0);
 	}
 
-	virtual ssize_t access(io_request *requests, int num, int access_method) {
+	virtual bool set_callback(callback *cb) {
+		this->cb = cb;
+		return true;
+	}
+
+	virtual callback *get_callback() {
+		return cb;
+	}
+
+	virtual ssize_t access(io_request *requests, int num) {
 		for (int i = 0; i < num; i++) {
 			int ret = sender->send_cached(&requests[i]);
 			/* send should always succeed. */

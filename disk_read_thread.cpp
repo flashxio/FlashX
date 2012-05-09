@@ -48,23 +48,23 @@ class initiator_callback: public callback
 public:
 
 	int invoke(io_request *rq) {
-		thread_private *thread = rq->get_thread();
+		io_interface *io = rq->get_io();
 		/* 
 		 * after a request is processed,
 		 * we need to notify the initiator thread.
 		 * It's possible the initiator thread is itself,
 		 * we need to stop the infinite loop.
 		 */
-		if (thread->cb)
-			thread->cb->invoke(rq);
+		if (io->get_callback())
+			io->get_callback()->invoke(rq);
 		return 0;
 	}
 };
 
 disk_read_thread::disk_read_thread(const char *name,
 		long size): queue(1024) {
-	aio = new aio_private(&name, 1, size, 0, 0);
-	aio->cb = new initiator_callback();
+	aio = new async_io(&name, 1, size);
+	aio->set_callback(new initiator_callback());
 
 	int ret = pthread_create(&id, NULL, process_requests, (void *) this);
 	if (ret) {
@@ -74,7 +74,7 @@ disk_read_thread::disk_read_thread(const char *name,
 }
 
 void disk_read_thread::run() {
-	aio->thread_init();
+	aio->init();
 	while (true) {
 
 		/* 
@@ -86,8 +86,9 @@ void disk_read_thread::run() {
 		io_request reqs[num];
 		queue.fetch(reqs, num);
 
-		aio->access(reqs, num, READ);
+		aio->access(reqs, num);
 	}
+	// TODO I need to call cleanup() of aio.
 }
 
 void *process_requests(void *arg)
