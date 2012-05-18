@@ -399,7 +399,11 @@ void LRU_shadow_cell::scale_down_hits() {
 	}
 }
 
-bool associative_cache::expand(hash_cell *cell) {
+/**
+ * expand the cache.
+ * @trigger_cell: the cell triggers the cache expansion.
+ */
+bool associative_cache::expand(hash_cell *trigger_cell) {
 	hash_cell *cells = NULL;
 	unsigned int i;
 
@@ -416,15 +420,14 @@ bool associative_cache::expand(hash_cell *cell) {
 		cells = cells_table[i];
 		if (cells == NULL)
 			break;
-		if (cell >= cells && cell < cells + init_ncells)
+		if (trigger_cell >= cells && trigger_cell < cells + init_ncells)
 			break;
 	}
 	assert(cells);
-	int global_idx = i * init_ncells + (cell - cells);
 
-	cell = get_cell(split);
+	hash_cell *cell = get_cell(split);
 	long size = pow(2, level) * init_ncells;
-	while (split < global_idx || cell->is_overflow()) {
+	while (trigger_cell->is_overflow()) {
 		unsigned int cells_idx = (split + size) / init_ncells;
 		/* 
 		 * I'm sure only this thread can change the table,
