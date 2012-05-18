@@ -123,7 +123,7 @@ int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num)
   ret = n = io_getevents(a_ctx->ctx, num, a_ctx->max_aio, events, to);
   if (ret < 0)
   {
-    fprintf(stderr, "io_wait: %s", strerror(-ret));
+    fprintf(stderr, "io_wait: %s\n", strerror(-ret));
     //exit(1);
   }
   for (ep = events; n-- > 0; ep++)
