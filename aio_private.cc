@@ -82,11 +82,15 @@ struct iocb *async_io::construct_req(char *buf, off_t offset,
 ssize_t async_io::access(io_request *requests, int num)
 {
 	ssize_t ret = 0;
+	int min = 10;
+	/* a minimal number of IO events to wait. */
+	if (min > AIO_DEPTH)
+		min = AIO_DEPTH;
 
 	while (num > 0) {
 		int slot = max_io_slot(ctx);
 		if (slot == 0) {
-			io_wait(ctx, NULL, 10);
+			io_wait(ctx, NULL, min);
 			slot = max_io_slot(ctx);
 		}
 		struct iocb *reqs[slot];
