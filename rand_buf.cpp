@@ -30,8 +30,6 @@ char *rand_buf::next_entry() {
 	assert(!free_refs.is_empty());
 	int off = free_refs.front();
 	free_refs.pop_front();
-	if (off == free_refs.front())
-		printf("buf: %p\n", &buf[off]);
 	assert(marks[off / entry_size] == 0);
 	marks[off / entry_size] = 1;
 	char *ret = &buf[off];
