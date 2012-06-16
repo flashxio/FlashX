@@ -11,6 +11,8 @@ volatile int lock_contentions;
 int end_evicts = 0;
 int middle_evicts = 0;
 
+#ifdef USE_SHADOW_PAGE
+
 /*
  * remove the idx'th element in the queue.
  * idx is the logical position in the queue,
@@ -79,6 +81,8 @@ void generic_queue<T, SIZE>::remove(int idx) {
 		num--;
 	}
 }
+
+#endif
 
 hash_cell::hash_cell(associative_cache *cache, long hash) {
 	this->hash = hash;
@@ -329,6 +333,8 @@ thread_safe_page *hash_cell::get_empty_page() {
 }
 #endif
 
+#ifdef USE_SHADOW_PAGE
+
 void clock_shadow_cell::add(shadow_page pg) {
 	if (!queue.is_full()) {
 		queue.push_back(pg);
@@ -398,6 +404,8 @@ void LRU_shadow_cell::scale_down_hits() {
 		queue.get(i).set_hits(queue.get(i).get_hits() / 2);
 	}
 }
+
+#endif
 
 /**
  * expand the cache.

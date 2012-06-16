@@ -12,8 +12,6 @@
 
 #define CELL_SIZE 8
 
-#define USE_SHADOW_PAGE
-
 /* 36 shadow pages makes exactly 4 cache lines. */
 #define NUM_SHADOW_PAGES 36
 
@@ -205,6 +203,8 @@ public:
 	}
 };
 
+#ifdef USE_SHADOW_PAGE
+
 class shadow_cell
 {
 public:
@@ -252,6 +252,8 @@ public:
 
 	void scale_down_hits();
 };
+
+#endif
 
 class associative_cache;
 
