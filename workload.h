@@ -23,6 +23,7 @@ public:
 	 */
 	virtual off_t next_offset() = 0;
 	virtual bool has_next() = 0;
+	virtual ~workload_gen() { }
 };
 
 class seq_workload: public workload_gen
@@ -130,7 +131,7 @@ public:
 		num = end - start;
 	}
 
-	~local_rand_permute_workload() {
+	virtual ~local_rand_permute_workload() {
 		delete permute;
 	}
 
@@ -168,7 +169,7 @@ public:
 		this->end = end;
 	}
 
-	~global_rand_permute_workload() {
+	virtual ~global_rand_permute_workload() {
 		if (permute) {
 			delete permute;
 			permute = NULL;
@@ -208,7 +209,7 @@ class file_workload: public workload_gen
 public:
 	file_workload(const std::string &file, int nthreads);
 
-	~file_workload() {
+	virtual ~file_workload() {
 		free(offsets);
 	}
 
@@ -242,7 +243,7 @@ public:
 		}
 	}
 
-	~rand_workload() {
+	virtual ~rand_workload() {
 		free(offsets);
 	}
 
@@ -281,7 +282,7 @@ public:
 				npages * PAGE_SIZE / entry_size / nthreads, 1);
 	}
 
-	~RAID0_rand_permute_workload() {
+	virtual ~RAID0_rand_permute_workload() {
 		delete local_gen;
 	}
 
@@ -298,6 +299,7 @@ class workload_chunk
 {
 public:
 	virtual bool get_workload(off_t *, int num) = 0;
+	virtual ~workload_chunk() { }
 };
 
 class stride_workload_chunk: public workload_chunk
@@ -319,7 +321,7 @@ public:
 		stride = PAGE_SIZE / entry_size;
 	}
 
-	~stride_workload_chunk() {
+	virtual ~stride_workload_chunk() {
 		pthread_spin_destroy(&_lock);
 	}
 
@@ -338,7 +340,7 @@ public:
 		this->chunks = chunks;
 	}
 
-	~balanced_workload() {
+	virtual ~balanced_workload() {
 		if (chunks) {
 			delete chunks;
 			chunks = NULL;

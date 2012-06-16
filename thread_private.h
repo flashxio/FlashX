@@ -19,6 +19,8 @@ public:
 class io_interface
 {
 public:
+	virtual ~io_interface() { }
+
 	virtual int init() {
 		return 0;
 	}

@@ -42,7 +42,7 @@ public:
 	 */
 	async_io(const char *names[], int num, long size);
 
-	~async_io();
+	virtual ~async_io();
 
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
 		return -1;

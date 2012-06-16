@@ -9,7 +9,7 @@
 class tree_cache: public page_cache
 {
 	page_buffer<page> *buf;
-	std::map<off_t, struct page *> map;
+	std::map<off_t, page *> map;
 
 public:
 	tree_cache(long size, long page_buf) {
@@ -22,7 +22,7 @@ public:
 	}
 	
 	page *search(const off_t offset, off_t &old_off) {
-		std::map<off_t, struct page *>::iterator it = map.find(offset);
+		std::map<off_t, page *>::iterator it = map.find(offset);
 		if (it == map.end()) {
 			page *ret = get_empty_page(offset);
 			return ret;
@@ -37,7 +37,7 @@ public:
 	 * If the cache is full, evict a page and return the evicted page
 	 */
 	page *get_empty_page(off_t offset) {
-		struct page *page = buf->get_empty_page();
+		page *page = buf->get_empty_page();
 		if (page->initialized()) {
 			map.erase(page->get_offset());
 		}
@@ -51,7 +51,7 @@ public:
 	int add_page(void *data, const off_t offset) {
 		class page page(offset, data);
 		class page removed;
-		struct page *ret = buf.push_back(page, removed);
+		page *ret = buf.push_back(page, removed);
 		if (removed.is_valid()) {
 			/* if the page is valid,
 			 * we should remove the page in the map. */

@@ -139,7 +139,7 @@ public:
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	~bulk_queue() {
+	virtual ~bulk_queue() {
 		pthread_spin_destroy(&_lock);
 		delete [] buf;
 	}

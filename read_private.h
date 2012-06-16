@@ -40,7 +40,7 @@ public:
 		this->size = size;
 	}
 
-	~buffered_io() {
+	virtual ~buffered_io() {
 		delete [] file_names;
 		delete [] fds;
 	}

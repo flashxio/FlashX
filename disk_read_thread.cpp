@@ -1,5 +1,7 @@
 #include "disk_read_thread.h"
 
+const int MAX_FETCH_REQS = 100;
+
 template<class T>
 int io_queue<T>::fetch(T *entries, int num) {
 	/* we have to wait for coming requests. */
@@ -75,6 +77,7 @@ disk_read_thread::disk_read_thread(const char *name,
 
 void disk_read_thread::run() {
 	aio->init();
+	io_request reqs[MAX_FETCH_REQS];
 	while (true) {
 
 		/* 
@@ -82,9 +85,7 @@ void disk_read_thread::run() {
 		 * from the queue.
 		 * get all requests in the queue
 		 */
-		int num = queue.get_num_entries();
-		io_request reqs[num];
-		queue.fetch(reqs, num);
+		int num = queue.fetch(reqs, MAX_FETCH_REQS);
 
 		aio->access(reqs, num);
 	}
