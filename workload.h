@@ -195,17 +195,6 @@ class file_workload: public workload_gen
 	long curr;
 	long end;
 
-	long swap_bytesl(long num) {
-		long res;
-
-		char *src = (char *) &num;
-		char *dst = (char *) &res;
-		for (unsigned int i = 0; i < sizeof(long); i++) {
-			dst[sizeof(long) - 1 - i] = src[i];
-		}
-		return res;
-	}
-
 public:
 	file_workload(const std::string &file, int nthreads);
 
@@ -223,6 +212,17 @@ public:
 
 	bool has_next() {
 		return curr < end;
+	}
+
+	long static swap_bytesl(long num) {
+		long res;
+
+		char *src = (char *) &num;
+		char *dst = (char *) &res;
+		for (unsigned int i = 0; i < sizeof(long); i++) {
+			dst[sizeof(long) - 1 - i] = src[i];
+		}
+		return res;
 	}
 };
 

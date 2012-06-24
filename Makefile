@@ -10,7 +10,7 @@ CC = clang
 CXX = clang++
 OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o hash_index_cache.o messaging.o disk_read_thread.o thread_private.o
 
-all: rand-read rand-memcpy create_file
+all: rand-read rand-memcpy create_file stat
 
 create_file: create_file.o
 	$(CXX) -o create_file create_file.o -lnuma
@@ -25,6 +25,9 @@ rand-memcpy: rand-memcpy.c
 
 test: test.cc cuckoo_cache.h cache.h associative_cache.h tree_cache.h $(HEADERS)
 	$(CXX) -o test test.cc -g -lpthread -DNUM_NODES=1
+
+stat: stat.cc workload.h
+	$(CXX) -o stat stat.cc
 
 clean:
 	rm *.o
