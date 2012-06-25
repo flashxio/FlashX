@@ -6,7 +6,7 @@
 
 #define RECLAIM_NPAGES 32
 
-class linked_page: public page {
+class linked_page: public thread_safe_page {
 	linked_page *prev, *next;
 public:
 	linked_page() {
@@ -14,7 +14,7 @@ public:
 		next = this;
 	}
 
-	linked_page(off_t off, long data): page(off, data) {
+	linked_page(off_t off, long data): thread_safe_page(off, data) {
 		prev = this;
 		next = this;
 	}
