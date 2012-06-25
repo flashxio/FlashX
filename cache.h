@@ -286,9 +286,6 @@ public:
 	void dec_ref() {
 		__sync_fetch_and_sub(&refcnt, 1);
 	}
-	short get_ref() {
-		return refcnt;
-	}
 
 	void wait_unused() {
 		while(get_ref()) {
