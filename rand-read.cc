@@ -99,6 +99,7 @@ str2int cache_types[] = {
 	{ "hash-index", HASH_INDEX_CACHE },
 	{ "cuckoo", CUCKOO_CACHE },
 	{ "lru2q", LRU2Q_CACHE },
+	{ "gclock", GCLOCK_CACHE },
 };
 
 enum {

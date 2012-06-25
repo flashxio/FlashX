@@ -7,6 +7,7 @@
 #include "associative_cache.h"
 #include "cuckoo_cache.h"
 #include "hash_index_cache.h"
+#include "gclock_cache.h"
 #include "LRU2Q.h"
 
 enum {
@@ -55,6 +56,9 @@ public:
 				break;
 			case LRU2Q_CACHE:
 				global_cache = new LRU2Q_cache(cache_size);
+				break;
+			case GCLOCK_CACHE:
+				global_cache = new gclock_cache(cache_size);
 				break;
 			default:
 				fprintf(stderr, "wrong cache type\n");
