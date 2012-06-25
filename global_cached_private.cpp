@@ -38,8 +38,8 @@ public:
 		p->set_data_ready(true);
 		p->set_io_pending(false);
 		__complete_req(orig, p);
-		if (io->get_cb())
-			io->get_cb()->invoke(orig);
+		if (io->get_callback())
+			io->get_callback()->invoke(orig);
 		// TODO use my own deallocator.
 		delete orig;
 		return 0;
@@ -115,6 +115,8 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 		}
 		else {
 			__complete_req(&requests[i], p);
+			if (get_callback())
+				get_callback()->invoke(&requests[i]);
 #ifdef STATISTICS
 			cache_hits++;
 #endif

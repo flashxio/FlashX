@@ -15,6 +15,7 @@ enum {
 	HASH_INDEX_CACHE,
 	CUCKOO_CACHE,
 	LRU2Q_CACHE,
+	GCLOCK_CACHE,
 };
 
 class global_cached_io: public io_interface
@@ -96,10 +97,6 @@ public:
 
 	virtual void cleanup() {
 		underlying->cleanup();
-	}
-
-	callback *get_cb() {
-		return cb;
 	}
 
 #ifdef STATISTICS
