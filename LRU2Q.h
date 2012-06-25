@@ -171,6 +171,7 @@ public:
 			}
 			else
 				pg->set_referenced(true);
+			pg->inc_ref();
 			return pg;
 		}
 
