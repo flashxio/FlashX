@@ -1,6 +1,8 @@
 #ifndef __CONCURRENCY_H__
 #define __CONCURRENCY_H__
 
+#include <numa.h>
+
 class atomic_integer
 {
 	volatile int v;
