@@ -1,3 +1,5 @@
+#include <assert.h>
+
 #include <iostream>
 
 #include "SA_hash_table.h"
@@ -119,7 +121,8 @@ void entry_set<KeyT, ValueT, SIZE>::rehash(entry_set *expanded) {
 	}
 	pthread_spin_unlock(&expanded->lock);
 	pthread_spin_unlock(&lock);
-	overflow = false;
+	if (num_entries < SIZE)
+		overflow = false;
 }
 
 template<class KeyT, class ValueT>
@@ -218,12 +221,11 @@ bool SA_hashtable<KeyT, ValueT>::expand(entry_set_t *trigger_set) {
 	entry_set_t *sets = NULL;
 	unsigned int i;
 
-	if (flags.test_and_set_flags(TABLE_EXPANDING)) {
-		/*
-		 * if the flag has been set before,
-		 * it means another thread is expanding the table,
-		 */
-		return false;
+	/*
+	 * if the flag has been set before, it means another thread
+	 * is expanding the table, wait for it to finish expanding.
+	 */
+	while (flags.test_and_set_flags(TABLE_EXPANDING)) {
 	}
 
 	/* starting from this point, only one thred can be here. */
@@ -329,11 +331,11 @@ ValueT SA_hashtable<KeyT, ValueT>::putIfAbsent(KeyT key, ValueT value) {
 
 		try {
 			ret = set->putIfAbsent(key, value);
+			prev = set;
 		} catch (no_space_exception e) {
 			std::cout << "a set is out of space" << std::endl;
 			expand(set);
 		}
-		prev = set;
 	} while (!table_lock.read_unlock(count));
 	return ret;
 	
@@ -341,7 +343,7 @@ ValueT SA_hashtable<KeyT, ValueT>::putIfAbsent(KeyT key, ValueT value) {
 
 template<class KeyT, class ValueT>
 bool SA_hashtable<KeyT, ValueT>::replace(KeyT key, ValueT expect, ValueT new_value) {
-	ValueT ret;
+	bool ret;
 	unsigned long count;
 	do {
 		table_lock.read_lock(count);
