@@ -6,9 +6,12 @@ CLANG_FLAGS = -Wno-attributes
 LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) #-lprofiler
 CXXFLAGS = -g -Inbds.0.4.3/include/ -Wall $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=0 #-DPROFILER
 HEADERS = aio_private.h direct_private.h global_cached_private.h part_global_cached_private.h read_private.h thread_private.h workload.h rand_buf.h
-CC = clang
-CXX = clang++
-OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o hash_index_cache.o messaging.o disk_read_thread.o thread_private.o
+#CC = clang
+#CXX = clang++
+CC = gcc
+CXX = g++
+OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o hash_index_cache.o messaging.o disk_read_thread.o thread_private.o SA_hash_table.o
+UNITTEST = SAHT_unit_test
 
 all: rand-read rand-memcpy create_file stat
 
@@ -31,3 +34,8 @@ stat: stat.cc workload.h
 
 clean:
 	rm *.o
+
+unit_test: $(UNITTEST)
+
+SAHT_unit_test: SAHT_unit_test.o SA_hash_table.o
+	$(CXX) -o SAHT_unit_test SAHT_unit_test.o SA_hash_table.o $(LDFLAGS)
