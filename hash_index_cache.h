@@ -14,9 +14,12 @@ extern "C" {
 #include "memory_manager.h"
 #include "cache.h"
 #include "concurrency.h"
+#include "hashtable.h"
+#include "SA_hash_table.h"
+#include "SA_hash_table.cpp"
 
 template<class KeyT, class ValueT>
-class lock_free_hashtable
+class lock_free_hashtable: hashtable_interface<KeyT, ValueT>
 {
 	map_t *map;
 public:
@@ -238,11 +241,12 @@ class hash_index_cache: public page_cache
 	frame_allocator *allocator;
 	memory_manager *manager;
 
-	lock_free_hashtable<off_t, frame *> *hashtable;
+	hashtable_interface<off_t, frame *> *hashtable;
 	clock_buffer *clock_buf;
 public:
 	hash_index_cache(memory_manager *manager) {
-		hashtable = new lock_free_hashtable<off_t, frame *>();
+		hashtable = new SA_hashtable<off_t, frame *>(1024);
+//		hashtable = new lock_free_hashtable<off_t, frame *>();
 		this->manager = manager;
 		manager->register_cache(this);
 		int max_npages = manager->get_max_size() / PAGE_SIZE;

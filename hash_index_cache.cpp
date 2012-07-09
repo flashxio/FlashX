@@ -74,10 +74,10 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			 * BTW, the only place that can cause remove to fail
 			 * is replace() below.
 			 */
-			hashtable->remove(removed->get_offset(), removed);
+			hashtable->remove(removed->get_offset() / PAGE_SIZE, removed);
 			purge_frame(removed);
 		}
-		frame *prev_entry = hashtable->putIfAbsent(key, new_entry);
+		frame *prev_entry = hashtable->putIfAbsent(key / PAGE_SIZE, new_entry);
 		if (prev_entry) {
 			/* this happens if the page is just added to the hash table. */
 			if (!prev_entry->pin()) {
@@ -86,7 +86,7 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 				 * but it couldn't be removed from the clock buffer.
 				 * Therefore, I can't purge the page.
 				 */
-				if (hashtable->replace(key, prev_entry, new_entry)) {
+				if (hashtable->replace(key / PAGE_SIZE, prev_entry, new_entry)) {
 					/*
 					 * this place is different from the code
 					 * in the paper. The value of the frame
@@ -106,7 +106,7 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 }
 
 page *hash_index_cache::search(off_t offset, off_t &old_off) {
-	frame *entry = hashtable->get(offset);
+	frame *entry = hashtable->get(offset / PAGE_SIZE);
 	/*
 	 * since the key of a frame nevers changes,
 	 * the frame returned from the hash table doesn't

@@ -2,7 +2,7 @@
 #define __HASHTABLE_H__
 
 template<class KeyT, class ValueT>
-class hashtable
+class hashtable_interface
 {
 public:
 	virtual ValueT get(KeyT key) = 0;

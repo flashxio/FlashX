@@ -68,7 +68,7 @@ public:
 };
 
 template<class KeyT, class ValueT>
-class SA_hashtable: public hashtable<KeyT, ValueT>
+class SA_hashtable: public hashtable_interface<KeyT, ValueT>
 {
 	const int init_nsets;
 	const int max_nsets;
