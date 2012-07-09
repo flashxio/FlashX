@@ -25,15 +25,6 @@ extern int middle_evicts;
 
 const int CACHE_LINE = 128;
 
-class expand_exception
-{
-};
-
-/* out of memory exception */
-class oom_exception
-{
-};
-
 /**
  * This data structure is to implement LRU.
  */

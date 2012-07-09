@@ -11,6 +11,15 @@ volatile int lock_contentions;
 int end_evicts = 0;
 int middle_evicts = 0;
 
+/* out of memory exception */
+class oom_exception
+{
+};
+
+class expand_exception
+{
+};
+
 #ifdef USE_SHADOW_PAGE
 
 /*
