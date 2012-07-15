@@ -8,9 +8,6 @@ volatile int num_wait_unused;
 volatile int lock_contentions;
 #endif
 
-int end_evicts = 0;
-int middle_evicts = 0;
-
 /* out of memory exception */
 class oom_exception
 {
@@ -19,79 +16,6 @@ class oom_exception
 class expand_exception
 {
 };
-
-#ifdef USE_SHADOW_PAGE
-
-/*
- * remove the idx'th element in the queue.
- * idx is the logical position in the queue,
- * instead of the physical index in the buffer.
- */
-template<class T, int SIZE>
-void generic_queue<T, SIZE>::remove(int idx) {
-	assert(idx < num);
-	/* the first element in the queue. */
-	if (idx == 0) {
-		pop_front();
-	}
-	/* the last element in the queue. */
-	else if (idx == num - 1){
-		num--;
-	}
-	/*
-	 * in the middle.
-	 * now we need to move data.
-	 */
-	else {
-		T tmp[num];
-		T *p = tmp;
-		/* if the end of the queue is physically behind the start */
-		if (start + num <= SIZE) {
-			/* copy elements in front of the removed element. */
-			memcpy(p, &buf[start], sizeof(T) * idx);
-			p += idx;
-			/* copy elements behind the removed element. */
-			memcpy(p, &buf[start + idx + 1], sizeof(T) * (num - idx - 1));
-		}
-		/* 
-		 * the removed element is between the first element
-		 * and the end of the buffer.
-		 */
-		else if (idx + start < SIZE) {
-			/* copy elements in front of the removed element. */
-			memcpy(p, &buf[start], sizeof(T) * idx);
-			p += idx;
-			/*
-			 * copy elements behind the removed element
-			 * and before the end of the buffer.
-			 */
-			memcpy(p, &buf[start + idx + 1], sizeof(T) * (SIZE - start - idx - 1));
-			p += (SIZE - start - idx - 1);
-			/* copy the remaining elements in the beginning of the buffer. */
-			memcpy(p, buf, sizeof(T) * (num - (SIZE - start)));
-		}
-		/*
-		 * the removed element is between the beginning of the buffer
-		 * and the last element.
-		 */
-		else {
-			/* copy elements between the first element and the end of the buffer. */
-			memcpy(p, &buf[start], sizeof(T) * (SIZE - start));
-			p += (SIZE - start);
-			/* copy elements between the beginning of the buffer and the removed element. */
-			idx = (idx + start) % SIZE;
-			memcpy(p, buf, sizeof(T) * idx);
-			p += idx;
-			/* copy elements after the removed element and before the last element */
-			memcpy(p, &buf[idx + 1], sizeof(T) * ((start + num) % SIZE - idx - 1));
-		}
-		memcpy(buf, tmp, sizeof(T) * (num - 1));
-		start = 0;
-		num--;
-	}
-}
-
-#endif
 
 hash_cell::hash_cell(associative_cache *cache, long hash) {
 	this->hash = hash;

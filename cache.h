@@ -11,6 +11,8 @@
 
 #include <map>
 
+#include "container.h"
+
 #define PTHREAD_WAIT
 
 #define PAGE_SIZE 4096
@@ -325,59 +327,19 @@ public:
 };
 
 /**
- * this is a first-in-first-out queue.
- * However, the location of an entry in the queue never changes.
- */
-template<class T>
-class queue
-{
-	long size;			// the number of pages that can be buffered
-	volatile unsigned long idx;		// to the point where we can evict a page in the buffer
-protected:
-	T *buf;			// a circular buffer to keep pages.
-public:
-	queue(long size) {
-		idx = 0;
-		this->size = size;
-		buf = new T[size];
-	}
-
-	~queue() {
-		delete [] buf;
-	}
-
-	T *get_empty_entry() {
-		/* TODO I ignore the case of integer overflow */
-		long orig = __sync_fetch_and_add(&idx, 1);
-		T *ret = &buf[orig % size];
-		return ret;
-	}
-
-	T *get_entry(int i) {
-		if (i >= size)
-			return NULL;
-		return &buf[i];
-	}
-
-	int get_idx(T *p) {
-		return p - buf;
-	}
-};
-
-/**
  * This data structure is to implement LRU.
  */
 template<class T>
-class page_buffer: public queue<T>
+class page_buffer: public fifo_queue<T>
 {
 public:
 	/*
 	 * @size: the size of the page buffer
 	 * @page_buf: the offset of the page array in the global page cache.
 	 */
-	page_buffer(long size, long page_buf): queue<T>(size) {
+	page_buffer(long size, long page_buf): fifo_queue<T>(size) {
 		for (int i = 0; i < size; i++) {
-			queue<T>::buf[i] = T(-1, page_buf + i * PAGE_SIZE);
+			fifo_queue<T>::buf[i] = T(-1, page_buf + i * PAGE_SIZE);
 		}
 	}
 
@@ -387,11 +349,11 @@ public:
 	 * so I change the begin and end index of the circular buffer.
 	 */
 	T *get_empty_page() {
-		return queue<T>::get_empty_entry();
+		return fifo_queue<T>::get_empty_entry();
 	}
 
 	T *get_page(int i) {
-		return queue<T>::get_entry(i);
+		return fifo_queue<T>::get_entry(i);
 	}
 };
 

@@ -446,7 +446,6 @@ int main(int argc, char *argv[])
 	printf("%d keys are evicted from the hash table because of conflicts\n", removed_indices);
 	printf("there are %d lock contentions\n", lock_contentions);
 #endif
-	printf("middle evicts: %d, end evicts: %d\n", middle_evicts, end_evicts);
 }
 
 const rand_permute *global_rand_permute_workload::permute;

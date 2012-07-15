@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include "common.h"
+#include "container.h"
 
 class io_interface;
 class io_request
@@ -115,49 +116,6 @@ public:
 
 	int get_access_method() {
 		return access_method;
-	}
-};
-
-/**
- * this is a thread-safe FIFO queue.
- * It supports bulk operations.
- */
-template<class T>
-class bulk_queue
-{
-	T *buf;
-	volatile int size;
-	int start;
-	int num_entries;
-	pthread_spinlock_t _lock;
-public:
-	bulk_queue(int size) {
-		buf = new T[size];
-		this->size = size;
-		start = 0;
-		num_entries = 0;
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
-	}
-
-	virtual ~bulk_queue() {
-		pthread_spin_destroy(&_lock);
-		delete [] buf;
-	}
-
-	virtual int fetch(T *entries, int num);
-
-	virtual int add(T *entries, int num);
-
-	int get_num_entries() {
-		return num_entries;
-	}
-
-	bool is_full() {
-		return num_entries == size;
-	}
-
-	bool is_empty() {
-		return num_entries == 0;
 	}
 };
 

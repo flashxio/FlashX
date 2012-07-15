@@ -19,7 +19,7 @@ extern "C" {
 #include "SA_hash_table.cpp"
 
 template<class KeyT, class ValueT>
-class lock_free_hashtable: hashtable_interface<KeyT, ValueT>
+class lock_free_hashtable: public hashtable_interface<KeyT, ValueT>
 {
 	map_t *map;
 public:
