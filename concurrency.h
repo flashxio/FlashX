@@ -1,7 +1,37 @@
 #ifndef __CONCURRENCY_H__
 #define __CONCURRENCY_H__
 
+#include <pthread.h>
 #include <numa.h>
+
+class atomic_unsigned_integer
+{
+	volatile unsigned int v;
+public:
+	atomic_unsigned_integer() {
+		v = 0;
+	}
+
+	atomic_unsigned_integer(unsigned int init) {
+		v = init;
+	}
+
+	unsigned int inc(unsigned int by) {
+		return __sync_add_and_fetch(&v, by);
+	}
+
+	unsigned int dec(unsigned int by) {
+		return __sync_sub_and_fetch(&v, by);
+	}
+
+	unsigned int get() {
+		return v;
+	}
+
+	bool CAS(unsigned int expected, unsigned int value) {
+		return __sync_bool_compare_and_swap(&v, expected, value);
+	}
+};
 
 class atomic_integer
 {

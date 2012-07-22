@@ -10,8 +10,8 @@ HEADERS = aio_private.h direct_private.h global_cached_private.h part_global_cac
 #CXX = clang++
 CC = gcc
 CXX = g++
-OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o hash_index_cache.o messaging.o disk_read_thread.o thread_private.o SA_hash_table.o
-UNITTEST = SAHT_unit_test
+OBJECTS = part_global_cached_private.o cuckoo_cache.o associative_cache.o workload.o global_cached_private.o direct_private.o read_private.o rand_buf.o memory_manager.o wpaio.o rand-read.o aio_private.o hash_index_cache.o messaging.o disk_read_thread.o thread_private.o SA_hash_table.o gclock.o
+UNITTEST = SAHT_unit_test GClock_unit_test
 
 all: rand-read rand-memcpy create_file stat
 
@@ -39,3 +39,6 @@ unit_test: $(UNITTEST)
 
 SAHT_unit_test: SAHT_unit_test.o SA_hash_table.o
 	$(CXX) -o SAHT_unit_test SAHT_unit_test.o SA_hash_table.o $(LDFLAGS)
+
+GClock_unit_test: GClock_unit_test.o gclock.o
+	$(CXX) -o GClock_unit_test GClock_unit_test.o gclock.o $(LDFLAGS)

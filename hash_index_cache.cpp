@@ -2,54 +2,6 @@
 
 #include "hash_index_cache.h"
 
-frame *clock_buffer::swap(frame *entry) {
-	int num_pinning = 0;
-	int start = clock_hand.get();
-	for (int i = start % size; ; i = (i + 1) % size) {
-		frame *e = pool.get(i);
-		if (e == NULL)
-			continue;
-
-		int pin_count = e->pinCount();
-		if (pin_count == -1) {	// evicted?
-			if (pool.CAS(i, e, entry)) {
-				moveClockHand(i, start);
-				return e;
-			}
-			continue;
-		}
-
-		if (pin_count > 0) {	// pinned?
-			if (++num_pinning >= size)
-				// TODO wait
-				;
-			continue;
-		}
-
-		if (e->decrWC() <= 0) {
-			if (e->tryEvict() && pool.CAS(i, e, entry)) {
-				moveClockHand(i, start);
-				return e;
-			}
-		}
-	}	// end for
-}
-
-frame *clock_buffer::add(frame *entry) {
-	do {
-		int v = free.get();
-		if (v == 0)
-			return swap(entry);
-		if (free.CAS(v, v - 1))
-			break;
-	} while (true);
-	int idx = clock_hand.get();
-	while (!pool.CAS(idx % size, NULL, entry))
-		idx++;
-	clock_hand.inc(1);
-	return NULL;
-}
-
 frame *hash_index_cache::addEntry(off_t key, char *data) {
 	for (;;) {
 		frame *new_entry = allocator->alloc();
@@ -75,6 +27,10 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			 * is replace() below.
 			 */
 			hashtable->remove(removed->get_offset() / PAGE_SIZE, removed);
+			/* TODO There is a problem here. How can I guarantee that
+			 * no other threads have a reference to this frame?
+			 * It's possible a thread gets a reference to the page before
+			 * the page is removed from the hashtable. */
 			purge_frame(removed);
 		}
 		frame *prev_entry = hashtable->putIfAbsent(key / PAGE_SIZE, new_entry);

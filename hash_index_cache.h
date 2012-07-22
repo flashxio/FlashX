@@ -17,6 +17,7 @@ extern "C" {
 #include "hashtable.h"
 #include "SA_hash_table.h"
 #include "SA_hash_table.cpp"
+#include "gclock.h"
 
 template<class KeyT, class ValueT>
 class lock_free_hashtable: public hashtable_interface<KeyT, ValueT>
@@ -66,137 +67,6 @@ public:
 	}
 };
 
-class frame: public thread_safe_page
-{
-	/* equivalent to the number of hits */
-	atomic_integer wcount;
-	/* equivalent to the number of references */
-	atomic_integer pinning;
-	frame *prev, *next;
-
-public:
-	frame(): thread_safe_page() {
-		prev = next = this;
-	}
-
-	frame(off_t offset, char *data): thread_safe_page(offset, data) {
-		prev = next = this;
-	}
-
-	void *volatileGetValue() {
-		/*
-		 * maybe a memory fence here,
-		 * but it's not needed in the x86 machine.
-		 */
-		return get_data();
-	}
-
-	bool CASValue(void *expect,void *update) {
-		return __sync_bool_compare_and_swap(&data, expect, update);
-	}
-
-	void incrWC() {
-		wcount.inc(1);
-	}
-
-	int decrWC() {
-		return wcount.dec(1);
-	}
-
-	bool tryEvict() {
-		return pinning.CAS(1, -1);
-	}
-
-	void evictUnshared() {
-		pinning.CAS(1, -1);
-	}
-
-	int pinCount() {
-		return pinning.get();
-	}
-
-	bool pin() {
-		int x;
-		do {
-			x = pinning.get();
-			if (x <= -1)
-				return false;
-		} while (!pinning.CAS(x, x + 1));
-		return true;
-	}
-
-	void dec_ref() {
-		unpin();
-	}
-
-	void unpin() {
-		pinning.dec(1);
-	}
-
-	/* for linked pages */
-	void add_front(frame *pg) {
-		frame *next = this->next;
-		pg->next = next;
-		pg->prev = this;
-		this->next = pg;
-		next->prev = pg;
-	}
-
-	void add_back(frame *pg) {
-		frame *prev = this->prev;
-		pg->next = this;
-		pg->prev = prev;
-		this->prev = pg;
-		prev->next = pg;
-	}
-
-	void remove_from_list() {
-		frame *prev = this->prev;
-		frame *next = this->next;
-		prev->next = next;
-		next->prev = prev;
-		this->next = this;
-		this->prev = this;
-	}
-
-	bool is_empty() {
-		return this->next == this;
-	}
-
-	frame *front() {
-		return next;
-	}
-
-	frame *back() {
-		return prev;
-	}
-
-};
-
-class clock_buffer
-{
-	atomic_array<frame *> pool;
-	atomic_integer free;
-	atomic_integer clock_hand;
-	int size;
-public:
-	clock_buffer(int size): pool(size), free(size) {
-		this->size = size;
-	}
-
-	frame *add(frame *entry);
-	frame *swap(frame *entry);
-
-	void moveClockHand(int curr, int start) {
-		int delta;
-		if (curr < start)
-			delta = curr + size - start + 1;
-		else
-			delta = curr - start + 1;
-		clock_hand.inc(delta);
-	}
-};
-
 class frame_allocator
 {
 	frame list_head;
@@ -242,7 +112,7 @@ class hash_index_cache: public page_cache
 	memory_manager *manager;
 
 	hashtable_interface<off_t, frame *> *hashtable;
-	clock_buffer *clock_buf;
+	LF_gclock_buffer *clock_buf;
 public:
 	hash_index_cache(memory_manager *manager) {
 		hashtable = new SA_hashtable<off_t, frame *>(1024);
@@ -250,7 +120,7 @@ public:
 		this->manager = manager;
 		manager->register_cache(this);
 		int max_npages = manager->get_max_size() / PAGE_SIZE;
-		clock_buf = new clock_buffer(max_npages);
+		clock_buf = new LF_gclock_buffer(max_npages);
 		/* we need more frames than the maximal number of pages. */
 		allocator = new frame_allocator(max_npages * 2);
 	}
