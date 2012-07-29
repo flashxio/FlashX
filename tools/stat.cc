@@ -9,7 +9,7 @@
 #define PAGE_SIZE 4096
 #define SCALE_FACTOR 100
 
-#include "workload.h"
+#include "../workload.h"
 
 int main(int argc, char *argv[])
 {

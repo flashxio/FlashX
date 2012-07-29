@@ -1,0 +1,14 @@
+LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) #-lprofiler
+UNITTEST = SAHT_unit_test GClock_unit_test
+CXXFLAGS = -I..
+
+all: $(UNITTEST)
+
+SAHT_unit_test: SAHT_unit_test.o ../SA_hash_table.o
+	$(CXX) -o SAHT_unit_test SAHT_unit_test.o ../SA_hash_table.o $(LDFLAGS)
+
+GClock_unit_test: GClock_unit_test.o ../gclock.o
+	$(CXX) -o GClock_unit_test GClock_unit_test.o ../gclock.o $(LDFLAGS)
+
+clean:
+	rm *.o

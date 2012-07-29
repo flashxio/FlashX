@@ -307,7 +307,7 @@ void embedded_queue<T, SIZE>::remove(int idx) {
 		start = 0;
 		num--;
 	}
-}
+}    
 
 #endif
 
