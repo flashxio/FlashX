@@ -6,101 +6,16 @@
 
 #define RECLAIM_NPAGES 32
 
-class linked_page: public thread_safe_page {
-	linked_page *prev, *next;
-public:
-	linked_page() {
-		prev = this;
-		next = this;
-	}
-
-	linked_page(off_t off, long data): thread_safe_page(off, data) {
-		prev = this;
-		next = this;
-	}
-
-	void add_front(linked_page *pg) {
-		linked_page *next = this->next;
-		pg->next = next;
-		pg->prev = this;
-		this->next = pg;
-		next->prev = pg;
-	}
-
-	void add_back(linked_page *pg) {
-		linked_page *prev = this->prev;
-		pg->next = this;
-		pg->prev = prev;
-		this->prev = pg;
-		prev->next = pg;
-	}
-
-	void remove_from_list() {
-		linked_page *prev = this->prev;
-		linked_page *next = this->next;
-		prev->next = next;
-		next->prev = prev;
-		this->next = this;
-		this->prev = this;
-	}
-
-	bool is_empty() {
-		return this->next == this;
-	}
-
-	linked_page *front() {
-		return next;
-	}
-
-	linked_page *back() {
-		return prev;
-	}
-};
-
-class linked_page_queue {
-	linked_page head;
-	int _size;
-public:
-	linked_page_queue() {
-		_size = 0;
-	}
-
-	void push_back(linked_page *pg) {
-		head.add_back(pg);
-		_size++;
-	}
-
-	void pop_front() {
-		linked_page *pg = front();
-		remove(pg);
-	}
-
-	void remove(linked_page *pg) {
-		if (pg->is_empty())
-			return;
-		// TODO do I need to check whether the page is in the queue.
-		pg->remove_from_list();
-		_size--;
-	}
-
-	bool empty() {
-		return head.is_empty();
-	}
-
-	linked_page *front() {
-		return head.front();
-	}
-
-	linked_page *back() {
-		return head.back();
-	}
-
-	int size() {
-		return _size;
-	}
-};
-
 class LRU2Q_cache: public page_cache {
+	class linked_page: public frame {
+	public:
+		linked_page() {
+		}
+
+		linked_page(off_t offset, long d): frame(offset, d) {
+		}
+	};
+
 	int npages;
 	linked_page *pages;
 	std::map<off_t, linked_page *> page_map;
@@ -116,7 +31,7 @@ class LRU2Q_cache: public page_cache {
 		 */
 		if (inactive_queue.size() < active_queue.size()) {
 			for (int i = 0; i < RECLAIM_NPAGES;) {
-				linked_page *pg = active_queue.front();
+				linked_page *pg = (linked_page *) active_queue.front();
 				active_queue.pop_front();
 				if (pg->referenced()) {
 					pg->set_referenced(false);
@@ -132,7 +47,7 @@ class LRU2Q_cache: public page_cache {
 
 		for (int i = 0; i < RECLAIM_NPAGES;) {
 			/* reclaim the oldest pages in the inactive queue. */
-			linked_page *pg = inactive_queue.front();
+			linked_page *pg = (linked_page *) inactive_queue.front();
 			inactive_queue.pop_front();
 			if (pg->referenced()) {
 				inactive_queue.push_back(pg);
@@ -178,7 +93,7 @@ public:
 		/* we need to get a free page. */
 		if (free_pages.empty())
 			evict_pages();
-		linked_page *pg = free_pages.front();
+		linked_page *pg = (linked_page *) free_pages.front();
 		free_pages.pop_front();
 		page_map.insert(std::pair<off_t, linked_page *>(offset, pg));
 

@@ -1,6 +1,10 @@
 LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) #-lprofiler
 UNITTEST = SAHT_unit_test GClock_unit_test
-CXXFLAGS = -I..
+CPPFLAGS := -MD
+CXXFLAGS = -I.. -g
+SOURCE := $(wildcard *.c) $(wildcard *.cpp)
+OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
+DEPS := $(patsubst %.o,%.d,$(OBJS))
 
 all: $(UNITTEST)
 
@@ -12,3 +16,5 @@ GClock_unit_test: GClock_unit_test.o ../gclock.o
 
 clean:
 	rm *.o
+
+-include $(DEPS) 

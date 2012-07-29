@@ -4,117 +4,6 @@
 #include "concurrency.h"
 #include "cache.h"
 
-class frame: public thread_safe_page
-{
-	/* equivalent to the number of hits */
-	atomic_integer wcount;
-	/* equivalent to the number of references */
-	atomic_integer pinning;
-	frame *prev, *next;
-
-public:
-	frame(): thread_safe_page() {
-		prev = next = this;
-	}
-
-	frame(off_t offset, char *data): thread_safe_page(offset, data) {
-		prev = next = this;
-	}
-
-	void *volatileGetValue() {
-		/*
-		 * maybe a memory fence here,
-		 * but it's not needed in the x86 machine.
-		 */
-		return get_data();
-	}
-
-	bool CASValue(void *expect,void *update) {
-		return __sync_bool_compare_and_swap(&data, expect, update);
-	}
-
-	int getWC() {
-		return wcount.get();
-	}
-
-	void incrWC(int num = 1) {
-		wcount.inc(num);
-	}
-
-	int decrWC(int num = 1) {
-		return wcount.dec(num);
-	}
-
-	bool tryEvict() {
-		return pinning.CAS(0, -1);
-	}
-
-	void evictUnshared() {
-		pinning.CAS(1, -1);
-	}
-
-	int pinCount() {
-		return pinning.get();
-	}
-
-	bool pin() {
-		int x;
-		do {
-			x = pinning.get();
-			if (x <= -1)
-				return false;
-		} while (!pinning.CAS(x, x + 1));
-		return true;
-	}
-
-	void dec_ref() {
-		unpin();
-	}
-
-	void unpin() {
-		pinning.dec(1);
-	}
-
-	/* for linked pages */
-	void add_front(frame *pg) {
-		frame *next = this->next;
-		pg->next = next;
-		pg->prev = this;
-		this->next = pg;
-		next->prev = pg;
-	}
-
-	void add_back(frame *pg) {
-		frame *prev = this->prev;
-		pg->next = this;
-		pg->prev = prev;
-		this->prev = pg;
-		prev->next = pg;
-	}
-
-	void remove_from_list() {
-		frame *prev = this->prev;
-		frame *next = this->next;
-		prev->next = next;
-		next->prev = prev;
-		this->next = this;
-		this->prev = this;
-	}
-
-	bool is_empty() {
-		return this->next == this;
-	}
-
-	frame *front() {
-		return next;
-	}
-
-	frame *back() {
-		return prev;
-	}
-
-};
-
 class gclock_buffer
 {
 public:
@@ -153,7 +42,8 @@ public:
 
 	void print() {
 		printf("**************************\n");
-		printf("there are %d frames in the lf_buffer\n", size - free.get());
+		printf("there are %d frames in the lf_buffer, clock_hand: %d\n",
+				size - free.get(), clock_hand.get());
 		for (unsigned i = 0; i < size - free.get(); i++) {
 			printf("\toffset: %ld, hits: %d\n",
 					pool.get(i)->get_offset(), pool.get(i)->getWC());
@@ -176,11 +66,6 @@ public:
  * increase the scan counter whenever the entire buffer is increased. We need to
  * decrease the hit counter eventually, but we can decrease the number of 
  * cache invalidations significantly.
- *
- * 2. GClock may need to scan many pages in order to evict a page. We need to 
- * roughly sort the pages, so we can avoid scan unnecessary pages.
- *
- * Solution: TODO We can decrease the number of cache misses.
  */
 class enhanced_gclock_buffer: public gclock_buffer
 {
@@ -219,6 +104,89 @@ public:
 					pool[i]->get_offset(), pool[i]->getWC());
 		}
 	}
+};
+
+/*
+ * 2. GClock may need to scan many pages in order to evict a page. We need to 
+ * roughly sort the pages, so we can avoid scan unnecessary pages.
+ *
+ * Solution: we split the page set according to the number of cache hits.
+ */
+class enhanced_gclock_buffer1: public gclock_buffer
+{
+	int scan_nrounds;	// how many times has the buffer been scanned
+	bool start_dec;		// start to decrease the hit count
+
+	class range_queue: public linked_page_queue {
+		unsigned int max_hits;
+		unsigned int min_hits;
+	public:
+		range_queue() {
+			max_hits = 0x7fffffff;
+			min_hits = 0;
+		}
+
+		range_queue(unsigned int min_hits,
+				unsigned int max_hits = 0x7fffffff) {
+			this->min_hits = min_hits;
+			this->max_hits = max_hits;
+		}
+
+		void set_min_hits(unsigned int hits) {
+			this->min_hits = hits;
+		}
+
+		void set_max_hits(unsigned int hits) {
+			this->max_hits = hits;
+		}
+
+		unsigned get_min_hits() {
+			return min_hits;
+		}
+
+		unsigned get_max_hits() {
+			return max_hits;
+		}
+	};
+
+	range_queue *queues;
+	int num_queues;
+
+	unsigned free;
+	frame *clock_hand;
+	unsigned size;
+
+	frame *swap(frame *entry);
+	void merge_all_queues();
+	void merge_queues(int nrounds);
+	void add2range(frame *e, unsigned int hits);
+public: 
+	enhanced_gclock_buffer1(int size,
+		const int *ranges, int num_ranges);
+
+	~enhanced_gclock_buffer1() {
+		delete [] queues;
+	}
+
+	frame *add(frame *entry);
+
+	void print() {
+		printf("**************************\n");
+		printf("there are %d frames in the buffer1, scan_nrounds: %d, clock_hand: %ld\n",
+				size - free, scan_nrounds, clock_hand->get_offset());
+		printf("there are %d range queues: \n", num_queues);
+		for (int i = 0; i < num_queues; i++) {
+			printf("[%d, %d), size: %d\n", queues[i].get_min_hits(),
+					queues[i].get_max_hits(), queues[i].size());
+			frame *pg = queues[i].front();
+			while (!queues[i].is_head(pg)) {
+				printf("\toffset: %ld, hits: %d\n", pg->get_offset(), pg->getWC());
+				pg = pg->front();
+			}
+		}
+	}
+
+	void sanity_check();
 };
 
 #endif

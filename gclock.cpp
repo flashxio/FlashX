@@ -78,6 +78,201 @@ frame *enhanced_gclock_buffer::swap(frame *entry)
 	}	// end for
 }
 
+enhanced_gclock_buffer1::enhanced_gclock_buffer1(int size,
+		const int *ranges, int num_ranges)
+{
+	/* initialize the ranges. */
+	queues = new range_queue[num_ranges];
+	for (int i = 0; i < num_ranges - 1; i++) {
+		queues[i].set_min_hits(ranges[i]);
+		queues[i].set_max_hits(ranges[i + 1]);
+	}
+	queues[num_ranges - 1].set_min_hits(ranges[num_ranges - 1]);
+	num_queues = num_ranges;
+
+	free = size;
+	clock_hand = queues[0].front();
+	this->size = size;
+
+	start_dec = false;
+	scan_nrounds = 0;
+}
+
+frame *enhanced_gclock_buffer1::add(frame *entry)
+{
+	if (free == 0)
+		return swap(entry);
+
+	/*
+	 * The real hits is the frame's wcount - scan_nrounds,
+	 * so we need to change the wcount accordingly when we insert the frame.
+	 */
+	entry->incrWC(scan_nrounds);
+	queues[0].push_back(entry);
+	free--;
+	return NULL;
+}
+
+/**
+ * Merge all queues to the first queue.
+ */
+void enhanced_gclock_buffer1::merge_all_queues()
+{
+	for (int i = 1; i < num_queues; i++) {
+		if (queues[i].empty())
+			continue;
+
+		queues[0].merge(queues + i);
+	}
+}
+
+/**
+ * Merge the queues whose lower bound is `nrounds' * n to the first queue.
+ */
+void enhanced_gclock_buffer1::merge_queues(int nrounds)
+{
+	for (int i = 1; i < num_queues; i++) {
+		if (queues[i].empty())
+			continue;
+		if (queues[i].get_min_hits() % nrounds == 0)
+			queues[0].merge(queues + i);
+	}
+}
+
+/**
+ * Add the frame to the queue corresponding to the hits.
+ */
+void enhanced_gclock_buffer1::add2range(frame *e, unsigned int hits)
+{
+	for (int i = 1; i < num_queues; i++) {
+		if (queues[i].get_min_hits() <= hits
+				&& queues[i].get_max_hits() > hits) {
+			queues[i].push_back(e);
+			break;
+		}
+	}
+}
+
+/**
+ * sanity check of the state of the buffer.
+ * When it starts to decrease the hit counts of pages, all pages should be
+ * in the first queue.
+ */
+void enhanced_gclock_buffer1::sanity_check()
+{
+	if (start_dec) {
+		for (int i = 1; i < num_queues; i++)
+			assert(queues[i].empty());
+	}
+}
+
+/**
+ * This evicts a frame from the buffer and adds the new frame.
+ * There are multiple page lists to hold pages with different
+ * number of cache hits. We scan the pages in the first list,
+ * which potentially contains pages with a small number of cache hits.
+ * The pages in the lists are loosely organized: pages are reorganized
+ * only when lists are scanned.
+ *
+ * When `scan_nrounds' reaches the upper bound of a range, all pages
+ * in the next range needs to be added to the first range. For example,
+ * assume we have range [0, 2), [2, 4), [4, 8), [8, ]. When `scan_nranges'
+ * reaches 2 * n, we need to add all pages in [2, 4) to the first range. 
+ * When `scan_nranges' reaches 4 * n, we need to add all pages in [4, 8)
+ * to the first range.
+ *
+ * When `scan_nranges' reaches the maximal value, we should place all pages 
+ * in the first range because we need to change the hit count of all pages
+ * anyway.
+ *
+ * It means we only need to scan the pages in the first range. In the process
+ * of scanning the first range, we need to place the pages to the right range.
+ */
+frame *enhanced_gclock_buffer1::swap(frame *entry)
+{
+	unsigned int num_pinning = 0;
+
+	for (; ;) {
+		/* if we have scanned all pages in the first range */
+		if (queues[0].is_head(clock_hand)) {
+			if (start_dec) {// if we have decreased the hit count of all pages.
+				start_dec = false;
+				scan_nrounds = 0;
+			}
+			scan_nrounds++;
+			if (scan_nrounds >= MAX_SCAN_NROUNDS) {
+				merge_all_queues();
+				start_dec = true;
+			}
+			else
+				merge_queues(scan_nrounds);
+			clock_hand = queues[0].front();
+		}
+
+		frame *e = clock_hand;
+		/* Get the next frame in the list. */
+		clock_hand = clock_hand->front();
+
+		// TODO I need to look back later.
+		if (start_dec)
+			e->decrWC(scan_nrounds);
+
+		int pin_count = e->pinCount();
+		if (pin_count == -1) {	// evicted?
+			/* Use `entry' to replace `e' in the list. */
+			queues[0].replace(e, entry);
+			/*
+			 * If it's in the decreasing mode, scan_nrounds is
+			 * virtually 0.
+			 */
+			if (!start_dec)
+				entry->incrWC(scan_nrounds);
+			return e;
+		}
+
+		if (pin_count > 0) {	// pinned?
+			if (++num_pinning >= size)
+				/* 
+				 * If all pages are pinned, we have to wait until
+				 * some pages can be unpinned.
+				 */
+				// TODO wait
+				;
+			continue;
+		}
+
+		int real_hits = start_dec ? e->getWC() : (e->getWC() - scan_nrounds);
+		if (real_hits <= 0) {
+			if (e->tryEvict()) {
+				queues[0].replace(e, entry);
+
+				if (!start_dec)
+					entry->incrWC(scan_nrounds);
+				return e;
+			}
+		}
+		else if (real_hits >= queues[0].get_max_hits()) {
+			e->remove_from_list();
+			add2range(e, real_hits);
+		}
+	}	// end for
+}
+
+frame *LF_gclock_buffer::add(frame *entry) {
+	do {
+		int v = free.get();
+		if (v == 0)
+			return swap(entry);
+		if (free.CAS(v, v - 1))
+			break;
+	} while (true);
+	int idx = clock_hand.get();
+	while (!pool.CAS(idx % size, NULL, entry))
+		idx++;
+	clock_hand.inc(1);
+	return NULL;
+}
+
 frame *LF_gclock_buffer::swap(frame *entry) {
 	unsigned int num_pinning = 0;
 	unsigned int start = clock_hand.get();
@@ -113,19 +308,4 @@ frame *LF_gclock_buffer::swap(frame *entry) {
 			}
 		}
 	}	// end for
-}
-
-frame *LF_gclock_buffer::add(frame *entry) {
-	do {
-		int v = free.get();
-		if (v == 0)
-			return swap(entry);
-		if (free.CAS(v, v - 1))
-			break;
-	} while (true);
-	int idx = clock_hand.get();
-	while (!pool.CAS(idx % size, NULL, entry))
-		idx++;
-	clock_hand.inc(1);
-	return NULL;
 }

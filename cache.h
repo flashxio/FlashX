@@ -12,6 +12,7 @@
 #include <map>
 
 #include "container.h"
+#include "concurrency.h"
 
 #define PTHREAD_WAIT
 
@@ -354,6 +355,222 @@ public:
 
 	T *get_page(int i) {
 		return fifo_queue<T>::get_entry(i);
+	}
+};
+
+/**
+ * This is used to implement hashtable-based indexing.
+ */
+class frame: public thread_safe_page
+{
+	/* equivalent to the number of hits */
+	atomic_integer wcount;
+	/* equivalent to the number of references */
+	atomic_integer pinning;
+	frame *prev, *next;
+
+public:
+	frame(): thread_safe_page() {
+		prev = next = this;
+	}
+
+	frame(off_t offset, char *data): thread_safe_page(offset, data) {
+		prev = next = this;
+	}
+
+	frame(off_t off, long d): thread_safe_page(off, d) {
+		prev = next = this;
+	}
+
+	void *volatileGetValue() {
+		/*
+		 * maybe a memory fence here,
+		 * but it's not needed in the x86 machine.
+		 */
+		return get_data();
+	}
+
+	bool CASValue(void *expect,void *update) {
+		return __sync_bool_compare_and_swap(&data, expect, update);
+	}
+
+	int getWC() {
+		return wcount.get();
+	}
+
+	void incrWC(int num = 1) {
+		wcount.inc(num);
+	}
+
+	int decrWC(int num = 1) {
+		return wcount.dec(num);
+	}
+
+	bool tryEvict() {
+		return pinning.CAS(0, -1);
+	}
+
+	void evictUnshared() {
+		pinning.CAS(1, -1);
+	}
+
+	int pinCount() {
+		return pinning.get();
+	}
+
+	bool pin() {
+		int x;
+		do {
+			x = pinning.get();
+			if (x <= -1)
+				return false;
+		} while (!pinning.CAS(x, x + 1));
+		return true;
+	}
+
+	void dec_ref() {
+		unpin();
+	}
+
+	void unpin() {
+		pinning.dec(1);
+	}
+
+	/* for linked pages */
+
+	/* Add a frame behind the frame in the list. */
+	void add_front(frame *pg) {
+		frame *next = this->next;
+		pg->next = next;
+		pg->prev = this;
+		this->next = pg;
+		next->prev = pg;
+	}
+
+	/* Add a frame before the frame in the list. */
+	void add_back(frame *pg) {
+		frame *prev = this->prev;
+		pg->next = this;
+		pg->prev = prev;
+		this->prev = pg;
+		prev->next = pg;
+	}
+
+	void remove_from_list() {
+		frame *prev = this->prev;
+		frame *next = this->next;
+		prev->next = next;
+		next->prev = prev;
+		this->next = this;
+		this->prev = this;
+	}
+
+	bool is_empty() {
+		return this->next == this;
+	}
+
+	frame *front() {
+		return next;
+	}
+
+	frame *back() {
+		return prev;
+	}
+
+	friend class linked_page_queue;
+};
+
+class linked_page_queue {
+	frame head;
+	int _size;
+public:
+	linked_page_queue() {
+		_size = 0;
+	}
+
+	bool is_head(frame *pg) {
+		return pg == &head;
+	}
+
+	void push_back(frame *pg) {
+		head.add_back(pg);
+		_size++;
+	}
+
+	void pop_front() {
+		frame *pg = front();
+		remove(pg);
+	}
+
+	void remove(frame *pg) {
+		if (pg->is_empty())
+			return;
+		// TODO do I need to check whether the page is in the queue.
+		pg->remove_from_list();
+		_size--;
+	}
+
+	void remove(int idx) {
+		frame *f = front();
+		for (int i = 0; i < idx; i++)
+			f = f->front();
+		f->remove_from_list();
+		_size--;
+	}
+
+	bool empty() {
+		return head.is_empty();
+	}
+
+	frame *front() {
+		return head.front();
+	}
+
+	frame *back() {
+		return head.back();
+	}
+
+	int size() {
+		return _size;
+	}
+
+	void replace(frame *old_frame, frame *new_frame) {
+		frame *prev = old_frame->back();
+		old_frame->remove_from_list();
+		prev->add_front(new_frame);
+	}
+
+	void merge(linked_page_queue *list) {
+		if (list->empty())
+			return;
+
+		frame *list_begin = list->front();
+		frame *list_end = list->back();
+		frame *this_end = this->back();
+		
+		/* Remove all pages in the list. */
+		list->head.next = &list->head;
+		list->head.prev = &list->head;
+		this->_size += list->_size;
+		list->_size = 0;
+
+		/* Add `list' to the end of this list. */
+		this_end->next = list_begin;
+		list_begin->prev = this_end;
+
+		/* Link the end of `list' to the end of this list. */
+		list_end->next = &this->head;
+		this->head.prev = list_end;
+	}
+
+	void print() {
+		frame *f = front();
+		printf("queue size: %d\n", _size);
+		while (f != &head) {
+			printf("%ld\t", f->get_offset());
+			f = f->front();
+		}
+		printf("\n");
 	}
 };
 
