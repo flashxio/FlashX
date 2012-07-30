@@ -120,9 +120,40 @@ void testEnhanced1GClock()
 	}
 }
 
+void test1Enhanced1GClock()
+{
+	const int BUF_SIZE = 5;
+	int ranges[] = {0, 5};
+	/*
+	 * When there is only one range, enhanced_gclock_buffer1 should behave
+	 * exactly the same as enhanced_gclock_buffer. 
+	 */
+	enhanced_gclock_buffer1 buffer(BUF_SIZE, ranges, 2);
+	for (int i = 0; i < BUF_SIZE; i++) {
+		frame *f = new frame(i * PAGE_SIZE, (char *) NULL);
+		int r = random() % 40;
+		frame *ret = buffer.add(f);
+		f->incrWC(r);
+		assert(ret == NULL);
+	}
+	
+	buffer.print();
+
+	for (int i = 0; i < BUF_SIZE * 4000000; i++) {
+		frame *f = new frame((i + BUF_SIZE) * PAGE_SIZE, (char *) NULL);
+		int r = random() % 40;
+		frame *ret = buffer.add(f);
+		f->incrWC(r);
+		buffer.print();
+		assert(ret);
+		delete ret;
+	}
+}
+
 int main()
 {
 //	testEnhancedGClock();
 //	testLinkedPageList();
-	testEnhanced1GClock();
+//	testEnhanced1GClock();
+	test1Enhanced1GClock();
 }

@@ -155,14 +155,10 @@ void enhanced_gclock_buffer1::add2range(frame *e, unsigned int hits)
 
 /**
  * sanity check of the state of the buffer.
- * When it starts to decrease the hit counts of pages, all pages should be
- * in the first queue.
  */
 void enhanced_gclock_buffer1::sanity_check()
 {
 	if (start_dec) {
-		for (int i = 1; i < num_queues; i++)
-			assert(queues[i].empty());
 	}
 }
 
@@ -193,8 +189,8 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 	unsigned int num_pinning = 0;
 
 	for (; ;) {
-		/* if we have scanned all pages in the first range */
-		if (queues[0].is_head(clock_hand)) {
+		/* We have scanned all pages in the first range */
+		while (queues[0].is_head(clock_hand)) {
 			if (start_dec) {// if we have decreased the hit count of all pages.
 				start_dec = false;
 				scan_nrounds = 0;
@@ -208,6 +204,7 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 				merge_queues(scan_nrounds);
 			clock_hand = queues[0].front();
 		}
+		sanity_check();
 
 		frame *e = clock_hand;
 		/* Get the next frame in the list. */
@@ -252,7 +249,7 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 			}
 		}
 		else if (real_hits >= queues[0].get_max_hits()) {
-			e->remove_from_list();
+			queues[0].remove(e);
 			add2range(e, real_hits);
 		}
 	}	// end for
