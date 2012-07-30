@@ -438,6 +438,7 @@ public:
 
 	/* for linked pages */
 
+private:
 	/* Add a frame behind the frame in the list. */
 	void add_front(frame *pg) {
 		frame *next = this->next;
@@ -469,6 +470,7 @@ public:
 		return this->next == this;
 	}
 
+public:
 	frame *front() {
 		return next;
 	}

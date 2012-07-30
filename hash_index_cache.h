@@ -69,7 +69,7 @@ public:
 
 class frame_allocator
 {
-	frame list_head;
+	linked_page_queue queue;
 	int size;
 	pthread_spinlock_t lock;
 	frame *p;
@@ -79,7 +79,7 @@ public:
 		this->size = size;
 		p = new frame[size];
 		for (int i = 0; i < size; i++)
-			list_head.add_front(&p[i]);
+			queue.push_back(&p[i]);
 	}
 
 	~frame_allocator() {
@@ -88,19 +88,19 @@ public:
 
 	frame *alloc() {
 		pthread_spin_lock(&lock);
-		if (list_head.is_empty()) {
+		if (queue.empty()) {
 			pthread_spin_unlock(&lock);
 			return NULL;
 		}
-		frame *p = list_head.front();
-		p->remove_from_list();
+		frame *p = queue.front();
+		queue.pop_front();
 		pthread_spin_unlock(&lock);
 		return p;
 	}
 
 	void free(frame *p) {
 		pthread_spin_lock(&lock);
-		list_head.add_front(p);
+		queue.push_back(p);
 		pthread_spin_unlock(&lock);
 	}
 };
