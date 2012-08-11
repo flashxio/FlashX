@@ -124,10 +124,6 @@ void test1Enhanced1GClock()
 {
 	const int BUF_SIZE = 5;
 	int ranges[] = {0, 5};
-	/*
-	 * When there is only one range, enhanced_gclock_buffer1 should behave
-	 * exactly the same as enhanced_gclock_buffer. 
-	 */
 	enhanced_gclock_buffer1 buffer(BUF_SIZE, ranges, 2);
 	for (int i = 0; i < BUF_SIZE; i++) {
 		frame *f = new frame(i * PAGE_SIZE, (char *) NULL);
@@ -150,10 +146,41 @@ void test1Enhanced1GClock()
 	}
 }
 
+void testPerformance()
+{
+	const int BUF_SIZE = 1000;
+	int ranges[] = {0, 2, 4, 8, 16};
+	enhanced_gclock_buffer1 buffer1(BUF_SIZE, ranges, 5);
+	enhanced_gclock_buffer buffer(BUF_SIZE);
+	LF_gclock_buffer lf_buffer(BUF_SIZE);
+	for (int i = 0; i < BUF_SIZE * 1000; i++) {
+		frame *f = new frame(i * PAGE_SIZE, (char *) NULL);
+		frame *f1 = new frame(i * PAGE_SIZE, (char *) NULL);
+		frame *lf_f = new frame(i * PAGE_SIZE, (char *) NULL);
+		int r = random() % 40;
+		f->incrWC(r);
+		f1->incrWC(r);
+		lf_f->incrWC(r);
+		frame *ret = buffer.add(f);
+		if (ret)
+			delete ret;
+		ret = buffer1.add(f1);
+		if (ret)
+			delete ret;
+		ret = lf_buffer.add(lf_f);
+		if (ret)
+			delete ret;
+	}
+	lf_buffer.print(true);
+	buffer.print(true);
+	buffer1.print(true);
+}
+
 int main()
 {
 //	testEnhancedGClock();
 //	testLinkedPageList();
 //	testEnhanced1GClock();
-	test1Enhanced1GClock();
+//	test1Enhanced1GClock();
+	testPerformance();
 }

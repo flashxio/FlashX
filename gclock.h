@@ -23,10 +23,15 @@ class LF_gclock_buffer: public gclock_buffer
 	atomic_unsigned_integer clock_hand;
 	unsigned int size;
 
+	long tot_nwrites;
+	long tot_naccesses;
+
 	frame *swap(frame *entry);
 public:
 	LF_gclock_buffer(unsigned int size): pool(size), free(size) {
 		this->size = size;
+		tot_nwrites = 0;
+		tot_naccesses = 0;
 	}
 
 	virtual frame *add(frame *entry);
@@ -40,14 +45,16 @@ public:
 		clock_hand.inc(delta);
 	}
 
-	void print() {
+	void print(bool stat_only = false) {
 		printf("**************************\n");
 		printf("there are %d frames in the lf_buffer, clock_hand: %d\n",
 				size - free.get(), clock_hand.get());
-		for (unsigned i = 0; i < size - free.get(); i++) {
-			printf("\toffset: %ld, hits: %d\n",
-					pool.get(i)->get_offset(), pool.get(i)->getWC());
-		}
+		printf("there were %ld writes and %ld page accesses\n", tot_nwrites, tot_naccesses);
+		if (!stat_only)
+			for (unsigned i = 0; i < size - free.get(); i++) {
+				printf("\toffset: %ld, hits: %d\n",
+						pool.get(i)->get_offset(), pool.get(i)->getWC());
+			}
 	}
 };
 
@@ -72,6 +79,9 @@ class enhanced_gclock_buffer: public gclock_buffer
 	int scan_nrounds;	// how many times has the buffer been scanned
 	bool start_dec;		// start to decrease the hit count
 
+	long tot_nwrites;
+	long tot_naccesses;
+
 	frame **pool;
 	unsigned free;
 	unsigned clock_hand;
@@ -88,6 +98,9 @@ public:
 
 		start_dec = false;
 		scan_nrounds = 0;
+
+		tot_nwrites = 0;
+		tot_naccesses = 0;
 	}
 
 	~enhanced_gclock_buffer() {
@@ -96,13 +109,15 @@ public:
 
 	frame *add(frame *entry);
 
-	void print() {
+	void print(bool stat_only = false) {
 		printf("**************************\n");
 		printf("there are %d frames in the buffer\n", size - free);
-		for (unsigned i = 0; i < size - free; i++) {
-			printf("\toffset: %ld, hits: %d\n",
-					pool[i]->get_offset(), pool[i]->getWC());
-		}
+		printf("there were %ld writes and %ld page accesses\n", tot_nwrites, tot_naccesses);
+		if (!stat_only)
+			for (unsigned i = 0; i < size - free; i++) {
+				printf("\toffset: %ld, hits: %d\n",
+						pool[i]->get_offset(), pool[i]->getWC());
+			}
 	}
 };
 
@@ -116,6 +131,9 @@ class enhanced_gclock_buffer1: public gclock_buffer
 {
 	int scan_nrounds;	// how many times has the buffer been scanned
 	bool start_dec;		// start to decrease the hit count
+
+	long tot_nwrites;
+	long tot_naccesses;
 
 	class range_queue: public linked_page_queue {
 		unsigned int max_hits;
@@ -170,20 +188,22 @@ public:
 
 	frame *add(frame *entry);
 
-	void print() {
+	void print(bool stat_only = false) {
 		printf("**************************\n");
 		printf("there are %d frames in the buffer1, scan_nrounds: %d, clock_hand: %ld\n",
 				size - free, scan_nrounds, clock_hand->get_offset());
+		printf("there were %ld writes and %ld page accesses\n", tot_nwrites, tot_naccesses);
 		printf("there are %d range queues: \n", num_queues);
-		for (int i = 0; i < num_queues; i++) {
-			printf("[%d, %d), size: %d\n", queues[i].get_min_hits(),
-					queues[i].get_max_hits(), queues[i].size());
-			frame *pg = queues[i].front();
-			while (!queues[i].is_head(pg)) {
-				printf("\toffset: %ld, hits: %d\n", pg->get_offset(), pg->getWC());
-				pg = pg->front();
+		if (!stat_only)
+			for (int i = 0; i < num_queues; i++) {
+				printf("[%d, %d), size: %d\n", queues[i].get_min_hits(),
+						queues[i].get_max_hits(), queues[i].size());
+				frame *pg = queues[i].front();
+				while (!queues[i].is_head(pg)) {
+					printf("\toffset: %ld, hits: %d\n", pg->get_offset(), pg->getWC());
+					pg = pg->front();
+				}
 			}
-		}
 	}
 
 	void sanity_check();

@@ -22,6 +22,8 @@ frame *enhanced_gclock_buffer::add(frame *entry)
  */
 frame *enhanced_gclock_buffer::swap(frame *entry)
 {
+	int num_writes = 0;
+	int num_accesses = 0;
 	unsigned int num_pinning = 0;
 	for (; ;) {
 		if (clock_hand == size) {	// if we have scanned all pages in the buffer
@@ -39,8 +41,11 @@ frame *enhanced_gclock_buffer::swap(frame *entry)
 		if (e == NULL)
 			continue;
 
-		if (start_dec)
+		num_accesses++;
+		if (start_dec) {
 			e->decrWC(scan_nrounds);
+			num_writes++;
+		}
 
 		int pin_count = e->pinCount();
 		if (pin_count == -1) {	// evicted?
@@ -69,6 +74,8 @@ frame *enhanced_gclock_buffer::swap(frame *entry)
 		if ((e->getWC() - scan_nrounds <= 0 && !start_dec)
 				|| (e->getWC() <= 0 && start_dec)) {
 			if (e->tryEvict()) {
+				tot_nwrites += num_writes;
+				tot_naccesses += num_accesses;
 				pool[clock_hand - 1] = entry;
 				if (!start_dec)
 					entry->incrWC(scan_nrounds);
@@ -96,6 +103,9 @@ enhanced_gclock_buffer1::enhanced_gclock_buffer1(int size,
 
 	start_dec = false;
 	scan_nrounds = 0;
+
+	tot_naccesses = 0;
+	tot_nwrites = 0;
 }
 
 frame *enhanced_gclock_buffer1::add(frame *entry)
@@ -188,6 +198,10 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 {
 	unsigned int num_pinning = 0;
 
+	/* the number of pages to be accessed before a page can be evicted. */
+	int num_accesses = 0;
+	/* The number of writes before a page can be evicted. */
+	int num_writes = 0;
 	for (; ;) {
 		/* We have scanned all pages in the first range */
 		while (queues[0].is_head(clock_hand)) {
@@ -209,10 +223,13 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 		frame *e = clock_hand;
 		/* Get the next frame in the list. */
 		clock_hand = clock_hand->front();
+		num_accesses++;
 
 		// TODO I need to look back later.
-		if (start_dec)
+		if (start_dec) {
 			e->decrWC(scan_nrounds);
+			num_writes++;
+		}
 
 		int pin_count = e->pinCount();
 		if (pin_count == -1) {	// evicted?
@@ -224,6 +241,8 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 			 */
 			if (!start_dec)
 				entry->incrWC(scan_nrounds);
+			tot_naccesses += num_accesses;
+			tot_nwrites += num_writes;
 			return e;
 		}
 
@@ -245,11 +264,17 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 
 				if (!start_dec)
 					entry->incrWC(scan_nrounds);
+				tot_naccesses += num_accesses;
+				tot_nwrites += num_writes;
 				return e;
 			}
 		}
 		else if (real_hits >= queues[0].get_max_hits()) {
+			// TODO I should split the link list implement from the page,
+			// so moving a page from a queue to another won't cause any
+			// cache line invalidation.
 			queues[0].remove(e);
+			num_writes++;
 			add2range(e, real_hits);
 		}
 	}	// end for
@@ -273,11 +298,14 @@ frame *LF_gclock_buffer::add(frame *entry) {
 frame *LF_gclock_buffer::swap(frame *entry) {
 	unsigned int num_pinning = 0;
 	unsigned int start = clock_hand.get();
+	int num_writes = 0;
+	int num_accesses = 0;
 	for (unsigned int i = start % size; ; i = (i + 1) % size) {
 		frame *e = pool.get(i);
 		if (e == NULL)
 			continue;
 
+		num_accesses++;
 		int pin_count = e->pinCount();
 		if (pin_count == -1) {	// evicted?
 			if (pool.CAS(i, e, entry)) {
@@ -298,9 +326,12 @@ frame *LF_gclock_buffer::swap(frame *entry) {
 			continue;
 		}
 
+		num_writes++;
 		if (e->decrWC() <= 0) {
 			if (e->tryEvict() && pool.CAS(i, e, entry)) {
 				moveClockHand(i, start);
+				tot_nwrites += num_writes;
+				tot_naccesses += num_accesses;
 				return e;
 			}
 		}
