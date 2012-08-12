@@ -16,12 +16,58 @@ class LRU2Q_cache: public page_cache {
 		}
 	};
 
+	/**
+	 * This class is to support removing any page in the queue.
+	 * It's just for showing the idea of LRU2Q, so performance isn't
+	 * very important here.
+	 */
+	class indexed_page_queue: public linked_page_queue {
+		/* 
+		 * I need to hide this method so no one will be able to 
+		 * get the iterator.
+		 */
+		iterator begin() {
+			return linked_page_queue::begin();
+		}
+
+		/* This is to acclerate the deletion of any page. */
+		std::map<frame *, linked_obj *const> page_map;
+	public:
+		indexed_page_queue() {
+		}
+
+		linked_obj *const push_back(frame *pg) {
+			linked_obj *const obj = linked_page_queue::push_back(pg);
+			page_map.insert(std::pair<frame *, linked_obj *const>(pg, obj));
+			return obj;
+		}
+
+		void pop_front() {
+			if (size() <= 0)
+				return;
+			frame *pg = front();
+			remove(pg);
+		}
+
+		void remove(frame *pg) {
+			std::map<frame *, linked_obj *const>::iterator it
+				= page_map.find(pg);
+			if (it == page_map.end()) {
+				fprintf(stderr, "page %ld doesn't exist in the queue\n",
+						pg->get_offset());
+				return;
+			}
+			page_map.erase(pg);
+			remove((linked_page *) it->second);
+		}
+	};
+
 	int npages;
 	linked_page *pages;
 	std::map<off_t, linked_page *> page_map;
-	linked_page_queue free_pages;
-	linked_page_queue active_queue;
-	linked_page_queue inactive_queue;
+	indexed_page_queue free_pages;
+	indexed_page_queue active_queue;
+	indexed_page_queue inactive_queue;
 
 	void evict_pages() {
 		/*

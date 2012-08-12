@@ -2,6 +2,9 @@
 #define __CONTAINER_H__
 
 #include <stdio.h>
+#include <numa.h>
+#include <assert.h>
+#include <pthread.h>
 
 #include "common.h"
 

@@ -11,10 +11,10 @@
 
 #include <map>
 
+#include "common.h"
 #include "container.h"
 #include "concurrency.h"
-
-#define PTHREAD_WAIT
+#include "slab_allocator.h"
 
 #define PAGE_SIZE 4096
 #define LOG_PAGE_SIZE 12
@@ -367,19 +367,15 @@ class frame: public thread_safe_page
 	atomic_integer wcount;
 	/* equivalent to the number of references */
 	atomic_integer pinning;
-	frame *prev, *next;
 
 public:
 	frame(): thread_safe_page() {
-		prev = next = this;
 	}
 
 	frame(off_t offset, char *data): thread_safe_page(offset, data) {
-		prev = next = this;
 	}
 
 	frame(off_t off, long d): thread_safe_page(off, d) {
-		prev = next = this;
 	}
 
 	void *volatileGetValue() {
@@ -435,120 +431,239 @@ public:
 	void unpin() {
 		pinning.dec(1);
 	}
+};
 
-	/* for linked pages */
+class linked_page_queue;
 
-private:
-	/* Add a frame behind the frame in the list. */
-	void add_front(frame *pg) {
-		frame *next = this->next;
-		pg->next = next;
-		pg->prev = this;
-		this->next = pg;
-		next->prev = pg;
+class linked_obj
+{
+	linked_obj *prev, *next;
+	void *payload;
+public:
+	linked_obj() {
+		prev = next = this;
+		payload = NULL;
 	}
 
-	/* Add a frame before the frame in the list. */
-	void add_back(frame *pg) {
-		frame *prev = this->prev;
-		pg->next = this;
-		pg->prev = prev;
-		this->prev = pg;
-		prev->next = pg;
+	linked_obj(void *payload) {
+		prev = next = this;
+		this->payload = payload;
+	}
+
+	void set_payload(void *payload) {
+		this->payload = payload;
+	}
+
+	void *get_payload() const {
+		return payload;
+	}
+
+	/* Add an obj behind the obj in the list. */
+	void add_front(linked_obj *obj) {
+		linked_obj *next = this->next;
+		obj->next = next;
+		obj->prev = this;
+		this->next = obj;
+		next->prev = obj;
+	}
+
+	/* Add an obj before the obj in the list. */
+	void add_back(linked_obj *obj) {
+		linked_obj *prev = this->prev;
+		obj->next = this;
+		obj->prev = prev;
+		this->prev = obj;
+		prev->next = obj;
 	}
 
 	void remove_from_list() {
-		frame *prev = this->prev;
-		frame *next = this->next;
+		linked_obj *prev = this->prev;
+		linked_obj *next = this->next;
 		prev->next = next;
 		next->prev = prev;
 		this->next = this;
 		this->prev = this;
 	}
 
-	bool is_empty() {
+	bool is_empty() const {
 		return this->next == this;
 	}
 
-public:
-	frame *front() {
+	linked_obj *front() const {
 		return next;
 	}
 
-	frame *back() {
+	linked_obj *back() const {
 		return prev;
 	}
 
 	friend class linked_page_queue;
 };
 
+/**
+ * The queue is formed as a linked list, so it only supports sequential access.
+ * The queue is designed to reduce writes to the shared memory when we need to
+ * reorganize the page list. The idea is to split the page metadata from the 
+ * data structure that forms the linked list. As long as the linked page list
+ * isn't shared by multiple CPUs, any modification on the page list occurs
+ * on the local memory.
+ */
 class linked_page_queue {
-	frame head;
+	linked_obj head;
 	int _size;
+
+	bool local_allocator;
+	obj_allocator<linked_obj> *allocator;
+
+protected:
+	void remove(linked_obj *obj) {
+		obj->remove_from_list();
+		_size--;
+		allocator->free(obj);
+	}
 public:
+	class iterator {
+		linked_obj *curr_loc;
+		linked_page_queue *queue;
+		bool has_moved;
+
+		iterator(linked_obj *head, linked_page_queue *queue) {
+			this->curr_loc = head;
+			this->queue = queue;
+			has_moved = false;
+		}
+	public:
+		iterator() {
+			curr_loc = NULL;
+			queue = NULL;
+			has_moved = false;
+		}
+
+		bool has_next() const {
+			if (curr_loc == NULL || queue == NULL)
+				return false;
+			if (queue->size() == 0)
+				return false;
+			if (has_moved)
+				return curr_loc->front() != &queue->head;
+			else
+				return true;
+		}
+
+		/* move to the next object and return the next object. */
+		frame *next() {
+			assert(curr_loc != NULL && queue != NULL);
+			curr_loc = curr_loc->front();
+			has_moved = true;
+			return (frame *) curr_loc->get_payload();
+		}
+
+		/* 
+		 * These methods are extensions of the basic iterator.
+		 * They can only be called after next() is called at least once.
+		 */
+
+		/*
+		 * return the current object.
+		 * return NULL if it's pointing to the head of the queue.
+		 */
+		frame *curr() {
+			assert(curr_loc != NULL && queue != NULL);
+			if (curr_loc == &queue->head)
+				return NULL;
+			return (frame *) curr_loc->get_payload();
+		}
+
+		void set(frame *payload) {
+			assert(curr_loc != NULL && queue != NULL);
+			if (curr_loc != &queue->head)
+				curr_loc->set_payload(payload);
+		}
+
+		/* 
+		 * remove the current frame in the queue
+		 * and move to the next page automatically.
+		 */
+		void remove() {
+			assert(curr_loc != NULL && queue != NULL);
+			if (queue->size() <= 0 && curr_loc != &queue->head)
+				return;
+			linked_obj *tmp = curr_loc;
+			curr_loc = curr_loc->front();
+			queue->remove(tmp);
+		}
+
+		friend class linked_page_queue;
+	};
+
+	virtual ~linked_page_queue() {
+		if (local_allocator)
+			delete allocator;
+	}
+
+	linked_page_queue(obj_allocator<linked_obj> *allocator) {
+		_size = 0;
+		this->allocator = allocator;
+		local_allocator = false;
+	}
+
 	linked_page_queue() {
 		_size = 0;
+		allocator = new obj_allocator<linked_obj>(PAGE_SIZE);
+		local_allocator = true;
 	}
 
-	bool is_head(frame *pg) {
-		return pg == &head;
+	virtual iterator begin() {
+		return iterator(&head, this);
 	}
 
-	void push_back(frame *pg) {
-		head.add_back(pg);
+	virtual linked_obj *const push_back(frame *pg) {
+		linked_obj *obj = allocator->alloc_obj();
+		assert(obj);
+		obj->set_payload(pg);
+		head.add_back(obj);
 		_size++;
+		return obj;
 	}
 
-	void pop_front() {
-		frame *pg = front();
-		remove(pg);
-	}
-
-	void remove(frame *pg) {
-		if (pg->is_empty())
+	virtual void pop_front() {
+		if (size() == 0)
 			return;
-		// TODO do I need to check whether the page is in the queue.
-		pg->remove_from_list();
+		assert(size() > 0);
+
+		linked_obj *obj = head.front();
+		obj->remove_from_list();
 		_size--;
+		allocator->free(obj);
 	}
 
-	void remove(int idx) {
-		frame *f = front();
-		for (int i = 0; i < idx; i++)
-			f = f->front();
-		f->remove_from_list();
-		_size--;
-	}
-
-	bool empty() {
+	bool empty() const {
 		return head.is_empty();
 	}
 
 	frame *front() {
-		return head.front();
+		if (size() <= 0)
+			return NULL;
+		return (frame *) head.front()->get_payload();
 	}
 
 	frame *back() {
-		return head.back();
+		if (size() <= 0)
+			return NULL;
+		return (frame *) head.back()->get_payload();
 	}
 
-	int size() {
+	int size() const {
 		return _size;
-	}
-
-	void replace(frame *old_frame, frame *new_frame) {
-		frame *prev = old_frame->back();
-		old_frame->remove_from_list();
-		prev->add_front(new_frame);
 	}
 
 	void merge(linked_page_queue *list) {
 		if (list->empty())
 			return;
 
-		frame *list_begin = list->front();
-		frame *list_end = list->back();
-		frame *this_end = this->back();
+		linked_obj *list_begin = list->head.front();
+		linked_obj *list_end = list->head.back();
+		linked_obj *this_end = this->head.back();
 		
 		/* Remove all pages in the list. */
 		list->head.next = &list->head;
@@ -565,14 +680,24 @@ public:
 		this->head.prev = list_end;
 	}
 
-	void print() {
-		frame *f = front();
+	// for test
+	void print() const {
+		linked_obj *f = head.front();
 		printf("queue size: %d\n", _size);
 		while (f != &head) {
-			printf("%ld\t", f->get_offset());
+			printf("%ld\t", ((frame *) f->get_payload())->get_offset());
 			f = f->front();
 		}
 		printf("\n");
+	}
+
+	void remove(int idx) {
+		int i = 0;
+		for (iterator it = begin(); it.has_next(); i++) {
+			it.next();
+			if (idx == i)
+				it.remove();
+		}
 	}
 };
 

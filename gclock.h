@@ -1,6 +1,7 @@
 #ifndef __GCLOCK_H__
 #define __GCLOCK_H__
 
+#include "container.h"
 #include "concurrency.h"
 #include "cache.h"
 
@@ -167,11 +168,16 @@ class enhanced_gclock_buffer1: public gclock_buffer
 		}
 	};
 
+	/* 
+	 * All pages in a queue have WC values higher than or equal to
+	 * the lower bound of the queue. But it's possible that the WC
+	 * value of a page is higher than the upper bound of the queue.
+	 */
 	range_queue *queues;
 	int num_queues;
 
 	unsigned free;
-	frame *clock_hand;
+	linked_page_queue::iterator clock_hand;
 	unsigned size;
 
 	frame *swap(frame *entry);
@@ -190,18 +196,20 @@ public:
 
 	void print(bool stat_only = false) {
 		printf("**************************\n");
+		long offset = -1;
+		if (clock_hand.curr())
+			offset = clock_hand.curr()->get_offset();
 		printf("there are %d frames in the buffer1, scan_nrounds: %d, clock_hand: %ld\n",
-				size - free, scan_nrounds, clock_hand->get_offset());
+				size - free, scan_nrounds, offset);
 		printf("there were %ld writes and %ld page accesses\n", tot_nwrites, tot_naccesses);
 		printf("there are %d range queues: \n", num_queues);
 		if (!stat_only)
 			for (int i = 0; i < num_queues; i++) {
 				printf("[%d, %d), size: %d\n", queues[i].get_min_hits(),
 						queues[i].get_max_hits(), queues[i].size());
-				frame *pg = queues[i].front();
-				while (!queues[i].is_head(pg)) {
+				for (linked_page_queue::iterator it = queues[i].begin(); it.has_next(); ) {
+					frame *pg = it.next();
 					printf("\toffset: %ld, hits: %d\n", pg->get_offset(), pg->getWC());
-					pg = pg->front();
 				}
 			}
 	}

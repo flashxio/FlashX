@@ -98,7 +98,7 @@ enhanced_gclock_buffer1::enhanced_gclock_buffer1(int size,
 	num_queues = num_ranges;
 
 	free = size;
-	clock_hand = queues[0].front();
+	clock_hand = queues[0].begin();
 	this->size = size;
 
 	start_dec = false;
@@ -204,7 +204,7 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 	int num_writes = 0;
 	for (; ;) {
 		/* We have scanned all pages in the first range */
-		while (queues[0].is_head(clock_hand)) {
+		while (!clock_hand.has_next()) {
 			if (start_dec) {// if we have decreased the hit count of all pages.
 				start_dec = false;
 				scan_nrounds = 0;
@@ -216,13 +216,13 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 			}
 			else
 				merge_queues(scan_nrounds);
-			clock_hand = queues[0].front();
+			clock_hand = queues[0].begin();
 		}
 		sanity_check();
 
-		frame *e = clock_hand;
 		/* Get the next frame in the list. */
-		clock_hand = clock_hand->front();
+		frame *e = clock_hand.next();
+		assert(e);
 		num_accesses++;
 
 		// TODO I need to look back later.
@@ -234,7 +234,7 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 		int pin_count = e->pinCount();
 		if (pin_count == -1) {	// evicted?
 			/* Use `entry' to replace `e' in the list. */
-			queues[0].replace(e, entry);
+			clock_hand.set(entry);
 			/*
 			 * If it's in the decreasing mode, scan_nrounds is
 			 * virtually 0.
@@ -260,7 +260,7 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 		int real_hits = start_dec ? e->getWC() : (e->getWC() - scan_nrounds);
 		if (real_hits <= 0) {
 			if (e->tryEvict()) {
-				queues[0].replace(e, entry);
+				clock_hand.set(entry);
 
 				if (!start_dec)
 					entry->incrWC(scan_nrounds);
@@ -269,13 +269,13 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 				return e;
 			}
 		}
-		else if (real_hits >= queues[0].get_max_hits()) {
-			// TODO I should split the link list implement from the page,
-			// so moving a page from a queue to another won't cause any
-			// cache line invalidation.
-			queues[0].remove(e);
-			num_writes++;
-			add2range(e, real_hits);
+		/*
+		 * pages are split into multiple queues according to their WC values
+		 * instead of real hit counts.
+		 */
+		else if (e->getWC() >= queues[0].get_max_hits()) {
+			clock_hand.remove();
+			add2range(e, e->getWC());
 		}
 	}	// end for
 }

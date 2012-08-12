@@ -84,11 +84,13 @@ public:
 	}
 };
 
+const static long MAX_SIZE = 0x7fffffffffffffffL;
+
 template<class T>
 class obj_allocator: public slab_allocator {
 public:
 	obj_allocator(long increase_size,
-			long max_size): slab_allocator(sizeof(T),
+			long max_size = MAX_SIZE): slab_allocator(sizeof(T),
 				increase_size, max_size) {
 	}
 
