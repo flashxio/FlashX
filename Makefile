@@ -26,6 +26,7 @@ unit_test: $(OBJS)
 	make -C test
 
 clean:
+	make -C test clean
 	rm *.o
 
 -include $(DEPS) 
