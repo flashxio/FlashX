@@ -82,6 +82,8 @@ class enhanced_gclock_buffer: public gclock_buffer
 
 	long tot_nwrites;
 	long tot_naccesses;
+	long tot_nrounds;
+	long tot_write_nrounds;
 
 	frame **pool;
 	unsigned free;
@@ -102,6 +104,8 @@ public:
 
 		tot_nwrites = 0;
 		tot_naccesses = 0;
+		tot_nrounds = 0;
+		tot_write_nrounds = 0;
 	}
 
 	~enhanced_gclock_buffer() {
@@ -113,7 +117,8 @@ public:
 	void print(bool stat_only = false) {
 		printf("**************************\n");
 		printf("there are %d frames in the buffer\n", size - free);
-		printf("there were %ld writes and %ld page accesses\n", tot_nwrites, tot_naccesses);
+		printf("there were %ld writes and %ld page accesses, %ld rounds, %ld write rounds\n",
+				tot_nwrites, tot_naccesses, tot_nrounds, tot_write_nrounds);
 		if (!stat_only)
 			for (unsigned i = 0; i < size - free; i++) {
 				printf("\toffset: %ld, hits: %d\n",
@@ -135,6 +140,8 @@ class enhanced_gclock_buffer1: public gclock_buffer
 
 	long tot_nwrites;
 	long tot_naccesses;
+	long tot_nrounds;
+	long tot_write_nrounds;
 
 	class range_queue: public linked_page_queue {
 		unsigned int max_hits;
@@ -201,7 +208,8 @@ public:
 			offset = clock_hand.curr()->get_offset();
 		printf("there are %d frames in the buffer1, scan_nrounds: %d, clock_hand: %ld\n",
 				size - free, scan_nrounds, offset);
-		printf("there were %ld writes and %ld page accesses\n", tot_nwrites, tot_naccesses);
+		printf("there were %ld writes and %ld page accesses and %ld rounds, %ld write rounds\n",
+				tot_nwrites, tot_naccesses, tot_nrounds, tot_write_nrounds);
 		printf("there are %d range queues: \n", num_queues);
 		if (!stat_only)
 			for (int i = 0; i < num_queues; i++) {

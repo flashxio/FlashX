@@ -525,36 +525,31 @@ public:
 	class iterator {
 		linked_obj *curr_loc;
 		linked_page_queue *queue;
-		bool has_moved;
+		int num_iter;	// number of pages that have been accessed.
 
 		iterator(linked_obj *head, linked_page_queue *queue) {
 			this->curr_loc = head;
 			this->queue = queue;
-			has_moved = false;
+			num_iter = 0;
 		}
 	public:
 		iterator() {
 			curr_loc = NULL;
 			queue = NULL;
-			has_moved = false;
+			num_iter = 0;
 		}
 
 		bool has_next() const {
 			if (curr_loc == NULL || queue == NULL)
 				return false;
-			if (queue->size() == 0)
-				return false;
-			if (has_moved)
-				return curr_loc->front() != &queue->head;
-			else
-				return true;
+			return num_iter < queue->size();
 		}
 
 		/* move to the next object and return the next object. */
 		frame *next() {
 			assert(curr_loc != NULL && queue != NULL);
 			curr_loc = curr_loc->front();
-			has_moved = true;
+			num_iter++;
 			return (frame *) curr_loc->get_payload();
 		}
 
@@ -589,8 +584,14 @@ public:
 			if (queue->size() <= 0 && curr_loc != &queue->head)
 				return;
 			linked_obj *tmp = curr_loc;
-			curr_loc = curr_loc->front();
+			curr_loc = curr_loc->back();
+			num_iter--;
 			queue->remove(tmp);
+		}
+
+		// for test
+		linked_page_queue *owner() const {
+			return queue;
 		}
 
 		friend class linked_page_queue;

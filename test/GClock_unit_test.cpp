@@ -1,3 +1,5 @@
+#include <sys/time.h>
+
 #include "gclock.h"
 
 void *page::data_start;
@@ -95,6 +97,16 @@ void testLinkedPageList()
 	printf("the new created list after merging\n");
 	list1.print();
 	printf("\n");
+
+	int i = 0;
+	printf("print and remove the second page simultaneously\n");
+	for (linked_page_queue::iterator it = list.begin(); it.has_next(); i++) {
+		it.next();
+		if (2 == i)
+			it.remove();
+		printf("%ld\t", it.curr()->get_offset());
+	}
+	printf("\nthe list has %d pages\n", list.size());
 }
 
 /**
@@ -179,31 +191,55 @@ void test1Enhanced1GClock()
 void testPerformance()
 {
 	const int BUF_SIZE = 1000;
-	int ranges[] = {0, 2, 4, 8, 16};
-	enhanced_gclock_buffer1 buffer1(BUF_SIZE, ranges, 5);
+	int ranges[] = {0, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
+	enhanced_gclock_buffer1 buffer1(BUF_SIZE, ranges, 11);
 	enhanced_gclock_buffer buffer(BUF_SIZE);
 	LF_gclock_buffer lf_buffer(BUF_SIZE);
+	struct timeval start, end;
+	srandom(0);
+	gettimeofday(&start, NULL);
 	for (int i = 0; i < BUF_SIZE * 1000; i++) {
-		frame *f = new frame((long) i * PAGE_SIZE, (char *) NULL);
 		frame *f1 = new frame((long) i * PAGE_SIZE, (char *) NULL);
-		frame *lf_f = new frame((long) i * PAGE_SIZE, (char *) NULL);
-		int r = random() % 40;
-		f->incrWC(r);
+		int r = random() % 2048;
 		f1->incrWC(r);
-		lf_f->incrWC(r);
-		frame *ret = buffer.add(f);
-		if (ret)
-			delete ret;
-		ret = buffer1.add(f1);
-		if (ret)
-			delete ret;
-		ret = lf_buffer.add(lf_f);
+		frame *ret = buffer1.add(f1);
 		if (ret)
 			delete ret;
 	}
-	lf_buffer.print(true);
-	buffer.print(true);
+	gettimeofday(&end, NULL);
+	printf("it takes %.3f seconds\n",
+			end.tv_sec - start.tv_sec + ((double) end.tv_usec - start.tv_usec) / 1000000);
 	buffer1.print(true);
+	printf("\n");
+	srandom(0);
+	gettimeofday(&start, NULL);
+	for (int i = 0; i < BUF_SIZE * 1000; i++) {
+		frame *f = new frame((long) i * PAGE_SIZE, (char *) NULL);
+		int r = random() % 2048;
+		f->incrWC(r);
+		frame *ret = buffer.add(f);
+		if (ret)
+			delete ret;
+	}
+	gettimeofday(&end, NULL);
+	printf("it takes %.3f seconds\n",
+			end.tv_sec - start.tv_sec + ((double) end.tv_usec - start.tv_usec) / 1000000);
+	buffer.print(true);
+	printf("\n");
+	srandom(0);
+	gettimeofday(&start, NULL);
+	for (int i = 0; i < BUF_SIZE * 1000; i++) {
+		frame *lf_f = new frame((long) i * PAGE_SIZE, (char *) NULL);
+		int r = random() % 2048;
+		lf_f->incrWC(r);
+		frame *ret = lf_buffer.add(lf_f);
+		if (ret)
+			delete ret;
+	}
+	gettimeofday(&end, NULL);
+	printf("it takes %.3f seconds\n",
+			end.tv_sec - start.tv_sec + ((double) end.tv_usec - start.tv_usec) / 1000000);
+	lf_buffer.print(true);
 }
 
 int main()
