@@ -42,23 +42,26 @@ public:
 			long cache_size, memory_manager *manager) {
 		page_cache *global_cache;
 		switch (cache_type) {
+#if 0
+			// These are just for testing in the single thread.
 			case TREE_CACHE:
 				global_cache = new tree_cache(cache_size, 0);
 				break;
+			case CUCKOO_CACHE:
+				global_cache = new cuckoo_cache(cache_size);
+				break;
+			case GCLOCK_CACHE:
+				global_cache = new gclock_cache(cache_size);
+				break;
+			case LRU2Q_CACHE:
+				global_cache = new LRU2Q_cache(cache_size);
+				break;
+#endif
 			case ASSOCIATIVE_CACHE:
 				global_cache = new associative_cache(manager);
 				break;
 			case HASH_INDEX_CACHE:
 				global_cache = new hash_index_cache(manager);
-				break;
-			case CUCKOO_CACHE:
-				global_cache = new cuckoo_cache(cache_size);
-				break;
-			case LRU2Q_CACHE:
-				global_cache = new LRU2Q_cache(cache_size);
-				break;
-			case GCLOCK_CACHE:
-				global_cache = new gclock_cache(cache_size);
 				break;
 			default:
 				fprintf(stderr, "wrong cache type\n");
