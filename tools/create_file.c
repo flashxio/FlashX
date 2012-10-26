@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <numaif.h>
 #include <numa.h>
+#include <sys/time.h>
 
 /**
  * generate a file filled with a sequence starting from 0.
@@ -88,6 +89,9 @@ int main(int argc, char *argv[])
 	}
 
 	/* write data of `size' bytes to the file. */
+	struct timeval start_time, end_time;
+	gettimeofday(&start_time, NULL);
+	long tot_size = size;
 	while (size > 0) {
 		int i;
 		int write_size = sizeof(buf);
@@ -107,6 +111,10 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
+	gettimeofday(&end_time, NULL);
+	printf("write %ld bytes, takes %f seconds\n",
+			tot_size, end_time.tv_sec - start_time.tv_sec
+			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 
 	return 0;
 }
