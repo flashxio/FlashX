@@ -443,11 +443,11 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 	} while (true);
 }
 
-associative_cache::associative_cache(memory_manager *manager) {
+associative_cache::associative_cache(long cache_size) {
 	printf("associative cache is used\n");
 	level = 0;
 	split = 0;
-	this->manager = manager;
+	this->manager = new memory_manager(cache_size);
 	manager->register_cache(this);
 	int npages = init_cache_size / PAGE_SIZE;
 	assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);

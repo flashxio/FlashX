@@ -50,7 +50,8 @@ int part_global_cached_io::init() {
 	if (group->cache == NULL) {
 		/* this allocates all pages for the cache. */
 		page::allocate_cache(cache_size);
-		group->cache = global_cached_io::create_cache(cache_type, cache_size, manager);
+		/* Each cache has their own memory managers */
+		group->cache = global_cached_io::create_cache(cache_type, cache_size);
 	}
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
@@ -99,11 +100,10 @@ int part_global_cached_io::init() {
 }
 
 part_global_cached_io::part_global_cached_io(int num_groups,
-		io_interface *underlying, int idx, long cache_size, int cache_type,
-		memory_manager *manager): global_cached_io(underlying) {
+		io_interface *underlying, int idx, long cache_size,
+		int cache_type): global_cached_io(underlying) {
 	this->thread_id = idx;
 	this->cb = NULL;
-	this->manager = manager;
 	remote_reads = 0;
 	//		assert(nthreads % num_groups == 0);
 	this->num_groups = num_groups;

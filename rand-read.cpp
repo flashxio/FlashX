@@ -300,8 +300,6 @@ int main(int argc, char *argv[])
 	}
 
 	num = num_files;
-	// TODO each node should have a memory manager.
-	memory_manager *manager = new memory_manager(cache_size);
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
 		switch (access_option) {
@@ -325,7 +323,7 @@ int main(int argc, char *argv[])
 					io_interface *underlying = new remote_disk_access(
 							read_threads, num_files);
 					global_cached_io *io = new global_cached_io(underlying,
-							cache_size, cache_type, manager);
+							cache_size, cache_type);
 					if (preload)
 						io->preload(0, npages * PAGE_SIZE);
 					threads[j] = new thread_private(j, entry_size, io);
@@ -337,7 +335,7 @@ int main(int argc, char *argv[])
 							npages * PAGE_SIZE);
 					threads[j] = new thread_private(j, entry_size,
 							new part_global_cached_io(num_nodes, underlying,
-								j, cache_size, cache_type, manager));
+								j, cache_size, cache_type));
 				}
 				break;
 			default:

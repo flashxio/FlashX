@@ -38,8 +38,7 @@ public:
 		cache_hits = 0;
 	}
 
-	static page_cache *create_cache(int cache_type,
-			long cache_size, memory_manager *manager) {
+	static page_cache *create_cache(int cache_type, long cache_size) {
 		page_cache *global_cache;
 		switch (cache_type) {
 #if 0
@@ -58,10 +57,10 @@ public:
 				break;
 #endif
 			case ASSOCIATIVE_CACHE:
-				global_cache = new associative_cache(manager);
+				global_cache = new associative_cache(cache_size);
 				break;
 			case HASH_INDEX_CACHE:
-				global_cache = new hash_index_cache(manager);
+				global_cache = new hash_index_cache(cache_size);
 				break;
 			default:
 				fprintf(stderr, "wrong cache type\n");
@@ -70,7 +69,7 @@ public:
 		return global_cache;
 	}
 
-	global_cached_io(io_interface *, long, int, memory_manager *);
+	global_cached_io(io_interface *, long, int);
 
 	virtual page_cache *get_global_cache() {
 		return global_cache;
