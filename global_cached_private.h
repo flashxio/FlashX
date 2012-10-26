@@ -3,12 +3,8 @@
 
 #include "read_private.h"
 #include "cache.h"
-#include "tree_cache.h"
 #include "associative_cache.h"
-#include "cuckoo_cache.h"
 #include "hash_index_cache.h"
-#include "gclock_cache.h"
-#include "LRU2Q.h"
 
 enum {
 	TREE_CACHE,
@@ -38,27 +34,29 @@ public:
 		cache_hits = 0;
 	}
 
-	static page_cache *create_cache(int cache_type,
-			long cache_size, memory_manager *manager) {
+	static page_cache *create_cache(int cache_type, long cache_size) {
 		page_cache *global_cache;
 		switch (cache_type) {
+#if 0
+			// These are just for testing in the single thread.
 			case TREE_CACHE:
 				global_cache = new tree_cache(cache_size, 0);
-				break;
-			case ASSOCIATIVE_CACHE:
-				global_cache = new associative_cache(manager);
-				break;
-			case HASH_INDEX_CACHE:
-				global_cache = new hash_index_cache(manager);
 				break;
 			case CUCKOO_CACHE:
 				global_cache = new cuckoo_cache(cache_size);
 				break;
+			case GCLOCK_CACHE:
+				global_cache = new gclock_cache(cache_size);
+				break;
 			case LRU2Q_CACHE:
 				global_cache = new LRU2Q_cache(cache_size);
 				break;
-			case GCLOCK_CACHE:
-				global_cache = new gclock_cache(cache_size);
+#endif
+			case ASSOCIATIVE_CACHE:
+				global_cache = new associative_cache(cache_size);
+				break;
+			case HASH_INDEX_CACHE:
+				global_cache = new hash_index_cache(cache_size);
 				break;
 			default:
 				fprintf(stderr, "wrong cache type\n");
@@ -67,7 +65,7 @@ public:
 		return global_cache;
 	}
 
-	global_cached_io(io_interface *, long, int, memory_manager *);
+	global_cached_io(io_interface *, long, int);
 
 	virtual page_cache *get_global_cache() {
 		return global_cache;
@@ -81,7 +79,9 @@ public:
 		return underlying->get_size();
 	}
 
+	/* When a thread begins, this method will be called. */
 	virtual int init() {
+		global_cache->init();
 		return underlying->init();
 	}
 

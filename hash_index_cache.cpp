@@ -3,6 +3,8 @@
 #include "hash_index_cache.h"
 
 frame *hash_index_cache::addEntry(off_t key, char *data) {
+	gclock_buffer *gclock_buf = (gclock_buffer *) pthread_getspecific(gclock_key);
+	frame_allocator *allocator = (frame_allocator *) pthread_getspecific(allocator_key);
 	for (;;) {
 		frame *new_entry = allocator->alloc();
 		*new_entry = frame(key, data);
@@ -12,7 +14,7 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 		 * it doesn't need to be freed. The frame will be freed
 		 * when it is evicted from the clock buffer.
 		 */
-		frame *removed = clock_buf->add(new_entry);
+		frame *removed = gclock_buf->add(new_entry);
 		/* 
 		 * the removed page can't be pinned any more,
 		 * so other threads can't reference it except the thread
@@ -81,6 +83,7 @@ page *hash_index_cache::search(off_t offset, off_t &old_off) {
 		 */
 		if (entry->volatileGetValue() == NULL) {
 			char *pg;
+			memory_manager *manager = (memory_manager *) pthread_getspecific(manager_key);
 			manager->get_free_pages(1, &pg, this);
 			/*
 			 * if the value of the frame has been set

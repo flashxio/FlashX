@@ -1,6 +1,6 @@
 #include "gclock.h"
 
-const int MAX_SCAN_NROUNDS = 32;
+const int MAX_SCAN_NROUNDS = 1024;
 
 frame *enhanced_gclock_buffer::add(frame *entry)
 {
@@ -30,11 +30,13 @@ frame *enhanced_gclock_buffer::swap(frame *entry)
 			if (start_dec) {// if we have decreased the hit count of all pages.
 				start_dec = false;
 				scan_nrounds = 0;
+				tot_write_nrounds++;
 			}
 			scan_nrounds++;
 			if (scan_nrounds >= MAX_SCAN_NROUNDS)
 				start_dec = true;
 			clock_hand = 0;
+			tot_nrounds++;
 		}
 
 		frame *e = pool[clock_hand++];
@@ -56,6 +58,8 @@ frame *enhanced_gclock_buffer::swap(frame *entry)
 			 */
 			if (!start_dec)
 				entry->incrWC(scan_nrounds);
+			tot_nwrites += num_writes;
+			tot_naccesses += num_accesses;
 			return e;
 		}
 
@@ -106,6 +110,8 @@ enhanced_gclock_buffer1::enhanced_gclock_buffer1(int size,
 
 	tot_naccesses = 0;
 	tot_nwrites = 0;
+	tot_nrounds = 0;
+	tot_write_nrounds = 0;
 }
 
 frame *enhanced_gclock_buffer1::add(frame *entry)
@@ -168,8 +174,11 @@ void enhanced_gclock_buffer1::add2range(frame *e, unsigned int hits)
  */
 void enhanced_gclock_buffer1::sanity_check()
 {
-	if (start_dec) {
-	}
+	unsigned real_size = 0;
+	for (int i = 0; i < num_queues; i++)
+		real_size += queues[i].size();
+	assert(real_size == size);
+	assert(clock_hand.owner() == &queues[0]);
 }
 
 /**
@@ -208,15 +217,18 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 			if (start_dec) {// if we have decreased the hit count of all pages.
 				start_dec = false;
 				scan_nrounds = 0;
+				tot_write_nrounds++;
 			}
 			scan_nrounds++;
 			if (scan_nrounds >= MAX_SCAN_NROUNDS) {
 				merge_all_queues();
 				start_dec = true;
+				assert(queues[0].size() == size);
 			}
 			else
 				merge_queues(scan_nrounds);
 			clock_hand = queues[0].begin();
+			tot_nrounds++;
 		}
 		sanity_check();
 

@@ -47,7 +47,7 @@ public:
 };
 
 global_cached_io::global_cached_io(io_interface *underlying,
-		long cache_size, int cache_type, memory_manager *manager) {
+		long cache_size, int cache_type) {
 	cb = NULL;
 	cache_hits = 0;
 	this->underlying = underlying;
@@ -55,8 +55,7 @@ global_cached_io::global_cached_io(io_interface *underlying,
 	num_waits = 0;
 	this->cache_size = cache_size;
 	if (global_cache == NULL) {
-		page::allocate_cache(cache_size);
-		global_cache = create_cache(cache_type, cache_size, manager);
+		global_cache = create_cache(cache_type, cache_size);
 	}
 }
 

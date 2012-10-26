@@ -37,13 +37,6 @@ class page
 	 */
 	int offset;
 
-	/* 
-	 * all data in a page is in a buffer,
-	 * so can we use the start of the buffer
-	 * and the offset in the buffer to calculate
-	 * the address of the page.
-	 */
-	static void *data_start;
 	/*
 	 * in pages.
 	 */
@@ -64,14 +57,6 @@ public:
 	page(off_t off, char *data) {
 		set_offset(off);
 		this->data = data;
-		refcnt = 0;
-		flags = 0;
-		hits = 0;
-	}
-
-	page(off_t off, long data_off) {
-		set_offset(off);
-		data = (void *) ((long) data_start + data_off);
 		refcnt = 0;
 		flags = 0;
 		hits = 0;
@@ -139,10 +124,6 @@ public:
 		hits++;
 	}
 
-	static void allocate_cache(long size) {
-		data_start = numa_alloc_local(size);
-	}
-
 	virtual void inc_ref() {
 		refcnt++;
 	}
@@ -175,14 +156,6 @@ class thread_safe_page: public page
 
 public:
 	thread_safe_page(): page() {
-#ifdef PTHREAD_WAIT
-		pthread_cond_init(&ready_cond, NULL);
-		pthread_cond_init(&dirty_cond, NULL);
-		pthread_mutex_init(&mutex, NULL);
-#endif
-	}
-
-	thread_safe_page(off_t off, long d): page(off, d) {
 #ifdef PTHREAD_WAIT
 		pthread_cond_init(&ready_cond, NULL);
 		pthread_cond_init(&dirty_cond, NULL);
@@ -319,6 +292,9 @@ public:
 		pthread_spin_destroy(&_lock);
 	}
 	virtual page *search(off_t offset, off_t &old_off) = 0;
+	/* This method should be called within each thread. */
+	virtual void init() {
+	}
 	virtual long size() {
 		return 0;
 	}
@@ -373,9 +349,6 @@ public:
 	}
 
 	frame(off_t offset, char *data): thread_safe_page(offset, data) {
-	}
-
-	frame(off_t off, long d): thread_safe_page(off, d) {
 	}
 
 	void *volatileGetValue() {
@@ -525,36 +498,31 @@ public:
 	class iterator {
 		linked_obj *curr_loc;
 		linked_page_queue *queue;
-		bool has_moved;
+		int num_iter;	// number of pages that have been accessed.
 
 		iterator(linked_obj *head, linked_page_queue *queue) {
 			this->curr_loc = head;
 			this->queue = queue;
-			has_moved = false;
+			num_iter = 0;
 		}
 	public:
 		iterator() {
 			curr_loc = NULL;
 			queue = NULL;
-			has_moved = false;
+			num_iter = 0;
 		}
 
 		bool has_next() const {
 			if (curr_loc == NULL || queue == NULL)
 				return false;
-			if (queue->size() == 0)
-				return false;
-			if (has_moved)
-				return curr_loc->front() != &queue->head;
-			else
-				return true;
+			return num_iter < queue->size();
 		}
 
 		/* move to the next object and return the next object. */
 		frame *next() {
 			assert(curr_loc != NULL && queue != NULL);
 			curr_loc = curr_loc->front();
-			has_moved = true;
+			num_iter++;
 			return (frame *) curr_loc->get_payload();
 		}
 
@@ -589,8 +557,14 @@ public:
 			if (queue->size() <= 0 && curr_loc != &queue->head)
 				return;
 			linked_obj *tmp = curr_loc;
-			curr_loc = curr_loc->front();
+			curr_loc = curr_loc->back();
+			num_iter--;
 			queue->remove(tmp);
+		}
+
+		// for test
+		linked_page_queue *owner() const {
+			return queue;
 		}
 
 		friend class linked_page_queue;

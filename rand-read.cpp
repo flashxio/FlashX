@@ -25,11 +25,8 @@
 #define NUM_THREADS 1024
 
 #include "cache.h"
-#include "tree_cache.h"
 #include "associative_cache.h"
-#include "cuckoo_cache.h"
 #include "workload.h"
-#include "LRU2Q.h"
 #include "global_cached_private.h"
 #include "aio_private.h"
 #include "direct_private.h"
@@ -48,8 +45,6 @@ enum {
 	DIRECT,
 	MMAP,
 };
-
-void *page::data_start;
 
 long npages;
 int nthreads = 1;
@@ -300,8 +295,6 @@ int main(int argc, char *argv[])
 	}
 
 	num = num_files;
-	// TODO each node should have a memory manager.
-	memory_manager *manager = new memory_manager(cache_size);
 	/* initialize the threads' private data. */
 	for (j = 0; j < nthreads; j++) {
 		switch (access_option) {
@@ -322,10 +315,12 @@ int main(int argc, char *argv[])
 			case GLOBAL_CACHE_ACCESS:
 				{
 //					io_interface *underlying = new async_io(cnames, num, npages * PAGE_SIZE);
-					io_interface *underlying = new remote_disk_access(
-							read_threads, num_files);
+//					io_interface *underlying = new remote_disk_access(
+//							read_threads, num_files);
+					io_interface *underlying = new direct_io(cnames, num,
+							npages * PAGE_SIZE);
 					global_cached_io *io = new global_cached_io(underlying,
-							cache_size, cache_type, manager);
+							cache_size, cache_type);
 					if (preload)
 						io->preload(0, npages * PAGE_SIZE);
 					threads[j] = new thread_private(j, entry_size, io);
@@ -337,7 +332,7 @@ int main(int argc, char *argv[])
 							npages * PAGE_SIZE);
 					threads[j] = new thread_private(j, entry_size,
 							new part_global_cached_io(num_nodes, underlying,
-								j, cache_size, cache_type, manager));
+								j, cache_size, cache_type));
 				}
 				break;
 			default:
@@ -443,7 +438,6 @@ int main(int argc, char *argv[])
 	}
 	printf("there are %d cells\n", avail_cells);
 	printf("there are %d waits for unused\n", num_wait_unused);
-	printf("%d keys are evicted from the hash table because of conflicts\n", removed_indices);
 	printf("there are %d lock contentions\n", lock_contentions);
 #endif
 }

@@ -266,7 +266,7 @@ class associative_cache: public page_cache
 	int split;
 
 public:
-	associative_cache(memory_manager *manager);
+	associative_cache(long cache_size);
 
 	~associative_cache() {
 		for (unsigned int i = 0; i < cells_table.size(); i++)

@@ -107,35 +107,53 @@ public:
 
 class hash_index_cache: public page_cache
 {
-	// TODO these should be thread private.
-	frame_allocator *allocator;
-	memory_manager *manager;
-
 	hashtable_interface<off_t, frame *> *hashtable;
-	LF_gclock_buffer *clock_buf;
+	long cache_size_per_thread;
+
+	// For frame allocator
+	pthread_key_t allocator_key;
+	// For memory manager;
+	pthread_key_t manager_key;
+	// For gclock buffer
+	pthread_key_t gclock_key;
 public:
-	hash_index_cache(memory_manager *manager) {
+	hash_index_cache(long cache_size) {
+		extern int nthreads;
 		hashtable = new SA_hashtable<off_t, frame *>(1024);
-//		hashtable = new lock_free_hashtable<off_t, frame *>();
-		this->manager = manager;
+		cache_size_per_thread = cache_size / nthreads;
+
+		pthread_key_create(&allocator_key, NULL);
+		pthread_key_create(&manager_key, NULL);
+		pthread_key_create(&gclock_key, NULL);
+	}
+
+	void init() {
+		memory_manager *manager = new memory_manager(cache_size_per_thread);
 		manager->register_cache(this);
+		pthread_setspecific(manager_key, manager);
+
+		gclock_buffer *gclock_buf;
 		int max_npages = manager->get_max_size() / PAGE_SIZE;
-		clock_buf = new LF_gclock_buffer(max_npages);
+		gclock_buf = new enhanced_gclock_buffer(max_npages);
+		pthread_setspecific(gclock_key, gclock_buf);
+
+		frame_allocator *allocator;
 		/* we need more frames than the maximal number of pages. */
 		allocator = new frame_allocator(max_npages * 2);
+		pthread_setspecific(allocator_key, allocator);
 	}
 
 	~hash_index_cache() {
 		delete hashtable;
-		delete clock_buf;
-		manager->unregister_cache(this);
 	}
 
 	void purge_frame(frame *p) {
 		char *pg = (char *) p->volatileGetValue();
 		if (pg) {
+			memory_manager *manager = (memory_manager *) pthread_getspecific(manager_key);
 			manager->free_pages(1, &pg);
 		}
+		frame_allocator *allocator = (frame_allocator *) pthread_getspecific(allocator_key);
 		allocator->free(p);
 	}
 
