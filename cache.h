@@ -319,6 +319,9 @@ public:
 		pthread_spin_destroy(&_lock);
 	}
 	virtual page *search(off_t offset, off_t &old_off) = 0;
+	/* This method should be called within each thread. */
+	virtual void init() {
+	}
 	virtual long size() {
 		return 0;
 	}

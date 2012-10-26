@@ -21,6 +21,7 @@ class io_interface
 public:
 	virtual ~io_interface() { }
 
+	/* When a thread begins, this method will be called. */
 	virtual int init() {
 		return 0;
 	}

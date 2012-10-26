@@ -83,7 +83,9 @@ public:
 		return underlying->get_size();
 	}
 
+	/* When a thread begins, this method will be called. */
 	virtual int init() {
+		global_cache->init();
 		return underlying->init();
 	}
 
