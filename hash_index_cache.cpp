@@ -46,7 +46,8 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 		frame *prev_entry = hashtable->putIfAbsent(key / PAGE_SIZE, new_entry);
 		if (prev_entry) {
 			/* this happens if the page is just added to the hash table. */
-			if (!prev_entry->pin()) {
+
+			if (!prev_entry->pin()) {	// If we can't pin the old page
 				/*
 				 * It's possible that a page has been evicted,
 				 * but it couldn't be removed from the clock buffer.
@@ -60,9 +61,21 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 					 */
 					return new_entry;
 				}
+				/*
+				 * This can happen if another thread happens to replace the old
+				 * page successfully. In this case, we can't do anything and
+				 * have to start over. The new page will be evicted by the 
+				 * gclock algorithm later.
+				 * This case should happen very rarely.
+				 */
 				new_entry->evictUnshared();
 				continue;
 			}
+			/*
+			 * Since we can pin the old page, we are just using the old one.
+			 * So we should set the new page unused, and gclock algorithm
+			 * will use evict later.
+			 */
 			new_entry->evictUnshared();
 			prev_entry->incrWC();
 			return prev_entry;
@@ -92,7 +105,12 @@ page *hash_index_cache::search(off_t offset, off_t &old_off) {
 		if (entry->volatileGetValue() == NULL) {
 			char *pg;
 			memory_manager *manager = (memory_manager *) pthread_getspecific(manager_key);
-			manager->get_free_pages(1, &pg, this);
+			bool ret = manager->get_free_pages(1, &pg, this);
+			if (!ret) {
+				fprintf(stderr, "can't allocate a page from the memory manager.\n");
+				fprintf(stderr, "there are %d pages allocated\n", num_pages.get());
+				exit(1);
+			}
 			/*
 			 * if the value of the frame has been set
 			 * by another thread, free the allocated page.
