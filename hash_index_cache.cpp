@@ -15,6 +15,14 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 		 * when it is evicted from the clock buffer.
 		 */
 		frame *removed = gclock_buf->add(new_entry);
+		/*
+		 * If the gclock buffer doesn't return a page,
+		 * it doesn't evict any pages, so we should increase
+		 * the number of pages by one. It doesn't happen very
+		 * often, so it shouldn't hurt performance.
+		 */
+		if (removed == NULL)
+			num_pages.inc(1);
 		/* 
 		 * the removed page can't be pinned any more,
 		 * so other threads can't reference it except the thread

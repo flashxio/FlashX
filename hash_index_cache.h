@@ -109,6 +109,8 @@ class hash_index_cache: public page_cache
 {
 	hashtable_interface<off_t, frame *> *hashtable;
 	long cache_size_per_thread;
+	/* The number of pages that have been allocated. */
+	atomic_unsigned_integer num_pages;
 
 	// For frame allocator
 	pthread_key_t allocator_key;
@@ -155,6 +157,13 @@ public:
 		}
 		frame_allocator *allocator = (frame_allocator *) pthread_getspecific(allocator_key);
 		allocator->free(p);
+	}
+
+	/**
+	 * The size of allocated pages in the cache.
+	 */
+	long size() {
+		return num_pages.get() * PAGE_SIZE;
 	}
 
 	frame *addEntry(off_t offset, char *data);

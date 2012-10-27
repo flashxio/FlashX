@@ -307,6 +307,9 @@ public:
 		get_cell(off)->print_cell();
 	}
 
+	/**
+	 * The size of allocated pages in the cache.
+	 */
 	long size() {
 		return ((long) ncells.get())
 			* init_ncells * CELL_SIZE * PAGE_SIZE;
