@@ -149,16 +149,6 @@ public:
 		delete hashtable;
 	}
 
-	void purge_frame(frame *p) {
-		char *pg = (char *) p->volatileGetValue();
-		if (pg) {
-			memory_manager *manager = (memory_manager *) pthread_getspecific(manager_key);
-			manager->free_pages(1, &pg);
-		}
-		frame_allocator *allocator = (frame_allocator *) pthread_getspecific(allocator_key);
-		allocator->free(p);
-	}
-
 	/**
 	 * The size of allocated pages in the cache.
 	 */

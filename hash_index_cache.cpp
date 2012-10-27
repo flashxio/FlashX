@@ -41,7 +41,21 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			 * no other threads have a reference to this frame?
 			 * It's possible a thread gets a reference to the page before
 			 * the page is removed from the hashtable. */
-			purge_frame(removed);
+			char *pg = (char *) removed->volatileGetValue();
+			if (pg) {
+				/*
+				 * We can give the page in the old frame to the new page.
+				 * No one else can get access to the new frame, the operation
+				 * below should be always successful.
+				 */
+				if (!new_entry->CASValue(NULL, pg)) {
+					fprintf(stderr, "we can't set the value of the new frame!\n");
+					memory_manager *manager
+						= (memory_manager *) pthread_getspecific(manager_key);
+					manager->free_pages(1, &pg);
+				}
+			}
+			allocator->free(removed);
 		}
 		frame *prev_entry = hashtable->putIfAbsent(key / PAGE_SIZE, new_entry);
 		if (prev_entry) {
