@@ -48,9 +48,9 @@ bool memory_manager::get_free_pages(int npages,
 		}
 		pthread_spin_lock(&lock);
 		slab_allocator::free(buf, num_shrink);
+		/* now it's guaranteed that we have enough free pages. */
+		ret = slab_allocator::alloc(pages, npages);
 	}
-	/* now it's guaranteed that we have enough free pages. */
-	ret = slab_allocator::alloc(pages, npages);
 	pthread_spin_unlock(&lock);
 	return true;
 }
