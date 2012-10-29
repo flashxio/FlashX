@@ -31,6 +31,10 @@ ssize_t buffered_io::access(char *buf, off_t offset, ssize_t size, int access_me
 		ret = pwrite(fd, buf, size, offset);
 	else
 		ret = pread(fd, buf, size, offset);
+	if (ret < 0) {
+		perror("pread");
+		abort();
+	}
 #ifdef STATISTICS
 	gettimeofday(&end, NULL);
 	read_time += ((long) end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
