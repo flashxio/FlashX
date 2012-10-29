@@ -255,7 +255,6 @@ bool SA_hashtable<KeyT, ValueT>::expand(entry_set_t *trigger_set) {
 			std::vector<entry_set_t *> table;
 			for (unsigned int i = orig_size; i <= sets_idx; i++) {
 				entry_set_t *sets = new entry_set_t[init_nsets];
-				printf("create %d sets: %p\n", init_nsets, sets);
 				try {
 					for (int j = 0; j < init_nsets; j++) {
 						sets[j] = entry_set_t(this, i * init_nsets + j);
@@ -333,7 +332,6 @@ ValueT SA_hashtable<KeyT, ValueT>::putIfAbsent(KeyT key, ValueT value) {
 			ret = set->putIfAbsent(key, value);
 			prev = set;
 		} catch (no_space_exception e) {
-			std::cout << "a set is out of space" << std::endl;
 			expand(set);
 		}
 	} while (!table_lock.read_unlock(count));
