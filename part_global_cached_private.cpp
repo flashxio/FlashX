@@ -48,8 +48,6 @@ int part_global_cached_io::init() {
 	pthread_mutex_lock(&init_mutex);
 	thread_group *group = &groups[group_idx];
 	if (group->cache == NULL) {
-		/* this allocates all pages for the cache. */
-		page::allocate_cache(cache_size);
 		/* Each cache has their own memory managers */
 		group->cache = global_cached_io::create_cache(cache_type, cache_size);
 	}

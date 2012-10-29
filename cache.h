@@ -37,13 +37,6 @@ class page
 	 */
 	int offset;
 
-	/* 
-	 * all data in a page is in a buffer,
-	 * so can we use the start of the buffer
-	 * and the offset in the buffer to calculate
-	 * the address of the page.
-	 */
-	static void *data_start;
 	/*
 	 * in pages.
 	 */
@@ -64,14 +57,6 @@ public:
 	page(off_t off, char *data) {
 		set_offset(off);
 		this->data = data;
-		refcnt = 0;
-		flags = 0;
-		hits = 0;
-	}
-
-	page(off_t off, long data_off) {
-		set_offset(off);
-		data = (void *) ((long) data_start + data_off);
 		refcnt = 0;
 		flags = 0;
 		hits = 0;
@@ -139,10 +124,6 @@ public:
 		hits++;
 	}
 
-	static void allocate_cache(long size) {
-		data_start = numa_alloc_local(size);
-	}
-
 	virtual void inc_ref() {
 		refcnt++;
 	}
@@ -175,14 +156,6 @@ class thread_safe_page: public page
 
 public:
 	thread_safe_page(): page() {
-#ifdef PTHREAD_WAIT
-		pthread_cond_init(&ready_cond, NULL);
-		pthread_cond_init(&dirty_cond, NULL);
-		pthread_mutex_init(&mutex, NULL);
-#endif
-	}
-
-	thread_safe_page(off_t off, long d): page(off, d) {
 #ifdef PTHREAD_WAIT
 		pthread_cond_init(&ready_cond, NULL);
 		pthread_cond_init(&dirty_cond, NULL);
@@ -376,9 +349,6 @@ public:
 	}
 
 	frame(off_t offset, char *data): thread_safe_page(offset, data) {
-	}
-
-	frame(off_t off, long d): thread_safe_page(off, d) {
 	}
 
 	void *volatileGetValue() {
