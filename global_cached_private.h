@@ -3,12 +3,8 @@
 
 #include "read_private.h"
 #include "cache.h"
-#include "tree_cache.h"
 #include "associative_cache.h"
-#include "cuckoo_cache.h"
 #include "hash_index_cache.h"
-#include "gclock_cache.h"
-#include "LRU2Q.h"
 
 enum {
 	TREE_CACHE,
