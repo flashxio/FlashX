@@ -94,8 +94,10 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			prev_entry->incrWC();
 			return prev_entry;
 		}
-		if (new_entry->pin())
+		if (new_entry->pin()) {
+			new_entry->incrWC();
 			return new_entry;
+		}
 		else {
 			// In a rare case, we can't pin the new frame.
 			// we should remove it from the hash table and try again.
