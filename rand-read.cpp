@@ -315,8 +315,10 @@ int main(int argc, char *argv[])
 			case GLOBAL_CACHE_ACCESS:
 				{
 //					io_interface *underlying = new async_io(cnames, num, npages * PAGE_SIZE);
-					io_interface *underlying = new remote_disk_access(
-							read_threads, num_files);
+//					io_interface *underlying = new remote_disk_access(
+//							read_threads, num_files);
+					io_interface *underlying = new direct_io(cnames, num,
+							npages * PAGE_SIZE);
 					global_cached_io *io = new global_cached_io(underlying,
 							cache_size, cache_type);
 					if (preload)
