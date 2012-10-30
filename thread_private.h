@@ -107,6 +107,7 @@ public:
 	}
 
 	thread_private(int idx, int entry_size, io_interface *io) {
+		this->cb = NULL;
 		this->idx = idx;
 		this->entry_size = entry_size;
 		buf = NULL;
