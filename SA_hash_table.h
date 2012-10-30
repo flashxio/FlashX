@@ -67,12 +67,12 @@ public:
 	bool replace(KeyT key, ValueT expect, ValueT new_value);
 };
 
+static const int SET_SIZE = 8;
 template<class KeyT, class ValueT>
 class SA_hashtable: public hashtable_interface<KeyT, ValueT>
 {
 	const int init_nsets;
 	const int max_nsets;
-	static const int SET_SIZE = 8;
 	enum {
 		TABLE_EXPANDING,
 	};

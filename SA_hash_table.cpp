@@ -126,8 +126,7 @@ void entry_set<KeyT, ValueT, SIZE>::rehash(entry_set *expanded) {
 }
 
 template<class KeyT, class ValueT>
-entry_set<KeyT, ValueT, SA_hashtable<KeyT, ValueT>::SET_SIZE> *
-SA_hashtable<KeyT, ValueT>::get_set_key(KeyT key)
+entry_set<KeyT, ValueT, SET_SIZE> *SA_hashtable<KeyT, ValueT>::get_set_key(KeyT key)
 {
 	int global_idx;
 	unsigned long count;
@@ -144,8 +143,7 @@ SA_hashtable<KeyT, ValueT>::get_set_key(KeyT key)
 }
 
 template<class KeyT, class ValueT>
-entry_set<KeyT, ValueT, SA_hashtable<KeyT, ValueT>::SET_SIZE> *
-SA_hashtable<KeyT, ValueT>::get_set(
+entry_set<KeyT, ValueT, SET_SIZE> *SA_hashtable<KeyT, ValueT>::get_set(
 		unsigned int global_idx)
 {
 	unsigned int set_idx = global_idx / init_nsets;

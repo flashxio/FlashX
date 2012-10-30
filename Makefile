@@ -20,7 +20,7 @@ CXX = g++
 all: rand-read
 
 rand-read: $(OBJS)
-	$(CXX) -o rand-read -static $(OBJS) $(LDFLAGS) -Lnbds.0.4.3/ -lnbds
+	$(CXX) -o rand-read $(OBJS) $(LDFLAGS) -Lnbds.0.4.3/ -lnbds
 
 unit_test: $(OBJS)
 	make -C test

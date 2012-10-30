@@ -5,6 +5,8 @@ template<class KeyT, class ValueT>
 class hashtable_interface
 {
 public:
+	virtual ~hashtable_interface() {
+	}
 	virtual ValueT get(KeyT key) = 0;
 
 	virtual bool remove(KeyT key, ValueT value) = 0;
