@@ -37,6 +37,8 @@ class gclock_cache: public page_cache {
 			 */
 			int hits = pages[idx].get_hits();
 			if (hits == 1) {
+				off_t offset = pages[idx].get_offset();
+				page_map.erase(offset);
 				pages[idx].reset_hits();
 				free_pages.push_back(&pages[idx]);
 				return;
@@ -56,8 +58,11 @@ public:
 		printf("gclock cache is used\n");
 		npages = cache_size / PAGE_SIZE;
 		pages = new thread_safe_page[npages];
+		memory_manager *manager = new memory_manager(cache_size);
 		for (int i = 0; i < npages; i++) {
-			pages[i] = thread_safe_page(-1, i * PAGE_SIZE);
+			char *pg;
+			manager->get_free_pages(1, &pg, this);
+			pages[i] = thread_safe_page(-1, pg);
 			free_pages.push_back(&pages[i]);
 		}
 		printf("there are %ld free pages\n", free_pages.size());
@@ -71,6 +76,10 @@ public:
 			thread_safe_page *pg = it->second;
 			pg->inc_ref();
 			pg->hit();
+			if (pg->get_offset() != offset)
+				printf("page offset: %ld, request offset: %ld\n",
+						pg->get_offset(), offset);
+			assert(pg->get_offset() == offset);
 			return pg;
 		}
 
@@ -93,6 +102,10 @@ public:
 		pg->inc_ref();
 		pg->hit();
 		return pg;
+	}
+
+	long size() {
+		return npages * PAGE_SIZE;
 	}
 };
 
