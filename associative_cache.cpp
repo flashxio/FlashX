@@ -8,6 +8,8 @@ volatile int num_wait_unused;
 volatile int lock_contentions;
 #endif
 
+const long default_init_cache_size = 128 * 1024 * 1024;
+
 /* out of memory exception */
 class oom_exception
 {
@@ -449,6 +451,9 @@ associative_cache::associative_cache(long cache_size) {
 	split = 0;
 	this->manager = new memory_manager(cache_size);
 	manager->register_cache(this);
+	long init_cache_size = default_init_cache_size;
+	if (init_cache_size > cache_size)
+		init_cache_size = cache_size;
 	int npages = init_cache_size / PAGE_SIZE;
 	assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);
 	init_ncells = npages / CELL_SIZE;

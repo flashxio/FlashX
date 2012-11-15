@@ -92,6 +92,7 @@ public:
 	obj_allocator(long increase_size,
 			long max_size = MAX_SIZE): slab_allocator(sizeof(T),
 				increase_size, max_size) {
+		assert(increase_size <= max_size);
 	}
 
 	int alloc_objs(T **objs, int num) {

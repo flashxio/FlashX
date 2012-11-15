@@ -239,8 +239,6 @@ public:
 	}
 };
 
-const long init_cache_size = 128 * 1024 * 1024;
-
 class associative_cache: public page_cache
 {
 	enum {
