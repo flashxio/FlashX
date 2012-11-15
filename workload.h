@@ -15,9 +15,37 @@
 
 #define CHUNK_SLOTS 1024
 
+typedef struct workload_type
+{
+	off_t off;
+	int size: 31;
+	int read: 1;
+} workload_t;
+
 class workload_gen
 {
+	workload_t access;
+	static int default_entry_size;
+	static int default_access_method;
 public:
+	static void set_default_entry_size(int entry_size) {
+		default_entry_size = entry_size;
+	}
+	static void set_default_access_method(int access_method) {
+		default_access_method = access_method;
+	}
+
+	/**
+	 * This is a wrapper to the original interface `next_offset'
+	 * so more info of an access is provided.
+	 */
+	virtual const workload_t &next() {
+		access.off = next_offset();
+		access.size = default_entry_size;
+		access.read = default_access_method == READ;
+		return access;
+	}
+
 	/**
 	 * The enxt offset in bytes.
 	 */
@@ -187,8 +215,8 @@ public:
 	}
 };
 
-/* this class reads workload from a file. */
-class file_workload: public workload_gen
+/* this class reads workload from a file dumped by a Java program. */
+class java_dump_workload: public workload_gen
 {
 	static off_t *offsets;
 
@@ -196,9 +224,9 @@ class file_workload: public workload_gen
 	long end;
 
 public:
-	file_workload(const std::string &file, int nthreads);
+	java_dump_workload(const std::string &file, int nthreads);
 
-	virtual ~file_workload() {
+	virtual ~java_dump_workload() {
 		free(offsets);
 	}
 
@@ -223,6 +251,34 @@ public:
 			dst[sizeof(long) - 1 - i] = src[i];
 		}
 		return res;
+	}
+};
+
+class file_workload: public workload_gen
+{
+	static workload_t *workloads;
+	long curr;
+	long end;
+public:
+	file_workload(const std::string &file, int nthreads);
+
+	virtual ~file_workload() {
+		if (workloads) {
+			free(workloads);
+			workloads = NULL;
+		}
+	}
+
+	const workload_t &next() {
+		return workloads[curr++];
+	}
+
+	off_t next_offset() {
+		return workloads[curr++].off;
+	}
+
+	bool has_next() {
+		return curr < end;
 	}
 };
 

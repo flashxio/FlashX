@@ -72,7 +72,6 @@ class cleanup_callback;
 /* this data structure stores the thread-private info. */
 class thread_private
 {
-	int entry_size;
 #ifdef USE_PROCESS
 	pid_t id;
 #else
@@ -109,7 +108,6 @@ public:
 	thread_private(int idx, int entry_size, io_interface *io) {
 		this->cb = NULL;
 		this->idx = idx;
-		this->entry_size = entry_size;
 		buf = NULL;
 		this->gen = NULL;
 		this->io = io;
@@ -121,10 +119,6 @@ public:
 	}
 
 	int attach2cpu();
-
-	int get_entry_size() {
-		return entry_size;
-	}
 
 	int get_idx() {
 		return idx;

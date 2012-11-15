@@ -50,7 +50,6 @@ long npages;
 int nthreads = 1;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
-int access_method = READ;
 bool verify_read_content = false;
 bool high_prio = false;
 
@@ -236,6 +235,7 @@ int main(int argc, char *argv[])
 		}
 		else if(key.compare("entry_size") == 0) {
 			entry_size = (int) str2size(value);
+			workload_gen::set_default_entry_size(entry_size);
 		}
 		else if(key.compare("workload") == 0) {
 			workload = workload_map.map(value);
@@ -245,11 +245,11 @@ int main(int argc, char *argv[])
 		}
 		else if(key.compare("access") == 0) {
 			if(value.compare("read") == 0)
-				access_method = READ;
+				workload_gen::set_default_access_method(READ);
 			else if(value.compare("write") == 0)
-				access_method = WRITE;
+				workload_gen::set_default_access_method(WRITE);
 			else {
-				fprintf(stderr, "wrong access method\n");
+				fprintf(stderr, "wrong default access method\n");
 				exit(1);
 			}
 		}

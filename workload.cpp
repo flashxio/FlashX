@@ -1,6 +1,9 @@
 #include "workload.h"
 
-off_t *file_workload::offsets;
+off_t *java_dump_workload::offsets;
+int workload_gen::default_entry_size;
+int workload_gen::default_access_method;
+workload_t *file_workload::workloads;
 
 off_t stride_workload::next_offset() {
 	off_t ret = curr;
@@ -20,7 +23,7 @@ off_t stride_workload::next_offset() {
 	return ret;
 }
 
-file_workload::file_workload(const std::string &file, int nthreads) {
+java_dump_workload::java_dump_workload(const std::string &file, int nthreads) {
 	static off_t file_size;
 	static int remainings;
 	static int shift = 0;
@@ -64,6 +67,56 @@ file_workload::file_workload(const std::string &file, int nthreads) {
 	/* the range in `offsets' */
 	start = end;
 	end = start + file_size / sizeof(off_t) / nthreads + (shift < remainings);
+	this->curr = start;
+	this->end = end;
+	printf("start at %ld end at %ld\n", curr, end);
+}
+
+file_workload::file_workload(const std::string &file, int nthreads)
+{
+	static off_t file_size;
+	static int remainings;
+	static int shift = 0;
+	static long start;
+	static long end = 0;
+
+	if (workloads == NULL) {
+		int fd = open(file.c_str(), O_RDONLY);
+		if (fd < 0) {
+			perror("open");
+			exit(1);
+		}
+		printf("%s's fd is %d\n", file.c_str(), fd);
+
+		/* get the file size */
+		struct stat stats;
+		if (fstat(fd, &stats) < 0) {
+			perror("fstat");
+			exit(1);
+		}
+		file_size = stats.st_size;
+		remainings = file_size / sizeof(workload_t) % nthreads;
+		assert(file_size % sizeof(workload_t) == 0);
+
+		workloads = (workload_t *) malloc(file_size);
+		/* read data of the file to a buffer */
+		char *buf = (char *) workloads;
+		long size = file_size;
+		while (size > 0) {
+			ssize_t ret = read(fd, buf, size);
+			if (ret < 0) {
+				perror("read");
+				exit(1);
+			}
+			buf += ret;
+			size -= ret;
+		}
+		close(fd);
+	}
+
+	/* the range in `workloads' */
+	start = end;
+	end = start + file_size / sizeof(workload_t) / nthreads + (shift < remainings);
 	this->curr = start;
 	this->end = end;
 	printf("start at %ld end at %ld\n", curr, end);
