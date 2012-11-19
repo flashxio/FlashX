@@ -1,10 +1,11 @@
 CFLAGS = -g
+CXXFLAGS = -g
 CC = gcc
 CXX = g++
 
 LDFLAGS = -lpthread -lnuma -laio
 
-all: stat create_file rand-memcpy rand-memcpy-agg workload-gen
+all: stat create_file rand-memcpy rand-memcpy-agg workload-gen memory-fill
 
 stat: stat.o ../workload.h
 	$(CXX) -o stat stat.o
@@ -20,6 +21,9 @@ rand-memcpy-agg: rand-memcpy-agg.o
 
 workload-gen: workload-gen.o
 	$(CXX) -o workload-gen workload-gen.o
+
+memory-fill: memory-fill.o
+	$(CXX) -o memory-fill memory-fill.o
 
 clean:
 	rm *.o
