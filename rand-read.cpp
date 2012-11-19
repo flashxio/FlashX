@@ -291,7 +291,10 @@ int main(int argc, char *argv[])
 	disk_read_thread **read_threads = new disk_read_thread*[num_files];
 	for (int k = 0; k < num_files; k++) {
 		cnames[k] = file_names[k].c_str();
-		read_threads[k] = new disk_read_thread(cnames[k], npages * PAGE_SIZE);
+		if (access_option == GLOBAL_CACHE_ACCESS
+				|| access_option == PART_GLOBAL_ACCESS)
+			read_threads[k] = new disk_read_thread(cnames[k],
+					npages * PAGE_SIZE);
 	}
 
 	num = num_files;
