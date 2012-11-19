@@ -275,7 +275,7 @@ int main(int argc, char *argv[])
 	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d\n",
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio);
 
-	int num_entries = npages * (PAGE_SIZE / entry_size);
+	int num_entries = (int) (((long) npages) * PAGE_SIZE / entry_size);
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
