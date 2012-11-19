@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
 		if (ret != 8)
 			break;
 		count++;
-		long n = file_workload::swap_bytesl(*src);
+		long n = java_dump_workload::swap_bytesl(*src);
 		nums[n / 4096]++;
 		if (n > max_pos)
 			max_pos = n;
