@@ -24,7 +24,7 @@ public:
 		return __sync_sub_and_fetch(&v, by);
 	}
 
-	unsigned int get() {
+	unsigned int get() const {
 		return v;
 	}
 
@@ -53,7 +53,7 @@ public:
 		return __sync_sub_and_fetch(&v, by);
 	}
 
-	int get() {
+	int get() const {
 		return v;
 	}
 
@@ -78,7 +78,7 @@ public:
 		numa_free((void *) arr, sizeof(T) * size);
 	}
 
-	T get(int idx) {
+	T get(int idx) const {
 		return arr[idx];
 	}
 

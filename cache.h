@@ -96,7 +96,7 @@ public:
 		else
 			flags &= ~(0x1 << REFERENCED_BIT);
 	}
-	bool referenced() {
+	bool referenced() const {
 		return flags & (0x1 << REFERENCED_BIT);
 	}
 
@@ -106,14 +106,14 @@ public:
 		else
 			flags &= ~(0x1 << ACTIVE_BIT);
 	}
-	bool active() {
+	bool active() const {
 		return flags & (0x1 << ACTIVE_BIT);
 	}
 
 	void reset_hits() {
 		hits = 0;
 	}
-	int get_hits() {
+	int get_hits() const {
 		return hits;
 	}
 	void set_hits(int hits) {
@@ -131,7 +131,7 @@ public:
 	virtual void dec_ref() {
 		refcnt--;
 	}
-	virtual short get_ref() {
+	virtual short get_ref() const {
 		return refcnt;
 	}
 };
@@ -234,7 +234,7 @@ public:
 #endif
 	}
 
-	bool is_io_pending() {
+	bool is_io_pending() const {
 		return get_flags_bit(IO_PENDING_BIT);
 	}
 	void set_io_pending(bool pending) {
@@ -365,7 +365,7 @@ public:
 		return __sync_bool_compare_and_swap(&data, expect, update);
 	}
 
-	int getWC() {
+	int getWC() const {
 		return wcount.get();
 	}
 
@@ -385,7 +385,7 @@ public:
 		pinning.CAS(1, -1);
 	}
 
-	int pinCount() {
+	int pinCount() const {
 		return pinning.get();
 	}
 
