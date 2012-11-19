@@ -129,20 +129,8 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 			ret->set_hits(shadow_pg.get_hits());
 #endif
 	}
-#ifdef USE_LRU
-	else {
-		/* move the page to the end of the pos vector. */
-		int pos = buf.get_idx(ret);
-		for (std::vector<int>::iterator it = pos_vec.begin();
-				it != pos_vec.end(); it++) {
-			if (*it == pos) {
-				pos_vec.erase(it);
-				break;
-			}
-		}
-		pos_vec.push_back(pos);
-	}
-#endif
+	else
+		policy.access_page(ret, buf);
 	/* it's possible that the data in the page isn't ready */
 	ret->inc_ref();
 	if (ret->get_hits() == 0xff) {
@@ -160,10 +148,81 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 thread_safe_page *hash_cell::get_empty_page() {
 	thread_safe_page *ret = NULL;
 
-	int min_hits;
 	bool expanded = false;
 search_again:
-	min_hits = 0x7fffffff;
+	ret = policy.evict_page(buf);
+	/*
+	 * the selected page got hit before,
+	 * we should expand the hash table
+	 * if we haven't done it before.
+	 */
+	if (table->is_expandable() && policy.expand_buffer(*ret)) {
+		overflow = true;
+		long table_size = table->size();
+		long average_size = table->get_manager()->average_cache_size();
+		if (table_size < average_size && !expanded) {
+			pthread_spin_unlock(&_lock);
+			if (table->expand(this)) {
+				throw expand_exception();
+			}
+			pthread_spin_lock(&_lock);
+			expanded = true;
+			goto search_again;
+		}
+	}
+
+	/* we record the hit info of the page in the shadow cell. */
+#ifdef USE_SHADOW_PAGE
+	if (ret->get_hits() > 0)
+		shadow.add(shadow_page(*ret));
+#endif
+
+	return ret;
+}
+
+/* 
+ * the end of the vector points to the pages
+ * that are most recently accessed.
+ */
+thread_safe_page *LRU_eviction_policy::evict_page(
+		page_cell<thread_safe_page> &buf)
+{
+	int pos;
+	if (pos_vec.size() < CELL_SIZE) {
+		pos = pos_vec.size();
+	}
+	else {
+		/* evict the first page */
+		pos = pos_vec[0];
+		pos_vec.erase(pos_vec.begin());
+	}
+	thread_safe_page *ret = buf.get_page(pos);
+	while (ret->get_ref()) {}
+	pos_vec.push_back(pos);
+	ret->set_data_ready(false);
+	return ret;
+}
+
+void LRU_eviction_policy::access_page(thread_safe_page *pg,
+		page_cell<thread_safe_page> &buf)
+{
+	/* move the page to the end of the pos vector. */
+	int pos = buf.get_idx(pg);
+	for (std::vector<int>::iterator it = pos_vec.begin();
+			it != pos_vec.end(); it++) {
+		if (*it == pos) {
+			pos_vec.erase(it);
+			break;
+		}
+	}
+	pos_vec.push_back(pos);
+}
+
+thread_safe_page *LFU_eviction_policy::evict_page(
+		page_cell<thread_safe_page> &buf)
+{
+	thread_safe_page *ret = NULL;
+	int min_hits = 0x7fffffff;
 	do {
 		int num_io_pending = 0;
 		for (int i = 0; i < CELL_SIZE; i++) {
@@ -199,64 +258,14 @@ search_again:
 		}
 		/* it happens when all pages in the cell is used currently. */
 	} while (ret == NULL);
-
-	/*
-	 * the selected page got hit before,
-	 * we should expand the hash table
-	 * if we haven't done it before.
-	 */
-	if (min_hits) {
-		overflow = true;
-		long table_size = table->size();
-		long average_size = table->get_manager()->average_cache_size();
-		if (table_size < average_size && !expanded) {
-			pthread_spin_unlock(&_lock);
-			if (table->expand(this)) {
-				throw expand_exception();
-			}
-			pthread_spin_lock(&_lock);
-			expanded = true;
-			goto search_again;
-		}
-	}
-
-	/* we record the hit info of the page in the shadow cell. */
-#ifdef USE_SHADOW_PAGE
-	if (ret->get_hits() > 0)
-		shadow.add(shadow_page(*ret));
-#endif
-
+	ret->set_data_ready(false);
 	ret->reset_hits();
-	ret->set_data_ready(false);
 	return ret;
 }
 
-#ifdef USE_LRU
-/* 
- * the end of the vector points to the pages
- * that are most recently accessed.
- */
-thread_safe_page *hash_cell::get_empty_page() {
-	int pos;
-	if (pos_vec.size() < CELL_SIZE) {
-		pos = pos_vec.size();
-	}
-	else {
-		/* evict the first page */
-		pos = pos_vec[0];
-		pos_vec.erase(pos_vec.begin());
-	}
-	thread_safe_page *ret = buf.get_page(pos);
-	while (ret->get_ref()) {}
-	pos_vec.push_back(pos);
-	ret->set_data_ready(false);
-	return ret;
-}
-#endif
-
-#ifdef USE_FIFO
-/* this function has to be called with lock held */
-thread_safe_page *hash_cell::get_empty_page() {
+thread_safe_page *FIFO_eviction_policy::evict_page(
+		page_cell<thread_safe_page> &buf)
+{
 	thread_safe_page *ret = buf.get_empty_page();
 	// TODO I assume this situation is rare
 	while (ret->get_ref()) {
@@ -266,7 +275,39 @@ thread_safe_page *hash_cell::get_empty_page() {
 	ret->set_data_ready(false);
 	return ret;
 }
-#endif
+
+thread_safe_page *gclock_eviction_policy::evict_page(
+		page_cell<thread_safe_page> &buf)
+{
+	thread_safe_page *ret = NULL;
+	do {
+		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
+		if (pg->get_ref())
+			continue;
+		if (pg->get_hits() == 0) {
+			ret = pg;
+			break;
+		}
+		pg->set_hits(pg->get_hits() - 1);
+	} while (ret == NULL);
+	ret->set_data_ready(false);
+	return ret;
+}
+
+thread_safe_page *clock_eviction_policy::evict_page(
+		page_cell<thread_safe_page> &buf)
+{
+	thread_safe_page *ret = NULL;
+	do {
+		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
+		if (pg->get_ref())
+			continue;
+		ret = pg;
+	} while (ret == NULL);
+	ret->set_data_ready(false);
+	ret->reset_hits();
+	return ret;
+}
 
 #ifdef USE_SHADOW_PAGE
 
@@ -445,14 +486,18 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 	} while (true);
 }
 
-associative_cache::associative_cache(long cache_size) {
+associative_cache::associative_cache(long cache_size, bool expandable) {
 	printf("associative cache is used\n");
 	level = 0;
 	split = 0;
+	this->expandable = expandable;
 	this->manager = new memory_manager(cache_size);
 	manager->register_cache(this);
 	long init_cache_size = default_init_cache_size;
-	if (init_cache_size > cache_size)
+	if (init_cache_size > cache_size
+			// If the cache isn't expandable, let's just use the maximal
+			// cache size at the beginning.
+			|| !expandable)
 		init_cache_size = cache_size;
 	int npages = init_cache_size / PAGE_SIZE;
 	assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);

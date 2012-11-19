@@ -10,6 +10,7 @@
 #include "cache.h"
 #include "concurrency.h"
 #include "container.h"
+#include "parameters.h"
 
 #define CELL_SIZE 8
 
@@ -27,11 +28,11 @@ const int CACHE_LINE = 128;
 /**
  * This data structure is to implement LRU.
  */
-template<class T, int BUF_SIZE>
+template<class T>
 class page_cell
 {
 	unsigned int idx;		// to the point where we can evict a page in the buffer
-	T buf[BUF_SIZE];			// a circular buffer to keep pages.
+	T buf[CELL_SIZE];			// a circular buffer to keep pages.
 
 public:
 	/*
@@ -43,7 +44,7 @@ public:
 	}
 
 	void set_pages(char *pages[]) {
-		for (int i = 0; i < BUF_SIZE; i++) {
+		for (int i = 0; i < CELL_SIZE; i++) {
 			buf[i] = T(-1, pages[i]);
 		}
 		idx = 0;
@@ -56,25 +57,25 @@ public:
 	 */
 	T *get_empty_page() {
 		/* TODO I ignore the case of integer overflow */
-		T *ret = &buf[idx % BUF_SIZE];
+		T *ret = &buf[idx % CELL_SIZE];
 		idx++;
 		return ret;
 	}
 
 	T *get_page(int i) {
-		if (i >= BUF_SIZE)
+		if (i >= CELL_SIZE)
 			return NULL;
 		return &buf[i];
 	}
 
 	int get_idx(T *page) {
 		int idx = page - buf;
-		assert (idx >= 0 && idx < BUF_SIZE);
+		assert (idx >= 0 && idx < CELL_SIZE);
 		return idx;
 	}
 
 	void scale_down_hits() {
-		for (int i = 0; i < BUF_SIZE; i++) {
+		for (int i = 0; i < CELL_SIZE; i++) {
 			buf[i].set_hits(buf[i].get_hits() / 2);
 		}
 	}
@@ -179,17 +180,110 @@ public:
 
 class associative_cache;
 
+class eviction_policy
+{
+public:
+	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
+	void access_page(thread_safe_page *pg,
+			page_cell<thread_safe_page> &buf) {
+		// We don't need to do anything if a page is accessed for many policies.
+	}
+	bool expand_buffer(const thread_safe_page &pg) {
+		return false;
+	}
+};
+
+class LRU_eviction_policy: public eviction_policy
+{
+	std::vector<int> pos_vec;
+public:
+	LRU_eviction_policy() {
+		static bool has_print = false;
+		if (!has_print)
+			printf("use LRU eviction policy\n");
+		has_print = true;
+	}
+	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
+	void access_page(thread_safe_page *pg,
+			page_cell<thread_safe_page> &buf);
+	bool expand_buffer(const thread_safe_page &pg) {
+		return pg.get_hits() > 0;
+	}
+};
+
+class clock_eviction_policy: public eviction_policy
+{
+	unsigned int clock_head;
+public:
+	clock_eviction_policy() {
+		clock_head = 0;
+		static bool has_print = false;
+		if (!has_print)
+			printf("use clock eviction policy\n");
+		has_print = true;
+	}
+
+	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
+};
+
+class gclock_eviction_policy: public eviction_policy
+{
+	unsigned int clock_head;
+public:
+	gclock_eviction_policy() {
+		clock_head = 0;
+		static bool has_print = false;
+		if (!has_print)
+			printf("use gclock eviction policy\n");
+		has_print = true;
+	}
+
+	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
+};
+
+class LFU_eviction_policy: public eviction_policy
+{
+public:
+	LFU_eviction_policy() {
+		static bool has_print = false;
+		if (!has_print)
+			printf("use LFU eviction policy\n");
+		has_print = true;
+	}
+	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
+};
+
+class FIFO_eviction_policy: public eviction_policy
+{
+public:
+	FIFO_eviction_policy() {
+		static bool has_print = false;
+		if (!has_print)
+			printf("use FIFO eviction policy\n");
+		has_print = true;
+	}
+	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
+};
+
 class hash_cell
 {
 	// for testing
 	long hash;
 
 	pthread_spinlock_t _lock;
-	page_cell<thread_safe_page, CELL_SIZE> buf;
+	page_cell<thread_safe_page> buf;
 	bool overflow;
 	associative_cache *table;
 #ifdef USE_LRU
-	std::vector<int> pos_vec;
+	LRU_eviction_policy policy;
+#elif defined USE_LFU
+	LFU_eviction_policy policy;
+#elif defined USE_FIFO
+	FIFO_eviction_policy policy;
+#elif defined USE_CLOCK
+	clock_eviction_policy policy;
+#elif defined USE_GCLOCK
+	gclock_eviction_policy policy;
 #endif
 #ifdef USE_SHADOW_PAGE
 	clock_shadow_cell shadow;
@@ -259,12 +353,13 @@ class associative_cache: public page_cache
 
 	memory_manager *manager;
 
+	bool expandable;
 	/* used for linear hashing */
 	int level;
 	int split;
 
 public:
-	associative_cache(long cache_size);
+	associative_cache(long cache_size, bool expandable = false);
 
 	~associative_cache() {
 		for (unsigned int i = 0; i < cells_table.size(); i++)
@@ -342,6 +437,10 @@ public:
 		} while (!table_lock.read_unlock(count));
 		assert(cell);
 		return cell;
+	}
+
+	bool is_expandable() const {
+		return expandable;
 	}
 };
 
