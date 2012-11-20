@@ -165,6 +165,19 @@ long str2size(std::string str)
 	return atol(str.c_str()) * multiply;
 }
 
+#ifdef PROFILER
+std::string prof_file = "rand-read.prof";
+#endif
+
+void int_handler(int sig_num)
+{
+#ifdef PROFILER
+	if (!prof_file.empty())
+		ProfilerStop();
+#endif
+	exit(0);
+}
+
 int main(int argc, char *argv[])
 {
 	bool preload = false;
@@ -187,9 +200,6 @@ int main(int argc, char *argv[])
 			sizeof(workloads) / sizeof(workloads[0]));
 	str2int_map cache_map(cache_types, 
 			sizeof(cache_types) / sizeof(cache_types[0]));
-#ifdef PROFILER
-	std::string prof_file;
-#endif
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
@@ -199,6 +209,8 @@ int main(int argc, char *argv[])
 		cache_map.print("available cache types: ");
 		exit(1);
 	}
+
+	signal(SIGINT, int_handler);
 
 	for (int i = 1; i < argc; i++) {
 		std::string str = argv[i];
