@@ -270,7 +270,6 @@ thread_safe_page *FIFO_eviction_policy::evict_page(
 	// TODO I assume this situation is rare
 	while (ret->get_ref()) {
 		ret = buf.get_empty_page();
-		printf("try another empty page.\n");
 	}
 	ret->set_data_ready(false);
 	return ret;
@@ -289,6 +288,7 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 			break;
 		}
 		pg->set_hits(pg->get_hits() - 1);
+		clock_head++;
 	} while (ret == NULL);
 	ret->set_data_ready(false);
 	return ret;
@@ -303,6 +303,7 @@ thread_safe_page *clock_eviction_policy::evict_page(
 		if (pg->get_ref())
 			continue;
 		ret = pg;
+		clock_head++;
 	} while (ret == NULL);
 	ret->set_data_ready(false);
 	ret->reset_hits();
