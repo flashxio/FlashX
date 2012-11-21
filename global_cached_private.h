@@ -5,6 +5,7 @@
 #include "cache.h"
 #include "associative_cache.h"
 #include "hash_index_cache.h"
+#include "LRU2Q.h"
 
 enum {
 	TREE_CACHE,
@@ -48,10 +49,10 @@ public:
 			case GCLOCK_CACHE:
 				global_cache = new gclock_cache(cache_size);
 				break;
+#endif
 			case LRU2Q_CACHE:
 				global_cache = new LRU2Q_cache(cache_size);
 				break;
-#endif
 			case ASSOCIATIVE_CACHE:
 				global_cache = new associative_cache(cache_size);
 				break;

@@ -12,7 +12,7 @@ class LRU2Q_cache: public page_cache {
 		linked_page() {
 		}
 
-		linked_page(off_t offset, long d): frame(offset, d) {
+		linked_page(off_t offset, char *data): frame(offset, data) {
 		}
 	};
 
@@ -53,12 +53,12 @@ class LRU2Q_cache: public page_cache {
 			std::map<frame *, linked_obj *const>::iterator it
 				= page_map.find(pg);
 			if (it == page_map.end()) {
-				fprintf(stderr, "page %ld doesn't exist in the queue\n",
-						pg->get_offset());
+				fprintf(stderr, "page %p (offset %ld) doesn't exist in the queue\n",
+						pg, pg->get_offset());
 				return;
 			}
 			page_map.erase(pg);
-			remove((linked_page *) it->second);
+			linked_page_queue::remove(it->second);
 		}
 	};
 
@@ -108,13 +108,18 @@ class LRU2Q_cache: public page_cache {
 		}
 	}
 
+	memory_manager *manager;
 public:
 	LRU2Q_cache(long cache_size) {
 		printf("LRU2Q cache is used\n");
 		npages = cache_size / PAGE_SIZE;
 		pages = new linked_page[npages];
+		manager = new memory_manager(cache_size);
+		manager->register_cache(this);
 		for (int i = 0; i < npages; i++) {
-			pages[i] = linked_page(-1, i * PAGE_SIZE);
+			char *page = NULL;
+			manager->get_free_pages(1, &page, this);
+			pages[i] = linked_page(-1, page);
 			free_pages.push_back(&pages[i]);
 		}
 	}
@@ -154,6 +159,10 @@ public:
 		pg->inc_ref();
 		pg->hit();
 		return pg;
+	}
+
+	long size() {
+		return ((long) npages) * PAGE_SIZE;
 	}
 };
 
