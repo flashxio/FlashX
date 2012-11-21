@@ -302,7 +302,11 @@ thread_safe_page *clock_eviction_policy::evict_page(
 		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
 		if (pg->get_ref())
 			continue;
-		ret = pg;
+		if (pg->get_hits() == 0) {
+			ret = pg;
+			break;
+		}
+		pg->reset_hits();
 		clock_head++;
 	} while (ret == NULL);
 	ret->set_data_ready(false);
