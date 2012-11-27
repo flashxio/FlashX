@@ -120,7 +120,9 @@ int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num)
   struct io_event events[a_ctx->max_aio];
   struct io_event* ep;
   int ret, n;
-  ret = n = io_getevents(a_ctx->ctx, num, a_ctx->max_aio, events, to);
+  do {
+	  ret = n = io_getevents(a_ctx->ctx, num, a_ctx->max_aio, events, to);
+  } while (ret == -EINTR);
   if (ret < 0)
   {
     fprintf(stderr, "io_wait: %s\n", strerror(-ret));
