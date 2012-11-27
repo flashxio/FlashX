@@ -1,6 +1,8 @@
 #ifndef __DISK_READ_THREAD_H__
 #define __DISK_READ_THREAD_H__
 
+#include <string>
+
 #include "messaging.h"
 #include "aio_private.h"
 
@@ -17,12 +19,15 @@ class io_queue: public bulk_queue<T>
 	/* when the queue becomes full */
 	pthread_cond_t full_cond;
 	pthread_mutex_t full_mutex;
+
+	std::string name;
 public:
-	io_queue(int size): bulk_queue<T>(size) {
+	io_queue(const std::string name, int size): bulk_queue<T>(size) {
 		pthread_mutex_init(&empty_mutex, NULL);
 		pthread_cond_init(&empty_cond, NULL);
 		pthread_mutex_init(&full_mutex, NULL);
 		pthread_cond_init(&full_cond, NULL);
+		this->name = name;
 	}
 
 	virtual int fetch(T *entries, int num);

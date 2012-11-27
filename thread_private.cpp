@@ -181,7 +181,7 @@ static void *rand_read(void *arg)
 {
 	thread_private *priv = (thread_private *) arg;
 
-	printf("pid: %d, tid: %ld\n", getpid(), gettid());
+	printf("rand_read: pid: %d, tid: %ld\n", getpid(), gettid());
 	priv->thread_init();
 	priv->run();
 	return NULL;

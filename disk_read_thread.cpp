@@ -7,6 +7,7 @@ int io_queue<T>::fetch(T *entries, int num) {
 	/* we have to wait for coming requests. */
 	pthread_mutex_lock(&empty_mutex);
 	while(this->is_empty()) {
+		printf("the io queue %s is empty, wait...\n", name.c_str());
 		pthread_cond_wait(&empty_cond, &empty_mutex);
 	}
 	pthread_mutex_unlock(&empty_mutex);
@@ -37,6 +38,7 @@ int io_queue<T>::add(T *entries, int num) {
 
 		pthread_mutex_lock(&full_mutex);
 		while (this->is_full()) {
+			printf("the io queue %s is full, wait...\n", name.c_str());
 			pthread_cond_wait(&full_cond, &full_mutex);
 		}
 		pthread_mutex_unlock(&full_mutex);
@@ -64,7 +66,7 @@ public:
 };
 
 disk_read_thread::disk_read_thread(const char *name,
-		long size): queue(1024) {
+		long size): queue(name, 1024) {
 	aio = new async_io(&name, 1, size);
 	aio->set_callback(new initiator_callback());
 
@@ -92,9 +94,14 @@ void disk_read_thread::run() {
 	// TODO I need to call cleanup() of aio.
 }
 
+#include <sys/types.h>
+#include <sys/syscall.h>
+#define gettid() syscall(__NR_gettid)
+
 void *process_requests(void *arg)
 {
 	disk_read_thread *thread = (disk_read_thread *) arg;
+	printf("disk_read_thread: pid: %d, tid: %ld\n", getpid(), gettid());
 	thread->run();
 	return NULL;
 }
