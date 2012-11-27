@@ -173,17 +173,31 @@ public:
 template<class T>
 class bulk_queue
 {
-	T *buf;
-	volatile int size;
-	int start;
-	int num_entries;
+	volatile T *buf;
+	const int capacity;
+	volatile long alloc_offset;
+	volatile long add_offset;
+	volatile long fetch_offset;
 	pthread_spinlock_t _lock;
+
+	int get_virtual_num_entries() const {
+		return (int) (alloc_offset - fetch_offset);
+	}
+
+	int get_actual_num_entries() const {
+		return (int) (add_offset - fetch_offset);
+	}
+
+	int get_remaining_space() const {
+		return (int) (capacity - get_virtual_num_entries());
+	}
+
 public:
-	bulk_queue(int size) {
+	bulk_queue(int size): capacity(size) {
 		buf = new T[size];
-		this->size = size;
-		start = 0;
-		num_entries = 0;
+		alloc_offset = 0;
+		add_offset = 0;
+		fetch_offset = 0;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
@@ -197,28 +211,32 @@ public:
 	virtual int add(T *entries, int num);
 
 	int get_num_entries() {
+		pthread_spin_lock(&_lock);
+		int num_entries = (int) (add_offset - fetch_offset);
+		pthread_spin_unlock(&_lock);
 		return num_entries;
 	}
 
 	bool is_full() {
-		return num_entries == size;
+		return get_virtual_num_entries() == capacity;
 	}
 
 	bool is_empty() {
-		return num_entries == 0;
+		return get_actual_num_entries() == 0;
 	}
 };
 
 template<class T>
 int bulk_queue<T>::fetch(T *entries, int num) {
 	pthread_spin_lock(&_lock);
-	int n = min(num, num_entries);
-	for (int i = 0; i < n; i++) {
-		entries[i] = buf[(start + i) % this->size];
-	}
-	start = (start + n) % this->size;
-	num_entries -= n;
+	long curr_fetch_offset = fetch_offset;
+	int n = min(num, get_actual_num_entries());
+	fetch_offset += n;
 	pthread_spin_unlock(&_lock);
+
+	for (int i = 0; i < n; i++) {
+		entries[i] = ((T*)buf)[(curr_fetch_offset + i) % this->capacity];
+	}
 	return n;
 }
 
@@ -231,13 +249,17 @@ int bulk_queue<T>::fetch(T *entries, int num) {
 template<class T>
 int bulk_queue<T>::add(T *entries, int num) {
 	pthread_spin_lock(&_lock);
-	int n = min(num, this->size - num_entries);
-	int end = (start + num_entries) % this->size;
-	for (int i = 0; i < n; i++) {
-		buf[(end + i) % this->size] = entries[i];
-	}
-	num_entries += n;
+	int n = min(num, get_remaining_space());
+	long curr_alloc_offset = alloc_offset;
+	alloc_offset += n;
 	pthread_spin_unlock(&_lock);
+
+	for (int i = 0; i < n; i++) {
+		((T *)buf)[(curr_alloc_offset + i) % this->capacity] = entries[i];
+	}
+	while (!__sync_bool_compare_and_swap(&add_offset,
+				curr_alloc_offset, curr_alloc_offset + n)) {
+	}
 	return n;
 }
 
