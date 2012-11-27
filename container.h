@@ -10,52 +10,6 @@
 
 #include "common.h"
 
-template<class T>
-class dynamic_queue
-{
-	int start;
-	int num;
-	T *buf;
-	int size;
-public:
-	dynamic_queue(int size) {
-		buf = (T *) numa_alloc_local(sizeof(T) * size);
-		this->size = size;
-		start = 0;
-		num = 0;
-	}
-
-	void push_back(T v) {
-		assert(num < size);
-		buf[(start + num) % size] = v;
-		num++;
-	}
-
-	void pop_front() {
-		assert(num > 0);
-		start = (start + 1) % size;
-		num--;
-	}
-
-	bool is_empty() {
-		return num == 0;
-	}
-
-	bool is_full() {
-		return num == size;
-	}
-
-	T &back() {
-		assert(num > 0);
-		return buf[(start + num - 1) % size];
-	}
-
-	T &front() {
-		assert(num > 0);
-		return buf[start];
-	}
-};
-
 /**
  * The elements in the queue stored in the same piece of memory
  * as the queue metadata. The size of the queue is defined 

@@ -76,8 +76,7 @@ int thread_private::run()
 		if (io->support_aio()) {
 			int i;
 //			io_request *reqs = gc->allocate_obj(BULK_SIZE);
-			for (i = 0; i < BULK_SIZE
-					&& gen->has_next() && !buf->is_full(); ) {
+			for (i = 0; i < BULK_SIZE && gen->has_next(); ) {
 				char *p = buf->next_entry();
 //				printf("thread %d: allocate %p\n", idx, p);
 				// TODO right now it only support read.
