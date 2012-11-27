@@ -18,7 +18,8 @@ public:
 		for (int i = 0; i < num_remotes; i++) {
 			queues[i] = remotes[i]->get_queue();
 		}
-		sender = new msg_sender<io_request>(BUF_SIZE, queues, num_remotes);
+		sender = new msg_sender<io_request>(MSG_SEND_BUF_SIZE,
+				queues, num_remotes);
 	}
 
 	~remote_disk_access() {

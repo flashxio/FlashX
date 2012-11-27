@@ -1,6 +1,5 @@
 #include "disk_read_thread.h"
-
-const int MAX_FETCH_REQS = 100;
+#include "parameters.h"
 
 template<class T>
 int io_queue<T>::fetch(T *entries, int num) {
@@ -66,7 +65,7 @@ public:
 };
 
 disk_read_thread::disk_read_thread(const char *name,
-		long size): queue(name, 1024) {
+		long size): queue(name, IO_QUEUE_SIZE) {
 	aio = new async_io(&name, 1, size);
 	aio->set_callback(new initiator_callback());
 
