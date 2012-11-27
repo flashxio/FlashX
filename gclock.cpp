@@ -223,7 +223,7 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 			if (scan_nrounds >= MAX_SCAN_NROUNDS) {
 				merge_all_queues();
 				start_dec = true;
-				assert(queues[0].size() == size);
+				assert((unsigned) queues[0].size() == size);
 			}
 			else
 				merge_queues(scan_nrounds);
@@ -285,7 +285,7 @@ frame *enhanced_gclock_buffer1::swap(frame *entry)
 		 * pages are split into multiple queues according to their WC values
 		 * instead of real hit counts.
 		 */
-		else if (e->getWC() >= queues[0].get_max_hits()) {
+		else if ((unsigned) e->getWC() >= queues[0].get_max_hits()) {
 			clock_hand.remove();
 			add2range(e, e->getWC());
 		}
