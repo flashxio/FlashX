@@ -73,6 +73,7 @@ enum {
 #ifdef ENABLE_AIO
 	AIO_ACCESS,
 #endif
+	REMOTE_ACCESS,
 	GLOBAL_CACHE_ACCESS,
 	PART_GLOBAL_ACCESS,
 };
@@ -83,6 +84,7 @@ str2int access_methods[] = {
 #ifdef ENABLE_AIO
 	{ "aio", AIO_ACCESS },
 #endif
+	{ "remote", REMOTE_ACCESS },
 	{ "global_cache", GLOBAL_CACHE_ACCESS },
 	{ "parted_global", PART_GLOBAL_ACCESS },
 };
@@ -300,11 +302,13 @@ int main(int argc, char *argv[])
 	long end = 0;
 	const char *cnames[num_files];
 	int num;
+
 	disk_read_thread **read_threads = new disk_read_thread*[num_files];
 	for (int k = 0; k < num_files; k++) {
 		cnames[k] = file_names[k].c_str();
 		if (access_option == GLOBAL_CACHE_ACCESS
-				|| access_option == PART_GLOBAL_ACCESS)
+				|| access_option == PART_GLOBAL_ACCESS
+				|| access_option == REMOTE_ACCESS)
 			read_threads[k] = new disk_read_thread(cnames[k],
 					npages * PAGE_SIZE);
 	}
@@ -327,6 +331,10 @@ int main(int argc, char *argv[])
 						new async_io(cnames, num, npages * PAGE_SIZE));
 				break;
 #endif
+			case REMOTE_ACCESS:
+				threads[j] = new thread_private(j, entry_size,
+						new remote_disk_access(read_threads, num_files));
+				break;
 			case GLOBAL_CACHE_ACCESS:
 				{
 //					io_interface *underlying = new async_io(cnames, num, npages * PAGE_SIZE);
