@@ -6,6 +6,8 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include <string>
+
 #include "common.h"
 
 template<class T>
@@ -171,13 +173,29 @@ public:
  * It supports bulk operations.
  */
 template<class T>
-class bulk_queue
+class thread_safe_FIFO_queue
 {
 	volatile T *buf;
-	const int capacity;
+	const int capacity;			// capacity of the buffer
+
+	/**
+	 * The buffer virtually has infinite space. The three offsets
+	 * shows the location in the buffer of infinite size. 
+	 * We can easy convert the three offsets to the real location 
+	 * in the buffer with modulo operation.
+	 */
+
+	/* The location, up to where the space in the buffer has been allocated. */
 	volatile long alloc_offset;
+	/* The location where new entries have been added to the buffer. */
 	volatile long add_offset;
+	/* The location where we can fetch entries in the buffer. */
 	volatile long fetch_offset;
+
+	/* 
+	 * lock is still needed because we need to check whether the buffer
+	 * has entries or has space.
+	 */
 	pthread_spinlock_t _lock;
 
 	int get_virtual_num_entries() const {
@@ -193,7 +211,7 @@ class bulk_queue
 	}
 
 public:
-	bulk_queue(int size): capacity(size) {
+	thread_safe_FIFO_queue(int size): capacity(size) {
 		buf = new T[size];
 		alloc_offset = 0;
 		add_offset = 0;
@@ -201,7 +219,7 @@ public:
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	virtual ~bulk_queue() {
+	virtual ~thread_safe_FIFO_queue() {
 		pthread_spin_destroy(&_lock);
 		delete [] buf;
 	}
@@ -210,6 +228,22 @@ public:
 
 	virtual int add(T *entries, int num);
 
+	T pop_front() {
+		T entry;
+		int num = fetch(&entry, 1);
+		assert(num == 1);
+		return entry;
+	}
+
+	void push_back(T &entry) {
+		while (add(&entry, 1) == 0) {
+		}
+	}
+
+	/**
+	 * Get the existing entries from the queue.
+	 * It locks the buffer, so don't over use it.
+	 */
 	int get_num_entries() {
 		pthread_spin_lock(&_lock);
 		int num_entries = (int) (add_offset - fetch_offset);
@@ -226,114 +260,36 @@ public:
 	}
 };
 
-template<class T>
-int bulk_queue<T>::fetch(T *entries, int num) {
-	pthread_spin_lock(&_lock);
-	long curr_fetch_offset = fetch_offset;
-	int n = min(num, get_actual_num_entries());
-	fetch_offset += n;
-	pthread_spin_unlock(&_lock);
-
-	for (int i = 0; i < n; i++) {
-		entries[i] = ((T*)buf)[(curr_fetch_offset + i) % this->capacity];
-	}
-	return n;
-}
-
 /**
- * this is non-blocking. 
- * It adds entries to the queue as much as possible,
- * and returns the number of entries that have been
- * added.
+ * This FIFO queue can block the thread if
+ * a thread wants to add more entries when the queue is full;
+ * or
+ * a thread wants to fetch more entries when the queue is empty.
  */
 template<class T>
-int bulk_queue<T>::add(T *entries, int num) {
-	pthread_spin_lock(&_lock);
-	int n = min(num, get_remaining_space());
-	long curr_alloc_offset = alloc_offset;
-	alloc_offset += n;
-	pthread_spin_unlock(&_lock);
+class blocking_FIFO_queue: public thread_safe_FIFO_queue<T>
+{
+	/* when the queue becomes empty */
+	pthread_cond_t empty_cond;
+	pthread_mutex_t empty_mutex;
 
-	for (int i = 0; i < n; i++) {
-		((T *)buf)[(curr_alloc_offset + i) % this->capacity] = entries[i];
-	}
-	while (!__sync_bool_compare_and_swap(&add_offset,
-				curr_alloc_offset, curr_alloc_offset + n)) {
-	}
-	return n;
-}
+	/* when the queue becomes full */
+	pthread_cond_t full_cond;
+	pthread_mutex_t full_mutex;
 
-#ifdef USE_SHADOW_PAGE
+	std::string name;
+public:
+	blocking_FIFO_queue(const std::string name, int size): thread_safe_FIFO_queue<T>(size) {
+		pthread_mutex_init(&empty_mutex, NULL);
+		pthread_cond_init(&empty_cond, NULL);
+		pthread_mutex_init(&full_mutex, NULL);
+		pthread_cond_init(&full_cond, NULL);
+		this->name = name;
+	}
 
-/*
- * remove the idx'th element in the queue.
- * idx is the logical position in the queue,
- * instead of the physical index in the buffer.
- */
-template<class T, int SIZE>
-void embedded_queue<T, SIZE>::remove(int idx) {
-	assert(idx < num);
-	/* the first element in the queue. */
-	if (idx == 0) {
-		pop_front();
-	}
-	/* the last element in the queue. */
-	else if (idx == num - 1){
-		num--;
-	}
-	/*
-	 * in the middle.
-	 * now we need to move data.
-	 */
-	else {
-		T tmp[num];
-		T *p = tmp;
-		/* if the end of the queue is physically behind the start */
-		if (start + num <= SIZE) {
-			/* copy elements in front of the removed element. */
-			memcpy(p, &buf[start], sizeof(T) * idx);
-			p += idx;
-			/* copy elements behind the removed element. */
-			memcpy(p, &buf[start + idx + 1], sizeof(T) * (num - idx - 1));
-		}
-		/* 
-		 * the removed element is between the first element
-		 * and the end of the buffer.
-		 */
-		else if (idx + start < SIZE) {
-			/* copy elements in front of the removed element. */
-			memcpy(p, &buf[start], sizeof(T) * idx);
-			p += idx;
-			/*
-			 * copy elements behind the removed element
-			 * and before the end of the buffer.
-			 */
-			memcpy(p, &buf[start + idx + 1], sizeof(T) * (SIZE - start - idx - 1));
-			p += (SIZE - start - idx - 1);
-			/* copy the remaining elements in the beginning of the buffer. */
-			memcpy(p, buf, sizeof(T) * (num - (SIZE - start)));
-		}
-		/*
-		 * the removed element is between the beginning of the buffer
-		 * and the last element.
-		 */
-		else {
-			/* copy elements between the first element and the end of the buffer. */
-			memcpy(p, &buf[start], sizeof(T) * (SIZE - start));
-			p += (SIZE - start);
-			/* copy elements between the beginning of the buffer and the removed element. */
-			idx = (idx + start) % SIZE;
-			memcpy(p, buf, sizeof(T) * idx);
-			p += idx;
-			/* copy elements after the removed element and before the last element */
-			memcpy(p, &buf[idx + 1], sizeof(T) * ((start + num) % SIZE - idx - 1));
-		}
-		memcpy(buf, tmp, sizeof(T) * (num - 1));
-		start = 0;
-		num--;
-	}
-}    
+	virtual int fetch(T *entries, int num);
 
-#endif
+	virtual int add(T *entries, int num);
+};
 
 #endif

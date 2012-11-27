@@ -3,17 +3,18 @@
 
 #include "disk_read_thread.h"
 #include "messaging.h"
+#include "container.h"
 
 class remote_disk_access: public io_interface
 {
 	msg_sender<io_request> *sender;
-	bulk_queue<io_request> **queues;
+	thread_safe_FIFO_queue<io_request> **queues;
 	int num_queues;
 	callback *cb;
 public:
 	remote_disk_access(disk_read_thread **remotes,
 			int num_remotes) {
-		queues = new bulk_queue<io_request> *[num_remotes];
+		queues = new thread_safe_FIFO_queue<io_request> *[num_remotes];
 		num_queues = num_remotes;
 		for (int i = 0; i < num_remotes; i++) {
 			queues[i] = remotes[i]->get_queue();

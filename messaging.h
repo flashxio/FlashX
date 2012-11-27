@@ -125,17 +125,17 @@ class msg_sender
 	T *buf;
 	int buf_size;		// the max number of messages that can be buffered
 	int num_current;	// the current number of messages in the buffer.
-	bulk_queue<T> **dest_queues;
+	thread_safe_FIFO_queue<T> **dest_queues;
 	int num_queues;
 public:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	msg_sender(int buf_size, bulk_queue<T> **queues, int num_queues);
+	msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues, int num_queues);
 
 	~msg_sender() {
 		numa_free(buf, sizeof(T) * buf_size);
-		numa_free(dest_queues, sizeof(bulk_queue<T> *) * num_queues);
+		numa_free(dest_queues, sizeof(thread_safe_FIFO_queue<T> *) * num_queues);
 	}
 
 	int num_msg() {

@@ -1,49 +1,6 @@
 #include "disk_read_thread.h"
 #include "parameters.h"
-
-template<class T>
-int io_queue<T>::fetch(T *entries, int num) {
-	/* we have to wait for coming requests. */
-	pthread_mutex_lock(&empty_mutex);
-	while(this->is_empty()) {
-		printf("the io queue %s is empty, wait...\n", name.c_str());
-		pthread_cond_wait(&empty_cond, &empty_mutex);
-	}
-	pthread_mutex_unlock(&empty_mutex);
-
-	int ret = bulk_queue<T>::fetch(entries, num);
-
-	/* wake up all threads to send more requests */
-	pthread_cond_broadcast(&full_cond);
-
-	return ret;
-}
-
-/**
- * This is a blocking version.
- * It adds all entries to the queue. If the queue is full,
- * wait until it can add all entries.
- */
-template<class T>
-int io_queue<T>::add(T *entries, int num) {
-	int orig_num = num;
-
-	while (num > 0) {
-		int ret = bulk_queue<T>::add(entries, num);
-		entries += ret;
-		num -= ret;
-		/* signal the thread of reading disk to wake up. */
-		pthread_cond_signal(&empty_cond);
-
-		pthread_mutex_lock(&full_mutex);
-		while (this->is_full()) {
-			printf("the io queue %s is full, wait...\n", name.c_str());
-			pthread_cond_wait(&full_cond, &full_mutex);
-		}
-		pthread_mutex_unlock(&full_mutex);
-	}
-	return orig_num;
-}
+#include "container.cpp"
 
 /* just call the callback of the initiator. */
 class initiator_callback: public callback

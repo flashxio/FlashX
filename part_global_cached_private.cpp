@@ -38,8 +38,8 @@ int part_global_cached_io::init() {
 #endif
 
 	global_cached_io::init();
-	request_queue = new bulk_queue<io_request>(REQ_QUEUE_SIZE);
-	reply_queue = new bulk_queue<io_reply>(REPLY_QUEUE_SIZE);
+	request_queue = new thread_safe_FIFO_queue<io_request>(REQ_QUEUE_SIZE);
+	reply_queue = new thread_safe_FIFO_queue<io_reply>(REPLY_QUEUE_SIZE);
 
 	/* 
 	 * there is a global lock for all threads.
@@ -73,7 +73,7 @@ int part_global_cached_io::init() {
 	req_senders = (msg_sender<io_request> **) numa_alloc_local(
 			sizeof(msg_sender<io_request> *) * num_groups);
 	for (int i = 0; i < num_groups; i++) {
-		bulk_queue<io_request> *queues[groups[i].nthreads];
+		thread_safe_FIFO_queue<io_request> *queues[groups[i].nthreads];
 		for (int j = 0; j < groups[i].nthreads; j++)
 			queues[j] = groups[i].ios[j]->request_queue;
 		req_senders[i] = new msg_sender<io_request>(BUF_SIZE, queues, groups[i].nthreads);
@@ -87,7 +87,7 @@ int part_global_cached_io::init() {
 	int idx = 0;
 	for (int i = 0; i < num_groups; i++) {
 		for (int j = 0; j < groups[i].nthreads; j++) {
-			bulk_queue<io_reply> *queues[1];
+			thread_safe_FIFO_queue<io_reply> *queues[1];
 			assert(idx == groups[i].ios[j]->thread_id);
 			queues[0] = groups[i].ios[j]->reply_queue;
 			reply_senders[idx++] = new msg_sender<io_reply>(BUF_SIZE, queues, 1);

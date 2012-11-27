@@ -1,16 +1,17 @@
 #include <stdio.h>
 
 #include "messaging.h"
+#include "container.cpp"
 
 template<class T>
-msg_sender<T>::msg_sender(int buf_size, bulk_queue<T> **queues,
+msg_sender<T>::msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
 		int num_queues) {
 	buf = (T *) numa_alloc_local(sizeof(T) * buf_size);
 	this->buf_size = buf_size;
 	num_current = 0;
-	dest_queues = (bulk_queue<T> **) numa_alloc_local(
-			sizeof(bulk_queue<T> *) * num_queues);
-	memcpy(dest_queues, queues, sizeof(bulk_queue<T> *) * num_queues);
+	dest_queues = (thread_safe_FIFO_queue<T> **) numa_alloc_local(
+			sizeof(thread_safe_FIFO_queue<T> *) * num_queues);
+	memcpy(dest_queues, queues, sizeof(thread_safe_FIFO_queue<T> *) * num_queues);
 	this->num_queues = num_queues;
 }
 
@@ -33,7 +34,7 @@ int msg_sender<T>::flush() {
 	int num_sent = 0;
 	T *tmp = buf;
 	for (int i = 0; num_current > 0 && i < num_queues; i++) {
-		bulk_queue<T> *q = dest_queues[(base_idx + i) % num_queues];
+		thread_safe_FIFO_queue<T> *q = dest_queues[(base_idx + i) % num_queues];
 		assert(q);
 
 		// TODO the thread might be blocked if it's full.
@@ -75,7 +76,7 @@ int msg_sender<T>::send_cached(T *msg) {
  * these are to force to instantiate the templates
  * for io_request and io_reply.
  */
-template class bulk_queue<io_request>;
-template class bulk_queue<io_reply>;
+template class thread_safe_FIFO_queue<io_request>;
+template class thread_safe_FIFO_queue<io_reply>;
 template class msg_sender<io_request>;
 template class msg_sender<io_reply>;

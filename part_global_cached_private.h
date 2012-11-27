@@ -39,8 +39,8 @@ class part_global_cached_io: public global_cached_io
 	long cache_size;
 	int cache_type;
 	
-	bulk_queue<io_request> *request_queue;
-	bulk_queue<io_reply> *reply_queue;
+	thread_safe_FIFO_queue<io_request> *request_queue;
+	thread_safe_FIFO_queue<io_reply> *reply_queue;
 
 	volatile int finished_threads;
 
