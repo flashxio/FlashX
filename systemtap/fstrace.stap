@@ -1,0 +1,26 @@
+#! /usr/bin/env stap
+#
+probe begin {
+	printf ("monitor starts\n")
+}
+
+probe kernel.function("vfs_read").return {
+	if (execname() == @1) {
+		printf("%s,%ld,%d,R,%d\n", kernel_string($file->f_path->dentry->d_iname),
+				kernel_long($pos), $count, $return);
+	}
+}
+
+probe kernel.function("vfs_llseek").return {
+	if (execname() == @1) {
+		printf("%s,%ld,%d,seek,%d\n", kernel_string($file->f_path->dentry->d_iname),
+				$offset, $origin, $return);
+	}
+}
+
+probe kernel.function("vfs_write").return {
+	if (execname() == @1) {
+		printf("%s,%ld,%d,W,%d\n", kernel_string($file->f_path->dentry->d_iname),
+				kernel_long($pos), $count, $return);
+	}
+}
