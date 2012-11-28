@@ -30,6 +30,7 @@ class async_io: public buffered_io
 	struct aio_ctx *ctx;
 	std::deque<thread_callback_s *> cbs;
 	callback *cb;
+	const int AIO_DEPTH;
 
 	struct iocb *construct_req(char *buf, off_t offset, ssize_t size,
 			int access_method, callback_t callback,
@@ -39,8 +40,9 @@ public:
 	 * @names: the names of files to be accessed
 	 * @num: the number of files
 	 * @size: the size of data to be accessed in all files
+	 * @aio_depth_per_file
 	 */
-	async_io(const char *names[], int num, long size);
+	async_io(const char *names[], int num, long size, int aio_depth_per_file);
 
 	virtual ~async_io();
 

@@ -23,7 +23,7 @@ public:
 
 disk_read_thread::disk_read_thread(const char *name,
 		long size): queue(name, IO_QUEUE_SIZE) {
-	aio = new async_io(&name, 1, size);
+	aio = new async_io(&name, 1, size, AIO_DEPTH_PER_FILE);
 	aio->set_callback(new initiator_callback());
 
 	int ret = pthread_create(&id, NULL, process_requests, (void *) this);

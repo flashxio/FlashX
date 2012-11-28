@@ -1,7 +1,5 @@
 #include "aio_private.h"
 
-#define AIO_DEPTH (40 * num_open_files() / nthreads)
-
 #define EVEN_DISTRIBUTE
 
 const int MAX_BUF_REQS = 1024 * 3;
@@ -22,7 +20,8 @@ void aio_callback(io_context_t ctx, struct iocb* iocb,
 }
 
 async_io::async_io(const char *names[], int num,
-		long size): buffered_io(names, num, size, O_DIRECT | O_RDONLY)
+		long size, int aio_depth_per_file): buffered_io(names, num, size,
+			O_DIRECT | O_RDONLY), AIO_DEPTH(aio_depth_per_file * num)
 {
 	printf("aio is used\n");
 	buf_idx = 0;

@@ -327,8 +327,14 @@ int main(int argc, char *argv[])
 				break;
 #if ENABLE_AIO
 			case AIO_ACCESS:
-				threads[j] = new thread_private(j, entry_size,
-						new async_io(cnames, num, npages * PAGE_SIZE));
+				{
+					int depth_per_file = AIO_DEPTH_PER_FILE / nthreads;
+					if (depth_per_file == 0)
+						depth_per_file = 1;
+					threads[j] = new thread_private(j, entry_size,
+							new async_io(cnames, num, npages * PAGE_SIZE,
+								depth_per_file));
+				}
 				break;
 #endif
 			case REMOTE_ACCESS:
