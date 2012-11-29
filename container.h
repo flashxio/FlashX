@@ -90,35 +90,40 @@ template<class T>
 class fifo_queue
 {
 	long size;			// the number of pages that can be buffered
-	volatile unsigned long idx;		// to the point where we can evict a page in the buffer
-protected:
 	T *buf;			// a circular buffer to keep pages.
+	long start;
+	long end;
 public:
 	fifo_queue(long size) {
-		idx = 0;
 		this->size = size;
 		buf = new T[size];
+		start = 0;
+		end = 0;
 	}
 
 	~fifo_queue() {
 		delete [] buf;
 	}
 
-	T *get_empty_entry() {
-		/* TODO I ignore the case of integer overflow */
-		long orig = __sync_fetch_and_add(&idx, 1);
-		T *ret = &buf[orig % size];
+	T pop_front() {
+		assert(start < end);
+		T ret = buf[start % size];
+		start++;
 		return ret;
 	}
 
-	T *get_entry(int i) {
-		if (i >= size)
-			return NULL;
-		return &buf[i];
+	void push_back(const T &v) {
+		assert(end - start < size);
+		buf[end % size] = v;
+		end++;
 	}
 
-	int get_idx(T *p) {
-		return p - buf;
+	bool is_full() const {
+		return end - start >= size;
+	}
+
+	bool is_empty() const {
+		return start >= end;
 	}
 };
 

@@ -306,37 +306,6 @@ public:
 };
 
 /**
- * This data structure is to implement LRU.
- */
-template<class T>
-class page_buffer: public fifo_queue<T>
-{
-public:
-	/*
-	 * @size: the size of the page buffer
-	 * @page_buf: the offset of the page array in the global page cache.
-	 */
-	page_buffer(long size, long page_buf): fifo_queue<T>(size) {
-		for (int i = 0; i < size; i++) {
-			fifo_queue<T>::buf[i] = T(-1, page_buf + i * PAGE_SIZE);
-		}
-	}
-
-	/**
-	 * return an empty page.
-	 * I expected the page will be filled with data,
-	 * so I change the begin and end index of the circular buffer.
-	 */
-	T *get_empty_page() {
-		return fifo_queue<T>::get_empty_entry();
-	}
-
-	T *get_page(int i) {
-		return fifo_queue<T>::get_entry(i);
-	}
-};
-
-/**
  * This is used to implement hashtable-based indexing.
  */
 class frame: public thread_safe_page

@@ -8,9 +8,11 @@ class rand_buf
 {
 	/* where the data read from the disk is stored */
 	char *buf;
-	const int entry_size;
-	const int num_entries;
-	blocking_FIFO_queue<int> free_refs;
+	char *marks;
+	int entry_size;
+	int num_entries;
+	fifo_queue<int> free_refs;
+	pthread_spinlock_t lock;
 
 	int current;
 public:
@@ -30,6 +32,10 @@ public:
 
 	int get_entry_size() {
 		return entry_size;
+	}
+
+	int get_num_entries() {
+		return num_entries;
 	}
 };
 
