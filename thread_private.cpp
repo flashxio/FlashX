@@ -30,7 +30,6 @@ public:
 			assert(*(unsigned long *) rq->get_buf()
 					== rq->get_offset() / sizeof(long));
 		}
-//		printf("thread %d: free %p\n", thread_id, rq->get_buf());
 		buf->free_entry(rq->get_buf());
 		read_bytes += rq->get_size();
 		return 0;
@@ -77,7 +76,6 @@ int thread_private::run()
 			int i;
 //			io_request *reqs = gc->allocate_obj(BULK_SIZE);
 			for (i = 0; i < BULK_SIZE && gen->has_next(); ) {
-				char *p = buf->next_entry();
 //				printf("thread %d: allocate %p\n", idx, p);
 				// TODO right now it only support read.
 				workload_t workload = gen->next();
@@ -93,6 +91,7 @@ int thread_private::run()
 					// is broken into multiple requests. It works because the array for
 					// storing requests are twice as large as needed.
 					assert (i < reqs_capacity);
+					char *p = buf->next_entry();
 					reqs[i].init(p, off, next_off - off, access_method, io);
 					size -= next_off - off;
 					off = next_off;
