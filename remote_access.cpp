@@ -51,7 +51,6 @@ void remote_disk_access::cleanup()
 ssize_t remote_disk_access::access(io_request *requests, int num)
 {
 	for (int i = 0; i < num; i++) {
-		io_request *orig = (io_request *) requests[i].get_priv();
 		// TODO I assume data is striped on disks.
 		// and I assume the request size is aligned with the strip size.
 		int idx = requests[i].get_offset() / PAGE_SIZE % num_senders;
