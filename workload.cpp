@@ -67,6 +67,7 @@ java_dump_workload::java_dump_workload(const std::string &file, int nthreads) {
 	/* the range in `offsets' */
 	start = end;
 	end = start + file_size / sizeof(off_t) / nthreads + (shift < remainings);
+	shift++;
 	this->curr = start;
 	this->end = end;
 	printf("start at %ld end at %ld\n", curr, end);
@@ -117,6 +118,7 @@ file_workload::file_workload(const std::string &file, int nthreads)
 	/* the range in `workloads' */
 	start = end;
 	end = start + file_size / sizeof(workload_t) / nthreads + (shift < remainings);
+	shift++;
 	this->curr = start;
 	this->end = end;
 	printf("start at %ld end at %ld\n", curr, end);
