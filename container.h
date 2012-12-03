@@ -150,6 +150,8 @@ class thread_safe_FIFO_queue
 	volatile long add_offset;
 	/* The location where we can fetch entries in the buffer. */
 	volatile long fetch_offset;
+	/* The location where we have completed fetching. */
+	volatile long fetched_offset;
 
 	/* 
 	 * lock is still needed because we need to check whether the buffer
@@ -158,7 +160,7 @@ class thread_safe_FIFO_queue
 	pthread_spinlock_t _lock;
 
 	int get_virtual_num_entries() const {
-		return (int) (alloc_offset - fetch_offset);
+		return (int) (alloc_offset - fetched_offset);
 	}
 
 	int get_actual_num_entries() const {
@@ -175,6 +177,7 @@ public:
 		alloc_offset = 0;
 		add_offset = 0;
 		fetch_offset = 0;
+		fetched_offset = 0;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
@@ -205,7 +208,7 @@ public:
 	 */
 	int get_num_entries() {
 		pthread_spin_lock(&_lock);
-		int num_entries = (int) (add_offset - fetch_offset);
+		int num_entries = get_actual_num_entries();
 		pthread_spin_unlock(&_lock);
 		return num_entries;
 	}
