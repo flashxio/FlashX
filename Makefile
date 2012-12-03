@@ -1,5 +1,7 @@
 CFLAGS = -g -O3 -DSTATISTICS -DENABLE_AIO #-DPROFILER
-#TRACE_FLAGS = -faddress-sanitizer 
+ifdef MEMCHECK
+TRACE_FLAGS = -faddress-sanitizer
+endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
@@ -12,10 +14,13 @@ OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 MISSING_DEPS := $(filter-out $(wildcard $(DEPS)),$(DEPS))
 MISSING_DEPS_SOURCES := $(wildcard $(patsubst %.d,%.c,$(MISSING_DEPS)) $(patsubst %.d,%.cc,$(MISSING_DEPS)))
-#CC = clang
-#CXX = clang++
+ifdef MEMCHECK
+CC = clang
+CXX = clang++
+else
 CC = gcc
 CXX = g++
+endif
 
 all: rand-read
 
