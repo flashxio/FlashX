@@ -113,13 +113,21 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 						exit(1);
 					}
 				}
-				// If data is ready, the request won't be added to the page.
-				// so just serve the data.
-				else if (status == ADD_REQ_DATA_READY)
-					goto serve_data;
+				else {
+#ifdef STATISTICS
+					cache_hits++;
+#endif
+					// If data is ready, the request won't be added to the page.
+					// so just serve the data.
+					if (status == ADD_REQ_DATA_READY)
+						goto serve_data;
+				}
 			}
 			else {
 				p->unlock();
+#ifdef STATISTICS
+				cache_hits++;
+#endif
 				// An IO request can be added only when the page is still
 				// in IO pending state. Otherwise, it returns NULL.
 				io_request *orig = p->add_io_req(requests[i]);
@@ -132,13 +140,13 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			// If the data in the page is ready, we don't need to change any state
 			// of the page and just read data.
 			p->unlock();
+#ifdef STATISTICS
+			cache_hits++;
+#endif
 serve_data:
 			__complete_req(&requests[i], p);
 			if (get_callback())
 				get_callback()->invoke(&requests[i]);
-#ifdef STATISTICS
-			cache_hits++;
-#endif
 		}
 	}
 	return 0;
