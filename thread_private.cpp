@@ -95,7 +95,7 @@ int thread_private::run()
 				// TODO right now it only support read.
 				workload_t workload = gen->next();
 				// TODO let's read data first;
-				int access_method = READ;
+				int access_method = workload.read ? READ : WRITE;
 				off_t off = workload.off;
 				int size = workload.size;
 				while (size > 0) {
@@ -123,7 +123,7 @@ int thread_private::run()
 			workload_t workload = gen->next();
 			off_t off = workload.off;
 			// TODO let's just read data first.
-			int access_method = READ;
+			int access_method = workload.read ? READ : WRITE;
 			int entry_size = workload.size;
 
 			while (entry_size > 0) {

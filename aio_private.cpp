@@ -21,7 +21,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb,
 
 async_io::async_io(const char *names[], int num,
 		long size, int aio_depth_per_file): buffered_io(names, num, size,
-			O_DIRECT | O_RDONLY), AIO_DEPTH(aio_depth_per_file * num)
+			O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file * num)
 {
 	printf("aio is used\n");
 	buf_idx = 0;
@@ -74,7 +74,8 @@ struct iocb *async_io::construct_req(char *buf, off_t offset,
 	assert(size % MIN_BLOCK_SIZE == 0);
 	assert(offset % MIN_BLOCK_SIZE == 0);
 	assert((long) buf % MIN_BLOCK_SIZE == 0);
-	req = make_io_request(ctx, get_fd(offset), size, offset, buf, A_READ, cb);
+	int io_type = access_method == READ ? A_READ : A_WRITE;
+	req = make_io_request(ctx, get_fd(offset), size, offset, buf, io_type, cb);
 	return req;
 }
 

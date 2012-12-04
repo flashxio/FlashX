@@ -25,7 +25,7 @@ class buffered_io: public io_interface
 #endif
 public:
 	buffered_io(const char *names[], int num,
-			long size, int flags = O_RDONLY) {
+			long size, int flags = O_RDWR) {
 		this->flags = flags;
 #ifdef STATISTICS
 		read_time = 0;
