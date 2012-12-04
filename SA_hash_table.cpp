@@ -239,7 +239,7 @@ bool SA_hashtable<KeyT, ValueT>::expand(entry_set_t *trigger_set) {
 	assert(sets);
 
 	entry_set_t *set = get_set(split);
-	long size = pow(2, level) * init_nsets;
+	long size = (1 << level) * init_nsets;
 	while (trigger_set->is_overflow()) {
 		unsigned int sets_idx = (split + size) / init_nsets;
 		/* 

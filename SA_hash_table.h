@@ -106,12 +106,12 @@ public:
 
 	/* the hash function used for the current level. */
 	int hash(KeyT key) {
-		return key % (init_nsets * (long) pow(2, level));
+		return key % (init_nsets * (1 << level));
 	}
 
 	/* the hash function used for the next level. */
 	int hash1(KeyT key) {
-		return key % (init_nsets * (long) pow(2, level + 1));
+		return key % (init_nsets * (1 << (level + 1)));
 	}
 
 	/* interface for the hashtable. */
