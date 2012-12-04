@@ -26,22 +26,34 @@ static void __complete_req(io_request *orig, thread_safe_page *p)
 
 class read_page_callback: public callback
 {
-	global_cached_io *io;
 public:
-	read_page_callback(global_cached_io *io) {
-		this->io = io;
-	}
-
 	int invoke(io_request *request) {
 		io_request *orig = (io_request *) request->get_priv();
 		thread_safe_page *p = (thread_safe_page *) orig->get_priv();
+		std::vector<io_request> reqs;
+
+		p->lock();
 		p->set_data_ready(true);
 		p->set_io_pending(false);
-		__complete_req(orig, p);
-		if (io->get_callback())
-			io->get_callback()->invoke(orig);
-		// TODO use my own deallocator.
-		delete orig;
+		io_request *req = p->get_io_req();
+		assert(req);
+		// TODO vector may allocate memory and block the thread.
+		// I should be careful of that.
+		while (req) {
+			reqs.push_back(*req);
+			req = req->get_next_req();
+		}
+		p->unlock();
+		// At this point, data is ready, so any threads that want to add
+		// requests to the page will fail.
+		p->reset_reqs();
+
+		for (unsigned i = 0; i < reqs.size(); i++) {
+			__complete_req(&reqs[i], p);
+			io_interface *io = reqs[i].get_io();
+			if (io->get_callback())
+				io->get_callback()->invoke(&reqs[i]);
+		}
 		return 0;
 	}
 };
@@ -51,7 +63,7 @@ global_cached_io::global_cached_io(io_interface *underlying,
 	cb = NULL;
 	cache_hits = 0;
 	this->underlying = underlying;
-	underlying->set_callback(new read_page_callback(this));
+	underlying->set_callback(new read_page_callback());
 	num_waits = 0;
 	this->cache_size = cache_size;
 	if (global_cache == NULL) {
@@ -76,43 +88,51 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			// TODO handle dirty pages later.
 		}
 
+		p->lock();
 		if (!p->data_ready()) {
-			/*
-			 * TODO if two threads want to access the same page,
-			 * both of them will come here and the page will be
-			 * read twice from the file.
-			 * I can't use the IO pending bit because a request
-			 * can't be served immediately when it's issued.
-			 * I just hope the case that two threads access 
-			 * the same page doesn't happen very often.
-			 */
-			/*
-			 * No other threads set the page dirty at this moment,
-			 * because if a thread can set the page dirty,
-			 * it means the page isn't dirty and already has data
-			 * ready at the first place.
-			 */
-			if (p->is_dirty())
-				p->wait_cleaned();
+			if(!p->is_io_pending()) {
+				p->set_io_pending(true);
+				assert(!p->is_dirty());
+				p->unlock();
 
-			// TODO I need to my own allocator for this.
-			io_request *orig = new io_request(requests[i]);
-			orig->set_priv((void *) p);
-
-			io_request req((char *) p->get_data(),
-					ROUND_PAGE(offset), PAGE_SIZE, READ,
-					/*
-					 * it will notify the underlying IO,
-					 * which then notifies global_cached_io.
-					 */
-					underlying, (void *) orig);
-			ret = underlying->access(&req, 1);
-			if (ret < 0) {
-				perror("read");
-				exit(1);
+				// If the thread can't add the request as the first IO request
+				// of the page, it doesn't need to issue a IO request to the file.
+				int status;
+				io_request *orig = p->add_first_io_req(requests[i], status);
+				if (status == ADD_REQ_SUCCESS) {
+					io_request req((char *) p->get_data(),
+							ROUND_PAGE(offset), PAGE_SIZE, READ,
+							/*
+							 * it will notify the underlying IO,
+							 * which then notifies global_cached_io.
+							 */
+							underlying, (void *) orig);
+					ret = underlying->access(&req, 1);
+					if (ret < 0) {
+						perror("read");
+						exit(1);
+					}
+				}
+				// If data is ready, the request won't be added to the page.
+				// so just serve the data.
+				else if (status == ADD_REQ_DATA_READY)
+					goto serve_data;
+			}
+			else {
+				p->unlock();
+				// An IO request can be added only when the page is still
+				// in IO pending state. Otherwise, it returns NULL.
+				io_request *orig = p->add_io_req(requests[i]);
+				// the page isn't in IO pending state any more.
+				if (orig == NULL)
+					goto serve_data;
 			}
 		}
 		else {
+			// If the data in the page is ready, we don't need to change any state
+			// of the page and just read data.
+			p->unlock();
+serve_data:
 			__complete_req(&requests[i], p);
 			if (get_callback())
 				get_callback()->invoke(&requests[i]);
@@ -200,6 +220,9 @@ ssize_t global_cached_io::access(char *buf, off_t offset,
 		}
 		else {
 			num_waits++;
+			// TODO this is a problem. It takes a long time to get data
+			// from real storage devices. If we use busy waiting, 
+			// we just waste computation time.
 			p->wait_ready();
 		}
 	}

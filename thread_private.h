@@ -5,8 +5,6 @@
 #include "garbage_collection.h"
 #include "messaging.h"
 
-#define NUM_PAGES (4096 * nthreads)
-
 class callback
 {
 public:

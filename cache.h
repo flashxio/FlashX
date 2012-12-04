@@ -136,6 +136,8 @@ public:
 	}
 };
 
+class io_request;
+
 class thread_safe_page: public page
 {
 #ifdef PTHREAD_WAIT
@@ -155,6 +157,8 @@ class thread_safe_page: public page
 		return flags & (0x1 << i);
 	}
 
+	io_request *reqs;
+
 public:
 	thread_safe_page(): page() {
 #ifdef PTHREAD_WAIT
@@ -162,6 +166,7 @@ public:
 		pthread_cond_init(&dirty_cond, NULL);
 		pthread_mutex_init(&mutex, NULL);
 #endif
+		reqs = NULL;
 	}
 
 	thread_safe_page(off_t off, char *data): page(off, data) {
@@ -170,6 +175,7 @@ public:
 		pthread_cond_init(&dirty_cond, NULL);
 		pthread_mutex_init(&mutex, NULL);
 #endif
+		reqs = NULL;
 	}
 
 	~thread_safe_page() {
@@ -271,6 +277,19 @@ public:
 #endif
 		}
 	}
+
+	io_request *add_io_req(const io_request &req);
+	io_request *add_first_io_req(const io_request &req, int &status);
+	void reset_reqs();
+	io_request *get_io_req() const {
+		return reqs;
+	}
+};
+
+enum {
+	ADD_REQ_SUCCESS,
+	ADD_REQ_DATA_READY,
+	ADD_REQ_NOT_DATA_READY,
 };
 
 class page_cache

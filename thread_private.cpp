@@ -7,6 +7,8 @@
 
 #define BULK_SIZE 1000
 
+#define NUM_PAGES (40960 * nthreads)
+
 extern bool verify_read_content;
 
 class cleanup_callback: public callback

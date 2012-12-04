@@ -17,6 +17,7 @@ class io_request
 	int access_method: 1;
 	io_interface *io;
 	void *priv;
+	io_request *next;
 public:
 	io_request() {
 		init(NULL, 0, 0, READ, NULL);
@@ -36,6 +37,7 @@ public:
 		this->io = io;
 		this->access_method = access_method;
 		this->priv = priv;
+		next = NULL;
 	}
 
 	int get_access_method() {
@@ -64,6 +66,14 @@ public:
 
 	void set_priv(void *priv) {
 		this->priv = priv;
+	}
+
+	io_request *get_next_req() const {
+		return next;
+	}
+
+	void set_next_req(io_request *next) {
+		this->next = next;
 	}
 };
 
