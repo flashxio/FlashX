@@ -12,9 +12,14 @@ int thread_safe_FIFO_queue<T>::fetch(T *entries, int num)
 	for (int i = 0; i < n; i++) {
 		entries[i] = ((T*)buf)[(curr_fetch_offset + i) % this->capacity];
 	}
-	while (!__sync_bool_compare_and_swap(&fetched_offset,
-				curr_fetch_offset, curr_fetch_offset + n)) {
-	}
+	// If n is 0, two threads may get the same value of fetched_offset,
+	// the thread with n = 0 may lose a chance to jump out of the loop
+	// because fetched_offset has been updated by the other thread
+	// and is larger curr_fetch_offset.
+	if (n)
+		while (!__sync_bool_compare_and_swap(&fetched_offset,
+					curr_fetch_offset, curr_fetch_offset + n)) {
+		}
 	return n;
 }
 
@@ -36,9 +41,11 @@ int thread_safe_FIFO_queue<T>::add(T *entries, int num)
 	for (int i = 0; i < n; i++) {
 		((T *)buf)[(curr_alloc_offset + i) % this->capacity] = entries[i];
 	}
-	while (!__sync_bool_compare_and_swap(&add_offset,
-				curr_alloc_offset, curr_alloc_offset + n)) {
-	}
+	// For the same reason as above.
+	if (n)
+		while (!__sync_bool_compare_and_swap(&add_offset,
+					curr_alloc_offset, curr_alloc_offset + n)) {
+		}
 	return n;
 }
 
