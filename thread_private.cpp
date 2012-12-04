@@ -11,6 +11,23 @@
 
 extern bool verify_read_content;
 
+void check_read_content(char *buf, int size, off_t off)
+{
+	// I assume the space in the buffer is larger than 8 bytes.
+	off_t aligned_off = off & (~(sizeof(off_t) - 1));
+	long data[2];
+	data[0] = aligned_off / sizeof(off_t);
+	data[1] = aligned_off / sizeof(off_t) + 1;
+	long expected = 0;
+	int copy_size = size < (int) sizeof(off_t) ? size : (int) sizeof(off_t);
+	memcpy(&expected, ((char *) data) + (off - aligned_off), copy_size);
+	long read_value = 0;
+	memcpy(&read_value, buf, copy_size);
+	if(read_value != expected)
+		printf("%ld %ld\n", read_value, expected);
+	assert(read_value == expected);
+}
+
 class cleanup_callback: public callback
 {
 	rand_buf *buf;
@@ -26,11 +43,7 @@ public:
 	int invoke(io_request *rq) {
 		extern bool verify_read_content;
 		if (rq->get_access_method() == READ && verify_read_content) {
-			if(*(unsigned long *) rq->get_buf() != rq->get_offset() / sizeof(long))
-				printf("%ld %ld\n", *(unsigned long *) rq->get_buf(),
-						rq->get_offset() / sizeof(long));
-			assert(*(unsigned long *) rq->get_buf()
-					== rq->get_offset() / sizeof(long));
+			check_read_content(rq->get_buf(), rq->get_size(), rq->get_offset());
 		}
 		buf->free_entry(rq->get_buf());
 		read_bytes += rq->get_size();
@@ -134,9 +147,7 @@ int thread_private::run()
 				ret = io->access(entry, off, next_off - off, access_method);
 				if (ret > 0) {
 					if (access_method == READ && verify_read_content) {
-						if (*(unsigned long *) entry != off / sizeof(long))
-							printf("entry: %ld, off: %ld\n", *(unsigned long *) entry, off / sizeof(long));
-						assert(*(unsigned long *) entry == off / sizeof(long));
+						check_read_content(entry, next_off - off, off);
 					}
 					read_bytes += ret;
 				}
