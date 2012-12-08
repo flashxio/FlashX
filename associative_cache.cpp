@@ -279,9 +279,14 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = NULL;
+	bool all_referenced = false;
+	int num_referenced = 0;
 	do {
 		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
 		if (pg->get_ref()) {
+			num_referenced++;
+			if (num_referenced >= CELL_SIZE)
+				all_referenced = true;
 			clock_head++;
 			continue;
 		}
@@ -292,6 +297,8 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 		pg->set_hits(pg->get_hits() - 1);
 		clock_head++;
 	} while (ret == NULL);
+	if (all_referenced)
+		printf("all pages in the cell were all referenced\n");
 	ret->set_data_ready(false);
 	return ret;
 }
@@ -300,9 +307,14 @@ thread_safe_page *clock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = NULL;
+	bool all_referenced = false;
+	int num_referenced = 0;
 	do {
 		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
 		if (pg->get_ref()) {
+			num_referenced++;
+			if (num_referenced >= CELL_SIZE)
+				all_referenced = true;
 			clock_head++;
 			continue;
 		}
@@ -313,6 +325,8 @@ thread_safe_page *clock_eviction_policy::evict_page(
 		pg->reset_hits();
 		clock_head++;
 	} while (ret == NULL);
+	if (all_referenced)
+		printf("all pages in the cell were all referenced\n");
 	ret->set_data_ready(false);
 	ret->reset_hits();
 	return ret;
