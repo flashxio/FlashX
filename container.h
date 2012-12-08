@@ -190,6 +190,13 @@ public:
 
 	virtual int add(T *entries, int num);
 
+	/**
+	 * It guarantees to be able to add n entries to the queue.
+	 * If there isn't enough space left, it will increase the capacity
+	 * of the queue.
+	 */
+	virtual void addByForce(T *entries, int num);
+
 	T pop_front() {
 		T entry;
 		int num = fetch(&entry, 1);

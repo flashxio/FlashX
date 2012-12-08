@@ -15,6 +15,7 @@
 #include "container.h"
 #include "concurrency.h"
 #include "slab_allocator.h"
+#include "messaging.h"
 
 #define PAGE_SIZE 4096
 #define LOG_PAGE_SIZE 12
@@ -22,10 +23,15 @@
 #define ROUNDUP_PAGE(off) (((long) off + PAGE_SIZE - 1) & (~(PAGE_SIZE - 1)))
 
 enum {
+	/* All the 4 bites need to be protected by the lock bit. */
 	DATA_READY_BIT = 0,
 	IO_PENDING_BIT,
 	DIRTY_BIT,
+	OLD_DIRTY_BIT,
+
 	LOCK_BIT,
+
+	/* These bits don't need to be protected by the lock. */
 	ACTIVE_BIT,
 	REFERENCED_BIT,
 };
@@ -88,6 +94,14 @@ public:
 			flags |= 0x1 << DIRTY_BIT;
 		else
 			flags &= ~(0x1 << DIRTY_BIT);
+	}
+
+	bool is_old_dirty() const { return flags & (0x1 << OLD_DIRTY_BIT); }
+	void set_old_dirty(bool dirty) {
+		if (dirty)
+			flags |= 0x1 << OLD_DIRTY_BIT;
+		else
+			flags &= ~(0x1 << OLD_DIRTY_BIT);
 	}
 
 	void set_referenced(bool referenced) {
@@ -278,18 +292,20 @@ public:
 		}
 	}
 
-	io_request *add_io_req(const io_request &req);
-	io_request *add_first_io_req(const io_request &req, int &status);
-	void reset_reqs();
+	void add_req(io_request *req) {
+		req->set_next_req(reqs);
+		reqs = req;
+	}
+
+	io_request *reset_reqs() {
+		io_request *ret = reqs;
+		reqs = NULL;
+		return ret;
+	}
+
 	io_request *get_io_req() const {
 		return reqs;
 	}
-};
-
-enum {
-	ADD_REQ_SUCCESS,
-	ADD_REQ_DATA_READY,
-	ADD_REQ_NOT_DATA_READY,
 };
 
 class page_cache

@@ -8,6 +8,9 @@
 #include "common.h"
 #include "container.h"
 
+class io_request;
+typedef void (*request_callback_t)(io_request *);
+
 class io_interface;
 class io_request
 {
@@ -18,6 +21,7 @@ class io_request
 	io_interface *io;
 	void *priv;
 	io_request *next;
+	request_callback_t cb;
 public:
 	io_request() {
 		init(NULL, 0, 0, READ, NULL);
@@ -35,13 +39,22 @@ public:
 		this->offset = off;
 		this->size = size;
 		this->io = io;
-		this->access_method = access_method;
+		this->access_method = access_method & 0x1;
 		this->priv = priv;
 		next = NULL;
+		cb = NULL;
+	}
+
+	void set_cb(request_callback_t cb) {
+		this->cb = cb;
+	}
+
+	request_callback_t get_cb() const {
+		return cb;
 	}
 
 	int get_access_method() {
-		return access_method;
+		return access_method & 0x1;
 	}
 
 	io_interface *get_io() {

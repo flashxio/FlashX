@@ -25,15 +25,25 @@ class global_cached_io: public io_interface
 	io_interface *underlying;
 	callback *cb;
 
+	/**
+	 * If a thread wants to issue a request but only allows non-blocking
+	 * operations, the request should be added to the queue. All requests
+	 * will be issued to the underlying IO in the user's thread when 
+	 * the next user IO comes.
+	 */
+	thread_safe_FIFO_queue<io_request *> pending_requests;
+
 	int cache_hits;
+
+	/**
+	 * It's another version of read() and write(), but it's responsible
+	 * for deleting `req'.
+	 */
+	ssize_t __read(io_request *req, thread_safe_page *p);
+	ssize_t __write(io_request *req, thread_safe_page *p);
 public:
-	inline global_cached_io(io_interface *underlying) {
-		this->underlying = underlying;
-		num_waits = 0;
-		cache_size = 0;
-		cb = NULL;
-		cache_hits = 0;
-	}
+	global_cached_io(io_interface *underlying);
+	global_cached_io(io_interface *, long, int);
 
 	static page_cache *create_cache(int cache_type, long cache_size) {
 		page_cache *global_cache;
@@ -66,8 +76,6 @@ public:
 		return global_cache;
 	}
 
-	global_cached_io(io_interface *, long, int);
-
 	virtual page_cache *get_global_cache() {
 		return global_cache;
 	}
@@ -75,6 +83,15 @@ public:
 	int preload(off_t start, long size);
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
 	ssize_t access(io_request *requests, int num);
+
+	ssize_t read(io_request &req, thread_safe_page *p);
+	ssize_t write(io_request &req, thread_safe_page *p);
+
+	void queue_request(io_request *req) {
+		pending_requests.addByForce(&req, 1);
+	}
+
+	int handle_pending_requests();
 
 	ssize_t get_size() {
 		return underlying->get_size();

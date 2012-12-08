@@ -23,6 +23,14 @@ int thread_safe_FIFO_queue<T>::fetch(T *entries, int num)
 	return n;
 }
 
+template<class T>
+void thread_safe_FIFO_queue<T>::addByForce(T *entries, int num)
+{
+	int added = add(entries, num);
+	assert(added == num);
+	// TODO I should make the queue extensible.
+}
+
 /**
  * this is non-blocking. 
  * It adds entries to the queue as much as possible,

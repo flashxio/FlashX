@@ -1,4 +1,5 @@
 #include "global_cached_private.h"
+#include "container.cpp"
 
 static void __complete_req(io_request *orig, thread_safe_page *p)
 {
@@ -6,12 +7,6 @@ static void __complete_req(io_request *orig, thread_safe_page *p)
 
 	p->lock();
 	if (orig->get_access_method() == WRITE) {
-		unsigned long *l = (unsigned long *) ((char *) p->get_data()
-				+ page_off);
-		unsigned long start = orig->get_offset() / sizeof(long);
-		if (*l != start)
-			printf("write: start: %ld, l: %ld, offset: %ld\n",
-					start, *l, p->get_offset() / sizeof(long));
 		memcpy((char *) p->get_data() + page_off, orig->get_buf(),
 				orig->get_size());
 		p->set_dirty(true);
@@ -24,46 +19,131 @@ static void __complete_req(io_request *orig, thread_safe_page *p)
 	p->dec_ref();
 }
 
-class read_page_callback: public callback
+void read_complete(io_request *request)
+{
+	io_request *orig = (io_request *) request->get_priv();
+	thread_safe_page *p = (thread_safe_page *) orig->get_priv();
+
+	p->lock();
+	p->set_data_ready(true);
+	p->set_io_pending(false);
+	io_request *req = p->get_io_req();
+	assert(req);
+	int access_method = req->get_access_method();
+	assert(access_method == READ);
+	// Now data is ready, no threads will add more read requests.
+	io_request *old = p->reset_reqs();
+	p->unlock();
+
+	while (old) {
+		io_request *next = old->get_next_req();
+		__complete_req(old, p);
+		io_interface *io = old->get_io();
+		if (io->get_callback())
+			io->get_callback()->invoke(old);
+		// Now we can delete it.
+		delete old;
+		old = next;
+	}
+}
+
+void reissue_read(io_request *request)
+{
+	io_request *orig = (io_request *) request->get_priv();
+	thread_safe_page *p = (thread_safe_page *) orig->get_priv();
+
+	p->lock();
+	p->set_old_dirty(false);
+	p->set_io_pending(false);
+	io_request *req = p->get_io_req();
+	assert(req);
+	io_request *old = p->reset_reqs();
+	p->unlock();
+	global_cached_io *io = static_cast<global_cached_io *>(
+			old->get_io());
+	// We can't invoke write() here because it may block the thread.
+	// Instead, we queue the request, so it will be issue to
+	// the device by the user thread.
+	io->queue_request(old);
+	// These requests can't be deleted yet.
+	// They will be deleted when these write requests are finally served.
+}
+
+void reissue_write(io_request *request)
+{
+	io_request *orig = (io_request *) request->get_priv();
+	thread_safe_page *p = (thread_safe_page *) orig->get_priv();
+
+	p->lock();
+	// If we write data to part of a page, we need to first read
+	// the entire page to memory first.
+	if (request->get_access_method() == READ) {
+		p->set_data_ready(true);
+		p->set_io_pending(false);
+	}
+	// We just evict a page with dirty data and write the original
+	// dirty data in the page to a file.
+	else {
+		p->set_old_dirty(false);
+		p->set_io_pending(false);
+	}
+	io_request *req = p->get_io_req();
+	assert(req);
+	io_request *old = p->reset_reqs();
+	p->unlock();
+
+	if (request->get_access_method() == READ) {
+		while (old) {
+			io_request *next = old->get_next_req();
+			// We are ready to write data to the page.
+			__complete_req(old, p);
+			io_interface *io = old->get_io();
+			if (io->get_callback())
+				io->get_callback()->invoke(old);
+
+			delete old;
+			old = next;
+		}
+	}
+	else {
+		global_cached_io *io = static_cast<global_cached_io *>(
+				old->get_io());
+		// We can't invoke write() here because it may block the thread.
+		// Instead, we queue the request, so it will be issue to
+		// the device by the user thread.
+		io->queue_request(old);
+		// These requests can't be deleted yet.
+		// They will be deleted when these write requests are finally served.
+	}
+}
+
+class access_page_callback: public callback
 {
 public:
 	int invoke(io_request *request) {
 		io_request *orig = (io_request *) request->get_priv();
-		thread_safe_page *p = (thread_safe_page *) orig->get_priv();
-		std::vector<io_request> reqs;
-
-		p->lock();
-		p->set_data_ready(true);
-		p->set_io_pending(false);
-		io_request *req = p->get_io_req();
-		assert(req);
-		// TODO vector may allocate memory and block the thread.
-		// I should be careful of that.
-		while (req) {
-			reqs.push_back(*req);
-			req = req->get_next_req();
-		}
-		p->unlock();
-		// At this point, data is ready, so any threads that want to add
-		// requests to the page will fail.
-		p->reset_reqs();
-
-		for (unsigned i = 0; i < reqs.size(); i++) {
-			__complete_req(&reqs[i], p);
-			io_interface *io = reqs[i].get_io();
-			if (io->get_callback())
-				io->get_callback()->invoke(&reqs[i]);
-		}
+		orig->get_cb()(request);
 		return 0;
 	}
 };
 
-global_cached_io::global_cached_io(io_interface *underlying,
-		long cache_size, int cache_type) {
+global_cached_io::global_cached_io(io_interface *underlying): pending_requests(
+		INIT_GCACHE_PENDING_SIZE)
+{
+	this->underlying = underlying;
+	num_waits = 0;
+	cache_size = 0;
+	cb = NULL;
+	cache_hits = 0;
+}
+
+global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
+		int cache_type): pending_requests(INIT_GCACHE_PENDING_SIZE)
+{
 	cb = NULL;
 	cache_hits = 0;
 	this->underlying = underlying;
-	underlying->set_callback(new read_page_callback());
+	underlying->set_callback(new access_page_callback());
 	num_waits = 0;
 	this->cache_size = cache_size;
 	if (global_cache == NULL) {
@@ -71,83 +151,248 @@ global_cached_io::global_cached_io(io_interface *underlying,
 	}
 }
 
-ssize_t global_cached_io::access(io_request *requests, int num)
+ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 {
-	for (int i = 0; i < num; i++) {
-		ssize_t ret;
-		off_t old_off = -1;
-		off_t offset = requests[i].get_offset();
-		thread_safe_page *p = (thread_safe_page *) (get_global_cache()
-				->search(ROUND_PAGE(offset), old_off));
+	ssize_t ret = 0;
+	orig->set_priv((void *) p);
+	orig->set_cb(reissue_write);
+	p->lock();
+	if (!p->data_ready()) {
+		if(!p->is_io_pending()) {
+			p->set_io_pending(true);
+			assert(!p->is_dirty());
 
-		/*
-		 * the page isn't in the cache,
-		 * so the cache evict a page and return it to us.
-		 */
-		if (old_off != ROUND_PAGE(offset) && old_off != -1) {
-			// TODO handle dirty pages later.
-		}
-
-		p->lock();
-		if (!p->data_ready()) {
-			if(!p->is_io_pending()) {
-				p->set_io_pending(true);
-				assert(!p->is_dirty());
+			// We are going to write to part of a page, therefore,
+			// we need to first read the page.
+			if (orig->get_size() < PAGE_SIZE) {
+				io_request read_req((char *) p->get_data(),
+						ROUND_PAGE(orig->get_offset()), PAGE_SIZE, READ,
+						underlying, (char *) orig);
+				p->add_req(orig);
 				p->unlock();
-
-				// If the thread can't add the request as the first IO request
-				// of the page, it doesn't need to issue a IO request to the file.
-				int status;
-				io_request *orig = p->add_first_io_req(requests[i], status);
-				if (status == ADD_REQ_SUCCESS) {
-					io_request req((char *) p->get_data(),
-							ROUND_PAGE(offset), PAGE_SIZE, READ,
-							/*
-							 * it will notify the underlying IO,
-							 * which then notifies global_cached_io.
-							 */
-							underlying, (void *) orig);
-					ret = underlying->access(&req, 1);
-					if (ret < 0) {
-						perror("read");
-						exit(1);
-					}
-				}
-				else {
-#ifdef STATISTICS
-					cache_hits++;
-#endif
-					// If data is ready, the request won't be added to the page.
-					// so just serve the data.
-					if (status == ADD_REQ_DATA_READY)
-						goto serve_data;
+				ret = underlying->access(&read_req, 1);
+				if (ret < 0) {
+					perror("read");
+					exit(1);
 				}
 			}
 			else {
 				p->unlock();
-#ifdef STATISTICS
-				cache_hits++;
-#endif
-				// An IO request can be added only when the page is still
-				// in IO pending state. Otherwise, it returns NULL.
-				io_request *orig = p->add_io_req(requests[i]);
-				// the page isn't in IO pending state any more.
-				if (orig == NULL)
-					goto serve_data;
+				ret = PAGE_SIZE;
+				__complete_req(orig, p);
+				if (get_callback())
+					get_callback()->invoke(orig);
+				delete orig;
 			}
 		}
 		else {
-			// If the data in the page is ready, we don't need to change any state
-			// of the page and just read data.
+			// If there is an IO pending, it means a read request
+			// has been issuded. It can't be a write request, otherwise,
+			// the data in the page will be ready.
+			p->add_req(orig);
 			p->unlock();
 #ifdef STATISTICS
 			cache_hits++;
 #endif
-serve_data:
-			__complete_req(&requests[i], p);
-			if (get_callback())
-				get_callback()->invoke(&requests[i]);
 		}
+	}
+	else {
+		// The data in the page is ready. We can write data to the page directly.
+		//
+		// If data is ready, there shouldn't be an IO pending.
+		// In other words, if the thread for writing dirty pages is writing
+		// a page, the page will be referenced and therefore, can't be returned
+		// from the cache.
+		assert(!p->is_io_pending());
+		p->unlock();
+
+		__complete_req(orig, p);
+		if (get_callback())
+			get_callback()->invoke(orig);
+		ret = orig->get_size();
+		delete orig;
+#ifdef STATISTICS
+		cache_hits++;
+#endif
+	}
+	return ret;
+}
+
+ssize_t global_cached_io::write(io_request &req, thread_safe_page *p)
+{
+	io_request *orig = new io_request(req);
+	return __write(orig, p);
+}
+
+ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
+{
+	ssize_t ret = 0;
+	orig->set_priv((void *) p);
+	orig->set_cb(read_complete);
+	p->lock();
+	if (!p->data_ready()) {
+		if(!p->is_io_pending()) {
+			p->set_io_pending(true);
+			assert(!p->is_dirty());
+
+			p->add_req(orig);
+			io_request req((char *) p->get_data(), p->get_offset(),
+					/*
+					 * it will notify the underlying IO,
+					 * which then notifies global_cached_io.
+					 */
+					PAGE_SIZE, READ, underlying, (void *) orig);
+			p->unlock();
+			ret = underlying->access(&req, 1);
+			if (ret < 0) {
+				perror("read");
+				exit(1);
+			}
+		}
+		else {
+			p->add_req(orig);
+			p->unlock();
+#ifdef STATISTICS
+			cache_hits++;
+#endif
+		}
+	}
+	else {
+		// If the data in the page is ready, we don't need to change any state
+		// of the page and just read data.
+		p->unlock();
+#ifdef STATISTICS
+		cache_hits++;
+#endif
+		ret = orig->get_size();
+		__complete_req(orig, p);
+		if (get_callback())
+			get_callback()->invoke(orig);
+	}
+	return ret;
+}
+
+ssize_t global_cached_io::read(io_request &req, thread_safe_page *p)
+{
+	io_request *orig = new io_request(req);
+	return __read(orig, p);
+}
+
+int global_cached_io::handle_pending_requests()
+{
+	int tot = 0;
+	while (!pending_requests.is_empty()) {
+		io_request *reqs[MAX_FETCH_REQS];
+		int num = pending_requests.fetch(reqs, MAX_FETCH_REQS);
+		for (int i = 0; i < num; i++) {
+			// It may be the head of a request list. All requests
+			// in the list should point to the same page.
+			io_request *req = reqs[i];
+			thread_safe_page *p = static_cast<thread_safe_page *>(
+					req->get_priv());
+			assert(p);
+			assert(!p->is_old_dirty());
+			while (req) {
+				io_request *next = req->get_next_req();
+				assert(req->get_priv() == p);
+				req->set_next_req(NULL);
+				if (req->get_access_method() == WRITE)
+					__write(req, p);
+				else
+					__read(req, p);
+				req = next;
+			}
+		}
+		tot += num;
+	}
+	return tot;
+}
+
+
+ssize_t global_cached_io::access(io_request *requests, int num)
+{
+	if (!pending_requests.is_empty()) {
+		handle_pending_requests();
+	}
+
+	for (int i = 0; i < num; i++) {
+		ssize_t ret;
+		off_t old_off = -1;
+		off_t offset = requests[i].get_offset();
+
+		// TODO a request should be within a page.
+		assert(offset - ROUND_PAGE(offset) + requests[i].get_size() <= PAGE_SIZE);
+		thread_safe_page *p = (thread_safe_page *) (get_global_cache()
+				->search(ROUND_PAGE(offset), old_off));
+		/*
+		 * Cache may evict a dirty page and return the dirty page
+		 * to the user before it is written back to a file.
+		 *
+		 * We encounter a situation that two threads get the old dirty
+		 * evicted page, one thread gets its old offset thanks to
+		 * old_off, the other can't, so the other thread has to wait
+		 * until the dirty page is written to the file, and we need to
+		 * give the page another status to indicate it's an old dirty
+		 * page.
+		 */
+
+		/* This page has been evicted. */
+		if (p->is_old_dirty()) {
+			/* The page is evicted in this thread */
+			if (old_off != ROUND_PAGE(offset) && old_off != -1) {
+				/*
+				 * Only one thread can come here because only one thread
+				 * can evict the dirty page and the thread gets its old
+				 * offset, and only this thread can write back the old
+				 * dirty page.
+				 */
+				io_request *orig = new io_request(requests[i]);
+				orig->set_priv((void *) p);
+				if (orig->get_access_method() == READ)
+					orig->set_cb(reissue_read);
+				else
+					orig->set_cb(reissue_write);
+				p->lock();
+				p->add_req(orig);
+				p->set_io_pending(true);
+				io_request req((char *) p->get_data(),
+						old_off, PAGE_SIZE, WRITE, underlying, (void *) orig);
+				p->unlock();
+				ret = underlying->access(&req, 1);
+				if (ret < 0) {
+					perror("read");
+					abort();
+				}
+				continue;
+			}
+			else {
+				// At this moment, the page is being written back to the file
+				// by another thread. We should queue the request to tht page,
+				// so when the dirty page completes writing back, we can proceed
+				// writing.
+				io_request *orig = new io_request(requests[i]);
+				orig->set_priv((void *) p);
+				orig->set_cb(reissue_write);
+				p->lock();
+				if (p->is_old_dirty()) {
+					p->add_req(orig);
+					p->unlock();
+					// the request has been added to the page, when the old dirty
+					// data is written back to the file, the write request will be
+					// reissued to the file.
+					continue;
+				}
+				else {
+					p->unlock();
+					delete orig;
+				}
+			}
+		}
+
+		if (requests[i].get_access_method() == WRITE)
+			write(requests[i], p);
+		else
+			read(requests[i], p);
 	}
 	return 0;
 }
@@ -155,6 +400,8 @@ serve_data:
 ssize_t global_cached_io::access(char *buf, off_t offset,
 		ssize_t size, int access_method)
 {
+	assert(access_method == READ);
+
 	ssize_t ret;
 	off_t old_off = -1;
 	thread_safe_page *p = (thread_safe_page *) (get_global_cache()

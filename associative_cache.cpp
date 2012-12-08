@@ -111,6 +111,10 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 	}
 	if (ret == NULL) {
 		ret = get_empty_page();
+		if (ret->is_dirty() && !ret->is_old_dirty()) {
+			ret->set_dirty(false);
+			ret->set_old_dirty(true);
+		}
 		old_off = ret->get_offset();
 		/*
 		 * I have to change the offset in the spinlock,
@@ -275,6 +279,7 @@ thread_safe_page *FIFO_eviction_policy::evict_page(
 	return ret;
 }
 
+// TODO we should avoid evicting dirty pages as much as possible
 thread_safe_page *gclock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
@@ -303,6 +308,7 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 	return ret;
 }
 
+// TODO we should avoid evicting dirty pages as much as possible
 thread_safe_page *clock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {

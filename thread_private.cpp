@@ -4,8 +4,7 @@
 #define gettid() syscall(__NR_gettid)
 
 #include "thread_private.h"
-
-#define BULK_SIZE 1000
+#include "parameters.h"
 
 #define NUM_PAGES (40960 * nthreads)
 
@@ -26,6 +25,29 @@ void check_read_content(char *buf, int size, off_t off)
 	if(read_value != expected)
 		printf("%ld %ld\n", read_value, expected);
 	assert(read_value == expected);
+}
+
+void create_write_data(char *buf, int size, off_t off)
+{
+	off_t aligned_start = off & (~(sizeof(off_t) - 1));
+	off_t aligned_end = (off + size) & (~(sizeof(off_t) - 1));
+	long start_data = aligned_start / sizeof(off_t);
+	long end_data = aligned_end / sizeof(off_t);
+
+	int first_size =  (int)(sizeof(off_t) - (off - aligned_start));
+	if (first_size == sizeof(off_t))
+		first_size = 0;
+	if (first_size)
+		memcpy(buf, ((char *) &start_data) + (off - aligned_start),
+				first_size);
+	for (int i = first_size; i < size; i += sizeof(off_t)) {
+		*((long *) (buf + i)) = (off + i) / sizeof(off_t);
+	}
+	int last_size = (int) (off + size - aligned_end);
+	if (last_size)
+		memcpy(buf + (aligned_end - off), (char *) &end_data, last_size);
+
+	check_read_content(buf, size, off);
 }
 
 class cleanup_callback: public callback
@@ -84,17 +106,15 @@ int thread_private::run()
 {
 	ssize_t ret = -1;
 	gettimeofday(&start_time, NULL);
-	int reqs_capacity = BULK_SIZE * 2;
+	// TODO we should allow send large requests, so we don't need to
+	// break large requests and thus don't need to over allocate memory.
+	int reqs_capacity = NUM_REQS_BY_USER * 10;
 	io_request *reqs = (io_request *) malloc(sizeof(io_request) * reqs_capacity);
 	while (gen->has_next()) {
 		if (io->support_aio()) {
 			int i;
-//			io_request *reqs = gc->allocate_obj(BULK_SIZE);
-			for (i = 0; i < BULK_SIZE && gen->has_next(); ) {
-//				printf("thread %d: allocate %p\n", idx, p);
-				// TODO right now it only support read.
+			for (i = 0; i < NUM_REQS_BY_USER && gen->has_next(); ) {
 				workload_t workload = gen->next();
-				// TODO let's read data first;
 				int access_method = workload.read ? READ : WRITE;
 				off_t off = workload.off;
 				int size = workload.size;
@@ -107,6 +127,7 @@ int thread_private::run()
 					// storing requests are twice as large as needed.
 					assert (i < reqs_capacity);
 					char *p = buf->next_entry();
+					create_write_data(p, next_off - off, off);
 					reqs[i].init(p, off, next_off - off, access_method, io);
 					size -= next_off - off;
 					off = next_off;
@@ -133,10 +154,7 @@ int thread_private::run()
 				 * so the data in the file isn't changed.
 				 */
 				if (access_method == WRITE) {
-					unsigned long *p = (unsigned long *) entry;
-					long start = off / sizeof(long);
-					for (unsigned int i = 0; i < entry_size / sizeof(*p); i++)
-						p[i] = start++;
+					create_write_data(entry, entry_size, off);
 				}
 				// There is at least one byte we need to access in the page.
 				// By adding 1 and rounding up the offset, we'll get the next page
