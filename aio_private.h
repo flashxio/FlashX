@@ -15,6 +15,7 @@ class async_io;
 struct thread_callback_s
 {
 	struct io_callback_s cb;
+	int access;
 	async_io *aio;
 	/*
 	 * the thread that initiates the request.
@@ -71,9 +72,8 @@ public:
 		cbs.push_back(tcb);
 		io_callback_s *cb = (io_callback_s *) tcb;
 
-		// TODO it only support READ right now.
 		if (this->cb) {
-			io_request req(cb->buf, cb->offset, cb->size, READ,
+			io_request req(cb->buf, cb->offset, cb->size, tcb->access & 0x1,
 					tcb->initiator, tcb->priv);
 			this->cb->invoke(&req);
 		}

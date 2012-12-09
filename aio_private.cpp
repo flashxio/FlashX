@@ -66,6 +66,7 @@ struct iocb *async_io::construct_req(char *buf, off_t offset,
 	cb->offset = offset;
 	cb->size = size;
 	cb->func = cb_func;
+	tcb->access = access_method & 0x1;
 	tcb->aio = this;
 	tcb->initiator = initiator;
 	tcb->priv = priv;
