@@ -2,7 +2,7 @@
 
 off_t *java_dump_workload::offsets;
 int workload_gen::default_entry_size;
-int workload_gen::default_access_method;
+int workload_gen::default_access_method = -1;
 workload_t *file_workload::workloads;
 
 off_t stride_workload::next_offset() {

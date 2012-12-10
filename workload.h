@@ -34,12 +34,16 @@ public:
 	static void set_default_access_method(int access_method) {
 		default_access_method = access_method;
 	}
+	static int get_default_access_method() {
+		return default_access_method;
+	}
 
 	/**
 	 * This is a wrapper to the original interface `next_offset'
 	 * so more info of an access is provided.
 	 */
 	virtual const workload_t &next() {
+		assert(default_access_method >= 0);
 		access.off = next_offset();
 		access.size = default_entry_size;
 		access.read = default_access_method == READ;
@@ -270,6 +274,8 @@ public:
 	}
 
 	const workload_t &next() {
+		if (get_default_access_method() >= 0)
+			workloads[curr].read = get_default_access_method() == READ;
 		return workloads[curr++];
 	}
 
