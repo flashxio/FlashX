@@ -19,6 +19,22 @@ static void __complete_req(io_request *orig, thread_safe_page *p)
 	p->dec_ref();
 }
 
+static void __complete_req_unlocked(io_request *orig, thread_safe_page *p)
+{
+	int page_off = orig->get_offset() - ROUND_PAGE(orig->get_offset());
+
+	if (orig->get_access_method() == WRITE) {
+		memcpy((char *) p->get_data() + page_off, orig->get_buf(),
+				orig->get_size());
+		p->set_dirty(true);
+	}
+	else 
+		/* I assume the data I read never crosses the page boundary */
+		memcpy(orig->get_buf(), (char *) p->get_data() + page_off,
+				orig->get_size());
+	p->dec_ref();
+}
+
 class access_page_callback: public callback
 {
 public:
@@ -116,7 +132,6 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 	p->lock();
 	if (!p->data_ready()) {
 		if(!p->is_io_pending()) {
-			p->set_io_pending(true);
 			assert(!p->is_dirty());
 
 			// We are going to write to part of a page, therefore,
@@ -126,6 +141,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 						ROUND_PAGE(orig->get_offset()), PAGE_SIZE, READ,
 						underlying, (char *) orig);
 				p->add_req(orig);
+				p->set_io_pending(true);
 				p->unlock();
 				inc_pending(1);
 				ret = underlying->access(&read_req, 1);
@@ -135,9 +151,14 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 				}
 			}
 			else {
+				// This is an optimization. If we can overwrite the entire page,
+				// we don't need to read the page first. However, we have to
+				// make sure data is written to a page without anyone else
+				// having IO operations on it.
+				__complete_req_unlocked(orig, p);
+				p->set_data_ready(true);
 				p->unlock();
 				ret = PAGE_SIZE;
-				__complete_req(orig, p);
 				if (get_callback())
 					get_callback()->invoke(orig);
 				delete orig;
