@@ -35,16 +35,22 @@ void read_complete(io_request *request)
 	io_request *old = p->reset_reqs();
 	p->unlock();
 
+	int num = 0;
+	global_cached_io *cached_io = NULL;
 	while (old) {
 		io_request *next = old->get_next_req();
 		__complete_req(old, p);
 		io_interface *io = old->get_io();
+		cached_io = static_cast<global_cached_io *>(io);
 		if (io->get_callback())
 			io->get_callback()->invoke(old);
 		// Now we can delete it.
 		delete old;
 		old = next;
+		num++;
 	}
+	if (cached_io)
+		cached_io->dec_pending(num);
 }
 
 void reissue_read(io_request *request)
@@ -93,17 +99,23 @@ void reissue_write(io_request *request)
 	p->unlock();
 
 	if (request->get_access_method() == READ) {
+		int num = 0;
+		global_cached_io *cached_io = NULL;
 		while (old) {
 			io_request *next = old->get_next_req();
 			// We are ready to write data to the page.
 			__complete_req(old, p);
 			io_interface *io = old->get_io();
+			cached_io = static_cast<global_cached_io *>(io);
 			if (io->get_callback())
 				io->get_callback()->invoke(old);
 
 			delete old;
 			old = next;
+			num++;
 		}
+		if (cached_io)
+			cached_io->dec_pending(num);
 	}
 	else {
 		global_cached_io *io = static_cast<global_cached_io *>(
@@ -135,6 +147,7 @@ global_cached_io::global_cached_io(io_interface *underlying): pending_requests(
 	cache_size = 0;
 	cb = NULL;
 	cache_hits = 0;
+	num_pending_reqs = 0;
 }
 
 global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
@@ -145,6 +158,7 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 	this->underlying = underlying;
 	underlying->set_callback(new access_page_callback());
 	num_waits = 0;
+	num_pending_reqs = 0;
 	this->cache_size = cache_size;
 	if (global_cache == NULL) {
 		global_cache = create_cache(cache_type, cache_size);
@@ -170,6 +184,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 						underlying, (char *) orig);
 				p->add_req(orig);
 				p->unlock();
+				inc_pending(1);
 				ret = underlying->access(&read_req, 1);
 				if (ret < 0) {
 					perror("read");
@@ -191,6 +206,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 			// the data in the page will be ready.
 			p->add_req(orig);
 			p->unlock();
+			inc_pending(1);
 #ifdef STATISTICS
 			cache_hits++;
 #endif
@@ -243,6 +259,7 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 					 */
 					PAGE_SIZE, READ, underlying, (void *) orig);
 			p->unlock();
+			inc_pending(1);
 			ret = underlying->access(&req, 1);
 			if (ret < 0) {
 				perror("read");
@@ -252,6 +269,7 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		else {
 			p->add_req(orig);
 			p->unlock();
+			inc_pending(1);
 #ifdef STATISTICS
 			cache_hits++;
 #endif
@@ -292,6 +310,7 @@ int global_cached_io::handle_pending_requests()
 					req->get_priv());
 			assert(p);
 			assert(!p->is_old_dirty());
+			int num_same = 0;
 			while (req) {
 				io_request *next = req->get_next_req();
 				assert(req->get_priv() == p);
@@ -301,7 +320,14 @@ int global_cached_io::handle_pending_requests()
 				else
 					__read(req, p);
 				req = next;
+				num_same++;
 			}
+			// These requests have been counted as pending requests.
+			// When a request is passed to __write(), if it is sent
+			// to the device, it will be double counted as pending.
+			// If not, the request has been served. In either case,
+			// we need to subtract these requests.
+			dec_pending(num_same);
 		}
 		tot += num;
 	}
@@ -358,6 +384,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				io_request req((char *) p->get_data(),
 						old_off, PAGE_SIZE, WRITE, underlying, (void *) orig);
 				p->unlock();
+				inc_pending(1);
 				ret = underlying->access(&req, 1);
 				if (ret < 0) {
 					perror("read");
@@ -377,6 +404,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				if (p->is_old_dirty()) {
 					p->add_req(orig);
 					p->unlock();
+					inc_pending(1);
 					// the request has been added to the page, when the old dirty
 					// data is written back to the file, the write request will be
 					// reissued to the file.

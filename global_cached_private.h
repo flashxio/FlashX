@@ -41,6 +41,8 @@ class global_cached_io: public io_interface
 	 */
 	ssize_t __read(io_request *req, thread_safe_page *p);
 	ssize_t __write(io_request *req, thread_safe_page *p);
+
+	volatile int num_pending_reqs;
 public:
 	global_cached_io(io_interface *underlying);
 	global_cached_io(io_interface *, long, int);
@@ -92,6 +94,13 @@ public:
 	}
 
 	int handle_pending_requests();
+
+	void inc_pending(int num) {
+		__sync_fetch_and_add(&num_pending_reqs, num);
+	}
+	void dec_pending(int num) {
+		__sync_fetch_and_sub(&num_pending_reqs, num);
+	}
 
 	ssize_t get_size() {
 		return underlying->get_size();
