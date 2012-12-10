@@ -13,7 +13,7 @@ SSD=/dev/sdc	# I assume sdc is an SSD
 #./rand-read $SSD option=global_cache pages=40960 threads=1 workload=RAND_PERMUTE cache_size=16M cache_type=associative
 
 size=$((4096 * 1))
-npages=$((10485760 * 1))
+npages=$((1048576 * 1))
 option=aio
 nthreads=1
 pattern=RAND_PERMUTE
@@ -26,13 +26,13 @@ node1=0
 #numactl -m $node1 -N $node1 ./rand-read /dev/sdf option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
 
 node2=1
-numactl -m $node2 -N $node2 ./rand-read /dev/sdc option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
-numactl -m $node2 -N $node2 ./rand-read /dev/sdd option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
-#numactl -m $node2 -N $node2 ./rand-read /dev/sde option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
-#numactl -m $node2 -N $node2 ./rand-read /dev/sdf option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
-#numactl -m $node2 -N $node2 ./rand-read /dev/sdg option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
-#numactl -m $node2 -N $node2 ./rand-read /dev/sdh option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
-#numactl -m $node2 -N $node2 ./rand-read /dev/sdi option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
+numactl -m $node2 -N $node2 ./rand-read /mnt/ssd2/test option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 access=write &
+numactl -m $node2 -N $node2 ./rand-read /mnt/ssd3/test option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 access=write &
+numactl -m $node2 -N $node2 ./rand-read /mnt/ssd4/test option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 access=write &
+numactl -m $node2 -N $node2 ./rand-read /mnt/ssd5/test option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 access=write &
+numactl -m $node2 -N $node2 ./rand-read /mnt/ssd6/test option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 access=write &
+numactl -m $node2 -N $node2 ./rand-read /mnt/ssd7/test option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 access=write &
+numactl -m $node2 -N $node2 ./rand-read /mnt/ssd8/test option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 access=write &
 
 node3=1
 #numactl -m $node3 -N $node3 ./rand-read /dev/sdj option=$option pages=$npages threads=$nthreads workload=$pattern entry_size=$size num_nodes=1 &
