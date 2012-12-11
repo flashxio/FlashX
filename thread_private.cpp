@@ -43,9 +43,11 @@ void create_write_data(char *buf, int size, off_t off)
 	for (int i = first_size; i < size; i += sizeof(off_t)) {
 		*((long *) (buf + i)) = (off + i) / sizeof(off_t);
 	}
-	int last_size = (int) (off + size - aligned_end);
-	if (last_size)
-		memcpy(buf + (aligned_end - off), (char *) &end_data, last_size);
+	if (aligned_end > aligned_start) {
+		int last_size = (int) (off + size - aligned_end);
+		if (last_size)
+			memcpy(buf + (aligned_end - off), (char *) &end_data, last_size);
+	}
 
 	check_read_content(buf, size, off);
 }
