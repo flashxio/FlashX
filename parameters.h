@@ -2,6 +2,7 @@
 #define __MY_PARAMETERS_H__
 
 #define USE_GCLOCK
+#define PER_CPU
 
 const int AIO_DEPTH_PER_FILE = 32;
 

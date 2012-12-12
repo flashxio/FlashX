@@ -3,8 +3,10 @@
 #include "hash_index_cache.h"
 
 frame *hash_index_cache::addEntry(off_t key, char *data) {
+#ifdef PER_CPU
 	gclock_buffer *gclock_buf = (gclock_buffer *) pthread_getspecific(gclock_key);
 	frame_allocator *allocator = (frame_allocator *) pthread_getspecific(allocator_key);
+#endif
 	for (;;) {
 		frame *new_entry = allocator->alloc();
 		*new_entry = frame(key, data);
@@ -50,8 +52,10 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 				 */
 				if (!new_entry->CASValue(NULL, pg)) {
 					fprintf(stderr, "we can't set the value of the new frame!\n");
+#ifdef PER_CPU
 					memory_manager *manager
 						= (memory_manager *) pthread_getspecific(manager_key);
+#endif
 					manager->free_pages(1, &pg);
 				}
 			}
@@ -102,7 +106,6 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			// In a rare case, we can't pin the new frame.
 			// we should remove it from the hash table and try again.
 			hashtable->remove(key / PAGE_SIZE, new_entry);
-			printf("the new entry has been evicted\n");
 		}
 	}
 }
@@ -127,7 +130,9 @@ page *hash_index_cache::search(off_t offset, off_t &old_off) {
 		 */
 		if (entry->volatileGetValue() == NULL) {
 			char *pg;
+#ifdef PER_CPU
 			memory_manager *manager = (memory_manager *) pthread_getspecific(manager_key);
+#endif
 			bool ret = manager->get_free_pages(1, &pg, this);
 			if (!ret) {
 				fprintf(stderr, "can't allocate a page from the memory manager.\n");

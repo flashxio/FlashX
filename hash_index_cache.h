@@ -18,6 +18,7 @@ extern "C" {
 #include "SA_hash_table.h"
 #include "SA_hash_table.cpp"
 #include "gclock.h"
+#include "parameters.h"
 
 template<class KeyT, class ValueT>
 class lock_free_hashtable: public hashtable_interface<KeyT, ValueT>
@@ -112,24 +113,40 @@ class hash_index_cache: public page_cache
 	/* The number of pages that have been allocated. */
 	atomic_unsigned_integer num_pages;
 
+#ifdef PER_CPU
 	// For frame allocator
 	pthread_key_t allocator_key;
 	// For memory manager;
 	pthread_key_t manager_key;
 	// For gclock buffer
 	pthread_key_t gclock_key;
+#else
+	gclock_buffer *gclock_buf;
+	memory_manager *manager;
+	frame_allocator *allocator;
+#endif
 public:
 	hash_index_cache(long cache_size) {
 		extern int nthreads;
 		hashtable = new SA_hashtable<off_t, frame *>(1024);
 		cache_size_per_thread = cache_size / nthreads;
 
+#ifdef PER_CPU
 		pthread_key_create(&allocator_key, NULL);
 		pthread_key_create(&manager_key, NULL);
 		pthread_key_create(&gclock_key, NULL);
+#else
+		// TODO I just prepare much more memory than I need.
+		manager = new memory_manager(cache_size * 2);
+		manager->register_cache(this);
+		extern int nthreads;
+		gclock_buf = new LF_gclock_buffer(cache_size / PAGE_SIZE);
+		allocator = new frame_allocator(cache_size / PAGE_SIZE * 2);
+#endif
 	}
 
 	void init() {
+#ifdef PER_CPU
 		memory_manager *manager = new memory_manager(cache_size_per_thread);
 		manager->register_cache(this);
 		pthread_setspecific(manager_key, manager);
@@ -143,6 +160,7 @@ public:
 		/* we need more frames than the maximal number of pages. */
 		allocator = new frame_allocator(max_npages * 2);
 		pthread_setspecific(allocator_key, allocator);
+#endif
 	}
 
 	~hash_index_cache() {
