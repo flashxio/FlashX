@@ -15,6 +15,7 @@ DEPS := $(patsubst %.o,%.d,$(OBJS))
 MISSING_DEPS := $(filter-out $(wildcard $(DEPS)),$(DEPS))
 MISSING_DEPS_SOURCES := $(wildcard $(patsubst %.d,%.c,$(MISSING_DEPS)) $(patsubst %.d,%.cc,$(MISSING_DEPS)))
 ifdef MEMCHECK
+CXXFLAGS += -DMEMCHECK
 CC = clang
 CXX = clang++
 else

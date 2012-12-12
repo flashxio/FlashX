@@ -3,6 +3,11 @@
 #include "slab_allocator.h"
 
 int slab_allocator::alloc(char **objs, int nobjs) {
+#ifdef MEMCHECK
+	for (int i = 0; i < nobjs; i++)
+		objs[i] = (char *) allocator.alloc(obj_size);
+	return nobjs;
+#else
 	if (list.get_size() < nobjs) {
 		if (curr_size < max_size) {
 			char *objs = (char *) numa_alloc_local(increase_size);
@@ -22,16 +27,22 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 		objs[i] = (char *) o;
 	}
 	return nobjs;
+#endif
 }
 
 slab_allocator::~slab_allocator() {
 }
 
 void slab_allocator::free(char **objs, int nobjs) {
+#ifdef MEMCHECK
+	for (int i = 0; i < nobjs; i++)
+		allocator.dealloc(objs[i]);
+#else
 	for (int i = 0; i < nobjs; i++) {
 		linked_obj *o = (linked_obj *) objs[i];
 		*o = linked_obj();
 		list.add(o);
 	}
+#endif
 }
 

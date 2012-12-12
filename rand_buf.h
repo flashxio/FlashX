@@ -3,6 +3,7 @@
 
 #include "workload.h"
 #include "container.h"
+#include "aligned_allocator.h"
 
 class rand_buf
 {
@@ -15,6 +16,9 @@ class rand_buf
 	pthread_spinlock_t lock;
 
 	int current;
+#ifdef MEMCHECK
+	aligned_allocator allocator;
+#endif
 public:
 	rand_buf(int buf_size, int entry_size);
 

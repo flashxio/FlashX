@@ -88,6 +88,9 @@ public:
 	}
 
 	frame *alloc() {
+#ifdef MEMCHECK
+		return new frame();
+#else
 		pthread_spin_lock(&lock);
 		if (queue.empty()) {
 			pthread_spin_unlock(&lock);
@@ -97,12 +100,17 @@ public:
 		queue.pop_front();
 		pthread_spin_unlock(&lock);
 		return p;
+#endif
 	}
 
 	void free(frame *p) {
+#ifdef MEMCHECK
+		delete p;
+#else
 		pthread_spin_lock(&lock);
 		queue.push_back(p);
 		pthread_spin_unlock(&lock);
+#endif
 	}
 };
 

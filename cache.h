@@ -357,6 +357,13 @@ public:
 	frame(off_t offset, char *data): thread_safe_page(offset, data) {
 	}
 
+	/**
+	 * To remove the warning of clang++, I need to define a virtual destructor.
+	 * But I really don't need to clean up anything.
+	 */
+	virtual ~frame() {
+	}
+
 	void *volatileGetValue() {
 		/*
 		 * maybe a memory fence here,

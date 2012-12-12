@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "aligned_allocator.h"
+
 class slab_allocator
 {
 	class linked_obj {
@@ -64,8 +66,16 @@ class slab_allocator
 	long curr_size;
 	// the size to increase each time there aren't enough objects
 	long increase_size;
+
+#ifdef MEMCHECK
+	aligned_allocator allocator;
+#endif
 public:
-	slab_allocator(int obj_size, long increase_size, long max_size) {
+	slab_allocator(int obj_size, long increase_size, long max_size)
+#ifdef MEMCHECK
+		: allocator(obj_size)
+#endif
+	{
 		this->obj_size = obj_size;
 		this->max_size = max_size;
 		this->curr_size = 0;

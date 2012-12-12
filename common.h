@@ -1,6 +1,9 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#include <sys/time.h>
+#include <stdlib.h>
+
 enum {
 	READ,
 	WRITE
@@ -22,5 +25,10 @@ inline static int min(int v1, int v2)
 
 class thread_private;
 extern thread_private *get_thread(int idx);
+
+/**
+ * Check if the integer is a power of two.
+ */
+bool align_check(size_t alignment);
 
 #endif

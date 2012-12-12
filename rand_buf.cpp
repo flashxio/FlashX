@@ -1,6 +1,10 @@
 #include "rand_buf.h"
 
-rand_buf::rand_buf(int buf_size, int entry_size): free_refs(buf_size / entry_size) {
+rand_buf::rand_buf(int buf_size, int entry_size): free_refs(buf_size / entry_size)
+#ifdef MEMCHECK
+	  , allocator(entry_size)
+#endif
+{
 	num_entries = buf_size / entry_size;
 	rand_permute buf_offset(num_entries, entry_size);
 	for (int i = 0; i < num_entries; i++)
@@ -27,6 +31,9 @@ rand_buf::rand_buf(int buf_size, int entry_size): free_refs(buf_size / entry_siz
 }
 
 char *rand_buf::next_entry() {
+#ifdef MEMCHECK
+	return (char *) allocator.alloc(entry_size);
+#else
 	pthread_spin_lock(&lock);
 	assert(!free_refs.is_empty());
 	int off = free_refs.pop_front();
@@ -35,9 +42,13 @@ char *rand_buf::next_entry() {
 	char *ret = &buf[off];
 	pthread_spin_unlock(&lock);
 	return ret;
+#endif
 }
 
 void rand_buf::free_entry(char *buf) {
+#ifdef MEMCHECK
+	allocator.dealloc(buf);
+#else
 	pthread_spin_lock(&lock);
 	int buf_size = num_entries * entry_size;
 	if (!((long) buf >= (long) this->buf
@@ -53,4 +64,5 @@ void rand_buf::free_entry(char *buf) {
 	assert(marks[off]);
 	marks[off] = 0;
 	pthread_spin_unlock(&lock);
+#endif
 }
