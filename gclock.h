@@ -127,6 +127,22 @@ public:
 	}
 };
 
+class LP_gclock_buffer: public enhanced_gclock_buffer
+{
+	pthread_spinlock_t lock;
+public:
+	LP_gclock_buffer(int size): enhanced_gclock_buffer(size) {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	frame *add(frame *entry) {
+		pthread_spin_lock(&lock);
+		frame *ret = enhanced_gclock_buffer::add(entry);
+		pthread_spin_unlock(&lock);
+		return ret;
+	}
+};
+
 /*
  * 2. GClock may need to scan many pages in order to evict a page. We need to 
  * roughly sort the pages, so we can avoid scan unnecessary pages.
