@@ -30,6 +30,7 @@ class LF_gclock_buffer: public gclock_buffer
 	frame *swap(frame *entry);
 public:
 	LF_gclock_buffer(unsigned int size): pool(size), free(size) {
+		printf("lock-free glock buffer\n");
 		this->size = size;
 		tot_nwrites = 0;
 		tot_naccesses = 0;
@@ -93,6 +94,7 @@ class enhanced_gclock_buffer: public gclock_buffer
 	frame *swap(frame *entry);
 public: 
 	enhanced_gclock_buffer(int size): gclock_buffer() {
+		printf("enhanced glock buffer\n");
 		pool = (frame **) numa_alloc_local(sizeof(frame *) * size);
 		memset(pool, 0, sizeof(frame *) * size);
 		free = size;
@@ -132,6 +134,7 @@ class LP_gclock_buffer: public enhanced_gclock_buffer
 	pthread_spinlock_t lock;
 public:
 	LP_gclock_buffer(int size): enhanced_gclock_buffer(size) {
+		printf("lock-protected glock buffer\n");
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 

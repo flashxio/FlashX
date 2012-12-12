@@ -92,6 +92,7 @@ frame *enhanced_gclock_buffer::swap(frame *entry)
 enhanced_gclock_buffer1::enhanced_gclock_buffer1(int size,
 		const int *ranges, int num_ranges)
 {
+	printf("enhanced glock buffer1\n");
 	/* initialize the ranges. */
 	queues = new range_queue[num_ranges];
 	for (int i = 0; i < num_ranges - 1; i++) {
