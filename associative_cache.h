@@ -370,12 +370,12 @@ public:
 
 	/* the hash function used for the current level. */
 	int hash(off_t offset) {
-		return offset / PAGE_SIZE % (init_ncells * (long) pow(2, level));
+		return offset / PAGE_SIZE % (init_ncells * (long) (1 << level));
 	}
 
 	/* the hash function used for the next level. */
 	int hash1(off_t offset) {
-		return offset / PAGE_SIZE % (init_ncells * (long) pow(2, level + 1));
+		return offset / PAGE_SIZE % (init_ncells * (long) (1 << (level + 1)));
 	}
 
 	int hash1_locked(off_t offset) {
@@ -383,7 +383,7 @@ public:
 		int ret;
 		do {
 			table_lock.read_lock(count);
-			ret = offset / PAGE_SIZE % (init_ncells * (long) pow(2, level + 1));
+			ret = offset / PAGE_SIZE % (init_ncells * (long) (1 << (level + 1)));
 		} while (!table_lock.read_unlock(count));
 		return ret;
 	}
