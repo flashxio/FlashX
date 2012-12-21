@@ -10,9 +10,16 @@
 #include "container.h"
 #include "parameters.h"
 
+enum io_req_type
+{
+	SINGLE_BUF,
+	MULTI_BUF,
+};
+
 class io_interface;
 class io_request
 {
+	io_req_type type;
 	char *buf;
 	off_t offset;
 	ssize_t size: 32;
@@ -33,6 +40,7 @@ public:
 	void init(char *buf, off_t off, ssize_t size,
 			int access_method, io_interface *io, void *priv = NULL) {
 		assert(off >= 0);
+		type = SINGLE_BUF;
 		this->buf = buf;
 		this->offset = off;
 		this->size = size;
@@ -42,27 +50,36 @@ public:
 		next = NULL;
 	}
 
-	int get_access_method() {
+	/**
+	 * `type' is at the beginning of the two request classes.
+	 * so we can always get the right type no matter what pointer
+	 * type we use.
+	 */
+	io_req_type get_type() const {
+		return type;
+	}
+
+	int get_access_method() const {
 		return access_method & 0x1;
 	}
 
-	io_interface *get_io() {
+	io_interface *get_io() const {
 		return io;
 	}
 
-	char *get_buf() {
+	char *get_buf() const {
 		return buf;
 	}
 
-	off_t get_offset() {
+	off_t get_offset() const {
 		return offset;
 	}
 
-	ssize_t get_size() {
+	ssize_t get_size() const {
 		return size;
 	}
 
-	void *get_priv() {
+	void *get_priv() const {
 		return priv;
 	}
 
@@ -81,6 +98,7 @@ public:
 
 class multibuf_io_request
 {
+	io_req_type type;
 	struct iovec vecs[MAX_NUM_IOVECS];
 	int num_bufs;
 	off_t offset;
@@ -89,7 +107,8 @@ class multibuf_io_request
 	void *priv;
 public:
 	multibuf_io_request() {
-		memset(vecs, sizeof(vecs), 0);
+		type = MULTI_BUF;
+		memset((void *) vecs, 0, sizeof(vecs[0]) * MAX_NUM_IOVECS);
 		num_bufs = 0;
 		offset = 0;
 		access_method = 0;
@@ -100,12 +119,21 @@ public:
 	multibuf_io_request(const struct iovec vecs[], int num_vecs,
 			off_t offset, int access_method, io_interface *io,
 			void *priv = NULL) {
-		memcpy(this->vecs, vecs, sizeof(vecs[0]) * num_vecs);
+		type = MULTI_BUF;
+		memcpy((void *) this->vecs, (void *) vecs, sizeof(vecs[0]) * num_vecs);
 		this->num_bufs = num_vecs;
 		this->offset = offset;
 		this->access_method = access_method & 0x1;
 		this->io = io;
 		this->priv = priv;
+	}
+
+	io_req_type get_type() const {
+		return type;
+	}
+
+	bool is_empty() const {
+		return num_bufs == 0;
 	}
 
 	void add_buf(char *buf, int size) {
