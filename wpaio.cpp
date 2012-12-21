@@ -88,7 +88,25 @@ inline void put_iocb(struct aio_ctx* a_ctx, struct iocb* io)
 	a_ctx->free_list->array[a_ctx->free_list->pos++] = io;
 }
 
-
+struct iocb *make_io_request(struct aio_ctx *a_ctx, int fd,
+		const struct iovec *iov, int count, long long offset,
+		int io_type, iovec_callback_s *cb)
+{
+	struct iocb* a_req = get_iocb(a_ctx);
+	if (io_type == A_READ) {
+		io_prep_preadv(a_req, fd, iov, count, offset);
+		io_set_callback(a_req, (io_callback_t) cb);
+	}
+	else if (io_type == A_WRITE) {
+		io_prep_pwritev(a_req, fd, iov, count, offset);
+		io_set_callback(a_req, (io_callback_t) cb);
+	}
+	else {
+		perror("unknown operation");
+		exit(1);
+	}
+	return a_req;
+}
 
 struct iocb* make_io_request(struct aio_ctx* a_ctx, int fd, size_t iosize, long long offset,
 							 void* buffer, int io_type, io_callback_s *cb)
@@ -132,6 +150,11 @@ int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num)
   {
     io_callback_s *cb = (io_callback_s *)ep->data;
     struct iocb* iocb = ep->obj;
+	/*
+	 * callback of aio happens here. Since the callback function is stored
+	 * in the first member of io_callback_s and iovec_callback_s, so it
+	 * works fine.
+	 */
     cb->func(a_ctx->ctx, iocb, cb, ep->res, ep->res2);
 	a_ctx->busy_aio--;
 	put_iocb(a_ctx, iocb);

@@ -19,6 +19,19 @@ public:
 			io->get_callback()->invoke(rq);
 		return 0;
 	}
+
+	int invoke(multibuf_io_request *rq) {
+		io_interface *io = rq->get_io();
+		/* 
+		 * after a request is processed,
+		 * we need to notify the initiator thread.
+		 * It's possible the initiator thread is itself,
+		 * we need to stop the infinite loop.
+		 */
+		if (io->get_callback())
+			io->get_callback()->invoke(rq);
+		return 0;
+	}
 };
 
 disk_read_thread::disk_read_thread(const char *name,

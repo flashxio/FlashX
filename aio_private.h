@@ -8,8 +8,7 @@
 
 #ifdef ENABLE_AIO
 
-void aio_callback(io_context_t, struct iocb*,
-		struct io_callback_s *, long, long);
+void aio_callback(io_context_t, struct iocb*, void *, long, long);
 
 class async_io;
 struct thread_callback_s
@@ -25,11 +24,21 @@ struct thread_callback_s
 	void *priv;
 };
 
+struct thread_iovec_callback_s
+{
+	struct iovec_callback_s cb;
+	int access;
+	async_io *aio;
+	io_interface *initiator;
+	void *priv;
+};
+
 class async_io: public buffered_io
 {
 	int buf_idx;
 	struct aio_ctx *ctx;
 	std::deque<thread_callback_s *> cbs;
+	std::deque<thread_iovec_callback_s *> iovec_cbs;
 	callback *cb;
 	const int AIO_DEPTH;
 
@@ -52,6 +61,7 @@ public:
 	}
 
 	ssize_t access(io_request *requests, int num);
+	ssize_t access(multibuf_io_request *requests, int num);
 
 	bool set_callback(callback *cb) {
 		this->cb = cb;
@@ -69,7 +79,6 @@ public:
 	virtual void cleanup();
 
 	void return_cb(thread_callback_s *tcb) {
-		cbs.push_back(tcb);
 		io_callback_s *cb = (io_callback_s *) tcb;
 
 		if (this->cb) {
@@ -77,6 +86,17 @@ public:
 					tcb->initiator, tcb->priv);
 			this->cb->invoke(&req);
 		}
+		cbs.push_back(tcb);
+	}
+
+	void return_iovec_cb(thread_iovec_callback_s *tcb) {
+		iovec_callback_s *cb = (iovec_callback_s *) tcb;
+		if (this->cb) {
+			multibuf_io_request req(cb->vecs, cb->num_vecs, cb->offset,
+					tcb->access & 0x1, tcb->initiator, tcb->priv);
+			this->cb->invoke(&req);
+		}
+		iovec_cbs.push_back(tcb);
 	}
 };
 #endif

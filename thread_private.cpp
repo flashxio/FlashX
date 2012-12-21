@@ -74,6 +74,21 @@ public:
 		return 0;
 	}
 
+	int invoke(multibuf_io_request *rq) {
+		extern bool verify_read_content;
+		if (rq->get_access_method() == READ && verify_read_content) {
+			off_t off = rq->get_offset();
+			for (int i = 0; i < rq->get_num_bufs(); i++) {
+				check_read_content(rq->get_buf(i), rq->get_buf_size(i), off);
+				off += rq->get_buf_size(i);
+			}
+		}
+		for (int i = 0; i < rq->get_num_bufs(); i++)
+			buf->free_entry(rq->get_buf(i));
+		read_bytes += rq->get_size();
+		return 0;
+	}
+
 	ssize_t get_size() {
 		return read_bytes;
 	}
@@ -108,8 +123,6 @@ int thread_private::run()
 {
 	ssize_t ret = -1;
 	gettimeofday(&start_time, NULL);
-	// TODO we should allow send large requests, so we don't need to
-	// break large requests and thus don't need to over allocate memory.
 	int reqs_capacity = NUM_REQS_BY_USER * 10;
 	io_request *reqs = (io_request *) malloc(sizeof(io_request) * reqs_capacity);
 	while (gen->has_next()) {
@@ -120,6 +133,19 @@ int thread_private::run()
 				int access_method = workload.read ? READ : WRITE;
 				off_t off = workload.off;
 				int size = workload.size;
+				if (size > PAGE_SIZE && off % PAGE_SIZE == 0
+						&& size % PAGE_SIZE == 0) {
+					int num_vecs = size / PAGE_SIZE;
+					struct iovec vecs[num_vecs];
+					for (int k = 0; k < num_vecs; k++) {
+						vecs[k].iov_base = buf->next_entry();
+						vecs[k].iov_len = PAGE_SIZE;
+					}
+					multibuf_io_request req(vecs, num_vecs, off,
+							access_method, io);
+					ret = io->access(&req, 1);
+					continue;
+				}
 				while (size > 0) {
 					off_t next_off = ROUNDUP_PAGE(off + 1);
 					if (next_off > off + size)

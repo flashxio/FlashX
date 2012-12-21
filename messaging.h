@@ -4,9 +4,11 @@
 #include <pthread.h>
 #include <numa.h>
 #include <assert.h>
+#include <sys/uio.h>
 
 #include "common.h"
 #include "container.h"
+#include "parameters.h"
 
 class io_interface;
 class io_request
@@ -74,6 +76,86 @@ public:
 
 	void set_next_req(io_request *next) {
 		this->next = next;
+	}
+};
+
+class multibuf_io_request
+{
+	struct iovec vecs[MAX_NUM_IOVECS];
+	int num_bufs;
+	off_t offset;
+	int access_method: 1;
+	io_interface *io;
+	void *priv;
+public:
+	multibuf_io_request() {
+		memset(vecs, sizeof(vecs), 0);
+		num_bufs = 0;
+		offset = 0;
+		access_method = 0;
+		io = NULL;
+		priv = NULL;
+	}
+
+	multibuf_io_request(const struct iovec vecs[], int num_vecs,
+			off_t offset, int access_method, io_interface *io,
+			void *priv = NULL) {
+		memcpy(this->vecs, vecs, sizeof(vecs[0]) * num_vecs);
+		this->num_bufs = num_vecs;
+		this->offset = offset;
+		this->access_method = access_method & 0x1;
+		this->io = io;
+		this->priv = priv;
+	}
+
+	void add_buf(char *buf, int size) {
+		assert(num_bufs < MAX_NUM_IOVECS);
+		vecs[num_bufs].iov_base = buf;
+		vecs[num_bufs].iov_len = size;
+		num_bufs++;
+	}
+
+	int get_num_bufs() const {
+		return num_bufs;
+	}
+
+	char *get_buf(int idx) const {
+		return (char *) vecs[idx].iov_base;
+	}
+
+	int get_buf_size(int idx) const {
+		return vecs[idx].iov_len;
+	}
+
+	const struct iovec &get(int idx) const {
+		return vecs[idx];
+	}
+
+	int get_access_method() const {
+		return access_method & 0x1;
+	}
+
+	io_interface *get_io() const {
+		return io;
+	}
+
+	off_t get_offset() const {
+		return offset;
+	}
+
+	ssize_t get_size() const {
+		ssize_t size = 0;
+		for (int i = 0; i < num_bufs; i++)
+			size += vecs[i].iov_len;
+		return size;
+	}
+
+	void *get_priv() const {
+		return priv;
+	}
+
+	void set_priv(void *priv) {
+		this->priv = priv;
 	}
 };
 

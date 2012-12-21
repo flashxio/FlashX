@@ -22,4 +22,9 @@ const int NUM_REQS_BY_USER = 100;
  */
 const int INIT_GCACHE_PENDING_SIZE = NUM_REQS_BY_USER * 10;
 
+/**
+ * The max number of IO vectors.
+ */
+const int MAX_NUM_IOVECS = 16;
+
 #endif

@@ -13,10 +13,16 @@ const int MAX_BUF_REQS = 1024 * 3;
 #endif
 
 void aio_callback(io_context_t ctx, struct iocb* iocb,
-		struct io_callback_s *cb, long res, long res2) {
+		void *cb, long res, long res2) {
 	thread_callback_s *tcb = (thread_callback_s *) cb;
 
 	tcb->aio->return_cb(tcb);
+}
+
+void aio_iovec_callback(io_context_t ctx, struct iocb *iocb,
+		void *cb, long res, long res2) {
+	thread_iovec_callback_s *tcb = (thread_iovec_callback_s *) cb;
+	tcb->aio->return_iovec_cb(tcb);
 }
 
 async_io::async_io(const char *names[], int num,
@@ -28,6 +34,9 @@ async_io::async_io(const char *names[], int num,
 	ctx = create_aio_ctx(AIO_DEPTH);
 	for (int i = 0; i < AIO_DEPTH * 5; i++) {
 		cbs.push_back(new thread_callback_s());
+	}
+	for (int i = 0; i < AIO_DEPTH * 5; i++) {
+		iovec_cbs.push_back(new thread_iovec_callback_s());
 	}
 	cb = NULL;
 }
@@ -78,6 +87,47 @@ struct iocb *async_io::construct_req(char *buf, off_t offset,
 	int io_type = access_method == READ ? A_READ : A_WRITE;
 	req = make_io_request(ctx, get_fd(offset), size, offset, buf, io_type, cb);
 	return req;
+}
+
+ssize_t async_io::access(multibuf_io_request *requests, int num)
+{
+	assert(num == 1);
+	int slot = max_io_slot(ctx);
+	if (slot == 0) {
+		io_wait(ctx, NULL, 1);
+		slot = max_io_slot(ctx);
+	}
+	assert(slot > 0);
+
+	if (iovec_cbs.empty()) {
+		fprintf(stderr, "no callback object left\n");
+		return -1;
+	}
+
+	thread_iovec_callback_s *tcb = iovec_cbs.front();
+	iovec_callback_s *cb = (iovec_callback_s *) tcb;
+	iovec_cbs.pop_front();
+	int num_bufs = requests[0].get_num_bufs();
+	assert(num_bufs <= MAX_NUM_IOVECS);
+	for (int i = 0; i < num_bufs; i++) {
+		cb->vecs[i] = requests[0].get(i);
+		assert((long) requests[0].get_buf(i) % MIN_BLOCK_SIZE == 0);
+		assert(requests[0].get_buf_size(i) % MIN_BLOCK_SIZE == 0);
+	}
+	cb->num_vecs = num_bufs;
+	cb->offset = requests[0].get_offset();
+	cb->func = aio_iovec_callback;
+	tcb->access = requests[0].get_access_method() & 0x1;
+	tcb->aio = this;
+	tcb->initiator = requests[0].get_io();
+	tcb->priv = requests[0].get_priv();
+
+	assert(requests[0].get_offset() % MIN_BLOCK_SIZE == 0);
+	int io_type = requests[0].get_access_method() == READ ? A_READ : A_WRITE;
+	struct iocb *req = make_io_request(ctx, get_fd(requests[0].get_offset()),
+			cb->vecs, num_bufs, requests[0].get_offset(), io_type, cb);
+	submit_io_request(ctx, &req, 1);
+	return 1;
 }
 
 ssize_t async_io::access(io_request *requests, int num)
