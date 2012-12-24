@@ -6,7 +6,6 @@ static void __complete_req(io_request *orig, thread_safe_page *p)
 	int page_off = orig->get_offset() - ROUND_PAGE(orig->get_offset());
 
 	p->lock();
-	assert(p->get_data());
 	if (orig->get_access_method() == WRITE) {
 		memcpy((char *) p->get_data() + page_off, orig->get_buf(),
 				orig->get_size());
@@ -17,6 +16,7 @@ static void __complete_req(io_request *orig, thread_safe_page *p)
 		memcpy(orig->get_buf(), (char *) p->get_data() + page_off,
 				orig->get_size());
 	p->unlock();
+	p->dec_ref();
 }
 
 static void __complete_req_unlocked(io_request *orig, thread_safe_page *p)
@@ -32,6 +32,7 @@ static void __complete_req_unlocked(io_request *orig, thread_safe_page *p)
 		/* I assume the data I read never crosses the page boundary */
 		memcpy(orig->get_buf(), (char *) p->get_data() + page_off,
 				orig->get_size());
+	p->dec_ref();
 }
 
 class access_page_callback: public callback
@@ -89,7 +90,6 @@ int access_page_callback::invoke(io_request *request)
 		}
 		if (cached_io)
 			cached_io->dec_pending(num);
-		p->dec_ref();
 	}
 	else {
 		global_cached_io *io = static_cast<global_cached_io *>(
@@ -163,7 +163,6 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 				__complete_req_unlocked(orig, p);
 				p->set_data_ready(true);
 				p->unlock();
-				p->dec_ref();
 				ret = PAGE_SIZE;
 				if (get_callback())
 					get_callback()->invoke(orig);
@@ -193,7 +192,6 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 		p->unlock();
 
 		__complete_req(orig, p);
-		p->dec_ref();
 		if (get_callback())
 			get_callback()->invoke(orig);
 		ret = orig->get_size();
@@ -254,7 +252,6 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 #endif
 		ret = orig->get_size();
 		__complete_req(orig, p);
-		p->dec_ref();
 		if (get_callback())
 			get_callback()->invoke(orig);
 	}
