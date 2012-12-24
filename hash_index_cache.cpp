@@ -61,6 +61,31 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			}
 			allocator->free(removed);
 		}
+
+		/* 
+		 * We have to make sure the new entry gets a page before it is
+		 * published in the index.
+		 */
+		if (new_entry->volatileGetValue() == NULL) {
+			char *pg;
+#ifdef PER_CPU
+			memory_manager *manager = (memory_manager *) pthread_getspecific(manager_key);
+#endif
+			bool ret = manager->get_free_pages(1, &pg, this);
+			if (!ret) {
+				fprintf(stderr, "can't allocate a page from the memory manager.\n");
+				fprintf(stderr, "there are %d pages allocated\n", num_pages.get());
+				exit(1);
+			}
+			/*
+			 * if the value of the frame has been set
+			 * by another thread, free the allocated page.
+			 */
+			if (!new_entry->CASValue(NULL, pg)) {
+				manager->free_pages(1, &pg);
+			}
+		}
+
 		frame *prev_entry = hashtable->putIfAbsent(key / PAGE_SIZE, new_entry);
 		if (prev_entry) {
 			/* this happens if the page is just added to the hash table. */
@@ -124,29 +149,6 @@ page *hash_index_cache::search(off_t offset, off_t &old_off) {
 	}
 	else {
 		entry = addEntry(offset, NULL);
-		/* 
-		 * the frame might just have been added to the hashtable.
-		 * In this case, its value should be NULL.
-		 */
-		if (entry->volatileGetValue() == NULL) {
-			char *pg;
-#ifdef PER_CPU
-			memory_manager *manager = (memory_manager *) pthread_getspecific(manager_key);
-#endif
-			bool ret = manager->get_free_pages(1, &pg, this);
-			if (!ret) {
-				fprintf(stderr, "can't allocate a page from the memory manager.\n");
-				fprintf(stderr, "there are %d pages allocated\n", num_pages.get());
-				exit(1);
-			}
-			/*
-			 * if the value of the frame has been set
-			 * by another thread, free the allocated page.
-			 */
-			if (!entry->CASValue(NULL, pg)) {
-				manager->free_pages(1, &pg);
-			}
-		}
 		return entry;
 	}
 }
