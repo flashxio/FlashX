@@ -92,15 +92,15 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 ssize_t async_io::access(io_request *requests, int num)
 {
 	ssize_t ret = 0;
-	int min = 10;
-	/* a minimal number of IO events to wait. */
-	if (min > AIO_DEPTH)
-		min = AIO_DEPTH;
 
 	while (num > 0) {
 		int slot = max_io_slot(ctx);
 		if (slot == 0) {
-			io_wait(ctx, NULL, min);
+			/*
+			 * To achieve the best performance, we need to submit requests
+			 * as long as there is a slot available.
+			 */
+			io_wait(ctx, NULL, 1);
 			slot = max_io_slot(ctx);
 		}
 		struct iocb *reqs[slot];
