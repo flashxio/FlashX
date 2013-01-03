@@ -47,7 +47,10 @@ enum {
 };
 
 long npages;
+int entry_size = 128;
 int nthreads = 1;
+int buf_type = SINGLE_LARGE_BUF;
+int buf_size = PAGE_SIZE;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 bool verify_read_content = false;
@@ -120,6 +123,12 @@ str2int workloads[] = {
 	{ "user_file", USER_FILE_WORKLOAD },
 };
 
+str2int req_buf_types[] = {
+	{ "SINGLE_LARGE", SINGLE_LARGE_BUF },
+	{ "SINGLE_SMALL", SINGLE_SMALL_BUF },
+	{ "MULTI", MULTI_BUF },
+};
+
 class str2int_map {
 	str2int *maps;
 	int num;
@@ -184,7 +193,6 @@ int main(int argc, char *argv[])
 {
 	bool preload = false;
 	long cache_size = 512 * 1024 * 1024;
-	int entry_size = 128;
 	int access_option = -1;
 	int ret;
 	int i, j;
@@ -202,13 +210,16 @@ int main(int argc, char *argv[])
 			sizeof(workloads) / sizeof(workloads[0]));
 	str2int_map cache_map(cache_types, 
 			sizeof(cache_types) / sizeof(cache_types[0]));
+	str2int_map buf_type_map(req_buf_types,
+			sizeof(req_buf_types) / sizeof(req_buf_types[0]));
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
+		buf_type_map.print("available buf types: ");
 		exit(1);
 	}
 
@@ -276,6 +287,12 @@ int main(int argc, char *argv[])
 		else if(key.compare("high_prio") == 0) {
 			high_prio = true;
 		}
+		else if (key.compare("buf_type") == 0) {
+			buf_type = buf_type_map.map(value);
+		}
+		else if (key.compare("buf_size") == 0) {
+			buf_size = (int) str2size(value);
+		}
 #ifdef PROFILER
 		else if(key.compare("prof") == 0) {
 			prof_file = value;
@@ -290,6 +307,10 @@ int main(int argc, char *argv[])
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio);
 
 	int num_entries = (int) (((long) npages) * PAGE_SIZE / entry_size);
+	/* If a user doesn't specify multibuf requests */
+	if (buf_type == SINGLE_LARGE_BUF) {
+		assert(buf_size >= entry_size);
+	}
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");

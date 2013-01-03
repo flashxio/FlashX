@@ -95,12 +95,13 @@ int thread_private::thread_init() {
 	attach2cpu();
 	io->init();
 
+	extern int buf_size;
 	rand_buf *buf = new rand_buf(NUM_PAGES / (nthreads
 				// TODO maybe I should set the right entry size for a buffer.
 				// If each access size is irregular, I'll break each access
 				// into pages so each access is no larger than a page, so it
 				// should workl fine.
-				/ NUM_NODES) * PAGE_SIZE, PAGE_SIZE);
+				/ NUM_NODES) * PAGE_SIZE, buf_size);
 	this->buf = buf;
 	if (io->support_aio()) {
 		cb = new cleanup_callback(buf, idx);
@@ -113,8 +114,12 @@ int thread_private::run()
 {
 	ssize_t ret = -1;
 	gettimeofday(&start_time, NULL);
-	int reqs_capacity = NUM_REQS_BY_USER * 10;
-	io_request *reqs = (io_request *) malloc(sizeof(io_request) * reqs_capacity);
+	io_request reqs[NUM_REQS_BY_USER];
+	char *entry = NULL;
+	if (!io->support_aio()) {
+		extern int buf_size;
+		entry = (char *) valloc(buf_size);
+	}
 	while (gen->has_next()) {
 		if (io->support_aio()) {
 			int i;
@@ -123,30 +128,46 @@ int thread_private::run()
 				int access_method = workload.read ? READ : WRITE;
 				off_t off = workload.off;
 				int size = workload.size;
-				if (size > PAGE_SIZE && off % PAGE_SIZE == 0
-						&& size % PAGE_SIZE == 0) {
+				/*
+				 * If the size of the request is larger than a page size,
+				 * and the user explicitly wants to use multibuf requests.
+				 */
+				if (buf_type == MULTI_BUF && size > PAGE_SIZE) {
+					assert(off % PAGE_SIZE == 0);
 					int num_vecs = size / PAGE_SIZE;
-					io_request req(off, io, access_method);
+					reqs[i].init(off, io, access_method);
+					assert(buf->get_entry_size() >= PAGE_SIZE);
 					for (int k = 0; k < num_vecs; k++) {
-						req.add_buf(buf->next_entry(), PAGE_SIZE);
+						reqs[i].add_buf(buf->next_entry(), PAGE_SIZE);
 					}
-					ret = io->access(&req, 1);
-					continue;
-				}
-				while (size > 0) {
-					off_t next_off = ROUNDUP_PAGE(off + 1);
-					if (next_off > off + size)
-						next_off = off + size;
-					// This is a very hacking way to handle the case that one access
-					// is broken into multiple requests. It works because the array for
-					// storing requests are twice as large as needed.
-					assert (i < reqs_capacity);
-					char *p = buf->next_entry();
-					create_write_data(p, next_off - off, off);
-					reqs[i].init(p, off, next_off - off, access_method, io);
-					size -= next_off - off;
-					off = next_off;
 					i++;
+				}
+				else if (buf_type == SINGLE_SMALL_BUF && size > PAGE_SIZE) {
+again:
+					while (size > 0 && i < NUM_REQS_BY_USER) {
+						off_t next_off = ROUNDUP_PAGE(off + 1);
+						if (next_off > off + size)
+							next_off = off + size;
+						char *p = buf->next_entry();
+						if (access_method == WRITE)
+							create_write_data(p, next_off - off, off);
+						reqs[i].init(p, off, next_off - off, access_method, io);
+						size -= next_off - off;
+						off = next_off;
+						i++;
+					}
+					if (size > 0) {
+						ret = io->access(reqs, i);
+						i = 0;
+						goto again;
+					}
+				}
+				else {
+					assert(buf->get_entry_size() >= size);
+					char *p = buf->next_entry();
+					if (access_method == WRITE)
+						create_write_data(p, size, off);
+					reqs[i++].init(p, off, size, access_method, io);
 				}
 			}
 			ret = io->access(reqs, i);
@@ -162,42 +183,57 @@ int thread_private::run()
 			int access_method = workload.read ? READ : WRITE;
 			int entry_size = workload.size;
 
-			while (entry_size > 0) {
-				char *entry = buf->next_entry();
-				/*
-				 * generate the data for writing the file,
-				 * so the data in the file isn't changed.
-				 */
+			if (buf_type == SINGLE_SMALL_BUF) {
+				while (entry_size > 0) {
+					/*
+					 * generate the data for writing the file,
+					 * so the data in the file isn't changed.
+					 */
+					if (access_method == WRITE) {
+						create_write_data(entry, entry_size, off);
+					}
+					// There is at least one byte we need to access in the page.
+					// By adding 1 and rounding up the offset, we'll get the next page
+					// behind the current offset.
+					off_t next_off = ROUNDUP_PAGE(off + 1);
+					if (next_off > off + entry_size)
+						next_off = off + entry_size;
+					ret = io->access(entry, off, next_off - off, access_method);
+					if (ret > 0) {
+						if (access_method == READ && verify_read_content) {
+							check_read_content(entry, next_off - off, off);
+						}
+						read_bytes += ret;
+					}
+					if (ret < 0) {
+						perror("access");
+						exit(1);
+					}
+					entry_size -= next_off - off;
+					off = next_off;
+				}
+			}
+			else {
 				if (access_method == WRITE) {
 					create_write_data(entry, entry_size, off);
 				}
-				// There is at least one byte we need to access in the page.
-				// By adding 1 and rounding up the offset, we'll get the next page
-				// behind the current offset.
-				off_t next_off = ROUNDUP_PAGE(off + 1);
-				if (next_off > off + entry_size)
-					next_off = off + entry_size;
-				ret = io->access(entry, off, next_off - off, access_method);
+				ret = io->access(entry, off, entry_size, access_method);
 				if (ret > 0) {
 					if (access_method == READ && verify_read_content) {
-						check_read_content(entry, next_off - off, off);
+						check_read_content(entry, entry_size, off);
 					}
 					read_bytes += ret;
 				}
-				buf->free_entry(entry);
 				if (ret < 0) {
 					perror("access");
 					exit(1);
 				}
-				entry_size -= next_off - off;
-				off = next_off;
 			}
 		}
 	}
 	io->cleanup();
 	printf("thread %d exits\n", idx);
 	gettimeofday(&end_time, NULL);
-	free(reqs);
 	return 0;
 }
 

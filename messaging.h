@@ -71,7 +71,7 @@ public:
 	}
 
 	void init(off_t off, io_interface *io,
-			int access_method, void *priv) {
+			int access_method, void *priv = NULL) {
 		this->offset = off;
 		this->io = io;
 		this->access_method = access_method & 0x1;

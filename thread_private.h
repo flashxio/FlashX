@@ -5,6 +5,14 @@
 #include "garbage_collection.h"
 #include "messaging.h"
 
+extern int buf_type;
+
+enum {
+	SINGLE_LARGE_BUF,
+	SINGLE_SMALL_BUF,
+	MULTI_BUF,
+};
+
 class callback
 {
 public:
