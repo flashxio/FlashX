@@ -89,8 +89,8 @@ inline void put_iocb(struct aio_ctx* a_ctx, struct iocb* io)
 }
 
 struct iocb *make_io_request(struct aio_ctx *a_ctx, int fd,
-		const struct iovec *iov, int count, long long offset,
-		int io_type, iovec_callback_s *cb)
+		const struct iovec iov[], int count, long long offset,
+		int io_type, io_callback_s *cb)
 {
 	struct iocb* a_req = get_iocb(a_ctx);
 	if (io_type == A_READ) {

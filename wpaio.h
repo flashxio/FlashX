@@ -42,17 +42,6 @@ typedef void (*callback_t) (io_context_t, struct iocb*,
 struct io_callback_s
 {
 	callback_t func;
-	char *buf;
-	off_t offset;
-	ssize_t size;
-};
-
-struct iovec_callback_s
-{
-	callback_t func;
-	struct iovec vecs[MAX_NUM_IOVECS];
-	int num_vecs;
-	off_t offset;
 };
 
 //extern struct aio_ctx* a_ctx;
@@ -66,8 +55,8 @@ struct aio_ctx* create_aio_ctx(int max_aio);
 struct iocb* make_io_request(struct aio_ctx* a_ctx, int fd, size_t iosize, long long offset,
 							 void* buffer, int io_type, io_callback_s *cb);
 struct iocb *make_io_request(struct aio_ctx *a_ctx, int fd,
-		const struct iovec *iov, int count, long long offset,
-		int io_type, iovec_callback_s *cb);
+		const struct iovec iov[], int count, long long offset,
+		int io_type, io_callback_s *cb);
 void submit_io_request(struct aio_ctx* a_ctx, struct iocb* ioq[], int num);
 int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num = 1);
 int max_io_slot(struct aio_ctx* a_ctx);

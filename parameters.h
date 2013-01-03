@@ -23,8 +23,9 @@ const int NUM_REQS_BY_USER = 100;
 const int INIT_GCACHE_PENDING_SIZE = NUM_REQS_BY_USER * 10;
 
 /**
- * The max number of IO vectors.
+ * The min size of IO vector allocated for an IO request..
  */
-const int MAX_NUM_IOVECS = 16;
+const int MIN_NUM_ALLOC_IOVECS = 16;
+const int NUM_EMBEDDED_IOVECS = 1;
 
 #endif

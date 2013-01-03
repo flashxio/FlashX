@@ -67,16 +67,6 @@ public:
 	int invoke(io_request *rq) {
 		extern bool verify_read_content;
 		if (rq->get_access_method() == READ && verify_read_content) {
-			check_read_content(rq->get_buf(), rq->get_size(), rq->get_offset());
-		}
-		buf->free_entry(rq->get_buf());
-		read_bytes += rq->get_size();
-		return 0;
-	}
-
-	int invoke(multibuf_io_request *rq) {
-		extern bool verify_read_content;
-		if (rq->get_access_method() == READ && verify_read_content) {
 			off_t off = rq->get_offset();
 			for (int i = 0; i < rq->get_num_bufs(); i++) {
 				check_read_content(rq->get_buf(i), rq->get_buf_size(i), off);
@@ -136,13 +126,10 @@ int thread_private::run()
 				if (size > PAGE_SIZE && off % PAGE_SIZE == 0
 						&& size % PAGE_SIZE == 0) {
 					int num_vecs = size / PAGE_SIZE;
-					struct iovec vecs[num_vecs];
+					io_request req(off, io, access_method);
 					for (int k = 0; k < num_vecs; k++) {
-						vecs[k].iov_base = buf->next_entry();
-						vecs[k].iov_len = PAGE_SIZE;
+						req.add_buf(buf->next_entry(), PAGE_SIZE);
 					}
-					multibuf_io_request req(vecs, num_vecs, off,
-							access_method, io);
 					ret = io->access(&req, 1);
 					continue;
 				}

@@ -39,11 +39,6 @@ class access_page_callback: public callback
 {
 public:
 	int invoke(io_request *request);
-	int invoke(multibuf_io_request *request) {
-		fprintf(stderr,
-				"multibuf_io_request isn't support in access_page_callback\n");
-		return -1;
-	}
 };
 
 int access_page_callback::invoke(io_request *request)

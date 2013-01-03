@@ -9,7 +9,6 @@ class callback
 {
 public:
 	virtual int invoke(io_request *) = 0;
-	virtual int invoke(multibuf_io_request *) = 0;
 };
 
 /**
@@ -52,9 +51,6 @@ public:
 	 * The asynchronous IO interface
 	 */
 	virtual ssize_t access(io_request *requests, int num) {
-		return -1;
-	}
-	virtual ssize_t access(multibuf_io_request *requests, int num) {
 		return -1;
 	}
 

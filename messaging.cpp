@@ -3,6 +3,55 @@
 #include "messaging.h"
 #include "container.cpp"
 
+void io_request::assign(io_request &req)
+{
+	this->offset = req.offset;
+	this->io = req.io;
+	this->priv = req.priv;
+	this->access_method = req.access_method;
+	this->num_bufs = req.num_bufs;
+	this->vec_capacity = req.vec_capacity;
+	/*
+	 * If the request uses embedded vector, then the new request
+	 * should point to its own embedded vector. Otherwise,
+	 * the new request steals the vector from the old one.
+	 */
+	if (req.use_embedded())
+		this->vec_pointer = this->embedded_vecs;
+	else
+		this->vec_pointer = req.vec_pointer;
+	this->next = req.next;
+	memcpy(this->embedded_vecs, req.embedded_vecs,
+			sizeof(req.embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
+	req.vec_pointer = req.embedded_vecs;
+	req.vec_capacity = NUM_EMBEDDED_IOVECS;
+	req.clear();
+}
+
+void io_request::add_buf(char *buf, int size)
+{
+	if (num_bufs >= vec_capacity) {
+		if (vec_pointer == embedded_vecs) {
+			vec_capacity = MIN_NUM_ALLOC_IOVECS;
+			vec_pointer = new struct iovec[vec_capacity];
+			memcpy(vec_pointer, embedded_vecs,
+					sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
+		}
+		else {
+			vec_capacity *= 2;
+			struct iovec *tmp = new struct iovec[vec_capacity];
+			memcpy(tmp, vec_pointer,
+					sizeof(vec_pointer[0]) * vec_capacity / 2);
+			delete [] vec_pointer;
+			vec_pointer = tmp;
+		}
+	}
+	assert(num_bufs < vec_capacity);
+	vec_pointer[num_bufs].iov_base = buf;
+	vec_pointer[num_bufs].iov_len = size;
+	num_bufs++;
+}
+
 template<class T>
 msg_sender<T>::msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
 		int num_queues) {

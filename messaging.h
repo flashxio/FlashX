@@ -10,53 +10,78 @@
 #include "container.h"
 #include "parameters.h"
 
-enum io_req_type
-{
-	SINGLE_BUF,
-	MULTI_BUF,
-};
-
 class io_interface;
+
+/**
+ * This class contains the info of an IO request.
+ */
 class io_request
 {
-	io_req_type type;
-	char *buf;
 	off_t offset;
-	ssize_t size: 32;
-	int access_method: 1;
 	io_interface *io;
 	void *priv;
+
+	int access_method: 1;
+	int num_bufs: 15;
+	int vec_capacity: 16;
+
+	struct iovec *vec_pointer;
+	struct iovec embedded_vecs[NUM_EMBEDDED_IOVECS];
 	io_request *next;
-public:
-	io_request() {
-		init(NULL, 0, 0, READ, NULL);
+
+	bool use_embedded() const {
+		return vec_pointer == embedded_vecs;
 	}
 
-	io_request(char *buf, off_t off, ssize_t size,
-			int access_method, io_interface *io, void *priv = NULL) {
+	void assign(io_request &req);
+
+public:
+	io_request() {
+		init(-1, NULL, READ, NULL);
+	}
+
+	io_request(off_t off, io_interface *io, int access_method,
+			void *priv = NULL) {
+		init(off, io, access_method, priv);
+	}
+
+	io_request(char *buf, off_t off, ssize_t size, int access_method,
+			io_interface *io, void *priv = NULL) {
 		init(buf, off, size, access_method, io, priv);
+	}
+
+	io_request(io_request &req) {
+		assign(req);
+	}
+
+	io_request &operator=(io_request &req) {
+		assign(req);
+		return *this;
+	}
+
+	~io_request() {
+		if (vec_pointer != embedded_vecs)
+			delete [] vec_pointer;
 	}
 
 	void init(char *buf, off_t off, ssize_t size,
 			int access_method, io_interface *io, void *priv = NULL) {
-		assert(off >= 0);
-		type = SINGLE_BUF;
-		this->buf = buf;
+		init(off, io, access_method, priv);
+		add_buf(buf, size);
+	}
+
+	void init(off_t off, io_interface *io,
+			int access_method, void *priv) {
 		this->offset = off;
-		this->size = size;
 		this->io = io;
 		this->access_method = access_method & 0x1;
 		this->priv = priv;
+		memset(embedded_vecs, 0,
+				sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
+		num_bufs = 0;
+		vec_pointer = embedded_vecs;
+		vec_capacity = NUM_EMBEDDED_IOVECS;
 		next = NULL;
-	}
-
-	/**
-	 * `type' is at the beginning of the two request classes.
-	 * so we can always get the right type no matter what pointer
-	 * type we use.
-	 */
-	io_req_type get_type() const {
-		return type;
 	}
 
 	int get_access_method() const {
@@ -67,16 +92,12 @@ public:
 		return io;
 	}
 
-	char *get_buf() const {
-		return buf;
+	void set_offset(off_t offset) {
+		this->offset = offset;
 	}
 
 	off_t get_offset() const {
 		return offset;
-	}
-
-	ssize_t get_size() const {
-		return size;
 	}
 
 	void *get_priv() const {
@@ -85,6 +106,49 @@ public:
 
 	void set_priv(void *priv) {
 		this->priv = priv;
+	}
+
+	bool is_empty() const {
+		return num_bufs == 0;
+	}
+
+	void clear() {
+		memset((void *) vec_pointer, 0, sizeof(vec_pointer[0]) * vec_capacity);
+		num_bufs = 0;
+		set_offset(-1);
+	}
+
+	void add_buf(char *buf, int size);
+
+	int get_num_bufs() const {
+		return num_bufs;
+	}
+
+	/**
+	 * By default, we get the first buffer. This makes sense
+	 * for a single buffer request.
+	 */
+	char *get_buf(int idx = 0) const {
+		return (char *) vec_pointer[idx].iov_base;
+	}
+
+	int get_buf_size(int idx) const {
+		return vec_pointer[idx].iov_len;
+	}
+
+	const struct iovec &get(int idx) const {
+		return vec_pointer[idx];
+	}
+
+	const struct iovec *get_vec() const {
+		return vec_pointer;
+	}
+
+	ssize_t get_size() const {
+		ssize_t size = 0;
+		for (int i = 0; i < num_bufs; i++)
+			size += vec_pointer[i].iov_len;
+		return size;
 	}
 
 	io_request *get_next_req() const {
@@ -93,97 +157,6 @@ public:
 
 	void set_next_req(io_request *next) {
 		this->next = next;
-	}
-};
-
-class multibuf_io_request
-{
-	io_req_type type;
-	struct iovec vecs[MAX_NUM_IOVECS];
-	int num_bufs;
-	off_t offset;
-	int access_method: 1;
-	io_interface *io;
-	void *priv;
-public:
-	multibuf_io_request() {
-		type = MULTI_BUF;
-		memset((void *) vecs, 0, sizeof(vecs[0]) * MAX_NUM_IOVECS);
-		num_bufs = 0;
-		offset = 0;
-		access_method = 0;
-		io = NULL;
-		priv = NULL;
-	}
-
-	multibuf_io_request(const struct iovec vecs[], int num_vecs,
-			off_t offset, int access_method, io_interface *io,
-			void *priv = NULL) {
-		type = MULTI_BUF;
-		memcpy((void *) this->vecs, (void *) vecs, sizeof(vecs[0]) * num_vecs);
-		this->num_bufs = num_vecs;
-		this->offset = offset;
-		this->access_method = access_method & 0x1;
-		this->io = io;
-		this->priv = priv;
-	}
-
-	io_req_type get_type() const {
-		return type;
-	}
-
-	bool is_empty() const {
-		return num_bufs == 0;
-	}
-
-	void add_buf(char *buf, int size) {
-		assert(num_bufs < MAX_NUM_IOVECS);
-		vecs[num_bufs].iov_base = buf;
-		vecs[num_bufs].iov_len = size;
-		num_bufs++;
-	}
-
-	int get_num_bufs() const {
-		return num_bufs;
-	}
-
-	char *get_buf(int idx) const {
-		return (char *) vecs[idx].iov_base;
-	}
-
-	int get_buf_size(int idx) const {
-		return vecs[idx].iov_len;
-	}
-
-	const struct iovec &get(int idx) const {
-		return vecs[idx];
-	}
-
-	int get_access_method() const {
-		return access_method & 0x1;
-	}
-
-	io_interface *get_io() const {
-		return io;
-	}
-
-	off_t get_offset() const {
-		return offset;
-	}
-
-	ssize_t get_size() const {
-		ssize_t size = 0;
-		for (int i = 0; i < num_bufs; i++)
-			size += vecs[i].iov_len;
-		return size;
-	}
-
-	void *get_priv() const {
-		return priv;
-	}
-
-	void set_priv(void *priv) {
-		this->priv = priv;
 	}
 };
 
