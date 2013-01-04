@@ -84,9 +84,22 @@ public:
 
 	int preload(off_t start, long size);
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
+	/**
+	 * A request can access data of arbitrary size and from arbitrary offset.
+	 */
 	ssize_t access(io_request *requests, int num);
 
-	ssize_t read(io_request &req, thread_safe_page *p);
+	/**
+	 * One read can access multiple pages while one write can only write
+	 * data in a page because if there is a large write (into multiple pages),
+	 * the only IO it can cause is to read the first and the last pages if
+	 * the offset of the write isn't aligned to a page size. Otherwise,
+	 * we can just simply write data to a page without issuing any IO requests.
+	 * TODO the only case that we can optimize writes is that a write needs
+	 * to touch two pages and the beginning and the end of the write aren't
+	 * aligned with a page size.
+	 */
+	ssize_t read(io_request &req, thread_safe_page *pages[], int npages);
 	ssize_t write(io_request &req, thread_safe_page *p);
 
 	void queue_request(io_request *req) {

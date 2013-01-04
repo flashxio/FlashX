@@ -28,4 +28,11 @@ const int INIT_GCACHE_PENDING_SIZE = NUM_REQS_BY_USER * 10;
 const int MIN_NUM_ALLOC_IOVECS = 16;
 const int NUM_EMBEDDED_IOVECS = 1;
 
+/**
+ * The maximal size of IO vector issued by the global cache.
+ * The experiment shows AIO with 16 pages in a request can achieve
+ * the best performance.
+ */
+const int MAX_NUM_IOVECS = 16;
+
 #endif
