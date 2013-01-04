@@ -155,6 +155,29 @@ thread_safe_page *hash_cell::get_empty_page() {
 	bool expanded = false;
 search_again:
 	ret = policy.evict_page(buf);
+	if (ret == NULL) {
+		printf("all pages in the cell were all referenced\n");
+		/* 
+		 * If all pages in the cell are referenced, there is
+		 * nothing we can do but wait. However, before busy waiting,
+		 * we should unlock the lock, so other threads may still
+		 * search the cell.
+		 */
+		pthread_spin_unlock(&_lock);
+		bool all_referenced = true;
+		while (all_referenced) {
+			for (int i = 0; i < CELL_SIZE; i++) {
+				thread_safe_page *pg = buf.get_page(i);
+				/* If a page isn't referenced. */
+				if (!pg->get_ref()) {
+					all_referenced = false;
+					break;
+				}
+			}
+		}
+		pthread_spin_lock(&_lock);
+		goto search_again;
+	}
 	/*
 	 * the selected page got hit before,
 	 * we should expand the hash table
@@ -284,15 +307,18 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = NULL;
-	bool all_referenced = false;
 	int num_referenced = 0;
 	do {
 		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
 		if (pg->get_ref()) {
 			num_referenced++;
-			if (num_referenced >= CELL_SIZE)
-				all_referenced = true;
 			clock_head++;
+			/*
+			 * If all pages in the cell are referenced, we should
+			 * return NULL to notify the invoker.
+			 */
+			if (num_referenced >= CELL_SIZE)
+				return NULL;
 			continue;
 		}
 		if (pg->get_hits() == 0) {
@@ -302,8 +328,6 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 		pg->set_hits(pg->get_hits() - 1);
 		clock_head++;
 	} while (ret == NULL);
-	if (all_referenced)
-		printf("all pages in the cell were all referenced\n");
 	ret->set_data_ready(false);
 	return ret;
 }
@@ -313,14 +337,13 @@ thread_safe_page *clock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = NULL;
-	bool all_referenced = false;
 	int num_referenced = 0;
 	do {
 		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
 		if (pg->get_ref()) {
 			num_referenced++;
 			if (num_referenced >= CELL_SIZE)
-				all_referenced = true;
+				return NULL;
 			clock_head++;
 			continue;
 		}
@@ -331,8 +354,6 @@ thread_safe_page *clock_eviction_policy::evict_page(
 		pg->reset_hits();
 		clock_head++;
 	} while (ret == NULL);
-	if (all_referenced)
-		printf("all pages in the cell were all referenced\n");
 	ret->set_data_ready(false);
 	ret->reset_hits();
 	return ret;
