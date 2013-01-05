@@ -132,7 +132,7 @@ int thread_private::run()
 				 * If the size of the request is larger than a page size,
 				 * and the user explicitly wants to use multibuf requests.
 				 */
-				if (buf_type == MULTI_BUF && size > PAGE_SIZE) {
+				if (buf_type == MULTI_BUF) {
 					assert(off % PAGE_SIZE == 0);
 					int num_vecs = size / PAGE_SIZE;
 					reqs[i].init(off, io, access_method);
@@ -142,7 +142,7 @@ int thread_private::run()
 					}
 					i++;
 				}
-				else if (buf_type == SINGLE_SMALL_BUF && size > PAGE_SIZE) {
+				else if (buf_type == SINGLE_SMALL_BUF) {
 again:
 					while (size > 0 && i < NUM_REQS_BY_USER) {
 						off_t next_off = ROUNDUP_PAGE(off + 1);

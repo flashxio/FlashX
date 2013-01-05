@@ -11,6 +11,8 @@ void io_request::assign(io_request &req)
 	this->access_method = req.access_method;
 	this->num_bufs = req.num_bufs;
 	this->vec_capacity = req.vec_capacity;
+	this->partial = req.partial;
+	this->completed_size = req.completed_size;
 	/*
 	 * If the request uses embedded vector, then the new request
 	 * should point to its own embedded vector. Otherwise,
@@ -21,6 +23,7 @@ void io_request::assign(io_request &req)
 	else
 		this->vec_pointer = req.vec_pointer;
 	this->next = req.next;
+	this->completed_size = req.completed_size;
 	memcpy(this->embedded_vecs, req.embedded_vecs,
 			sizeof(req.embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
 	req.vec_pointer = req.embedded_vecs;

@@ -23,11 +23,14 @@ class io_request
 
 	int access_method: 1;
 	int num_bufs: 15;
-	int vec_capacity: 16;
+	// Is the request part of a request?
+	int partial: 1;
+	int vec_capacity: 15;
 
 	struct iovec *vec_pointer;
 	struct iovec embedded_vecs[NUM_EMBEDDED_IOVECS];
 	io_request *next;
+	ssize_t completed_size;
 
 	bool use_embedded() const {
 		return vec_pointer == embedded_vecs;
@@ -76,6 +79,8 @@ public:
 		this->io = io;
 		this->access_method = access_method & 0x1;
 		this->priv = priv;
+		this->partial = 0;
+		this->completed_size = 0;
 		memset(embedded_vecs, 0,
 				sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
 		num_bufs = 0;
@@ -157,6 +162,22 @@ public:
 
 	void set_next_req(io_request *next) {
 		this->next = next;
+	}
+
+	void complete_size(ssize_t completed) {
+		completed_size += completed;
+	}
+
+	bool is_completed() const {
+		return completed_size == get_size();
+	}
+
+	void set_partial(bool partial) {
+		this->partial = partial ? 1 : 0;
+	}
+
+	bool is_partial() const {
+		return this->partial;
 	}
 };
 
