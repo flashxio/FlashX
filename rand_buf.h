@@ -32,7 +32,7 @@ public:
 
 	void free_entry(char *buf);
 
-	char *next_entry();
+	char *next_entry(int size);
 
 	int get_entry_size() {
 		return entry_size;

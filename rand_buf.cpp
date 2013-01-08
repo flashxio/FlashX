@@ -30,10 +30,12 @@ rand_buf::rand_buf(int buf_size, int entry_size): free_refs(buf_size / entry_siz
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 }
 
-char *rand_buf::next_entry() {
+char *rand_buf::next_entry(int size) {
 #ifdef MEMCHECK
-	return (char *) allocator.alloc(entry_size);
+	return (char *) allocator.alloc(size);
 #else
+	if (size > entry_size)
+		return (char *) valloc(size);
 	pthread_spin_lock(&lock);
 	assert(!free_refs.is_empty());
 	int off = free_refs.pop_front();
@@ -52,10 +54,11 @@ void rand_buf::free_entry(char *buf) {
 	pthread_spin_lock(&lock);
 	int buf_size = num_entries * entry_size;
 	if (!((long) buf >= (long) this->buf
-			&& (long) buf < (long) this->buf + buf_size))
-		printf("%ld: fail to free %p\n", pthread_self(), buf);
-	assert((long) buf >= (long) this->buf
-			&& (long) buf < (long) this->buf + buf_size);
+			&& (long) buf < (long) this->buf + buf_size)) {
+		pthread_spin_unlock(&lock);
+		free(buf);
+		return;
+	}
 	int off = buf - this->buf;
 	free_refs.push_back(off);
 	off /= entry_size;

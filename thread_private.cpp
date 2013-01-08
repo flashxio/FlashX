@@ -138,7 +138,7 @@ int thread_private::run()
 					reqs[i].init(off, io, access_method);
 					assert(buf->get_entry_size() >= PAGE_SIZE);
 					for (int k = 0; k < num_vecs; k++) {
-						reqs[i].add_buf(buf->next_entry(), PAGE_SIZE);
+						reqs[i].add_buf(buf->next_entry(PAGE_SIZE), PAGE_SIZE);
 					}
 					i++;
 				}
@@ -148,7 +148,7 @@ again:
 						off_t next_off = ROUNDUP_PAGE(off + 1);
 						if (next_off > off + size)
 							next_off = off + size;
-						char *p = buf->next_entry();
+						char *p = buf->next_entry(next_off - off);
 						if (access_method == WRITE)
 							create_write_data(p, next_off - off, off);
 						reqs[i].init(p, off, next_off - off, access_method, io);
@@ -164,7 +164,7 @@ again:
 				}
 				else {
 					assert(buf->get_entry_size() >= size);
-					char *p = buf->next_entry();
+					char *p = buf->next_entry(size);
 					if (access_method == WRITE)
 						create_write_data(p, size, off);
 					reqs[i++].init(p, off, size, access_method, io);
