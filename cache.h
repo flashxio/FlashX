@@ -22,6 +22,8 @@
 #define ROUND_PAGE(off) (((long) off) & (~(PAGE_SIZE - 1)))
 #define ROUNDUP_PAGE(off) (((long) off + PAGE_SIZE - 1) & (~(PAGE_SIZE - 1)))
 
+const off_t PAGE_INVALID_OFFSET = ((off_t) -1) << LOG_PAGE_SIZE;
+
 enum {
 	/* All the 4 bites need to be protected by the lock bit. */
 	DATA_READY_BIT = 0,

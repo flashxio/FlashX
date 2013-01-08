@@ -116,6 +116,8 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 			ret->set_old_dirty(true);
 		}
 		old_off = ret->get_offset();
+		if (old_off == PAGE_INVALID_OFFSET)
+			old_off = -1;
 		/*
 		 * I have to change the offset in the spinlock,
 		 * to make sure when the spinlock is unlocked, 
