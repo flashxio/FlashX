@@ -3,20 +3,28 @@
 
 /**
  * This file implements global cache.
+ * There are three types of requests:
+ * original request: it is a copy of the request passed from access() and 
+ *		is allocated in the heap.
+ * partial request: it represents part of a request, and it should have 
+ *		a point to the original request. This exists in two cases: when
+ *		writing an old dirty page; when reading a page with a pending IO.
+ * underlying request: it is a request sent to the underlying IO and is
+ *		allocated on the stack. It has a point to the original request for
+ *		a read request and the partial request for a write request. Only
+ *		this type of requests can be multi-buf requests, and it should have
+ *		a point to a page if it's a single-buf request.
+ *
  * When a request is issued to the cache with access(), we first make a copy
  * of the request as there is no guarantee that the original request from
  * the invoker will be available after access() returns.
  *
  * However, it's often that we need to break a request into smaller ones for
- * different reasons when issuing them to the underlying IO. When the (partial)
- * request is issued to the underlying IO, the private data of the request
- * points to the very original request just allocated in access().
+ * different reasons when issuing them to the underlying IO.
  *
  * In some case, a request tries to access a page that another request has
- * been issued to the underlying IO for the page, we should allocate memory
- * for the request and add the request to the page. If the request is just
- * a partial request, the private data of the request should point to
- * the original request.
+ * been issued to the underlying IO for the page, the request will be added
+ * to the page.
  */
 
 /**
@@ -108,12 +116,14 @@ public:
  * This method is to finalize the request. The processing of the request
  * ends here.
  */
-void finalize_request(io_request *req, io_interface *io)
+void finalize_request(io_request *req)
 {
 	// It's possible that the request is just a partial request.
+	io_interface *io = req->get_io();
 	if (req->is_partial()) {
-		io_request *original = (io_request *) req->get_priv();
+		io_request *original = req->get_orig();
 		assert(original);
+		assert(original->get_orig() == NULL);
 		original->complete_size(req->get_size());
 		if (original->is_completed()) {
 			if (io->get_callback())
@@ -122,6 +132,7 @@ void finalize_request(io_request *req, io_interface *io)
 		}
 	}
 	else {
+		assert(req->get_orig() == NULL);
 		if (io->get_callback())
 			io->get_callback()->invoke(req);
 	}
@@ -132,7 +143,8 @@ void finalize_request(io_request *req, io_interface *io)
 int access_page_callback::multibuf_invoke(io_request *request)
 {
 	assert(request->get_access_method() == READ);
-	io_request *orig = (io_request *) request->get_priv();
+	io_request *orig = request->get_orig();
+	assert(orig->get_orig() == NULL);
 	assert(orig->get_num_bufs() == 1);
 	/*
 	 * Right now the global cache only support normal access().
@@ -182,9 +194,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		while (old) {
 			io_request *next = old->get_next_req();
 			__complete_req(old, p);
-			io_interface *io = old->get_io();
-
-			finalize_request(old, io);
+			finalize_request(old);
 			old = next;
 		}
 		p->dec_ref();
@@ -198,19 +208,8 @@ int access_page_callback::invoke(io_request *request)
 	if (request->get_num_bufs() > 1)
 		return multibuf_invoke(request);
 
-	off_t old_off = -1;
-	thread_safe_page *p = (thread_safe_page *) cache->search(
-			request->get_offset(), old_off);
+	thread_safe_page *p = (thread_safe_page *) request->get_priv();
 	assert(request->get_size() <= PAGE_SIZE);
-	/*
-	 * If the request isn't added to the page, the request was created
-	 * as a multi-buf request.
-	 * TODO there must a better way to handle this.
-	 */
-	if (p->get_io_req() == NULL) {
-		p->dec_ref();
-		return multibuf_invoke(request);
-	}
 
 	p->lock();
 	// If we write data to part of a page, we need to first read
@@ -226,27 +225,28 @@ int access_page_callback::invoke(io_request *request)
 	p->set_io_pending(false);
 	io_request *old = p->reset_reqs();
 	bool data_ready = p->data_ready();
-	/* The request should contain the very original request. */
-	io_request *orig = (io_request *) request->get_priv();
-	__complete_req_unlocked(orig, p);
 	p->unlock();
-
-	io_interface *io = orig->get_io();
-	io_request partial;
-	extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
-	orig->complete_size(partial.get_size());
-	if (orig->is_completed()) {
-		if (io->get_callback())
-			io->get_callback()->invoke(orig);
-		// Now we can delete it.
-		delete orig;
-	}
 
 	// If the data on the page is ready, it won't become unready.
 	// The only place where data is set unready is where the page is evicted.
 	// Since we have a reference of the page, it won't be evicted.
 	// When data is ready, we can execuate any operations on the page.
 	if (data_ready) {
+		/* The request should contain the very original request. */
+		io_request *orig = request->get_orig();
+		assert(orig->get_orig() == NULL);
+		__complete_req(orig, p);
+		io_interface *io = orig->get_io();
+		io_request partial;
+		extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
+		orig->complete_size(partial.get_size());
+		if (orig->is_completed()) {
+			if (io->get_callback())
+				io->get_callback()->invoke(orig);
+			// Now we can delete it.
+			delete orig;
+		}
+
 		int num = 0;
 		global_cached_io *cached_io = NULL;
 		while (old) {
@@ -261,7 +261,7 @@ int access_page_callback::invoke(io_request *request)
 			io_interface *io = old->get_io();
 			cached_io = static_cast<global_cached_io *>(io);
 
-			finalize_request(old, io);
+			finalize_request(old);
 			old = next;
 			num++;
 		}
@@ -269,16 +269,18 @@ int access_page_callback::invoke(io_request *request)
 			cached_io->dec_pending(num);
 	}
 	else {
+		io_request *orig = request->get_orig();
 		global_cached_io *io = static_cast<global_cached_io *>(
-				old->get_io());
+				orig->get_io());
 		// We can't invoke write() here because it may block the thread.
 		// Instead, we queue the request, so it will be issue to
 		// the device by the user thread.
-		io->queue_request(old);
+		assert(orig->get_next_req() == NULL);
+		orig->set_next_req(old);
+		io->queue_request(orig);
 		// These requests can't be deleted yet.
 		// They will be deleted when these write requests are finally served.
 	}
-	p->dec_ref();
 	return 0;
 }
 
@@ -316,6 +318,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 	ssize_t ret = 0;
 //	orig->set_priv((void *) p);
 	p->lock();
+	assert(!p->is_old_dirty());
 	if (!p->data_ready()) {
 		if(!p->is_io_pending()) {
 			assert(!p->is_dirty());
@@ -324,7 +327,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 			// we need to first read the page.
 			if (orig->get_size() < PAGE_SIZE) {
 				off_t off = orig->get_offset();
-				io_request *real_orig = (io_request *) orig->get_priv();
+				io_request *real_orig = orig->get_orig();
 				// If the request doesn't have a private data, it is the real
 				// original request.
 				if (real_orig == NULL)
@@ -333,9 +336,10 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 					// `orig' is just part of the original request.
 					// we don't need it any more.
 					delete orig;
+				assert(real_orig->get_orig() == NULL);
 				io_request read_req((char *) p->get_data(),
 						ROUND_PAGE(off), PAGE_SIZE, READ,
-						underlying, (char *) real_orig);
+						underlying, real_orig, p);
 				p->set_io_pending(true);
 				p->unlock();
 				inc_pending(1);
@@ -354,13 +358,15 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 				p->set_data_ready(true);
 				p->unlock();
 				ret = PAGE_SIZE;
-				finalize_request(orig, this);
+				finalize_request(orig);
 			}
 		}
 		else {
 			// If there is an IO pending, it means a read request
 			// has been issuded. It can't be a write request, otherwise,
 			// the data in the page will be ready.
+			orig->set_priv(p);
+			assert(orig->get_access_method() == WRITE);
 			p->add_req(orig);
 			p->unlock();
 			inc_pending(1);
@@ -381,7 +387,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 
 		__complete_req(orig, p);
 		ret = orig->get_size();
-		finalize_request(orig, this);
+		finalize_request(orig);
 #ifdef STATISTICS
 		cache_hits++;
 #endif
@@ -391,7 +397,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 
 ssize_t global_cached_io::write(io_request &req, thread_safe_page *p)
 {
-	io_request *orig = (io_request *) req.get_priv();
+	io_request *orig = req.get_orig();
 	if (orig->get_size() == req.get_size())
 		return __write(orig, p);
 	else {
@@ -416,9 +422,10 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 					 * it will notify the underlying IO,
 					 * which then notifies global_cached_io.
 					 */
-					PAGE_SIZE, READ, underlying, (void *) orig);
+					PAGE_SIZE, READ, underlying, orig, p);
 			p->unlock();
 			inc_pending(1);
+			assert(orig->get_orig() == NULL);
 			ret = underlying->access(&req, 1);
 			if (ret < 0) {
 				perror("read");
@@ -426,6 +433,8 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 			}
 		}
 		else {
+			orig->set_priv(p);
+			assert(orig->get_access_method() == READ);
 			p->add_req(orig);
 			p->unlock();
 			inc_pending(1);
@@ -461,10 +470,10 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 	ssize_t ret = 0;
 
 	assert(npages <= MAX_NUM_IOVECS);
-	io_request multibuf_req(-1, underlying, req.get_access_method());
-	io_request *orig = (io_request *) req.get_priv();
+	io_request *orig = req.get_orig();
+	assert(orig->get_orig() == NULL);
+	io_request multibuf_req(-1, underlying, req.get_access_method(), orig);
 
-	multibuf_req.set_priv(orig);
 	/*
 	 * The pages in `pages' should be sorted with their offsets.
 	 * We are going to grab multiple locks below. As long as we always
@@ -481,6 +490,7 @@ again:
 				multibuf_req.set_offset(p->get_offset());
 			/* We don't need to worry buffer overflow here. */
 			multibuf_req.add_buf((char *) p->get_data(), PAGE_SIZE);
+			multibuf_req.set_priv(p);
 			p->unlock();
 		}
 		else if (!p->data_ready() && p->is_io_pending()) {
@@ -503,7 +513,8 @@ again:
 				io_request *partial_orig = new io_request();
 				extract_pages(*orig, p->get_offset(), 1, *partial_orig);
 				partial_orig->set_partial(true);
-				partial_orig->set_priv(orig);
+				partial_orig->set_orig(orig);
+				partial_orig->set_priv(p);
 				p->add_req(partial_orig);
 				p->unlock();
 				inc_pending(1);
@@ -555,8 +566,7 @@ int global_cached_io::handle_pending_requests()
 			// It may be the head of a request list. All requests
 			// in the list should point to the same page.
 			io_request *req = reqs[i];
-			thread_safe_page *p = static_cast<thread_safe_page *>(
-					req->get_priv());
+			thread_safe_page *p = (thread_safe_page *) req->get_priv();
 			assert(p);
 			assert(!p->is_old_dirty());
 			int num_same = 0;
@@ -596,7 +606,6 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 
 	for (int i = 0; i < num; i++) {
 		ssize_t ret;
-		off_t old_off = -1;
 		off_t offset = requests[i].get_offset();
 		int size = requests[i].get_size();
 		off_t begin_pg_offset = ROUND_PAGE(offset);
@@ -609,6 +618,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 		int pg_idx = 0;
 		for (off_t tmp_off = begin_pg_offset; tmp_off < end_pg_offset;
 				tmp_off += PAGE_SIZE) {
+			off_t old_off = -1;
 			thread_safe_page *p = (thread_safe_page *) (get_global_cache()
 					->search(tmp_off, old_off));
 			/*
@@ -634,19 +644,29 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				if (pg_idx) {
 					io_request req;
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
-					req.set_priv(orig);
+					req.set_orig(orig);
 					req.set_partial(orig->get_size() > req.get_size());
 					read(req, pages, pg_idx);
 					pg_idx = 0;
 				}
 
 				// Extract the partial access.
-				io_request *partial_orig = new io_request();
-				extract_pages(*orig, tmp_off, 1, *partial_orig);
-				partial_orig->set_priv(orig);
-				partial_orig->set_partial(orig->get_size() > partial_orig->get_size());
-//				orig->set_priv((void *) p);
+				io_request *orig1;
+				// If the request accesses more than one page.
+				if (end_pg_offset - begin_pg_offset > PAGE_SIZE) {
+					orig1 = new io_request();
+					extract_pages(*orig, tmp_off, 1, *orig1);
+					orig1->set_orig(orig);
+					orig1->set_priv(p);
+					assert(orig->get_size() > orig1->get_size());
+					orig1->set_partial(true);
+				}
+				else {
+					orig1 = orig;
+					orig1->set_priv(p);
+				}
 
+				assert(!p->data_ready());
 				/* The page is evicted in this thread */
 				if (old_off != ROUND_PAGE(offset) && old_off != -1) {
 					/*
@@ -656,9 +676,10 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					 * dirty page.
 					 */
 					p->lock();
+					assert(!p->is_io_pending());
 					p->set_io_pending(true);
-					io_request req((char *) p->get_data(),
-							old_off, PAGE_SIZE, WRITE, underlying, (void *) orig);
+					io_request req((char *) p->get_data(), old_off,
+							PAGE_SIZE, WRITE, underlying, orig1, p);
 					p->unlock();
 					inc_pending(1);
 					ret = underlying->access(&req, 1);
@@ -675,7 +696,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					// writing.
 					p->lock();
 					if (p->is_old_dirty()) {
-						p->add_req(partial_orig);
+						p->add_req(orig1);
 						p->unlock();
 						inc_pending(1);
 						// the request has been added to the page, when the old dirty
@@ -685,7 +706,8 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					}
 					else {
 						p->unlock();
-						delete partial_orig;
+						if (orig1 != orig)
+							delete orig1;
 					}
 				}
 			}
@@ -702,7 +724,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				/* We need to extract a page from the request. */
 				io_request req;
 				extract_pages(*orig, tmp_off, 1, req);
-				req.set_priv(orig);
+				req.set_orig(orig);
 				req.set_partial(orig->get_size() > req.get_size());
 				write(req, p);
 			}
@@ -711,7 +733,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				if (pg_idx == MAX_NUM_IOVECS) {
 					io_request req;
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
-					req.set_priv(orig);
+					req.set_orig(orig);
 					req.set_partial(orig->get_size() > req.get_size());
 					read(req, pages, pg_idx);
 					pg_idx = 0;
@@ -724,7 +746,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 		if (pg_idx) {
 			io_request req;
 			extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
-			req.set_priv(orig);
+			req.set_orig(orig);
 			req.set_partial(orig->get_size() > req.get_size());
 			read(req, pages, pg_idx);
 		}

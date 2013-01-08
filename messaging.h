@@ -19,6 +19,7 @@ class io_request
 {
 	off_t offset;
 	io_interface *io;
+	io_request *orig;
 	void *priv;
 
 	int access_method: 1;
@@ -40,17 +41,17 @@ class io_request
 
 public:
 	io_request() {
-		init(-1, NULL, READ, NULL);
+		init(-1, NULL, READ, NULL, NULL);
 	}
 
 	io_request(off_t off, io_interface *io, int access_method,
-			void *priv = NULL) {
-		init(off, io, access_method, priv);
+			io_request *orig = NULL, void *priv = NULL) {
+		init(off, io, access_method, orig, priv);
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, void *priv = NULL) {
-		init(buf, off, size, access_method, io, priv);
+			io_interface *io, io_request *orig = NULL, void *priv = NULL) {
+		init(buf, off, size, access_method, io, orig, priv);
 	}
 
 	io_request(io_request &req) {
@@ -67,20 +68,21 @@ public:
 			delete [] vec_pointer;
 	}
 
-	void init(char *buf, off_t off, ssize_t size,
-			int access_method, io_interface *io, void *priv = NULL) {
-		init(off, io, access_method, priv);
+	void init(char *buf, off_t off, ssize_t size, int access_method,
+			io_interface *io, io_request *orig = NULL, void *priv = NULL) {
+		init(off, io, access_method, orig, priv);
 		add_buf(buf, size);
 	}
 
-	void init(off_t off, io_interface *io,
-			int access_method, void *priv = NULL) {
+	void init(off_t off, io_interface *io, int access_method,
+			io_request *orig = NULL, void *priv = NULL) {
 		this->offset = off;
 		this->io = io;
 		this->access_method = access_method & 0x1;
 		this->priv = priv;
 		this->partial = 0;
 		this->completed_size = 0;
+		this->orig = orig;
 		memset(embedded_vecs, 0,
 				sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
 		num_bufs = 0;
@@ -95,6 +97,14 @@ public:
 
 	io_interface *get_io() const {
 		return io;
+	}
+
+	io_request *get_orig() const {
+		return orig;
+	}
+
+	void set_orig(io_request *orig) {
+		this->orig = orig;
 	}
 
 	void set_offset(off_t offset) {
@@ -169,7 +179,9 @@ public:
 	}
 
 	bool is_completed() const {
-		return completed_size == get_size();
+		ssize_t size = get_size();
+		assert(completed_size <= size);
+		return completed_size == size;
 	}
 
 	void set_partial(bool partial) {
