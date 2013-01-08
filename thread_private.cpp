@@ -34,17 +34,25 @@ void create_write_data(char *buf, int size, off_t off)
 	long start_data = aligned_start / sizeof(off_t);
 	long end_data = aligned_end / sizeof(off_t);
 
+	/* If all data is in one 8-byte word. */
+	if (aligned_start == aligned_end) {
+		memcpy(buf, ((char *) &start_data) + (off - aligned_start), size);
+		return;
+	}
+
 	int first_size =  (int)(sizeof(off_t) - (off - aligned_start));
+	int last_size = (int) (off + size - aligned_end);
+
 	if (first_size == sizeof(off_t))
 		first_size = 0;
 	if (first_size)
 		memcpy(buf, ((char *) &start_data) + (off - aligned_start),
 				first_size);
-	for (int i = first_size; i < size; i += sizeof(off_t)) {
+	for (int i = first_size; i < aligned_end - off; i += sizeof(off_t)) {
 		*((long *) (buf + i)) = (off + i) / sizeof(off_t);
 	}
-	if (aligned_end > aligned_start) {
-		int last_size = (int) (off + size - aligned_end);
+	if (aligned_end > aligned_start
+			|| (aligned_end == aligned_start && first_size == 0)) {
 		if (last_size)
 			memcpy(buf + (aligned_end - off), (char *) &end_data, last_size);
 	}
