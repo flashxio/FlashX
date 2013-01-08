@@ -171,7 +171,6 @@ again:
 					}
 				}
 				else {
-					assert(buf->get_entry_size() >= size);
 					char *p = buf->next_entry(size);
 					if (access_method == WRITE)
 						create_write_data(p, size, off);

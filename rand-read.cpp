@@ -307,10 +307,6 @@ int main(int argc, char *argv[])
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio);
 
 	int num_entries = (int) (((long) npages) * PAGE_SIZE / entry_size);
-	/* If a user doesn't specify multibuf requests */
-	if (buf_type == SINGLE_LARGE_BUF) {
-		assert(buf_size >= entry_size);
-	}
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
