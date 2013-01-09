@@ -112,32 +112,50 @@ public:
 	int multibuf_invoke(io_request *request);
 };
 
+void finalize_partial_request(io_request &partial, io_request *orig)
+{
+	io_interface *io = partial.get_io();
+	orig->inc_complete_count();
+	if (orig->complete_size(partial.get_size())) {
+		if (io->get_callback())
+			io->get_callback()->invoke(orig);
+		orig->dec_complete_count();
+		orig->wait4unref();
+		// Now we can delete it.
+		delete orig;
+	}
+	else
+		orig->dec_complete_count();
+}
+
 /**
  * This method is to finalize the request. The processing of the request
  * ends here.
  */
-void finalize_request(io_request *req)
+void finalize_request(io_request &req)
 {
 	// It's possible that the request is just a partial request.
-	io_interface *io = req->get_io();
-	if (req->is_partial()) {
-		io_request *original = req->get_orig();
+	io_interface *io = req.get_io();
+	if (req.is_partial()) {
+		io_request *original = req.get_orig();
 		assert(original);
 		assert(original->get_orig() == NULL);
-		original->complete_size(req->get_size());
-		if (original->is_completed()) {
+		original->inc_complete_count();
+		if (original->complete_size(req.get_size())) {
 			if (io->get_callback())
 				io->get_callback()->invoke(original);
+			original->dec_complete_count();
+			original->wait4unref();
 			delete original;
 		}
+		else
+			original->dec_complete_count();
 	}
 	else {
-		assert(req->get_orig() == NULL);
+		assert(req.get_orig() == NULL);
 		if (io->get_callback())
-			io->get_callback()->invoke(req);
+			io->get_callback()->invoke(&req);
 	}
-	// Now we can delete it.
-	delete req;
 }
 
 int access_page_callback::multibuf_invoke(io_request *request)
@@ -169,20 +187,13 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		p->unlock();
 		off += PAGE_SIZE;
 	}
-	io_interface *io = orig->get_io();
 	/*
 	 * For a multi-buf request, the private data actually points to
 	 * the very original request.
 	 */
 	io_request partial;
 	extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
-	orig->complete_size(partial.get_size());
-	if (orig->is_completed()) {
-		if (io->get_callback())
-			io->get_callback()->invoke(orig);
-		// Now we can delete it.
-		delete orig;
-	}
+	finalize_partial_request(partial, orig);
 
 	/*
 	 * Now we should start to deal with all requests pending to pages
@@ -194,7 +205,9 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		while (old) {
 			io_request *next = old->get_next_req();
 			__complete_req(old, p);
-			finalize_request(old);
+			finalize_request(*old);
+			// Now we can delete it.
+			delete old;
 			old = next;
 		}
 		p->dec_ref();
@@ -236,16 +249,9 @@ int access_page_callback::invoke(io_request *request)
 		io_request *orig = request->get_orig();
 		assert(orig->get_orig() == NULL);
 		__complete_req(orig, p);
-		io_interface *io = orig->get_io();
 		io_request partial;
 		extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
-		orig->complete_size(partial.get_size());
-		if (orig->is_completed()) {
-			if (io->get_callback())
-				io->get_callback()->invoke(orig);
-			// Now we can delete it.
-			delete orig;
-		}
+		finalize_partial_request(partial, orig);
 
 		int num = 0;
 		global_cached_io *cached_io = NULL;
@@ -261,7 +267,9 @@ int access_page_callback::invoke(io_request *request)
 			io_interface *io = old->get_io();
 			cached_io = static_cast<global_cached_io *>(io);
 
-			finalize_request(old);
+			finalize_request(*old);
+			// Now we can delete it.
+			delete old;
 			old = next;
 			num++;
 		}
@@ -358,7 +366,9 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 				p->set_data_ready(true);
 				p->unlock();
 				ret = PAGE_SIZE;
-				finalize_request(orig);
+				finalize_request(*orig);
+				// Now we can delete it.
+				delete orig;
 			}
 		}
 		else {
@@ -387,7 +397,9 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 
 		__complete_req(orig, p);
 		ret = orig->get_size();
-		finalize_request(orig);
+		finalize_request(*orig);
+		// Now we can delete it.
+		delete orig;
 #ifdef STATISTICS
 		cache_hits++;
 #endif
@@ -541,13 +553,7 @@ again:
 			extract_pages(*orig, p->get_offset(), 1, complete_partial);
 			ret += complete_partial.get_size();
 			__complete_req(&complete_partial, p);
-			// TODO I need to use a lock to protect this.
-			orig->complete_size(complete_partial.get_size());
-			if (orig->is_completed()) {
-				if (get_callback())
-					get_callback()->invoke(orig);
-				delete orig;
-			}
+			finalize_partial_request(complete_partial, orig);
 		}
 	}
 	if (!multibuf_req.is_empty()) {

@@ -14,6 +14,7 @@ void io_request::assign(io_request &req)
 	this->partial = req.partial;
 	this->completed_size = req.completed_size;
 	this->orig = req.orig;
+	this->refcnt = 0;
 	/*
 	 * If the request uses embedded vector, then the new request
 	 * should point to its own embedded vector. Otherwise,

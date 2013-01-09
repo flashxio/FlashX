@@ -28,10 +28,16 @@ class io_request
 	int partial: 1;
 	int vec_capacity: 15;
 
+	/* 
+	 * This is to protect the object from being removed
+	 * while others are still using it.
+	 */
+	volatile int refcnt;
+
 	struct iovec *vec_pointer;
 	struct iovec embedded_vecs[NUM_EMBEDDED_IOVECS];
 	io_request *next;
-	ssize_t completed_size;
+	volatile ssize_t completed_size;
 
 	bool use_embedded() const {
 		return vec_pointer == embedded_vecs;
@@ -83,6 +89,7 @@ public:
 		this->partial = 0;
 		this->completed_size = 0;
 		this->orig = orig;
+		this->refcnt = 0;
 		memset(embedded_vecs, 0,
 				sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
 		num_bufs = 0;
@@ -174,14 +181,27 @@ public:
 		this->next = next;
 	}
 
-	void complete_size(ssize_t completed) {
-		completed_size += completed;
+	int inc_complete_count() {
+		return __sync_add_and_fetch(&refcnt, 1);
 	}
 
-	bool is_completed() const {
+	int dec_complete_count() {
+		return __sync_sub_and_fetch(&refcnt, 1);
+	}
+
+	void wait4unref() {
+		while (refcnt > 0) {}
+	}
+
+	/**
+	 * Maintain the completed size in this request.
+	 * If the request is complete, return true;
+	 */
+	bool complete_size(ssize_t completed) {
+		ssize_t res = __sync_add_and_fetch(&completed_size, completed);
 		ssize_t size = get_size();
-		assert(completed_size <= size);
-		return completed_size == size;
+		assert(res <= size);
+		return res == size;
 	}
 
 	void set_partial(bool partial) {
