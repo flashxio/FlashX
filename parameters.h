@@ -20,7 +20,7 @@ const int NUM_REQS_BY_USER = 100;
  * The initial size of the queue for pending IO requests
  * in the global cache.
  */
-const int INIT_GCACHE_PENDING_SIZE = NUM_REQS_BY_USER * 10;
+const int INIT_GCACHE_PENDING_SIZE = NUM_REQS_BY_USER * 100;
 
 /**
  * The min size of IO vector allocated for an IO request..
