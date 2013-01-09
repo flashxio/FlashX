@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/perl
 
 use strict;
 
