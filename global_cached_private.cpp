@@ -170,8 +170,8 @@ int access_page_callback::multibuf_invoke(io_request *request)
 	io_request *pending_reqs[request->get_num_bufs()];
 	thread_safe_page *pages[request->get_num_bufs()];
 	off_t off = request->get_offset();
-	off_t old_off = -1;
 	for (int i = 0; i < request->get_num_bufs(); i++) {
+		off_t old_off = -1;
 		thread_safe_page *p = (thread_safe_page *) cache->search(off, old_off);
 		pages[i] = p;
 		// The page must exist in the cache originally.
