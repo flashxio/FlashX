@@ -1,6 +1,10 @@
 #include <errno.h>
+#include <limits.h>
 
+#include "thread_private.h"
 #include "associative_cache.h"
+#include "flush_thread.h"
+#include "container.cpp"
 
 #ifdef STATISTICS
 volatile int avail_cells;
@@ -21,7 +25,7 @@ class expand_exception
 
 hash_cell::hash_cell(associative_cache *cache, long hash) {
 	this->hash = hash;
-	overflow = false;
+	assert(hash < INT_MAX);
 	pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	this->table = cache;
 	char *pages[CELL_SIZE];
@@ -85,7 +89,7 @@ void hash_cell::rehash(hash_cell *expanded) {
 	}
 	pthread_spin_unlock(&expanded->_lock);
 	pthread_spin_unlock(&_lock);
-	overflow = false;
+	flags.clear_flag(OVERFLOW);
 }
 
 /**
@@ -186,7 +190,7 @@ search_again:
 	 * if we haven't done it before.
 	 */
 	if (table->is_expandable() && policy.expand_buffer(*ret)) {
-		overflow = true;
+		flags.set_flag(OVERFLOW);
 		long table_size = table->size();
 		long average_size = table->get_manager()->average_cache_size();
 		if (table_size < average_size && !expanded) {
@@ -217,7 +221,7 @@ thread_safe_page *LRU_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	int pos;
-	if (pos_vec.size() < CELL_SIZE) {
+	if (pos_vec.size() < (unsigned) CELL_SIZE) {
 		pos = pos_vec.size();
 	}
 	else {
@@ -573,4 +577,318 @@ associative_cache::associative_cache(long cache_size, bool expandable) {
 	int max_ncells = max_npages / CELL_SIZE;
 	for (int i = 1; i < max_ncells / init_ncells; i++)
 		cells_table.push_back(NULL);
+}
+
+class associative_flush_thread: public flush_thread
+{
+	associative_cache *cache;
+	io_interface *io;
+	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
+public:
+	associative_flush_thread(associative_cache *cache,
+			io_interface *io): dirty_cells(MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
+		this->cache = cache;
+		this->io = io;
+	}
+
+	void run();
+	void request_callback(io_request &req);
+	void dirty_pages(thread_safe_page *pages[], int num);
+};
+
+void merge_pages2reqs(std::vector<io_request *> &requests,
+		std::map<off_t, thread_safe_page *> &dirty_pages,
+		bool forward, std::vector<io_request *> &complete)
+{
+	for (unsigned i = 0; i < requests.size(); ) {
+		io_request *req = requests[i];
+		// there is a page adjacent to the request.
+		std::map<off_t, thread_safe_page *>::iterator it;
+		if (forward)
+			it = dirty_pages.find(req->get_offset() + req->get_size());
+		else
+			it = dirty_pages.find(req->get_offset() - PAGE_SIZE);
+		if (it != dirty_pages.end()) {
+			thread_safe_page *p = it->second;
+			dirty_pages.erase(it);
+			p->lock();
+			assert(!p->is_old_dirty());
+			assert(p->data_ready());
+			if (!p->is_io_pending()) {
+				req->add_buf((char *) p->get_data(), PAGE_SIZE);
+				// If the dirty pages are in front of the requests.
+				if (!forward) {
+					assert(p->get_offset() == req->get_offset() - PAGE_SIZE);
+					req->set_offset(p->get_offset());
+				}
+				p->set_io_pending(true);
+				i++;
+				p->unlock();
+			}
+			else {
+				/* The page is being written back, so we don't need to do it. */
+				p->dec_ref();
+				p->unlock();
+				/* 
+				 * We are going to break the request and write the existing
+				 * request.
+				 */
+				complete.push_back(req);
+				requests.erase(requests.begin() + i);
+			}
+		}
+		else {
+			/*
+			 * There isn't a page adjacency to the request,
+			 * we should remove the request from the vector and write it
+			 * to the disk.
+			 */
+			complete.push_back(req);
+			requests.erase(requests.begin() + i);
+		}
+	}
+
+	/*
+	 * We just release the reference count on the remaining pages,
+	 * as we won't use them any more.
+	 */
+	for (std::map<off_t, thread_safe_page *>::const_iterator it
+			= dirty_pages.begin(); it != dirty_pages.end(); it++) {
+		thread_safe_page *p = it->second;
+		p->dec_ref();
+	}
+}
+
+void write_requests(const std::vector<io_request *> &requests, io_interface *io)
+{
+	for (unsigned i = 0; i < requests.size(); i++) {
+		assert(requests[i]->get_orig() == NULL);
+		if (requests[i]->get_num_bufs() > 1)
+			io->access(requests[i], 1);
+		else {
+			thread_safe_page *p = (thread_safe_page *) requests[i]->get_priv();
+			p->set_io_pending(false);
+			p->dec_ref();
+		}
+	}
+}
+
+void associative_flush_thread::request_callback(io_request &req)
+{
+	if (req.get_num_bufs() == 1) {
+		thread_safe_page *p = (thread_safe_page *) req.get_priv();
+		p->lock();
+		assert(p->is_dirty());
+		p->set_dirty(false);
+		p->set_io_pending(false);
+		p->dec_ref();
+		p->unlock();
+	}
+	else {
+		off_t off = req.get_offset();
+		for (int i = 0; i < req.get_num_bufs(); i++) {
+			off_t old_off = -1;
+			thread_safe_page *p = (thread_safe_page *) cache->search(off, old_off);
+			assert(old_off == -1);
+			p->lock();
+			assert(p->is_dirty());
+			p->set_dirty(false);
+			p->set_io_pending(false);
+			p->dec_ref();
+			p->dec_ref();
+			assert(p->get_ref() >= 0);
+			p->unlock();
+			off += PAGE_SIZE;
+		}
+	}
+}
+
+void associative_flush_thread::run()
+{
+	int num_fetches;
+	// We can't get more requests than the number of pages in a cell.
+	io_request req_array[CELL_SIZE];
+	while ((num_fetches = dirty_cells.get_num_entries()) > 0) {
+		hash_cell *cells[num_fetches];
+		int ret = dirty_cells.fetch(cells, num_fetches);
+		// This is the only place where we fetches entries in the queue,
+		// and there is only one thread fetching entries, so we can be 
+		// very sure we can fetch the number of entries we specify.
+		assert(ret == num_fetches);
+
+		for (int i = 0; i < num_fetches; i++) {
+			std::map<off_t, thread_safe_page *> dirty_pages;
+			std::vector<io_request *> requests;
+			cells[i]->get_dirty_pages(dirty_pages);
+			int num_init_reqs = 0;
+			for (std::map<off_t, thread_safe_page *>::const_iterator it
+					= dirty_pages.begin(); it != dirty_pages.end(); it++) {
+				thread_safe_page *p = it->second;
+				p->lock();
+				assert(!p->is_old_dirty());
+				assert(p->data_ready());
+				if (!p->is_io_pending()) {
+					req_array[num_init_reqs].init((char *) p->get_data(),
+								p->get_offset(), PAGE_SIZE, WRITE, io, NULL, p);
+					requests.push_back(&req_array[num_init_reqs]);
+					num_init_reqs++;
+					p->set_io_pending(true);
+				}
+				else {
+					/*
+					 * If there is IO pending on the page, it means the page is being
+					 * written back to the file, so we don't need to do anything on
+					 * the page other than relasing the reference to the page.
+					 */
+					p->dec_ref();
+				}
+				p->unlock();
+			}
+			std::vector<io_request *> forward_complete;
+			hash_cell *curr_cell = cells[i];
+			size_t num_reqs = requests.size();
+			// Search forward and find pages that can merge with the current requests.
+			while (!requests.empty()) {
+				hash_cell *next_cell = cache->get_next_cell(curr_cell);
+				if (next_cell == NULL)
+					break;
+				dirty_pages.clear();
+				next_cell->get_dirty_pages(dirty_pages);
+				merge_pages2reqs(requests, dirty_pages, true, forward_complete);
+				curr_cell = next_cell;
+			}
+			// Add the remaining merged requests to the same array with others.
+			for (unsigned k = 0; k < requests.size(); k++)
+				forward_complete.push_back(requests[k]);
+			assert(forward_complete.size() == num_reqs);
+
+			std::vector<io_request *> complete;
+			curr_cell = cells[i];
+			// Search backward and find pages that can merge with the current requests.
+			while (!forward_complete.empty()) {
+				hash_cell *prev_cell = cache->get_prev_cell(curr_cell);
+				if (prev_cell == NULL)
+					break;
+				dirty_pages.clear();
+				prev_cell->get_dirty_pages(dirty_pages);
+				merge_pages2reqs(forward_complete, dirty_pages, false, complete);
+			}
+			for (unsigned k = 0; k < forward_complete.size(); k++)
+				complete.push_back(forward_complete[k]);
+			assert(complete.size() == num_reqs);
+			write_requests(complete, io);
+			// TODO maybe I shouldn't clear the bit here.
+			cells[i]->set_in_queue(false);
+		}
+	}
+}
+
+flush_thread *associative_cache::create_flush_thread(io_interface *io)
+{
+	_flush_thread = new associative_flush_thread(this, io);
+	return _flush_thread;
+}
+
+hash_cell *associative_cache::get_prev_cell(hash_cell *cell) {
+	long index = cell->get_hash();
+	// The first cell in the hash table.
+	if (index == 0)
+		return NULL;
+	// The cell is in the middle of a cell array.
+	if (index % init_ncells)
+		return cell - 1;
+	else {
+		unsigned i;
+		for (i = 0; i < cells_table.size(); i++) {
+			if (cell == cells_table[i]) {
+				assert(i > 0);
+				// return the last cell in the previous cell array.
+				return (cells_table[i - 1] + init_ncells - 1);
+			}
+		}
+		// we should reach here if the cell exists in the table.
+		abort();
+	}
+}
+
+hash_cell *associative_cache::get_next_cell(hash_cell *cell)
+{
+	long index = cell->get_hash();
+	// If it's not the last cell in the cell array.
+	if (index % init_ncells != init_ncells - 1)
+		return cell + 1;
+	else {
+		unsigned i;
+		hash_cell *first = cell + 1 - init_ncells;
+		for (i = 0; i < cells_table.size(); i++) {
+			if (first == cells_table[i]) {
+				if (i == cells_table.size() - 1)
+					return NULL;
+				else
+					return cells_table[i + 1];
+			}
+		}
+		// We should reach here.
+		abort();
+	}
+}
+
+void hash_cell::get_dirty_pages(std::map<off_t, thread_safe_page *> &pages)
+{
+	pthread_spin_lock(&_lock);
+	for (int i = 0; i < CELL_SIZE; i++) {
+		thread_safe_page *p = buf.get_page(i);
+		/*
+		 * When we are here, the page can't be evicted, so it won't be
+		 * set old dirty.
+		 * By checking the IO pending bit, we can reduce the chance of
+		 * returning the page to the flush thread, so we might be able
+		 * to improve performance.
+		 */
+		if (p->is_dirty() && !p->is_io_pending()) {
+			p->inc_ref();
+			pages.insert(std::pair<off_t, thread_safe_page *>(p->get_offset(), p));
+		}
+	}
+	pthread_spin_unlock(&_lock);
+}
+
+int hash_cell::num_pages(char set_flags, char clear_flags)
+{
+	int num = 0;
+	pthread_spin_lock(&_lock);
+	for (int i = 0; i < CELL_SIZE; i++) {
+		thread_safe_page *p = buf.get_page(i);
+		if (p->test_flags(set_flags) && !p->test_flags(clear_flags))
+			num++;
+	}
+	pthread_spin_unlock(&_lock);
+	return num;
+}
+
+void associative_flush_thread::dirty_pages(thread_safe_page *pages[], int num)
+{
+	hash_cell *cells[num];
+	int num_queued_cells = 0;
+	for (int i = 0; i < num; i++) {
+		hash_cell *cell = cache->get_cell_offset(pages[i]->get_offset());
+		if (!cell->is_in_queue()) {
+			char dirty_flag = 0;
+			char io_pending_flag = 0;
+			page_set_flag(dirty_flag, DIRTY_BIT, true);
+			page_set_flag(io_pending_flag, IO_PENDING_BIT, true);
+			/*
+			 * We only count the number of dirty pages without IO pending.
+			 * If a page is dirty but has IO pending, it means the page
+			 * is being written back, so we don't need to do anything with it.
+			 */
+			int n = cell->num_pages(dirty_flag, io_pending_flag);
+			if (n > DIRTY_PAGES_THRESHOLD && !cell->set_in_queue(true))
+				cells[num_queued_cells++] = cell;
+		}
+	}
+	if (num_queued_cells > 0) {
+		dirty_cells.add(cells, num_queued_cells);
+		activate();
+	}
 }

@@ -5,12 +5,25 @@
 #include "messaging.h"
 #include "container.h"
 
+/**
+ * This class is to help the local thread send IO requests to remote threads
+ * dedicated to accessing SSDs. Each SSD has such a thread.
+ * However, the helper class isn't thread safe, so each local thread has to
+ * reference its own helper object.
+ */
 class remote_disk_access: public io_interface
 {
 	msg_sender<io_request> **senders;
 	thread_safe_FIFO_queue<io_request> **queues;
 	int num_senders;
 	callback *cb;
+
+	remote_disk_access() {
+		senders = NULL;
+		queues = NULL;
+		num_senders = 0;
+		cb = NULL;
+	}
 public:
 	remote_disk_access(disk_read_thread **remotes,
 			int num_remotes);
@@ -37,6 +50,7 @@ public:
 	}
 
 	virtual ssize_t access(io_request *requests, int num);
+	virtual io_interface *clone() const;
 };
 
 #endif

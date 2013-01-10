@@ -71,6 +71,10 @@ public:
 
 	virtual void print_stat() {
 	}
+
+	virtual io_interface *clone() const {
+		return NULL;
+	}
 };
 
 class cleanup_callback;

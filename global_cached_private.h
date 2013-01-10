@@ -40,7 +40,8 @@ class global_cached_io: public io_interface
 	 * for deleting `req'.
 	 */
 	ssize_t __read(io_request *req, thread_safe_page *p);
-	ssize_t __write(io_request *req, thread_safe_page *p);
+	ssize_t __write(io_request *req, thread_safe_page *p,
+		std::vector<thread_safe_page *> &dirty_pages);
 
 	volatile int num_pending_reqs;
 public:
@@ -100,7 +101,8 @@ public:
 	 * aligned with a page size.
 	 */
 	ssize_t read(io_request &req, thread_safe_page *pages[], int npages);
-	ssize_t write(io_request &req, thread_safe_page *p);
+	ssize_t write(io_request &req, thread_safe_page *p,
+		std::vector<thread_safe_page *> &dirty_pages);
 
 	void queue_request(io_request *req) {
 		pending_requests.addByForce(&req, 1);

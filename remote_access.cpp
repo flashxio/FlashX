@@ -14,6 +14,7 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 				&queue, 1);
 		queues[i] = queue;
 	}
+	cb = NULL;
 }
 
 remote_disk_access::~remote_disk_access()
@@ -22,6 +23,21 @@ remote_disk_access::~remote_disk_access()
 		delete senders[i];
 	delete [] senders;
 	delete [] queues;
+}
+
+io_interface *remote_disk_access::clone() const
+{
+	remote_disk_access *copy = new remote_disk_access();
+	copy->num_senders = this->num_senders;
+	copy->senders = new msg_sender<io_request> *[this->num_senders];
+	copy->queues = new thread_safe_FIFO_queue<io_request> *[this->num_senders];
+	for (int i = 0; i < copy->num_senders; i++) {
+		copy->queues[i] = this->queues[i];
+		copy->senders[i] = new msg_sender<io_request>(MSG_SEND_BUF_SIZE,
+				&copy->queues[i], 1);
+	}
+	copy->cb = this->cb;
+	return copy;
 }
 
 void remote_disk_access::cleanup()

@@ -12,8 +12,6 @@
 #include "container.h"
 #include "parameters.h"
 
-#define CELL_SIZE 8
-
 /* 36 shadow pages makes exactly 4 cache lines. */
 #define NUM_SHADOW_PAGES 36
 
@@ -267,12 +265,16 @@ public:
 
 class hash_cell
 {
-	// for testing
-	long hash;
+	enum {
+		CELL_OVERFLOW,
+		IN_QUEUE,
+	};
+	// It's actually a virtual index of the cell on the hash table.
+	int hash;
+	atomic_flags<int> flags;
 
 	pthread_spinlock_t _lock;
 	page_cell<thread_safe_page> buf;
-	bool overflow;
 	associative_cache *table;
 #ifdef USE_LRU
 	LRU_eviction_policy policy;
@@ -293,8 +295,8 @@ class hash_cell
 
 public:
 	hash_cell() {
-		overflow = false;
 		table = NULL;
+		hash = -1;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
@@ -316,7 +318,7 @@ public:
 	}
 
 	bool is_overflow() {
-		return overflow;
+		return flags.test_flag(OVERFLOW);
 	}
 
 	page *search(off_t off, off_t &old_off);
@@ -331,8 +333,28 @@ public:
 			printf("%lx\t", buf.get_page(i)->get_offset());
 		printf("\n");
 	}
+
+	void get_dirty_pages(std::map<off_t, thread_safe_page *> &pages);
+
+	long get_hash() const {
+		return hash;
+	}
+
+	bool is_in_queue() const {
+		return flags.test_flag(IN_QUEUE);
+	}
+
+	bool set_in_queue(bool v) {
+		if (v)
+			return flags.set_flag(IN_QUEUE);
+		else
+			return flags.clear_flag(IN_QUEUE);
+	}
+
+	int num_pages(char set_flags, char clear_flags);
 };
 
+class flush_thread;
 class associative_cache: public page_cache
 {
 	enum {
@@ -357,6 +379,8 @@ class associative_cache: public page_cache
 	/* used for linear hashing */
 	int level;
 	int split;
+
+	flush_thread *_flush_thread;
 
 public:
 	associative_cache(long cache_size, bool expandable = false);
@@ -408,6 +432,10 @@ public:
 			* init_ncells * CELL_SIZE * PAGE_SIZE;
 	}
 
+	int get_num_cells() const {
+		return ncells.get();
+	}
+
 	bool shrink(int npages, char *pages[]) {
 		// TODO shrink the cache
 		return false;
@@ -442,6 +470,16 @@ public:
 	bool is_expandable() const {
 		return expandable;
 	}
+
+	/* Methods for flushing dirty pages. */
+
+	flush_thread *create_flush_thread(io_interface *io);
+	flush_thread *get_flush_thread() const {
+		return _flush_thread;
+	}
+
+	hash_cell *get_prev_cell(hash_cell *cell);
+	hash_cell *get_next_cell(hash_cell *cell);
 };
 
 #endif

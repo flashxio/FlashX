@@ -1,5 +1,6 @@
 #include "global_cached_private.h"
 #include "container.cpp"
+#include "flush_thread.h"
 
 /**
  * This file implements global cache.
@@ -63,17 +64,22 @@ static void extract_pages(const io_request &req, off_t off, int npages,
 			req.get_io());
 }
 
-static void __complete_req(io_request *orig, thread_safe_page *p)
+/**
+ * It returns the page that is dirtied by the function for the first time.
+ */
+static thread_safe_page *__complete_req(io_request *orig, thread_safe_page *p)
 {
 	io_request extracted;
 	extract_pages(*orig, p->get_offset(), 1, extracted);
 	int page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
+	thread_safe_page *ret = NULL;
 
 	p->lock();
 	if (orig->get_access_method() == WRITE) {
 		memcpy((char *) p->get_data() + page_off, extracted.get_buf(),
 				extracted.get_size());
-		p->set_dirty(true);
+		if (!p->set_dirty(true))
+			ret = p;
 	}
 	else 
 		/* I assume the data I read never crosses the page boundary */
@@ -81,24 +87,29 @@ static void __complete_req(io_request *orig, thread_safe_page *p)
 				extracted.get_size());
 	p->unlock();
 	p->dec_ref();
+	return ret;
 }
 
-static void __complete_req_unlocked(io_request *orig, thread_safe_page *p)
+static thread_safe_page *__complete_req_unlocked(io_request *orig,
+		thread_safe_page *p)
 {
 	io_request extracted;
 	extract_pages(*orig, p->get_offset(), 1, extracted);
 	int page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
+	thread_safe_page *ret = NULL;
 
 	if (orig->get_access_method() == WRITE) {
 		memcpy((char *) p->get_data() + page_off, extracted.get_buf(),
 				extracted.get_size());
-		p->set_dirty(true);
+		if (!p->set_dirty(true))
+			ret = p;
 	}
 	else 
 		/* I assume the data I read never crosses the page boundary */
 		memcpy(extracted.get_buf(), (char *) p->get_data() + page_off,
 				extracted.get_size());
 	p->dec_ref();
+	return ret;
 }
 
 class access_page_callback: public callback
@@ -169,6 +180,9 @@ int access_page_callback::multibuf_invoke(io_request *request)
 	 */
 	io_request *pending_reqs[request->get_num_bufs()];
 	thread_safe_page *pages[request->get_num_bufs()];
+	// The pages that are set dirty for the first time.
+	thread_safe_page *dirty_pages[request->get_num_bufs()];
+	int num_dirty_pages = 0;
 	off_t off = request->get_offset();
 	for (int i = 0; i < request->get_num_bufs(); i++) {
 		off_t old_off = -1;
@@ -183,7 +197,9 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		p->set_data_ready(true);
 		p->set_io_pending(false);
 		pending_reqs[i] = p->reset_reqs();
-		__complete_req_unlocked(orig, p);
+		thread_safe_page *dirty = __complete_req_unlocked(orig, p);
+		if (dirty)
+			dirty_pages[num_dirty_pages++] = dirty;
 		p->unlock();
 		off += PAGE_SIZE;
 	}
@@ -204,7 +220,13 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		thread_safe_page *p = pages[i];
 		while (old) {
 			io_request *next = old->get_next_req();
-			__complete_req(old, p);
+			thread_safe_page *dirty = __complete_req(old, p);
+			if (dirty) {
+				// We can be pretty certain that the same page won't appear
+				// twice in the array.
+				assert(num_dirty_pages < request->get_num_bufs());
+				dirty_pages[num_dirty_pages++] = dirty;
+			}
 			finalize_request(*old);
 			// Now we can delete it.
 			delete old;
@@ -212,12 +234,22 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		}
 		p->dec_ref();
 	}
+	cache->get_flush_thread()->dirty_pages(dirty_pages, num_dirty_pages);
 
 	return -1;
 }
 
 int access_page_callback::invoke(io_request *request)
 {
+	/* 
+	 * If the request doesn't have an original request,
+	 * it is issued by the flushing thread.
+	 */
+	if (request->get_orig() == NULL) {
+		cache->get_flush_thread()->request_callback(*request);
+		return 0;
+	}
+
 	if (request->get_num_bufs() > 1)
 		return multibuf_invoke(request);
 
@@ -248,7 +280,10 @@ int access_page_callback::invoke(io_request *request)
 		/* The request should contain the very original request. */
 		io_request *orig = request->get_orig();
 		assert(orig->get_orig() == NULL);
-		__complete_req(orig, p);
+		thread_safe_page *dirty = __complete_req(orig, p);
+		// TODO maybe I should make it support multi-request callback.
+		if (dirty)
+			cache->get_flush_thread()->dirty_pages(&dirty, 1);
 		io_request partial;
 		extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
 		finalize_partial_request(partial, orig);
@@ -263,7 +298,9 @@ int access_page_callback::invoke(io_request *request)
 			 */
 			io_request *next = old->get_next_req();
 			assert(old->get_num_bufs() == 1);
-			__complete_req(old, p);
+			thread_safe_page *dirty = __complete_req(old, p);
+			if (dirty)
+				cache->get_flush_thread()->dirty_pages(&dirty, 1);
 			io_interface *io = old->get_io();
 			cached_io = static_cast<global_cached_io *>(io);
 
@@ -316,12 +353,17 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 		global_cache = create_cache(cache_type, cache_size);
 	}
 	underlying->set_callback(new access_page_callback(global_cache));
+	if (global_cache->get_flush_thread() == NULL) {
+		flush_thread *thread = global_cache->create_flush_thread(underlying->clone());
+		thread->start();
+	}
 }
 
 /**
  * a write request only covers the memory within one page.
  */
-ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
+ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
+		std::vector<thread_safe_page *> &dirty_pages)
 {
 	ssize_t ret = 0;
 //	orig->set_priv((void *) p);
@@ -362,7 +404,9 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 				// we don't need to read the page first. However, we have to
 				// make sure data is written to a page without anyone else
 				// having IO operations on it.
-				__complete_req_unlocked(orig, p);
+				thread_safe_page *dirty = __complete_req_unlocked(orig, p);
+				if (dirty)
+					dirty_pages.push_back(dirty);
 				p->set_data_ready(true);
 				p->unlock();
 				ret = PAGE_SIZE;
@@ -392,10 +436,13 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 		// In other words, if the thread for writing dirty pages is writing
 		// a page, the page will be referenced and therefore, can't be returned
 		// from the cache.
-		assert(!p->is_io_pending());
+		// TODO we should delay the write if the page is being written back.
+//		assert(!p->is_io_pending());
 		p->unlock();
 
-		__complete_req(orig, p);
+		thread_safe_page *dirty = __complete_req(orig, p);
+		if (dirty)
+			dirty_pages.push_back(dirty);
 		ret = orig->get_size();
 		finalize_request(*orig);
 		// Now we can delete it.
@@ -407,15 +454,16 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p)
 	return ret;
 }
 
-ssize_t global_cached_io::write(io_request &req, thread_safe_page *p)
+ssize_t global_cached_io::write(io_request &req, thread_safe_page *p,
+		std::vector<thread_safe_page *> &dirty_pages)
 {
 	io_request *orig = req.get_orig();
 	if (orig->get_size() == req.get_size())
-		return __write(orig, p);
+		return __write(orig, p, dirty_pages);
 	else {
 		io_request *partial_orig = new io_request(req);
 		partial_orig->set_partial(true);
-		return __write(partial_orig, p);
+		return __write(partial_orig, p, dirty_pages);
 	}
 }
 
@@ -565,6 +613,7 @@ again:
 int global_cached_io::handle_pending_requests()
 {
 	int tot = 0;
+	std::vector<thread_safe_page *> dirty_pages;
 	while (!pending_requests.is_empty()) {
 		io_request *reqs[MAX_FETCH_REQS];
 		int num = pending_requests.fetch(reqs, MAX_FETCH_REQS);
@@ -586,7 +635,7 @@ int global_cached_io::handle_pending_requests()
 				assert(req->get_priv() == p);
 				req->set_next_req(NULL);
 				if (req->get_access_method() == WRITE)
-					__write(req, p);
+					__write(req, p, dirty_pages);
 				else
 					__read(req, p);
 				req = next;
@@ -601,6 +650,12 @@ int global_cached_io::handle_pending_requests()
 		}
 		tot += num;
 	}
+	// It's not very likely we can get dirty pages here because this is
+	// the place where we just finish writing old dirty pages to the disk.
+	// The only possible reason is that we happen to overwrite the entire
+	// page.
+	global_cache->get_flush_thread()->dirty_pages(dirty_pages.data(),
+			dirty_pages.size());
 	return tot;
 }
 
@@ -610,6 +665,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 		handle_pending_requests();
 	}
 
+	std::vector<thread_safe_page *> dirty_pages;
 	for (int i = 0; i < num; i++) {
 		ssize_t ret;
 		off_t offset = requests[i].get_offset();
@@ -722,9 +778,6 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			 * Large access only makes sense for reading. As large writes
 			 * essentially overwrite entire pages in the memory, so we may
 			 * only need to read the first and the last pages.
-			 * TODO It may be interesting to change our dirty page flushing
-			 * algorithm so we can always write a large chunk of data in one
-			 * go.
 			 */
 			if (orig->get_access_method() == WRITE) {
 				/* We need to extract a page from the request. */
@@ -732,7 +785,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				extract_pages(*orig, tmp_off, 1, req);
 				req.set_orig(orig);
 				req.set_partial(orig->get_size() > req.get_size());
-				write(req, p);
+				write(req, p, dirty_pages);
 			}
 			else {
 				pages[pg_idx++] = p;
@@ -757,6 +810,8 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			read(req, pages, pg_idx);
 		}
 	}
+	global_cache->get_flush_thread()->dirty_pages(dirty_pages.data(),
+			dirty_pages.size());
 	return 0;
 }
 
@@ -850,6 +905,7 @@ ssize_t global_cached_io::access(char *buf, off_t offset,
 #endif
 	}
 	int page_off = offset - ROUND_PAGE(offset);
+	bool is_page_set_dirty = false;
 	p->lock();
 	if (access_method == WRITE) {
 		unsigned long *l = (unsigned long *) ((char *) p->get_data() + page_off);
@@ -858,12 +914,15 @@ ssize_t global_cached_io::access(char *buf, off_t offset,
 			printf("write: start: %ld, l: %ld, offset: %ld\n",
 					start, *l, p->get_offset() / sizeof(long));
 		memcpy((char *) p->get_data() + page_off, buf, size);
-		p->set_dirty(true);
+		if (!p->set_dirty(true))
+			is_page_set_dirty = true;
 	}
 	else 
 		/* I assume the data I read never crosses the page boundary */
 		memcpy(buf, (char *) p->get_data() + page_off, size);
 	p->unlock();
+	if (is_page_set_dirty)
+		global_cache->get_flush_thread()->dirty_pages(&p, 1);
 	p->dec_ref();
 	ret = size;
 	return ret;

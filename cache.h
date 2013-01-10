@@ -28,6 +28,7 @@ enum {
 	/* All the 4 bites need to be protected by the lock bit. */
 	DATA_READY_BIT = 0,
 	IO_PENDING_BIT,
+	/* The two bits exclude each other. */
 	DIRTY_BIT,
 	OLD_DIRTY_BIT,
 
@@ -320,6 +321,8 @@ public:
 	}
 };
 
+class flush_thread;
+class io_interface;
 class page_cache
 {
 	pthread_spinlock_t _lock;
@@ -349,6 +352,12 @@ public:
 	}
 	virtual bool shrink(int npages, char *pages[]) {
 		return false;
+	}
+	virtual flush_thread *create_flush_thread(io_interface *io) {
+		return NULL;
+	}
+	virtual flush_thread *get_flush_thread() const {
+		return NULL;
 	}
 };
 
