@@ -38,6 +38,16 @@ enum {
 	REFERENCED_BIT,
 };
 
+static inline bool page_set_flag(char &flags, int flag, bool v)
+{
+	char orig = flags;
+	if (v)
+		flags |= 0x1 << flag;
+	else
+		flags &= ~(0x1 << flag);
+	return orig & (0x1 << flag);
+}
+
 class page
 {
 	/*
@@ -54,7 +64,6 @@ protected:
 	volatile short refcnt;
 	volatile char flags;
 	volatile unsigned char hits;
-
 public:
 	page(): data(NULL) {
 		offset = -1;
@@ -71,6 +80,18 @@ public:
 		hits = 0;
 	}
 
+	bool set_flag(int flag, bool v) {
+		char orig = flags;
+		if (v)
+			flags |= 0x1 << flag;
+		else
+			flags &= ~(0x1 << flag);
+		return orig & (0x1 << flag);
+	}
+	char test_flags(char flags) {
+		return this->flags & flags;
+	}
+
 	/* offset in the file in bytes */
 	void set_offset(off_t off) {
 		offset = off >> LOG_PAGE_SIZE;
@@ -84,43 +105,28 @@ public:
 	void *get_data() const { return (void *) data; }
 
 	bool data_ready() const { return flags & (0x1 << DATA_READY_BIT); }
-	void set_data_ready(bool ready) {
-		if (ready)
-			flags |= 0x1 << DATA_READY_BIT;
-		else
-			flags &= ~(0x1 << DATA_READY_BIT);
+	bool set_data_ready(bool ready) {
+		return set_flag(DATA_READY_BIT, ready);
 	}
 	bool is_dirty() const { return flags & (0x1 << DIRTY_BIT); }
-	void set_dirty(bool dirty) {
-		if (dirty)
-			flags |= 0x1 << DIRTY_BIT;
-		else
-			flags &= ~(0x1 << DIRTY_BIT);
+	bool set_dirty(bool dirty) {
+		return set_flag(DIRTY_BIT, dirty);
 	}
 
 	bool is_old_dirty() const { return flags & (0x1 << OLD_DIRTY_BIT); }
-	void set_old_dirty(bool dirty) {
-		if (dirty)
-			flags |= 0x1 << OLD_DIRTY_BIT;
-		else
-			flags &= ~(0x1 << OLD_DIRTY_BIT);
+	bool set_old_dirty(bool dirty) {
+		return set_flag(OLD_DIRTY_BIT, dirty);
 	}
 
-	void set_referenced(bool referenced) {
-		if (referenced)
-			flags |= 0x1 << REFERENCED_BIT;
-		else
-			flags &= ~(0x1 << REFERENCED_BIT);
+	bool set_referenced(bool referenced) {
+		return set_flag(REFERENCED_BIT, referenced);
 	}
 	bool referenced() const {
 		return flags & (0x1 << REFERENCED_BIT);
 	}
 
-	void set_active(bool active) {
-		if (active)
-			flags |= 0x1 << ACTIVE_BIT;
-		else
-			flags &= ~(0x1 << ACTIVE_BIT);
+	bool set_active(bool active) {
+		return set_flag(ACTIVE_BIT, active);
 	}
 	bool active() const {
 		return flags & (0x1 << ACTIVE_BIT);
@@ -162,11 +168,13 @@ class thread_safe_page: public page
 	pthread_mutex_t mutex;
 #endif
 
-	void set_flags_bit(int i, bool v) {
+	bool set_flags_bit(int i, bool v) {
+		char orig;
 		if (v)
-			__sync_fetch_and_or(&flags, 0x1 << i);
+			orig = __sync_fetch_and_or(&flags, 0x1 << i);
 		else
-			__sync_fetch_and_and(&flags, ~(0x1 << i));
+			orig = __sync_fetch_and_and(&flags, ~(0x1 << i));
+		return orig & (0x1 << i);
 	}
 
 	bool get_flags_bit(int i) const {
@@ -219,26 +227,28 @@ public:
 		pthread_mutex_unlock(&mutex);
 #endif
 	}
-	void set_data_ready(bool ready) {
+	bool set_data_ready(bool ready) {
 #ifdef PTHREAD_WAIT
 		pthread_mutex_lock(&mutex);
 #endif
-		set_flags_bit(DATA_READY_BIT, ready);
+		bool ret = set_flags_bit(DATA_READY_BIT, ready);
 #ifdef PTHREAD_WAIT
 		pthread_cond_signal(&ready_cond);
 		pthread_mutex_unlock(&mutex);
 #endif
+		return ret;
 	}
 
-	void set_dirty(bool dirty) {
+	bool set_dirty(bool dirty) {
 #ifdef PTHREAD_WAIT
 		pthread_mutex_lock(&mutex);
 #endif
-		set_flags_bit(DIRTY_BIT, dirty);
+		bool ret = set_flags_bit(DIRTY_BIT, dirty);
 #ifdef PTHREAD_WAIT
 		pthread_cond_signal(&dirty_cond);
 		pthread_mutex_unlock(&mutex);
 #endif
+		return ret;
 	}
 	void wait_cleaned() {
 #ifdef PTHREAD_WAIT
@@ -259,8 +269,8 @@ public:
 	bool is_io_pending() const {
 		return get_flags_bit(IO_PENDING_BIT);
 	}
-	void set_io_pending(bool pending) {
-		set_flags_bit(IO_PENDING_BIT, pending);
+	bool set_io_pending(bool pending) {
+		return set_flags_bit(IO_PENDING_BIT, pending);
 	}
 	/* we set the status to io pending,
 	 * and return the original status */
