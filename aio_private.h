@@ -65,6 +65,14 @@ public:
 		}
 		cbs.push_back(tcb);
 	}
+
+	int num_pending_IOs() const {
+		return AIO_DEPTH - max_io_slot(ctx);
+	}
+
+	void wait4complete() {
+		io_wait(ctx, NULL, 1);
+	}
 };
 #endif
 

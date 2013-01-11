@@ -37,14 +37,14 @@ void disk_read_thread::run() {
 	aio->init();
 	io_request reqs[MAX_FETCH_REQS];
 	while (true) {
-
 		/* 
-		 * this is the only thread that fetch requests
-		 * from the queue.
-		 * get all requests in the queue
+		 * this is the only thread that fetch requests from the queue.
+		 * If there are no incoming requests and there are pending IOs,
+		 * let's complete the pending IOs first.
 		 */
+		while (queue.is_empty() && aio->num_pending_IOs() > 0)
+			aio->wait4complete();
 		int num = queue.fetch(reqs, MAX_FETCH_REQS);
-
 		aio->access(reqs, num);
 	}
 	// TODO I need to call cleanup() of aio.
