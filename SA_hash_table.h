@@ -88,7 +88,7 @@ class SA_hashtable: public hashtable_interface<KeyT, ValueT>
 
 	std::vector<entry_set_t *> sets_table;
 	atomic_integer nsets;
-	atomic_flags flags;
+	atomic_flags<int> flags;
 
 	/* used for linear hashing */
 	int level;

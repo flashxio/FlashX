@@ -443,7 +443,7 @@ bool associative_cache::expand(hash_cell *trigger_cell) {
 	hash_cell *cells = NULL;
 	unsigned int i;
 
-	if (flags.test_and_set_flags(TABLE_EXPANDING)) {
+	if (flags.set_flag(TABLE_EXPANDING)) {
 		/*
 		 * if the flag has been set before,
 		 * it means another thread is expanding the table,
@@ -518,7 +518,7 @@ bool associative_cache::expand(hash_cell *trigger_cell) {
 		table_lock.write_unlock();
 		cell = get_cell(split);
 	}
-	flags.clear_flags(TABLE_EXPANDING);
+	flags.clear_flag(TABLE_EXPANDING);
 	return true;
 }
 

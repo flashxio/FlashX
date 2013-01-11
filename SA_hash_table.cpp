@@ -223,7 +223,7 @@ bool SA_hashtable<KeyT, ValueT>::expand(entry_set_t *trigger_set) {
 	 * if the flag has been set before, it means another thread
 	 * is expanding the table, wait for it to finish expanding.
 	 */
-	while (flags.test_and_set_flags(TABLE_EXPANDING)) {
+	while (flags.set_flag(TABLE_EXPANDING)) {
 	}
 
 	/* starting from this point, only one thred can be here. */
@@ -294,7 +294,7 @@ bool SA_hashtable<KeyT, ValueT>::expand(entry_set_t *trigger_set) {
 		table_lock.write_unlock();
 		set = get_set(split);
 	}
-	flags.clear_flags(TABLE_EXPANDING);
+	flags.clear_flag(TABLE_EXPANDING);
 	return true;
 }
 

@@ -126,29 +126,33 @@ public:
 	}
 };
 
+template<class T>
 class atomic_flags
 {
-	volatile int flags;
+	volatile T flags;
 public:
 	atomic_flags() {
 		flags = 0;
 	}
 
-	void set_flags(int flag) {
-		__sync_fetch_and_or(&flags, 0x1 << flag);
-	}
-
-	void clear_flags(int flag) {
-		__sync_fetch_and_and(&flags, ~(0x1 << flag));
-	}
-
-	bool test_flags(int flag) {
-		return flags & (0x1 << flag);
-	}
-
-	bool test_and_set_flags(int flag) {
+	/**
+	 * Set the flag and return the orig flag.
+	 */
+	bool set_flag(int flag) {
 		int orig = __sync_fetch_and_or(&flags, 0x1 << flag);
 		return orig & (0x1 << flag);
+	}
+
+	/**
+	 * Clear the flag and return the orig flag.
+	 */
+	bool clear_flag(int flag) {
+		int orig = __sync_fetch_and_and(&flags, ~(0x1 << flag));
+		return orig & (0x1 << flag);
+	}
+
+	bool test_flag(int flag) const {
+		return flags & (0x1 << flag);
 	}
 };
 

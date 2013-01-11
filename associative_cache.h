@@ -347,7 +347,7 @@ class associative_cache: public page_cache
 	atomic_integer ncells;
 	
 	seq_lock table_lock;
-	atomic_flags flags;
+	atomic_flags<int> flags;
 	/* the initial number of cells in the table. */
 	int init_ncells;
 
