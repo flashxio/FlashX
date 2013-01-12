@@ -320,7 +320,11 @@ thread_safe_page *FIFO_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = buf.get_empty_page();
-	// TODO I assume this situation is rare
+	/*
+	 * This happens a lot if we actually read pages from the disk.
+	 * So basically, we shouldn't use this eviction policy for SSDs
+	 * or magnetic hard drive..
+	 */
 	while (ret->get_ref()) {
 		ret = buf.get_empty_page();
 	}
@@ -328,14 +332,20 @@ thread_safe_page *FIFO_eviction_policy::evict_page(
 	return ret;
 }
 
-// TODO we should avoid evicting dirty pages as much as possible
 thread_safe_page *gclock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = NULL;
 	int num_referenced = 0;
+	int num_dirty = 0;
+	bool avoid_dirty = true;
 	do {
 		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
+		if (num_dirty + num_referenced >= CELL_SIZE) {
+			num_dirty = 0;
+			num_referenced = 0;
+			avoid_dirty = false;
+		}
 		if (pg->get_ref()) {
 			num_referenced++;
 			clock_head++;
@@ -345,6 +355,11 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 			 */
 			if (num_referenced >= CELL_SIZE)
 				return NULL;
+			continue;
+		}
+		if (avoid_dirty && pg->is_dirty()) {
+			num_dirty++;
+			clock_head++;
 			continue;
 		}
 		if (pg->get_hits() == 0) {
@@ -358,18 +373,29 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 	return ret;
 }
 
-// TODO we should avoid evicting dirty pages as much as possible
 thread_safe_page *clock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = NULL;
 	int num_referenced = 0;
+	int num_dirty = 0;
+	bool avoid_dirty = true;
 	do {
 		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
+		if (num_dirty + num_referenced >= CELL_SIZE) {
+			num_dirty = 0;
+			num_referenced = 0;
+			avoid_dirty = false;
+		}
 		if (pg->get_ref()) {
 			num_referenced++;
 			if (num_referenced >= CELL_SIZE)
 				return NULL;
+			clock_head++;
+			continue;
+		}
+		if (avoid_dirty && pg->is_dirty()) {
+			num_dirty++;
 			clock_head++;
 			continue;
 		}
