@@ -57,6 +57,34 @@ void io_request::add_buf(char *buf, int size)
 	num_bufs++;
 }
 
+void io_request::add_buf_front(char *buf, int size)
+{
+	if (num_bufs >= vec_capacity) {
+		if (vec_pointer == embedded_vecs) {
+			vec_capacity = MIN_NUM_ALLOC_IOVECS;
+			vec_pointer = new struct iovec[vec_capacity];
+			memcpy(vec_pointer + 1, embedded_vecs,
+					sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
+		}
+		else {
+			vec_capacity *= 2;
+			struct iovec *tmp = new struct iovec[vec_capacity];
+			memcpy(tmp + 1, vec_pointer,
+					sizeof(vec_pointer[0]) * vec_capacity / 2);
+			delete [] vec_pointer;
+			vec_pointer = tmp;
+		}
+	}
+	else {
+		memmove(vec_pointer + 1, vec_pointer,
+				sizeof(vec_pointer[0]) * num_bufs);
+	}
+	assert(num_bufs < vec_capacity);
+	vec_pointer[0].iov_base = buf;
+	vec_pointer[0].iov_len = size;
+	num_bufs++;
+}
+
 template<class T>
 msg_sender<T>::msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
 		int num_queues) {

@@ -322,6 +322,7 @@ public:
 	}
 
 	page *search(off_t off, off_t &old_off);
+	page *search(off_t offset);
 	/* 
 	 * this is to rehash the pages in the current cell
 	 * to the cell in the parameter.
@@ -412,7 +413,19 @@ public:
 		return ret;
 	}
 
+	/**
+	 * This method searches for the specified page. If the page doesn't exist,
+	 * it tries to evict a page. Therefore, it also triggers some code of
+	 * maintaining eviction policy.
+	 */
 	page *search(off_t offset, off_t &old_off);
+	/**
+	 * This method just searches for the specified page, nothing more.
+	 * So if the request isn't issued from the workload, and we don't need
+	 * evict a page if the specified page doesn't exist, we should use
+	 * this method.
+	 */
+	page *search(off_t offset);
 
 	bool expand(hash_cell *cell);
 

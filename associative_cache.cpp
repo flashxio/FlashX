@@ -92,6 +92,26 @@ void hash_cell::rehash(hash_cell *expanded) {
 	flags.clear_flag(OVERFLOW);
 }
 
+page *hash_cell::search(off_t offset)
+{
+	pthread_spin_lock(&_lock);
+	page *ret = NULL;
+	for (int i = 0; i < CELL_SIZE; i++) {
+		if (buf.get_page(i)->get_offset() == offset) {
+			ret = buf.get_page(i);
+			break;
+		}
+	}
+	if (ret) {
+		if (ret->get_hits() == 0xff)
+			buf.scale_down_hits();
+		ret->inc_ref();
+		ret->hit();
+	}
+	pthread_spin_unlock(&_lock);
+	return ret;
+}
+
 /**
  * search for a page with the offset.
  * If the page doesn't exist, return an empty page.
@@ -542,6 +562,16 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 	} while (true);
 }
 
+page *associative_cache::search(off_t offset)
+{
+	do {
+		try {
+			return get_cell_offset(offset)->search(offset);
+		} catch (expand_exception e) {
+		}
+	} while (true);
+}
+
 associative_cache::associative_cache(long cache_size, bool expandable) {
 	printf("associative cache is used\n");
 	level = 0;
@@ -687,9 +717,8 @@ void associative_flush_thread::request_callback(io_request &req)
 	else {
 		off_t off = req.get_offset();
 		for (int i = 0; i < req.get_num_bufs(); i++) {
-			off_t old_off = -1;
-			thread_safe_page *p = (thread_safe_page *) cache->search(off, old_off);
-			assert(old_off == -1);
+			thread_safe_page *p = (thread_safe_page *) cache->search(off);
+			assert(p);
 			p->lock();
 			assert(p->is_dirty());
 			p->set_dirty(false);

@@ -342,7 +342,20 @@ public:
 	~page_cache() {
 		pthread_spin_destroy(&_lock);
 	}
+	/**
+	 * This method searches for a page with the specified offset.
+	 * It may evict a page if the specificed page doesn't exist.
+	 * If the returned page is evicted, its original page offset is
+	 * saved in `old_off'.
+	 */
 	virtual page *search(off_t offset, off_t &old_off) = 0;
+	/**
+	 * This method searches for a page with the specified offset.
+	 * If the page doesn't exist, it returns NULL.
+	 */
+	virtual page *search(off_t offset) {
+		return NULL;
+	}
 	/**
 	 * The size of allocated pages in the cache in bytes.
 	 */

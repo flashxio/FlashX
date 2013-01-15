@@ -141,6 +141,7 @@ public:
 	}
 
 	void add_buf(char *buf, int size);
+	void add_buf_front(char *buf, int size);
 
 	int get_num_bufs() const {
 		return num_bufs;
