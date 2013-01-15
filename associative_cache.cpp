@@ -897,6 +897,7 @@ int hash_cell::num_pages(char set_flags, char clear_flags)
 
 void associative_flush_thread::dirty_pages(thread_safe_page *pages[], int num)
 {
+#ifdef ENABLE_FLUSH_THREAD
 	hash_cell *cells[num];
 	int num_queued_cells = 0;
 	for (int i = 0; i < num; i++) {
@@ -920,4 +921,5 @@ void associative_flush_thread::dirty_pages(thread_safe_page *pages[], int num)
 		dirty_cells.add(cells, num_queued_cells);
 		activate();
 	}
+#endif
 }

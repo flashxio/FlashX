@@ -2,6 +2,8 @@
 #include "container.cpp"
 #include "flush_thread.h"
 
+#define ENABLE_LARGE_WRITE
+
 /**
  * This file implements global cache.
  * There are three types of requests:
@@ -736,6 +738,7 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 			io, orig, p);
 	p->unlock();
 
+#ifdef ENABLE_LARGE_WRITE
 	off_t forward_off = off + PAGE_SIZE;
 	while ((p = (thread_safe_page *) cache->search(forward_off))) {
 		p->lock();
@@ -782,6 +785,7 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 				break;
 		}
 	}
+#endif
 
 	ssize_t ret = io->access(&req, 1);
 	if (ret < 0) {
