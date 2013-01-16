@@ -352,7 +352,6 @@ int access_page_callback::invoke(io_request *request)
 		finalize_partial_request(partial, orig);
 
 		int num = 0;
-		global_cached_io *cached_io = NULL;
 		while (old) {
 			/*
 			 * It should be guaranteed that there isn't a multi-buf request
@@ -364,8 +363,6 @@ int access_page_callback::invoke(io_request *request)
 			thread_safe_page *dirty = __complete_req(old, p);
 			if (dirty)
 				cache->get_flush_thread()->dirty_pages(&dirty, 1);
-			io_interface *io = old->get_io();
-			cached_io = static_cast<global_cached_io *>(io);
 
 			finalize_request(*old);
 			// Now we can delete it.
@@ -373,8 +370,6 @@ int access_page_callback::invoke(io_request *request)
 			old = next;
 			num++;
 		}
-		if (cached_io)
-			cached_io->dec_pending(num);
 	}
 	else {
 		io_request *orig = request->get_orig();
@@ -400,7 +395,6 @@ global_cached_io::global_cached_io(io_interface *underlying): pending_requests(
 	cache_size = 0;
 	cb = NULL;
 	cache_hits = 0;
-	num_pending_reqs = 0;
 }
 
 global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
@@ -410,7 +404,6 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 	cache_hits = 0;
 	this->underlying = underlying;
 	num_waits = 0;
-	num_pending_reqs = 0;
 	this->cache_size = cache_size;
 	if (global_cache == NULL) {
 		global_cache = create_cache(cache_type, cache_size);
@@ -455,7 +448,6 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 						underlying, real_orig, p);
 				p->set_io_pending(true);
 				p->unlock();
-				inc_pending(1);
 				ret = underlying->access(&read_req, 1);
 				if (ret < 0) {
 					perror("read");
@@ -486,7 +478,6 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 			assert(orig->get_access_method() == WRITE);
 			p->add_req(orig);
 			p->unlock();
-			inc_pending(1);
 		}
 	}
 	else {
@@ -541,7 +532,6 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 					 */
 					PAGE_SIZE, READ, underlying, orig, p);
 			p->unlock();
-			inc_pending(1);
 			assert(orig->get_orig() == NULL);
 			ret = underlying->access(&req, 1);
 			if (ret < 0) {
@@ -554,7 +544,6 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 			assert(orig->get_access_method() == READ);
 			p->add_req(orig);
 			p->unlock();
-			inc_pending(1);
 		}
 	}
 	else {
@@ -628,7 +617,6 @@ again:
 				partial_orig->set_priv(p);
 				p->add_req(partial_orig);
 				p->unlock();
-				inc_pending(1);
 			}
 		}
 		/* 
@@ -674,7 +662,6 @@ int global_cached_io::handle_pending_requests()
 			if (p->is_old_dirty())
 				printf("request %lx, p %lx is old dirty\n", req->get_offset(), p->get_offset());
 			assert(!p->is_old_dirty());
-			int num_same = 0;
 			while (req) {
 				/**
 				 * Right now all pending requests are writes.
@@ -689,14 +676,7 @@ int global_cached_io::handle_pending_requests()
 				else
 					__read(req, p);
 				req = next;
-				num_same++;
 			}
-			// These requests have been counted as pending requests.
-			// When a request is passed to __write(), if it is sent
-			// to the device, it will be double counted as pending.
-			// If not, the request has been served. In either case,
-			// we need to subtract these requests.
-			dec_pending(num_same);
 		}
 		tot += num;
 	}
@@ -865,7 +845,6 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					 * dirty page.
 					 */
 					write_dirty_page(p, old_off, underlying, orig1, global_cache);
-					inc_pending(1);
 					continue;
 				}
 				else {
@@ -877,7 +856,6 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					if (p->is_old_dirty()) {
 						p->add_req(orig1);
 						p->unlock();
-						inc_pending(1);
 						// the request has been added to the page, when the old dirty
 						// data is written back to the file, the write request will be
 						// reissued to the file.
