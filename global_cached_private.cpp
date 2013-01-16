@@ -487,9 +487,6 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 			p->add_req(orig);
 			p->unlock();
 			inc_pending(1);
-#ifdef STATISTICS
-			cache_hits++;
-#endif
 		}
 	}
 	else {
@@ -510,9 +507,6 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 		finalize_request(*orig);
 		// Now we can delete it.
 		delete orig;
-#ifdef STATISTICS
-		cache_hits++;
-#endif
 	}
 	return ret;
 }
@@ -561,18 +555,12 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 			p->add_req(orig);
 			p->unlock();
 			inc_pending(1);
-#ifdef STATISTICS
-			cache_hits++;
-#endif
 		}
 	}
 	else {
 		// If the data in the page is ready, we don't need to change any state
 		// of the page and just read data.
 		p->unlock();
-#ifdef STATISTICS
-		cache_hits++;
-#endif
 		ret = orig->get_size();
 		__complete_req(orig, p);
 		if (get_callback())
@@ -657,9 +645,6 @@ again:
 				underlying->access(&multibuf_req, 1);
 				multibuf_req.clear();
 			}
-#ifdef STATISTICS
-			cache_hits++;
-#endif
 			io_request complete_partial;
 			extract_pages(*orig, p->get_offset(), 1, complete_partial);
 			ret += complete_partial.get_size();
@@ -817,6 +802,14 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			off_t old_off = -1;
 			thread_safe_page *p = (thread_safe_page *) (get_global_cache()
 					->search(tmp_off, old_off));
+#ifdef STATISTICS
+			/* 
+			 * If old_off is -1, it means search() didn't evict a page, i.e.,
+			 * it's a cache hit.
+			 */
+			if (old_off == -1)
+				cache_hits++;
+#endif
 			/*
 			 * Cache may evict a dirty page and return the dirty page
 			 * to the user before it is written back to a file.
