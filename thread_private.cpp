@@ -166,6 +166,7 @@ again:
 					}
 					if (size > 0) {
 						ret = io->access(reqs, i);
+						num_accesses += i;
 						i = 0;
 						goto again;
 					}
@@ -182,6 +183,7 @@ again:
 				perror("access_vector");
 				exit(1);
 			}
+			num_accesses += i;
 		}
 		else {
 			workload_t workload = gen->next();
@@ -207,6 +209,7 @@ again:
 						next_off = off + entry_size;
 					ret = io->access(entry, off, next_off - off, access_method);
 					if (ret > 0) {
+						num_accesses++;
 						if (access_method == READ && verify_read_content) {
 							check_read_content(entry, next_off - off, off);
 						}
@@ -226,6 +229,7 @@ again:
 				}
 				ret = io->access(entry, off, entry_size, access_method);
 				if (ret > 0) {
+					num_accesses++;
 					if (access_method == READ && verify_read_content) {
 						check_read_content(entry, entry_size, off);
 					}

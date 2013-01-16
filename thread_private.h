@@ -94,6 +94,7 @@ class thread_private
 	io_interface *io;
 
 	ssize_t read_bytes;
+	long num_accesses;
 
 	cleanup_callback *cb;
 	
@@ -149,8 +150,8 @@ public:
 #ifdef STATISTICS
 	virtual void print_stat() {
 		io->print_stat();
-		printf("read %ld bytes, start at %f seconds, takes %f seconds\n",
-				get_read_bytes(), time_diff(global_start, start_time),
+		printf("access %ld bytes in %ld accesses, start at %f seconds, takes %f seconds\n",
+				get_read_bytes(), num_accesses, time_diff(global_start, start_time),
 				time_diff(start_time, end_time));
 	}
 #endif
