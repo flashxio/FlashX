@@ -29,9 +29,10 @@ hash_cell::hash_cell(associative_cache *cache, long hash) {
 	pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	this->table = cache;
 	char *pages[CELL_SIZE];
-	if (!table->get_manager()->get_free_pages(CELL_SIZE, pages, cache))
+	if (!table->get_manager()->get_free_pages(buf.get_min_num_pages(),
+				pages, cache))
 		throw oom_exception();
-	buf.set_pages(pages);
+	buf.set_pages(pages, buf.get_min_num_pages());
 }
 
 /**
@@ -41,7 +42,8 @@ hash_cell::hash_cell(associative_cache *cache, long hash) {
 void hash_cell::rehash(hash_cell *expanded) {
 	pthread_spin_lock(&_lock);
 	pthread_spin_lock(&expanded->_lock);
-	for (int i = 0, j = 0; i < CELL_SIZE; i++) {
+	int j = 0;
+	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		thread_safe_page *pg = buf.get_page(i);
 		int hash1 = table->hash1_locked(pg->get_offset());
 		/*
@@ -96,7 +98,7 @@ page *hash_cell::search(off_t offset)
 {
 	pthread_spin_lock(&_lock);
 	page *ret = NULL;
-	for (int i = 0; i < CELL_SIZE; i++) {
+	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		if (buf.get_page(i)->get_offset() == offset) {
 			ret = buf.get_page(i);
 			break;
@@ -127,7 +129,7 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 	}
 #endif
 
-	for (int i = 0; i < CELL_SIZE; i++) {
+	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		if (buf.get_page(i)->get_offset() == off) {
 			ret = buf.get_page(i);
 			break;
@@ -192,7 +194,7 @@ search_again:
 		pthread_spin_unlock(&_lock);
 		bool all_referenced = true;
 		while (all_referenced) {
-			for (int i = 0; i < CELL_SIZE; i++) {
+			for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 				thread_safe_page *pg = buf.get_page(i);
 				/* If a page isn't referenced. */
 				if (!pg->get_ref()) {
@@ -241,7 +243,7 @@ thread_safe_page *LRU_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	int pos;
-	if (pos_vec.size() < (unsigned) CELL_SIZE) {
+	if (pos_vec.size() < buf.get_num_pages()) {
 		pos = pos_vec.size();
 	}
 	else {
@@ -277,8 +279,8 @@ thread_safe_page *LFU_eviction_policy::evict_page(
 	thread_safe_page *ret = NULL;
 	int min_hits = 0x7fffffff;
 	do {
-		int num_io_pending = 0;
-		for (int i = 0; i < CELL_SIZE; i++) {
+		unsigned int num_io_pending = 0;
+		for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 			thread_safe_page *pg = buf.get_page(i);
 			if (pg->get_ref()) {
 				if (pg->is_io_pending())
@@ -304,7 +306,7 @@ thread_safe_page *LFU_eviction_policy::evict_page(
 			if (min_hits == 0)
 				break;
 		}
-		if (num_io_pending == CELL_SIZE) {
+		if (num_io_pending == buf.get_num_pages()) {
 			printf("all pages are at io pending\n");
 			// TODO do something...
 			// maybe we should use pthread_wait
@@ -336,12 +338,12 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = NULL;
-	int num_referenced = 0;
-	int num_dirty = 0;
+	unsigned int num_referenced = 0;
+	unsigned int num_dirty = 0;
 	bool avoid_dirty = true;
 	do {
-		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
-		if (num_dirty + num_referenced >= CELL_SIZE) {
+		thread_safe_page *pg = buf.get_page(clock_head % buf.get_num_pages());
+		if (num_dirty + num_referenced >= buf.get_num_pages()) {
 			num_dirty = 0;
 			num_referenced = 0;
 			avoid_dirty = false;
@@ -353,7 +355,7 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 			 * If all pages in the cell are referenced, we should
 			 * return NULL to notify the invoker.
 			 */
-			if (num_referenced >= CELL_SIZE)
+			if (num_referenced >= buf.get_num_pages())
 				return NULL;
 			continue;
 		}
@@ -377,19 +379,19 @@ thread_safe_page *clock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
 	thread_safe_page *ret = NULL;
-	int num_referenced = 0;
-	int num_dirty = 0;
+	unsigned int num_referenced = 0;
+	unsigned int num_dirty = 0;
 	bool avoid_dirty = true;
 	do {
-		thread_safe_page *pg = buf.get_page(clock_head % CELL_SIZE);
-		if (num_dirty + num_referenced >= CELL_SIZE) {
+		thread_safe_page *pg = buf.get_page(clock_head % buf.get_num_pages());
+		if (num_dirty + num_referenced >= buf.get_num_pages()) {
 			num_dirty = 0;
 			num_referenced = 0;
 			avoid_dirty = false;
 		}
 		if (pg->get_ref()) {
 			num_referenced++;
-			if (num_referenced >= CELL_SIZE)
+			if (num_referenced >= buf.get_num_pages())
 				return NULL;
 			clock_head++;
 			continue;
@@ -538,8 +540,9 @@ associative_cache::associative_cache(long cache_size, bool expandable) {
 			|| !expandable)
 		init_cache_size = cache_size;
 	int npages = init_cache_size / PAGE_SIZE;
-	assert(init_cache_size >= CELL_SIZE * PAGE_SIZE);
-	init_ncells = npages / CELL_SIZE;
+	int min_cell_size = (CELL_SIZE + 1) / 2;
+	assert(init_cache_size >= min_cell_size * PAGE_SIZE);
+	init_ncells = npages / min_cell_size;
 	hash_cell *cells = new hash_cell[init_ncells];
 	printf("%d cells: %p\n", init_ncells, cells);
 	int max_npages = manager->get_max_size() / PAGE_SIZE;
@@ -556,7 +559,7 @@ associative_cache::associative_cache(long cache_size, bool expandable) {
 	cells_table.push_back(cells);
 	ncells.inc(1);
 
-	int max_ncells = max_npages / CELL_SIZE;
+	int max_ncells = max_npages / min_cell_size;
 	for (int i = 1; i < max_ncells / init_ncells; i++)
 		cells_table.push_back(NULL);
 }
@@ -817,7 +820,7 @@ hash_cell *associative_cache::get_next_cell(hash_cell *cell)
 void hash_cell::get_dirty_pages(std::map<off_t, thread_safe_page *> &pages)
 {
 	pthread_spin_lock(&_lock);
-	for (int i = 0; i < CELL_SIZE; i++) {
+	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		thread_safe_page *p = buf.get_page(i);
 		/*
 		 * When we are here, the page can't be evicted, so it won't be
@@ -838,7 +841,7 @@ int hash_cell::num_pages(char set_flags, char clear_flags)
 {
 	int num = 0;
 	pthread_spin_lock(&_lock);
-	for (int i = 0; i < CELL_SIZE; i++) {
+	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		thread_safe_page *p = buf.get_page(i);
 		if (p->test_flags(set_flags) && !p->test_flags(clear_flags))
 			num++;

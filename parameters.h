@@ -35,7 +35,7 @@ const int NUM_EMBEDDED_IOVECS = 1;
  */
 const int MAX_NUM_IOVECS = 16;
 
-const int CELL_SIZE = 8;
+const int CELL_SIZE = 16;
 
 const int MAX_NUM_DIRTY_CELLS_IN_QUEUE = 1000;
 const int DIRTY_PAGES_THRESHOLD = CELL_SIZE / 2;

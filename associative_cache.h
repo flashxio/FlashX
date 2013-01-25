@@ -22,12 +22,23 @@ volatile extern int lock_contentions;
 const int CACHE_LINE = 128;
 
 /**
- * This data structure is to implement LRU.
+ * This data structure is to contain page data structures in the hash cell.
+ * It has space large enough for maximal CELL_SIZE, but only some of them
+ * are used. The actual number of pages in the data structure varies,
+ * and has a minimal limit.
  */
 template<class T>
 class page_cell
 {
-	unsigned int idx;		// to the point where we can evict a page in the buffer
+	// to the point where we can evict a page in the buffer
+	unsigned char idx;
+	unsigned char min_num_pages;
+	unsigned char num_pages;
+	// There are gaps in the `buf' array but we expose a virtual array without
+	// gaps, so this mapping is to help remove the gaps in the physical array.
+	// The number of elements in `maps' is `num_pages'.
+	unsigned char maps[CELL_SIZE];
+
 	T buf[CELL_SIZE];			// a circular buffer to keep pages.
 
 public:
@@ -37,13 +48,64 @@ public:
 	 */
 	page_cell() {
 		idx = 0;
+		min_num_pages = (CELL_SIZE + 1) / 2;
+		num_pages = 0;
+		memset(maps, 0, sizeof(maps));
 	}
 
-	void set_pages(char *pages[]) {
-		for (int i = 0; i < CELL_SIZE; i++) {
+	void set_pages(char *pages[], int num) {
+		assert(num <= CELL_SIZE);
+		for (int i = 0; i < num; i++) {
 			buf[i] = T(-1, pages[i]);
 		}
 		idx = 0;
+		num_pages = num;
+		for (int i = 0; i < num; i++) {
+			maps[i] = i;
+		}
+	}
+
+	/**
+	 * The two methods might be expensive because it reconstruct
+	 * the entire mapping array.
+	 */
+
+	void add_pages(char *pages[], int num) {
+		assert(num + num_pages <= CELL_SIZE);
+		for (int i = 0; i < CELL_SIZE; i++) {
+			if (buf[i].get_data() == NULL)
+				buf[i] = T(-1, pages[i]);
+		}
+		num_pages += num;
+		int j = 0;
+		for (int i = 0; i < CELL_SIZE; i++) {
+			if (buf[i].get_data())
+				maps[j++] = i;
+		}
+		assert(j == num_pages);
+	}
+
+	/**
+	 * Steal the specified number of pages and the pages are
+	 * stored in the array.
+	 */
+	void steal_page(T *pg) {
+		assert(pg->get_ref() == 0);
+		num_pages--;
+		int j = 0;
+		for (int i = 0; i < CELL_SIZE; i++) {
+			if (buf[i].get_data())
+				maps[j++] = i;
+		}
+		assert(j == num_pages);
+	}
+
+	unsigned int get_num_pages() const {
+		return num_pages;
+	}
+
+	unsigned int get_min_num_pages() const {
+		return min_num_pages;
 	}
 
 	/**
@@ -52,32 +114,39 @@ public:
 	 * so I change the begin and end index of the circular buffer.
 	 */
 	T *get_empty_page() {
-		/* TODO I ignore the case of integer overflow */
-		T *ret = &buf[idx % CELL_SIZE];
+		T *ret;
+		// the condition check in the while loop should be false
+		// most of time, and it only iterates once.
+		while (idx >= num_pages)
+			idx -= num_pages;
+		ret = get_page(idx);
 		idx++;
 		return ret;
 	}
 
+	/**
+	 * return a page pointed by the iterator or after the iterator.
+	 */
 	T *get_page(int i) {
-		if (i >= CELL_SIZE)
-			return NULL;
-		return &buf[i];
+		int real_idx = maps[i];
+		T *ret = &buf[real_idx];
+		assert(ret->get_data());
+		return ret;
 	}
 
-	int get_idx(T *page) {
+	int get_idx(T *page) const {
 		int idx = page - buf;
-		assert (idx >= 0 && idx < CELL_SIZE);
+		assert (idx >= 0 && idx < num_pages);
 		return idx;
 	}
 
 	void scale_down_hits() {
-		for (int i = 0; i < CELL_SIZE; i++) {
-			buf[i].set_hits(buf[i].get_hits() / 2);
+		for (int i = 0; i < num_pages; i++) {
+			T *pg = get_page(i);
+			pg->set_hits(pg->get_hits() / 2);
 		}
 	}
 };
-
-class associative_cache;
 
 class eviction_policy
 {
@@ -164,6 +233,8 @@ public:
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 };
 
+class associative_cache;
+
 class hash_cell
 {
 	enum {
@@ -231,7 +302,7 @@ public:
 	void rehash(hash_cell *cell);
 
 	void print_cell() {
-		for (int i = 0; i < CELL_SIZE; i++)
+		for (unsigned int i = 0; i < buf.get_num_pages(); i++)
 			printf("%lx\t", buf.get_page(i)->get_offset());
 		printf("\n");
 	}
@@ -269,6 +340,10 @@ class associative_cache: public page_cache
 	 */
 	std::vector<hash_cell*> cells_table;
 	atomic_integer ncells;
+	// The number of pages in the cache.
+	// Cells may have different numbers of pages, so we can't
+	// deduct the size of cache from `ncells'.
+	atomic_integer npages;
 	
 	seq_lock table_lock;
 	atomic_flags<int> flags;
@@ -330,6 +405,11 @@ public:
 
 	bool expand(hash_cell *cell);
 
+	bool shrink(int npages, char *pages[]) {
+		// TODO shrink the cache
+		return false;
+	}
+
 	memory_manager *get_manager() {
 		return manager;
 	}
@@ -342,17 +422,7 @@ public:
 	 * The size of allocated pages in the cache.
 	 */
 	long size() {
-		return ((long) ncells.get())
-			* init_ncells * CELL_SIZE * PAGE_SIZE;
-	}
-
-	int get_num_cells() const {
-		return ncells.get();
-	}
-
-	bool shrink(int npages, char *pages[]) {
-		// TODO shrink the cache
-		return false;
+		return ((long) npages.get()) * PAGE_SIZE;
 	}
 
 	hash_cell *get_cell(unsigned int global_idx) {
