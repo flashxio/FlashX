@@ -65,7 +65,7 @@ public:
 				global_cache = new LRU2Q_cache(cache_size);
 				break;
 			case ASSOCIATIVE_CACHE:
-				global_cache = new associative_cache(cache_size);
+				global_cache = new associative_cache(cache_size, MAX_CACHE_SIZE);
 				break;
 			case HASH_INDEX_CACHE:
 				global_cache = new hash_index_cache(cache_size);

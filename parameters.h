@@ -36,8 +36,11 @@ const int NUM_EMBEDDED_IOVECS = 1;
 const int MAX_NUM_IOVECS = 16;
 
 const int CELL_SIZE = 16;
+const int CELL_MIN_NUM_PAGES = 8;
 
 const int MAX_NUM_DIRTY_CELLS_IN_QUEUE = 1000;
 const int DIRTY_PAGES_THRESHOLD = CELL_SIZE / 2;
+
+const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024;
 
 #endif

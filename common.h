@@ -23,6 +23,11 @@ inline static int min(int v1, int v2)
 	return v1 > v2 ? v2 : v1;
 }
 
+inline static int max(int v1, int v2)
+{
+	return v1 < v2 ? v2 : v1;
+}
+
 class thread_private;
 extern thread_private *get_thread(int idx);
 

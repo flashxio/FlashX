@@ -19,30 +19,155 @@ class oom_exception
 {
 };
 
-class expand_exception
+template<class T>
+void page_cell<T>::set_pages(char *pages[], int num)
 {
-};
+	assert(num <= CELL_SIZE);
+	for (int i = 0; i < num; i++) {
+		buf[i] = T(-1, pages[i]);
+	}
+	idx = 0;
+	num_pages = num;
+	for (int i = 0; i < num; i++) {
+		maps[i] = i;
+	}
+}
 
-hash_cell::hash_cell(associative_cache *cache, long hash) {
+template<class T>
+void page_cell<T>::rebuild_map()
+{
+	int j = 0;
+	for (int i = 0; i < CELL_SIZE; i++) {
+		if (buf[i].get_data())
+			maps[j++] = i;
+	}
+	assert(j == num_pages);
+}
+
+template<class T>
+void page_cell<T>::add_pages(char *pages[], int num)
+{
+	int num_added = 0;
+	assert(num_pages == get_num_used_pages());
+	assert(num + num_pages <= CELL_SIZE);
+	for (int i = 0; i < CELL_SIZE && num_added < num; i++) {
+		if (buf[i].get_data() == NULL)
+			buf[i] = T(-1, pages[num_added++]);
+	}
+	num_pages += num;
+	rebuild_map();
+}
+
+template<class T>
+void page_cell<T>::inject_pages(T pages[], int npages)
+{
+	int num_copied = 0;
+	for (int i = 0; i < CELL_SIZE && num_copied < npages; i++) {
+		if (buf[i].get_data() == NULL) {
+			buf[i] = pages[num_copied++];
+		}
+	}
+	assert(num_copied == npages);
+	num_pages += num_copied;
+	rebuild_map();
+}
+
+template<class T>
+void page_cell<T>::steal_pages(T pages[], int &npages)
+{
+	int num_copied = 0;
+	for (int i = 0; i < CELL_SIZE && num_copied < npages; i++) {
+		if (buf[i].get_data()) {
+			// We have to make sure the page isn't being referenced.
+			// TODO busy wait.
+			while (buf[i].get_ref() > 0) {}
+			pages[num_copied++] = buf[i];
+			buf[i] = T();
+		}
+	}
+	npages = num_copied;
+	num_pages -= num_copied;
+	if (num_pages > 0)
+		rebuild_map();
+	else
+		memset(maps, 0, sizeof(maps));
+}
+
+template<class T>
+void page_cell<T>::sanity_check() const
+{
+	assert(CELL_MIN_NUM_PAGES <= num_pages);
+	int num_used_pages = 0;
+	for (int i = 0; i < CELL_SIZE; i++)
+		if (buf[i].get_data())
+			num_used_pages++;
+	assert(num_used_pages == num_pages);
+	int prev_map = -1;
+	for (int i = 0; i < num_pages; i++) {
+		int map = maps[i];
+		if (prev_map >= 0)
+			assert(map > prev_map);
+		assert(buf[map].get_data());
+		prev_map = map;
+	}
+}
+
+template<class T>
+int page_cell<T>::get_num_used_pages() const
+{
+	int num = 0;
+	for (int i = 0; i < CELL_SIZE; i++)
+		if (buf[i].get_data())
+			num++;
+	return num;
+}
+
+hash_cell::hash_cell(associative_cache *cache, long hash, bool get_pages) {
 	this->hash = hash;
 	assert(hash < INT_MAX);
 	pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	this->table = cache;
-	char *pages[CELL_SIZE];
-	if (!table->get_manager()->get_free_pages(buf.get_min_num_pages(),
-				pages, cache))
-		throw oom_exception();
-	buf.set_pages(pages, buf.get_min_num_pages());
+	if (get_pages) {
+		char *pages[CELL_SIZE];
+		if (!table->get_manager()->get_free_pages(CELL_MIN_NUM_PAGES,
+					pages, cache))
+			throw oom_exception();
+		buf.set_pages(pages, CELL_MIN_NUM_PAGES);
+	}
+}
+
+void hash_cell::sanity_check()
+{
+	pthread_spin_lock(&_lock);
+	buf.sanity_check();
+	pthread_spin_unlock(&_lock);
+}
+
+void hash_cell::merge(hash_cell *cell)
+{
+	pthread_spin_lock(&_lock);
+	pthread_spin_lock(&cell->_lock);
+
+	assert(cell->get_num_pages() + this->get_num_pages() <= CELL_SIZE);
+	thread_safe_page pages[CELL_SIZE];
+	int npages = CELL_SIZE;
+	// TODO there may be busy wait in this method.
+	cell->buf.steal_pages(pages, npages);
+	buf.inject_pages(pages, npages);
+
+	pthread_spin_unlock(&cell->_lock);
+	pthread_spin_unlock(&_lock);
 }
 
 /**
- * rehash the pages in the current cell 
- * to the expanded cell.
+ * rehash the pages in the current cell to the expanded cell.
  */
-void hash_cell::rehash(hash_cell *expanded) {
+void hash_cell::rehash(hash_cell *expanded)
+{
 	pthread_spin_lock(&_lock);
 	pthread_spin_lock(&expanded->_lock);
-	int j = 0;
+	thread_safe_page *exchanged_pages_pointers[CELL_SIZE];
+	int num_exchanges = 0;
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		thread_safe_page *pg = buf.get_page(i);
 		int hash1 = table->hash1_locked(pg->get_offset());
@@ -68,30 +193,75 @@ void hash_cell::rehash(hash_cell *expanded) {
 		 * we exchange the pages in the two cells.
 		 */
 		if (this->hash != hash1) {
-			thread_safe_page *expanded_pg = expanded->buf.get_page(j);
 			/* 
 			 * we have to make sure no other threads are using them
 			 * before we can exchange them.
 			 * If the pages are in use, skip them.
 			 */
-			if (pg->get_ref()) {
+			if (pg->get_ref())
 				continue;
-			}
-			/* 
-			 * the page in the expanded cell shouldn't
-			 * have been initialized.
-			 */
-			assert(!expanded_pg->initialized());
 
-			thread_safe_page tmp = *expanded_pg;
-			*expanded_pg = *pg;
-			*pg = tmp;
-			j++;
+			exchanged_pages_pointers[num_exchanges++] = pg;
+			// We can't steal pages while iterating them.
 		}
+	}
+	if (num_exchanges > 0) {
+		// We can only steal pages here.
+		thread_safe_page exchanged_pages[CELL_SIZE];
+		for (int i = 0; i < num_exchanges; i++) {
+			exchanged_pages[i] = *exchanged_pages_pointers[i];
+			buf.steal_page(exchanged_pages_pointers[i], false);
+			*exchanged_pages_pointers[i] = thread_safe_page();
+		}
+		buf.rebuild_map();
+		expanded->buf.inject_pages(exchanged_pages, num_exchanges);
+	}
+
+	// Move empty pages to the expanded cell if it doesn't have enough pages.
+	int num_required = CELL_MIN_NUM_PAGES - expanded->buf.get_num_pages();
+	int num_empty = 0;
+	if (num_required > 0) {
+		thread_safe_page *empty_pages_pointers[num_required];
+		thread_safe_page empty_pages[num_required];
+		for (unsigned int i = 0; i < buf.get_num_pages()
+				&& num_empty < num_required; i++) {
+			thread_safe_page *pg = buf.get_page(i);
+			if (!pg->initialized())
+				empty_pages_pointers[num_empty++] = pg;
+		}
+		for (int i = 0; i < num_empty; i++) {
+			// For the same reason, we can't steal pages
+			// while iterating them.
+			empty_pages[i] = *empty_pages_pointers[i];
+			buf.steal_page(empty_pages_pointers[i], false);
+			*empty_pages_pointers[i] = thread_safe_page();
+		}
+		buf.rebuild_map();
+		expanded->buf.inject_pages(empty_pages, num_empty);
 	}
 	pthread_spin_unlock(&expanded->_lock);
 	pthread_spin_unlock(&_lock);
-	flags.clear_flag(OVERFLOW);
+}
+
+void hash_cell::steal_pages(char *pages[], int &npages)
+{
+	int num_stolen = 0;
+	while (num_stolen < npages) {
+		thread_safe_page *pg = get_empty_page();
+		if (pg == NULL)
+			break;
+		assert(!pg->is_dirty());
+		pages[num_stolen++] = (char *) pg->get_data();
+		*pg = thread_safe_page();
+		buf.steal_page(pg, false);
+	}
+	buf.rebuild_map();
+	npages = num_stolen;
+}
+
+void hash_cell::rebalance(hash_cell *cell)
+{
+	// TODO
 }
 
 page *hash_cell::search(off_t offset)
@@ -180,7 +350,6 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 thread_safe_page *hash_cell::get_empty_page() {
 	thread_safe_page *ret = NULL;
 
-	bool expanded = false;
 search_again:
 	ret = policy.evict_page(buf);
 	if (ret == NULL) {
@@ -205,25 +374,6 @@ search_again:
 		}
 		pthread_spin_lock(&_lock);
 		goto search_again;
-	}
-	/*
-	 * the selected page got hit before,
-	 * we should expand the hash table
-	 * if we haven't done it before.
-	 */
-	if (table->is_expandable() && policy.expand_buffer(*ret)) {
-		flags.set_flag(OVERFLOW);
-		long table_size = table->size();
-		long average_size = table->get_manager()->average_cache_size();
-		if (table_size < average_size && !expanded) {
-			pthread_spin_unlock(&_lock);
-			if (table->expand(this)) {
-				throw expand_exception();
-			}
-			pthread_spin_lock(&_lock);
-			expanded = true;
-			goto search_again;
-		}
 	}
 
 	/* we record the hit info of the page in the shadow cell. */
@@ -413,14 +563,8 @@ thread_safe_page *clock_eviction_policy::evict_page(
 	return ret;
 }
 
-/**
- * expand the cache.
- * @trigger_cell: the cell triggers the cache expansion.
- */
-bool associative_cache::expand(hash_cell *trigger_cell) {
-	hash_cell *cells = NULL;
-	unsigned int i;
-
+bool associative_cache::shrink(int npages, char *pages[])
+{
 	if (flags.set_flag(TABLE_EXPANDING)) {
 		/*
 		 * if the flag has been set before,
@@ -430,43 +574,140 @@ bool associative_cache::expand(hash_cell *trigger_cell) {
 	}
 
 	/* starting from this point, only one thred can be here. */
-	for (i = 0; i < cells_table.size(); i++) {
-		cells = cells_table[i];
-		if (cells == NULL)
-			break;
-		if (trigger_cell >= cells && trigger_cell < cells + init_ncells)
-			break;
-	}
-	assert(cells);
 
-	hash_cell *cell = get_cell(split);
-	long size = pow(2, level) * init_ncells;
-	while (trigger_cell->is_overflow()) {
-		unsigned int cells_idx = (split + size) / init_ncells;
-		/* 
-		 * I'm sure only this thread can change the table,
-		 * so it doesn't need to hold a lock when accessing the size.
-		 */
-		unsigned int orig_size = ncells.get();
-		if (cells_idx >= orig_size) {
-			bool out_of_memory = false;
-			/* create cells and put them in a temporary table. */
-			std::vector<hash_cell *> table;
-			for (unsigned int i = orig_size; i <= cells_idx; i++) {
-				hash_cell *cells = new hash_cell[init_ncells];
-				printf("create %d cells: %p\n", init_ncells, cells);
-				try {
-					for (int j = 0; j < init_ncells; j++) {
-						cells[j] = hash_cell(this, i * init_ncells + j);
-					}
-					table.push_back(cells);
-				} catch (oom_exception e) {
-					out_of_memory = true;
-					delete [] cells;
-					break;
+	int pg_idx = 0;
+	int orig_ncells = get_num_cells();
+	while (pg_idx < npages) {
+		// The cell table isn't in the stage of splitting.
+		if (split == 0) {
+			hash_cell *cell = get_cell(expand_cell_idx);
+			while (height >= CELL_MIN_NUM_PAGES) {
+				int num = max(0, cell->get_num_pages() - height);
+				num = min(npages - pg_idx, num);
+				if (num > 0) {
+					cell->steal_pages(&pages[pg_idx], num);
+					pg_idx += num;
 				}
+
+				if (expand_cell_idx <= 0) {
+					height--;
+					expand_cell_idx = orig_ncells;
+				}
+				expand_cell_idx--;
+				cell = get_cell(expand_cell_idx);
+			}
+			if (pg_idx == npages) {
+				cache_npages.dec(npages);
+				flags.clear_flag(TABLE_EXPANDING);
+				return true;
+			}
+		}
+
+		/* From here, we shrink the cell table. */
+
+		// When the thread is within in the while loop, other threads can
+		// hardly access the cells in the table.
+		if (level == 0)
+			break;
+		int num_half = (1 << level) * init_ncells / 2;
+		table_lock.write_lock();
+		if (split == 0) {
+			split = num_half - 1;
+			level--;
+		}
+		table_lock.write_unlock();
+		while (split > 0) {
+			hash_cell *high_cell = get_cell(split + num_half);
+			hash_cell *cell = get_cell(split);
+			// At this point, the high cell and the low cell together
+			// should have no more than CELL_MIN_NUM_PAGES pages.
+			cell->merge(high_cell);
+			table_lock.write_lock();
+			split--;
+			table_lock.write_unlock();
+		}
+		int orig_narrays = (1 << level);
+		// It's impossible to access the arrays after `narrays' now.
+		int narrays = orig_narrays / 2;
+		for (int i = narrays; i < orig_narrays; i++) {
+			delete [] cells_table[i];
+			cells_table[i] = NULL;
+		}
+	}
+	flags.clear_flag(TABLE_EXPANDING);
+	cache_npages.dec(npages);
+	return true;
+}
+
+/**
+ * This method increases the cache size by `npages'.
+ */
+int associative_cache::expand(int npages)
+{
+	if (flags.set_flag(TABLE_EXPANDING)) {
+		/*
+		 * if the flag has been set before,
+		 * it means another thread is expanding the table,
+		 */
+		return 0;
+	}
+
+	/* starting from this point, only one thred can be here. */
+
+	char *pages[npages];
+	if (!manager->get_free_pages(npages, pages, this)) {
+		flags.clear_flag(TABLE_EXPANDING);
+		fprintf(stderr, "expand: can't allocate %d pages\n", npages);
+		return 0;
+	}
+	int pg_idx = 0;
+	bool expand_over = false;
+	while (pg_idx < npages && !expand_over) {
+		// The cell table isn't in the stage of splitting.
+		if (split == 0) {
+			int orig_ncells = get_num_cells();
+			/* We first try to add pages to the existing cells. */
+			hash_cell *cell = get_cell(expand_cell_idx);
+			while (height <= CELL_SIZE && pg_idx < npages) {
+				assert(pages[pg_idx]);
+				// We should skip the cells with more than `height'.
+				if (cell->get_num_pages() >= height) {
+					expand_cell_idx++;
+					cell = get_cell(expand_cell_idx);
+					continue;
+				}
+
+				int num_missing = height - cell->get_num_pages();
+				num_missing = min(num_missing, npages - pg_idx);
+				cell->add_pages(&pages[pg_idx], num_missing);
+				pg_idx += num_missing;
+				expand_cell_idx++;
+				if (expand_cell_idx >= (unsigned) orig_ncells) {
+					expand_cell_idx = 0;
+					height++;
+				}
+				cell = get_cell(expand_cell_idx);
+			}
+			if (pg_idx == npages) {
+				cache_npages.inc(npages);
+				flags.clear_flag(TABLE_EXPANDING);
+				return npages;
 			}
 
+			/* We have to expand the cell table in order to add more pages. */
+
+			/* Double the size of the cell table. */
+			/* create cells and put them in a temporary table. */
+			std::vector<hash_cell *> table;
+			int orig_narrays = (1 << level);
+			for (int i = orig_narrays; i < orig_narrays * 2; i++) {
+				hash_cell *cells = new hash_cell[init_ncells];
+				printf("create %d cells: %p\n", init_ncells, cells);
+				for (int j = 0; j < init_ncells; j++) {
+					cells[j] = hash_cell(this, i * init_ncells + j, false);
+				}
+				table.push_back(cells);
+			}
 			/*
 			 * here we need to hold the lock because other threads
 			 * might be accessing the table. by using the write lock,
@@ -474,30 +715,66 @@ bool associative_cache::expand(hash_cell *trigger_cell) {
 			 */
 			table_lock.write_lock();
 			for (unsigned int i = 0; i < table.size(); i++) {
-				cells_table[orig_size + i] = table[i];
+				cells_table[orig_narrays + i] = table[i];
 			}
-			ncells.inc(table.size());
 			table_lock.write_unlock();
-			if (out_of_memory)
-				return false;
 		}
+		height = CELL_MIN_NUM_PAGES + 1;
 
-		hash_cell *expanded_cell = get_cell(split + size);
-		cell->rehash(expanded_cell);
-		table_lock.write_lock();
-		split++;
-		if (split == size) {
-			level++;
-			printf("increase level to %d\n", level);
-			split = 0;
+		// When the thread is within in the while loop, other threads
+		// can hardly access the cells in the table.
+		int num_half = (1 << level) * init_ncells;
+		while (split < num_half) {
+			hash_cell *expanded_cell = get_cell(split + num_half);
+			hash_cell *cell = get_cell(split);
+			cell->rehash(expanded_cell);
+
+			/*
+			 * After rehashing, there is no guarantee that two cells will have
+			 * the same number of pages. We need to either add empty pages to
+			 * the cell without enough pages or rebalance the two cells.
+			 */
+
+			/* Add pages to the cell without enough pages. */
+			int num_required = max(expanded_cell->get_num_pages()
+				- CELL_MIN_NUM_PAGES, 0);
+			num_required += max(cell->get_num_pages() - CELL_MIN_NUM_PAGES, 0);
+			if (num_required <= npages - pg_idx) {
+				/* 
+				 * Actually only one cell requires more pages, the other
+				 * one will just take 0 pages.
+				 */
+				pg_idx += cell->add_pages_to_min(&pages[pg_idx],
+						npages - pg_idx);
+				pg_idx += expanded_cell->add_pages_to_min(&pages[pg_idx],
+						npages - pg_idx);
+			}
+
+			if (expanded_cell->get_num_pages() < CELL_MIN_NUM_PAGES
+					|| cell->get_num_pages() < CELL_MIN_NUM_PAGES) {
+				// If we failed to split a cell, we should merge the two half
+				cell->merge(expanded_cell);
+				expand_over = true;
+				fprintf(stderr, "A cell can't have enough pages, merge back\n");
+				break;
+			}
+
+			table_lock.write_lock();
+			split++;
 			table_lock.write_unlock();
-			break;
+		}
+		table_lock.write_lock();
+		if (split == num_half) {
+			split = 0;
+			level++;
 		}
 		table_lock.write_unlock();
-		cell = get_cell(split);
 	}
+	if (pg_idx < npages)
+		manager->free_pages(npages - pg_idx, &pages[pg_idx]);
 	flags.clear_flag(TABLE_EXPANDING);
-	return true;
+	cache_npages.inc(npages);
+	return npages - pg_idx;
 }
 
 page *associative_cache::search(off_t offset, off_t &old_off) {
@@ -509,29 +786,54 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 	 * for the cell.
 	 */
 	do {
-		try {
-			return get_cell_offset(offset)->search(offset, old_off);
-		} catch (expand_exception e) {
-		}
+		return get_cell_offset(offset)->search(offset, old_off);
 	} while (true);
 }
 
 page *associative_cache::search(off_t offset)
 {
 	do {
-		try {
-			return get_cell_offset(offset)->search(offset);
-		} catch (expand_exception e) {
-		}
+		return get_cell_offset(offset)->search(offset);
 	} while (true);
 }
 
-associative_cache::associative_cache(long cache_size, bool expandable) {
+int associative_cache::get_num_used_pages() const
+{
+	unsigned long count;
+	int npages = 0;
+	do {
+		table_lock.read_lock(count);
+		int ncells = get_num_cells();
+		for (int i = 0; i < ncells; i++) {
+			npages += get_cell(i)->get_num_pages();
+		}
+	} while (!table_lock.read_unlock(count));
+	return npages;
+}
+
+void associative_cache::sanity_check() const
+{
+	unsigned long count;
+	do {
+		table_lock.read_lock(count);
+		int ncells = get_num_cells();
+		for (int i = 0; i < ncells; i++) {
+			hash_cell *cell = get_cell(i);
+			cell->sanity_check();
+		}
+	} while (!table_lock.read_unlock(count));
+}
+
+associative_cache::associative_cache(long cache_size, long max_cache_size,
+		bool expandable)
+{
 	printf("associative cache is used\n");
 	level = 0;
 	split = 0;
+	height = CELL_SIZE / 2 + 1;
+	expand_cell_idx = 0;
 	this->expandable = expandable;
-	this->manager = new memory_manager(cache_size);
+	this->manager = new memory_manager(max_cache_size);
 	manager->register_cache(this);
 	long init_cache_size = default_init_cache_size;
 	if (init_cache_size > cache_size
@@ -548,7 +850,7 @@ associative_cache::associative_cache(long cache_size, bool expandable) {
 	int max_npages = manager->get_max_size() / PAGE_SIZE;
 	try {
 		for (int i = 0; i < init_ncells; i++)
-			cells[i] = hash_cell(this, i);
+			cells[i] = hash_cell(this, i, true);
 	} catch (oom_exception e) {
 		fprintf(stderr,
 				"out of memory: max npages: %d, init npages: %d\n",
@@ -557,7 +859,6 @@ associative_cache::associative_cache(long cache_size, bool expandable) {
 	}
 
 	cells_table.push_back(cells);
-	ncells.inc(1);
 
 	int max_ncells = max_npages / min_cell_size;
 	for (int i = 1; i < max_ncells / init_ncells; i++)

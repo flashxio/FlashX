@@ -32,7 +32,6 @@ class page_cell
 {
 	// to the point where we can evict a page in the buffer
 	unsigned char idx;
-	unsigned char min_num_pages;
 	unsigned char num_pages;
 	// There are gaps in the `buf' array but we expose a virtual array without
 	// gaps, so this mapping is to help remove the gaps in the physical array.
@@ -48,64 +47,36 @@ public:
 	 */
 	page_cell() {
 		idx = 0;
-		min_num_pages = (CELL_SIZE + 1) / 2;
 		num_pages = 0;
 		memset(maps, 0, sizeof(maps));
 	}
 
-	void set_pages(char *pages[], int num) {
-		assert(num <= CELL_SIZE);
-		for (int i = 0; i < num; i++) {
-			buf[i] = T(-1, pages[i]);
-		}
-		idx = 0;
-		num_pages = num;
-		for (int i = 0; i < num; i++) {
-			maps[i] = i;
-		}
-	}
+	void set_pages(char *pages[], int num);
+
+	void add_pages(char *pages[], int num);
+
+	void inject_pages(T pages[], int npages);
 
 	/**
-	 * The two methods might be expensive because it reconstruct
-	 * the entire mapping array.
+	 * Steal up to `npages' pages from the buffer.
 	 */
-
-	void add_pages(char *pages[], int num) {
-		assert(num + num_pages <= CELL_SIZE);
-		for (int i = 0; i < CELL_SIZE; i++) {
-			if (buf[i].get_data() == NULL)
-				buf[i] = T(-1, pages[i]);
-		}
-		num_pages += num;
-		int j = 0;
-		for (int i = 0; i < CELL_SIZE; i++) {
-			if (buf[i].get_data())
-				maps[j++] = i;
-		}
-		assert(j == num_pages);
-	}
+	void steal_pages(T pages[], int &npages);
 
 	/**
 	 * Steal the specified number of pages and the pages are
 	 * stored in the array.
 	 */
-	void steal_page(T *pg) {
+	void steal_page(T *pg, bool rebuild = true) {
 		assert(pg->get_ref() == 0);
 		num_pages--;
-		int j = 0;
-		for (int i = 0; i < CELL_SIZE; i++) {
-			if (buf[i].get_data())
-				maps[j++] = i;
-		}
-		assert(j == num_pages);
+		if (rebuild)
+			rebuild_map();
 	}
+
+	void rebuild_map();
 
 	unsigned int get_num_pages() const {
 		return num_pages;
-	}
-
-	unsigned int get_min_num_pages() const {
-		return min_num_pages;
 	}
 
 	/**
@@ -146,6 +117,10 @@ public:
 			pg->set_hits(pg->get_hits() / 2);
 		}
 	}
+
+	/* For test. */
+	void sanity_check() const;
+	int get_num_used_pages() const;
 };
 
 class eviction_policy
@@ -155,9 +130,6 @@ public:
 	void access_page(thread_safe_page *pg,
 			page_cell<thread_safe_page> &buf) {
 		// We don't need to do anything if a page is accessed for many policies.
-	}
-	bool expand_buffer(const thread_safe_page &pg) {
-		return false;
 	}
 };
 
@@ -174,9 +146,6 @@ public:
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 	void access_page(thread_safe_page *pg,
 			page_cell<thread_safe_page> &buf);
-	bool expand_buffer(const thread_safe_page &pg) {
-		return pg.get_hits() > 0;
-	}
 };
 
 class clock_eviction_policy: public eviction_policy
@@ -272,11 +241,26 @@ public:
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	hash_cell(associative_cache *cache, long hash);
+	hash_cell(associative_cache *cache, long hash, bool get_pages);
 
 	~hash_cell() {
 		pthread_spin_destroy(&_lock);
 	}
+
+	void add_pages(char *pages[], int num) {
+		buf.add_pages(pages, num);
+	}
+	int add_pages_to_min(char *pages[], int num) {
+		int num_required = CELL_MIN_NUM_PAGES - buf.get_num_pages();
+		if (num_required > 0) {
+			num_required = min(num_required, num);
+			buf.add_pages(pages, num_required);
+			return num_required;
+		}
+		else
+			return 0;
+	}
+	void rebalance(hash_cell *cell);
 
 	void *operator new[](size_t size) {
 		printf("allocate %ld bytes\n", size);
@@ -289,17 +273,24 @@ public:
 		free((void *) ((long) p - (CACHE_LINE - 8)));
 	}
 
-	bool is_overflow() {
-		return flags.test_flag(OVERFLOW);
-	}
-
 	page *search(off_t off, off_t &old_off);
 	page *search(off_t offset);
-	/* 
+
+	/**
 	 * this is to rehash the pages in the current cell
 	 * to the cell in the parameter.
 	 */
 	void rehash(hash_cell *cell);
+	/**
+	 * Merge two cells and put all pages in the current cell.
+	 * The other cell will contain no pages.
+	 */
+	void merge(hash_cell *cell);
+	/**
+	 * Steal pages from the cell, possibly the one to be evicted
+	 * by the eviction policy. The page can't be referenced and dirty.
+	 */
+	void steal_pages(char *pages[], int &npages);
 
 	void print_cell() {
 		for (unsigned int i = 0; i < buf.get_num_pages(); i++)
@@ -324,7 +315,21 @@ public:
 			return flags.clear_flag(IN_QUEUE);
 	}
 
+	bool is_deficit() const {
+		return buf.get_num_pages() < (unsigned) CELL_MIN_NUM_PAGES;
+	}
+
+	bool is_full() const {
+		return buf.get_num_pages() == (unsigned) CELL_SIZE;
+	}
+
 	int num_pages(char set_flags, char clear_flags);
+	int get_num_pages() const {
+		return buf.get_num_pages();
+	}
+
+	/* For test. */
+	void sanity_check();
 };
 
 class flush_thread;
@@ -339,11 +344,13 @@ class associative_cache: public page_cache
 	 * TODO we might need to use map to improve performance.
 	 */
 	std::vector<hash_cell*> cells_table;
-	atomic_integer ncells;
+	/*
+	 * The index points to the cell that will expand next time.
+	 */
+	unsigned int expand_cell_idx;
 	// The number of pages in the cache.
-	// Cells may have different numbers of pages, so we can't
-	// deduct the size of cache from `ncells'.
-	atomic_integer npages;
+	// Cells may have different numbers of pages.
+	atomic_integer cache_npages;
 	
 	seq_lock table_lock;
 	atomic_flags<int> flags;
@@ -353,14 +360,20 @@ class associative_cache: public page_cache
 	memory_manager *manager;
 
 	bool expandable;
+	int height;
 	/* used for linear hashing */
 	int level;
 	int split;
 
 	flush_thread *_flush_thread;
 
+	int get_num_cells() const {
+		return (1 << level) * init_ncells + split;
+	}
+
 public:
-	associative_cache(long cache_size, bool expandable = false);
+	associative_cache(long cache_size, long max_cache_size,
+			bool expandable = false);
 
 	~associative_cache() {
 		for (unsigned int i = 0; i < cells_table.size(); i++)
@@ -403,12 +416,12 @@ public:
 	 */
 	page *search(off_t offset);
 
-	bool expand(hash_cell *cell);
-
-	bool shrink(int npages, char *pages[]) {
-		// TODO shrink the cache
-		return false;
-	}
+	/**
+	 * Expand the cache by `npages' pages, and return the actual number
+	 * of pages that the cache has been expanded.
+	 */
+	int expand(int npages);
+	bool shrink(int npages, char *pages[]);
 
 	memory_manager *get_manager() {
 		return manager;
@@ -422,10 +435,10 @@ public:
 	 * The size of allocated pages in the cache.
 	 */
 	long size() {
-		return ((long) npages.get()) * PAGE_SIZE;
+		return ((long) cache_npages.get()) * PAGE_SIZE;
 	}
 
-	hash_cell *get_cell(unsigned int global_idx) {
+	hash_cell *get_cell(unsigned int global_idx) const {
 		unsigned int cells_idx = global_idx / init_ncells;
 		int idx = global_idx % init_ncells;
 		assert(cells_idx < cells_table.size());
@@ -464,6 +477,10 @@ public:
 
 	hash_cell *get_prev_cell(hash_cell *cell);
 	hash_cell *get_next_cell(hash_cell *cell);
+
+	/* For test */
+	int get_num_used_pages() const;
+	void sanity_check() const;
 };
 
 #endif
