@@ -2,8 +2,6 @@
 
 #include "gclock.h"
 
-void *page::data_start;
-
 void testEnhancedGClock()
 {
 	const int BUF_SIZE = 5;
