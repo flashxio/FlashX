@@ -101,7 +101,7 @@ public:
 		pthread_spin_destroy(&lock);
 	}
 
-	void read_lock(unsigned long &count) {
+	void read_lock(unsigned long &count) const {
 		/*
 		 * If the count is odd, it means another thread is changing
 		 * the data structure the lock tries to protect. 
@@ -111,7 +111,7 @@ public:
 		} while (count & 1);
 	}
 
-	bool read_unlock(unsigned long count) {
+	bool read_unlock(unsigned long count) const {
 		return this->count == count;
 	}
 
