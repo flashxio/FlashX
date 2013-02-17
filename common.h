@@ -36,4 +36,18 @@ extern thread_private *get_thread(int idx);
  */
 bool align_check(size_t alignment);
 
+inline static long get_curr_ms()
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return ((long) tv.tv_sec) * 1000 + tv.tv_usec / 1000;
+};
+
+inline static long get_curr_us()
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return ((long) tv.tv_sec) * 1000 * 1000 + tv.tv_usec;
+}
+
 #endif
