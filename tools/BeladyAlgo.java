@@ -152,7 +152,9 @@ public class BeladyAlgo {
 			}
 		}
 		in.close();
-		return offs;
+		int tmp[] = new int[idx];
+		System.arraycopy(offs, 0, tmp, 0, idx);
+		return tmp;
 	}
 	
 	public static void main(String args[]) throws IOException {
