@@ -14,7 +14,7 @@ extern "C" {
 #include "memory_manager.h"
 #include "cache.h"
 #include "concurrency.h"
-#include "hashtable.h"
+#include "my_hashtable.h"
 #include "SA_hash_table.h"
 #include "SA_hash_table.cpp"
 #include "gclock.h"
