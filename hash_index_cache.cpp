@@ -137,18 +137,19 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 
 page *hash_index_cache::search(off_t offset, off_t &old_off) {
 	frame *entry = hashtable->get(offset / PAGE_SIZE);
-	/*
-	 * since the key of a frame nevers changes,
-	 * the frame returned from the hash table doesn't
-	 * have an old offset.
-	 */
-	old_off = 0;
 	if (entry && entry->pin()) {
 		entry->incrWC();
+		/* We don't change old_off here to indicate it's a cache hit. */
 		return entry;
 	}
 	else {
 		entry = addEntry(offset, NULL);
+		/*
+		 * since the key of a frame nevers changes,
+		 * the frame returned from the hash table doesn't
+		 * have an old offset.
+		 */
+		old_off = 0;
 		return entry;
 	}
 }
