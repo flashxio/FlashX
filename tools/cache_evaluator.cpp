@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 		workload_t workload = gen->next();
 		off_t off = ROUND_PAGE(workload.off);
 		off_t end = workload.off + workload.size;
-		while (off <= end) {
+		while (off < end) {
 			off_t old_off = -1;
 			num_accesses++;
 			thread_safe_page *pg = (thread_safe_page *) global_cache->search(off, old_off);

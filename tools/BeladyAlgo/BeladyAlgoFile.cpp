@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 	while (read(fd, &workload, sizeof(workload)) > 0) {
 		off_t off = workload.off;
 		off_t end = off + workload.size;
-		while (off <= end) {
+		while (off < end) {
 			int tmp = (int) (off / 4096);
 			off = ((long) tmp) * 4096 + 4096;
 			offs.push_back(tmp);
