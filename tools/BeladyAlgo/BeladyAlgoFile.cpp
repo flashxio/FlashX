@@ -45,13 +45,23 @@ int main(int argc, char *argv[])
 
 	// Load accesses
 	long start = get_curr_ms();
-	int num_accesses = file_size / sizeof(workload_t);
+	int tot_num_accesses = file_size / sizeof(workload_t);
+	int num_accesses = 0;
 	std::vector<int> offs;
 	workload_t workload;
+	// Find the location of the access sequence where we start
+	// to count cache hits.
+	// Basically, we use the first half to warm up the cache
+	// and the second half to measure the cache hit rate.
+	int half_access_pointer = 0;
 	while (read(fd, &workload, sizeof(workload)) > 0) {
+		num_accesses++;
 		off_t off = workload.off;
 		off_t end = off + workload.size;
 		while (off < end) {
+			if (num_accesses < tot_num_accesses / 2) {
+				half_access_pointer++;
+			}
 			int tmp = (int) (off / 4096);
 			off = ((long) tmp) * 4096 + 4096;
 			offs.push_back(tmp);
@@ -67,8 +77,8 @@ int main(int argc, char *argv[])
 	indexed_offset_scanner scanner(offs.data(), (int) offs.size());
 	if (!prof_file.empty())
 		ProfilerStart(prof_file.c_str());
-	int nhits = algo.access(scanner);
+	int nhits = algo.access(scanner, half_access_pointer);
 	if (!prof_file.empty())
 		ProfilerStop();
-	printf("There are %d hits among %ld accesses\n", nhits, offs.size());
+	printf("There are %d hits among %ld accesses\n", nhits, offs.size() - half_access_pointer);
 }

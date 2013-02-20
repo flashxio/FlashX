@@ -37,22 +37,28 @@ int main(int argc, char *argv[])
 	global_cache->init();
 
 	int num_hits = 0;
+	int num_accesses_in_pages = 0;
 	int num_accesses = 0;
-	workload_gen *gen = new file_workload(workload_file, 1);
+	file_workload *gen = new file_workload(workload_file, 1);
+	int size = gen->size();
 	while (gen->has_next()) {
 		workload_t workload = gen->next();
 		off_t off = ROUND_PAGE(workload.off);
 		off_t end = workload.off + workload.size;
+		num_accesses++;
 		while (off < end) {
 			off_t old_off = -1;
-			num_accesses++;
 			thread_safe_page *pg = (thread_safe_page *) global_cache->search(off, old_off);
-			if (old_off == -1)
-				num_hits++;
+			// We only count the cache hits for the second half of the workload.
+			if (num_accesses >= size / 2) {
+				num_accesses_in_pages++;
+				if (old_off == -1)
+					num_hits++;
+			}
 //			pg->set_dirty(false);
 			pg->dec_ref();
 			off += PAGE_SIZE;
 		}
 	}
-	printf("There are %d accesses and %d hits\n", num_accesses, num_hits);
+	printf("There are %d accesses in pages and %d hits\n", num_accesses_in_pages, num_hits);
 }

@@ -182,7 +182,7 @@ void belady_algo::add_to_cache(int off, indexed_offset_scanner &scanner)
 	access_map.insert(std::pair<int, struct access *>(acc->off, acc));
 }
 
-int belady_algo::access(indexed_offset_scanner &scanner)
+int belady_algo::access(indexed_offset_scanner &scanner, int hit_count_start)
 {
 	int cache_hits = 0;
 	int num_accesses = 0;
@@ -191,15 +191,10 @@ int belady_algo::access(indexed_offset_scanner &scanner)
 		int off = scanner.next();
 		print_cache();
 		num_accesses++;
-		if (num_accesses == 1000000) {
-			long end = get_curr_ms();
-			printf("%d accesses take %ld ms\n", num_accesses, end - start);
-			num_accesses = 0;
-			start = end;
-		}
 
 		if (access_map.find(off) != access_map.end()) {
-			cache_hits++;
+			if (num_accesses >= hit_count_start)
+				cache_hits++;
 			cache_hit(off, scanner);
 #ifdef DEBUG
 			printf("%d get cache hit\n", off);

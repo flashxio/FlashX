@@ -9,6 +9,6 @@ int main()
 	printf("There are %d accesses\n", length);
 	belady_algo algo(3);
 	indexed_offset_scanner scanner(offs, length);
-	int nhits = algo.access(scanner);
+	int nhits = algo.access(scanner, 0);
 	printf("There are %d hits among %d accesses\n", nhits, length);
 }

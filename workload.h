@@ -286,6 +286,13 @@ public:
 	bool has_next() {
 		return curr < end;
 	}
+
+	/**
+	 * The remaining number of accesses.
+	 */
+	int size() const {
+		return end - curr;
+	}
 };
 
 class rand_workload: public workload_gen

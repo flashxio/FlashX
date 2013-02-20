@@ -58,7 +58,7 @@ public:
 	void cache_hit(int off, indexed_offset_scanner &scanner);
 	void cache_miss(int off, indexed_offset_scanner &scanner);
 	void add_to_cache(int off, indexed_offset_scanner &scanner);
-	int access(indexed_offset_scanner &scanner);
+	int access(indexed_offset_scanner &scanner, int hit_count_start);
 	void print_cache() const;
 	void print_cache_by_seq_order() const;
 };
