@@ -105,20 +105,18 @@ int main(int argc, char *argv[])
 		perror("set_mempolicy");
 		exit(1);
 	}
-	printf("run on node 0\n");
-	if (numa_run_on_node(0) < 0) {
-		perror("numa_run_on_node");
-		exit(1);
-	}
 
-	array = malloc(ARRAY_SIZE);
+	array = numa_alloc_onnode(ARRAY_SIZE, 0);
 	/* we need to avoid the cost of page fault. */
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		array[i] = 0;
-	dst_arr = malloc(ARRAY_SIZE);
+	printf("allocate source array %p in node 0\n", array);
+
+	dst_arr = numa_alloc_onnode(ARRAY_SIZE, node);
 	/* we need to avoid the cost of page fault. */
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		dst_arr[i] = 0;
+	printf("allocate dst array %p in node %d\n", dst_arr, node);
 
 	printf("run on node %d\n", node);
 	if (numa_run_on_node(node) < 0) {
