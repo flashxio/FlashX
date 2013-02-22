@@ -1,6 +1,7 @@
 #include "rand_buf.h"
 
-rand_buf::rand_buf(int buf_size, int entry_size): free_refs(buf_size / entry_size)
+rand_buf::rand_buf(int buf_size, int entry_size,
+		int nodeid): free_refs(buf_size / entry_size)
 #ifdef MEMCHECK
 	  , allocator(entry_size)
 #endif
@@ -12,7 +13,10 @@ rand_buf::rand_buf(int buf_size, int entry_size): free_refs(buf_size / entry_siz
 
 	this->entry_size = entry_size;
 	printf("there are %d entries in the rand buffer\n", num_entries);
-	buf = (char *) numa_alloc_local(buf_size);
+	if (nodeid >= 0)
+		buf = (char *) numa_alloc_onnode(buf_size, nodeid);
+	else
+		buf = (char *) numa_alloc_local(buf_size);
 	marks = (char *) numa_alloc_local(num_entries);
 	memset(marks, 0, num_entries);
 	printf("%ld: rand_buf start %p, end %p\n", pthread_self(), buf, buf + buf_size);

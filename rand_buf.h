@@ -20,7 +20,7 @@ class rand_buf
 	aligned_allocator allocator;
 #endif
 public:
-	rand_buf(int buf_size, int entry_size);
+	rand_buf(int buf_size, int entry_size, int nodeid = -1);
 
 	~rand_buf() {
 		free(buf);
