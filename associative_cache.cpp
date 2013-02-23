@@ -222,7 +222,7 @@ void hash_cell::rehash(hash_cell *expanded)
 	int num_empty = 0;
 	if (num_required > 0) {
 		thread_safe_page *empty_pages_pointers[num_required];
-		thread_safe_page empty_pages[num_required];
+		thread_safe_page empty_pages[CELL_MIN_NUM_PAGES];
 		for (unsigned int i = 0; i < buf.get_num_pages()
 				&& num_empty < num_required; i++) {
 			thread_safe_page *pg = buf.get_page(i);
