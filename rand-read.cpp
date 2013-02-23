@@ -189,6 +189,47 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
+struct file_info
+{
+	std::string name;
+	// The NUMA node id where the disk is connected to.
+	int node_id;
+};
+
+int retrieve_data_files(std::string file_file,
+		std::vector<file_info> &data_files)
+{
+	char *line = NULL;
+	size_t size = 0;
+	int line_length;
+	FILE *fd = fopen(file_file.c_str(), "r");
+	if (fd == NULL) {
+		perror("fopen");
+		return 0;
+	}
+	while ((line_length = getline(&line, &size, fd)) > 0) {
+		line[line_length - 1] = 0;
+		char *colon = strstr(line, ":");
+		if (colon == NULL) {
+			free(line);
+			fprintf(stderr, "can't find : in %s\n", line);
+			goto out;
+		}
+		*colon = 0;
+		file_info info;
+		info.node_id = atoi(line);
+		colon++;
+		info.name = colon;
+		data_files.push_back(info);
+		free(line);
+		line = NULL;
+		size = 0;
+	}
+out:
+	fclose(fd);
+	return data_files.size();
+}
+
 int main(int argc, char *argv[])
 {
 	bool preload = false;
@@ -198,10 +239,8 @@ int main(int argc, char *argv[])
 	int i, j;
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
-	int num_files = 0;
 	int num_nodes = 1;
 	int cache_type = -1;
-	std::string file_names[NUM_THREADS];
 	int workload = RAND_OFFSET;
 	std::string workload_file;
 	str2int_map access_map(access_methods,
@@ -224,13 +263,15 @@ int main(int argc, char *argv[])
 	}
 
 	signal(SIGINT, int_handler);
+	// The file that contains all data files.
+	std::string file_file;
 
 	for (int i = 1; i < argc; i++) {
 		std::string str = argv[i];
 		size_t found = str.find("=");
 		/* if there isn't `=', I assume it's a file name*/
 		if (found == std::string::npos) {
-			file_names[num_files++] = str;
+			file_file = str;
 			continue;
 		}
 
@@ -307,6 +348,8 @@ int main(int argc, char *argv[])
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio);
 
 	int num_entries = (int) (((long) npages) * PAGE_SIZE / entry_size);
+	std::vector<file_info> files;
+	int num_files = retrieve_data_files(file_file, files);
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
@@ -322,12 +365,12 @@ int main(int argc, char *argv[])
 
 	disk_read_thread **read_threads = new disk_read_thread*[num_files];
 	for (int k = 0; k < num_files; k++) {
-		cnames[k] = file_names[k].c_str();
+		cnames[k] = files[k].name.c_str();
 		if (access_option == GLOBAL_CACHE_ACCESS
 				|| access_option == PART_GLOBAL_ACCESS
 				|| access_option == REMOTE_ACCESS)
 			read_threads[k] = new disk_read_thread(cnames[k],
-					npages * PAGE_SIZE, -1);
+					npages * PAGE_SIZE, files[k].node_id);
 	}
 
 	num = num_files;
