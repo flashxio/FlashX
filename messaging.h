@@ -155,6 +155,9 @@ public:
 		return num_bufs;
 	}
 
+	void set_buf(int idx, char *buf) {
+		vec_pointer[idx].iov_base = buf;
+	}
 	/**
 	 * By default, we get the first buffer. This makes sense
 	 * for a single buffer request.

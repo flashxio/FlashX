@@ -67,11 +67,14 @@ class slab_allocator
 	// the size to increase each time there aren't enough objects
 	long increase_size;
 
+	int node_id;
+
 #ifdef MEMCHECK
 	aligned_allocator allocator;
 #endif
 public:
-	slab_allocator(int obj_size, long increase_size, long max_size)
+	slab_allocator(int obj_size, long increase_size, long max_size,
+			int node_id = -1)
 #ifdef MEMCHECK
 		: allocator(obj_size)
 #endif
@@ -81,6 +84,7 @@ public:
 		this->curr_size = 0;
 		this->increase_size = increase_size;
 		assert((unsigned) obj_size >= sizeof(linked_obj));
+		this->node_id = node_id;
 	}
 
 	virtual ~slab_allocator();

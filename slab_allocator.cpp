@@ -10,7 +10,11 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 #else
 	if (list.get_size() < nobjs) {
 		if (curr_size < max_size) {
-			char *objs = (char *) numa_alloc_local(increase_size);
+			char *objs;
+			if (node_id == -1)
+				objs = (char *) numa_alloc_local(increase_size);
+			else
+				objs = (char *) numa_alloc_onnode(increase_size, node_id);
 			for (int i = 0; i < increase_size / obj_size; i++) {
 				linked_obj *header = (linked_obj *) (objs
 						+ obj_size * i);

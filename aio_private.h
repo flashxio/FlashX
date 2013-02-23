@@ -10,13 +10,7 @@
 
 void aio_callback(io_context_t, struct iocb*, void *, long, long);
 
-class async_io;
-struct thread_callback_s
-{
-	struct io_callback_s cb;
-	async_io *aio;
-	io_request req;
-};
+struct thread_callback_s;
 
 class async_io: public buffered_io
 {
@@ -25,6 +19,9 @@ class async_io: public buffered_io
 	std::deque<thread_callback_s *> cbs;
 	callback *cb;
 	const int AIO_DEPTH;
+	// This is for allocating memory in the case that the memory given
+	// by the user isn't in the local NUMA node.
+	slab_allocator allocator;
 
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:
@@ -33,6 +30,7 @@ public:
 	 * @num: the number of files
 	 * @size: the size of data to be accessed in all files
 	 * @aio_depth_per_file
+	 * @node_id: the NUMA node where the disks to be read are connected to.
 	 */
 	async_io(const char *names[], int num, long size, int aio_depth_per_file,
 			int node_id);
@@ -60,12 +58,7 @@ public:
 
 	virtual void cleanup();
 
-	void return_cb(thread_callback_s *tcb) {
-		if (this->cb) {
-			this->cb->invoke(&tcb->req);
-		}
-		cbs.push_back(tcb);
-	}
+	void return_cb(thread_callback_s *tcb);
 
 	int num_pending_IOs() const {
 		return AIO_DEPTH - max_io_slot(ctx);
