@@ -2,7 +2,7 @@
 #include "parameters.h"
 
 remote_disk_access::remote_disk_access(disk_read_thread **remotes,
-			int num_remotes)
+			int num_remotes, int node_id): io_interface(node_id)
 {
 	senders = new msg_sender<io_request> *[num_remotes];
 	queues = new thread_safe_FIFO_queue<io_request> *[num_remotes];

@@ -22,9 +22,10 @@ public:
 };
 
 disk_read_thread::disk_read_thread(const char *name,
-		long size): queue(name, IO_QUEUE_SIZE) {
-	aio = new async_io(&name, 1, size, AIO_DEPTH_PER_FILE);
+		long size, int node_id): queue(name, IO_QUEUE_SIZE) {
+	aio = new async_io(&name, 1, size, AIO_DEPTH_PER_FILE, node_id);
 	aio->set_callback(new initiator_callback());
+	this->node_id = node_id;
 
 	int ret = pthread_create(&id, NULL, process_requests, (void *) this);
 	if (ret) {
@@ -34,6 +35,8 @@ disk_read_thread::disk_read_thread(const char *name,
 }
 
 void disk_read_thread::run() {
+	numa_run_on_node(node_id);
+	printf("disk read thread runs on node %d\n", node_id);
 	aio->init();
 	io_request reqs[MAX_FETCH_REQS];
 	while (true) {

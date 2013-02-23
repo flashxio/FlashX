@@ -32,7 +32,11 @@ class io_request
 	 * This is to protect the object from being removed
 	 * while others are still using it.
 	 */
-	volatile int refcnt;
+	volatile short refcnt;
+	/*
+	 * The NUMA node id where the buffers of the request are allocated.
+	 */
+	short node_id;
 
 	struct iovec *vec_pointer;
 	struct iovec embedded_vecs[NUM_EMBEDDED_IOVECS];
@@ -43,21 +47,23 @@ class io_request
 		return vec_pointer == embedded_vecs;
 	}
 
+protected:
 	void assign(io_request &req);
 
 public:
 	io_request() {
-		init(-1, NULL, READ, NULL, NULL);
+		init(-1, NULL, READ, -1, NULL, NULL);
 	}
 
-	io_request(off_t off, io_interface *io, int access_method,
+	io_request(off_t off, io_interface *io, int access_method, int node_id,
 			io_request *orig = NULL, void *priv = NULL) {
-		init(off, io, access_method, orig, priv);
+		init(off, io, access_method, node_id, orig, priv);
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, io_request *orig = NULL, void *priv = NULL) {
-		init(buf, off, size, access_method, io, orig, priv);
+			io_interface *io, int node_id, io_request *orig = NULL,
+			void *priv = NULL) {
+		init(buf, off, size, access_method, io, node_id, orig, priv);
 	}
 
 	io_request(io_request &req) {
@@ -75,12 +81,13 @@ public:
 	}
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, io_request *orig = NULL, void *priv = NULL) {
-		init(off, io, access_method, orig, priv);
+			io_interface *io, int node_id, io_request *orig = NULL,
+			void *priv = NULL) {
+		init(off, io, access_method, node_id, orig, priv);
 		add_buf(buf, size);
 	}
 
-	void init(off_t off, io_interface *io, int access_method,
+	void init(off_t off, io_interface *io, int access_method, int node_id,
 			io_request *orig = NULL, void *priv = NULL) {
 		this->offset = off;
 		this->io = io;
@@ -96,6 +103,7 @@ public:
 		vec_pointer = embedded_vecs;
 		vec_capacity = NUM_EMBEDDED_IOVECS;
 		next = NULL;
+		this->node_id = node_id;
 	}
 
 	int get_access_method() const {
@@ -211,6 +219,10 @@ public:
 
 	bool is_partial() const {
 		return this->partial;
+	}
+
+	int get_node_id() const {
+		return node_id;
 	}
 };
 

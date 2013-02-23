@@ -120,6 +120,7 @@ class hash_index_cache: public page_cache
 	long cache_size_per_thread;
 	/* The number of pages that have been allocated. */
 	atomic_unsigned_integer num_pages;
+	int node_id;
 
 #ifdef PER_CPU
 	// For frame allocator
@@ -134,10 +135,11 @@ class hash_index_cache: public page_cache
 	frame_allocator *allocator;
 #endif
 public:
-	hash_index_cache(long cache_size) {
+	hash_index_cache(long cache_size, int node_id) {
 		extern int nthreads;
 		hashtable = new SA_hashtable<off_t, frame *>(1024);
 		cache_size_per_thread = cache_size / nthreads;
+		this->node_id = node_id;
 
 #ifdef PER_CPU
 		pthread_key_create(&allocator_key, NULL);
@@ -173,6 +175,10 @@ public:
 
 	~hash_index_cache() {
 		delete hashtable;
+	}
+
+	int get_node_id() const {
+		return node_id;
 	}
 
 	/**

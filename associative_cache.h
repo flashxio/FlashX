@@ -358,6 +358,7 @@ class associative_cache: public page_cache
 	int init_ncells;
 
 	memory_manager *manager;
+	int node_id;
 
 	bool expandable;
 	int height;
@@ -372,7 +373,7 @@ class associative_cache: public page_cache
 	}
 
 public:
-	associative_cache(long cache_size, long max_cache_size,
+	associative_cache(long cache_size, long max_cache_size, int node_id,
 			bool expandable = false);
 
 	~associative_cache() {
@@ -380,6 +381,10 @@ public:
 			if (cells_table[i])
 				delete [] cells_table[i];
 		manager->unregister_cache(this);
+	}
+
+	int get_node_id() const {
+		return node_id;
 	}
 
 	/* the hash function used for the current level. */

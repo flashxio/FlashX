@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
 				|| access_option == PART_GLOBAL_ACCESS
 				|| access_option == REMOTE_ACCESS)
 			read_threads[k] = new disk_read_thread(cnames[k],
-					npages * PAGE_SIZE);
+					npages * PAGE_SIZE, -1);
 	}
 
 	num = num_files;
@@ -336,11 +336,11 @@ int main(int argc, char *argv[])
 		switch (access_option) {
 			case READ_ACCESS:
 				threads[j] = new thread_private(j, entry_size,
-						new buffered_io(cnames, num, npages * PAGE_SIZE));
+						new buffered_io(cnames, num, npages * PAGE_SIZE, -1));
 				break;
 			case DIRECT_ACCESS:
 				threads[j] = new thread_private(j, entry_size,
-						new direct_io(cnames, num, npages * PAGE_SIZE));
+						new direct_io(cnames, num, npages * PAGE_SIZE, -1));
 				break;
 #if ENABLE_AIO
 			case AIO_ACCESS:
@@ -350,20 +350,20 @@ int main(int argc, char *argv[])
 						depth_per_file = 1;
 					threads[j] = new thread_private(j, entry_size,
 							new async_io(cnames, num, npages * PAGE_SIZE,
-								depth_per_file));
+								depth_per_file, -1));
 				}
 				break;
 #endif
 			case REMOTE_ACCESS:
 				threads[j] = new thread_private(j, entry_size,
-						new remote_disk_access(read_threads, num_files));
+						new remote_disk_access(read_threads, num_files, -1));
 				break;
 			case GLOBAL_CACHE_ACCESS:
 				{
 					io_interface *underlying = new remote_disk_access(
-							read_threads, num_files);
+							read_threads, num_files, -1);
 					global_cached_io *io = new global_cached_io(underlying,
-							cache_size, cache_type);
+							cache_size, cache_type, -1);
 					if (preload)
 						io->preload(0, npages * PAGE_SIZE);
 					threads[j] = new thread_private(j, entry_size, io);
@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
 			case PART_GLOBAL_ACCESS:
 				{
 					io_interface *underlying = new direct_io(cnames, num,
-							npages * PAGE_SIZE);
+							npages * PAGE_SIZE, -1);
 					threads[j] = new thread_private(j, entry_size,
 							new part_global_cached_io(num_nodes, underlying,
 								j, cache_size, cache_type));

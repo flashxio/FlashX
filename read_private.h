@@ -24,8 +24,8 @@ class buffered_io: public io_interface
 	long num_reads;
 #endif
 public:
-	buffered_io(const char *names[], int num,
-			long size, int flags = O_RDWR) {
+	buffered_io(const char *names[], int num, long size, int node_id,
+			int flags = O_RDWR): io_interface(node_id) {
 		this->flags = flags;
 #ifdef STATISTICS
 		read_time = 0;

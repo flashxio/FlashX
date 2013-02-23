@@ -143,7 +143,7 @@ int thread_private::run()
 				if (buf_type == MULTI_BUF) {
 					assert(off % PAGE_SIZE == 0);
 					int num_vecs = size / PAGE_SIZE;
-					reqs[i].init(off, io, access_method);
+					reqs[i].init(off, io, access_method, node_id);
 					assert(buf->get_entry_size() >= PAGE_SIZE);
 					for (int k = 0; k < num_vecs; k++) {
 						reqs[i].add_buf(buf->next_entry(PAGE_SIZE), PAGE_SIZE);
@@ -159,7 +159,8 @@ again:
 						char *p = buf->next_entry(next_off - off);
 						if (access_method == WRITE)
 							create_write_data(p, next_off - off, off);
-						reqs[i].init(p, off, next_off - off, access_method, io);
+						reqs[i].init(p, off, next_off - off, access_method,
+								io, node_id);
 						size -= next_off - off;
 						off = next_off;
 						i++;
@@ -175,7 +176,7 @@ again:
 					char *p = buf->next_entry(size);
 					if (access_method == WRITE)
 						create_write_data(p, size, off);
-					reqs[i++].init(p, off, size, access_method, io);
+					reqs[i++].init(p, off, size, access_method, io, node_id);
 				}
 			}
 			ret = io->access(reqs, i);

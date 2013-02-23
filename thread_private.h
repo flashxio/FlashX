@@ -24,7 +24,12 @@ public:
  */
 class io_interface
 {
+	int node_id;
 public:
+	io_interface(int node_id) {
+		this->node_id = node_id;
+	}
+
 	virtual ~io_interface() { }
 
 	/* When a thread begins, this method will be called. */
@@ -75,6 +80,10 @@ public:
 	virtual io_interface *clone() const {
 		return NULL;
 	}
+
+	int get_node_id() const {
+		return node_id;
+	}
 };
 
 class cleanup_callback;
@@ -92,6 +101,7 @@ class thread_private
 	workload_gen *gen;
 	rand_buf *buf;
 	io_interface *io;
+	int node_id;
 
 	ssize_t read_bytes;
 	long num_accesses;
@@ -101,8 +111,9 @@ class thread_private
 	struct timeval start_time, end_time;
 
 public:
-	thread_private() {
+	thread_private(int node_id) {
 		cb = NULL;
+		this->node_id = node_id;
 	}
 
 	~thread_private() {

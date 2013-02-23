@@ -18,7 +18,7 @@ class remote_disk_access: public io_interface
 	int num_senders;
 	callback *cb;
 
-	remote_disk_access() {
+	remote_disk_access(): io_interface(-1) {
 		senders = NULL;
 		queues = NULL;
 		num_senders = 0;
@@ -26,7 +26,7 @@ class remote_disk_access: public io_interface
 	}
 public:
 	remote_disk_access(disk_read_thread **remotes,
-			int num_remotes);
+			int num_remotes, int node_id);
 
 	~remote_disk_access();
 

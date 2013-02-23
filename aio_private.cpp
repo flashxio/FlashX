@@ -20,8 +20,8 @@ void aio_callback(io_context_t ctx, struct iocb* iocb,
 }
 
 async_io::async_io(const char *names[], int num,
-		long size, int aio_depth_per_file): buffered_io(names, num, size,
-			O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file * num)
+		long size, int aio_depth_per_file, int node_id): buffered_io(names,
+			num, size, node_id, O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file * num)
 {
 	printf("aio is used\n");
 	buf_idx = 0;

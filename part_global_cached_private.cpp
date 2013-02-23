@@ -49,7 +49,8 @@ int part_global_cached_io::init() {
 	thread_group *group = &groups[group_idx];
 	if (group->cache == NULL) {
 		/* Each cache has their own memory managers */
-		group->cache = global_cached_io::create_cache(cache_type, cache_size);
+		// TODO I need to set the node id right.
+		group->cache = global_cached_io::create_cache(cache_type, cache_size, -1);
 	}
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
@@ -246,7 +247,8 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 				strerror(reply->get_status()));
 	}
 	io_request req(reply->get_buf(), reply->get_offset(), reply->get_size(),
-			reply->get_access_method(), get_thread(thread_id)->get_io());
+			// TODO
+			reply->get_access_method(), get_thread(thread_id)->get_io(), -1);
 	cb->invoke(&req);
 	return ret;
 }

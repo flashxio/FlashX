@@ -72,7 +72,7 @@ static void extract_pages(const io_request &req, off_t off, int npages,
 			* npages : remaining;
 	}
 	extracted.init(req_buf, req_off, req_size, req.get_access_method(),
-			req.get_io());
+			req.get_io(), req.get_node_id());
 }
 
 /**
@@ -387,8 +387,8 @@ int access_page_callback::invoke(io_request *request)
 	return 0;
 }
 
-global_cached_io::global_cached_io(io_interface *underlying): pending_requests(
-		INIT_GCACHE_PENDING_SIZE)
+global_cached_io::global_cached_io(io_interface *underlying): io_interface(
+		-1), pending_requests(INIT_GCACHE_PENDING_SIZE)
 {
 	this->underlying = underlying;
 	num_waits = 0;
@@ -398,7 +398,8 @@ global_cached_io::global_cached_io(io_interface *underlying): pending_requests(
 }
 
 global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
-		int cache_type): pending_requests(INIT_GCACHE_PENDING_SIZE)
+		int cache_type, int node_id): io_interface(node_id),
+	pending_requests(INIT_GCACHE_PENDING_SIZE)
 {
 	cb = NULL;
 	cache_hits = 0;
@@ -406,7 +407,7 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 	num_waits = 0;
 	this->cache_size = cache_size;
 	if (global_cache == NULL) {
-		global_cache = create_cache(cache_type, cache_size);
+		global_cache = create_cache(cache_type, cache_size, node_id);
 	}
 	underlying->set_callback(new access_page_callback(global_cache));
 	if (global_cache->get_flush_thread() == NULL) {
@@ -445,7 +446,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 				assert(real_orig->get_orig() == NULL);
 				io_request read_req((char *) p->get_data(),
 						ROUND_PAGE(off), PAGE_SIZE, READ,
-						underlying, real_orig, p);
+						underlying, get_node_id(), real_orig, p);
 				p->set_io_pending(true);
 				p->unlock();
 				ret = underlying->access(&read_req, 1);
@@ -530,7 +531,7 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 					 * it will notify the underlying IO,
 					 * which then notifies global_cached_io.
 					 */
-					PAGE_SIZE, READ, underlying, orig, p);
+					PAGE_SIZE, READ, underlying, get_node_id(), orig, p);
 			p->unlock();
 			assert(orig->get_orig() == NULL);
 			ret = underlying->access(&req, 1);
@@ -572,7 +573,8 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 	assert(npages <= MAX_NUM_IOVECS);
 	io_request *orig = req.get_orig();
 	assert(orig->get_orig() == NULL);
-	io_request multibuf_req(-1, underlying, req.get_access_method(), orig);
+	io_request multibuf_req(-1, underlying, req.get_access_method(),
+			get_node_id(), orig);
 
 	/*
 	 * The pages in `pages' should be sorted with their offsets.
@@ -700,7 +702,7 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 	assert(!p->is_io_pending());
 	p->set_io_pending(true);
 	io_request req((char *) p->get_data(), off, PAGE_SIZE, WRITE,
-			io, orig, p);
+			io, cache->get_node_id(), orig, p);
 	p->unlock();
 
 #ifdef ENABLE_LARGE_WRITE

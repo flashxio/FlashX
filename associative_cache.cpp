@@ -825,9 +825,10 @@ void associative_cache::sanity_check() const
 }
 
 associative_cache::associative_cache(long cache_size, long max_cache_size,
-		bool expandable)
+		int node_id, bool expandable)
 {
 	printf("associative cache is used\n");
+	this->node_id = node_id;
 	level = 0;
 	split = 0;
 	height = CELL_SIZE / 2 + 1;
@@ -870,11 +871,14 @@ class associative_flush_thread: public flush_thread
 	associative_cache *cache;
 	io_interface *io;
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
+	int node_id;
 public:
 	associative_flush_thread(associative_cache *cache,
-			io_interface *io): dirty_cells(MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
+			io_interface *io, int node_id): dirty_cells(
+				MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
 		this->cache = cache;
 		this->io = io;
+		this->node_id = node_id;
 	}
 
 	void run();
@@ -1014,7 +1018,8 @@ void associative_flush_thread::run()
 				assert(p->data_ready());
 				if (!p->is_io_pending()) {
 					req_array[num_init_reqs].init((char *) p->get_data(),
-								p->get_offset(), PAGE_SIZE, WRITE, io, NULL, p);
+								p->get_offset(), PAGE_SIZE, WRITE, io,
+								node_id, NULL, p);
 					requests.push_back(&req_array[num_init_reqs]);
 					num_init_reqs++;
 					p->set_io_pending(true);
@@ -1070,7 +1075,7 @@ void associative_flush_thread::run()
 
 flush_thread *associative_cache::create_flush_thread(io_interface *io)
 {
-	_flush_thread = new associative_flush_thread(this, io);
+	_flush_thread = new associative_flush_thread(this, io, node_id);
 	return _flush_thread;
 }
 

@@ -34,7 +34,8 @@ public:
 	 * @size: the size of data to be accessed in all files
 	 * @aio_depth_per_file
 	 */
-	async_io(const char *names[], int num, long size, int aio_depth_per_file);
+	async_io(const char *names[], int num, long size, int aio_depth_per_file,
+			int node_id);
 
 	virtual ~async_io();
 

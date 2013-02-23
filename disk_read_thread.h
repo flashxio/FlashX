@@ -15,9 +15,10 @@ class disk_read_thread
 	blocking_FIFO_queue<io_request> queue;
 	pthread_t id;
 	async_io *aio;
+	int node_id;
 
 public:
-	disk_read_thread(const char *name, long size);
+	disk_read_thread(const char *name, long size, int node_id);
 
 	blocking_FIFO_queue<io_request> *get_queue() {
 		return &queue;

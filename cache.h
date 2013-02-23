@@ -372,6 +372,9 @@ public:
 	virtual flush_thread *get_flush_thread() const {
 		return NULL;
 	}
+	virtual int get_node_id() const {
+		return -1;
+	}
 };
 
 /**

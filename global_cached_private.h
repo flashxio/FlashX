@@ -44,9 +44,10 @@ class global_cached_io: public io_interface
 		std::vector<thread_safe_page *> &dirty_pages);
 public:
 	global_cached_io(io_interface *underlying);
-	global_cached_io(io_interface *, long, int);
+	global_cached_io(io_interface *, long, int, int node_id);
 
-	static page_cache *create_cache(int cache_type, long cache_size) {
+	static page_cache *create_cache(int cache_type, long cache_size,
+			int node_id) {
 		page_cache *global_cache;
 		switch (cache_type) {
 #if 0
@@ -65,10 +66,10 @@ public:
 				global_cache = new LRU2Q_cache(cache_size);
 				break;
 			case ASSOCIATIVE_CACHE:
-				global_cache = new associative_cache(cache_size, MAX_CACHE_SIZE);
+				global_cache = new associative_cache(cache_size, MAX_CACHE_SIZE, node_id);
 				break;
 			case HASH_INDEX_CACHE:
-				global_cache = new hash_index_cache(cache_size);
+				global_cache = new hash_index_cache(cache_size, node_id);
 				break;
 			default:
 				fprintf(stderr, "wrong cache type\n");
