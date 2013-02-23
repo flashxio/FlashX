@@ -33,6 +33,8 @@ bool memory_manager::get_free_pages(int npages,
 				cache = caches[i];
 			}
 		}
+		if (cache == NULL)
+			return false;
 		/* 
 		 * if we are going to shrink the cache that requests
 		 * free pages, it just fails.
