@@ -18,6 +18,8 @@
 #include <google/profiler.h>
 #endif
 
+#include <vector>
+#include <set>
 #include <iostream>
 #include <string>
 #include <deque>
@@ -236,7 +238,6 @@ int main(int argc, char *argv[])
 	long cache_size = 512 * 1024 * 1024;
 	int access_option = -1;
 	int ret;
-	int i, j;
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
 	int num_nodes = 1;
@@ -347,7 +348,6 @@ int main(int argc, char *argv[])
 	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d\n",
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio);
 
-	int num_entries = (int) (((long) npages) * PAGE_SIZE / entry_size);
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);
 
@@ -364,6 +364,7 @@ int main(int argc, char *argv[])
 	int num;
 
 	disk_read_thread **read_threads = new disk_read_thread*[num_files];
+	std::set<int> node_ids;
 	for (int k = 0; k < num_files; k++) {
 		cnames[k] = files[k].name.c_str();
 		if (access_option == GLOBAL_CACHE_ACCESS
@@ -371,112 +372,133 @@ int main(int argc, char *argv[])
 				|| access_option == REMOTE_ACCESS)
 			read_threads[k] = new disk_read_thread(cnames[k],
 					npages * PAGE_SIZE, files[k].node_id);
+		node_ids.insert(files[k].node_id);
 	}
 
-	num = num_files;
-	/* initialize the threads' private data. */
-	for (j = 0; j < nthreads; j++) {
-		switch (access_option) {
-			case READ_ACCESS:
-				threads[j] = new thread_private(j, entry_size,
-						new buffered_io(cnames, num, npages * PAGE_SIZE, -1));
-				break;
-			case DIRECT_ACCESS:
-				threads[j] = new thread_private(j, entry_size,
-						new direct_io(cnames, num, npages * PAGE_SIZE, -1));
-				break;
-#if ENABLE_AIO
-			case AIO_ACCESS:
-				{
-					int depth_per_file = AIO_DEPTH_PER_FILE / nthreads;
-					if (depth_per_file == 0)
-						depth_per_file = 1;
-					threads[j] = new thread_private(j, entry_size,
-							new async_io(cnames, num, npages * PAGE_SIZE,
-								depth_per_file, -1));
-				}
-				break;
-#endif
-			case REMOTE_ACCESS:
-				threads[j] = new thread_private(j, entry_size,
-						new remote_disk_access(read_threads, num_files, -1));
-				break;
-			case GLOBAL_CACHE_ACCESS:
-				{
-					io_interface *underlying = new remote_disk_access(
-							read_threads, num_files, -1);
-					global_cached_io *io = new global_cached_io(underlying,
-							cache_size, cache_type, -1);
-					if (preload)
-						io->preload(0, npages * PAGE_SIZE);
-					threads[j] = new thread_private(j, entry_size, io);
-				}
-				break;
-			case PART_GLOBAL_ACCESS:
-				{
-					io_interface *underlying = new direct_io(cnames, num,
-							npages * PAGE_SIZE, -1);
-					threads[j] = new thread_private(j, entry_size,
-							new part_global_cached_io(num_nodes, underlying,
-								j, cache_size, cache_type));
-				}
-				break;
-			default:
-				fprintf(stderr, "wrong access option\n");
-				exit(1);
-		}
-		
-		/*
-		 * we still assign each thread a range regardless of the number
-		 * of threads. read_private will choose the right file descriptor
-		 * according to the offset.
-		 */
-		start = end;
-		end = start + ((long) npages / nthreads + (shift < remainings))
-			* PAGE_SIZE / entry_size;
-		if (remainings != shift)
-			shift++;
-		printf("thread %d starts %ld ends %ld\n", j, start, end);
+	// In this way, we can guarantee that the cache is created
+	// on the nodes with the data files.
+	for (int i = 0; i < num_nodes
+			&& node_ids.size() < (unsigned) num_nodes; i++)
+		node_ids.insert(i);
+	std::vector<int> node_id_array(node_ids.begin(), node_ids.end());
 
-		workload_gen *gen;
-		workload_chunk *chunk = NULL;
-		switch (workload) {
-			case SEQ_OFFSET:
-				gen = new seq_workload(start, end, entry_size);
-				break;
-			case RAND_OFFSET:
-				gen = new rand_workload(start, end, entry_size);
-				break;
-			case RAND_PERMUTE:
-				gen = new global_rand_permute_workload(num_entries,
-						entry_size, start, end);
-				break;
-			case LOCAL_RAND_PERMUTE:
-				gen = new local_rand_permute_workload(start, end, entry_size);
-				break;
-			case STRIDE:
-				gen = new stride_workload(start, end, entry_size);
-				break;
-			case BALANCED:
-				if (chunk == NULL) {
-					chunk = new stride_workload_chunk(0,
-							(long) npages * PAGE_SIZE / entry_size, entry_size);
-				}
-				gen = new balanced_workload(chunk);
-				break;
-			case RAID_RAND:
-				/* In this workload each thread starts */
-				gen = new RAID0_rand_permute_workload(npages,
-						entry_size, nthreads, j);
-				break;
-			case -1:
-				gen = new file_workload(workload_file, nthreads);
-				break;
-			default:
-				fprintf(stderr, "unsupported workload\n");
-				exit(1);
+	num = num_files;
+	assert(nthreads % num_nodes == 0);
+	assert(node_id_array.size() >= (unsigned) num_nodes);
+	int nthreads_per_node = nthreads / num_nodes;
+	for (int i = 0; i < num_nodes; i++) {
+		int node_id = node_id_array[i];
+		numa_run_on_node(node_id);
+		/* initialize the threads' private data. */
+		for (int j = 0; j < nthreads_per_node; j++) {
+			switch (access_option) {
+				case READ_ACCESS:
+					threads[j] = new thread_private(j, entry_size,
+							new buffered_io(cnames, num, npages * PAGE_SIZE, node_id));
+					break;
+				case DIRECT_ACCESS:
+					threads[j] = new thread_private(j, entry_size,
+							new direct_io(cnames, num, npages * PAGE_SIZE, node_id));
+					break;
+#if ENABLE_AIO
+				case AIO_ACCESS:
+					{
+						int depth_per_file = AIO_DEPTH_PER_FILE / nthreads;
+						if (depth_per_file == 0)
+							depth_per_file = 1;
+						threads[j] = new thread_private(j, entry_size,
+								new async_io(cnames, num, npages * PAGE_SIZE,
+									depth_per_file, node_id));
+					}
+					break;
+#endif
+				case REMOTE_ACCESS:
+					threads[j] = new thread_private(j, entry_size,
+							new remote_disk_access(read_threads, num_files, node_id));
+					break;
+				case GLOBAL_CACHE_ACCESS:
+					{
+						io_interface *underlying = new remote_disk_access(
+								read_threads, num_files, node_id);
+						global_cached_io *io = new global_cached_io(underlying,
+								cache_size, cache_type, node_id);
+						if (preload)
+							io->preload(0, npages * PAGE_SIZE);
+						threads[j] = new thread_private(j, entry_size, io);
+					}
+					break;
+				case PART_GLOBAL_ACCESS:
+					{
+						io_interface *underlying = new direct_io(cnames, num,
+								npages * PAGE_SIZE, node_id);
+						threads[j] = new thread_private(j, entry_size,
+								new part_global_cached_io(num_nodes, underlying,
+									j, cache_size, cache_type));
+					}
+					break;
+				default:
+					fprintf(stderr, "wrong access option\n");
+					exit(1);
+			}
+
+			/*
+			 * we still assign each thread a range regardless of the number
+			 * of threads. read_private will choose the right file descriptor
+			 * according to the offset.
+			 */
+			start = end;
+			end = start + ((long) npages / nthreads + (shift < remainings))
+				* PAGE_SIZE / entry_size;
+			if (remainings != shift)
+				shift++;
+			printf("thread %d starts %ld ends %ld\n", j, start, end);
+
+			workload_gen *gen;
+			workload_chunk *chunk = NULL;
+			switch (workload) {
+				case SEQ_OFFSET:
+					gen = new seq_workload(start, end, entry_size);
+					break;
+				case RAND_OFFSET:
+					gen = new rand_workload(start, end, entry_size);
+					break;
+				case RAND_PERMUTE:
+					gen = new global_rand_permute_workload(entry_size,
+							start, end);
+					break;
+				case LOCAL_RAND_PERMUTE:
+					gen = new local_rand_permute_workload(start, end, entry_size);
+					break;
+				case STRIDE:
+					gen = new stride_workload(start, end, entry_size);
+					break;
+				case BALANCED:
+					if (chunk == NULL) {
+						chunk = new stride_workload_chunk(0,
+								(long) npages * PAGE_SIZE / entry_size, entry_size);
+					}
+					gen = new balanced_workload(chunk);
+					break;
+				case RAID_RAND:
+					/* In this workload each thread starts */
+					gen = new RAID0_rand_permute_workload(npages,
+							entry_size, nthreads, j);
+					break;
+				case -1:
+					{
+						static long length = 0;
+						static workload_t *workloads = NULL;
+						if (workloads == NULL)
+							workloads = load_file_workload(workload_file, length);
+						gen = new file_workload(workloads, length, start, end);
+						break;
+					}
+				default:
+					fprintf(stderr, "unsupported workload\n");
+					exit(1);
+			}
+			threads[j]->set_workload(gen);
 		}
-		threads[j]->set_workload(gen);
 	}
 
 	if (high_prio) {
@@ -493,7 +515,7 @@ int main(int argc, char *argv[])
 	if (!prof_file.empty())
 		ProfilerStart(prof_file.c_str());
 #endif
-	for (i = 0; i < nthreads; i++) {
+	for (int i = 0; i < nthreads; i++) {
 		ret = threads[i]->start_thread();
 		if (ret) {
 			perror("pthread_create");
@@ -501,7 +523,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	for (i = 0; i < nthreads; i++) {
+	for (int i = 0; i < nthreads; i++) {
 		threads[i]->wait_thread_end();
 		if (ret) {
 			perror("pthread_join");
@@ -527,5 +549,3 @@ int main(int argc, char *argv[])
 	printf("there are %d lock contentions\n", lock_contentions);
 #endif
 }
-
-const rand_permute *global_rand_permute_workload::permute;

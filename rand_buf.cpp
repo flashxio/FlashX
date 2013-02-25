@@ -7,7 +7,7 @@ rand_buf::rand_buf(int buf_size, int entry_size,
 #endif
 {
 	num_entries = buf_size / entry_size;
-	rand_permute buf_offset(num_entries, entry_size);
+	rand_permute buf_offset(num_entries, entry_size, 0);
 	for (int i = 0; i < num_entries; i++)
 		free_refs.push_back(buf_offset.get_offset(i));
 

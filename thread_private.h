@@ -101,7 +101,6 @@ class thread_private
 	workload_gen *gen;
 	rand_buf *buf;
 	io_interface *io;
-	int node_id;
 
 	ssize_t read_bytes;
 	long num_accesses;
@@ -111,9 +110,8 @@ class thread_private
 	struct timeval start_time, end_time;
 
 public:
-	thread_private(int node_id) {
+	thread_private() {
 		cb = NULL;
-		this->node_id = node_id;
 	}
 
 	~thread_private() {

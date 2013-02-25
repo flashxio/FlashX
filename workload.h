@@ -90,10 +90,10 @@ class rand_permute
 	long num;
 
 public:
-	rand_permute(long num, int stride) {
+	rand_permute(long num, int stride, long start) {
 		offset = (off_t *) valloc(num * sizeof(off_t));
 		for (int i = 0; i < num; i++) {
-			offset[i] = ((off_t) i) * stride;
+			offset[i] = ((off_t) i) * stride + start;
 		}
 
 		for (int i = num - 1; i >= 1; i--) {
@@ -157,7 +157,7 @@ public:
 	 * `start' and `end' are entry indexes.
 	 */
 	local_rand_permute_workload(long start, long end, int entry_size) {
-		permute = new rand_permute(end - start, entry_size);
+		permute = new rand_permute(end - start, entry_size, 0);
 		this->start = start * entry_size;
 		idx = 0;
 		num = end - start;
@@ -191,14 +191,12 @@ class global_rand_permute_workload: public workload_gen
 {
 	long start;
 	long end;
-	static const rand_permute *permute;
+	const rand_permute *permute;
 public:
-	global_rand_permute_workload(long num, int stride, long start, long end) {
-		if (permute == NULL) {
-			permute = new rand_permute(num, stride);
-		}
-		this->start = start;
-		this->end = end;
+	global_rand_permute_workload(int stride, long start, long end) {
+		permute = new rand_permute(end - start, stride, start);
+		this->start = 0;
+		this->end = end - start;
 	}
 
 	virtual ~global_rand_permute_workload() {
@@ -219,16 +217,25 @@ public:
 	}
 };
 
+off_t *load_java_dump(const std::string &file, long &num_offsets);
+workload_t *load_file_workload(const std::string &file, long &num);
+
 /* this class reads workload from a file dumped by a Java program. */
 class java_dump_workload: public workload_gen
 {
-	static off_t *offsets;
-
+	off_t *offsets;
 	long curr;
 	long end;
 
 public:
-	java_dump_workload(const std::string &file, int nthreads);
+	java_dump_workload(off_t offsets[], long length, long start, long end) {
+		assert(length >= end);
+		this->offsets = (off_t *) valloc((end - start) * sizeof(off_t));
+		memcpy(this->offsets, &offsets[start], sizeof(off_t) * (end - start));
+		this->end = end - start;
+		this->curr = 0;
+		printf("start at %ld end at %ld\n", curr, end);
+	}
 
 	virtual ~java_dump_workload() {
 		free(offsets);
@@ -260,17 +267,23 @@ public:
 
 class file_workload: public workload_gen
 {
-	static workload_t *workloads;
+	workload_t *workloads;
 	long curr;
 	long end;
 public:
-	file_workload(const std::string &file, int nthreads);
+	file_workload(workload_t workloads[], long length, long start, long end) {
+		assert(length >= end);
+		this->workloads = (workload_t *) valloc((end - start)
+				* sizeof(workload_t));
+		memcpy(this->workloads, &workloads[start],
+				sizeof(workload_t) * (end - start));
+		this->end = end - start;
+		this->curr = 0;
+		printf("start at %ld end at %ld\n", curr, end);
+	}
 
 	virtual ~file_workload() {
-		if (workloads) {
-			free(workloads);
-			workloads = NULL;
-		}
+		free(workloads);
 	}
 
 	const workload_t &next() {

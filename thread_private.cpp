@@ -120,6 +120,9 @@ int thread_private::thread_init() {
 
 int thread_private::run()
 {
+	int node_id = io->get_node_id();
+	printf("run thread on node %d\n", node_id);
+	numa_run_on_node(node_id);
 	ssize_t ret = -1;
 	gettimeofday(&start_time, NULL);
 	io_request reqs[NUM_REQS_BY_USER];
