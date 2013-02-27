@@ -3,10 +3,7 @@
 
 #include <errno.h>
 
-#define BUF_SIZE 1000
-#define REQ_QUEUE_SIZE 100000
-#define REPLY_QUEUE_SIZE REQ_QUEUE_SIZE
-
+#include "parameters.h"
 #include "messaging.h"
 #include "garbage_collection.h"
 #include "global_cached_private.h"
@@ -52,9 +49,7 @@ class part_global_cached_io: public global_cached_io
 
 	int hash_req(io_request *req)
 	{
-		/* the size of each group needs to access */
-		long size = get_size() / num_groups;
-		return req->get_offset() / size;
+		return req->get_offset() % num_groups;
 	}
 
 	long processed_requests;
@@ -112,7 +107,7 @@ public:
 
 	int reply(io_request *requests, io_reply *replies, int num);
 
-	void distribute_reqs(io_request *requests, int num);
+	int distribute_reqs(io_request *requests, int num);
 
 	int process_requests(int max_nreqs);
 

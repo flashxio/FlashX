@@ -125,10 +125,10 @@ static thread_safe_page *__complete_req_unlocked(io_request *orig,
 
 class access_page_callback: public callback
 {
-	page_cache *cache;
+	global_cached_io *cached_io;
 public:
-	access_page_callback(page_cache *cache) {
-		this->cache = cache;
+	access_page_callback(global_cached_io *io) {
+		cached_io = io;
 	}
 	int invoke(io_request *request);
 	int multibuf_invoke(io_request *request);
@@ -182,6 +182,7 @@ void finalize_request(io_request &req)
 
 int access_page_callback::multibuf_invoke(io_request *request)
 {
+	page_cache *cache = cached_io->get_global_cache();
 	io_request *orig = request->get_orig();
 	assert(orig->get_num_bufs() == 1);
 	/*
@@ -304,6 +305,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 
 int access_page_callback::invoke(io_request *request)
 {
+	page_cache *cache = cached_io->get_global_cache();
 	/* 
 	 * If the request doesn't have an original request,
 	 * it is issued by the flushing thread.
@@ -395,6 +397,7 @@ global_cached_io::global_cached_io(io_interface *underlying): io_interface(
 	cache_size = 0;
 	cb = NULL;
 	cache_hits = 0;
+	underlying->set_callback(new access_page_callback(this));
 }
 
 global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
@@ -406,10 +409,10 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 	this->underlying = underlying;
 	num_waits = 0;
 	this->cache_size = cache_size;
+	underlying->set_callback(new access_page_callback(this));
 	if (global_cache == NULL) {
 		global_cache = create_cache(cache_type, cache_size, get_node_id());
 	}
-	underlying->set_callback(new access_page_callback(global_cache));
 }
 
 /**
@@ -682,7 +685,7 @@ int global_cached_io::handle_pending_requests()
 	// the place where we just finish writing old dirty pages to the disk.
 	// The only possible reason is that we happen to overwrite the entire
 	// page.
-	global_cache->get_flush_thread()->dirty_pages(dirty_pages.data(),
+	get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
 			dirty_pages.size());
 	return tot;
 }
@@ -842,7 +845,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					 * offset, and only this thread can write back the old
 					 * dirty page.
 					 */
-					write_dirty_page(p, old_off, underlying, orig1, global_cache);
+					write_dirty_page(p, old_off, underlying, orig1, get_global_cache());
 					continue;
 				}
 				else {
@@ -903,7 +906,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			read(req, pages, pg_idx);
 		}
 	}
-	global_cache->get_flush_thread()->dirty_pages(dirty_pages.data(),
+	get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
 			dirty_pages.size());
 	return 0;
 }
@@ -1015,7 +1018,7 @@ ssize_t global_cached_io::access(char *buf, off_t offset,
 		memcpy(buf, (char *) p->get_data() + page_off, size);
 	p->unlock();
 	if (is_page_set_dirty)
-		global_cache->get_flush_thread()->dirty_pages(&p, 1);
+		get_global_cache()->get_flush_thread()->dirty_pages(&p, 1);
 	p->dec_ref();
 	ret = size;
 	return ret;

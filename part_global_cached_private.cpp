@@ -17,10 +17,34 @@
 #include "part_global_cached_private.h"
 
 const int MIN_NUM_PROCESS_REQ = 100;
+const int BUF_SIZE = 100;
+
+/**
+ * This callback is used in global cache IO.
+ * When a request is complete in the global cache IO, this callback
+ * will be invoked.
+ */
+class for_global_callback: public callback
+{
+	part_global_cached_io *io;
+public:
+	for_global_callback(part_global_cached_io *io) {
+		this->io = io;
+	}
+
+	int invoke(io_request *request);
+};
+
+int for_global_callback::invoke(io_request *req)
+{
+	printf("a request is complete\n");
+	io_reply rep(req, true, 0);
+	io->reply(req, &rep, 1);
+	return 0;
+}
 
 bool part_global_cached_io::set_callback(callback *cb)
 {
-	// TODO I need to create a new callback for async global_cached_io.
 	this->cb = cb;
 	return true;
 }
@@ -37,9 +61,8 @@ int part_global_cached_io::init() {
 	numa_set_bind_policy(1);
 #endif
 
-	global_cached_io::init();
-	request_queue = new thread_safe_FIFO_queue<io_request>(REQ_QUEUE_SIZE);
-	reply_queue = new thread_safe_FIFO_queue<io_reply>(REPLY_QUEUE_SIZE);
+	request_queue = new thread_safe_FIFO_queue<io_request>(NUMA_REQ_QUEUE_SIZE);
+	reply_queue = new thread_safe_FIFO_queue<io_reply>(NUMA_REPLY_QUEUE_SIZE);
 
 	/* 
 	 * there is a global lock for all threads.
@@ -54,6 +77,7 @@ int part_global_cached_io::init() {
 	}
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
+	global_cached_io::init();
 
 	pthread_mutex_lock(&wait_mutex);
 	while (num_finish_init < nthreads) {
@@ -77,7 +101,8 @@ int part_global_cached_io::init() {
 		thread_safe_FIFO_queue<io_request> *queues[groups[i].nthreads];
 		for (int j = 0; j < groups[i].nthreads; j++)
 			queues[j] = groups[i].ios[j]->request_queue;
-		req_senders[i] = new msg_sender<io_request>(BUF_SIZE, queues, groups[i].nthreads);
+		req_senders[i] = new msg_sender<io_request>(NUMA_MSG_CACHE_SIZE,
+				queues, groups[i].nthreads);
 	}
 	/* 
 	 * there is a reply sender for each thread.
@@ -91,7 +116,8 @@ int part_global_cached_io::init() {
 			thread_safe_FIFO_queue<io_reply> *queues[1];
 			assert(idx == groups[i].ios[j]->thread_id);
 			queues[0] = groups[i].ios[j]->reply_queue;
-			reply_senders[idx++] = new msg_sender<io_reply>(BUF_SIZE, queues, 1);
+			reply_senders[idx++] = new msg_sender<io_reply>(NUMA_MSG_CACHE_SIZE,
+					queues, 1);
 		}
 	}
 
@@ -147,6 +173,8 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	int i = thread_idx(idx, num_groups);
 	assert (group->ios[i] == NULL);
 	group->ios[i] = this;
+
+	global_cached_io::set_callback(new for_global_callback(this));
 }
 
 /**
@@ -165,52 +193,51 @@ int part_global_cached_io::reply(io_request *requests,
 			continue;
 		}
 	}
+	// TODO We shouldn't flush here, but we need to flush at some point.
+#if 0
 	for (int i = 0; i < nthreads; i++)
 		reply_senders[i]->flush();
+#endif
 	return 0;
 }
 
 /* distribute requests to nodes. */
-void part_global_cached_io::distribute_reqs(io_request *requests, int num) {
+int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
+	int num_sent = 0;
 	for (int i = 0; i < num; i++) {
 		int idx = hash_req(&requests[i]);
 		assert (idx < num_groups);
 		if (idx != get_group_id())
 			remote_reads++;
-		int num_sent = req_senders[idx]->send_cached(&requests[i]);
-		// TODO if we fail to send the requests to the specific node,
-		// we should rehash it and give it to another node.
-		if (num_sent == 0) {
-			// TODO the buffer is already full.
-			// discard the request for now.
-			printf("the request buffer for group %d is already full\n", idx);
-			continue;
-		}
+		int ret = req_senders[idx]->send_cached(&requests[i]);
+		if (ret == 0)
+			break;
+		num_sent++;
 	}
 	for (int i = 0; i < num_groups; i++)
 		req_senders[i]->flush();
+	return num_sent;
 }
 
 /* process the requests sent to this thread */
 int part_global_cached_io::process_requests(int max_nreqs) {
 	int num_processed = 0;
 	io_request local_reqs[BUF_SIZE];
-	io_reply local_replies[BUF_SIZE];
 	while (!request_queue->is_empty() && num_processed < max_nreqs) {
 		int num = request_queue->fetch(local_reqs, BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			io_request *req = &local_reqs[i];
-			// TODO will it be better if I collect all data
-			// and send them back to the initiator in blocks?
-			int access_method = req->get_access_method();
 			assert(req->get_offset() >= 0);
-			// TODO use the async interface of global_cached_io.
-			int ret = global_cached_io::access(req->get_buf(),
-					req->get_offset(), req->get_size(), access_method);
-			local_replies[i] = io_reply(req, ret >= 0, errno);
+			// The thread will be blocked by the global cache IO
+			// if too many requests flush in.
+			int ret = global_cached_io::access(req, 1);
+			if (ret < 0) {
+				fprintf(stderr, "part global cache can't issue a request\n");
+				io_reply rep(req, false, errno);
+				reply(req, &rep, 1);
+			}
 		}
 		num_processed += num;
-		reply(local_reqs, local_replies, num);
 	}
 	processed_requests += num_processed;
 	return num_processed;
@@ -247,24 +274,34 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 				strerror(reply->get_status()));
 	}
 	io_request req(reply->get_buf(), reply->get_offset(), reply->get_size(),
-			// TODO
+			// It doesn't really matter what node id is specified
+			// for the request. The request is just used for notifying
+			// the user code of the completion of the request.
 			reply->get_access_method(), get_thread(thread_id)->get_io(), -1);
 	cb->invoke(&req);
 	return ret;
 }
 
 ssize_t part_global_cached_io::access(io_request *requests, int num) {
-	distribute_reqs(requests, num);
-	/*
-	 * let's process up to twice as many requests as demanded by the upper layer,
-	 * I hope this can help load balancing problem.
-	 */
 	int num_recv = 0;
-	if (num == 0)
-		num = MIN_NUM_PROCESS_REQ;
-	/* we need to process them at least once. */
-	process_requests(num * 2);
-	num_recv += process_replies(num * 4);
+	int num_sent = 0;
+	// If we can't sent the requests to the destination node,
+	// we have to busy wait.
+	while (num - num_sent > 0) {
+		int ret = distribute_reqs(&requests[num_sent], num - num_sent);
+		if (ret > 0)
+			num_sent += ret;
+		/*
+		 * let's process up to twice as many requests as demanded by the upper layer,
+		 * I hope this can help load balancing problem.
+		 */
+		if (num == 0)
+			num = MIN_NUM_PROCESS_REQ;
+		/* we need to process them at least once. */
+		process_requests(num * 2);
+		ret = process_replies(num * 4);
+		num_recv += ret;
+	}
 	return num_recv;
 }
 
