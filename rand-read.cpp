@@ -386,11 +386,11 @@ int main(int argc, char *argv[])
 	assert(nthreads % num_nodes == 0);
 	assert(node_id_array.size() >= (unsigned) num_nodes);
 	int nthreads_per_node = nthreads / num_nodes;
-	for (int i = 0; i < num_nodes; i++) {
+	for (int i = 0, j = 0; i < num_nodes; i++) {
 		int node_id = node_id_array[i];
 		numa_run_on_node(node_id);
 		/* initialize the threads' private data. */
-		for (int j = 0; j < nthreads_per_node; j++) {
+		for (int k = 0; k < nthreads_per_node; k++, j++) {
 			switch (access_option) {
 				case READ_ACCESS:
 					threads[j] = new thread_private(j, entry_size,
@@ -429,8 +429,8 @@ int main(int argc, char *argv[])
 					break;
 				case PART_GLOBAL_ACCESS:
 					{
-						io_interface *underlying = new direct_io(cnames, num,
-								npages * PAGE_SIZE, node_id);
+						io_interface *underlying = new remote_disk_access(
+								read_threads, num_files, node_id);
 						threads[j] = new thread_private(j, entry_size,
 								new part_global_cached_io(num_nodes, underlying,
 									j, cache_size, cache_type));
