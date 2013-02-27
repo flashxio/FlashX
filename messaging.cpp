@@ -129,8 +129,13 @@ int msg_sender<T>::flush() {
 	}
 
 	/* move the remaining entries to the beginning of the buffer. */
-	if (num_current)
-		memmove(buf, tmp, num_current * sizeof(T));
+	if (num_current && buf != tmp) {
+		for (int i = 0; i < num_current; i++) {
+			assert(tmp[i].get_offset() >= 0);
+			buf[i] = tmp[i];
+			assert(buf[i].get_offset() >= 0);
+		}
+	}
 
 	return num_sent;
 }
