@@ -145,13 +145,10 @@ int msg_sender<T>::send_cached(T *msg) {
 		return 0;
 
 	buf[num_current++] = *msg;
-	if (num_current == buf_size) {
-		int ret = flush();
-		return ret;
-	}
-	else
-		/* one message has been cached. */
-		return 1;
+	if (num_current == buf_size)
+		flush();
+	/* one message has been cached. */
+	return 1;
 }
 
 /**
