@@ -121,8 +121,6 @@ int thread_private::thread_init() {
 int thread_private::run()
 {
 	int node_id = io->get_node_id();
-	printf("run thread on node %d\n", node_id);
-	numa_run_on_node(node_id);
 	ssize_t ret = -1;
 	gettimeofday(&start_time, NULL);
 	io_request reqs[NUM_REQS_BY_USER];
@@ -275,8 +273,15 @@ int thread_private::attach2cpu()
 static void *rand_read(void *arg)
 {
 	thread_private *priv = (thread_private *) arg;
-
 	printf("rand_read: pid: %d, tid: %ld\n", getpid(), gettid());
+
+	// We put the thread at the specified NUMA node at the very beginning
+	// to make sure all data created in this thread will be on the specified
+	// node.
+	int node_id = priv->get_io()->get_node_id();
+	printf("run thread on node %d\n", node_id);
+	numa_run_on_node(node_id);
+
 	priv->thread_init();
 	priv->run();
 	return NULL;
