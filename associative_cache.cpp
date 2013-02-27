@@ -827,6 +827,7 @@ void associative_cache::sanity_check() const
 associative_cache::associative_cache(long cache_size, long max_cache_size,
 		int node_id, bool expandable)
 {
+	pthread_mutex_init(&init_mutex, NULL);
 	printf("associative cache is used\n");
 	this->node_id = node_id;
 	level = 0;
@@ -1077,6 +1078,21 @@ flush_thread *associative_cache::create_flush_thread(io_interface *io)
 {
 	_flush_thread = new associative_flush_thread(this, io, node_id);
 	return _flush_thread;
+}
+
+void associative_cache::init(io_interface *underlying)
+{
+	// This init method is called in all threads. Since the cache is
+	// shared by multiple threads, we need to make sure only one flush
+	// thread is created.
+	pthread_mutex_lock(&init_mutex);
+	if (get_flush_thread() == NULL) {
+		// We need to duplicate the underlying IO because it may not
+		// be thread-safe.
+		flush_thread *thread = create_flush_thread(underlying->clone());
+		thread->start();
+	}
+	pthread_mutex_unlock(&init_mutex);
 }
 
 hash_cell *associative_cache::get_prev_cell(hash_cell *cell) {

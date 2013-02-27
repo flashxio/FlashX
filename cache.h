@@ -361,13 +361,10 @@ public:
 	 */
 	virtual long size() = 0;
 	/* This method should be called within each thread. */
-	virtual void init() {
+	virtual void init(io_interface *underlying) {
 	}
 	virtual bool shrink(int npages, char *pages[]) {
 		return false;
-	}
-	virtual flush_thread *create_flush_thread(io_interface *io) {
-		return NULL;
 	}
 	virtual flush_thread *get_flush_thread() const {
 		return NULL;

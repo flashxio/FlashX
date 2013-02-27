@@ -155,7 +155,7 @@ public:
 #endif
 	}
 
-	void init() {
+	void init(io_interface *underlying) {
 #ifdef PER_CPU
 		memory_manager *manager = new memory_manager(cache_size_per_thread);
 		manager->register_cache(this);

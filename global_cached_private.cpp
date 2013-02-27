@@ -410,10 +410,6 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 		global_cache = create_cache(cache_type, cache_size, node_id);
 	}
 	underlying->set_callback(new access_page_callback(global_cache));
-	if (global_cache->get_flush_thread() == NULL) {
-		flush_thread *thread = global_cache->create_flush_thread(underlying->clone());
-		thread->start();
-	}
 }
 
 /**

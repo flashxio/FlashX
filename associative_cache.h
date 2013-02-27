@@ -367,6 +367,7 @@ class associative_cache: public page_cache
 	int split;
 
 	flush_thread *_flush_thread;
+	pthread_mutex_t init_mutex;
 
 	int get_num_cells() const {
 		return (1 << level) * init_ncells + split;
@@ -486,6 +487,8 @@ public:
 	/* For test */
 	int get_num_used_pages() const;
 	void sanity_check() const;
+
+	virtual void init(io_interface *underlying);
 };
 
 #endif
