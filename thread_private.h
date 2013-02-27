@@ -132,6 +132,7 @@ public:
 		this->gen = NULL;
 		this->io = io;
 		read_bytes = 0;
+		num_accesses = 0;
 	}
 
 	io_interface *get_io() {
