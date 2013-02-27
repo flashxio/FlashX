@@ -421,7 +421,7 @@ int main(int argc, char *argv[])
 						io_interface *underlying = new remote_disk_access(
 								read_threads, num_files, node_id);
 						global_cached_io *io = new global_cached_io(underlying,
-								cache_size, cache_type, node_id);
+								cache_size, cache_type);
 						if (preload)
 							io->preload(0, npages * PAGE_SIZE);
 						threads[j] = new thread_private(j, entry_size, io);

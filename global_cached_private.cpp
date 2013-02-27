@@ -388,7 +388,7 @@ int access_page_callback::invoke(io_request *request)
 }
 
 global_cached_io::global_cached_io(io_interface *underlying): io_interface(
-		-1), pending_requests(INIT_GCACHE_PENDING_SIZE)
+		underlying->get_node_id()), pending_requests(INIT_GCACHE_PENDING_SIZE)
 {
 	this->underlying = underlying;
 	num_waits = 0;
@@ -398,7 +398,7 @@ global_cached_io::global_cached_io(io_interface *underlying): io_interface(
 }
 
 global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
-		int cache_type, int node_id): io_interface(node_id),
+		int cache_type): io_interface(underlying->get_node_id()),
 	pending_requests(INIT_GCACHE_PENDING_SIZE)
 {
 	cb = NULL;
@@ -407,7 +407,7 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 	num_waits = 0;
 	this->cache_size = cache_size;
 	if (global_cache == NULL) {
-		global_cache = create_cache(cache_type, cache_size, node_id);
+		global_cache = create_cache(cache_type, cache_size, get_node_id());
 	}
 	underlying->set_callback(new access_page_callback(global_cache));
 }

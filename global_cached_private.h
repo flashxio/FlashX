@@ -44,7 +44,7 @@ class global_cached_io: public io_interface
 		std::vector<thread_safe_page *> &dirty_pages);
 public:
 	global_cached_io(io_interface *underlying);
-	global_cached_io(io_interface *, long, int, int node_id);
+	global_cached_io(io_interface *, long, int);
 
 	static page_cache *create_cache(int cache_type, long cache_size,
 			int node_id) {
