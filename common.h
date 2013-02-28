@@ -4,6 +4,8 @@
 #include <sys/time.h>
 #include <stdlib.h>
 
+#include <string>
+
 enum {
 	READ,
 	WRITE
@@ -49,5 +51,12 @@ inline static long get_curr_us()
 	gettimeofday(&tv, NULL);
 	return ((long) tv.tv_sec) * 1000 * 1000 + tv.tv_usec;
 }
+
+struct file_info
+{
+	std::string name;
+	// The NUMA node id where the disk is connected to.
+	int node_id;
+};
 
 #endif

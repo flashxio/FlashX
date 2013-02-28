@@ -3,6 +3,7 @@
 
 #include <errno.h>
 
+#include "access_mapper.h"
 #include "parameters.h"
 #include "messaging.h"
 #include "garbage_collection.h"
@@ -47,9 +48,10 @@ class part_global_cached_io: public global_cached_io
 	msg_sender<io_request> **req_senders;
 	msg_sender<io_reply> **reply_senders;
 
+	access_mapper *mapper;
 	int hash_req(io_request *req)
 	{
-		return req->get_offset() / PAGE_SIZE % num_groups;
+		return mapper->map(req->get_offset());
 	}
 
 	long processed_requests;
@@ -61,15 +63,6 @@ class part_global_cached_io: public global_cached_io
 	callback *cb;
 
 public:
-	static inline int group_id(int thread_id, int num_groups) {
-		int remaining = nthreads % num_groups;
-		int group_size = nthreads / num_groups;
-		if (thread_id <= remaining * (group_size + 1))
-			return thread_id / (group_size + 1);
-		else
-			return (thread_id - remaining * (group_size + 1)) / group_size + remaining;
-	}
-
 	/* get the location of a thread in the group. */
 	static inline int thread_idx(int thread_id, int num_groups) {
 		int remaining = nthreads % num_groups;
@@ -78,10 +71,6 @@ public:
 			return thread_id % (group_size + 1);
 		else
 			return (thread_id - remaining * (group_size + 1)) % group_size;
-	}
-
-	part_global_cached_io *id2thread(int thread_id) {
-		return groups[group_id(thread_id, num_groups)].ios[thread_idx(thread_id, num_groups)];
 	}
 
 	~part_global_cached_io() {
@@ -93,7 +82,7 @@ public:
 	int init();
 
 	part_global_cached_io(int num_groups, io_interface *underlying,
-			int idx, long cache_size, int cache_type);
+			int idx, long cache_size, int cache_type, access_mapper *mapper);
 
 	virtual page_cache *get_global_cache() {
 		return groups[group_idx].cache;

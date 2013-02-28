@@ -191,13 +191,6 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-struct file_info
-{
-	std::string name;
-	// The NUMA node id where the disk is connected to.
-	int node_id;
-};
-
 int retrieve_data_files(std::string file_file,
 		std::vector<file_info> &data_files)
 {
@@ -350,6 +343,7 @@ int main(int argc, char *argv[])
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);
+	NUMA_access_mapper *NUMA_mapper = new NUMA_access_mapper(files);
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
@@ -371,7 +365,7 @@ int main(int argc, char *argv[])
 				|| access_option == PART_GLOBAL_ACCESS
 				|| access_option == REMOTE_ACCESS)
 			read_threads[k] = new disk_read_thread(cnames[k],
-					npages * PAGE_SIZE, files[k].node_id);
+					npages * PAGE_SIZE / num_files, files[k].node_id);
 		node_ids.insert(files[k].node_id);
 	}
 
@@ -433,7 +427,7 @@ int main(int argc, char *argv[])
 								read_threads, num_files, node_id);
 						threads[j] = new thread_private(j, entry_size,
 								new part_global_cached_io(num_nodes, underlying,
-									j, cache_size, cache_type));
+									j, cache_size, cache_type, NUMA_mapper));
 					}
 					break;
 				default:

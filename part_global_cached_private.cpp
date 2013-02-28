@@ -74,7 +74,7 @@ int part_global_cached_io::init() {
 		/* Each cache has their own memory managers */
 		group->cache = global_cached_io::create_cache(cache_type, cache_size,
 				// TODO I need to set the node id right.
-				-1, num_groups);
+				-1, 1);
 	}
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
@@ -127,14 +127,16 @@ int part_global_cached_io::init() {
 
 part_global_cached_io::part_global_cached_io(int num_groups,
 		io_interface *underlying, int idx, long cache_size,
-		int cache_type): global_cached_io(underlying) {
+		int cache_type, access_mapper *mapper): global_cached_io(underlying) {
+	this->mapper = mapper->clone();
 	this->thread_id = idx;
 	this->cb = NULL;
 	remote_reads = 0;
 	//		assert(nthreads % num_groups == 0);
 	this->num_groups = num_groups;
-	this->group_idx = group_id(idx, num_groups);
-	this->cache_size = cache_size / num_groups;
+	this->group_idx = underlying->get_node_id();
+	this->cache_size = (long) (cache_size * ((double) underlying->get_local_size()
+		/ underlying->get_size()));
 	this->cache_type = cache_type;
 	processed_requests = 0;
 	finished_threads = 0;
@@ -142,7 +144,8 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	reply_senders = NULL;
 
 	printf("cache is partitioned\n");
-	printf("thread id: %d, group id: %d, num groups: %d\n", idx, group_idx, num_groups);
+	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
+			idx, group_idx, num_groups, this->cache_size);
 
 	if (groups == NULL) {
 		pthread_mutex_init(&init_mutex, NULL);
@@ -223,6 +226,8 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 /* process the requests sent to this thread */
 int part_global_cached_io::process_requests(int max_nreqs) {
 	int num_processed = 0;
+	if (request_queue->is_empty())
+		return 0;
 	io_request local_reqs[BUF_SIZE];
 	while (!request_queue->is_empty() && num_processed < max_nreqs) {
 		int num = request_queue->fetch(local_reqs, BUF_SIZE);
@@ -250,15 +255,15 @@ int part_global_cached_io::process_requests(int max_nreqs) {
  */
 int part_global_cached_io::process_replies(int max_nreplies) {
 	int num_processed = 0;
+	if (reply_queue->is_empty())
+		return 0;
+
 	io_reply local_replies[BUF_SIZE];
-	int size = 0;
 	while(!reply_queue->is_empty() && num_processed < max_nreplies) {
 		int num = reply_queue->fetch(local_replies, BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			io_reply *reply = &local_replies[i];
-			int ret = process_reply(reply);
-			if (ret >= 0)
-				size += ret;
+			process_reply(reply);
 		}
 		num_processed += num;
 	}

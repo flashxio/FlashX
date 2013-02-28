@@ -24,6 +24,14 @@ public:
 		return &queue;
 	}
 
+	long get_size() const {
+		return aio->get_size();
+	}
+
+	int get_node_id() const {
+		return node_id;
+	}
+
 	~disk_read_thread() {
 		delete aio;
 	}

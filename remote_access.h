@@ -18,6 +18,11 @@ class remote_disk_access: public io_interface
 	int num_senders;
 	callback *cb;
 
+	// The total size of data accessible with this IO interface.
+	long total_size;
+	// The size of data on the local node.
+	long local_size;
+
 	remote_disk_access(): io_interface(-1) {
 		senders = NULL;
 		queues = NULL;
@@ -47,6 +52,14 @@ public:
 
 	virtual callback *get_callback() {
 		return cb;
+	}
+
+	long get_size() const {
+		return total_size;
+	}
+
+	long get_local_size() const {
+		return local_size;
 	}
 
 	virtual ssize_t access(io_request *requests, int num);

@@ -45,7 +45,12 @@ public:
 		delete [] fds;
 	}
 
-	long get_size() {
+	long get_size() const {
+		return size;
+	}
+
+	long get_local_size() const {
+		// TODO I assume all files are connected to the local node.
 		return size;
 	}
 

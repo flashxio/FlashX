@@ -7,8 +7,13 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 	senders = new msg_sender<io_request> *[num_remotes];
 	queues = new thread_safe_FIFO_queue<io_request> *[num_remotes];
 	num_senders = num_remotes;
+	total_size = 0;
+	local_size = 0;
 	// create a msg sender for each disk read thread.
 	for (int i = 0; i < num_remotes; i++) {
+		total_size += remotes[i]->get_size();
+		if (remotes[i]->get_node_id() == node_id)
+			local_size += remotes[i]->get_size();
 		thread_safe_FIFO_queue<io_request> *queue = remotes[i]->get_queue();
 		senders[i] = new msg_sender<io_request>(MSG_SEND_BUF_SIZE,
 				&queue, 1);
@@ -37,6 +42,8 @@ io_interface *remote_disk_access::clone() const
 				&copy->queues[i], 1);
 	}
 	copy->cb = this->cb;
+	copy->total_size = this->total_size;
+	copy->local_size = this->local_size;
 	return copy;
 }
 
