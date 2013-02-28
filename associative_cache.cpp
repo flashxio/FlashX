@@ -844,9 +844,10 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 			// cache size at the beginning.
 			|| !expandable)
 		init_cache_size = cache_size;
-	int npages = init_cache_size / PAGE_SIZE;
 	int min_cell_size = (CELL_SIZE + 1) / 2;
-	assert(init_cache_size >= min_cell_size * PAGE_SIZE);
+	if (init_cache_size < min_cell_size * PAGE_SIZE)
+		init_cache_size = min_cell_size * PAGE_SIZE;
+	int npages = init_cache_size / PAGE_SIZE;
 	init_ncells = npages / min_cell_size;
 	hash_cell *cells = new hash_cell[init_ncells];
 	printf("%d cells: %p\n", init_ncells, cells);
