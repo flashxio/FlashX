@@ -49,7 +49,7 @@ class part_global_cached_io: public global_cached_io
 
 	int hash_req(io_request *req)
 	{
-		return req->get_offset() % num_groups;
+		return req->get_offset() / PAGE_SIZE % num_groups;
 	}
 
 	long processed_requests;
