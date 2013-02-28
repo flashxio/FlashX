@@ -411,7 +411,7 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 	this->cache_size = cache_size;
 	underlying->set_callback(new access_page_callback(this));
 	if (global_cache == NULL) {
-		global_cache = create_cache(cache_type, cache_size, get_node_id());
+		global_cache = create_cache(cache_type, cache_size, get_node_id(), 1);
 	}
 }
 

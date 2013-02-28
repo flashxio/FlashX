@@ -47,7 +47,7 @@ public:
 	global_cached_io(io_interface *, long, int);
 
 	static page_cache *create_cache(int cache_type, long cache_size,
-			int node_id) {
+			int node_id, int offset_factor) {
 		page_cache *global_cache;
 		switch (cache_type) {
 #if 0
@@ -66,7 +66,8 @@ public:
 				global_cache = new LRU2Q_cache(cache_size);
 				break;
 			case ASSOCIATIVE_CACHE:
-				global_cache = new associative_cache(cache_size, MAX_CACHE_SIZE, node_id);
+				global_cache = new associative_cache(cache_size, MAX_CACHE_SIZE,
+						node_id, offset_factor);
 				break;
 			case HASH_INDEX_CACHE:
 				global_cache = new hash_index_cache(cache_size, node_id);

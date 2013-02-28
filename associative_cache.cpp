@@ -825,10 +825,11 @@ void associative_cache::sanity_check() const
 }
 
 associative_cache::associative_cache(long cache_size, long max_cache_size,
-		int node_id, bool expandable)
+		int node_id, int offset_factor, bool expandable)
 {
+	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
-	printf("associative cache is used\n");
+	printf("associative cache is created on node %d\n", node_id);
 	this->node_id = node_id;
 	level = 0;
 	split = 0;

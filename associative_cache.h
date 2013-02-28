@@ -351,6 +351,7 @@ class associative_cache: public page_cache
 	// The number of pages in the cache.
 	// Cells may have different numbers of pages.
 	atomic_integer cache_npages;
+	int offset_factor;
 	
 	seq_lock table_lock;
 	atomic_flags<int> flags;
@@ -375,7 +376,7 @@ class associative_cache: public page_cache
 
 public:
 	associative_cache(long cache_size, long max_cache_size, int node_id,
-			bool expandable = false);
+			int offset_factor, bool expandable = false);
 
 	~associative_cache() {
 		for (unsigned int i = 0; i < cells_table.size(); i++)
@@ -390,12 +391,17 @@ public:
 
 	/* the hash function used for the current level. */
 	int hash(off_t offset) {
-		return offset / PAGE_SIZE % (init_ncells * (long) (1 << level));
+		// The offset of pages in this cache may all be a multiple of
+		// some value, so when we hash a page to a page set, we need
+		// to adjust the offset.
+		return offset / PAGE_SIZE / offset_factor % (init_ncells
+				* (long) (1 << level));
 	}
 
 	/* the hash function used for the next level. */
 	int hash1(off_t offset) {
-		return offset / PAGE_SIZE % (init_ncells * (long) (1 << (level + 1)));
+		return offset / PAGE_SIZE / offset_factor % (init_ncells
+				* (long) (1 << (level + 1)));
 	}
 
 	int hash1_locked(off_t offset) {
@@ -403,7 +409,8 @@ public:
 		int ret;
 		do {
 			table_lock.read_lock(count);
-			ret = offset / PAGE_SIZE % (init_ncells * (long) (1 << (level + 1)));
+			ret = offset / PAGE_SIZE / offset_factor % (init_ncells
+					* (long) (1 << (level + 1)));
 		} while (!table_lock.read_unlock(count));
 		return ret;
 	}

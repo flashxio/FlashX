@@ -72,8 +72,9 @@ int part_global_cached_io::init() {
 	thread_group *group = &groups[group_idx];
 	if (group->cache == NULL) {
 		/* Each cache has their own memory managers */
-		// TODO I need to set the node id right.
-		group->cache = global_cached_io::create_cache(cache_type, cache_size, -1);
+		group->cache = global_cached_io::create_cache(cache_type, cache_size,
+				// TODO I need to set the node id right.
+				-1, num_groups);
 	}
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
