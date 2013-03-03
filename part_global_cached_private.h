@@ -17,6 +17,9 @@ struct thread_group
 	int nthreads;
 	part_global_cached_io **ios;
 	page_cache *cache;
+	
+	thread_safe_FIFO_queue<io_request> *request_queue;
+	thread_safe_FIFO_queue<io_reply> *reply_queue;
 };
 
 class part_global_cached_io: public global_cached_io
@@ -36,9 +39,6 @@ class part_global_cached_io: public global_cached_io
 	/* the size of the cache associated to the thread. */
 	long cache_size;
 	int cache_type;
-	
-	thread_safe_FIFO_queue<io_request> *request_queue;
-	thread_safe_FIFO_queue<io_reply> *reply_queue;
 
 	volatile int finished_threads;
 
@@ -75,8 +75,6 @@ public:
 
 	~part_global_cached_io() {
 		// TODO delete all senders
-		delete request_queue;
-		delete reply_queue;
 	}
 
 	int init();

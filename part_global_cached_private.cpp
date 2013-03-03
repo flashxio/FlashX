@@ -61,9 +61,6 @@ int part_global_cached_io::init() {
 	numa_set_bind_policy(1);
 #endif
 
-	request_queue = new thread_safe_FIFO_queue<io_request>(NUMA_REQ_QUEUE_SIZE);
-	reply_queue = new thread_safe_FIFO_queue<io_reply>(NUMA_REPLY_QUEUE_SIZE);
-
 	/* 
 	 * there is a global lock for all threads.
 	 * so this lock makes sure cache initialization is serialized
@@ -75,6 +72,10 @@ int part_global_cached_io::init() {
 		group->cache = global_cached_io::create_cache(cache_type, cache_size,
 				// TODO I need to set the node id right.
 				-1, 1);
+		group->request_queue = new thread_safe_FIFO_queue<io_request>(
+				NUMA_REQ_QUEUE_SIZE);
+		group->reply_queue = new thread_safe_FIFO_queue<io_reply>(
+				NUMA_REPLY_QUEUE_SIZE);
 	}
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
@@ -99,11 +100,9 @@ int part_global_cached_io::init() {
 	req_senders = (msg_sender<io_request> **) numa_alloc_local(
 			sizeof(msg_sender<io_request> *) * num_groups);
 	for (int i = 0; i < num_groups; i++) {
-		thread_safe_FIFO_queue<io_request> *queues[groups[i].nthreads];
-		for (int j = 0; j < groups[i].nthreads; j++)
-			queues[j] = groups[i].ios[j]->request_queue;
-		req_senders[i] = new msg_sender<io_request>(NUMA_MSG_CACHE_SIZE,
-				queues, groups[i].nthreads);
+		thread_safe_FIFO_queue<io_request> *q[1];
+		q[0] = groups[i].request_queue;
+		req_senders[i] = new msg_sender<io_request>(NUMA_MSG_CACHE_SIZE, q, 1);
 	}
 	/* 
 	 * there is a reply sender for each thread.
@@ -111,15 +110,10 @@ int part_global_cached_io::init() {
 	 */
 	reply_senders = (msg_sender<io_reply> **) numa_alloc_local(
 			sizeof(msg_sender<io_reply> *) * nthreads);
-	int idx = 0;
 	for (int i = 0; i < num_groups; i++) {
-		for (int j = 0; j < groups[i].nthreads; j++) {
-			thread_safe_FIFO_queue<io_reply> *queues[1];
-			assert(idx == groups[i].ios[j]->thread_id);
-			queues[0] = groups[i].ios[j]->reply_queue;
-			reply_senders[idx++] = new msg_sender<io_reply>(NUMA_MSG_CACHE_SIZE,
-					queues, 1);
-		}
+		thread_safe_FIFO_queue<io_reply> *q[1];
+		q[0] = groups[i].reply_queue;
+		reply_senders[i] = new msg_sender<io_reply>(NUMA_MSG_CACHE_SIZE, q, 1);
 	}
 
 	return 0;
@@ -188,8 +182,8 @@ int part_global_cached_io::reply(io_request *requests,
 		io_reply *replies, int num) {
 	for (int i = 0; i < num; i++) {
 		part_global_cached_io *io = (part_global_cached_io *) requests[i].get_io();
-		int thread_id = io->thread_id;
-		int num_sent = reply_senders[thread_id]->send_cached(&replies[i]);
+		int group_id = io->group_idx;
+		int num_sent = reply_senders[group_id]->send_cached(&replies[i]);
 		if (num_sent == 0) {
 			// TODO the buffer is already full.
 			// discard the request for now.
@@ -226,6 +220,8 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 /* process the requests sent to this thread */
 int part_global_cached_io::process_requests(int max_nreqs) {
 	int num_processed = 0;
+	thread_safe_FIFO_queue<io_request> *request_queue
+		= groups[group_idx].request_queue;
 	if (request_queue->is_empty())
 		return 0;
 	io_request local_reqs[BUF_SIZE];
@@ -234,6 +230,7 @@ int part_global_cached_io::process_requests(int max_nreqs) {
 		for (int i = 0; i < num; i++) {
 			io_request *req = &local_reqs[i];
 			assert(req->get_offset() >= 0);
+			assert(req->get_size() > 0);
 			// The thread will be blocked by the global cache IO
 			// if too many requests flush in.
 			int ret = global_cached_io::access(req, 1);
@@ -255,6 +252,7 @@ int part_global_cached_io::process_requests(int max_nreqs) {
  */
 int part_global_cached_io::process_replies(int max_nreplies) {
 	int num_processed = 0;
+	thread_safe_FIFO_queue<io_reply> *reply_queue = groups[group_idx].reply_queue;
 	if (reply_queue->is_empty())
 		return 0;
 
@@ -319,8 +317,8 @@ void part_global_cached_io::cleanup() {
 			if (groups[i].ios[j])
 				__sync_fetch_and_add(&groups[i].ios[j]->finished_threads, 1);
 	}
-	while (!request_queue->is_empty()
-			|| !reply_queue->is_empty()
+	while (!groups[group_idx].request_queue->is_empty()
+			|| !groups[group_idx].reply_queue->is_empty()
 			/*
 			 * if finished_threads == nthreads,
 			 * then all threads have reached the point.
