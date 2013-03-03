@@ -96,24 +96,16 @@ int part_global_cached_io::init() {
 	 * because we need to make sure other threads have 
 	 * initialized all queues.
 	 */
-	/* there is a request sender for each node. */
-	req_senders = (msg_sender<io_request> **) numa_alloc_local(
-			sizeof(msg_sender<io_request> *) * num_groups);
-	for (int i = 0; i < num_groups; i++) {
+	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
+			= groups.begin(); it != groups.end(); it++) {
 		thread_safe_FIFO_queue<io_request> *q[1];
-		q[0] = groups[i].request_queue;
-		req_senders[i] = new msg_sender<io_request>(NUMA_MSG_CACHE_SIZE, q, 1);
-	}
-	/* 
-	 * there is a reply sender for each thread.
-	 * therefore, there is only one queue for a sender.
-	 */
-	reply_senders = (msg_sender<io_reply> **) numa_alloc_local(
-			sizeof(msg_sender<io_reply> *) * nthreads);
-	for (int i = 0; i < num_groups; i++) {
-		thread_safe_FIFO_queue<io_reply> *q[1];
-		q[0] = groups[i].reply_queue;
-		reply_senders[i] = new msg_sender<io_reply>(NUMA_MSG_CACHE_SIZE, q, 1);
+		q[0] = it->second.request_queue;
+		req_senders.insert(std::pair<int, msg_sender<io_request> *>(it->first,
+					new msg_sender<io_request>(NUMA_MSG_CACHE_SIZE, q, 1)));
+		thread_safe_FIFO_queue<io_reply> *q1[1];
+		q1[0] = it->second.reply_queue;
+		reply_senders.insert(std::pair<int, msg_sender<io_reply> *>(it->first,
+					new msg_sender<io_reply>(NUMA_MSG_CACHE_SIZE, q1, 1)));
 	}
 
 	return 0;
@@ -134,40 +126,35 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	this->cache_type = cache_type;
 	processed_requests = 0;
 	finished_threads = 0;
-	req_senders = NULL;
-	reply_senders = NULL;
 
 	printf("cache is partitioned\n");
 	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
 			idx, group_idx, num_groups, this->cache_size);
 
-	if (groups == NULL) {
+	if (groups.size() == 0) {
 		pthread_mutex_init(&init_mutex, NULL);
 		pthread_mutex_init(&wait_mutex, NULL);
 		pthread_cond_init(&cond, NULL);
 		num_finish_init = 0;
-		groups = new thread_group[num_groups];
-		for (int i = 0; i < num_groups; i++) {
-			groups[i].id = i;
-			groups[i].nthreads = nthreads / num_groups;
-			if (nthreads % num_groups)
-				groups[i].nthreads++;
-			groups[i].ios = new part_global_cached_io*[groups[i].nthreads];
-			groups[i].cache = NULL;
-			for (int j = 0; j < groups[i].nthreads; j++)
-				groups[i].ios[j] = NULL;
-		}
+	}
+	// If the group hasn't been added to the table yet.
+	if (groups.find(group_idx) == groups.end()) {
+		struct thread_group group;
+		group.id = group_idx;
+		group.nthreads = nthreads / num_groups;
+		if (nthreads % num_groups)
+			group.nthreads++;
+		printf("group %d has %d threads\n", group.id, group.nthreads);
+		group.ios = new part_global_cached_io*[group.nthreads];
+		group.cache = NULL;
+		for (int j = 0; j < group.nthreads; j++)
+			group.ios[j] = NULL;
+		groups.insert(std::pair<int, struct thread_group>(group_idx,
+					group));
 	}
 
 	/* assign a thread to a group. */
-	thread_group *group = NULL;
-	for (int i = 0; i < num_groups; i++) {
-		if (groups[i].id == group_idx) {
-			group = &groups[i];
-			break;
-		}
-	}
-	assert (group);
+	thread_group *group = &groups[group_idx];
 	int i = thread_idx(idx, num_groups);
 	assert (group->ios[i] == NULL);
 	group->ios[i] = this;
@@ -204,7 +191,6 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	int num_sent = 0;
 	for (int i = 0; i < num; i++) {
 		int idx = hash_req(&requests[i]);
-		assert (idx < num_groups);
 		if (idx != get_group_id())
 			remote_reads++;
 		int ret = req_senders[idx]->send_cached(&requests[i]);
@@ -212,8 +198,9 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 			break;
 		num_sent++;
 	}
-	for (int i = 0; i < num_groups; i++)
-		req_senders[i]->flush();
+	for (std::tr1::unordered_map<int, msg_sender<io_request> *>::const_iterator it
+			= req_senders.begin(); it != req_senders.end(); it++)
+		it->second->flush();
 	return num_sent;
 }
 
@@ -312,13 +299,14 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 void part_global_cached_io::cleanup() {
 	int num = 0;
 	printf("thread %d: start to clean up\n", thread_id);
-	for (int i = 0; i < num_groups; i++) {
-		for (int j = 0; j < groups[i].nthreads; j++)
-			if (groups[i].ios[j])
-				__sync_fetch_and_add(&groups[i].ios[j]->finished_threads, 1);
+	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
+			= groups.begin(); it != groups.end(); it++) {
+		for (int j = 0; j < it->second.nthreads; j++)
+			if (it->second.ios[j])
+				__sync_fetch_and_add(&it->second.ios[j]->finished_threads, 1);
 	}
-	while (!groups[group_idx].request_queue->is_empty()
-			|| !groups[group_idx].reply_queue->is_empty()
+	thread_group *group = &groups[group_idx];
+	while (!group->request_queue->is_empty() || !group->reply_queue->is_empty()
 			/*
 			 * if finished_threads == nthreads,
 			 * then all threads have reached the point.
@@ -331,7 +319,7 @@ void part_global_cached_io::cleanup() {
 	printf("thread %d processed %ld requests\n", thread_id, processed_requests);
 }
 
-thread_group *part_global_cached_io::groups;
+std::tr1::unordered_map<int, thread_group> part_global_cached_io::groups;
 pthread_mutex_t part_global_cached_io::init_mutex;
 int part_global_cached_io::num_finish_init;
 pthread_mutex_t part_global_cached_io::wait_mutex;

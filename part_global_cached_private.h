@@ -3,6 +3,8 @@
 
 #include <errno.h>
 
+#include <tr1/unordered_map>
+
 #include "access_mapper.h"
 #include "parameters.h"
 #include "messaging.h"
@@ -24,7 +26,7 @@ struct thread_group
 
 class part_global_cached_io: public global_cached_io
 {
-	static thread_group *groups;
+	static std::tr1::unordered_map<int, struct thread_group> groups;
 	/* this mutex just for helping initialize cache. */
 	static pthread_mutex_t init_mutex;
 	/* indicates the number of threads that finish initialization. */
@@ -45,8 +47,8 @@ class part_global_cached_io: public global_cached_io
 	/*
 	 * there is a sender for each node.
 	 */
-	msg_sender<io_request> **req_senders;
-	msg_sender<io_reply> **reply_senders;
+	std::tr1::unordered_map<int, msg_sender<io_request> *> req_senders;
+	std::tr1::unordered_map<int, msg_sender<io_reply> *> reply_senders;
 
 	access_mapper *mapper;
 	int hash_req(io_request *req)
