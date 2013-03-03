@@ -5,14 +5,17 @@
 
 class thread
 {
+	int node_id;
 	pthread_t id;
+
 	volatile bool _is_running;
 
 	bool is_activate;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 public:
-	thread() {
+	thread(int node_id = -1) {
+		this->node_id = node_id;
 		is_activate = false;
 		_is_running = true;
 		pthread_mutex_init(&mutex, NULL);
@@ -35,8 +38,12 @@ public:
 		pthread_mutex_unlock(&mutex);
 	}
 
-	bool is_running() {
+	bool is_running() const {
 		return _is_running;
+	}
+
+	int get_node_id() const {
+		return node_id;
 	}
 
 	void stop() {

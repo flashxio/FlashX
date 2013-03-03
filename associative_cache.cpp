@@ -874,14 +874,12 @@ class associative_flush_thread: public flush_thread
 	associative_cache *cache;
 	io_interface *io;
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
-	int node_id;
 public:
 	associative_flush_thread(associative_cache *cache,
-			io_interface *io, int node_id): dirty_cells(
+			io_interface *io, int node_id): flush_thread(node_id), dirty_cells(
 				MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
 		this->cache = cache;
 		this->io = io;
-		this->node_id = node_id;
 	}
 
 	void run();
@@ -1022,7 +1020,7 @@ void associative_flush_thread::run()
 				if (!p->is_io_pending()) {
 					req_array[num_init_reqs].init((char *) p->get_data(),
 								p->get_offset(), PAGE_SIZE, WRITE, io,
-								node_id, NULL, p);
+								get_node_id(), NULL, p);
 					requests.push_back(&req_array[num_init_reqs]);
 					num_init_reqs++;
 					p->set_io_pending(true);
