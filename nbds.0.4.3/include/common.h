@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <string.h>
 #include <sys/types.h>
+#include <stdint.h>
 
 #define CACHE_LINE_SIZE  64 // 64 byte cache line on x86 and x86-64
 #define CACHE_LINE_SCALE 6  // log base 2 of the cache line size
@@ -62,11 +63,6 @@
 #define ERROR_TXN_NOT_RUNNING     (-4)
 
 #define VOLATILE_DEREF(x) (*((volatile typeof(x))(x)))
-
-typedef unsigned long long uint64_t;
-typedef unsigned int       uint32_t;
-typedef unsigned short     uint16_t;
-typedef unsigned char      uint8_t;
 
 typedef size_t markable_t;
 
