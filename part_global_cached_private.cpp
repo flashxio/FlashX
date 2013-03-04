@@ -135,18 +135,12 @@ int part_global_cached_io::init() {
 				-1, 1);
 		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
 				NUMA_REQ_QUEUE_SIZE);
-		group->reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
-				NUMA_REPLY_QUEUE_SIZE);
 		// Create processing threads.
 		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
 			thread *t = new process_request_thread(this);
 			t->start();
 			printf("create a request processing thread, blocking: %d\n", t->is_blocking());
 			group->process_request_threads.push_back(t);
-			t = new process_reply_thread(this);
-			t->start();
-			printf("create a reply processing thread, blocking: %d\n", t->is_blocking());
-			group->process_reply_threads.push_back(t);
 		}
 	}
 	num_finish_init++;
@@ -170,14 +164,22 @@ int part_global_cached_io::init() {
 	 */
 	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
+		const struct thread_group *group = &it->second;
 		thread_safe_FIFO_queue<io_request> *q[1];
-		q[0] = it->second.request_queue;
+		q[0] = group->request_queue;
 		req_senders.insert(std::pair<int, msg_sender<io_request> *>(it->first,
 					new msg_sender<io_request>(NUMA_MSG_CACHE_SIZE, q, 1)));
-		thread_safe_FIFO_queue<io_reply> *q1[1];
-		q1[0] = it->second.reply_queue;
-		reply_senders.insert(std::pair<int, msg_sender<io_reply> *>(it->first,
-					new msg_sender<io_reply>(NUMA_MSG_CACHE_SIZE, q1, 1)));
+
+		// We need a sender for each parted global IO because we need to
+		// make sure replies are sent to the right the IO instance that
+		// issued the request.
+		for (int j = 0; j < group->nthreads; j++) {
+			thread_safe_FIFO_queue<io_reply> *q1[1];
+			q1[0] = group->ios[j]->reply_queue;
+			reply_senders.insert(std::pair<int, msg_sender<io_reply> *>(
+						group->ios[j]->thread_id,
+						new msg_sender<io_reply>(NUMA_MSG_CACHE_SIZE, q1, 1)));
+		}
 	}
 
 	return 0;
@@ -191,7 +193,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	this->final_cb = NULL;
 	this->my_cb = NULL;
 	remote_reads = 0;
-	//		assert(nthreads % num_groups == 0);
 	this->num_groups = num_groups;
 	this->group_idx = underlying->get_node_id();
 	this->cache_size = (long) (cache_size * ((double) underlying->get_local_size()
@@ -231,6 +232,12 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	assert (local_group->ios[i] == NULL);
 	local_group->ios[i] = this;
 
+	// Create a thread for processing replies.
+	reply_processor = new process_reply_thread(this);
+	reply_processor->start();
+	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
+			NUMA_REPLY_QUEUE_SIZE);
+
 	my_cb = new for_global_callback(this);
 	global_cached_io::set_callback(my_cb);
 }
@@ -242,14 +249,9 @@ int part_global_cached_io::reply(io_request *requests,
 		io_reply *replies, int num) {
 	for (int i = 0; i < num; i++) {
 		part_global_cached_io *io = (part_global_cached_io *) requests[i].get_io();
-		int group_id = io->group_idx;
-		int num_sent = reply_senders[group_id]->send_cached(&replies[i]);
-		if (num_sent == 0) {
-			// TODO the buffer is already full.
-			// discard the request for now.
-			printf("the reply buffer for thread %d is already full\n", thread_id);
-			continue;
-		}
+		int num_sent = reply_senders[io->thread_id]->send_cached(&replies[i]);
+		// We use blocking queues here, so the send must succeed.
+		assert(num_sent > 0);
 	}
 	// TODO We shouldn't flush here, but we need to flush at some point.
 #if 0
@@ -310,7 +312,6 @@ int part_global_cached_io::process_requests(int max_nreqs) {
  */
 int part_global_cached_io::process_replies(int max_nreplies) {
 	int num_processed = 0;
-	thread_safe_FIFO_queue<io_reply> *reply_queue = local_group->reply_queue;
 	io_reply local_replies[BUF_SIZE];
 	while(num_processed < max_nreplies) {
 		int num = reply_queue->fetch(local_replies, BUF_SIZE);
@@ -362,7 +363,7 @@ void part_global_cached_io::cleanup() {
 				__sync_fetch_and_add(&it->second.ios[j]->finished_threads, 1);
 	}
 	while (!local_group->request_queue->is_empty()
-			|| !local_group->reply_queue->is_empty()
+			|| !reply_queue->is_empty()
 			/*
 			 * if finished_threads == nthreads,
 			 * then all threads have reached the point.

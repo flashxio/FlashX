@@ -21,10 +21,8 @@ struct thread_group
 	part_global_cached_io **ios;
 	page_cache *cache;
 	std::vector<thread *> process_request_threads;
-	std::vector<thread *> process_reply_threads;
 	
 	blocking_FIFO_queue<io_request> *request_queue;
-	blocking_FIFO_queue<io_reply> *reply_queue;
 };
 
 class part_global_cached_io: public global_cached_io
@@ -42,6 +40,9 @@ class part_global_cached_io: public global_cached_io
 	int group_idx;
 	struct thread_group *local_group;
 
+	thread *reply_processor;
+	blocking_FIFO_queue<io_reply> *reply_queue;
+
 	/* the size of the cache associated to the thread. */
 	long cache_size;
 	int cache_type;
@@ -51,7 +52,9 @@ class part_global_cached_io: public global_cached_io
 	/*
 	 * there is a sender for each node.
 	 */
+	// group id <-> msg sender
 	std::tr1::unordered_map<int, msg_sender<io_request> *> req_senders;
+	// thread id <-> msg sender
 	std::tr1::unordered_map<int, msg_sender<io_reply> *> reply_senders;
 
 	access_mapper *mapper;
