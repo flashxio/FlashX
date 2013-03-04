@@ -249,9 +249,15 @@ int part_global_cached_io::reply(io_request *requests,
 		io_reply *replies, int num) {
 	for (int i = 0; i < num; i++) {
 		part_global_cached_io *io = (part_global_cached_io *) requests[i].get_io();
-		int num_sent = reply_senders[io->thread_id]->send_cached(&replies[i]);
-		// We use blocking queues here, so the send must succeed.
-		assert(num_sent > 0);
+		// If the reply is sent to the thread on a different node.
+		if (io->get_node_id() != this->get_node_id()) {
+			int num_sent = reply_senders[io->thread_id]->send_cached(&replies[i]);
+			// We use blocking queues here, so the send must succeed.
+			assert(num_sent > 0);
+		}
+		else {
+			process_reply(&replies[i]);
+		}
 	}
 	// TODO We shouldn't flush here, but we need to flush at some point.
 #if 0
