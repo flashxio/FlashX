@@ -3,11 +3,14 @@
 
 #include <pthread.h>
 
+#include <string>
+
 class thread
 {
 	int node_id;
 	pthread_t id;
 	bool blocking;
+	std::string name;
 
 	volatile bool _is_running;
 
@@ -15,7 +18,8 @@ class thread
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 public:
-	thread(int node_id = -1, bool blocking = true) {
+	thread(std::string name, int node_id = -1, bool blocking = true) {
+		this->name = name;
 		this->node_id = node_id;
 		this->blocking = blocking;
 		is_activate = false;

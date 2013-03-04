@@ -3,6 +3,7 @@
 
 #include <sys/time.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <string>
 
@@ -58,5 +59,12 @@ struct file_info
 	// The NUMA node id where the disk is connected to.
 	int node_id;
 };
+
+static inline std::string itoa(int n)
+{
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%d", n);
+	return buf;
+}
 
 #endif

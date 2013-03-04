@@ -75,6 +75,7 @@ class process_request_thread: public thread
 	part_global_cached_io *io;
 public:
 	process_request_thread(part_global_cached_io *io): thread(
+			std::string("process_request_thread-") + itoa(io->get_node_id()),
 			// We don't use blocking mode of the thread because
 			// we are using blocking queue.
 			io->get_node_id(), false) {
@@ -93,6 +94,7 @@ class process_reply_thread: public thread
 	part_global_cached_io *io;
 public:
 	process_reply_thread(part_global_cached_io *io): thread(
+			std::string("process_reply_thread-") + itoa(io->get_node_id()),
 			io->get_node_id(), false) {
 		this->io = io;
 	}
