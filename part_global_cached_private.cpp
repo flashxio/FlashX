@@ -15,9 +15,28 @@
 #include "associative_cache.h"
 #include "global_cached_private.h"
 #include "part_global_cached_private.h"
+#include "parameters.h"
 
 const int MIN_NUM_PROCESS_REQ = 100;
 const int BUF_SIZE = 100;
+
+#if 0
+thread_group::~thread_group()
+{
+	for (size_t i = 0; i < process_request_threads.size(); i++) {
+		thread *t = process_request_threads[i];
+		t->stop();
+		// TODO I need to free memory of the thread here.
+	}
+	for (size_t i = 0; i < process_reply_threads.size(); i++) {
+		thread *t = process_reply_threads[i];
+		t->stop();
+		// TODO I need to free memory of the thread here.
+	}
+	delete request_queue;
+	delete reply_queue;
+}
+#endif
 
 /**
  * This callback is used in global cache IO.
@@ -43,6 +62,53 @@ int for_global_callback::invoke(io_request *req)
 	return 0;
 }
 
+/**
+ * This thread runs on the node with cache.
+ * It is dedicated to processing requests.
+ * The application threads send requests to the node with cache
+ * by placing the requests in the queue. This thread fetches requests
+ * from the queue and process them. If the queue is empty, the thread
+ * will sleep.
+ */
+class process_request_thread: public thread
+{
+	part_global_cached_io *io;
+public:
+	process_request_thread(part_global_cached_io *io): thread(
+			// We don't use blocking mode of the thread because
+			// we are using blocking queue.
+			io->get_node_id(), false) {
+		this->io = io;
+	}
+	void run();
+};
+
+/**
+ * This thread runs on the node with the application threads.
+ * It is dedicated to processing replies. If the queue is empty,
+ * the thread will sleep.
+ */
+class process_reply_thread: public thread
+{
+	part_global_cached_io *io;
+public:
+	process_reply_thread(part_global_cached_io *io): thread(
+			io->get_node_id(), false) {
+		this->io = io;
+	}
+	void run();
+};
+
+void process_request_thread::run()
+{
+	io->process_requests(NUMA_NUM_PROCESS_MSGS);
+}
+
+void process_reply_thread::run()
+{
+	io->process_replies(NUMA_NUM_PROCESS_MSGS);
+}
+
 bool part_global_cached_io::set_callback(callback *cb)
 {
 	this->cb = cb;
@@ -66,16 +132,27 @@ int part_global_cached_io::init() {
 	 * so this lock makes sure cache initialization is serialized
 	 */
 	pthread_mutex_lock(&init_mutex);
-	thread_group *group = &groups[group_idx];
+	thread_group *group = local_group;
 	if (group->cache == NULL) {
 		/* Each cache has their own memory managers */
 		group->cache = global_cached_io::create_cache(cache_type, cache_size,
 				// TODO I need to set the node id right.
 				-1, 1);
-		group->request_queue = new thread_safe_FIFO_queue<io_request>(
+		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
 				NUMA_REQ_QUEUE_SIZE);
-		group->reply_queue = new thread_safe_FIFO_queue<io_reply>(
+		group->reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
 				NUMA_REPLY_QUEUE_SIZE);
+		// Create processing threads.
+		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
+			thread *t = new process_request_thread(this);
+			t->start();
+			printf("create a request processing thread, blocking: %d\n", t->is_blocking());
+			group->process_request_threads.push_back(t);
+			t = new process_reply_thread(this);
+			t->start();
+			printf("create a reply processing thread, blocking: %d\n", t->is_blocking());
+			group->process_reply_threads.push_back(t);
+		}
 	}
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
@@ -144,7 +221,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 		group.nthreads = nthreads / num_groups;
 		if (nthreads % num_groups)
 			group.nthreads++;
-		printf("group %d has %d threads\n", group.id, group.nthreads);
 		group.ios = new part_global_cached_io*[group.nthreads];
 		group.cache = NULL;
 		for (int j = 0; j < group.nthreads; j++)
@@ -154,10 +230,10 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	}
 
 	/* assign a thread to a group. */
-	thread_group *group = &groups[group_idx];
+	local_group = &groups[group_idx];
 	int i = thread_idx(idx, num_groups);
-	assert (group->ios[i] == NULL);
-	group->ios[i] = this;
+	assert (local_group->ios[i] == NULL);
+	local_group->ios[i] = this;
 
 	global_cached_io::set_callback(new for_global_callback(this));
 }
@@ -208,11 +284,9 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 int part_global_cached_io::process_requests(int max_nreqs) {
 	int num_processed = 0;
 	thread_safe_FIFO_queue<io_request> *request_queue
-		= groups[group_idx].request_queue;
-	if (request_queue->is_empty())
-		return 0;
+		= local_group->request_queue;
 	io_request local_reqs[BUF_SIZE];
-	while (!request_queue->is_empty() && num_processed < max_nreqs) {
+	while (num_processed < max_nreqs) {
 		int num = request_queue->fetch(local_reqs, BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			io_request *req = &local_reqs[i];
@@ -239,12 +313,9 @@ int part_global_cached_io::process_requests(int max_nreqs) {
  */
 int part_global_cached_io::process_replies(int max_nreplies) {
 	int num_processed = 0;
-	thread_safe_FIFO_queue<io_reply> *reply_queue = groups[group_idx].reply_queue;
-	if (reply_queue->is_empty())
-		return 0;
-
+	thread_safe_FIFO_queue<io_reply> *reply_queue = local_group->reply_queue;
 	io_reply local_replies[BUF_SIZE];
-	while(!reply_queue->is_empty() && num_processed < max_nreplies) {
+	while(num_processed < max_nreplies) {
 		int num = reply_queue->fetch(local_replies, BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			io_reply *reply = &local_replies[i];
@@ -274,7 +345,6 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 }
 
 ssize_t part_global_cached_io::access(io_request *requests, int num) {
-	int num_recv = 0;
 	int num_sent = 0;
 	// If we can't sent the requests to the destination node,
 	// we have to busy wait.
@@ -282,22 +352,11 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 		int ret = distribute_reqs(&requests[num_sent], num - num_sent);
 		if (ret > 0)
 			num_sent += ret;
-		/*
-		 * let's process up to twice as many requests as demanded by the upper layer,
-		 * I hope this can help load balancing problem.
-		 */
-		if (num == 0)
-			num = MIN_NUM_PROCESS_REQ;
-		/* we need to process them at least once. */
-		process_requests(num * 2);
-		ret = process_replies(num * 4);
-		num_recv += ret;
 	}
-	return num_recv;
+	return num_sent;
 }
 
 void part_global_cached_io::cleanup() {
-	int num = 0;
 	printf("thread %d: start to clean up\n", thread_id);
 	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
@@ -305,16 +364,13 @@ void part_global_cached_io::cleanup() {
 			if (it->second.ios[j])
 				__sync_fetch_and_add(&it->second.ios[j]->finished_threads, 1);
 	}
-	thread_group *group = &groups[group_idx];
-	while (!group->request_queue->is_empty() || !group->reply_queue->is_empty()
+	while (!local_group->request_queue->is_empty()
+			|| !local_group->reply_queue->is_empty()
 			/*
 			 * if finished_threads == nthreads,
 			 * then all threads have reached the point.
 			 */
 			|| finished_threads < nthreads) {
-		process_requests(200);
-		process_replies(200);
-		num++;
 	}
 	printf("thread %d processed %ld requests\n", thread_id, processed_requests);
 }

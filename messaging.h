@@ -284,6 +284,8 @@ public:
 template<class T>
 class msg_sender
 {
+	// The message sender can be used by multiple threads in parted global cache.
+	pthread_spinlock_t lock;
 	T *buf;
 	int buf_size;		// the max number of messages that can be buffered
 	int num_current;	// the current number of messages in the buffer.
@@ -304,7 +306,7 @@ public:
 		return num_current;
 	}
 
-	int flush();
+	int flush(bool locked = false);
 
 	int send_cached(T *msg);
 };

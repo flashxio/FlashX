@@ -7,6 +7,7 @@ class thread
 {
 	int node_id;
 	pthread_t id;
+	bool blocking;
 
 	volatile bool _is_running;
 
@@ -14,8 +15,9 @@ class thread
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 public:
-	thread(int node_id = -1) {
+	thread(int node_id = -1, bool blocking = true) {
 		this->node_id = node_id;
+		this->blocking = blocking;
 		is_activate = false;
 		_is_running = true;
 		pthread_mutex_init(&mutex, NULL);
@@ -40,6 +42,10 @@ public:
 
 	bool is_running() const {
 		return _is_running;
+	}
+
+	bool is_blocking() const {
+		return blocking;
 	}
 
 	int get_node_id() const {

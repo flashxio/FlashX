@@ -88,6 +88,7 @@ void io_request::add_buf_front(char *buf, int size)
 template<class T>
 msg_sender<T>::msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
 		int num_queues) {
+	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	buf = (T *) numa_alloc_local(sizeof(T) * buf_size);
 	this->buf_size = buf_size;
 	num_current = 0;
@@ -104,9 +105,14 @@ msg_sender<T>::msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
  * return the number of entries that have been flushed.
  */
 template<class T>
-int msg_sender<T>::flush() {
-	if (num_current == 0)
+int msg_sender<T>::flush(bool locked) {
+	if (!locked)
+		pthread_spin_lock(&lock);
+	if (num_current == 0) {
+		if (!locked)
+			pthread_spin_unlock(&lock);
 		return 0;
+	}
 
 	int base_idx;
 	if (num_queues == 1)
@@ -122,7 +128,11 @@ int msg_sender<T>::flush() {
 		// TODO the thread might be blocked if it's full.
 		// it might hurt performance. We should try other
 		// queues first before being blocked.
+		if (!locked)
+			pthread_spin_unlock(&lock);
 		int ret = q->add(tmp, num_current);
+		if (!locked)
+			pthread_spin_lock(&lock);
 		tmp += ret;
 		num_current -= ret;
 		num_sent += ret;
@@ -137,6 +147,8 @@ int msg_sender<T>::flush() {
 		}
 	}
 
+	if (!locked)
+		pthread_spin_unlock(&lock);
 	return num_sent;
 }
 
@@ -146,12 +158,16 @@ int msg_sender<T>::send_cached(T *msg) {
 	 * if the buffer is full, and we can't flush
 	 * any messages, there is nothing we can do.
 	 */
-	if (num_current == buf_size && flush() == 0)
+	pthread_spin_lock(&lock);
+	if (num_current == buf_size && flush(true) == 0) {
+		pthread_spin_unlock(&lock);
 		return 0;
+	}
 
 	buf[num_current++] = *msg;
 	if (num_current == buf_size)
-		flush();
+		flush(true);
+	pthread_spin_unlock(&lock);
 	/* one message has been cached. */
 	return 1;
 }
@@ -162,5 +178,7 @@ int msg_sender<T>::send_cached(T *msg) {
  */
 template class thread_safe_FIFO_queue<io_request>;
 template class thread_safe_FIFO_queue<io_reply>;
+template class blocking_FIFO_queue<io_request>;
+template class blocking_FIFO_queue<io_reply>;
 template class msg_sender<io_request>;
 template class msg_sender<io_reply>;

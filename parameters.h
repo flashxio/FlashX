@@ -46,5 +46,7 @@ const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024;
 const int NUMA_MSG_CACHE_SIZE = 100;
 const int NUMA_REQ_QUEUE_SIZE = 200;
 const int NUMA_REPLY_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE;
+const int NUMA_NUM_PROCESS_MSGS = 20;
+const int NUMA_NUM_PROCESS_THREADS = 3;
 
 #endif

@@ -11,7 +11,8 @@ static void *thread_run(void *arg)
 	if (node_id >= 0)
 		numa_run_on_node(node_id);
 	while (t->is_running()) {
-		t->wait();
+		if (t->is_blocking())
+			t->wait();
 		t->run();
 	}
 	return NULL;

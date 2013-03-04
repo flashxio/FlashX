@@ -10,6 +10,7 @@
 #include "messaging.h"
 #include "garbage_collection.h"
 #include "global_cached_private.h"
+#include "thread.h"
 
 class part_global_cached_io;
 
@@ -19,9 +20,11 @@ struct thread_group
 	int nthreads;
 	part_global_cached_io **ios;
 	page_cache *cache;
+	std::vector<thread *> process_request_threads;
+	std::vector<thread *> process_reply_threads;
 	
-	thread_safe_FIFO_queue<io_request> *request_queue;
-	thread_safe_FIFO_queue<io_reply> *reply_queue;
+	blocking_FIFO_queue<io_request> *request_queue;
+	blocking_FIFO_queue<io_reply> *reply_queue;
 };
 
 class part_global_cached_io: public global_cached_io
@@ -37,6 +40,7 @@ class part_global_cached_io: public global_cached_io
 
 	int num_groups;
 	int group_idx;
+	struct thread_group *local_group;
 
 	/* the size of the cache associated to the thread. */
 	long cache_size;
