@@ -15,6 +15,7 @@ void io_request::assign(io_request &req)
 	this->completed_size = req.completed_size;
 	this->orig = req.orig;
 	this->refcnt = 0;
+	this->node_id = req.node_id;
 	/*
 	 * If the request uses embedded vector, then the new request
 	 * should point to its own embedded vector. Otherwise,
