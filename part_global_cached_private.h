@@ -66,7 +66,10 @@ class part_global_cached_io: public global_cached_io
 
 	int thread_id;
 
-	callback *cb;
+	// It's the callback from the user.
+	callback *final_cb;
+	// It's the callback used by global_cached_io.
+	callback *my_cb;
 
 public:
 	/* get the location of a thread in the group. */
@@ -92,10 +95,13 @@ public:
 		return groups[group_idx].cache;
 	}
 
-	virtual bool set_callback(callback *cb);
+	virtual bool set_callback(callback *cb) {
+		this->final_cb = cb;
+		return true;
+	}
 
 	virtual callback *get_callback() {
-		return cb;
+		return my_cb;
 	}
 
 	int reply(io_request *requests, io_reply *replies, int num);

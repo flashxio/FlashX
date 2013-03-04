@@ -56,7 +56,6 @@ public:
 
 int for_global_callback::invoke(io_request *req)
 {
-	printf("a request is complete\n");
 	io_reply rep(req, true, 0);
 	io->reply(req, &rep, 1);
 	return 0;
@@ -109,12 +108,6 @@ void process_request_thread::run()
 void process_reply_thread::run()
 {
 	io->process_replies(NUMA_NUM_PROCESS_MSGS);
-}
-
-bool part_global_cached_io::set_callback(callback *cb)
-{
-	this->cb = cb;
-	return true;
 }
 
 int part_global_cached_io::init() {
@@ -195,7 +188,8 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 		int cache_type, access_mapper *mapper): global_cached_io(underlying) {
 	this->mapper = mapper->clone();
 	this->thread_id = idx;
-	this->cb = NULL;
+	this->final_cb = NULL;
+	this->my_cb = NULL;
 	remote_reads = 0;
 	//		assert(nthreads % num_groups == 0);
 	this->num_groups = num_groups;
@@ -237,7 +231,8 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	assert (local_group->ios[i] == NULL);
 	local_group->ios[i] = this;
 
-	global_cached_io::set_callback(new for_global_callback(this));
+	my_cb = new for_global_callback(this);
+	global_cached_io::set_callback(my_cb);
 }
 
 /**
@@ -342,7 +337,7 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 			// for the request. The request is just used for notifying
 			// the user code of the completion of the request.
 			reply->get_access_method(), get_thread(thread_id)->get_io(), -1);
-	cb->invoke(&req);
+	final_cb->invoke(&req);
 	return ret;
 }
 
