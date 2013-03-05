@@ -143,6 +143,10 @@ public:
 		underlying->cleanup();
 	}
 
+	virtual void notify_completion(io_request *req);
+	void finalize_partial_request(io_request &partial, io_request *orig);
+	void finalize_request(io_request &req);
+
 #ifdef STATISTICS
 	void print_stat() {
 		static int tot_hits = 0;

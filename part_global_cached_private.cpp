@@ -39,29 +39,6 @@ thread_group::~thread_group()
 #endif
 
 /**
- * This callback is used in global cache IO.
- * When a request is complete in the global cache IO, this callback
- * will be invoked.
- */
-class for_global_callback: public callback
-{
-	part_global_cached_io *io;
-public:
-	for_global_callback(part_global_cached_io *io) {
-		this->io = io;
-	}
-
-	int invoke(io_request *request);
-};
-
-int for_global_callback::invoke(io_request *req)
-{
-	io_reply rep(req, true, 0);
-	io->reply(req, &rep, 1);
-	return 0;
-}
-
-/**
  * This thread runs on the node with cache.
  * It is dedicated to processing requests.
  * The application threads send requests to the node with cache
@@ -191,7 +168,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	this->mapper = mapper->clone();
 	this->thread_id = idx;
 	this->final_cb = NULL;
-	this->my_cb = NULL;
 	remote_reads = 0;
 	this->num_groups = num_groups;
 	this->group_idx = underlying->get_node_id();
@@ -237,9 +213,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	reply_processor->start();
 	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
 			NUMA_REPLY_QUEUE_SIZE);
-
-	my_cb = new for_global_callback(this);
-	global_cached_io::set_callback(my_cb);
 }
 
 /**
@@ -256,7 +229,7 @@ int part_global_cached_io::reply(io_request *requests,
 			assert(num_sent > 0);
 		}
 		else {
-			process_reply(&replies[i]);
+			io->process_reply(&replies[i]);
 		}
 	}
 	// TODO We shouldn't flush here, but we need to flush at some point.
@@ -377,6 +350,13 @@ void part_global_cached_io::cleanup() {
 			|| finished_threads < nthreads) {
 	}
 	printf("thread %d processed %ld requests\n", thread_id, processed_requests);
+}
+
+void part_global_cached_io::notify_completion(io_request *req)
+{
+	assert(get_node_id() == 1);
+	io_reply rep(req, true, 0);
+	reply(req, &rep, 1);
 }
 
 std::tr1::unordered_map<int, thread_group> part_global_cached_io::groups;

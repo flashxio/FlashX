@@ -134,13 +134,19 @@ public:
 	int multibuf_invoke(io_request *request);
 };
 
-void finalize_partial_request(io_request &partial, io_request *orig)
+void global_cached_io::notify_completion(io_request *req)
 {
-	io_interface *io = partial.get_io();
+	io_interface *io = req->get_io();
+	if (io->get_callback())
+		io->get_callback()->invoke(req);
+}
+
+void global_cached_io::finalize_partial_request(io_request &partial,
+		io_request *orig)
+{
 	orig->inc_complete_count();
 	if (orig->complete_size(partial.get_size())) {
-		if (io->get_callback())
-			io->get_callback()->invoke(orig);
+		notify_completion(orig);
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
@@ -154,18 +160,16 @@ void finalize_partial_request(io_request &partial, io_request *orig)
  * This method is to finalize the request. The processing of the request
  * ends here.
  */
-void finalize_request(io_request &req)
+void global_cached_io::finalize_request(io_request &req)
 {
 	// It's possible that the request is just a partial request.
-	io_interface *io = req.get_io();
 	if (req.is_partial()) {
 		io_request *original = req.get_orig();
 		assert(original);
 		assert(original->get_orig() == NULL);
 		original->inc_complete_count();
 		if (original->complete_size(req.get_size())) {
-			if (io->get_callback())
-				io->get_callback()->invoke(original);
+			notify_completion(original);
 			original->dec_complete_count();
 			original->wait4unref();
 			delete original;
@@ -175,8 +179,7 @@ void finalize_request(io_request &req)
 	}
 	else {
 		assert(req.get_orig() == NULL);
-		if (io->get_callback())
-			io->get_callback()->invoke(&req);
+		notify_completion(&req);
 	}
 }
 
@@ -255,7 +258,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		io_request partial;
 		extract_pages(*orig, request->get_offset(), request->get_num_bufs(),
 				partial);
-		finalize_partial_request(partial, orig);
+		cached_io->finalize_partial_request(partial, orig);
 
 		/*
 		 * Now we should start to deal with all requests pending to pages
@@ -273,7 +276,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 					assert(num_dirty_pages < request->get_num_bufs());
 					dirty_pages[num_dirty_pages++] = dirty;
 				}
-				finalize_request(*old);
+				cached_io->finalize_request(*old);
 				// Now we can delete it.
 				delete old;
 				old = next;
@@ -351,7 +354,7 @@ int access_page_callback::invoke(io_request *request)
 			cache->get_flush_thread()->dirty_pages(&dirty, 1);
 		io_request partial;
 		extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
-		finalize_partial_request(partial, orig);
+		cached_io->finalize_partial_request(partial, orig);
 
 		int num = 0;
 		while (old) {
@@ -366,7 +369,7 @@ int access_page_callback::invoke(io_request *request)
 			if (dirty)
 				cache->get_flush_thread()->dirty_pages(&dirty, 1);
 
-			finalize_request(*old);
+			cached_io->finalize_request(*old);
 			// Now we can delete it.
 			delete old;
 			old = next;

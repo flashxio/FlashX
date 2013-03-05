@@ -71,8 +71,6 @@ class part_global_cached_io: public global_cached_io
 
 	// It's the callback from the user.
 	callback *final_cb;
-	// It's the callback used by global_cached_io.
-	callback *my_cb;
 
 public:
 	/* get the location of a thread in the group. */
@@ -104,7 +102,7 @@ public:
 	}
 
 	virtual callback *get_callback() {
-		return my_cb;
+		return final_cb;
 	}
 
 	int reply(io_request *requests, io_reply *replies, int num);
@@ -121,6 +119,8 @@ public:
 	ssize_t access(char *, off_t, ssize_t, int) {
 		return -1;
 	}
+
+	virtual void notify_completion(io_request *req);
 
 	void cleanup();
 
