@@ -174,8 +174,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	this->cache_size = (long) (cache_size * ((double) underlying->get_local_size()
 		/ underlying->get_size()));
 	this->cache_type = cache_type;
-	processed_requests = 0;
-	finished_threads = 0;
 
 	printf("cache is partitioned\n");
 	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
@@ -230,6 +228,7 @@ int part_global_cached_io::reply(io_request *requests,
 		}
 		else {
 			io->process_reply(&replies[i]);
+			io->processed_replies.inc(1);
 		}
 	}
 	// TODO We shouldn't flush here, but we need to flush at some point.
@@ -281,7 +280,6 @@ int part_global_cached_io::process_requests(int max_nreqs) {
 		}
 		num_processed += num;
 	}
-	processed_requests += num_processed;
 	return num_processed;
 }
 
@@ -300,6 +298,7 @@ int part_global_cached_io::process_replies(int max_nreplies) {
 		}
 		num_processed += num;
 	}
+	processed_replies.inc(num_processed);
 	return num_processed;
 }
 
@@ -327,29 +326,25 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 	// we have to busy wait.
 	while (num - num_sent > 0) {
 		int ret = distribute_reqs(&requests[num_sent], num - num_sent);
-		if (ret > 0)
+		if (ret > 0) {
+			// This variable is only accessed in one thread, so we don't
+			// need to protect it.
+			processed_requests.inc(ret);
 			num_sent += ret;
+		}
 	}
 	return num_sent;
 }
 
-void part_global_cached_io::cleanup() {
+void part_global_cached_io::cleanup()
+{
 	printf("thread %d: start to clean up\n", thread_id);
-	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
-			= groups.begin(); it != groups.end(); it++) {
-		for (int j = 0; j < it->second.nthreads; j++)
-			if (it->second.ios[j])
-				__sync_fetch_and_add(&it->second.ios[j]->finished_threads, 1);
-	}
-	while (!local_group->request_queue->is_empty()
-			|| !reply_queue->is_empty()
-			/*
-			 * if finished_threads == nthreads,
-			 * then all threads have reached the point.
-			 */
-			|| finished_threads < nthreads) {
-	}
-	printf("thread %d processed %ld requests\n", thread_id, processed_requests);
+	printf("thread %d processed %d requests and %d replies\n", thread_id,
+			processed_requests.get(), processed_replies.get());
+	// Let's just use the simpliest finishing protocol.
+	// Wait for all requests to get replies.
+	while (processed_requests.get() > processed_replies.get())
+		usleep(1000 * 10);
 }
 
 void part_global_cached_io::notify_completion(io_request *req)

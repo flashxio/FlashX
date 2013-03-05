@@ -47,8 +47,6 @@ class part_global_cached_io: public global_cached_io
 	long cache_size;
 	int cache_type;
 
-	volatile int finished_threads;
-
 	/*
 	 * there is a sender for each node.
 	 */
@@ -63,7 +61,8 @@ class part_global_cached_io: public global_cached_io
 		return mapper->map(req->get_offset());
 	}
 
-	long processed_requests;
+	atomic_integer processed_requests;
+	atomic_integer processed_replies;
 
 	long remote_reads;
 
