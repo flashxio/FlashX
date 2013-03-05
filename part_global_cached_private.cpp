@@ -174,6 +174,7 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	this->cache_size = (long) (cache_size * ((double) underlying->get_local_size()
 		/ underlying->get_size()));
 	this->cache_type = cache_type;
+	this->underlying = underlying;
 
 	printf("cache is partitioned\n");
 	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
@@ -338,13 +339,60 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 
 void part_global_cached_io::cleanup()
 {
-	printf("thread %d: start to clean up\n", thread_id);
+	int num_threads = 0;
+	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
+			= groups.begin(); it != groups.end(); it++) {
+		num_threads += it->second.nthreads;
+	}
+	printf("thread %d of %d: start to clean up\n", thread_id, num_threads);
+
+	// First make sure all requests have been flushed for processing.
+	for (std::tr1::unordered_map<int, msg_sender<io_request> *>::const_iterator it
+			= req_senders.begin(); it != req_senders.end(); it++) {
+		msg_sender<io_request> *sender = it->second;
+		sender->flush_all();
+	}
+
+	// Make sure all threads have finished issuing requests.
+	num_finish_issuing_threads.inc(1);
+	while (num_finish_issuing_threads.get() < num_threads) {
+		usleep(1000 * 10);
+	}
+
+	// Now we know no more requests will be put in the request queues.
+	// Make sure all request queues empty.
+	bool empty;
+	do {
+		empty = true;
+		for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
+				= groups.begin(); it != groups.end(); it++) {
+			empty &= it->second.request_queue->is_empty();
+		}
+		usleep(1000 * 10);
+	} while (!empty);
+
+	// Now all requests have been issued to the underlying IOs.
+	// Make sure to clean the queues in its own underlying IO.
+	underlying->cleanup();
+
+	// Now we need to wait for all requests issued to the disks
+	// to be completed.
+//	while (processed_requests.get() > processed_replies.get()) {
+//		usleep(1000 * 10);
+		for (std::tr1::unordered_map<int, msg_sender<io_reply> *>::const_iterator it
+				= reply_senders.begin(); it != reply_senders.end(); it++) {
+			msg_sender<io_reply> *sender = it->second;
+			sender->flush_all();
+		}
+//	}
+	
+	// Let's just exit together.
+	num_finished_threads.inc(1);
+	while (num_finished_threads.get() < num_threads) {
+		usleep(1000 * 10);
+	}
 	printf("thread %d processed %d requests and %d replies\n", thread_id,
 			processed_requests.get(), processed_replies.get());
-	// Let's just use the simpliest finishing protocol.
-	// Wait for all requests to get replies.
-	while (processed_requests.get() > processed_replies.get())
-		usleep(1000 * 10);
 }
 
 void part_global_cached_io::notify_completion(io_request *req)
@@ -359,3 +407,5 @@ pthread_mutex_t part_global_cached_io::init_mutex;
 int part_global_cached_io::num_finish_init;
 pthread_mutex_t part_global_cached_io::wait_mutex;
 pthread_cond_t part_global_cached_io::cond;
+atomic_integer part_global_cached_io::num_finish_issuing_threads;
+atomic_integer part_global_cached_io::num_finished_threads;

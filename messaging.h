@@ -308,6 +308,11 @@ public:
 
 	int flush(bool locked = false);
 
+	void flush_all() {
+		while (num_msg() > 0)
+			flush();
+	}
+
 	int send_cached(T *msg);
 };
 

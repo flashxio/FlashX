@@ -51,8 +51,7 @@ void remote_disk_access::cleanup()
 {
 	for (int i = 0; i < num_senders; i++) {
 		msg_sender<io_request> *sender = senders[i];
-		while (sender->num_msg())
-			sender->flush();
+		sender->flush_all();
 	}
 	int num;
 	do {
@@ -74,7 +73,9 @@ void remote_disk_access::cleanup()
 ssize_t remote_disk_access::access(io_request *requests, int num)
 {
 	for (int i = 0; i < num; i++) {
-		// TODO I assume data is striped on disks.
+		assert(requests[i].get_size() > 0);
+		// TODO data is striped on disks, we have to make sure the data
+		// can be accessed from the remote disk access.
 		// and I assume the request size is aligned with the strip size.
 		int idx = requests[i].get_offset() / PAGE_SIZE % num_senders;
 		int ret = senders[idx]->send_cached(&requests[i]);

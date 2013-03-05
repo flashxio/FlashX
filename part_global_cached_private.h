@@ -36,6 +36,12 @@ class part_global_cached_io: public global_cached_io
 	static pthread_mutex_t wait_mutex;
 	static pthread_cond_t cond;
 
+	/*
+	 * These counts are used for stopping protocols.
+	 */
+	static atomic_integer num_finish_issuing_threads;
+	static atomic_integer num_finished_threads;
+
 	int num_groups;
 	int group_idx;
 	struct thread_group *local_group;
@@ -60,6 +66,8 @@ class part_global_cached_io: public global_cached_io
 	{
 		return mapper->map(req->get_offset());
 	}
+
+	io_interface *underlying;
 
 	atomic_integer processed_requests;
 	atomic_integer processed_replies;
