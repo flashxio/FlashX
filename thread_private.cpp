@@ -1,7 +1,4 @@
 #include <sys/time.h>
-#include <sys/types.h>
-#include <sys/syscall.h>
-#define gettid() syscall(__NR_gettid)
 
 #include "thread_private.h"
 #include "parameters.h"

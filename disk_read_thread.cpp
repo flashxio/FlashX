@@ -53,10 +53,6 @@ void disk_read_thread::run() {
 	// TODO I need to call cleanup() of aio.
 }
 
-#include <sys/types.h>
-#include <sys/syscall.h>
-#define gettid() syscall(__NR_gettid)
-
 void *process_requests(void *arg)
 {
 	disk_read_thread *thread = (disk_read_thread *) arg;

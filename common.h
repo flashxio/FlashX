@@ -4,8 +4,12 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
 
 #include <string>
+
+#define gettid() syscall(__NR_gettid)
 
 enum {
 	READ,
