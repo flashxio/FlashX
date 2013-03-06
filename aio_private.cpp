@@ -152,6 +152,7 @@ struct thread_callback_s
 
 void aio_callback(io_context_t ctx, struct iocb* iocb,
 		void *cb, long res, long res2) {
+	assert(res2 == 0);
 	thread_callback_s *tcb = (thread_callback_s *) cb;
 
 	tcb->aio->return_cb(tcb);
