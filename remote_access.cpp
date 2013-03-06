@@ -32,7 +32,7 @@ remote_disk_access::~remote_disk_access()
 
 io_interface *remote_disk_access::clone() const
 {
-	remote_disk_access *copy = new remote_disk_access();
+	remote_disk_access *copy = new remote_disk_access(this->get_node_id());
 	copy->num_senders = this->num_senders;
 	copy->senders = new msg_sender<io_request> *[this->num_senders];
 	copy->queues = new thread_safe_FIFO_queue<io_request> *[this->num_senders];

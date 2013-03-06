@@ -25,7 +25,7 @@ struct thread_group
 	blocking_FIFO_queue<io_request> *request_queue;
 };
 
-class part_global_cached_io: public global_cached_io
+class part_global_cached_io: public io_interface
 {
 	static std::tr1::unordered_map<int, struct thread_group> groups;
 	/* this mutex just for helping initialize cache. */
@@ -42,9 +42,7 @@ class part_global_cached_io: public global_cached_io
 	static atomic_integer num_finish_issuing_threads;
 	static atomic_integer num_finished_threads;
 
-	int num_groups;
 	int group_idx;
-	struct thread_group *local_group;
 
 	thread *reply_processor;
 	blocking_FIFO_queue<io_reply> *reply_queue;
@@ -58,8 +56,6 @@ class part_global_cached_io: public global_cached_io
 	 */
 	// group id <-> msg sender
 	std::tr1::unordered_map<int, msg_sender<io_request> *> req_senders;
-	// thread id <-> msg sender
-	std::tr1::unordered_map<int, msg_sender<io_reply> *> reply_senders;
 
 	access_mapper *mapper;
 	int hash_req(io_request *req)
@@ -127,8 +123,6 @@ public:
 		return -1;
 	}
 
-	virtual void notify_completion(io_request *req);
-
 	void cleanup();
 
 	int get_group_id() {
@@ -138,10 +132,10 @@ public:
 	bool support_aio() {
 		return true;
 	}
+	friend class node_cached_io;
 
 #ifdef STATISTICS
 	virtual void print_stat() {
-		global_cached_io::print_stat();
 		static long tot_remote_reads = 0;
 		static int seen_threads = 0;
 		tot_remote_reads += remote_reads;

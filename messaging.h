@@ -284,8 +284,11 @@ public:
 template<class T>
 class msg_sender
 {
-	// The message sender can be used by multiple threads in parted global cache.
+	// The message sender can be used by multiple threads
+	// if it is set thread-safe.
 	pthread_spinlock_t lock;
+	bool thread_safe;
+
 	T *buf;
 	int buf_size;		// the max number of messages that can be buffered
 	int num_current;	// the current number of messages in the buffer.
@@ -295,7 +298,8 @@ public:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues, int num_queues);
+	msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
+			int num_queues, bool thread_safe = false);
 
 	~msg_sender() {
 		numa_free(buf, sizeof(T) * buf_size);

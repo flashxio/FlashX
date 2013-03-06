@@ -23,7 +23,7 @@ class remote_disk_access: public io_interface
 	// The size of data on the local node.
 	long local_size;
 
-	remote_disk_access(): io_interface(-1) {
+	remote_disk_access(int node_id): io_interface(node_id) {
 		senders = NULL;
 		queues = NULL;
 		num_senders = 0;
