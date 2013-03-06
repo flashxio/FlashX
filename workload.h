@@ -90,10 +90,13 @@ class rand_permute
 	long num;
 
 public:
+	/**
+	 * @start: the index of the first entry.
+	 */
 	rand_permute(long num, int stride, long start) {
 		offset = (off_t *) valloc(num * sizeof(off_t));
 		for (int i = 0; i < num; i++) {
-			offset[i] = ((off_t) i) * stride + start;
+			offset[i] = ((off_t) i) * stride + start * stride;
 		}
 
 		for (int i = num - 1; i >= 1; i--) {
@@ -193,6 +196,10 @@ class global_rand_permute_workload: public workload_gen
 	long end;
 	const rand_permute *permute;
 public:
+	/**
+	 * @start: the index of the first entry.
+	 * @end: the index of the last entry.
+	 */
 	global_rand_permute_workload(int stride, long start, long end) {
 		permute = new rand_permute(end - start, stride, start);
 		this->start = 0;
