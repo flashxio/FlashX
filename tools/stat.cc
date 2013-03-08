@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <tr1/unordered_set>
 
 #define PAGE_SIZE 4096
 #define SCALE_FACTOR 100
@@ -35,35 +36,26 @@ int main(int argc, char *argv[])
 	long file_size = stats.st_size;
 
 	/* the numbers of accesses of each page */
-	std::vector<int> nums(file_size / 8, 0);
+	int num_accesses = (int) (file_size / sizeof(workload_t));
+	workload_t *workloads = new workload_t[num_accesses];
+	ssize_t ret = read(fd, (void *) workloads, file_size);
 
-	char buf[8];
-	long *src = (long *) buf;
-	int count = 0;
-	while(true) {
-		ssize_t ret = read(fd, buf, sizeof(buf));
-		if (ret != 8)
-			break;
-		count++;
-		long n = java_dump_workload::swap_bytesl(*src);
-		nums[n / 4096]++;
-		if (n > max_pos)
-			max_pos = n;
+	std::tr1::unordered_set<off_t> pages;
+	int num_reads = 0;
+	int num_writes = 0;
+	for (int i = 0; i < num_accesses; i++) {
+		off_t page_off = ROUND_PAGE(workloads[i].off);
+		off_t last_page = ROUNDUP_PAGE(workloads[i].off + workloads[i].size);
+		int num_pages = (last_page - page_off) / PAGE_SIZE;
+		for (; page_off < last_page; page_off += PAGE_SIZE)
+			pages.insert(page_off);
+		if (workloads[i].read)
+			num_reads += num_pages;
+		else
+			num_writes += num_pages;
 	}
 
-	std::sort(nums.begin(), nums.end());
-
-	long naccesses = 0;
-	long accessed_pages = 0;
-	for (int i = nums.size() - 1; i >= 0; i--) {
-		if (nums[i] == 0)
-			break;
-		naccesses += nums[i];
-		if (i % 100 == 0)
-			printf("%ld\t%ld\n", nums.size() - i, naccesses);
-		accessed_pages++;
-	}
-	printf("there are %ld numbers accessed\n", naccesses);
-	printf("there are %ld accessed pages\n", accessed_pages);
-	printf("the max location is %ld\n", max_pos);
+	printf("there are %d reads\n", num_reads);
+	printf("there are %d writes\n", num_writes);
+	printf("there are %ld accessed pages\n", pages.size());
 }

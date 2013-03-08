@@ -1,5 +1,5 @@
 CFLAGS = -g
-CXXFLAGS = -g -I.. -I../nbds.0.4.3/include/
+CXXFLAGS = -g -I.. -I../nbds.0.4.3/include/ -std=c++0x
 CC = gcc
 CXX = g++
 
