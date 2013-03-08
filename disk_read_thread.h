@@ -16,6 +16,7 @@ class disk_read_thread
 	pthread_t id;
 	async_io *aio;
 	int node_id;
+	int num_accesses;
 
 public:
 	disk_read_thread(const char *name, long size, int node_id);
@@ -30,6 +31,14 @@ public:
 
 	int get_node_id() const {
 		return node_id;
+	}
+
+	int get_num_accesses() const {
+		return num_accesses;
+	}
+
+	int get_num_iowait() const {
+		return aio->get_num_iowait();
 	}
 
 	~disk_read_thread() {

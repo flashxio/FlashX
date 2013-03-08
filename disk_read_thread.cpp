@@ -26,6 +26,7 @@ disk_read_thread::disk_read_thread(const char *name,
 	aio = new async_io(&name, 1, size, AIO_DEPTH_PER_FILE, node_id);
 	aio->set_callback(new initiator_callback());
 	this->node_id = node_id;
+	num_accesses = 0;
 
 	int ret = pthread_create(&id, NULL, process_requests, (void *) this);
 	if (ret) {
@@ -48,6 +49,7 @@ void disk_read_thread::run() {
 		while (queue.is_empty() && aio->num_pending_IOs() > 0)
 			aio->wait4complete();
 		int num = queue.fetch(reqs, MAX_FETCH_REQS);
+		num_accesses += num;
 		aio->access(reqs, num);
 	}
 	// TODO I need to call cleanup() of aio.

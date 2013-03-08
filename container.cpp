@@ -62,6 +62,7 @@ int blocking_FIFO_queue<T>::fetch(T *entries, int num) {
 	/* we have to wait for coming requests. */
 	pthread_mutex_lock(&empty_mutex);
 	while(this->is_empty()) {
+		num_empty++;
 //		printf("the blocking queue %s is empty, wait...\n", name.c_str());
 		pthread_cond_wait(&empty_cond, &empty_mutex);
 	}
@@ -93,6 +94,7 @@ int blocking_FIFO_queue<T>::add(T *entries, int num) {
 
 		pthread_mutex_lock(&full_mutex);
 		while (this->is_full()) {
+			num_full++;
 //			printf("the blocking queue %s is full, wait...\n", name.c_str());
 			pthread_cond_wait(&full_cond, &full_mutex);
 		}

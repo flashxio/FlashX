@@ -537,6 +537,14 @@ int main(int argc, char *argv[])
 			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 
 #ifdef STATISTICS
+	for (int i = 0; i < num_files; i++) {
+		disk_read_thread *t = read_threads[i];
+		if (t)
+			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits\n",
+					cnames[i], read_threads[i]->get_queue()->get_num_empty(),
+					read_threads[i]->get_queue()->get_num_empty(), read_threads[i]->get_num_accesses(),
+					read_threads[i]->get_num_iowait());
+	}
 	for (int i = 0; i < nthreads; i++) {
 		threads[i]->print_stat();
 	}

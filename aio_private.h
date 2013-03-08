@@ -23,6 +23,8 @@ class async_io: public buffered_io
 	// by the user isn't in the local NUMA node.
 	slab_allocator allocator;
 
+	int num_iowait;
+
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:
 	/**
@@ -66,6 +68,10 @@ public:
 
 	void wait4complete() {
 		io_wait(ctx, NULL, 1);
+	}
+
+	int get_num_iowait() const {
+		return num_iowait;
 	}
 };
 #endif

@@ -170,6 +170,7 @@ async_io::async_io(const char *names[], int num,
 		cbs.push_back(new thread_callback_s());
 	}
 	cb = NULL;
+	num_iowait = 0;
 }
 
 void async_io::cleanup()
@@ -243,6 +244,7 @@ ssize_t async_io::access(io_request *requests, int num)
 			 * To achieve the best performance, we need to submit requests
 			 * as long as there is a slot available.
 			 */
+			num_iowait++;
 			io_wait(ctx, NULL, 1);
 			slot = max_io_slot(ctx);
 		}

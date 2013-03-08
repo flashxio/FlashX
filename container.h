@@ -241,10 +241,12 @@ class blocking_FIFO_queue: public thread_safe_FIFO_queue<T>
 	/* when the queue becomes empty */
 	pthread_cond_t empty_cond;
 	pthread_mutex_t empty_mutex;
+	int num_empty;
 
 	/* when the queue becomes full */
 	pthread_cond_t full_cond;
 	pthread_mutex_t full_mutex;
+	int num_full;
 
 	std::string name;
 public:
@@ -254,11 +256,21 @@ public:
 		pthread_mutex_init(&full_mutex, NULL);
 		pthread_cond_init(&full_cond, NULL);
 		this->name = name;
+		num_empty = 0;
+		num_full = 0;
 	}
 
 	virtual int fetch(T *entries, int num);
 
 	virtual int add(T *entries, int num);
+
+	int get_num_empty() const {
+		return num_empty;
+	}
+
+	int get_num_full() const {
+		return num_full;
+	}
 };
 
 #endif
