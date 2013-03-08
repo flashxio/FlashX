@@ -32,7 +32,7 @@ public:
 
 	int map(off_t off) const {
 		int size = (int) mapping_array.size();
-		int idx = (int) (off / PAGE_SIZE % size);
+		int idx = universal_hash(off / PAGE_SIZE, size);
 		return mapping_array[idx];
 	}
 

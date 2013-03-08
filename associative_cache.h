@@ -394,14 +394,14 @@ public:
 		// The offset of pages in this cache may all be a multiple of
 		// some value, so when we hash a page to a page set, we need
 		// to adjust the offset.
-		return offset / PAGE_SIZE / offset_factor % (init_ncells
-				* (long) (1 << level));
+		int num_cells = (init_ncells * (long) (1 << level));
+		return universal_hash(offset / PAGE_SIZE / offset_factor, num_cells);
 	}
 
 	/* the hash function used for the next level. */
 	int hash1(off_t offset) {
-		return offset / PAGE_SIZE / offset_factor % (init_ncells
-				* (long) (1 << (level + 1)));
+		int num_cells = (init_ncells * (long) (1 << (level + 1)));
+		return universal_hash(offset / PAGE_SIZE / offset_factor, num_cells);
 	}
 
 	int hash1_locked(off_t offset) {
@@ -409,8 +409,8 @@ public:
 		int ret;
 		do {
 			table_lock.read_lock(count);
-			ret = offset / PAGE_SIZE / offset_factor % (init_ncells
-					* (long) (1 << (level + 1)));
+			int num_cells = (init_ncells * (long) (1 << (level + 1)));
+			ret = universal_hash(offset / PAGE_SIZE / offset_factor, num_cells);
 		} while (!table_lock.read_unlock(count));
 		return ret;
 	}

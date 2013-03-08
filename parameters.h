@@ -49,4 +49,8 @@ const int NUMA_REPLY_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE;
 const int NUMA_NUM_PROCESS_MSGS = 20;
 const int NUMA_NUM_PROCESS_THREADS = 3;
 
+const int CONST_A = 27644437;
+const int CONST_B = 131;
+const long CONST_P = 68718952447L;
+
 #endif

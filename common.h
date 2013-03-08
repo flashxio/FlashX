@@ -9,6 +9,8 @@
 
 #include <string>
 
+#include "parameters.h"
+
 #define gettid() syscall(__NR_gettid)
 
 enum {
@@ -69,6 +71,11 @@ static inline std::string itoa(int n)
 	char buf[32];
 	snprintf(buf, sizeof(buf), "%d", n);
 	return buf;
+}
+
+static inline int universal_hash(off_t v, int modulo)
+{
+	return (v * CONST_A + CONST_B) % CONST_P % modulo;
 }
 
 #endif

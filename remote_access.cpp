@@ -77,7 +77,8 @@ ssize_t remote_disk_access::access(io_request *requests, int num)
 		// TODO data is striped on disks, we have to make sure the data
 		// can be accessed from the remote disk access.
 		// and I assume the request size is aligned with the strip size.
-		int idx = requests[i].get_offset() / PAGE_SIZE % num_senders;
+		off_t pg_off = requests[i].get_offset() / PAGE_SIZE;
+		int idx = universal_hash(pg_off, num_senders);
 		int ret = senders[idx]->send_cached(&requests[i]);
 		/* send should always succeed. */
 		assert(ret > 0);
