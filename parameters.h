@@ -53,4 +53,7 @@ const int CONST_A = 27644437;
 const int CONST_B = 131;
 const long CONST_P = 68718952447L;
 
+/* The striping block size for software RAID-0 */
+const int STRIPE_BLOCK_SIZE = 7;
+
 #endif
