@@ -13,5 +13,7 @@ for (my $i = 1; $i <= 15; $i++) {
 	system("mkdir -p $dir");
 	system("mount $dev_file $dir");
 	system("chown zhengda.zhengda $dir/test");
+	system("echo noop > /sys/block/sd$dev_names[$dev_idx]/queue/scheduler");
+	system("cat /sys/block/sd$dev_names[$dev_idx]/queue/scheduler");
 }
 
