@@ -46,6 +46,8 @@ while (<FILE>) {
 my $accum_size = 0;
 my %file_offsets;
 foreach my $key (keys %file_size) {
+	my $orig = $file_size{$key};
+	$file_size{$key} = ($orig + 4096) & (~4095);
 	print STDERR "$key has $file_size{$key} bytes, min offset: $file_start{$key}\n";
 	$file_offsets{$key} = $accum_size;
 	$accum_size += $file_size{$key};
