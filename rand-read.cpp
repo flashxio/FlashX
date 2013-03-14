@@ -107,10 +107,7 @@ enum {
 	SEQ_OFFSET,
 	RAND_OFFSET,
 	RAND_PERMUTE,
-	LOCAL_RAND_PERMUTE,
-	STRIDE,
-	BALANCED,
-	RAID_RAND,
+	HIT_DEFINED,
 	USER_FILE_WORKLOAD = -1
 };
 
@@ -118,10 +115,7 @@ str2int workloads[] = {
 	{ "SEQ", SEQ_OFFSET },
 	{ "RAND", RAND_OFFSET },
 	{ "RAND_PERMUTE", RAND_PERMUTE },
-	{ "LOCAL_RAND_PERMUTE", LOCAL_RAND_PERMUTE },
-	{ "STRIDE", STRIDE },
-	{ "BALANCED", BALANCED },
-	{ "RAID_RAND", RAID_RAND},
+	{ "HIT_DEFINED", HIT_DEFINED },
 	{ "user_file", USER_FILE_WORKLOAD },
 };
 
@@ -448,7 +442,6 @@ int main(int argc, char *argv[])
 			printf("thread %d starts %ld ends %ld\n", j, start, end);
 
 			workload_gen *gen;
-			workload_chunk *chunk = NULL;
 			switch (workload) {
 				case SEQ_OFFSET:
 					gen = new seq_workload(start, end, entry_size);
@@ -460,23 +453,9 @@ int main(int argc, char *argv[])
 					gen = new global_rand_permute_workload(entry_size,
 							start, end);
 					break;
-				case LOCAL_RAND_PERMUTE:
-					gen = new local_rand_permute_workload(start, end, entry_size);
-					break;
-				case STRIDE:
-					gen = new stride_workload(start, end, entry_size);
-					break;
-				case BALANCED:
-					if (chunk == NULL) {
-						chunk = new stride_workload_chunk(0,
-								(long) npages * PAGE_SIZE / entry_size, entry_size);
-					}
-					gen = new balanced_workload(chunk);
-					break;
-				case RAID_RAND:
-					/* In this workload each thread starts */
-					gen = new RAID0_rand_permute_workload(npages,
-							entry_size, nthreads, j);
+				case HIT_DEFINED:
+					gen = new cache_hit_defined_workload(entry_size, start,
+							end, cache_size, 0);
 					break;
 				case -1:
 					{

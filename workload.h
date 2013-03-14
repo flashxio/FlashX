@@ -10,6 +10,7 @@
 #include <stdlib.h>
 
 #include <string>
+#include <deque>
 
 #include "cache.h"
 
@@ -116,80 +117,6 @@ public:
 	}
 };
 
-class stride_workload: public workload_gen
-{
-	long first;	// the first entry
-	long last;	// the last entry but it's not included in the range
-	long curr;	// the current location
-	long num;	// the number of entries we have visited
-	int stride;
-	int entry_size;
-public:
-	stride_workload(long first, long last, int entry_size) {
-		this->first = first;
-		this->last = last;
-		curr = first;
-		num = 0;
-		this->entry_size = entry_size;
-		stride = PAGE_SIZE / entry_size;
-	}
-
-	off_t next_offset();
-
-	bool has_next() {
-		return num < (last - first);
-	}
-};
-
-class local_rand_permute_workload: public workload_gen
-{
-	long idx;
-	long num;
-	long start;		// the start offset in bytes
-	rand_permute *permute;
-
-	local_rand_permute_workload() {
-		idx = 0;
-		num = 0;
-		start = 0;
-		permute = NULL;
-	}
-
-public:
-	/**
-	 * `start' and `end' are entry indexes.
-	 */
-	local_rand_permute_workload(long start, long end, int entry_size) {
-		permute = new rand_permute(end - start, entry_size, 0);
-		this->start = start * entry_size;
-		idx = 0;
-		num = end - start;
-	}
-
-	virtual ~local_rand_permute_workload() {
-		delete permute;
-	}
-
-	off_t next_offset() {
-		if (idx >= num)
-			return -1;
-		return permute->get_offset(idx++) + start;
-	}
-
-	bool has_next() {
-		return idx < num;
-	}
-
-	local_rand_permute_workload *clone() {
-		local_rand_permute_workload *gen = new local_rand_permute_workload();
-		gen->permute = permute;
-		gen->idx = idx;
-		gen->num = num;
-		gen->start = start;
-		return gen;
-	}
-};
-
 class global_rand_permute_workload: public workload_gen
 {
 	long start;
@@ -222,6 +149,31 @@ public:
 	bool has_next() {
 		return start < end;
 	}
+};
+
+/**
+ * In this workload generator, the expected cache hit ratio
+ * can be defined by the user.
+ */
+class cache_hit_defined_workload: public global_rand_permute_workload
+{
+	long num_pages;
+	double cache_hit_ratio;
+	std::deque<off_t> cached_pages;
+	long seq;				// the sequence number of accesses
+	long cache_hit_seq;		// the sequence number of cache hits
+public:
+	cache_hit_defined_workload(int stride, long start, long end,
+			long cache_size, double ratio): global_rand_permute_workload(stride,
+				start, end) {
+		// only to access the most recent pages.
+		this->num_pages = cache_size / PAGE_SIZE / 100;
+		cache_hit_ratio = ratio;
+		seq = 0;
+		cache_hit_seq = 0;
+	}
+
+	off_t next_offset();
 };
 
 off_t *load_java_dump(const std::string &file, long &num_offsets);
@@ -342,45 +294,6 @@ public:
 
 	bool has_next() {
 		return num < range;
-	}
-};
-
-/**
- * this make sure requests are evenly distributed among disks in RAID0
- * as long as the number of threads are multiple of the number of 
- * disks in RAID0.
- */
-class RAID0_rand_permute_workload: public workload_gen
-{
-	int nthreads;
-	int thread_id;
-	int entry_size;
-	local_rand_permute_workload *local_gen;
-	static local_rand_permute_workload *gen;
-public:
-	RAID0_rand_permute_workload(long npages, int entry_size,
-			int nthreads, int thread_id) {
-		this->nthreads = nthreads;
-		this->entry_size = entry_size;
-		this->thread_id = thread_id;
-		if (gen == NULL) {
-			gen = new local_rand_permute_workload(0,
-				npages * PAGE_SIZE / entry_size / nthreads, 1);
-		}
-		local_gen = new local_rand_permute_workload(0,
-				npages * PAGE_SIZE / entry_size / nthreads, 1);
-	}
-
-	virtual ~RAID0_rand_permute_workload() {
-		delete local_gen;
-	}
-
-	off_t next_offset() {
-		return (thread_id + local_gen->next_offset() * nthreads) * entry_size;
-	}
-
-	bool has_next() {
-		return local_gen->has_next();
 	}
 };
 

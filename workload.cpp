@@ -3,22 +3,24 @@
 int workload_gen::default_entry_size;
 int workload_gen::default_access_method = -1;
 
-off_t stride_workload::next_offset() {
-	off_t ret = curr;
-	num++; 
-
-	/*
-	 * we stride with PAGE_SIZE.
-	 * When we reach the end of the range,
-	 * we start over but move one ahead from the last startover.
-	 */
-	curr += stride;
-	if (curr >= last) {
-		curr = first + (curr & (stride - 1));
-		curr++;
+off_t cache_hit_defined_workload::next_offset()
+{
+	if (seq < cache_hit_ratio * 100 && cached_pages.size() > 0) {
+		// cache hit
+		seq = (seq + 1) % 100;
+		off_t ret = cached_pages[cache_hit_seq];
+		cache_hit_seq = (cache_hit_seq + 1) % cached_pages.size();
+		return ret;
 	}
-	ret *= entry_size;
-	return ret;
+	else {
+		// cache miss
+		seq = (seq + 1) % 100;
+		off_t ret = global_rand_permute_workload::next_offset();
+		if (cached_pages.size() >= (size_t) num_pages)
+			cached_pages.pop_front();
+		cached_pages.push_back(ret);
+		return ret;
+	}
 }
 
 off_t *load_java_dump(const std::string &file, long &num_offsets)
@@ -135,4 +137,3 @@ unlock:
 }
 
 workload_chunk *balanced_workload::chunks;
-local_rand_permute_workload *RAID0_rand_permute_workload::gen;
