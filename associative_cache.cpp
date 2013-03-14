@@ -1086,7 +1086,7 @@ void associative_cache::init(io_interface *underlying)
 	// shared by multiple threads, we need to make sure only one flush
 	// thread is created.
 	pthread_mutex_lock(&init_mutex);
-	if (get_flush_thread() == NULL) {
+	if (get_flush_thread() == NULL && underlying) {
 		// We need to duplicate the underlying IO because it may not
 		// be thread-safe.
 		flush_thread *thread = create_flush_thread(underlying->clone());

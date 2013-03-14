@@ -25,8 +25,8 @@ workload-gen: workload-gen.o
 memory-fill: memory-fill.o
 	$(CXX) -o memory-fill memory-fill.o
 
-cache_evaluator: cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o
-	$(CXX) -o cache_evaluator cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o $(LDFLAGS) -L../nbds.0.4.3/ -lnbds
+cache_evaluator: cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o ../thread.o
+	$(CXX) -o cache_evaluator cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o ../thread.o $(LDFLAGS) -L../nbds.0.4.3/ -lnbds
 
 clean:
 	rm *.o

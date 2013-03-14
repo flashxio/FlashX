@@ -29,23 +29,28 @@ int main(int argc, char *argv[])
 		global_cache = new LRU2Q_cache(cache_size);
 	}
 	else if (cache_type == "associative") {
-		global_cache = new associative_cache(cache_size, MAX_CACHE_SIZE);
+		global_cache = new associative_cache(cache_size, MAX_CACHE_SIZE, 0, 1);
 	}
 	else if (cache_type == "hash-index") {
-		global_cache = new hash_index_cache(cache_size);
+		global_cache = new hash_index_cache(cache_size, 0);
 	}
-	global_cache->init();
+	global_cache->init(NULL);
 
 	int num_hits = 0;
 	int num_accesses_in_pages = 0;
 	int num_accesses = 0;
-	file_workload *gen = new file_workload(workload_file, 1);
+
+	long length = 0;
+	workload_t *workloads = load_file_workload(workload_file, length);
+	printf("There are %ld requests\n", length);
+	file_workload *gen = new file_workload(workloads, length, 0, length);
 	int size = gen->size();
 	while (gen->has_next()) {
 		workload_t workload = gen->next();
 		off_t off = ROUND_PAGE(workload.off);
 		off_t end = workload.off + workload.size;
 		num_accesses++;
+		assert(off < end);
 		while (off < end) {
 			off_t old_off = -1;
 			thread_safe_page *pg = (thread_safe_page *) global_cache->search(off, old_off);
@@ -60,5 +65,6 @@ int main(int argc, char *argv[])
 			off += PAGE_SIZE;
 		}
 	}
-	printf("There are %d accesses in pages and %d hits\n", num_accesses_in_pages, num_hits);
+	printf("There are %d accesses in pages in the second half and %d hits\n",
+			num_accesses_in_pages, num_hits);
 }
