@@ -1033,28 +1033,18 @@ int global_cached_io::preload(off_t start, long size) {
 		exit(1);
 	}
 
-	/* open the file. It's a hack, but it works for now. */
-	underlying->init();
-
 	assert(ROUND_PAGE(start) == start);
 	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
 		off_t old_off = -1;
-		thread_safe_page *p = (thread_safe_page *) (get_global_cache()->search(ROUND_PAGE(offset), old_off));
+		thread_safe_page *p = (thread_safe_page *) (get_global_cache()->search(
+					ROUND_PAGE(offset), old_off));
+		// This is mainly for testing. I don't need to really read data from disks.
 		if (!p->data_ready()) {
-			ssize_t ret = underlying->access((char *) p->get_data(),
-					ROUND_PAGE(offset), PAGE_SIZE, READ);
-			if (ret < 0) {
-				p->dec_ref();
-				perror("read");
-				return ret;
-			}
 			p->set_io_pending(false);
 			p->set_data_ready(true);
 		}
 		p->dec_ref();
 	}
-	/* close the file as it will be opened again in the real workload. */
-	underlying->cleanup();
 	return 0;
 }
 
