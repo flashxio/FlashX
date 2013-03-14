@@ -283,7 +283,8 @@ int access_page_callback::multibuf_invoke(io_request *request)
 			}
 			p->dec_ref();
 		}
-		cache->get_flush_thread()->dirty_pages(dirty_pages, num_dirty_pages);
+		if (cache->get_flush_thread())
+			cache->get_flush_thread()->dirty_pages(dirty_pages, num_dirty_pages);
 	}
 	else {
 		io_request *orig = request->get_orig();
@@ -314,7 +315,8 @@ int access_page_callback::invoke(io_request *request)
 	 * it is issued by the flushing thread.
 	 */
 	if (request->get_orig() == NULL) {
-		cache->get_flush_thread()->request_callback(*request);
+		if (cache->get_flush_thread())
+			cache->get_flush_thread()->request_callback(*request);
 		return 0;
 	}
 
@@ -350,7 +352,7 @@ int access_page_callback::invoke(io_request *request)
 		assert(orig->get_orig() == NULL);
 		thread_safe_page *dirty = __complete_req(orig, p);
 		// TODO maybe I should make it support multi-request callback.
-		if (dirty)
+		if (dirty && cache->get_flush_thread())
 			cache->get_flush_thread()->dirty_pages(&dirty, 1);
 		io_request partial;
 		extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
@@ -366,7 +368,7 @@ int access_page_callback::invoke(io_request *request)
 			io_request *next = old->get_next_req();
 			assert(old->get_num_bufs() == 1);
 			thread_safe_page *dirty = __complete_req(old, p);
-			if (dirty)
+			if (dirty && cache->get_flush_thread())
 				cache->get_flush_thread()->dirty_pages(&dirty, 1);
 
 			cached_io->finalize_request(*old);
@@ -688,8 +690,9 @@ int global_cached_io::handle_pending_requests()
 	// the place where we just finish writing old dirty pages to the disk.
 	// The only possible reason is that we happen to overwrite the entire
 	// page.
-	get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
-			dirty_pages.size());
+	if (get_global_cache()->get_flush_thread())
+		get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
+				dirty_pages.size());
 	return tot;
 }
 
@@ -909,8 +912,9 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			read(req, pages, pg_idx);
 		}
 	}
-	get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
-			dirty_pages.size());
+	if (get_global_cache()->get_flush_thread())
+		get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
+				dirty_pages.size());
 	return 0;
 }
 
@@ -1020,7 +1024,7 @@ ssize_t global_cached_io::access(char *buf, off_t offset,
 		/* I assume the data I read never crosses the page boundary */
 		memcpy(buf, (char *) p->get_data() + page_off, size);
 	p->unlock();
-	if (is_page_set_dirty)
+	if (is_page_set_dirty && get_global_cache()->get_flush_thread())
 		get_global_cache()->get_flush_thread()->dirty_pages(&p, 1);
 	p->dec_ref();
 	ret = size;
