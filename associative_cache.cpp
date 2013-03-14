@@ -833,7 +833,7 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 	this->node_id = node_id;
 	level = 0;
 	split = 0;
-	height = CELL_SIZE / 2 + 1;
+	height = CELL_MIN_NUM_PAGES;
 	expand_cell_idx = 0;
 	this->expandable = expandable;
 	this->manager = new memory_manager(max_cache_size);
@@ -844,7 +844,7 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 			// cache size at the beginning.
 			|| !expandable)
 		init_cache_size = cache_size;
-	int min_cell_size = (CELL_SIZE + 1) / 2;
+	int min_cell_size = CELL_MIN_NUM_PAGES;
 	if (init_cache_size < min_cell_size * PAGE_SIZE)
 		init_cache_size = min_cell_size * PAGE_SIZE;
 	int npages = init_cache_size / PAGE_SIZE;
