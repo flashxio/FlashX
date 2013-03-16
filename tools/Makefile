@@ -5,7 +5,7 @@ CXX = g++
 
 LDFLAGS = -lpthread -lnuma -laio
 
-all: stat create_file rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator
+all: stat create_file rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator java_dump2c_dump
 
 stat: stat.o ../workload.h
 	$(CXX) -o stat stat.o
@@ -24,6 +24,9 @@ workload-gen: workload-gen.o
 
 memory-fill: memory-fill.o
 	$(CXX) -o memory-fill memory-fill.o
+
+java_dump2c_dump: java_dump2c_dump.o ../workload.o
+	$(CXX) -o java_dump2c_dump java_dump2c_dump.o ../workload.o $(LDFLAGS)
 
 cache_evaluator: cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o ../thread.o
 	$(CXX) -o cache_evaluator cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o ../thread.o $(LDFLAGS) -L../nbds.0.4.3/ -lnbds
