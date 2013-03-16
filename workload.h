@@ -39,6 +39,12 @@ public:
 		return default_access_method;
 	}
 
+	workload_gen() {
+		default_entry_size = PAGE_SIZE;
+		default_access_method = READ;
+		memset(&access, 0, sizeof(access));
+	}
+
 	/**
 	 * This is a wrapper to the original interface `next_offset'
 	 * so more info of an access is provided.
