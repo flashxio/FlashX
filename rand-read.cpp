@@ -463,9 +463,7 @@ int main(int argc, char *argv[])
 						static workload_t *workloads = NULL;
 						if (workloads == NULL)
 							workloads = load_file_workload(workload_file, length);
-						int part_length = length / nthreads;
-						gen = new file_workload(workloads, length, part_length * j,
-								part_length * (j + 1));
+						gen = new file_workload(workloads, length, j, nthreads);
 						break;
 					}
 				default:

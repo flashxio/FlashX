@@ -236,19 +236,23 @@ class file_workload: public workload_gen
 	long curr;
 	long end;
 public:
-	file_workload(workload_t workloads[], long length, long start, long end) {
-		assert(length >= end);
-		this->workloads = (workload_t *) valloc((end - start)
-				* sizeof(workload_t));
-		memcpy(this->workloads, &workloads[start],
-				sizeof(workload_t) * (end - start));
-		this->end = end - start;
+	file_workload(workload_t workloads[], long length, int thread_id,
+			int nthreads) {
+		int local_length = length / nthreads;
 		this->curr = 0;
+		this->end = local_length;
+		this->workloads = new workload_t[local_length];
+		memset(this->workloads, 0, sizeof(workload_t) * local_length);
+		int i = 0;
+		for (long idx = thread_id; i < local_length
+				&& idx < length; idx += nthreads, i++)
+			this->workloads[i] = workloads[idx];
+		assert(i == local_length);
 		printf("start at %ld end at %ld\n", curr, end);
 	}
 
 	virtual ~file_workload() {
-		free(workloads);
+		delete [] workloads;
 	}
 
 	const workload_t &next() {
