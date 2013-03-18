@@ -43,6 +43,10 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			 */
 			hashtable->remove(removed->get_offset() / PAGE_SIZE, removed);
 			// TODO busy wait
+#ifdef STATISTICS
+			if (removed->pinCount() > 0)
+				num_remove_pinned.inc(1);
+#endif
 			while (removed->pinCount() > 0) {}
 
 			// Now we know no others have a reference to the frame.
@@ -115,6 +119,9 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 				 * gclock algorithm later.
 				 * This case should happen very rarely.
 				 */
+#ifdef STATISTICS
+				num_failed_add2hash.inc(1);
+#endif
 				new_entry->evictUnshared();
 				continue;
 			}
@@ -123,6 +130,9 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			 * So we should set the new page unused, and gclock algorithm
 			 * will use evict later.
 			 */
+#ifdef STATISTICS
+			num_failed_add2hash.inc(1);
+#endif
 			new_entry->evictUnshared();
 			prev_entry->incrWC();
 			return prev_entry;
@@ -135,12 +145,17 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 
 page *hash_index_cache::search(off_t offset, off_t &old_off) {
 	frame *entry = hashtable->get(offset / PAGE_SIZE);
-	if (entry && entry->pin()) {
+	bool pin_ret = true;
+	if (entry && (pin_ret = entry->pin())) {
 		entry->incrWC();
 		/* We don't change old_off here to indicate it's a cache hit. */
 		return entry;
 	}
 	else {
+#ifdef STATISTICS
+		if (!pin_ret)
+			num_failed_pins.inc(1);
+#endif
 		entry = addEntry(offset, NULL);
 		/*
 		 * since the key of a frame nevers changes,

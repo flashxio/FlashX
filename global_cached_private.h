@@ -153,8 +153,10 @@ public:
 		static int seen_threads = 0;
 		seen_threads++;
 		tot_hits += cache_hits;
-		if (seen_threads == nthreads)
+		if (seen_threads == nthreads) {
 			printf("there are %d cache hits\n", tot_hits);
+			global_cache->print_stat();
+		}
 		printf("there are %d waits\n", num_waits);
 	}
 #endif

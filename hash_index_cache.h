@@ -122,6 +122,11 @@ class hash_index_cache: public page_cache
 	atomic_unsigned_integer num_pages;
 	int node_id;
 
+	// for statistics
+	atomic_integer num_failed_pins;
+	atomic_integer num_remove_pinned;
+	atomic_integer num_failed_add2hash;
+
 #ifdef PER_CPU
 	// For frame allocator
 	pthread_key_t allocator_key;
@@ -190,6 +195,11 @@ public:
 
 	frame *addEntry(off_t offset, char *data);
 	page *search(off_t offset, off_t &old_off);
+
+	virtual void print_stat() const {
+		printf("There are %d failed pins, %d removed frames pinned and %d times failing to add a frame to the hashtable\n",
+				num_failed_pins.get(), num_remove_pinned.get(), num_failed_add2hash.get());
+	}
 };
 
 #endif

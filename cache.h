@@ -372,6 +372,9 @@ public:
 	virtual int get_node_id() const {
 		return -1;
 	}
+
+	virtual void print_stat() const {
+	}
 };
 
 /**
