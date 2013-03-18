@@ -867,6 +867,9 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 	int max_ncells = max_npages / min_cell_size;
 	for (int i = 1; i < max_ncells / init_ncells; i++)
 		cells_table.push_back(NULL);
+
+	if (expandable && cache_size > init_cache_size)
+		expand((cache_size - init_cache_size) / PAGE_SIZE);
 }
 
 class associative_flush_thread: public flush_thread
