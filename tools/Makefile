@@ -12,7 +12,7 @@ CXXFLAGS = -g -I.. -I../nbds.0.4.3/include/ -std=c++0x $(TRACE_FLAGS)
 
 LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS)
 
-all: stat create_file rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator java_dump2c_dump
+all: stat create_file rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator java_dump2c_dump eval_expand_SA_cache
 
 stat: stat.o ../workload.h
 	$(CXX) -o stat stat.o $(LDFLAGS)
@@ -37,6 +37,9 @@ java_dump2c_dump: java_dump2c_dump.o ../workload.o
 
 cache_evaluator: cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o ../thread.o ../common.o
 	$(CXX) -o cache_evaluator cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o ../thread.o ../common.o $(LDFLAGS) -L../nbds.0.4.3/ -lnbds
+
+eval_expand_SA_cache: eval_expand_SA_cache.o ../associative_cache.o ../workload.o ../slab_allocator.o ../memory_manager.o ../messaging.o ../thread.o ../common.o
+	$(CXX) -o eval_expand_SA_cache eval_expand_SA_cache.o ../associative_cache.o ../workload.o ../slab_allocator.o ../memory_manager.o ../messaging.o ../thread.o ../common.o $(LDFLAGS)
 
 clean:
 	rm *.o
