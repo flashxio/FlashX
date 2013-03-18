@@ -496,6 +496,11 @@ public:
 	void sanity_check() const;
 
 	virtual void init(io_interface *underlying);
+
+	void print_stat() const {
+		printf("SA-cache: ncells: %d, height: %d, split: %d\n",
+				get_num_cells(), height, split);
+	}
 };
 
 #endif
