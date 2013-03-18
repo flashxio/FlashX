@@ -10,6 +10,9 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 	for (;;) {
 		frame *new_entry = allocator->alloc();
 		*new_entry = frame(key, data);
+		bool ret = new_entry->pin();
+		assert(ret);
+		assert(new_entry->pinCount() == 1);
 		/*
 		 * all allocated frames will be added to the clock buffer.
 		 * so if the frame can't be added to the hashtable, 
@@ -39,10 +42,11 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			 * is replace() below.
 			 */
 			hashtable->remove(removed->get_offset() / PAGE_SIZE, removed);
-			/* TODO There is a problem here. How can I guarantee that
-			 * no other threads have a reference to this frame?
-			 * It's possible a thread gets a reference to the page before
-			 * the page is removed from the hashtable. */
+			// TODO busy wait
+			while (removed->pinCount() > 0) {}
+
+			// Now we know no others have a reference to the frame.
+
 			char *pg = (char *) removed->volatileGetValue();
 			if (pg) {
 				/*
@@ -123,15 +127,9 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 			prev_entry->incrWC();
 			return prev_entry;
 		}
-		if (new_entry->pin()) {
-			new_entry->incrWC();
-			return new_entry;
-		}
-		else {
-			// In a rare case, we can't pin the new frame.
-			// we should remove it from the hash table and try again.
-			hashtable->remove(key / PAGE_SIZE, new_entry);
-		}
+
+		new_entry->incrWC();
+		return new_entry;
 	}
 }
 
