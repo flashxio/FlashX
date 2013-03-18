@@ -669,18 +669,18 @@ int associative_cache::expand(int npages)
 			/* We first try to add pages to the existing cells. */
 			hash_cell *cell = get_cell(expand_cell_idx);
 			while (height <= CELL_SIZE && pg_idx < npages) {
+				int num_missing;
+
 				assert(pages[pg_idx]);
 				// We should skip the cells with more than `height'.
-				if (cell->get_num_pages() >= height) {
-					expand_cell_idx++;
-					cell = get_cell(expand_cell_idx);
-					continue;
-				}
+				if (cell->get_num_pages() >= height)
+					goto next_cell;
 
-				int num_missing = height - cell->get_num_pages();
+				num_missing = height - cell->get_num_pages();
 				num_missing = min(num_missing, npages - pg_idx);
 				cell->add_pages(&pages[pg_idx], num_missing);
 				pg_idx += num_missing;
+next_cell:
 				expand_cell_idx++;
 				if (expand_cell_idx >= (unsigned) orig_ncells) {
 					expand_cell_idx = 0;
