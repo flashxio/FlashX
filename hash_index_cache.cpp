@@ -105,6 +105,8 @@ frame *hash_index_cache::addEntry(off_t key, char *data) {
 				 * Therefore, I can't purge the page.
 				 */
 				if (hashtable->replace(key / PAGE_SIZE, prev_entry, new_entry)) {
+					new_entry->incrWC();
+					// TODO we need to remove the previous entry.
 					/*
 					 * this place is different from the code
 					 * in the paper. The value of the frame
