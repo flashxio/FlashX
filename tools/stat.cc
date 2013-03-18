@@ -2,6 +2,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <limits.h>
 
 #include <vector>
 #include <algorithm>
@@ -43,8 +44,16 @@ int main(int argc, char *argv[])
 	std::tr1::unordered_set<off_t> pages;
 	int num_reads = 0;
 	int num_writes = 0;
+	int max_size = 0;
+	int min_size = INT_MAX;
+	long tot_size = 0;
 	for (int i = 0; i < num_accesses; i++) {
 		off_t page_off = ROUND_PAGE(workloads[i].off);
+		if (max_size < workloads[i].size)
+			max_size = workloads[i].size;
+		if (min_size > workloads[i].size)
+			min_size = workloads[i].size;
+		tot_size += workloads[i].size;
 		off_t last_page = ROUNDUP_PAGE(workloads[i].off + workloads[i].size);
 		int num_pages = (last_page - page_off) / PAGE_SIZE;
 		for (; page_off < last_page; page_off += PAGE_SIZE)
@@ -55,6 +64,8 @@ int main(int argc, char *argv[])
 			num_writes += num_pages;
 	}
 
+	printf("min request size: %d, max req size: %d, avg size: %ld\n",
+			min_size, max_size, tot_size / num_accesses);
 	printf("there are %d reads\n", num_reads);
 	printf("there are %d writes\n", num_writes);
 	printf("there are %ld accessed pages\n", pages.size());
