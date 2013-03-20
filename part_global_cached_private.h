@@ -5,12 +5,12 @@
 
 #include <tr1/unordered_map>
 
-#include "access_mapper.h"
 #include "parameters.h"
 #include "messaging.h"
 #include "garbage_collection.h"
 #include "global_cached_private.h"
 #include "thread.h"
+#include "file_mapper.h"
 
 class part_global_cached_io;
 
@@ -57,10 +57,11 @@ class part_global_cached_io: public io_interface
 	// group id <-> msg sender
 	std::tr1::unordered_map<int, msg_sender<io_request> *> req_senders;
 
-	access_mapper *mapper;
+	file_mapper *mapper;
 	int hash_req(io_request *req)
 	{
-		return mapper->map(req->get_offset());
+		int idx = mapper->map2file(req->get_offset() / PAGE_SIZE);
+		return mapper->get_file_node_id(idx);
 	}
 
 	io_interface *underlying;
@@ -87,13 +88,14 @@ public:
 	}
 
 	~part_global_cached_io() {
+		delete mapper;
 		// TODO delete all senders
 	}
 
 	int init();
 
 	part_global_cached_io(int num_groups, io_interface *underlying,
-			int idx, long cache_size, int cache_type, access_mapper *mapper);
+			int idx, long cache_size, int cache_type, file_mapper *mapper);
 
 	virtual page_cache *get_global_cache() {
 		return groups[group_idx].cache;

@@ -298,7 +298,7 @@ int part_global_cached_io::init() {
 
 part_global_cached_io::part_global_cached_io(int num_groups,
 		io_interface *underlying, int idx, long cache_size,
-		int cache_type, access_mapper *mapper): io_interface(
+		int cache_type, file_mapper *mapper): io_interface(
 			underlying->get_node_id()) {
 	this->mapper = mapper->clone();
 	this->thread_id = idx;

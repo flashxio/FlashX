@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
 	bool preload = false;
 	long cache_size = 512 * 1024 * 1024;
 	int access_option = -1;
-	int ret;
+	int ret = 0;
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
 	int num_nodes = 1;
@@ -303,7 +303,13 @@ int main(int argc, char *argv[])
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);
-	NUMA_access_mapper *NUMA_mapper = new NUMA_access_mapper(files);
+	file_mapper *mapper = new RAID0_mapper(files);
+
+	std::vector<int> indices;
+	for (int i = 0; i < mapper->get_num_files(); i++)
+		indices.push_back(i);
+	// The partition contains all files.
+	logical_file_partition global_partition(indices, mapper);
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
@@ -314,18 +320,18 @@ int main(int argc, char *argv[])
 	int shift = 0;
 	long start;
 	long end = 0;
-	const char *cnames[num_files];
-	int num;
 
 	disk_read_thread **read_threads = new disk_read_thread*[num_files];
 	std::set<int> node_ids;
 	for (int k = 0; k < num_files; k++) {
-		cnames[k] = files[k].name.c_str();
 		if (access_option == GLOBAL_CACHE_ACCESS
 				|| access_option == PART_GLOBAL_ACCESS
-				|| access_option == REMOTE_ACCESS)
-			read_threads[k] = new disk_read_thread(cnames[k],
+				|| access_option == REMOTE_ACCESS) {
+			std::vector<int> indices(1, k);
+			logical_file_partition partition(indices, mapper);
+			read_threads[k] = new disk_read_thread(partition,
 					npages * PAGE_SIZE / num_files, files[k].node_id);
+		}
 		node_ids.insert(files[k].node_id);
 	}
 
@@ -336,7 +342,6 @@ int main(int argc, char *argv[])
 		node_ids.insert(i);
 	std::vector<int> node_id_array(node_ids.begin(), node_ids.end());
 
-	num = num_files;
 	assert(nthreads % num_nodes == 0);
 	assert(node_id_array.size() >= (unsigned) num_nodes);
 	int nthreads_per_node = nthreads / num_nodes;
@@ -348,11 +353,13 @@ int main(int argc, char *argv[])
 			switch (access_option) {
 				case READ_ACCESS:
 					threads[j] = new thread_private(j, entry_size,
-							new buffered_io(cnames, num, npages * PAGE_SIZE, node_id));
+							new buffered_io(global_partition,
+								npages * PAGE_SIZE, node_id));
 					break;
 				case DIRECT_ACCESS:
 					threads[j] = new thread_private(j, entry_size,
-							new direct_io(cnames, num, npages * PAGE_SIZE, node_id));
+							new direct_io(global_partition, npages * PAGE_SIZE,
+								node_id));
 					break;
 #if ENABLE_AIO
 				case AIO_ACCESS:
@@ -361,19 +368,20 @@ int main(int argc, char *argv[])
 						if (depth_per_file == 0)
 							depth_per_file = 1;
 						threads[j] = new thread_private(j, entry_size,
-								new async_io(cnames, num, npages * PAGE_SIZE,
+								new async_io(global_partition, npages * PAGE_SIZE,
 									depth_per_file, node_id));
 					}
 					break;
 #endif
 				case REMOTE_ACCESS:
 					threads[j] = new thread_private(j, entry_size,
-							new remote_disk_access(read_threads, num_files, node_id));
+							new remote_disk_access(read_threads, num_files,
+								mapper, node_id));
 					break;
 				case GLOBAL_CACHE_ACCESS:
 					{
 						io_interface *underlying = new remote_disk_access(
-								read_threads, num_files, node_id);
+								read_threads, num_files, mapper, node_id);
 						global_cached_io *io = new global_cached_io(underlying,
 								cache_size, cache_type);
 						if (preload)
@@ -384,10 +392,10 @@ int main(int argc, char *argv[])
 				case PART_GLOBAL_ACCESS:
 					{
 						io_interface *underlying = new remote_disk_access(
-								read_threads, num_files, node_id);
+								read_threads, num_files, mapper, node_id);
 						threads[j] = new thread_private(j, entry_size,
 								new part_global_cached_io(num_nodes, underlying,
-									j, cache_size, cache_type, NUMA_mapper));
+									j, cache_size, cache_type, mapper));
 					}
 					break;
 				default:
@@ -484,7 +492,7 @@ int main(int argc, char *argv[])
 		disk_read_thread *t = read_threads[i];
 		if (t)
 			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits\n",
-					cnames[i], read_threads[i]->get_queue()->get_num_empty(),
+					mapper->get_file_name(i).c_str(), read_threads[i]->get_queue()->get_num_empty(),
 					read_threads[i]->get_queue()->get_num_empty(), read_threads[i]->get_num_accesses(),
 					read_threads[i]->get_num_iowait());
 	}

@@ -50,10 +50,12 @@ const int NUMA_NUM_PROCESS_MSGS = 20;
 const int NUMA_NUM_PROCESS_THREADS = 3;
 
 const int CONST_A = 27644437;
-const int CONST_B = 131;
 const long CONST_P = 68718952447L;
 
+const int FILE_CONST_A = 1871;
+const int FILE_CONST_P = 10007;
+
 /* The striping block size for software RAID-0 */
-const int STRIPE_BLOCK_SIZE = 7;
+const int STRIPE_BLOCK_SIZE = 1;
 
 #endif

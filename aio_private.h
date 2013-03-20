@@ -28,14 +28,12 @@ class async_io: public buffered_io
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:
 	/**
-	 * @names: the names of files to be accessed
-	 * @num: the number of files
 	 * @size: the size of data to be accessed in all files
 	 * @aio_depth_per_file
 	 * @node_id: the NUMA node where the disks to be read are connected to.
 	 */
-	async_io(const char *names[], int num, long size, int aio_depth_per_file,
-			int node_id);
+	async_io(const logical_file_partition &partition, long size,
+			int aio_depth_per_file, int node_id);
 
 	virtual ~async_io();
 

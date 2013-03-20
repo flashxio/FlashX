@@ -3,8 +3,8 @@
 int buffered_io::init() {
 	int ret;
 
-	for (int i = 0; i < num; i++) {
-		fds[i] = open(file_names[i], flags);
+	for (int i = 0; i < partition.get_num_files(); i++) {
+		fds[i] = open(partition.get_file_name(i).c_str(), flags);
 		if (fds[i] < 0) {
 			perror("open");
 			exit (1);

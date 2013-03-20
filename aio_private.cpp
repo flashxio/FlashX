@@ -158,10 +158,11 @@ void aio_callback(io_context_t ctx, struct iocb* iocb,
 	tcb->aio->return_cb(tcb);
 }
 
-async_io::async_io(const char *names[], int num,
-		long size, int aio_depth_per_file, int node_id): buffered_io(names,
-			num, size, node_id, O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file * num),
-		allocator(PAGE_SIZE, AIO_DEPTH * PAGE_SIZE, INT_MAX, node_id)
+async_io::async_io(const logical_file_partition &partition, long size,
+		int aio_depth_per_file, int node_id): buffered_io(partition, size,
+			node_id, O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file *
+				partition.get_num_files()), allocator(PAGE_SIZE,
+				AIO_DEPTH * PAGE_SIZE, INT_MAX, node_id)
 {
 	printf("aio is used\n");
 	buf_idx = 0;
@@ -212,9 +213,11 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	assert(tcb->req.get_offset() % MIN_BLOCK_SIZE == 0);
 	assert((long) tcb->req.get_buf() % MIN_BLOCK_SIZE == 0);
 	int io_type = tcb->req.get_access_method() == READ ? A_READ : A_WRITE;
+	block_identifier bid;
+	get_partition().map(tcb->req.get_offset() / PAGE_SIZE, bid);
 	if (tcb->req.get_num_bufs() == 1)
 		return make_io_request(ctx, get_fd(tcb->req.get_offset()),
-				tcb->req.get_size(), tcb->req.get_offset(), tcb->req.get_buf(),
+				tcb->req.get_size(), bid.off * PAGE_SIZE, tcb->req.get_buf(),
 				io_type, cb);
 	else {
 		int num_bufs = tcb->req.get_num_bufs();
@@ -228,7 +231,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 				 * the space for the IO vector is stored
 				 * in the callback structure.
 				 */
-				tcb->req.get_vec(), num_bufs, tcb->req.get_offset(),
+				tcb->req.get_vec(), num_bufs, bid.off * PAGE_SIZE,
 				io_type, cb);
 	}
 }

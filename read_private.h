@@ -4,16 +4,15 @@
 #include <sys/time.h>
 
 #include "thread_private.h"
+#include "file_partition.h"
 
 #define MIN_BLOCK_SIZE 512
 
 class buffered_io: public io_interface
 {
+	logical_file_partition partition;
 	/* the array of files that it's going to access */
-	const char **file_names;
-	int *fds;
-	/* the number of files */
-	int num;
+	std::vector<int> fds;
 	/* the size of data it's going to access, and it'll be divided for each file */
 	long size;
 
@@ -24,25 +23,19 @@ class buffered_io: public io_interface
 	long num_reads;
 #endif
 public:
-	buffered_io(const char *names[], int num, long size, int node_id,
-			int flags = O_RDWR): io_interface(node_id) {
+	buffered_io(const logical_file_partition &partition_, long size,
+			int node_id, int flags = O_RDWR): io_interface(node_id), partition(
+				partition_), fds(partition.get_num_files()) {
 		this->flags = flags;
 #ifdef STATISTICS
 		read_time = 0;
 		num_reads = 0;
 #endif
 		remote_reads = 0;
-		file_names = new const char *[num];
-		for (int i = 0; i < num; i++)
-			file_names[i] = names[i];
-		fds = new int[num];
-		this->num = num;
 		this->size = size;
 	}
 
 	virtual ~buffered_io() {
-		delete [] file_names;
-		delete [] fds;
 	}
 
 	long get_size() const {
@@ -54,34 +47,27 @@ public:
 		return size;
 	}
 
-	int get_fd_idx(long offset) {
-		int fd_idx = (offset / PAGE_SIZE) % num;
-		if (fd_idx >= num) {
-			printf("offset: %ld, fd_idx: %d, size: %ld, num: %d\n", offset, fd_idx, this->size, num);
-		}
-#if NUM_NODES > 1
-		int node_num = idx / (nthreads / NUM_NODES);
-		if (node_num != fd_idx) {
-			remote_reads++;
-		}
-#endif
-		assert (fd_idx < num);
-		return fd_idx;
-	}
-
 	/* get the file descriptor corresponding to the offset. */
 	int get_fd(long offset) {
-		return fds[get_fd_idx(offset)];
+		if (fds.size() == 1)
+			return fds[0];
+
+		int idx = partition.map2file(offset / PAGE_SIZE);
+		return fds[idx];
 	}
 
 	int num_open_files() {
-		return num;
+		return partition.get_num_files();
+	}
+
+	const logical_file_partition &get_partition() const {
+		return partition;
 	}
 
 	int init();
 
 	void cleanup() {
-		for (int i = 0; i < num; i++)
+		for (int i = 0; i < partition.get_num_files(); i++)
 			close(fds[i]);
 	}
 

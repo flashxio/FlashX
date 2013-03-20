@@ -2,8 +2,10 @@
 #include "parameters.h"
 
 remote_disk_access::remote_disk_access(disk_read_thread **remotes,
-			int num_remotes, int node_id): io_interface(node_id)
+		int num_remotes, file_mapper *mapper,
+		int node_id): io_interface(node_id)
 {
+	assert(num_remotes == mapper->get_num_files());
 	senders = new msg_sender<io_request> *[num_remotes];
 	queues = new thread_safe_FIFO_queue<io_request> *[num_remotes];
 	num_senders = num_remotes;
@@ -20,6 +22,7 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 		queues[i] = queue;
 	}
 	cb = NULL;
+	this->block_mapper = mapper;
 }
 
 remote_disk_access::~remote_disk_access()
@@ -44,6 +47,7 @@ io_interface *remote_disk_access::clone() const
 	copy->cb = this->cb;
 	copy->total_size = this->total_size;
 	copy->local_size = this->local_size;
+	copy->block_mapper = this->block_mapper;
 	return copy;
 }
 
@@ -78,7 +82,9 @@ ssize_t remote_disk_access::access(io_request *requests, int num)
 		// can be accessed from the remote disk access.
 		// and I assume the request size is aligned with the strip size.
 		off_t pg_off = requests[i].get_offset() / PAGE_SIZE;
-		int idx = file_hash(pg_off, num_senders);
+		struct block_identifier bid;
+		block_mapper->map(pg_off, bid);
+		int idx = bid.idx;
 		int ret = senders[idx]->send_cached(&requests[i]);
 		/* send should always succeed. */
 		assert(ret > 0);

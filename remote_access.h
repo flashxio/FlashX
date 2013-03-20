@@ -4,6 +4,7 @@
 #include "disk_read_thread.h"
 #include "messaging.h"
 #include "container.h"
+#include "file_mapper.h"
 
 /**
  * This class is to help the local thread send IO requests to remote threads
@@ -17,6 +18,7 @@ class remote_disk_access: public io_interface
 	thread_safe_FIFO_queue<io_request> **queues;
 	int num_senders;
 	callback *cb;
+	file_mapper *block_mapper;
 
 	// The total size of data accessible with this IO interface.
 	long total_size;
@@ -28,10 +30,11 @@ class remote_disk_access: public io_interface
 		queues = NULL;
 		num_senders = 0;
 		cb = NULL;
+		block_mapper = NULL;
 	}
 public:
-	remote_disk_access(disk_read_thread **remotes,
-			int num_remotes, int node_id);
+	remote_disk_access(disk_read_thread **remotes, int num_remotes,
+			file_mapper *mapper, int node_id);
 
 	~remote_disk_access();
 

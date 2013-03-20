@@ -76,12 +76,7 @@ static inline std::string itoa(int n)
 
 static inline int universal_hash(off_t v, int modulo)
 {
-	return (v * CONST_A + CONST_B) % CONST_P % modulo;
-}
-
-static inline int file_hash(off_t v, int modulo)
-{
-	return v / STRIPE_BLOCK_SIZE % modulo;
+	return (v * CONST_A) % CONST_P % modulo;
 }
 
 int retrieve_data_files(std::string file_file,
