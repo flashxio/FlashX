@@ -5,7 +5,7 @@
 
 int main()
 {
-	associative_cache *cache = new associative_cache(16 * 1024 * 1024, 512 * 1024 * 1024);
+	associative_cache *cache = new associative_cache(16 * 1024 * 1024, 512 * 1024 * 1024, 0, 1);
 	std::vector<off_t> added_offs;
 	std::set<off_t> evicted_offs;
 	for (int i = 0; i < 4096; i++) {
