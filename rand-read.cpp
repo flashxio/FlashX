@@ -185,40 +185,6 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-int retrieve_data_files(std::string file_file,
-		std::vector<file_info> &data_files)
-{
-	char *line = NULL;
-	size_t size = 0;
-	int line_length;
-	FILE *fd = fopen(file_file.c_str(), "r");
-	if (fd == NULL) {
-		perror("fopen");
-		return 0;
-	}
-	while ((line_length = getline(&line, &size, fd)) > 0) {
-		line[line_length - 1] = 0;
-		char *colon = strstr(line, ":");
-		if (colon == NULL) {
-			free(line);
-			fprintf(stderr, "can't find : in %s\n", line);
-			goto out;
-		}
-		*colon = 0;
-		file_info info;
-		info.node_id = atoi(line);
-		colon++;
-		info.name = colon;
-		data_files.push_back(info);
-		free(line);
-		line = NULL;
-		size = 0;
-	}
-out:
-	fclose(fd);
-	return data_files.size();
-}
-
 int main(int argc, char *argv[])
 {
 	bool preload = false;

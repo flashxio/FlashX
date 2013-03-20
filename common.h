@@ -8,6 +8,7 @@
 #include <sys/syscall.h>
 
 #include <string>
+#include <vector>
 
 #include "parameters.h"
 
@@ -82,5 +83,9 @@ static inline int file_hash(off_t v, int modulo)
 {
 	return v / STRIPE_BLOCK_SIZE % modulo;
 }
+
+int retrieve_data_files(std::string file_file,
+		std::vector<file_info> &data_files);
+ssize_t get_file_size(const char *file_name);
 
 #endif
