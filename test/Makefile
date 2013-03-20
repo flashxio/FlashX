@@ -1,5 +1,5 @@
 LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) #-lprofiler
-UNITTEST = SAHT_unit_test GClock_unit_test SA_expand_shrink_test
+UNITTEST = SAHT_unit_test GClock_unit_test SA_expand_shrink_test file_mapper_unit_test
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -g
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -16,6 +16,9 @@ GClock_unit_test: GClock_unit_test.o ../gclock.o ../slab_allocator.o
 
 SA_expand_shrink_test: SA_expand_shrink_test.o ../associative_cache.o ../memory_manager.o ../slab_allocator.o ../messaging.o ../thread.o
 	$(CXX) -o SA_expand_shrink_test SA_expand_shrink_test.o ../associative_cache.o ../memory_manager.o ../slab_allocator.o ../messaging.o ../thread.o $(LDFLAGS)
+
+file_mapper_unit_test: file_mapper_unit_test.o
+	$(CXX) -o file_mapper_unit_test file_mapper_unit_test.o
 
 clean:
 	rm *.o
