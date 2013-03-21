@@ -40,8 +40,6 @@ public:
 	}
 
 	workload_gen() {
-		default_entry_size = PAGE_SIZE;
-		default_access_method = READ;
 		memset(&access, 0, sizeof(access));
 	}
 

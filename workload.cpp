@@ -1,8 +1,8 @@
 #include "workload.h"
 #include "common.h"
 
-int workload_gen::default_entry_size;
-int workload_gen::default_access_method = -1;
+int workload_gen::default_entry_size = PAGE_SIZE;
+int workload_gen::default_access_method = READ;
 
 off_t cache_hit_defined_workload::next_offset()
 {
