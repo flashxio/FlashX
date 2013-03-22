@@ -83,4 +83,10 @@ int retrieve_data_files(std::string file_file,
 		std::vector<file_info> &data_files);
 ssize_t get_file_size(const char *file_name);
 
+#define ROUND(off, base) (((long) off) & (~((long) (base) - 1)))
+#define ROUNDUP(off, base) (((long) off + (base) - 1) & (~((long) (base) - 1)))
+
+#define ROUND_PAGE(off) (((long) off) & (~((long) PAGE_SIZE - 1)))
+#define ROUNDUP_PAGE(off) (((long) off + PAGE_SIZE - 1) & (~((long) PAGE_SIZE - 1)))
+
 #endif

@@ -18,9 +18,6 @@
 #include "messaging.h"
 #include "parameters.h"
 
-#define ROUND_PAGE(off) (((long) off) & (~(PAGE_SIZE - 1)))
-#define ROUNDUP_PAGE(off) (((long) off + PAGE_SIZE - 1) & (~(PAGE_SIZE - 1)))
-
 const off_t PAGE_INVALID_OFFSET = ((off_t) -1) << LOG_PAGE_SIZE;
 
 enum {

@@ -7,6 +7,8 @@
 #define PAGE_SIZE 4096
 #define LOG_PAGE_SIZE 12
 
+#define MIN_BLOCK_SIZE 512
+
 const int AIO_DEPTH_PER_FILE = 32;
 
 const int IO_QUEUE_SIZE = AIO_DEPTH_PER_FILE * 5;

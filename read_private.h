@@ -5,8 +5,7 @@
 
 #include "thread_private.h"
 #include "file_partition.h"
-
-#define MIN_BLOCK_SIZE 512
+#include "parameters.h"
 
 class buffered_io: public io_interface
 {
