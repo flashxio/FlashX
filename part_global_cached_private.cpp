@@ -171,7 +171,6 @@ int node_cached_io::reply(io_request *requests, io_reply *replies, int num)
 
 void node_cached_io::notify_completion(io_request *req)
 {
-	assert(get_node_id() == 1);
 	io_reply rep(req, true, 0);
 	reply(req, &rep, 1);
 }
