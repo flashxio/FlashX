@@ -334,6 +334,7 @@ int main(int argc, char *argv[])
 		}
 		node_ids.insert(files[k].node_id);
 	}
+	assert(num_nodes >= (int) node_ids.size());
 
 	// In this way, we can guarantee that the cache is created
 	// on the nodes with the data files.
