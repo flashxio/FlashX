@@ -198,6 +198,10 @@ public:
 		return io;
 	}
 	void run();
+
+	int get_cache_hits() const {
+		return io->get_cache_hits();
+	}
 };
 
 /**
@@ -476,6 +480,32 @@ void part_global_cached_io::cleanup()
 	printf("thread %d processed %d requests and %d replies\n", thread_id,
 			processed_requests.get(), processed_replies.get());
 }
+
+#ifdef STATISTICS
+void part_global_cached_io::print_stat()
+{
+	static long tot_remote_reads = 0;
+	static int seen_threads = 0;
+	tot_remote_reads += remote_reads;
+	seen_threads++;
+	if (seen_threads == nthreads) {
+		printf("there are %ld requests sent to the remote nodes\n",
+				tot_remote_reads);
+		int tot_hits = 0;
+		for (std::tr1::unordered_map<int, struct thread_group>::const_iterator
+				it = groups.begin(); it != groups.end(); it++) {
+			const struct thread_group *group = &it->second;
+			int tot_group_hits = 0;
+			for (size_t i = 0; i < group->process_request_threads.size(); i++)
+				tot_group_hits += ((process_request_thread *)group
+						->process_request_threads[i])->get_cache_hits();
+			printf("group %d gets %d hits\n", group->id, tot_group_hits);
+			tot_hits += tot_group_hits;
+		}
+		printf("There are %d cache hits\n", tot_hits);
+	}
+}
+#endif
 
 std::tr1::unordered_map<int, thread_group> part_global_cached_io::groups;
 pthread_mutex_t part_global_cached_io::init_mutex;

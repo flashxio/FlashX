@@ -137,16 +137,7 @@ public:
 	friend class node_cached_io;
 
 #ifdef STATISTICS
-	virtual void print_stat() {
-		static long tot_remote_reads = 0;
-		static int seen_threads = 0;
-		tot_remote_reads += remote_reads;
-		seen_threads++;
-		if (seen_threads == nthreads) {
-			printf("there are %ld requests sent to the remote nodes\n",
-					tot_remote_reads);
-		}
-	}
+	virtual void print_stat();
 #endif
 };
 
