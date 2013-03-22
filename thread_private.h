@@ -114,6 +114,7 @@ class thread_private
 
 	ssize_t read_bytes;
 	long num_accesses;
+	atomic_integer num_completes;
 
 	cleanup_callback *cb;
 	
@@ -170,8 +171,8 @@ public:
 #ifdef STATISTICS
 	virtual void print_stat() {
 		io->print_stat();
-		printf("access %ld bytes in %ld accesses, start at %f seconds, takes %f seconds\n",
-				get_read_bytes(), num_accesses, time_diff(global_start, start_time),
+		printf("access %ld bytes in %ld accesses (%d completes), start at %f seconds, takes %f seconds\n",
+				get_read_bytes(), num_accesses, num_completes.get(), time_diff(global_start, start_time),
 				time_diff(start_time, end_time));
 	}
 #endif

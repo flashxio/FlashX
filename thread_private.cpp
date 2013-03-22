@@ -62,11 +62,13 @@ class cleanup_callback: public callback
 	rand_buf *buf;
 	ssize_t read_bytes;
 	int thread_id;
+	atomic_integer *num_completes;
 public:
-	cleanup_callback(rand_buf *buf, int idx) {
+	cleanup_callback(rand_buf *buf, int idx, atomic_integer *num_completes) {
 		this->buf = buf;
 		read_bytes = 0;
 		this->thread_id = idx;
+		this->num_completes = num_completes;
 	}
 
 	int invoke(io_request *rq) {
@@ -81,6 +83,7 @@ public:
 		for (int i = 0; i < rq->get_num_bufs(); i++)
 			buf->free_entry(rq->get_buf(i));
 		read_bytes += rq->get_size();
+		num_completes->inc(1);
 		return 0;
 	}
 
@@ -109,7 +112,7 @@ int thread_private::thread_init() {
 				/ NUM_NODES) * PAGE_SIZE, buf_size);
 	this->buf = buf;
 	if (io->support_aio()) {
-		cb = new cleanup_callback(buf, idx);
+		cb = new cleanup_callback(buf, idx, &num_completes);
 		io->set_callback(cb);
 	}
 	return 0;
