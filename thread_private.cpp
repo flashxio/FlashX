@@ -5,6 +5,8 @@
 
 #define NUM_PAGES (40960 * nthreads)
 
+bool align_req = false;
+
 extern bool verify_read_content;
 
 void check_read_content(char *buf, int size, off_t off)
@@ -137,6 +139,11 @@ int thread_private::run()
 				int access_method = workload.read ? READ : WRITE;
 				off_t off = workload.off;
 				int size = workload.size;
+				if (align_req) {
+					off = ROUND(off, MIN_BLOCK_SIZE);
+					size = ROUNDUP(off + size, MIN_BLOCK_SIZE)
+						- ROUND(off, MIN_BLOCK_SIZE);
+				}
 				/*
 				 * If the size of the request is larger than a page size,
 				 * and the user explicitly wants to use multibuf requests.
@@ -190,9 +197,13 @@ again:
 		else {
 			workload_t workload = gen->next();
 			off_t off = workload.off;
-			// TODO let's just read data first.
 			int access_method = workload.read ? READ : WRITE;
 			int entry_size = workload.size;
+			if (align_req) {
+				off = ROUND(off, MIN_BLOCK_SIZE);
+				entry_size = ROUNDUP(off + entry_size, MIN_BLOCK_SIZE)
+					- ROUND(off, MIN_BLOCK_SIZE);
+			}
 
 			if (buf_type == SINGLE_SMALL_BUF) {
 				while (entry_size > 0) {
