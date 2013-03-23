@@ -829,7 +829,8 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 {
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
-	printf("associative cache is created on node %d\n", node_id);
+	printf("associative cache is created on node %d, cache size: %ld\n",
+			node_id, cache_size);
 	this->node_id = node_id;
 	level = 0;
 	split = 0;

@@ -49,6 +49,7 @@ class node_cached_io: public global_cached_io
 	const std::tr1::unordered_map<int, struct thread_group> *groups;
 	const struct thread_group *local_group;
 	long processed_requests;
+	long num_requests;
 
 	pthread_t processing_thread_id;
 
@@ -64,6 +65,10 @@ public:
 
 	virtual page_cache *get_global_cache() {
 		return local_group->cache;
+	}
+
+	long get_num_requests() const {
+		return num_requests;
 	}
 
 	void init_repliers();
@@ -145,6 +150,7 @@ int node_cached_io::process_requests(int max_nreqs)
 		}
 		num_processed += num;
 	}
+	num_requests += num_processed;
 	return num_processed;
 }
 
@@ -202,6 +208,10 @@ public:
 	int get_cache_hits() const {
 		return io->get_cache_hits();
 	}
+
+	long get_num_requests() const {
+		return io->get_num_requests();
+	}
 };
 
 /**
@@ -253,8 +263,7 @@ int part_global_cached_io::init() {
 	if (group->cache == NULL) {
 		/* Each cache has their own memory managers */
 		group->cache = global_cached_io::create_cache(cache_type, cache_size,
-				// TODO I need to set the node id right.
-				-1, 1);
+				group_idx, 1);
 		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
 				NUMA_REQ_QUEUE_SIZE);
 		// Create processing threads.
@@ -496,9 +505,13 @@ void part_global_cached_io::print_stat()
 				it = groups.begin(); it != groups.end(); it++) {
 			const struct thread_group *group = &it->second;
 			int tot_group_hits = 0;
-			for (size_t i = 0; i < group->process_request_threads.size(); i++)
-				tot_group_hits += ((process_request_thread *)group
-						->process_request_threads[i])->get_cache_hits();
+			for (size_t i = 0; i < group->process_request_threads.size(); i++) {
+				process_request_thread *thread = (process_request_thread *) group
+					->process_request_threads[i];
+				printf("group %d thread %ld gets %ld requests\n", group->id, i,
+						thread->get_num_requests());
+				tot_group_hits += thread->get_cache_hits();
+			}
 			printf("group %d gets %d hits\n", group->id, tot_group_hits);
 			tot_hits += tot_group_hits;
 		}
