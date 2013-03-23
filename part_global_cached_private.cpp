@@ -363,11 +363,11 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	assert (group->ios[i] == NULL);
 	group->ios[i] = this;
 
+	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
+			NUMA_REPLY_QUEUE_SIZE);
 	// Create a thread for processing replies.
 	reply_processor = new process_reply_thread(this);
 	reply_processor->start();
-	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
-			NUMA_REPLY_QUEUE_SIZE);
 }
 
 /* distribute requests to nodes. */
