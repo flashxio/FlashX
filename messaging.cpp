@@ -88,9 +88,7 @@ void io_request::add_buf_front(char *buf, int size)
 
 template<class T>
 msg_sender<T>::msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
-		int num_queues, bool thread_safe) {
-	this->thread_safe = thread_safe;
-	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		int num_queues) {
 	buf = (T *) numa_alloc_local(sizeof(T) * buf_size);
 	this->buf_size = buf_size;
 	num_current = 0;
@@ -107,12 +105,8 @@ msg_sender<T>::msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
  * return the number of entries that have been flushed.
  */
 template<class T>
-int msg_sender<T>::flush(bool locked) {
-	if (!locked && thread_safe)
-		pthread_spin_lock(&lock);
+int msg_sender<T>::flush() {
 	if (num_current == 0) {
-		if (!locked && thread_safe)
-			pthread_spin_unlock(&lock);
 		return 0;
 	}
 
@@ -135,11 +129,7 @@ int msg_sender<T>::flush(bool locked) {
 		 * no matter whether it is locked in flush() or in send(). Later,
 		 * we have to make sure the lock is grabbed in either case.
 		 */
-		if (thread_safe)
-			pthread_spin_unlock(&lock);
 		int ret = q->add(tmp, num_current);
-		if (thread_safe)
-			pthread_spin_lock(&lock);
 		tmp += ret;
 		num_current -= ret;
 		num_sent += ret;
@@ -154,8 +144,6 @@ int msg_sender<T>::flush(bool locked) {
 		}
 	}
 
-	if (!locked && thread_safe)
-		pthread_spin_unlock(&lock);
 	return num_sent;
 }
 
@@ -165,19 +153,13 @@ int msg_sender<T>::send_cached(T *msg) {
 	 * if the buffer is full, and we can't flush
 	 * any messages, there is nothing we can do.
 	 */
-	if (thread_safe)
-		pthread_spin_lock(&lock);
-	if (num_current == buf_size && flush(true) == 0) {
-		if (thread_safe)
-			pthread_spin_unlock(&lock);
+	if (num_current == buf_size && flush() == 0) {
 		return 0;
 	}
 
 	buf[num_current++] = *msg;
 	if (num_current == buf_size)
-		flush(true);
-	if (thread_safe)
-		pthread_spin_unlock(&lock);
+		flush();
 	/* one message has been cached. */
 	return 1;
 }
