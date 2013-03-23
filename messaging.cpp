@@ -130,10 +130,15 @@ int msg_sender<T>::flush(bool locked) {
 		// TODO the thread might be blocked if it's full.
 		// it might hurt performance. We should try other
 		// queues first before being blocked.
-		if (!locked && thread_safe)
+		/*
+		 * If the sender is in thread-safe mode, we have to release the lock
+		 * no matter whether it is locked in flush() or in send(). Later,
+		 * we have to make sure the lock is grabbed in either case.
+		 */
+		if (thread_safe)
 			pthread_spin_unlock(&lock);
 		int ret = q->add(tmp, num_current);
-		if (!locked && thread_safe)
+		if (thread_safe)
 			pthread_spin_lock(&lock);
 		tmp += ret;
 		num_current -= ret;
