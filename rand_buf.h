@@ -12,8 +12,15 @@ class rand_buf
 	char *marks;
 	int entry_size;
 	int num_entries;
-	fifo_queue<off_t> free_refs;
+	thread_safe_FIFO_queue<off_t> free_refs;
 	pthread_spinlock_t lock;
+
+	// The buffers pre-allocated to serve allocation requests
+	// from the local threads.
+	pthread_key_t local_buf_key;
+	// The buffers freed in the local threads, which hasn't been
+	// added the main buffer.
+	pthread_key_t local_free_key;
 
 	int current;
 #ifdef MEMCHECK

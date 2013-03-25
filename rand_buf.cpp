@@ -1,4 +1,7 @@
 #include "rand_buf.h"
+#include "container.cpp"
+
+const int LOCAL_BUF_SIZE = 100;
 
 rand_buf::rand_buf(int buf_size, int entry_size,
 		int nodeid): free_refs(buf_size / entry_size)
@@ -34,6 +37,8 @@ rand_buf::rand_buf(int buf_size, int entry_size,
 	current = 0;
 	// TODO I shouldn't use spin lock here.
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	pthread_key_create(&local_buf_key, NULL);
+	pthread_key_create(&local_free_key, NULL);
 }
 
 char *rand_buf::next_entry(int size) {
@@ -42,6 +47,22 @@ char *rand_buf::next_entry(int size) {
 #else
 	if (size > entry_size)
 		return (char *) valloc(size);
+	fifo_queue<off_t> *local_buf_refs
+		= (fifo_queue<off_t> *) pthread_getspecific(local_buf_key);
+	if (local_buf_refs == NULL) {
+		local_buf_refs = new fifo_queue<off_t>(LOCAL_BUF_SIZE);
+		pthread_setspecific(local_buf_key, local_buf_refs);
+	}
+	if (local_buf_refs->is_empty()) {
+		off_t offs[LOCAL_BUF_SIZE];
+		int num = free_refs.fetch(offs, LOCAL_BUF_SIZE);
+		assert(num > 0);
+		int num_added = local_buf_refs->add(offs, num);
+		assert(num_added == num);
+	}
+	off_t off = local_buf_refs->pop_front();
+	return &buf[off];
+#if 0
 	pthread_spin_lock(&lock);
 	assert(!free_refs.is_empty());
 	int off = free_refs.pop_front();
@@ -51,20 +72,35 @@ char *rand_buf::next_entry(int size) {
 	pthread_spin_unlock(&lock);
 	return ret;
 #endif
+#endif
 }
 
 void rand_buf::free_entry(char *buf) {
 #ifdef MEMCHECK
 	allocator.dealloc(buf);
 #else
-	pthread_spin_lock(&lock);
-	int buf_size = num_entries * entry_size;
+	const int buf_size = num_entries * entry_size;
 	if (!((long) buf >= (long) this->buf
 			&& (long) buf < (long) this->buf + buf_size)) {
-		pthread_spin_unlock(&lock);
 		free(buf);
 		return;
 	}
+	fifo_queue<off_t> *local_free_refs
+		= (fifo_queue<off_t> *) pthread_getspecific(local_free_key);
+	if (local_free_refs == NULL) {
+		local_free_refs = new fifo_queue<off_t>(LOCAL_BUF_SIZE);
+		pthread_setspecific(local_free_key, local_free_refs);
+	}
+	if (local_free_refs->is_full()) {
+		off_t offs[LOCAL_BUF_SIZE];
+		int num = local_free_refs->fetch(offs, LOCAL_BUF_SIZE);
+		int num_added = free_refs.add(offs, num);
+		assert(num == num_added);
+	}
+	off_t off = buf - this->buf;
+	local_free_refs->push_back(off);
+#if 0
+	pthread_spin_lock(&lock);
 	off_t off = buf - this->buf;
 	free_refs.push_back(off);
 	off /= entry_size;
@@ -73,5 +109,6 @@ void rand_buf::free_entry(char *buf) {
 	assert(marks[off]);
 	marks[off] = 0;
 	pthread_spin_unlock(&lock);
+#endif
 #endif
 }
