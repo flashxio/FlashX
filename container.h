@@ -105,24 +105,46 @@ public:
 		delete [] buf;
 	}
 
-	T pop_front() {
+	virtual T pop_front() {
 		assert(start < end);
 		T ret = buf[start % size];
 		start++;
 		return ret;
 	}
 
-	void push_back(const T &v) {
+	virtual void push_back(T &v) {
 		assert(end - start < size);
 		buf[end % size] = v;
 		end++;
 	}
 
-	bool is_full() const {
+	virtual int fetch(T *entries, int num) {
+		int num_fetches = 0;
+		while (!is_empty() && num_fetches < num) {
+			entries[num_fetches++] = buf[start % size];
+			start++;
+		}
+		return num_fetches;
+	}
+
+	virtual int add(T *entries, int num) {
+		int num_pushes = 0;
+		while (!is_full() && num_pushes < num) {
+			buf[end % size] = entries[num_pushes++];
+			end++;
+		}
+		return num_pushes;
+	}
+
+	virtual int get_num_entries() {
+		return (int) (end - start);
+	}
+
+	virtual bool is_full() const {
 		return end - start >= size;
 	}
 
-	bool is_empty() const {
+	virtual bool is_empty() const {
 		return start >= end;
 	}
 };
@@ -132,7 +154,7 @@ public:
  * It supports bulk operations.
  */
 template<class T>
-class thread_safe_FIFO_queue
+class thread_safe_FIFO_queue: fifo_queue<T>
 {
 	volatile T *buf;
 	const int capacity;			// capacity of the buffer
@@ -172,7 +194,7 @@ class thread_safe_FIFO_queue
 	}
 
 public:
-	thread_safe_FIFO_queue(int size): capacity(size) {
+	thread_safe_FIFO_queue(int size): fifo_queue<T>(size), capacity(size) {
 		buf = new T[size];
 		alloc_offset = 0;
 		add_offset = 0;
@@ -236,25 +258,18 @@ public:
  * a thread wants to fetch more entries when the queue is empty.
  */
 template<class T>
-class blocking_FIFO_queue: public thread_safe_FIFO_queue<T>
+class blocking_FIFO_queue: public fifo_queue<T>
 {
-	/* when the queue becomes empty */
-	pthread_cond_t empty_cond;
-	pthread_mutex_t empty_mutex;
+	pthread_cond_t cond;
+	pthread_mutex_t mutex;
 	int num_empty;
-
-	/* when the queue becomes full */
-	pthread_cond_t full_cond;
-	pthread_mutex_t full_mutex;
 	int num_full;
 
 	std::string name;
 public:
-	blocking_FIFO_queue(const std::string name, int size): thread_safe_FIFO_queue<T>(size) {
-		pthread_mutex_init(&empty_mutex, NULL);
-		pthread_cond_init(&empty_cond, NULL);
-		pthread_mutex_init(&full_mutex, NULL);
-		pthread_cond_init(&full_cond, NULL);
+	blocking_FIFO_queue(const std::string name, int size): fifo_queue<T>(size) {
+		pthread_mutex_init(&mutex, NULL);
+		pthread_cond_init(&cond, NULL);
 		this->name = name;
 		num_empty = 0;
 		num_full = 0;
@@ -270,6 +285,13 @@ public:
 
 	int get_num_full() const {
 		return num_full;
+	}
+
+	int get_num_entries() {
+		pthread_mutex_lock(&mutex);
+		int ret = fifo_queue<T>::get_num_entries();
+		pthread_mutex_unlock(&mutex);
+		return ret;
 	}
 };
 

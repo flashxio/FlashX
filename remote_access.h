@@ -15,7 +15,7 @@
 class remote_disk_access: public io_interface
 {
 	msg_sender<io_request> **senders;
-	thread_safe_FIFO_queue<io_request> **queues;
+	fifo_queue<io_request> **queues;
 	int num_senders;
 	callback *cb;
 	file_mapper *block_mapper;

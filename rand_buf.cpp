@@ -8,8 +8,10 @@ rand_buf::rand_buf(int buf_size, int entry_size,
 {
 	num_entries = buf_size / entry_size;
 	rand_permute buf_offset(num_entries, entry_size, 0);
-	for (int i = 0; i < num_entries; i++)
-		free_refs.push_back(buf_offset.get_offset(i));
+	for (int i = 0; i < num_entries; i++) {
+		off_t off = buf_offset.get_offset(i);
+		free_refs.push_back(off);
+	}
 
 	this->entry_size = entry_size;
 	printf("there are %d entries in the rand buffer\n", num_entries);
@@ -63,7 +65,7 @@ void rand_buf::free_entry(char *buf) {
 		free(buf);
 		return;
 	}
-	int off = buf - this->buf;
+	off_t off = buf - this->buf;
 	free_refs.push_back(off);
 	off /= entry_size;
 	if (marks[off] == 0)

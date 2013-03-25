@@ -87,14 +87,14 @@ void io_request::add_buf_front(char *buf, int size)
 }
 
 template<class T>
-msg_sender<T>::msg_sender(int buf_size, thread_safe_FIFO_queue<T> **queues,
+msg_sender<T>::msg_sender(int buf_size, fifo_queue<T> **queues,
 		int num_queues) {
 	buf = (T *) numa_alloc_local(sizeof(T) * buf_size);
 	this->buf_size = buf_size;
 	num_current = 0;
-	dest_queues = (thread_safe_FIFO_queue<T> **) numa_alloc_local(
-			sizeof(thread_safe_FIFO_queue<T> *) * num_queues);
-	memcpy(dest_queues, queues, sizeof(thread_safe_FIFO_queue<T> *) * num_queues);
+	dest_queues = (fifo_queue<T> **) numa_alloc_local(
+			sizeof(fifo_queue<T> *) * num_queues);
+	memcpy(dest_queues, queues, sizeof(fifo_queue<T> *) * num_queues);
 	this->num_queues = num_queues;
 }
 
@@ -118,7 +118,7 @@ int msg_sender<T>::flush() {
 	int num_sent = 0;
 	T *tmp = buf;
 	for (int i = 0; num_current > 0 && i < num_queues; i++) {
-		thread_safe_FIFO_queue<T> *q = dest_queues[(base_idx + i) % num_queues];
+		fifo_queue<T> *q = dest_queues[(base_idx + i) % num_queues];
 		assert(q);
 
 		// TODO the thread might be blocked if it's full.

@@ -108,7 +108,7 @@ std::tr1::unordered_map<int, msg_sender<io_reply> *> *node_cached_io::init_repli
 			// We need a sender for each parted global IO because we need to
 			// make sure replies are sent to the right the IO instance that
 			// issued the request.
-			thread_safe_FIFO_queue<io_reply> *q1[1];
+			fifo_queue<io_reply> *q1[1];
 			q1[0] = group->ios[j]->reply_queue;
 			reply_senders->insert(std::pair<int, msg_sender<io_reply> *>(
 						group->ios[j]->thread_id,
@@ -138,8 +138,7 @@ int node_cached_io::process_requests(int max_nreqs)
 		processing_thread_id = pthread_self();
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
-	thread_safe_FIFO_queue<io_request> *request_queue
-		= local_group->request_queue;
+	fifo_queue<io_request> *request_queue = local_group->request_queue;
 	io_request local_reqs[BUF_SIZE];
 	while (num_processed < max_nreqs) {
 		int num = request_queue->fetch(local_reqs, BUF_SIZE);
@@ -309,7 +308,7 @@ int part_global_cached_io::init() {
 	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
 		const struct thread_group *group = &it->second;
-		thread_safe_FIFO_queue<io_request> *q[1];
+		fifo_queue<io_request> *q[1];
 		q[0] = group->request_queue;
 		req_senders.insert(std::pair<int, msg_sender<io_request> *>(it->first,
 					new msg_sender<io_request>(NUMA_MSG_CACHE_SIZE, q, 1)));

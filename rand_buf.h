@@ -12,7 +12,7 @@ class rand_buf
 	char *marks;
 	int entry_size;
 	int num_entries;
-	fifo_queue<int> free_refs;
+	fifo_queue<off_t> free_refs;
 	pthread_spinlock_t lock;
 
 	int current;

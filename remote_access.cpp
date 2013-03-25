@@ -7,7 +7,7 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 {
 	assert(num_remotes == mapper->get_num_files());
 	senders = new msg_sender<io_request> *[num_remotes];
-	queues = new thread_safe_FIFO_queue<io_request> *[num_remotes];
+	queues = new fifo_queue<io_request> *[num_remotes];
 	num_senders = num_remotes;
 	total_size = 0;
 	local_size = 0;
@@ -16,7 +16,7 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 		total_size += remotes[i]->get_size();
 		if (remotes[i]->get_node_id() == node_id)
 			local_size += remotes[i]->get_size();
-		thread_safe_FIFO_queue<io_request> *queue = remotes[i]->get_queue();
+		fifo_queue<io_request> *queue = remotes[i]->get_queue();
 		senders[i] = new msg_sender<io_request>(MSG_SEND_BUF_SIZE,
 				&queue, 1);
 		queues[i] = queue;
@@ -38,7 +38,7 @@ io_interface *remote_disk_access::clone() const
 	remote_disk_access *copy = new remote_disk_access(this->get_node_id());
 	copy->num_senders = this->num_senders;
 	copy->senders = new msg_sender<io_request> *[this->num_senders];
-	copy->queues = new thread_safe_FIFO_queue<io_request> *[this->num_senders];
+	copy->queues = new fifo_queue<io_request> *[this->num_senders];
 	for (int i = 0; i < copy->num_senders; i++) {
 		copy->queues[i] = this->queues[i];
 		copy->senders[i] = new msg_sender<io_request>(MSG_SEND_BUF_SIZE,

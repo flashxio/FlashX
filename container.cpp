@@ -60,18 +60,19 @@ int thread_safe_FIFO_queue<T>::add(T *entries, int num)
 template<class T>
 int blocking_FIFO_queue<T>::fetch(T *entries, int num) {
 	/* we have to wait for coming requests. */
-	pthread_mutex_lock(&empty_mutex);
+	pthread_mutex_lock(&mutex);
 	while(this->is_empty()) {
 		num_empty++;
 //		printf("the blocking queue %s is empty, wait...\n", name.c_str());
-		pthread_cond_wait(&empty_cond, &empty_mutex);
+		pthread_cond_wait(&cond, &mutex);
 	}
-	pthread_mutex_unlock(&empty_mutex);
-
-	int ret = thread_safe_FIFO_queue<T>::fetch(entries, num);
+	bool full = this->is_full();
+	int ret = fifo_queue<T>::fetch(entries, num);
+	pthread_mutex_unlock(&mutex);
 
 	/* wake up all threads to send more requests */
-	pthread_cond_broadcast(&full_cond);
+	if (full)
+		pthread_cond_broadcast(&cond);
 
 	return ret;
 }
@@ -86,19 +87,21 @@ int blocking_FIFO_queue<T>::add(T *entries, int num) {
 	int orig_num = num;
 
 	while (num > 0) {
-		int ret = thread_safe_FIFO_queue<T>::add(entries, num);
+		pthread_mutex_lock(&mutex);
+		bool empty = this->is_empty();
+		int ret = fifo_queue<T>::add(entries, num);
 		entries += ret;
 		num -= ret;
 		/* signal the thread of reading disk to wake up. */
-		pthread_cond_signal(&empty_cond);
+		if (empty)
+			pthread_cond_broadcast(&cond);
 
-		pthread_mutex_lock(&full_mutex);
 		while (this->is_full()) {
 			num_full++;
 //			printf("the blocking queue %s is full, wait...\n", name.c_str());
-			pthread_cond_wait(&full_cond, &full_mutex);
+			pthread_cond_wait(&cond, &mutex);
 		}
-		pthread_mutex_unlock(&full_mutex);
+		pthread_mutex_unlock(&mutex);
 	}
 	return orig_num;
 }
