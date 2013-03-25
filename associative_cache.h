@@ -232,6 +232,9 @@ class hash_cell
 	clock_shadow_cell shadow;
 #endif
 
+	long num_accesses;
+	long num_evictions;
+
 	thread_safe_page *get_empty_page();
 
 public:
@@ -239,6 +242,8 @@ public:
 		table = NULL;
 		hash = -1;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
+		num_accesses = 0;
+		num_evictions = 0;
 	}
 
 	hash_cell(associative_cache *cache, long hash, bool get_pages);
@@ -330,6 +335,14 @@ public:
 
 	/* For test. */
 	void sanity_check();
+
+	long get_num_accesses() const {
+		return num_accesses;
+	}
+
+	long get_num_evictions() const {
+		return num_evictions;
+	}
 };
 
 class flush_thread;
@@ -497,10 +510,18 @@ public:
 
 	virtual void init(io_interface *underlying);
 
+#ifdef STATISTICS
 	void print_stat() const {
 		printf("SA-cache: ncells: %d, height: %d, split: %d\n",
 				get_num_cells(), height, split);
+#ifdef DETAILED_STATISTICS
+		for (int i = 0; i < get_num_cells(); i++)
+			printf("cell %d: %ld accesses, %ld evictions\n", i,
+					get_cell(i)->get_num_accesses(),
+					get_cell(i)->get_num_evictions());
+#endif
 	}
+#endif
 };
 
 #endif

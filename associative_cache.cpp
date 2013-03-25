@@ -134,6 +134,8 @@ hash_cell::hash_cell(associative_cache *cache, long hash, bool get_pages) {
 			throw oom_exception();
 		buf.set_pages(pages, CELL_MIN_NUM_PAGES);
 	}
+	num_accesses = 0;
+	num_evictions = 0;
 }
 
 void hash_cell::sanity_check()
@@ -298,6 +300,7 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 		pthread_spin_lock(&_lock);
 	}
 #endif
+	num_accesses++;
 
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		if (buf.get_page(i)->get_offset() == off) {
@@ -306,6 +309,7 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 		}
 	}
 	if (ret == NULL) {
+		num_evictions++;
 		ret = get_empty_page();
 		if (ret->is_dirty() && !ret->is_old_dirty()) {
 			ret->set_dirty(false);
