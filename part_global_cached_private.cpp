@@ -513,6 +513,12 @@ void part_global_cached_io::print_stat()
 		for (std::tr1::unordered_map<int, struct thread_group>::const_iterator
 				it = groups.begin(); it != groups.end(); it++) {
 			const struct thread_group *group = &it->second;
+			printf("cache on node %d\n", group->id);
+			group->cache->print_stat();
+		}
+		for (std::tr1::unordered_map<int, struct thread_group>::const_iterator
+				it = groups.begin(); it != groups.end(); it++) {
+			const struct thread_group *group = &it->second;
 			int tot_group_hits = 0;
 			for (size_t i = 0; i < group->process_request_threads.size(); i++) {
 				process_request_thread *thread = (process_request_thread *) group
