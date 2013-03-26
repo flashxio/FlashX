@@ -5,17 +5,8 @@
 
 void io_request::assign(io_request &req)
 {
-	this->offset = req.offset;
-	this->io = req.io;
-	this->priv = req.priv;
-	this->access_method = req.access_method;
-	this->num_bufs = req.num_bufs;
-	this->vec_capacity = req.vec_capacity;
-	this->partial = req.partial;
-	this->completed_size = req.completed_size;
-	this->orig = req.orig;
+	memcpy(this, &req, sizeof(req));
 	this->refcnt = 0;
-	this->node_id = req.node_id;
 	/*
 	 * If the request uses embedded vector, then the new request
 	 * should point to its own embedded vector. Otherwise,
@@ -25,13 +16,11 @@ void io_request::assign(io_request &req)
 		this->vec_pointer = this->embedded_vecs;
 	else
 		this->vec_pointer = req.vec_pointer;
-	this->next = req.next;
-	this->completed_size = req.completed_size;
-	memcpy(this->embedded_vecs, req.embedded_vecs,
-			sizeof(req.embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
-	req.vec_pointer = req.embedded_vecs;
-	req.vec_capacity = NUM_EMBEDDED_IOVECS;
-	req.clear();
+	if (!req.use_embedded()) {
+		req.vec_pointer = req.embedded_vecs;
+		req.vec_capacity = NUM_EMBEDDED_IOVECS;
+		req.clear();
+	}
 }
 
 void io_request::add_buf(char *buf, int size)
