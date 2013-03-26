@@ -6,7 +6,10 @@ int buffered_io::init() {
 	for (int i = 0; i < partition.get_num_files(); i++) {
 		fds[i] = open(partition.get_file_name(i).c_str(), flags);
 		if (fds[i] < 0) {
-			perror("open");
+			char err_msg[128];
+			snprintf(err_msg, sizeof(err_msg),
+					"open %s\n", partition.get_file_name(i).c_str());
+			perror(err_msg);
 			exit (1);
 		}
 		ret = posix_fadvise(fds[i], 0, 0, POSIX_FADV_RANDOM);
