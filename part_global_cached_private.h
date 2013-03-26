@@ -25,7 +25,7 @@ struct thread_group
 	blocking_FIFO_queue<io_request> *request_queue;
 };
 
-class part_global_cached_io: public io_interface
+class part_global_cached_io: public global_cached_io
 {
 	static std::tr1::unordered_map<int, struct thread_group> groups;
 	/* this mutex just for helping initialize cache. */

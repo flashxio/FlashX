@@ -84,7 +84,7 @@ public:
 
 node_cached_io::node_cached_io(io_interface *underlying,
 		const std::tr1::unordered_map<int, struct thread_group> *groups):
-	global_cached_io(underlying)
+	global_cached_io(underlying->clone())
 {
 	this->groups = groups;
 	local_group = get_group(underlying->get_node_id());
@@ -290,6 +290,8 @@ int part_global_cached_io::init() {
 	num_finish_init++;
 	pthread_mutex_unlock(&init_mutex);
 
+	global_cached_io::init();
+
 	pthread_mutex_lock(&wait_mutex);
 	while (num_finish_init < nthreads) {
 		pthread_cond_wait(&cond, &wait_mutex);
@@ -319,8 +321,8 @@ int part_global_cached_io::init() {
 
 part_global_cached_io::part_global_cached_io(int num_groups,
 		io_interface *underlying, int idx, long cache_size,
-		int cache_type, file_mapper *mapper): io_interface(
-			underlying->get_node_id()) {
+		int cache_type, file_mapper *mapper): global_cached_io(
+			underlying->clone()) {
 	this->mapper = mapper->clone();
 	this->thread_id = idx;
 	this->final_cb = NULL;
@@ -374,11 +376,21 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	int num_sent = 0;
 	for (int i = 0; i < num; i++) {
 		int idx = hash_req(&requests[i]);
-		if (idx != get_group_id())
+		if (idx != get_group_id()) {
 			remote_reads++;
-		int ret = req_senders[idx]->send_cached(&requests[i]);
-		if (ret == 0)
-			break;
+			int ret = req_senders[idx]->send_cached(&requests[i]);
+			if (ret == 0)
+				break;
+		}
+		else {
+			int ret = global_cached_io::access(&requests[i], 1);
+			if (ret < 0) {
+				fprintf(stderr, "part global cache can't issue a request\n");
+				io_reply rep(&requests[i], false, errno);
+				process_reply(&rep);
+				processed_replies.inc(1);
+			}
+		}
 		num_sent++;
 	}
 	for (std::tr1::unordered_map<int, msg_sender<io_request> *>::const_iterator it
