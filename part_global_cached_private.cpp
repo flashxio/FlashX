@@ -17,9 +17,6 @@
 #include "part_global_cached_private.h"
 #include "parameters.h"
 
-const int MIN_NUM_PROCESS_REQ = 100;
-const int BUF_SIZE = 100;
-
 #if 0
 thread_group::~thread_group()
 {
@@ -139,9 +136,9 @@ int node_cached_io::process_requests(int max_nreqs)
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
 	fifo_queue<io_request> *request_queue = local_group->request_queue;
-	io_request local_reqs[BUF_SIZE];
+	io_request local_reqs[NUMA_REQ_BUF_SIZE];
 	while (num_processed < max_nreqs) {
-		int num = request_queue->fetch(local_reqs, BUF_SIZE);
+		int num = request_queue->fetch(local_reqs, NUMA_REQ_BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			io_request *req = &local_reqs[i];
 			assert(req->get_offset() >= 0);
@@ -405,9 +402,9 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
  */
 int part_global_cached_io::process_replies(int max_nreplies) {
 	int num_processed = 0;
-	io_reply local_replies[BUF_SIZE];
+	io_reply local_replies[NUMA_REPLY_BUF_SIZE];
 	while(num_processed < max_nreplies) {
-		int num = reply_queue->fetch(local_replies, BUF_SIZE);
+		int num = reply_queue->fetch(local_replies, NUMA_REPLY_BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			io_reply *reply = &local_replies[i];
 			process_reply(reply);
