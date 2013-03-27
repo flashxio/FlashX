@@ -32,6 +32,9 @@ public:
 	static void set_default_entry_size(int entry_size) {
 		default_entry_size = entry_size;
 	}
+	static int get_default_entry_size() {
+		return default_entry_size;
+	}
 	static void set_default_access_method(int access_method) {
 		default_access_method = access_method;
 	}
@@ -126,15 +129,21 @@ class global_rand_permute_workload: public workload_gen
 	long start;
 	long end;
 	const rand_permute *permute;
+	int num_reads_in_100;
+	int num_accesses;
+	workload_t access;
 public:
 	/**
 	 * @start: the index of the first entry.
 	 * @end: the index of the last entry.
 	 */
-	global_rand_permute_workload(int stride, long start, long end) {
+	global_rand_permute_workload(int stride, long start, long end,
+			double read_ratio) {
 		permute = new rand_permute(end - start, stride, start);
 		this->start = 0;
 		this->end = end - start;
+		this->num_reads_in_100 = (int) (read_ratio * 100);
+		this->num_accesses = 0;
 	}
 
 	virtual ~global_rand_permute_workload() {
@@ -153,6 +162,19 @@ public:
 	bool has_next() {
 		return start < end;
 	}
+
+	virtual const workload_t &next() {
+		access.off = next_offset();
+		access.size = workload_gen::get_default_entry_size();
+		if (num_accesses < num_reads_in_100)
+			access.read = 1;
+		else
+			access.read = 0;
+		num_accesses++;
+		if (num_accesses >= 100)
+			num_accesses = 0;
+		return access;
+	}
 };
 
 /**
@@ -168,11 +190,12 @@ class cache_hit_defined_workload: public global_rand_permute_workload
 	long cache_hit_seq;		// the sequence number of cache hits
 public:
 	cache_hit_defined_workload(int stride, long start, long end,
-			long cache_size, double ratio): global_rand_permute_workload(stride,
-				start, end) {
+			long cache_size, double hit_ratio,
+			double read_ratio): global_rand_permute_workload(stride,
+				start, end, read_ratio) {
 		// only to access the most recent pages.
 		this->num_pages = cache_size / PAGE_SIZE / 100;
-		cache_hit_ratio = ratio;
+		cache_hit_ratio = hit_ratio;
 		seq = 0;
 		cache_hit_seq = 0;
 	}

@@ -196,6 +196,10 @@ int main(int argc, char *argv[])
 	int num_nodes = 1;
 	int cache_type = -1;
 	int workload = RAND_OFFSET;
+	// No cache hits.
+	double hit_ratio = 0;
+	// All reads
+	double read_ratio = 1;
 	std::string workload_file;
 	str2int_map access_map(access_methods,
 			sizeof(access_methods) / sizeof(access_methods[0]));
@@ -208,7 +212,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -252,6 +256,12 @@ int main(int argc, char *argv[])
 		}
 		else if(key.compare("num_nodes") == 0) {
 			num_nodes = str2size(value);
+		}
+		else if(key.compare("hit_percent") == 0) {
+			hit_ratio = (((double) atoi(value.c_str())) / 100);
+		}
+		else if(key.compare("read_percent") == 0) {
+			read_ratio = (((double) atoi(value.c_str())) / 100);
 		}
 		else if(key.compare("entry_size") == 0) {
 			entry_size = (int) str2size(value);
@@ -298,12 +308,13 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d\n",
-			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio);
+	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f\n",
+			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio);
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);
 	file_mapper *mapper = new RAID0_mapper(files);
+	printf("There are %d data files\n", num_files);
 
 	std::vector<int> indices;
 	for (int i = 0; i < mapper->get_num_files(); i++)
@@ -334,7 +345,6 @@ int main(int argc, char *argv[])
 		}
 		node_ids.insert(files[k].node_id);
 	}
-	assert(num_nodes >= (int) node_ids.size());
 
 	// In this way, we can guarantee that the cache is created
 	// on the nodes with the data files.
@@ -392,6 +402,7 @@ int main(int argc, char *argv[])
 					break;
 				case PART_GLOBAL_ACCESS:
 					{
+						assert(num_nodes >= (int) node_ids.size());
 						io_interface *underlying = new remote_disk_access(
 								read_threads, num_files, mapper, node_id);
 						threads[j] = new thread_private(j, entry_size,
@@ -426,11 +437,11 @@ int main(int argc, char *argv[])
 					break;
 				case RAND_PERMUTE:
 					gen = new global_rand_permute_workload(entry_size,
-							start, end);
+							start, end, read_ratio);
 					break;
 				case HIT_DEFINED:
 					gen = new cache_hit_defined_workload(entry_size, start,
-							end, cache_size, 0);
+							end, cache_size, hit_ratio, read_ratio);
 					break;
 				case -1:
 					{
