@@ -19,7 +19,7 @@ const int MSG_SEND_BUF_SIZE = 10;
  * The number of requests issued by user applications
  * in one access.
  */
-const int NUM_REQS_BY_USER = 100;
+const int NUM_REQS_BY_USER = 300;
 
 /**
  * The initial size of the queue for pending IO requests
@@ -48,13 +48,13 @@ const int DIRTY_PAGES_THRESHOLD = CELL_SIZE / 2;
 
 const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024;
 
-const int NUMA_MSG_CACHE_SIZE = 100;
-const int NUMA_REQ_QUEUE_SIZE = 200;
-const int NUMA_REQ_BUF_SIZE = 100;
+const int NUMA_MSG_CACHE_SIZE = 300;
+const int NUMA_REQ_QUEUE_SIZE = 600;
+const int NUMA_REQ_BUF_SIZE = 300;
 const int NUMA_REPLY_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE;
 const int NUMA_REPLY_BUF_SIZE = 100;
 const int NUMA_NUM_PROCESS_MSGS = 20;
-const int NUMA_NUM_PROCESS_THREADS = 3;
+const int NUMA_NUM_PROCESS_THREADS = 8;
 
 const int CONST_A = 27644437;
 const long CONST_P = 68718952447L;
