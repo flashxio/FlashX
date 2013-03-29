@@ -12,9 +12,12 @@
 #include <string>
 #include <deque>
 
+#include "container.h"
 #include "cache.h"
 
 #define CHUNK_SLOTS 1024
+
+const int WORKLOAD_BUF_SIZE = 20;
 
 typedef struct workload_type
 {
@@ -92,79 +95,62 @@ public:
 	}
 };
 
-class rand_permute
-{
-	off_t *offset;
-	long num;
-
-public:
-	/**
-	 * @start: the index of the first entry.
-	 */
-	rand_permute(long num, int stride, long start) {
-		offset = (off_t *) valloc(num * sizeof(off_t));
-		for (int i = 0; i < num; i++) {
-			offset[i] = ((off_t) i) * stride + start * stride;
-		}
-
-		for (int i = num - 1; i >= 1; i--) {
-			int j = random() % i;
-			off_t tmp = offset[j];
-			offset[j] = offset[i];
-			offset[i] = tmp;
-		}
-	}
-
-	~rand_permute() {
-		free(offset);
-	}
-
-	off_t get_offset(long idx) const {
-		return offset[idx];
-	}
-};
-
 class global_rand_permute_workload: public workload_gen
 {
-	long start;
-	long end;
-	const rand_permute *permute;
+	static thread_safe_FIFO_queue<off_t> *permuted_offsets;
 	int num_reads_in_100;
 	int num_accesses;
 	workload_t access;
+	fifo_queue<off_t> local_buf;
+
 public:
 	/**
 	 * @start: the index of the first entry.
 	 * @end: the index of the last entry.
 	 */
-	global_rand_permute_workload(int stride, long start, long end,
-			double read_ratio) {
-		permute = new rand_permute(end - start, stride, start);
-		this->start = 0;
-		this->end = end - start;
+	global_rand_permute_workload(int stride, int length, int repeats,
+			double read_ratio): local_buf(WORKLOAD_BUF_SIZE) {
+		if (permuted_offsets == NULL) {
+			int tot_length = length * repeats;
+			off_t *offsets = new off_t[tot_length];
+			permute_offsets(length, repeats, stride, 0, offsets);
+			permuted_offsets = new thread_safe_FIFO_queue<off_t>(tot_length);
+			int ret = permuted_offsets->add(offsets, tot_length);
+			assert(ret == tot_length);
+			delete offsets;
+		}
 		this->num_reads_in_100 = (int) (read_ratio * 100);
 		this->num_accesses = 0;
 	}
 
 	virtual ~global_rand_permute_workload() {
-		if (permute) {
-			delete permute;
-			permute = NULL;
+		if (permuted_offsets) {
+			delete permuted_offsets;
+			permuted_offsets = NULL;
 		}
 	}
 
+	bool is_initialized() const {
+		return permuted_offsets != NULL;
+	}
+
 	off_t next_offset() {
-		if (start >= end)
-			return -1;
-		return permute->get_offset(start++);
+		assert(!local_buf.is_empty());
+		return local_buf.pop_front();
 	}
 
 	bool has_next() {
-		return start < end;
+		if (local_buf.is_empty()) {
+			off_t offs[WORKLOAD_BUF_SIZE];
+			int num = permuted_offsets->fetch(offs, WORKLOAD_BUF_SIZE);
+			local_buf.add(offs, num);
+		}
+		return !local_buf.is_empty();
 	}
 
 	virtual const workload_t &next() {
-		access.off = next_offset();
+		off_t off = next_offset();
+		access.off = off;
 		access.size = workload_gen::get_default_entry_size();
 		if (num_accesses < num_reads_in_100)
 			access.read = 1;
@@ -189,10 +175,9 @@ class cache_hit_defined_workload: public global_rand_permute_workload
 	long seq;				// the sequence number of accesses
 	long cache_hit_seq;		// the sequence number of cache hits
 public:
-	cache_hit_defined_workload(int stride, long start, long end,
-			long cache_size, double hit_ratio,
-			double read_ratio): global_rand_permute_workload(stride,
-				start, end, read_ratio) {
+	cache_hit_defined_workload(int stride, int length, long cache_size,
+			double hit_ratio, double read_ratio): global_rand_permute_workload(
+				stride, length, 1, read_ratio) {
 		// only to access the most recent pages.
 		this->num_pages = cache_size / PAGE_SIZE / 100;
 		cache_hit_ratio = hit_ratio;
@@ -253,48 +238,54 @@ public:
 
 class file_workload: public workload_gen
 {
-	workload_t *workloads;
-	long curr;
-	long end;
+	static thread_safe_FIFO_queue<workload_t> *workload_queue;
+	fifo_queue<workload_t> local_buf;
+	workload_t curr;
 public:
 	file_workload(workload_t workloads[], long length, int thread_id,
-			int nthreads) {
-		int local_length = length / nthreads;
-		this->curr = 0;
-		this->end = local_length;
-		this->workloads = new workload_t[local_length];
-		memset(this->workloads, 0, sizeof(workload_t) * local_length);
-		int i = 0;
-		for (long idx = thread_id; i < local_length
-				&& idx < length; idx += nthreads, i++)
-			this->workloads[i] = workloads[idx];
-		assert(i == local_length);
-		printf("start at %ld end at %ld\n", curr, end);
+			int nthreads): local_buf(WORKLOAD_BUF_SIZE) {
+		if (workload_queue == NULL) {
+			workload_queue = new thread_safe_FIFO_queue<workload_t>(length);
+			int ret = workload_queue->add(workloads, length);
+			assert(ret == length);
+		}
 	}
 
 	virtual ~file_workload() {
-		delete [] workloads;
+		if (workload_queue) {
+			delete workload_queue;
+			workload_queue = NULL;
+		}
 	}
 
 	const workload_t &next() {
+		assert(!local_buf.is_empty());
+		curr = local_buf.pop_front();
 		if (get_default_access_method() >= 0)
-			workloads[curr].read = get_default_access_method() == READ;
-		return workloads[curr++];
+			curr.read = get_default_access_method() == READ;
+		return curr;
 	}
 
 	off_t next_offset() {
-		return workloads[curr++].off;
+		assert(!local_buf.is_empty());
+		workload_t access = local_buf.pop_front();
+		return access.off;
 	}
 
 	bool has_next() {
-		return curr < end;
+		if (local_buf.is_empty()) {
+			workload_t buf[WORKLOAD_BUF_SIZE];
+			int num = workload_queue->fetch(buf, WORKLOAD_BUF_SIZE);
+			local_buf.add(buf, num);
+		}
+		return !local_buf.is_empty();
 	}
 
 	/**
 	 * The remaining number of accesses.
 	 */
 	int size() const {
-		return end - curr;
+		return 0;
 	}
 };
 

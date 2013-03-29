@@ -69,3 +69,22 @@ ssize_t get_file_size(const char *file_name)
 	}
 	return stats.st_size;
 }
+
+void permute_offsets(int num, int repeats, int stride, off_t start,
+		off_t offsets[])
+{
+	int idx = 0;
+	for (int k = 0; k < repeats; k++) {
+		for (int i = 0; i < num; i++) {
+			offsets[idx++] = ((off_t) i) * stride + start * stride;
+		}
+	}
+	int tot_length = idx;
+
+	for (int i = tot_length - 1; i >= 1; i--) {
+		int j = random() % tot_length;
+		off_t tmp = offsets[j];
+		offsets[j] = offsets[i];
+		offsets[i] = tmp;
+	}
+}

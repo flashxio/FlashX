@@ -89,4 +89,39 @@ ssize_t get_file_size(const char *file_name);
 #define ROUND_PAGE(off) (((long) off) & (~((long) PAGE_SIZE - 1)))
 #define ROUNDUP_PAGE(off) (((long) off + PAGE_SIZE - 1) & (~((long) PAGE_SIZE - 1)))
 
+void permute_offsets(int num, int repeats, int stride, off_t start,
+		off_t offsets[]);
+
+class rand_permute
+{
+	off_t *offset;
+	long num;
+
+public:
+	/**
+	 * @start: the index of the first entry.
+	 */
+	rand_permute(long num, int stride, long start) {
+		offset = new off_t[num];
+		for (int i = 0; i < num; i++) {
+			offset[i] = ((off_t) i) * stride + start * stride;
+		}
+
+		for (int i = num - 1; i >= 1; i--) {
+			int j = random() % i;
+			off_t tmp = offset[j];
+			offset[j] = offset[i];
+			offset[i] = tmp;
+		}
+	}
+
+	~rand_permute() {
+		delete [] offset;
+	}
+
+	off_t get_offset(long idx) const {
+		return offset[idx];
+	}
+};
+
 #endif

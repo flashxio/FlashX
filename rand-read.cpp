@@ -200,6 +200,7 @@ int main(int argc, char *argv[])
 	double hit_ratio = 0;
 	// All reads
 	double read_ratio = 1;
+	int num_repeats = 1;
 	std::string workload_file;
 	str2int_map access_map(access_methods,
 			sizeof(access_methods) / sizeof(access_methods[0]));
@@ -212,7 +213,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -263,6 +264,9 @@ int main(int argc, char *argv[])
 		else if(key.compare("read_percent") == 0) {
 			read_ratio = (((double) atoi(value.c_str())) / 100);
 		}
+		else if (key.compare("repeats") == 0) {
+			num_repeats = atoi(value.c_str());
+		}
 		else if(key.compare("entry_size") == 0) {
 			entry_size = (int) str2size(value);
 			workload_gen::set_default_entry_size(entry_size);
@@ -308,8 +312,8 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f\n",
-			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio);
+	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d\n",
+			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats);
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);
@@ -333,6 +337,7 @@ int main(int argc, char *argv[])
 	long end = 0;
 
 	disk_read_thread **read_threads = new disk_read_thread*[num_files];
+	memset(read_threads, 0, sizeof(*read_threads) * num_files);
 	std::set<int> node_ids;
 	for (int k = 0; k < num_files; k++) {
 		if (access_option == GLOBAL_CACHE_ACCESS
@@ -437,11 +442,12 @@ int main(int argc, char *argv[])
 					break;
 				case RAND_PERMUTE:
 					gen = new global_rand_permute_workload(entry_size,
-							start, end, read_ratio);
+							npages * (PAGE_SIZE / entry_size), num_repeats, read_ratio);
 					break;
 				case HIT_DEFINED:
-					gen = new cache_hit_defined_workload(entry_size, start,
-							end, cache_size, hit_ratio, read_ratio);
+					gen = new cache_hit_defined_workload(entry_size,
+							npages * (PAGE_SIZE / entry_size),
+							cache_size, hit_ratio, read_ratio);
 					break;
 				case -1:
 					{

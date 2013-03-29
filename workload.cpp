@@ -1,5 +1,6 @@
 #include "workload.h"
 #include "common.h"
+#include "container.cpp"
 
 int workload_gen::default_entry_size = PAGE_SIZE;
 int workload_gen::default_access_method = READ;
@@ -127,4 +128,8 @@ unlock:
 	return true;
 }
 
+template class thread_safe_FIFO_queue<workload_t>;
+
 workload_chunk *balanced_workload::chunks;
+thread_safe_FIFO_queue<off_t> *global_rand_permute_workload::permuted_offsets;
+thread_safe_FIFO_queue<workload_t> *file_workload::workload_queue;
