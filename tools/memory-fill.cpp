@@ -32,13 +32,20 @@ int main(int argc, char *argv[])
 	std::string size_str = argv[1];
 	long size = str2size(size_str);
 	long one_alloc = 1024 * 1024 * 1024;
-	for (long allocated_size = 0; allocated_size < size;
-			allocated_size += one_alloc) {
-		char *buf = (char *) malloc(one_alloc);
-		for (int off = 0; off < one_alloc; off += 4096)
+	long remaining_size = size;
+	long allocated_size = 0;
+	for (; allocated_size < size;) {
+		long alloc = one_alloc;
+		if (remaining_size < alloc)
+			alloc = remaining_size;
+		char *buf = (char *) malloc(alloc);
+		for (int off = 0; off < alloc; off += 4096)
 			buf[off] = 0;
+		remaining_size -= alloc;
+		allocated_size += alloc;
 	}
 	unsigned int sleep_time = 1 << 31;
+	printf("allocate %ld bytes\n", allocated_size);
 	printf("sleep %d seconds\n", sleep_time);
 	sleep(sleep_time);
 }
