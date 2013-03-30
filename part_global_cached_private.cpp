@@ -456,7 +456,8 @@ void part_global_cached_io::cleanup()
 			= groups.begin(); it != groups.end(); it++) {
 		num_threads += it->second.nthreads;
 	}
-	printf("thread %d of %d: start to clean up\n", thread_id, num_threads);
+	printf("thread %d of %d on node %d: start to clean up\n",
+			thread_id, num_threads, group_idx);
 
 	// First make sure all requests have been flushed for processing.
 	for (std::tr1::unordered_map<int, msg_sender<io_request> *>::const_iterator it
@@ -513,12 +514,13 @@ void part_global_cached_io::print_stat()
 {
 	static long tot_remote_reads = 0;
 	static int seen_threads = 0;
+	static int tot_hits = 0;
 	tot_remote_reads += remote_reads;
 	seen_threads++;
+	tot_hits += get_cache_hits();
 	if (seen_threads == nthreads) {
 		printf("there are %ld requests sent to the remote nodes\n",
 				tot_remote_reads);
-		int tot_hits = 0;
 		for (std::tr1::unordered_map<int, struct thread_group>::const_iterator
 				it = groups.begin(); it != groups.end(); it++) {
 			const struct thread_group *group = &it->second;
