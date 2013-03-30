@@ -114,15 +114,26 @@ class thread_private
 
 	ssize_t read_bytes;
 	long num_accesses;
-	atomic_integer num_completes;
+
+	/* compute average number of pending IOs. */
+	long tot_num_pending;
+	long num_sampling;
+	int max_num_pending;
 
 	cleanup_callback *cb;
 	
 	struct timeval start_time, end_time;
 
 public:
+	atomic_integer num_completes;
+	atomic_integer num_pending;
+
+public:
 	thread_private() {
 		cb = NULL;
+		num_sampling = 0;
+		tot_num_pending = 0;
+		max_num_pending = 0;
 	}
 
 	~thread_private() {
@@ -144,6 +155,9 @@ public:
 		this->io = io;
 		read_bytes = 0;
 		num_accesses = 0;
+		num_sampling = 0;
+		tot_num_pending = 0;
+		max_num_pending = 0;
 	}
 
 	io_interface *get_io() {
@@ -171,9 +185,9 @@ public:
 #ifdef STATISTICS
 	virtual void print_stat() {
 		io->print_stat();
-		printf("access %ld bytes in %ld accesses (%d completes), start at %f seconds, takes %f seconds\n",
+		printf("access %ld bytes in %ld accesses (%d completes), start at %f seconds, takes %f seconds, avg pending: %ld, max pending: %d\n",
 				get_read_bytes(), num_accesses, num_completes.get(), time_diff(global_start, start_time),
-				time_diff(start_time, end_time));
+				time_diff(start_time, end_time), tot_num_pending / num_sampling, max_num_pending);
 	}
 #endif
 };

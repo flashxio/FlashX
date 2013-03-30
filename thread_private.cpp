@@ -64,13 +64,13 @@ class cleanup_callback: public callback
 	rand_buf *buf;
 	ssize_t read_bytes;
 	int thread_id;
-	atomic_integer *num_completes;
+	thread_private *thread;
 public:
-	cleanup_callback(rand_buf *buf, int idx, atomic_integer *num_completes) {
+	cleanup_callback(rand_buf *buf, int idx, thread_private *thread) {
 		this->buf = buf;
 		read_bytes = 0;
 		this->thread_id = idx;
-		this->num_completes = num_completes;
+		this->thread = thread;
 	}
 
 	int invoke(io_request *rq) {
@@ -85,7 +85,8 @@ public:
 		for (int i = 0; i < rq->get_num_bufs(); i++)
 			buf->free_entry(rq->get_buf(i));
 		read_bytes += rq->get_size();
-		num_completes->inc(1);
+		thread->num_completes.inc(1);
+		thread->num_pending.dec(1);
 		return 0;
 	}
 
@@ -114,7 +115,7 @@ int thread_private::thread_init() {
 				/ NUM_NODES) * PAGE_SIZE, buf_size);
 	this->buf = buf;
 	if (io->support_aio()) {
-		cb = new cleanup_callback(buf, idx, &num_completes);
+		cb = new cleanup_callback(buf, idx, this);
 		io->set_callback(cb);
 	}
 	return 0;
@@ -175,6 +176,7 @@ again:
 					}
 					if (size > 0) {
 						ret = io->access(reqs, i);
+						num_pending.inc(i);
 						num_accesses += i;
 						i = 0;
 						goto again;
@@ -188,11 +190,18 @@ again:
 				}
 			}
 			ret = io->access(reqs, i);
+			int curr = num_pending.inc(i);
 			if (ret < 0) {
 				perror("access_vector");
 				exit(1);
 			}
 			num_accesses += i;
+			if (max_num_pending < curr)
+				max_num_pending = curr;
+			if (num_accesses % 100 == 0) {
+				num_sampling++;
+				tot_num_pending += curr;
+			}
 		}
 		else {
 			workload_t workload = gen->next();
