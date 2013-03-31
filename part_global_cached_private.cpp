@@ -68,8 +68,6 @@ public:
 		return num_requests;
 	}
 
-	std::tr1::unordered_map<int, msg_sender<io_reply> *> * init_repliers();
-
 	int process_requests(int max_nreqs);
 
 	int reply(io_request *requests, io_reply *replies, int num);
@@ -121,34 +119,14 @@ node_cached_io::node_cached_io(io_interface *underlying,
 	pthread_key_create(&replier_key, NULL);
 }
 
-std::tr1::unordered_map<int, msg_sender<io_reply> *> *node_cached_io::init_repliers()
-{
-	std::tr1::unordered_map<int, msg_sender<io_reply> *> *reply_senders
-		= new std::tr1::unordered_map<int, msg_sender<io_reply> *>();
-	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
-			= groups->begin(); it != groups->end(); it++) {
-		const struct thread_group *group = &it->second;
-		fifo_queue<io_reply> *q1[1];
-		q1[0] = ((process_reply_thread *) group->reply_processor)
-			->get_reply_queue();
-		reply_senders->insert(std::pair<int, msg_sender<io_reply> *>(
-					group->id,
-					new msg_sender<io_reply>(NUMA_REPLY_CACHE_SIZE, q1, 1)));
-	}
-	pthread_setspecific(replier_key, reply_senders);
-	return reply_senders;
-}
-
 void node_cached_io::flush_replies()
 {
-	// TODO we need a way to flush replies.
-#if 0
-	for (std::tr1::unordered_map<int, msg_sender<io_reply> *>::const_iterator it
-			= reply_senders.begin(); it != reply_senders.end(); it++) {
-		msg_sender<io_reply> *sender = it->second;
+	for (std::tr1::unordered_map<int, thread_safe_msg_sender<io_reply> *>::const_iterator it
+			= local_group->reply_senders.begin();
+			it != local_group->reply_senders.end(); it++) {
+		thread_safe_msg_sender<io_reply> *sender = it->second;
 		sender->flush_all();
 	}
-#endif
 }
 
 /* process the requests sent to this thread */
@@ -186,15 +164,12 @@ int node_cached_io::process_requests(int max_nreqs)
  */
 int node_cached_io::reply(io_request *requests, io_reply *replies, int num)
 {
-	std::tr1::unordered_map<int, msg_sender<io_reply> *> *reply_senders
-		= (std::tr1::unordered_map<int, msg_sender<io_reply> *> *) pthread_getspecific(replier_key);
-	if (reply_senders == NULL)
-		reply_senders = init_repliers();
 	for (int i = 0; i < num; i++) {
 		part_global_cached_io *io = (part_global_cached_io *) requests[i].get_io();
 		// If the reply is sent to the thread on a different node.
 		if (io->get_node_id() != this->get_node_id()) {
-			int num_sent = (*reply_senders)[io->group_idx]->send_cached(&replies[i]);
+			int num_sent = ((struct thread_group *) local_group)
+				->reply_senders[io->group_idx]->send_cached(&replies[i]);
 			// We use blocking queues here, so the send must succeed.
 			assert(num_sent > 0);
 		}
@@ -265,6 +240,21 @@ void process_reply_thread::run()
 	}
 }
 
+void init_repliers(const std::tr1::unordered_map<int, struct thread_group> &groups,
+		std::tr1::unordered_map<int, thread_safe_msg_sender<io_reply> *> &reply_senders)
+{
+	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
+			= groups.begin(); it != groups.end(); it++) {
+		const struct thread_group *group = &it->second;
+		fifo_queue<io_reply> *q1[1];
+		q1[0] = ((process_reply_thread *) group->reply_processor)
+			->get_reply_queue();
+		reply_senders.insert(std::pair<int, thread_safe_msg_sender<io_reply> *>(
+					group->id,
+					new thread_safe_msg_sender<io_reply>(NUMA_REPLY_CACHE_SIZE, q1, 1)));
+	}
+}
+
 int part_global_cached_io::init() {
 #if NUM_NODES > 1
 	/* let's bind the thread to a specific node first. */
@@ -290,9 +280,7 @@ int part_global_cached_io::init() {
 				group_idx, 1);
 		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
 				NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
-		// Create a thread for processing replies.
-		group->reply_processor = new process_reply_thread(this);
-		group->reply_processor->start();
+		init_repliers(groups, group->reply_senders);
 		// Create processing threads.
 		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
 			node_cached_io *io = new node_cached_io(underlying->clone(), &groups);
@@ -368,6 +356,9 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 			group.nthreads++;
 		group.ios = new part_global_cached_io*[group.nthreads];
 		group.cache = NULL;
+		// Create a thread for processing replies.
+		group.reply_processor = new process_reply_thread(this);
+		group.reply_processor->start();
 		for (int j = 0; j < group.nthreads; j++)
 			group.ios[j] = NULL;
 		groups.insert(std::pair<int, struct thread_group>(group_idx,

@@ -113,11 +113,6 @@ int msg_sender<T>::flush() {
 		// TODO the thread might be blocked if it's full.
 		// it might hurt performance. We should try other
 		// queues first before being blocked.
-		/*
-		 * If the sender is in thread-safe mode, we have to release the lock
-		 * no matter whether it is locked in flush() or in send(). Later,
-		 * we have to make sure the lock is grabbed in either case.
-		 */
 		int ret = q->add(tmp, num_current);
 		tmp += ret;
 		num_current -= ret;
@@ -152,6 +147,48 @@ int msg_sender<T>::send_cached(T *msg) {
 	/* one message has been cached. */
 	return 1;
 }
+/**
+ * flush the entries in the buffer to the queues.
+ * A queue is randomly picked. If the queue is full, pick the next queue
+ * until all queues are tried or all entries in the buffer is flushed.
+ * return the number of entries that have been flushed.
+ */
+template<class T>
+int thread_safe_msg_sender<T>::flush() {
+	int base_idx;
+	if (dest_queues.size() == 1)
+		base_idx = 0;
+	else
+		base_idx = random() % dest_queues.size();
+	int num_sent = 0;
+	for (size_t i = 0; !buf.is_empty() && i < dest_queues.size(); i++) {
+		fifo_queue<T> *q = dest_queues[(base_idx + i) % dest_queues.size()];
+		assert(q);
+
+		// TODO the thread might be blocked if it's full.
+		// it might hurt performance. We should try other
+		// queues first before being blocked.
+		int ret = q->add(&buf);
+		num_sent += ret;
+	}
+
+	return num_sent;
+}
+
+template<class T>
+int thread_safe_msg_sender<T>::send_cached(T *msg) {
+	int ret = buf.add(msg, 1);
+	if (ret == 1)
+		return 1;
+	// We expect the method is always successful.
+	// so we try again and again until we succeed.
+	do {
+		// If the buffer is full, we should flush the buffer.
+		flush();
+		ret = buf.add(msg, 1);
+	} while (ret == 0);
+	return ret;
+}
 
 /**
  * these are to force to instantiate the templates
@@ -163,3 +200,4 @@ template class blocking_FIFO_queue<io_request>;
 template class blocking_FIFO_queue<io_reply>;
 template class msg_sender<io_request>;
 template class msg_sender<io_reply>;
+template class thread_safe_msg_sender<io_reply>;

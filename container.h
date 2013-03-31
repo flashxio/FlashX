@@ -133,6 +133,26 @@ public:
 		return num_fetches;
 	}
 
+	virtual int add(fifo_queue<T> *queue) {
+		int idx = (int) (end % size);
+		int length = min(size - idx, get_num_remaining());
+		int num_added = 0;
+		int num = queue->fetch(buf + idx, length);
+		end += num;
+		num_added += num;
+		// If we fetch fewer entries than we ask for, it means we have fetched
+		// all entries in the queue.
+		// or the current queue is full.
+		if (num < length || get_num_remaining() == 0)
+			return num_added;
+		assert(end % size == 0);
+		length = get_num_remaining();
+		num = queue->fetch(buf, length);
+		end += num;
+		num_added += num;
+		return num_added;
+	}
+
 	virtual int add(T *entries, int num) {
 		int num_pushes = 0;
 		while (!is_full() && num_pushes < num) {
@@ -140,6 +160,10 @@ public:
 			end++;
 		}
 		return num_pushes;
+	}
+
+	int get_num_remaining() {
+		return size - fifo_queue<T>::get_num_entries();
 	}
 
 	virtual int get_num_entries() {
@@ -150,11 +174,11 @@ public:
 		return size;
 	}
 
-	virtual bool is_full() const {
+	virtual bool is_full() {
 		return end - start >= size;
 	}
 
-	virtual bool is_empty() const {
+	virtual bool is_empty() {
 		return start >= end;
 	}
 };
@@ -164,7 +188,7 @@ public:
  * It supports bulk operations.
  */
 template<class T>
-class thread_safe_FIFO_queue: fifo_queue<T>
+class thread_safe_FIFO_queue: public fifo_queue<T>
 {
 	volatile T *buf;
 	const int capacity;			// capacity of the buffer
@@ -221,6 +245,10 @@ public:
 	virtual int fetch(T *entries, int num);
 
 	virtual int add(T *entries, int num);
+	virtual int add(fifo_queue<T> &queue) {
+		assert(0);
+		return 0;
+	}
 
 	/**
 	 * It guarantees to be able to add n entries to the queue.
@@ -292,6 +320,8 @@ public:
 	virtual int fetch(T *entries, int num);
 
 	virtual int add(T *entries, int num);
+
+	virtual int add(fifo_queue<T> *queue);
 
 	int get_num_empty() const {
 		return num_empty;

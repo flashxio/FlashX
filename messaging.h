@@ -321,4 +321,33 @@ public:
 	int send_cached(T *msg);
 };
 
+template<class T>
+class thread_safe_msg_sender
+{
+	thread_safe_FIFO_queue<T> buf;
+	std::vector<fifo_queue<T> *> dest_queues;
+public:
+	/**
+	 * buf_size: the number of messages that can be buffered in the sender.
+	 */
+	thread_safe_msg_sender(int buf_size, fifo_queue<T> **queues,
+			int num_queues): buf(buf_size), dest_queues(num_queues) {
+		for (int i = 0; i < num_queues; i++)
+			dest_queues[i] = queues[i];
+	}
+
+	int num_msg() {
+		return buf.get_num_entries();
+	}
+
+	int flush();
+
+	void flush_all() {
+		while (num_msg() > 0)
+			flush();
+	}
+
+	int send_cached(T *msg);
+};
+
 #endif
