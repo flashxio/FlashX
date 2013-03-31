@@ -246,12 +246,12 @@ public:
 
 void process_request_thread::run()
 {
-	io->process_requests(NUMA_NUM_PROCESS_MSGS);
+	io->process_requests(NUMA_REQ_BUF_SIZE);
 }
 
 void process_reply_thread::run()
 {
-	int max_nreplies = NUMA_NUM_PROCESS_MSGS;
+	int max_nreplies = NUMA_REPLY_BUF_SIZE;
 	int num_processed = 0;
 	io_reply local_replies[NUMA_REPLY_BUF_SIZE];
 	while(num_processed < max_nreplies) {
