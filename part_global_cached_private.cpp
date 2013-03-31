@@ -273,7 +273,7 @@ int part_global_cached_io::init() {
 		group->cache = global_cached_io::create_cache(cache_type, cache_size,
 				group_idx, 1);
 		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
-				NUMA_REQ_QUEUE_SIZE);
+				NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
 		// Create processing threads.
 		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
 			node_cached_io *io = new node_cached_io(underlying->clone(), &groups);
@@ -362,7 +362,9 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	group->ios[i] = this;
 
 	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
-			NUMA_REPLY_QUEUE_SIZE);
+			// We don't want that adding replies is blocked, so we allow
+			// the reply queue to be expanded to an arbitrary size.
+			NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
 	// Create a thread for processing replies.
 	reply_processor = new process_reply_thread(this);
 	reply_processor->start();

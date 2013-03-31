@@ -89,16 +89,22 @@ public:
 template<class T>
 class fifo_queue
 {
-	long size;			// the number of pages that can be buffered
+	int size;
 	T *buf;			// a circular buffer to keep pages.
 	long start;
 	long end;
+	bool resizable;
+
+protected:
+	bool expand_queue(int new_size);
+
 public:
-	fifo_queue(long size) {
+	fifo_queue(int size, bool resizable = false) {
 		this->size = size;
 		buf = new T[size];
 		start = 0;
 		end = 0;
+		this->resizable = resizable;
 	}
 
 	~fifo_queue() {
@@ -138,6 +144,10 @@ public:
 
 	virtual int get_num_entries() {
 		return (int) (end - start);
+	}
+
+	int get_size() const {
+		return size;
 	}
 
 	virtual bool is_full() const {
@@ -264,15 +274,19 @@ class blocking_FIFO_queue: public fifo_queue<T>
 	pthread_mutex_t mutex;
 	int num_empty;
 	int num_full;
+	int max_size;
 
 	std::string name;
 public:
-	blocking_FIFO_queue(const std::string name, int size): fifo_queue<T>(size) {
+	blocking_FIFO_queue(const std::string name, int init_size,
+			int max_size): fifo_queue<T>(init_size, max_size > init_size) {
+		assert(init_size <= max_size);
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
 		this->name = name;
 		num_empty = 0;
 		num_full = 0;
+		this->max_size = max_size;
 	}
 
 	virtual int fetch(T *entries, int num);
