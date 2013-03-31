@@ -109,7 +109,7 @@ std::tr1::unordered_map<int, msg_sender<io_reply> *> *node_cached_io::init_repli
 			q1[0] = group->ios[j]->reply_queue;
 			reply_senders->insert(std::pair<int, msg_sender<io_reply> *>(
 						group->ios[j]->thread_id,
-						new msg_sender<io_reply>(NUMA_MSG_CACHE_SIZE, q1, 1)));
+						new msg_sender<io_reply>(NUMA_REPLY_CACHE_SIZE, q1, 1)));
 		}
 	}
 	pthread_setspecific(replier_key, reply_senders);
@@ -310,7 +310,7 @@ int part_global_cached_io::init() {
 		fifo_queue<io_request> *q[1];
 		q[0] = group->request_queue;
 		req_senders.insert(std::pair<int, msg_sender<io_request> *>(it->first,
-					new msg_sender<io_request>(NUMA_MSG_CACHE_SIZE, q, 1)));
+					new msg_sender<io_request>(NUMA_REQ_CACHE_SIZE, q, 1)));
 	}
 
 	return 0;

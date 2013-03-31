@@ -48,7 +48,8 @@ const int DIRTY_PAGES_THRESHOLD = CELL_SIZE / 2;
 
 const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024;
 
-const int NUMA_MSG_CACHE_SIZE = 300;
+const int NUMA_REQ_CACHE_SIZE = 300;
+const int NUMA_REPLY_CACHE_SIZE = 300;
 const int NUMA_REQ_QUEUE_SIZE = 600;
 const int NUMA_REQ_BUF_SIZE = 300;
 const int NUMA_REPLY_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE;
