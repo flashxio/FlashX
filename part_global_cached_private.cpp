@@ -79,6 +79,33 @@ public:
 	virtual void notify_completion(io_request *req);
 };
 
+/**
+ * This thread runs on the node with the application threads.
+ * It is dedicated to processing replies. If the queue is empty,
+ * the thread will sleep.
+ */
+class process_reply_thread: public thread
+{
+	part_global_cached_io *io;
+	blocking_FIFO_queue<io_reply> *reply_queue;
+public:
+	process_reply_thread(part_global_cached_io *io): thread(
+			std::string("process_reply_thread-") + itoa(io->get_node_id()),
+			io->get_node_id(), false) {
+		this->io = io;
+
+		reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
+				// We don't want that adding replies is blocked, so we allow
+				// the reply queue to be expanded to an arbitrary size.
+				NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
+	}
+	void run();
+
+	blocking_FIFO_queue<io_reply> *get_reply_queue() {
+		return reply_queue;
+	}
+};
+
 node_cached_io::node_cached_io(io_interface *underlying,
 		const std::tr1::unordered_map<int, struct thread_group> *groups):
 	global_cached_io(underlying->clone())
@@ -101,16 +128,12 @@ std::tr1::unordered_map<int, msg_sender<io_reply> *> *node_cached_io::init_repli
 	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
 			= groups->begin(); it != groups->end(); it++) {
 		const struct thread_group *group = &it->second;
-		for (int j = 0; j < group->nthreads; j++) {
-			// We need a sender for each parted global IO because we need to
-			// make sure replies are sent to the right the IO instance that
-			// issued the request.
-			fifo_queue<io_reply> *q1[1];
-			q1[0] = group->ios[j]->reply_queue;
-			reply_senders->insert(std::pair<int, msg_sender<io_reply> *>(
-						group->ios[j]->thread_id,
-						new msg_sender<io_reply>(NUMA_REPLY_CACHE_SIZE, q1, 1)));
-		}
+		fifo_queue<io_reply> *q1[1];
+		q1[0] = ((process_reply_thread *) group->reply_processor)
+			->get_reply_queue();
+		reply_senders->insert(std::pair<int, msg_sender<io_reply> *>(
+					group->id,
+					new msg_sender<io_reply>(NUMA_REPLY_CACHE_SIZE, q1, 1)));
 	}
 	pthread_setspecific(replier_key, reply_senders);
 	return reply_senders;
@@ -171,14 +194,14 @@ int node_cached_io::reply(io_request *requests, io_reply *replies, int num)
 		part_global_cached_io *io = (part_global_cached_io *) requests[i].get_io();
 		// If the reply is sent to the thread on a different node.
 		if (io->get_node_id() != this->get_node_id()) {
-			int num_sent = (*reply_senders)[io->thread_id]->send_cached(&replies[i]);
+			int num_sent = (*reply_senders)[io->group_idx]->send_cached(&replies[i]);
 			// We use blocking queues here, so the send must succeed.
 			assert(num_sent > 0);
 		}
 		else {
 			io->process_reply(&replies[i]);
-			io->processed_replies.inc(1);
 		}
+		io->processed_replies.inc(1);
 	}
 	return 0;
 }
@@ -222,23 +245,6 @@ public:
 	}
 };
 
-/**
- * This thread runs on the node with the application threads.
- * It is dedicated to processing replies. If the queue is empty,
- * the thread will sleep.
- */
-class process_reply_thread: public thread
-{
-	part_global_cached_io *io;
-public:
-	process_reply_thread(part_global_cached_io *io): thread(
-			std::string("process_reply_thread-") + itoa(io->get_node_id()),
-			io->get_node_id(), false) {
-		this->io = io;
-	}
-	void run();
-};
-
 void process_request_thread::run()
 {
 	io->process_requests(NUMA_NUM_PROCESS_MSGS);
@@ -246,7 +252,17 @@ void process_request_thread::run()
 
 void process_reply_thread::run()
 {
-	io->process_replies(NUMA_NUM_PROCESS_MSGS);
+	int max_nreplies = NUMA_NUM_PROCESS_MSGS;
+	int num_processed = 0;
+	io_reply local_replies[NUMA_REPLY_BUF_SIZE];
+	while(num_processed < max_nreplies) {
+		int num = reply_queue->fetch(local_replies, NUMA_REPLY_BUF_SIZE);
+		for (int i = 0; i < num; i++) {
+			io_reply *reply = &local_replies[i];
+			((part_global_cached_io *) reply->get_io())->process_reply(reply);
+		}
+		num_processed += num;
+	}
 }
 
 int part_global_cached_io::init() {
@@ -274,6 +290,9 @@ int part_global_cached_io::init() {
 				group_idx, 1);
 		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
 				NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
+		// Create a thread for processing replies.
+		group->reply_processor = new process_reply_thread(this);
+		group->reply_processor->start();
 		// Create processing threads.
 		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
 			node_cached_io *io = new node_cached_io(underlying->clone(), &groups);
@@ -360,14 +379,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	int i = thread_idx(idx, num_groups);
 	assert (group->ios[i] == NULL);
 	group->ios[i] = this;
-
-	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
-			// We don't want that adding replies is blocked, so we allow
-			// the reply queue to be expanded to an arbitrary size.
-			NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
-	// Create a thread for processing replies.
-	reply_processor = new process_reply_thread(this);
-	reply_processor->start();
 }
 
 /* distribute requests to nodes. */
@@ -398,25 +409,6 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	return num_sent;
 }
 
-/* 
- * process the replies and return the number
- * of bytes that have been accessed.
- */
-int part_global_cached_io::process_replies(int max_nreplies) {
-	int num_processed = 0;
-	io_reply local_replies[NUMA_REPLY_BUF_SIZE];
-	while(num_processed < max_nreplies) {
-		int num = reply_queue->fetch(local_replies, NUMA_REPLY_BUF_SIZE);
-		for (int i = 0; i < num; i++) {
-			io_reply *reply = &local_replies[i];
-			process_reply(reply);
-		}
-		num_processed += num;
-	}
-	processed_replies.inc(num_processed);
-	return num_processed;
-}
-
 int part_global_cached_io::process_reply(io_reply *reply) {
 	int ret = -1;
 	if (reply->is_success()) {
@@ -430,7 +422,7 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 			// It doesn't really matter what node id is specified
 			// for the request. The request is just used for notifying
 			// the user code of the completion of the request.
-			reply->get_access_method(), get_thread(thread_id)->get_io(), -1);
+			reply->get_access_method(), this, -1);
 	final_cb->invoke(&req);
 	return ret;
 }

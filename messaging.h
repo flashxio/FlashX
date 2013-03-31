@@ -233,13 +233,15 @@ class io_reply
 {
 	char *buf;
 	off_t offset;
+	io_interface *io;
 	ssize_t size: 32;
 	int success: 1;
 	int status: 16;
 	int access_method: 1;
-	void init(char *buf, off_t off, ssize_t size, int success,
+	void init(char *buf, io_interface *io, off_t off, ssize_t size, int success,
 			int status, int access_method) {
 		this->buf = buf;
+		this->io = io;
 		this->offset = off;
 		this->size = size;
 		this->success = success;
@@ -248,35 +250,39 @@ class io_reply
 	}
 public:
 	io_reply() {
-		init(NULL, 0, 0, 0, 0, READ);
+		init(NULL, NULL, 0, 0, 0, 0, READ);
 	}
 
 	io_reply(io_request *req, int success, int status) {
-		init(req->get_buf(), req->get_offset(), req->get_size(),
+		init(req->get_buf(), req->get_io(), req->get_offset(), req->get_size(),
 					success, status, req->get_access_method());
 	}
 
-	int get_status() {
+	io_interface *get_io() const {
+		return io;
+	}
+
+	int get_status() const {
 		return status;
 	}
 
-	bool is_success() {
+	bool is_success() const {
 		return success;
 	}
 
-	char *get_buf() {
+	char *get_buf() const {
 		return buf;
 	}
 
-	off_t get_offset() {
+	off_t get_offset() const {
 		return offset;
 	}
 
-	ssize_t get_size() {
+	ssize_t get_size() const {
 		return size;
 	}
 
-	int get_access_method() {
+	int get_access_method() const {
 		return access_method;
 	}
 };

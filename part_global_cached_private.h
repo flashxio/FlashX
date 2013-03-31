@@ -23,6 +23,8 @@ struct thread_group
 	std::vector<thread *> process_request_threads;
 	
 	blocking_FIFO_queue<io_request> *request_queue;
+
+	thread *reply_processor;
 };
 
 class part_global_cached_io: public global_cached_io
@@ -43,9 +45,6 @@ class part_global_cached_io: public global_cached_io
 	static atomic_integer num_finished_threads;
 
 	int group_idx;
-
-	thread *reply_processor;
-	blocking_FIFO_queue<io_reply> *reply_queue;
 
 	/* the size of the cache associated to the thread. */
 	long cache_size;
@@ -115,8 +114,6 @@ public:
 	int distribute_reqs(io_request *requests, int num);
 
 	int process_requests(int max_nreqs);
-
-	int process_replies(int max_nreplies);
 
 	int process_reply(io_reply *reply);
 
