@@ -36,8 +36,7 @@ thread_group::~thread_group()
 #endif
 
 /**
- * This wraps global cached IO to handle requests in the cache
- * of the local node.
+ * This wraps global cached IO to handle requests sent from remote threads.
  */
 class node_cached_io: public global_cached_io
 {
@@ -70,11 +69,12 @@ public:
 
 	int process_requests(int max_nreqs);
 
-	int reply(io_request *requests, io_reply *replies, int num);
-
 	void flush_replies();
 
+	// Requests are from remote threads, so we need to send replies
+	// to them for notification.
 	virtual void notify_completion(io_request *req);
+	virtual void notify_completion(io_request *reqs[], int num);
 };
 
 /**
@@ -147,32 +147,68 @@ int node_cached_io::process_requests(int max_nreqs)
 	return num_processed;
 }
 
-/**
- * send replies to the thread that sent the requests.
+/*
+ * We sort requests according to the io instance where they will be delivered to.
  */
-int node_cached_io::reply(io_request *requests, io_reply *replies, int num)
+void sort_requests(io_request *reqs[], int num,
+		std::tr1::unordered_map<io_interface *, std::vector<io_request *> > &req_map)
 {
 	for (int i = 0; i < num; i++) {
-		part_global_cached_io *io = (part_global_cached_io *) requests[i].get_io();
-		// If the reply is sent to the thread on a different node.
-		if (io->get_node_id() != this->get_node_id()) {
-			int num_sent = ((struct thread_group *) local_group)
-				->reply_senders[io->group_idx]->send_cached(&replies[i]);
-			// We use blocking queues here, so the send must succeed.
-			assert(num_sent > 0);
+		io_request *req = reqs[i];
+		io_interface *io = req->get_io();
+		std::vector<io_request *> *vec;
+		std::tr1::unordered_map<io_interface *,
+			std::vector<io_request *> >::iterator it = req_map.find(io);
+		if (it == req_map.end()) {
+			req_map.insert(std::pair<io_interface *, std::vector<io_request *> >(
+						io, std::vector<io_request *>()));
+			vec = &req_map[io];
 		}
-		else {
-			io->process_reply(&replies[i]);
-		}
-		io->processed_replies.inc(1);
+		else
+			vec = &it->second;
+		vec->push_back(req);
 	}
-	return 0;
+}
+
+void node_cached_io::notify_completion(io_request *reqs[], int num)
+{
+	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > req_map;
+	sort_requests(reqs, num, req_map);
+	for (std::tr1::unordered_map<io_interface *,
+			std::vector<io_request *> >::iterator it = req_map.begin();
+			it != req_map.end(); it++) {
+		part_global_cached_io *io = (part_global_cached_io *) it->first;
+		std::vector<io_request *> *vec = &it->second;
+
+		io_reply replies[vec->size()];
+		for (size_t i = 0; i < vec->size(); i++)
+			replies[i] = io_reply(vec->at(i), true, 0);
+		// The reply must be sent to the thread on a different node.
+		assert(io->get_node_id() != this->get_node_id());
+		int num_sent;
+		if ((int) vec->size() > NUMA_REPLY_CACHE_SIZE)
+			num_sent = ((struct thread_group *) local_group)
+				->reply_senders[io->group_idx]->send(replies, vec->size());
+		else
+			num_sent = ((struct thread_group *) local_group)
+				->reply_senders[io->group_idx]->send_cached(replies, vec->size());
+		// We use blocking queues here, so the send must succeed.
+		assert(num_sent == (int) vec->size());
+		io->processed_replies.inc(vec->size());
+	}
 }
 
 void node_cached_io::notify_completion(io_request *req)
 {
 	io_reply rep(req, true, 0);
-	reply(req, &rep, 1);
+	part_global_cached_io *io = (part_global_cached_io *) req->get_io();
+	// The reply must be sent to the thread on a different node.
+	assert(io->get_node_id() != this->get_node_id());
+	int num_sent = ((struct thread_group *) local_group)
+		->reply_senders[io->group_idx]->send_cached(&rep);
+	// We use blocking queues here, so the send must succeed.
+	assert(num_sent > 0);
+	io->processed_replies.inc(1);
 }
 
 /**
@@ -363,25 +399,23 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 /* distribute requests to nodes. */
 int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	int num_sent = 0;
+	io_request local_reqs[num];
+	int num_local_reqs = 0;
 	for (int i = 0; i < num; i++) {
 		int idx = hash_req(&requests[i]);
 		if (idx != get_group_id()) {
 			remote_reads++;
 			int ret = req_senders[idx]->send_cached(&requests[i]);
-			if (ret == 0)
-				break;
+			assert(ret > 0);
 		}
 		else {
-			int ret = global_cached_io::access(&requests[i], 1);
-			if (ret < 0) {
-				fprintf(stderr, "part global cache can't issue a request\n");
-				io_reply rep(&requests[i], false, errno);
-				process_reply(&rep);
-				processed_replies.inc(1);
-			}
+			local_reqs[num_local_reqs++] = requests[i];
 		}
 		num_sent++;
 	}
+
+	global_cached_io::access(local_reqs, num_local_reqs);
+	// TODO how to deal with error of access.
 	for (std::tr1::unordered_map<int, msg_sender<io_request> *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++)
 		it->second->flush();

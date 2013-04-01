@@ -28,6 +28,12 @@ struct thread_group
 	std::tr1::unordered_map<int, thread_safe_msg_sender<io_reply> *> reply_senders;
 };
 
+/**
+ * This provides interface for application threads issue IO requests
+ * in the NUMA architecture. If the requests are sent to disks connected
+ * to the local processor, they are processed directly. No message passing
+ * is needed.
+ */
 class part_global_cached_io: public global_cached_io
 {
 	static std::tr1::unordered_map<int, struct thread_group> groups;

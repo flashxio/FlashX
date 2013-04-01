@@ -190,6 +190,56 @@ int thread_safe_msg_sender<T>::send_cached(T *msg) {
 	return ret;
 }
 
+template<class T>
+int thread_safe_msg_sender<T>::send_cached(T *msg, int num)
+{
+	int num_added = 0;
+	// We expect the method is always successful.
+	// so we try again and again until we succeed.
+	while (true) {
+		int ret = buf.add(msg, num);
+		msg += ret;
+		num -= ret;
+		num_added += ret;
+		if (num == 0)
+			return num_added;
+		// If the buffer is full, we should flush the buffer.
+		flush();
+	}
+}
+
+// Send msgs to the destinatiion queue directly without caching.
+template<class T>
+int thread_safe_msg_sender<T>::send(T *msg, int num)
+{
+	// We should flush the msgs in the cache first.
+	// but it won't flush all msgs in the cache.
+	flush();
+
+	int num_sent = 0;
+	while (num > 0) {
+		int base_idx;
+		if (dest_queues.size() == 1)
+			base_idx = 0;
+		else
+			base_idx = random() % dest_queues.size();
+		for (size_t i = 0; num > 0 && i < dest_queues.size(); i++) {
+			fifo_queue<T> *q = dest_queues[(base_idx + i) % dest_queues.size()];
+			assert(q);
+
+			// TODO the thread might be blocked if it's full.
+			// it might hurt performance. We should try other
+			// queues first before being blocked.
+			int ret = q->add(msg, num);
+			msg += ret;
+			num -= ret;
+			num_sent += ret;
+		}
+	}
+
+	return num_sent;
+}
+
 /**
  * these are to force to instantiate the templates
  * for io_request and io_reply.

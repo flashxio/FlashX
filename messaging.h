@@ -359,6 +359,8 @@ public:
 	}
 
 	int send_cached(T *msg);
+	int send_cached(T *msg, int num);
+	int send(T *msg, int num);
 };
 
 #endif
