@@ -1,3 +1,6 @@
+#include <tr1/unordered_map>
+#include <vector>
+
 #include "global_cached_private.h"
 #include "container.cpp"
 #include "flush_thread.h"
@@ -78,6 +81,32 @@ static void extract_pages(const io_request &req, off_t off, int npages,
 /**
  * It returns the page that is dirtied by the function for the first time.
  */
+static thread_safe_page *__complete_1page_req(io_request *req, thread_safe_page *p)
+{
+	int page_off = req->get_offset() - ROUND_PAGE(req->get_offset());
+	thread_safe_page *ret = NULL;
+
+	p->lock();
+	if (req->get_access_method() == WRITE) {
+		memcpy((char *) p->get_data() + page_off, req->get_buf(),
+				req->get_size());
+		if (!p->set_dirty(true))
+			ret = p;
+	}
+	else 
+		/* I assume the data I read never crosses the page boundary */
+		memcpy(req->get_buf(), (char *) p->get_data() + page_off,
+				req->get_size());
+	p->unlock();
+	// TODO this is a bug. If the page is returned, we shouldn't
+	// dereference it here.
+	p->dec_ref();
+	return ret;
+}
+
+/**
+ * It returns the page that is dirtied by the function for the first time.
+ */
 static thread_safe_page *__complete_req(io_request *orig, thread_safe_page *p)
 {
 	io_request extracted;
@@ -97,6 +126,8 @@ static thread_safe_page *__complete_req(io_request *orig, thread_safe_page *p)
 		memcpy(extracted.get_buf(), (char *) p->get_data() + page_off,
 				extracted.get_size());
 	p->unlock();
+	// TODO this is a bug. If the page is returned, we shouldn't
+	// dereference it here.
 	p->dec_ref();
 	return ret;
 }
@@ -119,6 +150,8 @@ static thread_safe_page *__complete_req_unlocked(io_request *orig,
 		/* I assume the data I read never crosses the page boundary */
 		memcpy(extracted.get_buf(), (char *) p->get_data() + page_off,
 				extracted.get_size());
+	// TODO this is a bug. If the page is returned, we shouldn't
+	// dereference it here.
 	p->dec_ref();
 	return ret;
 }
@@ -139,6 +172,14 @@ void global_cached_io::notify_completion(io_request *req)
 	io_interface *io = req->get_io();
 	if (io->get_callback())
 		io->get_callback()->invoke(&req, 1);
+}
+
+void global_cached_io::notify_completion(io_request *reqs[], int num)
+{
+	// If we just deliver notification to threads on the local processor.
+	// we can notify them for each request.
+	for (int i = 0; i < num; i++)
+		notify_completion(reqs[i]);
 }
 
 void global_cached_io::finalize_partial_request(io_request &partial,
@@ -771,11 +812,29 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 	}
 }
 
+void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
+		thread_safe_page *cached_pages[], int num_cached_reqs)
+{
+	for (int i = 0; i < num_cached_reqs; i++) {
+		io_request *req = cached_reqs[i];
+		thread_safe_page *dirty = __complete_1page_req(req,
+				cached_pages[i]);
+		page_cache *cache = get_global_cache();
+		if (dirty && cache->get_flush_thread())
+			cache->get_flush_thread()->dirty_pages(&dirty, 1);
+	}
+	notify_completion(cached_reqs, num_cached_reqs);
+}
+
 ssize_t global_cached_io::access(io_request *requests, int num)
 {
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();
 	}
+
+	io_request *cached_reqs[num];
+	thread_safe_page *cached_pages[num];
+	int num_cached_reqs = 0;
 
 	std::vector<thread_safe_page *> dirty_pages;
 	for (int i = 0; i < num; i++) {
@@ -786,7 +845,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 		thread_safe_page *pages[MAX_NUM_IOVECS];
 		// TODO right now it only supports single-buf requests.
 		assert(requests[i].get_num_bufs() == 1);
-		io_request *orig = new io_request(requests[i]);
+		io_request *orig = NULL;
 
 		int pg_idx = 0;
 		for (off_t tmp_off = begin_pg_offset; tmp_off < end_pg_offset;
@@ -803,7 +862,20 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 #ifdef STATISTICS
 				cache_hits++;
 #endif
+				// Let's optimize for cached single-page requests by stealing
+				// them from normal code path of processing them.
+				assert(requests[i].is_valid());
+				if (requests[i].within_1page()) {
+					cached_reqs[num_cached_reqs] = &requests[i];
+					cached_pages[num_cached_reqs] = p;
+					num_cached_reqs++;
+					break;
+				}
 			}
+			// We delay copying the IO request until here, so we don't
+			// need to do it for cached single-page requests..
+			if (orig == NULL)
+				orig = new io_request(requests[i]);
 			/*
 			 * Cache may evict a dirty page and return the dirty page
 			 * to the user before it is written back to a file.
@@ -919,6 +991,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			read(req, pages, pg_idx);
 		}
 	}
+	process_cached_reqs(cached_reqs, cached_pages, num_cached_reqs);
 	if (get_global_cache()->get_flush_thread())
 		get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
 				dirty_pages.size());

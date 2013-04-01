@@ -142,6 +142,17 @@ public:
 		return num_bufs == 0;
 	}
 
+	bool is_valid() const {
+		return get_offset() != -1;
+	}
+
+	/**
+	 * The requested data is inside a page on the disk.
+	 */
+	bool within_1page() const {
+		return get_offset() + get_size() <= ROUND_PAGE(get_offset()) + PAGE_SIZE;
+	}
+
 	void clear() {
 		memset((void *) vec_pointer, 0, sizeof(vec_pointer[0]) * vec_capacity);
 		num_bufs = 0;

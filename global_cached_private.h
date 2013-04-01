@@ -104,6 +104,9 @@ public:
 	ssize_t write(io_request &req, thread_safe_page *p,
 		std::vector<thread_safe_page *> &dirty_pages);
 
+	void process_cached_reqs(io_request *cached_reqs[],
+			thread_safe_page *cached_pages[], int num_cached_reqs);
+
 	void queue_request(io_request *req) {
 		pending_requests.addByForce(&req, 1);
 	}
@@ -147,7 +150,12 @@ public:
 		return cache_hits;
 	}
 
+	// These two methods notify of application threads the completion of requests.
+	// For global cache, they call invoke() callback directly.
+	// For parted global cache, they should send reply messages to remote threads.
 	virtual void notify_completion(io_request *req);
+	virtual void notify_completion(io_request *reqs[], int num);
+
 	void finalize_partial_request(io_request &partial, io_request *orig);
 	void finalize_request(io_request &req);
 
