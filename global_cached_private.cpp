@@ -130,7 +130,7 @@ public:
 	access_page_callback(global_cached_io *io) {
 		cached_io = io;
 	}
-	int invoke(io_request *request);
+	int invoke(io_request *requests[], int);
 	int multibuf_invoke(io_request *request);
 };
 
@@ -138,7 +138,7 @@ void global_cached_io::notify_completion(io_request *req)
 {
 	io_interface *io = req->get_io();
 	if (io->get_callback())
-		io->get_callback()->invoke(req);
+		io->get_callback()->invoke(&req, 1);
 }
 
 void global_cached_io::finalize_partial_request(io_request &partial,
@@ -307,89 +307,94 @@ int access_page_callback::multibuf_invoke(io_request *request)
 	return -1;
 }
 
-int access_page_callback::invoke(io_request *request)
+int access_page_callback::invoke(io_request *requests[], int num)
 {
 	page_cache *cache = cached_io->get_global_cache();
-	/* 
-	 * If the request doesn't have an original request,
-	 * it is issued by the flushing thread.
-	 */
-	if (request->get_orig() == NULL) {
-		if (cache->get_flush_thread())
-			cache->get_flush_thread()->request_callback(*request);
-		return 0;
-	}
+	for (int i = 0; i < num; i++) {
+		io_request *request = requests[i];
+		/* 
+		 * If the request doesn't have an original request,
+		 * it is issued by the flushing thread.
+		 */
+		if (request->get_orig() == NULL) {
+			if (cache->get_flush_thread())
+				cache->get_flush_thread()->request_callback(*request);
+			continue;
+		}
 
-	if (request->get_num_bufs() > 1)
-		return multibuf_invoke(request);
+		if (request->get_num_bufs() > 1) {
+			multibuf_invoke(request);
+			continue;
+		}
 
-	thread_safe_page *p = (thread_safe_page *) request->get_priv();
-	assert(request->get_size() <= PAGE_SIZE);
+		thread_safe_page *p = (thread_safe_page *) request->get_priv();
+		assert(request->get_size() <= PAGE_SIZE);
 
-	p->lock();
-	// If we write data to part of a page, we need to first read
-	// the entire page to memory first.
-	if (request->get_access_method() == READ) {
-		p->set_data_ready(true);
-	}
-	// We just evict a page with dirty data and write the original
-	// dirty data in the page to a file.
-	else {
-		p->set_old_dirty(false);
-	}
-	p->set_io_pending(false);
-	io_request *old = p->reset_reqs();
-	bool data_ready = p->data_ready();
-	p->unlock();
+		p->lock();
+		// If we write data to part of a page, we need to first read
+		// the entire page to memory first.
+		if (request->get_access_method() == READ) {
+			p->set_data_ready(true);
+		}
+		// We just evict a page with dirty data and write the original
+		// dirty data in the page to a file.
+		else {
+			p->set_old_dirty(false);
+		}
+		p->set_io_pending(false);
+		io_request *old = p->reset_reqs();
+		bool data_ready = p->data_ready();
+		p->unlock();
 
-	// If the data on the page is ready, it won't become unready.
-	// The only place where data is set unready is where the page is evicted.
-	// Since we have a reference of the page, it won't be evicted.
-	// When data is ready, we can execuate any operations on the page.
-	if (data_ready) {
-		/* The request should contain the very original request. */
-		io_request *orig = request->get_orig();
-		assert(orig->get_orig() == NULL);
-		thread_safe_page *dirty = __complete_req(orig, p);
-		// TODO maybe I should make it support multi-request callback.
-		if (dirty && cache->get_flush_thread())
-			cache->get_flush_thread()->dirty_pages(&dirty, 1);
-		io_request partial;
-		extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
-		cached_io->finalize_partial_request(partial, orig);
-
-		int num = 0;
-		while (old) {
-			/*
-			 * It should be guaranteed that there isn't a multi-buf request
-			 * in the queue. Because if a page is in IO pending, we won't
-			 * issue a multi-buf request for the page.
-			 */
-			io_request *next = old->get_next_req();
-			assert(old->get_num_bufs() == 1);
-			thread_safe_page *dirty = __complete_req(old, p);
+		// If the data on the page is ready, it won't become unready.
+		// The only place where data is set unready is where the page is evicted.
+		// Since we have a reference of the page, it won't be evicted.
+		// When data is ready, we can execuate any operations on the page.
+		if (data_ready) {
+			/* The request should contain the very original request. */
+			io_request *orig = request->get_orig();
+			assert(orig->get_orig() == NULL);
+			thread_safe_page *dirty = __complete_req(orig, p);
+			// TODO maybe I should make it support multi-request callback.
 			if (dirty && cache->get_flush_thread())
 				cache->get_flush_thread()->dirty_pages(&dirty, 1);
+			io_request partial;
+			extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
+			cached_io->finalize_partial_request(partial, orig);
 
-			cached_io->finalize_request(*old);
-			// Now we can delete it.
-			delete old;
-			old = next;
-			num++;
+			int num = 0;
+			while (old) {
+				/*
+				 * It should be guaranteed that there isn't a multi-buf request
+				 * in the queue. Because if a page is in IO pending, we won't
+				 * issue a multi-buf request for the page.
+				 */
+				io_request *next = old->get_next_req();
+				assert(old->get_num_bufs() == 1);
+				thread_safe_page *dirty = __complete_req(old, p);
+				if (dirty && cache->get_flush_thread())
+					cache->get_flush_thread()->dirty_pages(&dirty, 1);
+
+				cached_io->finalize_request(*old);
+				// Now we can delete it.
+				delete old;
+				old = next;
+				num++;
+			}
 		}
-	}
-	else {
-		io_request *orig = request->get_orig();
-		global_cached_io *io = static_cast<global_cached_io *>(
-				orig->get_io());
-		// We can't invoke write() here because it may block the thread.
-		// Instead, we queue the request, so it will be issue to
-		// the device by the user thread.
-		assert(orig->get_next_req() == NULL);
-		orig->set_next_req(old);
-		io->queue_request(orig);
-		// These requests can't be deleted yet.
-		// They will be deleted when these write requests are finally served.
+		else {
+			io_request *orig = request->get_orig();
+			global_cached_io *io = static_cast<global_cached_io *>(
+					orig->get_io());
+			// We can't invoke write() here because it may block the thread.
+			// Instead, we queue the request, so it will be issue to
+			// the device by the user thread.
+			assert(orig->get_next_req() == NULL);
+			orig->set_next_req(old);
+			io->queue_request(orig);
+			// These requests can't be deleted yet.
+			// They will be deleted when these write requests are finally served.
+		}
 	}
 	return 0;
 }
@@ -558,7 +563,7 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		ret = orig->get_size();
 		__complete_req(orig, p);
 		if (get_callback())
-			get_callback()->invoke(orig);
+			get_callback()->invoke(&orig, 1);
 	}
 	return ret;
 }
@@ -789,14 +794,16 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			off_t old_off = -1;
 			thread_safe_page *p = (thread_safe_page *) (get_global_cache()
 					->search(tmp_off, old_off));
-#ifdef STATISTICS
+
 			/* 
 			 * If old_off is -1, it means search() didn't evict a page, i.e.,
 			 * it's a cache hit.
 			 */
-			if (old_off == -1)
+			if (old_off == -1) {
+#ifdef STATISTICS
 				cache_hits++;
 #endif
+			}
 			/*
 			 * Cache may evict a dirty page and return the dirty page
 			 * to the user before it is written back to a file.

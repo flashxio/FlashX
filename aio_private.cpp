@@ -150,12 +150,20 @@ struct thread_callback_s
 	extended_io_request req;
 };
 
-void aio_callback(io_context_t ctx, struct iocb* iocb,
-		void *cb, long res, long res2) {
-	assert(res2 == 0);
-	thread_callback_s *tcb = (thread_callback_s *) cb;
+void aio_callback(io_context_t ctx, struct iocb* iocb[],
+		void *cbs[], long res[], long res2[], int num) {
+	async_io *aio = NULL;
+	thread_callback_s *tcbs[num];
+	for (int i = 0; i < num; i++) {
+		assert(res2[i] == 0);
+		tcbs[i] = (thread_callback_s *) cbs[i];
+		if (aio == NULL)
+			aio = tcbs[i]->aio;
+		// This is true when disks are only accessed by disk access threads.
+		assert(aio == tcbs[i]->aio);
+	}
 
-	tcb->aio->return_cb(tcb);
+	aio->return_cb(tcbs, num);
 }
 
 async_io::async_io(const logical_file_partition &partition, long size,
@@ -264,13 +272,21 @@ ssize_t async_io::access(io_request *requests, int num)
 	return ret;
 }
 
-void async_io::return_cb(thread_callback_s *tcb)
+void async_io::return_cb(thread_callback_s *tcbs[], int num)
 {
-	if (tcb->req.is_replaced())
-		tcb->req.use_orig_bufs();
-	if (this->cb) {
-		this->cb->invoke(&tcb->req);
+	io_request *reqs[num];
+	for (int i = 0; i < num; i++) {
+		thread_callback_s *tcb = tcbs[i];
+		if (tcb->req.is_replaced())
+			tcb->req.use_orig_bufs();
+		reqs[i] = &tcb->req;
 	}
-	tcb->req.reset();
-	cbs.push_back(tcb);
+	if (this->cb) {
+		this->cb->invoke(reqs, num);
+	}
+	for (int i = 0; i < num; i++) {
+		thread_callback_s *tcb = tcbs[i];
+		tcb->req.reset();
+		cbs.push_back(tcb);
+	}
 }

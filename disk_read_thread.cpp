@@ -6,17 +6,14 @@
 class initiator_callback: public callback
 {
 public:
-
-	int invoke(io_request *rq) {
-		io_interface *io = rq->get_io();
-		/* 
-		 * after a request is processed,
-		 * we need to notify the initiator thread.
-		 * It's possible the initiator thread is itself,
-		 * we need to stop the infinite loop.
-		 */
-		if (io->get_callback())
-			io->get_callback()->invoke(rq);
+	int invoke(io_request *rqs[], int num) {
+		// TODO let's do it for now.
+		for (int i = 0; i < num; i++) {
+			io_request *rq = rqs[i];
+			io_interface *io = rq->get_io();
+			if (io->get_callback())
+				io->get_callback()->invoke(&rq, 1);
+		}
 		return 0;
 	}
 };

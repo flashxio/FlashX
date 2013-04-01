@@ -36,8 +36,8 @@ struct aio_ctx
 	struct free_list_s* free_list;
 };
 
-typedef void (*callback_t) (io_context_t, struct iocb*,
-		void *, long, long);
+typedef void (*callback_t) (io_context_t, struct iocb*[],
+		void *[], long *, long *, int);
 
 struct io_callback_s
 {

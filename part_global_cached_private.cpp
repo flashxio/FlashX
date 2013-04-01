@@ -140,19 +140,7 @@ int node_cached_io::process_requests(int max_nreqs)
 	io_request local_reqs[NUMA_REQ_BUF_SIZE];
 	while (num_processed < max_nreqs) {
 		int num = request_queue->fetch(local_reqs, NUMA_REQ_BUF_SIZE);
-		for (int i = 0; i < num; i++) {
-			io_request *req = &local_reqs[i];
-			assert(req->get_offset() >= 0);
-			assert(req->get_size() > 0);
-			// The thread will be blocked by the global cache IO
-			// if too many requests flush in.
-			int ret = global_cached_io::access(req, 1);
-			if (ret < 0) {
-				fprintf(stderr, "part global cache can't issue a request\n");
-				io_reply rep(req, false, errno);
-				reply(req, &rep, 1);
-			}
-		}
+		global_cached_io::access(local_reqs, num);
 		num_processed += num;
 	}
 	num_requests += num_processed;
@@ -414,7 +402,8 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 			// for the request. The request is just used for notifying
 			// the user code of the completion of the request.
 			reply->get_access_method(), this, -1);
-	final_cb->invoke(&req);
+	io_request *reqs[1] = {&req};
+	final_cb->invoke(reqs, 1);
 	return ret;
 }
 

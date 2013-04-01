@@ -16,7 +16,7 @@ enum {
 class callback
 {
 public:
-	virtual int invoke(io_request *) = 0;
+	virtual int invoke(io_request *reqs[], int num) = 0;
 };
 
 /**

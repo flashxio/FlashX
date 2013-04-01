@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <sys/select.h>
 
 //#include <libaio.h>
@@ -136,7 +137,7 @@ struct iocb* make_io_request(struct aio_ctx* a_ctx, int fd, size_t iosize, long 
 int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num)
 {
   struct io_event events[a_ctx->max_aio];
-  struct io_event* ep;
+  struct io_event* ep = events;
   int ret, n;
   do {
 	  ret = n = io_getevents(a_ctx->ctx, num, a_ctx->max_aio, events, to);
@@ -146,20 +147,28 @@ int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num)
     fprintf(stderr, "io_wait: %s\n", strerror(-ret));
     //exit(1);
   }
-  for (ep = events; n-- > 0; ep++)
+
+  struct iocb *iocbs[n];
+  long res[n];
+  long res2[n];
+  io_callback_s *cbs[n];
+  callback_t cb_func = NULL;
+  for (int i = 0; i < n; ep++, i++)
   {
-    io_callback_s *cb = (io_callback_s *)ep->data;
-    struct iocb* iocb = ep->obj;
-	/*
-	 * callback of aio happens here. Since the callback function is stored
-	 * in the first member of io_callback_s and iovec_callback_s, so it
-	 * works fine.
-	 */
-    cb->func(a_ctx->ctx, iocb, cb, ep->res, ep->res2);
-	a_ctx->busy_aio--;
-	put_iocb(a_ctx, iocb);
+	cbs[i] = (io_callback_s *)ep->data;
+	if (cb_func == NULL)
+		cb_func = cbs[i]->func;
+	assert(cb_func == cbs[i]->func);
+	iocbs[i] = ep->obj;
+	res[i] = ep->res;
+	res2[i] = ep->res2;
   }
-  //  a_ctx->busy_aio -= n;
+
+  cb_func(a_ctx->ctx, iocbs, (void **) cbs, res, res2, n);
+
+  a_ctx->busy_aio -= n;
+  for (int i = 0; i < n; i++)
+	  put_iocb(a_ctx, iocbs[i]);
   return ret;
 }
 

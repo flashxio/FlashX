@@ -73,20 +73,23 @@ public:
 		this->thread = thread;
 	}
 
-	int invoke(io_request *rq) {
-		extern bool verify_read_content;
-		if (rq->get_access_method() == READ && verify_read_content) {
-			off_t off = rq->get_offset();
-			for (int i = 0; i < rq->get_num_bufs(); i++) {
-				check_read_content(rq->get_buf(i), rq->get_buf_size(i), off);
-				off += rq->get_buf_size(i);
+	int invoke(io_request *rqs[], int num) {
+		for (int i = 0; i < num; i++) {
+			io_request *rq = rqs[i];
+			extern bool verify_read_content;
+			if (rq->get_access_method() == READ && verify_read_content) {
+				off_t off = rq->get_offset();
+				for (int i = 0; i < rq->get_num_bufs(); i++) {
+					check_read_content(rq->get_buf(i), rq->get_buf_size(i), off);
+					off += rq->get_buf_size(i);
+				}
 			}
+			for (int i = 0; i < rq->get_num_bufs(); i++)
+				buf->free_entry(rq->get_buf(i));
+			read_bytes += rq->get_size();
 		}
-		for (int i = 0; i < rq->get_num_bufs(); i++)
-			buf->free_entry(rq->get_buf(i));
-		read_bytes += rq->get_size();
-		thread->num_completes.inc(1);
-		thread->num_pending.dec(1);
+		thread->num_completes.inc(num);
+		thread->num_pending.dec(num);
 		return 0;
 	}
 
