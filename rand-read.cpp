@@ -442,11 +442,11 @@ int main(int argc, char *argv[])
 					break;
 				case RAND_PERMUTE:
 					gen = new global_rand_permute_workload(entry_size,
-							npages * (PAGE_SIZE / entry_size), num_repeats, read_ratio);
+							(((long) npages) * PAGE_SIZE) / entry_size, num_repeats, read_ratio);
 					break;
 				case HIT_DEFINED:
 					gen = new cache_hit_defined_workload(entry_size,
-							npages * (PAGE_SIZE / entry_size),
+							(((long) npages) * PAGE_SIZE) / entry_size,
 							cache_size, hit_ratio, read_ratio);
 					break;
 				case -1:
