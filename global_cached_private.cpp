@@ -865,7 +865,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				// Let's optimize for cached single-page requests by stealing
 				// them from normal code path of processing them.
 				assert(requests[i].is_valid());
-				if (requests[i].within_1page()) {
+				if (requests[i].within_1page() && p->data_ready()) {
 					cached_reqs[num_cached_reqs] = &requests[i];
 					cached_pages[num_cached_reqs] = p;
 					num_cached_reqs++;
