@@ -92,15 +92,17 @@ public:
 
 void extended_io_request::use_orig_bufs()
 {
-	char *bufs[get_num_bufs()];
 	for (int i = 0; i < get_num_bufs(); i++) {
-		bufs[i] = get_buf(i);
+		char *buf = get_buf(i);
 		// This memory copy can significantly decrease the performance.
 		// But it seems there isn't a better way to avoid it.
-		memcpy(orig_bufs[i], bufs[i], get_buf_size(i));
+		memcpy(orig_bufs[i], buf, get_buf_size(i));
 		set_buf(i, orig_bufs[i]);
+		if (this->get_buf_size(i) <= PAGE_SIZE)
+			allocator->free(&buf, 1);
+		else
+			free(buf);
 	}
-	allocator->free(bufs, get_num_bufs());
 	// We have to reset orig_bufs because all original buffers
 	// will be destroyed when the object is destructed.
 	if (orig_bufs != orig_embedded_bufs)
@@ -117,13 +119,15 @@ void extended_io_request::init(io_request &req, slab_allocator *allocator)
 		orig_bufs = new char *[this->get_num_bufs()];
 	else
 		orig_bufs = orig_embedded_bufs;
-	char *local_pages[this->get_num_bufs()];
-	int npages = allocator->alloc(local_pages, this->get_num_bufs());
-	assert(npages == this->get_num_bufs());
 	for (int i = 0; i < this->get_num_bufs(); i++) {
 		char *remote_buf = this->get_buf(i);
-		char *local_buf = local_pages[i];
-		assert(this->get_buf_size(i) == PAGE_SIZE);
+		char *local_buf;
+		if (this->get_buf_size(i) <= PAGE_SIZE) {
+			int ret = allocator->alloc(&local_buf, 1);
+			assert(ret == 1);
+		}
+		else
+			local_buf = (char *) valloc(this->get_buf_size(i));
 		this->set_buf(i, local_buf);
 		orig_bufs[i] = remote_buf;
 	}
