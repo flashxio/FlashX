@@ -765,7 +765,10 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 
 #ifdef ENABLE_LARGE_WRITE
 	off_t forward_off = off + PAGE_SIZE;
-	while ((p = (thread_safe_page *) cache->search(forward_off))) {
+	off_t block_off = ROUND(off, STRIPE_BLOCK_SIZE * PAGE_SIZE);
+	off_t block_end_off = block_off + STRIPE_BLOCK_SIZE * PAGE_SIZE;
+	while (forward_off < block_end_off
+			&& (p = (thread_safe_page *) cache->search(forward_off))) {
 		p->lock();
 		if (!p->is_dirty()) {
 			p->dec_ref();
@@ -786,7 +789,8 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 	}
 	if (off >= PAGE_SIZE) {
 		off_t backward_off = off - PAGE_SIZE;
-		while ((p = (thread_safe_page *) cache->search(backward_off))) {
+		while (backward_off >= block_off
+				&& (p = (thread_safe_page *) cache->search(backward_off))) {
 			p->lock();
 			if (!p->is_dirty()) {
 				p->dec_ref();
