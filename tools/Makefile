@@ -32,8 +32,8 @@ workload-gen: workload-gen.o
 memory-fill: memory-fill.o
 	$(CXX) -o memory-fill memory-fill.o $(LDFLAGS)
 
-java_dump2c_dump: java_dump2c_dump.o ../workload.o
-	$(CXX) -o java_dump2c_dump java_dump2c_dump.o ../workload.o $(LDFLAGS)
+java_dump2c_dump: java_dump2c_dump.o ../workload.o ../common.o
+	$(CXX) -o java_dump2c_dump java_dump2c_dump.o ../workload.o ../common.o $(LDFLAGS)
 
 cache_evaluator: cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o ../thread.o ../common.o
 	$(CXX) -o cache_evaluator cache_evaluator.o ../associative_cache.o ../workload.o ../slab_allocator.o ../hash_index_cache.o ../memory_manager.o ../messaging.o ../gclock.o ../thread.o ../common.o $(LDFLAGS) -L../nbds.0.4.3/ -lnbds

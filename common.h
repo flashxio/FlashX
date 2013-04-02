@@ -124,4 +124,6 @@ public:
 	}
 };
 
+long str2size(std::string str);
+
 #endif

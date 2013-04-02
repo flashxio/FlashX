@@ -88,3 +88,22 @@ void permute_offsets(int num, int repeats, int stride, off_t start,
 		offsets[i] = tmp;
 	}
 }
+
+long str2size(std::string str)
+{
+	int len = str.length();
+	long multiply = 1;
+	if (str[len - 1] == 'M' || str[len - 1] == 'm') {
+		multiply *= 1024 * 1024;
+		str[len - 1] = 0;
+	}
+	else if (str[len - 1] == 'K' || str[len - 1] == 'k') {
+		multiply *= 1024;
+		str[len - 1] = 0;
+	}
+	else if (str[len - 1] == 'G' || str[len - 1] == 'g') {
+		multiply *= 1024 * 1024 * 1024;
+		str[len - 1] = 0;
+	}
+	return atol(str.c_str()) * multiply;
+}

@@ -280,13 +280,6 @@ public:
 		}
 		return !local_buf.is_empty();
 	}
-
-	/**
-	 * The remaining number of accesses.
-	 */
-	int size() const {
-		return 0;
-	}
 };
 
 class rand_workload: public workload_gen

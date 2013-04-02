@@ -7,6 +7,7 @@
 #include "associative_cache.h"
 #include "hash_index_cache.h"
 #include "LRU2Q.h"
+#include "common.h"
 
 #include <string>
 
@@ -22,7 +23,8 @@ int main(int argc, char *argv[])
 	std::string workload_file = argv[1];
 	std::string cache_type = argv[2];
 	// Cache size in bytes.
-	int cache_size = atoi(argv[3]) * 4096;
+	int cache_size = str2size(argv[3]);
+	printf("The cache size is %d bytes\n", cache_size);
 
 	page_cache *global_cache;
 	if (cache_type == "lru2q") {
@@ -42,9 +44,10 @@ int main(int argc, char *argv[])
 
 	long length = 0;
 	workload_t *workloads = load_file_workload(workload_file, length);
-	printf("There are %ld requests\n", length);
 	file_workload *gen = new file_workload(workloads, length, 0, length);
-	int size = gen->size();
+	long size = length;
+	int num_pages = 0;
+	printf("There are %ld requests\n", size);
 	while (gen->has_next()) {
 		workload_t workload = gen->next();
 		off_t off = ROUND_PAGE(workload.off);
@@ -60,11 +63,11 @@ int main(int argc, char *argv[])
 				if (old_off == -1)
 					num_hits++;
 			}
-//			pg->set_dirty(false);
 			pg->dec_ref();
 			off += PAGE_SIZE;
 		}
+		num_pages += (off - ROUND_PAGE(workload.off)) / PAGE_SIZE;
 	}
-	printf("There are %d accesses in pages in the second half and %d hits\n",
-			num_accesses_in_pages, num_hits);
+	printf("There are %d accesses in pages in the second half and %d hits, %d total pages\n",
+			num_accesses_in_pages, num_hits, num_pages);
 }
