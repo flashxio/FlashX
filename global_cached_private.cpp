@@ -187,7 +187,12 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 {
 	orig->inc_complete_count();
 	if (orig->complete_size(partial.get_size())) {
-		notify_completion(orig);
+		// It's important to notify the IO interface that issues the request.
+		// In the case of parted global cache, the IO interface that processes
+		// the reqeust isn't the IO interface that issue the request.
+		// The request may be handled differently.
+		global_cached_io *io = (global_cached_io *) orig->get_io();
+		io->notify_completion(orig);
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
@@ -210,7 +215,8 @@ void global_cached_io::finalize_request(io_request &req)
 		assert(original->get_orig() == NULL);
 		original->inc_complete_count();
 		if (original->complete_size(req.get_size())) {
-			notify_completion(original);
+			global_cached_io *io = (global_cached_io *) original->get_io();
+			io->notify_completion(original);
 			original->dec_complete_count();
 			original->wait4unref();
 			delete original;
@@ -220,7 +226,8 @@ void global_cached_io::finalize_request(io_request &req)
 	}
 	else {
 		assert(req.get_orig() == NULL);
-		notify_completion(&req);
+		global_cached_io *io = (global_cached_io *) req.get_io();
+		io->notify_completion(&req);
 	}
 }
 
