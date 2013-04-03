@@ -66,6 +66,7 @@ int main(int argc, char *argv[])
 
 	printf("min request size: %d, max req size: %d, avg size: %ld\n",
 			min_size, max_size, tot_size / num_accesses);
+	printf("there are %d accesses\n", num_accesses);
 	printf("there are %d reads\n", num_reads);
 	printf("there are %d writes\n", num_writes);
 	printf("there are %ld accessed pages\n", pages.size());
