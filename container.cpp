@@ -123,7 +123,7 @@ int blocking_FIFO_queue<T>::add(T *entries, int num) {
 		if (empty)
 			pthread_cond_broadcast(&cond);
 
-		while (this->is_full()) {
+		while (this->is_full() && num > 0) {
 			num_full++;
 //			printf("the blocking queue %s is full, wait...\n", name.c_str());
 			pthread_cond_wait(&cond, &mutex);
@@ -156,7 +156,7 @@ int blocking_FIFO_queue<T>::add(fifo_queue<T> *queue)
 		if (empty)
 			pthread_cond_broadcast(&cond);
 
-		while (this->is_full()) {
+		while (this->is_full() && !queue->is_empty()) {
 			num_full++;
 //			printf("the blocking queue %s is full, wait...\n", name.c_str());
 			pthread_cond_wait(&cond, &mutex);
