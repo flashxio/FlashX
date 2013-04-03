@@ -764,9 +764,10 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 	p->unlock();
 
 #ifdef ENABLE_LARGE_WRITE
+	int get_RAID_block_size();
 	off_t forward_off = off + PAGE_SIZE;
-	off_t block_off = ROUND(off, STRIPE_BLOCK_SIZE * PAGE_SIZE);
-	off_t block_end_off = block_off + STRIPE_BLOCK_SIZE * PAGE_SIZE;
+	off_t block_off = ROUND(off, get_RAID_block_size() * PAGE_SIZE);
+	off_t block_end_off = block_off + get_RAID_block_size() * PAGE_SIZE;
 	while (forward_off < block_end_off
 			&& (p = (thread_safe_page *) cache->search(forward_off))) {
 		p->lock();

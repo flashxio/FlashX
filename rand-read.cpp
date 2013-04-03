@@ -57,6 +57,11 @@ struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 bool verify_read_content = false;
 bool high_prio = false;
+static int RAID_block_size = 16;
+int get_RAID_block_size()
+{
+	return RAID_block_size;
+}
 
 thread_private *threads[NUM_THREADS];
 
@@ -125,6 +130,18 @@ str2int req_buf_types[] = {
 	{ "MULTI", MULTI_BUF },
 };
 
+enum {
+	RAID0,
+	RAID5,
+	HASH,
+};
+
+str2int RAID_options[] = {
+	{"RAID0", RAID0},
+	{"RAID5", RAID5},
+	{"HASH", HASH},
+};
+
 class str2int_map {
 	str2int *maps;
 	int num;
@@ -171,6 +188,7 @@ int main(int argc, char *argv[])
 	bool preload = false;
 	long cache_size = 512 * 1024 * 1024;
 	int access_option = -1;
+	int RAID_mapping_option = RAID5;
 	int ret = 0;
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
@@ -191,10 +209,12 @@ int main(int argc, char *argv[])
 			sizeof(cache_types) / sizeof(cache_types[0]));
 	str2int_map buf_type_map(req_buf_types,
 			sizeof(req_buf_types) / sizeof(req_buf_types[0]));
+	str2int_map RAID_option_map(RAID_options,
+			sizeof(RAID_options) / sizeof(RAID_options[0]));
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -220,7 +240,7 @@ int main(int argc, char *argv[])
 		if (key.compare("option") == 0) {
 			access_option = access_map.map(value);
 			if (access_option < 0) {
-				fprintf(stderr, "can't find the right option\n");
+				fprintf(stderr, "can't find the right access option\n");
 				exit(1);
 			}
 		}
@@ -283,6 +303,16 @@ int main(int argc, char *argv[])
 		else if (key.compare("buf_size") == 0) {
 			buf_size = (int) str2size(value);
 		}
+		else if (key.compare("RAID_mapping") == 0) {
+			RAID_mapping_option = RAID_option_map.map(value);
+			if (RAID_mapping_option < 0) {
+				fprintf(stderr, "can't find the right mapping option\n");
+				exit(1);
+			}
+		}
+		else if(key.compare("RAID_block_size") == 0) {
+			RAID_block_size = (int) str2size(value);
+		}
 #ifdef PROFILER
 		else if(key.compare("prof") == 0) {
 			prof_file = value;
@@ -293,13 +323,25 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d\n",
-			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats);
+	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d, RAID_mapping: %d, RAID block size: %d\n",
+			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size);
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);
-	file_mapper *mapper = new RAID0_mapper(files);
 	printf("There are %d data files\n", num_files);
+
+	file_mapper *mapper = NULL;
+	switch (RAID_mapping_option) {
+		case RAID0:
+			mapper = new RAID0_mapper(files, RAID_block_size);
+			break;
+		case RAID5:
+			mapper = new RAID5_mapper(files, RAID_block_size);
+			break;
+		case HASH:
+			mapper = new hash_mapper(files, RAID_block_size);
+			break;
+	}
 
 	std::vector<int> indices;
 	for (int i = 0; i < mapper->get_num_files(); i++)

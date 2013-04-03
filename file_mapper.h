@@ -21,7 +21,10 @@ protected:
 		return files;
 	}
 public:
-	file_mapper(const std::vector<file_info> &files) {
+	const int STRIPE_BLOCK_SIZE;
+public:
+	file_mapper(const std::vector<file_info> &files,
+			int block_size): STRIPE_BLOCK_SIZE(block_size) {
 		this->files = files;
 	}
 
@@ -50,7 +53,8 @@ public:
 class RAID0_mapper: public file_mapper
 {
 public:
-	RAID0_mapper(const std::vector<file_info> &files): file_mapper(files) {
+	RAID0_mapper(const std::vector<file_info> &files,
+			int block_size): file_mapper(files, block_size) {
 	}
 
 	virtual void map(off_t off, struct block_identifier &bid) {
@@ -66,7 +70,7 @@ public:
 	}
 
 	virtual file_mapper *clone() {
-		return new RAID0_mapper(get_files());
+		return new RAID0_mapper(get_files(), STRIPE_BLOCK_SIZE);
 	}
 
 	virtual int cycle_size() const {
@@ -81,8 +85,8 @@ public:
 class RAID5_mapper: public RAID0_mapper
 {
 public:
-	RAID5_mapper(const std::vector<file_info> &files): RAID0_mapper(
-			files) {
+	RAID5_mapper(const std::vector<file_info> &files,
+			int block_size): RAID0_mapper(files, block_size) {
 	}
 
 	virtual void map(off_t off, struct block_identifier &bid) {
@@ -102,7 +106,7 @@ public:
 	}
 
 	virtual file_mapper *clone() {
-		return new RAID5_mapper(get_files());
+		return new RAID5_mapper(get_files(), STRIPE_BLOCK_SIZE);
 	}
 
 	virtual int cycle_size() const {
@@ -120,9 +124,8 @@ class hash_mapper: public file_mapper
 	static const int CONST_P = FILE_CONST_P;
 	const int P_MOD_N;
 public:
-	hash_mapper(
-			const std::vector<file_info> &files): file_mapper(
-				files), P_MOD_N(CONST_P % files.size()) {
+	hash_mapper(const std::vector<file_info> &files, int block_size): file_mapper(
+				files, block_size), P_MOD_N(CONST_P % files.size()) {
 	}
 
 	virtual void map(off_t off, struct block_identifier &bid) {
@@ -146,7 +149,7 @@ public:
 	}
 
 	virtual file_mapper *clone() {
-		return new hash_mapper(get_files());
+		return new hash_mapper(get_files(), STRIPE_BLOCK_SIZE);
 	}
 
 	virtual int cycle_size() const {
