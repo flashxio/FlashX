@@ -95,9 +95,6 @@ class fifo_queue
 	long end;
 	bool resizable;
 
-protected:
-	bool expand_queue(int new_size);
-
 public:
 	fifo_queue(int size, bool resizable = false) {
 		this->size = size;
@@ -110,6 +107,8 @@ public:
 	~fifo_queue() {
 		delete [] buf;
 	}
+
+	bool expand_queue(int new_size);
 
 	virtual T pop_front() {
 		assert(start < end);
@@ -322,6 +321,7 @@ public:
 	virtual int add(T *entries, int num);
 
 	virtual int add(fifo_queue<T> *queue);
+	virtual int non_blocking_add(fifo_queue<T> *queue);
 
 	int get_num_empty() const {
 		return num_empty;

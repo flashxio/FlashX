@@ -6,6 +6,8 @@
 #include "container.h"
 #include "file_mapper.h"
 
+class request_sender;
+
 /**
  * This class is to help the local thread send IO requests to remote threads
  * dedicated to accessing SSDs. Each SSD has such a thread.
@@ -14,8 +16,7 @@
  */
 class remote_disk_access: public io_interface
 {
-	msg_sender<io_request> **senders;
-	fifo_queue<io_request> **queues;
+	request_sender **senders;
 	int num_senders;
 	callback *cb;
 	file_mapper *block_mapper;
@@ -27,7 +28,6 @@ class remote_disk_access: public io_interface
 
 	remote_disk_access(int node_id): io_interface(node_id) {
 		senders = NULL;
-		queues = NULL;
 		num_senders = 0;
 		cb = NULL;
 		block_mapper = NULL;
