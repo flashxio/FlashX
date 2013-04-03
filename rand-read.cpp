@@ -57,10 +57,17 @@ struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 bool verify_read_content = false;
 bool high_prio = false;
+
 static int RAID_block_size = 16;
 int get_RAID_block_size()
 {
 	return RAID_block_size;
+}
+
+static int SA_min_cell_size = 8;
+int get_SA_min_cell_size()
+{
+	return SA_min_cell_size;
 }
 
 thread_private *threads[NUM_THREADS];
@@ -214,7 +221,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size SA_cell_size\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -313,6 +320,9 @@ int main(int argc, char *argv[])
 		else if(key.compare("RAID_block_size") == 0) {
 			RAID_block_size = (int) str2size(value);
 		}
+		else if(key.compare("SA_cell_size") == 0) {
+			SA_min_cell_size = atoi(value.c_str());
+		}
 #ifdef PROFILER
 		else if(key.compare("prof") == 0) {
 			prof_file = value;
@@ -323,8 +333,8 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d, RAID_mapping: %d, RAID block size: %d\n",
-			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size);
+	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d, RAID_mapping: %d, RAID block size: %d, SA_cell_size: %d\n",
+			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size, SA_min_cell_size);
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);

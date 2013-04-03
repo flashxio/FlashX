@@ -12,6 +12,8 @@ volatile int num_wait_unused;
 volatile int lock_contentions;
 #endif
 
+extern int get_SA_min_cell_size();
+
 const long default_init_cache_size = 128 * 1024 * 1024;
 
 /* out of memory exception */
@@ -96,7 +98,7 @@ void page_cell<T>::steal_pages(T pages[], int &npages)
 template<class T>
 void page_cell<T>::sanity_check() const
 {
-	assert(CELL_MIN_NUM_PAGES <= num_pages);
+	assert(get_SA_min_cell_size() <= num_pages);
 	int num_used_pages = 0;
 	for (int i = 0; i < CELL_SIZE; i++)
 		if (buf[i].get_data())
@@ -129,10 +131,10 @@ hash_cell::hash_cell(associative_cache *cache, long hash, bool get_pages) {
 	this->table = cache;
 	if (get_pages) {
 		char *pages[CELL_SIZE];
-		if (!table->get_manager()->get_free_pages(CELL_MIN_NUM_PAGES,
+		if (!table->get_manager()->get_free_pages(get_SA_min_cell_size(),
 					pages, cache))
 			throw oom_exception();
-		buf.set_pages(pages, CELL_MIN_NUM_PAGES);
+		buf.set_pages(pages, get_SA_min_cell_size());
 	}
 	num_accesses = 0;
 	num_evictions = 0;
@@ -220,11 +222,11 @@ void hash_cell::rehash(hash_cell *expanded)
 	}
 
 	// Move empty pages to the expanded cell if it doesn't have enough pages.
-	int num_required = CELL_MIN_NUM_PAGES - expanded->buf.get_num_pages();
+	int num_required = get_SA_min_cell_size() - expanded->buf.get_num_pages();
 	int num_empty = 0;
 	if (num_required > 0) {
 		thread_safe_page *empty_pages_pointers[num_required];
-		thread_safe_page empty_pages[CELL_MIN_NUM_PAGES];
+		thread_safe_page empty_pages[get_SA_min_cell_size()];
 		for (unsigned int i = 0; i < buf.get_num_pages()
 				&& num_empty < num_required; i++) {
 			thread_safe_page *pg = buf.get_page(i);
@@ -585,7 +587,7 @@ bool associative_cache::shrink(int npages, char *pages[])
 		// The cell table isn't in the stage of splitting.
 		if (split == 0) {
 			hash_cell *cell = get_cell(expand_cell_idx);
-			while (height >= CELL_MIN_NUM_PAGES) {
+			while (height >= get_SA_min_cell_size()) {
 				int num = max(0, cell->get_num_pages() - height);
 				num = min(npages - pg_idx, num);
 				if (num > 0) {
@@ -723,7 +725,7 @@ next_cell:
 			}
 			table_lock.write_unlock();
 		}
-		height = CELL_MIN_NUM_PAGES + 1;
+		height = get_SA_min_cell_size() + 1;
 
 		// When the thread is within in the while loop, other threads
 		// can hardly access the cells in the table.
@@ -741,8 +743,8 @@ next_cell:
 
 			/* Add pages to the cell without enough pages. */
 			int num_required = max(expanded_cell->get_num_pages()
-				- CELL_MIN_NUM_PAGES, 0);
-			num_required += max(cell->get_num_pages() - CELL_MIN_NUM_PAGES, 0);
+				- get_SA_min_cell_size(), 0);
+			num_required += max(cell->get_num_pages() - get_SA_min_cell_size(), 0);
 			if (num_required <= npages - pg_idx) {
 				/* 
 				 * Actually only one cell requires more pages, the other
@@ -754,8 +756,8 @@ next_cell:
 						npages - pg_idx);
 			}
 
-			if (expanded_cell->get_num_pages() < CELL_MIN_NUM_PAGES
-					|| cell->get_num_pages() < CELL_MIN_NUM_PAGES) {
+			if (expanded_cell->get_num_pages() < get_SA_min_cell_size()
+					|| cell->get_num_pages() < get_SA_min_cell_size()) {
 				// If we failed to split a cell, we should merge the two half
 				cell->merge(expanded_cell);
 				expand_over = true;
@@ -833,12 +835,12 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 {
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
-	printf("associative cache is created on node %d, cache size: %ld\n",
-			node_id, cache_size);
+	printf("associative cache is created on node %d, cache size: %ld, min cell size: %d\n",
+			node_id, cache_size, get_SA_min_cell_size());
 	this->node_id = node_id;
 	level = 0;
 	split = 0;
-	height = CELL_MIN_NUM_PAGES;
+	height = get_SA_min_cell_size();
 	expand_cell_idx = 0;
 	this->expandable = expandable;
 	this->manager = new memory_manager(max_cache_size);
@@ -849,7 +851,7 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 			// cache size at the beginning.
 			|| !expandable)
 		init_cache_size = cache_size;
-	int min_cell_size = CELL_MIN_NUM_PAGES;
+	int min_cell_size = get_SA_min_cell_size();
 	if (init_cache_size < min_cell_size * PAGE_SIZE)
 		init_cache_size = min_cell_size * PAGE_SIZE;
 	int npages = init_cache_size / PAGE_SIZE;
