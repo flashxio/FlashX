@@ -544,7 +544,7 @@ int main(int argc, char *argv[])
 		if (t)
 			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits\n",
 					mapper->get_file_name(i).c_str(), read_threads[i]->get_queue()->get_num_empty(),
-					read_threads[i]->get_queue()->get_num_empty(), read_threads[i]->get_num_accesses(),
+					read_threads[i]->get_queue()->get_num_full(), read_threads[i]->get_num_accesses(),
 					read_threads[i]->get_num_iowait());
 	}
 	for (int i = 0; i < nthreads; i++) {
