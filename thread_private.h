@@ -182,14 +182,16 @@ public:
 
 	int wait_thread_end();
 
-#ifdef STATISTICS
 	virtual void print_stat() {
+#ifdef STATISTICS
 		io->print_stat();
-		printf("access %ld bytes in %ld accesses (%d completes), start at %f seconds, takes %f seconds, avg pending: %ld, max pending: %d\n",
-				get_read_bytes(), num_accesses, num_completes.get(), time_diff(global_start, start_time),
-				time_diff(start_time, end_time), tot_num_pending / num_sampling, max_num_pending);
-	}
+		printf("access %ld bytes in %ld accesses (%d completes), avg pending: %ld, max pending: %d\n",
+				get_read_bytes(), num_accesses, num_completes.get(),
+				tot_num_pending / num_sampling, max_num_pending);
 #endif
+		printf("thread %d: start at %f seconds, takes %f seconds\n", idx,
+				time_diff(global_start, start_time), time_diff(start_time, end_time));
+	}
 };
 
 #endif

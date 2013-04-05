@@ -538,6 +538,9 @@ int main(int argc, char *argv[])
 			read_bytes, end_time.tv_sec - start_time.tv_sec
 			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 
+	for (int i = 0; i < nthreads; i++) {
+		threads[i]->print_stat();
+	}
 #ifdef STATISTICS
 	for (int i = 0; i < num_files; i++) {
 		disk_read_thread *t = read_threads[i];
@@ -546,9 +549,6 @@ int main(int argc, char *argv[])
 					mapper->get_file_name(i).c_str(), read_threads[i]->get_queue()->get_num_empty(),
 					read_threads[i]->get_queue()->get_num_full(), read_threads[i]->get_num_accesses(),
 					read_threads[i]->get_num_iowait());
-	}
-	for (int i = 0; i < nthreads; i++) {
-		threads[i]->print_stat();
 	}
 	printf("there are %d cells\n", avail_cells);
 	printf("there are %d waits for unused\n", num_wait_unused);
