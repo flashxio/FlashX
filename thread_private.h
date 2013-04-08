@@ -185,9 +185,12 @@ public:
 	virtual void print_stat() {
 #ifdef STATISTICS
 		io->print_stat();
-		printf("access %ld bytes in %ld accesses (%d completes), avg pending: %ld, max pending: %d\n",
+		int avg_num_pending = 0;
+		if (num_sampling > 0)
+			avg_num_pending = tot_num_pending / num_sampling;
+		printf("access %ld bytes in %ld accesses (%d completes), avg pending: %d, max pending: %d\n",
 				get_read_bytes(), num_accesses, num_completes.get(),
-				tot_num_pending / num_sampling, max_num_pending);
+				avg_num_pending, max_num_pending);
 #endif
 		printf("thread %d: start at %f seconds, takes %f seconds\n", idx,
 				time_diff(global_start, start_time), time_diff(start_time, end_time));
