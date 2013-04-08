@@ -96,7 +96,8 @@ void extended_io_request::use_orig_bufs()
 		char *buf = get_buf(i);
 		// This memory copy can significantly decrease the performance.
 		// But it seems there isn't a better way to avoid it.
-		memcpy(orig_bufs[i], buf, get_buf_size(i));
+		if (this->get_access_method() == READ)
+			memcpy(orig_bufs[i], buf, get_buf_size(i));
 		set_buf(i, orig_bufs[i]);
 		if (this->get_buf_size(i) <= PAGE_SIZE)
 			allocator->free(&buf, 1);
@@ -128,6 +129,8 @@ void extended_io_request::init(io_request &req, slab_allocator *allocator)
 		}
 		else
 			local_buf = (char *) valloc(this->get_buf_size(i));
+		if (this->get_access_method() == WRITE)
+			memcpy(local_buf, remote_buf, this->get_buf_size(i));
 		this->set_buf(i, local_buf);
 		orig_bufs[i] = remote_buf;
 	}
