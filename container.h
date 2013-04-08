@@ -244,7 +244,7 @@ public:
 	virtual int fetch(T *entries, int num);
 
 	virtual int add(T *entries, int num);
-	virtual int add(fifo_queue<T> &queue) {
+	virtual int add(fifo_queue<T> *queue) {
 		assert(0);
 		return 0;
 	}
