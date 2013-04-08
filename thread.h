@@ -38,7 +38,7 @@ public:
 	void wait() {
 		pthread_mutex_lock(&mutex);
 		is_activate = false;
-		while (!is_activate) {
+		while (!is_activate && _is_running) {
 			pthread_cond_wait(&cond, &mutex);
 		}
 		pthread_mutex_unlock(&mutex);
@@ -57,9 +57,18 @@ public:
 	}
 
 	void stop() {
+		pthread_mutex_lock(&mutex);
 		// This is the only place where `is_running' is changed.
 		_is_running = false;
+		pthread_cond_signal(&cond);
+		pthread_mutex_unlock(&mutex);
 	}
+
+	void join() {
+		pthread_join(id, NULL);
+		printf("stop thread %s\n", name.c_str());
+	}
+
 	void start();
 	virtual void run() = 0;
 };
