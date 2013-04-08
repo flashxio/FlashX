@@ -12,13 +12,16 @@ CXXFLAGS = -g -I.. -I../nbds.0.4.3/include/ -std=c++0x $(TRACE_FLAGS)
 
 LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS)
 
-all: stat create_file rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator java_dump2c_dump eval_expand_SA_cache
+all: stat create_file create_files rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator java_dump2c_dump eval_expand_SA_cache
 
 stat: stat.o ../workload.h
 	$(CXX) -o stat stat.o $(LDFLAGS)
 
 create_file: create_file.o
 	$(CXX) -o create_file create_file.o $(LDFLAGS)
+
+create_files: create_files.o ../common.o ../thread.o
+	$(CXX) -o create_files create_files.o ../common.o ../thread.o $(LDFLAGS)
 
 rand-memcpy: rand-memcpy.o
 	$(CC) -o rand-memcpy rand-memcpy.o $(LDFLAGS)
