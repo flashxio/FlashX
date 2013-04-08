@@ -107,3 +107,5 @@ long str2size(std::string str)
 	}
 	return atol(str.c_str()) * multiply;
 }
+
+sys_parameters params;

@@ -58,18 +58,6 @@ char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 bool verify_read_content = false;
 bool high_prio = false;
 
-static int RAID_block_size = 16;
-int get_RAID_block_size()
-{
-	return RAID_block_size;
-}
-
-static int SA_min_cell_size = 8;
-int get_SA_min_cell_size()
-{
-	return SA_min_cell_size;
-}
-
 thread_private *threads[NUM_THREADS];
 
 thread_private *get_thread(int idx)
@@ -202,6 +190,8 @@ int main(int argc, char *argv[])
 	int num_nodes = 1;
 	int cache_type = -1;
 	int workload = RAND_OFFSET;
+	int RAID_block_size = sys_parameters::get_default_RAID_block_size();
+	int SA_min_cell_size = sys_parameters::get_default_SA_min_cell_size();
 	// No cache hits.
 	double hit_ratio = 0;
 	// All reads
@@ -335,6 +325,7 @@ int main(int argc, char *argv[])
 	}
 	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d, RAID_mapping: %d, RAID block size: %d, SA_cell_size: %d\n",
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size, SA_min_cell_size);
+	params.init(RAID_block_size, SA_min_cell_size);
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);
