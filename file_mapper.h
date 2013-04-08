@@ -9,8 +9,8 @@
 
 struct block_identifier
 {
-	int idx;
-	off_t off;
+	int idx;		// identify the file where the block is.
+	off_t off;		// the location (in pages) in the file.
 };
 
 class file_mapper
@@ -26,6 +26,9 @@ public:
 	file_mapper(const std::vector<file_info> &files,
 			int block_size): STRIPE_BLOCK_SIZE(block_size) {
 		this->files = files;
+	}
+
+	virtual ~file_mapper() {
 	}
 
 	const std::string &get_file_name(int idx) const {
