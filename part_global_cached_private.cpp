@@ -239,6 +239,10 @@ public:
 		return io->get_cache_hits();
 	}
 
+	int get_num_fast_process() const {
+		return io->get_num_fast_process();
+	}
+
 	long get_num_requests() const {
 		return io->get_num_requests();
 	}
@@ -523,9 +527,11 @@ void part_global_cached_io::print_stat()
 	static long tot_remote_reads = 0;
 	static int seen_threads = 0;
 	static int tot_hits = 0;
+	static int tot_fast_process = 0;
 	tot_remote_reads += remote_reads;
 	seen_threads++;
 	tot_hits += get_cache_hits();
+	tot_fast_process += this->get_num_fast_process();
 	if (seen_threads == nthreads) {
 		printf("there are %ld requests sent to the remote nodes\n",
 				tot_remote_reads);
@@ -545,11 +551,13 @@ void part_global_cached_io::print_stat()
 				printf("group %d thread %ld gets %ld requests\n", group->id, i,
 						thread->get_num_requests());
 				tot_group_hits += thread->get_cache_hits();
+				tot_fast_process += thread->get_num_fast_process();
 			}
 			printf("group %d gets %d hits\n", group->id, tot_group_hits);
 			tot_hits += tot_group_hits;
 		}
 		printf("There are %d cache hits\n", tot_hits);
+		printf("There are %d requests processed in the fast path\n", tot_fast_process);
 	}
 }
 #endif

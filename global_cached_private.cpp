@@ -803,6 +803,7 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		thread_safe_page *cached_pages[], int num_cached_reqs)
 {
+	num_fast_process += num_cached_reqs;
 	for (int i = 0; i < num_cached_reqs; i++) {
 		io_request *req = cached_reqs[i];
 		thread_safe_page *dirty = __complete_req(req, cached_pages[i]);

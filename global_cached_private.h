@@ -36,6 +36,7 @@ class global_cached_io: public io_interface
 	obj_allocator<io_request> req_allocator;
 
 	int cache_hits;
+	int num_fast_process;
 
 	/**
 	 * It's another version of read() and write(), but it's responsible
@@ -156,6 +157,10 @@ public:
 		return cache_hits;
 	}
 
+	int get_num_fast_process() const {
+		return num_fast_process;
+	}
+
 	// These two methods notify of application threads the completion of requests.
 	// For global cache, they call invoke() callback directly.
 	// For parted global cache, they should send reply messages to remote threads.
@@ -169,13 +174,16 @@ public:
 	void print_stat() {
 		static int tot_hits = 0;
 		static int seen_threads = 0;
+		static int tot_fast_process = 0;
 		seen_threads++;
 		tot_hits += cache_hits;
+		tot_fast_process += num_fast_process;
 		if (seen_threads == nthreads) {
 			printf("there are %d cache hits\n", tot_hits);
 			global_cache->print_stat();
 		}
 		printf("there are %d waits\n", num_waits);
+		printf("There are %d requests processed in the fast path\n", tot_fast_process);
 	}
 #endif
 };
