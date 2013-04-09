@@ -78,25 +78,36 @@ static void extract_pages(const io_request &req, off_t off, int npages,
 			req.get_io(), req.get_node_id());
 }
 
-/**
- * It returns the page that is dirtied by the function for the first time.
- */
-static thread_safe_page *__complete_1page_req(io_request *req, thread_safe_page *p)
+static thread_safe_page *generic_complete_req(io_request *req,
+		thread_safe_page *p, bool lock)
 {
-	int page_off = req->get_offset() - ROUND_PAGE(req->get_offset());
+	int page_off;
 	thread_safe_page *ret = NULL;
+	char *req_buf;
+	int req_size;
+
+	if (req->within_1page()) {
+		page_off = req->get_offset() - ROUND_PAGE(req->get_offset());
+		req_buf = req->get_buf();
+		req_size = req->get_size();
+	}
+	else {
+		io_request extracted;
+		extract_pages(*req, p->get_offset(), 1, extracted);
+		page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
+		req_buf = extracted.get_buf();
+		req_size = extracted.get_size();
+	}
 
 	p->lock();
 	if (req->get_access_method() == WRITE) {
-		memcpy((char *) p->get_data() + page_off, req->get_buf(),
-				req->get_size());
+		memcpy((char *) p->get_data() + page_off, req_buf, req_size);
 		if (!p->set_dirty(true))
 			ret = p;
 	}
 	else 
 		/* I assume the data I read never crosses the page boundary */
-		memcpy(req->get_buf(), (char *) p->get_data() + page_off,
-				req->get_size());
+		memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
 	p->unlock();
 	// TODO this is a bug. If the page is returned, we shouldn't
 	// dereference it here.
@@ -107,53 +118,16 @@ static thread_safe_page *__complete_1page_req(io_request *req, thread_safe_page 
 /**
  * It returns the page that is dirtied by the function for the first time.
  */
-static thread_safe_page *__complete_req(io_request *orig, thread_safe_page *p)
-{
-	io_request extracted;
-	extract_pages(*orig, p->get_offset(), 1, extracted);
-	int page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
-	thread_safe_page *ret = NULL;
-
-	p->lock();
-	if (orig->get_access_method() == WRITE) {
-		memcpy((char *) p->get_data() + page_off, extracted.get_buf(),
-				extracted.get_size());
-		if (!p->set_dirty(true))
-			ret = p;
-	}
-	else 
-		/* I assume the data I read never crosses the page boundary */
-		memcpy(extracted.get_buf(), (char *) p->get_data() + page_off,
-				extracted.get_size());
-	p->unlock();
-	// TODO this is a bug. If the page is returned, we shouldn't
-	// dereference it here.
-	p->dec_ref();
-	return ret;
-}
-
-static thread_safe_page *__complete_req_unlocked(io_request *orig,
+static inline thread_safe_page *__complete_req(io_request *orig,
 		thread_safe_page *p)
 {
-	io_request extracted;
-	extract_pages(*orig, p->get_offset(), 1, extracted);
-	int page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
-	thread_safe_page *ret = NULL;
+	return generic_complete_req(orig, p, true);
+}
 
-	if (orig->get_access_method() == WRITE) {
-		memcpy((char *) p->get_data() + page_off, extracted.get_buf(),
-				extracted.get_size());
-		if (!p->set_dirty(true))
-			ret = p;
-	}
-	else 
-		/* I assume the data I read never crosses the page boundary */
-		memcpy(extracted.get_buf(), (char *) p->get_data() + page_off,
-				extracted.get_size());
-	// TODO this is a bug. If the page is returned, we shouldn't
-	// dereference it here.
-	p->dec_ref();
-	return ret;
+static inline thread_safe_page *__complete_req_unlocked(io_request *orig,
+		thread_safe_page *p)
+{
+	return generic_complete_req(orig, p, false);
 }
 
 class access_page_callback: public callback
@@ -828,8 +802,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 {
 	for (int i = 0; i < num_cached_reqs; i++) {
 		io_request *req = cached_reqs[i];
-		thread_safe_page *dirty = __complete_1page_req(req,
-				cached_pages[i]);
+		thread_safe_page *dirty = __complete_req(req, cached_pages[i]);
 		page_cache *cache = get_global_cache();
 		if (dirty && cache->get_flush_thread())
 			cache->get_flush_thread()->dirty_pages(&dirty, 1);
