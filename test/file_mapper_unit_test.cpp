@@ -15,7 +15,7 @@ int main()
 	int num_files = 16;
 	std::vector<struct extended_block_identifier> locs[num_files];
 	std::vector<file_info> files(num_files);
-	RAID0_mapper mapper(files);
+	RAID0_mapper mapper(files, 16);
 	for (int i = 0; i < 100000; i++) {
 		block_identifier bid;
 		mapper.map(i, bid);
