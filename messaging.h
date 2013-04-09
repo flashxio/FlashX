@@ -52,7 +52,11 @@ protected:
 
 public:
 	io_request() {
+#ifdef DEBUG
 		init(-1, NULL, READ, -1, NULL, NULL);
+#else
+		vec_pointer = embedded_vecs;
+#endif
 	}
 
 	io_request(off_t off, io_interface *io, int access_method, int node_id,

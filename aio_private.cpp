@@ -33,7 +33,7 @@ class extended_io_request: public io_request
 		}
 	}
 public:
-	extended_io_request() {
+	extended_io_request(): io_request(-1, NULL, READ, -1) {
 		orig_bufs = NULL;
 		allocator = NULL;
 		memset(orig_embedded_bufs, 0, sizeof(orig_embedded_bufs));
@@ -43,7 +43,8 @@ public:
 	 * The buffers in the IO request are allocated in a different NUMA node
 	 * than the SSDs are connected to, and allocate buffers on the local node.
 	 */
-	extended_io_request(io_request &req, slab_allocator *allocator) {
+	extended_io_request(io_request &req,
+			slab_allocator *allocator): io_request(-1, NULL, READ, -1) {
 		init(req, allocator);
 	}
 
@@ -57,7 +58,8 @@ public:
 		memset(orig_embedded_bufs, 0, sizeof(orig_embedded_bufs));
 	}
 
-	extended_io_request(extended_io_request &req) {
+	extended_io_request(extended_io_request &req): io_request(-1,
+			NULL, READ, -1) {
 		io_request::assign(req);
 		assign_extended(req);
 	}
