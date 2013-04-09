@@ -1,18 +1,19 @@
-CFLAGS = -g
 ifdef MEMCHECK
 TRACE_FLAGS = -faddress-sanitizer
-TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 CC = clang
 CXX = clang++
 else
 CC = gcc
 CXX = g++
 endif
-CXXFLAGS = -g -I.. -I../nbds.0.4.3/include/ -std=c++0x $(TRACE_FLAGS)
+TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
+TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
+CXXFLAGS = -g -O3 -I.. -I../nbds.0.4.3/include/ -std=c++0x $(TRACE_FLAGS)
+CFLAGS = -g -O3 -I.. $(TRACE_FLAGS)
 
-LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS)
+LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler
 
-all: stat create_file create_files rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator java_dump2c_dump eval_expand_SA_cache
+all: stat create_file create_files mem-read rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator java_dump2c_dump eval_expand_SA_cache
 
 stat: stat.o ../workload.h
 	$(CXX) -o stat stat.o $(LDFLAGS)
@@ -22,6 +23,9 @@ create_file: create_file.o
 
 create_files: create_files.o ../common.o ../thread.o
 	$(CXX) -o create_files create_files.o ../common.o ../thread.o $(LDFLAGS)
+
+mem-read: mem-read.o
+	$(CC) -o mem-read mem-read.o $(LDFLAGS)
 
 rand-memcpy: rand-memcpy.o
 	$(CC) -o rand-memcpy rand-memcpy.o $(LDFLAGS)
