@@ -12,15 +12,10 @@
  */
 class memory_manager: public slab_allocator
 {
-	pthread_spinlock_t lock;
 
 	std::vector<page_cache *> caches;
 public:
 	memory_manager(long max_size);
-
-	~memory_manager() {
-		pthread_spin_destroy(&lock);
-	}
 
 	void register_cache(page_cache *cache) {
 		caches.push_back(cache);

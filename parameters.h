@@ -62,4 +62,6 @@ const long CONST_P = 68718952447L;
 const int FILE_CONST_A = 1871;
 const int FILE_CONST_P = 10007;
 
+const int LOCAL_BUF_SIZE = 100;
+
 #endif

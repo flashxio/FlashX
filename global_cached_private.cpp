@@ -170,7 +170,7 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
-		delete orig;
+		req_allocator.free(orig);
 	}
 	else
 		orig->dec_complete_count();
@@ -193,7 +193,7 @@ void global_cached_io::finalize_request(io_request &req)
 			io->notify_completion(original);
 			original->dec_complete_count();
 			original->wait4unref();
-			delete original;
+			req_allocator.free(original);
 		}
 		else
 			original->dec_complete_count();
@@ -300,7 +300,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 				}
 				cached_io->finalize_request(*old);
 				// Now we can delete it.
-				delete old;
+				cached_io->get_req_allocator()->free(old);
 				old = next;
 			}
 			p->dec_ref();
@@ -399,7 +399,7 @@ int access_page_callback::invoke(io_request *requests[], int num)
 
 				cached_io->finalize_request(*old);
 				// Now we can delete it.
-				delete old;
+				cached_io->get_req_allocator()->free(old);
 				old = next;
 				num++;
 			}
@@ -422,7 +422,8 @@ int access_page_callback::invoke(io_request *requests[], int num)
 }
 
 global_cached_io::global_cached_io(io_interface *underlying): io_interface(
-		underlying->get_node_id()), pending_requests(INIT_GCACHE_PENDING_SIZE)
+		underlying->get_node_id()), pending_requests(
+		INIT_GCACHE_PENDING_SIZE), req_allocator(sizeof(io_request) * 1024)
 {
 	this->underlying = underlying;
 	num_waits = 0;
@@ -434,7 +435,8 @@ global_cached_io::global_cached_io(io_interface *underlying): io_interface(
 
 global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 		int cache_type): io_interface(underlying->get_node_id()),
-	pending_requests(INIT_GCACHE_PENDING_SIZE)
+	pending_requests(INIT_GCACHE_PENDING_SIZE), req_allocator(
+			sizeof(io_request) * 1024)
 {
 	cb = NULL;
 	cache_hits = 0;
@@ -473,7 +475,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 				else
 					// `orig' is just part of the original request.
 					// we don't need it any more.
-					delete orig;
+					req_allocator.free(orig);
 				assert(real_orig->get_orig() == NULL);
 				io_request read_req((char *) p->get_data(),
 						ROUND_PAGE(off), PAGE_SIZE, READ,
@@ -499,7 +501,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 				ret = PAGE_SIZE;
 				finalize_request(*orig);
 				// Now we can delete it.
-				delete orig;
+				req_allocator.free(orig);
 			}
 		}
 		else {
@@ -529,7 +531,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 		ret = orig->get_size();
 		finalize_request(*orig);
 		// Now we can delete it.
-		delete orig;
+		req_allocator.free(orig);
 	}
 	return ret;
 }
@@ -541,7 +543,8 @@ ssize_t global_cached_io::write(io_request &req, thread_safe_page *p,
 	if (orig->get_size() == req.get_size())
 		return __write(orig, p, dirty_pages);
 	else {
-		io_request *partial_orig = new io_request(req);
+		io_request *partial_orig = req_allocator.alloc_obj();
+		*partial_orig = req;
 		partial_orig->set_partial(true);
 		return __write(partial_orig, p, dirty_pages);
 	}
@@ -643,7 +646,7 @@ again:
 				 * Furthermore, the pending requests must only cover one page.
 				 */
 				// TODO I shouldn't allocate memory within locks.
-				io_request *partial_orig = new io_request();
+				io_request *partial_orig = req_allocator.alloc_obj();
 				extract_pages(*orig, p->get_offset(), 1, *partial_orig);
 				partial_orig->set_partial(true);
 				partial_orig->set_orig(orig);
@@ -858,8 +861,10 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			}
 			// We delay copying the IO request until here, so we don't
 			// need to do it for cached single-page requests..
-			if (orig == NULL)
-				orig = new io_request(requests[i]);
+			if (orig == NULL) {
+				orig = req_allocator.alloc_obj();
+				*orig = requests[i];
+			}
 			/*
 			 * Cache may evict a dirty page and return the dirty page
 			 * to the user before it is written back to a file.
@@ -893,7 +898,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				io_request *orig1;
 				// If the request accesses more than one page.
 				if (end_pg_offset - begin_pg_offset > PAGE_SIZE) {
-					orig1 = new io_request();
+					orig1 = req_allocator.alloc_obj();
 					extract_pages(*orig, tmp_off, 1, *orig1);
 					orig1->set_orig(orig);
 					orig1->set_priv(p);
@@ -934,7 +939,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					else {
 						p->unlock();
 						if (orig1 != orig)
-							delete orig1;
+							req_allocator.free(orig1);
 					}
 				}
 			}

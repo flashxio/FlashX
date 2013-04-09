@@ -6,7 +6,6 @@ const long INCREASE_SIZE = 1024 * 1024 * 128;
 memory_manager::memory_manager(
 		long max_size): slab_allocator(PAGE_SIZE,
 			INCREASE_SIZE <= max_size ? INCREASE_SIZE : max_size , max_size) {
-	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 }
 
 /**
@@ -16,7 +15,6 @@ memory_manager::memory_manager(
  */
 bool memory_manager::get_free_pages(int npages,
 		char **pages, page_cache *request_cache) {
-	pthread_spin_lock(&lock);
 	int ret = slab_allocator::alloc(pages, npages);
 	/* 
 	 * slab_allocator allocates either all required number of 
@@ -25,7 +23,6 @@ bool memory_manager::get_free_pages(int npages,
 	if (ret == 0) {
 		long size = 0;
 		page_cache *cache = NULL;
-		pthread_spin_unlock(&lock);
 		/* shrink the cache of the largest size */
 		for (unsigned int i = 0; i < caches.size(); i++) {
 			if (size < caches[i]->size()) {
@@ -49,17 +46,13 @@ bool memory_manager::get_free_pages(int npages,
 		if (!cache->shrink(num_shrink, buf)) {
 			return false;
 		}
-		pthread_spin_lock(&lock);
 		slab_allocator::free(buf, num_shrink);
 		/* now it's guaranteed that we have enough free pages. */
 		ret = slab_allocator::alloc(pages, npages);
 	}
-	pthread_spin_unlock(&lock);
 	return true;
 }
 
 void memory_manager::free_pages(int npages, char **pages) {
-	pthread_spin_lock(&lock);
 	slab_allocator::free(pages, npages);
-	pthread_spin_unlock(&lock);
 }

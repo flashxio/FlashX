@@ -33,6 +33,8 @@ class global_cached_io: public io_interface
 	 */
 	thread_safe_FIFO_queue<io_request *> pending_requests;
 
+	obj_allocator<io_request> req_allocator;
+
 	int cache_hits;
 
 	/**
@@ -81,6 +83,10 @@ public:
 
 	virtual page_cache *get_global_cache() {
 		return global_cache;
+	}
+
+	obj_allocator<io_request> *get_req_allocator() {
+		return &req_allocator;
 	}
 
 	int preload(off_t start, long size);

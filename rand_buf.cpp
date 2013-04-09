@@ -1,8 +1,6 @@
 #include "rand_buf.h"
 #include "container.cpp"
 
-const int LOCAL_BUF_SIZE = 100;
-
 rand_buf::rand_buf(int buf_size, int entry_size,
 		int nodeid): free_refs(buf_size / entry_size)
 #ifdef MEMCHECK
