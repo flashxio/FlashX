@@ -124,9 +124,11 @@ class thread_private
 	
 	struct timeval start_time, end_time;
 
+#ifdef STATISTICS
 public:
 	atomic_integer num_completes;
 	atomic_integer num_pending;
+#endif
 
 public:
 	thread_private() {

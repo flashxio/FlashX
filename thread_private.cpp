@@ -88,8 +88,10 @@ public:
 				buf->free_entry(rq->get_buf(i));
 			read_bytes += rq->get_size();
 		}
+#ifdef STATISTICS
 		thread->num_completes.inc(num);
 		thread->num_pending.dec(num);
+#endif
 		return 0;
 	}
 
@@ -179,7 +181,9 @@ again:
 					}
 					if (size > 0) {
 						ret = io->access(reqs, i);
+#ifdef STATISTICS
 						num_pending.inc(i);
+#endif
 						num_accesses += i;
 						i = 0;
 						goto again;
@@ -193,18 +197,20 @@ again:
 				}
 			}
 			ret = io->access(reqs, i);
-			int curr = num_pending.inc(i);
 			if (ret < 0) {
 				perror("access_vector");
 				exit(1);
 			}
 			num_accesses += i;
+#ifdef STATISTICS
+			int curr = num_pending.inc(i);
 			if (max_num_pending < curr)
 				max_num_pending = curr;
 			if (num_accesses % 100 == 0) {
 				num_sampling++;
 				tot_num_pending += curr;
 			}
+#endif
 		}
 		else {
 			workload_t workload = gen->next();
