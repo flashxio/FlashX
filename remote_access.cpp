@@ -4,50 +4,6 @@
 const int INIT_DISK_QUEUE_SIZE = 32;
 const int MAX_DISK_CACHED_REQS = 32;
 
-class request_sender
-{
-	fifo_queue<io_request> buf;
-	blocking_FIFO_queue<io_request> *queue;
-public:
-	/**
-	 * buf_size: the number of messages that can be buffered in the sender.
-	 */
-	request_sender(blocking_FIFO_queue<io_request> *queue): buf(
-			INIT_DISK_QUEUE_SIZE, true) {
-		this->queue = queue;
-	}
-
-	int flush(bool blocking) {
-		if (buf.is_empty()) {
-			return 0;
-		}
-		if (blocking)
-			return queue->add(&buf);
-		else
-			return queue->non_blocking_add(&buf);
-	}
-
-	void flush_all() {
-		while (!buf.is_empty())
-			queue->add(&buf);
-	}
-
-	int get_num_remaining() {
-		return buf.get_num_entries();
-	}
-
-	int send_cached(io_request *msg) {
-		if (buf.is_full())
-			buf.expand_queue(buf.get_size() * 2);
-		buf.push_back(*msg);
-		return 1;
-	}
-
-	blocking_FIFO_queue<io_request> *get_queue() const {
-		return queue;
-	}
-};
-
 remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 		int num_remotes, file_mapper *mapper,
 		int node_id): io_interface(node_id)
@@ -63,7 +19,7 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 		if (remotes[i]->get_node_id() == node_id)
 			local_size += remotes[i]->get_size();
 		blocking_FIFO_queue<io_request> *queue = remotes[i]->get_queue();
-		senders[i] = new request_sender(queue);
+		senders[i] = new request_sender(queue, INIT_DISK_QUEUE_SIZE);
 	}
 	cb = NULL;
 	this->block_mapper = mapper;
@@ -82,7 +38,8 @@ io_interface *remote_disk_access::clone() const
 	copy->num_senders = this->num_senders;
 	copy->senders = new request_sender *[this->num_senders];
 	for (int i = 0; i < copy->num_senders; i++) {
-		copy->senders[i] = new request_sender(this->senders[i]->get_queue());
+		copy->senders[i] = new request_sender(this->senders[i]->get_queue(),
+				INIT_DISK_QUEUE_SIZE);
 	}
 	copy->cb = this->cb;
 	copy->total_size = this->total_size;

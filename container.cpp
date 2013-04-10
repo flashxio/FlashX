@@ -76,6 +76,21 @@ int thread_safe_FIFO_queue<T>::add(T *entries, int num)
 }
 
 template<class T>
+int blocking_FIFO_queue<T>::non_blocking_fetch(T *entries, int num)
+{
+	pthread_mutex_lock(&mutex);
+	bool full = this->is_full();
+	int ret = fifo_queue<T>::fetch(entries, num);
+	pthread_mutex_unlock(&mutex);
+
+	/* wake up all threads to send more requests */
+	if (full)
+		pthread_cond_broadcast(&cond);
+
+	return ret;
+}
+
+template<class T>
 int blocking_FIFO_queue<T>::fetch(T *entries, int num) {
 	/* we have to wait for coming requests. */
 	pthread_mutex_lock(&mutex);

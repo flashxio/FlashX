@@ -367,4 +367,48 @@ public:
 	int send(T *msg, int num);
 };
 
+class request_sender
+{
+	fifo_queue<io_request> buf;
+	blocking_FIFO_queue<io_request> *queue;
+public:
+	/**
+	 * buf_size: the number of messages that can be buffered in the sender.
+	 */
+	request_sender(blocking_FIFO_queue<io_request> *queue,
+			int init_queue_size): buf(init_queue_size, true) {
+		this->queue = queue;
+	}
+
+	int flush(bool blocking) {
+		if (buf.is_empty()) {
+			return 0;
+		}
+		if (blocking)
+			return queue->add(&buf);
+		else
+			return queue->non_blocking_add(&buf);
+	}
+
+	void flush_all() {
+		while (!buf.is_empty())
+			queue->add(&buf);
+	}
+
+	int get_num_remaining() {
+		return buf.get_num_entries();
+	}
+
+	int send_cached(io_request *msg) {
+		if (buf.is_full())
+			buf.expand_queue(buf.get_size() * 2);
+		buf.push_back(*msg);
+		return 1;
+	}
+
+	blocking_FIFO_queue<io_request> *get_queue() const {
+		return queue;
+	}
+};
+
 #endif

@@ -228,6 +228,7 @@ class thread_safe_FIFO_queue: public fifo_queue<T>
 
 public:
 	thread_safe_FIFO_queue(int size): fifo_queue<T>(size), capacity(size) {
+		// TODO I don't need to allocate this buffer.
 		buf = new T[size];
 		alloc_offset = 0;
 		add_offset = 0;
@@ -256,6 +257,7 @@ public:
 	 */
 	virtual void addByForce(T *entries, int num);
 
+	// TODO I should return reference.
 	T pop_front() {
 		T entry;
 		int num = fetch(&entry, 1);
@@ -317,11 +319,12 @@ public:
 	}
 
 	virtual int fetch(T *entries, int num);
+	int non_blocking_fetch(T *entries, int num);
 
 	virtual int add(T *entries, int num);
 
 	virtual int add(fifo_queue<T> *queue);
-	virtual int non_blocking_add(fifo_queue<T> *queue);
+	int non_blocking_add(fifo_queue<T> *queue);
 
 	int get_num_empty() const {
 		return num_empty;

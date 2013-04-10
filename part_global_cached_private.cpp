@@ -87,15 +87,12 @@ class process_reply_thread: public thread
 	part_global_cached_io *io;
 	blocking_FIFO_queue<io_reply> *reply_queue;
 public:
-	process_reply_thread(part_global_cached_io *io): thread(
+	process_reply_thread(part_global_cached_io *io,
+			blocking_FIFO_queue<io_reply> *reply_queue): thread(
 			std::string("process_reply_thread-") + itoa(io->get_node_id()),
 			io->get_node_id(), false) {
 		this->io = io;
-
-		reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
-				// We don't want that adding replies is blocked, so we allow
-				// the reply queue to be expanded to an arbitrary size.
-				NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
+		this->reply_queue = reply_queue;
 	}
 	void run();
 
@@ -342,10 +339,8 @@ int part_global_cached_io::init() {
 	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
 		const struct thread_group *group = &it->second;
-		fifo_queue<io_request> *q[1];
-		q[0] = group->request_queue;
-		req_senders.insert(std::pair<int, msg_sender<io_request> *>(it->first,
-					new msg_sender<io_request>(NUMA_REQ_CACHE_SIZE, q, 1)));
+		req_senders.insert(std::pair<int, request_sender *>(it->first,
+					new request_sender(group->request_queue, NUMA_REQ_CACHE_SIZE)));
 	}
 
 	return 0;
@@ -383,9 +378,13 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 		if (nthreads % num_groups)
 			group.nthreads++;
 		group.ios = new part_global_cached_io*[group.nthreads];
+		group.reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
+				// We don't want that adding replies is blocked, so we allow
+				// the reply queue to be expanded to an arbitrary size.
+				NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
 		group.cache = NULL;
 		// Create a thread for processing replies.
-		group.reply_processor = new process_reply_thread(this);
+		group.reply_processor = new process_reply_thread(this, group.reply_queue);
 		group.reply_processor->start();
 		for (int j = 0; j < group.nthreads; j++)
 			group.ios[j] = NULL;
@@ -398,6 +397,7 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	int i = thread_idx(idx, num_groups);
 	assert (group->ios[i] == NULL);
 	group->ios[i] = this;
+	this->local_group = group;
 }
 
 /* distribute requests to nodes. */
@@ -420,10 +420,13 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 
 	global_cached_io::access(local_reqs, num_local_reqs);
 	// TODO how to deal with error of access.
-	for (std::tr1::unordered_map<int, msg_sender<io_request> *>::const_iterator it
-			= req_senders.begin(); it != req_senders.end(); it++)
-		it->second->flush();
-	return num_sent;
+	int num_remaining = 0;
+	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+			= req_senders.begin(); it != req_senders.end(); it++) {
+		it->second->flush(false);
+		num_remaining += it->second->get_num_remaining();
+	}
+	return num_remaining;
 }
 
 int part_global_cached_io::process_reply(io_reply *reply) {
@@ -445,19 +448,44 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 	return ret;
 }
 
+int part_global_cached_io::process_replies(int max_nreplies)
+{
+	int num_processed = 0;
+	io_reply local_replies[max_nreplies];
+	if (!local_group->reply_queue->is_empty()) {
+		int num = local_group->reply_queue->non_blocking_fetch(local_replies,
+				max_nreplies);
+		for (int i = 0; i < num; i++) {
+			io_reply *reply = &local_replies[i];
+			((part_global_cached_io *) reply->get_io())->process_reply(reply);
+		}
+		num_processed += num;
+	}
+	return num_processed;
+}
+
 ssize_t part_global_cached_io::access(io_request *requests, int num) {
 	int num_sent = 0;
-	// If we can't sent the requests to the destination node,
-	// we have to busy wait.
-	while (num - num_sent > 0) {
-		int ret = distribute_reqs(&requests[num_sent], num - num_sent);
-		if (ret > 0) {
-			// This variable is only accessed in one thread, so we don't
-			// need to protect it.
-			processed_requests.inc(ret);
-			num_sent += ret;
+	int num_remaining = distribute_reqs(&requests[num_sent], num - num_sent);
+	// This variable is only accessed in one thread, so we don't
+	// need to protect it.
+	processed_requests.inc(num);
+	num_sent += num;
+
+	while (num_remaining > 0) {
+		int num_replies = process_replies(NUMA_REPLY_BUF_SIZE);
+		// If the number of replies we process is smaller than the expected
+		// number, it's probably because there aren't so many replies available.
+		bool blocking = num_replies < NUMA_REPLY_BUF_SIZE;
+		
+		num_remaining = 0;
+		for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+				= req_senders.begin(); it != req_senders.end(); it++) {
+			it->second->flush(blocking);
+			num_remaining += it->second->get_num_remaining();
 		}
 	}
+
 	return num_sent;
 }
 
@@ -472,9 +500,9 @@ void part_global_cached_io::cleanup()
 			thread_id, num_threads, group_idx);
 
 	// First make sure all requests have been flushed for processing.
-	for (std::tr1::unordered_map<int, msg_sender<io_request> *>::const_iterator it
+	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
-		msg_sender<io_request> *sender = it->second;
+		request_sender *sender = it->second;
 		sender->flush_all();
 	}
 

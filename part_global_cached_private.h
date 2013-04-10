@@ -23,6 +23,7 @@ struct thread_group
 	std::vector<thread *> process_request_threads;
 	
 	blocking_FIFO_queue<io_request> *request_queue;
+	blocking_FIFO_queue<io_reply> *reply_queue;
 
 	thread *reply_processor;
 	std::tr1::unordered_map<int, thread_safe_msg_sender<io_reply> *> reply_senders;
@@ -52,6 +53,7 @@ class part_global_cached_io: public global_cached_io
 	static atomic_integer num_finished_threads;
 
 	int group_idx;
+	struct thread_group *local_group;
 
 	/* the size of the cache associated to the thread. */
 	long cache_size;
@@ -61,7 +63,7 @@ class part_global_cached_io: public global_cached_io
 	 * there is a sender for each node.
 	 */
 	// group id <-> msg sender
-	std::tr1::unordered_map<int, msg_sender<io_request> *> req_senders;
+	std::tr1::unordered_map<int, request_sender *> req_senders;
 
 	file_mapper *mapper;
 	int hash_req(io_request *req)
@@ -81,6 +83,9 @@ class part_global_cached_io: public global_cached_io
 
 	// It's the callback from the user.
 	callback *final_cb;
+
+	int process_replies(int num);
+	int distribute_reqs(io_request *requests, int num);
 
 public:
 	/* get the location of a thread in the group. */
@@ -117,8 +122,6 @@ public:
 	}
 
 	int reply(io_request *requests, io_reply *replies, int num);
-
-	int distribute_reqs(io_request *requests, int num);
 
 	int process_requests(int max_nreqs);
 
