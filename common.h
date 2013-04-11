@@ -150,7 +150,7 @@ public:
 	}
 
 	static int get_default_SA_min_cell_size() {
-		return 8;
+		return 12;
 	}
 
 	static int get_default_RAID_block_size() {
