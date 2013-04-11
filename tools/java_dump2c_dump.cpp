@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
 		cworkloads.push_back(w);
 	}
 
-	int fd = open(output_file, O_WRONLY | O_CREAT);
+	int fd = open(output_file, O_WRONLY | O_CREAT, S_IRWXU);
 	if (fd < 0) {
 		perror("open");
 		return -1;

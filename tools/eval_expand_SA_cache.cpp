@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
 	long length = 0;
 	workload_t *workloads = load_file_workload(workload_file, length);
 	file_workload *gen = new file_workload(workloads, length, 0, 1);
-	int size = gen->size();
+	int size = (int) length;
 	printf("There are %d requests\n", size);
 	// We expand the cache by half of its original size.
 	if (new_cache_size - cache_size > 0)
