@@ -16,7 +16,7 @@ int nthreads = 1;
 int main(int argc, char *argv[])
 {
 	if (argc < 4) {
-		fprintf(stderr, "cache_evaluator workload_file cache_type cache_size\n");
+		fprintf(stderr, "cache_evaluator workload_file cache_type cache_size [cell_size]\n");
 		fprintf(stderr, "supported cache types: associative, hash-index, lru2q\n");
 		return 1;
 	}
@@ -25,6 +25,9 @@ int main(int argc, char *argv[])
 	// Cache size in bytes.
 	int cache_size = str2size(argv[3]);
 	printf("The cache size is %d bytes\n", cache_size);
+	int cell_size = atoi(argv[4]);
+	printf("The cell size of SA-cache is %d\n", cell_size);
+	params.init(1, cell_size);
 
 	page_cache *global_cache;
 	if (cache_type == "lru2q") {
