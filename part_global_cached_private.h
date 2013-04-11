@@ -57,6 +57,7 @@ class part_global_cached_io: public global_cached_io
 
 	/* the size of the cache associated to the thread. */
 	long cache_size;
+	long tot_cache_size;
 	int cache_type;
 
 	/*
@@ -66,9 +67,9 @@ class part_global_cached_io: public global_cached_io
 	std::tr1::unordered_map<int, request_sender *> req_senders;
 
 	file_mapper *mapper;
-	int hash_req(io_request *req)
+	int hash_req(off_t off)
 	{
-		int idx = mapper->map2file(req->get_offset() / PAGE_SIZE);
+		int idx = mapper->map2file(off / PAGE_SIZE);
 		return mapper->get_file_node_id(idx);
 	}
 
@@ -133,6 +134,7 @@ public:
 	}
 
 	void cleanup();
+	int preload(off_t start, long size);
 
 	int get_group_id() {
 		return group_idx;

@@ -299,10 +299,7 @@ int part_global_cached_io::init() {
 	std::vector<node_cached_io *> node_ios;
 	pthread_mutex_lock(&init_mutex);
 	thread_group *group = &groups[group_idx];
-	if (group->cache == NULL) {
-		/* Each cache has their own memory managers */
-		group->cache = global_cached_io::create_cache(cache_type, cache_size,
-				group_idx, 1);
+	if (group->request_queue == NULL) {
 		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
 				NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
 		init_repliers(groups, group->reply_senders);
@@ -355,6 +352,7 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	this->final_cb = NULL;
 	remote_reads = 0;
 	this->group_idx = underlying->get_node_id();
+	this->tot_cache_size = cache_size;
 	this->cache_size = (long) (cache_size * ((double) underlying->get_local_size()
 		/ underlying->get_size()));
 	this->cache_type = cache_type;
@@ -382,7 +380,9 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 				// We don't want that adding replies is blocked, so we allow
 				// the reply queue to be expanded to an arbitrary size.
 				NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
-		group.cache = NULL;
+		group.request_queue = NULL;
+		group.cache = global_cached_io::create_cache(cache_type, this->cache_size,
+				group_idx, 1);
 		// Create a thread for processing replies.
 		group.reply_processor = new process_reply_thread(this, group.reply_queue);
 		group.reply_processor->start();
@@ -406,7 +406,7 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	io_request local_reqs[num];
 	int num_local_reqs = 0;
 	for (int i = 0; i < num; i++) {
-		int idx = hash_req(&requests[i]);
+		int idx = hash_req(requests[i].get_offset());
 		if (idx != get_group_id()) {
 			remote_reads++;
 			int ret = req_senders[idx]->send_cached(&requests[i]);
@@ -589,6 +589,31 @@ void part_global_cached_io::print_stat()
 	}
 }
 #endif
+
+int part_global_cached_io::preload(off_t start, long size)
+{
+	if (size > tot_cache_size) {
+		fprintf(stderr, "we can't preload data larger than the cache size\n");
+		exit(1);
+	}
+
+	assert(ROUND_PAGE(start) == start);
+	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
+		off_t old_off = -1;
+		// We only preload data to the local cache.
+		if (hash_req(offset) != get_group_id())
+			continue;
+		thread_safe_page *p = (thread_safe_page *) local_group->cache->search(
+					ROUND_PAGE(offset), old_off);
+		// This is mainly for testing. I don't need to really read data from disks.
+		if (!p->data_ready()) {
+			p->set_io_pending(false);
+			p->set_data_ready(true);
+		}
+		p->dec_ref();
+	}
+	return 0;
+}
 
 std::tr1::unordered_map<int, thread_group> part_global_cached_io::groups;
 pthread_mutex_t part_global_cached_io::init_mutex;

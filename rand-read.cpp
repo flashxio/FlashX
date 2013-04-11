@@ -434,9 +434,12 @@ int main(int argc, char *argv[])
 						assert(num_nodes >= (int) node_ids.size());
 						io_interface *underlying = new remote_disk_access(
 								read_threads, num_files, mapper, node_id);
-						threads[j] = new thread_private(j, entry_size,
-								new part_global_cached_io(num_nodes, underlying,
-									j, cache_size, cache_type, mapper));
+						part_global_cached_io *io = new part_global_cached_io(
+								num_nodes, underlying, j, cache_size,
+								cache_type, mapper);
+						if (preload)
+							io->preload(0, npages * PAGE_SIZE);
+						threads[j] = new thread_private(j, entry_size, io);
 					}
 					break;
 				default:
