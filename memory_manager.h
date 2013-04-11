@@ -15,7 +15,7 @@ class memory_manager: public slab_allocator
 
 	std::vector<page_cache *> caches;
 public:
-	memory_manager(long max_size);
+	memory_manager(long max_size, int node_id);
 
 	void register_cache(page_cache *cache) {
 		caches.push_back(cache);

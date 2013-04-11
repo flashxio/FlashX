@@ -4,8 +4,9 @@ const long SHRINK_NPAGES = 1024;
 const long INCREASE_SIZE = 1024 * 1024 * 128;
 
 memory_manager::memory_manager(
-		long max_size): slab_allocator(PAGE_SIZE,
-			INCREASE_SIZE <= max_size ? INCREASE_SIZE : max_size , max_size) {
+		long max_size, int node_id): slab_allocator(PAGE_SIZE,
+			INCREASE_SIZE <= max_size ? INCREASE_SIZE : max_size,
+			max_size, node_id) {
 }
 
 /**

@@ -842,7 +842,7 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 	height = params.get_SA_min_cell_size();
 	expand_cell_idx = 0;
 	this->expandable = expandable;
-	this->manager = new memory_manager(max_cache_size);
+	this->manager = new memory_manager(max_cache_size, node_id);
 	manager->register_cache(this);
 	long init_cache_size = default_init_cache_size;
 	if (init_cache_size > cache_size

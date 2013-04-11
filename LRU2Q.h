@@ -114,7 +114,7 @@ public:
 		printf("LRU2Q cache is used\n");
 		npages = cache_size / PAGE_SIZE;
 		pages = new linked_page[npages];
-		manager = new memory_manager(cache_size);
+		manager = new memory_manager(cache_size, -1);
 		manager->register_cache(this);
 		for (int i = 0; i < npages; i++) {
 			char *page = NULL;

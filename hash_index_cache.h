@@ -162,7 +162,8 @@ public:
 
 	void init(io_interface *underlying) {
 #ifdef PER_CPU
-		memory_manager *manager = new memory_manager(cache_size_per_thread);
+		memory_manager *manager = new memory_manager(cache_size_per_thread,
+				node_id);
 		manager->register_cache(this);
 		pthread_setspecific(manager_key, manager);
 
