@@ -47,8 +47,8 @@ public:
 		return (int) files.size();
 	}
 
-	virtual void map(off_t, struct block_identifier &) = 0;
-	virtual int map2file(off_t) = 0;
+	virtual void map(off_t, struct block_identifier &) const = 0;
+	virtual int map2file(off_t) const = 0;
 
 	virtual file_mapper *clone() = 0;
 
@@ -64,7 +64,7 @@ public:
 			int block_size): file_mapper(files, block_size) {
 	}
 
-	virtual void map(off_t off, struct block_identifier &bid) {
+	virtual void map(off_t off, struct block_identifier &bid) const {
 		int idx_in_block = off % STRIPE_BLOCK_SIZE;
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
 		bid.idx = (int) (block_idx % get_num_files());
@@ -72,7 +72,7 @@ public:
 			+ idx_in_block;
 	}
 
-	virtual int map2file(off_t off) {
+	virtual int map2file(off_t off) const {
 		return (int) ((off / STRIPE_BLOCK_SIZE) % get_num_files());
 	}
 
@@ -96,7 +96,7 @@ public:
 			int block_size): RAID0_mapper(files, block_size) {
 	}
 
-	virtual void map(off_t off, struct block_identifier &bid) {
+	virtual void map(off_t off, struct block_identifier &bid) const {
 		int idx_in_block = off % STRIPE_BLOCK_SIZE;
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
 		bid.idx = (int) (block_idx % get_num_files());
@@ -106,7 +106,7 @@ public:
 		bid.idx = (bid.idx + shift) % get_num_files();
 	}
 
-	virtual int map2file(off_t off) {
+	virtual int map2file(off_t off) const {
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
 		int shift = (int) ((block_idx / get_num_files()) % get_num_files());
 		return (int) ((block_idx % get_num_files() + shift) % get_num_files());
@@ -135,7 +135,7 @@ public:
 				files, block_size), P_MOD_N(CONST_P % files.size()) {
 	}
 
-	virtual void map(off_t off, struct block_identifier &bid) {
+	virtual void map(off_t off, struct block_identifier &bid) const {
 		int idx_in_block = off % STRIPE_BLOCK_SIZE;
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
 		off_t p_idx = (CONST_A * block_idx) % CONST_P;
@@ -149,7 +149,7 @@ public:
 			* STRIPE_BLOCK_SIZE + idx_in_block;
 	}
 
-	virtual int map2file(off_t off) {
+	virtual int map2file(off_t off) const {
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
 		off_t p_idx = (CONST_A * block_idx) % CONST_P;
 		return p_idx % get_num_files();

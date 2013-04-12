@@ -25,6 +25,10 @@ public:
 			file_map[indices[i]] = i;
 	}
 
+	const file_mapper *get_mapper() const {
+		return mapper;
+	}
+
 	int get_num_files() const {
 		return indices.size();
 	}
