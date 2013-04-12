@@ -65,6 +65,7 @@ struct file_info
 	std::string name;
 	// The NUMA node id where the disk is connected to.
 	int node_id;
+	int fd;
 };
 
 static inline std::string itoa(int n)

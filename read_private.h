@@ -23,16 +23,7 @@ class buffered_io: public io_interface
 #endif
 public:
 	buffered_io(const logical_file_partition &partition_, long size,
-			int node_id, int flags = O_RDWR): io_interface(node_id), partition(
-				partition_), fds(partition.get_num_files()) {
-		this->flags = flags;
-#ifdef STATISTICS
-		read_time = 0;
-		num_reads = 0;
-#endif
-		remote_reads = 0;
-		this->size = size;
-	}
+			int node_id, int flags = O_RDWR);
 
 	virtual ~buffered_io() {
 	}
@@ -66,8 +57,6 @@ public:
 	int init();
 
 	void cleanup() {
-		for (int i = 0; i < partition.get_num_files(); i++)
-			close(fds[i]);
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);

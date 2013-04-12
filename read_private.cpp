@@ -1,23 +1,22 @@
 #include "read_private.h"
 
-int buffered_io::init() {
-	int ret;
+buffered_io::buffered_io(const logical_file_partition &partition_, long size,
+		int node_id, int flags): io_interface(node_id), partition(
+			partition_), fds(partition.get_num_files())
+{
+	this->flags = flags;
+#ifdef STATISTICS
+	read_time = 0;
+	num_reads = 0;
+#endif
+	remote_reads = 0;
+	this->size = size;
 
-	for (int i = 0; i < partition.get_num_files(); i++) {
-		fds[i] = open(partition.get_file_name(i).c_str(), flags);
-		if (fds[i] < 0) {
-			char err_msg[128];
-			snprintf(err_msg, sizeof(err_msg),
-					"open %s\n", partition.get_file_name(i).c_str());
-			perror(err_msg);
-			exit (1);
-		}
-		ret = posix_fadvise(fds[i], 0, 0, POSIX_FADV_RANDOM);
-		if (ret < 0) {
-			perror("posix_fadvise");
-			exit(1);
-		}
-	}
+	for (int i = 0; i < partition.get_num_files(); i++)
+		fds[i] = partition.get_fd(i);
+}
+
+int buffered_io::init() {
 	return 0;
 }
 
