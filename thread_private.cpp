@@ -6,6 +6,7 @@
 #define NUM_PAGES (40960 * nthreads)
 
 bool align_req = false;
+int align_size = PAGE_SIZE;
 
 extern bool verify_read_content;
 
@@ -146,9 +147,9 @@ int thread_private::run()
 				off_t off = workload.off;
 				int size = workload.size;
 				if (align_req) {
-					off = ROUND(off, MIN_BLOCK_SIZE);
-					size = ROUNDUP(off + size, MIN_BLOCK_SIZE)
-						- ROUND(off, MIN_BLOCK_SIZE);
+					off = ROUND(off, align_size);
+					size = ROUNDUP(off + size, align_size)
+						- ROUND(off, align_size);
 				}
 				/*
 				 * If the size of the request is larger than a page size,
@@ -218,9 +219,9 @@ again:
 			int access_method = workload.read ? READ : WRITE;
 			int entry_size = workload.size;
 			if (align_req) {
-				off = ROUND(off, MIN_BLOCK_SIZE);
-				entry_size = ROUNDUP(off + entry_size, MIN_BLOCK_SIZE)
-					- ROUND(off, MIN_BLOCK_SIZE);
+				off = ROUND(off, align_size);
+				entry_size = ROUNDUP(off + entry_size, align_size)
+					- ROUND(off, align_size);
 			}
 
 			if (buf_type == SINGLE_SMALL_BUF) {
