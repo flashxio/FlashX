@@ -88,30 +88,40 @@ ssize_t remote_disk_access::access(io_request *requests, int num)
 	}
 
 	if (num_remaining > MAX_DISK_CACHED_REQS) {
-		num_remaining = 0;
-		// Now let's flush requests to the queues, but we first try to
-		// flush requests non-blockingly.
-		for (int i = 0; i < num_senders; i++) {
-			senders[i]->flush(false);
-			num_remaining += senders[i]->get_num_remaining();
-		}
-
-		int base_idx;
-		if (num_senders == 1)
-			base_idx = 0;
-		else
-			base_idx = random() % num_senders;
-		int i = 0;
-		// We only allow cache that many requests. If we have more than
-		// we want, continue flushing, but try harder this time.
-		while (num_remaining > MAX_DISK_CACHED_REQS) {
-			int idx = (base_idx + i) % num_senders;
-			int orig_remaining = senders[idx]->get_num_remaining();
-			senders[idx]->flush(true);
-			assert(senders[idx]->get_num_remaining() == 0);
-			num_remaining -= orig_remaining;
-			i++;
-		}
+		flush_requests(MAX_DISK_CACHED_REQS);
 	}
 	return 0;
+}
+
+void remote_disk_access::flush_requests()
+{
+	flush_requests(0);
+}
+
+void remote_disk_access::flush_requests(int max_cached)
+{
+	int num_remaining = 0;
+	// Now let's flush requests to the queues, but we first try to
+	// flush requests non-blockingly.
+	for (int i = 0; i < num_senders; i++) {
+		senders[i]->flush(false);
+		num_remaining += senders[i]->get_num_remaining();
+	}
+
+	int base_idx;
+	if (num_senders == 1)
+		base_idx = 0;
+	else
+		base_idx = random() % num_senders;
+	int i = 0;
+	// We only allow cache that many requests. If we have more than
+	// we want, continue flushing, but try harder this time.
+	while (num_remaining > max_cached) {
+		int idx = (base_idx + i) % num_senders;
+		int orig_remaining = senders[idx]->get_num_remaining();
+		senders[idx]->flush(true);
+		int num_flushed = orig_remaining - senders[idx]->get_num_remaining();
+		num_remaining -= num_flushed;
+		i++;
+	}
 }

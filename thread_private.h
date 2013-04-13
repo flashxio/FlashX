@@ -76,6 +76,8 @@ public:
 	virtual ssize_t access(io_request *requests, int num) {
 		return -1;
 	}
+	virtual void flush_requests() {
+	}
 
 	/**
 	 * The synchronous IO interface.

@@ -67,6 +67,8 @@ public:
 
 	virtual ssize_t access(io_request *requests, int num);
 	virtual io_interface *clone() const;
+	void flush_requests(int max_cached);
+	virtual void flush_requests();
 };
 
 #endif

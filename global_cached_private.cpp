@@ -985,6 +985,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 	if (get_global_cache()->get_flush_thread())
 		get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
 				dirty_pages.size());
+	underlying->flush_requests();
 	return 0;
 }
 
