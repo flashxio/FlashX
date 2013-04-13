@@ -2,7 +2,6 @@
 #include "parameters.h"
 
 const int INIT_DISK_QUEUE_SIZE = 32;
-const int MAX_DISK_CACHED_REQS = 32;
 
 remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 		int num_remotes, file_mapper *mapper,

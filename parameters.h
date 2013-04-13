@@ -13,7 +13,7 @@ const int AIO_DEPTH_PER_FILE = 32;
 
 const int IO_QUEUE_SIZE = 32 * 5;
 const int MAX_FETCH_REQS = 10;
-const int MSG_SEND_BUF_SIZE = 10;
+const int MAX_DISK_CACHED_REQS = 8;
 
 /**
  * The number of requests issued by user applications
