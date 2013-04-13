@@ -385,7 +385,7 @@ public:
 			return 0;
 		}
 		if (blocking)
-			return queue->add(&buf);
+			return queue->add_partial(&buf);
 		else
 			return queue->non_blocking_add(&buf);
 	}

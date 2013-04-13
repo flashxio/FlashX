@@ -1,5 +1,6 @@
-#include "container.h"
+#include <limits.h>
 
+#include "container.h"
 
 template<class T>
 bool fifo_queue<T>::expand_queue(int new_size)
@@ -151,8 +152,14 @@ int blocking_FIFO_queue<T>::add(T *entries, int num) {
 template<class T>
 int blocking_FIFO_queue<T>::add(fifo_queue<T> *queue)
 {
+	return add_partial(queue, INT_MAX);
+}
+
+template<class T>
+int blocking_FIFO_queue<T>::add_partial(fifo_queue<T> *queue, int min_added)
+{
 	int num_added = 0;
-	while (!queue->is_empty()) {
+	while (!queue->is_empty() && num_added < min_added) {
 		int num = queue->get_num_entries();
 		pthread_mutex_lock(&mutex);
 		bool empty = this->is_empty();
@@ -173,7 +180,6 @@ int blocking_FIFO_queue<T>::add(fifo_queue<T> *queue)
 
 		while (this->is_full() && !queue->is_empty()) {
 			num_full++;
-//			printf("the blocking queue %s is full, wait...\n", name.c_str());
 			pthread_cond_wait(&cond, &mutex);
 		}
 		pthread_mutex_unlock(&mutex);
