@@ -169,7 +169,7 @@ again:
 						if (next_off > off + size)
 							next_off = off + size;
 						char *p = buf->next_entry(next_off - off);
-						if (access_method == WRITE)
+						if (access_method == WRITE && verify_read_content)
 							create_write_data(p, next_off - off, off);
 						reqs[i].init(p, off, next_off - off, access_method,
 								io, node_id);
@@ -187,7 +187,7 @@ again:
 				}
 				else {
 					char *p = buf->next_entry(size);
-					if (access_method == WRITE)
+					if (access_method == WRITE && verify_read_content)
 						create_write_data(p, size, off);
 					reqs[i++].init(p, off, size, access_method, io, node_id);
 				}
@@ -223,7 +223,7 @@ again:
 					 * generate the data for writing the file,
 					 * so the data in the file isn't changed.
 					 */
-					if (access_method == WRITE) {
+					if (access_method == WRITE && verify_read_content) {
 						create_write_data(entry, entry_size, off);
 					}
 					// There is at least one byte we need to access in the page.
@@ -249,7 +249,7 @@ again:
 				}
 			}
 			else {
-				if (access_method == WRITE) {
+				if (access_method == WRITE && verify_read_content) {
 					create_write_data(entry, entry_size, off);
 				}
 				ret = io->access(entry, off, entry_size, access_method);
