@@ -150,6 +150,29 @@ int blocking_FIFO_queue<T>::add(T *entries, int num) {
 }
 
 template<class T>
+int blocking_FIFO_queue<T>::non_blocking_add(T *entries, int num) {
+	pthread_mutex_lock(&mutex);
+	bool empty = this->is_empty();
+	if (this->get_size() - fifo_queue<T>::get_num_entries() < num
+			&& this->get_size() < max_size) {
+		int new_size = this->get_size() * 2;
+		new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
+		new_size = min(new_size, max_size);
+		printf("try to expand queue to %d\n", new_size);
+		bool ret = fifo_queue<T>::expand_queue(new_size);
+		printf("expand queue to %d: %d\n", new_size, ret);
+	}
+	int ret = fifo_queue<T>::add(entries, num);
+	entries += ret;
+	num -= ret;
+	pthread_mutex_unlock(&mutex);
+	/* signal the thread of reading disk to wake up. */
+	if (empty)
+		pthread_cond_broadcast(&cond);
+	return ret;
+}
+
+template<class T>
 int blocking_FIFO_queue<T>::add(fifo_queue<T> *queue)
 {
 	return add_partial(queue, INT_MAX);

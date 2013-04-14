@@ -19,9 +19,9 @@ public:
 };
 
 disk_read_thread::disk_read_thread(const logical_file_partition &partition,
-		long size, int node_id): queue(partition.get_file_name(0),
-			IO_QUEUE_SIZE, IO_QUEUE_SIZE) {
-	aio = new async_io(partition, size, AIO_DEPTH_PER_FILE, node_id);
+		aio_complete_thread *complete_thread, long size, int node_id): queue(
+			partition.get_file_name(0), IO_QUEUE_SIZE, IO_QUEUE_SIZE) {
+	aio = new async_io(partition, complete_thread, size, AIO_DEPTH_PER_FILE, node_id);
 	aio->set_callback(new initiator_callback());
 	this->node_id = node_id;
 	num_accesses = 0;

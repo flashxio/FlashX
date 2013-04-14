@@ -4,9 +4,13 @@
 const int INIT_DISK_QUEUE_SIZE = 32;
 
 remote_disk_access::remote_disk_access(disk_read_thread **remotes,
-		int num_remotes, file_mapper *mapper,
-		int node_id): io_interface(node_id)
+		aio_complete_thread *complete_thread, int num_remotes,
+		file_mapper *mapper, int node_id): io_interface(node_id)
 {
+	if (complete_thread == NULL)
+		this->complete_queue = NULL;
+	else
+		this->complete_queue = complete_thread->get_queue();
 	assert(num_remotes == mapper->get_num_files());
 	senders = new request_sender *[num_remotes];
 	num_senders = num_remotes;
@@ -22,6 +26,7 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 	}
 	cb = NULL;
 	this->block_mapper = mapper;
+	num_completed_reqs = 0;
 }
 
 remote_disk_access::~remote_disk_access()
@@ -106,6 +111,11 @@ void remote_disk_access::flush_requests(int max_cached)
 		senders[i]->flush(false);
 		num_remaining += senders[i]->get_num_remaining();
 	}
+	// If all requests have been flushed successfully, return immediately.
+	if (num_remaining == 0)
+		return;
+	if (complete_queue)
+		num_completed_reqs += complete_queue->process(1000, false);
 
 	int base_idx;
 	if (num_senders == 1)

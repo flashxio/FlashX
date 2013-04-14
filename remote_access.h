@@ -20,20 +20,24 @@ class remote_disk_access: public io_interface
 	int num_senders;
 	callback *cb;
 	file_mapper *block_mapper;
+	aio_complete_queue *complete_queue;
 
 	// The total size of data accessible with this IO interface.
 	long total_size;
 	// The size of data on the local node.
 	long local_size;
+	int num_completed_reqs;
 
 	remote_disk_access(int node_id): io_interface(node_id) {
 		senders = NULL;
 		num_senders = 0;
 		cb = NULL;
 		block_mapper = NULL;
+		num_completed_reqs = 0;
 	}
 public:
-	remote_disk_access(disk_read_thread **remotes, int num_remotes,
+	remote_disk_access(disk_read_thread **remotes,
+			aio_complete_thread *complete_thread, int num_remotes,
 			file_mapper *mapper, int node_id);
 
 	~remote_disk_access();
@@ -69,6 +73,9 @@ public:
 	virtual io_interface *clone() const;
 	void flush_requests(int max_cached);
 	virtual void flush_requests();
+	virtual void print_stat() {
+		printf("num completed reqs: %d\n", num_completed_reqs);
+	}
 };
 
 #endif

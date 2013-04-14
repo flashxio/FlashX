@@ -1,6 +1,9 @@
 #include <limits.h>
 
 #include "aio_private.h"
+#include "container.cpp"
+
+template class blocking_FIFO_queue<thread_callback_s *>;
 
 #define EVEN_DISTRIBUTE
 
@@ -156,6 +159,8 @@ struct thread_callback_s
 {
 	struct io_callback_s cb;
 	async_io *aio;
+	callback *aio_callback;
+	obj_allocator<thread_callback_s> *cb_allocator;
 	extended_io_request req;
 };
 
@@ -175,20 +180,24 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 	aio->return_cb(tcbs, num);
 }
 
-async_io::async_io(const logical_file_partition &partition, long size,
+async_io::async_io(const logical_file_partition &partition,
+		aio_complete_thread *complete_thread, long size,
 		int aio_depth_per_file, int node_id): buffered_io(partition, size,
 			node_id, O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file *
 				partition.get_num_files()), allocator(PAGE_SIZE,
-				AIO_DEPTH * PAGE_SIZE, INT_MAX, node_id)
+				AIO_DEPTH * PAGE_SIZE, INT_MAX, node_id), cb_allocator(
+					AIO_DEPTH * sizeof(thread_callback_s))
 {
 	printf("aio is used\n");
 	buf_idx = 0;
 	ctx = create_aio_ctx(AIO_DEPTH);
-	for (int i = 0; i < AIO_DEPTH * 5; i++) {
-		cbs.push_back(new thread_callback_s());
-	}
 	cb = NULL;
 	num_iowait = 0;
+	if (complete_thread)
+		this->complete_queue = complete_thread->get_queue();
+	else
+		this->complete_queue = NULL;
+	num_completed_reqs = 0;
 }
 
 void async_io::cleanup()
@@ -209,14 +218,8 @@ async_io::~async_io()
 
 struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 {
-	if (cbs.empty()) {
-		fprintf(stderr, "no callback object left\n");
-		return NULL;
-	}
-
-	thread_callback_s *tcb = cbs.front();
+	thread_callback_s *tcb = cb_allocator.alloc_obj();
 	io_callback_s *cb = (io_callback_s *) tcb;
-	cbs.pop_front();
 
 	cb->func = cb_func;
 	if (get_node_id() == io_req.get_node_id() || get_node_id() == -1)
@@ -224,6 +227,8 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	else
 		tcb->req.init(io_req, &allocator);
 	tcb->aio = this;
+	tcb->aio_callback = this->get_callback();
+	tcb->cb_allocator = &cb_allocator;
 
 	assert(tcb->req.get_size() >= MIN_BLOCK_SIZE);
 	assert(tcb->req.get_size() % MIN_BLOCK_SIZE == 0);
@@ -283,6 +288,44 @@ ssize_t async_io::access(io_request *requests, int num)
 
 void async_io::return_cb(thread_callback_s *tcbs[], int num)
 {
+	thread_callback_s *local_tcbs[num];
+	// If there is a dedicated thread to process the completed requests,
+	// send the requests to it.
+	// But we process completed requests ourselves if there aren't
+	// so many. It's very often that there are only few completed requests,
+	// It seems many numbers work. 5 is just randomly picked.
+	if (complete_queue && num > 5) {
+		thread_callback_s *remote_tcbs[num];
+		int num_remote = 0;
+		int num_local = 0;
+		for (int i = 0; i < num; i++) {
+			thread_callback_s *tcb = tcbs[i];
+			// We have allocated a local buffer, and it is a read request,
+			// we need to copy data back to the issuer processor.
+			// Pushing data to remote memory is more expensive than pulling
+			// data from remote memory, so we let the issuer processor pull
+			// data.
+			if (tcb->req.is_replaced() && tcb->req.get_access_method() == READ)
+				remote_tcbs[num_remote++] = tcb;
+			else
+				local_tcbs[num_local++] = tcb;
+		}
+		if (num_remote > 0) {
+			int num_added = complete_queue->add(remote_tcbs, num_remote);
+			// If we can't add the remote requests to the queue,
+			// we have to process them locally.
+			if (num_added < num_remote) {
+				for (int i = num_added; i < num_remote; i++)
+					local_tcbs[num_local++] = remote_tcbs[i];
+			}
+		}
+		tcbs = local_tcbs;
+		num = num_local;
+	}
+	if (num == 0)
+		return;
+
+	// Otherwise, we process them ourselves.
 	io_request *reqs[num];
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
@@ -296,6 +339,41 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
 		tcb->req.reset();
-		cbs.push_back(tcb);
+		cb_allocator.free(tcb);
+	}
+	num_completed_reqs += num;
+}
+
+const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;
+
+int aio_complete_queue::process(int max_num, bool blocking)
+{
+	if (queue.is_empty() && !blocking)
+		return 0;
+	thread_callback_s *tcbs[max_num];
+	int num;
+	if (blocking)
+		num = queue.fetch(tcbs, max_num);
+	else {
+		num = queue.non_blocking_fetch(tcbs, max_num);
+	}
+
+	for (int i = 0; i < num; i++) {
+		thread_callback_s *tcb = tcbs[i];
+		if (tcb->req.is_replaced())
+			tcb->req.use_orig_bufs();
+		io_request *reqs[1];
+		reqs[0] = &tcb->req;
+		tcb->aio_callback->invoke(reqs, 1);
+		tcb->req.reset();
+		tcb->cb_allocator->free(tcb);
+	}
+	return num;
+}
+
+void aio_complete_thread::run()
+{
+	while(true) {
+		num_completed_reqs += queue.process(AIO_NUM_PROCESS_REQS, true);
 	}
 }

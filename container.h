@@ -327,6 +327,7 @@ public:
 	// Add at least `min_added' elements or all elements in `queue' are added.
 	int add_partial(fifo_queue<T> *queue, int min_added = 1);
 	int non_blocking_add(fifo_queue<T> *queue);
+	int non_blocking_add(T *entries, int num);
 
 	int get_num_empty() const {
 		return num_empty;
