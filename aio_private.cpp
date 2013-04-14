@@ -118,6 +118,7 @@ void extended_io_request::use_orig_bufs()
 
 void extended_io_request::init(io_request &req, slab_allocator *allocator)
 {
+	assert(this->get_access_method() == READ);
 	io_request::assign(req);
 	this->allocator = allocator;
 	memset(orig_embedded_bufs, 0, sizeof(orig_embedded_bufs));
@@ -134,8 +135,6 @@ void extended_io_request::init(io_request &req, slab_allocator *allocator)
 		}
 		else
 			local_buf = (char *) valloc(this->get_buf_size(i));
-		if (this->get_access_method() == WRITE)
-			memcpy(local_buf, remote_buf, this->get_buf_size(i));
 		this->set_buf(i, local_buf);
 		orig_bufs[i] = remote_buf;
 	}
@@ -222,7 +221,9 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	io_callback_s *cb = (io_callback_s *) tcb;
 
 	cb->func = cb_func;
-	if (get_node_id() == io_req.get_node_id() || get_node_id() == -1)
+	if (get_node_id() == io_req.get_node_id() || get_node_id() == -1
+			// It seems remote write requests can perform well.
+			|| io_req.get_access_method() == WRITE)
 		tcb->req = io_req;
 	else
 		tcb->req.init(io_req, &allocator);
