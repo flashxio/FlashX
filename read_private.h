@@ -57,6 +57,9 @@ public:
 	int init();
 
 	void cleanup() {
+		printf("start to flush dirty data\n");
+		for (size_t i = 0; i < fds.size(); i++)
+			fsync(fds[i]);
 	}
 
 	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
