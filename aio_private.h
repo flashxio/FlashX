@@ -2,6 +2,7 @@
 #define __AIO_PRIVATE_H__
 
 #include <deque>
+#include <tr1/unordered_map>
 
 #include "wpaio.h"
 #include "read_private.h"
@@ -41,7 +42,8 @@ class async_io: public buffered_io
 	// by the user isn't in the local NUMA node.
 	slab_allocator allocator;
 	obj_allocator<thread_callback_s> cb_allocator;
-	aio_complete_queue *complete_queue;
+	std::tr1::unordered_map<int, aio_complete_queue *> complete_queues;
+	std::tr1::unordered_map<int, fifo_queue<thread_callback_s *> *> remote_tcbs;
 
 	int num_iowait;
 	int num_completed_reqs;
@@ -54,7 +56,7 @@ public:
 	 * @node_id: the NUMA node where the disks to be read are connected to.
 	 */
 	async_io(const logical_file_partition &partition,
-			aio_complete_thread *complete_thread,
+			const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 			long size, int aio_depth_per_file, int node_id);
 
 	virtual ~async_io();

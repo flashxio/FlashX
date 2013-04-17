@@ -180,8 +180,8 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 }
 
 async_io::async_io(const logical_file_partition &partition,
-		aio_complete_thread *complete_thread, long size,
-		int aio_depth_per_file, int node_id): buffered_io(partition, size,
+		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
+		long size, int aio_depth_per_file, int node_id): buffered_io(partition, size,
 			node_id, O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file *
 				partition.get_num_files()), allocator(PAGE_SIZE,
 				AIO_DEPTH * PAGE_SIZE, INT_MAX, node_id), cb_allocator(
@@ -192,10 +192,13 @@ async_io::async_io(const logical_file_partition &partition,
 	ctx = create_aio_ctx(AIO_DEPTH);
 	cb = NULL;
 	num_iowait = 0;
-	if (complete_thread)
-		this->complete_queue = complete_thread->get_queue();
-	else
-		this->complete_queue = NULL;
+	for (std::tr1::unordered_map<int, aio_complete_thread *>::const_iterator it
+			= complete_threads.begin(); it != complete_threads.end(); it++) {
+		complete_queues.insert(std::pair<int, aio_complete_queue *>(it->first,
+					it->second->get_queue()));
+		remote_tcbs.insert(std::pair<int, fifo_queue<thread_callback_s *> *>(
+					it->first, new fifo_queue<thread_callback_s *>(AIO_DEPTH)));
+	}
 	num_completed_reqs = 0;
 }
 
@@ -295,8 +298,7 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 	// But we process completed requests ourselves if there aren't
 	// so many. It's very often that there are only few completed requests,
 	// It seems many numbers work. 5 is just randomly picked.
-	if (complete_queue && num > 5) {
-		thread_callback_s *remote_tcbs[num];
+	if (complete_queues.size() > 0 && num > 5) {
 		int num_remote = 0;
 		int num_local = 0;
 		for (int i = 0; i < num; i++) {
@@ -306,18 +308,30 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 			// Pushing data to remote memory is more expensive than pulling
 			// data from remote memory, so we let the issuer processor pull
 			// data.
-			if (tcb->req.is_replaced() && tcb->req.get_access_method() == READ)
-				remote_tcbs[num_remote++] = tcb;
+			io_interface *io = tcb->req.get_io();
+			if (tcb->req.is_replaced() && io && tcb->req.get_access_method() == READ) {
+				remote_tcbs[io->get_node_id()]->push_back(tcb);
+				num_remote++;
+			}
 			else
 				local_tcbs[num_local++] = tcb;
 		}
 		if (num_remote > 0) {
-			int num_added = complete_queue->add(remote_tcbs, num_remote);
-			// If we can't add the remote requests to the queue,
-			// we have to process them locally.
-			if (num_added < num_remote) {
-				for (int i = num_added; i < num_remote; i++)
-					local_tcbs[num_local++] = remote_tcbs[i];
+			thread_callback_s *tcbs1[num];
+			for (std::tr1::unordered_map<int, aio_complete_queue *>::iterator it
+					= complete_queues.begin(); it != complete_queues.end(); it++) {
+				aio_complete_queue *complete_queue = it->second;
+				int ret = remote_tcbs[it->first]->fetch(tcbs1, num);
+				assert(ret <= num);
+				assert(remote_tcbs[it->first]->is_empty());
+
+				int num_added = complete_queue->add(tcbs1, ret);
+				// If we can't add the remote requests to the queue,
+				// we have to process them locally.
+				if (num_added < ret) {
+					for (int i = num_added; i < ret; i++)
+						local_tcbs[num_local++] = tcbs1[i];
+				}
 			}
 		}
 		tcbs = local_tcbs;

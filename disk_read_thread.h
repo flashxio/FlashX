@@ -20,7 +20,8 @@ class disk_read_thread
 
 public:
 	disk_read_thread(const logical_file_partition &partition,
-			aio_complete_thread *complete_thread, long size, int node_id);
+			const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
+			long size, int node_id);
 
 	blocking_FIFO_queue<io_request> *get_queue() {
 		return &queue;

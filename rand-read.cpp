@@ -401,18 +401,6 @@ int main(int argc, char *argv[])
 	for (int k = 0; k < num_files; k++) {
 		node_ids.insert(files[k].node_id);
 	}
-	aio_complete_thread *complete_thread = NULL;
-	if (access_option == GLOBAL_CACHE_ACCESS
-			|| access_option == PART_GLOBAL_ACCESS
-			|| access_option == REMOTE_ACCESS) {
-		complete_thread = new aio_complete_thread(*node_ids.begin());
-		for (int k = 0; k < num_files; k++) {
-			std::vector<int> indices(1, k);
-			logical_file_partition partition(indices, mapper);
-			read_threads[k] = new disk_read_thread(partition, complete_thread,
-					npages * PAGE_SIZE / num_files, files[k].node_id);
-		}
-	}
 
 	// In this way, we can guarantee that the cache is created
 	// on the nodes with the data files.
@@ -423,6 +411,27 @@ int main(int argc, char *argv[])
 
 	assert(nthreads % num_nodes == 0);
 	assert(node_id_array.size() >= (unsigned) num_nodes);
+
+	// Create threads for helping process completed AIO requests.
+	std::tr1::unordered_map<int, aio_complete_thread *> complete_threads;
+	for (int i = 0; i < num_nodes; i++) {
+		int node_id = node_id_array[i];
+		complete_threads.insert(std::pair<int, aio_complete_thread *>(node_id,
+					new aio_complete_thread(node_id)));
+	}
+
+	// Create disk accessing threads.
+	if (access_option == GLOBAL_CACHE_ACCESS
+			|| access_option == PART_GLOBAL_ACCESS
+			|| access_option == REMOTE_ACCESS) {
+		for (int k = 0; k < num_files; k++) {
+			std::vector<int> indices(1, k);
+			logical_file_partition partition(indices, mapper);
+			read_threads[k] = new disk_read_thread(partition, complete_threads,
+					npages * PAGE_SIZE / num_files, files[k].node_id);
+		}
+	}
+
 	int nthreads_per_node = nthreads / num_nodes;
 	for (int i = 0, j = 0; i < num_nodes; i++) {
 		int node_id = node_id_array[i];
@@ -446,21 +455,22 @@ int main(int argc, char *argv[])
 						int depth_per_file = AIO_DEPTH_PER_FILE / nthreads;
 						if (depth_per_file == 0)
 							depth_per_file = 1;
+						std::tr1::unordered_map<int, aio_complete_thread *> no_complete_threads;
 						threads[j] = new thread_private(j, entry_size,
-								new async_io(global_partition, NULL, npages * PAGE_SIZE,
+								new async_io(global_partition, no_complete_threads, npages * PAGE_SIZE,
 									depth_per_file, node_id));
 					}
 					break;
 #endif
 				case REMOTE_ACCESS:
 					threads[j] = new thread_private(j, entry_size,
-							new remote_disk_access(read_threads, complete_thread, num_files,
+							new remote_disk_access(read_threads, complete_threads[node_id], num_files,
 								mapper, node_id));
 					break;
 				case GLOBAL_CACHE_ACCESS:
 					{
 						io_interface *underlying = new remote_disk_access(
-								read_threads, complete_thread, num_files, mapper, node_id);
+								read_threads, complete_threads[node_id], num_files, mapper, node_id);
 						global_cached_io *io = new global_cached_io(underlying,
 								cache_size, cache_type);
 						if (preload)
@@ -472,7 +482,7 @@ int main(int argc, char *argv[])
 					{
 						assert(num_nodes >= (int) node_ids.size());
 						io_interface *underlying = new remote_disk_access(
-								read_threads, complete_thread, num_files, mapper, node_id);
+								read_threads, complete_threads[node_id], num_files, mapper, node_id);
 						part_global_cached_io *io = new part_global_cached_io(
 								num_nodes, underlying, j, cache_size,
 								cache_type, mapper);
@@ -587,8 +597,9 @@ int main(int argc, char *argv[])
 	printf("there are %d cells\n", avail_cells);
 	printf("there are %d waits for unused\n", num_wait_unused);
 	printf("there are %d lock contentions\n", lock_contentions);
-	if (complete_thread)
+	for (std::tr1::unordered_map<int, aio_complete_thread *>::const_iterator it
+			= complete_threads.begin(); it != complete_threads.end(); it++)
 		printf("aio_complete_thread complete %d reqs\n",
-				complete_thread->get_num_completed_reqs());
+				it->second->get_num_completed_reqs());
 #endif
 }
