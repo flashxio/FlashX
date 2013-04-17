@@ -358,7 +358,12 @@ int main(int argc, char *argv[])
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);
-	open_files(files, O_DIRECT | O_RDWR);
+	int flags = O_RDWR;
+	if (access_option != READ_ACCESS) {
+		printf("file is opened with direct I/O\n");
+		flags |= O_DIRECT;
+	}
+	open_files(files, flags);
 	printf("There are %d data files\n", num_files);
 
 	file_mapper *mapper = NULL;
