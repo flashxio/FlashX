@@ -268,14 +268,21 @@ public:
 	void rebalance(hash_cell *cell);
 
 	void *operator new[](size_t size) {
-		printf("allocate %ld bytes\n", size);
-		void *addr = memalign(CACHE_LINE, size + CACHE_LINE);
+		int node_id = numa_get_mem_node();
+		void *addr = numa_alloc_onnode(size + CACHE_LINE, node_id);
+		assert(((long) addr) % PAGE_SIZE == 0);
+		// We save the size info in the padding area.
+		((size_t *) addr)[0] = size;
+		printf("allocate %ld bytes on node %d\n", size, node_id);
 		// TODO 8 might be architecture specific. It's 8 for 64-bit machines.
 		return (void *) ((long) addr + CACHE_LINE - 8);
 	}
 
 	void operator delete[](void *p) {
-		free((void *) ((long) p - (CACHE_LINE - 8)));
+		void *addr = (void *) ((long) p - (CACHE_LINE - 8));
+		size_t size = *(size_t *) addr;
+		printf("free %ld bytes\n", size);
+		numa_free(addr, size);
 	}
 
 	page *search(off_t off, off_t &old_off);
@@ -354,7 +361,6 @@ class associative_cache: public page_cache
 	/* 
 	 * this table contains cell arrays.
 	 * each array contains N cells;
-	 * TODO we might need to use map to improve performance.
 	 */
 	std::vector<hash_cell*> cells_table;
 	/*

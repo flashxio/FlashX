@@ -435,7 +435,7 @@ int main(int argc, char *argv[])
 	int nthreads_per_node = nthreads / num_nodes;
 	for (int i = 0, j = 0; i < num_nodes; i++) {
 		int node_id = node_id_array[i];
-		numa_run_on_node(node_id);
+		bind_mem2node_id(node_id);
 		/* initialize the threads' private data. */
 		for (int k = 0; k < nthreads_per_node; k++, j++) {
 			switch (access_option) {

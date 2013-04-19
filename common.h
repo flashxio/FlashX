@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <numa.h>
+#include <assert.h>
 
 #include <string>
 #include <vector>
@@ -158,6 +160,40 @@ public:
 		return 16;
 	}
 };
+
+/**
+ * This returns the first node id where the process can allocate memory.
+ */
+static inline int numa_get_mem_node()
+{
+	struct bitmask *bmp = numa_get_membind();
+	int nbytes = numa_bitmask_nbytes(bmp);
+	int num_nodes = 0;
+	int node_id = -1;
+	for (int i = 0; i < nbytes * 8; i++)
+		if (numa_bitmask_isbitset(bmp, i)) {
+			num_nodes++;
+			node_id = i;
+		}
+	assert(num_nodes == 1);
+	return node_id;
+}
+
+static inline void bind2node_id(int node_id)
+{
+	struct bitmask *bmp = numa_allocate_nodemask();
+	numa_bitmask_setbit(bmp, node_id);
+	numa_bind(bmp);
+	numa_free_nodemask(bmp);
+}
+
+static inline void bind_mem2node_id(int node_id)
+{
+	struct bitmask *bmp = numa_allocate_nodemask();
+	numa_bitmask_setbit(bmp, node_id);
+	numa_set_membind(bmp);
+	numa_free_nodemask(bmp);
+}
 
 extern sys_parameters params;
 

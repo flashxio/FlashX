@@ -52,6 +52,8 @@ public:
 	static page_cache *create_cache(int cache_type, long cache_size,
 			int node_id, int offset_factor) {
 		page_cache *global_cache;
+		struct bitmask *orig_bmp = numa_get_membind();
+		bind_mem2node_id(node_id);
 		switch (cache_type) {
 #if 0
 			// These are just for testing in the single thread.
@@ -79,6 +81,7 @@ public:
 				fprintf(stderr, "wrong cache type\n");
 				exit(1);
 		}
+		numa_set_membind(orig_bmp);
 		return global_cache;
 	}
 

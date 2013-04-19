@@ -310,7 +310,7 @@ static void *rand_read(void *arg)
 	// node.
 	int node_id = priv->get_io()->get_node_id();
 	printf("run thread on node %d\n", node_id);
-	numa_run_on_node(node_id);
+	bind2node_id(node_id);
 
 	priv->thread_init();
 	priv->run();

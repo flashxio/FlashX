@@ -3,13 +3,14 @@
 #include <numa.h>
 
 #include "thread.h"
+#include "common.h"
 
 static void *thread_run(void *arg)
 {
 	thread *t = (thread *) arg;
 	int node_id = t->get_node_id();
 	if (node_id >= 0)
-		numa_run_on_node(node_id);
+		bind2node_id(node_id);
 	while (t->is_running()) {
 		t->run();
 		if (t->is_blocking())

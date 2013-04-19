@@ -35,7 +35,7 @@ disk_read_thread::disk_read_thread(const logical_file_partition &partition,
 }
 
 void disk_read_thread::run() {
-	numa_run_on_node(node_id);
+	bind2node_id(node_id);
 	printf("disk read thread runs on node %d\n", node_id);
 	aio->init();
 	io_request reqs[MAX_FETCH_REQS];
