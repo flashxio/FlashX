@@ -308,9 +308,8 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 			// Pushing data to remote memory is more expensive than pulling
 			// data from remote memory, so we let the issuer processor pull
 			// data.
-			io_interface *io = tcb->req.get_io();
-			if (tcb->req.is_replaced() && io && tcb->req.get_access_method() == READ) {
-				remote_tcbs[io->get_node_id()]->push_back(tcb);
+			if (tcb->req.is_replaced() && tcb->req.get_access_method() == READ) {
+				remote_tcbs[tcb->req.get_node_id()]->push_back(tcb);
 				num_remote++;
 			}
 			else
