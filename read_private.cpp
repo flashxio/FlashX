@@ -1,4 +1,5 @@
 #include "read_private.h"
+#include "file_mapper.h"
 
 buffered_io::buffered_io(const logical_file_partition &partition_, long size,
 		int node_id, int flags): io_interface(node_id), partition(
@@ -21,7 +22,15 @@ int buffered_io::init() {
 }
 
 ssize_t buffered_io::access(char *buf, off_t offset, ssize_t size, int access_method) {
-	int fd = get_fd(offset);
+	int fd;
+	if (fds.size() == 1)
+		fd = fds[0];
+	else {
+		struct block_identifier bid;
+		partition.map(offset / PAGE_SIZE, bid);
+		fd = fds[bid.idx];
+		offset = bid.off * PAGE_SIZE;
+	}
 #ifdef STATISTICS
 	if (access_method == READ)
 		num_reads++;
