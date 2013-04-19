@@ -473,7 +473,7 @@ int main(int argc, char *argv[])
 								read_threads, complete_threads[node_id], num_files, mapper, node_id);
 						global_cached_io *io = new global_cached_io(underlying,
 								cache_size, cache_type);
-						if (preload)
+						if (preload && j == 0)
 							io->preload(0, npages * PAGE_SIZE);
 						threads[j] = new thread_private(j, entry_size, io);
 					}
