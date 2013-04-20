@@ -19,7 +19,7 @@ off_t *offset;
 unsigned int nentries;
 int nthreads;
 struct timeval global_start;
-char *array;
+char *array0, *array1;
 char *dst_arr;
 
 void permute_offset(off_t *offset, int num)
@@ -33,26 +33,32 @@ void permute_offset(off_t *offset, int num)
 	}
 }
 
+static inline void bind2node_id(int node_id)
+{
+	struct bitmask *bmp = numa_allocate_nodemask();
+	numa_bitmask_setbit(bmp, node_id);
+	numa_bind(bmp);
+	numa_free_nodemask(bmp);
+}
+
 float time_diff(struct timeval time1, struct timeval time2)
 {
 	return time2.tv_sec - time1.tv_sec
 			+ ((float)(time2.tv_usec - time1.tv_usec))/1000000;
 }
 
-void rand_read(void *arg)
+long rand_memcpy(char *src, char *dst, long start_i)
 {
-	int fd;
 	ssize_t ret;
-	int i, j, start_i, end_i;
+	int i, j, end_i;
 	ssize_t read_bytes = 0;
 	struct timeval start_time, end_time;
 
-	start_i = (long) arg;
 	end_i = start_i + nentries / nthreads;
 	gettimeofday(&start_time, NULL);
-	for (j = 0; j < 8; j++) {
+	for (j = 0; j < 64; j++) {
 		for (i = start_i; i < end_i; i++) {
-			memcpy(dst_arr + offset[i], array + offset[i], ENTRY_SIZE);
+			memcpy(dst + offset[i], src + offset[i], ENTRY_SIZE);
 			read_bytes += ENTRY_SIZE;
 		}
 	}
@@ -60,6 +66,20 @@ void rand_read(void *arg)
 	printf("read %ld bytes, start at %f seconds, takes %f seconds\n",
 			read_bytes, time_diff(global_start, start_time),
 			time_diff(start_time, end_time));
+	
+	return read_bytes;
+}
+
+void rand_read1(void *arg)
+{
+	long read_bytes = rand_memcpy(array0, dst_arr, (long) arg);
+	
+	pthread_exit((void *) read_bytes);
+}
+
+void rand_read2(void *arg)
+{
+	long read_bytes = rand_memcpy(array1, dst_arr, (long) arg);
 	
 	pthread_exit((void *) read_bytes);
 }
@@ -95,34 +115,30 @@ int main(int argc, char *argv[])
 			i, numa_node_of_cpu(i));
 	}
 #endif
-	/* bind to node 0. */
-	nodemask_t nodemask;
-	nodemask_zero(&nodemask);
-	nodemask_set_compat(&nodemask, 0);
-	unsigned long maxnode = NUMA_NUM_NODES;
-	if (set_mempolicy(MPOL_BIND,
-				(unsigned long *) &nodemask, maxnode) < 0) {
-		perror("set_mempolicy");
-		exit(1);
-	}
 
-	array = numa_alloc_onnode(ARRAY_SIZE, 0);
+	bind2node_id(0);
+	array0 = numa_alloc_local(ARRAY_SIZE);
 	/* we need to avoid the cost of page fault. */
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
-		array[i] = 0;
-	printf("allocate source array %p in node 0\n", array);
+		array0[i] = 0;
+	printf("allocate source array %p in node 0\n", array0);
 
-	dst_arr = numa_alloc_onnode(ARRAY_SIZE, node);
+	bind2node_id(1);
+	array1 = numa_alloc_local(ARRAY_SIZE);
+	/* we need to avoid the cost of page fault. */
+	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
+		array1[i] = 0;
+	printf("allocate source array %p in node 0\n", array1);
+
+	bind2node_id(node);
+	dst_arr = numa_alloc_local(ARRAY_SIZE);
 	/* we need to avoid the cost of page fault. */
 	for (i = 0; i < ARRAY_SIZE; i += PAGE_SIZE)
 		dst_arr[i] = 0;
 	printf("allocate dst array %p in node %d\n", dst_arr, node);
 
 	printf("run on node %d\n", node);
-	if (numa_run_on_node(node) < 0) {
-		perror("numa_run_on_node");
-		exit(1);
-	}
+	bind2node_id(node);
 
 	nthreads = atoi(argv[2]);
 	if (nthreads > NUM_THREADS) {
@@ -130,17 +146,19 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	ret = setpriority(PRIO_PROCESS, getpid(), -20);
-	if (ret < 0) {
-		perror("setpriority");
-		exit(1);
-	}
-
 	gettimeofday(&start_time, NULL);
 	global_start = start_time;
-	for (i = 0; i < nthreads; i++) {
+	for (i = 0; i < nthreads / 2; i++) {
 		ret = pthread_create(&threads[i], NULL,
-				rand_read, (void *) (long) (nentries / nthreads * i));
+				rand_read1, (void *) (long) (nentries / nthreads * i));
+		if (ret) {
+			perror("pthread_create");
+			exit(1);
+		}
+	}
+	for (i = nthreads / 2; i < nthreads; i++) {
+		ret = pthread_create(&threads[i], NULL,
+				rand_read2, (void *) (long) (nentries / nthreads * i));
 		if (ret) {
 			perror("pthread_create");
 			exit(1);
