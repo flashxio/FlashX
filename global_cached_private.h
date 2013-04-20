@@ -3,18 +3,7 @@
 
 #include "read_private.h"
 #include "cache.h"
-#include "associative_cache.h"
-#include "hash_index_cache.h"
-#include "LRU2Q.h"
-
-enum {
-	TREE_CACHE,
-	ASSOCIATIVE_CACHE,
-	HASH_INDEX_CACHE,
-	CUCKOO_CACHE,
-	LRU2Q_CACHE,
-	GCLOCK_CACHE,
-};
+#include "NUMA_cache.h"
 
 class global_cached_io: public io_interface
 {
@@ -47,42 +36,16 @@ class global_cached_io: public io_interface
 		std::vector<thread_safe_page *> &dirty_pages);
 public:
 	global_cached_io(io_interface *underlying);
-	global_cached_io(io_interface *, long, int);
+	global_cached_io(io_interface *, long, int, const std::vector<int> &);
 
 	static page_cache *create_cache(int cache_type, long cache_size,
-			int node_id, int offset_factor) {
-		page_cache *global_cache;
-		struct bitmask *orig_bmp = numa_get_membind();
-		bind_mem2node_id(node_id);
-		switch (cache_type) {
-#if 0
-			// These are just for testing in the single thread.
-			case TREE_CACHE:
-				global_cache = new tree_cache(cache_size, 0);
-				break;
-			case CUCKOO_CACHE:
-				global_cache = new cuckoo_cache(cache_size);
-				break;
-			case GCLOCK_CACHE:
-				global_cache = new gclock_cache(cache_size);
-				break;
-#endif
-			case LRU2Q_CACHE:
-				global_cache = new LRU2Q_cache(cache_size);
-				break;
-			case ASSOCIATIVE_CACHE:
-				global_cache = new associative_cache(cache_size, MAX_CACHE_SIZE,
-						node_id, offset_factor);
-				break;
-			case HASH_INDEX_CACHE:
-				global_cache = new hash_index_cache(cache_size, node_id);
-				break;
-			default:
-				fprintf(stderr, "wrong cache type\n");
-				exit(1);
-		}
-		numa_set_membind(orig_bmp);
-		return global_cache;
+			const std::vector<int> &node_ids, int offset_factor) {
+		assert(node_ids.size() > 0);
+		if (node_ids.size() == 1)
+			return NUMA_cache::create_cache(cache_type, cache_size,
+					node_ids[0], offset_factor);
+		else
+			return new NUMA_cache(cache_type, cache_size, node_ids);
 	}
 
 	virtual page_cache *get_global_cache() {

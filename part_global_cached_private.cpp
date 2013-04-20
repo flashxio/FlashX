@@ -354,7 +354,7 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	this->group_idx = underlying->get_node_id();
 	this->tot_cache_size = cache_size;
 	this->cache_size = (long) (cache_size * ((double) underlying->get_local_size()
-		/ underlying->get_size()));
+				/ underlying->get_size()));
 	this->cache_type = cache_type;
 	this->underlying = underlying;
 
@@ -381,8 +381,10 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 				// the reply queue to be expanded to an arbitrary size.
 				NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
 		group.request_queue = NULL;
+		std::vector<int> node_ids(1);
+		node_ids[0] = group_idx;
 		group.cache = global_cached_io::create_cache(cache_type, this->cache_size,
-				group_idx, 1);
+				node_ids, 1);
 		// Create a thread for processing replies.
 		group.reply_processor = new process_reply_thread(this, group.reply_queue);
 		group.reply_processor->start();

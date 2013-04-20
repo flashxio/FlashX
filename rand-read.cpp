@@ -397,20 +397,25 @@ int main(int argc, char *argv[])
 
 	disk_read_thread **read_threads = new disk_read_thread*[num_files];
 	memset(read_threads, 0, sizeof(*read_threads) * num_files);
+
 	std::set<int> node_ids;
 	for (int k = 0; k < num_files; k++) {
 		node_ids.insert(files[k].node_id);
 	}
-
 	// In this way, we can guarantee that the cache is created
 	// on the nodes with the data files.
 	for (int i = 0; i < num_nodes
 			&& node_ids.size() < (unsigned) num_nodes; i++)
 		node_ids.insert(i);
-	std::vector<int> node_id_array(node_ids.begin(), node_ids.end());
+	std::vector<int> node_id_array;
+	// We only get a specified number of nodes.
+	for (std::set<int>::const_iterator it = node_ids.begin();
+			it != node_ids.end() && (int) node_id_array.size() < num_nodes; it++)
+		node_id_array.push_back(*it);
 
 	assert(nthreads % num_nodes == 0);
 	assert(node_id_array.size() >= (unsigned) num_nodes);
+	printf("There are %ld nodes\n", node_id_array.size());
 
 	// Create threads for helping process completed AIO requests.
 	std::tr1::unordered_map<int, aio_complete_thread *> complete_threads;
@@ -472,7 +477,7 @@ int main(int argc, char *argv[])
 						io_interface *underlying = new remote_disk_access(
 								read_threads, complete_threads[node_id], num_files, mapper, node_id);
 						global_cached_io *io = new global_cached_io(underlying,
-								cache_size, cache_type);
+								cache_size, cache_type, node_id_array);
 						if (preload && j == 0)
 							io->preload(0, npages * PAGE_SIZE);
 						threads[j] = new thread_private(j, entry_size, io);
