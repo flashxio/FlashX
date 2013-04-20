@@ -6,6 +6,7 @@
 #include "flush_thread.h"
 
 #define ENABLE_LARGE_WRITE
+//#define TEST_HIT_RATE_100
 
 /**
  * This file implements global cache.
@@ -843,6 +844,13 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			thread_safe_page *p = (thread_safe_page *) (get_global_cache()
 					->search(tmp_off, old_off));
 
+#ifdef TEST_HIT_RATE_100
+			if (!p->data_ready()) {
+				p->set_io_pending(false);
+				p->set_data_ready(true);
+				old_off = -1;
+			}
+#endif
 			/* 
 			 * If old_off is -1, it means search() didn't evict a page, i.e.,
 			 * it's a cache hit.
