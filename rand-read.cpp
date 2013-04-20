@@ -589,10 +589,11 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < num_files; i++) {
 		disk_read_thread *t = read_threads[i];
 		if (t)
-			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits, complete %d reqs\n",
+			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits, complete %d reqs, process %d remote read requests\n",
 					mapper->get_file_name(i).c_str(), read_threads[i]->get_queue()->get_num_empty(),
 					read_threads[i]->get_queue()->get_num_full(), read_threads[i]->get_num_accesses(),
-					read_threads[i]->get_num_iowait(), read_threads[i]->get_num_completed_reqs());
+					read_threads[i]->get_num_iowait(), read_threads[i]->get_num_completed_reqs(),
+					read_threads[i]->get_num_local_alloc());
 	}
 	printf("there are %d cells\n", avail_cells);
 	printf("there are %d waits for unused\n", num_wait_unused);

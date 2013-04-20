@@ -47,6 +47,10 @@ public:
 		return aio->get_num_completed_reqs();
 	}
 
+	int get_num_local_alloc() const {
+		return aio->get_num_local_alloc();
+	}
+
 	~disk_read_thread() {
 		delete aio;
 	}

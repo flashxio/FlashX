@@ -200,6 +200,7 @@ async_io::async_io(const logical_file_partition &partition,
 					it->first, new fifo_queue<thread_callback_s *>(AIO_DEPTH)));
 	}
 	num_completed_reqs = 0;
+	num_local_alloc = 0;
 }
 
 void async_io::cleanup()
@@ -228,8 +229,10 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 			// It seems remote write requests can perform well.
 			|| io_req.get_access_method() == WRITE)
 		tcb->req = io_req;
-	else
+	else {
+		num_local_alloc++;
 		tcb->req.init(io_req, &allocator);
+	}
 	tcb->aio = this;
 	tcb->aio_callback = this->get_callback();
 	tcb->cb_allocator = &cb_allocator;

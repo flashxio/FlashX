@@ -47,6 +47,7 @@ class async_io: public buffered_io
 
 	int num_iowait;
 	int num_completed_reqs;
+	int num_local_alloc;
 
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:
@@ -98,6 +99,10 @@ public:
 
 	int get_num_completed_reqs() const {
 		return num_completed_reqs;
+	}
+
+	int get_num_local_alloc() const {
+		return num_local_alloc;
 	}
 };
 
