@@ -474,6 +474,9 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 	processed_requests.inc(num);
 	num_sent += num;
 
+	// This is an effective way to reduce the number of replies in the queue,
+	// and thus reduce the number of pending I/O.
+	process_replies(num);
 	while (num_remaining > 0) {
 		int num_replies = process_replies(NUMA_REPLY_BUF_SIZE);
 		// If the number of replies we process is smaller than the expected
