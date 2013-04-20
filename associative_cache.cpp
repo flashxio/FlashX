@@ -358,7 +358,9 @@ thread_safe_page *hash_cell::get_empty_page() {
 search_again:
 	ret = policy.evict_page(buf);
 	if (ret == NULL) {
+#ifdef DEBUG
 		printf("all pages in the cell were all referenced\n");
+#endif
 		/* 
 		 * If all pages in the cell are referenced, there is
 		 * nothing we can do but wait. However, before busy waiting,
