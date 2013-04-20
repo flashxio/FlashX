@@ -321,23 +321,7 @@ class flush_thread;
 class io_interface;
 class page_cache
 {
-	pthread_spinlock_t _lock;
 public:
-	page_cache() {
-		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
-	}
-
-	int lock() {
-		return pthread_spin_lock(&_lock);
-	}
-
-	int unlock() {
-		return pthread_spin_unlock(&_lock);
-	}
-
-	~page_cache() {
-		pthread_spin_destroy(&_lock);
-	}
 	/**
 	 * This method searches for a page with the specified offset.
 	 * It may evict a page if the specificed page doesn't exist.
