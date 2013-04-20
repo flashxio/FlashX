@@ -434,8 +434,8 @@ global_cached_io::global_cached_io(io_interface *underlying): io_interface(
 	underlying->set_callback(new access_page_callback(this));
 }
 
-global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
-		int cache_type, const std::vector<int> &node_ids): io_interface(
+global_cached_io::global_cached_io(io_interface *underlying,
+		cache_config *config): io_interface(
 			underlying->get_node_id()), pending_requests(
 			INIT_GCACHE_PENDING_SIZE), req_allocator(sizeof(io_request) * 1024)
 {
@@ -443,11 +443,11 @@ global_cached_io::global_cached_io(io_interface *underlying, long cache_size,
 	cache_hits = 0;
 	this->underlying = underlying;
 	num_waits = 0;
-	this->cache_size = cache_size;
+	this->cache_size = config->get_size();
 	underlying->set_callback(new access_page_callback(this));
 	if (global_cache == NULL) {
-		printf("Create cache on %ld nodes\n", node_ids.size());
-		global_cache = create_cache(cache_type, cache_size, node_ids, 1);
+		printf("Create cache on %d nodes\n", config->get_num_caches());
+		global_cache = config->create_cache();
 	}
 }
 

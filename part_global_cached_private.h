@@ -55,23 +55,13 @@ class part_global_cached_io: public global_cached_io
 	int group_idx;
 	struct thread_group *local_group;
 
-	/* the size of the cache associated to the thread. */
-	long cache_size;
-	long tot_cache_size;
-	int cache_type;
+	cache_config *cache_conf;
 
 	/*
 	 * there is a sender for each node.
 	 */
 	// group id <-> msg sender
 	std::tr1::unordered_map<int, request_sender *> req_senders;
-
-	file_mapper *mapper;
-	int hash_req(off_t off)
-	{
-		int idx = mapper->map2file(off / PAGE_SIZE);
-		return mapper->get_file_node_id(idx);
-	}
 
 	io_interface *underlying;
 
@@ -100,14 +90,13 @@ public:
 	}
 
 	~part_global_cached_io() {
-		delete mapper;
 		// TODO delete all senders
 	}
 
 	int init();
 
 	part_global_cached_io(int num_groups, io_interface *underlying,
-			int idx, long cache_size, int cache_type, file_mapper *mapper);
+			int idx, cache_config *config);
 
 	virtual page_cache *get_global_cache() {
 		return groups[group_idx].cache;

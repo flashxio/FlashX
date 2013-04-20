@@ -437,6 +437,18 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	cache_config *cache_conf = NULL;
+	if (access_option == GLOBAL_CACHE_ACCESS)
+		cache_conf = new even_cache_config(cache_size, cache_type,
+				node_id_array);
+	else if (access_option == PART_GLOBAL_ACCESS) {
+		assert(num_nodes == 4);
+		cache_conf = new test_cache_config(cache_size, cache_type,
+				node_id_array);
+//		cache_conf = new file_map_cache_config(cache_size, cache_type,
+//				node_id_array, mapper, 2);
+	}
+
 	int nthreads_per_node = nthreads / num_nodes;
 	for (int i = 0, j = 0; i < num_nodes; i++) {
 		int node_id = node_id_array[i];
@@ -476,8 +488,7 @@ int main(int argc, char *argv[])
 					{
 						io_interface *underlying = new remote_disk_access(
 								read_threads, complete_threads[node_id], num_files, mapper, node_id);
-						global_cached_io *io = new global_cached_io(underlying,
-								cache_size, cache_type, node_id_array);
+						global_cached_io *io = new global_cached_io(underlying, cache_conf);
 						if (preload && j == 0)
 							io->preload(0, npages * PAGE_SIZE);
 						threads[j] = new thread_private(j, entry_size, io);
@@ -489,8 +500,7 @@ int main(int argc, char *argv[])
 						io_interface *underlying = new remote_disk_access(
 								read_threads, complete_threads[node_id], num_files, mapper, node_id);
 						part_global_cached_io *io = new part_global_cached_io(
-								num_nodes, underlying, j, cache_size,
-								cache_type, mapper);
+								num_nodes, underlying, j, cache_conf);
 						if (preload)
 							io->preload(0, npages * PAGE_SIZE);
 						threads[j] = new thread_private(j, entry_size, io);

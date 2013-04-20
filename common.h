@@ -21,15 +21,6 @@ enum {
 	WRITE
 };
 
-enum {
-	TREE_CACHE,
-	ASSOCIATIVE_CACHE,
-	HASH_INDEX_CACHE,
-	CUCKOO_CACHE,
-	LRU2Q_CACHE,
-	GCLOCK_CACHE,
-};
-
 extern int nthreads;
 extern struct timeval global_start;
 

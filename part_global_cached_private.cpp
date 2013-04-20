@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <assert.h>
+#include <limits.h>
 
 #include "cache.h"
 #include "associative_cache.h"
@@ -344,23 +345,19 @@ int part_global_cached_io::init() {
 }
 
 part_global_cached_io::part_global_cached_io(int num_groups,
-		io_interface *underlying, int idx, long cache_size,
-		int cache_type, file_mapper *mapper): global_cached_io(
-			underlying->clone()) {
-	this->mapper = mapper->clone();
+		io_interface *underlying, int idx,
+		cache_config *config): global_cached_io(underlying->clone()) {
 	this->thread_id = idx;
 	this->final_cb = NULL;
 	remote_reads = 0;
 	this->group_idx = underlying->get_node_id();
-	this->tot_cache_size = cache_size;
-	this->cache_size = (long) (cache_size * ((double) underlying->get_local_size()
-				/ underlying->get_size()));
-	this->cache_type = cache_type;
 	this->underlying = underlying;
+	this->cache_conf = config;
 
+	long cache_size = cache_conf->get_part_size(underlying->get_node_id());
 	printf("cache is partitioned\n");
 	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
-			idx, group_idx, num_groups, this->cache_size);
+			idx, group_idx, num_groups, cache_size);
 
 	if (groups.size() == 0) {
 		pthread_mutex_init(&init_mutex, NULL);
@@ -383,8 +380,8 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 		group.request_queue = NULL;
 		std::vector<int> node_ids(1);
 		node_ids[0] = group_idx;
-		group.cache = global_cached_io::create_cache(cache_type, this->cache_size,
-				node_ids, 1);
+		group.cache = cache_conf->create_cache_on_node(
+				underlying->get_node_id());
 		// Create a thread for processing replies.
 		group.reply_processor = new process_reply_thread(this, group.reply_queue);
 		group.reply_processor->start();
@@ -408,7 +405,8 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	io_request local_reqs[num];
 	int num_local_reqs = 0;
 	for (int i = 0; i < num; i++) {
-		int idx = hash_req(requests[i].get_offset());
+		assert(requests[i].within_1page());
+		int idx = cache_conf->page2cache(requests[i].get_offset());
 		if (idx != get_group_id()) {
 			remote_reads++;
 			int ret = req_senders[idx]->send_cached(&requests[i]);
@@ -597,7 +595,7 @@ void part_global_cached_io::print_stat()
 
 int part_global_cached_io::preload(off_t start, long size)
 {
-	if (size > tot_cache_size) {
+	if (size > cache_conf->get_size()) {
 		fprintf(stderr, "we can't preload data larger than the cache size\n");
 		exit(1);
 	}
@@ -606,7 +604,7 @@ int part_global_cached_io::preload(off_t start, long size)
 	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
 		off_t old_off = -1;
 		// We only preload data to the local cache.
-		if (hash_req(offset) != get_group_id())
+		if (cache_conf->page2cache(offset) != get_group_id())
 			continue;
 		thread_safe_page *p = (thread_safe_page *) local_group->cache->search(
 					ROUND_PAGE(offset), old_off);

@@ -36,17 +36,7 @@ class global_cached_io: public io_interface
 		std::vector<thread_safe_page *> &dirty_pages);
 public:
 	global_cached_io(io_interface *underlying);
-	global_cached_io(io_interface *, long, int, const std::vector<int> &);
-
-	static page_cache *create_cache(int cache_type, long cache_size,
-			const std::vector<int> &node_ids, int offset_factor) {
-		assert(node_ids.size() > 0);
-		if (node_ids.size() == 1)
-			return NUMA_cache::create_cache(cache_type, cache_size,
-					node_ids[0], offset_factor);
-		else
-			return new NUMA_cache(cache_type, cache_size, node_ids);
-	}
+	global_cached_io(io_interface *, cache_config *config);
 
 	virtual page_cache *get_global_cache() {
 		return global_cache;
