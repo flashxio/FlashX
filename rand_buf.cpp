@@ -8,9 +8,8 @@ rand_buf::rand_buf(int buf_size, int entry_size,
 #endif
 {
 	num_entries = buf_size / entry_size;
-	rand_permute buf_offset(num_entries, entry_size, 0);
 	for (int i = 0; i < num_entries; i++) {
-		off_t off = buf_offset.get_offset(i);
+		off_t off = i * entry_size;
 		free_refs.push_back(off);
 	}
 
