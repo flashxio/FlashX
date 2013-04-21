@@ -196,8 +196,9 @@ public:
 				get_read_bytes(), num_accesses, num_completes.get(),
 				avg_num_pending, max_num_pending);
 #endif
-		printf("thread %d: start at %f seconds, takes %f seconds\n", idx,
-				time_diff(global_start, start_time), time_diff(start_time, end_time));
+		printf("thread %d: start at %f seconds, takes %f seconds, access %ld bytes in %ld accesses\n", idx,
+				time_diff(global_start, start_time), time_diff(start_time, end_time),
+				get_read_bytes(), num_accesses);
 	}
 };
 

@@ -310,7 +310,6 @@ int part_global_cached_io::init() {
 			node_ios.push_back(io);
 			thread *t = new process_request_thread(io);
 			t->start();
-			printf("create a request processing thread, blocking: %d\n", t->is_blocking());
 			group->process_request_threads.push_back(t);
 		}
 	}
@@ -355,7 +354,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	this->cache_conf = config;
 
 	long cache_size = cache_conf->get_part_size(underlying->get_node_id());
-	printf("cache is partitioned\n");
 	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
 			idx, group_idx, num_groups, cache_size);
 

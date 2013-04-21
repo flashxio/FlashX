@@ -303,13 +303,13 @@ int thread_private::attach2cpu()
 static void *rand_read(void *arg)
 {
 	thread_private *priv = (thread_private *) arg;
-	printf("rand_read: pid: %d, tid: %ld\n", getpid(), gettid());
 
 	// We put the thread at the specified NUMA node at the very beginning
 	// to make sure all data created in this thread will be on the specified
 	// node.
 	int node_id = priv->get_io()->get_node_id();
-	printf("run thread on node %d\n", node_id);
+	printf("run thread rand_read: pid: %d, tid: %ld, on node %d\n",
+			getpid(), gettid(), node_id);
 	bind2node_id(node_id);
 
 	priv->thread_init();
