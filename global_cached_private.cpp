@@ -100,7 +100,8 @@ static thread_safe_page *generic_complete_req(io_request *req,
 		req_size = extracted.get_size();
 	}
 
-	p->lock();
+	if (lock)
+		p->lock();
 	if (req->get_access_method() == WRITE) {
 		memcpy((char *) p->get_data() + page_off, req_buf, req_size);
 		if (!p->set_dirty(true))
@@ -109,7 +110,8 @@ static thread_safe_page *generic_complete_req(io_request *req,
 	else 
 		/* I assume the data I read never crosses the page boundary */
 		memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
-	p->unlock();
+	if (lock)
+		p->unlock();
 	// TODO this is a bug. If the page is returned, we shouldn't
 	// dereference it here.
 	p->dec_ref();
