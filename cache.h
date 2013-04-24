@@ -179,6 +179,7 @@ class thread_safe_page: public page
 	}
 
 	io_request *reqs;
+	int node_id;
 
 public:
 	thread_safe_page(): page() {
@@ -188,15 +189,17 @@ public:
 		pthread_mutex_init(&mutex, NULL);
 #endif
 		reqs = NULL;
+		node_id = -1;
 	}
 
-	thread_safe_page(off_t off, char *data): page(off, data) {
+	thread_safe_page(off_t off, char *data, int node_id): page(off, data) {
 #ifdef PTHREAD_WAIT
 		pthread_cond_init(&ready_cond, NULL);
 		pthread_cond_init(&dirty_cond, NULL);
 		pthread_mutex_init(&mutex, NULL);
 #endif
 		reqs = NULL;
+		this->node_id = node_id;
 	}
 
 	~thread_safe_page() {
@@ -205,6 +208,10 @@ public:
 		pthread_cond_destroy(&ready_cond);
 		pthread_cond_destroy(&dirty_cond);
 #endif
+	}
+
+	int get_node_id() const {
+		return node_id;
 	}
 
 	/* this is enough for x86 architecture */
@@ -371,7 +378,7 @@ public:
 	frame(): thread_safe_page() {
 	}
 
-	frame(off_t offset, char *data): thread_safe_page(offset, data) {
+	frame(off_t offset, char *data): thread_safe_page(offset, data, -1) {
 	}
 
 	/**

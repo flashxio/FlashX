@@ -20,11 +20,11 @@ class oom_exception
 };
 
 template<class T>
-void page_cell<T>::set_pages(char *pages[], int num)
+void page_cell<T>::set_pages(char *pages[], int num, int node_id)
 {
 	assert(num <= CELL_SIZE);
 	for (int i = 0; i < num; i++) {
-		buf[i] = T(-1, pages[i]);
+		buf[i] = T(-1, pages[i], node_id);
 	}
 	idx = 0;
 	num_pages = num;
@@ -45,14 +45,14 @@ void page_cell<T>::rebuild_map()
 }
 
 template<class T>
-void page_cell<T>::add_pages(char *pages[], int num)
+void page_cell<T>::add_pages(char *pages[], int num, int node_id)
 {
 	int num_added = 0;
 	assert(num_pages == get_num_used_pages());
 	assert(num + num_pages <= CELL_SIZE);
 	for (int i = 0; i < CELL_SIZE && num_added < num; i++) {
 		if (buf[i].get_data() == NULL)
-			buf[i] = T(-1, pages[num_added++]);
+			buf[i] = T(-1, pages[num_added++], node_id);
 	}
 	num_pages += num;
 	rebuild_map();
@@ -132,7 +132,7 @@ hash_cell::hash_cell(associative_cache *cache, long hash, bool get_pages) {
 		if (!table->get_manager()->get_free_pages(params.get_SA_min_cell_size(),
 					pages, cache))
 			throw oom_exception();
-		buf.set_pages(pages, params.get_SA_min_cell_size());
+		buf.set_pages(pages, params.get_SA_min_cell_size(), table->get_node_id());
 	}
 	num_accesses = 0;
 	num_evictions = 0;
@@ -143,6 +143,23 @@ void hash_cell::sanity_check()
 	pthread_spin_lock(&_lock);
 	buf.sanity_check();
 	pthread_spin_unlock(&_lock);
+}
+
+void hash_cell::add_pages(char *pages[], int num)
+{
+	buf.add_pages(pages, num, table->get_node_id());
+}
+
+int hash_cell::add_pages_to_min(char *pages[], int num)
+{
+	int num_required = CELL_MIN_NUM_PAGES - buf.get_num_pages();
+	if (num_required > 0) {
+		num_required = min(num_required, num);
+		buf.add_pages(pages, num_required, table->get_node_id());
+		return num_required;
+	}
+	else
+		return 0;
 }
 
 void hash_cell::merge(hash_cell *cell)

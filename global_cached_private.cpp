@@ -886,7 +886,6 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			if (orig == NULL) {
 				orig = req_allocator.alloc_obj();
 				*orig = requests[i];
-				orig->set_node_id(this->get_node_id());
 			}
 			/*
 			 * Cache may evict a dirty page and return the dirty page
@@ -913,6 +912,8 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
 					req.set_orig(orig);
 					req.set_partial(orig->get_size() > req.get_size());
+					// TODO It only works with one-page request
+					req.set_node_id(pages[0]->get_node_id());
 					read(req, pages, pg_idx);
 					pg_idx = 0;
 				}
@@ -987,6 +988,8 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
 					req.set_orig(orig);
 					req.set_partial(orig->get_size() > req.get_size());
+					// TODO It only works with one-page request
+					req.set_node_id(pages[0]->get_node_id());
 					read(req, pages, pg_idx);
 					pg_idx = 0;
 				}
@@ -1000,6 +1003,8 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
 			req.set_orig(orig);
 			req.set_partial(orig->get_size() > req.get_size());
+			// TODO It only works with one-page request
+			req.set_node_id(pages[0]->get_node_id());
 			read(req, pages, pg_idx);
 		}
 	}

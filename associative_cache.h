@@ -51,9 +51,9 @@ public:
 		memset(maps, 0, sizeof(maps));
 	}
 
-	void set_pages(char *pages[], int num);
+	void set_pages(char *pages[], int num, int node_id);
 
-	void add_pages(char *pages[], int num);
+	void add_pages(char *pages[], int num, int node_id);
 
 	void inject_pages(T pages[], int npages);
 
@@ -252,19 +252,9 @@ public:
 		pthread_spin_destroy(&_lock);
 	}
 
-	void add_pages(char *pages[], int num) {
-		buf.add_pages(pages, num);
-	}
-	int add_pages_to_min(char *pages[], int num) {
-		int num_required = CELL_MIN_NUM_PAGES - buf.get_num_pages();
-		if (num_required > 0) {
-			num_required = min(num_required, num);
-			buf.add_pages(pages, num_required);
-			return num_required;
-		}
-		else
-			return 0;
-	}
+	void add_pages(char *pages[], int num);
+	int add_pages_to_min(char *pages[], int num);
+
 	void rebalance(hash_cell *cell);
 
 	void *operator new[](size_t size) {
