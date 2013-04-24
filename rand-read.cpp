@@ -354,7 +354,7 @@ int main(int argc, char *argv[])
 	}
 	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d, RAID_mapping: %d, RAID block size: %d, SA_cell_size: %d\n",
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size, SA_min_cell_size);
-	params.init(RAID_block_size, SA_min_cell_size);
+	params.init(RAID_block_size, SA_min_cell_size, (int) (hit_ratio * 100));
 
 	std::vector<file_info> files;
 	int num_files = retrieve_data_files(file_file, files);

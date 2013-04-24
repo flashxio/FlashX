@@ -24,6 +24,8 @@ class global_cached_io: public io_interface
 
 	obj_allocator<io_request> req_allocator;
 
+	long num_accesses;
+
 	int cache_hits;
 	int num_fast_process;
 

@@ -6,7 +6,7 @@
 #include "flush_thread.h"
 
 #define ENABLE_LARGE_WRITE
-//#define TEST_HIT_RATE_100
+//#define TEST_HIT_RATE
 
 /**
  * This file implements global cache.
@@ -433,6 +433,7 @@ global_cached_io::global_cached_io(io_interface *underlying): io_interface(
 	cache_size = 0;
 	cb = NULL;
 	cache_hits = 0;
+	num_accesses = 0;
 	underlying->set_callback(new access_page_callback(this));
 }
 
@@ -443,6 +444,7 @@ global_cached_io::global_cached_io(io_interface *underlying,
 {
 	cb = NULL;
 	cache_hits = 0;
+	num_accesses = 0;
 	this->underlying = underlying;
 	num_waits = 0;
 	this->cache_size = config->get_size();
@@ -846,11 +848,19 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			thread_safe_page *p = (thread_safe_page *) (get_global_cache()
 					->search(tmp_off, old_off));
 
-#ifdef TEST_HIT_RATE_100
-			if (!p->data_ready()) {
-				p->set_io_pending(false);
-				p->set_data_ready(true);
-				old_off = -1;
+			num_accesses++;
+#ifdef TEST_HIT_RATE
+			if (num_accesses % 100 < params.get_test_hit_rate()) {
+				if (!p->data_ready()) {
+					p->set_io_pending(false);
+					p->set_data_ready(true);
+					old_off = -1;
+					if (p->is_old_dirty()) {
+						p->set_dirty(false);
+						p->set_old_dirty(false);
+						p->set_io_pending(false);
+					}
+				}
 			}
 #endif
 			/* 
