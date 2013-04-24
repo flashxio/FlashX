@@ -239,6 +239,10 @@ public:
 		return this->partial;
 	}
 
+	void set_node_id(int node_id) {
+		this->node_id = node_id;
+	}
+
 	int get_node_id() const {
 		return node_id;
 	}

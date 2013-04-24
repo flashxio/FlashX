@@ -876,6 +876,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			if (orig == NULL) {
 				orig = req_allocator.alloc_obj();
 				*orig = requests[i];
+				orig->set_node_id(this->get_node_id());
 			}
 			/*
 			 * Cache may evict a dirty page and return the dirty page
