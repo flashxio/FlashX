@@ -22,14 +22,22 @@ class aio_complete_queue
 public:
 	aio_complete_queue(): queue("aio_completes", AIO_DEPTH_PER_FILE,
 			// This max size seems enough to keep all requests.
-			AIO_DEPTH_PER_FILE * 6) {
+			AIO_DEPTH_PER_FILE * 200) {
 	}
 
-	int add(thread_callback_s *tcbs[], int num) {
-		return queue.non_blocking_add(tcbs, num);
+	blocking_FIFO_queue<thread_callback_s *> *get_queue() {
+		return &queue;
 	}
 
 	int process(int max_num, bool blocking);
+};
+
+class aio_complete_sender: public simple_msg_sender<thread_callback_s *>
+{
+public:
+	aio_complete_sender(aio_complete_queue *queue): simple_msg_sender<thread_callback_s *>(
+			queue->get_queue(), AIO_DEPTH_PER_FILE) {
+	}
 };
 
 class async_io: public buffered_io
@@ -42,7 +50,7 @@ class async_io: public buffered_io
 	// by the user isn't in the local NUMA node.
 	slab_allocator allocator;
 	obj_allocator<thread_callback_s> cb_allocator;
-	std::tr1::unordered_map<int, aio_complete_queue *> complete_queues;
+	std::tr1::unordered_map<int, aio_complete_sender *> complete_senders;
 	std::tr1::unordered_map<int, fifo_queue<thread_callback_s *> *> remote_tcbs;
 
 	int num_iowait;

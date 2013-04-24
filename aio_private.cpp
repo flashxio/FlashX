@@ -194,8 +194,8 @@ async_io::async_io(const logical_file_partition &partition,
 	num_iowait = 0;
 	for (std::tr1::unordered_map<int, aio_complete_thread *>::const_iterator it
 			= complete_threads.begin(); it != complete_threads.end(); it++) {
-		complete_queues.insert(std::pair<int, aio_complete_queue *>(it->first,
-					it->second->get_queue()));
+		complete_senders.insert(std::pair<int, aio_complete_sender *>(it->first,
+					new aio_complete_sender(it->second->get_queue())));
 		remote_tcbs.insert(std::pair<int, fifo_queue<thread_callback_s *> *>(
 					it->first, new fifo_queue<thread_callback_s *>(AIO_DEPTH)));
 	}
@@ -301,7 +301,7 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 	// But we process completed requests ourselves if there aren't
 	// so many. It's very often that there are only few completed requests,
 	// It seems many numbers work. 5 is just randomly picked.
-	if (complete_queues.size() > 0 && num > 5) {
+	if (complete_senders.size() > 0) {
 		int num_remote = 0;
 		int num_local = 0;
 		for (int i = 0; i < num; i++) {
@@ -311,7 +311,7 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 			// Pushing data to remote memory is more expensive than pulling
 			// data from remote memory, so we let the issuer processor pull
 			// data.
-			if (tcb->req.is_replaced() && tcb->req.get_access_method() == READ) {
+			if  (tcb->req.get_node_id() != this->get_node_id()) {
 				remote_tcbs[tcb->req.get_node_id()]->push_back(tcb);
 				num_remote++;
 			}
@@ -320,19 +320,20 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 		}
 		if (num_remote > 0) {
 			thread_callback_s *tcbs1[num];
-			for (std::tr1::unordered_map<int, aio_complete_queue *>::iterator it
-					= complete_queues.begin(); it != complete_queues.end(); it++) {
-				aio_complete_queue *complete_queue = it->second;
+			for (std::tr1::unordered_map<int, aio_complete_sender *>::iterator it
+					= complete_senders.begin(); it != complete_senders.end(); it++) {
+				aio_complete_sender *sender = it->second;
 				int ret = remote_tcbs[it->first]->fetch(tcbs1, num);
 				assert(ret <= num);
 				assert(remote_tcbs[it->first]->is_empty());
+				if (ret == 0)
+					continue;
 
-				int num_added = complete_queue->add(tcbs1, ret);
-				// If we can't add the remote requests to the queue,
-				// we have to process them locally.
-				if (num_added < ret) {
-					for (int i = num_added; i < ret; i++)
-						local_tcbs[num_local++] = tcbs1[i];
+				sender->send_cached(tcbs1, ret);
+				int num_msg = sender->get_num_remaining();
+				if (num_msg >= AIO_DEPTH_PER_FILE) {
+					sender->flush(false);
+					assert(sender->get_num_remaining() < num_msg);
 				}
 			}
 		}

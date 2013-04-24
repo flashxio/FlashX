@@ -367,15 +367,16 @@ public:
 	int send(T *msg, int num);
 };
 
-class request_sender
+template<class T>
+class simple_msg_sender
 {
-	fifo_queue<io_request> buf;
-	blocking_FIFO_queue<io_request> *queue;
+	fifo_queue<T> buf;
+	blocking_FIFO_queue<T> *queue;
 public:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	request_sender(blocking_FIFO_queue<io_request> *queue,
+	simple_msg_sender(blocking_FIFO_queue<T> *queue,
 			int init_queue_size): buf(init_queue_size, true) {
 		this->queue = queue;
 	}
@@ -399,15 +400,35 @@ public:
 		return buf.get_num_entries();
 	}
 
-	int send_cached(io_request *msg) {
+	int send_cached(T *msg) {
 		if (buf.is_full())
 			buf.expand_queue(buf.get_size() * 2);
 		buf.push_back(*msg);
 		return 1;
 	}
 
-	blocking_FIFO_queue<io_request> *get_queue() const {
+	int send_cached(T *msgs, int num) {
+		int orig_num = num;
+		int ret = buf.add(msgs, num);
+		while (ret < num) {
+			buf.expand_queue(buf.get_size() * 2);
+			msgs += ret;
+			num -= ret;
+			ret = buf.add(msgs, num);
+		}
+		return orig_num;
+	}
+
+	blocking_FIFO_queue<T> *get_queue() const {
 		return queue;
+	}
+};
+
+class request_sender: public simple_msg_sender<io_request>
+{
+public:
+	request_sender(blocking_FIFO_queue<io_request> *queue,
+			int init_queue_size): simple_msg_sender(queue, init_queue_size) {
 	}
 };
 
