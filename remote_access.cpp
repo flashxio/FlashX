@@ -49,6 +49,7 @@ io_interface *remote_disk_access::clone() const
 	copy->total_size = this->total_size;
 	copy->local_size = this->local_size;
 	copy->block_mapper = this->block_mapper;
+	copy->complete_queue = this->complete_queue;
 	return copy;
 }
 
