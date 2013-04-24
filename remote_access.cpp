@@ -105,6 +105,8 @@ void remote_disk_access::flush_requests()
 
 void remote_disk_access::flush_requests(int max_cached)
 {
+	if (complete_queue)
+		num_completed_reqs += complete_queue->process(1000, false);
 	int num_remaining = 0;
 	// Now let's flush requests to the queues, but we first try to
 	// flush requests non-blockingly.
@@ -115,8 +117,6 @@ void remote_disk_access::flush_requests(int max_cached)
 	// If all requests have been flushed successfully, return immediately.
 	if (num_remaining == 0)
 		return;
-	if (complete_queue)
-		num_completed_reqs += complete_queue->process(1000, false);
 
 	int base_idx;
 	if (num_senders == 1)
