@@ -247,6 +247,8 @@ again:
 						}
 						read_bytes += ret;
 					}
+					if (ret == 0)
+						printf("read %ld get 0 bytes\n", off);
 					if (ret < 0) {
 						perror("access");
 						exit(1);
@@ -308,8 +310,9 @@ static void *rand_read(void *arg)
 	// to make sure all data created in this thread will be on the specified
 	// node.
 	int node_id = priv->get_io()->get_node_id();
-	printf("run thread rand_read: pid: %d, tid: %ld, on node %d\n",
-			getpid(), gettid(), node_id);
+	time_t curr_time = time(NULL);
+	printf("run thread rand_read: pid: %d, tid: %ld, on node %d at %s",
+			getpid(), gettid(), node_id, ctime(&curr_time));
 	bind2node_id(node_id);
 
 	priv->thread_init();
