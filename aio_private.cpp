@@ -17,150 +17,13 @@ const int MAX_BUF_REQS = 1024 * 3;
 #define ALLOW_DROP
 #endif
 
-class extended_io_request: public io_request
-{
-	char *orig_embedded_bufs[NUM_EMBEDDED_IOVECS];
-	char **orig_bufs;
-	slab_allocator *allocator;
-
-	void assign_extended(extended_io_request &req) {
-		this->allocator = req.allocator;
-		if (req.orig_bufs == req.orig_embedded_bufs) {
-			this->orig_bufs = this->orig_embedded_bufs;
-			memcpy(this->orig_embedded_bufs, req.orig_embedded_bufs,
-					sizeof(orig_embedded_bufs));
-		}
-		else {
-			this->orig_bufs = req.orig_bufs;
-			req.orig_bufs = NULL;
-		}
-	}
-public:
-	extended_io_request(): io_request(-1, NULL, READ, -1) {
-		orig_bufs = NULL;
-		allocator = NULL;
-		memset(orig_embedded_bufs, 0, sizeof(orig_embedded_bufs));
-	}
-
-	/**
-	 * The buffers in the IO request are allocated in a different NUMA node
-	 * than the SSDs are connected to, and allocate buffers on the local node.
-	 */
-	extended_io_request(io_request &req,
-			slab_allocator *allocator): io_request(-1, NULL, READ, -1) {
-		init(req, allocator);
-	}
-
-	/**
-	 * The buffers are allocated in the same NUMA node as the SSDs
-	 * are connected to.
-	 */
-	extended_io_request(io_request &req): io_request(req) {
-		allocator = NULL;
-		orig_bufs = NULL;
-		memset(orig_embedded_bufs, 0, sizeof(orig_embedded_bufs));
-	}
-
-	extended_io_request(extended_io_request &req): io_request(-1,
-			NULL, READ, -1) {
-		io_request::assign(req);
-		assign_extended(req);
-	}
-
-	~extended_io_request() {
-		reset();
-	}
-
-	extended_io_request &operator=(io_request &req) {
-		io_request::assign(req);
-		orig_bufs = NULL;
-		allocator = NULL;
-		memset(orig_embedded_bufs, 0, sizeof(orig_embedded_bufs));
-		return *this;
-	}
-
-	extended_io_request &operator=(extended_io_request &req) {
-		io_request::assign(req);
-		assign_extended(req);
-		return *this;
-	}
-
-	void reset();
-	void init(io_request &req, slab_allocator *allocator);
-
-	bool is_replaced() const {
-		return orig_bufs != NULL;
-	}
-
-	void use_orig_bufs();
-};
-
-void extended_io_request::use_orig_bufs()
-{
-	for (int i = 0; i < get_num_bufs(); i++) {
-		char *buf = get_buf(i);
-		// This memory copy can significantly decrease the performance.
-		// But it seems there isn't a better way to avoid it.
-		if (this->get_access_method() == READ)
-			memcpy(orig_bufs[i], buf, get_buf_size(i));
-		set_buf(i, orig_bufs[i]);
-		if (this->get_buf_size(i) <= PAGE_SIZE)
-			allocator->free(&buf, 1);
-		else
-			free(buf);
-	}
-	// We have to reset orig_bufs because all original buffers
-	// will be destroyed when the object is destructed.
-	if (orig_bufs != orig_embedded_bufs)
-		delete orig_bufs;
-	orig_bufs = NULL;
-}
-
-void extended_io_request::init(io_request &req, slab_allocator *allocator)
-{
-	assert(this->get_access_method() == READ);
-	io_request::assign(req);
-	this->allocator = allocator;
-	memset(orig_embedded_bufs, 0, sizeof(orig_embedded_bufs));
-	if (this->get_num_bufs() > NUM_EMBEDDED_IOVECS)
-		orig_bufs = new char *[this->get_num_bufs()];
-	else
-		orig_bufs = orig_embedded_bufs;
-	for (int i = 0; i < this->get_num_bufs(); i++) {
-		char *remote_buf = this->get_buf(i);
-		char *local_buf;
-		if (this->get_buf_size(i) <= PAGE_SIZE) {
-			int ret = allocator->alloc(&local_buf, 1);
-			assert(ret == 1);
-		}
-		else
-			local_buf = (char *) valloc(this->get_buf_size(i));
-		this->set_buf(i, local_buf);
-		orig_bufs[i] = remote_buf;
-	}
-}
-
-void extended_io_request::reset()
-{
-	if (orig_bufs) {
-		char *local_pages[get_num_bufs()];
-		for (int i = 0; i < get_num_bufs(); i++) {
-			local_pages[i] = get_buf(i);
-		}
-		allocator->free(local_pages, get_num_bufs());
-		if (orig_bufs != orig_embedded_bufs)
-			delete orig_bufs;
-		orig_bufs = NULL;
-	}
-}
-
 struct thread_callback_s
 {
 	struct io_callback_s cb;
 	async_io *aio;
 	callback *aio_callback;
 	obj_allocator<thread_callback_s> *cb_allocator;
-	extended_io_request req;
+	io_request req;
 };
 
 void aio_callback(io_context_t ctx, struct iocb* iocb[],
@@ -225,14 +88,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	io_callback_s *cb = (io_callback_s *) tcb;
 
 	cb->func = cb_func;
-	if (get_node_id() == io_req.get_node_id() || get_node_id() == -1
-			// It seems remote write requests can perform well.
-			|| io_req.get_access_method() == WRITE)
-		tcb->req = io_req;
-	else {
-		num_local_alloc++;
-		tcb->req.init(io_req, &allocator);
-	}
+	tcb->req = io_req;
 	tcb->aio = this;
 	tcb->aio_callback = this->get_callback();
 	tcb->cb_allocator = &cb_allocator;
@@ -347,8 +203,6 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 	io_request *reqs[num];
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
-		if (tcb->req.is_replaced())
-			tcb->req.use_orig_bufs();
 		reqs[i] = &tcb->req;
 	}
 	if (this->cb) {
@@ -356,7 +210,6 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 	}
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
-		tcb->req.reset();
 		cb_allocator.free(tcb);
 	}
 	num_completed_reqs += num;
@@ -378,12 +231,9 @@ int aio_complete_queue::process(int max_num, bool blocking)
 
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
-		if (tcb->req.is_replaced())
-			tcb->req.use_orig_bufs();
 		io_request *reqs[1];
 		reqs[0] = &tcb->req;
 		tcb->aio_callback->invoke(reqs, 1);
-		tcb->req.reset();
 		tcb->cb_allocator->free(tcb);
 	}
 	return num;
