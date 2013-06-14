@@ -236,6 +236,42 @@ public:
 	}
 };
 
+/**
+ * This workload generator statistically divides workloads between threads.
+ */
+class divided_file_workload: public workload_gen
+{
+	fifo_queue<workload_t> local_buf;
+	workload_t curr;
+public:
+	divided_file_workload(workload_t workloads[], long length, int thread_id,
+			int nthreads): local_buf(length / nthreads) {
+		long part_size = length / nthreads;
+		local_buf.add(workloads + thread_id * part_size, part_size);
+	}
+
+	const workload_t &next() {
+		assert(!local_buf.is_empty());
+		curr = local_buf.pop_front();
+		if (get_default_access_method() >= 0)
+			curr.read = get_default_access_method() == READ;
+		return curr;
+	}
+
+	off_t next_offset() {
+		assert(!local_buf.is_empty());
+		workload_t access = local_buf.pop_front();
+		return access.off;
+	}
+
+	bool has_next() {
+		return !local_buf.is_empty();
+	}
+};
+
+/**
+ * This workload generator dynamically assigns workloads to threads.
+ */
 class file_workload: public workload_gen
 {
 	static thread_safe_FIFO_queue<workload_t> *workload_queue;
