@@ -330,6 +330,8 @@ public:
 		this->range = end - start;
 		num = 0;
 		offsets = (off_t *) valloc(sizeof(*offsets) * range);
+		printf("use a different random sequence\n");
+		srandom(time(NULL));
 		for (int i = 0; i < range; i++) {
 			offsets[i] = (start + random() % range) * stride;
 		}
