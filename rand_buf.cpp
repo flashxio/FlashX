@@ -53,7 +53,8 @@ char *rand_buf::next_entry(int size) {
 	if (local_buf_refs->is_empty()) {
 		off_t offs[LOCAL_BUF_SIZE];
 		int num = free_refs.fetch(offs, LOCAL_BUF_SIZE);
-		assert(num > 0);
+		if (num == 0)
+			return NULL;
 		int num_added = local_buf_refs->add(offs, num);
 		assert(num_added == num);
 	}
