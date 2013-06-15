@@ -318,6 +318,53 @@ public:
 	}
 };
 
+/**
+ * This generates workloads mostly sequential but with random jumps.
+ */
+class rand_seq_workload: public workload_gen
+{
+	long start;
+	long end;
+	int entry_size;
+	long seq_len;
+
+	long num;
+	long tot_num;
+	long tot_num_seqs;		// The number of sequential ranges.
+	long off_in_seq;		// The offset in the current sequential range.
+	long seq_num;			// The sequential range ID.
+public:
+	rand_seq_workload(long start, long end, int entry_size, long seq_len) {
+		this->start = start;
+		this->end = end;
+		this->entry_size = entry_size;
+		this->seq_len = seq_len;
+
+		this->num = 0;
+		this->tot_num = end - start;
+		this->tot_num_seqs = (end - start) * entry_size / seq_len;
+		printf("use a different random sequence\n");
+		srandom(time(NULL));
+		this->off_in_seq = 0;
+		this->seq_num = random() % tot_num_seqs;
+	}
+
+	off_t next_offset() {
+		if (off_in_seq + entry_size > seq_len) {
+			seq_num = random() % tot_num_seqs;
+			off_in_seq = 0;
+		}
+		num++;
+		long tmp = off_in_seq;
+		off_in_seq += entry_size;
+		return seq_num * seq_len + start + tmp;
+	}
+
+	bool has_next() {
+		return num < tot_num;
+	}
+};
+
 class rand_workload: public workload_gen
 {
 	long start;

@@ -106,6 +106,7 @@ str2int cache_types[] = {
 enum {
 	SEQ_OFFSET,
 	RAND_OFFSET,
+	RAND_SEQ_OFFSET,
 	RAND_PERMUTE,
 	HIT_DEFINED,
 	USER_FILE_WORKLOAD = -1
@@ -114,6 +115,7 @@ enum {
 str2int workloads[] = {
 	{ "SEQ", SEQ_OFFSET },
 	{ "RAND", RAND_OFFSET },
+	{ "RAND_SEQ", RAND_SEQ_OFFSET },
 	{ "RAND_PERMUTE", RAND_PERMUTE },
 	{ "HIT_DEFINED", HIT_DEFINED },
 	{ "user_file", USER_FILE_WORKLOAD },
@@ -530,6 +532,9 @@ int main(int argc, char *argv[])
 					break;
 				case RAND_OFFSET:
 					gen = new rand_workload(start, end, entry_size);
+					break;
+				case RAND_SEQ_OFFSET:
+					gen = new rand_seq_workload(start, end, entry_size, 1024 * 1024 * 4);
 					break;
 				case RAND_PERMUTE:
 					gen = new global_rand_permute_workload(entry_size,
