@@ -30,6 +30,12 @@ inline float time_diff(struct timeval time1, struct timeval time2)
 			+ ((float)(time2.tv_usec - time1.tv_usec))/1000000;
 }
 
+inline long time_diff_us(struct timeval time1, struct timeval time2)
+{
+	return (time2.tv_sec - time1.tv_sec) * 1000000
+			+ (time2.tv_usec - time1.tv_usec);
+}
+
 inline static int min(int v1, int v2)
 {
 	return v1 > v2 ? v2 : v1;
@@ -95,6 +101,17 @@ ssize_t get_file_size(const char *file_name);
 void permute_offsets(int num, int repeats, int stride, off_t start,
 		off_t offsets[]);
 
+template<class T>
+void rand_permute_array(T arr[], int num)
+{
+	for (int i = num - 1; i >= 1; i--) {
+		int j = random() % i;
+		T tmp = arr[j];
+		arr[j] = arr[i];
+		arr[i] = tmp;
+	}
+}
+
 class rand_permute
 {
 	off_t *offset;
@@ -110,12 +127,7 @@ public:
 			offset[i] = ((off_t) i) * stride + start * stride;
 		}
 
-		for (int i = num - 1; i >= 1; i--) {
-			int j = random() % i;
-			off_t tmp = offset[j];
-			offset[j] = offset[i];
-			offset[i] = tmp;
-		}
+		rand_permute_array(offset, num);
 	}
 
 	~rand_permute() {
