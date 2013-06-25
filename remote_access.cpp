@@ -13,6 +13,7 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 		this->complete_queue = complete_thread->get_queue();
 	assert(num_remotes == mapper->get_num_files());
 	senders = new request_sender *[num_remotes];
+	low_prio_senders = new request_sender *[num_remotes];
 	num_senders = num_remotes;
 	total_size = 0;
 	local_size = 0;
@@ -23,6 +24,8 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 			local_size += remotes[i]->get_size();
 		blocking_FIFO_queue<io_request> *queue = remotes[i]->get_queue();
 		senders[i] = new request_sender(queue, INIT_DISK_QUEUE_SIZE);
+		low_prio_senders[i] = new request_sender(remotes[i]->get_low_prio_queue(),
+				INIT_DISK_QUEUE_SIZE);
 	}
 	cb = NULL;
 	this->block_mapper = mapper;
@@ -31,9 +34,12 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 
 remote_disk_access::~remote_disk_access()
 {
-	for (int i = 0; i < num_senders; i++)
+	for (int i = 0; i < num_senders; i++) {
 		delete senders[i];
+		delete low_prio_senders[i];
+	}
 	delete [] senders;
+	delete [] low_prio_senders;
 }
 
 io_interface *remote_disk_access::clone() const
@@ -41,9 +47,12 @@ io_interface *remote_disk_access::clone() const
 	remote_disk_access *copy = new remote_disk_access(this->get_node_id());
 	copy->num_senders = this->num_senders;
 	copy->senders = new request_sender *[this->num_senders];
+	copy->low_prio_senders = new request_sender *[this->num_senders];
 	for (int i = 0; i < copy->num_senders; i++) {
 		copy->senders[i] = new request_sender(this->senders[i]->get_queue(),
 				INIT_DISK_QUEUE_SIZE);
+		copy->low_prio_senders[i] = new request_sender(
+				this->low_prio_senders[i]->get_queue(), INIT_DISK_QUEUE_SIZE);
 	}
 	copy->cb = this->cb;
 	copy->total_size = this->total_size;
@@ -57,12 +66,14 @@ void remote_disk_access::cleanup()
 {
 	for (int i = 0; i < num_senders; i++) {
 		senders[i]->flush_all();
+		low_prio_senders[i]->flush_all();
 	}
 	int num;
 	do {
 		num = 0;
 		for (int i = 0; i < num_senders; i++) {
 			num += senders[i]->get_queue()->get_num_entries();
+			num += low_prio_senders[i]->get_queue()->get_num_entries();
 		}
 		/* 
 		 * if there are still messages in the queue, wait.
@@ -77,7 +88,6 @@ void remote_disk_access::cleanup()
 
 ssize_t remote_disk_access::access(io_request *requests, int num)
 {
-	int num_remaining = 0;
 	for (int i = 0; i < num; i++) {
 		assert(requests[i].get_size() > 0);
 		// TODO data is striped on disks, we have to make sure the data
@@ -87,11 +97,19 @@ ssize_t remote_disk_access::access(io_request *requests, int num)
 		int idx = block_mapper->map2file(pg_off);
 		// The cache inside a sender is extensible, so it can absorb
 		// all requests.
-		int ret = senders[idx]->send_cached(&requests[i]);
-		num_remaining += senders[idx]->get_num_remaining();
+		int ret;
+		if (requests[i].is_high_prio())
+			ret = senders[idx]->send_cached(&requests[i]);
+		else
+			ret = low_prio_senders[idx]->send_cached(&requests[i]);
 		assert(ret == 1);
 	}
 
+	int num_remaining = 0;
+	for (int i = 0; i < num_senders; i++) {
+		num_remaining += senders[i]->get_num_remaining();
+		num_remaining += low_prio_senders[i]->get_num_remaining();
+	}
 	if (num_remaining > MAX_DISK_CACHED_REQS) {
 		flush_requests(MAX_DISK_CACHED_REQS);
 	}
@@ -107,15 +125,18 @@ void remote_disk_access::flush_requests(int max_cached)
 {
 	if (complete_queue)
 		num_completed_reqs += complete_queue->process(1000, false);
-	int num_remaining = 0;
+	int num_high_prio_remaining = 0;
+	int num_low_prio_remaining = 0;
 	// Now let's flush requests to the queues, but we first try to
 	// flush requests non-blockingly.
 	for (int i = 0; i < num_senders; i++) {
 		senders[i]->flush(false);
-		num_remaining += senders[i]->get_num_remaining();
+		low_prio_senders[i]->flush(false);
+		num_high_prio_remaining += senders[i]->get_num_remaining();
+		num_low_prio_remaining += low_prio_senders[i]->get_num_remaining();
 	}
 	// If all requests have been flushed successfully, return immediately.
-	if (num_remaining == 0)
+	if (num_high_prio_remaining + num_low_prio_remaining == 0)
 		return;
 
 	int base_idx;
@@ -126,12 +147,28 @@ void remote_disk_access::flush_requests(int max_cached)
 	int i = 0;
 	// We only allow cache that many requests. If we have more than
 	// we want, continue flushing, but try harder this time.
-	while (num_remaining > max_cached) {
+	while (num_high_prio_remaining + num_low_prio_remaining > max_cached
+			&& num_high_prio_remaining > 0) {
 		int idx = (base_idx + i) % num_senders;
 		int orig_remaining = senders[idx]->get_num_remaining();
 		senders[idx]->flush(true);
 		int num_flushed = orig_remaining - senders[idx]->get_num_remaining();
-		num_remaining -= num_flushed;
+		num_high_prio_remaining -= num_flushed;
+		i++;
+	}
+	// When we reach this point, it means either that the total number of
+	// remaining requests is lower than max_cached or there aren't high-
+	// priority requests left.
+	// In this way, we can make sure high-priority requests have been moved
+	// to the IO threads before low-priority requests are moved.
+	i = 0;
+	while (num_low_prio_remaining > max_cached) {
+		int idx = (base_idx + i) % num_senders;
+		int orig_remaining = low_prio_senders[idx]->get_num_remaining();
+		low_prio_senders[idx]->flush(true);
+		int num_flushed = orig_remaining
+			- low_prio_senders[idx]->get_num_remaining();
+		num_low_prio_remaining -= num_flushed;
 		i++;
 	}
 }

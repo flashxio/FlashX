@@ -13,6 +13,7 @@ void *process_requests(void *arg);
 class disk_read_thread
 {
 	blocking_FIFO_queue<io_request> queue;
+	blocking_FIFO_queue<io_request> low_prio_queue;
 	pthread_t id;
 	async_io *aio;
 	int node_id;
@@ -25,6 +26,10 @@ public:
 
 	blocking_FIFO_queue<io_request> *get_queue() {
 		return &queue;
+	}
+
+	blocking_FIFO_queue<io_request> *get_low_prio_queue() {
+		return &low_prio_queue;
 	}
 
 	long get_size() const {

@@ -16,7 +16,11 @@ class request_sender;
  */
 class remote_disk_access: public io_interface
 {
+	// They work as buffers for requests and are only used to
+	// send high-priority requests.
 	request_sender **senders;
+	// They are used to send low-priority requests.
+	request_sender **low_prio_senders;
 	int num_senders;
 	callback *cb;
 	file_mapper *block_mapper;
@@ -30,6 +34,7 @@ class remote_disk_access: public io_interface
 
 	remote_disk_access(int node_id): io_interface(node_id) {
 		senders = NULL;
+		low_prio_senders = NULL;
 		num_senders = 0;
 		cb = NULL;
 		block_mapper = NULL;

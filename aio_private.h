@@ -93,6 +93,10 @@ public:
 
 	void return_cb(thread_callback_s *tcbs[], int num);
 
+	int num_available_IO_slots() const {
+		return max_io_slot(ctx);
+	}
+
 	int num_pending_IOs() const {
 		return AIO_DEPTH - max_io_slot(ctx);
 	}

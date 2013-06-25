@@ -329,6 +329,10 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 	if (ret == NULL) {
 		num_evictions++;
 		ret = get_empty_page();
+		// We need to clear flags here.
+		ret->set_data_ready(false);
+		assert(!ret->is_io_pending());
+		ret->set_prepare_writeback(false);
 		if (ret->is_dirty() && !ret->is_old_dirty()) {
 			ret->set_dirty(false);
 			ret->set_old_dirty(true);
@@ -982,13 +986,7 @@ void write_requests(const std::vector<io_request *> &requests, io_interface *io)
 {
 	for (unsigned i = 0; i < requests.size(); i++) {
 		assert(requests[i]->get_orig() == NULL);
-		if (requests[i]->get_num_bufs() > 1)
-			io->access(requests[i], 1);
-		else {
-			thread_safe_page *p = (thread_safe_page *) requests[i]->get_priv();
-			p->set_io_pending(false);
-			p->dec_ref();
-		}
+		io->access(requests[i], 1);
 	}
 }
 
@@ -1037,6 +1035,8 @@ void associative_flush_thread::run()
 		for (int i = 0; i < num_fetches; i++) {
 			std::map<off_t, thread_safe_page *> dirty_pages;
 			std::vector<io_request *> requests;
+			// TODO we should only write back dirty pages that are likely
+			// to be evicted by the eviction policy.
 			cells[i]->get_dirty_pages(dirty_pages);
 			int num_init_reqs = 0;
 			for (std::map<off_t, thread_safe_page *>::const_iterator it
@@ -1044,25 +1044,26 @@ void associative_flush_thread::run()
 				thread_safe_page *p = it->second;
 				p->lock();
 				assert(!p->is_old_dirty());
+				assert(p->is_dirty());
 				assert(p->data_ready());
-				if (!p->is_io_pending()) {
+				if (!p->is_io_pending() && !p->is_prepare_writeback()) {
 					req_array[num_init_reqs].init((char *) p->get_data(),
 								p->get_offset(), PAGE_SIZE, WRITE, io,
 								get_node_id(), NULL, p);
+					req_array[num_init_reqs].set_high_prio(false);
 					requests.push_back(&req_array[num_init_reqs]);
 					num_init_reqs++;
-					p->set_io_pending(true);
+					p->set_prepare_writeback(true);
 				}
-				else {
-					/*
-					 * If there is IO pending on the page, it means the page is being
-					 * written back to the file, so we don't need to do anything on
-					 * the page other than relasing the reference to the page.
-					 */
-					p->dec_ref();
-				}
+				// When a page is put in the queue for writing back,
+				// the queue of the IO thread doesn't own the page, which
+				// means that the page can be evicted.
+				p->dec_ref();
 				p->unlock();
 			}
+
+#ifdef FLUSH_MERGE_REQS
+			// Merge with adjacent dirty pages behind the current dirty page.
 			std::vector<io_request *> forward_complete;
 			hash_cell *curr_cell = cells[i];
 			size_t num_reqs = requests.size();
@@ -1081,6 +1082,7 @@ void associative_flush_thread::run()
 				forward_complete.push_back(requests[k]);
 			assert(forward_complete.size() == num_reqs);
 
+			// Merge with adjacent dirty pages before the current dirty page.
 			std::vector<io_request *> complete;
 			curr_cell = cells[i];
 			// Search backward and find pages that can merge with the current requests.
@@ -1096,7 +1098,14 @@ void associative_flush_thread::run()
 				complete.push_back(forward_complete[k]);
 			assert(complete.size() == num_reqs);
 			write_requests(complete, io);
-			// TODO maybe I shouldn't clear the bit here.
+#else
+			write_requests(requests, io);
+#endif
+			// We can clear the in_queue flag now.
+			// The cell won't be added to the queue for flush until its dirty pages
+			// have been written back successfully.
+			// A cell is added to the queue only when the number of dirty pages
+			// that aren't being written back is larger than a threshold.
 			cells[i]->set_in_queue(false);
 		}
 	}
@@ -1200,6 +1209,8 @@ int hash_cell::num_pages(char set_flags, char clear_flags)
 	return num;
 }
 
+#define ENABLE_FLUSH_THREAD
+
 void associative_flush_thread::dirty_pages(thread_safe_page *pages[], int num)
 {
 #ifdef ENABLE_FLUSH_THREAD
@@ -1209,20 +1220,24 @@ void associative_flush_thread::dirty_pages(thread_safe_page *pages[], int num)
 		hash_cell *cell = cache->get_cell_offset(pages[i]->get_offset());
 		if (!cell->is_in_queue()) {
 			char dirty_flag = 0;
-			char io_pending_flag = 0;
+			char skip_flags = 0;
 			page_set_flag(dirty_flag, DIRTY_BIT, true);
-			page_set_flag(io_pending_flag, IO_PENDING_BIT, true);
+			// We should skip pages in IO pending or in a writeback queue.
+			page_set_flag(skip_flags, IO_PENDING_BIT, true);
+			page_set_flag(skip_flags, PREPARE_WRITEBACK, true);
 			/*
 			 * We only count the number of dirty pages without IO pending.
 			 * If a page is dirty but has IO pending, it means the page
 			 * is being written back, so we don't need to do anything with it.
 			 */
-			int n = cell->num_pages(dirty_flag, io_pending_flag);
+			int n = cell->num_pages(dirty_flag, skip_flags);
 			if (n > DIRTY_PAGES_THRESHOLD && !cell->set_in_queue(true))
 				cells[num_queued_cells++] = cell;
 		}
 	}
 	if (num_queued_cells > 0) {
+		// TODO currently, there is only one flush thread. Adding dirty cells
+		// requires to grab a spin lock. It may not work well on a NUMA machine.
 		dirty_cells.add(cells, num_queued_cells);
 		activate();
 	}

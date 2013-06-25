@@ -27,10 +27,18 @@ enum {
 	/* The two bits exclude each other. */
 	DIRTY_BIT,
 	OLD_DIRTY_BIT,
+	/*
+	 * This flag indicates the IO request is in the queue for
+	 * writing back.
+	 */
+	PREPARE_WRITEBACK,
 
 	LOCK_BIT,
 
-	/* These bits don't need to be protected by the lock. */
+	/* 
+	 * These bits don't need to be protected by the lock.
+	 * They are used by LRU2Q, so it can be deleted in the future.
+	 */
 	ACTIVE_BIT,
 	REFERENCED_BIT,
 };
@@ -113,6 +121,13 @@ public:
 	bool is_old_dirty() const { return flags & (0x1 << OLD_DIRTY_BIT); }
 	bool set_old_dirty(bool dirty) {
 		return set_flag(OLD_DIRTY_BIT, dirty);
+	}
+
+	bool is_prepare_writeback() const {
+		return flags & (0x1 << PREPARE_WRITEBACK);
+	}
+	bool set_prepare_writeback(bool writeback) {
+		return set_flag(PREPARE_WRITEBACK, writeback);
 	}
 
 	bool set_referenced(bool referenced) {
@@ -281,6 +296,13 @@ public:
 	bool test_and_set_io_pending() {
 		int old = __sync_fetch_and_or(&flags, 0x1 << IO_PENDING_BIT);
 		return old & (0x1 << IO_PENDING_BIT);
+	}
+
+	bool is_prepare_writeback() const {
+		return get_flags_bit(PREPARE_WRITEBACK);
+	}
+	bool set_prepare_writeback(bool writeback) {
+		return set_flags_bit(PREPARE_WRITEBACK, writeback);
 	}
 
 	void lock() {

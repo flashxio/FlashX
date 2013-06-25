@@ -26,7 +26,8 @@ class io_request
 	int num_bufs: 15;
 	// Is the request part of a request?
 	int partial: 1;
-	int vec_capacity: 15;
+	int high_prio: 1;
+	int vec_capacity: 14;
 
 	/* 
 	 * This is to protect the object from being removed
@@ -98,6 +99,8 @@ public:
 		this->access_method = access_method & 0x1;
 		this->priv = priv;
 		this->partial = 0;
+		// by default, a request is of high priority.
+		this->high_prio = 1;
 		this->completed_size = 0;
 		this->orig = orig;
 		this->refcnt = 0;
@@ -108,6 +111,14 @@ public:
 		vec_capacity = NUM_EMBEDDED_IOVECS;
 		next = NULL;
 		this->node_id = node_id;
+	}
+
+	bool is_high_prio() const {
+		return (high_prio & 0x1) == 1;
+	}
+
+	void set_high_prio(bool high_prio) {
+		this->high_prio = high_prio;
 	}
 
 	int get_access_method() const {
