@@ -8,13 +8,10 @@
 
 #include "my_hashtable.h"
 #include "concurrency.h"
+#include "exception.h"
 
 template<class KeyT, class ValueT>
 class SA_hashtable;
-
-class no_space_exception
-{
-};
 
 template<class KeyT, class ValueT, int SIZE>
 class entry_set

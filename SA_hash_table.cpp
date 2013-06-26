@@ -3,10 +3,7 @@
 #include <iostream>
 
 #include "SA_hash_table.h"
-
-class oom_exception
-{
-};
+#include "exception.h"
 
 template<class KeyT, class ValueT, int SIZE>
 ValueT entry_set<KeyT, ValueT, SIZE>::get(KeyT key) {

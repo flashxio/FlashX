@@ -5,6 +5,7 @@
 #include "associative_cache.h"
 #include "flush_thread.h"
 #include "container.cpp"
+#include "exception.h"
 
 #ifdef STATISTICS
 volatile int avail_cells;
@@ -13,11 +14,6 @@ volatile int lock_contentions;
 #endif
 
 const long default_init_cache_size = 128 * 1024 * 1024;
-
-/* out of memory exception */
-class oom_exception
-{
-};
 
 template<class T>
 void page_cell<T>::set_pages(char *pages[], int num, int node_id)
