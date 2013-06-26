@@ -55,17 +55,19 @@ void disk_read_thread::run() {
 				assert(io_slots <= AIO_DEPTH_PER_FILE);
 				int num = low_prio_queue.fetch(reqs, io_slots);
 				for (int i = 0; i < num; i++) {
-					thread_safe_page *p = (thread_safe_page *) reqs[i].get_priv();
+					// The request doesn't own the page, so the reference count
+					// isn't increased while in the queue. Now we try to write
+					// it back, we need to increase its reference. The only
+					// safe way to do it is to use the search method of
+					// the page cache.
+					page_cache *cache = (page_cache *) reqs[i].get_priv();
+					thread_safe_page *p = (thread_safe_page *) cache->search(
+							reqs[i].get_offset());
+					if (p == NULL)
+						continue;
 					// The object of page always exists, so we can always
 					// lock a page.
 					p->lock();
-					// TODO this means a request can only carry one page.
-					// If the page has been evicted, we don't need to process
-					// the request.
-					if (p->get_offset() != reqs[i].get_offset()) {
-						p->unlock();
-						continue;
-					}
 					// The page may have been written back by the applications.
 					// But in either way, we need to reset the PREPARE_WRITEBACK
 					// flag.
@@ -74,16 +76,16 @@ void disk_read_thread::run() {
 					// we can skip the request.
 					if (p->is_io_pending() || !p->is_dirty()) {
 						p->unlock();
+						p->dec_ref();
 						continue;
 					}
-					assert(p->is_dirty());
 					p->set_io_pending(true);
-					// The queue doesn't own the page, so the reference count
-					// isn't increased while in the queue. Now we are writing
-					// it back, we need to increase its reference.
-					p->inc_ref();
 					p->unlock();
 					num_accesses++;
+					// The current private data points to the page cache.
+					// Now the request owns the page, it's safe to point to
+					// the page directly.
+					reqs[i].set_priv(p);
 					// This should block the thread.
 					aio->access(&reqs[i], 1);
 				}

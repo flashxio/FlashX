@@ -1040,12 +1040,13 @@ void associative_flush_thread::run()
 				thread_safe_page *p = it->second;
 				p->lock();
 				assert(!p->is_old_dirty());
-				assert(p->is_dirty());
 				assert(p->data_ready());
-				if (!p->is_io_pending() && !p->is_prepare_writeback()) {
+				if (!p->is_io_pending() && !p->is_prepare_writeback()
+						// The page may have been cleaned.
+						&& p->is_dirty()) {
 					req_array[num_init_reqs].init((char *) p->get_data(),
 								p->get_offset(), PAGE_SIZE, WRITE, io,
-								get_node_id(), NULL, p);
+								get_node_id(), NULL, cache);
 					req_array[num_init_reqs].set_high_prio(false);
 					requests.push_back(&req_array[num_init_reqs]);
 					num_init_reqs++;
@@ -1054,8 +1055,8 @@ void associative_flush_thread::run()
 				// When a page is put in the queue for writing back,
 				// the queue of the IO thread doesn't own the page, which
 				// means that the page can be evicted.
-				p->dec_ref();
 				p->unlock();
+				p->dec_ref();
 			}
 
 #ifdef FLUSH_MERGE_REQS
