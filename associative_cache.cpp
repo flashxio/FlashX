@@ -549,6 +549,47 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 	return ret;
 }
 
+int gclock_eviction_policy::predict_evicted_pages(
+		page_cell<thread_safe_page> &buf, int num_pages, int set_flags,
+		int clear_flags, std::map<off_t, thread_safe_page *> &pages)
+{
+	// We are just predicting. We don't actually evict any pages.
+	// So we need to make a copy of the hits of each page.
+	short hits[CELL_SIZE];
+	for (int i = 0; i < (int) buf.get_num_pages(); i++) {
+		hits[i] = buf.get_page(i)->get_hits();
+	}
+	// The function returns when we get the expected number of pages
+	// or we get pages 
+	while (true) {
+		int num_with_hits = 0;
+		for (int i = 0; i < (int) buf.get_num_pages(); i++) {
+			int idx = (i + clock_head) % buf.get_num_pages();
+			short *hit = &hits[idx];
+			// The page is already in the page map.
+			if (*hit < 0)
+				continue;
+			else if (*hit == 0) {
+				*hit = -1;
+				thread_safe_page *p = buf.get_page(idx);
+				if (p->test_flags(set_flags) && !p->test_flags(clear_flags)) {
+					pages.insert(std::pair<off_t, thread_safe_page *>(
+								p->get_offset(), p));
+					if ((int) pages.size() == num_pages)
+						return pages.size();
+				}
+			}
+			else {
+				(*hit)--;
+				num_with_hits++;
+			}
+		}
+		// No pages have hits.
+		if (num_with_hits == 0)
+			return pages.size();
+	}
+}
+
 thread_safe_page *clock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
@@ -1031,9 +1072,7 @@ void associative_flush_thread::run()
 		for (int i = 0; i < num_fetches; i++) {
 			std::map<off_t, thread_safe_page *> dirty_pages;
 			std::vector<io_request *> requests;
-			// TODO we should only write back dirty pages that are likely
-			// to be evicted by the eviction policy.
-			cells[i]->get_dirty_pages(dirty_pages);
+			cells[i]->get_dirty_pages(dirty_pages, NUM_WRITEBACK_DIRTY_PAGES);
 			int num_init_reqs = 0;
 			for (std::map<off_t, thread_safe_page *>::const_iterator it
 					= dirty_pages.begin(); it != dirty_pages.end(); it++) {
@@ -1173,22 +1212,19 @@ hash_cell *associative_cache::get_next_cell(hash_cell *cell)
 	}
 }
 
-void hash_cell::get_dirty_pages(std::map<off_t, thread_safe_page *> &pages)
+void hash_cell::get_dirty_pages(std::map<off_t, thread_safe_page *> &pages,
+		int num_pages)
 {
 	pthread_spin_lock(&_lock);
-	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
-		thread_safe_page *p = buf.get_page(i);
-		/*
-		 * When we are here, the page can't be evicted, so it won't be
-		 * set old dirty.
-		 * By checking the IO pending bit, we can reduce the chance of
-		 * returning the page to the flush thread, so we might be able
-		 * to improve performance.
-		 */
-		if (p->is_dirty() && !p->is_io_pending()) {
-			p->inc_ref();
-			pages.insert(std::pair<off_t, thread_safe_page *>(p->get_offset(), p));
-		}
+	char set_flags = 0;
+	char clear_flags = 0;
+	page_set_flag(set_flags, DIRTY_BIT, true);
+	page_set_flag(clear_flags, IO_PENDING_BIT, true);
+	page_set_flag(clear_flags, PREPARE_WRITEBACK, true);
+	policy.predict_evicted_pages(buf, num_pages, set_flags, clear_flags, pages);
+	for (std::map<off_t, thread_safe_page *>::iterator it = pages.begin();
+			it != pages.end(); it++) {
+		it->second->inc_ref();
 	}
 	pthread_spin_unlock(&_lock);
 }

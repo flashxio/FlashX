@@ -12,6 +12,7 @@
 #include "container.h"
 #include "parameters.h"
 #include "shadow_cell.h"
+#include "exception.h"
 
 #ifdef STATISTICS
 volatile extern int avail_cells;
@@ -126,6 +127,12 @@ public:
 class eviction_policy
 {
 public:
+	// It predicts which pages are to be evicted.
+	int predict_evicted_pages(page_cell<thread_safe_page> &buf,
+			int num_pages, int set_flags, int clear_flags,
+			std::map<off_t, thread_safe_page *> &pages) {
+		throw unsupported_exception();
+	}
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 	void access_page(thread_safe_page *pg,
 			page_cell<thread_safe_page> &buf) {
@@ -176,6 +183,9 @@ public:
 	}
 
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
+	int predict_evicted_pages(page_cell<thread_safe_page> &buf,
+			int num_pages, int set_flags, int clear_flags,
+			std::map<off_t, thread_safe_page *> &pages);
 };
 
 class LFU_eviction_policy: public eviction_policy
@@ -300,7 +310,7 @@ public:
 		printf("\n");
 	}
 
-	void get_dirty_pages(std::map<off_t, thread_safe_page *> &pages);
+	void get_dirty_pages(std::map<off_t, thread_safe_page *> &pages, int num_pages);
 
 	long get_hash() const {
 		return hash;
