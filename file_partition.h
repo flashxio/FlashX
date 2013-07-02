@@ -37,10 +37,6 @@ public:
 		return mapper->get_file_name(indices[idx]);
 	}
 
-	int get_fd(int idx) const {
-		return mapper->get_fd(indices[idx]);
-	}
-
 	void map(off_t pg_off, block_identifier &bid) const {
 		mapper->map(pg_off, bid);
 		// We have to make sure the offset does exist in the partition.

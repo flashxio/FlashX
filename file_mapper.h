@@ -35,10 +35,6 @@ public:
 		return files[idx].name;
 	}
 
-	int get_fd(int idx) const {
-		return files[idx].fd;
-	}
-
 	int get_file_node_id(int idx) const {
 		return files[idx].node_id;
 	}

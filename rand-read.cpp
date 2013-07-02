@@ -180,35 +180,6 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-void open_files(std::vector<file_info> &files, int flags)
-{
-	// This works for SMP, TODO but what about NUMA.
-	for (size_t i = 0; i < files.size(); i++) {
-		int ret;
-		files[i].fd = open(files[i].name.c_str(), flags);
-		if (files[i].fd < 0) {
-			char err_msg[128];
-			snprintf(err_msg, sizeof(err_msg),
-					"open %s\n", files[i].name.c_str());
-			perror(err_msg);
-			exit (1);
-		}
-		ret = posix_fadvise(files[i].fd, 0, 0, POSIX_FADV_RANDOM);
-		if (ret < 0) {
-			perror("posix_fadvise");
-			exit(1);
-		}
-	}
-}
-
-void close_files(std::vector<file_info> &files)
-{
-	for (size_t i = 0; i < files.size(); i++) {
-		close(files[i].fd);
-		files[i].fd = 0;
-	}
-}
-
 int main(int argc, char *argv[])
 {
 	bool preload = false;
@@ -365,7 +336,6 @@ int main(int argc, char *argv[])
 		printf("file is opened with direct I/O\n");
 		flags |= O_DIRECT;
 	}
-	open_files(files, flags);
 	printf("There are %d data files\n", num_files);
 
 	file_mapper *mapper = NULL;
@@ -600,7 +570,6 @@ int main(int argc, char *argv[])
 	printf("read %ld bytes, takes %f seconds\n",
 			read_bytes, end_time.tv_sec - start_time.tv_sec
 			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
-	close_files(files);
 
 	for (int i = 0; i < nthreads; i++) {
 		threads[i]->print_stat();
