@@ -48,8 +48,12 @@ void create_write_data(char *buf, int size, off_t off)
 	if (first_size)
 		memcpy(buf, ((char *) &start_data) + (off - aligned_start),
 				first_size);
+	// Make each buffer written to SSDs different, so it's hard for SSDs
+	// to do some tricks on it.
+	struct timeval zero = {0, 0};
+	long diff = time_diff_us(zero, global_start);
 	for (int i = first_size; i < aligned_end - off; i += sizeof(off_t)) {
-		*((long *) (buf + i)) = (off + i) / sizeof(off_t);
+		*((long *) (buf + i)) = (off + i) / sizeof(off_t) + diff;
 	}
 	if (aligned_end > aligned_start
 			|| (aligned_end == aligned_start && first_size == 0)) {
