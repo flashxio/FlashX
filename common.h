@@ -8,6 +8,7 @@
 #include <sys/syscall.h>
 #include <numa.h>
 #include <assert.h>
+#include <execinfo.h>
 
 #include <string>
 #include <vector>
@@ -214,5 +215,20 @@ static inline void bind_mem2node_id(int node_id)
 }
 
 extern sys_parameters params;
+
+#define PRINT_BACKTRACE()							\
+	do {											\
+		void *buf[100];								\
+		char **strings;								\
+		int nptrs = backtrace(buf, 100);			\
+		strings = backtrace_symbols(buf, nptrs);	\
+		if (strings == NULL) {						\
+			perror("backtrace_symbols");			\
+			exit(EXIT_FAILURE);						\
+		}											\
+		for (int i = 0; i < nptrs; i++)				\
+			printf("%s\n", strings[i]);				\
+		free(strings);								\
+	} while (0)
 
 #endif
