@@ -230,4 +230,16 @@ extern sys_parameters params;
 		free(strings);								\
 	} while (0)
 
+static inline void bind2cpu(int cpu_id)
+{
+	cpu_set_t cpu_mask;
+	CPU_ZERO(&cpu_mask);
+	CPU_SET(cpu_id, &cpu_mask);
+	int len = sizeof(cpu_mask);
+	if (sched_setaffinity(gettid(), len, &cpu_mask) < 0) {
+		perror("sched_setaffinity");
+		exit(1);
+	}
+}
+
 #endif
