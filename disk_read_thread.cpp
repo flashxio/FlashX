@@ -29,6 +29,7 @@ disk_read_thread::disk_read_thread(const logical_file_partition &partition,
 	aio->set_callback(new initiator_callback());
 	this->node_id = node_id;
 	num_accesses = 0;
+	num_low_prio_accesses = 0;
 
 	int ret = pthread_create(&id, NULL, process_requests, (void *) this);
 	if (ret) {
@@ -88,6 +89,7 @@ void disk_read_thread::run() {
 					reqs[i].set_priv(p);
 					// This should block the thread.
 					aio->access(&reqs[i], 1);
+					num_low_prio_accesses++;
 				}
 			}
 			/* 

@@ -18,6 +18,7 @@ class disk_read_thread
 	async_io *aio;
 	int node_id;
 	int num_accesses;
+	int num_low_prio_accesses;
 
 public:
 	disk_read_thread(const logical_file_partition &partition,
@@ -42,6 +43,10 @@ public:
 
 	int get_num_accesses() const {
 		return num_accesses;
+	}
+
+	int get_num_low_prio_accesses() const {
+		return num_low_prio_accesses;
 	}
 
 	int get_num_iowait() const {
