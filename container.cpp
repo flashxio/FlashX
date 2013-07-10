@@ -117,7 +117,7 @@ int blocking_FIFO_queue<T>::add(T *entries, int num) {
 			int new_size = this->get_size() * 2;
 			new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
 			new_size = min(new_size, max_size);
-			printf("try to expand queue to %d\n", new_size);
+			printf("try to expand queue %s to %d\n", name.c_str(), new_size);
 			bool ret = fifo_queue<T>::expand_queue(new_size);
 			printf("expand queue to %d: %d\n", new_size, ret);
 		}
@@ -147,7 +147,7 @@ int blocking_FIFO_queue<T>::non_blocking_add(T *entries, int num) {
 		int new_size = this->get_size() * 2;
 		new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
 		new_size = min(new_size, max_size);
-		printf("try to expand queue to %d\n", new_size);
+		printf("try to expand queue %s to %d\n", name.c_str(), new_size);
 		bool ret = fifo_queue<T>::expand_queue(new_size);
 		printf("expand queue to %d: %d\n", new_size, ret);
 	}
@@ -180,7 +180,7 @@ int blocking_FIFO_queue<T>::add_partial(fifo_queue<T> *queue, int min_added)
 			int new_size = this->get_size() * 2;
 			new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
 			new_size = min(new_size, max_size);
-			printf("try to expand queue to %d\n", new_size);
+			printf("try to expand queue %s to %d\n", name.c_str(), new_size);
 			bool ret = fifo_queue<T>::expand_queue(new_size);
 			printf("expand queue to %d: %d\n", new_size, ret);
 		}
@@ -212,7 +212,7 @@ int blocking_FIFO_queue<T>::non_blocking_add(fifo_queue<T> *queue)
 			int new_size = this->get_size() * 2;
 			new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
 			new_size = min(new_size, max_size);
-			printf("try to expand queue to %d\n", new_size);
+			printf("try to expand queue %s to %d\n", name.c_str(), new_size);
 			bool ret = fifo_queue<T>::expand_queue(new_size);
 			printf("expand queue to %d: %d\n", new_size, ret);
 		}
