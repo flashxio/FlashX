@@ -26,19 +26,12 @@ int thread_safe_FIFO_queue<T>::fetch(T *entries, int num)
 	long curr_fetch_offset = fetch_offset;
 	int n = min(num, get_actual_num_entries());
 	fetch_offset += n;
-	pthread_spin_unlock(&_lock);
 
 	for (int i = 0; i < n; i++) {
 		entries[i] = ((T*)buf)[(curr_fetch_offset + i) % this->capacity];
 	}
-	// If n is 0, two threads may get the same value of fetched_offset,
-	// the thread with n = 0 may lose a chance to jump out of the loop
-	// because fetched_offset has been updated by the other thread
-	// and is larger curr_fetch_offset.
-	if (n)
-		while (!__sync_bool_compare_and_swap(&fetched_offset,
-					curr_fetch_offset, curr_fetch_offset + n)) {
-		}
+	fetched_offset = curr_fetch_offset + n;
+	pthread_spin_unlock(&_lock);
 	return n;
 }
 
@@ -63,16 +56,12 @@ int thread_safe_FIFO_queue<T>::add(T *entries, int num)
 	int n = min(num, get_remaining_space());
 	long curr_alloc_offset = alloc_offset;
 	alloc_offset += n;
-	pthread_spin_unlock(&_lock);
 
 	for (int i = 0; i < n; i++) {
 		((T *)buf)[(curr_alloc_offset + i) % this->capacity] = entries[i];
 	}
-	// For the same reason as above.
-	if (n)
-		while (!__sync_bool_compare_and_swap(&add_offset,
-					curr_alloc_offset, curr_alloc_offset + n)) {
-		}
+	add_offset = curr_alloc_offset + n;
+	pthread_spin_unlock(&_lock);
 	return n;
 }
 
