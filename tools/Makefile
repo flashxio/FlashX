@@ -13,7 +13,7 @@ CFLAGS = -g -O3 -I.. $(TRACE_FLAGS)
 
 LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler
 
-all: stat create_file create_files mem-read rand-memcpy rand-memcpy-agg workload-gen memory-fill cache_evaluator java_dump2c_dump eval_expand_SA_cache
+all: stat create_file create_files workload-gen memory-fill cache_evaluator java_dump2c_dump eval_expand_SA_cache
 
 stat: stat.o ../workload.h
 	$(CXX) -o stat stat.o $(LDFLAGS)
@@ -23,15 +23,6 @@ create_file: create_file.o
 
 create_files: create_files.o ../common.o ../thread.o
 	$(CXX) -o create_files create_files.o ../common.o ../thread.o $(LDFLAGS)
-
-mem-read: mem-read.o
-	$(CC) -o mem-read mem-read.o $(LDFLAGS)
-
-rand-memcpy: rand-memcpy.o
-	$(CC) -o rand-memcpy rand-memcpy.o $(LDFLAGS)
-
-rand-memcpy-agg: rand-memcpy-agg.o
-	$(CC) -o rand-memcpy-agg rand-memcpy-agg.o $(LDFLAGS)
 
 workload-gen: workload-gen.o
 	$(CXX) -o workload-gen workload-gen.o $(LDFLAGS)
