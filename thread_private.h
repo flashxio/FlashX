@@ -4,6 +4,7 @@
 #include "rand_buf.h"
 #include "garbage_collection.h"
 #include "messaging.h"
+#include "io_interface.h"
 
 extern int buf_type;
 
@@ -11,91 +12,6 @@ enum {
 	SINGLE_LARGE_BUF,
 	SINGLE_SMALL_BUF,
 	MULTI_BUF,
-};
-
-class callback
-{
-public:
-	virtual int invoke(io_request *reqs[], int num) = 0;
-};
-
-/**
- * The interface for all IO classes.
- */
-class io_interface
-{
-	int node_id;
-public:
-	io_interface(int node_id) {
-		this->node_id = node_id;
-	}
-
-	virtual ~io_interface() { }
-
-	/* When a thread begins, this method will be called. */
-	virtual int init() {
-		return 0;
-	}
-
-	/**
-	 * set the callback if the class supports the asynchronous fashion.
-	 * If the class doesn't support async IO, return false.
-	 */
-	virtual bool set_callback(callback *cb) {
-		return false;
-	}
-
-	virtual callback *get_callback() {
-		return NULL;
-	}
-
-	virtual bool support_aio() {
-		return false;
-	}
-
-	/**
-	 * The total size accessible with this IO interface.
-	 */
-	virtual ssize_t get_size() const {
-		return 0;
-	}
-
-	/**
-	 * The size of data on the local node.
-	 */
-	virtual ssize_t get_local_size() const {
-		return 0;
-	}
-
-	virtual void cleanup() {
-	}
-
-	/**
-	 * The asynchronous IO interface
-	 */
-	virtual ssize_t access(io_request *requests, int num) {
-		return -1;
-	}
-	virtual void flush_requests() {
-	}
-
-	/**
-	 * The synchronous IO interface.
-	 */
-	virtual ssize_t access(char *, off_t, ssize_t, int) {
-		return -1;
-	}
-
-	virtual void print_stat() {
-	}
-
-	virtual io_interface *clone() const {
-		return NULL;
-	}
-
-	int get_node_id() const {
-		return node_id;
-	}
 };
 
 class cleanup_callback;

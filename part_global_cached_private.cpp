@@ -47,6 +47,8 @@ class node_cached_io: public global_cached_io
 	const struct thread_group *local_group;
 	long processed_requests;
 	long num_requests;
+	msg_io_request local_msg_reqs[NUMA_REQ_BUF_SIZE];
+	io_request local_reqs[NUMA_REQ_BUF_SIZE];
 
 	pthread_t processing_thread_id;
 
@@ -134,10 +136,11 @@ int node_cached_io::process_requests(int max_nreqs)
 		processing_thread_id = pthread_self();
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
-	fifo_queue<io_request> *request_queue = local_group->request_queue;
-	io_request local_reqs[NUMA_REQ_BUF_SIZE];
+	fifo_queue<msg_io_request> *request_queue = local_group->request_queue;
 	while (num_processed < max_nreqs) {
-		int num = request_queue->fetch(local_reqs, NUMA_REQ_BUF_SIZE);
+		int num = request_queue->fetch(local_msg_reqs, NUMA_REQ_BUF_SIZE);
+		for (int i = 0; i < num; i++)
+			local_reqs[i] = local_msg_reqs[i];
 		global_cached_io::access(local_reqs, num);
 		num_processed += num;
 	}
@@ -301,7 +304,7 @@ int part_global_cached_io::init() {
 	pthread_mutex_lock(&init_mutex);
 	thread_group *group = &groups[group_idx];
 	if (group->request_queue == NULL) {
-		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
+		group->request_queue = new blocking_FIFO_queue<msg_io_request>("request_queue", 
 				NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
 		init_repliers(groups, group->reply_senders);
 		// Create processing threads.
@@ -336,8 +339,8 @@ int part_global_cached_io::init() {
 	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
 		const struct thread_group *group = &it->second;
-		req_senders.insert(std::pair<int, request_sender *>(it->first,
-					new request_sender(group->request_queue, NUMA_REQ_CACHE_SIZE)));
+		req_senders.insert(std::pair<int, msg_req_sender *>(it->first,
+					new msg_req_sender(group->request_queue, NUMA_REQ_CACHE_SIZE)));
 	}
 
 	return 0;
@@ -346,6 +349,7 @@ int part_global_cached_io::init() {
 part_global_cached_io::part_global_cached_io(int num_groups,
 		io_interface *underlying, int idx,
 		cache_config *config): global_cached_io(underlying->clone()) {
+	register_io(this);
 	this->thread_id = idx;
 	this->final_cb = NULL;
 	remote_reads = 0;
@@ -407,7 +411,8 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 		int idx = cache_conf->page2cache(requests[i].get_offset());
 		if (idx != get_group_id()) {
 			remote_reads++;
-			int ret = req_senders[idx]->send_cached(&requests[i]);
+			msg_io_request req(requests[i]);
+			int ret = req_senders[idx]->send_cached(&req);
 			assert(ret > 0);
 		}
 		else {
@@ -419,7 +424,7 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	global_cached_io::access(local_reqs, num_local_reqs);
 	// TODO how to deal with error of access.
 	int num_remaining = 0;
-	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+	for (std::tr1::unordered_map<int, msg_req_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
 		it->second->flush(false);
 		num_remaining += it->second->get_num_remaining();
@@ -480,7 +485,7 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 		bool blocking = num_replies < NUMA_REPLY_BUF_SIZE;
 		
 		num_remaining = 0;
-		for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+		for (std::tr1::unordered_map<int, msg_req_sender *>::const_iterator it
 				= req_senders.begin(); it != req_senders.end(); it++) {
 			it->second->flush(blocking);
 			num_remaining += it->second->get_num_remaining();
@@ -501,9 +506,9 @@ void part_global_cached_io::cleanup()
 			thread_id, num_threads, group_idx);
 
 	// First make sure all requests have been flushed for processing.
-	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+	for (std::tr1::unordered_map<int, msg_req_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
-		request_sender *sender = it->second;
+		msg_req_sender *sender = it->second;
 		sender->flush_all();
 	}
 

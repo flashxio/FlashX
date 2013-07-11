@@ -22,7 +22,7 @@ struct thread_group
 	page_cache *cache;
 	std::vector<thread *> process_request_threads;
 	
-	blocking_FIFO_queue<io_request> *request_queue;
+	blocking_FIFO_queue<msg_io_request> *request_queue;
 	blocking_FIFO_queue<io_reply> *reply_queue;
 
 	thread *reply_processor;
@@ -61,7 +61,7 @@ class part_global_cached_io: public global_cached_io
 	 * there is a sender for each node.
 	 */
 	// group id <-> msg sender
-	std::tr1::unordered_map<int, request_sender *> req_senders;
+	std::tr1::unordered_map<int, msg_req_sender *> req_senders;
 
 	io_interface *underlying;
 

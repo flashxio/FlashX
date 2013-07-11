@@ -11,6 +11,58 @@
 #include "parameters.h"
 
 class io_interface;
+io_interface *get_io(int idx);
+
+class io_request;
+
+class msg_io_request
+{
+	off_t offset: 40;
+	unsigned int node_id: 8;
+	unsigned int io_idx: 16;
+
+	unsigned int access_method: 1;
+	unsigned long buf_size: 15;
+	unsigned long buf_addr: 48;
+
+	void init(char *buf, off_t off, ssize_t size, int access_method,
+			io_interface *io, int node_id);
+public:
+	msg_io_request() {
+	}
+
+	msg_io_request(char *buf, off_t off, ssize_t size, int access_method,
+			io_interface *io, int node_id) {
+		init(buf, off, size, access_method, io, node_id);
+	}
+
+	msg_io_request(const io_request &req);
+
+	off_t get_offset() const {
+		return offset;
+	}
+
+	int get_access_method() const {
+		return access_method & 0x1;
+	}
+
+	io_interface *get_io() const {
+		return ::get_io(io_idx);
+	}
+
+	int get_node_id() const {
+		return node_id;
+	}
+
+	int get_size() const {
+		return buf_size;
+	}
+
+	char *get_buf() const {
+		unsigned long addr = buf_addr;
+		return (char *) addr;
+	}
+};
 
 /**
  * This class contains the info of an IO request.
@@ -77,6 +129,12 @@ public:
 
 	io_request &operator=(io_request &req) {
 		assign(req);
+		return *this;
+	}
+
+	io_request &operator=(const msg_io_request &req) {
+		init(req.get_buf(), req.get_offset(), req.get_size(),
+				req.get_access_method(), req.get_io(), req.get_node_id());
 		return *this;
 	}
 
@@ -443,6 +501,14 @@ class request_sender: public simple_msg_sender<io_request>
 {
 public:
 	request_sender(blocking_FIFO_queue<io_request> *queue,
+			int init_queue_size): simple_msg_sender(queue, init_queue_size) {
+	}
+};
+
+class msg_req_sender: public simple_msg_sender<msg_io_request>
+{
+public:
+	msg_req_sender(blocking_FIFO_queue<msg_io_request> *queue,
 			int init_queue_size): simple_msg_sender(queue, init_queue_size) {
 	}
 };

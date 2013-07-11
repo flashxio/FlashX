@@ -427,16 +427,19 @@ int main(int argc, char *argv[])
 		bind_mem2node_id(node_id);
 		/* initialize the threads' private data. */
 		for (int k = 0; k < nthreads_per_node; k++, j++) {
+			io_interface *io;
 			switch (access_option) {
 				case READ_ACCESS:
-					threads[j] = new thread_private(j, entry_size,
-							new buffered_io(global_partition,
-								npages * PAGE_SIZE, node_id));
+					io = new buffered_io(global_partition,
+							npages * PAGE_SIZE, node_id);
+					register_io(io);
+					threads[j] = new thread_private(j, entry_size, io);
 					break;
 				case DIRECT_ACCESS:
-					threads[j] = new thread_private(j, entry_size,
-							new direct_io(global_partition, npages * PAGE_SIZE,
-								node_id));
+					io = new direct_io(global_partition, npages * PAGE_SIZE,
+								node_id);
+					register_io(io);
+					threads[j] = new thread_private(j, entry_size, io);
 					break;
 #if ENABLE_AIO
 				case AIO_ACCESS:
@@ -445,22 +448,28 @@ int main(int argc, char *argv[])
 						if (depth_per_file == 0)
 							depth_per_file = 1;
 						std::tr1::unordered_map<int, aio_complete_thread *> no_complete_threads;
-						threads[j] = new thread_private(j, entry_size,
-								new async_io(global_partition, no_complete_threads, npages * PAGE_SIZE,
-									depth_per_file, node_id));
+						io = new async_io(global_partition, no_complete_threads,
+								npages * PAGE_SIZE, depth_per_file, node_id);
+						register_io(io);
+						threads[j] = new thread_private(j, entry_size, io);
 					}
 					break;
 #endif
 				case REMOTE_ACCESS:
-					threads[j] = new thread_private(j, entry_size,
-							new remote_disk_access(read_threads, complete_threads[node_id], num_files,
-								mapper, node_id));
+					io = new remote_disk_access(read_threads,
+							complete_threads[node_id], num_files,
+							mapper, node_id);
+					register_io(io);
+					threads[j] = new thread_private(j, entry_size, io);
 					break;
 				case GLOBAL_CACHE_ACCESS:
 					{
 						io_interface *underlying = new remote_disk_access(
-								read_threads, complete_threads[node_id], num_files, mapper, node_id);
-						global_cached_io *io = new global_cached_io(underlying, cache_conf);
+								read_threads, complete_threads[node_id],
+								num_files, mapper, node_id);
+						global_cached_io *io = new global_cached_io(underlying,
+								cache_conf);
+						register_io(io);
 						if (preload && j == 0)
 							io->preload(0, npages * PAGE_SIZE);
 						threads[j] = new thread_private(j, entry_size, io);
@@ -470,9 +479,11 @@ int main(int argc, char *argv[])
 					{
 						assert(num_nodes >= (int) node_ids.size());
 						io_interface *underlying = new remote_disk_access(
-								read_threads, complete_threads[node_id], num_files, mapper, node_id);
+								read_threads, complete_threads[node_id],
+								num_files, mapper, node_id);
 						part_global_cached_io *io = new part_global_cached_io(
 								num_nodes, underlying, j, cache_conf);
+						register_io(io);
 						if (preload)
 							io->preload(0, npages * PAGE_SIZE);
 						threads[j] = new thread_private(j, entry_size, io);
