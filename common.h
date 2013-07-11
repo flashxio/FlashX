@@ -230,6 +230,19 @@ extern sys_parameters params;
 		free(strings);								\
 	} while (0)
 
+#define ASSERT_EQ(x, y)								\
+	if ((x) != (y))	{								\
+		PRINT_BACKTRACE();							\
+		assert(x == y);								\
+	}
+
+#define ASSERT_TRUE(x)								\
+	if (!(x)) {										\
+		PRINT_BACKTRACE();							\
+		assert(x);									\
+	}
+
+
 static inline void bind2cpu(int cpu_id)
 {
 	cpu_set_t cpu_mask;

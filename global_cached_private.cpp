@@ -614,7 +614,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 	io_request *orig = req.get_orig();
 	assert(orig->get_orig() == NULL);
 	io_request multibuf_req(-1, underlying, req.get_access_method(),
-			get_node_id(), orig);
+			get_node_id(), orig, NULL);
 
 	/*
 	 * The pages in `pages' should be sorted with their offsets.

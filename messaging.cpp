@@ -4,45 +4,20 @@
 #include "container.cpp"
 #include "io_interface.h"
 
-msg_io_request::msg_io_request(const io_request &req)
-{
-	assert(req.get_num_bufs() == 1);
-	init(req.get_buf(0), req.get_offset(), req.get_size(),
-			req.get_access_method(), req.get_io(), req.get_node_id());
-}
-
-void msg_io_request::init(char *buf, off_t off, ssize_t size,
+void io_request::init(char *buf, off_t off, ssize_t size,
 		int access_method, io_interface *io, int node_id)
 {
 	this->offset = off;
 	this->io_idx = io->get_io_idx();
 	this->access_method = access_method & 0x1;
+	// by default, a request is of high priority.
+	this->high_prio = 1;
 	this->node_id = node_id;
 	this->buf_size = size;
 	this->buf_addr = (long) buf;
 }
 
-void io_request::assign(io_request &req)
-{
-	memcpy(this, &req, sizeof(req));
-	this->refcnt = 0;
-	/*
-	 * If the request uses embedded vector, then the new request
-	 * should point to its own embedded vector. Otherwise,
-	 * the new request steals the vector from the old one.
-	 */
-	if (req.use_embedded())
-		this->vec_pointer = this->embedded_vecs;
-	else
-		this->vec_pointer = req.vec_pointer;
-	if (!req.use_embedded()) {
-		req.vec_pointer = req.embedded_vecs;
-		req.vec_capacity = NUM_EMBEDDED_IOVECS;
-		req.clear();
-	}
-}
-
-void io_request::add_buf(char *buf, int size)
+void io_req_extension::add_buf(char *buf, int size)
 {
 	if (num_bufs >= vec_capacity) {
 		if (vec_pointer == embedded_vecs) {
@@ -66,7 +41,7 @@ void io_request::add_buf(char *buf, int size)
 	num_bufs++;
 }
 
-void io_request::add_buf_front(char *buf, int size)
+void io_req_extension::add_buf_front(char *buf, int size)
 {
 	if (num_bufs >= vec_capacity) {
 		if (vec_pointer == embedded_vecs) {
@@ -266,7 +241,6 @@ int thread_safe_msg_sender<T>::send(T *msg, int num)
 template class thread_safe_FIFO_queue<io_request>;
 template class thread_safe_FIFO_queue<io_reply>;
 template class blocking_FIFO_queue<io_request>;
-template class blocking_FIFO_queue<msg_io_request>;
 template class blocking_FIFO_queue<io_reply>;
 template class msg_sender<io_request>;
 template class msg_sender<io_reply>;

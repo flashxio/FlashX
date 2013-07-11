@@ -15,31 +15,146 @@ io_interface *get_io(int idx);
 
 class io_request;
 
-class msg_io_request
+struct io_req_extension
+{
+	io_interface *io;
+	io_request *orig;
+	void *priv;
+
+	int num_bufs: 16;
+	// Is the request part of a request?
+	int partial: 1;
+	int vec_capacity: 15;
+
+	/* 
+	 * This is to protect the object from being removed
+	 * while others are still using it.
+	 */
+	volatile short refcnt;
+
+	struct iovec *vec_pointer;
+	struct iovec embedded_vecs[NUM_EMBEDDED_IOVECS];
+	io_request *next;
+	volatile ssize_t completed_size;
+
+	void init() {
+		this->io = NULL;
+		this->orig = NULL;
+		this->priv = NULL;
+		this->num_bufs = 0;
+		this->partial = 0;
+		this->vec_capacity = NUM_EMBEDDED_IOVECS;
+		this->refcnt = 0;
+		memset(embedded_vecs, 0,
+				sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
+		vec_pointer = embedded_vecs;
+		next = NULL;
+		this->completed_size = 0;
+	}
+
+	io_req_extension() {
+		init();
+	}
+
+	~io_req_extension() {
+		if (vec_pointer != embedded_vecs)
+			delete [] vec_pointer;
+	}
+
+	void add_buf(char *buf, int size);
+	void add_buf_front(char *buf, int size);
+};
+
+/**
+ * This class contains the request info.
+ * If it's in an extended form, it is created by the global cache
+ * and is used within a NUMA machine.
+ * It is decided when the request is created whether or not it is
+ * an extended request. It can't be changed afterwards.
+ */
+class io_request
 {
 	off_t offset: 40;
-	unsigned int node_id: 8;
+	unsigned int extended: 1;
+	unsigned int high_prio: 1;
+	/*
+	 * The NUMA node id where the buffers of the request are allocated.
+	 */
+	unsigned int node_id: 6;
 	unsigned int io_idx: 16;
 
 	unsigned int access_method: 1;
 	unsigned long buf_size: 15;
 	unsigned long buf_addr: 48;
 
-	void init(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id);
-public:
-	msg_io_request() {
+	io_req_extension *get_extension() const {
+		ASSERT_TRUE(is_extended_req());
+		unsigned long addr = buf_addr;
+		return (io_req_extension *) addr;
 	}
 
-	msg_io_request(char *buf, off_t off, ssize_t size, int access_method,
+	bool use_embedded() const {
+		return get_extension()->vec_pointer == get_extension()->embedded_vecs;
+	}
+
+public:
+	io_request() {
+		extended = 0;
+		buf_addr = 0;
+	}
+
+	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id) {
 		init(buf, off, size, access_method, io, node_id);
+		extended = 0;
 	}
 
-	msg_io_request(const io_request &req);
+	io_request(off_t off, io_interface *io, int access_method, int node_id,
+			io_request *orig, void *priv) {
+		init(off, io, access_method, node_id, orig, priv);
+		extended = 1;
+	}
+
+	io_request(char *buf, off_t off, ssize_t size, int access_method,
+			io_interface *io, int node_id, io_request *orig,
+			void *priv) {
+		init(buf, off, size, access_method, io, node_id, orig, priv);
+		extended = 1;
+	}
+
+	~io_request() {
+		if (is_extended_req())
+			delete get_extension();;
+	}
+
+	void init(char *buf, off_t off, ssize_t size, int access_method,
+			io_interface *io, int node_id);
+
+	void init(char *buf, off_t off, ssize_t size, int access_method,
+			io_interface *io, int node_id, io_request *orig, void *priv) {
+		init(off, io, access_method, node_id, orig, priv);
+		add_buf(buf, size);
+	}
+
+	void init(off_t off, io_interface *io, int access_method, int node_id,
+			io_request *orig, void *priv) {
+		io_req_extension *ext = new io_req_extension();
+		io_request::init((char *) ext, off, 0, access_method, io, node_id);
+		ext->io = io;
+		ext->priv = priv;
+		ext->orig = orig;
+	}
+
+	bool is_extended_req() const {
+		return extended;
+	}
 
 	off_t get_offset() const {
 		return offset;
+	}
+
+	void set_offset(off_t offset) {
+		this->offset = offset;
 	}
 
 	int get_access_method() const {
@@ -47,127 +162,18 @@ public:
 	}
 
 	io_interface *get_io() const {
-		return ::get_io(io_idx);
+		if (is_extended_req()) {
+			return get_extension()->io;
+		}
+		else
+			return ::get_io(io_idx);
 	}
 
 	int get_node_id() const {
 		return node_id;
 	}
 
-	int get_size() const {
-		return buf_size;
-	}
-
-	char *get_buf() const {
-		unsigned long addr = buf_addr;
-		return (char *) addr;
-	}
-};
-
-/**
- * This class contains the info of an IO request.
- */
-class io_request
-{
-	off_t offset;
-	io_interface *io;
-	io_request *orig;
-	void *priv;
-
-	int access_method: 1;
-	int num_bufs: 15;
-	// Is the request part of a request?
-	int partial: 1;
-	int high_prio: 1;
-	int vec_capacity: 14;
-
-	/* 
-	 * This is to protect the object from being removed
-	 * while others are still using it.
-	 */
-	volatile short refcnt;
-	/*
-	 * The NUMA node id where the buffers of the request are allocated.
-	 */
-	short node_id;
-
-	struct iovec *vec_pointer;
-	struct iovec embedded_vecs[NUM_EMBEDDED_IOVECS];
-	io_request *next;
-	volatile ssize_t completed_size;
-
-	bool use_embedded() const {
-		return vec_pointer == embedded_vecs;
-	}
-
-protected:
-	void assign(io_request &req);
-
-public:
-	io_request() {
-#ifdef DEBUG
-		init(-1, NULL, READ, -1, NULL, NULL);
-#else
-		vec_pointer = embedded_vecs;
-#endif
-	}
-
-	io_request(off_t off, io_interface *io, int access_method, int node_id,
-			io_request *orig = NULL, void *priv = NULL) {
-		init(off, io, access_method, node_id, orig, priv);
-	}
-
-	io_request(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id, io_request *orig = NULL,
-			void *priv = NULL) {
-		init(buf, off, size, access_method, io, node_id, orig, priv);
-	}
-
-	io_request(io_request &req) {
-		assign(req);
-	}
-
-	io_request &operator=(io_request &req) {
-		assign(req);
-		return *this;
-	}
-
-	io_request &operator=(const msg_io_request &req) {
-		init(req.get_buf(), req.get_offset(), req.get_size(),
-				req.get_access_method(), req.get_io(), req.get_node_id());
-		return *this;
-	}
-
-	~io_request() {
-		if (vec_pointer != embedded_vecs)
-			delete [] vec_pointer;
-	}
-
-	void init(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id, io_request *orig = NULL,
-			void *priv = NULL) {
-		init(off, io, access_method, node_id, orig, priv);
-		add_buf(buf, size);
-	}
-
-	void init(off_t off, io_interface *io, int access_method, int node_id,
-			io_request *orig = NULL, void *priv = NULL) {
-		this->offset = off;
-		this->io = io;
-		this->access_method = access_method & 0x1;
-		this->priv = priv;
-		this->partial = 0;
-		// by default, a request is of high priority.
-		this->high_prio = 1;
-		this->completed_size = 0;
-		this->orig = orig;
-		this->refcnt = 0;
-		memset(embedded_vecs, 0,
-				sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
-		num_bufs = 0;
-		vec_pointer = embedded_vecs;
-		vec_capacity = NUM_EMBEDDED_IOVECS;
-		next = NULL;
+	void set_node_id(int node_id) {
 		this->node_id = node_id;
 	}
 
@@ -179,46 +185,6 @@ public:
 		this->high_prio = high_prio;
 	}
 
-	int get_access_method() const {
-		return access_method & 0x1;
-	}
-
-	io_interface *get_io() const {
-		return io;
-	}
-
-	io_request *get_orig() const {
-		return orig;
-	}
-
-	void set_orig(io_request *orig) {
-		this->orig = orig;
-	}
-
-	void set_offset(off_t offset) {
-		this->offset = offset;
-	}
-
-	off_t get_offset() const {
-		return offset;
-	}
-
-	void *get_priv() const {
-		return priv;
-	}
-
-	void set_priv(void *priv) {
-		this->priv = priv;
-	}
-
-	bool is_empty() const {
-		return num_bufs == 0;
-	}
-
-	bool is_valid() const {
-		return get_offset() != -1;
-	}
-
 	/**
 	 * The requested data is inside a page on the disk.
 	 */
@@ -226,67 +192,112 @@ public:
 		return get_offset() + get_size() <= ROUND_PAGE(get_offset()) + PAGE_SIZE;
 	}
 
+	io_request *get_orig() const {
+		return get_extension()->orig;
+	}
+
+	void set_orig(io_request *orig) {
+		get_extension()->orig = orig;
+	}
+
+	void *get_priv() const {
+		return get_extension()->priv;
+	}
+
+	void set_priv(void *priv) {
+		get_extension()->priv = priv;
+	}
+
+	bool is_empty() const {
+		return get_extension()->num_bufs == 0;
+	}
+
+	bool is_valid() const {
+		return get_offset() != -1;
+	}
+
 	void clear() {
-		memset((void *) vec_pointer, 0, sizeof(vec_pointer[0]) * vec_capacity);
-		num_bufs = 0;
+		memset((void *) get_extension()->vec_pointer, 0,
+				sizeof(get_extension()->vec_pointer[0]) * get_extension()->vec_capacity);
+		get_extension()->num_bufs = 0;
 		set_offset(-1);
 	}
 
-	void add_buf(char *buf, int size);
-	void add_buf_front(char *buf, int size);
-
-	int get_num_bufs() const {
-		return num_bufs;
+	ssize_t get_size() const {
+		if (!is_extended_req()) {
+			return buf_size;
+		}
+		else {
+			ssize_t size = 0;
+			for (int i = 0; i < get_extension()->num_bufs; i++)
+				size += get_extension()->vec_pointer[i].iov_len;
+			return size;
+		}
 	}
 
-	void set_buf(int idx, char *buf) {
-		vec_pointer[idx].iov_base = buf;
-	}
 	/**
 	 * By default, we get the first buffer. This makes sense
 	 * for a single buffer request.
 	 */
 	char *get_buf(int idx = 0) const {
-		return (char *) vec_pointer[idx].iov_base;
+		if (!is_extended_req()) {
+			unsigned long addr = buf_addr;
+			return (char *) addr;
+		}
+		else {
+			return (char *) get_extension()->vec_pointer[idx].iov_base;
+		}
+	}
+
+	void add_buf(char *buf, int size) {
+		get_extension()->add_buf(buf, size);
+	}
+
+	void add_buf_front(char *buf, int size) {
+		get_extension()->add_buf_front(buf, size);
+	}
+
+	int get_num_bufs() const {
+		if (is_extended_req())
+			return get_extension()->num_bufs;
+		else
+			return 1;
+	}
+
+	void set_buf(int idx, char *buf) {
+		get_extension()->vec_pointer[idx].iov_base = buf;
 	}
 
 	int get_buf_size(int idx) const {
-		return vec_pointer[idx].iov_len;
+		return get_extension()->vec_pointer[idx].iov_len;
 	}
 
 	const struct iovec &get(int idx) const {
-		return vec_pointer[idx];
+		return get_extension()->vec_pointer[idx];
 	}
 
 	const struct iovec *get_vec() const {
-		return vec_pointer;
-	}
-
-	ssize_t get_size() const {
-		ssize_t size = 0;
-		for (int i = 0; i < num_bufs; i++)
-			size += vec_pointer[i].iov_len;
-		return size;
+		return get_extension()->vec_pointer;
 	}
 
 	io_request *get_next_req() const {
-		return next;
+		return get_extension()->next;
 	}
 
 	void set_next_req(io_request *next) {
-		this->next = next;
+		get_extension()->next = next;
 	}
 
 	int inc_complete_count() {
-		return __sync_add_and_fetch(&refcnt, 1);
+		return __sync_add_and_fetch(&get_extension()->refcnt, 1);
 	}
 
 	int dec_complete_count() {
-		return __sync_sub_and_fetch(&refcnt, 1);
+		return __sync_sub_and_fetch(&get_extension()->refcnt, 1);
 	}
 
 	void wait4unref() {
-		while (refcnt > 0) {}
+		while (get_extension()->refcnt > 0) {}
 	}
 
 	/**
@@ -294,26 +305,18 @@ public:
 	 * If the request is complete, return true;
 	 */
 	bool complete_size(ssize_t completed) {
-		ssize_t res = __sync_add_and_fetch(&completed_size, completed);
+		ssize_t res = __sync_add_and_fetch(&get_extension()->completed_size, completed);
 		ssize_t size = get_size();
 		assert(res <= size);
 		return res == size;
 	}
 
 	void set_partial(bool partial) {
-		this->partial = partial ? 1 : 0;
+		get_extension()->partial = partial ? 1 : 0;
 	}
 
 	bool is_partial() const {
-		return this->partial;
-	}
-
-	void set_node_id(int node_id) {
-		this->node_id = node_id;
-	}
-
-	int get_node_id() const {
-		return node_id;
+		return get_extension()->partial;
 	}
 };
 
@@ -501,14 +504,6 @@ class request_sender: public simple_msg_sender<io_request>
 {
 public:
 	request_sender(blocking_FIFO_queue<io_request> *queue,
-			int init_queue_size): simple_msg_sender(queue, init_queue_size) {
-	}
-};
-
-class msg_req_sender: public simple_msg_sender<msg_io_request>
-{
-public:
-	msg_req_sender(blocking_FIFO_queue<msg_io_request> *queue,
 			int init_queue_size): simple_msg_sender(queue, init_queue_size) {
 	}
 };
