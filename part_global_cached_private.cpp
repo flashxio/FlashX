@@ -198,7 +198,6 @@ void node_cached_io::notify_completion(io_request *reqs[], int num)
 				->reply_senders[io]->send_cached(replies, vec->size());
 		// We use blocking queues here, so the send must succeed.
 		assert(num_sent == (int) vec->size());
-		io->processed_replies.inc(vec->size());
 	}
 }
 
@@ -212,7 +211,6 @@ void node_cached_io::notify_completion(io_request *req)
 		->reply_senders[io]->send_cached(&rep);
 	// We use blocking queues here, so the send must succeed.
 	assert(num_sent > 0);
-	io->processed_replies.inc(1);
 }
 
 /**
@@ -357,6 +355,10 @@ int part_global_cached_io::init() {
 part_global_cached_io::part_global_cached_io(int num_groups,
 		io_interface *underlying, int idx,
 		cache_config *config): global_cached_io(underlying->clone()) {
+	processed_requests = 0;;
+	sent_requests = 0;
+	processed_replies = 0;
+
 	this->thread_id = idx;
 	this->final_cb = NULL;
 	remote_reads = 0;
@@ -417,6 +419,7 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 			remote_reads++;
 			io_request req(requests[i]);
 			int ret = req_senders[idx]->send_cached(&req);
+			sent_requests++;
 			assert(ret > 0);
 		}
 		else {
@@ -466,6 +469,7 @@ int part_global_cached_io::process_replies()
 		}
 		num_processed += num;
 	}
+	processed_replies += num_processed;
 	return num_processed;
 }
 
@@ -474,7 +478,7 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 	int num_remaining = distribute_reqs(&requests[num_sent], num - num_sent);
 	// This variable is only accessed in one thread, so we don't
 	// need to protect it.
-	processed_requests.inc(num);
+	processed_requests += num;
 	num_sent += num;
 
 	// Let's process all replies before proceeding.
@@ -547,8 +551,8 @@ void part_global_cached_io::cleanup()
 	while (num_finished_threads.get() < num_threads) {
 		usleep(1000 * 10);
 	}
-	printf("thread %d processed %d requests and %d replies\n", thread_id,
-			processed_requests.get(), processed_replies.get());
+	printf("thread %d processed %ld requests (%ld remote requests) and %ld replies\n",
+			thread_id, processed_requests, sent_requests, processed_replies);
 }
 
 #ifdef STATISTICS

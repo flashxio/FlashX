@@ -68,8 +68,9 @@ class part_global_cached_io: public global_cached_io
 
 	io_interface *underlying;
 
-	atomic_integer processed_requests;
-	atomic_integer processed_replies;
+	long processed_requests;
+	long sent_requests;
+	long processed_replies;
 
 	long remote_reads;
 
