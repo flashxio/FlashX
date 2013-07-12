@@ -462,7 +462,7 @@ int part_global_cached_io::process_replies()
 		int num = reply_queue->non_blocking_fetch(local_reply_buf, REPLY_BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			io_reply *reply = &local_reply_buf[i];
-			((part_global_cached_io *) reply->get_io())->process_reply(reply);
+			this->process_reply(reply);
 		}
 		num_processed += num;
 	}

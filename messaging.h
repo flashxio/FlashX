@@ -322,19 +322,20 @@ public:
 
 class io_reply
 {
-	char *buf;
-	off_t offset;
-	io_interface *io;
-	ssize_t size: 32;
-	int success: 1;
-	int status: 16;
-	int access_method: 1;
+	off_t offset: 40;
+	unsigned int success: 1;
+	unsigned int status: 16;
+
+	unsigned int access_method: 1;
+	unsigned long buf_size: 15;
+	unsigned long buf_addr: 48;
+
 	void init(char *buf, io_interface *io, off_t off, ssize_t size, int success,
 			int status, int access_method) {
-		this->buf = buf;
-		this->io = io;
+		long addr = (long) buf;
+		this->buf_addr = addr;
 		this->offset = off;
-		this->size = size;
+		this->buf_size = size;
 		this->success = success;
 		this->status = status;
 		this->access_method = access_method;
@@ -349,10 +350,6 @@ public:
 					success, status, req->get_access_method());
 	}
 
-	io_interface *get_io() const {
-		return io;
-	}
-
 	int get_status() const {
 		return status;
 	}
@@ -362,7 +359,8 @@ public:
 	}
 
 	char *get_buf() const {
-		return buf;
+		long addr = buf_addr;
+		return (char *) addr;
 	}
 
 	off_t get_offset() const {
@@ -370,7 +368,7 @@ public:
 	}
 
 	ssize_t get_size() const {
-		return size;
+		return buf_size;
 	}
 
 	int get_access_method() const {
