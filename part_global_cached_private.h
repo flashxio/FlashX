@@ -23,10 +23,9 @@ struct thread_group
 	std::vector<thread *> process_request_threads;
 	
 	blocking_FIFO_queue<io_request> *request_queue;
-	blocking_FIFO_queue<io_reply> *reply_queue;
 
-	thread *reply_processor;
-	std::tr1::unordered_map<int, thread_safe_msg_sender<io_reply> *> reply_senders;
+	std::tr1::unordered_map<part_global_cached_io *,
+		thread_safe_msg_sender<io_reply> *> reply_senders;
 };
 
 /**
@@ -56,6 +55,7 @@ class part_global_cached_io: public global_cached_io
 	struct thread_group *local_group;
 
 	cache_config *cache_conf;
+	blocking_FIFO_queue<io_reply> *reply_queue;
 
 	/*
 	 * there is a sender for each node.
@@ -132,6 +132,11 @@ public:
 	bool support_aio() {
 		return true;
 	}
+
+	blocking_FIFO_queue<io_reply> *get_reply_queue() {
+		return reply_queue;
+	}
+
 	friend class node_cached_io;
 
 #ifdef STATISTICS
