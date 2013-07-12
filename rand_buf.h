@@ -5,6 +5,11 @@
 #include "container.h"
 #include "aligned_allocator.h"
 
+/**
+ * The class maintains a set of buffers of a mixed size for a single thread.
+ * It works the same as slab_allocator.
+ * To reduce overhead, the class isn't thread-safe.
+ */
 class rand_buf
 {
 	/* where the data read from the disk is stored */
@@ -12,15 +17,7 @@ class rand_buf
 	char *marks;
 	int entry_size;
 	int num_entries;
-	thread_safe_FIFO_queue<off_t> free_refs;
-	pthread_spinlock_t lock;
-
-	// The buffers pre-allocated to serve allocation requests
-	// from the local threads.
-	pthread_key_t local_buf_key;
-	// The buffers freed in the local threads, which hasn't been
-	// added the main buffer.
-	pthread_key_t local_free_key;
+	fifo_queue<off_t> free_refs;
 
 	int current;
 #ifdef MEMCHECK
