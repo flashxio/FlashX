@@ -20,52 +20,6 @@ bool fifo_queue<T>::expand_queue(int new_size)
 }
 
 template<class T>
-int thread_safe_FIFO_queue<T>::fetch(T *entries, int num)
-{
-	pthread_spin_lock(&_lock);
-	long curr_fetch_offset = fetch_offset;
-	int n = min(num, get_actual_num_entries());
-	fetch_offset += n;
-
-	for (int i = 0; i < n; i++) {
-		entries[i] = ((T*)buf)[(curr_fetch_offset + i) % this->capacity];
-	}
-	fetched_offset = curr_fetch_offset + n;
-	pthread_spin_unlock(&_lock);
-	return n;
-}
-
-template<class T>
-void thread_safe_FIFO_queue<T>::addByForce(T *entries, int num)
-{
-	int added = add(entries, num);
-	assert(added == num);
-	// TODO I should make the queue extensible.
-}
-
-/**
- * this is non-blocking. 
- * It adds entries to the queue as much as possible,
- * and returns the number of entries that have been
- * added.
- */
-template<class T>
-int thread_safe_FIFO_queue<T>::add(T *entries, int num)
-{
-	pthread_spin_lock(&_lock);
-	int n = min(num, get_remaining_space());
-	long curr_alloc_offset = alloc_offset;
-	alloc_offset += n;
-
-	for (int i = 0; i < n; i++) {
-		((T *)buf)[(curr_alloc_offset + i) % this->capacity] = entries[i];
-	}
-	add_offset = curr_alloc_offset + n;
-	pthread_spin_unlock(&_lock);
-	return n;
-}
-
-template<class T>
 int blocking_FIFO_queue<T>::non_blocking_fetch(T *entries, int num)
 {
 	pthread_mutex_lock(&mutex);

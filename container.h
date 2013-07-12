@@ -189,62 +189,34 @@ public:
 template<class T>
 class thread_safe_FIFO_queue: public fifo_queue<T>
 {
-	volatile T *buf;
-	const int capacity;			// capacity of the buffer
-
-	/**
-	 * The buffer virtually has infinite space. The three offsets
-	 * shows the location in the buffer of infinite size. 
-	 * We can easy convert the three offsets to the real location 
-	 * in the buffer with modulo operation.
-	 */
-
-	/* The location, up to where the space in the buffer has been allocated. */
-	volatile long alloc_offset;
-	/* The location where new entries have been added to the buffer. */
-	volatile long add_offset;
-	/* The location where we can fetch entries in the buffer. */
-	volatile long fetch_offset;
-	/* The location where we have completed fetching. */
-	volatile long fetched_offset;
-
 	/* 
 	 * lock is still needed because we need to check whether the buffer
 	 * has entries or has space.
 	 */
 	pthread_spinlock_t _lock;
 
-	int get_virtual_num_entries() const {
-		return (int) (alloc_offset - fetched_offset);
-	}
-
-	int get_actual_num_entries() const {
-		return (int) (add_offset - fetch_offset);
-	}
-
-	int get_remaining_space() const {
-		return (int) (capacity - get_virtual_num_entries());
-	}
-
 public:
-	thread_safe_FIFO_queue(int size): fifo_queue<T>(size), capacity(size) {
-		// TODO I don't need to allocate this buffer.
-		buf = new T[size];
-		alloc_offset = 0;
-		add_offset = 0;
-		fetch_offset = 0;
-		fetched_offset = 0;
+	thread_safe_FIFO_queue(int size): fifo_queue<T>(size) {
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	virtual ~thread_safe_FIFO_queue() {
 		pthread_spin_destroy(&_lock);
-		delete [] buf;
 	}
 
-	virtual int fetch(T *entries, int num);
+	virtual int fetch(T *entries, int num) {
+		pthread_spin_lock(&_lock);
+		int ret = fifo_queue<T>::fetch(entries, num);
+		pthread_spin_unlock(&_lock);
+		return ret;
+	}
 
-	virtual int add(T *entries, int num);
+	virtual int add(T *entries, int num) {
+		pthread_spin_lock(&_lock);
+		int ret = fifo_queue<T>::add(entries, num);
+		pthread_spin_unlock(&_lock);
+		return ret;
+	}
 	virtual int add(fifo_queue<T> *queue) {
 		assert(0);
 		return 0;
@@ -255,19 +227,24 @@ public:
 	 * If there isn't enough space left, it will increase the capacity
 	 * of the queue.
 	 */
-	virtual void addByForce(T *entries, int num);
+	virtual void addByForce(T *entries, int num) {
+		int added = add(entries, num);
+		assert(added == num);
+		// TODO I should make the queue extensible.
+	}
 
 	// TODO I should return reference.
 	T pop_front() {
-		T entry;
-		int num = fetch(&entry, 1);
-		assert(num == 1);
+		pthread_spin_lock(&_lock);
+		T entry = fifo_queue<T>::pop_front();
+		pthread_spin_unlock(&_lock);
 		return entry;
 	}
 
 	void push_back(T &entry) {
-		while (add(&entry, 1) == 0) {
-		}
+		pthread_spin_lock(&_lock);
+		while (add(&entry, 1) == 0);
+		pthread_spin_unlock(&_lock);
 	}
 
 	/**
@@ -276,17 +253,20 @@ public:
 	 */
 	int get_num_entries() {
 		pthread_spin_lock(&_lock);
-		int num_entries = get_actual_num_entries();
+		int num_entries = fifo_queue<T>::get_num_entries();
 		pthread_spin_unlock(&_lock);
 		return num_entries;
 	}
 
+	// TODO these are bugs. They should be protected by locks.
 	bool is_full() {
-		return get_virtual_num_entries() == capacity;
+		bool ret = fifo_queue<T>::is_full();
+		return ret;
 	}
 
 	bool is_empty() {
-		return get_actual_num_entries() == 0;
+		bool ret = fifo_queue<T>::is_empty();
+		return ret;
 	}
 };
 
