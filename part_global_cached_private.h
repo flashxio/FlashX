@@ -12,6 +12,8 @@
 #include "thread.h"
 #include "file_mapper.h"
 
+#define REPLY_BUF_SIZE 1000
+
 class part_global_cached_io;
 
 struct thread_group
@@ -56,6 +58,7 @@ class part_global_cached_io: public global_cached_io
 
 	cache_config *cache_conf;
 	blocking_FIFO_queue<io_reply> *reply_queue;
+	io_reply local_reply_buf[REPLY_BUF_SIZE];
 
 	/*
 	 * there is a sender for each node.
@@ -75,7 +78,7 @@ class part_global_cached_io: public global_cached_io
 	// It's the callback from the user.
 	callback *final_cb;
 
-	int process_replies(int num);
+	int process_replies();
 	int distribute_reqs(io_request *requests, int num);
 
 public:

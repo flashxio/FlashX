@@ -455,14 +455,13 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 	return ret;
 }
 
-int part_global_cached_io::process_replies(int max_nreplies)
+int part_global_cached_io::process_replies()
 {
 	int num_processed = 0;
-	io_reply local_replies[max_nreplies];
-	if (!reply_queue->is_empty()) {
-		int num = reply_queue->non_blocking_fetch(local_replies, max_nreplies);
+	while (!reply_queue->is_empty()) {
+		int num = reply_queue->non_blocking_fetch(local_reply_buf, REPLY_BUF_SIZE);
 		for (int i = 0; i < num; i++) {
-			io_reply *reply = &local_replies[i];
+			io_reply *reply = &local_reply_buf[i];
 			((part_global_cached_io *) reply->get_io())->process_reply(reply);
 		}
 		num_processed += num;
@@ -478,19 +477,13 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 	processed_requests.inc(num);
 	num_sent += num;
 
-	// This is an effective way to reduce the number of replies in the queue,
-	// and thus reduce the number of pending I/O.
-	process_replies(num * 10);
+	// Let's process all replies before proceeding.
+	process_replies();
 	while (num_remaining > 0) {
-		int num_replies = process_replies(NUMA_REPLY_BUF_SIZE);
-		// If the number of replies we process is smaller than the expected
-		// number, it's probably because there aren't so many replies available.
-		bool blocking = num_replies < NUMA_REPLY_BUF_SIZE;
-		
 		num_remaining = 0;
 		for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
 				= req_senders.begin(); it != req_senders.end(); it++) {
-			it->second->flush(blocking);
+			it->second->flush(true);
 			num_remaining += it->second->get_num_remaining();
 		}
 	}
