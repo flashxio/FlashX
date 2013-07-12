@@ -345,4 +345,6 @@ public:
 	}
 };
 
+template class thread_safe_FIFO_queue<long>;
+
 #endif
