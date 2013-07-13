@@ -244,16 +244,14 @@ public:
 
 	// TODO I should return reference.
 	T pop_front() {
-		pthread_spin_lock(&_lock);
-		T entry = fifo_queue<T>::pop_front();
-		pthread_spin_unlock(&_lock);
+		T entry;
+		int num = fetch(&entry, 1);
+		assert(num == 1);
 		return entry;
 	}
 
 	void push_back(T &entry) {
-		pthread_spin_lock(&_lock);
 		while (add(&entry, 1) == 0);
-		pthread_spin_unlock(&_lock);
 	}
 
 	/**
