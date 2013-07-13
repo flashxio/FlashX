@@ -2,6 +2,7 @@
 #define __CONTAINER_H__
 
 #include <stdio.h>
+#include <math.h>
 #include <numa.h>
 #include <assert.h>
 #include <pthread.h>
@@ -89,15 +90,23 @@ public:
 template<class T>
 class fifo_queue
 {
-	int size;
+	int size_mask;
 	T *buf;			// a circular buffer to keep pages.
 	long start;
 	long end;
 	bool resizable;
 
+	long loc_in_queue(long idx) {
+		return idx & size_mask;
+	}
+
 public:
+	// the queue has to be 2^n. If it's not, the smallest number of 2^n
+	// is used.
 	fifo_queue(int size, bool resizable = false) {
-		this->size = size;
+		int log_size = (int) ceil(log2(size));
+		size = 1 << log_size;
+		this->size_mask = size - 1;
 		buf = new T[size];
 		start = 0;
 		end = 0;
@@ -112,29 +121,29 @@ public:
 
 	virtual T pop_front() {
 		assert(start < end);
-		T ret = buf[start % size];
+		T ret = buf[loc_in_queue(start)];
 		start++;
 		return ret;
 	}
 
 	virtual void push_back(T &v) {
-		assert(end - start < size);
-		buf[end % size] = v;
+		assert(end - start < get_size());
+		buf[loc_in_queue(end)] = v;
 		end++;
 	}
 
 	virtual int fetch(T *entries, int num) {
 		int num_fetches = 0;
 		while (!is_empty() && num_fetches < num) {
-			entries[num_fetches++] = buf[start % size];
+			entries[num_fetches++] = buf[loc_in_queue(start)];
 			start++;
 		}
 		return num_fetches;
 	}
 
 	virtual int add(fifo_queue<T> *queue) {
-		int idx = (int) (end % size);
-		int length = min(size - idx, get_num_remaining());
+		int idx = (int) (loc_in_queue(end));
+		int length = min(get_size() - idx, get_num_remaining());
 		int num_added = 0;
 		int num = queue->fetch(buf + idx, length);
 		end += num;
@@ -144,7 +153,7 @@ public:
 		// or the current queue is full.
 		if (num < length || get_num_remaining() == 0)
 			return num_added;
-		assert(end % size == 0);
+		assert(loc_in_queue(end) == 0);
 		length = get_num_remaining();
 		num = queue->fetch(buf, length);
 		end += num;
@@ -155,14 +164,14 @@ public:
 	virtual int add(T *entries, int num) {
 		int num_pushes = 0;
 		while (!is_full() && num_pushes < num) {
-			buf[end % size] = entries[num_pushes++];
+			buf[loc_in_queue(end)] = entries[num_pushes++];
 			end++;
 		}
 		return num_pushes;
 	}
 
 	int get_num_remaining() {
-		return size - fifo_queue<T>::get_num_entries();
+		return get_size() - fifo_queue<T>::get_num_entries();
 	}
 
 	virtual int get_num_entries() {
@@ -170,11 +179,11 @@ public:
 	}
 
 	int get_size() const {
-		return size;
+		return size_mask + 1;
 	}
 
 	virtual bool is_full() {
-		return end - start >= size;
+		return end - start >= get_size();
 	}
 
 	virtual bool is_empty() {

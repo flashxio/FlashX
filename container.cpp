@@ -5,15 +5,17 @@
 template<class T>
 bool fifo_queue<T>::expand_queue(int new_size)
 {
-	assert(resizable && size < new_size);
+	int log_size = (int) ceil(log2(new_size));
+	new_size = 1 << log_size;
+	assert(resizable && get_size() < new_size);
 	T *tmp = new T[new_size];
 	int num = fifo_queue<T>::get_num_entries();
 	for (int i = 0; i < num; i++) {
-		tmp[i] = buf[(start + i) % size];
+		tmp[i] = buf[loc_in_queue(start + i)];
 	}
 	delete [] buf;
 	buf = tmp;
-	size = new_size;
+	size_mask = new_size - 1;
 	start = 0;
 	end = num;
 	return true;
