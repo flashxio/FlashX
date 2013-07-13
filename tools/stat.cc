@@ -6,12 +6,14 @@
 
 #include <vector>
 #include <algorithm>
-#include <tr1/unordered_set>
+#include <tr1/unordered_map>
 
 #define PAGE_SIZE 4096
 #define SCALE_FACTOR 100
 
 #include "../workload.h"
+
+bool histogram = true;
 
 int main(int argc, char *argv[])
 {
@@ -41,7 +43,7 @@ int main(int argc, char *argv[])
 	workload_t *workloads = new workload_t[num_accesses];
 	ssize_t ret = read(fd, (void *) workloads, file_size);
 
-	std::tr1::unordered_set<off_t> pages;
+	std::tr1::unordered_map<off_t, int> page_map;
 	int num_reads = 0;
 	int num_writes = 0;
 	int max_size = 0;
@@ -56,18 +58,40 @@ int main(int argc, char *argv[])
 		tot_size += workloads[i].size;
 		off_t last_page = ROUNDUP_PAGE(workloads[i].off + workloads[i].size);
 		int num_pages = (last_page - page_off) / PAGE_SIZE;
-		for (; page_off < last_page; page_off += PAGE_SIZE)
-			pages.insert(page_off);
+		for (; page_off < last_page; page_off += PAGE_SIZE) {
+			std::tr1::unordered_map<off_t, int>::iterator it = page_map.find(page_off);
+			if (it == page_map.end()) {
+				page_map.insert(std::pair<off_t, int>(page_off, 1));
+			}
+			else
+				it->second++;
+		}
 		if (workloads[i].read)
 			num_reads += num_pages;
 		else
 			num_writes += num_pages;
 	}
 
+	if (histogram) {
+		std::map<int, int> count_nums;
+		for (std::tr1::unordered_map<off_t, int>::iterator it = page_map.begin();
+				it != page_map.end(); it++) {
+			int num_accesses = it->second;
+			std::map<int, int>::iterator it1 = count_nums.find(num_accesses);
+			if (it1 != count_nums.end())
+				it1->second++;
+			else
+				count_nums.insert(std::pair<int, int>(num_accesses, 1));
+		}
+		for (std::map<int, int>::const_iterator it = count_nums.begin();
+				it != count_nums.end(); it++) {
+			printf("%d pages get %d hits\n", it->second, it->first);
+		}
+	}
 	printf("min request size: %d, max req size: %d, avg size: %ld\n",
 			min_size, max_size, tot_size / num_accesses);
 	printf("there are %d accesses\n", num_accesses);
 	printf("there are %d reads\n", num_reads);
 	printf("there are %d writes\n", num_writes);
-	printf("there are %ld accessed pages\n", pages.size());
+	printf("there are %ld accessed pages\n", page_map.size());
 }

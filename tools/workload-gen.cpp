@@ -11,6 +11,41 @@
 
 bool histogram = true;
 
+/**
+ * This class can convert a sequence of numbers into another sequence,
+ * but the frequency of numbers should be preserved.
+ */
+class rand_rehasher
+{
+	long *rehash_map;
+	long rehash_zero;
+	long st;
+	long range;
+public:
+	rand_rehasher(long st, long n) {
+		srandom(time(NULL));
+		this->range = n - st;
+		this->st = st;
+		rehash_map = new long[range];
+		memset(rehash_map, 0, sizeof(rehash_map[0]) * range);
+		rehash_zero = random() % range + st;
+	}
+
+	~rand_rehasher() {
+		delete rehash_map;
+	}
+
+	long rehash(long v) {
+		assert(v >= st && v < st + range);
+		if (v == 0)
+			return rehash_zero;
+		else if (rehash_map[v - st] == 0) {
+			rehash_map[v - st] = random() % range + st;
+		}
+		return rehash_map[v - st];
+	}
+};
+
 int main(int argc, char *argv[])
 {
 	if (argc < 3) {
@@ -30,6 +65,8 @@ int main(int argc, char *argv[])
 	size_t num_write_bytes = 0;
 	// calculate which pages are accessed and how many times a page is accessed.
 	std::tr1::unordered_map<off_t, int> page_map;
+
+	rand_rehasher rehasher(0, 100 * 1024 * 1024);
 
 	FILE *in = fopen(argv[1], "r");
 	FILE *out = fopen(argv[2], "w");
@@ -51,6 +88,7 @@ int main(int argc, char *argv[])
 		*str = 0;
 		char *flag_str = str + 1;
 		workload.off = strtol(off_str, NULL, 10);
+//		workload.off = rehasher.rehash(workload.off / 4096) * 4096;
 		if (min_off > workload.off)
 			min_off = workload.off;
 		if (max_off < workload.off)
