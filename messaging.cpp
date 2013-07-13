@@ -8,13 +8,20 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 		int access_method, io_interface *io, int node_id)
 {
 	this->offset = off;
-	this->io_idx = io->get_io_idx();
+	if (is_extended_req()) {
+		get_extension()->io = io;
+		if (buf)
+			add_buf(buf, size);
+	}
+	else {
+		this->io_idx = io->get_io_idx();
+		this->buf_size = size;
+		this->buf_addr = (long) buf;
+	}
 	this->access_method = access_method & 0x1;
 	// by default, a request is of high priority.
 	this->high_prio = 1;
 	this->node_id = node_id;
-	this->buf_size = size;
-	this->buf_addr = (long) buf;
 }
 
 void io_req_extension::add_buf(char *buf, int size)

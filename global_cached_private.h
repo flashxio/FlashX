@@ -5,6 +5,46 @@
 #include "cache.h"
 #include "NUMA_cache.h"
 
+/**
+ * This slab allocator allocates IO requests, and all of them are
+ * extended requests.
+ */
+class request_allocator: public obj_allocator<io_request>
+{
+	class req_initiator: public obj_initiator<io_request>
+	{
+	public:
+		void init(io_request *req) {
+			req->init();
+		}
+	};
+public:
+	request_allocator(long increase_size,
+			long max_size = MAX_SIZE): obj_allocator<io_request>(
+				increase_size, max_size, new req_initiator()) {
+	}
+
+	virtual int alloc_objs(io_request **reqs, int num) {
+		int ret = obj_allocator<io_request>::alloc_objs(reqs, num);
+		// Make sure all requests are extended requests.
+		for (int i = 0; i < ret; i++)
+			if (!reqs[i]->is_extended_req()) {
+				io_request tmp(true);
+				*reqs[i] = tmp;
+			}
+		return ret;
+	}
+
+	virtual io_request *alloc_obj() {
+		io_request *req = obj_allocator<io_request>::alloc_obj();
+		if (!req->is_extended_req()) {
+			io_request tmp(true);
+			*req = tmp;
+		}
+		return req;
+	}
+};
+
 class global_cached_io: public io_interface
 {
 	int num_waits;
@@ -22,7 +62,7 @@ class global_cached_io: public io_interface
 	 */
 	thread_safe_FIFO_queue<io_request *> pending_requests;
 
-	obj_allocator<io_request> req_allocator;
+	request_allocator req_allocator;
 
 	long num_accesses;
 

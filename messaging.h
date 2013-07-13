@@ -75,6 +75,13 @@ struct io_req_extension
 class io_request
 {
 	off_t offset: 40;
+	// This flag is initialized when the object is created and
+	// can't be changed manually.
+	// The only case that the flag of a request is changed is when
+	// another request object is copied to this request object.
+	// What needs to be guaranteed is that
+	// the flag is true when buf_addr points to the extension object;
+	// the flag is false when buf_addr points to the real buffer.
 	unsigned int extended: 1;
 	unsigned int high_prio: 1;
 	/*
@@ -85,6 +92,7 @@ class io_request
 
 	unsigned int access_method: 1;
 	unsigned long buf_size: 15;
+	// Linux uses 48 bit for addresses.
 	unsigned long buf_addr: 48;
 
 	io_req_extension *get_extension() const {
@@ -101,30 +109,95 @@ public:
 	io_request() {
 		extended = 0;
 		buf_addr = 0;
+		high_prio = 1;
+	}
+
+	io_request(bool extended) {
+		this->extended = extended;
+		buf_addr = 0;
+		high_prio = 1;
+		if (extended) {
+			buf_addr = (long) new io_req_extension();
+		}
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id) {
-		init(buf, off, size, access_method, io, node_id);
 		extended = 0;
+		init(buf, off, size, access_method, io, node_id);
 	}
 
 	io_request(off_t off, io_interface *io, int access_method, int node_id,
 			io_request *orig, void *priv) {
-		init(off, io, access_method, node_id, orig, priv);
 		extended = 1;
+		buf_addr = (long) new io_req_extension();
+		init(off, io, access_method, node_id, orig, priv);
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, io_request *orig,
 			void *priv) {
-		init(buf, off, size, access_method, io, node_id, orig, priv);
 		extended = 1;
+		buf_addr = (long) new io_req_extension();
+		init(buf, off, size, access_method, io, node_id, orig, priv);
+	}
+
+	io_request(io_request &req) {
+		// We need to free its own extension first.
+		if (this->is_extended_req())
+			delete this->get_extension();
+		memcpy(this, &req, sizeof(req));
+		if (req.is_extended_req()) {
+			req.extended = 0;
+			req.buf_addr = 0;
+		}
+	}
+
+	io_request &operator=(io_request &req) {
+		if (this->is_extended_req())
+			delete this->get_extension();
+		memcpy(this, &req, sizeof(req));
+		if (req.is_extended_req()) {
+			req.extended = 0;
+			req.buf_addr = 0;
+		}
+		return *this;
 	}
 
 	~io_request() {
-		if (is_extended_req())
-			delete get_extension();;
+		if (is_extended_req() && get_extension())
+			delete get_extension();
+	}
+
+	void init(const io_request &req) {
+		if (!req.is_extended_req()) {
+			this->init(req.get_buf(), req.get_offset(), req.get_size(),
+					req.get_access_method(), req.get_io(), req.get_node_id());
+		}
+		else if (this->is_extended_req()) {
+			this->init(req.get_offset(), req.get_io(), req.get_access_method(),
+					req.get_node_id(), req.get_orig(), req.get_priv());
+			for (int i = 0; i < req.get_num_bufs(); i++) {
+				this->add_buf(req.get_buf(i), req.get_buf_size(i));
+			}
+		}
+		else {
+			// The last case is that this request doesn't have extension,
+			// but the given request has extension. This request can't keep
+			// all information in the given request.
+			assert(!this->is_extended_req() && req.is_extended_req());
+		}
+	}
+
+	void init() {
+		offset = 0;
+		extended = 0;
+		high_prio = 0;
+		node_id = 0;
+		io_idx = 0;
+		access_method = 0;
+		buf_size = 0;
+		buf_addr = 0;
 	}
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
@@ -138,8 +211,9 @@ public:
 
 	void init(off_t off, io_interface *io, int access_method, int node_id,
 			io_request *orig, void *priv) {
-		io_req_extension *ext = new io_req_extension();
-		io_request::init((char *) ext, off, 0, access_method, io, node_id);
+		assert(is_extended_req());
+		io_request::init(NULL, off, 0, access_method, io, node_id);
+		io_req_extension *ext = get_extension();
 		ext->io = io;
 		ext->priv = priv;
 		ext->orig = orig;

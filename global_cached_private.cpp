@@ -45,6 +45,7 @@ static void extract_pages(const io_request &req, off_t off, int npages,
 	off_t req_off;
 	char *req_buf;
 	ssize_t req_size;
+	assert(req.get_num_bufs() == 1);
 	assert((off & (PAGE_SIZE - 1)) == 0);
 	bool check = (off >= req.get_offset() && off < req.get_offset() + req.get_size())
 		|| (off + PAGE_SIZE >= req.get_offset()
@@ -550,7 +551,7 @@ ssize_t global_cached_io::write(io_request &req, thread_safe_page *p,
 		return __write(orig, p, dirty_pages);
 	else {
 		io_request *partial_orig = req_allocator.alloc_obj();
-		*partial_orig = req;
+		partial_orig->init(req);
 		partial_orig->set_partial(true);
 		return __write(partial_orig, p, dirty_pages);
 	}
@@ -885,7 +886,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			// need to do it for cached single-page requests..
 			if (orig == NULL) {
 				orig = req_allocator.alloc_obj();
-				*orig = requests[i];
+				orig->init(requests[i]);
 			}
 			/*
 			 * Cache may evict a dirty page and return the dirty page
@@ -908,7 +909,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 				 * read requests.
 				 */
 				if (pg_idx) {
-					io_request req;
+					io_request req(true);
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
 					req.set_orig(orig);
 					req.set_partial(orig->get_size() > req.get_size());
@@ -975,7 +976,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			 */
 			if (orig->get_access_method() == WRITE) {
 				/* We need to extract a page from the request. */
-				io_request req;
+				io_request req(true);
 				extract_pages(*orig, tmp_off, 1, req);
 				req.set_orig(orig);
 				req.set_partial(orig->get_size() > req.get_size());
@@ -984,7 +985,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			else {
 				pages[pg_idx++] = p;
 				if (pg_idx == MAX_NUM_IOVECS) {
-					io_request req;
+					io_request req(true);
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
 					req.set_orig(orig);
 					req.set_partial(orig->get_size() > req.get_size());
@@ -999,7 +1000,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 		 * The only reason that pg_idx > 0 is that there is a large read request.
 		 */
 		if (pg_idx) {
-			io_request req;
+			io_request req(true);
 			extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
 			req.set_orig(orig);
 			req.set_partial(orig->get_size() > req.get_size());

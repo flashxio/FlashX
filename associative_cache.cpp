@@ -1083,6 +1083,12 @@ void associative_flush_thread::run()
 				if (!p->is_io_pending() && !p->is_prepare_writeback()
 						// The page may have been cleaned.
 						&& p->is_dirty()) {
+					// TODO global_cached_io may delete the extension.
+					// I'll fix it later.
+					if (!req_array[num_init_reqs].is_extended_req()) {
+						io_request tmp(true);
+						req_array[num_init_reqs] = tmp;
+					}
 					req_array[num_init_reqs].init((char *) p->get_data(),
 								p->get_offset(), PAGE_SIZE, WRITE, io,
 								get_node_id(), NULL, cache);

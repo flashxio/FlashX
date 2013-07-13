@@ -146,6 +146,23 @@ public:
 const static long MAX_SIZE = 0x7fffffffffffffffL;
 
 template<class T>
+class obj_initiator
+{
+public:
+	virtual void init(T *obj) = 0;
+};
+
+template<class T>
+class default_obj_initiator: public obj_initiator<T>
+{
+public:
+	void init(T *obj) {
+		T tmp;
+		*obj = tmp;
+	}
+};
+
+template<class T>
 class obj_allocator: public slab_allocator
 {
 	// The buffers pre-allocated to serve allocation requests
@@ -154,25 +171,26 @@ class obj_allocator: public slab_allocator
 	// The buffers freed in the local threads, which hasn't been
 	// added the main buffer.
 	pthread_key_t local_free_key;
+	obj_initiator<T> *initiator;
 public:
-	obj_allocator(long increase_size,
-			long max_size = MAX_SIZE): slab_allocator(sizeof(T),
-				increase_size, max_size) {
+	obj_allocator(long increase_size, long max_size = MAX_SIZE,
+			obj_initiator<T> *initiator = new default_obj_initiator<T>(
+				)): slab_allocator(sizeof(T), increase_size, max_size) {
 		assert(increase_size <= max_size);
 		pthread_key_create(&local_buf_key, NULL);
 		pthread_key_create(&local_free_key, NULL);
+		this->initiator = initiator;
 	}
 
-	int alloc_objs(T **objs, int num) {
+	virtual int alloc_objs(T **objs, int num) {
 		int ret = slab_allocator::alloc((char **) objs, num);
-		T obj;
 		for (int i = 0; i < ret; i++) {
-			*objs[i] = obj;
+			initiator->init(objs[i]);
 		}
 		return ret;
 	}
 
-	T *alloc_obj() {
+	virtual T *alloc_obj() {
 		fifo_queue<T *> *local_buf_refs
 			= (fifo_queue<T *> *) pthread_getspecific(local_buf_key);
 		if (local_buf_refs == NULL) {
