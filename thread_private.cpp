@@ -2,6 +2,7 @@
 
 #include "thread_private.h"
 #include "parameters.h"
+#include "exception.h"
 
 #define NUM_PAGES (40960 * nthreads)
 
@@ -160,6 +161,8 @@ int thread_private::run()
 				 * and the user explicitly wants to use multibuf requests.
 				 */
 				if (buf_type == MULTI_BUF) {
+					throw unsupported_exception();
+#if 0
 					assert(off % PAGE_SIZE == 0);
 					int num_vecs = size / PAGE_SIZE;
 					reqs[i].init(off, io, access_method, node_id);
@@ -168,6 +171,7 @@ int thread_private::run()
 						reqs[i].add_buf(buf->next_entry(PAGE_SIZE), PAGE_SIZE);
 					}
 					i++;
+#endif
 				}
 				else if (buf_type == SINGLE_SMALL_BUF) {
 again:
