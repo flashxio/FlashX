@@ -170,7 +170,10 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		// the reqeust isn't the IO interface that issue the request.
 		// The request may be handled differently.
 		global_cached_io *io = (global_cached_io *) orig->get_io();
-		io->notify_completion(orig);
+		if (orig->is_sync())
+			io->wakeup_on_req(orig, IO_OK);
+		else
+			io->notify_completion(orig);
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
@@ -194,7 +197,10 @@ void global_cached_io::finalize_request(io_request &req)
 		original->inc_complete_count();
 		if (original->complete_size(req.get_size())) {
 			global_cached_io *io = (global_cached_io *) original->get_io();
-			io->notify_completion(original);
+			if (original->is_sync())
+				io->wakeup_on_req(original, IO_OK);
+			else
+				io->notify_completion(original);
 			original->dec_complete_count();
 			original->wait4unref();
 			req_allocator.free(original);
@@ -205,7 +211,10 @@ void global_cached_io::finalize_request(io_request &req)
 	else {
 		assert(req.get_orig() == NULL);
 		global_cached_io *io = (global_cached_io *) req.get_io();
-		io->notify_completion(&req);
+		if (req.is_sync())
+			io->wakeup_on_req(&req, IO_OK);
+		else
+			io->notify_completion(&req);
 	}
 }
 
@@ -436,6 +445,10 @@ global_cached_io::global_cached_io(io_interface *underlying): io_interface(
 	cache_hits = 0;
 	num_accesses = 0;
 	underlying->set_callback(new access_page_callback(this));
+	pthread_mutex_init(&sync_mutex, NULL);
+	pthread_cond_init(&sync_cond, NULL);
+	wait_req = NULL;
+	status = 0;
 }
 
 global_cached_io::global_cached_io(io_interface *underlying,
@@ -454,6 +467,10 @@ global_cached_io::global_cached_io(io_interface *underlying,
 		printf("Create cache on %d nodes\n", config->get_num_caches());
 		global_cache = config->create_cache();
 	}
+	pthread_mutex_init(&sync_mutex, NULL);
+	pthread_cond_init(&sync_cond, NULL);
+	wait_req = NULL;
+	status = 0;
 }
 
 /**
@@ -596,8 +613,12 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		p->unlock();
 		ret = orig->get_size();
 		__complete_req(orig, p);
-		if (get_callback())
-			get_callback()->invoke(&orig, 1);
+		global_cached_io *io = (global_cached_io *) orig->get_io();
+		assert(this == io);
+		if (orig->is_sync())
+			io->wakeup_on_req(orig, IO_OK);
+		else
+			notify_completion(orig);
 	}
 	return ret;
 }
@@ -813,6 +834,8 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		thread_safe_page *cached_pages[], int num_cached_reqs)
 {
+	io_request *async_reqs[num_cached_reqs];
+	int num_async_reqs = 0;
 	num_fast_process += num_cached_reqs;
 	for (int i = 0; i < num_cached_reqs; i++) {
 		io_request *req = cached_reqs[i];
@@ -820,8 +843,12 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		page_cache *cache = get_global_cache();
 		if (dirty && cache->get_flush_thread())
 			cache->get_flush_thread()->dirty_pages(&dirty, 1);
+		if (!req->is_sync())
+			async_reqs[num_async_reqs++] = req;
 	}
-	notify_completion(cached_reqs, num_cached_reqs);
+	// We don't need to notify completion for sync requests.
+	// Actually, we don't even need to do anything for sync requests.
+	notify_completion(async_reqs, num_async_reqs);
 }
 
 void global_cached_io::access(io_request *requests, int num, io_status *status)
@@ -847,6 +874,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 
 		int pg_idx = 0;
 		int num_pages_hit = 0;
+		int num_bytes_completed = 0;
 		for (off_t tmp_off = begin_pg_offset; tmp_off < end_pg_offset;
 				tmp_off += PAGE_SIZE) {
 			off_t old_off = -1;
@@ -985,7 +1013,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				extract_pages(*orig, tmp_off, 1, req);
 				req.set_orig(orig);
 				req.set_partial(orig->get_size() > req.get_size());
-				write(req, p, dirty_pages);
+				num_bytes_completed += write(req, p, dirty_pages);
 			}
 			else {
 				pages[pg_idx++] = p;
@@ -996,7 +1024,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					req.set_partial(orig->get_size() > req.get_size());
 					// TODO It only works with one-page request
 					req.set_node_id(pages[0]->get_node_id());
-					read(req, pages, pg_idx);
+					num_bytes_completed += read(req, pages, pg_idx);
 					pg_idx = 0;
 				}
 			}
@@ -1015,12 +1043,19 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		}
 
 		// If all pages accessed by the request are in the cache, the request
-		// can be completed when we return from the function.
+		// can be completed by the time when the functions returns.
 		if (status) {
-			if (num_pages_hit == (end_pg_offset - begin_pg_offset) / PAGE_SIZE)
+			if (num_pages_hit == (end_pg_offset - begin_pg_offset) / PAGE_SIZE
+					// It's possible that a request is completed in the slow path.
+					// The requested pages may become ready in the slow path;
+					// or we write the entire page.
+					|| num_bytes_completed == requests[i].get_size())
 				status[i] = IO_OK;
-			else
+			else {
+				assert(orig);
 				status[i] = IO_PENDING;
+				status[i].set_priv_data((long) orig);
+			}
 		}
 	}
 	process_cached_reqs(cached_reqs, cached_pages, num_cached_reqs);
@@ -1033,114 +1068,15 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 io_status global_cached_io::access(char *buf, off_t offset,
 		ssize_t size, int access_method)
 {
-	assert(access_method == READ);
-
-	ssize_t ret;
-	off_t old_off = -1;
-	thread_safe_page *p = (thread_safe_page *) (get_global_cache()
-			->search(ROUND_PAGE(offset), old_off));
-
-	/*
-	 * the page isn't in the cache,
-	 * so the cache evict a page and return it to us.
-	 */
-	if (old_off != ROUND_PAGE(offset) && old_off != -1) {
-		/* 
-		 * if the new page we get is dirty,
-		 * we need to write its data back to the file
-		 * before we can put data in the page. 
-		 * Therefore, the data ready flag is definitely
-		 * not set yet.
-		 */
-		if (p->is_dirty()) {
-			unsigned long *l = (unsigned long *) p->get_data();
-			unsigned long start = old_off / sizeof(long);
-			if (*l != start)
-				printf("start: %ld, l: %ld\n", start, *l);
-			underlying->access((char *) p->get_data(),
-					old_off, PAGE_SIZE, WRITE);
-			p->set_dirty(false);
-		}
+	io_request req(buf, offset, size, access_method, this, this->get_node_id(), true);
+	io_status status;
+	access(&req, 1, &status);
+	if (status == IO_PENDING) {
+		io_request *orig = (io_request *) status.get_priv_data();
+		assert(orig);
+		wait4req(orig);
 	}
-
-	if (!p->data_ready()) {
-		/* if the page isn't io pending, set it io pending, and return
-		 * original result. otherwise, just return the original value.
-		 *
-		 * This is an ugly hack, but with this atomic operation,
-		 * I can avoid using locks.
-		 */
-		if(!p->test_and_set_io_pending()) {
-			/* 
-			 * Because of the atomic operation, it's guaranteed
-			 * that only one thread can enter here.
-			 * If other threads have reference to the page,
-			 * they must be waiting for its data to be ready.
-			 */
-			/*
-			 * It's possible that two threads go through here
-			 * sequentially. For example, the second thread already
-			 * sees the data isn't ready, but find io pending isn't
-			 * set when the first thread resets io pending.
-			 *
-			 * However, in any case, when the second thread comes here,
-			 * the data is already ready and the second thread should
-			 * be able to see the data is ready when it comes here.
-			 */
-			if (!p->data_ready()) {
-				/*
-				 * No other threads set the page dirty at this moment,
-				 * because if a thread can set the page dirty,
-				 * it means the page isn't dirty and already has data
-				 * ready at the first place.
-				 */
-				if (p->is_dirty())
-					p->wait_cleaned();
-				ret = underlying->access((char *) p->get_data(),
-						ROUND_PAGE(offset), PAGE_SIZE, READ);
-				if (ret < 0) {
-					perror("read");
-					exit(1);
-				}
-			}
-			p->set_data_ready(true);
-			p->set_io_pending(false);
-		}
-		else {
-			num_waits++;
-			// TODO this is a problem. It takes a long time to get data
-			// from real storage devices. If we use busy waiting, 
-			// we just waste computation time.
-			p->wait_ready();
-		}
-	}
-	else {
-#ifdef STATISTICS
-		cache_hits++;
-#endif
-	}
-	int page_off = offset - ROUND_PAGE(offset);
-	bool is_page_set_dirty = false;
-	p->lock();
-	if (access_method == WRITE) {
-		unsigned long *l = (unsigned long *) ((char *) p->get_data() + page_off);
-		unsigned long start = offset / sizeof(long);
-		if (*l != start)
-			printf("write: start: %ld, l: %ld, offset: %ld\n",
-					start, *l, p->get_offset() / sizeof(long));
-		memcpy((char *) p->get_data() + page_off, buf, size);
-		if (!p->set_dirty(true))
-			is_page_set_dirty = true;
-	}
-	else 
-		/* I assume the data I read never crosses the page boundary */
-		memcpy(buf, (char *) p->get_data() + page_off, size);
-	p->unlock();
-	if (is_page_set_dirty && get_global_cache()->get_flush_thread())
-		get_global_cache()->get_flush_thread()->dirty_pages(&p, 1);
-	p->dec_ref();
-	ret = size;
-	return IO_OK;
+	return status;
 }
 
 int global_cached_io::preload(off_t start, long size) {

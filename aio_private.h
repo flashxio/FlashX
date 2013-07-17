@@ -40,6 +40,59 @@ public:
 	}
 };
 
+class async_io;
+class callback_allocator;
+
+struct thread_callback_s
+{
+	struct io_callback_s cb;
+	async_io *aio;
+	callback *aio_callback;
+	callback_allocator *cb_allocator;
+	io_request req;
+};
+
+/**
+ * This slab allocator makes sure all requests in the callback structure
+ * are extended requests.
+ */
+class callback_allocator: public obj_allocator<thread_callback_s>
+{
+	class callback_initiator: public obj_initiator<thread_callback_s>
+	{
+	public:
+		void init(thread_callback_s *cb) {
+			cb->req.init();
+		}
+	};
+public:
+	callback_allocator(long increase_size,
+			long max_size = MAX_SIZE): obj_allocator<thread_callback_s>(
+				increase_size, max_size, new callback_initiator()) {
+	}
+
+	virtual int alloc_objs(thread_callback_s **cbs, int num) {
+		int ret = obj_allocator<thread_callback_s>::alloc_objs(cbs, num);
+		// Make sure all requests are extended requests.
+		for (int i = 0; i < ret; i++) {
+			if (!cbs[i]->req.is_extended_req()) {
+				io_request tmp(true);
+				cbs[i]->req = tmp;
+			}
+		}
+		return ret;
+	}
+
+	virtual thread_callback_s *alloc_obj() {
+		thread_callback_s *cb = obj_allocator<thread_callback_s>::alloc_obj();
+		if (!cb->req.is_extended_req()) {
+			io_request tmp(true);
+			cb->req = tmp;
+		}
+		return cb;
+	}
+};
+
 class async_io: public buffered_io
 {
 	int buf_idx;
@@ -49,7 +102,7 @@ class async_io: public buffered_io
 	// This is for allocating memory in the case that the memory given
 	// by the user isn't in the local NUMA node.
 	slab_allocator allocator;
-	obj_allocator<thread_callback_s> cb_allocator;
+	callback_allocator cb_allocator;
 	std::tr1::unordered_map<int, aio_complete_sender *> complete_senders;
 	std::tr1::unordered_map<int, fifo_queue<thread_callback_s *> *> remote_tcbs;
 
@@ -70,7 +123,10 @@ public:
 
 	virtual ~async_io();
 
-	void access(io_request *requests, int num, io_status *status = NULL);
+	virtual io_status access(char *, off_t, ssize_t, int) {
+		return IO_UNSUPPORTED;
+	}
+	virtual void access(io_request *requests, int num, io_status *status = NULL);
 
 	bool set_callback(callback *cb) {
 		this->cb = cb;

@@ -17,15 +17,6 @@ const int MAX_BUF_REQS = 1024 * 3;
 #define ALLOW_DROP
 #endif
 
-struct thread_callback_s
-{
-	struct io_callback_s cb;
-	async_io *aio;
-	callback *aio_callback;
-	obj_allocator<thread_callback_s> *cb_allocator;
-	io_request req;
-};
-
 void aio_callback(io_context_t ctx, struct iocb* iocb[],
 		void *cbs[], long res[], long res2[], int num) {
 	async_io *aio = NULL;

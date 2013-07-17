@@ -84,10 +84,12 @@ class io_request
 	// the flag is false when buf_addr points to the real buffer.
 	unsigned int extended: 1;
 	unsigned int high_prio: 1;
+	// Is this synchronous IO?
+	unsigned int sync: 1;
 	/*
 	 * The NUMA node id where the buffers of the request are allocated.
 	 */
-	unsigned int node_id: 6;
+	unsigned int node_id: 5;
 	unsigned int io_idx: 16;
 
 	unsigned int access_method: 1;
@@ -110,35 +112,40 @@ public:
 		extended = 0;
 		buf_addr = 0;
 		high_prio = 1;
+		sync = false;
 	}
 
 	io_request(bool extended) {
 		this->extended = extended;
 		buf_addr = 0;
 		high_prio = 1;
+		sync = false;
 		if (extended) {
 			buf_addr = (long) new io_req_extension();
 		}
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id) {
+			io_interface *io, int node_id, bool sync = false) {
 		extended = 0;
+		this->sync = sync;
 		init(buf, off, size, access_method, io, node_id);
 	}
 
 	io_request(off_t off, io_interface *io, int access_method, int node_id,
-			io_request *orig, void *priv) {
+			io_request *orig, void *priv, bool sync = false) {
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
+		this->sync = sync;
 		init(off, io, access_method, node_id, orig, priv);
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, io_request *orig,
-			void *priv) {
+			void *priv, bool sync = false) {
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
+		this->sync = sync;
 		init(buf, off, size, access_method, io, node_id, orig, priv);
 	}
 
@@ -170,6 +177,7 @@ public:
 	}
 
 	void init(const io_request &req) {
+		this->sync = req.sync;
 		if (!req.is_extended_req()) {
 			this->init(req.get_buf(), req.get_offset(), req.get_size(),
 					req.get_access_method(), req.get_io(), req.get_node_id());
@@ -193,6 +201,7 @@ public:
 		offset = 0;
 		extended = 0;
 		high_prio = 0;
+		sync = 0;
 		node_id = 0;
 		io_idx = 0;
 		access_method = 0;
@@ -217,6 +226,10 @@ public:
 		ext->io = io;
 		ext->priv = priv;
 		ext->orig = orig;
+	}
+
+	bool is_sync() const {
+		return sync;
 	}
 
 	bool is_extended_req() const {

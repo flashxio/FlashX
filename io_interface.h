@@ -13,7 +13,40 @@ public:
 	virtual int invoke(io_request *reqs[], int num) = 0;
 };
 
-enum io_status
+class io_status
+{
+	long status: 8;
+	long priv_data: 56;
+public:
+	io_status() {
+		status = 0;
+		priv_data = 0;
+	}
+
+	io_status(int status) {
+		this->status = status;
+		priv_data = 0;
+	}
+
+	void set_priv_data(long data) {
+		priv_data = data;
+	}
+
+	long get_priv_data() const {
+		return priv_data;
+	}
+
+	io_status &operator=(int status) {
+		this->status = status;
+		return *this;
+	}
+
+	bool operator==(int status) {
+		return this->status == status;
+	}
+};
+
+enum
 {
 	IO_OK,
 	IO_PENDING = -1,
@@ -101,8 +134,8 @@ public:
 	virtual void flush_requests() {
 	}
 	/**
-	 * This method waits for all requests currently being sent by the access
-	 * method to complete.
+	 * This method waits for at least the specified number of requests currently
+	 * being sent by the access method to complete.
 	 */
 	virtual void wait4complete() {
 	}

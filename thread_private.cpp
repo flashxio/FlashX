@@ -8,6 +8,7 @@
 
 bool align_req = false;
 int align_size = PAGE_SIZE;
+bool use_aio = false;
 
 extern bool verify_read_content;
 
@@ -139,12 +140,14 @@ int thread_private::run()
 	gettimeofday(&start_time, NULL);
 	io_request reqs[NUM_REQS_BY_USER];
 	char *entry = NULL;
-	if (!io->support_aio()) {
+	if (!io->support_aio())
+		use_aio = false;
+	if (!use_aio) {
 		extern int buf_size;
 		entry = (char *) valloc(buf_size);
 	}
 	while (gen->has_next()) {
-		if (io->support_aio()) {
+		if (use_aio) {
 			int i;
 			for (i = 0; i < NUM_REQS_BY_USER && gen->has_next(); ) {
 				workload_t workload = gen->next();
@@ -255,17 +258,16 @@ again:
 					off_t next_off = ROUNDUP_PAGE(off + 1);
 					if (next_off > off + entry_size)
 						next_off = off + entry_size;
-					ret = io->access(entry, off, next_off - off, access_method);
-					if (ret > 0) {
+					io_status status = io->access(entry, off, next_off - off,
+							access_method);
+					if (status == IO_OK) {
 						num_accesses++;
 						if (access_method == READ && verify_read_content) {
 							check_read_content(entry, next_off - off, off);
 						}
 						read_bytes += ret;
 					}
-					if (ret == 0)
-						printf("read %ld get 0 bytes\n", off);
-					if (ret < 0) {
+					if (status == IO_FAIL) {
 						perror("access");
 						exit(1);
 					}
@@ -277,15 +279,16 @@ again:
 				if (access_method == WRITE && verify_read_content) {
 					create_write_data(entry, entry_size, off);
 				}
-				ret = io->access(entry, off, entry_size, access_method);
-				if (ret > 0) {
+				io_status status = io->access(entry, off, entry_size,
+						access_method);
+				if (status == IO_OK) {
 					num_accesses++;
 					if (access_method == READ && verify_read_content) {
 						check_read_content(entry, entry_size, off);
 					}
 					read_bytes += ret;
 				}
-				if (ret < 0) {
+				if (status == IO_FAIL) {
 					perror("access");
 					exit(1);
 				}
