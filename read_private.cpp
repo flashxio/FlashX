@@ -35,7 +35,7 @@ int buffered_io::init() {
 	return 0;
 }
 
-ssize_t buffered_io::access(char *buf, off_t offset, ssize_t size, int access_method) {
+io_status buffered_io::access(char *buf, off_t offset, ssize_t size, int access_method) {
 	int fd;
 	if (fds.size() == 1)
 		fd = fds[0];
@@ -52,17 +52,17 @@ ssize_t buffered_io::access(char *buf, off_t offset, ssize_t size, int access_me
 	gettimeofday(&start, NULL);
 #endif
 	ssize_t ret;
+	// TODO I need to make sure all data is read or written to the file.
 	if (access_method == WRITE)
 		ret = pwrite(fd, buf, size, offset);
 	else
 		ret = pread(fd, buf, size, offset);
-	if (ret < 0) {
-		perror("pread");
-		abort();
-	}
 #ifdef STATISTICS
 	gettimeofday(&end, NULL);
 	read_time += ((long) end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
 #endif
-	return ret;
+	if (ret < 0)
+		return IO_FAIL;
+	else
+		return IO_OK;
 }

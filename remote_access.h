@@ -74,7 +74,8 @@ public:
 		return local_size;
 	}
 
-	virtual ssize_t access(io_request *requests, int num);
+	virtual void access(io_request *requests, int num,
+			io_status *status = NULL);
 	virtual io_interface *clone() const;
 	void flush_requests(int max_cached);
 	virtual void flush_requests();

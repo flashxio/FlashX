@@ -123,9 +123,9 @@ public:
 
 	int process_reply(io_reply *reply);
 
-	ssize_t access(io_request *requests, int num);
-	ssize_t access(char *, off_t, ssize_t, int) {
-		return -1;
+	void access(io_request *requests, int num, io_status *status);
+	io_status access(char *, off_t, ssize_t, int) {
+		return IO_UNSUPPORTED;
 	}
 
 	void cleanup();

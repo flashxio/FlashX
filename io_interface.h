@@ -3,12 +3,22 @@
 
 #include <stdlib.h>
 
+#include "exception.h"
+
 class io_request;
 
 class callback
 {
 public:
 	virtual int invoke(io_request *reqs[], int num) = 0;
+};
+
+enum io_status
+{
+	IO_OK,
+	IO_PENDING = -1,
+	IO_FAIL = -2,
+	IO_UNSUPPORTED = -3,
 };
 
 /**
@@ -80,8 +90,8 @@ public:
 	/**
 	 * The main interface to send requests.
 	 */
-	virtual ssize_t access(io_request *requests, int num) {
-		return -1;
+	virtual void access(io_request *requests, int num, io_status *status = NULL) {
+		throw unsupported_exception();
 	}
 	/**
 	 * When requests are passed to the access method, an IO layer may buffer
@@ -100,8 +110,8 @@ public:
 	/**
 	 * The synchronous IO interface.
 	 */
-	virtual ssize_t access(char *, off_t, ssize_t, int) {
-		return -1;
+	virtual io_status access(char *, off_t, ssize_t, int) {
+		return IO_UNSUPPORTED;
 	}
 
 	virtual void print_stat() {

@@ -70,11 +70,7 @@ public:
 
 	virtual ~async_io();
 
-	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method) {
-		return -1;
-	}
-
-	ssize_t access(io_request *requests, int num);
+	void access(io_request *requests, int num, io_status *status = NULL);
 
 	bool set_callback(callback *cb) {
 		this->cb = cb;

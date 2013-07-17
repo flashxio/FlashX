@@ -62,7 +62,7 @@ public:
 			fsync(fds[i]);
 	}
 
-	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
+	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
 
 #ifdef STATISTICS
 	virtual void print_stat() {

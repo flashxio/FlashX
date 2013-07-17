@@ -193,7 +193,7 @@ again:
 						i++;
 					}
 					if (size > 0) {
-						ret = io->access(reqs, i);
+						io->access(reqs, i);
 #ifdef STATISTICS
 						num_pending.inc(i);
 #endif
@@ -213,7 +213,7 @@ again:
 					reqs[i++].init(p, off, size, access_method, io, node_id);
 				}
 			}
-			ret = io->access(reqs, i);
+			io->access(reqs, i);
 			if (ret < 0) {
 				perror("access_vector");
 				exit(1);

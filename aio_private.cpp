@@ -123,7 +123,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	}
 }
 
-ssize_t async_io::access(io_request *requests, int num)
+void async_io::access(io_request *requests, int num, io_status *status)
 {
 	ssize_t ret = 0;
 
@@ -148,7 +148,9 @@ ssize_t async_io::access(io_request *requests, int num)
 		submit_io_request(ctx, reqs, min);
 		num -= min;
 	}
-	return ret;
+	if (status)
+		for (int i = 0; i < num; i++)
+			status[i] = IO_PENDING;
 }
 
 void async_io::return_cb(thread_callback_s *tcbs[], int num)

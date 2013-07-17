@@ -489,8 +489,9 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 						underlying, get_node_id(), real_orig, p);
 				p->set_io_pending(true);
 				p->unlock();
-				ret = underlying->access(&read_req, 1);
-				if (ret < 0) {
+				io_status status;
+				underlying->access(&read_req, 1, &status);
+				if (status == IO_FAIL) {
 					perror("read");
 					exit(1);
 				}
@@ -575,8 +576,9 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 					PAGE_SIZE, READ, underlying, get_node_id(), orig, p);
 			p->unlock();
 			assert(orig->get_orig() == NULL);
-			ret = underlying->access(&req, 1);
-			if (ret < 0) {
+			io_status status;
+			underlying->access(&req, 1, &status);
+			if (status == IO_FAIL) {
 				perror("read");
 				exit(1);
 			}
@@ -800,8 +802,9 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 	}
 #endif
 
-	ssize_t ret = io->access(&req, 1);
-	if (ret < 0) {
+	io_status status;
+	io->access(&req, 1, &status);
+	if (status == IO_FAIL) {
 		perror("write");
 		abort();
 	}
@@ -821,7 +824,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 	notify_completion(cached_reqs, num_cached_reqs);
 }
 
-ssize_t global_cached_io::access(io_request *requests, int num)
+void global_cached_io::access(io_request *requests, int num, io_status *status)
 {
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();
@@ -843,6 +846,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 		io_request *orig = NULL;
 
 		int pg_idx = 0;
+		int num_pages_hit = 0;
 		for (off_t tmp_off = begin_pg_offset; tmp_off < end_pg_offset;
 				tmp_off += PAGE_SIZE) {
 			off_t old_off = -1;
@@ -872,6 +876,7 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 #ifdef STATISTICS
 				cache_hits++;
 #endif
+				num_pages_hit++;
 				// Let's optimize for cached single-page requests by stealing
 				// them from normal code path of processing them.
 				assert(requests[i].is_valid());
@@ -1008,16 +1013,24 @@ ssize_t global_cached_io::access(io_request *requests, int num)
 			req.set_node_id(pages[0]->get_node_id());
 			read(req, pages, pg_idx);
 		}
+
+		// If all pages accessed by the request are in the cache, the request
+		// can be completed when we return from the function.
+		if (status) {
+			if (num_pages_hit == (end_pg_offset - begin_pg_offset) / PAGE_SIZE)
+				status[i] = IO_OK;
+			else
+				status[i] = IO_PENDING;
+		}
 	}
 	process_cached_reqs(cached_reqs, cached_pages, num_cached_reqs);
 	if (get_global_cache()->get_flush_thread())
 		get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
 				dirty_pages.size());
 	underlying->flush_requests();
-	return 0;
 }
 
-ssize_t global_cached_io::access(char *buf, off_t offset,
+io_status global_cached_io::access(char *buf, off_t offset,
 		ssize_t size, int access_method)
 {
 	assert(access_method == READ);
@@ -1127,7 +1140,7 @@ ssize_t global_cached_io::access(char *buf, off_t offset,
 		get_global_cache()->get_flush_thread()->dirty_pages(&p, 1);
 	p->dec_ref();
 	ret = size;
-	return ret;
+	return IO_OK;
 }
 
 int global_cached_io::preload(off_t start, long size) {

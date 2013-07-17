@@ -473,7 +473,9 @@ int part_global_cached_io::process_replies()
 	return num_processed;
 }
 
-ssize_t part_global_cached_io::access(io_request *requests, int num) {
+void part_global_cached_io::access(io_request *requests, int num, io_status status[])
+{
+	// TODO I'll write status to the status array later.
 	int num_sent = 0;
 	int num_remaining = distribute_reqs(&requests[num_sent], num - num_sent);
 	// This variable is only accessed in one thread, so we don't
@@ -491,8 +493,6 @@ ssize_t part_global_cached_io::access(io_request *requests, int num) {
 			num_remaining += it->second->get_num_remaining();
 		}
 	}
-
-	return num_sent;
 }
 
 void part_global_cached_io::cleanup()

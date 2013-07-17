@@ -10,7 +10,7 @@ public:
 			int node_id): buffered_io(partition, size, node_id, O_DIRECT | O_RDWR) {
 	}
 
-	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
+	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
 };
 
 #endif

@@ -89,11 +89,11 @@ public:
 	}
 
 	int preload(off_t start, long size);
-	ssize_t access(char *buf, off_t offset, ssize_t size, int access_method);
+	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
 	/**
 	 * A request can access data of arbitrary size and from arbitrary offset.
 	 */
-	ssize_t access(io_request *requests, int num);
+	void access(io_request *requests, int num, io_status *status = NULL);
 
 	/**
 	 * One read can access multiple pages while one write can only write

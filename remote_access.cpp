@@ -86,7 +86,8 @@ void remote_disk_access::cleanup()
 	} while (num > 0);
 }
 
-ssize_t remote_disk_access::access(io_request *requests, int num)
+void remote_disk_access::access(io_request *requests, int num,
+		io_status *status)
 {
 	for (int i = 0; i < num; i++) {
 		assert(requests[i].get_size() > 0);
@@ -113,7 +114,9 @@ ssize_t remote_disk_access::access(io_request *requests, int num)
 	if (num_remaining > MAX_DISK_CACHED_REQS) {
 		flush_requests(MAX_DISK_CACHED_REQS);
 	}
-	return 0;
+	if (status)
+		for (int i = 0; i < num; i++)
+			status[i] = IO_PENDING;
 }
 
 void remote_disk_access::flush_requests()
