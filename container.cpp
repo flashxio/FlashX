@@ -1,5 +1,3 @@
-#include <limits.h>
-
 #include "container.h"
 
 template<class T>
@@ -19,41 +17,6 @@ bool fifo_queue<T>::expand_queue(int new_size)
 	start = 0;
 	end = num;
 	return true;
-}
-
-template<class T>
-int blocking_FIFO_queue<T>::non_blocking_fetch(T *entries, int num)
-{
-	pthread_mutex_lock(&mutex);
-	bool full = this->is_full();
-	int ret = fifo_queue<T>::fetch(entries, num);
-	pthread_mutex_unlock(&mutex);
-
-	/* wake up all threads to send more requests */
-	if (full)
-		pthread_cond_broadcast(&cond);
-
-	return ret;
-}
-
-template<class T>
-int blocking_FIFO_queue<T>::fetch(T *entries, int num) {
-	/* we have to wait for coming requests. */
-	pthread_mutex_lock(&mutex);
-	while(this->is_empty()) {
-		num_empty++;
-//		printf("the blocking queue %s is empty, wait...\n", name.c_str());
-		pthread_cond_wait(&cond, &mutex);
-	}
-	bool full = this->is_full();
-	int ret = fifo_queue<T>::fetch(entries, num);
-	pthread_mutex_unlock(&mutex);
-
-	/* wake up all threads to send more requests */
-	if (full)
-		pthread_cond_broadcast(&cond);
-
-	return ret;
 }
 
 /**
@@ -118,12 +81,6 @@ int blocking_FIFO_queue<T>::non_blocking_add(T *entries, int num) {
 }
 
 template<class T>
-int blocking_FIFO_queue<T>::add(fifo_queue<T> *queue)
-{
-	return add_partial(queue, INT_MAX);
-}
-
-template<class T>
 int blocking_FIFO_queue<T>::add_partial(fifo_queue<T> *queue, int min_added)
 {
 	int num_added = 0;
@@ -181,6 +138,42 @@ int blocking_FIFO_queue<T>::non_blocking_add(fifo_queue<T> *queue)
 			pthread_cond_broadcast(&cond);
 	}
 	return num_added;
+}
+
+template<class T>
+int blocking_FIFO_queue<T>::fetch(T *entries, int num, bool blocking,
+		bool interruptible)
+{
+	/* we have to wait for coming requests. */
+	pthread_mutex_lock(&mutex);
+	if (blocking) {
+		while(this->is_empty()) {
+			num_empty++;
+			if (interruptible && interrupted) {
+				// We need to reset the interrupt signal.
+				interrupted = false;
+				break;
+			}
+			pthread_cond_wait(&cond, &mutex);
+		}
+	}
+	bool full = this->is_full();
+	int ret = fifo_queue<T>::fetch(entries, num);
+	pthread_mutex_unlock(&mutex);
+
+	/* wake up all threads to send more requests */
+	if (full)
+		pthread_cond_broadcast(&cond);
+
+	return ret;
+}
+
+template<class T>
+int blocking_FIFO_queue<T>::add(T *entries, int num, bool blocking,
+		bool interruptible)
+{
+	// TODO
+	return -1;
 }
 
 #ifdef USE_SHADOW_PAGE

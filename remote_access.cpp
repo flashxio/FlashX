@@ -81,14 +81,24 @@ void remote_disk_access::cleanup()
 		 * unless the queues can notify me when they are
 		 * empty.
 		 */
-		if (num > 0)
+		if (num > 0) {
+			// Let's wake up all IO threads if there are still
+			// some low-priority requests that need to be processed.
+			for (int i = 0; i < num_senders; i++) {
+				senders[i]->get_queue()->wakeup();
+			}
 			usleep(100000);
+		}
 	} while (num > 0);
 }
 
 void remote_disk_access::access(io_request *requests, int num,
 		io_status *status)
 {
+	// It marks whether a low-priority sender gets a request.
+	bool has_msgs[num_senders];
+	memset(has_msgs, 0, sizeof(has_msgs[0]) * num_senders);
+
 	for (int i = 0; i < num; i++) {
 		assert(requests[i].get_size() > 0);
 		// TODO data is striped on disks, we have to make sure the data
@@ -101,8 +111,10 @@ void remote_disk_access::access(io_request *requests, int num,
 		int ret;
 		if (requests[i].is_high_prio())
 			ret = senders[idx]->send_cached(&requests[i]);
-		else
+		else {
+			has_msgs[idx] = true;
 			ret = low_prio_senders[idx]->send_cached(&requests[i]);
+		}
 		assert(ret == 1);
 	}
 
@@ -117,6 +129,14 @@ void remote_disk_access::access(io_request *requests, int num,
 	if (status)
 		for (int i = 0; i < num; i++)
 			status[i] = IO_PENDING;
+
+	// The IO threads are never blocked by the low-priority queues,
+	// but they may be blocked by the regular message queues.
+	// If so, we need to explicitly wake up the IO threads.
+	for (int i = 0; i < num_senders; i++) {
+		if (has_msgs[i])
+			senders[i]->get_queue()->wakeup();
+	}
 }
 
 void remote_disk_access::flush_requests()

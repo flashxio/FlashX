@@ -6,6 +6,7 @@
 #include <numa.h>
 #include <assert.h>
 #include <pthread.h>
+#include <limits.h>
 
 #include <string>
 
@@ -291,6 +292,7 @@ class blocking_FIFO_queue: public fifo_queue<T>
 	int num_empty;
 	int num_full;
 	int max_size;
+	bool interrupted;
 
 	std::string name;
 public:
@@ -303,18 +305,42 @@ public:
 		num_empty = 0;
 		num_full = 0;
 		this->max_size = max_size;
+		interrupted = false;
 	}
 
-	virtual int fetch(T *entries, int num);
-	int non_blocking_fetch(T *entries, int num);
-
+	virtual int fetch(T *entries, int num) {
+		return fetch(entries, num, true, false);
+	}
 	virtual int add(T *entries, int num);
+	virtual int add(fifo_queue<T> *queue) {
+		return add_partial(queue, INT_MAX);
+	}
 
-	virtual int add(fifo_queue<T> *queue);
 	// Add at least `min_added' elements or all elements in `queue' are added.
 	int add_partial(fifo_queue<T> *queue, int min_added = 1);
 	int non_blocking_add(fifo_queue<T> *queue);
 	int non_blocking_add(T *entries, int num);
+	int non_blocking_fetch(T *entries, int num) {
+		return fetch(entries, num, false, false);
+	}
+
+	int fetch(T *entries, int num, bool blocking, bool interruptible);
+	int add(T *entries, int num, bool blocking, bool interruptible);
+
+	/**
+	 * This method wakes up the thread that is waiting on the queue
+	 * and can be interrupted.
+	 * This can only wake up one thread.
+	 */
+	void wakeup() {
+		pthread_mutex_lock(&mutex);
+		// We only try to wake up the thread when it's waiting for requests.
+		if (this->is_empty()) {
+			interrupted = true;
+			pthread_cond_signal(&cond);
+		}
+		pthread_mutex_unlock(&mutex);
+	}
 
 	int get_num_empty() const {
 		return num_empty;

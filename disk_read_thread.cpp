@@ -109,7 +109,11 @@ void disk_read_thread::run() {
 		}
 
 		if (num == 0)
-			num = queue.fetch(reqs, AIO_DEPTH_PER_FILE);
+			num = queue.fetch(reqs, AIO_DEPTH_PER_FILE, true, true);
+		// We have been interrupted from waiting for IO requests.
+		// Let's go back and try to process low-priority requests.
+		if (num == 0)
+			continue;
 		num_accesses += num;
 		aio->access(reqs, num);
 	}
