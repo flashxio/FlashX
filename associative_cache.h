@@ -310,7 +310,20 @@ public:
 		printf("\n");
 	}
 
-	void get_dirty_pages(std::map<off_t, thread_safe_page *> &pages, int num_pages);
+	/**
+	 * This method returns a specified number of pages that contains
+	 * set flags and don't contain clear flags.
+	 */
+	void get_pages(int num_pages, char set_flags, char clear_flags,
+			std::map<off_t, thread_safe_page *> &pages);
+
+	/**
+	 * Predict the pages that are about to be evicted by the eviction policy,
+	 * and return them to the invoker.
+	 * The selected pages must have the set flags and don't have clear flags.
+	 */
+	void predict_evicted_pages(int num_pages, char set_flags, char clear_flags,
+			std::map<off_t, thread_safe_page *> &pages);
 
 	long get_hash() const {
 		return hash;

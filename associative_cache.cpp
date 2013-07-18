@@ -938,17 +938,68 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 		expand((cache_size - init_cache_size) / PAGE_SIZE);
 }
 
+/**
+ * This defines an interface for implementing the policy of selecting
+ * dirty pages for flushing.
+ */
+class select_dirty_pages_policy
+{
+public:
+	// It select a specified number of pages from the page set.
+	virtual int select(hash_cell *cell, int num_pages,
+			std::map<off_t, thread_safe_page *> &pages) = 0;
+};
+
+/**
+ * The policy selects dirty pages that are most likely to be evicted
+ * by the eviction policy.
+ */
+class eviction_select_dirty_pages_policy: public select_dirty_pages_policy
+{
+public:
+	int select(hash_cell *cell, int num_pages,
+			std::map<off_t, thread_safe_page *> &pages) {
+		char set_flags = 0;
+		char clear_flags = 0;
+		page_set_flag(set_flags, DIRTY_BIT, true);
+		page_set_flag(clear_flags, IO_PENDING_BIT, true);
+		page_set_flag(clear_flags, PREPARE_WRITEBACK, true);
+		cell->predict_evicted_pages(num_pages, set_flags, clear_flags, pages);
+		return pages.size();
+	}
+};
+
+/**
+ * This policy simply selects some dirty pages in a page set.
+ */
+class default_select_dirty_pages_policy: public select_dirty_pages_policy
+{
+public:
+	int select(hash_cell *cell, int num_pages,
+			std::map<off_t, thread_safe_page *> &pages) {
+		char set_flags = 0;
+		char clear_flags = 0;
+		page_set_flag(set_flags, DIRTY_BIT, true);
+		page_set_flag(clear_flags, IO_PENDING_BIT, true);
+		page_set_flag(clear_flags, PREPARE_WRITEBACK, true);
+		cell->get_pages(num_pages, set_flags, clear_flags, pages);
+		return pages.size();
+	}
+};
+
 class associative_flush_thread: public flush_thread
 {
 	associative_cache *cache;
 	io_interface *io;
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
+	select_dirty_pages_policy *policy;
 public:
 	associative_flush_thread(associative_cache *cache,
 			io_interface *io, int node_id): flush_thread(node_id), dirty_cells(
 				MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
 		this->cache = cache;
 		this->io = io;
+		policy = new eviction_select_dirty_pages_policy();
 	}
 
 	void run();
@@ -1072,7 +1123,7 @@ void associative_flush_thread::run()
 		for (int i = 0; i < num_fetches; i++) {
 			std::map<off_t, thread_safe_page *> dirty_pages;
 			std::vector<io_request *> requests;
-			cells[i]->get_dirty_pages(dirty_pages, NUM_WRITEBACK_DIRTY_PAGES);
+			policy->select(cells[i], NUM_WRITEBACK_DIRTY_PAGES, dirty_pages);
 			int num_init_reqs = 0;
 			for (std::map<off_t, thread_safe_page *>::const_iterator it
 					= dirty_pages.begin(); it != dirty_pages.end(); it++) {
@@ -1218,23 +1269,6 @@ hash_cell *associative_cache::get_next_cell(hash_cell *cell)
 	}
 }
 
-void hash_cell::get_dirty_pages(std::map<off_t, thread_safe_page *> &pages,
-		int num_pages)
-{
-	pthread_spin_lock(&_lock);
-	char set_flags = 0;
-	char clear_flags = 0;
-	page_set_flag(set_flags, DIRTY_BIT, true);
-	page_set_flag(clear_flags, IO_PENDING_BIT, true);
-	page_set_flag(clear_flags, PREPARE_WRITEBACK, true);
-	policy.predict_evicted_pages(buf, num_pages, set_flags, clear_flags, pages);
-	for (std::map<off_t, thread_safe_page *>::iterator it = pages.begin();
-			it != pages.end(); it++) {
-		it->second->inc_ref();
-	}
-	pthread_spin_unlock(&_lock);
-}
-
 int hash_cell::num_pages(char set_flags, char clear_flags)
 {
 	int num = 0;
@@ -1246,6 +1280,34 @@ int hash_cell::num_pages(char set_flags, char clear_flags)
 	}
 	pthread_spin_unlock(&_lock);
 	return num;
+}
+
+void hash_cell::predict_evicted_pages(int num_pages, char set_flags,
+		char clear_flags, std::map<off_t, thread_safe_page *> &pages)
+{
+	pthread_spin_lock(&_lock);
+	policy.predict_evicted_pages(buf, num_pages, set_flags,
+			clear_flags, pages);
+	for (std::map<off_t, thread_safe_page *>::iterator it = pages.begin();
+			it != pages.end(); it++) {
+		it->second->inc_ref();
+	}
+	pthread_spin_unlock(&_lock);
+}
+
+void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
+		std::map<off_t, thread_safe_page *> &pages)
+{
+	pthread_spin_lock(&_lock);
+	for (int i = 0; i < (int) buf.get_num_pages(); i++) {
+		thread_safe_page *p = buf.get_page(i);
+		if (p->test_flags(set_flags) && !p->test_flags(clear_flags)) {
+			p->inc_ref();
+			pages.insert(std::pair<off_t, thread_safe_page *>(
+						p->get_offset(), p));
+		}
+	}
+	pthread_spin_unlock(&_lock);
 }
 
 #define ENABLE_FLUSH_THREAD
