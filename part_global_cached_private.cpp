@@ -49,6 +49,7 @@ class node_cached_io: public global_cached_io
 	long num_requests;
 	io_request local_msg_reqs[NUMA_REQ_BUF_SIZE];
 	io_request local_reqs[NUMA_REQ_BUF_SIZE];
+	io_reply local_reply_buf[REPLY_BUF_SIZE];
 
 	pthread_t processing_thread_id;
 
@@ -184,18 +185,17 @@ void node_cached_io::notify_completion(io_request *reqs[], int num)
 		part_global_cached_io *io = (part_global_cached_io *) it->first;
 		std::vector<io_request *> *vec = &it->second;
 
-		io_reply replies[vec->size()];
 		for (size_t i = 0; i < vec->size(); i++)
-			replies[i] = io_reply(vec->at(i), true, 0);
+			local_reply_buf[i] = io_reply(vec->at(i), true, 0);
 		// The reply must be sent to the thread on a different node.
 		assert(io->get_node_id() != this->get_node_id());
 		int num_sent;
 		if ((int) vec->size() > NUMA_REPLY_CACHE_SIZE)
 			num_sent = ((struct thread_group *) local_group)
-				->reply_senders[io]->send(replies, vec->size());
+				->reply_senders[io]->send(local_reply_buf, vec->size());
 		else
 			num_sent = ((struct thread_group *) local_group)
-				->reply_senders[io]->send_cached(replies, vec->size());
+				->reply_senders[io]->send_cached(local_reply_buf, vec->size());
 		// We use blocking queues here, so the send must succeed.
 		assert(num_sent == (int) vec->size());
 	}
@@ -410,7 +410,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 /* distribute requests to nodes. */
 int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	int num_sent = 0;
-	io_request local_reqs[num];
 	int num_local_reqs = 0;
 	for (int i = 0; i < num; i++) {
 		assert(requests[i].within_1page());
@@ -423,12 +422,13 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 			assert(ret > 0);
 		}
 		else {
-			local_reqs[num_local_reqs++] = requests[i];
+			assert(num_local_reqs < REQ_BUF_SIZE);
+			local_req_buf[num_local_reqs++] = requests[i];
 		}
 		num_sent++;
 	}
 
-	global_cached_io::access(local_reqs, num_local_reqs);
+	global_cached_io::access(local_req_buf, num_local_reqs);
 	// TODO how to deal with error of access.
 	int num_remaining = 0;
 	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it

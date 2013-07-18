@@ -13,6 +13,7 @@
 #include "file_mapper.h"
 
 #define REPLY_BUF_SIZE 1000
+#define REQ_BUF_SIZE 1000
 
 class part_global_cached_io;
 
@@ -59,6 +60,7 @@ class part_global_cached_io: public global_cached_io
 	cache_config *cache_conf;
 	blocking_FIFO_queue<io_reply> *reply_queue;
 	io_reply local_reply_buf[REPLY_BUF_SIZE];
+	io_request local_req_buf[REQ_BUF_SIZE];
 
 	/*
 	 * there is a sender for each node.
