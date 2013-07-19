@@ -136,7 +136,6 @@ int thread_private::thread_init() {
 int thread_private::run()
 {
 	int node_id = io->get_node_id();
-	ssize_t ret = -1;
 	gettimeofday(&start_time, NULL);
 	io_request reqs[NUM_REQS_BY_USER];
 	char *entry = NULL;
@@ -217,10 +216,6 @@ again:
 				}
 			}
 			io->access(reqs, i);
-			if (ret < 0) {
-				perror("access_vector");
-				exit(1);
-			}
 			num_accesses += i;
 #ifdef STATISTICS
 			int curr = num_pending.inc(i);
@@ -233,6 +228,7 @@ again:
 #endif
 		}
 		else {
+			int ret = 0;
 			workload_t workload = gen->next();
 			off_t off = workload.off;
 			int access_method = workload.read ? READ : WRITE;
