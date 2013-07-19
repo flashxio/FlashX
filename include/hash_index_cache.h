@@ -4,13 +4,6 @@
 #include <pthread.h>
 #include <math.h>
 
-/* the header files for the lock-free hashtable. */
-extern "C" {
-#include <map.h>
-#include <hashtable.h>
-#include <common.h>
-}
-
 #include "memory_manager.h"
 #include "cache.h"
 #include "concurrency.h"
@@ -19,6 +12,13 @@ extern "C" {
 #include "SA_hash_table.cpp"
 #include "gclock.h"
 #include "parameters.h"
+
+/* the header files for the lock-free hashtable. */
+extern "C" {
+#include <map.h>
+#include <hashtable.h>
+#include <common.h>
+}
 
 template<class KeyT, class ValueT>
 class lock_free_hashtable: public hashtable_interface<KeyT, ValueT>

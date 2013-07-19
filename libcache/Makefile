@@ -5,8 +5,8 @@ endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread -lnuma $(TRACE_FLAGS) -lprofiler -rdynamic -Lnbds.0.4.3/ -lnbds -Llibcache -lcache -laio
-CXXFLAGS = -g -O3 -Iinclude -I. -Inbds.0.4.3/include/ -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=0 -DPROFILER
+LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -rdynamic
+CXXFLAGS = -g -O3 -I../include -I. -I../nbds.0.4.3/include/ -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=0 -DPROFILER
 CPPFLAGS := -MD
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -23,22 +23,15 @@ CC = gcc
 CXX = g++
 endif
 
-all: rand-read
+all: libcache
 
-rand-read: $(OBJS) build_lib
-	$(CXX) -o rand-read $(OBJS) $(LDFLAGS)
-
-build_lib:
-	make -C libcache
-
-unit_test: $(OBJS)
-	make -C test
+libcache: $(OBJS)
+	ar -cvq libcache.a $(OBJS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	make --ignore-errors -C test clean
-	make --ignore-errors -C libcache clean
+	rm libcache.a
 
 -include $(DEPS) 

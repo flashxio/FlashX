@@ -57,7 +57,6 @@ public:
 	long get_part_size(int node_id) const {
 		std::tr1::unordered_map<int, long>::const_iterator it
 			= part_sizes.find(node_id);
-		fprintf(stderr, "node_id: %d\n", node_id);
 		assert(it != part_sizes.end());
 		return it->second;
 	}
@@ -102,20 +101,35 @@ public:
  */
 class test_cache_config: public cache_config
 {
+	std::vector<int> map;
+	int num_page_sets;
+	int part_size;		// also in the number of page sets.
 public:
 	test_cache_config(long size, int type,
-			const std::vector<int> &node_ids): cache_config(size, type) {
+			const std::vector<int> &node_ids): cache_config(size, type), map(3) {
+		num_page_sets = size / PAGE_SIZE / CELL_MIN_NUM_PAGES;
+		part_size = num_page_sets / 3;
+		map[0] = 0;
+		map[1] = 2;
+		map[2] = 3;
 		assert(node_ids.size() == 4);
 		std::tr1::unordered_map<int, long> part_sizes;
-		part_sizes.insert(std::pair<int, long>(0, 0));
+		part_sizes.insert(std::pair<int, long>(0, size));
 		part_sizes.insert(std::pair<int, long>(1, 0));
-		part_sizes.insert(std::pair<int, long>(2, size / 2));
-		part_sizes.insert(std::pair<int, long>(3, size / 2));
+		part_sizes.insert(std::pair<int, long>(2, 0));
+		part_sizes.insert(std::pair<int, long>(3, 0));
 		init(part_sizes);
 	}
 
 	virtual int page2cache(off_t off) const {
-		return (int) (off / PAGE_SIZE) % 2 + 2;
+		return 0;
+//		return map[(off / PAGE_SIZE) % 3];
+//		return (int) (off / PAGE_SIZE) % 2;
+//		int idx = (int) (off / PAGE_SIZE);
+//		if (idx % 7 == 0)
+//			return 0;
+//		else
+//			return idx % 7 % 2 + 2;
 	}
 };
 

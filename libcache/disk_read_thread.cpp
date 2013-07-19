@@ -1,3 +1,4 @@
+#include "cache.h"
 #include "disk_read_thread.h"
 #include "parameters.h"
 #include "container.cpp"

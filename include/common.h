@@ -1,5 +1,5 @@
-#ifndef __COMMON_H__
-#define __COMMON_H__
+#ifndef __MY_COMMON_H__
+#define __MY_COMMON_H__
 
 #include <sys/time.h>
 #include <stdlib.h>

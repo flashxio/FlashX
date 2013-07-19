@@ -8,6 +8,8 @@
 #include "read_private.h"
 #include "thread.h"
 #include "container.h"
+#include "messaging.h"
+#include "slab_allocator.h"
 
 #ifdef ENABLE_AIO
 

@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <limits.h>
 
-#include "thread_private.h"
+#include "io_interface.h"
 #include "associative_cache.h"
 #include "flush_thread.h"
 #include "container.cpp"

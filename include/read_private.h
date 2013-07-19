@@ -2,8 +2,11 @@
 #define __READ_PRIVATE_H__
 
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
-#include "thread_private.h"
+#include "io_interface.h"
 #include "file_partition.h"
 #include "parameters.h"
 
