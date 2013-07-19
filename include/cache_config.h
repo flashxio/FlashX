@@ -2,6 +2,7 @@
 #define __CACHE_CONFIG_H__
 
 #include <vector>
+#include <tr1/unordered_map>
 
 #include "common.h"
 #include "file_mapper.h"

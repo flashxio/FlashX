@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+#include <vector>
+
 #include "exception.h"
 
 class io_request;
@@ -159,7 +161,24 @@ public:
 	}
 };
 
-void register_io(io_interface *io);
 io_interface *get_io(int idx);
+
+enum {
+	READ_ACCESS,
+	DIRECT_ACCESS,
+#ifdef ENABLE_AIO
+	AIO_ACCESS,
+#endif
+	REMOTE_ACCESS,
+	GLOBAL_CACHE_ACCESS,
+	PART_GLOBAL_ACCESS,
+};
+
+class RAID_config;
+class cache_config;
+
+std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
+		cache_config *cache_conf, const std::vector<int> &node_id_array,
+		int access_option, long size, bool preload);
 
 #endif

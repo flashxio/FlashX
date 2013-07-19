@@ -26,17 +26,12 @@
 
 #define NUM_THREADS 1024
 
-#include "cache.h"
-#include "associative_cache.h"
 #include "workload.h"
-#include "global_cached_private.h"
-#include "aio_private.h"
-#include "direct_private.h"
-#include "part_global_cached_private.h"
-#include "read_private.h"
 #include "thread_private.h"
-#include "remote_access.h"
-#include "disk_read_thread.h"
+#include "RAID_config.h"
+#include "io_interface.h"
+#include "cache.h"
+#include "cache_config.h"
 
 //#define USE_PROCESS
 
@@ -70,17 +65,6 @@ thread_private *get_thread(int idx)
 struct str2int {
 	std::string name;
 	int value;
-};
-
-enum {
-	READ_ACCESS,
-	DIRECT_ACCESS,
-#ifdef ENABLE_AIO
-	AIO_ACCESS,
-#endif
-	REMOTE_ACCESS,
-	GLOBAL_CACHE_ACCESS,
-	PART_GLOBAL_ACCESS,
 };
 
 str2int access_methods[] = {
@@ -125,12 +109,6 @@ str2int req_buf_types[] = {
 	{ "SINGLE_LARGE", SINGLE_LARGE_BUF },
 	{ "SINGLE_SMALL", SINGLE_SMALL_BUF },
 	{ "MULTI", MULTI_BUF },
-};
-
-enum {
-	RAID0,
-	RAID5,
-	HASH,
 };
 
 str2int RAID_options[] = {
@@ -338,25 +316,6 @@ int main(int argc, char *argv[])
 	}
 	printf("There are %d data files\n", num_files);
 
-	file_mapper *mapper = NULL;
-	switch (RAID_mapping_option) {
-		case RAID0:
-			mapper = new RAID0_mapper(files, RAID_block_size);
-			break;
-		case RAID5:
-			mapper = new RAID5_mapper(files, RAID_block_size);
-			break;
-		case HASH:
-			mapper = new hash_mapper(files, RAID_block_size);
-			break;
-	}
-
-	std::vector<int> indices;
-	for (int i = 0; i < mapper->get_num_files(); i++)
-		indices.push_back(i);
-	// The partition contains all files.
-	logical_file_partition global_partition(indices, mapper);
-
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
 		exit(1);
@@ -367,13 +326,9 @@ int main(int argc, char *argv[])
 	long start;
 	long end = 0;
 
-	disk_read_thread **read_threads = new disk_read_thread*[num_files];
-	memset(read_threads, 0, sizeof(*read_threads) * num_files);
+	RAID_config raid_conf(files, RAID_mapping_option, RAID_block_size);
 
-	std::set<int> node_ids;
-	for (int k = 0; k < num_files; k++) {
-		node_ids.insert(files[k].node_id);
-	}
+	std::set<int> node_ids = raid_conf.get_node_ids();
 	// In this way, we can guarantee that the cache is created
 	// on the nodes with the data files.
 	for (int i = 0; i < num_nodes
@@ -386,28 +341,8 @@ int main(int argc, char *argv[])
 		node_id_array.push_back(*it);
 
 	assert(nthreads % num_nodes == 0);
-	assert(node_id_array.size() >= (unsigned) num_nodes);
+	assert(node_id_array.size() == (unsigned) num_nodes);
 	printf("There are %ld nodes\n", node_id_array.size());
-
-	// Create threads for helping process completed AIO requests.
-	std::tr1::unordered_map<int, aio_complete_thread *> complete_threads;
-	for (int i = 0; i < num_nodes; i++) {
-		int node_id = node_id_array[i];
-		complete_threads.insert(std::pair<int, aio_complete_thread *>(node_id,
-					new aio_complete_thread(node_id)));
-	}
-
-	// Create disk accessing threads.
-	if (access_option == GLOBAL_CACHE_ACCESS
-			|| access_option == PART_GLOBAL_ACCESS
-			|| access_option == REMOTE_ACCESS) {
-		for (int k = 0; k < num_files; k++) {
-			std::vector<int> indices(1, k);
-			logical_file_partition partition(indices, mapper);
-			read_threads[k] = new disk_read_thread(partition, complete_threads,
-					npages * PAGE_SIZE / num_files, files[k].node_id);
-		}
-	}
 
 	cache_config *cache_conf = NULL;
 	if (access_option == GLOBAL_CACHE_ACCESS)
@@ -421,126 +356,60 @@ int main(int argc, char *argv[])
 //				node_id_array, mapper, 2);
 	}
 
-	int nthreads_per_node = nthreads / num_nodes;
-	for (int i = 0, j = 0; i < num_nodes; i++) {
-		int node_id = node_id_array[i];
+	std::vector<io_interface *> ios = create_ios(raid_conf, cache_conf,
+			node_id_array, access_option, npages * PAGE_SIZE, preload);
+	for (unsigned int j = 0; j < ios.size(); j++) {
+		io_interface *io = ios[j];
+		int node_id = io->get_node_id();
 		bind_mem2node_id(node_id);
-		/* initialize the threads' private data. */
-		for (int k = 0; k < nthreads_per_node; k++, j++) {
-			io_interface *io;
-			switch (access_option) {
-				case READ_ACCESS:
-					io = new buffered_io(global_partition,
-							npages * PAGE_SIZE, node_id);
-					register_io(io);
-					threads[j] = new thread_private(j, entry_size, io);
-					break;
-				case DIRECT_ACCESS:
-					io = new direct_io(global_partition, npages * PAGE_SIZE,
-								node_id);
-					register_io(io);
-					threads[j] = new thread_private(j, entry_size, io);
-					break;
-#if ENABLE_AIO
-				case AIO_ACCESS:
-					{
-						int depth_per_file = AIO_DEPTH_PER_FILE / nthreads;
-						if (depth_per_file == 0)
-							depth_per_file = 1;
-						std::tr1::unordered_map<int, aio_complete_thread *> no_complete_threads;
-						io = new async_io(global_partition, no_complete_threads,
-								npages * PAGE_SIZE, depth_per_file, node_id);
-						register_io(io);
-						threads[j] = new thread_private(j, entry_size, io);
-					}
-					break;
-#endif
-				case REMOTE_ACCESS:
-					io = new remote_disk_access(read_threads,
-							complete_threads[node_id], num_files,
-							mapper, node_id);
-					register_io(io);
-					threads[j] = new thread_private(j, entry_size, io);
-					break;
-				case GLOBAL_CACHE_ACCESS:
-					{
-						io_interface *underlying = new remote_disk_access(
-								read_threads, complete_threads[node_id],
-								num_files, mapper, node_id);
-						global_cached_io *io = new global_cached_io(underlying,
-								cache_conf);
-						register_io(io);
-						if (preload && j == 0)
-							io->preload(0, npages * PAGE_SIZE);
-						threads[j] = new thread_private(j, entry_size, io);
-					}
-					break;
-				case PART_GLOBAL_ACCESS:
-					{
-						assert(num_nodes >= (int) node_ids.size());
-						io_interface *underlying = new remote_disk_access(
-								read_threads, complete_threads[node_id],
-								num_files, mapper, node_id);
-						part_global_cached_io *io = new part_global_cached_io(
-								num_nodes, underlying, j, cache_conf);
-						register_io(io);
-						if (preload)
-							io->preload(0, npages * PAGE_SIZE);
-						threads[j] = new thread_private(j, entry_size, io);
-					}
-					break;
-				default:
-					fprintf(stderr, "wrong access option\n");
-					exit(1);
-			}
+		threads[j] = new thread_private(j, entry_size, io);
 
-			/*
-			 * we still assign each thread a range regardless of the number
-			 * of threads. read_private will choose the right file descriptor
-			 * according to the offset.
-			 */
-			start = end;
-			end = start + ((long) npages / nthreads + (shift < remainings))
-				* PAGE_SIZE / entry_size;
-			if (remainings != shift)
-				shift++;
-			printf("thread %d starts %ld ends %ld\n", j, start, end);
+		/*
+		 * we still assign each thread a range regardless of the number
+		 * of threads. read_private will choose the right file descriptor
+		 * according to the offset.
+		 */
+		start = end;
+		end = start + ((long) npages / nthreads + (shift < remainings))
+			* PAGE_SIZE / entry_size;
+		if (remainings != shift)
+			shift++;
+		printf("thread %d starts %ld ends %ld\n", j, start, end);
 
-			workload_gen *gen;
-			switch (workload) {
-				case SEQ_OFFSET:
-					gen = new seq_workload(start, end, entry_size);
+		workload_gen *gen;
+		switch (workload) {
+			case SEQ_OFFSET:
+				gen = new seq_workload(start, end, entry_size);
+				break;
+			case RAND_OFFSET:
+				gen = new rand_workload(start, end, entry_size);
+				break;
+			case RAND_SEQ_OFFSET:
+				gen = new rand_seq_workload(start, end, entry_size, 1024 * 1024 * 4);
+				break;
+			case RAND_PERMUTE:
+				gen = new global_rand_permute_workload(entry_size,
+						(((long) npages) * PAGE_SIZE) / entry_size, num_repeats, read_ratio);
+				break;
+			case HIT_DEFINED:
+				gen = new cache_hit_defined_workload(entry_size,
+						(((long) npages) * PAGE_SIZE) / entry_size,
+						cache_size, hit_ratio, read_ratio);
+				break;
+			case -1:
+				{
+					static long length = 0;
+					static workload_t *workloads = NULL;
+					if (workloads == NULL)
+						workloads = load_file_workload(workload_file, length);
+					gen = new file_workload(workloads, length, j, nthreads);
 					break;
-				case RAND_OFFSET:
-					gen = new rand_workload(start, end, entry_size);
-					break;
-				case RAND_SEQ_OFFSET:
-					gen = new rand_seq_workload(start, end, entry_size, 1024 * 1024 * 4);
-					break;
-				case RAND_PERMUTE:
-					gen = new global_rand_permute_workload(entry_size,
-							(((long) npages) * PAGE_SIZE) / entry_size, num_repeats, read_ratio);
-					break;
-				case HIT_DEFINED:
-					gen = new cache_hit_defined_workload(entry_size,
-							(((long) npages) * PAGE_SIZE) / entry_size,
-							cache_size, hit_ratio, read_ratio);
-					break;
-				case -1:
-					{
-						static long length = 0;
-						static workload_t *workloads = NULL;
-						if (workloads == NULL)
-							workloads = load_file_workload(workload_file, length);
-						gen = new file_workload(workloads, length, j, nthreads);
-						break;
-					}
-				default:
-					fprintf(stderr, "unsupported workload\n");
-					exit(1);
-			}
-			threads[j]->set_workload(gen);
+				}
+			default:
+				fprintf(stderr, "unsupported workload\n");
+				exit(1);
 		}
+		threads[j]->set_workload(gen);
 	}
 
 	if (high_prio) {
@@ -586,21 +455,18 @@ int main(int argc, char *argv[])
 		threads[i]->print_stat();
 	}
 #ifdef STATISTICS
-	for (int i = 0; i < num_files; i++) {
-		disk_read_thread *t = read_threads[i];
-		if (t)
-			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits, complete %d reqs and %d low-prio reqs, process %d remote read requests\n",
-					mapper->get_file_name(i).c_str(), read_threads[i]->get_queue()->get_num_empty(),
-					read_threads[i]->get_queue()->get_num_full(), read_threads[i]->get_num_accesses(),
-					read_threads[i]->get_num_iowait(), read_threads[i]->get_num_completed_reqs(),
-					read_threads[i]->get_num_low_prio_accesses(), read_threads[i]->get_num_local_alloc());
-	}
-	printf("there are %d cells\n", avail_cells);
-	printf("there are %d waits for unused\n", num_wait_unused);
-	printf("there are %d lock contentions\n", lock_contentions);
-	for (std::tr1::unordered_map<int, aio_complete_thread *>::const_iterator it
-			= complete_threads.begin(); it != complete_threads.end(); it++)
-		printf("aio_complete_thread complete %d reqs\n",
-				it->second->get_num_completed_reqs());
+//	for (int i = 0; i < num_files; i++) {
+//		disk_read_thread *t = read_threads[i];
+//		if (t)
+//			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits, complete %d reqs and %d low-prio reqs, process %d remote read requests\n",
+//					mapper->get_file_name(i).c_str(), read_threads[i]->get_queue()->get_num_empty(),
+//					read_threads[i]->get_queue()->get_num_full(), read_threads[i]->get_num_accesses(),
+//					read_threads[i]->get_num_iowait(), read_threads[i]->get_num_completed_reqs(),
+//					read_threads[i]->get_num_low_prio_accesses(), read_threads[i]->get_num_local_alloc());
+//	}
+//	for (std::tr1::unordered_map<int, aio_complete_thread *>::const_iterator it
+//			= complete_threads.begin(); it != complete_threads.end(); it++)
+//		printf("aio_complete_thread complete %d reqs\n",
+//				it->second->get_num_completed_reqs());
 #endif
 }
