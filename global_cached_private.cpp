@@ -503,7 +503,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 				assert(real_orig->get_orig() == NULL);
 				io_request read_req((char *) p->get_data(),
 						ROUND_PAGE(off), PAGE_SIZE, READ,
-						underlying, get_node_id(), real_orig, p);
+						underlying, p->get_node_id(), real_orig, p);
 				p->set_io_pending(true);
 				p->unlock();
 				io_status status;
@@ -767,7 +767,7 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 	assert(!p->is_io_pending());
 	p->set_io_pending(true);
 	io_request req((char *) p->get_data(), off, PAGE_SIZE, WRITE,
-			io, cache->get_node_id(), orig, p);
+			io, p->get_node_id(), orig, p);
 	p->unlock();
 
 #ifdef ENABLE_LARGE_WRITE
@@ -946,7 +946,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
 					req.set_orig(orig);
 					req.set_partial(orig->get_size() > req.get_size());
-					// TODO It only works with one-page request
+					// All pages should be on the same node.
 					req.set_node_id(pages[0]->get_node_id());
 					read(req, pages, pg_idx);
 					pg_idx = 0;
@@ -1016,6 +1016,10 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				num_bytes_completed += write(req, p, dirty_pages);
 			}
 			else {
+				// We have to make sure all pages accessed in one request should
+				// be on the same node.
+				if (pg_idx > 0)
+					assert(pages[pg_idx - 1]->get_node_id() == p->get_node_id());
 				pages[pg_idx++] = p;
 				if (pg_idx == MAX_NUM_IOVECS) {
 					io_request req(true);
