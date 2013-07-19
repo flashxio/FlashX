@@ -519,6 +519,8 @@ public:
 	flush_thread *get_flush_thread() const {
 		return _flush_thread;
 	}
+	void mark_dirty_pages(thread_safe_page *pages[], int num);
+	void flush_callback(io_request &req);
 
 	hash_cell *get_prev_cell(hash_cell *cell);
 	hash_cell *get_next_cell(hash_cell *cell);

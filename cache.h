@@ -375,8 +375,9 @@ public:
 	virtual bool shrink(int npages, char *pages[]) {
 		return false;
 	}
-	virtual flush_thread *get_flush_thread() const {
-		return NULL;
+	virtual void mark_dirty_pages(thread_safe_page *pages[], int num) {
+	}
+	virtual void flush_callback(io_request &req) {
 	}
 	virtual int get_node_id() const {
 		return -1;

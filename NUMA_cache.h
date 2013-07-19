@@ -49,6 +49,18 @@ public:
 		for (size_t i = 0; i < caches.size(); i++)
 			caches[i]->print_stat();
 	}
+
+	virtual void mark_dirty_pages(thread_safe_page *pages[], int num) {
+		for (int i = 0; i < num; i++) {
+			int idx = cache_conf->page2cache(pages[i]->get_offset());
+			caches[idx]->mark_dirty_pages(&pages[i], 1);
+		}
+	}
+
+	virtual void flush_callback(io_request &req) {
+		int idx = cache_conf->page2cache(req.get_offset());
+		caches[idx]->flush_callback(req);
+	}
 };
 
 #endif

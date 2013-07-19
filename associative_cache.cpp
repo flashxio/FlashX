@@ -1210,6 +1210,18 @@ flush_thread *associative_cache::create_flush_thread(io_interface *io)
 	return _flush_thread;
 }
 
+void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num)
+{
+	if (_flush_thread)
+		_flush_thread->dirty_pages(pages, num);
+}
+
+void associative_cache::flush_callback(io_request &req)
+{
+	if (_flush_thread)
+		_flush_thread->request_callback(req);
+}
+
 void associative_cache::init(io_interface *underlying)
 {
 	// This init method is called in all threads. Since the cache is

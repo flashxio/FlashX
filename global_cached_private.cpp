@@ -318,8 +318,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 			}
 			p->dec_ref();
 		}
-		if (cache->get_flush_thread())
-			cache->get_flush_thread()->dirty_pages(dirty_pages, num_dirty_pages);
+		cache->mark_dirty_pages(dirty_pages, num_dirty_pages);
 	}
 	else {
 		io_request *orig = request->get_orig();
@@ -352,8 +351,7 @@ int access_page_callback::invoke(io_request *requests[], int num)
 		 * it is issued by the flushing thread.
 		 */
 		if (request->get_orig() == NULL) {
-			if (cache->get_flush_thread())
-				cache->get_flush_thread()->request_callback(*request);
+			cache->flush_callback(*request);
 			continue;
 		}
 
@@ -391,8 +389,8 @@ int access_page_callback::invoke(io_request *requests[], int num)
 			assert(orig->get_orig() == NULL);
 			thread_safe_page *dirty = __complete_req(orig, p);
 			// TODO maybe I should make it support multi-request callback.
-			if (dirty && cache->get_flush_thread())
-				cache->get_flush_thread()->dirty_pages(&dirty, 1);
+			if (dirty)
+				cache->mark_dirty_pages(&dirty, 1);
 			io_request partial;
 			extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
 			cached_io->finalize_partial_request(partial, orig);
@@ -407,8 +405,8 @@ int access_page_callback::invoke(io_request *requests[], int num)
 				io_request *next = old->get_next_req();
 				assert(old->get_num_bufs() == 1);
 				thread_safe_page *dirty = __complete_req(old, p);
-				if (dirty && cache->get_flush_thread())
-					cache->get_flush_thread()->dirty_pages(&dirty, 1);
+				if (dirty)
+					cache->mark_dirty_pages(&dirty, 1);
 
 				cached_io->finalize_request(*old);
 				// Now we can delete it.
@@ -750,9 +748,8 @@ int global_cached_io::handle_pending_requests()
 	// the place where we just finish writing old dirty pages to the disk.
 	// The only possible reason is that we happen to overwrite the entire
 	// page.
-	if (get_global_cache()->get_flush_thread())
-		get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
-				dirty_pages.size());
+	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
+			dirty_pages.size());
 	return tot;
 }
 
@@ -841,8 +838,8 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		io_request *req = cached_reqs[i];
 		thread_safe_page *dirty = __complete_req(req, cached_pages[i]);
 		page_cache *cache = get_global_cache();
-		if (dirty && cache->get_flush_thread())
-			cache->get_flush_thread()->dirty_pages(&dirty, 1);
+		if (dirty)
+			cache->mark_dirty_pages(&dirty, 1);
 		if (!req->is_sync())
 			async_reqs[num_async_reqs++] = req;
 	}
@@ -1063,8 +1060,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		}
 	}
 	process_cached_reqs(cached_reqs, cached_pages, num_cached_reqs);
-	if (get_global_cache()->get_flush_thread())
-		get_global_cache()->get_flush_thread()->dirty_pages(dirty_pages.data(),
+	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size());
 	underlying->flush_requests();
 }
