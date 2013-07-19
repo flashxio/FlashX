@@ -35,7 +35,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 
 async_io::async_io(const logical_file_partition &partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
-		long size, int aio_depth_per_file, int node_id): buffered_io(partition, size,
+		int aio_depth_per_file, int node_id): buffered_io(partition,
 			node_id, O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file *
 				partition.get_num_files()), allocator(PAGE_SIZE,
 				AIO_DEPTH * PAGE_SIZE, INT_MAX, node_id), cb_allocator(

@@ -61,7 +61,7 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
 			read_threads[k] = new disk_read_thread(partition, complete_threads,
-					size / num_files, raid_conf.get_file(k).node_id);
+					raid_conf.get_file(k).node_id);
 		}
 	}
 
@@ -73,12 +73,12 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 			io_interface *io;
 			switch (access_option) {
 				case READ_ACCESS:
-					io = new buffered_io(global_partition, size, node_id);
+					io = new buffered_io(global_partition, node_id);
 					register_io(io);
 					ios.push_back(io);
 					break;
 				case DIRECT_ACCESS:
-					io = new direct_io(global_partition, size, node_id);
+					io = new direct_io(global_partition, node_id);
 					register_io(io);
 					ios.push_back(io);
 					break;
@@ -90,7 +90,7 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 							depth_per_file = 1;
 						std::tr1::unordered_map<int, aio_complete_thread *> no_complete_threads;
 						io = new async_io(global_partition, no_complete_threads,
-								size, depth_per_file, node_id);
+								depth_per_file, node_id);
 						register_io(io);
 						ios.push_back(io);
 					}

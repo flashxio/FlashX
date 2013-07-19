@@ -1,7 +1,7 @@
 #include "read_private.h"
 #include "file_mapper.h"
 
-buffered_io::buffered_io(const logical_file_partition &partition_, long size,
+buffered_io::buffered_io(const logical_file_partition &partition_,
 		int node_id, int flags): io_interface(node_id), partition(
 			partition_), fds(partition.get_num_files())
 {
@@ -11,7 +11,6 @@ buffered_io::buffered_io(const logical_file_partition &partition_, long size,
 	num_reads = 0;
 #endif
 	remote_reads = 0;
-	this->size = size;
 
 	for (int i = 0; i < partition.get_num_files(); i++) {
 		int ret;

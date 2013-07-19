@@ -101,20 +101,6 @@ public:
 		return false;
 	}
 
-	/**
-	 * The total size accessible with this IO interface.
-	 */
-	virtual ssize_t get_size() const {
-		return 0;
-	}
-
-	/**
-	 * The size of data on the local node.
-	 */
-	virtual ssize_t get_local_size() const {
-		return 0;
-	}
-
 	virtual void cleanup() {
 	}
 

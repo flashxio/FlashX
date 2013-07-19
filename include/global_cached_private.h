@@ -137,14 +137,6 @@ public:
 
 	int handle_pending_requests();
 
-	ssize_t get_size() const {
-		return underlying->get_size();
-	}
-
-	ssize_t get_local_size() const {
-		return underlying->get_local_size();
-	}
-
 	/* When a thread begins, this method will be called. */
 	virtual int init() {
 		int ret = underlying->init();

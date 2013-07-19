@@ -26,10 +26,6 @@ class remote_disk_access: public io_interface
 	file_mapper *block_mapper;
 	aio_complete_queue *complete_queue;
 
-	// The total size of data accessible with this IO interface.
-	long total_size;
-	// The size of data on the local node.
-	long local_size;
 	int num_completed_reqs;
 
 	remote_disk_access(int node_id): io_interface(node_id) {
@@ -64,14 +60,6 @@ public:
 
 	virtual callback *get_callback() {
 		return cb;
-	}
-
-	long get_size() const {
-		return total_size;
-	}
-
-	long get_local_size() const {
-		return local_size;
 	}
 
 	virtual void access(io_request *requests, int num,

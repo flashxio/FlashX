@@ -21,12 +21,12 @@ public:
 
 disk_read_thread::disk_read_thread(const logical_file_partition &partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
-		long size, int node_id): queue(partition.get_file_name(0),
+		int node_id): queue(partition.get_file_name(0),
 			IO_QUEUE_SIZE, IO_QUEUE_SIZE), low_prio_queue(
 				// TODO let's allow the low-priority queue to
 				// be infinitely large for now.
 				partition.get_file_name(0) + "-low_prio", IO_QUEUE_SIZE, INT_MAX) {
-	aio = new async_io(partition, complete_threads, size, AIO_DEPTH_PER_FILE, node_id);
+	aio = new async_io(partition, complete_threads, AIO_DEPTH_PER_FILE, node_id);
 	aio->set_callback(new initiator_callback());
 	this->node_id = node_id;
 	num_accesses = 0;

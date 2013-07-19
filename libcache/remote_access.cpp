@@ -15,13 +15,8 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 	senders = new request_sender *[num_remotes];
 	low_prio_senders = new request_sender *[num_remotes];
 	num_senders = num_remotes;
-	total_size = 0;
-	local_size = 0;
 	// create a msg sender for each disk read thread.
 	for (int i = 0; i < num_remotes; i++) {
-		total_size += remotes[i]->get_size();
-		if (remotes[i]->get_node_id() == node_id)
-			local_size += remotes[i]->get_size();
 		blocking_FIFO_queue<io_request> *queue = remotes[i]->get_queue();
 		senders[i] = new request_sender(queue, INIT_DISK_QUEUE_SIZE);
 		low_prio_senders[i] = new request_sender(remotes[i]->get_low_prio_queue(),
@@ -55,8 +50,6 @@ io_interface *remote_disk_access::clone() const
 				this->low_prio_senders[i]->get_queue(), INIT_DISK_QUEUE_SIZE);
 	}
 	copy->cb = this->cb;
-	copy->total_size = this->total_size;
-	copy->local_size = this->local_size;
 	copy->block_mapper = this->block_mapper;
 	copy->complete_queue = this->complete_queue;
 	return copy;

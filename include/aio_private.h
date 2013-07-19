@@ -115,13 +115,12 @@ class async_io: public buffered_io
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:
 	/**
-	 * @size: the size of data to be accessed in all files
 	 * @aio_depth_per_file
 	 * @node_id: the NUMA node where the disks to be read are connected to.
 	 */
 	async_io(const logical_file_partition &partition,
 			const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
-			long size, int aio_depth_per_file, int node_id);
+			int aio_depth_per_file, int node_id);
 
 	virtual ~async_io();
 
