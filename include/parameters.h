@@ -2,7 +2,6 @@
 #define __MY_PARAMETERS_H__
 
 #define USE_GCLOCK
-#define PER_CPU
 
 #define PAGE_SIZE 4096
 #define LOG_PAGE_SIZE 12

@@ -38,7 +38,7 @@ io_interface *get_io(int idx)
 
 std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 		cache_config *cache_conf, const std::vector<int> &node_id_array,
-		int access_option, long size, bool preload)
+		int nthreads, int access_option, long size, bool preload)
 {
 	int num_nodes = node_id_array.size();
 	file_mapper *mapper = raid_conf.create_file_mapper();
@@ -69,6 +69,9 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 					raid_conf.get_file(k).node_id);
 		}
 	}
+
+	if (access_option == PART_GLOBAL_ACCESS)
+		part_global_cached_io::set_num_threads(nthreads);
 
 	std::vector<io_interface *> ios;
 	int nthreads_per_node = nthreads / num_nodes;

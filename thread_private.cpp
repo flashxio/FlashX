@@ -11,6 +11,8 @@ int align_size = PAGE_SIZE;
 bool use_aio = false;
 
 extern bool verify_read_content;
+extern struct timeval global_start;
+extern int nthreads;
 
 void check_read_content(char *buf, int size, off_t off)
 {

@@ -628,3 +628,4 @@ pthread_mutex_t part_global_cached_io::wait_mutex;
 pthread_cond_t part_global_cached_io::cond;
 atomic_integer part_global_cached_io::num_finish_issuing_threads;
 atomic_integer part_global_cached_io::num_finished_threads;
+int part_global_cached_io::nthreads;

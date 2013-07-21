@@ -141,20 +141,19 @@ class hash_index_cache: public page_cache
 #endif
 public:
 	hash_index_cache(long cache_size, int node_id) {
-		extern int nthreads;
 		hashtable = new SA_hashtable<off_t, frame *>(1024);
-		cache_size_per_thread = cache_size / nthreads;
 		this->node_id = node_id;
 
 #ifdef PER_CPU
+		extern int nthreads;
+		cache_size_per_thread = cache_size / nthreads;
 		pthread_key_create(&allocator_key, NULL);
 		pthread_key_create(&manager_key, NULL);
 		pthread_key_create(&gclock_key, NULL);
 #else
 		// TODO I just prepare much more memory than I need.
-		manager = new memory_manager(cache_size * 2);
+		manager = new memory_manager(cache_size * 2, node_id);
 		manager->register_cache(this);
-		extern int nthreads;
 		gclock_buf = new LF_gclock_buffer(cache_size / PAGE_SIZE);
 		allocator = new frame_allocator(cache_size / PAGE_SIZE * 2);
 #endif

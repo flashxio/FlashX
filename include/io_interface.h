@@ -167,6 +167,6 @@ class cache_config;
 
 std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 		cache_config *cache_conf, const std::vector<int> &node_id_array,
-		int access_option, long size, bool preload);
+		int nthreads, int access_option, long size, bool preload);
 
 #endif

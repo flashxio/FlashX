@@ -357,7 +357,7 @@ int main(int argc, char *argv[])
 	}
 
 	std::vector<io_interface *> ios = create_ios(raid_conf, cache_conf,
-			node_id_array, access_option, npages * PAGE_SIZE, preload);
+			node_id_array, nthreads, access_option, npages * PAGE_SIZE, preload);
 	for (unsigned int j = 0; j < ios.size(); j++) {
 		io_interface *io = ios[j];
 		int node_id = io->get_node_id();

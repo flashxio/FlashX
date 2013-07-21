@@ -47,6 +47,7 @@ class part_global_cached_io: public global_cached_io
 	/* used for thread initialization. */
 	static pthread_mutex_t wait_mutex;
 	static pthread_cond_t cond;
+	static int nthreads;
 
 	/*
 	 * These counts are used for stopping protocols.
@@ -93,6 +94,10 @@ public:
 			return thread_id % (group_size + 1);
 		else
 			return (thread_id - remaining * (group_size + 1)) % group_size;
+	}
+
+	static void set_num_threads(const int num) {
+		nthreads = num;
 	}
 
 	~part_global_cached_io() {

@@ -57,7 +57,7 @@ void ssd_io_init(const char *name)
 					node_id_array);
 		}
 
-		create_ios(raid_conf, cache_conf, node_id_array, access_option,
+		create_ios(raid_conf, cache_conf, node_id_array, num_threads, access_option,
 				0, false);
 	}
 }

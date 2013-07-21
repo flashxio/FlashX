@@ -6,7 +6,7 @@ TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messag
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
 LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -rdynamic
-CXXFLAGS = -g -O3 -I../include -I. -I../nbds.0.4.3/include/ -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=0 -DPROFILER
+CXXFLAGS = -g -O3 -I../include -I. -I../nbds.0.4.3/include/ -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DENABLE_AIO -DNUM_NODES=1 -DNCPUS=0 -DPROFILER
 CPPFLAGS := -MD
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
