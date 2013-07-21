@@ -60,8 +60,11 @@ io_status buffered_io::access(char *buf, off_t offset, ssize_t size, int access_
 	gettimeofday(&end, NULL);
 	read_time += ((long) end.tv_sec - start.tv_sec) * 1000000 + end.tv_usec - start.tv_usec;
 #endif
+	io_status status;
 	if (ret < 0)
-		return IO_FAIL;
+		status = IO_FAIL;
 	else
-		return IO_OK;
+		status = IO_OK;
+	status.set_priv_data(ret);
+	return status;
 }

@@ -1076,6 +1076,9 @@ io_status global_cached_io::access(char *buf, off_t offset,
 		assert(orig);
 		wait4req(orig);
 	}
+	// TODO IO may fail, I need to return an error in case it fails.
+	status = IO_OK;
+	status.set_priv_data(size);
 	return status;
 }
 
