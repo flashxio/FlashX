@@ -184,6 +184,15 @@ AioriBind(char * api)
         IOR_SetVersion  = IOR_SetVersion_POSIX;
         IOR_Fsync       = IOR_Fsync_POSIX;
         IOR_GetFileSize = IOR_GetFileSize_POSIX;
+	} else if (strcmp(api, "SSDIO") == 0) {
+        IOR_Create      = IOR_Create_SSDIO;
+        IOR_Open        = IOR_Open_SSDIO;
+        IOR_Xfer        = IOR_Xfer_SSDIO;
+        IOR_Close       = IOR_Close_SSDIO;
+        IOR_Delete      = IOR_Delete_SSDIO;
+        IOR_SetVersion  = IOR_SetVersion_SSDIO;
+        IOR_Fsync       = IOR_Fsync_SSDIO;
+        IOR_GetFileSize = IOR_GetFileSize_SSDIO;
 #if 0
     } else if (strcmp(api, "MPIIO") == 0) {
         IOR_Create      = IOR_Create_MPIIO;

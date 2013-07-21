@@ -28,11 +28,13 @@ include Makefile.config
 # Requires GNU Make
 OS=$(shell uname)
 
+CCFLAGS += -I../include
+
 SRCS = IOR.c utilities.c parse_options.c
 OBJS = $(SRCS:.c=.o)
 
-posix: $(OBJS) aiori-POSIX.o 
-	$(CC) -o IOR $(OBJS) aiori-POSIX.o $(LDFLAGS) 
+posix: $(OBJS) aiori-POSIX.o aiori-SSDIO.o 
+	mpic++ -o IOR $(OBJS) aiori-POSIX.o aiori-SSDIO.o $(LDFLAGS) -L../libcache -lcache -lnuma -laio
 
 mpiio: $(OBJS) aiori-POSIX.o aiori-MPIIO.o aiori-noHDF5.o aiori-noNCMPI.o
 	$(CC) -o IOR $(OBJS) \
@@ -47,9 +49,9 @@ ncmpi: $(OBJS) aiori-POSIX.o aiori-MPIIO.o aiori-noHDF5.o aiori-NCMPI.o
 	$(CC) $(LDFLAGS_NCMPI) -o IOR $(OBJS) \
 		aiori-POSIX.o aiori-MPIIO.o aiori-noHDF5.o aiori-NCMPI.o
 
-all: $(OBJS) aiori-POSIX.o 
-	$(CC) $(LDFLAGS_HDF5) $(LDFLAGS_NCMPI) -o IOR $(OBJS) \
-		aiori-POSIX.o 
+all: $(OBJS) aiori-POSIX.o aiori-SSDIO.o
+	mpic++ $(LDFLAGS_HDF5) $(LDFLAGS_NCMPI) -o IOR $(OBJS) \
+		aiori-POSIX.o aiori-SSDIO.o -L../libcache -lcache -lnuma -laio
 
 clean:
 	-rm -f *.o IOR

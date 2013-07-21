@@ -198,6 +198,17 @@ void         IOR_SetVersion_POSIX  (IOR_param_t *);
 void         IOR_Fsync_POSIX       (void *, IOR_param_t *);
 IOR_offset_t IOR_GetFileSize_POSIX (IOR_param_t *, MPI_Comm, char *);
 
+/* SSDIO-specific functions */
+void *       IOR_Create_SSDIO      (char *, IOR_param_t *);
+void *       IOR_Open_SSDIO        (char *, IOR_param_t *);
+IOR_offset_t IOR_Xfer_SSDIO        (int, void *, IOR_size_t *,
+                                    IOR_offset_t, IOR_offset_t, IOR_param_t *);
+void         IOR_Close_SSDIO       (void *, IOR_param_t *);
+void         IOR_Delete_SSDIO      (char *, IOR_param_t *);
+void         IOR_SetVersion_SSDIO  (IOR_param_t *);
+void         IOR_Fsync_SSDIO       (void *, IOR_param_t *);
+IOR_offset_t IOR_GetFileSize_SSDIO (IOR_param_t *, MPI_Comm, char *);
+
 /* MPIIO-specific functions */
 void *       IOR_Create_MPIIO      (char *, IOR_param_t *);
 void *       IOR_Open_MPIIO        (char *, IOR_param_t *);
