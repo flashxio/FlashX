@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "exception.h"
+#include "common.h"
 
 class io_request;
 
@@ -148,6 +149,7 @@ public:
 };
 
 io_interface *get_io(int idx);
+int get_num_ios();
 
 enum {
 	READ_ACCESS,

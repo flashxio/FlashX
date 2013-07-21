@@ -13,6 +13,11 @@
 
 static std::vector<io_interface *> io_table;
 
+int get_num_ios()
+{
+	return io_table.size();
+}
+
 void register_io(io_interface *io)
 {
 	// Make sure the index hasn't been set.
