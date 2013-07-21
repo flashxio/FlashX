@@ -31,10 +31,8 @@ OS=$(shell uname)
 SRCS = IOR.c utilities.c parse_options.c
 OBJS = $(SRCS:.c=.o)
 
-posix: $(OBJS) aiori-POSIX.o aiori-noMPIIO.o aiori-noHDF5.o aiori-noNCMPI.o
-	$(CC) -o IOR $(OBJS) \
-		aiori-POSIX.o aiori-noMPIIO.o aiori-noHDF5.o aiori-noNCMPI.o \
-		$(LDFLAGS) 
+posix: $(OBJS) aiori-POSIX.o 
+	$(CC) -o IOR $(OBJS) aiori-POSIX.o $(LDFLAGS) 
 
 mpiio: $(OBJS) aiori-POSIX.o aiori-MPIIO.o aiori-noHDF5.o aiori-noNCMPI.o
 	$(CC) -o IOR $(OBJS) \
@@ -49,9 +47,9 @@ ncmpi: $(OBJS) aiori-POSIX.o aiori-MPIIO.o aiori-noHDF5.o aiori-NCMPI.o
 	$(CC) $(LDFLAGS_NCMPI) -o IOR $(OBJS) \
 		aiori-POSIX.o aiori-MPIIO.o aiori-noHDF5.o aiori-NCMPI.o
 
-all: $(OBJS) aiori-POSIX.o aiori-MPIIO.o aiori-HDF5.o aiori-NCMPI.o
+all: $(OBJS) aiori-POSIX.o 
 	$(CC) $(LDFLAGS_HDF5) $(LDFLAGS_NCMPI) -o IOR $(OBJS) \
-		aiori-POSIX.o aiori-MPIIO.o aiori-HDF5.o aiori-NCMPI.o
+		aiori-POSIX.o 
 
 clean:
 	-rm -f *.o IOR

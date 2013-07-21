@@ -220,6 +220,7 @@ IOR_Xfer_POSIX(int            access,
                void         * file,
                IOR_size_t   * buffer,
                IOR_offset_t   length,
+			   IOR_offset_t   offset,
                IOR_param_t  * param)
 {
     int            xferRetries = 0;
@@ -231,7 +232,7 @@ IOR_Xfer_POSIX(int            access,
     fd = *(int *)file;
 
     /* seek to offset */
-    if (lseek64(fd, param->offset, SEEK_SET) == -1)
+    if (lseek64(fd, offset, SEEK_SET) == -1)
         ERR("seek failed");
 
     while (remaining > 0) {
@@ -239,14 +240,14 @@ IOR_Xfer_POSIX(int            access,
         if (access == WRITE) { /* WRITE */
             if (verbose >= VERBOSE_4) {
                 fprintf(stdout, "task %d writing to offset %lld\n",
-                        rank, param->offset + length - remaining);
+                        rank, offset + length - remaining);
             }
             rc = write(fd, ptr, remaining);
             if (param->fsyncPerWrite == TRUE) IOR_Fsync_POSIX(&fd, param);
         } else {               /* READ or CHECK */
             if (verbose >= VERBOSE_4) {
                 fprintf(stdout, "task %d reading from offset %lld\n",
-                        rank, param->offset + length - remaining);
+                        rank, offset + length - remaining);
             }
             rc = read(fd, ptr, remaining);
             if (rc == 0)
@@ -260,7 +261,7 @@ IOR_Xfer_POSIX(int            access,
                     rank, remaining);
             fprintf(stdout,
                     "         but transferred %lld bytes at offset %lld\n",
-                    rc, param->offset + length - remaining);
+                    rc, offset + length - remaining);
             if (param->singleXferAttempt == TRUE)
                 MPI_CHECK(MPI_Abort(MPI_COMM_WORLD, -1), "barrier error");
         }

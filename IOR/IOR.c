@@ -184,6 +184,7 @@ AioriBind(char * api)
         IOR_SetVersion  = IOR_SetVersion_POSIX;
         IOR_Fsync       = IOR_Fsync_POSIX;
         IOR_GetFileSize = IOR_GetFileSize_POSIX;
+#if 0
     } else if (strcmp(api, "MPIIO") == 0) {
         IOR_Create      = IOR_Create_MPIIO;
         IOR_Open        = IOR_Open_MPIIO;
@@ -211,6 +212,7 @@ AioriBind(char * api)
         IOR_SetVersion  = IOR_SetVersion_NCMPI;
         IOR_Fsync       = IOR_Fsync_NCMPI;
         IOR_GetFileSize = IOR_GetFileSize_NCMPI;
+#endif
     } else {
         WARN("unrecognized IO API");
     }
@@ -1190,7 +1192,7 @@ ReadCheck(void         *fd,
     IOR_offset_t segmentSize, segmentNum;
 
     memset(buffer, 'a', transfer);
-    *amtXferred = IOR_Xfer(access, fd, buffer, transfer, test);
+    *amtXferred = IOR_Xfer(access, fd, buffer, transfer, test->offset, test);
     tmpOffset = test->offset;
     if (test->filePerProc == FALSE) {
         /* offset changes for shared file, not for file-per-proc */
@@ -1220,9 +1222,9 @@ ReadCheck(void         *fd,
     MPI_CHECK(MPI_Barrier(testComm), "barrier error");
     if (test->filePerProc) {
         *amtXferred = IOR_Xfer(access, test->fd_fppReadCheck,
-                               checkBuffer, transfer, test);
+                               checkBuffer, transfer, test->offset, test);
     } else {
-        *amtXferred = IOR_Xfer(access, fd, checkBuffer, transfer, test);
+        *amtXferred = IOR_Xfer(access, fd, checkBuffer, transfer, test->offset, test);
     }
     test->offset = tmpOffset;
     if (*amtXferred != transfer)
@@ -2491,6 +2493,7 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access)
     IOR_offset_t offsets = 0, offsetCnt = 0;
     IOR_offset_t fileSize;
     IOR_offset_t *offsetArray;
+	printf("there are %d tasks, pretend rank: %d\n", test->numTasks, pretendRank);
 
     /* set up seed for random() */
     if (access == WRITE || access == READ) {
@@ -2504,6 +2507,7 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access)
     if (test->filePerProc == FALSE) {
         fileSize *= test->numTasks;
     }
+	printf("file size: %lld\n", fileSize);
 
     /* count needed offsets (pass 1) */
     for (i = 0; i < fileSize; i += test->transferSize) {
@@ -2515,6 +2519,7 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access)
             offsets++;
         }
     }
+	printf("There are %lld offsets\n", offsets);
 
     /* setup empty array */
     offsetArray = (IOR_offset_t *)malloc((offsets+1) * sizeof(IOR_offset_t));
@@ -2548,6 +2553,93 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access)
     return(offsetArray);
 } /* GetOffsetArrayRandom() */
 
+struct ThreadData
+{
+	pthread_t tid;
+
+	// input data
+	IOR_param_t *test;
+	void *fd;
+	int access;
+	int pretendRank;
+	IOR_offset_t *offsetArray;
+	IOR_offset_t arrStart;
+	IOR_offset_t arrEnd;
+
+	// output data
+	volatile IOR_offset_t   dataMoved;
+	volatile int errors;
+};
+
+void *
+ThreadWriteOrRead(void *arg)
+{
+    char           testFileName[MAX_STR];
+	struct ThreadData *data = (struct ThreadData *) arg;
+    void         * buffer = NULL;
+    void         * checkBuffer = NULL;
+    void         * readCheckBuffer = NULL;
+	IOR_offset_t	transfer,
+					transferCount = 0,
+					amtXferred;
+    IOR_offset_t   dataMoved = 0;             /* for data rate calculation */
+    int            errors = 0;
+
+	IOR_param_t *test = data->test;
+	void *fd = data->fd;
+	int access = data->access;
+	int pretendRank = data->pretendRank;
+	IOR_offset_t *offsetArray = data->offsetArray;
+	IOR_offset_t arrStart = data->arrStart;
+	IOR_offset_t arrEnd = data->arrEnd;
+	IOR_offset_t arrPos = arrStart;
+
+	GetTestFileName(testFileName, test);
+	fd = IOR_Open(testFileName, test);
+
+    SetupXferBuffers(&buffer, &checkBuffer, &readCheckBuffer,
+                     test, pretendRank, access);
+	while (arrPos < arrEnd) {
+        IOR_offset_t offset = offsetArray[arrPos];
+        /*
+         * fills each transfer with a unique pattern
+         * containing the offset into the file
+         */
+        if (test->storeFileOffset == TRUE) {
+            FillBuffer(buffer, test, test->offset, pretendRank);
+        }
+        transfer = test->transferSize;
+        if (access == WRITE) {
+            amtXferred = IOR_Xfer(access, fd, buffer, transfer, offset, test);
+            if (amtXferred != transfer) ERR("cannot write to file");
+        } else if (access == READ) {
+            amtXferred = IOR_Xfer(access, fd, buffer, transfer, offset, test);
+            if (amtXferred != transfer) ERR("cannot read from file");
+        } else if (access == WRITECHECK) {
+            memset(checkBuffer, 'a', transfer);
+            amtXferred = IOR_Xfer(access, fd, checkBuffer, transfer, offset, test);
+            if (amtXferred != transfer)
+                ERR("cannot read from file write check");
+            transferCount++;
+            errors += CompareBuffers(buffer, checkBuffer, transfer,
+                                     transferCount, test, WRITECHECK);
+        } else if (access == READCHECK){
+            ReadCheck(fd, buffer, checkBuffer, readCheckBuffer, test,
+                      transfer, test->blockSize, &amtXferred,
+                      &transferCount, access, &errors);
+        }
+        dataMoved += amtXferred;
+		arrPos++;
+	}
+	data->dataMoved = dataMoved;
+	data->errors = errors;
+	IOR_Close(fd, test);
+
+    FreeBuffers(access, checkBuffer, readCheckBuffer, buffer, NULL);
+	return NULL;
+}
+
+int numThreads = 2;
 
 /******************************************************************************/
 /*
@@ -2561,18 +2653,13 @@ WriteOrRead(IOR_param_t * test,
             int           access)
 {
     int            errors = 0;
-    IOR_offset_t   amtXferred,
-                   transfer,
-                   transferCount = 0,
-                   pairCnt = 0,
+    IOR_offset_t   pairCnt = 0,
                  * offsetArray;
     int            pretendRank;
-    void         * buffer = NULL;
-    void         * checkBuffer = NULL;
-    void         * readCheckBuffer = NULL;
     IOR_offset_t   dataMoved = 0;             /* for data rate calculation */
     double         startForStonewall;
     int            hitStonewall;
+	int            i;
 
 
     /* initialize values */
@@ -2584,57 +2671,45 @@ WriteOrRead(IOR_param_t * test,
         offsetArray = GetOffsetArraySequential(test, pretendRank);
     }
 
-    SetupXferBuffers(&buffer, &checkBuffer, &readCheckBuffer,
-                     test, pretendRank, access);
-
     /* check for stonewall */
-    startForStonewall = GetTimeStamp();
-    hitStonewall = ((test->deadlineForStonewalling != 0)
-                    && ((GetTimeStamp() - startForStonewall)
-                        > test->deadlineForStonewalling));
+//    startForStonewall = GetTimeStamp();
+//    hitStonewall = ((test->deadlineForStonewalling != 0)
+//                    && ((GetTimeStamp() - startForStonewall)
+//                        > test->deadlineForStonewalling));
 
     /* loop over offsets to access */
-    while ((offsetArray[pairCnt] != -1) && !hitStonewall) {
-        test->offset = offsetArray[pairCnt];
-        /*
-         * fills each transfer with a unique pattern
-         * containing the offset into the file
-         */
-        if (test->storeFileOffset == TRUE) {
-            FillBuffer(buffer, test, test->offset, pretendRank);
-        }
-        transfer = test->transferSize;
-        if (access == WRITE) {
-            amtXferred = IOR_Xfer(access, fd, buffer, transfer, test);
-            if (amtXferred != transfer) ERR("cannot write to file");
-        } else if (access == READ) {
-            amtXferred = IOR_Xfer(access, fd, buffer, transfer, test);
-            if (amtXferred != transfer) ERR("cannot read from file");
-        } else if (access == WRITECHECK) {
-            memset(checkBuffer, 'a', transfer);
-            amtXferred = IOR_Xfer(access, fd, checkBuffer, transfer, test);
-            if (amtXferred != transfer)
-                ERR("cannot read from file write check");
-            transferCount++;
-            errors += CompareBuffers(buffer, checkBuffer, transfer,
-                                     transferCount, test, WRITECHECK);
-        } else if (access == READCHECK){
-            ReadCheck(fd, buffer, checkBuffer, readCheckBuffer, test,
-                      transfer, test->blockSize, &amtXferred,
-                      &transferCount, access, &errors);
-        }
-        dataMoved += amtXferred;
-        pairCnt++;
+    while ((offsetArray[pairCnt] != -1)) {
+		pairCnt++;
 
-        hitStonewall = ((test->deadlineForStonewalling != 0)
-                        && ((GetTimeStamp() - startForStonewall)
-                            > test->deadlineForStonewalling));
+//        hitStonewall = ((test->deadlineForStonewalling != 0)
+//                        && ((GetTimeStamp() - startForStonewall)
+//                            > test->deadlineForStonewalling));
     }
 	printf("access: %d, pairCnt: %lld\n", access, pairCnt);
+	struct ThreadData data[numThreads];
+	IOR_offset_t numOffsetsPerThread = pairCnt / numThreads;
+	for (i = 0; i < numThreads; i++) {
+		data[i].test = test;
+		data[i].fd = fd;
+		data[i].access = access;
+		data[i].pretendRank = pretendRank;
+		data[i].offsetArray = offsetArray;
+		data[i].arrStart = i * numOffsetsPerThread;
+		data[i].arrEnd = (i + 1) * numOffsetsPerThread;
+		int ret = pthread_create(&data[i].tid, NULL, ThreadWriteOrRead, (void *) &data[i]);
+		if (ret) {
+			perror("pthread_create");
+			exit(1);
+		}
+	}
+	for (i = 0; i < numThreads; i++) {
+		pthread_join(data[i].tid, NULL);
+		dataMoved += data[i].dataMoved;
+		errors += data[i].errors;
+	}
+	free(offsetArray);
 
     totalErrorCount += CountErrors(test, access, errors);
-
-    FreeBuffers(access, checkBuffer, readCheckBuffer, buffer, offsetArray);
 
     if (access == WRITE && test->fsync == TRUE) {
         IOR_Fsync(fd, test); /*fsync after all accesses*/

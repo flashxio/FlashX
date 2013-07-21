@@ -29,7 +29,7 @@
 void *       (*IOR_Create)      (char *, IOR_param_t *);
 void *       (*IOR_Open)        (char *, IOR_param_t *);
 IOR_offset_t (*IOR_Xfer)        (int, void *, IOR_size_t *,
-                                 IOR_offset_t, IOR_param_t *);
+                                 IOR_offset_t, IOR_offset_t, IOR_param_t *);
 void         (*IOR_Close)       (void *, IOR_param_t *);
 void         (*IOR_Delete)      (char *, IOR_param_t *);
 void         (*IOR_SetVersion)  (IOR_param_t *);

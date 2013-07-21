@@ -191,7 +191,7 @@ typedef struct
 void *       IOR_Create_POSIX      (char *, IOR_param_t *);
 void *       IOR_Open_POSIX        (char *, IOR_param_t *);
 IOR_offset_t IOR_Xfer_POSIX        (int, void *, IOR_size_t *,
-                                    IOR_offset_t, IOR_param_t *);
+                                    IOR_offset_t, IOR_offset_t, IOR_param_t *);
 void         IOR_Close_POSIX       (void *, IOR_param_t *);
 void         IOR_Delete_POSIX      (char *, IOR_param_t *);
 void         IOR_SetVersion_POSIX  (IOR_param_t *);
