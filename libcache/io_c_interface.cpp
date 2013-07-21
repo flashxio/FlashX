@@ -12,13 +12,13 @@
 #include "cache.h"
 #include "cache_config.h"
 
-long cache_size;
-int cache_type;
-int access_option;
-int num_threads;
-int num_nodes;
-int RAID_mapping_option;
-int RAID_block_size;
+static long cache_size = 512 * 1024 * 1024;
+static int cache_type = ASSOCIATIVE_CACHE;
+int access_option = GLOBAL_CACHE_ACCESS;
+int num_threads = 1;
+int num_nodes = 1;
+int RAID_mapping_option = RAID0;
+int RAID_block_size = 16;		// in the number of pages.
 
 void ssd_io_init(const char *name)
 {
@@ -63,6 +63,42 @@ void ssd_io_init(const char *name)
 }
 
 extern "C" {
+
+void set_cache_size(long size)
+{
+	cache_size = size;
+}
+
+void set_cache_type(int type)
+{
+	cache_type = type;
+}
+
+void set_access_option(int option)
+{
+	access_option = option;
+}
+
+void set_num_threads(int num)
+{
+	num_threads = num;
+}
+
+void set_num_nodes(int num)
+{
+	num_nodes = num;
+}
+
+void set_RAID_mapping_option(int option)
+{
+	RAID_mapping_option = option;
+}
+
+void set_RAID_block_size(int num_pages)
+{
+	RAID_block_size = num_pages;
+}
+
 int ssd_create(const char *name, size_t tot_size)
 {
 	std::vector<file_info> files;
