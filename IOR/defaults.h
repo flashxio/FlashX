@@ -144,6 +144,9 @@ IOR_param_t defaultParameters = {
 #endif /* USE_UNDOC_OPT */
 
     0,               /* test's unique ID */
-    0                /* intraTestBarriers */
+    0,               /* intraTestBarriers */
+	
+	FALSE,			 /* useAsync */
+	1,				 /* numThreads */
 };
 #endif /* not _IOR_DEFAULTS_H */

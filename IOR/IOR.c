@@ -720,6 +720,8 @@ DisplayUsage(char ** argv)
 " -W    checkWrite -- check read after write",
 " -x    singleXferAttempt -- do not retry transfer if incomplete",
 " -z    randomOffset -- access is to random, not sequential, offsets within a file",
+" -L    useAsync",
+" -M N  numThreads",
 " ",
 "         NOTE: S is a string, N is an integer number.",
 " ",
@@ -2648,8 +2650,6 @@ ThreadWriteOrRead(void *arg)
 	return NULL;
 }
 
-int numThreads = 2;
-
 /******************************************************************************/
 /*
  * Write or Read data to file(s).  This loops through the strides, writing
@@ -2695,6 +2695,7 @@ WriteOrRead(IOR_param_t * test,
 //                            > test->deadlineForStonewalling));
     }
 	printf("access: %d, pairCnt: %lld\n", access, pairCnt);
+	int numThreads = test->numThreads;
 	struct ThreadData data[numThreads];
 	IOR_offset_t numOffsetsPerThread = pairCnt / numThreads;
 	for (i = 0; i < numThreads; i++) {

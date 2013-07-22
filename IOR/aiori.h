@@ -181,6 +181,10 @@ typedef struct
 
     int id;                          /* test's unique ID */
     int intraTestBarriers;           /* barriers between open/op and op/close */
+
+	// New parameters
+	int useAsync;						/* whether use async IO interface */
+	int numThreads;					/* the number of threads in a task */
 } IOR_param_t;
 
 
