@@ -79,6 +79,7 @@
 #include <string.h>
 #include <sys/stat.h>                                 /* struct stat */
 #include <time.h>
+#include <assert.h>
 #ifndef _WIN32
 #   include <sys/time.h>                              /* gettimeofday() */
 #   include <sys/utsname.h>                           /* uname() */
@@ -188,6 +189,8 @@ AioriBind(char * api)
         IOR_Create      = IOR_Create_SSDIO;
         IOR_Open        = IOR_Open_SSDIO;
         IOR_Xfer        = IOR_Xfer_SSDIO;
+        IOR_AsyncXfer   = IOR_AsyncXfer_SSDIO;
+        IOR_SetAsyncCallback = IOR_SetAsyncCallback_SSDIO;
         IOR_Close       = IOR_Close_SSDIO;
         IOR_Delete      = IOR_Delete_SSDIO;
         IOR_SetVersion  = IOR_SetVersion_SSDIO;
@@ -2582,8 +2585,93 @@ struct ThreadData
 	volatile int errors;
 };
 
+void XferComplete(void *arg, int status)
+{
+	struct AsyncData *data = (struct AsyncData *) arg;
+	if (status == 0)
+		*data->dataMoved += data->transferSize;
+	if (data->access == WRITECHECK)
+		*data->errors += CompareBuffers(data->buffer, data->checkBuffer,
+				data->transferSize, data->transferCount, data->test,
+				data->access);
+    FreeBuffers(data->access, data->checkBuffer, data->readCheckBuffer,
+			data->buffer, NULL);
+}
+
 void *
-ThreadWriteOrRead(void *arg)
+AsyncThreadWriteOrRead(void *arg)
+{
+    char           testFileName[MAX_STR];
+	struct ThreadData *data = (struct ThreadData *) arg;
+	IOR_offset_t	transfer,
+					transferCount = 0,
+					amtXferred;
+    IOR_offset_t   dataMoved = 0;             /* for data rate calculation */
+    int            errors = 0;
+	void *fd;
+
+	IOR_param_t *test = data->test;
+	int access = data->access;
+	int pretendRank = data->pretendRank;
+	IOR_offset_t *offsetArray = data->offsetArray;
+	IOR_offset_t arrStart = data->arrStart;
+	IOR_offset_t arrEnd = data->arrEnd;
+	IOR_offset_t arrPos = arrStart;
+
+	GetTestFileName(testFileName, test);
+	fd = IOR_Open(testFileName, test);
+
+	assert(IOR_AsyncXfer);
+	assert(IOR_SetAsyncCallback);
+	IOR_SetAsyncCallback(fd, XferComplete);
+	while (arrPos < arrEnd) {
+		IOR_offset_t offset = offsetArray[arrPos];
+		struct AsyncData *asyncData = (struct AsyncData *) malloc(sizeof(*asyncData));
+		SetupXferBuffers(&asyncData->buffer, &asyncData->checkBuffer,
+				&asyncData->readCheckBuffer, test, pretendRank, access);
+        /*
+         * fills each transfer with a unique pattern
+         * containing the offset into the file
+         */
+        if (test->storeFileOffset == TRUE) {
+            FillBuffer(asyncData->buffer, test, test->offset, pretendRank);
+        }
+        transfer = test->transferSize;
+		asyncData->transferSize = transfer;
+		asyncData->test = test;
+		asyncData->dataMoved = &dataMoved;
+		asyncData->errors = &errors;
+        if (access == WRITE) {
+            IOR_AsyncXfer(access, fd, asyncData->buffer, transfer, offset, test,
+					asyncData);
+        } else if (access == READ) {
+            IOR_AsyncXfer(access, fd, asyncData->buffer, transfer, offset, test,
+					asyncData);
+        } else if (access == WRITECHECK) {
+            memset(asyncData->checkBuffer, 'a', transfer);
+            transferCount++;
+			asyncData->transferCount = transferCount;
+            IOR_AsyncXfer(access, fd, asyncData->checkBuffer, transfer, offset, test,
+					asyncData);
+        } else if (access == READCHECK){
+#if 0
+            ReadCheck(fd, buffer, checkBuffer, readCheckBuffer, test,
+                      transfer, test->blockSize, &amtXferred,
+                      &transferCount, access, &errors);
+#endif
+        }
+		arrPos++;
+	}
+	IOR_Close(fd, test);
+
+	data->dataMoved = dataMoved;
+	data->errors = errors;
+
+	return NULL;
+}
+
+void *
+SyncThreadWriteOrRead(void *arg)
 {
     char           testFileName[MAX_STR];
 	struct ThreadData *data = (struct ThreadData *) arg;
@@ -2705,7 +2793,11 @@ WriteOrRead(IOR_param_t * test,
 		data[i].offsetArray = offsetArray;
 		data[i].arrStart = i * numOffsetsPerThread;
 		data[i].arrEnd = (i + 1) * numOffsetsPerThread;
-		int ret = pthread_create(&data[i].tid, NULL, ThreadWriteOrRead, (void *) &data[i]);
+		int ret;
+		if (test->useAsync)
+			ret = pthread_create(&data[i].tid, NULL, AsyncThreadWriteOrRead, (void *) &data[i]);
+		else
+			ret = pthread_create(&data[i].tid, NULL, SyncThreadWriteOrRead, (void *) &data[i]);
 		if (ret) {
 			perror("pthread_create");
 			exit(1);

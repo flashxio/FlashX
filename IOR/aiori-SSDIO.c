@@ -38,15 +38,34 @@ void *IOR_Open_SSDIO(char *name, IOR_param_t *test)
 	return (void *) fdp;
 }
 
+void IOR_SetAsyncCallback_SSDIO(void *file, AsyncCallbackFunc_t func)
+{
+	int fd = *(int *) file;
+	ssd_set_callback(fd, func);
+}
+
+int IOR_AsyncXfer_SSDIO(int access, void *file, IOR_size_t *buffer,
+		IOR_offset_t length, IOR_offset_t offset, IOR_param_t *test,
+		struct AsyncData *data)
+{
+	int fd = *(int *) file;
+	if (access == READ) {
+		return ssd_aread(fd, (void *) buffer, length, offset, (void *) data);
+	}
+	else {
+		return ssd_awrite(fd, (void *) buffer, length, offset, (void *) data);
+	}
+}
+
 IOR_offset_t IOR_Xfer_SSDIO(int access, void *file, IOR_size_t *buffer,
 		IOR_offset_t length, IOR_offset_t offset, IOR_param_t *test)
 {
 	int fd = *(int *) file;
 	if (access == READ) {
-		ssd_read(fd, (void *) buffer, length, offset);
+		return ssd_read(fd, (void *) buffer, length, offset);
 	}
 	else {
-		ssd_write(fd, (void *) buffer, length, offset);
+		return ssd_write(fd, (void *) buffer, length, offset);
 	}
 }
 

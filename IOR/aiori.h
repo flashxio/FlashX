@@ -187,6 +187,21 @@ typedef struct
 	int numThreads;					/* the number of threads in a task */
 } IOR_param_t;
 
+struct AsyncData
+{
+	void *buffer;
+	void *checkBuffer;
+	void *readCheckBuffer;
+	IOR_offset_t transferSize;
+	IOR_offset_t transferCount;
+	IOR_param_t *test;
+	int access;
+
+	IOR_offset_t *dataMoved;
+	int *errors;
+};
+
+typedef void (*AsyncCallbackFunc_t)(void *, int);
 
 /**************************** P R O T O T Y P E S *****************************/
 
@@ -196,6 +211,10 @@ void *       IOR_Create_POSIX      (char *, IOR_param_t *);
 void *       IOR_Open_POSIX        (char *, IOR_param_t *);
 IOR_offset_t IOR_Xfer_POSIX        (int, void *, IOR_size_t *,
                                     IOR_offset_t, IOR_offset_t, IOR_param_t *);
+int          IOR_AsyncXfer_POSIX   (int, void *, IOR_size_t *,
+                                    IOR_offset_t, IOR_offset_t, IOR_param_t *,
+                                    struct AsyncData *);
+void         IOR_SetAsyncCallback_POSIX(void *file, AsyncCallbackFunc_t func);
 void         IOR_Close_POSIX       (void *, IOR_param_t *);
 void         IOR_Delete_POSIX      (char *, IOR_param_t *);
 void         IOR_SetVersion_POSIX  (IOR_param_t *);
@@ -207,6 +226,10 @@ void *       IOR_Create_SSDIO      (char *, IOR_param_t *);
 void *       IOR_Open_SSDIO        (char *, IOR_param_t *);
 IOR_offset_t IOR_Xfer_SSDIO        (int, void *, IOR_size_t *,
                                     IOR_offset_t, IOR_offset_t, IOR_param_t *);
+int          IOR_AsyncXfer_SSDIO   (int, void *, IOR_size_t *,
+                                    IOR_offset_t, IOR_offset_t, IOR_param_t *,
+                                    struct AsyncData *);
+void         IOR_SetAsyncCallback_SSDIO(void *file, AsyncCallbackFunc_t func);
 void         IOR_Close_SSDIO       (void *, IOR_param_t *);
 void         IOR_Delete_SSDIO      (char *, IOR_param_t *);
 void         IOR_SetVersion_SSDIO  (IOR_param_t *);
