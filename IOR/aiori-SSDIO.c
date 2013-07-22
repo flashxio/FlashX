@@ -1,3 +1,10 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "io_c_interface.h"
 #include "aiori.h"
 
@@ -10,7 +17,10 @@ void *IOR_Create_SSDIO(char *name, IOR_param_t *test)
     }
 	ssd_create(name, fileSize);
 	int *fdp = (int *) malloc(sizeof(*fdp));
-	*fdp = ssd_open(name);
+	int flags = O_RDWR;
+	if (test->useO_DIRECT == TRUE)
+		flags |= O_DIRECT;
+	*fdp = ssd_open(name, flags);
 	return (void *) fdp;
 }
 
@@ -18,7 +28,10 @@ void *IOR_Open_SSDIO(char *name, IOR_param_t *test)
 {
 	printf("SSDIO: open %s\n", name);
 	int *fdp = (int *) malloc(sizeof(*fdp));
-	*fdp = ssd_open(name);
+	int flags = O_RDWR;
+	if (test->useO_DIRECT == TRUE)
+		flags |= O_DIRECT;
+	*fdp = ssd_open(name, flags);
 	return (void *) fdp;
 }
 

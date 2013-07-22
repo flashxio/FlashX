@@ -14,18 +14,26 @@
 
 static long cache_size = 512 * 1024 * 1024;
 static int cache_type = ASSOCIATIVE_CACHE;
-int access_option = GLOBAL_CACHE_ACCESS;
 int num_threads = 1;
 int num_nodes = 1;
 int RAID_mapping_option = RAID0;
 int RAID_block_size = 16;		// in the number of pages.
 
-void ssd_io_init(const char *name)
+void ssd_io_init(const char *name, int flags)
 {
 	static atomic_unsigned_integer has_init;
 
 	// this is the first time it is called.
 	if (has_init.inc(1) == 1) {
+		int access_option = GLOBAL_CACHE_ACCESS;
+		if (flags & O_DIRECT) {
+			printf("use remote access\n");
+			access_option = REMOTE_ACCESS;
+		}
+		else {
+			printf("use global cached IO\n");
+		}
+
 		// Init RAID configuration.
 		std::vector<file_info> files;
 		int num_files = retrieve_data_files(name, files);
@@ -124,11 +132,6 @@ void set_cache_type(int type)
 	cache_type = type;
 }
 
-void set_access_option(int option)
-{
-	access_option = option;
-}
-
 void set_num_threads(int num)
 {
 	num_threads = num;
@@ -190,9 +193,9 @@ int ssd_create(const char *name, size_t tot_size)
 	return 0;
 }
 
-int ssd_open(const char *name)
+int ssd_open(const char *name, int flags)
 {
-	ssd_io_init(name);
+	ssd_io_init(name, flags);
 
 	io_interface *io = allocate_io();
 	return io->get_io_idx();
