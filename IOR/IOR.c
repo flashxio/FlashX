@@ -1863,7 +1863,7 @@ TestIoSys(IOR_param_t *test)
     int            i,
                    rep,
                    maxTimeDuration;
-    void         * fd;
+    void         * fd = NULL;
     MPI_Group      orig_group, new_group;
     int            range[3];
     IOR_offset_t   dataMoved;             /* for data rate calculation */
@@ -2013,6 +2013,7 @@ TestIoSys(IOR_param_t *test)
             test->open = WRITE;
             timer[0][rep] = GetTimeStamp();
             fd = IOR_Create(testFileName, test);
+            IOR_Close(fd, test);
             timer[1][rep] = GetTimeStamp();
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
@@ -2026,7 +2027,7 @@ TestIoSys(IOR_param_t *test)
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             timer[4][rep] = GetTimeStamp();
-            IOR_Close(fd, test);
+//            IOR_Close(fd, test);
 
 #if USE_UNDOC_OPT /* includeDeleteTime */
             if (test->includeDeleteTime) {
@@ -2098,9 +2099,9 @@ TestIoSys(IOR_param_t *test)
             }
             GetTestFileName(testFileName, test);
             test->open = WRITECHECK;
-            fd = IOR_Open(testFileName, test);
+//            fd = IOR_Open(testFileName, test);
             dataMoved = WriteOrRead(test, fd, WRITECHECK);
-            IOR_Close(fd, test);
+//            IOR_Close(fd, test);
             rankOffset = 0;
         }
         /*
@@ -2169,7 +2170,7 @@ TestIoSys(IOR_param_t *test)
             MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             test->open = READ;
             timer[6][rep] = GetTimeStamp();
-            fd = IOR_Open(testFileName, test);
+//            fd = IOR_Open(testFileName, test);
             if (rank == 0 && verbose >= VERBOSE_2) {
                 fprintf(stdout, "[RANK %03d] open for reading file %s XXCEL\n", rank,testFileName);
             }
@@ -2186,7 +2187,7 @@ TestIoSys(IOR_param_t *test)
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             timer[10][rep] = GetTimeStamp();
-            IOR_Close(fd, test);
+//            IOR_Close(fd, test);
             timer[11][rep] = GetTimeStamp();
 
             /* get the size of the file just read */
@@ -2224,7 +2225,7 @@ TestIoSys(IOR_param_t *test)
             GetTestFileName(testFileName, test);
             MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             test->open = READCHECK;
-            fd = IOR_Open(testFileName, test);
+//            fd = IOR_Open(testFileName, test);
             if (test->filePerProc) {
                 int tmpRankOffset;
                 tmpRankOffset = rankOffset;
@@ -2243,7 +2244,7 @@ TestIoSys(IOR_param_t *test)
                 IOR_Close(test->fd_fppReadCheck, test);
                 test->fd_fppReadCheck = NULL;
             }
-            IOR_Close(fd, test);
+//            IOR_Close(fd, test);
         }
         /*
          * this final barrier may not be necessary as IOR_Close should
@@ -2568,7 +2569,6 @@ struct ThreadData
 
 	// input data
 	IOR_param_t *test;
-	void *fd;
 	int access;
 	int pretendRank;
 	IOR_offset_t *offsetArray;
@@ -2593,9 +2593,9 @@ ThreadWriteOrRead(void *arg)
 					amtXferred;
     IOR_offset_t   dataMoved = 0;             /* for data rate calculation */
     int            errors = 0;
+	void *fd;
 
 	IOR_param_t *test = data->test;
-	void *fd = data->fd;
 	int access = data->access;
 	int pretendRank = data->pretendRank;
 	IOR_offset_t *offsetArray = data->offsetArray;
@@ -2699,7 +2699,6 @@ WriteOrRead(IOR_param_t * test,
 	IOR_offset_t numOffsetsPerThread = pairCnt / numThreads;
 	for (i = 0; i < numThreads; i++) {
 		data[i].test = test;
-		data[i].fd = fd;
 		data[i].access = access;
 		data[i].pretendRank = pretendRank;
 		data[i].offsetArray = offsetArray;
