@@ -11,6 +11,9 @@
 #include "RAID_config.h"
 #include "cache.h"
 #include "cache_config.h"
+extern "C" {
+#include "io_c_interface.h"
+}
 
 static long cache_size = 512 * 1024 * 1024;
 static int cache_type = ASSOCIATIVE_CACHE;
@@ -119,6 +122,22 @@ static size_t get_filesize(int fd)
 	}
 	return stat_buf.st_size;
 }
+
+class user_callback: public callback
+{
+	ssd_callback_func_t cb;
+public:
+	user_callback(ssd_callback_func_t cb) {
+		this->cb = cb;
+	}
+
+	int invoke(io_request *rqs[], int num) {
+		for (int i = 0; i < num; i++) {
+			cb(rqs[i]->get_priv(), 0);
+		}
+		return 0;
+	}
+};
 
 extern "C" {
 
@@ -253,6 +272,35 @@ size_t ssd_get_filesize(const char *name)
 		tot_size += stat_buf.st_size;
 	}
 	return tot_size;
+}
+
+void ssd_set_callback(int fd, ssd_callback_func_t cb)
+{
+	io_interface *io = get_io(fd);
+	assert(io->support_aio());
+	io->set_callback(new user_callback(cb));
+}
+
+ssize_t ssd_aread(int fd, void *buf, size_t count, off_t off,
+		void *callback_data)
+{
+	io_interface *io = get_io(fd);
+	assert(io->support_aio());
+	io_request req((char *) buf, off, count, READ, io, io->get_node_id(),
+			NULL, callback_data);
+	io->access(&req, 1);
+	return 0;
+}
+
+ssize_t ssd_awrite(int fd, void *buf, size_t count, off_t off,
+		void *callback_data)
+{
+	io_interface *io = get_io(fd);
+	assert(io->support_aio());
+	io_request req((char *) buf, off, count, WRITE, io, io->get_node_id(),
+			NULL, callback_data);
+	io->access(&req, 1);
+	return 0;
 }
 
 }
