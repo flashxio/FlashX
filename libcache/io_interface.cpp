@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <pthread.h>
 
 #include <vector>
 
@@ -11,7 +12,48 @@
 #include "global_cached_private.h"
 #include "part_global_cached_private.h"
 
-static std::vector<io_interface *> io_table;
+class io_tracker
+{
+	io_interface *io;
+	bool has_init;
+	pthread_spinlock_t lock;
+	bool taken;
+public:
+	io_tracker(io_interface *io) {
+		this->io = io;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		taken = false;
+		has_init = false;
+	}
+
+	io_interface *take() {
+		pthread_spin_lock(&lock);
+		io_interface *ret = NULL;
+		if (!taken)
+			ret = io;
+		taken = true;
+		// If the IO is used for the first time, initialize it.
+		if (!has_init && ret) {
+			ret->init();
+			has_init = true;
+		}
+		pthread_spin_unlock(&lock);
+		return ret;
+	}
+
+	io_interface *get() {
+		assert(has_init && taken);
+		return io;
+	}
+
+	void release() {
+		pthread_spin_lock(&lock);
+		taken = false;
+		pthread_spin_unlock(&lock);
+	}
+};
+
+static std::vector<io_tracker *> io_table;
 
 int get_num_ios()
 {
@@ -23,7 +65,7 @@ void register_io(io_interface *io)
 	// Make sure the index hasn't been set.
 	assert(io->get_io_idx() < 0);
 
-	io_table.push_back(io);
+	io_table.push_back(new io_tracker(io));
 	int idx = io_table.size() - 1;
 	io->set_io_idx(idx);
 }
@@ -31,9 +73,25 @@ void register_io(io_interface *io)
 io_interface *get_io(int idx)
 {
 	assert(idx >= 0);
-	io_interface *io = io_table[idx];
+	io_interface *io = io_table[idx]->get();
+	assert(io);
 	assert(io->get_io_idx() == idx);
 	return io;
+}
+
+io_interface *allocate_io()
+{
+	for (unsigned i = 0; i < io_table.size(); i++) {
+		io_interface *io = io_table[i]->take();
+		if (io)
+			return io;
+	}
+	return NULL;
+}
+
+void release_io(io_interface *io)
+{
+	io_table[io->get_io_idx()]->release();
 }
 
 std::vector<io_interface *> create_ios(const RAID_config &raid_conf,

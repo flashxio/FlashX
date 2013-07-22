@@ -122,15 +122,10 @@ int ssd_create(const char *name, size_t tot_size)
 
 int ssd_open(const char *name)
 {
-	static atomic_unsigned_integer open_id;
 	ssd_io_init(name);
-	int id = open_id.inc(1) - 1;
-	printf("open id: %d\n", id);
-	assert(id < get_num_ios());
 
-	io_interface *io = get_io(id);
-	io->init();
-	return id;
+	io_interface *io = allocate_io();
+	return io->get_io_idx();
 }
 
 ssize_t ssd_read(int fd, void *buf, size_t count, off_t off)
@@ -153,6 +148,7 @@ int ssd_close(int fd)
 {
 	io_interface *io = get_io(fd);
 	io->cleanup();
+	release_io(io);
 	return 0;
 }
 
