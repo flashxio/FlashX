@@ -11,8 +11,6 @@
 #include "messaging.h"
 #include "slab_allocator.h"
 
-#ifdef ENABLE_AIO
-
 void aio_callback(io_context_t, struct iocb*, void *, long, long);
 
 struct thread_callback_s;
@@ -192,7 +190,5 @@ public:
 		return &queue;
 	}
 };
-
-#endif
 
 #endif

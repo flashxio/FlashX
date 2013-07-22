@@ -23,7 +23,6 @@
 //static int aio_blksize = 0;
 //static int aio_maxio = 0;
 
-#ifdef ENABLE_AIO
 int f_fd;
 long long f_offset;
 
@@ -189,4 +188,3 @@ int max_io_slot(struct aio_ctx* a_ctx)
 	return a_ctx->max_aio - a_ctx->busy_aio;
 }
 
-#endif

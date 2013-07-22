@@ -148,7 +148,6 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 					register_io(io);
 					ios.push_back(io);
 					break;
-#if ENABLE_AIO
 				case AIO_ACCESS:
 					{
 						int depth_per_file = AIO_DEPTH_PER_FILE / nthreads;
@@ -161,7 +160,6 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 						ios.push_back(io);
 					}
 					break;
-#endif
 				case REMOTE_ACCESS:
 					io = new remote_disk_access(read_threads.data(),
 							complete_threads[node_id], num_files,

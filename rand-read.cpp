@@ -70,9 +70,7 @@ struct str2int {
 str2int access_methods[] = {
 	{ "normal", READ_ACCESS },
 	{ "direct", DIRECT_ACCESS },
-#ifdef ENABLE_AIO
 	{ "aio", AIO_ACCESS },
-#endif
 	{ "remote", REMOTE_ACCESS },
 	{ "global_cache", GLOBAL_CACHE_ACCESS },
 	{ "parted_global", PART_GLOBAL_ACCESS },
