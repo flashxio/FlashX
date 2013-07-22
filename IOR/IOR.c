@@ -2099,9 +2099,9 @@ TestIoSys(IOR_param_t *test)
             }
             GetTestFileName(testFileName, test);
             test->open = WRITECHECK;
-//            fd = IOR_Open(testFileName, test);
+            fd = IOR_Open(testFileName, test);
+            IOR_Close(fd, test);
             dataMoved = WriteOrRead(test, fd, WRITECHECK);
-//            IOR_Close(fd, test);
             rankOffset = 0;
         }
         /*
@@ -2170,11 +2170,14 @@ TestIoSys(IOR_param_t *test)
             MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             test->open = READ;
             timer[6][rep] = GetTimeStamp();
-//            fd = IOR_Open(testFileName, test);
+            fd = IOR_Open(testFileName, test);
             if (rank == 0 && verbose >= VERBOSE_2) {
                 fprintf(stdout, "[RANK %03d] open for reading file %s XXCEL\n", rank,testFileName);
             }
             timer[7][rep] = GetTimeStamp();
+            timer[10][rep] = GetTimeStamp();
+            IOR_Close(fd, test);
+            timer[11][rep] = GetTimeStamp();
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             if (rank == 0 && verbose >= VERBOSE_1) {
@@ -2186,9 +2189,6 @@ TestIoSys(IOR_param_t *test)
             timer[9][rep] = GetTimeStamp();
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
-            timer[10][rep] = GetTimeStamp();
-//            IOR_Close(fd, test);
-            timer[11][rep] = GetTimeStamp();
 
             /* get the size of the file just read */
             test->aggFileSizeFromStat[rep] = IOR_GetFileSize(test, testComm,
@@ -2225,7 +2225,7 @@ TestIoSys(IOR_param_t *test)
             GetTestFileName(testFileName, test);
             MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             test->open = READCHECK;
-//            fd = IOR_Open(testFileName, test);
+            fd = IOR_Open(testFileName, test);
             if (test->filePerProc) {
                 int tmpRankOffset;
                 tmpRankOffset = rankOffset;
@@ -2239,12 +2239,12 @@ TestIoSys(IOR_param_t *test)
                 test->fd_fppReadCheck =
                     IOR_Open(test->testFileName_fppReadCheck, test);
             }
+            IOR_Close(fd, test);
             dataMoved = WriteOrRead(test, fd, READCHECK);
             if (test->filePerProc) {
                 IOR_Close(test->fd_fppReadCheck, test);
                 test->fd_fppReadCheck = NULL;
             }
-//            IOR_Close(fd, test);
         }
         /*
          * this final barrier may not be necessary as IOR_Close should
