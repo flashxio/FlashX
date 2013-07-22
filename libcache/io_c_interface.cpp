@@ -62,6 +62,56 @@ void ssd_io_init(const char *name)
 	}
 }
 
+struct data_fill_struct
+{
+	pthread_t tid;
+	int fd;
+	off_t off;
+	size_t tot_size;
+};
+
+static void *fill_space(void *arg)
+{
+	struct data_fill_struct *data = (struct data_fill_struct *) arg;
+	size_t tot_size = data->tot_size;
+	int fd = data->fd;
+	off_t off = data->off;
+
+	size_t block_size = 2 * 1024 * 1024;
+	char *buf = (char *) valloc(block_size);
+	memset(buf, 0, block_size);
+	off_t ret = lseek(fd, off, SEEK_SET);
+	if (ret < 0) {
+		perror("lseek");
+		abort();
+	}
+	size_t remaining_size = tot_size;
+	while (remaining_size > 0) {
+		size_t count = min(remaining_size, block_size);
+		ssize_t written = write(fd, buf, count);
+		if (written < 0) {
+			perror("write");
+			abort();
+		}
+		if (written == 0) {
+			printf("WARNING! nothing was written\n");
+		}
+		remaining_size -= written;
+	}
+	free(buf);
+	return NULL;
+}
+
+static size_t get_filesize(int fd)
+{
+	struct stat stat_buf;
+	if (fstat(fd, &stat_buf) != 0) {
+		perror("fstat");
+		abort();
+	}
+	return stat_buf.st_size;
+}
+
 extern "C" {
 
 void set_cache_size(long size)
@@ -104,17 +154,37 @@ int ssd_create(const char *name, size_t tot_size)
 	std::vector<file_info> files;
 	retrieve_data_files(name, files);
 	size_t file_size = tot_size / files.size();
+	struct data_fill_struct data[files.size()];
 	for (unsigned i = 0; i < files.size(); i++) {
-		int fd = open(files[i].name.c_str(), O_RDWR | O_CREAT,
+		int fd = open(files[i].name.c_str(), O_RDWR | O_CREAT | O_DIRECT,
 				S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 		if (fd < 0) {
 			perror("open");
 			abort();
 		}
-		int err = posix_fallocate(fd, 0, file_size);
-		if (err) {
-			fprintf(stderr, "posix_fallocate error: %s\n", strerror(err));
-			abort();
+
+		size_t curr_size = get_filesize(fd);
+		if (file_size > curr_size) {
+			int err = posix_fallocate(fd, 0, file_size);
+			if (err) {
+				fprintf(stderr, "posix_fallocate error: %s\n", strerror(err));
+				abort();
+			}
+			data[i].fd = fd;
+			data[i].off = 0;
+			data[i].tot_size = file_size;
+			pthread_create(&data[i].tid, NULL, fill_space, &data[i]);
+		}
+		else {
+			close(fd);
+			data[i].fd = -1;
+		}
+	}
+	for (unsigned i = 0; i < files.size(); i++) {
+		if (data[i].fd >= 0) {
+			pthread_join(data[i].tid, NULL);
+			close(data[i].fd);
+			printf("fill the file %s\n", files[i].name.c_str());
 		}
 	}
 	return 0;
