@@ -1,10 +1,24 @@
-LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) #-lprofiler
-UNITTEST = SAHT_unit_test GClock_unit_test SA_expand_shrink_test file_mapper_unit_test slab_allocator_test
+ifdef MEMCHECK
+TRACE_FLAGS = -faddress-sanitizer
+CC = clang
+CXX = clang++
+endif
+TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
+TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
+CLANG_FLAGS = -Wno-attributes
+
+CFLAGS = -g -I../include $(TRACE_FLAGS)
+
+LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -L../nbds.0.4.3/ -lnbds $(TRACE_FLAGS) #-lprofiler
+UNITTEST = SAHT_unit_test GClock_unit_test SA_expand_shrink_test file_mapper_unit_test slab_allocator_test test
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -g
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
+
+test_c_interface: test_c_interface.o ../libcache/libcache.a
+	$(CXX) -o test_c_interface test_c_interface.o $(LDFLAGS)
 
 all: $(UNITTEST)
 
@@ -21,7 +35,7 @@ file_mapper_unit_test: file_mapper_unit_test.o
 	$(CXX) -o file_mapper_unit_test file_mapper_unit_test.o
 
 slab_allocator_test: slab_allocator_test.o
-	$(CXX) -o slab_allocator_test slab_allocator_test.o
+	$(CXX) -o slab_allocator_test slab_allocator_test.o $(LDFLAGS)
 
 clean:
 	rm *.o
