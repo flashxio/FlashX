@@ -180,6 +180,8 @@ AioriBind(char * api)
         IOR_Create      = IOR_Create_POSIX;
         IOR_Open        = IOR_Open_POSIX;
         IOR_Xfer        = IOR_Xfer_POSIX;
+        IOR_AsyncXfer   = IOR_AsyncXfer_POSIX;
+        IOR_SetAsyncCallback = IOR_SetAsyncCallback_POSIX;
         IOR_Close       = IOR_Close_POSIX;
         IOR_Delete      = IOR_Delete_POSIX;
         IOR_SetVersion  = IOR_SetVersion_POSIX;

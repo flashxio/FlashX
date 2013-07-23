@@ -36,6 +36,7 @@
 #ifdef _MANUALLY_SET_LUSTRE_STRIPING
 #  include <lustre/lustre_user.h>
 #endif /* _MANUALLY_SET_LUSTRE_STRIPING */
+#include <assert.h>
 
 #ifndef   open64                                    /* necessary for TRU64 -- */
 #  define open64  open                              /* unlikely, but may pose */
@@ -49,6 +50,8 @@
 #  define O_BINARY 0
 #endif
 
+#include "wpaio.h"
+
 
 /**************************** P R O T O T Y P E S *****************************/
 
@@ -60,6 +63,23 @@ extern int      rank;
 extern int      rankOffset;
 extern int      verbose;
 extern MPI_Comm testComm;
+
+struct aio_struct
+{
+	struct aio_ctx *ctx;
+	AsyncCallbackFunc_t func;
+};
+
+#define NUM_AIOS 100
+#define AIO_DEPTH (32 * 16)
+static struct aio_struct aios[NUM_AIOS];
+
+struct IOR_callback_s
+{
+	struct io_callback_s cb;
+	struct AsyncData *data;
+	AsyncCallbackFunc_t func;
+};
 
 /***************************** F U N C T I O N S ******************************/
 
@@ -311,11 +331,25 @@ IOR_Fsync_POSIX(void * fd, IOR_param_t * param)
  */
 
 void
-IOR_Close_POSIX(void *fd,
+IOR_Close_POSIX(void *file,
                 IOR_param_t * param)
 {
-    if (close(*(int *)fd) != 0) ERR("cannot close file");
-    free(fd);
+	printf("close file\n");
+	int fd = *(int *) file;
+	// if the file descriptor was used for AIO, wait for all IOs to
+	// be completed before returning.
+	if (fd < NUM_AIOS) {
+		struct aio_ctx *ctx = aios[fd].ctx;
+		if (ctx) {
+			int slot = max_io_slot(ctx);
+			while (slot < AIO_DEPTH) {
+				io_wait(ctx, NULL, 1);
+				slot = max_io_slot(ctx);
+			}
+		}
+	}
+    if (close(fd) != 0) ERR("cannot close file");
+    free(file);
 } /* IOR_Close_POSIX() */
 
 
@@ -387,3 +421,56 @@ IOR_GetFileSize_POSIX(IOR_param_t * test,
 
     return(aggFileSizeFromStat);
 } /* IOR_GetFileSize_POSIX() */
+
+static void IOR_callback(io_context_t ctx, struct iocb* iocb[],
+		void *cbs[], long res[], long res2[], int num)
+{
+	int i;
+
+	for (i = 0; i < num; i++) {
+		assert(res2[i] == 0);
+		struct IOR_callback_s *cb = (struct IOR_callback_s *) cbs[i];
+		cb->func(cb->data, res2[i]);
+	}
+}
+
+int
+IOR_AsyncXfer_POSIX(int access, void *file, IOR_size_t *buffer,
+		IOR_offset_t length, IOR_offset_t offset, IOR_param_t *test,
+		struct AsyncData *data)
+{
+	int fd = * (int *) file;
+	assert(fd < NUM_AIOS);
+	struct aio_ctx *ctx = aios[fd].ctx;
+	assert(ctx);
+
+	// Wait for at least one slot to be available.
+	int slot = max_io_slot(ctx);
+	if (slot == 0) {
+		io_wait(ctx, NULL, 1);
+		slot = max_io_slot(ctx);
+	}
+	assert(slot > 0);
+
+	// Construct an IO request.
+	int io_type = access == READ ? A_READ : A_WRITE;
+	struct IOR_callback_s *cb = (struct IOR_callback_s *) malloc(sizeof(*cb));
+	cb->data = data;
+	cb->cb.func = IOR_callback;
+	cb->func = aios[fd].func;
+	struct iocb *req = make_io_request(ctx, fd, length, offset, buffer,
+			io_type, (struct io_callback_s *) cb);
+
+	submit_io_request(ctx, &req, 1);
+
+	return 0;
+}
+
+void
+IOR_SetAsyncCallback_POSIX(void *file, AsyncCallbackFunc_t func)
+{
+	int fd = * (int *) file;
+	assert(fd < NUM_AIOS);
+	aios[fd].ctx = create_aio_ctx(AIO_DEPTH);
+	aios[fd].func = func;
+}
