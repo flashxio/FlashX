@@ -9,7 +9,7 @@ CLANG_FLAGS = -Wno-attributes
 
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
-LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -L../nbds.0.4.3/ -lnbds $(TRACE_FLAGS) #-lprofiler
+LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -lprofiler -L../nbds.0.4.3/ -lnbds $(TRACE_FLAGS)
 UNITTEST = SAHT_unit_test GClock_unit_test SA_expand_shrink_test file_mapper_unit_test slab_allocator_test test
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -g

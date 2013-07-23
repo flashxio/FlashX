@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <pthread.h>
+#include <signal.h>
+#include <google/profiler.h>
 
 #include "io_c_interface.h"
 
@@ -9,6 +11,7 @@ off_t *offs;
 int num_offs = 1000000;
 int num_threads = 8;
 char *file_name = "../conf/data_files.txt";
+char *prof_file = "test_c_interface.prof";
 int block_size = 4096;
 
 struct thread_data
@@ -67,6 +70,12 @@ void *AsyncThreadWriteOrRead(void *arg)
 	return NULL;
 }
 
+void int_handler(int sig_num)
+{
+	ProfilerStop();
+	exit(0);
+}
+
 int main()
 {
 	int i;
@@ -75,6 +84,9 @@ int main()
 		offs[i] = i * 4096L;
 	rand_permute_array(offs, num_offs);
 
+	signal(SIGINT, int_handler);
+
+	ProfilerStart(prof_file);
 	ssd_io_init(file_name, 0, num_threads);
 	struct thread_data data[num_threads];
 	for (i = 0; i < num_threads; i++) {
@@ -84,5 +96,6 @@ int main()
 	}
 	for (i = 0; i < num_threads; i++)
 		pthread_join(data[i].tid, NULL);
+	ProfilerStop();
 	printf("complete\n");
 }
