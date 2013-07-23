@@ -13,6 +13,7 @@ int num_threads = 8;
 char *file_name = "../conf/data_files.txt";
 char *prof_file = "test_c_interface.prof";
 int block_size = 4096;
+int node_id = 1;
 
 struct thread_data
 {
@@ -35,14 +36,19 @@ struct callback_data
 {
 	char *buffer;
 	volatile int *num_completes;
+	struct buf_pool *buf_allocator;
+	struct buf_pool *cb_allocator;
 };
 
 void cb_func(void *arg, int status)
 {
 	struct callback_data *data = arg;
+	struct buf_pool *buf_allocator = data->buf_allocator;
+	struct buf_pool *cb_allocator = data->cb_allocator;
+
 	__sync_fetch_and_add(data->num_completes, 1);
-	free(data->buffer);
-	free(data);
+	free_buf(buf_allocator, data->buffer);
+	free_buf(cb_allocator, data);
 }
 
 void *AsyncThreadWriteOrRead(void *arg)
@@ -50,6 +56,10 @@ void *AsyncThreadWriteOrRead(void *arg)
 	int fd = ssd_open(file_name, 0);
 	ssd_set_callback(fd, cb_func);
 	int num_completes = 0;
+	struct buf_pool *buf_allocator = create_buf_pool(block_size,
+			block_size * 10000, node_id);
+	struct buf_pool *cb_allocator = create_buf_pool(sizeof(struct callback_data),
+			sizeof(struct callback_data) * 10000, node_id);
 
 	struct thread_data *data = arg;
 	int num = num_offs / num_threads;
@@ -57,12 +67,14 @@ void *AsyncThreadWriteOrRead(void *arg)
 	int i;
 
 	for (i = 0; i < num; i++) {
-		char *buffer = malloc(block_size);
+		char *buffer = alloc_buf(buf_allocator);
 		assert(off_start + i < num_offs);
 		off_t offset = offs[off_start + i];
-		struct callback_data *cb_data = malloc(sizeof(struct callback_data));
+		struct callback_data *cb_data = alloc_buf(cb_allocator);
 		cb_data->buffer = buffer;
 		cb_data->num_completes = &num_completes;
+		cb_data->buf_allocator = buf_allocator;
+		cb_data->cb_allocator = cb_allocator;
 		ssd_awrite(fd, (void *) buffer, block_size, offset, (void *) cb_data);
 	}
 

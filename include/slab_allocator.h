@@ -115,6 +115,12 @@ private:
 	long curr_size;
 
 	pthread_spinlock_t lock;
+	// The buffers pre-allocated to serve allocation requests
+	// from the local threads.
+	pthread_key_t local_buf_key;
+	// The buffers freed in the local threads, which hasn't been
+	// added the main buffer.
+	pthread_key_t local_free_key;
 
 #ifdef MEMCHECK
 	aligned_allocator allocator;
@@ -130,6 +136,8 @@ public:
 		curr_size = 0;
 		assert((unsigned) obj_size >= sizeof(linked_obj));
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		pthread_key_create(&local_buf_key, NULL);
+		pthread_key_create(&local_free_key, NULL);
 	}
 
 	virtual ~slab_allocator();
@@ -137,6 +145,39 @@ public:
 	int alloc(char **objs, int num);
 
 	void free(char **objs, int num);
+
+	char *alloc() {
+		fifo_queue<char *> *local_buf_refs
+			= (fifo_queue<char *> *) pthread_getspecific(local_buf_key);
+		if (local_buf_refs == NULL) {
+			local_buf_refs = new fifo_queue<char *>(LOCAL_BUF_SIZE);
+			pthread_setspecific(local_buf_key, local_buf_refs);
+		}
+
+		if (local_buf_refs->is_empty()) {
+			char *objs[LOCAL_BUF_SIZE];
+			int num = alloc(objs, LOCAL_BUF_SIZE);
+			assert(num > 0);
+			int num_added = local_buf_refs->add(objs, num);
+			assert(num_added == num);
+		}
+		return local_buf_refs->pop_front();
+	}
+
+	void free(char *obj) {
+		fifo_queue<char *> *local_free_refs
+			= (fifo_queue<char *> *) pthread_getspecific(local_free_key);
+		if (local_free_refs == NULL) {
+			local_free_refs = new fifo_queue<char *>(LOCAL_BUF_SIZE);
+			pthread_setspecific(local_free_key, local_free_refs);
+		}
+		if (local_free_refs->is_full()) {
+			char *objs[LOCAL_BUF_SIZE];
+			int num = local_free_refs->fetch(objs, LOCAL_BUF_SIZE);
+			slab_allocator::free(objs, num);
+		}
+		local_free_refs->push_back(obj);
+	}
 
 	long get_max_size() const {
 		return max_size;
@@ -165,24 +206,16 @@ public:
 template<class T>
 class obj_allocator: public slab_allocator
 {
-	// The buffers pre-allocated to serve allocation requests
-	// from the local threads.
-	pthread_key_t local_buf_key;
-	// The buffers freed in the local threads, which hasn't been
-	// added the main buffer.
-	pthread_key_t local_free_key;
 	obj_initiator<T> *initiator;
 public:
 	obj_allocator(long increase_size, long max_size = MAX_SIZE,
 			obj_initiator<T> *initiator = new default_obj_initiator<T>(
 				)): slab_allocator(sizeof(T), increase_size, max_size) {
 		assert(increase_size <= max_size);
-		pthread_key_create(&local_buf_key, NULL);
-		pthread_key_create(&local_free_key, NULL);
 		this->initiator = initiator;
 	}
 
-	virtual int alloc_objs(T **objs, int num) {
+	int alloc_objs(T **objs, int num) {
 		int ret = slab_allocator::alloc((char **) objs, num);
 		for (int i = 0; i < ret; i++) {
 			initiator->init(objs[i]);
@@ -190,22 +223,10 @@ public:
 		return ret;
 	}
 
-	virtual T *alloc_obj() {
-		fifo_queue<T *> *local_buf_refs
-			= (fifo_queue<T *> *) pthread_getspecific(local_buf_key);
-		if (local_buf_refs == NULL) {
-			local_buf_refs = new fifo_queue<T *>(LOCAL_BUF_SIZE);
-			pthread_setspecific(local_buf_key, local_buf_refs);
-		}
-
-		if (local_buf_refs->is_empty()) {
-			T *objs[LOCAL_BUF_SIZE];
-			int num = alloc_objs(objs, LOCAL_BUF_SIZE);
-			assert(num > 0);
-			int num_added = local_buf_refs->add(objs, num);
-			assert(num_added == num);
-		}
-		return local_buf_refs->pop_front();
+	T *alloc_obj() {
+		T *obj = (T *) slab_allocator::alloc();
+		initiator->init(obj);
+		return obj;
 	}
 
 	void free(T **objs, int num) {
@@ -213,18 +234,7 @@ public:
 	}
 
 	void free(T *obj) {
-		fifo_queue<T *> *local_free_refs
-			= (fifo_queue<T *> *) pthread_getspecific(local_free_key);
-		if (local_free_refs == NULL) {
-			local_free_refs = new fifo_queue<T *>(LOCAL_BUF_SIZE);
-			pthread_setspecific(local_free_key, local_free_refs);
-		}
-		if (local_free_refs->is_full()) {
-			T *objs[LOCAL_BUF_SIZE];
-			int num = local_free_refs->fetch(objs, LOCAL_BUF_SIZE);
-			free(objs, num);
-		}
-		local_free_refs->push_back(obj);
+		slab_allocator::free((char *) obj);
 	}
 };
 
