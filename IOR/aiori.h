@@ -197,8 +197,9 @@ struct AsyncData
 	IOR_param_t *test;
 	int access;
 
-	IOR_offset_t *dataMoved;
-	int *errors;
+	volatile IOR_offset_t *dataMoved;
+	volatile int *errors;
+	volatile int *numCompletes;
 };
 
 typedef void (*AsyncCallbackFunc_t)(void *, int);

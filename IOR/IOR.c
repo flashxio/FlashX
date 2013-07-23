@@ -2592,13 +2592,17 @@ void XferComplete(void *arg, int status)
 {
 	struct AsyncData *data = (struct AsyncData *) arg;
 	if (status == 0)
-		*data->dataMoved += data->transferSize;
-	if (data->access == WRITECHECK)
-		*data->errors += CompareBuffers(data->buffer, data->checkBuffer,
+		__sync_fetch_and_add(data->dataMoved, data->transferSize);
+	if (data->access == WRITECHECK) {
+		int errs = CompareBuffers(data->buffer, data->checkBuffer,
 				data->transferSize, data->transferCount, data->test,
 				data->access);
+		__sync_fetch_and_add(data->errors, errs);
+	}
+	__sync_fetch_and_add(data->numCompletes, 1);
     FreeBuffers(data->access, data->checkBuffer, data->readCheckBuffer,
 			data->buffer, NULL);
+	free(data);
 }
 
 void *
@@ -2611,6 +2615,7 @@ AsyncThreadWriteOrRead(void *arg)
 					amtXferred;
     IOR_offset_t   dataMoved = 0;             /* for data rate calculation */
     int            errors = 0;
+	volatile int   numCompletes = 0;
 	void *fd;
 
 	IOR_param_t *test = data->test;
@@ -2630,6 +2635,7 @@ AsyncThreadWriteOrRead(void *arg)
 	while (arrPos < arrEnd) {
 		IOR_offset_t offset = offsetArray[arrPos];
 		struct AsyncData *asyncData = (struct AsyncData *) malloc(sizeof(*asyncData));
+		memset(asyncData, 0, sizeof(*asyncData));
 		SetupXferBuffers(&asyncData->buffer, &asyncData->checkBuffer,
 				&asyncData->readCheckBuffer, test, pretendRank, access);
         /*
@@ -2644,6 +2650,7 @@ AsyncThreadWriteOrRead(void *arg)
 		asyncData->test = test;
 		asyncData->dataMoved = &dataMoved;
 		asyncData->errors = &errors;
+		asyncData->numCompletes = &numCompletes;
         if (access == WRITE) {
             IOR_AsyncXfer(access, fd, asyncData->buffer, transfer, offset, test,
 					asyncData);
@@ -2666,6 +2673,7 @@ AsyncThreadWriteOrRead(void *arg)
 		arrPos++;
 	}
 	IOR_Close(fd, test);
+	printf("%lld accesses, %d completes\n", arrEnd - arrStart, numCompletes);
 
 	data->dataMoved = dataMoved;
 	data->errors = errors;
