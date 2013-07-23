@@ -11,13 +11,21 @@ ssize_t ssd_write(int fd, void *buf, size_t count, off_t off);
 int ssd_close(int fd);
 int ssd_delete(const char *name);
 
+/**
+ * For async IO.
+ */
 typedef void (*ssd_callback_func_t)(void *, int);
-
 void ssd_set_callback(int fd, ssd_callback_func_t);
 ssize_t ssd_aread(int fd, void *buf, size_t count, off_t off,
 		void *callback_data);
 ssize_t ssd_awrite(int fd, void *buf, size_t count, off_t off,
 		void *callback_data);
+
+struct buf_pool;
+struct buf_pool *create_buf_pool(int obj_size, long pool_size, int node_id);
+void *alloc_buf(struct buf_pool *pool);
+void free_buf(struct buf_pool *pool, void *buf);
+void destroy_buf_pool(struct buf_pool *pool);
 
 /**
  * Set the parameters of the system.

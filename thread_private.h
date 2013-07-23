@@ -1,6 +1,7 @@
 #ifndef __THREAD_PRIVATE_H__
 #define __THREAD_PRIVATE_H__
 
+#include "workload.h"
 #include "rand_buf.h"
 #include "garbage_collection.h"
 #include "messaging.h"

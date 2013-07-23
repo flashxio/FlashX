@@ -1,7 +1,6 @@
 #ifndef __RAND_BUF_H__
 #define __RAND_BUF_H__
 
-#include "workload.h"
 #include "container.h"
 #include "aligned_allocator.h"
 

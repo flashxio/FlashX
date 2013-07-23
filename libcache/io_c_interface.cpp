@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "rand_buf.h"
 #include "io_interface.h"
 #include "concurrency.h"
 #include "RAID_config.h"
@@ -296,6 +297,36 @@ ssize_t ssd_awrite(int fd, void *buf, size_t count, off_t off,
 	req.set_user_data(callback_data);
 	io->access(&req, 1);
 	return 0;
+}
+
+struct buf_pool
+{
+	rand_buf *alloc;
+	int entry_size;
+};
+
+struct buf_pool *create_buf_pool(int obj_size, long pool_size, int node_id)
+{
+	struct buf_pool *pool = new struct buf_pool;
+	pool->alloc = new rand_buf(pool_size, obj_size, node_id);
+	pool->entry_size = obj_size;
+	return pool;
+}
+
+void *alloc_buf(struct buf_pool *pool)
+{
+	return pool->alloc->next_entry(pool->entry_size);
+}
+
+void free_buf(struct buf_pool *pool, void *buf)
+{
+	pool->alloc->free_entry((char *) buf);
+}
+
+void destroy_buf_pool(struct buf_pool *pool)
+{
+	delete pool->alloc;
+	delete pool;
 }
 
 }
