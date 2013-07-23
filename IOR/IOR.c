@@ -2504,18 +2504,18 @@ GetOffsetArraySequential(IOR_param_t *test, int pretendRank)
 
 
 IOR_offset_t *
-GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access)
+GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access, long seed)
 {
-    int seed;
     IOR_offset_t i, value, tmp;
     IOR_offset_t offsets = 0, offsetCnt = 0;
     IOR_offset_t fileSize;
     IOR_offset_t *offsetArray;
-	printf("there are %d tasks, pretend rank: %d\n", test->numTasks, pretendRank);
+	printf("there are %d tasks %d threads per task, pretend rank: %d\n",
+			test->numTasks, test->numThreads, pretendRank);
 
     /* set up seed for random() */
     if (access == WRITE || access == READ) {
-        test->randomSeed = seed = random();
+        test->randomSeed = seed;
     } else {
         seed = test->randomSeed;
     }
@@ -2528,15 +2528,15 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access)
 	printf("file size: %lld\n", fileSize);
 
     /* count needed offsets (pass 1) */
-    for (i = 0; i < fileSize; i += test->transferSize) {
-        if (test->filePerProc == FALSE) {
-            if ((random() % test->numTasks) == pretendRank) {
-                offsets++;
-            }
-        } else {
-            offsets++;
-        }
-    }
+	if (test->filePerProc == FALSE) {
+		for (i = 0; i < fileSize; i += test->transferSize) {
+			if ((random() % (test->numTasks * test->numThreads)) == pretendRank) {
+				offsets++;
+			}
+		}
+	} else {
+		offsets = fileSize / test->transferSize / test->numThreads;
+	}
 	printf("There are %lld offsets\n", offsets);
 
     /* setup empty array */
@@ -2553,7 +2553,7 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access)
         /* fill with offsets (pass 2) */
         srandom(seed); /* need same seed */
         for (i = 0; i < fileSize; i += test->transferSize) {
-            if ((random() % test->numTasks) == pretendRank) {
+            if ((random() % (test->numTasks * test->numThreads)) == pretendRank) {
                 offsetArray[offsetCnt] = i;
                 offsetCnt++;
             }
@@ -2580,8 +2580,6 @@ struct ThreadData
 	int access;
 	int pretendRank;
 	IOR_offset_t *offsetArray;
-	IOR_offset_t arrStart;
-	IOR_offset_t arrEnd;
 
 	// output data
 	volatile IOR_offset_t   dataMoved;
@@ -2617,23 +2615,30 @@ AsyncThreadWriteOrRead(void *arg)
     int            errors = 0;
 	volatile int   numCompletes = 0;
 	void *fd;
+	double         startForStonewall;
+	int            hitStonewall;
 
 	IOR_param_t *test = data->test;
 	int access = data->access;
 	int pretendRank = data->pretendRank;
 	IOR_offset_t *offsetArray = data->offsetArray;
-	IOR_offset_t arrStart = data->arrStart;
-	IOR_offset_t arrEnd = data->arrEnd;
-	IOR_offset_t arrPos = arrStart;
+	IOR_offset_t pairCnt = 0;
 
 	GetTestFileName(testFileName, test);
 	fd = IOR_Open(testFileName, test);
 
+    /* check for stonewall */
+    startForStonewall = GetTimeStamp();
+    hitStonewall = ((test->deadlineForStonewalling != 0)
+                    && ((GetTimeStamp() - startForStonewall)
+                        > test->deadlineForStonewalling));
+
 	assert(IOR_AsyncXfer);
 	assert(IOR_SetAsyncCallback);
 	IOR_SetAsyncCallback(fd, XferComplete);
-	while (arrPos < arrEnd) {
-		IOR_offset_t offset = offsetArray[arrPos];
+    /* loop over offsets to access */
+    while ((offsetArray[pairCnt] != -1) && !hitStonewall) {
+		IOR_offset_t offset = offsetArray[pairCnt];
 		struct AsyncData *asyncData = (struct AsyncData *) malloc(sizeof(*asyncData));
 		memset(asyncData, 0, sizeof(*asyncData));
 		SetupXferBuffers(&asyncData->buffer, &asyncData->checkBuffer,
@@ -2670,10 +2675,14 @@ AsyncThreadWriteOrRead(void *arg)
                       &transferCount, access, &errors);
 #endif
         }
-		arrPos++;
+        hitStonewall = ((test->deadlineForStonewalling != 0)
+                        && ((GetTimeStamp() - startForStonewall)
+                            > test->deadlineForStonewalling));
+		pairCnt++;
 	}
 	IOR_Close(fd, test);
-	printf("%lld accesses, %d completes\n", arrEnd - arrStart, numCompletes);
+	printf("access: %d, %lld accesses, %d completes\n",
+			access, pairCnt, numCompletes);
 
 	data->dataMoved = dataMoved;
 	data->errors = errors;
@@ -2695,22 +2704,29 @@ SyncThreadWriteOrRead(void *arg)
     IOR_offset_t   dataMoved = 0;             /* for data rate calculation */
     int            errors = 0;
 	void *fd;
+	double         startForStonewall;
+	int            hitStonewall;
 
 	IOR_param_t *test = data->test;
 	int access = data->access;
 	int pretendRank = data->pretendRank;
 	IOR_offset_t *offsetArray = data->offsetArray;
-	IOR_offset_t arrStart = data->arrStart;
-	IOR_offset_t arrEnd = data->arrEnd;
-	IOR_offset_t arrPos = arrStart;
+	IOR_offset_t pairCnt = 0;
 
 	GetTestFileName(testFileName, test);
 	fd = IOR_Open(testFileName, test);
 
+    /* check for stonewall */
+    startForStonewall = GetTimeStamp();
+    hitStonewall = ((test->deadlineForStonewalling != 0)
+                    && ((GetTimeStamp() - startForStonewall)
+                        > test->deadlineForStonewalling));
+
     SetupXferBuffers(&buffer, &checkBuffer, &readCheckBuffer,
                      test, pretendRank, access);
-	while (arrPos < arrEnd) {
-        IOR_offset_t offset = offsetArray[arrPos];
+    /* loop over offsets to access */
+    while ((offsetArray[pairCnt] != -1) && !hitStonewall) {
+        IOR_offset_t offset = offsetArray[pairCnt];
         /*
          * fills each transfer with a unique pattern
          * containing the offset into the file
@@ -2739,11 +2755,15 @@ SyncThreadWriteOrRead(void *arg)
                       &transferCount, access, &errors);
         }
         dataMoved += amtXferred;
-		arrPos++;
+        hitStonewall = ((test->deadlineForStonewalling != 0)
+                        && ((GetTimeStamp() - startForStonewall)
+                            > test->deadlineForStonewalling));
+		pairCnt++;
 	}
 	data->dataMoved = dataMoved;
 	data->errors = errors;
 	IOR_Close(fd, test);
+	printf("access: %d, pairCnt: %lld\n", access, pairCnt);
 
     FreeBuffers(access, checkBuffer, readCheckBuffer, buffer, NULL);
 	return NULL;
@@ -2761,8 +2781,7 @@ WriteOrRead(IOR_param_t * test,
             int           access)
 {
     int            errors = 0;
-    IOR_offset_t   pairCnt = 0,
-                 * offsetArray;
+    IOR_offset_t * offsetArray;
     int            pretendRank;
     IOR_offset_t   dataMoved = 0;             /* for data rate calculation */
     double         startForStonewall;
@@ -2773,37 +2792,19 @@ WriteOrRead(IOR_param_t * test,
     /* initialize values */
     pretendRank = (rank + rankOffset) % test->numTasks;
 
-    if (test->randomOffset) {
-        offsetArray = GetOffsetArrayRandom(test, pretendRank, access);
-    } else {
-        offsetArray = GetOffsetArraySequential(test, pretendRank);
-    }
-
-    /* check for stonewall */
-//    startForStonewall = GetTimeStamp();
-//    hitStonewall = ((test->deadlineForStonewalling != 0)
-//                    && ((GetTimeStamp() - startForStonewall)
-//                        > test->deadlineForStonewalling));
-
-    /* loop over offsets to access */
-    while ((offsetArray[pairCnt] != -1)) {
-		pairCnt++;
-
-//        hitStonewall = ((test->deadlineForStonewalling != 0)
-//                        && ((GetTimeStamp() - startForStonewall)
-//                            > test->deadlineForStonewalling));
-    }
-	printf("access: %d, pairCnt: %lld\n", access, pairCnt);
 	int numThreads = test->numThreads;
 	struct ThreadData data[numThreads];
-	IOR_offset_t numOffsetsPerThread = pairCnt / numThreads;
+	long seed = random();
 	for (i = 0; i < numThreads; i++) {
 		data[i].test = test;
 		data[i].access = access;
-		data[i].pretendRank = pretendRank;
-		data[i].offsetArray = offsetArray;
-		data[i].arrStart = i * numOffsetsPerThread;
-		data[i].arrEnd = (i + 1) * numOffsetsPerThread;
+		data[i].pretendRank = i;
+		assert(test->randomOffset);
+		if (test->randomOffset) {
+			data[i].offsetArray = GetOffsetArrayRandom(test, i, access, seed);
+		} else {
+			data[i].offsetArray = GetOffsetArraySequential(test, i);
+		}
 		int ret;
 		if (test->useAsync)
 			ret = pthread_create(&data[i].tid, NULL, AsyncThreadWriteOrRead, (void *) &data[i]);
@@ -2818,8 +2819,8 @@ WriteOrRead(IOR_param_t * test,
 		pthread_join(data[i].tid, NULL);
 		dataMoved += data[i].dataMoved;
 		errors += data[i].errors;
+		free(offsetArray);
 	}
-	free(offsetArray);
 
     totalErrorCount += CountErrors(test, access, errors);
 
