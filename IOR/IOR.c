@@ -2182,9 +2182,7 @@ TestIoSys(IOR_param_t *test)
                 fprintf(stdout, "[RANK %03d] open for reading file %s XXCEL\n", rank,testFileName);
             }
             timer[7][rep] = GetTimeStamp();
-            timer[10][rep] = GetTimeStamp();
             IOR_Close(fd, test);
-            timer[11][rep] = GetTimeStamp();
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
             if (rank == 0 && verbose >= VERBOSE_1) {
@@ -2196,6 +2194,9 @@ TestIoSys(IOR_param_t *test)
             timer[9][rep] = GetTimeStamp();
             if (test->intraTestBarriers)
                 MPI_CHECK(MPI_Barrier(testComm), "barrier error");
+            timer[10][rep] = GetTimeStamp();
+//            IOR_Close(fd, test);
+            timer[11][rep] = GetTimeStamp();
 
             /* get the size of the file just read */
             test->aggFileSizeFromStat[rep] = IOR_GetFileSize(test, testComm,
