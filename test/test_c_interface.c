@@ -1,3 +1,10 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -7,6 +14,11 @@
 
 #include "io_c_interface.h"
 
+enum {
+	READ,
+	WRITE,
+};
+
 off_t *offs;
 int num_offs = 1000000;
 int num_threads = 8;
@@ -14,6 +26,7 @@ char *file_name = "../conf/data_files.txt";
 char *prof_file = "test_c_interface.prof";
 int block_size = 4096;
 int node_id = 1;
+int access = READ;
 
 struct thread_data
 {
@@ -75,7 +88,10 @@ void *AsyncThreadWriteOrRead(void *arg)
 		cb_data->num_completes = &num_completes;
 		cb_data->buf_allocator = buf_allocator;
 		cb_data->cb_allocator = cb_allocator;
-		ssd_awrite(fd, (void *) buffer, block_size, offset, (void *) cb_data);
+		if (access == READ)
+			ssd_aread(fd, (void *) buffer, block_size, offset, (void *) cb_data);
+		else
+			ssd_awrite(fd, (void *) buffer, block_size, offset, (void *) cb_data);
 	}
 
 	ssd_close(fd);
