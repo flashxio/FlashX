@@ -62,7 +62,7 @@ void async_io::cleanup()
 	int slot = max_io_slot(ctx);
 
 	while (slot < AIO_DEPTH) {
-		io_wait(ctx, NULL);
+		io_wait(ctx, NULL, 1);
 		slot = max_io_slot(ctx);
 	}
 	buffered_io::cleanup();
@@ -103,7 +103,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 			assert((long) tcb->req.get_buf(i) % MIN_BLOCK_SIZE == 0);
 			assert(tcb->req.get_buf_size(i) % MIN_BLOCK_SIZE == 0);
 		}
-		return make_io_request(ctx, get_fd(tcb->req.get_offset()),
+		return make_iovec_request(ctx, get_fd(tcb->req.get_offset()),
 				/* 
 				 * iocb only contains a pointer to the io vector.
 				 * the space for the IO vector is stored

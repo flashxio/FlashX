@@ -27,6 +27,7 @@ int f_fd;
 long long f_offset;
 
 
+extern "C" {
 static void init_free_list(struct free_list_s* free_list, int size)
 {
 	int i;
@@ -88,7 +89,7 @@ inline void put_iocb(struct aio_ctx* a_ctx, struct iocb* io)
 	a_ctx->free_list->array[a_ctx->free_list->pos++] = io;
 }
 
-struct iocb *make_io_request(struct aio_ctx *a_ctx, int fd,
+struct iocb *make_iovec_request(struct aio_ctx *a_ctx, int fd,
 		const struct iovec iov[], int count, long long offset,
 		int io_type, io_callback_s *cb)
 {
@@ -188,3 +189,4 @@ int max_io_slot(struct aio_ctx* a_ctx)
 	return a_ctx->max_aio - a_ctx->busy_aio;
 }
 
+}

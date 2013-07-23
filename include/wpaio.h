@@ -15,8 +15,6 @@
 
 #include <libaio.h>
 
-#include "parameters.h"
-
 #define A_READ 0
 #define A_WRITE 1
 
@@ -48,15 +46,21 @@ struct io_callback_s
 extern int f_fd;
 extern long long f_offset;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 struct aio_ctx* create_aio_ctx(int max_aio);
 //void init_free_list();
 struct iocb* make_io_request(struct aio_ctx* a_ctx, int fd, size_t iosize, long long offset,
-							 void* buffer, int io_type, io_callback_s *cb);
-struct iocb *make_io_request(struct aio_ctx *a_ctx, int fd,
+							 void* buffer, int io_type, struct io_callback_s *cb);
+struct iocb *make_iovec_request(struct aio_ctx *a_ctx, int fd,
 		const struct iovec iov[], int count, long long offset,
-		int io_type, io_callback_s *cb);
+		int io_type, struct io_callback_s *cb);
 void submit_io_request(struct aio_ctx* a_ctx, struct iocb* ioq[], int num);
-int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num = 1);
+int io_wait(struct aio_ctx* a_ctx, struct timespec* to, int num);
 int max_io_slot(struct aio_ctx* a_ctx);
+#ifdef __cplusplus
+}
+#endif
 
 #endif
