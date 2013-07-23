@@ -1062,7 +1062,6 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	process_cached_reqs(cached_reqs, cached_pages, num_cached_reqs);
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size());
-	underlying->flush_requests();
 }
 
 io_status global_cached_io::access(char *buf, off_t offset,
@@ -1071,6 +1070,7 @@ io_status global_cached_io::access(char *buf, off_t offset,
 	io_request req(buf, offset, size, access_method, this, this->get_node_id(), true);
 	io_status status;
 	access(&req, 1, &status);
+	underlying->flush_requests();
 	if (status == IO_PENDING) {
 		io_request *orig = (io_request *) status.get_priv_data();
 		assert(orig);
