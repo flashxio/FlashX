@@ -133,7 +133,8 @@ public:
 
 	int invoke(io_request *rqs[], int num) {
 		for (int i = 0; i < num; i++) {
-			cb(rqs[i]->get_priv(), 0);
+			assert(rqs[i]->get_user_data());
+			cb(rqs[i]->get_user_data(), 0);
 		}
 		return 0;
 	}
@@ -286,8 +287,9 @@ ssize_t ssd_aread(int fd, void *buf, size_t count, off_t off,
 {
 	io_interface *io = get_io(fd);
 	assert(io->support_aio());
-	io_request req((char *) buf, off, count, READ, io, io->get_node_id(),
-			NULL, callback_data);
+	io_request req(true);
+	req.init((char *) buf, off, count, READ, io, io->get_node_id());
+	req.set_user_data(callback_data);
 	io->access(&req, 1);
 	return 0;
 }
@@ -297,8 +299,9 @@ ssize_t ssd_awrite(int fd, void *buf, size_t count, off_t off,
 {
 	io_interface *io = get_io(fd);
 	assert(io->support_aio());
-	io_request req((char *) buf, off, count, WRITE, io, io->get_node_id(),
-			NULL, callback_data);
+	io_request req(true);
+	req.init((char *) buf, off, count, WRITE, io, io->get_node_id());
+	req.set_user_data(callback_data);
 	io->access(&req, 1);
 	return 0;
 }

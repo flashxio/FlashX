@@ -20,6 +20,7 @@ struct io_req_extension
 	io_interface *io;
 	io_request *orig;
 	void *priv;
+	void *user_data;
 
 	int num_bufs: 16;
 	// Is the request part of a request?
@@ -41,6 +42,7 @@ struct io_req_extension
 		this->io = NULL;
 		this->orig = NULL;
 		this->priv = NULL;
+		this->user_data = NULL;
 		this->num_bufs = 0;
 		this->partial = 0;
 		this->vec_capacity = NUM_EMBEDDED_IOVECS;
@@ -137,7 +139,7 @@ public:
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
 		this->sync = sync;
-		init(off, io, access_method, node_id, orig, priv);
+		init(off, io, access_method, node_id, orig, priv, NULL);
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
@@ -146,7 +148,7 @@ public:
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
 		this->sync = sync;
-		init(buf, off, size, access_method, io, node_id, orig, priv);
+		init(buf, off, size, access_method, io, node_id, orig, priv, NULL);
 	}
 
 	io_request(io_request &req) {
@@ -184,7 +186,7 @@ public:
 		}
 		else if (this->is_extended_req()) {
 			this->init(req.get_offset(), req.get_io(), req.get_access_method(),
-					req.get_node_id(), req.get_orig(), req.get_priv());
+					req.get_node_id(), req.get_orig(), req.get_priv(), req.get_user_data());
 			for (int i = 0; i < req.get_num_bufs(); i++) {
 				this->add_buf(req.get_buf(i), req.get_buf_size(i));
 			}
@@ -213,19 +215,21 @@ public:
 			io_interface *io, int node_id);
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id, io_request *orig, void *priv) {
-		init(off, io, access_method, node_id, orig, priv);
+			io_interface *io, int node_id, io_request *orig, void *priv,
+			void *user_data) {
+		init(off, io, access_method, node_id, orig, priv, user_data);
 		add_buf(buf, size);
 	}
 
 	void init(off_t off, io_interface *io, int access_method, int node_id,
-			io_request *orig, void *priv) {
+			io_request *orig, void *priv, void *user_data) {
 		assert(is_extended_req());
 		io_request::init(NULL, off, 0, access_method, io, node_id);
 		io_req_extension *ext = get_extension();
 		ext->io = io;
 		ext->priv = priv;
 		ext->orig = orig;
+		ext->user_data = user_data;
 	}
 
 	bool is_sync() const {
@@ -285,6 +289,14 @@ public:
 
 	void set_orig(io_request *orig) {
 		get_extension()->orig = orig;
+	}
+
+	void *get_user_data() const {
+		return get_extension()->user_data;
+	}
+
+	void set_user_data(void *data) {
+		get_extension()->user_data = data;
 	}
 
 	void *get_priv() const {

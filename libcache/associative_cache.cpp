@@ -1142,7 +1142,7 @@ void associative_flush_thread::run()
 					}
 					req_array[num_init_reqs].init((char *) p->get_data(),
 								p->get_offset(), PAGE_SIZE, WRITE, io,
-								get_node_id(), NULL, cache);
+								get_node_id(), NULL, cache, NULL);
 					req_array[num_init_reqs].set_high_prio(false);
 					requests.push_back(&req_array[num_init_reqs]);
 					num_init_reqs++;
