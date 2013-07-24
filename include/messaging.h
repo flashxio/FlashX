@@ -15,6 +15,53 @@ class io_interface;
 io_interface *get_io(int idx);
 
 class io_request;
+class thread_safe_page;
+
+class io_buf
+{
+	union {
+		thread_safe_page *p;
+		void *buf;
+	} u;
+	unsigned int size: 31;
+	unsigned int is_page: 1;
+public:
+	io_buf() {
+		u.buf = NULL;
+		size = 0;
+		is_page = 0;
+	}
+
+	void init(void *p, int size, bool is_page) {
+		u.buf = p;
+		if (is_page)
+			assert(size == PAGE_SIZE);
+		this->size = size;
+		this->is_page = is_page;
+	}
+
+	void init(thread_safe_page *p) {
+		u.p = p;
+		size = PAGE_SIZE;
+		is_page = 1;
+	}
+	void init(void *buf, int size) {
+		u.buf = buf;
+		this->size = size;
+		is_page = 0;
+	}
+
+	void *get_buf() const;
+
+	int get_size() const {
+		return size;
+	}
+
+	thread_safe_page *get_page() const {
+		assert(is_page);
+		return u.p;
+	}
+};
 
 struct io_req_extension
 {
@@ -35,8 +82,8 @@ struct io_req_extension
 	 */
 	volatile short refcnt;
 
-	struct iovec *vec_pointer;
-	struct iovec embedded_vecs[NUM_EMBEDDED_IOVECS];
+	io_buf *vec_pointer;
+	io_buf embedded_vecs[NUM_EMBEDDED_IOVECS];
 	io_request *next;
 	volatile ssize_t completed_size;
 
@@ -49,8 +96,6 @@ struct io_req_extension
 		this->partial = 0;
 		this->vec_capacity = NUM_EMBEDDED_IOVECS;
 		this->refcnt = 0;
-		memset(embedded_vecs, 0,
-				sizeof(embedded_vecs[0]) * NUM_EMBEDDED_IOVECS);
 		vec_pointer = embedded_vecs;
 		next = NULL;
 		this->completed_size = 0;
@@ -66,8 +111,9 @@ struct io_req_extension
 			delete [] vec_pointer;
 	}
 
-	void add_buf(char *buf, int size);
-	void add_buf_front(char *buf, int size);
+	void add_io_buf(const io_buf &buf);
+	void add_buf(char *buf, int size, bool is_page);
+	void add_buf_front(char *buf, int size, bool is_page);
 };
 
 /**
@@ -191,7 +237,7 @@ public:
 			this->init(req.get_offset(), req.get_io(), req.get_access_method(),
 					req.get_node_id(), req.get_orig(), req.get_priv(), req.get_user_data());
 			for (int i = 0; i < req.get_num_bufs(); i++) {
-				this->add_buf(req.get_buf(i), req.get_buf_size(i));
+				this->add_io_buf(req.get_io_buf(i));
 			}
 		}
 		else {
@@ -339,7 +385,7 @@ public:
 		else {
 			ssize_t size = 0;
 			for (int i = 0; i < get_extension()->num_bufs; i++)
-				size += get_extension()->vec_pointer[i].iov_len;
+				size += get_extension()->vec_pointer[i].get_size();
 			return size;
 		}
 	}
@@ -354,16 +400,32 @@ public:
 			return (char *) addr;
 		}
 		else {
-			return (char *) get_extension()->vec_pointer[idx].iov_base;
+			return (char *) get_extension()->vec_pointer[idx].get_buf();
 		}
 	}
 
+	thread_safe_page *get_page(int idx) const {
+		return get_extension()->vec_pointer[idx].get_page();
+	}
+
 	void add_buf(char *buf, int size) {
-		get_extension()->add_buf(buf, size);
+		get_extension()->add_buf(buf, size, 0);
+	}
+
+	void add_page(thread_safe_page *p) {
+		get_extension()->add_buf((char *) p, PAGE_SIZE, 1);
+	}
+
+	void add_io_buf(const io_buf &buf) {
+		get_extension()->add_io_buf(buf);
 	}
 
 	void add_buf_front(char *buf, int size) {
-		get_extension()->add_buf_front(buf, size);
+		get_extension()->add_buf_front(buf, size, 0);
+	}
+
+	void add_page_front(thread_safe_page *p) {
+		get_extension()->add_buf_front((char *) p, PAGE_SIZE, 1);
 	}
 
 	int get_num_bufs() const {
@@ -373,20 +435,30 @@ public:
 			return 1;
 	}
 
-	void set_buf(int idx, char *buf) {
-		get_extension()->vec_pointer[idx].iov_base = buf;
-	}
-
 	int get_buf_size(int idx) const {
-		return get_extension()->vec_pointer[idx].iov_len;
+		return get_extension()->vec_pointer[idx].get_size();
 	}
 
-	const struct iovec &get(int idx) const {
+	const io_buf &get_io_buf(int idx) const {
 		return get_extension()->vec_pointer[idx];
 	}
 
-	const struct iovec *get_vec() const {
-		return get_extension()->vec_pointer;
+	const struct iovec get(int idx) const {
+		struct iovec ret;
+		struct io_req_extension *ext = get_extension();
+		ret.iov_base = ext->vec_pointer[idx].get_buf();
+		ret.iov_len = ext->vec_pointer[idx].get_size();
+		return ret;
+	}
+
+	const int get_vec(struct iovec *vec, int num) const {
+		num = min(get_num_bufs(), num);
+		for (int i = 0; i < num; i++) {
+			struct io_req_extension *ext = get_extension();
+			vec[i].iov_base = ext->vec_pointer[i].get_buf();
+			vec[i].iov_len = ext->vec_pointer[i].get_size();
+		}
+		return num;
 	}
 
 	io_request *get_next_req() const {
