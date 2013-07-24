@@ -122,8 +122,8 @@ public:
 	void process_cached_reqs(io_request *cached_reqs[],
 			thread_safe_page *cached_pages[], int num_cached_reqs);
 
-	void queue_request(io_request *req) {
-		pending_requests.addByForce(&req, 1);
+	void queue_requests(io_request *reqs[], int num) {
+		pending_requests.addByForce(reqs, num);
 		// the pending requests are processed in the app thread.
 		// If the app thread is waiting for a sync thread to complete,
 		// we need to wake it up to process pending requests.

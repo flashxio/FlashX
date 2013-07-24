@@ -233,27 +233,11 @@ int access_page_callback::multibuf_invoke(io_request *request)
 	int num_dirty_pages = 0;
 	off_t off = request->get_offset();
 	for (int i = 0; i < request->get_num_bufs(); i++) {
-		thread_safe_page *p;
+		thread_safe_page *p = request->get_page(i);
 		/*
 		 * The pages in the buffer of the request are sorted according
 		 * to their offsets.
 		 */
-		p = (thread_safe_page *) cache->search(off);
-		if (request->get_access_method() == READ)
-			assert(p->get_data() == request->get_buf(i));
-		else {
-			/* 
-			 * The evicted page that triggers the write can't be found
-			 * in the cache (either the offset doesn't exist or the address
-			 * of the physical page doesn't match.
-			 */
-			if (p == NULL || p->get_data() != request->get_buf(i)) {
-				if (p)
-					p->dec_ref();
-				p = (thread_safe_page *) request->get_priv();
-			}
-		}
-		// The page must exist in the cache originally.
 		assert(p);
 		pages[i] = p;
 		p->lock();
@@ -272,13 +256,11 @@ int access_page_callback::multibuf_invoke(io_request *request)
 				dirty_pages[num_dirty_pages++] = dirty;
 		}
 		else {
-			if (p != request->get_priv()) {
-				// release the reference increased by search() in this function
+			// The page isn't flushed by the page eviction policy.
+			// It's flush because we want to flush data with a large request.
+			// The page that triggers the flush is saved in the private data.
+			if (p != request->get_priv())
 				p->dec_ref();
-				// If the page isn't the evicted one, we don't need to
-				// reference it any more.
-				p->dec_ref();
-			}
 			assert(p->get_ref() >= 0);
 		}
 		p->unlock();
@@ -316,7 +298,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 				cached_io->get_req_allocator()->free(old);
 				old = next;
 			}
-			p->dec_ref();
+			assert(p->get_ref() >= 0);
 		}
 		cache->mark_dirty_pages(dirty_pages, num_dirty_pages);
 	}
@@ -328,12 +310,15 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		// Instead, we queue the request, so it will be issue to
 		// the device by the user thread.
 		assert(orig->get_next_req() == NULL);
-		io->queue_request(orig);
+		io_request *buf[request->get_num_bufs() + 1];
+		int num_req = 0;
+		buf[num_req++] = orig;
 		for (int i = 0; i < request->get_num_bufs(); i++) {
 			if (pending_reqs[i]) {
-				io->queue_request(pending_reqs[i]);
+				buf[num_req++] = pending_reqs[i];
 			}
 		}
+		io->queue_requests(buf, num_req);
 		// These requests can't be deleted yet.
 		// They will be deleted when these write requests are finally served.
 	}
@@ -424,7 +409,7 @@ int access_page_callback::invoke(io_request *requests[], int num)
 			// the device by the user thread.
 			assert(orig->get_next_req() == NULL);
 			orig->set_next_req(old);
-			io->queue_request(orig);
+			io->queue_requests(&orig, 1);
 			// These requests can't be deleted yet.
 			// They will be deleted when these write requests are finally served.
 		}
@@ -638,7 +623,7 @@ again:
 			if (multibuf_req.is_empty())
 				multibuf_req.set_offset(p->get_offset());
 			/* We don't need to worry buffer overflow here. */
-			multibuf_req.add_buf((char *) p->get_data(), PAGE_SIZE);
+			multibuf_req.add_page(p);
 			multibuf_req.set_priv(p);
 			p->unlock();
 		}
@@ -752,8 +737,9 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 	p->lock();
 	assert(!p->is_io_pending());
 	p->set_io_pending(true);
-	io_request req((char *) p->get_data(), off, PAGE_SIZE, WRITE,
-			io, p->get_node_id(), orig, p);
+	io_request req(off, io, WRITE, p->get_node_id(), orig, p);
+	assert(p->get_ref() > 0);
+	req.add_page(p);
 	p->unlock();
 
 #ifdef ENABLE_LARGE_WRITE
@@ -770,7 +756,7 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 		}
 		if (!p->is_io_pending()) {
 			p->set_io_pending(true);
-			req.add_buf((char *) p->get_data(), PAGE_SIZE);
+			req.add_page(p);
 		}
 		else {
 			p->dec_ref();
@@ -792,7 +778,7 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 			}
 			if (!p->is_io_pending()) {
 				p->set_io_pending(true);
-				req.add_buf_front((char *) p->get_data(), PAGE_SIZE);
+				req.add_page_front(p);
 				req.set_offset(backward_off);
 			}
 			else {

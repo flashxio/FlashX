@@ -40,11 +40,7 @@ public:
 		this->is_page = is_page;
 	}
 
-	void init(thread_safe_page *p) {
-		u.p = p;
-		size = PAGE_SIZE;
-		is_page = 1;
-	}
+	void init(thread_safe_page *p);
 	void init(void *buf, int size) {
 		u.buf = buf;
 		this->size = size;

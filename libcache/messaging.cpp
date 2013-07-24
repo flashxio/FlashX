@@ -14,6 +14,14 @@ void *io_buf::get_buf() const
 		return u.buf;
 }
 
+void io_buf::init(thread_safe_page *p)
+{
+	assert(p->get_ref() > 0);
+	u.p = p;
+	size = PAGE_SIZE;
+	is_page = 1;
+}
+
 void io_request::init(char *buf, off_t off, ssize_t size,
 		int access_method, io_interface *io, int node_id)
 {
