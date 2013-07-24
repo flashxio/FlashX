@@ -650,7 +650,9 @@ again:
 			if (!multibuf_req.is_empty()) {
 				p->unlock();
 				underlying->access(&multibuf_req, 1);
-				multibuf_req.clear();
+				io_request tmp(-1, underlying, req.get_access_method(),
+						get_node_id(), orig, NULL);
+				multibuf_req = tmp;
 				goto again;
 			}
 			else {
@@ -680,7 +682,9 @@ again:
 			 */
 			if (!multibuf_req.is_empty()) {
 				underlying->access(&multibuf_req, 1);
-				multibuf_req.clear();
+				io_request tmp(-1, underlying, req.get_access_method(),
+						get_node_id(), orig, NULL);
+				multibuf_req = tmp;
 			}
 			io_request complete_partial;
 			extract_pages(*orig, p->get_offset(), 1, complete_partial);

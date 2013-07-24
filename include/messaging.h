@@ -103,6 +103,7 @@ class io_request
 	unsigned long buf_addr: 48;
 
 	io_req_extension *get_extension() const {
+		assert(is_extended_req() && buf_addr);
 		unsigned long addr = buf_addr;
 		return (io_req_extension *) addr;
 	}
@@ -329,13 +330,6 @@ public:
 
 	bool is_valid() const {
 		return get_offset() != -1;
-	}
-
-	void clear() {
-		memset((void *) get_extension()->vec_pointer, 0,
-				sizeof(get_extension()->vec_pointer[0]) * get_extension()->vec_capacity);
-		get_extension()->num_bufs = 0;
-		set_offset(-1);
 	}
 
 	ssize_t get_size() const {
