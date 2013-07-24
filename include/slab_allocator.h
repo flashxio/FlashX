@@ -210,31 +210,42 @@ class obj_allocator: public slab_allocator
 public:
 	obj_allocator(long increase_size, long max_size = MAX_SIZE,
 			obj_initiator<T> *initiator = new default_obj_initiator<T>(
-				)): slab_allocator(sizeof(T), increase_size, max_size) {
+				// leave some space for linked_obj, so the values in an object
+				// won't be modified.
+				)): slab_allocator(sizeof(T) + sizeof(slab_allocator::linked_obj),
+				increase_size, max_size) {
 		assert(increase_size <= max_size);
 		this->initiator = initiator;
 	}
 
-	int alloc_objs(T **objs, int num) {
-		int ret = slab_allocator::alloc((char **) objs, num);
+	virtual int alloc_objs(T **objs, int num) {
+		char *addrs[num];
+		int ret = slab_allocator::alloc(addrs, num);
 		for (int i = 0; i < ret; i++) {
+			objs[i] = (T *) (addrs + sizeof(slab_allocator::linked_obj));
 			initiator->init(objs[i]);
 		}
 		return ret;
 	}
 
-	T *alloc_obj() {
-		T *obj = (T *) slab_allocator::alloc();
+	virtual T *alloc_obj() {
+		char *addr = slab_allocator::alloc();
+		T *obj = (T *) (addr + sizeof(slab_allocator::linked_obj));
 		initiator->init(obj);
 		return obj;
 	}
 
-	void free(T **objs, int num) {
-		slab_allocator::free((char **) objs, num);
+	virtual void free(T **objs, int num) {
+		char *addrs[num];
+		for (int i = 0; i < num; i++) {
+			addrs[i] = ((char *) objs[i]) - sizeof(slab_allocator::linked_obj);
+		}
+		slab_allocator::free(addrs, num);
 	}
 
-	void free(T *obj) {
-		slab_allocator::free((char *) obj);
+	virtual void free(T *obj) {
+		char *addr = ((char *) obj) - sizeof(slab_allocator::linked_obj);
+		slab_allocator::free(addr);
 	}
 };
 

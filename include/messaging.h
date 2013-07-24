@@ -9,6 +9,7 @@
 #include "common.h"
 #include "container.h"
 #include "parameters.h"
+#include "concurrency.h"
 
 class io_interface;
 io_interface *get_io(int idx);
@@ -17,6 +18,7 @@ class io_request;
 
 struct io_req_extension
 {
+	static atomic_unsigned_integer num_creates;
 	io_interface *io;
 	io_request *orig;
 	void *priv;
@@ -55,6 +57,7 @@ struct io_req_extension
 	}
 
 	io_req_extension() {
+		num_creates.inc(1);
 		init();
 	}
 
@@ -100,7 +103,6 @@ class io_request
 	unsigned long buf_addr: 48;
 
 	io_req_extension *get_extension() const {
-		ASSERT_TRUE(is_extended_req());
 		unsigned long addr = buf_addr;
 		return (io_req_extension *) addr;
 	}
@@ -200,15 +202,29 @@ public:
 	}
 
 	void init() {
-		offset = 0;
-		extended = 0;
-		high_prio = 0;
-		sync = 0;
-		node_id = 0;
-		io_idx = 0;
-		access_method = 0;
-		buf_size = 0;
-		buf_addr = 0;
+		if (is_extended_req()) {
+			io_req_extension *ext = get_extension();
+			assert(ext);
+			ext->init();
+			offset = 0;
+			high_prio = 0;
+			sync = 0;
+			node_id = 0;
+			io_idx = 0;
+			access_method = 0;
+			buf_size = 0;
+		}
+		else {
+			offset = 0;
+			extended = 0;
+			high_prio = 0;
+			sync = 0;
+			node_id = 0;
+			io_idx = 0;
+			access_method = 0;
+			buf_size = 0;
+			buf_addr = 0;
+		}
 	}
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,

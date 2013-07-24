@@ -3,6 +3,7 @@
 #include "messaging.h"
 #include "container.cpp"
 #include "io_interface.h"
+#include "slab_allocator.h"
 
 void io_request::init(char *buf, off_t off, ssize_t size,
 		int access_method, io_interface *io, int node_id)
@@ -252,3 +253,5 @@ template class blocking_FIFO_queue<io_reply>;
 template class msg_sender<io_request>;
 template class msg_sender<io_reply>;
 template class thread_safe_msg_sender<io_reply>;
+
+atomic_unsigned_integer io_req_extension::num_creates;

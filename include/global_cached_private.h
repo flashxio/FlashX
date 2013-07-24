@@ -117,9 +117,7 @@ public:
 	 * to touch two pages and the beginning and the end of the write aren't
 	 * aligned with a page size.
 	 */
-	ssize_t read(io_request &req, thread_safe_page *pages[], int npages);
-	ssize_t write(io_request &req, thread_safe_page *p,
-		std::vector<thread_safe_page *> &dirty_pages);
+	ssize_t read(io_request &req, thread_safe_page *pages[], int npages, io_request *orig);
 
 	void process_cached_reqs(io_request *cached_reqs[],
 			thread_safe_page *cached_pages[], int num_cached_reqs);

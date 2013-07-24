@@ -559,20 +559,6 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 	return ret;
 }
 
-ssize_t global_cached_io::write(io_request &req, thread_safe_page *p,
-		std::vector<thread_safe_page *> &dirty_pages)
-{
-	io_request *orig = req.get_orig();
-	if (orig->get_size() == req.get_size())
-		return __write(orig, p, dirty_pages);
-	else {
-		io_request *partial_orig = req_allocator.alloc_obj();
-		partial_orig->init(req);
-		partial_orig->set_partial(true);
-		return __write(partial_orig, p, dirty_pages);
-	}
-}
-
 ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 {
 	ssize_t ret = 0;
@@ -628,12 +614,11 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
  * @req: potentially part of a request.
  */
 ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
-		int npages)
+		int npages, io_request *orig)
 {
 	ssize_t ret = 0;
 
 	assert(npages <= MAX_NUM_IOVECS);
-	io_request *orig = req.get_orig();
 	assert(orig->get_orig() == NULL);
 	io_request multibuf_req(-1, underlying, req.get_access_method(),
 			get_node_id(), orig, NULL);
@@ -939,13 +924,9 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				 * read requests.
 				 */
 				if (pg_idx) {
-					io_request req(true);
+					io_request req;
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
-					req.set_orig(orig);
-					req.set_partial(orig->get_size() > req.get_size());
-					// All pages should be on the same node.
-					req.set_node_id(pages[0]->get_node_id());
-					read(req, pages, pg_idx);
+					read(req, pages, pg_idx, orig);
 					pg_idx = 0;
 				}
 
@@ -1006,11 +987,18 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 			 */
 			if (orig->get_access_method() == WRITE) {
 				/* We need to extract a page from the request. */
-				io_request req(true);
+				io_request req;
 				extract_pages(*orig, tmp_off, 1, req);
-				req.set_orig(orig);
-				req.set_partial(orig->get_size() > req.get_size());
-				num_bytes_completed += write(req, p, dirty_pages);
+
+				if (orig->get_size() == req.get_size())
+					num_bytes_completed += __write(orig, p, dirty_pages);
+				else {
+					io_request *partial_orig = req_allocator.alloc_obj();
+					partial_orig->init(req);
+					partial_orig->set_orig(orig);
+					partial_orig->set_partial(true);
+					num_bytes_completed += __write(partial_orig, p, dirty_pages);
+				}
 			}
 			else {
 				// We have to make sure all pages accessed in one request should
@@ -1019,13 +1007,9 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					assert(pages[pg_idx - 1]->get_node_id() == p->get_node_id());
 				pages[pg_idx++] = p;
 				if (pg_idx == MAX_NUM_IOVECS) {
-					io_request req(true);
+					io_request req;
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
-					req.set_orig(orig);
-					req.set_partial(orig->get_size() > req.get_size());
-					// TODO It only works with one-page request
-					req.set_node_id(pages[0]->get_node_id());
-					num_bytes_completed += read(req, pages, pg_idx);
+					num_bytes_completed += read(req, pages, pg_idx, orig);
 					pg_idx = 0;
 				}
 			}
@@ -1034,13 +1018,9 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		 * The only reason that pg_idx > 0 is that there is a large read request.
 		 */
 		if (pg_idx) {
-			io_request req(true);
+			io_request req;
 			extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
-			req.set_orig(orig);
-			req.set_partial(orig->get_size() > req.get_size());
-			// TODO It only works with one-page request
-			req.set_node_id(pages[0]->get_node_id());
-			read(req, pages, pg_idx);
+			read(req, pages, pg_idx, orig);
 		}
 
 		// If all pages accessed by the request are in the cache, the request

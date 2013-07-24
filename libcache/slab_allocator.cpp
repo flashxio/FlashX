@@ -34,6 +34,7 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 				objs = (char *) numa_alloc_local(increase_size);
 			else
 				objs = (char *) numa_alloc_onnode(increase_size, node_id);
+			memset(objs, 0, increase_size);
 			linked_obj_list tmp_list;
 			for (int i = 0; i < increase_size / obj_size; i++) {
 				linked_obj *header = (linked_obj *) (objs
