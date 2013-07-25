@@ -946,7 +946,6 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					orig1->set_priv(p);
 				}
 
-				assert(!p->data_ready());
 				/* The page is evicted in this thread */
 				if (old_off != ROUND_PAGE(offset) && old_off != -1) {
 					/*
