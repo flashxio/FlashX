@@ -20,13 +20,15 @@ enum {
 };
 
 off_t *offs;
-int num_offs = 1000000;
-int num_threads = 8;
+int num_offs;
+int num_threads = 2;
 char *file_name = "../conf/data_files.txt";
 char *prof_file = "test_c_interface.prof";
-int block_size = 4096;
+long data_size = 1024L * 10240 * 4096;
+int block_size = 4096 * 4;
 int node_id = 1;
-int access = READ;
+int sync = 1;
+int access = WRITE;
 
 struct thread_data
 {
@@ -62,6 +64,29 @@ void cb_func(void *arg, int status)
 	__sync_fetch_and_add(data->num_completes, 1);
 	free_buf(buf_allocator, data->buffer);
 	free_buf(cb_allocator, data);
+}
+
+void *SyncThreadWriteOrRead(void *arg)
+{
+	int fd = ssd_open(file_name, 0);
+	ssd_set_callback(fd, cb_func);
+
+	struct thread_data *data = arg;
+	int num = num_offs / num_threads;
+	int off_start = data->idx * num;
+	int i;
+	char buffer[block_size];
+
+	for (i = 0; i < num; i++) {
+		off_t offset = offs[off_start + i];
+		if (access == READ)
+			ssd_read(fd, (void *) buffer, block_size, offset);
+		else
+			ssd_write(fd, (void *) buffer, block_size, offset);
+	}
+
+	ssd_close(fd);
+	return NULL;
 }
 
 void *AsyncThreadWriteOrRead(void *arg)
@@ -107,9 +132,10 @@ void int_handler(int sig_num)
 int main()
 {
 	int i;
+	num_offs = data_size / block_size;
 	offs = (off_t *) malloc(num_offs * sizeof(off_t));
 	for (i = 0; i < num_offs; i++)
-		offs[i] = i * 4096L;
+		offs[i] = i * (long) block_size;
 	rand_permute_array(offs, num_offs);
 
 	signal(SIGINT, int_handler);
@@ -119,7 +145,13 @@ int main()
 	struct thread_data data[num_threads];
 	for (i = 0; i < num_threads; i++) {
 		data[i].idx = i;
-		int ret = pthread_create(&data[i].tid, NULL, AsyncThreadWriteOrRead, (void *) &data[i]);
+		int ret;
+		if (sync)
+			ret = pthread_create(&data[i].tid, NULL, SyncThreadWriteOrRead,
+					(void *) &data[i]);
+		else
+			ret = pthread_create(&data[i].tid, NULL, AsyncThreadWriteOrRead,
+					(void *) &data[i]);
 		assert(ret == 0);
 	}
 	for (i = 0; i < num_threads; i++)
