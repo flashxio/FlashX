@@ -42,7 +42,7 @@ public:
 	}
 
 	io_interface *get() {
-		assert(has_init && taken);
+//		assert(has_init && taken);
 		return io;
 	}
 
@@ -99,6 +99,7 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 		int nthreads, int access_option, long size, bool preload)
 {
 	int num_nodes = node_id_array.size();
+	assert(num_nodes <= nthreads && nthreads % num_nodes == 0);
 	file_mapper *mapper = raid_conf.create_file_mapper();
 
 	std::vector<int> indices;
