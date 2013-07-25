@@ -183,12 +183,13 @@ private:
 		pthread_mutex_lock(&sync_mutex);
 		wait_req = req;
 		while (wait_req) {
-			pthread_cond_wait(&sync_cond, &sync_mutex);
 			if (!pending_requests.is_empty()) {
 				pthread_mutex_unlock(&sync_mutex);
 				handle_pending_requests();
 				pthread_mutex_lock(&sync_mutex);
 			}
+			else
+				pthread_cond_wait(&sync_cond, &sync_mutex);
 		}
 		pthread_mutex_unlock(&sync_mutex);
 	}
