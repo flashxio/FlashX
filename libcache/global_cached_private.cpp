@@ -360,6 +360,8 @@ int access_page_callback::invoke(io_request *requests[], int num)
 		// We just evict a page with dirty data and write the original
 		// dirty data in the page to a file.
 		else {
+			assert(p->is_old_dirty());
+			assert(!p->data_ready());
 			p->set_old_dirty(false);
 		}
 		p->set_io_pending(false);
@@ -504,10 +506,10 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 				// we don't need to read the page first. However, we have to
 				// make sure data is written to a page without anyone else
 				// having IO operations on it.
+				p->set_data_ready(true);
 				thread_safe_page *dirty = __complete_req_unlocked(orig, p);
 				if (dirty)
 					dirty_pages.push_back(dirty);
-				p->set_data_ready(true);
 				p->unlock();
 				ret = PAGE_SIZE;
 				finalize_request(*orig);
