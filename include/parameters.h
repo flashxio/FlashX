@@ -56,12 +56,6 @@ const int NUMA_REPLY_QUEUE_SIZE = 1024;
 const int NUMA_REPLY_BUF_SIZE = 200;
 const int NUMA_NUM_PROCESS_THREADS = 8;
 
-const int CONST_A = 27644437;
-const long CONST_P = 68718952447L;
-
-const int FILE_CONST_A = 31;
-const int FILE_CONST_P = 191;
-
 const int LOCAL_BUF_SIZE = 100;
 
 #endif

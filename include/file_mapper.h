@@ -7,6 +7,9 @@
 #include "common.h"
 #include "parameters.h"
 
+const int FILE_CONST_A = 31;
+const int FILE_CONST_P = 191;
+
 struct block_identifier
 {
 	int idx;		// identify the file where the block is.

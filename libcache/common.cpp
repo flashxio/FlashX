@@ -6,6 +6,37 @@
 
 #include "common.h"
 
+extern "C" {
+ssize_t get_file_size(const char *file_name)
+{
+	struct stat stats;
+	if (stat(file_name, &stats) < 0) {
+		perror("stat");
+		return -1;
+	}
+	return stats.st_size;
+}
+
+void permute_offsets(int num, int repeats, int stride, off_t start,
+		off_t offsets[])
+{
+	int idx = 0;
+	for (int k = 0; k < repeats; k++) {
+		for (int i = 0; i < num; i++) {
+			offsets[idx++] = ((off_t) i) * stride + start * stride;
+		}
+	}
+	int tot_length = idx;
+
+	for (int i = tot_length - 1; i >= 1; i--) {
+		int j = random() % tot_length;
+		off_t tmp = offsets[j];
+		offsets[j] = offsets[i];
+		offsets[i] = tmp;
+	}
+}
+}
+
 bool align_check(size_t alignment)
 {
 	assert(alignment >= 0);
@@ -22,6 +53,25 @@ bool align_check(size_t alignment)
 		alignment /= 2;
 	}
 	return aligned;
+}
+
+long str2size(std::string str)
+{
+	int len = str.length();
+	long multiply = 1;
+	if (str[len - 1] == 'M' || str[len - 1] == 'm') {
+		multiply *= 1024 * 1024;
+		str[len - 1] = 0;
+	}
+	else if (str[len - 1] == 'K' || str[len - 1] == 'k') {
+		multiply *= 1024;
+		str[len - 1] = 0;
+	}
+	else if (str[len - 1] == 'G' || str[len - 1] == 'g') {
+		multiply *= 1024 * 1024 * 1024;
+		str[len - 1] = 0;
+	}
+	return atol(str.c_str()) * multiply;
 }
 
 int retrieve_data_files(std::string file_file,
@@ -58,54 +108,6 @@ int retrieve_data_files(std::string file_file,
 	}
 	fclose(fd);
 	return data_files.size();
-}
-
-ssize_t get_file_size(const char *file_name)
-{
-	struct stat stats;
-	if (stat(file_name, &stats) < 0) {
-		perror("stat");
-		return -1;
-	}
-	return stats.st_size;
-}
-
-void permute_offsets(int num, int repeats, int stride, off_t start,
-		off_t offsets[])
-{
-	int idx = 0;
-	for (int k = 0; k < repeats; k++) {
-		for (int i = 0; i < num; i++) {
-			offsets[idx++] = ((off_t) i) * stride + start * stride;
-		}
-	}
-	int tot_length = idx;
-
-	for (int i = tot_length - 1; i >= 1; i--) {
-		int j = random() % tot_length;
-		off_t tmp = offsets[j];
-		offsets[j] = offsets[i];
-		offsets[i] = tmp;
-	}
-}
-
-long str2size(std::string str)
-{
-	int len = str.length();
-	long multiply = 1;
-	if (str[len - 1] == 'M' || str[len - 1] == 'm') {
-		multiply *= 1024 * 1024;
-		str[len - 1] = 0;
-	}
-	else if (str[len - 1] == 'K' || str[len - 1] == 'k') {
-		multiply *= 1024;
-		str[len - 1] = 0;
-	}
-	else if (str[len - 1] == 'G' || str[len - 1] == 'g') {
-		multiply *= 1024 * 1024 * 1024;
-		str[len - 1] = 0;
-	}
-	return atol(str.c_str()) * multiply;
 }
 
 sys_parameters params;
