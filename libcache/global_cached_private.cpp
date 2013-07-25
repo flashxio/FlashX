@@ -5,6 +5,9 @@
 #include "container.cpp"
 #include "flush_thread.h"
 
+// TODO I assume the block size of the RAID array is 16 pages.
+const int RAID_BLOCK_SIZE = 16 * PAGE_SIZE;
+
 #define ENABLE_LARGE_WRITE
 //#define TEST_HIT_RATE
 
@@ -996,7 +999,8 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				if (pg_idx > 0)
 					assert(pages[pg_idx - 1]->get_node_id() == p->get_node_id());
 				pages[pg_idx++] = p;
-				if (pg_idx == MAX_NUM_IOVECS) {
+				if (pg_idx == MAX_NUM_IOVECS || (pages[0]->get_offset()
+							+ PAGE_SIZE * pg_idx) % RAID_BLOCK_SIZE == 0) {
 					io_request req;
 					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
 					num_bytes_completed += read(req, pages, pg_idx, orig);
