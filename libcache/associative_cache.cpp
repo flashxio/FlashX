@@ -1018,7 +1018,7 @@ void write_requests(const std::vector<io_request *> &requests, io_interface *io)
 void associative_flush_thread::request_callback(io_request &req)
 {
 	if (req.get_num_bufs() == 1) {
-		thread_safe_page *p = (thread_safe_page *) req.get_priv();
+		thread_safe_page *p = (thread_safe_page *) req.get_page(0);
 		p->lock();
 		assert(p->is_dirty());
 		p->set_dirty(false);
@@ -1029,13 +1029,12 @@ void associative_flush_thread::request_callback(io_request &req)
 	else {
 		off_t off = req.get_offset();
 		for (int i = 0; i < req.get_num_bufs(); i++) {
-			thread_safe_page *p = (thread_safe_page *) cache->search(off);
+			thread_safe_page *p = req.get_page(i);
 			assert(p);
 			p->lock();
 			assert(p->is_dirty());
 			p->set_dirty(false);
 			p->set_io_pending(false);
-			p->dec_ref();
 			p->dec_ref();
 			assert(p->get_ref() >= 0);
 			p->unlock();
@@ -1043,6 +1042,8 @@ void associative_flush_thread::request_callback(io_request &req)
 		}
 	}
 }
+
+void merge_pages2req(io_request &req, page_cache *cache);
 
 void associative_flush_thread::run()
 {
@@ -1068,6 +1069,32 @@ void associative_flush_thread::run()
 				p->lock();
 				assert(!p->is_old_dirty());
 				assert(p->data_ready());
+
+				// Here we flush dirty pages with normal requests.
+				if (!p->is_io_pending() && !p->is_prepare_writeback()
+						// The page may have been cleaned.
+						&& p->is_dirty()) {
+					// TODO global_cached_io may delete the extension.
+					// I'll fix it later.
+					if (!req_array[num_init_reqs].is_extended_req()) {
+						io_request tmp(true);
+						req_array[num_init_reqs] = tmp;
+					}
+					req_array[num_init_reqs].init(p->get_offset(), io, WRITE,
+								get_node_id(), NULL, cache, NULL);
+					req_array[num_init_reqs].add_page(p);
+					req_array[num_init_reqs].set_high_prio(true);
+					requests.push_back(&req_array[num_init_reqs]);
+					p->set_io_pending(true);
+					p->unlock();
+					merge_pages2req(req_array[num_init_reqs], cache);
+					num_init_reqs++;
+				}
+				else
+					p->unlock();
+
+				// The code blow flush dirty pages with low-priority requests.
+#if 0
 				if (!p->is_io_pending() && !p->is_prepare_writeback()
 						// The page may have been cleaned.
 						&& p->is_dirty()) {
@@ -1090,6 +1117,7 @@ void associative_flush_thread::run()
 				// means that the page can be evicted.
 				p->unlock();
 				p->dec_ref();
+#endif
 			}
 			write_requests(requests, io);
 			// We can clear the in_queue flag now.

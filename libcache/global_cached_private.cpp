@@ -730,22 +730,11 @@ int global_cached_io::handle_pending_requests()
 	return tot;
 }
 
-/**
- * Write the dirty page. If possible, we merge it with pages adjacent to
- * it and write a larger request.
- */
-void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
-		io_request *orig, page_cache *cache)
+void merge_pages2req(io_request &req, page_cache *cache)
 {
-	p->lock();
-	assert(!p->is_io_pending());
-	p->set_io_pending(true);
-	io_request req(off, io, WRITE, p->get_node_id(), orig, p);
-	assert(p->get_ref() > 0);
-	req.add_page(p);
-	p->unlock();
-
 #ifdef ENABLE_LARGE_WRITE
+	thread_safe_page *p;
+	off_t off = req.get_offset();
 	off_t forward_off = off + PAGE_SIZE;
 	off_t block_off = ROUND(off, params.get_RAID_block_size() * PAGE_SIZE);
 	off_t block_end_off = block_off + params.get_RAID_block_size() * PAGE_SIZE;
@@ -797,6 +786,24 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 		}
 	}
 #endif
+}
+
+/**
+ * Write the dirty page. If possible, we merge it with pages adjacent to
+ * it and write a larger request.
+ */
+void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
+		io_request *orig, page_cache *cache)
+{
+	p->lock();
+	assert(!p->is_io_pending());
+	p->set_io_pending(true);
+	io_request req(off, io, WRITE, p->get_node_id(), orig, p);
+	assert(p->get_ref() > 0);
+	req.add_page(p);
+	p->unlock();
+
+	merge_pages2req(req, cache);
 
 	io_status status;
 	io->access(&req, 1, &status);
