@@ -375,6 +375,10 @@ public:
 	virtual bool shrink(int npages, char *pages[]) {
 		return false;
 	}
+	virtual flush_thread *create_flush_thread(io_interface *io,
+			page_cache *global_cache) {
+		return NULL;
+	}
 	virtual void mark_dirty_pages(thread_safe_page *pages[], int num) {
 	}
 	virtual void flush_callback(io_request &req) {

@@ -989,15 +989,22 @@ public:
 
 class associative_flush_thread: public flush_thread
 {
-	associative_cache *cache;
+	// For the case of NUMA cache, cache and local_cache are different.
+	page_cache *cache;
+	associative_cache *local_cache;
+
 	io_interface *io;
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
 	select_dirty_pages_policy *policy;
 public:
-	associative_flush_thread(associative_cache *cache,
+	associative_flush_thread(page_cache *cache, associative_cache *local_cache,
 			io_interface *io, int node_id): flush_thread(node_id), dirty_cells(
 				MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
 		this->cache = cache;
+		this->local_cache = local_cache;
+		if (this->cache == NULL)
+			this->cache = local_cache;
+
 		this->io = io;
 		policy = new eviction_select_dirty_pages_policy();
 	}
@@ -1130,9 +1137,16 @@ void associative_flush_thread::run()
 	}
 }
 
-flush_thread *associative_cache::create_flush_thread(io_interface *io)
+flush_thread *associative_cache::create_flush_thread(io_interface *io,
+		page_cache *global_cache)
 {
-	_flush_thread = new associative_flush_thread(this, io, node_id);
+	pthread_mutex_lock(&init_mutex);
+	if (_flush_thread == NULL && io) {
+		_flush_thread = new associative_flush_thread(global_cache, this,
+				io->clone(), node_id);
+		_flush_thread->start();
+	}
+	pthread_mutex_unlock(&init_mutex);
 	return _flush_thread;
 }
 
@@ -1150,17 +1164,7 @@ void associative_cache::flush_callback(io_request &req)
 
 void associative_cache::init(io_interface *underlying)
 {
-	// This init method is called in all threads. Since the cache is
-	// shared by multiple threads, we need to make sure only one flush
-	// thread is created.
-	pthread_mutex_lock(&init_mutex);
-	if (get_flush_thread() == NULL && underlying) {
-		// We need to duplicate the underlying IO because it may not
-		// be thread-safe.
-		flush_thread *thread = create_flush_thread(underlying->clone());
-		thread->start();
-	}
-	pthread_mutex_unlock(&init_mutex);
+	create_flush_thread(underlying, this);
 }
 
 hash_cell *associative_cache::get_prev_cell(hash_cell *cell) {
@@ -1256,7 +1260,7 @@ void associative_flush_thread::dirty_pages(thread_safe_page *pages[], int num)
 	hash_cell *cells[num];
 	int num_queued_cells = 0;
 	for (int i = 0; i < num; i++) {
-		hash_cell *cell = cache->get_cell_offset(pages[i]->get_offset());
+		hash_cell *cell = local_cache->get_cell_offset(pages[i]->get_offset());
 		if (!cell->is_in_queue()) {
 			char dirty_flag = 0;
 			char skip_flags = 0;

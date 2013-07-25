@@ -515,7 +515,8 @@ public:
 
 	/* Methods for flushing dirty pages. */
 
-	flush_thread *create_flush_thread(io_interface *io);
+	flush_thread *create_flush_thread(io_interface *io,
+			page_cache *global_cache);
 	flush_thread *get_flush_thread() const {
 		return _flush_thread;
 	}
