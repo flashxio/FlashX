@@ -18,7 +18,6 @@ extern "C" {
 
 static long cache_size = 512 * 1024 * 1024;
 static int cache_type = ASSOCIATIVE_CACHE;
-static int num_nodes = 1;
 static int RAID_mapping_option = RAID0;
 static int RAID_block_size = 16;		// in the number of pages.
 
@@ -101,11 +100,6 @@ void set_cache_type(int type)
 	cache_type = type;
 }
 
-void set_num_nodes(int num)
-{
-	num_nodes = num;
-}
-
 void set_RAID_mapping_option(int option)
 {
 	RAID_mapping_option = option;
@@ -116,7 +110,7 @@ void set_RAID_block_size(int num_pages)
 	RAID_block_size = num_pages;
 }
 
-void ssd_io_init(const char *name, int flags, int num_threads)
+void ssd_io_init(const char *name, int flags, int num_threads, int num_nodes)
 {
 	static atomic_unsigned_integer has_init;
 
@@ -297,6 +291,12 @@ ssize_t ssd_awrite(int fd, void *buf, size_t count, off_t off,
 	req.set_user_data(callback_data);
 	io->access(&req, 1);
 	return 0;
+}
+
+int ssd_fd_node_id(int fd)
+{
+	io_interface *io = get_io(fd);
+	return io->get_node_id();
 }
 
 struct buf_pool

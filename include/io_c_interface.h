@@ -3,13 +3,16 @@
 
 #include <stdlib.h>
 
-void ssd_io_init(const char *name, int flags, int num_threads);
+#include "common_c.h"
+
+void ssd_io_init(const char *name, int flags, int num_threads, int num_ndoes);
 int ssd_create(const char *name, size_t size);
 int ssd_open(const char *name, int flags);
 ssize_t ssd_read(int fd, void *buf, size_t count, off_t off);
 ssize_t ssd_write(int fd, void *buf, size_t count, off_t off);
 int ssd_close(int fd);
 int ssd_delete(const char *name);
+int ssd_fd_node_id(int fd);
 
 /**
  * For async IO.
@@ -33,7 +36,6 @@ void destroy_buf_pool(struct buf_pool *pool);
 size_t ssd_get_filesize(const char *name);
 void set_cache_size(long size);
 void set_cache_type(int type);
-void set_num_nodes(int num);
 void set_RAID_mapping_option(int option);
 void set_RAID_block_size(int num_pages);
 
