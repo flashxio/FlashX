@@ -1002,10 +1002,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				}
 			}
 			else {
-				// We have to make sure all pages accessed in one request should
-				// be on the same node.
-				if (pg_idx > 0)
-					assert(pages[pg_idx - 1]->get_node_id() == p->get_node_id());
+				// Right now, we don't care in which nodes the pages are.
 				pages[pg_idx++] = p;
 				if (pg_idx == MAX_NUM_IOVECS || (pages[0]->get_offset()
 							+ PAGE_SIZE * pg_idx) % RAID_BLOCK_SIZE == 0) {
