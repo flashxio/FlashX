@@ -114,6 +114,8 @@ private:
 	// the current size of memory used by the allocator.
 	long curr_size;
 
+	std::vector<char *> alloc_bufs;
+
 	pthread_spinlock_t lock;
 	// The buffers pre-allocated to serve allocation requests
 	// from the local threads.
@@ -177,6 +179,16 @@ public:
 			slab_allocator::free(objs, num);
 		}
 		local_free_refs->push_back(obj);
+	}
+
+	// Use it carefully. It's not thread-safe.
+	bool contains(const char *addr) const {
+		for (unsigned i = 0; i < alloc_bufs.size(); i++) {
+			if (addr >= alloc_bufs[i] && addr < alloc_bufs[i]
+					+ increase_size)
+				return true;
+		}
+		return false;
 	}
 
 	long get_max_size() const {

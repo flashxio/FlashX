@@ -43,6 +43,7 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 				tmp_list.add(header);
 			}
 			pthread_spin_lock(&lock);
+			alloc_bufs.push_back(objs);
 			list.add_list(&tmp_list);
 			pthread_spin_unlock(&lock);
 		}
