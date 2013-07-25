@@ -39,6 +39,8 @@
 
 #include <string.h>
 
+#include "io_c_interface.h"
+
 /*************************** D E F I N I T I O N S ****************************/
 
                                 /* -- file open flags -- */
@@ -196,6 +198,8 @@ struct AsyncData
 	IOR_offset_t transferCount;
 	IOR_param_t *test;
 	int access;
+	struct buf_pool *buf_allocator;
+	struct buf_pool *cb_allocator;
 
 	volatile IOR_offset_t *dataMoved;
 	volatile int *errors;

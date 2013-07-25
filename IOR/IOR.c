@@ -843,6 +843,28 @@ FreeBuffers(int           access,
     return;
 } /* FreeBuffers() */
 
+void
+FreeBuffersPool(struct buf_pool *pool,
+		int           access,
+		void         *checkBuffer,
+		void         *readCheckBuffer,
+		void         *buffer,
+		IOR_offset_t *offsetArray)
+{
+	/* free() aligned buffers */
+	if (access == WRITECHECK || access == READCHECK) {
+		free_buf(pool, checkBuffer);
+	}
+	if (access == READCHECK) {
+		free_buf(pool, readCheckBuffer);
+	}
+	free_buf(pool, buffer);
+
+	/* nothing special needed to free() this unaligned buffer */
+	free(offsetArray);
+	return;
+} /* FreeBuffersPool() */
+
 
 /******************************************************************************/
 /*
@@ -1467,6 +1489,28 @@ SetupXferBuffers(void        **buffer,
     }
     return;
 } /* SetupXferBuffers() */
+
+void
+SetupXferBuffersPool(struct buf_pool *pool,
+		void        **buffer,
+		void        **checkBuffer,
+		void        **readCheckBuffer,
+		IOR_param_t  *test,
+		int           pretendRank,
+		int           access)
+{
+	/* create buffer of filled data */
+	*buffer = alloc_buf(pool);
+	FillBuffer(*buffer, test, 0, pretendRank);
+	if (access == WRITECHECK || access == READCHECK) {
+		/* this allocates buffer only */
+		*checkBuffer = alloc_buf(pool);
+		if (access == READCHECK) {
+			*readCheckBuffer = alloc_buf(pool);
+		}
+	}
+	return;
+} /* SetupXferBuffersPool() */
 
 
 /******************************************************************************/
@@ -2598,9 +2642,9 @@ void XferComplete(void *arg, int status)
 		__sync_fetch_and_add(data->errors, errs);
 	}
 	__sync_fetch_and_add(data->numCompletes, 1);
-    FreeBuffers(data->access, data->checkBuffer, data->readCheckBuffer,
+    FreeBuffersPool(data->buf_allocator, data->access, data->checkBuffer, data->readCheckBuffer,
 			data->buffer, NULL);
-	free(data);
+	free_buf(data->cb_allocator, data);
 }
 
 void *
@@ -2624,6 +2668,9 @@ AsyncThreadWriteOrRead(void *arg)
 	IOR_offset_t *offsetArray = data->offsetArray;
 	IOR_offset_t pairCnt = 0;
 
+	struct buf_pool *buf_allocator = create_buf_pool(test->transferSize, INT_MAX, -1);
+	struct buf_pool *cb_allocator = create_buf_pool(sizeof(struct AsyncData), INT_MAX, -1);
+
 	GetTestFileName(testFileName, test);
 	fd = IOR_Open(testFileName, test);
 
@@ -2639,9 +2686,9 @@ AsyncThreadWriteOrRead(void *arg)
     /* loop over offsets to access */
     while ((offsetArray[pairCnt] != -1) && !hitStonewall) {
 		IOR_offset_t offset = offsetArray[pairCnt];
-		struct AsyncData *asyncData = (struct AsyncData *) malloc(sizeof(*asyncData));
+		struct AsyncData *asyncData = (struct AsyncData *) alloc_buf(cb_allocator);
 		memset(asyncData, 0, sizeof(*asyncData));
-		SetupXferBuffers(&asyncData->buffer, &asyncData->checkBuffer,
+		SetupXferBuffersPool(buf_allocator, &asyncData->buffer, &asyncData->checkBuffer,
 				&asyncData->readCheckBuffer, test, pretendRank, access);
         /*
          * fills each transfer with a unique pattern
@@ -2656,6 +2703,8 @@ AsyncThreadWriteOrRead(void *arg)
 		asyncData->dataMoved = &dataMoved;
 		asyncData->errors = &errors;
 		asyncData->numCompletes = &numCompletes;
+		asyncData->buf_allocator = buf_allocator;
+		asyncData->cb_allocator = cb_allocator;
         if (access == WRITE) {
             IOR_AsyncXfer(access, fd, asyncData->buffer, transfer, offset, test,
 					asyncData);
@@ -2805,6 +2854,8 @@ WriteOrRead(IOR_param_t * test,
 		} else {
 			data[i].offsetArray = GetOffsetArraySequential(test, i);
 		}
+	}
+	for (i = 0; i < numThreads; i++) {
 		int ret;
 		if (test->useAsync)
 			ret = pthread_create(&data[i].tid, NULL, AsyncThreadWriteOrRead, (void *) &data[i]);
