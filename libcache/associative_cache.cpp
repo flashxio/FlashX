@@ -1014,14 +1014,6 @@ public:
 	void dirty_pages(thread_safe_page *pages[], int num);
 };
 
-void write_requests(const std::vector<io_request *> &requests, io_interface *io)
-{
-	for (unsigned i = 0; i < requests.size(); i++) {
-		assert(requests[i]->get_orig() == NULL);
-		io->access(requests[i], 1);
-	}
-}
-
 void associative_flush_thread::request_callback(io_request &req)
 {
 	if (req.get_num_bufs() == 1) {
@@ -1056,7 +1048,8 @@ void associative_flush_thread::run()
 {
 	int num_fetches;
 	// We can't get more requests than the number of pages in a cell.
-	io_request req_array[CELL_SIZE];
+	const int req_array_size = NUM_WRITEBACK_DIRTY_PAGES * 100;
+	io_request req_array[req_array_size];
 	while ((num_fetches = dirty_cells.get_num_entries()) > 0) {
 		hash_cell *cells[num_fetches];
 		int ret = dirty_cells.fetch(cells, num_fetches);
@@ -1065,11 +1058,10 @@ void associative_flush_thread::run()
 		// very sure we can fetch the number of entries we specify.
 		assert(ret == num_fetches);
 
+		int num_init_reqs = 0;
 		for (int i = 0; i < num_fetches; i++) {
 			std::map<off_t, thread_safe_page *> dirty_pages;
-			std::vector<io_request *> requests;
 			policy->select(cells[i], NUM_WRITEBACK_DIRTY_PAGES, dirty_pages);
-			int num_init_reqs = 0;
 			for (std::map<off_t, thread_safe_page *>::const_iterator it
 					= dirty_pages.begin(); it != dirty_pages.end(); it++) {
 				thread_safe_page *p = it->second;
@@ -1077,6 +1069,7 @@ void associative_flush_thread::run()
 				assert(!p->is_old_dirty());
 				assert(p->data_ready());
 
+				assert(num_init_reqs < req_array_size);
 				// Here we flush dirty pages with normal requests.
 				if (!p->is_io_pending() && !p->is_prepare_writeback()
 						// The page may have been cleaned.
@@ -1091,7 +1084,6 @@ void associative_flush_thread::run()
 								get_node_id(), NULL, cache, NULL);
 					req_array[num_init_reqs].add_page(p);
 					req_array[num_init_reqs].set_high_prio(true);
-					requests.push_back(&req_array[num_init_reqs]);
 					p->set_io_pending(true);
 					p->unlock();
 					merge_pages2req(req_array[num_init_reqs], cache);
@@ -1115,7 +1107,6 @@ void associative_flush_thread::run()
 								get_node_id(), NULL, cache, NULL);
 					req_array[num_init_reqs].add_page(p);
 					req_array[num_init_reqs].set_high_prio(false);
-					requests.push_back(&req_array[num_init_reqs]);
 					num_init_reqs++;
 					p->set_prepare_writeback(true);
 				}
@@ -1126,7 +1117,10 @@ void associative_flush_thread::run()
 				p->dec_ref();
 #endif
 			}
-			write_requests(requests, io);
+			if (num_init_reqs >= req_array_size - NUM_WRITEBACK_DIRTY_PAGES) {
+				io->access(req_array, num_init_reqs);
+				num_init_reqs = 0;
+			}
 			// We can clear the in_queue flag now.
 			// The cell won't be added to the queue for flush until its dirty pages
 			// have been written back successfully.
@@ -1134,6 +1128,8 @@ void associative_flush_thread::run()
 			// that aren't being written back is larger than a threshold.
 			cells[i]->set_in_queue(false);
 		}
+
+		io->access(req_array, num_init_reqs);
 	}
 }
 
