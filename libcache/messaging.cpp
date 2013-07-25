@@ -34,8 +34,8 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 	else {
 		this->io_idx = io->get_io_idx();
 		assert(io_idx <= MAX_IO_IDX);
+		assert(size <= MAX_BUF_SIZE);
 		this->buf_size = size;
-		assert(buf_size <= MAX_BUF_SIZE);
 		this->buf_addr = (long) buf;
 	}
 	this->access_method = access_method & 0x1;
