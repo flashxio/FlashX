@@ -1007,69 +1007,6 @@ public:
 	void dirty_pages(thread_safe_page *pages[], int num);
 };
 
-void merge_pages2reqs(std::vector<io_request *> &requests,
-		std::map<off_t, thread_safe_page *> &dirty_pages,
-		bool forward, std::vector<io_request *> &complete)
-{
-	for (unsigned i = 0; i < requests.size(); ) {
-		io_request *req = requests[i];
-		// there is a page adjacent to the request.
-		std::map<off_t, thread_safe_page *>::iterator it;
-		if (forward)
-			it = dirty_pages.find(req->get_offset() + req->get_size());
-		else
-			it = dirty_pages.find(req->get_offset() - PAGE_SIZE);
-		if (it != dirty_pages.end()) {
-			thread_safe_page *p = it->second;
-			dirty_pages.erase(it);
-			p->lock();
-			assert(!p->is_old_dirty());
-			assert(p->data_ready());
-			if (!p->is_io_pending()) {
-				req->add_buf((char *) p->get_data(), PAGE_SIZE);
-				// If the dirty pages are in front of the requests.
-				if (!forward) {
-					assert(p->get_offset() == req->get_offset() - PAGE_SIZE);
-					req->set_offset(p->get_offset());
-				}
-				p->set_io_pending(true);
-				i++;
-				p->unlock();
-			}
-			else {
-				/* The page is being written back, so we don't need to do it. */
-				p->dec_ref();
-				p->unlock();
-				/* 
-				 * We are going to break the request and write the existing
-				 * request.
-				 */
-				complete.push_back(req);
-				requests.erase(requests.begin() + i);
-			}
-		}
-		else {
-			/*
-			 * There isn't a page adjacency to the request,
-			 * we should remove the request from the vector and write it
-			 * to the disk.
-			 */
-			complete.push_back(req);
-			requests.erase(requests.begin() + i);
-		}
-	}
-
-	/*
-	 * We just release the reference count on the remaining pages,
-	 * as we won't use them any more.
-	 */
-	for (std::map<off_t, thread_safe_page *>::const_iterator it
-			= dirty_pages.begin(); it != dirty_pages.end(); it++) {
-		thread_safe_page *p = it->second;
-		p->dec_ref();
-	}
-}
-
 void write_requests(const std::vector<io_request *> &requests, io_interface *io)
 {
 	for (unsigned i = 0; i < requests.size(); i++) {
@@ -1154,46 +1091,7 @@ void associative_flush_thread::run()
 				p->unlock();
 				p->dec_ref();
 			}
-
-#ifdef FLUSH_MERGE_REQS
-			// Merge with adjacent dirty pages behind the current dirty page.
-			std::vector<io_request *> forward_complete;
-			hash_cell *curr_cell = cells[i];
-			size_t num_reqs = requests.size();
-			// Search forward and find pages that can merge with the current requests.
-			while (!requests.empty()) {
-				hash_cell *next_cell = cache->get_next_cell(curr_cell);
-				if (next_cell == NULL)
-					break;
-				dirty_pages.clear();
-				next_cell->get_dirty_pages(dirty_pages);
-				merge_pages2reqs(requests, dirty_pages, true, forward_complete);
-				curr_cell = next_cell;
-			}
-			// Add the remaining merged requests to the same array with others.
-			for (unsigned k = 0; k < requests.size(); k++)
-				forward_complete.push_back(requests[k]);
-			assert(forward_complete.size() == num_reqs);
-
-			// Merge with adjacent dirty pages before the current dirty page.
-			std::vector<io_request *> complete;
-			curr_cell = cells[i];
-			// Search backward and find pages that can merge with the current requests.
-			while (!forward_complete.empty()) {
-				hash_cell *prev_cell = cache->get_prev_cell(curr_cell);
-				if (prev_cell == NULL)
-					break;
-				dirty_pages.clear();
-				prev_cell->get_dirty_pages(dirty_pages);
-				merge_pages2reqs(forward_complete, dirty_pages, false, complete);
-			}
-			for (unsigned k = 0; k < forward_complete.size(); k++)
-				complete.push_back(forward_complete[k]);
-			assert(complete.size() == num_reqs);
-			write_requests(complete, io);
-#else
 			write_requests(requests, io);
-#endif
 			// We can clear the in_queue flag now.
 			// The cell won't be added to the queue for flush until its dirty pages
 			// have been written back successfully.
