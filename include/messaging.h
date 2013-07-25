@@ -122,6 +122,14 @@ struct io_req_extension
 class io_request
 {
 	off_t offset: 40;
+	/*
+	 * The NUMA node id where the buffers of the request are allocated.
+	 */
+	static const int MAX_NODE_ID = (1 << 4) - 1;
+	unsigned int node_id: 4;
+	static const int MAX_BUF_SIZE = (1 << 20) - 1;
+	unsigned long buf_size: 20;
+
 	// This flag is initialized when the object is created and
 	// can't be changed manually.
 	// The only case that the flag of a request is changed is when
@@ -130,17 +138,12 @@ class io_request
 	// the flag is true when buf_addr points to the extension object;
 	// the flag is false when buf_addr points to the real buffer.
 	unsigned int extended: 1;
-	unsigned int high_prio: 1;
+	unsigned int access_method: 1;
 	// Is this synchronous IO?
 	unsigned int sync: 1;
-	/*
-	 * The NUMA node id where the buffers of the request are allocated.
-	 */
-	unsigned int node_id: 5;
-	unsigned int io_idx: 16;
-
-	unsigned int access_method: 1;
-	unsigned long buf_size: 15;
+	unsigned int high_prio: 1;
+	static const int MAX_IO_IDX = (1 << 12) - 1;
+	unsigned int io_idx: 12;
 	// Linux uses 48 bit for addresses.
 	unsigned long buf_addr: 48;
 
@@ -176,6 +179,7 @@ public:
 			io_interface *io, int node_id, bool sync = false) {
 		extended = 0;
 		this->sync = sync;
+		assert(node_id <= MAX_NODE_ID);
 		init(buf, off, size, access_method, io, node_id);
 	}
 
@@ -184,6 +188,7 @@ public:
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
 		this->sync = sync;
+		assert(node_id <= MAX_NODE_ID);
 		init(off, io, access_method, node_id, orig, priv, NULL);
 	}
 
@@ -193,6 +198,7 @@ public:
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
 		this->sync = sync;
+		assert(node_id <= MAX_NODE_ID);
 		init(buf, off, size, access_method, io, node_id, orig, priv, NULL);
 	}
 
@@ -324,6 +330,7 @@ public:
 	}
 
 	void set_node_id(int node_id) {
+		assert(node_id <= MAX_NODE_ID);
 		this->node_id = node_id;
 	}
 
