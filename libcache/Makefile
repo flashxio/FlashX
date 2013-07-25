@@ -26,6 +26,7 @@ endif
 all: libcache
 
 libcache: $(OBJS)
+	rm -f libcache.a
 	ar -cvq libcache.a $(OBJS)
 
 clean:
