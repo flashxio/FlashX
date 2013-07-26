@@ -258,6 +258,7 @@ again:
 						next_off = off + entry_size;
 					io_status status = io->access(entry, off, next_off - off,
 							access_method);
+					assert(!(status == IO_UNSUPPORTED));
 					if (status == IO_OK) {
 						num_accesses++;
 						if (access_method == READ && verify_read_content) {
@@ -279,6 +280,7 @@ again:
 				}
 				io_status status = io->access(entry, off, entry_size,
 						access_method);
+				assert(!(status == IO_UNSUPPORTED));
 				if (status == IO_OK) {
 					num_accesses++;
 					if (access_method == READ && verify_read_content) {
