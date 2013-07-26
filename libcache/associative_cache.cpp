@@ -1012,6 +1012,7 @@ public:
 	void run();
 	void request_callback(io_request &req);
 	void dirty_pages(thread_safe_page *pages[], int num);
+	int flush_cell(hash_cell *cell, io_request *req_array, int req_array_size);
 };
 
 void associative_flush_thread::request_callback(io_request &req)
@@ -1044,6 +1045,70 @@ void associative_flush_thread::request_callback(io_request &req)
 
 void merge_pages2req(io_request &req, page_cache *cache);
 
+int associative_flush_thread::flush_cell(hash_cell *cell,
+		io_request *req_array, int req_array_size)
+{
+	std::map<off_t, thread_safe_page *> dirty_pages;
+	policy->select(cell, NUM_WRITEBACK_DIRTY_PAGES, dirty_pages);
+	int num_init_reqs = 0;
+	for (std::map<off_t, thread_safe_page *>::const_iterator it
+			= dirty_pages.begin(); it != dirty_pages.end(); it++) {
+		thread_safe_page *p = it->second;
+		p->lock();
+		assert(!p->is_old_dirty());
+		assert(p->data_ready());
+
+		assert(num_init_reqs < req_array_size);
+		// Here we flush dirty pages with normal requests.
+		if (!p->is_io_pending() && !p->is_prepare_writeback()
+				// The page may have been cleaned.
+				&& p->is_dirty()) {
+			// TODO global_cached_io may delete the extension.
+			// I'll fix it later.
+			if (!req_array[num_init_reqs].is_extended_req()) {
+				io_request tmp(true);
+				req_array[num_init_reqs] = tmp;
+			}
+			req_array[num_init_reqs].init(p->get_offset(), io, WRITE,
+					get_node_id(), NULL, cache, NULL);
+			req_array[num_init_reqs].add_page(p);
+			req_array[num_init_reqs].set_high_prio(true);
+			p->set_io_pending(true);
+			p->unlock();
+			merge_pages2req(req_array[num_init_reqs], cache);
+			num_init_reqs++;
+		}
+		else
+			p->unlock();
+
+		// The code blow flush dirty pages with low-priority requests.
+#if 0
+		if (!p->is_io_pending() && !p->is_prepare_writeback()
+				// The page may have been cleaned.
+				&& p->is_dirty()) {
+			// TODO global_cached_io may delete the extension.
+			// I'll fix it later.
+			if (!req_array[num_init_reqs].is_extended_req()) {
+				io_request tmp(true);
+				req_array[num_init_reqs] = tmp;
+			}
+			req_array[num_init_reqs].init(p->get_offset(), io, WRITE,
+					get_node_id(), NULL, cache, NULL);
+			req_array[num_init_reqs].add_page(p);
+			req_array[num_init_reqs].set_high_prio(false);
+			num_init_reqs++;
+			p->set_prepare_writeback(true);
+		}
+		// When a page is put in the queue for writing back,
+		// the queue of the IO thread doesn't own the page, which
+		// means that the page can be evicted.
+		p->unlock();
+		p->dec_ref();
+#endif
+	}
+	return num_init_reqs;
+}
+
 void associative_flush_thread::run()
 {
 	int num_fetches;
@@ -1060,63 +1125,9 @@ void associative_flush_thread::run()
 
 		int num_init_reqs = 0;
 		for (int i = 0; i < num_fetches; i++) {
-			std::map<off_t, thread_safe_page *> dirty_pages;
-			policy->select(cells[i], NUM_WRITEBACK_DIRTY_PAGES, dirty_pages);
-			for (std::map<off_t, thread_safe_page *>::const_iterator it
-					= dirty_pages.begin(); it != dirty_pages.end(); it++) {
-				thread_safe_page *p = it->second;
-				p->lock();
-				assert(!p->is_old_dirty());
-				assert(p->data_ready());
-
-				assert(num_init_reqs < req_array_size);
-				// Here we flush dirty pages with normal requests.
-				if (!p->is_io_pending() && !p->is_prepare_writeback()
-						// The page may have been cleaned.
-						&& p->is_dirty()) {
-					// TODO global_cached_io may delete the extension.
-					// I'll fix it later.
-					if (!req_array[num_init_reqs].is_extended_req()) {
-						io_request tmp(true);
-						req_array[num_init_reqs] = tmp;
-					}
-					req_array[num_init_reqs].init(p->get_offset(), io, WRITE,
-								get_node_id(), NULL, cache, NULL);
-					req_array[num_init_reqs].add_page(p);
-					req_array[num_init_reqs].set_high_prio(true);
-					p->set_io_pending(true);
-					p->unlock();
-					merge_pages2req(req_array[num_init_reqs], cache);
-					num_init_reqs++;
-				}
-				else
-					p->unlock();
-
-				// The code blow flush dirty pages with low-priority requests.
-#if 0
-				if (!p->is_io_pending() && !p->is_prepare_writeback()
-						// The page may have been cleaned.
-						&& p->is_dirty()) {
-					// TODO global_cached_io may delete the extension.
-					// I'll fix it later.
-					if (!req_array[num_init_reqs].is_extended_req()) {
-						io_request tmp(true);
-						req_array[num_init_reqs] = tmp;
-					}
-					req_array[num_init_reqs].init(p->get_offset(), io, WRITE,
-								get_node_id(), NULL, cache, NULL);
-					req_array[num_init_reqs].add_page(p);
-					req_array[num_init_reqs].set_high_prio(false);
-					num_init_reqs++;
-					p->set_prepare_writeback(true);
-				}
-				// When a page is put in the queue for writing back,
-				// the queue of the IO thread doesn't own the page, which
-				// means that the page can be evicted.
-				p->unlock();
-				p->dec_ref();
-#endif
-			}
+			int ret = flush_cell(cells[i], &req_array[num_init_reqs],
+					req_array_size - num_init_reqs);
+			num_init_reqs += ret;
 			if (num_init_reqs >= req_array_size - NUM_WRITEBACK_DIRTY_PAGES) {
 				io->access(req_array, num_init_reqs);
 				num_init_reqs = 0;
