@@ -7,6 +7,11 @@
 #include "common_c.h"
 #include "parameters.h"
 
+enum {
+	READ,
+	WRITE
+};
+
 struct file_info
 {
 	std::string name;

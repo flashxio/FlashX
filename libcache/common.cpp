@@ -1,3 +1,7 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <sched.h>
 #include <assert.h>
 #include <string.h>
 #include <sys/types.h>
@@ -7,6 +11,51 @@
 #include "common.h"
 
 extern "C" {
+
+void bind2cpu(int cpu_id)
+{
+	cpu_set_t cpu_mask;
+	CPU_ZERO(&cpu_mask);
+	CPU_SET(cpu_id, &cpu_mask);
+	int len = sizeof(cpu_mask);
+	if (sched_setaffinity(gettid(), len, &cpu_mask) < 0) {
+		perror("sched_setaffinity");
+		exit(1);
+	}
+}
+
+void bind_mem2node_id(int node_id)
+{
+	struct bitmask *bmp = numa_allocate_nodemask();
+	numa_bitmask_setbit(bmp, node_id);
+	numa_set_membind(bmp);
+	numa_free_nodemask(bmp);
+}
+
+void bind2node_id(int node_id)
+{
+	struct bitmask *bmp = numa_allocate_nodemask();
+	numa_bitmask_setbit(bmp, node_id);
+	numa_bind(bmp);
+	numa_free_nodemask(bmp);
+}
+
+int numa_get_mem_node()
+{
+	struct bitmask *bmp = numa_get_membind();
+	int nbytes = numa_bitmask_nbytes(bmp);
+	int num_nodes = 0;
+	int node_id = -1;
+	int i;
+	for (i = 0; i < nbytes * 8; i++)
+		if (numa_bitmask_isbitset(bmp, i)) {
+			num_nodes++;
+			node_id = i;
+		}
+	assert(num_nodes == 1);
+	return node_id;
+}
+
 ssize_t get_file_size(const char *file_name)
 {
 	struct stat stats;
