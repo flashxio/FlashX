@@ -195,9 +195,11 @@ class thread_safe_page: public page
 
 	io_request *reqs;
 	int node_id;
+	pthread_spinlock_t _lock;
 
 public:
 	thread_safe_page(): page() {
+		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 #ifdef PTHREAD_WAIT
 		pthread_cond_init(&ready_cond, NULL);
 		pthread_cond_init(&dirty_cond, NULL);
@@ -208,6 +210,7 @@ public:
 	}
 
 	thread_safe_page(off_t off, char *data, int node_id): page(off, data) {
+		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 #ifdef PTHREAD_WAIT
 		pthread_cond_init(&ready_cond, NULL);
 		pthread_cond_init(&dirty_cond, NULL);
@@ -218,6 +221,7 @@ public:
 	}
 
 	~thread_safe_page() {
+		pthread_spin_destroy(&_lock);
 #ifdef PTHREAD_WAIT
 		pthread_mutex_destroy(&mutex);
 		pthread_cond_destroy(&ready_cond);
@@ -306,13 +310,15 @@ public:
 	}
 
 	void lock() {
-		int old;
-		do {
-			old = __sync_fetch_and_or(&flags, 0x1 << LOCK_BIT);
-		} while (old & (0x1 << LOCK_BIT));
+		pthread_spin_lock(&_lock);
+//		int old;
+//		do {
+//			old = __sync_fetch_and_or(&flags, 0x1 << LOCK_BIT);
+//		} while (old & (0x1 << LOCK_BIT));
 	}
 	void unlock() {
-		set_flags_bit(LOCK_BIT, false);
+		pthread_spin_unlock(&_lock);
+//		set_flags_bit(LOCK_BIT, false);
 	}
 
 	void inc_ref() {
