@@ -148,5 +148,6 @@ IOR_param_t defaultParameters = {
 	
 	FALSE,			 /* useAsync */
 	1,				 /* numThreads */
+	1,               /* numNodes */
 };
 #endif /* not _IOR_DEFAULTS_H */

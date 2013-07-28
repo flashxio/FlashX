@@ -187,6 +187,7 @@ typedef struct
 	// New parameters
 	int useAsync;						/* whether use async IO interface */
 	int numThreads;					/* the number of threads in a task */
+	int numNodes;
 } IOR_param_t;
 
 struct AsyncData

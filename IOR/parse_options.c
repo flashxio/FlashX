@@ -341,7 +341,7 @@ IOR_queue_t *
 ParseCommandLine(int argc, char ** argv)
 {
     static const char * opts
-        = "A:a:b:BcCQ:ZX:d:D:YeEf:FgG:hHi:j:J:IkKlmnN:o:O:pPqrRs:St:T:uU:vVwWxzLM:";
+        = "A:a:b:BcCQ:ZX:d:D:YeEf:FgG:hHi:j:J:IkKlmnN:o:O:pPqrRs:St:T:uU:vVwWxzLM:y:";
     int                 c, i;
     static IOR_queue_t *tests = NULL;
 
@@ -414,6 +414,7 @@ ParseCommandLine(int argc, char ** argv)
         case 'z': initialTestParams.randomOffset = TRUE;           break;
         case 'L': initialTestParams.useAsync = TRUE;		       break;
         case 'M': initialTestParams.numThreads = atoi(optarg);	   break;
+        case 'y': initialTestParams.numNodes = atoi(optarg);       break;
         default:  fprintf (stdout, "ParseCommandLine: unknown option `-%c'.\n", optopt);
         }
     }

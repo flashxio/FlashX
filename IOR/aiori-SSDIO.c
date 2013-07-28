@@ -21,7 +21,7 @@ void *IOR_Create_SSDIO(char *name, IOR_param_t *test)
 	int flags = O_RDWR;
 	if (test->useO_DIRECT == TRUE)
 		flags |= O_DIRECT;
-	ssd_io_init(name, flags, test->numThreads);
+	ssd_io_init(name, flags, test->numThreads, test->numNodes);
 	*fdp = ssd_open(name, flags);
 	return (void *) fdp;
 }
@@ -33,7 +33,7 @@ void *IOR_Open_SSDIO(char *name, IOR_param_t *test)
 	int flags = O_RDWR;
 	if (test->useO_DIRECT == TRUE)
 		flags |= O_DIRECT;
-	ssd_io_init(name, flags, test->numThreads);
+	ssd_io_init(name, flags, test->numThreads, test->numNodes);
 	*fdp = ssd_open(name, flags);
 	return (void *) fdp;
 }

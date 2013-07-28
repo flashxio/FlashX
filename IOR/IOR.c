@@ -2623,6 +2623,7 @@ struct ThreadData
 	IOR_param_t *test;
 	int access;
 	int pretendRank;
+	int node_id;
 	IOR_offset_t *offsetArray;
 
 	// output data
@@ -2667,6 +2668,9 @@ AsyncThreadWriteOrRead(void *arg)
 	int pretendRank = data->pretendRank;
 	IOR_offset_t *offsetArray = data->offsetArray;
 	IOR_offset_t pairCnt = 0;
+
+	printf("bind to node %d\n", data->node_id);
+	bind2node_id(data->node_id);
 
 	struct buf_pool *buf_allocator = create_buf_pool(test->transferSize, INT_MAX, -1);
 	struct buf_pool *cb_allocator = create_buf_pool(sizeof(struct AsyncData), INT_MAX, -1);
@@ -2762,6 +2766,9 @@ SyncThreadWriteOrRead(void *arg)
 	IOR_offset_t *offsetArray = data->offsetArray;
 	IOR_offset_t pairCnt = 0;
 
+	printf("bind to node %d\n", data->node_id);
+	bind2node_id(data->node_id);
+
 	GetTestFileName(testFileName, test);
 	fd = IOR_Open(testFileName, test);
 
@@ -2844,8 +2851,10 @@ WriteOrRead(IOR_param_t * test,
 	int numThreads = test->numThreads;
 	struct ThreadData data[numThreads];
 	long seed = random();
+	double start1 = GetTimeStamp();
 	for (i = 0; i < numThreads; i++) {
 		data[i].test = test;
+		data[i].node_id = i % test->numNodes;
 		data[i].access = access;
 		data[i].pretendRank = i;
 		assert(test->randomOffset);
@@ -2855,6 +2864,7 @@ WriteOrRead(IOR_param_t * test,
 			data[i].offsetArray = GetOffsetArraySequential(test, i);
 		}
 	}
+	double start2 = GetTimeStamp();
 	for (i = 0; i < numThreads; i++) {
 		int ret;
 		if (test->useAsync)
@@ -2870,14 +2880,19 @@ WriteOrRead(IOR_param_t * test,
 		pthread_join(data[i].tid, NULL);
 		dataMoved += data[i].dataMoved;
 		errors += data[i].errors;
-		free(offsetArray);
+		free(data[i].offsetArray);
 	}
+	double end2 = GetTimeStamp();
 
     totalErrorCount += CountErrors(test, access, errors);
 
     if (access == WRITE && test->fsync == TRUE) {
         IOR_Fsync(fd, test); /*fsync after all accesses*/
     }
+	double end1 = GetTimeStamp();
+	printf("IO takes %fs, total takes %fs, rate %ldMB/s\n",
+			end2 - start2, end1 - start1,
+			(long) (dataMoved / (end1 - start2) / 1024 / 1024));
     return(dataMoved);
 } /* WriteOrRead() */
 
