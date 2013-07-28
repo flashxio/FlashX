@@ -1024,8 +1024,8 @@ void associative_flush_thread::request_callback(io_request &req)
 		p->set_dirty(false);
 		p->set_io_pending(false);
 		assert(p->reset_reqs() == NULL);
-		p->dec_ref();
 		p->unlock();
+		p->dec_ref();
 	}
 	else {
 		off_t off = req.get_offset();
@@ -1037,9 +1037,9 @@ void associative_flush_thread::request_callback(io_request &req)
 			p->set_dirty(false);
 			p->set_io_pending(false);
 			assert(p->reset_reqs() == NULL);
+			p->unlock();
 			p->dec_ref();
 			assert(p->get_ref() >= 0);
-			p->unlock();
 			off += PAGE_SIZE;
 		}
 	}

@@ -256,8 +256,10 @@ int access_page_callback::multibuf_invoke(io_request *request,
 			thread_safe_page *dirty = __complete_req_unlocked(orig, p);
 			if (dirty)
 				dirty_pages.push_back(dirty);
+			p->unlock();
 		}
 		else {
+			p->unlock();
 			// The page isn't flushed by the page eviction policy.
 			// It's flush because we want to flush data with a large request.
 			// The page that triggers the flush is saved in the private data.
@@ -265,7 +267,6 @@ int access_page_callback::multibuf_invoke(io_request *request,
 				p->dec_ref();
 			assert(p->get_ref() >= 0);
 		}
-		p->unlock();
 		off += PAGE_SIZE;
 	}
 
@@ -740,8 +741,8 @@ void merge_pages2req(io_request &req, page_cache *cache)
 			&& (p = (thread_safe_page *) cache->search(forward_off))) {
 		p->lock();
 		if (!p->is_dirty()) {
-			p->dec_ref();
 			p->unlock();
+			p->dec_ref();
 			break;
 		}
 		if (!p->is_io_pending()) {
@@ -749,8 +750,8 @@ void merge_pages2req(io_request &req, page_cache *cache)
 			req.add_page(p);
 		}
 		else {
-			p->dec_ref();
 			p->unlock();
+			p->dec_ref();
 			break;
 		}
 		p->unlock();
@@ -762,8 +763,8 @@ void merge_pages2req(io_request &req, page_cache *cache)
 				&& (p = (thread_safe_page *) cache->search(backward_off))) {
 			p->lock();
 			if (!p->is_dirty()) {
-				p->dec_ref();
 				p->unlock();
+				p->dec_ref();
 				break;
 			}
 			if (!p->is_io_pending()) {
@@ -772,8 +773,8 @@ void merge_pages2req(io_request &req, page_cache *cache)
 				req.set_offset(backward_off);
 			}
 			else {
-				p->dec_ref();
 				p->unlock();
+				p->dec_ref();
 				break;
 			}
 			p->unlock();
