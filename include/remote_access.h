@@ -26,6 +26,13 @@ class remote_disk_access: public io_interface
 	file_mapper *block_mapper;
 	aio_complete_queue *complete_queue;
 
+	// This is used for requests that access data across multiple blocks.
+	// These requests will be broken into smaller requests.
+	// This fake IO interface intercepts requests in the IO completion path,
+	// and merge the smaller requests and present users the original
+	// completed IO requests.
+	io_interface *req_intercepter;
+
 	int num_completed_reqs;
 
 	remote_disk_access(int node_id): io_interface(node_id) {
@@ -34,6 +41,7 @@ class remote_disk_access: public io_interface
 		num_senders = 0;
 		cb = NULL;
 		block_mapper = NULL;
+		req_intercepter = NULL;
 		num_completed_reqs = 0;
 	}
 public:

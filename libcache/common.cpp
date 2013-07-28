@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "common.h"
+#include "messaging.h"
 
 extern "C" {
 
@@ -157,6 +158,59 @@ int retrieve_data_files(std::string file_file,
 	}
 	fclose(fd);
 	return data_files.size();
+}
+
+/**
+ * Extract a request from the input request.
+ * The extract request is within the range [off, off + npages * PAGE_SIZE),
+ * where off is aligned with PAGE_SIZE.
+ */
+void extract_pages(const io_request &req, off_t off, int npages,
+		io_request &extracted)
+{
+	off_t req_off;
+	char *req_buf;
+	ssize_t req_size;
+	assert(req.get_num_bufs() == 1);
+	assert((off & (PAGE_SIZE - 1)) == 0);
+	bool check = (off >= req.get_offset() && off < req.get_offset() + req.get_size())
+		|| (off + PAGE_SIZE >= req.get_offset()
+				&& off + PAGE_SIZE < req.get_offset() + req.get_size())
+		|| (off <= req.get_offset()
+				&& off + PAGE_SIZE >= req.get_offset() + req.get_size());
+	if (!check)
+		fprintf(stderr, "req %lx, size: %lx, page off: %lx\n",
+				req.get_offset(), req.get_size(), off);
+	assert(check);
+	// this is the first page in the request.
+	if (off == ROUND_PAGE(req.get_offset())) {
+		req_off = req.get_offset();
+		req_buf = req.get_buf();
+		// the remaining size in the page.
+		req_size = PAGE_SIZE * npages - (req_off - off);
+		if (req_size > req.get_size())
+			req_size = req.get_size();
+	}
+	else {
+		req_off = off;
+		/* 
+		 * We can't be sure if the request buffer is aligned
+		 * with the page size.
+		 */
+		req_buf = req.get_buf() + (off - req.get_offset());
+		ssize_t remaining = req.get_size() - (off - req.get_offset());
+		req_size = remaining > PAGE_SIZE * npages ? PAGE_SIZE
+			* npages : remaining;
+	}
+	extracted.init(req_buf, req_off, req_size, req.get_access_method(),
+			req.get_io(), req.get_node_id());
+}
+
+bool inside_RAID_block(const io_request &req)
+{
+	int RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
+	return ROUND(req.get_offset(), RAID_block_size)
+		== ROUND(req.get_offset() + req.get_size() - 1, RAID_block_size);
 }
 
 sys_parameters params;

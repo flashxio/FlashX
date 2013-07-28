@@ -114,4 +114,9 @@ public:
 
 extern sys_parameters params;
 
+class io_request;
+void extract_pages(const io_request &req, off_t off, int npages,
+		io_request &extracted);
+bool inside_RAID_block(const io_request &req);
+
 #endif

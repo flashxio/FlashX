@@ -317,6 +317,11 @@ public:
 		return access_method & 0x1;
 	}
 
+	void set_io(io_interface *io) {
+		assert(is_extended_req());
+		get_extension()->io = io;
+	}
+
 	io_interface *get_io() const {
 		if (is_extended_req()) {
 			return get_extension()->io;
