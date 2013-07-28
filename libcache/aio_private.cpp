@@ -207,8 +207,8 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 			sender->send_cached(local_tcbs, num_local);
 			sender->flush(false);
 		}
+		return;
 	}
-#if 0
 	if (num == 0)
 		return;
 
@@ -226,7 +226,6 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 		cb_allocator.free(tcb);
 	}
 	num_completed_reqs += num;
-#endif
 }
 
 const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;
