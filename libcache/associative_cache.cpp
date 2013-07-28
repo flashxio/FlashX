@@ -1023,6 +1023,7 @@ void associative_flush_thread::request_callback(io_request &req)
 		assert(p->is_dirty());
 		p->set_dirty(false);
 		p->set_io_pending(false);
+		assert(p->reset_reqs() == NULL);
 		p->dec_ref();
 		p->unlock();
 	}
@@ -1035,6 +1036,7 @@ void associative_flush_thread::request_callback(io_request &req)
 			assert(p->is_dirty());
 			p->set_dirty(false);
 			p->set_io_pending(false);
+			assert(p->reset_reqs() == NULL);
 			p->dec_ref();
 			assert(p->get_ref() >= 0);
 			p->unlock();
@@ -1078,8 +1080,10 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 			merge_pages2req(req_array[num_init_reqs], cache);
 			num_init_reqs++;
 		}
-		else
+		else {
 			p->unlock();
+			p->dec_ref();
+		}
 
 		// The code blow flush dirty pages with low-priority requests.
 #if 0
