@@ -242,12 +242,31 @@ int aio_complete_queue::process(int max_num, bool blocking)
 		num = queue.non_blocking_fetch(tcbs, max_num);
 	}
 
+	// We should try to invoke for as many requests as possible,
+	// so the upper layer has the opportunity to optimize the request completion.
+	std::tr1::unordered_map<callback *, std::vector<io_request *> > map;
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
-		io_request *reqs[1];
-		reqs[0] = &tcb->req;
-		tcb->aio_callback->invoke(reqs, 1);
-		tcb->cb_allocator->free(tcb);
+		std::vector<io_request *> *v;
+		std::tr1::unordered_map<callback *, std::vector<io_request *> >::iterator it;
+		if ((it = map.find(tcb->aio_callback)) == map.end()) {
+			map.insert(std::pair<callback *, std::vector<io_request *> >(
+						tcb->aio_callback, std::vector<io_request *>()));
+			v = &map[tcb->aio_callback];
+		}
+		else
+			v = &it->second;
+
+		v->push_back(&tcb->req);
+	}
+	for (std::tr1::unordered_map<callback *, std::vector<io_request *> >::iterator it
+			= map.begin(); it != map.end(); it++) {
+		callback *cb = it->first;
+		std::vector<io_request *> *v = &it->second;
+		cb->invoke(v->data(), v->size());
+	}
+	for (int i = 0; i < num; i++) {
+		tcbs[i]->cb_allocator->free(tcbs[i]);
 	}
 	return num;
 }

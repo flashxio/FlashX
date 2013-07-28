@@ -145,7 +145,8 @@ public:
 		cached_io = io;
 	}
 	int invoke(io_request *requests[], int);
-	int multibuf_invoke(io_request *request);
+	int multibuf_invoke(io_request *request,
+			std::vector<thread_safe_page *> &dirty_pages);
 };
 
 void global_cached_io::notify_completion(io_request *req)
@@ -221,9 +222,9 @@ void global_cached_io::finalize_request(io_request &req)
 	}
 }
 
-int access_page_callback::multibuf_invoke(io_request *request)
+int access_page_callback::multibuf_invoke(io_request *request,
+		std::vector<thread_safe_page *> &dirty_pages)
 {
-	page_cache *cache = cached_io->get_global_cache();
 	io_request *orig = request->get_orig();
 	assert(orig->get_num_bufs() == 1);
 	/*
@@ -232,8 +233,6 @@ int access_page_callback::multibuf_invoke(io_request *request)
 	io_request *pending_reqs[request->get_num_bufs()];
 	thread_safe_page *pages[request->get_num_bufs()];
 	// The pages that are set dirty for the first time.
-	thread_safe_page *dirty_pages[request->get_num_bufs()];
-	int num_dirty_pages = 0;
 	off_t off = request->get_offset();
 	for (int i = 0; i < request->get_num_bufs(); i++) {
 		thread_safe_page *p = request->get_page(i);
@@ -256,7 +255,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 		if (request->get_access_method() == READ) {
 			thread_safe_page *dirty = __complete_req_unlocked(orig, p);
 			if (dirty)
-				dirty_pages[num_dirty_pages++] = dirty;
+				dirty_pages.push_back(dirty);
 		}
 		else {
 			// The page isn't flushed by the page eviction policy.
@@ -290,12 +289,8 @@ int access_page_callback::multibuf_invoke(io_request *request)
 			while (old) {
 				io_request *next = old->get_next_req();
 				thread_safe_page *dirty = __complete_req(old, p);
-				if (dirty) {
-					// We can be pretty certain that the same page won't appear
-					// twice in the array.
-					assert(num_dirty_pages < request->get_num_bufs());
-					dirty_pages[num_dirty_pages++] = dirty;
-				}
+				if (dirty)
+					dirty_pages.push_back(dirty);
 				cached_io->finalize_request(*old);
 				// Now we can delete it.
 				cached_io->get_req_allocator()->free(old);
@@ -303,7 +298,6 @@ int access_page_callback::multibuf_invoke(io_request *request)
 			}
 			assert(p->get_ref() >= 0);
 		}
-		cache->mark_dirty_pages(dirty_pages, num_dirty_pages);
 	}
 	else {
 		io_request *orig = request->get_orig();
@@ -332,6 +326,7 @@ int access_page_callback::multibuf_invoke(io_request *request)
 int access_page_callback::invoke(io_request *requests[], int num)
 {
 	page_cache *cache = cached_io->get_global_cache();
+	std::vector<thread_safe_page *> dirty_pages;
 	for (int i = 0; i < num; i++) {
 		io_request *request = requests[i];
 		/* 
@@ -344,7 +339,7 @@ int access_page_callback::invoke(io_request *requests[], int num)
 		}
 
 		if (request->get_num_bufs() > 1) {
-			multibuf_invoke(request);
+			multibuf_invoke(request, dirty_pages);
 			continue;
 		}
 
@@ -380,7 +375,7 @@ int access_page_callback::invoke(io_request *requests[], int num)
 			thread_safe_page *dirty = __complete_req(orig, p);
 			// TODO maybe I should make it support multi-request callback.
 			if (dirty)
-				cache->mark_dirty_pages(&dirty, 1);
+				dirty_pages.push_back(dirty);
 			io_request partial;
 			extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
 			cached_io->finalize_partial_request(partial, orig);
@@ -396,7 +391,7 @@ int access_page_callback::invoke(io_request *requests[], int num)
 				assert(old->get_num_bufs() == 1);
 				thread_safe_page *dirty = __complete_req(old, p);
 				if (dirty)
-					cache->mark_dirty_pages(&dirty, 1);
+					dirty_pages.push_back(dirty);
 
 				cached_io->finalize_request(*old);
 				// Now we can delete it.
@@ -419,6 +414,7 @@ int access_page_callback::invoke(io_request *requests[], int num)
 			// They will be deleted when these write requests are finally served.
 		}
 	}
+	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size());
 	return 0;
 }
 
