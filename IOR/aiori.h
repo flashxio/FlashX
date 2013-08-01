@@ -188,6 +188,7 @@ typedef struct
 	int useAsync;						/* whether use async IO interface */
 	int numThreads;					/* the number of threads in a task */
 	int numNodes;
+	int threadId;
 } IOR_param_t;
 
 struct AsyncData

@@ -958,7 +958,8 @@ GetTestFileName(char * testFileName, IOR_param_t * test)
         }
 #endif /* USE_UNDOC_OPT - NFS */
         sprintf(testFileName, "%s.%08d", testFileNameRoot,
-                (rank+rankOffset)%test->numTasks); 
+                (rank+rankOffset * test->numThreads + test->threadId)
+				%(test->numTasks * test->numThreads)); 
     } else {
         strcpy(testFileName, testFileNameRoot);
     }
@@ -2854,8 +2855,11 @@ WriteOrRead(IOR_param_t * test,
 	struct ThreadData data[numThreads];
 	long seed = random();
 	double start1 = GetTimeStamp();
+	IOR_param_t test_array[numThreads];
 	for (i = 0; i < numThreads; i++) {
-		data[i].test = test;
+		test_array[i] = *test;
+		test_array[i].threadId = i;
+		data[i].test = &test_array[i];
 		if (test->numNodes > 1)
 			data[i].node_id = i % test->numNodes;
 		else
