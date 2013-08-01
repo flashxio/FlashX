@@ -2825,6 +2825,8 @@ SyncThreadWriteOrRead(void *arg)
 	return NULL;
 }
 
+int defaultNodeId = 1;
+
 /******************************************************************************/
 /*
  * Write or Read data to file(s).  This loops through the strides, writing
@@ -2854,7 +2856,10 @@ WriteOrRead(IOR_param_t * test,
 	double start1 = GetTimeStamp();
 	for (i = 0; i < numThreads; i++) {
 		data[i].test = test;
-		data[i].node_id = i % test->numNodes;
+		if (test->numNodes > 1)
+			data[i].node_id = i % test->numNodes;
+		else
+			data[i].node_id = defaultNodeId;
 		data[i].access = access;
 		data[i].pretendRank = i;
 		assert(test->randomOffset);
