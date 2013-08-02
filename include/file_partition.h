@@ -25,7 +25,27 @@ public:
 			file_map[indices[i]] = i;
 	}
 
+	logical_file_partition(std::vector<int> indices) {
+		this->indices = indices;
+		mapper = NULL;
+	}
+
+	logical_file_partition *create_file_partition(file_mapper *mapper) const {
+		assert(mapper);
+		return new logical_file_partition(indices, mapper);
+	}
+
+	int get_file_id() const {
+		assert(mapper);
+		return mapper->get_file_id();
+	}
+
+	bool is_active() const {
+		return mapper != NULL;
+	}
+
 	const file_mapper *get_mapper() const {
+		assert(mapper);
 		return mapper;
 	}
 
@@ -34,10 +54,12 @@ public:
 	}
 
 	const std::string &get_file_name(int idx) const {
+		assert(mapper);
 		return mapper->get_file_name(indices[idx]);
 	}
 
 	void map(off_t pg_off, block_identifier &bid) const {
+		assert(mapper);
 		mapper->map(pg_off, bid);
 		// We have to make sure the offset does exist in the partition.
 		assert(file_map[bid.idx] >= 0);
@@ -45,6 +67,7 @@ public:
 	}
 
 	int map2file(off_t pg_off) const {
+		assert(mapper);
 		int idx = mapper->map2file(pg_off);
 		assert(file_map[idx] >= 0);
 		return file_map[idx];

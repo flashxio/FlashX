@@ -6,6 +6,7 @@
 
 #include "common.h"
 #include "parameters.h"
+#include "concurrency.h"
 
 const int FILE_CONST_A = 31;
 const int FILE_CONST_P = 191;
@@ -18,6 +19,8 @@ struct block_identifier
 
 class file_mapper
 {
+	static atomic_integer file_id_gen;
+	int file_id;
 	std::vector<file_info> files;
 protected:
 	const std::vector<file_info> &get_files() const {
@@ -29,9 +32,14 @@ public:
 	file_mapper(const std::vector<file_info> &files,
 			int block_size): STRIPE_BLOCK_SIZE(block_size) {
 		this->files = files;
+		file_id = file_id_gen.inc(1);
 	}
 
 	virtual ~file_mapper() {
+	}
+
+	int get_file_id() const {
+		return file_id;
 	}
 
 	const std::string &get_file_name(int idx) const {

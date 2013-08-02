@@ -35,9 +35,8 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 
 async_io::async_io(const logical_file_partition &partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
-		int aio_depth_per_file, int node_id): buffered_io(partition,
-			node_id, O_DIRECT | O_RDWR), AIO_DEPTH(aio_depth_per_file *
-				partition.get_num_files()), allocator(PAGE_SIZE,
+		int aio_depth_per_file, int node_id): io_interface(node_id), AIO_DEPTH(
+			aio_depth_per_file * partition.get_num_files()), allocator(PAGE_SIZE,
 				AIO_DEPTH * PAGE_SIZE, INT_MAX, node_id), cb_allocator(
 					AIO_DEPTH * sizeof(thread_callback_s))
 {
@@ -55,6 +54,13 @@ async_io::async_io(const logical_file_partition &partition,
 	}
 	num_completed_reqs = 0;
 	num_local_alloc = 0;
+	if (partition.is_active()) {
+		int file_id = partition.get_file_id();
+		buffered_io *io = new buffered_io(partition, node_id,
+				O_DIRECT | O_RDWR);
+		default_io = io;
+		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
+	}
 }
 
 void async_io::cleanup()
@@ -65,7 +71,13 @@ void async_io::cleanup()
 		io_wait(ctx, NULL, 1);
 		slot = max_io_slot(ctx);
 	}
-	buffered_io::cleanup();
+	for (std::tr1::unordered_map<int, buffered_io *>::iterator it
+			= open_files.begin(); it != open_files.end(); it++) {
+		buffered_io *io = it->second;
+		// Files may have been closed.
+		if (io)
+			io->cleanup();
+	}
 }
 
 async_io::~async_io()
@@ -92,9 +104,17 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	assert((long) tcb->req.get_buf() % MIN_BLOCK_SIZE == 0);
 	int io_type = tcb->req.get_access_method() == READ ? A_READ : A_WRITE;
 	block_identifier bid;
-	get_partition().map(tcb->req.get_offset() / PAGE_SIZE, bid);
+	buffered_io *io;
+	std::tr1::unordered_map<int, buffered_io *>::iterator it
+		= open_files.find(io_req.get_file_id());
+	if (it != open_files.end())
+		io = it->second;
+	else
+		io = default_io;
+	assert(io);
+	io->get_partition().map(tcb->req.get_offset() / PAGE_SIZE, bid);
 	if (tcb->req.get_num_bufs() == 1)
-		return make_io_request(ctx, get_fd(tcb->req.get_offset()),
+		return make_io_request(ctx, io->get_fd(tcb->req.get_offset()),
 				tcb->req.get_size(), bid.off * PAGE_SIZE, tcb->req.get_buf(),
 				io_type, cb);
 	else {
@@ -106,7 +126,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 		struct iovec vec[num_bufs];
 		int ret = tcb->req.get_vec(vec, num_bufs);
 		assert(ret == num_bufs);
-		struct iocb *req = make_iovec_request(ctx, get_fd(tcb->req.get_offset()),
+		struct iocb *req = make_iovec_request(ctx, io->get_fd(tcb->req.get_offset()),
 				/* 
 				 * iocb only contains a pointer to the io vector.
 				 * the space for the IO vector is stored
@@ -226,6 +246,31 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 		cb_allocator.free(tcb);
 	}
 	num_completed_reqs += num;
+}
+
+int async_io::open_file(const logical_file_partition &partition)
+{
+	int file_id = partition.get_file_id();
+	if (open_files.find(file_id) == open_files.end()) {
+		buffered_io *io = new buffered_io(partition, get_node_id(),
+				O_DIRECT | O_RDWR);
+		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
+	}
+	else {
+		fprintf(stderr, "the file id has been used\n");
+		abort();
+	}
+	return 0;
+}
+
+int async_io::close_file(int file_id)
+{
+	buffered_io *io = open_files[file_id];
+	// TODO I don't delete the entry.
+	open_files[file_id] = NULL;
+	io->cleanup();
+	delete io;
+	return 0;
 }
 
 const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;

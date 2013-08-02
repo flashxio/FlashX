@@ -93,7 +93,7 @@ public:
 	}
 };
 
-class async_io: public buffered_io
+class async_io: public io_interface
 {
 	int buf_idx;
 	struct aio_ctx *ctx;
@@ -109,6 +109,9 @@ class async_io: public buffered_io
 	int num_iowait;
 	int num_completed_reqs;
 	int num_local_alloc;
+
+	std::tr1::unordered_map<int, buffered_io *> open_files;
+	buffered_io *default_io;
 
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:
@@ -167,6 +170,16 @@ public:
 	int get_num_local_alloc() const {
 		return num_local_alloc;
 	}
+
+	// These two interfaces allow users to open and close more files.
+	
+	/*
+	 * It opens a virtual file.
+	 * Actually, it opens physical files on the underlying filesystems
+	 * within the partition of the virtual file, managed by the IO interface.
+	 */
+	int open_file(const logical_file_partition &partition);
+	int close_file(int file_id);
 };
 
 class aio_complete_thread: public thread
