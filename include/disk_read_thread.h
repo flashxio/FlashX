@@ -14,6 +14,7 @@ class disk_read_thread
 {
 	blocking_FIFO_queue<io_request> queue;
 	blocking_FIFO_queue<io_request> low_prio_queue;
+	logical_file_partition partition;
 	pthread_t id;
 	async_io *aio;
 	int node_id;
@@ -55,6 +56,14 @@ public:
 
 	int get_num_local_alloc() const {
 		return aio->get_num_local_alloc();
+	}
+
+	// It open a new file. The mapping is still the same.
+	int open_file(file_mapper *mapper) {
+		logical_file_partition *part = partition.create_file_partition(mapper);
+		int ret = aio->open_file(*part);
+		delete part;
+		return ret;
 	}
 
 	~disk_read_thread() {

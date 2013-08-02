@@ -121,6 +121,7 @@ struct io_req_extension
  */
 class io_request
 {
+	int file_id;
 	off_t offset: 40;
 	/*
 	 * The NUMA node id where the buffers of the request are allocated.
@@ -159,6 +160,7 @@ class io_request
 
 public:
 	io_request() {
+		file_id = -1;
 		extended = 0;
 		buf_addr = 0;
 		high_prio = 1;
@@ -166,6 +168,7 @@ public:
 	}
 
 	io_request(bool extended) {
+		file_id = -1;
 		this->extended = extended;
 		buf_addr = 0;
 		high_prio = 1;
@@ -177,6 +180,7 @@ public:
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, bool sync = false) {
+		file_id = -1;
 		extended = 0;
 		this->sync = sync;
 		assert(node_id <= MAX_NODE_ID);
@@ -185,6 +189,7 @@ public:
 
 	io_request(off_t off, io_interface *io, int access_method, int node_id,
 			io_request *orig, void *priv, bool sync = false) {
+		file_id = -1;
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
 		this->sync = sync;
@@ -195,6 +200,7 @@ public:
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, io_request *orig,
 			void *priv, bool sync = false) {
+		file_id = -1;
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
 		this->sync = sync;
@@ -230,6 +236,7 @@ public:
 	}
 
 	void init(const io_request &req) {
+		this->file_id = req.get_file_id();
 		this->sync = req.sync;
 		if (!req.is_extended_req()) {
 			this->init(req.get_buf(), req.get_offset(), req.get_size(),
@@ -251,6 +258,7 @@ public:
 	}
 
 	void init() {
+		file_id = -1;
 		if (is_extended_req()) {
 			io_req_extension *ext = get_extension();
 			assert(ext);
@@ -295,6 +303,14 @@ public:
 		ext->priv = priv;
 		ext->orig = orig;
 		ext->user_data = user_data;
+	}
+
+	void set_file_id(int file_id) {
+		this->file_id = file_id;
+	}
+
+	int get_file_id() const {
+		return file_id;
 	}
 
 	bool is_sync() const {

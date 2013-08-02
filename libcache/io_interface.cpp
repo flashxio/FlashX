@@ -140,6 +140,19 @@ void release_io(io_interface *io)
 	ios.release_io(io);
 }
 
+struct global_data_collection
+{
+	std::vector<disk_read_thread *> read_threads;
+	std::tr1::unordered_map<int, aio_complete_thread *>  complete_threads;
+	pthread_mutex_t mutex;
+
+	global_data_collection() {
+		pthread_mutex_init(&mutex, NULL);
+	}
+};
+
+static global_data_collection global_data;
+
 std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 		cache_config *cache_conf, const std::vector<int> &node_id_array,
 		int nthreads, int access_option, long size, bool preload)
@@ -155,26 +168,36 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 	// The partition contains all files.
 	logical_file_partition global_partition(indices, mapper);
 
-	std::vector<disk_read_thread *> read_threads(num_files);
-	std::tr1::unordered_map<int, aio_complete_thread *> complete_threads;
+	pthread_mutex_lock(&global_data.mutex);
 	if (access_option == GLOBAL_CACHE_ACCESS
 			|| access_option == PART_GLOBAL_ACCESS
 			|| access_option == REMOTE_ACCESS) {
-		// Create threads for helping process completed AIO requests.
-		for (int i = 0; i < num_nodes; i++) {
-			int node_id = node_id_array[i];
-			complete_threads.insert(std::pair<int, aio_complete_thread *>(node_id,
-						new aio_complete_thread(node_id)));
+		// The global data hasn't been initialized.
+		if (global_data.read_threads.size() == 0) {
+			global_data.read_threads.resize(num_files);
+			// Create threads for helping process completed AIO requests.
+			for (int i = 0; i < num_nodes; i++) {
+				int node_id = node_id_array[i];
+				global_data.complete_threads.insert(
+						std::pair<int, aio_complete_thread *>(node_id,
+							new aio_complete_thread(node_id)));
+			}
+			for (int k = 0; k < num_files; k++) {
+				std::vector<int> indices(1, k);
+				logical_file_partition partition(indices);
+				// Create disk accessing threads.
+				global_data.read_threads[k] = new disk_read_thread(partition,
+						global_data.complete_threads,
+						raid_conf.get_file(k).node_id);
+			}
 		}
-		for (int k = 0; k < num_files; k++) {
-			std::vector<int> indices(1, k);
-			logical_file_partition partition(indices, mapper);
-			// Create disk accessing threads.
-			read_threads[k] = new disk_read_thread(partition, complete_threads,
-					raid_conf.get_file(k).node_id);
+		for (int i = 0; i < num_files; i++) {
+			global_data.read_threads[i]->open_file(mapper);
 		}
 	}
+	pthread_mutex_unlock(&global_data.mutex);
 
+	// TODO the number of threads shouldn't be a global variable.
 	if (access_option == PART_GLOBAL_ACCESS)
 		part_global_cached_io::set_num_threads(nthreads);
 
@@ -208,8 +231,8 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 					}
 					break;
 				case REMOTE_ACCESS:
-					io = new remote_disk_access(read_threads.data(),
-							complete_threads[node_id], num_files,
+					io = new remote_disk_access(global_data.read_threads.data(),
+							global_data.complete_threads[node_id], num_files,
 							mapper, node_id);
 					register_io(io);
 					ios.push_back(io);
@@ -217,7 +240,8 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 				case GLOBAL_CACHE_ACCESS:
 					{
 						io_interface *underlying = new remote_disk_access(
-								read_threads.data(), complete_threads[node_id],
+								global_data.read_threads.data(),
+								global_data.complete_threads[node_id],
 								num_files, mapper, node_id);
 						global_cached_io *io = new global_cached_io(underlying,
 								cache_conf);
@@ -230,7 +254,8 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 				case PART_GLOBAL_ACCESS:
 					{
 						io_interface *underlying = new remote_disk_access(
-								read_threads.data(), complete_threads[node_id],
+								global_data.read_threads.data(),
+								global_data.complete_threads[node_id],
 								num_files, mapper, node_id);
 						part_global_cached_io *io = new part_global_cached_io(
 								num_nodes, underlying, j, cache_conf);

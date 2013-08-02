@@ -139,6 +139,7 @@ void remote_disk_access::access(io_request *requests, int num,
 	memset(has_msgs, 0, sizeof(has_msgs[0]) * num_senders);
 
 	for (int i = 0; i < num; i++) {
+		requests[i].set_file_id(block_mapper->get_file_id());
 		assert(requests[i].get_size() > 0);
 		// If the request accesses one RAID block, it's simple.
 		if (inside_RAID_block(requests[i])) {
@@ -173,6 +174,7 @@ void remote_disk_access::access(io_request *requests, int num,
 				// It only supports to extract a specified request from
 				// a single-buffer request.
 				extract_pages(*orig, begin, size / PAGE_SIZE, req);
+				req.set_file_id(orig->get_file_id());
 				req.set_orig(orig);
 				req.set_io(req_intercepter);
 				assert(inside_RAID_block(req));
