@@ -7,7 +7,7 @@
 
 void ssd_io_init(const char *name, int flags, int num_threads, int num_ndoes);
 int ssd_create(const char *name, size_t size);
-int ssd_open(const char *name, int flags);
+int ssd_open(const char *name, int node_id, int flags);
 ssize_t ssd_read(int fd, void *buf, size_t count, off_t off);
 ssize_t ssd_write(int fd, void *buf, size_t count, off_t off);
 int ssd_close(int fd);

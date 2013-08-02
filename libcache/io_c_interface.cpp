@@ -116,6 +116,8 @@ void ssd_io_init(const char *name, int flags, int num_threads, int num_nodes)
 
 	// this is the first time it is called.
 	if (has_init.inc(1) == 1) {
+		printf("Init SSDIO with %d threads and %d nodes\n",
+				num_threads, num_nodes);
 		int access_option = GLOBAL_CACHE_ACCESS;
 		if (flags & O_DIRECT) {
 			printf("use remote access\n");
@@ -202,9 +204,9 @@ int ssd_create(const char *name, size_t tot_size)
 	return 0;
 }
 
-int ssd_open(const char *name, int flags)
+int ssd_open(const char *name, int node_id, int flags)
 {
-	io_interface *io = allocate_io();
+	io_interface *io = allocate_io(node_id);
 	return io->get_io_idx();
 }
 

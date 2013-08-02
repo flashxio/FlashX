@@ -148,7 +148,7 @@ public:
 	}
 };
 
-io_interface *allocate_io();
+io_interface *allocate_io(int node_id);
 void release_io(io_interface *io);
 io_interface *get_io(int idx);
 int get_num_ios();

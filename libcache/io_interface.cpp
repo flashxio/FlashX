@@ -53,45 +53,91 @@ public:
 	}
 };
 
-static std::vector<io_tracker *> io_table;
+class io_table
+{
+	pthread_spinlock_t lock;
+	/* node id <-> ios */
+	std::vector<io_tracker *> table;
+public:
+	io_table() {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	int size() {
+		pthread_spin_lock(&lock);
+		int ret = table.size();
+		pthread_spin_unlock(&lock);
+		return ret;
+	}
+
+	void register_io(io_interface *io) {
+		pthread_spin_lock(&lock);
+		// Make sure the index hasn't been set.
+		assert(io->get_io_idx() < 0);
+
+		table.push_back(new io_tracker(io));
+		int idx = table.size() - 1;
+		io->set_io_idx(idx);
+		pthread_spin_unlock(&lock);
+	}
+
+	io_interface *get_io(int idx) {
+		pthread_spin_lock(&lock);
+		assert(idx >= 0);
+		io_interface *io = table[idx]->get();
+		assert(io);
+		assert(io->get_io_idx() == idx);
+		pthread_spin_unlock(&lock);
+		return io;
+	}
+
+	io_interface *allocate_io(int node_id) {
+		pthread_spin_lock(&lock);
+		io_interface *io = NULL;
+		for (unsigned i = 0; i < table.size(); i++) {
+			io_interface *tmp = table[i]->get();
+			if (tmp->get_node_id() == node_id) {
+				io = table[i]->take();
+				if (io)
+					break;
+			}
+		}
+		pthread_spin_unlock(&lock);
+		return io;
+	}
+
+	void release_io(io_interface *io) {
+		pthread_spin_lock(&lock);
+		table[io->get_io_idx()]->release();
+		pthread_spin_unlock(&lock);
+	}
+};
+
+static io_table ios;
 
 int get_num_ios()
 {
-	return io_table.size();
+	return ios.size();
 }
 
 void register_io(io_interface *io)
 {
-	// Make sure the index hasn't been set.
-	assert(io->get_io_idx() < 0);
-
-	io_table.push_back(new io_tracker(io));
-	int idx = io_table.size() - 1;
-	io->set_io_idx(idx);
+	ios.register_io(io);
 }
 
 io_interface *get_io(int idx)
 {
-	assert(idx >= 0);
-	io_interface *io = io_table[idx]->get();
-	assert(io);
-	assert(io->get_io_idx() == idx);
-	return io;
+	return ios.get_io(idx);
 }
 
-io_interface *allocate_io()
+io_interface *allocate_io(int node_id)
 {
-	for (unsigned i = 0; i < io_table.size(); i++) {
-		io_interface *io = io_table[i]->take();
-		if (io)
-			return io;
-	}
-	return NULL;
+	return ios.allocate_io(node_id);
 }
 
 void release_io(io_interface *io)
 {
-	io_table[io->get_io_idx()]->release();
+	ios.release_io(io);
 }
 
 std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
