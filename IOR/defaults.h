@@ -150,5 +150,6 @@ IOR_param_t defaultParameters = {
 	1,				 /* numThreads */
 	1,               /* numNodes */
 	0,               /* threadId */
+	1,               /* nodeId */
 };
 #endif /* not _IOR_DEFAULTS_H */

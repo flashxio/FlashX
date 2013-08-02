@@ -189,6 +189,7 @@ typedef struct
 	int numThreads;					/* the number of threads in a task */
 	int numNodes;
 	int threadId;
+	int nodeId;
 } IOR_param_t;
 
 struct AsyncData

@@ -2624,7 +2624,6 @@ struct ThreadData
 	IOR_param_t *test;
 	int access;
 	int pretendRank;
-	int node_id;
 	IOR_offset_t *offsetArray;
 
 	// output data
@@ -2670,8 +2669,8 @@ AsyncThreadWriteOrRead(void *arg)
 	IOR_offset_t *offsetArray = data->offsetArray;
 	IOR_offset_t pairCnt = 0;
 
-	printf("bind to node %d\n", data->node_id);
-	bind2node_id(data->node_id);
+	printf("bind to node %d\n", data->test->nodeId);
+	bind2node_id(data->test->nodeId);
 
 	struct buf_pool *buf_allocator = create_buf_pool(test->transferSize, INT_MAX, -1);
 	struct buf_pool *cb_allocator = create_buf_pool(sizeof(struct AsyncData), INT_MAX, -1);
@@ -2767,8 +2766,8 @@ SyncThreadWriteOrRead(void *arg)
 	IOR_offset_t *offsetArray = data->offsetArray;
 	IOR_offset_t pairCnt = 0;
 
-	printf("bind to node %d\n", data->node_id);
-	bind2node_id(data->node_id);
+	printf("bind to node %d\n", data->test->nodeId);
+	bind2node_id(data->test->nodeId);
 
 	GetTestFileName(testFileName, test);
 	fd = IOR_Open(testFileName, test);
@@ -2826,8 +2825,6 @@ SyncThreadWriteOrRead(void *arg)
 	return NULL;
 }
 
-int defaultNodeId = 1;
-
 /******************************************************************************/
 /*
  * Write or Read data to file(s).  This loops through the strides, writing
@@ -2859,11 +2856,9 @@ WriteOrRead(IOR_param_t * test,
 	for (i = 0; i < numThreads; i++) {
 		test_array[i] = *test;
 		test_array[i].threadId = i;
-		data[i].test = &test_array[i];
 		if (test->numNodes > 1)
-			data[i].node_id = i % test->numNodes;
-		else
-			data[i].node_id = defaultNodeId;
+			test_array[i].nodeId = i % test->numNodes;
+		data[i].test = &test_array[i];
 		data[i].access = access;
 		data[i].pretendRank = i;
 		assert(test->randomOffset);

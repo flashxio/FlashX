@@ -22,7 +22,7 @@ void *IOR_Create_SSDIO(char *name, IOR_param_t *test)
 	if (test->useO_DIRECT == TRUE)
 		flags |= O_DIRECT;
 	ssd_io_init(name, flags, test->numThreads, test->numNodes);
-	*fdp = ssd_open(name, flags);
+	*fdp = ssd_open(name, test->nodeId, flags);
 	return (void *) fdp;
 }
 
@@ -34,7 +34,8 @@ void *IOR_Open_SSDIO(char *name, IOR_param_t *test)
 	if (test->useO_DIRECT == TRUE)
 		flags |= O_DIRECT;
 	ssd_io_init(name, flags, test->numThreads, test->numNodes);
-	*fdp = ssd_open(name, flags);
+	*fdp = ssd_open(name, test->nodeId, flags);
+	printf("running node: %d, the fd node is %d\n", test->nodeId, ssd_fd_node_id(*fdp));
 	return (void *) fdp;
 }
 
