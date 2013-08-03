@@ -15,6 +15,8 @@ class disk_read_thread
 	blocking_FIFO_queue<io_request> queue;
 	blocking_FIFO_queue<io_request> low_prio_queue;
 	logical_file_partition partition;
+	std::vector<file_mapper *> open_files;
+
 	pthread_t id;
 	async_io *aio;
 	int node_id;
@@ -58,8 +60,16 @@ public:
 		return aio->get_num_local_alloc();
 	}
 
+	const std::string get_file_name() const {
+		logical_file_partition *part = partition.create_file_partition(open_files[0]);
+		std::string name = part->get_file_name(0);
+		delete part;
+		return name;
+	}
+
 	// It open a new file. The mapping is still the same.
 	int open_file(file_mapper *mapper) {
+		open_files.push_back(mapper);
 		logical_file_partition *part = partition.create_file_partition(mapper);
 		int ret = aio->open_file(*part);
 		delete part;

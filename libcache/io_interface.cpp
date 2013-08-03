@@ -153,6 +153,11 @@ struct global_data_collection
 
 static global_data_collection global_data;
 
+const std::vector<disk_read_thread *> &get_read_threads()
+{
+	return global_data.read_threads;
+}
+
 std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 		cache_config *cache_conf, const std::vector<int> &node_id_array,
 		int nthreads, int access_option, long size, bool preload)

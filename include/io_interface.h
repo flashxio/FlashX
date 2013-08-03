@@ -169,4 +169,8 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 		cache_config *cache_conf, const std::vector<int> &node_id_array,
 		int nthreads, int access_option, long size, bool preload);
 
+// This interface is used for debugging.
+class disk_read_thread;
+const std::vector<disk_read_thread *> &get_read_threads();
+
 #endif
