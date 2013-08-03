@@ -8,14 +8,13 @@
 #include "io_c_interface.h"
 #include "aiori.h"
 
+IOR_offset_t GetFileSize(IOR_param_t *test);
+
 void *IOR_Create_SSDIO(char *name, IOR_param_t *test)
 {
 	printf("SSDIO: create and open %s\n", name);
 	printf("use %d threads for IO\n", test->numThreads);
-    IOR_offset_t fileSize = test->blockSize * test->segmentCount;
-    if (test->filePerProc == FALSE) {
-        fileSize *= test->numTasks;
-    }
+    IOR_offset_t fileSize = GetFileSize(test);
 	ssd_create(name, fileSize);
 	int *fdp = (int *) malloc(sizeof(*fdp));
 	int flags = O_RDWR;
@@ -35,7 +34,7 @@ void *IOR_Open_SSDIO(char *name, IOR_param_t *test)
 		flags |= O_DIRECT;
 	ssd_io_init(name, flags, test->numThreads, test->numNodes);
 	*fdp = ssd_open(name, test->nodeId, flags);
-	printf("running node: %d, the fd node is %d\n", test->nodeId, ssd_fd_node_id(*fdp));
+	assert(test->nodeId == ssd_fd_node_id(*fdp));
 	return (void *) fdp;
 }
 

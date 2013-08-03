@@ -1990,7 +1990,7 @@ TestIoSys(IOR_param_t *test)
     /* file size is first calculated on for comparison */
     for (rep = 0; rep < test->repetitions; rep++) {
         test->aggFileSizeFromCalc[rep] = test->blockSize * test->segmentCount *
-                                         test->numTasks;
+                                         test->numTasks * test->numThreads;
     }
 
     /* show test setup */
@@ -2547,6 +2547,18 @@ GetOffsetArraySequential(IOR_param_t *test, int pretendRank)
     return(offsetArray);
 } /* GetOffsetArraySequential() */
 
+IOR_offset_t
+GetFileSize(IOR_param_t *test)
+{
+	IOR_offset_t fileSize;
+
+    fileSize = test->blockSize * test->segmentCount;
+    if (test->filePerProc == FALSE) {
+        fileSize *= test->numTasks * test->numThreads;
+    }
+	return fileSize;
+}
+
 
 IOR_offset_t *
 GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access, long seed)
@@ -2566,10 +2578,7 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access, long seed)
     }
     srandom(seed);
 
-    fileSize = test->blockSize * test->segmentCount;
-    if (test->filePerProc == FALSE) {
-        fileSize *= test->numTasks;
-    }
+	fileSize = GetFileSize(test);
 	printf("file size: %lld\n", fileSize);
 
     /* count needed offsets (pass 1) */
@@ -2580,7 +2589,7 @@ GetOffsetArrayRandom(IOR_param_t *test, int pretendRank, int access, long seed)
 			}
 		}
 	} else {
-		offsets = fileSize / test->transferSize / test->numThreads;
+		offsets = fileSize / test->transferSize;
 	}
 	printf("There are %lld offsets\n", offsets);
 
