@@ -1,11 +1,11 @@
 #include "rand_buf.h"
 #include "container.cpp"
 
-rand_buf::rand_buf(int buf_size, int entry_size,
-		int nodeid): allocator(entry_size, buf_size,
-			buf_size, nodeid)
+rand_buf::rand_buf(int buf_size, int entry_size, int nodeid)
 #ifdef MEMCHECK
-	  , allocator(entry_size)
+	: allocator(entry_size)
+#else
+	: allocator(entry_size, buf_size, buf_size, nodeid)
 #endif
 {
 	this->entry_size = entry_size;

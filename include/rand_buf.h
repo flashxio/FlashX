@@ -12,11 +12,12 @@
  */
 class rand_buf
 {
-	/* where the data read from the disk is stored */
-	slab_allocator allocator;
 	int entry_size;
 #ifdef MEMCHECK
 	aligned_allocator allocator;
+#else
+	/* where the data read from the disk is stored */
+	slab_allocator allocator;
 #endif
 public:
 	rand_buf(int buf_size, int entry_size, int nodeid = -1);
