@@ -12,68 +12,89 @@ IOR_offset_t GetFileSize(IOR_param_t *test);
 
 void *IOR_Create_SSDIO(char *name, IOR_param_t *test)
 {
-	printf("SSDIO: create and open %s\n", name);
+	printf("SSDIO: create and open %s on node %d\n", name, test->nodeId);
 	printf("use %d threads for IO\n", test->numThreads);
     IOR_offset_t fileSize = GetFileSize(test);
 	ssd_create(name, fileSize);
-	int *fdp = (int *) malloc(sizeof(*fdp));
+	ssd_file_desc_t fdp;
 	int flags = O_RDWR;
 	if (test->useO_DIRECT == TRUE)
 		flags |= O_DIRECT;
-	ssd_io_init(name, flags, test->numThreads, test->numNodes);
-	*fdp = ssd_open(name, test->nodeId, flags);
+	int node_ids[test->numNodes];
+	int i;
+	for (i = 0; i < test->numNodes; i++)
+		node_ids[i] = i;
+	ssd_init_io_system(name, node_ids, test->numNodes);
+	if (test->filePerProc) {
+		int suggested_nodes[1] = {test->nodeId};
+		set_cache_size(512 * 1024 * 1024 / test->numThreads);
+		ssd_file_io_init(name, flags, 1, 1, suggested_nodes);
+	}
+	else
+		ssd_file_io_init(name, flags, test->numThreads, test->numNodes, NULL);
+	fdp = ssd_open(name, test->nodeId, flags);
 	return (void *) fdp;
 }
 
 void *IOR_Open_SSDIO(char *name, IOR_param_t *test)
 {
-	printf("SSDIO: open %s\n", name);
-	int *fdp = (int *) malloc(sizeof(*fdp));
+	printf("SSDIO: open %s on node %d\n", name, test->nodeId);
+	ssd_file_desc_t fdp;
 	int flags = O_RDWR;
 	if (test->useO_DIRECT == TRUE)
 		flags |= O_DIRECT;
-	ssd_io_init(name, flags, test->numThreads, test->numNodes);
-	*fdp = ssd_open(name, test->nodeId, flags);
-	assert(test->nodeId == ssd_fd_node_id(*fdp));
+	int node_ids[test->numNodes];
+	int i;
+	for (i = 0; i < test->numNodes; i++)
+		node_ids[i] = i;
+	ssd_init_io_system(name, node_ids, test->numNodes);
+	if (test->filePerProc) {
+		int suggested_nodes[1] = {test->nodeId};
+		set_cache_size(512 * 1024 * 1024 / test->numThreads);
+		ssd_file_io_init(name, flags, 1, 1, suggested_nodes);
+	}
+	else
+		ssd_file_io_init(name, flags, test->numThreads, test->numNodes, NULL);
+	fdp = ssd_open(name, test->nodeId, flags);
+	assert(test->nodeId == ssd_fd_node_id(fdp));
 	return (void *) fdp;
 }
 
 void IOR_SetAsyncCallback_SSDIO(void *file, AsyncCallbackFunc_t func)
 {
-	int fd = *(int *) file;
-	ssd_set_callback(fd, func);
+	ssd_set_callback((ssd_file_desc_t) file, func);
 }
 
 int IOR_AsyncXfer_SSDIO(int access, void *file, IOR_size_t *buffer,
 		IOR_offset_t length, IOR_offset_t offset, IOR_param_t *test,
 		struct AsyncData *data)
 {
-	int fd = *(int *) file;
+	ssd_file_desc_t fdp = (ssd_file_desc_t) file;
 	if (access == READ) {
-		return ssd_aread(fd, (void *) buffer, length, offset, (void *) data);
+		return ssd_aread(fdp, (void *) buffer, length, offset, (void *) data);
 	}
 	else {
-		return ssd_awrite(fd, (void *) buffer, length, offset, (void *) data);
+		return ssd_awrite(fdp, (void *) buffer, length, offset, (void *) data);
 	}
 }
 
 IOR_offset_t IOR_Xfer_SSDIO(int access, void *file, IOR_size_t *buffer,
 		IOR_offset_t length, IOR_offset_t offset, IOR_param_t *test)
 {
-	int fd = *(int *) file;
+	ssd_file_desc_t fdp = (ssd_file_desc_t) file;
 	if (access == READ) {
-		return ssd_read(fd, (void *) buffer, length, offset);
+		return ssd_read(fdp, (void *) buffer, length, offset);
 	}
 	else {
-		return ssd_write(fd, (void *) buffer, length, offset);
+		return ssd_write(fdp, (void *) buffer, length, offset);
 	}
 }
 
 void IOR_Close_SSDIO(void *file, IOR_param_t *test)
 {
 	printf("SSDIO: close file\n");
-	int fd = *(int *) file;
-	ssd_close(fd);
+	ssd_file_desc_t fdp = (ssd_file_desc_t) file;
+	ssd_close(fdp);
 	free(file);
 }
 
