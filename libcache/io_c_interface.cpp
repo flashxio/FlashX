@@ -32,6 +32,11 @@ struct data_fill_struct
 	size_t tot_size;
 };
 
+struct ssd_file_desc
+{
+	io_interface *io;
+};
+
 static void *fill_space(void *arg)
 {
 	struct data_fill_struct *data = (struct data_fill_struct *) arg;
@@ -227,34 +232,37 @@ int ssd_create(const char *name, size_t tot_size)
 	return 0;
 }
 
-int ssd_open(const char *name, int node_id, int flags)
+ssd_file_desc_t ssd_open(const char *name, int node_id, int flags)
 {
 	io_interface *io = allocate_io(std::string(name), node_id);
 	assert(io);
-	return io->get_io_idx();
+	ssd_file_desc_t desc = new struct ssd_file_desc;
+	desc->io = io;
+	return desc;
 }
 
-ssize_t ssd_read(int fd, void *buf, size_t count, off_t off)
+ssize_t ssd_read(ssd_file_desc_t fd, void *buf, size_t count, off_t off)
 {
-	io_interface *io = get_io(fd);
+	io_interface *io = fd->io;
 	io_status status = io->access((char *) buf, off, count, READ);
 	assert(status == IO_OK);
 	return status.get_priv_data();
 }
 
-ssize_t ssd_write(int fd, void *buf, size_t count, off_t off)
+ssize_t ssd_write(ssd_file_desc_t fd, void *buf, size_t count, off_t off)
 {
-	io_interface *io = get_io(fd);
+	io_interface *io = fd->io;
 	io_status status = io->access((char *) buf, off, count, WRITE);
 	assert(status == IO_OK);
 	return status.get_priv_data();
 }
 
-int ssd_close(int fd)
+int ssd_close(ssd_file_desc_t fd)
 {
-	io_interface *io = get_io(fd);
+	io_interface *io = fd->io;
 	io->cleanup();
 	release_io(io);
+	// TODO I need to free the space of fd.
 	return 0;
 }
 
@@ -288,17 +296,17 @@ size_t ssd_get_filesize(const char *name)
 	return tot_size;
 }
 
-void ssd_set_callback(int fd, ssd_callback_func_t cb)
+void ssd_set_callback(ssd_file_desc_t fd, ssd_callback_func_t cb)
 {
-	io_interface *io = get_io(fd);
+	io_interface *io = fd->io;
 	assert(io->support_aio());
 	io->set_callback(new user_callback(cb));
 }
 
-ssize_t ssd_aread(int fd, void *buf, size_t count, off_t off,
+ssize_t ssd_aread(ssd_file_desc_t fd, void *buf, size_t count, off_t off,
 		void *callback_data)
 {
-	io_interface *io = get_io(fd);
+	io_interface *io = fd->io;
 	assert(io->support_aio());
 	io_request req(true);
 	req.init((char *) buf, off, count, READ, io, io->get_node_id());
@@ -307,10 +315,10 @@ ssize_t ssd_aread(int fd, void *buf, size_t count, off_t off,
 	return 0;
 }
 
-ssize_t ssd_awrite(int fd, void *buf, size_t count, off_t off,
+ssize_t ssd_awrite(ssd_file_desc_t fd, void *buf, size_t count, off_t off,
 		void *callback_data)
 {
-	io_interface *io = get_io(fd);
+	io_interface *io = fd->io;
 	assert(io->support_aio());
 	io_request req(true);
 	req.init((char *) buf, off, count, WRITE, io, io->get_node_id());
@@ -319,9 +327,9 @@ ssize_t ssd_awrite(int fd, void *buf, size_t count, off_t off,
 	return 0;
 }
 
-int ssd_fd_node_id(int fd)
+int ssd_fd_node_id(ssd_file_desc_t fd)
 {
-	io_interface *io = get_io(fd);
+	io_interface *io = fd->io;
 	return io->get_node_id();
 }
 
