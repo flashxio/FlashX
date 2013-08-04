@@ -148,7 +148,7 @@ public:
 	}
 };
 
-io_interface *allocate_io(int node_id);
+io_interface *allocate_io(const std::string &file_name, int node_id);
 void release_io(io_interface *io);
 io_interface *get_io(int idx);
 int get_num_ios();
@@ -168,6 +168,8 @@ class cache_config;
 std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 		cache_config *cache_conf, const std::vector<int> &node_id_array,
 		int nthreads, int access_option, long size, bool preload);
+void init_io_system(const RAID_config &raid_conf,
+		const std::vector<int> &node_id_array);
 
 // This interface is used for debugging.
 class disk_read_thread;

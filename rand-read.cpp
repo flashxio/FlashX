@@ -307,14 +307,11 @@ int main(int argc, char *argv[])
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size, SA_min_cell_size);
 	params.init(RAID_block_size, SA_min_cell_size, (int) (hit_ratio * 100));
 
-	std::vector<file_info> files;
-	int num_files = retrieve_data_files(file_file, files);
 	int flags = O_RDWR;
 	if (access_option != READ_ACCESS) {
 		printf("file is opened with direct I/O\n");
 		flags |= O_DIRECT;
 	}
-	printf("There are %d data files\n", num_files);
 
 	if (nthreads > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
@@ -326,7 +323,7 @@ int main(int argc, char *argv[])
 	long start;
 	long end = 0;
 
-	RAID_config raid_conf(files, RAID_mapping_option, RAID_block_size);
+	RAID_config raid_conf(file_file, RAID_mapping_option, RAID_block_size);
 
 	std::set<int> node_ids = raid_conf.get_node_ids();
 	// In this way, we can guarantee that the cache is created
@@ -356,6 +353,7 @@ int main(int argc, char *argv[])
 //				node_id_array, mapper, 2);
 	}
 
+	init_io_system(raid_conf, node_id_array);
 	std::vector<io_interface *> ios = create_ios(raid_conf, cache_conf,
 			node_id_array, nthreads, access_option, npages * PAGE_SIZE, preload);
 	for (unsigned int j = 0; j < ios.size(); j++) {

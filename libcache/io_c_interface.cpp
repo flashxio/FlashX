@@ -21,6 +21,9 @@ static int cache_type = ASSOCIATIVE_CACHE;
 static int RAID_mapping_option = RAID0;
 static int RAID_block_size = 16;		// in the number of pages.
 
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static std::set<std::string> opened_files;
+
 struct data_fill_struct
 {
 	pthread_t tid;
@@ -110,29 +113,48 @@ void set_RAID_block_size(int num_pages)
 	RAID_block_size = num_pages;
 }
 
-void ssd_io_init(const char *name, int flags, int num_threads, int num_nodes)
+void ssd_init_io_system(const char *name, int *node_ids, int num_nodes)
 {
-	static atomic_unsigned_integer has_init;
+	// Init RAID configuration.
+	RAID_config raid_conf(name, RAID_mapping_option, RAID_block_size);
+	std::vector<int> node_id_array;
+	for (int i = 0; i < num_nodes; i++)
+		node_id_array.push_back(node_ids[i]);
+	init_io_system(raid_conf, node_id_array);
+}
 
-	// this is the first time it is called.
-	if (has_init.inc(1) == 1) {
-		printf("Init SSDIO with %d threads and %d nodes\n",
-				num_threads, num_nodes);
-		int access_option = GLOBAL_CACHE_ACCESS;
-		if (flags & O_DIRECT) {
-			printf("use remote access\n");
-			access_option = REMOTE_ACCESS;
-		}
-		else {
-			printf("use global cached IO\n");
-		}
+void ssd_file_io_init(const char *name, int flags, int num_threads, int num_nodes,
+		int *suggested_nodes)
+{
+	pthread_mutex_lock(&mutex);
+	if (opened_files.find(name) != opened_files.end()) {
+		pthread_mutex_unlock(&mutex);
+		return;
+	}
+	opened_files.insert(name);
 
-		// Init RAID configuration.
-		std::vector<file_info> files;
-		int num_files = retrieve_data_files(name, files);
-		printf("There are %d data files\n", num_files);
-		RAID_config raid_conf(files, RAID_mapping_option, RAID_block_size);
+	printf("Init SSDIO with %d threads and %d nodes\n",
+			num_threads, num_nodes);
+	int access_option = GLOBAL_CACHE_ACCESS;
+	if (flags & O_DIRECT) {
+		printf("use remote access\n");
+		access_option = REMOTE_ACCESS;
+	}
+	else {
+		printf("use global cached IO\n");
+	}
 
+	// Init RAID configuration.
+	RAID_config raid_conf(name, RAID_mapping_option, RAID_block_size);
+
+	std::vector<int> node_id_array;
+	// Users can suggest nodes where the IO should be. It make sense for cached IO
+	// because we are going to place cache on those nodes.
+	if (suggested_nodes) {
+		for (int i = 0; i < num_nodes; i++)
+			node_id_array.push_back(suggested_nodes[i]);
+	}
+	else {
 		// Init node id array.
 		std::set<int> node_ids = raid_conf.get_node_ids();
 		// In this way, we can guarantee that the cache is created
@@ -140,31 +162,32 @@ void ssd_io_init(const char *name, int flags, int num_threads, int num_nodes)
 		for (int i = 0; i < num_nodes
 				&& node_ids.size() < (unsigned) num_nodes; i++)
 			node_ids.insert(i);
-		std::vector<int> node_id_array;
 		// We only get a specified number of nodes.
 		for (std::set<int>::const_iterator it = node_ids.begin();
 				it != node_ids.end() && (int) node_id_array.size() < num_nodes; it++)
 			node_id_array.push_back(*it);
-		printf("There are %ld nodes\n", node_id_array.size());
-
-		// Init cache configuration.
-		cache_config *cache_conf = NULL;
-		if (access_option == GLOBAL_CACHE_ACCESS)
-			cache_conf = new even_cache_config(cache_size, cache_type,
-					node_id_array);
-		else if (access_option == PART_GLOBAL_ACCESS) {
-			assert(num_nodes == 4);
-			cache_conf = new test_cache_config(cache_size, cache_type,
-					node_id_array);
-		}
-
-		create_ios(raid_conf, cache_conf, node_id_array, num_threads, access_option,
-				0, false);
 	}
+	printf("There are %ld nodes\n", node_id_array.size());
+
+	// Init cache configuration.
+	cache_config *cache_conf = NULL;
+	if (access_option == GLOBAL_CACHE_ACCESS)
+		cache_conf = new even_cache_config(cache_size, cache_type,
+				node_id_array);
+	else if (access_option == PART_GLOBAL_ACCESS) {
+		assert(num_nodes == 4);
+		cache_conf = new test_cache_config(cache_size, cache_type,
+				node_id_array);
+	}
+
+	create_ios(raid_conf, cache_conf, node_id_array, num_threads, access_option,
+			0, false);
+	pthread_mutex_unlock(&mutex);
 }
 
 int ssd_create(const char *name, size_t tot_size)
 {
+	printf("create %s, size: %ld\n", name, tot_size);
 	std::vector<file_info> files;
 	retrieve_data_files(name, files);
 	size_t file_size = tot_size / files.size();
@@ -206,7 +229,8 @@ int ssd_create(const char *name, size_t tot_size)
 
 int ssd_open(const char *name, int node_id, int flags)
 {
-	io_interface *io = allocate_io(node_id);
+	io_interface *io = allocate_io(std::string(name), node_id);
+	assert(io);
 	return io->get_io_idx();
 }
 

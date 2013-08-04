@@ -391,7 +391,7 @@ global_cached_io::global_cached_io(io_interface *underlying): io_interface(
 }
 
 global_cached_io::global_cached_io(io_interface *underlying,
-		cache_config *config): io_interface(
+		page_cache *cache): io_interface(
 			underlying->get_node_id()), pending_requests(
 			INIT_GCACHE_PENDING_SIZE), req_allocator(sizeof(io_request) * 1024)
 {
@@ -400,12 +400,9 @@ global_cached_io::global_cached_io(io_interface *underlying,
 	num_accesses = 0;
 	this->underlying = underlying;
 	num_waits = 0;
-	this->cache_size = config->get_size();
+	this->cache_size = cache->size();
 	underlying->set_callback(new access_page_callback(this));
-	if (global_cache == NULL) {
-		printf("Create cache on %d nodes\n", config->get_num_caches());
-		global_cache = config->create_cache();
-	}
+	global_cache = cache;
 	pthread_mutex_init(&sync_mutex, NULL);
 	pthread_cond_init(&sync_cond, NULL);
 	wait_req = NULL;
@@ -1033,5 +1030,3 @@ int global_cached_io::preload(off_t start, long size) {
 	}
 	return 0;
 }
-
-page_cache *global_cached_io::global_cache;

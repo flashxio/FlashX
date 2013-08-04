@@ -14,14 +14,18 @@ enum {
 
 class RAID_config
 {
+	std::string conf_file;
 	int RAID_mapping_option;
 	int RAID_block_size;
 	std::vector<file_info> files;
 public:
-	RAID_config(std::vector<file_info> &files, int mapping_option, int block_size) {
+	RAID_config(const std::string &conf_file, int mapping_option, int block_size) {
+		this->conf_file = conf_file;
+		retrieve_data_files(conf_file, files);
+		printf("there are %ld files\n", files.size());
+
 		RAID_mapping_option = mapping_option;
 		RAID_block_size = block_size;
-		this->files = files;
 	}
 
 	file_mapper *create_file_mapper() const;
@@ -33,6 +37,10 @@ public:
 
 	const file_info &get_file(int idx) const {
 		return files[idx];
+	}
+
+	const std::string &get_conf_file() const {
+		return conf_file;
 	}
 };
 

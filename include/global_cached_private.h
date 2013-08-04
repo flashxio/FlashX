@@ -50,7 +50,7 @@ class global_cached_io: public io_interface
 {
 	int num_waits;
 	long cache_size;
-	static page_cache *global_cache;
+	page_cache *global_cache;
 	/* the underlying IO. */
 	io_interface *underlying;
 	callback *cb;
@@ -90,7 +90,7 @@ class global_cached_io: public io_interface
 		std::vector<thread_safe_page *> &dirty_pages);
 public:
 	global_cached_io(io_interface *underlying);
-	global_cached_io(io_interface *, cache_config *config);
+	global_cached_io(io_interface *, page_cache *cache);
 
 	virtual page_cache *get_global_cache() {
 		return global_cache;
