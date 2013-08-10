@@ -204,10 +204,18 @@ std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
 	if (access_option == GLOBAL_CACHE_ACCESS
 			|| access_option == PART_GLOBAL_ACCESS
 			|| access_option == REMOTE_ACCESS) {
-		assert(global_data.read_threads.size() > node_id_array.size());
+		assert(global_data.read_threads.size() >= node_id_array.size());
 		assert((int) global_data.read_threads.size() == num_files);
 		for (int i = 0; i < num_files; i++) {
 			global_data.read_threads[i]->open_file(mapper);
+		}
+
+		// We have to make sure the nodes where IOs are going to create
+		// has I/O complete threads.
+		for (unsigned i = 0; i < node_id_array.size(); i++) {
+			int node_id = node_id_array[i];
+			assert(global_data.complete_threads.find(node_id)
+					!= global_data.complete_threads.end());
 		}
 	}
 	pthread_mutex_unlock(&global_data.mutex);
