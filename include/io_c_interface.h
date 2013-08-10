@@ -41,7 +41,6 @@ void destroy_buf_pool(struct buf_pool *pool);
 size_t ssd_get_filesize(const char *name);
 void set_cache_size(long size);
 void set_cache_type(int type);
-void set_RAID_mapping_option(int option);
 void set_RAID_block_size(int num_pages);
 
 #endif

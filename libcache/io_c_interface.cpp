@@ -18,7 +18,6 @@ extern "C" {
 
 static long cache_size = 512 * 1024 * 1024;
 static int cache_type = ASSOCIATIVE_CACHE;
-static int RAID_mapping_option = RAID0;
 static int RAID_block_size = 16;		// in the number of pages.
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -108,11 +107,6 @@ void set_cache_type(int type)
 	cache_type = type;
 }
 
-void set_RAID_mapping_option(int option)
-{
-	RAID_mapping_option = option;
-}
-
 void set_RAID_block_size(int num_pages)
 {
 	RAID_block_size = num_pages;
@@ -121,6 +115,11 @@ void set_RAID_block_size(int num_pages)
 void ssd_init_io_system(const char *name, int *node_ids, int num_nodes)
 {
 	// Init RAID configuration.
+	int RAID_mapping_option;
+	if (num_nodes == 1)
+		RAID_mapping_option = RAID0;
+	else
+		RAID_mapping_option = HASH;
 	RAID_config raid_conf(name, RAID_mapping_option, RAID_block_size);
 	std::vector<int> node_id_array;
 	for (int i = 0; i < num_nodes; i++)
@@ -150,6 +149,11 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 	}
 
 	// Init RAID configuration.
+	int RAID_mapping_option;
+	if (num_nodes == 1)
+		RAID_mapping_option = RAID0;
+	else
+		RAID_mapping_option = HASH;
 	RAID_config raid_conf(name, RAID_mapping_option, RAID_block_size);
 
 	std::vector<int> node_id_array;
