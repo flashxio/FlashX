@@ -172,7 +172,6 @@ void init_io_system(const RAID_config &raid_conf,
 		const std::vector<int> &node_id_array);
 
 // This interface is used for debugging.
-class disk_read_thread;
-const std::vector<disk_read_thread *> &get_read_threads();
+void print_io_thread_stat();
 
 #endif

@@ -33,8 +33,6 @@
 #include "cache.h"
 #include "cache_config.h"
 
-#include "disk_read_thread.h"
-
 //#define USE_PROCESS
 
 #define GC_SIZE 10000
@@ -453,19 +451,6 @@ int main(int argc, char *argv[])
 		threads[i]->print_stat();
 	}
 #ifdef STATISTICS
-	const std::vector<disk_read_thread *> read_threads = get_read_threads();
-	for (int i = 0; i < num_files; i++) {
-		disk_read_thread *t = read_threads[i];
-		if (t)
-			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits, complete %d reqs and %d low-prio reqs, process %d remote read requests\n",
-					read_threads[i]->get_file_name().c_str(),
-					read_threads[i]->get_queue()->get_num_empty(),
-					read_threads[i]->get_queue()->get_num_full(),
-					read_threads[i]->get_num_accesses(),
-					read_threads[i]->get_num_iowait(),
-					read_threads[i]->get_num_completed_reqs(),
-					read_threads[i]->get_num_low_prio_accesses(),
-					read_threads[i]->get_num_local_alloc());
-	}
+	print_io_thread_stat();
 #endif
 }
