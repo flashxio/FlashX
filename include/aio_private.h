@@ -99,9 +99,6 @@ class async_io: public io_interface
 	struct aio_ctx *ctx;
 	callback *cb;
 	const int AIO_DEPTH;
-	// This is for allocating memory in the case that the memory given
-	// by the user isn't in the local NUMA node.
-	slab_allocator allocator;
 	callback_allocator cb_allocator;
 	std::tr1::unordered_map<int, aio_complete_sender *> complete_senders;
 	std::tr1::unordered_map<int, fifo_queue<thread_callback_s *> *> remote_tcbs;

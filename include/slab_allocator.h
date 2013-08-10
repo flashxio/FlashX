@@ -113,6 +113,7 @@ private:
 	linked_obj_list list;
 	// the current size of memory used by the allocator.
 	long curr_size;
+	bool init;
 
 	std::vector<char *> alloc_bufs;
 
@@ -129,12 +130,13 @@ private:
 #endif
 public:
 	slab_allocator(int _obj_size, long _increase_size, long _max_size,
-			int _node_id = -1): obj_size(_obj_size), increase_size(
+			int _node_id = -1, bool init = false): obj_size(_obj_size), increase_size(
 				_increase_size), max_size(_max_size), node_id(_node_id)
 #ifdef MEMCHECK
 		, allocator(obj_size)
 #endif
 	{
+		this->init = init;
 		curr_size = 0;
 		assert((unsigned) obj_size >= sizeof(linked_obj));
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
@@ -225,7 +227,7 @@ public:
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
 				)): slab_allocator(sizeof(T) + sizeof(slab_allocator::linked_obj),
-				increase_size, max_size) {
+				increase_size, max_size, -1, true) {
 		assert(increase_size <= max_size);
 		this->initiator = initiator;
 	}

@@ -36,8 +36,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 async_io::async_io(const logical_file_partition &partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 		int aio_depth_per_file, int node_id): io_interface(node_id), AIO_DEPTH(
-			aio_depth_per_file * partition.get_num_files()), allocator(PAGE_SIZE,
-				AIO_DEPTH * PAGE_SIZE, INT_MAX, node_id), cb_allocator(
+			aio_depth_per_file * partition.get_num_files()), cb_allocator(
 					AIO_DEPTH * sizeof(thread_callback_s))
 {
 	printf("aio is used\n");
