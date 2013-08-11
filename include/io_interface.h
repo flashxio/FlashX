@@ -148,10 +148,39 @@ public:
 	}
 };
 
+/**
+ * The interface of creating IOs to access a file.
+ */
+class file_io_factory
+{
+	// The name of the file.
+	const std::string name;
+public:
+	file_io_factory(const std::string _name): name(_name) {
+	}
+
+	const std::string &get_name() const {
+		return name;
+	}
+
+	virtual io_interface *create_io(int node_id) = 0;
+	virtual void destroy_io(io_interface *) = 0;
+};
+
+class RAID_config;
+class cache_config;
+
+std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
+		cache_config *cache_conf, const std::vector<int> &node_id_array,
+		int nthreads, int access_option, long size, bool preload);
 io_interface *allocate_io(const std::string &file_name, int node_id);
 void release_io(io_interface *io);
+
+file_io_factory *create_io_factory(const RAID_config &raid_conf,
+		const std::vector<int> &node_id_array, const int access_option,
+		const int io_depth = 0, const cache_config *cache_conf = NULL);
+
 io_interface *get_io(int idx);
-int get_num_ios();
 
 enum {
 	READ_ACCESS,
@@ -162,12 +191,6 @@ enum {
 	PART_GLOBAL_ACCESS,
 };
 
-class RAID_config;
-class cache_config;
-
-std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
-		cache_config *cache_conf, const std::vector<int> &node_id_array,
-		int nthreads, int access_option, long size, bool preload);
 void init_io_system(const RAID_config &raid_conf,
 		const std::vector<int> &node_id_array);
 

@@ -121,11 +121,6 @@ public:
 
 static io_table ios;
 
-int get_num_ios()
-{
-	return ios.size();
-}
-
 void register_io(const std::string &file_name, io_interface *io)
 {
 	ios.register_io(file_name, io);
@@ -148,6 +143,13 @@ void release_io(io_interface *io)
 	ios.release_io(io);
 }
 
+/**
+ * This global data collection is very static.
+ * Once the data is initialized, no data needs to be changed.
+ * The mutex is to used only at the initialization.
+ * As long as all threads call init_io_system() first before using
+ * the global data, they will all see the complete global data.
+ */
 struct global_data_collection
 {
 	std::vector<disk_read_thread *> read_threads;
@@ -168,6 +170,13 @@ void init_io_system(const RAID_config &raid_conf,
 	file_mapper *mapper = raid_conf.create_file_mapper();
 	int num_files = mapper->get_num_files();
 
+	/* 
+	 * The mutex is enough to guarantee that all threads will see initialized
+	 * global data. The first thread that enters the critical area will
+	 * initialize the global data. If another thread tries to run the code,
+	 * it will be blocked by the mutex. When a thread is returned from
+	 * the function, they all can see the global data.
+	 */
 	pthread_mutex_lock(&global_data.mutex);
 	// The global data hasn't been initialized.
 	if (global_data.read_threads.size() == 0) {
@@ -191,122 +200,253 @@ void init_io_system(const RAID_config &raid_conf,
 	pthread_mutex_unlock(&global_data.mutex);
 }
 
-std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
-		cache_config *cache_conf, const std::vector<int> &node_id_array,
-		int nthreads, int access_option, long size, bool preload)
+class posix_io_factory: public file_io_factory
 {
-	int num_nodes = node_id_array.size();
-	assert(num_nodes <= nthreads && nthreads % num_nodes == 0);
-	file_mapper *mapper = raid_conf.create_file_mapper();
-	int num_files = mapper->get_num_files();
-
-	pthread_mutex_lock(&global_data.mutex);
-	if (access_option == GLOBAL_CACHE_ACCESS
-			|| access_option == PART_GLOBAL_ACCESS
-			|| access_option == REMOTE_ACCESS) {
-		assert(global_data.read_threads.size() >= node_id_array.size());
-		assert((int) global_data.read_threads.size() == num_files);
-		for (int i = 0; i < num_files; i++) {
-			global_data.read_threads[i]->open_file(mapper);
-		}
-
-		// We have to make sure the nodes where IOs are going to create
-		// has I/O complete threads.
-		for (unsigned i = 0; i < node_id_array.size(); i++) {
-			int node_id = node_id_array[i];
-			assert(global_data.complete_threads.find(node_id)
-					!= global_data.complete_threads.end());
-		}
+	int access_option;
+	RAID_config raid_conf;
+public:
+	posix_io_factory(const RAID_config &_raid_conf,
+			int access_option): file_io_factory(
+				_raid_conf.get_conf_file()), raid_conf(_raid_conf) {
+		this->access_option = access_option;
 	}
-	pthread_mutex_unlock(&global_data.mutex);
 
-	// TODO the number of threads shouldn't be a global variable.
-	if (access_option == PART_GLOBAL_ACCESS)
+	virtual io_interface *create_io(int node_id);
+
+	virtual void destroy_io(io_interface *io) {
+	}
+};
+
+class aio_factory: public file_io_factory
+{
+	int io_depth_per_file;
+	RAID_config raid_conf;
+public:
+	aio_factory(const RAID_config &_raid_conf,
+			int io_depth_per_file): file_io_factory(
+				_raid_conf.get_conf_file()), raid_conf(_raid_conf) {
+		this->io_depth_per_file = io_depth_per_file;
+	}
+
+	virtual io_interface *create_io(int node_id);
+
+	virtual void destroy_io(io_interface *io) {
+	}
+};
+
+class remote_io_factory: public file_io_factory
+{
+protected:
+	file_mapper *mapper;
+	RAID_config raid_conf;
+public:
+	remote_io_factory(const RAID_config &raid_conf,
+			const std::vector<int> &node_id_array);
+
+	virtual io_interface *create_io(int node_id);
+
+	virtual void destroy_io(io_interface *io) {
+	}
+};
+
+class global_cached_io_factory: public remote_io_factory
+{
+	const cache_config *cache_conf;
+	page_cache *global_cache;
+public:
+	global_cached_io_factory(const RAID_config &raid_conf,
+			const std::vector<int> &node_id_array,
+			const cache_config *cache_conf): remote_io_factory(
+				raid_conf, node_id_array) {
+		this->cache_conf = cache_conf;
+		global_cache = cache_conf->create_cache();
+	}
+
+	virtual io_interface *create_io(int node_id);
+
+	virtual void destroy_io(io_interface *io) {
+	}
+};
+
+class part_global_cached_io_factory: public remote_io_factory
+{
+	const cache_config *cache_conf;
+	atomic_integer counter;
+	int num_nodes;
+public:
+	part_global_cached_io_factory(const RAID_config &raid_conf,
+			const std::vector<int> &node_id_array,
+			const cache_config *cache_conf, int nthreads): remote_io_factory(
+				raid_conf, node_id_array) {
+		this->cache_conf = cache_conf;
+		this->num_nodes = node_id_array.size();
+		// TODO the number of threads shouldn't be a global variable.
 		part_global_cached_io::set_num_threads(nthreads);
 
+	}
+
+	virtual io_interface *create_io(int node_id);
+
+	virtual void destroy_io(io_interface *io) {
+	}
+};
+
+io_interface *posix_io_factory::create_io(int node_id)
+{
+	file_mapper *mapper = raid_conf.create_file_mapper();
+	int num_files = mapper->get_num_files();
 	std::vector<int> indices;
 	for (int i = 0; i < num_files; i++)
 		indices.push_back(i);
 	// The partition contains all files.
 	logical_file_partition global_partition(indices, mapper);
 
-	page_cache *global_cache = NULL;
-	if (access_option == GLOBAL_CACHE_ACCESS) {
-		printf("Create cache on %d nodes\n", cache_conf->get_num_caches());
-		global_cache = cache_conf->create_cache();
+	io_interface *io;
+	switch (access_option) {
+		case READ_ACCESS:
+			io = new buffered_io(global_partition, node_id);
+			break;
+		case DIRECT_ACCESS:
+			io = new direct_io(global_partition, node_id);
+			break;
+		default:
+			fprintf(stderr, "a wrong posix access option\n");
+			abort();
+	}
+	register_io(raid_conf.get_conf_file(), io);
+	return io;
+}
+
+io_interface *aio_factory::create_io(int node_id)
+{
+	file_mapper *mapper = raid_conf.create_file_mapper();
+	int num_files = mapper->get_num_files();
+	std::vector<int> indices;
+	for (int i = 0; i < num_files; i++)
+		indices.push_back(i);
+	// The partition contains all files.
+	logical_file_partition global_partition(indices, mapper);
+
+	io_interface *io;
+	std::tr1::unordered_map<int, aio_complete_thread *> no_complete_threads;
+	io = new async_io(global_partition, no_complete_threads,
+			io_depth_per_file, node_id);
+	register_io(raid_conf.get_conf_file(), io);
+	return io;
+}
+
+remote_io_factory::remote_io_factory(const RAID_config &_raid_conf,
+		const std::vector<int> &node_id_array): file_io_factory(
+			_raid_conf.get_conf_file()), raid_conf(_raid_conf)
+{
+	init_io_system(raid_conf, node_id_array);
+
+	mapper = raid_conf.create_file_mapper();
+	int num_files = mapper->get_num_files();
+	assert(global_data.read_threads.size() >= node_id_array.size());
+	assert((int) global_data.read_threads.size() == num_files);
+
+	for (int i = 0; i < num_files; i++) {
+		global_data.read_threads[i]->open_file(mapper);
 	}
 
+	// We have to make sure the nodes where IOs are going to create
+	// has I/O complete threads.
+	for (unsigned i = 0; i < node_id_array.size(); i++) {
+		int node_id = node_id_array[i];
+		assert(global_data.complete_threads.find(node_id)
+				!= global_data.complete_threads.end());
+	}
+}
+
+io_interface *remote_io_factory::create_io(int node_id)
+{
+	int num_files = mapper->get_num_files();
+	io_interface *io = new remote_disk_access(global_data.read_threads.data(),
+			global_data.complete_threads[node_id], num_files, mapper, node_id);
+	register_io(raid_conf.get_conf_file(), io);
+	return io;
+}
+
+io_interface *global_cached_io_factory::create_io(int node_id)
+{
+	int num_files = mapper->get_num_files();
+	io_interface *underlying = new remote_disk_access(
+			global_data.read_threads.data(),
+			global_data.complete_threads[node_id],
+			num_files, mapper, node_id);
+	global_cached_io *io = new global_cached_io(underlying,
+			global_cache);
+	register_io(raid_conf.get_conf_file(), io);
+	return io;
+}
+
+io_interface *part_global_cached_io_factory::create_io(int node_id)
+{
+	int num_files = mapper->get_num_files();
+	io_interface *underlying = new remote_disk_access(
+			global_data.read_threads.data(),
+			global_data.complete_threads[node_id],
+			num_files, mapper, node_id);
+	part_global_cached_io *io = new part_global_cached_io(
+			// The idx should start with 0.
+			// TODO But I should remove this argument.
+			num_nodes, underlying, counter.inc(1) - 1, cache_conf);
+	register_io(raid_conf.get_conf_file(), io);
+	return io;
+}
+
+std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
+		cache_config *cache_conf, const std::vector<int> &node_id_array,
+		int nthreads, int access_option, long size, bool preload)
+{
 	std::vector<io_interface *> ios;
+	int io_depth = AIO_DEPTH_PER_FILE / nthreads;
+	if (io_depth == 0)
+		io_depth = 1;
+	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
+			access_option, io_depth, cache_conf);
+	int num_nodes = node_id_array.size();
 	int nthreads_per_node = nthreads / num_nodes;
 	for (int i = 0, j = 0; i < num_nodes; i++) {
 		int node_id = node_id_array[i];
 		for (int k = 0; k < nthreads_per_node; k++, j++) {
-			io_interface *io;
-			switch (access_option) {
-				case READ_ACCESS:
-					io = new buffered_io(global_partition, node_id);
-					register_io(raid_conf.get_conf_file(), io);
-					ios.push_back(io);
-					break;
-				case DIRECT_ACCESS:
-					io = new direct_io(global_partition, node_id);
-					register_io(raid_conf.get_conf_file(), io);
-					ios.push_back(io);
-					break;
-				case AIO_ACCESS:
-					{
-						int depth_per_file = AIO_DEPTH_PER_FILE / nthreads;
-						if (depth_per_file == 0)
-							depth_per_file = 1;
-						std::tr1::unordered_map<int, aio_complete_thread *> no_complete_threads;
-						io = new async_io(global_partition, no_complete_threads,
-								depth_per_file, node_id);
-						register_io(raid_conf.get_conf_file(), io);
-						ios.push_back(io);
-					}
-					break;
-				case REMOTE_ACCESS:
-					io = new remote_disk_access(global_data.read_threads.data(),
-							global_data.complete_threads[node_id], num_files,
-							mapper, node_id);
-					register_io(raid_conf.get_conf_file(), io);
-					ios.push_back(io);
-					break;
-				case GLOBAL_CACHE_ACCESS:
-					{
-						io_interface *underlying = new remote_disk_access(
-								global_data.read_threads.data(),
-								global_data.complete_threads[node_id],
-								num_files, mapper, node_id);
-						global_cached_io *io = new global_cached_io(underlying,
-								global_cache);
-						if (preload && j == 0)
-							io->preload(0, size);
-						register_io(raid_conf.get_conf_file(), io);
-						ios.push_back(io);
-					}
-					break;
-				case PART_GLOBAL_ACCESS:
-					{
-						io_interface *underlying = new remote_disk_access(
-								global_data.read_threads.data(),
-								global_data.complete_threads[node_id],
-								num_files, mapper, node_id);
-						part_global_cached_io *io = new part_global_cached_io(
-								num_nodes, underlying, j, cache_conf);
-						if (preload && j == 0)
-							io->preload(0, size);
-						register_io(raid_conf.get_conf_file(), io);
-						ios.push_back(io);
-					}
-					break;
-				default:
-					fprintf(stderr, "wrong access option\n");
-					exit(1);
-			}
+			ios.push_back(factory->create_io(node_id));
 		}
 	}
+	delete factory;
+
 	return ios;
+}
+
+file_io_factory *create_io_factory(const RAID_config &raid_conf,
+		const std::vector<int> &node_id_array, const int access_option,
+		const int io_depth, const cache_config *cache_conf)
+{
+	switch (access_option) {
+		case READ_ACCESS:
+		case DIRECT_ACCESS:
+			return new posix_io_factory(raid_conf, access_option);
+		case AIO_ACCESS:
+			assert(io_depth > 0);
+			return new aio_factory(raid_conf, io_depth);
+		case REMOTE_ACCESS:
+			return new remote_io_factory(raid_conf, node_id_array);
+		case GLOBAL_CACHE_ACCESS:
+			assert(cache_conf);
+			return new global_cached_io_factory(raid_conf, node_id_array,
+					cache_conf);
+#if 0
+		case PART_GLOBAL_ACCESS:
+			assert(cache_conf);
+			return new part_global_cached_io_factory(raid_conf,
+					node_id_array, cache_conf, nthreads);
+#endif
+		default:
+			fprintf(stderr, "a wrong access option\n");
+			abort();
+	}
+	return NULL;
 }
 
 void print_io_thread_stat()

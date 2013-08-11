@@ -58,7 +58,7 @@ class part_global_cached_io: public global_cached_io
 	int group_idx;
 	struct thread_group *local_group;
 
-	cache_config *cache_conf;
+	const cache_config *cache_conf;
 	blocking_FIFO_queue<io_reply> *reply_queue;
 	io_reply local_reply_buf[REPLY_BUF_SIZE];
 	io_request local_req_buf[REQ_BUF_SIZE];
@@ -107,7 +107,7 @@ public:
 	int init();
 
 	part_global_cached_io(int num_groups, io_interface *underlying,
-			int idx, cache_config *config);
+			int idx, const cache_config *config);
 
 	virtual page_cache *get_global_cache() {
 		return groups[group_idx].cache;

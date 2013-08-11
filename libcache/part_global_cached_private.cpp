@@ -354,7 +354,7 @@ int part_global_cached_io::init() {
 
 part_global_cached_io::part_global_cached_io(int num_groups,
 		io_interface *underlying, int idx,
-		cache_config *config): global_cached_io(underlying->clone()) {
+		const cache_config *config): global_cached_io(underlying->clone()) {
 	processed_requests = 0;;
 	sent_requests = 0;
 	processed_replies = 0;
