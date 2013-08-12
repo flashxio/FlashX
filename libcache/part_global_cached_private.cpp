@@ -321,7 +321,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 
 	/* assign a thread to a group. */
 	struct thread_group *group = &groups[group_idx];
-	group->ios.push_back(this);
 	this->local_group = group;
 	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
 			// We don't want that adding replies is blocked, so we allow
@@ -429,38 +428,15 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 
 void part_global_cached_io::cleanup()
 {
-	int num_threads = 0;
-	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
-			= groups.begin(); it != groups.end(); it++) {
-		num_threads += it->second.ios.size();
-	}
-	printf("thread %d of %d on node %d: start to clean up\n",
-			get_io_idx(), num_threads, group_idx);
-
 	// First make sure all requests have been flushed for processing.
 	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
 		request_sender *sender = it->second;
+		// Send a flush request to force request process threads to flush all requests.
+		io_request flush_req;
+		sender->send_cached(&flush_req);
 		sender->flush_all();
 	}
-
-	// Make sure all threads have finished issuing requests.
-	num_finish_issuing_threads.inc(1);
-	while (num_finish_issuing_threads.get() < num_threads) {
-		usleep(1000 * 10);
-	}
-
-	// Now we know no more requests will be put in the request queues.
-	// Make sure all request queues empty.
-	bool empty;
-	do {
-		empty = true;
-		for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
-				= groups.begin(); it != groups.end(); it++) {
-			empty &= it->second.request_queue->is_empty();
-		}
-		usleep(1000 * 10);
-	} while (!empty);
 
 	// Now all requests have been issued to the underlying IOs.
 	// Make sure to clean the queues in its own underlying IO.
@@ -468,24 +444,19 @@ void part_global_cached_io::cleanup()
 
 	// Now we need to wait for all requests issued to the disks
 	// to be completed.
-//	while (processed_requests.get() > processed_replies.get()) {
-//		usleep(1000 * 10);
+	while (sent_requests > processed_replies) {
+		// flush all replies in the reply senders, so this IO can process
+		// the remaining replies.
+		for (unsigned i = 0; i < reply_senders.size(); i++) {
+			thread_safe_msg_sender<io_reply> *sender = reply_senders[i];
+			if (sender)
+				sender->flush_all();
+		}
+		process_replies();
 
-	// flush all replies in the reply senders, so this IO can process
-	// the remaining replies.
-	for (unsigned i = 0; i < reply_senders.size(); i++) {
-		thread_safe_msg_sender<io_reply> *sender = reply_senders[i];
-		if (sender)
-			sender->flush_all();
-	}
-	process_replies();
-//	}
-	
-	// Let's just exit together.
-	num_finished_threads.inc(1);
-	while (num_finished_threads.get() < num_threads) {
 		usleep(1000 * 10);
 	}
+
 	printf("thread %d processed %ld requests (%ld remote requests) and %ld replies\n",
 			get_io_idx(), processed_requests, sent_requests, processed_replies);
 }
@@ -558,6 +529,4 @@ int part_global_cached_io::preload(off_t start, long size)
 
 std::tr1::unordered_map<int, thread_group> part_global_cached_io::groups;
 pthread_mutex_t part_global_cached_io::init_mutex = PTHREAD_MUTEX_INITIALIZER;
-atomic_integer part_global_cached_io::num_finish_issuing_threads;
-atomic_integer part_global_cached_io::num_finished_threads;
 atomic_integer part_global_cached_io::nthreads;

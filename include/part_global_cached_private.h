@@ -20,7 +20,6 @@ class part_global_cached_io;
 struct thread_group
 {
 	int id;
-	std::vector<part_global_cached_io *> ios;
 	page_cache *cache;
 	std::vector<thread *> process_request_threads;
 	
@@ -39,12 +38,6 @@ class part_global_cached_io: public global_cached_io
 	/* this mutex just for helping initialize cache. */
 	static pthread_mutex_t init_mutex;
 	static atomic_integer nthreads;
-
-	/*
-	 * These counts are used for stopping protocols.
-	 */
-	static atomic_integer num_finish_issuing_threads;
-	static atomic_integer num_finished_threads;
 
 	int group_idx;
 	struct thread_group *local_group;
@@ -70,10 +63,11 @@ class part_global_cached_io: public global_cached_io
 
 	io_interface *underlying;
 
+	// All these variables are updated in one thread, so it's fine without
+	// any concurrency control.
 	long processed_requests;
 	long sent_requests;
 	long processed_replies;
-
 	long remote_reads;
 
 	// It's the callback from the user.
