@@ -77,16 +77,17 @@ public:
 
 	void register_io(const std::string &file_name, io_interface *io) {
 		pthread_spin_lock(&lock);
-		// Make sure the index hasn't been set.
-		assert(io->get_io_idx() < 0);
-
-		table.push_back(new io_tracker(file_name, io));
-		int idx = table.size() - 1;
-		io->set_io_idx(idx);
+		// If the IO table is too small, we need to resize the table.
+		// TODO after a while, the IO index might be very large. I should use
+		// a hashtable here.
+		if ((int) table.size() <= io->get_io_idx())
+			table.resize(io->get_io_idx() * 2);
+		table[io->get_io_idx()] = new io_tracker(file_name, io);
 		pthread_spin_unlock(&lock);
 	}
 
 	io_interface *get_io(int idx) {
+		// TODO I need to make thread-safe here.
 //		pthread_spin_lock(&lock);
 		assert(idx >= 0);
 		io_interface *io = table[idx]->get();
@@ -271,19 +272,11 @@ public:
 class part_global_cached_io_factory: public remote_io_factory
 {
 	const cache_config *cache_conf;
-	atomic_integer counter;
 	int num_nodes;
 public:
 	part_global_cached_io_factory(const RAID_config &raid_conf,
 			const std::vector<int> &node_id_array,
-			const cache_config *cache_conf, int nthreads): remote_io_factory(
-				raid_conf, node_id_array) {
-		this->cache_conf = cache_conf;
-		this->num_nodes = node_id_array.size();
-		// TODO the number of threads shouldn't be a global variable.
-		part_global_cached_io::set_num_threads(nthreads);
-
-	}
+			const cache_config *cache_conf);
 
 	virtual io_interface *create_io(int node_id);
 
@@ -381,6 +374,28 @@ io_interface *global_cached_io_factory::create_io(int node_id)
 	return io;
 }
 
+part_global_cached_io_factory::part_global_cached_io_factory(
+		const RAID_config &raid_conf, const std::vector<int> &node_id_array,
+		const cache_config *cache_conf): remote_io_factory(raid_conf,
+			node_id_array)
+{
+	int num_files = mapper->get_num_files();
+	std::map<int, io_interface *> underlyings;
+	for (unsigned i = 0; i < node_id_array.size(); i++) {
+		int node_id = node_id_array[i];
+		underlyings.insert(std::pair<int, io_interface *>(node_id,
+					new remote_disk_access(
+						global_data.read_threads.data(),
+						global_data.complete_threads[node_id],
+						num_files, mapper, node_id)));
+	}
+	part_global_cached_io::init_io_system(node_id_array, underlyings,
+			cache_conf);
+	this->cache_conf = cache_conf;
+	this->num_nodes = node_id_array.size();
+
+}
+
 io_interface *part_global_cached_io_factory::create_io(int node_id)
 {
 	int num_files = mapper->get_num_files();
@@ -389,9 +404,7 @@ io_interface *part_global_cached_io_factory::create_io(int node_id)
 			global_data.complete_threads[node_id],
 			num_files, mapper, node_id);
 	part_global_cached_io *io = new part_global_cached_io(
-			// The idx should start with 0.
-			// TODO But I should remove this argument.
-			num_nodes, underlying, counter.inc(1) - 1, cache_conf);
+			num_nodes, underlying, cache_conf);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
 }
@@ -436,12 +449,10 @@ file_io_factory *create_io_factory(const RAID_config &raid_conf,
 			assert(cache_conf);
 			return new global_cached_io_factory(raid_conf, node_id_array,
 					cache_conf);
-#if 0
 		case PART_GLOBAL_ACCESS:
 			assert(cache_conf);
 			return new part_global_cached_io_factory(raid_conf,
-					node_id_array, cache_conf, nthreads);
-#endif
+					node_id_array, cache_conf);
 		default:
 			fprintf(stderr, "a wrong access option\n");
 			abort();
@@ -461,3 +472,5 @@ void print_io_thread_stat()
 					t->get_num_low_prio_accesses(), t->get_num_local_alloc());
 	}
 }
+
+atomic_integer io_interface::io_counter;

@@ -43,7 +43,6 @@ class node_cached_io: public global_cached_io
 {
 	// thread id <-> msg sender
 	pthread_key_t replier_key;
-	const std::tr1::unordered_map<int, struct thread_group> *groups;
 	const struct thread_group *local_group;
 	long processed_requests;
 	long num_requests;
@@ -52,16 +51,8 @@ class node_cached_io: public global_cached_io
 	io_reply local_reply_buf[REPLY_BUF_SIZE];
 
 	pthread_t processing_thread_id;
-
-	const struct thread_group *get_group(int group_id) {
-		std::tr1::unordered_map<int, struct thread_group>::const_iterator it
-			= groups->find(get_node_id());
-		assert(it != groups->end());
-		return &it->second;
-	}
 public:
-	node_cached_io(io_interface *underlying, const std::tr1::unordered_map<int,
-			struct thread_group> *groups);
+	node_cached_io(io_interface *underlying, struct thread_group *local_group);
 
 	virtual page_cache *get_global_cache() {
 		return local_group->cache;
@@ -72,8 +63,6 @@ public:
 	}
 
 	int process_requests(int max_nreqs);
-
-	void flush_replies();
 
 	// Requests are from remote threads, so we need to send replies
 	// to them for notification.
@@ -108,29 +97,18 @@ public:
 #endif
 
 node_cached_io::node_cached_io(io_interface *underlying,
-		const std::tr1::unordered_map<int, struct thread_group> *groups):
+		struct thread_group *local_group):
 	global_cached_io(underlying->clone())
 {
-	this->groups = groups;
-	local_group = get_group(underlying->get_node_id());
 	assert(local_group);
+	this->local_group = local_group;
+
 	processed_requests = 0;
 	// This IO instance is created inside the right thread.
 	global_cached_io::init();
 
 	processing_thread_id = 0;
 	pthread_key_create(&replier_key, NULL);
-}
-
-void node_cached_io::flush_replies()
-{
-	for (std::tr1::unordered_map<part_global_cached_io *,
-			thread_safe_msg_sender<io_reply> *>::const_iterator it
-			= local_group->reply_senders.begin();
-			it != local_group->reply_senders.end(); it++) {
-		thread_safe_msg_sender<io_reply> *sender = it->second;
-		sender->flush_all();
-	}
 }
 
 /* process the requests sent to this thread */
@@ -179,6 +157,7 @@ void node_cached_io::notify_completion(io_request *reqs[], int num)
 {
 	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > req_map;
 	sort_requests(reqs, num, req_map);
+	int node_id = local_group->id;
 	for (std::tr1::unordered_map<io_interface *,
 			std::vector<io_request *> >::iterator it = req_map.begin();
 			it != req_map.end(); it++) {
@@ -191,11 +170,11 @@ void node_cached_io::notify_completion(io_request *reqs[], int num)
 		assert(io->get_node_id() != this->get_node_id());
 		int num_sent;
 		if ((int) vec->size() > NUMA_REPLY_CACHE_SIZE)
-			num_sent = ((struct thread_group *) local_group)
-				->reply_senders[io]->send(local_reply_buf, vec->size());
+			num_sent = io->get_reply_sender(node_id)->send(local_reply_buf,
+					vec->size());
 		else
-			num_sent = ((struct thread_group *) local_group)
-				->reply_senders[io]->send_cached(local_reply_buf, vec->size());
+			num_sent = io->get_reply_sender(node_id)->send_cached(
+					local_reply_buf, vec->size());
 		// We use blocking queues here, so the send must succeed.
 		assert(num_sent == (int) vec->size());
 	}
@@ -207,8 +186,8 @@ void node_cached_io::notify_completion(io_request *req)
 	part_global_cached_io *io = (part_global_cached_io *) req->get_io();
 	// The reply must be sent to the thread on a different node.
 	assert(io->get_node_id() != this->get_node_id());
-	int num_sent = ((struct thread_group *) local_group)
-		->reply_senders[io]->send_cached(&rep);
+	int node_id = local_group->id;
+	int num_sent = io->get_reply_sender(node_id)->send_cached(&rep);
 	// We use blocking queues here, so the send must succeed.
 	assert(num_sent > 0);
 }
@@ -272,70 +251,8 @@ void process_reply_thread::run()
 }
 #endif
 
-void init_repliers(const std::tr1::unordered_map<int, struct thread_group> &groups,
-		std::tr1::unordered_map<part_global_cached_io *,
-		thread_safe_msg_sender<io_reply> *> &reply_senders)
-{
-	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
-			= groups.begin(); it != groups.end(); it++) {
-		const struct thread_group *group = &it->second;
-		for (int i = 0; i < group->nthreads; i++) {
-			fifo_queue<io_reply> *q1[1];
-			part_global_cached_io *io = group->ios[i];
-			q1[0] = io->get_reply_queue();
-			reply_senders.insert(std::pair<part_global_cached_io *,
-					thread_safe_msg_sender<io_reply> *>(io,
-						new thread_safe_msg_sender<io_reply>(NUMA_REPLY_CACHE_SIZE, q1, 1)));
-		}
-	}
-}
-
 int part_global_cached_io::init() {
-#if NUM_NODES > 1
-	/* let's bind the thread to a specific node first. */
-	struct bitmask *nodemask = numa_allocate_cpumask();
-	numa_bitmask_clearall(nodemask);
-	printf("thread %d is associated to node %d\n", thread_id, get_group_id());
-	numa_bitmask_setbit(nodemask, get_group_id());
-	numa_bind(nodemask);
-	numa_set_strict(1);
-	numa_set_bind_policy(1);
-#endif
-
-	/* 
-	 * there is a global lock for all threads.
-	 * so this lock makes sure cache initialization is serialized
-	 */
-	std::vector<node_cached_io *> node_ios;
-	pthread_mutex_lock(&init_mutex);
-	thread_group *group = &groups[group_idx];
-	if (group->request_queue == NULL) {
-		group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
-				NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
-		init_repliers(groups, group->reply_senders);
-		// Create processing threads.
-		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
-			node_cached_io *io = new node_cached_io(underlying->clone(), &groups);
-			node_ios.push_back(io);
-			thread *t = new process_request_thread(io);
-			t->start();
-			group->process_request_threads.push_back(t);
-		}
-	}
-	num_finish_init++;
-	pthread_mutex_unlock(&init_mutex);
-
 	global_cached_io::init();
-
-	pthread_mutex_lock(&wait_mutex);
-	while (num_finish_init < nthreads) {
-		pthread_cond_wait(&cond, &wait_mutex);
-	}
-	pthread_mutex_unlock(&wait_mutex);
-	pthread_mutex_lock(&wait_mutex);
-	pthread_cond_broadcast(&cond);
-	pthread_mutex_unlock(&wait_mutex);
-	printf("thread %d finishes initialization\n", thread_id);
 
 	/*
 	 * we have to initialize senders here
@@ -352,14 +269,46 @@ int part_global_cached_io::init() {
 	return 0;
 }
 
+// This function initializes all processing threads.
+int part_global_cached_io::init_io_system(const std::vector<int> &node_id_array,
+		std::map<int, io_interface *> &underlyings,
+		const cache_config *cache_conf)
+{
+	pthread_mutex_lock(&init_mutex);
+	if (groups.size() == 0) {
+		for (unsigned i = 0 ; i < node_id_array.size(); i++) {
+			int node_id = node_id_array[i];
+			groups.insert(std::pair<int, struct thread_group>(node_id, thread_group()));
+			struct thread_group *group = &groups[node_id];
+
+			group->id = node_id;
+			group->cache = cache_conf->create_cache_on_node(node_id);
+			group->request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
+					NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
+			io_interface *underlying = underlyings[node_id];
+			assert(underlying);
+			// Create processing threads.
+			for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
+				node_cached_io *io = new node_cached_io(underlying->clone(), group);
+				thread *t = new process_request_thread(io);
+				t->start();
+				group->process_request_threads.push_back(t);
+			}
+		}
+	}
+	pthread_mutex_unlock(&init_mutex);
+	return 0;
+}
+
 part_global_cached_io::part_global_cached_io(int num_groups,
-		io_interface *underlying, int idx,
-		const cache_config *config): global_cached_io(underlying->clone()) {
+		io_interface *underlying, const cache_config *config): global_cached_io(
+			underlying->clone())
+{
 	processed_requests = 0;;
 	sent_requests = 0;
 	processed_replies = 0;
 
-	this->thread_id = idx;
+	nthreads.inc(1);
 	this->final_cb = NULL;
 	remote_reads = 0;
 	this->group_idx = underlying->get_node_id();
@@ -368,43 +317,26 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 
 	long cache_size = cache_conf->get_part_size(underlying->get_node_id());
 	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
-			idx, group_idx, num_groups, cache_size);
-
-	if (groups.size() == 0) {
-		pthread_mutex_init(&init_mutex, NULL);
-		pthread_mutex_init(&wait_mutex, NULL);
-		pthread_cond_init(&cond, NULL);
-		num_finish_init = 0;
-	}
-	// If the group hasn't been added to the table yet.
-	if (groups.find(group_idx) == groups.end()) {
-		struct thread_group group;
-		group.id = group_idx;
-		group.nthreads = nthreads / num_groups;
-		if (nthreads % num_groups)
-			group.nthreads++;
-		group.ios = new part_global_cached_io*[group.nthreads];
-		group.request_queue = NULL;
-		std::vector<int> node_ids(1);
-		node_ids[0] = group_idx;
-		group.cache = cache_conf->create_cache_on_node(
-				underlying->get_node_id());
-		for (int j = 0; j < group.nthreads; j++)
-			group.ios[j] = NULL;
-		groups.insert(std::pair<int, struct thread_group>(group_idx,
-					group));
-	}
+			get_io_idx(), group_idx, num_groups, cache_size);
 
 	/* assign a thread to a group. */
 	struct thread_group *group = &groups[group_idx];
-	int i = thread_idx(idx, num_groups);
-	assert (group->ios[i] == NULL);
-	group->ios[i] = this;
+	group->ios.push_back(this);
 	this->local_group = group;
 	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
 			// We don't want that adding replies is blocked, so we allow
 			// the reply queue to be expanded to an arbitrary size.
 			NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
+
+	fifo_queue<io_reply> *q1[1];
+	q1[0] = reply_queue;
+	for (unsigned i = 0; i < groups.size(); i++) {
+		struct thread_group *group = &groups[i];
+		if ((int) reply_senders.size() <= group->id)
+			reply_senders.resize(group->id + 1);
+		reply_senders[group->id] = new thread_safe_msg_sender<io_reply>(
+				NUMA_REPLY_CACHE_SIZE, q1, 1);
+	}
 }
 
 /* distribute requests to nodes. */
@@ -500,10 +432,10 @@ void part_global_cached_io::cleanup()
 	int num_threads = 0;
 	for (std::tr1::unordered_map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
-		num_threads += it->second.nthreads;
+		num_threads += it->second.ios.size();
 	}
 	printf("thread %d of %d on node %d: start to clean up\n",
-			thread_id, num_threads, group_idx);
+			get_io_idx(), num_threads, group_idx);
 
 	// First make sure all requests have been flushed for processing.
 	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
@@ -538,12 +470,15 @@ void part_global_cached_io::cleanup()
 	// to be completed.
 //	while (processed_requests.get() > processed_replies.get()) {
 //		usleep(1000 * 10);
-	struct thread_group *group = &groups[group_idx];
-	for (size_t i = 0; i < group->process_request_threads.size(); i++) {
-		process_request_thread *t
-			= (process_request_thread *) group->process_request_threads[i];
-		t->get_io()->flush_replies();
+
+	// flush all replies in the reply senders, so this IO can process
+	// the remaining replies.
+	for (unsigned i = 0; i < reply_senders.size(); i++) {
+		thread_safe_msg_sender<io_reply> *sender = reply_senders[i];
+		if (sender)
+			sender->flush_all();
 	}
+	process_replies();
 //	}
 	
 	// Let's just exit together.
@@ -552,7 +487,7 @@ void part_global_cached_io::cleanup()
 		usleep(1000 * 10);
 	}
 	printf("thread %d processed %ld requests (%ld remote requests) and %ld replies\n",
-			thread_id, processed_requests, sent_requests, processed_replies);
+			get_io_idx(), processed_requests, sent_requests, processed_replies);
 }
 
 #ifdef STATISTICS
@@ -566,7 +501,7 @@ void part_global_cached_io::print_stat()
 	seen_threads++;
 	tot_hits += get_cache_hits();
 	tot_fast_process += this->get_num_fast_process();
-	if (seen_threads == nthreads) {
+	if (seen_threads == nthreads.get()) {
 		printf("there are %ld requests sent to the remote nodes\n",
 				tot_remote_reads);
 		for (std::tr1::unordered_map<int, struct thread_group>::const_iterator
@@ -622,10 +557,7 @@ int part_global_cached_io::preload(off_t start, long size)
 }
 
 std::tr1::unordered_map<int, thread_group> part_global_cached_io::groups;
-pthread_mutex_t part_global_cached_io::init_mutex;
-int part_global_cached_io::num_finish_init;
-pthread_mutex_t part_global_cached_io::wait_mutex;
-pthread_cond_t part_global_cached_io::cond;
+pthread_mutex_t part_global_cached_io::init_mutex = PTHREAD_MUTEX_INITIALIZER;
 atomic_integer part_global_cached_io::num_finish_issuing_threads;
 atomic_integer part_global_cached_io::num_finished_threads;
-int part_global_cached_io::nthreads;
+atomic_integer part_global_cached_io::nthreads;

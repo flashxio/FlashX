@@ -20,15 +20,11 @@ class part_global_cached_io;
 struct thread_group
 {
 	int id;
-	int nthreads;
-	part_global_cached_io **ios;
+	std::vector<part_global_cached_io *> ios;
 	page_cache *cache;
 	std::vector<thread *> process_request_threads;
 	
 	blocking_FIFO_queue<io_request> *request_queue;
-
-	std::tr1::unordered_map<part_global_cached_io *,
-		thread_safe_msg_sender<io_reply> *> reply_senders;
 };
 
 /**
@@ -42,12 +38,7 @@ class part_global_cached_io: public global_cached_io
 	static std::tr1::unordered_map<int, struct thread_group> groups;
 	/* this mutex just for helping initialize cache. */
 	static pthread_mutex_t init_mutex;
-	/* indicates the number of threads that finish initialization. */
-	static int num_finish_init;
-	/* used for thread initialization. */
-	static pthread_mutex_t wait_mutex;
-	static pthread_cond_t cond;
-	static int nthreads;
+	static atomic_integer nthreads;
 
 	/*
 	 * These counts are used for stopping protocols.
@@ -69,6 +60,14 @@ class part_global_cached_io: public global_cached_io
 	// group id <-> msg sender
 	std::tr1::unordered_map<int, request_sender *> req_senders;
 
+	/*
+	 * These reply senders are to send replies to this IO. They are made
+	 * to be thread-safe, so all threads can use them. However, the remote
+	 * access on a NUMA machine is slow, so each NUMA node has a copy of
+	 * the reply sender to improve performance.
+	 */
+	std::vector<thread_safe_msg_sender<io_reply> *> reply_senders;
+
 	io_interface *underlying;
 
 	long processed_requests;
@@ -77,8 +76,6 @@ class part_global_cached_io: public global_cached_io
 
 	long remote_reads;
 
-	int thread_id;
-
 	// It's the callback from the user.
 	callback *final_cb;
 
@@ -86,19 +83,9 @@ class part_global_cached_io: public global_cached_io
 	int distribute_reqs(io_request *requests, int num);
 
 public:
-	/* get the location of a thread in the group. */
-	static inline int thread_idx(int thread_id, int num_groups) {
-		int remaining = nthreads % num_groups;
-		int group_size = nthreads / num_groups;
-		if (thread_id <= remaining * (group_size + 1))
-			return thread_id % (group_size + 1);
-		else
-			return (thread_id - remaining * (group_size + 1)) % group_size;
-	}
-
-	static void set_num_threads(const int num) {
-		nthreads = num;
-	}
+	static int init_io_system(const std::vector<int> &node_id_array,
+			std::map<int, io_interface *> &underlyings,
+			const cache_config *config);
 
 	~part_global_cached_io() {
 		// TODO delete all senders
@@ -107,7 +94,11 @@ public:
 	int init();
 
 	part_global_cached_io(int num_groups, io_interface *underlying,
-			int idx, const cache_config *config);
+			const cache_config *config);
+
+	thread_safe_msg_sender<io_reply> *get_reply_sender(int node_id) const {
+		return reply_senders[node_id];
+	}
 
 	virtual page_cache *get_global_cache() {
 		return groups[group_idx].cache;
@@ -142,10 +133,6 @@ public:
 
 	bool support_aio() {
 		return true;
-	}
-
-	blocking_FIFO_queue<io_reply> *get_reply_queue() {
-		return reply_queue;
 	}
 
 	friend class node_cached_io;

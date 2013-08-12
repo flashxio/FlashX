@@ -7,6 +7,7 @@
 
 #include "exception.h"
 #include "common.h"
+#include "concurrency.h"
 
 class io_request;
 
@@ -65,10 +66,11 @@ class io_interface
 	int node_id;
 	// This is an index for locating this IO object in a global table.
 	int io_idx;
+	static atomic_integer io_counter;
 public:
 	io_interface(int node_id) {
 		this->node_id = node_id;
-		this->io_idx = -1;
+		this->io_idx = io_counter.inc(1) - 1;
 	}
 
 	virtual ~io_interface() { }
@@ -76,10 +78,6 @@ public:
 	/* When a thread begins, this method will be called. */
 	virtual int init() {
 		return 0;
-	}
-
-	void set_io_idx(int idx) {
-		io_idx = idx;
 	}
 
 	int get_io_idx() const {
