@@ -43,6 +43,7 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 	this->high_prio = 1;
 	assert(node_id <= MAX_NODE_ID);
 	this->node_id = node_id;
+	this->sync = false;
 }
 
 void io_req_extension::add_io_buf(const io_buf &buf)

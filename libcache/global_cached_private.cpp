@@ -794,6 +794,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	thread_safe_page *cached_pages[num];
 	int num_cached_reqs = 0;
 
+	bool syncd = false;
 	std::vector<thread_safe_page *> dirty_pages;
 	for (int i = 0; i < num; i++) {
 		off_t offset = requests[i].get_offset();
@@ -804,6 +805,14 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		// TODO right now it only supports single-buf requests.
 		assert(requests[i].get_num_bufs() == 1);
 		io_request *orig = NULL;
+
+		if (requests[i].is_flush()) {
+			syncd = true;
+			continue;
+		}
+		else if (requests[i].is_sync()) {
+			syncd = true;
+		}
 
 		int pg_idx = 0;
 		int num_pages_hit = 0;
@@ -990,6 +999,9 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	process_cached_reqs(cached_reqs, cached_pages, num_cached_reqs);
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size());
+
+	if (syncd)
+		underlying->flush_requests();
 }
 
 io_status global_cached_io::access(char *buf, off_t offset,
@@ -998,7 +1010,6 @@ io_status global_cached_io::access(char *buf, off_t offset,
 	io_request req(buf, offset, size, access_method, this, this->get_node_id(), true);
 	io_status status;
 	access(&req, 1, &status);
-	underlying->flush_requests();
 	if (status == IO_PENDING) {
 		io_request *orig = (io_request *) status.get_priv_data();
 		assert(orig);

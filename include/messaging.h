@@ -159,12 +159,13 @@ class io_request
 	}
 
 public:
+	// By default, a request is initialized as a flush request.
 	io_request() {
 		file_id = -1;
 		extended = 0;
 		buf_addr = 0;
 		high_prio = 1;
-		sync = false;
+		sync = 1;
 	}
 
 	io_request(bool extended) {
@@ -311,6 +312,15 @@ public:
 
 	int get_file_id() const {
 		return file_id;
+	}
+
+	/**
+	 * Test whether the request is a flush request.
+	 * The difference of a sync'd request and a flush request is that
+	 * a flush request isn't a valid request for accessing data.
+	 */
+	bool is_flush() const {
+		return sync && high_prio && (buf_addr == 0);
 	}
 
 	bool is_sync() const {

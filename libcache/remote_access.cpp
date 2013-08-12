@@ -138,9 +138,19 @@ void remote_disk_access::access(io_request *requests, int num,
 	bool has_msgs[num_senders];
 	memset(has_msgs, 0, sizeof(has_msgs[0]) * num_senders);
 
+	bool syncd = false;
 	for (int i = 0; i < num; i++) {
 		requests[i].set_file_id(block_mapper->get_file_id());
 		assert(requests[i].get_size() > 0);
+
+		if (requests[i].is_flush()) {
+			syncd = true;
+			continue;
+		}
+		else if (requests[i].is_sync()) {
+			syncd = true;
+		}
+
 		// If the request accesses one RAID block, it's simple.
 		if (inside_RAID_block(requests[i])) {
 			off_t pg_off = requests[i].get_offset() / PAGE_SIZE;
@@ -204,6 +214,9 @@ void remote_disk_access::access(io_request *requests, int num,
 	if (num_remaining > MAX_DISK_CACHED_REQS) {
 		flush_requests(MAX_DISK_CACHED_REQS);
 	}
+	if (syncd)
+		flush_requests();
+
 	if (status)
 		for (int i = 0; i < num; i++)
 			status[i] = IO_PENDING;
