@@ -37,7 +37,6 @@ class part_global_cached_io: public global_cached_io
 	static std::tr1::unordered_map<int, struct thread_group> groups;
 	/* this mutex just for helping initialize cache. */
 	static pthread_mutex_t init_mutex;
-	static atomic_integer nthreads;
 
 	int group_idx;
 	struct thread_group *local_group;
@@ -132,7 +131,7 @@ public:
 	friend class node_cached_io;
 
 #ifdef STATISTICS
-	virtual void print_stat();
+	virtual void print_stat(int nthreads);
 #endif
 };
 

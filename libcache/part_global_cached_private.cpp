@@ -308,7 +308,6 @@ part_global_cached_io::part_global_cached_io(int num_groups,
 	sent_requests = 0;
 	processed_replies = 0;
 
-	nthreads.inc(1);
 	this->final_cb = NULL;
 	remote_reads = 0;
 	this->group_idx = underlying->get_node_id();
@@ -462,7 +461,7 @@ void part_global_cached_io::cleanup()
 }
 
 #ifdef STATISTICS
-void part_global_cached_io::print_stat()
+void part_global_cached_io::print_stat(int nthreads)
 {
 	static long tot_remote_reads = 0;
 	static int seen_threads = 0;
@@ -472,7 +471,7 @@ void part_global_cached_io::print_stat()
 	seen_threads++;
 	tot_hits += get_cache_hits();
 	tot_fast_process += this->get_num_fast_process();
-	if (seen_threads == nthreads.get()) {
+	if (seen_threads == nthreads) {
 		printf("there are %ld requests sent to the remote nodes\n",
 				tot_remote_reads);
 		for (std::tr1::unordered_map<int, struct thread_group>::const_iterator
@@ -529,4 +528,3 @@ int part_global_cached_io::preload(off_t start, long size)
 
 std::tr1::unordered_map<int, thread_group> part_global_cached_io::groups;
 pthread_mutex_t part_global_cached_io::init_mutex = PTHREAD_MUTEX_INITIALIZER;
-atomic_integer part_global_cached_io::nthreads;

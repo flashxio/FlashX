@@ -134,7 +134,7 @@ public:
 		return IO_UNSUPPORTED;
 	}
 
-	virtual void print_stat() {
+	virtual void print_stat(int nthreads) {
 	}
 
 	virtual io_interface *clone() const {

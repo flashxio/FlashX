@@ -57,7 +57,7 @@ public:
 	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
 
 #ifdef STATISTICS
-	virtual void print_stat() {
+	virtual void print_stat(int nthreads) {
 		static int seen_threads = 0;
 		static long tot_nreads;
 		static long tot_read_time;

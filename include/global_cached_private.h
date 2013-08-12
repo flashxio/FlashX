@@ -212,8 +212,8 @@ public:
 	}
 
 #ifdef STATISTICS
-	void print_stat() {
-		underlying->print_stat();
+	void print_stat(int nthreads) {
+		underlying->print_stat(nthreads);
 		static int tot_hits = 0;
 		static int seen_threads = 0;
 		static int tot_fast_process = 0;
