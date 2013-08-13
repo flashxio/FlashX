@@ -133,7 +133,7 @@ int retrieve_data_files(std::string file_file,
 	FILE *fd = fopen(file_file.c_str(), "r");
 	if (fd == NULL) {
 		perror("fopen");
-		return 0;
+		abort();
 	}
 	while ((line_length = getline(&line, &size, fd)) > 0) {
 		line[line_length - 1] = 0;
