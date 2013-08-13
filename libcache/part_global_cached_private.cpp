@@ -124,6 +124,7 @@ int node_cached_io::process_requests(int max_nreqs)
 		for (int i = 0; i < num; i++)
 			local_reqs[i] = local_msg_reqs[i];
 		global_cached_io::access(local_reqs, num);
+		flush_requests();
 		num_processed += num;
 	}
 	num_requests += num_processed;

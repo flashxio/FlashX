@@ -106,6 +106,9 @@ public:
 	 * A request can access data of arbitrary size and from arbitrary offset.
 	 */
 	void access(io_request *requests, int num, io_status *status = NULL);
+	virtual void flush_requests() {
+		underlying->flush_requests();
+	}
 
 	/**
 	 * One read can access multiple pages while one write can only write
