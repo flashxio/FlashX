@@ -131,7 +131,7 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		if (orig->is_sync())
 			io->wakeup_on_req(orig, IO_OK);
 		else
-			io->notify_completion(orig);
+			notify_completion(orig);
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
@@ -158,7 +158,7 @@ void global_cached_io::finalize_request(io_request &req)
 			if (original->is_sync())
 				io->wakeup_on_req(original, IO_OK);
 			else
-				io->notify_completion(original);
+				notify_completion(original);
 			original->dec_complete_count();
 			original->wait4unref();
 			req_allocator.free(original);
@@ -172,7 +172,7 @@ void global_cached_io::finalize_request(io_request &req)
 		if (req.is_sync())
 			io->wakeup_on_req(&req, IO_OK);
 		else
-			io->notify_completion(&req);
+			notify_completion(&req);
 	}
 }
 
