@@ -17,14 +17,8 @@
 
 class part_global_cached_io;
 
-struct thread_group
-{
-	int id;
-	page_cache *cache;
-	std::vector<thread *> process_request_threads;
-	
-	blocking_FIFO_queue<io_request> *request_queue;
-};
+struct thread_group;
+class part_io_process_table;
 
 /**
  * This provides interface for application threads issue IO requests
@@ -34,12 +28,9 @@ struct thread_group
  */
 class part_global_cached_io: public global_cached_io
 {
-	static std::tr1::unordered_map<int, struct thread_group> groups;
-	/* this mutex just for helping initialize cache. */
-	static pthread_mutex_t init_mutex;
+	part_io_process_table *global_table;
 
-	int group_idx;
-	struct thread_group *local_group;
+	const struct thread_group *local_group;
 
 	const cache_config *cache_conf;
 	blocking_FIFO_queue<io_reply> *reply_queue;
@@ -60,8 +51,6 @@ class part_global_cached_io: public global_cached_io
 	 */
 	std::vector<thread_safe_msg_sender<io_reply> *> reply_senders;
 
-	io_interface *underlying;
-
 	// All these variables are updated in one thread, so it's fine without
 	// any concurrency control.
 	long processed_requests;
@@ -76,9 +65,12 @@ class part_global_cached_io: public global_cached_io
 	int distribute_reqs(io_request *requests, int num);
 
 public:
-	static int init_io_system(const std::vector<int> &node_id_array,
+	static part_io_process_table *open_file(
 			std::map<int, io_interface *> &underlyings,
 			const cache_config *config);
+	static int close_file(part_io_process_table *table) {
+		throw unsupported_exception();
+	}
 
 	~part_global_cached_io() {
 		// TODO delete all senders
@@ -86,15 +78,10 @@ public:
 
 	int init();
 
-	part_global_cached_io(int num_groups, io_interface *underlying,
-			const cache_config *config);
+	part_global_cached_io(int node_id, part_io_process_table *);
 
 	thread_safe_msg_sender<io_reply> *get_reply_sender(int node_id) const {
 		return reply_senders[node_id];
-	}
-
-	virtual page_cache *get_global_cache() {
-		return groups[group_idx].cache;
 	}
 
 	virtual bool set_callback(callback *cb) {
@@ -119,10 +106,6 @@ public:
 
 	void cleanup();
 	int preload(off_t start, long size);
-
-	int get_group_id() {
-		return group_idx;
-	}
 
 	bool support_aio() {
 		return true;

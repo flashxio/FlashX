@@ -272,6 +272,7 @@ public:
 class part_global_cached_io_factory: public remote_io_factory
 {
 	const cache_config *cache_conf;
+	part_io_process_table *table;
 	int num_nodes;
 public:
 	part_global_cached_io_factory(const RAID_config &raid_conf,
@@ -389,8 +390,7 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 						global_data.complete_threads[node_id],
 						num_files, mapper, node_id)));
 	}
-	part_global_cached_io::init_io_system(node_id_array, underlyings,
-			cache_conf);
+	table = part_global_cached_io::open_file(underlyings, cache_conf);
 	this->cache_conf = cache_conf;
 	this->num_nodes = node_id_array.size();
 
@@ -398,13 +398,7 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 
 io_interface *part_global_cached_io_factory::create_io(int node_id)
 {
-	int num_files = mapper->get_num_files();
-	io_interface *underlying = new remote_disk_access(
-			global_data.read_threads.data(),
-			global_data.complete_threads[node_id],
-			num_files, mapper, node_id);
-	part_global_cached_io *io = new part_global_cached_io(
-			num_nodes, underlying, cache_conf);
+	part_global_cached_io *io = new part_global_cached_io(node_id, table);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
 }

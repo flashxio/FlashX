@@ -373,23 +373,6 @@ int access_page_callback::invoke(io_request *requests[], int num)
 	return 0;
 }
 
-global_cached_io::global_cached_io(io_interface *underlying): io_interface(
-		underlying->get_node_id()), pending_requests(
-		INIT_GCACHE_PENDING_SIZE), req_allocator(sizeof(io_request) * 1024)
-{
-	this->underlying = underlying;
-	num_waits = 0;
-	cache_size = 0;
-	cb = NULL;
-	cache_hits = 0;
-	num_accesses = 0;
-	underlying->set_callback(new access_page_callback(this));
-	pthread_mutex_init(&sync_mutex, NULL);
-	pthread_cond_init(&sync_cond, NULL);
-	wait_req = NULL;
-	status = 0;
-}
-
 global_cached_io::global_cached_io(io_interface *underlying,
 		page_cache *cache): io_interface(
 			underlying->get_node_id()), pending_requests(

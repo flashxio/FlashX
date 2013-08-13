@@ -89,10 +89,9 @@ class global_cached_io: public io_interface
 	ssize_t __write(io_request *req, thread_safe_page *p,
 		std::vector<thread_safe_page *> &dirty_pages);
 public:
-	global_cached_io(io_interface *underlying);
 	global_cached_io(io_interface *, page_cache *cache);
 
-	virtual page_cache *get_global_cache() {
+	page_cache *get_global_cache() {
 		return global_cache;
 	}
 
