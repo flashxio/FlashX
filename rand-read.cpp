@@ -55,13 +55,6 @@ bool high_prio = false;
 
 thread_private *threads[NUM_THREADS];
 
-thread_private *get_thread(int idx)
-{
-	thread_private *thread = threads[idx];
-	assert(idx == thread->get_idx());
-	return thread;
-}
-
 struct str2int {
 	std::string name;
 	int value;
@@ -352,60 +345,67 @@ int main(int argc, char *argv[])
 	}
 
 	init_io_system(raid_conf, node_id_array);
-	std::vector<io_interface *> ios = create_ios(raid_conf, cache_conf,
-			node_id_array, nthreads, access_option, npages * PAGE_SIZE, preload);
-	for (unsigned int j = 0; j < ios.size(); j++) {
-		io_interface *io = ios[j];
-		int node_id = io->get_node_id();
-		bind_mem2node_id(node_id);
-		threads[j] = new thread_private(j, entry_size, io);
 
-		/*
-		 * we still assign each thread a range regardless of the number
-		 * of threads. read_private will choose the right file descriptor
-		 * according to the offset.
-		 */
-		start = end;
-		end = start + ((long) npages / nthreads + (shift < remainings))
-			* PAGE_SIZE / entry_size;
-		if (remainings != shift)
-			shift++;
-		printf("thread %d starts %ld ends %ld\n", j, start, end);
+	int io_depth = AIO_DEPTH_PER_FILE / nthreads;
+	if (io_depth == 0)
+		io_depth = 1;
+	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
+			access_option, io_depth, cache_conf);
+	int nthread_per_node = nthreads / node_id_array.size();
+	for (unsigned i = 0; i < node_id_array.size(); i++) {
+		int node_id = node_id_array[i];
+		for (int j = 0; j < nthread_per_node; j++) {
+			/*
+			 * we still assign each thread a range regardless of the number
+			 * of threads. read_private will choose the right file descriptor
+			 * according to the offset.
+			 */
+			start = end;
+			end = start + ((long) npages / nthreads + (shift < remainings))
+				* PAGE_SIZE / entry_size;
+			if (remainings != shift)
+				shift++;
+			printf("thread %d starts %ld ends %ld\n", j, start, end);
 
-		workload_gen *gen;
-		switch (workload) {
-			case SEQ_OFFSET:
-				gen = new seq_workload(start, end, entry_size);
-				break;
-			case RAND_OFFSET:
-				gen = new rand_workload(start, end, entry_size);
-				break;
-			case RAND_SEQ_OFFSET:
-				gen = new rand_seq_workload(start, end, entry_size, 1024 * 1024 * 4);
-				break;
-			case RAND_PERMUTE:
-				gen = new global_rand_permute_workload(entry_size,
-						(((long) npages) * PAGE_SIZE) / entry_size, num_repeats, read_ratio);
-				break;
-			case HIT_DEFINED:
-				gen = new cache_hit_defined_workload(entry_size,
-						(((long) npages) * PAGE_SIZE) / entry_size,
-						cache_size, hit_ratio, read_ratio);
-				break;
-			case -1:
-				{
-					static long length = 0;
-					static workload_t *workloads = NULL;
-					if (workloads == NULL)
-						workloads = load_file_workload(workload_file, length);
-					gen = new file_workload(workloads, length, j, nthreads);
+			workload_gen *gen;
+			switch (workload) {
+				case SEQ_OFFSET:
+					gen = new seq_workload(start, end, entry_size);
 					break;
-				}
-			default:
-				fprintf(stderr, "unsupported workload\n");
-				exit(1);
+				case RAND_OFFSET:
+					gen = new rand_workload(start, end, entry_size);
+					break;
+				case RAND_SEQ_OFFSET:
+					gen = new rand_seq_workload(start, end, entry_size,
+							1024 * 1024 * 4);
+					break;
+				case RAND_PERMUTE:
+					gen = new global_rand_permute_workload(entry_size,
+							(((long) npages) * PAGE_SIZE) / entry_size,
+							num_repeats, read_ratio);
+					break;
+				case HIT_DEFINED:
+					gen = new cache_hit_defined_workload(entry_size,
+							(((long) npages) * PAGE_SIZE) / entry_size,
+							cache_size, hit_ratio, read_ratio);
+					break;
+				case -1:
+					{
+						static long length = 0;
+						static workload_t *workloads = NULL;
+						if (workloads == NULL)
+							workloads = load_file_workload(workload_file, length);
+						gen = new file_workload(workloads, length, j, nthreads);
+						break;
+					}
+				default:
+					fprintf(stderr, "unsupported workload\n");
+					exit(1);
+			}
+
+			int idx = i * nthread_per_node + j;
+			threads[idx] = new thread_private(node_id, idx, entry_size, factory, gen);
 		}
-		threads[j]->set_workload(gen);
 	}
 
 	if (high_prio) {
@@ -447,10 +447,10 @@ int main(int argc, char *argv[])
 			read_bytes, end_time.tv_sec - start_time.tv_sec
 			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 
+#ifdef STATISTICS
 	for (int i = 0; i < nthreads; i++) {
 		threads[i]->print_stat();
 	}
-#ifdef STATISTICS
 	print_io_thread_stat();
 #endif
 }

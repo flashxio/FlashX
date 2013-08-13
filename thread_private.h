@@ -27,9 +27,11 @@ class thread_private
 #endif
 	/* the location in the thread descriptor array. */
 	int idx;
+	int node_id;
 	workload_gen *gen;
 	rand_buf *buf;
 	io_interface *io;
+	file_io_factory *factory;
 
 	ssize_t read_bytes;
 	long num_accesses;
@@ -62,18 +64,21 @@ public:
 			delete buf;
 	}
 
-	virtual int thread_init();
+	int thread_init();
 
-	virtual int get_group_id() {
-		return 0;
+	int get_node_id() {
+		return node_id;
 	}
 
-	thread_private(int idx, int entry_size, io_interface *io) {
+	thread_private(int node_id, int idx, int entry_size, file_io_factory *factory,
+			workload_gen *gen) {
 		this->cb = NULL;
+		this->node_id = node_id;
 		this->idx = idx;
 		buf = NULL;
-		this->gen = NULL;
-		this->io = io;
+		this->gen = gen;
+		this->io = NULL;
+		this->factory = factory;
 		read_bytes = 0;
 		num_accesses = 0;
 		num_sampling = 0;
@@ -81,19 +86,7 @@ public:
 		max_num_pending = 0;
 	}
 
-	io_interface *get_io() {
-		return io;
-	}
-
 	int attach2cpu();
-
-	int get_idx() {
-		return idx;
-	}
-
-	void set_workload(workload_gen *gen) {
-		this->gen = gen;
-	}
 
 	int run();
 
@@ -103,9 +96,10 @@ public:
 
 	int wait_thread_end();
 
-	virtual void print_stat() {
+	void print_stat() {
 #ifdef STATISTICS
-		io->print_stat();
+		extern int nthreads;
+		io->print_stat(nthreads);
 		int avg_num_pending = 0;
 		if (num_sampling > 0)
 			avg_num_pending = tot_num_pending / num_sampling;

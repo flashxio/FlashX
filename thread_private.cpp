@@ -117,7 +117,7 @@ ssize_t thread_private::get_read_bytes() {
 }
 
 int thread_private::thread_init() {
-	attach2cpu();
+	io = factory->create_io(node_id);
 	io->init();
 
 	extern int buf_size;
@@ -328,7 +328,7 @@ static void *rand_read(void *arg)
 	// We put the thread at the specified NUMA node at the very beginning
 	// to make sure all data created in this thread will be on the specified
 	// node.
-	int node_id = priv->get_io()->get_node_id();
+	int node_id = priv->get_node_id();
 	time_t curr_time = time(NULL);
 	printf("run thread rand_read: pid: %d, tid: %ld, on node %d at %s",
 			getpid(), gettid(), node_id, ctime(&curr_time));
