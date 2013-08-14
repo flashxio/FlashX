@@ -343,7 +343,9 @@ public:
 		this->num = 0;
 		this->tot_num = end - start;
 		this->tot_num_seqs = (end - start) * entry_size / seq_len;
+#ifdef DEBUG
 		printf("use a different random sequence\n");
+#endif
 		srandom(time(NULL));
 		this->off_in_seq = 0;
 		this->seq_num = random() % tot_num_seqs;
@@ -377,7 +379,9 @@ public:
 		this->range = end - start;
 		num = 0;
 		offsets = (off_t *) valloc(sizeof(*offsets) * range);
+#ifdef DEBUG
 		printf("use a different random sequence\n");
+#endif
 		srandom(time(NULL));
 		for (int i = 0; i < range; i++) {
 			offsets[i] = (start + random() % range) * stride;

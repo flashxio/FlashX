@@ -39,7 +39,6 @@ async_io::async_io(const logical_file_partition &partition,
 			aio_depth_per_file * partition.get_num_files()), cb_allocator(
 					AIO_DEPTH * sizeof(thread_callback_s))
 {
-	printf("aio is used\n");
 	buf_idx = 0;
 	ctx = create_aio_ctx(AIO_DEPTH);
 	cb = NULL;

@@ -273,7 +273,9 @@ public:
 		assert(((long) addr) % PAGE_SIZE == 0);
 		// We save the size info in the padding area.
 		((size_t *) addr)[0] = size;
+#ifdef DEBUG
 		printf("allocate %ld bytes on node %d\n", size, node_id);
+#endif
 		// TODO 8 might be architecture specific. It's 8 for 64-bit machines.
 		return (void *) ((long) addr + CACHE_LINE - 8);
 	}

@@ -365,7 +365,9 @@ int main(int argc, char *argv[])
 				* PAGE_SIZE / entry_size;
 			if (remainings != shift)
 				shift++;
+#ifdef DEBUG
 			printf("thread %d starts %ld ends %ld\n", j, start, end);
+#endif
 
 			workload_gen *gen;
 			switch (workload) {

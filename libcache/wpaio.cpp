@@ -59,7 +59,9 @@ struct aio_ctx* create_aio_ctx(int max_aio)
 	a_ctx->max_aio = max_aio;
 	a_ctx->busy_aio = 0;
 	memset(&a_ctx->ctx, 0, sizeof(a_ctx->ctx));
+#ifdef DEBUG
 	printf("size of queue: %d\n", max_aio);
+#endif
 	int ret = io_queue_init(a_ctx->max_aio, &a_ctx->ctx);
 	if (ret < 0)
 	{

@@ -297,7 +297,6 @@ again:
 		}
 	}
 	io->cleanup();
-	printf("thread %d exits\n", idx);
 	gettimeofday(&end_time, NULL);
 	return 0;
 }
@@ -315,7 +314,6 @@ int thread_private::attach2cpu()
 		perror("pthread_setaffinity_np");
 		exit(1);
 	}
-	printf("attach thread %d to CPU %d\n", idx, cpu_num);
 	return ret;
 #else
 	return -1;
@@ -330,9 +328,11 @@ static void *rand_read(void *arg)
 	// to make sure all data created in this thread will be on the specified
 	// node.
 	int node_id = priv->get_node_id();
+#ifdef DEBUG
 	time_t curr_time = time(NULL);
 	printf("run thread rand_read: pid: %d, tid: %ld, on node %d at %s",
 			getpid(), gettid(), node_id, ctime(&curr_time));
+#endif
 	bind2node_id(node_id);
 
 	priv->thread_init();

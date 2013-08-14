@@ -63,7 +63,9 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 
 void disk_read_thread::run() {
 	bind2node_id(node_id);
+#ifdef DEBUG
 	printf("disk read thread runs on node %d\n", node_id);
+#endif
 	aio->init();
 	io_request reqs[AIO_DEPTH_PER_FILE];
 	while (true) {
@@ -153,7 +155,6 @@ void disk_read_thread::run() {
 void *process_requests(void *arg)
 {
 	disk_read_thread *thread = (disk_read_thread *) arg;
-	printf("disk_read_thread: pid: %d, tid: %ld\n", getpid(), gettid());
 	thread->run();
 	return NULL;
 }

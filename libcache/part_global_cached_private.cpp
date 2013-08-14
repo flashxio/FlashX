@@ -402,9 +402,11 @@ part_global_cached_io::part_global_cached_io(int node_id,
 	remote_reads = 0;
 	this->cache_conf = table->get_cache_config();
 
+#ifdef DEBUG
 	long cache_size = cache_conf->get_part_size(node_id);
 	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
 			get_io_idx(), node_id, table->get_num_groups(), cache_size);
+#endif
 
 	/* assign a thread to a group. */
 	this->local_group = table->get_thread_group(node_id);
@@ -548,8 +550,10 @@ void part_global_cached_io::cleanup()
 		usleep(1000 * 10);
 	}
 
+#ifdef STATISTICS
 	printf("thread %d processed %ld requests (%ld remote requests) and %ld replies\n",
 			get_io_idx(), processed_requests, sent_requests, processed_replies);
+#endif
 }
 
 #ifdef STATISTICS

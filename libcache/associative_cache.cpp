@@ -894,8 +894,10 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 {
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
+#ifdef DEBUG
 	printf("associative cache is created on node %d, cache size: %ld, min cell size: %d\n",
 			node_id, cache_size, params.get_SA_min_cell_size());
+#endif
 	this->node_id = node_id;
 	level = 0;
 	split = 0;
@@ -916,7 +918,6 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 	int npages = init_cache_size / PAGE_SIZE;
 	init_ncells = npages / min_cell_size;
 	hash_cell *cells = new hash_cell[init_ncells];
-	printf("%d cells: %p\n", init_ncells, cells);
 	int max_npages = manager->get_max_size() / PAGE_SIZE;
 	try {
 		for (int i = 0; i < init_ncells; i++)
