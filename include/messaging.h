@@ -210,9 +210,6 @@ public:
 	}
 
 	io_request(io_request &req) {
-		// We need to free its own extension first.
-		if (this->is_extended_req())
-			delete this->get_extension();
 		memcpy(this, &req, sizeof(req));
 		if (req.is_extended_req()) {
 			req.extended = 0;
@@ -221,6 +218,7 @@ public:
 	}
 
 	io_request &operator=(io_request &req) {
+		// We need to free its own extension first.
 		if (this->is_extended_req())
 			delete this->get_extension();
 		memcpy(this, &req, sizeof(req));
