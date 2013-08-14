@@ -209,12 +209,22 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 					continue;
 
 				sender->send_cached(tcbs1, ret);
-				// TODO Some requests may be synchronous, we should send them back
+				bool sync = false;
+				for (int i = 0; i < ret; i++)
+					if (tcbs1[i]->req.is_sync()) {
+						sync = true;
+						break;
+					}
+				// Some requests may be synchronous, we should send them back
 				// as quickly as possible.
-				int num_msg = sender->get_num_remaining();
-				if (num_msg >= AIO_DEPTH_PER_FILE) {
+				if (sync)
 					sender->flush(false);
-					assert(sender->get_num_remaining() < num_msg);
+				else {
+					int num_msg = sender->get_num_remaining();
+					if (num_msg >= AIO_DEPTH_PER_FILE) {
+						sender->flush(false);
+						assert(sender->get_num_remaining() < num_msg);
+					}
 				}
 			}
 		}
