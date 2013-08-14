@@ -75,7 +75,7 @@ public:
 	virtual io_interface *clone() const;
 	void flush_requests(int max_cached);
 	virtual void flush_requests();
-	virtual void print_stat() {
+	virtual void print_stat(int nthreads) {
 		printf("num completed reqs: %d\n", num_completed_reqs);
 	}
 };

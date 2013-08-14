@@ -157,6 +157,9 @@ public:
 	file_io_factory(const std::string _name): name(_name) {
 	}
 
+	virtual ~file_io_factory() {
+	}
+
 	const std::string &get_name() const {
 		return name;
 	}
