@@ -48,9 +48,10 @@ public:
 };
 
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
-		aio_complete_thread *complete_thread, file_mapper *mapper,
-		int node_id): io_interface(node_id)
+		aio_complete_thread *complete_thread, file_mapper *mapper, int node_id,
+		int max_reqs): io_interface(node_id), max_disk_cached_reqs(max_reqs)
 {
+	this->io_threads = remotes;
 	if (complete_thread == NULL)
 		this->complete_queue = NULL;
 	else
@@ -83,7 +84,9 @@ remote_disk_access::~remote_disk_access()
 
 io_interface *remote_disk_access::clone() const
 {
-	remote_disk_access *copy = new remote_disk_access(this->get_node_id());
+	remote_disk_access *copy = new remote_disk_access(this->get_node_id(),
+			this->max_disk_cached_reqs);
+	copy->io_threads = this->io_threads;
 	copy->senders.resize(this->senders.size());
 	copy->low_prio_senders.resize(this->low_prio_senders.size());
 	assert(copy->senders.size() == copy->low_prio_senders.size());
@@ -128,6 +131,9 @@ void remote_disk_access::cleanup()
 			usleep(100000);
 		}
 	} while (num > 0);
+
+	for (unsigned i = 0; i < io_threads.size(); i++)
+		io_threads[i]->flush_requests();
 }
 
 void remote_disk_access::access(io_request *requests, int num,

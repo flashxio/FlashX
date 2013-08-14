@@ -133,6 +133,13 @@ void disk_read_thread::run() {
 
 		if (num == 0)
 			num = queue.fetch(reqs, AIO_DEPTH_PER_FILE, true, true);
+		int num_flushes = flush_counter.get();
+		if (num_flushes > 0) {
+			// This thread is the only one that decreases the counter.
+			flush_counter.dec(1);
+			assert(flush_counter.get() >= 0);
+			aio->flush_requests();
+		}
 		// We have been interrupted from waiting for IO requests.
 		// Let's go back and try to process low-priority requests.
 		if (num == 0)

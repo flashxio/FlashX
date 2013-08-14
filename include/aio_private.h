@@ -168,6 +168,16 @@ public:
 		return num_local_alloc;
 	}
 
+	virtual void flush_requests() {
+		// There is nothing we can flush for incoming requests,
+		// but we can flush completed requests.
+		for (std::tr1::unordered_map<int, aio_complete_sender *>::iterator it
+				= complete_senders.begin(); it != complete_senders.end(); it++) {
+			aio_complete_sender *sender = it->second;
+			sender->flush(true);
+		}
+	}
+
 	// These two interfaces allow users to open and close more files.
 	
 	/*

@@ -209,16 +209,13 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 					continue;
 
 				sender->send_cached(tcbs1, ret);
-				// Some requests may be synchronous, we should send them back
+				// TODO Some requests may be synchronous, we should send them back
 				// as quickly as possible.
-				sender->flush(false);
-#if 0
 				int num_msg = sender->get_num_remaining();
 				if (num_msg >= AIO_DEPTH_PER_FILE) {
 					sender->flush(false);
 					assert(sender->get_num_remaining() < num_msg);
 				}
-#endif
 			}
 		}
 		if (num_local > 0) {

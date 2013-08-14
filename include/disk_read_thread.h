@@ -23,6 +23,8 @@ class disk_read_thread
 	int num_accesses;
 	int num_low_prio_accesses;
 
+	atomic_integer flush_counter;
+
 public:
 	disk_read_thread(const logical_file_partition &partition,
 			const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
@@ -65,6 +67,19 @@ public:
 		std::string name = part->get_file_name(0);
 		delete part;
 		return name;
+	}
+
+	/**
+	 * Flush threads asynchronously.
+	 * The invoker of this function shouldn't be the I/O thread.
+	 * So we need to wake up the I/O thread and notify the I/O thread
+	 * to flush requests.
+	 */
+	void flush_requests() {
+		flush_counter.inc(1);
+		// If the I/O thread is blocked by the request queue, we should
+		// wake the thread up.
+		queue.wakeup();
 	}
 
 	// It open a new file. The mapping is still the same.

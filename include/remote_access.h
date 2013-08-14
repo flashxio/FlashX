@@ -16,11 +16,13 @@ class request_sender;
  */
 class remote_disk_access: public io_interface
 {
+	const int max_disk_cached_reqs;
 	// They work as buffers for requests and are only used to
 	// send high-priority requests.
 	std::vector<request_sender *> senders;
 	// They are used to send low-priority requests.
 	std::vector<request_sender *> low_prio_senders;
+	std::vector<disk_read_thread *> io_threads;
 	callback *cb;
 	file_mapper *block_mapper;
 	aio_complete_queue *complete_queue;
@@ -34,7 +36,8 @@ class remote_disk_access: public io_interface
 
 	int num_completed_reqs;
 
-	remote_disk_access(int node_id): io_interface(node_id) {
+	remote_disk_access(int node_id, int max_reqs): io_interface(
+			node_id), max_disk_cached_reqs(max_reqs) {
 		cb = NULL;
 		block_mapper = NULL;
 		req_intercepter = NULL;
@@ -43,7 +46,8 @@ class remote_disk_access: public io_interface
 public:
 	remote_disk_access(const std::vector<disk_read_thread *> &remotes,
 			aio_complete_thread *complete_thread,
-			file_mapper *mapper, int node_id);
+			file_mapper *mapper, int node_id,
+			int max_reqs = MAX_DISK_CACHED_REQS);
 
 	~remote_disk_access();
 

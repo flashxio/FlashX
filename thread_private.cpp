@@ -218,6 +218,7 @@ again:
 				}
 			}
 			io->access(reqs, i);
+			io->flush_requests();
 			num_accesses += i;
 #ifdef STATISTICS
 			int curr = num_pending.inc(i);

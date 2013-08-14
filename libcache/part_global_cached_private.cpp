@@ -543,6 +543,7 @@ void part_global_cached_io::cleanup()
 				sender->flush_all();
 		}
 		process_replies();
+		global_cached_io::cleanup();
 
 		usleep(1000 * 10);
 	}
