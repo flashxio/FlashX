@@ -126,7 +126,7 @@ int thread_private::thread_init() {
 				// If each access size is irregular, I'll break each access
 				// into pages so each access is no larger than a page, so it
 				// should workl fine.
-				/ NUM_NODES) * PAGE_SIZE, buf_size);
+				/ NUM_NODES) * PAGE_SIZE, buf_size, node_id);
 	this->buf = buf;
 	if (io->support_aio()) {
 		cb = new cleanup_callback(buf, idx, this);

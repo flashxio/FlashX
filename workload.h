@@ -109,12 +109,12 @@ public:
 	 * @end: the index of the last entry.
 	 */
 	global_rand_permute_workload(int stride, int length, int repeats,
-			double read_ratio): local_buf(WORKLOAD_BUF_SIZE) {
+			double read_ratio): local_buf(-1, WORKLOAD_BUF_SIZE) {
 		if (permuted_offsets == NULL) {
 			int tot_length = length * repeats;
 			off_t *offsets = new off_t[tot_length];
 			permute_offsets(length, repeats, stride, 0, offsets);
-			permuted_offsets = new thread_safe_FIFO_queue<off_t>(tot_length);
+			permuted_offsets = thread_safe_FIFO_queue<off_t>::create(-1, tot_length);
 			int ret = permuted_offsets->add(offsets, tot_length);
 			assert(ret == tot_length);
 			delete offsets;
@@ -245,7 +245,7 @@ class divided_file_workload: public workload_gen
 	workload_t curr;
 public:
 	divided_file_workload(workload_t workloads[], long length, int thread_id,
-			int nthreads): local_buf(length / nthreads) {
+			int nthreads): local_buf(-1, length / nthreads) {
 		long part_size = length / nthreads;
 		local_buf.add(workloads + thread_id * part_size, part_size);
 	}
@@ -279,9 +279,9 @@ class file_workload: public workload_gen
 	workload_t curr;
 public:
 	file_workload(workload_t workloads[], long length, int thread_id,
-			int nthreads): local_buf(WORKLOAD_BUF_SIZE) {
+			int nthreads): local_buf(-1, WORKLOAD_BUF_SIZE) {
 		if (workload_queue == NULL) {
-			workload_queue = new thread_safe_FIFO_queue<workload_t>(length);
+			workload_queue = thread_safe_FIFO_queue<workload_t>::create(-1, length);
 			int ret = workload_queue->add(workloads, length);
 			assert(ret == length);
 		}

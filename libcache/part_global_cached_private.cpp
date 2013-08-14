@@ -57,7 +57,8 @@ public:
 	part_io_process_table(std::map<int, io_interface *> &underlyings,
 			const cache_config *config);
 
-	std::tr1::unordered_map<int, request_sender *> create_req_senders() const;
+	std::tr1::unordered_map<int, request_sender *> create_req_senders(
+			int node_id) const;
 
 	const cache_config *get_cache_config() const {
 		return cache_conf;
@@ -117,18 +118,33 @@ thread_group::~thread_group()
  */
 class node_cached_io: public global_cached_io
 {
+	const struct thread_group *local_group;
+
 	// thread id <-> msg sender
 	pthread_key_t replier_key;
-	const struct thread_group *local_group;
 	long processed_requests;
 	long num_requests;
 	io_request local_msg_reqs[NUMA_REQ_BUF_SIZE];
 	io_request local_reqs[NUMA_REQ_BUF_SIZE];
 	io_reply local_reply_buf[REPLY_BUF_SIZE];
-
 	pthread_t processing_thread_id;
-public:
+
 	node_cached_io(io_interface *underlying, struct thread_group *local_group);
+	~node_cached_io() {
+	}
+public:
+	static node_cached_io *create(io_interface *underlying,
+			struct thread_group *local_group) {
+		assert(underlying->get_node_id() >= 0);
+		void *addr = numa_alloc_onnode(sizeof(node_cached_io),
+				underlying->get_node_id());
+		return new(addr) node_cached_io(underlying, local_group);
+	}
+
+	static void destroy(node_cached_io *io) {
+		io->~node_cached_io();
+		numa_free(io, sizeof(*io));
+	}
 
 	virtual page_cache *get_global_cache() {
 		return local_group->cache;
@@ -280,7 +296,7 @@ void node_cached_io::notify_completion(io_request *req)
 class process_request_thread: public thread
 {
 	node_cached_io *io;
-public:
+
 	process_request_thread(node_cached_io *io): thread(
 			std::string("process_request_thread-") + itoa(io->get_node_id()),
 			// We don't use blocking mode of the thread because
@@ -288,6 +304,21 @@ public:
 			io->get_node_id(), false) {
 		this->io = io;
 	}
+	~process_request_thread() {
+		// TODO
+	}
+public:
+	static process_request_thread *create(node_cached_io *io) {
+		assert(io->get_node_id() >= 0);
+		void *addr = numa_alloc_onnode(sizeof(process_request_thread), io->get_node_id());
+		return new(addr) process_request_thread(io);
+	}
+
+	static void destroy(process_request_thread *t) {
+		t->~process_request_thread();
+		numa_free(t, sizeof(*t));
+	}
+
 	node_cached_io *get_io() const {
 		return io;
 	}
@@ -344,7 +375,7 @@ part_io_process_table::part_io_process_table(
 		group.id = node_id;
 		group.underlying = underlying;
 		group.cache = cache_conf->create_cache_on_node(node_id);
-		group.request_queue = new blocking_FIFO_queue<io_request>("request_queue", 
+		group.request_queue = blocking_FIFO_queue<io_request>::create(node_id, "request_queue", 
 				NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
 		assert(underlying);
 		groups.insert(std::pair<int, struct thread_group>(node_id, group));
@@ -352,8 +383,8 @@ part_io_process_table::part_io_process_table(
 		struct thread_group *groupp = &groups[node_id];
 		// Create processing threads.
 		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
-			node_cached_io *io = new node_cached_io(underlying->clone(), groupp);
-			thread *t = new process_request_thread(io);
+			node_cached_io *io = node_cached_io::create(underlying->clone(), groupp);
+			thread *t = process_request_thread::create(io);
 			t->start();
 			groupp->process_request_threads.push_back(t);
 		}
@@ -361,7 +392,7 @@ part_io_process_table::part_io_process_table(
 }
 
 std::tr1::unordered_map<int, request_sender *>
-part_io_process_table::create_req_senders() const
+part_io_process_table::create_req_senders(int node_id) const
 {
 	std::tr1::unordered_map<int, request_sender *> req_senders;
 	// Initialize the request senders.
@@ -370,7 +401,7 @@ part_io_process_table::create_req_senders() const
 		const struct thread_group *group = &it->second;
 		assert(group->id == it->first);
 		req_senders.insert(std::pair<int, request_sender *>(group->id,
-					new request_sender(group->request_queue,
+					request_sender::create(node_id, group->request_queue,
 						NUMA_REQ_CACHE_SIZE)));
 	}
 	return req_senders;
@@ -401,6 +432,7 @@ part_global_cached_io::part_global_cached_io(int node_id,
 	this->final_cb = NULL;
 	remote_reads = 0;
 	this->cache_conf = table->get_cache_config();
+	this->global_table = table;
 
 #ifdef DEBUG
 	long cache_size = cache_conf->get_part_size(node_id);
@@ -410,7 +442,7 @@ part_global_cached_io::part_global_cached_io(int node_id,
 
 	/* assign a thread to a group. */
 	this->local_group = table->get_thread_group(node_id);
-	reply_queue = new blocking_FIFO_queue<io_reply>("reply_queue", 
+	reply_queue = blocking_FIFO_queue<io_reply>::create(node_id, "reply_queue", 
 			// We don't want that adding replies is blocked, so we allow
 			// the reply queue to be expanded to an arbitrary size.
 			NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
@@ -423,11 +455,11 @@ part_global_cached_io::part_global_cached_io(int node_id,
 		int node_id = *it;
 		if ((int) reply_senders.size() <= node_id)
 			reply_senders.resize(node_id + 1);
-		reply_senders[node_id] = new thread_safe_msg_sender<io_reply>(
+		reply_senders[node_id] = thread_safe_msg_sender<io_reply>::create(node_id,
 				NUMA_REPLY_CACHE_SIZE, q1, 1);
 	}
 
-	req_senders = table->create_req_senders();
+	req_senders = table->create_req_senders(node_id);
 }
 
 /* distribute requests to nodes. */

@@ -20,7 +20,7 @@ class aio_complete_queue
 {
 	blocking_FIFO_queue<thread_callback_s *> queue;
 public:
-	aio_complete_queue(): queue("aio_completes", AIO_DEPTH_PER_FILE,
+	aio_complete_queue(int node_id): queue(node_id, "aio_completes", AIO_DEPTH_PER_FILE,
 			// This max size seems enough to keep all requests.
 			AIO_DEPTH_PER_FILE * 200) {
 	}
@@ -35,8 +35,9 @@ public:
 class aio_complete_sender: public simple_msg_sender<thread_callback_s *>
 {
 public:
-	aio_complete_sender(aio_complete_queue *queue): simple_msg_sender<thread_callback_s *>(
-			queue->get_queue(), AIO_DEPTH_PER_FILE) {
+	aio_complete_sender(int node_id,
+			aio_complete_queue *queue): simple_msg_sender<thread_callback_s *>(
+			node_id, queue->get_queue(), AIO_DEPTH_PER_FILE) {
 	}
 };
 
@@ -66,8 +67,8 @@ class callback_allocator: public obj_allocator<thread_callback_s>
 		}
 	};
 public:
-	callback_allocator(long increase_size,
-			long max_size = MAX_SIZE): obj_allocator<thread_callback_s>(
+	callback_allocator(int node_id, long increase_size,
+			long max_size = MAX_SIZE): obj_allocator<thread_callback_s>(node_id,
 				increase_size, max_size, new callback_initiator()) {
 	}
 
@@ -107,6 +108,7 @@ class async_io: public io_interface
 	int num_completed_reqs;
 	int num_local_alloc;
 
+	// file id <-> buffered io
 	std::tr1::unordered_map<int, buffered_io *> open_files;
 	buffered_io *default_io;
 
@@ -195,7 +197,7 @@ class aio_complete_thread: public thread
 	int num_completed_reqs;
 public:
 	aio_complete_thread(int node_id): thread("aio_complete_thread",
-			node_id) {
+			node_id), queue(node_id) {
 		num_completed_reqs = 0;
 		start();
 	}

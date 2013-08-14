@@ -36,7 +36,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 async_io::async_io(const logical_file_partition &partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 		int aio_depth_per_file, int node_id): io_interface(node_id), AIO_DEPTH(
-			aio_depth_per_file * partition.get_num_files()), cb_allocator(
+			aio_depth_per_file * partition.get_num_files()), cb_allocator(node_id,
 					AIO_DEPTH * sizeof(thread_callback_s))
 {
 	buf_idx = 0;
@@ -46,9 +46,9 @@ async_io::async_io(const logical_file_partition &partition,
 	for (std::tr1::unordered_map<int, aio_complete_thread *>::const_iterator it
 			= complete_threads.begin(); it != complete_threads.end(); it++) {
 		complete_senders.insert(std::pair<int, aio_complete_sender *>(it->first,
-					new aio_complete_sender(it->second->get_queue())));
+					new aio_complete_sender(node_id, it->second->get_queue())));
 		remote_tcbs.insert(std::pair<int, fifo_queue<thread_callback_s *> *>(
-					it->first, new fifo_queue<thread_callback_s *>(AIO_DEPTH)));
+					it->first, fifo_queue<thread_callback_s *>::create(node_id, AIO_DEPTH)));
 	}
 	num_completed_reqs = 0;
 	num_local_alloc = 0;

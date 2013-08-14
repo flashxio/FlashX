@@ -118,7 +118,7 @@ int page_cell<T>::get_num_used_pages() const
 	return num;
 }
 
-hash_cell::hash_cell(associative_cache *cache, long hash, bool get_pages) {
+void hash_cell::init(associative_cache *cache, long hash, bool get_pages) {
 	this->hash = hash;
 	assert(hash < INT_MAX);
 	pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
@@ -695,7 +695,7 @@ bool associative_cache::shrink(int npages, char *pages[])
 		// It's impossible to access the arrays after `narrays' now.
 		int narrays = orig_narrays / 2;
 		for (int i = narrays; i < orig_narrays; i++) {
-			delete [] cells_table[i];
+			hash_cell::destroy_array(cells_table[i], init_ncells);
 			cells_table[i] = NULL;
 		}
 	}
@@ -766,10 +766,10 @@ next_cell:
 			std::vector<hash_cell *> table;
 			int orig_narrays = (1 << level);
 			for (int i = orig_narrays; i < orig_narrays * 2; i++) {
-				hash_cell *cells = new hash_cell[init_ncells];
+				hash_cell *cells = hash_cell::create_array(node_id, init_ncells);
 				printf("create %d cells: %p\n", init_ncells, cells);
 				for (int j = 0; j < init_ncells; j++) {
-					cells[j] = hash_cell(this, i * init_ncells + j, false);
+					cells[j].init(this, i * init_ncells + j, false);
 				}
 				table.push_back(cells);
 			}
@@ -904,7 +904,7 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 	height = params.get_SA_min_cell_size();
 	expand_cell_idx = 0;
 	this->expandable = expandable;
-	this->manager = new memory_manager(max_cache_size, node_id);
+	this->manager = memory_manager::create(max_cache_size, node_id);
 	manager->register_cache(this);
 	long init_cache_size = default_init_cache_size;
 	if (init_cache_size > cache_size
@@ -917,11 +917,11 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 		init_cache_size = min_cell_size * PAGE_SIZE;
 	int npages = init_cache_size / PAGE_SIZE;
 	init_ncells = npages / min_cell_size;
-	hash_cell *cells = new hash_cell[init_ncells];
+	hash_cell *cells = hash_cell::create_array(node_id, init_ncells);
 	int max_npages = manager->get_max_size() / PAGE_SIZE;
 	try {
 		for (int i = 0; i < init_ncells; i++)
-			cells[i] = hash_cell(this, i, true);
+			cells[i].init(this, i, true);
 	} catch (oom_exception e) {
 		fprintf(stderr,
 				"out of memory: max npages: %d, init npages: %d\n",
@@ -1000,7 +1000,7 @@ class associative_flush_thread: public flush_thread
 public:
 	associative_flush_thread(page_cache *cache, associative_cache *local_cache,
 			io_interface *io, int node_id): flush_thread(node_id), dirty_cells(
-				MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
+				io->get_node_id(), MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
 		this->cache = cache;
 		this->local_cache = local_cache;
 		if (this->cache == NULL)

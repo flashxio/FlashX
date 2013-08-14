@@ -397,7 +397,7 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 
 io_interface *part_global_cached_io_factory::create_io(int node_id)
 {
-	part_global_cached_io *io = new part_global_cached_io(node_id, table);
+	part_global_cached_io *io = part_global_cached_io::create(node_id, table);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
 }

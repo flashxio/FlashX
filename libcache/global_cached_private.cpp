@@ -91,18 +91,6 @@ static inline thread_safe_page *__complete_req_unlocked(io_request *orig,
 	return generic_complete_req(orig, p, false);
 }
 
-class access_page_callback: public callback
-{
-	global_cached_io *cached_io;
-public:
-	access_page_callback(global_cached_io *io) {
-		cached_io = io;
-	}
-	int invoke(io_request *requests[], int);
-	int multibuf_invoke(io_request *request,
-			std::vector<thread_safe_page *> &dirty_pages);
-};
-
 void global_cached_io::notify_completion(io_request *req)
 {
 	io_interface *io = req->get_io();
@@ -176,8 +164,8 @@ void global_cached_io::finalize_request(io_request &req)
 	}
 }
 
-int access_page_callback::multibuf_invoke(io_request *request,
-		std::vector<thread_safe_page *> &dirty_pages)
+int global_cached_io::access_page_callback::multibuf_invoke(
+		io_request *request, std::vector<thread_safe_page *> &dirty_pages)
 {
 	io_request *orig = request->get_orig();
 	assert(orig->get_num_bufs() == 1);
@@ -278,7 +266,8 @@ int access_page_callback::multibuf_invoke(io_request *request,
 	return -1;
 }
 
-int access_page_callback::invoke(io_request *requests[], int num)
+int global_cached_io::access_page_callback::invoke(io_request *requests[],
+		int num)
 {
 	page_cache *cache = cached_io->get_global_cache();
 	std::vector<thread_safe_page *> dirty_pages;
@@ -374,9 +363,10 @@ int access_page_callback::invoke(io_request *requests[], int num)
 }
 
 global_cached_io::global_cached_io(io_interface *underlying,
-		page_cache *cache): io_interface(
-			underlying->get_node_id()), pending_requests(
-			INIT_GCACHE_PENDING_SIZE), req_allocator(sizeof(io_request) * 1024)
+		page_cache *cache): io_interface(underlying->get_node_id()),
+	underlying_cb(this),
+	pending_requests(underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
+	req_allocator(underlying->get_node_id(), sizeof(io_request) * 1024)
 {
 	cb = NULL;
 	cache_hits = 0;

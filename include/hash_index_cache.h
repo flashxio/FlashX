@@ -152,7 +152,7 @@ public:
 		pthread_key_create(&gclock_key, NULL);
 #else
 		// TODO I just prepare much more memory than I need.
-		manager = new memory_manager(cache_size * 2, node_id);
+		manager = memory_manager::create(cache_size * 2, node_id);
 		manager->register_cache(this);
 		gclock_buf = new LF_gclock_buffer(cache_size / PAGE_SIZE);
 		allocator = new frame_allocator(cache_size / PAGE_SIZE * 2);

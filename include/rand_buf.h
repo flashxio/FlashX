@@ -20,7 +20,7 @@ class rand_buf
 	slab_allocator allocator;
 #endif
 public:
-	rand_buf(int buf_size, int entry_size, int nodeid = -1);
+	rand_buf(int buf_size, int entry_size, int nodeid);
 
 	void free_entry(char *buf);
 

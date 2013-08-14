@@ -653,7 +653,7 @@ public:
 
 	linked_page_queue() {
 		_size = 0;
-		allocator = new obj_allocator<linked_obj>(PAGE_SIZE);
+		allocator = new obj_allocator<linked_obj>(-1, PAGE_SIZE);
 		local_allocator = true;
 	}
 

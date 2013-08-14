@@ -41,8 +41,8 @@ int initiator_callback::invoke(io_request *rqs[], int num)
 
 disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
-		int node_id): queue(std::string("io-queue-") + itoa(node_id),
-			IO_QUEUE_SIZE, IO_QUEUE_SIZE), low_prio_queue(
+		int node_id): queue(node_id, std::string("io-queue-") + itoa(node_id),
+			IO_QUEUE_SIZE, IO_QUEUE_SIZE), low_prio_queue(node_id,
 				// TODO let's allow the low-priority queue to
 				// be infinitely large for now.
 				std::string("io-queue-low_prio-") + itoa(node_id),

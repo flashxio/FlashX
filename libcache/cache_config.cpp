@@ -9,14 +9,12 @@
 page_cache *cache_config::create_cache_on_node(int node_id) const
 {
 	page_cache *cache;
-	struct bitmask *orig_bmp = numa_get_membind();
-	bind_mem2node_id(node_id);
 	switch (get_type()) {
 		case LRU2Q_CACHE:
 			cache = new LRU2Q_cache(get_part_size(node_id));
 			break;
 		case ASSOCIATIVE_CACHE:
-			cache = new associative_cache(get_part_size(node_id),
+			cache = associative_cache::create(get_part_size(node_id),
 					MAX_CACHE_SIZE, node_id, 1);
 			break;
 		case HASH_INDEX_CACHE:
@@ -26,7 +24,6 @@ page_cache *cache_config::create_cache_on_node(int node_id) const
 			fprintf(stderr, "wrong cache type\n");
 			exit(1);
 	}
-	numa_set_membind(orig_bmp);
 	return cache;
 }
 

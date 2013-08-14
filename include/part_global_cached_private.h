@@ -28,11 +28,10 @@ class part_io_process_table;
  */
 class part_global_cached_io: public global_cached_io
 {
-	part_io_process_table *global_table;
-
+	const part_io_process_table *global_table;
 	const struct thread_group *local_group;
-
 	const cache_config *cache_conf;
+
 	blocking_FIFO_queue<io_reply> *reply_queue;
 	io_reply local_reply_buf[REPLY_BUF_SIZE];
 	io_request local_req_buf[REQ_BUF_SIZE];
@@ -64,6 +63,10 @@ class part_global_cached_io: public global_cached_io
 	int process_replies();
 	int distribute_reqs(io_request *requests, int num);
 
+	part_global_cached_io(int node_id, part_io_process_table *);
+	~part_global_cached_io() {
+		// TODO delete all senders
+	}
 public:
 	static part_io_process_table *open_file(
 			std::map<int, io_interface *> &underlyings,
@@ -72,13 +75,19 @@ public:
 		throw unsupported_exception();
 	}
 
-	~part_global_cached_io() {
-		// TODO delete all senders
+	static part_global_cached_io *create(int node_id,
+			part_io_process_table *table) {
+		assert(node_id >= 0);
+		void *addr = numa_alloc_onnode(sizeof(part_global_cached_io), node_id);
+		return new(addr) part_global_cached_io(node_id, table);
+	}
+
+	static void destroy(part_global_cached_io *io) {
+		io->~part_global_cached_io();
+		numa_free(io, sizeof(*io));
 	}
 
 	int init();
-
-	part_global_cached_io(int node_id, part_io_process_table *);
 
 	thread_safe_msg_sender<io_reply> *get_reply_sender(int node_id) const {
 		return reply_senders[node_id];

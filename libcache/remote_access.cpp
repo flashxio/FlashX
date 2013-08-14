@@ -61,8 +61,8 @@ remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &re
 	// create a msg sender for each disk read thread.
 	for (unsigned i = 0; i < remotes.size(); i++) {
 		blocking_FIFO_queue<io_request> *queue = remotes[i]->get_queue();
-		senders[i] = new request_sender(queue, INIT_DISK_QUEUE_SIZE);
-		low_prio_senders[i] = new request_sender(remotes[i]->get_low_prio_queue(),
+		senders[i] = request_sender::create(node_id, queue, INIT_DISK_QUEUE_SIZE);
+		low_prio_senders[i] = request_sender::create(node_id, remotes[i]->get_low_prio_queue(),
 				INIT_DISK_QUEUE_SIZE);
 	}
 	cb = NULL;
@@ -76,8 +76,8 @@ remote_disk_access::~remote_disk_access()
 	assert(senders.size() == low_prio_senders.size());
 	int num_senders = senders.size();
 	for (int i = 0; i < num_senders; i++) {
-		delete senders[i];
-		delete low_prio_senders[i];
+		request_sender::destroy(senders[i]);
+		request_sender::destroy(low_prio_senders[i]);
 	}
 	delete req_intercepter;
 }
@@ -91,9 +91,9 @@ io_interface *remote_disk_access::clone() const
 	copy->low_prio_senders.resize(this->low_prio_senders.size());
 	assert(copy->senders.size() == copy->low_prio_senders.size());
 	for (unsigned i = 0; i < copy->senders.size(); i++) {
-		copy->senders[i] = new request_sender(this->senders[i]->get_queue(),
-				INIT_DISK_QUEUE_SIZE);
-		copy->low_prio_senders[i] = new request_sender(
+		copy->senders[i] = request_sender::create(this->get_node_id(),
+				this->senders[i]->get_queue(), INIT_DISK_QUEUE_SIZE);
+		copy->low_prio_senders[i] = request_sender::create(this->get_node_id(),
 				this->low_prio_senders[i]->get_queue(), INIT_DISK_QUEUE_SIZE);
 	}
 	copy->cb = this->cb;

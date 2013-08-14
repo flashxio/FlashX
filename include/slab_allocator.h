@@ -130,7 +130,7 @@ private:
 #endif
 public:
 	slab_allocator(int _obj_size, long _increase_size, long _max_size,
-			int _node_id = -1, bool init = false): obj_size(_obj_size), increase_size(
+			int _node_id, bool init = false): obj_size(_obj_size), increase_size(
 				_increase_size), max_size(_max_size), node_id(_node_id)
 #ifdef MEMCHECK
 		, allocator(obj_size)
@@ -154,7 +154,8 @@ public:
 		fifo_queue<char *> *local_buf_refs
 			= (fifo_queue<char *> *) pthread_getspecific(local_buf_key);
 		if (local_buf_refs == NULL) {
-			local_buf_refs = new fifo_queue<char *>(LOCAL_BUF_SIZE);
+			assert(node_id >= 0);
+			local_buf_refs = fifo_queue<char *>::create(node_id, LOCAL_BUF_SIZE);
 			pthread_setspecific(local_buf_key, local_buf_refs);
 		}
 
@@ -172,7 +173,7 @@ public:
 		fifo_queue<char *> *local_free_refs
 			= (fifo_queue<char *> *) pthread_getspecific(local_free_key);
 		if (local_free_refs == NULL) {
-			local_free_refs = new fifo_queue<char *>(LOCAL_BUF_SIZE);
+			local_free_refs = fifo_queue<char *>::create(node_id, LOCAL_BUF_SIZE);
 			pthread_setspecific(local_free_key, local_free_refs);
 		}
 		if (local_free_refs->is_full()) {
@@ -222,12 +223,12 @@ class obj_allocator: public slab_allocator
 {
 	obj_initiator<T> *initiator;
 public:
-	obj_allocator(long increase_size, long max_size = MAX_SIZE,
+	obj_allocator(int node_id, long increase_size, long max_size = MAX_SIZE,
 			obj_initiator<T> *initiator = new default_obj_initiator<T>(
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
 				)): slab_allocator(sizeof(T) + sizeof(slab_allocator::linked_obj),
-				increase_size, max_size, -1, true) {
+				increase_size, max_size, node_id, true) {
 		assert(increase_size <= max_size);
 		this->initiator = initiator;
 	}

@@ -96,26 +96,62 @@ class fifo_queue
 	long start;
 	long end;
 	bool resizable;
+	int node_id;
 
 	long loc_in_queue(long idx) {
 		return idx & size_mask;
 	}
 
+	T *alloc_buf(int size) {
+		void *addr;
+		if (node_id < 0)
+			addr = numa_alloc_local(sizeof(T) * size);
+		else
+			addr = numa_alloc_onnode(sizeof(T) * size, node_id);
+		T *buf = (T *) addr;
+		for (int i = 0; i < size; i++)
+			new(&buf[i]) T();
+		return buf;
+	}
+
+	void free_buf(T *buf) {
+		int size = size_mask + 1;
+		for (int i = 0; i < size; i++)
+			buf[i].~T();
+		numa_free(buf, sizeof(T) * size);
+	}
+
 public:
 	// the queue has to be 2^n. If it's not, the smallest number of 2^n
 	// is used.
-	fifo_queue(int size, bool resizable = false) {
+	fifo_queue(int node_id, int size, bool resizable = false) {
 		int log_size = (int) ceil(log2(size));
 		size = 1 << log_size;
 		this->size_mask = size - 1;
-		buf = new T[size];
+		this->node_id = node_id;
+		buf = alloc_buf(size);
 		start = 0;
 		end = 0;
 		this->resizable = resizable;
 	}
 
-	~fifo_queue() {
-		delete [] buf;
+	virtual ~fifo_queue() {
+		free_buf(buf);
+	}
+
+	static fifo_queue<T> *create(int node_id, int size,
+			bool resizable = false) {
+		void *addr;
+		if (node_id < 0)
+			addr = numa_alloc_local(sizeof(fifo_queue<T>));
+		else
+			addr = numa_alloc_onnode(sizeof(fifo_queue<T>), node_id);
+		return new(addr) fifo_queue<T>(node_id, size, resizable);
+	}
+
+	static void destroy(fifo_queue<T> *q) {
+		q->~fifo_queue();
+		numa_free(q, sizeof(*q));
 	}
 
 	bool expand_queue(int new_size);
@@ -206,12 +242,26 @@ class thread_safe_FIFO_queue: public fifo_queue<T>
 	pthread_spinlock_t _lock;
 
 public:
-	thread_safe_FIFO_queue(int size): fifo_queue<T>(size) {
+	thread_safe_FIFO_queue(int node_id, int size): fifo_queue<T>(node_id, size) {
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	virtual ~thread_safe_FIFO_queue() {
 		pthread_spin_destroy(&_lock);
+	}
+
+	static thread_safe_FIFO_queue<T> *create(int node_id, int size) {
+		void *addr;
+		if (node_id < 0)
+			addr = numa_alloc_local(sizeof(thread_safe_FIFO_queue<T>));
+		else
+			addr = numa_alloc_onnode(sizeof(thread_safe_FIFO_queue<T>), node_id);
+		return new(addr) thread_safe_FIFO_queue<T>(node_id, size);
+	}
+
+	static void destroy(thread_safe_FIFO_queue<T> *q) {
+		q->~thread_safe_FIFO_queue();
+		numa_free(q, sizeof(*q));
 	}
 
 	virtual int fetch(T *entries, int num) {
@@ -296,8 +346,8 @@ class blocking_FIFO_queue: public fifo_queue<T>
 
 	std::string name;
 public:
-	blocking_FIFO_queue(const std::string name, int init_size,
-			int max_size): fifo_queue<T>(init_size, max_size > init_size) {
+	blocking_FIFO_queue(int node_id, const std::string name, int init_size,
+			int max_size): fifo_queue<T>(node_id, init_size, max_size > init_size) {
 		assert(init_size <= max_size);
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
@@ -306,6 +356,21 @@ public:
 		num_full = 0;
 		this->max_size = max_size;
 		interrupted = false;
+	}
+
+	static blocking_FIFO_queue<T> *create(int node_id, const std::string name,
+			int init_size, int max_size) {
+		void *addr;
+		if (node_id < 0)
+			addr = numa_alloc_local(sizeof(blocking_FIFO_queue<T>));
+		else
+			addr = numa_alloc_onnode(sizeof(blocking_FIFO_queue<T>), node_id);
+		return new(addr) blocking_FIFO_queue<T>(node_id, name, init_size, max_size);
+	}
+
+	static void destroy(blocking_FIFO_queue<T> *q) {
+		q->~blocking_FIFO_queue();
+		numa_free(q, sizeof(*q));
 	}
 
 	virtual int fetch(T *entries, int num) {

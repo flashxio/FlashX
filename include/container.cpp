@@ -6,12 +6,19 @@ bool fifo_queue<T>::expand_queue(int new_size)
 	int log_size = (int) ceil(log2(new_size));
 	new_size = 1 << log_size;
 	assert(resizable && get_size() < new_size);
-	T *tmp = new T[new_size];
+
+	// Allocate new memory for the array and initialize it.
+	T *tmp = alloc_buf(new_size);
+
+	// Copy the old array to the new one.
 	int num = fifo_queue<T>::get_num_entries();
 	for (int i = 0; i < num; i++) {
 		tmp[i] = buf[loc_in_queue(start + i)];
 	}
-	delete [] buf;
+
+	// Destroy the old array.
+	free_buf(buf);
+
 	buf = tmp;
 	size_mask = new_size - 1;
 	start = 0;

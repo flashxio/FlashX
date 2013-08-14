@@ -247,8 +247,7 @@ class hash_cell
 
 	thread_safe_page *get_empty_page();
 
-public:
-	hash_cell() {
+	void init() {
 		table = NULL;
 		hash = -1;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
@@ -256,36 +255,36 @@ public:
 		num_evictions = 0;
 	}
 
-	hash_cell(associative_cache *cache, long hash, bool get_pages);
+	hash_cell() {
+		init();
+	}
 
 	~hash_cell() {
 		pthread_spin_destroy(&_lock);
 	}
 
+public:
+	static hash_cell *create_array(int node_id, int num) {
+		assert(node_id >= 0);
+		void *addr = numa_alloc_onnode(sizeof(hash_cell) * num, node_id);
+		hash_cell *cells = (hash_cell *) addr;
+		for (int i = 0; i < num; i++)
+			new(&cells[i]) hash_cell();
+		return cells;
+	}
+
+	static void destroy_array(hash_cell *cells, int num) {
+		for (int i = 0; i < num; i++)
+			cells[i].~hash_cell();
+		numa_free(cells, sizeof(*cells) * num);
+	}
+
+	void init(associative_cache *cache, long hash, bool get_pages);
+
 	void add_pages(char *pages[], int num);
 	int add_pages_to_min(char *pages[], int num);
 
 	void rebalance(hash_cell *cell);
-
-	void *operator new[](size_t size) {
-		int node_id = numa_get_mem_node();
-		void *addr = numa_alloc_onnode(size + CACHE_LINE, node_id);
-		assert(((long) addr) % PAGE_SIZE == 0);
-		// We save the size info in the padding area.
-		((size_t *) addr)[0] = size;
-#ifdef DEBUG
-		printf("allocate %ld bytes on node %d\n", size, node_id);
-#endif
-		// TODO 8 might be architecture specific. It's 8 for 64-bit machines.
-		return (void *) ((long) addr + CACHE_LINE - 8);
-	}
-
-	void operator delete[](void *p) {
-		void *addr = (void *) ((long) p - (CACHE_LINE - 8));
-		size_t size = *(size_t *) addr;
-		printf("free %ld bytes\n", size);
-		numa_free(addr, size);
-	}
 
 	page *search(off_t off, off_t &old_off);
 	page *search(off_t offset);
@@ -408,15 +407,28 @@ class associative_cache: public page_cache
 		return (1 << level) * init_ncells + split;
 	}
 
-public:
 	associative_cache(long cache_size, long max_cache_size, int node_id,
 			int offset_factor, bool expandable = false);
 
 	~associative_cache() {
 		for (unsigned int i = 0; i < cells_table.size(); i++)
 			if (cells_table[i])
-				delete [] cells_table[i];
+				hash_cell::destroy_array(cells_table[i], init_ncells);
 		manager->unregister_cache(this);
+	}
+
+public:
+	static associative_cache *create(long cache_size, long max_cache_size,
+			int node_id, int offset_factor, bool expandable = false) {
+		assert(node_id >= 0);
+		void *addr = numa_alloc_onnode(sizeof(associative_cache), node_id);
+		return new(addr) associative_cache(cache_size, max_cache_size,
+				node_id, offset_factor, expandable);
+	}
+
+	static void destroy(associative_cache *cache) {
+		cache->~associative_cache();
+		numa_free(cache, sizeof(*cache));
 	}
 
 	int get_node_id() const {

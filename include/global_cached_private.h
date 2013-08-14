@@ -17,11 +17,11 @@ class request_allocator: public obj_allocator<io_request>
 		void init(io_request *req) {
 			req->init();
 		}
-	};
+	} initiator;
 public:
-	request_allocator(long increase_size,
-			long max_size = MAX_SIZE): obj_allocator<io_request>(
-				increase_size, max_size, new req_initiator()) {
+	request_allocator(int node_id, long increase_size,
+			long max_size = MAX_SIZE): obj_allocator<io_request>(node_id,
+				increase_size, max_size, &initiator) {
 	}
 
 	virtual int alloc_objs(io_request **reqs, int num) {
@@ -48,6 +48,18 @@ public:
 
 class global_cached_io: public io_interface
 {
+	class access_page_callback: public callback
+	{
+		global_cached_io *cached_io;
+		public:
+		access_page_callback(global_cached_io *io) {
+			cached_io = io;
+		}
+		int invoke(io_request *requests[], int);
+		int multibuf_invoke(io_request *request,
+				std::vector<thread_safe_page *> &dirty_pages);
+	} underlying_cb;
+
 	int num_waits;
 	long cache_size;
 	page_cache *global_cache;

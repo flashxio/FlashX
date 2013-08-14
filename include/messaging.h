@@ -597,6 +597,7 @@ class msg_sender
 	int num_current;	// the current number of messages in the buffer.
 	fifo_queue<T> **dest_queues;
 	int num_queues;
+
 public:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
@@ -628,14 +629,29 @@ class thread_safe_msg_sender
 {
 	thread_safe_FIFO_queue<T> buf;
 	std::vector<fifo_queue<T> *> dest_queues;
-public:
+
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	thread_safe_msg_sender(int buf_size, fifo_queue<T> **queues,
-			int num_queues): buf(buf_size), dest_queues(num_queues) {
+	thread_safe_msg_sender(int node_id, int buf_size, fifo_queue<T> **queues,
+			int num_queues): buf(node_id, buf_size), dest_queues(num_queues) {
 		for (int i = 0; i < num_queues; i++)
 			dest_queues[i] = queues[i];
+	}
+
+public:
+	static thread_safe_msg_sender<T> *create(int node_id, int buf_size,
+			fifo_queue<T> **queues, int num_queues) {
+		assert(node_id >= 0);
+		void *addr = numa_alloc_onnode(sizeof(thread_safe_msg_sender<T>),
+				node_id);
+		return new(addr) thread_safe_msg_sender<T>(node_id, buf_size,
+				queues, num_queues);
+	}
+
+	static void destroy(thread_safe_msg_sender<T> *s) {
+		s->~thread_safe_msg_sender();
+		numa_free(s, sizeof(*s));
 	}
 
 	int num_msg() {
@@ -659,13 +675,27 @@ class simple_msg_sender
 {
 	fifo_queue<T> buf;
 	blocking_FIFO_queue<T> *queue;
-public:
+
+protected:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	simple_msg_sender(blocking_FIFO_queue<T> *queue,
-			int init_queue_size): buf(init_queue_size, true) {
+	simple_msg_sender(int node_id, blocking_FIFO_queue<T> *queue,
+			int init_queue_size): buf(node_id, init_queue_size, true) {
 		this->queue = queue;
+	}
+
+public:
+	static simple_msg_sender<T> *create(int node_id, blocking_FIFO_queue<T> *queue,
+			int init_queue_size) {
+		assert(node_id >= 0);
+		void *addr = numa_alloc_onnode(sizeof(simple_msg_sender<T>), node_id);
+		return new(addr) simple_msg_sender<T>(queue, init_queue_size);
+	}
+
+	static void destroy(simple_msg_sender<T> *s) {
+		s->~simple_msg_sender();
+		numa_free(s, sizeof(*s));
 	}
 
 	int flush(bool blocking) {
@@ -713,9 +743,22 @@ public:
 
 class request_sender: public simple_msg_sender<io_request>
 {
+	request_sender(int node_id, blocking_FIFO_queue<io_request> *queue,
+			int init_queue_size): simple_msg_sender(node_id, queue,
+				init_queue_size) {
+	}
+
 public:
-	request_sender(blocking_FIFO_queue<io_request> *queue,
-			int init_queue_size): simple_msg_sender(queue, init_queue_size) {
+	static request_sender *create(int node_id,
+			blocking_FIFO_queue<io_request> *queue, int init_queue_size) {
+		assert(node_id >= 0);
+		void *addr = numa_alloc_onnode(sizeof(request_sender), node_id);
+		return new(addr) request_sender(node_id, queue, init_queue_size);
+	}
+
+	static void destroy(request_sender *s) {
+		s->~request_sender();
+		numa_free(s, sizeof(*s));
 	}
 };
 
