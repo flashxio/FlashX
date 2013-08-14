@@ -47,20 +47,18 @@ public:
 	}
 };
 
-remote_disk_access::remote_disk_access(disk_read_thread **remotes,
-		aio_complete_thread *complete_thread, int num_remotes,
-		file_mapper *mapper, int node_id): io_interface(node_id)
+remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
+		aio_complete_thread *complete_thread, file_mapper *mapper,
+		int node_id): io_interface(node_id)
 {
 	if (complete_thread == NULL)
 		this->complete_queue = NULL;
 	else
 		this->complete_queue = complete_thread->get_queue();
-	assert(num_remotes == mapper->get_num_files());
-	senders = new request_sender *[num_remotes];
-	low_prio_senders = new request_sender *[num_remotes];
-	num_senders = num_remotes;
+	senders.resize(remotes.size());
+	low_prio_senders.resize(remotes.size());
 	// create a msg sender for each disk read thread.
-	for (int i = 0; i < num_remotes; i++) {
+	for (unsigned i = 0; i < remotes.size(); i++) {
 		blocking_FIFO_queue<io_request> *queue = remotes[i]->get_queue();
 		senders[i] = new request_sender(queue, INIT_DISK_QUEUE_SIZE);
 		low_prio_senders[i] = new request_sender(remotes[i]->get_low_prio_queue(),
@@ -74,22 +72,22 @@ remote_disk_access::remote_disk_access(disk_read_thread **remotes,
 
 remote_disk_access::~remote_disk_access()
 {
+	assert(senders.size() == low_prio_senders.size());
+	int num_senders = senders.size();
 	for (int i = 0; i < num_senders; i++) {
 		delete senders[i];
 		delete low_prio_senders[i];
 	}
-	delete [] senders;
-	delete [] low_prio_senders;
 	delete req_intercepter;
 }
 
 io_interface *remote_disk_access::clone() const
 {
 	remote_disk_access *copy = new remote_disk_access(this->get_node_id());
-	copy->num_senders = this->num_senders;
-	copy->senders = new request_sender *[this->num_senders];
-	copy->low_prio_senders = new request_sender *[this->num_senders];
-	for (int i = 0; i < copy->num_senders; i++) {
+	copy->senders.resize(this->senders.size());
+	copy->low_prio_senders.resize(this->low_prio_senders.size());
+	assert(copy->senders.size() == copy->low_prio_senders.size());
+	for (unsigned i = 0; i < copy->senders.size(); i++) {
 		copy->senders[i] = new request_sender(this->senders[i]->get_queue(),
 				INIT_DISK_QUEUE_SIZE);
 		copy->low_prio_senders[i] = new request_sender(
@@ -103,14 +101,15 @@ io_interface *remote_disk_access::clone() const
 
 void remote_disk_access::cleanup()
 {
-	for (int i = 0; i < num_senders; i++) {
+	for (unsigned i = 0; i < senders.size(); i++) {
 		senders[i]->flush_all();
 		low_prio_senders[i]->flush_all();
 	}
 	int num;
 	do {
 		num = 0;
-		for (int i = 0; i < num_senders; i++) {
+		assert(senders.size() == low_prio_senders.size());
+		for (unsigned i = 0; i < senders.size(); i++) {
 			num += senders[i]->get_queue()->get_num_entries();
 			num += low_prio_senders[i]->get_queue()->get_num_entries();
 		}
@@ -123,7 +122,7 @@ void remote_disk_access::cleanup()
 		if (num > 0) {
 			// Let's wake up all IO threads if there are still
 			// some low-priority requests that need to be processed.
-			for (int i = 0; i < num_senders; i++) {
+			for (unsigned i = 0; i < senders.size(); i++) {
 				senders[i]->get_queue()->wakeup();
 			}
 			usleep(100000);
@@ -135,8 +134,8 @@ void remote_disk_access::access(io_request *requests, int num,
 		io_status *status)
 {
 	// It marks whether a low-priority sender gets a request.
-	bool has_msgs[num_senders];
-	memset(has_msgs, 0, sizeof(has_msgs[0]) * num_senders);
+	bool has_msgs[low_prio_senders.size()];
+	memset(has_msgs, 0, sizeof(has_msgs[0]) * low_prio_senders.size());
 
 	bool syncd = false;
 	for (int i = 0; i < num; i++) {
@@ -207,7 +206,8 @@ void remote_disk_access::access(io_request *requests, int num,
 	}
 
 	int num_remaining = 0;
-	for (int i = 0; i < num_senders; i++) {
+	assert(senders.size() == low_prio_senders.size());
+	for (unsigned i = 0; i < senders.size(); i++) {
 		num_remaining += senders[i]->get_num_remaining();
 		num_remaining += low_prio_senders[i]->get_num_remaining();
 	}
@@ -224,7 +224,7 @@ void remote_disk_access::access(io_request *requests, int num,
 	// The IO threads are never blocked by the low-priority queues,
 	// but they may be blocked by the regular message queues.
 	// If so, we need to explicitly wake up the IO threads.
-	for (int i = 0; i < num_senders; i++) {
+	for (unsigned i = 0; i < senders.size(); i++) {
 		if (has_msgs[i])
 			senders[i]->get_queue()->wakeup();
 	}
@@ -243,6 +243,8 @@ void remote_disk_access::flush_requests(int max_cached)
 	int num_low_prio_remaining = 0;
 	// Now let's flush requests to the queues, but we first try to
 	// flush requests non-blockingly.
+	assert(senders.size() == low_prio_senders.size());
+	int num_senders = senders.size();
 	for (int i = 0; i < num_senders; i++) {
 		senders[i]->flush(false);
 		low_prio_senders[i]->flush(false);

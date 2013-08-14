@@ -355,20 +355,18 @@ remote_io_factory::remote_io_factory(const RAID_config &_raid_conf,
 
 io_interface *remote_io_factory::create_io(int node_id)
 {
-	int num_files = mapper->get_num_files();
-	io_interface *io = new remote_disk_access(global_data.read_threads.data(),
-			global_data.complete_threads[node_id], num_files, mapper, node_id);
+	io_interface *io = new remote_disk_access(global_data.read_threads,
+			global_data.complete_threads[node_id], mapper, node_id);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
 }
 
 io_interface *global_cached_io_factory::create_io(int node_id)
 {
-	int num_files = mapper->get_num_files();
 	io_interface *underlying = new remote_disk_access(
-			global_data.read_threads.data(),
+			global_data.read_threads,
 			global_data.complete_threads[node_id],
-			num_files, mapper, node_id);
+			mapper, node_id);
 	global_cached_io *io = new global_cached_io(underlying,
 			global_cache);
 	register_io(raid_conf.get_conf_file(), io);
@@ -380,15 +378,14 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 		const cache_config *cache_conf): remote_io_factory(raid_conf,
 			node_id_array)
 {
-	int num_files = mapper->get_num_files();
 	std::map<int, io_interface *> underlyings;
 	for (unsigned i = 0; i < node_id_array.size(); i++) {
 		int node_id = node_id_array[i];
 		underlyings.insert(std::pair<int, io_interface *>(node_id,
 					new remote_disk_access(
-						global_data.read_threads.data(),
+						global_data.read_threads,
 						global_data.complete_threads[node_id],
-						num_files, mapper, node_id)));
+						mapper, node_id)));
 	}
 	table = part_global_cached_io::open_file(underlyings, cache_conf);
 	this->cache_conf = cache_conf;
