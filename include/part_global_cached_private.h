@@ -64,16 +64,12 @@ class part_global_cached_io: public global_cached_io
 	int distribute_reqs(io_request *requests, int num);
 
 	part_global_cached_io(int node_id, part_io_process_table *);
-	~part_global_cached_io() {
-		// TODO delete all senders
-	}
+	~part_global_cached_io();
 public:
 	static part_io_process_table *open_file(
 			std::map<int, io_interface *> &underlyings,
 			const cache_config *config);
-	static int close_file(part_io_process_table *table) {
-		throw unsupported_exception();
-	}
+	static int close_file(part_io_process_table *table);
 
 	static part_global_cached_io *create(int node_id,
 			part_io_process_table *table) {

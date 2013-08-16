@@ -74,7 +74,10 @@ struct aio_ctx* create_aio_ctx(int max_aio)
 	return a_ctx;
 }
 
-
+void destroy_aio_ctx(struct aio_ctx *ctx)
+{
+	// TODO
+}
 
 inline struct iocb* get_iocb(struct aio_ctx* a_ctx)
 {

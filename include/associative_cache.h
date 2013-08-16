@@ -415,6 +415,11 @@ class associative_cache: public page_cache
 			if (cells_table[i])
 				hash_cell::destroy_array(cells_table[i], init_ncells);
 		manager->unregister_cache(this);
+		memory_manager::destroy(manager);
+	}
+
+	memory_manager *get_manager() {
+		return manager;
 	}
 
 public:
@@ -482,10 +487,6 @@ public:
 	int expand(int npages);
 	bool shrink(int npages, char *pages[]);
 
-	memory_manager *get_manager() {
-		return manager;
-	}
-
 	void print_cell(off_t off) {
 		get_cell(off)->print_cell();
 	}
@@ -546,6 +547,7 @@ public:
 
 	virtual void init(io_interface *underlying);
 
+	friend class hash_cell;
 #ifdef STATISTICS
 	void print_stat() const {
 		printf("SA-cache: ncells: %d, height: %d, split: %d\n",

@@ -13,6 +13,7 @@ class thread
 	std::string name;
 
 	volatile bool _is_running;
+	volatile bool _has_exit;
 
 	bool is_activate;
 	pthread_mutex_t mutex;
@@ -23,9 +24,13 @@ public:
 		this->node_id = node_id;
 		this->blocking = blocking;
 		is_activate = false;
+		_has_exit = false;
 		_is_running = true;
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
+	}
+
+	virtual ~thread() {
 	}
 
 	void activate() {
@@ -64,9 +69,19 @@ public:
 		pthread_mutex_unlock(&mutex);
 	}
 
+	void exit() {
+		_has_exit = true;
+	}
+
+	bool has_exit() const {
+		return _has_exit;
+	}
+
 	void join() {
 		pthread_join(id, NULL);
+#ifdef DEBUG
 		printf("stop thread %s\n", name.c_str());
+#endif
 	}
 
 	void start();

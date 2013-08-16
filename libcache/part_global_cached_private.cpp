@@ -20,11 +20,12 @@
 #include "part_global_cached_private.h"
 #include "parameters.h"
 
+class process_request_thread;
 struct thread_group
 {
 	int id;
 	page_cache *cache;
-	std::vector<thread *> process_request_threads;
+	std::vector<process_request_thread *> process_request_threads;
 	const io_interface *underlying;
 	blocking_FIFO_queue<io_request> *request_queue;
 
@@ -57,8 +58,12 @@ public:
 	part_io_process_table(std::map<int, io_interface *> &underlyings,
 			const cache_config *config);
 
+	~part_io_process_table();
+
 	std::tr1::unordered_map<int, request_sender *> create_req_senders(
 			int node_id) const;
+	void destroy_req_senders(const std::tr1::unordered_map<int,
+			request_sender *> &) const;
 
 	const cache_config *get_cache_config() const {
 		return cache_conf;
@@ -210,9 +215,15 @@ int node_cached_io::process_requests(int max_nreqs)
 		processing_thread_id = pthread_self();
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
-	fifo_queue<io_request> *request_queue = local_group->request_queue;
+	blocking_FIFO_queue<io_request> *request_queue = local_group->request_queue;
 	while (num_processed < max_nreqs) {
-		int num = request_queue->fetch(local_msg_reqs, NUMA_REQ_BUF_SIZE);
+		int num = request_queue->fetch(local_msg_reqs, NUMA_REQ_BUF_SIZE,
+				true, true);
+		// We have been interrupted from waiting for IO requests.
+		// Maybe it's a signal for stopping the thread.
+		if (num == 0)
+			break;
+
 		for (int i = 0; i < num; i++)
 			local_reqs[i] = local_msg_reqs[i];
 		global_cached_io::access(local_reqs, num);
@@ -304,17 +315,22 @@ class process_request_thread: public thread
 			io->get_node_id(), false) {
 		this->io = io;
 	}
-	~process_request_thread() {
-		// TODO
-	}
 public:
 	static process_request_thread *create(node_cached_io *io) {
 		assert(io->get_node_id() >= 0);
-		void *addr = numa_alloc_onnode(sizeof(process_request_thread), io->get_node_id());
+		void *addr = numa_alloc_onnode(sizeof(process_request_thread),
+				io->get_node_id());
 		return new(addr) process_request_thread(io);
 	}
 
-	static void destroy(process_request_thread *t) {
+	static void destroy(process_request_thread *t,
+			const struct thread_group *group) {
+		while (!t->has_exit()) {
+			t->stop();
+			group->request_queue->wakeup();
+			usleep(10000);
+		}
+		t->join();
 		t->~process_request_thread();
 		numa_free(t, sizeof(*t));
 	}
@@ -384,10 +400,26 @@ part_io_process_table::part_io_process_table(
 		// Create processing threads.
 		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
 			node_cached_io *io = node_cached_io::create(underlying->clone(), groupp);
-			thread *t = process_request_thread::create(io);
+			process_request_thread *t = process_request_thread::create(io);
 			t->start();
 			groupp->process_request_threads.push_back(t);
 		}
+	}
+}
+
+part_io_process_table::~part_io_process_table()
+{
+	for (std::map<int, struct thread_group>::const_iterator it
+			= groups.begin(); it != groups.end(); it++) {
+		const struct thread_group *group = &it->second;
+		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
+			process_request_thread *t = group->process_request_threads[i];
+			node_cached_io *io = t->get_io();
+			process_request_thread::destroy(t, group);
+			node_cached_io::destroy(io);
+		}
+		cache_conf->destroy_cache_on_node(group->cache);
+		blocking_FIFO_queue<io_request>::destroy(group->request_queue);
 	}
 }
 
@@ -407,9 +439,25 @@ part_io_process_table::create_req_senders(int node_id) const
 	return req_senders;
 }
 
-int part_global_cached_io::init() {
+void part_io_process_table::destroy_req_senders(
+		const std::tr1::unordered_map<int, request_sender *> &req_senders) const
+{
+	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+			= req_senders.begin(); it != req_senders.end(); it++) {
+		request_sender::destroy(it->second);
+	}
+}
+
+int part_global_cached_io::init()
+{
 	global_cached_io::init();
 
+	return 0;
+}
+
+int part_global_cached_io::close_file(part_io_process_table *table)
+{
+	delete table;
 	return 0;
 }
 
@@ -460,6 +508,16 @@ part_global_cached_io::part_global_cached_io(int node_id,
 	}
 
 	req_senders = table->create_req_senders(node_id);
+}
+
+part_global_cached_io::~part_global_cached_io()
+{
+	blocking_FIFO_queue<io_reply>::destroy(reply_queue);
+	for (unsigned i = 0; i < reply_senders.size(); i++) {
+		if (reply_senders[i])
+			thread_safe_msg_sender<io_reply>::destroy(reply_senders[i]);
+	}
+	global_table->destroy_req_senders(req_senders);
 }
 
 /* distribute requests to nodes. */

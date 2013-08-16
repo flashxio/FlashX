@@ -201,6 +201,12 @@ void init_io_system(const RAID_config &raid_conf,
 		}
 	}
 	pthread_mutex_unlock(&global_data.mutex);
+	delete mapper;
+}
+
+void destroy_io_system()
+{
+	// TODO
 }
 
 class posix_io_factory: public file_io_factory
@@ -246,6 +252,10 @@ public:
 	remote_io_factory(const RAID_config &raid_conf,
 			const std::vector<int> &node_id_array);
 
+	~remote_io_factory() {
+		delete mapper;
+	}
+
 	virtual io_interface *create_io(int node_id);
 
 	virtual void destroy_io(io_interface *io) {
@@ -265,6 +275,10 @@ public:
 		global_cache = cache_conf->create_cache();
 	}
 
+	~global_cached_io_factory() {
+		cache_conf->destroy_cache(global_cache);
+	}
+
 	virtual io_interface *create_io(int node_id);
 
 	virtual void destroy_io(io_interface *io) {
@@ -280,6 +294,10 @@ public:
 	part_global_cached_io_factory(const RAID_config &raid_conf,
 			const std::vector<int> &node_id_array,
 			const cache_config *cache_conf);
+
+	~part_global_cached_io_factory() {
+		part_global_cached_io::close_file(table);
+	}
 
 	virtual io_interface *create_io(int node_id);
 
@@ -451,6 +469,11 @@ file_io_factory *create_io_factory(const RAID_config &raid_conf,
 			abort();
 	}
 	return NULL;
+}
+
+void destroy_io_factory(file_io_factory *factory)
+{
+	delete factory;
 }
 
 void print_io_thread_stat()

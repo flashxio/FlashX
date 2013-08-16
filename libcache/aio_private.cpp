@@ -81,6 +81,21 @@ void async_io::cleanup()
 async_io::~async_io()
 {
 	cleanup();
+	destroy_aio_ctx(ctx);
+	for (std::tr1::unordered_map<int, aio_complete_sender *>::const_iterator it
+			= complete_senders.begin(); it != complete_senders.end(); it++) {
+		aio_complete_sender *sender = it->second;
+		assert(sender->get_num_remaining() == 0);
+		delete sender;
+	}
+	for (std::tr1::unordered_map<int, fifo_queue<thread_callback_s *> *>::const_iterator it
+			= remote_tcbs.begin(); it != remote_tcbs.end(); it++) {
+		assert(it->second->get_num_entries() == 0);
+		delete it->second;
+	}
+	for (std::tr1::unordered_map<int, buffered_io *>::const_iterator it
+			= open_files.begin(); it != open_files.end(); it++)
+		delete it->second;
 }
 
 struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)

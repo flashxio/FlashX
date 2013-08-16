@@ -103,6 +103,10 @@ class global_cached_io: public io_interface
 public:
 	global_cached_io(io_interface *, page_cache *cache);
 
+	~global_cached_io() {
+		delete underlying;
+	}
+
 	page_cache *get_global_cache() {
 		return global_cache;
 	}

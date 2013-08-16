@@ -26,6 +26,11 @@ public:
 		}
 	}
 
+	~NUMA_cache() {
+		for (unsigned i = 0; i < caches.size(); i++)
+			cache_conf->destroy_cache_on_node(caches[i]);
+	}
+
 	virtual page *search(off_t offset, off_t &old_off) {
 		int idx = cache_conf->page2cache(offset);
 		return caches[idx]->search(offset, old_off);

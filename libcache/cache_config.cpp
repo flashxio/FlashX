@@ -27,6 +27,22 @@ page_cache *cache_config::create_cache_on_node(int node_id) const
 	return cache;
 }
 
+void cache_config::destroy_cache_on_node(page_cache *cache) const
+{
+	switch (get_type()) {
+		case LRU2Q_CACHE:
+		case HASH_INDEX_CACHE:
+			delete cache;
+			break;
+		case ASSOCIATIVE_CACHE:
+			associative_cache::destroy((associative_cache *) cache);
+			break;
+		default:
+			fprintf(stderr, "wrong cache type\n");
+			exit(1);
+	}
+}
+
 page_cache *cache_config::create_cache() const
 {
 	std::vector<int> node_ids;
@@ -35,6 +51,16 @@ page_cache *cache_config::create_cache() const
 		return create_cache_on_node(node_ids[0]);
 	else
 		return new NUMA_cache(this);
+}
+
+void cache_config::destroy_cache(page_cache *cache) const
+{
+	std::vector<int> node_ids;
+	get_node_ids(node_ids);
+	if (node_ids.size() == 1)
+		destroy_cache_on_node(cache);
+	else
+		delete cache;
 }
 
 static bool node_exist(const std::vector<int> &node_ids, int node_id)

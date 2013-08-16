@@ -71,8 +71,9 @@ public:
 	}
 
 	page_cache *create_cache_on_node(int node_id) const;
-
+	void destroy_cache_on_node(page_cache *cache) const;
 	page_cache *create_cache() const;
+	void destroy_cache(page_cache *cache) const;
 
 };
 

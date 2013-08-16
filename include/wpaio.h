@@ -50,6 +50,7 @@ extern long long f_offset;
 extern "C" {
 #endif
 struct aio_ctx* create_aio_ctx(int max_aio);
+void destroy_aio_ctx(struct aio_ctx *);
 //void init_free_list();
 struct iocb* make_io_request(struct aio_ctx* a_ctx, int fd, size_t iosize, long long offset,
 							 void* buffer, int io_type, struct io_callback_s *cb);

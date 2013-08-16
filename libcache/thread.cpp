@@ -16,6 +16,7 @@ static void *thread_run(void *arg)
 		if (t->is_blocking())
 			t->wait();
 	}
+	t->exit();
 	return NULL;
 }
 
@@ -24,6 +25,6 @@ void thread::start()
 	int ret = pthread_create(&id, NULL, thread_run, (void *) this);
 	if (ret) {
 		perror("pthread_create");
-		exit(1);
+		::exit(1);
 	}
 }

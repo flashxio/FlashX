@@ -352,6 +352,7 @@ int main(int argc, char *argv[])
 	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
 			access_option, io_depth, cache_conf);
 	int nthread_per_node = nthreads / node_id_array.size();
+	std::vector<workload_gen *> workload_gens;
 	for (unsigned i = 0; i < node_id_array.size(); i++) {
 		int node_id = node_id_array[i];
 		for (int j = 0; j < nthread_per_node; j++) {
@@ -404,6 +405,7 @@ int main(int argc, char *argv[])
 					fprintf(stderr, "unsupported workload\n");
 					exit(1);
 			}
+			workload_gens.push_back(gen);
 
 			int idx = i * nthread_per_node + j;
 			threads[idx] = new thread_private(node_id, idx, entry_size, factory, gen);
@@ -455,4 +457,10 @@ int main(int argc, char *argv[])
 	}
 	print_io_thread_stat();
 #endif
+	delete cache_conf;
+	for (unsigned i = 0; i < workload_gens.size(); i++)
+		delete workload_gens[i];
+	for (int i = 0; i < nthreads; i++)
+		delete threads[i];
+	destroy_io_factory(factory);
 }
