@@ -133,8 +133,8 @@ public:
 	slab_allocator(int _obj_size, long _increase_size, long _max_size,
 			// We allow pages to be pinned when allocated.
 			int _node_id, bool init = false, bool pinned = false): obj_size(
-				_obj_size), increase_size(
-				_increase_size), max_size(_max_size), node_id(_node_id)
+				_obj_size), increase_size(ROUNDUP_PAGE(_increase_size)),
+			max_size(_max_size), node_id(_node_id)
 #ifdef MEMCHECK
 		, allocator(obj_size)
 #endif
