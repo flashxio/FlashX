@@ -114,6 +114,7 @@ private:
 	// the current size of memory used by the allocator.
 	long curr_size;
 	bool init;
+	bool pinned;
 
 	std::vector<char *> alloc_bufs;
 
@@ -130,13 +131,16 @@ private:
 #endif
 public:
 	slab_allocator(int _obj_size, long _increase_size, long _max_size,
-			int _node_id, bool init = false): obj_size(_obj_size), increase_size(
+			// We allow pages to be pinned when allocated.
+			int _node_id, bool init = false, bool pinned = false): obj_size(
+				_obj_size), increase_size(
 				_increase_size), max_size(_max_size), node_id(_node_id)
 #ifdef MEMCHECK
 		, allocator(obj_size)
 #endif
 	{
 		this->init = init;
+		this->pinned = pinned;
 		curr_size = 0;
 		assert((unsigned) obj_size >= sizeof(linked_obj));
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);

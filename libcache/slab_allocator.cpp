@@ -1,4 +1,5 @@
 #include <numa.h>
+#include <sys/mman.h>
 
 #include "slab_allocator.h"
 
@@ -34,6 +35,15 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 				objs = (char *) numa_alloc_local(increase_size);
 			else
 				objs = (char *) numa_alloc_onnode(increase_size, node_id);
+#ifdef USE_IOAT
+			if (pinned) {
+				int ret = mlock(objs, increase_size);
+				if (ret < 0)
+					perror("mlock");
+				assert(ret == 0);
+			}
+#endif
+			assert(((long) objs) % PAGE_SIZE == 0);
 			if (init)
 				memset(objs, 0, increase_size);
 			linked_obj_list tmp_list;
@@ -62,6 +72,17 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 
 slab_allocator::~slab_allocator()
 {
+	for (unsigned i = 0; i < alloc_bufs.size(); i++) {
+#ifdef USE_IOAT
+		if (pinned) {
+#ifdef DEBUG
+			printf("unpin buf %p of %ld bytes\n", alloc_bufs[i], increase_size);
+#endif
+			munlock(alloc_bufs[i], increase_size);
+		}
+#endif
+		numa_free(alloc_bufs[i], increase_size);
+	}
 	pthread_spin_destroy(&lock);
 }
 

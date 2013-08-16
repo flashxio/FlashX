@@ -5,7 +5,8 @@ rand_buf::rand_buf(int buf_size, int entry_size, int nodeid)
 #ifdef MEMCHECK
 	: allocator(entry_size)
 #else
-	: allocator(entry_size, buf_size, buf_size, nodeid)
+	// We don't initialize pages but pin them.
+	: allocator(entry_size, buf_size, buf_size, nodeid, false, true)
 #endif
 {
 	this->entry_size = entry_size;
