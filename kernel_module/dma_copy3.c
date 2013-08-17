@@ -8,7 +8,6 @@
 static int version_id = 0;
 
 static atomic_t completed_nthreads;
-static struct dma_chan *all_cpu_local_chans[NR_CPUS];
 
 /**
  * A vector of DMA channels on each node
@@ -24,11 +23,21 @@ static int num_chan_vectors;
 
 int dmachan_gather_func(void *data)
 {
+	int node_id;
 	int cpu_id = smp_processor_id();
-	all_cpu_local_chans[cpu_id] = dma_find_channel(DMA_MEMCPY);
-	pr_info("thread on cpu %d get channal %p on node %d\n", cpu_id,
-			all_cpu_local_chans[cpu_id],
-			all_cpu_local_chans[cpu_id]->device->dev->numa_node);
+	struct dma_chan *chan;
+	struct dma_chan **all_cpu_local_chans = data;
+
+	chan= dma_find_channel(DMA_MEMCPY);
+	if (chan) {
+		node_id = chan->device->dev->numa_node;
+		all_cpu_local_chans[cpu_id] = chan;
+		pr_info("thread on cpu %d get channal %p on node %d\n", cpu_id,
+				chan, node_id);
+	}
+	else {
+		pr_info("can't find a channel on cpu %d\n", cpu_id);
+	}
 	atomic_inc(&completed_nthreads);
 	return 0;
 }
@@ -48,12 +57,30 @@ static void gather_all_dma_chans(void)
 	int max_node_id = 0;
 	int nchans = 0;
 	int i;
+	struct dma_chan **all_cpu_local_chans;
+	struct task_struct **tasks;
+
+	all_cpu_local_chans = kmalloc(sizeof(struct dma_chan *) * NR_CPUS,
+			GFP_KERNEL);
+	tasks = kmalloc(sizeof(struct task_struct *) * NR_CPUS, GFP_KERNEL);
+	if (all_cpu_local_chans == NULL || tasks == NULL) {
+		pr_err("can't allocate memory\n");
+		kfree(all_cpu_local_chans);
+		kfree(tasks);
+		return;
+	}
+	memset(all_cpu_local_chans, 0, sizeof(struct dma_chan *) * NR_CPUS);
+	memset(tasks, 0, sizeof(struct task_struct *) * NR_CPUS);
 
 	get_online_cpus();
 	for_each_online_cpu(cpu) {
-		struct task_struct *task = kthread_create(&dmachan_gather_func,
-				NULL, "dmachan_gather_%d", cpu);
+		struct task_struct *task;
+
+		task = kthread_create(&dmachan_gather_func, all_cpu_local_chans,
+				"dmachan_gather_%d", cpu);
 		if (task) {
+			tasks[ncpus] = task;
+			get_task_struct(task);
 			kthread_bind(task, cpu);
 			wake_up_process(task);
 			ncpus++;
@@ -65,7 +92,11 @@ static void gather_all_dma_chans(void)
 	 * have exit and now we have all channels.
 	 */
 	while (atomic_read(&completed_nthreads) < ncpus);
-	pr_info("gather all channels\n");
+	for (i = 0; i < ncpus; i++) {
+		kthread_stop(tasks[i]);
+		put_task_struct(tasks[i]);
+	}
+	kfree(tasks);
 
 	if (all_cpu_local_chans[0])
 		nchans++;
@@ -92,19 +123,28 @@ static void gather_all_dma_chans(void)
 		if (i == cpu)
 			nchans++;
 	}
-	pr_info("There are %d channels and max node id is %d\n", nchans, max_node_id);
 
+	/* Initialize the channel vectors. */
 	num_chan_vectors = max_node_id + 1;
 	chan_vectors = (struct chan_vec *) kmalloc(
 			sizeof(struct chan_vec) * num_chan_vectors, GFP_KERNEL);
+	if (chan_vectors == NULL) {
+		pr_err("can't allocate memory for channel vectors\n");
+		goto out;
+	}
 	memset(chan_vectors, 0, sizeof(struct chan_vec) * num_chan_vectors);
 	for (i = 0; i < num_chan_vectors; i++) {
 		/* Let's allocate more memory than we need. */
 		chan_vectors[i].chans = (struct dma_chan **) kmalloc(
 				sizeof(struct dma_chan *) * nchans, GFP_KERNEL);
+		if (chan_vectors[i].chans == NULL) {
+			pr_err("can't allocate memory for channel vector %d\n", i);
+			goto cleanup;
+		}
 		memset(chan_vectors[i].chans, 0, sizeof(struct dma_chan *) * nchans);
 	}
 
+	/* Add channels to the channel vectors. */
 	for (i = 0; i < NR_CPUS; i++) {
 		int node_id;
 		struct dma_chan *chan = all_cpu_local_chans[i];
@@ -117,6 +157,17 @@ static void gather_all_dma_chans(void)
 	for (i = 0; i < num_chan_vectors; i++) {
 		pr_info("node %d has %d channels\n", i, chan_vectors[i].nchans);
 	}
+out:
+	kfree(all_cpu_local_chans);
+	return;
+
+cleanup:
+	for (i = 0; i < num_chan_vectors; i++) {
+		kfree(chan_vectors[i].chans);
+	}
+	kfree(chan_vectors);
+	chan_vectors = NULL;
+	kfree(all_cpu_local_chans);
 }
 
 /**************
@@ -137,7 +188,15 @@ module_init(dmacpy_init);
 static void
 dmacpy_exit(void)
 {
+	int i;
+
 	dmaengine_put();
+	if (chan_vectors) {
+		for (i = 0; i < num_chan_vectors; i++) {
+			kfree(chan_vectors[i].chans);
+		}
+		kfree(chan_vectors);
+	}
 	printk(KERN_INFO "dmacpy version %d terminating\n", version_id);
 }
 module_exit(dmacpy_exit);
