@@ -170,10 +170,91 @@ cleanup:
 	kfree(all_cpu_local_chans);
 }
 
-void memcpy_test(void)
-{
+#define NUM_PAGES (128 * 1024)
+#define FROM_NODE 0
+#define TO_NODE 1
+#define NUM_THREADS
 
+struct copy_worker_data
+{
+	void **from_addrs;
+	void **to_addrs;
+	int num_pages;
+};
+
+int memcpy_worker(void *arg)
+{
+	int i;
+	struct copy_worker_data *data = arg;
+
+	for (i = 0; i < data->num_pages; i++) {
+		memcpy(data->to_addrs[i], data->from_addrs[i], PAGE_SIZE);
+	}
+	return 0;
 }
+
+int memcpy_test(void *arg)
+{
+	int i;
+	struct page **from_pages, **to_pages;
+	void **from_addrs, **to_addrs;
+	struct timeval start_time, end_time;
+
+	from_pages = kmalloc(sizeof(from_pages[0]) * NUM_PAGES, GFP_KERNEL);
+	to_pages = kmalloc(sizeof(to_pages[0]) * NUM_PAGES, GFP_KERNEL);
+	from_addrs = kmalloc(sizeof(from_addrs[0]) * NUM_PAGES, GFP_KERNEL);
+	to_addrs = kmalloc(sizeof(to_addrs[0]) * NUM_PAGES, GFP_KERNEL);
+	if (from_pages == NULL || to_pages == NULL
+			|| from_addrs == NULL || to_addrs == NULL) {
+		pr_err("can't allocate the page array\n");
+		kfree(from_pages);
+		kfree(to_pages);
+		kfree(from_addrs);
+		kfree(to_addrs);
+		return 0;
+	}
+	memset(from_pages, 0, sizeof(from_pages[0]) * NUM_PAGES);
+	memset(to_pages, 0, sizeof(to_pages[0]) * NUM_PAGES);
+	memset(from_addrs, 0, sizeof(from_addrs[0]) * NUM_PAGES);
+	memset(to_addrs, 0, sizeof(to_addrs[0]) * NUM_PAGES);
+
+	for (i = 0; i < NUM_PAGES; i++) {
+		from_pages[i] = alloc_pages_exact_node(FROM_NODE, GFP_KERNEL, 0);
+		if (from_pages[i] == NULL) {
+			pr_err("can't allocate pages for from array\n");
+			goto cleanup;
+		}
+		from_addrs[i] = page_address(from_pages[i]);
+		to_pages[i] = alloc_pages_exact_node(TO_NODE, GFP_KERNEL, 0);
+		if (to_pages[i] == NULL) {
+			pr_err("can't allocate pages for to array\n");
+			goto cleanup;
+		}
+		to_addrs[i] = page_address(to_pages[i]);
+	}
+
+	do_gettimeofday(&start_time);
+	for (i = 0; i < NUM_PAGES; i++) {
+		memcpy(to_addrs[i], from_addrs[i], PAGE_SIZE);
+	}
+	do_gettimeofday(&end_time);
+	pr_info("copy takes %ldus\n", (end_time.tv_sec - start_time.tv_sec)
+			* 1000000 + (end_time.tv_usec - start_time.tv_usec));
+
+cleanup:
+	for (i = 0; i < NUM_PAGES; i++) {
+		if (from_pages[i])
+			__free_page(from_pages[i]);
+		if (to_pages[i])
+			__free_page(to_pages[i]);
+	}
+	kfree(from_pages);
+	kfree(to_pages);
+
+	return 0;
+}
+
+static struct task_struct *test_thread;
 
 /**************
  * Module core
@@ -186,6 +267,13 @@ dmacpy_init(void)
 	dmaengine_get();
 	gather_all_dma_chans();
 
+	test_thread = kthread_create(&memcpy_test, NULL,
+			"memcopy_test");
+	if (test_thread) {
+		get_task_struct(test_thread);
+		wake_up_process(test_thread);
+	}
+
 	return 0;
 }
 module_init(dmacpy_init);
@@ -194,6 +282,9 @@ static void
 dmacpy_exit(void)
 {
 	int i;
+
+	kthread_stop(test_thread);
+	put_task_struct(test_thread);
 
 	dmaengine_put();
 	if (chan_vectors) {
