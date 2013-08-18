@@ -170,6 +170,11 @@ cleanup:
 	kfree(all_cpu_local_chans);
 }
 
+void memcpy_test(void)
+{
+
+}
+
 /**************
  * Module core
  */

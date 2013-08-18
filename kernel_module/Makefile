@@ -1,4 +1,4 @@
-obj-m += dma_copy3.o
+obj-m += dma_copy.o
 
 all:
 		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
