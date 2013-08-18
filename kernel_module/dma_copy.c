@@ -183,13 +183,16 @@ cleanup:
 #define NUM_PAGES (128 * 1024)
 #define FROM_NODE 0
 #define TO_NODE 1
-#define NUM_THREADS
+#define NUM_THREADS 8
 
 struct copy_worker_data
 {
 	void **from_addrs;
 	void **to_addrs;
 	int num_pages;
+
+	wait_queue_head_t *wq;
+	atomic_t *completed_nthreads;
 };
 
 int memcpy_worker(void *arg)
@@ -200,15 +203,24 @@ int memcpy_worker(void *arg)
 	for (i = 0; i < data->num_pages; i++) {
 		memcpy(data->to_addrs[i], data->from_addrs[i], PAGE_SIZE);
 	}
+
+	atomic_inc(data->completed_nthreads);
+	wake_up(data->wq);
 	return 0;
 }
 
 int memcpy_test(void *arg)
 {
 	int i;
-	struct page **from_pages, **to_pages;
-	void **from_addrs, **to_addrs;
+	struct page **from_pages = NULL, **to_pages = NULL;
+	void **from_addrs = NULL, **to_addrs = NULL;
+	struct copy_worker_data *worker_data_arr = NULL;
+	struct task_struct **tasks = NULL;
 	struct timeval start_time, end_time;
+	int npages_per_thread;
+	wait_queue_head_t wq;
+	atomic_t completed_nthreads;
+	int created_nthreads = 0;
 
 	from_pages = kmalloc(sizeof(from_pages[0]) * NUM_PAGES, GFP_KERNEL);
 	to_pages = kmalloc(sizeof(to_pages[0]) * NUM_PAGES, GFP_KERNEL);
@@ -217,11 +229,7 @@ int memcpy_test(void *arg)
 	if (from_pages == NULL || to_pages == NULL
 			|| from_addrs == NULL || to_addrs == NULL) {
 		pr_err("can't allocate the page array\n");
-		kfree(from_pages);
-		kfree(to_pages);
-		kfree(from_addrs);
-		kfree(to_addrs);
-		return 0;
+		goto cleanup;
 	}
 	memset(from_pages, 0, sizeof(from_pages[0]) * NUM_PAGES);
 	memset(to_pages, 0, sizeof(to_pages[0]) * NUM_PAGES);
@@ -243,23 +251,76 @@ int memcpy_test(void *arg)
 		to_addrs[i] = page_address(to_pages[i]);
 	}
 
-	do_gettimeofday(&start_time);
-	for (i = 0; i < NUM_PAGES; i++) {
-		memcpy(to_addrs[i], from_addrs[i], PAGE_SIZE);
+	init_waitqueue_head(&wq);
+	atomic_set(&completed_nthreads, 0);
+	worker_data_arr = kmalloc(sizeof(*worker_data_arr) * NUM_THREADS,
+			GFP_KERNEL);
+	if (worker_data_arr == NULL) {
+		pr_err("can't allocate worker data array\n");
+		goto cleanup;
 	}
+	npages_per_thread = NUM_PAGES / NUM_THREADS;
+	for (i = 0; i < NUM_THREADS; i++) {
+		worker_data_arr[i].from_addrs = from_addrs + npages_per_thread * i;
+		worker_data_arr[i].to_addrs = to_addrs + npages_per_thread * i;
+		worker_data_arr[i].num_pages = npages_per_thread;
+		worker_data_arr[i].wq = &wq;
+		worker_data_arr[i].completed_nthreads = &completed_nthreads;
+	}
+
+	tasks = kmalloc(sizeof(*tasks) * NUM_THREADS, GFP_KERNEL);
+	if (tasks == NULL) {
+		pr_err("can't allocate task array\n");
+		goto cleanup;
+	}
+	memset(tasks, 0, sizeof(*tasks) * NUM_THREADS);
+
+	do_gettimeofday(&start_time);
+	for (i = 0; i < NUM_THREADS; i++) {
+		tasks[i] = kthread_create_on_node(&memcpy_worker, &worker_data_arr[i],
+				TO_NODE, "memcpy_%d", i);
+		if (tasks[i]) {
+			get_task_struct(tasks[i]);
+			wake_up_process(tasks[i]);
+			created_nthreads++;
+		}
+		else
+			pr_err("fail to create a memcpy worker thread\n");
+	}
+	wait_event_interruptible(wq,
+			atomic_read(&completed_nthreads) == created_nthreads);
+	
 	do_gettimeofday(&end_time);
 	pr_info("copy takes %ldus\n", (end_time.tv_sec - start_time.tv_sec)
 			* 1000000 + (end_time.tv_usec - start_time.tv_usec));
 
 cleanup:
-	for (i = 0; i < NUM_PAGES; i++) {
-		if (from_pages[i])
-			__free_page(from_pages[i]);
-		if (to_pages[i])
-			__free_page(to_pages[i]);
+	if (tasks) {
+		for (i = 0; i < NUM_THREADS; i++) {
+			if (tasks[i]) {
+				kthread_stop(tasks[i]);
+				put_task_struct(tasks[i]);
+			}
+		}
+	}
+	if (from_pages) {
+		for (i = 0; i < NUM_PAGES; i++) {
+			if (from_pages[i])
+				__free_page(from_pages[i]);
+		}
+	}
+	if (to_pages) {
+		for (i = 0; i < NUM_PAGES; i++) {
+			if (to_pages[i])
+				__free_page(to_pages[i]);
+		}
 	}
 	kfree(from_pages);
 	kfree(to_pages);
+	kfree(from_addrs);
+	kfree(to_addrs);
+	kfree(worker_data_arr);
+	kfree(tasks);
 
 	return 0;
 }
