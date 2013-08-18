@@ -7,7 +7,12 @@
 
 static int version_id = 0;
 
-static atomic_t completed_nthreads;
+struct dmachan_gather_thread_data
+{
+	struct dma_chan **all_cpu_local_chans;
+	wait_queue_head_t wq;
+	atomic_t completed_nthreads;
+};
 
 /**
  * A vector of DMA channels on each node
@@ -26,7 +31,8 @@ int dmachan_gather_func(void *data)
 	int node_id;
 	int cpu_id = smp_processor_id();
 	struct dma_chan *chan;
-	struct dma_chan **all_cpu_local_chans = data;
+	struct dmachan_gather_thread_data *thread_data = data;
+	struct dma_chan **all_cpu_local_chans = thread_data->all_cpu_local_chans;
 
 	chan= dma_find_channel(DMA_MEMCPY);
 	if (chan) {
@@ -38,7 +44,8 @@ int dmachan_gather_func(void *data)
 	else {
 		pr_info("can't find a channel on cpu %d\n", cpu_id);
 	}
-	atomic_inc(&completed_nthreads);
+	atomic_inc(&thread_data->completed_nthreads);
+	wake_up(&thread_data->wq);
 	return 0;
 }
 
@@ -59,6 +66,7 @@ static void gather_all_dma_chans(void)
 	int i;
 	struct dma_chan **all_cpu_local_chans;
 	struct task_struct **tasks;
+	struct dmachan_gather_thread_data thread_data;
 
 	all_cpu_local_chans = kmalloc(sizeof(struct dma_chan *) * NR_CPUS,
 			GFP_KERNEL);
@@ -72,11 +80,15 @@ static void gather_all_dma_chans(void)
 	memset(all_cpu_local_chans, 0, sizeof(struct dma_chan *) * NR_CPUS);
 	memset(tasks, 0, sizeof(struct task_struct *) * NR_CPUS);
 
+	thread_data.all_cpu_local_chans = all_cpu_local_chans;
+	atomic_set(&thread_data.completed_nthreads, 0);
+	init_waitqueue_head(&thread_data.wq);
+
 	get_online_cpus();
 	for_each_online_cpu(cpu) {
 		struct task_struct *task;
 
-		task = kthread_create(&dmachan_gather_func, all_cpu_local_chans,
+		task = kthread_create(&dmachan_gather_func, &thread_data,
 				"dmachan_gather_%d", cpu);
 		if (task) {
 			tasks[ncpus] = task;
@@ -87,11 +99,9 @@ static void gather_all_dma_chans(void)
 		}
 	}
 	put_online_cpus();
-	/*
-	 * This isn't a good way to wait, but it guarantees that all threads
-	 * have exit and now we have all channels.
-	 */
-	while (atomic_read(&completed_nthreads) < ncpus);
+
+	wait_event_interruptible(thread_data.wq,
+			atomic_read(&thread_data.completed_nthreads) == ncpus);
 	for (i = 0; i < ncpus; i++) {
 		kthread_stop(tasks[i]);
 		put_task_struct(tasks[i]);
