@@ -341,10 +341,13 @@ int dma_memcpy_test(void *arg)
 	int i;
 	struct page **from_pages = NULL, **to_pages = NULL;
 	struct timeval start_time, end_time;
-	struct dma_chan *chan;
-	dma_cookie_t last_cookie = 0;
+	struct timeval wait_start_time, wait_end_time;
+	struct dma_chan **chans;
+	int num_chans;
+	int chan_idx;
+	dma_cookie_t *last_cookies;
 	int chan_node = * (int *) arg;
-	int num_cleanup = 0;
+	int num_busy = 0;
 
 	pr_info("dma_memcpy_test runs on cpu %d, use DMA channel on node %d\n",
 			smp_processor_id(), chan_node);
@@ -352,7 +355,14 @@ int dma_memcpy_test(void *arg)
 		pr_err("can't get a dma channel\n");
 		return -1;
 	}
-	chan = chan_vectors[chan_node].chans[0];
+	chans = chan_vectors[chan_node].chans;
+	num_chans = chan_vectors[chan_node].nchans;
+	last_cookies = kmalloc(sizeof(*last_cookies) * num_chans, GFP_KERNEL);
+	if (last_cookies == NULL) {
+		pr_err("can't allocate the array for last cookies\n");
+		return -1;
+	}
+	memset(last_cookies, 0, sizeof(*last_cookies) * num_chans);
 
 	from_pages = kmalloc(sizeof(from_pages[0]) * NUM_PAGES, GFP_KERNEL);
 	to_pages = kmalloc(sizeof(to_pages[0]) * NUM_PAGES, GFP_KERNEL);
@@ -376,16 +386,18 @@ int dma_memcpy_test(void *arg)
 		}
 	}
 
+	chan_idx = 0;
 	do_gettimeofday(&start_time);
 	for (i = 0; i < NUM_PAGES; i++) {
 		int err;
 		
 again:
-		err = dma_async_memcpy_pg_to_pg(chan, to_pages[i], 0,
+		err = dma_async_memcpy_pg_to_pg(chans[chan_idx], to_pages[i], 0,
 				from_pages[i], 0, PAGE_SIZE);
-		if (err == -ENOMEM && last_cookie > 0) {
-			num_cleanup++;
-			dmacpy_wait_until(chan, last_cookie);
+		/* This channel is busy. Let's switch to the next channel. */
+		if (err == -ENOMEM) {
+			chan_idx = (chan_idx + 1) % num_chans;
+			num_busy++;
 			goto again;
 		}
 		if (err < 0) {
@@ -393,18 +405,29 @@ again:
 			pr_err("dma err: %d\n", err);
 			goto cleanup;
 		}
-		last_cookie = err;
+		last_cookies[chan_idx] = err;
+		chan_idx = (chan_idx + 1) % num_chans;
 	}
-	dmacpy_wait_until(chan, last_cookie);
-	last_cookie = 0;
+	do_gettimeofday(&wait_start_time);
+	for (i = 0; i < num_chans; i++)
+		dmacpy_wait_until(chans[i], last_cookies[i]);
+	do_gettimeofday(&wait_end_time);
+	kfree(last_cookies);
+	last_cookies = NULL;
 	do_gettimeofday(&end_time);
-	pr_info("dma memcopy takes %ldus, %d cleanups in the middle\n",
-			(end_time.tv_sec - start_time.tv_sec)
-			* 1000000 + (end_time.tv_usec - start_time.tv_usec), num_cleanup);
+	pr_info("dma memcopy takes %ldus, wait for DMA %ldus, %d times busy\n",
+			(end_time.tv_sec - start_time.tv_sec) * 1000000
+			+ (end_time.tv_usec - start_time.tv_usec),
+			(wait_end_time.tv_sec - wait_start_time.tv_sec) * 1000000
+			+ (wait_end_time.tv_usec - wait_start_time.tv_usec),
+			num_busy);
 
 cleanup:
-	if (last_cookie > 0)
-		dmacpy_wait_until(chan, last_cookie);
+	if (last_cookies) {
+		for (i = 0; i < num_chans; i++)
+			dmacpy_wait_until(chans[i], last_cookies[i]);
+		kfree(last_cookies);
+	}
 
 	if (from_pages) {
 		for (i = 0; i < NUM_PAGES; i++) {
@@ -432,7 +455,7 @@ static struct task_struct *test_thread;
 static int
 dmacpy_init(void)
 {
-	int node_id = 0;
+	static int node_id = 1;
 	int (*memcpy_test) (void *data) = dma_memcpy_test;
 
 	printk(KERN_INFO "dmacpy version %d starting\n", version_id);
