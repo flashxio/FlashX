@@ -209,7 +209,7 @@ int memcpy_worker(void *arg)
 	return 0;
 }
 
-int memcpy_test(void *arg)
+int cpu_memcpy_test(void *arg)
 {
 	int i;
 	struct page **from_pages = NULL, **to_pages = NULL;
@@ -291,7 +291,7 @@ int memcpy_test(void *arg)
 			atomic_read(&completed_nthreads) == created_nthreads);
 	
 	do_gettimeofday(&end_time);
-	pr_info("copy takes %ldus\n", (end_time.tv_sec - start_time.tv_sec)
+	pr_info("cpu memcopy takes %ldus\n", (end_time.tv_sec - start_time.tv_sec)
 			* 1000000 + (end_time.tv_usec - start_time.tv_usec));
 
 cleanup:
@@ -325,6 +325,104 @@ cleanup:
 	return 0;
 }
 
+void dmacpy_wait_until(struct dma_chan *chan, dma_cookie_t cookie)
+{
+	enum dma_status status = DMA_IN_PROGRESS;
+
+	while (status == DMA_IN_PROGRESS) {
+		dma_cookie_t done, used;
+
+		status = dma_async_memcpy_complete(chan, cookie, &done, &used);
+	}
+}
+
+int dma_memcpy_test(void *arg)
+{
+	int i;
+	struct page **from_pages = NULL, **to_pages = NULL;
+	struct timeval start_time, end_time;
+	struct dma_chan *chan;
+	dma_cookie_t last_cookie = 0;
+	int chan_node = TO_NODE;
+	int num_cleanup = 0;
+
+	pr_info("dma_memcpy_test runs on cpu %d, use DMA channel on node %d\n",
+			smp_processor_id(), chan_node);
+	if (chan_node >= num_chan_vectors || chan_vectors[chan_node].nchans <= 0) {
+		pr_err("can't get a dma channel\n");
+		return -1;
+	}
+	chan = chan_vectors[chan_node].chans[0];
+
+	from_pages = kmalloc(sizeof(from_pages[0]) * NUM_PAGES, GFP_KERNEL);
+	to_pages = kmalloc(sizeof(to_pages[0]) * NUM_PAGES, GFP_KERNEL);
+	if (from_pages == NULL || to_pages == NULL) {
+		pr_err("can't allocate the page array\n");
+		goto cleanup;
+	}
+	memset(from_pages, 0, sizeof(from_pages[0]) * NUM_PAGES);
+	memset(to_pages, 0, sizeof(to_pages[0]) * NUM_PAGES);
+
+	for (i = 0; i < NUM_PAGES; i++) {
+		from_pages[i] = alloc_pages_exact_node(FROM_NODE, GFP_KERNEL, 0);
+		if (from_pages[i] == NULL) {
+			pr_err("can't allocate pages for from array\n");
+			goto cleanup;
+		}
+		to_pages[i] = alloc_pages_exact_node(TO_NODE, GFP_KERNEL, 0);
+		if (to_pages[i] == NULL) {
+			pr_err("can't allocate pages for to array\n");
+			goto cleanup;
+		}
+	}
+
+	do_gettimeofday(&start_time);
+	for (i = 0; i < NUM_PAGES; i++) {
+		int err;
+		
+again:
+		err = dma_async_memcpy_pg_to_pg(chan, to_pages[i], 0,
+				from_pages[i], 0, PAGE_SIZE);
+		if (err == -ENOMEM && last_cookie > 0) {
+			num_cleanup++;
+			dmacpy_wait_until(chan, last_cookie);
+			goto again;
+		}
+		if (err < 0) {
+			pr_info("%d pages have been copied\n", i);
+			pr_err("dma err: %d\n", err);
+			goto cleanup;
+		}
+		last_cookie = err;
+	}
+	dmacpy_wait_until(chan, last_cookie);
+	last_cookie = 0;
+	do_gettimeofday(&end_time);
+	pr_info("dma memcopy takes %ldus, %d cleanups in the middle\n",
+			(end_time.tv_sec - start_time.tv_sec)
+			* 1000000 + (end_time.tv_usec - start_time.tv_usec), num_cleanup);
+
+cleanup:
+	if (last_cookie > 0)
+		dmacpy_wait_until(chan, last_cookie);
+
+	if (from_pages) {
+		for (i = 0; i < NUM_PAGES; i++) {
+			if (from_pages[i])
+				__free_page(from_pages[i]);
+		}
+	}
+	if (to_pages) {
+		for (i = 0; i < NUM_PAGES; i++) {
+			if (to_pages[i])
+				__free_page(to_pages[i]);
+		}
+	}
+	kfree(from_pages);
+	kfree(to_pages);
+	return 0;
+}
+
 static struct task_struct *test_thread;
 
 /**************
@@ -334,11 +432,12 @@ static struct task_struct *test_thread;
 static int
 dmacpy_init(void)
 {
+	int (*memcpy_test) (void *data) = dma_memcpy_test;
 	printk(KERN_INFO "dmacpy version %d starting\n", version_id);
 	dmaengine_get();
 	gather_all_dma_chans();
 
-	test_thread = kthread_create(&memcpy_test, NULL,
+	test_thread = kthread_create_on_node(memcpy_test, NULL, 0,
 			"memcopy_test");
 	if (test_thread) {
 		get_task_struct(test_thread);
