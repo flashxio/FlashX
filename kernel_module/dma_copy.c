@@ -343,7 +343,7 @@ int dma_memcpy_test(void *arg)
 	struct timeval start_time, end_time;
 	struct dma_chan *chan;
 	dma_cookie_t last_cookie = 0;
-	int chan_node = TO_NODE;
+	int chan_node = * (int *) arg;
 	int num_cleanup = 0;
 
 	pr_info("dma_memcpy_test runs on cpu %d, use DMA channel on node %d\n",
@@ -432,15 +432,24 @@ static struct task_struct *test_thread;
 static int
 dmacpy_init(void)
 {
+	int node_id = 0;
 	int (*memcpy_test) (void *data) = dma_memcpy_test;
+
 	printk(KERN_INFO "dmacpy version %d starting\n", version_id);
 	dmaengine_get();
 	gather_all_dma_chans();
 
-	test_thread = kthread_create_on_node(memcpy_test, NULL, 0,
+	test_thread = kthread_create_on_node(memcpy_test, &node_id, node_id,
 			"memcopy_test");
 	if (test_thread) {
+		const struct cpumask *cpumask = cpumask_of_node(node_id);
+
+		// Bind the kernel thread to the specified NUMA node.
 		get_task_struct(test_thread);
+		if (!cpumask_empty(cpumask)) {
+			pr_info("bind the testing thread on node %d\n", node_id);
+			set_cpus_allowed_ptr(test_thread, cpumask);
+		}
 		wake_up_process(test_thread);
 	}
 
