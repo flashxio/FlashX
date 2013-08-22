@@ -495,8 +495,6 @@ part_global_cached_io::part_global_cached_io(int node_id,
 			// the reply queue to be expanded to an arbitrary size.
 			NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
 
-	fifo_queue<io_reply> *q1[1];
-	q1[0] = reply_queue;
 	std::set<int> node_ids = table->get_node_ids();
 	for (std::set<int>::const_iterator it = node_ids.begin();
 			it != node_ids.end(); it++) {
@@ -504,7 +502,7 @@ part_global_cached_io::part_global_cached_io(int node_id,
 		if ((int) reply_senders.size() <= node_id)
 			reply_senders.resize(node_id + 1);
 		reply_senders[node_id] = thread_safe_msg_sender<io_reply>::create(node_id,
-				NUMA_REPLY_CACHE_SIZE, q1, 1);
+				NUMA_REPLY_CACHE_SIZE, reply_queue);
 	}
 
 	req_senders = table->create_req_senders(node_id);

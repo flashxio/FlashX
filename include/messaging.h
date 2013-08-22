@@ -593,25 +593,23 @@ template<class T>
 class thread_safe_msg_sender
 {
 	thread_safe_FIFO_queue<T> buf;
-	std::vector<fifo_queue<T> *> dest_queues;
+	fifo_queue<T> *dest_queue;
 
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	thread_safe_msg_sender(int node_id, int buf_size, fifo_queue<T> **queues,
-			int num_queues): buf(node_id, buf_size), dest_queues(num_queues) {
-		for (int i = 0; i < num_queues; i++)
-			dest_queues[i] = queues[i];
+	thread_safe_msg_sender(int node_id, int buf_size, fifo_queue<T> *queue): buf(
+			node_id, buf_size) {
+		dest_queue = queue;
 	}
 
 public:
 	static thread_safe_msg_sender<T> *create(int node_id, int buf_size,
-			fifo_queue<T> **queues, int num_queues) {
+			fifo_queue<T> *queue) {
 		assert(node_id >= 0);
 		void *addr = numa_alloc_onnode(sizeof(thread_safe_msg_sender<T>),
 				node_id);
-		return new(addr) thread_safe_msg_sender<T>(node_id, buf_size,
-				queues, num_queues);
+		return new(addr) thread_safe_msg_sender<T>(node_id, buf_size, queue);
 	}
 
 	static void destroy(thread_safe_msg_sender<T> *s) {

@@ -111,24 +111,10 @@ void io_req_extension::add_buf_front(char *buf, int size, bool is_page)
  */
 template<class T>
 int thread_safe_msg_sender<T>::flush() {
-	int base_idx;
-	if (dest_queues.size() == 1)
-		base_idx = 0;
+	if (!buf.is_empty())
+		return dest_queue->add(&buf);
 	else
-		base_idx = random() % dest_queues.size();
-	int num_sent = 0;
-	for (size_t i = 0; !buf.is_empty() && i < dest_queues.size(); i++) {
-		fifo_queue<T> *q = dest_queues[(base_idx + i) % dest_queues.size()];
-		assert(q);
-
-		// TODO the thread might be blocked if it's full.
-		// it might hurt performance. We should try other
-		// queues first before being blocked.
-		int ret = q->add(&buf);
-		num_sent += ret;
-	}
-
-	return num_sent;
+		return 0;
 }
 
 template<class T>
@@ -174,23 +160,10 @@ int thread_safe_msg_sender<T>::send(T *msg, int num)
 
 	int num_sent = 0;
 	while (num > 0) {
-		int base_idx;
-		if (dest_queues.size() == 1)
-			base_idx = 0;
-		else
-			base_idx = random() % dest_queues.size();
-		for (size_t i = 0; num > 0 && i < dest_queues.size(); i++) {
-			fifo_queue<T> *q = dest_queues[(base_idx + i) % dest_queues.size()];
-			assert(q);
-
-			// TODO the thread might be blocked if it's full.
-			// it might hurt performance. We should try other
-			// queues first before being blocked.
-			int ret = q->add(msg, num);
-			msg += ret;
-			num -= ret;
-			num_sent += ret;
-		}
+		int ret = dest_queue->add(msg, num);
+		msg += ret;
+		num -= ret;
+		num_sent += ret;
 	}
 
 	return num_sent;
