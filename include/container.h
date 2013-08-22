@@ -93,6 +93,7 @@ class fifo_queue
 {
 	int size_mask;
 	T *buf;			// a circular buffer to keep pages.
+	bool allocated;	// indicates whether the buffer is allocated by the queue.
 	long start;
 	long end;
 	bool resizable;
@@ -115,6 +116,7 @@ class fifo_queue
 	}
 
 	void free_buf(T *buf) {
+		assert(allocated);
 		int size = size_mask + 1;
 		for (int i = 0; i < size; i++)
 			buf[i].~T();
@@ -122,6 +124,16 @@ class fifo_queue
 	}
 
 public:
+	fifo_queue(T *entries, int num) {
+		size_mask = INT_MAX;
+		buf = entries;
+		allocated = false;
+		start = 0;
+		end = num;
+		resizable = false;
+		node_id = -1;
+	}
+
 	// the queue has to be 2^n. If it's not, the smallest number of 2^n
 	// is used.
 	fifo_queue(int node_id, int size, bool resizable = false) {
@@ -130,13 +142,15 @@ public:
 		this->size_mask = size - 1;
 		this->node_id = node_id;
 		buf = alloc_buf(size);
+		allocated = true;
 		start = 0;
 		end = 0;
 		this->resizable = resizable;
 	}
 
 	virtual ~fifo_queue() {
-		free_buf(buf);
+		if (allocated)
+			free_buf(buf);
 	}
 
 	static fifo_queue<T> *create(int node_id, int size,
@@ -216,6 +230,7 @@ public:
 	}
 
 	int get_size() const {
+		assert(allocated);
 		return size_mask + 1;
 	}
 
@@ -376,15 +391,23 @@ public:
 	virtual int fetch(T *entries, int num) {
 		return fetch(entries, num, true, false);
 	}
-	virtual int add(T *entries, int num);
+	virtual int add(T *entries, int num) {
+		fifo_queue<T> tmp(entries, num);
+		return add(&tmp);
+	}
 	virtual int add(fifo_queue<T> *queue) {
 		return add_partial(queue, INT_MAX);
 	}
 
 	// Add at least `min_added' elements or all elements in `queue' are added.
 	int add_partial(fifo_queue<T> *queue, int min_added = 1);
-	int non_blocking_add(fifo_queue<T> *queue);
-	int non_blocking_add(T *entries, int num);
+	int non_blocking_add(fifo_queue<T> *queue) {
+		return add_partial(queue, 0);
+	}
+	int non_blocking_add(T *entries, int num) {
+		fifo_queue<T> tmp(entries, num);
+		return non_blocking_add(&tmp);
+	}
 	int non_blocking_fetch(T *entries, int num) {
 		return fetch(entries, num, false, false);
 	}

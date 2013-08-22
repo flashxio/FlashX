@@ -6,6 +6,7 @@ bool fifo_queue<T>::expand_queue(int new_size)
 	int log_size = (int) ceil(log2(new_size));
 	new_size = 1 << log_size;
 	assert(resizable && get_size() < new_size);
+	assert(allocated);
 
 	// Allocate new memory for the array and initialize it.
 	T *tmp = alloc_buf(new_size);
@@ -26,76 +27,11 @@ bool fifo_queue<T>::expand_queue(int new_size)
 	return true;
 }
 
-/**
- * This is a blocking version.
- * It adds all entries to the queue. If the queue is full,
- * wait until it can add all entries.
- */
-template<class T>
-int blocking_FIFO_queue<T>::add(T *entries, int num) {
-	int orig_num = num;
-
-	while (num > 0) {
-		pthread_mutex_lock(&mutex);
-		bool empty = this->is_empty();
-		if (this->get_size() - fifo_queue<T>::get_num_entries() < num
-				&& this->get_size() < max_size) {
-			int new_size = this->get_size() * 2;
-			new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
-			new_size = min(new_size, max_size);
-#ifdef DEBUG
-			printf("try to expand queue %s to %d\n", name.c_str(), new_size);
-#endif
-			bool ret = fifo_queue<T>::expand_queue(new_size);
-			assert(ret);
-		}
-		int ret = fifo_queue<T>::add(entries, num);
-		entries += ret;
-		num -= ret;
-		/* signal the thread of reading disk to wake up. */
-		if (empty)
-			pthread_cond_broadcast(&cond);
-
-		while (this->is_full() && num > 0) {
-			num_full++;
-//			printf("the blocking queue %s is full, wait...\n", name.c_str());
-			pthread_cond_wait(&cond, &mutex);
-		}
-		pthread_mutex_unlock(&mutex);
-	}
-	return orig_num;
-}
-
-template<class T>
-int blocking_FIFO_queue<T>::non_blocking_add(T *entries, int num) {
-	pthread_mutex_lock(&mutex);
-	bool empty = this->is_empty();
-	if (this->get_size() - fifo_queue<T>::get_num_entries() < num
-			&& this->get_size() < max_size) {
-		int new_size = this->get_size() * 2;
-		new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
-		new_size = min(new_size, max_size);
-#ifdef DEBUG
-		printf("try to expand queue %s to %d\n", name.c_str(), new_size);
-#endif
-		bool ret = fifo_queue<T>::expand_queue(new_size);
-		assert(ret);
-	}
-	int ret = fifo_queue<T>::add(entries, num);
-	entries += ret;
-	num -= ret;
-	pthread_mutex_unlock(&mutex);
-	/* signal the thread of reading disk to wake up. */
-	if (empty)
-		pthread_cond_broadcast(&cond);
-	return ret;
-}
-
 template<class T>
 int blocking_FIFO_queue<T>::add_partial(fifo_queue<T> *queue, int min_added)
 {
 	int num_added = 0;
-	while (!queue->is_empty() && num_added < min_added) {
+	while (!queue->is_empty()) {
 		int num = queue->get_num_entries();
 		pthread_mutex_lock(&mutex);
 		bool empty = this->is_empty();
@@ -116,41 +52,18 @@ int blocking_FIFO_queue<T>::add_partial(fifo_queue<T> *queue, int min_added)
 		if (empty)
 			pthread_cond_broadcast(&cond);
 
-		while (this->is_full() && !queue->is_empty()) {
-			num_full++;
-			pthread_cond_wait(&cond, &mutex);
+		/* We only block the thread when it doesn't send enough data. */
+		if (num_added < min_added) {
+			while (this->is_full() && !queue->is_empty()) {
+				num_full++;
+				pthread_cond_wait(&cond, &mutex);
+			}
+			pthread_mutex_unlock(&mutex);
 		}
-		pthread_mutex_unlock(&mutex);
-	}
-	return num_added;
-}
-
-template<class T>
-int blocking_FIFO_queue<T>::non_blocking_add(fifo_queue<T> *queue)
-{
-	int num_added = 0;
-	if (!queue->is_empty()) {
-		int num = queue->get_num_entries();
-		pthread_mutex_lock(&mutex);
-		bool empty = this->is_empty();
-		if (this->get_size() - fifo_queue<T>::get_num_entries() < num
-				&& this->get_size() < max_size) {
-			int new_size = this->get_size() * 2;
-			new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
-			new_size = min(new_size, max_size);
-#ifdef DEBUG
-			printf("try to expand queue %s to %d\n", name.c_str(), new_size);
-#endif
-			bool ret = fifo_queue<T>::expand_queue(new_size);
-			assert(ret);
+		else {
+			pthread_mutex_unlock(&mutex);
+			break;
 		}
-		int ret = fifo_queue<T>::add(queue);
-		pthread_mutex_unlock(&mutex);
-
-		num_added += ret;
-		/* signal the thread of reading disk to wake up. */
-		if (empty)
-			pthread_cond_broadcast(&cond);
 	}
 	return num_added;
 }
