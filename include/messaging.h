@@ -590,41 +590,6 @@ public:
 };
 
 template<class T>
-class msg_sender
-{
-	T *buf;
-	int buf_size;		// the max number of messages that can be buffered
-	int num_current;	// the current number of messages in the buffer.
-	fifo_queue<T> **dest_queues;
-	int num_queues;
-
-public:
-	/**
-	 * buf_size: the number of messages that can be buffered in the sender.
-	 */
-	msg_sender(int buf_size, fifo_queue<T> **queues,
-			int num_queues);
-
-	~msg_sender() {
-		numa_free(buf, sizeof(T) * buf_size);
-		numa_free(dest_queues, sizeof(fifo_queue<T> *) * num_queues);
-	}
-
-	int num_msg() {
-		return num_current;
-	}
-
-	int flush();
-
-	void flush_all() {
-		while (num_msg() > 0)
-			flush();
-	}
-
-	int send_cached(T *msg);
-};
-
-template<class T>
 class thread_safe_msg_sender
 {
 	thread_safe_FIFO_queue<T> buf;
