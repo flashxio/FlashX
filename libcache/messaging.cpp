@@ -23,31 +23,36 @@ void io_buf::init(thread_safe_page *p)
 }
 
 void io_request::init(char *buf, off_t off, ssize_t size,
-		int access_method, io_interface *io, int node_id)
+		int access_method, io_interface *io, int node_id, int sync)
 {
 	this->offset = off;
-	this->io = io;
+	this->io_addr = (long) io;
 	if (is_extended_req()) {
 		if (buf)
 			add_buf(buf, size);
 	}
+	else if (payload_type == BASIC_REQ) {
+		assert(size <= MAX_BUF_SIZE);
+		this->buf_size = size;
+		this->payload.buf_addr = buf;
+	}
 	else {
 		assert(size <= MAX_BUF_SIZE);
 		this->buf_size = size;
-		this->buf_addr = (long) buf;
+		this->payload.compute = NULL;
 	}
 	this->access_method = access_method & 0x1;
 	// by default, a request is of high priority.
 	this->high_prio = 1;
 	assert(node_id <= MAX_NODE_ID);
 	this->node_id = node_id;
-	this->sync = false;
+	this->sync = sync;
 }
 
 int io_request::get_file_id() const
 {
-	assert(io);
-	int ret = io->get_file_id();
+	assert(io_addr);
+	int ret = get_io()->get_file_id();
 	assert(ret >= 0);
 	return ret;
 }

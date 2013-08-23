@@ -62,7 +62,6 @@ public:
 struct io_req_extension
 {
 	static atomic_unsigned_integer num_creates;
-	io_interface *io;
 	io_request *orig;
 	void *priv;
 	void *user_data;
@@ -84,7 +83,6 @@ struct io_req_extension
 	volatile ssize_t completed_size;
 
 	void init() {
-		this->io = NULL;
 		this->orig = NULL;
 		this->priv = NULL;
 		this->user_data = NULL;
@@ -112,6 +110,15 @@ struct io_req_extension
 	void add_buf_front(char *buf, int size, bool is_page);
 };
 
+const int MAX_INLINE_SIZE=128;
+
+class user_compute
+{
+public:
+	virtual int serialize(char *buf, int size) const = 0;
+	virtual int get_serialized_size() const = 0;
+};
+
 /**
  * This class contains the request info.
  * If it's in an extended form, it is created by the global cache
@@ -121,33 +128,49 @@ struct io_req_extension
  */
 class io_request
 {
+	enum {
+		BASIC_REQ,
+		EXT_REQ,
+		USER_COMPUTE,
+	};
+
 	off_t offset: 40;
 	static const int MAX_BUF_SIZE = (1 << 24) - 1;
 	unsigned long buf_size: 24;
 
-	// This flag is initialized when the object is created and
-	// can't be changed manually.
-	// The only case that the flag of a request is changed is when
+	// These two flags decide how the payload is interpreted, so they are
+	// initialized when the object is created and can't be changed manually.
+	// The only case that payload_type is changed is when
 	// another request object is copied to this request object.
-	// What needs to be guaranteed is that
-	// the flag is true when buf_addr points to the extension object;
-	// the flag is false when buf_addr points to the real buffer.
-	unsigned int extended: 1;
+	// What needs to be guaranteed is that the pointer in the payload always
+	// points to the object of the right type.
+	// However, data_inline is never changed. It is usually false. It is
+	// used when to interpret the io requests in a message.
+	unsigned int payload_type: 2;
+	unsigned int data_inline: 1;
+
 	unsigned int access_method: 1;
 	// Is this synchronous IO?
 	unsigned int sync: 1;
 	unsigned int high_prio: 1;
-	static const int MAX_NODE_ID = (1 << 12) - 1;
-	unsigned int node_id: 12;
+	static const int MAX_NODE_ID = (1 << 10) - 1;
+	unsigned int node_id: 10;
 	// Linux uses 48 bit for addresses.
-	unsigned long buf_addr: 48;
+	unsigned long io_addr: 48;
 
-	io_interface *io;
+	union {
+		void *buf_addr;
+		user_compute *compute;
+		io_req_extension *ext;
+		char buf[0];
+	} payload;
 
 	io_req_extension *get_extension() const {
-		assert(is_extended_req() && buf_addr);
-		unsigned long addr = buf_addr;
-		return (io_req_extension *) addr;
+		assert(is_extended_req() && payload.ext);
+		if (data_inline)
+			return (io_req_extension *) payload.buf;
+		else
+			return payload.ext;
 	}
 
 	bool use_embedded() const {
@@ -157,62 +180,78 @@ class io_request
 public:
 	// By default, a request is initialized as a flush request.
 	io_request() {
-		extended = 0;
-		buf_addr = 0;
+		payload_type = BASIC_REQ;
+		payload.buf_addr = NULL;
 		high_prio = 1;
 		sync = 1;
+		data_inline = 0;
 	}
 
 	io_request(bool extended) {
-		this->extended = extended;
-		buf_addr = 0;
+		if (extended) {
+			payload_type = EXT_REQ;
+			payload.ext = new io_req_extension();
+		}
+		else {
+			payload_type = BASIC_REQ;
+			payload.buf_addr = NULL;
+		}
 		high_prio = 1;
 		sync = false;
-		if (extended) {
-			buf_addr = (long) new io_req_extension();
-		}
+		data_inline = 0;
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, bool sync = false) {
-		extended = 0;
-		this->sync = sync;
-		init(buf, off, size, access_method, io, node_id);
+		payload_type = BASIC_REQ;
+		data_inline = 0;
+		init(buf, off, size, access_method, io, node_id, sync);
 	}
 
 	io_request(off_t off, int access_method, io_interface *io, int node_id,
 			io_request *orig, void *priv, bool sync = false) {
-		extended = 1;
-		buf_addr = (long) new io_req_extension();
-		this->sync = sync;
-		init(off, access_method, io, node_id, orig, priv, NULL);
+		payload_type = EXT_REQ;
+		data_inline = 0;
+		payload.ext = new io_req_extension();
+		init(off, access_method, io, node_id, orig, priv, NULL, sync);
+	}
+
+	io_request(user_compute *compute, off_t off, ssize_t size,
+			int access_method, io_interface *io, int node_id,
+			bool sync = false) {
+		payload_type = USER_COMPUTE;
+		data_inline = 0;
+		init(NULL, off, size, access_method, io, node_id, sync);
+		payload.compute = compute;
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, io_request *orig,
 			void *priv, bool sync = false) {
-		extended = 1;
-		buf_addr = (long) new io_req_extension();
-		this->sync = sync;
-		init(buf, off, size, access_method, io, node_id, orig, priv, NULL);
+		payload_type = EXT_REQ;
+		data_inline = 0;
+		payload.ext = new io_req_extension();
+		init(buf, off, size, access_method, io, node_id, orig, priv, NULL, sync);
 	}
 
 	io_request(io_request &req) {
+		assert(!req.data_inline);
 		memcpy(this, &req, sizeof(req));
 		if (req.is_extended_req()) {
-			req.extended = 0;
-			req.buf_addr = 0;
+			req.payload_type = BASIC_REQ;
+			req.payload.buf_addr = NULL;
 		}
 	}
 
 	io_request &operator=(io_request &req) {
+		assert(!data_inline && !req.data_inline);
 		// We need to free its own extension first.
 		if (this->is_extended_req())
 			delete this->get_extension();
 		memcpy(this, &req, sizeof(req));
 		if (req.is_extended_req()) {
-			req.extended = 0;
-			req.buf_addr = 0;
+			req.payload_type = BASIC_REQ;
+			req.payload.buf_addr = NULL;
 		}
 		return *this;
 	}
@@ -223,8 +262,15 @@ public:
 	}
 
 	void init(const io_request &req) {
+		assert(!data_inline);
 		this->sync = req.sync;
-		if (!req.is_extended_req()) {
+		if (req.payload_type == USER_COMPUTE
+				|| this->payload_type == USER_COMPUTE) {
+			assert(req.payload_type == USER_COMPUTE
+					&& this->payload_type == USER_COMPUTE);
+			// TODO
+		}
+		else if (!req.is_extended_req()) {
 			this->init(req.get_buf(), req.get_offset(), req.get_size(),
 					req.get_access_method(), req.get_io(), req.get_node_id());
 		}
@@ -244,6 +290,7 @@ public:
 	}
 
 	void init() {
+		data_inline = 0;
 		if (is_extended_req()) {
 			io_req_extension *ext = get_extension();
 			assert(ext);
@@ -252,39 +299,38 @@ public:
 			high_prio = 0;
 			sync = 0;
 			node_id = 0;
-			io = NULL;
+			io_addr = 0;
 			access_method = 0;
 			buf_size = 0;
 		}
 		else {
 			offset = 0;
-			extended = 0;
+			payload_type = BASIC_REQ;
 			high_prio = 0;
 			sync = 0;
 			node_id = 0;
-			io = NULL;
+			io_addr = 0;
 			access_method = 0;
 			buf_size = 0;
-			buf_addr = 0;
+			payload.buf_addr = NULL;
 		}
 	}
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id);
+			io_interface *io, int node_id, int sync = false);
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, io_request *orig, void *priv,
-			void *user_data) {
-		init(off, access_method, io, node_id, orig, priv, user_data);
+			void *user_data, int sync = false) {
+		init(off, access_method, io, node_id, orig, priv, user_data, sync);
 		add_buf(buf, size);
 	}
 
 	void init(off_t off, int access_method, io_interface *io, int node_id,
-			io_request *orig, void *priv, void *user_data) {
+			io_request *orig, void *priv, void *user_data, int sync = false) {
 		assert(is_extended_req());
-		io_request::init(NULL, off, 0, access_method, io, node_id);
+		io_request::init(NULL, off, 0, access_method, io, node_id, sync);
 		io_req_extension *ext = get_extension();
-		ext->io = io;
 		ext->priv = priv;
 		ext->orig = orig;
 		ext->user_data = user_data;
@@ -298,7 +344,7 @@ public:
 	 * a flush request isn't a valid request for accessing data.
 	 */
 	bool is_flush() const {
-		return sync && high_prio && (buf_addr == 0);
+		return sync && high_prio && (payload.buf_addr == NULL);
 	}
 
 	bool is_sync() const {
@@ -306,7 +352,7 @@ public:
 	}
 
 	bool is_extended_req() const {
-		return extended;
+		return payload_type == EXT_REQ;
 	}
 
 	off_t get_offset() const {
@@ -322,12 +368,11 @@ public:
 	}
 
 	void set_io(io_interface *io) {
-		assert(is_extended_req());
-		get_extension()->io = io;
+		this->io_addr = (long) io;
 	}
 
 	io_interface *get_io() const {
-		return io;
+		return (io_interface *) (long) io_addr;
 	}
 
 	int get_node_id() const {
@@ -404,8 +449,7 @@ public:
 	 */
 	char *get_buf(int idx = 0) const {
 		if (!is_extended_req()) {
-			unsigned long addr = buf_addr;
-			return (char *) addr;
+			return (char *) payload.buf_addr;
 		}
 		else {
 			return (char *) get_extension()->vec_pointer[idx].get_buf();
