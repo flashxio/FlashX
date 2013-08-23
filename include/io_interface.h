@@ -100,6 +100,8 @@ public:
 		return false;
 	}
 
+	virtual int get_file_id() const = 0;
+
 	virtual void cleanup() {
 	}
 

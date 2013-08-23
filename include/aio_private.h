@@ -142,6 +142,13 @@ public:
 		return true;
 	}
 
+	int get_file_id() const {
+		if (default_io)
+			return default_io->get_file_id();
+		else
+			return -1;
+	}
+
 	virtual void cleanup();
 
 	void return_cb(thread_callback_s *tcbs[], int num);

@@ -26,14 +26,12 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 		int access_method, io_interface *io, int node_id)
 {
 	this->offset = off;
+	this->io = io;
 	if (is_extended_req()) {
-		get_extension()->io = io;
 		if (buf)
 			add_buf(buf, size);
 	}
 	else {
-		this->io_idx = io->get_io_idx();
-		assert(io_idx <= MAX_IO_IDX);
 		assert(size <= MAX_BUF_SIZE);
 		this->buf_size = size;
 		this->buf_addr = (long) buf;
@@ -44,6 +42,14 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 	assert(node_id <= MAX_NODE_ID);
 	this->node_id = node_id;
 	this->sync = false;
+}
+
+int io_request::get_file_id() const
+{
+	assert(io);
+	int ret = io->get_file_id();
+	assert(ret >= 0);
+	return ret;
 }
 
 void io_req_extension::add_io_buf(const io_buf &buf)

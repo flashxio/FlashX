@@ -531,7 +531,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 
 	assert(npages <= MAX_NUM_IOVECS);
 	assert(orig->get_orig() == NULL);
-	io_request multibuf_req(-1, underlying, req.get_access_method(),
+	io_request multibuf_req(-1, req.get_access_method(), underlying,
 			get_node_id(), orig, NULL);
 
 	/*
@@ -561,7 +561,7 @@ again:
 			if (!multibuf_req.is_empty()) {
 				p->unlock();
 				underlying->access(&multibuf_req, 1);
-				io_request tmp(-1, underlying, req.get_access_method(),
+				io_request tmp(-1, req.get_access_method(), underlying,
 						get_node_id(), orig, NULL);
 				multibuf_req = tmp;
 				goto again;
@@ -593,7 +593,7 @@ again:
 			 */
 			if (!multibuf_req.is_empty()) {
 				underlying->access(&multibuf_req, 1);
-				io_request tmp(-1, underlying, req.get_access_method(),
+				io_request tmp(-1, req.get_access_method(), underlying,
 						get_node_id(), orig, NULL);
 				multibuf_req = tmp;
 			}
@@ -722,7 +722,7 @@ void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
 	p->lock();
 	assert(!p->is_io_pending());
 	p->set_io_pending(true);
-	io_request req(off, io, WRITE, p->get_node_id(), orig, p);
+	io_request req(off, WRITE, io, p->get_node_id(), orig, p);
 	assert(p->get_ref() > 0);
 	req.add_page(p);
 	p->unlock();

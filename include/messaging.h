@@ -121,15 +121,9 @@ struct io_req_extension
  */
 class io_request
 {
-	int file_id;
 	off_t offset: 40;
-	/*
-	 * The NUMA node id where the buffers of the request are allocated.
-	 */
-	static const int MAX_NODE_ID = (1 << 4) - 1;
-	unsigned int node_id: 4;
-	static const int MAX_BUF_SIZE = (1 << 20) - 1;
-	unsigned long buf_size: 20;
+	static const int MAX_BUF_SIZE = (1 << 24) - 1;
+	unsigned long buf_size: 24;
 
 	// This flag is initialized when the object is created and
 	// can't be changed manually.
@@ -143,10 +137,12 @@ class io_request
 	// Is this synchronous IO?
 	unsigned int sync: 1;
 	unsigned int high_prio: 1;
-	static const int MAX_IO_IDX = (1 << 12) - 1;
-	unsigned int io_idx: 12;
+	static const int MAX_NODE_ID = (1 << 12) - 1;
+	unsigned int node_id: 12;
 	// Linux uses 48 bit for addresses.
 	unsigned long buf_addr: 48;
+
+	io_interface *io;
 
 	io_req_extension *get_extension() const {
 		assert(is_extended_req() && buf_addr);
@@ -161,7 +157,6 @@ class io_request
 public:
 	// By default, a request is initialized as a flush request.
 	io_request() {
-		file_id = -1;
 		extended = 0;
 		buf_addr = 0;
 		high_prio = 1;
@@ -169,7 +164,6 @@ public:
 	}
 
 	io_request(bool extended) {
-		file_id = -1;
 		this->extended = extended;
 		buf_addr = 0;
 		high_prio = 1;
@@ -181,31 +175,25 @@ public:
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, bool sync = false) {
-		file_id = -1;
 		extended = 0;
 		this->sync = sync;
-		assert(node_id <= MAX_NODE_ID);
 		init(buf, off, size, access_method, io, node_id);
 	}
 
-	io_request(off_t off, io_interface *io, int access_method, int node_id,
+	io_request(off_t off, int access_method, io_interface *io, int node_id,
 			io_request *orig, void *priv, bool sync = false) {
-		file_id = -1;
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
 		this->sync = sync;
-		assert(node_id <= MAX_NODE_ID);
-		init(off, io, access_method, node_id, orig, priv, NULL);
+		init(off, access_method, io, node_id, orig, priv, NULL);
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, io_request *orig,
 			void *priv, bool sync = false) {
-		file_id = -1;
 		extended = 1;
 		buf_addr = (long) new io_req_extension();
 		this->sync = sync;
-		assert(node_id <= MAX_NODE_ID);
 		init(buf, off, size, access_method, io, node_id, orig, priv, NULL);
 	}
 
@@ -235,14 +223,13 @@ public:
 	}
 
 	void init(const io_request &req) {
-		this->file_id = req.get_file_id();
 		this->sync = req.sync;
 		if (!req.is_extended_req()) {
 			this->init(req.get_buf(), req.get_offset(), req.get_size(),
 					req.get_access_method(), req.get_io(), req.get_node_id());
 		}
 		else if (this->is_extended_req()) {
-			this->init(req.get_offset(), req.get_io(), req.get_access_method(),
+			this->init(req.get_offset(), req.get_access_method(), req.get_io(),
 					req.get_node_id(), req.get_orig(), req.get_priv(), req.get_user_data());
 			for (int i = 0; i < req.get_num_bufs(); i++) {
 				this->add_io_buf(req.get_io_buf(i));
@@ -257,7 +244,6 @@ public:
 	}
 
 	void init() {
-		file_id = -1;
 		if (is_extended_req()) {
 			io_req_extension *ext = get_extension();
 			assert(ext);
@@ -266,7 +252,7 @@ public:
 			high_prio = 0;
 			sync = 0;
 			node_id = 0;
-			io_idx = 0;
+			io = NULL;
 			access_method = 0;
 			buf_size = 0;
 		}
@@ -276,7 +262,7 @@ public:
 			high_prio = 0;
 			sync = 0;
 			node_id = 0;
-			io_idx = 0;
+			io = NULL;
 			access_method = 0;
 			buf_size = 0;
 			buf_addr = 0;
@@ -289,11 +275,11 @@ public:
 	void init(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, io_request *orig, void *priv,
 			void *user_data) {
-		init(off, io, access_method, node_id, orig, priv, user_data);
+		init(off, access_method, io, node_id, orig, priv, user_data);
 		add_buf(buf, size);
 	}
 
-	void init(off_t off, io_interface *io, int access_method, int node_id,
+	void init(off_t off, int access_method, io_interface *io, int node_id,
 			io_request *orig, void *priv, void *user_data) {
 		assert(is_extended_req());
 		io_request::init(NULL, off, 0, access_method, io, node_id);
@@ -304,13 +290,7 @@ public:
 		ext->user_data = user_data;
 	}
 
-	void set_file_id(int file_id) {
-		this->file_id = file_id;
-	}
-
-	int get_file_id() const {
-		return file_id;
-	}
+	int get_file_id() const;
 
 	/**
 	 * Test whether the request is a flush request.
@@ -347,11 +327,7 @@ public:
 	}
 
 	io_interface *get_io() const {
-		if (is_extended_req()) {
-			return get_extension()->io;
-		}
-		else
-			return ::get_io(io_idx);
+		return io;
 	}
 
 	int get_node_id() const {

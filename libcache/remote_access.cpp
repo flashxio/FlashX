@@ -45,6 +45,10 @@ public:
 	virtual callback *get_callback() {
 		return cb;
 	}
+
+	virtual int get_file_id() const {
+		return -1;
+	}
 };
 
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
@@ -145,7 +149,6 @@ void remote_disk_access::access(io_request *requests, int num,
 
 	bool syncd = false;
 	for (int i = 0; i < num; i++) {
-		requests[i].set_file_id(block_mapper->get_file_id());
 		assert(requests[i].get_size() > 0);
 
 		if (requests[i].is_flush()) {
@@ -189,7 +192,6 @@ void remote_disk_access::access(io_request *requests, int num,
 				// It only supports to extract a specified request from
 				// a single-buffer request.
 				extract_pages(*orig, begin, size / PAGE_SIZE, req);
-				req.set_file_id(orig->get_file_id());
 				req.set_orig(orig);
 				req.set_io(req_intercepter);
 				assert(inside_RAID_block(req));

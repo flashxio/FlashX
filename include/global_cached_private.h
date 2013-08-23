@@ -174,6 +174,10 @@ public:
 		return underlying->support_aio();
 	}
 
+	virtual int get_file_id() const {
+		return underlying->get_file_id();
+	}
+
 	virtual void cleanup() {
 		underlying->cleanup();
 	}

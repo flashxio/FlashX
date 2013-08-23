@@ -1072,7 +1072,7 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 				io_request tmp(true);
 				req_array[num_init_reqs] = tmp;
 			}
-			req_array[num_init_reqs].init(p->get_offset(), io, WRITE,
+			req_array[num_init_reqs].init(p->get_offset(), WRITE, io,
 					get_node_id(), NULL, cache, NULL);
 			req_array[num_init_reqs].add_page(p);
 			req_array[num_init_reqs].set_high_prio(true);

@@ -70,6 +70,10 @@ public:
 		return cb;
 	}
 
+	virtual int get_file_id() const {
+		return block_mapper->get_file_id();
+	}
+
 	virtual void access(io_request *requests, int num,
 			io_status *status = NULL);
 	virtual io_interface *clone() const;

@@ -46,6 +46,10 @@ public:
 		return partition;
 	}
 
+	int get_file_id() const {
+		return partition.get_file_id();
+	}
+
 	int init();
 
 	void cleanup() {
