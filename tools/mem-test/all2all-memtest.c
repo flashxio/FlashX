@@ -48,15 +48,41 @@ void materialize_buf(char *buf, int size)
 		buf[j] = 0;
 }
 
+struct data_buffer
+{
+	char *addr;
+	int size;
+	int node_id;
+};
+
+void init_buffer(struct data_buffer *buf)
+{
+	buf->addr = NULL;
+	buf->size = 0;
+	buf->node_id = -1;
+}
+
+void set_buffer(struct data_buffer *buf, char *addr, int size, int node_id)
+{
+	buf->addr = addr;
+	buf->size = size;
+	buf->node_id = node_id;
+}
+
+int is_valid_buffer(struct data_buffer *buf)
+{
+	return buf->addr != NULL;
+}
+
 struct buf_init_data
 {
 	int buf_size;
 	int node_id;
 
 	// The source data buffers for other threads to copy data from.
-	char *src_bufs[NUM_NODES][NUM_THREADS];
+	struct data_buffer src_bufs[NUM_NODES][NUM_THREADS];
 	// The local data buffers for memcpy threads to store data to.
-	char *local_bufs[NUM_NODES][NUM_THREADS];
+	struct data_buffer local_bufs[NUM_NODES][NUM_THREADS];
 };
 
 /**
@@ -72,19 +98,21 @@ void *buf_init_func(void *arg)
 	for (i = 0; i < NUM_NODES; i++) {
 		for (j = 0; j < NUM_THREADS; j++) {
 			if (i == data->node_id) {
-				data->src_bufs[i][j] = NULL;
-				data->local_bufs[i][j] = NULL;
+				init_buffer(&data->src_bufs[i][j]);
+				init_buffer(&data->local_bufs[i][j]);
 			}
 			else {
 				char *buf;
 				
 				buf = (char *) numa_alloc_onnode(data->buf_size, data->node_id);
-				data->src_bufs[i][j] = buf;
 				materialize_buf(buf, data->buf_size);
+				set_buffer(&data->src_bufs[i][j], buf, data->buf_size,
+						data->node_id);
 
 				buf = (char *) numa_alloc_onnode(data->buf_size, data->node_id);
-				data->local_bufs[i][j] = buf;
 				materialize_buf(buf, data->buf_size);
+				set_buffer(&data->local_bufs[i][j], buf, data->buf_size,
+						data->node_id);
 			}
 		}
 	}
@@ -95,11 +123,10 @@ struct buf_copy_data
 {
 	struct {
 		// A data buffer in a remote NUMA node.
-		char *from;
+		struct data_buffer from;
 		// the data buffer local to the memcpy thread.
-		char *to;
+		struct data_buffer to;
 	} copy_entries[NUM_NODES - 1];
-	int buf_size;
 	int node_id;
 
 	size_t copy_size;
@@ -118,9 +145,13 @@ void *buf_copy_func(void *arg)
 	data->copy_size = 0;
 	for (j = 0; j < NUM_COPY; j++)
 		for (i = 0; i < NUM_NODES - 1; i++) {
-			memcpy(data->copy_entries[i].to, data->copy_entries[i].from,
-					data->buf_size);
-			data->copy_size += data->buf_size;
+			int size = data->copy_entries[i].to.size;
+			assert(size == data->copy_entries[i].from.size);
+			assert(data->copy_entries[i].to.node_id == data->node_id);
+			assert(data->copy_entries[i].from.node_id != data->node_id);
+			memcpy(data->copy_entries[i].to.addr, data->copy_entries[i].from.addr,
+					size);
+			data->copy_size += size;
 		}
 	return NULL;
 }
@@ -177,21 +208,20 @@ int main(int argc, char *argv[])
 			for (thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
 				int idx = 0;
 				copy_data[local_node_id][thread_id].node_id = local_node_id;
-				copy_data[local_node_id][thread_id].buf_size = ARRAY_SIZE;
 				for (remote_node_id = 0; remote_node_id < NUM_NODES;
 						remote_node_id++) {
-					char *buf1, *buf2;
+					struct data_buffer buf1, buf2;
 					if (local_node_id == remote_node_id)
 						continue;
 
 					buf1 = node_buf_data[remote_node_id].src_bufs[local_node_id][thread_id];
-					assert(buf1);
+					assert(is_valid_buffer(&buf1));
 					copy_data[local_node_id][thread_id].copy_entries[idx].from = buf1;
 
 					buf2 = node_buf_data[local_node_id].local_bufs[remote_node_id][thread_id];
-					assert(buf2);
+					assert(is_valid_buffer(&buf2));
 					copy_data[local_node_id][thread_id].copy_entries[idx].to = buf2;
-					printf("%p\t%p\n", buf1, buf2);
+					printf("%p\t%p\n", buf1.addr, buf2.addr);
 					idx++;
 				}
 
