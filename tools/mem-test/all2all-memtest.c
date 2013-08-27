@@ -25,6 +25,7 @@ enum
 {
 	MEMCPY_PULL,
 	MEMCPY_PUSH,
+	MEMCPY_R2R,
 	MEMREAD,
 	MEMWRITE,
 };
@@ -108,17 +109,17 @@ void *buf_init_func(void *arg)
 	bind2node_id(data->node_id);
 	for (i = 0; i < NUM_NODES; i++) {
 		for (j = 0; j < NUM_THREADS; j++) {
-			if ((i == data->node_id && use_remote)
-					|| (i != data->node_id && !use_remote)) {
+			if (/*(i == data->node_id && use_remote)
+					||*/ (i != data->node_id && !use_remote)) {
 				init_buffer(&data->src_bufs[i][j]);
 				init_buffer(&data->local_bufs[i][j]);
 			}
-			if ((i != data->node_id && use_remote)
+			if ((/*i != data->node_id && */use_remote)
 					|| (i == data->node_id && !use_remote)) {
 				char *buf;
 				
 				if (data->mode == MEMCPY_PULL || data->mode == MEMCPY_PUSH
-						|| data->mode == MEMREAD) {
+						|| data->mode == MEMCPY_R2R || data->mode == MEMREAD) {
 					buf = (char *) numa_alloc_onnode(data->buf_size,
 							data->node_id);
 					materialize_buf(buf, data->buf_size);
@@ -129,7 +130,7 @@ void *buf_init_func(void *arg)
 					init_buffer(&data->src_bufs[i][j]);
 
 				if (data->mode == MEMCPY_PULL || data->mode == MEMCPY_PUSH
-						|| data->mode == MEMWRITE) {
+						|| data->mode == MEMCPY_R2R || data->mode == MEMWRITE) {
 					buf = (char *) numa_alloc_onnode(data->buf_size,
 							data->node_id);
 					materialize_buf(buf, data->buf_size);
@@ -235,6 +236,19 @@ void *buf_copy_func(void *arg)
 				memcpy(data->copy_entries[i].to.addr,
 						data->copy_entries[i].from.addr, size);
 			}
+			else if (data->mode == MEMCPY_R2R) {
+				if (use_remote) {
+					assert(data->copy_entries[i].to.node_id != data->node_id);
+					assert(data->copy_entries[i].from.node_id != data->node_id);
+				}
+				else {
+					assert(data->copy_entries[i].to.node_id == data->node_id);
+					assert(data->copy_entries[i].from.node_id == data->node_id);
+				}
+				assert(size == data->copy_entries[i].from.size);
+				memcpy(data->copy_entries[i].to.addr,
+						data->copy_entries[i].from.addr, size);
+			}
 			else if (data->mode == MEMREAD) {
 				assert(data->copy_entries[i].to.addr == NULL);
 				if (use_remote)
@@ -267,7 +281,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 3) {
 		fprintf(stderr, "memtest mode remote\n");
-		fprintf(stderr, "mode: 0(memcpy_pull), 1(memcpy_push), 2(memread), 3(memwrite)\n");
+		fprintf(stderr, "mode: 0(memcpy_pull), 1(memcpy_push), 2(memcpy_r2r), 3(memread), 4(memwrite)\n");
 		fprintf(stderr, "remote: 0(local) 1(remote)\n");
 		return -1;
 	}
@@ -325,26 +339,39 @@ int main(int argc, char *argv[])
 						remote_node_id++) {
 					struct data_buffer buf1, buf2;
 					int node1, node2;
-					if (local_node_id == remote_node_id)
-						continue;
 
 					if (use_remote) {
-						if (mode == MEMCPY_PULL || mode == MEMREAD) {
-							node1 = remote_node_id;
-							node2 = local_node_id;
-						}
-						else if (mode == MEMCPY_PUSH || mode == MEMWRITE) {
-							node1 = local_node_id;
+						if (mode == MEMCPY_R2R) {
+							if (local_node_id == remote_node_id)
+								continue;
+							node1 = (local_node_id + 1) % NUM_NODES;
 							node2 = remote_node_id;
 						}
-						else
-							assert(0);
+						else {
+							if (local_node_id == remote_node_id)
+								continue;
+
+							if (mode == MEMCPY_PULL || mode == MEMREAD) {
+								node1 = remote_node_id;
+								node2 = local_node_id;
+							}
+							else if (mode == MEMCPY_PUSH || mode == MEMWRITE) {
+								node1 = local_node_id;
+								node2 = remote_node_id;
+							}
+							else
+								assert(0);
+						}
 					}
 					else {
+						// We only need to run for (NUM_NODES -1) times.
+						if (remote_node_id == NUM_NODES - 1)
+							break;
 						node1 = local_node_id;
 						node2 = local_node_id;
 					}
-					if (mode == MEMCPY_PULL || mode == MEMCPY_PUSH) {
+					if (mode == MEMCPY_PULL || mode == MEMCPY_PUSH
+							|| mode == MEMCPY_R2R) {
 						buf1 = node_buf_data[node1].src_bufs[node2][thread_id];
 						assert(is_valid_buffer(&buf1));
 						copy_data[local_node_id][thread_id].copy_entries[idx].from = buf1;
