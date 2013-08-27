@@ -19,6 +19,16 @@
 #define ENTRY_SIZE PAGE_SIZE
 #define ARRAY_SIZE (128 * 1024 * 1024)
 
+int use_remote;
+
+enum
+{
+	MEMCPY_PULL,
+	MEMCPY_PUSH,
+	MEMREAD,
+	MEMWRITE,
+};
+
 struct timeval global_start;
 
 static inline void bind2node_id(int node_id)
@@ -78,6 +88,7 @@ struct buf_init_data
 {
 	int buf_size;
 	int node_id;
+	int mode;
 
 	// The source data buffers for other threads to copy data from.
 	struct data_buffer src_bufs[NUM_NODES][NUM_THREADS];
@@ -97,22 +108,36 @@ void *buf_init_func(void *arg)
 	bind2node_id(data->node_id);
 	for (i = 0; i < NUM_NODES; i++) {
 		for (j = 0; j < NUM_THREADS; j++) {
-			if (i == data->node_id) {
+			if ((i == data->node_id && use_remote)
+					|| (i != data->node_id && !use_remote)) {
 				init_buffer(&data->src_bufs[i][j]);
 				init_buffer(&data->local_bufs[i][j]);
 			}
-			else {
+			if ((i != data->node_id && use_remote)
+					|| (i == data->node_id && !use_remote)) {
 				char *buf;
 				
-				buf = (char *) numa_alloc_onnode(data->buf_size, data->node_id);
-				materialize_buf(buf, data->buf_size);
-				set_buffer(&data->src_bufs[i][j], buf, data->buf_size,
-						data->node_id);
+				if (data->mode == MEMCPY_PULL || data->mode == MEMCPY_PUSH
+						|| data->mode == MEMREAD) {
+					buf = (char *) numa_alloc_onnode(data->buf_size,
+							data->node_id);
+					materialize_buf(buf, data->buf_size);
+					set_buffer(&data->src_bufs[i][j], buf, data->buf_size,
+							data->node_id);
+				}
+				else
+					init_buffer(&data->src_bufs[i][j]);
 
-				buf = (char *) numa_alloc_onnode(data->buf_size, data->node_id);
-				materialize_buf(buf, data->buf_size);
-				set_buffer(&data->local_bufs[i][j], buf, data->buf_size,
-						data->node_id);
+				if (data->mode == MEMCPY_PULL || data->mode == MEMCPY_PUSH
+						|| data->mode == MEMWRITE) {
+					buf = (char *) numa_alloc_onnode(data->buf_size,
+							data->node_id);
+					materialize_buf(buf, data->buf_size);
+					set_buffer(&data->local_bufs[i][j], buf, data->buf_size,
+							data->node_id);
+				}
+				else
+					init_buffer(&data->local_bufs[i][j]);
 			}
 		}
 	}
@@ -128,9 +153,46 @@ struct buf_copy_data
 		struct data_buffer to;
 	} copy_entries[NUM_NODES - 1];
 	int node_id;
+	int mode;
 
 	size_t copy_size;
 };
+
+int sum_buf(char *buf, int size)
+{
+	long *lbuf = (long *) buf;
+	int num = size / sizeof(long);
+	int i;
+	long sum = 0;
+
+	for (i = 0; i < num; i++)
+		sum += lbuf[i];
+	return sum;
+}
+
+int memread(struct data_buffer buf)
+{
+	long sum = 0;
+	char page[4096];
+	char *addr = buf.addr;
+	char *end = buf.addr + buf.size;
+	for (; addr < end; addr += sizeof(page)) {
+		memcpy(page, addr, sizeof(page));
+		sum += sum_buf(page, sizeof(page));
+	}
+	return sum;
+}
+
+int memwrite(struct data_buffer buf)
+{
+	char page[4096];
+	char *addr = buf.addr;
+	char *end = buf.addr + buf.size;
+	memset(page, 0, sizeof(page));
+	for (; addr < end; addr += sizeof(page))
+		memcpy(addr, page, sizeof(page));
+	return buf.size;
+}
 
 /**
  * Each thread copies memory from a remote memory buffer.
@@ -140,20 +202,58 @@ void *buf_copy_func(void *arg)
 	int i, j;
 	size_t size = 0;
 	struct buf_copy_data *data = (struct buf_copy_data *) arg;
+	long memread_sum = 0;
 
 	bind2node_id(data->node_id);
 	data->copy_size = 0;
 	for (j = 0; j < NUM_COPY; j++)
 		for (i = 0; i < NUM_NODES - 1; i++) {
 			int size = data->copy_entries[i].to.size;
-			assert(size == data->copy_entries[i].from.size);
-			assert(data->copy_entries[i].to.node_id == data->node_id);
-			assert(data->copy_entries[i].from.node_id != data->node_id);
-			memcpy(data->copy_entries[i].to.addr, data->copy_entries[i].from.addr,
-					size);
+			if (data->mode == MEMCPY_PULL) {
+				if (use_remote) {
+					assert(data->copy_entries[i].to.node_id == data->node_id);
+					assert(data->copy_entries[i].from.node_id != data->node_id);
+				}
+				else {
+					assert(data->copy_entries[i].to.node_id == data->node_id);
+					assert(data->copy_entries[i].from.node_id == data->node_id);
+				}
+				assert(size == data->copy_entries[i].from.size);
+				memcpy(data->copy_entries[i].to.addr,
+						data->copy_entries[i].from.addr, size);
+			}
+			else if (data->mode == MEMCPY_PUSH) {
+				if (use_remote) {
+					assert(data->copy_entries[i].to.node_id != data->node_id);
+					assert(data->copy_entries[i].from.node_id == data->node_id);
+				}
+				else {
+					assert(data->copy_entries[i].to.node_id == data->node_id);
+					assert(data->copy_entries[i].from.node_id == data->node_id);
+				}
+				assert(size == data->copy_entries[i].from.size);
+				memcpy(data->copy_entries[i].to.addr,
+						data->copy_entries[i].from.addr, size);
+			}
+			else if (data->mode == MEMREAD) {
+				assert(data->copy_entries[i].to.addr == NULL);
+				if (use_remote)
+					assert(data->copy_entries[i].from.node_id != data->node_id);
+				else
+					assert(data->copy_entries[i].from.node_id == data->node_id);
+				memread_sum += memread(data->copy_entries[i].from);
+			}
+			else if (data->mode == MEMWRITE) {
+				if (use_remote)
+					assert(data->copy_entries[i].to.node_id != data->node_id);
+				else
+					assert(data->copy_entries[i].to.node_id == data->node_id);
+				assert(data->copy_entries[i].from.addr == NULL);
+				memwrite(data->copy_entries[i].to);
+			}
 			data->copy_size += size;
 		}
-	return NULL;
+	return (void *) memread_sum;
 }
 
 int main(int argc, char *argv[])
@@ -162,7 +262,18 @@ int main(int argc, char *argv[])
 	ssize_t read_bytes = 0;
 	/* the number of entries the array can contain. */
 	int node;
+	int mode;
 	struct buf_init_data node_buf_data[NUM_NODES];
+
+	if (argc < 3) {
+		fprintf(stderr, "memtest mode remote\n");
+		fprintf(stderr, "mode: 0(memcpy_pull), 1(memcpy_push), 2(memread), 3(memwrite)\n");
+		fprintf(stderr, "remote: 0(local) 1(remote)\n");
+		return -1;
+	}
+	mode = atoi(argv[1]);
+	assert(mode <= MEMWRITE);
+	use_remote = atoi(argv[2]);
 
 	{
 		pthread_t threads[NUM_NODES];
@@ -174,6 +285,7 @@ int main(int argc, char *argv[])
 		for (i = 0; i < NUM_NODES; i++) {
 			node_buf_data[i].buf_size = ARRAY_SIZE;
 			node_buf_data[i].node_id = i;
+			node_buf_data[i].mode = mode;
 
 			ret = pthread_create(&threads[i], NULL,
 					buf_init_func, &node_buf_data[i]);
@@ -208,20 +320,53 @@ int main(int argc, char *argv[])
 			for (thread_id = 0; thread_id < NUM_THREADS; thread_id++) {
 				int idx = 0;
 				copy_data[local_node_id][thread_id].node_id = local_node_id;
+				copy_data[local_node_id][thread_id].mode = mode;
 				for (remote_node_id = 0; remote_node_id < NUM_NODES;
 						remote_node_id++) {
 					struct data_buffer buf1, buf2;
+					int node1, node2;
 					if (local_node_id == remote_node_id)
 						continue;
 
-					buf1 = node_buf_data[remote_node_id].src_bufs[local_node_id][thread_id];
-					assert(is_valid_buffer(&buf1));
-					copy_data[local_node_id][thread_id].copy_entries[idx].from = buf1;
+					if (use_remote) {
+						if (mode == MEMCPY_PULL || mode == MEMREAD) {
+							node1 = remote_node_id;
+							node2 = local_node_id;
+						}
+						else if (mode == MEMCPY_PUSH || mode == MEMWRITE) {
+							node1 = local_node_id;
+							node2 = remote_node_id;
+						}
+						else
+							assert(0);
+					}
+					else {
+						node1 = local_node_id;
+						node2 = local_node_id;
+					}
+					if (mode == MEMCPY_PULL || mode == MEMCPY_PUSH) {
+						buf1 = node_buf_data[node1].src_bufs[node2][thread_id];
+						assert(is_valid_buffer(&buf1));
+						copy_data[local_node_id][thread_id].copy_entries[idx].from = buf1;
 
-					buf2 = node_buf_data[local_node_id].local_bufs[remote_node_id][thread_id];
-					assert(is_valid_buffer(&buf2));
-					copy_data[local_node_id][thread_id].copy_entries[idx].to = buf2;
-					printf("%p\t%p\n", buf1.addr, buf2.addr);
+						buf2 = node_buf_data[node2].local_bufs[node1][thread_id];
+						assert(is_valid_buffer(&buf2));
+						copy_data[local_node_id][thread_id].copy_entries[idx].to = buf2;
+					}
+					else if (mode == MEMREAD) {
+						buf1 = node_buf_data[node1].src_bufs[node2][thread_id];
+						assert(is_valid_buffer(&buf1));
+						copy_data[local_node_id][thread_id].copy_entries[idx].from = buf1;
+						init_buffer(&copy_data[local_node_id][
+								thread_id].copy_entries[idx].to);
+					}
+					else if (mode == MEMWRITE) {
+						buf2 = node_buf_data[node2].local_bufs[node1][thread_id];
+						assert(is_valid_buffer(&buf2));
+						copy_data[local_node_id][thread_id].copy_entries[idx].to = buf2;
+						init_buffer(&copy_data[local_node_id][
+								thread_id].copy_entries[idx].from);
+					}
 					idx++;
 				}
 
