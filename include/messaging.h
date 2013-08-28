@@ -551,6 +551,91 @@ public:
 	bool is_partial() const {
 		return get_extension()->partial;
 	}
+
+	bool is_data_inline() const {
+		return data_inline == 1;
+	}
+
+	/**
+	 * We need to serialize an io request to a buffer so it can be sent to
+	 * another thread.
+	 */
+	int serialize(char *buf, int size) const {
+		int serialized_size;
+		if (is_data_inline()) {
+			serialized_size = get_serialized_size();
+			assert(serialized_size <= size);
+			memcpy(buf, this, serialized_size);
+		}
+		else if (payload_type == EXT_REQ) {
+			// We never serialize the io request extension to the message.
+			serialized_size = sizeof(io_request);
+			assert(serialized_size <= size);
+			memcpy(buf, this, sizeof(*this));
+		}
+		else if (payload_type == BASIC_REQ) {
+			// We only serialize the data buffer to the message for write
+			// requests. The size of the data buffer has to be small.
+			if (get_size() > MAX_INLINE_SIZE || access_method == READ) {
+				serialized_size = sizeof(io_request);
+				assert(serialized_size <= size);
+				memcpy(buf, this, sizeof(*this));
+			}
+			else {
+				serialized_size = sizeof(io_request) - sizeof(this->payload)
+					+ get_size();
+				assert(serialized_size <= size);
+				memcpy(buf, this, sizeof(*this));
+				io_request *p = (io_request *) buf;
+				p->data_inline = 1;
+				memcpy(p->payload.buf, (char *) this->payload.buf_addr,
+						this->get_size());
+			}
+		}
+		else {
+			// The user compute object is always serialized to the message.
+			user_compute *compute = this->payload.compute;
+			serialized_size = sizeof(io_request) - sizeof(this->payload)
+				+ compute->get_serialized_size();
+			assert(serialized_size <= size && sizeof(io_request)
+					<= (unsigned) size);
+			memcpy(buf, this, sizeof(*this));
+			io_request *p = (io_request *) buf;
+			p->data_inline = 1;
+			compute->serialize((char *) p->payload.buf,
+					size - (sizeof(io_request) - sizeof(this->payload)));
+		}
+		return serialized_size;
+	}
+
+	/**
+	 * This method returns the size of an IO request after it is serialized.
+	 */
+	int get_serialized_size() const {
+		if (payload_type == EXT_REQ)
+			return sizeof(io_request);
+		else if (payload_type == BASIC_REQ && (get_size() > MAX_INLINE_SIZE
+					|| access_method == READ))
+			return sizeof(io_request);
+		else if (payload_type == BASIC_REQ)
+			return sizeof(io_request) - sizeof(this->payload) + get_size();
+		else if (!is_data_inline()) {
+			user_compute *compute = this->payload.compute;
+			return sizeof(io_request) - sizeof(this->payload)
+				+ compute->get_serialized_size();
+		}
+		else {
+			user_compute *compute = (user_compute *) this->payload.buf;
+			return sizeof(io_request) - sizeof(this->payload)
+				+ compute->get_serialized_size();
+		}
+	}
+
+	static io_request *deserialize(char *buf, int size) {
+		io_request *ret = (io_request *) buf;
+		assert(ret->get_serialized_size() <= size);
+		return ret;
+	}
 };
 
 class io_reply
