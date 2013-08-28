@@ -201,6 +201,11 @@ int sum_buf(char *buf, int size)
 	return sum;
 }
 
+struct cache_line
+{
+	long data[128 / sizeof(long)];
+};
+
 int memread(struct data_buffer buf)
 {
 	long sum = 0;
@@ -218,12 +223,23 @@ int memread(struct data_buffer buf)
 
 int memwrite(struct data_buffer buf)
 {
-	char page[4096];
-	char *addr = buf.addr;
-	char *end = buf.addr + buf.size;
-	memset(page, 0, sizeof(page));
-	for (; addr < end; addr += sizeof(page))
-		memcpy(addr, page, sizeof(page));
+	/*
+	 * When memset is used to reset all data in the buffer, it gets very good
+	 * performance. memwrite is as fast as memread. Although I have tried
+	 * many other ways to speed up the following code to write data.
+	 */
+//	memset(buf.addr, 0, buf.size);
+	struct cache_line *start = (struct cache_line *) buf.addr;
+	int num = buf.size / sizeof(struct cache_line);
+	int i;
+	char local_buf[sizeof(struct cache_line) * 2];
+	// Let's get a cache line that is aligned in the memory.
+	struct cache_line *local = (struct cache_line *) (((long) local_buf
+				+ sizeof(struct cache_line) - 1) & (~(sizeof(struct cache_line) - 1)));
+
+	assert(((long) local) % sizeof(struct cache_line) == 0);
+	for (i = 0; i < num; i++)
+		start[i] = *local;
 	return buf.size;
 }
 
