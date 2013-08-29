@@ -106,7 +106,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	cb->func = cb_func;
 	// init doesn't pass the ownership of an extension from one request
 	// to another.
-	tcb->req.init(io_req);
+	tcb->req = io_req;
 	tcb->aio = this;
 	tcb->aio_callback = this->get_callback();
 	tcb->cb_allocator = &cb_allocator;

@@ -71,27 +71,6 @@ public:
 			long max_size = MAX_SIZE): obj_allocator<thread_callback_s>(node_id,
 				increase_size, max_size, &initiator) {
 	}
-
-	virtual int alloc_objs(thread_callback_s **cbs, int num) {
-		int ret = obj_allocator<thread_callback_s>::alloc_objs(cbs, num);
-		// Make sure all requests are extended requests.
-		for (int i = 0; i < ret; i++) {
-			if (!cbs[i]->req.is_extended_req()) {
-				io_request tmp(true);
-				cbs[i]->req = tmp;
-			}
-		}
-		return ret;
-	}
-
-	virtual thread_callback_s *alloc_obj() {
-		thread_callback_s *cb = obj_allocator<thread_callback_s>::alloc_obj();
-		if (!cb->req.is_extended_req()) {
-			io_request tmp(true);
-			cb->req = tmp;
-		}
-		return cb;
-	}
 };
 
 class async_io: public io_interface
