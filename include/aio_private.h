@@ -20,9 +20,11 @@ class aio_complete_queue
 {
 	blocking_FIFO_queue<thread_callback_s *> queue;
 public:
-	aio_complete_queue(int node_id): queue(node_id, "aio_completes", AIO_DEPTH_PER_FILE,
-			// This max size seems enough to keep all requests.
-			AIO_DEPTH_PER_FILE * 200) {
+	aio_complete_queue(int node_id): queue(node_id, "aio_completes",
+			// The max size of the queue can be unlimited.
+			// The number of completed requests is limited by the number of
+			// requests issued by the user.
+			AIO_DEPTH_PER_FILE, INT_MAX) {
 	}
 
 	blocking_FIFO_queue<thread_callback_s *> *get_queue() {
