@@ -212,6 +212,9 @@ public:
 			io_request *orig, void *priv, bool sync = false) {
 		payload_type = EXT_REQ;
 		data_inline = 0;
+		// TODO we should remove the ownership to the request extension
+		// from the IO request. i.e., the extension should be allocated and
+		// deallocated by someone else.
 		payload.ext = new io_req_extension();
 		init(off, access_method, io, node_id, orig, priv, NULL, sync);
 	}
@@ -559,10 +562,13 @@ public:
 	/**
 	 * We need to serialize an io request to a buffer so it can be sent to
 	 * another thread.
+	 * @accept_inline: indicates whether the IO request can inline data
+	 * to the buffer.
 	 */
-	int serialize(char *buf, int size) const {
+	int serialize(char *buf, int size, bool accept_inline) {
 		int serialized_size;
 		if (is_data_inline()) {
+			assert(accept_inline);
 			serialized_size = get_serialized_size();
 			assert(serialized_size <= size);
 			memcpy(buf, this, serialized_size);
@@ -572,11 +578,14 @@ public:
 			serialized_size = sizeof(io_request);
 			assert(serialized_size <= size);
 			memcpy(buf, this, sizeof(*this));
+			payload.ext = NULL;
+			payload_type = BASIC_REQ;
 		}
 		else if (payload_type == BASIC_REQ) {
 			// We only serialize the data buffer to the message for write
 			// requests. The size of the data buffer has to be small.
-			if (get_size() > MAX_INLINE_SIZE || access_method == READ) {
+			if (get_size() > MAX_INLINE_SIZE || access_method == READ
+					|| !accept_inline) {
 				serialized_size = sizeof(io_request);
 				assert(serialized_size <= size);
 				memcpy(buf, this, sizeof(*this));
@@ -593,6 +602,7 @@ public:
 			}
 		}
 		else {
+			assert(accept_inline);
 			// The user compute object is always serialized to the message.
 			user_compute *compute = this->payload.compute;
 			serialized_size = sizeof(io_request) - sizeof(this->payload)
@@ -631,7 +641,34 @@ public:
 		}
 	}
 
+	/**
+	 * This method deserialize an request from the buffer.
+	 * If the request data is inline in the buffer, instead of allocating
+	 * memory for the extra objects of the IO request, the extra objects
+	 * will stay in the buffer and the created request will point to the buffer.
+	 */
+	static void deserialize(io_request &req, char *buf, int size) {
+		assert((unsigned) size >= sizeof(io_request));
+		io_request *p = (io_request *) buf;
+		memcpy(&req, buf, sizeof(req));
+		if (req.is_data_inline()) {
+			assert(req.payload_type != EXT_REQ);
+			switch(req.payload_type) {
+				case BASIC_REQ:
+					req.payload.buf_addr = p->payload.buf;
+					break;
+				case USER_COMPUTE:
+					req.payload.compute = (user_compute *) p->payload.buf;
+					break;
+				default:
+					assert(0);
+			}
+			req.data_inline = 0;
+		}
+	}
+
 	static io_request *deserialize(char *buf, int size) {
+		assert((unsigned) size >= sizeof(io_request));
 		io_request *ret = (io_request *) buf;
 		assert(ret->get_serialized_size() <= size);
 		return ret;
@@ -692,29 +729,329 @@ public:
 	int get_access_method() const {
 		return access_method;
 	}
+
+	bool is_data_inline() const {
+		return false;
+	}
+
+	int serialize(char *buf, int size, bool accept_inline) {
+		assert((unsigned) size >= sizeof(*this));
+		memcpy(buf, this, sizeof(*this));
+		return get_serialized_size();
+	}
+
+	int get_serialized_size() const {
+		return sizeof(*this);
+	}
+
+	static void deserialize(io_reply &reply, char *buf, int size) {
+		assert((unsigned) size >= sizeof(io_reply));
+		reply = *(io_reply *) buf;
+	}
+
+	static io_reply *deserialize(char *buf, int size) {
+		assert((unsigned) size >= sizeof(io_reply));
+		io_reply *ret = (io_reply *) buf;
+		assert(ret->get_serialized_size() <= size);
+		return ret;
+	}
+};
+
+class slab_allocator;
+
+/**
+ * It is an object container used for message passing.
+ * Instead of sending objects to another thread directly, we add objects
+ * to a message, and send the message to the thread.
+ *
+ * The message supports objects of variant sizes, but objects need to
+ * be able to serialize and deserialize itself from the message.
+ *
+ * The objects that can be added to a message need to support
+ *	serialize(),
+ *	get_serialized_size(),
+ *	deserialize().
+ * If the message allows objects inline in the message buffer, after objects
+ * are serialized in the message, they shouldn't own any memory, and
+ * the message isn't responsible for destroying them when the message
+ * is destroyed.
+ * If the message doesn't allow objects inline in the message buffer,
+ * the objects stored in the message may still own their own memory. Thus,
+ * when the message is destroyed, all objects will be destroyed.
+ *
+ * The ways of fetching objects are different in these two modes:
+ * If the message accepts inline objects, get_next_inline() should be used.
+ * Otherwise, get_next() should be used.
+ *
+ * There are multiple benefits of using the message object:
+ * It reduces lock contention.
+ * When it works with message senders, we can reduce the number of memory
+ * copies. There are at most two memory copies: add an object to
+ * the message; (optionally) the receiver thread copies the message to
+ * the local memory if it runs on a NUMA node different from the message sender.
+ * Previously, we need to copy an object to the sender's local buffer,
+ * copy the local buffer to the queue, copy objects in the queue to the
+ * remote buffer.
+ */
+template<class T>
+class message
+{
+	// The allocator of the message buffer.
+	slab_allocator *alloc;
+
+	char *buf;
+	short curr_get_off;
+	short curr_add_off;
+	short num_objs;
+	// Indicate whether the data of an object can be inline in the message.
+	short accept_inline: 1;
+
+	void init() {
+		alloc = NULL;
+		buf = NULL;
+		curr_get_off = 0;
+		curr_add_off = 0;
+		num_objs = 0;
+		accept_inline = 0;
+	}
+
+	void destroy();
+
+	/**
+	 * This just returns the address of the next object.
+	 */
+	T *get_next_addr() {
+		int remaining = size() - curr_get_off;
+		assert(num_objs > 0);
+		num_objs--;
+		T *ret = T::deserialize(&buf[curr_get_off], remaining);
+		curr_get_off += ret->get_serialized_size();
+		return ret;
+	}
+public:
+	message() {
+		init();
+	}
+
+	message(slab_allocator *alloc, bool accept_inline);
+
+	~message() {
+		destroy();
+	}
+
+	message(message<T> &msg) {
+		memcpy(this, &msg, sizeof(msg));
+		msg.init();
+	}
+
+	message<T> &operator=(message<T> &msg) {
+		destroy();
+		memcpy(this, &msg, sizeof(msg));
+		msg.init();
+		return *this;
+	}
+
+	void clear() {
+		destroy();
+		init();
+	}
+
+	/**
+	 * It's actually the number of remaining objects in the message.
+	 */
+	int get_num_objs() const {
+		return num_objs;
+	}
+
+	bool is_empty() const {
+		return get_num_objs() == 0;
+	}
+
+	int size() const;
+
+	bool has_next() const {
+		return num_objs > 0;
+	}
+
+	int get_next_inline(T objs[], int num_objs) {
+		/* If the message accepts inline objects, there are no ownership
+		 * problems. The memory owned by the objects has been embedded
+		 * in the message buffer.
+		 */
+		assert(accept_inline);
+		int i = 0;
+		while (has_next()) {
+			int remaining = size() - curr_get_off;
+			assert(num_objs > 0);
+			num_objs--;
+			T::deserialize(objs[i], &buf[curr_get_off], remaining);
+			curr_get_off += objs[i].get_serialized_size();
+			i++;
+		}
+		return i;
+	}
+
+	bool get_next(T &obj) {
+		T *ret = get_next_addr();
+		assert(!accept_inline && !ret->is_data_inline());
+		// The copy constructor of the object will remove the ownership
+		// of any memory pointed by the object, so we don't need to call
+		// the deconstructor of the object.
+		obj = *ret;
+		return true;
+	}
+
+	int get_next_objs(T objs[], int num) {
+		for (int i = 0; i < num; i++) {
+			if (has_next())
+				get_next(objs[i]);
+			else
+				return i;
+		}
+		return num;
+	}
+
+	int add(T *objs, int num = 1) {
+		int num_added = 0;
+		for (int i = 0; i < num; i++) {
+			int remaining = size() - curr_add_off;
+			if (remaining < objs[i].get_serialized_size())
+				return num_added;
+			curr_add_off += objs[i].serialize(&buf[curr_add_off], remaining,
+					accept_inline);
+			num_objs++;
+			num_added++;
+		}
+		return num_added;
+	}
+
+	bool copy_to(message<T> &msg) {
+		assert(msg.alloc);
+		assert(msg.size() >= this->size());
+		memcpy(msg.buf, this->buf, curr_add_off);
+		// It probably makes more sense to reset the get offset.
+		// I expect the user will iterate all objects the message later.
+		msg.curr_get_off = 0;
+		msg.curr_add_off = this->curr_add_off;
+		msg.num_objs = this->num_objs;
+		msg.accept_inline = this->accept_inline;
+		// After we copy all objects to another message, the current
+		// message doesn't contain objects.
+		this->num_objs = 0;
+		this->curr_get_off = this->curr_add_off;
+		return true;
+	}
+};
+
+/**
+ * It contains multiple messages. It basically helps construct messages.
+ */
+template<class T>
+class msg_buffer: public fifo_queue<message<T> >
+{
+	static const int INIT_MSG_BUF_SIZE = 16;
+
+	message<T> curr;
+	slab_allocator *alloc;
+	bool accept_inline;
+
+	void add_msg(message<T> &msg) {
+		if (fifo_queue<message<T> >::is_full()) {
+			fifo_queue<message<T> >::expand_queue(
+					fifo_queue<message<T> >::get_size() * 2);
+		}
+		fifo_queue<message<T> >::add(&msg, 1);
+	}
+
+public:
+	msg_buffer(int node_id, slab_allocator *alloc,
+			bool accpet_inline): fifo_queue<message<T> >(
+			node_id, INIT_MSG_BUF_SIZE, true), curr(alloc, accept_inline) {
+		this->alloc = alloc;
+		this->accept_inline = accept_inline;
+	}
+
+	int add_objs(T *objs, int num = 1) {
+		int num_added = 0;
+		while (num > 0) {
+			int ret = curr.add(objs, num);
+			// The current message is full. We need to add the current
+			// message to the queue and create a new one.
+			if (ret == 0) {
+				add_msg(curr);
+				message<T> tmp(alloc, accept_inline);
+				curr = tmp;
+			}
+			else {
+				num_added += ret;
+				objs += ret;
+				num -= ret;
+			}
+		}
+		return num_added;
+	}
+};
+
+template<class T>
+class msg_queue: public blocking_FIFO_queue<message<T> >
+{
+	// TODO I may need to make sure all messages are compatible with the flag.
+	bool accept_inline;
+
+public:
+	msg_queue(int node_id, const std::string name, int init_size, int max_size,
+			bool accept_inline): blocking_FIFO_queue<message<T> >(node_id,
+				name, init_size, max_size) {
+		this->accept_inline = accept_inline;
+	}
+
+	static msg_queue<T> *create(int node_id, const std::string name,
+			int init_size, int max_size, bool accept_inline) {
+		void *addr;
+		if (node_id < 0)
+			addr = numa_alloc_local(sizeof(msg_queue<T>));
+		else
+			addr = numa_alloc_onnode(sizeof(msg_queue<T>), node_id);
+		return new(addr) msg_queue<T>(node_id, name, init_size, max_size,
+				accept_inline);
+	}
+
+	static void destroy(msg_queue<T> *q) {
+		q->~msg_queue();
+		numa_free(q, sizeof(*q));
+	}
+
+	bool is_accept_inline() const {
+		return accept_inline;
+	}
 };
 
 template<class T>
 class thread_safe_msg_sender
 {
-	thread_safe_FIFO_queue<T> buf;
-	fifo_queue<T> *dest_queue;
+	pthread_spinlock_t _lock;
+	message<T> buf;
+
+	slab_allocator *alloc;
+	msg_queue<T> *dest_queue;
 
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	thread_safe_msg_sender(int node_id, int buf_size, fifo_queue<T> *queue): buf(
-			node_id, buf_size) {
+	thread_safe_msg_sender(slab_allocator *alloc,
+			msg_queue<T> *queue): buf(alloc, queue->is_accept_inline()) {
+		this->alloc = alloc;
 		dest_queue = queue;
+		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 public:
-	static thread_safe_msg_sender<T> *create(int node_id, int buf_size,
-			fifo_queue<T> *queue) {
+	static thread_safe_msg_sender<T> *create(int node_id, slab_allocator *alloc,
+			msg_queue<T> *queue) {
 		assert(node_id >= 0);
 		void *addr = numa_alloc_onnode(sizeof(thread_safe_msg_sender<T>),
 				node_id);
-		return new(addr) thread_safe_msg_sender<T>(node_id, buf_size, queue);
+		return new(addr) thread_safe_msg_sender<T>(alloc, queue);
 	}
 
 	static void destroy(thread_safe_msg_sender<T> *s) {
@@ -722,47 +1059,143 @@ public:
 		numa_free(s, sizeof(*s));
 	}
 
-	int num_msg() {
-		return buf.get_num_entries();
+	/**
+	 * flush the entries in the buffer to the queues.
+	 * return the number of entries that have been flushed.
+	 */
+	int flush() {
+		pthread_spin_lock(&_lock);
+		if (!buf.is_empty()) {
+			message<T> tmp = buf;
+			message<T> tmp1(alloc, dest_queue->is_accept_inline());
+			buf = tmp1;
+			pthread_spin_unlock(&_lock);
+			return dest_queue->add(&tmp, 1);
+		}
+		else {
+			pthread_spin_unlock(&_lock);
+			return 0;
+		}
 	}
-
-	int flush();
 
 	void flush_all() {
-		while (num_msg() > 0)
-			flush();
+		// flush_all() now is the same as flush().
+		flush();
 	}
 
-	int send_cached(T *msg);
-	int send_cached(T *msg, int num);
+	int send_cached(T *msg, int num = 1);
 	int send(T *msg, int num);
 };
 
 template<class T>
 class simple_msg_sender
 {
-	fifo_queue<T> buf;
-	blocking_FIFO_queue<T> *queue;
+	slab_allocator *alloc;
+	msg_buffer<T> buf;
+	msg_queue<T> *queue;
 
 protected:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	simple_msg_sender(int node_id, blocking_FIFO_queue<T> *queue,
+	simple_msg_sender(int node_id, slab_allocator *alloc,
+			msg_queue<T> *queue): buf(node_id, alloc, queue->is_accept_inline()) {
+		this->alloc = alloc;
+		this->queue = queue;
+	}
+
+public:
+	static simple_msg_sender<T> *create(int node_id, slab_allocator *alloc,
+			msg_queue<T> *queue) {
+		assert(node_id >= 0);
+		void *addr = numa_alloc_onnode(sizeof(simple_msg_sender<T>), node_id);
+		return new(addr) simple_msg_sender<T>(node_id, alloc, queue);
+	}
+
+	static void destroy(simple_msg_sender<T> *s) {
+		s->~simple_msg_sender();
+		numa_free(s, sizeof(*s));
+	}
+
+	int flush(bool blocking) {
+		if (buf.is_empty()) {
+			return 0;
+		}
+		if (blocking)
+			queue->add(&buf);
+		else
+			queue->non_blocking_add(&buf);
+		return 1;
+	}
+
+	void flush_all() {
+		while (!buf.is_empty())
+			queue->add(&buf);
+	}
+
+	/**
+	 * This returns the number of remaining messages instead of the number
+	 * of remaining objects.
+	 */
+	int get_num_remaining() {
+		return buf.get_num_entries();
+	}
+
+	int send_cached(T *msgs, int num = 1) {
+		return buf.add_objs(msgs, num);
+	}
+
+	msg_queue<T> *get_queue() const {
+		return queue;
+	}
+};
+
+class request_sender: public simple_msg_sender<io_request>
+{
+	request_sender(int node_id, slab_allocator *alloc,
+			msg_queue<io_request> *queue): simple_msg_sender(
+				node_id, alloc, queue) {
+	}
+
+public:
+	static request_sender *create(int node_id, slab_allocator *alloc,
+			msg_queue<io_request> *queue) {
+		assert(node_id >= 0);
+		void *addr = numa_alloc_onnode(sizeof(request_sender), node_id);
+		return new(addr) request_sender(node_id, alloc, queue);
+	}
+
+	static void destroy(request_sender *s) {
+		s->~request_sender();
+		numa_free(s, sizeof(*s));
+	}
+};
+
+template<class T>
+class simple_sender
+{
+	fifo_queue<T> buf;
+	blocking_FIFO_queue<T> *queue;
+
+protected:
+	/**
+	 *      * buf_size: the number of messages that can be buffered in the sender.
+	 *           */
+	simple_sender(int node_id, blocking_FIFO_queue<T> *queue,
 			int init_queue_size): buf(node_id, init_queue_size, true) {
 		this->queue = queue;
 	}
 
 public:
-	static simple_msg_sender<T> *create(int node_id, blocking_FIFO_queue<T> *queue,
+	static simple_sender<T> *create(int node_id, blocking_FIFO_queue<T> *queue,
 			int init_queue_size) {
 		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(simple_msg_sender<T>), node_id);
-		return new(addr) simple_msg_sender<T>(queue, init_queue_size);
+		void *addr = numa_alloc_onnode(sizeof(simple_sender<T>), node_id);
+		return new(addr) simple_sender<T>(queue, init_queue_size);
 	}
 
-	static void destroy(simple_msg_sender<T> *s) {
-		s->~simple_msg_sender();
+	static void destroy(simple_sender<T> *s) {
+		s->~simple_sender();
 		numa_free(s, sizeof(*s));
 	}
 
@@ -806,27 +1239,6 @@ public:
 
 	blocking_FIFO_queue<T> *get_queue() const {
 		return queue;
-	}
-};
-
-class request_sender: public simple_msg_sender<io_request>
-{
-	request_sender(int node_id, blocking_FIFO_queue<io_request> *queue,
-			int init_queue_size): simple_msg_sender(node_id, queue,
-				init_queue_size) {
-	}
-
-public:
-	static request_sender *create(int node_id,
-			blocking_FIFO_queue<io_request> *queue, int init_queue_size) {
-		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(request_sender), node_id);
-		return new(addr) request_sender(node_id, queue, init_queue_size);
-	}
-
-	static void destroy(request_sender *s) {
-		s->~request_sender();
-		numa_free(s, sizeof(*s));
 	}
 };
 

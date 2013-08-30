@@ -20,6 +20,16 @@
 #include "part_global_cached_private.h"
 #include "parameters.h"
 
+// The size of a request >= sizeof(io_request).
+const int NUMA_REQ_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_request);
+// The size of a reply >= sizeof(io_reply).
+const int NUMA_REPLY_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_reply);
+
+const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
+		NUMA_MSG_SIZE / sizeof(io_request));
+const int NUMA_REPLY_MSG_QUEUE_SIZE = NUMA_REPLY_QUEUE_SIZE / (
+		NUMA_MSG_SIZE / sizeof(io_reply));
+
 class process_request_thread;
 struct thread_group
 {
@@ -27,7 +37,8 @@ struct thread_group
 	page_cache *cache;
 	std::vector<process_request_thread *> process_request_threads;
 	const io_interface *underlying;
-	blocking_FIFO_queue<io_request> *request_queue;
+	slab_allocator *msg_allocator;
+	msg_queue<io_request> *request_queue;
 
 	thread_group() {
 		id = -1;
@@ -129,8 +140,10 @@ class node_cached_io: public global_cached_io
 	pthread_key_t replier_key;
 	long processed_requests;
 	long num_requests;
-	io_request local_msg_reqs[NUMA_REQ_BUF_SIZE];
-	io_request local_reqs[NUMA_REQ_BUF_SIZE];
+	// This message buffer is used for copying remote messages to
+	// the local memory.
+	message<io_request> local_msgs[MSG_BUF_SIZE];
+	// This buffer is used for sending replies.
 	io_reply local_reply_buf[REPLY_BUF_SIZE];
 	pthread_t processing_thread_id;
 
@@ -206,6 +219,11 @@ node_cached_io::node_cached_io(io_interface *underlying,
 
 	processing_thread_id = 0;
 	pthread_key_create(&replier_key, NULL);
+
+	for (int i = 0; i < MSG_BUF_SIZE; i++) {
+		message<io_request> tmp(local_group->msg_allocator, false);
+		local_msgs[i] = tmp;
+	}
 }
 
 /* process the requests sent to this thread */
@@ -215,20 +233,30 @@ int node_cached_io::process_requests(int max_nreqs)
 		processing_thread_id = pthread_self();
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
-	blocking_FIFO_queue<io_request> *request_queue = local_group->request_queue;
+	msg_queue<io_request> *request_queue = local_group->request_queue;
+	message<io_request> tmp_msgs[MSG_BUF_SIZE];
+	// This request buffer has requests more than a message can contain.
+	io_request local_reqs[NUMA_REQ_BUF_SIZE];
 	while (num_processed < max_nreqs) {
-		int num = request_queue->fetch(local_msg_reqs, NUMA_REQ_BUF_SIZE,
+		int num = request_queue->fetch(tmp_msgs, MSG_BUF_SIZE,
 				true, true);
 		// We have been interrupted from waiting for IO requests.
 		// Maybe it's a signal for stopping the thread.
 		if (num == 0)
 			break;
 
-		for (int i = 0; i < num; i++)
-			local_reqs[i] = local_msg_reqs[i];
-		global_cached_io::access(local_reqs, num);
+		// We need to copy the message buffers to the local memory.
+		for (int i = 0; i < num; i++) {
+			tmp_msgs[i].copy_to(local_msgs[i]);
+		}
+		for (int i = 0; i < num; i++) {
+			int num_reqs = local_msgs[i].get_next_objs(local_reqs,
+					NUMA_REQ_BUF_SIZE);
+			assert(local_msgs[i].is_empty());
+			global_cached_io::access(local_reqs, num_reqs);
+			num_processed += num_reqs;
+		}
 		flush_requests();
-		num_processed += num;
 	}
 	num_requests += num_processed;
 	return num_processed;
@@ -268,6 +296,7 @@ void node_cached_io::notify_completion(io_request *reqs[], int num)
 		part_global_cached_io *io = (part_global_cached_io *) it->first;
 		std::vector<io_request *> *vec = &it->second;
 
+		assert((int) vec->size() <= REPLY_BUF_SIZE);
 		for (size_t i = 0; i < vec->size(); i++)
 			local_reply_buf[i] = io_reply(vec->at(i), true, 0);
 		// The reply must be sent to the thread on a different node.
@@ -391,8 +420,10 @@ part_io_process_table::part_io_process_table(
 		group.id = node_id;
 		group.underlying = underlying;
 		group.cache = cache_conf->create_cache_on_node(node_id);
-		group.request_queue = blocking_FIFO_queue<io_request>::create(node_id, "request_queue", 
-				NUMA_REQ_QUEUE_SIZE, NUMA_REQ_QUEUE_SIZE);
+		group.request_queue = msg_queue<io_request>::create(node_id, "request_queue", 
+				NUMA_REQ_MSG_QUEUE_SIZE, NUMA_REQ_MSG_QUEUE_SIZE, false);
+		group.msg_allocator = new slab_allocator(NUMA_MSG_SIZE,
+				NUMA_MSG_SIZE * 128, INT_MAX, node_id);
 		assert(underlying);
 		groups.insert(std::pair<int, struct thread_group>(node_id, group));
 
@@ -419,7 +450,7 @@ part_io_process_table::~part_io_process_table()
 			node_cached_io::destroy(io);
 		}
 		cache_conf->destroy_cache_on_node(group->cache);
-		blocking_FIFO_queue<io_request>::destroy(group->request_queue);
+		msg_queue<io_request>::destroy(group->request_queue);
 	}
 }
 
@@ -433,8 +464,8 @@ part_io_process_table::create_req_senders(int node_id) const
 		const struct thread_group *group = &it->second;
 		assert(group->id == it->first);
 		req_senders.insert(std::pair<int, request_sender *>(group->id,
-					request_sender::create(node_id, group->request_queue,
-						NUMA_REQ_CACHE_SIZE)));
+					request_sender::create(node_id, group->msg_allocator,
+						group->request_queue)));
 	}
 	return req_senders;
 }
@@ -490,10 +521,10 @@ part_global_cached_io::part_global_cached_io(int node_id,
 
 	/* assign a thread to a group. */
 	this->local_group = table->get_thread_group(node_id);
-	reply_queue = blocking_FIFO_queue<io_reply>::create(node_id, "reply_queue", 
+	reply_queue = msg_queue<io_reply>::create(node_id, "reply_queue", 
 			// We don't want that adding replies is blocked, so we allow
 			// the reply queue to be expanded to an arbitrary size.
-			NUMA_REPLY_QUEUE_SIZE, INT_MAX / sizeof(io_reply));
+			NUMA_REPLY_MSG_QUEUE_SIZE, INT_MAX / sizeof(io_reply), false);
 
 	std::set<int> node_ids = table->get_node_ids();
 	for (std::set<int>::const_iterator it = node_ids.begin();
@@ -501,16 +532,21 @@ part_global_cached_io::part_global_cached_io(int node_id,
 		int node_id = *it;
 		if ((int) reply_senders.size() <= node_id)
 			reply_senders.resize(node_id + 1);
-		reply_senders[node_id] = thread_safe_msg_sender<io_reply>::create(node_id,
-				NUMA_REPLY_CACHE_SIZE, reply_queue);
+		reply_senders[node_id] = thread_safe_msg_sender<io_reply>::create(
+				node_id, local_group->msg_allocator, reply_queue);
 	}
 
 	req_senders = table->create_req_senders(node_id);
+
+	for (int i = 0; i < MSG_BUF_SIZE; i++) {
+		message<io_reply> tmp(local_group->msg_allocator, false);
+		local_reply_msgs[i] = tmp;
+	}
 }
 
 part_global_cached_io::~part_global_cached_io()
 {
-	blocking_FIFO_queue<io_reply>::destroy(reply_queue);
+	msg_queue<io_reply>::destroy(reply_queue);
 	for (unsigned i = 0; i < reply_senders.size(); i++) {
 		if (reply_senders[i])
 			thread_safe_msg_sender<io_reply>::destroy(reply_senders[i]);
@@ -527,6 +563,7 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 		int idx = cache_conf->page2cache(requests[i].get_offset());
 		if (idx != get_node_id()) {
 			remote_reads++;
+			// TODO why do this?
 			io_request req(requests[i]);
 			int ret = req_senders[idx]->send_cached(&req);
 			sent_requests++;
@@ -572,11 +609,24 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 int part_global_cached_io::process_replies()
 {
 	int num_processed = 0;
+	message<io_reply> tmp_msgs[MSG_BUF_SIZE];
+	// The reply buffer size should be able to contain more replies than
+	// a reply message.
+	io_reply local_reply_buf[NUMA_REPLY_BUF_SIZE];
 	while (!reply_queue->is_empty()) {
-		int num = reply_queue->non_blocking_fetch(local_reply_buf, REPLY_BUF_SIZE);
+		int num = reply_queue->non_blocking_fetch(tmp_msgs, MSG_BUF_SIZE);
+		assert(num <= MSG_BUF_SIZE);
 		for (int i = 0; i < num; i++) {
-			io_reply *reply = &local_reply_buf[i];
-			this->process_reply(reply);
+			tmp_msgs[i].copy_to(local_reply_msgs[i]);
+		}
+		for (int i = 0; i < num; i++) {
+			int num_replies = local_reply_msgs[i].get_next_objs(
+					local_reply_buf, NUMA_REPLY_BUF_SIZE);
+			assert(local_reply_msgs[i].is_empty());
+			for (int j = 0; j < num_replies; j++) {
+				io_reply *reply = &local_reply_buf[j];
+				this->process_reply(reply);
+			}
 		}
 		num_processed += num;
 	}

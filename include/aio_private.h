@@ -34,11 +34,11 @@ public:
 	int process(int max_num, bool blocking);
 };
 
-class aio_complete_sender: public simple_msg_sender<thread_callback_s *>
+class aio_complete_sender: public simple_sender<thread_callback_s *>
 {
 public:
 	aio_complete_sender(int node_id,
-			aio_complete_queue *queue): simple_msg_sender<thread_callback_s *>(
+			aio_complete_queue *queue): simple_sender<thread_callback_s *>(
 			node_id, queue->get_queue(), AIO_DEPTH_PER_FILE) {
 	}
 };

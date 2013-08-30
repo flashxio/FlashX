@@ -1,8 +1,6 @@
 #include "remote_access.h"
 #include "parameters.h"
 
-const int INIT_DISK_QUEUE_SIZE = 32;
-
 class request_assemble_callback: public callback
 {
 public:
@@ -60,14 +58,17 @@ remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &re
 		this->complete_queue = NULL;
 	else
 		this->complete_queue = complete_thread->get_queue();
+	// TODO I need to deallocate it later.
+	msg_allocator = new slab_allocator(IO_MSG_SIZE, IO_MSG_SIZE * 1024,
+			INT_MAX, node_id);
 	senders.resize(remotes.size());
 	low_prio_senders.resize(remotes.size());
 	// create a msg sender for each disk read thread.
 	for (unsigned i = 0; i < remotes.size(); i++) {
-		blocking_FIFO_queue<io_request> *queue = remotes[i]->get_queue();
-		senders[i] = request_sender::create(node_id, queue, INIT_DISK_QUEUE_SIZE);
-		low_prio_senders[i] = request_sender::create(node_id, remotes[i]->get_low_prio_queue(),
-				INIT_DISK_QUEUE_SIZE);
+		senders[i] = request_sender::create(node_id, msg_allocator,
+				remotes[i]->get_queue());
+		low_prio_senders[i] = request_sender::create(node_id, msg_allocator,
+				remotes[i]->get_low_prio_queue());
 	}
 	cb = NULL;
 	this->block_mapper = mapper;
@@ -96,13 +97,14 @@ io_interface *remote_disk_access::clone() const
 	assert(copy->senders.size() == copy->low_prio_senders.size());
 	for (unsigned i = 0; i < copy->senders.size(); i++) {
 		copy->senders[i] = request_sender::create(this->get_node_id(),
-				this->senders[i]->get_queue(), INIT_DISK_QUEUE_SIZE);
+				msg_allocator, this->senders[i]->get_queue());
 		copy->low_prio_senders[i] = request_sender::create(this->get_node_id(),
-				this->low_prio_senders[i]->get_queue(), INIT_DISK_QUEUE_SIZE);
+				msg_allocator, this->low_prio_senders[i]->get_queue());
 	}
 	copy->cb = this->cb;
 	copy->block_mapper = this->block_mapper;
 	copy->complete_queue = this->complete_queue;
+	copy->msg_allocator = this->msg_allocator;
 	return copy;
 }
 

@@ -114,33 +114,35 @@ void io_req_extension::add_buf_front(char *buf, int size, bool is_page)
 	num_bufs++;
 }
 
-/**
- * flush the entries in the buffer to the queues.
- * A queue is randomly picked. If the queue is full, pick the next queue
- * until all queues are tried or all entries in the buffer is flushed.
- * return the number of entries that have been flushed.
- */
 template<class T>
-int thread_safe_msg_sender<T>::flush() {
-	if (!buf.is_empty())
-		return dest_queue->add(&buf);
-	else
-		return 0;
+message<T>::message(slab_allocator *alloc, bool accept_inline)
+{
+	init();
+	this->alloc = alloc;
+	this->buf = alloc->alloc();
+	this->accept_inline = accept_inline;
 }
 
 template<class T>
-int thread_safe_msg_sender<T>::send_cached(T *msg) {
-	int ret = buf.add(msg, 1);
-	if (ret == 1)
-		return 1;
-	// We expect the method is always successful.
-	// so we try again and again until we succeed.
-	do {
-		// If the buffer is full, we should flush the buffer.
-		flush();
-		ret = buf.add(msg, 1);
-	} while (ret == 0);
-	return ret;
+void message<T>::destroy()
+{
+	if (buf) {
+		// we need to destroy the remaining objects in the message buffer
+		// only when objects in the message aren't inline.
+		if (!accept_inline) {
+			while (has_next()) {
+				T *obj = get_next_addr();
+				obj->~T();
+			}
+		}
+		alloc->free(buf);
+	}
+}
+
+template<class T>
+int message<T>::size() const
+{
+	return alloc->get_obj_size();
 }
 
 template<class T>
@@ -150,7 +152,9 @@ int thread_safe_msg_sender<T>::send_cached(T *msg, int num)
 	// We expect the method is always successful.
 	// so we try again and again until we succeed.
 	while (true) {
+		pthread_spin_lock(&_lock);
 		int ret = buf.add(msg, num);
+		pthread_spin_unlock(&_lock);
 		msg += ret;
 		num -= ret;
 		num_added += ret;
@@ -171,10 +175,15 @@ int thread_safe_msg_sender<T>::send(T *msg, int num)
 
 	int num_sent = 0;
 	while (num > 0) {
-		int ret = dest_queue->add(msg, num);
+		message<T> tmp(alloc, dest_queue->is_accept_inline());
+		int ret = tmp.add(msg, num);
 		msg += ret;
 		num -= ret;
 		num_sent += ret;
+
+		// We need to make sure the message is added to the queue.
+		// TODO we should add multiple messages together.
+		while (dest_queue->add(&tmp, 1) <= 0);
 	}
 
 	return num_sent;
@@ -184,10 +193,12 @@ int thread_safe_msg_sender<T>::send(T *msg, int num)
  * these are to force to instantiate the templates
  * for io_request and io_reply.
  */
-template class thread_safe_FIFO_queue<io_request>;
-template class thread_safe_FIFO_queue<io_reply>;
-template class blocking_FIFO_queue<io_request>;
-template class blocking_FIFO_queue<io_reply>;
+template class thread_safe_FIFO_queue<message<io_request> >;
+template class thread_safe_FIFO_queue<message<io_reply> >;
+template class blocking_FIFO_queue<message<io_request> >;
+template class blocking_FIFO_queue<message<io_reply> >;
 template class thread_safe_msg_sender<io_reply>;
+template class message<io_request>;
+template class message<io_reply>;
 
 atomic_unsigned_integer io_req_extension::num_creates;

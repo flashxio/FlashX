@@ -10,7 +10,10 @@
 
 const int AIO_DEPTH_PER_FILE = 32;
 
-const int IO_QUEUE_SIZE = 32 * 5;
+// The IO message size should be AIO depth multiplied by the size
+// of an IO request.
+const int IO_MSG_SIZE = AIO_DEPTH_PER_FILE * 32;
+const int IO_QUEUE_SIZE = 10;
 const int MAX_FETCH_REQS = 10;
 
 const int MAX_DISK_CACHED_REQS = 1000;
@@ -49,12 +52,10 @@ const int NUM_WRITEBACK_DIRTY_PAGES = 2;
 
 const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024 * 2;
 
-const int NUMA_REQ_CACHE_SIZE = 600;
+const int NUMA_MSG_SIZE = 4096;
 const int NUMA_REQ_QUEUE_SIZE = 2000;
-const int NUMA_REQ_BUF_SIZE = 600;
 const int NUMA_REPLY_CACHE_SIZE = 50;
 const int NUMA_REPLY_QUEUE_SIZE = 1024;
-const int NUMA_REPLY_BUF_SIZE = 200;
 const int NUMA_NUM_PROCESS_THREADS = 8;
 
 const int LOCAL_BUF_SIZE = 100;

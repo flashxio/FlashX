@@ -12,8 +12,9 @@
 #include "thread.h"
 #include "file_mapper.h"
 
-#define REPLY_BUF_SIZE 1000
-#define REQ_BUF_SIZE 1000
+const int REPLY_BUF_SIZE = 1000;
+const int REQ_BUF_SIZE = 1000;
+const int MSG_BUF_SIZE = 128;
 
 class part_global_cached_io;
 
@@ -32,8 +33,11 @@ class part_global_cached_io: public global_cached_io
 	const struct thread_group *local_group;
 	const cache_config *cache_conf;
 
-	blocking_FIFO_queue<io_reply> *reply_queue;
-	io_reply local_reply_buf[REPLY_BUF_SIZE];
+	msg_queue<io_reply> *reply_queue;
+	// This reply message buffer is used when copying remote messages
+	// to the local memory.
+	message<io_reply> local_reply_msgs[MSG_BUF_SIZE];
+	// This request buffer is used when distributing requests.
 	io_request local_req_buf[REQ_BUF_SIZE];
 
 	/*

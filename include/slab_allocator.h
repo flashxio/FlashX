@@ -150,6 +150,10 @@ public:
 
 	virtual ~slab_allocator();
 
+	int get_obj_size() const {
+		return obj_size;
+	}
+
 	int alloc(char **objs, int num);
 
 	void free(char **objs, int num);

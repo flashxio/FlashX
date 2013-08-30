@@ -26,6 +26,7 @@ class remote_disk_access: public io_interface
 	callback *cb;
 	file_mapper *block_mapper;
 	aio_complete_queue *complete_queue;
+	slab_allocator *msg_allocator;
 
 	// This is used for requests that access data across multiple blocks.
 	// These requests will be broken into smaller requests.

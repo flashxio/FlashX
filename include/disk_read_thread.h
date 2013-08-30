@@ -12,8 +12,10 @@ void *process_requests(void *arg);
 
 class disk_read_thread
 {
-	blocking_FIFO_queue<io_request> queue;
-	blocking_FIFO_queue<io_request> low_prio_queue;
+	static const int LOCAL_BUF_SIZE = 16;
+
+	msg_queue<io_request> queue;
+	msg_queue<io_request> low_prio_queue;
 	logical_file_partition partition;
 	std::vector<file_mapper *> open_files;
 
@@ -30,11 +32,11 @@ public:
 			const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 			int node_id);
 
-	blocking_FIFO_queue<io_request> *get_queue() {
+	msg_queue<io_request> *get_queue() {
 		return &queue;
 	}
 
-	blocking_FIFO_queue<io_request> *get_low_prio_queue() {
+	msg_queue<io_request> *get_low_prio_queue() {
 		return &low_prio_queue;
 	}
 
