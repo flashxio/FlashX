@@ -453,10 +453,10 @@ int main(int argc, char *argv[])
 	}
 	print_io_thread_stat();
 #endif
-	delete cache_conf;
 	for (unsigned i = 0; i < workload_gens.size(); i++)
 		delete workload_gens[i];
 	for (int i = 0; i < nthreads; i++)
 		delete threads[i];
 	destroy_io_factory(factory);
+	delete cache_conf;
 }
