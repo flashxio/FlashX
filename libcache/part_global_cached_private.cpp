@@ -627,8 +627,8 @@ int part_global_cached_io::process_replies()
 				io_reply *reply = &local_reply_buf[j];
 				this->process_reply(reply);
 			}
+			num_processed += num_replies;
 		}
-		num_processed += num;
 	}
 	processed_replies += num_processed;
 	return num_processed;
