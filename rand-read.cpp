@@ -151,7 +151,6 @@ void int_handler(int sig_num)
 
 int main(int argc, char *argv[])
 {
-	bool preload = false;
 	long cache_size = 512 * 1024 * 1024;
 	int access_option = -1;
 	int RAID_mapping_option = RAID5;
@@ -182,7 +181,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size preload workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size SA_cell_size\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size SA_cell_size\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -255,9 +254,6 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "wrong default access method\n");
 				exit(1);
 			}
-		}
-		else if(key.compare("preload") == 0) {
-			preload = true;
 		}
 		else if(key.compare("verify_content") == 0) {
 			verify_read_content = true;
