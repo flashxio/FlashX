@@ -5,8 +5,11 @@
 
 int slab_allocator::alloc(char **objs, int nobjs) {
 #ifdef MEMCHECK
-	for (int i = 0; i < nobjs; i++)
+	for (int i = 0; i < nobjs; i++) {
 		objs[i] = (char *) allocator.alloc(obj_size);
+		if (init)
+			memset(objs[i], 0, obj_size);
+	}
 	return nobjs;
 #else
 	int num = 0;
