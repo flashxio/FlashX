@@ -24,9 +24,16 @@ else
     exit 1;
 fi;
 
+irq0=`grep mpt2sas0-msix0 /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
+irq1=`grep mpt2sas1-msix0 /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
+irq2=`grep mpt2sas2-msix0 /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
+echo "irq0: $irq0"
+echo "irq1: $irq1"
+echo "irq2: $irq2"
+
 echo "set for controller 0"
-set_affinity_node 0 201
+set_affinity_node 1 $irq0
 echo "set for controller 1"
-set_affinity_node 1 217
+set_affinity_node 1 $irq1
 echo "set for controller 2"
-set_affinity_node 2 233
+set_affinity_node 2 $irq2
