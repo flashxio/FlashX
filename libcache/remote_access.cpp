@@ -1,5 +1,8 @@
 #include "remote_access.h"
 #include "parameters.h"
+#include "slab_allocator.h"
+#include "disk_read_thread.h"
+#include "file_mapper.h"
 
 class request_assemble_callback: public callback
 {
@@ -297,4 +300,9 @@ void remote_disk_access::flush_requests(int max_cached)
 		num_low_prio_remaining -= num_flushed;
 		i++;
 	}
+}
+
+int remote_disk_access::get_file_id() const
+{
+	return block_mapper->get_file_id();
 }

@@ -5,6 +5,7 @@
 #include "hash_index_cache.h"
 #include "LRU2Q.h"
 #include "NUMA_cache.h"
+#include "file_mapper.h"
 
 page_cache *cache_config::create_cache_on_node(int node_id) const
 {
@@ -111,4 +112,10 @@ file_map_cache_config::file_map_cache_config(long size, int type,
 	}
 	assert(tot_files == mapper->get_num_files());
 	init(part_sizes);
+}
+
+int file_map_cache_config::page2cache(off_t off) const
+{
+	int idx = mapper->map2file(off / PAGE_SIZE);
+	return mapper->get_file_node_id(idx) + shift;
 }

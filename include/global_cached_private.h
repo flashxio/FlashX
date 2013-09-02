@@ -1,50 +1,11 @@
 #ifndef __GLOBAL_CACHED_PRIVATE_H__
 #define __GLOBAL_CACHED_PRIVATE_H__
 
-#include "read_private.h"
+#include "io_interface.h"
 #include "cache.h"
-#include "NUMA_cache.h"
+#include "container.h"
 
-/**
- * This slab allocator allocates IO requests, and all of them are
- * extended requests.
- */
-class request_allocator: public obj_allocator<io_request>
-{
-	class req_initiator: public obj_initiator<io_request>
-	{
-	public:
-		void init(io_request *req) {
-			req->init();
-		}
-	} initiator;
-public:
-	request_allocator(int node_id, long increase_size,
-			long max_size = MAX_SIZE): obj_allocator<io_request>(node_id,
-				increase_size, max_size, &initiator) {
-	}
-
-	virtual int alloc_objs(io_request **reqs, int num) {
-		int ret = obj_allocator<io_request>::alloc_objs(reqs, num);
-		// Make sure all requests are extended requests.
-		for (int i = 0; i < ret; i++) {
-			if (!reqs[i]->is_extended_req()) {
-				io_request tmp(true);
-				*reqs[i] = tmp;
-			}
-		}
-		return ret;
-	}
-
-	virtual io_request *alloc_obj() {
-		io_request *req = obj_allocator<io_request>::alloc_obj();
-		if (!req->is_extended_req()) {
-			io_request tmp(true);
-			*req = tmp;
-		}
-		return req;
-	}
-};
+class request_allocator;
 
 class global_cached_io: public io_interface
 {
@@ -75,7 +36,7 @@ class global_cached_io: public io_interface
 	 */
 	thread_safe_FIFO_queue<io_request *> pending_requests;
 
-	request_allocator req_allocator;
+	request_allocator *req_allocator;
 
 	// These are used for implementing sync IO.
 	// A thread can only be blocked on one sync IO, and this class can only
@@ -103,16 +64,14 @@ class global_cached_io: public io_interface
 public:
 	global_cached_io(io_interface *, page_cache *cache);
 
-	~global_cached_io() {
-		delete underlying;
-	}
+	~global_cached_io();
 
 	page_cache *get_global_cache() {
 		return global_cache;
 	}
 
-	obj_allocator<io_request> *get_req_allocator() {
-		return &req_allocator;
+	request_allocator *get_req_allocator() {
+		return req_allocator;
 	}
 
 	int preload(off_t start, long size);

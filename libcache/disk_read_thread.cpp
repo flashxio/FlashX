@@ -2,6 +2,7 @@
 #include "disk_read_thread.h"
 #include "parameters.h"
 #include "container.cpp"
+#include "aio_private.h"
 
 /* just call the callback of the initiator. */
 class initiator_callback: public callback

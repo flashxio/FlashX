@@ -6,7 +6,6 @@
 
 #include <vector>
 
-#include "memory_manager.h"
 #include "cache.h"
 #include "concurrency.h"
 #include "container.h"
@@ -367,6 +366,8 @@ public:
 };
 
 class flush_thread;
+class memory_manager;
+
 class associative_cache: public page_cache
 {
 	enum {
@@ -410,13 +411,7 @@ class associative_cache: public page_cache
 	associative_cache(long cache_size, long max_cache_size, int node_id,
 			int offset_factor, bool expandable = false);
 
-	~associative_cache() {
-		for (unsigned int i = 0; i < cells_table.size(); i++)
-			if (cells_table[i])
-				hash_cell::destroy_array(cells_table[i], init_ncells);
-		manager->unregister_cache(this);
-		memory_manager::destroy(manager);
-	}
+	~associative_cache();
 
 	memory_manager *get_manager() {
 		return manager;

@@ -2,6 +2,10 @@
 
 #include "aio_private.h"
 #include "container.cpp"
+#include "messaging.h"
+#include "read_private.h"
+#include "file_partition.h"
+#include "slab_allocator.h"
 
 template class blocking_FIFO_queue<thread_callback_s *>;
 
@@ -16,6 +20,44 @@ const int MAX_BUF_REQS = 1024 * 3;
 #define MAX_OUTSTANDING_NREQS (AIO_DEPTH / num_open_files())
 #define ALLOW_DROP
 #endif
+
+class aio_complete_sender: public simple_sender<thread_callback_s *>
+{
+public:
+	aio_complete_sender(int node_id,
+			aio_complete_queue *queue): simple_sender<thread_callback_s *>(
+			node_id, queue->get_queue(), AIO_DEPTH_PER_FILE) {
+	}
+};
+
+struct thread_callback_s
+{
+	struct io_callback_s cb;
+	async_io *aio;
+	callback *aio_callback;
+	callback_allocator *cb_allocator;
+	io_request req;
+};
+
+/**
+ * This slab allocator makes sure all requests in the callback structure
+ * are extended requests.
+ */
+class callback_allocator: public obj_allocator<thread_callback_s>
+{
+	class callback_initiator: public obj_initiator<thread_callback_s>
+	{
+	public:
+		void init(thread_callback_s *cb) {
+			cb->req.init();
+		}
+	} initiator;
+public:
+	callback_allocator(int node_id, long increase_size,
+			long max_size = MAX_SIZE): obj_allocator<thread_callback_s>(node_id,
+				increase_size, max_size, &initiator) {
+	}
+};
 
 void aio_callback(io_context_t ctx, struct iocb* iocb[],
 		void *cbs[], long res[], long res2[], int num) {
@@ -36,9 +78,10 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 async_io::async_io(const logical_file_partition &partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 		int aio_depth_per_file, int node_id): io_interface(node_id), AIO_DEPTH(
-			aio_depth_per_file * partition.get_num_files()), cb_allocator(node_id,
-					AIO_DEPTH * sizeof(thread_callback_s))
+			aio_depth_per_file * partition.get_num_files())
 {
+	cb_allocator = new callback_allocator(node_id,
+			AIO_DEPTH * sizeof(thread_callback_s));;
 	buf_idx = 0;
 	ctx = create_aio_ctx(AIO_DEPTH);
 	cb = NULL;
@@ -96,11 +139,20 @@ async_io::~async_io()
 	for (std::tr1::unordered_map<int, buffered_io *>::const_iterator it
 			= open_files.begin(); it != open_files.end(); it++)
 		delete it->second;
+	delete cb_allocator;
+}
+
+int async_io::get_file_id() const
+{
+	if (default_io)
+		return default_io->get_file_id();
+	else
+		return -1;
 }
 
 struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 {
-	thread_callback_s *tcb = cb_allocator.alloc_obj();
+	thread_callback_s *tcb = cb_allocator->alloc_obj();
 	io_callback_s *cb = (io_callback_s *) tcb;
 
 	cb->func = cb_func;
@@ -109,7 +161,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	tcb->req = io_req;
 	tcb->aio = this;
 	tcb->aio_callback = this->get_callback();
-	tcb->cb_allocator = &cb_allocator;
+	tcb->cb_allocator = cb_allocator;
 
 	assert(tcb->req.get_size() >= MIN_BLOCK_SIZE);
 	assert(tcb->req.get_size() % MIN_BLOCK_SIZE == 0);
@@ -263,7 +315,7 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 	}
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
-		cb_allocator.free(tcb);
+		cb_allocator->free(tcb);
 	}
 	num_completed_reqs += num;
 }
@@ -291,6 +343,17 @@ int async_io::close_file(int file_id)
 	io->cleanup();
 	delete io;
 	return 0;
+}
+
+void async_io::flush_requests()
+{
+	// There is nothing we can flush for incoming requests,
+	// but we can flush completed requests.
+	for (std::tr1::unordered_map<int, aio_complete_sender *>::iterator it
+			= complete_senders.begin(); it != complete_senders.end(); it++) {
+		aio_complete_sender *sender = it->second;
+		sender->flush(true);
+	}
 }
 
 const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;

@@ -7,10 +7,7 @@
 
 #include "parameters.h"
 #include "messaging.h"
-#include "garbage_collection.h"
 #include "global_cached_private.h"
-#include "thread.h"
-#include "file_mapper.h"
 
 const int REPLY_BUF_SIZE = 1000;
 const int REQ_BUF_SIZE = 1000;

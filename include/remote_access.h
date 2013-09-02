@@ -1,12 +1,14 @@
 #ifndef __REMOTE_ACCESS_H__
 #define __REMOTE_ACCESS_H__
 
-#include "disk_read_thread.h"
-#include "messaging.h"
-#include "container.h"
-#include "file_mapper.h"
+#include "io_interface.h"
 
 class request_sender;
+class disk_read_thread;
+class aio_complete_queue;
+class aio_complete_thread;
+class slab_allocator;
+class file_mapper;
 
 /**
  * This class is to help the local thread send IO requests to remote threads
@@ -71,9 +73,7 @@ public:
 		return cb;
 	}
 
-	virtual int get_file_id() const {
-		return block_mapper->get_file_id();
-	}
+	virtual int get_file_id() const;
 
 	virtual void access(io_request *requests, int num,
 			io_status *status = NULL);

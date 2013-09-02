@@ -4,6 +4,7 @@
 #include "container.h"
 #include "concurrency.h"
 #include "cache.h"
+#include "page_queue.h"
 
 class gclock_buffer
 {

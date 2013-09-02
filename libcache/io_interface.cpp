@@ -11,6 +11,8 @@
 #include "remote_access.h"
 #include "global_cached_private.h"
 #include "part_global_cached_private.h"
+#include "cache_config.h"
+#include "disk_read_thread.h"
 
 class io_tracker
 {

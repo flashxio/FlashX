@@ -2,13 +2,18 @@
 #define __DISK_READ_THREAD_H__
 
 #include <string>
+#include <tr1/unordered_map>
 
-#include "messaging.h"
 #include "aio_private.h"
+#include "io_request.h"
 #include "container.h"
 #include "file_partition.h"
+#include "messaging.h"
 
 void *process_requests(void *arg);
+
+class async_io;
+class aio_complete_thread;
 
 class disk_read_thread
 {

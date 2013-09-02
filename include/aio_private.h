@@ -5,11 +5,10 @@
 #include <tr1/unordered_map>
 
 #include "wpaio.h"
-#include "read_private.h"
+#include "io_interface.h"
 #include "thread.h"
 #include "container.h"
-#include "messaging.h"
-#include "slab_allocator.h"
+#include "io_request.h"
 
 void aio_callback(io_context_t, struct iocb*, void *, long, long);
 
@@ -34,46 +33,10 @@ public:
 	int process(int max_num, bool blocking);
 };
 
-class aio_complete_sender: public simple_sender<thread_callback_s *>
-{
-public:
-	aio_complete_sender(int node_id,
-			aio_complete_queue *queue): simple_sender<thread_callback_s *>(
-			node_id, queue->get_queue(), AIO_DEPTH_PER_FILE) {
-	}
-};
-
-class async_io;
+class aio_complete_sender;
+class buffered_io;
+class logical_file_partition;
 class callback_allocator;
-
-struct thread_callback_s
-{
-	struct io_callback_s cb;
-	async_io *aio;
-	callback *aio_callback;
-	callback_allocator *cb_allocator;
-	io_request req;
-};
-
-/**
- * This slab allocator makes sure all requests in the callback structure
- * are extended requests.
- */
-class callback_allocator: public obj_allocator<thread_callback_s>
-{
-	class callback_initiator: public obj_initiator<thread_callback_s>
-	{
-	public:
-		void init(thread_callback_s *cb) {
-			cb->req.init();
-		}
-	} initiator;
-public:
-	callback_allocator(int node_id, long increase_size,
-			long max_size = MAX_SIZE): obj_allocator<thread_callback_s>(node_id,
-				increase_size, max_size, &initiator) {
-	}
-};
 
 class async_io: public io_interface
 {
@@ -81,7 +44,7 @@ class async_io: public io_interface
 	struct aio_ctx *ctx;
 	callback *cb;
 	const int AIO_DEPTH;
-	callback_allocator cb_allocator;
+	callback_allocator *cb_allocator;
 	std::tr1::unordered_map<int, aio_complete_sender *> complete_senders;
 	std::tr1::unordered_map<int, fifo_queue<thread_callback_s *> *> remote_tcbs;
 
@@ -123,12 +86,7 @@ public:
 		return true;
 	}
 
-	int get_file_id() const {
-		if (default_io)
-			return default_io->get_file_id();
-		else
-			return -1;
-	}
+	int get_file_id() const;
 
 	virtual void cleanup();
 
@@ -158,15 +116,7 @@ public:
 		return num_local_alloc;
 	}
 
-	virtual void flush_requests() {
-		// There is nothing we can flush for incoming requests,
-		// but we can flush completed requests.
-		for (std::tr1::unordered_map<int, aio_complete_sender *>::iterator it
-				= complete_senders.begin(); it != complete_senders.end(); it++) {
-			aio_complete_sender *sender = it->second;
-			sender->flush(true);
-		}
-	}
+	virtual void flush_requests();
 
 	// These two interfaces allow users to open and close more files.
 	

@@ -19,6 +19,9 @@
 #include "global_cached_private.h"
 #include "part_global_cached_private.h"
 #include "parameters.h"
+#include "cache_config.h"
+#include "slab_allocator.h"
+#include "thread.h"
 
 // The size of a request >= sizeof(io_request).
 const int NUMA_REQ_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_request);

@@ -6,6 +6,7 @@
 #include "flush_thread.h"
 #include "container.cpp"
 #include "exception.h"
+#include "memory_manager.h"
 
 #ifdef STATISTICS
 volatile int avail_cells;
@@ -626,6 +627,15 @@ thread_safe_page *clock_eviction_policy::evict_page(
 	ret->set_data_ready(false);
 	ret->reset_hits();
 	return ret;
+}
+
+associative_cache::~associative_cache()
+{
+	for (unsigned int i = 0; i < cells_table.size(); i++)
+		if (cells_table[i])
+			hash_cell::destroy_array(cells_table[i], init_ncells);
+	manager->unregister_cache(this);
+	memory_manager::destroy(manager);
 }
 
 bool associative_cache::shrink(int npages, char *pages[])

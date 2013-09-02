@@ -3,6 +3,7 @@
 
 #include <deque>
 #include "cache.h"
+#include "page_queue.h"
 
 #define RECLAIM_NPAGES 32
 
