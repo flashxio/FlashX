@@ -170,6 +170,22 @@ public:
 
 	bool expand_queue(int new_size);
 
+	/**
+	 * Get the first element in the queue.
+	 */
+	T &front() {
+		assert(!is_empty());
+		return buf[loc_in_queue(start)];
+	}
+
+	/**
+	 * Get the last element in the queue.
+	 */
+	T &back() {
+		assert(!is_empty());
+		return buf[loc_in_queue(end - 1)];
+	}
+
 	virtual T pop_front() {
 		assert(start < end);
 		T ret = buf[loc_in_queue(start)];

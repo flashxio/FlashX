@@ -951,7 +951,6 @@ class msg_buffer: public fifo_queue<message<T> >
 {
 	static const int INIT_MSG_BUF_SIZE = 16;
 
-	message<T> curr;
 	slab_allocator *alloc;
 	bool accept_inline;
 
@@ -966,21 +965,24 @@ class msg_buffer: public fifo_queue<message<T> >
 public:
 	msg_buffer(int node_id, slab_allocator *alloc,
 			bool accpet_inline): fifo_queue<message<T> >(
-			node_id, INIT_MSG_BUF_SIZE, true), curr(alloc, accept_inline) {
+			node_id, INIT_MSG_BUF_SIZE, true) {
 		this->alloc = alloc;
 		this->accept_inline = accept_inline;
 	}
 
 	int add_objs(T *objs, int num = 1) {
 		int num_added = 0;
+		if (fifo_queue<message<T> >::is_empty()) {
+			message<T> tmp(alloc, accept_inline);
+			add_msg(tmp);
+		}
 		while (num > 0) {
-			int ret = curr.add(objs, num);
-			// The current message is full. We need to add the current
-			// message to the queue and create a new one.
+			int ret = fifo_queue<message<T> >::back().add(objs, num);
+			// The last message is full. We need to add a new message
+			// to the queue.
 			if (ret == 0) {
-				add_msg(curr);
 				message<T> tmp(alloc, accept_inline);
-				curr = tmp;
+				add_msg(tmp);
 			}
 			else {
 				num_added += ret;
