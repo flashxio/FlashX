@@ -1,7 +1,6 @@
 #include <stdio.h>
 
 #include "messaging.h"
-#include "container.cpp"
 #include "io_interface.h"
 #include "slab_allocator.h"
 #include "cache.h"

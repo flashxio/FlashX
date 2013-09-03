@@ -2,7 +2,6 @@
 #include <vector>
 
 #include "global_cached_private.h"
-#include "container.cpp"
 #include "flush_thread.h"
 #include "slab_allocator.h"
 

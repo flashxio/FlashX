@@ -4,7 +4,6 @@
 #include "io_interface.h"
 #include "associative_cache.h"
 #include "flush_thread.h"
-#include "container.cpp"
 #include "exception.h"
 #include "memory_manager.h"
 

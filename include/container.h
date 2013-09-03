@@ -13,78 +13,6 @@
 #include "common.h"
 
 /**
- * The elements in the queue stored in the same piece of memory
- * as the queue metadata. The size of the queue is defined 
- * during the compile time.
- */
-template<class T, int SIZE>
-class embedded_queue
-{
-	unsigned short start;
-	unsigned short num;
-	/* the size of the buffer is specified by SIZE. */
-	T buf[SIZE];
-public:
-	embedded_queue() {
-		assert(SIZE < 0xffff);
-		start = 0;
-		num = 0;
-	}
-
-	void push_back(T v) {
-		assert(num < SIZE);
-		buf[(start + num) % SIZE] = v;
-		num++;
-	}
-
-	void pop_front() {
-		assert(num > 0);
-		start = (start + 1) % SIZE;
-		num--;
-	}
-
-	void remove(int idx);
-
-	bool is_empty() {
-		return num == 0;
-	}
-
-	bool is_full() {
-		return num == SIZE;
-	}
-
-	int size() {
-		return num;
-	}
-
-	T &back() {
-		assert(num > 0);
-		return buf[(start + num - 1) % SIZE];
-	}
-
-	T &front() {
-		assert(num > 0);
-		return buf[start];
-	}
-
-	T &get(int idx) {
-		assert(num > 0);
-		return buf[(start + idx) % SIZE];
-	}
-
-	void set(T &v, int idx) {
-		buf[(start + idx) % SIZE] = v;
-	}
-
-	void print_state() {
-		printf("start: %d, num: %d\n", start, num);
-		for (int i = 0; i < this->size(); i++)
-			printf("%ld\t", this->get(i));
-		printf("\n");
-	}
-};
-
-/**
  * this is a first-in-first-out queue.
  * However, the location of an entry in the queue never changes.
  */
@@ -429,7 +357,10 @@ public:
 	}
 
 	int fetch(T *entries, int num, bool blocking, bool interruptible);
-	int add(T *entries, int num, bool blocking, bool interruptible);
+	int add(T *entries, int num, bool blocking, bool interruptible) {
+		// TODO
+		return -1;
+	}
 
 	/**
 	 * This method wakes up the thread that is waiting on the queue
@@ -462,6 +393,100 @@ public:
 	}
 };
 
-template class thread_safe_FIFO_queue<long>;
+template<class T>
+bool fifo_queue<T>::expand_queue(int new_size)
+{
+	int log_size = (int) ceil(log2(new_size));
+	new_size = 1 << log_size;
+	assert(resizable && get_size() < new_size);
+	assert(allocated);
+
+	// Allocate new memory for the array and initialize it.
+	T *tmp = alloc_buf(new_size);
+
+	// Copy the old array to the new one.
+	int num = fifo_queue<T>::get_num_entries();
+	for (int i = 0; i < num; i++) {
+		tmp[i] = buf[loc_in_queue(start + i)];
+	}
+
+	// Destroy the old array.
+	free_buf(buf);
+
+	buf = tmp;
+	size_mask = new_size - 1;
+	start = 0;
+	end = num;
+	return true;
+}
+
+template<class T>
+int blocking_FIFO_queue<T>::add_partial(fifo_queue<T> *queue, int min_added)
+{
+	int num_added = 0;
+	while (!queue->is_empty()) {
+		int num = queue->get_num_entries();
+		pthread_mutex_lock(&mutex);
+		bool empty = this->is_empty();
+		if (this->get_size() - fifo_queue<T>::get_num_entries() < num
+				&& this->get_size() < max_size) {
+			int new_size = this->get_size() * 2;
+			new_size = max(new_size, fifo_queue<T>::get_num_entries() + num);
+			new_size = min(new_size, max_size);
+#ifdef DEBUG
+			printf("try to expand queue %s to %d\n", name.c_str(), new_size);
+#endif
+			bool ret = fifo_queue<T>::expand_queue(new_size);
+			assert(ret);
+		}
+		int ret = fifo_queue<T>::add(queue);
+		num_added += ret;
+		/* signal the thread of reading disk to wake up. */
+		if (empty)
+			pthread_cond_broadcast(&cond);
+
+		/* We only block the thread when it doesn't send enough data. */
+		if (num_added < min_added) {
+			while (this->is_full() && !queue->is_empty()) {
+				num_full++;
+				pthread_cond_wait(&cond, &mutex);
+			}
+			pthread_mutex_unlock(&mutex);
+		}
+		else {
+			pthread_mutex_unlock(&mutex);
+			break;
+		}
+	}
+	return num_added;
+}
+
+template<class T>
+int blocking_FIFO_queue<T>::fetch(T *entries, int num, bool blocking,
+		bool interruptible)
+{
+	/* we have to wait for coming requests. */
+	pthread_mutex_lock(&mutex);
+	if (blocking) {
+		while(this->is_empty()) {
+			num_empty++;
+			if (interruptible && interrupted) {
+				// We need to reset the interrupt signal.
+				interrupted = false;
+				break;
+			}
+			pthread_cond_wait(&cond, &mutex);
+		}
+	}
+	bool full = this->is_full();
+	int ret = fifo_queue<T>::fetch(entries, num);
+	pthread_mutex_unlock(&mutex);
+
+	/* wake up all threads to send more requests */
+	if (full)
+		pthread_cond_broadcast(&cond);
+
+	return ret;
+}
 
 #endif

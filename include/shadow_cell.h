@@ -61,6 +61,78 @@ public:
 	virtual void scale_down_hits() = 0;
 };
 
+/**
+ * The elements in the queue stored in the same piece of memory
+ * as the queue metadata. The size of the queue is defined 
+ * during the compile time.
+ */
+template<class T, int SIZE>
+class embedded_queue
+{
+	unsigned short start;
+	unsigned short num;
+	/* the size of the buffer is specified by SIZE. */
+	T buf[SIZE];
+public:
+	embedded_queue() {
+		assert(SIZE < 0xffff);
+		start = 0;
+		num = 0;
+	}
+
+	void push_back(T v) {
+		assert(num < SIZE);
+		buf[(start + num) % SIZE] = v;
+		num++;
+	}
+
+	void pop_front() {
+		assert(num > 0);
+		start = (start + 1) % SIZE;
+		num--;
+	}
+
+	void remove(int idx);
+
+	bool is_empty() {
+		return num == 0;
+	}
+
+	bool is_full() {
+		return num == SIZE;
+	}
+
+	int size() {
+		return num;
+	}
+
+	T &back() {
+		assert(num > 0);
+		return buf[(start + num - 1) % SIZE];
+	}
+
+	T &front() {
+		assert(num > 0);
+		return buf[start];
+	}
+
+	T &get(int idx) {
+		assert(num > 0);
+		return buf[(start + idx) % SIZE];
+	}
+
+	void set(T &v, int idx) {
+		buf[(start + idx) % SIZE] = v;
+	}
+
+	void print_state() {
+		printf("start: %d, num: %d\n", start, num);
+		for (int i = 0; i < this->size(); i++)
+			printf("%ld\t", this->get(i));
+		printf("\n");
+	}
+};
+
 class clock_shadow_cell: public shadow_cell
 {
 	int last_idx;
