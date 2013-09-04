@@ -146,8 +146,6 @@ class node_cached_io: public global_cached_io
 	// This message buffer is used for copying remote messages to
 	// the local memory.
 	message<io_request> local_msgs[MSG_BUF_SIZE];
-	// This buffer is used for sending replies.
-	io_reply local_reply_buf[REPLY_BUF_SIZE];
 	pthread_t processing_thread_id;
 
 	node_cached_io(io_interface *underlying, struct thread_group *local_group);
@@ -176,11 +174,6 @@ public:
 	}
 
 	int process_requests(int max_nreqs);
-
-	// Requests are from remote threads, so we need to send replies
-	// to them for notification.
-	virtual void notify_completion(io_request *req);
-	virtual void notify_completion(io_request *reqs[], int num);
 };
 
 #if 0
@@ -265,67 +258,60 @@ int node_cached_io::process_requests(int max_nreqs)
 	return num_processed;
 }
 
-/*
- * We sort requests according to the io instance where they will be delivered to.
- */
-void sort_requests(io_request *reqs[], int num,
-		std::tr1::unordered_map<io_interface *, std::vector<io_request *> > &req_map)
+void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 {
-	for (int i = 0; i < num; i++) {
-		io_request *req = reqs[i];
-		io_interface *io = req->get_io();
-		std::vector<io_request *> *vec;
-		std::tr1::unordered_map<io_interface *,
-			std::vector<io_request *> >::iterator it = req_map.find(io);
-		if (it == req_map.end()) {
-			req_map.insert(std::pair<io_interface *, std::vector<io_request *> >(
-						io, std::vector<io_request *>()));
-			vec = &req_map[io];
+	// This method is only used for remote requests.
+	// For local requests, global_cached_io will return the completed requests
+	// to the application directly.
+	if (num == 1) {
+		int idx = cache_conf->page2cache(reqs[0]->get_offset());
+		if (idx != get_node_id()) {
+			io_request *req = reqs[0];
+			io_reply rep(req, true, 0);
+			part_global_cached_io *io = (part_global_cached_io *) req->get_io();
+			int node_id = local_group->id;
+			int num_sent = io->get_reply_sender(node_id)->send_cached(&rep);
+			// We use blocking queues here, so the send must succeed.
+			assert(num_sent > 0);
 		}
 		else
-			vec = &it->second;
-		vec->push_back(req);
+			global_cached_io::notify_completion(reqs, 1);
 	}
-}
+	else {
+		io_request *local_reqs[num];
+		// This buffer is used for sending replies.
+#ifdef MEMCHECK
+		io_reply *local_reply_buf = new io_reply[num];
+#else
+		io_reply local_reply_buf[num];
+#endif
+		int node_id = local_group->id;
+		int num_remote = 0;
+		int num_local = 0;
 
-void node_cached_io::notify_completion(io_request *reqs[], int num)
-{
-	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > req_map;
-	sort_requests(reqs, num, req_map);
-	int node_id = local_group->id;
-	for (std::tr1::unordered_map<io_interface *,
-			std::vector<io_request *> >::iterator it = req_map.begin();
-			it != req_map.end(); it++) {
-		part_global_cached_io *io = (part_global_cached_io *) it->first;
-		std::vector<io_request *> *vec = &it->second;
+		for (int i = 0; i < num; i++) {
+			int idx = cache_conf->page2cache(reqs[i]->get_offset());
+			if (idx != get_node_id())
+				local_reply_buf[num_remote++] = io_reply(reqs[i], true, 0);
+			else
+				local_reqs[num_local++] = reqs[i];
+		}
 
-		assert((int) vec->size() <= REPLY_BUF_SIZE);
-		for (size_t i = 0; i < vec->size(); i++)
-			local_reply_buf[i] = io_reply(vec->at(i), true, 0);
 		// The reply must be sent to the thread on a different node.
-		assert(io->get_node_id() != this->get_node_id());
 		int num_sent;
-		if ((int) vec->size() > NUMA_REPLY_CACHE_SIZE)
-			num_sent = io->get_reply_sender(node_id)->send(local_reply_buf,
-					vec->size());
+		if (num_remote > NUMA_REPLY_CACHE_SIZE)
+			num_sent = get_reply_sender(node_id)->send(local_reply_buf, num_remote);
 		else
-			num_sent = io->get_reply_sender(node_id)->send_cached(
-					local_reply_buf, vec->size());
+			num_sent = get_reply_sender(node_id)->send_cached(
+					local_reply_buf, num_remote);
 		// We use blocking queues here, so the send must succeed.
-		assert(num_sent == (int) vec->size());
+		assert(num_sent == num_remote);
+#ifdef MEMCHECK
+		delete local_reply_buf;
+#endif
+		if (num_local > 0)
+			global_cached_io::notify_completion(local_reqs, num_local);
 	}
-}
-
-void node_cached_io::notify_completion(io_request *req)
-{
-	io_reply rep(req, true, 0);
-	part_global_cached_io *io = (part_global_cached_io *) req->get_io();
-	// The reply must be sent to the thread on a different node.
-	assert(io->get_node_id() != this->get_node_id());
-	int node_id = local_group->id;
-	int num_sent = io->get_reply_sender(node_id)->send_cached(&rep);
-	// We use blocking queues here, so the send must succeed.
-	assert(num_sent > 0);
 }
 
 /**

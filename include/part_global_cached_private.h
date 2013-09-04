@@ -105,6 +105,7 @@ public:
 
 	int process_reply(io_reply *reply);
 
+	virtual void notify_completion(io_request *reqs[], int num);
 	void access(io_request *requests, int num, io_status *status);
 	io_status access(char *, off_t, ssize_t, int) {
 		return IO_UNSUPPORTED;
