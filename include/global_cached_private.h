@@ -9,18 +9,6 @@ class request_allocator;
 
 class global_cached_io: public io_interface
 {
-	class access_page_callback: public callback
-	{
-		global_cached_io *cached_io;
-		public:
-		access_page_callback(global_cached_io *io) {
-			cached_io = io;
-		}
-		int invoke(io_request *requests[], int);
-		int multibuf_invoke(io_request *request,
-				std::vector<thread_safe_page *> &dirty_pages);
-	} underlying_cb;
-
 	int num_waits;
 	long cache_size;
 	page_cache *global_cache;
@@ -61,6 +49,8 @@ class global_cached_io: public io_interface
 	ssize_t __read(io_request *req, thread_safe_page *p);
 	ssize_t __write(io_request *req, thread_safe_page *p,
 		std::vector<thread_safe_page *> &dirty_pages);
+	int multibuf_completion(io_request *request,
+			std::vector<thread_safe_page *> &dirty_pages);
 public:
 	global_cached_io(io_interface *, page_cache *cache);
 
@@ -149,10 +139,6 @@ public:
 		return num_fast_process;
 	}
 
-	// These two methods notify of application threads the completion of requests.
-	// For global cache, they call invoke() callback directly.
-	// For parted global cache, they should send reply messages to remote threads.
-	virtual void notify_completion(io_request *req);
 	virtual void notify_completion(io_request *reqs[], int num);
 
 	void finalize_partial_request(io_request &partial, io_request *orig);

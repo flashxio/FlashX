@@ -132,19 +132,53 @@ static inline thread_safe_page *__complete_req_unlocked(io_request *orig,
 	return generic_complete_req(orig, p, false);
 }
 
-void global_cached_io::notify_completion(io_request *req)
+void notify_completion(io_interface *this_io, io_request *req)
 {
+	// The request is from the application.
 	io_interface *io = req->get_io();
-	if (io->get_callback())
-		io->get_callback()->invoke(&req, 1);
+	if (io == this_io) {
+		if (io->get_callback())
+			io->get_callback()->invoke(&req, 1);
+	}
+	else
+		io->notify_completion(&req, 1);
 }
 
-void global_cached_io::notify_completion(io_request *reqs[], int num)
+void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 {
-	// If we just deliver notification to threads on the local processor.
-	// we can notify them for each request.
-	for (int i = 0; i < num; i++)
-		notify_completion(reqs[i]);
+	io_request *from_app[num];
+	int num_from_app = 0;
+	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > req_map;
+	for (int i = 0; i < num; i++) {
+		io_interface *io = reqs[i]->get_io();
+		if (io == this_io)
+			from_app[num_from_app++] = reqs[i];
+		else {
+			io_request *req = reqs[i];
+			std::vector<io_request *> *vec;
+			std::tr1::unordered_map<io_interface *,
+				std::vector<io_request *> >::iterator it = req_map.find(io);
+			if (it == req_map.end()) {
+				req_map.insert(std::pair<io_interface *, std::vector<io_request *> >(
+							io, std::vector<io_request *>()));
+				vec = &req_map[io];
+			}
+			else
+				vec = &it->second;
+			vec->push_back(req);
+		}
+	}
+
+	if (this_io->get_callback() && num_from_app > 0)
+		this_io->get_callback()->invoke(from_app, num_from_app);
+
+	for (std::tr1::unordered_map<io_interface *,
+			std::vector<io_request *> >::iterator it = req_map.begin();
+			it != req_map.end(); it++) {
+		io_interface *io = it->first;
+		std::vector<io_request *> *vec = &it->second;
+		io->notify_completion(vec->data(), vec->size());
+	}
 }
 
 void global_cached_io::finalize_partial_request(io_request &partial,
@@ -160,7 +194,7 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		if (orig->is_sync())
 			io->wakeup_on_req(orig, IO_OK);
 		else
-			notify_completion(orig);
+			::notify_completion(this, orig);
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
@@ -187,7 +221,7 @@ void global_cached_io::finalize_request(io_request &req)
 			if (original->is_sync())
 				io->wakeup_on_req(original, IO_OK);
 			else
-				notify_completion(original);
+				::notify_completion(this, original);
 			original->dec_complete_count();
 			original->wait4unref();
 			req_allocator->free(original);
@@ -201,12 +235,12 @@ void global_cached_io::finalize_request(io_request &req)
 		if (req.is_sync())
 			io->wakeup_on_req(&req, IO_OK);
 		else
-			notify_completion(&req);
+			::notify_completion(this, &req);
 	}
 }
 
-int global_cached_io::access_page_callback::multibuf_invoke(
-		io_request *request, std::vector<thread_safe_page *> &dirty_pages)
+int global_cached_io::multibuf_completion(io_request *request,
+		std::vector<thread_safe_page *> &dirty_pages)
 {
 	io_request *orig = request->get_orig();
 	assert(orig->get_num_bufs() == 1);
@@ -261,7 +295,7 @@ int global_cached_io::access_page_callback::multibuf_invoke(
 		io_request partial;
 		extract_pages(*orig, request->get_offset(), request->get_num_bufs(),
 				partial);
-		cached_io->finalize_partial_request(partial, orig);
+		this->finalize_partial_request(partial, orig);
 
 		/*
 		 * Now we should start to deal with all requests pending to pages
@@ -275,9 +309,9 @@ int global_cached_io::access_page_callback::multibuf_invoke(
 				thread_safe_page *dirty = __complete_req(old, p);
 				if (dirty)
 					dirty_pages.push_back(dirty);
-				cached_io->finalize_request(*old);
+				this->finalize_request(*old);
 				// Now we can delete it.
-				cached_io->get_req_allocator()->free(old);
+				this->get_req_allocator()->free(old);
 				old = next;
 			}
 			assert(p->get_ref() >= 0);
@@ -307,10 +341,9 @@ int global_cached_io::access_page_callback::multibuf_invoke(
 	return -1;
 }
 
-int global_cached_io::access_page_callback::invoke(io_request *requests[],
-		int num)
+void global_cached_io::notify_completion(io_request *requests[], int num)
 {
-	page_cache *cache = cached_io->get_global_cache();
+	page_cache *cache = this->get_global_cache();
 	std::vector<thread_safe_page *> dirty_pages;
 	for (int i = 0; i < num; i++) {
 		io_request *request = requests[i];
@@ -324,7 +357,7 @@ int global_cached_io::access_page_callback::invoke(io_request *requests[],
 		}
 
 		if (request->get_num_bufs() > 1) {
-			multibuf_invoke(request, dirty_pages);
+			multibuf_completion(request, dirty_pages);
 			continue;
 		}
 
@@ -363,7 +396,7 @@ int global_cached_io::access_page_callback::invoke(io_request *requests[],
 				dirty_pages.push_back(dirty);
 			io_request partial;
 			extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
-			cached_io->finalize_partial_request(partial, orig);
+			this->finalize_partial_request(partial, orig);
 
 			int num = 0;
 			while (old) {
@@ -378,9 +411,9 @@ int global_cached_io::access_page_callback::invoke(io_request *requests[],
 				if (dirty)
 					dirty_pages.push_back(dirty);
 
-				cached_io->finalize_request(*old);
+				this->finalize_request(*old);
 				// Now we can delete it.
-				cached_io->get_req_allocator()->free(old);
+				this->get_req_allocator()->free(old);
 				old = next;
 				num++;
 			}
@@ -400,12 +433,10 @@ int global_cached_io::access_page_callback::invoke(io_request *requests[],
 		}
 	}
 	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size());
-	return 0;
 }
 
 global_cached_io::global_cached_io(io_interface *underlying,
 		page_cache *cache): io_interface(underlying->get_node_id()),
-	underlying_cb(this),
 	pending_requests(underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE)
 {
 	req_allocator = new request_allocator(underlying->get_node_id(),
@@ -416,7 +447,6 @@ global_cached_io::global_cached_io(io_interface *underlying,
 	this->underlying = underlying;
 	num_waits = 0;
 	this->cache_size = cache->size();
-	underlying->set_callback(new access_page_callback(this));
 	global_cache = cache;
 	pthread_mutex_init(&sync_mutex, NULL);
 	pthread_cond_init(&sync_cond, NULL);
@@ -460,7 +490,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 				assert(real_orig->get_orig() == NULL);
 				io_request read_req((char *) p->get_data(),
 						ROUND_PAGE(off), PAGE_SIZE, READ,
-						underlying, p->get_node_id(), real_orig, p);
+						this, p->get_node_id(), real_orig, p);
 				p->set_io_pending(true);
 				p->unlock();
 				io_status status;
@@ -533,7 +563,7 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 					 * it will notify the underlying IO,
 					 * which then notifies global_cached_io.
 					 */
-					PAGE_SIZE, READ, underlying, get_node_id(), orig, p);
+					PAGE_SIZE, READ, this, get_node_id(), orig, p);
 			p->unlock();
 			assert(orig->get_orig() == NULL);
 			io_status status;
@@ -561,7 +591,7 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		if (orig->is_sync())
 			io->wakeup_on_req(orig, IO_OK);
 		else
-			notify_completion(orig);
+			::notify_completion(this, orig);
 	}
 	return ret;
 }
@@ -579,7 +609,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 
 	assert(npages <= MAX_NUM_IOVECS);
 	assert(orig->get_orig() == NULL);
-	io_request multibuf_req(-1, req.get_access_method(), underlying,
+	io_request multibuf_req(-1, req.get_access_method(), this,
 			get_node_id(), orig, NULL);
 
 	/*
@@ -609,7 +639,7 @@ again:
 			if (!multibuf_req.is_empty()) {
 				p->unlock();
 				underlying->access(&multibuf_req, 1);
-				io_request tmp(-1, req.get_access_method(), underlying,
+				io_request tmp(-1, req.get_access_method(), this,
 						get_node_id(), orig, NULL);
 				multibuf_req = tmp;
 				goto again;
@@ -641,7 +671,7 @@ again:
 			 */
 			if (!multibuf_req.is_empty()) {
 				underlying->access(&multibuf_req, 1);
-				io_request tmp(-1, req.get_access_method(), underlying,
+				io_request tmp(-1, req.get_access_method(), this,
 						get_node_id(), orig, NULL);
 				multibuf_req = tmp;
 			}
@@ -802,7 +832,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 	}
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
-	notify_completion(async_reqs, num_async_reqs);
+	::notify_completion(this, async_reqs, num_async_reqs);
 }
 
 void global_cached_io::access(io_request *requests, int num, io_status *status)
@@ -935,7 +965,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					 * offset, and only this thread can write back the old
 					 * dirty page.
 					 */
-					write_dirty_page(p, old_off, underlying, orig1, get_global_cache());
+					write_dirty_page(p, old_off, this, orig1, get_global_cache());
 					continue;
 				}
 				else {
