@@ -33,7 +33,6 @@ struct thread_callback_s
 {
 	struct io_callback_s cb;
 	async_io *aio;
-	callback *aio_callback;
 	callback_allocator *cb_allocator;
 	io_request req;
 };
@@ -159,7 +158,6 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	// to another.
 	tcb->req = io_req;
 	tcb->aio = this;
-	tcb->aio_callback = this->get_callback();
 	tcb->cb_allocator = cb_allocator;
 
 	assert(tcb->req.get_size() >= MIN_BLOCK_SIZE);
@@ -371,26 +369,27 @@ int aio_complete_queue::process(int max_num, bool blocking)
 
 	// We should try to invoke for as many requests as possible,
 	// so the upper layer has the opportunity to optimize the request completion.
-	std::tr1::unordered_map<callback *, std::vector<io_request *> > map;
+	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > map;
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
 		std::vector<io_request *> *v;
-		std::tr1::unordered_map<callback *, std::vector<io_request *> >::iterator it;
-		if ((it = map.find(tcb->aio_callback)) == map.end()) {
-			map.insert(std::pair<callback *, std::vector<io_request *> >(
-						tcb->aio_callback, std::vector<io_request *>()));
-			v = &map[tcb->aio_callback];
+		std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it;
+		io_interface *io = tcb->req.get_io();
+		if ((it = map.find(io)) == map.end()) {
+			map.insert(std::pair<io_interface *, std::vector<io_request *> >(
+						io, std::vector<io_request *>()));
+			v = &map[io];
 		}
 		else
 			v = &it->second;
 
 		v->push_back(&tcb->req);
 	}
-	for (std::tr1::unordered_map<callback *, std::vector<io_request *> >::iterator it
+	for (std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it
 			= map.begin(); it != map.end(); it++) {
-		callback *cb = it->first;
+		io_interface *io = it->first;
 		std::vector<io_request *> *v = &it->second;
-		cb->invoke(v->data(), v->size());
+		io->notify_completion(v->data(), v->size());
 	}
 	for (int i = 0; i < num; i++) {
 		tcbs[i]->cb_allocator->free(tcbs[i]);

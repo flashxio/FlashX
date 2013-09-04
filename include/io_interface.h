@@ -130,6 +130,16 @@ public:
 	}
 
 	/**
+	 * This method gives the underlying layer an interface to notify
+	 * the current IO of the completed requests.
+	 * The requests should be issued by this IO.
+	 */
+	virtual void notify_completion(io_request *reqs[], int num) {
+		if (get_callback())
+			get_callback()->invoke(reqs, num);
+	}
+
+	/**
 	 * The synchronous IO interface.
 	 */
 	virtual io_status access(char *, off_t, ssize_t, int) {
