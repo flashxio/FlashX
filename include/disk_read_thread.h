@@ -70,6 +70,9 @@ public:
 	}
 
 	const std::string get_file_name() const {
+		if (open_files.empty())
+			return "";
+
 		logical_file_partition *part = partition.create_file_partition(open_files[0]);
 		std::string name = part->get_file_name(0);
 		delete part;
