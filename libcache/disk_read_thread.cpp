@@ -3,42 +3,6 @@
 #include "parameters.h"
 #include "aio_private.h"
 
-/* just call the callback of the initiator. */
-class initiator_callback: public callback
-{
-public:
-	int invoke(io_request *rqs[], int num);
-};
-
-int initiator_callback::invoke(io_request *rqs[], int num)
-{
-	// We should try to invoke for as many requests as possible,
-	// so the upper layer has the opportunity to optimize the request completion.
-	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > map;
-	for (int i = 0; i < num; i++) {
-		io_request *rq = rqs[i];
-		std::vector<io_request *> *v;
-		std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it;
-		if ((it = map.find(rq->get_io())) == map.end()) {
-			map.insert(std::pair<io_interface *, std::vector<io_request *> >(
-						rq->get_io(), std::vector<io_request *>()));
-			v = &map[rq->get_io()];
-		}
-		else
-			v = &it->second;
-
-		v->push_back(rq);
-	}
-	for (std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it
-			= map.begin(); it != map.end(); it++) {
-		io_interface *io = it->first;
-		std::vector<io_request *> *v = &it->second;
-		if (io->get_callback())
-			io->get_callback()->invoke(v->data(), v->size());
-	}
-	return 0;
-}
-
 disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 		int node_id): queue(node_id, std::string("io-queue-") + itoa(node_id),
@@ -49,7 +13,6 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 				IO_QUEUE_SIZE, INT_MAX, false), partition(_partition)
 {
 	aio = new async_io(_partition, complete_threads, AIO_DEPTH_PER_FILE, node_id);
-	aio->set_callback(new initiator_callback());
 	this->node_id = node_id;
 	num_accesses = 0;
 	num_low_prio_accesses = 0;

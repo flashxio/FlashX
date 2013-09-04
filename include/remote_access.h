@@ -30,20 +30,12 @@ class remote_disk_access: public io_interface
 	aio_complete_queue *complete_queue;
 	slab_allocator *msg_allocator;
 
-	// This is used for requests that access data across multiple blocks.
-	// These requests will be broken into smaller requests.
-	// This fake IO interface intercepts requests in the IO completion path,
-	// and merge the smaller requests and present users the original
-	// completed IO requests.
-	io_interface *req_intercepter;
-
 	int num_completed_reqs;
 
 	remote_disk_access(int node_id, int max_reqs): io_interface(
 			node_id), max_disk_cached_reqs(max_reqs) {
 		cb = NULL;
 		block_mapper = NULL;
-		req_intercepter = NULL;
 		num_completed_reqs = 0;
 	}
 public:
@@ -77,6 +69,7 @@ public:
 
 	virtual void access(io_request *requests, int num,
 			io_status *status = NULL);
+	virtual void notify_completion(io_request *reqs[], int num);
 	virtual io_interface *clone() const;
 	void flush_requests(int max_cached);
 	virtual void flush_requests();

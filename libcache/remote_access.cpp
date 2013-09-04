@@ -4,53 +4,64 @@
 #include "disk_read_thread.h"
 #include "file_mapper.h"
 
-class request_assemble_callback: public callback
+void remote_disk_access::notify_completion(io_request *reqs[], int num)
 {
-public:
-	int invoke(io_request *requests[], int num);
-};
-
-int request_assemble_callback::invoke(io_request *requests[], int num)
-{
+	// There are a few cases for the incoming requests.
+	//	the requests issued by the upper layer IO;
+	//	the requests split by the current IO;
+	//	the requests issued by an application.
+	io_request *from_upper[num];
+	io_request *from_app[num];
+	io_interface *upper_io = NULL;
+	int num_from_upper = 0;
+	int num_from_app = 0;
 	std::vector<io_request *> completes;
 	for (int i = 0; i < num; i++) {
-		io_request *orig = requests[i]->get_orig();
-		io_request *req = requests[i];
+		// The requests issued by the upper layer IO.
+		if (reqs[i]->get_io() != this) {
+			if (upper_io == NULL)
+				upper_io = reqs[i]->get_io();
+			else
+				// They should be from the same upper layer IO.
+				assert(upper_io == reqs[i]->get_io());
+			from_upper[num_from_upper++] = reqs[i];
+			continue;
+		}
+		if (reqs[i]->get_io() == this && !reqs[i]->is_extended_req()) {
+			from_app[num_from_app++] = reqs[i];
+			continue;
+		}
+
+		io_request *orig = reqs[i]->get_orig();
+		io_request *req = reqs[i];
 		orig->inc_complete_count();
 		if (orig->complete_size(req->get_size()))
 			completes.push_back(orig);
 		else
 			orig->dec_complete_count();
 	}
+	if (num_from_upper > 0)
+		upper_io->notify_completion(from_upper, num_from_upper);
+	if (num_from_app > 0 && this->get_callback())
+		this->get_callback()->invoke(from_app, num_from_app);
 
 	for (unsigned i = 0; i < completes.size(); i++) {
 		io_request *orig = completes[i];
-		if (orig->get_io()->get_callback())
-			orig->get_io()->get_callback()->invoke(&orig, 1);
+		assert(orig->is_extended_req());
+		io_interface *io = orig->get_io();
+		// It's from an application.
+		if (io == this) {
+			if (io->get_callback())
+				io->get_callback()->invoke(&orig, 1);
+		}
+		else
+			io->notify_completion(&orig, 1);
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
 		delete orig;
 	}
-	return 0;
 }
-
-class request_intercepter: public io_interface
-{
-	callback *cb;
-public:
-	request_intercepter(): io_interface(-1) {
-		cb = new request_assemble_callback();
-	}
-
-	virtual callback *get_callback() {
-		return cb;
-	}
-
-	virtual int get_file_id() const {
-		return -1;
-	}
-};
 
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
 		aio_complete_thread *complete_thread, file_mapper *mapper, int node_id,
@@ -76,7 +87,6 @@ remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &re
 	cb = NULL;
 	this->block_mapper = mapper;
 	num_completed_reqs = 0;
-	this->req_intercepter = new request_intercepter();
 }
 
 remote_disk_access::~remote_disk_access()
@@ -87,7 +97,6 @@ remote_disk_access::~remote_disk_access()
 		request_sender::destroy(senders[i]);
 		request_sender::destroy(low_prio_senders[i]);
 	}
-	delete req_intercepter;
 }
 
 io_interface *remote_disk_access::clone() const
@@ -185,8 +194,12 @@ void remote_disk_access::access(io_request *requests, int num,
 			// I still use the default memory allocator, but since it is used
 			// when the request size is large, it should normally be OK.
 			// TODO I can use slab allocators later.
-			io_request *orig = new io_request();
-			*orig = requests[i];
+			io_request *orig = new io_request(true);
+			// global_cached_io doesn't issue requests across a block boundary.
+			// It can only be application issued requst, so it shouldn't have
+			// extension.
+			assert(!requests[i].is_extended_req());
+			orig->init(requests[i]);
 			off_t end = orig->get_offset() + orig->get_size();
 			const off_t RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
 			for (off_t begin = orig->get_offset(); begin < end;
@@ -198,7 +211,7 @@ void remote_disk_access::access(io_request *requests, int num,
 				// a single-buffer request.
 				extract_pages(*orig, begin, size / PAGE_SIZE, req);
 				req.set_orig(orig);
-				req.set_io(req_intercepter);
+				req.set_io(this);
 				assert(inside_RAID_block(req));
 
 				// Send a request.
