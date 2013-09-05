@@ -4,7 +4,6 @@
 #include "workload.h"
 #include "rand_buf.h"
 #include "garbage_collection.h"
-#include "messaging.h"
 #include "io_interface.h"
 
 extern int buf_type;
