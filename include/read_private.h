@@ -66,7 +66,6 @@ public:
 		static long tot_nreads;
 		static long tot_read_time;
 		static long tot_remote_reads;
-		extern int nthreads;
 		tot_remote_reads += remote_reads;
 		tot_nreads += num_reads;
 		tot_read_time += read_time;
