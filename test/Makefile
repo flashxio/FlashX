@@ -1,11 +1,13 @@
+CC = gcc
+
 ifdef MEMCHECK
 TRACE_FLAGS = -faddress-sanitizer
 CC = clang
 CXX = clang++
-endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
+endif
 
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
