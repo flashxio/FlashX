@@ -1920,6 +1920,7 @@ TestIoSys(IOR_param_t *test)
     int            range[3];
     IOR_offset_t   dataMoved;             /* for data rate calculation */
 
+	test->nodeId = 1;
     /* set up communicator for test */
     if (test->numTasks > numTasksWorld) {
         if (rank == 0) {
@@ -2634,6 +2635,7 @@ struct ThreadData
 	int access;
 	int pretendRank;
 	IOR_offset_t *offsetArray;
+	void *fd;
 
 	// output data
 	volatile IOR_offset_t   dataMoved;
@@ -2660,7 +2662,6 @@ void XferComplete(void *arg, int status)
 void *
 AsyncThreadWriteOrRead(void *arg)
 {
-    char           testFileName[MAX_STR];
 	struct ThreadData *data = (struct ThreadData *) arg;
 	IOR_offset_t	transfer,
 					transferCount = 0,
@@ -2683,9 +2684,7 @@ AsyncThreadWriteOrRead(void *arg)
 
 	struct buf_pool *buf_allocator = create_buf_pool(test->transferSize, INT_MAX, -1);
 	struct buf_pool *cb_allocator = create_buf_pool(sizeof(struct AsyncData), INT_MAX, -1);
-
-	GetTestFileName(testFileName, test);
-	fd = IOR_Open(testFileName, test);
+	fd = data->fd;
 
     /* check for stonewall */
     startForStonewall = GetTimeStamp();
@@ -2755,7 +2754,6 @@ AsyncThreadWriteOrRead(void *arg)
 void *
 SyncThreadWriteOrRead(void *arg)
 {
-    char           testFileName[MAX_STR];
 	struct ThreadData *data = (struct ThreadData *) arg;
     void         * buffer = NULL;
     void         * checkBuffer = NULL;
@@ -2778,11 +2776,11 @@ SyncThreadWriteOrRead(void *arg)
 	printf("bind to node %d\n", data->test->nodeId);
 	bind2node_id(data->test->nodeId);
 
-	GetTestFileName(testFileName, test);
-	fd = IOR_Open(testFileName, test);
+	fd = data->fd;
 
     /* check for stonewall */
     startForStonewall = GetTimeStamp();
+	double start = startForStonewall;
     hitStonewall = ((test->deadlineForStonewalling != 0)
                     && ((GetTimeStamp() - startForStonewall)
                         > test->deadlineForStonewalling));
@@ -2828,7 +2826,9 @@ SyncThreadWriteOrRead(void *arg)
 	data->dataMoved = dataMoved;
 	data->errors = errors;
 	IOR_Close(fd, test);
-	printf("access: %d, pairCnt: %lld\n", access, pairCnt);
+	double end = GetTimeStamp();
+	printf("access: %d, pairCnt: %lld, rate: %ld(MB/s)\n", access, pairCnt,
+			(long) (dataMoved / (end - start) / 1024 / 1024));
 
     FreeBuffers(access, checkBuffer, readCheckBuffer, buffer, NULL);
 	return NULL;
@@ -2876,6 +2876,9 @@ WriteOrRead(IOR_param_t * test,
 		} else {
 			data[i].offsetArray = GetOffsetArraySequential(test, i);
 		}
+		char           testFileName[MAX_STR];
+		GetTestFileName(testFileName, data[i].test);
+		data[i].fd = IOR_Open(testFileName, data[i].test);
 	}
 	double start2 = GetTimeStamp();
 	for (i = 0; i < numThreads; i++) {

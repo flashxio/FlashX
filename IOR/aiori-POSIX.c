@@ -71,7 +71,7 @@ struct aio_struct
 };
 
 #define NUM_AIOS 100
-#define AIO_DEPTH (32 * 16)
+#define AIO_DEPTH (32)
 static struct aio_struct aios[NUM_AIOS];
 
 struct IOR_callback_s

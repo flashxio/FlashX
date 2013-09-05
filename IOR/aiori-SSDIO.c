@@ -10,6 +10,25 @@
 
 IOR_offset_t GetFileSize(IOR_param_t *test);
 
+/**
+ * Create the specified number of node Ids.
+ * One of them must be the suggested node Id.
+ */
+void get_nodes(int suggested_node, int *node_ids, int num)
+{
+	int i;
+	int exist = 0;
+	for (i = 0; i < num; i++) {
+		node_ids[i] = i;
+		if (i == suggested_node)
+			exist = 1;
+	}
+	// If the suggested node doesn't exist, we make the first node id
+	// the suggested node id.
+	if (!exist)
+		node_ids[0] = suggested_node;
+}
+
 void *IOR_Create_SSDIO(char *name, IOR_param_t *test)
 {
 	printf("SSDIO: create and open %s on node %d\n", name, test->nodeId);
@@ -21,9 +40,7 @@ void *IOR_Create_SSDIO(char *name, IOR_param_t *test)
 	if (test->useO_DIRECT == TRUE)
 		flags |= O_DIRECT;
 	int node_ids[test->numNodes];
-	int i;
-	for (i = 0; i < test->numNodes; i++)
-		node_ids[i] = i;
+	get_nodes(test->nodeId, node_ids, test->numNodes);
 	ssd_init_io_system(name, node_ids, test->numNodes);
 	if (test->filePerProc) {
 		int suggested_nodes[1] = {test->nodeId};
@@ -44,9 +61,7 @@ void *IOR_Open_SSDIO(char *name, IOR_param_t *test)
 	if (test->useO_DIRECT == TRUE)
 		flags |= O_DIRECT;
 	int node_ids[test->numNodes];
-	int i;
-	for (i = 0; i < test->numNodes; i++)
-		node_ids[i] = i;
+	get_nodes(test->nodeId, node_ids, test->numNodes);
 	ssd_init_io_system(name, node_ids, test->numNodes);
 	if (test->filePerProc) {
 		int suggested_nodes[1] = {test->nodeId};

@@ -34,7 +34,7 @@ SRCS = IOR.c utilities.c parse_options.c
 OBJS = $(SRCS:.c=.o)
 
 posix: $(OBJS) aiori-POSIX.o aiori-SSDIO.o 
-	mpic++ -o IOR $(OBJS) aiori-POSIX.o aiori-SSDIO.o $(LDFLAGS) -L../libcache -lcache -lnuma -laio
+	mpic++ -o IOR $(OBJS) aiori-POSIX.o aiori-SSDIO.o $(LDFLAGS) -L../libcache -lcache -lnuma -laio -L../nbds.0.4.3 -lnbds
 
 mpiio: $(OBJS) aiori-POSIX.o aiori-MPIIO.o aiori-noHDF5.o aiori-noNCMPI.o
 	$(CC) -o IOR $(OBJS) \
