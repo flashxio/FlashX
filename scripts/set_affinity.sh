@@ -32,7 +32,7 @@ echo "irq1: $irq1"
 echo "irq2: $irq2"
 
 echo "set for controller 0"
-set_affinity_node 1 $irq0
+set_affinity_node 0 $irq0
 echo "set for controller 1"
 set_affinity_node 1 $irq1
 echo "set for controller 2"
