@@ -6,7 +6,7 @@
 disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 		int node_id): queue(node_id, std::string("io-queue-") + itoa(node_id),
-			IO_QUEUE_SIZE, IO_QUEUE_SIZE, false), low_prio_queue(node_id,
+			IO_QUEUE_SIZE, INT_MAX, false), low_prio_queue(node_id,
 				// TODO let's allow the low-priority queue to
 				// be infinitely large for now.
 				std::string("io-queue-low_prio-") + itoa(node_id),
@@ -127,8 +127,8 @@ void disk_read_thread::run() {
 			 * If there are no incoming requests and there are pending IOs,
 			 * let's complete the pending IOs first.
 			 */
-			else if (aio->num_pending_IOs() > 0) {
-				aio->wait4complete();
+			else if (aio->num_pending_ios() > 0) {
+				aio->wait4complete(1);
 			}
 			// If there is no other work to do, let's wait for new requests.
 			else

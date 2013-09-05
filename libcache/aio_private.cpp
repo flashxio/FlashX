@@ -284,7 +284,7 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 					sender->flush(false);
 				else {
 					int num_msg = sender->get_num_remaining();
-					if (num_msg >= AIO_DEPTH_PER_FILE) {
+					if (num_msg >= AIO_COMPLETE_BUF_SIZE) {
 						sender->flush(false);
 						assert(sender->get_num_remaining() < num_msg);
 					}

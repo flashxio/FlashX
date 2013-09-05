@@ -18,6 +18,7 @@ class file_mapper;
  */
 class remote_disk_access: public io_interface
 {
+	static atomic_integer num_ios;
 	const int max_disk_cached_reqs;
 	// They work as buffers for requests and are only used to
 	// send high-priority requests.
@@ -30,13 +31,13 @@ class remote_disk_access: public io_interface
 	aio_complete_queue *complete_queue;
 	slab_allocator *msg_allocator;
 
-	int num_completed_reqs;
+	atomic_integer num_completed_reqs;
+	atomic_integer num_issued_reqs;
 
 	remote_disk_access(int node_id, int max_reqs): io_interface(
 			node_id), max_disk_cached_reqs(max_reqs) {
 		cb = NULL;
 		block_mapper = NULL;
-		num_completed_reqs = 0;
 	}
 public:
 	remote_disk_access(const std::vector<disk_read_thread *> &remotes,
@@ -70,11 +71,15 @@ public:
 	virtual void access(io_request *requests, int num,
 			io_status *status = NULL);
 	virtual void notify_completion(io_request *reqs[], int num);
+	virtual int num_pending_ios() const {
+		return num_issued_reqs.get() - num_completed_reqs.get();
+	}
+	virtual int get_max_num_pending_ios() const;
 	virtual io_interface *clone() const;
 	void flush_requests(int max_cached);
 	virtual void flush_requests();
 	virtual void print_stat(int nthreads) {
-		printf("num completed reqs: %d\n", num_completed_reqs);
+		printf("num completed reqs: %d\n", num_completed_reqs.get());
 	}
 };
 

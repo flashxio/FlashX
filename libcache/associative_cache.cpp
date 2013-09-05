@@ -1021,8 +1021,8 @@ public:
 	virtual void flush_requests() {
 		underlying->flush_requests();
 	}
-	virtual void wait4complete() {
-		underlying->wait4complete();
+	virtual void wait4complete(int num) {
+		underlying->wait4complete(num);
 	}
 
 	virtual void cleanup() {

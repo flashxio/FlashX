@@ -66,11 +66,19 @@ class io_interface
 	int node_id;
 	// This is an index for locating this IO object in a global table.
 	int io_idx;
+	int max_num_pending_ios;
 	static atomic_integer io_counter;
+
+	pthread_mutex_t wait_mutex;
+	pthread_cond_t wait_cond;
+
 public:
 	io_interface(int node_id) {
 		this->node_id = node_id;
 		this->io_idx = io_counter.inc(1) - 1;
+		max_num_pending_ios = 0;
+		pthread_mutex_init(&wait_mutex, NULL);
+		pthread_cond_init(&wait_cond, NULL);
 	}
 
 	virtual ~io_interface() { }
@@ -127,13 +135,25 @@ public:
 	 * This method waits for at least the specified number of requests currently
 	 * being sent by the access method to complete.
 	 */
-	virtual void wait4complete() {
+	virtual void wait4complete(int num);
+	virtual void wakeup_waiting_thread() {
+		pthread_cond_signal(&wait_cond);
+	}
+	virtual int num_pending_ios() const {
 		throw unsupported_exception();
+	}
+	virtual int get_max_num_pending_ios() const {
+		throw unsupported_exception();
+	}
+	int get_remaining_io_slots() const {
+		return get_max_num_pending_ios() - num_pending_ios();
 	}
 
 	/**
 	 * This method gives the underlying layer an interface to notify
 	 * the current IO of the completed requests.
+	 * The method may be called by multiple threads, so it has to be made
+	 * thread-safe.
 	 * The requests should be issued by this IO.
 	 */
 	virtual void notify_completion(io_request *reqs[], int num) {

@@ -150,7 +150,8 @@ int thread_private::run()
 	while (gen->has_next()) {
 		if (use_aio) {
 			int i;
-			for (i = 0; i < NUM_REQS_BY_USER && gen->has_next(); ) {
+			int num_reqs_by_user = min(io->get_remaining_io_slots(), NUM_REQS_BY_USER);
+			for (i = 0; i < num_reqs_by_user && gen->has_next(); ) {
 				workload_t workload = gen->next();
 				int access_method = workload.read ? READ : WRITE;
 				off_t off = workload.off;
@@ -179,7 +180,7 @@ int thread_private::run()
 				}
 				else if (buf_type == SINGLE_SMALL_BUF) {
 again:
-					while (size > 0 && i < NUM_REQS_BY_USER) {
+					while (size > 0 && i < num_reqs_by_user) {
 						off_t next_off = ROUNDUP_PAGE(off + 1);
 						if (next_off > off + size)
 							next_off = off + size;
@@ -215,7 +216,7 @@ again:
 				}
 			}
 			io->access(reqs, i);
-			io->flush_requests();
+			io->wait4complete(io->get_max_num_pending_ios() / 10);
 			num_accesses += i;
 #ifdef STATISTICS
 			int curr = num_pending.inc(i);
@@ -293,6 +294,7 @@ again:
 			}
 		}
 	}
+	printf("thread %d has issued all requests\n", idx);
 	io->cleanup();
 	gettimeofday(&end_time, NULL);
 	return 0;

@@ -4,6 +4,18 @@
 #include "disk_read_thread.h"
 #include "file_mapper.h"
 
+const int DEFAULT_MAX_PENDING_IOS = 128;
+
+/**
+ * The maximal number of pending IOs is decided by the maximal pending IOs
+ * allowed on each I/O thread divided by the number of remote_disk_access.
+ * Thus, the performance isn't decided by the number of remote_disk_access.
+ */
+int remote_disk_access::get_max_num_pending_ios() const
+{
+	return DEFAULT_MAX_PENDING_IOS * io_threads.size() / num_ios.get();
+}
+
 void remote_disk_access::notify_completion(io_request *reqs[], int num)
 {
 	// There are a few cases for the incoming requests.
@@ -15,6 +27,7 @@ void remote_disk_access::notify_completion(io_request *reqs[], int num)
 	io_interface *upper_io = NULL;
 	int num_from_upper = 0;
 	int num_from_app = 0;
+	int num_part_reqs = 0;
 	std::vector<io_request *> completes;
 	for (int i = 0; i < num; i++) {
 		// The requests issued by the upper layer IO.
@@ -37,8 +50,10 @@ void remote_disk_access::notify_completion(io_request *reqs[], int num)
 		orig->inc_complete_count();
 		if (orig->complete_size(req->get_size()))
 			completes.push_back(orig);
-		else
+		else {
 			orig->dec_complete_count();
+			num_part_reqs++;
+		}
 	}
 	if (num_from_upper > 0)
 		upper_io->notify_completion(from_upper, num_from_upper);
@@ -61,12 +76,16 @@ void remote_disk_access::notify_completion(io_request *reqs[], int num)
 		// Now we can delete it.
 		delete orig;
 	}
+
+	num_completed_reqs.inc(num - num_part_reqs);
+	wakeup_waiting_thread();
 }
 
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
 		aio_complete_thread *complete_thread, file_mapper *mapper, int node_id,
 		int max_reqs): io_interface(node_id), max_disk_cached_reqs(max_reqs)
 {
+	num_ios.inc(1);
 	this->io_threads = remotes;
 	if (complete_thread == NULL)
 		this->complete_queue = NULL;
@@ -86,7 +105,6 @@ remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &re
 	}
 	cb = NULL;
 	this->block_mapper = mapper;
-	num_completed_reqs = 0;
 }
 
 remote_disk_access::~remote_disk_access()
@@ -101,6 +119,7 @@ remote_disk_access::~remote_disk_access()
 
 io_interface *remote_disk_access::clone() const
 {
+	num_ios.inc(1);
 	remote_disk_access *copy = new remote_disk_access(this->get_node_id(),
 			this->max_disk_cached_reqs);
 	copy->io_threads = this->io_threads;
@@ -122,6 +141,7 @@ io_interface *remote_disk_access::clone() const
 
 void remote_disk_access::cleanup()
 {
+	num_ios.dec(1);
 	for (unsigned i = 0; i < senders.size(); i++) {
 		senders[i]->flush_all();
 		low_prio_senders[i]->flush_all();
@@ -157,6 +177,7 @@ void remote_disk_access::cleanup()
 void remote_disk_access::access(io_request *requests, int num,
 		io_status *status)
 {
+	num_issued_reqs.inc(num);
 	// It marks whether a low-priority sender gets a request.
 	bool has_msgs[low_prio_senders.size()];
 	memset(has_msgs, 0, sizeof(has_msgs[0]) * low_prio_senders.size());
@@ -254,6 +275,7 @@ void remote_disk_access::access(io_request *requests, int num,
 		if (has_msgs[i])
 			senders[i]->get_queue()->wakeup();
 	}
+
 }
 
 void remote_disk_access::flush_requests()
@@ -264,7 +286,7 @@ void remote_disk_access::flush_requests()
 void remote_disk_access::flush_requests(int max_cached)
 {
 	if (complete_queue)
-		num_completed_reqs += complete_queue->process(1000, false);
+		complete_queue->process(1000, false);
 	int num_high_prio_remaining = 0;
 	int num_low_prio_remaining = 0;
 	// Now let's flush requests to the queues, but we first try to
@@ -319,3 +341,5 @@ int remote_disk_access::get_file_id() const
 {
 	return block_mapper->get_file_id();
 }
+
+atomic_integer remote_disk_access::num_ios;

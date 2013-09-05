@@ -21,6 +21,7 @@ const int IO_MSG_SIZE = AIO_DEPTH_PER_FILE;
  */
 const int IO_QUEUE_SIZE = 10;
 const int MAX_FETCH_REQS = 3;
+const int AIO_COMPLETE_BUF_SIZE = 8;
 
 const int MAX_DISK_CACHED_REQS = 1000;
 
