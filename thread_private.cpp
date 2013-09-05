@@ -184,10 +184,7 @@ again:
 						if (next_off > off + size)
 							next_off = off + size;
 						char *p = buf->next_entry(next_off - off);
-						if (p == NULL) {
-							fprintf(stderr, "there is no empty buffer left\n");
-							break;
-						}
+						assert(p);
 						if (access_method == WRITE && verify_read_content)
 							create_write_data(p, next_off - off, off);
 						reqs[i].init(p, off, next_off - off, access_method,
@@ -208,10 +205,7 @@ again:
 				}
 				else {
 					char *p = buf->next_entry(size);
-					if (p == NULL) {
-						fprintf(stderr, "allocate LARGE: there is no empty buffer left\n");
-						break;
-					}
+					assert(p);
 					if (access_method == WRITE && verify_read_content)
 						create_write_data(p, size, off);
 					reqs[i++].init(p, off, size, access_method, io, node_id);
