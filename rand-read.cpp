@@ -30,7 +30,6 @@
 #include "thread_private.h"
 #include "RAID_config.h"
 #include "io_interface.h"
-#include "cache.h"
 #include "cache_config.h"
 
 //#define USE_PROCESS
@@ -334,10 +333,8 @@ int main(int argc, char *argv[])
 				node_id_array);
 	else if (access_option == PART_GLOBAL_ACCESS) {
 		assert(num_nodes == 4);
-		cache_conf = new test_cache_config(cache_size, cache_type,
+		cache_conf = new even_cache_config(cache_size, cache_type,
 				node_id_array);
-//		cache_conf = new file_map_cache_config(cache_size, cache_type,
-//				node_id_array, mapper, 2);
 	}
 
 	init_io_system(raid_conf, node_id_array);
