@@ -4,7 +4,7 @@
 #include "parameters.h"
 #include "exception.h"
 
-#define NUM_PAGES (40960 * nthreads)
+#define NUM_PAGES (40960 * 4 * nthreads)
 
 bool align_req = false;
 int align_size = PAGE_SIZE;
