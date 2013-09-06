@@ -997,13 +997,74 @@ public:
 	}
 };
 
+class flush_io: public io_interface
+{
+	io_interface *underlying;
+public:
+	flush_io(io_interface *underlying): io_interface(
+			underlying->get_node_id()) {
+		this->underlying = underlying;
+	}
+
+	virtual int get_file_id() const {
+		return underlying->get_file_id();
+	}
+
+	virtual void notify_completion(io_request *reqs[], int num);
+	virtual void access(io_request *requests, int num, io_status *status = NULL) {
+		underlying->access(requests, num, status);
+	}
+	virtual void flush_requests() {
+		underlying->flush_requests();
+	}
+	virtual void wait4complete() {
+		underlying->wait4complete();
+	}
+
+	virtual void cleanup() {
+		underlying->cleanup();
+	}
+};
+
+void flush_io::notify_completion(io_request *reqs[], int num)
+{
+	for (int i = 0; i < num; i++) {
+		if (reqs[i]->get_num_bufs() == 1) {
+			thread_safe_page *p = (thread_safe_page *) reqs[i]->get_page(0);
+			p->lock();
+			assert(p->is_dirty());
+			p->set_dirty(false);
+			p->set_io_pending(false);
+			assert(p->reset_reqs() == NULL);
+			p->unlock();
+			p->dec_ref();
+		}
+		else {
+			off_t off = reqs[i]->get_offset();
+			for (int j = 0; j < reqs[i]->get_num_bufs(); j++) {
+				thread_safe_page *p = reqs[i]->get_page(j);
+				assert(p);
+				p->lock();
+				assert(p->is_dirty());
+				p->set_dirty(false);
+				p->set_io_pending(false);
+				assert(p->reset_reqs() == NULL);
+				p->unlock();
+				p->dec_ref();
+				assert(p->get_ref() >= 0);
+				off += PAGE_SIZE;
+			}
+		}
+	}
+}
+
 class associative_flush_thread: public flush_thread
 {
 	// For the case of NUMA cache, cache and local_cache are different.
 	page_cache *cache;
 	associative_cache *local_cache;
 
-	io_interface *io;
+	flush_io *io;
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
 	select_dirty_pages_policy *policy;
 public:
@@ -1015,45 +1076,14 @@ public:
 		if (this->cache == NULL)
 			this->cache = local_cache;
 
-		this->io = io;
+		this->io = new flush_io(io);
 		policy = new eviction_select_dirty_pages_policy();
 	}
 
 	void run();
-	void request_callback(io_request &req);
 	void dirty_pages(thread_safe_page *pages[], int num);
 	int flush_cell(hash_cell *cell, io_request *req_array, int req_array_size);
 };
-
-void associative_flush_thread::request_callback(io_request &req)
-{
-	if (req.get_num_bufs() == 1) {
-		thread_safe_page *p = (thread_safe_page *) req.get_page(0);
-		p->lock();
-		assert(p->is_dirty());
-		p->set_dirty(false);
-		p->set_io_pending(false);
-		assert(p->reset_reqs() == NULL);
-		p->unlock();
-		p->dec_ref();
-	}
-	else {
-		off_t off = req.get_offset();
-		for (int i = 0; i < req.get_num_bufs(); i++) {
-			thread_safe_page *p = req.get_page(i);
-			assert(p);
-			p->lock();
-			assert(p->is_dirty());
-			p->set_dirty(false);
-			p->set_io_pending(false);
-			assert(p->reset_reqs() == NULL);
-			p->unlock();
-			p->dec_ref();
-			assert(p->get_ref() >= 0);
-			off += PAGE_SIZE;
-		}
-	}
-}
 
 void merge_pages2req(io_request &req, page_cache *cache);
 
@@ -1156,6 +1186,7 @@ void associative_flush_thread::run()
 
 		io->access(req_array, num_init_reqs);
 	}
+	io->flush_requests();
 }
 
 flush_thread *associative_cache::create_flush_thread(io_interface *io,
@@ -1175,12 +1206,6 @@ void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num)
 {
 	if (_flush_thread)
 		_flush_thread->dirty_pages(pages, num);
-}
-
-void associative_cache::flush_callback(io_request &req)
-{
-	if (_flush_thread)
-		_flush_thread->request_callback(req);
 }
 
 void associative_cache::init(io_interface *underlying)

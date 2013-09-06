@@ -12,7 +12,6 @@ public:
 	flush_thread(int node_id): thread(std::string("flush_thread-")
 			+ itoa(node_id), node_id) {
 	}
-	virtual void request_callback(io_request &req) = 0;
 	virtual void dirty_pages(thread_safe_page *pages[], int num) = 0;
 };
 
