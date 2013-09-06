@@ -144,6 +144,8 @@ public:
 	void finalize_partial_request(io_request &partial, io_request *orig);
 	void finalize_request(io_request &req);
 
+	void write_dirty_page(thread_safe_page *p, off_t off, io_request *orig);
+
 private:
 	// This method can only be called in a single thread.
 	void wait4req(io_request *req) {

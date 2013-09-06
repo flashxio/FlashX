@@ -794,21 +794,21 @@ void merge_pages2req(io_request &req, page_cache *cache)
  * Write the dirty page. If possible, we merge it with pages adjacent to
  * it and write a larger request.
  */
-void write_dirty_page(thread_safe_page *p, off_t off, io_interface *io,
-		io_request *orig, page_cache *cache)
+void global_cached_io::write_dirty_page(thread_safe_page *p, off_t off,
+		io_request *orig)
 {
 	p->lock();
 	assert(!p->is_io_pending());
 	p->set_io_pending(true);
-	io_request req(off, WRITE, io, p->get_node_id(), orig, p);
+	io_request req(off, WRITE, this, p->get_node_id(), orig, p);
 	assert(p->get_ref() > 0);
 	req.add_page(p);
 	p->unlock();
 
-	merge_pages2req(req, cache);
+	merge_pages2req(req, get_global_cache());
 
 	io_status status;
-	io->access(&req, 1, &status);
+	underlying->access(&req, 1, &status);
 	if (status == IO_FAIL) {
 		perror("write");
 		abort();
@@ -965,7 +965,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					 * offset, and only this thread can write back the old
 					 * dirty page.
 					 */
-					write_dirty_page(p, old_off, this, orig1, get_global_cache());
+					write_dirty_page(p, old_off, orig1);
 					continue;
 				}
 				else {
