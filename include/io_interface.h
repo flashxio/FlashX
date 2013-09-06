@@ -121,12 +121,14 @@ public:
 	 * the underlying devices.
 	 */
 	virtual void flush_requests() {
+		throw unsupported_exception();
 	}
 	/**
 	 * This method waits for at least the specified number of requests currently
 	 * being sent by the access method to complete.
 	 */
 	virtual void wait4complete() {
+		throw unsupported_exception();
 	}
 
 	/**
