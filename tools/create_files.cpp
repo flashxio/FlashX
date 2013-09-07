@@ -12,8 +12,8 @@
 
 #include <vector>
 
-#include "../thread.h"
-#include "../file_mapper.h"
+#include "thread.h"
+#include "file_mapper.h"
 
 class write_thread: public thread
 {
@@ -33,7 +33,7 @@ public:
 		fd = open(file.name.c_str(), O_DIRECT | O_RDWR | O_CREAT, 00644);
 		if (fd < 0) {
 			perror("open");
-			exit(1);
+			::exit(1);
 		}
 	}
 

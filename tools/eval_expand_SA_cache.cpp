@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
 		new_cache_size = atoi(argv[3]) * 4096;
 	assert(new_cache_size >= cache_size);
 
-	associative_cache *global_cache = new associative_cache(cache_size,
+	associative_cache *global_cache = associative_cache::create(cache_size,
 			MAX_CACHE_SIZE, 0, 1, new_cache_size != cache_size);
 	global_cache->init(NULL);
 
