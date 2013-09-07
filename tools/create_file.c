@@ -16,7 +16,7 @@
  * which is 8 bytes in 64-bit architecture.
  */
 
-char buf[1024 * 1024]__attribute__((aligned(4096)));
+char buf[1024 * 1024 * 4]__attribute__((aligned(4096)));
 #define MAX_NODES 32
 
 int main(int argc, char *argv[])
