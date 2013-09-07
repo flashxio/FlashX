@@ -9,7 +9,6 @@
 #include "concurrency.h"
 #include "my_hashtable.h"
 #include "SA_hash_table.h"
-#include "SA_hash_table.cpp"
 #include "gclock.h"
 #include "parameters.h"
 
