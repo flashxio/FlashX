@@ -328,7 +328,11 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 		// We need to clear flags here.
 		ret->set_data_ready(false);
 		assert(!ret->is_io_pending());
-		ret->set_prepare_writeback(false);
+		// We don't clear the prepare writeback flag because this flag
+		// indicates that the page is in the queue for writing back, so
+		// the flusher doesn't need to add another request to flush the
+		// page. The flag will be cleared after it is removed from the queue.
+
 		if (ret->is_dirty() && !ret->is_old_dirty()) {
 			ret->set_dirty(false);
 			ret->set_old_dirty(true);
