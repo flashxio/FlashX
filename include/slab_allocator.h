@@ -170,7 +170,8 @@ public:
 		if (local_buf_refs->is_empty()) {
 			char *objs[LOCAL_BUF_SIZE];
 			int num = alloc(objs, LOCAL_BUF_SIZE);
-			assert(num > 0);
+			if (num == 0)
+				return NULL;
 			int num_added = local_buf_refs->add(objs, num);
 			assert(num_added == num);
 		}

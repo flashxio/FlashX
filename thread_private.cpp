@@ -184,7 +184,8 @@ again:
 						if (next_off > off + size)
 							next_off = off + size;
 						char *p = buf->next_entry(next_off - off);
-						assert(p);
+						if (p == NULL)
+							break;
 						if (access_method == WRITE && verify_read_content)
 							create_write_data(p, next_off - off, off);
 						reqs[i].init(p, off, next_off - off, access_method,
@@ -195,6 +196,7 @@ again:
 					}
 					if (size > 0) {
 						io->access(reqs, i);
+						io->flush_requests();
 #ifdef STATISTICS
 						num_pending.inc(i);
 #endif
@@ -205,7 +207,8 @@ again:
 				}
 				else {
 					char *p = buf->next_entry(size);
-					assert(p);
+					if (p == NULL)
+						break;
 					if (access_method == WRITE && verify_read_content)
 						create_write_data(p, size, off);
 					reqs[i++].init(p, off, size, access_method, io, node_id);
