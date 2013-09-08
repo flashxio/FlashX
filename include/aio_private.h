@@ -50,7 +50,6 @@ class async_io: public io_interface
 
 	int num_iowait;
 	int num_completed_reqs;
-	int num_local_alloc;
 
 	// file id <-> buffered io
 	std::tr1::unordered_map<int, buffered_io *> open_files;
@@ -110,10 +109,6 @@ public:
 
 	int get_num_completed_reqs() const {
 		return num_completed_reqs;
-	}
-
-	int get_num_local_alloc() const {
-		return num_local_alloc;
 	}
 
 	virtual void flush_requests();

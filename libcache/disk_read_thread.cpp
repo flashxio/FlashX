@@ -24,7 +24,7 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	}
 }
 
-int process_low_prio_msg(message<io_request> &low_prio_msg, async_io *aio)
+int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 {
 	int num_accesses = 0;
 	int io_slots = aio->num_available_IO_slots();
@@ -43,8 +43,10 @@ int process_low_prio_msg(message<io_request> &low_prio_msg, async_io *aio)
 		thread_safe_page *p = (thread_safe_page *) cache->search(
 				req.get_offset());
 		// The page has been evicted.
-		if (p == NULL)
+		if (p == NULL) {
+			num_ignored_low_prio_accesses++;
 			continue;
+		}
 		// If the original page has been evicted and the new page for
 		// the offset has been added to the cache.
 		if (p != req.get_page(0)) {
@@ -53,6 +55,7 @@ int process_low_prio_msg(message<io_request> &low_prio_msg, async_io *aio)
 			// The original page has been evicted, we should clear
 			// the prepare-writeback flag on it.
 			req.get_page(0)->set_prepare_writeback(false);
+			num_ignored_low_prio_accesses++;
 			continue;
 		}
 		// If we are here, it means the page is the one we are looking for.
@@ -71,6 +74,7 @@ int process_low_prio_msg(message<io_request> &low_prio_msg, async_io *aio)
 		if (p->is_io_pending() || !p->is_dirty()) {
 			p->unlock();
 			p->dec_ref();
+			num_ignored_low_prio_accesses++;
 			continue;
 		}
 		assert(p == req.get_page(0));
@@ -114,7 +118,7 @@ void disk_read_thread::run() {
 					int num = low_prio_queue.fetch(&low_prio_msg, 1);
 					assert(num == 1);
 				}
-				int ret = process_low_prio_msg(low_prio_msg, aio);
+				int ret = process_low_prio_msg(low_prio_msg);
 				num_accesses += ret;
 				num_low_prio_accesses += ret;
 			}

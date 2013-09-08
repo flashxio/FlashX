@@ -29,8 +29,11 @@ class disk_read_thread
 	int node_id;
 	int num_accesses;
 	int num_low_prio_accesses;
+	int num_ignored_low_prio_accesses;
 
 	atomic_integer flush_counter;
+
+	int process_low_prio_msg(message<io_request> &low_prio_msg);
 
 public:
 	disk_read_thread(const logical_file_partition &partition,
@@ -57,16 +60,16 @@ public:
 		return num_low_prio_accesses;
 	}
 
+	int get_num_ignored_low_prio_accesses() const {
+		return num_ignored_low_prio_accesses;
+	}
+
 	int get_num_iowait() const {
 		return aio->get_num_iowait();
 	}
 
 	int get_num_completed_reqs() const {
 		return aio->get_num_completed_reqs();
-	}
-
-	int get_num_local_alloc() const {
-		return aio->get_num_local_alloc();
 	}
 
 	const std::string get_file_name() const {

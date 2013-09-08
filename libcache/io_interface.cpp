@@ -483,11 +483,11 @@ void print_io_thread_stat()
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
 		disk_read_thread *t = global_data.read_threads[i];
 		if (t)
-			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits, complete %d reqs and %d low-prio reqs, process %d remote read requests\n",
+			printf("queue on file %s wait for requests for %d times, is full for %d times, and %d accesses and %d io waits, complete %d reqs and %d low-prio reqs, ignore %d low-prio reqs\n",
 					t->get_file_name().c_str(), t->get_queue()->get_num_empty(),
 					t->get_queue()->get_num_full(), t->get_num_accesses(),
 					t->get_num_iowait(), t->get_num_completed_reqs(),
-					t->get_num_low_prio_accesses(), t->get_num_local_alloc());
+					t->get_num_low_prio_accesses(), t->get_num_ignored_low_prio_accesses());
 	}
 }
 

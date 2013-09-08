@@ -92,7 +92,6 @@ async_io::async_io(const logical_file_partition &partition,
 					it->first, fifo_queue<thread_callback_s *>::create(node_id, AIO_DEPTH)));
 	}
 	num_completed_reqs = 0;
-	num_local_alloc = 0;
 	if (partition.is_active()) {
 		int file_id = partition.get_file_id();
 		buffered_io *io = new buffered_io(partition, node_id,
@@ -236,6 +235,7 @@ void async_io::access(io_request *requests, int num, io_status *status)
 
 void async_io::return_cb(thread_callback_s *tcbs[], int num)
 {
+	num_completed_reqs += num;
 	thread_callback_s *local_tcbs[num];
 	// If there is a dedicated thread to process the completed requests,
 	// send the requests to it.
@@ -314,7 +314,6 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 		thread_callback_s *tcb = tcbs[i];
 		cb_allocator->free(tcb);
 	}
-	num_completed_reqs += num;
 }
 
 int async_io::open_file(const logical_file_partition &partition)
