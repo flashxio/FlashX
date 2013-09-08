@@ -10,11 +10,17 @@
 
 const int AIO_DEPTH_PER_FILE = 32;
 
-// The IO message size should be AIO depth multiplied by the size
-// of an IO request.
-const int IO_MSG_SIZE = AIO_DEPTH_PER_FILE * 32;
+/**
+ * The size of an I/O message sent to an I/O thread.
+ * It is in the number of I/O requests.
+ */
+const int IO_MSG_SIZE = AIO_DEPTH_PER_FILE;
+/**
+ * The size of a high-priority I/O queue.
+ * It's in the number of I/O messages.
+ */
 const int IO_QUEUE_SIZE = 10;
-const int MAX_FETCH_REQS = 10;
+const int MAX_FETCH_REQS = 3;
 
 const int MAX_DISK_CACHED_REQS = 1000;
 

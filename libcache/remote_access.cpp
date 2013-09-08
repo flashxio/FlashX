@@ -73,8 +73,8 @@ remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &re
 	else
 		this->complete_queue = complete_thread->get_queue();
 	// TODO I need to deallocate it later.
-	msg_allocator = new slab_allocator(IO_MSG_SIZE, IO_MSG_SIZE * 1024,
-			INT_MAX, node_id);
+	msg_allocator = new slab_allocator(IO_MSG_SIZE * sizeof(io_request),
+			IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, node_id);
 	senders.resize(remotes.size());
 	low_prio_senders.resize(remotes.size());
 	// create a msg sender for each disk read thread.

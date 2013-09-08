@@ -99,7 +99,7 @@ void disk_read_thread::run() {
 	message<io_request> msg_buffer[LOCAL_BUF_SIZE];
 	message<io_request> low_prio_msg;
 
-	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE / sizeof(io_request);
+	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	io_request local_reqs[LOCAL_REQ_BUF_SIZE];
 	while (true) {
 		int num;
