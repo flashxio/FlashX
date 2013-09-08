@@ -119,6 +119,7 @@ message<T>::message(slab_allocator *alloc, bool accept_inline)
 	init();
 	this->alloc = alloc;
 	this->buf = alloc->alloc();
+	assert(this->buf);
 	this->accept_inline = accept_inline;
 }
 
