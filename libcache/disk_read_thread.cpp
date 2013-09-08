@@ -24,6 +24,55 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	}
 }
 
+int process_low_prio_msg(message<io_request> &low_prio_msg, async_io *aio)
+{
+	int num_accesses = 0;
+	int io_slots = aio->num_available_IO_slots();
+
+	io_request req;
+	while (low_prio_msg.has_next() && num_accesses < io_slots) {
+		// We copy the request to the local stack.
+		low_prio_msg.get_next(req);
+		// The request doesn't own the page, so the reference count
+		// isn't increased while in the queue. Now we try to write
+		// it back, we need to increase its reference. The only
+		// safe way to do it is to use the search method of
+		// the page cache.
+		page_cache *cache = (page_cache *) req.get_priv();
+		thread_safe_page *p = (thread_safe_page *) cache->search(
+				req.get_offset());
+		if (p == NULL)
+			continue;
+		// The object of page always exists, so we can always
+		// lock a page.
+		p->lock();
+		// The page may have been written back by the applications.
+		// But in either way, we need to reset the PREPARE_WRITEBACK
+		// flag.
+		p->set_prepare_writeback(false);
+		// If the page is being written back or has been written back,
+		// we can skip the request.
+		if (p->is_io_pending() || !p->is_dirty()) {
+			p->unlock();
+			p->dec_ref();
+			continue;
+		}
+		p->set_io_pending(true);
+		p->unlock();
+		num_accesses++;
+		// The current private data points to the page cache.
+		// Now the request owns the page, it's safe to point to
+		// the page directly.
+		req.set_priv(p);
+		// This should block the thread.
+		aio->access(&req, 1);
+	}
+	if (low_prio_msg.is_empty())
+		low_prio_msg.clear();
+
+	return num_accesses;
+}
+
 void disk_read_thread::run() {
 	bind2node_id(node_id);
 #ifdef DEBUG
@@ -31,6 +80,7 @@ void disk_read_thread::run() {
 #endif
 	aio->init();
 	message<io_request> msg_buffer[LOCAL_BUF_SIZE];
+	message<io_request> low_prio_msg;
 
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE / sizeof(io_request);
 	io_request local_reqs[LOCAL_REQ_BUF_SIZE];
@@ -43,51 +93,13 @@ void disk_read_thread::run() {
 			// but they should block the thread.
 			if (!low_prio_queue.is_empty()
 					&& aio->num_available_IO_slots() > 0) {
-				int io_slots = aio->num_available_IO_slots();
-				assert(io_slots <= AIO_DEPTH_PER_FILE);
-				int num = low_prio_queue.fetch(msg_buffer, io_slots);
-				for (int i = 0; i < num; i++) {
-					io_request req;
-					while (msg_buffer[i].has_next()) {
-						// We copy the request to the local stack.
-						msg_buffer[i].get_next(req);
-						// The request doesn't own the page, so the reference count
-						// isn't increased while in the queue. Now we try to write
-						// it back, we need to increase its reference. The only
-						// safe way to do it is to use the search method of
-						// the page cache.
-						page_cache *cache = (page_cache *) req.get_priv();
-						thread_safe_page *p = (thread_safe_page *) cache->search(
-								req.get_offset());
-						if (p == NULL)
-							continue;
-						// The object of page always exists, so we can always
-						// lock a page.
-						p->lock();
-						// The page may have been written back by the applications.
-						// But in either way, we need to reset the PREPARE_WRITEBACK
-						// flag.
-						p->set_prepare_writeback(false);
-						// If the page is being written back or has been written back,
-						// we can skip the request.
-						if (p->is_io_pending() || !p->is_dirty()) {
-							p->unlock();
-							p->dec_ref();
-							continue;
-						}
-						p->set_io_pending(true);
-						p->unlock();
-						num_accesses++;
-						// The current private data points to the page cache.
-						// Now the request owns the page, it's safe to point to
-						// the page directly.
-						req.set_priv(p);
-						// This should block the thread.
-						aio->access(&req, 1);
-						num_low_prio_accesses++;
-					}
-					msg_buffer[i].clear();
+				if (low_prio_msg.is_empty()) {
+					int num = low_prio_queue.fetch(&low_prio_msg, 1);
+					assert(num == 1);
 				}
+				int ret = process_low_prio_msg(low_prio_msg, aio);
+				num_accesses += ret;
+				num_low_prio_accesses += ret;
 			}
 			/* 
 			 * this is the only thread that fetch requests from the queue.

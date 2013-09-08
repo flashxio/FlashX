@@ -1102,6 +1102,7 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 
 		assert(num_init_reqs < req_array_size);
 		// Here we flush dirty pages with normal requests.
+#if 0
 		if (!p->is_io_pending() && !p->is_prepare_writeback()
 				// The page may have been cleaned.
 				&& p->is_dirty()) {
@@ -1124,9 +1125,9 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 			p->unlock();
 			p->dec_ref();
 		}
+#endif
 
 		// The code blow flush dirty pages with low-priority requests.
-#if 0
 		if (!p->is_io_pending() && !p->is_prepare_writeback()
 				// The page may have been cleaned.
 				&& p->is_dirty()) {
@@ -1136,7 +1137,7 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 				io_request tmp(true);
 				req_array[num_init_reqs] = tmp;
 			}
-			req_array[num_init_reqs].init(p->get_offset(), io, WRITE,
+			req_array[num_init_reqs].init(p->get_offset(), WRITE, io,
 					get_node_id(), NULL, cache, NULL);
 			req_array[num_init_reqs].add_page(p);
 			req_array[num_init_reqs].set_high_prio(false);
@@ -1148,7 +1149,6 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 		// means that the page can be evicted.
 		p->unlock();
 		p->dec_ref();
-#endif
 	}
 	return num_init_reqs;
 }
