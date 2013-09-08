@@ -33,6 +33,7 @@ int process_low_prio_msg(message<io_request> &low_prio_msg, async_io *aio)
 	while (low_prio_msg.has_next() && num_accesses < io_slots) {
 		// We copy the request to the local stack.
 		low_prio_msg.get_next(req);
+		assert(req.get_num_bufs() == 1);
 		// The request doesn't own the page, so the reference count
 		// isn't increased while in the queue. Now we try to write
 		// it back, we need to increase its reference. The only
@@ -41,8 +42,23 @@ int process_low_prio_msg(message<io_request> &low_prio_msg, async_io *aio)
 		page_cache *cache = (page_cache *) req.get_priv();
 		thread_safe_page *p = (thread_safe_page *) cache->search(
 				req.get_offset());
+		// The page has been evicted.
 		if (p == NULL)
 			continue;
+		// If the original page has been evicted and the new page for
+		// the offset has been added to the cache.
+		if (p != req.get_page(0)) {
+			p->unlock();
+			p->dec_ref();
+			// The original page has been evicted, we should clear
+			// the prepare-writeback flag on it.
+			req.get_page(0)->set_prepare_writeback(false);
+			continue;
+		}
+		// If we are here, it means the page is the one we are looking for.
+		// We can be certain that the page won't be evicted because we have
+		// a reference on it.
+
 		// The object of page always exists, so we can always
 		// lock a page.
 		p->lock();
@@ -57,6 +73,7 @@ int process_low_prio_msg(message<io_request> &low_prio_msg, async_io *aio)
 			p->dec_ref();
 			continue;
 		}
+		assert(p == req.get_page(0));
 		p->set_io_pending(true);
 		p->unlock();
 		num_accesses++;
