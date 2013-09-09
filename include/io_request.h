@@ -126,9 +126,10 @@ class io_request
 		USER_COMPUTE,
 	};
 
-	off_t offset: 40;
-	static const int MAX_BUF_SIZE = (1 << 24) - 1;
-	unsigned long buf_size: 24;
+	static const off_t MAX_FILE_SIZE = (1L << 42) - 1;
+	off_t offset: 42;
+	static const int MAX_BUF_SIZE = (1 << 22) - 1;
+	unsigned long buf_size: 22;
 
 	// These two flags decide how the payload is interpreted, so they are
 	// initialized when the object is created and can't be changed manually.

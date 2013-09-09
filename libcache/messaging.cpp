@@ -24,6 +24,7 @@ void io_buf::init(thread_safe_page *p)
 void io_request::init(char *buf, off_t off, ssize_t size,
 		int access_method, io_interface *io, int node_id, int sync)
 {
+	assert(off <= MAX_FILE_SIZE);
 	this->offset = off;
 	this->io_addr = (long) io;
 	if (is_extended_req()) {
