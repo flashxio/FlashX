@@ -139,7 +139,7 @@ void disk_read_thread::run() {
 		}
 
 		if (num == 0)
-			num = queue.fetch(msg_buffer, AIO_DEPTH_PER_FILE, true, true);
+			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE, true, true);
 		int num_flushes = flush_counter.get();
 		if (num_flushes > 0) {
 			// This thread is the only one that decreases the counter.
