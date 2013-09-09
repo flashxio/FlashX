@@ -372,18 +372,20 @@ class rand_workload: public workload_gen
 	long start;
 	long range;
 	long num;
+	long tot_accesses;
 	off_t *offsets;
 public:
-	rand_workload(long start, long end, int stride) {
+	rand_workload(long start, long end, int stride, long tot_accesses) {
 		this->start = start;
 		this->range = end - start;
+		this->tot_accesses = tot_accesses;
 		num = 0;
-		offsets = (off_t *) valloc(sizeof(*offsets) * range);
+		offsets = (off_t *) valloc(sizeof(*offsets) * tot_accesses);
 #ifdef DEBUG
 		printf("use a different random sequence\n");
 #endif
 		srandom(time(NULL));
-		for (int i = 0; i < range; i++) {
+		for (int i = 0; i < tot_accesses; i++) {
 			offsets[i] = (start + random() % range) * stride;
 		}
 	}
@@ -397,7 +399,7 @@ public:
 	}
 
 	bool has_next() {
-		return num < range;
+		return num < tot_accesses;
 	}
 };
 

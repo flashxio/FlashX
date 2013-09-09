@@ -148,6 +148,8 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
+const long TEST_DATA_SIZE = 15L * 1024 * 1024 * 4096;
+
 int main(int argc, char *argv[])
 {
 	long cache_size = 512 * 1024 * 1024;
@@ -369,7 +371,8 @@ int main(int argc, char *argv[])
 					gen = new seq_workload(start, end, entry_size);
 					break;
 				case RAND_OFFSET:
-					gen = new rand_workload(start, end, entry_size);
+					gen = new rand_workload(start, end, entry_size,
+							end - start);
 					break;
 				case RAND_SEQ_OFFSET:
 					gen = new rand_seq_workload(start, end, entry_size,
