@@ -42,6 +42,9 @@ class global_cached_io: public io_interface
 	int cache_hits;
 	int num_fast_process;
 
+	atomic_integer num_completed_reqs;
+	atomic_integer num_issued_reqs;
+
 	/**
 	 * It's another version of read() and write(), but it's responsible
 	 * for deleting `req'.
@@ -140,6 +143,10 @@ public:
 	}
 
 	virtual void notify_completion(io_request *reqs[], int num);
+	virtual int num_pending_ios() const {
+		return num_issued_reqs.get() - num_completed_reqs.get();
+	}
+	virtual int get_max_num_pending_ios() const;
 
 	void finalize_partial_request(io_request &partial, io_request *orig);
 	void finalize_request(io_request &req);

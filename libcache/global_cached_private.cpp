@@ -7,6 +7,7 @@
 
 // TODO I assume the block size of the RAID array is 16 pages.
 const int RAID_BLOCK_SIZE = 16 * PAGE_SIZE;
+const int DEFAULT_MAX_PENDING_IOS = 2 * 128;
 
 #define ENABLE_LARGE_WRITE
 //#define TEST_HIT_RATE
@@ -193,8 +194,11 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		global_cached_io *io = (global_cached_io *) orig->get_io();
 		if (orig->is_sync())
 			io->wakeup_on_req(orig, IO_OK);
-		else
+		else {
+			num_completed_reqs.inc(1);
+			wakeup_waiting_thread();
 			::notify_completion(this, orig);
+		}
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
@@ -220,8 +224,11 @@ void global_cached_io::finalize_request(io_request &req)
 			global_cached_io *io = (global_cached_io *) original->get_io();
 			if (original->is_sync())
 				io->wakeup_on_req(original, IO_OK);
-			else
+			else {
+				num_completed_reqs.inc(1);
+				wakeup_waiting_thread();
 				::notify_completion(this, original);
+			}
 			original->dec_complete_count();
 			original->wait4unref();
 			req_allocator->free(original);
@@ -234,8 +241,11 @@ void global_cached_io::finalize_request(io_request &req)
 		global_cached_io *io = (global_cached_io *) req.get_io();
 		if (req.is_sync())
 			io->wakeup_on_req(&req, IO_OK);
-		else
+		else {
+			num_completed_reqs.inc(1);
+			wakeup_waiting_thread();
 			::notify_completion(this, &req);
+		}
 	}
 }
 
@@ -590,8 +600,11 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		assert(this == io);
 		if (orig->is_sync())
 			io->wakeup_on_req(orig, IO_OK);
-		else
+		else {
+			num_completed_reqs.inc(1);
+			wakeup_waiting_thread();
 			::notify_completion(this, orig);
+		}
 	}
 	return ret;
 }
@@ -832,11 +845,14 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 	}
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
+	num_completed_reqs.inc(num_async_reqs);
+	wakeup_waiting_thread();
 	::notify_completion(this, async_reqs, num_async_reqs);
 }
 
 void global_cached_io::access(io_request *requests, int num, io_status *status)
 {
+	num_issued_reqs.inc(num);
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();
 	}
@@ -1091,4 +1107,9 @@ int global_cached_io::preload(off_t start, long size) {
 		p->dec_ref();
 	}
 	return 0;
+}
+
+int global_cached_io::get_max_num_pending_ios() const
+{
+	return DEFAULT_MAX_PENDING_IOS;
 }
