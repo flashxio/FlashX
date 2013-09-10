@@ -102,6 +102,9 @@ public:
 	void wait4complete(int num) {
 		io_wait(ctx, NULL, num);
 	}
+	virtual int get_max_num_pending_ios() const {
+		return AIO_DEPTH;
+	}
 
 	int get_num_iowait() const {
 		return num_iowait;
