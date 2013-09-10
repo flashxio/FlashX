@@ -12,6 +12,7 @@
 #include "gclock.h"
 #include "parameters.h"
 
+#ifdef USE_NBDS
 /* the header files for the lock-free hashtable. */
 extern "C" {
 #include <map.h>
@@ -66,6 +67,7 @@ public:
 		return ret != DOES_NOT_EXIST;
 	}
 };
+#endif
 
 class frame_allocator
 {
