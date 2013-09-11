@@ -272,16 +272,17 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 					continue;
 
 				sender->send_cached(tcbs1, ret);
-				bool sync = false;
+				bool to_flush = false;
 				for (int i = 0; i < ret; i++)
-					if (tcbs1[i]->req.is_sync()) {
-						sync = true;
+					if (tcbs1[i]->req.is_sync() || tcbs1[i]->req.is_low_latency()) {
+						to_flush = true;
 						break;
 					}
 				// Some requests may be synchronous, we should send them back
 				// as quickly as possible.
-				if (sync)
+				if (to_flush) {
 					sender->flush(false);
+				}
 				else {
 					int num_msg = sender->get_num_remaining();
 					if (num_msg >= AIO_COMPLETE_BUF_SIZE) {

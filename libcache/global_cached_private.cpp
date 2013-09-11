@@ -821,6 +821,8 @@ void global_cached_io::write_dirty_page(thread_safe_page *p, off_t off,
 	merge_pages2req(req, get_global_cache());
 
 	io_status status;
+	if (orig->is_sync())
+		req.set_low_latency(true);
 	underlying->access(&req, 1, &status);
 	if (status == IO_FAIL) {
 		perror("write");

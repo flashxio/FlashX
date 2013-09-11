@@ -146,8 +146,9 @@ class io_request
 	// Is this synchronous IO?
 	unsigned int sync: 1;
 	unsigned int high_prio: 1;
-	static const int MAX_NODE_ID = (1 << 10) - 1;
-	unsigned int node_id: 10;
+	unsigned int low_latency: 1;
+	static const int MAX_NODE_ID = (1 << 9) - 1;
+	unsigned int node_id: 9;
 	// Linux uses 48 bit for addresses.
 	unsigned long io_addr: 48;
 
@@ -173,11 +174,13 @@ class io_request
 	void use_default_flags() {
 		sync = 0;
 		high_prio = 1;
+		low_latency = 0;
 	}
 
 	void copy_flags(const io_request &req) {
 		this->sync = req.sync;
 		this->high_prio = req.high_prio;
+		this->low_latency = req.low_latency;
 	}
 
 public:
@@ -403,6 +406,14 @@ public:
 
 	void set_high_prio(bool high_prio) {
 		this->high_prio = high_prio;
+	}
+
+	bool is_low_latency() const {
+		return (low_latency & 0x1) == 1;
+	}
+
+	void set_low_latency(bool low_latency) {
+		this->low_latency = low_latency;
 	}
 
 	/**
