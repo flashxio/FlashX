@@ -94,7 +94,9 @@ public:
 			thread_safe_page *cached_pages[], int num_cached_reqs);
 
 	void queue_requests(io_request *reqs[], int num) {
+		pthread_mutex_lock(&wait_mutex);
 		pending_requests.addByForce(reqs, num);
+		pthread_mutex_unlock(&wait_mutex);
 		pthread_cond_signal(&wait_cond);
 	}
 
