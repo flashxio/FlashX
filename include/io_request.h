@@ -170,14 +170,23 @@ class io_request
 		return get_extension()->vec_pointer == get_extension()->embedded_vecs;
 	}
 
+	void use_default_flags() {
+		sync = 0;
+		high_prio = 1;
+	}
+
+	void copy_flags(const io_request &req) {
+		this->sync = req.sync;
+		this->high_prio = req.high_prio;
+	}
+
 public:
 	// By default, a request is initialized as a flush request.
 	io_request() {
 		payload_type = BASIC_REQ;
 		payload.buf_addr = NULL;
-		high_prio = 1;
-		sync = 1;
 		data_inline = 0;
+		use_default_flags();
 	}
 
 	io_request(bool extended) {
@@ -189,16 +198,17 @@ public:
 			payload_type = BASIC_REQ;
 			payload.buf_addr = NULL;
 		}
-		high_prio = 1;
-		sync = false;
 		data_inline = 0;
+		use_default_flags();
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, bool sync = false) {
 		payload_type = BASIC_REQ;
 		data_inline = 0;
-		init(buf, off, size, access_method, io, node_id, sync);
+		init(buf, off, size, access_method, io, node_id);
+		use_default_flags();
+		this->sync = sync;
 	}
 
 	io_request(off_t off, int access_method, io_interface *io, int node_id,
@@ -209,7 +219,9 @@ public:
 		// from the IO request. i.e., the extension should be allocated and
 		// deallocated by someone else.
 		payload.ext = new io_req_extension();
-		init(off, access_method, io, node_id, orig, priv, NULL, sync);
+		init(off, access_method, io, node_id, orig, priv, NULL);
+		use_default_flags();
+		this->sync = sync;
 	}
 
 	io_request(user_compute *compute, off_t off, ssize_t size,
@@ -217,8 +229,10 @@ public:
 			bool sync = false) {
 		payload_type = USER_COMPUTE;
 		data_inline = 0;
-		init(NULL, off, size, access_method, io, node_id, sync);
+		init(NULL, off, size, access_method, io, node_id);
 		payload.compute = compute;
+		use_default_flags();
+		this->sync = sync;
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
@@ -227,7 +241,9 @@ public:
 		payload_type = EXT_REQ;
 		data_inline = 0;
 		payload.ext = new io_req_extension();
-		init(buf, off, size, access_method, io, node_id, orig, priv, NULL, sync);
+		init(buf, off, size, access_method, io, node_id, orig, priv, NULL);
+		use_default_flags();
+		this->sync = sync;
 	}
 
 	io_request(io_request &req) {
@@ -267,13 +283,12 @@ public:
 		}
 		else if (!req.is_extended_req()) {
 			this->init(req.get_buf(), req.get_offset(), req.get_size(),
-					req.get_access_method(), req.get_io(), req.get_node_id(),
-					req.sync);
+					req.get_access_method(), req.get_io(), req.get_node_id());
 		}
 		else if (this->is_extended_req()) {
 			this->init(req.get_offset(), req.get_access_method(), req.get_io(),
 					req.get_node_id(), req.get_orig(), req.get_priv(),
-					req.get_user_data(), req.sync);
+					req.get_user_data());
 			for (int i = 0; i < req.get_num_bufs(); i++) {
 				this->add_io_buf(req.get_io_buf(i));
 			}
@@ -284,6 +299,7 @@ public:
 			// all information in the given request.
 			assert(!this->is_extended_req() && req.is_extended_req());
 		}
+		copy_flags(req);
 	}
 
 	void init() {
@@ -314,19 +330,19 @@ public:
 	}
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id, int sync = false);
+			io_interface *io, int node_id);
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, io_request *orig, void *priv,
-			void *user_data, int sync = false) {
-		init(off, access_method, io, node_id, orig, priv, user_data, sync);
+			void *user_data) {
+		init(off, access_method, io, node_id, orig, priv, user_data);
 		add_buf(buf, size);
 	}
 
 	void init(off_t off, int access_method, io_interface *io, int node_id,
-			io_request *orig, void *priv, void *user_data, int sync = false) {
+			io_request *orig, void *priv, void *user_data) {
 		assert(is_extended_req());
-		io_request::init(NULL, off, 0, access_method, io, node_id, sync);
+		io_request::init(NULL, off, 0, access_method, io, node_id);
 		io_req_extension *ext = get_extension();
 		ext->priv = priv;
 		ext->orig = orig;

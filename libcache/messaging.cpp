@@ -22,7 +22,7 @@ void io_buf::init(thread_safe_page *p)
 }
 
 void io_request::init(char *buf, off_t off, ssize_t size,
-		int access_method, io_interface *io, int node_id, int sync)
+		int access_method, io_interface *io, int node_id)
 {
 	assert(off <= MAX_FILE_SIZE);
 	this->offset = off;
@@ -43,10 +43,8 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 	}
 	this->access_method = access_method & 0x1;
 	// by default, a request is of high priority.
-	this->high_prio = 1;
 	assert(node_id <= MAX_NODE_ID);
 	this->node_id = node_id;
-	this->sync = sync;
 }
 
 int io_request::get_file_id() const
