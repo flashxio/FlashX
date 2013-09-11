@@ -44,12 +44,22 @@ int main(int argc, char *argv[])
 	ssize_t ret = read(fd, (void *) workloads, file_size);
 
 	std::tr1::unordered_map<off_t, int> page_map;
+	int num_page_reads = 0;
+	int num_page_writes = 0;
 	int num_reads = 0;
 	int num_writes = 0;
+	size_t read_size = 0;
+	size_t write_size = 0;
 	int max_size = 0;
 	int min_size = INT_MAX;
 	long tot_size = 0;
+	off_t min_off = LONG_MAX;
+	off_t max_off = 0;
 	for (int i = 0; i < num_accesses; i++) {
+		if (min_off > workloads[i].off)
+			min_off = workloads[i].off;
+		if (max_off < workloads[i].off)
+			max_off = workloads[i].off;
 		off_t page_off = ROUND_PAGE(workloads[i].off);
 		if (max_size < workloads[i].size)
 			max_size = workloads[i].size;
@@ -66,10 +76,16 @@ int main(int argc, char *argv[])
 			else
 				it->second++;
 		}
-		if (workloads[i].read)
-			num_reads += num_pages;
-		else
-			num_writes += num_pages;
+		if (workloads[i].read) {
+			num_page_reads += num_pages;
+			num_reads++;
+			read_size += workloads[i].size;
+		}
+		else {
+			num_page_writes += num_pages;
+			num_writes++;
+			write_size += workloads[i].size;
+		}
 	}
 
 	if (histogram) {
@@ -90,8 +106,11 @@ int main(int argc, char *argv[])
 	}
 	printf("min request size: %d, max req size: %d, avg size: %ld\n",
 			min_size, max_size, tot_size / num_accesses);
+	printf("min off: %ld, max off: %ld\n", min_off, max_off);
 	printf("there are %d accesses\n", num_accesses);
-	printf("there are %d reads\n", num_reads);
-	printf("there are %d writes\n", num_writes);
+	printf("there are %d reads and %d writes\n", num_reads, num_writes);
+	printf("there are %d reads in pages, %d writes in pages\n",
+			num_page_reads, num_page_writes);
+	printf("read %ld in bytes and write %ld in bytes\n", read_size, write_size);
 	printf("there are %ld accessed pages\n", page_map.size());
 }
