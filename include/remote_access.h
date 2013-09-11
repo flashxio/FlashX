@@ -31,6 +31,8 @@ class remote_disk_access: public io_interface
 	aio_complete_queue *complete_queue;
 	slab_allocator *msg_allocator;
 
+	pthread_mutex_t wait_mutex;
+	pthread_cond_t wait_cond;
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
 
@@ -71,6 +73,7 @@ public:
 	virtual void access(io_request *requests, int num,
 			io_status *status = NULL);
 	virtual void notify_completion(io_request *reqs[], int num);
+	virtual void wait4complete(int num_to_complete);
 	virtual int num_pending_ios() const {
 		return num_issued_reqs.get() - num_completed_reqs.get();
 	}

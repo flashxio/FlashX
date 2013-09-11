@@ -78,7 +78,8 @@ void remote_disk_access::notify_completion(io_request *reqs[], int num)
 	}
 
 	num_completed_reqs.inc(num - num_part_reqs);
-	wakeup_waiting_thread();
+
+	pthread_cond_signal(&wait_cond);
 }
 
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
@@ -105,6 +106,8 @@ remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &re
 	}
 	cb = NULL;
 	this->block_mapper = mapper;
+	pthread_mutex_init(&wait_mutex, NULL);
+	pthread_cond_init(&wait_cond, NULL);
 }
 
 remote_disk_access::~remote_disk_access()
@@ -340,6 +343,29 @@ void remote_disk_access::flush_requests(int max_cached)
 int remote_disk_access::get_file_id() const
 {
 	return block_mapper->get_file_id();
+}
+
+/**
+ * We wait for at least the specified number of requests to complete.
+ */
+void remote_disk_access::wait4complete(int num_to_complete)
+{
+	flush_requests();
+	int pending = num_pending_ios();
+	num_to_complete = min(pending, num_to_complete);
+	/*
+	 * Once this function is called and it needs to wait for requests to
+	 * complete, the number of pending requests can only be reduced because 
+	 * new requests can't be issued.
+	 */
+	if (num_to_complete > 0) {
+		pthread_mutex_lock(&wait_mutex);
+		// If the number of completed requests after the function is called
+		// is smaller than the specified number, we should wait.
+		while (pending - num_pending_ios() < num_to_complete)
+			pthread_cond_wait(&wait_cond, &wait_mutex);
+		pthread_mutex_unlock(&wait_mutex);
+	}
 }
 
 atomic_integer remote_disk_access::num_ios;

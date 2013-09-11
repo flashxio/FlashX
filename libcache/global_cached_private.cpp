@@ -195,8 +195,8 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		if (orig->is_sync())
 			io->wakeup_on_req(orig, IO_OK);
 		else {
-			num_completed_reqs.inc(1);
-			wakeup_waiting_thread();
+			num_completed_areqs.inc(1);
+			pthread_cond_signal(&wait_cond);
 			::notify_completion(this, orig);
 		}
 		orig->dec_complete_count();
@@ -225,8 +225,8 @@ void global_cached_io::finalize_request(io_request &req)
 			if (original->is_sync())
 				io->wakeup_on_req(original, IO_OK);
 			else {
-				num_completed_reqs.inc(1);
-				wakeup_waiting_thread();
+				num_completed_areqs.inc(1);
+				pthread_cond_signal(&wait_cond);
 				::notify_completion(this, original);
 			}
 			original->dec_complete_count();
@@ -242,8 +242,8 @@ void global_cached_io::finalize_request(io_request &req)
 		if (req.is_sync())
 			io->wakeup_on_req(&req, IO_OK);
 		else {
-			num_completed_reqs.inc(1);
-			wakeup_waiting_thread();
+			num_completed_areqs.inc(1);
+			pthread_cond_signal(&wait_cond);
 			::notify_completion(this, &req);
 		}
 	}
@@ -458,8 +458,8 @@ global_cached_io::global_cached_io(io_interface *underlying,
 	num_waits = 0;
 	this->cache_size = cache->size();
 	global_cache = cache;
-	pthread_mutex_init(&sync_mutex, NULL);
-	pthread_cond_init(&sync_cond, NULL);
+	pthread_mutex_init(&wait_mutex, NULL);
+	pthread_cond_init(&wait_cond, NULL);
 	wait_req = NULL;
 	status = 0;
 }
@@ -601,8 +601,8 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		if (orig->is_sync())
 			io->wakeup_on_req(orig, IO_OK);
 		else {
-			num_completed_reqs.inc(1);
-			wakeup_waiting_thread();
+			num_completed_areqs.inc(1);
+			pthread_cond_signal(&wait_cond);
 			::notify_completion(this, orig);
 		}
 	}
@@ -845,14 +845,14 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 	}
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
-	num_completed_reqs.inc(num_async_reqs);
-	wakeup_waiting_thread();
+	num_completed_areqs.inc(num_async_reqs);
+	pthread_cond_signal(&wait_cond);
 	::notify_completion(this, async_reqs, num_async_reqs);
 }
 
 void global_cached_io::access(io_request *requests, int num, io_status *status)
 {
-	num_issued_reqs.inc(num);
+	num_issued_areqs.inc(num);
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();
 	}
@@ -1112,4 +1112,34 @@ int global_cached_io::preload(off_t start, long size) {
 int global_cached_io::get_max_num_pending_ios() const
 {
 	return DEFAULT_MAX_PENDING_IOS;
+}
+
+/**
+ * We wait for at least the specified number of requests to complete.
+ */
+void global_cached_io::wait4complete(int num_to_complete)
+{
+	flush_requests();
+	int pending = num_pending_ios();
+	num_to_complete = min(pending, num_to_complete);
+	/*
+	 * Once this function is called and it needs to wait for requests to
+	 * complete, the number of pending requests can only be reduced because 
+	 * new requests can't be issued.
+	 */
+	if (num_to_complete > 0) {
+		pthread_mutex_lock(&wait_mutex);
+		// If the number of completed requests after the function is called
+		// is smaller than the specified number, we should wait.
+		while (pending - num_pending_ios() < num_to_complete) {
+			if (!pending_requests.is_empty()) {
+				pthread_mutex_unlock(&wait_mutex);
+				handle_pending_requests();
+				pthread_mutex_lock(&wait_mutex);
+			}
+			else
+				pthread_cond_wait(&wait_cond, &wait_mutex);
+		}
+		pthread_mutex_unlock(&wait_mutex);
+	}
 }

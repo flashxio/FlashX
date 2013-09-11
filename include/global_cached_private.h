@@ -26,11 +26,11 @@ class global_cached_io: public io_interface
 
 	request_allocator *req_allocator;
 
+	pthread_mutex_t wait_mutex;
+	pthread_cond_t wait_cond;
 	// These are used for implementing sync IO.
 	// A thread can only be blocked on one sync IO, and this class can only
 	// be used in a single thread.
-	pthread_mutex_t sync_mutex;
-	pthread_cond_t sync_cond;
 	io_request *wait_req;
 	int status;
 
@@ -42,8 +42,9 @@ class global_cached_io: public io_interface
 	int cache_hits;
 	int num_fast_process;
 
-	atomic_integer num_completed_reqs;
-	atomic_integer num_issued_reqs;
+	// Count the number of async requests.
+	atomic_integer num_completed_areqs;
+	atomic_integer num_issued_areqs;
 
 	/**
 	 * It's another version of read() and write(), but it's responsible
@@ -94,13 +95,7 @@ public:
 
 	void queue_requests(io_request *reqs[], int num) {
 		pending_requests.addByForce(reqs, num);
-		// the pending requests are processed in the app thread.
-		// If the app thread is waiting for a sync thread to complete,
-		// we need to wake it up to process pending requests.
-		pthread_mutex_lock(&sync_mutex);
-		if (wait_req)
-			pthread_cond_signal(&sync_cond);
-		pthread_mutex_unlock(&sync_mutex);
+		pthread_cond_signal(&wait_cond);
 	}
 
 	int handle_pending_requests();
@@ -142,9 +137,10 @@ public:
 		return num_fast_process;
 	}
 
+	virtual void wait4complete(int num);
 	virtual void notify_completion(io_request *reqs[], int num);
 	virtual int num_pending_ios() const {
-		return num_issued_reqs.get() - num_completed_reqs.get();
+		return num_issued_areqs.get() - num_completed_areqs.get();
 	}
 	virtual int get_max_num_pending_ios() const;
 
@@ -156,35 +152,35 @@ public:
 private:
 	// This method can only be called in a single thread.
 	void wait4req(io_request *req) {
-		pthread_mutex_lock(&sync_mutex);
+		pthread_mutex_lock(&wait_mutex);
 		wait_req = req;
 		while (wait_req) {
 			if (!pending_requests.is_empty()) {
-				pthread_mutex_unlock(&sync_mutex);
+				pthread_mutex_unlock(&wait_mutex);
 				handle_pending_requests();
-				pthread_mutex_lock(&sync_mutex);
+				pthread_mutex_lock(&wait_mutex);
 			}
 			else
-				pthread_cond_wait(&sync_cond, &sync_mutex);
+				pthread_cond_wait(&wait_cond, &wait_mutex);
 		}
-		pthread_mutex_unlock(&sync_mutex);
+		pthread_mutex_unlock(&wait_mutex);
 	}
 
 public:
 	void wakeup_on_req(io_request *req, int status) {
-		pthread_mutex_lock(&sync_mutex);
+		pthread_mutex_lock(&wait_mutex);
 		assert(req);
 		if (wait_req == req) {
 			wait_req = NULL;
 			this->status = status;
-			pthread_cond_signal(&sync_cond);
+			pthread_cond_signal(&wait_cond);
 		}
 		else if (wait_req && !pending_requests.is_empty()) {
 			// The thread that owns the global cached io is blocked.
 			// And there are pending requests, let's wake up the thread.
-			pthread_cond_signal(&sync_cond);
+			pthread_cond_signal(&wait_cond);
 		}
-		pthread_mutex_unlock(&sync_mutex);
+		pthread_mutex_unlock(&wait_mutex);
 	}
 
 #ifdef STATISTICS

@@ -491,27 +491,4 @@ void print_io_thread_stat()
 	}
 }
 
-/**
- * We wait for at least the specified number of requests to complete.
- */
-void io_interface::wait4complete(int num_to_complete)
-{
-	flush_requests();
-	int pending = num_pending_ios();
-	num_to_complete = min(pending, num_to_complete);
-	/*
-	 * Once this function is called and it needs to wait for requests to
-	 * complete, the number of pending requests can only be reduced because 
-	 * new requests can't be issued.
-	 */
-	if (num_to_complete > 0) {
-		pthread_mutex_lock(&wait_mutex);
-		// If the number of completed requests after the function is called
-		// is smaller than the specified number, we should wait.
-		while (pending - num_pending_ios() < num_to_complete)
-			pthread_cond_wait(&wait_cond, &wait_mutex);
-		pthread_mutex_unlock(&wait_mutex);
-	}
-}
-
 atomic_integer io_interface::io_counter;
