@@ -259,7 +259,6 @@ public:
 
 	void init(const io_request &req) {
 		assert(!data_inline);
-		this->sync = req.sync;
 		if (req.payload_type == USER_COMPUTE
 				|| this->payload_type == USER_COMPUTE) {
 			assert(req.payload_type == USER_COMPUTE
@@ -268,11 +267,13 @@ public:
 		}
 		else if (!req.is_extended_req()) {
 			this->init(req.get_buf(), req.get_offset(), req.get_size(),
-					req.get_access_method(), req.get_io(), req.get_node_id());
+					req.get_access_method(), req.get_io(), req.get_node_id(),
+					req.sync);
 		}
 		else if (this->is_extended_req()) {
 			this->init(req.get_offset(), req.get_access_method(), req.get_io(),
-					req.get_node_id(), req.get_orig(), req.get_priv(), req.get_user_data());
+					req.get_node_id(), req.get_orig(), req.get_priv(),
+					req.get_user_data(), req.sync);
 			for (int i = 0; i < req.get_num_bufs(); i++) {
 				this->add_io_buf(req.get_io_buf(i));
 			}
