@@ -4,7 +4,7 @@
 #include "disk_read_thread.h"
 #include "file_mapper.h"
 
-const int DEFAULT_MAX_PENDING_IOS = 128;
+const int DEFAULT_MAX_PENDING_IOS = 32;
 
 /**
  * The maximal number of pending IOs is decided by the maximal pending IOs
