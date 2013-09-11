@@ -23,6 +23,12 @@ const int IO_QUEUE_SIZE = 10;
 const int MAX_FETCH_REQS = 3;
 const int AIO_COMPLETE_BUF_SIZE = 8;
 
+/**
+ * The time interval that I/O threads flush the buffered notifications
+ * of IO completion.
+ */
+const int COMPLETION_FLUSH_INTERVAL = 200 * 1000 * 1000;
+
 const int MAX_DISK_CACHED_REQS = 1000;
 
 /**

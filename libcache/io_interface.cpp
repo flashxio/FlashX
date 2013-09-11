@@ -1,4 +1,6 @@
 #include <assert.h>
+#include <signal.h>
+#include <time.h>
 #include <pthread.h>
 
 #include <vector>
@@ -166,6 +168,79 @@ struct global_data_collection
 
 static global_data_collection global_data;
 
+/**
+ * We flush notifications of IO completion buffered by I/O threads
+ * periodically. By default, it's every 200ms.
+ */
+static void handler(int sig, siginfo_t *si, void *uc)
+{
+	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
+		global_data.read_threads[i]->flush_requests();
+	}
+}
+
+static void set_completion_flush_timer()
+{
+	/**
+	 * The code here is copied from the example code in the manual of
+	 * timer_create.
+	 */
+	timer_t timerid;
+	struct sigevent sev;
+	struct itimerspec its;
+	sigset_t mask;
+	struct sigaction sa;
+
+	/* Establish handler for timer signal */
+
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = handler;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGRTMIN, &sa, NULL) == -1) {
+		perror("sigaction");
+		exit(1);
+	}
+
+	/* Block timer signal temporarily */
+
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGRTMIN);
+	if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+		perror("sigprocmask");
+		exit(1);
+	}
+
+	/* Create the timer */
+
+	sev.sigev_notify = SIGEV_SIGNAL;
+	sev.sigev_signo = SIGRTMIN;
+	sev.sigev_value.sival_ptr = &timerid;
+	if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
+		perror("timer_create");
+		exit(1);
+	}
+
+	/* Start the timer */
+
+	its.it_value.tv_sec = 0;
+	its.it_value.tv_nsec = COMPLETION_FLUSH_INTERVAL;
+	its.it_interval.tv_sec = its.it_value.tv_sec;
+	its.it_interval.tv_nsec = its.it_value.tv_nsec;
+
+	if (timer_settime(timerid, 0, &its, NULL) == -1) {
+		perror("timer_settime");
+		exit(1);
+	}
+
+	/* Unlock the timer signal, so that timer notification
+	 * can be delivered */
+
+	if (sigprocmask(SIG_UNBLOCK, &mask, NULL) == -1) {
+		perror("sigprocmask");
+		exit(1);
+	}
+}
+
 void init_io_system(const RAID_config &raid_conf,
 		const std::vector<int> &node_id_array)
 {
@@ -201,6 +276,10 @@ void init_io_system(const RAID_config &raid_conf,
 					global_data.complete_threads,
 					raid_conf.get_file(k).node_id);
 		}
+
+		// Set a timer that flush the nofications of request completion
+		// periodically.
+		set_completion_flush_timer();
 	}
 	pthread_mutex_unlock(&global_data.mutex);
 	delete mapper;
