@@ -289,7 +289,7 @@ public:
 
 	virtual ~file_workload() {
 		if (workload_queue) {
-			delete workload_queue;
+			thread_safe_FIFO_queue<workload_t>::destroy(workload_queue);
 			workload_queue = NULL;
 		}
 	}
