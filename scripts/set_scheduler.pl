@@ -2,7 +2,19 @@
 
 use strict;
 
-my @dev_names=("b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q");
+my @dev_details = `ls -l /sys/block/ | grep sd | grep -v sda`;
+
+my @dev_names;
+while (@dev_details) {
+	my $item = shift(@dev_details);
+	if ($item =~ /sd([b-z])$/) {
+		my $dev = $1;
+		# get all devices
+		push(@dev_names, $dev);
+		print "dev: $dev\n";
+	}
+}
+
 my $scheduler = "noop";
 
 for (my $i = 1; $i <= 16; $i++) {
