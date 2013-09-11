@@ -442,7 +442,7 @@ void global_cached_io::notify_completion(io_request *requests[], int num)
 			// They will be deleted when these write requests are finally served.
 		}
 	}
-	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size());
+	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size(), underlying);
 }
 
 global_cached_io::global_cached_io(io_interface *underlying,
@@ -740,7 +740,7 @@ int global_cached_io::handle_pending_requests()
 	// The only possible reason is that we happen to overwrite the entire
 	// page.
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
-			dirty_pages.size());
+			dirty_pages.size(), underlying);
 	return tot;
 }
 
@@ -841,7 +841,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		thread_safe_page *dirty = __complete_req(req, cached_pages[i]);
 		page_cache *cache = get_global_cache();
 		if (dirty)
-			cache->mark_dirty_pages(&dirty, 1);
+			cache->mark_dirty_pages(&dirty, 1, underlying);
 		if (!req->is_sync())
 			async_reqs[num_async_reqs++] = req;
 	}
@@ -1067,7 +1067,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	}
 	process_cached_reqs(cached_reqs, cached_pages, num_cached_reqs);
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
-				dirty_pages.size());
+				dirty_pages.size(), underlying);
 
 	if (syncd)
 		underlying->flush_requests();

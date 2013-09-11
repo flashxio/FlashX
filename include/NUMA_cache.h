@@ -61,10 +61,11 @@ public:
 			caches[i]->print_stat();
 	}
 
-	virtual void mark_dirty_pages(thread_safe_page *pages[], int num) {
+	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
+			io_interface *io) {
 		for (int i = 0; i < num; i++) {
 			int idx = cache_conf->page2cache(pages[i]->get_offset());
-			caches[idx]->mark_dirty_pages(&pages[i], 1);
+			caches[idx]->mark_dirty_pages(&pages[i], 1, io);
 		}
 	}
 

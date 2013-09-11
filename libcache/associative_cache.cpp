@@ -1085,7 +1085,8 @@ public:
 	}
 
 	void run();
-	void dirty_pages(thread_safe_page *pages[], int num);
+	void flush_dirty_pages(thread_safe_page *pages[], int num,
+			io_interface *io);
 	int flush_cell(hash_cell *cell, io_request *req_array, int req_array_size);
 };
 
@@ -1206,10 +1207,11 @@ flush_thread *associative_cache::create_flush_thread(io_interface *io,
 	return _flush_thread;
 }
 
-void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num)
+void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num,
+		io_interface *io)
 {
 	if (_flush_thread)
-		_flush_thread->dirty_pages(pages, num);
+		_flush_thread->flush_dirty_pages(pages, num, io);
 }
 
 void associative_cache::init(io_interface *underlying)
@@ -1304,7 +1306,8 @@ void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
 
 #define ENABLE_FLUSH_THREAD
 
-void associative_flush_thread::dirty_pages(thread_safe_page *pages[], int num)
+void associative_flush_thread::flush_dirty_pages(thread_safe_page *pages[],
+		int num, io_interface *io)
 {
 #ifdef ENABLE_FLUSH_THREAD
 	hash_cell *cells[num];
@@ -1324,8 +1327,13 @@ void associative_flush_thread::dirty_pages(thread_safe_page *pages[], int num)
 			 * is being written back, so we don't need to do anything with it.
 			 */
 			int n = cell->num_pages(dirty_flag, skip_flags);
-			if (n > DIRTY_PAGES_THRESHOLD && !cell->set_in_queue(true))
-				cells[num_queued_cells++] = cell;
+			if (n > DIRTY_PAGES_THRESHOLD && !cell->set_in_queue(true)) {
+				io_request req_array[NUM_WRITEBACK_DIRTY_PAGES];
+				int ret = flush_cell(cell, req_array, NUM_WRITEBACK_DIRTY_PAGES);
+				io->access(req_array, ret);
+				cell->set_in_queue(false);
+//				cells[num_queued_cells++] = cell;
+			}
 		}
 	}
 	if (num_queued_cells > 0) {

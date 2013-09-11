@@ -381,7 +381,8 @@ public:
 			page_cache *global_cache) {
 		return NULL;
 	}
-	virtual void mark_dirty_pages(thread_safe_page *pages[], int num) {
+	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
+			io_interface *io) {
 	}
 	virtual void flush_callback(io_request &req) {
 	}

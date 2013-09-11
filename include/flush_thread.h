@@ -12,7 +12,14 @@ public:
 	flush_thread(int node_id): thread(std::string("flush_thread-")
 			+ itoa(node_id), node_id) {
 	}
-	virtual void dirty_pages(thread_safe_page *pages[], int num) = 0;
+
+	/**
+	 * This method flushes dirty pages with the specified io instance.
+	 * The method has to be thread-safe, as it will be invoked in different
+	 * thread contexts. It also shouldn't block threads.
+	 */
+	virtual void flush_dirty_pages(thread_safe_page *pages[], int num,
+			io_interface *io) = 0;
 };
 
 #endif
