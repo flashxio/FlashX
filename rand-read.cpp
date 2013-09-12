@@ -147,6 +147,13 @@ void int_handler(int sig_num)
 	if (!prof_file.empty())
 		ProfilerStop();
 #endif
+#ifdef STATISTICS
+	for (int i = 0; i < nthreads; i++) {
+		if (threads[i])
+			threads[i]->print_stat();
+	}
+	print_io_thread_stat();
+#endif
 	exit(0);
 }
 
