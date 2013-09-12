@@ -400,10 +400,6 @@ class associative_cache: public page_cache
 	flush_thread *_flush_thread;
 	pthread_mutex_t init_mutex;
 
-	int get_num_cells() const {
-		return (1 << level) * init_ncells + split;
-	}
-
 	associative_cache(long cache_size, long max_cache_size, int node_id,
 			int offset_factor, bool expandable = false);
 
@@ -414,6 +410,10 @@ class associative_cache: public page_cache
 	}
 
 public:
+	// The number of pages in the I/O queue waiting to be flushed.
+	atomic_integer num_pending_flush;
+	const int max_num_pending_flush;
+
 	static associative_cache *create(long cache_size, long max_cache_size,
 			int node_id, int offset_factor, bool expandable = false) {
 		assert(node_id >= 0);
@@ -530,6 +530,10 @@ public:
 
 	hash_cell *get_prev_cell(hash_cell *cell);
 	hash_cell *get_next_cell(hash_cell *cell);
+
+	int get_num_cells() const {
+		return (1 << level) * init_ncells + split;
+	}
 
 	/* For test */
 	int get_num_used_pages() const;

@@ -925,7 +925,8 @@ void associative_cache::sanity_check() const
 }
 
 associative_cache::associative_cache(long cache_size, long max_cache_size,
-		int node_id, int offset_factor, bool expandable)
+		int node_id, int offset_factor, bool expandable): max_num_pending_flush(
+			2048 * 18 / 4)
 {
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
@@ -1023,13 +1024,30 @@ public:
 	}
 };
 
+class associative_flush_thread;
+
 class flush_io: public io_interface
 {
 	io_interface *underlying;
+	pthread_key_t underlying_key;
+	associative_cache *cache;
+	associative_flush_thread *flush_thread;
+
+	io_interface *get_per_thread_io() {
+		io_interface *io = (io_interface *) pthread_getspecific(underlying_key);
+		if (io == NULL) {
+			io = underlying->clone();
+			pthread_setspecific(underlying_key, io);
+		}
+		return io;
+	}
 public:
-	flush_io(io_interface *underlying): io_interface(
-			underlying->get_node_id()) {
+	flush_io(io_interface *underlying, associative_cache *cache,
+			associative_flush_thread *flush_thread): io_interface(underlying->get_node_id()) {
 		this->underlying = underlying;
+		this->cache = cache;
+		this->flush_thread = flush_thread;
+		pthread_key_create(&underlying_key, NULL);
 	}
 
 	virtual int get_file_id() const {
@@ -1038,51 +1056,19 @@ public:
 
 	virtual void notify_completion(io_request *reqs[], int num);
 	virtual void access(io_request *requests, int num, io_status *status = NULL) {
-		underlying->access(requests, num, status);
+		get_per_thread_io()->access(requests, num, status);
 	}
 	virtual void flush_requests() {
-		underlying->flush_requests();
+		get_per_thread_io()->flush_requests();
 	}
 	virtual void wait4complete(int num) {
-		underlying->wait4complete(num);
+		throw unsupported_exception();
 	}
 
 	virtual void cleanup() {
-		underlying->cleanup();
+		throw unsupported_exception();
 	}
 };
-
-void flush_io::notify_completion(io_request *reqs[], int num)
-{
-	for (int i = 0; i < num; i++) {
-		if (reqs[i]->get_num_bufs() == 1) {
-			thread_safe_page *p = (thread_safe_page *) reqs[i]->get_page(0);
-			p->lock();
-			assert(p->is_dirty());
-			p->set_dirty(false);
-			p->set_io_pending(false);
-			assert(p->reset_reqs() == NULL);
-			p->unlock();
-			p->dec_ref();
-		}
-		else {
-			off_t off = reqs[i]->get_offset();
-			for (int j = 0; j < reqs[i]->get_num_bufs(); j++) {
-				thread_safe_page *p = reqs[i]->get_page(j);
-				assert(p);
-				p->lock();
-				assert(p->is_dirty());
-				p->set_dirty(false);
-				p->set_io_pending(false);
-				assert(p->reset_reqs() == NULL);
-				p->unlock();
-				p->dec_ref();
-				assert(p->get_ref() >= 0);
-				off += PAGE_SIZE;
-			}
-		}
-	}
-}
 
 class associative_flush_thread: public flush_thread
 {
@@ -1091,18 +1077,18 @@ class associative_flush_thread: public flush_thread
 	associative_cache *local_cache;
 
 	flush_io *io;
-	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
 	select_dirty_pages_policy *policy;
 public:
+	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
 	associative_flush_thread(page_cache *cache, associative_cache *local_cache,
 			io_interface *io, int node_id): flush_thread(node_id), dirty_cells(
-				io->get_node_id(), MAX_NUM_DIRTY_CELLS_IN_QUEUE) {
+				io->get_node_id(), local_cache->get_num_cells()) {
 		this->cache = cache;
 		this->local_cache = local_cache;
 		if (this->cache == NULL)
 			this->cache = local_cache;
 
-		this->io = new flush_io(io);
+		this->io = new flush_io(io, local_cache, this);
 		policy = new eviction_select_dirty_pages_policy();
 	}
 
@@ -1111,6 +1097,45 @@ public:
 			io_interface *io);
 	int flush_cell(hash_cell *cell, io_request *req_array, int req_array_size);
 };
+
+void flush_io::notify_completion(io_request *reqs[], int num)
+{
+	// If they are ignored flushes, reqs is NULL.
+	if (reqs) {
+		for (int i = 0; i < num; i++) {
+			assert(reqs[i]->get_num_bufs());
+			if (reqs[i]->get_num_bufs() == 1) {
+				thread_safe_page *p = (thread_safe_page *) reqs[i]->get_page(0);
+				p->lock();
+				assert(p->is_dirty());
+				p->set_dirty(false);
+				p->set_io_pending(false);
+				assert(p->reset_reqs() == NULL);
+				p->unlock();
+				p->dec_ref();
+			}
+			else {
+				off_t off = reqs[i]->get_offset();
+				for (int j = 0; j < reqs[i]->get_num_bufs(); j++) {
+					thread_safe_page *p = reqs[i]->get_page(j);
+					assert(p);
+					p->lock();
+					assert(p->is_dirty());
+					p->set_dirty(false);
+					p->set_io_pending(false);
+					assert(p->reset_reqs() == NULL);
+					p->unlock();
+					p->dec_ref();
+					assert(p->get_ref() >= 0);
+					off += PAGE_SIZE;
+				}
+			}
+		}
+	}
+
+	cache->num_pending_flush.dec(num);
+	flush_thread->run();
+}
 
 void merge_pages2req(io_request &req, page_cache *cache);
 
@@ -1180,38 +1205,50 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 	return num_init_reqs;
 }
 
+/**
+ * This will run until we get enough pending flushes.
+ */
 void associative_flush_thread::run()
 {
-	int num_fetches;
+	const int FETCH_BUF_SIZE = 32;
 	// We can't get more requests than the number of pages in a cell.
-	const int req_array_size = NUM_WRITEBACK_DIRTY_PAGES * 100;
-	io_request req_array[req_array_size];
-	while ((num_fetches = dirty_cells.get_num_entries()) > 0) {
-		hash_cell *cells[num_fetches];
-		int ret = dirty_cells.fetch(cells, num_fetches);
-		// This is the only place where we fetches entries in the queue,
-		// and there is only one thread fetching entries, so we can be 
-		// very sure we can fetch the number of entries we specify.
-		assert(ret == num_fetches);
-
-		int num_init_reqs = 0;
+	io_request req_array[NUM_WRITEBACK_DIRTY_PAGES];
+	int tot_flushes = 0;
+	while (dirty_cells.get_num_entries() > 0) {
+		hash_cell *cells[FETCH_BUF_SIZE];
+		hash_cell *tmp[FETCH_BUF_SIZE];
+		int num_dirty_cells = 0;
+		int num_fetches = dirty_cells.fetch(cells, FETCH_BUF_SIZE);
+		int num_flushes = 0;
 		for (int i = 0; i < num_fetches; i++) {
-			int ret = flush_cell(cells[i], &req_array[num_init_reqs],
-					req_array_size - num_init_reqs);
-			num_init_reqs += ret;
-			if (num_init_reqs >= req_array_size - NUM_WRITEBACK_DIRTY_PAGES) {
-				io->access(req_array, num_init_reqs);
-				num_init_reqs = 0;
+			int ret = flush_cell(cells[i], req_array,
+					NUM_WRITEBACK_DIRTY_PAGES);
+			if (ret > 0) {
+				io->access(req_array, ret);
+				num_flushes += ret;
 			}
-			// We can clear the in_queue flag now.
-			// The cell won't be added to the queue for flush until its dirty pages
-			// have been written back successfully.
-			// A cell is added to the queue only when the number of dirty pages
-			// that aren't being written back is larger than a threshold.
-			cells[i]->set_in_queue(false);
+			// If we get what we ask for, maybe there are more dirty pages
+			// we can flush. Add the dirty cell back in the queue.
+			if (ret == NUM_WRITEBACK_DIRTY_PAGES)
+				tmp[num_dirty_cells++] = cells[i];
+			else {
+				// We can clear the in_queue flag now.
+				// The cell won't be added to the queue for flush until its dirty pages
+				// have been written back successfully.
+				// A cell is added to the queue only when the number of dirty pages
+				// that aren't being written back is larger than a threshold.
+				cells[i]->set_in_queue(false);
+			}
 		}
+		dirty_cells.add(tmp, num_dirty_cells);
+		local_cache->num_pending_flush.inc(num_flushes);
+		tot_flushes += num_flushes;
 
-		io->access(req_array, num_init_reqs);
+		// If we have flushed enough pages, we can stop now.
+		if (local_cache->num_pending_flush.get()
+				> local_cache->max_num_pending_flush) {
+			break;
+		}
 	}
 	io->flush_requests();
 }
@@ -1334,35 +1371,50 @@ void associative_flush_thread::flush_dirty_pages(thread_safe_page *pages[],
 #ifdef ENABLE_FLUSH_THREAD
 	hash_cell *cells[num];
 	int num_queued_cells = 0;
+	int num_flushes = 0;
 	for (int i = 0; i < num; i++) {
 		hash_cell *cell = local_cache->get_cell_offset(pages[i]->get_offset());
-		if (!cell->is_in_queue()) {
-			char dirty_flag = 0;
-			char skip_flags = 0;
-			page_set_flag(dirty_flag, DIRTY_BIT, true);
-			// We should skip pages in IO pending or in a writeback queue.
-			page_set_flag(skip_flags, IO_PENDING_BIT, true);
-			page_set_flag(skip_flags, PREPARE_WRITEBACK, true);
-			/*
-			 * We only count the number of dirty pages without IO pending.
-			 * If a page is dirty but has IO pending, it means the page
-			 * is being written back, so we don't need to do anything with it.
-			 */
-			int n = cell->num_pages(dirty_flag, skip_flags);
-			if (n > DIRTY_PAGES_THRESHOLD && !cell->set_in_queue(true)) {
+		char dirty_flag = 0;
+		char skip_flags = 0;
+		page_set_flag(dirty_flag, DIRTY_BIT, true);
+		// We should skip pages in IO pending or in a writeback queue.
+		page_set_flag(skip_flags, IO_PENDING_BIT, true);
+		page_set_flag(skip_flags, PREPARE_WRITEBACK, true);
+		/*
+		 * We only count the number of dirty pages without IO pending.
+		 * If a page is dirty but has IO pending, it means the page
+		 * is being written back, so we don't need to do anything with it.
+		 */
+		int n = cell->num_pages(dirty_flag, skip_flags);
+		if (n > DIRTY_PAGES_THRESHOLD) {
+			if (local_cache->num_pending_flush.get()
+					> local_cache->max_num_pending_flush) {
+				if (!cell->set_in_queue(true))
+					cells[num_queued_cells++] = cell;
+			}
+			else {
 				io_request req_array[NUM_WRITEBACK_DIRTY_PAGES];
-				int ret = flush_cell(cell, req_array, NUM_WRITEBACK_DIRTY_PAGES);
+				int ret = flush_cell(cell, req_array,
+						NUM_WRITEBACK_DIRTY_PAGES);
 				io->access(req_array, ret);
-				cell->set_in_queue(false);
-//				cells[num_queued_cells++] = cell;
+				num_flushes += ret;
+				// If it has the required number of dirty pages to flush,
+				// it may have more to be flushed.
+				if (ret == NUM_WRITEBACK_DIRTY_PAGES && n - ret > 6)
+					if (!cell->set_in_queue(true))
+						cells[num_queued_cells++] = cell;
 			}
 		}
 	}
+	if (num_flushes > 0)
+		local_cache->num_pending_flush.inc(num_flushes);
 	if (num_queued_cells > 0) {
 		// TODO currently, there is only one flush thread. Adding dirty cells
 		// requires to grab a spin lock. It may not work well on a NUMA machine.
-		dirty_cells.add(cells, num_queued_cells);
-		activate();
+		int ret = dirty_cells.add(cells, num_queued_cells);
+		if (ret < num_queued_cells) {
+			printf("only queue %d in %d dirty cells\n", ret, num_queued_cells);
+		}
 	}
 #endif
 }

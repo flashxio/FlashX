@@ -24,7 +24,20 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	}
 }
 
-int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
+void ignore_flush(std::tr1::unordered_map<io_interface *, int> &ignored_flushes,
+		const io_request &req)
+{
+	std::tr1::unordered_map<io_interface *, int>::iterator it
+		= ignored_flushes.find(req.get_io());
+	if (it == ignored_flushes.end()) {
+		ignored_flushes.insert(std::pair<io_interface *, int>(req.get_io(), 0));
+		it = ignored_flushes.find(req.get_io());
+	}
+	it->second++;
+}
+
+int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
+		std::tr1::unordered_map<io_interface *, int> &ignored_flushes)
 {
 	int num_accesses = 0;
 	int io_slots = aio->num_available_IO_slots();
@@ -45,6 +58,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 		// The page has been evicted.
 		if (p == NULL) {
 			num_ignored_low_prio_accesses++;
+			ignore_flush(ignored_flushes, req);
 			continue;
 		}
 		// If the original page has been evicted and the new page for
@@ -56,6 +70,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 			// the prepare-writeback flag on it.
 			req.get_page(0)->set_prepare_writeback(false);
 			num_ignored_low_prio_accesses++;
+			ignore_flush(ignored_flushes, req);
 			continue;
 		}
 		// If we are here, it means the page is the one we are looking for.
@@ -75,6 +90,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 			p->unlock();
 			p->dec_ref();
 			num_ignored_low_prio_accesses++;
+			ignore_flush(ignored_flushes, req);
 			continue;
 		}
 		assert(p == req.get_page(0));
@@ -105,11 +121,14 @@ void disk_read_thread::run() {
 
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	io_request local_reqs[LOCAL_REQ_BUF_SIZE];
+	std::tr1::unordered_map<io_interface *, int> ignored_flushes;
 	while (true) {
 		int num;
 		num = queue.non_blocking_fetch(msg_buffer, LOCAL_BUF_SIZE);
 		// The high-prio queue is empty.
+		bool processed_low_prio = false;
 		while (num == 0) {
+			processed_low_prio = true;
 			// we can process as many low-prio requests as possible,
 			// but they should block the thread.
 			if (!low_prio_queue.is_empty()
@@ -118,7 +137,7 @@ void disk_read_thread::run() {
 					int num = low_prio_queue.fetch(&low_prio_msg, 1);
 					assert(num == 1);
 				}
-				int ret = process_low_prio_msg(low_prio_msg);
+				int ret = process_low_prio_msg(low_prio_msg, ignored_flushes);
 				num_accesses += ret;
 				num_low_prio_accesses += ret;
 			}
@@ -136,6 +155,18 @@ void disk_read_thread::run() {
 
 			// Let's try to fetch requests again.
 			num = queue.non_blocking_fetch(msg_buffer, LOCAL_BUF_SIZE);
+		}
+		if (processed_low_prio) {
+			// When we ignore flush requests, we also need to tell it.
+			for (std::tr1::unordered_map<io_interface *, int>::iterator it
+					= ignored_flushes.begin(); it != ignored_flushes.end(); it++) {
+				io_interface *io = it->first;
+				if (it->second > 0) {
+					io->notify_completion(NULL, it->second);
+					// We need to clear the counter for the next count.
+					it->second = 0;
+				}
+			}
 		}
 
 		if (num == 0)

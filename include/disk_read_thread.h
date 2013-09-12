@@ -33,7 +33,8 @@ class disk_read_thread
 
 	atomic_integer flush_counter;
 
-	int process_low_prio_msg(message<io_request> &low_prio_msg);
+	int process_low_prio_msg(message<io_request> &low_prio_msg,
+			std::tr1::unordered_map<io_interface *, int> &ignored_flushes);
 
 public:
 	disk_read_thread(const logical_file_partition &partition,
