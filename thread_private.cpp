@@ -8,7 +8,7 @@
 
 bool align_req = false;
 int align_size = PAGE_SIZE;
-bool use_aio = true;
+extern bool use_aio;
 
 extern bool verify_read_content;
 extern struct timeval global_start;
