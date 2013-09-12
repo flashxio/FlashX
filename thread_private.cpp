@@ -117,7 +117,9 @@ ssize_t thread_private::get_read_bytes() {
 }
 
 int thread_private::thread_init() {
+	extern int io_depth_per_file;
 	io = factory->create_io(node_id);
+	io->set_max_num_pending_ios(io_depth_per_file);
 	io->init();
 
 	extern int buf_size;

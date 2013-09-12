@@ -4,8 +4,6 @@
 #include "disk_read_thread.h"
 #include "file_mapper.h"
 
-const int DEFAULT_MAX_PENDING_IOS = 32;
-
 /**
  * The maximal number of pending IOs is decided by the maximal pending IOs
  * allowed on each I/O thread divided by the number of remote_disk_access.
@@ -13,7 +11,8 @@ const int DEFAULT_MAX_PENDING_IOS = 32;
  */
 int remote_disk_access::get_max_num_pending_ios() const
 {
-	return DEFAULT_MAX_PENDING_IOS * io_threads.size() / num_ios.get();
+	return io_interface::get_max_num_pending_ios() *
+		io_threads.size() / num_ios.get();
 }
 
 void remote_disk_access::notify_completion(io_request *reqs[], int num)

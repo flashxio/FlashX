@@ -144,7 +144,6 @@ public:
 	virtual int num_pending_ios() const {
 		return num_issued_areqs.get() - num_completed_areqs.get();
 	}
-	virtual int get_max_num_pending_ios() const;
 
 	void finalize_partial_request(io_request &partial, io_request *orig);
 	void finalize_request(io_request &req);

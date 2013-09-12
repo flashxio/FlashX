@@ -76,7 +76,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 async_io::async_io(const logical_file_partition &partition,
 		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 		int aio_depth_per_file, int node_id): io_interface(node_id), AIO_DEPTH(
-			aio_depth_per_file * partition.get_num_files())
+			aio_depth_per_file)
 {
 	cb_allocator = new callback_allocator(node_id,
 			AIO_DEPTH * sizeof(thread_callback_s));;

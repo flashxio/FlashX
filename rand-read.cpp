@@ -51,6 +51,7 @@ struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 bool verify_read_content = false;
 bool high_prio = false;
+int io_depth_per_file = 32;
 
 thread_private *threads[NUM_THREADS];
 
@@ -182,7 +183,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 5) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read files option pages threads cache_size entry_size workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size SA_cell_size\n");
+		fprintf(stderr, "read files option pages threads cache_size entry_size workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size SA_cell_size io_depth\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
 		cache_map.print("available cache types: ");
@@ -281,6 +282,9 @@ int main(int argc, char *argv[])
 		else if(key.compare("SA_cell_size") == 0) {
 			SA_min_cell_size = atoi(value.c_str());
 		}
+		else if(key.compare("io_depth") == 0) {
+			io_depth_per_file = atoi(value.c_str());
+		}
 #ifdef PROFILER
 		else if(key.compare("prof") == 0) {
 			prof_file = value;
@@ -341,11 +345,8 @@ int main(int argc, char *argv[])
 
 	init_io_system(raid_conf, node_id_array);
 
-	int io_depth = AIO_DEPTH_PER_FILE / nthreads;
-	if (io_depth == 0)
-		io_depth = 1;
 	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
-			access_option, io_depth, cache_conf);
+			access_option, io_depth_per_file, cache_conf);
 	int nthread_per_node = nthreads / node_id_array.size();
 	std::vector<workload_gen *> workload_gens;
 	for (unsigned i = 0; i < node_id_array.size(); i++) {

@@ -7,7 +7,6 @@
 
 // TODO I assume the block size of the RAID array is 16 pages.
 const int RAID_BLOCK_SIZE = 16 * PAGE_SIZE;
-const int DEFAULT_MAX_PENDING_IOS = 2 * 128;
 
 #define ENABLE_LARGE_WRITE
 //#define TEST_HIT_RATE
@@ -1109,11 +1108,6 @@ int global_cached_io::preload(off_t start, long size) {
 		p->dec_ref();
 	}
 	return 0;
-}
-
-int global_cached_io::get_max_num_pending_ios() const
-{
-	return DEFAULT_MAX_PENDING_IOS;
 }
 
 /**

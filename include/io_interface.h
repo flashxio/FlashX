@@ -69,12 +69,11 @@ class io_interface
 	int max_num_pending_ios;
 	static atomic_integer io_counter;
 
-
 public:
 	io_interface(int node_id) {
 		this->node_id = node_id;
 		this->io_idx = io_counter.inc(1) - 1;
-		max_num_pending_ios = 0;
+		max_num_pending_ios = 32;
 	}
 
 	virtual ~io_interface() { }
@@ -138,7 +137,10 @@ public:
 		throw unsupported_exception();
 	}
 	virtual int get_max_num_pending_ios() const {
-		throw unsupported_exception();
+		return max_num_pending_ios;
+	}
+	virtual void set_max_num_pending_ios(int max) {
+		this->max_num_pending_ios = max;
 	}
 	int get_remaining_io_slots() const {
 		return get_max_num_pending_ios() - num_pending_ios();

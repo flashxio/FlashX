@@ -105,6 +105,8 @@ public:
 	virtual int get_max_num_pending_ios() const {
 		return AIO_DEPTH;
 	}
+	virtual void set_max_num_pending_ios(int max) {
+	}
 
 	int get_num_iowait() const {
 		return num_iowait;

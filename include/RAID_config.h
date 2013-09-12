@@ -42,6 +42,10 @@ public:
 	const std::string &get_conf_file() const {
 		return conf_file;
 	}
+
+	int get_num_files() const {
+		return files.size();
+	}
 };
 
 #endif
