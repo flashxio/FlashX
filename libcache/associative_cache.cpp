@@ -553,6 +553,11 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 	return ret;
 }
 
+/**
+ * This method runs over all pages and finds the pages that are most likely
+ * to be evicted. But we only return pages that have certain flags and/or
+ * don't have certain pages.
+ */
 int gclock_eviction_policy::predict_evicted_pages(
 		page_cell<thread_safe_page> &buf, int num_pages, int set_flags,
 		int clear_flags, std::map<off_t, thread_safe_page *> &pages)
@@ -563,10 +568,11 @@ int gclock_eviction_policy::predict_evicted_pages(
 	for (int i = 0; i < (int) buf.get_num_pages(); i++) {
 		hits[i] = buf.get_page(i)->get_hits();
 	}
+	// The number of pages that are most likely to be evicted.
+	int num_most_likely = 0;
 	// The function returns when we get the expected number of pages
 	// or we get pages 
 	while (true) {
-		int num_with_hits = 0;
 		for (int i = 0; i < (int) buf.get_num_pages(); i++) {
 			int idx = (i + clock_head) % buf.get_num_pages();
 			short *hit = &hits[idx];
@@ -582,14 +588,17 @@ int gclock_eviction_policy::predict_evicted_pages(
 					if ((int) pages.size() == num_pages)
 						return pages.size();
 				}
+				num_most_likely++;
 			}
 			else {
 				(*hit)--;
-				num_with_hits++;
 			}
 		}
-		// No pages have hits.
-		if (num_with_hits == 0)
+		/* 
+		 * We have got all pages that are most likely to be evicted.
+		 * Let's just return whatever we have.
+		 */
+		if (num_most_likely >= MAX_NUM_WRITEBACK)
 			return pages.size();
 	}
 }
