@@ -16,12 +16,14 @@ class NUMA_cache: public page_cache
 	const cache_config *cache_conf;
 	std::vector<page_cache *> caches;
 public:
-	NUMA_cache(const cache_config *config): caches(config->get_num_caches()) {
+	NUMA_cache(const cache_config *config, int max_num_pending_flush): caches(
+			config->get_num_caches()) {
 		cache_conf = config;
 		std::vector<int> node_ids;
 		cache_conf->get_node_ids(node_ids);
 		for (size_t i = 0; i < node_ids.size(); i++) {
-			page_cache *cache = cache_conf->create_cache_on_node(node_ids[i]);
+			page_cache *cache = cache_conf->create_cache_on_node(node_ids[i],
+					max_num_pending_flush / node_ids.size());
 			caches[i] = cache;
 		}
 	}

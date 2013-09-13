@@ -354,7 +354,8 @@ public:
 			const cache_config *cache_conf): remote_io_factory(
 				raid_conf, node_id_array) {
 		this->cache_conf = cache_conf;
-		global_cache = cache_conf->create_cache();
+		global_cache = cache_conf->create_cache(MAX_NUM_FLUSHES_PER_FILE *
+				raid_conf.get_num_files());
 	}
 
 	~global_cached_io_factory() {
@@ -489,7 +490,8 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 						global_data.complete_threads[node_id],
 						mapper, node_id)));
 	}
-	table = part_global_cached_io::open_file(underlyings, cache_conf);
+	table = part_global_cached_io::open_file(underlyings, cache_conf,
+			raid_conf.get_num_files());
 	this->cache_conf = cache_conf;
 	this->num_nodes = node_id_array.size();
 

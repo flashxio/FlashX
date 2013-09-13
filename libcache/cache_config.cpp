@@ -7,7 +7,8 @@
 #include "NUMA_cache.h"
 #include "file_mapper.h"
 
-page_cache *cache_config::create_cache_on_node(int node_id) const
+page_cache *cache_config::create_cache_on_node(int node_id,
+		int max_num_pending_flush) const
 {
 	page_cache *cache;
 	switch (get_type()) {
@@ -16,7 +17,7 @@ page_cache *cache_config::create_cache_on_node(int node_id) const
 			break;
 		case ASSOCIATIVE_CACHE:
 			cache = associative_cache::create(get_part_size(node_id),
-					MAX_CACHE_SIZE, node_id, 1);
+					MAX_CACHE_SIZE, node_id, 1, max_num_pending_flush);
 			break;
 		case HASH_INDEX_CACHE:
 			cache = new hash_index_cache(get_part_size(node_id), node_id);
@@ -44,14 +45,14 @@ void cache_config::destroy_cache_on_node(page_cache *cache) const
 	}
 }
 
-page_cache *cache_config::create_cache() const
+page_cache *cache_config::create_cache(int max_num_pending_flush) const
 {
 	std::vector<int> node_ids;
 	get_node_ids(node_ids);
 	if (node_ids.size() == 1)
-		return create_cache_on_node(node_ids[0]);
+		return create_cache_on_node(node_ids[0], max_num_pending_flush);
 	else
-		return new NUMA_cache(this);
+		return new NUMA_cache(this, max_num_pending_flush);
 }
 
 void cache_config::destroy_cache(page_cache *cache) const

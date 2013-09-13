@@ -70,7 +70,7 @@ class part_io_process_table
 	int num_groups;
 public:
 	part_io_process_table(std::map<int, io_interface *> &underlyings,
-			const cache_config *config);
+			const cache_config *config, int num_ssds);
 
 	~part_io_process_table();
 
@@ -395,7 +395,7 @@ void process_reply_thread::run()
 
 part_io_process_table::part_io_process_table(
 		std::map<int, io_interface *> &underlyings,
-		const cache_config *config)
+		const cache_config *config, int num_ssds)
 {
 	cache_conf = config;
 	num_groups = underlyings.size();
@@ -408,7 +408,8 @@ part_io_process_table::part_io_process_table(
 		struct thread_group group;
 		group.id = node_id;
 		group.underlying = underlying;
-		group.cache = cache_conf->create_cache_on_node(node_id);
+		group.cache = cache_conf->create_cache_on_node(node_id,
+				MAX_NUM_FLUSHES_PER_FILE * num_ssds / config->get_num_caches());
 		group.request_queue = msg_queue<io_request>::create(node_id, "request_queue", 
 				NUMA_REQ_MSG_QUEUE_SIZE, NUMA_REQ_MSG_QUEUE_SIZE, false);
 		group.msg_allocator = new slab_allocator(NUMA_MSG_SIZE,
@@ -483,9 +484,9 @@ int part_global_cached_io::close_file(part_io_process_table *table)
 
 part_io_process_table *part_global_cached_io::open_file(
 		std::map<int, io_interface *> &underlyings,
-		const cache_config *config)
+		const cache_config *config, int num_ssds)
 {
-	return new part_io_process_table(underlyings, config);
+	return new part_io_process_table(underlyings, config, num_ssds);
 }
 
 part_global_cached_io::part_global_cached_io(int node_id,

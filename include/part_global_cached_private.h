@@ -69,7 +69,7 @@ class part_global_cached_io: public global_cached_io
 public:
 	static part_io_process_table *open_file(
 			std::map<int, io_interface *> &underlyings,
-			const cache_config *config);
+			const cache_config *config, int num_ssds);
 	static int close_file(part_io_process_table *table);
 
 	static part_global_cached_io *create(int node_id,

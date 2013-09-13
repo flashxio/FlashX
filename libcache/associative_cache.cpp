@@ -925,11 +925,12 @@ void associative_cache::sanity_check() const
 }
 
 associative_cache::associative_cache(long cache_size, long max_cache_size,
-		int node_id, int offset_factor, bool expandable): max_num_pending_flush(
-			2048 * 18 / 4)
+		int node_id, int offset_factor, int _max_num_pending_flush,
+		bool expandable): max_num_pending_flush(_max_num_pending_flush)
 {
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
+	printf("max num flushes: %d\n", max_num_pending_flush);
 #ifdef DEBUG
 	printf("associative cache is created on node %d, cache size: %ld, min cell size: %d\n",
 			node_id, cache_size, params.get_SA_min_cell_size());

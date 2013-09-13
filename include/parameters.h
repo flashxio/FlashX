@@ -28,6 +28,12 @@ const int AIO_COMPLETE_BUF_SIZE = 8;
  * of IO completion.
  */
 const int COMPLETION_FLUSH_INTERVAL = 200 * 1000 * 1000;
+/**
+ * This number defines the max number of flushes sent to an SSD.
+ * The number is set based on the performance result.
+ * It varies in different SSDs. It's better that we can estimate at runtime.
+ */
+const int MAX_NUM_FLUSHES_PER_FILE = 2048;
 
 const int MAX_DISK_CACHED_REQS = 1000;
 

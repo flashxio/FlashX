@@ -69,9 +69,9 @@ public:
 			node_ids.push_back(it->first);
 	}
 
-	page_cache *create_cache_on_node(int node_id) const;
+	page_cache *create_cache_on_node(int node_id, int max_num_pending_flush) const;
 	void destroy_cache_on_node(page_cache *cache) const;
-	page_cache *create_cache() const;
+	page_cache *create_cache(int max_num_pending_flush) const;
 	void destroy_cache(page_cache *cache) const;
 
 };

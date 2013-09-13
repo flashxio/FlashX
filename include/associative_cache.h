@@ -401,7 +401,8 @@ class associative_cache: public page_cache
 	pthread_mutex_t init_mutex;
 
 	associative_cache(long cache_size, long max_cache_size, int node_id,
-			int offset_factor, bool expandable = false);
+			int offset_factor, int _max_num_pending_flush,
+			bool expandable = false);
 
 	~associative_cache();
 
@@ -415,11 +416,12 @@ public:
 	const int max_num_pending_flush;
 
 	static associative_cache *create(long cache_size, long max_cache_size,
-			int node_id, int offset_factor, bool expandable = false) {
+			int node_id, int offset_factor, int _max_num_pending_flush,
+			bool expandable = false) {
 		assert(node_id >= 0);
 		void *addr = numa_alloc_onnode(sizeof(associative_cache), node_id);
 		return new(addr) associative_cache(cache_size, max_cache_size,
-				node_id, offset_factor, expandable);
+				node_id, offset_factor, _max_num_pending_flush, expandable);
 	}
 
 	static void destroy(associative_cache *cache) {
