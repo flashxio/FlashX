@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "common.h"
 #include "messaging.h"
@@ -83,6 +84,29 @@ void permute_offsets(int num, int repeats, int stride, off_t start,
 		off_t tmp = offsets[j];
 		offsets[j] = offsets[i];
 		offsets[i] = tmp;
+	}
+}
+
+bool enable_debug = false;
+
+static void enable_debug_handler(int sig, siginfo_t *si, void *uc)
+{
+	enable_debug = true;
+	printf("debug mode is enabled\n");
+}
+
+void set_enable_debug_signal()
+{
+	struct sigaction sa;
+
+	/* Establish handler for timer signal */
+
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = enable_debug_handler;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+		perror("sigaction");
+		exit(1);
 	}
 }
 }

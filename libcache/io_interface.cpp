@@ -280,6 +280,7 @@ void init_io_system(const RAID_config &raid_conf,
 		// Set a timer that flush the nofications of request completion
 		// periodically.
 		set_completion_flush_timer();
+		set_enable_debug_signal();
 	}
 	pthread_mutex_unlock(&global_data.mutex);
 	delete mapper;
