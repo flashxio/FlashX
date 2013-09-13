@@ -1148,7 +1148,9 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 	cache->num_dirty_pages.dec(num);
 	int orig = cache->num_pending_flush.get();
 #endif
-	flush_thread->run();
+	if (cache->num_pending_flush.get() < cache->max_num_pending_flush) {
+		flush_thread->run();
+	}
 #ifdef DEBUG
 	if (enable_debug)
 		printf("node %d: %d orig, %d pending, %d dirty cells, %d dirty pages\n",
