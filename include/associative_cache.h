@@ -304,12 +304,6 @@ public:
 	 */
 	void steal_pages(char *pages[], int &npages);
 
-	void print_cell() {
-		for (unsigned int i = 0; i < buf.get_num_pages(); i++)
-			printf("%lx\t", buf.get_page(i)->get_offset());
-		printf("\n");
-	}
-
 	/**
 	 * This method returns a specified number of pages that contains
 	 * set flags and don't contain clear flags.
@@ -363,6 +357,8 @@ public:
 	long get_num_evictions() const {
 		return num_evictions;
 	}
+
+	void print_cell();
 };
 
 class flush_thread;

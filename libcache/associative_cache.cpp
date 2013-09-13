@@ -372,6 +372,19 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 	return ret;
 }
 
+void hash_cell::print_cell()
+{
+	pthread_spin_lock(&_lock);
+	printf("cell: %ld, in queue: %d\n", get_hash(), is_in_queue());
+	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
+		thread_safe_page *p = buf.get_page(i);
+		printf("p%lx, ready: %d, io: %d, dirty: %d, old dirty: %d, writeback: %d\n",
+				p->get_offset(), p->data_ready(), p->is_io_pending(), p->is_dirty(),
+				p->is_old_dirty(), p->is_prepare_writeback());
+	}
+	pthread_spin_unlock(&_lock);
+}
+
 /* this function has to be called with lock held */
 thread_safe_page *hash_cell::get_empty_page() {
 	thread_safe_page *ret = NULL;
