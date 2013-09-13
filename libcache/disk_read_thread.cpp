@@ -57,6 +57,9 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 				req.get_offset());
 		// The page has been evicted.
 		if (p == NULL) {
+			// The original page has been evicted, we should clear
+			// the prepare-writeback flag on it.
+			req.get_page(0)->set_prepare_writeback(false);
 			num_ignored_low_prio_accesses++;
 			ignore_flush(ignored_flushes, req);
 			continue;
@@ -64,7 +67,6 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 		// If the original page has been evicted and the new page for
 		// the offset has been added to the cache.
 		if (p != req.get_page(0)) {
-			p->unlock();
 			p->dec_ref();
 			// The original page has been evicted, we should clear
 			// the prepare-writeback flag on it.
