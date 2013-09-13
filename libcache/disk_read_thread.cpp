@@ -127,6 +127,10 @@ void disk_read_thread::run() {
 	while (true) {
 		int num;
 		num = queue.non_blocking_fetch(msg_buffer, LOCAL_BUF_SIZE);
+		if (enable_debug)
+			printf("I/O thread %d: queue size: %d, low-prio queue size: %d\n",
+					get_node_id(), queue.get_num_entries(),
+					low_prio_queue.get_num_entries());
 		// The high-prio queue is empty.
 		bool processed_low_prio = false;
 		while (num == 0) {

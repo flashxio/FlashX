@@ -414,6 +414,9 @@ public:
 	// The number of pages in the I/O queue waiting to be flushed.
 	atomic_integer num_pending_flush;
 	const int max_num_pending_flush;
+#ifdef DEBUG
+	atomic_integer num_dirty_pages;
+#endif
 
 	static associative_cache *create(long cache_size, long max_cache_size,
 			int node_id, int offset_factor, int _max_num_pending_flush,

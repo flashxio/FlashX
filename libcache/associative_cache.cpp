@@ -369,6 +369,10 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 	}
 	ret->hit();
 	pthread_spin_unlock(&_lock);
+#ifdef DEBUG
+	if (enable_debug && ret->is_old_dirty())
+		print_cell();
+#endif
 	return ret;
 }
 
@@ -886,7 +890,12 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 	 * for the cell.
 	 */
 	do {
-		return get_cell_offset(offset)->search(offset, old_off);
+		page *p = get_cell_offset(offset)->search(offset, old_off);
+#ifdef DEBUG
+		if (p->is_old_dirty())
+			num_dirty_pages.dec(1);
+#endif
+		return p;
 	} while (true);
 }
 
@@ -1135,7 +1144,18 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 	}
 
 	cache->num_pending_flush.dec(num);
+#ifdef DEBUG
+	cache->num_dirty_pages.dec(num);
+	int orig = cache->num_pending_flush.get();
+#endif
 	flush_thread->run();
+#ifdef DEBUG
+	if (enable_debug)
+		printf("node %d: %d orig, %d pending, %d dirty cells, %d dirty pages\n",
+				get_node_id(), orig, cache->num_pending_flush.get(),
+				flush_thread->dirty_cells.get_num_entries(),
+				cache->num_dirty_pages.get());
+#endif
 }
 
 void merge_pages2req(io_request &req, page_cache *cache);
@@ -1270,6 +1290,9 @@ flush_thread *associative_cache::create_flush_thread(io_interface *io,
 void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num,
 		io_interface *io)
 {
+#ifdef DEBUG
+	num_dirty_pages.inc(num);
+#endif
 	if (_flush_thread)
 		_flush_thread->flush_dirty_pages(pages, num, io);
 }
@@ -1417,5 +1440,11 @@ void associative_flush_thread::flush_dirty_pages(thread_safe_page *pages[],
 			printf("only queue %d in %d dirty cells\n", ret, num_queued_cells);
 		}
 	}
+#ifdef DEBUG
+	if (enable_debug)
+		printf("node %d: %d flushes, %d pending, %d dirty cells, %d dirty pages\n",
+				get_node_id(), num_flushes, local_cache->num_pending_flush.get(),
+				dirty_cells.get_num_entries(), local_cache->num_dirty_pages.get());
+#endif
 #endif
 }
