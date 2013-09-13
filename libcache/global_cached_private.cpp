@@ -461,6 +461,7 @@ global_cached_io::global_cached_io(io_interface *underlying,
 	pthread_cond_init(&wait_cond, NULL);
 	wait_req = NULL;
 	status = 0;
+	num_evicted_dirty_pages = 0;
 }
 
 global_cached_io::~global_cached_io()
@@ -945,6 +946,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 
 			/* This page has been evicted. */
 			if (p->is_old_dirty()) {
+				num_evicted_dirty_pages++;
 				/*
 				 * We got a few contiguous pages for read, so we should split
 				 * the request and issue reads for the contiguous pages first.

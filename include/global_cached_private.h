@@ -41,6 +41,7 @@ class global_cached_io: public io_interface
 
 	int cache_hits;
 	int num_fast_process;
+	int num_evicted_dirty_pages;
 
 	// Count the number of async requests.
 	atomic_integer num_completed_areqs;
@@ -199,6 +200,7 @@ public:
 		}
 		printf("there are %d waits\n", num_waits);
 		printf("There are %d requests processed in the fast path\n", tot_fast_process);
+		printf("There are %d evicted dirty pages\n", num_evicted_dirty_pages);
 	}
 #endif
 };
