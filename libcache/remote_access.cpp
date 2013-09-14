@@ -4,6 +4,8 @@
 #include "disk_read_thread.h"
 #include "file_mapper.h"
 
+const int NUM_PROCESS_COMPLETED_REQS = 8;
+
 /**
  * The maximal number of pending IOs is decided by the maximal pending IOs
  * allowed on each I/O thread divided by the number of remote_disk_access.
@@ -17,80 +19,34 @@ int remote_disk_access::get_max_num_pending_ios() const
 
 void remote_disk_access::notify_completion(io_request *reqs[], int num)
 {
-	// There are a few cases for the incoming requests.
-	//	the requests issued by the upper layer IO;
-	//	the requests split by the current IO;
-	//	the requests issued by an application.
-	io_request *from_upper[num];
-	io_request *from_app[num];
-	io_interface *upper_io = NULL;
-	int num_from_upper = 0;
-	int num_from_app = 0;
-	int num_part_reqs = 0;
-	std::vector<io_request *> completes;
+#ifdef MEMCHECK
+	io_request *req_copies = new io_request[num];
+#else
+	io_request req_copies[num];
+#endif
 	for (int i = 0; i < num; i++) {
-		// The requests issued by the upper layer IO.
-		if (reqs[i]->get_io() != this) {
-			if (upper_io == NULL)
-				upper_io = reqs[i]->get_io();
-			else
-				// They should be from the same upper layer IO.
-				assert(upper_io == reqs[i]->get_io());
-			from_upper[num_from_upper++] = reqs[i];
-			continue;
-		}
-		if (reqs[i]->get_io() == this && !reqs[i]->is_extended_req()) {
-			from_app[num_from_app++] = reqs[i];
-			continue;
-		}
-
-		io_request *orig = reqs[i]->get_orig();
-		io_request *req = reqs[i];
-		orig->inc_complete_count();
-		if (orig->complete_size(req->get_size()))
-			completes.push_back(orig);
-		else {
-			orig->dec_complete_count();
-			num_part_reqs++;
-		}
-	}
-	if (num_from_upper > 0)
-		upper_io->notify_completion(from_upper, num_from_upper);
-	if (num_from_app > 0 && this->get_callback())
-		this->get_callback()->invoke(from_app, num_from_app);
-
-	for (unsigned i = 0; i < completes.size(); i++) {
-		io_request *orig = completes[i];
-		assert(orig->is_extended_req());
-		io_interface *io = orig->get_io();
-		// It's from an application.
-		if (io == this) {
-			if (io->get_callback())
-				io->get_callback()->invoke(&orig, 1);
-		}
-		else
-			io->notify_completion(&orig, 1);
-		orig->dec_complete_count();
-		orig->wait4unref();
-		// Now we can delete it.
-		delete orig;
+		req_copies[i] = *reqs[i];
+		assert(req_copies[i].get_io());
 	}
 
-	num_completed_reqs.inc(num - num_part_reqs);
-
-	pthread_cond_signal(&wait_cond);
+	int ret = complete_queue.add(req_copies, num);
+	assert(ret == num);
+	// We only wake up the issuer thread when we buffer a few requests.
+	if (complete_queue.get_num_entries() > AIO_COMPLETE_BUF_SIZE)
+		pthread_cond_signal(&wait_cond);
+#ifdef MEMCHECK
+	delete [] req_copies;
+#endif
 }
 
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
-		aio_complete_thread *complete_thread, file_mapper *mapper, int node_id,
-		int max_reqs): io_interface(node_id), max_disk_cached_reqs(max_reqs)
+		file_mapper *mapper, int node_id, int max_reqs): io_interface(
+			// TODO I hope the queue size is large enough.
+			node_id), max_disk_cached_reqs(max_reqs), complete_queue(node_id,
+				COMPLETE_QUEUE_SIZE)
 {
 	num_ios.inc(1);
 	this->io_threads = remotes;
-	if (complete_thread == NULL)
-		this->complete_queue = NULL;
-	else
-		this->complete_queue = complete_thread->get_queue();
 	// TODO I need to deallocate it later.
 	msg_allocator = new slab_allocator(IO_MSG_SIZE * sizeof(io_request),
 			IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, node_id);
@@ -136,13 +92,14 @@ io_interface *remote_disk_access::clone() const
 	}
 	copy->cb = this->cb;
 	copy->block_mapper = this->block_mapper;
-	copy->complete_queue = this->complete_queue;
 	copy->msg_allocator = this->msg_allocator;
 	return copy;
 }
 
 void remote_disk_access::cleanup()
 {
+	process_completed_requests(complete_queue.get_num_entries());
+
 	num_ios.dec(1);
 	for (unsigned i = 0; i < senders.size(); i++) {
 		senders[i]->flush_all();
@@ -285,10 +242,95 @@ void remote_disk_access::flush_requests()
 	flush_requests(0);
 }
 
+int remote_disk_access::process_completed_requests(int num)
+{
+	if (num > 0) {
+#ifdef MEMCHECK
+		io_request *reqs = new io_request[num];
+#else
+		io_request reqs[num];
+#endif
+		int ret = complete_queue.fetch(reqs, num);
+		process_completed_requests(reqs, ret);
+#ifdef MEMCHECK
+		delete [] reqs;
+#endif
+		return ret;
+	}
+	else
+		return 0;
+}
+
+int remote_disk_access::process_completed_requests(io_request reqs[], int num)
+{
+	// There are a few cases for the incoming requests.
+	//	the requests issued by the upper layer IO;
+	//	the requests split by the current IO;
+	//	the requests issued by an application.
+	io_request *from_upper[num];
+	io_request *from_app[num];
+	io_interface *upper_io = NULL;
+	int num_from_upper = 0;
+	int num_from_app = 0;
+	int num_part_reqs = 0;
+	std::vector<io_request *> completes;
+	for (int i = 0; i < num; i++) {
+		assert(reqs[i].get_io());
+		// The requests issued by the upper layer IO.
+		if (reqs[i].get_io() != this) {
+			if (upper_io == NULL)
+				upper_io = reqs[i].get_io();
+			else
+				// They should be from the same upper layer IO.
+				assert(upper_io == reqs[i].get_io());
+			from_upper[num_from_upper++] = &reqs[i];
+			continue;
+		}
+		if (reqs[i].get_io() == this && !reqs[i].is_extended_req()) {
+			from_app[num_from_app++] = &reqs[i];
+			continue;
+		}
+
+		io_request *orig = reqs[i].get_orig();
+		io_request *req = &reqs[i];
+		orig->inc_complete_count();
+		if (orig->complete_size(req->get_size()))
+			completes.push_back(orig);
+		else {
+			orig->dec_complete_count();
+			num_part_reqs++;
+		}
+	}
+	if (num_from_upper > 0) {
+		assert(upper_io);
+		upper_io->notify_completion(from_upper, num_from_upper);
+	}
+	if (num_from_app > 0 && this->get_callback())
+		this->get_callback()->invoke(from_app, num_from_app);
+
+	for (unsigned i = 0; i < completes.size(); i++) {
+		io_request *orig = completes[i];
+		assert(orig->is_extended_req());
+		io_interface *io = orig->get_io();
+		// It's from an application.
+		if (io == this) {
+			if (io->get_callback())
+				io->get_callback()->invoke(&orig, 1);
+		}
+		else
+			io->notify_completion(&orig, 1);
+		orig->dec_complete_count();
+		orig->wait4unref();
+		// Now we can delete it.
+		delete orig;
+	}
+
+	num_completed_reqs.inc(num - num_part_reqs);
+	return num - num_part_reqs;
+}
+
 void remote_disk_access::flush_requests(int max_cached)
 {
-	if (complete_queue)
-		complete_queue->process(1000, false);
 	int num_high_prio_remaining = 0;
 	int num_low_prio_remaining = 0;
 	// Now let's flush requests to the queues, but we first try to
@@ -361,8 +403,16 @@ int remote_disk_access::wait4complete(int num_to_complete)
 		pthread_mutex_lock(&wait_mutex);
 		// If the number of completed requests after the function is called
 		// is smaller than the specified number, we should wait.
-		while (pending - num_pending_ios() < num_to_complete)
-			pthread_cond_wait(&wait_cond, &wait_mutex);
+		while (pending - num_pending_ios() < num_to_complete) {
+			int num = complete_queue.get_num_entries();
+			if (num > 0) {
+				pthread_mutex_unlock(&wait_mutex);
+				process_completed_requests(num);
+				pthread_mutex_lock(&wait_mutex);
+			}
+			else
+				pthread_cond_wait(&wait_cond, &wait_mutex);
+		}
 		pthread_mutex_unlock(&wait_mutex);
 	}
 	return pending - num_pending_ios();

@@ -2,13 +2,14 @@
 #define __REMOTE_ACCESS_H__
 
 #include "io_interface.h"
+#include "container.h"
 
 class request_sender;
 class disk_read_thread;
-class aio_complete_queue;
-class aio_complete_thread;
 class slab_allocator;
 class file_mapper;
+
+const int COMPLETE_QUEUE_SIZE = 10240;
 
 /**
  * This class is to help the local thread send IO requests to remote threads
@@ -28,7 +29,7 @@ class remote_disk_access: public io_interface
 	std::vector<disk_read_thread *> io_threads;
 	callback *cb;
 	file_mapper *block_mapper;
-	aio_complete_queue *complete_queue;
+	thread_safe_FIFO_queue<io_request> complete_queue;
 	slab_allocator *msg_allocator;
 
 	pthread_mutex_t wait_mutex;
@@ -37,13 +38,16 @@ class remote_disk_access: public io_interface
 	atomic_integer num_issued_reqs;
 
 	remote_disk_access(int node_id, int max_reqs): io_interface(
-			node_id), max_disk_cached_reqs(max_reqs) {
+			node_id), max_disk_cached_reqs(max_reqs), complete_queue(node_id,
+				COMPLETE_QUEUE_SIZE) {
 		cb = NULL;
 		block_mapper = NULL;
 	}
+
+	int process_completed_requests(io_request reqs[], int num);
+	int process_completed_requests(int num);
 public:
 	remote_disk_access(const std::vector<disk_read_thread *> &remotes,
-			aio_complete_thread *complete_thread,
 			file_mapper *mapper, int node_id,
 			int max_reqs = MAX_DISK_CACHED_REQS);
 

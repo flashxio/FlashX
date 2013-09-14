@@ -13,7 +13,6 @@
 void *process_requests(void *arg);
 
 class async_io;
-class aio_complete_thread;
 
 class disk_read_thread
 {
@@ -37,9 +36,7 @@ class disk_read_thread
 			std::tr1::unordered_map<io_interface *, int> &ignored_flushes);
 
 public:
-	disk_read_thread(const logical_file_partition &partition,
-			const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
-			int node_id);
+	disk_read_thread(const logical_file_partition &partition, int node_id);
 
 	msg_queue<io_request> *get_queue() {
 		return &queue;

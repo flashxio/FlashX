@@ -4,7 +4,6 @@
 #include "aio_private.h"
 
 disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
-		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 		int node_id): queue(node_id, std::string("io-queue-") + itoa(node_id),
 			IO_QUEUE_SIZE, INT_MAX, false), low_prio_queue(node_id,
 				// TODO let's allow the low-priority queue to
@@ -12,7 +11,7 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 				std::string("io-queue-low_prio-") + itoa(node_id),
 				IO_QUEUE_SIZE, INT_MAX, false), partition(_partition)
 {
-	aio = new async_io(_partition, complete_threads, AIO_DEPTH_PER_FILE, node_id);
+	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, node_id);
 	this->node_id = node_id;
 	num_accesses = 0;
 	num_low_prio_accesses = 0;

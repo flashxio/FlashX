@@ -20,15 +20,6 @@ const int MAX_BUF_REQS = 1024 * 3;
 #define ALLOW_DROP
 #endif
 
-class aio_complete_sender: public simple_sender<thread_callback_s *>
-{
-public:
-	aio_complete_sender(int node_id,
-			aio_complete_queue *queue): simple_sender<thread_callback_s *>(
-			node_id, queue->get_queue(), AIO_DEPTH_PER_FILE) {
-	}
-};
-
 struct thread_callback_s
 {
 	struct io_callback_s cb;
@@ -74,7 +65,6 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 }
 
 async_io::async_io(const logical_file_partition &partition,
-		const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 		int aio_depth_per_file, int node_id): io_interface(node_id), AIO_DEPTH(
 			aio_depth_per_file)
 {
@@ -84,13 +74,6 @@ async_io::async_io(const logical_file_partition &partition,
 	ctx = create_aio_ctx(AIO_DEPTH);
 	cb = NULL;
 	num_iowait = 0;
-	for (std::tr1::unordered_map<int, aio_complete_thread *>::const_iterator it
-			= complete_threads.begin(); it != complete_threads.end(); it++) {
-		complete_senders.insert(std::pair<int, aio_complete_sender *>(it->first,
-					new aio_complete_sender(node_id, it->second->get_queue())));
-		remote_tcbs.insert(std::pair<int, fifo_queue<thread_callback_s *> *>(
-					it->first, fifo_queue<thread_callback_s *>::create(node_id, AIO_DEPTH)));
-	}
 	num_completed_reqs = 0;
 	if (partition.is_active()) {
 		int file_id = partition.get_file_id();
@@ -122,17 +105,6 @@ async_io::~async_io()
 {
 	cleanup();
 	destroy_aio_ctx(ctx);
-	for (std::tr1::unordered_map<int, aio_complete_sender *>::const_iterator it
-			= complete_senders.begin(); it != complete_senders.end(); it++) {
-		aio_complete_sender *sender = it->second;
-		assert(sender->get_num_remaining() == 0);
-		delete sender;
-	}
-	for (std::tr1::unordered_map<int, fifo_queue<thread_callback_s *> *>::const_iterator it
-			= remote_tcbs.begin(); it != remote_tcbs.end(); it++) {
-		assert(it->second->get_num_entries() == 0);
-		delete it->second;
-	}
 	for (std::tr1::unordered_map<int, buffered_io *>::const_iterator it
 			= open_files.begin(); it != open_files.end(); it++)
 		delete it->second;
@@ -236,84 +208,40 @@ void async_io::access(io_request *requests, int num, io_status *status)
 void async_io::return_cb(thread_callback_s *tcbs[], int num)
 {
 	num_completed_reqs += num;
-	thread_callback_s *local_tcbs[num];
-	// If there is a dedicated thread to process the completed requests,
-	// send the requests to it.
-	// But we process completed requests ourselves if there aren't
-	// so many. It's very often that there are only few completed requests,
-	// It seems many numbers work. 5 is just randomly picked.
-	if (complete_senders.size() > 0) {
-		int num_remote = 0;
-		int num_local = 0;
-		for (int i = 0; i < num; i++) {
-			thread_callback_s *tcb = tcbs[i];
-			// We have allocated a local buffer, and it is a read request,
-			// we need to copy data back to the issuer processor.
-			// Pushing data to remote memory is more expensive than pulling
-			// data from remote memory, so we let the issuer processor pull
-			// data.
-			assert(tcb->req.get_node_id() >= 0);
-			if  (tcb->req.get_node_id() != this->get_node_id()) {
-				remote_tcbs[tcb->req.get_node_id()]->push_back(tcb);
-				num_remote++;
-			}
-			else
-				local_tcbs[num_local++] = tcb;
-		}
-		if (num_remote > 0) {
-			thread_callback_s *tcbs1[num];
-			for (std::tr1::unordered_map<int, aio_complete_sender *>::iterator it
-					= complete_senders.begin(); it != complete_senders.end(); it++) {
-				aio_complete_sender *sender = it->second;
-				int ret = remote_tcbs[it->first]->fetch(tcbs1, num);
-				assert(ret <= num);
-				assert(remote_tcbs[it->first]->is_empty());
-				if (ret == 0)
-					continue;
 
-				sender->send_cached(tcbs1, ret);
-				bool to_flush = false;
-				for (int i = 0; i < ret; i++)
-					if (tcbs1[i]->req.is_sync() || tcbs1[i]->req.is_low_latency()) {
-						to_flush = true;
-						break;
-					}
-				// Some requests may be synchronous, we should send them back
-				// as quickly as possible.
-				if (to_flush) {
-					sender->flush(false);
-				}
-				else {
-					int num_msg = sender->get_num_remaining();
-					if (num_msg >= AIO_COMPLETE_BUF_SIZE) {
-						sender->flush(false);
-						assert(sender->get_num_remaining() < num_msg);
-					}
-				}
-			}
-		}
-		if (num_local > 0) {
-			aio_complete_sender *sender = complete_senders[this->get_node_id()];
-			sender->send_cached(local_tcbs, num_local);
-			sender->flush(false);
-		}
-		return;
-	}
-	if (num == 0)
-		return;
-
-	// Otherwise, we process them ourselves.
-	io_request *reqs[num];
+	// We should try to invoke for as many requests as possible,
+	// so the upper layer has the opportunity to optimize the request completion.
+	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > map;
 	for (int i = 0; i < num; i++) {
 		thread_callback_s *tcb = tcbs[i];
-		reqs[i] = &tcb->req;
+		std::vector<io_request *> *v;
+		std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it;
+		io_interface *io = tcb->req.get_io();
+		if ((it = map.find(io)) == map.end()) {
+			map.insert(std::pair<io_interface *, std::vector<io_request *> >(
+						io, std::vector<io_request *>()));
+			v = &map[io];
+		}
+		else
+			v = &it->second;
+
+		v->push_back(&tcb->req);
 	}
+	for (std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it
+			= map.begin(); it != map.end(); it++) {
+		io_interface *io = it->first;
+		std::vector<io_request *> *v = &it->second;
+		io->notify_completion(v->data(), v->size());
+	}
+	for (int i = 0; i < num; i++) {
+		tcbs[i]->cb_allocator->free(tcbs[i]);
+	}
+}
+
+void async_io::notify_completion(io_request *reqs[], int num)
+{
 	if (this->cb) {
 		this->cb->invoke(reqs, num);
-	}
-	for (int i = 0; i < num; i++) {
-		thread_callback_s *tcb = tcbs[i];
-		cb_allocator->free(tcb);
 	}
 }
 
@@ -344,62 +272,6 @@ int async_io::close_file(int file_id)
 
 void async_io::flush_requests()
 {
-	// There is nothing we can flush for incoming requests,
-	// but we can flush completed requests.
-	for (std::tr1::unordered_map<int, aio_complete_sender *>::iterator it
-			= complete_senders.begin(); it != complete_senders.end(); it++) {
-		aio_complete_sender *sender = it->second;
-		sender->flush(true);
-	}
 }
 
 const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;
-
-int aio_complete_queue::process(int max_num, bool blocking)
-{
-	if (queue.is_empty() && !blocking)
-		return 0;
-	thread_callback_s *tcbs[max_num];
-	int num;
-	if (blocking)
-		num = queue.fetch(tcbs, max_num);
-	else {
-		num = queue.non_blocking_fetch(tcbs, max_num);
-	}
-
-	// We should try to invoke for as many requests as possible,
-	// so the upper layer has the opportunity to optimize the request completion.
-	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > map;
-	for (int i = 0; i < num; i++) {
-		thread_callback_s *tcb = tcbs[i];
-		std::vector<io_request *> *v;
-		std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it;
-		io_interface *io = tcb->req.get_io();
-		if ((it = map.find(io)) == map.end()) {
-			map.insert(std::pair<io_interface *, std::vector<io_request *> >(
-						io, std::vector<io_request *>()));
-			v = &map[io];
-		}
-		else
-			v = &it->second;
-
-		v->push_back(&tcb->req);
-	}
-	for (std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it
-			= map.begin(); it != map.end(); it++) {
-		io_interface *io = it->first;
-		std::vector<io_request *> *v = &it->second;
-		io->notify_completion(v->data(), v->size());
-	}
-	for (int i = 0; i < num; i++) {
-		tcbs[i]->cb_allocator->free(tcbs[i]);
-	}
-	return num;
-}
-
-void aio_complete_thread::run()
-{
-	while(true) {
-		num_completed_reqs += queue.process(AIO_NUM_PROCESS_REQS, true);
-	}
-}

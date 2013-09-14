@@ -13,27 +13,7 @@
 void aio_callback(io_context_t, struct iocb*, void *, long, long);
 
 struct thread_callback_s;
-class aio_complete_thread;
 
-class aio_complete_queue
-{
-	blocking_FIFO_queue<thread_callback_s *> queue;
-public:
-	aio_complete_queue(int node_id): queue(node_id, "aio_completes",
-			// The max size of the queue can be unlimited.
-			// The number of completed requests is limited by the number of
-			// requests issued by the user.
-			AIO_DEPTH_PER_FILE, INT_MAX) {
-	}
-
-	blocking_FIFO_queue<thread_callback_s *> *get_queue() {
-		return &queue;
-	}
-
-	int process(int max_num, bool blocking);
-};
-
-class aio_complete_sender;
 class buffered_io;
 class logical_file_partition;
 class callback_allocator;
@@ -45,8 +25,6 @@ class async_io: public io_interface
 	callback *cb;
 	const int AIO_DEPTH;
 	callback_allocator *cb_allocator;
-	std::tr1::unordered_map<int, aio_complete_sender *> complete_senders;
-	std::tr1::unordered_map<int, fifo_queue<thread_callback_s *> *> remote_tcbs;
 
 	int num_iowait;
 	int num_completed_reqs;
@@ -62,7 +40,6 @@ public:
 	 * @node_id: the NUMA node where the disks to be read are connected to.
 	 */
 	async_io(const logical_file_partition &partition,
-			const std::tr1::unordered_map<int, aio_complete_thread *> &complete_threads,
 			int aio_depth_per_file, int node_id);
 
 	virtual ~async_io();
@@ -99,6 +76,7 @@ public:
 		return AIO_DEPTH - max_io_slot(ctx);
 	}
 
+	virtual void notify_completion(io_request *reqs[], int num);
 	int wait4complete(int num) {
 		return io_wait(ctx, NULL, num);
 	}
@@ -127,28 +105,6 @@ public:
 	 */
 	int open_file(const logical_file_partition &partition);
 	int close_file(int file_id);
-};
-
-class aio_complete_thread: public thread
-{
-	aio_complete_queue queue;
-	int num_completed_reqs;
-public:
-	aio_complete_thread(int node_id): thread("aio_complete_thread",
-			node_id), queue(node_id) {
-		num_completed_reqs = 0;
-		start();
-	}
-
-	void run();
-
-	int get_num_completed_reqs() const {
-		return num_completed_reqs;
-	}
-
-	aio_complete_queue *get_queue() {
-		return &queue;
-	}
 };
 
 #endif

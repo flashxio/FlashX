@@ -158,7 +158,6 @@ void release_io(io_interface *io)
 struct global_data_collection
 {
 	std::vector<disk_read_thread *> read_threads;
-	std::tr1::unordered_map<int, aio_complete_thread *>  complete_threads;
 	pthread_mutex_t mutex;
 
 	global_data_collection() {
@@ -246,7 +245,6 @@ void init_io_system(const RAID_config &raid_conf,
 {
 	numa_set_bind_policy(1);
 
-	int num_nodes = node_id_array.size();
 	file_mapper *mapper = raid_conf.create_file_mapper();
 	int num_files = mapper->get_num_files();
 
@@ -261,19 +259,11 @@ void init_io_system(const RAID_config &raid_conf,
 	// The global data hasn't been initialized.
 	if (global_data.read_threads.size() == 0) {
 		global_data.read_threads.resize(num_files);
-		// Create threads for helping process completed AIO requests.
-		for (int i = 0; i < num_nodes; i++) {
-			int node_id = node_id_array[i];
-			global_data.complete_threads.insert(
-					std::pair<int, aio_complete_thread *>(node_id,
-						new aio_complete_thread(node_id)));
-		}
 		for (int k = 0; k < num_files; k++) {
 			std::vector<int> indices(1, k);
 			logical_file_partition partition(indices);
 			// Create disk accessing threads.
 			global_data.read_threads[k] = new disk_read_thread(partition,
-					global_data.complete_threads,
 					raid_conf.get_file(k).node_id);
 		}
 
@@ -425,9 +415,7 @@ io_interface *aio_factory::create_io(int node_id)
 	logical_file_partition global_partition(indices, mapper);
 
 	io_interface *io;
-	std::tr1::unordered_map<int, aio_complete_thread *> no_complete_threads;
-	io = new async_io(global_partition, no_complete_threads,
-			io_depth_per_file, node_id);
+	io = new async_io(global_partition, io_depth_per_file, node_id);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
 }
@@ -446,20 +434,12 @@ remote_io_factory::remote_io_factory(const RAID_config &_raid_conf,
 	for (int i = 0; i < num_files; i++) {
 		global_data.read_threads[i]->open_file(mapper);
 	}
-
-	// We have to make sure the nodes where IOs are going to create
-	// has I/O complete threads.
-	for (unsigned i = 0; i < node_id_array.size(); i++) {
-		int node_id = node_id_array[i];
-		assert(global_data.complete_threads.find(node_id)
-				!= global_data.complete_threads.end());
-	}
 }
 
 io_interface *remote_io_factory::create_io(int node_id)
 {
 	io_interface *io = new remote_disk_access(global_data.read_threads,
-			global_data.complete_threads[node_id], mapper, node_id);
+			mapper, node_id);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
 }
@@ -467,9 +447,7 @@ io_interface *remote_io_factory::create_io(int node_id)
 io_interface *global_cached_io_factory::create_io(int node_id)
 {
 	io_interface *underlying = new remote_disk_access(
-			global_data.read_threads,
-			global_data.complete_threads[node_id],
-			mapper, node_id);
+			global_data.read_threads, mapper, node_id);
 	global_cached_io *io = new global_cached_io(underlying,
 			global_cache);
 	register_io(raid_conf.get_conf_file(), io);
@@ -485,9 +463,7 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 	for (unsigned i = 0; i < node_id_array.size(); i++) {
 		int node_id = node_id_array[i];
 		underlyings.insert(std::pair<int, io_interface *>(node_id,
-					new remote_disk_access(
-						global_data.read_threads,
-						global_data.complete_threads[node_id],
+					new remote_disk_access(global_data.read_threads,
 						mapper, node_id)));
 	}
 	table = part_global_cached_io::open_file(underlyings, cache_conf,
