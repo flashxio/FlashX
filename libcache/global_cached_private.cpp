@@ -7,6 +7,7 @@
 
 // TODO I assume the block size of the RAID array is 16 pages.
 const int RAID_BLOCK_SIZE = 16 * PAGE_SIZE;
+const int COMPLETE_QUEUE_SIZE = 10240;
 
 #define ENABLE_LARGE_WRITE
 //#define TEST_HIT_RATE
@@ -350,7 +351,8 @@ int global_cached_io::multibuf_completion(io_request *request,
 	return -1;
 }
 
-void global_cached_io::notify_completion(io_request *requests[], int num)
+void global_cached_io::process_completed_requests(io_request requests[],
+		int num)
 {
 #ifdef STATISTICS
 	num_from_underlying.inc(num);
@@ -358,7 +360,7 @@ void global_cached_io::notify_completion(io_request *requests[], int num)
 	page_cache *cache = this->get_global_cache();
 	std::vector<thread_safe_page *> dirty_pages;
 	for (int i = 0; i < num; i++) {
-		io_request *request = requests[i];
+		io_request *request = &requests[i];
 		/* 
 		 * If the request doesn't have an original request,
 		 * it is issued by the flushing thread.
@@ -449,7 +451,8 @@ void global_cached_io::notify_completion(io_request *requests[], int num)
 
 global_cached_io::global_cached_io(io_interface *underlying,
 		page_cache *cache): io_interface(underlying->get_node_id()),
-	pending_requests(underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE)
+	pending_requests(underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
+	complete_queue(underlying->get_node_id(), COMPLETE_QUEUE_SIZE)
 {
 	req_allocator = new request_allocator(underlying->get_node_id(),
 			sizeof(io_request) * 1024);
@@ -1132,7 +1135,23 @@ int global_cached_io::wait4complete(int num_to_complete)
 		// If the number of completed requests after the function is called
 		// is smaller than the specified number, we should wait.
 		while (pending - num_pending_ios() < num_to_complete) {
-			if (!pending_requests.is_empty()) {
+			int num = complete_queue.get_num_entries();
+			if (num > 0) {
+				pthread_mutex_unlock(&wait_mutex);
+#ifdef MEMCHECK
+				io_request *reqs = new io_request[num];
+#else
+				io_request reqs[num];
+#endif
+				int ret = complete_queue.fetch(reqs, num);
+				assert(ret == num);
+				process_completed_requests(reqs, num);
+#ifdef MEMCHECK
+				delete [] reqs;
+#endif
+				pthread_mutex_lock(&wait_mutex);
+			}
+			else if (!pending_requests.is_empty()) {
 				pthread_mutex_unlock(&wait_mutex);
 				handle_pending_requests();
 				pthread_mutex_lock(&wait_mutex);
@@ -1155,4 +1174,26 @@ int global_cached_io::wait4complete(int num_to_complete)
 	}
 
 	return pending - num_pending_ios();
+}
+
+void global_cached_io::notify_completion(io_request *reqs[], int num)
+{
+#ifdef MEMCHECK
+	io_request *req_copies = new io_request[num];
+#else
+	io_request req_copies[num];
+#endif
+	for (int i = 0; i < num; i++) {
+		req_copies[i] = *reqs[i];
+		assert(req_copies[i].get_io());
+	}
+
+	int ret = complete_queue.add(req_copies, num);
+	assert(ret == num);
+	// We only wake up the issuer thread when we buffer a few requests.
+	if (complete_queue.get_num_entries() > AIO_COMPLETE_BUF_SIZE)
+		pthread_cond_signal(&wait_cond);
+#ifdef MEMCHECK
+	delete [] req_copies;
+#endif
 }

@@ -25,6 +25,7 @@ class global_cached_io: public io_interface
 
 	request_allocator *req_allocator;
 
+	thread_safe_FIFO_queue<io_request> complete_queue;
 	pthread_mutex_t wait_mutex;
 	pthread_cond_t wait_cond;
 	// These are used for implementing sync IO.
@@ -58,6 +59,7 @@ class global_cached_io: public io_interface
 		std::vector<thread_safe_page *> &dirty_pages);
 	int multibuf_completion(io_request *request,
 			std::vector<thread_safe_page *> &dirty_pages);
+	void process_completed_requests(io_request requests[], int num);
 public:
 	global_cached_io(io_interface *, page_cache *cache);
 
