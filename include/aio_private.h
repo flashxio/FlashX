@@ -107,4 +107,6 @@ public:
 	int close_file(int file_id);
 };
 
+void init_aio(std::vector<int> node_ids);
+
 #endif

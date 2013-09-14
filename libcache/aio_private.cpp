@@ -205,10 +205,46 @@ void async_io::access(io_request *requests, int num, io_status *status)
 			status[i] = IO_PENDING;
 }
 
-void async_io::return_cb(thread_callback_s *tcbs[], int num)
+class aio_complete_thread: public thread
 {
-	num_completed_reqs += num;
+	thread_safe_FIFO_queue<thread_callback_s *> completed_reqs;
+public:
+	aio_complete_thread(int node_id): thread(std::string("aio_complete")
+			+ itoa(node_id), node_id), completed_reqs(node_id, 10240) {
+	}
+	void run() {
+		int num = completed_reqs.get_num_entries();
+		thread_callback_s *tcbs[num];
+		int ret = completed_reqs.fetch(tcbs, num);
+		assert(ret == num);
+		process_completed_reqs(tcbs, ret);
+	}
 
+	void add_reqs(thread_callback_s *tcbs[], int num) {
+		int ret = completed_reqs.add(tcbs, num);
+		assert(ret == num);
+		activate();
+	}
+
+	void process_completed_reqs(thread_callback_s *tcbs[], int num);
+};
+
+std::vector<aio_complete_thread *> complete_thread_table;
+
+void init_aio(std::vector<int> node_ids)
+{
+	for (unsigned i = 0; i < node_ids.size(); i++) {
+		int node_id = node_ids[i];
+		if ((int) complete_thread_table.size() <= node_id)
+			complete_thread_table.resize(node_id + 1);
+		complete_thread_table[node_id] = new aio_complete_thread(node_id);
+		complete_thread_table[node_id]->start();
+	}
+}
+
+void aio_complete_thread::process_completed_reqs(thread_callback_s *tcbs[],
+		int num)
+{
 	// We should try to invoke for as many requests as possible,
 	// so the upper layer has the opportunity to optimize the request completion.
 	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > map;
@@ -235,6 +271,35 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 	}
 	for (int i = 0; i < num; i++) {
 		tcbs[i]->cb_allocator->free(tcbs[i]);
+	}
+}
+
+void async_io::return_cb(thread_callback_s *tcbs[], int num)
+{
+	thread_callback_s *local_tcbs[num];
+	thread_callback_s *remote_tcbs[num];
+	int num_local = 0;
+	int num_remote = 0;
+
+	num_completed_reqs += num;
+	for (int i = 0; i < num; i++) {
+		thread_callback_s *tcb = tcbs[i];
+		if (tcb->req.get_io() == this)
+			local_tcbs[num_local++] = tcb;
+		else
+			remote_tcbs[num_remote++] = tcb;
+	}
+	if (num_local > 0) {
+		io_request *reqs[num_local];
+		for (int i = 0; i < num_local; i++)
+			reqs[i] = &local_tcbs[i]->req;
+		notify_completion(reqs, num_local);
+		for (int i = 0; i < num_local; i++) {
+			local_tcbs[i]->cb_allocator->free(local_tcbs[i]);
+		}
+	}
+	if (num_remote > 0) {
+		complete_thread_table[get_node_id()]->add_reqs(remote_tcbs, num_remote);
 	}
 }
 

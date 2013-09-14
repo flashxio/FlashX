@@ -244,6 +244,7 @@ void init_io_system(const RAID_config &raid_conf,
 		const std::vector<int> &node_id_array)
 {
 	numa_set_bind_policy(1);
+	init_aio(node_id_array);
 
 	file_mapper *mapper = raid_conf.create_file_mapper();
 	int num_files = mapper->get_num_files();
