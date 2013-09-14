@@ -1450,3 +1450,21 @@ void associative_flush_thread::flush_dirty_pages(thread_safe_page *pages[],
 #endif
 #endif
 }
+
+int associative_cache::get_num_dirty_pages() const
+{
+	int num = 0;
+	for (int i = 0; i < get_num_cells(); i++) {
+		hash_cell *cell = get_cell(i);
+		char set_flag = 0;
+		page_set_flag(set_flag, DIRTY_BIT, true);
+		int n = cell->num_pages(set_flag, 0);
+		num += n;
+	}
+#ifdef DEBUG
+	if (num != num_dirty_pages.get())
+		printf("the counted dirty pages: %d, there are actually %d dirty pages\n",
+				num_dirty_pages.get(), num);
+#endif
+	return num;
+}

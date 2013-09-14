@@ -544,13 +544,15 @@ public:
 	int get_num_used_pages() const;
 	void sanity_check() const;
 
+	int get_num_dirty_pages() const;
+
 	virtual void init(io_interface *underlying);
 
 	friend class hash_cell;
 #ifdef STATISTICS
 	void print_stat() const {
-		printf("SA-cache: ncells: %d, height: %d, split: %d\n",
-				get_num_cells(), height, split);
+		printf("SA-cache on node %d: ncells: %d, height: %d, split: %d, dirty pages: %d\n",
+				node_id, get_num_cells(), height, split, get_num_dirty_pages());
 #ifdef DETAILED_STATISTICS
 		for (int i = 0; i < get_num_cells(); i++)
 			printf("cell %d: %ld accesses, %ld evictions\n", i,
