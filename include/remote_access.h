@@ -82,7 +82,8 @@ public:
 	void flush_requests(int max_cached);
 	virtual void flush_requests();
 	virtual void print_stat(int nthreads) {
-		printf("num completed reqs: %d\n", num_completed_reqs.get());
+		printf("remote_disk_access: %d reqs, %d completed reqs\n",
+				num_issued_reqs.get(), num_completed_reqs.get());
 	}
 };
 

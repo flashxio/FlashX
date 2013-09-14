@@ -9,7 +9,6 @@ class request_allocator;
 
 class global_cached_io: public io_interface
 {
-	int num_waits;
 	long cache_size;
 	page_cache *global_cache;
 	/* the underlying IO. */
@@ -46,6 +45,9 @@ class global_cached_io: public io_interface
 	// Count the number of async requests.
 	atomic_integer num_completed_areqs;
 	atomic_integer num_issued_areqs;
+#ifdef STATISTICS
+	atomic_integer num_from_underlying;
+#endif
 
 	/**
 	 * It's another version of read() and write(), but it's responsible
@@ -196,10 +198,11 @@ public:
 		tot_fast_process += num_fast_process;
 		if (seen_threads == nthreads) {
 			printf("there are %d cache hits\n", tot_hits);
+			printf("There are %d requests processed in the fast path\n", tot_fast_process);
 			global_cache->print_stat();
 		}
-		printf("there are %d waits\n", num_waits);
-		printf("There are %d requests processed in the fast path\n", tot_fast_process);
+		printf("%d requests are completed from the underlying io\n",
+				num_from_underlying.get());
 		printf("There are %d evicted dirty pages\n", num_evicted_dirty_pages);
 	}
 #endif

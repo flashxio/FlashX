@@ -352,6 +352,9 @@ int global_cached_io::multibuf_completion(io_request *request,
 
 void global_cached_io::notify_completion(io_request *requests[], int num)
 {
+#ifdef STATISTICS
+	num_from_underlying.inc(num);
+#endif
 	page_cache *cache = this->get_global_cache();
 	std::vector<thread_safe_page *> dirty_pages;
 	for (int i = 0; i < num; i++) {
@@ -454,7 +457,6 @@ global_cached_io::global_cached_io(io_interface *underlying,
 	cache_hits = 0;
 	num_accesses = 0;
 	this->underlying = underlying;
-	num_waits = 0;
 	this->cache_size = cache->size();
 	global_cache = cache;
 	pthread_mutex_init(&wait_mutex, NULL);
