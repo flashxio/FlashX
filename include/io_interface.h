@@ -130,7 +130,7 @@ public:
 	 * This method waits for at least the specified number of requests currently
 	 * being sent by the access method to complete.
 	 */
-	virtual void wait4complete(int num) {
+	virtual int wait4complete(int num) {
 		throw unsupported_exception();
 	}
 	virtual int num_pending_ios() const {

@@ -73,7 +73,7 @@ public:
 	virtual void access(io_request *requests, int num,
 			io_status *status = NULL);
 	virtual void notify_completion(io_request *reqs[], int num);
-	virtual void wait4complete(int num_to_complete);
+	virtual int wait4complete(int num_to_complete);
 	virtual int num_pending_ios() const {
 		return num_issued_reqs.get() - num_completed_reqs.get();
 	}

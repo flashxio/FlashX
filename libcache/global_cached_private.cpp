@@ -1117,7 +1117,7 @@ int global_cached_io::preload(off_t start, long size) {
 /**
  * We wait for at least the specified number of requests to complete.
  */
-void global_cached_io::wait4complete(int num_to_complete)
+int global_cached_io::wait4complete(int num_to_complete)
 {
 	flush_requests();
 	int pending = num_pending_ios();
@@ -1137,9 +1137,22 @@ void global_cached_io::wait4complete(int num_to_complete)
 				handle_pending_requests();
 				pthread_mutex_lock(&wait_mutex);
 			}
-			else
-				pthread_cond_wait(&wait_cond, &wait_mutex);
+			else {
+				struct timeval curr_time;
+				gettimeofday(&curr_time, NULL);
+				struct timespec timeout = {curr_time.tv_sec + 1,
+					curr_time.tv_usec * 1000};
+				int ret = pthread_cond_timedwait(&wait_cond, &wait_mutex,
+						&timeout);
+				if (ret == ETIMEDOUT) {
+					printf("orig pending: %d, curr pending: %d, expected completion: %d\n",
+							pending, num_pending_ios(), num_to_complete);
+					break;
+				}
+			}
 		}
 		pthread_mutex_unlock(&wait_mutex);
 	}
+
+	return pending - num_pending_ios();
 }

@@ -1071,7 +1071,7 @@ public:
 	virtual void flush_requests() {
 		get_per_thread_io()->flush_requests();
 	}
-	virtual void wait4complete(int num) {
+	virtual int wait4complete(int num) {
 		throw unsupported_exception();
 	}
 

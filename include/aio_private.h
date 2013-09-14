@@ -99,8 +99,8 @@ public:
 		return AIO_DEPTH - max_io_slot(ctx);
 	}
 
-	void wait4complete(int num) {
-		io_wait(ctx, NULL, num);
+	int wait4complete(int num) {
+		return io_wait(ctx, NULL, num);
 	}
 	virtual int get_max_num_pending_ios() const {
 		return AIO_DEPTH;

@@ -347,7 +347,7 @@ int remote_disk_access::get_file_id() const
 /**
  * We wait for at least the specified number of requests to complete.
  */
-void remote_disk_access::wait4complete(int num_to_complete)
+int remote_disk_access::wait4complete(int num_to_complete)
 {
 	flush_requests();
 	int pending = num_pending_ios();
@@ -365,6 +365,7 @@ void remote_disk_access::wait4complete(int num_to_complete)
 			pthread_cond_wait(&wait_cond, &wait_mutex);
 		pthread_mutex_unlock(&wait_mutex);
 	}
+	return pending - num_pending_ios();
 }
 
 atomic_integer remote_disk_access::num_ios;
