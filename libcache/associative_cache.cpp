@@ -569,9 +569,9 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 			num_referenced = 0;
 			avoid_dirty = false;
 		}
+		clock_head++;
 		if (pg->get_ref()) {
 			num_referenced++;
-			clock_head++;
 			/*
 			 * If all pages in the cell are referenced, we should
 			 * return NULL to notify the invoker.
@@ -582,7 +582,6 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 		}
 		if (avoid_dirty && pg->is_dirty()) {
 			num_dirty++;
-			clock_head++;
 			continue;
 		}
 		if (pg->get_hits() == 0) {
@@ -590,7 +589,6 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 			break;
 		}
 		pg->set_hits(pg->get_hits() - 1);
-		clock_head++;
 	} while (ret == NULL);
 	ret->set_data_ready(false);
 	assign_flush_scores(buf);
