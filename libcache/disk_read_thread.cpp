@@ -17,6 +17,8 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	this->node_id = node_id;
 	num_accesses = 0;
 	num_low_prio_accesses = 0;
+	num_ignored_flushes_evicted = 0;
+	num_ignored_flushes_cleaned = 0;
 #ifdef STATISTICS
 	tot_flush_delay = 0;
 	max_flush_delay = 0;
@@ -59,6 +61,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 			&& queue.is_empty()) {
 		// We copy the request to the local stack.
 		low_prio_msg.get_next(req);
+		num_low_prio_accesses++;
 		assert(req.get_num_bufs() == 1);
 		// The request doesn't own the page, so the reference count
 		// isn't increased while in the queue. Now we try to write
@@ -73,7 +76,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 			// The original page has been evicted, we should clear
 			// the prepare-writeback flag on it.
 			req.get_page(0)->set_prepare_writeback(false);
-			num_ignored_low_prio_accesses++;
+			num_ignored_flushes_evicted++;
 			ignore_flush(ignored_flushes, req);
 			continue;
 		}
@@ -84,7 +87,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 			// The original page has been evicted, we should clear
 			// the prepare-writeback flag on it.
 			req.get_page(0)->set_prepare_writeback(false);
-			num_ignored_low_prio_accesses++;
+			num_ignored_flushes_evicted++;
 			ignore_flush(ignored_flushes, req);
 			continue;
 		}
@@ -104,7 +107,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 		if (p->is_io_pending() || !p->is_dirty()) {
 			p->unlock();
 			p->dec_ref();
-			num_ignored_low_prio_accesses++;
+			num_ignored_flushes_cleaned++;
 			ignore_flush(ignored_flushes, req);
 			continue;
 		}
@@ -168,7 +171,6 @@ void disk_read_thread::run() {
 				}
 				int ret = process_low_prio_msg(low_prio_msg, ignored_flushes);
 				num_accesses += ret;
-				num_low_prio_accesses += ret;
 			}
 			/* 
 			 * this is the only thread that fetch requests from the queue.

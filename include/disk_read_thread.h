@@ -28,7 +28,8 @@ class disk_read_thread
 	int node_id;
 	int num_accesses;
 	int num_low_prio_accesses;
-	int num_ignored_low_prio_accesses;
+	int num_ignored_flushes_evicted;
+	int num_ignored_flushes_cleaned;
 #ifdef STATISTICS
 	long tot_flush_delay;	// in us
 	long max_flush_delay;
@@ -53,26 +54,6 @@ public:
 
 	int get_node_id() const {
 		return node_id;
-	}
-
-	int get_num_accesses() const {
-		return num_accesses;
-	}
-
-	int get_num_low_prio_accesses() const {
-		return num_low_prio_accesses;
-	}
-
-	int get_num_ignored_low_prio_accesses() const {
-		return num_ignored_low_prio_accesses;
-	}
-
-	int get_num_iowait() const {
-		return aio->get_num_iowait();
-	}
-
-	int get_num_completed_reqs() const {
-		return aio->get_num_completed_reqs();
 	}
 
 	const std::string get_file_name() const {
@@ -112,6 +93,22 @@ public:
 	}
 
 	void run();
+
+	void print_stat() {
+#ifdef STATISTICS
+		printf("queue on file %s wait for requests for %d times, is full for %d times,\n",
+				get_file_name().c_str(), get_queue()->get_num_empty(),
+				get_queue()->get_num_full());
+		printf("\t%d accesses and %d io waits, complete %d reqs and %d low-prio reqs, ignore flushes: %d evicted, %d cleaned\n",
+				num_accesses, aio->get_num_iowait(), aio->get_num_completed_reqs(),
+				num_low_prio_accesses, num_ignored_flushes_evicted,
+				num_ignored_flushes_cleaned);
+		if (num_low_prio_accesses > 0)
+			printf("\tavg flush delay: %ldus, max flush delay: %ldus, min flush delay: %ldus\n",
+					tot_flush_delay / num_low_prio_accesses, max_flush_delay,
+					min_flush_delay);
+#endif
+	}
 };
 
 #endif
