@@ -2,6 +2,7 @@
 #define __IO_REQUEST_H__
 
 #include <sys/uio.h>
+#include <sys/time.h>
 
 #include "common.h"
 #include "concurrency.h"
@@ -73,6 +74,8 @@ struct io_req_extension
 	io_buf embedded_vecs[NUM_EMBEDDED_IOVECS];
 	io_request *next;
 	volatile ssize_t completed_size;
+
+	struct timeval issue_time;
 
 	void init() {
 		this->orig = NULL;
@@ -578,6 +581,14 @@ public:
 
 	bool is_data_inline() const {
 		return data_inline == 1;
+	}
+
+	void set_timestamp() {
+		gettimeofday(&get_extension()->issue_time, NULL);
+	}
+
+	struct timeval get_timestamp() {
+		return get_extension()->issue_time;
 	}
 
 	/**

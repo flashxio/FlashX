@@ -1216,6 +1216,9 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 					get_node_id(), NULL, cache, NULL);
 			req_array[num_init_reqs].add_page(p);
 			req_array[num_init_reqs].set_high_prio(false);
+#ifdef STATISTICS
+			req_array[num_init_reqs].set_timestamp();
+#endif
 			num_init_reqs++;
 			p->set_prepare_writeback(true);
 		}

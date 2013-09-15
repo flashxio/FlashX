@@ -17,6 +17,11 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	this->node_id = node_id;
 	num_accesses = 0;
 	num_low_prio_accesses = 0;
+#ifdef STATISTICS
+	tot_flush_delay = 0;
+	max_flush_delay = 0;
+	min_flush_delay = LONG_MAX;
+#endif
 
 	int ret = pthread_create(&id, NULL, process_requests, (void *) this);
 	if (ret) {
@@ -42,6 +47,10 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 {
 	int num_accesses = 0;
 
+#ifdef STATISTICS
+	struct timeval curr_time;
+	gettimeofday(&curr_time, NULL);
+#endif
 	io_request req;
 	while (low_prio_msg.has_next()
 			&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS
@@ -99,6 +108,16 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 			ignore_flush(ignored_flushes, req);
 			continue;
 		}
+
+#ifdef STATISTICS
+		long delay = time_diff_us(req.get_timestamp(), curr_time);
+		tot_flush_delay += delay;
+		if (delay < min_flush_delay)
+			min_flush_delay = delay;
+		if (delay > max_flush_delay)
+			max_flush_delay = delay;
+#endif
+
 		assert(p == req.get_page(0));
 		p->set_io_pending(true);
 		p->unlock();

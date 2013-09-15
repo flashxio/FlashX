@@ -29,6 +29,11 @@ class disk_read_thread
 	int num_accesses;
 	int num_low_prio_accesses;
 	int num_ignored_low_prio_accesses;
+#ifdef STATISTICS
+	long tot_flush_delay;	// in us
+	long max_flush_delay;
+	long min_flush_delay;
+#endif
 
 	atomic_integer flush_counter;
 
