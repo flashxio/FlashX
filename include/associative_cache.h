@@ -185,6 +185,7 @@ public:
 	int predict_evicted_pages(page_cell<thread_safe_page> &buf,
 			int num_pages, int set_flags, int clear_flags,
 			std::map<off_t, thread_safe_page *> &pages);
+	void assign_flush_scores(page_cell<thread_safe_page> &buf);
 };
 
 class LFU_eviction_policy: public eviction_policy

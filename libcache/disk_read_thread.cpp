@@ -19,6 +19,7 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	num_low_prio_accesses = 0;
 	num_ignored_flushes_evicted = 0;
 	num_ignored_flushes_cleaned = 0;
+	num_ignored_flushes_old = 0;
 #ifdef STATISTICS
 	tot_flush_delay = 0;
 	max_flush_delay = 0;
@@ -104,10 +105,14 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 		p->set_prepare_writeback(false);
 		// If the page is being written back or has been written back,
 		// we can skip the request.
-		if (p->is_io_pending() || !p->is_dirty()) {
+		if (p->is_io_pending() || !p->is_dirty()
+				|| p->get_flush_score() > MAX_NUM_WRITEBACK) {
 			p->unlock();
 			p->dec_ref();
-			num_ignored_flushes_cleaned++;
+			if (p->get_flush_score() > MAX_NUM_WRITEBACK)
+				num_ignored_flushes_old++;
+			else
+				num_ignored_flushes_cleaned++;
 			ignore_flush(ignored_flushes, req);
 			continue;
 		}

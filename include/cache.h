@@ -67,12 +67,14 @@ protected:
 	volatile short refcnt;
 	volatile char flags;
 	volatile unsigned char hits;
+	volatile char flush_score;
 public:
 	page(): data(NULL) {
 		offset = -1;
 		refcnt = 0;
 		flags = 0;
 		hits = 0;
+		flush_score = 0;
 	}
 
 	page(off_t off, char *data) {
@@ -81,6 +83,7 @@ public:
 		refcnt = 0;
 		flags = 0;
 		hits = 0;
+		flush_score = 0;
 	}
 
 	bool set_flag(int flag, bool v) {
@@ -93,6 +96,14 @@ public:
 	}
 	char test_flags(char flags) {
 		return this->flags & flags;
+	}
+
+	void set_flush_score(int score) {
+		this->flush_score = score;
+	}
+
+	int get_flush_score() const {
+		return flush_score;
 	}
 
 	/* offset in the file in bytes */

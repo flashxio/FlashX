@@ -1,6 +1,8 @@
 #include <errno.h>
 #include <limits.h>
 
+#include <algorithm>
+
 #include "io_interface.h"
 #include "associative_cache.h"
 #include "flush_thread.h"
@@ -529,6 +531,30 @@ thread_safe_page *FIFO_eviction_policy::evict_page(
 	return ret;
 }
 
+struct comp_flush_score {
+	bool operator() (const thread_safe_page *pg1, const thread_safe_page *pg2) {
+		return pg1->get_flush_score() < pg2->get_flush_score();
+	}
+} flush_score_comparator;
+
+void gclock_eviction_policy::assign_flush_scores(page_cell<thread_safe_page> &buf)
+{
+	const int num_pages = buf.get_num_pages();
+	thread_safe_page *pages[num_pages];
+	int head = clock_head % num_pages;
+	for (int i = 0; i < num_pages; i++) {
+		thread_safe_page *pg = buf.get_page(i);
+		int score = pg->get_hits() * num_pages + (i - head + num_pages) % num_pages;
+		pg->set_flush_score(score);
+		pages[i] = pg;
+	}
+	// We need to normalize the flush score.
+	std::sort(pages, pages + num_pages, flush_score_comparator);
+	for (int i = 0; i < num_pages; i++) {
+		pages[i]->set_flush_score(i);
+	}
+}
+
 thread_safe_page *gclock_eviction_policy::evict_page(
 		page_cell<thread_safe_page> &buf)
 {
@@ -567,6 +593,7 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 		clock_head++;
 	} while (ret == NULL);
 	ret->set_data_ready(false);
+	assign_flush_scores(buf);
 	return ret;
 }
 
@@ -585,6 +612,8 @@ int gclock_eviction_policy::predict_evicted_pages(
 	for (int i = 0; i < (int) buf.get_num_pages(); i++) {
 		hits[i] = buf.get_page(i)->get_hits();
 	}
+	assign_flush_scores(buf);
+
 	// The number of pages that are most likely to be evicted.
 	int num_most_likely = 0;
 	// The function returns when we get the expected number of pages

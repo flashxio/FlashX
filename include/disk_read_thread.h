@@ -30,6 +30,7 @@ class disk_read_thread
 	int num_low_prio_accesses;
 	int num_ignored_flushes_evicted;
 	int num_ignored_flushes_cleaned;
+	int num_ignored_flushes_old;
 #ifdef STATISTICS
 	long tot_flush_delay;	// in us
 	long max_flush_delay;
@@ -99,10 +100,12 @@ public:
 		printf("queue on file %s wait for requests for %d times, is full for %d times,\n",
 				get_file_name().c_str(), get_queue()->get_num_empty(),
 				get_queue()->get_num_full());
-		printf("\t%d accesses and %d io waits, complete %d reqs and %d low-prio reqs, ignore flushes: %d evicted, %d cleaned\n",
+		printf("\t%d accesses and %d io waits, complete %d reqs and %d low-prio reqs,\n",
 				num_accesses, aio->get_num_iowait(), aio->get_num_completed_reqs(),
-				num_low_prio_accesses, num_ignored_flushes_evicted,
-				num_ignored_flushes_cleaned);
+				num_low_prio_accesses);
+		printf("\tignore flushes: %d evicted, %d cleaned, %d out-of-date\n",
+				num_ignored_flushes_evicted, num_ignored_flushes_cleaned,
+				num_ignored_flushes_old);
 		if (num_low_prio_accesses > 0)
 			printf("\tavg flush delay: %ldus, max flush delay: %ldus, min flush delay: %ldus\n",
 					tot_flush_delay / num_low_prio_accesses, max_flush_delay,
