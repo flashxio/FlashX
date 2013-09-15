@@ -1190,9 +1190,11 @@ void global_cached_io::notify_completion(io_request *reqs[], int num)
 
 	int ret = complete_queue.add(req_copies, num);
 	assert(ret == num);
-	// We only wake up the issuer thread when we buffer a few requests.
-	if (complete_queue.get_num_entries() > AIO_COMPLETE_BUF_SIZE)
-		pthread_cond_signal(&wait_cond);
+	// Because of the flush requests, somtimes global_cached_io can't get
+	// enough completed requests. If we only signal the request issuer thread
+	// when there are enough completed requests, we'll get very poor
+	// performance.
+	pthread_cond_signal(&wait_cond);
 #ifdef MEMCHECK
 	delete [] req_copies;
 #endif
