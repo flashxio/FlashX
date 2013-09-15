@@ -3,6 +3,8 @@
 #include "parameters.h"
 #include "aio_private.h"
 
+const int AIO_HIGH_PRIO_SLOTS = 7;
+
 disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 		int node_id): queue(node_id, std::string("io-queue-") + itoa(node_id),
 			IO_QUEUE_SIZE, INT_MAX, false), low_prio_queue(node_id,
@@ -39,10 +41,13 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 		std::tr1::unordered_map<io_interface *, int> &ignored_flushes)
 {
 	int num_accesses = 0;
-	int io_slots = aio->num_available_IO_slots();
 
 	io_request req;
-	while (low_prio_msg.has_next() && num_accesses < io_slots) {
+	while (low_prio_msg.has_next()
+			&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS
+			// We only submit requests to the disk when there aren't
+			// high-prio requests.
+			&& queue.is_empty()) {
 		// We copy the request to the local stack.
 		low_prio_msg.get_next(req);
 		assert(req.get_num_bufs() == 1);
@@ -137,7 +142,7 @@ void disk_read_thread::run() {
 			// we can process as many low-prio requests as possible,
 			// but they should block the thread.
 			if (!low_prio_queue.is_empty()
-					&& aio->num_available_IO_slots() > 0) {
+					&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS) {
 				if (low_prio_msg.is_empty()) {
 					int num = low_prio_queue.fetch(&low_prio_msg, 1);
 					assert(num == 1);
