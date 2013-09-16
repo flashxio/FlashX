@@ -542,15 +542,19 @@ void gclock_eviction_policy::assign_flush_scores(page_cell<thread_safe_page> &bu
 	const int num_pages = buf.get_num_pages();
 	thread_safe_page *pages[num_pages];
 	int head = clock_head % num_pages;
+	int num_avail_pages = 0;
 	for (int i = 0; i < num_pages; i++) {
 		thread_safe_page *pg = buf.get_page(i);
-		int score = pg->get_hits() * num_pages + (i - head + num_pages) % num_pages;
-		pg->set_flush_score(score);
-		pages[i] = pg;
+		if (pg->is_valid()) {
+			int score = pg->get_hits() * num_pages + (i - head + num_pages) % num_pages;
+			pg->set_flush_score(score);
+			pages[num_avail_pages] = pg;
+			num_avail_pages++;
+		}
 	}
 	// We need to normalize the flush score.
-	std::sort(pages, pages + num_pages, flush_score_comparator);
-	for (int i = 0; i < num_pages; i++) {
+	std::sort(pages, pages + num_avail_pages, flush_score_comparator);
+	for (int i = 0; i < num_avail_pages; i++) {
 		pages[i]->set_flush_score(i);
 	}
 }

@@ -86,6 +86,10 @@ public:
 		flush_score = 0;
 	}
 
+	bool is_valid() const {
+		return offset != -1;
+	}
+
 	bool set_flag(int flag, bool v) {
 		char orig = flags;
 		if (v)
