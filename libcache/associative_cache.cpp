@@ -637,13 +637,13 @@ int gclock_eviction_policy::predict_evicted_pages(
 			else {
 				(*hit)--;
 			}
+			/* 
+			 * We have got all pages that are most likely to be evicted.
+			 * Let's just return whatever we have.
+			 */
+			if (num_most_likely >= MAX_NUM_WRITEBACK)
+				return pages.size();
 		}
-		/* 
-		 * We have got all pages that are most likely to be evicted.
-		 * Let's just return whatever we have.
-		 */
-		if (num_most_likely >= MAX_NUM_WRITEBACK)
-			return pages.size();
 	}
 }
 
