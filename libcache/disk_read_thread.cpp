@@ -20,11 +20,12 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, node_id);
 	this->node_id = node_id;
 	num_accesses = 0;
+#ifdef STATISTICS
 	num_low_prio_accesses = 0;
+	num_requested_flushes = 0;
 	num_ignored_flushes_evicted = 0;
 	num_ignored_flushes_cleaned = 0;
 	num_ignored_flushes_old = 0;
-#ifdef STATISTICS
 	tot_flush_delay = 0;
 	max_flush_delay = 0;
 	min_flush_delay = LONG_MAX;
@@ -66,7 +67,9 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 			&& queue.is_empty()) {
 		// We copy the request to the local stack.
 		low_prio_msg.get_next(req);
+#ifdef STATISTICS
 		num_low_prio_accesses++;
+#endif
 		assert(req.get_num_bufs() == 1);
 		// The request doesn't own the page, so the reference count
 		// isn't increased while in the queue. Now we try to write
@@ -81,7 +84,9 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 			// The original page has been evicted, we should clear
 			// the prepare-writeback flag on it.
 			req.get_page(0)->set_prepare_writeback(false);
+#ifdef STATISTICS
 			num_ignored_flushes_evicted++;
+#endif
 			ignore_flush(ignored_flushes, req);
 			continue;
 		}
@@ -92,7 +97,9 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 			// The original page has been evicted, we should clear
 			// the prepare-writeback flag on it.
 			req.get_page(0)->set_prepare_writeback(false);
+#ifdef STATISTICS
 			num_ignored_flushes_evicted++;
+#endif
 			ignore_flush(ignored_flushes, req);
 			continue;
 		}
@@ -113,10 +120,12 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 				|| p->get_flush_score() > MAX_NUM_WRITEBACK) {
 			p->unlock();
 			p->dec_ref();
+#ifdef STATISTICS
 			if (p->get_flush_score() > MAX_NUM_WRITEBACK)
 				num_ignored_flushes_old++;
 			else
 				num_ignored_flushes_cleaned++;
+#endif
 			ignore_flush(ignored_flushes, req);
 			continue;
 		}
@@ -193,6 +202,7 @@ void disk_read_thread::run() {
 				int ret = cache->flush_dirty_pages(&filter, NUM_DIRTY_PAGES_TO_FETCH);
 				if (ret == 0)
 					break;
+				num_requested_flushes += ret;
 			}
 			else
 				break;

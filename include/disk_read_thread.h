@@ -30,11 +30,12 @@ class disk_read_thread
 	async_io *aio;
 	int node_id;
 	int num_accesses;
+#ifdef STATISTICS
 	int num_low_prio_accesses;
+	int num_requested_flushes;
 	int num_ignored_flushes_evicted;
 	int num_ignored_flushes_cleaned;
 	int num_ignored_flushes_old;
-#ifdef STATISTICS
 	long tot_flush_delay;	// in us
 	long max_flush_delay;
 	long min_flush_delay;
@@ -127,9 +128,9 @@ public:
 		printf("\t%d accesses and %d io waits, complete %d reqs and %d low-prio reqs,\n",
 				num_accesses, aio->get_num_iowait(), aio->get_num_completed_reqs(),
 				num_low_prio_accesses);
-		printf("\tignore flushes: %d evicted, %d cleaned, %d out-of-date\n",
-				num_ignored_flushes_evicted, num_ignored_flushes_cleaned,
-				num_ignored_flushes_old);
+		printf("\trequest %d flushes, ignore flushes: %d evicted, %d cleaned, %d out-of-date\n",
+				num_requested_flushes, num_ignored_flushes_evicted,
+				num_ignored_flushes_cleaned, num_ignored_flushes_old);
 		if (num_low_prio_accesses > 0)
 			printf("\tavg flush delay: %ldus, max flush delay: %ldus, min flush delay: %ldus\n",
 					tot_flush_delay / num_low_prio_accesses, max_flush_delay,
