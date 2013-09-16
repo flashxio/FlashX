@@ -414,6 +414,7 @@ class associative_cache: public page_cache
 public:
 	// The number of pages in the I/O queue waiting to be flushed.
 	atomic_integer num_pending_flush;
+	atomic_integer recorded_max_num_pending;
 	const int max_num_pending_flush;
 #ifdef DEBUG
 	atomic_integer num_dirty_pages;
@@ -553,8 +554,8 @@ public:
 	friend class hash_cell;
 #ifdef STATISTICS
 	void print_stat() const {
-		printf("SA-cache on node %d: ncells: %d, height: %d, split: %d, dirty pages: %d\n",
-				node_id, get_num_cells(), height, split, get_num_dirty_pages());
+		printf("SA-cache on node %d: ncells: %d, height: %d, split: %d, dirty pages: %d, max pending flushes: %d\n",
+				node_id, get_num_cells(), height, split, get_num_dirty_pages(), recorded_max_num_pending.get());
 #ifdef DETAILED_STATISTICS
 		for (int i = 0; i < get_num_cells(); i++)
 			printf("cell %d: %ld accesses, %ld evictions\n", i,
