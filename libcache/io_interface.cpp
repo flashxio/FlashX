@@ -265,7 +265,7 @@ void init_io_system(const RAID_config &raid_conf,
 			logical_file_partition partition(indices);
 			// Create disk accessing threads.
 			global_data.read_threads[k] = new disk_read_thread(partition,
-					raid_conf.get_file(k).node_id);
+					raid_conf.get_file(k).node_id, NULL, k);
 		}
 
 		// Set a timer that flush the nofications of request completion
@@ -338,15 +338,21 @@ public:
 class global_cached_io_factory: public remote_io_factory
 {
 	const cache_config *cache_conf;
-	page_cache *global_cache;
+	static page_cache *global_cache;
 public:
 	global_cached_io_factory(const RAID_config &raid_conf,
 			const std::vector<int> &node_id_array,
 			const cache_config *cache_conf): remote_io_factory(
 				raid_conf, node_id_array) {
 		this->cache_conf = cache_conf;
-		global_cache = cache_conf->create_cache(MAX_NUM_FLUSHES_PER_FILE *
-				raid_conf.get_num_files());
+		if (global_cache == NULL) {
+			global_cache = cache_conf->create_cache(MAX_NUM_FLUSHES_PER_FILE *
+					raid_conf.get_num_files());
+			int num_files = global_data.read_threads.size();
+			for (int k = 0; k < num_files; k++) {
+				global_data.read_threads[k]->register_cache(global_cache);
+			}
+		}
 	}
 
 	~global_cached_io_factory() {
@@ -547,3 +553,4 @@ void print_io_thread_stat()
 }
 
 atomic_integer io_interface::io_counter;
+page_cache *global_cached_io_factory::global_cache;

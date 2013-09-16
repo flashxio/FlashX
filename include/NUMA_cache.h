@@ -75,6 +75,15 @@ public:
 		int idx = cache_conf->page2cache(req.get_offset());
 		caches[idx]->flush_callback(req);
 	}
+
+	virtual int flush_dirty_pages(page_filter *filter, int max_num) {
+		int tot = 0;
+		for (size_t i = 0; i < caches.size(); i++) {
+			tot += caches[i]->flush_dirty_pages(filter,
+					max_num / caches.size());
+		}
+		return tot;
+	}
 };
 
 #endif

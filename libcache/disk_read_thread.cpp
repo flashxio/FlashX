@@ -4,15 +4,19 @@
 #include "aio_private.h"
 
 const int AIO_HIGH_PRIO_SLOTS = 7;
+const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
 disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
-		int node_id): queue(node_id, std::string("io-queue-") + itoa(node_id),
+		int node_id, page_cache *cache, int _disk_id): disk_id(_disk_id), queue(
+			node_id, std::string("io-queue-") + itoa(node_id),
 			IO_QUEUE_SIZE, INT_MAX, false), low_prio_queue(node_id,
 				// TODO let's allow the low-priority queue to
 				// be infinitely large for now.
 				std::string("io-queue-low_prio-") + itoa(node_id),
-				IO_QUEUE_SIZE, INT_MAX, false), partition(_partition)
+				IO_QUEUE_SIZE, INT_MAX, false), partition(_partition), filter(
+					open_files, _disk_id)
 {
+	this->cache = cache;
 	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, node_id);
 	this->node_id = node_id;
 	num_accesses = 0;
@@ -185,7 +189,11 @@ void disk_read_thread::run() {
 			else if (aio->num_pending_ios() > 0) {
 				aio->wait4complete(1);
 			}
-			// If there is no other work to do, let's wait for new requests.
+			else if (cache) {
+				int ret = cache->flush_dirty_pages(&filter, NUM_DIRTY_PAGES_TO_FETCH);
+				if (ret == 0)
+					break;
+			}
 			else
 				break;
 
@@ -235,4 +243,17 @@ void *process_requests(void *arg)
 	disk_read_thread *thread = (disk_read_thread *) arg;
 	thread->run();
 	return NULL;
+}
+
+int disk_read_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
+		int num, const thread_safe_page *returned_pages[])
+{
+	assert(mappers.size() == 1);
+	int num_returned = 0;
+	for (int i = 0; i < num; i++) {
+		int id = mappers[0]->map2file(pages[i]->get_offset());
+		if (this->disk_id == id)
+			returned_pages[num_returned++] = pages[i];
+	}
+	return num_returned;
 }

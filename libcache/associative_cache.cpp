@@ -1143,6 +1143,7 @@ public:
 	void run();
 	void flush_dirty_pages(thread_safe_page *pages[], int num,
 			io_interface *io);
+	int flush_dirty_pages(page_filter *filter, int max_num);
 	int flush_cell(hash_cell *cell, io_request *req_array, int req_array_size);
 };
 
@@ -1492,6 +1493,43 @@ void associative_flush_thread::flush_dirty_pages(thread_safe_page *pages[],
 #endif
 }
 
+int associative_flush_thread::flush_dirty_pages(page_filter *filter,
+		int max_num)
+{
+#ifdef ENABLE_FLUSH_THREAD
+	int num_flushes = 0;
+
+	while (num_flushes < max_num) {
+		int num_cells = (max_num - num_flushes) / NUM_WRITEBACK_DIRTY_PAGES;
+		if (num_cells == 0)
+			num_cells = 1;
+		hash_cell *cells[num_cells];
+		hash_cell *queue_cells[num_cells];
+		int num_queued_cells = 0;
+		int num_fetched_cells = dirty_cells.fetch(cells, num_cells);
+		if (num_fetched_cells == 0)
+			return num_flushes;
+		io_request req_array[NUM_WRITEBACK_DIRTY_PAGES];
+		for (int i = 0; i < num_fetched_cells; i++) {
+			int ret = flush_cell(cells[i], req_array, NUM_WRITEBACK_DIRTY_PAGES);
+			io->access(req_array, ret);
+			num_flushes += ret;
+			if (ret == NUM_WRITEBACK_DIRTY_PAGES)
+				queue_cells[num_queued_cells++] = cells[i];
+			else
+				cells[i]->set_in_queue(false);
+		}
+		dirty_cells.add(queue_cells, num_queued_cells);
+	}
+	io->flush_requests();
+	local_cache->num_pending_flush.inc(num_flushes);
+
+	return num_flushes;
+#else
+	return 0;
+#endif
+}
+
 int associative_cache::get_num_dirty_pages() const
 {
 	int num = 0;
@@ -1508,4 +1546,12 @@ int associative_cache::get_num_dirty_pages() const
 				num_dirty_pages.get(), num);
 #endif
 	return num;
+}
+
+int associative_cache::flush_dirty_pages(page_filter *filter, int max_num)
+{
+	if (_flush_thread)
+		return _flush_thread->flush_dirty_pages(filter, max_num);
+	else
+		return 0;
 }

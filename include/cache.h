@@ -363,8 +363,16 @@ public:
 	}
 };
 
+class page_filter
+{
+public:
+	virtual int filter(const thread_safe_page *pages[], int num,
+			const thread_safe_page *returned_pages[]) = 0;
+};
+
 class flush_thread;
 class io_interface;
+class page_filter;
 class page_cache
 {
 public:
@@ -398,6 +406,9 @@ public:
 	}
 	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
 			io_interface *io) {
+	}
+	virtual int flush_dirty_pages(page_filter *filter, int max_num) {
+		return 0;
 	}
 	virtual void flush_callback(io_request &req) {
 	}

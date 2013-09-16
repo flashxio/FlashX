@@ -9,6 +9,7 @@
 #include "container.h"
 #include "file_partition.h"
 #include "messaging.h"
+#include "cache.h"
 
 void *process_requests(void *arg);
 
@@ -17,6 +18,8 @@ class async_io;
 class disk_read_thread
 {
 	static const int LOCAL_BUF_SIZE = 16;
+
+	const int disk_id;
 
 	msg_queue<io_request> queue;
 	msg_queue<io_request> low_prio_queue;
@@ -39,11 +42,28 @@ class disk_read_thread
 
 	atomic_integer flush_counter;
 
+	class dirty_page_filter: public page_filter {
+		const std::vector<file_mapper *> &mappers;
+		int disk_id;
+	public:
+		dirty_page_filter(const std::vector<file_mapper *> &_mappers,
+				int disk_id): mappers(_mappers) {
+			this->disk_id = disk_id;
+		}
+
+		int filter(const thread_safe_page *pages[], int num,
+				const thread_safe_page *returned_pages[]);
+	};
+
+	page_cache *cache;
+	dirty_page_filter filter;
+
 	int process_low_prio_msg(message<io_request> &low_prio_msg,
 			std::tr1::unordered_map<io_interface *, int> &ignored_flushes);
 
 public:
-	disk_read_thread(const logical_file_partition &partition, int node_id);
+	disk_read_thread(const logical_file_partition &partition, int node_id,
+			page_cache *cache, int disk_id);
 
 	msg_queue<io_request> *get_queue() {
 		return &queue;
@@ -87,6 +107,10 @@ public:
 		int ret = aio->open_file(*part);
 		delete part;
 		return ret;
+	}
+
+	void register_cache(page_cache *cache) {
+		this->cache = cache;
 	}
 
 	~disk_read_thread() {
