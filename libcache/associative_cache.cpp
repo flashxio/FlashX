@@ -531,16 +531,22 @@ thread_safe_page *FIFO_eviction_policy::evict_page(
 	return ret;
 }
 
+struct page_score
+{
+	thread_safe_page *pg;
+	int score;
+};
+
 struct comp_flush_score {
-	bool operator() (const thread_safe_page *pg1, const thread_safe_page *pg2) {
-		return pg1->get_flush_score() < pg2->get_flush_score();
+	bool operator() (const page_score &pg1, const page_score &pg2) {
+		return pg1.score < pg2.score;
 	}
 } flush_score_comparator;
 
 void gclock_eviction_policy::assign_flush_scores(page_cell<thread_safe_page> &buf)
 {
 	const int num_pages = buf.get_num_pages();
-	thread_safe_page *pages[num_pages];
+	page_score pages[num_pages];
 	int head = clock_head % num_pages;
 	int num_avail_pages = 0;
 	for (int i = 0; i < num_pages; i++) {
@@ -548,14 +554,15 @@ void gclock_eviction_policy::assign_flush_scores(page_cell<thread_safe_page> &bu
 		if (pg->is_valid()) {
 			int score = pg->get_hits() * num_pages + (i - head + num_pages) % num_pages;
 			pg->set_flush_score(score);
-			pages[num_avail_pages] = pg;
+			pages[num_avail_pages].pg = pg;
+			pages[num_avail_pages].score = score;
 			num_avail_pages++;
 		}
 	}
 	// We need to normalize the flush score.
 	std::sort(pages, pages + num_avail_pages, flush_score_comparator);
 	for (int i = 0; i < num_avail_pages; i++) {
-		pages[i]->set_flush_score(i);
+		pages[i].pg->set_flush_score(i);
 	}
 }
 
