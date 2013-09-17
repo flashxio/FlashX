@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
 					break;
 				case RAND_OFFSET:
 					gen = new rand_workload(start, end, entry_size,
-							end - start);
+							end - start, (int) (read_ratio * 100));
 					break;
 				case RAND_SEQ_OFFSET:
 					gen = new rand_seq_workload(start, end, entry_size,

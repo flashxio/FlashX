@@ -369,13 +369,16 @@ public:
 
 class rand_workload: public workload_gen
 {
+	workload_t access;
 	long start;
 	long range;
 	long num;
 	long tot_accesses;
 	off_t *offsets;
+	bool *access_methods;
 public:
-	rand_workload(long start, long end, int stride, long tot_accesses) {
+	rand_workload(long start, long end, int stride, long tot_accesses,
+			int read_percent) {
 		this->start = start;
 		this->range = end - start;
 		this->tot_accesses = tot_accesses;
@@ -388,10 +391,18 @@ public:
 		for (int i = 0; i < tot_accesses; i++) {
 			offsets[i] = (start + random() % range) * stride;
 		}
+		access_methods = (bool *) valloc(sizeof(bool) * tot_accesses);
+		for (int i = 0; i < tot_accesses; i++) {
+			if (random() % 100 < read_percent)
+				access_methods[i] = READ;
+			else
+				access_methods[i] = WRITE;
+		}
 	}
 
 	virtual ~rand_workload() {
 		free(offsets);
+		free(access_methods);
 	}
 
 	off_t next_offset() {
@@ -400,6 +411,14 @@ public:
 
 	bool has_next() {
 		return num < tot_accesses;
+	}
+
+	virtual const workload_t &next() {
+		access.off = offsets[num];
+		access.size = get_default_entry_size();
+		access.read = access_methods[num];
+		num++;
+		return access;
 	}
 };
 
