@@ -117,11 +117,11 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 		// If the page is being written back or has been written back,
 		// we can skip the request.
 		if (p->is_io_pending() || !p->is_dirty()
-				|| p->get_flush_score() > MAX_NUM_WRITEBACK) {
+				|| p->get_flush_score() > DISCARD_FLUSH_THRESHOLD) {
 			p->unlock();
 			p->dec_ref();
 #ifdef STATISTICS
-			if (p->get_flush_score() > MAX_NUM_WRITEBACK)
+			if (p->get_flush_score() > DISCARD_FLUSH_THRESHOLD)
 				num_ignored_flushes_old++;
 			else
 				num_ignored_flushes_cleaned++;

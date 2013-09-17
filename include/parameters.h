@@ -69,6 +69,7 @@ const int MAX_NUM_DIRTY_CELLS_IN_QUEUE = 1000;
 const int DIRTY_PAGES_THRESHOLD = 1;
 const int NUM_WRITEBACK_DIRTY_PAGES = 2;
 const int MAX_NUM_WRITEBACK = 4;
+const int DISCARD_FLUSH_THRESHOLD = 6;
 
 const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024 * 2;
 
