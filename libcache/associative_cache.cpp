@@ -292,12 +292,8 @@ page *hash_cell::search(off_t offset)
 			break;
 		}
 	}
-	if (ret) {
-		if (ret->get_hits() == 0xff)
-			buf.scale_down_hits();
+	if (ret)
 		ret->inc_ref();
-		ret->hit();
-	}
 	pthread_spin_unlock(&_lock);
 	return ret;
 }
