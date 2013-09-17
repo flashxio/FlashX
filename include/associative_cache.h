@@ -12,6 +12,7 @@
 #include "parameters.h"
 #include "shadow_cell.h"
 #include "exception.h"
+#include "compute_stat.h"
 
 #ifdef STATISTICS
 volatile extern int avail_cells;
@@ -414,8 +415,9 @@ class associative_cache: public page_cache
 public:
 	// The number of pages in the I/O queue waiting to be flushed.
 	atomic_integer num_pending_flush;
-	atomic_integer recorded_max_num_pending;
 	const int max_num_pending_flush;
+	stat_max<long> recorded_max_num_pending;
+	stat_mean<long> avg_num_pending;
 #ifdef DEBUG
 	atomic_integer num_dirty_pages;
 #endif
@@ -554,8 +556,9 @@ public:
 	friend class hash_cell;
 #ifdef STATISTICS
 	void print_stat() const {
-		printf("SA-cache on node %d: ncells: %d, height: %d, split: %d, dirty pages: %d, max pending flushes: %d\n",
-				node_id, get_num_cells(), height, split, get_num_dirty_pages(), recorded_max_num_pending.get());
+		printf("SA-cache on node %d: ncells: %d, height: %d, split: %d, dirty pages: %d, max pending flushes: %ld, avg: %ld\n",
+				node_id, get_num_cells(), height, split, get_num_dirty_pages(),
+				recorded_max_num_pending.get(), (long) avg_num_pending.get());
 #ifdef DETAILED_STATISTICS
 		for (int i = 0; i < get_num_cells(); i++)
 			printf("cell %d: %ld accesses, %ld evictions\n", i,

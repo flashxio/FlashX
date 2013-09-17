@@ -1534,10 +1534,10 @@ int associative_flush_thread::flush_dirty_pages(page_filter *filter,
 		dirty_cells.add(queue_cells, num_queued_cells);
 	}
 	io->flush_requests();
-	int num = local_cache->num_pending_flush.inc(num_flushes);
-	int record = local_cache->recorded_max_num_pending.get();
-	if (record < num)
-		local_cache->recorded_max_num_pending.CAS(record, num);
+
+	int pending = local_cache->num_pending_flush.inc(num_flushes);
+	local_cache->recorded_max_num_pending.add(pending);
+	local_cache->avg_num_pending.add(pending);
 
 	return num_flushes;
 #else
