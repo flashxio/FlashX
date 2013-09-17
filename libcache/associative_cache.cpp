@@ -381,11 +381,12 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 void hash_cell::print_cell()
 {
 	pthread_spin_lock(&_lock);
-	printf("cell: %ld, in queue: %d\n", get_hash(), is_in_queue());
+	printf("cell %ld: in queue: %d\n", get_hash(), is_in_queue());
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		thread_safe_page *p = buf.get_page(i);
-		printf("p%lx, ready: %d, io: %d, dirty: %d, old dirty: %d, writeback: %d\n",
-				p->get_offset(), p->data_ready(), p->is_io_pending(), p->is_dirty(),
+		printf("cell %ld: p%lx, hits: %d, score: %d, ref: %d, r: %d, p: %d, d: %d, od: %d, w: %d\n",
+				get_hash(), p->get_offset(), p->get_hits(), p->get_flush_score(),
+				p->get_ref(), p->data_ready(), p->is_io_pending(), p->is_dirty(),
 				p->is_old_dirty(), p->is_prepare_writeback());
 	}
 	pthread_spin_unlock(&_lock);
@@ -1409,11 +1410,22 @@ void hash_cell::predict_evicted_pages(int num_pages, char set_flags,
 	pthread_spin_lock(&_lock);
 	policy.predict_evicted_pages(buf, num_pages, set_flags,
 			clear_flags, pages);
+	bool print = false;
 	for (std::map<off_t, thread_safe_page *>::iterator it = pages.begin();
 			it != pages.end(); it++) {
 		it->second->inc_ref();
+		if (it->second->get_flush_score() >= MAX_NUM_WRITEBACK)
+			print = true;
 	}
 	pthread_spin_unlock(&_lock);
+
+	if (print) {
+		for (std::map<off_t, thread_safe_page *>::iterator it = pages.begin();
+				it != pages.end(); it++) {
+			printf("flush page %lx\n", it->second->get_offset());
+		}
+		print_cell();
+	}
 }
 
 void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
