@@ -23,8 +23,8 @@ int main(int argc, char *argv[])
 	std::string workload_file = argv[1];
 	std::string cache_type = argv[2];
 	// Cache size in bytes.
-	int cache_size = str2size(argv[3]);
-	printf("The cache size is %d bytes\n", cache_size);
+	long cache_size = str2size(argv[3]);
+	printf("The cache size is %ld bytes\n", cache_size);
 	int cell_size = atoi(argv[4]);
 	printf("The cell size of SA-cache is %d\n", cell_size);
 	params.init(1, cell_size, 0);
@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 		global_cache = new LRU2Q_cache(cache_size);
 	}
 	else if (cache_type == "associative") {
-		global_cache = associative_cache::create(cache_size, MAX_CACHE_SIZE, 0, 1);
+		global_cache = associative_cache::create(cache_size, MAX_CACHE_SIZE, 0, 1, -1);
 	}
 	else if (cache_type == "hash-index") {
 		global_cache = new hash_index_cache(cache_size, 0);
