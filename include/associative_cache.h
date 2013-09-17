@@ -52,6 +52,10 @@ public:
 		memset(maps, 0, sizeof(maps));
 	}
 
+	bool contain(T *pg) const {
+		return pg >= buf && pg < buf + num_pages;
+	}
+
 	void set_pages(char *pages[], int num, int node_id);
 
 	void add_pages(char *pages[], int num, int node_id);
@@ -289,6 +293,10 @@ public:
 
 	page *search(off_t off, off_t &old_off);
 	page *search(off_t offset);
+
+	bool contain(thread_safe_page *pg) const {
+		return buf.contain(pg);
+	}
 
 	/**
 	 * this is to rehash the pages in the current cell
