@@ -1359,7 +1359,10 @@ flush_thread *associative_cache::create_flush_thread(io_interface *io,
 		page_cache *global_cache)
 {
 	pthread_mutex_lock(&init_mutex);
-	if (_flush_thread == NULL && io) {
+	if (_flush_thread == NULL && io
+			// The IO instance should be on the same node or we don't know
+			// in which node the cache is.
+			&& (io->get_node_id() == node_id || node_id == -1)) {
 		_flush_thread = new associative_flush_thread(global_cache, this,
 				io->clone(), node_id);
 		_flush_thread->start();
