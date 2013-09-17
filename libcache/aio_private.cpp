@@ -220,13 +220,13 @@ public:
 		process_completed_reqs(tcbs, ret);
 	}
 
-	void add_reqs(thread_callback_s *tcbs[], int num) {
+	int add_reqs(thread_callback_s *tcbs[], int num) {
 		int ret = completed_reqs.add(tcbs, num);
-		assert(ret == num);
 		activate();
+		return ret;
 	}
 
-	void process_completed_reqs(thread_callback_s *tcbs[], int num);
+	static void process_completed_reqs(thread_callback_s *tcbs[], int num);
 };
 
 std::vector<aio_complete_thread *> complete_thread_table;
@@ -299,7 +299,10 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 		}
 	}
 	if (num_remote > 0) {
-		complete_thread_table[get_node_id()]->add_reqs(remote_tcbs, num_remote);
+		int ret = complete_thread_table[get_node_id()]->add_reqs(
+				remote_tcbs, num_remote);
+		aio_complete_thread::process_completed_reqs(remote_tcbs + ret,
+				num_remote - ret);
 	}
 }
 
