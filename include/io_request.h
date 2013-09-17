@@ -150,6 +150,7 @@ class io_request
 	unsigned int sync: 1;
 	unsigned int high_prio: 1;
 	unsigned int low_latency: 1;
+	unsigned int discarded: 1;
 	static const int MAX_NODE_ID = (1 << 9) - 1;
 	unsigned int node_id: 9;
 	// Linux uses 48 bit for addresses.
@@ -178,6 +179,7 @@ class io_request
 		sync = 0;
 		high_prio = 1;
 		low_latency = 0;
+		discarded = 0;
 	}
 
 	void copy_flags(const io_request &req) {
@@ -401,6 +403,14 @@ public:
 	void set_node_id(int node_id) {
 		assert(node_id <= MAX_NODE_ID);
 		this->node_id = node_id;
+	}
+
+	bool is_discarded() const {
+		return (discarded & 0x1) == 1;
+	}
+
+	void set_discarded(bool discarded) {
+		this->discarded = discarded;
 	}
 
 	bool is_high_prio() const {

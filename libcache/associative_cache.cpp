@@ -1146,12 +1146,62 @@ public:
 
 void flush_io::notify_completion(io_request *reqs[], int num)
 {
-	// If they are ignored flushes, reqs is NULL.
-	if (reqs) {
-		for (int i = 0; i < num; i++) {
-			assert(reqs[i]->get_num_bufs());
-			if (reqs[i]->get_num_bufs() == 1) {
-				thread_safe_page *p = (thread_safe_page *) reqs[i]->get_page(0);
+	hash_cell *dirty_cells[num];
+	int num_dirty_cells = 0;
+	int num_flushes = 0;
+	for (int i = 0; i < num; i++) {
+		// If the request is discarded by the I/O thread, we need to
+		// check the page set where it is located.
+		// If the page set isn't in the queue of dirty page sets,
+		// we need to check if the page set contains pages that
+		// we should flush.
+		if (reqs[i]->is_discarded()) {
+			hash_cell *cell = cache->get_cell_offset(
+					reqs[i]->get_offset());
+#ifdef DEBUG
+			assert(cell->contain(reqs[i]->get_page(0))); 
+#endif
+			if (cell->is_in_queue())
+				continue;
+
+			// Try to add more flushes only when there aren't many pending
+			// flush requests.
+			if (cache->num_pending_flush.get() < cache->max_num_pending_flush) {
+				io_request req_array[NUM_WRITEBACK_DIRTY_PAGES];
+				int ret = flush_thread->flush_cell(cell, req_array,
+						NUM_WRITEBACK_DIRTY_PAGES);
+				if (ret > 0) {
+					this->access(req_array, ret);
+					num_flushes += ret;
+				}
+				// If we get what we ask for, maybe there are more dirty pages
+				// we can flush. Add the dirty cell back in the queue.
+				if (ret == NUM_WRITEBACK_DIRTY_PAGES && !cell->set_in_queue(true))
+					dirty_cells[num_dirty_cells++] = cell;
+			}
+			else
+				// Let's add the cell for later examination.
+				dirty_cells[num_dirty_cells++] = cell;
+
+			continue;
+		}
+
+		assert(reqs[i]->get_num_bufs());
+		if (reqs[i]->get_num_bufs() == 1) {
+			thread_safe_page *p = (thread_safe_page *) reqs[i]->get_page(0);
+			p->lock();
+			assert(p->is_dirty());
+			p->set_dirty(false);
+			p->set_io_pending(false);
+			assert(p->reset_reqs() == NULL);
+			p->unlock();
+			p->dec_ref();
+		}
+		else {
+			off_t off = reqs[i]->get_offset();
+			for (int j = 0; j < reqs[i]->get_num_bufs(); j++) {
+				thread_safe_page *p = reqs[i]->get_page(j);
+				assert(p);
 				p->lock();
 				assert(p->is_dirty());
 				p->set_dirty(false);
@@ -1159,25 +1209,15 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 				assert(p->reset_reqs() == NULL);
 				p->unlock();
 				p->dec_ref();
-			}
-			else {
-				off_t off = reqs[i]->get_offset();
-				for (int j = 0; j < reqs[i]->get_num_bufs(); j++) {
-					thread_safe_page *p = reqs[i]->get_page(j);
-					assert(p);
-					p->lock();
-					assert(p->is_dirty());
-					p->set_dirty(false);
-					p->set_io_pending(false);
-					assert(p->reset_reqs() == NULL);
-					p->unlock();
-					p->dec_ref();
-					assert(p->get_ref() >= 0);
-					off += PAGE_SIZE;
-				}
+				assert(p->get_ref() >= 0);
+				off += PAGE_SIZE;
 			}
 		}
 	}
+	if (num_dirty_cells > 0)
+		flush_thread->dirty_cells.add(dirty_cells, num_dirty_cells);
+	if (num_flushes > 0)
+		cache->num_pending_flush.inc(num_flushes);
 
 	cache->num_pending_flush.dec(num);
 #ifdef DEBUG

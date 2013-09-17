@@ -59,8 +59,7 @@ class disk_read_thread
 	page_cache *cache;
 	dirty_page_filter filter;
 
-	int process_low_prio_msg(message<io_request> &low_prio_msg,
-			std::tr1::unordered_map<io_interface *, int> &ignored_flushes);
+	int process_low_prio_msg(message<io_request> &low_prio_msg);
 
 public:
 	disk_read_thread(const logical_file_partition &partition, int node_id,

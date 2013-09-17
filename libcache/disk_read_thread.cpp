@@ -38,20 +38,21 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	}
 }
 
-void ignore_flush(std::tr1::unordered_map<io_interface *, int> &ignored_flushes,
-		const io_request &req)
+/**
+ * Notify the IO issuer of the ignored flushes.
+ * All flush requests must come from the same IO instance.
+ */
+void notify_ignored_flushes(io_request ignored_flushes[], int num_ignored)
 {
-	std::tr1::unordered_map<io_interface *, int>::iterator it
-		= ignored_flushes.find(req.get_io());
-	if (it == ignored_flushes.end()) {
-		ignored_flushes.insert(std::pair<io_interface *, int>(req.get_io(), 0));
-		it = ignored_flushes.find(req.get_io());
+	for (int i = 0; i < num_ignored; i++) {
+		ignored_flushes[i].set_discarded(true);
+		io_request *flush = &ignored_flushes[i];
+		io_interface *io = flush->get_io();
+		io->notify_completion(&flush, 1);
 	}
-	it->second++;
 }
 
-int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
-		std::tr1::unordered_map<io_interface *, int> &ignored_flushes)
+int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 {
 	int num_accesses = 0;
 
@@ -60,6 +61,8 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 	gettimeofday(&curr_time, NULL);
 #endif
 	io_request req;
+	io_request ignored_flushes[low_prio_msg.get_num_objs()];
+	int num_ignored = 0;
 	while (low_prio_msg.has_next()
 			&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS
 			// We only submit requests to the disk when there aren't
@@ -87,7 +90,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 #ifdef STATISTICS
 			num_ignored_flushes_evicted++;
 #endif
-			ignore_flush(ignored_flushes, req);
+			ignored_flushes[num_ignored++] = req;
 			continue;
 		}
 		// If the original page has been evicted and the new page for
@@ -100,7 +103,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 #ifdef STATISTICS
 			num_ignored_flushes_evicted++;
 #endif
-			ignore_flush(ignored_flushes, req);
+			ignored_flushes[num_ignored++] = req;
 			continue;
 		}
 		// If we are here, it means the page is the one we are looking for.
@@ -126,7 +129,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 			else
 				num_ignored_flushes_cleaned++;
 #endif
-			ignore_flush(ignored_flushes, req);
+			ignored_flushes[num_ignored++] = req;
 			continue;
 		}
 
@@ -153,6 +156,9 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg,
 	if (low_prio_msg.is_empty())
 		low_prio_msg.clear();
 
+	if (num_ignored > 0)
+		notify_ignored_flushes(ignored_flushes, num_ignored);
+
 	return num_accesses;
 }
 
@@ -167,7 +173,6 @@ void disk_read_thread::run() {
 
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	io_request local_reqs[LOCAL_REQ_BUF_SIZE];
-	std::tr1::unordered_map<io_interface *, int> ignored_flushes;
 	while (true) {
 		int num;
 		num = queue.non_blocking_fetch(msg_buffer, LOCAL_BUF_SIZE);
@@ -187,7 +192,7 @@ void disk_read_thread::run() {
 					int num = low_prio_queue.fetch(&low_prio_msg, 1);
 					assert(num == 1);
 				}
-				int ret = process_low_prio_msg(low_prio_msg, ignored_flushes);
+				int ret = process_low_prio_msg(low_prio_msg);
 				num_accesses += ret;
 			}
 			/* 
@@ -211,16 +216,6 @@ void disk_read_thread::run() {
 			num = queue.non_blocking_fetch(msg_buffer, LOCAL_BUF_SIZE);
 		}
 		if (processed_low_prio) {
-			// When we ignore flush requests, we also need to tell it.
-			for (std::tr1::unordered_map<io_interface *, int>::iterator it
-					= ignored_flushes.begin(); it != ignored_flushes.end(); it++) {
-				io_interface *io = it->first;
-				if (it->second > 0) {
-					io->notify_completion(NULL, it->second);
-					// We need to clear the counter for the next count.
-					it->second = 0;
-				}
-			}
 		}
 
 		if (num == 0)
