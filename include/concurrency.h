@@ -4,61 +4,64 @@
 #include <pthread.h>
 #include <numa.h>
 
-class atomic_unsigned_integer
+template<class T>
+class atomic_number
 {
-	volatile unsigned int v;
+	volatile T v;
 public:
-	atomic_unsigned_integer() {
+	atomic_number() {
 		v = 0;
 	}
 
-	atomic_unsigned_integer(unsigned int init) {
+	atomic_number(T init) {
 		v = init;
 	}
 
-	unsigned int inc(unsigned int by) {
+	T inc(T by) {
 		return __sync_add_and_fetch(&v, by);
 	}
 
-	unsigned int dec(unsigned int by) {
+	T dec(T by) {
 		return __sync_sub_and_fetch(&v, by);
 	}
 
-	unsigned int get() const {
+	T get() const {
 		return v;
 	}
 
-	bool CAS(unsigned int expected, unsigned int value) {
+	bool CAS(T expected, T value) {
 		return __sync_bool_compare_and_swap(&v, expected, value);
 	}
 };
 
-class atomic_integer
+class atomic_unsigned_integer: public atomic_number<unsigned int>
 {
-	volatile int v;
+public:
+	atomic_unsigned_integer() {
+	}
+
+	atomic_unsigned_integer(unsigned int init): atomic_number<unsigned int>(
+			init) {
+	}
+};
+
+class atomic_integer: public atomic_number<int>
+{
 public:
 	atomic_integer() {
-		v = 0;
 	}
 
-	atomic_integer(int init) {
-		v = init;
+	atomic_integer(int init): atomic_number<int>(init) {
+	}
+};
+
+class atomic_long: public atomic_number<long>
+{
+public:
+	atomic_long() {
 	}
 
-	int inc(int by) {
-		return __sync_add_and_fetch(&v, by);
-	}
-
-	int dec(int by) {
-		return __sync_sub_and_fetch(&v, by);
-	}
-
-	int get() const {
-		return v;
-	}
-
-	bool CAS(int expected, int value) {
-		return __sync_bool_compare_and_swap(&v, expected, value);
+	atomic_long(long init): atomic_number<long>(init) {
 	}
 };
 
