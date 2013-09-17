@@ -1117,6 +1117,31 @@ int global_cached_io::preload(off_t start, long size) {
 	return 0;
 }
 
+void global_cached_io::wait4req(io_request *req)
+{
+	pthread_mutex_lock(&wait_mutex);
+	wait_req = req;
+	while (wait_req) {
+		int num = complete_queue.get_num_entries();
+		if (num > 0) {
+			pthread_mutex_unlock(&wait_mutex);
+			io_request req;
+			int ret = complete_queue.fetch(&req, 1);
+			assert(ret == 1);
+			process_completed_requests(&req, 1);
+			pthread_mutex_lock(&wait_mutex);
+		}
+		else if (!pending_requests.is_empty()) {
+			pthread_mutex_unlock(&wait_mutex);
+			handle_pending_requests();
+			pthread_mutex_lock(&wait_mutex);
+		}
+		else
+			pthread_cond_wait(&wait_cond, &wait_mutex);
+	}
+	pthread_mutex_unlock(&wait_mutex);
+}
+
 /**
  * We wait for at least the specified number of requests to complete.
  */

@@ -60,6 +60,8 @@ class global_cached_io: public io_interface
 	int multibuf_completion(io_request *request,
 			std::vector<thread_safe_page *> &dirty_pages);
 	void process_completed_requests(io_request requests[], int num);
+
+	void wait4req(io_request *req);
 public:
 	global_cached_io(io_interface *, page_cache *cache);
 
@@ -155,24 +157,6 @@ public:
 
 	void write_dirty_page(thread_safe_page *p, off_t off, io_request *orig);
 
-private:
-	// This method can only be called in a single thread.
-	void wait4req(io_request *req) {
-		pthread_mutex_lock(&wait_mutex);
-		wait_req = req;
-		while (wait_req) {
-			if (!pending_requests.is_empty()) {
-				pthread_mutex_unlock(&wait_mutex);
-				handle_pending_requests();
-				pthread_mutex_lock(&wait_mutex);
-			}
-			else
-				pthread_cond_wait(&wait_cond, &wait_mutex);
-		}
-		pthread_mutex_unlock(&wait_mutex);
-	}
-
-public:
 	void wakeup_on_req(io_request *req, int status) {
 		pthread_mutex_lock(&wait_mutex);
 		assert(req);
