@@ -31,6 +31,8 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	min_flush_delay = LONG_MAX;
 #endif
 
+	running = true;
+
 	int ret = pthread_create(&id, NULL, process_requests, (void *) this);
 	if (ret) {
 		perror("pthread_create");
@@ -173,7 +175,7 @@ void disk_read_thread::run() {
 
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	io_request local_reqs[LOCAL_REQ_BUF_SIZE];
-	while (true) {
+	while (running) {
 		int num;
 		num = queue.non_blocking_fetch(msg_buffer, LOCAL_BUF_SIZE);
 		if (enable_debug)

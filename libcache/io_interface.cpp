@@ -548,6 +548,12 @@ void print_io_thread_stat()
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
 		disk_read_thread *t = global_data.read_threads[i];
 		if (t)
+			t->stop();
+	}
+	sleep(1);
+	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
+		disk_read_thread *t = global_data.read_threads[i];
+		if (t)
 			t->print_stat();
 	}
 }

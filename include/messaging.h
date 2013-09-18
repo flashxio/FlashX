@@ -363,6 +363,25 @@ public:
 	bool is_accept_inline() const {
 		return accept_inline;
 	}
+
+	/**
+	 * This method needs to be used with caution.
+	 * It may change the behavior of other threads if they also access
+	 * the queue, so it's better to use it when no other threads are
+	 * using it.
+	 * It is also a heavy operation.
+	 */
+	int get_num_objs() {
+		int num = blocking_FIFO_queue<message<T> >::get_num_entries();
+		message<T> msgs[num];
+		int ret = blocking_FIFO_queue<message<T> >::non_blocking_fetch(msgs, num);
+		int num_objs = 0;
+		for (int i = 0; i < ret; i++) {
+			num_objs += msgs[i].get_num_objs();
+		}
+		blocking_FIFO_queue<message<T> >::add(msgs, ret);
+		return num_objs;
+	}
 };
 
 template<class T>

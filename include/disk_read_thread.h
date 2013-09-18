@@ -1,6 +1,8 @@
 #ifndef __DISK_READ_THREAD_H__
 #define __DISK_READ_THREAD_H__
 
+#include <unistd.h>
+
 #include <string>
 #include <tr1/unordered_map>
 
@@ -41,6 +43,8 @@ class disk_read_thread
 	long min_flush_delay;
 #endif
 
+	volatile bool running;
+
 	atomic_integer flush_counter;
 
 	class dirty_page_filter: public page_filter {
@@ -60,6 +64,14 @@ class disk_read_thread
 	dirty_page_filter filter;
 
 	int process_low_prio_msg(message<io_request> &low_prio_msg);
+
+	int get_num_high_prio_reqs() {
+		return queue.get_num_objs();
+	}
+
+	int get_num_low_prio_reqs() {
+		return low_prio_queue.get_num_objs();
+	}
 
 public:
 	disk_read_thread(const logical_file_partition &partition, int node_id,
@@ -119,6 +131,10 @@ public:
 
 	void run();
 
+	void stop() {
+		running = false;
+	}
+
 	void print_stat() {
 #ifdef STATISTICS
 		printf("queue on file %s wait for requests for %d times, is full for %d times,\n",
@@ -134,6 +150,8 @@ public:
 			printf("\tavg flush delay: %ldus, max flush delay: %ldus, min flush delay: %ldus\n",
 					tot_flush_delay / num_low_prio_accesses, max_flush_delay,
 					min_flush_delay);
+		printf("\tremain %d high-prio requests, %d low-prio requests\n",
+				get_num_high_prio_reqs(), get_num_low_prio_reqs());
 #endif
 	}
 };
