@@ -408,7 +408,7 @@ public:
 	virtual const workload_t &next() {
 		access.off = offsets[num];
 		access.size = get_default_entry_size();
-		access.read = access_methods[num];
+		access.read = access_methods[num] == READ;
 		num++;
 		return access;
 	}
