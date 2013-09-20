@@ -310,6 +310,9 @@ int main(int argc, char *argv[])
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size, SA_min_cell_size);
 	params.init(RAID_block_size, SA_min_cell_size, (int) (hit_ratio * 100));
 
+	printf("use a different random sequence\n");
+	srandom(time(NULL));
+
 	int flags = O_RDWR;
 	if (access_option != READ_ACCESS) {
 		printf("file is opened with direct I/O\n");
