@@ -31,9 +31,7 @@ void remote_disk_access::notify_completion(io_request *reqs[], int num)
 
 	int ret = complete_queue.add(req_copies, num);
 	assert(ret == num);
-	// We only wake up the issuer thread when we buffer a few requests.
-	if (complete_queue.get_num_entries() > AIO_COMPLETE_BUF_SIZE)
-		pthread_cond_signal(&wait_cond);
+	pthread_cond_signal(&wait_cond);
 #ifdef MEMCHECK
 	delete [] req_copies;
 #endif
