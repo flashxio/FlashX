@@ -87,13 +87,14 @@ void permute_offsets(int num, int repeats, int stride, off_t start,
 	}
 }
 
-bool enable_debug = false;
-
 static void enable_debug_handler(int sig, siginfo_t *si, void *uc)
 {
 	enable_debug = true;
 	printf("debug mode is enabled\n");
 }
+}
+
+bool enable_debug = false;
 
 void set_enable_debug_signal()
 {
@@ -108,7 +109,6 @@ void set_enable_debug_signal()
 		perror("sigaction");
 		exit(1);
 	}
-}
 }
 
 bool align_check(size_t alignment)

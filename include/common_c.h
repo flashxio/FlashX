@@ -107,9 +107,6 @@ void bind2node_id(int node_id);
 void bind_mem2node_id(int node_id);
 void bind2cpu(int cpu_id);
 
-extern bool enable_debug;
-void set_enable_debug_signal();
-
 #ifdef __cplusplus
 }
 #endif
