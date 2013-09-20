@@ -8,6 +8,8 @@
 #include "parameters.h"
 #include "concurrency.h"
 
+#define TEST
+
 const int FILE_CONST_A = 31;
 const int FILE_CONST_P = 191;
 
@@ -64,23 +66,32 @@ public:
 	virtual int cycle_size_in_bucket(int) const = 0;
 };
 
+int gen_RAID_rand_start(int num_files);
+
 class RAID0_mapper: public file_mapper
 {
+	static int rand_start;
 public:
 	RAID0_mapper(const std::vector<file_info> &files,
 			int block_size): file_mapper(files, block_size) {
+#ifdef TEST
+		if (rand_start == 0) {
+			rand_start = gen_RAID_rand_start(files.size());
+			printf("rand start shift in RAID0: %d\n", rand_start);
+		}
+#endif
 	}
 
 	virtual void map(off_t off, struct block_identifier &bid) const {
 		int idx_in_block = off % STRIPE_BLOCK_SIZE;
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
-		bid.idx = (int) (block_idx % get_num_files());
+		bid.idx = (int) ((block_idx + rand_start) % get_num_files());
 		bid.off = block_idx / get_num_files() * STRIPE_BLOCK_SIZE
 			+ idx_in_block;
 	}
 
 	virtual int map2file(off_t off) const {
-		return (int) ((off / STRIPE_BLOCK_SIZE) % get_num_files());
+		return (int) (((off / STRIPE_BLOCK_SIZE) + rand_start) % get_num_files());
 	}
 
 	virtual file_mapper *clone() {
@@ -96,11 +107,18 @@ public:
 	}
 };
 
-class RAID5_mapper: public RAID0_mapper
+class RAID5_mapper: public file_mapper
 {
+	static int rand_start;
 public:
 	RAID5_mapper(const std::vector<file_info> &files,
-			int block_size): RAID0_mapper(files, block_size) {
+			int block_size): file_mapper(files, block_size) {
+#ifdef TEST
+		if (rand_start == 0) {
+			rand_start = gen_RAID_rand_start(files.size());
+			printf("rand start shift RAID5: %d\n", rand_start);
+		}
+#endif
 	}
 
 	virtual void map(off_t off, struct block_identifier &bid) const {
@@ -110,13 +128,14 @@ public:
 		bid.off = block_idx / get_num_files() * STRIPE_BLOCK_SIZE
 			+ idx_in_block;
 		int shift = (int) ((block_idx / get_num_files()) % get_num_files());
-		bid.idx = (bid.idx + shift) % get_num_files();
+		bid.idx = (bid.idx + shift + rand_start) % get_num_files();
 	}
 
 	virtual int map2file(off_t off) const {
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
 		int shift = (int) ((block_idx / get_num_files()) % get_num_files());
-		return (int) ((block_idx % get_num_files() + shift) % get_num_files());
+		return (int) ((block_idx % get_num_files() + shift
+					+ rand_start) % get_num_files());
 	}
 
 	virtual file_mapper *clone() {
