@@ -173,9 +173,14 @@ static global_data_collection global_data;
  */
 static void handler(int sig, siginfo_t *si, void *uc)
 {
+	// We can't call the flush requests to wake up I/O threads.
+	// There might be a deadlock if the lock has been held by the thread
+	// interrupted by the signal.
+#if 0
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
 		global_data.read_threads[i]->flush_requests();
 	}
+#endif
 }
 
 static void set_completion_flush_timer()
