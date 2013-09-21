@@ -245,32 +245,45 @@ void init_aio(std::vector<int> node_ids)
 void aio_complete_thread::process_completed_reqs(thread_callback_s *tcbs[],
 		int num)
 {
-	// We should try to invoke for as many requests as possible,
-	// so the upper layer has the opportunity to optimize the request completion.
-	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > map;
-	for (int i = 0; i < num; i++) {
-		thread_callback_s *tcb = tcbs[i];
-		std::vector<io_request *> *v;
-		std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it;
-		io_interface *io = tcb->req.get_io();
-		if ((it = map.find(io)) == map.end()) {
-			map.insert(std::pair<io_interface *, std::vector<io_request *> >(
-						io, std::vector<io_request *>()));
-			v = &map[io];
+	// If the number of completed requests is small, it's unlikely that they
+	// are from the same IO instance.
+	if (num < 8) {
+		for (int i = 0; i < num; i++) {
+			thread_callback_s *tcb = tcbs[i];
+			io_interface *io = tcb->req.get_io();
+			io_request *req = &tcb->req;
+			io->notify_completion(&req, 1);
+			tcbs[i]->cb_allocator->free(tcbs[i]);
 		}
-		else
-			v = &it->second;
+	}
+	else {
+		// We should try to invoke for as many requests as possible,
+		// so the upper layer has the opportunity to optimize the request completion.
+		std::tr1::unordered_map<io_interface *, std::vector<io_request *> > map;
+		for (int i = 0; i < num; i++) {
+			thread_callback_s *tcb = tcbs[i];
+			std::vector<io_request *> *v;
+			std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it;
+			io_interface *io = tcb->req.get_io();
+			if ((it = map.find(io)) == map.end()) {
+				map.insert(std::pair<io_interface *, std::vector<io_request *> >(
+							io, std::vector<io_request *>()));
+				v = &map[io];
+			}
+			else
+				v = &it->second;
 
-		v->push_back(&tcb->req);
-	}
-	for (std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it
-			= map.begin(); it != map.end(); it++) {
-		io_interface *io = it->first;
-		std::vector<io_request *> *v = &it->second;
-		io->notify_completion(v->data(), v->size());
-	}
-	for (int i = 0; i < num; i++) {
-		tcbs[i]->cb_allocator->free(tcbs[i]);
+			v->push_back(&tcb->req);
+		}
+		for (std::tr1::unordered_map<io_interface *, std::vector<io_request *> >::iterator it
+				= map.begin(); it != map.end(); it++) {
+			io_interface *io = it->first;
+			std::vector<io_request *> *v = &it->second;
+			io->notify_completion(v->data(), v->size());
+		}
+		for (int i = 0; i < num; i++) {
+			tcbs[i]->cb_allocator->free(tcbs[i]);
+		}
 	}
 }
 
