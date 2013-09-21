@@ -209,7 +209,9 @@ void disk_read_thread::run() {
 				int ret = cache->flush_dirty_pages(&filter, NUM_DIRTY_PAGES_TO_FETCH);
 				if (ret == 0)
 					break;
+#ifdef STATISTICS
 				num_requested_flushes += ret;
+#endif
 			}
 			else
 				break;
