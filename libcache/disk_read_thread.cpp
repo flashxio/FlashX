@@ -19,8 +19,11 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	this->cache = cache;
 	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, node_id);
 	this->node_id = node_id;
-	num_accesses = 0;
 #ifdef STATISTICS
+	num_reads = 0;
+	num_writes = 0;
+	num_read_bytes = 0;
+	num_write_bytes = 0;
 	num_low_prio_accesses = 0;
 	num_requested_flushes = 0;
 	num_ignored_flushes_evicted = 0;
@@ -142,6 +145,14 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 			min_flush_delay = delay;
 		if (delay > max_flush_delay)
 			max_flush_delay = delay;
+		if (req.get_access_method() == READ) {
+			num_reads++;
+			num_read_bytes += req.get_size();
+		}
+		else {
+			num_writes++;
+			num_write_bytes += req.get_size();
+		}
 #endif
 
 		assert(p == req.get_page(0));
@@ -194,8 +205,7 @@ void disk_read_thread::run() {
 					int num = low_prio_queue.fetch(&low_prio_msg, 1);
 					assert(num == 1);
 				}
-				int ret = process_low_prio_msg(low_prio_msg);
-				num_accesses += ret;
+				process_low_prio_msg(low_prio_msg);
 			}
 			/* 
 			 * this is the only thread that fetch requests from the queue.
@@ -239,8 +249,19 @@ void disk_read_thread::run() {
 			int num_reqs = msg_buffer[i].get_num_objs();
 			assert(num_reqs <= LOCAL_REQ_BUF_SIZE);
 			msg_buffer[i].get_next_objs(local_reqs, num_reqs);
+#ifdef STATISTICS
+			for (int j = 0; j < num_reqs; j++) {
+				if (local_reqs[j].get_access_method() == READ) {
+					num_reads++;
+					num_read_bytes += local_reqs[j].get_size();
+				}
+				else {
+					num_writes++;
+					num_write_bytes += local_reqs[j].get_size();
+				}
+			}
+#endif
 			aio->access(local_reqs, num_reqs);
-			num_accesses += num_reqs;
 			msg_buffer[i].clear();
 		}
 	}

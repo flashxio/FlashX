@@ -31,13 +31,16 @@ class disk_read_thread
 	pthread_t id;
 	async_io *aio;
 	int node_id;
-	int num_accesses;
 #ifdef STATISTICS
-	int num_low_prio_accesses;
-	int num_requested_flushes;
-	int num_ignored_flushes_evicted;
-	int num_ignored_flushes_cleaned;
-	int num_ignored_flushes_old;
+	long num_reads;
+	long num_writes;
+	long num_read_bytes;
+	long num_write_bytes;
+	long num_low_prio_accesses;
+	long num_requested_flushes;
+	long num_ignored_flushes_evicted;
+	long num_ignored_flushes_cleaned;
+	long num_ignored_flushes_old;
 	long tot_flush_delay;	// in us
 	long max_flush_delay;
 	long min_flush_delay;
@@ -140,10 +143,10 @@ public:
 		printf("queue on file %s wait for requests for %d times, is full for %d times,\n",
 				get_file_name().c_str(), get_queue()->get_num_empty(),
 				get_queue()->get_num_full());
-		printf("\t%d accesses and %d io waits, complete %d reqs and %d low-prio reqs,\n",
-				num_accesses, aio->get_num_iowait(), aio->get_num_completed_reqs(),
+		printf("\t%ld reads (%ld bytes), %ld writes (%ld bytes) and %d io waits, complete %d reqs and %ld low-prio reqs,\n",
+				num_reads, num_read_bytes, num_writes, num_write_bytes, aio->get_num_iowait(), aio->get_num_completed_reqs(),
 				num_low_prio_accesses);
-		printf("\trequest %d flushes, ignore flushes: %d evicted, %d cleaned, %d out-of-date\n",
+		printf("\trequest %ld flushes, ignore flushes: %ld evicted, %ld cleaned, %ld out-of-date\n",
 				num_requested_flushes, num_ignored_flushes_evicted,
 				num_ignored_flushes_cleaned, num_ignored_flushes_old);
 		if (num_low_prio_accesses > 0)
