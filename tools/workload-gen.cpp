@@ -69,7 +69,16 @@ int main(int argc, char *argv[])
 	rand_rehasher rehasher(0, 100 * 1024 * 1024);
 
 	FILE *in = fopen(argv[1], "r");
+	if (in == NULL) {
+		perror("fopen");
+		assert(in);
+	}
 	FILE *out = fopen(argv[2], "w");
+	if (out == NULL) {
+		perror("fopen");
+		assert(out);
+	}
+	assert(out);
 	char buf[1024];
 	while (fgets(buf, sizeof(buf), in)) {
 		workload_t workload;
