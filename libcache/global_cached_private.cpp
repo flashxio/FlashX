@@ -667,13 +667,18 @@ again:
 				 * All pending requests on a page have to be a single-buf request.
 				 * Furthermore, the pending requests must only cover one page.
 				 */
-				// TODO I shouldn't allocate memory within locks.
-				io_request *partial_orig = req_allocator->alloc_obj();
-				extract_pages(*orig, p->get_offset(), 1, *partial_orig);
-				partial_orig->set_partial(true);
-				partial_orig->set_orig(orig);
-				partial_orig->set_priv(p);
-				p->add_req(partial_orig);
+				if (orig->within_1page()) {
+					p->add_req(orig);
+				}
+				else {
+					// TODO I shouldn't allocate memory within locks.
+					io_request *partial_orig = req_allocator->alloc_obj();
+					extract_pages(*orig, p->get_offset(), 1, *partial_orig);
+					partial_orig->set_partial(true);
+					partial_orig->set_orig(orig);
+					partial_orig->set_priv(p);
+					p->add_req(partial_orig);
+				}
 				p->unlock();
 			}
 		}
