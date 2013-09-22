@@ -1,5 +1,6 @@
 #include <tr1/unordered_map>
 #include <vector>
+#include <algorithm>
 
 #include "global_cached_private.h"
 #include "flush_thread.h"
@@ -136,13 +137,21 @@ static inline thread_safe_page *__complete_req_unlocked(io_request *orig,
 void notify_completion(io_interface *this_io, io_request *req)
 {
 	// The request is from the application.
+	// TODO this is a temp fix. It won't work with part_global_cached_io.
+	// It doesn't guarantee that a request's callback function is always
+	// called in the thread where it is issued.
 	io_interface *io = req->get_io();
+	assert(io == this_io);
+	if (io->get_callback())
+		io->get_callback()->invoke(&req, 1);
+#if 0
 	if (io == this_io) {
 		if (io->get_callback())
 			io->get_callback()->invoke(&req, 1);
 	}
 	else
 		io->notify_completion(&req, 1);
+#endif
 }
 
 void notify_completion(io_interface *this_io, io_request *reqs[], int num)
@@ -249,6 +258,45 @@ void global_cached_io::finalize_request(io_request &req)
 	}
 }
 
+struct comp_pending_req {
+	bool operator() (const io_request *req1, const io_request *req2) {
+		return (long) req1->get_io() < (long) req2->get_io();
+	}
+} pending_req_comparator;
+
+void queue_requests(std::vector<io_request *> &pending_reqs)
+{
+	if (pending_reqs.empty())
+		return;
+
+	int num_orig = pending_reqs.size();
+	for (int i = 0; i < num_orig; i++) {
+		io_request *req = (io_request *) pending_reqs[i]->get_next_req();
+		while (req) {
+			io_request *next = (io_request *) req->get_next_req();
+			req->set_next_req(NULL);
+			pending_reqs.push_back(req);
+			req = next;
+		}
+		pending_reqs[i]->set_next_req(NULL);
+	}
+	std::sort(pending_reqs.begin(), pending_reqs.end(), pending_req_comparator);
+	int num_pending = pending_reqs.size();
+	io_interface *prev = pending_reqs[0]->get_io();
+	int begin_idx = 0;
+	for (int end_idx = 1; end_idx < num_pending; end_idx++) {
+		if (pending_reqs[end_idx]->get_io() != prev) {
+			static_cast<global_cached_io *>(prev)->queue_requests(
+					pending_reqs.data() + begin_idx, end_idx - begin_idx);
+			begin_idx = end_idx;
+			prev = pending_reqs[end_idx]->get_io();
+		}
+	}
+	assert(begin_idx < num_pending);
+	static_cast<global_cached_io *>(prev)->queue_requests(
+			pending_reqs.data() + begin_idx, num_pending - begin_idx);
+}
+
 int global_cached_io::multibuf_completion(io_request *request,
 		std::vector<thread_safe_page *> &dirty_pages)
 {
@@ -257,8 +305,7 @@ int global_cached_io::multibuf_completion(io_request *request,
 	/*
 	 * Right now the global cache only support normal access().
 	 */
-	io_request *pending_reqs[request->get_num_bufs()];
-	thread_safe_page *pages[request->get_num_bufs()];
+	std::vector<io_request *> pending_reqs;
 	// The pages that are set dirty for the first time.
 	off_t off = request->get_offset();
 	for (int i = 0; i < request->get_num_bufs(); i++) {
@@ -268,7 +315,6 @@ int global_cached_io::multibuf_completion(io_request *request,
 		 * to their offsets.
 		 */
 		assert(p);
-		pages[i] = p;
 		p->lock();
 		assert(p->is_io_pending());
 		if (request->get_access_method() == READ)
@@ -278,7 +324,9 @@ int global_cached_io::multibuf_completion(io_request *request,
 			p->set_old_dirty(false);
 		}
 		p->set_io_pending(false);
-		pending_reqs[i] = p->reset_reqs();
+		io_request *pending_req = p->reset_reqs();
+		if (pending_req)
+			pending_reqs.push_back(pending_req);
 		if (request->get_access_method() == READ) {
 			thread_safe_page *dirty = __complete_req_unlocked(orig, p);
 			if (dirty)
@@ -306,47 +354,15 @@ int global_cached_io::multibuf_completion(io_request *request,
 		extract_pages(*orig, request->get_offset(), request->get_num_bufs(),
 				partial);
 		this->finalize_partial_request(partial, orig);
-
-		/*
-		 * Now we should start to deal with all requests pending to pages
-		 * All of these requests should be single buffer requests.
-		 */
-		for (int i = 0; i < request->get_num_bufs(); i++) {
-			io_request *old = pending_reqs[i];
-			thread_safe_page *p = pages[i];
-			while (old) {
-				io_request *next = old->get_next_req();
-				thread_safe_page *dirty = __complete_req(old, p);
-				if (dirty)
-					dirty_pages.push_back(dirty);
-				this->finalize_request(*old);
-				// Now we can delete it.
-				this->get_req_allocator()->free(old);
-				old = next;
-			}
-			assert(p->get_ref() >= 0);
-		}
 	}
 	else {
 		io_request *orig = request->get_orig();
-		global_cached_io *io = static_cast<global_cached_io *>(
-				orig->get_io());
-		// We can't invoke write() here because it may block the thread.
-		// Instead, we queue the request, so it will be issue to
-		// the device by the user thread.
 		assert(orig->get_next_req() == NULL);
-		io_request *buf[request->get_num_bufs() + 1];
-		int num_req = 0;
-		buf[num_req++] = orig;
-		for (int i = 0; i < request->get_num_bufs(); i++) {
-			if (pending_reqs[i]) {
-				buf[num_req++] = pending_reqs[i];
-			}
-		}
-		io->queue_requests(buf, num_req);
+		pending_reqs.push_back(orig);
 		// These requests can't be deleted yet.
 		// They will be deleted when these write requests are finally served.
 	}
+	::queue_requests(pending_reqs);
 
 	return -1;
 }
@@ -359,16 +375,9 @@ void global_cached_io::process_completed_requests(io_request requests[],
 #endif
 	page_cache *cache = this->get_global_cache();
 	std::vector<thread_safe_page *> dirty_pages;
+	std::vector<io_request *> pending_reqs;
 	for (int i = 0; i < num; i++) {
 		io_request *request = &requests[i];
-		/* 
-		 * If the request doesn't have an original request,
-		 * it is issued by the flushing thread.
-		 */
-		if (request->get_orig() == NULL) {
-			cache->flush_callback(*request);
-			continue;
-		}
 
 		if (request->get_num_bufs() > 1) {
 			multibuf_completion(request, dirty_pages);
@@ -412,39 +421,21 @@ void global_cached_io::process_completed_requests(io_request requests[],
 			extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
 			this->finalize_partial_request(partial, orig);
 
-			int num = 0;
-			while (old) {
-				/*
-				 * It should be guaranteed that there isn't a multi-buf request
-				 * in the queue. Because if a page is in IO pending, we won't
-				 * issue a multi-buf request for the page.
-				 */
-				io_request *next = old->get_next_req();
-				assert(old->get_num_bufs() == 1);
-				thread_safe_page *dirty = __complete_req(old, p);
-				if (dirty)
-					dirty_pages.push_back(dirty);
-
-				this->finalize_request(*old);
-				// Now we can delete it.
-				this->get_req_allocator()->free(old);
-				old = next;
-				num++;
-			}
+			if (old)
+				pending_reqs.push_back(old);
 		}
 		else {
 			io_request *orig = request->get_orig();
-			global_cached_io *io = static_cast<global_cached_io *>(
-					orig->get_io());
-			// We can't invoke write() here because it may block the thread.
-			// Instead, we queue the request, so it will be issue to
-			// the device by the user thread.
 			assert(orig->get_next_req() == NULL);
-			orig->set_next_req(old);
-			io->queue_requests(&orig, 1);
+			pending_reqs.push_back(orig);
+			if (old)
+				pending_reqs.push_back(old);
 			// These requests can't be deleted yet.
 			// They will be deleted when these write requests are finally served.
 		}
+	}
+	if (!pending_reqs.empty()) {
+		::queue_requests(pending_reqs);
 	}
 	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size(), underlying);
 }
@@ -737,6 +728,8 @@ int global_cached_io::handle_pending_requests()
 				 * Right now all pending requests are writes.
 				 * All writes are single-buf requests.
 				 */
+				assert(req->get_next_req() == NULL);
+				assert(req->get_io() == this);
 				assert(req->get_num_bufs() == 1);
 				io_request *next = (io_request *) req->get_next_req();
 				assert(req->get_priv() == p);
