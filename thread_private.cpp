@@ -182,6 +182,7 @@ int thread_private::run()
 				}
 				else if (buf_type == SINGLE_SMALL_BUF) {
 again:
+					num_reqs_by_user = min(io->get_remaining_io_slots(), NUM_REQS_BY_USER);
 					while (size > 0 && i < num_reqs_by_user) {
 						off_t next_off = ROUNDUP_PAGE(off + 1);
 						if (next_off > off + size)
@@ -199,7 +200,8 @@ again:
 					}
 					if (size > 0) {
 						io->access(reqs, i);
-						io->flush_requests();
+						if (io->get_remaining_io_slots() <= 0)
+							io->wait4complete(io->get_max_num_pending_ios() / 10);
 #ifdef STATISTICS
 						num_pending.inc(i);
 #endif
@@ -218,7 +220,8 @@ again:
 				}
 			}
 			io->access(reqs, i);
-			io->wait4complete(io->get_max_num_pending_ios() / 10);
+			if (io->get_remaining_io_slots() <= 0)
+				io->wait4complete(io->get_max_num_pending_ios() / 10);
 			num_accesses += i;
 #ifdef STATISTICS
 			int curr = num_pending.inc(i);
