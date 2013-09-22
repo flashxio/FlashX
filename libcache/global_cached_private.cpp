@@ -664,6 +664,7 @@ again:
 				 * Furthermore, the pending requests must only cover one page.
 				 */
 				if (orig->within_1page()) {
+					assert(orig->get_priv());
 					p->add_req(orig);
 				}
 				else {
@@ -940,6 +941,8 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				orig = req_allocator->alloc_obj();
 				orig->init(requests[i]);
 			}
+			if (orig->within_1page())
+				orig->set_priv(p);
 			/*
 			 * Cache may evict a dirty page and return the dirty page
 			 * to the user before it is written back to a file.
@@ -1002,6 +1005,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					// writing.
 					p->lock();
 					if (p->is_old_dirty()) {
+						assert(orig1->get_priv());
 						p->add_req(orig1);
 						p->unlock();
 						// the request has been added to the page, when the old dirty
