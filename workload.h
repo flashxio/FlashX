@@ -279,9 +279,17 @@ class file_workload: public workload_gen
 	workload_t curr;
 public:
 	file_workload(workload_t workloads[], long length, int thread_id,
-			int nthreads): local_buf(-1, WORKLOAD_BUF_SIZE) {
+			int nthreads, int read_percent = -1): local_buf(-1, WORKLOAD_BUF_SIZE) {
 		if (workload_queue == NULL) {
 			workload_queue = thread_safe_FIFO_queue<workload_t>::create(-1, length);
+			if (read_percent >= 0) {
+				for (int i = 0; i < length; i++) {
+					if (random() % 100 < read_percent)
+						workloads[i].read = 1;
+					else
+						workloads[i].read = 0;
+				}
+			}
 			int ret = workload_queue->add(workloads, length);
 			assert(ret == length);
 		}
@@ -297,8 +305,6 @@ public:
 	const workload_t &next() {
 		assert(!local_buf.is_empty());
 		curr = local_buf.pop_front();
-		if (get_default_access_method() >= 0)
-			curr.read = get_default_access_method() == READ;
 		return curr;
 	}
 

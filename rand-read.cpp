@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
 	// No cache hits.
 	double hit_ratio = 0;
 	// All reads
-	double read_ratio = 1;
+	double read_ratio = -1;
 	int num_repeats = 1;
 	std::string workload_file;
 	str2int_map access_map(access_methods,
@@ -386,6 +386,7 @@ int main(int argc, char *argv[])
 					gen = new seq_workload(start, end, entry_size);
 					break;
 				case RAND_OFFSET:
+					assert(read_ratio >= 0);
 					gen = new rand_workload(start, end, entry_size,
 							end - start, (int) (read_ratio * 100));
 					break;
@@ -394,11 +395,13 @@ int main(int argc, char *argv[])
 							1024 * 1024 * 4);
 					break;
 				case RAND_PERMUTE:
+					assert(read_ratio >= 0);
 					gen = new global_rand_permute_workload(entry_size,
 							(((long) npages) * PAGE_SIZE) / entry_size,
 							num_repeats, read_ratio);
 					break;
 				case HIT_DEFINED:
+					assert(read_ratio >= 0);
 					gen = new cache_hit_defined_workload(entry_size,
 							(((long) npages) * PAGE_SIZE) / entry_size,
 							cache_size, hit_ratio, read_ratio);
@@ -409,7 +412,8 @@ int main(int argc, char *argv[])
 						static workload_t *workloads = NULL;
 						if (workloads == NULL)
 							workloads = load_file_workload(workload_file, length);
-						gen = new file_workload(workloads, length, j, nthreads);
+						gen = new file_workload(workloads, length, j, nthreads,
+								(int) (read_ratio * 100));
 						break;
 					}
 				default:
