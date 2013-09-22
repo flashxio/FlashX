@@ -602,7 +602,12 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		ret = orig->get_size();
 		__complete_req(orig, p);
 		global_cached_io *io = (global_cached_io *) orig->get_io();
+		// Maybe the request is the one queued on a page and is waiting for
+		// the I/O on the page to be completed. Therefore, its IO instance
+		// isn't necessary to be the current IO instance.
+#if 0
 		assert(this == io);
+#endif
 		if (orig->is_sync())
 			io->wakeup_on_req(orig, IO_OK);
 		else {
