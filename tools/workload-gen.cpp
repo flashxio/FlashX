@@ -80,29 +80,44 @@ int main(int argc, char *argv[])
 	}
 	assert(out);
 	char buf[1024];
+	char orig[1024];
+	int num_lines = 0;
 	while (fgets(buf, sizeof(buf), in)) {
+		memcpy(orig, buf, sizeof(buf));
+		num_lines++;
 		workload_t workload;
 		char *str = strchr(buf, ',');
-		if (str == NULL)
-			break;
+		if (str == NULL) {
+			printf("skip %s\n", orig);
+			continue;
+		}
 		char *off_str = str + 1;
 		str = strchr(off_str, ',');
-		if (str == NULL)
-			break;
+		if (str == NULL) {
+			printf("skip %s\n", orig);
+			continue;
+		}
 		*str = 0;
 		char *size_str = str + 1;
 		str = strchr(size_str, ',');
-		if (str == NULL)
-			break;
+		if (str == NULL) {
+			printf("skip %s\n", orig);
+			continue;
+		}
 		*str = 0;
 		char *flag_str = str + 1;
 		workload.off = strtol(off_str, NULL, 10);
+		assert(workload.off >= 0);
 //		workload.off = rehasher.rehash(workload.off / 4096) * 4096;
 		if (min_off > workload.off)
 			min_off = workload.off;
 		if (max_off < workload.off)
 			max_off = workload.off;
 		workload.size = atoi(size_str);
+		if (workload.size <= 0) {
+			printf("skip %s\n", orig);
+			continue;
+		}
 		if (min_size > workload.size)
 			min_size = workload.size;
 		if (max_size < workload.size)
@@ -150,6 +165,7 @@ int main(int argc, char *argv[])
 			printf("%d pages get %d hits\n", it->second, it->first);
 		}
 	}
+	printf("read %d lines\n", num_lines);
 	printf("There are %ld pages accessed\n", page_map.size());
 	printf("The min offset is %ld, the max offset is %ld\n", min_off, max_off);
 	printf("The min request size is %ld, the max request size is %ld\n", min_size, max_size);
