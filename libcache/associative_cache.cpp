@@ -5,7 +5,7 @@
 
 #include "io_interface.h"
 #include "associative_cache.h"
-#include "flush_thread.h"
+#include "dirty_page_flusher.h"
 #include "exception.h"
 #include "memory_manager.h"
 
@@ -1069,14 +1069,14 @@ public:
 	}
 };
 
-class associative_flush_thread;
+class associative_flusher;
 
 class flush_io: public io_interface
 {
 	io_interface *underlying;
 	pthread_key_t underlying_key;
 	associative_cache *cache;
-	associative_flush_thread *flush_thread;
+	associative_flusher *flusher;
 
 	io_interface *get_per_thread_io() {
 		io_interface *io = (io_interface *) pthread_getspecific(underlying_key);
@@ -1088,10 +1088,10 @@ class flush_io: public io_interface
 	}
 public:
 	flush_io(io_interface *underlying, associative_cache *cache,
-			associative_flush_thread *flush_thread): io_interface(underlying->get_node_id()) {
+			associative_flusher *flusher): io_interface(underlying->get_node_id()) {
 		this->underlying = underlying;
 		this->cache = cache;
-		this->flush_thread = flush_thread;
+		this->flusher = flusher;
 		pthread_key_create(&underlying_key, NULL);
 	}
 
@@ -1115,19 +1115,21 @@ public:
 	}
 };
 
-class associative_flush_thread: public flush_thread
+class associative_flusher: public dirty_page_flusher
 {
 	// For the case of NUMA cache, cache and local_cache are different.
 	page_cache *cache;
 	associative_cache *local_cache;
+	int node_id;
 
 	flush_io *io;
 	select_dirty_pages_policy *policy;
 public:
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
-	associative_flush_thread(page_cache *cache, associative_cache *local_cache,
-			io_interface *io, int node_id): flush_thread(node_id), dirty_cells(
+	associative_flusher(page_cache *cache, associative_cache *local_cache,
+			io_interface *io, int node_id): dirty_cells(
 				io->get_node_id(), local_cache->get_num_cells()) {
+		this->node_id = node_id;
 		this->cache = cache;
 		this->local_cache = local_cache;
 		if (this->cache == NULL)
@@ -1135,6 +1137,10 @@ public:
 
 		this->io = new flush_io(io, local_cache, this);
 		policy = new eviction_select_dirty_pages_policy();
+	}
+
+	int get_node_id() const {
+		return node_id;
 	}
 
 	void run();
@@ -1168,7 +1174,7 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 			// flush requests.
 			if (cache->num_pending_flush.get() < cache->max_num_pending_flush) {
 				io_request req_array[NUM_WRITEBACK_DIRTY_PAGES];
-				int ret = flush_thread->flush_cell(cell, req_array,
+				int ret = flusher->flush_cell(cell, req_array,
 						NUM_WRITEBACK_DIRTY_PAGES);
 				if (ret > 0) {
 					this->access(req_array, ret);
@@ -1215,7 +1221,7 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 		}
 	}
 	if (num_dirty_cells > 0)
-		flush_thread->dirty_cells.add(dirty_cells, num_dirty_cells);
+		flusher->dirty_cells.add(dirty_cells, num_dirty_cells);
 	if (num_flushes > 0)
 		cache->num_pending_flush.inc(num_flushes);
 
@@ -1225,20 +1231,20 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 	int orig = cache->num_pending_flush.get();
 #endif
 	if (cache->num_pending_flush.get() < cache->max_num_pending_flush) {
-		flush_thread->run();
+		flusher->run();
 	}
 #ifdef DEBUG
 	if (enable_debug)
 		printf("node %d: %d orig, %d pending, %d dirty cells, %d dirty pages\n",
 				get_node_id(), orig, cache->num_pending_flush.get(),
-				flush_thread->dirty_cells.get_num_entries(),
+				flusher->dirty_cells.get_num_entries(),
 				cache->num_dirty_pages.get());
 #endif
 }
 
 void merge_pages2req(io_request &req, page_cache *cache);
 
-int associative_flush_thread::flush_cell(hash_cell *cell,
+int associative_flusher::flush_cell(hash_cell *cell,
 		io_request *req_array, int req_array_size)
 {
 	std::map<off_t, thread_safe_page *> dirty_pages;
@@ -1310,7 +1316,7 @@ int associative_flush_thread::flush_cell(hash_cell *cell,
 /**
  * This will run until we get enough pending flushes.
  */
-void associative_flush_thread::run()
+void associative_flusher::run()
 {
 	const int FETCH_BUF_SIZE = 32;
 	// We can't get more requests than the number of pages in a cell.
@@ -1355,20 +1361,19 @@ void associative_flush_thread::run()
 	io->flush_requests();
 }
 
-flush_thread *associative_cache::create_flush_thread(io_interface *io,
+dirty_page_flusher *associative_cache::create_flusher(io_interface *io,
 		page_cache *global_cache)
 {
 	pthread_mutex_lock(&init_mutex);
-	if (_flush_thread == NULL && io
+	if (_flusher == NULL && io
 			// The IO instance should be on the same node or we don't know
 			// in which node the cache is.
 			&& (io->get_node_id() == node_id || node_id == -1)) {
-		_flush_thread = new associative_flush_thread(global_cache, this,
+		_flusher = new associative_flusher(global_cache, this,
 				io->clone(), node_id);
-		_flush_thread->start();
 	}
 	pthread_mutex_unlock(&init_mutex);
-	return _flush_thread;
+	return _flusher;
 }
 
 void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num,
@@ -1377,13 +1382,13 @@ void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num,
 #ifdef DEBUG
 	num_dirty_pages.inc(num);
 #endif
-	if (_flush_thread)
-		_flush_thread->flush_dirty_pages(pages, num, io);
+	if (_flusher)
+		_flusher->flush_dirty_pages(pages, num, io);
 }
 
 void associative_cache::init(io_interface *underlying)
 {
-	create_flush_thread(underlying, this);
+	create_flusher(underlying, this);
 }
 
 hash_cell *associative_cache::get_prev_cell(hash_cell *cell) {
@@ -1484,7 +1489,7 @@ void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
 
 #define ENABLE_FLUSH_THREAD
 
-void associative_flush_thread::flush_dirty_pages(thread_safe_page *pages[],
+void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],
 		int num, io_interface *io)
 {
 #ifdef ENABLE_FLUSH_THREAD
@@ -1544,8 +1549,7 @@ void associative_flush_thread::flush_dirty_pages(thread_safe_page *pages[],
 #endif
 }
 
-int associative_flush_thread::flush_dirty_pages(page_filter *filter,
-		int max_num)
+int associative_flusher::flush_dirty_pages(page_filter *filter, int max_num)
 {
 #ifdef ENABLE_FLUSH_THREAD
 	int num_flushes = 0;
@@ -1604,8 +1608,8 @@ int associative_cache::get_num_dirty_pages() const
 
 int associative_cache::flush_dirty_pages(page_filter *filter, int max_num)
 {
-	if (_flush_thread)
-		return _flush_thread->flush_dirty_pages(filter, max_num);
+	if (_flusher)
+		return _flusher->flush_dirty_pages(filter, max_num);
 	else
 		return 0;
 }

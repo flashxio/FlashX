@@ -53,7 +53,7 @@ public:
 		for (size_t i = 0; i < caches.size(); i++) {
 			// TODO this is a ugly hack. It makes sure that each flush
 			// thread of a SA-cache has a reference to this NUMA cache.
-			caches[i]->create_flush_thread(underlying, this);
+			caches[i]->create_flusher(underlying, this);
 			caches[i]->init(underlying);
 		}
 	}

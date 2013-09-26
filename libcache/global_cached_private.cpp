@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "global_cached_private.h"
-#include "flush_thread.h"
 #include "slab_allocator.h"
 
 // TODO I assume the block size of the RAID array is 16 pages.

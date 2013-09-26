@@ -371,7 +371,7 @@ public:
 	void print_cell();
 };
 
-class flush_thread;
+class dirty_page_flusher;
 class memory_manager;
 
 class associative_cache: public page_cache
@@ -407,7 +407,7 @@ class associative_cache: public page_cache
 	int level;
 	int split;
 
-	flush_thread *_flush_thread;
+	dirty_page_flusher *_flusher;
 	pthread_mutex_t init_mutex;
 
 	associative_cache(long cache_size, long max_cache_size, int node_id,
@@ -538,10 +538,10 @@ public:
 
 	/* Methods for flushing dirty pages. */
 
-	flush_thread *create_flush_thread(io_interface *io,
+	dirty_page_flusher *create_flusher(io_interface *io,
 			page_cache *global_cache);
-	flush_thread *get_flush_thread() const {
-		return _flush_thread;
+	dirty_page_flusher *get_flusher() const {
+		return _flusher;
 	}
 	void mark_dirty_pages(thread_safe_page *pages[], int num, io_interface *);
 	virtual int flush_dirty_pages(page_filter *filter, int max_num);

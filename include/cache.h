@@ -370,7 +370,7 @@ public:
 			const thread_safe_page *returned_pages[]) = 0;
 };
 
-class flush_thread;
+class dirty_page_flusher;
 class io_interface;
 class page_filter;
 class page_cache
@@ -400,7 +400,7 @@ public:
 	virtual bool shrink(int npages, char *pages[]) {
 		return false;
 	}
-	virtual flush_thread *create_flush_thread(io_interface *io,
+	virtual dirty_page_flusher *create_flusher(io_interface *io,
 			page_cache *global_cache) {
 		return NULL;
 	}
