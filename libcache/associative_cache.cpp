@@ -1081,14 +1081,14 @@ class flush_io: public io_interface
 	io_interface *get_per_thread_io() {
 		io_interface *io = (io_interface *) pthread_getspecific(underlying_key);
 		if (io == NULL) {
-			io = underlying->clone();
+			io = underlying->clone(NULL);
 			pthread_setspecific(underlying_key, io);
 		}
 		return io;
 	}
 public:
 	flush_io(io_interface *underlying, associative_cache *cache,
-			associative_flusher *flusher): io_interface(underlying->get_node_id()) {
+			associative_flusher *flusher): io_interface(NULL) {
 		this->underlying = underlying;
 		this->cache = cache;
 		this->flusher = flusher;
@@ -1370,7 +1370,7 @@ dirty_page_flusher *associative_cache::create_flusher(io_interface *io,
 			// in which node the cache is.
 			&& (io->get_node_id() == node_id || node_id == -1)) {
 		_flusher = new associative_flusher(global_cache, this,
-				io->clone(), node_id);
+				io->clone(NULL), node_id);
 	}
 	pthread_mutex_unlock(&init_mutex);
 	return _flusher;

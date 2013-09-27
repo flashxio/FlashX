@@ -64,7 +64,7 @@ class part_global_cached_io: public global_cached_io
 	int process_replies();
 	int distribute_reqs(io_request *requests, int num);
 
-	part_global_cached_io(int node_id, part_io_process_table *);
+	part_global_cached_io(thread *t, part_io_process_table *);
 	~part_global_cached_io();
 public:
 	static part_io_process_table *open_file(
@@ -72,11 +72,12 @@ public:
 			const cache_config *config, int num_ssds);
 	static int close_file(part_io_process_table *table);
 
-	static part_global_cached_io *create(int node_id,
+	static part_global_cached_io *create(thread *t,
 			part_io_process_table *table) {
+		int node_id = t->get_node_id();
 		assert(node_id >= 0);
 		void *addr = numa_alloc_onnode(sizeof(part_global_cached_io), node_id);
-		return new(addr) part_global_cached_io(node_id, table);
+		return new(addr) part_global_cached_io(t, table);
 	}
 
 	static void destroy(part_global_cached_io *io) {

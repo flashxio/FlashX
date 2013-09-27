@@ -148,16 +148,17 @@ class node_cached_io: public global_cached_io
 	message<io_request> local_msgs[MSG_BUF_SIZE];
 	pthread_t processing_thread_id;
 
-	node_cached_io(io_interface *underlying, struct thread_group *local_group);
+	node_cached_io(thread *t, io_interface *underlying,
+			struct thread_group *local_group);
 	~node_cached_io() {
 	}
 public:
-	static node_cached_io *create(io_interface *underlying,
+	static node_cached_io *create(thread *t, io_interface *underlying,
 			struct thread_group *local_group) {
 		assert(underlying->get_node_id() >= 0);
 		void *addr = numa_alloc_onnode(sizeof(node_cached_io),
 				underlying->get_node_id());
-		return new(addr) node_cached_io(underlying, local_group);
+		return new(addr) node_cached_io(t, underlying, local_group);
 	}
 
 	static void destroy(node_cached_io *io) {
@@ -202,9 +203,9 @@ public:
 };
 #endif
 
-node_cached_io::node_cached_io(io_interface *underlying,
+node_cached_io::node_cached_io(thread *t, io_interface *underlying,
 		struct thread_group *local_group):
-	global_cached_io(underlying, local_group->cache)
+	global_cached_io(t, underlying, local_group->cache)
 {
 	assert(local_group);
 	this->local_group = local_group;
@@ -323,19 +324,18 @@ class process_request_thread: public thread
 {
 	node_cached_io *io;
 
-	process_request_thread(node_cached_io *io): thread(
-			std::string("process_request_thread-") + itoa(io->get_node_id()),
+	process_request_thread(int node_id): thread(
+			std::string("process_request_thread-") + itoa(node_id),
 			// We don't use blocking mode of the thread because
 			// we are using blocking queue.
-			io->get_node_id(), false) {
-		this->io = io;
+			node_id, false) {
+		this->io = NULL;
 	}
 public:
-	static process_request_thread *create(node_cached_io *io) {
-		assert(io->get_node_id() >= 0);
+	static process_request_thread *create(int node_id) {
 		void *addr = numa_alloc_onnode(sizeof(process_request_thread),
-				io->get_node_id());
-		return new(addr) process_request_thread(io);
+				node_id);
+		return new(addr) process_request_thread(node_id);
 	}
 
 	static void destroy(process_request_thread *t,
@@ -347,6 +347,10 @@ public:
 		t->join();
 		t->~process_request_thread();
 		numa_free(t, sizeof(*t));
+	}
+
+	void set_io(node_cached_io *io) {
+		this->io = io;
 	}
 
 	node_cached_io *get_io() const {
@@ -416,8 +420,11 @@ part_io_process_table::part_io_process_table(
 		struct thread_group *groupp = &groups[node_id];
 		// Create processing threads.
 		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
-			node_cached_io *io = node_cached_io::create(underlying->clone(), groupp);
-			process_request_thread *t = process_request_thread::create(io);
+			process_request_thread *t = process_request_thread::create(
+					underlying->get_node_id());
+			node_cached_io *io = node_cached_io::create(t,
+					underlying->clone(t), groupp);
+			t->set_io(io);
 			t->start();
 			groupp->process_request_threads.push_back(t);
 		}
@@ -485,11 +492,12 @@ part_io_process_table *part_global_cached_io::open_file(
 	return new part_io_process_table(underlyings, config, num_ssds);
 }
 
-part_global_cached_io::part_global_cached_io(int node_id,
-		part_io_process_table *table): global_cached_io(
-			table->get_underlying_io(node_id)->clone(),
-			table->get_cache(node_id))
+part_global_cached_io::part_global_cached_io(thread *t,
+		part_io_process_table *table): global_cached_io(t,
+			table->get_underlying_io(t->get_node_id())->clone(t),
+			table->get_cache(t->get_node_id()))
 {
+	int node_id = t->get_node_id();
 	processed_requests = 0;;
 	sent_requests = 0;
 	processed_replies = 0;

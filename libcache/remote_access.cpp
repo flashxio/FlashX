@@ -38,11 +38,12 @@ void remote_disk_access::notify_completion(io_request *reqs[], int num)
 }
 
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
-		file_mapper *mapper, int node_id, int max_reqs): io_interface(
+		file_mapper *mapper, thread *t, int max_reqs): io_interface(
 			// TODO I hope the queue size is large enough.
-			node_id), max_disk_cached_reqs(max_reqs), complete_queue(node_id,
+			t), max_disk_cached_reqs(max_reqs), complete_queue(t->get_node_id(),
 				COMPLETE_QUEUE_SIZE)
 {
+	int node_id = t->get_node_id();
 	num_ios.inc(1);
 	this->io_threads = remotes;
 	// TODO I need to deallocate it later.
@@ -73,10 +74,12 @@ remote_disk_access::~remote_disk_access()
 	}
 }
 
-io_interface *remote_disk_access::clone() const
+io_interface *remote_disk_access::clone(thread *t) const
 {
+	// An IO may not be associated to any threads.
+	assert(t == NULL || t->get_node_id() == this->get_node_id());
 	num_ios.inc(1);
-	remote_disk_access *copy = new remote_disk_access(this->get_node_id(),
+	remote_disk_access *copy = new remote_disk_access(t,
 			this->max_disk_cached_reqs);
 	copy->io_threads = this->io_threads;
 	copy->senders.resize(this->senders.size());

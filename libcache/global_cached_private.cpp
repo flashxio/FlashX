@@ -439,9 +439,9 @@ void global_cached_io::process_completed_requests(io_request requests[],
 	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size(), underlying);
 }
 
-global_cached_io::global_cached_io(io_interface *underlying,
-		page_cache *cache): io_interface(underlying->get_node_id()),
-	pending_requests(underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
+global_cached_io::global_cached_io(thread *t, io_interface *underlying,
+		page_cache *cache): io_interface(t), pending_requests(
+			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
 	complete_queue(underlying->get_node_id(), COMPLETE_QUEUE_SIZE)
 {
 	req_allocator = new request_allocator(underlying->get_node_id(),

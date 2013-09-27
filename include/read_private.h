@@ -24,7 +24,7 @@ class buffered_io: public io_interface
 #endif
 public:
 	buffered_io(const logical_file_partition &partition_,
-			int node_id, int flags = O_RDWR);
+			thread *t, int flags = O_RDWR);
 
 	virtual ~buffered_io() {
 	}

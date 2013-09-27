@@ -37,8 +37,8 @@ class remote_disk_access: public io_interface
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
 
-	remote_disk_access(int node_id, int max_reqs): io_interface(
-			node_id), max_disk_cached_reqs(max_reqs), complete_queue(node_id,
+	remote_disk_access(thread *t, int max_reqs): io_interface(
+			t), max_disk_cached_reqs(max_reqs), complete_queue(t->get_node_id(),
 				COMPLETE_QUEUE_SIZE) {
 		cb = NULL;
 		block_mapper = NULL;
@@ -48,7 +48,7 @@ class remote_disk_access: public io_interface
 	int process_completed_requests(int num);
 public:
 	remote_disk_access(const std::vector<disk_read_thread *> &remotes,
-			file_mapper *mapper, int node_id,
+			file_mapper *mapper, thread *t,
 			int max_reqs = MAX_DISK_CACHED_REQS);
 
 	~remote_disk_access();
@@ -82,7 +82,7 @@ public:
 		return num_issued_reqs.get() - num_completed_reqs.get();
 	}
 	virtual int get_max_num_pending_ios() const;
-	virtual io_interface *clone() const;
+	virtual io_interface *clone(thread *t) const;
 	void flush_requests(int max_cached);
 	virtual void flush_requests();
 	virtual void print_stat(int nthreads) {

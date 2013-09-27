@@ -2,7 +2,7 @@
 #include "file_mapper.h"
 
 buffered_io::buffered_io(const logical_file_partition &partition_,
-		int node_id, int flags): io_interface(node_id), partition(
+		thread *t, int flags): io_interface(t), partition(
 			partition_), fds(partition.get_num_files())
 {
 	this->flags = flags;

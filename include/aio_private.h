@@ -40,7 +40,7 @@ public:
 	 * @node_id: the NUMA node where the disks to be read are connected to.
 	 */
 	async_io(const logical_file_partition &partition,
-			int aio_depth_per_file, int node_id);
+			int aio_depth_per_file, thread *t);
 
 	virtual ~async_io();
 

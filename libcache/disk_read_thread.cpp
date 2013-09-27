@@ -18,7 +18,7 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 					open_files, _disk_id)
 {
 	this->cache = cache;
-	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, node_id);
+	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, this);
 #ifdef STATISTICS
 	num_empty = 0;
 	num_reads = 0;

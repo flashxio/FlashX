@@ -8,6 +8,7 @@
 #include "exception.h"
 #include "common.h"
 #include "concurrency.h"
+#include "thread.h"
 
 class io_request;
 
@@ -63,20 +64,26 @@ enum
  */
 class io_interface
 {
-	int node_id;
+	thread *curr;		// the thread where the IO instance runs.
+
 	// This is an index for locating this IO object in a global table.
 	int io_idx;
 	int max_num_pending_ios;
 	static atomic_integer io_counter;
 
 public:
-	io_interface(int node_id) {
-		this->node_id = node_id;
+	io_interface(thread *t) {
+		this->curr = t;
 		this->io_idx = io_counter.inc(1) - 1;
 		max_num_pending_ios = 32;
 	}
 
 	virtual ~io_interface() { }
+
+	thread *get_thread() const {
+		assert(curr);
+		return curr;
+	}
 
 	/* When a thread begins, this method will be called. */
 	virtual int init() {
@@ -168,12 +175,13 @@ public:
 	virtual void print_stat(int nthreads) {
 	}
 
-	virtual io_interface *clone() const {
+	virtual io_interface *clone(thread *t) const {
 		return NULL;
 	}
 
 	int get_node_id() const {
-		return node_id;
+		assert(curr);
+		return curr->get_node_id();
 	}
 };
 
@@ -195,16 +203,13 @@ public:
 		return name;
 	}
 
-	virtual io_interface *create_io(int node_id) = 0;
+	virtual io_interface *create_io(thread *t) = 0;
 	virtual void destroy_io(io_interface *) = 0;
 };
 
 class RAID_config;
 class cache_config;
 
-std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
-		cache_config *cache_conf, const std::vector<int> &node_id_array,
-		int nthreads, int access_option, long size, bool preload);
 io_interface *allocate_io(const std::string &file_name, int node_id);
 void release_io(io_interface *io);
 

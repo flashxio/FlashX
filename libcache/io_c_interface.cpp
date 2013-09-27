@@ -139,14 +139,6 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 
 	printf("Init SSDIO with %d threads and %d nodes\n",
 			num_threads, num_nodes);
-	int access_option = GLOBAL_CACHE_ACCESS;
-	if (flags & O_DIRECT) {
-		printf("use remote access\n");
-		access_option = REMOTE_ACCESS;
-	}
-	else {
-		printf("use global cached IO\n");
-	}
 
 	// Init RAID configuration.
 	int RAID_mapping_option;
@@ -178,19 +170,6 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 	}
 	printf("There are %ld nodes\n", node_id_array.size());
 
-	// Init cache configuration.
-	cache_config *cache_conf = NULL;
-	if (access_option == GLOBAL_CACHE_ACCESS)
-		cache_conf = new even_cache_config(cache_size, cache_type,
-				node_id_array);
-	else if (access_option == PART_GLOBAL_ACCESS) {
-		assert(num_nodes == 4);
-		cache_conf = new test_cache_config(cache_size, cache_type,
-				node_id_array);
-	}
-
-	create_ios(raid_conf, cache_conf, node_id_array, num_threads, access_option,
-			0, false);
 	pthread_mutex_unlock(&mutex);
 }
 

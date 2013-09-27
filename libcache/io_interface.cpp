@@ -298,7 +298,7 @@ public:
 		this->access_option = access_option;
 	}
 
-	virtual io_interface *create_io(int node_id);
+	virtual io_interface *create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io) {
 	}
@@ -315,7 +315,7 @@ public:
 		this->io_depth_per_file = io_depth_per_file;
 	}
 
-	virtual io_interface *create_io(int node_id);
+	virtual io_interface *create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io) {
 	}
@@ -334,7 +334,7 @@ public:
 		delete mapper;
 	}
 
-	virtual io_interface *create_io(int node_id);
+	virtual io_interface *create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io) {
 	}
@@ -364,7 +364,7 @@ public:
 		cache_conf->destroy_cache(global_cache);
 	}
 
-	virtual io_interface *create_io(int node_id);
+	virtual io_interface *create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io) {
 	}
@@ -384,13 +384,13 @@ public:
 		part_global_cached_io::close_file(table);
 	}
 
-	virtual io_interface *create_io(int node_id);
+	virtual io_interface *create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io) {
 	}
 };
 
-io_interface *posix_io_factory::create_io(int node_id)
+io_interface *posix_io_factory::create_io(thread *t)
 {
 	file_mapper *mapper = raid_conf.create_file_mapper();
 	int num_files = mapper->get_num_files();
@@ -403,10 +403,10 @@ io_interface *posix_io_factory::create_io(int node_id)
 	io_interface *io;
 	switch (access_option) {
 		case READ_ACCESS:
-			io = new buffered_io(global_partition, node_id);
+			io = new buffered_io(global_partition, t);
 			break;
 		case DIRECT_ACCESS:
-			io = new direct_io(global_partition, node_id);
+			io = new direct_io(global_partition, t);
 			break;
 		default:
 			fprintf(stderr, "a wrong posix access option\n");
@@ -416,7 +416,7 @@ io_interface *posix_io_factory::create_io(int node_id)
 	return io;
 }
 
-io_interface *aio_factory::create_io(int node_id)
+io_interface *aio_factory::create_io(thread *t)
 {
 	file_mapper *mapper = raid_conf.create_file_mapper();
 	int num_files = mapper->get_num_files();
@@ -427,7 +427,7 @@ io_interface *aio_factory::create_io(int node_id)
 	logical_file_partition global_partition(indices, mapper);
 
 	io_interface *io;
-	io = new async_io(global_partition, io_depth_per_file, node_id);
+	io = new async_io(global_partition, io_depth_per_file, t);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
 }
@@ -448,19 +448,19 @@ remote_io_factory::remote_io_factory(const RAID_config &_raid_conf,
 	}
 }
 
-io_interface *remote_io_factory::create_io(int node_id)
+io_interface *remote_io_factory::create_io(thread *t)
 {
 	io_interface *io = new remote_disk_access(global_data.read_threads,
-			mapper, node_id);
+			mapper, t);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
 }
 
-io_interface *global_cached_io_factory::create_io(int node_id)
+io_interface *global_cached_io_factory::create_io(thread *t)
 {
 	io_interface *underlying = new remote_disk_access(
-			global_data.read_threads, mapper, node_id);
-	global_cached_io *io = new global_cached_io(underlying,
+			global_data.read_threads, mapper, t);
+	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
@@ -476,7 +476,7 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 		int node_id = node_id_array[i];
 		underlyings.insert(std::pair<int, io_interface *>(node_id,
 					new remote_disk_access(global_data.read_threads,
-						mapper, node_id)));
+						mapper, NULL)));
 	}
 	table = part_global_cached_io::open_file(underlyings, cache_conf,
 			raid_conf.get_num_files());
@@ -485,34 +485,11 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 
 }
 
-io_interface *part_global_cached_io_factory::create_io(int node_id)
+io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
-	part_global_cached_io *io = part_global_cached_io::create(node_id, table);
+	part_global_cached_io *io = part_global_cached_io::create(t, table);
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
-}
-
-std::vector<io_interface *> create_ios(const RAID_config &raid_conf,
-		cache_config *cache_conf, const std::vector<int> &node_id_array,
-		int nthreads, int access_option, long size, bool preload)
-{
-	std::vector<io_interface *> ios;
-	int io_depth = AIO_DEPTH_PER_FILE / nthreads;
-	if (io_depth == 0)
-		io_depth = 1;
-	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
-			access_option, io_depth, cache_conf);
-	int num_nodes = node_id_array.size();
-	int nthreads_per_node = nthreads / num_nodes;
-	for (int i = 0, j = 0; i < num_nodes; i++) {
-		int node_id = node_id_array[i];
-		for (int k = 0; k < nthreads_per_node; k++, j++) {
-			ios.push_back(factory->create_io(node_id));
-		}
-	}
-	delete factory;
-
-	return ios;
 }
 
 file_io_factory *create_io_factory(const RAID_config &raid_conf,

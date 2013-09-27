@@ -63,7 +63,7 @@ class global_cached_io: public io_interface
 
 	void wait4req(io_request *req);
 public:
-	global_cached_io(io_interface *, page_cache *cache);
+	global_cached_io(thread *t, io_interface *, page_cache *cache);
 
 	~global_cached_io();
 
