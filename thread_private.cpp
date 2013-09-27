@@ -200,8 +200,12 @@ again:
 					}
 					if (size > 0) {
 						io->access(reqs, i);
-						if (io->get_remaining_io_slots() <= 0)
-							io->wait4complete(io->get_max_num_pending_ios() / 10);
+						if (io->get_remaining_io_slots() <= 0) {
+							int num_ios = io->get_max_num_pending_ios() / 10;
+							if (num_ios == 0)
+								num_ios = 1;
+							io->wait4complete(num_ios);
+						}
 #ifdef STATISTICS
 						num_pending.inc(i);
 #endif
@@ -220,8 +224,12 @@ again:
 				}
 			}
 			io->access(reqs, i);
-			if (io->get_remaining_io_slots() <= 0)
-				io->wait4complete(io->get_max_num_pending_ios() / 10);
+			if (io->get_remaining_io_slots() <= 0) {
+				int num_ios = io->get_max_num_pending_ios() / 10;
+				if (num_ios == 0)
+					num_ios = 1;
+				io->wait4complete(num_ios);
+			}
 			num_accesses += i;
 #ifdef STATISTICS
 			int curr = num_pending.inc(i);
