@@ -4,23 +4,60 @@ probe begin {
 	printf ("monitor starts\n")
 }
 
+function get_block_dev:long(addr:long) %{
+	struct file *filp = (struct file *) THIS->addr;
+	if (filp->f_mapping->host == NULL) {
+		THIS->__retvalue = 0;
+	}
+	else if (filp->f_mapping->host->i_sb->s_bdev == NULL) {
+		THIS->__retvalue = 0;
+	}
+	else if (filp->f_mapping->host->i_sb->s_bdev->bd_disk) {
+		THIS->__retvalue = (long) filp->f_mapping->host->i_sb->s_bdev->bd_disk;
+	}
+	else {
+		THIS->__retvalue = 0;
+	}
+%}
+
 probe kernel.function("vfs_read").return {
-	if (execname() == @1) {
-		printf("%s,%ld,%d,R,%d\n", kernel_string($file->f_path->dentry->d_iname),
-				kernel_long($pos), $count, $return);
+	block_dev = get_block_dev($file);
+	if (execname() == @1 && block_dev) {
+		if (@cast(block_dev, "gendisk")->major == 9) {
+			printf("%s,%ld,%d,R,%d\n",
+#					@cast(block_dev, "gendisk")->major,
+#					@cast(block_dev, "gendisk")->first_minor,
+					kernel_string($file->f_path->dentry->d_iname),
+#					$file->f_mapping->host->i_ino,
+					kernel_long($pos), $count, $return);
+		}
 	}
 }
 
 probe kernel.function("vfs_llseek").return {
-	if (execname() == @1) {
-		printf("%s,%ld,%d,seek,%d\n", kernel_string($file->f_path->dentry->d_iname),
-				$offset, $origin, $return);
+	block_dev = get_block_dev($file);
+	if (execname() == @1 && block_dev) {
+		if (@cast(block_dev, "gendisk")->major == 9) {
+			printf("%s,%ld,%d,seek,%d\n",
+#					@cast(block_dev, "gendisk")->major,
+#					@cast(block_dev, "gendisk")->first_minor,
+					kernel_string($file->f_path->dentry->d_iname),
+#					$file->f_mapping->host->i_ino,
+					$offset, $origin, $return);
+		}
 	}
 }
 
 probe kernel.function("vfs_write").return {
-	if (execname() == @1) {
-		printf("%s,%ld,%d,W,%d\n", kernel_string($file->f_path->dentry->d_iname),
-				kernel_long($pos), $count, $return);
+	block_dev = get_block_dev($file);
+	if (execname() == @1 && block_dev) {
+		if (@cast(block_dev, "gendisk")->major == 9) {
+			printf("%s,%ld,%d,W,%d\n",
+#					@cast(block_dev, "gendisk")->major,
+#					@cast(block_dev, "gendisk")->first_minor,
+					kernel_string($file->f_path->dentry->d_iname),
+#					$file->f_mapping->host->i_ino,
+					kernel_long($pos), $count, $return);
+		}
 	}
 }
