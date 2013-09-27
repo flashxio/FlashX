@@ -114,7 +114,7 @@ public:
 	void flush_requests() {
 		for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
 				= req_senders.begin(); it != req_senders.end(); it++) {
-			it->second->flush(true);
+			it->second->flush();
 		}
 		global_cached_io::flush_requests();
 	}

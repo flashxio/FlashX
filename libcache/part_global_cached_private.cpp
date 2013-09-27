@@ -234,10 +234,7 @@ int node_cached_io::process_requests(int max_nreqs)
 	// This request buffer has requests more than a message can contain.
 	io_request local_reqs[NUMA_REQ_BUF_SIZE];
 	while (num_processed < max_nreqs) {
-		int num = request_queue->fetch(tmp_msgs, MSG_BUF_SIZE,
-				true, true);
-		// We have been interrupted from waiting for IO requests.
-		// Maybe it's a signal for stopping the thread.
+		int num = request_queue->fetch(tmp_msgs, MSG_BUF_SIZE);
 		if (num == 0)
 			break;
 
@@ -345,7 +342,6 @@ public:
 			const struct thread_group *group) {
 		while (!t->has_exit()) {
 			t->stop();
-			group->request_queue->wakeup();
 			usleep(10000);
 		}
 		t->join();
@@ -571,7 +567,7 @@ int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
 	int num_remaining = 0;
 	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
-		it->second->flush(false);
+		it->second->flush();
 		num_remaining += it->second->get_num_remaining();
 	}
 	return num_remaining;
@@ -604,7 +600,7 @@ int part_global_cached_io::process_replies()
 	// a reply message.
 	io_reply local_reply_buf[NUMA_REPLY_BUF_SIZE];
 	while (!reply_queue->is_empty()) {
-		int num = reply_queue->non_blocking_fetch(tmp_msgs, MSG_BUF_SIZE);
+		int num = reply_queue->fetch(tmp_msgs, MSG_BUF_SIZE);
 		assert(num <= MSG_BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			tmp_msgs[i].copy_to(local_reply_msgs[i]);
@@ -640,7 +636,7 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 		num_remaining = 0;
 		for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
 				= req_senders.begin(); it != req_senders.end(); it++) {
-			it->second->flush(true);
+			it->second->flush();
 			num_remaining += it->second->get_num_remaining();
 		}
 	}
@@ -655,7 +651,7 @@ void part_global_cached_io::cleanup()
 		// Send a flush request to force request process threads to flush all requests.
 		io_request flush_req;
 		sender->send_cached(&flush_req);
-		sender->flush_all();
+		sender->flush();
 	}
 
 	// Now all requests have been issued to the underlying IOs.
