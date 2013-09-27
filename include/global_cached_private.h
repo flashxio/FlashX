@@ -149,6 +149,7 @@ public:
 	virtual int wait4complete(int num);
 	virtual void notify_completion(io_request *reqs[], int num);
 	virtual int num_pending_ios() const {
+		assert(num_issued_areqs.get() >= num_completed_areqs.get());
 		return num_issued_areqs.get() - num_completed_areqs.get();
 	}
 
