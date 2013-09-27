@@ -32,8 +32,6 @@ class remote_disk_access: public io_interface
 	thread_safe_FIFO_queue<io_request> complete_queue;
 	slab_allocator *msg_allocator;
 
-	pthread_mutex_t wait_mutex;
-	pthread_cond_t wait_cond;
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
 
