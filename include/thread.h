@@ -42,10 +42,10 @@ public:
 
 	void wait() {
 		pthread_mutex_lock(&mutex);
-		is_activate = false;
 		while (!is_activate && _is_running) {
 			pthread_cond_wait(&cond, &mutex);
 		}
+		is_activate = false;
 		pthread_mutex_unlock(&mutex);
 	}
 
