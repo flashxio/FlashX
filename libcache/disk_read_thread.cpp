@@ -7,8 +7,9 @@ const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
 disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
-		int node_id, page_cache *cache, int _disk_id): disk_id(_disk_id), queue(
-			node_id, std::string("io-queue-") + itoa(node_id),
+		int node_id, page_cache *cache, int _disk_id): thread(
+			std::string("io-thread-") + itoa(node_id), node_id), disk_id(
+			_disk_id), queue(node_id, std::string("io-queue-") + itoa(node_id),
 			IO_QUEUE_SIZE, INT_MAX, false), low_prio_queue(node_id,
 				// TODO let's allow the low-priority queue to
 				// be infinitely large for now.
@@ -18,8 +19,8 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 {
 	this->cache = cache;
 	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, node_id);
-	this->node_id = node_id;
 #ifdef STATISTICS
+	num_empty = 0;
 	num_reads = 0;
 	num_writes = 0;
 	num_read_bytes = 0;
@@ -33,14 +34,7 @@ disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
 	max_flush_delay = 0;
 	min_flush_delay = LONG_MAX;
 #endif
-
-	running = true;
-
-	int ret = pthread_create(&id, NULL, process_requests, (void *) this);
-	if (ret) {
-		perror("pthread_create");
-		exit(1);
-	}
+	thread::start();
 }
 
 /**
@@ -176,29 +170,29 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 }
 
 void disk_read_thread::run() {
-	bind2node_id(node_id);
-#ifdef DEBUG
-	printf("disk read thread runs on node %d\n", node_id);
-#endif
-	aio->init();
+	// First, check if we need to flush requests.
+	int num_flushes = flush_counter.get();
+	if (num_flushes > 0) {
+		// This thread is the only one that decreases the counter.
+		flush_counter.dec(1);
+		assert(flush_counter.get() >= 0);
+		aio->flush_requests();
+	}
+
 	message<io_request> msg_buffer[LOCAL_BUF_SIZE];
 	message<io_request> low_prio_msg;
 
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
-	io_request local_reqs[LOCAL_REQ_BUF_SIZE];
-	while (running) {
-		int num;
-		num = queue.non_blocking_fetch(msg_buffer, LOCAL_BUF_SIZE);
+	do {
+		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
 		if (enable_debug)
 			printf("I/O thread %d: queue size: %d, low-prio queue size: %d\n",
 					get_node_id(), queue.get_num_entries(),
 					low_prio_queue.get_num_entries());
 		// The high-prio queue is empty.
-		bool processed_low_prio = false;
 		while (num == 0) {
-			processed_low_prio = true;
 			// we can process as many low-prio requests as possible,
-			// but they should block the thread.
+			// but they shouldn't block the thread.
 			if (!low_prio_queue.is_empty()
 					&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS) {
 				if (low_prio_msg.is_empty()) {
@@ -227,24 +221,10 @@ void disk_read_thread::run() {
 				break;
 
 			// Let's try to fetch requests again.
-			num = queue.non_blocking_fetch(msg_buffer, LOCAL_BUF_SIZE);
-		}
-		if (processed_low_prio) {
+			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
 		}
 
-		if (num == 0)
-			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE, true, true);
-		int num_flushes = flush_counter.get();
-		if (num_flushes > 0) {
-			// This thread is the only one that decreases the counter.
-			flush_counter.dec(1);
-			assert(flush_counter.get() >= 0);
-			aio->flush_requests();
-		}
-		// We have been interrupted from waiting for IO requests.
-		// Let's go back and try to process low-priority requests.
-		if (num == 0)
-			continue;
+		io_request local_reqs[LOCAL_REQ_BUF_SIZE];
 		for (int i = 0; i < num; i++) {
 			int num_reqs = msg_buffer[i].get_num_objs();
 			assert(num_reqs <= LOCAL_REQ_BUF_SIZE);
@@ -264,15 +244,10 @@ void disk_read_thread::run() {
 			aio->access(local_reqs, num_reqs);
 			msg_buffer[i].clear();
 		}
-	}
-	// TODO I need to call cleanup() of aio.
-}
 
-void *process_requests(void *arg)
-{
-	disk_read_thread *thread = (disk_read_thread *) arg;
-	thread->run();
-	return NULL;
+		// We can't exit the loop if there are still pending AIO requests.
+		// This thread is responsible for processing completed AIO requests.
+	} while (aio->num_pending_ios() > 0);
 }
 
 int disk_read_thread::dirty_page_filter::filter(const thread_safe_page *pages[],

@@ -11,11 +11,13 @@ static void *thread_run(void *arg)
 	int node_id = t->get_node_id();
 	if (node_id >= 0)
 		bind2node_id(node_id);
+	t->init();
 	while (t->is_running()) {
 		t->run();
 		if (t->is_blocking())
 			t->wait();
 	}
+	t->cleanup();
 	t->exit();
 	return NULL;
 }

@@ -12,12 +12,13 @@
 #include "file_partition.h"
 #include "messaging.h"
 #include "cache.h"
+#include "thread.h"
 
 void *process_requests(void *arg);
 
 class async_io;
 
-class disk_read_thread
+class disk_read_thread: public thread
 {
 	static const int LOCAL_BUF_SIZE = 16;
 
@@ -30,8 +31,8 @@ class disk_read_thread
 
 	pthread_t id;
 	async_io *aio;
-	int node_id;
 #ifdef STATISTICS
+	long num_empty;
 	long num_reads;
 	long num_writes;
 	long num_read_bytes;
@@ -45,8 +46,6 @@ class disk_read_thread
 	long max_flush_delay;
 	long min_flush_delay;
 #endif
-
-	volatile bool running;
 
 	atomic_integer flush_counter;
 
@@ -88,10 +87,6 @@ public:
 		return &low_prio_queue;
 	}
 
-	int get_node_id() const {
-		return node_id;
-	}
-
 	const std::string get_file_name() const {
 		if (open_files.empty())
 			return "";
@@ -110,9 +105,7 @@ public:
 	 */
 	void flush_requests() {
 		flush_counter.inc(1);
-		// If the I/O thread is blocked by the request queue, we should
-		// wake the thread up.
-		queue.wakeup();
+		activate();
 	}
 
 	// It open a new file. The mapping is still the same.
@@ -133,16 +126,17 @@ public:
 	}
 
 	void run();
-
-	void stop() {
-		running = false;
+	void init() {
+		aio->init();
+	}
+	virtual void cleanup() {
+		aio->cleanup();
 	}
 
 	void print_stat() {
 #ifdef STATISTICS
-		printf("queue on file %s wait for requests for %d times, is full for %d times,\n",
-				get_file_name().c_str(), get_queue()->get_num_empty(),
-				get_queue()->get_num_full());
+		printf("queue on file %s wait for requests for %ld times,\n",
+				get_file_name().c_str(), num_empty);
 		printf("\t%ld reads (%ld bytes), %ld writes (%ld bytes) and %d io waits, complete %d reqs and %ld low-prio reqs,\n",
 				num_reads, num_read_bytes, num_writes, num_write_bytes, aio->get_num_iowait(), aio->get_num_completed_reqs(),
 				num_low_prio_accesses);

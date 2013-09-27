@@ -100,8 +100,8 @@ void remote_disk_access::cleanup()
 
 	num_ios.dec(1);
 	for (unsigned i = 0; i < senders.size(); i++) {
-		senders[i]->flush_all();
-		low_prio_senders[i]->flush_all();
+		senders[i]->flush();
+		low_prio_senders[i]->flush();
 	}
 	int num;
 	do {
@@ -120,8 +120,8 @@ void remote_disk_access::cleanup()
 		if (num > 0) {
 			// Let's wake up all IO threads if there are still
 			// some low-priority requests that need to be processed.
-			for (unsigned i = 0; i < senders.size(); i++) {
-				senders[i]->get_queue()->wakeup();
+			for (unsigned i = 0; i < io_threads.size(); i++) {
+				io_threads[i]->activate();
 			}
 			usleep(100000);
 		}
@@ -135,9 +135,6 @@ void remote_disk_access::access(io_request *requests, int num,
 		io_status *status)
 {
 	num_issued_reqs.inc(num);
-	// It marks whether a low-priority sender gets a request.
-	bool has_msgs[low_prio_senders.size()];
-	memset(has_msgs, 0, sizeof(has_msgs[0]) * low_prio_senders.size());
 
 	bool syncd = false;
 	for (int i = 0; i < num; i++) {
@@ -161,7 +158,6 @@ void remote_disk_access::access(io_request *requests, int num,
 			if (requests[i].is_high_prio())
 				ret = senders[idx]->send_cached(&requests[i]);
 			else {
-				has_msgs[idx] = true;
 				ret = low_prio_senders[idx]->send_cached(&requests[i]);
 			}
 			assert(ret == 1);
@@ -201,7 +197,6 @@ void remote_disk_access::access(io_request *requests, int num,
 				if (req.is_high_prio())
 					ret = senders[idx]->send_cached(&req);
 				else {
-					has_msgs[idx] = true;
 					ret = low_prio_senders[idx]->send_cached(&req);
 				}
 				assert(ret == 1);
@@ -224,15 +219,6 @@ void remote_disk_access::access(io_request *requests, int num,
 	if (status)
 		for (int i = 0; i < num; i++)
 			status[i] = IO_PENDING;
-
-	// The IO threads are never blocked by the low-priority queues,
-	// but they may be blocked by the regular message queues.
-	// If so, we need to explicitly wake up the IO threads.
-	for (unsigned i = 0; i < senders.size(); i++) {
-		if (has_msgs[i])
-			senders[i]->get_queue()->wakeup();
-	}
-
 }
 
 void remote_disk_access::flush_requests()
@@ -329,53 +315,18 @@ int remote_disk_access::process_completed_requests(io_request reqs[], int num)
 
 void remote_disk_access::flush_requests(int max_cached)
 {
-	int num_high_prio_remaining = 0;
-	int num_low_prio_remaining = 0;
 	// Now let's flush requests to the queues, but we first try to
 	// flush requests non-blockingly.
 	assert(senders.size() == low_prio_senders.size());
 	int num_senders = senders.size();
 	for (int i = 0; i < num_senders; i++) {
-		senders[i]->flush(false);
-		low_prio_senders[i]->flush(false);
-		num_high_prio_remaining += senders[i]->get_num_remaining();
-		num_low_prio_remaining += low_prio_senders[i]->get_num_remaining();
+		senders[i]->flush();
+		low_prio_senders[i]->flush();
+		assert(senders[i]->get_num_remaining() == 0);
+		assert(low_prio_senders[i]->get_num_remaining() == 0);
 	}
-	// If all requests have been flushed successfully, return immediately.
-	if (num_high_prio_remaining + num_low_prio_remaining == 0)
-		return;
-
-	int base_idx;
-	if (num_senders == 1)
-		base_idx = 0;
-	else
-		base_idx = random() % num_senders;
-	int i = 0;
-	// We only allow cache that many requests. If we have more than
-	// we want, continue flushing, but try harder this time.
-	while (num_high_prio_remaining + num_low_prio_remaining > max_cached
-			&& num_high_prio_remaining > 0) {
-		int idx = (base_idx + i) % num_senders;
-		int orig_remaining = senders[idx]->get_num_remaining();
-		senders[idx]->flush(true);
-		int num_flushed = orig_remaining - senders[idx]->get_num_remaining();
-		num_high_prio_remaining -= num_flushed;
-		i++;
-	}
-	// When we reach this point, it means either that the total number of
-	// remaining requests is lower than max_cached or there aren't high-
-	// priority requests left.
-	// In this way, we can make sure high-priority requests have been moved
-	// to the IO threads before low-priority requests are moved.
-	i = 0;
-	while (num_low_prio_remaining > max_cached) {
-		int idx = (base_idx + i) % num_senders;
-		int orig_remaining = low_prio_senders[idx]->get_num_remaining();
-		low_prio_senders[idx]->flush(true);
-		int num_flushed = orig_remaining
-			- low_prio_senders[idx]->get_num_remaining();
-		num_low_prio_remaining -= num_flushed;
-		i++;
+	for (unsigned i = 0; i < io_threads.size(); i++) {
+		io_threads[i]->activate();
 	}
 }
 

@@ -86,6 +86,10 @@ public:
 
 	void start();
 	virtual void run() = 0;
+	virtual void init() {
+	}
+	virtual void cleanup() {
+	}
 };
 
 #endif

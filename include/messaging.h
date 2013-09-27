@@ -332,15 +332,16 @@ public:
 };
 
 template<class T>
-class msg_queue: public blocking_FIFO_queue<message<T> >
+class msg_queue: public thread_safe_FIFO_queue<message<T> >
 {
 	// TODO I may need to make sure all messages are compatible with the flag.
 	bool accept_inline;
+	const std::string name;
 
 public:
-	msg_queue(int node_id, const std::string name, int init_size, int max_size,
-			bool accept_inline): blocking_FIFO_queue<message<T> >(node_id,
-				name, init_size, max_size) {
+	msg_queue(int node_id, const std::string _name, int init_size, int max_size,
+			bool accept_inline): thread_safe_FIFO_queue<message<T> >(node_id,
+				init_size, max_size), name(_name) {
 		this->accept_inline = accept_inline;
 	}
 
@@ -372,14 +373,14 @@ public:
 	 * It is also a heavy operation.
 	 */
 	int get_num_objs() {
-		int num = blocking_FIFO_queue<message<T> >::get_num_entries();
+		int num = thread_safe_FIFO_queue<message<T> >::get_num_entries();
 		message<T> msgs[num];
-		int ret = blocking_FIFO_queue<message<T> >::non_blocking_fetch(msgs, num);
+		int ret = thread_safe_FIFO_queue<message<T> >::fetch(msgs, num);
 		int num_objs = 0;
 		for (int i = 0; i < ret; i++) {
 			num_objs += msgs[i].get_num_objs();
 		}
-		blocking_FIFO_queue<message<T> >::add(msgs, ret);
+		thread_safe_FIFO_queue<message<T> >::add(msgs, ret);
 		return num_objs;
 	}
 };
@@ -475,20 +476,14 @@ public:
 		numa_free(s, sizeof(*s));
 	}
 
-	int flush(bool blocking) {
+	int flush() {
 		if (buf.is_empty()) {
 			return 0;
 		}
-		if (blocking)
-			queue->add(&buf);
-		else
-			queue->non_blocking_add(&buf);
+		queue->add(&buf);
+		// We have to make sure all messages have been sent to the queue.
+		assert(buf.is_empty());
 		return 1;
-	}
-
-	void flush_all() {
-		while (!buf.is_empty())
-			queue->add(&buf);
 	}
 
 	/**
