@@ -12,10 +12,11 @@ class thread
 	bool blocking;
 	std::string name;
 
+	volatile bool _is_sleeping;
 	volatile bool _is_running;
 	volatile bool _has_exit;
+	volatile bool _is_activated;
 
-	bool is_activate;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 public:
@@ -23,9 +24,10 @@ public:
 		this->name = name;
 		this->node_id = node_id;
 		this->blocking = blocking;
-		is_activate = false;
+		_is_activated = false;
 		_has_exit = false;
 		_is_running = true;
+		_is_sleeping = true;
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
 	}
@@ -34,19 +36,21 @@ public:
 	}
 
 	void activate() {
-		pthread_mutex_lock(&mutex);
-		is_activate = true;
-		pthread_cond_signal(&cond);
-		pthread_mutex_unlock(&mutex);
+		_is_activated = true;
+		if (_is_sleeping) {
+			pthread_cond_signal(&cond);
+		}
 	}
 
 	void wait() {
 		pthread_mutex_lock(&mutex);
-		while (!is_activate && _is_running) {
+		_is_sleeping = true;
+		while (!_is_activated && _is_running) {
 			pthread_cond_wait(&cond, &mutex);
 		}
-		is_activate = false;
+		_is_sleeping = false;
 		pthread_mutex_unlock(&mutex);
+		_is_activated = false;
 	}
 
 	bool is_running() const {
