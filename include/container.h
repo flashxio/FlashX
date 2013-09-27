@@ -199,9 +199,19 @@ class thread_safe_FIFO_queue: public fifo_queue<T>
 	 * has entries or has space.
 	 */
 	pthread_spinlock_t _lock;
+	int max_size;
 
 public:
-	thread_safe_FIFO_queue(int node_id, int size): fifo_queue<T>(node_id, size) {
+	thread_safe_FIFO_queue(int node_id, int size): fifo_queue<T>(node_id, size,
+			false) {
+		this->max_size = size;
+		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	thread_safe_FIFO_queue(int node_id, int init_size,
+			int max_size): fifo_queue<T>(node_id, init_size,
+				max_size > init_size) {
+		this->max_size = max_size;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
@@ -233,11 +243,27 @@ public:
 	virtual int add(T *entries, int num) {
 		pthread_spin_lock(&_lock);
 		int ret = fifo_queue<T>::add(entries, num);
+		int orig_size = fifo_queue<T>::get_size();
+		if (ret < num && orig_size < max_size) {
+			fifo_queue<T>::expand_queue(orig_size * 2);
+			int ret2 = fifo_queue<T>::add(entries + ret, num - ret);
+			ret += ret2;
+			assert(ret == num);
+		}
 		pthread_spin_unlock(&_lock);
 		return ret;
 	}
 	virtual int add(fifo_queue<T> *queue) {
-		assert(0);
+		pthread_spin_lock(&_lock);
+		int ret = fifo_queue<T>::add(queue);
+		int orig_size = fifo_queue<T>::get_size();
+		if (!queue->is_empty() && orig_size < max_size) {
+			fifo_queue<T>::expand_queue(orig_size * 2);
+			int ret2 = fifo_queue<T>::add(queue);
+			ret += ret2;
+			assert(queue->is_empty());
+		}
+		pthread_spin_unlock(&_lock);
 		return 0;
 	}
 
@@ -249,7 +275,6 @@ public:
 	virtual void addByForce(T *entries, int num) {
 		int added = add(entries, num);
 		assert(added == num);
-		// TODO I should make the queue extensible.
 	}
 
 	// TODO I should return reference.
