@@ -116,9 +116,9 @@ ssize_t thread_private::get_read_bytes() {
 		return read_bytes;
 }
 
-int thread_private::thread_init() {
+void thread_private::init() {
 	extern int io_depth_per_file;
-	io = factory->create_io(node_id);
+	io = factory->create_io(this);
 	io->set_max_num_pending_ios(io_depth_per_file);
 	io->init();
 
@@ -134,10 +134,9 @@ int thread_private::thread_init() {
 		cb = new cleanup_callback(buf, idx, this);
 		io->set_callback(cb);
 	}
-	return 0;
 }
 
-int thread_private::run()
+void thread_private::run()
 {
 	int node_id = io->get_node_id();
 	gettimeofday(&start_time, NULL);
@@ -280,7 +279,7 @@ again:
 					}
 					if (status == IO_FAIL) {
 						perror("access");
-						exit(1);
+						::exit(1);
 					}
 					entry_size -= next_off - off;
 					off = next_off;
@@ -302,7 +301,7 @@ again:
 				}
 				if (status == IO_FAIL) {
 					perror("access");
-					exit(1);
+					::exit(1);
 				}
 			}
 		}
@@ -310,7 +309,9 @@ again:
 	printf("thread %d has issued all requests\n", idx);
 	io->cleanup();
 	gettimeofday(&end_time, NULL);
-	return 0;
+
+	// Stop itself.
+	stop();
 }
 
 int thread_private::attach2cpu()
@@ -330,26 +331,6 @@ int thread_private::attach2cpu()
 #else
 	return -1;
 #endif
-}
-
-static void *rand_read(void *arg)
-{
-	thread_private *priv = (thread_private *) arg;
-
-	// We put the thread at the specified NUMA node at the very beginning
-	// to make sure all data created in this thread will be on the specified
-	// node.
-	int node_id = priv->get_node_id();
-#ifdef DEBUG
-	time_t curr_time = time(NULL);
-	printf("run thread rand_read: pid: %d, tid: %ld, on node %d at %s",
-			getpid(), gettid(), node_id, ctime(&curr_time));
-#endif
-	bind2node_id(node_id);
-
-	priv->thread_init();
-	priv->run();
-	return NULL;
 }
 
 #ifdef USE_PROCESS
@@ -377,25 +358,3 @@ static int process_join(pid_t pid)
 	return ret < 0 ? ret : 0;
 }
 #endif
-
-int thread_private::start_thread()
-{
-	int ret;
-#ifdef USE_PROCESS
-	ret = process_create(&id, rand_read, (void *) this);
-#else
-	ret = pthread_create(&id, NULL, rand_read, (void *) this);
-#endif
-	return ret;
-}
-
-int thread_private::wait_thread_end()
-{
-	int ret;
-#ifdef USE_PROCESS
-	ret = process_join(id);
-#else
-	ret = pthread_join(id, NULL);
-#endif
-	return ret;
-}

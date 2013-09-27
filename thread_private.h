@@ -5,6 +5,7 @@
 #include "rand_buf.h"
 #include "garbage_collection.h"
 #include "io_interface.h"
+#include "thread.h"
 
 extern int buf_type;
 
@@ -17,7 +18,7 @@ enum {
 class cleanup_callback;
 
 /* this data structure stores the thread-private info. */
-class thread_private
+class thread_private: public thread
 {
 #ifdef USE_PROCESS
 	pid_t id;
@@ -51,26 +52,20 @@ public:
 #endif
 
 public:
-	thread_private() {
-		cb = NULL;
-		num_sampling = 0;
-		tot_num_pending = 0;
-		max_num_pending = 0;
-	}
-
 	~thread_private() {
 		if (buf)
 			delete buf;
 	}
 
-	int thread_init();
+	void init();
 
 	int get_node_id() {
 		return node_id;
 	}
 
-	thread_private(int node_id, int idx, int entry_size, file_io_factory *factory,
-			workload_gen *gen) {
+	thread_private(int node_id, int idx, int entry_size,
+			file_io_factory *factory, workload_gen *gen): thread(
+				std::string("test_thread") + itoa(idx), node_id) {
 		this->cb = NULL;
 		this->node_id = node_id;
 		this->idx = idx;
@@ -87,13 +82,9 @@ public:
 
 	int attach2cpu();
 
-	int run();
+	void run();
 
 	ssize_t get_read_bytes();
-
-	int start_thread();
-
-	int wait_thread_end();
 
 	void print_stat() {
 #ifdef STATISTICS

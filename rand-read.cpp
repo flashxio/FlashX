@@ -442,19 +442,11 @@ int main(int argc, char *argv[])
 		ProfilerStart(prof_file.c_str());
 #endif
 	for (int i = 0; i < nthreads; i++) {
-		ret = threads[i]->start_thread();
-		if (ret) {
-			perror("pthread_create");
-			exit(1);
-		}
+		threads[i]->start();
 	}
 
 	for (int i = 0; i < nthreads; i++) {
-		threads[i]->wait_thread_end();
-		if (ret) {
-			perror("pthread_join");
-			exit(1);
-		}
+		threads[i]->join();
 		read_bytes += threads[i]->get_read_bytes();
 	}
 #ifdef PROFILER
