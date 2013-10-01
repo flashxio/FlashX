@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <numa.h>
+#include <pthread.h>
 
 #include "thread.h"
 #include "common.h"
@@ -30,3 +31,24 @@ void thread::start()
 		::exit(1);
 	}
 }
+
+static pthread_once_t once_control = PTHREAD_ONCE_INIT;
+
+void init_thread_class()
+{
+	printf("init thread key\n");
+	pthread_key_create(&thread::thread_key, NULL);
+}
+
+void thread::thread_class_init()
+{
+	pthread_once(&once_control, init_thread_class);
+}
+
+thread *thread::get_curr_thread()
+{
+	thread *curr = (thread *) pthread_getspecific(thread_key);
+	return curr;
+}
+
+pthread_key_t thread::thread_key;

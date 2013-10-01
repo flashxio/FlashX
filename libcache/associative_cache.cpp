@@ -1081,7 +1081,9 @@ class flush_io: public io_interface
 	io_interface *get_per_thread_io() {
 		io_interface *io = (io_interface *) pthread_getspecific(underlying_key);
 		if (io == NULL) {
-			io = underlying->clone(NULL);
+			thread *curr = thread::get_curr_thread();
+			assert(curr);
+			io = underlying->clone(curr);
 			pthread_setspecific(underlying_key, io);
 		}
 		return io;
@@ -1369,8 +1371,7 @@ dirty_page_flusher *associative_cache::create_flusher(io_interface *io,
 			// The IO instance should be on the same node or we don't know
 			// in which node the cache is.
 			&& (io->get_node_id() == node_id || node_id == -1)) {
-		_flusher = new associative_flusher(global_cache, this,
-				io->clone(NULL), node_id);
+		_flusher = new associative_flusher(global_cache, this, io, node_id);
 	}
 	pthread_mutex_unlock(&init_mutex);
 	return _flusher;

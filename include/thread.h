@@ -7,6 +7,8 @@
 
 class thread
 {
+	static pthread_key_t thread_key;
+
 	int node_id;
 	pthread_t id;
 	bool blocking;
@@ -19,8 +21,13 @@ class thread
 
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
+
+	friend void init_thread_class();
 public:
 	thread(std::string name, int node_id = -1, bool blocking = true) {
+		thread_class_init();
+		pthread_setspecific(thread_key, this);
+
 		this->name = name;
 		this->node_id = node_id;
 		this->blocking = blocking;
@@ -98,6 +105,13 @@ public:
 	}
 	virtual void cleanup() {
 	}
+
+	/**
+	 * This is to initialize the thread class instead of a single thread.
+	 */
+	static void thread_class_init();
+
+	static thread *get_curr_thread();
 };
 
 #endif
