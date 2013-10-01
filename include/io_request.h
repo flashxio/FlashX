@@ -581,6 +581,10 @@ public:
 		return res == size;
 	}
 
+	bool is_complete() const {
+		return get_extension()->completed_size == get_size();
+	}
+
 	void set_partial(bool partial) {
 		get_extension()->partial = partial ? 1 : 0;
 	}

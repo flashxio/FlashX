@@ -204,7 +204,7 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 			io->wakeup_on_req(orig, IO_OK);
 		else {
 			num_completed_areqs.inc(1);
-			pthread_cond_signal(&wait_cond);
+			get_thread()->activate();
 			::notify_completion(this, orig);
 		}
 		orig->dec_complete_count();
@@ -234,7 +234,7 @@ void global_cached_io::finalize_request(io_request &req)
 				io->wakeup_on_req(original, IO_OK);
 			else {
 				num_completed_areqs.inc(1);
-				pthread_cond_signal(&wait_cond);
+				get_thread()->activate();
 				::notify_completion(this, original);
 			}
 			original->dec_complete_count();
@@ -251,7 +251,7 @@ void global_cached_io::finalize_request(io_request &req)
 			io->wakeup_on_req(&req, IO_OK);
 		else {
 			num_completed_areqs.inc(1);
-			pthread_cond_signal(&wait_cond);
+			get_thread()->activate();
 			::notify_completion(this, &req);
 		}
 	}
@@ -439,6 +439,25 @@ void global_cached_io::process_completed_requests(io_request requests[],
 	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size(), underlying);
 }
 
+int global_cached_io::process_completed_requests(int num)
+{
+	if (num > 0) {
+#ifdef MEMCHECK
+		io_request *reqs = new io_request[num];
+#else
+		io_request reqs[num];
+#endif
+		int ret = complete_queue.fetch(reqs, num);
+		process_completed_requests(reqs, ret);
+#ifdef MEMCHECK
+		delete [] reqs;
+#endif
+		return ret;
+	}
+	else
+		return 0;
+}
+
 global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 		page_cache *cache): io_interface(t), pending_requests(
 			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
@@ -452,10 +471,6 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 	this->underlying = underlying;
 	this->cache_size = cache->size();
 	global_cache = cache;
-	pthread_mutex_init(&wait_mutex, NULL);
-	pthread_cond_init(&wait_cond, NULL);
-	wait_req = NULL;
-	status = 0;
 	num_evicted_dirty_pages = 0;
 }
 
@@ -591,20 +606,9 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		p->unlock();
 		ret = orig->get_size();
 		__complete_req(orig, p);
-		global_cached_io *io = (global_cached_io *) orig->get_io();
-		// Maybe the request is the one queued on a page and is waiting for
-		// the I/O on the page to be completed. Therefore, its IO instance
-		// isn't necessary to be the current IO instance.
-#if 0
-		assert(this == io);
-#endif
-		if (orig->is_sync())
-			io->wakeup_on_req(orig, IO_OK);
-		else {
-			num_completed_areqs.inc(1);
-			pthread_cond_signal(&wait_cond);
-			::notify_completion(this, orig);
-		}
+
+		assert(!orig->is_partial());
+		finalize_request(*orig);
 	}
 	return ret;
 }
@@ -856,7 +860,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
 	num_completed_areqs.inc(num_async_reqs);
-	pthread_cond_signal(&wait_cond);
+	get_thread()->activate();
 	::notify_completion(this, async_reqs, num_async_reqs);
 }
 
@@ -1125,27 +1129,15 @@ int global_cached_io::preload(off_t start, long size) {
 
 void global_cached_io::wait4req(io_request *req)
 {
-	pthread_mutex_lock(&wait_mutex);
-	wait_req = req;
-	while (wait_req) {
-		int num = complete_queue.get_num_entries();
-		if (num > 0) {
-			pthread_mutex_unlock(&wait_mutex);
-			io_request req;
-			int ret = complete_queue.fetch(&req, 1);
-			assert(ret == 1);
-			process_completed_requests(&req, 1);
-			pthread_mutex_lock(&wait_mutex);
-		}
-		else if (!pending_requests.is_empty()) {
-			pthread_mutex_unlock(&wait_mutex);
+	while (!req->is_complete()) {
+		process_completed_requests(complete_queue.get_num_entries());
+		if (!pending_requests.is_empty()) {
 			handle_pending_requests();
-			pthread_mutex_lock(&wait_mutex);
 		}
-		else
-			pthread_cond_wait(&wait_cond, &wait_mutex);
+		if (req->is_complete())
+			break;
+		get_thread()->wait();
 	}
-	pthread_mutex_unlock(&wait_mutex);
 }
 
 /**
@@ -1156,54 +1148,20 @@ int global_cached_io::wait4complete(int num_to_complete)
 	flush_requests();
 	int pending = num_pending_ios();
 	num_to_complete = min(pending, num_to_complete);
-	/*
-	 * Once this function is called and it needs to wait for requests to
-	 * complete, the number of pending requests can only be reduced because 
-	 * new requests can't be issued.
-	 */
-	if (num_to_complete > 0) {
-		pthread_mutex_lock(&wait_mutex);
-		// If the number of completed requests after the function is called
-		// is smaller than the specified number, we should wait.
-		while (pending - num_pending_ios() < num_to_complete) {
-			int num = complete_queue.get_num_entries();
-			if (num > 0) {
-				pthread_mutex_unlock(&wait_mutex);
-#ifdef MEMCHECK
-				io_request *reqs = new io_request[num];
-#else
-				io_request reqs[num];
-#endif
-				int ret = complete_queue.fetch(reqs, num);
-				assert(ret == num);
-				process_completed_requests(reqs, num);
-#ifdef MEMCHECK
-				delete [] reqs;
-#endif
-				pthread_mutex_lock(&wait_mutex);
-			}
-			else if (!pending_requests.is_empty()) {
-				pthread_mutex_unlock(&wait_mutex);
-				handle_pending_requests();
-				pthread_mutex_lock(&wait_mutex);
-			}
-			else {
-				struct timeval curr_time;
-				gettimeofday(&curr_time, NULL);
-				struct timespec timeout = {curr_time.tv_sec + 1,
-					curr_time.tv_usec * 1000};
-				int ret = pthread_cond_timedwait(&wait_cond, &wait_mutex,
-						&timeout);
-				if (ret == ETIMEDOUT) {
-					printf("orig pending: %d, curr pending: %d, expected completion: %d\n",
-							pending, num_pending_ios(), num_to_complete);
-					break;
-				}
-			}
-		}
-		pthread_mutex_unlock(&wait_mutex);
-	}
 
+	process_completed_requests(complete_queue.get_num_entries());
+	if (!pending_requests.is_empty()) {
+		handle_pending_requests();
+	}
+	int iters = 0;
+	while (pending - num_pending_ios() < num_to_complete) {
+		iters++;
+		get_thread()->wait();
+		process_completed_requests(complete_queue.get_num_entries());
+		if (!pending_requests.is_empty()) {
+			handle_pending_requests();
+		}
+	}
 	return pending - num_pending_ios();
 }
 
@@ -1225,7 +1183,7 @@ void global_cached_io::notify_completion(io_request *reqs[], int num)
 	// enough completed requests. If we only signal the request issuer thread
 	// when there are enough completed requests, we'll get very poor
 	// performance.
-	pthread_cond_signal(&wait_cond);
+	get_thread()->activate();
 #ifdef MEMCHECK
 	delete [] req_copies;
 #endif

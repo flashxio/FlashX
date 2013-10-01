@@ -26,13 +26,6 @@ class global_cached_io: public io_interface
 	request_allocator *req_allocator;
 
 	thread_safe_FIFO_queue<io_request> complete_queue;
-	pthread_mutex_t wait_mutex;
-	pthread_cond_t wait_cond;
-	// These are used for implementing sync IO.
-	// A thread can only be blocked on one sync IO, and this class can only
-	// be used in a single thread.
-	io_request *wait_req;
-	int status;
 
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
@@ -60,6 +53,7 @@ class global_cached_io: public io_interface
 	int multibuf_completion(io_request *request,
 			std::vector<thread_safe_page *> &dirty_pages);
 	void process_completed_requests(io_request requests[], int num);
+	int process_completed_requests(int num);
 
 	void wait4req(io_request *req);
 public:
@@ -101,10 +95,8 @@ public:
 			thread_safe_page *cached_pages[], int num_cached_reqs);
 
 	void queue_requests(io_request *reqs[], int num) {
-		pthread_mutex_lock(&wait_mutex);
 		pending_requests.addByForce(reqs, num);
-		pthread_mutex_unlock(&wait_mutex);
-		pthread_cond_signal(&wait_cond);
+		get_thread()->activate();
 	}
 
 	int handle_pending_requests();
@@ -159,19 +151,9 @@ public:
 	void write_dirty_page(thread_safe_page *p, off_t off, io_request *orig);
 
 	void wakeup_on_req(io_request *req, int status) {
-		pthread_mutex_lock(&wait_mutex);
-		assert(req);
-		if (wait_req == req) {
-			wait_req = NULL;
-			this->status = status;
-			pthread_cond_signal(&wait_cond);
-		}
-		else if (wait_req && !pending_requests.is_empty()) {
-			// The thread that owns the global cached io is blocked.
-			// And there are pending requests, let's wake up the thread.
-			pthread_cond_signal(&wait_cond);
-		}
-		pthread_mutex_unlock(&wait_mutex);
+		assert(req->is_sync());
+		assert(req->is_complete());
+		get_thread()->activate();
 	}
 
 #ifdef STATISTICS
