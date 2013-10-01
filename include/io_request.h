@@ -52,7 +52,7 @@ public:
 	}
 };
 
-struct io_req_extension
+class io_req_extension
 {
 	static atomic_unsigned_integer num_creates;
 	io_request *orig;
@@ -68,30 +68,34 @@ struct io_req_extension
 	 * This is to protect the object from being removed
 	 * while others are still using it.
 	 */
-	volatile short refcnt;
+	atomic_number<short> refcnt;
+
+	atomic_number<ssize_t> completed_size;
 
 	io_buf *vec_pointer;
 	io_buf embedded_vecs[NUM_EMBEDDED_IOVECS];
 	io_request *next;
-	volatile ssize_t completed_size;
 
 	struct timeval issue_time;
 
+public:
 	void init() {
 		this->orig = NULL;
 		this->priv = NULL;
 		this->user_data = NULL;
 		this->num_bufs = 0;
 		this->partial = 0;
-		this->vec_capacity = NUM_EMBEDDED_IOVECS;
-		this->refcnt = 0;
-		vec_pointer = embedded_vecs;
+		memset(vec_pointer, 0, vec_capacity * sizeof(io_buf));
 		next = NULL;
-		this->completed_size = 0;
+		memset(&issue_time, 0, sizeof(issue_time));
+		refcnt = atomic_number<short>();
+		completed_size = atomic_number<ssize_t>();
 	}
 
 	io_req_extension() {
 		num_creates.inc(1);
+		vec_pointer = embedded_vecs;
+		vec_capacity = NUM_EMBEDDED_IOVECS;
 		init();
 	}
 
@@ -100,9 +104,91 @@ struct io_req_extension
 			delete [] vec_pointer;
 	}
 
+	io_request *get_orig() const {
+		return orig;
+	}
+
+	void set_orig(io_request *orig) {
+		this->orig = orig;
+	}
+
+	void *get_priv() const {
+		return priv;
+	}
+
+	void set_priv(void *priv) {
+		this->priv = priv;
+	}
+
+	void *get_user_data() const {
+		return user_data;
+	}
+
+	void set_user_data(void *user_data) {
+		this->user_data = user_data;
+	}
+
+	void set_partial(bool partial) {
+		this->partial = partial;
+	}
+
+	bool is_partial() const {
+		return partial;
+	}
+
+	io_request *get_next() const {
+		return next;
+	}
+
+	void set_next(io_request *next) {
+		this->next = next;
+	}
+
+	int inc_ref() {
+		return refcnt.inc(1);
+	}
+
+	int dec_ref() {
+		return refcnt.dec(1);
+	}
+
+	int get_ref() const {
+		return refcnt.get();
+	}
+
+	ssize_t inc_completed_size(ssize_t size) {
+		return completed_size.inc(size);
+	}
+
+	ssize_t get_completed_size() const {
+		return completed_size.get();
+	}
+
+	void set_timestamp() {
+		gettimeofday(&issue_time, NULL);
+	}
+
+	struct timeval get_timestamp() {
+		return issue_time;
+	}
+
 	void add_io_buf(const io_buf &buf);
 	void add_buf(char *buf, int size, bool is_page);
 	void add_buf_front(char *buf, int size, bool is_page);
+	int get_num_bufs() const {
+		return num_bufs;
+	}
+
+	const io_buf &get_buf(int idx) const {
+		return vec_pointer[idx];
+	}
+
+	int get_size() const {
+		ssize_t size = 0;
+		for (int i = 0; i < num_bufs; i++)
+			size += vec_pointer[i].get_size();
+		return size;
+	}
 };
 
 const int MAX_INLINE_SIZE=128;
@@ -169,10 +255,6 @@ class io_request
 			return (io_req_extension *) payload.buf;
 		else
 			return payload.ext;
-	}
-
-	bool use_embedded() const {
-		return get_extension()->vec_pointer == get_extension()->embedded_vecs;
 	}
 
 	void use_default_flags() {
@@ -352,9 +434,9 @@ public:
 		assert(is_extended_req());
 		io_request::init(NULL, off, 0, access_method, io, node_id);
 		io_req_extension *ext = get_extension();
-		ext->priv = priv;
-		ext->orig = orig;
-		ext->user_data = user_data;
+		ext->set_priv(priv);
+		ext->set_orig(orig);
+		ext->set_user_data(user_data);
 	}
 
 	int get_file_id() const;
@@ -437,31 +519,31 @@ public:
 	}
 
 	io_request *get_orig() const {
-		return get_extension()->orig;
+		return get_extension()->get_orig();
 	}
 
 	void set_orig(io_request *orig) {
-		get_extension()->orig = orig;
+		get_extension()->set_orig(orig);
 	}
 
 	void *get_user_data() const {
-		return get_extension()->user_data;
+		return get_extension()->get_user_data();
 	}
 
 	void set_user_data(void *data) {
-		get_extension()->user_data = data;
+		get_extension()->set_user_data(data);
 	}
 
 	void *get_priv() const {
-		return get_extension()->priv;
+		return get_extension()->get_priv();
 	}
 
 	void set_priv(void *priv) {
-		get_extension()->priv = priv;
+		get_extension()->set_priv(priv);
 	}
 
 	bool is_empty() const {
-		return get_extension()->num_bufs == 0;
+		return get_extension()->get_num_bufs() == 0;
 	}
 
 	bool is_valid() const {
@@ -473,10 +555,7 @@ public:
 			return buf_size;
 		}
 		else {
-			ssize_t size = 0;
-			for (int i = 0; i < get_extension()->num_bufs; i++)
-				size += get_extension()->vec_pointer[i].get_size();
-			return size;
+			return get_extension()->get_size();
 		}
 	}
 
@@ -489,12 +568,12 @@ public:
 			return (char *) payload.buf_addr;
 		}
 		else {
-			return (char *) get_extension()->vec_pointer[idx].get_buf();
+			return (char *) get_extension()->get_buf(idx).get_buf();
 		}
 	}
 
 	thread_safe_page *get_page(int idx) const {
-		return get_extension()->vec_pointer[idx].get_page();
+		return get_extension()->get_buf(idx).get_page();
 	}
 
 	void add_buf(char *buf, int size) {
@@ -519,55 +598,55 @@ public:
 
 	int get_num_bufs() const {
 		if (is_extended_req())
-			return get_extension()->num_bufs;
+			return get_extension()->get_num_bufs();
 		else
 			return 1;
 	}
 
 	int get_buf_size(int idx) const {
-		return get_extension()->vec_pointer[idx].get_size();
+		return get_extension()->get_buf(idx).get_size();
 	}
 
 	const io_buf &get_io_buf(int idx) const {
-		return get_extension()->vec_pointer[idx];
+		return get_extension()->get_buf(idx);
 	}
 
 	const struct iovec get(int idx) const {
 		struct iovec ret;
-		struct io_req_extension *ext = get_extension();
-		ret.iov_base = ext->vec_pointer[idx].get_buf();
-		ret.iov_len = ext->vec_pointer[idx].get_size();
+		io_req_extension *ext = get_extension();
+		ret.iov_base = ext->get_buf(idx).get_buf();
+		ret.iov_len = ext->get_buf(idx).get_size();
 		return ret;
 	}
 
 	const int get_vec(struct iovec *vec, int num) const {
 		num = min(get_num_bufs(), num);
 		for (int i = 0; i < num; i++) {
-			struct io_req_extension *ext = get_extension();
-			vec[i].iov_base = ext->vec_pointer[i].get_buf();
-			vec[i].iov_len = ext->vec_pointer[i].get_size();
+			io_req_extension *ext = get_extension();
+			vec[i].iov_base = ext->get_buf(i).get_buf();
+			vec[i].iov_len = ext->get_buf(i).get_size();
 		}
 		return num;
 	}
 
 	io_request *get_next_req() const {
-		return get_extension()->next;
+		return get_extension()->get_next();
 	}
 
 	void set_next_req(io_request *next) {
-		get_extension()->next = next;
+		get_extension()->set_next(next);
 	}
 
 	int inc_complete_count() {
-		return __sync_add_and_fetch(&get_extension()->refcnt, 1);
+		return get_extension()->inc_ref();
 	}
 
 	int dec_complete_count() {
-		return __sync_sub_and_fetch(&get_extension()->refcnt, 1);
+		return get_extension()->dec_ref();
 	}
 
 	void wait4unref() {
-		while (get_extension()->refcnt > 0) {}
+		while (get_extension()->get_ref() > 0) {}
 	}
 
 	/**
@@ -575,22 +654,22 @@ public:
 	 * If the request is complete, return true;
 	 */
 	bool complete_size(ssize_t completed) {
-		ssize_t res = __sync_add_and_fetch(&get_extension()->completed_size, completed);
+		ssize_t res = get_extension()->inc_completed_size(completed);;
 		ssize_t size = get_size();
 		assert(res <= size);
 		return res == size;
 	}
 
 	bool is_complete() const {
-		return get_extension()->completed_size == get_size();
+		return get_extension()->get_completed_size() == get_size();
 	}
 
 	void set_partial(bool partial) {
-		get_extension()->partial = partial ? 1 : 0;
+		get_extension()->set_partial(partial);
 	}
 
 	bool is_partial() const {
-		return get_extension()->partial;
+		return get_extension()->is_partial();
 	}
 
 	bool is_data_inline() const {
@@ -598,11 +677,11 @@ public:
 	}
 
 	void set_timestamp() {
-		gettimeofday(&get_extension()->issue_time, NULL);
+		get_extension()->set_timestamp();
 	}
 
 	struct timeval get_timestamp() {
-		return get_extension()->issue_time;
+		return get_extension()->get_timestamp();
 	}
 
 	/**
