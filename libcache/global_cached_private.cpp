@@ -12,6 +12,27 @@ const int COMPLETE_QUEUE_SIZE = 10240;
 #define ENABLE_LARGE_WRITE
 //#define TEST_HIT_RATE
 
+class req_ext_allocator: public obj_allocator<io_req_extension>
+{
+	class ext_initiator: public obj_initiator<io_req_extension>
+	{
+	public:
+		void init(io_req_extension *ext) {
+			if (ext->is_valid()) {
+				ext->init();
+			}
+			else {
+				new (ext) io_req_extension();
+			}
+		}
+	} initiator;
+public:
+	req_ext_allocator(int node_id, long increase_size,
+			long max_size = MAX_SIZE): obj_allocator<io_req_extension>(node_id,
+				increase_size, max_size, &initiator) {
+	}
+};
+
 /**
  * This slab allocator allocates IO requests, and all of them are
  * extended requests.
@@ -20,36 +41,25 @@ class request_allocator: public obj_allocator<io_request>
 {
 	class req_initiator: public obj_initiator<io_request>
 	{
+		req_ext_allocator *ext_allocator;
 	public:
-		void init(io_request *req) {
-			req->init();
+		req_initiator(req_ext_allocator *alloc) {
+			this->ext_allocator = alloc;
 		}
-	} initiator;
-public:
-	request_allocator(int node_id, long increase_size,
-			long max_size = MAX_SIZE): obj_allocator<io_request>(node_id,
-				increase_size, max_size, &initiator) {
-	}
 
-	virtual int alloc_objs(io_request **reqs, int num) {
-		int ret = obj_allocator<io_request>::alloc_objs(reqs, num);
-		// Make sure all requests are extended requests.
-		for (int i = 0; i < ret; i++) {
-			if (!reqs[i]->is_extended_req()) {
-				io_request tmp(true);
-				*reqs[i] = tmp;
+		void init(io_request *req) {
+			if (req->is_extended_req()) {
+				req->init();
+			}
+			else {
+				new (req) io_request(ext_allocator->alloc_obj(), 0, 0, NULL, 0);
 			}
 		}
-		return ret;
-	}
-
-	virtual io_request *alloc_obj() {
-		io_request *req = obj_allocator<io_request>::alloc_obj();
-		if (!req->is_extended_req()) {
-			io_request tmp(true);
-			*req = tmp;
-		}
-		return req;
+	};
+public:
+	request_allocator(req_ext_allocator *alloc, int node_id, long increase_size,
+			long max_size = MAX_SIZE): obj_allocator<io_request>(node_id,
+				increase_size, max_size, new req_initiator(alloc)) {
 	}
 };
 
@@ -362,6 +372,7 @@ int global_cached_io::multibuf_completion(io_request *request,
 		// They will be deleted when these write requests are finally served.
 	}
 	::queue_requests(pending_reqs);
+	ext_allocator->free(request->get_extension());
 
 	return -1;
 }
@@ -432,6 +443,7 @@ void global_cached_io::process_completed_requests(io_request requests[],
 			// These requests can't be deleted yet.
 			// They will be deleted when these write requests are finally served.
 		}
+		ext_allocator->free(request->get_extension());
 	}
 	if (!pending_reqs.empty()) {
 		::queue_requests(pending_reqs);
@@ -463,8 +475,10 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
 	complete_queue(underlying->get_node_id(), COMPLETE_QUEUE_SIZE)
 {
-	req_allocator = new request_allocator(underlying->get_node_id(),
+	ext_allocator = new req_ext_allocator(underlying->get_node_id(),
 			sizeof(io_request) * 1024);
+	req_allocator = new request_allocator(ext_allocator,
+			underlying->get_node_id(), sizeof(io_request) * 1024);
 	cb = NULL;
 	cache_hits = 0;
 	num_accesses = 0;
@@ -508,9 +522,14 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 					// we don't need it any more.
 					req_allocator->free(orig);
 				assert(real_orig->get_orig() == NULL);
-				io_request read_req((char *) p->get_data(),
-						ROUND_PAGE(off), PAGE_SIZE, READ,
-						this, p->get_node_id(), real_orig, p);
+
+				io_req_extension *ext = ext_allocator->alloc_obj();
+				ext->set_orig(real_orig);
+				ext->set_priv(p);
+				ext->add_buf((char *) p->get_data(), PAGE_SIZE, 0);
+
+				io_request read_req(ext, ROUND_PAGE(off), READ,
+						this, p->get_node_id());
 				p->set_io_pending(true);
 				p->unlock();
 				io_status status;
@@ -578,12 +597,12 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 			p->set_io_pending(true);
 			assert(!p->is_dirty());
 
-			io_request req((char *) p->get_data(), p->get_offset(),
-					/*
-					 * it will notify the underlying IO,
-					 * which then notifies global_cached_io.
-					 */
-					PAGE_SIZE, READ, this, get_node_id(), orig, p);
+			io_req_extension *ext = ext_allocator->alloc_obj();
+			ext->set_orig(orig);
+			ext->set_priv(p);
+			ext->add_buf((char *) p->get_data(), PAGE_SIZE, 0);
+
+			io_request req(ext, p->get_offset(), READ, this, get_node_id());
 			p->unlock();
 			assert(orig->get_orig() == NULL);
 			io_status status;
@@ -626,8 +645,11 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 
 	assert(npages <= MAX_NUM_IOVECS);
 	assert(orig->get_orig() == NULL);
-	io_request multibuf_req(-1, req.get_access_method(), this,
-			get_node_id(), orig, NULL);
+
+	io_req_extension *ext = ext_allocator->alloc_obj();
+	ext->set_orig(orig);
+	io_request multibuf_req(ext, -1, req.get_access_method(), this,
+			get_node_id());
 
 	/*
 	 * The pages in `pages' should be sorted with their offsets.
@@ -656,8 +678,11 @@ again:
 			if (!multibuf_req.is_empty()) {
 				p->unlock();
 				underlying->access(&multibuf_req, 1);
-				io_request tmp(-1, req.get_access_method(), this,
-						get_node_id(), orig, NULL);
+
+				io_req_extension *ext = ext_allocator->alloc_obj();
+				ext->set_orig(orig);
+				io_request tmp(ext, -1, req.get_access_method(), this,
+						get_node_id());
 				multibuf_req = tmp;
 				goto again;
 			}
@@ -694,8 +719,11 @@ again:
 			 */
 			if (!multibuf_req.is_empty()) {
 				underlying->access(&multibuf_req, 1);
-				io_request tmp(-1, req.get_access_method(), this,
-						get_node_id(), orig, NULL);
+
+				io_req_extension *ext = ext_allocator->alloc_obj();
+				ext->set_orig(orig);
+				io_request tmp(ext, -1, req.get_access_method(), this,
+						get_node_id());
 				multibuf_req = tmp;
 			}
 			io_request complete_partial;
@@ -707,6 +735,9 @@ again:
 	}
 	if (!multibuf_req.is_empty()) {
 		underlying->access(&multibuf_req, 1);
+	}
+	else {
+		ext_allocator->free(multibuf_req.get_extension());
 	}
 	return ret;
 }
@@ -825,7 +856,11 @@ void global_cached_io::write_dirty_page(thread_safe_page *p, off_t off,
 	p->lock();
 	assert(!p->is_io_pending());
 	p->set_io_pending(true);
-	io_request req(off, WRITE, this, p->get_node_id(), orig, p);
+
+	io_req_extension *ext = ext_allocator->alloc_obj();
+	ext->set_orig(orig);
+	ext->set_priv(p);
+	io_request req(ext, off, WRITE, this, p->get_node_id());
 	assert(p->get_ref() > 0);
 	req.add_page(p);
 	p->unlock();

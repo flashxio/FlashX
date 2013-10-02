@@ -169,7 +169,8 @@ void remote_disk_access::access(io_request *requests, int num,
 			// I still use the default memory allocator, but since it is used
 			// when the request size is large, it should normally be OK.
 			// TODO I can use slab allocators later.
-			io_request *orig = new io_request(true);
+			io_req_extension *ext = new io_req_extension();
+			io_request *orig = new io_request(ext, 0, 0, NULL, 0);
 			// global_cached_io doesn't issue requests across a block boundary.
 			// It can only be application issued requst, so it shouldn't have
 			// extension.
@@ -179,13 +180,14 @@ void remote_disk_access::access(io_request *requests, int num,
 			const off_t RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
 			for (off_t begin = orig->get_offset(); begin < end;
 					begin = ROUND(begin + RAID_block_size, RAID_block_size)) {
-				io_request req(true);
+				io_req_extension *ext = new io_req_extension();
+				ext->set_orig(orig);
+				io_request req(ext, 0, 0, NULL, 0);
 				int size = ROUND(begin + RAID_block_size, RAID_block_size) - begin;
 				size = min(size, end - begin);
 				// It only supports to extract a specified request from
 				// a single-buffer request.
 				extract_pages(*orig, begin, size / PAGE_SIZE, req);
-				req.set_orig(orig);
 				req.set_io(this);
 				assert(inside_RAID_block(req));
 
@@ -285,6 +287,7 @@ int remote_disk_access::process_completed_requests(io_request reqs[], int num)
 			orig->dec_complete_count();
 			num_part_reqs++;
 		}
+		delete req->get_extension();
 	}
 	if (num_from_upper > 0) {
 		assert(upper_io);
@@ -307,6 +310,7 @@ int remote_disk_access::process_completed_requests(io_request reqs[], int num)
 		orig->dec_complete_count();
 		orig->wait4unref();
 		// Now we can delete it.
+		delete orig->get_extension();
 		delete orig;
 	}
 

@@ -6,6 +6,7 @@
 #include "container.h"
 
 class request_allocator;
+class req_ext_allocator;
 
 class global_cached_io: public io_interface
 {
@@ -24,6 +25,7 @@ class global_cached_io: public io_interface
 	thread_safe_FIFO_queue<io_request *> pending_requests;
 
 	request_allocator *req_allocator;
+	req_ext_allocator *ext_allocator;
 
 	thread_safe_FIFO_queue<io_request> complete_queue;
 

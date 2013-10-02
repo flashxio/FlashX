@@ -291,9 +291,10 @@ ssize_t ssd_aread(ssd_file_desc_t fd, void *buf, size_t count, off_t off,
 {
 	io_interface *io = fd->io;
 	assert(io->support_aio());
-	io_request req(true);
-	req.init((char *) buf, off, count, READ, io, io->get_node_id());
-	req.set_user_data(callback_data);
+	io_req_extension *ext = new io_req_extension();
+	ext->set_user_data(callback_data);
+	ext->add_buf((char *) buf, count, 0);
+	io_request req(ext, off, READ, io, io->get_node_id());
 	io->access(&req, 1);
 	return 0;
 }
@@ -303,8 +304,10 @@ ssize_t ssd_awrite(ssd_file_desc_t fd, void *buf, size_t count, off_t off,
 {
 	io_interface *io = fd->io;
 	assert(io->support_aio());
-	io_request req(true);
-	req.init((char *) buf, off, count, WRITE, io, io->get_node_id());
+	io_req_extension *ext = new io_req_extension();
+	ext->set_user_data(callback_data);
+	ext->add_buf((char *) buf, count, 0);
+	io_request req(ext, off, WRITE, io, io->get_node_id());
 	req.set_user_data(callback_data);
 	io->access(&req, 1);
 	return 0;

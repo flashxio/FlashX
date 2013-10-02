@@ -38,7 +38,7 @@ class callback_allocator: public obj_allocator<thread_callback_s>
 	{
 	public:
 		void init(thread_callback_s *cb) {
-			cb->req.init();
+			new (&cb->req) io_request();
 		}
 	} initiator;
 public:

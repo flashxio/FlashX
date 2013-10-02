@@ -79,6 +79,24 @@ class io_req_extension
 	struct timeval issue_time;
 
 public:
+	io_req_extension() {
+		num_creates.inc(1);
+		vec_pointer = embedded_vecs;
+		vec_capacity = NUM_EMBEDDED_IOVECS;
+		init();
+	}
+
+	~io_req_extension() {
+		if (vec_pointer != embedded_vecs)
+			delete [] vec_pointer;
+	}
+
+	bool is_valid() const {
+		// Valid extension must have vec_pointer points to embedded_vecs
+		// or an array.
+		return vec_pointer != NULL;
+	}
+
 	void init() {
 		this->orig = NULL;
 		this->priv = NULL;
@@ -92,16 +110,18 @@ public:
 		completed_size = atomic_number<ssize_t>();
 	}
 
-	io_req_extension() {
-		num_creates.inc(1);
-		vec_pointer = embedded_vecs;
-		vec_capacity = NUM_EMBEDDED_IOVECS;
-		init();
-	}
-
-	~io_req_extension() {
-		if (vec_pointer != embedded_vecs)
-			delete [] vec_pointer;
+	void init(const io_req_extension &ext) {
+		this->orig = ext.orig;
+		this->priv = ext.priv;
+		this->user_data = ext.user_data;
+		this->num_bufs = ext.num_bufs;
+		this->partial = ext.partial;
+		assert(this->vec_capacity >= ext.vec_capacity);
+		assert(this->refcnt.get() == 0);
+		assert(this->completed_size.get() == 0);
+		memcpy(vec_pointer, ext.vec_pointer, num_bufs * sizeof(*vec_pointer));
+		assert(this->next == NULL);
+		memset(&issue_time, 0, sizeof(issue_time));
 	}
 
 	io_request *get_orig() const {
@@ -249,14 +269,6 @@ class io_request
 		char buf[0];
 	} payload;
 
-	io_req_extension *get_extension() const {
-		assert(is_extended_req() && payload.ext);
-		if (data_inline)
-			return (io_req_extension *) payload.buf;
-		else
-			return payload.ext;
-	}
-
 	void use_default_flags() {
 		sync = 0;
 		high_prio = 1;
@@ -279,19 +291,6 @@ public:
 		use_default_flags();
 	}
 
-	io_request(bool extended) {
-		if (extended) {
-			payload_type = EXT_REQ;
-			payload.ext = new io_req_extension();
-		}
-		else {
-			payload_type = BASIC_REQ;
-			payload.buf_addr = NULL;
-		}
-		data_inline = 0;
-		use_default_flags();
-	}
-
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id, bool sync = false) {
 		payload_type = BASIC_REQ;
@@ -301,15 +300,12 @@ public:
 		this->sync = sync;
 	}
 
-	io_request(off_t off, int access_method, io_interface *io, int node_id,
-			io_request *orig, void *priv, bool sync = false) {
+	io_request(io_req_extension *ext, off_t off, int access_method,
+			io_interface *io, int node_id, bool sync = false) {
 		payload_type = EXT_REQ;
 		data_inline = 0;
-		// TODO we should remove the ownership to the request extension
-		// from the IO request. i.e., the extension should be allocated and
-		// deallocated by someone else.
-		payload.ext = new io_req_extension();
-		init(off, access_method, io, node_id, orig, priv, NULL);
+		payload.ext = ext;
+		init(NULL, off, 0, access_method, io, node_id);
 		use_default_flags();
 		this->sync = sync;
 	}
@@ -325,44 +321,6 @@ public:
 		this->sync = sync;
 	}
 
-	io_request(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id, io_request *orig,
-			void *priv, bool sync = false) {
-		payload_type = EXT_REQ;
-		data_inline = 0;
-		payload.ext = new io_req_extension();
-		init(buf, off, size, access_method, io, node_id, orig, priv, NULL);
-		use_default_flags();
-		this->sync = sync;
-	}
-
-	io_request(io_request &req) {
-		assert(!req.data_inline);
-		memcpy(this, &req, sizeof(req));
-		if (req.is_extended_req()) {
-			req.payload_type = BASIC_REQ;
-			req.payload.buf_addr = NULL;
-		}
-	}
-
-	io_request &operator=(io_request &req) {
-		assert(!data_inline && !req.data_inline);
-		// We need to free its own extension first.
-		if (this->is_extended_req())
-			delete this->get_extension();
-		memcpy(this, &req, sizeof(req));
-		if (req.is_extended_req()) {
-			req.payload_type = BASIC_REQ;
-			req.payload.buf_addr = NULL;
-		}
-		return *this;
-	}
-
-	~io_request() {
-		if (is_extended_req() && get_extension())
-			delete get_extension();
-	}
-
 	void init(const io_request &req) {
 		assert(!data_inline);
 		if (req.payload_type == USER_COMPUTE
@@ -375,13 +333,11 @@ public:
 			this->init(req.get_buf(), req.get_offset(), req.get_size(),
 					req.get_access_method(), req.get_io(), req.get_node_id());
 		}
+		// Both requests have extensions.
 		else if (this->is_extended_req()) {
-			this->init(req.get_offset(), req.get_access_method(), req.get_io(),
-					req.get_node_id(), req.get_orig(), req.get_priv(),
-					req.get_user_data());
-			for (int i = 0; i < req.get_num_bufs(); i++) {
-				this->add_io_buf(req.get_io_buf(i));
-			}
+			this->init(NULL, req.get_offset(), 0, req.get_access_method(),
+					req.get_io(), req.get_node_id());
+			this->get_extension()->init(*req.get_extension());
 		}
 		else {
 			// The last case is that this request doesn't have extension,
@@ -421,22 +377,16 @@ public:
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
 			io_interface *io, int node_id);
-
-	void init(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id, io_request *orig, void *priv,
-			void *user_data) {
-		init(off, access_method, io, node_id, orig, priv, user_data);
-		add_buf(buf, size);
+	void init(off_t off, int access_method, io_interface *io, int node_id) {
+		init(NULL, off, 0, access_method, io, node_id);
 	}
 
-	void init(off_t off, int access_method, io_interface *io, int node_id,
-			io_request *orig, void *priv, void *user_data) {
-		assert(is_extended_req());
-		io_request::init(NULL, off, 0, access_method, io, node_id);
-		io_req_extension *ext = get_extension();
-		ext->set_priv(priv);
-		ext->set_orig(orig);
-		ext->set_user_data(user_data);
+	io_req_extension *get_extension() const {
+		assert(is_extended_req() && payload.ext);
+		if (data_inline)
+			return (io_req_extension *) payload.buf;
+		else
+			return payload.ext;
 	}
 
 	int get_file_id() const;
