@@ -27,16 +27,16 @@ CC = gcc
 CXX = g++
 endif
 
-all: rand-read
+all: rand-read unit_test
 
 rand-read: $(OBJS) build_lib
 	$(CXX) -o rand-read $(OBJS) $(LDFLAGS)
 
 build_lib:
-	make -C libcache
+	$(MAKE) -C libcache
 
-unit_test: $(OBJS)
-	make -C test
+unit_test: build_lib
+	$(MAKE) -C test
 
 clean:
 	rm -f *.d
