@@ -60,7 +60,11 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 	gettimeofday(&curr_time, NULL);
 #endif
 	io_request req;
+#ifdef MEMCHECK
+	io_request *ignored_flushes = new io_request[low_prio_msg.get_num_objs()];
+#else
 	io_request ignored_flushes[low_prio_msg.get_num_objs()];
+#endif
 	int num_ignored = 0;
 	while (low_prio_msg.has_next()
 			&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS
@@ -166,6 +170,9 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 	if (num_ignored > 0)
 		notify_ignored_flushes(ignored_flushes, num_ignored);
 
+#ifdef MEMCHECK
+	delete [] ignored_flushes;
+#endif
 	return num_accesses;
 }
 

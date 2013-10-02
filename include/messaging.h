@@ -374,13 +374,20 @@ public:
 	 */
 	int get_num_objs() {
 		int num = thread_safe_FIFO_queue<message<T> >::get_num_entries();
+#ifdef MEMCHECK
+		message<T> *msgs = new message<T>[num];
+#else
 		message<T> msgs[num];
+#endif
 		int ret = thread_safe_FIFO_queue<message<T> >::fetch(msgs, num);
 		int num_objs = 0;
 		for (int i = 0; i < ret; i++) {
 			num_objs += msgs[i].get_num_objs();
 		}
 		thread_safe_FIFO_queue<message<T> >::add(msgs, ret);
+#ifdef MEMCHECK
+		delete [] msgs;
+#endif
 		return num_objs;
 	}
 };
