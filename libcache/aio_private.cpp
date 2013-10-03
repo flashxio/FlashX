@@ -72,7 +72,7 @@ async_io::async_io(const logical_file_partition &partition,
 	cb_allocator = new callback_allocator(node_id,
 			AIO_DEPTH * sizeof(thread_callback_s));;
 	buf_idx = 0;
-	ctx = aio_ctx::create_aio_ctx(AIO_DEPTH);
+	ctx = aio_ctx::create_aio_ctx(node_id, AIO_DEPTH);
 	cb = NULL;
 	num_iowait = 0;
 	num_completed_reqs = 0;

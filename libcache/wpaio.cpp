@@ -17,35 +17,9 @@
 #define AIO_MAXIO	32
 #define FREE_LIST_SIZE 128
 
-struct free_list_s
+aio_ctx* aio_ctx::create_aio_ctx(int node_id, int max_aio)
 {
-	struct iocb** array;
-	int pos;
-};
-
-static void init_free_list(struct free_list_s* free_list, int size)
-{
-	int i;
-	free_list->array = (struct iocb**)malloc(size * sizeof(struct iocb*));
-	if (NULL == free_list->array)
-	{
-		perror("malloc free_list");
-	}
-	for (i = 0; i < size; i++)
-	{
-		free_list->array[i] = (struct iocb*)malloc(sizeof(struct iocb));
-		if (NULL == free_list->array[i])
-		{
-			perror("malloc free_list[i]");
-		}
-	}
-	free_list->pos = size;
-}
-
-
-aio_ctx* aio_ctx::create_aio_ctx(int max_aio)
-{
-	aio_ctx* a_ctx = new aio_ctx();
+	aio_ctx* a_ctx = new aio_ctx(node_id, max_aio);
 	if (a_ctx == NULL)
 	{
 		perror("malloc aio_ctx");
@@ -63,8 +37,6 @@ aio_ctx* aio_ctx::create_aio_ctx(int max_aio)
 		perror ("io_queue_init");
 		exit (1);
 	}
-	a_ctx->free_list = (struct free_list_s*)malloc(sizeof(struct free_list_s));
-	init_free_list(a_ctx->free_list, max_aio);
 	
 	return a_ctx;
 }
@@ -74,25 +46,10 @@ void aio_ctx::destroy_aio_ctx(aio_ctx *ctx)
 	delete ctx;
 }
 
-inline struct iocb* aio_ctx::get_iocb()
-{
-	if (!free_list->pos)
-	{
-		printf("out of free_list\n");
-		exit(1);
-	}
-	return free_list->array[--free_list->pos];
-}
-
-inline void aio_ctx::put_iocb(struct iocb* io)
-{
-	free_list->array[free_list->pos++] = io;
-}
-
 struct iocb *aio_ctx::make_iovec_request(int fd, const struct iovec iov[],
 		int count, long long offset, int io_type, io_callback_s *cb)
 {
-	struct iocb* a_req = get_iocb();
+	struct iocb* a_req = iocb_allocator.alloc_obj();
 	if (io_type == A_READ) {
 		io_prep_preadv(a_req, fd, iov, count, offset);
 		io_set_callback(a_req, (io_callback_t) cb);
@@ -111,7 +68,7 @@ struct iocb *aio_ctx::make_iovec_request(int fd, const struct iovec iov[],
 struct iocb* aio_ctx::make_io_request(int fd, size_t iosize, long long offset,
 							 void* buffer, int io_type, io_callback_s *cb)
 {
-	struct iocb* a_req = get_iocb();
+	struct iocb* a_req = iocb_allocator.alloc_obj();
   if (io_type == A_READ)
   {
     io_prep_pread(a_req, fd, buffer, iosize, offset);
@@ -166,8 +123,7 @@ int aio_ctx::io_wait(struct timespec* to, int num)
   cb_func(ctx, iocbs, (void **) cbs, res, res2, n);
 
   busy_aio -= n;
-  for (int i = 0; i < n; i++)
-	  put_iocb(iocbs[i]);
+  iocb_allocator.free(iocbs, n);
   return ret;
 }
 

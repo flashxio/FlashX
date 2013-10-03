@@ -11,34 +11,29 @@
 #include <sys/param.h>
 #include <fcntl.h>
 #include <stdlib.h>
-
-
 #include <libaio.h>
+
+#include "slab_allocator.h"
 
 #define A_READ 0
 #define A_WRITE 1
-
-struct free_list_s;
 
 class aio_ctx
 {
 	int max_aio;
 	int busy_aio;
 	io_context_t ctx;
-	struct free_list_s* free_list;
+	obj_allocator<struct iocb> iocb_allocator;
 
-	aio_ctx() {
+	aio_ctx(int node_id, int max_aio): iocb_allocator(node_id,
+			sizeof(struct iocb) * max_aio) {
 		max_aio = 0;
 		busy_aio = 0;
 		ctx = 0;
-		free_list = NULL;
 	}
 
-	struct iocb* get_iocb();
-	void put_iocb(struct iocb* io);
-
 public:
-	static aio_ctx* create_aio_ctx(int max_aio);
+	static aio_ctx* create_aio_ctx(int node_id, int max_aio);
 	static void destroy_aio_ctx(aio_ctx *);
 
 	virtual struct iocb* make_io_request(int fd, size_t iosize, long long offset,
