@@ -19,23 +19,11 @@
 
 aio_ctx* aio_ctx::create_aio_ctx(int node_id, int max_aio)
 {
-	aio_ctx* a_ctx = new aio_ctx(node_id, max_aio);
+	aio_ctx* a_ctx = new aio_ctx_impl(node_id, max_aio);
 	if (a_ctx == NULL)
 	{
 		perror("malloc aio_ctx");
 		exit(1);
-	}
-	a_ctx->max_aio = max_aio;
-	a_ctx->busy_aio = 0;
-	memset(&a_ctx->ctx, 0, sizeof(a_ctx->ctx));
-#ifdef DEBUG
-	printf("size of queue: %d\n", max_aio);
-#endif
-	int ret = io_queue_init(a_ctx->max_aio, &a_ctx->ctx);
-	if (ret < 0)
-	{
-		perror ("io_queue_init");
-		exit (1);
 	}
 	
 	return a_ctx;
@@ -90,7 +78,7 @@ struct iocb* aio_ctx::make_io_request(int fd, size_t iosize, long long offset,
   return a_req;
 }
 
-int aio_ctx::io_wait(struct timespec* to, int num)
+int aio_ctx_impl::io_wait(struct timespec* to, int num)
 {
   struct io_event events[max_aio];
   struct io_event* ep = events;
@@ -123,11 +111,11 @@ int aio_ctx::io_wait(struct timespec* to, int num)
   cb_func(ctx, iocbs, (void **) cbs, res, res2, n);
 
   busy_aio -= n;
-  iocb_allocator.free(iocbs, n);
+  destroy_io_requests(iocbs, n);
   return ret;
 }
 
-void aio_ctx::submit_io_request(struct iocb* ioq[], int num)
+void aio_ctx_impl::submit_io_request(struct iocb* ioq[], int num)
 {
   int rc;
   rc = io_submit(ctx, num, ioq);
@@ -139,7 +127,7 @@ void aio_ctx::submit_io_request(struct iocb* ioq[], int num)
   busy_aio += num;
 } 
 
-int aio_ctx::max_io_slot()
+int aio_ctx_impl::max_io_slot()
 {
 	return max_aio - busy_aio;
 }
