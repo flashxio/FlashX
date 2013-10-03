@@ -72,7 +72,7 @@ async_io::async_io(const logical_file_partition &partition,
 	cb_allocator = new callback_allocator(node_id,
 			AIO_DEPTH * sizeof(thread_callback_s));;
 	buf_idx = 0;
-	ctx = create_aio_ctx(AIO_DEPTH);
+	ctx = aio_ctx::create_aio_ctx(AIO_DEPTH);
 	cb = NULL;
 	num_iowait = 0;
 	num_completed_reqs = 0;
@@ -86,11 +86,11 @@ async_io::async_io(const logical_file_partition &partition,
 
 void async_io::cleanup()
 {
-	int slot = max_io_slot(ctx);
+	int slot = ctx->max_io_slot();
 
 	while (slot < AIO_DEPTH) {
-		io_wait(ctx, NULL, 1);
-		slot = max_io_slot(ctx);
+		ctx->io_wait(NULL, 1);
+		slot = ctx->max_io_slot();
 	}
 	for (std::tr1::unordered_map<int, buffered_io *>::iterator it
 			= open_files.begin(); it != open_files.end(); it++) {
@@ -104,7 +104,7 @@ void async_io::cleanup()
 async_io::~async_io()
 {
 	cleanup();
-	destroy_aio_ctx(ctx);
+	aio_ctx::destroy_aio_ctx(ctx);
 	for (std::tr1::unordered_map<int, buffered_io *>::const_iterator it
 			= open_files.begin(); it != open_files.end(); it++)
 		delete it->second;
@@ -147,7 +147,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	assert(io);
 	io->get_partition().map(tcb->req.get_offset() / PAGE_SIZE, bid);
 	if (tcb->req.get_num_bufs() == 1)
-		return make_io_request(ctx, io->get_fd(tcb->req.get_offset()),
+		return ctx->make_io_request(io->get_fd(tcb->req.get_offset()),
 				tcb->req.get_size(), bid.off * PAGE_SIZE, tcb->req.get_buf(),
 				io_type, cb);
 	else {
@@ -159,7 +159,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 		struct iovec vec[num_bufs];
 		int ret = tcb->req.get_vec(vec, num_bufs);
 		assert(ret == num_bufs);
-		struct iocb *req = make_iovec_request(ctx, io->get_fd(tcb->req.get_offset()),
+		struct iocb *req = ctx->make_iovec_request(io->get_fd(tcb->req.get_offset()),
 				/* 
 				 * iocb only contains a pointer to the io vector.
 				 * the space for the IO vector is stored
@@ -169,7 +169,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 				io_type, cb);
 		// I need to submit the request immediately. The iovec array is
 		// allocated in the stack.
-		submit_io_request(ctx, &req, 1);
+		ctx->submit_io_request(&req, 1);
 		return NULL;
 	}
 }
@@ -177,15 +177,15 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 void async_io::access(io_request *requests, int num, io_status *status)
 {
 	while (num > 0) {
-		int slot = max_io_slot(ctx);
+		int slot = ctx->max_io_slot();
 		if (slot == 0) {
 			/*
 			 * To achieve the best performance, we need to submit requests
 			 * as long as there is a slot available.
 			 */
 			num_iowait++;
-			io_wait(ctx, NULL, 1);
-			slot = max_io_slot(ctx);
+			ctx->io_wait(NULL, 1);
+			slot = ctx->max_io_slot();
 		}
 		struct iocb *reqs[slot];
 		int min = slot > num ? num : slot;
@@ -197,7 +197,7 @@ void async_io::access(io_request *requests, int num, io_status *status)
 				reqs[num_iocb++] = req;
 		}
 		if (num_iocb > 0)
-			submit_io_request(ctx, reqs, num_iocb);
+			ctx->submit_io_request(reqs, num_iocb);
 		num -= min;
 	}
 	if (status)

@@ -21,7 +21,7 @@ class callback_allocator;
 class async_io: public io_interface
 {
 	int buf_idx;
-	struct aio_ctx *ctx;
+	aio_ctx *ctx;
 	callback *cb;
 	const int AIO_DEPTH;
 	callback_allocator *cb_allocator;
@@ -69,16 +69,16 @@ public:
 	void return_cb(thread_callback_s *tcbs[], int num);
 
 	int num_available_IO_slots() const {
-		return max_io_slot(ctx);
+		return ctx->max_io_slot();
 	}
 
 	virtual int num_pending_ios() const {
-		return AIO_DEPTH - max_io_slot(ctx);
+		return AIO_DEPTH - ctx->max_io_slot();
 	}
 
 	virtual void notify_completion(io_request *reqs[], int num);
 	int wait4complete(int num) {
-		return io_wait(ctx, NULL, num);
+		return ctx->io_wait(NULL, num);
 	}
 	virtual int get_max_num_pending_ios() const {
 		return AIO_DEPTH;
