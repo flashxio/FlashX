@@ -167,6 +167,7 @@ struct global_data_collection
 
 static global_data_collection global_data;
 
+#if 0
 /**
  * We flush notifications of IO completion buffered by I/O threads
  * periodically. By default, it's every 200ms.
@@ -244,6 +245,7 @@ static void set_completion_flush_timer()
 		exit(1);
 	}
 }
+#endif
 
 void init_io_system(const RAID_config &raid_conf,
 		const std::vector<int> &node_id_array)
@@ -274,9 +276,6 @@ void init_io_system(const RAID_config &raid_conf,
 					raid_conf.get_file(k).node_id, NULL, k);
 		}
 
-		// Set a timer that flush the nofications of request completion
-		// periodically.
-		set_completion_flush_timer();
 		set_enable_debug_signal();
 	}
 	pthread_mutex_unlock(&global_data.mutex);
