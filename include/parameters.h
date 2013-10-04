@@ -1,6 +1,7 @@
 #ifndef __MY_PARAMETERS_H__
 #define __MY_PARAMETERS_H__
 
+#include <iostream>
 #include <map>
 #include <string>
 
@@ -11,7 +12,55 @@
 
 #define MIN_BLOCK_SIZE 512
 
-const int AIO_DEPTH_PER_FILE = 32;
+class sys_parameters
+{
+	int RAID_block_size;
+	int SA_min_cell_size;
+	int test_hit_rate;
+	int io_depth_per_file;
+	int cache_type;
+	int cache_size;
+	int RAID_mapping_option;
+public:
+	sys_parameters();
+
+	void init(const std::map<std::string, std::string> &parameters);
+
+	void print();
+	void print_help();
+
+	int get_RAID_block_size() const {
+		return RAID_block_size;
+	}
+
+	int get_SA_min_cell_size() const {
+		return SA_min_cell_size;
+	}
+
+	int get_test_hit_rate() const {
+		return test_hit_rate;
+	}
+
+	int get_aio_depth_per_file() const {
+		return io_depth_per_file;
+	}
+
+	int get_cache_type() const {
+		return cache_type;
+	}
+
+	int get_cache_size() const {
+		return cache_size;
+	}
+
+	int get_RAID_mapping_option() const {
+		return RAID_mapping_option;
+	}
+};
+
+extern sys_parameters sys_params;
+
+#define AIO_DEPTH_PER_FILE sys_params.get_aio_depth_per_file()
 
 /**
  * The size of an I/O message sent to an I/O thread.
@@ -84,29 +133,37 @@ const int NUMA_NUM_PROCESS_THREADS = 8;
 
 const int LOCAL_BUF_SIZE = 100;
 
-class sys_parameters
-{
-	int RAID_block_size;
-	int SA_min_cell_size;
-	int test_hit_rate;
-public:
-	sys_parameters();
-
-	void init(const std::map<std::string, std::string> &parameters);
-
-	int get_RAID_block_size() const {
-		return RAID_block_size;
-	}
-
-	int get_SA_min_cell_size() const {
-		return SA_min_cell_size;
-	}
-
-	int get_test_hit_rate() const {
-		return test_hit_rate;
-	}
+struct str2int {
+	std::string name;
+	int value;
 };
 
-extern sys_parameters sys_params;
+class str2int_map {
+	str2int *maps;
+	int num;
+public:
+	str2int_map(str2int *maps, int num) {
+		this->maps = maps;
+		this->num = num;
+	}
+
+	int map(const std::string &str) {
+		for (int i = 0; i < num; i++) {
+			if (maps[i].name.compare(str) == 0)
+				return i;
+		}
+		return -1;
+	}
+
+	void print(const std::string &str) {
+		std::cout<<str;
+		for (int i = 0; i < num; i++) {
+			std::cout<<maps[i].name;
+			if (i < num - 1)
+				std::cout<<", ";
+		}
+		std::cout<<std::endl;
+	}
+};
 
 #endif

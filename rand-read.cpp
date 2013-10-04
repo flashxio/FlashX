@@ -23,6 +23,7 @@
 #include <iostream>
 #include <string>
 #include <deque>
+#include <algorithm>
 
 #define NUM_THREADS 1024
 
@@ -56,11 +57,6 @@ bool use_aio = true;
 
 thread_private *threads[NUM_THREADS];
 
-struct str2int {
-	std::string name;
-	int value;
-};
-
 str2int access_methods[] = {
 	{ "normal", READ_ACCESS },
 	{ "direct", DIRECT_ACCESS },
@@ -68,15 +64,6 @@ str2int access_methods[] = {
 	{ "remote", REMOTE_ACCESS },
 	{ "global_cache", GLOBAL_CACHE_ACCESS },
 	{ "parted_global", PART_GLOBAL_ACCESS },
-};
-
-str2int cache_types[] = {
-	{ "tree", TREE_CACHE } ,
-	{ "associative", ASSOCIATIVE_CACHE },
-	{ "hash-index", HASH_INDEX_CACHE },
-	{ "cuckoo", CUCKOO_CACHE },
-	{ "lru2q", LRU2Q_CACHE },
-	{ "gclock", GCLOCK_CACHE },
 };
 
 enum {
@@ -103,40 +90,6 @@ str2int req_buf_types[] = {
 	{ "MULTI", MULTI_BUF },
 };
 
-str2int RAID_options[] = {
-	{"RAID0", RAID0},
-	{"RAID5", RAID5},
-	{"HASH", HASH},
-};
-
-class str2int_map {
-	str2int *maps;
-	int num;
-public:
-	str2int_map(str2int *maps, int num) {
-		this->maps = maps;
-		this->num = num;
-	}
-
-	int map(const std::string &str) {
-		for (int i = 0; i < num; i++) {
-			if (maps[i].name.compare(str) == 0)
-				return i;
-		}
-		return -1;
-	}
-
-	void print(const std::string &str) {
-		std::cout<<str;
-		for (int i = 0; i < num; i++) {
-			std::cout<<maps[i].name;
-			if (i < num - 1)
-				std::cout<<", ";
-		}
-		std::cout<<std::endl;
-	}
-};
-
 #ifdef PROFILER
 std::string prof_file = "rand-read.prof";
 #endif
@@ -159,19 +112,46 @@ void int_handler(int sig_num)
 
 const long TEST_DATA_SIZE = 15L * 1024 * 1024 * 4096;
 
+void read_config_file(const std::string &conf_file,
+		std::map<std::string, std::string> &configs)
+{
+	FILE *f = fopen(conf_file.c_str(), "r");
+	if (f == NULL) {
+		perror("fopen");
+		assert(0);
+	}
+
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
+	while ((read = getline(&line, &len, f)) > 0) {
+		std::string str = line;
+		size_t found = str.find("=");
+		/* if there isn't `=', I assume it's a file name*/
+		if (found == std::string::npos) {
+			fprintf(stderr, "wrong format: %s\n", line);
+			assert(0);
+		}
+
+		std::string value = str.substr(found + 1);
+		value.erase(std::remove_if(value.begin(), value.end(), isspace),
+				value.end());
+		std::string key = str.substr(0, found);
+		key.erase(std::remove_if(key.begin(), key.end(), isspace),
+				key.end());
+		configs.insert(std::pair<std::string, std::string>(key, value));
+	}
+	fclose(f);
+}
+
 int main(int argc, char *argv[])
 {
-	long cache_size = 512 * 1024 * 1024;
 	int access_option = -1;
-	int RAID_mapping_option = RAID5;
 	int ret = 0;
 	struct timeval start_time, end_time;
 	ssize_t read_bytes = 0;
 	int num_nodes = 1;
-	int cache_type = -1;
 	int workload = RAND_OFFSET;
-	int RAID_block_size = 0;
-	int SA_min_cell_size = 0;
 	// No cache hits.
 	double hit_ratio = 0;
 	// All reads
@@ -182,132 +162,127 @@ int main(int argc, char *argv[])
 			sizeof(access_methods) / sizeof(access_methods[0]));
 	str2int_map workload_map(workloads, 
 			sizeof(workloads) / sizeof(workloads[0]));
-	str2int_map cache_map(cache_types, 
-			sizeof(cache_types) / sizeof(cache_types[0]));
 	str2int_map buf_type_map(req_buf_types,
 			sizeof(req_buf_types) / sizeof(req_buf_types[0]));
-	str2int_map RAID_option_map(RAID_options,
-			sizeof(RAID_options) / sizeof(RAID_options[0]));
 
-	if (argc < 5) {
+	if (argc < 3) {
 		fprintf(stderr, "there are %d argments\n", argc);
+		fprintf(stderr, "read conf_file data_file\n");
+
 		fprintf(stderr, "read files option pages threads cache_size entry_size workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size SA_cell_size io_depth sync\n");
 		access_map.print("available access options: ");
 		workload_map.print("available workloads: ");
-		cache_map.print("available cache types: ");
 		buf_type_map.print("available buf types: ");
 		exit(1);
 	}
+	std::string conf_file = argv[1];
+	std::string file_file = argv[2];
 
 	signal(SIGINT, int_handler);
 	// The file that contains all data files.
-	std::string file_file;
 
-	for (int i = 1; i < argc; i++) {
-		std::string str = argv[i];
-		size_t found = str.find("=");
-		/* if there isn't `=', I assume it's a file name*/
-		if (found == std::string::npos) {
-			file_file = str;
-			continue;
-		}
+	std::map<std::string, std::string> configs;
+	read_config_file(conf_file, configs);
+	sys_params.init(configs);
 
-		std::string value = str.substr(found + 1);
-		std::string key = str.substr(0, found);
-		if (key.compare("option") == 0) {
-			access_option = access_map.map(value);
-			if (access_option < 0) {
-				fprintf(stderr, "can't find the right access option\n");
-				exit(1);
-			}
-		}
-		else if(key.compare("cache_type") == 0) {
-			cache_type = cache_map.map(value);
-		}
-		else if(key.compare("pages") == 0) {
-			npages = atoi(value.c_str());
-		}
-		else if(key.compare("threads") == 0) {
-			nthreads = atoi(value.c_str());
-		}
-		else if(key.compare("cache_size") == 0) {
-			cache_size = str2size(value);
-		}
-		else if(key.compare("num_nodes") == 0) {
-			num_nodes = str2size(value);
-		}
-		else if(key.compare("hit_percent") == 0) {
-			hit_ratio = (((double) atoi(value.c_str())) / 100);
-		}
-		else if(key.compare("read_percent") == 0) {
-			read_ratio = (((double) atoi(value.c_str())) / 100);
-		}
-		else if (key.compare("repeats") == 0) {
-			num_repeats = atoi(value.c_str());
-		}
-		else if(key.compare("entry_size") == 0) {
-			entry_size = (int) str2size(value);
-			workload_gen::set_default_entry_size(entry_size);
-		}
-		else if(key.compare("workload") == 0) {
-			workload = workload_map.map(value);
-			if (workload == -1) {
-				workload_file = value;
-			}
-		}
-		else if(key.compare("access") == 0) {
-			if(value.compare("read") == 0)
-				workload_gen::set_default_access_method(READ);
-			else if(value.compare("write") == 0)
-				workload_gen::set_default_access_method(WRITE);
-			else {
-				fprintf(stderr, "wrong default access method\n");
-				exit(1);
-			}
-		}
-		else if(key.compare("verify_content") == 0) {
-			verify_read_content = true;
-		}
-		else if(key.compare("high_prio") == 0) {
-			high_prio = true;
-		}
-		else if (key.compare("buf_type") == 0) {
-			buf_type = buf_type_map.map(value);
-		}
-		else if (key.compare("buf_size") == 0) {
-			buf_size = (int) str2size(value);
-		}
-		else if (key.compare("RAID_mapping") == 0) {
-			RAID_mapping_option = RAID_option_map.map(value);
-			if (RAID_mapping_option < 0) {
-				fprintf(stderr, "can't find the right mapping option\n");
-				exit(1);
-			}
-		}
-		else if(key.compare("RAID_block_size") == 0) {
-			RAID_block_size = (int) str2size(value);
-		}
-		else if(key.compare("SA_cell_size") == 0) {
-			SA_min_cell_size = atoi(value.c_str());
-		}
-		else if(key.compare("io_depth") == 0) {
-			io_depth_per_file = atoi(value.c_str());
-		}
-		else if(key.compare("sync") == 0) {
-			use_aio = false;
-		}
-#ifdef PROFILER
-		else if(key.compare("prof") == 0) {
-			prof_file = value;
-		}
-#endif
-		else {
-			fprintf(stderr, "wrong option\n");
+	std::map<std::string, std::string>::const_iterator it;
+
+	it = configs.find("option");
+	if (it != configs.end()) {
+		access_option = access_map.map(it->second);
+		if (access_option < 0) {
+			fprintf(stderr, "can't find the right access option\n");
 			exit(1);
 		}
 	}
-	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d, RAID_mapping: %d, RAID block size: %d, SA_cell_size: %d\n",
-			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size, SA_min_cell_size);
+
+	it = configs.find("pages");
+	if (it != configs.end()) {
+		npages = atoi(it->second.c_str());
+	}
+
+	it = configs.find("threads");
+	if (it != configs.end()) {
+		nthreads = atoi(it->second.c_str());
+	}
+
+	it = configs.find("num_nodes");
+	if (it != configs.end()) {
+		num_nodes = str2size(it->second);
+	}
+
+	it = configs.find("read_percent");
+	if (it != configs.end()) {
+		read_ratio = (((double) atoi(it->second.c_str())) / 100);
+	}
+
+	it = configs.find("repeats");
+	if (it != configs.end()) {
+		num_repeats = atoi(it->second.c_str());
+	}
+
+	it = configs.find("entry_size");
+	if (it != configs.end()) {
+		entry_size = (int) str2size(it->second);
+		workload_gen::set_default_entry_size(entry_size);
+	}
+
+	it = configs.find("workload");
+	if (it != configs.end()) {
+		workload = workload_map.map(it->second);
+		if (workload == -1) {
+			workload_file = it->second;
+		}
+	}
+
+	it = configs.find("access");
+	if (it != configs.end()) {
+		if(it->second.compare("read") == 0)
+			workload_gen::set_default_access_method(READ);
+		else if(it->second.compare("write") == 0)
+			workload_gen::set_default_access_method(WRITE);
+		else {
+			fprintf(stderr, "wrong default access method\n");
+			exit(1);
+		}
+	}
+
+	it = configs.find("verify_content");
+	if (it != configs.end()) {
+		verify_read_content = true;
+	}
+
+	it = configs.find("high_prio");
+	if (it != configs.end()) {
+		high_prio = true;
+	}
+
+	it = configs.find("buf_type");
+	if (it != configs.end()) {
+		buf_type = buf_type_map.map(it->second);
+	}
+
+	it = configs.find("buf_size");
+	if (it != configs.end()) {
+		buf_size = (int) str2size(it->second);
+	}
+
+	it = configs.find("sync");
+	if (it != configs.end()) {
+		use_aio = false;
+	}
+
+#ifdef PROFILER
+	it = configs.find("prof");
+	if (it != configs.end()) {
+		prof_file = it->second;
+	}
+#endif
+
+	sys_params.print();
+	printf("access: %d, npages: %ld, nthreads: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d\n",
+			access_option, npages, nthreads, entry_size, workload, num_nodes,
+			verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats);
 
 	printf("use a different random sequence\n");
 	srandom(time(NULL));
@@ -328,7 +303,7 @@ int main(int argc, char *argv[])
 	long start;
 	long end = 0;
 
-	RAID_config raid_conf(file_file, RAID_mapping_option,
+	RAID_config raid_conf(file_file, sys_params.get_RAID_mapping_option(),
 			sys_params.get_RAID_block_size());
 
 	std::set<int> node_ids = raid_conf.get_node_ids();
@@ -349,12 +324,12 @@ int main(int argc, char *argv[])
 
 	cache_config *cache_conf = NULL;
 	if (access_option == GLOBAL_CACHE_ACCESS)
-		cache_conf = new even_cache_config(cache_size, cache_type,
-				node_id_array);
+		cache_conf = new even_cache_config(sys_params.get_cache_size(),
+				sys_params.get_cache_type(), node_id_array);
 	else if (access_option == PART_GLOBAL_ACCESS) {
 		assert(num_nodes == 4);
-		cache_conf = new even_cache_config(cache_size, cache_type,
-				node_id_array);
+		cache_conf = new even_cache_config(sys_params.get_cache_size(),
+				sys_params.get_cache_type(), node_id_array);
 	}
 
 	init_io_system(raid_conf, node_id_array);
@@ -404,7 +379,7 @@ int main(int argc, char *argv[])
 					assert(read_ratio >= 0);
 					gen = new cache_hit_defined_workload(entry_size,
 							(((long) npages) * PAGE_SIZE) / entry_size,
-							cache_size, hit_ratio, read_ratio);
+							sys_params.get_cache_size(), hit_ratio, read_ratio);
 					break;
 				case -1:
 					{
