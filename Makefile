@@ -42,6 +42,7 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
+	rm -f include/*~
 	make --ignore-errors -C test clean
 	make --ignore-errors -C libcache clean
 
