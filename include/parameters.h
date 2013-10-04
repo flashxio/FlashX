@@ -1,6 +1,9 @@
 #ifndef __MY_PARAMETERS_H__
 #define __MY_PARAMETERS_H__
 
+#include <map>
+#include <string>
+
 #define USE_GCLOCK
 
 #define PAGE_SIZE 4096
@@ -80,5 +83,30 @@ const int NUMA_REPLY_QUEUE_SIZE = 1024;
 const int NUMA_NUM_PROCESS_THREADS = 8;
 
 const int LOCAL_BUF_SIZE = 100;
+
+class sys_parameters
+{
+	int RAID_block_size;
+	int SA_min_cell_size;
+	int test_hit_rate;
+public:
+	sys_parameters();
+
+	void init(const std::map<std::string, std::string> &parameters);
+
+	int get_RAID_block_size() const {
+		return RAID_block_size;
+	}
+
+	int get_SA_min_cell_size() const {
+		return SA_min_cell_size;
+	}
+
+	int get_test_hit_rate() const {
+		return test_hit_rate;
+	}
+};
+
+extern sys_parameters sys_params;
 
 #endif

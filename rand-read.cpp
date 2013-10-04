@@ -170,8 +170,8 @@ int main(int argc, char *argv[])
 	int num_nodes = 1;
 	int cache_type = -1;
 	int workload = RAND_OFFSET;
-	int RAID_block_size = sys_parameters::get_default_RAID_block_size();
-	int SA_min_cell_size = sys_parameters::get_default_SA_min_cell_size();
+	int RAID_block_size = 0;
+	int SA_min_cell_size = 0;
 	// No cache hits.
 	double hit_ratio = 0;
 	// All reads
@@ -308,7 +308,6 @@ int main(int argc, char *argv[])
 	}
 	printf("access: %d, npages: %ld, nthreads: %d, cache_size: %ld, cache_type: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d, RAID_mapping: %d, RAID block size: %d, SA_cell_size: %d\n",
 			access_option, npages, nthreads, cache_size, cache_type, entry_size, workload, num_nodes, verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats, RAID_mapping_option, RAID_block_size, SA_min_cell_size);
-	params.init(RAID_block_size, SA_min_cell_size, (int) (hit_ratio * 100));
 
 	printf("use a different random sequence\n");
 	srandom(time(NULL));
@@ -329,7 +328,8 @@ int main(int argc, char *argv[])
 	long start;
 	long end = 0;
 
-	RAID_config raid_conf(file_file, RAID_mapping_option, RAID_block_size);
+	RAID_config raid_conf(file_file, RAID_mapping_option,
+			sys_params.get_RAID_block_size());
 
 	std::set<int> node_ids = raid_conf.get_node_ids();
 	// In this way, we can guarantee that the cache is created

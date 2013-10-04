@@ -74,44 +74,6 @@ public:
 
 long str2size(std::string str);
 
-class sys_parameters
-{
-	int RAID_block_size;
-	int SA_min_cell_size;
-	int test_hit_rate;
-public:
-	sys_parameters() {
-		RAID_block_size = get_default_RAID_block_size();
-		SA_min_cell_size = get_default_SA_min_cell_size();
-	}
-
-	void init(int RAID_block_size, int SA_min_cell_size, int test_hit_rate) {
-		this->RAID_block_size = RAID_block_size;
-		this->SA_min_cell_size = SA_min_cell_size;
-		this->test_hit_rate = test_hit_rate;
-	}
-
-	int get_RAID_block_size() {
-		return RAID_block_size;
-	}
-
-	int get_SA_min_cell_size() {
-		return SA_min_cell_size;
-	}
-
-	int get_test_hit_rate() {
-		return test_hit_rate;
-	}
-
-	static int get_default_SA_min_cell_size() {
-		return 12;
-	}
-
-	static int get_default_RAID_block_size() {
-		return 16;
-	}
-};
-
 extern sys_parameters params;
 
 class io_request;
