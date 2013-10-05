@@ -4,15 +4,12 @@
 #include "parameters.h"
 #include "exception.h"
 
-#define NUM_PAGES (4096 * nthreads)
+#define NUM_PAGES (4096 * config.get_nthreads())
 
 bool align_req = false;
 int align_size = PAGE_SIZE;
-extern bool use_aio;
 
-extern bool verify_read_content;
 extern struct timeval global_start;
-extern int nthreads;
 
 void check_read_content(char *buf, int size, off_t off)
 {
@@ -85,8 +82,7 @@ public:
 	int invoke(io_request *rqs[], int num) {
 		for (int i = 0; i < num; i++) {
 			io_request *rq = rqs[i];
-			extern bool verify_read_content;
-			if (rq->get_access_method() == READ && verify_read_content) {
+			if (rq->get_access_method() == READ && config.is_verify_read()) {
 				off_t off = rq->get_offset();
 				for (int i = 0; i < rq->get_num_bufs(); i++) {
 					check_read_content(rq->get_buf(i), rq->get_buf_size(i), off);
@@ -117,18 +113,16 @@ ssize_t thread_private::get_read_bytes() {
 }
 
 void thread_private::init() {
-	extern int io_depth_per_file;
 	io = factory->create_io(this);
-	io->set_max_num_pending_ios(io_depth_per_file);
+	io->set_max_num_pending_ios(sys_params.get_aio_depth_per_file());
 	io->init();
 
-	extern int buf_size;
-	rand_buf *buf = new rand_buf(NUM_PAGES / (nthreads
+	rand_buf *buf = new rand_buf(NUM_PAGES / (config.get_nthreads()
 				// TODO maybe I should set the right entry size for a buffer.
 				// If each access size is irregular, I'll break each access
 				// into pages so each access is no larger than a page, so it
 				// should workl fine.
-				/ NUM_NODES) * PAGE_SIZE, buf_size, node_id);
+				/ NUM_NODES) * PAGE_SIZE, config.get_buf_size(), node_id);
 	this->buf = buf;
 	if (io->support_aio()) {
 		cb = new cleanup_callback(buf, idx, this);
@@ -142,14 +136,13 @@ void thread_private::run()
 	gettimeofday(&start_time, NULL);
 	io_request reqs[NUM_REQS_BY_USER];
 	char *entry = NULL;
-	if (!io->support_aio())
-		use_aio = false;
-	if (!use_aio) {
-		extern int buf_size;
-		entry = (char *) valloc(buf_size);
+	if (config.is_use_aio())
+		assert(io->support_aio());
+	if (!config.is_use_aio()) {
+		entry = (char *) valloc(config.get_buf_size());
 	}
 	while (gen->has_next()) {
-		if (use_aio) {
+		if (config.is_use_aio()) {
 			int i;
 			int num_reqs_by_user = min(io->get_remaining_io_slots(), NUM_REQS_BY_USER);
 			for (i = 0; i < num_reqs_by_user && gen->has_next(); ) {
@@ -166,7 +159,7 @@ void thread_private::run()
 				 * If the size of the request is larger than a page size,
 				 * and the user explicitly wants to use multibuf requests.
 				 */
-				if (buf_type == MULTI_BUF) {
+				if (config.get_buf_type() == MULTI_BUF) {
 					throw unsupported_exception();
 #if 0
 					assert(off % PAGE_SIZE == 0);
@@ -179,7 +172,7 @@ void thread_private::run()
 					i++;
 #endif
 				}
-				else if (buf_type == SINGLE_SMALL_BUF) {
+				else if (config.get_buf_type() == SINGLE_SMALL_BUF) {
 again:
 					num_reqs_by_user = min(io->get_remaining_io_slots(), NUM_REQS_BY_USER);
 					while (size > 0 && i < num_reqs_by_user) {
@@ -189,7 +182,7 @@ again:
 						char *p = buf->next_entry(next_off - off);
 						if (p == NULL)
 							break;
-						if (access_method == WRITE && verify_read_content)
+						if (access_method == WRITE && config.is_verify_read())
 							create_write_data(p, next_off - off, off);
 						reqs[i].init(p, off, next_off - off, access_method,
 								io, node_id);
@@ -217,7 +210,7 @@ again:
 					char *p = buf->next_entry(size);
 					if (p == NULL)
 						break;
-					if (access_method == WRITE && verify_read_content)
+					if (access_method == WRITE && config.is_verify_read())
 						create_write_data(p, size, off);
 					reqs[i++].init(p, off, size, access_method, io, node_id);
 				}
@@ -252,13 +245,13 @@ again:
 					- ROUND(off, align_size);
 			}
 
-			if (buf_type == SINGLE_SMALL_BUF) {
+			if (config.get_buf_type() == SINGLE_SMALL_BUF) {
 				while (entry_size > 0) {
 					/*
 					 * generate the data for writing the file,
 					 * so the data in the file isn't changed.
 					 */
-					if (access_method == WRITE && verify_read_content) {
+					if (access_method == WRITE && config.is_verify_read()) {
 						create_write_data(entry, entry_size, off);
 					}
 					// There is at least one byte we need to access in the page.
@@ -272,7 +265,7 @@ again:
 					assert(!(status == IO_UNSUPPORTED));
 					if (status == IO_OK) {
 						num_accesses++;
-						if (access_method == READ && verify_read_content) {
+						if (access_method == READ && config.is_verify_read()) {
 							check_read_content(entry, next_off - off, off);
 						}
 						read_bytes += ret;
@@ -286,7 +279,7 @@ again:
 				}
 			}
 			else {
-				if (access_method == WRITE && verify_read_content) {
+				if (access_method == WRITE && config.is_verify_read()) {
 					create_write_data(entry, entry_size, off);
 				}
 				io_status status = io->access(entry, off, entry_size,
@@ -294,7 +287,7 @@ again:
 				assert(!(status == IO_UNSUPPORTED));
 				if (status == IO_OK) {
 					num_accesses++;
-					if (access_method == READ && verify_read_content) {
+					if (access_method == READ && config.is_verify_read()) {
 						check_read_content(entry, entry_size, off);
 					}
 					read_bytes += ret;

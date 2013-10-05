@@ -32,6 +32,7 @@
 #include "RAID_config.h"
 #include "io_interface.h"
 #include "cache_config.h"
+#include "config.h"
 
 //#define USE_PROCESS
 
@@ -43,17 +44,8 @@ enum {
 	MMAP,
 };
 
-long npages;
-int entry_size = 128;
-int nthreads = 1;
-int buf_type = SINGLE_LARGE_BUF;
-int buf_size = PAGE_SIZE;
 struct timeval global_start;
 char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
-bool verify_read_content = false;
-bool high_prio = false;
-int io_depth_per_file = 32;
-bool use_aio = true;
 
 thread_private *threads[NUM_THREADS];
 
@@ -64,15 +56,6 @@ str2int access_methods[] = {
 	{ "remote", REMOTE_ACCESS },
 	{ "global_cache", GLOBAL_CACHE_ACCESS },
 	{ "parted_global", PART_GLOBAL_ACCESS },
-};
-
-enum {
-	SEQ_OFFSET,
-	RAND_OFFSET,
-	RAND_SEQ_OFFSET,
-	RAND_PERMUTE,
-	HIT_DEFINED,
-	USER_FILE_WORKLOAD = -1
 };
 
 str2int workloads[] = {
@@ -94,96 +77,16 @@ str2int req_buf_types[] = {
 std::string prof_file = "rand-read.prof";
 #endif
 
-void int_handler(int sig_num)
+test_config config;
+
+void test_config::init(const std::map<std::string, std::string> configs)
 {
-#ifdef PROFILER
-	if (!prof_file.empty())
-		ProfilerStop();
-#endif
-#ifdef STATISTICS
-	for (int i = 0; i < nthreads; i++) {
-		if (threads[i])
-			threads[i]->print_stat();
-	}
-	print_io_thread_stat();
-#endif
-	exit(0);
-}
-
-const long TEST_DATA_SIZE = 15L * 1024 * 1024 * 4096;
-
-void read_config_file(const std::string &conf_file,
-		std::map<std::string, std::string> &configs)
-{
-	FILE *f = fopen(conf_file.c_str(), "r");
-	if (f == NULL) {
-		perror("fopen");
-		assert(0);
-	}
-
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
-	while ((read = getline(&line, &len, f)) > 0) {
-		std::string str = line;
-		size_t found = str.find("=");
-		/* if there isn't `=', I assume it's a file name*/
-		if (found == std::string::npos) {
-			fprintf(stderr, "wrong format: %s\n", line);
-			assert(0);
-		}
-
-		std::string value = str.substr(found + 1);
-		value.erase(std::remove_if(value.begin(), value.end(), isspace),
-				value.end());
-		std::string key = str.substr(0, found);
-		key.erase(std::remove_if(key.begin(), key.end(), isspace),
-				key.end());
-		configs.insert(std::pair<std::string, std::string>(key, value));
-	}
-	fclose(f);
-}
-
-int main(int argc, char *argv[])
-{
-	int access_option = -1;
-	int ret = 0;
-	struct timeval start_time, end_time;
-	ssize_t read_bytes = 0;
-	int num_nodes = 1;
-	int workload = RAND_OFFSET;
-	// No cache hits.
-	double hit_ratio = 0;
-	// All reads
-	double read_ratio = -1;
-	int num_repeats = 1;
-	std::string workload_file;
 	str2int_map access_map(access_methods,
 			sizeof(access_methods) / sizeof(access_methods[0]));
 	str2int_map workload_map(workloads, 
 			sizeof(workloads) / sizeof(workloads[0]));
 	str2int_map buf_type_map(req_buf_types,
 			sizeof(req_buf_types) / sizeof(req_buf_types[0]));
-
-	if (argc < 3) {
-		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read conf_file data_file\n");
-
-		fprintf(stderr, "read files option pages threads cache_size entry_size workload cache_type num_nodes verify_content high_prio multibuf buf_size hit_percent read_percent repeats RAID_mapping RAID_block_size SA_cell_size io_depth sync\n");
-		access_map.print("available access options: ");
-		workload_map.print("available workloads: ");
-		buf_type_map.print("available buf types: ");
-		exit(1);
-	}
-	std::string conf_file = argv[1];
-	std::string file_file = argv[2];
-
-	signal(SIGINT, int_handler);
-	// The file that contains all data files.
-
-	std::map<std::string, std::string> configs;
-	read_config_file(conf_file, configs);
-	sys_params.init(configs);
 
 	std::map<std::string, std::string>::const_iterator it;
 
@@ -278,27 +181,168 @@ int main(int argc, char *argv[])
 		prof_file = it->second;
 	}
 #endif
+}
+
+void test_config::print()
+{
+	printf("the configuration of the test program\n");
+	printf("\toption: %d\n", access_option);
+	printf("\tpages: %ld\n", npages);
+	printf("\tthreads: %d\n", nthreads);
+	printf("\tnum_nodes: %d\n", num_nodes);
+	printf("\tread_ratio: %f\n", read_ratio);
+	printf("\trepeats: %d\n", num_repeats);
+	printf("\tentry_size: %d\n", entry_size);
+	printf("\tworkload: %d\n", workload);
+	printf("\tverify_content: %d\n", verify_read_content);
+	printf("\thigh_prio: %d\n", high_prio);
+	printf("\tbuf_type: %d\n", buf_type);
+	printf("\tbuf_size: %d\n", buf_size);
+	printf("\tsync: %d\n", !use_aio);
+}
+
+void test_config::print_help()
+{
+	str2int_map access_map(access_methods,
+			sizeof(access_methods) / sizeof(access_methods[0]));
+	str2int_map workload_map(workloads, 
+			sizeof(workloads) / sizeof(workloads[0]));
+	str2int_map buf_type_map(req_buf_types,
+			sizeof(req_buf_types) / sizeof(req_buf_types[0]));
+
+	printf("test options:\n");
+	access_map.print("access options: ");
+	printf("\tpages: the number of pages to access in a synthetic workload\n");
+	printf("\tread_ratio: the read percentage of a synthetic workload\n");
+	printf("\trepeats: the number of repeats in a random permutation workload\n");
+	printf("\tthreads: the number of test threads\n");
+	printf("\tnum_nodes: the number of NUMA nodes the test program should run\n");
+	printf("\tentry_size: the size of each access\n");
+	workload_map.print("workloads: ");
+	printf("\tverify_content: to verify the data read from the disks\n");
+	printf("\thigh_prio: run the test program in a higher OS priority\n");
+	buf_type_map.print("buf types: ");
+	printf("\tbuf_size: the buffer size for each access\n");
+	printf("\tsync: whether to use sync or async\n");
+}
+
+void int_handler(int sig_num)
+{
+#ifdef PROFILER
+	if (!prof_file.empty())
+		ProfilerStop();
+#endif
+#ifdef STATISTICS
+	for (int i = 0; i < config.get_nthreads(); i++) {
+		if (threads[i])
+			threads[i]->print_stat();
+	}
+	print_io_thread_stat();
+#endif
+	exit(0);
+}
+
+const long TEST_DATA_SIZE = 15L * 1024 * 1024 * 4096;
+
+void read_config_file(const std::string &conf_file,
+		std::map<std::string, std::string> &configs)
+{
+	FILE *f = fopen(conf_file.c_str(), "r");
+	if (f == NULL) {
+		perror("fopen");
+		assert(0);
+	}
+
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
+	while ((read = getline(&line, &len, f)) > 0) {
+		std::string str = line;
+		size_t found = str.find("=");
+		/* if there isn't `=', I assume it's a file name*/
+		if (found == std::string::npos) {
+			fprintf(stderr, "wrong format: %s\n", line);
+			assert(0);
+		}
+
+		std::string value = str.substr(found + 1);
+		value.erase(std::remove_if(value.begin(), value.end(), isspace),
+				value.end());
+		std::string key = str.substr(0, found);
+		key.erase(std::remove_if(key.begin(), key.end(), isspace),
+				key.end());
+		configs.insert(std::pair<std::string, std::string>(key, value));
+	}
+	fclose(f);
+}
+
+void parse_args(int argc, char *argv[],
+		std::map<std::string, std::string> &configs)
+{
+	for (int i = 0; i < argc; i++) {
+		std::string str = argv[i];
+
+		size_t found = str.find("=");
+		/* if there isn't `=', I assume it's a file name*/
+		if (found == std::string::npos) {
+			fprintf(stderr, "wrong format: %s\n", argv[i]);
+			assert(0);
+		}
+
+		std::string value = str.substr(found + 1);
+		value.erase(std::remove_if(value.begin(), value.end(), isspace),
+				value.end());
+		std::string key = str.substr(0, found);
+		key.erase(std::remove_if(key.begin(), key.end(), isspace),
+				key.end());
+		configs.insert(std::pair<std::string, std::string>(key, value));
+	}
+}
+
+int main(int argc, char *argv[])
+{
+	int ret = 0;
+	struct timeval start_time, end_time;
+	ssize_t read_bytes = 0;
+
+	if (argc < 3) {
+		fprintf(stderr, "there are %d argments\n", argc);
+		fprintf(stderr, "read conf_file data_file [conf_key=conf_value]\n");
+
+		config.print_help();
+		sys_params.print_help();
+		exit(1);
+	}
+	std::string conf_file = argv[1];
+	std::string file_file = argv[2];
+
+	signal(SIGINT, int_handler);
+	// The file that contains all data files.
+
+	std::map<std::string, std::string> configs;
+	read_config_file(conf_file, configs);
+	parse_args(argc - 3, argv + 3, configs);
+	sys_params.init(configs);
+	config.init(configs);
 
 	sys_params.print();
-	printf("access: %d, npages: %ld, nthreads: %d, entry_size: %d, workload: %d, num_nodes: %d, verify_content: %d, high_prio: %d, hit_ratio: %f, read_ratio: %f, repeats: %d\n",
-			access_option, npages, nthreads, entry_size, workload, num_nodes,
-			verify_read_content, high_prio, hit_ratio, read_ratio, num_repeats);
+	config.print();
 
 	printf("use a different random sequence\n");
 	srandom(time(NULL));
 
 	int flags = O_RDWR;
-	if (access_option != READ_ACCESS) {
+	if (config.get_access_option() != READ_ACCESS) {
 		printf("file is opened with direct I/O\n");
 		flags |= O_DIRECT;
 	}
 
-	if (nthreads > NUM_THREADS) {
+	if (config.get_nthreads() > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
 		exit(1);
 	}
 
-	int remainings = npages % nthreads;
+	int remainings = config.get_npages() % config.get_nthreads();
 	int shift = 0;
 	long start;
 	long end = 0;
@@ -309,25 +353,26 @@ int main(int argc, char *argv[])
 	std::set<int> node_ids = raid_conf.get_node_ids();
 	// In this way, we can guarantee that the cache is created
 	// on the nodes with the data files.
-	for (int i = 0; i < num_nodes
-			&& node_ids.size() < (unsigned) num_nodes; i++)
+	for (int i = 0; i < config.get_num_nodes()
+			&& node_ids.size() < (unsigned) config.get_num_nodes(); i++)
 		node_ids.insert(i);
 	std::vector<int> node_id_array;
 	// We only get a specified number of nodes.
 	for (std::set<int>::const_iterator it = node_ids.begin();
-			it != node_ids.end() && (int) node_id_array.size() < num_nodes; it++)
+			it != node_ids.end()
+			&& (int) node_id_array.size() < config.get_num_nodes(); it++)
 		node_id_array.push_back(*it);
 
-	assert(nthreads % num_nodes == 0);
-	assert(node_id_array.size() == (unsigned) num_nodes);
+	assert(config.get_nthreads() % config.get_num_nodes() == 0);
+	assert(node_id_array.size() == (unsigned) config.get_num_nodes());
 	printf("There are %ld nodes\n", node_id_array.size());
 
 	cache_config *cache_conf = NULL;
-	if (access_option == GLOBAL_CACHE_ACCESS)
+	if (config.get_access_option() == GLOBAL_CACHE_ACCESS)
 		cache_conf = new even_cache_config(sys_params.get_cache_size(),
 				sys_params.get_cache_type(), node_id_array);
-	else if (access_option == PART_GLOBAL_ACCESS) {
-		assert(num_nodes == 4);
+	else if (config.get_access_option() == PART_GLOBAL_ACCESS) {
+		assert(config.get_num_nodes() == 4);
 		cache_conf = new even_cache_config(sys_params.get_cache_size(),
 				sys_params.get_cache_type(), node_id_array);
 	}
@@ -335,8 +380,9 @@ int main(int argc, char *argv[])
 	init_io_system(raid_conf, node_id_array);
 
 	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
-			access_option, io_depth_per_file, cache_conf);
-	int nthread_per_node = nthreads / node_id_array.size();
+			config.get_access_option(), sys_params.get_aio_depth_per_file(),
+			cache_conf);
+	int nthread_per_node = config.get_nthreads() / node_id_array.size();
 	std::vector<workload_gen *> workload_gens;
 	for (unsigned i = 0; i < node_id_array.size(); i++) {
 		int node_id = node_id_array[i];
@@ -347,8 +393,8 @@ int main(int argc, char *argv[])
 			 * according to the offset.
 			 */
 			start = end;
-			end = start + ((long) npages / nthreads + (shift < remainings))
-				* PAGE_SIZE / entry_size;
+			end = start + ((long) config.get_npages() / config.get_nthreads()
+					+ (shift < remainings)) * PAGE_SIZE / config.get_entry_size();
 			if (remainings != shift)
 				shift++;
 #ifdef DEBUG
@@ -356,39 +402,33 @@ int main(int argc, char *argv[])
 #endif
 
 			workload_gen *gen;
-			switch (workload) {
+			switch (config.get_workload()) {
 				case SEQ_OFFSET:
-					gen = new seq_workload(start, end, entry_size);
+					gen = new seq_workload(start, end, config.get_entry_size());
 					break;
 				case RAND_OFFSET:
-					assert(read_ratio >= 0);
-					gen = new rand_workload(start, end, entry_size,
-							end - start, (int) (read_ratio * 100));
+					assert(config.get_read_ratio() >= 0);
+					gen = new rand_workload(start, end, config.get_entry_size(),
+							end - start, (int) (config.get_read_ratio() * 100));
 					break;
 				case RAND_SEQ_OFFSET:
-					gen = new rand_seq_workload(start, end, entry_size,
+					gen = new rand_seq_workload(start, end, config.get_entry_size(),
 							1024 * 1024 * 4);
 					break;
 				case RAND_PERMUTE:
-					assert(read_ratio >= 0);
-					gen = new global_rand_permute_workload(entry_size,
-							(((long) npages) * PAGE_SIZE) / entry_size,
-							num_repeats, read_ratio);
-					break;
-				case HIT_DEFINED:
-					assert(read_ratio >= 0);
-					gen = new cache_hit_defined_workload(entry_size,
-							(((long) npages) * PAGE_SIZE) / entry_size,
-							sys_params.get_cache_size(), hit_ratio, read_ratio);
+					assert(config.get_read_ratio() >= 0);
+					gen = new global_rand_permute_workload(config.get_entry_size(),
+							(((long) config.get_npages()) * PAGE_SIZE) / config.get_entry_size(),
+							config.get_num_repeats(), config.get_read_ratio());
 					break;
 				case -1:
 					{
 						static long length = 0;
 						static workload_t *workloads = NULL;
 						if (workloads == NULL)
-							workloads = load_file_workload(workload_file, length);
-						gen = new file_workload(workloads, length, j, nthreads,
-								(int) (read_ratio * 100));
+							workloads = load_file_workload(config.get_workload_file(), length);
+						gen = new file_workload(workloads, length, j, config.get_nthreads(),
+								(int) (config.get_read_ratio() * 100));
 						break;
 					}
 				default:
@@ -398,11 +438,11 @@ int main(int argc, char *argv[])
 			workload_gens.push_back(gen);
 
 			int idx = i * nthread_per_node + j;
-			threads[idx] = new thread_private(node_id, idx, entry_size, factory, gen);
+			threads[idx] = new thread_private(node_id, idx, config.get_entry_size(), factory, gen);
 		}
 	}
 
-	if (high_prio) {
+	if (config.is_high_prio()) {
 		ret = setpriority(PRIO_PROCESS, getpid(), -20);
 		if (ret < 0) {
 			perror("setpriority");
@@ -416,11 +456,11 @@ int main(int argc, char *argv[])
 	if (!prof_file.empty())
 		ProfilerStart(prof_file.c_str());
 #endif
-	for (int i = 0; i < nthreads; i++) {
+	for (int i = 0; i < config.get_nthreads(); i++) {
 		threads[i]->start();
 	}
 
-	for (int i = 0; i < nthreads; i++) {
+	for (int i = 0; i < config.get_nthreads(); i++) {
 		threads[i]->join();
 		read_bytes += threads[i]->get_read_bytes();
 	}
@@ -434,14 +474,14 @@ int main(int argc, char *argv[])
 			+ ((float)(end_time.tv_usec - start_time.tv_usec))/1000000);
 
 #ifdef STATISTICS
-	for (int i = 0; i < nthreads; i++) {
+	for (int i = 0; i < config.get_nthreads(); i++) {
 		threads[i]->print_stat();
 	}
 	print_io_thread_stat();
 #endif
 	for (unsigned i = 0; i < workload_gens.size(); i++)
 		delete workload_gens[i];
-	for (int i = 0; i < nthreads; i++)
+	for (int i = 0; i < config.get_nthreads(); i++)
 		delete threads[i];
 	destroy_io_factory(factory);
 	delete cache_conf;

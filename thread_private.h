@@ -6,14 +6,7 @@
 #include "garbage_collection.h"
 #include "io_interface.h"
 #include "thread.h"
-
-extern int buf_type;
-
-enum {
-	SINGLE_LARGE_BUF,
-	SINGLE_SMALL_BUF,
-	MULTI_BUF,
-};
+#include "config.h"
 
 class cleanup_callback;
 
@@ -88,8 +81,7 @@ public:
 
 	void print_stat() {
 #ifdef STATISTICS
-		extern int nthreads;
-		io->print_stat(nthreads);
+		io->print_stat(config.get_nthreads());
 		int avg_num_pending = 0;
 		if (num_sampling > 0)
 			avg_num_pending = tot_num_pending / num_sampling;
