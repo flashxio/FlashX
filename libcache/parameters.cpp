@@ -29,6 +29,7 @@ sys_parameters::sys_parameters()
 	cache_type = ASSOCIATIVE_CACHE;
 	cache_size = 512 * 1024 * 1024;
 	RAID_mapping_option = RAID5;
+	use_virt_aio = false;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -81,6 +82,10 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 			exit(1);
 		}
 	}
+
+	it = configs.find("virt_aio");
+	if (it != configs.end())
+		use_virt_aio = true;
 }
 
 void sys_parameters::print()

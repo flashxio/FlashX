@@ -20,11 +20,13 @@
 
 aio_ctx* aio_ctx::create_aio_ctx(int node_id, int max_aio)
 {
-#ifdef VIRT_AIO
-	aio_ctx *a_ctx = new virt_aio_ctx(node_id, max_aio);
-#else
-	aio_ctx* a_ctx = new aio_ctx_impl(node_id, max_aio);
-#endif
+	aio_ctx *a_ctx;
+
+	if (sys_params.is_use_virt_aio())
+		a_ctx = new virt_aio_ctx(node_id, max_aio);
+	else
+		a_ctx = new aio_ctx_impl(node_id, max_aio);
+
 	if (a_ctx == NULL)
 	{
 		perror("malloc aio_ctx");
