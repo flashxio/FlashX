@@ -440,7 +440,6 @@ remote_io_factory::remote_io_factory(const RAID_config &_raid_conf,
 
 	mapper = raid_conf.create_file_mapper();
 	int num_files = mapper->get_num_files();
-	assert(global_data.read_threads.size() >= node_id_array.size());
 	assert((int) global_data.read_threads.size() == num_files);
 
 	for (int i = 0; i < num_files; i++) {
