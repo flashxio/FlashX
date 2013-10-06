@@ -258,6 +258,11 @@ void read_config_file(const std::string &conf_file,
 	ssize_t read;
 	while ((read = getline(&line, &len, f)) > 0) {
 		std::string str = line;
+		if (str.length() == 1)
+			continue;
+		if (line[0] == '#')
+			continue;
+
 		size_t found = str.find("=");
 		/* if there isn't `=', I assume it's a file name*/
 		if (found == std::string::npos) {
