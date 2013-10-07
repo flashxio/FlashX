@@ -139,7 +139,7 @@ io_interface *get_io(int idx)
 io_interface *allocate_io(const std::string &file_name, int node_id)
 {
 	io_interface *ret = ios.allocate_io(file_name, node_id);
-	assert(ret);
+	ASSERT_TRUE(ret != NULL);
 	return ret;
 }
 
