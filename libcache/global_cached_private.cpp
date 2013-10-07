@@ -901,6 +901,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 
 void global_cached_io::access(io_request *requests, int num, io_status *status)
 {
+	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	num_issued_areqs.inc(num);
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();

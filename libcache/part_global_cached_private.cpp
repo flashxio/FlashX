@@ -630,6 +630,7 @@ int part_global_cached_io::process_replies()
 
 void part_global_cached_io::access(io_request *requests, int num, io_status status[])
 {
+	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	// TODO I'll write status to the status array later.
 	int num_sent = 0;
 	int num_remaining = distribute_reqs(&requests[num_sent], num - num_sent);

@@ -35,6 +35,7 @@ int buffered_io::init() {
 }
 
 io_status buffered_io::access(char *buf, off_t offset, ssize_t size, int access_method) {
+	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	int fd;
 	if (fds.size() == 1)
 		fd = fds[0];

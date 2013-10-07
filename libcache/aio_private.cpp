@@ -176,6 +176,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 
 void async_io::access(io_request *requests, int num, io_status *status)
 {
+	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	while (num > 0) {
 		int slot = ctx->max_io_slot();
 		if (slot == 0) {

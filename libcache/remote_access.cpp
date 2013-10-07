@@ -135,6 +135,7 @@ void remote_disk_access::cleanup()
 void remote_disk_access::access(io_request *requests, int num,
 		io_status *status)
 {
+	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	num_issued_reqs.inc(num);
 
 	bool syncd = false;
