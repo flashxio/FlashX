@@ -22,12 +22,13 @@ int ssd_fd_node_id(ssd_file_desc_t fd);
 /**
  * For async IO.
  */
-typedef void (*ssd_callback_func_t)(void *, int);
-void ssd_set_callback(ssd_file_desc_t fd, ssd_callback_func_t);
-ssize_t ssd_aread(ssd_file_desc_t fd, void *buf, size_t count, off_t off,
-		void *callback_data);
-ssize_t ssd_awrite(ssd_file_desc_t fd, void *buf, size_t count, off_t off,
-		void *callback_data);
+typedef void (*ssd_callback_func_t)(off_t off, void *buffer, int size,
+		void *cb_data, int status);
+void ssd_set_callback(ssd_file_desc_t fd, ssd_callback_func_t, void *cb_data);
+ssize_t ssd_aread(ssd_file_desc_t fd, void *buf, size_t count, off_t off);
+ssize_t ssd_awrite(ssd_file_desc_t fd, void *buf, size_t count, off_t off);
+int ssd_wait(ssd_file_desc_t fd, int num);
+int ssd_get_io_slots(ssd_file_desc_t fd);
 
 struct buf_pool;
 struct buf_pool *create_buf_pool(int obj_size, long pool_size, int node_id);

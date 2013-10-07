@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <vector>
+#include <tr1/unordered_map>
 
 #include "slab_allocator.h"
 #include "io_interface.h"
@@ -21,7 +22,7 @@ static int cache_type = ASSOCIATIVE_CACHE;
 static int RAID_block_size = 16;		// in the number of pages.
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-static std::set<std::string> opened_files;
+static std::tr1::unordered_map<std::string, file_io_factory *> opened_files;
 
 struct data_fill_struct
 {
@@ -34,6 +35,17 @@ struct data_fill_struct
 struct ssd_file_desc
 {
 	io_interface *io;
+};
+
+class fake_thread: public thread
+{
+public:
+	fake_thread(int node_id): thread(std::string("fake-thread-node")
+			+ itoa(node_id), node_id) {
+	}
+
+	void run() {
+	}
 };
 
 static void *fill_space(void *arg)
@@ -81,15 +93,17 @@ static size_t get_filesize(int fd)
 class user_callback: public callback
 {
 	ssd_callback_func_t cb;
+	void *cb_data;
 public:
-	user_callback(ssd_callback_func_t cb) {
+	user_callback(ssd_callback_func_t cb, void *cb_data) {
 		this->cb = cb;
+		this->cb_data = cb_data;
 	}
 
 	int invoke(io_request *rqs[], int num) {
 		for (int i = 0; i < num; i++) {
-			assert(rqs[i]->get_user_data());
-			cb(rqs[i]->get_user_data(), 0);
+			cb(rqs[i]->get_offset(), rqs[i]->get_buf(), rqs[i]->get_size(),
+					cb_data, 0);
 		}
 		return 0;
 	}
@@ -135,7 +149,6 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 		pthread_mutex_unlock(&mutex);
 		return;
 	}
-	opened_files.insert(name);
 
 	printf("Init SSDIO with %d threads and %d nodes\n",
 			num_threads, num_nodes);
@@ -169,6 +182,19 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 			node_id_array.push_back(*it);
 	}
 	printf("There are %ld nodes\n", node_id_array.size());
+
+	int access_option = GLOBAL_CACHE_ACCESS;
+	cache_config *cache_conf = NULL;
+	if (flags | O_DIRECT)
+		access_option = REMOTE_ACCESS;
+	else
+		cache_conf = new even_cache_config(sys_params.get_cache_size(),
+				sys_params.get_cache_type(), node_id_array);
+
+	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
+			access_option, sys_params.get_aio_depth_per_file(), cache_conf);
+	opened_files.insert(std::pair<std::string, file_io_factory *>(name,
+				factory));
 
 	pthread_mutex_unlock(&mutex);
 }
@@ -217,7 +243,8 @@ int ssd_create(const char *name, size_t tot_size)
 
 ssd_file_desc_t ssd_open(const char *name, int node_id, int flags)
 {
-	io_interface *io = allocate_io(std::string(name), node_id);
+	thread *t = new fake_thread(node_id);
+	io_interface *io = opened_files[name]->create_io(t);
 	assert(io);
 	ssd_file_desc_t desc = new struct ssd_file_desc;
 	desc->io = io;
@@ -279,38 +306,43 @@ size_t ssd_get_filesize(const char *name)
 	return tot_size;
 }
 
-void ssd_set_callback(ssd_file_desc_t fd, ssd_callback_func_t cb)
+void ssd_set_callback(ssd_file_desc_t fd, ssd_callback_func_t cb, void *cb_data)
 {
 	io_interface *io = fd->io;
 	assert(io->support_aio());
-	io->set_callback(new user_callback(cb));
+	io->set_callback(new user_callback(cb, cb_data));
 }
 
-ssize_t ssd_aread(ssd_file_desc_t fd, void *buf, size_t count, off_t off,
-		void *callback_data)
+ssize_t ssd_aread(ssd_file_desc_t fd, void *buf, size_t count, off_t off)
 {
 	io_interface *io = fd->io;
 	assert(io->support_aio());
-	io_req_extension *ext = new io_req_extension();
-	ext->set_user_data(callback_data);
-	ext->add_buf((char *) buf, count, 0);
-	io_request req(ext, off, READ, io, io->get_node_id());
+	io_request req((char *) buf, off, count, READ, io, io->get_node_id());
 	io->access(&req, 1);
 	return 0;
 }
 
-ssize_t ssd_awrite(ssd_file_desc_t fd, void *buf, size_t count, off_t off,
-		void *callback_data)
+ssize_t ssd_awrite(ssd_file_desc_t fd, void *buf, size_t count, off_t off)
 {
 	io_interface *io = fd->io;
 	assert(io->support_aio());
-	io_req_extension *ext = new io_req_extension();
-	ext->set_user_data(callback_data);
-	ext->add_buf((char *) buf, count, 0);
-	io_request req(ext, off, WRITE, io, io->get_node_id());
-	req.set_user_data(callback_data);
+	io_request req((char *) buf, off, count, WRITE, io, io->get_node_id());
 	io->access(&req, 1);
 	return 0;
+}
+
+int ssd_wait(ssd_file_desc_t fd, int num)
+{
+	io_interface *io = fd->io;
+	assert(io->support_aio());
+	return io->wait4complete(num);
+}
+
+int ssd_get_io_slots(ssd_file_desc_t fd)
+{
+	io_interface *io = fd->io;
+	assert(io->support_aio());
+	return io->get_remaining_io_slots();
 }
 
 int ssd_fd_node_id(ssd_file_desc_t fd)
