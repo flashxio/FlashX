@@ -21,19 +21,18 @@ enum {
 
 off_t *offs;
 int num_threads = 16;
-char *file_name_root = "../conf/data_files.txt";
 char *prof_file = "test_c_interface.prof";
-long data_size = 1024L * 1024 * 4096 * 32;
+long data_size = 1024L * 1024 * 4096;
 int block_size = 4096;
 int num_nodes = 1;
 int sync = 0;
 int access = READ;
-int file_per_proc = 1;
+int file_per_proc = 0;
 
 struct thread_data
 {
 	pthread_t tid;
-	ssd_file_desc_t fd;
+	char file_name[128];
 	int node_id;
 	int off_start;
 	int num;
@@ -56,31 +55,28 @@ struct callback_data
 	char *buffer;
 	volatile int *num_completes;
 	struct buf_pool *buf_allocator;
-	struct buf_pool *cb_allocator;
 };
 
-void cb_func(void *arg, int status)
+void cb_func(off_t off, void *buf, int size, void *cb_data, int status)
 {
-	struct callback_data *data = arg;
+	struct callback_data *data = cb_data;
 	struct buf_pool *buf_allocator = data->buf_allocator;
-	struct buf_pool *cb_allocator = data->cb_allocator;
 
 	__sync_fetch_and_add(data->num_completes, 1);
-	free_buf(buf_allocator, data->buffer);
-	free_buf(cb_allocator, data);
+	free_buf(buf_allocator, buf);
 }
 
 void *SyncThreadWriteOrRead(void *arg)
 {
 	struct thread_data *data = arg;
 	bind2node_id(data->node_id);
-	ssd_file_desc_t fd = data->fd;
-	int node_id = ssd_fd_node_id(fd);
-	assert(node_id == data->node_id);
+	int node_id = data->node_id;
 	int num = data->num;
 	int off_start = data->off_start;
 	int i;
 	char *buffer = (char *) numa_alloc_onnode(block_size, node_id);
+
+	ssd_file_desc_t fd = ssd_open(data->file_name, node_id, 0);
 
 	printf("thread %d: access %d blocks\n", data->idx, num);
 	for (i = 0; i < num; i++) {
@@ -100,33 +96,34 @@ void *AsyncThreadWriteOrRead(void *arg)
 {
 	struct thread_data *data = arg;
 	bind2node_id(data->node_id);
-	ssd_file_desc_t fd = data->fd;
-	int node_id = ssd_fd_node_id(fd);
-	assert(node_id == data->node_id);
+	int node_id = data->node_id;
 	int num_completes = 0;
 	int num = data->num;
 	int off_start = data->off_start;
 	int i;
 
+	ssd_file_desc_t fd = ssd_open(data->file_name, node_id, 0);
+
 	struct buf_pool *buf_allocator = create_buf_pool(block_size,
 			block_size * 10000, node_id);
-	struct buf_pool *cb_allocator = create_buf_pool(sizeof(struct callback_data),
-			sizeof(struct callback_data) * 10000, node_id);
+	struct callback_data *cb_data = (struct callback_data *) malloc(sizeof(*cb_data));
+	assert(cb_data);
+	cb_data->num_completes = &num_completes;
+	cb_data->buf_allocator = buf_allocator;
 
-	ssd_set_callback(fd, cb_func);
+	ssd_set_callback(fd, cb_func, cb_data);
 
 	for (i = 0; i < num; i++) {
 		char *buffer = alloc_buf(buf_allocator);
+		assert(buffer);
 		off_t offset = offs[off_start + i];
-		struct callback_data *cb_data = alloc_buf(cb_allocator);
-		cb_data->buffer = buffer;
-		cb_data->num_completes = &num_completes;
-		cb_data->buf_allocator = buf_allocator;
-		cb_data->cb_allocator = cb_allocator;
 		if (access == READ)
-			ssd_aread(fd, (void *) buffer, block_size, offset, (void *) cb_data);
+			ssd_aread(fd, (void *) buffer, block_size, offset);
 		else
-			ssd_awrite(fd, (void *) buffer, block_size, offset, (void *) cb_data);
+			ssd_awrite(fd, (void *) buffer, block_size, offset);
+		if (ssd_get_io_slots(fd) == 0) {
+			ssd_wait(fd, 1);
+		}
 	}
 
 	ssd_close(fd);
@@ -139,10 +136,16 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
 	int i;
 	int num_offs;
+	char *file_name_root;
+
+	if (argc < 2) {
+		fprintf(stderr, "test data_file\n");
+		return -1;
+	}
 
 	if (file_per_proc)
 		num_offs = data_size / block_size / num_threads;
@@ -152,14 +155,17 @@ int main()
 	for (i = 0; i < num_offs; i++)
 		offs[i] = i * (long) block_size;
 	rand_permute_array(offs, num_offs);
+	printf("generate random offsets\n");
 
 	signal(SIGINT, int_handler);
 	int node_ids[num_nodes];
 	for (i = 0; i < num_nodes; i++)
 		node_ids[i] = i;
+	file_name_root = argv[1];
 	ssd_init_io_system(file_name_root, node_ids, num_nodes);
 	if (file_per_proc)
 		set_cache_size(512 * 1024 * 1024 / num_threads);
+	printf("init IO system\n");
 
 	char file_name_buf[128];
 	char *file_name;
@@ -189,8 +195,10 @@ int main()
 			file_name = file_name_root;
 			ssd_file_io_init(file_name, 0, num_threads, num_nodes, NULL);
 		}
+		printf("init file IO\n");
 
-		data[i].fd = ssd_open(file_name, data->node_id, 0);
+		printf("open file %s\n", file_name);
+		strncpy(data[i].file_name, file_name, sizeof(data[i].file_name));
 		int ret;
 		if (sync)
 			ret = pthread_create(&data[i].tid, NULL, SyncThreadWriteOrRead,

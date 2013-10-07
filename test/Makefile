@@ -1,4 +1,5 @@
-CC = g++
+CC = gcc
+CXX = g++
 
 ifdef MEMCHECK
 TRACE_FLAGS = -faddress-sanitizer
@@ -11,8 +12,8 @@ endif
 
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
-LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -lprofiler -L../nbds.0.4.3/ -lnbds $(TRACE_FLAGS) -lrt
-UNITTEST = file_mapper_unit_test slab_allocator_test
+LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -lprofiler -L../nbds.0.4.3/ -lnbds $(TRACE_FLAGS) -lrt -rdynamic
+UNITTEST = file_mapper_unit_test slab_allocator_test test_c_interface
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -I../include -g
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
