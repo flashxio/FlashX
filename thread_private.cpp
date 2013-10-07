@@ -117,12 +117,8 @@ void thread_private::init() {
 	io->set_max_num_pending_ios(sys_params.get_aio_depth_per_file());
 	io->init();
 
-	rand_buf *buf = new rand_buf(NUM_PAGES / (config.get_nthreads()
-				// TODO maybe I should set the right entry size for a buffer.
-				// If each access size is irregular, I'll break each access
-				// into pages so each access is no larger than a page, so it
-				// should workl fine.
-				/ NUM_NODES) * PAGE_SIZE, config.get_buf_size(), node_id);
+	rand_buf *buf = new rand_buf(NUM_PAGES / config.get_nthreads() * PAGE_SIZE,
+			config.get_buf_size(), node_id);
 	this->buf = buf;
 	if (io->support_aio()) {
 		cb = new cleanup_callback(buf, idx, this);
@@ -335,7 +331,7 @@ void thread_private::run()
 
 int thread_private::attach2cpu()
 {
-#if NCPUS > 0
+#if 0
 	cpu_set_t cpuset;
 	pthread_t thread = pthread_self();
 	CPU_ZERO(&cpuset);
@@ -347,9 +343,8 @@ int thread_private::attach2cpu()
 		exit(1);
 	}
 	return ret;
-#else
-	return -1;
 #endif
+	return 0;
 }
 
 #ifdef USE_PROCESS

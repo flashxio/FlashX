@@ -72,9 +72,6 @@ public:
 		seen_threads++;
 		if (seen_threads == nthreads) {
 			printf("there are %ld reads and takes %ldus\n", tot_nreads, tot_read_time);
-#if NUM_NODES > 1
-			printf("total remote reads: %ld\n", tot_remote_reads);
-#endif
 		}
 	}
 #endif
