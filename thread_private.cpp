@@ -130,9 +130,94 @@ void thread_private::init() {
 	}
 }
 
-void thread_private::run()
+class work2req_converter
+{
+	workload_t workload;
+	int align_size;
+	rand_buf *buf;
+	io_interface *io;
+public:
+	work2req_converter(io_interface *io, rand_buf * buf, int align_size) {
+		workload.off = -1;
+		workload.size = -1;
+		workload.read = 0;
+		this->align_size = align_size;
+		this->buf = buf;
+		this->io = io;
+	}
+
+	void init(const workload_t &workload) {
+		this->workload = workload;
+		if (align_size > 0) {
+			this->workload.off = ROUND(workload.off, align_size);
+			this->workload.size = ROUNDUP(workload.off
+					+ workload.size, align_size)
+				- ROUND(workload.off, align_size);
+		}
+	}
+
+	bool has_complete() const {
+		return workload.size <= 0;
+	}
+
+	int to_reqs(int buf_type, int num, io_request reqs[]);
+};
+
+int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
 {
 	int node_id = io->get_node_id();
+	int access_method = workload.read ? READ : WRITE;
+	off_t off = workload.off;
+	int size = workload.size;
+
+	if (buf_type == MULTI_BUF) {
+		throw unsupported_exception();
+#if 0
+		assert(off % PAGE_SIZE == 0);
+		int num_vecs = size / PAGE_SIZE;
+		reqs[i].init(off, io, access_method, node_id);
+		assert(buf->get_entry_size() >= PAGE_SIZE);
+		for (int k = 0; k < num_vecs; k++) {
+			reqs[i].add_buf(buf->next_entry(PAGE_SIZE), PAGE_SIZE);
+		}
+		workload.off += size;
+		workload.size = 0;
+#endif
+	}
+	else if (buf_type == SINGLE_SMALL_BUF) {
+		int i = 0;
+		while (size > 0 && i < num) {
+			off_t next_off = ROUNDUP_PAGE(off + 1);
+			if (next_off > off + size)
+				next_off = off + size;
+			char *p = buf->next_entry(next_off - off);
+			if (p == NULL)
+				break;
+			if (access_method == WRITE && config.is_verify_read())
+				create_write_data(p, next_off - off, off);
+			reqs[i].init(p, off, next_off - off, access_method,
+					io, node_id);
+			size -= next_off - off;
+			off = next_off;
+			i++;
+		}
+		workload.off = off;
+		workload.size = size;
+		return i;
+	}
+	else {
+		char *p = buf->next_entry(size);
+		if (p == NULL)
+			return 0;
+		if (access_method == WRITE && config.is_verify_read())
+			create_write_data(p, size, off);
+		reqs[0].init(p, off, size, access_method, io, node_id);
+		return 1;
+	}
+}
+
+void thread_private::run()
+{
 	gettimeofday(&start_time, NULL);
 	io_request reqs[NUM_REQS_BY_USER];
 	char *entry = NULL;
@@ -141,82 +226,23 @@ void thread_private::run()
 	if (!config.is_use_aio()) {
 		entry = (char *) valloc(config.get_buf_size());
 	}
+	work2req_converter converter(io, buf, align_size);
 	while (gen->has_next()) {
 		if (config.is_use_aio()) {
 			int i;
 			int num_reqs_by_user = min(io->get_remaining_io_slots(), NUM_REQS_BY_USER);
-			for (i = 0; i < num_reqs_by_user && gen->has_next(); ) {
-				workload_t workload = gen->next();
-				int access_method = workload.read ? READ : WRITE;
-				off_t off = workload.off;
-				int size = workload.size;
-				if (align_req) {
-					off = ROUND(off, align_size);
-					size = ROUNDUP(off + size, align_size)
-						- ROUND(off, align_size);
+			for (i = 0; i < num_reqs_by_user; ) {
+				if (converter.has_complete() && gen->has_next()) {
+					converter.init(gen->next());
 				}
-				/*
-				 * If the size of the request is larger than a page size,
-				 * and the user explicitly wants to use multibuf requests.
-				 */
-				if (config.get_buf_type() == MULTI_BUF) {
-					throw unsupported_exception();
-#if 0
-					assert(off % PAGE_SIZE == 0);
-					int num_vecs = size / PAGE_SIZE;
-					reqs[i].init(off, io, access_method, node_id);
-					assert(buf->get_entry_size() >= PAGE_SIZE);
-					for (int k = 0; k < num_vecs; k++) {
-						reqs[i].add_buf(buf->next_entry(PAGE_SIZE), PAGE_SIZE);
-					}
-					i++;
-#endif
-				}
-				else if (config.get_buf_type() == SINGLE_SMALL_BUF) {
-again:
-					num_reqs_by_user = min(io->get_remaining_io_slots(), NUM_REQS_BY_USER);
-					while (size > 0 && i < num_reqs_by_user) {
-						off_t next_off = ROUNDUP_PAGE(off + 1);
-						if (next_off > off + size)
-							next_off = off + size;
-						char *p = buf->next_entry(next_off - off);
-						if (p == NULL)
-							break;
-						if (access_method == WRITE && config.is_verify_read())
-							create_write_data(p, next_off - off, off);
-						reqs[i].init(p, off, next_off - off, access_method,
-								io, node_id);
-						size -= next_off - off;
-						off = next_off;
-						i++;
-					}
-					if (size > 0) {
-						io->access(reqs, i);
-						if (io->get_remaining_io_slots() <= 0) {
-							int num_ios = io->get_max_num_pending_ios() / 10;
-							if (num_ios == 0)
-								num_ios = 1;
-							io->wait4complete(num_ios);
-						}
-#ifdef STATISTICS
-						num_pending.inc(i);
-#endif
-						num_accesses += i;
-						i = 0;
-						goto again;
-					}
-				}
-				else {
-					char *p = buf->next_entry(size);
-					if (p == NULL)
-						break;
-					if (access_method == WRITE && config.is_verify_read())
-						create_write_data(p, size, off);
-					reqs[i++].init(p, off, size, access_method, io, node_id);
-				}
+				int ret = converter.to_reqs(config.get_buf_type(),
+						num_reqs_by_user - i, reqs + i);
+				if (ret == 0)
+					break;
+				i += ret;
 			}
 			io->access(reqs, i);
-			if (io->get_remaining_io_slots() <= 0) {
+			while (io->get_remaining_io_slots() <= 0) {
 				int num_ios = io->get_max_num_pending_ios() / 10;
 				if (num_ios == 0)
 					num_ios = 1;
