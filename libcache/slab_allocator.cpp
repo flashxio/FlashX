@@ -3,6 +3,58 @@
 
 #include "slab_allocator.h"
 
+void slab_allocator::free(char *obj)
+{
+	if (local_buf_size == 0) {
+		slab_allocator::free(&obj, 1);
+	}
+	else {
+		fifo_queue<char *> *local_free_refs
+			= (fifo_queue<char *> *) pthread_getspecific(local_free_key);
+		if (local_free_refs == NULL) {
+			local_free_refs = fifo_queue<char *>::create(node_id, local_buf_size);
+			pthread_setspecific(local_free_key, local_free_refs);
+		}
+		if (local_free_refs->is_full()) {
+			char *objs[local_buf_size];
+			int num = local_free_refs->fetch(objs, local_buf_size);
+			slab_allocator::free(objs, num);
+		}
+		local_free_refs->push_back(obj);
+	}
+}
+
+char *slab_allocator::alloc()
+{
+	if (local_buf_size == 0) {
+		char *obj;
+		int num = alloc(&obj, 1);
+		if (num == 0)
+			return NULL;
+		else
+			return obj;
+	}
+	else {
+		fifo_queue<char *> *local_buf_refs
+			= (fifo_queue<char *> *) pthread_getspecific(local_buf_key);
+		if (local_buf_refs == NULL) {
+			assert(node_id >= 0);
+			local_buf_refs = fifo_queue<char *>::create(node_id, local_buf_size);
+			pthread_setspecific(local_buf_key, local_buf_refs);
+		}
+
+		if (local_buf_refs->is_empty()) {
+			char *objs[local_buf_size];
+			int num = alloc(objs, local_buf_size);
+			if (num == 0)
+				return NULL;
+			int num_added = local_buf_refs->add(objs, num);
+			assert(num_added == num);
+		}
+		return local_buf_refs->pop_front();
+	}
+}
+
 int slab_allocator::alloc(char **objs, int nobjs) {
 #ifdef MEMCHECK
 	for (int i = 0; i < nobjs; i++) {

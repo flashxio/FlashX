@@ -5,7 +5,7 @@ rand_buf::rand_buf(int buf_size, int entry_size, int nodeid)
 	: allocator(entry_size)
 #else
 	// We don't initialize pages but pin them.
-	: allocator(entry_size, buf_size, buf_size, nodeid, false, true)
+	: allocator(entry_size, buf_size, buf_size, nodeid, false, true, 0)
 #endif
 {
 	this->entry_size = entry_size;

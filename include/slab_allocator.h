@@ -109,6 +109,7 @@ private:
 	// the maximal size of all objects
 	const long max_size;
 	const int node_id;
+	const int local_buf_size;
 
 	linked_obj_list list;
 	// the current size of memory used by the allocator.
@@ -132,9 +133,10 @@ private:
 public:
 	slab_allocator(int _obj_size, long _increase_size, long _max_size,
 			// We allow pages to be pinned when allocated.
-			int _node_id, bool init = false, bool pinned = false): obj_size(
+			int _node_id, bool init = false, bool pinned = false,
+			int _local_buf_size = LOCAL_BUF_SIZE): obj_size(
 				_obj_size), increase_size(ROUNDUP_PAGE(_increase_size)),
-			max_size(_max_size), node_id(_node_id)
+			max_size(_max_size), node_id(_node_id), local_buf_size(_local_buf_size)
 #ifdef MEMCHECK
 		, allocator(obj_size)
 #endif
@@ -158,40 +160,9 @@ public:
 
 	void free(char **objs, int num);
 
-	char *alloc() {
-		fifo_queue<char *> *local_buf_refs
-			= (fifo_queue<char *> *) pthread_getspecific(local_buf_key);
-		if (local_buf_refs == NULL) {
-			assert(node_id >= 0);
-			local_buf_refs = fifo_queue<char *>::create(node_id, LOCAL_BUF_SIZE);
-			pthread_setspecific(local_buf_key, local_buf_refs);
-		}
+	char *alloc();
 
-		if (local_buf_refs->is_empty()) {
-			char *objs[LOCAL_BUF_SIZE];
-			int num = alloc(objs, LOCAL_BUF_SIZE);
-			if (num == 0)
-				return NULL;
-			int num_added = local_buf_refs->add(objs, num);
-			assert(num_added == num);
-		}
-		return local_buf_refs->pop_front();
-	}
-
-	void free(char *obj) {
-		fifo_queue<char *> *local_free_refs
-			= (fifo_queue<char *> *) pthread_getspecific(local_free_key);
-		if (local_free_refs == NULL) {
-			local_free_refs = fifo_queue<char *>::create(node_id, LOCAL_BUF_SIZE);
-			pthread_setspecific(local_free_key, local_free_refs);
-		}
-		if (local_free_refs->is_full()) {
-			char *objs[LOCAL_BUF_SIZE];
-			int num = local_free_refs->fetch(objs, LOCAL_BUF_SIZE);
-			slab_allocator::free(objs, num);
-		}
-		local_free_refs->push_back(obj);
-	}
+	void free(char *obj);
 
 	// Use it carefully. It's not thread-safe.
 	bool contains(const char *addr) const {
