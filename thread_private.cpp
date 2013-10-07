@@ -78,6 +78,7 @@ public:
 	}
 
 	int invoke(io_request *rqs[], int num) {
+		assert(thread == thread::get_curr_thread());
 		for (int i = 0; i < num; i++) {
 			io_request *rq = rqs[i];
 			if (rq->get_access_method() == READ && config.is_verify_read()) {
