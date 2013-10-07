@@ -1,4 +1,4 @@
-#include "../slab_allocator.h"
+#include "slab_allocator.h"
 
 int main()
 {

@@ -6,7 +6,6 @@
 #include <assert.h>
 
 #include "SA_hash_table.h"
-#include "SA_hash_table.cpp"
 
 void testEntrySet()
 {
