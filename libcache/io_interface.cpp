@@ -410,7 +410,7 @@ io_interface *posix_io_factory::create_io(thread *t)
 			break;
 		default:
 			fprintf(stderr, "a wrong posix access option\n");
-			abort();
+			assert(0);
 	}
 	register_io(raid_conf.get_conf_file(), io);
 	return io;
@@ -514,7 +514,7 @@ file_io_factory *create_io_factory(const RAID_config &raid_conf,
 					node_id_array, cache_conf);
 		default:
 			fprintf(stderr, "a wrong access option\n");
-			abort();
+			assert(0);
 	}
 	return NULL;
 }

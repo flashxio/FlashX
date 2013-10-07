@@ -1409,7 +1409,7 @@ hash_cell *associative_cache::get_prev_cell(hash_cell *cell) {
 			}
 		}
 		// we should reach here if the cell exists in the table.
-		abort();
+		assert(0);
 	}
 }
 
@@ -1431,7 +1431,7 @@ hash_cell *associative_cache::get_next_cell(hash_cell *cell)
 			}
 		}
 		// We should reach here.
-		abort();
+		assert(0);
 	}
 }
 

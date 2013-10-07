@@ -49,7 +49,7 @@ static void *fill_space(void *arg)
 	off_t ret = lseek(fd, off, SEEK_SET);
 	if (ret < 0) {
 		perror("lseek");
-		abort();
+		assert(0);
 	}
 	size_t remaining_size = tot_size;
 	while (remaining_size > 0) {
@@ -57,7 +57,7 @@ static void *fill_space(void *arg)
 		ssize_t written = write(fd, buf, count);
 		if (written < 0) {
 			perror("write");
-			abort();
+			assert(0);
 		}
 		if (written == 0) {
 			printf("WARNING! nothing was written\n");
@@ -73,7 +73,7 @@ static size_t get_filesize(int fd)
 	struct stat stat_buf;
 	if (fstat(fd, &stat_buf) != 0) {
 		perror("fstat");
-		abort();
+		assert(0);
 	}
 	return stat_buf.st_size;
 }
@@ -185,7 +185,7 @@ int ssd_create(const char *name, size_t tot_size)
 				S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 		if (fd < 0) {
 			perror("open");
-			abort();
+			assert(0);
 		}
 
 		size_t curr_size = get_filesize(fd);
@@ -193,7 +193,7 @@ int ssd_create(const char *name, size_t tot_size)
 			int err = posix_fallocate(fd, 0, file_size);
 			if (err) {
 				fprintf(stderr, "posix_fallocate error: %s\n", strerror(err));
-				abort();
+				assert(0);
 			}
 			data[i].fd = fd;
 			data[i].off = 0;
@@ -257,7 +257,7 @@ int ssd_delete(const char *name)
 		int ret = unlink(files[i].name.c_str());
 		if (ret < 0) {
 			perror("unlink");
-			abort();
+			assert(0);
 		}
 	}
 	return 0;
@@ -272,7 +272,7 @@ size_t ssd_get_filesize(const char *name)
 		struct stat stat_buf;
 		if (stat(files[i].name.c_str(), &stat_buf) != 0) {
 			perror("stat");
-			abort();
+			assert(0);
 		}
 		tot_size += stat_buf.st_size;
 	}

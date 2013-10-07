@@ -336,7 +336,7 @@ int async_io::open_file(const logical_file_partition &partition)
 	}
 	else {
 		fprintf(stderr, "the file id has been used\n");
-		abort();
+		assert(0);
 	}
 	return 0;
 }

@@ -873,7 +873,7 @@ void global_cached_io::write_dirty_page(thread_safe_page *p, off_t off,
 	underlying->access(&req, 1, &status);
 	if (status == IO_FAIL) {
 		perror("write");
-		abort();
+		assert(0);
 	}
 }
 
