@@ -1,6 +1,7 @@
 #ifndef __COMMON_C_H__
 #define __COMMON_C_H__
 
+#include <errno.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -28,8 +29,12 @@
 			perror("backtrace_symbols");			\
 			exit(EXIT_FAILURE);						\
 		}											\
-		for (int i = 0; i < nptrs; i++)				\
-			printf("%s\n", strings[i]);				\
+		for (int i = 0; i < nptrs; i++)	{			\
+			char syscom[256];						\
+			printf("[bt] #%d %s\n", i, strings[i]);	\
+			sprintf(syscom,"addr2line %p -e %s", buf[i], program_invocation_name);\
+			assert(system(syscom) == 0);			\
+		}											\
 		free(strings);								\
 	} while (0)
 
