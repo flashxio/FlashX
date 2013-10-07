@@ -276,7 +276,10 @@ void read_config_file(const std::string &conf_file,
 		std::string key = str.substr(0, found);
 		key.erase(std::remove_if(key.begin(), key.end(), isspace),
 				key.end());
-		configs.insert(std::pair<std::string, std::string>(key, value));
+		bool res = configs.insert(std::pair<std::string, std::string>(key,
+					value)).second;
+		if (!res)
+			configs[key] = value;
 	}
 	fclose(f);
 }
@@ -300,7 +303,10 @@ void parse_args(int argc, char *argv[],
 		std::string key = str.substr(0, found);
 		key.erase(std::remove_if(key.begin(), key.end(), isspace),
 				key.end());
-		configs.insert(std::pair<std::string, std::string>(key, value));
+		bool res = configs.insert(std::pair<std::string, std::string>(key,
+					value)).second;
+		if (!res)
+			configs[key] = value;
 	}
 }
 
