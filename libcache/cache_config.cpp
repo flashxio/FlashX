@@ -2,8 +2,10 @@
 
 #include "cache_config.h"
 #include "associative_cache.h"
+#if 0
 #include "hash_index_cache.h"
 #include "LRU2Q.h"
+#endif
 #include "NUMA_cache.h"
 #include "file_mapper.h"
 
@@ -12,15 +14,17 @@ page_cache *cache_config::create_cache_on_node(int node_id,
 {
 	page_cache *cache;
 	switch (get_type()) {
+#if 0
 		case LRU2Q_CACHE:
 			cache = new LRU2Q_cache(get_part_size(node_id));
 			break;
+		case HASH_INDEX_CACHE:
+			cache = new hash_index_cache(get_part_size(node_id), node_id);
+			break;
+#endif
 		case ASSOCIATIVE_CACHE:
 			cache = associative_cache::create(get_part_size(node_id),
 					MAX_CACHE_SIZE, node_id, 1, max_num_pending_flush);
-			break;
-		case HASH_INDEX_CACHE:
-			cache = new hash_index_cache(get_part_size(node_id), node_id);
 			break;
 		default:
 			fprintf(stderr, "wrong cache type\n");
@@ -32,10 +36,12 @@ page_cache *cache_config::create_cache_on_node(int node_id,
 void cache_config::destroy_cache_on_node(page_cache *cache) const
 {
 	switch (get_type()) {
+#if 0
 		case LRU2Q_CACHE:
 		case HASH_INDEX_CACHE:
 			delete cache;
 			break;
+#endif
 		case ASSOCIATIVE_CACHE:
 			associative_cache::destroy((associative_cache *) cache);
 			break;
