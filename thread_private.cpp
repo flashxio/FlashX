@@ -4,8 +4,6 @@
 #include "parameters.h"
 #include "exception.h"
 
-#define NUM_PAGES (4096 * config.get_nthreads())
-
 bool align_req = false;
 int align_size = PAGE_SIZE;
 
@@ -117,8 +115,8 @@ void thread_private::init() {
 	io->set_max_num_pending_ios(sys_params.get_aio_depth_per_file());
 	io->init();
 
-	rand_buf *buf = new rand_buf(NUM_PAGES / config.get_nthreads() * PAGE_SIZE,
-			config.get_buf_size(), node_id);
+	rand_buf *buf = new rand_buf(config.get_buf_size(),
+			config.get_entry_size(), node_id);
 	this->buf = buf;
 	if (io->support_aio()) {
 		cb = new cleanup_callback(buf, idx, this);
@@ -220,7 +218,7 @@ void thread_private::run()
 	if (config.is_use_aio())
 		assert(io->support_aio());
 	if (!config.is_use_aio()) {
-		entry = (char *) valloc(config.get_buf_size());
+		entry = (char *) valloc(config.get_entry_size());
 	}
 	work2req_converter converter(io, buf, align_size);
 	while (gen->has_next()) {
