@@ -3,7 +3,6 @@
 
 #include "workload.h"
 #include "rand_buf.h"
-#include "garbage_collection.h"
 #include "io_interface.h"
 #include "thread.h"
 #include "config.h"
