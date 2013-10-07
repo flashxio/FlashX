@@ -6,9 +6,11 @@
 #include "thread.h"
 #include "common.h"
 
-static void *thread_run(void *arg)
+void *thread_run(void *arg)
 {
 	thread *t = (thread *) arg;
+	pthread_setspecific(thread::thread_key, t);
+
 	int node_id = t->get_node_id();
 	if (node_id >= 0)
 		bind2node_id(node_id);
@@ -25,6 +27,7 @@ static void *thread_run(void *arg)
 
 void thread::start()
 {
+	assert(id == 0);
 	int ret = pthread_create(&id, NULL, thread_run, (void *) this);
 	if (ret) {
 		perror("pthread_create");
@@ -52,3 +55,23 @@ thread *thread::get_curr_thread()
 }
 
 pthread_key_t thread::thread_key;
+
+class thread_representer: public thread
+{
+	void run() {
+	}
+public:
+	thread_representer(int node_id): thread(std::string(
+				"representer-thread-node") + itoa(node_id), node_id) {
+	}
+};
+
+thread *thread::represent_thread(int node_id)
+{
+	thread *curr = thread::get_curr_thread();
+	assert(curr == NULL);
+	curr = new thread_representer(node_id);
+	pthread_setspecific(thread::thread_key, curr);
+	curr->_is_sleeping = false;
+	return curr;
+}

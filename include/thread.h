@@ -23,18 +23,21 @@ class thread
 	pthread_cond_t cond;
 
 	friend void init_thread_class();
+	friend void *thread_run(void *arg);
 public:
 	thread(std::string name, int node_id = -1, bool blocking = true) {
 		thread_class_init();
-		pthread_setspecific(thread_key, this);
 
 		this->name = name;
 		this->node_id = node_id;
 		this->blocking = blocking;
+		this->id = 0;
+
 		_is_activated = false;
 		_has_exit = false;
 		_is_running = true;
 		_is_sleeping = true;
+
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
 	}
@@ -112,6 +115,12 @@ public:
 	static void thread_class_init();
 
 	static thread *get_curr_thread();
+
+	/**
+	 * This creates a thread instance to represent the current thread context.
+	 * It is used when the current thread isn't created by the thread class.
+	 */
+	static thread *represent_thread(int node_id);
 };
 
 #endif

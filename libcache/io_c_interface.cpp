@@ -37,17 +37,6 @@ struct ssd_file_desc
 	io_interface *io;
 };
 
-class fake_thread: public thread
-{
-public:
-	fake_thread(int node_id): thread(std::string("fake-thread-node")
-			+ itoa(node_id), node_id) {
-	}
-
-	void run() {
-	}
-};
-
 static void *fill_space(void *arg)
 {
 	struct data_fill_struct *data = (struct data_fill_struct *) arg;
@@ -243,7 +232,7 @@ int ssd_create(const char *name, size_t tot_size)
 
 ssd_file_desc_t ssd_open(const char *name, int node_id, int flags)
 {
-	thread *t = new fake_thread(node_id);
+	thread *t = thread::represent_thread(node_id);
 	io_interface *io = opened_files[name]->create_io(t);
 	assert(io);
 	ssd_file_desc_t desc = new struct ssd_file_desc;
