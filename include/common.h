@@ -3,9 +3,45 @@
 
 #include <string>
 #include <vector>
+#include <iostream>
 
 #include "common_c.h"
 #include "parameters.h"
+
+#define ASSERT_EQ(x, y)								\
+	if ((x) != (y))	{								\
+		std::cerr << "x: " << x << ", y: " << y << std::endl;\
+		PRINT_BACKTRACE();							\
+		assert(x == y);								\
+	}
+
+#define ASSERT_LT(x, y)								\
+	if ((x) <= (y))	{								\
+		std::cerr << "x: " << x << ", y: " << y << std::endl;\
+		PRINT_BACKTRACE();							\
+		assert(x > y);								\
+	}
+
+#define ASSERT_LTEQ(x, y)							\
+	if ((x) < (y))	{								\
+		std::cerr << "x: " << x << ", y: " << y << std::endl;\
+		PRINT_BACKTRACE();							\
+		assert(x >= y);								\
+	}
+
+#define ASSERT_ST(x, y)								\
+	if ((x) >= (y))	{								\
+		std::cerr << "x: " << x << ", y: " << y << std::endl;\
+		PRINT_BACKTRACE();							\
+		assert(x < y);								\
+	}
+
+#define ASSERT_STEQ(x, y)							\
+	if ((x) > (y))	{								\
+		std::cerr << "x: " << x << ", y: " << y << std::endl;\
+		PRINT_BACKTRACE();							\
+		assert(x <= y);								\
+	}
 
 enum {
 	READ,

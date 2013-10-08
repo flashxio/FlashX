@@ -38,12 +38,6 @@
 		free(strings);								\
 	} while (0)
 
-#define ASSERT_EQ(x, y)								\
-	if ((x) != (y))	{								\
-		PRINT_BACKTRACE();							\
-		assert(x == y);								\
-	}
-
 #define ASSERT_TRUE(x)								\
 	if (!(x)) {										\
 		PRINT_BACKTRACE();							\
