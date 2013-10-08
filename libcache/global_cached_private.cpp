@@ -10,7 +10,6 @@ const int RAID_BLOCK_SIZE = 16 * PAGE_SIZE;
 const int COMPLETE_QUEUE_SIZE = 10240;
 
 #define ENABLE_LARGE_WRITE
-//#define TEST_HIT_RATE
 
 class req_ext_allocator: public obj_allocator<io_req_extension>
 {
@@ -941,7 +940,6 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					->search(tmp_off, old_off));
 
 			num_accesses++;
-#ifdef TEST_HIT_RATE
 			if (num_accesses % 100 < params.get_test_hit_rate()) {
 				if (!p->data_ready()) {
 					p->set_io_pending(false);
@@ -954,7 +952,6 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					}
 				}
 			}
-#endif
 			/* 
 			 * If old_off is -1, it means search() didn't evict a page, i.e.,
 			 * it's a cache hit.
