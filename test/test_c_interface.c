@@ -140,12 +140,15 @@ int main(int argc, char *argv[])
 {
 	int i;
 	int num_offs;
-	char *file_name_root;
+	char *root_conf_file;
+	char *data_file;
 
-	if (argc < 2) {
-		fprintf(stderr, "test data_file\n");
+	if (argc < 3) {
+		fprintf(stderr, "test root_conf data_file\n");
 		return -1;
 	}
+	root_conf_file = argv[1];
+	data_file = argv[2];
 
 	if (file_per_proc)
 		num_offs = data_size / block_size / num_threads;
@@ -161,8 +164,7 @@ int main(int argc, char *argv[])
 	int node_ids[num_nodes];
 	for (i = 0; i < num_nodes; i++)
 		node_ids[i] = i;
-	file_name_root = argv[1];
-	ssd_init_io_system(file_name_root, node_ids, num_nodes);
+	ssd_init_io_system(root_conf_file, node_ids, num_nodes);
 	if (file_per_proc)
 		set_cache_size(512 * 1024 * 1024 / num_threads);
 	printf("init IO system\n");
@@ -186,13 +188,13 @@ int main(int argc, char *argv[])
 		}
 
 		if (file_per_proc) {
-			sprintf(file_name_buf, "%s.%08d", file_name_root, data[i].idx);
+			sprintf(file_name_buf, "%s.%08d", data_file, data[i].idx);
 			file_name = file_name_buf;
 			int suggested_nodes[1] = {data->node_id};
 			ssd_file_io_init(file_name, 0, 1, 1, suggested_nodes);
 		}
 		else {
-			file_name = file_name_root;
+			file_name = data_file;
 			ssd_file_io_init(file_name, 0, num_threads, num_nodes, NULL);
 		}
 		printf("init file IO\n");
