@@ -207,6 +207,8 @@ int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
 		if (access_method == WRITE && config.is_verify_read())
 			create_write_data(p, size, off);
 		reqs[0].init(p, off, size, access_method, io, node_id);
+		workload.off += size;
+		workload.size = 0;
 		return 1;
 	}
 }
