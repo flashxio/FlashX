@@ -16,138 +16,6 @@
 #include "cache_config.h"
 #include "disk_read_thread.h"
 
-class io_tracker
-{
-	const std::string file_name;
-	io_interface *io;
-	bool has_init;
-	pthread_spinlock_t lock;
-	bool taken;
-public:
-	io_tracker(const std::string &_file_name,
-			io_interface *io): file_name(_file_name) {
-		this->io = io;
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-		taken = false;
-		has_init = false;
-	}
-
-	const std::string &get_file_name() const {
-		return file_name;
-	}
-
-	io_interface *take() {
-		pthread_spin_lock(&lock);
-		io_interface *ret = NULL;
-		if (!taken)
-			ret = io;
-		taken = true;
-		// If the IO is used for the first time, initialize it.
-		if (!has_init && ret) {
-			ret->init();
-			has_init = true;
-		}
-		pthread_spin_unlock(&lock);
-		return ret;
-	}
-
-	io_interface *get() {
-//		assert(has_init && taken);
-		return io;
-	}
-
-	void release() {
-		pthread_spin_lock(&lock);
-		taken = false;
-		pthread_spin_unlock(&lock);
-	}
-};
-
-class io_table
-{
-	pthread_spinlock_t lock;
-	std::vector<io_tracker *> table;
-public:
-	io_table() {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-	}
-
-	int size() {
-		pthread_spin_lock(&lock);
-		int ret = table.size();
-		pthread_spin_unlock(&lock);
-		return ret;
-	}
-
-	void register_io(const std::string &file_name, io_interface *io) {
-		pthread_spin_lock(&lock);
-		// If the IO table is too small, we need to resize the table.
-		// TODO after a while, the IO index might be very large. I should use
-		// a hashtable here.
-		if ((int) table.size() <= io->get_io_idx())
-			table.resize(io->get_io_idx() * 2);
-		table[io->get_io_idx()] = new io_tracker(file_name, io);
-		pthread_spin_unlock(&lock);
-	}
-
-	io_interface *get_io(int idx) {
-		// TODO I need to make thread-safe here.
-//		pthread_spin_lock(&lock);
-		assert(idx >= 0);
-		io_interface *io = table[idx]->get();
-		assert(io);
-		assert(io->get_io_idx() == idx);
-//		pthread_spin_unlock(&lock);
-		return io;
-	}
-
-	io_interface *allocate_io(const std::string &file_name, int node_id) {
-		pthread_spin_lock(&lock);
-		io_interface *io = NULL;
-		for (unsigned i = 0; i < table.size(); i++) {
-			io_interface *tmp = table[i]->get();
-			if (tmp->get_node_id() == node_id
-					&& table[i]->get_file_name() == file_name) {
-				io = table[i]->take();
-				if (io)
-					break;
-			}
-		}
-		pthread_spin_unlock(&lock);
-		return io;
-	}
-
-	void release_io(io_interface *io) {
-		pthread_spin_lock(&lock);
-		table[io->get_io_idx()]->release();
-		pthread_spin_unlock(&lock);
-	}
-};
-
-static io_table ios;
-
-void register_io(const std::string &file_name, io_interface *io)
-{
-	ios.register_io(file_name, io);
-}
-
-io_interface *get_io(int idx)
-{
-	return ios.get_io(idx);
-}
-
-io_interface *allocate_io(const std::string &file_name, int node_id)
-{
-	io_interface *ret = ios.allocate_io(file_name, node_id);
-	ASSERT_TRUE(ret != NULL);
-	return ret;
-}
-
-void release_io(io_interface *io)
-{
-	ios.release_io(io);
-}
-
 /**
  * This global data collection is very static.
  * Once the data is initialized, no data needs to be changed.
@@ -400,7 +268,6 @@ io_interface *posix_io_factory::create_io(thread *t)
 			fprintf(stderr, "a wrong posix access option\n");
 			assert(0);
 	}
-	register_io(get_name(), io);
 	return io;
 }
 
@@ -416,7 +283,6 @@ io_interface *aio_factory::create_io(thread *t)
 
 	io_interface *io;
 	io = new async_io(global_partition, params.get_aio_depth_per_file(), t);
-	register_io(get_name(), io);
 	return io;
 }
 
@@ -436,7 +302,6 @@ io_interface *remote_io_factory::create_io(thread *t)
 {
 	io_interface *io = new remote_disk_access(global_data.read_threads,
 			mapper, t);
-	register_io(get_name(), io);
 	return io;
 }
 
@@ -446,7 +311,6 @@ io_interface *global_cached_io_factory::create_io(thread *t)
 			global_data.read_threads, mapper, t);
 	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache);
-	register_io(get_name(), io);
 	return io;
 }
 
@@ -474,7 +338,6 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(t, table);
-	register_io(get_name(), io);
 	return io;
 }
 

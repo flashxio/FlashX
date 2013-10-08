@@ -59,6 +59,15 @@ enum
 	IO_UNSUPPORTED = -3,
 };
 
+enum {
+	READ_ACCESS,
+	DIRECT_ACCESS,
+	AIO_ACCESS,
+	REMOTE_ACCESS,
+	GLOBAL_CACHE_ACCESS,
+	PART_GLOBAL_ACCESS,
+};
+
 /**
  * The interface for all IO classes.
  */
@@ -207,26 +216,11 @@ public:
 	virtual void destroy_io(io_interface *) = 0;
 };
 
-class RAID_config;
 class cache_config;
-
-io_interface *allocate_io(const std::string &file_name, int node_id);
-void release_io(io_interface *io);
 
 file_io_factory *create_io_factory(const std::string &file_name,
 		const int access_option, const cache_config *cache_conf = NULL);
 void destroy_io_factory(file_io_factory *factory);
-
-io_interface *get_io(int idx);
-
-enum {
-	READ_ACCESS,
-	DIRECT_ACCESS,
-	AIO_ACCESS,
-	REMOTE_ACCESS,
-	GLOBAL_CACHE_ACCESS,
-	PART_GLOBAL_ACCESS,
-};
 
 void init_io_system(const std::string root_conf_file);
 
