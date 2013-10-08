@@ -31,6 +31,7 @@ struct data_fill_struct
 struct ssd_file_desc
 {
 	io_interface *io;
+	file_io_factory *factory;
 };
 
 static void *fill_space(void *arg)
@@ -209,10 +210,12 @@ int ssd_create(const char *name, size_t tot_size)
 ssd_file_desc_t ssd_open(const char *name, int node_id, int flags)
 {
 	thread *t = thread::represent_thread(node_id);
-	io_interface *io = opened_files[name]->create_io(t);
+	file_io_factory *factory = opened_files[name];
+	io_interface *io = factory->create_io(t);
 	assert(io);
 	ssd_file_desc_t desc = new struct ssd_file_desc;
 	desc->io = io;
+	desc->factory = factory;
 	return desc;
 }
 
@@ -236,7 +239,7 @@ int ssd_close(ssd_file_desc_t fd)
 {
 	io_interface *io = fd->io;
 	io->cleanup();
-	release_io(io);
+	fd->factory->destroy_io(io);
 	// TODO I need to free the space of fd.
 	return 0;
 }
