@@ -177,11 +177,11 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 	if (flags | O_DIRECT)
 		access_option = REMOTE_ACCESS;
 	else
-		cache_conf = new even_cache_config(sys_params.get_cache_size(),
-				sys_params.get_cache_type(), node_id_array);
+		cache_conf = new even_cache_config(params.get_cache_size(),
+				params.get_cache_type(), node_id_array);
 
 	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
-			access_option, sys_params.get_aio_depth_per_file(), cache_conf);
+			access_option, params.get_aio_depth_per_file(), cache_conf);
 	opened_files.insert(std::pair<std::string, file_io_factory *>(name,
 				factory));
 

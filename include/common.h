@@ -74,8 +74,6 @@ public:
 
 long str2size(std::string str);
 
-extern sys_parameters params;
-
 class io_request;
 void extract_pages(const io_request &req, off_t off, int npages,
 		io_request &extracted);

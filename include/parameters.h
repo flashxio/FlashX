@@ -63,9 +63,9 @@ public:
 	}
 };
 
-extern sys_parameters sys_params;
+extern sys_parameters params;
 
-#define AIO_DEPTH_PER_FILE sys_params.get_aio_depth_per_file()
+#define AIO_DEPTH_PER_FILE params.get_aio_depth_per_file()
 
 /**
  * The size of an I/O message sent to an I/O thread.

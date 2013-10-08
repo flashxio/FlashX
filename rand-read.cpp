@@ -321,7 +321,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "read conf_file data_file [conf_key=conf_value]\n");
 
 		config.print_help();
-		sys_params.print_help();
+		params.print_help();
 		exit(1);
 	}
 	std::string conf_file = argv[1];
@@ -333,10 +333,10 @@ int main(int argc, char *argv[])
 	std::map<std::string, std::string> configs;
 	read_config_file(conf_file, configs);
 	parse_args(argc - 3, argv + 3, configs);
-	sys_params.init(configs);
+	params.init(configs);
 	config.init(configs);
 
-	sys_params.print();
+	params.print();
 	config.print();
 
 	printf("use a different random sequence\n");
@@ -358,8 +358,8 @@ int main(int argc, char *argv[])
 	long start;
 	long end = 0;
 
-	RAID_config raid_conf(file_file, sys_params.get_RAID_mapping_option(),
-			sys_params.get_RAID_block_size());
+	RAID_config raid_conf(file_file, params.get_RAID_mapping_option(),
+			params.get_RAID_block_size());
 
 	std::set<int> node_ids = raid_conf.get_node_ids();
 	// In this way, we can guarantee that the cache is created
@@ -380,18 +380,18 @@ int main(int argc, char *argv[])
 
 	cache_config *cache_conf = NULL;
 	if (config.get_access_option() == GLOBAL_CACHE_ACCESS)
-		cache_conf = new even_cache_config(sys_params.get_cache_size(),
-				sys_params.get_cache_type(), node_id_array);
+		cache_conf = new even_cache_config(params.get_cache_size(),
+				params.get_cache_type(), node_id_array);
 	else if (config.get_access_option() == PART_GLOBAL_ACCESS) {
 		assert(config.get_num_nodes() == 4);
-		cache_conf = new even_cache_config(sys_params.get_cache_size(),
-				sys_params.get_cache_type(), node_id_array);
+		cache_conf = new even_cache_config(params.get_cache_size(),
+				params.get_cache_type(), node_id_array);
 	}
 
 	init_io_system(raid_conf, node_id_array);
 
 	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
-			config.get_access_option(), sys_params.get_aio_depth_per_file(),
+			config.get_access_option(), params.get_aio_depth_per_file(),
 			cache_conf);
 	int nthread_per_node = config.get_nthreads() / node_id_array.size();
 	std::vector<workload_gen *> workload_gens;

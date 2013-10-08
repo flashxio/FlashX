@@ -3,7 +3,7 @@
 #include "RAID_config.h"
 #include "cache_config.h"
 
-sys_parameters sys_params;
+sys_parameters params;
 
 str2int RAID_options[] = {
 	{"RAID0", RAID0},

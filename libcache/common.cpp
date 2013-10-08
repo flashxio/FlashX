@@ -236,5 +236,3 @@ bool inside_RAID_block(const io_request &req)
 	return ROUND(req.get_offset(), RAID_block_size)
 		== ROUND(req.get_offset() + req.get_size() - 1, RAID_block_size);
 }
-
-sys_parameters params;

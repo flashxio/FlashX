@@ -113,7 +113,7 @@ ssize_t thread_private::get_read_bytes() {
 
 void thread_private::init() {
 	io = factory->create_io(this);
-	io->set_max_num_pending_ios(sys_params.get_aio_depth_per_file());
+	io->set_max_num_pending_ios(params.get_aio_depth_per_file());
 	io->init();
 
 	rand_buf *buf = new rand_buf(config.get_buf_size(),
