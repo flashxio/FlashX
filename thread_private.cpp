@@ -232,6 +232,8 @@ void thread_private::run()
 				if (converter.has_complete() && gen->has_next()) {
 					converter.init(gen->next());
 				}
+				if (converter.has_complete())
+					break;
 				int ret = converter.to_reqs(config.get_buf_type(),
 						num_reqs_by_user - i, reqs + i);
 				if (ret == 0)
