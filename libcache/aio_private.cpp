@@ -313,10 +313,14 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 		}
 	}
 	if (num_remote > 0) {
-		int ret = complete_thread_table[get_node_id()]->add_reqs(
-				remote_tcbs, num_remote);
-		aio_complete_thread::process_completed_reqs(remote_tcbs + ret,
-				num_remote - ret);
+		if (complete_thread_table.empty())
+			aio_complete_thread::process_completed_reqs(remote_tcbs, num_remote);
+		else {
+			int ret = complete_thread_table[get_node_id()]->add_reqs(
+					remote_tcbs, num_remote);
+			aio_complete_thread::process_completed_reqs(remote_tcbs + ret,
+					num_remote - ret);
+		}
 	}
 }
 
