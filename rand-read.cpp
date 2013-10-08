@@ -218,10 +218,10 @@ void test_config::print_help()
 	printf("\tthreads: the number of test threads\n");
 	printf("\tnum_nodes: the number of NUMA nodes the test program should run\n");
 	printf("\tentry_size: the size of each access\n");
-	workload_map.print("workloads: ");
+	workload_map.print("\tworkloads: ");
 	printf("\tverify_content: to verify the data read from the disks\n");
 	printf("\thigh_prio: run the test program in a higher OS priority\n");
-	buf_type_map.print("buf types: ");
+	buf_type_map.print("\tbuf types: ");
 	printf("\tbuf_size: the buffer size for each access\n");
 	printf("\tsync: whether to use sync or async\n");
 }

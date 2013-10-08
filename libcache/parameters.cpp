@@ -97,7 +97,8 @@ void sys_parameters::print()
 	std::cout << "\thit_percent: " << test_hit_rate << std::endl;
 	std::cout << "\tcache_type: " << cache_type << std::endl;
 	std::cout << "\tcache_size: " << cache_size << std::endl;
-	std::cout << "\tRAID_mapping: " << std::endl;
+	std::cout << "\tRAID_mapping: " << RAID_mapping_option << std::endl;
+	std::cout << "\tvirt_aio: " << use_virt_aio << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -113,7 +114,9 @@ void sys_parameters::print_help()
 	std::cout << "\tio_depth: the number of pending I/O requests per file"
 		<< std::endl;
 	std::cout << "\thit_percent: the artificial cache hit rate (%)" << std::endl;
-	cache_map.print("\tcache_type");
+	cache_map.print("\tcache_type: ");
 	std::cout << "\tcache_size: x(k, K, m, M, g, G)" << std::endl;
-	RAID_option_map.print("\tRAID_mapping");
+	RAID_option_map.print("\tRAID_mapping: ");
+	std::cout << "\tvirt_aio: enable virtual AIO for debugging and performance evaluation"
+		<< std::endl;
 }
