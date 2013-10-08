@@ -17,10 +17,6 @@ extern "C" {
 #include "io_c_interface.h"
 }
 
-static long cache_size = 512 * 1024 * 1024;
-static int cache_type = ASSOCIATIVE_CACHE;
-static int RAID_block_size = 16;		// in the number of pages.
-
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static std::tr1::unordered_map<std::string, file_io_factory *> opened_files;
 
@@ -102,32 +98,29 @@ extern "C" {
 
 void set_cache_size(long size)
 {
-	cache_size = size;
+	std::map<std::string, std::string> parameter;
+	parameter.insert(std::pair<std::string, std::string>("cache_size", itoa(size)));
+	params.init(parameter);
 }
 
 void set_cache_type(int type)
 {
-	cache_type = type;
+	std::map<std::string, std::string> parameter;
+	parameter.insert(std::pair<std::string, std::string>("cache_type", itoa(type)));
+	params.init(parameter);
 }
 
 void set_RAID_block_size(int num_pages)
 {
-	RAID_block_size = num_pages;
+	std::map<std::string, std::string> parameter;
+	parameter.insert(std::pair<std::string, std::string>("RAID_block_size",
+				itoa(num_pages * PAGE_SIZE)));
+	params.init(parameter);
 }
 
-void ssd_init_io_system(const char *name, int *node_ids, int num_nodes)
+void ssd_init_io_system(const char *root_conf_file, int *node_ids, int num_nodes)
 {
-	// Init RAID configuration.
-	int RAID_mapping_option;
-	if (num_nodes == 1)
-		RAID_mapping_option = RAID0;
-	else
-		RAID_mapping_option = HASH;
-	RAID_config raid_conf(name, RAID_mapping_option, RAID_block_size);
-	std::vector<int> node_id_array;
-	for (int i = 0; i < num_nodes; i++)
-		node_id_array.push_back(node_ids[i]);
-	init_io_system(raid_conf, node_id_array);
+	init_io_system(root_conf_file);
 }
 
 void ssd_file_io_init(const char *name, int flags, int num_threads, int num_nodes,
@@ -142,14 +135,6 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 	printf("Init SSDIO with %d threads and %d nodes\n",
 			num_threads, num_nodes);
 
-	// Init RAID configuration.
-	int RAID_mapping_option;
-	if (num_nodes == 1)
-		RAID_mapping_option = RAID0;
-	else
-		RAID_mapping_option = HASH;
-	RAID_config raid_conf(name, RAID_mapping_option, RAID_block_size);
-
 	std::vector<int> node_id_array;
 	// Users can suggest nodes where the IO should be. It make sense for cached IO
 	// because we are going to place cache on those nodes.
@@ -158,17 +143,8 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 			node_id_array.push_back(suggested_nodes[i]);
 	}
 	else {
-		// Init node id array.
-		std::set<int> node_ids = raid_conf.get_node_ids();
-		// In this way, we can guarantee that the cache is created
-		// on the nodes with the data files.
-		for (int i = 0; i < num_nodes
-				&& node_ids.size() < (unsigned) num_nodes; i++)
-			node_ids.insert(i);
-		// We only get a specified number of nodes.
-		for (std::set<int>::const_iterator it = node_ids.begin();
-				it != node_ids.end() && (int) node_id_array.size() < num_nodes; it++)
-			node_id_array.push_back(*it);
+		for (int i = 0; i < num_nodes; i++)
+			node_id_array.push_back(i);
 	}
 	printf("There are %ld nodes\n", node_id_array.size());
 
@@ -180,8 +156,8 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 		cache_conf = new even_cache_config(params.get_cache_size(),
 				params.get_cache_type(), node_id_array);
 
-	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
-			access_option, params.get_aio_depth_per_file(), cache_conf);
+	file_io_factory *factory = create_io_factory(name, access_option,
+			cache_conf);
 	opened_files.insert(std::pair<std::string, file_io_factory *>(name,
 				factory));
 

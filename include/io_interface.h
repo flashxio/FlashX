@@ -213,9 +213,8 @@ class cache_config;
 io_interface *allocate_io(const std::string &file_name, int node_id);
 void release_io(io_interface *io);
 
-file_io_factory *create_io_factory(const RAID_config &raid_conf,
-		const std::vector<int> &node_id_array, const int access_option,
-		const int io_depth = 0, const cache_config *cache_conf = NULL);
+file_io_factory *create_io_factory(const std::string &file_name,
+		const int access_option, const cache_config *cache_conf = NULL);
 void destroy_io_factory(file_io_factory *factory);
 
 io_interface *get_io(int idx);
@@ -229,8 +228,7 @@ enum {
 	PART_GLOBAL_ACCESS,
 };
 
-void init_io_system(const RAID_config &raid_conf,
-		const std::vector<int> &node_id_array);
+void init_io_system(const std::string root_conf_file);
 
 // This interface is used for debugging.
 void print_io_thread_stat();

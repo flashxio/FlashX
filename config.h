@@ -39,6 +39,7 @@ class test_config
 	double read_ratio;
 	int num_repeats;
 	std::string workload_file;
+	std::string root_conf_file;
 public:
 	test_config() {
 		access_option = -1;
@@ -114,6 +115,10 @@ public:
 
 	std::string get_workload_file() const {
 		return workload_file;
+	}
+
+	std::string get_root_conf_file() const {
+		return root_conf_file;
 	}
 };
 

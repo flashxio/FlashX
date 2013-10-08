@@ -175,6 +175,11 @@ void test_config::init(const std::map<std::string, std::string> configs)
 		use_aio = false;
 	}
 
+	it = configs.find("root_conf");
+	if (it != configs.end()) {
+		root_conf_file = it->second;
+	}
+
 #ifdef PROFILER
 	it = configs.find("prof");
 	if (it != configs.end()) {
@@ -199,6 +204,7 @@ void test_config::print()
 	printf("\tbuf_type: %d\n", buf_type);
 	printf("\tbuf_size: %d\n", buf_size);
 	printf("\tsync: %d\n", !use_aio);
+	printf("\troot_conf: %s\n", root_conf_file.c_str());
 }
 
 void test_config::print_help()
@@ -224,6 +230,7 @@ void test_config::print_help()
 	buf_type_map.print("\tbuf types: ");
 	printf("\tbuf_size: the buffer size for each access\n");
 	printf("\tsync: whether to use sync or async\n");
+	printf("\troot_conf: a config file to specify the root paths of the RAID\n");
 }
 
 void int_handler(int sig_num)
@@ -325,7 +332,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	std::string conf_file = argv[1];
-	std::string file_file = argv[2];
+	std::string data_file = argv[2];
 
 	signal(SIGINT, int_handler);
 	// The file that contains all data files.
@@ -358,21 +365,9 @@ int main(int argc, char *argv[])
 	long start;
 	long end = 0;
 
-	RAID_config raid_conf(file_file, params.get_RAID_mapping_option(),
-			params.get_RAID_block_size());
-
-	std::set<int> node_ids = raid_conf.get_node_ids();
-	// In this way, we can guarantee that the cache is created
-	// on the nodes with the data files.
-	for (int i = 0; i < config.get_num_nodes()
-			&& node_ids.size() < (unsigned) config.get_num_nodes(); i++)
-		node_ids.insert(i);
 	std::vector<int> node_id_array;
-	// We only get a specified number of nodes.
-	for (std::set<int>::const_iterator it = node_ids.begin();
-			it != node_ids.end()
-			&& (int) node_id_array.size() < config.get_num_nodes(); it++)
-		node_id_array.push_back(*it);
+	for (int i = 0; i < config.get_num_nodes(); i++)
+		node_id_array.push_back(i);
 
 	assert(config.get_nthreads() % config.get_num_nodes() == 0);
 	assert(node_id_array.size() == (unsigned) config.get_num_nodes());
@@ -388,11 +383,10 @@ int main(int argc, char *argv[])
 				params.get_cache_type(), node_id_array);
 	}
 
-	init_io_system(raid_conf, node_id_array);
+	init_io_system(config.get_root_conf_file());
 
-	file_io_factory *factory = create_io_factory(raid_conf, node_id_array,
-			config.get_access_option(), params.get_aio_depth_per_file(),
-			cache_conf);
+	file_io_factory *factory = create_io_factory(data_file,
+			config.get_access_option(), cache_conf);
 	int nthread_per_node = config.get_nthreads() / node_id_array.size();
 	std::vector<workload_gen *> workload_gens;
 	for (unsigned i = 0; i < node_id_array.size(); i++) {
