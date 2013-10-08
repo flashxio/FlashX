@@ -33,6 +33,7 @@ public:
 public:
 	file_mapper(const std::vector<file_info> &files,
 			int block_size): STRIPE_BLOCK_SIZE(block_size) {
+		ASSERT_TRUE(block_size > 0);
 		this->files = files;
 		file_id = file_id_gen.inc(1);
 	}
