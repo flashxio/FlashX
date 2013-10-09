@@ -61,10 +61,6 @@ public:
 	virtual int map2file(off_t) const = 0;
 
 	virtual file_mapper *clone() = 0;
-
-	// size in bytes
-	virtual int cycle_size() const = 0;
-	virtual int cycle_size_in_bucket(int) const = 0;
 };
 
 int gen_RAID_rand_start(int num_files);
@@ -97,14 +93,6 @@ public:
 
 	virtual file_mapper *clone() {
 		return new RAID0_mapper(get_files(), STRIPE_BLOCK_SIZE);
-	}
-
-	virtual int cycle_size() const {
-		return PAGE_SIZE * STRIPE_BLOCK_SIZE * get_num_files();
-	}
-
-	virtual int cycle_size_in_bucket(int) const {
-		return PAGE_SIZE * STRIPE_BLOCK_SIZE;
 	}
 };
 
@@ -142,14 +130,6 @@ public:
 	virtual file_mapper *clone() {
 		return new RAID5_mapper(get_files(), STRIPE_BLOCK_SIZE);
 	}
-
-	virtual int cycle_size() const {
-		return PAGE_SIZE * STRIPE_BLOCK_SIZE * get_num_files();
-	}
-
-	virtual int cycle_size_in_bucket(int) const {
-		return PAGE_SIZE * STRIPE_BLOCK_SIZE;
-	}
 };
 
 class hash_mapper: public file_mapper
@@ -157,6 +137,11 @@ class hash_mapper: public file_mapper
 	static const int CONST_A = FILE_CONST_A;
 	static const int CONST_P = FILE_CONST_P;
 	const int P_MOD_N;
+
+	int cycle_size_in_bucket(int idx) const {
+		return idx < P_MOD_N ? (CONST_P / get_num_files()
+				+ 1) : (CONST_P / get_num_files());
+	}
 public:
 	hash_mapper(const std::vector<file_info> &files, int block_size): file_mapper(
 				files, block_size), P_MOD_N(CONST_P % files.size()) {
@@ -184,15 +169,6 @@ public:
 
 	virtual file_mapper *clone() {
 		return new hash_mapper(get_files(), STRIPE_BLOCK_SIZE);
-	}
-
-	virtual int cycle_size() const {
-		return CONST_P * STRIPE_BLOCK_SIZE * PAGE_SIZE;
-	}
-
-	virtual int cycle_size_in_bucket(int idx) const {
-		return idx < P_MOD_N ? (CONST_P / get_num_files()
-				+ 1) : (CONST_P / get_num_files());
 	}
 };
 
