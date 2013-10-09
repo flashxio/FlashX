@@ -17,6 +17,7 @@ struct thread_callback_s;
 class buffered_io;
 class logical_file_partition;
 class callback_allocator;
+class virt_data_impl;
 
 class async_io: public io_interface
 {
@@ -32,6 +33,8 @@ class async_io: public io_interface
 	// file id <-> buffered io
 	std::tr1::unordered_map<int, buffered_io *> open_files;
 	buffered_io *default_io;
+
+	virt_data_impl *data;
 
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:

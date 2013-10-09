@@ -7,6 +7,7 @@
 #include "common.h"
 #include "parameters.h"
 #include "concurrency.h"
+#include "exception.h"
 
 #define TEST
 
@@ -59,6 +60,7 @@ public:
 
 	virtual void map(off_t, struct block_identifier &) const = 0;
 	virtual int map2file(off_t) const = 0;
+	virtual off_t map_backwards(int idx, off_t off_in_file) const = 0;
 
 	virtual file_mapper *clone() = 0;
 };
@@ -89,6 +91,14 @@ public:
 
 	virtual int map2file(off_t off) const {
 		return (int) (((off / STRIPE_BLOCK_SIZE) + rand_start) % get_num_files());
+	}
+
+	virtual off_t map_backwards(int idx, off_t off_in_file) const {
+		int idx_in_block = off_in_file % STRIPE_BLOCK_SIZE;
+		off_t block_in_file = off_in_file / STRIPE_BLOCK_SIZE;
+		return (block_in_file * get_num_files() + (idx - rand_start
+					+ get_num_files()) % get_num_files()) * STRIPE_BLOCK_SIZE
+			+ idx_in_block;
 	}
 
 	virtual file_mapper *clone() {
@@ -125,6 +135,15 @@ public:
 		int shift = (int) ((block_idx / get_num_files()) % get_num_files());
 		return (int) ((block_idx % get_num_files() + shift
 					+ rand_start) % get_num_files());
+	}
+
+	virtual off_t map_backwards(int idx, off_t off_in_file) const {
+		int idx_in_block = off_in_file % STRIPE_BLOCK_SIZE;
+		off_t block_in_file = off_in_file / STRIPE_BLOCK_SIZE;
+		int idx_in_stripe = (rand_start + block_in_file) % get_num_files();
+		return (block_in_file * get_num_files() + (idx - idx_in_stripe
+					+ get_num_files()) % get_num_files()) * STRIPE_BLOCK_SIZE
+			+ idx_in_block;
 	}
 
 	virtual file_mapper *clone() {
@@ -165,6 +184,10 @@ public:
 		off_t block_idx = off / STRIPE_BLOCK_SIZE;
 		off_t p_idx = (CONST_A * block_idx) % CONST_P;
 		return p_idx % get_num_files();
+	}
+
+	virtual off_t map_backwards(int idx, off_t off_in_file) const {
+		throw unsupported_exception();
 	}
 
 	virtual file_mapper *clone() {

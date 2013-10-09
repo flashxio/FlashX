@@ -66,6 +66,10 @@ public:
 		bid.idx = file_map[bid.idx];
 	}
 
+	off_t map_backwards(int idx, off_t off_in_file) const {
+		return mapper->map_backwards(indices[idx], off_in_file);
+	}
+
 	int map2file(off_t pg_off) const {
 		assert(mapper);
 		int idx = mapper->map2file(pg_off);

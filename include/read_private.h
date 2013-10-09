@@ -38,6 +38,10 @@ public:
 		return fds[idx];
 	}
 
+	const std::vector<int> &get_fds() const {
+		return fds;
+	}
+
 	int num_open_files() {
 		return partition.get_num_files();
 	}

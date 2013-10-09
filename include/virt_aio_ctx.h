@@ -10,6 +10,16 @@ struct req_entry {
 };
 
 /**
+ * This class defines the data inside the virtual SSDs.
+ */
+class virt_data
+{
+public:
+	virtual void create_data(int fd, void *data, int size, off_t off) = 0;
+	virtual bool verify_data(int fd, void *data, int size, off_t off) = 0;
+};
+
+/**
  * This emulates an SSD and provides the interface of an AIO context.
  * It is used for performance evaluation and debugging.
  * It accepts requests and returns them after a certain period of time.
@@ -20,18 +30,18 @@ class virt_aio_ctx: public aio_ctx
 {
 	int max_aio;
 	fifo_queue<struct req_entry> pending_reqs;
-
-	virt_aio_ctx(int node_id, int max_aio): aio_ctx(node_id,
+	virt_data *data;
+public:
+	virt_aio_ctx(virt_data *data, int node_id, int max_aio): aio_ctx(node_id,
 			max_aio), pending_reqs(node_id, max_aio) {
 		this->max_aio = max_aio;
+		this->data = data;
 	}
-public:
+
 	virtual void submit_io_request(struct iocb* ioq[], int num);
 	virtual int io_wait(struct timespec* to, int num);
 
 	virtual int max_io_slot();
-
-	friend aio_ctx* aio_ctx::create_aio_ctx(int node_id, int max_aio);
 };
 
 #endif

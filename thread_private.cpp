@@ -30,7 +30,8 @@ public:
 			if (rq->get_access_method() == READ && params.is_verify_content()) {
 				off_t off = rq->get_offset();
 				for (int i = 0; i < rq->get_num_bufs(); i++) {
-					check_read_content(rq->get_buf(i), rq->get_buf_size(i), off);
+					assert(check_read_content(rq->get_buf(i),
+								rq->get_buf_size(i), off));
 					off += rq->get_buf_size(i);
 				}
 			}

@@ -5,6 +5,7 @@
 #include "read_private.h"
 #include "file_partition.h"
 #include "slab_allocator.h"
+#include "virt_aio_ctx.h"
 
 template class blocking_FIFO_queue<thread_callback_s *>;
 
@@ -27,6 +28,48 @@ struct thread_callback_s
 	callback_allocator *cb_allocator;
 	io_request req;
 };
+
+class virt_data_impl: public virt_data
+{
+	// fd <-> buffered_io
+	std::tr1::unordered_map<int, const buffered_io *> fd_map;
+public:
+	void add_new_file(const buffered_io *io) {
+		std::vector<int> fds = io->get_fds();
+		for (unsigned i = 0; i < fds.size(); i++)
+			fd_map.insert(std::pair<int, const buffered_io *>(fds[i], io));
+	}
+
+	off_t find_global_off(int fd, off_t off);
+
+	virtual void create_data(int fd, void *data, int size, off_t off) {
+		off_t global_off = find_global_off(fd, off);
+		create_write_data((char *) data, size, global_off);
+	}
+
+	virtual bool verify_data(int fd, void *data, int size, off_t off) {
+		off_t global_off = find_global_off(fd, off);
+		return check_read_content((char *) data, size, global_off);
+	}
+};
+
+off_t virt_data_impl::find_global_off(int fd, off_t off)
+{
+	std::tr1::unordered_map<int, const buffered_io *>::const_iterator it
+		= fd_map.find(fd);
+	assert(it != fd_map.end());
+	int idx = -1;
+	for (unsigned i = 0; i < it->second->get_fds().size(); i++) {
+		if (fd == it->second->get_fds()[i])
+			idx = i;
+	}
+	assert(idx >= 0);
+	off_t pg_idx = off / PAGE_SIZE;
+	off_t idx_in_page = off % PAGE_SIZE;
+	off_t global_pg_idx = it->second->get_partition().map_backwards(idx,
+			pg_idx);
+	return global_pg_idx * PAGE_SIZE + idx_in_page;
+}
 
 /**
  * This slab allocator makes sure all requests in the callback structure
@@ -72,7 +115,15 @@ async_io::async_io(const logical_file_partition &partition,
 	cb_allocator = new callback_allocator(node_id,
 			AIO_DEPTH * sizeof(thread_callback_s));;
 	buf_idx = 0;
-	ctx = aio_ctx::create_aio_ctx(node_id, AIO_DEPTH);
+
+	data = NULL;
+	if (params.is_use_virt_aio()) {
+		data = new virt_data_impl();
+		ctx = new virt_aio_ctx(data, node_id, AIO_DEPTH);
+	}
+	else
+		ctx = new aio_ctx_impl(node_id, AIO_DEPTH);
+
 	cb = NULL;
 	num_iowait = 0;
 	num_completed_reqs = 0;
@@ -81,6 +132,8 @@ async_io::async_io(const logical_file_partition &partition,
 		buffered_io *io = new buffered_io(partition, t, O_DIRECT | O_RDWR);
 		default_io = io;
 		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
+		if (data)
+			data->add_new_file(io);
 	}
 }
 
@@ -104,7 +157,7 @@ void async_io::cleanup()
 async_io::~async_io()
 {
 	cleanup();
-	aio_ctx::destroy_aio_ctx(ctx);
+	delete ctx;
 	for (std::tr1::unordered_map<int, buffered_io *>::const_iterator it
 			= open_files.begin(); it != open_files.end(); it++)
 		delete it->second;
@@ -338,6 +391,8 @@ int async_io::open_file(const logical_file_partition &partition)
 		buffered_io *io = new buffered_io(partition, get_thread(),
 				O_DIRECT | O_RDWR);
 		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
+		if (data)
+			data->add_new_file(io);
 	}
 	else {
 		fprintf(stderr, "the file id has been used\n");

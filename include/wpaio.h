@@ -21,15 +21,12 @@
 class aio_ctx
 {
 	obj_allocator<struct iocb> iocb_allocator;
-protected:
+public:
 	aio_ctx(int node_id, int max_aio): iocb_allocator(node_id,
 			sizeof(struct iocb) * max_aio) {
 	}
 	virtual ~aio_ctx() {
 	}
-public:
-	static aio_ctx* create_aio_ctx(int node_id, int max_aio);
-	static void destroy_aio_ctx(aio_ctx *);
 
 	struct iocb* make_io_request(int fd, size_t iosize, long long offset,
 			void* buffer, int io_type, struct io_callback_s *cb);
@@ -50,6 +47,7 @@ class aio_ctx_impl: public aio_ctx
 	int busy_aio;
 	io_context_t ctx;
 
+public:
 	aio_ctx_impl(int node_id, int max_aio): aio_ctx(node_id, max_aio) {
 		this->max_aio = max_aio;
 		busy_aio = 0;
@@ -62,13 +60,9 @@ class aio_ctx_impl: public aio_ctx
 		}
 	}
 
-public:
 	virtual void submit_io_request(struct iocb* ioq[], int num);
 	virtual int io_wait(struct timespec* to, int num);
 	virtual int max_io_slot();
-
-	friend aio_ctx *aio_ctx::create_aio_ctx(int, int);
-	friend void aio_ctx::destroy_aio_ctx(aio_ctx *);
 };
 
 typedef void (*callback_t) (io_context_t, struct iocb*[],

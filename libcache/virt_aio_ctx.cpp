@@ -96,15 +96,17 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 				off_t offset = iocbs[i]->u.c.offset;
 				int num_vecs = iocbs[i]->u.c.nbytes;
 				struct iovec *iov = (struct iovec *) iocbs[i]->u.c.buf;
+				int fd = iocbs[i]->aio_fildes;
 				for (int j = 0; j < num_vecs; j++) {
-					create_write_data((char *) iov[j].iov_base,
+					data->create_data(fd, (char *) iov[j].iov_base,
 							iov[j].iov_len, offset);
 					offset += iov[j].iov_len;
 				}
 			}
 			else if (iocbs[i]->aio_lio_opcode == IO_CMD_PREAD) {
-				create_write_data((char *) iocbs[i]->u.c.buf,
-						iocbs[i]->u.c.nbytes, iocbs[i]->u.c.offset);
+				data->create_data(iocbs[i]->aio_fildes,
+						(char *) iocbs[i]->u.c.buf, iocbs[i]->u.c.nbytes,
+						iocbs[i]->u.c.offset);
 			}
 		}
 		res[i] = 0;

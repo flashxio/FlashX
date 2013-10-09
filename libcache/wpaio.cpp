@@ -18,29 +18,6 @@
 #define AIO_MAXIO	32
 #define FREE_LIST_SIZE 128
 
-aio_ctx* aio_ctx::create_aio_ctx(int node_id, int max_aio)
-{
-	aio_ctx *a_ctx;
-
-	if (params.is_use_virt_aio())
-		a_ctx = new virt_aio_ctx(node_id, max_aio);
-	else
-		a_ctx = new aio_ctx_impl(node_id, max_aio);
-
-	if (a_ctx == NULL)
-	{
-		perror("malloc aio_ctx");
-		exit(1);
-	}
-	
-	return a_ctx;
-}
-
-void aio_ctx::destroy_aio_ctx(aio_ctx *ctx)
-{
-	delete ctx;
-}
-
 struct iocb *aio_ctx::make_iovec_request(int fd, const struct iovec iov[],
 		int count, long long offset, int io_type, io_callback_s *cb)
 {

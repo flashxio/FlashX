@@ -93,7 +93,9 @@ static void enable_debug_handler(int sig, siginfo_t *si, void *uc)
 	printf("debug mode is enabled\n");
 }
 
-void check_read_content(char *buf, int size, off_t off)
+}
+
+bool check_read_content(char *buf, int size, off_t off)
 {
 	// I assume the space in the buffer is larger than 8 bytes.
 	off_t aligned_off = off & (~(sizeof(off_t) - 1));
@@ -106,8 +108,9 @@ void check_read_content(char *buf, int size, off_t off)
 	long read_value = 0;
 	memcpy(&read_value, buf, copy_size);
 	if(read_value != expected)
-		printf("%ld %ld\n", read_value, expected);
-	assert(read_value == expected);
+		printf("off: %ld, size: %d, read: %ld, expect: %ld\n",
+				off, size, read_value, expected);
+	return read_value == expected;
 }
 
 void create_write_data(char *buf, int size, off_t off)
@@ -141,8 +144,6 @@ void create_write_data(char *buf, int size, off_t off)
 	}
 
 	check_read_content(buf, size, off);
-}
-
 }
 
 bool enable_debug = false;
