@@ -1487,12 +1487,13 @@ void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
 	pthread_spin_unlock(&_lock);
 }
 
-#define ENABLE_FLUSH_THREAD
-
 void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],
 		int num, io_interface *io)
 {
-#ifdef ENABLE_FLUSH_THREAD
+	if (!params.is_use_flusher()) {
+		return;
+	}
+
 	hash_cell *cells[num];
 	int num_queued_cells = 0;
 	int num_flushes = 0;
@@ -1546,12 +1547,13 @@ void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],
 				get_node_id(), num_flushes, local_cache->num_pending_flush.get(),
 				dirty_cells.get_num_entries(), local_cache->num_dirty_pages.get());
 #endif
-#endif
 }
 
 int associative_flusher::flush_dirty_pages(page_filter *filter, int max_num)
 {
-#ifdef ENABLE_FLUSH_THREAD
+	if (!params.is_use_flusher())
+		return 0;
+
 	int num_flushes = 0;
 
 	while (num_flushes < max_num) {
@@ -1583,9 +1585,6 @@ int associative_flusher::flush_dirty_pages(page_filter *filter, int max_num)
 	local_cache->avg_num_pending.add(pending);
 
 	return num_flushes;
-#else
-	return 0;
-#endif
 }
 
 int associative_cache::get_num_dirty_pages() const

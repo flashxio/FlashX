@@ -23,6 +23,7 @@ class sys_parameters
 	int RAID_mapping_option;
 	bool use_virt_aio;
 	bool verify_content;
+	bool use_flusher;
 public:
 	sys_parameters();
 
@@ -65,6 +66,10 @@ public:
 
 	bool is_verify_content() const {
 		return verify_content;
+	}
+
+	bool is_use_flusher() const {
+		return use_flusher;
 	}
 };
 
