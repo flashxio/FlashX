@@ -36,7 +36,9 @@ build_lib:
 	$(MAKE) -C libcache
 
 unit_test: build_lib
+ifndef MEMCHECK
 	$(MAKE) -C test
+endif
 
 clean:
 	rm -f *.d
