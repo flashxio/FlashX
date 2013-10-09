@@ -554,7 +554,12 @@ public:
 	}
 
 	int get_buf_size(int idx) const {
-		return get_extension()->get_buf(idx).get_size();
+		if (!is_extended_req()) {
+			assert(idx == 0);
+			return buf_size;
+		}
+		else
+			return get_extension()->get_buf(idx).get_size();
 	}
 
 	const io_buf &get_io_buf(int idx) const {
