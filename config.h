@@ -30,7 +30,6 @@ class test_config
 	int nthreads;
 	int buf_type;
 	int buf_size;
-	bool verify_read_content;
 	bool high_prio;
 	bool use_aio;
 	int num_nodes;
@@ -48,7 +47,6 @@ public:
 		nthreads = 1;
 		buf_type = SINGLE_LARGE_BUF;
 		buf_size = PAGE_SIZE;
-		verify_read_content = false;
 		high_prio = false;
 		use_aio = true;
 		num_nodes = 1;
@@ -83,10 +81,6 @@ public:
 
 	int get_buf_size() const {
 		return buf_size;
-	}
-
-	bool is_verify_read() const {
-		return verify_read_content;
 	}
 
 	bool is_high_prio() const {

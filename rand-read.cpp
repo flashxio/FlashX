@@ -150,11 +150,6 @@ void test_config::init(const std::map<std::string, std::string> configs)
 		}
 	}
 
-	it = configs.find("verify_content");
-	if (it != configs.end()) {
-		verify_read_content = true;
-	}
-
 	it = configs.find("high_prio");
 	if (it != configs.end()) {
 		high_prio = true;
@@ -199,7 +194,6 @@ void test_config::print()
 	printf("\trepeats: %d\n", num_repeats);
 	printf("\tentry_size: %d\n", entry_size);
 	printf("\tworkload: %d\n", workload);
-	printf("\tverify_content: %d\n", verify_read_content);
 	printf("\thigh_prio: %d\n", high_prio);
 	printf("\tbuf_type: %d\n", buf_type);
 	printf("\tbuf_size: %d\n", buf_size);
@@ -225,7 +219,6 @@ void test_config::print_help()
 	printf("\tnum_nodes: the number of NUMA nodes the test program should run\n");
 	printf("\tentry_size: the size of each access\n");
 	workload_map.print("\tworkloads: ");
-	printf("\tverify_content: to verify the data read from the disks\n");
 	printf("\thigh_prio: run the test program in a higher OS priority\n");
 	buf_type_map.print("\tbuf types: ");
 	printf("\tbuf_size: the buffer size for each access\n");

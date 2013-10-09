@@ -22,6 +22,7 @@ class sys_parameters
 	int cache_size;
 	int RAID_mapping_option;
 	bool use_virt_aio;
+	bool verify_content;
 public:
 	sys_parameters();
 
@@ -60,6 +61,10 @@ public:
 
 	bool is_use_virt_aio() const {
 		return use_virt_aio;
+	}
+
+	bool is_verify_content() const {
+		return verify_content;
 	}
 };
 

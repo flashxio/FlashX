@@ -81,7 +81,7 @@ public:
 		assert(thread == thread::get_curr_thread());
 		for (int i = 0; i < num; i++) {
 			io_request *rq = rqs[i];
-			if (rq->get_access_method() == READ && config.is_verify_read()) {
+			if (rq->get_access_method() == READ && params.is_verify_content()) {
 				off_t off = rq->get_offset();
 				for (int i = 0; i < rq->get_num_bufs(); i++) {
 					check_read_content(rq->get_buf(i), rq->get_buf_size(i), off);
@@ -188,7 +188,7 @@ int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
 			char *p = buf->next_entry(next_off - off);
 			if (p == NULL)
 				break;
-			if (access_method == WRITE && config.is_verify_read())
+			if (access_method == WRITE && params.is_verify_content())
 				create_write_data(p, next_off - off, off);
 			reqs[i].init(p, off, next_off - off, access_method,
 					io, node_id);
@@ -204,7 +204,7 @@ int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
 		char *p = buf->next_entry(size);
 		if (p == NULL)
 			return 0;
-		if (access_method == WRITE && config.is_verify_read())
+		if (access_method == WRITE && params.is_verify_content())
 			create_write_data(p, size, off);
 		reqs[0].init(p, off, size, access_method, io, node_id);
 		workload.off += size;
@@ -276,7 +276,7 @@ void thread_private::run()
 					 * generate the data for writing the file,
 					 * so the data in the file isn't changed.
 					 */
-					if (access_method == WRITE && config.is_verify_read()) {
+					if (access_method == WRITE && params.is_verify_content()) {
 						create_write_data(entry, entry_size, off);
 					}
 					// There is at least one byte we need to access in the page.
@@ -290,7 +290,7 @@ void thread_private::run()
 					assert(!(status == IO_UNSUPPORTED));
 					if (status == IO_OK) {
 						num_accesses++;
-						if (access_method == READ && config.is_verify_read()) {
+						if (access_method == READ && params.is_verify_content()) {
 							check_read_content(entry, next_off - off, off);
 						}
 						read_bytes += ret;
@@ -304,7 +304,7 @@ void thread_private::run()
 				}
 			}
 			else {
-				if (access_method == WRITE && config.is_verify_read()) {
+				if (access_method == WRITE && params.is_verify_content()) {
 					create_write_data(entry, entry_size, off);
 				}
 				io_status status = io->access(entry, off, entry_size,
@@ -312,7 +312,7 @@ void thread_private::run()
 				assert(!(status == IO_UNSUPPORTED));
 				if (status == IO_OK) {
 					num_accesses++;
-					if (access_method == READ && config.is_verify_read()) {
+					if (access_method == READ && params.is_verify_content()) {
 						check_read_content(entry, entry_size, off);
 					}
 					read_bytes += ret;

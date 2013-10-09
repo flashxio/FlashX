@@ -30,6 +30,7 @@ sys_parameters::sys_parameters()
 	cache_size = 512 * 1024 * 1024;
 	RAID_mapping_option = RAID5;
 	use_virt_aio = false;
+	verify_content = false;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -86,6 +87,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	it = configs.find("virt_aio");
 	if (it != configs.end())
 		use_virt_aio = true;
+
+	it = configs.find("verify_content");
+	if (it != configs.end()) {
+		verify_content = true;
+	}
 }
 
 void sys_parameters::print()
@@ -99,6 +105,7 @@ void sys_parameters::print()
 	std::cout << "\tcache_size: " << cache_size << std::endl;
 	std::cout << "\tRAID_mapping: " << RAID_mapping_option << std::endl;
 	std::cout << "\tvirt_aio: " << use_virt_aio << std::endl;
+	std::cout << "\tverify_content: " << verify_content << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -119,4 +126,5 @@ void sys_parameters::print_help()
 	RAID_option_map.print("\tRAID_mapping: ");
 	std::cout << "\tvirt_aio: enable virtual AIO for debugging and performance evaluation"
 		<< std::endl;
+	std::cout << "\tverify_content: verify data for testing" << std::endl;
 }
