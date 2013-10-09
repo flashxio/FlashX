@@ -106,6 +106,9 @@ void bind2node_id(int node_id);
 void bind_mem2node_id(int node_id);
 void bind2cpu(int cpu_id);
 
+void check_read_content(char *buf, int size, off_t off);
+void create_write_data(char *buf, int size, off_t off);
+
 #ifdef __cplusplus
 }
 #endif

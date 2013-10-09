@@ -9,60 +9,6 @@ int align_size = PAGE_SIZE;
 
 extern struct timeval global_start;
 
-void check_read_content(char *buf, int size, off_t off)
-{
-	// I assume the space in the buffer is larger than 8 bytes.
-	off_t aligned_off = off & (~(sizeof(off_t) - 1));
-	long data[2];
-	data[0] = aligned_off / sizeof(off_t);
-	data[1] = aligned_off / sizeof(off_t) + 1;
-	long expected = 0;
-	int copy_size = size < (int) sizeof(off_t) ? size : (int) sizeof(off_t);
-	memcpy(&expected, ((char *) data) + (off - aligned_off), copy_size);
-	long read_value = 0;
-	memcpy(&read_value, buf, copy_size);
-	if(read_value != expected)
-		printf("%ld %ld\n", read_value, expected);
-	assert(read_value == expected);
-}
-
-void create_write_data(char *buf, int size, off_t off)
-{
-	off_t aligned_start = off & (~(sizeof(off_t) - 1));
-	off_t aligned_end = (off + size) & (~(sizeof(off_t) - 1));
-	long start_data = aligned_start / sizeof(off_t);
-	long end_data = aligned_end / sizeof(off_t);
-
-	/* If all data is in one 8-byte word. */
-	if (aligned_start == aligned_end) {
-		memcpy(buf, ((char *) &start_data) + (off - aligned_start), size);
-		return;
-	}
-
-	int first_size =  (int)(sizeof(off_t) - (off - aligned_start));
-	int last_size = (int) (off + size - aligned_end);
-
-	if (first_size == sizeof(off_t))
-		first_size = 0;
-	if (first_size)
-		memcpy(buf, ((char *) &start_data) + (off - aligned_start),
-				first_size);
-	// Make each buffer written to SSDs different, so it's hard for SSDs
-	// to do some tricks on it.
-	struct timeval zero = {0, 0};
-	long diff = time_diff_us(zero, global_start);
-	for (int i = first_size; i < aligned_end - off; i += sizeof(off_t)) {
-		*((long *) (buf + i)) = (off + i) / sizeof(off_t) + diff;
-	}
-	if (aligned_end > aligned_start
-			|| (aligned_end == aligned_start && first_size == 0)) {
-		if (last_size)
-			memcpy(buf + (aligned_end - off), (char *) &end_data, last_size);
-	}
-
-	check_read_content(buf, size, off);
-}
-
 class cleanup_callback: public callback
 {
 	rand_buf *buf;
