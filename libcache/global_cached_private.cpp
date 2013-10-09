@@ -625,7 +625,6 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		ret = orig->get_size();
 		__complete_req(orig, p);
 
-		assert(!orig->is_partial());
 		finalize_request(*orig);
 	}
 	return ret;
