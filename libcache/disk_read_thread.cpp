@@ -231,7 +231,11 @@ void disk_read_thread::run() {
 			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
 		}
 
+#ifdef MEMCHECK
+		io_request *local_reqs = new io_request[LOCAL_REQ_BUF_SIZE];
+#else
 		io_request local_reqs[LOCAL_REQ_BUF_SIZE];
+#endif
 		for (int i = 0; i < num; i++) {
 			int num_reqs = msg_buffer[i].get_num_objs();
 			assert(num_reqs <= LOCAL_REQ_BUF_SIZE);
@@ -251,6 +255,9 @@ void disk_read_thread::run() {
 			aio->access(local_reqs, num_reqs);
 			msg_buffer[i].clear();
 		}
+#ifdef MEMCHECK
+		delete [] local_reqs;
+#endif
 
 		// We can't exit the loop if there are still pending AIO requests.
 		// This thread is responsible for processing completed AIO requests.
