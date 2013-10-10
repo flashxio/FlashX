@@ -57,7 +57,6 @@ public:
 	int init();
 
 	void cleanup() {
-		printf("start to flush dirty data\n");
 		for (size_t i = 0; i < fds.size(); i++)
 			fsync(fds[i]);
 	}
