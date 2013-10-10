@@ -12,6 +12,7 @@ template class blocking_FIFO_queue<thread_callback_s *>;
 #define EVEN_DISTRIBUTE
 
 const int MAX_BUF_REQS = 1024 * 3;
+const int MAX_MULTI_BUFS = 64;
 
 /* 
  * each file gets the same number of outstanding requests.
@@ -27,6 +28,7 @@ struct thread_callback_s
 	async_io *aio;
 	callback_allocator *cb_allocator;
 	io_request req;
+	struct iovec vec[MAX_MULTI_BUFS];
 };
 
 class virt_data_impl: public virt_data
@@ -209,8 +211,8 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 			assert((long) tcb->req.get_buf(i) % MIN_BLOCK_SIZE == 0);
 			assert(tcb->req.get_buf_size(i) % MIN_BLOCK_SIZE == 0);
 		}
-		struct iovec vec[num_bufs];
-		int ret = tcb->req.get_vec(vec, num_bufs);
+		assert(num_bufs <= MAX_MULTI_BUFS);
+		int ret = tcb->req.get_vec(tcb->vec, num_bufs);
 		assert(ret == num_bufs);
 		struct iocb *req = ctx->make_iovec_request(io->get_fd(tcb->req.get_offset()),
 				/* 
@@ -218,7 +220,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 				 * the space for the IO vector is stored
 				 * in the callback structure.
 				 */
-				vec, num_bufs, bid.off * PAGE_SIZE,
+				tcb->vec, num_bufs, bid.off * PAGE_SIZE,
 				io_type, cb);
 		// I need to submit the request immediately. The iovec array is
 		// allocated in the stack.
