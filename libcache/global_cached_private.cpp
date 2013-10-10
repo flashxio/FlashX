@@ -9,8 +9,6 @@
 const int RAID_BLOCK_SIZE = 16 * PAGE_SIZE;
 const int COMPLETE_QUEUE_SIZE = 10240;
 
-#define ENABLE_LARGE_WRITE
-
 class req_ext_allocator: public obj_allocator<io_req_extension>
 {
 	class ext_initiator: public obj_initiator<io_req_extension>
@@ -787,7 +785,9 @@ int global_cached_io::handle_pending_requests()
 
 void merge_pages2req(io_request &req, page_cache *cache)
 {
-#ifdef ENABLE_LARGE_WRITE
+	if (!params.is_cache_large_write())
+		return;
+
 	thread_safe_page *p;
 	off_t off = req.get_offset();
 	off_t forward_off = off + PAGE_SIZE;
@@ -841,7 +841,6 @@ void merge_pages2req(io_request &req, page_cache *cache)
 		}
 	}
 	assert(inside_RAID_block(req));
-#endif
 }
 
 /**

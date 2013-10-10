@@ -98,6 +98,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		use_flusher = true;
 	}
+
+	it = configs.find("cache_large_write");
+	if (it != configs.end()) {
+		cache_large_write = true;
+	}
 }
 
 void sys_parameters::print()
@@ -113,6 +118,7 @@ void sys_parameters::print()
 	std::cout << "\tvirt_aio: " << use_virt_aio << std::endl;
 	std::cout << "\tverify_content: " << verify_content << std::endl;
 	std::cout << "\tuse_flusher: " << use_flusher << std::endl;
+	std::cout << "\tcache_large_write: " << cache_large_write << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -135,4 +141,6 @@ void sys_parameters::print_help()
 		<< std::endl;
 	std::cout << "\tverify_content: verify data for testing" << std::endl;
 	std::cout << "\tuse_flusher: use flusher in the page cache" << std::endl;
+	std::cout << "\tcache_large_write: enable large write in the page cache."
+		<< std::endl;
 }

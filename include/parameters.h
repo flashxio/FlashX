@@ -24,6 +24,7 @@ class sys_parameters
 	bool use_virt_aio;
 	bool verify_content;
 	bool use_flusher;
+	bool cache_large_write;
 public:
 	sys_parameters();
 
@@ -70,6 +71,10 @@ public:
 
 	bool is_use_flusher() const {
 		return use_flusher;
+	}
+
+	bool is_cache_large_write() const {
+		return cache_large_write;
 	}
 };
 
