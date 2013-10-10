@@ -32,6 +32,7 @@ sys_parameters::sys_parameters()
 	use_virt_aio = false;
 	verify_content = false;
 	use_flusher = false;
+	vaio_print_freq = 1000000;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -103,6 +104,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		cache_large_write = true;
 	}
+
+	it = configs.find("vaio_print_freq");
+	if (it != configs.end()) {
+		vaio_print_freq = str2size(it->second);
+	}
 }
 
 void sys_parameters::print()
@@ -119,6 +125,7 @@ void sys_parameters::print()
 	std::cout << "\tverify_content: " << verify_content << std::endl;
 	std::cout << "\tuse_flusher: " << use_flusher << std::endl;
 	std::cout << "\tcache_large_write: " << cache_large_write << std::endl;
+	std::cout << "\tvaio_print_freq: " << vaio_print_freq << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -142,5 +149,7 @@ void sys_parameters::print_help()
 	std::cout << "\tverify_content: verify data for testing" << std::endl;
 	std::cout << "\tuse_flusher: use flusher in the page cache" << std::endl;
 	std::cout << "\tcache_large_write: enable large write in the page cache."
+		<< std::endl;
+	std::cout << "\tvaio_print_freq: how frequently a virtual SSD print stat info (in us)"
 		<< std::endl;
 }

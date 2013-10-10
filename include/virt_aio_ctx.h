@@ -31,11 +31,19 @@ class virt_aio_ctx: public aio_ctx
 	int max_aio;
 	fifo_queue<struct req_entry> pending_reqs;
 	virt_data *data;
+
+	long read_bytes;
+	long write_bytes;
+	struct timeval prev_print_time;
 public:
 	virt_aio_ctx(virt_data *data, int node_id, int max_aio): aio_ctx(node_id,
 			max_aio), pending_reqs(node_id, max_aio) {
 		this->max_aio = max_aio;
 		this->data = data;
+
+		read_bytes = 0;
+		write_bytes = 0;
+		memset(&prev_print_time, 0, sizeof(prev_print_time));
 	}
 
 	virtual void submit_io_request(struct iocb* ioq[], int num);

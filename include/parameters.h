@@ -25,6 +25,7 @@ class sys_parameters
 	bool verify_content;
 	bool use_flusher;
 	bool cache_large_write;
+	int vaio_print_freq;
 public:
 	sys_parameters();
 
@@ -75,6 +76,10 @@ public:
 
 	bool is_cache_large_write() const {
 		return cache_large_write;
+	}
+
+	int get_vaio_print_freq() const {
+		return vaio_print_freq;
 	}
 };
 

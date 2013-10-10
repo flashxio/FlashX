@@ -77,6 +77,16 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 		gettimeofday(&curr, NULL);
 	} while (time_diff_us(curr, entries[ret - 1].issue_time) > 0);
 
+	long time_diff = time_diff_us(prev_print_time, curr);
+	if (time_diff >= params.get_vaio_print_freq()) {
+		printf("read %.2fMB/s, write %.2fMB/s\n",
+				((double) read_bytes) / 1024 / 1024 / (((double) time_diff) / 1000000),
+				((double) write_bytes) / 1024 / 1024 / (((double) time_diff) / 1000000));
+		read_bytes = 0;
+		write_bytes = 0;
+		prev_print_time = curr;
+	}
+
 	// Notify the application of the completion of the requests.
 	// TODO I should fill the requests with right data.
 	struct iocb *iocbs[ret];
@@ -91,39 +101,49 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 			cb_func = cbs[i]->func;
 		assert(cb_func == cbs[i]->func);
 		iocbs[i] = entries[i].req;
-		if (params.is_verify_content()) {
-			if (iocbs[i]->aio_lio_opcode == IO_CMD_PREADV) {
-				off_t offset = iocbs[i]->u.c.offset;
-				int num_vecs = iocbs[i]->u.c.nbytes;
-				struct iovec *iov = (struct iovec *) iocbs[i]->u.c.buf;
-				int fd = iocbs[i]->aio_fildes;
-				for (int j = 0; j < num_vecs; j++) {
+		if (iocbs[i]->aio_lio_opcode == IO_CMD_PREADV) {
+			off_t offset = iocbs[i]->u.c.offset;
+			int num_vecs = iocbs[i]->u.c.nbytes;
+			struct iovec *iov = (struct iovec *) iocbs[i]->u.c.buf;
+			int fd = iocbs[i]->aio_fildes;
+			for (int j = 0; j < num_vecs; j++) {
+				if (params.is_verify_content()) {
 					data->create_data(fd, (char *) iov[j].iov_base,
 							iov[j].iov_len, offset);
 					offset += iov[j].iov_len;
 				}
+				read_bytes += iov[j].iov_len;
 			}
-			else if (iocbs[i]->aio_lio_opcode == IO_CMD_PREAD) {
+		}
+		else if (iocbs[i]->aio_lio_opcode == IO_CMD_PREAD) {
+			if (params.is_verify_content()) {
 				data->create_data(iocbs[i]->aio_fildes,
 						(char *) iocbs[i]->u.c.buf, iocbs[i]->u.c.nbytes,
 						iocbs[i]->u.c.offset);
 			}
-			else if (iocbs[i]->aio_lio_opcode == IO_CMD_PWRITEV) {
-				off_t offset = iocbs[i]->u.c.offset;
-				int num_vecs = iocbs[i]->u.c.nbytes;
-				struct iovec *iov = (struct iovec *) iocbs[i]->u.c.buf;
-				int fd = iocbs[i]->aio_fildes;
-				for (int j = 0; j < num_vecs; j++) {
+			read_bytes += iocbs[i]->u.c.nbytes;
+		}
+		else if (iocbs[i]->aio_lio_opcode == IO_CMD_PWRITEV) {
+			off_t offset = iocbs[i]->u.c.offset;
+			int num_vecs = iocbs[i]->u.c.nbytes;
+			struct iovec *iov = (struct iovec *) iocbs[i]->u.c.buf;
+			int fd = iocbs[i]->aio_fildes;
+			for (int j = 0; j < num_vecs; j++) {
+				if (params.is_verify_content()) {
 					assert(data->verify_data(fd, (char *) iov[j].iov_base,
-							iov[j].iov_len, offset));
+								iov[j].iov_len, offset));
 					offset += iov[j].iov_len;
 				}
+				write_bytes += iov[j].iov_len;
 			}
-			else if (iocbs[i]->aio_lio_opcode == IO_CMD_PWRITE) {
+		}
+		else if (iocbs[i]->aio_lio_opcode == IO_CMD_PWRITE) {
+			if (params.is_verify_content()) {
 				assert(data->verify_data(iocbs[i]->aio_fildes,
-						(char *) iocbs[i]->u.c.buf, iocbs[i]->u.c.nbytes,
-						iocbs[i]->u.c.offset));
+							(char *) iocbs[i]->u.c.buf, iocbs[i]->u.c.nbytes,
+							iocbs[i]->u.c.offset));
 			}
+			write_bytes += iocbs[i]->u.c.nbytes;
 		}
 		res[i] = 0;
 		res2[i] = 0;
