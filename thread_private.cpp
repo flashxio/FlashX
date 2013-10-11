@@ -41,7 +41,8 @@ public:
 		}
 #ifdef STATISTICS
 		thread->num_completes.inc(num);
-		thread->num_pending.dec(num);
+		int res = thread->num_pending.dec(num);
+		assert(res >= 0);
 #endif
 		return 0;
 	}
@@ -174,6 +175,7 @@ void thread_private::run()
 	while (gen->has_next()) {
 		if (config.is_use_aio()) {
 			int i;
+			bool no_mem = false;
 			int num_reqs_by_user = min(io->get_remaining_io_slots(), NUM_REQS_BY_USER);
 			for (i = 0; i < num_reqs_by_user; ) {
 				if (converter.has_complete() && gen->has_next()) {
@@ -183,18 +185,14 @@ void thread_private::run()
 					break;
 				int ret = converter.to_reqs(config.get_buf_type(),
 						num_reqs_by_user - i, reqs + i);
-				if (ret == 0)
+				if (ret == 0) {
+					no_mem = true;
 					break;
+				}
 				i += ret;
 			}
-			io->access(reqs, i);
-			while (io->get_remaining_io_slots() <= 0) {
-				int num_ios = io->get_max_num_pending_ios() / 10;
-				if (num_ios == 0)
-					num_ios = 1;
-				io->wait4complete(num_ios);
-			}
-			num_accesses += i;
+			if (i > 0)
+				io->access(reqs, i);
 #ifdef STATISTICS
 			int curr = num_pending.inc(i);
 			if (max_num_pending < curr)
@@ -204,6 +202,15 @@ void thread_private::run()
 				tot_num_pending += curr;
 			}
 #endif
+			// We wait if we don't have IO slots left or we can't issue
+			// more requests due to the lack of memory.
+			if (io->get_remaining_io_slots() <= 0 || no_mem) {
+				int num_ios = io->get_max_num_pending_ios() / 10;
+				if (num_ios == 0)
+					num_ios = 1;
+				io->wait4complete(num_ios);
+			}
+			num_accesses += i;
 		}
 		else {
 			int ret = 0;
