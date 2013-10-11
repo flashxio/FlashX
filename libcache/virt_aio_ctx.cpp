@@ -80,10 +80,10 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 	long time_diff = time_diff_us(prev_print_time, curr);
 	if (time_diff >= params.get_vaio_print_freq()) {
 		printf("read %.2fMB/s, write %.2fMB/s\n",
-				((double) read_bytes) / 1024 / 1024 / (((double) time_diff) / 1000000),
-				((double) write_bytes) / 1024 / 1024 / (((double) time_diff) / 1000000));
-		read_bytes = 0;
-		write_bytes = 0;
+				((double) read_bytes_ps) / 1024 / 1024 / (((double) time_diff) / 1000000),
+				((double) write_bytes_ps) / 1024 / 1024 / (((double) time_diff) / 1000000));
+		read_bytes_ps = 0;
+		write_bytes_ps = 0;
 		prev_print_time = curr;
 	}
 
@@ -112,6 +112,7 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 							iov[j].iov_len, offset);
 					offset += iov[j].iov_len;
 				}
+				read_bytes_ps += iov[j].iov_len;
 				read_bytes += iov[j].iov_len;
 			}
 		}
@@ -121,6 +122,7 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 						(char *) iocbs[i]->u.c.buf, iocbs[i]->u.c.nbytes,
 						iocbs[i]->u.c.offset);
 			}
+			read_bytes_ps += iocbs[i]->u.c.nbytes;
 			read_bytes += iocbs[i]->u.c.nbytes;
 		}
 		else if (iocbs[i]->aio_lio_opcode == IO_CMD_PWRITEV) {
@@ -134,6 +136,7 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 								iov[j].iov_len, offset));
 					offset += iov[j].iov_len;
 				}
+				write_bytes_ps += iov[j].iov_len;
 				write_bytes += iov[j].iov_len;
 			}
 		}
@@ -143,6 +146,7 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 							(char *) iocbs[i]->u.c.buf, iocbs[i]->u.c.nbytes,
 							iocbs[i]->u.c.offset));
 			}
+			write_bytes_ps += iocbs[i]->u.c.nbytes;
 			write_bytes += iocbs[i]->u.c.nbytes;
 		}
 		res[i] = 0;

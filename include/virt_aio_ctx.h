@@ -34,6 +34,8 @@ class virt_aio_ctx: public aio_ctx
 
 	long read_bytes;
 	long write_bytes;
+	long read_bytes_ps;		// the bytes to read within a second.
+	long write_bytes_ps;	// the bytes to write within a second.
 	struct timeval prev_print_time;
 public:
 	virt_aio_ctx(virt_data *data, int node_id, int max_aio): aio_ctx(node_id,
@@ -43,6 +45,8 @@ public:
 
 		read_bytes = 0;
 		write_bytes = 0;
+		read_bytes_ps = 0;
+		write_bytes_ps = 0;
 		memset(&prev_print_time, 0, sizeof(prev_print_time));
 	}
 
@@ -50,6 +54,11 @@ public:
 	virtual int io_wait(struct timespec* to, int num);
 
 	virtual int max_io_slot();
+
+	virtual void print_stat() {
+		printf("the virtual AIO context reads %ld bytes and writes %ld bytes\n",
+				read_bytes, write_bytes);
+	}
 };
 
 #endif

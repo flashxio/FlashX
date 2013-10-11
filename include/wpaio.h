@@ -39,6 +39,8 @@ public:
 	virtual void submit_io_request(struct iocb* ioq[], int num) = 0;
 	virtual int io_wait(struct timespec* to, int num) = 0;
 	virtual int max_io_slot() = 0;
+	virtual void print_stat() {
+	}
 };
 
 class aio_ctx_impl: public aio_ctx

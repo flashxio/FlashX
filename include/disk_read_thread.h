@@ -149,6 +149,7 @@ public:
 					min_flush_delay);
 		printf("\tremain %d high-prio requests, %d low-prio requests\n",
 				get_num_high_prio_reqs(), get_num_low_prio_reqs());
+		aio->print_stat(1);
 #endif
 	}
 };

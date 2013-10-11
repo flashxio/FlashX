@@ -108,6 +108,10 @@ public:
 	 */
 	int open_file(const logical_file_partition &partition);
 	int close_file(int file_id);
+
+	virtual void print_stat(int nthreads) {
+		ctx->print_stat();
+	}
 };
 
 void init_aio(std::vector<int> node_ids);
