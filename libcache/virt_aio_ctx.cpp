@@ -2,8 +2,10 @@
 
 #include "virt_aio_ctx.h"
 
-const int MIN_DELAY = 100;
-const int MAX_RAND_DELAY = 100;		// in microseconds
+const int MIN_READ_DELAY = 100;
+const int MAX_RAND_READ_DELAY = 100;		// in microseconds
+const int MIN_WRITE_DELAY = 200;
+const int MAX_RAND_WRITE_DELAY = 500;		// in microseconds
 
 struct timeval add2timeval(const struct timeval time, long added_delay)
 {
@@ -14,6 +16,47 @@ struct timeval add2timeval(const struct timeval time, long added_delay)
 	return res;
 }
 
+class naive_ssd_perf_model: public ssd_perf_model
+{
+public:
+	virtual long get_read_delay(off_t off, size_t size);
+	virtual long get_write_delay(off_t off, size_t size);
+};
+
+long naive_ssd_perf_model::get_read_delay(off_t off, size_t size)
+{
+	// We introduce some random delay in each request.
+	// The delay is in microseconds.
+	int rand_delay = random() % MAX_RAND_READ_DELAY;
+	int num_pages = size / PAGE_SIZE;
+	if (num_pages == 0)
+		num_pages = 1;
+	return rand_delay + MIN_READ_DELAY * num_pages;
+}
+
+long naive_ssd_perf_model::get_write_delay(off_t off, size_t size)
+{
+	int rand_delay = random() % MAX_RAND_WRITE_DELAY;
+	int num_pages = size / PAGE_SIZE;
+	if (num_pages == 0)
+		num_pages = 1;
+	return rand_delay + MIN_WRITE_DELAY * num_pages;
+}
+
+virt_aio_ctx::virt_aio_ctx(virt_data *data, int node_id,
+		int max_aio): aio_ctx(node_id, max_aio), pending_reqs(node_id, max_aio)
+{
+	this->max_aio = max_aio;
+	this->data = data;
+	this->model = new naive_ssd_perf_model();
+
+	read_bytes = 0;
+	write_bytes = 0;
+	read_bytes_ps = 0;
+	write_bytes_ps = 0;
+	memset(&prev_print_time, 0, sizeof(prev_print_time));
+}
+
 struct comp_issued_request
 {
 	bool operator() (const struct req_entry &req1,
@@ -21,6 +64,23 @@ struct comp_issued_request
 		return time_diff_us(req1.issue_time, req2.issue_time) > 0;
 	}
 } issued_req_comparator;
+
+size_t get_size(struct iocb *req)
+{
+	if (req->aio_lio_opcode == IO_CMD_PREAD
+			|| req->aio_lio_opcode == IO_CMD_PWRITE) {
+		return req->u.c.nbytes;
+	}
+	else {
+		size_t size = 0;
+		int num_vecs = req->u.c.nbytes;
+		struct iovec *iov = (struct iovec *) req->u.c.buf;
+		for (int i = 0; i < num_vecs; i++) {
+			size += iov[i].iov_len;
+		}
+		return size;
+	}
+}
 
 void virt_aio_ctx::submit_io_request(struct iocb* ioq[], int num)
 {
@@ -31,10 +91,16 @@ void virt_aio_ctx::submit_io_request(struct iocb* ioq[], int num)
 	for (int i = 0; i < num; i++) {
 		entries[i].req = ioq[i];
 
-		// We introduce some random delay in each request.
-		// The delay is in microseconds.
-		int rand_delay = random() % MAX_RAND_DELAY;
-		entries[i].issue_time = add2timeval(curr, rand_delay + MIN_DELAY);
+		off_t off = ioq[i]->u.c.offset;
+		if (ioq[i]->aio_lio_opcode == IO_CMD_PREAD
+				|| ioq[i]->aio_lio_opcode == IO_CMD_PREADV) {
+			long delay = model->get_read_delay(off, get_size(ioq[i]));
+			entries[i].issue_time = add2timeval(curr, delay);
+		}
+		else {
+			long delay = model->get_write_delay(off, get_size(ioq[i]));
+			entries[i].issue_time = add2timeval(curr, delay);
+		}
 	}
 	std::sort(entries, entries + num, issued_req_comparator);
 	assert(time_diff_us(entries[0].issue_time,
