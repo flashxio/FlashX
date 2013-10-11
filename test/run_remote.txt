@@ -1,0 +1,12 @@
+#virt_aio=
+
+option=remote
+pages=1048576
+threads=16
+workload=RAND
+entry_size=4096
+num_nodes=4
+access=read
+buf_size=16777216
+read_percent=100
+root_conf=conf/RAID_ROOT.txt

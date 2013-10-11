@@ -1,0 +1,13 @@
+virt_aio=
+verify_content=
+
+option=remote
+pages=10485760
+threads=16
+workload=RAND
+entry_size=4096
+num_nodes=4
+access=read
+buf_size=16777216
+read_percent=100
+root_conf=conf/TEST_ROOTS.txt
