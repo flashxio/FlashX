@@ -1005,7 +1005,9 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					pg_idx = 0;
 				}
 
-				// Extract the partial access.
+				// Extract the partial write.
+				// The other part of the global cached IO can only handle
+				// a write request within one page.
 				io_request *orig1;
 				// If the request accesses more than one page.
 				if (end_pg_offset - begin_pg_offset > PAGE_SIZE) {
