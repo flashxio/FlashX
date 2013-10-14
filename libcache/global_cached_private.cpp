@@ -761,7 +761,7 @@ int global_cached_io::handle_pending_requests()
 				 */
 				assert(req->get_next_req() == NULL);
 				assert(req->get_io() == this);
-				assert(req->get_num_bufs() == 1);
+				assert(req->within_1page());
 				io_request *next = (io_request *) req->get_next_req();
 				assert(req->get_priv() == p);
 				req->set_next_req(NULL);
