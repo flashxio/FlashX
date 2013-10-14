@@ -19,7 +19,7 @@ class sys_parameters
 	int test_hit_rate;
 	int io_depth_per_file;
 	int cache_type;
-	int cache_size;
+	long cache_size;
 	int RAID_mapping_option;
 	bool use_virt_aio;
 	bool verify_content;
@@ -54,7 +54,7 @@ public:
 		return cache_type;
 	}
 
-	int get_cache_size() const {
+	long get_cache_size() const {
 		return cache_size;
 	}
 
