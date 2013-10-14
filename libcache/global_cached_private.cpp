@@ -892,7 +892,6 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
 	num_completed_areqs.inc(num_async_reqs);
-	get_thread()->activate();
 	::notify_completion(this, async_reqs, num_async_reqs);
 }
 
