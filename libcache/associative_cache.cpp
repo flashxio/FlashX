@@ -323,6 +323,10 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 	if (ret == NULL) {
 		num_evictions++;
 		ret = get_empty_page();
+		if (ret == NULL) {
+			pthread_spin_unlock(&_lock);
+			return NULL;
+		}
 		// We need to clear flags here.
 		ret->set_data_ready(false);
 		assert(!ret->is_io_pending());
@@ -389,35 +393,14 @@ void hash_cell::print_cell()
 }
 
 /* this function has to be called with lock held */
-thread_safe_page *hash_cell::get_empty_page() {
-	thread_safe_page *ret = NULL;
-
-search_again:
-	ret = policy.evict_page(buf);
+thread_safe_page *hash_cell::get_empty_page()
+{
+	thread_safe_page *ret = policy.evict_page(buf);
 	if (ret == NULL) {
 #ifdef DEBUG
 		printf("all pages in the cell were all referenced\n");
 #endif
-		/* 
-		 * If all pages in the cell are referenced, there is
-		 * nothing we can do but wait. However, before busy waiting,
-		 * we should unlock the lock, so other threads may still
-		 * search the cell.
-		 */
-		pthread_spin_unlock(&_lock);
-		bool all_referenced = true;
-		while (all_referenced) {
-			for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
-				thread_safe_page *pg = buf.get_page(i);
-				/* If a page isn't referenced. */
-				if (!pg->get_ref()) {
-					all_referenced = false;
-					break;
-				}
-			}
-		}
-		pthread_spin_lock(&_lock);
-		goto search_again;
+		return NULL;
 	}
 
 	/* we record the hit info of the page in the shadow cell. */

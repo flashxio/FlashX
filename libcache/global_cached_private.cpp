@@ -933,8 +933,20 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		for (off_t tmp_off = begin_pg_offset; tmp_off < end_pg_offset;
 				tmp_off += PAGE_SIZE) {
 			off_t old_off = -1;
-			thread_safe_page *p = (thread_safe_page *) (get_global_cache()
-					->search(tmp_off, old_off));
+			thread_safe_page *p;
+			
+			do {
+				p = (thread_safe_page *) (get_global_cache()
+						->search(tmp_off, old_off));
+				// If the cache can't evict a page, it's probably because
+				// all pages have been referenced. Let's flush all requests
+				// from the cached IO and process all completed requests,
+				// hopefully we can dereference the pages in the cache.
+				if (p == NULL) {
+					flush_requests();
+					process_all_completed_requests();
+				}
+			} while (p == NULL);
 
 			num_accesses++;
 			if (num_accesses % 100 < params.get_test_hit_rate()) {
@@ -1159,13 +1171,18 @@ int global_cached_io::preload(off_t start, long size) {
 	return 0;
 }
 
+void global_cached_io::process_all_completed_requests()
+{
+	process_completed_requests(complete_queue.get_num_entries());
+	if (!pending_requests.is_empty()) {
+		handle_pending_requests();
+	}
+}
+
 void global_cached_io::wait4req(io_request *req)
 {
 	while (!req->is_complete()) {
-		process_completed_requests(complete_queue.get_num_entries());
-		if (!pending_requests.is_empty()) {
-			handle_pending_requests();
-		}
+		process_all_completed_requests();
 		if (req->is_complete())
 			break;
 		get_thread()->wait();
@@ -1181,18 +1198,12 @@ int global_cached_io::wait4complete(int num_to_complete)
 	int pending = num_pending_ios();
 	num_to_complete = min(pending, num_to_complete);
 
-	process_completed_requests(complete_queue.get_num_entries());
-	if (!pending_requests.is_empty()) {
-		handle_pending_requests();
-	}
+	process_all_completed_requests();
 	int iters = 0;
 	while (pending - num_pending_ios() < num_to_complete) {
 		iters++;
 		get_thread()->wait();
-		process_completed_requests(complete_queue.get_num_entries());
-		if (!pending_requests.is_empty()) {
-			handle_pending_requests();
-		}
+		process_all_completed_requests();
 	}
 	return pending - num_pending_ios();
 }
