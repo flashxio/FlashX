@@ -130,6 +130,7 @@ public:
 	}
 
 	virtual void cleanup() {
+		wait4complete(num_pending_ios());
 		underlying->cleanup();
 	}
 
