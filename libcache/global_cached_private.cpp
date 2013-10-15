@@ -1182,6 +1182,7 @@ void global_cached_io::process_all_completed_requests()
 	process_completed_requests(complete_queue.get_num_entries());
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();
+		flush_requests();
 	}
 }
 
