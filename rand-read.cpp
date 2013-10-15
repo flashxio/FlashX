@@ -99,9 +99,9 @@ void test_config::init(const std::map<std::string, std::string> configs)
 		}
 	}
 
-	it = configs.find("pages");
+	it = configs.find("num_reqs");
 	if (it != configs.end()) {
-		npages = atoi(it->second.c_str());
+		num_reqs = atoi(it->second.c_str());
 	}
 
 	it = configs.find("threads");
@@ -187,7 +187,7 @@ void test_config::print()
 {
 	printf("the configuration of the test program\n");
 	printf("\toption: %d\n", access_option);
-	printf("\tpages: %ld\n", npages);
+	printf("\tnum_reqs: %ld\n", num_reqs);
 	printf("\tthreads: %d\n", nthreads);
 	printf("\tnum_nodes: %d\n", num_nodes);
 	printf("\tread_ratio: %f\n", read_ratio);
@@ -212,7 +212,7 @@ void test_config::print_help()
 
 	printf("test options:\n");
 	access_map.print("access options: ");
-	printf("\tpages: the number of pages to access in a synthetic workload\n");
+	printf("\tnum_reqs: the number of requests generated in a workload\n");
 	printf("\tread_ratio: the read percentage of a synthetic workload\n");
 	printf("\trepeats: the number of repeats in a random permutation workload\n");
 	printf("\tthreads: the number of test threads\n");
@@ -353,7 +353,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	int remainings = config.get_npages() % config.get_nthreads();
+	int remainings = config.get_num_reqs() % config.get_nthreads();
 	int shift = 0;
 	long start;
 	long end = 0;
@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
 			 * according to the offset.
 			 */
 			start = end;
-			end = start + ((long) config.get_npages() / config.get_nthreads()
+			end = start + ((long) config.get_num_reqs() / config.get_nthreads()
 					+ (shift < remainings)) * PAGE_SIZE / config.get_entry_size();
 			if (remainings != shift)
 				shift++;
@@ -416,7 +416,7 @@ int main(int argc, char *argv[])
 				case RAND_PERMUTE:
 					assert(config.get_read_ratio() >= 0);
 					gen = new global_rand_permute_workload(config.get_entry_size(),
-							(((long) config.get_npages()) * PAGE_SIZE) / config.get_entry_size(),
+							(((long) config.get_num_reqs()) * PAGE_SIZE) / config.get_entry_size(),
 							config.get_num_repeats(), config.get_read_ratio());
 					break;
 				case -1:
@@ -425,7 +425,10 @@ int main(int argc, char *argv[])
 						static workload_t *workloads = NULL;
 						if (workloads == NULL)
 							workloads = load_file_workload(config.get_workload_file(), length);
-						gen = new file_workload(workloads, length, j, config.get_nthreads(),
+						long num_reqs = length;
+						if (config.get_num_reqs() >= 0)
+							num_reqs = min(config.get_num_reqs(), num_reqs);
+						gen = new file_workload(workloads, num_reqs, j, config.get_nthreads(),
 								(int) (config.get_read_ratio() * 100));
 						break;
 					}

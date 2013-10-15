@@ -25,7 +25,7 @@ enum {
 class test_config
 {
 	int access_option;
-	long npages;
+	long num_reqs;
 	int entry_size;
 	int nthreads;
 	int buf_type;
@@ -42,7 +42,7 @@ class test_config
 public:
 	test_config() {
 		access_option = -1;
-		npages = -1;
+		num_reqs = -1;
 		entry_size = PAGE_SIZE;
 		nthreads = 1;
 		buf_type = SINGLE_LARGE_BUF;
@@ -63,8 +63,8 @@ public:
 		return access_option;
 	}
 
-	long get_npages() const {
-		return npages;
+	long get_num_reqs() const {
+		return num_reqs;
 	}
 
 	int get_entry_size() const {

@@ -1,7 +1,7 @@
 #virt_aio=
 
 option=remote
-pages=1048576
+num_reqs=1048576
 threads=16
 workload=RAND
 entry_size=4096

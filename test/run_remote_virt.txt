@@ -2,7 +2,7 @@ virt_aio=
 verify_content=
 
 option=remote
-pages=10485760
+num_reqs=10485760
 threads=16
 workload=RAND
 entry_size=4096
