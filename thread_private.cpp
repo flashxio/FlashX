@@ -199,6 +199,13 @@ void thread_private::run()
 				}
 				i += ret;
 			}
+#ifdef STATISTICS
+			/*
+			 * cached IO may complete a request before calling wait4complte().
+			 * so we need to increase num_pending before access() is called.
+			 */
+			int curr = num_pending.inc(i);
+#endif
 			if (i > 0) {
 #ifdef DEBUG
 				for (int k = 0; k < i; k++) {
@@ -211,7 +218,6 @@ void thread_private::run()
 				io->access(reqs, i);
 			}
 #ifdef STATISTICS
-			int curr = num_pending.inc(i);
 			if (max_num_pending < curr)
 				max_num_pending = curr;
 			if (num_accesses % 100 == 0) {
