@@ -16,6 +16,10 @@ class cleanup_callback: public callback
 	int thread_id;
 	thread_private *thread;
 public:
+#ifdef DEBUG
+	std::tr1::unordered_map<char *, workload_t> pending_reqs;
+#endif
+
 	cleanup_callback(rand_buf *buf, int idx, thread_private *thread) {
 		this->buf = buf;
 		read_bytes = 0;
@@ -35,6 +39,10 @@ public:
 					off += rq->get_buf_size(i);
 				}
 			}
+#ifdef DEBUG
+			assert(rq->get_num_bufs() == 1);
+			pending_reqs.erase(rq->get_buf(0));
+#endif
 			for (int i = 0; i < rq->get_num_bufs(); i++)
 				buf->free_entry(rq->get_buf(i));
 			read_bytes += rq->get_size();
@@ -191,8 +199,17 @@ void thread_private::run()
 				}
 				i += ret;
 			}
-			if (i > 0)
+			if (i > 0) {
+#ifdef DEBUG
+				for (int k = 0; k < i; k++) {
+					workload_t work = {reqs[k].get_offset(),
+						(int) reqs[k].get_size(), reqs[k].get_access_method() == READ};
+					cb->pending_reqs.insert(std::pair<char *, workload_t>(
+								reqs[k].get_buf(0), work));
+				}
+#endif
 				io->access(reqs, i);
+			}
 #ifdef STATISTICS
 			int curr = num_pending.inc(i);
 			if (max_num_pending < curr)
@@ -329,3 +346,30 @@ static int process_join(pid_t pid)
 	return ret < 0 ? ret : 0;
 }
 #endif
+
+void thread_private::print_stat()
+{
+#ifdef STATISTICS
+#ifdef DEBUG
+	assert(num_pending.get() == (int) cb->pending_reqs.size());
+	if (cb->pending_reqs.size() > 0) {
+		for (std::tr1::unordered_map<char *, workload_t>::const_iterator it
+				= cb->pending_reqs.begin(); it != cb->pending_reqs.end(); it++) {
+			workload_t work = it->second;
+			printf("missing req %lx, size %d, read: %d\n", work.off, work.size, work.read);
+		}
+	}
+#endif
+	io->print_stat(config.get_nthreads());
+	int avg_num_pending = 0;
+	if (num_sampling > 0)
+		avg_num_pending = tot_num_pending / num_sampling;
+	printf("access %ld bytes in %ld accesses (%d completes), avg pending: %d, max pending: %d, remaining pending: %d\n",
+			get_read_bytes(), num_accesses, num_completes.get(),
+			avg_num_pending, max_num_pending, num_pending.get());
+#endif
+	extern struct timeval global_start;
+	printf("thread %d: start at %f seconds, takes %f seconds, access %ld bytes in %ld accesses\n", idx,
+			time_diff(global_start, start_time), time_diff(start_time, end_time),
+			get_read_bytes(), num_accesses);
+}

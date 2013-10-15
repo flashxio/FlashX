@@ -78,21 +78,7 @@ public:
 
 	ssize_t get_read_bytes();
 
-	void print_stat() {
-#ifdef STATISTICS
-		io->print_stat(config.get_nthreads());
-		int avg_num_pending = 0;
-		if (num_sampling > 0)
-			avg_num_pending = tot_num_pending / num_sampling;
-		printf("access %ld bytes in %ld accesses (%d completes), avg pending: %d, max pending: %d\n",
-				get_read_bytes(), num_accesses, num_completes.get(),
-				avg_num_pending, max_num_pending);
-#endif
-		extern struct timeval global_start;
-		printf("thread %d: start at %f seconds, takes %f seconds, access %ld bytes in %ld accesses\n", idx,
-				time_diff(global_start, start_time), time_diff(start_time, end_time),
-				get_read_bytes(), num_accesses);
-	}
+	void print_stat();
 };
 
 #endif
