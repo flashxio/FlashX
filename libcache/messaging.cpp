@@ -28,7 +28,6 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 	this->offset = off;
 	this->io_addr = (long) io;
 	if (is_extended_req()) {
-		ASSERT_EQ(get_extension()->get_num_bufs(), 0);
 		if (buf)
 			add_buf(buf, size);
 	}
