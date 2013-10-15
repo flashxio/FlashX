@@ -1,0 +1,12 @@
+cache_type=associative
+virt_aio=
+verify_content=
+
+option=global_cache
+threads=16
+workload=test/mysqld_tpcc_datafile.data
+num_nodes=4
+buf_size=16777216
+root_conf=conf/TEST_ROOTS.txt
+#use_flusher=
+#cache_large_write=
