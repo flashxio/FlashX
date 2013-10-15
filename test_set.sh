@@ -47,3 +47,6 @@ echo "the basic test for global cached IO with small writes on virtual SSDs. Lar
 
 echo "the basic test for global cached IO with large writes on virtual SSDs."
 ./rand-read test/run_cache_virt.txt test read_percent=0 entry_size=$((4096 * 32)) RAID_block_size=64K
+
+echo "the basic test for global cached IO under the TPCC workload."
+./rand-read test/run_cache_tpcc.txt test
