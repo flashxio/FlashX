@@ -417,9 +417,16 @@ void global_cached_io::process_completed_requests(io_request requests[],
 		// Since we have a reference of the page, it won't be evicted.
 		// When data is ready, we can execuate any operations on the page.
 		if (data_ready) {
-			/* The request should contain the very original request. */
 			io_request *orig = request->get_orig();
-			assert(orig->get_orig() == NULL);
+			/* 
+			 * The request may contain an intermediate original request.
+			 * Let's get to the very original request.
+			 */
+			if (orig->get_orig()) {
+				assert(orig->within_1page());
+				orig = orig->get_orig();
+				assert(orig->get_orig() == NULL);
+			}
 			thread_safe_page *dirty = __complete_req(orig, p);
 			// TODO maybe I should make it support multi-request callback.
 			if (dirty)
@@ -601,7 +608,6 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 
 			io_request req(ext, p->get_offset(), READ, this, get_node_id());
 			p->unlock();
-			assert(orig->get_orig() == NULL);
 			io_status status;
 			underlying->access(&req, 1, &status);
 			if (status == IO_FAIL) {
