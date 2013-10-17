@@ -22,6 +22,7 @@
 #include "cache_config.h"
 #include "slab_allocator.h"
 #include "thread.h"
+#include "remote_access.h"
 
 // The size of a request >= sizeof(io_request).
 const int NUMA_REQ_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_request);
@@ -39,7 +40,6 @@ struct thread_group
 	int id;
 	page_cache *cache;
 	std::vector<process_request_thread *> process_request_threads;
-	const io_interface *underlying;
 	slab_allocator *msg_allocator;
 	msg_queue<io_request> *request_queue;
 
@@ -47,7 +47,6 @@ struct thread_group
 		id = -1;
 		cache = NULL;
 		request_queue = NULL;
-		underlying = NULL;
 	}
 };
 
@@ -69,8 +68,8 @@ class part_io_process_table
 	const cache_config *cache_conf;
 	int num_groups;
 public:
-	part_io_process_table(std::map<int, io_interface *> &underlyings,
-			const cache_config *config, int num_ssds);
+	part_io_process_table(const std::vector<disk_read_thread *> &io_threads,
+			file_mapper *mapper, const cache_config *config);
 
 	~part_io_process_table();
 
@@ -95,12 +94,6 @@ public:
 		return it->second.cache;
 	}
 
-	const io_interface *get_underlying_io(int node_id) const {
-		std::map<int, struct thread_group>::const_iterator it
-			= groups.find(node_id);
-		return it->second.underlying;
-	}
-
 	int get_num_groups() const {
 		return num_groups;
 	}
@@ -112,6 +105,8 @@ public:
 			node_ids.insert(it->first);
 		return node_ids;
 	}
+
+	void activate_all_threads();
 };
 
 #if 0
@@ -148,17 +143,17 @@ class node_cached_io: public global_cached_io
 	message<io_request> local_msgs[MSG_BUF_SIZE];
 	pthread_t processing_thread_id;
 
-	node_cached_io(thread *t, io_interface *underlying,
+	node_cached_io(io_interface *underlying,
 			struct thread_group *local_group);
 	~node_cached_io() {
 	}
 public:
-	static node_cached_io *create(thread *t, io_interface *underlying,
+	static node_cached_io *create(io_interface *underlying,
 			struct thread_group *local_group) {
 		assert(underlying->get_node_id() >= 0);
 		void *addr = numa_alloc_onnode(sizeof(node_cached_io),
 				underlying->get_node_id());
-		return new(addr) node_cached_io(t, underlying, local_group);
+		return new(addr) node_cached_io(underlying, local_group);
 	}
 
 	static void destroy(node_cached_io *io) {
@@ -203,9 +198,9 @@ public:
 };
 #endif
 
-node_cached_io::node_cached_io(thread *t, io_interface *underlying,
-		struct thread_group *local_group):
-	global_cached_io(t, underlying, local_group->cache)
+node_cached_io::node_cached_io(io_interface *underlying,
+		struct thread_group *local_group): global_cached_io(
+			underlying->get_thread(), underlying, local_group->cache)
 {
 	assert(local_group);
 	this->local_group = local_group;
@@ -244,72 +239,81 @@ int node_cached_io::process_requests(int max_nreqs)
 			tmp_msgs[i].copy_to(local_msgs[i]);
 		}
 		for (int i = 0; i < num; i++) {
-			int num_reqs = local_msgs[i].get_next_objs(local_reqs,
-					NUMA_REQ_BUF_SIZE);
-			assert(local_msgs[i].is_empty());
-			global_cached_io::access(local_reqs, num_reqs);
-			num_processed += num_reqs;
+			while (!local_msgs[i].is_empty()) {
+				int num_reqs = local_msgs[i].get_next_objs(local_reqs,
+						min(NUMA_REQ_BUF_SIZE,
+							global_cached_io::get_remaining_io_slots()));
+				global_cached_io::access(local_reqs, num_reqs);
+				num_processed += num_reqs;
+			}
 		}
-		flush_requests();
 	}
+	// We don't want the thread to be blocked here. The thread is activated
+	// in two cases: new requests are sent to its request queue; or some
+	// requests have been completed.
+	if (global_cached_io::num_pending_ios() > 0)
+		global_cached_io::wait4complete(0);
 	num_requests += num_processed;
 	return num_processed;
 }
 
+void part_global_cached_io::notify_upper(io_request *reqs[], int num)
+{
+	for (int i = 0; i < num; i++) {
+		io_request *req = reqs[i];
+		io_interface *io = req->get_io();
+		assert(io == this);
+		if (io->get_callback())
+			io->get_callback()->invoke(&req, 1);
+	}
+}
+
+/**
+ * This method is invoked in two places: the underlying IO instance and
+ * node_cached_io instance.
+ * If it's invoked by the underlying IO, the request was issued by the current
+ * thread, so it can just notify the application code.
+ * Otherwise, it needs to send a reply message to the thread that issues
+ * the request.
+ */
 void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 {
-	// This method is only used for remote requests.
-	// For local requests, global_cached_io will return the completed requests
-	// to the application directly.
-	if (num == 1) {
-		int idx = cache_conf->page2cache(reqs[0]->get_offset());
-		if (idx != get_node_id()) {
-			io_request *req = reqs[0];
-			io_reply rep(req, true, 0);
-			part_global_cached_io *io = (part_global_cached_io *) req->get_io();
-			int node_id = local_group->id;
-			int num_sent = io->get_reply_sender(node_id)->send_cached(&rep);
-			// We use blocking queues here, so the send must succeed.
-			assert(num_sent > 0);
-		}
-		else
-			global_cached_io::notify_completion(reqs, 1);
-	}
-	else {
-		io_request *local_reqs[num];
-		// This buffer is used for sending replies.
+	io_request *local_reqs[num];
+	// This buffer is used for sending replies.
 #ifdef MEMCHECK
-		io_reply *local_reply_buf = new io_reply[num];
+	io_reply *local_reply_buf = new io_reply[num];
 #else
-		io_reply local_reply_buf[num];
+	io_reply local_reply_buf[num];
 #endif
-		int node_id = local_group->id;
-		int num_remote = 0;
-		int num_local = 0;
+	int node_id = local_group->id;
+	int num_remote = 0;
+	int num_local = 0;
 
-		for (int i = 0; i < num; i++) {
-			int idx = cache_conf->page2cache(reqs[i]->get_offset());
-			if (idx != get_node_id())
-				local_reply_buf[num_remote++] = io_reply(reqs[i], true, 0);
-			else
-				local_reqs[num_local++] = reqs[i];
+	for (int i = 0; i < num; i++) {
+		int idx = cache_conf->page2cache(reqs[i]->get_offset());
+		if (idx != get_node_id())
+			local_reply_buf[num_remote++] = io_reply(reqs[i], true, 0);
+		else {
+			assert(reqs[i]->get_io() == this);
+			local_reqs[num_local++] = reqs[i];
 		}
-
-		// The reply must be sent to the thread on a different node.
-		int num_sent;
-		if (num_remote > NUMA_REPLY_CACHE_SIZE)
-			num_sent = get_reply_sender(node_id)->send(local_reply_buf, num_remote);
-		else
-			num_sent = get_reply_sender(node_id)->send_cached(
-					local_reply_buf, num_remote);
-		// We use blocking queues here, so the send must succeed.
-		assert(num_sent == num_remote);
-#ifdef MEMCHECK
-		delete local_reply_buf;
-#endif
-		if (num_local > 0)
-			global_cached_io::notify_completion(local_reqs, num_local);
 	}
+
+	// The reply must be sent to the thread on a different node.
+	int num_sent;
+//	if (num_remote > NUMA_REPLY_CACHE_SIZE)
+		num_sent = get_reply_sender(node_id)->send(local_reply_buf, num_remote);
+//	else
+//		num_sent = get_reply_sender(node_id)->send_cached(
+//				local_reply_buf, num_remote);
+	// We use blocking queues here, so the send must succeed.
+	assert(num_sent == num_remote);
+#ifdef MEMCHECK
+	delete local_reply_buf;
+#endif
+	get_thread()->activate();
+	if (num_local > 0)
+		notify_upper(local_reqs, num_local);
 }
 
 /**
@@ -325,10 +329,7 @@ class process_request_thread: public thread
 	node_cached_io *io;
 
 	process_request_thread(int node_id): thread(
-			std::string("process_request_thread-") + itoa(node_id),
-			// We don't use blocking mode of the thread because
-			// we are using blocking queue.
-			node_id, false) {
+			std::string("process_request_thread-") + itoa(node_id), node_id) {
 		this->io = NULL;
 	}
 public:
@@ -376,6 +377,18 @@ void process_request_thread::run()
 	io->process_requests(NUMA_REQ_BUF_SIZE);
 }
 
+void part_io_process_table::activate_all_threads()
+{
+	for (std::map<int, struct thread_group>::const_iterator it
+			= groups.begin(); it != groups.end(); it++) {
+		const std::vector<process_request_thread *> *threads
+			= &it->second.process_request_threads;
+		for (unsigned i = 0; i < threads->size(); i++) {
+			threads->at(i)->activate();
+		}
+	}
+}
+
 #if 0
 void process_reply_thread::run()
 {
@@ -394,36 +407,33 @@ void process_reply_thread::run()
 #endif
 
 part_io_process_table::part_io_process_table(
-		std::map<int, io_interface *> &underlyings,
-		const cache_config *config, int num_ssds)
+		const std::vector<disk_read_thread *> &io_threads,
+		file_mapper *mapper, const cache_config *config)
 {
+	int num_ssds = io_threads.size();
+	std::vector<int> node_ids;
+	config->get_node_ids(node_ids);
 	cache_conf = config;
-	num_groups = underlyings.size();
-	for (std::map<int, io_interface *>::const_iterator it = underlyings.begin();
-			it != underlyings.end(); it++) {
-		int node_id = it->first;
-		const io_interface *underlying = it->second;
-		assert(node_id == underlying->get_node_id());
-
+	num_groups = node_ids.size();
+	for (unsigned i = 0; i < node_ids.size(); i++) {
+		int node_id = node_ids[i];
 		struct thread_group group;
+
 		group.id = node_id;
-		group.underlying = underlying;
 		group.cache = cache_conf->create_cache_on_node(node_id,
 				MAX_NUM_FLUSHES_PER_FILE * num_ssds / config->get_num_caches());
 		group.request_queue = msg_queue<io_request>::create(node_id, "request_queue", 
-				NUMA_REQ_MSG_QUEUE_SIZE, NUMA_REQ_MSG_QUEUE_SIZE, false);
+				NUMA_REQ_MSG_QUEUE_SIZE, INT_MAX, false);
 		group.msg_allocator = new slab_allocator(NUMA_MSG_SIZE,
 				NUMA_MSG_SIZE * 128, INT_MAX, node_id);
-		assert(underlying);
 		groups.insert(std::pair<int, struct thread_group>(node_id, group));
 
 		struct thread_group *groupp = &groups[node_id];
 		// Create processing threads.
 		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
-			process_request_thread *t = process_request_thread::create(
-					underlying->get_node_id());
-			node_cached_io *io = node_cached_io::create(t,
-					underlying->clone(t), groupp);
+			process_request_thread *t = process_request_thread::create(node_id);
+			node_cached_io *io = node_cached_io::create(
+					new remote_disk_access(io_threads, mapper, t), groupp);
 			t->set_io(io);
 			t->start();
 			groupp->process_request_threads.push_back(t);
@@ -474,7 +484,7 @@ void part_io_process_table::destroy_req_senders(
 
 int part_global_cached_io::init()
 {
-	global_cached_io::init();
+	underlying->init();
 
 	return 0;
 }
@@ -486,18 +496,18 @@ int part_global_cached_io::close_file(part_io_process_table *table)
 }
 
 part_io_process_table *part_global_cached_io::open_file(
-		std::map<int, io_interface *> &underlyings,
-		const cache_config *config, int num_ssds)
+		const std::vector<disk_read_thread *> &io_threads,
+		file_mapper *mapper, const cache_config *config)
 {
-	return new part_io_process_table(underlyings, config, num_ssds);
+	return new part_io_process_table(io_threads, mapper, config);
 }
 
-part_global_cached_io::part_global_cached_io(thread *t,
-		part_io_process_table *table): global_cached_io(t,
-			table->get_underlying_io(t->get_node_id())->clone(t),
-			table->get_cache(t->get_node_id()))
+part_global_cached_io::part_global_cached_io(io_interface *underlying,
+		part_io_process_table *table): io_interface(underlying->get_thread())
 {
-	int node_id = t->get_node_id();
+	int node_id = underlying->get_node_id();
+	this->underlying = new global_cached_io(underlying->get_thread(), underlying,
+			table->get_cache(node_id));
 	processed_requests = 0;;
 	sent_requests = 0;
 	processed_replies = 0;
@@ -546,39 +556,6 @@ part_global_cached_io::~part_global_cached_io()
 			thread_safe_msg_sender<io_reply>::destroy(reply_senders[i]);
 	}
 	global_table->destroy_req_senders(req_senders);
-}
-
-/* distribute requests to nodes. */
-int part_global_cached_io::distribute_reqs(io_request *requests, int num) {
-	int num_sent = 0;
-	int num_local_reqs = 0;
-	for (int i = 0; i < num; i++) {
-		assert(requests[i].within_1page());
-		int idx = cache_conf->page2cache(requests[i].get_offset());
-		if (idx != get_node_id()) {
-			remote_reads++;
-			// TODO why do this?
-			io_request req(requests[i]);
-			int ret = req_senders[idx]->send_cached(&req);
-			sent_requests++;
-			assert(ret > 0);
-		}
-		else {
-			assert(num_local_reqs < REQ_BUF_SIZE);
-			local_req_buf[num_local_reqs++] = requests[i];
-		}
-		num_sent++;
-	}
-
-	global_cached_io::access(local_req_buf, num_local_reqs);
-	// TODO how to deal with error of access.
-	int num_remaining = 0;
-	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
-			= req_senders.begin(); it != req_senders.end(); it++) {
-		it->second->flush();
-		num_remaining += it->second->get_num_remaining();
-	}
-	return num_remaining;
 }
 
 int part_global_cached_io::process_reply(io_reply *reply) {
@@ -633,22 +610,40 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	// TODO I'll write status to the status array later.
 	int num_sent = 0;
-	int num_remaining = distribute_reqs(&requests[num_sent], num - num_sent);
+	int num_local_reqs = 0;
+	// Distribute requests to the corresponding nodes.
+	for (int i = 0; i < num; i++) {
+		assert(requests[i].within_1page());
+		int idx = cache_conf->page2cache(requests[i].get_offset());
+		if (idx != get_node_id()) {
+			remote_reads++;
+			// TODO why do this?
+			io_request req(requests[i]);
+			int ret = req_senders[idx]->send_cached(&req);
+			sent_requests++;
+			assert(ret > 0);
+		}
+		else {
+			assert(num_local_reqs < REQ_BUF_SIZE);
+			local_req_buf[num_local_reqs++] = requests[i];
+		}
+		num_sent++;
+	}
+
+	underlying->access(local_req_buf, num_local_reqs);
+	// TODO how to deal with error of access.
+	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+			= req_senders.begin(); it != req_senders.end(); it++) {
+		it->second->flush();
+	}
+	global_table->activate_all_threads();
+	
 	// This variable is only accessed in one thread, so we don't
 	// need to protect it.
 	processed_requests += num;
-	num_sent += num;
 
 	// Let's process all replies before proceeding.
 	process_replies();
-	while (num_remaining > 0) {
-		num_remaining = 0;
-		for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
-				= req_senders.begin(); it != req_senders.end(); it++) {
-			it->second->flush();
-			num_remaining += it->second->get_num_remaining();
-		}
-	}
 }
 
 void part_global_cached_io::cleanup()
@@ -665,7 +660,7 @@ void part_global_cached_io::cleanup()
 
 	// Now all requests have been issued to the underlying IOs.
 	// Make sure to clean the queues in its own underlying IO.
-	global_cached_io::cleanup();
+	underlying->cleanup();
 
 	// Now we need to wait for all requests issued to the disks
 	// to be completed.
@@ -678,7 +673,7 @@ void part_global_cached_io::cleanup()
 				sender->flush_all();
 		}
 		process_replies();
-		global_cached_io::cleanup();
+		underlying->cleanup();
 
 		usleep(1000 * 10);
 	}
@@ -698,8 +693,8 @@ void part_global_cached_io::print_stat(int nthreads)
 	static int tot_fast_process = 0;
 	tot_remote_reads += remote_reads;
 	seen_threads++;
-	tot_hits += get_cache_hits();
-	tot_fast_process += this->get_num_fast_process();
+	tot_hits += underlying->get_cache_hits();
+	tot_fast_process += underlying->get_num_fast_process();
 	if (seen_threads == nthreads) {
 		printf("there are %ld requests sent to the remote nodes\n",
 				tot_remote_reads);
@@ -756,4 +751,29 @@ int part_global_cached_io::preload(off_t start, long size)
 		p->dec_ref();
 	}
 	return 0;
+}
+
+int part_global_cached_io::wait4complete(int num_to_complete)
+{
+	// We first send all requests in the local buffer to their destinations.
+	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+			= req_senders.begin(); it != req_senders.end(); it++) {
+		it->second->flush();
+		int ret = it->second->get_num_remaining();
+		assert(ret == 0);
+	}
+
+	int pending = num_pending_ios();
+	num_to_complete = min(pending, num_to_complete);
+	// We process the completed requests sent to remote nodes.
+	process_replies();
+	// We process the completed requests in the local IO instance.
+	// But we don't want to be blocked.
+	underlying->wait4complete(0);
+	while (pending - num_pending_ios() < num_to_complete) {
+		get_thread()->wait();
+		process_replies();
+		underlying->wait4complete(0);
+	}
+	return pending - num_pending_ios();
 }

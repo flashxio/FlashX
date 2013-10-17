@@ -142,22 +142,13 @@ static inline thread_safe_page *__complete_req_unlocked(io_request *orig,
 
 void notify_completion(io_interface *this_io, io_request *req)
 {
-	// The request is from the application.
-	// TODO this is a temp fix. It won't work with part_global_cached_io.
-	// It doesn't guarantee that a request's callback function is always
-	// called in the thread where it is issued.
 	io_interface *io = req->get_io();
-	assert(io == this_io);
-	if (io->get_callback())
-		io->get_callback()->invoke(&req, 1);
-#if 0
 	if (io == this_io) {
 		if (io->get_callback())
 			io->get_callback()->invoke(&req, 1);
 	}
 	else
 		io->notify_completion(&req, 1);
-#endif
 }
 
 void notify_completion(io_interface *this_io, io_request *reqs[], int num)
@@ -479,6 +470,7 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
 	complete_queue(underlying->get_node_id(), COMPLETE_QUEUE_SIZE)
 {
+	assert(t == underlying->get_thread());
 	ext_allocator = new req_ext_allocator(underlying->get_node_id(),
 			sizeof(io_request) * 1024);
 	req_allocator = new request_allocator(ext_allocator,

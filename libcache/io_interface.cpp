@@ -322,14 +322,8 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 	cache_conf->get_node_ids(node_id_array);
 
 	std::map<int, io_interface *> underlyings;
-	for (unsigned i = 0; i < node_id_array.size(); i++) {
-		int node_id = node_id_array[i];
-		underlyings.insert(std::pair<int, io_interface *>(node_id,
-					new remote_disk_access(global_data.read_threads,
-						mapper, NULL)));
-	}
-	table = part_global_cached_io::open_file(underlyings, cache_conf,
-			global_data.raid_conf.get_num_disks());
+	table = part_global_cached_io::open_file(global_data.read_threads,
+			mapper, cache_conf);
 	this->cache_conf = cache_conf;
 	this->num_nodes = node_id_array.size();
 
@@ -337,7 +331,8 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 
 io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
-	part_global_cached_io *io = part_global_cached_io::create(t, table);
+	part_global_cached_io *io = part_global_cached_io::create(
+			new remote_disk_access(global_data.read_threads, mapper, t), table);
 	return io;
 }
 

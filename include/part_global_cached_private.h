@@ -13,10 +13,10 @@ const int REPLY_BUF_SIZE = 1000;
 const int REQ_BUF_SIZE = 1000;
 const int MSG_BUF_SIZE = 128;
 
-class part_global_cached_io;
-
 struct thread_group;
 class part_io_process_table;
+class disk_read_thread;
+class file_mapper;
 
 /**
  * This provides interface for application threads issue IO requests
@@ -24,11 +24,13 @@ class part_io_process_table;
  * to the local processor, they are processed directly. No message passing
  * is needed.
  */
-class part_global_cached_io: public global_cached_io
+class part_global_cached_io: public io_interface
 {
-	const part_io_process_table *global_table;
+	part_io_process_table *global_table;
 	const struct thread_group *local_group;
 	const cache_config *cache_conf;
+
+	global_cached_io *underlying;
 
 	msg_queue<io_reply> *reply_queue;
 	// This reply message buffer is used when copying remote messages
@@ -62,22 +64,22 @@ class part_global_cached_io: public global_cached_io
 	callback *final_cb;
 
 	int process_replies();
-	int distribute_reqs(io_request *requests, int num);
+	void notify_upper(io_request *reqs[], int num);
 
-	part_global_cached_io(thread *t, part_io_process_table *);
+	part_global_cached_io(io_interface *underlying, part_io_process_table *);
 	~part_global_cached_io();
 public:
 	static part_io_process_table *open_file(
-			std::map<int, io_interface *> &underlyings,
-			const cache_config *config, int num_ssds);
+			const std::vector<disk_read_thread *> &io_threads,
+			file_mapper *mapper, const cache_config *config);
 	static int close_file(part_io_process_table *table);
 
-	static part_global_cached_io *create(thread *t,
+	static part_global_cached_io *create(io_interface *underlying,
 			part_io_process_table *table) {
-		int node_id = t->get_node_id();
+		int node_id = underlying->get_node_id();
 		assert(node_id >= 0);
 		void *addr = numa_alloc_onnode(sizeof(part_global_cached_io), node_id);
-		return new(addr) part_global_cached_io(t, table);
+		return new(addr) part_global_cached_io(underlying, table);
 	}
 
 	static void destroy(part_global_cached_io *io) {
@@ -117,7 +119,7 @@ public:
 				= req_senders.begin(); it != req_senders.end(); it++) {
 			it->second->flush();
 		}
-		global_cached_io::flush_requests();
+		underlying->flush_requests();
 	}
 
 	void cleanup();
@@ -125,6 +127,17 @@ public:
 
 	bool support_aio() {
 		return true;
+	}
+
+	virtual int get_file_id() const {
+		return underlying->get_file_id();
+	}
+	virtual int wait4complete(int num);
+	virtual int num_pending_ios() const {
+		// the number of pending requests on the remote nodes.
+		return sent_requests - processed_replies
+			// The number of pending requests in the local IO instance.
+			+ underlying->num_pending_ios();
 	}
 
 	friend class node_cached_io;
