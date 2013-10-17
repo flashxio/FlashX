@@ -35,13 +35,6 @@ class remote_disk_access: public io_interface
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
 
-	remote_disk_access(thread *t, int max_reqs): io_interface(
-			t), max_disk_cached_reqs(max_reqs), complete_queue(t->get_node_id(),
-				COMPLETE_QUEUE_SIZE) {
-		cb = NULL;
-		block_mapper = NULL;
-	}
-
 	int process_completed_requests(io_request reqs[], int num);
 	int process_completed_requests(int num);
 public:

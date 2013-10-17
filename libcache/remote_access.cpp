@@ -77,22 +77,9 @@ io_interface *remote_disk_access::clone(thread *t) const
 	// An IO may not be associated to any threads.
 	ASSERT_TRUE(t);
 	num_ios.inc(1);
-	remote_disk_access *copy = new remote_disk_access(t,
-			this->max_disk_cached_reqs);
-	copy->io_threads = this->io_threads;
-	copy->senders.resize(this->senders.size());
-	copy->low_prio_senders.resize(this->low_prio_senders.size());
-	assert(copy->senders.size() == copy->low_prio_senders.size());
-	copy->msg_allocator = new slab_allocator(IO_MSG_SIZE * sizeof(io_request),
-			IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, t->get_node_id());
-	for (unsigned i = 0; i < copy->senders.size(); i++) {
-		copy->senders[i] = request_sender::create(t->get_node_id(),
-				copy->msg_allocator, this->senders[i]->get_queue());
-		copy->low_prio_senders[i] = request_sender::create(t->get_node_id(),
-				copy->msg_allocator, this->low_prio_senders[i]->get_queue());
-	}
+	remote_disk_access *copy = new remote_disk_access(io_threads,
+			block_mapper, t, this->max_disk_cached_reqs);
 	copy->cb = this->cb;
-	copy->block_mapper = this->block_mapper;
 	return copy;
 }
 
