@@ -260,6 +260,9 @@ class io_request
 	static const int MAX_NODE_ID = (1 << 9) - 1;
 	unsigned int node_id: 9;
 	// Linux uses 48 bit for addresses.
+	// When the request is completed, the IO instance will be notified of
+	// the completion. The IO is usually the issuer IO, but it can be other
+	// IOs.
 	unsigned long io_addr: 48;
 
 	union {
