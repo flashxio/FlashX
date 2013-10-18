@@ -24,11 +24,6 @@
 #include "thread.h"
 #include "remote_access.h"
 
-// The size of a request >= sizeof(io_request).
-const int NUMA_REQ_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_request);
-// The size of a reply >= sizeof(io_reply).
-const int NUMA_REPLY_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_reply);
-
 const int NUMA_REQ_QUEUE_SIZE = 2000;
 const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
 		NUMA_MSG_SIZE / sizeof(io_request));
@@ -664,7 +659,6 @@ int part_global_cached_io::process_replies()
 	message<io_reply> tmp_msgs[MSG_BUF_SIZE];
 	// The reply buffer size should be able to contain more replies than
 	// a reply message.
-	io_reply local_reply_buf[NUMA_REPLY_BUF_SIZE];
 	while (!reply_queue->is_empty()) {
 		int num = reply_queue->fetch(tmp_msgs, MSG_BUF_SIZE);
 		assert(num <= MSG_BUF_SIZE);

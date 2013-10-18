@@ -13,6 +13,11 @@ const int REPLY_BUF_SIZE = 1000;
 const int REQ_BUF_SIZE = 1000;
 const int MSG_BUF_SIZE = 128;
 
+// The size of a request >= sizeof(io_request).
+const int NUMA_REQ_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_request);
+// The size of a reply >= sizeof(io_reply).
+const int NUMA_REPLY_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_reply);
+
 struct thread_group;
 class part_io_process_table;
 class disk_read_thread;
@@ -39,6 +44,8 @@ class part_global_cached_io: public io_interface
 	message<io_reply> local_reply_msgs[MSG_BUF_SIZE];
 	// This request buffer is used when distributing requests.
 	io_request local_req_buf[REQ_BUF_SIZE];
+	// This reply buffer is used when processing replies.
+	io_reply local_reply_buf[NUMA_REPLY_BUF_SIZE];
 
 	/*
 	 * there is a sender for each node.
