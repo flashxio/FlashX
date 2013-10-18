@@ -33,6 +33,7 @@ sys_parameters::sys_parameters()
 	verify_content = false;
 	use_flusher = false;
 	vaio_print_freq = 1000000;
+	numa_num_process_threads = 1;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -109,6 +110,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		vaio_print_freq = str2size(it->second);
 	}
+
+	it = configs.find("numa_num_process_threads");
+	if (it != configs.end()) {
+		numa_num_process_threads = str2size(it->second);
+	}
 }
 
 void sys_parameters::print()
@@ -126,6 +132,7 @@ void sys_parameters::print()
 	std::cout << "\tuse_flusher: " << use_flusher << std::endl;
 	std::cout << "\tcache_large_write: " << cache_large_write << std::endl;
 	std::cout << "\tvaio_print_freq: " << vaio_print_freq << std::endl;
+	std::cout << "\tnuma_num_process_threads" << numa_num_process_threads << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -151,5 +158,7 @@ void sys_parameters::print_help()
 	std::cout << "\tcache_large_write: enable large write in the page cache."
 		<< std::endl;
 	std::cout << "\tvaio_print_freq: how frequently a virtual SSD print stat info (in us)"
+		<< std::endl;
+	std::cout << "\tnuma_num_process_threads: the number of request processing threads per node in part_global_cached_io"
 		<< std::endl;
 }

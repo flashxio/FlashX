@@ -29,8 +29,10 @@ const int NUMA_REQ_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_request);
 // The size of a reply >= sizeof(io_reply).
 const int NUMA_REPLY_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_reply);
 
+const int NUMA_REQ_QUEUE_SIZE = 2000;
 const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
 		NUMA_MSG_SIZE / sizeof(io_request));
+const int NUMA_REPLY_QUEUE_SIZE = 1024;
 const int NUMA_REPLY_MSG_QUEUE_SIZE = NUMA_REPLY_QUEUE_SIZE / (
 		NUMA_MSG_SIZE / sizeof(io_reply));
 const int MAX_REQS_TO_SINGLE_SENDER = IO_MSG_SIZE;
@@ -288,6 +290,7 @@ int node_cached_io::process_requests(int max_nreqs)
 			tmp_msgs[i].copy_to(local_msgs[i]);
 		}
 		for (int i = 0; i < num; i++) {
+			printf("msg has %d reqs\n", local_msgs[i].get_num_objs());
 			while (!local_msgs[i].is_empty()) {
 				int num_reqs = local_msgs[i].get_next_objs(local_reqs,
 						min(NUMA_REQ_BUF_SIZE,
@@ -507,7 +510,7 @@ part_io_process_table::part_io_process_table(
 
 		struct thread_group *groupp = &groups[node_id];
 		// Create processing threads.
-		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
+		for (int i = 0; i < params.get_numa_num_process_threads(); i++) {
 			process_request_thread *t = process_request_thread::create(node_id);
 			node_cached_io *io = node_cached_io::create(
 					new remote_disk_access(io_threads, mapper, t), groupp);
@@ -523,7 +526,7 @@ part_io_process_table::~part_io_process_table()
 	for (std::map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
 		const struct thread_group *group = &it->second;
-		for (int i = 0; i < NUMA_NUM_PROCESS_THREADS; i++) {
+		for (unsigned i = 0; i < group->process_request_threads.size(); i++) {
 			process_request_thread *t = group->process_request_threads[i];
 			node_cached_io *io = t->get_io();
 			process_request_thread::destroy(t, group);

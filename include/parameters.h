@@ -26,6 +26,7 @@ class sys_parameters
 	bool use_flusher;
 	bool cache_large_write;
 	int vaio_print_freq;
+	int numa_num_process_threads;
 public:
 	sys_parameters();
 
@@ -80,6 +81,10 @@ public:
 
 	int get_vaio_print_freq() const {
 		return vaio_print_freq;
+	}
+
+	int get_numa_num_process_threads() const {
+		return numa_num_process_threads;
 	}
 };
 
@@ -151,10 +156,7 @@ const int DISCARD_FLUSH_THRESHOLD = 6;
 const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024 * 2;
 
 const int NUMA_MSG_SIZE = 4096;
-const int NUMA_REQ_QUEUE_SIZE = 2000;
 const int NUMA_REPLY_CACHE_SIZE = 50;
-const int NUMA_REPLY_QUEUE_SIZE = 1024;
-const int NUMA_NUM_PROCESS_THREADS = 8;
 
 const int LOCAL_BUF_SIZE = 100;
 
