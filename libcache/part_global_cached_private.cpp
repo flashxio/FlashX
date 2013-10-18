@@ -260,6 +260,9 @@ node_cached_io::node_cached_io(io_interface *underlying,
 	processed_requests = 0;
 	// This IO instance is created inside the right thread.
 	global_cached_io::init();
+	// This IO just dispatches any number of requests sent to it.
+	// So we don't care how many requests are pending.
+	set_max_num_pending_ios(INT_MAX);
 
 	processing_thread_id = 0;
 	pthread_key_create(&replier_key, NULL);
@@ -290,7 +293,6 @@ int node_cached_io::process_requests(int max_nreqs)
 			tmp_msgs[i].copy_to(local_msgs[i]);
 		}
 		for (int i = 0; i < num; i++) {
-			printf("msg has %d reqs\n", local_msgs[i].get_num_objs());
 			while (!local_msgs[i].is_empty()) {
 				int num_reqs = local_msgs[i].get_next_objs(local_reqs,
 						min(NUMA_REQ_BUF_SIZE,
