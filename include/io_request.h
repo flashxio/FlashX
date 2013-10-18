@@ -287,11 +287,11 @@ class io_request
 
 public:
 	// By default, a request is initialized as a flush request.
-	io_request() {
+	io_request(bool sync = false) {
+		memset(this, 0, sizeof(*this));
 		payload_type = BASIC_REQ;
-		payload.buf_addr = NULL;
-		data_inline = 0;
 		use_default_flags();
+		this->sync = sync;
 	}
 
 	io_request(char *buf, off_t off, ssize_t size, int access_method,
