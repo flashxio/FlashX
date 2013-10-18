@@ -50,3 +50,10 @@ echo "the basic test for global cached IO with large writes on virtual SSDs."
 
 echo "the basic test for global cached IO under the TPCC workload."
 ./rand-read test/run_cache_tpcc.txt test
+
+
+echo "the basic test for parted global cached read on virtual SSDs."
+./rand-read test/run_parted_cache_virt.txt test
+
+echo "the basic test for parted global cached IO under the TPCC workload on virtual SSDs."
+./rand-read test/run_parted_cache_tpcc.txt test
