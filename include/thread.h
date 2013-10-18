@@ -5,10 +5,15 @@
 
 #include <string>
 
+#include "concurrency.h"
+#include "common.h"
+
 class thread
 {
 	static pthread_key_t thread_key;
+	static atomic_integer num_threads;
 
+	int thread_idx;
 	int node_id;
 	pthread_t id;
 	bool blocking;
@@ -28,7 +33,8 @@ public:
 	thread(std::string name, int node_id = -1, bool blocking = true) {
 		thread_class_init();
 
-		this->name = name;
+		thread_idx = num_threads.inc(1);
+		this->name = name + "-" + itoa(thread_idx);
 		this->node_id = node_id;
 		this->blocking = blocking;
 		this->id = 0;
@@ -121,6 +127,10 @@ public:
 	 * It is used when the current thread isn't created by the thread class.
 	 */
 	static thread *represent_thread(int node_id);
+
+	const std::string &get_thread_name() const {
+		return name;
+	}
 };
 
 #endif

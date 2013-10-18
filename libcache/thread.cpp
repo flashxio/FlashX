@@ -75,3 +75,5 @@ thread *thread::represent_thread(int node_id)
 	curr->_is_sleeping = false;
 	return curr;
 }
+
+atomic_integer thread::num_threads;
