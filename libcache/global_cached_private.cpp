@@ -1,4 +1,3 @@
-#include <tr1/unordered_map>
 #include <vector>
 #include <algorithm>
 
@@ -177,43 +176,45 @@ void notify_completion(io_interface *this_io, io_request *req)
 	}
 }
 
+struct comp_req_io {
+	bool operator() (const io_request *req1, const io_request *req2) {
+		return (long) req1->get_io() < (long) req2->get_io();
+	}
+} req_io_comparator;
+
 void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 {
-	io_request *from_app[num];
-	int num_from_app = 0;
-	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > req_map;
+	io_request *local_reqs[num];
+	int num_local = 0;
+	io_request *remote_reqs[num];
+	int num_remote = 0;
 	for (int i = 0; i < num; i++) {
 		if (is_local_req(reqs[i], this_io))
-			from_app[num_from_app++] = reqs[i];
+			local_reqs[num_local++] = reqs[i];
 		else {
-			io_interface *io = get_io(reqs[i]);
-			io_request *req = reqs[i];
-			std::vector<io_request *> *vec;
-			std::tr1::unordered_map<io_interface *,
-				std::vector<io_request *> >::iterator it = req_map.find(io);
-			if (it == req_map.end()) {
-				req_map.insert(std::pair<io_interface *, std::vector<io_request *> >(
-							io, std::vector<io_request *>()));
-				vec = &req_map[io];
-			}
-			else
-				vec = &it->second;
-			vec->push_back(req);
+			reqs[i]->set_io(get_io(reqs[i]));
+			remote_reqs[num_remote++] = reqs[i];
 		}
 	}
 
-	if (this_io->get_callback() && num_from_app > 0)
-		this_io->get_callback()->invoke(from_app, num_from_app);
+	if (this_io->get_callback() && num_local > 0)
+		this_io->get_callback()->invoke(local_reqs, num_local);
 
-	for (std::tr1::unordered_map<io_interface *,
-			std::vector<io_request *> >::iterator it = req_map.begin();
-			it != req_map.end(); it++) {
-		io_interface *io = it->first;
-		std::vector<io_request *> *vec = &it->second;
-		for (unsigned i = 0; i < vec->size(); i++)
-			vec->at(i)->set_io(io);
-		io->notify_completion(vec->data(), vec->size());
+	if (num_remote == 0)
+		return;
+	std::sort(remote_reqs, remote_reqs + num_remote, req_io_comparator);
+	io_interface *prev = remote_reqs[0]->get_io();
+	int begin_idx = 0;
+	for (int end_idx = 1; end_idx < num_remote; end_idx++) {
+		if (remote_reqs[end_idx]->get_io() != prev) {
+			prev->notify_completion(remote_reqs + begin_idx,
+					end_idx - begin_idx);
+			begin_idx = end_idx;
+			prev = remote_reqs[end_idx]->get_io();
+		}
 	}
+	assert(begin_idx < num_remote);
+	prev->notify_completion(remote_reqs + begin_idx, num_remote - begin_idx);
 }
 
 void global_cached_io::finalize_partial_request(io_request &partial,
@@ -280,12 +281,6 @@ void global_cached_io::finalize_request(io_request &req)
 	}
 }
 
-struct comp_pending_req {
-	bool operator() (const io_request *req1, const io_request *req2) {
-		return (long) req1->get_io() < (long) req2->get_io();
-	}
-} pending_req_comparator;
-
 void queue_requests(std::vector<io_request *> &pending_reqs)
 {
 	if (pending_reqs.empty())
@@ -302,7 +297,7 @@ void queue_requests(std::vector<io_request *> &pending_reqs)
 		}
 		pending_reqs[i]->set_next_req(NULL);
 	}
-	std::sort(pending_reqs.begin(), pending_reqs.end(), pending_req_comparator);
+	std::sort(pending_reqs.begin(), pending_reqs.end(), req_io_comparator);
 	int num_pending = pending_reqs.size();
 	io_interface *prev = pending_reqs[0]->get_io();
 	int begin_idx = 0;
@@ -921,6 +916,9 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 
 void global_cached_io::access(io_request *requests, int num, io_status *status)
 {
+	if (num == 0)
+		return;
+
 	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	num_issued_areqs.inc(num);
 	if (!pending_requests.is_empty()) {
