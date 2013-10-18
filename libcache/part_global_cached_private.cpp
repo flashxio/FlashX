@@ -33,6 +33,7 @@ const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
 		NUMA_MSG_SIZE / sizeof(io_request));
 const int NUMA_REPLY_MSG_QUEUE_SIZE = NUMA_REPLY_QUEUE_SIZE / (
 		NUMA_MSG_SIZE / sizeof(io_reply));
+const int MAX_REQS_TO_SINGLE_SENDER = IO_MSG_SIZE;
 
 class process_request_thread;
 struct thread_group
@@ -41,12 +42,53 @@ struct thread_group
 	page_cache *cache;
 	std::vector<process_request_thread *> process_request_threads;
 	slab_allocator *msg_allocator;
-	msg_queue<io_request> *request_queue;
 
 	thread_group() {
 		id = -1;
 		cache = NULL;
-		request_queue = NULL;
+		msg_allocator = NULL;
+	}
+};
+
+class group_request_sender
+{
+	// It points to the current sender for sending requests.
+	unsigned int curr_idx;
+
+	std::vector<process_request_thread *> threads;
+	std::vector<request_sender *> senders;
+	int num_reqs;
+
+	group_request_sender(slab_allocator *alloc,
+			const std::vector<process_request_thread *> &threads);
+public:
+	static group_request_sender *create(slab_allocator *alloc,
+			const std::vector<process_request_thread *> &threads);
+
+	static void destroy(group_request_sender *s) {
+		s->~group_request_sender();
+		numa_free(s, sizeof(*s));
+	}
+
+	int flush();
+
+	int send_cached(io_request *msgs, int num = 1) {
+		num_reqs += num;
+		if (senders[curr_idx]->get_num_remaining() < MAX_REQS_TO_SINGLE_SENDER)
+			return senders[curr_idx]->send_cached(msgs, num);
+		else {
+			curr_idx++;
+			curr_idx = curr_idx % threads.size();
+			return senders[curr_idx]->send_cached(msgs, num);
+		}
+	}
+
+	int get_num_remaining() const {
+		int tmp = 0;
+		for (unsigned i = 0; i < senders.size(); i++)
+			tmp += senders[i]->get_num_remaining();
+		assert(tmp == num_reqs);
+		return num_reqs;
 	}
 };
 
@@ -73,10 +115,10 @@ public:
 
 	~part_io_process_table();
 
-	std::tr1::unordered_map<int, request_sender *> create_req_senders(
+	std::tr1::unordered_map<int, group_request_sender *> create_req_senders(
 			int node_id) const;
 	void destroy_req_senders(const std::tr1::unordered_map<int,
-			request_sender *> &) const;
+			group_request_sender *> &) const;
 
 	const cache_config *get_cache_config() const {
 		return cache_conf;
@@ -105,8 +147,6 @@ public:
 			node_ids.insert(it->first);
 		return node_ids;
 	}
-
-	void activate_all_threads();
 };
 
 #if 0
@@ -142,10 +182,12 @@ class node_cached_io: public global_cached_io
 	// the local memory.
 	message<io_request> local_msgs[MSG_BUF_SIZE];
 	pthread_t processing_thread_id;
+	msg_queue<io_request> *request_queue;
 
 	node_cached_io(io_interface *underlying,
 			struct thread_group *local_group);
 	~node_cached_io() {
+		msg_queue<io_request>::destroy(request_queue);
 	}
 public:
 	static node_cached_io *create(io_interface *underlying,
@@ -170,6 +212,10 @@ public:
 	}
 
 	int process_requests(int max_nreqs);
+
+	msg_queue<io_request> *get_queue() const {
+		return request_queue;
+	}
 };
 
 #if 0
@@ -204,6 +250,10 @@ node_cached_io::node_cached_io(io_interface *underlying,
 {
 	assert(local_group);
 	this->local_group = local_group;
+	assert(local_group->id == underlying->get_node_id());
+
+	request_queue = msg_queue<io_request>::create(underlying->get_node_id(),
+			"request_queue", NUMA_REQ_MSG_QUEUE_SIZE, INT_MAX, false);
 
 	processed_requests = 0;
 	// This IO instance is created inside the right thread.
@@ -225,7 +275,6 @@ int node_cached_io::process_requests(int max_nreqs)
 		processing_thread_id = pthread_self();
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
-	msg_queue<io_request> *request_queue = local_group->request_queue;
 	message<io_request> tmp_msgs[MSG_BUF_SIZE];
 	// This request buffer has requests more than a message can contain.
 	io_request local_reqs[NUMA_REQ_BUF_SIZE];
@@ -253,6 +302,7 @@ int node_cached_io::process_requests(int max_nreqs)
 	// requests have been completed.
 	if (global_cached_io::num_pending_ios() > 0)
 		global_cached_io::wait4complete(0);
+
 	num_requests += num_processed;
 	return num_processed;
 }
@@ -377,16 +427,45 @@ void process_request_thread::run()
 	io->process_requests(NUMA_REQ_BUF_SIZE);
 }
 
-void part_io_process_table::activate_all_threads()
+group_request_sender *group_request_sender::create(slab_allocator *alloc,
+		const std::vector<process_request_thread *> &threads)
 {
-	for (std::map<int, struct thread_group>::const_iterator it
-			= groups.begin(); it != groups.end(); it++) {
-		const std::vector<process_request_thread *> *threads
-			= &it->second.process_request_threads;
-		for (unsigned i = 0; i < threads->size(); i++) {
-			threads->at(i)->activate();
+	assert(threads.size() > 0);
+	int node_id = threads[0]->get_node_id();
+	for (unsigned i = 1; i < threads.size(); i++)
+		assert(node_id == threads[i]->get_node_id());
+	void *addr = numa_alloc_onnode(sizeof(group_request_sender), node_id);
+	return new(addr) group_request_sender(alloc, threads);
+}
+
+group_request_sender::group_request_sender(slab_allocator *alloc,
+		const std::vector<process_request_thread *> &threads)
+{
+	senders.resize(threads.size());
+	for (unsigned i = 0; i < threads.size(); i++) {
+		request_sender *sender = request_sender::create(threads[i]->get_node_id(),
+				alloc, threads[i]->get_io()->get_queue());
+		senders[i] = sender;
+	}
+	this->threads = threads;
+	curr_idx = random() % threads.size();
+	num_reqs = 0;
+}
+
+int group_request_sender::flush()
+{
+	int ret = 0;
+	for (unsigned i = 0; i < senders.size(); i++) {
+		if (senders[i]->get_num_remaining() > 0) {
+			ret += senders[i]->flush();
+			assert(senders[i]->get_num_remaining() == 0);
+			// After we send requests to the remote thread, we need to
+			// activate the thread to process them.
+			threads[i]->activate();
 		}
 	}
+	num_reqs = 0;
+	return ret;
 }
 
 #if 0
@@ -422,8 +501,6 @@ part_io_process_table::part_io_process_table(
 		group.id = node_id;
 		group.cache = cache_conf->create_cache_on_node(node_id,
 				MAX_NUM_FLUSHES_PER_FILE * num_ssds / config->get_num_caches());
-		group.request_queue = msg_queue<io_request>::create(node_id, "request_queue", 
-				NUMA_REQ_MSG_QUEUE_SIZE, INT_MAX, false);
 		group.msg_allocator = new slab_allocator(NUMA_MSG_SIZE,
 				NUMA_MSG_SIZE * 128, INT_MAX, node_id);
 		groups.insert(std::pair<int, struct thread_group>(node_id, group));
@@ -453,32 +530,31 @@ part_io_process_table::~part_io_process_table()
 			node_cached_io::destroy(io);
 		}
 		cache_conf->destroy_cache_on_node(group->cache);
-		msg_queue<io_request>::destroy(group->request_queue);
 	}
 }
 
-std::tr1::unordered_map<int, request_sender *>
+std::tr1::unordered_map<int, group_request_sender *>
 part_io_process_table::create_req_senders(int node_id) const
 {
-	std::tr1::unordered_map<int, request_sender *> req_senders;
+	std::tr1::unordered_map<int, group_request_sender *> req_senders;
 	// Initialize the request senders.
 	for (std::map<int, struct thread_group>::const_iterator it
 			= groups.begin(); it != groups.end(); it++) {
 		const struct thread_group *group = &it->second;
 		assert(group->id == it->first);
-		req_senders.insert(std::pair<int, request_sender *>(group->id,
-					request_sender::create(node_id, group->msg_allocator,
-						group->request_queue)));
+		req_senders.insert(std::pair<int, group_request_sender *>(group->id,
+					group_request_sender::create(group->msg_allocator,
+						group->process_request_threads)));
 	}
 	return req_senders;
 }
 
 void part_io_process_table::destroy_req_senders(
-		const std::tr1::unordered_map<int, request_sender *> &req_senders) const
+		const std::tr1::unordered_map<int, group_request_sender *> &req_senders) const
 {
-	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
-		request_sender::destroy(it->second);
+		group_request_sender::destroy(it->second);
 	}
 }
 
@@ -632,11 +708,6 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 
 	underlying->access(local_req_buf, num_local_reqs);
 	// TODO how to deal with error of access.
-	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
-			= req_senders.begin(); it != req_senders.end(); it++) {
-		it->second->flush();
-	}
-	global_table->activate_all_threads();
 	
 	// This variable is only accessed in one thread, so we don't
 	// need to protect it.
@@ -649,11 +720,11 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 void part_global_cached_io::cleanup()
 {
 	// First make sure all requests have been flushed for processing.
-	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
+	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
-		request_sender *sender = it->second;
+		group_request_sender *sender = it->second;
 		// Send a flush request to force request process threads to flush all requests.
-		io_request flush_req;
+		io_request flush_req(true);
 		sender->send_cached(&flush_req);
 		sender->flush();
 	}
@@ -756,12 +827,7 @@ int part_global_cached_io::preload(off_t start, long size)
 int part_global_cached_io::wait4complete(int num_to_complete)
 {
 	// We first send all requests in the local buffer to their destinations.
-	for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
-			= req_senders.begin(); it != req_senders.end(); it++) {
-		it->second->flush();
-		int ret = it->second->get_num_remaining();
-		assert(ret == 0);
-	}
+	flush_requests();
 
 	int pending = num_pending_ios();
 	num_to_complete = min(pending, num_to_complete);
@@ -776,4 +842,15 @@ int part_global_cached_io::wait4complete(int num_to_complete)
 		underlying->wait4complete(0);
 	}
 	return pending - num_pending_ios();
+}
+
+void part_global_cached_io::flush_requests()
+{
+	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
+			= req_senders.begin(); it != req_senders.end(); it++) {
+		it->second->flush();
+		int ret = it->second->get_num_remaining();
+		assert(ret == 0);
+	}
+	underlying->flush_requests();
 }

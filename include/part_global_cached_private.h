@@ -17,6 +17,7 @@ struct thread_group;
 class part_io_process_table;
 class disk_read_thread;
 class file_mapper;
+class group_request_sender;
 
 /**
  * This provides interface for application threads issue IO requests
@@ -43,7 +44,7 @@ class part_global_cached_io: public io_interface
 	 * there is a sender for each node.
 	 */
 	// group id <-> msg sender
-	std::tr1::unordered_map<int, request_sender *> req_senders;
+	std::tr1::unordered_map<int, group_request_sender *> req_senders;
 
 	/*
 	 * These reply senders are to send replies to this IO. They are made
@@ -114,13 +115,7 @@ public:
 		return IO_UNSUPPORTED;
 	}
 
-	void flush_requests() {
-		for (std::tr1::unordered_map<int, request_sender *>::const_iterator it
-				= req_senders.begin(); it != req_senders.end(); it++) {
-			it->second->flush();
-		}
-		underlying->flush_requests();
-	}
+	void flush_requests();
 
 	void cleanup();
 	int preload(off_t start, long size);
