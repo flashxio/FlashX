@@ -140,15 +140,41 @@ static inline thread_safe_page *__complete_req_unlocked(io_request *orig,
 	return generic_complete_req(orig, p, false);
 }
 
+/**
+ * To test whether the request is issued by this_io.
+ * This only works on original requests: either the original requests provided
+ * by the application or a copy of the original requests.
+ */
+bool is_local_req(io_request *req, io_interface *this_io)
+{
+	// If the request isn't an extended request, it must be an original
+	// request from the application.
+	if (!req->is_extended_req())
+		return req->get_io() == this_io;
+	else
+		return req->get_user_data() == this_io;
+}
+
+io_interface *get_io(io_request *req)
+{
+	if (!req->is_extended_req())
+		return req->get_io();
+	else
+		return (io_interface *) req->get_user_data();
+}
+
 void notify_completion(io_interface *this_io, io_request *req)
 {
-	io_interface *io = req->get_io();
-	if (io == this_io) {
-		if (io->get_callback())
-			io->get_callback()->invoke(&req, 1);
+	if (is_local_req(req, this_io)) {
+		if (this_io->get_callback())
+			this_io->get_callback()->invoke(&req, 1);
 	}
-	else
+	else {
+		io_interface *io = get_io(req);
+		// We have to set the io instance to its original one.
+		req->set_io(io);
 		io->notify_completion(&req, 1);
+	}
 }
 
 void notify_completion(io_interface *this_io, io_request *reqs[], int num)
@@ -157,10 +183,10 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 	int num_from_app = 0;
 	std::tr1::unordered_map<io_interface *, std::vector<io_request *> > req_map;
 	for (int i = 0; i < num; i++) {
-		io_interface *io = reqs[i]->get_io();
-		if (io == this_io)
+		if (is_local_req(reqs[i], this_io))
 			from_app[num_from_app++] = reqs[i];
 		else {
+			io_interface *io = get_io(reqs[i]);
 			io_request *req = reqs[i];
 			std::vector<io_request *> *vec;
 			std::tr1::unordered_map<io_interface *,
@@ -184,6 +210,8 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 			it != req_map.end(); it++) {
 		io_interface *io = it->first;
 		std::vector<io_request *> *vec = &it->second;
+		for (unsigned i = 0; i < vec->size(); i++)
+			vec->at(i)->set_io(io);
 		io->notify_completion(vec->data(), vec->size());
 	}
 }
@@ -197,13 +225,12 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		// In the case of parted global cache, the IO interface that processes
 		// the reqeust isn't the IO interface that issue the request.
 		// The request may be handled differently.
-		global_cached_io *io = (global_cached_io *) orig->get_io();
 		if (orig->is_sync())
-			io->wakeup_on_req(orig, IO_OK);
+			((global_cached_io *) get_io(orig))->wakeup_on_req(orig, IO_OK);
 		else {
 			num_completed_areqs.inc(1);
-			get_thread()->activate();
 			::notify_completion(this, orig);
+			get_thread()->activate();
 		}
 		orig->dec_complete_count();
 		orig->wait4unref();
@@ -227,13 +254,12 @@ void global_cached_io::finalize_request(io_request &req)
 		assert(original->get_orig() == NULL);
 		original->inc_complete_count();
 		if (original->complete_size(req.get_size())) {
-			global_cached_io *io = (global_cached_io *) original->get_io();
 			if (original->is_sync())
-				io->wakeup_on_req(original, IO_OK);
+				((global_cached_io *) get_io(original))->wakeup_on_req(original, IO_OK);
 			else {
 				num_completed_areqs.inc(1);
-				get_thread()->activate();
 				::notify_completion(this, original);
+				get_thread()->activate();
 			}
 			original->dec_complete_count();
 			original->wait4unref();
@@ -244,9 +270,8 @@ void global_cached_io::finalize_request(io_request &req)
 	}
 	else {
 		assert(req.get_orig() == NULL);
-		global_cached_io *io = (global_cached_io *) req.get_io();
 		if (req.is_sync())
-			io->wakeup_on_req(&req, IO_OK);
+			((global_cached_io *) get_io(&req))->wakeup_on_req(&req, IO_OK);
 		else {
 			num_completed_areqs.inc(1);
 			get_thread()->activate();
@@ -696,6 +721,7 @@ again:
 					partial_orig->set_partial(true);
 					partial_orig->set_orig(orig);
 					partial_orig->set_priv(p);
+					partial_orig->set_io(this);
 					p->add_req(partial_orig);
 				}
 				p->unlock();
@@ -910,6 +936,8 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	for (int i = 0; i < num; i++) {
 		off_t offset = requests[i].get_offset();
 		int size = requests[i].get_size();
+		// We don't allow the user's requests to be extended requests.
+		assert(!requests[i].is_extended_req());
 		off_t begin_pg_offset = ROUND_PAGE(offset);
 		off_t end_pg_offset = ROUNDUP_PAGE(offset + size);
 		thread_safe_page *pages[MAX_NUM_IOVECS];
@@ -983,6 +1011,9 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 			if (orig == NULL) {
 				orig = req_allocator->alloc_obj();
 				orig->init(requests[i]);
+				io_interface *orig_io = orig->get_io();
+				orig->set_io(this);
+				orig->set_user_data(orig_io);
 			}
 			if (orig->within_1page())
 				orig->set_priv(p);
@@ -1024,6 +1055,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					extract_pages(*orig, tmp_off, 1, *orig1);
 					orig1->set_orig(orig);
 					orig1->set_priv(p);
+					orig1->set_io(this);
 					assert(orig->get_size() > orig1->get_size());
 					orig1->set_partial(true);
 				}
@@ -1083,6 +1115,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 					partial_orig->init(req);
 					partial_orig->set_orig(orig);
 					partial_orig->set_partial(true);
+					partial_orig->set_io(this);
 					num_bytes_completed += __write(partial_orig, p, dirty_pages);
 				}
 			}
