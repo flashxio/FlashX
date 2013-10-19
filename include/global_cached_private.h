@@ -179,6 +179,14 @@ public:
 		printf("There are %d evicted dirty pages\n", num_evicted_dirty_pages);
 	}
 #endif
+
+	virtual void print_state() {
+		printf("global cached io %d has %d pending reqs\n", get_io_idx(),
+				num_pending_ios());
+		printf("%d completed pending reqs, %d completed reqs from underlying\n",
+				pending_requests.get_num_entries(), complete_queue.get_num_entries());
+		underlying->print_state();
+	}
 };
 
 #endif

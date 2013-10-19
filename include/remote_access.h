@@ -80,6 +80,7 @@ public:
 		printf("remote_disk_access: %d reqs, %d completed reqs\n",
 				num_issued_reqs.get(), num_completed_reqs.get());
 	}
+	virtual void print_state();
 };
 
 #endif

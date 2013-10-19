@@ -3,6 +3,7 @@
 #include <time.h>
 #include <pthread.h>
 
+#include <tr1/unordered_set>
 #include <vector>
 
 #include "RAID_config.h"
@@ -15,6 +16,8 @@
 #include "part_global_cached_private.h"
 #include "cache_config.h"
 #include "disk_read_thread.h"
+
+#define DEBUG
 
 /**
  * This global data collection is very static.
@@ -29,12 +32,65 @@ struct global_data_collection
 	std::vector<disk_read_thread *> read_threads;
 	pthread_mutex_t mutex;
 
+#ifdef DEBUG
+	std::tr1::unordered_set<io_interface *> ios;
+	std::tr1::unordered_set<file_io_factory *> factories;
+#endif
+
 	global_data_collection() {
 		pthread_mutex_init(&mutex, NULL);
 	}
+
+#ifdef DEBUG
+	void register_io(io_interface *io) {
+		ios.insert(io);
+	}
+
+	void register_io_factory(file_io_factory *factory) {
+		factories.insert(factory);
+	}
+#endif
 };
 
 static global_data_collection global_data;
+
+static bool enable_debug = false;
+
+static void enable_debug_handler(int sig, siginfo_t *si, void *uc)
+{
+	enable_debug = true;
+	printf("debug mode is enabled\n");
+	for (unsigned i = 0; i < global_data.read_threads.size(); i++)
+		global_data.read_threads[i]->print_state();
+#ifdef DEBUG
+	for (std::tr1::unordered_set<io_interface *>::iterator it
+			= global_data.ios.begin(); it != global_data.ios.end(); it++)
+		(*it)->print_state();
+	for (std::tr1::unordered_set<file_io_factory *>::iterator it
+			= global_data.factories.begin(); it != global_data.factories.end(); it++)
+		(*it)->print_state();
+#endif
+}
+
+bool is_debug_enabled()
+{
+	return enable_debug;
+}
+
+static void set_enable_debug_signal()
+{
+	struct sigaction sa;
+
+	/* Establish handler for timer signal */
+
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = enable_debug_handler;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+		perror("sigaction");
+		exit(1);
+	}
+}
 
 #if 0
 /**
@@ -244,6 +300,9 @@ public:
 
 	virtual void destroy_io(io_interface *io) {
 	}
+	virtual void print_state() {
+		print_part_cached_io_state(table);
+	}
 };
 
 io_interface *posix_io_factory::create_io(thread *t)
@@ -268,6 +327,9 @@ io_interface *posix_io_factory::create_io(thread *t)
 			fprintf(stderr, "a wrong posix access option\n");
 			assert(0);
 	}
+#ifdef DEBUG
+	global_data.register_io(io);
+#endif
 	return io;
 }
 
@@ -283,6 +345,9 @@ io_interface *aio_factory::create_io(thread *t)
 
 	io_interface *io;
 	io = new async_io(global_partition, params.get_aio_depth_per_file(), t);
+#ifdef DEBUG
+	global_data.register_io(io);
+#endif
 	return io;
 }
 
@@ -302,6 +367,9 @@ io_interface *remote_io_factory::create_io(thread *t)
 {
 	io_interface *io = new remote_disk_access(global_data.read_threads,
 			mapper, t);
+#ifdef DEBUG
+	global_data.register_io(io);
+#endif
 	return io;
 }
 
@@ -311,6 +379,9 @@ io_interface *global_cached_io_factory::create_io(thread *t)
 			global_data.read_threads, mapper, t);
 	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache);
+#ifdef DEBUG
+	global_data.register_io(io);
+#endif
 	return io;
 }
 
@@ -333,31 +404,41 @@ io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
 			new remote_disk_access(global_data.read_threads, mapper, t), table);
+#ifdef DEBUG
+	global_data.register_io(io);
+#endif
 	return io;
 }
 
 file_io_factory *create_io_factory(const std::string &file_name,
 		const int access_option, const cache_config *cache_conf)
 {
+	file_io_factory *factory;
 	switch (access_option) {
 		case READ_ACCESS:
 		case DIRECT_ACCESS:
-			return new posix_io_factory(file_name, access_option);
+			factory = new posix_io_factory(file_name, access_option);
+			break;
 		case AIO_ACCESS:
-			return new aio_factory(file_name);
+			factory = new aio_factory(file_name);
+			break;
 		case REMOTE_ACCESS:
-			return new remote_io_factory(file_name);
+			factory = new remote_io_factory(file_name);
+			break;
 		case GLOBAL_CACHE_ACCESS:
 			assert(cache_conf);
-			return new global_cached_io_factory(file_name, cache_conf);
+			factory = new global_cached_io_factory(file_name, cache_conf);
+			break;
 		case PART_GLOBAL_ACCESS:
 			assert(cache_conf);
-			return new part_global_cached_io_factory(file_name, cache_conf);
+			factory = new part_global_cached_io_factory(file_name, cache_conf);
+			break;
 		default:
 			fprintf(stderr, "a wrong access option\n");
 			assert(0);
 	}
-	return NULL;
+	global_data.register_io_factory(factory);
+	return factory;
 }
 
 void destroy_io_factory(file_io_factory *factory)

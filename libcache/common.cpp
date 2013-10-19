@@ -87,12 +87,6 @@ void permute_offsets(int num, int repeats, int stride, off_t start,
 	}
 }
 
-static void enable_debug_handler(int sig, siginfo_t *si, void *uc)
-{
-	enable_debug = true;
-	printf("debug mode is enabled\n");
-}
-
 }
 
 bool check_read_content(char *buf, int size, off_t off)
@@ -144,23 +138,6 @@ void create_write_data(char *buf, int size, off_t off)
 	}
 
 	check_read_content(buf, size, off);
-}
-
-bool enable_debug = false;
-
-void set_enable_debug_signal()
-{
-	struct sigaction sa;
-
-	/* Establish handler for timer signal */
-
-	sa.sa_flags = SA_SIGINFO;
-	sa.sa_sigaction = enable_debug_handler;
-	sigemptyset(&sa.sa_mask);
-	if (sigaction(SIGUSR1, &sa, NULL) == -1) {
-		perror("sigaction");
-		exit(1);
-	}
 }
 
 bool align_check(size_t alignment)

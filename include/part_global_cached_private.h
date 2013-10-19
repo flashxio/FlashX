@@ -147,6 +147,9 @@ public:
 #ifdef STATISTICS
 	virtual void print_stat(int nthreads);
 #endif
+	virtual void print_state();
 };
+
+void print_part_cached_io_state(part_io_process_table *table);
 
 #endif

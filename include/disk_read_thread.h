@@ -152,6 +152,8 @@ public:
 		aio->print_stat(1);
 #endif
 	}
+
+	void print_state();
 };
 
 #endif

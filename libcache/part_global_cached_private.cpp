@@ -45,6 +45,8 @@ struct thread_group
 		cache = NULL;
 		msg_allocator = NULL;
 	}
+
+	void print_state();
 };
 
 class group_request_sender
@@ -144,7 +146,19 @@ public:
 			node_ids.insert(it->first);
 		return node_ids;
 	}
+
+	void print_state() {
+		for (std::map<int, struct thread_group>::iterator it
+				= groups.begin(); it != groups.end(); it++) {
+			it->second.print_state();
+		}
+	}
 };
+
+void print_part_cached_io_state(part_io_process_table *table)
+{
+	table->print_state();
+}
 
 #if 0
 thread_group::~thread_group()
@@ -212,6 +226,12 @@ public:
 
 	msg_queue<io_request> *get_queue() const {
 		return request_queue;
+	}
+
+	void print_state() {
+		printf("node cached io %d has %d pending requests and %d reqs in the queue\n",
+				get_io_idx(), num_pending_ios(), request_queue->get_num_objs());
+		global_cached_io::print_state();
 	}
 };
 
@@ -361,6 +381,7 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 #ifdef MEMCHECK
 	delete local_reply_buf;
 #endif
+	assert(get_reply_sender(node_id)->get_num_remaining() == 0);
 	get_thread()->activate();
 	if (num_local > 0)
 		notify_upper(local_reqs, num_local);
@@ -420,11 +441,22 @@ public:
 	long get_num_requests() const {
 		return io->get_num_requests();
 	}
+
+	void print_state() {
+		io->print_state();
+	}
 };
 
 void process_request_thread::run()
 {
 	io->process_requests(NUMA_REQ_BUF_SIZE);
+}
+
+void thread_group::print_state()
+{
+	for (unsigned i = 0; i < process_request_threads.size(); i++) {
+		process_request_threads[i]->print_state();
+	}
 }
 
 group_request_sender *group_request_sender::create(slab_allocator *alloc,
@@ -852,4 +884,19 @@ void part_global_cached_io::flush_requests()
 		assert(ret == 0);
 	}
 	underlying->flush_requests();
+}
+
+void part_global_cached_io::print_state()
+{
+	printf("part global cached io %d has %d pending reqs\n",
+			get_io_idx(), num_pending_ios());
+	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
+			= req_senders.begin(); it != req_senders.end(); it++) {
+		group_request_sender *sender = it->second;
+		printf("\treq sender has %d buffered reqs\n", sender->get_num_remaining());
+	}
+	for (unsigned i = 0; i < reply_senders.size(); i++) {
+		printf("\treply sender has %d buffered reqs\n", reply_senders[i]->get_num_remaining());
+	}
+	underlying->print_state();
 }

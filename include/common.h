@@ -115,9 +115,6 @@ void extract_pages(const io_request &req, off_t off, int npages,
 		io_request &extracted);
 bool inside_RAID_block(const io_request &req);
 
-extern bool enable_debug;
-void set_enable_debug_signal();
-
 bool check_read_content(char *buf, int size, off_t off);
 void create_write_data(char *buf, int size, off_t off);
 

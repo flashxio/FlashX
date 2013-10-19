@@ -192,7 +192,7 @@ void disk_read_thread::run() {
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	do {
 		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
-		if (enable_debug)
+		if (is_debug_enabled())
 			printf("I/O thread %d: queue size: %d, low-prio queue size: %d\n",
 					get_node_id(), queue.get_num_entries(),
 					low_prio_queue.get_num_entries());
@@ -275,4 +275,11 @@ int disk_read_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
 			returned_pages[num_returned++] = pages[i];
 	}
 	return num_returned;
+}
+
+void disk_read_thread::print_state()
+{
+	printf("io thread %d has %d reqs and %d low-prio reqs in the queue\n",
+			disk_id, queue.get_num_objs(), low_prio_queue.get_num_objs());
+	aio->print_state();
 }

@@ -127,7 +127,18 @@ public:
 	virtual void cleanup() {
 	}
 
+	/**
+	 * This method prints the final statistics of the IO instance.
+	 */
 	virtual void print_stat(int nthreads) {
+	}
+
+	/**
+	 * This method prints the current state of the IO instance.
+	 * For the sake of performance, the method may not be thread-safe.
+	 * It should be used with caution.
+	 */
+	virtual void print_state() {
 	}
 
 	virtual io_interface *clone(thread *t) const {
@@ -228,6 +239,8 @@ public:
 
 	virtual io_interface *create_io(thread *t) = 0;
 	virtual void destroy_io(io_interface *) = 0;
+	virtual void print_state() {
+	}
 };
 
 class cache_config;
@@ -240,5 +253,7 @@ void init_io_system(const std::string root_conf_file);
 
 // This interface is used for debugging.
 void print_io_thread_stat();
+
+bool is_debug_enabled();
 
 #endif

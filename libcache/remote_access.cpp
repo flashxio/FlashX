@@ -348,4 +348,16 @@ int remote_disk_access::wait4complete(int num_to_complete)
 	return pending - num_pending_ios();
 }
 
+void remote_disk_access::print_state()
+{
+	printf("remote_io %d has %d pending reqs, %d completed reqs\n",
+			get_io_idx(), num_pending_ios(), complete_queue.get_num_entries());
+	for (unsigned i = 0; i < senders.size(); i++)
+		printf("\tsender %d: remain %d reqs\n", i,
+				senders[i]->get_num_remaining());
+	for (unsigned i = 0; i < low_prio_senders.size(); i++)
+		printf("\tlow-prio sender %d: remain %d reqs\n", i,
+				low_prio_senders[i]->get_num_remaining());
+}
+
 atomic_integer remote_disk_access::num_ios;

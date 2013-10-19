@@ -112,6 +112,11 @@ public:
 	virtual void print_stat(int nthreads) {
 		ctx->print_stat();
 	}
+
+	virtual void print_state() {
+		printf("aio %d has %ld open files, %d pending reqs\n",
+				get_io_idx(), open_files.size(), num_pending_ios());
+	}
 };
 
 void init_aio(std::vector<int> node_ids);

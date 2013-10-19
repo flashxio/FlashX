@@ -451,6 +451,10 @@ public:
 
 	int send_cached(T *msg, int num = 1);
 	int send(T *msg, int num);
+
+	int get_num_remaining() const {
+		return buf.get_num_objs();
+	}
 };
 
 template<class T>
