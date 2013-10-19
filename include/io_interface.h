@@ -94,9 +94,9 @@ public:
 		return curr;
 	}
 
-	/* When a thread begins, this method will be called. */
-	virtual int init() {
-		return 0;
+	int get_node_id() const {
+		assert(curr);
+		return curr->get_node_id();
 	}
 
 	int get_io_idx() const {
@@ -104,28 +104,45 @@ public:
 	}
 
 	/**
-	 * set the callback if the class supports the asynchronous fashion.
-	 * If the class doesn't support async IO, return false.
+	 * The number of requests are allowed to be sent to the IO instance.
 	 */
-	virtual bool set_callback(callback *cb) {
-		return false;
+	int get_remaining_io_slots() const {
+		return get_max_num_pending_ios() - num_pending_ios();
 	}
 
-	virtual callback *get_callback() {
+	/* When a thread begins, this method will be called. */
+	virtual int init() {
+		return 0;
+	}
+
+	/**
+	 * Each IO instance can only access one file. This returns the ID of
+	 * the file being accessed by the IO instance.
+	 */
+	virtual int get_file_id() const = 0;
+
+	/**
+	 * This method needs to be called before destroying the IO instance.
+	 */
+	virtual void cleanup() {
+	}
+
+	virtual void print_stat(int nthreads) {
+	}
+
+	virtual io_interface *clone(thread *t) const {
 		return NULL;
 	}
 
+	/**
+	 * Indicate whether it supports asynchronous IO interface.
+	 */
 	virtual bool support_aio() {
 		return false;
 	}
 
-	virtual int get_file_id() const = 0;
-
-	virtual void cleanup() {
-	}
-
 	/**
-	 * The asynchronous IO interface
+	 * The asynchronous IO should implement some of the following methods.
 	 */
 
 	/**
@@ -158,9 +175,6 @@ public:
 	virtual void set_max_num_pending_ios(int max) {
 		this->max_num_pending_ios = max;
 	}
-	int get_remaining_io_slots() const {
-		return get_max_num_pending_ios() - num_pending_ios();
-	}
 
 	/**
 	 * This method gives the underlying layer an interface to notify
@@ -175,22 +189,22 @@ public:
 	}
 
 	/**
+	 * set the callback if the class supports the asynchronous fashion.
+	 * If the class doesn't support async IO, return false.
+	 */
+	virtual bool set_callback(callback *cb) {
+		return false;
+	}
+
+	virtual callback *get_callback() {
+		return NULL;
+	}
+
+	/**
 	 * The synchronous IO interface.
 	 */
 	virtual io_status access(char *, off_t, ssize_t, int) {
 		return IO_UNSUPPORTED;
-	}
-
-	virtual void print_stat(int nthreads) {
-	}
-
-	virtual io_interface *clone(thread *t) const {
-		return NULL;
-	}
-
-	int get_node_id() const {
-		assert(curr);
-		return curr->get_node_id();
 	}
 };
 
