@@ -132,6 +132,7 @@ void remote_disk_access::access(io_request *requests, int num,
 
 		if (requests[i].is_flush()) {
 			syncd = true;
+			num_completed_reqs.inc(1);
 			continue;
 		}
 		else if (requests[i].is_sync()) {

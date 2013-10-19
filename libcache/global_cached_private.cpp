@@ -945,6 +945,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 
 		if (requests[i].is_flush()) {
 			syncd = true;
+			num_completed_areqs.inc(1);
 			continue;
 		}
 		else if (requests[i].is_sync()) {
