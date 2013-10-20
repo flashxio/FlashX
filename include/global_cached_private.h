@@ -181,9 +181,9 @@ public:
 #endif
 
 	virtual void print_state() {
-		printf("global cached io %d has %d pending reqs\n", get_io_idx(),
-				num_pending_ios());
-		printf("%d completed pending reqs, %d completed reqs from underlying\n",
+		printf("global cached io %d has %d pending reqs and %d reqs from underlying\n",
+				get_io_idx(), num_pending_ios(), num_from_underlying.get());
+		printf("%d completed pending reqs, %d queued completed reqs from underlying\n",
 				pending_requests.get_num_entries(), complete_queue.get_num_entries());
 		underlying->print_state();
 	}
