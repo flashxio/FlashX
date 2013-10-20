@@ -900,9 +900,9 @@ void part_global_cached_io::flush_requests()
 
 void part_global_cached_io::print_state()
 {
-	printf("part global cached io %d has %d pending reqs, %ld remote pending reqs, %d local pending reqs\n",
+	printf("part global cached io %d has %d pending reqs, %ld remote pending reqs, %d local pending reqs %d replies in the queue\n",
 			get_io_idx(), num_pending_ios(), sent_requests - processed_replies,
-			underlying->num_pending_ios());
+			underlying->num_pending_ios(), reply_queue->get_num_objs());
 	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {
 		group_request_sender *sender = it->second;
