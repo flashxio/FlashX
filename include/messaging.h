@@ -296,7 +296,8 @@ class msg_buffer: public fifo_queue<message<T> >
 			fifo_queue<message<T> >::expand_queue(
 					fifo_queue<message<T> >::get_size() * 2);
 		}
-		fifo_queue<message<T> >::add(&msg, 1);
+		int ret = fifo_queue<message<T> >::add(&msg, 1);
+		assert(ret == 1);
 	}
 
 public:
@@ -384,7 +385,8 @@ public:
 		for (int i = 0; i < ret; i++) {
 			num_objs += msgs[i].get_num_objs();
 		}
-		thread_safe_FIFO_queue<message<T> >::add(msgs, ret);
+		int tmp = thread_safe_FIFO_queue<message<T> >::add(msgs, ret);
+		assert(ret == tmp);
 #ifdef MEMCHECK
 		delete [] msgs;
 #endif
@@ -436,7 +438,9 @@ public:
 			message<T> tmp1(alloc, dest_queue->is_accept_inline());
 			buf = tmp1;
 			pthread_spin_unlock(&_lock);
-			return dest_queue->add(&tmp, 1);
+			int ret = dest_queue->add(&tmp, 1);
+			assert(ret == 1);
+			return ret;
 		}
 		else {
 			pthread_spin_unlock(&_lock);
