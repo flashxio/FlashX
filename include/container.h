@@ -129,7 +129,7 @@ public:
 
 	virtual int fetch(T *entries, int num) {
 		int num_fetches = 0;
-		while (!is_empty() && num_fetches < num) {
+		while (!fifo_queue<T>::is_empty() && num_fetches < num) {
 			entries[num_fetches++] = buf[loc_in_queue(start)];
 			start++;
 		}
@@ -158,7 +158,7 @@ public:
 
 	virtual int add(T *entries, int num) {
 		int num_pushes = 0;
-		while (!is_full() && num_pushes < num) {
+		while (!fifo_queue<T>::is_full() && num_pushes < num) {
 			buf[loc_in_queue(end)] = entries[num_pushes++];
 			end++;
 		}
@@ -302,12 +302,16 @@ public:
 
 	// TODO these are bugs. They should be protected by locks.
 	bool is_full() {
+		pthread_spin_lock(&_lock);
 		bool ret = fifo_queue<T>::is_full();
+		pthread_spin_unlock(&_lock);
 		return ret;
 	}
 
 	bool is_empty() {
+		pthread_spin_lock(&_lock);
 		bool ret = fifo_queue<T>::is_empty();
+		pthread_spin_unlock(&_lock);
 		return ret;
 	}
 };
