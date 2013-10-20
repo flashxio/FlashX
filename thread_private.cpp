@@ -9,6 +9,12 @@ int align_size = PAGE_SIZE;
 
 extern struct timeval global_start;
 
+struct issued_workload_t
+{
+	workload_t work;
+	struct timeval issue_time;
+};
+
 class cleanup_callback: public callback
 {
 	rand_buf *buf;
@@ -17,7 +23,7 @@ class cleanup_callback: public callback
 	thread_private *thread;
 public:
 #ifdef DEBUG
-	std::tr1::unordered_map<char *, workload_t> pending_reqs;
+	std::tr1::unordered_map<char *, issued_workload_t> pending_reqs;
 #endif
 
 	cleanup_callback(rand_buf *buf, int idx, thread_private *thread) {
@@ -208,11 +214,17 @@ void thread_private::run()
 #endif
 			if (i > 0) {
 #ifdef DEBUG
+				struct timeval curr;
+
+				gettimeofday(&curr, NULL);
 				for (int k = 0; k < i; k++) {
 					workload_t work = {reqs[k].get_offset(),
 						(int) reqs[k].get_size(), reqs[k].get_access_method() == READ};
-					cb->pending_reqs.insert(std::pair<char *, workload_t>(
-								reqs[k].get_buf(0), work));
+					issued_workload_t issue_work;
+					issue_work.work = work;
+					issue_work.issue_time = curr;
+					cb->pending_reqs.insert(std::pair<char *, issued_workload_t>(
+								reqs[k].get_buf(0), issue_work));
 				}
 #endif
 				io->access(reqs, i);
@@ -301,7 +313,10 @@ void thread_private::run()
 			}
 		}
 	}
-	printf("thread %d has issued all requests\n", idx);
+	struct timeval curr;
+	gettimeofday(&curr, NULL);
+	printf("thread %d has issued all requests at %ld\n", idx,
+			time_diff_us(start_time, curr));
 	io->cleanup();
 	gettimeofday(&end_time, NULL);
 
@@ -359,10 +374,12 @@ void thread_private::print_stat()
 #ifdef DEBUG
 	assert(num_pending.get() == (int) cb->pending_reqs.size());
 	if (cb->pending_reqs.size() > 0) {
-		for (std::tr1::unordered_map<char *, workload_t>::const_iterator it
+		for (std::tr1::unordered_map<char *, issued_workload_t>::const_iterator it
 				= cb->pending_reqs.begin(); it != cb->pending_reqs.end(); it++) {
-			workload_t work = it->second;
-			printf("missing req %lx, size %d, read: %d\n", work.off, work.size, work.read);
+			workload_t work = it->second.work;
+			printf("missing req %lx, size %d, read: %d, issued at %ld\n",
+					work.off, work.size, work.read, time_diff_us(
+						start_time, it->second.issue_time));
 		}
 	}
 #endif
