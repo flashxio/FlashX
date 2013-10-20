@@ -2,6 +2,7 @@
 #include "disk_read_thread.h"
 #include "parameters.h"
 #include "aio_private.h"
+#include "debugger.h"
 
 const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;

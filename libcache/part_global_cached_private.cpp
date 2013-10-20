@@ -23,6 +23,7 @@
 #include "slab_allocator.h"
 #include "thread.h"
 #include "remote_access.h"
+#include "debugger.h"
 
 const int NUMA_REQ_QUEUE_SIZE = 2000;
 const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
@@ -154,11 +155,6 @@ public:
 		}
 	}
 };
-
-void print_part_cached_io_state(part_io_process_table *table)
-{
-	table->print_state();
-}
 
 #if 0
 thread_group::~thread_group()
@@ -603,11 +599,27 @@ int part_global_cached_io::close_file(part_io_process_table *table)
 	return 0;
 }
 
+class debug_process_request_threads: public debug_task
+{
+	part_io_process_table *table;
+public:
+	debug_process_request_threads(part_io_process_table *table) {
+		this->table = table;
+	}
+
+	void run() {
+		table->print_state();
+	}
+};
+
 part_io_process_table *part_global_cached_io::open_file(
 		const std::vector<disk_read_thread *> &io_threads,
 		file_mapper *mapper, const cache_config *config)
 {
-	return new part_io_process_table(io_threads, mapper, config);
+	part_io_process_table *table = new part_io_process_table(io_threads,
+			mapper, config);
+	debug.register_task(new debug_process_request_threads(table));
+	return table;
 }
 
 part_global_cached_io::part_global_cached_io(io_interface *underlying,

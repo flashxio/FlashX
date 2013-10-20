@@ -254,6 +254,4 @@ void init_io_system(const std::string root_conf_file);
 // This interface is used for debugging.
 void print_io_thread_stat();
 
-bool is_debug_enabled();
-
 #endif

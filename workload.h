@@ -67,6 +67,8 @@ public:
 	virtual off_t next_offset() = 0;
 	virtual bool has_next() = 0;
 	virtual ~workload_gen() { }
+	virtual void print_state() {
+	}
 };
 
 class seq_workload: public workload_gen
@@ -322,6 +324,11 @@ public:
 		}
 		return !local_buf.is_empty();
 	}
+
+	virtual void print_state() {
+		printf("file workload has %d global works and %d local works\n",
+				workload_queue->get_num_entries(), local_buf.get_num_entries());
+	}
 };
 
 /**
@@ -417,6 +424,10 @@ public:
 		access.read = access_methods[num] == READ;
 		num++;
 		return access;
+	}
+
+	virtual void print_state() {
+		printf("rand workload has %ld works left\n", tot_accesses - num);
 	}
 };
 

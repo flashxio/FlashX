@@ -33,6 +33,7 @@
 #include "io_interface.h"
 #include "cache_config.h"
 #include "config.h"
+#include "debugger.h"
 
 //#define USE_PROCESS
 
@@ -310,6 +311,20 @@ void parse_args(int argc, char *argv[],
 	}
 }
 
+class debug_workload_gens: public debug_task
+{
+	std::vector<workload_gen *> workloads;
+public:
+	debug_workload_gens(const std::vector<workload_gen *> &workloads) {
+		this->workloads = workloads;
+	}
+
+	void run() {
+		for (unsigned i = 0; i < workloads.size(); i++)
+			workloads[i]->print_state();
+	}
+};
+
 int main(int argc, char *argv[])
 {
 	int ret = 0;
@@ -442,6 +457,7 @@ int main(int argc, char *argv[])
 			threads[idx] = new thread_private(node_id, idx, config.get_entry_size(), factory, gen);
 		}
 	}
+	debug.register_task(new debug_workload_gens(workload_gens));
 
 	if (config.is_high_prio()) {
 		ret = setpriority(PRIO_PROCESS, getpid(), -20);
