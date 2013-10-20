@@ -62,7 +62,6 @@ str2int access_methods[] = {
 str2int workloads[] = {
 	{ "SEQ", SEQ_OFFSET },
 	{ "RAND", RAND_OFFSET },
-	{ "RAND_SEQ", RAND_SEQ_OFFSET },
 	{ "RAND_PERMUTE", RAND_PERMUTE },
 	{ "HIT_DEFINED", HIT_DEFINED },
 	{ "user_file", USER_FILE_WORKLOAD },
@@ -423,10 +422,6 @@ int main(int argc, char *argv[])
 					assert(config.get_read_ratio() >= 0);
 					gen = new rand_workload(start, end, config.get_entry_size(),
 							end - start, (int) (config.get_read_ratio() * 100));
-					break;
-				case RAND_SEQ_OFFSET:
-					gen = new rand_seq_workload(start, end, config.get_entry_size(),
-							1024 * 1024 * 4);
 					break;
 				case RAND_PERMUTE:
 					assert(config.get_read_ratio() >= 0);
