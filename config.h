@@ -55,7 +55,7 @@ public:
 		num_repeats = 1;
 	}
 
-	void init(const std::map<std::string, std::string> configs);
+	void init(const std::map<std::string, std::string> &configs);
 	void print();
 	void print_help();
 

@@ -1,3 +1,5 @@
+#include<algorithm>
+
 #include "parameters.h"
 #include "common.h"
 #include "RAID_config.h"
@@ -161,4 +163,77 @@ void sys_parameters::print_help()
 		<< std::endl;
 	std::cout << "\tnuma_num_process_threads: the number of request processing threads per node in part_global_cached_io"
 		<< std::endl;
+}
+
+static void read_config_file(const std::string &conf_file,
+		std::map<std::string, std::string> &configs)
+{
+	FILE *f = fopen(conf_file.c_str(), "r");
+	if (f == NULL) {
+		perror("fopen");
+		assert(0);
+	}
+
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
+	while ((read = getline(&line, &len, f)) > 0) {
+		std::string str = line;
+		if (str.length() == 1)
+			continue;
+		if (line[0] == '#')
+			continue;
+
+		size_t found = str.find("=");
+		/* if there isn't `=', I assume it's a file name*/
+		if (found == std::string::npos) {
+			fprintf(stderr, "wrong format: %s\n", line);
+			assert(0);
+		}
+
+		std::string value = str.substr(found + 1);
+		value.erase(std::remove_if(value.begin(), value.end(), isspace),
+				value.end());
+		std::string key = str.substr(0, found);
+		key.erase(std::remove_if(key.begin(), key.end(), isspace),
+				key.end());
+		bool res = configs.insert(std::pair<std::string, std::string>(key,
+					value)).second;
+		if (!res)
+			configs[key] = value;
+	}
+	fclose(f);
+}
+
+config_map::config_map(const std::string &conf_file)
+{
+	read_config_file(conf_file, configs);
+}
+
+/**
+ * All options should have the following format:
+ *		key=value.
+ * All options that don't have the format are ignored.
+ */
+void config_map::add_options(char *argv[], int argc)
+{
+	for (int i = 0; i < argc; i++) {
+		std::string str = argv[i];
+
+		size_t found = str.find("=");
+		if (found == std::string::npos) {
+			continue;
+		}
+
+		std::string value = str.substr(found + 1);
+		value.erase(std::remove_if(value.begin(), value.end(), isspace),
+				value.end());
+		std::string key = str.substr(0, found);
+		key.erase(std::remove_if(key.begin(), key.end(), isspace),
+				key.end());
+		bool res = configs.insert(std::pair<std::string, std::string>(key,
+					value)).second;
+		if (!res)
+			configs[key] = value;
+	}
 }

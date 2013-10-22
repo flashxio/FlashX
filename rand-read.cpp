@@ -79,7 +79,7 @@ std::string prof_file = "rand-read.prof";
 
 test_config config;
 
-void test_config::init(const std::map<std::string, std::string> configs)
+void test_config::init(const std::map<std::string, std::string> &configs)
 {
 	str2int_map access_map(access_methods,
 			sizeof(access_methods) / sizeof(access_methods[0]));
@@ -244,72 +244,6 @@ void int_handler(int sig_num)
 
 const long TEST_DATA_SIZE = 15L * 1024 * 1024 * 4096;
 
-void read_config_file(const std::string &conf_file,
-		std::map<std::string, std::string> &configs)
-{
-	FILE *f = fopen(conf_file.c_str(), "r");
-	if (f == NULL) {
-		perror("fopen");
-		assert(0);
-	}
-
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
-	while ((read = getline(&line, &len, f)) > 0) {
-		std::string str = line;
-		if (str.length() == 1)
-			continue;
-		if (line[0] == '#')
-			continue;
-
-		size_t found = str.find("=");
-		/* if there isn't `=', I assume it's a file name*/
-		if (found == std::string::npos) {
-			fprintf(stderr, "wrong format: %s\n", line);
-			assert(0);
-		}
-
-		std::string value = str.substr(found + 1);
-		value.erase(std::remove_if(value.begin(), value.end(), isspace),
-				value.end());
-		std::string key = str.substr(0, found);
-		key.erase(std::remove_if(key.begin(), key.end(), isspace),
-				key.end());
-		bool res = configs.insert(std::pair<std::string, std::string>(key,
-					value)).second;
-		if (!res)
-			configs[key] = value;
-	}
-	fclose(f);
-}
-
-void parse_args(int argc, char *argv[],
-		std::map<std::string, std::string> &configs)
-{
-	for (int i = 0; i < argc; i++) {
-		std::string str = argv[i];
-
-		size_t found = str.find("=");
-		/* if there isn't `=', I assume it's a file name*/
-		if (found == std::string::npos) {
-			fprintf(stderr, "wrong format: %s\n", argv[i]);
-			assert(0);
-		}
-
-		std::string value = str.substr(found + 1);
-		value.erase(std::remove_if(value.begin(), value.end(), isspace),
-				value.end());
-		std::string key = str.substr(0, found);
-		key.erase(std::remove_if(key.begin(), key.end(), isspace),
-				key.end());
-		bool res = configs.insert(std::pair<std::string, std::string>(key,
-					value)).second;
-		if (!res)
-			configs[key] = value;
-	}
-}
-
 class debug_workload_gens: public debug_task
 {
 	std::vector<workload_gen *> workloads;
@@ -344,11 +278,10 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	// The file that contains all data files.
 
-	std::map<std::string, std::string> configs;
-	read_config_file(conf_file, configs);
-	parse_args(argc - 3, argv + 3, configs);
-	params.init(configs);
-	config.init(configs);
+	config_map configs(conf_file);
+	configs.add_options(argv + 3, argc - 3);
+	params.init(configs.get_options());
+	config.init(configs.get_options());
 
 	params.print();
 	config.print();
