@@ -29,8 +29,9 @@ public:
 		this->thread_id = id;
 		this->block_size = block_size;
 		this->mapper = mapper;
-		printf("open file %s for write in thread %d\n", file.name.c_str(), id);
-		fd = open(file.name.c_str(), O_DIRECT | O_RDWR | O_CREAT, 00644);
+		std::string file_name = file.name + "/test";
+		printf("open file %s for write in thread %d\n", file_name.c_str(), id);
+		fd = open(file_name.c_str(), O_DIRECT | O_RDWR | O_CREAT, 00644);
 		if (fd < 0) {
 			perror("open");
 			::exit(1);
