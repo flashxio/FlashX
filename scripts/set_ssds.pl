@@ -39,11 +39,11 @@ for (sort keys %devices) {
 	my $host = $devices{$dev};
 	my $node_id = $host_ids{$host};
 
-	my $data_file = "$node_id:/mnt/ssd${dev_idx}/test_RAID0_16";
+	my $data_file = "$node_id:/mnt/ssd${dev_idx}/";
 	system("echo $data_file > conf/data_file${dev_idx}.txt");
 	print $fh "$data_file\n";
 
-	my $dev_file = "/dev/sd${dev}1";
+	my $dev_file = "/dev/sd${dev}";
 	my $mount_dir = "/mnt/ssd${dev_idx}";
 	print "dev: $dev_file, dir: $mount_dir, on node $node_id\n" ;
 	system("mkdir -p $mount_dir");
