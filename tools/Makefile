@@ -39,5 +39,11 @@ cache_evaluator: cache_evaluator.o
 eval_expand_SA_cache: eval_expand_SA_cache.o
 	$(CXX) -o eval_expand_SA_cache eval_expand_SA_cache.o ../workload.o $(LDFLAGS)
 
+verify_file: verify_file.o
+	$(CXX) -o verify_file verify_file.o $(LDFLAGS)
+
+print_file: print_file.o
+	$(CXX) -o print_file print_file.o $(LDFLAGS)
+
 clean:
 	rm *.o
