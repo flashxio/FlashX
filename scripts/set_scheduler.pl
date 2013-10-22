@@ -17,9 +17,10 @@ while (@dev_details) {
 
 my $scheduler = "noop";
 
-for (my $i = 1; $i <= 16; $i++) {
+my $num_devs = @dev_names;
+for (my $i = 1; $i <= $num_devs; $i++) {
 	my $dev_idx = $i - 1;
-	my $dev_file = "/dev/sd$dev_names[$dev_idx]1";
+	my $dev_file = "/dev/sd$dev_names[$dev_idx]";
 	system("echo $scheduler > /sys/block/sd$dev_names[$dev_idx]/queue/scheduler");
 	system("cat /sys/block/sd$dev_names[$dev_idx]/queue/scheduler");
 	system("echo 2 > /sys/block/sd$dev_names[$dev_idx]/queue/rq_affinity");
