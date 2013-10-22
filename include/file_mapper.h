@@ -9,8 +9,6 @@
 #include "concurrency.h"
 #include "exception.h"
 
-#define TEST
-
 const int FILE_CONST_A = 31;
 const int FILE_CONST_P = 191;
 
