@@ -76,6 +76,10 @@ public:
 		assert(file_map[idx] >= 0);
 		return file_map[idx];
 	}
+
+	int get_partition_id() const {
+		return indices[0];
+	}
 };
 
 #endif
