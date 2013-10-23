@@ -1,16 +1,12 @@
-CFLAGS = -g -O3 -DSTATISTICS #-DPROFILER
+CFLAGS = -g -O3 -DSTATISTICS -DENABLE_AIO #-DPROFILER
 ifdef MEMCHECK
 TRACE_FLAGS = -faddress-sanitizer
 endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -Llibcache -lcache -laio -lnuma -lrt
-CXXFLAGS = -g -O3 -Iinclude -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DPROFILER -DSTATISTICS
-ifdef USE_NBDS
-LDFLAGS += -Lnbds.0.4.3/ -lnbds
-CXXFLAGS += -Inbds.0.4.3/include/ -DUSE_NBDS
-endif
+LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -rdynamic
+CXXFLAGS = -g -I../include -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DENABLE_AIO -DPROFILER -DSTATISTICS
 CPPFLAGS := -MD
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -27,31 +23,24 @@ CC = gcc
 CXX = g++
 endif
 
-all: rand-read unit_test tools apps
+all: libgraph graph-bfs tools
 
-rand-read: $(OBJS) build_lib
-	$(CXX) -o rand-read $(OBJS) $(LDFLAGS)
+libgraph: $(OBJS)
+	rm -f libgraph.a
+	ar -cvq libgraph.a $(OBJS)
 
-build_lib:
-	$(MAKE) -C libcache
+graph-bfs: libgraph
+	$(MAKE) -C graph-bfs
 
-unit_test: build_lib
-ifndef MEMCHECK
-	$(MAKE) -C test
-endif
-
-tools: build_lib
+tools: libgraph
 	$(MAKE) -C tools
-
-apps: build_lib
-	$(MAKE) -C apps
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f include/*~
-	make --ignore-errors -C test clean
-	make --ignore-errors -C libcache clean
+	rm libgraph.a
+	$(MAKE) clean -C tools
+	$(MAKE) clean -C graph-bfs
 
 -include $(DEPS) 

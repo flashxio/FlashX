@@ -5,12 +5,8 @@ endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -Llibcache -lcache -laio -lnuma -lrt
-CXXFLAGS = -g -O3 -Iinclude -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DPROFILER -DSTATISTICS
-ifdef USE_NBDS
-LDFLAGS += -Lnbds.0.4.3/ -lnbds
-CXXFLAGS += -Inbds.0.4.3/include/ -DUSE_NBDS
-endif
+LDFLAGS = $(TRACE_FLAGS) -lprofiler -rdynamic -L../ -lgraph -L../../libcache -lcache -laio -lnuma -lpthread
+CXXFLAGS = -g -I../../include -I.. -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DNUM_NODES=1 -DNCPUS=0 -DPROFILER -DSTATISTICS
 CPPFLAGS := -MD
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -27,31 +23,15 @@ CC = gcc
 CXX = g++
 endif
 
-all: rand-read unit_test tools apps
+all: el2al
 
-rand-read: $(OBJS) build_lib
-	$(CXX) -o rand-read $(OBJS) $(LDFLAGS)
-
-build_lib:
-	$(MAKE) -C libcache
-
-unit_test: build_lib
-ifndef MEMCHECK
-	$(MAKE) -C test
-endif
-
-tools: build_lib
-	$(MAKE) -C tools
-
-apps: build_lib
-	$(MAKE) -C apps
+el2al: el2al.o ../libgraph.a
+	$(CXX) -o el2al el2al.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f include/*~
-	make --ignore-errors -C test clean
-	make --ignore-errors -C libcache clean
+	rm el2al
 
 -include $(DEPS) 
