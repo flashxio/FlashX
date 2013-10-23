@@ -289,12 +289,6 @@ int main(int argc, char *argv[])
 	printf("use a different random sequence\n");
 	srandom(time(NULL));
 
-	int flags = O_RDWR;
-	if (config.get_access_option() != READ_ACCESS) {
-		printf("file is opened with direct I/O\n");
-		flags |= O_DIRECT;
-	}
-
 	if (config.get_nthreads() > NUM_THREADS) {
 		fprintf(stderr, "too many threads\n");
 		exit(1);
