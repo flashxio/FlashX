@@ -109,11 +109,6 @@ void test_config::init(const std::map<std::string, std::string> &configs)
 		nthreads = atoi(it->second.c_str());
 	}
 
-	it = configs.find("num_nodes");
-	if (it != configs.end()) {
-		num_nodes = str2size(it->second);
-	}
-
 	it = configs.find("read_percent");
 	if (it != configs.end()) {
 		read_ratio = (((double) atoi(it->second.c_str())) / 100);
@@ -170,11 +165,6 @@ void test_config::init(const std::map<std::string, std::string> &configs)
 		use_aio = false;
 	}
 
-	it = configs.find("root_conf");
-	if (it != configs.end()) {
-		root_conf_file = it->second;
-	}
-
 #ifdef PROFILER
 	it = configs.find("prof");
 	if (it != configs.end()) {
@@ -189,7 +179,6 @@ void test_config::print()
 	printf("\toption: %d\n", access_option);
 	printf("\tnum_reqs: %ld\n", num_reqs);
 	printf("\tthreads: %d\n", nthreads);
-	printf("\tnum_nodes: %d\n", num_nodes);
 	printf("\tread_ratio: %f\n", read_ratio);
 	printf("\trepeats: %d\n", num_repeats);
 	printf("\tentry_size: %d\n", entry_size);
@@ -198,7 +187,6 @@ void test_config::print()
 	printf("\tbuf_type: %d\n", buf_type);
 	printf("\tbuf_size: %d\n", buf_size);
 	printf("\tsync: %d\n", !use_aio);
-	printf("\troot_conf: %s\n", root_conf_file.c_str());
 }
 
 void test_config::print_help()
@@ -216,7 +204,6 @@ void test_config::print_help()
 	printf("\tread_ratio: the read percentage of a synthetic workload\n");
 	printf("\trepeats: the number of repeats in a random permutation workload\n");
 	printf("\tthreads: the number of test threads\n");
-	printf("\tnum_nodes: the number of NUMA nodes the test program should run\n");
 	printf("\tentry_size: the size of each access\n");
 	workload_map.print("\tworkloads: ");
 	printf("\thigh_prio: run the test program in a higher OS priority\n");
@@ -280,10 +267,7 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(argv + 3, argc - 3);
-	params.init(configs.get_options());
 	config.init(configs.get_options());
-
-	params.print();
 	config.print();
 
 	printf("use a different random sequence\n");
@@ -299,28 +283,13 @@ int main(int argc, char *argv[])
 	long start;
 	long end = 0;
 
-	std::vector<int> node_id_array;
-	for (int i = 0; i < config.get_num_nodes(); i++)
-		node_id_array.push_back(i);
-
-	assert(config.get_nthreads() % config.get_num_nodes() == 0);
-	assert(node_id_array.size() == (unsigned) config.get_num_nodes());
-	printf("There are %ld nodes\n", node_id_array.size());
-
-	cache_config *cache_conf = NULL;
-	if (config.get_access_option() == GLOBAL_CACHE_ACCESS)
-		cache_conf = new even_cache_config(params.get_cache_size(),
-				params.get_cache_type(), node_id_array);
-	else if (config.get_access_option() == PART_GLOBAL_ACCESS) {
-		assert(config.get_num_nodes() == 4);
-		cache_conf = new even_cache_config(params.get_cache_size(),
-				params.get_cache_type(), node_id_array);
-	}
-
-	init_io_system(config.get_root_conf_file());
-
+	assert(config.get_nthreads() % params.get_num_nodes() == 0);
+	init_io_system(configs);
 	file_io_factory *factory = create_io_factory(data_file,
-			config.get_access_option(), cache_conf);
+			config.get_access_option());
+	std::vector<int> node_id_array;
+	for (int i = 0; i < params.get_num_nodes(); i++)
+		node_id_array.push_back(i);
 	int nthread_per_node = config.get_nthreads() / node_id_array.size();
 	std::vector<workload_gen *> workload_gens;
 	for (unsigned i = 0; i < node_id_array.size(); i++) {
@@ -423,5 +392,4 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < config.get_nthreads(); i++)
 		delete threads[i];
 	destroy_io_factory(factory);
-	delete cache_conf;
 }

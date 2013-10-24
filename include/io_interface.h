@@ -246,10 +246,10 @@ public:
 class cache_config;
 
 file_io_factory *create_io_factory(const std::string &file_name,
-		const int access_option, const cache_config *cache_conf = NULL);
+		const int access_option);
 void destroy_io_factory(file_io_factory *factory);
 
-void init_io_system(const std::string root_conf_file);
+void init_io_system(const config_map &map);
 
 // This interface is used for debugging.
 void print_io_thread_stat();

@@ -147,11 +147,16 @@ void debug_global_data::run()
 #endif
 }
 
-void init_io_system(const std::string root_conf_file)
+void init_io_system(const config_map &configs)
 {
+	params.init(configs.get_options());
+	params.print();
+
 	numa_set_bind_policy(1);
 	thread::thread_class_init();
 
+	std::string root_conf_file = configs.get_option("root_conf");
+	printf("The root conf file: %s\n", root_conf_file.c_str());
 	RAID_config raid_conf(root_conf_file, params.get_RAID_mapping_option(),
 			params.get_RAID_block_size());
 	int num_files = raid_conf.get_num_disks();
@@ -382,8 +387,14 @@ io_interface *part_global_cached_io_factory::create_io(thread *t)
 }
 
 file_io_factory *create_io_factory(const std::string &file_name,
-		const int access_option, const cache_config *cache_conf)
+		const int access_option)
 {
+	std::vector<int> node_id_array;
+	for (int i = 0; i < params.get_num_nodes(); i++)
+		node_id_array.push_back(i);
+	cache_config *cache_conf = new even_cache_config(params.get_cache_size(),
+				params.get_cache_type(), node_id_array);
+
 	file_io_factory *factory;
 	switch (access_option) {
 		case READ_ACCESS:

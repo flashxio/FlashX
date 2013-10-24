@@ -95,6 +95,8 @@ public:
 	}
 };
 
+static config_map c_global_map;
+
 extern "C" {
 
 void set_cache_size(long size)
@@ -121,7 +123,9 @@ void set_RAID_block_size(int num_pages)
 
 void ssd_init_io_system(const char *root_conf_file, int *node_ids, int num_nodes)
 {
-	init_io_system(root_conf_file);
+	// TODO I need to pass the options to the IO system.
+	assert(0);
+	init_io_system(c_global_map);
 }
 
 void ssd_file_io_init(const char *name, int flags, int num_threads, int num_nodes,
@@ -136,6 +140,10 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 	printf("Init SSDIO with %d threads and %d nodes\n",
 			num_threads, num_nodes);
 
+	// TODO the suggested nodes should be added to the system parameters
+	// in order to pass to the IO system.
+	assert(0);
+#if 0
 	std::vector<int> node_id_array;
 	// Users can suggest nodes where the IO should be. It make sense for cached IO
 	// because we are going to place cache on those nodes.
@@ -148,17 +156,13 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 			node_id_array.push_back(i);
 	}
 	printf("There are %ld nodes\n", node_id_array.size());
+#endif
 
 	int access_option = GLOBAL_CACHE_ACCESS;
-	cache_config *cache_conf = NULL;
 	if (flags | O_DIRECT)
 		access_option = REMOTE_ACCESS;
-	else
-		cache_conf = new even_cache_config(params.get_cache_size(),
-				params.get_cache_type(), node_id_array);
 
-	file_io_factory *factory = create_io_factory(name, access_option,
-			cache_conf);
+	file_io_factory *factory = create_io_factory(name, access_option);
 	opened_files.insert(std::pair<std::string, file_io_factory *>(name,
 				factory));
 

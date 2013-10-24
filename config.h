@@ -32,13 +32,11 @@ class test_config
 	int buf_size;
 	bool high_prio;
 	bool use_aio;
-	int num_nodes;
 	int workload;
 	// All reads
 	double read_ratio;
 	int num_repeats;
 	std::string workload_file;
-	std::string root_conf_file;
 public:
 	test_config() {
 		access_option = -1;
@@ -49,7 +47,6 @@ public:
 		buf_size = PAGE_SIZE;
 		high_prio = false;
 		use_aio = true;
-		num_nodes = 1;
 		workload = RAND_OFFSET;
 		read_ratio = -1;
 		num_repeats = 1;
@@ -91,10 +88,6 @@ public:
 		return use_aio;
 	}
 
-	int get_num_nodes() const {
-		return num_nodes;
-	}
-
 	int get_workload() const {
 		return workload;
 	}
@@ -109,10 +102,6 @@ public:
 
 	std::string get_workload_file() const {
 		return workload_file;
-	}
-
-	std::string get_root_conf_file() const {
-		return root_conf_file;
 	}
 };
 

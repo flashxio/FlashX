@@ -36,6 +36,7 @@ sys_parameters::sys_parameters()
 	use_flusher = false;
 	vaio_print_freq = 1000000;
 	numa_num_process_threads = 1;
+	num_nodes = 1;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -117,6 +118,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		numa_num_process_threads = str2size(it->second);
 	}
+
+	it = configs.find("num_nodes");
+	if (it != configs.end()) {
+		num_nodes = str2size(it->second);
+	}
 }
 
 void sys_parameters::print()
@@ -134,7 +140,8 @@ void sys_parameters::print()
 	std::cout << "\tuse_flusher: " << use_flusher << std::endl;
 	std::cout << "\tcache_large_write: " << cache_large_write << std::endl;
 	std::cout << "\tvaio_print_freq: " << vaio_print_freq << std::endl;
-	std::cout << "\tnuma_num_process_threads" << numa_num_process_threads << std::endl;
+	std::cout << "\tnuma_num_process_threads: " << numa_num_process_threads << std::endl;
+	std::cout << "\tnum_nodes: " << num_nodes << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -162,6 +169,8 @@ void sys_parameters::print_help()
 	std::cout << "\tvaio_print_freq: how frequently a virtual SSD print stat info (in us)"
 		<< std::endl;
 	std::cout << "\tnuma_num_process_threads: the number of request processing threads per node in part_global_cached_io"
+		<< std::endl;
+	std::cout << "\tnum_nodes: the number of NUMA nodes the test program should run"
 		<< std::endl;
 }
 

@@ -86,6 +86,7 @@ class sys_parameters
 	bool cache_large_write;
 	int vaio_print_freq;
 	int numa_num_process_threads;
+	int num_nodes;
 public:
 	sys_parameters();
 
@@ -144,6 +145,10 @@ public:
 
 	int get_numa_num_process_threads() const {
 		return numa_num_process_threads;
+	}
+
+	int get_num_nodes() const {
+		return num_nodes;
 	}
 };
 
