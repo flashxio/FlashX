@@ -68,6 +68,9 @@ public:
 
 thread *thread::represent_thread(int node_id)
 {
+	if (node_id >= 0)
+		bind2node_id(node_id);
+
 	thread *curr = thread::get_curr_thread();
 	assert(curr == NULL);
 	curr = new thread_representer(node_id);
