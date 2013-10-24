@@ -442,5 +442,15 @@ void print_io_thread_stat()
 	}
 }
 
+ssize_t file_io_factory::get_file_size() const
+{
+	ssize_t file_size = 0;
+	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
+		std::string file_name = global_data.raid_conf.get_disk(i).name + "/" + name;
+		file_size += ::get_file_size(file_name.c_str());
+	}
+	return file_size;
+}
+
 atomic_integer io_interface::io_counter;
 page_cache *global_cached_io_factory::global_cache;

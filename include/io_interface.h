@@ -242,6 +242,8 @@ public:
 	virtual void destroy_io(io_interface *) = 0;
 	virtual void print_state() {
 	}
+
+	ssize_t get_file_size() const;
 };
 
 class cache_config;
