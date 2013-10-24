@@ -84,6 +84,8 @@ inline static long get_curr_us()
 	return ((long) tv.tv_sec) * 1000 * 1000 + tv.tv_usec;
 }
 
+int isnumeric(char *str);
+
 static const int CONST_A = 27644437;
 static const long CONST_P = 68718952447L;
 

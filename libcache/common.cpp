@@ -87,6 +87,16 @@ void permute_offsets(int num, int repeats, int stride, off_t start,
 	}
 }
 
+int isnumeric(char *str)
+{
+	int len = strlen(str);
+	for (int i = 0; i < len; i++) {
+		if (!isdigit(str[i]))
+			return 0;
+	}
+	return 1;
+}
+
 }
 
 bool check_read_content(char *buf, int size, off_t off)
