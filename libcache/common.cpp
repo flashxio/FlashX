@@ -68,6 +68,12 @@ ssize_t get_file_size(const char *file_name)
 	return stats.st_size;
 }
 
+int file_exist(const char *file_name)
+{
+	struct stat stats;
+	return stat(file_name, &stats) == 0;
+}
+
 void permute_offsets(int num, int repeats, int stride, off_t start,
 		off_t offsets[])
 {

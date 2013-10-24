@@ -95,6 +95,7 @@ static inline int universal_hash(off_t v, int modulo)
 }
 
 ssize_t get_file_size(const char *file_name);
+int file_exist(const char *file_name);
 
 void permute_offsets(int num, int repeats, int stride, off_t start,
 		off_t offsets[]);

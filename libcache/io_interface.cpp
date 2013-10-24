@@ -389,6 +389,16 @@ io_interface *part_global_cached_io_factory::create_io(thread *t)
 file_io_factory *create_io_factory(const std::string &file_name,
 		const int access_option)
 {
+	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
+		std::string abs_path = global_data.raid_conf.get_disk(i).name
+			+ "/" + file_name;
+		if (!file_exist(abs_path.c_str())) {
+			fprintf(stderr, "the underlying file %s doesn't exist\n",
+					abs_path.c_str());
+			return NULL;
+		}
+	}
+
 	std::vector<int> node_id_array;
 	for (int i = 0; i < params.get_num_nodes(); i++)
 		node_id_array.push_back(i);
