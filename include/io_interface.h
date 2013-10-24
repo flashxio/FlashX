@@ -9,6 +9,7 @@
 #include "common.h"
 #include "concurrency.h"
 #include "thread.h"
+#include "io_request.h"
 
 class io_request;
 
