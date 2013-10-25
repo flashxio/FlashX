@@ -139,11 +139,14 @@ void bfs_graph::start(vertex_id_t id)
 {
 	printf("start on vertex %ld\n", id);
 	queue->add(&id, 1);
+	num_visited_vertices.inc(1);
 	worker_threads[0]->activate();
 }
 
 void bfs_graph::add_next_vertices(vertex_id_t vertices[], int num)
 {
+	num_visited_vertices.inc(num);
+
 	vertex_id_t to_add[num];
 	int num_to_add = 0;
 
@@ -261,4 +264,5 @@ int main(int argc, char *argv[])
 			params.get_num_nodes(), graph_file, index_file);
 	graph->start(start_vertex);
 	graph->wait4complete();
+	printf("BFS from vertex 0 visits %d vertices\n", graph->get_num_visited_vertices());
 }

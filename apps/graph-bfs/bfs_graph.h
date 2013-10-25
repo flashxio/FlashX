@@ -41,6 +41,7 @@ class worker_thread;
 class bfs_graph
 {
 	std::vector<bfs_vertex> vertices;
+	atomic_integer num_visited_vertices;
 
 	// These are two global queues. One contains the vertices that are being
 	// processed in the current level. The other contains the vertices that
@@ -89,6 +90,10 @@ public:
 	 */
 	int get_curr_vertices(vertex_id_t vertices[], int num) {
 		return queue->fetch(vertices, num);
+	}
+
+	int get_num_visited_vertices() const {
+		return num_visited_vertices.get();
 	}
 
 	void wait4complete();
