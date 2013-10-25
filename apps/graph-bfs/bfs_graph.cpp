@@ -207,7 +207,6 @@ void bfs_graph::wait4complete()
 class graph_config
 {
 	int num_threads;
-	std::string root_conf_file;
 public:
 	graph_config() {
 		num_threads = 4;
@@ -221,22 +220,23 @@ public:
 	int get_num_threads() const {
 		return num_threads;
 	}
-
-	const std::string &get_root_conf_file() const {
-		return root_conf_file;
-	}
 } graph_conf;
 
 void graph_config::print_help()
 {
+	printf("Configuration parameters in graph algorithm.\n");
+	printf("\tthreads: the number of threads processing the graph\n");
 }
 
 void graph_config::print()
 {
+	printf("Configuration parameters in graph algorithm.\n");
+	printf("\tthreads: %d\n", num_threads);
 }
 
 void graph_config::init(const config_map &map)
 {
+	map.read_option_int("threads", num_threads);
 }
 
 int main(int argc, char *argv[])
