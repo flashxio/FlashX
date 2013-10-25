@@ -108,6 +108,10 @@ public:
 #endif
 	}
 
+	int get_id() const {
+		return thread_idx;
+	}
+
 	void start();
 	virtual void run() = 0;
 	virtual void init() {
