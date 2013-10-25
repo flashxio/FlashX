@@ -245,7 +245,11 @@ public:
 		int ret = fifo_queue<T>::add(entries, num);
 		int orig_size = fifo_queue<T>::get_size();
 		if (ret < num && orig_size < max_size) {
-			fifo_queue<T>::expand_queue(orig_size * 2);
+			int new_size = orig_size;
+			int min_required_size = orig_size + num - ret;
+			while (new_size < min_required_size && new_size < max_size)
+				new_size *= 2;
+			fifo_queue<T>::expand_queue(new_size);
 			int ret2 = fifo_queue<T>::add(entries + ret, num - ret);
 			ret += ret2;
 			assert(ret == num);
@@ -258,7 +262,11 @@ public:
 		int ret = fifo_queue<T>::add(queue);
 		int orig_size = fifo_queue<T>::get_size();
 		if (!queue->is_empty() && orig_size < max_size) {
-			fifo_queue<T>::expand_queue(orig_size * 2);
+			int new_size = orig_size;
+			int min_required_size = orig_size + queue->get_num_entries();
+			while (new_size < min_required_size && new_size < max_size)
+				new_size *= 2;
+			fifo_queue<T>::expand_queue(new_size);
 			int ret2 = fifo_queue<T>::add(queue);
 			ret += ret2;
 			assert(queue->is_empty());
