@@ -51,6 +51,7 @@ class bfs_graph
 	// The queue for the next level.
 	thread_safe_FIFO_queue<vertex_id_t> *next_queue;
 	atomic_integer level;
+	volatile bool is_complete;
 
 	// These are used for switching queues.
 	pthread_mutex_t lock;

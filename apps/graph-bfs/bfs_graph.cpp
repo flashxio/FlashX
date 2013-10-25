@@ -107,6 +107,8 @@ void worker_thread::run()
 bfs_graph::bfs_graph(int num_threads, int num_nodes,
 		const std::string &graph_file, const std::string &index_file)
 {
+	is_complete = false;
+
 	vertex_index *indices = vertex_index::load(index_file);
 	vertices.resize(indices->get_num_vertices());
 	for (size_t i = 0; i < vertices.size(); i++) {
@@ -182,6 +184,7 @@ bool bfs_graph::progress_next_level()
 		level.inc(1);
 		printf("progress to level %d, there are %d vertices in this level\n",
 				level.get(), queue->get_num_entries());
+		is_complete = queue->is_empty();
 	}
 	pthread_mutex_unlock(&lock);
 
@@ -194,7 +197,7 @@ bool bfs_graph::progress_next_level()
 		printf("Could not wait on barrier\n");
 		exit(-1);
 	}
-	return queue->is_empty();
+	return is_complete;
 }
 
 void bfs_graph::wait4complete()
