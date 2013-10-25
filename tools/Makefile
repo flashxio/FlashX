@@ -21,7 +21,7 @@ stat: stat.o
 create_file: create_file.o
 	$(CXX) -o create_file create_file.o $(LDFLAGS)
 
-create_files: create_files.o 
+create_files: create_files.o ../libcache/libcache.a
 	$(CXX) -o create_files create_files.o $(LDFLAGS)
 
 workload-gen: workload-gen.o
@@ -33,16 +33,16 @@ memory-fill: memory-fill.o
 java_dump2c_dump: java_dump2c_dump.o
 	$(CXX) -o java_dump2c_dump java_dump2c_dump.o ../workload.o $(LDFLAGS)
 
-cache_evaluator: cache_evaluator.o
+cache_evaluator: cache_evaluator.o ../libcache/libcache.a
 	$(CXX) -o cache_evaluator cache_evaluator.o ../workload.o $(LDFLAGS) -L../nbds.0.4.3/ -lnbds
 
-eval_expand_SA_cache: eval_expand_SA_cache.o
+eval_expand_SA_cache: eval_expand_SA_cache.o ../libcache/libcache.a
 	$(CXX) -o eval_expand_SA_cache eval_expand_SA_cache.o ../workload.o $(LDFLAGS)
 
 verify_file: verify_file.o
 	$(CXX) -o verify_file verify_file.o $(LDFLAGS)
 
-print_file: print_file.o
+print_file: print_file.o ../libcache/libcache.a
 	$(CXX) -o print_file print_file.o $(LDFLAGS)
 
 clean:

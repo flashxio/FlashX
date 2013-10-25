@@ -27,7 +27,7 @@ CC = gcc
 CXX = g++
 endif
 
-all: rand-read unit_test
+all: rand-read unit_test tools
 
 rand-read: $(OBJS) build_lib
 	$(CXX) -o rand-read $(OBJS) $(LDFLAGS)
@@ -39,6 +39,9 @@ unit_test: build_lib
 ifndef MEMCHECK
 	$(MAKE) -C test
 endif
+
+tools: build_lib
+	$(MAKE) -C tools
 
 clean:
 	rm -f *.d
