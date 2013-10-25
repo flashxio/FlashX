@@ -100,7 +100,7 @@ static thread_safe_page *generic_complete_req(io_request *req,
 	}
 	else {
 		io_request extracted;
-		extract_pages(*req, p->get_offset(), 1, extracted);
+		req->extract(p->get_offset(), PAGE_SIZE, extracted);
 		page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
 		req_buf = extracted.get_buf();
 		req_size = extracted.get_size();
@@ -368,7 +368,7 @@ int global_cached_io::multibuf_completion(io_request *request,
 		 * the very original request.
 		 */
 		io_request partial;
-		extract_pages(*orig, request->get_offset(), request->get_num_bufs(),
+		orig->extract(request->get_offset(), request->get_num_bufs() * PAGE_SIZE,
 				partial);
 		this->finalize_partial_request(partial, orig);
 	}
@@ -443,7 +443,8 @@ void global_cached_io::process_completed_requests(io_request requests[],
 			if (dirty)
 				dirty_pages.push_back(dirty);
 			io_request partial;
-			extract_pages(*orig, request->get_offset(), request->get_num_bufs(), partial);
+			orig->extract(request->get_offset(),
+					request->get_num_bufs() * PAGE_SIZE, partial);
 			this->finalize_partial_request(partial, orig);
 
 			if (old)
@@ -712,7 +713,7 @@ again:
 				else {
 					// TODO I shouldn't allocate memory within locks.
 					io_request *partial_orig = req_allocator->alloc_obj();
-					extract_pages(*orig, p->get_offset(), 1, *partial_orig);
+					orig->extract(p->get_offset(), PAGE_SIZE, *partial_orig);
 					partial_orig->set_partial(true);
 					partial_orig->set_orig(orig);
 					partial_orig->set_priv(p);
@@ -742,7 +743,7 @@ again:
 				multibuf_req = tmp;
 			}
 			io_request complete_partial;
-			extract_pages(*orig, p->get_offset(), 1, complete_partial);
+			orig->extract(p->get_offset(), PAGE_SIZE, complete_partial);
 			ret += complete_partial.get_size();
 			__complete_req(&complete_partial, p);
 			finalize_partial_request(complete_partial, orig);
@@ -1039,7 +1040,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				 */
 				if (pg_idx) {
 					io_request req;
-					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
+					orig->extract(pages[0]->get_offset(), pg_idx * PAGE_SIZE, req);
 					read(req, pages, pg_idx, orig);
 					pg_idx = 0;
 				}
@@ -1051,7 +1052,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				// If the request accesses more than one page.
 				if (end_pg_offset - begin_pg_offset > PAGE_SIZE) {
 					orig1 = req_allocator->alloc_obj();
-					extract_pages(*orig, tmp_off, 1, *orig1);
+					orig->extract(tmp_off, PAGE_SIZE, *orig1);
 					orig1->set_orig(orig);
 					orig1->set_priv(p);
 					orig1->set_io(this);
@@ -1105,7 +1106,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 			if (orig->get_access_method() == WRITE) {
 				/* We need to extract a page from the request. */
 				io_request req;
-				extract_pages(*orig, tmp_off, 1, req);
+				orig->extract(tmp_off, PAGE_SIZE, req);
 
 				if (orig->get_size() == req.get_size())
 					num_bytes_completed += __write(orig, p, dirty_pages);
@@ -1124,7 +1125,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				if (pg_idx == MAX_NUM_IOVECS || (pages[0]->get_offset()
 							+ PAGE_SIZE * pg_idx) % RAID_BLOCK_SIZE == 0) {
 					io_request req;
-					extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
+					orig->extract(pages[0]->get_offset(), pg_idx * PAGE_SIZE, req);
 					num_bytes_completed += read(req, pages, pg_idx, orig);
 					pg_idx = 0;
 				}
@@ -1135,7 +1136,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		 */
 		if (pg_idx) {
 			io_request req;
-			extract_pages(*orig, pages[0]->get_offset(), pg_idx, req);
+			orig->extract(pages[0]->get_offset(), pg_idx * PAGE_SIZE, req);
 			read(req, pages, pg_idx, orig);
 		}
 

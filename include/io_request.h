@@ -643,6 +643,49 @@ public:
 	}
 
 	/**
+	 * Extract a request from the input request.
+	 * The extract request is within the range [off, off + size).
+	 */
+	void extract(off_t off, int size, io_request &extracted) const {
+		off_t req_off;
+		char *req_buf;
+		ssize_t req_size;
+		assert(get_num_bufs() == 1);
+		// We have to make sure the extracted range has overlap with
+		// the input request.
+		// Either the beginning of the extracted range inside the input request
+		bool check = (off >= this->get_offset() && off < this->get_offset()
+				+ this->get_size())
+			// or the end of the extracted range inside the input request
+			|| (off + size >= this->get_offset()
+					&& off + size < this->get_offset() + this->get_size())
+			// or the input request is inside the extracted range.
+			|| (off <= this->get_offset()
+					&& off + size >= this->get_offset() + this->get_size());
+		if (!check)
+			fprintf(stderr, "req %lx, size: %lx, page off: %lx\n",
+					this->get_offset(), this->get_size(), off);
+		assert(check);
+		// this is the first page in the request.
+		if (off <= this->get_offset()) {
+			req_off = this->get_offset();
+			req_buf = this->get_buf();
+		}
+		else {
+			req_off = off;
+			/* 
+			 * We can't be sure if the request buffer is aligned
+			 * with the page size.
+			 */
+			req_buf = this->get_buf() + (off - this->get_offset());
+		}
+		req_size = min(off + size - req_off,
+				this->get_offset() + this->get_size() - req_off);
+		extracted.init(req_buf, req_off, req_size, this->get_access_method(),
+				this->get_io(), this->get_node_id());
+	}
+
+	/**
 	 * We need to serialize an io request to a buffer so it can be sent to
 	 * another thread.
 	 * @accept_inline: indicates whether the IO request can inline data

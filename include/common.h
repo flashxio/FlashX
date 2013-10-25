@@ -111,8 +111,6 @@ public:
 long str2size(std::string str);
 
 class io_request;
-void extract_pages(const io_request &req, off_t off, int npages,
-		io_request &extracted);
 bool inside_RAID_block(const io_request &req);
 
 bool check_read_content(char *buf, int size, off_t off);

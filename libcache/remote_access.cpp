@@ -177,7 +177,7 @@ void remote_disk_access::access(io_request *requests, int num,
 				size = min(size, end - begin);
 				// It only supports to extract a specified request from
 				// a single-buffer request.
-				extract_pages(*orig, begin, size / PAGE_SIZE, req);
+				orig->extract(begin, size, req);
 				req.set_io(this);
 				assert(inside_RAID_block(req));
 
