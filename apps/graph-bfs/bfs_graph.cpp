@@ -147,8 +147,6 @@ void bfs_graph::start(vertex_id_t id)
 
 void bfs_graph::add_next_vertices(vertex_id_t vertices[], int num)
 {
-	num_visited_vertices.inc(num);
-
 	vertex_id_t to_add[num];
 	int num_to_add = 0;
 
@@ -160,6 +158,7 @@ void bfs_graph::add_next_vertices(vertex_id_t vertices[], int num)
 		if (!v.set_visited(true))
 			to_add[num_to_add++] = vertices[i];
 	}
+	num_visited_vertices.inc(num_to_add);
 	int num_added = next_queue->add(to_add, num_to_add);
 	assert(num_added == num_to_add);
 }
