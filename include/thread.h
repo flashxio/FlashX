@@ -30,7 +30,7 @@ class thread
 	friend void init_thread_class();
 	friend void *thread_run(void *arg);
 public:
-	thread(std::string name, int node_id = -1, bool blocking = true) {
+	thread(std::string name, int node_id, bool blocking = true) {
 		thread_class_init();
 
 		thread_idx = num_threads.inc(1);
