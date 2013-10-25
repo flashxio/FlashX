@@ -110,9 +110,6 @@ public:
 
 long str2size(std::string str);
 
-class io_request;
-bool inside_RAID_block(const io_request &req);
-
 bool check_read_content(char *buf, int size, off_t off);
 void create_write_data(char *buf, int size, off_t off);
 

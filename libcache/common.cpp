@@ -228,10 +228,3 @@ int retrieve_data_files(std::string file_file,
 	fclose(fd);
 	return data_files.size();
 }
-
-bool inside_RAID_block(const io_request &req)
-{
-	int RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
-	return ROUND(req.get_offset(), RAID_block_size)
-		== ROUND(req.get_offset() + req.get_size() - 1, RAID_block_size);
-}

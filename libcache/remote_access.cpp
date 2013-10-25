@@ -140,7 +140,7 @@ void remote_disk_access::access(io_request *requests, int num,
 		}
 
 		// If the request accesses one RAID block, it's simple.
-		if (inside_RAID_block(requests[i])) {
+		if (requests[i].inside_RAID_block()) {
 			off_t pg_off = requests[i].get_offset() / PAGE_SIZE;
 			int idx = block_mapper->map2file(pg_off);
 			// The cache inside a sender is extensible, so it can absorb
@@ -179,7 +179,7 @@ void remote_disk_access::access(io_request *requests, int num,
 				// a single-buffer request.
 				orig->extract(begin, size, req);
 				req.set_io(this);
-				assert(inside_RAID_block(req));
+				assert(req.inside_RAID_block());
 
 				// Send a request.
 				off_t pg_off = req.get_offset() / PAGE_SIZE;

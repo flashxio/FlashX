@@ -52,6 +52,8 @@ public:
 	}
 };
 
+class io_request;
+
 class io_req_extension
 {
 	static atomic_unsigned_integer num_creates;
@@ -469,6 +471,12 @@ public:
 	 */
 	bool within_1page() const {
 		return get_offset() + get_size() <= ROUND_PAGE(get_offset()) + PAGE_SIZE;
+	}
+
+	bool inside_RAID_block() const {
+		int RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
+		return ROUND(this->get_offset(), RAID_block_size)
+			== ROUND(this->get_offset() + this->get_size() - 1, RAID_block_size);
 	}
 
 	io_request *get_orig() const {

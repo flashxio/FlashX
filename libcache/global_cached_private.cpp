@@ -860,7 +860,7 @@ void merge_pages2req(io_request &req, page_cache *cache)
 				break;
 		}
 	}
-	assert(inside_RAID_block(req));
+	assert(req.inside_RAID_block());
 }
 
 /**
