@@ -146,9 +146,10 @@ void undirected_graph::dump(const std::string &file) const
 
 	for (size_t i = 0; i < vertices.size(); i++) {
 		int mem_size = vertices[i].get_serialize_size();
-		char buf[mem_size];
+		char *buf = new char[mem_size];
 		ext_mem_undirected_vertex::serialize(vertices[i], buf, mem_size);
 		ssize_t ret = fwrite(buf, mem_size, 1, f);
+		delete [] buf;
 		assert(ret == 1);
 	}
 
@@ -270,9 +271,10 @@ void directed_graph::dump(const std::string &file) const
 
 	for (size_t i = 0; i < vertices.size(); i++) {
 		int mem_size = vertices[i].get_serialize_size();
-		char buf[mem_size];
+		char *buf = new char[mem_size];
 		ext_mem_directed_vertex::serialize(vertices[i], buf, mem_size);
 		ssize_t ret = fwrite(buf, mem_size, 1, f);
+		delete [] buf;
 		assert(ret == 1);
 	}
 
