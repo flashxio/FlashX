@@ -6,7 +6,7 @@ TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messag
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
 LDFLAGS = $(TRACE_FLAGS) -lprofiler -rdynamic -L../ -lgraph -L../../libcache -lcache -laio -lnuma -lpthread -fopenmp
-CXXFLAGS = -g -I../../include -I.. -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -fopenmp
+CXXFLAGS = -g -O3 -I../../include -I.. -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -fopenmp
 CPPFLAGS := -MD
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
