@@ -5,6 +5,24 @@
 
 const int VERTEX_BUF_SIZE = 1024;
 
+class graph_config
+{
+	int num_threads;
+public:
+	graph_config() {
+		num_threads = 4;
+	}
+
+	void print_help();
+	void print();
+
+	void init(const config_map &map);
+
+	int get_num_threads() const {
+		return num_threads;
+	}
+} graph_conf;
+
 /**
  * This callback is to process a vertex.
  */
@@ -102,6 +120,7 @@ void worker_thread::run()
 			break;
 	}
 	stop();
+	io->print_stat(graph_conf.get_num_threads());
 }
 
 bfs_graph::bfs_graph(int num_threads, int num_nodes,
@@ -206,24 +225,6 @@ void bfs_graph::wait4complete()
 	}
 }
 
-class graph_config
-{
-	int num_threads;
-public:
-	graph_config() {
-		num_threads = 4;
-	}
-
-	void print_help();
-	void print();
-
-	void init(const config_map &map);
-
-	int get_num_threads() const {
-		return num_threads;
-	}
-} graph_conf;
-
 void graph_config::print_help()
 {
 	printf("Configuration parameters in graph algorithm.\n");
@@ -266,5 +267,6 @@ int main(int argc, char *argv[])
 			params.get_num_nodes(), graph_file, index_file);
 	graph->start(start_vertex);
 	graph->wait4complete();
+	print_io_thread_stat();
 	printf("BFS from vertex 0 visits %d vertices\n", graph->get_num_visited_vertices());
 }
