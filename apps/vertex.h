@@ -23,8 +23,8 @@ public:
 		id = -1;
 	}
 
-	in_mem_vertex_info(off_t off, int size) {
-		this->id = -1;
+	in_mem_vertex_info(vertex_id_t id, off_t off, int size) {
+		this->id = id;
 		this->off = off;
 		this->size = size;
 	}

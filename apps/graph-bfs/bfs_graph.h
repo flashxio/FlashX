@@ -21,7 +21,8 @@ public:
 	bfs_vertex() {
 	}
 
-	bfs_vertex(off_t off, int size): in_mem_vertex_info(off, size) {
+	bfs_vertex(vertex_id_t id, off_t off, int size): in_mem_vertex_info(
+			id, off, size) {
 	}
 
 	bool has_visited() const {
@@ -95,6 +96,14 @@ public:
 
 	int get_num_visited_vertices() const {
 		return num_visited_vertices.get();
+	}
+
+	vertex_id_t get_max_vertex_id() const {
+		return vertices.back().get_id();
+	}
+
+	vertex_id_t get_min_vertex_id() const {
+		return vertices.front().get_id();
 	}
 
 	void wait4complete();

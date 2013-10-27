@@ -39,6 +39,9 @@ public:
 
 int bfs_callback::invoke(io_request *reqs[], int num)
 {
+	vertex_id_t max_id = graph->get_max_vertex_id();
+	vertex_id_t min_id = graph->get_min_vertex_id();
+
 	std::vector<vertex_id_t> neighbors;
 	for (int i = 0; i < num; i++) {
 		char *buf = reqs[i]->get_buf();
@@ -48,6 +51,7 @@ int bfs_callback::invoke(io_request *reqs[], int num)
 		// the next level.
 		for (int j = 0; j < v->get_num_edges(); j++) {
 			vertex_id_t id = v->get_edge(j).get_to();
+			assert(id >= min_id && id <= max_id);
 			bfs_vertex &info = graph->get_vertex(id);
 			// If the vertex has been visited, we can skip it.
 			if (info.has_visited())
@@ -133,7 +137,7 @@ bfs_graph::bfs_graph(int num_threads, int num_nodes,
 	for (size_t i = 0; i < vertices.size(); i++) {
 		off_t off = indices->get_vertex_off(i);
 		int size = indices->get_vertex_size(i);
-		vertices[i] = bfs_vertex(off, size);
+		vertices[i] = bfs_vertex(i, off, size);
 	}
 	vertex_index::destroy(indices);
 
