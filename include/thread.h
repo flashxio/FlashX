@@ -19,6 +19,8 @@ class thread
 	bool blocking;
 	std::string name;
 
+	volatile void *user_data;
+
 	volatile bool _is_sleeping;
 	volatile bool _is_running;
 	volatile bool _has_exit;
@@ -46,6 +48,15 @@ public:
 
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
+		user_data = NULL;
+	}
+
+	void set_user_data(void *user_data) {
+		this->user_data = user_data;
+	}
+
+	void *get_user_data() const {
+		return (void *) user_data;
 	}
 
 	virtual ~thread() {
