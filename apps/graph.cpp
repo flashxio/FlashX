@@ -57,7 +57,7 @@ size_t read_edge_list_text(const std::string &file, std::vector<edge> &edges)
 	return edges.size();
 }
 
-struct comp_edge {
+static struct comp_edge {
 	bool operator() (const edge &e1, const edge &e2) {
 		if (e1.get_from() == e2.get_from())
 			return e1.get_to() < e2.get_to();
@@ -173,7 +173,7 @@ size_t undirected_graph::get_num_non_empty_vertices() const
 	return num_vertices;
 }
 
-struct comp_in_edge {
+static struct comp_in_edge {
 	bool operator() (const edge &e1, const edge &e2) {
 		if (e1.get_to() == e2.get_to())
 			return e1.get_from() < e2.get_from();
