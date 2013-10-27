@@ -36,6 +36,7 @@ public:
 	static vertex_index *create(const std::vector<vertex_type> &vertices) {
 		void *addr = malloc(sizeof(vertex_index)
 				+ sizeof(off_t) * vertices.size());
+		assert(addr);
 		vertex_index *index = new (addr) vertex_index(vertices.size());
 		index->num_vertices = vertices.size();
 		size_t tot_size = 0;
