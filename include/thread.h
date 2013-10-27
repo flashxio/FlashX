@@ -137,4 +137,52 @@ public:
 	}
 };
 
+class thread_task
+{
+public:
+	virtual void run() = 0;
+};
+
+class task_thread: public thread
+{
+	std::vector<thread_task *> tasks;
+	pthread_spinlock_t lock;
+	atomic_integer num_pending_tasks;
+public:
+	task_thread(const std::string &name, int node): thread(name, node) {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	void add_task(thread_task *t) {
+		pthread_spin_lock(&lock);
+		tasks.push_back(t);
+		pthread_spin_unlock(&lock);
+		num_pending_tasks.inc(1);
+		activate();
+	}
+
+	void run() {
+		std::vector<thread_task *> local_tasks;
+		pthread_spin_lock(&lock);
+		local_tasks = tasks;
+		tasks.clear();
+		pthread_spin_unlock(&lock);
+		for (unsigned i = 0; i < local_tasks.size(); i++) {
+			local_tasks[i]->run();
+			delete local_tasks[i];
+		}
+		num_pending_tasks.dec(local_tasks.size());
+	}
+
+	bool complete_all_tasks() const {
+		return num_pending_tasks.get() == 0;
+	}
+
+	void wait4complete() {
+		// TODO this is a temporary solution.
+		while (!complete_all_tasks())
+			sleep(1);
+	}
+};
+
 #endif
