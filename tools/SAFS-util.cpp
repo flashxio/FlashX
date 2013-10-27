@@ -108,7 +108,7 @@ public:
 	}
 
 	int invoke(io_request *rqs[], int num) {
-		size_t read_bytes = min(rqs[0]->get_size(),
+		size_t read_bytes = min<size_t>(rqs[0]->get_size(),
 				source->get_size() - rqs[0]->get_offset());
 		assert(read_bytes > 0);
 		size_t ret = source->get_data(rqs[0]->get_offset(), read_bytes, orig_buf);
