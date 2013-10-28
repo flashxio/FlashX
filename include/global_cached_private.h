@@ -163,15 +163,19 @@ public:
 #ifdef STATISTICS
 	void print_stat(int nthreads) {
 		underlying->print_stat(nthreads);
-		static int tot_hits = 0;
+		static size_t tot_accesses = 0;
+		static size_t tot_hits = 0;
+		static size_t tot_fast_process = 0;
 		static int seen_threads = 0;
-		static int tot_fast_process = 0;
 		seen_threads++;
+		tot_accesses += num_accesses;
 		tot_hits += cache_hits;
 		tot_fast_process += num_fast_process;
 		if (seen_threads == nthreads) {
-			printf("there are %d cache hits\n", tot_hits);
-			printf("There are %d requests processed in the fast path\n", tot_fast_process);
+			printf("there are %ld accesses in pages and %ld cache hits\n",
+					tot_accesses, tot_hits);
+			printf("There are %ld requests processed in the fast path\n",
+					tot_fast_process);
 			global_cache->print_stat();
 		}
 		printf("%d requests are completed from the underlying io\n",
