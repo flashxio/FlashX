@@ -1,3 +1,6 @@
+#include <signal.h>
+#include <google/profiler.h>
+
 #include "thread.h"
 #include "io_interface.h"
 
@@ -8,6 +11,7 @@ const int VERTEX_BUF_SIZE = 1024;
 class graph_config
 {
 	int num_threads;
+	std::string prof_file;
 public:
 	graph_config() {
 		num_threads = 4;
@@ -17,6 +21,10 @@ public:
 	void print();
 
 	void init(const config_map &map);
+
+	const std::string &get_prof_file() const {
+		return prof_file;
+	}
 
 	int get_num_threads() const {
 		return num_threads;
@@ -244,6 +252,14 @@ void graph_config::print()
 void graph_config::init(const config_map &map)
 {
 	map.read_option_int("threads", num_threads);
+	map.read_option("prof_file", prof_file);
+}
+
+void int_handler(int sig_num)
+{
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+	exit(0);
 }
 
 int main(int argc, char *argv[])
@@ -265,12 +281,19 @@ int main(int argc, char *argv[])
 	graph_conf.init(configs);
 	graph_conf.print();
 
+	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
 	bfs_graph *graph = bfs_graph::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index_file);
+	printf("BFS starts\n");
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStart(graph_conf.get_prof_file().c_str());
 	graph->start(start_vertex);
 	graph->wait4complete();
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
 	print_io_thread_stat();
 	printf("BFS from vertex 0 visits %d vertices\n", graph->get_num_visited_vertices());
 }
