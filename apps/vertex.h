@@ -68,6 +68,27 @@ public:
 
 class in_mem_directed_vertex;
 class in_mem_undirected_vertex;
+class ext_mem_directed_vertex;
+class ext_mem_undirected_vertex;
+
+class ext_mem_vertex
+{
+	char *buf;
+	int size;
+public:
+	ext_mem_vertex(char *buf, int size) {
+		this->buf = buf;
+		this->size = size;
+	}
+
+	ext_mem_directed_vertex *deserialize2directed() const;
+
+	ext_mem_undirected_vertex *deserialize2undirected() const;
+
+	vertex_id_t get_id() const {
+		return * (vertex_id_t *) buf;
+	}
+};
 
 /**
  * This vertex represents a directed vertex stored in the external memory.
@@ -234,5 +255,15 @@ public:
 			+ sizeof(vertex_id_t) * get_num_edges();
 	}
 };
+
+inline ext_mem_directed_vertex *ext_mem_vertex::deserialize2directed() const
+{
+	return ext_mem_directed_vertex::deserialize(buf, size);
+}
+
+inline ext_mem_undirected_vertex *ext_mem_vertex::deserialize2undirected() const
+{
+	return ext_mem_undirected_vertex::deserialize(buf, size);
+}
 
 #endif
