@@ -63,25 +63,23 @@ public:
 	}
 
 	void activate() {
+		pthread_mutex_lock(&mutex);
 		_is_activated = true;
-		if (_is_sleeping) {
-			pthread_cond_signal(&cond);
-		}
+		pthread_mutex_unlock(&mutex);
+		pthread_cond_signal(&cond);
 	}
 
 	void wait() {
+		pthread_mutex_lock(&mutex);
 		if (!_is_activated) {
-			pthread_mutex_lock(&mutex);
-			_is_sleeping = true;
 			while (!_is_activated && _is_running) {
 				int ret = pthread_cond_wait(&cond, &mutex);
 				if (ret)
 					perror("pthread_cond_wait");
 			}
-			_is_sleeping = false;
-			pthread_mutex_unlock(&mutex);
 		}
 		_is_activated = false;
+		pthread_mutex_unlock(&mutex);
 	}
 
 	bool is_running() const {
