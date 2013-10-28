@@ -23,6 +23,8 @@ void bfs_vertex::run(graph_engine &graph, ext_mem_vertex &v,
 		assert(id >= min_id && id <= max_id);
 		bfs_vertex &info = (bfs_vertex &) graph.get_vertex(id);
 		// If the vertex has been visited, we can skip it.
+		if (info.has_visited())
+			continue;
 		if (info.set_visited(true))
 			continue;
 		num_activated++;
