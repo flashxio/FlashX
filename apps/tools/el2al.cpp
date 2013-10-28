@@ -224,8 +224,7 @@ directed_graph *directed_edge_graph::create() const
 {
 	directed_graph *g = new directed_graph();
 
-	vertex_id_t curr = min(out_edges[0].get_from(),
-			in_edges[0].get_to());
+	vertex_id_t curr = 0;
 	in_mem_directed_vertex v(curr);
 	size_t out_idx = 0;
 	size_t in_idx = 0;
