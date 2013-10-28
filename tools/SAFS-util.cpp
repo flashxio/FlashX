@@ -97,10 +97,12 @@ class verify_callback: public callback
 {
 	char *orig_buf;
 	data_source *source;
+	size_t verified_bytes;
 public:
 	verify_callback(data_source *source) {
 		this->source = source;
 		orig_buf = (char *) malloc(BUF_SIZE);
+		verified_bytes = 0;
 	}
 
 	~verify_callback() {
@@ -114,7 +116,12 @@ public:
 		size_t ret = source->get_data(rqs[0]->get_offset(), read_bytes, orig_buf);
 		fprintf(stderr, "verify block %lx of %ld bytes\n", rqs[0]->get_offset(), read_bytes);
 		assert(ret == read_bytes);
+		verified_bytes += read_bytes;
 		verify_bytes(rqs[0]->get_buf(), orig_buf, read_bytes);
+	}
+
+	size_t get_verified_bytes() const {
+		return verified_bytes;
 	}
 };
 
@@ -140,7 +147,8 @@ void comm_verify_file(int argc, char *argv[])
 		source = new synthetic_data_source(DATA_SIZE);
 	else
 		source = new file_data_source(ext_file);
-	io->set_callback(new verify_callback(source));
+	verify_callback *cb = new verify_callback(source);
+	io->set_callback(cb);
 
 	size_t file_size = source->get_size();
 	assert(factory->get_file_size() >= file_size);
@@ -151,7 +159,7 @@ void comm_verify_file(int argc, char *argv[])
 		io->access(&req, 1);
 		io->wait4complete(1);
 	}
-	printf("verify all data\n");
+	printf("verify %ld bytes\n", cb->get_verified_bytes());
 	
 	io->cleanup();
 	delete io->get_callback();
