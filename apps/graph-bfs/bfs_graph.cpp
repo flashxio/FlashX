@@ -290,10 +290,17 @@ int main(int argc, char *argv[])
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	graph->start(start_vertex);
 	graph->wait4complete();
+	gettimeofday(&end, NULL);
+
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	print_io_thread_stat();
-	printf("BFS from vertex 0 visits %d vertices\n", graph->get_num_visited_vertices());
+	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
+			start_vertex, graph->get_num_visited_vertices(),
+			time_diff(start, end));
 }
