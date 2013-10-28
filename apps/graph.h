@@ -47,6 +47,7 @@ public:
 	}
 
 	void add_vertex(const in_mem_directed_vertex &v) {
+		assert(vertices.size() == v.get_id());
 		vertices.push_back(v);
 	}
 
