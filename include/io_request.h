@@ -3,6 +3,7 @@
 
 #include <sys/uio.h>
 #include <sys/time.h>
+#include <limits.h>
 
 #include "common.h"
 #include "concurrency.h"
@@ -237,10 +238,10 @@ class io_request
 		USER_COMPUTE,
 	};
 
-	static const off_t MAX_FILE_SIZE = (1L << 42) - 1;
-	off_t offset: 42;
-	static const int MAX_BUF_SIZE = (1 << 22) - 1;
-	unsigned long buf_size: 22;
+	static const off_t MAX_FILE_SIZE = LONG_MAX;
+	off_t offset;
+	static const long MAX_BUF_SIZE = (1L << 32) - 1;
+	unsigned long buf_size: 32;
 
 	// These two flags decide how the payload is interpreted, so they are
 	// initialized when the object is created and can't be changed manually.
