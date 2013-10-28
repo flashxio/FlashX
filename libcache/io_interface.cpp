@@ -437,6 +437,56 @@ void destroy_io_factory(file_io_factory *factory)
 	delete factory;
 }
 
+bool safs_file::exist() const
+{
+	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
+		std::string abs_path = global_data.raid_conf.get_disk(i).name
+			+ "/" + file_name;
+		if (!::file_exist(abs_path.c_str()))
+			return false;
+	}
+	return true;
+}
+
+size_t safs_file::get_file_size() const
+{
+	size_t min_size = LONG_MAX;
+	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
+		std::string abs_path = global_data.raid_conf.get_disk(i).name
+			+ "/" + file_name;
+		min_size = min<size_t>(min_size, ::get_file_size(abs_path.c_str()));
+	}
+	return min_size * global_data.raid_conf.get_num_disks();
+}
+
+bool safs_file::create_file(size_t file_size)
+{
+	size_t size_per_disk = file_size / global_data.raid_conf.get_num_disks();
+	if (file_size % global_data.raid_conf.get_num_disks() > 0)
+		size_per_disk++;
+
+	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
+		std::string abs_path = global_data.raid_conf.get_disk(i).name
+			+ "/" + file_name;
+		int ret = ::create_file(abs_path.c_str(), size_per_disk);
+		if (!ret)
+			return false;
+	}
+	return true;
+}
+
+bool safs_file::delete_file()
+{
+	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
+		std::string abs_path = global_data.raid_conf.get_disk(i).name
+			+ "/" + file_name;
+		int ret = ::delete_file(abs_path.c_str());
+		if (!ret)
+			return false;
+	}
+	return true;
+}
+
 void print_io_thread_stat()
 {
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {

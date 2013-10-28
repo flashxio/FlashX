@@ -94,8 +94,17 @@ static inline int universal_hash(off_t v, int modulo)
 	return (v * CONST_A) % CONST_P % modulo;
 }
 
+/**
+ * These are file operations on the native file.
+ */
 ssize_t get_file_size(const char *file_name);
 int file_exist(const char *file_name);
+/**
+ * Create/delete a file on the native file system.
+ * If succeed, return 1; otherwise, return 0.
+ */
+int create_file(const char *file_name, size_t size);
+int delete_file(const char *file_name);
 
 void permute_offsets(int num, int repeats, int stride, off_t start,
 		off_t offsets[]);

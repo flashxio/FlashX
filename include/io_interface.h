@@ -248,6 +248,20 @@ public:
 
 class cache_config;
 
+class safs_file
+{
+	std::string file_name;
+public:
+	safs_file(const std::string &file_name) {
+		this->file_name = file_name;
+	}
+
+	bool exist() const;
+	size_t get_file_size() const;
+	bool create_file(size_t file_size);
+	bool delete_file();
+};
+
 file_io_factory *create_io_factory(const std::string &file_name,
 		const int access_option);
 void destroy_io_factory(file_io_factory *factory);

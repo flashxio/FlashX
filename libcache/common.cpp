@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 
 #include "common.h"
 #include "messaging.h"
@@ -72,6 +73,31 @@ int file_exist(const char *file_name)
 {
 	struct stat stats;
 	return stat(file_name, &stats) == 0;
+}
+
+int create_file(const char *file_name, size_t size)
+{
+	int fd = open(file_name, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+	if (fd < 0) {
+		fprintf(stderr, "can't create %s: %s\n", file_name, strerror(errno));
+		return 0;
+	}
+	int ret = posix_fallocate(fd, 0, size);
+	if (ret != 0) {
+		fprintf(stderr, "can't allocate %ld bytes for %s\n", size, file_name);
+		return 0;
+	}
+	return 1;
+}
+
+int delete_file(const char *file_name)
+{
+	int ret = unlink(file_name);
+	if (ret < 0) {
+		fprintf(stderr, "can't delete %s\n", file_name);
+		return 0;
+	}
+	return 1;
 }
 
 void permute_offsets(int num, int repeats, int stride, off_t start,
