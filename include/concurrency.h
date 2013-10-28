@@ -157,6 +157,10 @@ public:
 	bool test_flag(int flag) const {
 		return flags & (0x1 << flag);
 	}
+
+	int get_num_tot_flags() const {
+		return sizeof(T) * 8;
+	}
 };
 
 #endif
