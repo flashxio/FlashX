@@ -6,7 +6,7 @@
 
 #include "io_interface.h"
 
-const int BUF_SIZE = 512 * PAGE_SIZE;
+const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
 const size_t DATA_SIZE = 10L * 1024 * 1024 * 1024;
 
 ssize_t complete_read(int fd, char *buf, size_t count)
