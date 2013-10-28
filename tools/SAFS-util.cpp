@@ -207,6 +207,22 @@ void comm_load_file2fs(int argc, char *argv[])
 	factory->destroy_io(io);
 }
 
+void comm_create_file(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "create file_name size\n");
+		fprintf(stderr, "file_name is the file name in the SA-FS file system\n");
+		exit(-1);
+	}
+
+	std::string file_name = argv[0];
+	size_t file_size = str2size(argv[1]);
+	safs_file file(file_name);
+	file.create_file(file_size);
+	printf("create file %s of %ld bytes\n", file_name.c_str(),
+			file.get_file_size());
+}
+
 /**
  * This is a utility tool for the SA-FS.
  */
@@ -229,5 +245,8 @@ int main(int argc, char *argv[])
 	}
 	else if (command == "verify") {
 		comm_verify_file(argc - 3, argv + 3);
+	}
+	else if (command == "create") {
+		comm_create_file(argc - 3, argv + 3);
 	}
 }
