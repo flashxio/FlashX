@@ -935,6 +935,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	for (int i = 0; i < num; i++) {
 		off_t offset = requests[i].get_offset();
 		int size = requests[i].get_size();
+		num_bytes += size;
 		// We don't allow the user's requests to be extended requests.
 		assert(!requests[i].is_extended_req());
 		off_t begin_pg_offset = ROUND_PAGE(offset);

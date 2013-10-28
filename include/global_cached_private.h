@@ -33,7 +33,7 @@ class global_cached_io: public io_interface
 	long curr_req_id;
 
 	long num_accesses;
-
+	size_t num_bytes;		// The number of accessed bytes
 	int cache_hits;
 	int num_fast_process;
 	int num_evicted_dirty_pages;
@@ -163,15 +163,18 @@ public:
 #ifdef STATISTICS
 	void print_stat(int nthreads) {
 		underlying->print_stat(nthreads);
+		static size_t tot_bytes = 0;
 		static size_t tot_accesses = 0;
 		static size_t tot_hits = 0;
 		static size_t tot_fast_process = 0;
 		static int seen_threads = 0;
 		seen_threads++;
+		tot_bytes += num_bytes;
 		tot_accesses += num_accesses;
 		tot_hits += cache_hits;
 		tot_fast_process += num_fast_process;
 		if (seen_threads == nthreads) {
+			printf("There are %ld accessed bytes\n", tot_bytes);
 			printf("there are %ld accesses in pages and %ld cache hits\n",
 					tot_accesses, tot_hits);
 			printf("There are %ld requests processed in the fast path\n",
