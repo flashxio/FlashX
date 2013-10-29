@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph->start(start_vertex);
+	graph->start(&start_vertex, 1);
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 

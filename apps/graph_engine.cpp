@@ -69,10 +69,12 @@ public:
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	void init(vertex_id_t vertices[], int num) {
+	void init(const std::vector<vertex_id_t> &vec, bool sorted) {
 		fetch_idx = 0;
 		sorted_vertices.clear();
-		sorted_vertices.insert(sorted_vertices.end(), vertices, vertices + num);
+		sorted_vertices.assign(vec.begin(), vec.end());
+		if (!sorted)
+			std::sort(sorted_vertices.begin(), sorted_vertices.end());
 	}
 
 	void init(std::vector<vertex_id_t> *vecs[], int num_vecs) {
@@ -228,11 +230,21 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	activated_vertex_buf = new vertex_collection(worker_threads);
 }
 
-void graph_engine::start(vertex_id_t id)
+void graph_engine::start(vertex_id_t ids[], int num)
 {
-	printf("start on vertex %ld\n", id);
-	activated_vertices->init(&id, 1);
+	std::vector<vertex_id_t> starts;
+	starts.assign(ids, ids + num);
+	activated_vertices->init(starts, false);
 	worker_threads[0]->activate();
+}
+
+void graph_engine::start_all()
+{
+	std::vector<vertex_id_t> all_vertices;
+	vertices->get_all_vertices(all_vertices);
+	activated_vertices->init(all_vertices, true);
+	for (unsigned i = 0; i < worker_threads.size(); i++)
+		worker_threads[i]->activate();
 }
 
 void graph_engine::activate_vertices(vertex_id_t vertices[], int num)

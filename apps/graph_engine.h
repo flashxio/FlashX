@@ -78,6 +78,10 @@ public:
 	virtual vertex_id_t get_max_vertex_id() const = 0;
 
 	virtual vertex_id_t get_min_vertex_id() const = 0;
+
+	virtual size_t get_num_vertices() const = 0;
+
+	virtual size_t get_all_vertices(std::vector<vertex_id_t> &vec) const = 0;
 };
 
 class vertex_collection;
@@ -120,7 +124,8 @@ public:
 		return vertices->get_vertex(id);
 	}
 
-	void start(vertex_id_t id);
+	void start(vertex_id_t ids[], int num);
+	void start_all();
 
 	/**
 	 * The algorithm progresses to the next level.

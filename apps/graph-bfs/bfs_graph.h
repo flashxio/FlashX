@@ -62,6 +62,17 @@ public:
 		return vertices[id];
 	}
 
+	virtual size_t get_num_vertices() const {
+		return vertices.size();
+	}
+
+	virtual size_t get_all_vertices(std::vector<vertex_id_t> &vec) const {
+		vec.resize(vertices.size());
+		for (size_t i = 0; i < vertices.size(); i++)
+			vec[i] = vertices[i].get_id();
+		return vec.size();
+	}
+
 	virtual vertex_id_t get_max_vertex_id() const {
 		return vertices.back().get_id();
 	}
