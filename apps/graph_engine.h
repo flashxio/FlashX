@@ -12,7 +12,9 @@ class graph_engine;
 class compute_vertex: public in_mem_vertex_info
 {
 	atomic_flags<long> activated_levels;
+	ext_mem_vertex vertex;
 public:
+
 	compute_vertex(vertex_id_t id, off_t off, int size): in_mem_vertex_info(
 			id, off, size) {
 	}
@@ -35,8 +37,37 @@ public:
 		return activated_levels.test_flag(level);
 	}
 
-	virtual void run(graph_engine &graph, ext_mem_vertex &vertex,
-			std::vector<vertex_id_t> &activated_vertices) = 0;
+	/**
+	 * This method materializes the vertex so it has the full information of
+	 * the vertex.
+	 */
+	void materialize(const ext_mem_vertex &vertex) {
+		this->vertex = vertex;
+	}
+
+	/**
+	 * This method removes the adjacency list of the vertex.
+	 */
+	void dematerialize() {
+		this->vertex.clear();
+	}
+
+	/**
+	 * Test whether if the vertex has the full information.
+	 */
+	bool is_materialized() const {
+		return vertex.is_valid();
+	}
+
+	int get_num_edges(edge_type type) {
+		return vertex.get_num_edges(type);
+	}
+
+	const edge get_edge(edge_type type, int idx) const {
+		return vertex.get_edge(type, idx);
+	}
+
+	virtual void run(graph_engine &graph) = 0;
 };
 
 class graph_index
@@ -71,13 +102,15 @@ class graph_engine
 	thread *first_thread;
 	std::vector<thread *> worker_threads;
 
+	bool directed;
+
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
-			graph_index *index);
+			graph_index *index, bool directed);
 public:
 	static graph_engine *create(int num_threads, int num_nodes,
-			const std::string &graph_file, graph_index *index) {
-		return new graph_engine(num_threads, num_nodes, graph_file, index);
+			const std::string &graph_file, graph_index *index, bool directed) {
+		return new graph_engine(num_threads, num_nodes, graph_file, index, directed);
 	}
 
 	compute_vertex &get_vertex(vertex_id_t id) {
@@ -116,6 +149,10 @@ public:
 
 	int get_num_threads() const {
 		return worker_threads.size();
+	}
+
+	bool is_directed() const {
+		return directed;
 	}
 };
 

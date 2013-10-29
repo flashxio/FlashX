@@ -36,8 +36,7 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
-	void run(graph_engine &graph, ext_mem_vertex &v,
-			std::vector<vertex_id_t> &activated_vertices);
+	void run(graph_engine &graph);
 };
 
 class bfs_graph_index: public graph_index
@@ -75,13 +74,13 @@ public:
 class bfs_graph: public graph_engine
 {
 	bfs_graph(int num_threads, int num_nodes, const std::string &graph_file,
-			graph_index *index): graph_engine(num_threads, num_nodes,
-				graph_file, index) {
+			graph_index *index, bool directed): graph_engine(num_threads, num_nodes,
+				graph_file, index, directed) {
 	}
 public:
 	static bfs_graph *create(int num_threads, int num_nodes,
-			const std::string &graph_file, graph_index *index) {
-		return new bfs_graph(num_threads, num_nodes, graph_file, index);
+			const std::string &graph_file, graph_index *index, bool directed) {
+		return new bfs_graph(num_threads, num_nodes, graph_file, index, directed);
 	}
 };
 

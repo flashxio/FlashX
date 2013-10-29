@@ -8,6 +8,12 @@
 
 typedef unsigned long vertex_id_t;
 
+enum edge_type {
+	IN_EDGE,
+	OUT_EDGE,
+	EDGE,
+};
+
 /**
  * This class contains the basic information of a vertex in the memory.
  */
@@ -71,25 +77,6 @@ class in_mem_undirected_vertex;
 class ext_mem_directed_vertex;
 class ext_mem_undirected_vertex;
 
-class ext_mem_vertex
-{
-	char *buf;
-	int size;
-public:
-	ext_mem_vertex(char *buf, int size) {
-		this->buf = buf;
-		this->size = size;
-	}
-
-	ext_mem_directed_vertex *deserialize2directed() const;
-
-	ext_mem_undirected_vertex *deserialize2undirected() const;
-
-	vertex_id_t get_id() const {
-		return * (vertex_id_t *) buf;
-	}
-};
-
 /**
  * This vertex represents a directed vertex stored in the external memory.
  */
@@ -110,6 +97,24 @@ public:
 
 	static int serialize(const in_mem_directed_vertex &in_v, char *buf,
 			int size);
+
+	int get_num_edges(edge_type type) const {
+		if (type == IN_EDGE)
+			return get_num_in_edges();
+		else if (type == OUT_EDGE)
+			return get_num_out_edges();
+		else
+			return get_num_in_edges() + get_num_out_edges();
+	}
+
+	const edge get_edge(edge_type type, int idx) const {
+		if (type == IN_EDGE)
+			return get_in_edge(idx);
+		else if (type == OUT_EDGE)
+			return get_out_edge(idx);
+		else
+			assert(0);
+	}
 
 	int get_num_in_edges() const {
 		return num_in_edges;
@@ -156,11 +161,11 @@ public:
 	static int serialize(const in_mem_undirected_vertex &v, char *buf,
 			int size);
 
-	int get_num_edges() const {
+	int get_num_edges(edge_type type) const {
 		return num_edges;
 	}
 
-	const edge get_edge(int idx) const {
+	const edge get_edge(edge_type type, int idx) const {
 		assert(idx < num_edges);
 		edge e(id, neighbors[idx]);
 		return e;
@@ -256,14 +261,67 @@ public:
 	}
 };
 
-inline ext_mem_directed_vertex *ext_mem_vertex::deserialize2directed() const
+class ext_mem_vertex
 {
-	return ext_mem_directed_vertex::deserialize(buf, size);
-}
+	unsigned long vertex_addr: 48;
+	unsigned long directed: 1;
 
-inline ext_mem_undirected_vertex *ext_mem_vertex::deserialize2undirected() const
-{
-	return ext_mem_undirected_vertex::deserialize(buf, size);
-}
+	ext_mem_undirected_vertex *get_undirected_vertex() const {
+		return (ext_mem_undirected_vertex *) (long) vertex_addr;
+	}
+
+	ext_mem_directed_vertex *get_directed_vertex() const {
+		return (ext_mem_directed_vertex *) (long) vertex_addr;
+	}
+public:
+	ext_mem_vertex() {
+		vertex_addr = 0;
+		directed = 0;
+	}
+
+	ext_mem_vertex(char *buf, int size, bool directed) {
+		if (directed)
+			vertex_addr = (unsigned long) ext_mem_directed_vertex::deserialize(
+					buf, size);
+		else
+			vertex_addr = (unsigned long) ext_mem_undirected_vertex::deserialize(
+					buf, size);
+		this->directed = directed;
+	}
+
+	vertex_id_t get_id() const {
+		if (directed)
+			return get_directed_vertex()->get_id();
+		else
+			return get_undirected_vertex()->get_id();
+	}
+
+	bool is_directed() const {
+		return directed;
+	}
+
+	int get_num_edges(edge_type type) const {
+		if (directed)
+			return get_directed_vertex()->get_num_edges(type);
+		else
+			return get_undirected_vertex()->get_num_edges(type);
+	}
+
+	const edge get_edge(edge_type type, int idx) const {
+		if (directed)
+			return get_directed_vertex()->get_edge(type, idx);
+		else
+			return get_undirected_vertex()->get_edge(type, idx);
+	}
+
+	bool is_valid() const {
+		return vertex_addr != 0;
+	}
+
+	void clear() {
+		vertex_addr = 0;
+		directed = 0;
+	}
+};
 
 #endif

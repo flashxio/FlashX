@@ -8,18 +8,16 @@
 
 atomic_integer num_visited_vertices;
 
-void bfs_vertex::run(graph_engine &graph, ext_mem_vertex &v,
-		std::vector<vertex_id_t> &activated_vertices)
+void bfs_vertex::run(graph_engine &graph)
 {
 	vertex_id_t max_id = graph.get_max_vertex_id();
 	vertex_id_t min_id = graph.get_min_vertex_id();
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	ext_mem_directed_vertex *directed_v = v.deserialize2directed();
-	int num_activated = 0;
-	for (int j = 0; j < directed_v->get_num_out_edges(); j++) {
-		vertex_id_t id = directed_v->get_out_edge(j).get_to();
+	std::vector<vertex_id_t> activated_vertices;
+	for (int j = 0; j < this->get_num_edges(OUT_EDGE); j++) {
+		vertex_id_t id = this->get_edge(OUT_EDGE, j).get_to();
 		assert(id >= min_id && id <= max_id);
 		bfs_vertex &info = (bfs_vertex &) graph.get_vertex(id);
 		// If the vertex has been visited, we can skip it.
@@ -27,11 +25,13 @@ void bfs_vertex::run(graph_engine &graph, ext_mem_vertex &v,
 			continue;
 		if (info.set_visited(true))
 			continue;
-		num_activated++;
 		activated_vertices.push_back(id);
 	}
-	if (num_activated > 0)
-		num_visited_vertices.inc(num_activated);
+	if (activated_vertices.size() > 0)
+		num_visited_vertices.inc(activated_vertices.size());
+
+	graph.activate_next_vertices(activated_vertices.data(),
+			activated_vertices.size());
 }
 
 class graph_config
@@ -84,7 +84,7 @@ void int_handler(int sig_num)
 
 int main(int argc, char *argv[])
 {
-	if (argc < 5) {
+	if (argc < 6) {
 		fprintf(stderr, "bfs conf_file graph_file index_file start_vertex\n");
 		graph_conf.print_help();
 		params.print_help();
@@ -95,6 +95,7 @@ int main(int argc, char *argv[])
 	std::string graph_file = argv[2];
 	std::string index_file = argv[3];
 	vertex_id_t start_vertex = atoi(argv[4]);
+	bool directed = atoi(argv[5]);
 
 	config_map configs(conf_file);
 	configs.add_options(argv + 4, argc - 4);
@@ -106,7 +107,7 @@ int main(int argc, char *argv[])
 
 	bfs_graph_index *index = bfs_graph_index::create(index_file);
 	bfs_graph *graph = bfs_graph::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+			params.get_num_nodes(), graph_file, index, directed);
 	printf("BFS starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

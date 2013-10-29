@@ -20,17 +20,15 @@ public:
 
 int vertex_callback::invoke(io_request *reqs[], int num)
 {
-	std::vector<vertex_id_t> activated_vertices;
 	for (int i = 0; i < num; i++) {
 		char *buf = reqs[i]->get_buf();
-		ext_mem_vertex ext_v(buf, reqs[i]->get_size());
+		ext_mem_vertex ext_v(buf, reqs[i]->get_size(), graph->is_directed());
 		compute_vertex &v = graph->get_vertex(ext_v.get_id());
-		v.run(*graph, ext_v, activated_vertices);
+		v.materialize(ext_v);
+		v.run(*graph);
+		v.dematerialize();
 		delete [] buf;
 	}
-	graph->activate_next_vertices(activated_vertices.data(),
-			activated_vertices.size());
-//	printf("add %ld vertices to the next level\n", neighbors.size());
 	return 0;
 }
 
@@ -97,8 +95,9 @@ void worker_thread::run()
 }
 
 graph_engine::graph_engine(int num_threads, int num_nodes,
-		const std::string &graph_file, graph_index *index)
+		const std::string &graph_file, graph_index *index, bool directed)
 {
+	this->directed = directed;
 	is_complete = false;
 	this->vertices = index;
 
