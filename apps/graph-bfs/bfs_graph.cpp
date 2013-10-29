@@ -30,7 +30,7 @@ void bfs_vertex::run(graph_engine &graph)
 	if (activated_vertices.size() > 0)
 		num_visited_vertices.inc(activated_vertices.size());
 
-	graph.activate_next_vertices(activated_vertices.data(),
+	graph.activate_vertices(activated_vertices.data(),
 			activated_vertices.size());
 }
 

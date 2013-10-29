@@ -128,7 +128,7 @@ void graph_engine::start(vertex_id_t id)
 	worker_threads[0]->activate();
 }
 
-void graph_engine::activate_next_vertices(vertex_id_t vertices[], int num)
+void graph_engine::activate_vertices(vertex_id_t vertices[], int num)
 {
 	vertex_id_t to_add[num];
 	int num_to_add = 0;

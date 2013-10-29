@@ -128,7 +128,7 @@ public:
 	/**
 	 * Activate vertices that may be processed in the next level.
 	 */
-	void activate_next_vertices(vertex_id_t vertices[], int num);
+	void activate_vertices(vertex_id_t vertices[], int num);
 
 	/**
 	 * Get vertices to be processed in the current level.
