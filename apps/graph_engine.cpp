@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "io_interface.h"
 
 #include "graph_engine.h"
@@ -37,6 +39,8 @@ class worker_thread: public thread
 	file_io_factory *factory;
 	io_interface *io;
 	graph_engine *graph;
+
+	std::vector<vertex_id_t> activated_vertices;
 public:
 	worker_thread(graph_engine *graph, file_io_factory *factory,
 			int node_id): thread("worker_thread", node_id) {
@@ -47,6 +51,92 @@ public:
 
 	void run();
 	void init();
+
+	std::vector<vertex_id_t> &get_activated_vertices() {
+		return activated_vertices;
+	}
+};
+
+class sorted_vertex_queue
+{
+	pthread_spinlock_t lock;
+	std::vector<vertex_id_t> sorted_vertices;
+	size_t fetch_idx;
+public:
+	sorted_vertex_queue() {
+		fetch_idx = 0;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	void init(vertex_id_t vertices[], int num) {
+		fetch_idx = 0;
+		sorted_vertices.clear();
+		sorted_vertices.insert(sorted_vertices.end(), vertices, vertices + num);
+	}
+
+	void init(std::vector<vertex_id_t> *vecs[], int num_vecs) {
+		fetch_idx = 0;
+		sorted_vertices.clear();
+		for (int i = 0; i < num_vecs; i++)
+			sorted_vertices.insert(sorted_vertices.end(), vecs[i]->begin(),
+					vecs[i]->end());
+		std::sort(sorted_vertices.begin(), sorted_vertices.end());
+	}
+
+	int fetch(vertex_id_t vertices[], int num) {
+		pthread_spin_lock(&lock);
+		int num_fetches = min(num, sorted_vertices.size() - fetch_idx);
+		memcpy(vertices, sorted_vertices.data() + fetch_idx,
+				num_fetches * sizeof(vertex_id_t));
+		fetch_idx += num_fetches;
+		pthread_spin_unlock(&lock);
+		return num_fetches;
+	}
+
+	bool is_empty() {
+		pthread_spin_lock(&lock);
+		bool ret = sorted_vertices.size() - fetch_idx == 0;
+		pthread_spin_unlock(&lock);
+		return ret;
+	}
+
+	size_t get_num_vertices() {
+		pthread_spin_lock(&lock);
+		size_t num = sorted_vertices.size() - fetch_idx;
+		pthread_spin_unlock(&lock);
+		return num;
+	}
+};
+
+/**
+ * This class collects vertices added by each thread.
+ */
+class vertex_collection
+{
+	std::vector<thread *> threads;
+public:
+	vertex_collection(const std::vector<thread *> &threads) {
+		this->threads = threads;
+	}
+
+	void add(vertex_id_t vertices[], int num) {
+		std::vector<vertex_id_t> &vec = ((worker_thread *) thread::get_curr_thread(
+					))->get_activated_vertices();
+		vec.insert(vec.end(), vertices, vertices + num);
+	}
+
+	void sort(sorted_vertex_queue &sorted_vertices) const {
+		std::vector<vertex_id_t> *vecs[threads.size()];
+		for (unsigned i = 0; i < threads.size(); i++) {
+			vecs[i] = &((worker_thread *) threads[i])->get_activated_vertices();
+		}
+		sorted_vertices.init(vecs, threads.size());
+	}
+
+	void clear() {
+		for (unsigned i = 0; i < threads.size(); i++)
+			((worker_thread *) threads[i])->get_activated_vertices().clear();
+	}
 };
 
 void worker_thread::init()
@@ -101,9 +191,6 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	is_complete = false;
 	this->vertices = index;
 
-	queue = new thread_safe_FIFO_queue<vertex_id_t>(-1, PAGE_SIZE, INT_MAX);
-	next_queue = new thread_safe_FIFO_queue<vertex_id_t>(-1, PAGE_SIZE, INT_MAX);
-
 	pthread_mutex_init(&lock, NULL);
 	pthread_barrier_init(&barrier1, NULL, num_threads);
 	pthread_barrier_init(&barrier2, NULL, num_threads);
@@ -119,12 +206,15 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 		worker_threads.push_back(t);
 	}
 	first_thread = worker_threads[0];
+
+	activated_vertices = new sorted_vertex_queue();
+	activated_vertex_buf = new vertex_collection(worker_threads);
 }
 
 void graph_engine::start(vertex_id_t id)
 {
 	printf("start on vertex %ld\n", id);
-	queue->add(&id, 1);
+	activated_vertices->init(&id, 1);
 	worker_threads[0]->activate();
 }
 
@@ -141,8 +231,12 @@ void graph_engine::activate_vertices(vertex_id_t vertices[], int num)
 		if (v.activate_in(level.get()))
 			to_add[num_to_add++] = vertices[i];
 	}
-	int num_added = next_queue->add(to_add, num_to_add);
-	assert(num_added == num_to_add);
+	activated_vertex_buf->add(to_add, num_to_add);
+}
+
+int graph_engine::get_curr_activated_vertices(vertex_id_t vertices[], int num)
+{
+	return activated_vertices->fetch(vertices, num);
 }
 
 bool graph_engine::progress_next_level()
@@ -158,14 +252,13 @@ bool graph_engine::progress_next_level()
 	}
 	pthread_mutex_lock(&lock);
 	if (thread::get_curr_thread() == first_thread) {
-		assert(queue->is_empty());
-		thread_safe_FIFO_queue<vertex_id_t> *tmp = queue;
-		queue = next_queue;
-		next_queue = tmp;
+		assert(activated_vertices->is_empty());
+		activated_vertex_buf->sort(*activated_vertices);
+		activated_vertex_buf->clear();
 		level.inc(1);
-		printf("progress to level %d, there are %d vertices in this level\n",
-				level.get(), queue->get_num_entries());
-		is_complete = queue->is_empty();
+		printf("progress to level %d, there are %ld vertices in this level\n",
+				level.get(), activated_vertices->get_num_vertices());
+		is_complete = activated_vertices->is_empty();
 	}
 	pthread_mutex_unlock(&lock);
 

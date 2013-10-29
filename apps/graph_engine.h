@@ -80,6 +80,9 @@ public:
 	virtual vertex_id_t get_min_vertex_id() const = 0;
 };
 
+class vertex_collection;
+class sorted_vertex_queue;
+
 class graph_engine
 {
 	graph_index *vertices;
@@ -88,9 +91,9 @@ class graph_engine
 	// processed in the current level. The other contains the vertices that
 	// will be processed in the next level.
 	// The queue for the current level.
-	thread_safe_FIFO_queue<vertex_id_t> *queue;
+	sorted_vertex_queue *activated_vertices;
 	// The queue for the next level.
-	thread_safe_FIFO_queue<vertex_id_t> *next_queue;
+	vertex_collection *activated_vertex_buf;
 	atomic_integer level;
 	volatile bool is_complete;
 
@@ -133,9 +136,7 @@ public:
 	/**
 	 * Get vertices to be processed in the current level.
 	 */
-	int get_curr_activated_vertices(vertex_id_t vertices[], int num) {
-		return queue->fetch(vertices, num);
-	}
+	int get_curr_activated_vertices(vertex_id_t vertices[], int num);
 
 	vertex_id_t get_max_vertex_id() const {
 		return vertices->get_max_vertex_id();
