@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <parallel/algorithm>
 
 #include "io_interface.h"
 
@@ -75,12 +76,22 @@ public:
 	}
 
 	void init(std::vector<vertex_id_t> *vecs[], int num_vecs) {
+		// all vertices have been sorted in each vector, we only need to
+		// merge them.
 		fetch_idx = 0;
 		sorted_vertices.clear();
-		for (int i = 0; i < num_vecs; i++)
-			sorted_vertices.insert(sorted_vertices.end(), vecs[i]->begin(),
-					vecs[i]->end());
-		std::sort(sorted_vertices.begin(), sorted_vertices.end());
+		std::vector<std::pair<std::vector<vertex_id_t>::iterator,
+			std::vector<vertex_id_t>::iterator> > seqs;
+		size_t tot_length = 0;
+		for (int i = 0; i < num_vecs; i++) {
+			seqs.push_back(std::make_pair<std::vector<vertex_id_t>::iterator,
+					std::vector<vertex_id_t>::iterator>(
+						vecs[i]->begin(), vecs[i]->end()));
+			tot_length += vecs[i]->size();
+		}
+		sorted_vertices.resize(tot_length);
+		__gnu_parallel::multiway_merge(seqs.begin(), seqs.end(),
+				sorted_vertices.begin(), tot_length, std::less<int>());
 	}
 
 	int fetch(vertex_id_t vertices[], int num) {
@@ -123,6 +134,12 @@ public:
 		std::vector<vertex_id_t> &vec = ((worker_thread *) thread::get_curr_thread(
 					))->get_activated_vertices();
 		vec.insert(vec.end(), vertices, vertices + num);
+	}
+
+	void local_sort() {
+		std::vector<vertex_id_t> &vec = ((worker_thread *) thread::get_curr_thread(
+					))->get_activated_vertices();
+		std::sort(vec.begin(), vec.end());
 	}
 
 	void sort(sorted_vertex_queue &sorted_vertices) const {
@@ -241,6 +258,7 @@ int graph_engine::get_curr_activated_vertices(vertex_id_t vertices[], int num)
 
 bool graph_engine::progress_next_level()
 {
+	activated_vertex_buf->local_sort();
 	// We have to make sure all threads have reach here, so we can switch
 	// queues to progress to the next level.
 	// If the queue of the next level is empty, the program can terminate.
