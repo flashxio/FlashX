@@ -13,24 +13,104 @@ const int VERTEX_BUF_SIZE = 1024;
 class vertex_callback: public callback
 {
 	graph_engine *graph;
+	io_interface *io;
 public:
-	vertex_callback(graph_engine *graph) {
+	vertex_callback(graph_engine *graph, io_interface *io) {
 		this->graph = graph;
+		this->io = io;
 	}
 
 	int invoke(io_request *reqs[], int num);
 };
 
+class pending_vertex: public ext_mem_vertex
+{
+	int num_completed_neighbors;
+	edge_type required_neighbor_type;
+
+	pending_vertex(char *buf, int size, bool directed,
+			edge_type required_neighbor_type): ext_mem_vertex(buf, size, directed) {
+		num_completed_neighbors = 0;
+		this->required_neighbor_type = required_neighbor_type;
+	}
+public:
+	static pending_vertex *create(char *buf, int size, graph_engine *graph) {
+		return new pending_vertex(buf, size, graph->is_directed(),
+				graph->get_required_neighbor_type());
+	}
+
+	static void destroy(pending_vertex *v) {
+		delete [] v->get_buf();
+		delete v;
+	}
+
+	void complete_neighbor() {
+		num_completed_neighbors++;
+	}
+
+	bool is_complete() const {
+		return num_completed_neighbors == get_num_edges(required_neighbor_type);
+	}
+};
+
 int vertex_callback::invoke(io_request *reqs[], int num)
 {
 	for (int i = 0; i < num; i++) {
-		char *buf = reqs[i]->get_buf();
-		ext_mem_vertex ext_v(buf, reqs[i]->get_size(), graph->is_directed());
-		compute_vertex &v = graph->get_vertex(ext_v.get_id());
-		v.materialize(ext_v);
-		v.run(*graph);
-		v.dematerialize();
-		delete [] buf;
+		char *req_buf = reqs[i]->get_buf();
+		size_t req_size = reqs[i]->get_size();
+		assert(this->io == reqs[i]->get_io());
+		ext_mem_vertex ext_v(req_buf, req_size, graph->is_directed());
+		if (graph->get_required_neighbor_type() == edge_type::NONE) {
+			compute_vertex &v = graph->get_vertex(ext_v.get_id());
+			v.materialize(ext_v);
+			v.run(*graph, NULL, 0);
+			v.dematerialize();
+			delete [] req_buf;
+		}
+		// We just fetched a vertex, we need to fetch its neighbors to
+		// perform computation.
+		else if (reqs[i]->get_user_data() == NULL) {
+			int num_neighbors = ext_v.get_num_edges(
+					graph->get_required_neighbor_type());
+			io_request reqs[num_neighbors];
+			pending_vertex *pending = pending_vertex::create(req_buf, req_size,
+					graph);
+			for (int j = 0; j < num_neighbors; j++) {
+				vertex_id_t neighbor = ext_v.get_neighbor(
+						graph->get_required_neighbor_type(), j);
+				compute_vertex &info = graph->get_vertex(neighbor);
+				reqs[j].init(new char[info.get_ext_mem_size()],
+						info.get_ext_mem_off(),
+						// TODO I might need to set the node id.
+						info.get_ext_mem_size(), READ, io, -1);
+				reqs[j].set_user_data(pending);
+			}
+			io->access(reqs, num);
+		}
+		else {
+			// Now a neighbor has been fetched, now we can do some computation
+			// between the original pending vertex and its neighbor.
+			pending_vertex *pending
+				= (pending_vertex *) reqs[i]->get_user_data();
+			compute_vertex &v = graph->get_vertex(
+					pending->get_id());
+			// We materialize the vertex and perform computation.
+			// The callback function is guaranteed to be called in the thread
+			// where a request is issued. Since all requests of fetching
+			// neighbors are issued by one thread, we don't need to use a lock
+			// to protect the pending vertex from concurrent access.
+			v.materialize(*pending);
+			v.run(*graph, &ext_v, 1);
+			v.dematerialize();
+			// The buffer contains the info of the neighbor, no we don't need
+			// it any more.
+			delete [] req_buf;
+			pending->complete_neighbor();
+			// Once we perform computation on all neighbors. We can destroy
+			// the pending vertex.
+			if (pending->is_complete())
+				pending_vertex::destroy(pending);
+		}
 	}
 	return 0;
 }
@@ -162,7 +242,7 @@ void worker_thread::init()
 {
 	io = factory->create_io(this);
 	io->init();
-	io->set_callback(new vertex_callback(graph));
+	io->set_callback(new vertex_callback(graph, io));
 }
 
 void worker_thread::run()
@@ -206,6 +286,7 @@ void worker_thread::run()
 graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index *index, bool directed)
 {
+	this->required_neighbor_type = edge_type::NONE;
 	this->directed = directed;
 	is_complete = false;
 	this->vertices = index;

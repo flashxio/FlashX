@@ -9,9 +9,10 @@
 typedef unsigned long vertex_id_t;
 
 enum edge_type {
+	NONE,
 	IN_EDGE,
 	OUT_EDGE,
-	EDGE,
+	BOTH_EDGES,
 };
 
 /**
@@ -116,6 +117,15 @@ public:
 			assert(0);
 	}
 
+	vertex_id_t get_neighbor(edge_type type, int idx) const {
+		if (type == IN_EDGE)
+			return neighbors[idx];
+		else if (type == OUT_EDGE)
+			return neighbors[num_in_edges + idx];
+		else
+			assert(0);
+	}
+
 	int get_num_in_edges() const {
 		return num_in_edges;
 	}
@@ -169,6 +179,10 @@ public:
 		assert(idx < num_edges);
 		edge e(id, neighbors[idx]);
 		return e;
+	}
+
+	vertex_id_t get_neighbor(edge_type type, int idx) const {
+		return neighbors[idx];
 	}
 
 	vertex_id_t get_id() const {
@@ -307,11 +321,22 @@ public:
 			return get_undirected_vertex()->get_num_edges(type);
 	}
 
+	vertex_id_t get_neighbor(edge_type type, int idx) const {
+		if (directed)
+			return get_directed_vertex()->get_neighbor(type, idx);
+		else
+			return get_undirected_vertex()->get_neighbor(type, idx);
+	}
+
 	const edge get_edge(edge_type type, int idx) const {
 		if (directed)
 			return get_directed_vertex()->get_edge(type, idx);
 		else
 			return get_undirected_vertex()->get_edge(type, idx);
+	}
+
+	char *get_buf() const {
+		return (char *) (long) vertex_addr;
 	}
 
 	bool is_valid() const {

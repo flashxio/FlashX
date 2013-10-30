@@ -67,7 +67,8 @@ public:
 		return vertex.get_edge(type, idx);
 	}
 
-	virtual void run(graph_engine &graph) = 0;
+	virtual void run(graph_engine &graph, const ext_mem_vertex vertices[],
+			int num) = 0;
 };
 
 class graph_index
@@ -110,6 +111,7 @@ class graph_engine
 	std::vector<thread *> worker_threads;
 
 	bool directed;
+	edge_type required_neighbor_type;
 
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
@@ -126,6 +128,14 @@ public:
 
 	void start(vertex_id_t ids[], int num);
 	void start_all();
+
+	void set_required_neighbor_type(edge_type type) {
+		required_neighbor_type = type;
+	}
+
+	edge_type get_required_neighbor_type() const {
+		return required_neighbor_type;
+	}
 
 	/**
 	 * The algorithm progresses to the next level.

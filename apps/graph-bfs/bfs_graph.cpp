@@ -8,7 +8,8 @@
 
 atomic_integer num_visited_vertices;
 
-void bfs_vertex::run(graph_engine &graph)
+void bfs_vertex::run(graph_engine &graph, const ext_mem_vertex vertices[],
+			int num)
 {
 	vertex_id_t max_id = graph.get_max_vertex_id();
 	vertex_id_t min_id = graph.get_min_vertex_id();

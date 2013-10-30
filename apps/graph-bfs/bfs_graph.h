@@ -36,7 +36,8 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
-	void run(graph_engine &graph);
+	void run(graph_engine &graph, const ext_mem_vertex vertices[],
+			int num);
 };
 
 class bfs_graph_index: public graph_index
