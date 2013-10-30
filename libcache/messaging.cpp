@@ -32,13 +32,11 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 			add_buf(buf, size);
 	}
 	else if (payload_type == BASIC_REQ) {
-		assert(size <= MAX_BUF_SIZE);
-		this->buf_size = size;
+		set_int_buf_size(size);
 		this->payload.buf_addr = buf;
 	}
 	else {
-		assert(size <= MAX_BUF_SIZE);
-		this->buf_size = size;
+		set_int_buf_size(size);
 		this->payload.compute = NULL;
 	}
 	this->access_method = access_method & 0x1;

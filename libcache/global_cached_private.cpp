@@ -151,7 +151,7 @@ bool is_local_req(io_request *req, io_interface *this_io)
 	if (!req->is_extended_req())
 		return req->get_io() == this_io;
 	else
-		return req->get_user_data() == this_io;
+		return req->get_extension()->get_user_data() == this_io;
 }
 
 io_interface *get_io(io_request *req)
@@ -159,7 +159,7 @@ io_interface *get_io(io_request *req)
 	if (!req->is_extended_req())
 		return req->get_io();
 	else
-		return (io_interface *) req->get_user_data();
+		return (io_interface *) req->get_extension()->get_user_data();
 }
 
 void notify_completion(io_interface *this_io, io_request *req)
@@ -1014,7 +1014,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				orig->init(requests[i]);
 				io_interface *orig_io = orig->get_io();
 				orig->set_io(this);
-				orig->set_user_data(orig_io);
+				orig->get_extension()->set_user_data(orig_io);
 			}
 			if (orig->within_1page())
 				orig->set_priv(p);

@@ -239,9 +239,11 @@ class io_request
 	};
 
 	static const off_t MAX_FILE_SIZE = LONG_MAX;
-	off_t offset;
-	static const long MAX_BUF_SIZE = (1L << 32) - 1;
-	unsigned long buf_size: 32;
+	off_t offset: 48;
+	static const size_t MAX_BUF_SIZE = (1L << 32) - 1;
+	unsigned long buf_size_low: 16;
+	long user_data_addr: 48;
+	unsigned long buf_size_high: 16;
 
 	// These two flags decide how the payload is interpreted, so they are
 	// initialized when the object is created and can't be changed manually.
@@ -269,9 +271,21 @@ class io_request
 	unsigned long io_addr: 48;
 
 	union {
+		/**
+		 * These two can be used by users.
+		 */
 		void *buf_addr;
 		user_compute *compute;
+
+		/**
+		 * This field should only be used by the library itself.
+		 */
 		io_req_extension *ext;
+
+		/**
+		 * This field is used to help address the memory following the request.
+		 * It is used when a user wants to embed user data in the request.
+		 */
 		char buf[0];
 	} payload;
 
@@ -288,6 +302,16 @@ class io_request
 		this->low_latency = req.low_latency;
 	}
 
+	void set_int_buf_size(size_t size) {
+		assert(size <= MAX_BUF_SIZE);
+		buf_size_high = size >> 16;
+		buf_size_low = size & 0xFFFFL;
+	}
+
+	size_t get_int_buf_size() const {
+		return (buf_size_high << 16) + buf_size_low;
+	}
+
 public:
 	// By default, a request is initialized as a flush request.
 	io_request(bool sync = false) {
@@ -301,6 +325,7 @@ public:
 			io_interface *io, int node_id, bool sync = false) {
 		payload_type = BASIC_REQ;
 		data_inline = 0;
+		user_data_addr = 0;
 		init(buf, off, size, access_method, io, node_id);
 		use_default_flags();
 		this->sync = sync;
@@ -311,6 +336,7 @@ public:
 		payload_type = EXT_REQ;
 		data_inline = 0;
 		payload.ext = ext;
+		user_data_addr = 0;
 		init(NULL, off, 0, access_method, io, node_id);
 		use_default_flags();
 		this->sync = sync;
@@ -321,6 +347,7 @@ public:
 			bool sync = false) {
 		payload_type = USER_COMPUTE;
 		data_inline = 0;
+		user_data_addr = 0;
 		init(NULL, off, size, access_method, io, node_id);
 		payload.compute = compute;
 		use_default_flags();
@@ -352,6 +379,7 @@ public:
 			assert(!this->is_extended_req() && req.is_extended_req());
 		}
 		copy_flags(req);
+		this->user_data_addr = req.user_data_addr;
 	}
 
 	void init() {
@@ -360,25 +388,20 @@ public:
 			io_req_extension *ext = get_extension();
 			assert(ext);
 			ext->init();
-			offset = 0;
-			high_prio = 0;
-			sync = 0;
-			node_id = 0;
-			io_addr = 0;
-			access_method = 0;
-			buf_size = 0;
 		}
 		else {
-			offset = 0;
 			payload_type = BASIC_REQ;
-			high_prio = 0;
-			sync = 0;
-			node_id = 0;
-			io_addr = 0;
-			access_method = 0;
-			buf_size = 0;
 			payload.buf_addr = NULL;
 		}
+		offset = 0;
+		offset = 0;
+		high_prio = 0;
+		sync = 0;
+		node_id = 0;
+		io_addr = 0;
+		access_method = 0;
+		set_int_buf_size(0);
+		user_data_addr = 0;
 	}
 
 	void init(char *buf, off_t off, ssize_t size, int access_method,
@@ -489,11 +512,11 @@ public:
 	}
 
 	void *get_user_data() const {
-		return get_extension()->get_user_data();
+		return (void *) (long) user_data_addr;
 	}
 
 	void set_user_data(void *data) {
-		get_extension()->set_user_data(data);
+		user_data_addr = (long) data;
 	}
 
 	void *get_priv() const {
@@ -514,7 +537,7 @@ public:
 
 	ssize_t get_size() const {
 		if (!is_extended_req()) {
-			return buf_size;
+			return get_int_buf_size();
 		}
 		else {
 			return get_extension()->get_size();
@@ -568,7 +591,7 @@ public:
 	int get_buf_size(int idx) const {
 		if (!is_extended_req()) {
 			assert(idx == 0);
-			return buf_size;
+			return get_int_buf_size();
 		}
 		else
 			return get_extension()->get_buf(idx).get_size();
