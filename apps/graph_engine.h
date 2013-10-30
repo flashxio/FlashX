@@ -6,6 +6,7 @@
 #include "concurrency.h"
 
 #include "vertex.h"
+#include "vertex_index.h"
 
 class graph_engine;
 
@@ -83,6 +84,50 @@ public:
 	virtual size_t get_num_vertices() const = 0;
 
 	virtual size_t get_all_vertices(std::vector<vertex_id_t> &vec) const = 0;
+};
+
+template<class vertex_type>
+class graph_index_impl: public graph_index
+{
+	std::vector<vertex_type> vertices;
+	
+	graph_index_impl(const std::string &index_file) {
+		vertex_index *indices = vertex_index::load(index_file);
+		vertices.resize(indices->get_num_vertices());
+		for (size_t i = 0; i < vertices.size(); i++) {
+			off_t off = indices->get_vertex_off(i);
+			int size = indices->get_vertex_size(i);
+			vertices[i] = vertex_type(i, off, size);
+		}
+		vertex_index::destroy(indices);
+	}
+public:
+	static graph_index *create(const std::string &index_file) {
+		return new graph_index_impl<vertex_type>(index_file);
+	}
+
+	virtual compute_vertex &get_vertex(vertex_id_t id) {
+		return vertices[id];
+	}
+
+	virtual size_t get_num_vertices() const {
+		return vertices.size();
+	}
+
+	virtual size_t get_all_vertices(std::vector<vertex_id_t> &vec) const {
+		vec.resize(vertices.size());
+		for (size_t i = 0; i < vertices.size(); i++)
+			vec[i] = vertices[i].get_id();
+		return vec.size();
+	}
+
+	virtual vertex_id_t get_max_vertex_id() const {
+		return vertices.back().get_id();
+	}
+
+	virtual vertex_id_t get_min_vertex_id() const {
+		return vertices.front().get_id();
+	}
 };
 
 class vertex_collection;

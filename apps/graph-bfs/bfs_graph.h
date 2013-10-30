@@ -40,49 +40,6 @@ public:
 			int num);
 };
 
-class bfs_graph_index: public graph_index
-{
-	std::vector<bfs_vertex> vertices;
-	
-	bfs_graph_index(const std::string &index_file) {
-		vertex_index *indices = vertex_index::load(index_file);
-		vertices.resize(indices->get_num_vertices());
-		for (size_t i = 0; i < vertices.size(); i++) {
-			off_t off = indices->get_vertex_off(i);
-			int size = indices->get_vertex_size(i);
-			vertices[i] = bfs_vertex(i, off, size);
-		}
-		vertex_index::destroy(indices);
-	}
-public:
-	static bfs_graph_index *create(const std::string &index_file) {
-		return new bfs_graph_index(index_file);
-	}
-
-	virtual compute_vertex &get_vertex(vertex_id_t id) {
-		return vertices[id];
-	}
-
-	virtual size_t get_num_vertices() const {
-		return vertices.size();
-	}
-
-	virtual size_t get_all_vertices(std::vector<vertex_id_t> &vec) const {
-		vec.resize(vertices.size());
-		for (size_t i = 0; i < vertices.size(); i++)
-			vec[i] = vertices[i].get_id();
-		return vec.size();
-	}
-
-	virtual vertex_id_t get_max_vertex_id() const {
-		return vertices.back().get_id();
-	}
-
-	virtual vertex_id_t get_min_vertex_id() const {
-		return vertices.front().get_id();
-	}
-};
-
 class bfs_graph: public graph_engine
 {
 	bfs_graph(int num_threads, int num_nodes, const std::string &graph_file,
