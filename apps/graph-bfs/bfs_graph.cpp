@@ -5,8 +5,10 @@
 #include "io_interface.h"
 
 #include "bfs_graph.h"
+#include "graph_config.h"
 
 atomic_integer num_visited_vertices;
+graph_config graph_conf;
 
 void bfs_vertex::run(graph_engine &graph, const ext_mem_vertex vertices[],
 			int num)
@@ -33,47 +35,6 @@ void bfs_vertex::run(graph_engine &graph, const ext_mem_vertex vertices[],
 
 	graph.activate_vertices(activated_vertices.data(),
 			activated_vertices.size());
-}
-
-class graph_config
-{
-	int num_threads;
-	std::string prof_file;
-public:
-	graph_config() {
-		num_threads = 4;
-	}
-
-	void print_help();
-	void print();
-
-	void init(const config_map &map);
-
-	const std::string &get_prof_file() const {
-		return prof_file;
-	}
-
-	int get_num_threads() const {
-		return num_threads;
-	}
-} graph_conf;
-
-void graph_config::print_help()
-{
-	printf("Configuration parameters in graph algorithm.\n");
-	printf("\tthreads: the number of threads processing the graph\n");
-}
-
-void graph_config::print()
-{
-	printf("Configuration parameters in graph algorithm.\n");
-	printf("\tthreads: %d\n", num_threads);
-}
-
-void graph_config::init(const config_map &map)
-{
-	map.read_option_int("threads", num_threads);
-	map.read_option("prof_file", prof_file);
 }
 
 void int_handler(int sig_num)
