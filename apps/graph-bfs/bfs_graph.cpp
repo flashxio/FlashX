@@ -47,7 +47,7 @@ void int_handler(int sig_num)
 int main(int argc, char *argv[])
 {
 	if (argc < 6) {
-		fprintf(stderr, "bfs conf_file graph_file index_file start_vertex\n");
+		fprintf(stderr, "bfs conf_file graph_file index_file start_vertex directed\n");
 		graph_conf.print_help();
 		params.print_help();
 		exit(-1);
@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 	bool directed = atoi(argv[5]);
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 4, argc - 4);
+	configs.add_options(argv + 6, argc - 6);
 	graph_conf.init(configs);
 	graph_conf.print();
 
