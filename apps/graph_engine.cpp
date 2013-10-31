@@ -306,7 +306,6 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	for (int i = 0; i < num_threads; i++) {
 		worker_thread *t = new worker_thread(this, factory,
 				num_threads % num_nodes);
-		t->start();
 		worker_threads.push_back(t);
 	}
 	first_thread = worker_threads[0];
@@ -320,16 +319,18 @@ void graph_engine::start(vertex_id_t ids[], int num)
 	std::vector<vertex_id_t> starts;
 	starts.assign(ids, ids + num);
 	activated_vertices->init(starts, false);
-	worker_threads[0]->activate();
+	for (unsigned i = 0; i < worker_threads.size(); i++)
+		worker_threads[i]->start();
 }
 
 void graph_engine::start_all()
 {
 	std::vector<vertex_id_t> all_vertices;
 	vertices->get_all_vertices(all_vertices);
+	printf("there are %ld activated vertices\n", all_vertices.size());
 	activated_vertices->init(all_vertices, true);
 	for (unsigned i = 0; i < worker_threads.size(); i++)
-		worker_threads[i]->activate();
+		worker_threads[i]->start();
 }
 
 void graph_engine::activate_vertices(vertex_id_t vertices[], int num)
