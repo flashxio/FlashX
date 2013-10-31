@@ -61,11 +61,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 	gettimeofday(&curr_time, NULL);
 #endif
 	io_request req;
-#ifdef MEMCHECK
-	io_request *ignored_flushes = new io_request[low_prio_msg.get_num_objs()];
-#else
-	io_request ignored_flushes[low_prio_msg.get_num_objs()];
-#endif
+	stack_array<io_request> ignored_flushes(low_prio_msg.get_num_objs());
 	int num_ignored = 0;
 	while (low_prio_msg.has_next()
 			&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS
@@ -169,11 +165,8 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 		low_prio_msg.clear();
 
 	if (num_ignored > 0)
-		notify_ignored_flushes(ignored_flushes, num_ignored);
+		notify_ignored_flushes(ignored_flushes.data(), num_ignored);
 
-#ifdef MEMCHECK
-	delete [] ignored_flushes;
-#endif
 	return num_accesses;
 }
 
@@ -232,15 +225,11 @@ void disk_read_thread::run() {
 			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
 		}
 
-#ifdef MEMCHECK
-		io_request *local_reqs = new io_request[LOCAL_REQ_BUF_SIZE];
-#else
-		io_request local_reqs[LOCAL_REQ_BUF_SIZE];
-#endif
+		stack_array<io_request> local_reqs(LOCAL_REQ_BUF_SIZE);
 		for (int i = 0; i < num; i++) {
 			int num_reqs = msg_buffer[i].get_num_objs();
 			assert(num_reqs <= LOCAL_REQ_BUF_SIZE);
-			msg_buffer[i].get_next_objs(local_reqs, num_reqs);
+			msg_buffer[i].get_next_objs(local_reqs.data(), num_reqs);
 #ifdef STATISTICS
 			for (int j = 0; j < num_reqs; j++) {
 				if (local_reqs[j].get_access_method() == READ) {
@@ -253,12 +242,9 @@ void disk_read_thread::run() {
 				}
 			}
 #endif
-			aio->access(local_reqs, num_reqs);
+			aio->access(local_reqs.data(), num_reqs);
 			msg_buffer[i].clear();
 		}
-#ifdef MEMCHECK
-		delete [] local_reqs;
-#endif
 
 		// We can't exit the loop if there are still pending AIO requests.
 		// This thread is responsible for processing completed AIO requests.

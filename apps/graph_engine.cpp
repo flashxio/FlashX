@@ -280,8 +280,7 @@ int worker_thread::process_pending_vertices(int max)
 		int num_neighbors = ext_v.get_num_edges(
 				graph->get_required_neighbor_type());
 		assert(num_neighbors > 0);
-		// TODO I need to handle the memory allocation more efficiently.
-		io_request *reqs = new io_request[num_neighbors];
+		stack_array<io_request> reqs(num_neighbors);
 		pending_vertex *pending = pending_vertex::create(ext_v, graph);
 		for (int j = 0; j < num_neighbors; j++) {
 			vertex_id_t neighbor = ext_v.get_neighbor(
@@ -294,9 +293,8 @@ int worker_thread::process_pending_vertices(int max)
 			reqs[j].set_user_data(pending);
 		}
 		i += num_neighbors;
-		io->access(reqs, num_neighbors);
+		io->access(reqs.data(), num_neighbors);
 		num_processed += num_neighbors;
-		delete [] reqs;
 	}
 	return num_processed;
 }
@@ -307,11 +305,7 @@ int worker_thread::process_activated_vertices(int max)
 		return 0;
 
 	vertex_id_t vertex_buf[max];
-#ifndef MEMCHECK
-	io_request reqs[max];
-#else
-	io_request *reqs = new io_request[max];
-#endif
+	stack_array<io_request> reqs(max);
 	int num = graph->get_curr_activated_vertices(vertex_buf, max);
 	for (int i = 0; i < num; i++) {
 		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
@@ -320,10 +314,7 @@ int worker_thread::process_activated_vertices(int max)
 				// TODO I might need to set the node id.
 				info.get_ext_mem_size(), READ, io, -1);
 	}
-	io->access(reqs, num);
-#ifdef MEMCHECK
-	delete [] reqs;
-#endif
+	io->access(reqs.data(), num);
 	return num;
 }
 

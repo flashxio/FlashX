@@ -346,11 +346,7 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 {
 	io_request *local_reqs[num];
 	// This buffer is used for sending replies.
-#ifdef MEMCHECK
-	io_reply *local_reply_buf = new io_reply[num];
-#else
-	io_reply local_reply_buf[num];
-#endif
+	stack_array<io_reply> local_reply_buf(num);
 	int node_id = local_group->id;
 	int num_remote = 0;
 	int num_local = 0;
@@ -368,15 +364,13 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 	// The reply must be sent to the thread on a different node.
 	int num_sent;
 //	if (num_remote > NUMA_REPLY_CACHE_SIZE)
-		num_sent = get_reply_sender(node_id)->send(local_reply_buf, num_remote);
+		num_sent = get_reply_sender(node_id)->send(local_reply_buf.data(),
+				num_remote);
 //	else
 //		num_sent = get_reply_sender(node_id)->send_cached(
 //				local_reply_buf, num_remote);
 	// We use blocking queues here, so the send must succeed.
 	assert(num_sent == num_remote);
-#ifdef MEMCHECK
-	delete local_reply_buf;
-#endif
 	assert(get_reply_sender(node_id)->get_num_remaining() == 0);
 	get_thread()->activate();
 	if (num_local > 0)

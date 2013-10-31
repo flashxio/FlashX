@@ -470,16 +470,9 @@ void global_cached_io::process_completed_requests(io_request requests[],
 int global_cached_io::process_completed_requests(int num)
 {
 	if (num > 0) {
-#ifdef MEMCHECK
-		io_request *reqs = new io_request[num];
-#else
-		io_request reqs[num];
-#endif
-		int ret = complete_queue.fetch(reqs, num);
-		process_completed_requests(reqs, ret);
-#ifdef MEMCHECK
-		delete [] reqs;
-#endif
+		stack_array<io_request> reqs(num);
+		int ret = complete_queue.fetch(reqs.data(), num);
+		process_completed_requests(reqs.data(), ret);
 		return ret;
 	}
 	else
@@ -923,8 +916,8 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	num_issued_areqs.inc(num);
 
-	io_request *cached_reqs[num];
-	thread_safe_page *cached_pages[num];
+	stack_array<io_request *, 128> cached_reqs(num);
+	stack_array<thread_safe_page *, 128> cached_pages(num);
 	int num_cached_reqs = 0;
 
 	bool syncd = false;
@@ -1154,7 +1147,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 			}
 		}
 	}
-	process_cached_reqs(cached_reqs, cached_pages, num_cached_reqs);
+	process_cached_reqs(cached_reqs.data(), cached_pages.data(), num_cached_reqs);
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), underlying);
 
@@ -1240,24 +1233,17 @@ int global_cached_io::wait4complete(int num_to_complete)
 
 void global_cached_io::notify_completion(io_request *reqs[], int num)
 {
-#ifdef MEMCHECK
-	io_request *req_copies = new io_request[num];
-#else
-	io_request req_copies[num];
-#endif
+	stack_array<io_request> req_copies(num);
 	for (int i = 0; i < num; i++) {
 		req_copies[i] = *reqs[i];
 		assert(req_copies[i].get_io());
 	}
 
-	int ret = complete_queue.add(req_copies, num);
+	int ret = complete_queue.add(req_copies.data(), num);
 	assert(ret == num);
 	// Because of the flush requests, somtimes global_cached_io can't get
 	// enough completed requests. If we only signal the request issuer thread
 	// when there are enough completed requests, we'll get very poor
 	// performance.
 	get_thread()->activate();
-#ifdef MEMCHECK
-	delete [] req_copies;
-#endif
 }

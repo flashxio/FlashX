@@ -19,22 +19,15 @@ int remote_disk_access::get_max_num_pending_ios() const
 
 void remote_disk_access::notify_completion(io_request *reqs[], int num)
 {
-#ifdef MEMCHECK
-	io_request *req_copies = new io_request[num];
-#else
-	io_request req_copies[num];
-#endif
+	stack_array<io_request> req_copies(num);
 	for (int i = 0; i < num; i++) {
 		req_copies[i] = *reqs[i];
 		assert(req_copies[i].get_io());
 	}
 
-	int ret = complete_queue.add(req_copies, num);
+	int ret = complete_queue.add(req_copies.data(), num);
 	assert(ret == num);
 	get_thread()->activate();
-#ifdef MEMCHECK
-	delete [] req_copies;
-#endif
 }
 
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
@@ -222,16 +215,9 @@ void remote_disk_access::flush_requests()
 int remote_disk_access::process_completed_requests(int num)
 {
 	if (num > 0) {
-#ifdef MEMCHECK
-		io_request *reqs = new io_request[num];
-#else
-		io_request reqs[num];
-#endif
-		int ret = complete_queue.fetch(reqs, num);
-		process_completed_requests(reqs, ret);
-#ifdef MEMCHECK
-		delete [] reqs;
-#endif
+		stack_array<io_request> reqs(num);
+		int ret = complete_queue.fetch(reqs.data(), num);
+		process_completed_requests(reqs.data(), ret);
 		return ret;
 	}
 	else

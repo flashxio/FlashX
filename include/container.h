@@ -430,6 +430,46 @@ public:
 	}
 };
 
+/**
+ * This is used to allocate an array on the stack.
+ * Some code needs to allocate a large array sometimes, but most of time,
+ * it only needs a small array.
+ * This wrapper class is to avoid allocating a large array on the stack,
+ * while being efficient most of times.
+ */
+template<class T, int size = 32>
+class stack_array
+{
+	T buf[size];
+	T *real_buf;
+	int capacity;
+public:
+	stack_array(int capacity) {
+		if (capacity <= size) {
+			this->capacity = size;
+			real_buf = buf;
+		}
+		else {
+			this->capacity = capacity;
+			real_buf = new T[capacity];
+		}
+	}
+
+	~stack_array() {
+		if (real_buf != buf)
+			delete [] real_buf;
+	}
+
+	T &operator[](int idx) {
+		assert(idx < capacity);
+		return real_buf[idx];
+	}
+
+	T *data() {
+		return real_buf;
+	}
+};
+
 template<class T>
 bool fifo_queue<T>::expand_queue(int new_size)
 {
