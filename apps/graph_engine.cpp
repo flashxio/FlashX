@@ -1,5 +1,7 @@
 #include <algorithm>
+#ifndef MEMCHECK
 #include <parallel/algorithm>
+#endif
 
 #include "io_interface.h"
 
@@ -82,7 +84,11 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 			int num_neighbors = ext_v.get_num_edges(
 					graph->get_required_neighbor_type());
 			assert(num_neighbors > 0);
+#ifndef MEMCHECK
 			io_request reqs[num_neighbors];
+#else
+			io_request *reqs = new io_request[num_neighbors];
+#endif
 			pending_vertex *pending = pending_vertex::create(req_buf, req_size,
 					graph);
 			for (int j = 0; j < num_neighbors; j++) {
@@ -96,6 +102,9 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 				reqs[j].set_user_data(pending);
 			}
 			io->access(reqs, num_neighbors);
+#ifdef MEMCHECK
+			delete [] reqs;
+#endif
 		}
 		else {
 			// Now a neighbor has been fetched, now we can do some computation
@@ -172,6 +181,7 @@ public:
 		// merge them.
 		fetch_idx = 0;
 		sorted_vertices.clear();
+#ifndef MEMCHECK
 		std::vector<std::pair<std::vector<vertex_id_t>::iterator,
 			std::vector<vertex_id_t>::iterator> > seqs;
 		size_t tot_length = 0;
@@ -184,6 +194,12 @@ public:
 		sorted_vertices.resize(tot_length);
 		__gnu_parallel::multiway_merge(seqs.begin(), seqs.end(),
 				sorted_vertices.begin(), tot_length, std::less<int>());
+#else
+		for (int i = 0; i < num_vecs; i++)
+			sorted_vertices.insert(sorted_vertices.end(), vecs[i]->begin(),
+					vecs[i]->end());
+		std::sort(sorted_vertices.begin(), sorted_vertices.end());
+#endif
 	}
 
 	int fetch(vertex_id_t vertices[], int num) {

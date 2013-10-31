@@ -1,7 +1,10 @@
 #include "graph.h"
 
-//#include <algorithm>
+#ifdef MEMCHECK
+#include <algorithm>
+#else
 #include <parallel/algorithm>
+#endif
 
 #include "thread.h"
 
@@ -214,10 +217,13 @@ void directed_edge_graph::add_edges(std::vector<edge> &edges)
 
 void directed_edge_graph::sort_edges()
 {
-//	std::sort(out_edges.begin(), out_edges.end(), edge_comparator);
-//	std::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
+#ifdef MEMCHECK
+	std::sort(out_edges.begin(), out_edges.end(), edge_comparator);
+	std::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
+#else
 	__gnu_parallel::sort(out_edges.begin(), out_edges.end(), edge_comparator);
 	__gnu_parallel::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
+#endif
 }
 
 directed_graph *directed_edge_graph::create() const
