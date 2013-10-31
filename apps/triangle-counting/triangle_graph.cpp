@@ -28,7 +28,13 @@ public:
 void triangle_vertex::run(graph_engine &graph, const ext_mem_vertex vertices[],
 			int num)
 {
-	assert(num > 0);
+	// If there aren't neighbors passed to the vertex's user code,
+	// it's because the vertex doesn't have neighbors.
+	if (num == 0) {
+		assert(this->get_num_edges(graph.get_required_neighbor_type()) == 0);
+		return;
+	}
+
 	int num_local_triangles = 0;
 	for (int i = 0; i < num; i++) {
 		const ext_mem_vertex *v = vertices + i;
