@@ -63,7 +63,13 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 		size_t req_size = reqs[i]->get_size();
 		assert(this->io == reqs[i]->get_io());
 		ext_mem_vertex ext_v(req_buf, req_size, graph->is_directed());
-		if (graph->get_required_neighbor_type() == edge_type::NONE) {
+		// If the algorithm doesn't need to get the full information
+		// of their neighbors
+		if (graph->get_required_neighbor_type() == edge_type::NONE
+				// Or the vertex doesn't have neighbors.
+				|| (reqs[i]->get_user_data() == NULL
+					&& ext_v.get_num_edges(graph->get_required_neighbor_type()) == 0)) {
+			// We can run user's code immediately on the vertex.
 			compute_vertex &v = graph->get_vertex(ext_v.get_id());
 			v.materialize(ext_v);
 			v.run(*graph, NULL, 0);
@@ -75,6 +81,7 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 		else if (reqs[i]->get_user_data() == NULL) {
 			int num_neighbors = ext_v.get_num_edges(
 					graph->get_required_neighbor_type());
+			assert(num_neighbors > 0);
 			io_request reqs[num_neighbors];
 			pending_vertex *pending = pending_vertex::create(req_buf, req_size,
 					graph);
@@ -88,7 +95,7 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 						info.get_ext_mem_size(), READ, io, -1);
 				reqs[j].set_user_data(pending);
 			}
-			io->access(reqs, num);
+			io->access(reqs, num_neighbors);
 		}
 		else {
 			// Now a neighbor has been fetched, now we can do some computation
