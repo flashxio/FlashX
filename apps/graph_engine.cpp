@@ -8,7 +8,7 @@
 #include "graph_config.h"
 #include "graph_engine.h"
 
-const int VERTEX_BUF_SIZE = 1024;
+const int MAX_IO_PEND_VERTICES = 1000;
 
 graph_config graph_conf;
 
@@ -33,6 +33,12 @@ class pending_vertex: public ext_mem_vertex
 	int num_completed_neighbors;
 	edge_type required_neighbor_type;
 
+	pending_vertex(const ext_mem_vertex &v,
+			edge_type required_neighbor_type): ext_mem_vertex(v) {
+		num_completed_neighbors = 0;
+		this->required_neighbor_type = required_neighbor_type;
+	}
+
 	pending_vertex(char *buf, int size, bool directed,
 			edge_type required_neighbor_type): ext_mem_vertex(buf, size, directed) {
 		num_completed_neighbors = 0;
@@ -42,6 +48,9 @@ public:
 	static pending_vertex *create(char *buf, int size, graph_engine *graph) {
 		return new pending_vertex(buf, size, graph->is_directed(),
 				graph->get_required_neighbor_type());
+	}
+	static pending_vertex *create(const ext_mem_vertex &v, graph_engine *graph) {
+		return new pending_vertex(v, graph->get_required_neighbor_type());
 	}
 
 	static void destroy(pending_vertex *v) {
@@ -58,8 +67,43 @@ public:
 	}
 };
 
+class worker_thread: public thread
+{
+	file_io_factory *factory;
+	io_interface *io;
+	graph_engine *graph;
+	fifo_queue<ext_mem_vertex> pending_vertices;
+
+	std::vector<vertex_id_t> activated_vertices;
+public:
+	worker_thread(graph_engine *graph, file_io_factory *factory,
+			int node_id): thread("worker_thread", node_id), pending_vertices(
+				-1, 1024, true) {
+		this->graph = graph;
+		this->io = NULL;
+		this->factory = factory;
+	}
+
+	void run();
+	void init();
+
+	std::vector<vertex_id_t> &get_activated_vertices() {
+		return activated_vertices;
+	}
+
+	void add_pending_vertex(ext_mem_vertex v) {
+		if (pending_vertices.is_full())
+			pending_vertices.expand_queue(pending_vertices.get_size() * 2);
+		pending_vertices.push_back(v);
+	}
+
+	int process_activated_vertices(int max);
+	int process_pending_vertices(int max);
+};
+
 int vertex_callback::invoke(io_request *reqs[], int num)
 {
+	worker_thread *curr_thread = (worker_thread *) thread::get_curr_thread();
 	for (int i = 0; i < num; i++) {
 		char *req_buf = reqs[i]->get_buf();
 		size_t req_size = reqs[i]->get_size();
@@ -81,30 +125,7 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 		// We just fetched a vertex, we need to fetch its neighbors to
 		// perform computation.
 		else if (reqs[i]->get_user_data() == NULL) {
-			int num_neighbors = ext_v.get_num_edges(
-					graph->get_required_neighbor_type());
-			assert(num_neighbors > 0);
-#ifndef MEMCHECK
-			io_request reqs[num_neighbors];
-#else
-			io_request *reqs = new io_request[num_neighbors];
-#endif
-			pending_vertex *pending = pending_vertex::create(req_buf, req_size,
-					graph);
-			for (int j = 0; j < num_neighbors; j++) {
-				vertex_id_t neighbor = ext_v.get_neighbor(
-						graph->get_required_neighbor_type(), j);
-				compute_vertex &info = graph->get_vertex(neighbor);
-				reqs[j].init(new char[info.get_ext_mem_size()],
-						info.get_ext_mem_off(),
-						// TODO I might need to set the node id.
-						info.get_ext_mem_size(), READ, io, -1);
-				reqs[j].set_user_data(pending);
-			}
-			io->access(reqs, num_neighbors);
-#ifdef MEMCHECK
-			delete [] reqs;
-#endif
+			curr_thread->add_pending_vertex(ext_v);
 		}
 		else {
 			// Now a neighbor has been fetched, now we can do some computation
@@ -133,29 +154,6 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 	}
 	return 0;
 }
-
-class worker_thread: public thread
-{
-	file_io_factory *factory;
-	io_interface *io;
-	graph_engine *graph;
-
-	std::vector<vertex_id_t> activated_vertices;
-public:
-	worker_thread(graph_engine *graph, file_io_factory *factory,
-			int node_id): thread("worker_thread", node_id) {
-		this->graph = graph;
-		this->io = NULL;
-		this->factory = factory;
-	}
-
-	void run();
-	void init();
-
-	std::vector<vertex_id_t> &get_activated_vertices() {
-		return activated_vertices;
-	}
-};
 
 class sorted_vertex_queue
 {
@@ -271,32 +269,86 @@ void worker_thread::init()
 	io->set_callback(new vertex_callback(graph, io));
 }
 
+int worker_thread::process_pending_vertices(int max)
+{
+	if (max <= 0)
+		return 0;
+
+	int num_processed = 0;
+	for (int i = 0; i < max && !pending_vertices.is_empty(); ) {
+		ext_mem_vertex ext_v = pending_vertices.pop_front();
+		int num_neighbors = ext_v.get_num_edges(
+				graph->get_required_neighbor_type());
+		assert(num_neighbors > 0);
+		// TODO I need to handle the memory allocation more efficiently.
+		io_request *reqs = new io_request[num_neighbors];
+		pending_vertex *pending = pending_vertex::create(ext_v, graph);
+		for (int j = 0; j < num_neighbors; j++) {
+			vertex_id_t neighbor = ext_v.get_neighbor(
+					graph->get_required_neighbor_type(), j);
+			compute_vertex &info = graph->get_vertex(neighbor);
+			reqs[j].init(new char[info.get_ext_mem_size()],
+					info.get_ext_mem_off(),
+					// TODO I might need to set the node id.
+					info.get_ext_mem_size(), READ, io, -1);
+			reqs[j].set_user_data(pending);
+		}
+		i += num_neighbors;
+		io->access(reqs, num_neighbors);
+		num_processed += num_neighbors;
+		delete [] reqs;
+	}
+	return num_processed;
+}
+
+int worker_thread::process_activated_vertices(int max)
+{
+	if (max <= 0)
+		return 0;
+
+	vertex_id_t vertex_buf[max];
+#ifndef MEMCHECK
+	io_request reqs[max];
+#else
+	io_request *reqs = new io_request[max];
+#endif
+	int num = graph->get_curr_activated_vertices(vertex_buf, max);
+	for (int i = 0; i < num; i++) {
+		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
+		reqs[i].init(new char[info.get_ext_mem_size()],
+				info.get_ext_mem_off(),
+				// TODO I might need to set the node id.
+				info.get_ext_mem_size(), READ, io, -1);
+	}
+	io->access(reqs, num);
+#ifdef MEMCHECK
+	delete [] reqs;
+#endif
+	return num;
+}
+
 void worker_thread::run()
 {
-	vertex_id_t vertex_buf[VERTEX_BUF_SIZE];
-	io_request reqs[VERTEX_BUF_SIZE];
-
 	while (true) {
 		int num_visited = 0;
-		int num = graph->get_curr_activated_vertices(vertex_buf, VERTEX_BUF_SIZE);
+		int num = process_activated_vertices(MAX_IO_PEND_VERTICES);
+		printf("thread %d process %d activated vertices\n", get_id(), num);
 		num_visited += num;
-		while (num > 0) {
-			for (int i = 0; i < num; i++) {
-				compute_vertex &info = graph->get_vertex(vertex_buf[i]);
-				reqs[i].init(new char[info.get_ext_mem_size()],
-						info.get_ext_mem_off(),
-						// TODO I might need to set the node id.
-						info.get_ext_mem_size(), READ, io, -1);
-			}
-			io->access(reqs, num);
-			int num2wait = num / 10;
-			if (num2wait == 0)
-				num2wait = 1;
-			io->wait4complete(num2wait);
-			num = graph->get_curr_activated_vertices(vertex_buf, VERTEX_BUF_SIZE);
+		while (graph->get_num_curr_activated_vertices() > 0) {
+			while (process_pending_vertices(
+						MAX_IO_PEND_VERTICES - io->num_pending_ios()) > 0)
+				io->wait4complete(io->num_pending_ios() / 10);
+			num = process_activated_vertices(
+					MAX_IO_PEND_VERTICES - io->num_pending_ios());
 			num_visited += num;
+			io->wait4complete(io->num_pending_ios() / 10 + max<int>(0,
+						io->num_pending_ios() - MAX_IO_PEND_VERTICES));
 		}
-		io->wait4complete(io->num_pending_ios());
+		// We have completed processing the activated vertices in this iteration.
+		while (io->num_pending_ios() > 0) {
+			io->wait4complete(1);
+			process_pending_vertices(MAX_IO_PEND_VERTICES - io->num_pending_ios());
+		}
 		printf("thread %d visited %d vertices\n", this->get_id(), num_visited);
 
 		// Now we have finished this level, we can progress to the next level.
@@ -375,6 +427,11 @@ void graph_engine::activate_vertices(vertex_id_t vertices[], int num)
 int graph_engine::get_curr_activated_vertices(vertex_id_t vertices[], int num)
 {
 	return activated_vertices->fetch(vertices, num);
+}
+
+size_t graph_engine::get_num_curr_activated_vertices() const
+{
+	return activated_vertices->get_num_vertices();
 }
 
 bool graph_engine::progress_next_level()

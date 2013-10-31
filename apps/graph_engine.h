@@ -205,6 +205,7 @@ public:
 	 * Get vertices to be processed in the current level.
 	 */
 	int get_curr_activated_vertices(vertex_id_t vertices[], int num);
+	size_t get_num_curr_activated_vertices() const;
 
 	vertex_id_t get_max_vertex_id() const {
 		return vertices->get_max_vertex_id();
