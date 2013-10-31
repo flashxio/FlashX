@@ -3,9 +3,12 @@
 
 #include "io_interface.h"
 
+#include "graph_config.h"
 #include "graph_engine.h"
 
 const int VERTEX_BUF_SIZE = 1024;
+
+graph_config graph_conf;
 
 /**
  * This callback is to process a vertex.
@@ -280,7 +283,8 @@ void worker_thread::run()
 			break;
 	}
 	stop();
-	io->print_stat(graph->get_num_threads());
+	if (graph_conf.get_print_io_stat())
+		io->print_stat(graph->get_num_threads());
 }
 
 graph_engine::graph_engine(int num_threads, int num_nodes,

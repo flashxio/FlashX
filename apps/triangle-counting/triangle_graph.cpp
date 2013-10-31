@@ -4,10 +4,9 @@
 #include "thread.h"
 #include "io_interface.h"
 
-#include "triangle_graph.h"
+#include "graph_engine.h"
 #include "graph_config.h"
 
-graph_config graph_conf;
 atomic_number<long> num_triangles;
 
 class triangle_vertex: public compute_vertex
@@ -101,7 +100,8 @@ int main(int argc, char *argv[])
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
-	print_io_thread_stat();
+	if (graph_conf.get_print_io_stat())
+		print_io_thread_stat();
 	printf("there are %ld triangles. It takes %f seconds\n",
 			num_triangles.get(), time_diff(start, end));
 }

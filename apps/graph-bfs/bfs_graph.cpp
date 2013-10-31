@@ -8,7 +8,6 @@
 #include "graph_config.h"
 
 atomic_integer num_visited_vertices;
-graph_config graph_conf;
 
 void bfs_vertex::run(graph_engine &graph, const ext_mem_vertex vertices[],
 			int num)
@@ -83,7 +82,8 @@ int main(int argc, char *argv[])
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
-	print_io_thread_stat();
+	if (graph_conf.get_print_io_stat())
+		print_io_thread_stat();
 	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
 			start_vertex, num_visited_vertices.get(),
 			time_diff(start, end));
