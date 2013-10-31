@@ -36,3 +36,49 @@ int ext_mem_undirected_vertex::serialize(const in_mem_undirected_vertex &v,
 
 	return mem_size;
 }
+
+bool ext_mem_directed_vertex::is_edge_list_sorted(edge_type type) const
+{
+	if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES) {
+		int num_in_edges = get_num_edges(edge_type::IN_EDGE);
+		if (num_in_edges > 0) {
+			vertex_id_t id = this->get_neighbor(edge_type::IN_EDGE, 0);
+			for (int i = 1; i < num_in_edges; i++) {
+				vertex_id_t i_neighbor = this->get_neighbor(edge_type::IN_EDGE, i);
+				if (i_neighbor < id)
+					return false;
+				id = i_neighbor;
+			}
+		}
+	}
+	if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
+		int num_out_edges = get_num_edges(edge_type::OUT_EDGE);
+		if (num_out_edges > 0) {
+			vertex_id_t id = this->get_neighbor(edge_type::OUT_EDGE, 0);
+			for (int i = 1; i < num_out_edges; i++) {
+				vertex_id_t i_neighbor = this->get_neighbor(edge_type::OUT_EDGE, i);
+				if (i_neighbor < id)
+					return false;
+				id = i_neighbor;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool ext_mem_undirected_vertex::is_edge_list_sorted(edge_type type) const
+{
+	int num_in_edges = get_num_edges(type);
+	if (num_in_edges > 0) {
+		vertex_id_t id = this->get_neighbor(type, 0);
+		for (int i = 1; i < num_in_edges; i++) {
+			vertex_id_t i_neighbor = this->get_neighbor(type, i);
+			if (i_neighbor < id)
+				return false;
+			id = i_neighbor;
+		}
+	}
+
+	return true;
+}

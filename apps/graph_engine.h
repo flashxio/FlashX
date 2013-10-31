@@ -72,6 +72,10 @@ public:
 		return vertex.get_neighbor(type, idx);
 	}
 
+	bool is_edge_list_sorted(edge_type type) const {
+		return vertex.is_edge_list_sorted(type);
+	}
+
 	virtual void run(graph_engine &graph, const ext_mem_vertex vertices[],
 			int num) = 0;
 };

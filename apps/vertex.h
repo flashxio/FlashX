@@ -149,6 +149,8 @@ public:
 	const vertex_id_t get_id() const {
 		return id;
 	}
+
+	bool is_edge_list_sorted(edge_type type) const;
 };
 
 /**
@@ -188,6 +190,8 @@ public:
 	vertex_id_t get_id() const {
 		return id;
 	}
+
+	bool is_edge_list_sorted(edge_type type) const;
 };
 
 class in_mem_directed_vertex
@@ -346,6 +350,13 @@ public:
 	void clear() {
 		vertex_addr = 0;
 		directed = 0;
+	}
+
+	bool is_edge_list_sorted(edge_type type) const {
+		if (directed)
+			return get_directed_vertex()->is_edge_list_sorted(type);
+		else
+			return get_undirected_vertex()->is_edge_list_sorted(type);
 	}
 };
 
