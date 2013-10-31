@@ -1,12 +1,12 @@
-CFLAGS = -g -O3 -DSTATISTICS -DENABLE_AIO #-DPROFILER
+CFLAGS = -g -O3 -DSTATISTICS #-DPROFILER
 ifdef MEMCHECK
 TRACE_FLAGS = -faddress-sanitizer
 endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -rdynamic -fopenmp
-CXXFLAGS = -g -O3 -I../include -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -fopenmp
+LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -L../../libcache -lcache -L.. -lgraph -laio -lnuma -fopenmp
+CXXFLAGS = -g -O3 -I../../include -I.. -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -fopenmp
 CPPFLAGS := -MD
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -23,27 +23,21 @@ CC = gcc
 CXX = g++
 endif
 
-all: libgraph graph-bfs triangle-counting tools
+all: triangle-counting
 
-libgraph: $(OBJS)
-	rm -f libgraph.a
-	ar -cvq libgraph.a $(OBJS)
+triangle-counting: $(OBJS) ../libgraph.a
+	$(CXX) -o triangle-counting $(OBJS) $(LDFLAGS)
 
-graph-bfs: libgraph
-	$(MAKE) -C graph-bfs
+build_lib:
+	make -C libcache
 
-triangle-counting: libgraph
-	$(MAKE) -C triangle-counting
-
-tools: libgraph
-	$(MAKE) -C tools
+unit_test: $(OBJS)
+	make -C test
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm libgraph.a
-	$(MAKE) clean -C tools
-	$(MAKE) clean -C graph-bfs
+	rm triangle-counting
 
 -include $(DEPS) 

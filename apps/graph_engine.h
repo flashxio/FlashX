@@ -68,6 +68,10 @@ public:
 		return vertex.get_edge(type, idx);
 	}
 
+	vertex_id_t get_neighbor(edge_type type, int idx) const {
+		return vertex.get_neighbor(type, idx);
+	}
+
 	virtual void run(graph_engine &graph, const ext_mem_vertex vertices[],
 			int num) = 0;
 };
