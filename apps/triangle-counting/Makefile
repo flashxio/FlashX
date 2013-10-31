@@ -40,6 +40,6 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm triangle-counting
+	rm -f triangle-counting
 
 -include $(DEPS) 

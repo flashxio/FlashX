@@ -44,8 +44,9 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm libgraph.a
+	rm -f libgraph.a
 	$(MAKE) clean -C tools
 	$(MAKE) clean -C graph-bfs
+	$(MAKE) clean -C triangle-counting
 
 -include $(DEPS) 

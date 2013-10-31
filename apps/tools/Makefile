@@ -34,6 +34,6 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm el2al
+	rm -f el2al
 
 -include $(DEPS) 

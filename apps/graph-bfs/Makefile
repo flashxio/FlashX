@@ -40,6 +40,6 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm graph-bfs
+	rm -f graph-bfs
 
 -include $(DEPS) 
