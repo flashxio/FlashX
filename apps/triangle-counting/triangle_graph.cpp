@@ -110,6 +110,7 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
+	graph->cleanup();
 	printf("there are %ld triangles. It takes %f seconds\n",
 			num_triangles.get(), time_diff(start, end));
 }

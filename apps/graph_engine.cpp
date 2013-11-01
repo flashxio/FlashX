@@ -337,6 +337,8 @@ int worker_thread::process_pending_vertex(int max)
 				info.get_ext_mem_size(), READ, io, -1);
 		reqs[j].set_user_data(curr_pending.get_pending_vertex());
 	}
+	if (graph->get_logger())
+		graph->get_logger()->log(reqs.data(), num_neighbors);
 	io->access(reqs.data(), num_neighbors);
 	return num_neighbors;
 }
@@ -385,6 +387,8 @@ int worker_thread::process_activated_vertices(int max)
 				// TODO I might need to set the node id.
 				info.get_ext_mem_size(), READ, io, -1);
 	}
+	if (graph->get_logger())
+		graph->get_logger()->log(reqs.data(), num);
 	io->access(reqs.data(), num);
 	return num;
 }
@@ -449,6 +453,11 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 
 	activated_vertices = new sorted_vertex_queue();
 	activated_vertex_buf = new vertex_collection(worker_threads);
+
+	if (graph_conf.get_trace_file().empty())
+		logger = NULL;
+	else
+		logger = new trace_logger(graph_conf.get_trace_file());
 }
 
 void graph_engine::start(vertex_id_t ids[], int num)

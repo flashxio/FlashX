@@ -7,6 +7,7 @@
 
 #include "vertex.h"
 #include "vertex_index.h"
+#include "trace_logger.h"
 
 class graph_engine;
 
@@ -166,6 +167,8 @@ class graph_engine
 	bool directed;
 	edge_type required_neighbor_type;
 
+	trace_logger *logger;
+
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index, bool directed);
@@ -223,6 +226,15 @@ public:
 
 	bool is_directed() const {
 		return directed;
+	}
+
+	trace_logger *get_logger() const {
+		return logger;
+	}
+
+	void cleanup() {
+		if (logger)
+			logger->close();
 	}
 };
 
