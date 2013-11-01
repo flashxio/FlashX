@@ -2,9 +2,12 @@
 #define __EXT_VERTEX_H__
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
 
 #include <vector>
+
+#include "container.h"
 
 typedef unsigned long vertex_id_t;
 
@@ -151,6 +154,20 @@ public:
 	}
 
 	bool is_edge_list_sorted(edge_type type) const;
+
+	int get_neighbors(edge_type type,
+			fifo_queue<vertex_id_t> &neighbors) const {
+		if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES) {
+			int ret = neighbors.add((vertex_id_t *) this->neighbors, num_in_edges);
+			assert(ret == num_in_edges);
+		}
+		if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
+			int ret = neighbors.add((vertex_id_t *) this->neighbors + num_in_edges,
+					num_out_edges);
+			assert(ret == num_out_edges);
+		}
+		return neighbors.get_num_entries();
+	}
 };
 
 /**
@@ -192,6 +209,13 @@ public:
 	}
 
 	bool is_edge_list_sorted(edge_type type) const;
+
+	int get_neighbors(edge_type type,
+			fifo_queue<vertex_id_t> &neighbors) const {
+		int ret = neighbors.add((vertex_id_t *) this->neighbors, num_edges);
+		assert(ret == num_edges);
+		return neighbors.get_num_entries();
+	}
 };
 
 class in_mem_directed_vertex
@@ -323,6 +347,14 @@ public:
 			return get_directed_vertex()->get_num_edges(type);
 		else
 			return get_undirected_vertex()->get_num_edges(type);
+	}
+
+	int get_neighbors(edge_type type,
+			fifo_queue<vertex_id_t> &neighbors) const {
+		if (directed)
+			return get_directed_vertex()->get_neighbors(type, neighbors);
+		else
+			return get_undirected_vertex()->get_neighbors(type, neighbors);
 	}
 
 	vertex_id_t get_neighbor(edge_type type, int idx) const {

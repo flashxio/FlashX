@@ -30,6 +30,7 @@ public:
 
 class pending_vertex: public ext_mem_vertex
 {
+	// The number of neighbors that have been fetched from disks.
 	int num_completed_neighbors;
 	edge_type required_neighbor_type;
 
@@ -65,6 +66,49 @@ public:
 	bool is_complete() const {
 		return num_completed_neighbors == get_num_edges(required_neighbor_type);
 	}
+
+	int get_num_neighbors() const {
+		return get_num_edges(required_neighbor_type);
+	}
+
+	int fetch_neighbors(fifo_queue<vertex_id_t> &neighbors) const {
+		return ext_mem_vertex::get_neighbors(required_neighbor_type, neighbors);
+	}
+};
+
+class pending_neighbor_collection
+{
+	fifo_queue<vertex_id_t> neighbors;
+	pending_vertex *vertex;
+public:
+	pending_neighbor_collection(): neighbors(-1, 1024, true) {
+		this->vertex = NULL;
+	}
+
+	void init(pending_vertex *vertex) {
+		assert(neighbors.is_empty());
+		this->vertex = vertex;
+		if (neighbors.get_size() < vertex->get_num_neighbors())
+			neighbors.expand_queue(vertex->get_num_neighbors());
+		assert(neighbors.get_size() >= vertex->get_num_neighbors());
+		vertex->fetch_neighbors(neighbors);
+	}
+
+	bool is_empty() {
+		return get_num_neighbors() == 0;
+	}
+
+	int get_num_neighbors() {
+		return neighbors.get_num_entries();
+	}
+
+	int fetch_neighbors(vertex_id_t neighbors[], int num) {
+		return this->neighbors.fetch(neighbors, num);
+	}
+
+	pending_vertex *get_pending_vertex() const {
+		return vertex;
+	}
 };
 
 class worker_thread: public thread
@@ -73,6 +117,8 @@ class worker_thread: public thread
 	io_interface *io;
 	graph_engine *graph;
 	fifo_queue<ext_mem_vertex> pending_vertices;
+
+	pending_neighbor_collection curr_pending;
 
 	std::vector<vertex_id_t> activated_vertices;
 public:
@@ -97,6 +143,7 @@ public:
 		pending_vertices.push_back(v);
 	}
 
+	int process_pending_vertex(int max);
 	int process_activated_vertices(int max);
 	int process_pending_vertices(int max);
 };
@@ -269,32 +316,56 @@ void worker_thread::init()
 	io->set_callback(new vertex_callback(graph, io));
 }
 
+int worker_thread::process_pending_vertex(int max)
+{
+	int num_neighbors = min(max, curr_pending.get_num_neighbors());
+	if (num_neighbors <= 0)
+		return 0;
+
+	stack_array<io_request> reqs(num_neighbors);
+	stack_array<vertex_id_t> remain_neighs(num_neighbors);
+
+	int ret = curr_pending.fetch_neighbors(remain_neighs.data(),
+			num_neighbors);
+	assert(ret == num_neighbors);
+	for (int j = 0; j < num_neighbors; j++) {
+		vertex_id_t neighbor = remain_neighs[j];
+		compute_vertex &info = graph->get_vertex(neighbor);
+		reqs[j].init(new char[info.get_ext_mem_size()],
+				info.get_ext_mem_off(),
+				// TODO I might need to set the node id.
+				info.get_ext_mem_size(), READ, io, -1);
+		reqs[j].set_user_data(curr_pending.get_pending_vertex());
+	}
+	io->access(reqs.data(), num_neighbors);
+	return num_neighbors;
+}
+
 int worker_thread::process_pending_vertices(int max)
 {
 	if (max <= 0)
 		return 0;
 
 	int num_processed = 0;
-	for (int i = 0; i < max && !pending_vertices.is_empty(); ) {
-		ext_mem_vertex ext_v = pending_vertices.pop_front();
-		int num_neighbors = ext_v.get_num_edges(
-				graph->get_required_neighbor_type());
-		assert(num_neighbors > 0);
-		stack_array<io_request> reqs(num_neighbors);
-		pending_vertex *pending = pending_vertex::create(ext_v, graph);
-		for (int j = 0; j < num_neighbors; j++) {
-			vertex_id_t neighbor = ext_v.get_neighbor(
-					graph->get_required_neighbor_type(), j);
-			compute_vertex &info = graph->get_vertex(neighbor);
-			reqs[j].init(new char[info.get_ext_mem_size()],
-					info.get_ext_mem_off(),
-					// TODO I might need to set the node id.
-					info.get_ext_mem_size(), READ, io, -1);
-			reqs[j].set_user_data(pending);
+	while (max > 0 && (!pending_vertices.is_empty() || !curr_pending.is_empty())) {
+		if (!curr_pending.is_empty()) {
+			int ret = process_pending_vertex(max);
+			num_processed += ret;
+			max -= ret;
+			assert(max >= 0);
 		}
-		i += num_neighbors;
-		io->access(reqs.data(), num_neighbors);
-		num_processed += num_neighbors;
+		else {
+			ext_mem_vertex ext_v = pending_vertices.pop_front();
+			int num_neighbors = ext_v.get_num_edges(
+					graph->get_required_neighbor_type());
+			assert(num_neighbors > 0);
+			curr_pending.init(pending_vertex::create(ext_v, graph));
+			int ret = process_pending_vertex(max);
+			assert(ret > 0);
+			num_processed += ret;
+			max -= ret;
+			assert(max >= 0);
+		}
 	}
 	return num_processed;
 }
