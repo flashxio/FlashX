@@ -149,6 +149,8 @@ public:
 class thread_task
 {
 public:
+	virtual ~thread_task() {
+	}
 	virtual void run() = 0;
 };
 
