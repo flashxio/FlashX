@@ -53,5 +53,7 @@ clean:
 	rm -f include/*~
 	make --ignore-errors -C test clean
 	make --ignore-errors -C libcache clean
+	make --ignore-errors -C tools clean
+	make --ignore-errors -C apps clean
 
 -include $(DEPS) 
