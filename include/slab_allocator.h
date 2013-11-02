@@ -114,7 +114,7 @@ private:
 
 	linked_obj_list list;
 	// the current size of memory used by the allocator.
-	long curr_size;
+	atomic_number<long> curr_size;
 	bool init;
 	bool pinned;
 
@@ -138,23 +138,7 @@ public:
 	slab_allocator(const std::string &name, int _obj_size, long _increase_size,
 			// We allow pages to be pinned when allocated.
 			long _max_size, int _node_id, bool init = false, bool pinned = false,
-			int _local_buf_size = LOCAL_BUF_SIZE): obj_size(
-				_obj_size), increase_size(ROUNDUP_PAGE(_increase_size)),
-			max_size(_max_size), node_id(_node_id), local_buf_size(_local_buf_size)
-#ifdef MEMCHECK
-		, allocator(obj_size)
-#endif
-	{
-		// To make each name unique.
-		this->name = name + "-" + itoa(alloc_counter.inc(1));
-		this->init = init;
-		this->pinned = pinned;
-		curr_size = 0;
-		assert((unsigned) obj_size >= sizeof(linked_obj));
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-		pthread_key_create(&local_buf_key, NULL);
-		pthread_key_create(&local_free_key, NULL);
-	}
+			int _local_buf_size = LOCAL_BUF_SIZE);
 
 	virtual ~slab_allocator();
 
@@ -182,6 +166,14 @@ public:
 
 	long get_max_size() const {
 		return max_size;
+	}
+
+	long get_curr_size() const {
+		return curr_size.get();
+	}
+
+	const std::string &get_name() const {
+		return name;
 	}
 };
 
