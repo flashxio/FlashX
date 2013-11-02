@@ -12,7 +12,6 @@ bool is_debug_enabled()
 
 static void enable_debug_handler(int sig, siginfo_t *si, void *uc)
 {
-	enable_debug = true;
 	printf("debug mode is enabled\n");
 	debug.run();
 }
