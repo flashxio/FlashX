@@ -523,7 +523,8 @@ part_io_process_table::part_io_process_table(
 		group.id = node_id;
 		group.cache = cache_conf->create_cache_on_node(node_id,
 				MAX_NUM_FLUSHES_PER_FILE * num_ssds / config->get_num_caches());
-		group.msg_allocator = new slab_allocator(NUMA_MSG_SIZE,
+		group.msg_allocator = new slab_allocator(std::string("msg_allocator-")
+				+ itoa(node_id), NUMA_MSG_SIZE,
 				NUMA_MSG_SIZE * 128, INT_MAX, node_id);
 		groups.insert(std::pair<int, struct thread_group>(node_id, group));
 

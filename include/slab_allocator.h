@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "concurrency.h"
 #include "aligned_allocator.h"
 #include "parameters.h"
 #include "container.h"
@@ -127,13 +128,16 @@ private:
 	// added the main buffer.
 	pthread_key_t local_free_key;
 
+	std::string name;
+	static atomic_integer alloc_counter;
+
 #ifdef MEMCHECK
 	aligned_allocator allocator;
 #endif
 public:
-	slab_allocator(int _obj_size, long _increase_size, long _max_size,
+	slab_allocator(const std::string &name, int _obj_size, long _increase_size,
 			// We allow pages to be pinned when allocated.
-			int _node_id, bool init = false, bool pinned = false,
+			long _max_size, int _node_id, bool init = false, bool pinned = false,
 			int _local_buf_size = LOCAL_BUF_SIZE): obj_size(
 				_obj_size), increase_size(ROUNDUP_PAGE(_increase_size)),
 			max_size(_max_size), node_id(_node_id), local_buf_size(_local_buf_size)
@@ -141,6 +145,8 @@ public:
 		, allocator(obj_size)
 #endif
 	{
+		// To make each name unique.
+		this->name = name + "-" + itoa(alloc_counter.inc(1));
 		this->init = init;
 		this->pinned = pinned;
 		curr_size = 0;
@@ -203,11 +209,12 @@ class obj_allocator: public slab_allocator
 {
 	obj_initiator<T> *initiator;
 public:
-	obj_allocator(int node_id, long increase_size, long max_size = MAX_SIZE,
+	obj_allocator(const std::string &name, int node_id, long increase_size,
+			long max_size = MAX_SIZE,
 			obj_initiator<T> *initiator = new default_obj_initiator<T>(
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
-				)): slab_allocator(sizeof(T) + sizeof(slab_allocator::linked_obj),
+				)): slab_allocator(name, sizeof(T) + sizeof(slab_allocator::linked_obj),
 				increase_size, max_size, node_id, true) {
 		assert(increase_size <= max_size);
 		this->initiator = initiator;

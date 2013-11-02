@@ -90,6 +90,7 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 				objs = (char *) numa_alloc_local(increase_size);
 			else
 				objs = (char *) numa_alloc_onnode(increase_size, node_id);
+			assert(objs);
 #ifdef USE_IOAT
 			if (pinned) {
 				int ret = mlock(objs, increase_size);
@@ -158,3 +159,4 @@ void slab_allocator::free(char **objs, int nobjs) {
 #endif
 }
 
+atomic_integer slab_allocator::alloc_counter;

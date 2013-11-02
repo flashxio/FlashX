@@ -40,7 +40,8 @@ remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &re
 	num_ios.inc(1);
 	this->io_threads = remotes;
 	// TODO I need to deallocate it later.
-	msg_allocator = new slab_allocator(IO_MSG_SIZE * sizeof(io_request),
+	msg_allocator = new slab_allocator(std::string("disk_msg_allocator-")
+			+ itoa(node_id), IO_MSG_SIZE * sizeof(io_request),
 			IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, node_id);
 	senders.resize(remotes.size());
 	low_prio_senders.resize(remotes.size());

@@ -4,7 +4,8 @@ const long SHRINK_NPAGES = 1024;
 const long INCREASE_SIZE = 1024 * 1024 * 128;
 
 memory_manager::memory_manager(
-		long max_size, int node_id): slab_allocator(PAGE_SIZE,
+		long max_size, int node_id): slab_allocator(
+			std::string("mem_manager-") + itoa(node_id), PAGE_SIZE,
 			INCREASE_SIZE <= max_size ? INCREASE_SIZE : max_size,
 			// We don't initialize pages but we pin pages.
 			max_size, node_id, false, true) {

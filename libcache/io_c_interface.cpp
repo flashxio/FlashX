@@ -332,8 +332,8 @@ struct buf_pool
 struct buf_pool *create_buf_pool(int obj_size, long pool_size, int node_id)
 {
 	struct buf_pool *pool = new struct buf_pool;
-	pool->alloc = new slab_allocator(obj_size, obj_size * 1000,
-			pool_size, node_id);
+	pool->alloc = new slab_allocator(std::string("buf_pool-") + itoa(node_id),
+			obj_size, obj_size * 1000, pool_size, node_id);
 	pool->entry_size = obj_size;
 	return pool;
 }
