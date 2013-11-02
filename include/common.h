@@ -82,44 +82,6 @@ static inline std::string itoa(int n)
 	return buf;
 }
 
-template<class T>
-void rand_permute_array(T arr[], int num)
-{
-	for (int i = num - 1; i >= 1; i--) {
-		int j = random() % i;
-		T tmp = arr[j];
-		arr[j] = arr[i];
-		arr[i] = tmp;
-	}
-}
-
-class rand_permute
-{
-	off_t *offset;
-	long num;
-
-public:
-	/**
-	 * @start: the index of the first entry.
-	 */
-	rand_permute(long num, int stride, long start) {
-		offset = new off_t[num];
-		for (int i = 0; i < num; i++) {
-			offset[i] = ((off_t) i) * stride + start * stride;
-		}
-
-		rand_permute_array(offset, num);
-	}
-
-	~rand_permute() {
-		delete [] offset;
-	}
-
-	off_t get_offset(long idx) const {
-		return offset[idx];
-	}
-};
-
 long str2size(std::string str);
 
 bool check_read_content(char *buf, int size, off_t off);
