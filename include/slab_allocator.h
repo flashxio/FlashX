@@ -177,8 +177,6 @@ public:
 	}
 };
 
-const static long MAX_SIZE = 0x7fffffffffffffffL;
-
 template<class T>
 class obj_initiator
 {
@@ -202,7 +200,7 @@ class obj_allocator: public slab_allocator
 	obj_initiator<T> *initiator;
 public:
 	obj_allocator(const std::string &name, int node_id, long increase_size,
-			long max_size = MAX_SIZE,
+			long max_size = INT_MAX,
 			obj_initiator<T> *initiator = new default_obj_initiator<T>(
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
