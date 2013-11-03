@@ -36,11 +36,9 @@ void triangle_vertex::run(graph_engine &graph, const ext_mem_vertex vertices[],
 	}
 
 	int num_local_triangles = 0;
-	this->is_edge_list_sorted(edge_type::IN_EDGE);
 	for (int i = 0; i < num; i++) {
 		const ext_mem_vertex *v = vertices + i;
 		int k, l;
-		v->is_edge_list_sorted(edge_type::OUT_EDGE);
 		for (k = 0, l = 0; k < this->get_num_edges(edge_type::IN_EDGE)
 				&& l < v->get_num_edges(edge_type::OUT_EDGE); k++, l++) {
 			vertex_id_t this_neighbor = this->get_neighbor(
