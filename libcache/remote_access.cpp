@@ -33,7 +33,8 @@ void remote_disk_access::notify_completion(io_request *reqs[], int num)
 remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
 		file_mapper *mapper, thread *t, int max_reqs): io_interface(
 			// TODO I hope the queue size is large enough.
-			t), max_disk_cached_reqs(max_reqs), complete_queue(t->get_node_id(),
+			t), max_disk_cached_reqs(max_reqs), complete_queue(std::string(
+					"disk_complete_queue-") + itoa(t->get_node_id()), t->get_node_id(),
 				COMPLETE_QUEUE_SIZE)
 {
 	int node_id = t->get_node_id();

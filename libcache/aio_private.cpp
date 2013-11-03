@@ -267,7 +267,8 @@ class aio_complete_thread: public thread
 	thread_safe_FIFO_queue<thread_callback_s *> completed_reqs;
 public:
 	aio_complete_thread(int node_id): thread(std::string("aio_complete")
-			+ itoa(node_id), node_id), completed_reqs(node_id, 10240) {
+			+ itoa(node_id), node_id), completed_reqs(
+			std::string("aio_complete_queue-") + itoa(node_id), node_id, 10240) {
 	}
 	void run() {
 		int num = completed_reqs.get_num_entries();

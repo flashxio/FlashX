@@ -11,6 +11,7 @@
 #include <string>
 
 #include "common.h"
+#include "debugger.h"
 
 /**
  * this is a first-in-first-out queue.
@@ -187,6 +188,21 @@ public:
 	}
 };
 
+template<class T>
+class thread_safe_FIFO_queue;
+
+template<class T>
+class print_queue_task: public debug_task
+{
+	thread_safe_FIFO_queue<T> *q;
+public:
+	print_queue_task(thread_safe_FIFO_queue<T> *q) {
+		this->q = q;
+	}
+
+	void run();
+};
+
 /**
  * this is a thread-safe FIFO queue.
  * It supports bulk operations.
@@ -200,32 +216,38 @@ class thread_safe_FIFO_queue: public fifo_queue<T>
 	 */
 	pthread_spinlock_t _lock;
 	int max_size;
+	std::string name;
 
 public:
-	thread_safe_FIFO_queue(int node_id, int size): fifo_queue<T>(node_id, size,
-			false) {
+	thread_safe_FIFO_queue(const std::string &name, int node_id,
+			int size): fifo_queue<T>(node_id, size, false) {
+		this->name = name;
 		this->max_size = size;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
+		debug.register_task(new print_queue_task<T>(this));
 	}
 
-	thread_safe_FIFO_queue(int node_id, int init_size,
+	thread_safe_FIFO_queue(const std::string &name, int node_id, int init_size,
 			int max_size): fifo_queue<T>(node_id, init_size,
 				max_size > init_size) {
+		this->name = name;
 		this->max_size = max_size;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
+		debug.register_task(new print_queue_task<T>(this));
 	}
 
 	virtual ~thread_safe_FIFO_queue() {
 		pthread_spin_destroy(&_lock);
 	}
 
-	static thread_safe_FIFO_queue<T> *create(int node_id, int size) {
+	static thread_safe_FIFO_queue<T> *create(const std::string &name,
+			int node_id, int size) {
 		void *addr;
 		if (node_id < 0)
 			addr = numa_alloc_local(sizeof(thread_safe_FIFO_queue<T>));
 		else
 			addr = numa_alloc_onnode(sizeof(thread_safe_FIFO_queue<T>), node_id);
-		return new(addr) thread_safe_FIFO_queue<T>(node_id, size);
+		return new(addr) thread_safe_FIFO_queue<T>(name, node_id, size);
 	}
 
 	static void destroy(thread_safe_FIFO_queue<T> *q) {
@@ -322,7 +344,19 @@ public:
 		pthread_spin_unlock(&_lock);
 		return ret;
 	}
+
+	const std::string &get_name() const {
+		return name;
+	}
 };
+
+template<class T>
+void print_queue_task<T>::run()
+{
+	printf("%s has %d entries with the size of %ld\n",
+			q->get_name().c_str(), q->get_num_entries(),
+			q->get_size() * sizeof(T));
+}
 
 /**
  * This FIFO queue can block the thread if

@@ -483,8 +483,11 @@ int global_cached_io::process_completed_requests(int num)
 
 global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 		page_cache *cache): io_interface(t), pending_requests(
+			std::string("pending_req_queue-") + itoa(underlying->get_node_id()),
 			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
-	complete_queue(underlying->get_node_id(), COMPLETE_QUEUE_SIZE, INT_MAX)
+	complete_queue(std::string("gcached_complete_queue-") + itoa(
+				underlying->get_node_id()), underlying->get_node_id(),
+			COMPLETE_QUEUE_SIZE, INT_MAX)
 {
 	assert(t == underlying->get_thread());
 	ext_allocator = new req_ext_allocator(underlying->get_node_id(),

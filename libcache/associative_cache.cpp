@@ -1113,6 +1113,7 @@ public:
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
 	associative_flusher(page_cache *cache, associative_cache *local_cache,
 			io_interface *io, int node_id): dirty_cells(
+				std::string("dirty_cells-") + itoa(io->get_node_id()),
 				io->get_node_id(), local_cache->get_num_cells()) {
 		this->node_id = node_id;
 		this->cache = cache;

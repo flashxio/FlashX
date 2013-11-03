@@ -337,12 +337,10 @@ class msg_queue: public thread_safe_FIFO_queue<message<T> >
 {
 	// TODO I may need to make sure all messages are compatible with the flag.
 	bool accept_inline;
-	const std::string name;
-
 public:
 	msg_queue(int node_id, const std::string _name, int init_size, int max_size,
-			bool accept_inline): thread_safe_FIFO_queue<message<T> >(node_id,
-				init_size, max_size), name(_name) {
+			bool accept_inline): thread_safe_FIFO_queue<message<T> >(_name,
+				node_id, init_size, max_size) {
 		this->accept_inline = accept_inline;
 	}
 
