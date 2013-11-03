@@ -641,6 +641,7 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		__complete_req(orig, p);
 
 		finalize_request(*orig);
+		req_allocator->free(orig);
 	}
 	return ret;
 }
