@@ -123,7 +123,8 @@ void remote_disk_access::access(io_request *requests, int num,
 
 	bool syncd = false;
 	for (int i = 0; i < num; i++) {
-		ASSERT_LTEQ(requests[i].get_size(), MIN_BLOCK_SIZE);
+		assert(requests[i].get_offset() % MIN_BLOCK_SIZE == 0);
+		assert(requests[i].get_size() % MIN_BLOCK_SIZE == 0);
 
 		if (requests[i].is_flush()) {
 			syncd = true;
