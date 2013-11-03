@@ -7,7 +7,7 @@
 
 #include <tr1/unordered_map>
 
-#include "../workload.h"
+#include "workload.h"
 
 bool histogram = true;
 

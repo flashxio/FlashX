@@ -19,15 +19,19 @@ SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 
-all: test_c_interface
+all: test_c_interface test_rand_io
 
 test_c_interface: test_c_interface.o ../libcache/libcache.a
 	$(CXX) -o test_c_interface test_c_interface.o $(LDFLAGS)
+
+test_rand_io: test_rand_io.o thread_private.o ../libcache/libcache.a
+	$(CXX) -o test_rand_io test_rand_io.o thread_private.o $(LDFLAGS)
 
 clean:
 	rm -f *.o
 	rm -f *.d
 	rm -f *~
 	rm -f test_c_interface
+	rm -f test_rand_io
 
 -include $(DEPS) 

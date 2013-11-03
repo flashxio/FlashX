@@ -59,3 +59,8 @@ echo "the basic test for parted global cached read on virtual SSDs."
 
 echo "the basic test for parted global cached IO under the TPCC workload on virtual SSDs."
 ./rand-read test/run_parted_cache_tpcc.txt test
+
+
+# failed test
+# The problem is that it fails to activate a thread.
+./rand-read test/run_parted_cache_tpcc.txt test io_depth=32

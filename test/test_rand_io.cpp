@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 3) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "read conf_file data_file [conf_key=conf_value]\n");
+		fprintf(stderr, "test_rand_io conf_file data_file [conf_key=conf_value]\n");
 
 		config.print_help();
 		params.print_help();

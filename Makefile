@@ -27,10 +27,7 @@ CC = gcc
 CXX = g++
 endif
 
-all: rand-read unit_test tools apps
-
-rand-read: $(OBJS) build_lib
-	$(CXX) -o rand-read $(OBJS) $(LDFLAGS)
+all: build_lib unit_test tools apps test
 
 build_lib:
 	$(MAKE) -C libcache
