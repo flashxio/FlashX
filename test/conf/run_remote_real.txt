@@ -1,0 +1,7 @@
+RAID_mapping=RAID0
+
+option=remote
+threads=32
+num_nodes=4
+buf_size=16777216
+root_conf=conf/data_files.txt

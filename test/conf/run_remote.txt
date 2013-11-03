@@ -1,7 +1,9 @@
 #virt_aio=
+verify_content=
+RAID_mapping=RAID0
 
 option=remote
-num_reqs=1048576
+num_reqs=10485760
 threads=16
 workload=RAND
 entry_size=4096
@@ -9,4 +11,4 @@ num_nodes=4
 access=read
 buf_size=16777216
 read_percent=100
-root_conf=conf/RAID_ROOT.txt
+root_conf=conf/data_files.txt

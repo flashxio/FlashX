@@ -13,29 +13,13 @@ endif
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
 LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -lprofiler -L../nbds.0.4.3/ -lnbds $(TRACE_FLAGS) -lrt -rdynamic
-UNITTEST = file_mapper_unit_test slab_allocator_test test_c_interface
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -I../include -g
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 
-all: $(UNITTEST)
-
-SAHT_unit_test: SAHT_unit_test.o ../SA_hash_table.o
-	$(CXX) -o SAHT_unit_test SAHT_unit_test.o ../SA_hash_table.o $(LDFLAGS)
-
-GClock_unit_test: GClock_unit_test.o
-	$(CXX) -o GClock_unit_test GClock_unit_test.o $(LDFLAGS)
-
-SA_expand_shrink_test: SA_expand_shrink_test.o
-	$(CXX) -o SA_expand_shrink_test SA_expand_shrink_test.o $(LDFLAGS)
-
-slab_allocator_test: slab_allocator_test.o
-	$(CXX) -o slab_allocator_test slab_allocator_test.o $(LDFLAGS)
-
-file_mapper_unit_test: file_mapper_unit_test.o
-	$(CXX) -o file_mapper_unit_test file_mapper_unit_test.o $(LDFLAGS)
+all: test_c_interface
 
 test_c_interface: test_c_interface.o ../libcache/libcache.a
 	$(CXX) -o test_c_interface test_c_interface.o $(LDFLAGS)
@@ -43,5 +27,7 @@ test_c_interface: test_c_interface.o ../libcache/libcache.a
 clean:
 	rm -f *.o
 	rm -f *.d
+	rm -f *~
+	rm -f test_c_interface
 
 -include $(DEPS) 

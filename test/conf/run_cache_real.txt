@@ -1,0 +1,11 @@
+cache_type=associative
+io_depth=1024
+cache_size=4G
+
+option=global_cache
+threads=32
+num_nodes=4
+buf_size=16777216
+root_conf=conf/data_files.txt
+#use_flusher=
+cache_large_write=
