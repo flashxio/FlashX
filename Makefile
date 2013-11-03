@@ -51,6 +51,7 @@ clean:
 	rm -f *.o
 	rm -f *~
 	rm -f include/*~
+	find -name core -delete
 	make --ignore-errors -C test clean
 	make --ignore-errors -C libcache clean
 	make --ignore-errors -C tools clean
