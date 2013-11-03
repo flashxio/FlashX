@@ -37,6 +37,9 @@ void *operator new(size_t n) throw (std::bad_alloc)
 
 void operator delete(void *p) throw ()
 {
+	if (p == NULL)
+		return;
+
 	alloc_objs.dec(1);
 	size_t *size = (size_t *) (((char *) p) - sizeof(size_t));
 	alloc_bytes.dec(*size);
@@ -56,6 +59,9 @@ void *operator new[](size_t n) throw (std::bad_alloc)
 
 void operator delete[](void *p) throw ()
 {
+	if (p == NULL)
+		return;
+
 	alloc_objs.dec(1);
 	size_t *size = (size_t *) (((char *) p) - sizeof(size_t));
 	alloc_bytes.dec(*size);
