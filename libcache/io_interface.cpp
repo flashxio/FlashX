@@ -17,6 +17,7 @@
 #include "cache_config.h"
 #include "disk_read_thread.h"
 #include "debugger.h"
+#include "mem_tracker.h"
 
 #define DEBUG
 
@@ -149,6 +150,10 @@ void debug_global_data::run()
 
 void init_io_system(const config_map &configs)
 {
+#ifdef ENABLE_MEM_TRACE
+	init_mem_tracker();
+#endif
+
 	params.init(configs.get_options());
 	params.print();
 
