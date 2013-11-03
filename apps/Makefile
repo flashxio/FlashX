@@ -62,6 +62,7 @@ clean:
 	rm -f *.o
 	rm -f *~
 	rm -f libgraph.a
+	find -name core -delete
 	$(MAKE) clean -C tools
 	$(MAKE) clean -C graph-bfs
 	$(MAKE) clean -C triangle-counting
