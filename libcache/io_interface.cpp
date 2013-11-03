@@ -36,15 +36,21 @@ struct global_data_collection
 
 #ifdef DEBUG
 	std::tr1::unordered_set<io_interface *> ios;
+	pthread_spinlock_t ios_lock;
 #endif
 
 	global_data_collection() {
 		pthread_mutex_init(&mutex, NULL);
+#ifdef DEBUG
+		pthread_spin_init(&ios_lock, PTHREAD_PROCESS_PRIVATE);
+#endif
 	}
 
 #ifdef DEBUG
 	void register_io(io_interface *io) {
+		pthread_spin_lock(&ios_lock);
 		ios.insert(io);
+		pthread_spin_unlock(&ios_lock);
 	}
 #endif
 };
@@ -142,8 +148,12 @@ void debug_global_data::run()
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++)
 		global_data.read_threads[i]->print_state();
 #ifdef DEBUG
+	pthread_spin_lock(&global_data.ios_lock);
+	std::tr1::unordered_set<io_interface *> ios = global_data.ios;
+	pthread_spin_unlock(&global_data.ios_lock);
+
 	for (std::tr1::unordered_set<io_interface *>::iterator it
-			= global_data.ios.begin(); it != global_data.ios.end(); it++)
+			= ios.begin(); it != ios.end(); it++)
 		(*it)->print_state();
 #endif
 }
