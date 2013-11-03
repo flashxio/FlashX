@@ -116,7 +116,8 @@ public:
 			int tot_length = length * repeats;
 			off_t *offsets = new off_t[tot_length];
 			permute_offsets(length, repeats, stride, 0, offsets);
-			permuted_offsets = thread_safe_FIFO_queue<off_t>::create(-1, tot_length);
+			permuted_offsets = thread_safe_FIFO_queue<off_t>::create(
+					std::string("permuted_offsets"), -1, tot_length);
 			int ret = permuted_offsets->add(offsets, tot_length);
 			assert(ret == tot_length);
 			delete offsets;
@@ -238,7 +239,8 @@ public:
 	file_workload(workload_t workloads[], long length, int thread_id,
 			int nthreads, int read_percent = -1): local_buf(-1, WORKLOAD_BUF_SIZE) {
 		if (workload_queue == NULL) {
-			workload_queue = thread_safe_FIFO_queue<workload_t>::create(-1, length);
+			workload_queue = thread_safe_FIFO_queue<workload_t>::create(
+					"file_workload_queue", -1, length);
 			if (read_percent >= 0) {
 				for (int i = 0; i < length; i++) {
 					if (random() % 100 < read_percent)
