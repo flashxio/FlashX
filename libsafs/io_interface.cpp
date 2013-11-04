@@ -319,6 +319,7 @@ public:
 io_interface *posix_io_factory::create_io(thread *t)
 {
 	file_mapper *mapper = global_data.raid_conf.create_file_mapper(get_name());
+	assert(mapper);
 	int num_files = mapper->get_num_files();
 	std::vector<int> indices;
 	for (int i = 0; i < num_files; i++)
@@ -347,6 +348,7 @@ io_interface *posix_io_factory::create_io(thread *t)
 io_interface *aio_factory::create_io(thread *t)
 {
 	file_mapper *mapper = global_data.raid_conf.create_file_mapper(get_name());
+	assert(mapper);
 	int num_files = mapper->get_num_files();
 	std::vector<int> indices;
 	for (int i = 0; i < num_files; i++)
@@ -366,6 +368,7 @@ remote_io_factory::remote_io_factory(const std::string &file_name): file_io_fact
 			file_name)
 {
 	mapper = global_data.raid_conf.create_file_mapper(get_name());
+	assert(mapper);
 	int num_files = mapper->get_num_files();
 	assert((int) global_data.read_threads.size() == num_files);
 
