@@ -1,7 +1,6 @@
 cache_type=associative
-#virt_aio=
-#verify_content=
-io_depth=1024
+virt_aio=
+verify_content=
 
 option=global_cache
 threads=32
