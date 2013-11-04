@@ -40,7 +40,6 @@ for (sort keys %devices) {
 	my $node_id = $host_ids{$host};
 
 	my $data_file = "$node_id:/mnt/ssd${dev_idx}/";
-	system("echo $data_file > conf/data_file${dev_idx}.txt");
 	print $fh "$data_file\n";
 
 	my $dev_file = "/dev/sd${dev}";
