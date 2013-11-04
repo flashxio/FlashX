@@ -7,10 +7,6 @@ TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
 LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -Llibcache -lcache -laio -lnuma -lrt
 CXXFLAGS = -g -O3 -Iinclude -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DPROFILER -DSTATISTICS
-ifdef USE_NBDS
-LDFLAGS += -Lnbds.0.4.3/ -lnbds
-CXXFLAGS += -Inbds.0.4.3/include/ -DUSE_NBDS
-endif
 CPPFLAGS := -MD
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)

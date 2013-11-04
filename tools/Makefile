@@ -8,7 +8,7 @@ CXX = g++
 endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
-CXXFLAGS = -g -O3 -I.. -I../include -I../nbds.0.4.3/include/ -std=c++0x $(TRACE_FLAGS)
+CXXFLAGS = -g -O3 -I.. -I../include -std=c++0x $(TRACE_FLAGS)
 CFLAGS = -g -O3 -I.. -I../include $(TRACE_FLAGS)
 
 LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -lrt

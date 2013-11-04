@@ -12,7 +12,7 @@ endif
 
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
-LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -lprofiler -L../nbds.0.4.3/ -lnbds $(TRACE_FLAGS) -lrt -rdynamic
+LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -lprofiler $(TRACE_FLAGS) -lrt -rdynamic
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -I../include -g
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
