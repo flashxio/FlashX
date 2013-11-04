@@ -12,7 +12,7 @@ endif
 
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
-LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio -lprofiler $(TRACE_FLAGS) -lrt -rdynamic
+LDFLAGS = -L../libsafs -lsafs -lpthread -lnuma -laio -lprofiler $(TRACE_FLAGS) -lrt -rdynamic
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -I../include -g
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -21,10 +21,10 @@ DEPS := $(patsubst %.o,%.d,$(OBJS))
 
 all: test_c_interface test_rand_io
 
-test_c_interface: test_c_interface.o ../libcache/libcache.a
+test_c_interface: test_c_interface.o ../libsafs/libsafs.a
 	$(CXX) -o test_c_interface test_c_interface.o $(LDFLAGS)
 
-test_rand_io: test_rand_io.o thread_private.o ../libcache/libcache.a
+test_rand_io: test_rand_io.o thread_private.o ../libsafs/libsafs.a
 	$(CXX) -o test_rand_io test_rand_io.o thread_private.o $(LDFLAGS)
 
 clean:

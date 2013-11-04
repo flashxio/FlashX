@@ -24,7 +24,7 @@ endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -L../../libcache -lcache -L.. -lgraph -laio -lnuma $(OMP_FLAG)
+LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -L../../libsafs -lsafs -L.. -lgraph -laio -lnuma $(OMP_FLAG)
 CXXFLAGS = -g -O3 -I../../include -I.. -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) $(OMP_FLAG)
 CPPFLAGS := -MD
 
@@ -46,12 +46,6 @@ all: triangle-counting
 
 triangle-counting: $(OBJS) ../libgraph.a
 	$(CXX) -o triangle-counting $(OBJS) $(LDFLAGS)
-
-build_lib:
-	make -C libcache
-
-unit_test: $(OBJS)
-	make -C test
 
 clean:
 	rm -f *.d

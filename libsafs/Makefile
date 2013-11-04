@@ -41,16 +41,16 @@ CC = gcc
 CXX = g++
 endif
 
-all: libcache
+all: libsafs
 
-libcache: $(OBJS)
-	rm -f libcache.a
-	ar -cvq libcache.a $(OBJS)
+libsafs: $(OBJS)
+	rm -f libsafs.a
+	ar -cvq libsafs.a $(OBJS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm libcache.a
+	rm libsafs.a
 
 -include $(DEPS) 

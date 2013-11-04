@@ -5,7 +5,7 @@ endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -Llibcache -lcache -laio -lnuma -lrt
+LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -laio -lnuma -lrt
 CXXFLAGS = -g -O3 -Iinclude -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DPROFILER -DSTATISTICS
 CPPFLAGS := -MD
 
@@ -26,7 +26,7 @@ endif
 all: build_lib unit_test tools apps test utils
 
 build_lib:
-	$(MAKE) -C libcache
+	$(MAKE) -C libsafs
 
 unit_test: build_lib
 ifndef MEMCHECK
@@ -53,7 +53,7 @@ clean:
 	find -name core -delete
 	make --ignore-errors -C unit-test clean
 	make --ignore-errors -C test clean
-	make --ignore-errors -C libcache clean
+	make --ignore-errors -C libsafs clean
 	make --ignore-errors -C tools clean
 	make --ignore-errors -C utils clean
 	make --ignore-errors -C apps clean
