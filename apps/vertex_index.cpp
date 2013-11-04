@@ -18,12 +18,14 @@
  */
 
 #include "common.h"
+#include "native_file.h"
 
 #include "vertex_index.h"
 
 vertex_index *vertex_index::load(const std::string &index_file)
 {
-	ssize_t size = get_file_size(index_file.c_str());
+	native_file local_f(index_file);
+	ssize_t size = local_f.get_size();
 	assert((unsigned) size >= sizeof(vertex_index));
 	char *buf = (char *) malloc(size);
 	FILE *fd = fopen(index_file.c_str(), "r");

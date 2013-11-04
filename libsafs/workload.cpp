@@ -19,6 +19,7 @@
 
 #include "workload.h"
 #include "common.h"
+#include "native_file.h"
 
 int workload_gen::default_entry_size = PAGE_SIZE;
 int workload_gen::default_access_method = -1;
@@ -53,7 +54,8 @@ off_t *load_java_dump(const std::string &file, long &num_offsets)
 	printf("%s's fd is %d\n", file.c_str(), fd);
 
 	/* get the file size */
-	long file_size = get_file_size(file.c_str());
+	native_file f(file);
+	long file_size = f.get_size();
 	assert(file_size % sizeof(off_t) == 0);
 
 	off_t *offsets = (off_t *) malloc(file_size);
@@ -84,7 +86,8 @@ workload_t *load_file_workload(const std::string &file, long &num)
 	printf("%s's fd is %d\n", file.c_str(), fd);
 
 	/* get the file size */
-	long file_size = get_file_size(file.c_str());
+	native_file f(file);
+	long file_size = f.get_size();
 	assert(file_size % sizeof(workload_t) == 0);
 
 	workload_t *workloads = (workload_t *) malloc(file_size);

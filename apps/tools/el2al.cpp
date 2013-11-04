@@ -26,6 +26,7 @@
 #endif
 
 #include "thread.h"
+#include "native_file.h"
 
 const int NUM_THREADS = 32;
 const int NUM_NODES = 4;
@@ -76,7 +77,8 @@ public:
 			perror("fopen");
 			assert(0);
 		}
-		file_size = get_file_size(file.c_str());
+		native_file local_f(file);
+		file_size = local_f.get_size();
 	}
 
 	~graph_file_io() {

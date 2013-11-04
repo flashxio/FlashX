@@ -37,6 +37,7 @@
 #include "disk_read_thread.h"
 #include "debugger.h"
 #include "mem_tracker.h"
+#include "native_file.h"
 
 #define DEBUG
 
@@ -426,7 +427,8 @@ file_io_factory *create_io_factory(const std::string &file_name,
 	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
 		std::string abs_path = global_data.raid_conf.get_disk(i).name
 			+ "/" + file_name;
-		if (!file_exist(abs_path.c_str())) {
+		native_file f(abs_path);
+		if (!f.exist()) {
 			fprintf(stderr, "the underlying file %s doesn't exist\n",
 					abs_path.c_str());
 			return NULL;
@@ -476,7 +478,8 @@ bool safs_file::exist() const
 	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
 		std::string abs_path = global_data.raid_conf.get_disk(i).name
 			+ "/" + file_name;
-		if (!::file_exist(abs_path.c_str()))
+		native_file f(abs_path);
+		if (!f.exist())
 			return false;
 	}
 	return true;
@@ -488,7 +491,8 @@ size_t safs_file::get_file_size() const
 	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
 		std::string abs_path = global_data.raid_conf.get_disk(i).name
 			+ "/" + file_name;
-		min_size = min<size_t>(min_size, ::get_file_size(abs_path.c_str()));
+		native_file f(abs_path);
+		min_size = min<size_t>(min_size, f.get_size());
 	}
 	return min_size * global_data.raid_conf.get_num_disks();
 }
@@ -502,7 +506,8 @@ bool safs_file::create_file(size_t file_size)
 	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
 		std::string abs_path = global_data.raid_conf.get_disk(i).name
 			+ "/" + file_name;
-		int ret = ::create_file(abs_path.c_str(), size_per_disk);
+		native_file f(abs_path);
+		int ret = f.create_file(size_per_disk);
 		if (!ret)
 			return false;
 	}
@@ -514,7 +519,8 @@ bool safs_file::delete_file()
 	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
 		std::string abs_path = global_data.raid_conf.get_disk(i).name
 			+ "/" + file_name;
-		int ret = ::delete_file(abs_path.c_str());
+		native_file f(abs_path);
+		int ret = f.delete_file();
 		if (!ret)
 			return false;
 	}
@@ -541,7 +547,8 @@ ssize_t file_io_factory::get_file_size() const
 	ssize_t file_size = 0;
 	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
 		std::string file_name = global_data.raid_conf.get_disk(i).name + "/" + name;
-		file_size += ::get_file_size(file_name.c_str());
+		native_file f(file_name);
+		file_size += f.get_size();
 	}
 	return file_size;
 }

@@ -21,10 +21,12 @@
 
 #include "graph.h"
 #include "common.h"
+#include "native_file.h"
 
 size_t read_edge_list(const std::string &file, std::vector<edge> &edge_vector)
 {
-	ssize_t file_size = get_file_size(file.c_str());
+	native_file local_f(file);
+	ssize_t file_size = local_f.get_size();
 	assert(file_size > (ssize_t) sizeof(edge));
 	assert(file_size % sizeof(edge) == 0);
 	int num_edges = file_size / sizeof(edge);

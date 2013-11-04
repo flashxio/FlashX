@@ -24,6 +24,7 @@
 #include <string>
 
 #include "io_interface.h"
+#include "native_file.h"
 
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
 const size_t DATA_SIZE = 10L * 1024 * 1024 * 1024;
@@ -70,7 +71,8 @@ public:
 			perror("open");
 			exit(-1);
 		}
-		file_size = get_file_size(ext_file.c_str());
+		native_file f(ext_file);
+		file_size = f.get_size();
 	}
 
 	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
