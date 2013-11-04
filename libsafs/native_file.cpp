@@ -11,9 +11,14 @@ ssize_t native_dir::read_all_files(std::vector<std::string> &files) const
 				strerror(errno));
 		return -1;
 	}
-	int len = offsetof(struct dirent, d_name) +
-		pathconf("dirpath", _PC_NAME_MAX) + 1;
-	struct dirent *entryp = (struct dirent *) malloc(len);
+	struct dirent *entryp;
+	long path_limit = pathconf(name.c_str(), _PC_NAME_MAX);
+	if (path_limit < 0) {
+		perror("pathconf");
+		path_limit = sizeof(entryp->d_name);
+	}
+	int len = offsetof(struct dirent, d_name) + path_limit + 1;
+	entryp = (struct dirent *) malloc(len);
 	struct dirent *result;
 	ssize_t num = 0;
 	while (true) {
