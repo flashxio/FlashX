@@ -29,7 +29,9 @@ ssize_t native_dir::read_all_files(std::vector<std::string> &files) const
 			break;
 
 		assert(result == entryp);
-		files.push_back(entryp->d_name);
+		std::string file = entryp->d_name;
+		if (file != "." && file != "..")
+			files.push_back(file);
 		num++;
 	}
 	free(entryp);
