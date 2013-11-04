@@ -23,7 +23,7 @@ CC = gcc
 CXX = g++
 endif
 
-all: build_lib unit_test tools apps test
+all: build_lib unit_test tools apps test utils
 
 build_lib:
 	$(MAKE) -C libcache
@@ -39,6 +39,9 @@ test: build_lib
 tools: build_lib
 	$(MAKE) -C tools
 
+utils: build_lib
+	$(MAKE) -C utils
+
 apps: build_lib
 	$(MAKE) -C apps
 
@@ -52,6 +55,7 @@ clean:
 	make --ignore-errors -C test clean
 	make --ignore-errors -C libcache clean
 	make --ignore-errors -C tools clean
+	make --ignore-errors -C utils clean
 	make --ignore-errors -C apps clean
 
 -include $(DEPS) 

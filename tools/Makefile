@@ -13,7 +13,7 @@ CFLAGS = -g -O3 -I.. -I../include $(TRACE_FLAGS)
 
 LDFLAGS = -L../libcache -lcache -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -lrt
 
-TARGETS = stat create_file create_files workload-gen memory-fill eval_expand_SA_cache verify_file print_file SAFS-util
+TARGETS = stat create_file create_files workload-gen memory-fill eval_expand_SA_cache verify_file print_file
 
 all: $(TARGETS)
 
@@ -46,9 +46,6 @@ verify_file: verify_file.o
 
 print_file: print_file.o ../libcache/libcache.a
 	$(CXX) -o print_file print_file.o $(LDFLAGS)
-
-SAFS-util: SAFS-util.o ../libcache/libcache.a
-	$(CXX) -o SAFS-util SAFS-util.o $(LDFLAGS)
 
 clean:
 	rm -f *.o
