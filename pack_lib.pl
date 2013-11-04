@@ -27,6 +27,7 @@ my $tmp_dir = "/tmp/$pack_name-v$version.$rand";
 my $pack_dir = "/$tmp_dir/$pack_name-v$version";
 
 system("mkdir -p $pack_dir");
+system("cp Makefile.SAFS $pack_dir/Makefile");
 for (my $i = 0; $i < @dirs; $i++) {
 	system("cp -R $dirs[$i] $pack_dir/$dirs[$i]");
 }
