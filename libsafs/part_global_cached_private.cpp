@@ -382,16 +382,16 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 
 	// The reply must be sent to the thread on a different node.
 	int num_sent;
-//	if (num_remote > NUMA_REPLY_CACHE_SIZE)
+	if (num_remote > NUMA_REPLY_CACHE_SIZE)
 		num_sent = get_reply_sender(node_id)->send(local_reply_buf.data(),
 				num_remote);
-//	else
-//		num_sent = get_reply_sender(node_id)->send_cached(
-//				local_reply_buf, num_remote);
+	else
+		num_sent = get_reply_sender(node_id)->send_cached(
+				local_reply_buf.data(), num_remote);
 	// We use blocking queues here, so the send must succeed.
 	assert(num_sent == num_remote);
-	assert(get_reply_sender(node_id)->get_num_remaining() == 0);
-	get_thread()->activate();
+	if (reply_queue->get_num_entries() > 0)
+		get_thread()->activate();
 	if (num_local > 0)
 		notify_upper(local_reqs, num_local);
 }
