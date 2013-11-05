@@ -130,6 +130,7 @@ private:
 	const long max_size;
 	const int node_id;
 	const int local_buf_size;
+	const bool thread_safe;
 
 	linked_obj_list list;
 	// the current size of memory used by the allocator.
@@ -157,7 +158,7 @@ public:
 	slab_allocator(const std::string &name, int _obj_size, long _increase_size,
 			// We allow pages to be pinned when allocated.
 			long _max_size, int _node_id, bool init = false, bool pinned = false,
-			int _local_buf_size = LOCAL_BUF_SIZE);
+			int _local_buf_size = LOCAL_BUF_SIZE, bool thread_safe = true);
 
 	virtual ~slab_allocator();
 

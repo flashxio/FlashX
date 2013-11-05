@@ -25,7 +25,7 @@ rand_buf::rand_buf(int buf_size, int entry_size, int nodeid)
 #else
 	// We don't initialize pages but pin them.
 	: allocator(std::string("rand_buf-") + itoa(nodeid), entry_size,
-			buf_size, buf_size, nodeid, false, true, 0)
+			buf_size, buf_size, nodeid, false, true, 0, false)
 #endif
 {
 	this->entry_size = entry_size;

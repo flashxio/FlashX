@@ -58,9 +58,10 @@ public:
 slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 		long _increase_size, long _max_size, int _node_id,
 		// We allow pages to be pinned when allocated.
-		bool init, bool pinned, int _local_buf_size): obj_size(
+		bool init, bool pinned, int _local_buf_size, bool _thread_safe): obj_size(
 			_obj_size), increase_size(ROUNDUP_PAGE(_increase_size)),
-		max_size(_max_size), node_id(_node_id), local_buf_size(_local_buf_size)
+		max_size(_max_size), node_id(_node_id), local_buf_size(_local_buf_size),
+		thread_safe(_thread_safe)
 #ifdef MEMCHECK
 		   , allocator(obj_size)
 #endif
@@ -142,9 +143,11 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 	int num = 0;
 
 	while (true) {
-		pthread_spin_lock(&lock);
+		if (thread_safe)
+			pthread_spin_lock(&lock);
 		linked_obj *o = list.pop(nobjs - num);
-		pthread_spin_unlock(&lock);
+		if (thread_safe)
+			pthread_spin_unlock(&lock);
 		while (o != NULL) {
 			objs[num++] = (char *) o;
 			o = o->get_next();
@@ -154,13 +157,15 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 
 		// This piece of code shouldn't be executed very frequently,
 		// otherwise, the performance can be pretty bad.
-		pthread_spin_lock(&lock);
+		if (thread_safe)
+			pthread_spin_lock(&lock);
 		if (curr_size.get() < max_size) {
 			// We should increase the current size in advance, so other threads
 			// can see what this thread is doing here.
 			curr_size.inc(increase_size);
 			tot_slab_size.inc(increase_size);
-			pthread_spin_unlock(&lock);
+			if (thread_safe)
+				pthread_spin_unlock(&lock);
 			char *objs;
 			if (node_id == -1)
 				objs = (char *) numa_alloc_local(increase_size);
@@ -185,13 +190,16 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 				*header = linked_obj();
 				tmp_list.add(header);
 			}
-			pthread_spin_lock(&lock);
+			if (thread_safe)
+				pthread_spin_lock(&lock);
 			alloc_bufs.push_back(objs);
 			list.add_list(&tmp_list);
-			pthread_spin_unlock(&lock);
+			if (thread_safe)
+				pthread_spin_unlock(&lock);
 		}
 		else {
-			pthread_spin_unlock(&lock);
+			if (thread_safe)
+				pthread_spin_unlock(&lock);
 			// If we can't allocate all objects, then free all objects that
 			// have been allocated, and return 0.
 			free(objs, num);
@@ -229,9 +237,11 @@ void slab_allocator::free(char **objs, int nobjs) {
 		*o = linked_obj();
 		tmp_list.add(o);
 	}
-	pthread_spin_lock(&lock);
+	if (thread_safe)
+		pthread_spin_lock(&lock);
 	list.add_list(&tmp_list);
-	pthread_spin_unlock(&lock);
+	if (thread_safe)
+		pthread_spin_unlock(&lock);
 #endif
 }
 
