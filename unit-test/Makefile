@@ -13,7 +13,7 @@ endif
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
 LDFLAGS = -L../libsafs -lsafs -lpthread -lnuma -laio -lprofiler $(TRACE_FLAGS) -lrt -rdynamic
-UNITTEST = file_mapper_unit_test slab_allocator_test test_mem_tracker
+UNITTEST = file_mapper_unit_test slab_allocator_test test_mem_tracker native_file_unit_test safs_file_unit_test
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -I../include -g
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -40,6 +40,12 @@ file_mapper_unit_test: file_mapper_unit_test.o $(LIBFILE)
 
 test_mem_tracker: test_mem_tracker.o $(LIBFILE)
 	$(CXX) -o test_mem_tracker test_mem_tracker.o $(LDFLAGS)
+
+native_file_unit_test: native_file_unit_test.o $(LIBFILE)
+	$(CXX) -o native_file_unit_test native_file_unit_test.o $(LDFLAGS)
+
+safs_file_unit_test: safs_file_unit_test.o $(LIBFILE)
+	$(CXX) -o safs_file_unit_test safs_file_unit_test.o $(LDFLAGS)
 
 clean:
 	rm -f *.o
