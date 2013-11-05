@@ -29,6 +29,8 @@
 #include <signal.h>
 #include <fcntl.h>
 
+#include <sstream>
+
 #include "common.h"
 #include "messaging.h"
 
@@ -231,4 +233,15 @@ int retrieve_data_files(std::string file_file,
 	}
 	fclose(fd);
 	return data_files.size();
+}
+
+int split_string(const std::string &str, char delim,
+		std::vector<std::string> &strs)
+{
+	std::stringstream ss(str);
+	std::string item;
+	while (std::getline(ss, item, delim)) {
+		strs.push_back(item);
+	}
+	return strs.size();
 }

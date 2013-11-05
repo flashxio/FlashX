@@ -65,6 +65,10 @@ public:
 		return S_ISDIR(stats.st_mode);
 	}
 
+	const std::string &get_name() const {
+		return file_name;
+	}
+
 	/**
 	 * Create/delete a file on the native file system.
 	 * If succeed, return 1; otherwise, return 0.
@@ -113,7 +117,14 @@ public:
 		return f.exist();
 	}
 
+	const std::string &get_name() const {
+		return name;
+	}
+
 	ssize_t read_all_files(std::vector<std::string> &files) const;
+
+	bool create_dir(bool recursive);
+	bool delete_dir(bool recursive);
 };
 
 #endif

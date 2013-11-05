@@ -25,6 +25,7 @@
 
 #include "io_interface.h"
 #include "native_file.h"
+#include "safs_file.h"
 
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
 const size_t DATA_SIZE = 10L * 1024 * 1024 * 1024;
@@ -246,7 +247,7 @@ void comm_create_file(int argc, char *argv[])
 
 	std::string file_name = argv[0];
 	size_t file_size = str2size(argv[1]);
-	safs_file file(file_name);
+	safs_file file(get_sys_RAID_conf(), file_name);
 	file.create_file(file_size);
 	printf("create file %s of %ld bytes\n", file_name.c_str(),
 			file.get_file_size());

@@ -178,6 +178,11 @@ void debug_global_data::run()
 #endif
 }
 
+const RAID_config &get_sys_RAID_conf()
+{
+	return global_data.raid_conf;
+}
+
 void init_io_system(const config_map &configs)
 {
 #ifdef ENABLE_MEM_TRACE
@@ -474,60 +479,6 @@ file_io_factory *create_io_factory(const std::string &file_name,
 void destroy_io_factory(file_io_factory *factory)
 {
 	delete factory;
-}
-
-bool safs_file::exist() const
-{
-	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
-		std::string abs_path = global_data.raid_conf.get_disk(i).name
-			+ "/" + file_name;
-		native_file f(abs_path);
-		if (!f.exist())
-			return false;
-	}
-	return true;
-}
-
-size_t safs_file::get_file_size() const
-{
-	size_t min_size = LONG_MAX;
-	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
-		std::string abs_path = global_data.raid_conf.get_disk(i).name
-			+ "/" + file_name;
-		native_file f(abs_path);
-		min_size = min<size_t>(min_size, f.get_size());
-	}
-	return min_size * global_data.raid_conf.get_num_disks();
-}
-
-bool safs_file::create_file(size_t file_size)
-{
-	size_t size_per_disk = file_size / global_data.raid_conf.get_num_disks();
-	if (file_size % global_data.raid_conf.get_num_disks() > 0)
-		size_per_disk++;
-
-	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
-		std::string abs_path = global_data.raid_conf.get_disk(i).name
-			+ "/" + file_name;
-		native_file f(abs_path);
-		int ret = f.create_file(size_per_disk);
-		if (!ret)
-			return false;
-	}
-	return true;
-}
-
-bool safs_file::delete_file()
-{
-	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
-		std::string abs_path = global_data.raid_conf.get_disk(i).name
-			+ "/" + file_name;
-		native_file f(abs_path);
-		int ret = f.delete_file();
-		if (!ret)
-			return false;
-	}
-	return true;
 }
 
 void print_io_thread_stat()

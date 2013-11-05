@@ -103,6 +103,9 @@ static inline std::string itoa(int n)
 
 long str2size(std::string str);
 
+int split_string(const std::string &str, char delim,
+		std::vector<std::string> &strs);
+
 bool check_read_content(char *buf, int size, off_t off);
 void create_write_data(char *buf, int size, off_t off);
 
