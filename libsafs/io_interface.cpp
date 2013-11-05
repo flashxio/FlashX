@@ -38,6 +38,7 @@
 #include "debugger.h"
 #include "mem_tracker.h"
 #include "native_file.h"
+#include "safs_file.h"
 
 #define DEBUG
 
@@ -498,13 +499,8 @@ void print_io_thread_stat()
 
 ssize_t file_io_factory::get_file_size() const
 {
-	ssize_t file_size = 0;
-	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
-		std::string file_name = global_data.raid_conf.get_disk(i).name + "/" + name;
-		native_file f(file_name);
-		file_size += f.get_size();
-	}
-	return file_size;
+	safs_file f(global_data.raid_conf, name);
+	return f.get_file_size();
 }
 
 atomic_integer io_interface::io_counter;
