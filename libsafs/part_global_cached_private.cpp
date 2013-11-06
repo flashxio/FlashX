@@ -159,6 +159,14 @@ public:
 		return num_groups;
 	}
 
+	int get_num_threads() const {
+		int nthreads = 0;
+		for (std::map<int, struct thread_group>::const_iterator it
+				= groups.begin(); it != groups.end(); it++)
+			nthreads += it->second.process_request_threads.size();
+		return nthreads;
+	}
+
 	std::set<int> get_node_ids() const {
 		std::set<int> node_ids;
 		for (std::map<int, struct thread_group>::const_iterator it
@@ -166,6 +174,12 @@ public:
 			node_ids.insert(it->first);
 		return node_ids;
 	}
+
+	/**
+	 * Print the statistics info of request processing threads.
+	 * `nthreads': the number of user threads.
+	 */
+	void print_stat(int num_user_threads);
 
 	void print_state() {
 		for (std::map<int, struct thread_group>::iterator it
@@ -600,6 +614,47 @@ void part_io_process_table::destroy_req_senders(
 	}
 }
 
+void part_io_process_table::print_stat(int num_user_threads)
+{
+	int tot_gcached_ios = num_user_threads + get_num_threads();
+	std::set<int> node_ids = get_node_ids();
+
+	printf("\n");
+	for (std::set<int>::const_iterator it = node_ids.begin();
+			it != node_ids.end(); it++) {
+		int node_id = *it;
+		const struct thread_group *group = get_thread_group(node_id);
+		printf("cache on node %d\n", group->id);
+		group->cache->print_stat();
+	}
+	printf("\n");
+	for (std::set<int>::const_iterator it = node_ids.begin();
+			it != node_ids.end(); it++) {
+		int node_id = *it;
+		const struct thread_group *group = get_thread_group(node_id);
+		for (size_t i = 0; i < group->process_request_threads.size(); i++) {
+			process_request_thread *thread = (process_request_thread *) group
+				->process_request_threads[i];
+			thread->get_io()->print_stat(tot_gcached_ios);
+		}
+	}
+	printf("\n");
+	for (std::set<int>::const_iterator it = node_ids.begin();
+			it != node_ids.end(); it++) {
+		int node_id = *it;
+		const struct thread_group *group = get_thread_group(node_id);
+		int tot_group_hits = 0;
+		for (size_t i = 0; i < group->process_request_threads.size(); i++) {
+			process_request_thread *thread = (process_request_thread *) group
+				->process_request_threads[i];
+			printf("group %d thread %ld gets %ld requests\n", group->id, i,
+					thread->get_num_requests());
+			tot_group_hits += thread->get_cache_hits();
+		}
+		printf("group %d gets %d hits\n", group->id, tot_group_hits);
+	}
+}
+
 int part_global_cached_io::init()
 {
 	underlying->init();
@@ -817,41 +872,15 @@ void part_global_cached_io::print_stat(int nthreads)
 {
 	static long tot_remote_reads = 0;
 	static int seen_threads = 0;
-	static int tot_hits = 0;
-	static int tot_fast_process = 0;
 	tot_remote_reads += remote_reads;
 	seen_threads++;
-	tot_hits += underlying->get_cache_hits();
-	tot_fast_process += underlying->get_num_fast_process();
+	int tot_gcached_ios = nthreads + global_table->get_num_threads();
+	underlying->print_stat(tot_gcached_ios);
+
 	if (seen_threads == nthreads) {
-		printf("there are %ld requests sent to the remote nodes\n",
+		printf("part_global_cached_io: in total, there are %ld requests sent to the remote nodes\n",
 				tot_remote_reads);
-		std::set<int> node_ids = global_table->get_node_ids();
-		for (std::set<int>::const_iterator it = node_ids.begin();
-				it != node_ids.end(); it++) {
-			int node_id = *it;
-			const struct thread_group *group = global_table->get_thread_group(node_id);
-			printf("cache on node %d\n", group->id);
-			group->cache->print_stat();
-		}
-		for (std::set<int>::const_iterator it = node_ids.begin();
-				it != node_ids.end(); it++) {
-			int node_id = *it;
-			const struct thread_group *group = global_table->get_thread_group(node_id);
-			int tot_group_hits = 0;
-			for (size_t i = 0; i < group->process_request_threads.size(); i++) {
-				process_request_thread *thread = (process_request_thread *) group
-					->process_request_threads[i];
-				printf("group %d thread %ld gets %ld requests\n", group->id, i,
-						thread->get_num_requests());
-				tot_group_hits += thread->get_cache_hits();
-				tot_fast_process += thread->get_num_fast_process();
-			}
-			printf("group %d gets %d hits\n", group->id, tot_group_hits);
-			tot_hits += tot_group_hits;
-		}
-		printf("There are %d cache hits\n", tot_hits);
-		printf("There are %d requests processed in the fast path\n", tot_fast_process);
+		global_table->print_stat(nthreads);
 	}
 }
 #endif

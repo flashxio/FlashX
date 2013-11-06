@@ -192,17 +192,16 @@ public:
 		tot_accesses += num_accesses;
 		tot_hits += cache_hits;
 		tot_fast_process += num_fast_process;
+		printf("global_cached_io: %d requests are completed from the underlying io\n",
+				num_from_underlying.get());
+		printf("global_cached_io: There are %d evicted dirty pages\n", num_evicted_dirty_pages);
 		if (seen_threads == nthreads) {
-			printf("There are %ld accessed bytes\n", tot_bytes);
-			printf("there are %ld accesses in pages and %ld cache hits\n",
-					tot_accesses, tot_hits);
-			printf("There are %ld requests processed in the fast path\n",
-					tot_fast_process);
+			printf("global_cached_io: in total, there are %ld accessed bytes, %ld pages\n",
+					tot_bytes, tot_accesses);
+			printf("and there are %ld cache hits and %ld processed in the fast path\n",
+					tot_hits, tot_fast_process);
 			global_cache->print_stat();
 		}
-		printf("%d requests are completed from the underlying io\n",
-				num_from_underlying.get());
-		printf("There are %d evicted dirty pages\n", num_evicted_dirty_pages);
 	}
 #endif
 
