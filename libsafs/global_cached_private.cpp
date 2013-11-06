@@ -263,18 +263,18 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 }
 
 /**
- * This method is to finalize the request. The processing of the request
- * ends here.
+ * This method is to finalize the request. The request may be a partial
+ * request. It has to be allocated from a slab allocator.
  */
-void global_cached_io::finalize_request(io_request &req)
+void global_cached_io::finalize_request(io_request *req)
 {
 	// It's possible that the request is just a partial request.
-	if (req.is_partial()) {
-		io_request *original = req.get_orig();
+	if (req->is_partial()) {
+		io_request *original = req->get_orig();
 		assert(original);
 		assert(original->get_orig() == NULL);
 		original->inc_complete_count();
-		if (original->complete_size(req.get_size())) {
+		if (original->complete_size(req->get_size())) {
 			if (original->is_sync())
 				((global_cached_io *) get_io(original))->wakeup_on_req(original, IO_OK);
 			else {
@@ -289,13 +289,14 @@ void global_cached_io::finalize_request(io_request &req)
 			original->dec_complete_count();
 	}
 	else {
-		assert(req.get_orig() == NULL);
-		if (req.is_sync())
-			((global_cached_io *) get_io(&req))->wakeup_on_req(&req, IO_OK);
+		assert(req->get_orig() == NULL);
+		if (req->is_sync())
+			((global_cached_io *) get_io(req))->wakeup_on_req(req, IO_OK);
 		else {
 			num_completed_areqs.inc(1);
-			::notify_completion(this, &req);
+			::notify_completion(this, req);
 		}
+		req_allocator->free(req);
 	}
 }
 
@@ -581,9 +582,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 					dirty_pages.push_back(dirty);
 				p->unlock();
 				ret = PAGE_SIZE;
-				finalize_request(*orig);
-				// Now we can delete it.
-				req_allocator->free(orig);
+				finalize_request(orig);
 			}
 		}
 		else {
@@ -611,9 +610,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 		if (dirty)
 			dirty_pages.push_back(dirty);
 		ret = orig->get_size();
-		finalize_request(*orig);
-		// Now we can delete it.
-		req_allocator->free(orig);
+		finalize_request(orig);
 	}
 	return ret;
 }
@@ -656,8 +653,7 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 		ret = orig->get_size();
 		__complete_req(orig, p);
 
-		finalize_request(*orig);
-		req_allocator->free(orig);
+		finalize_request(orig);
 	}
 	return ret;
 }
