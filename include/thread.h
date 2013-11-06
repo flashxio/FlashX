@@ -82,17 +82,22 @@ public:
 	}
 
 	void activate() {
+		bool sleeping;
 		pthread_mutex_lock(&mutex);
 		_is_activated = true;
+		sleeping = _is_sleeping;
 		pthread_mutex_unlock(&mutex);
-		pthread_cond_signal(&cond);
+		if (sleeping)
+			pthread_cond_signal(&cond);
 	}
 
 	void wait() {
 		pthread_mutex_lock(&mutex);
 		if (!_is_activated) {
 			while (!_is_activated && _is_running) {
+				_is_sleeping = true;
 				int ret = pthread_cond_wait(&cond, &mutex);
+				_is_sleeping = false;
 				if (ret)
 					perror("pthread_cond_wait");
 			}
