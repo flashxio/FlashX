@@ -31,7 +31,7 @@ CFLAGS = -g -I../include $(TRACE_FLAGS)
 
 LDFLAGS = -L../libsafs -lsafs -lpthread -lnuma -laio -lprofiler $(TRACE_FLAGS) -lrt -rdynamic
 CPPFLAGS := -MD
-CXXFLAGS = -I.. -I../include -g
+CXXFLAGS = -I.. -I../include -g -O3 -Wall -std=c++0x -DPROFILER -DSTATISTICS $(TRACE_FLAGS) $(CLANG_FLAGS)
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
