@@ -252,7 +252,6 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		else {
 			num_completed_areqs.inc(1);
 			::notify_completion(this, orig);
-			get_thread()->activate();
 		}
 		orig->dec_complete_count();
 		orig->wait4unref();
@@ -281,7 +280,6 @@ void global_cached_io::finalize_request(io_request &req)
 			else {
 				num_completed_areqs.inc(1);
 				::notify_completion(this, original);
-				get_thread()->activate();
 			}
 			original->dec_complete_count();
 			original->wait4unref();
@@ -296,7 +294,6 @@ void global_cached_io::finalize_request(io_request &req)
 			((global_cached_io *) get_io(&req))->wakeup_on_req(&req, IO_OK);
 		else {
 			num_completed_areqs.inc(1);
-			get_thread()->activate();
 			::notify_completion(this, &req);
 		}
 	}
