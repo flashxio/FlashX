@@ -1,5 +1,3 @@
-#virt_aio=
-verify_content=
 RAID_mapping=RAID0
 
 option=remote
