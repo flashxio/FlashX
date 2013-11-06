@@ -380,7 +380,6 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 	io_request *local_reqs[num];
 	// This buffer is used for sending replies.
 	stack_array<io_reply> local_reply_buf(num);
-	int node_id = local_group->id;
 	int num_remote = 0;
 	int num_local = 0;
 
@@ -396,6 +395,7 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 
 	// The reply must be sent to the thread on a different node.
 	int num_sent;
+	int node_id = thread::get_curr_thread()->get_node_id();
 	if (num_remote > NUMA_REPLY_CACHE_SIZE)
 		num_sent = get_reply_sender(node_id)->send(local_reply_buf.data(),
 				num_remote);
