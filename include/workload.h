@@ -45,6 +45,38 @@ typedef struct workload_type
 	int read: 1;
 } workload_t;
 
+class workload_pack
+{
+	workload_t *queue_ptr;
+	int curr;
+	int size;
+public:
+	workload_pack() {
+		queue_ptr = NULL;
+		curr = 0;
+		size = 0;
+	}
+
+	workload_pack(workload_t *workloads, int num) {
+		queue_ptr = new workload_t[num];
+		memcpy(queue_ptr, workloads, sizeof(*queue_ptr) * num);
+		curr = 0;
+		size = num;
+	}
+
+	bool is_empty() const {
+		return curr == size;
+	}
+
+	workload_t pop_front() {
+		return queue_ptr[curr++];
+	}
+
+	int get_num_remaining() const {
+		return size - curr;
+	}
+};
+
 class workload_gen
 {
 	workload_t access;
@@ -304,6 +336,72 @@ public:
 	virtual void print_state() {
 		printf("file workload has %d global works and %d local works\n",
 				workload_queue->get_num_entries(), local_buf.get_num_entries());
+	}
+};
+
+class dynamic_rand_workload: public workload_gen
+{
+	static thread_safe_FIFO_queue<workload_pack> *workload_queue;
+	static int pack_size;
+	workload_pack local_pack;
+	workload_t curr;
+public:
+	static void create_workload(long length, int stride, int read_percent) {
+		if (workload_queue == NULL) {
+			workload_t *workloads = new workload_t[length];
+			for (int i = 0; i < length; i++) {
+				workloads[i].off = (random() % length) * stride;
+				workloads[i].size = get_default_entry_size();
+				workloads[i].read = random() % 100 < read_percent;
+			}
+			workload_queue = thread_safe_FIFO_queue<workload_pack>::create(
+					"rand_workload_queue", -1,
+					(length + pack_size - 1) / pack_size);
+
+			long curr = 0;
+			while (curr < length) {
+				workload_pack pack(workloads + curr, min(pack_size,
+							length - curr));
+				curr += pack.get_num_remaining();
+				int ret = workload_queue->add(&pack, 1);
+				assert(ret == 1);
+			}
+			delete [] workloads;
+		}
+	}
+
+	dynamic_rand_workload() {
+		assert(workload_queue);
+	}
+
+	virtual ~dynamic_rand_workload() {
+		if (workload_queue) {
+			thread_safe_FIFO_queue<workload_pack>::destroy(workload_queue);
+			workload_queue = NULL;
+		}
+	}
+
+	const workload_t &next() {
+		assert(!local_pack.is_empty());
+		curr = local_pack.pop_front();
+		return curr;
+	}
+
+	off_t next_offset() {
+		assert(!local_pack.is_empty());
+		workload_t acc = local_pack.pop_front();
+		return acc.off;
+	}
+
+	bool has_next() {
+		if (local_pack.is_empty()) {
+			int ret = workload_queue->fetch(&local_pack, 1);
+			if (ret == 1)
+				assert(!local_pack.is_empty());
+			return ret == 1;
+		}
+		else
+			return true;
 	}
 };
 

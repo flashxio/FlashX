@@ -112,3 +112,6 @@ template class thread_safe_FIFO_queue<workload_t>;
 
 thread_safe_FIFO_queue<off_t> *global_rand_permute_workload::permuted_offsets;
 thread_safe_FIFO_queue<workload_t> *file_workload::workload_queue;
+
+thread_safe_FIFO_queue<workload_pack> *dynamic_rand_workload::workload_queue;
+int dynamic_rand_workload::pack_size = 1000;
