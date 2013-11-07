@@ -46,7 +46,8 @@ class global_cached_io: public io_interface
 	request_allocator *req_allocator;
 	req_ext_allocator *ext_allocator;
 
-	thread_safe_FIFO_queue<io_request> complete_queue;
+	// It contains the completed asynchronous user requests.
+	thread_safe_FIFO_queue<io_request *> complete_queue;
 
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
@@ -73,8 +74,6 @@ class global_cached_io: public io_interface
 		std::vector<thread_safe_page *> &dirty_pages);
 	int multibuf_completion(io_request *request,
 			std::vector<thread_safe_page *> &dirty_pages);
-	void process_completed_requests(io_request requests[], int num);
-	int process_completed_requests(int num);
 
 	void wait4req(io_request *req);
 public:
@@ -99,7 +98,6 @@ public:
 	virtual void flush_requests() {
 		underlying->flush_requests();
 	}
-	void process_all_completed_requests();
 
 	/**
 	 * One read can access multiple pages while one write can only write
@@ -163,6 +161,25 @@ public:
 
 	virtual int wait4complete(int num);
 	virtual void notify_completion(io_request *reqs[], int num);
+
+	/**
+	 * Process the completed requests issued to the disks.
+	 * These requests may be part of the users' requests.
+	 */
+	void process_disk_completed_requests(io_request requests[], int num);
+	/**
+	 * Process all completed users' requests.
+	 */
+	int process_completed_requests();
+	/**
+	 * Process all completed users' requests as well as pending requests.
+	 */
+	void process_all_completed_requests();
+
+	bool has_pending_requests() {
+		return !pending_requests.is_empty();
+	}
+
 	virtual int num_pending_ios() const {
 		assert(num_issued_areqs.get() >= num_completed_areqs.get());
 		return num_issued_areqs.get() - num_completed_areqs.get();

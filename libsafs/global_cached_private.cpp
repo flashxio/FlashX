@@ -235,16 +235,18 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		// In the case of parted global cache, the IO interface that processes
 		// the reqeust isn't the IO interface that issue the request.
 		// The request may be handled differently.
-		if (orig->is_sync())
+		if (orig->is_sync()) {
 			((global_cached_io *) get_io(orig))->wakeup_on_req(orig, IO_OK);
+			orig->dec_complete_count();
+			orig->wait4unref();
+			// Now we can delete it.
+			req_allocator->free(orig);
+		}
 		else {
 			num_completed_areqs.inc(1);
-			::notify_completion(this, orig);
+			orig->dec_complete_count();
+			complete_queue.push_back(orig);
 		}
-		orig->dec_complete_count();
-		orig->wait4unref();
-		// Now we can delete it.
-		req_allocator->free(orig);
 	}
 	else
 		orig->dec_complete_count();
@@ -263,28 +265,31 @@ void global_cached_io::finalize_request(io_request *req)
 		assert(original->get_orig() == NULL);
 		original->inc_complete_count();
 		if (original->complete_size(req->get_size())) {
-			if (original->is_sync())
+			if (original->is_sync()) {
 				((global_cached_io *) get_io(original))->wakeup_on_req(original, IO_OK);
+				original->dec_complete_count();
+				original->wait4unref();
+				req_allocator->free(original);
+			}
 			else {
 				num_completed_areqs.inc(1);
-				::notify_completion(this, original);
+				original->dec_complete_count();
+				complete_queue.push_back(original);
 			}
-			original->dec_complete_count();
-			original->wait4unref();
-			req_allocator->free(original);
 		}
 		else
 			original->dec_complete_count();
 	}
 	else {
 		assert(req->get_orig() == NULL);
-		if (req->is_sync())
+		if (req->is_sync()) {
 			((global_cached_io *) get_io(req))->wakeup_on_req(req, IO_OK);
+			req_allocator->free(req);
+		}
 		else {
 			num_completed_areqs.inc(1);
-			::notify_completion(this, req);
+			complete_queue.push_back(req);
 		}
-		req_allocator->free(req);
 	}
 }
 
@@ -384,7 +389,7 @@ int global_cached_io::multibuf_completion(io_request *request,
 	return -1;
 }
 
-void global_cached_io::process_completed_requests(io_request requests[],
+void global_cached_io::process_disk_completed_requests(io_request requests[],
 		int num)
 {
 #ifdef STATISTICS
@@ -466,12 +471,15 @@ void global_cached_io::process_completed_requests(io_request requests[],
 	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size(), underlying);
 }
 
-int global_cached_io::process_completed_requests(int num)
+int global_cached_io::process_completed_requests()
 {
+	int num = complete_queue.get_num_entries();
 	if (num > 0) {
-		stack_array<io_request> reqs(num);
+		stack_array<io_request *> reqs(num);
 		int ret = complete_queue.fetch(reqs.data(), num);
-		process_completed_requests(reqs.data(), ret);
+		::notify_completion(this, reqs.data(), ret);
+		for (int i = 0; i < ret; i++)
+			req_allocator->free(reqs[i]);
 		return ret;
 	}
 	else
@@ -1194,7 +1202,7 @@ int global_cached_io::preload(off_t start, long size) {
 
 void global_cached_io::process_all_completed_requests()
 {
-	process_completed_requests(complete_queue.get_num_entries());
+	process_completed_requests();
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();
 		flush_requests();
@@ -1238,11 +1246,7 @@ void global_cached_io::notify_completion(io_request *reqs[], int num)
 		assert(req_copies[i].get_io());
 	}
 
-	int ret = complete_queue.add(req_copies.data(), num);
-	assert(ret == num);
-	// Because of the flush requests, somtimes global_cached_io can't get
-	// enough completed requests. If we only signal the request issuer thread
-	// when there are enough completed requests, we'll get very poor
-	// performance.
+	process_disk_completed_requests(req_copies.data(), num);
+
 	get_thread()->activate();
 }
