@@ -281,8 +281,8 @@ class io_request
 	unsigned int high_prio: 1;
 	unsigned int low_latency: 1;
 	unsigned int discarded: 1;
-	static const int MAX_NODE_ID = (1 << 9) - 1;
-	unsigned int node_id: 9;
+	static const int MAX_NODE_ID = (1 << 8) - 1;
+	unsigned int node_id: 8;
 	// Linux uses 48 bit for addresses.
 	// When the request is completed, the IO instance will be notified of
 	// the completion. The IO is usually the issuer IO, but it can be other
