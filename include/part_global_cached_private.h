@@ -78,7 +78,7 @@ class part_global_cached_io: public io_interface
 	 * access on a NUMA machine is slow, so each NUMA node has a copy of
 	 * the reply sender to improve performance.
 	 */
-	std::vector<thread_safe_msg_sender<io_reply> *> reply_senders;
+	thread_safe_msg_sender<io_reply> *reply_sender;
 
 	// All these variables are updated in one thread, so it's fine without
 	// any concurrency control.
@@ -115,10 +115,6 @@ public:
 	}
 
 	int init();
-
-	thread_safe_msg_sender<io_reply> *get_reply_sender(int node_id) const {
-		return reply_senders[node_id];
-	}
 
 	virtual bool set_callback(callback *cb) {
 		this->final_cb = cb;

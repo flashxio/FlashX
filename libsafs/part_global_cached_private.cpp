@@ -544,17 +544,23 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 
 	// The reply must be sent to the thread on a different node.
 	int num_sent;
-	int node_id = thread::get_curr_thread()->get_node_id();
 	if (num_remote > NUMA_REPLY_CACHE_SIZE)
-		num_sent = get_reply_sender(node_id)->send(local_reply_buf.data(),
+		num_sent = reply_sender->send(local_reply_buf.data(),
 				num_remote);
 	else
-		num_sent = get_reply_sender(node_id)->send_cached(
+		num_sent = reply_sender->send_cached(
 				local_reply_buf.data(), num_remote);
 	// We use blocking queues here, so the send must succeed.
 	assert(num_sent == num_remote);
 	if (reply_queue->get_num_entries() > 0)
 		get_thread()->activate();
+	// This is to avoid deadlock.
+	// We have got enough completed requests. We should activate
+	// the thread that uses this IO instance.
+	else if (reply_sender->get_num_remaining() > get_max_num_pending_ios() / 2) {
+		reply_sender->flush();
+		get_thread()->activate();
+	}
 	if (num_local > 0)
 		notify_upper(local_reqs, num_local);
 }
@@ -873,15 +879,8 @@ part_global_cached_io::part_global_cached_io(io_interface *underlying,
 			// the reply queue to be expanded to an arbitrary size.
 			NUMA_REPLY_MSG_QUEUE_SIZE, INT_MAX / sizeof(io_reply), false);
 
-	std::set<int> node_ids = table->get_node_ids();
-	for (std::set<int>::const_iterator it = node_ids.begin();
-			it != node_ids.end(); it++) {
-		int node_id = *it;
-		if ((int) reply_senders.size() <= node_id)
-			reply_senders.resize(node_id + 1);
-		reply_senders[node_id] = thread_safe_msg_sender<io_reply>::create(
-				node_id, local_group->msg_allocator, reply_queue);
-	}
+	reply_sender = thread_safe_msg_sender<io_reply>::create(
+			0, local_group->msg_allocator, reply_queue);
 
 	req_senders = table->create_req_senders(node_id);
 
@@ -894,10 +893,7 @@ part_global_cached_io::part_global_cached_io(io_interface *underlying,
 part_global_cached_io::~part_global_cached_io()
 {
 	msg_queue<io_reply>::destroy(reply_queue);
-	for (unsigned i = 0; i < reply_senders.size(); i++) {
-		if (reply_senders[i])
-			thread_safe_msg_sender<io_reply>::destroy(reply_senders[i]);
-	}
+	thread_safe_msg_sender<io_reply>::destroy(reply_sender);
 	global_table->destroy_req_senders(req_senders);
 }
 
@@ -999,11 +995,7 @@ void part_global_cached_io::cleanup()
 	while (sent_requests > processed_replies) {
 		// flush all replies in the reply senders, so this IO can process
 		// the remaining replies.
-		for (unsigned i = 0; i < reply_senders.size(); i++) {
-			thread_safe_msg_sender<io_reply> *sender = reply_senders[i];
-			if (sender)
-				sender->flush_all();
-		}
+		reply_sender->flush_all();
 		process_replies();
 		underlying->cleanup();
 
@@ -1100,8 +1092,6 @@ void part_global_cached_io::print_state()
 		group_request_sender *sender = it->second;
 		printf("\treq sender has %d buffered reqs\n", sender->get_num_remaining());
 	}
-	for (unsigned i = 0; i < reply_senders.size(); i++) {
-		printf("\treply sender has %d buffered reqs\n", reply_senders[i]->get_num_remaining());
-	}
+	printf("\treply sender has %d buffered reqs\n", reply_sender->get_num_remaining());
 	underlying->print_state();
 }
