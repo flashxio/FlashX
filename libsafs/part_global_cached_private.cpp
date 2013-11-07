@@ -266,6 +266,23 @@ public:
 				get_io_idx(), num_pending_ios(), request_queue->get_num_objs());
 		global_cached_io::print_state();
 	}
+
+	// This method is used for IO requests that need to be sent to disks.
+	// Thanks to the IO proxy, it runs in the underlying IO thread,
+	// which is on the same NUMA node as the request process thread where
+	// the IO instance belongs to.
+	virtual void notify_completion(io_request *reqs[], int num) {
+		assert(thread::get_curr_thread()->get_node_id() == get_thread()->get_node_id());
+		stack_array<io_request> req_copies(num);
+		for (int i = 0; i < num; i++) {
+			req_copies[i] = *reqs[i];
+			assert(req_copies[i].get_io());
+		}
+		process_disk_completed_requests(req_copies.data(), num);
+		process_completed_requests();
+		if (has_pending_requests())
+			get_thread()->activate();
+	}
 };
 
 static void notify_gcached_io(io_interface *io, io_request *reqs[], int num)
