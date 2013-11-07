@@ -33,83 +33,67 @@
 
 class io_reply
 {
-	off_t offset: 40;
-	unsigned int success: 1;
-	unsigned int status: 16;
-
-	unsigned int access_method: 1;
-	unsigned long buf_size: 15;
-	unsigned long buf_addr: 48;
-
-	void init(char *buf, io_interface *io, off_t off, ssize_t size, int success,
-			int status, int access_method) {
-		long addr = (long) buf;
-		this->buf_addr = addr;
-		this->offset = off;
-		this->buf_size = size;
-		this->success = success;
-		this->status = status;
-		this->access_method = access_method;
-	}
+	io_request req;
 public:
 	io_reply() {
-		init(NULL, NULL, 0, 0, 0, 0, READ);
 	}
 
-	io_reply(io_request *req, int success, int status) {
-		init(req->get_buf(), req->get_io(), req->get_offset(), req->get_size(),
-					success, status, req->get_access_method());
+	io_reply(io_request *reqp, int success, int status) {
+		if (reqp->is_extended_req()) {
+			assert(reqp->get_num_bufs() == 1);
+			req = io_request(reqp->get_buf(), reqp->get_offset(), reqp->get_size(),
+					reqp->get_access_method(), reqp->get_io(), -1);
+		}
+		else
+			this->req = *reqp;
 	}
 
 	int get_status() const {
-		return status;
+		return 0;
 	}
 
 	bool is_success() const {
-		return success;
+		return true;
 	}
 
 	char *get_buf() const {
-		long addr = buf_addr;
-		return (char *) addr;
+		return req.get_buf();
 	}
 
 	off_t get_offset() const {
-		return offset;
+		return req.get_offset();
 	}
 
 	ssize_t get_size() const {
-		return buf_size;
+		return req.get_size();
 	}
 
 	int get_access_method() const {
-		return access_method;
+		return req.get_access_method();
 	}
 
 	bool is_data_inline() const {
 		return false;
 	}
-
+	
 	int serialize(char *buf, int size, bool accept_inline) {
-		assert((unsigned) size >= sizeof(*this));
-		memcpy(buf, this, sizeof(*this));
-		return get_serialized_size();
+		return req.serialize(buf, size, accept_inline);
 	}
 
 	int get_serialized_size() const {
-		return sizeof(*this);
+		return req.get_serialized_size();
+	}
+
+	io_request &get_request() {
+		return req;
 	}
 
 	static void deserialize(io_reply &reply, char *buf, int size) {
-		assert((unsigned) size >= sizeof(io_reply));
-		reply = *(io_reply *) buf;
+		io_request::deserialize(reply.req, buf, size);
 	}
 
 	static io_reply *deserialize(char *buf, int size) {
-		assert((unsigned) size >= sizeof(io_reply));
-		io_reply *ret = (io_reply *) buf;
-		assert(ret->get_serialized_size() <= size);
-		return ret;
+		return (io_reply *) io_request::deserialize(buf, size);
 	}
 };
 

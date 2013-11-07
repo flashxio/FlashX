@@ -756,12 +756,7 @@ int part_global_cached_io::process_reply(io_reply *reply) {
 		fprintf(stderr, "access error: %s\n",
 				strerror(reply->get_status()));
 	}
-	io_request req(reply->get_buf(), reply->get_offset(), reply->get_size(),
-			// It doesn't really matter what node id is specified
-			// for the request. The request is just used for notifying
-			// the user code of the completion of the request.
-			reply->get_access_method(), this, -1);
-	io_request *reqs[1] = {&req};
+	io_request *reqs[1] = {&reply->get_request()};
 	final_cb->invoke(reqs, 1);
 	return ret;
 }
