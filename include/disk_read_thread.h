@@ -64,6 +64,7 @@ class disk_read_thread: public thread
 	long tot_flush_delay;	// in us
 	long max_flush_delay;
 	long min_flush_delay;
+	long num_msgs;
 #endif
 
 	atomic_integer flush_counter;
@@ -166,8 +167,8 @@ public:
 			printf("\tavg flush delay: %ldus, max flush delay: %ldus, min flush delay: %ldus\n",
 					tot_flush_delay / num_low_prio_accesses, max_flush_delay,
 					min_flush_delay);
-		printf("\tremain %d high-prio requests, %d low-prio requests\n",
-				get_num_high_prio_reqs(), get_num_low_prio_reqs());
+		printf("\tremain %d high-prio requests, %d low-prio requests, %ld messages in total\n",
+				get_num_high_prio_reqs(), get_num_low_prio_reqs(), num_msgs);
 		aio->print_stat(1);
 #endif
 	}
