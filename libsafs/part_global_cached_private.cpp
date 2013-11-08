@@ -218,9 +218,15 @@ class node_cached_io: public global_cached_io
 	pthread_key_t replier_key;
 	long processed_requests;
 	long num_requests;
+
 	// This message buffer is used for copying remote messages to
 	// the local memory.
 	message<io_request> local_msgs[MSG_BUF_SIZE];
+	// This request buffer has requests more than a message can contain.
+	io_request local_reqs[NUMA_REQ_BUF_SIZE];
+	// A temporary message buffer
+	message<io_request> tmp_msg_buf[MSG_BUF_SIZE];
+
 	pthread_t processing_thread_id;
 	msg_queue<io_request> *request_queue;
 
@@ -324,17 +330,14 @@ int node_cached_io::process_requests(int max_nreqs)
 		processing_thread_id = pthread_self();
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
-	message<io_request> tmp_msgs[MSG_BUF_SIZE];
-	// This request buffer has requests more than a message can contain.
-	io_request local_reqs[NUMA_REQ_BUF_SIZE];
 	while (num_processed < max_nreqs) {
-		int num = request_queue->fetch(tmp_msgs, MSG_BUF_SIZE);
+		int num = request_queue->fetch(tmp_msg_buf, MSG_BUF_SIZE);
 		if (num == 0)
 			break;
 
 		// We need to copy the message buffers to the local memory.
 		for (int i = 0; i < num; i++) {
-			tmp_msgs[i].copy_to(local_msgs[i]);
+			tmp_msg_buf[i].copy_to(local_msgs[i]);
 		}
 		for (int i = 0; i < num; i++) {
 			while (!local_msgs[i].is_empty()) {
