@@ -461,6 +461,7 @@ class simple_msg_sender
 	slab_allocator *alloc;
 	msg_buffer<T> buf;
 	msg_queue<T> *queue;
+	int num_objs;
 
 protected:
 	/**
@@ -470,6 +471,7 @@ protected:
 			msg_queue<T> *queue): buf(node_id, alloc, queue->is_accept_inline()) {
 		this->alloc = alloc;
 		this->queue = queue;
+		num_objs = 0;
 	}
 
 public:
@@ -486,6 +488,7 @@ public:
 	}
 
 	int flush() {
+		num_objs = 0;
 		if (buf.is_empty()) {
 			return 0;
 		}
@@ -500,10 +503,11 @@ public:
 	 * of remaining objects.
 	 */
 	int get_num_remaining() {
-		return buf.get_num_entries();
+		return num_objs;
 	}
 
 	int send_cached(T *msgs, int num = 1) {
+		num_objs += num;
 		return buf.add_objs(msgs, num);
 	}
 
