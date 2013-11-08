@@ -323,13 +323,17 @@ void remote_disk_access::flush_requests(int max_cached)
 	assert(senders.size() == low_prio_senders.size());
 	int num_senders = senders.size();
 	for (int i = 0; i < num_senders; i++) {
-		senders[i]->flush();
-		low_prio_senders[i]->flush();
-		assert(senders[i]->get_num_remaining() == 0);
-		assert(low_prio_senders[i]->get_num_remaining() == 0);
-	}
-	for (unsigned i = 0; i < io_threads.size(); i++) {
-		io_threads[i]->activate();
+		bool has_data = false;
+		if (senders[i]->get_num_remaining() > 0) {
+			has_data = true;
+			senders[i]->flush();
+		}
+		if (low_prio_senders[i]->get_num_remaining() > 0) {
+			has_data = true;
+			low_prio_senders[i]->flush();
+		}
+		if (has_data)
+			io_threads[i]->activate();
 	}
 }
 
