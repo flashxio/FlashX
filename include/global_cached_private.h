@@ -75,7 +75,6 @@ class global_cached_io: public io_interface
 			std::vector<thread_safe_page *> &dirty_pages);
 	void process_completed_requests(io_request requests[], int num);
 	int process_completed_requests(int num);
-	void process_all_completed_requests();
 
 	void wait4req(io_request *req);
 public:
@@ -100,6 +99,7 @@ public:
 	virtual void flush_requests() {
 		underlying->flush_requests();
 	}
+	void process_all_completed_requests();
 
 	/**
 	 * One read can access multiple pages while one write can only write

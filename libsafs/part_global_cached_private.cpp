@@ -347,11 +347,12 @@ int node_cached_io::process_requests()
 			}
 		}
 	}
-	// We don't want the thread to be blocked here. The thread is activated
-	// in two cases: new requests are sent to its request queue; or some
-	// requests have been completed.
-	if (global_cached_io::num_pending_ios() > 0)
-		global_cached_io::wait4complete(0);
+	if (num_processed > 0) {
+		flush_requests();
+		process_all_completed_requests();
+	}
+	else
+		process_all_completed_requests();
 
 	num_requests += num_processed;
 	return num_processed;
