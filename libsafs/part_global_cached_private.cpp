@@ -50,7 +50,6 @@ const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
 const int NUMA_REPLY_QUEUE_SIZE = 1024;
 const int NUMA_REPLY_MSG_QUEUE_SIZE = NUMA_REPLY_QUEUE_SIZE / (
 		NUMA_MSG_SIZE / sizeof(io_reply));
-const int MAX_REQS_TO_SINGLE_SENDER = IO_MSG_SIZE;
 
 class process_request_thread;
 struct thread_group
@@ -93,13 +92,7 @@ public:
 
 	int send_cached(io_request *msgs, int num = 1) {
 		num_reqs += num;
-		if (senders[curr_idx]->get_num_remaining() < MAX_REQS_TO_SINGLE_SENDER)
-			return senders[curr_idx]->send_cached(msgs, num);
-		else {
-			curr_idx++;
-			curr_idx = curr_idx % threads.size();
-			return senders[curr_idx]->send_cached(msgs, num);
-		}
+		return senders[curr_idx]->send_cached(msgs, num);
 	}
 
 	int get_num_remaining() const {
@@ -512,6 +505,7 @@ group_request_sender::group_request_sender(slab_allocator *alloc,
 int group_request_sender::flush()
 {
 	int ret = 0;
+	curr_idx = (curr_idx + 1) % senders.size();
 	for (unsigned i = 0; i < senders.size(); i++) {
 		if (senders[i]->get_num_remaining() > 0) {
 			ret += senders[i]->flush();
