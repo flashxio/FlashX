@@ -978,6 +978,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				// from the cached IO and process all completed requests,
 				// hopefully we can dereference the pages in the cache.
 				if (p == NULL) {
+					fprintf(stderr, "can't evict a page\n");
 					flush_requests();
 					process_all_completed_requests();
 				}
