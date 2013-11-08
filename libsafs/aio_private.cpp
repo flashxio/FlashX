@@ -394,6 +394,7 @@ void async_io::return_cb(thread_callback_s *tcbs[], int num)
 		else {
 			int ret = complete_thread_table[get_node_id()]->add_reqs(
 					remote_tcbs, num_remote);
+			assert(ret == num_remote);
 			aio_complete_thread::process_completed_reqs(remote_tcbs + ret,
 					num_remote - ret);
 		}

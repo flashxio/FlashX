@@ -203,6 +203,11 @@ void init_io_system(const config_map &configs)
 	int num_files = raid_conf.get_num_disks();
 	global_data.raid_conf = raid_conf;
 
+	std::set<int> disk_node_set = raid_conf.get_node_ids();
+	std::vector<int> disk_node_ids(disk_node_set.begin(), disk_node_set.end());
+	printf("There are %ld nodes with disks\n", disk_node_ids.size());
+	init_aio(disk_node_ids);
+
 	/* 
 	 * The mutex is enough to guarantee that all threads will see initialized
 	 * global data. The first thread that enters the critical area will
