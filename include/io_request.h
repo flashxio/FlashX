@@ -852,4 +852,12 @@ public:
 	}
 };
 
+typedef void (*req_process_func_t)(io_interface *io, io_request *reqs[], int num);
+/**
+ * Perform the same function to the requests with the same IO instance.
+ * It turns out it's a common function when delivering requests to
+ * the upper layer.
+ */
+void process_reqs_on_io(io_request *reqs[], int num, req_process_func_t func);
+
 #endif

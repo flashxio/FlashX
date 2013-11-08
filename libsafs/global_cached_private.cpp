@@ -197,11 +197,10 @@ void notify_completion(io_interface *this_io, io_request *req)
 	}
 }
 
-struct comp_req_io {
-	bool operator() (const io_request *req1, const io_request *req2) {
-		return (long) req1->get_io() < (long) req2->get_io();
-	}
-} req_io_comparator;
+static void notify_completion_func(io_interface *io, io_request *reqs[], int num)
+{
+	io->notify_completion(reqs, num);
+}
 
 void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 {
@@ -223,19 +222,8 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 
 	if (num_remote == 0)
 		return;
-	std::sort(remote_reqs, remote_reqs + num_remote, req_io_comparator);
-	io_interface *prev = remote_reqs[0]->get_io();
-	int begin_idx = 0;
-	for (int end_idx = 1; end_idx < num_remote; end_idx++) {
-		if (remote_reqs[end_idx]->get_io() != prev) {
-			prev->notify_completion(remote_reqs + begin_idx,
-					end_idx - begin_idx);
-			begin_idx = end_idx;
-			prev = remote_reqs[end_idx]->get_io();
-		}
-	}
-	assert(begin_idx < num_remote);
-	prev->notify_completion(remote_reqs + begin_idx, num_remote - begin_idx);
+
+	process_reqs_on_io(remote_reqs, num_remote, notify_completion_func);
 }
 
 void global_cached_io::finalize_partial_request(io_request &partial,
@@ -300,6 +288,11 @@ void global_cached_io::finalize_request(io_request *req)
 	}
 }
 
+static void pending_reqs_func(io_interface *io, io_request *reqs[], int num)
+{
+	static_cast<global_cached_io *>(io)->queue_requests(reqs, num);
+}
+
 void queue_requests(std::vector<io_request *> &pending_reqs)
 {
 	if (pending_reqs.empty())
@@ -316,21 +309,8 @@ void queue_requests(std::vector<io_request *> &pending_reqs)
 		}
 		pending_reqs[i]->set_next_req(NULL);
 	}
-	std::sort(pending_reqs.begin(), pending_reqs.end(), req_io_comparator);
-	int num_pending = pending_reqs.size();
-	io_interface *prev = pending_reqs[0]->get_io();
-	int begin_idx = 0;
-	for (int end_idx = 1; end_idx < num_pending; end_idx++) {
-		if (pending_reqs[end_idx]->get_io() != prev) {
-			static_cast<global_cached_io *>(prev)->queue_requests(
-					pending_reqs.data() + begin_idx, end_idx - begin_idx);
-			begin_idx = end_idx;
-			prev = pending_reqs[end_idx]->get_io();
-		}
-	}
-	assert(begin_idx < num_pending);
-	static_cast<global_cached_io *>(prev)->queue_requests(
-			pending_reqs.data() + begin_idx, num_pending - begin_idx);
+
+	process_reqs_on_io(pending_reqs.data(), pending_reqs.size(), pending_reqs_func);
 }
 
 int global_cached_io::multibuf_completion(io_request *request,
