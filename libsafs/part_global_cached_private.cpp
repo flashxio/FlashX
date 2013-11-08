@@ -257,7 +257,7 @@ public:
 		return num_requests;
 	}
 
-	int process_requests(int max_nreqs);
+	int process_requests();
 
 	msg_queue<io_request> *get_queue() const {
 		return request_queue;
@@ -324,16 +324,14 @@ node_cached_io::node_cached_io(io_interface *underlying,
 }
 
 /* process the requests sent to this thread */
-int node_cached_io::process_requests(int max_nreqs)
+int node_cached_io::process_requests()
 {
 	if (processing_thread_id == 0)
 		processing_thread_id = pthread_self();
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
-	while (num_processed < max_nreqs) {
+	while (!request_queue->is_empty()) {
 		int num = request_queue->fetch(tmp_msg_buf, MSG_BUF_SIZE);
-		if (num == 0)
-			break;
 
 		// We need to copy the message buffers to the local memory.
 		for (int i = 0; i < num; i++) {
@@ -475,7 +473,7 @@ public:
 
 void process_request_thread::run()
 {
-	io->process_requests(NUMA_REQ_BUF_SIZE);
+	io->process_requests();
 }
 
 void thread_group::print_state()
