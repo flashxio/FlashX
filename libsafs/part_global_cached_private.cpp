@@ -52,17 +52,22 @@ const int NUMA_REPLY_MSG_QUEUE_SIZE = NUMA_REPLY_QUEUE_SIZE / (
 		NUMA_MSG_SIZE / sizeof(io_reply));
 
 class process_request_thread;
+class underlying_io_thread;
 struct thread_group
 {
 	int id;
 	page_cache *cache;
 	std::vector<process_request_thread *> process_request_threads;
+	// This processes the requests that are issued by global_cached_io and
+	// are supposed to be sent to the I/O threads.
+	underlying_io_thread *underlying_thread;
 	slab_allocator *msg_allocator;
 
 	thread_group() {
 		id = -1;
 		cache = NULL;
 		msg_allocator = NULL;
+		underlying_thread = NULL;
 	}
 
 	void print_state();
@@ -260,6 +265,138 @@ public:
 		printf("node cached io %d has %d pending requests and %d reqs in the queue\n",
 				get_io_idx(), num_pending_ios(), request_queue->get_num_objs());
 		global_cached_io::print_state();
+	}
+};
+
+static void notify_gcached_io(io_interface *io, io_request *reqs[], int num)
+{
+	// TODO we may to more than this since we run in the same NUMA node
+	// as the IO instance.
+	io->notify_completion(reqs, num);
+}
+
+/**
+ * This IO proxy is responsible for sending requests to disks and gather
+ * completion notifications.
+ */
+class underlying_io_proxy: public remote_disk_access
+{
+public:
+	underlying_io_proxy(const std::vector<disk_read_thread *> &remotes,
+			file_mapper *mapper, thread *curr_thread): remote_disk_access(
+				remotes, mapper, curr_thread) {
+	}
+
+	// This runs in underlying_io_thread.
+	virtual int process_completed_requests(io_request reqs[], int num) {
+		stack_array<io_request *, 256> req_ptrs(num);
+		for (int i = 0; i < num; i++) {
+			reqs[i].set_io((io_interface *) reqs[i].get_user_data());
+			reqs[i].set_user_data(NULL);
+			req_ptrs[i] = &reqs[i];
+		}
+		process_reqs_on_io(req_ptrs.data(), num, notify_gcached_io);
+		return num;
+	}
+};
+
+class underlying_io_thread: public thread
+{
+	static const int MSG_BUF_SIZE = 16;
+	static const int REQ_BUF_SIZE = 1024;
+
+	thread_safe_FIFO_queue<message<io_request> > queue;
+	message<io_request> msg_buf[MSG_BUF_SIZE];
+	io_request req_buf[REQ_BUF_SIZE];
+	underlying_io_proxy *io;
+	size_t num_reqs;
+public:
+	underlying_io_thread(const std::vector<disk_read_thread *> &remotes,
+			file_mapper *mapper, int node_id): thread(
+			std::string("underlying_io_thread-") + itoa(node_id),
+			node_id), queue("underlying_io_queue", node_id,
+			MSG_BUF_SIZE, INT_MAX) {
+		io = new underlying_io_proxy(remotes, mapper, this);
+		num_reqs = 0;
+		this->start();
+	}
+
+	void run() {
+		while (!queue.is_empty()) {
+			int ret = queue.fetch(msg_buf, MSG_BUF_SIZE);
+			for (int i = 0; i < ret; i++) {
+				num_reqs += msg_buf[i].get_num_objs();
+				while (!msg_buf[i].is_empty()) {
+					int num_reqs = msg_buf[i].get_next_objs(req_buf,
+							REQ_BUF_SIZE);
+					io->access(req_buf, num_reqs);
+				}
+			}
+		}
+		io->wait4complete(0);
+	}
+
+	void add_reqs(message<io_request> &requests) {
+		int ret = queue.add(&requests, 1);
+		assert(ret == 1);
+		this->activate();
+	}
+
+	io_interface *get_io() const {
+		return io;
+	}
+
+	void print_stat() {
+		printf("%s issued %ld reqs to I/O threads\n",
+				this->get_thread_name().c_str(), num_reqs);
+	}
+};
+
+class req_stealer: public io_interface
+{
+	underlying_io_thread *t;
+	message<io_request> req_buf;
+	slab_allocator *alloc;
+public:
+	req_stealer(underlying_io_thread *t, thread *curr_thread): io_interface(
+			curr_thread) {
+		this->t = t;
+		alloc = new slab_allocator(
+				"io_msg_allocator-" + itoa(curr_thread->get_node_id()),
+				PAGE_SIZE, PAGE_SIZE * 128, INT_MAX, curr_thread->get_node_id());
+		message<io_request> tmp(alloc, false);
+		req_buf = tmp;
+	}
+
+	virtual int get_file_id() const {
+		// This function shouldn't be called.
+		assert(0);
+		return -1;
+	}
+
+	void access(io_request *reqs, int num, io_status *status = NULL) {
+		int num_added = 0;
+		for (int i = 0; i < num; i++) {
+			// the requests are created by global_cached_io and user_data
+			// isn't used by global_cached_io, so we should be safe here.
+			assert(reqs[i].get_user_data() == NULL);
+			reqs[i].set_user_data((void *) reqs[i].get_io());
+			// We want I/O threads to notify the IO proxy of request completion
+			// first.
+			reqs[i].set_io(t->get_io());
+		}
+		while (num_added < num) {
+			int ret = req_buf.add(reqs + num_added, num - num_added);
+			num_added += ret;
+			if (ret == 0) {
+				t->add_reqs(req_buf);
+				message<io_request> tmp(alloc, false);
+				req_buf = tmp;
+			}
+		}
+	}
+
+	virtual void flush_requests() {
 	}
 };
 
@@ -550,6 +687,8 @@ part_io_process_table::part_io_process_table(
 		struct thread_group group;
 
 		group.id = node_id;
+		group.underlying_thread = new underlying_io_thread(io_threads,
+				mapper, node_id);
 		group.cache = cache_conf->create_cache_on_node(node_id,
 				MAX_NUM_FLUSHES_PER_FILE * num_ssds / config->get_num_caches());
 		group.msg_allocator = new slab_allocator(std::string("msg_allocator-")
@@ -562,7 +701,7 @@ part_io_process_table::part_io_process_table(
 		for (int i = 0; i < params.get_numa_num_process_threads(); i++) {
 			process_request_thread *t = process_request_thread::create(node_id);
 			node_cached_io *io = node_cached_io::create(
-					new remote_disk_access(io_threads, mapper, t), groupp);
+					new req_stealer(group.underlying_thread, t), groupp);
 			t->set_io(io);
 			t->start();
 			groupp->process_request_threads.push_back(t);
@@ -691,7 +830,10 @@ part_global_cached_io::part_global_cached_io(io_interface *underlying,
 		part_io_process_table *table): io_interface(underlying->get_thread())
 {
 	int node_id = underlying->get_node_id();
-	this->underlying = new global_cached_io(underlying->get_thread(), underlying,
+	this->local_group = table->get_thread_group(node_id);
+
+	this->underlying = new global_cached_io(underlying->get_thread(),
+			new req_stealer(local_group->underlying_thread, underlying->get_thread()),
 			table->get_cache(node_id));
 	processed_requests = 0;;
 	sent_requests = 0;
@@ -709,7 +851,6 @@ part_global_cached_io::part_global_cached_io(io_interface *underlying,
 #endif
 
 	/* assign a thread to a group. */
-	this->local_group = table->get_thread_group(node_id);
 	reply_queue = msg_queue<io_reply>::create(node_id, "reply_queue", 
 			// We don't want that adding replies is blocked, so we allow
 			// the reply queue to be expanded to an arbitrary size.

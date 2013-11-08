@@ -53,15 +53,15 @@ class remote_disk_access: public io_interface
 
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
-
-	int process_completed_requests(io_request reqs[], int num);
-	int process_completed_requests(int num);
 public:
 	remote_disk_access(const std::vector<disk_read_thread *> &remotes,
 			file_mapper *mapper, thread *t,
 			int max_reqs = MAX_DISK_CACHED_REQS);
 
 	~remote_disk_access();
+
+	virtual int process_completed_requests(io_request reqs[], int num);
+	int process_completed_requests(int num);
 
 	virtual int thread_init() {
 		return 0;
