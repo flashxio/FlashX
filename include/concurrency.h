@@ -182,4 +182,21 @@ public:
 	}
 };
 
+class spin_lock
+{
+	pthread_spinlock_t _lock;
+public:
+	spin_lock() {
+		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	void lock() {
+		pthread_spin_lock(&_lock);
+	}
+
+	void unlock() {
+		pthread_spin_unlock(&_lock);
+	}
+};
+
 #endif
