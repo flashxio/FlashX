@@ -32,8 +32,6 @@ const int REPLY_BUF_SIZE = 1000;
 const int REQ_BUF_SIZE = 1000;
 const int MSG_BUF_SIZE = 128;
 
-// The size of a request >= sizeof(io_request).
-const int NUMA_REQ_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_request);
 // The size of a reply >= sizeof(io_reply).
 const int NUMA_REPLY_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_reply);
 

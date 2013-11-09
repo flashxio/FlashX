@@ -210,6 +210,9 @@ thread_group::~thread_group()
  */
 class node_cached_io: public global_cached_io
 {
+	// The size of a request >= sizeof(io_request).
+	static const int NUMA_REQ_BUF_SIZE = 1024;
+
 	const struct thread_group *local_group;
 
 	// thread id <-> msg sender
@@ -477,6 +480,8 @@ int node_cached_io::process_requests()
 		processing_thread_id = pthread_self();
 	assert(processing_thread_id == pthread_self());
 	int num_processed = 0;
+	int num_access = 0;
+	int num_received = 0;
 	while (!request_queue->is_empty()) {
 		int num = request_queue->fetch(tmp_msg_buf, MSG_BUF_SIZE);
 
@@ -485,15 +490,21 @@ int node_cached_io::process_requests()
 			tmp_msg_buf[i].copy_to(local_msgs[i]);
 		}
 		for (int i = 0; i < num; i++) {
-			while (!local_msgs[i].is_empty()) {
-				int num_reqs = local_msgs[i].get_next_objs(local_reqs,
-						min(NUMA_REQ_BUF_SIZE,
-							global_cached_io::get_remaining_io_slots()));
-				global_cached_io::access(local_reqs, num_reqs);
-				num_processed += num_reqs;
+			if (local_msgs[i].get_num_objs() > NUMA_REQ_BUF_SIZE - num_received) {
+				global_cached_io::access(local_reqs, num_received);
+				num_access++;
+				num_processed += num_received;
+				num_received = 0;
 			}
+			int ret = local_msgs[i].get_next_objs(local_reqs + num_received,
+					NUMA_REQ_BUF_SIZE - num_received);
+			num_received += ret;
+			assert(local_msgs[i].is_empty());
 		}
 	}
+	global_cached_io::access(local_reqs, num_received);
+	num_access++;
+	num_processed += num_received;
 	if (num_processed > 0) {
 		flush_requests();
 		process_all_completed_requests();
