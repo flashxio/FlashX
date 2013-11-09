@@ -14,7 +14,7 @@ CFLAGS = -g -I../include $(TRACE_FLAGS)
 
 LDFLAGS = -L../libsafs -lsafs -lpthread -lnuma -laio -lprofiler $(TRACE_FLAGS) -lrt -rdynamic
 UNITTEST = file_mapper_unit_test slab_allocator_test test_mem_tracker native_file_unit_test	\
-		   safs_file_unit_test unique_ptr_unit_test
+		   safs_file_unit_test unique_ptr_unit_test timer_unit_test
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -I../include -g -std=c++0x
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -50,6 +50,9 @@ safs_file_unit_test: safs_file_unit_test.o $(LIBFILE)
 
 unique_ptr_unit_test: unique_ptr_unit_test.o $(LIBFILE)
 	$(CXX) -o unique_ptr_unit_test unique_ptr_unit_test.o $(LDFLAGS)
+
+timer_unit_test: timer_unit_test.o $(LIBFILE)
+	$(CXX) -o timer_unit_test timer_unit_test.o $(LDFLAGS)
 
 clean:
 	rm -f *.o

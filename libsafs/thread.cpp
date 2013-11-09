@@ -29,6 +29,7 @@ void *thread_run(void *arg)
 {
 	thread *t = (thread *) arg;
 	pthread_setspecific(thread::thread_key, t);
+	t->tid = gettid();
 
 	int node_id = t->get_node_id();
 	if (node_id >= 0)
@@ -95,6 +96,7 @@ thread *thread::represent_thread(int node_id)
 	curr = new thread_representer(node_id);
 	pthread_setspecific(thread::thread_key, curr);
 	curr->_is_sleeping = false;
+	curr->tid = gettid();
 	return curr;
 }
 

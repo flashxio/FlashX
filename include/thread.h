@@ -32,6 +32,7 @@ class thread
 	static pthread_key_t thread_key;
 	static atomic_integer num_threads;
 
+	volatile pid_t tid;
 	int thread_idx;
 	int node_id;
 	pthread_t id;
@@ -54,6 +55,7 @@ public:
 	thread(std::string name, int node_id, bool blocking = true) {
 		thread_class_init();
 
+		tid = -1;
 		thread_idx = num_threads.inc(1);
 		this->name = name + "-" + itoa(thread_idx);
 		this->node_id = node_id;
@@ -71,6 +73,7 @@ public:
 	}
 
 	void set_user_data(void *user_data) {
+		assert(this->user_data == NULL);
 		this->user_data = user_data;
 	}
 
@@ -143,6 +146,15 @@ public:
 
 	int get_id() const {
 		return thread_idx;
+	}
+	int get_tid() const {
+		if (get_curr_thread() == NULL || get_curr_thread() != this) {
+			// TODO I need a better way to wait for tid to be initialized.
+			while (tid < 0) { }
+			return tid;
+		}
+		else
+			return gettid();
 	}
 
 	void start();

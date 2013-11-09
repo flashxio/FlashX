@@ -189,11 +189,6 @@ const int MAX_FETCH_REQS = 3;
 const int AIO_COMPLETE_BUF_SIZE = 8;
 
 /**
- * The time interval that I/O threads flush the buffered notifications
- * of IO completion.
- */
-const int COMPLETION_FLUSH_INTERVAL = 200 * 1000 * 1000;
-/**
  * This number defines the max number of flushes sent to an SSD.
  * The number is set based on the performance result.
  * It varies in different SSDs. It's better that we can estimate at runtime.
