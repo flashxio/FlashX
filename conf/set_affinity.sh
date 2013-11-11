@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/bin/bash
+
+ctl_name="mpt2sas"
 
 set_affinity_node ()
 {
@@ -24,16 +26,20 @@ else
     exit 1;
 fi;
 
-irq0=`grep mpt2sas0-msix0 /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
-irq1=`grep mpt2sas1-msix0 /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
-irq2=`grep mpt2sas2-msix0 /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
-echo "irq0: $irq0"
-echo "irq1: $irq1"
-echo "irq2: $irq2"
+ctl_num=0
+node_id=0
+while [ 0 ]
+do
+	irq=`grep ${ctl_name}${ctl_num}-msix0 /proc/interrupts | awk '{print $1}' | awk -F : '{print $1}'`
+	if [ "$irq" == "" ]
+	then
+		break
+	fi
+	echo "irq: $irq"
 
-echo "set for controller 0"
-set_affinity_node 0 $irq0
-echo "set for controller 1"
-set_affinity_node 1 $irq1
-echo "set for controller 2"
-set_affinity_node 2 $irq2
+	echo "set for controller ${ctl_num}"
+	set_affinity_node $node_id $irq
+
+	ctl_num=$((ctl_num+1))
+	node_id=$ctl_num
+done
