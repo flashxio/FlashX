@@ -601,7 +601,9 @@ thread_safe_page *gclock_eviction_policy::evict_page(
 		pg->set_hits(pg->get_hits() - 1);
 	} while (ret == NULL);
 	ret->set_data_ready(false);
+#if 0
 	assign_flush_scores(buf);
+#endif
 	return ret;
 }
 
