@@ -5,13 +5,31 @@ use strict;
 # this file mounts SSDs to their corresponding directories and sets
 # up data files correctly.
 
-my @dev_details = `ls -l /sys/block/ | grep sd | grep -v sda`;
+my $num_args = @ARGV;
+print "$num_args\n";
+if ($num_args < 1) {
+	print STDERR "set_ssds dev_list\n";
+	exit 1;
+}
+
+open(my $dev_fh, "<", $ARGV[0]) or die "open $ARGV[0]: $!";
+my @dev_names;
+while (<$dev_fh>) {
+	chomp($_);
+	if ($_ eq "") {
+		next;
+	}
+	push(@dev_names, $_);
+	print "ssd: $_\n";
+}
+my $num_devs = @dev_names;
+print "There are $num_devs SSDs\n";
 
 my %devices;
 my %host_ids;
 
-while (@dev_details) {
-	my $item = shift(@dev_details);
+foreach (@dev_names) {
+	my $item = `ls -l /sys/block/ | grep $_`;
 	if ($item =~ /host([0-9]+).*sd([b-z])$/) {
 		my $host = $1;
 		my $dev = $2;
@@ -50,6 +68,7 @@ for (sort keys %devices) {
 	system("chown -R zhengda.zhengda $mount_dir");
 	system("echo noop > /sys/block/sd${dev}/queue/scheduler");
 	system("cat /sys/block/sd${dev}/queue/scheduler");
+	system("echo 2 > /sys/block/sd${dev}/queue/rq_affinity");
 	$dev_idx++;
 }
 
