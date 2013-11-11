@@ -597,24 +597,11 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 	}
 
 	// The reply must be sent to the thread on a different node.
-	int num_sent;
-	if (num_remote > NUMA_REPLY_CACHE_SIZE)
-		num_sent = reply_sender->send(local_reply_buf.data(),
-				num_remote);
-	else
-		num_sent = reply_sender->send_cached(
-				local_reply_buf.data(), num_remote);
+	int num_sent = reply_sender->send(local_reply_buf.data(), num_remote);
 	// We use blocking queues here, so the send must succeed.
 	assert(num_sent == num_remote);
 	if (reply_queue->get_num_entries() > 0)
 		get_thread()->activate();
-	// This is to avoid deadlock.
-	// We have got enough completed requests. We should activate
-	// the thread that uses this IO instance.
-	else if (reply_sender->get_num_remaining() > get_max_num_pending_ios() / 2) {
-		reply_sender->flush();
-		get_thread()->activate();
-	}
 	if (num_local > 0)
 		notify_upper(local_reqs, num_local);
 }
