@@ -1,8 +1,9 @@
 cache_type=associative
+cache_size=4G
 
 option=global_cache
 num_reqs=10485760
-threads=16
+threads=32
 workload=RAND
 entry_size=4096
 num_nodes=4
