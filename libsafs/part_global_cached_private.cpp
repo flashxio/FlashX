@@ -379,7 +379,7 @@ class flush_timer_task: public timer_task
 	static const int FLUSH_TIMEOUT = 300000;
 	req_stealer *io;
 public:
-	flush_timer_task(req_stealer *io): timer_task(FLUSH_TIMEOUT, true) {
+	flush_timer_task(req_stealer *io): timer_task(FLUSH_TIMEOUT) {
 		this->io = io;
 	}
 
@@ -391,14 +391,14 @@ class req_stealer: public io_interface
 	underlying_io_thread *t;
 	message<io_request> req_buf;
 	slab_allocator *alloc;
-	timer *flush_timer;
+	periodic_timer *flush_timer;
 
 	atomic_integer access_guard;
 public:
 	req_stealer(underlying_io_thread *t, thread *curr_thread): io_interface(
 			curr_thread) {
-		flush_timer = new timer(curr_thread);
-		flush_timer->add_task(new flush_timer_task(this));
+		flush_timer = new periodic_timer(curr_thread, new flush_timer_task(this));
+		flush_timer->start();
 		this->t = t;
 		alloc = new slab_allocator(
 				"io_msg_allocator-" + itoa(curr_thread->get_node_id()),
@@ -452,9 +452,9 @@ public:
 	}
 
 	void print_state() {
-		printf("req_stealer %d has %d buffered reqs\n",
-				get_io_idx(), req_buf.get_num_objs());
-		flush_timer->print_state();
+		printf("req_stealer %d has %d buffered reqs in thread %d, timer %d is enabled? %d\n",
+				get_io_idx(), req_buf.get_num_objs(), get_thread()->get_tid(),
+				flush_timer->get_id(), flush_timer->is_enabled());
 	}
 };
 

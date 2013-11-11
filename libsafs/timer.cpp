@@ -25,12 +25,32 @@
 
 static void handler(int sig, siginfo_t *si, void *uc)
 {
-	// We can't call the flush requests to wake up I/O threads.
-	// There might be a deadlock if the lock has been held by the thread
-	// interrupted by the signal.
-
-	timer *t = (timer *) thread::get_curr_thread()->get_user_data();
+	timer *t = (timer *) si->si_value.sival_ptr;
 	t->run_tasks();
+}
+
+static void disable_timer()
+{
+	sigset_t mask;
+
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGRTMIN);
+	if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+		perror("sigprocmask");
+		exit(1);
+	}
+}
+
+static void enable_timer()
+{
+	sigset_t mask;
+
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGRTMIN);
+	if (sigprocmask(SIG_UNBLOCK, &mask, NULL) == -1) {
+		perror("sigprocmask");
+		exit(1);
+	}
 }
 
 class timer_thread: public thread
@@ -68,7 +88,7 @@ void timer::init_timer()
 	// It supposes to be sigev_notify_thread_id
 	sev._sigev_un._tid = t->get_tid();
 	sev.sigev_signo = SIGRTMIN;
-	sev.sigev_value.sival_ptr = &timerid;
+	sev.sigev_value.sival_ptr = this;
 	if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
 		perror("timer_create");
 		exit(1);
@@ -77,20 +97,17 @@ void timer::init_timer()
 
 timer::timer(thread *t)
 {
+	timer_id = timer_count.inc(1);
 	this->t = t;
-	// TODO I should change this. There is no guarantee that the current
-	// thread doesn't have any user data.
-	assert(t->get_user_data() == NULL);
-	t->set_user_data(this);
 
 	init_timer();
 }
 
 timer::timer()
 {
+	timer_id = timer_count.inc(1);
 	t = new timer_thread();
 	t->start();
-	t->set_user_data(this);
 
 	init_timer();
 }
@@ -137,30 +154,6 @@ bool timer::add_task(timer_task *task)
 	return true;
 }
 
-void timer::disable_timer()
-{
-	sigset_t mask;
-
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGRTMIN);
-	if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
-		perror("sigprocmask");
-		exit(1);
-	}
-}
-
-void timer::enable_timer()
-{
-	sigset_t mask;
-
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGRTMIN);
-	if (sigprocmask(SIG_UNBLOCK, &mask, NULL) == -1) {
-		perror("sigprocmask");
-		exit(1);
-	}
-}
-
 void timer::set_timeout(int64_t timeout)
 {
 	assert(timeout > 0);
@@ -176,10 +169,15 @@ void timer::set_timeout(int64_t timeout)
 	its.it_interval.tv_sec = 0;
 	its.it_interval.tv_nsec = 0;
 
-	if (timer_settime(timerid, 0, &its, NULL) == -1) {
+	struct itimerspec old_value;
+	if (timer_settime(timerid, 0, &its, &old_value) == -1) {
 		perror("timer_settime");
 		exit(1);
 	}
+	assert(old_value.it_interval.tv_sec == 0
+			&& old_value.it_interval.tv_nsec == 0
+			&& old_value.it_value.tv_sec == 0
+			&& old_value.it_value.tv_nsec == 0);
 
 	enable_timer();
 }
@@ -211,12 +209,7 @@ void timer::run_tasks()
 	// Execute all timeout tasks.
 	for (unsigned i = 0; i < tasks.size(); i++) {
 		tasks[i]->run();
-		if (tasks[i]->repeat()) {
-			tasks[i]->renew();
-			_add_task(tasks[i]);
-		}
-		else
-			delete tasks[i];
+		delete tasks[i];
 	}
 
 	lock.lock();
@@ -251,4 +244,103 @@ void timer::print_state()
 			task_list.size(), get_next_timeout());
 }
 
+static void periodic_timer_handler(int sig, siginfo_t *si, void *uc)
+{
+	periodic_timer *t = (periodic_timer *) si->si_value.sival_ptr;
+	t->run_task();
+}
+
+periodic_timer::periodic_timer(thread *t, timer_task *task)
+{
+	timer_id = timer_count.inc(1);
+	this->t = t;
+	this->task = task;
+
+	/**
+	 * The code here is copied from the example code in the manual of
+	 * timer_create.
+	 */
+	struct sigevent sev;
+	struct sigaction sa;
+
+	/* Establish handler for timer signal */
+
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = periodic_timer_handler;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGRTMIN, &sa, NULL) == -1) {
+		perror("sigaction");
+		exit(1);
+	}
+
+	// This is a Linux feature, but we really want the signal sent to a dedicated
+	// thread, so whatever the timer task does, there won't be deadlock.
+	sev.sigev_notify = SIGEV_THREAD_ID;
+	// It supposes to be sigev_notify_thread_id
+	sev._sigev_un._tid = t->get_tid();
+	sev.sigev_signo = SIGRTMIN;
+	sev.sigev_value.sival_ptr = this;
+	if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
+		perror("timer_create");
+		exit(1);
+	}
+}
+
+void periodic_timer::set_timeout(int64_t timeout)
+{
+	assert(timeout > 0);
+
+	struct itimerspec its;
+
+	disable_timer();
+
+	/* Start the timer */
+
+	its.it_value.tv_sec = 0;
+	its.it_value.tv_nsec = timeout * 1000;
+	its.it_interval.tv_sec = its.it_value.tv_sec;
+	its.it_interval.tv_nsec = its.it_value.tv_nsec;
+
+	struct itimerspec old_value;
+	if (timer_settime(timerid, 0, &its, &old_value) == -1) {
+		perror("timer_settime");
+		exit(1);
+	}
+
+	enable_timer();
+}
+
+bool periodic_timer::start()
+{
+	set_timeout(task->get_timeout());
+
+	struct itimerspec curr_value;
+	int ret = timer_gettime(timerid, &curr_value);
+	if (ret < 0) {
+		perror("timer_gettime");
+		assert(0);
+	}
+
+	return true;
+}
+
+bool periodic_timer::is_enabled() const
+{
+	struct itimerspec curr_value;
+	int ret = timer_gettime(timerid, &curr_value);
+	if (ret < 0) {
+		perror("timer_gettime");
+		assert(0);
+	}
+	return ((int64_t) curr_value.it_interval.tv_sec) * 1000000
+		+ curr_value.it_interval.tv_nsec / 1000 > 0;
+}
+
+void periodic_timer::run_task()
+{
+	task->run();
+}
+
 atomic_number<long> timer_task::task_count;
+atomic_integer timer::timer_count;
+atomic_integer periodic_timer::timer_count;

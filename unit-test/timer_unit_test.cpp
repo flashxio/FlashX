@@ -8,7 +8,7 @@ class test_task: public timer_task
 	long prev;
 	int task_id;
 public:
-	test_task(int task_id): timer_task(10, true) {
+	test_task(int task_id): timer_task(10) {
 		prev = get_curr_time_us();
 		this->task_id = task_id;
 	}
