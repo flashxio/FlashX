@@ -18,6 +18,8 @@
 CC = gcc
 CXX = g++
 
+PROFILER=1
+
 ifdef MEMCHECK
 TRACE_FLAGS = -faddress-sanitizer
 CC = clang
