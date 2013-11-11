@@ -43,6 +43,7 @@
 #include "thread.h"
 #include "remote_access.h"
 #include "debugger.h"
+#include "timer.h"
 
 const int NUMA_REQ_QUEUE_SIZE = 2000;
 const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
@@ -372,14 +373,32 @@ public:
 	}
 };
 
+class req_stealer;
+class flush_timer_task: public timer_task
+{
+	static const int FLUSH_TIMEOUT = 300000;
+	req_stealer *io;
+public:
+	flush_timer_task(req_stealer *io): timer_task(FLUSH_TIMEOUT, true) {
+		this->io = io;
+	}
+
+	void run();
+};
+
 class req_stealer: public io_interface
 {
 	underlying_io_thread *t;
 	message<io_request> req_buf;
 	slab_allocator *alloc;
+	timer *flush_timer;
+
+	atomic_integer access_guard;
 public:
 	req_stealer(underlying_io_thread *t, thread *curr_thread): io_interface(
 			curr_thread) {
+		flush_timer = new timer(curr_thread);
+		flush_timer->add_task(new flush_timer_task(this));
 		this->t = t;
 		alloc = new slab_allocator(
 				"io_msg_allocator-" + itoa(curr_thread->get_node_id()),
@@ -395,6 +414,7 @@ public:
 	}
 
 	void access(io_request *reqs, int num, io_status *status = NULL) {
+		access_guard.inc(1);
 		int num_added = 0;
 		for (int i = 0; i < num; i++) {
 			// the requests are created by global_cached_io and user_data
@@ -414,11 +434,34 @@ public:
 				req_buf = tmp;
 			}
 		}
+		access_guard.inc(1);
+	}
+
+	void flush_requests_timeout() {
+		// The timeout signal is sent to the thread that uses the I/O
+		// instance. When the access guard is even, the thread isn't using
+		// req_buf, so we are safe to use it here.
+		if (access_guard.get() % 2 == 0) {
+			t->add_reqs(req_buf);
+			message<io_request> tmp(alloc, false);
+			req_buf = tmp;
+		}
 	}
 
 	virtual void flush_requests() {
 	}
+
+	void print_state() {
+		printf("req_stealer %d has %d buffered reqs\n",
+				get_io_idx(), req_buf.get_num_objs());
+		flush_timer->print_state();
+	}
 };
+
+void flush_timer_task::run()
+{
+	io->flush_requests_timeout();
+}
 
 #if 0
 /**
@@ -587,16 +630,18 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 class process_request_thread: public thread
 {
 	node_cached_io *io;
+	struct thread_group *group;
 
-	process_request_thread(int node_id): thread(
-			std::string("process_request_thread-") + itoa(node_id), node_id) {
+	process_request_thread(struct thread_group *group): thread(
+			std::string("process_request_thread-") + itoa(group->id), group->id) {
 		this->io = NULL;
+		this->group = group;
 	}
 public:
-	static process_request_thread *create(int node_id) {
+	static process_request_thread *create(struct thread_group *group) {
 		void *addr = numa_alloc_onnode(sizeof(process_request_thread),
-				node_id);
-		return new(addr) process_request_thread(node_id);
+				group->id);
+		return new(addr) process_request_thread(group);
 	}
 
 	static void destroy(process_request_thread *t,
@@ -610,8 +655,9 @@ public:
 		numa_free(t, sizeof(*t));
 	}
 
-	void set_io(node_cached_io *io) {
-		this->io = io;
+	void init() {
+		io = node_cached_io::create(
+				new req_stealer(group->underlying_thread, this), group);
 	}
 
 	node_cached_io *get_io() const {
@@ -733,10 +779,7 @@ part_io_process_table::part_io_process_table(
 		struct thread_group *groupp = &groups[node_id];
 		// Create processing threads.
 		for (int i = 0; i < params.get_numa_num_process_threads(); i++) {
-			process_request_thread *t = process_request_thread::create(node_id);
-			node_cached_io *io = node_cached_io::create(
-					new req_stealer(group.underlying_thread, t), groupp);
-			t->set_io(io);
+			process_request_thread *t = process_request_thread::create(groupp);
 			t->start();
 			groupp->process_request_threads.push_back(t);
 		}
