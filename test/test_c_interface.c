@@ -29,7 +29,9 @@
 #include <assert.h>
 #include <pthread.h>
 #include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include "io_c_interface.h"
 
@@ -151,7 +153,9 @@ void *AsyncThreadWriteOrRead(void *arg)
 
 void int_handler(int sig_num)
 {
+#ifdef PROFILER
 	ProfilerStop();
+#endif
 	exit(0);
 }
 
@@ -191,7 +195,9 @@ int main(int argc, char *argv[])
 	char file_name_buf[128];
 	char *file_name;
 
+#ifdef PROFILER
 	ProfilerStart(prof_file);
+#endif
 	struct thread_data data[num_threads];
 	long start = get_curr_ms();
 	for (i = 0; i < num_threads; i++) {
@@ -232,6 +238,8 @@ int main(int argc, char *argv[])
 	for (i = 0; i < num_threads; i++)
 		pthread_join(data[i].tid, NULL);
 	long end = get_curr_ms();
+#ifdef PROFILER
 	ProfilerStop();
+#endif
 	printf("It takes %ld ms\n", end - start);
 }
