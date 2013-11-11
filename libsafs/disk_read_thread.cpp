@@ -206,7 +206,9 @@ void disk_read_thread::run() {
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	do {
 		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
+#ifdef STATISTICS
 		num_msgs += num;
+#endif
 		if (is_debug_enabled())
 			printf("I/O thread %d: queue size: %d, low-prio queue size: %d\n",
 					get_node_id(), queue.get_num_entries(),
@@ -219,7 +221,9 @@ void disk_read_thread::run() {
 					&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS) {
 				if (low_prio_msg.is_empty()) {
 					int num = low_prio_queue.fetch(&low_prio_msg, 1);
+#ifdef STATISTICS
 					num_msgs += num;
+#endif
 					assert(num == 1);
 				}
 				process_low_prio_msg(low_prio_msg);
@@ -245,7 +249,9 @@ void disk_read_thread::run() {
 
 			// Let's try to fetch requests again.
 			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
+#ifdef STATISTICS
 			num_msgs += num;
+#endif
 		}
 
 		stack_array<io_request> local_reqs(LOCAL_REQ_BUF_SIZE);
