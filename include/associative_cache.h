@@ -310,8 +310,8 @@ public:
 
 	void rebalance(hash_cell *cell);
 
-	page *search(off_t off, off_t &old_off);
-	page *search(off_t offset);
+	page *search(const page_id_t &pg_id, page_id_t &old_id);
+	page *search(const page_id_t &pg_id);
 
 	bool contain(thread_safe_page *pg) const {
 		return buf.contain(pg);
@@ -468,18 +468,20 @@ public:
 	}
 
 	/* the hash function used for the current level. */
-	int hash(off_t offset) {
+	int hash(const page_id_t &pg_id) {
 		// The offset of pages in this cache may all be a multiple of
 		// some value, so when we hash a page to a page set, we need
 		// to adjust the offset.
 		int num_cells = (init_ncells * (long) (1 << level));
-		return universal_hash(offset / PAGE_SIZE / offset_factor, num_cells);
+		return universal_hash(pg_id.get_offset() / PAGE_SIZE / offset_factor
+				+ pg_id.get_file_id(), num_cells);
 	}
 
 	/* the hash function used for the next level. */
-	int hash1(off_t offset) {
+	int hash1(const page_id_t &pg_id) {
 		int num_cells = (init_ncells * (long) (1 << (level + 1)));
-		return universal_hash(offset / PAGE_SIZE / offset_factor, num_cells);
+		return universal_hash(pg_id.get_offset() / PAGE_SIZE / offset_factor
+				+ pg_id.get_file_id(), num_cells);
 	}
 
 	int hash1_locked(off_t offset) {
@@ -498,14 +500,14 @@ public:
 	 * it tries to evict a page. Therefore, it also triggers some code of
 	 * maintaining eviction policy.
 	 */
-	page *search(off_t offset, off_t &old_off);
+	page *search(const page_id_t &pg_id, page_id_t &old_id);
 	/**
 	 * This method just searches for the specified page, nothing more.
 	 * So if the request isn't issued from the workload, and we don't need
 	 * evict a page if the specified page doesn't exist, we should use
 	 * this method.
 	 */
-	page *search(off_t offset);
+	page *search(const page_id_t &pg_id);
 
 	/**
 	 * Expand the cache by `npages' pages, and return the actual number
@@ -536,15 +538,15 @@ public:
 			return NULL;
 	}
 
-	hash_cell *get_cell_offset(off_t offset) {
+	hash_cell *get_cell_offset(const page_id_t &pg_id) {
 		int global_idx;
 		unsigned long count;
 		hash_cell *cell = NULL;
 		do {
 			table_lock.read_lock(count);
-			global_idx = hash(offset);
+			global_idx = hash(pg_id);
 			if (global_idx < split)
-				global_idx = hash1(offset);
+				global_idx = hash1(pg_id);
 			cell = get_cell(global_idx);
 		} while (!table_lock.read_unlock(count));
 		assert(cell);

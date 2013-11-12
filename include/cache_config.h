@@ -24,6 +24,7 @@
 #include <tr1/unordered_map>
 
 #include "common.h"
+#include "cache.h"
 
 class page_cache;
 
@@ -80,7 +81,7 @@ public:
 		return it->second;
 	}
 
-	virtual int page2cache(off_t off) const = 0;
+	virtual int page2cache(const page_id_t &pg_id) const = 0;
 
 	void get_node_ids(std::vector<int> &node_ids) const {
 		for (std::tr1::unordered_map<int, long>::const_iterator it
@@ -110,8 +111,8 @@ public:
 		init(part_sizes);
 	}
 
-	virtual int page2cache(off_t off) const {
-		return (int) (off / PAGE_SIZE) % get_num_caches();
+	virtual int page2cache(const page_id_t &pg_id) const {
+		return (int) (pg_id.get_offset() / PAGE_SIZE) % get_num_caches();
 	}
 };
 
@@ -141,7 +142,7 @@ public:
 		init(part_sizes);
 	}
 
-	virtual int page2cache(off_t off) const {
+	virtual int page2cache(const page_id_t &pg_id) const {
 		return 0;
 //		return map[(off / PAGE_SIZE) % 3];
 //		return (int) (off / PAGE_SIZE) % 2;

@@ -100,8 +100,8 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 		// safe way to do it is to use the search method of
 		// the page cache.
 		page_cache *cache = (page_cache *) req.get_priv();
-		thread_safe_page *p = (thread_safe_page *) cache->search(
-				req.get_offset());
+		page_id_t pg_id(req.get_file_id(), req.get_offset());
+		thread_safe_page *p = (thread_safe_page *) cache->search(pg_id);
 		// The page has been evicted.
 		if (p == NULL) {
 			// The original page has been evicted, we should clear

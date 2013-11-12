@@ -592,7 +592,8 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 	int num_local = 0;
 
 	for (int i = 0; i < num; i++) {
-		int idx = cache_conf->page2cache(reqs[i]->get_offset());
+		page_id_t pg_id(reqs[i]->get_file_id(), reqs[i]->get_offset());
+		int idx = cache_conf->page2cache(pg_id);
 		if (idx != get_node_id())
 			local_reply_buf[num_remote++] = io_reply(reqs[i], true, 0);
 		else {
@@ -993,7 +994,8 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 	// Distribute requests to the corresponding nodes.
 	for (int i = 0; i < num; i++) {
 		assert(requests[i].within_1page());
-		int idx = cache_conf->page2cache(requests[i].get_offset());
+		page_id_t pg_id(requests[i].get_file_id(), requests[i].get_offset());
+		int idx = cache_conf->page2cache(pg_id);
 		if (idx != get_node_id()) {
 			remote_reads++;
 			// TODO why do this?
@@ -1081,12 +1083,13 @@ int part_global_cached_io::preload(off_t start, long size)
 
 	assert(ROUND_PAGE(start) == start);
 	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
-		off_t old_off = -1;
+		page_id_t pg_id(get_file_id(), ROUND_PAGE(offset));
+		page_id_t old_id;
 		// We only preload data to the local cache.
-		if (cache_conf->page2cache(offset) != get_node_id())
+		if (cache_conf->page2cache(pg_id) != get_node_id())
 			continue;
 		thread_safe_page *p = (thread_safe_page *) local_group->cache->search(
-					ROUND_PAGE(offset), old_off);
+					pg_id, old_id);
 		// This is mainly for testing. I don't need to really read data from disks.
 		if (!p->data_ready()) {
 			p->set_io_pending(false);

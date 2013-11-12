@@ -188,7 +188,8 @@ public:
 	void finalize_partial_request(io_request &partial, io_request *orig);
 	void finalize_request(io_request *req);
 
-	void write_dirty_page(thread_safe_page *p, off_t off, io_request *orig);
+	void write_dirty_page(thread_safe_page *p, const page_id_t &pg_id,
+			io_request *orig);
 
 	void wakeup_on_req(io_request *req, int status) {
 		assert(req->is_sync());

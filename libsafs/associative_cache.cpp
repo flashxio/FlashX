@@ -40,8 +40,9 @@ template<class T>
 void page_cell<T>::set_pages(char *pages[], int num, int node_id)
 {
 	assert(num <= CELL_SIZE);
+	page_id_t pg_id;
 	for (int i = 0; i < num; i++) {
-		buf[i] = T(-1, pages[i], node_id);
+		buf[i] = T(pg_id, pages[i], node_id);
 	}
 	idx = 0;
 	num_pages = num;
@@ -67,9 +68,10 @@ void page_cell<T>::add_pages(char *pages[], int num, int node_id)
 	int num_added = 0;
 	assert(num_pages == get_num_used_pages());
 	assert(num + num_pages <= CELL_SIZE);
+	page_id_t pg_id;
 	for (int i = 0; i < CELL_SIZE && num_added < num; i++) {
 		if (buf[i].get_data() == NULL)
-			buf[i] = T(-1, pages[num_added++], node_id);
+			buf[i] = T(pg_id, pages[num_added++], node_id);
 	}
 	num_pages += num;
 	rebuild_map();
@@ -301,12 +303,13 @@ void hash_cell::rebalance(hash_cell *cell)
 	// TODO
 }
 
-page *hash_cell::search(off_t offset)
+page *hash_cell::search(const page_id_t &pg_id)
 {
 	pthread_spin_lock(&_lock);
 	page *ret = NULL;
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
-		if (buf.get_page(i)->get_offset() == offset) {
+		if (buf.get_page(i)->get_offset() == pg_id.get_offset()
+				&& buf.get_page(i)->get_file_id() == pg_id.get_file_id()) {
 			ret = buf.get_page(i);
 			break;
 		}
@@ -321,7 +324,8 @@ page *hash_cell::search(off_t offset)
  * search for a page with the offset.
  * If the page doesn't exist, return an empty page.
  */
-page *hash_cell::search(off_t off, off_t &old_off) {
+page *hash_cell::search(const page_id_t &pg_id, page_id_t &old_id)
+{
 	thread_safe_page *ret = NULL;
 #ifndef STATISTICS
 	pthread_spin_lock(&_lock);
@@ -334,7 +338,8 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 	num_accesses++;
 
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
-		if (buf.get_page(i)->get_offset() == off) {
+		if (buf.get_page(i)->get_offset() == pg_id.get_offset()
+				&& buf.get_page(i)->get_file_id() == pg_id.get_file_id()) {
 			ret = buf.get_page(i);
 			break;
 		}
@@ -358,16 +363,20 @@ page *hash_cell::search(off_t off, off_t &old_off) {
 			ret->set_dirty(false);
 			ret->set_old_dirty(true);
 		}
-		old_off = ret->get_offset();
-		if (old_off == -1)
+		off_t old_off = ret->get_offset();
+		file_id_t old_file_id = ret->get_file_id();
+		if (old_off == -1) {
 			old_off = PAGE_INVALID_OFFSET;
+			assert(old_file_id == INVALID_FILE_ID);
+		}
+		old_id = page_id_t(old_file_id, old_off);
 		/*
 		 * I have to change the offset in the spinlock,
 		 * to make sure when the spinlock is unlocked, 
 		 * the page can be seen by others even though
 		 * it might not have data ready.
 		 */
-		ret->set_offset(off);
+		ret->set_id(pg_id);
 #ifdef USE_SHADOW_PAGE
 		shadow_page shadow_pg = shadow.search(off);
 		/*
@@ -920,7 +929,7 @@ next_cell:
 	return npages - pg_idx;
 }
 
-page *associative_cache::search(off_t offset, off_t &old_off) {
+page *associative_cache::search(const page_id_t &pg_id, page_id_t &old_id) {
 	/*
 	 * search might change the structure of the cell,
 	 * and cause the cell table to expand.
@@ -929,7 +938,7 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 	 * for the cell.
 	 */
 	do {
-		page *p = get_cell_offset(offset)->search(offset, old_off);
+		page *p = get_cell_offset(pg_id)->search(pg_id, old_id);
 #ifdef DEBUG
 		if (p->is_old_dirty())
 			num_dirty_pages.dec(1);
@@ -938,10 +947,10 @@ page *associative_cache::search(off_t offset, off_t &old_off) {
 	} while (true);
 }
 
-page *associative_cache::search(off_t offset)
+page *associative_cache::search(const page_id_t &pg_id)
 {
 	do {
-		return get_cell_offset(offset)->search(offset);
+		return get_cell_offset(pg_id)->search(pg_id);
 	} while (true);
 }
 
@@ -1169,8 +1178,11 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 		// we need to check if the page set contains pages that
 		// we should flush.
 		if (reqs[i]->is_discarded()) {
-			hash_cell *cell = cache->get_cell_offset(
-					reqs[i]->get_offset());
+			// TODO this doesn't work because the request in this case doesn't
+			// carry file id. what do we do here?
+			assert(0);
+			page_id_t pg_id(reqs[i]->get_file_id(), reqs[i]->get_offset());
+			hash_cell *cell = cache->get_cell_offset(pg_id);
 #ifdef DEBUG
 			assert(cell->contain(reqs[i]->get_page(0))); 
 #endif
@@ -1503,7 +1515,8 @@ void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],
 	int num_queued_cells = 0;
 	int num_flushes = 0;
 	for (int i = 0; i < num; i++) {
-		hash_cell *cell = local_cache->get_cell_offset(pages[i]->get_offset());
+		page_id_t pg_id(pages[i]->get_file_id(), pages[i]->get_offset());
+		hash_cell *cell = local_cache->get_cell_offset(pg_id);
 		char dirty_flag = 0;
 		char skip_flags = 0;
 		page_set_flag(dirty_flag, DIRTY_BIT, true);
