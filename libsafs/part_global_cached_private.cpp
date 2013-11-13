@@ -287,6 +287,11 @@ public:
 		if (has_pending_requests())
 			get_thread()->activate();
 	}
+
+	int get_file_id() const {
+		assert(0);
+		return -1;
+	}
 };
 
 static void notify_gcached_io(io_interface *io, io_request *reqs[], int num)
