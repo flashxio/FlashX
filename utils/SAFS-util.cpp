@@ -253,6 +253,49 @@ void comm_create_file(int argc, char *argv[])
 			file.get_file_size());
 }
 
+typedef void (*command_func_t)(int argc, char *argv[]);
+
+struct command
+{
+	std::string name;
+	command_func_t func;
+	std::string help_info;
+};
+
+struct command commands[] = {
+	{"create", comm_create_file,
+		"create file_name size: create a file with the specified size"},
+	{"load", comm_load_file2fs,
+		"load file_name [ext_file]: load data to the file"},
+	{"verify", comm_verify_file,
+		"verify file_name [ext_file]: verify data in the file"},
+};
+
+int get_num_commands()
+{
+	return sizeof(commands) / sizeof(commands[0]);
+}
+
+const command *get_command(const std::string &name)
+{
+	int num_comms = get_num_commands();
+	for (int i = 0; i < num_comms; i++) {
+		if (commands[i].name == name)
+			return &commands[i];
+	}
+	return NULL;
+}
+
+void print_help()
+{
+	printf("SAFS-util conf_file command ...\n");
+	printf("The supported commands are\n");
+	int num_commands = get_num_commands();
+	for (int i =0; i < num_commands; i++) {
+		printf("\t%s\n", commands[i].help_info.c_str());
+	}
+}
+
 /**
  * This is a utility tool for the SA-FS.
  */
@@ -260,7 +303,7 @@ void comm_create_file(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
 	if (argc < 3) {
-		fprintf(stderr, "util conf_file command ...\n");
+		print_help();
 		exit(-1);
 	}
 
@@ -270,13 +313,11 @@ int main(int argc, char *argv[])
 	config_map configs(conf_file);
 	init_io_system(configs);
 
-	if (command == "load") {
-		comm_load_file2fs(argc - 3, argv + 3);
+	const struct command *comm = get_command(command);
+	if (comm == NULL) {
+		fprintf(stderr, "wrong command %s\n", comm->name.c_str());
+		print_help();
+		return -1;
 	}
-	else if (command == "verify") {
-		comm_verify_file(argc - 3, argv + 3);
-	}
-	else if (command == "create") {
-		comm_create_file(argc - 3, argv + 3);
-	}
+	comm->func(argc - 3, argv + 3);
 }
