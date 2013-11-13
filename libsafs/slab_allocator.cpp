@@ -29,10 +29,6 @@ static atomic_flags<int> register_flag;
 class debug_all_slab_task: public debug_task
 {
 public:
-	debug_all_slab_task() {
-		printf("create all_slab task\n");
-	}
-
 	void run() {
 		printf("The size of all slab allocators: %ldMB\n",
 				tot_slab_size.get() / 1024 / 1024);
