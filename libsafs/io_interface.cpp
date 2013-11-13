@@ -52,7 +52,7 @@
 struct global_data_collection
 {
 	RAID_config raid_conf;
-	std::vector<disk_read_thread *> read_threads;
+	std::vector<disk_io_thread *> read_threads;
 	pthread_mutex_t mutex;
 
 #ifdef DEBUG
@@ -143,7 +143,7 @@ void init_io_system(const config_map &configs)
 			std::vector<int> indices(1, k);
 			logical_file_partition partition(indices);
 			// Create disk accessing threads.
-			global_data.read_threads[k] = new disk_read_thread(partition,
+			global_data.read_threads[k] = new disk_io_thread(partition,
 					global_data.raid_conf.get_disk(k).node_id, NULL, k);
 		}
 		debug.register_task(new debug_global_data());
@@ -409,13 +409,13 @@ void destroy_io_factory(file_io_factory *factory)
 void print_io_thread_stat()
 {
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
-		disk_read_thread *t = global_data.read_threads[i];
+		disk_io_thread *t = global_data.read_threads[i];
 		if (t)
 			t->stop();
 	}
 	sleep(1);
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
-		disk_read_thread *t = global_data.read_threads[i];
+		disk_io_thread *t = global_data.read_threads[i];
 		if (t)
 			t->print_stat();
 	}
