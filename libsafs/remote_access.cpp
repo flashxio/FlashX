@@ -27,16 +27,16 @@ const int NUM_PROCESS_COMPLETED_REQS = 8;
 
 /**
  * The maximal number of pending IOs is decided by the maximal pending IOs
- * allowed on each I/O thread divided by the number of remote_disk_access.
- * Thus, the performance isn't decided by the number of remote_disk_access.
+ * allowed on each I/O thread divided by the number of remote_io.
+ * Thus, the performance isn't decided by the number of remote_io.
  */
-int remote_disk_access::get_max_num_pending_ios() const
+int remote_io::get_max_num_pending_ios() const
 {
 	return io_interface::get_max_num_pending_ios() *
 		io_threads.size() / num_ios.get();
 }
 
-void remote_disk_access::notify_completion(io_request *reqs[], int num)
+void remote_io::notify_completion(io_request *reqs[], int num)
 {
 	stack_array<io_request> req_copies(num);
 	for (int i = 0; i < num; i++) {
@@ -49,7 +49,7 @@ void remote_disk_access::notify_completion(io_request *reqs[], int num)
 	get_thread()->activate();
 }
 
-remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &remotes,
+remote_io::remote_io(const std::vector<disk_read_thread *> &remotes,
 		file_mapper *mapper, thread *t, int max_reqs): io_interface(
 			// TODO I hope the queue size is large enough.
 			t), max_disk_cached_reqs(max_reqs), complete_queue(std::string(
@@ -76,7 +76,7 @@ remote_disk_access::remote_disk_access(const std::vector<disk_read_thread *> &re
 	this->block_mapper = mapper;
 }
 
-remote_disk_access::~remote_disk_access()
+remote_io::~remote_io()
 {
 	assert(senders.size() == low_prio_senders.size());
 	int num_senders = senders.size();
@@ -86,18 +86,18 @@ remote_disk_access::~remote_disk_access()
 	}
 }
 
-io_interface *remote_disk_access::clone(thread *t) const
+io_interface *remote_io::clone(thread *t) const
 {
 	// An IO may not be associated to any threads.
 	ASSERT_TRUE(t);
 	num_ios.inc(1);
-	remote_disk_access *copy = new remote_disk_access(io_threads,
+	remote_io *copy = new remote_io(io_threads,
 			block_mapper, t, this->max_disk_cached_reqs);
 	copy->cb = this->cb;
 	return copy;
 }
 
-void remote_disk_access::cleanup()
+void remote_io::cleanup()
 {
 	process_completed_requests(complete_queue.get_num_entries());
 
@@ -134,7 +134,7 @@ void remote_disk_access::cleanup()
 		io_threads[i]->flush_requests();
 }
 
-void remote_disk_access::access(io_request *requests, int num,
+void remote_io::access(io_request *requests, int num,
 		io_status *status)
 {
 	ASSERT_EQ(get_thread(), thread::get_curr_thread());
@@ -229,12 +229,12 @@ void remote_disk_access::access(io_request *requests, int num,
 			status[i] = IO_PENDING;
 }
 
-void remote_disk_access::flush_requests()
+void remote_io::flush_requests()
 {
 	flush_requests(0);
 }
 
-int remote_disk_access::process_completed_requests(int num)
+int remote_io::process_completed_requests(int num)
 {
 	if (num > 0) {
 		stack_array<io_request> reqs(num);
@@ -246,7 +246,7 @@ int remote_disk_access::process_completed_requests(int num)
 		return 0;
 }
 
-int remote_disk_access::process_completed_requests(io_request reqs[], int num)
+int remote_io::process_completed_requests(io_request reqs[], int num)
 {
 	// There are a few cases for the incoming requests.
 	//	the requests issued by the upper layer IO;
@@ -316,7 +316,7 @@ int remote_disk_access::process_completed_requests(io_request reqs[], int num)
 	return num - num_part_reqs;
 }
 
-void remote_disk_access::flush_requests(int max_cached)
+void remote_io::flush_requests(int max_cached)
 {
 	// Now let's flush requests to the queues, but we first try to
 	// flush requests non-blockingly.
@@ -337,7 +337,7 @@ void remote_disk_access::flush_requests(int max_cached)
 	}
 }
 
-int remote_disk_access::get_file_id() const
+int remote_io::get_file_id() const
 {
 	return block_mapper->get_file_id();
 }
@@ -345,7 +345,7 @@ int remote_disk_access::get_file_id() const
 /**
  * We wait for at least the specified number of requests to complete.
  */
-int remote_disk_access::wait4complete(int num_to_complete)
+int remote_io::wait4complete(int num_to_complete)
 {
 	flush_requests();
 	int pending = num_pending_ios();
@@ -361,7 +361,7 @@ int remote_disk_access::wait4complete(int num_to_complete)
 	return pending - num_pending_ios();
 }
 
-void remote_disk_access::print_state()
+void remote_io::print_state()
 {
 	printf("remote_io %d has %d pending reqs, %d completed reqs\n",
 			get_io_idx(), num_pending_ios(), complete_queue.get_num_entries());
@@ -373,4 +373,4 @@ void remote_disk_access::print_state()
 				low_prio_senders[i]->get_num_remaining());
 }
 
-atomic_integer remote_disk_access::num_ios;
+atomic_integer remote_io::num_ios;

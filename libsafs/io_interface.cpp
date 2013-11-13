@@ -310,8 +310,7 @@ remote_io_factory::remote_io_factory(const std::string &file_name): file_io_fact
 
 io_interface *remote_io_factory::create_io(thread *t)
 {
-	io_interface *io = new remote_disk_access(global_data.read_threads,
-			mapper, t);
+	io_interface *io = new remote_io(global_data.read_threads, mapper, t);
 #ifdef DEBUG
 	global_data.register_io(io);
 #endif
@@ -320,7 +319,7 @@ io_interface *remote_io_factory::create_io(thread *t)
 
 io_interface *global_cached_io_factory::create_io(thread *t)
 {
-	io_interface *underlying = new remote_disk_access(
+	io_interface *underlying = new remote_io(
 			global_data.read_threads, mapper, t);
 	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache);
@@ -348,7 +347,7 @@ part_global_cached_io_factory::part_global_cached_io_factory(
 io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
-			new remote_disk_access(global_data.read_threads, mapper, t), table);
+			new remote_io(global_data.read_threads, mapper, t), table);
 #ifdef DEBUG
 	global_data.register_io(io);
 #endif
