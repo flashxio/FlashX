@@ -253,6 +253,40 @@ void comm_create_file(int argc, char *argv[])
 			file.get_file_size());
 }
 
+void print_help();
+
+void comm_help(int argc, char *argv[])
+{
+	print_help();
+}
+
+void comm_list(int argc, char *argv[])
+{
+	std::set<std::string> files;
+	const RAID_config &conf = get_sys_RAID_conf();
+
+	// First find all individual file names in the root directories.
+	for (int i = 0; i < conf.get_num_disks(); i++) {
+		std::string dir_name = conf.get_disk(i).name;
+		native_dir dir(dir_name);
+		std::vector<std::string> file_names;
+		dir.read_all_files(file_names);
+		files.insert(file_names.begin(), file_names.end());
+	}
+
+	for (std::set<std::string>::const_iterator it = files.begin();
+			it != files.end(); it++) {
+		safs_file file(conf, *it);
+		if (file.exist()) {
+			printf("%s: %ld bytes\n", file.get_name().c_str(),
+					file.get_file_size());
+		}
+		else {
+			printf("%s is corrupted\n", file.get_name().c_str());
+		}
+	}
+}
+
 typedef void (*command_func_t)(int argc, char *argv[]);
 
 struct command
@@ -265,6 +299,9 @@ struct command
 struct command commands[] = {
 	{"create", comm_create_file,
 		"create file_name size: create a file with the specified size"},
+	{"help", comm_help,
+		"help: print the help info"},
+	{"list", comm_list, "list: list existing files in SAFS"},
 	{"load", comm_load_file2fs,
 		"load file_name [ext_file]: load data to the file"},
 	{"verify", comm_verify_file,
