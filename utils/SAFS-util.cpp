@@ -202,7 +202,14 @@ void comm_load_file2fs(int argc, char *argv[])
 	if (argc >= 2)
 		ext_file = argv[1];
 
+	safs_file file(get_sys_RAID_conf(), int_file_name);
+	if (!file.exist()) {
+		fprintf(stderr, "%s doesn't exist\n", int_file_name.c_str());
+		return;
+	}
+
 	file_io_factory *factory = create_io_factory(int_file_name, REMOTE_ACCESS);
+	assert(factory);
 	thread *curr_thread = thread::represent_thread(0);
 	io_interface *io = factory->create_io(curr_thread);
 
