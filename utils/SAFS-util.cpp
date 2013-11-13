@@ -294,6 +294,22 @@ void comm_list(int argc, char *argv[])
 	}
 }
 
+void comm_delete_file(int argc, char *argv[])
+{
+	if (argc < 1) {
+		fprintf(stderr, "delete file_name\n");
+		return;
+	}
+
+	std::string file_name = argv[0];
+	safs_file file(get_sys_RAID_conf(), file_name);
+	if (!file.exist()) {
+		fprintf(stderr, "%s doesn't exist\n", file_name.c_str());
+		return;
+	}
+	file.delete_file();
+}
+
 typedef void (*command_func_t)(int argc, char *argv[]);
 
 struct command
@@ -306,6 +322,8 @@ struct command
 struct command commands[] = {
 	{"create", comm_create_file,
 		"create file_name size: create a file with the specified size"},
+	{"delete", comm_delete_file,
+		"delete file_name: delete a file"},
 	{"help", comm_help,
 		"help: print the help info"},
 	{"list", comm_list, "list: list existing files in SAFS"},
