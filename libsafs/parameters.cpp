@@ -53,6 +53,7 @@ sys_parameters::sys_parameters()
 	use_virt_aio = false;
 	verify_content = false;
 	use_flusher = false;
+	cache_large_write = false;
 	vaio_print_freq = 1000000;
 	numa_num_process_threads = 1;
 	num_nodes = 1;
