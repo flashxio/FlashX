@@ -37,7 +37,7 @@ const int NUMA_REPLY_BUF_SIZE = NUMA_MSG_SIZE / sizeof(io_reply);
 
 struct thread_group;
 class part_io_process_table;
-class disk_read_thread;
+class disk_io_thread;
 class file_mapper;
 class group_request_sender;
 
@@ -95,7 +95,7 @@ class part_global_cached_io: public io_interface
 	~part_global_cached_io();
 public:
 	static part_io_process_table *open_file(
-			const std::vector<disk_read_thread *> &io_threads,
+			const std::vector<disk_io_thread *> &io_threads,
 			file_mapper *mapper, const cache_config *config);
 	static int close_file(part_io_process_table *table);
 

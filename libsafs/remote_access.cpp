@@ -49,7 +49,7 @@ void remote_io::notify_completion(io_request *reqs[], int num)
 	get_thread()->activate();
 }
 
-remote_io::remote_io(const std::vector<disk_read_thread *> &remotes,
+remote_io::remote_io(const std::vector<disk_io_thread *> &remotes,
 		file_mapper *mapper, thread *t, int max_reqs): io_interface(
 			// TODO I hope the queue size is large enough.
 			t), max_disk_cached_reqs(max_reqs), complete_queue(std::string(

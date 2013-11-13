@@ -128,7 +128,7 @@ class part_io_process_table
 	const cache_config *cache_conf;
 	int num_groups;
 public:
-	part_io_process_table(const std::vector<disk_read_thread *> &io_threads,
+	part_io_process_table(const std::vector<disk_io_thread *> &io_threads,
 			file_mapper *mapper, const cache_config *config);
 
 	~part_io_process_table();
@@ -308,7 +308,7 @@ static void notify_gcached_io(io_interface *io, io_request *reqs[], int num)
 class underlying_io_proxy: public remote_io
 {
 public:
-	underlying_io_proxy(const std::vector<disk_read_thread *> &remotes,
+	underlying_io_proxy(const std::vector<disk_io_thread *> &remotes,
 			file_mapper *mapper, thread *curr_thread): remote_io(
 				remotes, mapper, curr_thread) {
 	}
@@ -337,7 +337,7 @@ class underlying_io_thread: public thread
 	underlying_io_proxy *io;
 	size_t num_reqs;
 public:
-	underlying_io_thread(const std::vector<disk_read_thread *> &remotes,
+	underlying_io_thread(const std::vector<disk_io_thread *> &remotes,
 			file_mapper *mapper, int node_id): thread(
 			std::string("underlying_io_thread-") + itoa(node_id),
 			node_id), queue("underlying_io_queue", node_id,
@@ -746,7 +746,7 @@ void process_reply_thread::run()
 #endif
 
 part_io_process_table::part_io_process_table(
-		const std::vector<disk_read_thread *> &io_threads,
+		const std::vector<disk_io_thread *> &io_threads,
 		file_mapper *mapper, const cache_config *config)
 {
 	int num_ssds = io_threads.size();
@@ -886,7 +886,7 @@ public:
 };
 
 part_io_process_table *part_global_cached_io::open_file(
-		const std::vector<disk_read_thread *> &io_threads,
+		const std::vector<disk_io_thread *> &io_threads,
 		file_mapper *mapper, const cache_config *config)
 {
 	part_io_process_table *table = new part_io_process_table(io_threads,

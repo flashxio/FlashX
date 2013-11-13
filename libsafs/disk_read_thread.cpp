@@ -26,7 +26,7 @@
 const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
-disk_read_thread::disk_read_thread(const logical_file_partition &_partition,
+disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 		int node_id, page_cache *cache, int _disk_id): thread(
 			std::string("io-thread-") + itoa(node_id), node_id), disk_id(
 			_disk_id), queue(node_id, std::string("io-queue-") + itoa(node_id),
@@ -72,7 +72,7 @@ void notify_ignored_flushes(io_request ignored_flushes[], int num_ignored)
 	}
 }
 
-int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
+int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 {
 	int num_accesses = 0;
 
@@ -190,7 +190,7 @@ int disk_read_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 	return num_accesses;
 }
 
-void disk_read_thread::run() {
+void disk_io_thread::run() {
 	// First, check if we need to flush requests.
 	int num_flushes = flush_counter.get();
 	if (num_flushes > 0) {
@@ -280,7 +280,7 @@ void disk_read_thread::run() {
 	} while (aio->num_pending_ios() > 0);
 }
 
-int disk_read_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
+int disk_io_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
 		int num, const thread_safe_page *returned_pages[])
 {
 	assert(mappers.size() == 1);
@@ -293,7 +293,7 @@ int disk_read_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
 	return num_returned;
 }
 
-void disk_read_thread::print_state()
+void disk_io_thread::print_state()
 {
 	printf("io thread %d has %d reqs and %d low-prio reqs in the queue\n",
 			disk_id, queue.get_num_objs(), low_prio_queue.get_num_objs());

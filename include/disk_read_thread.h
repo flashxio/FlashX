@@ -37,7 +37,7 @@ void *process_requests(void *arg);
 
 class async_io;
 
-class disk_read_thread: public thread
+class disk_io_thread: public thread
 {
 	static const int LOCAL_BUF_SIZE = 16;
 
@@ -96,7 +96,7 @@ class disk_read_thread: public thread
 	}
 
 public:
-	disk_read_thread(const logical_file_partition &partition, int node_id,
+	disk_io_thread(const logical_file_partition &partition, int node_id,
 			page_cache *cache, int disk_id);
 
 	msg_queue<io_request> *get_queue() {
@@ -141,7 +141,7 @@ public:
 		this->cache = cache;
 	}
 
-	~disk_read_thread() {
+	~disk_io_thread() {
 		delete aio;
 	}
 
