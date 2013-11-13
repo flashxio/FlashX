@@ -305,11 +305,11 @@ static void notify_gcached_io(io_interface *io, io_request *reqs[], int num)
  * This IO proxy is responsible for sending requests to disks and gather
  * completion notifications.
  */
-class underlying_io_proxy: public remote_disk_access
+class underlying_io_proxy: public remote_io
 {
 public:
 	underlying_io_proxy(const std::vector<disk_read_thread *> &remotes,
-			file_mapper *mapper, thread *curr_thread): remote_disk_access(
+			file_mapper *mapper, thread *curr_thread): remote_io(
 				remotes, mapper, curr_thread) {
 	}
 

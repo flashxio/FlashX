@@ -36,7 +36,7 @@ const int COMPLETE_QUEUE_SIZE = 10240;
  * However, the helper class isn't thread safe, so each local thread has to
  * reference its own helper object.
  */
-class remote_disk_access: public io_interface
+class remote_io: public io_interface
 {
 	static atomic_integer num_ios;
 	const int max_disk_cached_reqs;
@@ -54,11 +54,11 @@ class remote_disk_access: public io_interface
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
 public:
-	remote_disk_access(const std::vector<disk_read_thread *> &remotes,
+	remote_io(const std::vector<disk_read_thread *> &remotes,
 			file_mapper *mapper, thread *t,
 			int max_reqs = MAX_DISK_CACHED_REQS);
 
-	~remote_disk_access();
+	~remote_io();
 
 	virtual int process_completed_requests(io_request reqs[], int num);
 	int process_completed_requests(int num);
@@ -96,7 +96,7 @@ public:
 	void flush_requests(int max_cached);
 	virtual void flush_requests();
 	virtual void print_stat(int nthreads) {
-		printf("remote_disk_access: %d reqs, %d completed reqs\n",
+		printf("remote_io: %d reqs, %d completed reqs\n",
 				num_issued_reqs.get(), num_completed_reqs.get());
 	}
 	virtual void print_state();
