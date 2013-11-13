@@ -59,7 +59,6 @@ static pthread_once_t once_control = PTHREAD_ONCE_INIT;
 
 void init_thread_class()
 {
-	printf("init thread key\n");
 	pthread_key_create(&thread::thread_key, NULL);
 }
 
