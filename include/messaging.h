@@ -41,7 +41,8 @@ public:
 	io_reply(io_request *reqp, int success, int status) {
 		if (reqp->is_extended_req()) {
 			assert(reqp->get_num_bufs() == 1);
-			req = io_request(reqp->get_buf(), reqp->get_offset(), reqp->get_size(),
+			data_loc_t loc(reqp->get_file_id(), reqp->get_offset());
+			req = io_request(reqp->get_buf(), loc, reqp->get_size(),
 					reqp->get_access_method(), reqp->get_io(), -1);
 		}
 		else

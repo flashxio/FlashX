@@ -1178,9 +1178,6 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 		// we need to check if the page set contains pages that
 		// we should flush.
 		if (reqs[i]->is_discarded()) {
-			// TODO this doesn't work because the request in this case doesn't
-			// carry file id. what do we do here?
-			assert(0);
 			page_id_t pg_id(reqs[i]->get_file_id(), reqs[i]->get_offset());
 			hash_cell *cell = cache->get_cell_offset(pg_id);
 #ifdef DEBUG
@@ -1309,10 +1306,9 @@ int associative_flusher::flush_cell(hash_cell *cell,
 		if (!p->is_io_pending() && !p->is_prepare_writeback()
 				// The page may have been cleaned.
 				&& p->is_dirty()) {
+			data_loc_t loc(p->get_file_id(), p->get_offset());
 			new (req_array + num_init_reqs) io_request(
-					new io_req_extension(), 0, 0, NULL, 0);
-			req_array[num_init_reqs].init(p->get_offset(), WRITE, io,
-					get_node_id());
+					new io_req_extension(), loc, WRITE, io, get_node_id());
 			req_array[num_init_reqs].set_priv(cache);
 			req_array[num_init_reqs].add_page(p);
 			req_array[num_init_reqs].set_high_prio(false);

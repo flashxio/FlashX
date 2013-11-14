@@ -70,32 +70,7 @@ static inline bool page_set_flag(char &flags, int flag, bool v)
 	return orig & (0x1 << flag);
 }
 
-typedef int file_id_t;
-const int INVALID_FILE_ID = -1;
-
-class page_id_t
-{
-	off_t off;
-	file_id_t file_id;
-public:
-	page_id_t() {
-		off = -1;
-		file_id = -1;
-	}
-
-	page_id_t(file_id_t file_id, off_t off) {
-		this->file_id = file_id;
-		this->off = off;
-	}
-
-	file_id_t get_file_id() const {
-		return file_id;
-	}
-
-	off_t get_offset() const {
-		return off;
-	}
-};
+typedef data_loc_t page_id_t;
 
 class page
 {

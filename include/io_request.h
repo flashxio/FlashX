@@ -242,6 +242,35 @@ public:
 	virtual int get_serialized_size() const = 0;
 };
 
+typedef int file_id_t;
+const int INVALID_FILE_ID = -1;
+
+class data_loc_t
+{
+	file_id_t file_id;
+	off_t off;
+public:
+	data_loc_t() {
+		file_id = -1;
+		off = -1;
+	}
+
+	data_loc_t(file_id_t file_id, off_t off) {
+		this->file_id = file_id;
+		this->off = off;
+	}
+
+	file_id_t get_file_id() const {
+		return file_id;
+	}
+
+	off_t get_offset() const {
+		return off;
+	}
+};
+
+const data_loc_t INVALID_DATA_LOC;
+
 /**
  * This class contains the request info.
  * If it's in an extended form, it is created by the global cache
@@ -257,6 +286,7 @@ class io_request
 		USER_COMPUTE,
 	};
 
+	int file_id;
 	static const off_t MAX_FILE_SIZE = LONG_MAX;
 	off_t offset: 48;
 	static const size_t MAX_BUF_SIZE = (1L << 32) - 1;
@@ -340,40 +370,41 @@ public:
 		this->sync = sync;
 	}
 
-	io_request(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id, bool sync = false) {
+	io_request(char *buf, const data_loc_t &loc, ssize_t size,
+			int access_method, io_interface *io, int node_id, bool sync = false) {
 		payload_type = BASIC_REQ;
 		data_inline = 0;
 		user_data_addr = 0;
-		init(buf, off, size, access_method, io, node_id);
+		init(buf, loc, size, access_method, io, node_id);
 		use_default_flags();
 		this->sync = sync;
 	}
 
-	io_request(io_req_extension *ext, off_t off, int access_method,
+	io_request(io_req_extension *ext, const data_loc_t &loc, int access_method,
 			io_interface *io, int node_id, bool sync = false) {
 		payload_type = EXT_REQ;
 		data_inline = 0;
 		payload.ext = ext;
-		user_data_addr = 0;
-		init(NULL, off, 0, access_method, io, node_id);
+		user_data_addr =0;
+		init(NULL, loc, 0, access_method, io, node_id);
 		use_default_flags();
 		this->sync = sync;
 	}
 
-	io_request(user_compute *compute, off_t off, ssize_t size,
+	io_request(user_compute *compute, const data_loc_t &loc, ssize_t size,
 			int access_method, io_interface *io, int node_id,
 			bool sync = false) {
 		payload_type = USER_COMPUTE;
 		data_inline = 0;
 		user_data_addr = 0;
-		init(NULL, off, size, access_method, io, node_id);
+		init(NULL, loc, size, access_method, io, node_id);
 		payload.compute = compute;
 		use_default_flags();
 		this->sync = sync;
 	}
 
 	void init(const io_request &req) {
+		data_loc_t loc(req.get_file_id(), req.get_offset());
 		assert(!data_inline);
 		if (req.payload_type == USER_COMPUTE
 				|| this->payload_type == USER_COMPUTE) {
@@ -382,12 +413,12 @@ public:
 			// TODO
 		}
 		else if (!req.is_extended_req()) {
-			this->init(req.get_buf(), req.get_offset(), req.get_size(),
+			this->init(req.get_buf(), loc, req.get_size(),
 					req.get_access_method(), req.get_io(), req.get_node_id());
 		}
 		// Both requests have extensions.
 		else if (this->is_extended_req()) {
-			this->init(NULL, req.get_offset(), 0, req.get_access_method(),
+			this->init(NULL, loc, 0, req.get_access_method(),
 					req.get_io(), req.get_node_id());
 			this->get_extension()->init(*req.get_extension());
 		}
@@ -412,7 +443,7 @@ public:
 			payload_type = BASIC_REQ;
 			payload.buf_addr = NULL;
 		}
-		offset = 0;
+		file_id = 0;
 		offset = 0;
 		high_prio = 0;
 		sync = 0;
@@ -423,10 +454,11 @@ public:
 		user_data_addr = 0;
 	}
 
-	void init(char *buf, off_t off, ssize_t size, int access_method,
-			io_interface *io, int node_id);
-	void init(off_t off, int access_method, io_interface *io, int node_id) {
-		init(NULL, off, 0, access_method, io, node_id);
+	void init(char *buf, const data_loc_t &loc, ssize_t size,
+			int access_method, io_interface *io, int node_id);
+	void init(const data_loc_t &loc, int access_method, io_interface *io,
+			int node_id) {
+		init(NULL, loc, 0, access_method, io, node_id);
 	}
 
 	io_req_extension *get_extension() const {
@@ -437,7 +469,7 @@ public:
 			return payload.ext;
 	}
 
-	int get_file_id() const;
+	file_id_t get_file_id() const;
 
 	/**
 	 * Test whether the request is a flush request.
@@ -460,8 +492,9 @@ public:
 		return offset;
 	}
 
-	void set_offset(off_t offset) {
-		this->offset = offset;
+	void set_data_loc(const data_loc_t &loc) {
+		this->file_id = loc.get_file_id();
+		this->offset = loc.get_offset();
 	}
 
 	int get_access_method() const {
@@ -732,7 +765,8 @@ public:
 		}
 		req_size = min(off + size - req_off,
 				this->get_offset() + this->get_size() - req_off);
-		extracted.init(req_buf, req_off, req_size, this->get_access_method(),
+		data_loc_t loc(this->get_file_id(), req_off);
+		extracted.init(req_buf, loc, req_size, this->get_access_method(),
 				this->get_io(), this->get_node_id());
 	}
 

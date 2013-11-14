@@ -42,11 +42,12 @@ void io_buf::init(thread_safe_page *p)
 	is_page = 1;
 }
 
-void io_request::init(char *buf, off_t off, ssize_t size,
+void io_request::init(char *buf, const data_loc_t &loc, ssize_t size,
 		int access_method, io_interface *io, int node_id)
 {
-	assert(off <= MAX_FILE_SIZE);
-	this->offset = off;
+	assert(loc.get_offset() <= MAX_FILE_SIZE);
+	this->file_id = loc.get_file_id();
+	this->offset = loc.get_offset();
 	this->io_addr = (long) io;
 	if (is_extended_req()) {
 		if (buf)
@@ -66,12 +67,9 @@ void io_request::init(char *buf, off_t off, ssize_t size,
 	this->node_id = node_id;
 }
 
-int io_request::get_file_id() const
+file_id_t io_request::get_file_id() const
 {
-	assert(io_addr);
-	int ret = get_io()->get_file_id();
-	assert(ret >= 0);
-	return ret;
+	return file_id;
 }
 
 void io_req_extension::add_io_buf(const io_buf &buf)

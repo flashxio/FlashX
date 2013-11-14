@@ -177,7 +177,8 @@ void comm_verify_file(int argc, char *argv[])
 	file_size = ROUNDUP(file_size, BUF_SIZE);
 	char *buf = (char *) valloc(BUF_SIZE);
 	for (off_t off = 0; off < file_size; off += BUF_SIZE) {
-		io_request req(buf, off, BUF_SIZE, READ, io, 0);
+		data_loc_t loc(io->get_file_id(), off);
+		io_request req(buf, loc, BUF_SIZE, READ, io, 0);
 		io->access(&req, 1);
 		io->wait4complete(1);
 	}
@@ -233,7 +234,8 @@ void comm_load_file2fs(int argc, char *argv[])
 		size_t ret = source->get_data(off, size, buf);
 		assert(ret == size);
 		ssize_t write_bytes = ROUNDUP(ret, 512);
-		io_request req(buf, off, write_bytes, WRITE, io, 0);
+		data_loc_t loc(io->get_file_id(), off);
+		io_request req(buf, loc, write_bytes, WRITE, io, 0);
 		io->access(&req, 1);
 		io->wait4complete(1);
 		off += write_bytes;

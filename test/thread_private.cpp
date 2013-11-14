@@ -136,10 +136,11 @@ public:
 		return workload.size <= 0;
 	}
 
-	int to_reqs(int buf_type, int num, io_request reqs[]);
+	int to_reqs(io_interface *io, int buf_type, int num, io_request reqs[]);
 };
 
-int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
+int work2req_converter::to_reqs(io_interface *io, int buf_type, int num,
+		io_request reqs[])
 {
 	int node_id = io->get_node_id();
 	int access_method = workload.read ? READ : WRITE;
@@ -171,7 +172,8 @@ int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
 				break;
 			if (access_method == WRITE && params.is_verify_content())
 				create_write_data(p, next_off - off, off);
-			reqs[i].init(p, off, next_off - off, access_method,
+			data_loc_t loc(io->get_file_id(), off);
+			reqs[i].init(p, loc, next_off - off, access_method,
 					io, node_id);
 			size -= next_off - off;
 			off = next_off;
@@ -187,7 +189,8 @@ int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
 			return 0;
 		if (access_method == WRITE && params.is_verify_content())
 			create_write_data(p, size, off);
-		reqs[0].init(p, off, size, access_method, io, node_id);
+		data_loc_t loc(io->get_file_id(), off);
+		reqs[0].init(p, loc, size, access_method, io, node_id);
 		workload.off += size;
 		workload.size = 0;
 		return 1;
@@ -216,7 +219,7 @@ void thread_private::run()
 				}
 				if (converter.has_complete())
 					break;
-				int ret = converter.to_reqs(config.get_buf_type(),
+				int ret = converter.to_reqs(io, config.get_buf_type(),
 						num_reqs_by_user - i, reqs + i);
 				if (ret == 0) {
 					no_mem = true;

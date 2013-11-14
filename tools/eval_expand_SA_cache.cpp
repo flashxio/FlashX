@@ -47,12 +47,13 @@ int main(int argc, char *argv[])
 		num_accesses++;
 		assert(off < end);
 		while (off < end) {
-			off_t old_off = -1;
-			thread_safe_page *pg = (thread_safe_page *) global_cache->search(off, old_off);
+			data_loc_t loc(0, off);
+			data_loc_t old_loc;
+			thread_safe_page *pg = (thread_safe_page *) global_cache->search(loc, old_loc);
 			// We only count the cache hits for the second half of the workload.
 			if (num_accesses >= size / 2) {
 				num_accesses_in_pages++;
-				if (old_off == -1)
+				if (old_loc.get_offset() == -1)
 					num_hits++;
 			}
 //			pg->set_dirty(false);
