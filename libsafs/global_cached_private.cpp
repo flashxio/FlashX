@@ -279,6 +279,7 @@ void global_cached_io::finalize_request(io_request *req)
 		}
 		else
 			original->dec_complete_count();
+		req_allocator->free(req);
 	}
 	else {
 		assert(req->get_orig() == NULL);
