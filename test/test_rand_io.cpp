@@ -314,6 +314,7 @@ int main(int argc, char *argv[])
 	for (unsigned i = 0; i < node_id_array.size(); i++) {
 		int node_id = node_id_array[i];
 		for (int j = 0; j < nthread_per_node; j++) {
+			int idx = i * nthread_per_node + j;
 			/*
 			 * we still assign each thread a range regardless of the number
 			 * of threads. read_private will choose the right file descriptor
@@ -353,7 +354,7 @@ int main(int argc, char *argv[])
 						long num_reqs = length;
 						if (config.get_num_reqs() >= 0)
 							num_reqs = min(config.get_num_reqs(), num_reqs);
-						gen = new file_workload(workloads, num_reqs, j, config.get_nthreads(),
+						gen = new file_workload(workloads, num_reqs, idx, config.get_nthreads(),
 								(int) (config.get_read_ratio() * 100));
 						break;
 					}
@@ -363,7 +364,6 @@ int main(int argc, char *argv[])
 			}
 			workload_gens.push_back(gen);
 
-			int idx = i * nthread_per_node + j;
 			threads[idx] = new thread_private(node_id, idx, config.get_entry_size(), factory, gen);
 		}
 	}
