@@ -74,19 +74,27 @@ public:
 	 * If succeed, return 1; otherwise, return 0.
 	 */
 	bool create_file(size_t size) {
+		if (size < 0) {
+			fprintf(stderr, "wrong file size\n");
+			return false;
+		}
+
 		int fd = open(file_name.c_str(), O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
 		if (fd < 0) {
 			fprintf(stderr, "can't create %s: %s\n", file_name.c_str(),
 					strerror(errno));
 			return false;
 		}
-		int ret = posix_fallocate(fd, 0, size);
-		if (ret != 0) {
-			fprintf(stderr, "can't allocate %ld bytes for %s\n", size,
-					file_name.c_str());
-			return false;
+		bool bret = true;
+		if (size > 0) {
+			int ret = posix_fallocate(fd, 0, size);
+			if (ret != 0) {
+				fprintf(stderr, "can't allocate %ld bytes for %s, error: %s\n",
+						size, file_name.c_str(), strerror(ret));
+				bret = false;
+			}
 		}
-		return true;
+		return bret;
 	}
 
 	bool delete_file() {
