@@ -110,6 +110,22 @@ class disk_io_thread: public thread
 		}
 	};
 
+	class close_comm: public remote_comm
+	{
+		async_io *aio;
+		int file_id;
+	public:
+		close_comm(async_io *aio, int file_id) {
+			this->aio = aio;
+			this->file_id = file_id;
+		}
+
+		void run() {
+			int ret = aio->close_file(file_id);
+			set_status(ret);
+		}
+	};
+
 	const int disk_id;
 
 	msg_queue<io_request> queue;
@@ -166,6 +182,16 @@ class disk_io_thread: public thread
 
 	void run_commands(thread_safe_FIFO_queue<remote_comm *> &);
 
+	int execute_remote_comm(remote_comm *comm) {
+		comm_queue.add(&comm, 1);
+		// We need to wake up the I/O thread to run the command.
+		this->activate();
+		// And then wait for the command to be executed.
+		comm->wait4complete();
+		int ret = comm->get_status();
+		delete comm;
+		return ret;
+	}
 public:
 	disk_io_thread(const logical_file_partition &partition, int node_id,
 			page_cache *cache, int disk_id);
@@ -192,14 +218,12 @@ public:
 	// It open a new file. The mapping is still the same.
 	int open_file(file_mapper *mapper) {
 		remote_comm *comm = new open_comm(aio, mapper, &partition);
-		comm_queue.add(&comm, 1);
-		// We need to wake up the I/O thread to run the command.
-		this->activate();
-		// And then wait for the command to be executed.
-		comm->wait4complete();
-		int ret = comm->get_status();
-		delete comm;
-		return ret;
+		return execute_remote_comm(comm);
+	}
+
+	int close_file(file_mapper *mapper) {
+		remote_comm *comm = new close_comm(aio, mapper->get_file_id());
+		return execute_remote_comm(comm);
 	}
 
 	void register_cache(page_cache *cache) {

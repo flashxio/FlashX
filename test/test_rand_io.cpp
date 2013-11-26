@@ -418,7 +418,6 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < config.get_nthreads(); i++) {
 		threads[i]->print_stat();
 	}
-	print_io_thread_stat();
 #endif
 	for (unsigned i = 0; i < workload_gens.size(); i++)
 		delete workload_gens[i];
@@ -426,4 +425,7 @@ int main(int argc, char *argv[])
 		delete threads[i];
 	for (unsigned i = 0; i < factories.size(); i++)
 		destroy_io_factory(factories[i]);
+#ifdef STATISTICS
+	print_io_thread_stat();
+#endif
 }

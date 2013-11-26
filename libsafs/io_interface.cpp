@@ -191,9 +191,7 @@ protected:
 public:
 	remote_io_factory(const std::string &file_name);
 
-	~remote_io_factory() {
-		delete mapper;
-	}
+	~remote_io_factory();
 
 	virtual io_interface *create_io(thread *t);
 
@@ -307,6 +305,14 @@ remote_io_factory::remote_io_factory(const std::string &file_name): file_io_fact
 	for (int i = 0; i < num_files; i++) {
 		global_data.read_threads[i]->open_file(mapper);
 	}
+}
+
+remote_io_factory::~remote_io_factory()
+{
+	int num_files = mapper->get_num_files();
+	for (int i = 0; i < num_files; i++)
+		global_data.read_threads[i]->close_file(mapper);
+	delete mapper;
 }
 
 io_interface *remote_io_factory::create_io(thread *t)
