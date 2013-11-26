@@ -30,14 +30,18 @@ const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 // to a file in the SAFS filesystem.
 disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 		int node_id, page_cache *cache, int _disk_id): thread(
-			std::string("io-thread-") + itoa(node_id), node_id), disk_id(
-			_disk_id), queue(node_id, std::string("io-queue-") + itoa(node_id),
-			IO_QUEUE_SIZE, INT_MAX, false), low_prio_queue(node_id,
-				// TODO let's allow the low-priority queue to
-				// be infinitely large for now.
-				std::string("io-queue-low_prio-") + itoa(node_id),
-				IO_QUEUE_SIZE, INT_MAX, false), partition(_partition), filter(
-					_partition.get_mapper(), _disk_id)
+			std::string("io-thread-") + itoa(node_id), node_id),
+		disk_id(_disk_id),
+		queue(node_id, std::string("io-queue-") + itoa(node_id),
+			IO_QUEUE_SIZE, INT_MAX, false),
+		// TODO let's allow the low-priority queue to
+		// be infinitely large for now.
+		low_prio_queue(node_id, std::string("io-queue-low_prio-")
+				+ itoa(node_id), IO_QUEUE_SIZE, INT_MAX, false),
+		comm_queue(std::string("comm-queue") + itoa(node_id), node_id, 1,
+				INT_MAX), 
+		partition(_partition),
+		filter(_partition.get_mapper(), _disk_id)
 {
 	this->cache = cache;
 	// We don't want AIO to open any files yet, so we pass a file partition
@@ -195,6 +199,20 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 	return num_accesses;
 }
 
+void disk_io_thread::run_commands(
+		thread_safe_FIFO_queue<disk_io_thread::remote_comm *> &queue)
+{
+	const int COMM_BUF_SIZE = 16;
+	remote_comm *commands[COMM_BUF_SIZE];
+	int num;
+	while ((num = queue.fetch(commands, COMM_BUF_SIZE)) > 0) {
+		for (int i = 0; i < num; i++) {
+			commands[i]->run();
+			commands[i]->complete();
+		}
+	}
+}
+
 void disk_io_thread::run() {
 	// First, check if we need to flush requests.
 	int num_flushes = flush_counter.get();
@@ -210,6 +228,10 @@ void disk_io_thread::run() {
 
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	do {
+		// TODO I need to make sure that checking commands doesn't cause
+		// noticeable CPU consumption.
+		if (!comm_queue.is_empty())
+			run_commands(comm_queue);
 		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
 #ifdef STATISTICS
 		num_msgs += num;

@@ -41,10 +41,80 @@ class disk_io_thread: public thread
 {
 	static const int LOCAL_BUF_SIZE = 16;
 
+	/**
+	 * This is a remote command that is to be executed in the I/O thread.
+	 * It is mainly used to open and close physical files in the I/O thread.
+	 */
+	class remote_comm
+	{
+		pthread_mutex_t mutex;
+		pthread_cond_t cond;
+		bool is_complete;
+		int status;
+	public:
+		remote_comm() {
+			status = 0;
+			is_complete = false;
+			pthread_mutex_init(&mutex, NULL);
+			pthread_cond_init(&cond, NULL);
+		}
+
+		virtual void run() = 0;
+
+		void complete() {
+			pthread_mutex_lock(&mutex);
+			is_complete = true;
+			pthread_mutex_unlock(&mutex);
+			pthread_cond_signal(&cond);
+		}
+
+		void wait4complete() {
+			pthread_mutex_lock(&mutex);
+			while (!is_complete) {
+				pthread_cond_wait(&cond, &mutex);
+			}
+			pthread_mutex_unlock(&mutex);
+		}
+
+		void set_status(int status) {
+			this->status = status;
+		}
+
+		int get_status() const {
+			return status;
+		}
+	};
+
+	/**
+	 * The command opens a file in the I/O thread.
+	 */
+	class open_comm: public remote_comm
+	{
+		file_mapper *mapper;
+		const logical_file_partition *partition;
+		async_io *aio;
+	public:
+		open_comm(async_io *aio, file_mapper *mapper,
+				const logical_file_partition *partition) {
+			this->aio = aio;
+			this->mapper = mapper;
+			this->partition = partition;
+		}
+
+		void run() {
+			logical_file_partition *part = partition->create_file_partition(
+					mapper);
+			int ret = aio->open_file(*part);
+			delete part;
+			set_status(ret);
+		}
+	};
+
 	const int disk_id;
 
 	msg_queue<io_request> queue;
 	msg_queue<io_request> low_prio_queue;
+	thread_safe_FIFO_queue<remote_comm *> comm_queue;
 	logical_file_partition partition;
 
 	pthread_t id;
@@ -94,6 +164,8 @@ class disk_io_thread: public thread
 		return low_prio_queue.get_num_objs();
 	}
 
+	void run_commands(thread_safe_FIFO_queue<remote_comm *> &);
+
 public:
 	disk_io_thread(const logical_file_partition &partition, int node_id,
 			page_cache *cache, int disk_id);
@@ -119,9 +191,14 @@ public:
 
 	// It open a new file. The mapping is still the same.
 	int open_file(file_mapper *mapper) {
-		logical_file_partition *part = partition.create_file_partition(mapper);
-		int ret = aio->open_file(*part);
-		delete part;
+		remote_comm *comm = new open_comm(aio, mapper, &partition);
+		comm_queue.add(&comm, 1);
+		// We need to wake up the I/O thread to run the command.
+		this->activate();
+		// And then wait for the command to be executed.
+		comm->wait4complete();
+		int ret = comm->get_status();
+		delete comm;
 		return ret;
 	}
 
