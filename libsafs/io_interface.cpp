@@ -128,6 +128,7 @@ void init_io_system(const config_map &configs)
 	printf("There are %ld nodes with disks\n", disk_node_ids.size());
 	init_aio(disk_node_ids);
 
+	file_mapper *mapper = raid_conf.create_file_mapper();
 	/* 
 	 * The mutex is enough to guarantee that all threads will see initialized
 	 * global data. The first thread that enters the critical area will
@@ -141,7 +142,7 @@ void init_io_system(const config_map &configs)
 		global_data.read_threads.resize(num_files);
 		for (int k = 0; k < num_files; k++) {
 			std::vector<int> indices(1, k);
-			logical_file_partition partition(indices);
+			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
 			global_data.read_threads[k] = new disk_io_thread(partition,
 					global_data.raid_conf.get_disk(k).node_id, NULL, k);

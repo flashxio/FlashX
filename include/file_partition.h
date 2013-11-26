@@ -72,6 +72,10 @@ public:
 		return indices.size();
 	}
 
+	const std::vector<int> &get_phy_file_indices() const {
+		return indices;
+	}
+
 	const std::string &get_file_name(int idx) const {
 		assert(mapper);
 		return mapper->get_file_name(indices[idx]);

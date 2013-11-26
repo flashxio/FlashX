@@ -26,6 +26,8 @@
 const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
+// The partition contains a file mapper but the file mapper doesn't point
+// to a file in the SAFS filesystem.
 disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 		int node_id, page_cache *cache, int _disk_id): thread(
 			std::string("io-thread-") + itoa(node_id), node_id), disk_id(
@@ -35,10 +37,13 @@ disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 				// be infinitely large for now.
 				std::string("io-queue-low_prio-") + itoa(node_id),
 				IO_QUEUE_SIZE, INT_MAX, false), partition(_partition), filter(
-					open_files, _disk_id)
+					_partition.get_mapper(), _disk_id)
 {
 	this->cache = cache;
-	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, this);
+	// We don't want AIO to open any files yet, so we pass a file partition
+	// definition without a file mapper.
+	logical_file_partition part(_partition.get_phy_file_indices());
+	aio = new async_io(part, AIO_DEPTH_PER_FILE, this);
 #ifdef STATISTICS
 	num_empty = 0;
 	num_reads = 0;
@@ -283,10 +288,13 @@ void disk_io_thread::run() {
 int disk_io_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
 		int num, const thread_safe_page *returned_pages[])
 {
-	assert(mappers.size() == 1);
 	int num_returned = 0;
 	for (int i = 0; i < num; i++) {
-		int id = mappers[0]->map2file(pages[i]->get_offset());
+		// All files use the same mapping function and the same block size,
+		// so it works fine with multiple files.
+		// TODO if we decide to use different block sizes for different files,
+		// we need to change it.
+		int id = mapper->map2file(pages[i]->get_offset());
 		if (this->disk_id == id)
 			returned_pages[num_returned++] = pages[i];
 	}

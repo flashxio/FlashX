@@ -46,7 +46,6 @@ class disk_io_thread: public thread
 	msg_queue<io_request> queue;
 	msg_queue<io_request> low_prio_queue;
 	logical_file_partition partition;
-	std::vector<file_mapper *> open_files;
 
 	pthread_t id;
 	async_io *aio;
@@ -70,12 +69,12 @@ class disk_io_thread: public thread
 	atomic_integer flush_counter;
 
 	class dirty_page_filter: public page_filter {
-		const std::vector<file_mapper *> &mappers;
+		const file_mapper *mapper;
 		int disk_id;
 	public:
-		dirty_page_filter(const std::vector<file_mapper *> &_mappers,
-				int disk_id): mappers(_mappers) {
+		dirty_page_filter(const file_mapper *_mapper, int disk_id) {
 			this->disk_id = disk_id;
+			this->mapper = _mapper;
 		}
 
 		int filter(const thread_safe_page *pages[], int num,
@@ -107,16 +106,6 @@ public:
 		return &low_prio_queue;
 	}
 
-	const std::string get_file_name() const {
-		if (open_files.empty())
-			return "";
-
-		logical_file_partition *part = partition.create_file_partition(open_files[0]);
-		std::string name = part->get_file_name(0);
-		delete part;
-		return name;
-	}
-
 	/**
 	 * Flush threads asynchronously.
 	 * The invoker of this function shouldn't be the I/O thread.
@@ -130,7 +119,6 @@ public:
 
 	// It open a new file. The mapping is still the same.
 	int open_file(file_mapper *mapper) {
-		open_files.push_back(mapper);
 		logical_file_partition *part = partition.create_file_partition(mapper);
 		int ret = aio->open_file(*part);
 		delete part;
@@ -155,8 +143,8 @@ public:
 
 	void print_stat() {
 #ifdef STATISTICS
-		printf("queue on file %s wait for requests for %ld times,\n",
-				get_file_name().c_str(), num_empty);
+		printf("queue on disk %d wait for requests for %ld times,\n",
+				disk_id, num_empty);
 		printf("\t%ld reads (%ld bytes), %ld writes (%ld bytes) and %d io waits, complete %d reqs and %ld low-prio reqs,\n",
 				num_reads, num_read_bytes, num_writes, num_write_bytes, aio->get_num_iowait(), aio->get_num_completed_reqs(),
 				num_low_prio_accesses);
