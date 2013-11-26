@@ -393,6 +393,7 @@ public:
 
 class req_stealer: public io_interface
 {
+	int file_id;
 	underlying_io_thread *t;
 	message<io_request> req_buf;
 	slab_allocator *alloc;
@@ -400,8 +401,9 @@ class req_stealer: public io_interface
 
 	atomic_integer access_guard;
 public:
-	req_stealer(underlying_io_thread *t, thread *curr_thread): io_interface(
-			curr_thread) {
+	req_stealer(underlying_io_thread *t, thread *curr_thread,
+			int file_id): io_interface(curr_thread) {
+		this->file_id = file_id;
 		flush_timer = new periodic_timer(curr_thread, new flush_timer_task(this));
 		flush_timer->start();
 		this->t = t;
@@ -413,9 +415,8 @@ public:
 	}
 
 	virtual int get_file_id() const {
-		// This function shouldn't be called.
-		assert(0);
-		return -1;
+		assert(file_id >= 0);
+		return file_id;
 	}
 
 	void access(io_request *reqs, int num, io_status *status = NULL) {
@@ -650,7 +651,9 @@ public:
 
 	void init() {
 		io = node_cached_io::create(
-				new req_stealer(group->underlying_thread, this), group);
+				// In request processing thread, a request stealer isn't
+				// associated to any files.
+				new req_stealer(group->underlying_thread, this, -1), group);
 	}
 
 	node_cached_io *get_io() const {
@@ -903,7 +906,8 @@ part_global_cached_io::part_global_cached_io(io_interface *underlying,
 	this->local_group = table->get_thread_group(node_id);
 
 	this->underlying = new global_cached_io(underlying->get_thread(),
-			new req_stealer(local_group->underlying_thread, underlying->get_thread()),
+			new req_stealer(local_group->underlying_thread,
+				underlying->get_thread(), underlying->get_file_id()),
 			table->get_cache(node_id));
 	processed_requests = 0;;
 	sent_requests = 0;
