@@ -272,14 +272,23 @@ int main(int argc, char *argv[])
 
 	if (argc < 3) {
 		fprintf(stderr, "there are %d argments\n", argc);
-		fprintf(stderr, "test_rand_io conf_file data_file [conf_key=conf_value]\n");
+		fprintf(stderr, "test_rand_io conf_file data_file [data_files ...] [conf_key=conf_value]\n");
 
 		config.print_help();
 		params.print_help();
 		exit(1);
 	}
 	std::string conf_file = argv[1];
-	std::string data_file = argv[2];
+
+	std::vector<std::string> data_files;
+	data_files.push_back(argv[2]);
+	for (int i = 3; i < argc; i++) {
+		// This specifies an configuration option for the test program.
+		if (strchr(argv[i], '=') != NULL)
+			break;
+
+		data_files.push_back(argv[i]);
+	}
 
 	signal(SIGINT, int_handler);
 	// The file that contains all data files.
@@ -304,68 +313,73 @@ int main(int argc, char *argv[])
 
 	assert(config.get_nthreads() % params.get_num_nodes() == 0);
 	init_io_system(configs);
-	file_io_factory *factory = create_io_factory(data_file,
-			config.get_access_option());
+	std::vector<file_io_factory *> factories;
+	for (unsigned i = 0; i < data_files.size(); i++)
+		factories.push_back(create_io_factory(data_files[i],
+					config.get_access_option()));
 	std::vector<int> node_id_array;
 	for (int i = 0; i < params.get_num_nodes(); i++)
 		node_id_array.push_back(i);
+	assert(config.get_nthreads() % node_id_array.size() == 0);
+	assert(config.get_nthreads() % data_files.size() == 0);
 	int nthread_per_node = config.get_nthreads() / node_id_array.size();
+	int nthread_per_file = config.get_nthreads() / data_files.size();
 	std::vector<workload_gen *> workload_gens;
-	for (unsigned i = 0; i < node_id_array.size(); i++) {
-		int node_id = node_id_array[i];
-		for (int j = 0; j < nthread_per_node; j++) {
-			int idx = i * nthread_per_node + j;
-			/*
-			 * we still assign each thread a range regardless of the number
-			 * of threads. read_private will choose the right file descriptor
-			 * according to the offset.
-			 */
-			start = end;
-			end = start + ((long) config.get_num_reqs() / config.get_nthreads()
-					+ (shift < remainings)) * PAGE_SIZE / config.get_entry_size();
-			if (remainings != shift)
-				shift++;
+	for (int i = 0; i < config.get_nthreads(); i++) {
+		int node_idx = i / nthread_per_node;
+		int file_idx = i / nthread_per_file;
+		int node_id = node_id_array[node_idx];
+		file_io_factory *factory = factories[file_idx];
+		/*
+		 * we still assign each thread a range regardless of the number
+		 * of threads. read_private will choose the right file descriptor
+		 * according to the offset.
+		 */
+		start = end;
+		end = start + ((long) config.get_num_reqs() / config.get_nthreads()
+				+ (shift < remainings)) * PAGE_SIZE / config.get_entry_size();
+		if (remainings != shift)
+			shift++;
 #ifdef DEBUG
-			printf("thread %d starts %ld ends %ld\n", j, start, end);
+		printf("thread %d starts %ld ends %ld\n", i, start, end);
 #endif
 
-			workload_gen *gen;
-			switch (config.get_workload()) {
-				case SEQ_OFFSET:
-					gen = new seq_workload(start, end, config.get_entry_size());
+		workload_gen *gen;
+		switch (config.get_workload()) {
+			case SEQ_OFFSET:
+				gen = new seq_workload(start, end, config.get_entry_size());
+				break;
+			case RAND_OFFSET:
+				assert(config.get_read_ratio() >= 0);
+				gen = new rand_workload(start, end, config.get_entry_size(),
+						end - start, (int) (config.get_read_ratio() * 100));
+				break;
+			case RAND_PERMUTE:
+				assert(config.get_read_ratio() >= 0);
+				gen = new global_rand_permute_workload(config.get_entry_size(),
+						(((long) config.get_num_reqs()) * PAGE_SIZE) / config.get_entry_size(),
+						config.get_num_repeats(), config.get_read_ratio());
+				break;
+			case -1:
+				{
+					static long length = 0;
+					static workload_t *workloads = NULL;
+					if (workloads == NULL)
+						workloads = load_file_workload(config.get_workload_file(), length);
+					long num_reqs = length;
+					if (config.get_num_reqs() >= 0)
+						num_reqs = min(config.get_num_reqs(), num_reqs);
+					gen = new file_workload(workloads, num_reqs, i, config.get_nthreads(),
+							(int) (config.get_read_ratio() * 100));
 					break;
-				case RAND_OFFSET:
-					assert(config.get_read_ratio() >= 0);
-					gen = new rand_workload(start, end, config.get_entry_size(),
-							end - start, (int) (config.get_read_ratio() * 100));
-					break;
-				case RAND_PERMUTE:
-					assert(config.get_read_ratio() >= 0);
-					gen = new global_rand_permute_workload(config.get_entry_size(),
-							(((long) config.get_num_reqs()) * PAGE_SIZE) / config.get_entry_size(),
-							config.get_num_repeats(), config.get_read_ratio());
-					break;
-				case -1:
-					{
-						static long length = 0;
-						static workload_t *workloads = NULL;
-						if (workloads == NULL)
-							workloads = load_file_workload(config.get_workload_file(), length);
-						long num_reqs = length;
-						if (config.get_num_reqs() >= 0)
-							num_reqs = min(config.get_num_reqs(), num_reqs);
-						gen = new file_workload(workloads, num_reqs, idx, config.get_nthreads(),
-								(int) (config.get_read_ratio() * 100));
-						break;
-					}
-				default:
-					fprintf(stderr, "unsupported workload\n");
-					exit(1);
-			}
-			workload_gens.push_back(gen);
-
-			threads[idx] = new thread_private(node_id, idx, config.get_entry_size(), factory, gen);
+				}
+			default:
+				fprintf(stderr, "unsupported workload\n");
+				exit(1);
 		}
+		workload_gens.push_back(gen);
+
+		threads[i] = new thread_private(node_id, i, config.get_entry_size(), factory, gen);
 	}
 	debug.register_task(new debug_workload_gens(workload_gens));
 
@@ -410,5 +424,6 @@ int main(int argc, char *argv[])
 		delete workload_gens[i];
 	for (int i = 0; i < config.get_nthreads(); i++)
 		delete threads[i];
-	destroy_io_factory(factory);
+	for (unsigned i = 0; i < factories.size(); i++)
+		destroy_io_factory(factories[i]);
 }
