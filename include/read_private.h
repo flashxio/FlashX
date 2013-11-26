@@ -46,6 +46,10 @@ public:
 			thread *t, int flags = O_RDWR);
 
 	virtual ~buffered_io() {
+		for (unsigned i = 0; i < fds.size(); i++) {
+			int ret = close(fds[i]);
+			assert(ret == 0);
+		}
 	}
 
 	/* get the file descriptor corresponding to the offset. */
