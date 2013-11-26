@@ -94,6 +94,7 @@ public:
 				bret = false;
 			}
 		}
+		close(fd);
 		return bret;
 	}
 
