@@ -40,6 +40,7 @@ class part_io_process_table;
 class disk_io_thread;
 class file_mapper;
 class group_request_sender;
+class NUMA_cache;
 
 /**
  * This provides interface for application threads issue IO requests
@@ -94,10 +95,10 @@ class part_global_cached_io: public io_interface
 	part_global_cached_io(io_interface *underlying, part_io_process_table *);
 	~part_global_cached_io();
 public:
-	static part_io_process_table *open_file(
+	static part_io_process_table *init_subsystem(
 			const std::vector<disk_io_thread *> &io_threads,
-			file_mapper *mapper, const cache_config *config);
-	static int close_file(part_io_process_table *table);
+			file_mapper *mapper, NUMA_cache *cache);
+	static int destroy_subsystem(part_io_process_table *table);
 
 	static part_global_cached_io *create(io_interface *underlying,
 			part_io_process_table *table) {

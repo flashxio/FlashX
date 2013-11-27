@@ -55,6 +55,8 @@ struct global_data_collection
 	std::vector<disk_io_thread *> read_threads;
 	pthread_mutex_t mutex;
 	page_cache *global_cache;
+	// For part_global_cached_io
+	part_io_process_table *table;
 
 #ifdef DEBUG
 	std::tr1::unordered_set<io_interface *> ios;
@@ -62,6 +64,7 @@ struct global_data_collection
 #endif
 
 	global_data_collection() {
+		table = NULL;
 		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
 #ifdef DEBUG
@@ -151,6 +154,7 @@ void init_io_system(const config_map &configs)
 		}
 		debug.register_task(new debug_global_data());
 	}
+
 	if (global_data.global_cache == NULL) {
 		std::vector<int> node_id_array;
 		for (int i = 0; i < params.get_num_nodes(); i++)
@@ -167,6 +171,12 @@ void init_io_system(const config_map &configs)
 			global_data.read_threads[k]->register_cache(
 					global_data.global_cache);
 		}
+	}
+	if (global_data.table == NULL) {
+		if (params.get_num_nodes() > 1)
+			global_data.table = part_global_cached_io::init_subsystem(
+					global_data.read_threads, mapper,
+					(NUMA_cache *) global_data.global_cache);
 	}
 	pthread_mutex_unlock(&global_data.mutex);
 }
@@ -234,18 +244,11 @@ public:
 	}
 };
 
-#if 0
 class part_global_cached_io_factory: public remote_io_factory
 {
-	const cache_config *cache_conf;
-	part_io_process_table *table;
-	int num_nodes;
 public:
-	part_global_cached_io_factory(const std::string &file_name,
-			const cache_config *cache_conf);
-
-	~part_global_cached_io_factory() {
-		part_global_cached_io::close_file(table);
+	part_global_cached_io_factory(
+			const std::string &file_name): remote_io_factory(file_name) {
 	}
 
 	virtual io_interface *create_io(thread *t);
@@ -253,7 +256,6 @@ public:
 	virtual void destroy_io(io_interface *io) {
 	}
 };
-#endif
 
 io_interface *posix_io_factory::create_io(thread *t)
 {
@@ -345,32 +347,17 @@ io_interface *global_cached_io_factory::create_io(thread *t)
 	return io;
 }
 
-#if 0
-part_global_cached_io_factory::part_global_cached_io_factory(
-		const std::string &file_name,
-		const cache_config *cache_conf): remote_io_factory(file_name)
-{
-	std::vector<int> node_id_array;
-	cache_conf->get_node_ids(node_id_array);
-
-	std::map<int, io_interface *> underlyings;
-	table = part_global_cached_io::open_file(global_data.read_threads,
-			mapper, cache_conf);
-	this->cache_conf = cache_conf;
-	this->num_nodes = node_id_array.size();
-
-}
 
 io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
-			new remote_io(global_data.read_threads, mapper, t), table);
+			new remote_io(global_data.read_threads, mapper, t),
+			global_data.table);
 #ifdef DEBUG
 	global_data.register_io(io);
 #endif
 	return io;
 }
-#endif
 
 file_io_factory *create_io_factory(const std::string &file_name,
 		const int access_option)
@@ -402,13 +389,9 @@ file_io_factory *create_io_factory(const std::string &file_name,
 			factory = new global_cached_io_factory(file_name,
 					global_data.global_cache);
 			break;
-#if 0
 		case PART_GLOBAL_ACCESS:
-			assert(cache_conf);
-			factory = new part_global_cached_io_factory(file_name,
-					global_data.global_cache);
+			factory = new part_global_cached_io_factory(file_name);
 			break;
-#endif
 		default:
 			fprintf(stderr, "a wrong access option\n");
 			assert(0);

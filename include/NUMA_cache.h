@@ -52,6 +52,14 @@ public:
 			cache_conf->destroy_cache_on_node(caches[i]);
 	}
 
+	const cache_config *get_cache_config() const {
+		return cache_conf;
+	}
+
+	page_cache *get_cache_on_node(int node_id) const {
+		return caches[node_id];
+	}
+
 	virtual page *search(const page_id_t &pg_id, page_id_t &old_id) {
 		int idx = cache_conf->page2cache(pg_id);
 		return caches[idx]->search(pg_id, old_id);

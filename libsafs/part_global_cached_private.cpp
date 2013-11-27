@@ -44,6 +44,7 @@
 #include "remote_access.h"
 #include "debugger.h"
 #include "timer.h"
+#include "NUMA_cache.h"
 
 const int NUMA_REQ_QUEUE_SIZE = 2000;
 const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
@@ -129,7 +130,7 @@ class part_io_process_table
 	int num_groups;
 public:
 	part_io_process_table(const std::vector<disk_io_thread *> &io_threads,
-			file_mapper *mapper, const cache_config *config);
+			file_mapper *mapper, NUMA_cache *cache);
 
 	~part_io_process_table();
 
@@ -751,12 +752,11 @@ void process_reply_thread::run()
 
 part_io_process_table::part_io_process_table(
 		const std::vector<disk_io_thread *> &io_threads,
-		file_mapper *mapper, const cache_config *config)
+		file_mapper *mapper, NUMA_cache *cache)
 {
-	int num_ssds = io_threads.size();
+	cache_conf = cache->get_cache_config();
 	std::vector<int> node_ids;
-	config->get_node_ids(node_ids);
-	cache_conf = config;
+	cache_conf->get_node_ids(node_ids);
 	num_groups = node_ids.size();
 	for (unsigned i = 0; i < node_ids.size(); i++) {
 		int node_id = node_ids[i];
@@ -765,8 +765,7 @@ part_io_process_table::part_io_process_table(
 		group.id = node_id;
 		group.underlying_thread = new underlying_io_thread(io_threads,
 				mapper, node_id);
-		group.cache = cache_conf->create_cache_on_node(node_id,
-				MAX_NUM_FLUSHES_PER_FILE * num_ssds / config->get_num_caches());
+		group.cache = cache->get_cache_on_node(node_id);
 		group.msg_allocator = new slab_allocator(std::string("msg_allocator-")
 				+ itoa(node_id), NUMA_MSG_SIZE,
 				NUMA_MSG_SIZE * 128, INT_MAX, node_id);
@@ -870,7 +869,7 @@ int part_global_cached_io::init()
 	return 0;
 }
 
-int part_global_cached_io::close_file(part_io_process_table *table)
+int part_global_cached_io::destroy_subsystem(part_io_process_table *table)
 {
 	delete table;
 	return 0;
@@ -889,12 +888,12 @@ public:
 	}
 };
 
-part_io_process_table *part_global_cached_io::open_file(
+part_io_process_table *part_global_cached_io::init_subsystem(
 		const std::vector<disk_io_thread *> &io_threads,
-		file_mapper *mapper, const cache_config *config)
+		file_mapper *mapper, NUMA_cache *cache)
 {
 	part_io_process_table *table = new part_io_process_table(io_threads,
-			mapper, config);
+			mapper, cache);
 	debug.register_task(new debug_process_request_threads(table));
 	return table;
 }
