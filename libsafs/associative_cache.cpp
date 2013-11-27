@@ -1111,7 +1111,8 @@ public:
 	}
 
 	virtual int get_file_id() const {
-		return underlying->get_file_id();
+		assert(0);
+		return -1;
 	}
 
 	virtual void notify_completion(io_request *reqs[], int num);
