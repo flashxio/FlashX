@@ -54,6 +54,7 @@ struct global_data_collection
 	RAID_config raid_conf;
 	std::vector<disk_io_thread *> read_threads;
 	pthread_mutex_t mutex;
+	page_cache *global_cache;
 
 #ifdef DEBUG
 	std::tr1::unordered_set<io_interface *> ios;
@@ -61,6 +62,7 @@ struct global_data_collection
 #endif
 
 	global_data_collection() {
+		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
 #ifdef DEBUG
 		pthread_spin_init(&ios_lock, PTHREAD_PROCESS_PRIVATE);
@@ -149,6 +151,23 @@ void init_io_system(const config_map &configs)
 		}
 		debug.register_task(new debug_global_data());
 	}
+	if (global_data.global_cache == NULL) {
+		std::vector<int> node_id_array;
+		for (int i = 0; i < params.get_num_nodes(); i++)
+			node_id_array.push_back(i);
+
+		cache_config *cache_conf = new even_cache_config(
+				params.get_cache_size(),
+				params.get_cache_type(), node_id_array);
+		global_data.global_cache = cache_conf->create_cache(
+				MAX_NUM_FLUSHES_PER_FILE *
+				global_data.raid_conf.get_num_disks());
+		int num_files = global_data.read_threads.size();
+		for (int k = 0; k < num_files; k++) {
+			global_data.read_threads[k]->register_cache(
+					global_data.global_cache);
+		}
+	}
 	pthread_mutex_unlock(&global_data.mutex);
 }
 
@@ -202,23 +221,11 @@ public:
 class global_cached_io_factory: public remote_io_factory
 {
 	const cache_config *cache_conf;
-	static page_cache *global_cache;
+	page_cache *global_cache;
 public:
 	global_cached_io_factory(const std::string &file_name,
-			const cache_config *cache_conf): remote_io_factory(file_name) {
-		this->cache_conf = cache_conf;
-		if (global_cache == NULL) {
-			global_cache = cache_conf->create_cache(MAX_NUM_FLUSHES_PER_FILE *
-					global_data.raid_conf.get_num_disks());
-			int num_files = global_data.read_threads.size();
-			for (int k = 0; k < num_files; k++) {
-				global_data.read_threads[k]->register_cache(global_cache);
-			}
-		}
-	}
-
-	~global_cached_io_factory() {
-		cache_conf->destroy_cache(global_cache);
+			page_cache *cache): remote_io_factory(file_name) {
+		this->global_cache = cache;
 	}
 
 	virtual io_interface *create_io(thread *t);
@@ -227,6 +234,7 @@ public:
 	}
 };
 
+#if 0
 class part_global_cached_io_factory: public remote_io_factory
 {
 	const cache_config *cache_conf;
@@ -245,6 +253,7 @@ public:
 	virtual void destroy_io(io_interface *io) {
 	}
 };
+#endif
 
 io_interface *posix_io_factory::create_io(thread *t)
 {
@@ -336,6 +345,7 @@ io_interface *global_cached_io_factory::create_io(thread *t)
 	return io;
 }
 
+#if 0
 part_global_cached_io_factory::part_global_cached_io_factory(
 		const std::string &file_name,
 		const cache_config *cache_conf): remote_io_factory(file_name)
@@ -360,6 +370,7 @@ io_interface *part_global_cached_io_factory::create_io(thread *t)
 #endif
 	return io;
 }
+#endif
 
 file_io_factory *create_io_factory(const std::string &file_name,
 		const int access_option)
@@ -375,12 +386,6 @@ file_io_factory *create_io_factory(const std::string &file_name,
 		}
 	}
 
-	std::vector<int> node_id_array;
-	for (int i = 0; i < params.get_num_nodes(); i++)
-		node_id_array.push_back(i);
-	cache_config *cache_conf = new even_cache_config(params.get_cache_size(),
-				params.get_cache_type(), node_id_array);
-
 	file_io_factory *factory;
 	switch (access_option) {
 		case READ_ACCESS:
@@ -394,13 +399,16 @@ file_io_factory *create_io_factory(const std::string &file_name,
 			factory = new remote_io_factory(file_name);
 			break;
 		case GLOBAL_CACHE_ACCESS:
-			assert(cache_conf);
-			factory = new global_cached_io_factory(file_name, cache_conf);
+			factory = new global_cached_io_factory(file_name,
+					global_data.global_cache);
 			break;
+#if 0
 		case PART_GLOBAL_ACCESS:
 			assert(cache_conf);
-			factory = new part_global_cached_io_factory(file_name, cache_conf);
+			factory = new part_global_cached_io_factory(file_name,
+					global_data.global_cache);
 			break;
+#endif
 		default:
 			fprintf(stderr, "a wrong access option\n");
 			assert(0);
@@ -435,4 +443,3 @@ ssize_t file_io_factory::get_file_size() const
 }
 
 atomic_integer io_interface::io_counter;
-page_cache *global_cached_io_factory::global_cache;
