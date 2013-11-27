@@ -124,7 +124,6 @@ public:
 	/* When a thread begins, this method will be called. */
 	virtual int init() {
 		int ret = underlying->init();
-		get_global_cache()->init(underlying);
 		return ret;
 	}
 

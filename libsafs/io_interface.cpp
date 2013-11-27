@@ -171,6 +171,16 @@ void init_io_system(const config_map &configs)
 			global_data.read_threads[k]->register_cache(
 					global_data.global_cache);
 		}
+
+		// The remote IO will never be used. It's only used for creating
+		// more remote IOs for flushing dirty pages, so it doesn't matter
+		// what thread is used here.
+		thread *curr = thread::get_curr_thread();
+		if (curr == NULL)
+			curr = thread::represent_thread(0);
+		io_interface *underlying = new remote_io(global_data.read_threads,
+				mapper, curr);
+		global_data.global_cache->init(underlying);
 	}
 	if (global_data.table == NULL) {
 		if (params.get_num_nodes() > 1)
