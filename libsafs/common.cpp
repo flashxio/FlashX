@@ -111,13 +111,13 @@ int isnumeric(char *str)
 
 }
 
-bool check_read_content(char *buf, int size, off_t off)
+bool check_read_content(char *buf, int size, off_t off, int file_id)
 {
 	// I assume the space in the buffer is larger than 8 bytes.
 	off_t aligned_off = off & (~(sizeof(off_t) - 1));
 	long data[2];
-	data[0] = aligned_off / sizeof(off_t);
-	data[1] = aligned_off / sizeof(off_t) + 1;
+	data[0] = aligned_off / sizeof(off_t) + file_id;
+	data[1] = aligned_off / sizeof(off_t) + 1 + file_id;
 	long expected = 0;
 	int copy_size = size < (int) sizeof(off_t) ? size : (int) sizeof(off_t);
 	memcpy(&expected, ((char *) data) + (off - aligned_off), copy_size);
@@ -129,12 +129,12 @@ bool check_read_content(char *buf, int size, off_t off)
 	return read_value == expected;
 }
 
-void create_write_data(char *buf, int size, off_t off)
+void create_write_data(char *buf, int size, off_t off, int file_id)
 {
 	off_t aligned_start = off & (~(sizeof(off_t) - 1));
 	off_t aligned_end = (off + size) & (~(sizeof(off_t) - 1));
-	long start_data = aligned_start / sizeof(off_t);
-	long end_data = aligned_end / sizeof(off_t);
+	long start_data = aligned_start / sizeof(off_t) + file_id;
+	long end_data = aligned_end / sizeof(off_t) + file_id;
 
 	/* If all data is in one 8-byte word. */
 	if (aligned_start == aligned_end) {
@@ -151,7 +151,7 @@ void create_write_data(char *buf, int size, off_t off)
 		memcpy(buf, ((char *) &start_data) + (off - aligned_start),
 				first_size);
 	for (int i = first_size; i < aligned_end - off; i += sizeof(off_t)) {
-		*((long *) (buf + i)) = (off + i) / sizeof(off_t);
+		*((long *) (buf + i)) = (off + i) / sizeof(off_t) + file_id;
 	}
 	if (aligned_end > aligned_start
 			|| (aligned_end == aligned_start && first_size == 0)) {
@@ -159,7 +159,7 @@ void create_write_data(char *buf, int size, off_t off)
 			memcpy(buf + (aligned_end - off), (char *) &end_data, last_size);
 	}
 
-	check_read_content(buf, size, off);
+	check_read_content(buf, size, off, file_id);
 }
 
 bool align_check(size_t alignment)

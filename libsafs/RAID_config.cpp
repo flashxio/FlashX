@@ -83,6 +83,21 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 	}
 }
 
+file_mapper *RAID_config::create_file_mapper() const
+{
+	switch (RAID_mapping_option) {
+		case RAID0:
+			return new RAID0_mapper(root_paths, RAID_block_size);
+		case RAID5:
+			return new RAID5_mapper(root_paths, RAID_block_size);
+		case HASH:
+			return new hash_mapper(root_paths, RAID_block_size);
+		default:
+			fprintf(stderr, "wrong RAID mapping option\n");
+			exit(1);
+	}
+}
+
 std::set<int> RAID_config::get_node_ids() const
 {
 	std::set<int> node_ids;

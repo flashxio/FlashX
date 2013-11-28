@@ -175,7 +175,7 @@ void remote_io::access(io_request *requests, int num,
 			// when the request size is large, it should normally be OK.
 			// TODO I can use slab allocators later.
 			io_req_extension *ext = new io_req_extension();
-			io_request *orig = new io_request(ext, 0, 0, NULL, 0);
+			io_request *orig = new io_request(ext, INVALID_DATA_LOC, 0, NULL, 0);
 			// global_cached_io doesn't issue requests across a block boundary.
 			// It can only be application issued requst, so it shouldn't have
 			// extension.
@@ -187,7 +187,7 @@ void remote_io::access(io_request *requests, int num,
 					begin = ROUND(begin + RAID_block_size, RAID_block_size)) {
 				io_req_extension *ext = new io_req_extension();
 				ext->set_orig(orig);
-				io_request req(ext, 0, 0, NULL, 0);
+				io_request req(ext, INVALID_DATA_LOC, 0, NULL, 0);
 				int size = ROUND(begin + RAID_block_size, RAID_block_size) - begin;
 				size = min(size, end - begin);
 				// It only supports to extract a specified request from

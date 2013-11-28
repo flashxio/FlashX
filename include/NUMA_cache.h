@@ -52,14 +52,22 @@ public:
 			cache_conf->destroy_cache_on_node(caches[i]);
 	}
 
-	virtual page *search(off_t offset, off_t &old_off) {
-		int idx = cache_conf->page2cache(offset);
-		return caches[idx]->search(offset, old_off);
+	const cache_config *get_cache_config() const {
+		return cache_conf;
 	}
 
-	virtual page *search(off_t offset) {
-		int idx = cache_conf->page2cache(offset);
-		return caches[idx]->search(offset);
+	page_cache *get_cache_on_node(int node_id) const {
+		return caches[node_id];
+	}
+
+	virtual page *search(const page_id_t &pg_id, page_id_t &old_id) {
+		int idx = cache_conf->page2cache(pg_id);
+		return caches[idx]->search(pg_id, old_id);
+	}
+
+	virtual page *search(const page_id_t &pg_id) {
+		int idx = cache_conf->page2cache(pg_id);
+		return caches[idx]->search(pg_id);
 	}
 
 	virtual long size() {
@@ -85,13 +93,16 @@ public:
 	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
 			io_interface *io) {
 		for (int i = 0; i < num; i++) {
-			int idx = cache_conf->page2cache(pages[i]->get_offset());
+			page_id_t pg_id(pages[i]->get_file_id(), pages[i]->get_offset());
+			int idx = cache_conf->page2cache(pg_id);
 			caches[idx]->mark_dirty_pages(&pages[i], 1, io);
 		}
 	}
 
 	virtual void flush_callback(io_request &req) {
-		int idx = cache_conf->page2cache(req.get_offset());
+		assert(req.within_1page());
+		page_id_t pg_id(req.get_file_id(), req.get_offset());
+		int idx = cache_conf->page2cache(pg_id);
 		caches[idx]->flush_callback(req);
 	}
 

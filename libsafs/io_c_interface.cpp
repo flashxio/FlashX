@@ -308,7 +308,8 @@ ssize_t ssd_aread(ssd_file_desc_t fd, void *buf, size_t count, off_t off)
 {
 	io_interface *io = fd->io;
 	assert(io->support_aio());
-	io_request req((char *) buf, off, count, READ, io, io->get_node_id());
+	data_loc_t loc(io->get_file_id(), off);
+	io_request req((char *) buf, loc, count, READ, io, io->get_node_id());
 	io->access(&req, 1);
 	return 0;
 }
@@ -317,7 +318,8 @@ ssize_t ssd_awrite(ssd_file_desc_t fd, void *buf, size_t count, off_t off)
 {
 	io_interface *io = fd->io;
 	assert(io->support_aio());
-	io_request req((char *) buf, off, count, WRITE, io, io->get_node_id());
+	data_loc_t loc(io->get_file_id(), off);
+	io_request req((char *) buf, loc, count, WRITE, io, io->get_node_id());
 	io->access(&req, 1);
 	return 0;
 }

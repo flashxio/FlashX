@@ -60,6 +60,7 @@ ssize_t native_dir::read_all_files(std::vector<std::string> &files) const
 		num++;
 	}
 	free(entryp);
+	closedir(d);
 	return num;
 }
 

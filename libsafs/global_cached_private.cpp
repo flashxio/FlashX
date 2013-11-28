@@ -68,7 +68,8 @@ class request_allocator: public obj_allocator<io_request>
 				req->init();
 			}
 			else {
-				new (req) io_request(ext_allocator->alloc_obj(), 0, 0, NULL, 0);
+				data_loc_t loc;
+				new (req) io_request(ext_allocator->alloc_obj(), loc, 0, NULL, 0);
 			}
 		}
 	};
@@ -279,6 +280,7 @@ void global_cached_io::finalize_request(io_request *req)
 		}
 		else
 			original->dec_complete_count();
+		req_allocator->free(req);
 	}
 	else {
 		assert(req->get_orig() == NULL);
@@ -532,6 +534,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 			// we need to first read the page.
 			if (orig->get_size() < PAGE_SIZE) {
 				off_t off = orig->get_offset();
+				data_loc_t pg_loc(orig->get_file_id(), ROUND_PAGE(off));
 				io_request *real_orig = orig->get_orig();
 				// If the request doesn't have a private data, it is the real
 				// original request.
@@ -548,8 +551,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 				ext->set_priv(p);
 				ext->add_buf((char *) p->get_data(), PAGE_SIZE, 0);
 
-				io_request read_req(ext, ROUND_PAGE(off), READ,
-						this, p->get_node_id());
+				io_request read_req(ext, pg_loc, READ, this, p->get_node_id());
 				p->set_io_pending(true);
 				p->unlock();
 				io_status status;
@@ -618,7 +620,8 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
 			ext->set_priv(p);
 			ext->add_buf((char *) p->get_data(), PAGE_SIZE, 0);
 
-			io_request req(ext, p->get_offset(), READ, this, get_node_id());
+			data_loc_t pg_loc(p->get_file_id(), p->get_offset());
+			io_request req(ext, pg_loc, READ, this, get_node_id());
 			p->unlock();
 			io_status status;
 			underlying->access(&req, 1, &status);
@@ -662,9 +665,11 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 
 	io_req_extension *ext = ext_allocator->alloc_obj();
 	ext->set_orig(orig);
-	io_request multibuf_req(ext, -1, req.get_access_method(), this,
+	io_request multibuf_req(ext, INVALID_DATA_LOC, req.get_access_method(), this,
 			get_node_id());
 
+	assert(npages > 0);
+	int file_id = pages[0]->get_file_id();
 	/*
 	 * The pages in `pages' should be sorted with their offsets.
 	 * We are going to grab multiple locks below. As long as we always
@@ -672,13 +677,16 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 	 */
 	for (int i = 0; i < npages; i++) {
 		thread_safe_page *p = pages[i];
+		assert(file_id == p->get_file_id());
 again:
 		p->lock();
 		if (!p->data_ready() && !p->is_io_pending()) {
 			p->set_io_pending(true);
 			assert(!p->is_dirty());
-			if (multibuf_req.is_empty())
-				multibuf_req.set_offset(p->get_offset());
+			if (multibuf_req.is_empty()) {
+				data_loc_t loc(p->get_file_id(), p->get_offset());
+				multibuf_req.set_data_loc(loc);
+			}
 			/* We don't need to worry buffer overflow here. */
 			multibuf_req.add_page(p);
 			multibuf_req.set_priv(p);
@@ -695,8 +703,8 @@ again:
 
 				io_req_extension *ext = ext_allocator->alloc_obj();
 				ext->set_orig(orig);
-				io_request tmp(ext, -1, req.get_access_method(), this,
-						get_node_id());
+				io_request tmp(ext, INVALID_DATA_LOC, req.get_access_method(),
+						this, get_node_id());
 				multibuf_req = tmp;
 				goto again;
 			}
@@ -737,8 +745,8 @@ again:
 
 				io_req_extension *ext = ext_allocator->alloc_obj();
 				ext->set_orig(orig);
-				io_request tmp(ext, -1, req.get_access_method(), this,
-						get_node_id());
+				io_request tmp(ext, INVALID_DATA_LOC, req.get_access_method(),
+						this, get_node_id());
 				multibuf_req = tmp;
 			}
 			io_request complete_partial;
@@ -812,8 +820,9 @@ void merge_pages2req(io_request &req, page_cache *cache)
 	off_t forward_off = off + PAGE_SIZE;
 	off_t block_off = ROUND(off, params.get_RAID_block_size() * PAGE_SIZE);
 	off_t block_end_off = block_off + params.get_RAID_block_size() * PAGE_SIZE;
+	page_id_t pg_id(req.get_file_id(), forward_off);
 	while (forward_off < block_end_off
-			&& (p = (thread_safe_page *) cache->search(forward_off))) {
+			&& (p = (thread_safe_page *) cache->search(pg_id))) {
 		p->lock();
 		if (!p->is_dirty()) {
 			p->unlock();
@@ -831,11 +840,13 @@ void merge_pages2req(io_request &req, page_cache *cache)
 		}
 		p->unlock();
 		forward_off += PAGE_SIZE;
+		pg_id = page_id_t(req.get_file_id(), forward_off);
 	}
 	if (off >= PAGE_SIZE) {
 		off_t backward_off = off - PAGE_SIZE;
+		pg_id = page_id_t(req.get_file_id(), backward_off);
 		while (backward_off >= block_off
-				&& (p = (thread_safe_page *) cache->search(backward_off))) {
+				&& (p = (thread_safe_page *) cache->search(pg_id))) {
 			p->lock();
 			if (!p->is_dirty()) {
 				p->unlock();
@@ -845,7 +856,7 @@ void merge_pages2req(io_request &req, page_cache *cache)
 			if (!p->is_io_pending()) {
 				p->set_io_pending(true);
 				req.add_page_front(p);
-				req.set_offset(backward_off);
+				req.set_data_loc(pg_id);
 			}
 			else {
 				p->unlock();
@@ -853,8 +864,10 @@ void merge_pages2req(io_request &req, page_cache *cache)
 				break;
 			}
 			p->unlock();
-			if (backward_off >= PAGE_SIZE)
+			if (backward_off >= PAGE_SIZE) {
 				backward_off -= PAGE_SIZE;
+				pg_id = page_id_t(req.get_file_id(), backward_off);
+			}
 			else
 				break;
 		}
@@ -866,8 +879,8 @@ void merge_pages2req(io_request &req, page_cache *cache)
  * Write the dirty page. If possible, we merge it with pages adjacent to
  * it and write a larger request.
  */
-void global_cached_io::write_dirty_page(thread_safe_page *p, off_t off,
-		io_request *orig)
+void global_cached_io::write_dirty_page(thread_safe_page *p,
+		const page_id_t &pg_id, io_request *orig)
 {
 	p->lock();
 	assert(!p->is_io_pending());
@@ -876,7 +889,7 @@ void global_cached_io::write_dirty_page(thread_safe_page *p, off_t off,
 	io_req_extension *ext = ext_allocator->alloc_obj();
 	ext->set_orig(orig);
 	ext->set_priv(p);
-	io_request req(ext, off, WRITE, this, p->get_node_id());
+	io_request req(ext, pg_id, WRITE, this, p->get_node_id());
 	assert(p->get_ref() > 0);
 	req.add_page(p);
 	p->unlock();
@@ -955,12 +968,13 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		int num_bytes_completed = 0;
 		for (off_t tmp_off = begin_pg_offset; tmp_off < end_pg_offset;
 				tmp_off += PAGE_SIZE) {
-			off_t old_off = -1;
 			thread_safe_page *p;
 			
+			page_id_t pg_id(requests[i].get_file_id(), tmp_off);
+			page_id_t old_id;
 			do {
 				p = (thread_safe_page *) (get_global_cache()
-						->search(tmp_off, old_off));
+						->search(pg_id, old_id));
 				// If the cache can't evict a page, it's probably because
 				// all pages have been referenced. Let's flush all requests
 				// from the cached IO and process all completed requests,
@@ -977,7 +991,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				if (!p->data_ready()) {
 					p->set_io_pending(false);
 					p->set_data_ready(true);
-					old_off = -1;
+					old_id = page_id_t();
 					if (p->is_old_dirty()) {
 						p->set_dirty(false);
 						p->set_old_dirty(false);
@@ -989,7 +1003,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 			 * If old_off is -1, it means search() didn't evict a page, i.e.,
 			 * it's a cache hit.
 			 */
-			if (old_off == -1) {
+			if (old_id.get_offset() == -1) {
 #ifdef STATISTICS
 				cache_hits++;
 #endif
@@ -1063,14 +1077,14 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				}
 
 				/* The page is evicted in this thread */
-				if (old_off != ROUND_PAGE(offset) && old_off != -1) {
+				if (old_id.get_offset() != ROUND_PAGE(offset) && old_id.get_offset() != -1) {
 					/*
 					 * Only one thread can come here because only one thread
 					 * can evict the dirty page and the thread gets its old
 					 * offset, and only this thread can write back the old
 					 * dirty page.
 					 */
-					write_dirty_page(p, old_off, orig1);
+					write_dirty_page(p, old_id, orig1);
 					continue;
 				}
 				else {
@@ -1165,7 +1179,8 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 io_status global_cached_io::access(char *buf, off_t offset,
 		ssize_t size, int access_method)
 {
-	io_request req(buf, offset, size, access_method, this, this->get_node_id(), true);
+	data_loc_t loc(this->get_file_id(), offset);
+	io_request req(buf, loc, size, access_method, this, this->get_node_id(), true);
 	io_status status;
 	access(&req, 1, &status);
 	if (status == IO_PENDING) {
@@ -1187,9 +1202,10 @@ int global_cached_io::preload(off_t start, long size) {
 
 	assert(ROUND_PAGE(start) == start);
 	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
-		off_t old_off = -1;
+		page_id_t pg_id(get_file_id(), ROUND_PAGE(offset));
+		page_id_t old_id;
 		thread_safe_page *p = (thread_safe_page *) (get_global_cache()->search(
-					ROUND_PAGE(offset), old_off));
+					pg_id, old_id));
 		// This is mainly for testing. I don't need to really read data from disks.
 		if (!p->data_ready()) {
 			p->set_io_pending(false);

@@ -40,16 +40,18 @@ class cleanup_callback: public callback
 	ssize_t read_bytes;
 	int thread_id;
 	thread_private *thread;
+	int file_id;
 public:
 #ifdef DEBUG
 	std::tr1::unordered_map<char *, issued_workload_t> pending_reqs;
 #endif
 
-	cleanup_callback(rand_buf *buf, int idx, thread_private *thread) {
+	cleanup_callback(rand_buf *buf, int idx, thread_private *thread, int file_id) {
 		this->buf = buf;
 		read_bytes = 0;
 		this->thread_id = idx;
 		this->thread = thread;
+		this->file_id = file_id;
 	}
 
 	int invoke(io_request *rqs[], int num) {
@@ -60,7 +62,7 @@ public:
 				off_t off = rq->get_offset();
 				for (int i = 0; i < rq->get_num_bufs(); i++) {
 					assert(check_read_content(rq->get_buf(i),
-								rq->get_buf_size(i), off));
+								rq->get_buf_size(i), off, file_id));
 					off += rq->get_buf_size(i);
 				}
 			}
@@ -101,7 +103,7 @@ void thread_private::init() {
 			config.get_entry_size(), node_id);
 	this->buf = buf;
 	if (io->support_aio()) {
-		cb = new cleanup_callback(buf, idx, this);
+		cb = new cleanup_callback(buf, idx, this, io->get_file_id());
 		io->set_callback(cb);
 	}
 }
@@ -136,10 +138,11 @@ public:
 		return workload.size <= 0;
 	}
 
-	int to_reqs(int buf_type, int num, io_request reqs[]);
+	int to_reqs(io_interface *io, int buf_type, int num, io_request reqs[]);
 };
 
-int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
+int work2req_converter::to_reqs(io_interface *io, int buf_type, int num,
+		io_request reqs[])
 {
 	int node_id = io->get_node_id();
 	int access_method = workload.read ? READ : WRITE;
@@ -170,8 +173,9 @@ int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
 			if (p == NULL)
 				break;
 			if (access_method == WRITE && params.is_verify_content())
-				create_write_data(p, next_off - off, off);
-			reqs[i].init(p, off, next_off - off, access_method,
+				create_write_data(p, next_off - off, off, io->get_file_id());
+			data_loc_t loc(io->get_file_id(), off);
+			reqs[i].init(p, loc, next_off - off, access_method,
 					io, node_id);
 			size -= next_off - off;
 			off = next_off;
@@ -186,8 +190,9 @@ int work2req_converter::to_reqs(int buf_type, int num, io_request reqs[])
 		if (p == NULL)
 			return 0;
 		if (access_method == WRITE && params.is_verify_content())
-			create_write_data(p, size, off);
-		reqs[0].init(p, off, size, access_method, io, node_id);
+			create_write_data(p, size, off, io->get_file_id());
+		data_loc_t loc(io->get_file_id(), off);
+		reqs[0].init(p, loc, size, access_method, io, node_id);
 		workload.off += size;
 		workload.size = 0;
 		return 1;
@@ -216,7 +221,7 @@ void thread_private::run()
 				}
 				if (converter.has_complete())
 					break;
-				int ret = converter.to_reqs(config.get_buf_type(),
+				int ret = converter.to_reqs(io, config.get_buf_type(),
 						num_reqs_by_user - i, reqs + i);
 				if (ret == 0) {
 					no_mem = true;
@@ -285,7 +290,7 @@ void thread_private::run()
 					 * so the data in the file isn't changed.
 					 */
 					if (access_method == WRITE && params.is_verify_content()) {
-						create_write_data(entry, entry_size, off);
+						create_write_data(entry, entry_size, off, io->get_file_id());
 					}
 					// There is at least one byte we need to access in the page.
 					// By adding 1 and rounding up the offset, we'll get the next page
@@ -299,7 +304,7 @@ void thread_private::run()
 					if (status == IO_OK) {
 						num_accesses++;
 						if (access_method == READ && params.is_verify_content()) {
-							check_read_content(entry, next_off - off, off);
+							check_read_content(entry, next_off - off, off, io->get_file_id());
 						}
 						read_bytes += ret;
 					}
@@ -313,7 +318,7 @@ void thread_private::run()
 			}
 			else {
 				if (access_method == WRITE && params.is_verify_content()) {
-					create_write_data(entry, entry_size, off);
+					create_write_data(entry, entry_size, off, io->get_file_id());
 				}
 				io_status status = io->access(entry, off, entry_size,
 						access_method);
@@ -321,7 +326,7 @@ void thread_private::run()
 				if (status == IO_OK) {
 					num_accesses++;
 					if (access_method == READ && params.is_verify_content()) {
-						check_read_content(entry, entry_size, off);
+						check_read_content(entry, entry_size, off, io->get_file_id());
 					}
 					read_bytes += ret;
 				}

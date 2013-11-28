@@ -65,12 +65,15 @@ public:
 
 	virtual void create_data(int fd, void *data, int size, off_t off) {
 		off_t global_off = find_global_off(fd, off);
-		create_write_data((char *) data, size, global_off);
+		const buffered_io *io = fd_map[fd];
+		create_write_data((char *) data, size, global_off, io->get_file_id());
 	}
 
 	virtual bool verify_data(int fd, void *data, int size, off_t off) {
 		off_t global_off = find_global_off(fd, off);
-		return check_read_content((char *) data, size, global_off);
+		const buffered_io *io = fd_map[fd];
+		return check_read_content((char *) data, size, global_off,
+				io->get_file_id());
 	}
 };
 

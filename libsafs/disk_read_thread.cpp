@@ -26,19 +26,28 @@
 const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
+// The partition contains a file mapper but the file mapper doesn't point
+// to a file in the SAFS filesystem.
 disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 		int node_id, page_cache *cache, int _disk_id): thread(
-			std::string("io-thread-") + itoa(node_id), node_id), disk_id(
-			_disk_id), queue(node_id, std::string("io-queue-") + itoa(node_id),
-			IO_QUEUE_SIZE, INT_MAX, false), low_prio_queue(node_id,
-				// TODO let's allow the low-priority queue to
-				// be infinitely large for now.
-				std::string("io-queue-low_prio-") + itoa(node_id),
-				IO_QUEUE_SIZE, INT_MAX, false), partition(_partition), filter(
-					open_files, _disk_id)
+			std::string("io-thread-") + itoa(node_id), node_id),
+		disk_id(_disk_id),
+		queue(node_id, std::string("io-queue-") + itoa(node_id),
+			IO_QUEUE_SIZE, INT_MAX, false),
+		// TODO let's allow the low-priority queue to
+		// be infinitely large for now.
+		low_prio_queue(node_id, std::string("io-queue-low_prio-")
+				+ itoa(node_id), IO_QUEUE_SIZE, INT_MAX, false),
+		comm_queue(std::string("comm-queue") + itoa(node_id), node_id, 1,
+				INT_MAX), 
+		partition(_partition),
+		filter(_partition.get_mapper(), _disk_id)
 {
 	this->cache = cache;
-	aio = new async_io(_partition, AIO_DEPTH_PER_FILE, this);
+	// We don't want AIO to open any files yet, so we pass a file partition
+	// definition without a file mapper.
+	logical_file_partition part(_partition.get_phy_file_indices());
+	aio = new async_io(part, AIO_DEPTH_PER_FILE, this);
 #ifdef STATISTICS
 	num_empty = 0;
 	num_reads = 0;
@@ -100,8 +109,8 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 		// safe way to do it is to use the search method of
 		// the page cache.
 		page_cache *cache = (page_cache *) req.get_priv();
-		thread_safe_page *p = (thread_safe_page *) cache->search(
-				req.get_offset());
+		page_id_t pg_id(req.get_file_id(), req.get_offset());
+		thread_safe_page *p = (thread_safe_page *) cache->search(pg_id);
 		// The page has been evicted.
 		if (p == NULL) {
 			// The original page has been evicted, we should clear
@@ -190,6 +199,20 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 	return num_accesses;
 }
 
+void disk_io_thread::run_commands(
+		thread_safe_FIFO_queue<disk_io_thread::remote_comm *> &queue)
+{
+	const int COMM_BUF_SIZE = 16;
+	remote_comm *commands[COMM_BUF_SIZE];
+	int num;
+	while ((num = queue.fetch(commands, COMM_BUF_SIZE)) > 0) {
+		for (int i = 0; i < num; i++) {
+			commands[i]->run();
+			commands[i]->complete();
+		}
+	}
+}
+
 void disk_io_thread::run() {
 	// First, check if we need to flush requests.
 	int num_flushes = flush_counter.get();
@@ -205,6 +228,10 @@ void disk_io_thread::run() {
 
 	const int LOCAL_REQ_BUF_SIZE = IO_MSG_SIZE;
 	do {
+		// TODO I need to make sure that checking commands doesn't cause
+		// noticeable CPU consumption.
+		if (!comm_queue.is_empty())
+			run_commands(comm_queue);
 		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
 #ifdef STATISTICS
 		num_msgs += num;
@@ -283,10 +310,13 @@ void disk_io_thread::run() {
 int disk_io_thread::dirty_page_filter::filter(const thread_safe_page *pages[],
 		int num, const thread_safe_page *returned_pages[])
 {
-	assert(mappers.size() == 1);
 	int num_returned = 0;
 	for (int i = 0; i < num; i++) {
-		int id = mappers[0]->map2file(pages[i]->get_offset());
+		// All files use the same mapping function and the same block size,
+		// so it works fine with multiple files.
+		// TODO if we decide to use different block sizes for different files,
+		// we need to change it.
+		int id = mapper->map2file(pages[i]->get_offset());
 		if (this->disk_id == id)
 			returned_pages[num_returned++] = pages[i];
 	}

@@ -44,6 +44,7 @@
 #include "remote_access.h"
 #include "debugger.h"
 #include "timer.h"
+#include "NUMA_cache.h"
 
 const int NUMA_REQ_QUEUE_SIZE = 2000;
 const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
@@ -129,7 +130,7 @@ class part_io_process_table
 	int num_groups;
 public:
 	part_io_process_table(const std::vector<disk_io_thread *> &io_threads,
-			file_mapper *mapper, const cache_config *config);
+			file_mapper *mapper, NUMA_cache *cache);
 
 	~part_io_process_table();
 
@@ -393,6 +394,7 @@ public:
 
 class req_stealer: public io_interface
 {
+	int file_id;
 	underlying_io_thread *t;
 	message<io_request> req_buf;
 	slab_allocator *alloc;
@@ -400,8 +402,9 @@ class req_stealer: public io_interface
 
 	atomic_integer access_guard;
 public:
-	req_stealer(underlying_io_thread *t, thread *curr_thread): io_interface(
-			curr_thread) {
+	req_stealer(underlying_io_thread *t, thread *curr_thread,
+			int file_id): io_interface(curr_thread) {
+		this->file_id = file_id;
 		flush_timer = new periodic_timer(curr_thread, new flush_timer_task(this));
 		flush_timer->start();
 		this->t = t;
@@ -413,9 +416,8 @@ public:
 	}
 
 	virtual int get_file_id() const {
-		// This function shouldn't be called.
-		assert(0);
-		return -1;
+		assert(file_id >= 0);
+		return file_id;
 	}
 
 	void access(io_request *reqs, int num, io_status *status = NULL) {
@@ -592,7 +594,8 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 	int num_local = 0;
 
 	for (int i = 0; i < num; i++) {
-		int idx = cache_conf->page2cache(reqs[i]->get_offset());
+		page_id_t pg_id(reqs[i]->get_file_id(), reqs[i]->get_offset());
+		int idx = cache_conf->page2cache(pg_id);
 		if (idx != get_node_id())
 			local_reply_buf[num_remote++] = io_reply(reqs[i], true, 0);
 		else {
@@ -649,7 +652,9 @@ public:
 
 	void init() {
 		io = node_cached_io::create(
-				new req_stealer(group->underlying_thread, this), group);
+				// In request processing thread, a request stealer isn't
+				// associated to any files.
+				new req_stealer(group->underlying_thread, this, -1), group);
 	}
 
 	node_cached_io *get_io() const {
@@ -747,12 +752,11 @@ void process_reply_thread::run()
 
 part_io_process_table::part_io_process_table(
 		const std::vector<disk_io_thread *> &io_threads,
-		file_mapper *mapper, const cache_config *config)
+		file_mapper *mapper, NUMA_cache *cache)
 {
-	int num_ssds = io_threads.size();
+	cache_conf = cache->get_cache_config();
 	std::vector<int> node_ids;
-	config->get_node_ids(node_ids);
-	cache_conf = config;
+	cache_conf->get_node_ids(node_ids);
 	num_groups = node_ids.size();
 	for (unsigned i = 0; i < node_ids.size(); i++) {
 		int node_id = node_ids[i];
@@ -761,8 +765,7 @@ part_io_process_table::part_io_process_table(
 		group.id = node_id;
 		group.underlying_thread = new underlying_io_thread(io_threads,
 				mapper, node_id);
-		group.cache = cache_conf->create_cache_on_node(node_id,
-				MAX_NUM_FLUSHES_PER_FILE * num_ssds / config->get_num_caches());
+		group.cache = cache->get_cache_on_node(node_id);
 		group.msg_allocator = new slab_allocator(std::string("msg_allocator-")
 				+ itoa(node_id), NUMA_MSG_SIZE,
 				NUMA_MSG_SIZE * 128, INT_MAX, node_id);
@@ -866,7 +869,7 @@ int part_global_cached_io::init()
 	return 0;
 }
 
-int part_global_cached_io::close_file(part_io_process_table *table)
+int part_global_cached_io::destroy_subsystem(part_io_process_table *table)
 {
 	delete table;
 	return 0;
@@ -885,12 +888,12 @@ public:
 	}
 };
 
-part_io_process_table *part_global_cached_io::open_file(
+part_io_process_table *part_global_cached_io::init_subsystem(
 		const std::vector<disk_io_thread *> &io_threads,
-		file_mapper *mapper, const cache_config *config)
+		file_mapper *mapper, NUMA_cache *cache)
 {
 	part_io_process_table *table = new part_io_process_table(io_threads,
-			mapper, config);
+			mapper, cache);
 	debug.register_task(new debug_process_request_threads(table));
 	return table;
 }
@@ -902,7 +905,8 @@ part_global_cached_io::part_global_cached_io(io_interface *underlying,
 	this->local_group = table->get_thread_group(node_id);
 
 	this->underlying = new global_cached_io(underlying->get_thread(),
-			new req_stealer(local_group->underlying_thread, underlying->get_thread()),
+			new req_stealer(local_group->underlying_thread,
+				underlying->get_thread(), underlying->get_file_id()),
 			table->get_cache(node_id));
 	processed_requests = 0;;
 	sent_requests = 0;
@@ -993,7 +997,8 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 	// Distribute requests to the corresponding nodes.
 	for (int i = 0; i < num; i++) {
 		assert(requests[i].within_1page());
-		int idx = cache_conf->page2cache(requests[i].get_offset());
+		page_id_t pg_id(requests[i].get_file_id(), requests[i].get_offset());
+		int idx = cache_conf->page2cache(pg_id);
 		if (idx != get_node_id()) {
 			remote_reads++;
 			// TODO why do this?
@@ -1081,12 +1086,13 @@ int part_global_cached_io::preload(off_t start, long size)
 
 	assert(ROUND_PAGE(start) == start);
 	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
-		off_t old_off = -1;
+		page_id_t pg_id(get_file_id(), ROUND_PAGE(offset));
+		page_id_t old_id;
 		// We only preload data to the local cache.
-		if (cache_conf->page2cache(offset) != get_node_id())
+		if (cache_conf->page2cache(pg_id) != get_node_id())
 			continue;
 		thread_safe_page *p = (thread_safe_page *) local_group->cache->search(
-					ROUND_PAGE(offset), old_off);
+					pg_id, old_id);
 		// This is mainly for testing. I don't need to really read data from disks.
 		if (!p->data_ready()) {
 			p->set_io_pending(false);

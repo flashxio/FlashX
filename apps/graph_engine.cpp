@@ -350,8 +350,8 @@ int worker_thread::process_pending_vertex(int max)
 	for (int j = 0; j < num_neighbors; j++) {
 		vertex_id_t neighbor = remain_neighs[j];
 		compute_vertex &info = graph->get_vertex(neighbor);
-		reqs[j].init(new char[info.get_ext_mem_size()],
-				info.get_ext_mem_off(),
+		data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
+		reqs[j].init(new char[info.get_ext_mem_size()], loc,
 				// TODO I might need to set the node id.
 				info.get_ext_mem_size(), READ, io, -1);
 		reqs[j].set_user_data(curr_pending.get_pending_vertex());
@@ -401,8 +401,8 @@ int worker_thread::process_activated_vertices(int max)
 	int num = graph->get_curr_activated_vertices(vertex_buf, max);
 	for (int i = 0; i < num; i++) {
 		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
-		reqs[i].init(new char[info.get_ext_mem_size()],
-				info.get_ext_mem_off(),
+		data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
+		reqs[i].init(new char[info.get_ext_mem_size()], loc,
 				// TODO I might need to set the node id.
 				info.get_ext_mem_size(), READ, io, -1);
 	}

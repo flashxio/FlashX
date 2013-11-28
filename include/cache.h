@@ -70,6 +70,8 @@ static inline bool page_set_flag(char &flags, int flag, bool v)
 	return orig & (0x1 << flag);
 }
 
+typedef data_loc_t page_id_t;
+
 class page
 {
 	/*
@@ -77,6 +79,12 @@ class page
 	 * it can cover a file of 8 TB.
 	 */
 	int offset;
+	file_id_t file_id;
+
+	/* offset in the file in bytes */
+	void set_offset(off_t off) {
+		offset = off >> LOG_PAGE_SIZE;
+	}
 
 	/*
 	 * in pages.
@@ -89,6 +97,7 @@ protected:
 	volatile char flush_score;
 public:
 	page(): data(NULL) {
+		file_id = -1;
 		offset = -1;
 		refcnt = 0;
 		flags = 0;
@@ -96,13 +105,19 @@ public:
 		flush_score = 0;
 	}
 
-	page(off_t off, char *data) {
-		set_offset(off);
+	page(const page_id_t &pg_id, char *data) {
+		set_offset(pg_id.get_offset());
+		file_id = pg_id.get_file_id();
 		this->data = data;
 		refcnt = 0;
 		flags = 0;
 		hits = 0;
 		flush_score = 0;
+	}
+
+	void set_id(const page_id_t &pg_id) {
+		set_offset(pg_id.get_offset());
+		file_id = pg_id.get_file_id();
 	}
 
 	bool is_valid() const {
@@ -129,15 +144,11 @@ public:
 		return flush_score;
 	}
 
-	/* offset in the file in bytes */
-	void set_offset(off_t off) {
-		offset = off >> LOG_PAGE_SIZE;
-	}
-
 	bool initialized() const {
 		return offset != -1;
 	}
 
+	file_id_t get_file_id() const { return file_id; }
 	off_t get_offset() const { return ((off_t) offset) << LOG_PAGE_SIZE; }
 	void *get_data() const { return (void *) data; }
 
@@ -239,7 +250,8 @@ public:
 		node_id = -1;
 	}
 
-	thread_safe_page(off_t off, char *data, int node_id): page(off, data) {
+	thread_safe_page(const page_id_t &pg_id, char *data,
+			int node_id): page(pg_id, data) {
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
 #ifdef PTHREAD_WAIT
 		pthread_cond_init(&ready_cond, NULL);
@@ -401,12 +413,12 @@ public:
 	 * If the returned page is evicted, its original page offset is
 	 * saved in `old_off'.
 	 */
-	virtual page *search(off_t offset, off_t &old_off) = 0;
+	virtual page *search(const page_id_t &pg_id, page_id_t &old_id) = 0;
 	/**
 	 * This method searches for a page with the specified offset.
 	 * If the page doesn't exist, it returns NULL.
 	 */
-	virtual page *search(off_t offset) {
+	virtual page *search(const page_id_t &pg_id) {
 		return NULL;
 	}
 	/**
@@ -453,7 +465,7 @@ public:
 	frame(): thread_safe_page() {
 	}
 
-	frame(off_t offset, char *data): thread_safe_page(offset, data, -1) {
+	frame(const page_id_t &pg_id, char *data): thread_safe_page(pg_id, data, -1) {
 	}
 
 	/**

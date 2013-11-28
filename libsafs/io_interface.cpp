@@ -54,6 +54,9 @@ struct global_data_collection
 	RAID_config raid_conf;
 	std::vector<disk_io_thread *> read_threads;
 	pthread_mutex_t mutex;
+	page_cache *global_cache;
+	// For part_global_cached_io
+	part_io_process_table *table;
 
 #ifdef DEBUG
 	std::tr1::unordered_set<io_interface *> ios;
@@ -61,6 +64,8 @@ struct global_data_collection
 #endif
 
 	global_data_collection() {
+		table = NULL;
+		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
 #ifdef DEBUG
 		pthread_spin_init(&ios_lock, PTHREAD_PROCESS_PRIVATE);
@@ -128,6 +133,7 @@ void init_io_system(const config_map &configs)
 	printf("There are %ld nodes with disks\n", disk_node_ids.size());
 	init_aio(disk_node_ids);
 
+	file_mapper *mapper = raid_conf.create_file_mapper();
 	/* 
 	 * The mutex is enough to guarantee that all threads will see initialized
 	 * global data. The first thread that enters the critical area will
@@ -141,12 +147,46 @@ void init_io_system(const config_map &configs)
 		global_data.read_threads.resize(num_files);
 		for (int k = 0; k < num_files; k++) {
 			std::vector<int> indices(1, k);
-			logical_file_partition partition(indices);
+			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
 			global_data.read_threads[k] = new disk_io_thread(partition,
 					global_data.raid_conf.get_disk(k).node_id, NULL, k);
 		}
 		debug.register_task(new debug_global_data());
+	}
+
+	if (global_data.global_cache == NULL) {
+		std::vector<int> node_id_array;
+		for (int i = 0; i < params.get_num_nodes(); i++)
+			node_id_array.push_back(i);
+
+		cache_config *cache_conf = new even_cache_config(
+				params.get_cache_size(),
+				params.get_cache_type(), node_id_array);
+		global_data.global_cache = cache_conf->create_cache(
+				MAX_NUM_FLUSHES_PER_FILE *
+				global_data.raid_conf.get_num_disks());
+		int num_files = global_data.read_threads.size();
+		for (int k = 0; k < num_files; k++) {
+			global_data.read_threads[k]->register_cache(
+					global_data.global_cache);
+		}
+
+		// The remote IO will never be used. It's only used for creating
+		// more remote IOs for flushing dirty pages, so it doesn't matter
+		// what thread is used here.
+		thread *curr = thread::get_curr_thread();
+		if (curr == NULL)
+			curr = thread::represent_thread(0);
+		io_interface *underlying = new remote_io(global_data.read_threads,
+				mapper, curr);
+		global_data.global_cache->init(underlying);
+	}
+	if (global_data.table == NULL) {
+		if (params.get_num_nodes() > 1)
+			global_data.table = part_global_cached_io::init_subsystem(
+					global_data.read_threads, mapper,
+					(NUMA_cache *) global_data.global_cache);
 	}
 	pthread_mutex_unlock(&global_data.mutex);
 }
@@ -190,9 +230,7 @@ protected:
 public:
 	remote_io_factory(const std::string &file_name);
 
-	~remote_io_factory() {
-		delete mapper;
-	}
+	~remote_io_factory();
 
 	virtual io_interface *create_io(thread *t);
 
@@ -203,23 +241,11 @@ public:
 class global_cached_io_factory: public remote_io_factory
 {
 	const cache_config *cache_conf;
-	static page_cache *global_cache;
+	page_cache *global_cache;
 public:
 	global_cached_io_factory(const std::string &file_name,
-			const cache_config *cache_conf): remote_io_factory(file_name) {
-		this->cache_conf = cache_conf;
-		if (global_cache == NULL) {
-			global_cache = cache_conf->create_cache(MAX_NUM_FLUSHES_PER_FILE *
-					global_data.raid_conf.get_num_disks());
-			int num_files = global_data.read_threads.size();
-			for (int k = 0; k < num_files; k++) {
-				global_data.read_threads[k]->register_cache(global_cache);
-			}
-		}
-	}
-
-	~global_cached_io_factory() {
-		cache_conf->destroy_cache(global_cache);
+			page_cache *cache): remote_io_factory(file_name) {
+		this->global_cache = cache;
 	}
 
 	virtual io_interface *create_io(thread *t);
@@ -230,15 +256,9 @@ public:
 
 class part_global_cached_io_factory: public remote_io_factory
 {
-	const cache_config *cache_conf;
-	part_io_process_table *table;
-	int num_nodes;
 public:
-	part_global_cached_io_factory(const std::string &file_name,
-			const cache_config *cache_conf);
-
-	~part_global_cached_io_factory() {
-		part_global_cached_io::close_file(table);
+	part_global_cached_io_factory(
+			const std::string &file_name): remote_io_factory(file_name) {
 	}
 
 	virtual io_interface *create_io(thread *t);
@@ -308,6 +328,14 @@ remote_io_factory::remote_io_factory(const std::string &file_name): file_io_fact
 	}
 }
 
+remote_io_factory::~remote_io_factory()
+{
+	int num_files = mapper->get_num_files();
+	for (int i = 0; i < num_files; i++)
+		global_data.read_threads[i]->close_file(mapper);
+	delete mapper;
+}
+
 io_interface *remote_io_factory::create_io(thread *t)
 {
 	io_interface *io = new remote_io(global_data.read_threads, mapper, t);
@@ -329,25 +357,12 @@ io_interface *global_cached_io_factory::create_io(thread *t)
 	return io;
 }
 
-part_global_cached_io_factory::part_global_cached_io_factory(
-		const std::string &file_name,
-		const cache_config *cache_conf): remote_io_factory(file_name)
-{
-	std::vector<int> node_id_array;
-	cache_conf->get_node_ids(node_id_array);
-
-	std::map<int, io_interface *> underlyings;
-	table = part_global_cached_io::open_file(global_data.read_threads,
-			mapper, cache_conf);
-	this->cache_conf = cache_conf;
-	this->num_nodes = node_id_array.size();
-
-}
 
 io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
-			new remote_io(global_data.read_threads, mapper, t), table);
+			new remote_io(global_data.read_threads, mapper, t),
+			global_data.table);
 #ifdef DEBUG
 	global_data.register_io(io);
 #endif
@@ -368,12 +383,6 @@ file_io_factory *create_io_factory(const std::string &file_name,
 		}
 	}
 
-	std::vector<int> node_id_array;
-	for (int i = 0; i < params.get_num_nodes(); i++)
-		node_id_array.push_back(i);
-	cache_config *cache_conf = new even_cache_config(params.get_cache_size(),
-				params.get_cache_type(), node_id_array);
-
 	file_io_factory *factory;
 	switch (access_option) {
 		case READ_ACCESS:
@@ -387,12 +396,11 @@ file_io_factory *create_io_factory(const std::string &file_name,
 			factory = new remote_io_factory(file_name);
 			break;
 		case GLOBAL_CACHE_ACCESS:
-			assert(cache_conf);
-			factory = new global_cached_io_factory(file_name, cache_conf);
+			factory = new global_cached_io_factory(file_name,
+					global_data.global_cache);
 			break;
 		case PART_GLOBAL_ACCESS:
-			assert(cache_conf);
-			factory = new part_global_cached_io_factory(file_name, cache_conf);
+			factory = new part_global_cached_io_factory(file_name);
 			break;
 		default:
 			fprintf(stderr, "a wrong access option\n");
@@ -428,4 +436,3 @@ ssize_t file_io_factory::get_file_size() const
 }
 
 atomic_integer io_interface::io_counter;
-page_cache *global_cached_io_factory::global_cache;

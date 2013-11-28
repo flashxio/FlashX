@@ -35,8 +35,12 @@ char *rand_buf::next_entry(int size) {
 #ifdef MEMCHECK
 	return (char *) allocator.alloc(size);
 #else
-	if (size > entry_size)
-		return (char *) valloc(size);
+	if (size > entry_size) {
+		void *buf;
+		int ret = posix_memalign(&buf, MIN_BLOCK_SIZE, size);
+		assert(ret == 0);
+		return (char *) buf;
+	}
 	return allocator.alloc();
 #if 0
 	pthread_spin_lock(&lock);
