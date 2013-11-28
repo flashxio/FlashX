@@ -1,5 +1,8 @@
 #!/bin/sh
 
+echo "unit-tests"
+unit-test/test_open_close
+
 echo "this is the basic test for remote IO."
 ./test/test_rand_io test/conf/run_remote.txt test
 
