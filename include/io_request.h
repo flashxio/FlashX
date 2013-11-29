@@ -280,12 +280,6 @@ const data_loc_t INVALID_DATA_LOC;
  */
 class io_request
 {
-	enum {
-		BASIC_REQ,
-		EXT_REQ,
-		USER_COMPUTE,
-	};
-
 	int file_id;
 	static const off_t MAX_FILE_SIZE = LONG_MAX;
 	off_t offset: 48;
@@ -362,6 +356,12 @@ class io_request
 	}
 
 public:
+	enum {
+		BASIC_REQ,
+		EXT_REQ,
+		USER_COMPUTE,
+	};
+
 	// By default, a request is initialized as a flush request.
 	io_request(bool sync = false) {
 		memset(this, 0, sizeof(*this));
@@ -459,6 +459,10 @@ public:
 	void init(const data_loc_t &loc, int access_method, io_interface *io,
 			int node_id) {
 		init(NULL, loc, 0, access_method, io, node_id);
+	}
+
+	int get_req_type() const {
+		return payload_type;
 	}
 
 	io_req_extension *get_extension() const {

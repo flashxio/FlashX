@@ -23,6 +23,34 @@
 #include "disk_read_thread.h"
 #include "file_mapper.h"
 
+/**
+ * An IO request may be split into multiple requests.
+ * This helper class represents the original I/O request issued by users.
+ */
+class original_io_request: public io_request
+{
+	atomic_number<ssize_t> completed_size;
+public:
+	static original_io_request *cast2original(io_request *req) {
+		return (original_io_request *) req;
+	}
+
+	void init(const io_request &req) {
+		assert(req.get_req_type() == io_request::BASIC_REQ);
+		io_request::init(req);
+		completed_size = atomic_number<ssize_t>();
+	}
+
+	bool complete_part(const io_request &part) {
+		ssize_t ret = completed_size.inc(part.get_size());
+		return ret == this->get_size();
+	}
+
+	bool is_complete() const {
+		return completed_size.get() >= this->get_size();
+	}
+};
+
 const int NUM_PROCESS_COMPLETED_REQS = 8;
 
 /**
@@ -174,8 +202,7 @@ void remote_io::access(io_request *requests, int num,
 			// I still use the default memory allocator, but since it is used
 			// when the request size is large, it should normally be OK.
 			// TODO I can use slab allocators later.
-			io_req_extension *ext = new io_req_extension();
-			io_request *orig = new io_request(ext, INVALID_DATA_LOC, 0, NULL, 0);
+			original_io_request *orig = new original_io_request();
 			// global_cached_io doesn't issue requests across a block boundary.
 			// It can only be application issued requst, so it shouldn't have
 			// extension.
@@ -258,7 +285,7 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 	int num_from_upper = 0;
 	int num_from_app = 0;
 	int num_part_reqs = 0;
-	std::vector<io_request *> completes;
+	std::vector<original_io_request *> completes;
 	for (int i = 0; i < num; i++) {
 		assert(reqs[i].get_io());
 		// The requests issued by the upper layer IO.
@@ -276,13 +303,12 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 			continue;
 		}
 
-		io_request *orig = reqs[i].get_orig();
+		original_io_request *orig = original_io_request::cast2original(
+				reqs[i].get_orig());
 		io_request *req = &reqs[i];
-		orig->inc_complete_count();
-		if (orig->complete_size(req->get_size()))
-			completes.push_back(orig);
+		if (orig->complete_part(*req))
+			completes.push_back(original_io_request::cast2original(orig));
 		else {
-			orig->dec_complete_count();
 			num_part_reqs++;
 		}
 		delete req->get_extension();
@@ -295,20 +321,17 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 		this->get_callback()->invoke(from_app, num_from_app);
 
 	for (unsigned i = 0; i < completes.size(); i++) {
-		io_request *orig = completes[i];
-		assert(orig->is_extended_req());
+		original_io_request *orig = completes[i];
+		io_request *req = (io_request *) orig;
 		io_interface *io = orig->get_io();
 		// It's from an application.
 		if (io == this) {
 			if (io->get_callback())
-				io->get_callback()->invoke(&orig, 1);
+				io->get_callback()->invoke(&req, 1);
 		}
 		else
-			io->notify_completion(&orig, 1);
-		orig->dec_complete_count();
-		orig->wait4unref();
+			io->notify_completion(&req, 1);
 		// Now we can delete it.
-		delete orig->get_extension();
 		delete orig;
 	}
 
