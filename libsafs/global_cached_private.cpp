@@ -320,8 +320,7 @@ void queue_requests(std::vector<io_request *> &pending_reqs)
 	process_reqs_on_io(pending_reqs.data(), pending_reqs.size(), pending_reqs_func);
 }
 
-int global_cached_io::multibuf_completion(io_request *request,
-		std::vector<thread_safe_page *> &dirty_pages)
+int global_cached_io::multibuf_completion(io_request *request)
 {
 	io_request *orig = request->get_orig();
 	assert(orig->get_num_bufs() == 1);
@@ -352,8 +351,7 @@ int global_cached_io::multibuf_completion(io_request *request,
 			pending_reqs.push_back(pending_req);
 		if (request->get_access_method() == READ) {
 			thread_safe_page *dirty = __complete_req_unlocked(orig, p);
-			if (dirty)
-				dirty_pages.push_back(dirty);
+			assert(dirty == NULL);
 			p->unlock();
 		}
 		else {
@@ -397,14 +395,12 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 #ifdef STATISTICS
 	num_from_underlying.inc(num);
 #endif
-	page_cache *cache = this->get_global_cache();
-	std::vector<thread_safe_page *> dirty_pages;
 	std::vector<io_request *> pending_reqs;
 	for (int i = 0; i < num; i++) {
 		io_request *request = &requests[i];
 
 		if (request->get_num_bufs() > 1) {
-			multibuf_completion(request, dirty_pages);
+			multibuf_completion(request);
 			continue;
 		}
 
@@ -445,9 +441,7 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 				assert(orig->get_orig() == NULL);
 			}
 			thread_safe_page *dirty = __complete_req(orig, p);
-			// TODO maybe I should make it support multi-request callback.
-			if (dirty)
-				dirty_pages.push_back(dirty);
+			assert(dirty == NULL);
 			io_request partial;
 			orig->extract(request->get_offset(),
 					request->get_num_bufs() * PAGE_SIZE, partial);
@@ -470,7 +464,6 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 	if (!pending_reqs.empty()) {
 		::queue_requests(pending_reqs);
 	}
-	cache->mark_dirty_pages(dirty_pages.data(), dirty_pages.size(), underlying);
 }
 
 int global_cached_io::process_completed_requests()

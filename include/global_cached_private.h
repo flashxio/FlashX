@@ -72,8 +72,7 @@ class global_cached_io: public io_interface
 	ssize_t __read(io_request *req, thread_safe_page *p);
 	ssize_t __write(io_request *req, thread_safe_page *p,
 		std::vector<thread_safe_page *> &dirty_pages);
-	int multibuf_completion(io_request *request,
-			std::vector<thread_safe_page *> &dirty_pages);
+	int multibuf_completion(io_request *request);
 
 	void wait4req(io_request *req);
 public:
