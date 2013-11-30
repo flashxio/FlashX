@@ -24,6 +24,8 @@
 #include <sys/time.h>
 #include <limits.h>
 
+#include <algorithm>
+
 #include "common.h"
 #include "concurrency.h"
 
@@ -82,8 +84,6 @@ class io_req_extension
 	void *user_data;
 
 	int num_bufs: 16;
-	// Is the request part of a request?
-	int partial: 1;
 	int vec_capacity: 15;
 
 	/* 
@@ -124,7 +124,6 @@ public:
 		this->priv = NULL;
 		this->user_data = NULL;
 		this->num_bufs = 0;
-		this->partial = 0;
 		memset(vec_pointer, 0, vec_capacity * sizeof(io_buf));
 		next = NULL;
 		memset(&issue_time, 0, sizeof(issue_time));
@@ -137,7 +136,6 @@ public:
 		this->priv = ext.priv;
 		this->user_data = ext.user_data;
 		this->num_bufs = ext.num_bufs;
-		this->partial = ext.partial;
 		assert(this->vec_capacity >= ext.vec_capacity);
 		assert(this->refcnt.get() == 0);
 		assert(this->completed_size.get() == 0);
@@ -168,14 +166,6 @@ public:
 
 	void set_user_data(void *user_data) {
 		this->user_data = user_data;
-	}
-
-	void set_partial(bool partial) {
-		this->partial = partial;
-	}
-
-	bool is_partial() const {
-		return partial;
 	}
 
 	io_request *get_next() const {
@@ -553,6 +543,25 @@ public:
 		return get_offset() + get_size() <= ROUND_PAGE(get_offset()) + PAGE_SIZE;
 	}
 
+	bool contain_offset(off_t off) const {
+		return get_offset() <= off && off < get_offset() + get_size();
+	}
+
+	/**
+	 * Test if the request has overlap with the specified range.
+	 */
+	bool has_overlap(off_t off, ssize_t size) const {
+		// the beginning of the range inside the input request
+		return (off >= this->get_offset() && off < this->get_offset()
+				+ this->get_size())
+			// or the end of the range inside the input request
+			|| (off + size >= this->get_offset()
+					&& off + size < this->get_offset() + this->get_size())
+			// or the input request is inside the range.
+			|| (off <= this->get_offset()
+					&& off + size >= this->get_offset() + this->get_size());
+	}
+
 	bool inside_RAID_block() const {
 		int RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
 		return ROUND(this->get_offset(), RAID_block_size)
@@ -710,14 +719,6 @@ public:
 		return get_extension()->get_completed_size() == get_size();
 	}
 
-	void set_partial(bool partial) {
-		get_extension()->set_partial(partial);
-	}
-
-	bool is_partial() const {
-		return get_extension()->is_partial();
-	}
-
 	bool is_data_inline() const {
 		return data_inline == 1;
 	}
@@ -741,15 +742,7 @@ public:
 		assert(get_num_bufs() == 1);
 		// We have to make sure the extracted range has overlap with
 		// the input request.
-		// Either the beginning of the extracted range inside the input request
-		bool check = (off >= this->get_offset() && off < this->get_offset()
-				+ this->get_size())
-			// or the end of the extracted range inside the input request
-			|| (off + size >= this->get_offset()
-					&& off + size < this->get_offset() + this->get_size())
-			// or the input request is inside the extracted range.
-			|| (off <= this->get_offset()
-					&& off + size >= this->get_offset() + this->get_size());
+		bool check = has_overlap(off, size);
 		if (!check)
 			fprintf(stderr, "req %lx, size: %lx, page off: %lx\n",
 					this->get_offset(), this->get_size(), off);
@@ -896,6 +889,59 @@ typedef void (*req_process_func_t)(io_interface *io, io_request *reqs[], int num
  * It turns out it's a common function when delivering requests to
  * the upper layer.
  */
-void process_reqs_on_io(io_request *reqs[], int num, req_process_func_t func);
+template<class req_type, class get_io_func, class process_req_func>
+void process_reqs_on_io(req_type reqs[], int num,
+		get_io_func func, process_req_func proc_func)
+{
+	struct comp_req_io {
+		get_io_func func;
+
+		comp_req_io(get_io_func func) {
+			this->func = func;
+		}
+
+		bool operator() (const req_type req1, const req_type req2) {
+			return (long) func(req1) < (long) func(req2);
+		}
+	} req_io_comparator(func);
+
+	std::sort(reqs, reqs + num, req_io_comparator);
+	io_interface *prev = func(reqs[0]);
+	int begin_idx = 0;
+	for (int end_idx = 1; end_idx < num; end_idx++) {
+		if (func(reqs[end_idx]) != prev) {
+			proc_func(prev, reqs + begin_idx, end_idx - begin_idx);
+			begin_idx = end_idx;
+			prev = func(reqs[end_idx]);
+		}
+	}
+	assert(begin_idx < num);
+	proc_func(prev, reqs + begin_idx, num - begin_idx);
+}
+
+static inline void process_reqs_on_io(io_request *reqs[],
+		int num, req_process_func_t func)
+{
+	class get_io_func {
+	public:
+		io_interface *operator()(io_request *req) {
+			return req->get_io();
+		}
+	} io_func;
+
+	class process_req_func {
+		req_process_func_t func;
+	public:
+		process_req_func(req_process_func_t func) {
+			this->func = func;
+		}
+
+		void operator()(io_interface *io, io_request *reqs[], int num) {
+			func(io, reqs, num);
+		}
+	} proc_func(func);
+
+	process_reqs_on_io(reqs, num, io_func, proc_func);
+}
 
 #endif

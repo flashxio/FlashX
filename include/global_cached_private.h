@@ -27,6 +27,8 @@
 class request_allocator;
 class req_ext_allocator;
 
+typedef std::pair<thread_safe_page *, io_request *> page_req_pair;
+
 class global_cached_io: public io_interface
 {
 	long cache_size;
@@ -41,7 +43,7 @@ class global_cached_io: public io_interface
 	 * will be issued to the underlying IO in the user's thread when 
 	 * the next user IO comes.
 	 */
-	thread_safe_FIFO_queue<io_request *> pending_requests;
+	thread_safe_FIFO_queue<page_req_pair> pending_requests;
 
 	request_allocator *req_allocator;
 	req_ext_allocator *ext_allocator;
@@ -113,7 +115,7 @@ public:
 	void process_cached_reqs(io_request *cached_reqs[],
 			thread_safe_page *cached_pages[], int num_cached_reqs);
 
-	void queue_requests(io_request *reqs[], int num) {
+	void queue_requests(page_req_pair reqs[], int num) {
 		pending_requests.addByForce(reqs, num);
 		get_thread()->activate();
 	}
@@ -184,7 +186,7 @@ public:
 	}
 
 	void finalize_partial_request(io_request &partial, io_request *orig);
-	void finalize_request(io_request *req);
+	void finalize_partial_request(thread_safe_page *p, io_request *orig);
 
 	void write_dirty_page(thread_safe_page *p, const page_id_t &pg_id,
 			io_request *orig);

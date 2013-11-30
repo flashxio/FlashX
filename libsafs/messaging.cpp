@@ -205,28 +205,6 @@ int thread_safe_msg_sender<T>::send(T *msg, int num)
 	return num_sent;
 }
 
-void process_reqs_on_io(io_request *reqs[], int num, req_process_func_t func)
-{
-	struct comp_req_io {
-		bool operator() (const io_request *req1, const io_request *req2) {
-			return (long) req1->get_io() < (long) req2->get_io();
-		}
-	} req_io_comparator;
-
-	std::sort(reqs, reqs + num, req_io_comparator);
-	io_interface *prev = reqs[0]->get_io();
-	int begin_idx = 0;
-	for (int end_idx = 1; end_idx < num; end_idx++) {
-		if (reqs[end_idx]->get_io() != prev) {
-			func(prev, reqs + begin_idx, end_idx - begin_idx);
-			begin_idx = end_idx;
-			prev = reqs[end_idx]->get_io();
-		}
-	}
-	assert(begin_idx < num);
-	func(prev, reqs + begin_idx, num - begin_idx);
-}
-
 /**
  * these are to force to instantiate the templates
  * for io_request and io_reply.
