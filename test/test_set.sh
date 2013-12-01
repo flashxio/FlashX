@@ -63,6 +63,12 @@ echo "the basic test for global cached IO under the TPCC workload."
 echo "the basic test for global cached IO under the Neo4j workload."
 ./test/test_rand_io test/conf/run_cache_tpcc.txt test1 test2 workload=test/workload/DijkstraSearch-reconstructed.data
 
+# max speed: read 285.50MB/s, write 0.00MB/s
+# cache hits: 254,499,141
+# total time: 793.357666 seconds
+echo "the basic test for global cached IO under my own triangle counting workload"
+./test/test_rand_io test/conf/run_cache_tpcc.txt test1 test2 workload=test/workload/triangle-counting.data
+
 
 # max speed: read 235.30MB/s, write 0.00MB/s
 echo "the basic test for parted global cached read on virtual SSDs."
