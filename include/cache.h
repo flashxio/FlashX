@@ -213,6 +213,8 @@ public:
 	}
 };
 
+class original_io_request;
+
 class thread_safe_page: public page
 {
 #ifdef PTHREAD_WAIT
@@ -234,7 +236,7 @@ class thread_safe_page: public page
 		return flags & (0x1 << i);
 	}
 
-	io_request *reqs;
+	original_io_request *reqs;
 	int node_id;
 	pthread_spinlock_t _lock;
 
@@ -378,20 +380,9 @@ public:
 		}
 	}
 
-	void add_req(io_request *req) {
-		req->set_next_req(reqs);
-		reqs = req;
-	}
-
-	io_request *reset_reqs() {
-		io_request *ret = reqs;
-		reqs = NULL;
-		return ret;
-	}
-
-	io_request *get_io_req() const {
-		return reqs;
-	}
+	void add_req(original_io_request *req);
+	original_io_request *reset_reqs();
+	original_io_request *get_io_req() const;
 };
 
 class page_filter

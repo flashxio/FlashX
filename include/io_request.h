@@ -86,17 +86,8 @@ class io_req_extension
 	int num_bufs: 16;
 	int vec_capacity: 15;
 
-	/* 
-	 * This is to protect the object from being removed
-	 * while others are still using it.
-	 */
-	atomic_number<short> refcnt;
-
-	atomic_number<ssize_t> completed_size;
-
 	io_buf *vec_pointer;
 	io_buf embedded_vecs[NUM_EMBEDDED_IOVECS];
-	io_request *next;
 
 	struct timeval issue_time;
 
@@ -125,10 +116,7 @@ public:
 		this->user_data = NULL;
 		this->num_bufs = 0;
 		memset(vec_pointer, 0, vec_capacity * sizeof(io_buf));
-		next = NULL;
 		memset(&issue_time, 0, sizeof(issue_time));
-		refcnt = atomic_number<short>();
-		completed_size = atomic_number<ssize_t>();
 	}
 
 	void init(const io_req_extension &ext) {
@@ -137,10 +125,7 @@ public:
 		this->user_data = ext.user_data;
 		this->num_bufs = ext.num_bufs;
 		assert(this->vec_capacity >= ext.vec_capacity);
-		assert(this->refcnt.get() == 0);
-		assert(this->completed_size.get() == 0);
 		memcpy(vec_pointer, ext.vec_pointer, num_bufs * sizeof(*vec_pointer));
-		assert(this->next == NULL);
 		memset(&issue_time, 0, sizeof(issue_time));
 	}
 
@@ -166,34 +151,6 @@ public:
 
 	void set_user_data(void *user_data) {
 		this->user_data = user_data;
-	}
-
-	io_request *get_next() const {
-		return next;
-	}
-
-	void set_next(io_request *next) {
-		this->next = next;
-	}
-
-	int inc_ref() {
-		return refcnt.inc(1);
-	}
-
-	int dec_ref() {
-		return refcnt.dec(1);
-	}
-
-	int get_ref() const {
-		return refcnt.get();
-	}
-
-	ssize_t inc_completed_size(ssize_t size) {
-		return completed_size.inc(size);
-	}
-
-	ssize_t get_completed_size() const {
-		return completed_size.get();
 	}
 
 	void set_timestamp() {
@@ -562,6 +519,14 @@ public:
 					&& off + size >= this->get_offset() + this->get_size());
 	}
 
+	int get_overlap_size(thread_safe_page *pg) const;
+
+	int get_num_covered_pages() const {
+		off_t begin_pg = ROUND_PAGE(get_offset());
+		off_t end_pg = ROUNDUP_PAGE(get_offset() + get_size());
+		return (end_pg - begin_pg) / PAGE_SIZE;
+	}
+
 	bool inside_RAID_block() const {
 		int RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
 		return ROUND(this->get_offset(), RAID_block_size)
@@ -682,41 +647,6 @@ public:
 			vec[i].iov_len = ext->get_buf(i).get_size();
 		}
 		return num;
-	}
-
-	io_request *get_next_req() const {
-		return get_extension()->get_next();
-	}
-
-	void set_next_req(io_request *next) {
-		get_extension()->set_next(next);
-	}
-
-	int inc_complete_count() {
-		return get_extension()->inc_ref();
-	}
-
-	int dec_complete_count() {
-		return get_extension()->dec_ref();
-	}
-
-	void wait4unref() {
-		while (get_extension()->get_ref() > 0) {}
-	}
-
-	/**
-	 * Maintain the completed size in this request.
-	 * If the request is complete, return true;
-	 */
-	bool complete_size(ssize_t completed) {
-		ssize_t res = get_extension()->inc_completed_size(completed);;
-		ssize_t size = get_size();
-		assert(res <= size);
-		return res == size;
-	}
-
-	bool is_complete() const {
-		return get_extension()->get_completed_size() == get_size();
 	}
 
 	bool is_data_inline() const {

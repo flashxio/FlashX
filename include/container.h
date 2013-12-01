@@ -523,6 +523,46 @@ public:
 	}
 };
 
+template<class T, int size = 32>
+class embedded_array
+{
+	T buf[size];
+	T *real_buf;
+	int capacity;
+public:
+	embedded_array() {
+		real_buf = buf;
+		capacity = size;
+	}
+
+	~embedded_array() {
+		if (real_buf != buf)
+			delete [] real_buf;
+	}
+
+	T &operator[](int idx) {
+		assert(idx < capacity);
+		return real_buf[idx];
+	}
+
+	// This can only increase the capacity of the array.
+	void resize(int new_size) {
+		if (new_size <= capacity)
+			return;
+		if (real_buf == buf) {
+			real_buf = new T[new_size];
+			memcpy(real_buf, buf, sizeof(buf));
+		}
+		else {
+			T *tmp = new T[new_size];
+			memcpy(tmp, real_buf, capacity * sizeof(T));
+			delete [] real_buf;
+			real_buf = tmp;
+		}
+		capacity = new_size;
+	}
+};
+
 template<class T>
 bool fifo_queue<T>::expand_queue(int new_size)
 {

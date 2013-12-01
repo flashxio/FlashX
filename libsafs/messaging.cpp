@@ -67,6 +67,14 @@ void io_request::init(char *buf, const data_loc_t &loc, ssize_t size,
 	this->node_id = node_id;
 }
 
+int io_request::get_overlap_size(thread_safe_page *pg) const
+{
+	off_t start = max(pg->get_offset(), this->get_offset());
+	off_t end = min(pg->get_offset() + PAGE_SIZE,
+			this->get_offset() + this->get_size());
+	return end - start;
+}
+
 file_id_t io_request::get_file_id() const
 {
 	return file_id;

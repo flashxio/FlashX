@@ -27,6 +27,24 @@
 const int RAID_BLOCK_SIZE = 16 * PAGE_SIZE;
 const int COMPLETE_QUEUE_SIZE = 10240;
 
+void thread_safe_page::add_req(original_io_request *req)
+{
+	req->set_next_req_on_page(this, reqs);
+	reqs = req;
+}
+
+original_io_request *thread_safe_page::reset_reqs()
+{
+	original_io_request *ret = reqs;
+	reqs = NULL;
+	return ret;
+}
+
+original_io_request *thread_safe_page::get_io_req() const
+{
+	return reqs;
+}
+
 class req_ext_allocator: public obj_allocator<io_req_extension>
 {
 	class ext_initiator: public obj_initiator<io_req_extension>
@@ -53,31 +71,20 @@ public:
  * This slab allocator allocates IO requests, and all of them are
  * extended requests.
  */
-class request_allocator: public obj_allocator<io_request>
+class request_allocator: public obj_allocator<original_io_request>
 {
-	class req_initiator: public obj_initiator<io_request>
+	class req_initiator: public obj_initiator<original_io_request>
 	{
-		req_ext_allocator *ext_allocator;
 	public:
-		req_initiator(req_ext_allocator *alloc) {
-			this->ext_allocator = alloc;
+		void init(original_io_request *req) {
+			new (req) original_io_request();
 		}
-
-		void init(io_request *req) {
-			if (req->is_extended_req()) {
-				req->init();
-			}
-			else {
-				data_loc_t loc;
-				new (req) io_request(ext_allocator->alloc_obj(), loc, 0, NULL, 0);
-			}
-		}
-	};
+	} initiator;
 public:
-	request_allocator(req_ext_allocator *alloc, int node_id, long increase_size,
-			long max_size = INT_MAX): obj_allocator<io_request>(
+	request_allocator(int node_id, long increase_size,
+			long max_size = INT_MAX): obj_allocator<original_io_request>(
 				std::string("gcached_req_allocator-") + itoa(node_id), node_id,
-				increase_size, max_size, new req_initiator(alloc)) {
+				increase_size, max_size, &initiator) {
 	}
 };
 
@@ -163,25 +170,10 @@ static inline thread_safe_page *__complete_req_unlocked(io_request *orig,
 
 /**
  * To test whether the request is issued by this_io.
- * This only works on original requests: either the original requests provided
- * by the application or a copy of the original requests.
  */
 bool is_local_req(io_request *req, io_interface *this_io)
 {
-	// If the request isn't an extended request, it must be an original
-	// request from the application.
-	if (!req->is_extended_req())
-		return req->get_io() == this_io;
-	else
-		return req->get_extension()->get_user_data() == this_io;
-}
-
-io_interface *get_io(io_request *req)
-{
-	if (!req->is_extended_req())
-		return req->get_io();
-	else
-		return (io_interface *) req->get_extension()->get_user_data();
+	return req->get_io() == this_io;
 }
 
 void notify_completion(io_interface *this_io, io_request *req)
@@ -191,7 +183,7 @@ void notify_completion(io_interface *this_io, io_request *req)
 			this_io->get_callback()->invoke(&req, 1);
 	}
 	else {
-		io_interface *io = get_io(req);
+		io_interface *io = req->get_io();
 		// We have to set the io instance to its original one.
 		req->set_io(io);
 		io->notify_completion(&req, 1);
@@ -213,7 +205,6 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 		if (is_local_req(reqs[i], this_io))
 			local_reqs[num_local++] = reqs[i];
 		else {
-			reqs[i]->set_io(get_io(reqs[i]));
 			remote_reqs[num_remote++] = reqs[i];
 		}
 	}
@@ -228,33 +219,35 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 }
 
 void global_cached_io::finalize_partial_request(io_request &partial,
-		io_request *orig)
+		original_io_request *orig)
 {
-	orig->inc_complete_count();
-	if (orig->complete_size(partial.get_size())) {
+	orig->inc_ref();
+	if (orig->complete_range(partial.get_offset(), partial.get_size())) {
+		orig->set_io(orig->get_orig_io());
 		// It's important to notify the IO interface that issues the request.
 		// In the case of parted global cache, the IO interface that processes
 		// the reqeust isn't the IO interface that issue the request.
 		// The request may be handled differently.
 		if (orig->is_sync()) {
-			((global_cached_io *) get_io(orig))->wakeup_on_req(orig, IO_OK);
-			orig->dec_complete_count();
+			assert(orig->get_io() == this);
+			((global_cached_io *) orig->get_io())->wakeup_on_req(orig, IO_OK);
+			orig->dec_ref();
 			orig->wait4unref();
 			// Now we can delete it.
 			req_allocator->free(orig);
 		}
 		else {
 			num_completed_areqs.inc(1);
-			orig->dec_complete_count();
+			orig->dec_ref();
 			complete_queue.push_back(orig);
 		}
 	}
 	else
-		orig->dec_complete_count();
+		orig->dec_ref();
 }
 
 void global_cached_io::finalize_partial_request(thread_safe_page *p,
-		io_request *orig)
+		original_io_request *orig)
 {
 	if (orig->within_1page())
 		finalize_partial_request(*orig, orig);
@@ -292,14 +285,14 @@ void queue_requests(std::vector<page_req_pair> &pending_reqs)
 	int num_orig = pending_reqs.size();
 	for (int i = 0; i < num_orig; i++) {
 		thread_safe_page *p = pending_reqs[i].first;
-		io_request *req = (io_request *) pending_reqs[i].second->get_next_req();
+		original_io_request *req = pending_reqs[i].second->get_next_req_on_page(p);
 		while (req) {
-			io_request *next = (io_request *) req->get_next_req();
-			req->set_next_req(NULL);
+			original_io_request *next = req->get_next_req_on_page(p);
+			req->set_next_req_on_page(p, NULL);
 			pending_reqs.push_back(page_req_pair(p, req));
 			req = next;
 		}
-		pending_reqs[i].second->set_next_req(NULL);
+		pending_reqs[i].second->set_next_req_on_page(p, NULL);
 	}
 
 	process_page_reqs_on_io(pending_reqs.data(), pending_reqs.size());
@@ -307,8 +300,7 @@ void queue_requests(std::vector<page_req_pair> &pending_reqs)
 
 int global_cached_io::multibuf_completion(io_request *request)
 {
-	io_request *orig = request->get_orig();
-	assert(orig->get_num_bufs() == 1);
+	original_io_request *orig = (original_io_request *) request->get_orig();
 	/*
 	 * Right now the global cache only support normal access().
 	 */
@@ -331,7 +323,7 @@ int global_cached_io::multibuf_completion(io_request *request)
 			p->set_old_dirty(false);
 		}
 		p->set_io_pending(false);
-		io_request *pending_req = p->reset_reqs();
+		original_io_request *pending_req = p->reset_reqs();
 		if (pending_req)
 			pending_reqs.push_back(page_req_pair(p, pending_req));
 		if (request->get_access_method() == READ) {
@@ -345,7 +337,6 @@ int global_cached_io::multibuf_completion(io_request *request)
 			// It's flushed because we want to flush data with a large request.
 			// The flushed data is contiguous with the old dirty data in
 			// the page evicted by the eviction policy.
-			io_request *orig = request->get_orig();
 			if (!orig->contain_offset(p->get_offset()))
 				p->dec_ref();
 			else
@@ -367,10 +358,9 @@ int global_cached_io::multibuf_completion(io_request *request)
 		this->finalize_partial_request(partial, orig);
 	}
 	else {
-		io_request *orig = request->get_orig();
-		assert(orig->get_next_req() == NULL);
-		pending_reqs.push_back(page_req_pair(
-					(thread_safe_page *) request->get_priv(), orig));
+		thread_safe_page *p = (thread_safe_page *) request->get_priv();
+		assert(orig->get_next_req_on_page(p) == NULL);
+		pending_reqs.push_back(page_req_pair(p, orig));
 		// These requests can't be deleted yet.
 		// They will be deleted when these write requests are finally served.
 	}
@@ -412,7 +402,7 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 			p->set_old_dirty(false);
 		}
 		p->set_io_pending(false);
-		io_request *old = p->reset_reqs();
+		original_io_request *old = p->reset_reqs();
 		bool data_ready = p->data_ready();
 		p->unlock();
 
@@ -421,16 +411,7 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 		// Since we have a reference of the page, it won't be evicted.
 		// When data is ready, we can execuate any operations on the page.
 		if (data_ready) {
-			io_request *orig = request->get_orig();
-			/* 
-			 * The request may contain an intermediate original request.
-			 * Let's get to the very original request.
-			 */
-			if (orig->get_orig()) {
-				assert(orig->within_1page());
-				orig = orig->get_orig();
-				assert(orig->get_orig() == NULL);
-			}
+			original_io_request *orig = (original_io_request *) request->get_orig();
 			thread_safe_page *dirty = __complete_req(orig, p);
 			assert(dirty == NULL);
 			io_request partial;
@@ -439,8 +420,8 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 			this->finalize_partial_request(partial, orig);
 		}
 		else {
-			io_request *orig = request->get_orig();
-			assert(orig->get_next_req() == NULL);
+			original_io_request *orig = (original_io_request *) request->get_orig();
+			assert(orig->get_next_req_on_page(p) == NULL);
 			pending_reqs.push_back(page_req_pair(p, orig));
 		}
 		if (old)
@@ -458,9 +439,9 @@ int global_cached_io::process_completed_requests()
 {
 	int num = complete_queue.get_num_entries();
 	if (num > 0) {
-		stack_array<io_request *> reqs(num);
+		stack_array<original_io_request *> reqs(num);
 		int ret = complete_queue.fetch(reqs.data(), num);
-		::notify_completion(this, reqs.data(), ret);
+		::notify_completion(this, (io_request **) reqs.data(), ret);
 		for (int i = 0; i < ret; i++)
 			req_allocator->free(reqs[i]);
 		return ret;
@@ -479,9 +460,9 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 {
 	assert(t == underlying->get_thread());
 	ext_allocator = new req_ext_allocator(underlying->get_node_id(),
-			sizeof(io_request) * 1024);
-	req_allocator = new request_allocator(ext_allocator,
-			underlying->get_node_id(), sizeof(io_request) * 1024);
+			sizeof(io_req_extension) * 1024);
+	req_allocator = new request_allocator(underlying->get_node_id(),
+			sizeof(original_io_request) * 1024);
 	cb = NULL;
 	cache_hits = 0;
 	num_accesses = 0;
@@ -502,7 +483,7 @@ global_cached_io::~global_cached_io()
  * @orig: the very original request issued by the user. It may span
  * multiple pages.
  */
-ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
+ssize_t global_cached_io::__write(original_io_request *orig, thread_safe_page *p,
 		std::vector<thread_safe_page *> &dirty_pages)
 {
 	ssize_t ret = 0;
@@ -578,7 +559,7 @@ ssize_t global_cached_io::__write(io_request *orig, thread_safe_page *p,
 	return ret;
 }
 
-ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
+ssize_t global_cached_io::__read(original_io_request *orig, thread_safe_page *p)
 {
 	ssize_t ret = 0;
 	p->lock();
@@ -627,12 +608,11 @@ ssize_t global_cached_io::__read(io_request *orig, thread_safe_page *p)
  * @req: potentially part of a request.
  */
 ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
-		int npages, io_request *orig)
+		int npages, original_io_request *orig)
 {
 	ssize_t ret = 0;
 
 	assert(npages <= MAX_NUM_IOVECS);
-	assert(orig->get_orig() == NULL);
 
 	io_req_extension *ext = ext_allocator->alloc_obj();
 	ext->set_orig(orig);
@@ -729,14 +709,14 @@ int global_cached_io::handle_pending_requests()
 		for (int i = 0; i < num; i++) {
 			// It may be the head of a request list. All requests
 			// in the list should point to the same page.
-			io_request *req = reqs[i].second;
+			original_io_request *req = reqs[i].second;
 			thread_safe_page *p = reqs[i].first;
 			assert(!p->is_old_dirty());
 			/**
 			 * Right now all pending requests are writes.
 			 * All writes are single-buf requests.
 			 */
-			assert(req->get_next_req() == NULL);
+			assert(req->get_next_req_on_page(p) == NULL);
 			assert(req->get_io() == this);
 			if (req->get_access_method() == WRITE)
 				__write(req, p, dirty_pages);
@@ -824,7 +804,7 @@ void merge_pages2req(io_request &req, page_cache *cache)
  * it and write a larger request.
  */
 void global_cached_io::write_dirty_page(thread_safe_page *p,
-		const page_id_t &pg_id, io_request *orig)
+		const page_id_t &pg_id, original_io_request *orig)
 {
 	p->lock();
 	assert(!p->is_io_pending());
@@ -899,7 +879,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		thread_safe_page *pages[MAX_NUM_IOVECS];
 		// TODO right now it only supports single-buf requests.
 		assert(requests[i].get_num_bufs() == 1);
-		io_request *orig = NULL;
+		original_io_request *orig = NULL;
 
 		if (requests[i].is_flush()) {
 			syncd = true;
@@ -972,7 +952,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				orig->init(requests[i]);
 				io_interface *orig_io = orig->get_io();
 				orig->set_io(this);
-				orig->get_extension()->set_user_data(orig_io);
+				orig->set_orig_io(orig_io);
 			}
 			/*
 			 * Cache may evict a dirty page and return the dirty page
@@ -1093,7 +1073,7 @@ io_status global_cached_io::access(char *buf, off_t offset,
 	io_status status;
 	access(&req, 1, &status);
 	if (status == IO_PENDING) {
-		io_request *orig = (io_request *) status.get_priv_data();
+		original_io_request *orig = (original_io_request *) status.get_priv_data();
 		assert(orig);
 		wait4req(orig);
 	}
@@ -1134,7 +1114,7 @@ void global_cached_io::process_all_completed_requests()
 	}
 }
 
-void global_cached_io::wait4req(io_request *req)
+void global_cached_io::wait4req(original_io_request *req)
 {
 	while (!req->is_complete()) {
 		process_all_completed_requests();

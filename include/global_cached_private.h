@@ -27,7 +27,132 @@
 class request_allocator;
 class req_ext_allocator;
 
-typedef std::pair<thread_safe_page *, io_request *> page_req_pair;
+typedef std::pair<thread_safe_page *, original_io_request *> page_req_pair;
+
+class original_io_request: public io_request
+{
+	struct page_status
+	{
+		thread_safe_page *pg;
+		// Point to the next request that queues to the same page.
+		original_io_request *next;
+		bool completed;
+
+		page_status() {
+			pg = NULL;
+			next = NULL;
+			completed = false;
+		}
+	};
+
+	/* 
+	 * This is to protect the object from being removed
+	 * while others are still using it.
+	 */
+	atomic_number<short> refcnt;
+	atomic_number<ssize_t> completed_size;
+
+	embedded_array<page_status> status_arr;
+
+	io_interface *orig_io;
+
+	off_t get_first_page_offset() const {
+		off_t mask = PAGE_SIZE - 1;
+		mask = ~mask;
+		return get_offset() & mask;
+	}
+
+	page_status &get_page_status(thread_safe_page *pg) {
+		off_t first_pg_off = get_first_page_offset();
+		int idx = (pg->get_offset() - first_pg_off) / PAGE_SIZE;
+		return status_arr[idx];
+	}
+
+	page_status &get_page_status(off_t off) {
+		off_t first_pg_off = get_first_page_offset();
+		int idx = (off - first_pg_off) / PAGE_SIZE;
+		return status_arr[idx];
+	}
+public:
+	original_io_request() {
+		orig_io = NULL;
+	}
+
+	original_io_request(char *buf, const data_loc_t &loc, ssize_t size,
+			int access_method, io_interface *io, int node_id,
+			bool sync = false): io_request(buf, loc, size, access_method,
+				io, node_id, sync) {
+		orig_io = NULL;
+	}
+
+	void init(const io_request &req) {
+		// Once an IO request is created, I can't change its type. I have to
+		// use this ugly way to change it.
+		data_loc_t loc(req.get_file_id(), req.get_offset());
+		if (req.get_req_type() == io_request::BASIC_REQ) {
+			new (this) original_io_request(req.get_buf(), loc, req.get_size(),
+					req.get_access_method(), req.get_io(), req.get_node_id(),
+					req.is_sync());
+		}
+		else if (req.get_req_type() == io_request::USER_COMPUTE) {
+			// TODO
+			assert(0);
+		}
+		else
+			assert(0);
+
+		status_arr.resize(get_num_covered_pages());
+	}
+
+	int inc_ref() {
+		return refcnt.inc(1);
+	}
+
+	int dec_ref() {
+		return refcnt.dec(1);
+	}
+
+	void wait4unref() {
+		while (refcnt.get() > 0) {}
+	}
+
+	bool complete_page(thread_safe_page *pg) {
+		get_page_status(pg).completed = true;
+		int size = get_overlap_size(pg);
+		ssize_t ret = completed_size.inc(size);
+		return ret == get_size();
+	}
+
+	bool complete_range(off_t off, size_t size) {
+		assert(ROUND_PAGE(off) == off);
+		assert(size % PAGE_SIZE == 0);
+		for (unsigned i = 0; i < size / PAGE_SIZE; i++) {
+			get_page_status(off + i * PAGE_SIZE).completed = true;
+		}
+		ssize_t ret = completed_size.inc(size);
+		return ret == get_size();
+	}
+
+	bool is_complete() const {
+		return completed_size.get() == get_size();
+	}
+
+	original_io_request *get_next_req_on_page(thread_safe_page *pg) {
+		return get_page_status(pg).next;
+	}
+
+	void set_next_req_on_page(thread_safe_page *pg, original_io_request *req) {
+		get_page_status(pg).next = req;
+	}
+
+	io_interface *get_orig_io() const {
+		return orig_io;
+	}
+
+	void set_orig_io(io_interface *io) {
+		orig_io = io;
+	}
+};
 
 class global_cached_io: public io_interface
 {
@@ -49,7 +174,7 @@ class global_cached_io: public io_interface
 	req_ext_allocator *ext_allocator;
 
 	// It contains the completed asynchronous user requests.
-	thread_safe_FIFO_queue<io_request *> complete_queue;
+	thread_safe_FIFO_queue<original_io_request *> complete_queue;
 
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
@@ -71,12 +196,12 @@ class global_cached_io: public io_interface
 	 * It's another version of read() and write(), but it's responsible
 	 * for deleting `req'.
 	 */
-	ssize_t __read(io_request *req, thread_safe_page *p);
-	ssize_t __write(io_request *req, thread_safe_page *p,
+	ssize_t __read(original_io_request *req, thread_safe_page *p);
+	ssize_t __write(original_io_request *orig, thread_safe_page *p,
 		std::vector<thread_safe_page *> &dirty_pages);
 	int multibuf_completion(io_request *request);
 
-	void wait4req(io_request *req);
+	void wait4req(original_io_request *req);
 public:
 	global_cached_io(thread *t, io_interface *, page_cache *cache);
 
@@ -110,7 +235,8 @@ public:
 	 * to touch two pages and the beginning and the end of the write aren't
 	 * aligned with a page size.
 	 */
-	ssize_t read(io_request &req, thread_safe_page *pages[], int npages, io_request *orig);
+	ssize_t read(io_request &req, thread_safe_page *pages[], int npages,
+			original_io_request *orig);
 
 	void process_cached_reqs(io_request *cached_reqs[],
 			thread_safe_page *cached_pages[], int num_cached_reqs);
@@ -185,13 +311,13 @@ public:
 		return num_issued_areqs.get() - num_completed_areqs.get();
 	}
 
-	void finalize_partial_request(io_request &partial, io_request *orig);
-	void finalize_partial_request(thread_safe_page *p, io_request *orig);
+	void finalize_partial_request(io_request &partial, original_io_request *orig);
+	void finalize_partial_request(thread_safe_page *p, original_io_request *orig);
 
 	void write_dirty_page(thread_safe_page *p, const page_id_t &pg_id,
-			io_request *orig);
+			original_io_request *orig);
 
-	void wakeup_on_req(io_request *req, int status) {
+	void wakeup_on_req(original_io_request *req, int status) {
 		assert(req->is_sync());
 		assert(req->is_complete());
 		get_thread()->activate();
