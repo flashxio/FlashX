@@ -147,9 +147,6 @@ static thread_safe_page *generic_complete_req(io_request *req,
 		memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
 	if (lock)
 		p->unlock();
-	// TODO this is a bug. If the page is returned, we shouldn't
-	// dereference it here.
-	p->dec_ref();
 	return ret;
 }
 
@@ -330,6 +327,7 @@ int global_cached_io::multibuf_completion(io_request *request)
 			thread_safe_page *dirty = __complete_req_unlocked(orig, p);
 			assert(dirty == NULL);
 			p->unlock();
+			p->dec_ref();
 		}
 		else {
 			p->unlock();
@@ -414,10 +412,8 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 			original_io_request *orig = (original_io_request *) request->get_orig();
 			thread_safe_page *dirty = __complete_req(orig, p);
 			assert(dirty == NULL);
-			io_request partial;
-			orig->extract(request->get_offset(),
-					request->get_num_bufs() * PAGE_SIZE, partial);
-			this->finalize_partial_request(partial, orig);
+			this->finalize_partial_request(p, orig);
+			p->dec_ref();
 		}
 		else {
 			original_io_request *orig = (original_io_request *) request->get_orig();
@@ -528,6 +524,9 @@ ssize_t global_cached_io::__write(original_io_request *orig, thread_safe_page *p
 				p->unlock();
 				ret = PAGE_SIZE;
 				finalize_partial_request(p, orig);
+				// TODO I may need to move page dereference further down.
+				// dirty page now doesn't have a reference.
+				p->dec_ref();
 			}
 		}
 		else {
@@ -555,6 +554,9 @@ ssize_t global_cached_io::__write(original_io_request *orig, thread_safe_page *p
 			dirty_pages.push_back(dirty);
 		ret = orig->get_size();
 		finalize_partial_request(p, orig);
+		// TODO I may need to move page dereference further down.
+		// dirty page now doesn't have a reference.
+		p->dec_ref();
 	}
 	return ret;
 }
@@ -595,8 +597,8 @@ ssize_t global_cached_io::__read(original_io_request *orig, thread_safe_page *p)
 		p->unlock();
 		ret = orig->get_size();
 		__complete_req(orig, p);
-
 		finalize_partial_request(p, orig);
+		p->dec_ref();
 	}
 	return ret;
 }
@@ -688,6 +690,7 @@ again:
 			ret += complete_partial.get_size();
 			__complete_req(&complete_partial, p);
 			finalize_partial_request(complete_partial, orig);
+			p->dec_ref();
 		}
 	}
 	if (!multibuf_req.is_empty()) {
@@ -845,6 +848,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		page_cache *cache = get_global_cache();
 		if (dirty)
 			cache->mark_dirty_pages(&dirty, 1, underlying);
+		cached_pages[i]->dec_ref();
 		if (!req->is_sync())
 			async_reqs[num_async_reqs++] = req;
 	}
