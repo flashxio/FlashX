@@ -30,9 +30,11 @@ echo "check the average request size. It should be 256 sectors. This is to test 
 echo "the basic test for global cached read."
 ./test/test_rand_io test/conf/run_cache.txt test
 
+# max speed: read 320.80MB/s, write 0.00MB/s
 echo "the basic test for global cached read on virtual SSDs"
 ./test/test_rand_io test/conf/run_cache_virt.txt test1 test2
 
+# max speed: read 0.00MB/s, write 254.75MB/s
 echo "the basic test for global cached write on virtual SSDs"
 ./test/test_rand_io test/conf/run_cache_virt.txt test1 test2 read_percent=0
 
@@ -42,25 +44,31 @@ echo "the basic test for global cached IO with small reads on virtual SSDs"
 echo "the basic test for global cached IO with large reads"
 ./test/test_rand_io test/conf/run_cache.txt test entry_size=$((4096 * 32)) RAID_block_size=64K
 
+# max speed: read 307.26MB/s, write 0.00MB/s
 echo "the basic test for global cached IO with large reads on virtual SSDs"
 ./test/test_rand_io test/conf/run_cache_virt.txt test1 test2 entry_size=$((4096 * 32)) RAID_block_size=64K
 
 echo "the basic test for global cached IO with small writes on virtual SSDs. Large writes and cache flusher are enabled by default."
 ./test/test_rand_io test/conf/run_cache_virt.txt test1 test2 pages=$((1024 * 1024)) entry_size=$((128)) read_percent=0
 
+# max speed: read 0.00MB/s, write 556.09MB/s
 echo "the basic test for global cached IO with large writes on virtual SSDs."
 ./test/test_rand_io test/conf/run_cache_virt.txt test1 test2 read_percent=0 entry_size=$((4096 * 32)) RAID_block_size=64K
 
+# max speed: read 192.80MB/s, write 144.09MB/s
 echo "the basic test for global cached IO under the TPCC workload."
 ./test/test_rand_io test/conf/run_cache_tpcc.txt test1 test2
 
+# max speed: read 259.47MB/s, write 0.00MB/s
 echo "the basic test for global cached IO under the Neo4j workload."
 ./test/test_rand_io test/conf/run_cache_tpcc.txt test1 test2 workload=test/workload/DijkstraSearch-reconstructed.data
 
 
+# max speed: read 235.30MB/s, write 0.00MB/s
 echo "the basic test for parted global cached read on virtual SSDs."
 ./test/test_rand_io test/conf/run_parted_cache_virt.txt test1 test2
 
+# max speed: read 171.32MB/s, write 85.96MB/s
 echo "the basic test for parted global cached IO under the TPCC workload on virtual SSDs."
 ./test/test_rand_io test/conf/run_parted_cache_tpcc.txt test1 test2
 
