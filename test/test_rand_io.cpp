@@ -314,9 +314,12 @@ int main(int argc, char *argv[])
 	assert(config.get_nthreads() % params.get_num_nodes() == 0);
 	init_io_system(configs);
 	std::vector<file_io_factory *> factories;
-	for (unsigned i = 0; i < data_files.size(); i++)
-		factories.push_back(create_io_factory(data_files[i],
-					config.get_access_option()));
+	for (unsigned i = 0; i < data_files.size(); i++) {
+		file_io_factory *factory = create_io_factory(data_files[i],
+				config.get_access_option());
+		assert(factory);
+		factories.push_back(factory);
+	}
 	std::vector<int> node_id_array;
 	for (int i = 0; i < params.get_num_nodes(); i++)
 		node_id_array.push_back(i);
