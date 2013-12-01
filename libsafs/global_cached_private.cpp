@@ -77,7 +77,10 @@ class request_allocator: public obj_allocator<original_io_request>
 	{
 	public:
 		void init(original_io_request *req) {
-			new (req) original_io_request();
+			if (req->is_initialized())
+				req->init();
+			else
+				new (req) original_io_request();
 		}
 	} initiator;
 public:

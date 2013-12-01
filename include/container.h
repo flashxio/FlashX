@@ -549,6 +549,7 @@ public:
 	void resize(int new_size) {
 		if (new_size <= capacity)
 			return;
+
 		if (real_buf == buf) {
 			real_buf = new T[new_size];
 			memcpy(real_buf, buf, sizeof(buf));
@@ -560,6 +561,10 @@ public:
 			real_buf = tmp;
 		}
 		capacity = new_size;
+	}
+
+	int get_capacity() const {
+		return capacity;
 	}
 };
 

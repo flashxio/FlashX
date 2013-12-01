@@ -78,10 +78,14 @@ public:
 		orig_io = NULL;
 	}
 
-	original_io_request(char *buf, const data_loc_t &loc, ssize_t size,
-			int access_method, io_interface *io, int node_id,
-			bool sync = false): io_request(buf, loc, size, access_method,
-				io, node_id, sync) {
+	bool is_initialized() const {
+		return status_arr.get_capacity() > 0;
+	}
+
+	void init() {
+		io_request::init();
+		refcnt = atomic_number<short>(0);
+		completed_size = atomic_number<ssize_t>(0);
 		orig_io = NULL;
 	}
 
@@ -90,9 +94,7 @@ public:
 		// use this ugly way to change it.
 		data_loc_t loc(req.get_file_id(), req.get_offset());
 		if (req.get_req_type() == io_request::BASIC_REQ) {
-			new (this) original_io_request(req.get_buf(), loc, req.get_size(),
-					req.get_access_method(), req.get_io(), req.get_node_id(),
-					req.is_sync());
+			io_request::init(req);
 		}
 		else if (req.get_req_type() == io_request::USER_COMPUTE) {
 			// TODO
@@ -101,6 +103,9 @@ public:
 		else
 			assert(0);
 
+		refcnt = atomic_number<short>(0);
+		completed_size = atomic_number<ssize_t>(0);
+		orig_io = NULL;
 		status_arr.resize(get_num_covered_pages());
 	}
 
