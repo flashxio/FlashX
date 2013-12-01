@@ -114,6 +114,7 @@ public:
 	void print();
 	void print_help();
 
+	// in pages
 	int get_RAID_block_size() const {
 		return RAID_block_size;
 	}

@@ -23,8 +23,6 @@
 #include "global_cached_private.h"
 #include "slab_allocator.h"
 
-// TODO I assume the block size of the RAID array is 16 pages.
-const int RAID_BLOCK_SIZE = 16 * PAGE_SIZE;
 const int COMPLETE_QUEUE_SIZE = 10240;
 
 void thread_safe_page::add_req(original_io_request *req)
@@ -1031,7 +1029,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				// Right now, we don't care in which nodes the pages are.
 				pages[pg_idx++] = p;
 				if (pg_idx == MAX_NUM_IOVECS || (pages[0]->get_offset()
-							+ PAGE_SIZE * pg_idx) % RAID_BLOCK_SIZE == 0) {
+							+ PAGE_SIZE * pg_idx) % params.get_RAID_block_size() == 0) {
 					io_request req;
 					orig->extract(pages[0]->get_offset(), pg_idx * PAGE_SIZE, req);
 					num_bytes_completed += read(req, pages, pg_idx, orig);
