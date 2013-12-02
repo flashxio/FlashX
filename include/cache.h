@@ -521,4 +521,83 @@ public:
 	}
 };
 
+/**
+ * Thie byte array represents an object in multiple pages in the page cache.
+ */
+class page_byte_array
+{
+public:
+	virtual void lock() = 0;
+	virtual void unlock() = 0;
+	virtual int get_offset_in_first_page() const = 0;
+	virtual const thread_safe_page *get_page(int idx) const = 0;
+	virtual int get_size() const = 0;
+
+	off_t get_offset() const {
+		const thread_safe_page *p = get_page(0);
+		return p->get_offset() + get_offset_in_first_page();
+	}
+
+	template<class T>
+	class const_iterator
+	{
+		const page_byte_array *arr;
+
+		// Current location.
+		int pg_idx;
+		int off_in_pg;
+	public:
+		const_iterator(const page_byte_array *arr) {
+			this->arr = arr;
+			pg_idx = 0;
+			off_in_pg = arr->get_offset_in_first_page();
+			assert((PAGE_SIZE - arr->get_offset_in_first_page()) % sizeof(T) == 0);
+			assert(arr->get_size() % sizeof(T) == 0);
+		}
+
+		T operator*() const {
+			char *data = (char *) arr->get_page(pg_idx)->get_data();
+			return *(T *) (data + off_in_pg);
+		}
+
+		// Prefix ++
+		const_iterator<T> &operator++() {
+			off_in_pg += sizeof(T);
+			if (off_in_pg == PAGE_SIZE) {
+				off_in_pg = 0;
+				pg_idx++;
+			}
+			return *this;
+		}
+
+		bool operator==(const const_iterator<T> &it) const {
+			return arr == it.arr && pg_idx == it.pg_idx
+				&& off_in_pg == it.off_in_pg;
+		}
+
+		bool operator!=(const const_iterator<T> &it) const {
+			return !(*this == it);
+		}
+
+		const_iterator<T> &operator+=(int num) {
+			off_in_pg += num * sizeof(T);
+			pg_idx += off_in_pg / PAGE_SIZE;
+			off_in_pg = off_in_pg % PAGE_SIZE;
+			return *this;
+		}
+	};
+
+	template<class T>
+	const_iterator<T> begin() const {
+		return const_iterator<T>(this);
+	}
+
+	template<class T>
+	const_iterator<T> end() const {
+		const_iterator<T> it(this);
+		it += this->get_size() / sizeof(T);
+		return it;
+	}
+};
+
 #endif

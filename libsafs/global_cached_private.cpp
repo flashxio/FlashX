@@ -118,37 +118,44 @@ public:
 thread_safe_page *original_io_request::complete_req(thread_safe_page *p,
 		bool lock)
 {
-	int page_off;
-	thread_safe_page *ret = NULL;
-	char *req_buf;
-	int req_size;
+	if (get_req_type() == io_request::BASIC_REQ) {
+		int page_off;
+		thread_safe_page *ret = NULL;
+		char *req_buf;
+		int req_size;
 
-	if (within_1page()) {
-		page_off = get_offset() - ROUND_PAGE(get_offset());
-		req_buf = get_buf();
-		req_size = get_size();
+		if (within_1page()) {
+			page_off = get_offset() - ROUND_PAGE(get_offset());
+			req_buf = get_buf();
+			req_size = get_size();
+		}
+		else {
+			io_request extracted;
+			extract(p->get_offset(), PAGE_SIZE, extracted);
+			page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
+			req_buf = extracted.get_buf();
+			req_size = extracted.get_size();
+		}
+
+		if (lock)
+			p->lock();
+		if (get_access_method() == WRITE) {
+			memcpy((char *) p->get_data() + page_off, req_buf, req_size);
+			if (!p->set_dirty(true))
+				ret = p;
+		}
+		else 
+			/* I assume the data I read never crosses the page boundary */
+			memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
+		if (lock)
+			p->unlock();
+		return ret;
 	}
 	else {
-		io_request extracted;
-		extract(p->get_offset(), PAGE_SIZE, extracted);
-		page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
-		req_buf = extracted.get_buf();
-		req_size = extracted.get_size();
+		p->inc_ref();
+		get_page_status(p).pg = p;
+		return NULL;
 	}
-
-	if (lock)
-		p->lock();
-	if (get_access_method() == WRITE) {
-		memcpy((char *) p->get_data() + page_off, req_buf, req_size);
-		if (!p->set_dirty(true))
-			ret = p;
-	}
-	else 
-		/* I assume the data I read never crosses the page boundary */
-		memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
-	if (lock)
-		p->unlock();
-	return ret;
 }
 
 /**
@@ -227,6 +234,8 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		// the reqeust isn't the IO interface that issue the request.
 		// The request may be handled differently.
 		if (orig->is_sync()) {
+			// The I/O request with user compute can't be a synchronous request.
+			assert(orig->get_req_type() == io_request::BASIC_REQ);
 			assert(orig->get_io() == this);
 			((global_cached_io *) orig->get_io())->wakeup_on_req(orig, IO_OK);
 			orig->dec_ref();
@@ -234,7 +243,16 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 			// Now we can delete it.
 			req_allocator->free(orig);
 		}
+		else if (orig->get_req_type() == io_request::USER_COMPUTE) {
+			orig->compute();
+
+			orig->dec_ref();
+			orig->wait4unref();
+			// Now we can delete it.
+			req_allocator->free(orig);
+		}
 		else {
+			assert(orig->get_req_type() == io_request::BASIC_REQ);
 			num_completed_areqs.inc(1);
 			orig->dec_ref();
 			complete_queue.push_back(orig);
@@ -837,28 +855,70 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	}
 }
 
+class simple_page_byte_array: public page_byte_array
+{
+	io_request *req;
+	thread_safe_page *p;
+public:
+	simple_page_byte_array(io_request *req, thread_safe_page *p) {
+		this->req = req;
+		this->p = p;
+	}
+
+	virtual void lock() {
+		// TODO
+		assert(0);
+	}
+
+	virtual void unlock() {
+		// TODO
+		assert(0);
+	}
+
+	virtual int get_offset_in_first_page() const {
+		return req->get_offset() % PAGE_SIZE;
+	}
+
+	virtual const thread_safe_page *get_page(int idx) const {
+		assert(idx == 0);
+		return p;
+	}
+
+	virtual int get_size() const {
+		return req->get_size();
+	}
+};
+
 thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
 {
-	int page_off;
-	thread_safe_page *ret = NULL;
-	char *req_buf;
-	int req_size;
+	if (req->get_req_type() == io_request::BASIC_REQ) {
+		int page_off;
+		thread_safe_page *ret = NULL;
+		char *req_buf;
+		int req_size;
 
-	page_off = req->get_offset() - ROUND_PAGE(req->get_offset());
-	req_buf = req->get_buf();
-	req_size = req->get_size();
+		page_off = req->get_offset() - ROUND_PAGE(req->get_offset());
+		req_buf = req->get_buf();
+		req_size = req->get_size();
 
-	p->lock();
-	if (req->get_access_method() == WRITE) {
-		memcpy((char *) p->get_data() + page_off, req_buf, req_size);
-		if (!p->set_dirty(true))
-			ret = p;
+		p->lock();
+		if (req->get_access_method() == WRITE) {
+			memcpy((char *) p->get_data() + page_off, req_buf, req_size);
+			if (!p->set_dirty(true))
+				ret = p;
+		}
+		else 
+			/* I assume the data I read never crosses the page boundary */
+			memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
+		p->unlock();
+		return ret;
 	}
-	else 
-		/* I assume the data I read never crosses the page boundary */
-		memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
-	p->unlock();
-	return ret;
+	else {
+		user_compute *compute = req->get_compute();
+		simple_page_byte_array arr(req, p);
+		compute->run(arr);
+		return NULL;
+	}
 }
 
 void global_cached_io::process_cached_reqs(io_request *cached_reqs[],

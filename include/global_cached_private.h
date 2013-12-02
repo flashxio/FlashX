@@ -159,7 +159,58 @@ public:
 	void set_orig_io(io_interface *io) {
 		orig_io = io;
 	}
+
+	void compute();
+
+	friend class original_req_byte_array;
 };
+
+/**
+ * This is a page byte array based on the original I/O request.
+ */
+class original_req_byte_array: public page_byte_array
+{
+	original_io_request *req;
+public:
+	original_req_byte_array(original_io_request *req) {
+		this->req = req;
+	}
+
+	virtual int get_offset_in_first_page() const {
+		return req->get_offset() % PAGE_SIZE;
+	}
+
+	virtual const thread_safe_page *get_page(int pg_idx) const {
+		return req->status_arr[pg_idx].pg;
+	}
+
+	virtual int get_size() const {
+		return req->get_size();
+	}
+
+	void lock() {
+		// TODO
+		assert(0);
+	}
+
+	void unlock() {
+		// TODO
+		assert(0);
+	}
+};
+
+inline void original_io_request::compute()
+{
+	assert(this->get_req_type() == io_request::USER_COMPUTE);
+	original_req_byte_array byte_arr(this);
+	get_compute()->run(byte_arr);
+	int num_pages = get_num_covered_pages();
+	for (int i = 0; i < num_pages; i++) {
+		assert(status_arr[i].pg);
+		status_arr[i].pg->dec_ref();
+	}
+	delete get_compute();
+}
 
 class global_cached_io: public io_interface
 {

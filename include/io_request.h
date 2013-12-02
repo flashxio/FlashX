@@ -182,11 +182,13 @@ public:
 
 const int MAX_INLINE_SIZE=128;
 
+class page_byte_array;
 class user_compute
 {
 public:
 	virtual int serialize(char *buf, int size) const = 0;
 	virtual int get_serialized_size() const = 0;
+	virtual void run(page_byte_array &) = 0;
 };
 
 typedef int file_id_t;
@@ -572,6 +574,11 @@ public:
 		else {
 			return get_extension()->get_size();
 		}
+	}
+
+	user_compute *get_compute() const {
+		assert(get_req_type() == io_request::USER_COMPUTE);
+		return payload.compute;
 	}
 
 	/**
