@@ -121,6 +121,8 @@ public:
 		while (refcnt.get() > 0) {}
 	}
 
+	thread_safe_page *complete_req(thread_safe_page *p, bool lock);
+
 	bool complete_page(thread_safe_page *pg) {
 		get_page_status(pg).completed = true;
 		int size = get_overlap_size(pg);

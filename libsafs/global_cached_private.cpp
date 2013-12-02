@@ -17,6 +17,32 @@
  * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/**
+ * This file implements global cache.
+ * There are three types of requests:
+ * original request: it is a copy of the request passed from access() and 
+ *		is allocated in the heap.
+ * partial request: it represents part of a request, and it should have 
+ *		a point to the original request. This exists in two cases: when
+ *		writing an old dirty page; when reading a page with a pending IO.
+ * underlying request: it is a request sent to the underlying IO and is
+ *		allocated on the stack. It has a point to the original request for
+ *		a read request and the partial request for a write request. Only
+ *		this type of requests can be multi-buf requests, and it should have
+ *		a point to a page if it's a single-buf request.
+ *
+ * When a request is issued to the cache with access(), we first make a copy
+ * of the request as there is no guarantee that the original request from
+ * the invoker will be available after access() returns.
+ *
+ * However, it's often that we need to break a request into smaller ones for
+ * different reasons when issuing them to the underlying IO.
+ *
+ * In some case, a request tries to access a page that another request has
+ * been issued to the underlying IO for the page, the request will be added
+ * to the page.
+ */
+
 #include <vector>
 #include <algorithm>
 
@@ -89,48 +115,22 @@ public:
 	}
 };
 
-/**
- * This file implements global cache.
- * There are three types of requests:
- * original request: it is a copy of the request passed from access() and 
- *		is allocated in the heap.
- * partial request: it represents part of a request, and it should have 
- *		a point to the original request. This exists in two cases: when
- *		writing an old dirty page; when reading a page with a pending IO.
- * underlying request: it is a request sent to the underlying IO and is
- *		allocated on the stack. It has a point to the original request for
- *		a read request and the partial request for a write request. Only
- *		this type of requests can be multi-buf requests, and it should have
- *		a point to a page if it's a single-buf request.
- *
- * When a request is issued to the cache with access(), we first make a copy
- * of the request as there is no guarantee that the original request from
- * the invoker will be available after access() returns.
- *
- * However, it's often that we need to break a request into smaller ones for
- * different reasons when issuing them to the underlying IO.
- *
- * In some case, a request tries to access a page that another request has
- * been issued to the underlying IO for the page, the request will be added
- * to the page.
- */
-
-static thread_safe_page *generic_complete_req(io_request *req,
-		thread_safe_page *p, bool lock)
+thread_safe_page *original_io_request::complete_req(thread_safe_page *p,
+		bool lock)
 {
 	int page_off;
 	thread_safe_page *ret = NULL;
 	char *req_buf;
 	int req_size;
 
-	if (req->within_1page()) {
-		page_off = req->get_offset() - ROUND_PAGE(req->get_offset());
-		req_buf = req->get_buf();
-		req_size = req->get_size();
+	if (within_1page()) {
+		page_off = get_offset() - ROUND_PAGE(get_offset());
+		req_buf = get_buf();
+		req_size = get_size();
 	}
 	else {
 		io_request extracted;
-		req->extract(p->get_offset(), PAGE_SIZE, extracted);
+		extract(p->get_offset(), PAGE_SIZE, extracted);
 		page_off = extracted.get_offset() - ROUND_PAGE(extracted.get_offset());
 		req_buf = extracted.get_buf();
 		req_size = extracted.get_size();
@@ -138,7 +138,7 @@ static thread_safe_page *generic_complete_req(io_request *req,
 
 	if (lock)
 		p->lock();
-	if (req->get_access_method() == WRITE) {
+	if (get_access_method() == WRITE) {
 		memcpy((char *) p->get_data() + page_off, req_buf, req_size);
 		if (!p->set_dirty(true))
 			ret = p;
@@ -154,16 +154,16 @@ static thread_safe_page *generic_complete_req(io_request *req,
 /**
  * It returns the page that is dirtied by the function for the first time.
  */
-static inline thread_safe_page *__complete_req(io_request *orig,
+static inline thread_safe_page *__complete_req(original_io_request *orig,
 		thread_safe_page *p)
 {
-	return generic_complete_req(orig, p, true);
+	return orig->complete_req(p, true);
 }
 
-static inline thread_safe_page *__complete_req_unlocked(io_request *orig,
-		thread_safe_page *p)
+static inline thread_safe_page *__complete_req_unlocked(
+		original_io_request *orig, thread_safe_page *p)
 {
-	return generic_complete_req(orig, p, false);
+	return orig->complete_req(p, false);
 }
 
 /**
@@ -689,7 +689,7 @@ again:
 			io_request complete_partial;
 			orig->extract(p->get_offset(), PAGE_SIZE, complete_partial);
 			ret += complete_partial.get_size();
-			__complete_req(&complete_partial, p);
+			__complete_req(orig, p);
 			finalize_partial_request(complete_partial, orig);
 			p->dec_ref();
 		}
@@ -837,6 +837,30 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	}
 }
 
+thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
+{
+	int page_off;
+	thread_safe_page *ret = NULL;
+	char *req_buf;
+	int req_size;
+
+	page_off = req->get_offset() - ROUND_PAGE(req->get_offset());
+	req_buf = req->get_buf();
+	req_size = req->get_size();
+
+	p->lock();
+	if (req->get_access_method() == WRITE) {
+		memcpy((char *) p->get_data() + page_off, req_buf, req_size);
+		if (!p->set_dirty(true))
+			ret = p;
+	}
+	else 
+		/* I assume the data I read never crosses the page boundary */
+		memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
+	p->unlock();
+	return ret;
+}
+
 void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		thread_safe_page *cached_pages[], int num_cached_reqs)
 {
@@ -845,7 +869,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 	num_fast_process += num_cached_reqs;
 	for (int i = 0; i < num_cached_reqs; i++) {
 		io_request *req = cached_reqs[i];
-		thread_safe_page *dirty = __complete_req(req, cached_pages[i]);
+		thread_safe_page *dirty = complete_cached_req(req, cached_pages[i]);
 		page_cache *cache = get_global_cache();
 		if (dirty)
 			cache->mark_dirty_pages(&dirty, 1, underlying);
