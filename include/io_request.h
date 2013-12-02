@@ -341,15 +341,14 @@ public:
 	}
 
 	io_request(user_compute *compute, const data_loc_t &loc, ssize_t size,
-			int access_method, io_interface *io, int node_id,
-			bool sync = false) {
+			int access_method, io_interface *io, int node_id) {
 		payload_type = USER_COMPUTE;
 		data_inline = 0;
 		user_data_addr = 0;
 		init(NULL, loc, size, access_method, io, node_id);
 		payload.compute = compute;
 		use_default_flags();
-		this->sync = sync;
+		this->sync = false;
 	}
 
 	void init(const io_request &req) {
