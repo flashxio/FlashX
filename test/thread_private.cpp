@@ -28,6 +28,8 @@ int align_size = PAGE_SIZE;
 
 extern struct timeval global_start;
 
+static atomic_number<long> global_sum;
+
 struct issued_workload_t
 {
 	workload_t work;
@@ -84,6 +86,31 @@ public:
 
 	ssize_t get_size() {
 		return read_bytes;
+	}
+};
+
+class sum_user_compute: public user_compute
+{
+public:
+	virtual int serialize(char *buf, int size) const {
+		assert(0);
+		return 0;
+	}
+
+	virtual int get_serialized_size() const {
+		assert(0);
+		return 0;
+	}
+
+	virtual void run(page_byte_array &array) {
+		long sum = 0;
+		page_byte_array::const_iterator<long> end = array.end<long>();
+		for (page_byte_array::const_iterator<long> it = array.begin<long>();
+				it != end; ++it) {
+			sum += *it;
+		}
+
+		global_sum.inc(sum);
 	}
 };
 
@@ -149,7 +176,15 @@ int work2req_converter::to_reqs(io_interface *io, int buf_type, int num,
 	off_t off = workload.off;
 	int size = workload.size;
 
-	if (buf_type == MULTI_BUF) {
+	if (config.is_user_compute()) {
+		data_loc_t loc(io->get_file_id(), off);
+		reqs[0] = io_request(new sum_user_compute(), loc, size,
+				access_method, io, node_id);
+		workload.off += size;
+		workload.size = 0;
+		return 1;
+	}
+	else if (buf_type == MULTI_BUF) {
 		throw unsupported_exception();
 #if 0
 		assert(off % PAGE_SIZE == 0);

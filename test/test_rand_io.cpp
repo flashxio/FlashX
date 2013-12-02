@@ -184,6 +184,11 @@ void test_config::init(const std::map<std::string, std::string> &configs)
 		use_aio = false;
 	}
 
+	it = configs.find("user_compute");
+	if (it != configs.end()) {
+		user_compute = true;
+	}
+
 #ifdef PROFILER
 	it = configs.find("prof");
 	if (it != configs.end()) {
@@ -206,6 +211,7 @@ void test_config::print()
 	printf("\tbuf_type: %d\n", buf_type);
 	printf("\tbuf_size: %d\n", buf_size);
 	printf("\tsync: %d\n", !use_aio);
+	printf("\tuser_compute: %d\n", user_compute);
 }
 
 void test_config::print_help()
@@ -230,6 +236,7 @@ void test_config::print_help()
 	printf("\tbuf_size: the buffer size for each access\n");
 	printf("\tsync: whether to use sync or async\n");
 	printf("\troot_conf: a config file to specify the root paths of the RAID\n");
+	printf("\tuser_compute: whether to use user_compute\n");
 }
 
 void int_handler(int sig_num)

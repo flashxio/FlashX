@@ -56,6 +56,7 @@ class test_config
 	double read_ratio;
 	int num_repeats;
 	std::string workload_file;
+	bool user_compute;
 public:
 	test_config() {
 		access_option = -1;
@@ -69,6 +70,7 @@ public:
 		workload = RAND_OFFSET;
 		read_ratio = -1;
 		num_repeats = 1;
+		user_compute = false;
 	}
 
 	void init(const std::map<std::string, std::string> &configs);
@@ -121,6 +123,10 @@ public:
 
 	std::string get_workload_file() const {
 		return workload_file;
+	}
+
+	bool is_user_compute() const {
+		return user_compute;
 	}
 };
 
