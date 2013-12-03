@@ -243,18 +243,7 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 			// Now we can delete it.
 			req_allocator->free(orig);
 		}
-		else if (orig->get_req_type() == io_request::USER_COMPUTE) {
-			orig->compute();
-			num_completed_areqs.inc(1);
-			// TODO the pages may become dirty.
-
-			orig->dec_ref();
-			orig->wait4unref();
-			// Now we can delete it.
-			req_allocator->free(orig);
-		}
 		else {
-			assert(orig->get_req_type() == io_request::BASIC_REQ);
 			num_completed_areqs.inc(1);
 			orig->dec_ref();
 			complete_queue.push_back(orig);
@@ -457,10 +446,25 @@ int global_cached_io::process_completed_requests()
 	int num = complete_queue.get_num_entries();
 	if (num > 0) {
 		stack_array<original_io_request *> reqs(num);
+		stack_array<original_io_request *> basic_reqs(num);
+		int num_basic_reqs = 0;
 		int ret = complete_queue.fetch(reqs.data(), num);
-		::notify_completion(this, (io_request **) reqs.data(), ret);
-		for (int i = 0; i < ret; i++)
-			req_allocator->free(reqs[i]);
+		for (int i = 0; i < ret; i++) {
+			if (reqs[i]->get_req_type() == io_request::BASIC_REQ)
+				basic_reqs[num_basic_reqs++] = reqs[i];
+			else {
+				// This is a user-compute request.
+				assert(reqs[i]->get_req_type() == io_request::USER_COMPUTE);
+				reqs[i]->compute();
+				// TODO the pages may become dirty.
+				reqs[i]->wait4unref();
+				req_allocator->free(reqs[i]);
+			}
+		}
+		::notify_completion(this, (io_request **) basic_reqs.data(),
+				num_basic_reqs);
+		for (int i = 0; i < num_basic_reqs; i++)
+			req_allocator->free(basic_reqs[i]);
 		return ret;
 	}
 	else
