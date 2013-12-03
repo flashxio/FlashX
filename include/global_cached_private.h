@@ -93,12 +93,9 @@ public:
 		// Once an IO request is created, I can't change its type. I have to
 		// use this ugly way to change it.
 		data_loc_t loc(req.get_file_id(), req.get_offset());
-		if (req.get_req_type() == io_request::BASIC_REQ) {
-			io_request::init(req);
-		}
-		else if (req.get_req_type() == io_request::USER_COMPUTE) {
-			// TODO
-			assert(0);
+		if (req.get_req_type() == io_request::BASIC_REQ
+				|| req.get_req_type() == io_request::USER_COMPUTE) {
+			*(io_request *) this = req;
 		}
 		else
 			assert(0);
