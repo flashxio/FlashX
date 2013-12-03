@@ -530,7 +530,7 @@ public:
 	virtual void lock() = 0;
 	virtual void unlock() = 0;
 	virtual int get_offset_in_first_page() const = 0;
-	virtual const thread_safe_page *get_page(int idx) const = 0;
+	virtual thread_safe_page *get_page(int idx) const = 0;
 	virtual int get_size() const = 0;
 
 	off_t get_offset() const {
@@ -588,6 +588,62 @@ public:
 	};
 
 	template<class T>
+	class iterator
+	{
+		const page_byte_array *arr;
+
+		// Current location.
+		int pg_idx;
+		int off_in_pg;
+	public:
+		iterator(page_byte_array *arr) {
+			this->arr = arr;
+			pg_idx = 0;
+			off_in_pg = arr->get_offset_in_first_page();
+			assert((PAGE_SIZE - arr->get_offset_in_first_page()) % sizeof(T) == 0);
+			assert(arr->get_size() % sizeof(T) == 0);
+
+			// This iterator can change data, so I set all pages that can be
+			// accessed by the iterator dirty.
+			int num_pages = (arr->get_offset_in_first_page()
+					+ arr->get_size()) / PAGE_SIZE;
+			for (int i = 0; i < num_pages; i++)
+				arr->get_page(i)->set_dirty(true);
+		}
+
+		T &operator*() {
+			char *data = (char *) arr->get_page(pg_idx)->get_data();
+			return *(T *) (data + off_in_pg);
+		}
+
+		// Prefix ++
+		iterator<T> &operator++() {
+			off_in_pg += sizeof(T);
+			if (off_in_pg == PAGE_SIZE) {
+				off_in_pg = 0;
+				pg_idx++;
+			}
+			return *this;
+		}
+
+		bool operator==(const iterator<T> &it) const {
+			return arr == it.arr && pg_idx == it.pg_idx
+				&& off_in_pg == it.off_in_pg;
+		}
+
+		bool operator!=(const iterator<T> &it) const {
+			return !(*this == it);
+		}
+
+		iterator<T> &operator+=(int num) {
+			off_in_pg += num * sizeof(T);
+			pg_idx += off_in_pg / PAGE_SIZE;
+			off_in_pg = off_in_pg % PAGE_SIZE;
+			return *this;
+		}
+	};
+
+	template<class T>
 	const_iterator<T> begin() const {
 		return const_iterator<T>(this);
 	}
@@ -597,6 +653,22 @@ public:
 		const_iterator<T> it(this);
 		it += this->get_size() / sizeof(T);
 		return it;
+	}
+
+	template<class T>
+	iterator<T> begin() {
+		return iterator<T>(this);
+	}
+
+	template<class T>
+	iterator<T> end() {
+		iterator<T> it(this);
+		it += this->get_size() / sizeof(T);
+		return it;
+	}
+
+	static const page_byte_array &const_cast_ref(page_byte_array &arr) {
+		return (const page_byte_array &) arr;
 	}
 };
 

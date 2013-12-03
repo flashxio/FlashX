@@ -104,8 +104,10 @@ public:
 
 	virtual void run(page_byte_array &array) {
 		long sum = 0;
-		page_byte_array::const_iterator<long> end = array.end<long>();
-		for (page_byte_array::const_iterator<long> it = array.begin<long>();
+		const page_byte_array &const_array = page_byte_array::const_cast_ref(
+				array);
+		page_byte_array::const_iterator<long> end = const_array.end<long>();
+		for (page_byte_array::const_iterator<long> it = const_array.begin<long>();
 				it != end; ++it) {
 			sum += *it;
 		}

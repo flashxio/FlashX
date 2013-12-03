@@ -177,7 +177,7 @@ public:
 		return req->get_offset() % PAGE_SIZE;
 	}
 
-	virtual const thread_safe_page *get_page(int pg_idx) const {
+	virtual thread_safe_page *get_page(int pg_idx) const {
 		return req->status_arr[pg_idx].pg;
 	}
 

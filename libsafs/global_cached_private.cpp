@@ -456,7 +456,6 @@ int global_cached_io::process_completed_requests()
 				// This is a user-compute request.
 				assert(reqs[i]->get_req_type() == io_request::USER_COMPUTE);
 				reqs[i]->compute();
-				// TODO the pages may become dirty.
 				reqs[i]->wait4unref();
 				req_allocator->free(reqs[i]);
 			}
@@ -885,7 +884,7 @@ public:
 		return req->get_offset() % PAGE_SIZE;
 	}
 
-	virtual const thread_safe_page *get_page(int idx) const {
+	virtual thread_safe_page *get_page(int idx) const {
 		assert(idx == 0);
 		return p;
 	}
@@ -923,7 +922,6 @@ thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
 		user_compute *compute = req->get_compute();
 		simple_page_byte_array arr(req, p);
 		compute->run(arr);
-		// TODO the page may become dirty.
 		return NULL;
 	}
 }
