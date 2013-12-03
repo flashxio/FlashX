@@ -245,6 +245,8 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 		}
 		else if (orig->get_req_type() == io_request::USER_COMPUTE) {
 			orig->compute();
+			num_completed_areqs.inc(1);
+			// TODO the pages may become dirty.
 
 			orig->dec_ref();
 			orig->wait4unref();
@@ -917,6 +919,7 @@ thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
 		user_compute *compute = req->get_compute();
 		simple_page_byte_array arr(req, p);
 		compute->run(arr);
+		// TODO the page may become dirty.
 		return NULL;
 	}
 }
@@ -926,6 +929,7 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 {
 	io_request *async_reqs[num_cached_reqs];
 	int num_async_reqs = 0;
+	int num_user_compute = 0;
 	num_fast_process += num_cached_reqs;
 	for (int i = 0; i < num_cached_reqs; i++) {
 		io_request *req = cached_reqs[i];
@@ -934,12 +938,15 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		if (dirty)
 			cache->mark_dirty_pages(&dirty, 1, underlying);
 		cached_pages[i]->dec_ref();
-		if (!req->is_sync())
+		if (req->get_req_type() == io_request::USER_COMPUTE)
+			num_user_compute++;
+		if (!req->is_sync() && req->get_req_type() != io_request::USER_COMPUTE)
 			async_reqs[num_async_reqs++] = req;
 	}
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
 	num_completed_areqs.inc(num_async_reqs);
+	num_completed_areqs.inc(num_user_compute);
 	::notify_completion(this, async_reqs, num_async_reqs);
 }
 
