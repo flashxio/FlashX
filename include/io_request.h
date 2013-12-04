@@ -722,8 +722,6 @@ public:
 			serialized_size = sizeof(io_request);
 			assert(serialized_size <= size);
 			memcpy(buf, this, sizeof(*this));
-			payload.ext = NULL;
-			payload_type = BASIC_REQ;
 		}
 		else if (payload_type == BASIC_REQ) {
 			// We only serialize the data buffer to the message for write
@@ -746,18 +744,11 @@ public:
 			}
 		}
 		else {
-			assert(accept_inline);
 			// The user compute object is always serialized to the message.
-			user_compute *compute = this->payload.compute;
-			serialized_size = sizeof(io_request) - sizeof(this->payload)
-				+ compute->get_serialized_size();
+			serialized_size = sizeof(io_request);
 			assert(serialized_size <= size && sizeof(io_request)
 					<= (unsigned) size);
-			memcpy(buf, this, sizeof(*this));
-			io_request *p = (io_request *) buf;
-			p->data_inline = 1;
-			compute->serialize((char *) p->payload.buf,
-					size - (sizeof(io_request) - sizeof(this->payload)));
+			memcpy(buf, this, serialized_size);
 		}
 		return serialized_size;
 	}
@@ -773,15 +764,8 @@ public:
 			return sizeof(io_request);
 		else if (payload_type == BASIC_REQ)
 			return sizeof(io_request) - sizeof(this->payload) + get_size();
-		else if (!is_data_inline()) {
-			user_compute *compute = this->payload.compute;
-			return sizeof(io_request) - sizeof(this->payload)
-				+ compute->get_serialized_size();
-		}
 		else {
-			user_compute *compute = (user_compute *) this->payload.buf;
-			return sizeof(io_request) - sizeof(this->payload)
-				+ compute->get_serialized_size();
+			return sizeof(io_request);
 		}
 	}
 
