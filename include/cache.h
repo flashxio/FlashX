@@ -546,10 +546,12 @@ public:
 		// Current location.
 		int pg_idx;
 		int off_in_pg;
+		int off;
 	public:
 		const_iterator(const page_byte_array *arr) {
 			this->arr = arr;
 			pg_idx = 0;
+			off = 0;
 			off_in_pg = arr->get_offset_in_first_page();
 			assert((PAGE_SIZE - arr->get_offset_in_first_page()) % sizeof(T) == 0);
 			assert(arr->get_size() % sizeof(T) == 0);
@@ -563,6 +565,7 @@ public:
 		// Prefix ++
 		const_iterator<T> &operator++() {
 			off_in_pg += sizeof(T);
+			off += sizeof(T);
 			if (off_in_pg == PAGE_SIZE) {
 				off_in_pg = 0;
 				pg_idx++;
@@ -571,8 +574,7 @@ public:
 		}
 
 		bool operator==(const const_iterator<T> &it) const {
-			return arr == it.arr && pg_idx == it.pg_idx
-				&& off_in_pg == it.off_in_pg;
+			return arr == it.arr && off == it.off;
 		}
 
 		bool operator!=(const const_iterator<T> &it) const {
@@ -581,6 +583,7 @@ public:
 
 		const_iterator<T> &operator+=(int num) {
 			off_in_pg += num * sizeof(T);
+			off += num * sizeof(T);
 			pg_idx += off_in_pg / PAGE_SIZE;
 			off_in_pg = off_in_pg % PAGE_SIZE;
 			return *this;
@@ -595,10 +598,12 @@ public:
 		// Current location.
 		int pg_idx;
 		int off_in_pg;
+		int off;
 	public:
 		iterator(page_byte_array *arr) {
 			this->arr = arr;
 			pg_idx = 0;
+			off = 0;
 			off_in_pg = arr->get_offset_in_first_page();
 			assert((PAGE_SIZE - arr->get_offset_in_first_page()) % sizeof(T) == 0);
 			assert(arr->get_size() % sizeof(T) == 0);
@@ -618,6 +623,7 @@ public:
 
 		// Prefix ++
 		iterator<T> &operator++() {
+			off += sizeof(T);
 			off_in_pg += sizeof(T);
 			if (off_in_pg == PAGE_SIZE) {
 				off_in_pg = 0;
@@ -627,8 +633,7 @@ public:
 		}
 
 		bool operator==(const iterator<T> &it) const {
-			return arr == it.arr && pg_idx == it.pg_idx
-				&& off_in_pg == it.off_in_pg;
+			return arr == it.arr && off == it.off;
 		}
 
 		bool operator!=(const iterator<T> &it) const {
@@ -636,7 +641,9 @@ public:
 		}
 
 		iterator<T> &operator+=(int num) {
+			assert(num >= 0);
 			off_in_pg += num * sizeof(T);
+			off += num * sizeof(T);
 			pg_idx += off_in_pg / PAGE_SIZE;
 			off_in_pg = off_in_pg % PAGE_SIZE;
 			return *this;
