@@ -116,6 +116,35 @@ public:
 	}
 };
 
+class write_user_compute: public user_compute
+{
+	int file_id;
+public:
+	write_user_compute(int file_id) {
+		this->file_id = file_id;
+	}
+
+	virtual int serialize(char *buf, int size) const {
+		assert(0);
+		return 0;
+	}
+
+	virtual int get_serialized_size() const {
+		assert(0);
+		return 0;
+	}
+
+	virtual void run(page_byte_array &array) {
+		page_byte_array::iterator<long> end = array.end<long>();
+		off_t off = array.get_offset();
+		for (page_byte_array::iterator<long> it = array.begin<long>();
+				it != end; ++it) {
+			*it = off / sizeof(off_t) + file_id;
+			off += sizeof(off_t);
+		}
+	}
+};
+
 ssize_t thread_private::get_read_bytes() {
 	if (cb)
 		return cb->get_size();
@@ -180,8 +209,12 @@ int work2req_converter::to_reqs(io_interface *io, int buf_type, int num,
 
 	if (config.is_user_compute()) {
 		data_loc_t loc(io->get_file_id(), off);
-		reqs[0] = io_request(new sum_user_compute(), loc, size,
-				access_method, io, node_id);
+		if (access_method == READ)
+			reqs[0] = io_request(new sum_user_compute(), loc, size,
+					access_method, io, node_id);
+		else
+			reqs[0] = io_request(new write_user_compute(io->get_file_id()),
+					loc, size, access_method, io, node_id);
 		workload.off += size;
 		workload.size = 0;
 		return 1;
