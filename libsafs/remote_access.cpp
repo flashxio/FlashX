@@ -172,6 +172,7 @@ void remote_io::access(io_request *requests, int num,
 	for (int i = 0; i < num; i++) {
 		assert(requests[i].get_offset() % MIN_BLOCK_SIZE == 0);
 		assert(requests[i].get_size() % MIN_BLOCK_SIZE == 0);
+		assert(requests[i].get_req_type() != io_request::USER_COMPUTE);
 
 		if (requests[i].is_flush()) {
 			syncd = true;
