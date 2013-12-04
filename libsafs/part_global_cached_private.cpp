@@ -593,22 +593,38 @@ void part_global_cached_io::notify_completion(io_request *reqs[], int num)
 	int num_remote = 0;
 	int num_local = 0;
 
+	int num_user_compute = 0;
 	for (int i = 0; i < num; i++) {
+
 		page_id_t pg_id(reqs[i]->get_file_id(), reqs[i]->get_offset());
 		int idx = cache_conf->page2cache(pg_id);
-		if (idx != get_node_id())
-			local_reply_buf[num_remote++] = io_reply(reqs[i], true, 0);
+		if (idx != get_node_id()) {
+			// We only count the remote user-compute request.
+			// It's enough to compute the number of pending requests.
+			if (reqs[i]->get_req_type() == io_request::USER_COMPUTE)
+				num_user_compute++;
+			else
+				local_reply_buf[num_remote++] = io_reply(reqs[i], true, 0);
+		}
 		else {
-			assert(reqs[i]->get_io() == this);
-			local_reqs[num_local++] = reqs[i];
+			// We don't need to notify the user of the completed local
+			// user-compute requests any more.
+			if (reqs[i]->get_req_type() != io_request::USER_COMPUTE) {
+				assert(reqs[i]->get_io() == this);
+				local_reqs[num_local++] = reqs[i];
+			}
 		}
 	}
+	if (num_user_compute > 0)
+		processed_replies.inc(num_user_compute);
 
-	// The reply must be sent to the thread on a different node.
-	int num_sent = reply_sender->send(local_reply_buf.data(), num_remote);
-	// We use blocking queues here, so the send must succeed.
-	assert(num_sent == num_remote);
-	if (reply_queue->get_num_entries() > 0)
+	if (num_remote > 0) {
+		// The reply must be sent to the thread on a different node.
+		int num_sent = reply_sender->send(local_reply_buf.data(), num_remote);
+		// We use blocking queues here, so the send must succeed.
+		assert(num_sent == num_remote);
+	}
+	if (reply_queue->get_num_entries() > 0 || num_user_compute > 0)
 		get_thread()->activate();
 	if (num_local > 0)
 		notify_upper(local_reqs, num_local);
@@ -910,7 +926,6 @@ part_global_cached_io::part_global_cached_io(io_interface *underlying,
 			table->get_cache(node_id));
 	processed_requests = 0;;
 	sent_requests = 0;
-	processed_replies = 0;
 
 	this->final_cb = NULL;
 	remote_reads = 0;
@@ -984,7 +999,7 @@ int part_global_cached_io::process_replies()
 			num_processed += num_replies;
 		}
 	}
-	processed_replies += num_processed;
+	processed_replies.inc(num_processed);
 	return num_processed;
 }
 
@@ -1043,7 +1058,7 @@ void part_global_cached_io::cleanup()
 
 	// Now we need to wait for all requests issued to the disks
 	// to be completed.
-	while (sent_requests > processed_replies) {
+	while (sent_requests > processed_replies.get()) {
 		// flush all replies in the reply senders, so this IO can process
 		// the remaining replies.
 		reply_sender->flush_all();
@@ -1055,7 +1070,7 @@ void part_global_cached_io::cleanup()
 
 #ifdef STATISTICS
 	printf("thread %d processed %ld requests (%ld remote requests) and %ld replies\n",
-			get_io_idx(), processed_requests, sent_requests, processed_replies);
+			get_io_idx(), processed_requests, sent_requests, processed_replies.get());
 #endif
 }
 
@@ -1137,7 +1152,7 @@ void part_global_cached_io::flush_requests()
 void part_global_cached_io::print_state()
 {
 	printf("part global cached io %d has %d pending reqs, %ld remote pending reqs, %d local pending reqs %d replies in the queue\n",
-			get_io_idx(), num_pending_ios(), sent_requests - processed_replies,
+			get_io_idx(), num_pending_ios(), sent_requests - processed_replies.get(),
 			underlying->num_pending_ios(), reply_queue->get_num_objs());
 	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {

@@ -83,7 +83,7 @@ class part_global_cached_io: public io_interface
 	// any concurrency control.
 	long processed_requests;
 	long sent_requests;
-	long processed_replies;
+	atomic_number<long> processed_replies;
 	long remote_reads;
 
 	// It's the callback from the user.
@@ -151,7 +151,7 @@ public:
 	virtual int wait4complete(int num);
 	virtual int num_pending_ios() const {
 		// the number of pending requests on the remote nodes.
-		return sent_requests - processed_replies
+		return sent_requests - processed_replies.get()
 			// The number of pending requests in the local IO instance.
 			+ underlying->num_pending_ios();
 	}

@@ -184,7 +184,8 @@ bool is_local_req(io_request *req, io_interface *this_io)
 void notify_completion(io_interface *this_io, io_request *req)
 {
 	if (is_local_req(req, this_io)) {
-		if (this_io->get_callback())
+		if (this_io->get_callback()
+				&& req->get_req_type() == io_request::BASIC_REQ)
 			this_io->get_callback()->invoke(&req, 1);
 	}
 	else {
@@ -207,8 +208,12 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 	io_request *remote_reqs[num];
 	int num_remote = 0;
 	for (int i = 0; i < num; i++) {
-		if (is_local_req(reqs[i], this_io))
-			local_reqs[num_local++] = reqs[i];
+		if (is_local_req(reqs[i], this_io)) {
+			// We only need to invoke the local basic requests.
+			// ignore all local user-compute requests.
+			if (reqs[i]->get_req_type() == io_request::BASIC_REQ)
+				local_reqs[num_local++] = reqs[i];
+		}
 		else {
 			remote_reqs[num_remote++] = reqs[i];
 		}
@@ -446,24 +451,19 @@ int global_cached_io::process_completed_requests()
 	int num = complete_queue.get_num_entries();
 	if (num > 0) {
 		stack_array<original_io_request *> reqs(num);
-		stack_array<original_io_request *> basic_reqs(num);
-		int num_basic_reqs = 0;
 		int ret = complete_queue.fetch(reqs.data(), num);
 		for (int i = 0; i < ret; i++) {
-			if (reqs[i]->get_req_type() == io_request::BASIC_REQ)
-				basic_reqs[num_basic_reqs++] = reqs[i];
-			else {
+			if (reqs[i]->get_req_type() == io_request::USER_COMPUTE) {
 				// This is a user-compute request.
 				assert(reqs[i]->get_req_type() == io_request::USER_COMPUTE);
 				reqs[i]->compute();
-				reqs[i]->wait4unref();
-				req_allocator->free(reqs[i]);
 			}
 		}
-		::notify_completion(this, (io_request **) basic_reqs.data(),
-				num_basic_reqs);
-		for (int i = 0; i < num_basic_reqs; i++)
-			req_allocator->free(basic_reqs[i]);
+		::notify_completion(this, (io_request **) reqs.data(), ret);
+		for (int i = 0; i < ret; i++) {
+			reqs[i]->wait4unref();
+			req_allocator->free(reqs[i]);
+		}
 		return ret;
 	}
 	else
@@ -931,7 +931,6 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 {
 	io_request *async_reqs[num_cached_reqs];
 	int num_async_reqs = 0;
-	int num_user_compute = 0;
 	num_fast_process += num_cached_reqs;
 	for (int i = 0; i < num_cached_reqs; i++) {
 		io_request *req = cached_reqs[i];
@@ -940,15 +939,12 @@ void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
 		if (dirty)
 			cache->mark_dirty_pages(&dirty, 1, underlying);
 		cached_pages[i]->dec_ref();
-		if (req->get_req_type() == io_request::USER_COMPUTE)
-			num_user_compute++;
-		if (!req->is_sync() && req->get_req_type() != io_request::USER_COMPUTE)
+		if (!req->is_sync())
 			async_reqs[num_async_reqs++] = req;
 	}
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
 	num_completed_areqs.inc(num_async_reqs);
-	num_completed_areqs.inc(num_user_compute);
 	::notify_completion(this, async_reqs, num_async_reqs);
 }
 
