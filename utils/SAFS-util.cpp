@@ -28,7 +28,6 @@
 #include "safs_file.h"
 
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
-const size_t DATA_SIZE = 10L * 1024 * 1024 * 1024;
 
 ssize_t complete_read(int fd, char *buf, size_t count)
 {
@@ -167,13 +166,14 @@ void comm_verify_file(int argc, char *argv[])
 	io_interface *io = factory->create_io(curr_thread);
 	data_source *source;
 	if (ext_file.empty())
-		source = new synthetic_data_source(DATA_SIZE);
+		source = new synthetic_data_source(factory->get_file_size());
 	else
 		source = new file_data_source(ext_file);
 	verify_callback *cb = new verify_callback(source);
 	io->set_callback(cb);
 
 	size_t file_size = source->get_size();
+	printf("verify %ld bytes\n", file_size);
 	assert(factory->get_file_size() >= file_size);
 	file_size = ROUNDUP(file_size, BUF_SIZE);
 	char *buf = (char *) valloc(BUF_SIZE);
@@ -219,7 +219,7 @@ void comm_load_file2fs(int argc, char *argv[])
 	data_source *source;
 	if (ext_file.empty()) {
 		printf("use synthetic data\n");
-		source = new synthetic_data_source(DATA_SIZE);
+		source = new synthetic_data_source(factory->get_file_size());
 	}
 	else {
 		printf("use file %s\n", ext_file.c_str());
