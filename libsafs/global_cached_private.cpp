@@ -1120,8 +1120,9 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 			else {
 				// Right now, we don't care in which nodes the pages are.
 				pages[pg_idx++] = p;
-				if (pg_idx == MAX_NUM_IOVECS || (pages[0]->get_offset()
-							+ PAGE_SIZE * pg_idx) % params.get_RAID_block_size() == 0) {
+				if (pg_idx == MAX_NUM_IOVECS
+						|| (pages[0]->get_offset() + PAGE_SIZE * pg_idx)
+						% (params.get_RAID_block_size() * PAGE_SIZE) == 0) {
 					io_request req;
 					orig->extract(pages[0]->get_offset(), pg_idx * PAGE_SIZE, req);
 					num_bytes_completed += read(req, pages, pg_idx, orig);
