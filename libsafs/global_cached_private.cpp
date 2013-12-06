@@ -476,6 +476,9 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
 	complete_queue(std::string("gcached_complete_queue-") + itoa(
 				underlying->get_node_id()), underlying->get_node_id(),
+			COMPLETE_QUEUE_SIZE, INT_MAX),
+	completed_disk_queue(std::string("gcached_complete_disk_queue-") + itoa(
+				underlying->get_node_id()), underlying->get_node_id(),
 			COMPLETE_QUEUE_SIZE, INT_MAX)
 {
 	assert(t == underlying->get_thread());
@@ -1201,9 +1204,23 @@ int global_cached_io::preload(off_t start, long size) {
 
 void global_cached_io::process_all_completed_requests()
 {
+	// We first process the completed requests from the disk.
+	while (!completed_disk_queue.is_empty()) {
+		int num = completed_disk_queue.get_num_entries();
+		stack_array<io_request> reqs(num);
+		int ret = completed_disk_queue.fetch(reqs.data(), num);
+		process_disk_completed_requests(reqs.data(), ret);
+	}
+
+	// User requests are placed in the queue, so we need to process them
+	// here.
 	process_completed_requests();
+
+	// Process the requests that are pending on the pages.
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();
+		// When processing the pending requests on the pages, we might issue
+		// more I/O requests. We need to flush these requests.
 		flush_requests();
 	}
 }
@@ -1244,8 +1261,9 @@ void global_cached_io::notify_completion(io_request *reqs[], int num)
 		req_copies[i] = *reqs[i];
 		assert(req_copies[i].get_io());
 	}
-
-	process_disk_completed_requests(req_copies.data(), num);
+	// By default, global_cached_io processes completed disk requests in
+	// the application thread.
+	completed_disk_queue.add(req_copies.data(), num);
 
 	get_thread()->activate();
 }

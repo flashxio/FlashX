@@ -230,6 +230,7 @@ class global_cached_io: public io_interface
 
 	// It contains the completed asynchronous user requests.
 	thread_safe_FIFO_queue<original_io_request *> complete_queue;
+	thread_safe_FIFO_queue<io_request> completed_disk_queue;
 
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
