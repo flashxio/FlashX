@@ -74,11 +74,6 @@ public:
 	 * If succeed, return 1; otherwise, return 0.
 	 */
 	bool create_file(size_t size) {
-		if (size < 0) {
-			fprintf(stderr, "wrong file size\n");
-			return false;
-		}
-
 		int fd = open(file_name.c_str(), O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
 		if (fd < 0) {
 			fprintf(stderr, "can't create %s: %s\n", file_name.c_str(),
