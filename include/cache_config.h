@@ -168,7 +168,7 @@ public:
 	file_map_cache_config(long size, int type, const std::vector<int> &node_ids,
 			file_mapper *mapper, int shift = 0);
 
-	virtual int page2cache(off_t off) const;
+	virtual int page2cache(const page_id_t &pg_id) const;
 };
 
 #endif

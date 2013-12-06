@@ -140,8 +140,8 @@ file_map_cache_config::file_map_cache_config(long size, int type,
 	init(part_sizes);
 }
 
-int file_map_cache_config::page2cache(off_t off) const
+int file_map_cache_config::page2cache(const page_id_t &pg_id) const
 {
-	int idx = mapper->map2file(off / PAGE_SIZE);
+	int idx = mapper->map2file(pg_id.get_offset() / PAGE_SIZE);
 	return mapper->get_file_node_id(idx) + shift;
 }
