@@ -546,37 +546,30 @@ public:
 		const page_byte_array *arr;
 
 		// Current location.
-		int pg_idx;
-		int off_in_pg;
 		int off;
 	public:
 		const_iterator(const page_byte_array *arr) {
 			this->arr = arr;
-			pg_idx = 0;
-			off = 0;
-			off_in_pg = arr->get_offset_in_first_page();
+			off = arr->get_offset_in_first_page();
 			assert((PAGE_SIZE - arr->get_offset_in_first_page()) % sizeof(T) == 0);
 			assert(arr->get_size() % sizeof(T) == 0);
 		}
 
 		T operator*() const {
+			int pg_idx = off / PAGE_SIZE;
+			int off_in_pg = off % PAGE_SIZE;
 			char *data = (char *) arr->get_page(pg_idx)->get_data();
 			return *(T *) (data + off_in_pg);
 		}
 
 		// Prefix ++
 		const_iterator<T> &operator++() {
-			off_in_pg += sizeof(T);
 			off += sizeof(T);
-			if (off_in_pg == PAGE_SIZE) {
-				off_in_pg = 0;
-				pg_idx++;
-			}
 			return *this;
 		}
 
 		bool operator==(const const_iterator<T> &it) const {
-			return arr == it.arr && off == it.off;
+			return off == it.off;
 		}
 
 		bool operator!=(const const_iterator<T> &it) const {
@@ -584,10 +577,8 @@ public:
 		}
 
 		const_iterator<T> &operator+=(int num) {
-			off_in_pg += num * sizeof(T);
+			assert(num >= 0);
 			off += num * sizeof(T);
-			pg_idx += off_in_pg / PAGE_SIZE;
-			off_in_pg = off_in_pg % PAGE_SIZE;
 			return *this;
 		}
 	};
@@ -598,15 +589,11 @@ public:
 		const page_byte_array *arr;
 
 		// Current location.
-		int pg_idx;
-		int off_in_pg;
 		int off;
 	public:
 		iterator(page_byte_array *arr) {
 			this->arr = arr;
-			pg_idx = 0;
-			off = 0;
-			off_in_pg = arr->get_offset_in_first_page();
+			off = arr->get_offset_in_first_page();
 			assert((PAGE_SIZE - arr->get_offset_in_first_page()) % sizeof(T) == 0);
 			assert(arr->get_size() % sizeof(T) == 0);
 
@@ -619,6 +606,8 @@ public:
 		}
 
 		T &operator*() {
+			int pg_idx = off / PAGE_SIZE;
+			int off_in_pg = off % PAGE_SIZE;
 			char *data = (char *) arr->get_page(pg_idx)->get_data();
 			return *(T *) (data + off_in_pg);
 		}
@@ -626,16 +615,11 @@ public:
 		// Prefix ++
 		iterator<T> &operator++() {
 			off += sizeof(T);
-			off_in_pg += sizeof(T);
-			if (off_in_pg == PAGE_SIZE) {
-				off_in_pg = 0;
-				pg_idx++;
-			}
 			return *this;
 		}
 
 		bool operator==(const iterator<T> &it) const {
-			return arr == it.arr && off == it.off;
+			return off == it.off;
 		}
 
 		bool operator!=(const iterator<T> &it) const {
@@ -644,10 +628,7 @@ public:
 
 		iterator<T> &operator+=(int num) {
 			assert(num >= 0);
-			off_in_pg += num * sizeof(T);
 			off += num * sizeof(T);
-			pg_idx += off_in_pg / PAGE_SIZE;
-			off_in_pg = off_in_pg % PAGE_SIZE;
 			return *this;
 		}
 	};
