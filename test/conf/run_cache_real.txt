@@ -1,5 +1,5 @@
 cache_type=associative
-io_depth=1024
+io_depth=64
 cache_size=4G
 
 option=global_cache
