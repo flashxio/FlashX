@@ -1,4 +1,5 @@
 RAID_mapping=RAID0
+io_depth=64
 
 option=remote
 num_reqs=10485760

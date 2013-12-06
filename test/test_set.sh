@@ -74,21 +74,37 @@ echo "the basic test for parted global cached IO under the TPCC workload with fe
 
 # performance test on the real SSDs.
 
+# total time: 14.2s to read 40GB.
+echo "the basic test for remote read."
+./test/test_rand_io test/conf/run_remote.txt test
+
+# total time: 8.1s to read 40GB.
 echo "this is the basic test for remote IO. Large read."
 echo "check the average request size. It should be 128 sectors."
 ./test/test_rand_io test/conf/run_remote.txt test entry_size=$((4096 * 32)) RAID_block_size=64K
 
+# total time: 13s to read 40GB
 echo "the basic test for global cached read."
 ./test/test_rand_io test/conf/run_cache.txt test
 
+# total time: 7.8s to read 40GB.
 echo "the basic test for global cached IO with large reads"
 ./test/test_rand_io test/conf/run_cache.txt test entry_size=$((4096 * 32)) RAID_block_size=64K
 
 echo "the basic test for global cached IO under the TPCC workload."
 ./test/test_rand_io test/conf/run_cache_real.txt test workload=test/workload/mysqld_tpcc_datafile.data
 
+# total time: 10.8s
+# cache hits: 19296954/26326945
 echo "the basic test for global cached IO under the Neo4j workload."
-./test/test_rand_io test/conf/run_cache_real.txt test workload=test/workload/DijkstraSearch-reconstructed.data
+./test/test_rand_io test/conf/run_cache_real.txt test workload=test/workload/DijkstraSearch-reconstructed.data cache_size=512M
 
+# total time: 273s
+# cache hits: 643938618/829040171
 echo "the basic test for global cached IO under my own triangle counting workload"
 ./test/test_rand_io test/conf/run_cache_real.txt test workload=test/workload/triangle-counting.data
+
+# total time: 268s
+./test/test_rand_io test/conf/run_cache_real.txt test workload=test/workload/triangle-counting.data user_compute=
+
+./test/test_rand_io test/conf/run_parted_cache_real.txt test workload=test/workload/triangle-counting.data user_compute=

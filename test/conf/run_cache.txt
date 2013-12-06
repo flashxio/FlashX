@@ -1,5 +1,6 @@
 cache_type=associative
 cache_size=4G
+io_depth=64
 
 option=global_cache
 num_reqs=10485760
