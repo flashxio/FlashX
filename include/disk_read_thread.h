@@ -59,6 +59,9 @@ class disk_io_thread: public thread
 			pthread_cond_init(&cond, NULL);
 		}
 
+		virtual ~remote_comm() {
+		}
+
 		virtual void run() = 0;
 
 		void complete() {

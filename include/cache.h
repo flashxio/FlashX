@@ -398,6 +398,8 @@ class page_filter;
 class page_cache
 {
 public:
+	virtual ~page_cache() {
+	}
 	/**
 	 * This method searches for a page with the specified offset.
 	 * It may evict a page if the specificed page doesn't exist.

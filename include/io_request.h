@@ -186,6 +186,8 @@ class page_byte_array;
 class user_compute
 {
 public:
+	virtual ~user_compute() {
+	}
 	virtual int serialize(char *buf, int size) const = 0;
 	virtual int get_serialized_size() const = 0;
 	virtual void run(page_byte_array &) = 0;
@@ -803,6 +805,21 @@ public:
 	}
 };
 
+template<class req_type, class get_io_func>
+class comp_req_io
+{
+	get_io_func get_io;
+
+public:
+	comp_req_io(get_io_func func) {
+		this->get_io = func;
+	}
+
+	bool operator() (const req_type req1, const req_type req2) {
+		return (long) get_io(req1) < (long) get_io(req2);
+	}
+};
+
 typedef void (*req_process_func_t)(io_interface *io, io_request *reqs[], int num);
 /**
  * Perform the same function to the requests with the same IO instance.
@@ -813,17 +830,7 @@ template<class req_type, class get_io_func, class process_req_func>
 void process_reqs_on_io(req_type reqs[], int num,
 		get_io_func func, process_req_func proc_func)
 {
-	struct comp_req_io {
-		get_io_func func;
-
-		comp_req_io(get_io_func func) {
-			this->func = func;
-		}
-
-		bool operator() (const req_type req1, const req_type req2) {
-			return (long) func(req1) < (long) func(req2);
-		}
-	} req_io_comparator(func);
+	comp_req_io<req_type, get_io_func> req_io_comparator(func);
 
 	std::sort(reqs, reqs + num, req_io_comparator);
 	io_interface *prev = func(reqs[0]);

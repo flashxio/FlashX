@@ -50,6 +50,9 @@ public:
 		this->timeout = timeout;
 	}
 
+	virtual ~timer_task() {
+	}
+
 	long get_id() const {
 		return task_id;
 	}
