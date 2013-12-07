@@ -128,12 +128,13 @@ public:
 	}
 
 	bool complete_range(off_t off, size_t size) {
-		assert(ROUND_PAGE(off) == off);
-		assert(size % PAGE_SIZE == 0);
-		for (unsigned i = 0; i < size / PAGE_SIZE; i++) {
-			get_page_status(off + i * PAGE_SIZE).completed = true;
-		}
 		ssize_t ret = completed_size.inc(size);
+		off_t pg_begin = ROUND_PAGE(off);
+		off_t pg_end = ROUNDUP_PAGE(off + size);
+		while (pg_begin < pg_end) {
+			get_page_status(pg_begin).completed = true;
+			pg_begin += PAGE_SIZE;
+		}
 		return ret == get_size();
 	}
 
