@@ -135,8 +135,22 @@ class worker_thread: public thread
 	file_io_factory *factory;
 	io_interface *io;
 	graph_engine *graph;
+
+	/* 
+	 * Some graph algorithms such as triangle counting require to join
+	 * the adjacency lists of two vertices. When we fetch one of the vertices,
+	 * we need to buffer the vertex and wait for the other vertex to
+	 * become available.
+	 */
 	fifo_queue<ext_mem_vertex> pending_vertices;
 
+	/*
+	 * When we join a vertex with its neighbors, we need to fetch them
+	 * fist. However, some vertex has a very large number of neighbors.
+	 * Whenever we need to fetch all neighbors of a vertex, we first keep
+	 * them in this data structure. Each time we only fetch a certain
+	 * number of the adjacency lists of the neighbors until we fetch all.
+	 */
 	pending_neighbor_collection curr_pending;
 
 	std::vector<vertex_id_t> activated_vertices;
@@ -335,6 +349,13 @@ void worker_thread::init()
 	io->set_callback(new vertex_callback(graph, io));
 }
 
+/**
+ * When we fetch all neighbors of a vertex, the number of neighbors of
+ * a vertex may exceeds the maximal number of pending I/O requests allowed
+ * by the graph engine. This method tries to fetch the neighbors of a vertex
+ * incrementally. Namely, we only fetch a certain number of neighbors of
+ * the vertex in each invocation until all neighbors are fetched.
+ */
 int worker_thread::process_pending_vertex(int max)
 {
 	int num_neighbors = min(max, curr_pending.get_num_neighbors());
@@ -362,6 +383,12 @@ int worker_thread::process_pending_vertex(int max)
 	return num_neighbors;
 }
 
+/**
+ * In the graph algorithms that need to join the adjacency lists of two
+ * vertices, the first fetched vertex is kept in the memory, waiting for
+ * its neighbors to become available. This method is to issue up to
+ * the specified number of I/O requests to fetch neighbors of vertices.
+ */
 int worker_thread::process_pending_vertices(int max)
 {
 	if (max <= 0)
@@ -391,6 +418,9 @@ int worker_thread::process_pending_vertices(int max)
 	return num_processed;
 }
 
+/**
+ * This is to process the activated vertices in the current iteration.
+ */
 int worker_thread::process_activated_vertices(int max)
 {
 	if (max <= 0)
@@ -412,6 +442,9 @@ int worker_thread::process_activated_vertices(int max)
 	return num;
 }
 
+/**
+ * This method is the main function of the graph engine.
+ */
 void worker_thread::run()
 {
 	while (true) {
