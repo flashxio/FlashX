@@ -81,7 +81,6 @@ class io_req_extension
 	static atomic_unsigned_integer num_creates;
 	io_request *orig;
 	void *priv;
-	void *user_data;
 
 	int num_bufs: 16;
 	int vec_capacity: 15;
@@ -113,7 +112,6 @@ public:
 	void init() {
 		this->orig = NULL;
 		this->priv = NULL;
-		this->user_data = NULL;
 		this->num_bufs = 0;
 		memset(vec_pointer, 0, vec_capacity * sizeof(io_buf));
 		memset(&issue_time, 0, sizeof(issue_time));
@@ -122,7 +120,6 @@ public:
 	void init(const io_req_extension &ext) {
 		this->orig = ext.orig;
 		this->priv = ext.priv;
-		this->user_data = ext.user_data;
 		this->num_bufs = ext.num_bufs;
 		assert(this->vec_capacity >= ext.vec_capacity);
 		memcpy(vec_pointer, ext.vec_pointer, num_bufs * sizeof(*vec_pointer));
@@ -143,14 +140,6 @@ public:
 
 	void set_priv(void *priv) {
 		this->priv = priv;
-	}
-
-	void *get_user_data() const {
-		return user_data;
-	}
-
-	void set_user_data(void *user_data) {
-		this->user_data = user_data;
 	}
 
 	void set_timestamp() {
