@@ -233,6 +233,11 @@ class global_cached_io: public io_interface
 	thread_safe_FIFO_queue<original_io_request *> complete_queue;
 	thread_safe_FIFO_queue<io_request> completed_disk_queue;
 
+	// This contains the requests issued to the underlying IO.
+	// There is only one thread that can access the request buffer,
+	// it doesn't need to be thread-safe.
+	std::vector<io_request> underlying_requests;
+
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
 
@@ -259,6 +264,19 @@ class global_cached_io: public io_interface
 	int multibuf_completion(io_request *request);
 
 	void wait4req(original_io_request *req);
+
+	void send2underlying(io_request &req) {
+		if (params.is_merge_reqs()) {
+			underlying_requests.push_back(req);
+		}
+		else {
+			io_status status;
+			underlying->access(&req, 1, &status);
+			if (status == IO_FAIL) {
+				abort();
+			}
+		}
+	}
 public:
 	global_cached_io(thread *t, io_interface *, page_cache *cache);
 
@@ -278,9 +296,7 @@ public:
 	 * A request can access data of arbitrary size and from arbitrary offset.
 	 */
 	void access(io_request *requests, int num, io_status *status = NULL);
-	virtual void flush_requests() {
-		underlying->flush_requests();
-	}
+	virtual void flush_requests();
 
 	/**
 	 * One read can access multiple pages while one write can only write

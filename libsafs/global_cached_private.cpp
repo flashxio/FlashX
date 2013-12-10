@@ -485,19 +485,15 @@ ssize_t global_cached_io::__write(original_io_request *orig, thread_safe_page *p
 				off_t off = orig->get_offset();
 				data_loc_t pg_loc(orig->get_file_id(), ROUND_PAGE(off));
 				io_req_extension *ext = ext_allocator->alloc_obj();
-				ext->set_priv(p);
-				ext->add_buf((char *) p->get_data(), PAGE_SIZE, 0);
 
 				io_request read_req(ext, pg_loc, READ, this, p->get_node_id());
+				read_req.add_page(p);
+				read_req.set_priv(p);
+				assert(p->get_io_req() == NULL);
 				p->set_io_pending(true);
 				p->add_req(orig);
 				p->unlock();
-				io_status status;
-				underlying->access(&read_req, 1, &status);
-				if (status == IO_FAIL) {
-					perror("read");
-					exit(1);
-				}
+				send2underlying(read_req);
 			}
 			else {
 				// This is an optimization. If we can overwrite the entire page,
@@ -554,23 +550,19 @@ ssize_t global_cached_io::__read(original_io_request *orig, thread_safe_page *p)
 	p->lock();
 	if (!p->data_ready()) {
 		if(!p->is_io_pending()) {
+			assert(p->get_io_req() == NULL);
 			p->set_io_pending(true);
 			assert(!p->is_dirty());
 
 			io_req_extension *ext = ext_allocator->alloc_obj();
-			ext->set_priv(p);
-			ext->add_buf((char *) p->get_data(), PAGE_SIZE, 0);
 
 			data_loc_t pg_loc(p->get_file_id(), p->get_offset());
 			io_request req(ext, pg_loc, READ, this, get_node_id());
+			req.set_priv(p);
+			req.add_page(p);
 			p->add_req(orig);
 			p->unlock();
-			io_status status;
-			underlying->access(&req, 1, &status);
-			if (status == IO_FAIL) {
-				perror("read");
-				exit(1);
-			}
+			send2underlying(req);
 		}
 		else {
 			assert(orig->get_access_method() == READ);
@@ -619,6 +611,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 		assert(file_id == p->get_file_id());
 		p->lock();
 		if (!p->data_ready() && !p->is_io_pending()) {
+			assert(p->get_io_req() == NULL);
 			p->add_req(orig);
 			p->set_io_pending(true);
 			assert(!p->is_dirty());
@@ -640,7 +633,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 			 * the partial request.
 			 */
 			if (!multibuf_req.is_empty()) {
-				underlying->access(&multibuf_req, 1);
+				send2underlying(multibuf_req);
 
 				io_req_extension *ext = ext_allocator->alloc_obj();
 				io_request tmp(ext, INVALID_DATA_LOC, req.get_access_method(),
@@ -659,7 +652,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 			 * request.
 			 */
 			if (!multibuf_req.is_empty()) {
-				underlying->access(&multibuf_req, 1);
+				send2underlying(multibuf_req);
 
 				io_req_extension *ext = ext_allocator->alloc_obj();
 				io_request tmp(ext, INVALID_DATA_LOC, req.get_access_method(),
@@ -675,7 +668,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 		}
 	}
 	if (!multibuf_req.is_empty()) {
-		underlying->access(&multibuf_req, 1);
+		send2underlying(multibuf_req);
 	}
 	else {
 		ext_allocator->free(multibuf_req.get_extension());
@@ -820,13 +813,19 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	// that triggered this writeback.
 	assert(!req.has_overlap(orig->get_offset(), orig->get_size()));
 
-	io_status status;
 	if (orig->is_sync())
 		req.set_low_latency(true);
+
+	/*
+	 * We have tried to merge the write request to make it as large as
+	 * possible. There is no reason to merge it with other reqeusts again.
+	 * Besides, we are flushing the old dirty data, it's unlikely to merge
+	 * it with other flushes.
+	 */
+	io_status status;
 	underlying->access(&req, 1, &status);
 	if (status == IO_FAIL) {
-		perror("write");
-		assert(0);
+		abort();
 	}
 }
 
@@ -1234,4 +1233,97 @@ void global_cached_io::notify_completion(io_request *reqs[], int num)
 	completed_disk_queue.add(req_copies.data(), num);
 
 	get_thread()->activate();
+}
+
+static struct comp_req_off {
+	bool operator() (const io_request &req1, const io_request &req2) {
+		return req1.get_offset() < req2.get_offset();
+	}
+} req_off_comparator;
+
+static bool cross_RAID_block_bound(off_t off, size_t size)
+{
+	off_t end = off + size;
+	off_t block_begin = ROUND(off, params.get_RAID_block_size() * PAGE_SIZE);
+	return end - block_begin > params.get_RAID_block_size() * PAGE_SIZE;
+}
+
+static bool merge_req(io_request &merged, const io_request &req)
+{
+	assert(merged.get_offset() <= req.get_offset());
+	assert(merged.get_file_id() == req.get_file_id());
+
+	if (merged.get_offset() + merged.get_size() != req.get_offset()
+			|| merged.get_access_method() != req.get_access_method()
+			|| merged.is_sync() != req.is_sync()
+			|| merged.is_high_prio() != req.is_high_prio()
+			|| merged.is_low_latency() != req.is_low_latency())
+		return false;
+
+	for (int i = 0; i < req.get_num_bufs(); i++) {
+		const io_buf &buf = req.get_io_buf(i);
+		thread_safe_page *p = buf.get_page();
+		// Assume two requests are overlapped, the overlapped part
+		// must point to the same pages.
+		// Actually, the real case is that two requests should never
+		// overlap. The check in flush_requests() has confirmed it.
+		if (merged.contain_offset(p->get_offset())) {
+			int idx = (p->get_offset() - merged.get_offset()) / PAGE_SIZE;
+			assert(p == merged.get_page(idx));
+		}
+		else
+			merged.add_io_buf(buf);
+	}
+	// We don't need to reference the page for a multi-buf request.
+	merged.set_priv(NULL);
+	return true;
+}
+
+static inline void access(io_interface *underlying, io_request &req)
+{
+	io_status status;
+	underlying->access(&req, 1, &status);
+	if (status == IO_FAIL) {
+		abort();
+	}
+}
+
+void global_cached_io::flush_requests()
+{
+	if (!params.is_merge_reqs())
+		assert(underlying_requests.empty());
+	else if (underlying_requests.size() > 0) {
+		if (underlying_requests.size() > 1)
+			std::sort(underlying_requests.begin(),
+					underlying_requests.end(), req_off_comparator);
+		io_request req = underlying_requests[0];
+		for (unsigned i = 1; i < underlying_requests.size(); i++) {
+			io_request *under_req = &underlying_requests[i];
+
+			// The requests shouldn't overlap.
+			assert(under_req->get_offset()
+					>= req.get_offset() + req.get_size());
+			// If the two requests are not connected
+			if (under_req->get_offset()
+					> req.get_offset() + req.get_size()
+					// The merged request will cross the boundary of
+					// a RAID block.
+					|| cross_RAID_block_bound(req.get_offset(),
+						req.get_size() + under_req->get_size())
+					// We can't merge the two requests.
+					|| !merge_req(req, *under_req)) {
+				::access(underlying, req);
+
+				req = *under_req;
+			}
+			else {
+				// If we merge the requests, we need to free the I/O
+				// extension of the second request.
+				ext_allocator->free(under_req->get_extension());
+			}
+		}
+		underlying_requests.clear();
+		::access(underlying, req);
+	}
+	underlying->flush_requests();
 }
