@@ -70,6 +70,7 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	it = configs.find("RAID_block_size");
 	if (it != configs.end()) {
 		RAID_block_size = (int) str2size(it->second) / PAGE_SIZE;
+		assert(power2(RAID_block_size));
 	}
 
 	it = configs.find("SA_cell_size");

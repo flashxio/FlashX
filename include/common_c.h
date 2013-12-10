@@ -89,6 +89,20 @@ inline static int max(int v1, int v2)
 	return v1 < v2 ? v2 : v1;
 }
 
+inline static int power2(int num)
+{
+	if (num < 0)
+		num = -num;
+	if (num == 1)
+		return 0;
+	while (num > 1) {
+		if (num % 2)
+			return 0;
+		num = num / 2;
+	}
+	return 1;
+}
+
 inline static long get_curr_ms()
 {
 	struct timeval tv;
