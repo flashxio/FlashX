@@ -14,3 +14,4 @@ read_percent=100
 root_conf=conf/TEST_ROOTS.txt
 use_flusher=
 cache_large_write=
+merge_reqs=

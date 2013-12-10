@@ -10,3 +10,4 @@ buf_size=16777216
 root_conf=conf/TEST_ROOTS.txt
 #use_flusher=
 cache_large_write=
+merge_reqs=
