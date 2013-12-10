@@ -104,6 +104,8 @@ public:
 		completed_size = atomic_number<ssize_t>(0);
 		orig_io = NULL;
 		status_arr.resize(get_num_covered_pages());
+		memset(status_arr.data(), 0,
+				sizeof(page_status) * get_num_covered_pages());
 	}
 
 	int inc_ref() {
@@ -132,6 +134,7 @@ public:
 		off_t pg_begin = ROUND_PAGE(off);
 		off_t pg_end = ROUNDUP_PAGE(off + size);
 		while (pg_begin < pg_end) {
+			assert(!get_page_status(pg_begin).completed);
 			get_page_status(pg_begin).completed = true;
 			pg_begin += PAGE_SIZE;
 		}

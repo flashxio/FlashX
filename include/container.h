@@ -566,6 +566,10 @@ public:
 	int get_capacity() const {
 		return capacity;
 	}
+
+	T *data() {
+		return real_buf;
+	}
 };
 
 template<class T>
