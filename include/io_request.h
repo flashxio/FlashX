@@ -79,7 +79,6 @@ class io_request;
 class io_req_extension
 {
 	static atomic_unsigned_integer num_creates;
-	io_request *orig;
 	void *priv;
 
 	int num_bufs: 16;
@@ -110,7 +109,6 @@ public:
 	}
 
 	void init() {
-		this->orig = NULL;
 		this->priv = NULL;
 		this->num_bufs = 0;
 		memset(vec_pointer, 0, vec_capacity * sizeof(io_buf));
@@ -118,20 +116,11 @@ public:
 	}
 
 	void init(const io_req_extension &ext) {
-		this->orig = ext.orig;
 		this->priv = ext.priv;
 		this->num_bufs = ext.num_bufs;
 		assert(this->vec_capacity >= ext.vec_capacity);
 		memcpy(vec_pointer, ext.vec_pointer, num_bufs * sizeof(*vec_pointer));
 		memset(&issue_time, 0, sizeof(issue_time));
-	}
-
-	io_request *get_orig() const {
-		return orig;
-	}
-
-	void set_orig(io_request *orig) {
-		this->orig = orig;
 	}
 
 	void *get_priv() const {
@@ -523,14 +512,6 @@ public:
 		int RAID_block_size = params.get_RAID_block_size() * PAGE_SIZE;
 		return ROUND(this->get_offset(), RAID_block_size)
 			== ROUND(this->get_offset() + this->get_size() - 1, RAID_block_size);
-	}
-
-	io_request *get_orig() const {
-		return get_extension()->get_orig();
-	}
-
-	void set_orig(io_request *orig) {
-		get_extension()->set_orig(orig);
 	}
 
 	void *get_user_data() const {

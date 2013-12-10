@@ -312,7 +312,6 @@ void queue_requests(std::vector<page_req_pair> &pending_reqs)
 
 int global_cached_io::multibuf_completion(io_request *request)
 {
-	original_io_request *orig = (original_io_request *) request->get_orig();
 	/*
 	 * Right now the global cache only support normal access().
 	 */
@@ -336,46 +335,16 @@ int global_cached_io::multibuf_completion(io_request *request)
 		}
 		p->set_io_pending(false);
 		original_io_request *pending_req = p->reset_reqs();
+		p->unlock();
 		if (pending_req)
 			pending_reqs.push_back(page_req_pair(p, pending_req));
-		if (request->get_access_method() == READ) {
-			thread_safe_page *dirty = __complete_req_unlocked(orig, p);
-			assert(dirty == NULL);
-			p->unlock();
+		if (request->get_access_method() == WRITE) {
+			// The reference count of a dirty page is always 1 + # original
+			// requests, so we can decrease the extra reference here.
 			p->dec_ref();
-		}
-		else {
-			p->unlock();
-			// The page isn't flushed by the page eviction policy.
-			// It's flushed because we want to flush data with a large request.
-			// The flushed data is contiguous with the old dirty data in
-			// the page evicted by the eviction policy.
-			if (!orig->contain_offset(p->get_offset()))
-				p->dec_ref();
-			else
-				// The private data contains the page that triggered the writeback.
-				assert(request->get_priv() == p);
 			assert(p->get_ref() >= 0);
 		}
 		off += PAGE_SIZE;
-	}
-
-	if (request->get_access_method() == READ) {
-		/*
-		 * For a multi-buf request, the private data actually points to
-		 * the very original request.
-		 */
-		io_request partial;
-		orig->extract(request->get_offset(), request->get_num_bufs() * PAGE_SIZE,
-				partial);
-		this->finalize_partial_request(partial, orig);
-	}
-	else {
-		thread_safe_page *p = (thread_safe_page *) request->get_priv();
-		assert(orig->get_next_req_on_page(p) == NULL);
-		pending_reqs.push_back(page_req_pair(p, orig));
-		// These requests can't be deleted yet.
-		// They will be deleted when these write requests are finally served.
 	}
 	::queue_requests(pending_reqs);
 	ext_allocator->free(request->get_extension());
@@ -416,25 +385,16 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 		}
 		p->set_io_pending(false);
 		original_io_request *old = p->reset_reqs();
-		bool data_ready = p->data_ready();
 		p->unlock();
 
-		// If the data on the page is ready, it won't become unready.
-		// The only place where data is set unready is where the page is evicted.
-		// Since we have a reference of the page, it won't be evicted.
-		// When data is ready, we can execuate any operations on the page.
-		if (data_ready) {
-			original_io_request *orig = (original_io_request *) request->get_orig();
-			thread_safe_page *dirty = __complete_req(orig, p);
-			assert(dirty == NULL);
-			this->finalize_partial_request(p, orig);
+		if (request->get_access_method() == WRITE) {
+			// The reference count of a dirty page is always 1 + # original
+			// requests, so we can decrease the extra reference here.
 			p->dec_ref();
+			assert(p->get_ref() >= 0);
 		}
-		else {
-			original_io_request *orig = (original_io_request *) request->get_orig();
-			assert(orig->get_next_req_on_page(p) == NULL);
-			pending_reqs.push_back(page_req_pair(p, orig));
-		}
+		// TODO I can process read requests.
+
 		if (old)
 			pending_reqs.push_back(page_req_pair(p, old));
 		// These requests can't be deleted yet.
@@ -525,12 +485,12 @@ ssize_t global_cached_io::__write(original_io_request *orig, thread_safe_page *p
 				off_t off = orig->get_offset();
 				data_loc_t pg_loc(orig->get_file_id(), ROUND_PAGE(off));
 				io_req_extension *ext = ext_allocator->alloc_obj();
-				ext->set_orig(orig);
 				ext->set_priv(p);
 				ext->add_buf((char *) p->get_data(), PAGE_SIZE, 0);
 
 				io_request read_req(ext, pg_loc, READ, this, p->get_node_id());
 				p->set_io_pending(true);
+				p->add_req(orig);
 				p->unlock();
 				io_status status;
 				underlying->access(&read_req, 1, &status);
@@ -598,12 +558,12 @@ ssize_t global_cached_io::__read(original_io_request *orig, thread_safe_page *p)
 			assert(!p->is_dirty());
 
 			io_req_extension *ext = ext_allocator->alloc_obj();
-			ext->set_orig(orig);
 			ext->set_priv(p);
 			ext->add_buf((char *) p->get_data(), PAGE_SIZE, 0);
 
 			data_loc_t pg_loc(p->get_file_id(), p->get_offset());
 			io_request req(ext, pg_loc, READ, this, get_node_id());
+			p->add_req(orig);
 			p->unlock();
 			io_status status;
 			underlying->access(&req, 1, &status);
@@ -644,7 +604,6 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 	assert(npages <= MAX_NUM_IOVECS);
 
 	io_req_extension *ext = ext_allocator->alloc_obj();
-	ext->set_orig(orig);
 	io_request multibuf_req(ext, INVALID_DATA_LOC, req.get_access_method(), this,
 			get_node_id());
 
@@ -658,9 +617,9 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 	for (int i = 0; i < npages; i++) {
 		thread_safe_page *p = pages[i];
 		assert(file_id == p->get_file_id());
-again:
 		p->lock();
 		if (!p->data_ready() && !p->is_io_pending()) {
+			p->add_req(orig);
 			p->set_io_pending(true);
 			assert(!p->is_dirty());
 			if (multibuf_req.is_empty()) {
@@ -673,24 +632,20 @@ again:
 			p->unlock();
 		}
 		else if (!p->data_ready() && p->is_io_pending()) {
+			p->add_req(orig);
+			p->unlock();
+
 			/*
 			 * If we have got some partial of the request, we need to submit
 			 * the partial request.
 			 */
 			if (!multibuf_req.is_empty()) {
-				p->unlock();
 				underlying->access(&multibuf_req, 1);
 
 				io_req_extension *ext = ext_allocator->alloc_obj();
-				ext->set_orig(orig);
 				io_request tmp(ext, INVALID_DATA_LOC, req.get_access_method(),
 						this, get_node_id());
 				multibuf_req = tmp;
-				goto again;
-			}
-			else {
-				p->add_req(orig);
-				p->unlock();
 			}
 		}
 		/* 
@@ -707,7 +662,6 @@ again:
 				underlying->access(&multibuf_req, 1);
 
 				io_req_extension *ext = ext_allocator->alloc_obj();
-				ext->set_orig(orig);
 				io_request tmp(ext, INVALID_DATA_LOC, req.get_access_method(),
 						this, get_node_id());
 				multibuf_req = tmp;
@@ -841,11 +795,24 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	p->set_io_pending(true);
 
 	io_req_extension *ext = ext_allocator->alloc_obj();
-	ext->set_orig(orig);
 	ext->set_priv(p);
 	io_request req(ext, pg_id, WRITE, this, p->get_node_id());
 	assert(p->get_ref() > 0);
 	req.add_page(p);
+	p->add_req(orig);
+	/*
+	 * I need to add another reference.
+	 * Normally, the reference count of a page should be the same as the number
+	 * of original I/O requests pending on the page. In the case of writing
+	 * dirty pages, more dirty pages are merged and write together in the same
+	 * request. The merged dirty pages don't have original I/O requests, so
+	 * their reference counts are 1 + # original I/O requests.
+	 * To add another reference to the page that triggers the write, the
+	 * reference count of all dirty pages is 1 + # original I/O requests.
+	 * It just simplifies the code of handling the completion of the write
+	 * request.
+	 */
+	p->inc_ref();
 	p->unlock();
 
 	merge_pages2req(req, get_global_cache());

@@ -214,7 +214,7 @@ void remote_io::access(io_request *requests, int num,
 			for (off_t begin = orig->get_offset(); begin < end;
 					begin = ROUND(begin + RAID_block_size, RAID_block_size)) {
 				io_req_extension *ext = new io_req_extension();
-				ext->set_orig(orig);
+				ext->set_priv(orig);
 				io_request req(ext, INVALID_DATA_LOC, 0, NULL, 0);
 				int size = ROUND(begin + RAID_block_size, RAID_block_size) - begin;
 				size = min(size, end - begin);
@@ -305,7 +305,7 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 		}
 
 		original_io_request *orig = original_io_request::cast2original(
-				reqs[i].get_orig());
+				(io_request *) reqs[i].get_priv());
 		io_request *req = &reqs[i];
 		if (orig->complete_part(*req))
 			completes.push_back(original_io_request::cast2original(orig));
