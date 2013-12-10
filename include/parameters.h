@@ -106,6 +106,7 @@ class sys_parameters
 	int vaio_print_freq;
 	int numa_num_process_threads;
 	int num_nodes;
+	bool merge_reqs;
 public:
 	sys_parameters();
 
@@ -169,6 +170,10 @@ public:
 
 	int get_num_nodes() const {
 		return num_nodes;
+	}
+
+	bool is_merge_reqs() const {
+		return merge_reqs;
 	}
 };
 

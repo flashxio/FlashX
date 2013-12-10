@@ -57,6 +57,7 @@ sys_parameters::sys_parameters()
 	vaio_print_freq = 1000000;
 	numa_num_process_threads = 1;
 	num_nodes = 1;
+	merge_reqs = false;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -144,6 +145,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		num_nodes = str2size(it->second);
 	}
+
+	it = configs.find("merge_reqs");
+	if (it != configs.end()) {
+		merge_reqs = true;
+	}
 }
 
 void sys_parameters::print()
@@ -163,6 +169,7 @@ void sys_parameters::print()
 	std::cout << "\tvaio_print_freq: " << vaio_print_freq << std::endl;
 	std::cout << "\tnuma_num_process_threads: " << numa_num_process_threads << std::endl;
 	std::cout << "\tnum_nodes: " << num_nodes << std::endl;
+	std::cout << "\tmerge_reqs: " << merge_reqs << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -192,6 +199,8 @@ void sys_parameters::print_help()
 	std::cout << "\tnuma_num_process_threads: the number of request processing threads per node in part_global_cached_io"
 		<< std::endl;
 	std::cout << "\tnum_nodes: the number of NUMA nodes the test program should run"
+		<< std::endl;
+	std::cout << "\tmerge_reqs: whether or not merge requests in the cached IO"
 		<< std::endl;
 }
 
