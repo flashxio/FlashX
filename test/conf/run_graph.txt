@@ -1,0 +1,10 @@
+RAID_mapping=RAID0
+io_depth=64
+cache_size=4G
+num_nodes=4
+root_conf=conf/data_files.txt
+
+threads=32
+#print_io_stat=
+prof_file=graph.prof
+merge_reqs=
