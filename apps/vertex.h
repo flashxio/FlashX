@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "container.h"
+#include "cache.h"
 
 typedef unsigned long vertex_id_t;
 
@@ -234,6 +235,123 @@ public:
 		int ret = neighbors.add((vertex_id_t *) this->neighbors, num_edges);
 		assert(ret == num_edges);
 		return neighbors.get_num_entries();
+	}
+};
+
+class page_vertex
+{
+public:
+	virtual int get_num_edges(edge_type type) const = 0;
+	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
+			edge_type type) const = 0;
+	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
+			edge_type type) const = 0;
+	virtual vertex_id_t get_id() const = 0;
+};
+
+/**
+ * This vertex represents a directed vertex stored in the page cache.
+ */
+class page_directed_vertex: public page_vertex
+{
+	vertex_id_t id;
+	int num_in_edges;
+	int num_out_edges;
+	const page_byte_array &array;
+public:
+	page_directed_vertex(const page_byte_array &arr): array(arr) {
+		unsigned size = arr.get_size();
+		assert((unsigned) size >= sizeof(ext_mem_directed_vertex));
+		ext_mem_directed_vertex v;
+		page_byte_array::const_iterator<ext_mem_directed_vertex> head_it
+			= arr.begin<ext_mem_directed_vertex>();
+		v = *head_it;
+		assert((unsigned) size >= sizeof(ext_mem_directed_vertex)
+				+ (v.get_num_in_edges() + v.get_num_out_edges()) * sizeof(vertex_id_t));
+
+		id = v.get_id();
+		num_in_edges = v.get_num_in_edges();
+		num_out_edges = v.get_num_out_edges();
+	}
+
+	int get_num_edges(edge_type type) const {
+		if (type == IN_EDGE)
+			return num_in_edges;
+		else if (type == OUT_EDGE)
+			return num_out_edges;
+		else
+			return num_in_edges + num_out_edges;
+	}
+
+	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
+			edge_type type) const {
+		if (type == IN_EDGE)
+			return array.begin<vertex_id_t>(sizeof(ext_mem_directed_vertex));
+		else if (type == OUT_EDGE)
+			return array.begin<vertex_id_t>(sizeof(ext_mem_directed_vertex)
+				+ num_in_edges * sizeof(vertex_id_t));
+		else
+			assert(0);
+	}
+
+	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
+			edge_type type) const {
+		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
+		if (type == IN_EDGE)
+			it += num_in_edges;
+		else if (type == OUT_EDGE)
+			it += num_out_edges;
+		else
+			assert(0);
+		return it;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
+};
+
+/**
+ * This vertex represents an undirected vertex in the page cache.
+ */
+class page_undirected_vertex: public page_vertex
+{
+	vertex_id_t id;
+	int num_edges;
+	const page_byte_array &array;
+public:
+	page_undirected_vertex(const page_byte_array &arr): array(arr) {
+		unsigned size = arr.get_size();
+		assert((unsigned) size >= sizeof(ext_mem_undirected_vertex));
+		ext_mem_undirected_vertex v;
+		page_byte_array::const_iterator<ext_mem_undirected_vertex> head_it
+			= arr.begin<ext_mem_undirected_vertex>();
+		v = *head_it;
+		assert((unsigned) size >= sizeof(ext_mem_undirected_vertex)
+				+ sizeof(vertex_id_t) * v.get_num_edges(BOTH_EDGES));
+
+		id = v.get_id();
+		num_edges = v.get_num_edges(BOTH_EDGES);
+	}
+
+	int get_num_edges(edge_type type) const {
+		return num_edges;
+	}
+
+	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
+			edge_type type) const {
+		return array.begin<vertex_id_t>(sizeof(ext_mem_undirected_vertex));
+	}
+
+	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
+			edge_type type) const {
+		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
+		it += num_edges;
+		return it;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
 	}
 };
 
