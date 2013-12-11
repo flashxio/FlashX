@@ -1189,6 +1189,8 @@ void global_cached_io::process_all_completed_requests()
 		// When processing the pending requests on the pages, we might issue
 		// more I/O requests. We need to flush these requests.
 		flush_requests();
+		// When handling pending requests, we may complete more user requests.
+		process_completed_requests();
 	}
 }
 
