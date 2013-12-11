@@ -599,7 +599,7 @@ public:
 
 			// This iterator can change data, so I set all pages that can be
 			// accessed by the iterator dirty.
-			int num_pages = (arr->get_offset_in_first_page()
+			int num_pages = ROUNDUP_PAGE(arr->get_offset_in_first_page()
 					+ arr->get_size()) / PAGE_SIZE;
 			for (int i = off / PAGE_SIZE; i < num_pages; i++)
 				arr->get_page(i)->set_dirty(true);
