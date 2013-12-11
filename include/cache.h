@@ -548,10 +548,10 @@ public:
 		// Current location.
 		int off;
 	public:
-		const_iterator(const page_byte_array *arr) {
+		const_iterator(const page_byte_array *arr, int byte_off = 0) {
 			this->arr = arr;
-			off = arr->get_offset_in_first_page();
-			assert((PAGE_SIZE - arr->get_offset_in_first_page()) % sizeof(T) == 0);
+			off = arr->get_offset_in_first_page() + byte_off;
+			assert((PAGE_SIZE - (off % PAGE_SIZE)) % sizeof(T) == 0);
 			assert(arr->get_size() % sizeof(T) == 0);
 		}
 
@@ -591,17 +591,17 @@ public:
 		// Current location.
 		int off;
 	public:
-		iterator(page_byte_array *arr) {
+		iterator(page_byte_array *arr, int byte_off = 0) {
 			this->arr = arr;
-			off = arr->get_offset_in_first_page();
-			assert((PAGE_SIZE - arr->get_offset_in_first_page()) % sizeof(T) == 0);
+			off = arr->get_offset_in_first_page() + byte_off;
+			assert((PAGE_SIZE - (off % PAGE_SIZE)) % sizeof(T) == 0);
 			assert(arr->get_size() % sizeof(T) == 0);
 
 			// This iterator can change data, so I set all pages that can be
 			// accessed by the iterator dirty.
 			int num_pages = (arr->get_offset_in_first_page()
 					+ arr->get_size()) / PAGE_SIZE;
-			for (int i = 0; i < num_pages; i++)
+			for (int i = off / PAGE_SIZE; i < num_pages; i++)
 				arr->get_page(i)->set_dirty(true);
 		}
 
@@ -634,8 +634,8 @@ public:
 	};
 
 	template<class T>
-	const_iterator<T> begin() const {
-		return const_iterator<T>(this);
+	const_iterator<T> begin(int byte_off = 0) const {
+		return const_iterator<T>(this, byte_off);
 	}
 
 	template<class T>
@@ -646,8 +646,8 @@ public:
 	}
 
 	template<class T>
-	iterator<T> begin() {
-		return iterator<T>(this);
+	iterator<T> begin(int byte_off = 0) {
+		return iterator<T>(this, byte_off);
 	}
 
 	template<class T>
