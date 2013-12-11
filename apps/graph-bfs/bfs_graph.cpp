@@ -28,7 +28,7 @@
 
 atomic_integer num_visited_vertices;
 
-void bfs_vertex::run(graph_engine &graph, const ext_mem_vertex vertices[],
+void bfs_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 			int num)
 {
 	vertex_id_t max_id = graph.get_max_vertex_id();
@@ -37,8 +37,11 @@ void bfs_vertex::run(graph_engine &graph, const ext_mem_vertex vertices[],
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	std::vector<vertex_id_t> activated_vertices;
-	for (int j = 0; j < this->get_num_edges(OUT_EDGE); j++) {
-		vertex_id_t id = this->get_edge(OUT_EDGE, j).get_to();
+	page_byte_array::const_iterator<vertex_id_t> end_it
+		= this->get_neigh_end(OUT_EDGE);
+	for (page_byte_array::const_iterator<vertex_id_t> it
+			= this->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
+		vertex_id_t id = *it;
 		assert(id >= min_id && id <= max_id);
 		bfs_vertex &info = (bfs_vertex &) graph.get_vertex(id);
 		// If the vertex has been visited, we can skip it.

@@ -33,7 +33,7 @@ class graph_engine;
 class compute_vertex: public in_mem_vertex_info
 {
 	atomic_flags<long> activated_levels;
-	ext_mem_vertex vertex;
+	const page_vertex *vertex;
 public:
 
 	compute_vertex(vertex_id_t id, off_t off, int size): in_mem_vertex_info(
@@ -62,7 +62,7 @@ public:
 	 * This method materializes the vertex so it has the full information of
 	 * the vertex.
 	 */
-	void materialize(const ext_mem_vertex &vertex) {
+	void materialize(const page_vertex *vertex) {
 		this->vertex = vertex;
 	}
 
@@ -70,33 +70,31 @@ public:
 	 * This method removes the adjacency list of the vertex.
 	 */
 	void dematerialize() {
-		this->vertex.clear();
+		this->vertex = NULL;
 	}
 
 	/**
 	 * Test whether if the vertex has the full information.
 	 */
 	bool is_materialized() const {
-		return vertex.is_valid();
+		return vertex != NULL;
 	}
 
 	int get_num_edges(edge_type type) {
-		return vertex.get_num_edges(type);
+		return vertex->get_num_edges(type);
 	}
 
-	const edge get_edge(edge_type type, int idx) const {
-		return vertex.get_edge(type, idx);
+	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
+			edge_type type) const {
+		return vertex->get_neigh_begin(type);
 	}
 
-	vertex_id_t get_neighbor(edge_type type, int idx) const {
-		return vertex.get_neighbor(type, idx);
+	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
+			edge_type type) const {
+		return vertex->get_neigh_end(type);
 	}
 
-	bool is_edge_list_sorted(edge_type type) const {
-		return vertex.is_edge_list_sorted(type);
-	}
-
-	virtual void run(graph_engine &graph, const ext_mem_vertex vertices[],
+	virtual void run(graph_engine &graph, const page_vertex *vertices[],
 			int num) = 0;
 };
 

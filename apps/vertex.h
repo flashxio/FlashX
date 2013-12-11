@@ -262,10 +262,7 @@ public:
 	page_directed_vertex(const page_byte_array &arr): array(arr) {
 		unsigned size = arr.get_size();
 		assert((unsigned) size >= sizeof(ext_mem_directed_vertex));
-		ext_mem_directed_vertex v;
-		page_byte_array::const_iterator<ext_mem_directed_vertex> head_it
-			= arr.begin<ext_mem_directed_vertex>();
-		v = *head_it;
+		ext_mem_directed_vertex v = arr.get<ext_mem_directed_vertex>(0);
 		assert((unsigned) size >= sizeof(ext_mem_directed_vertex)
 				+ (v.get_num_in_edges() + v.get_num_out_edges()) * sizeof(vertex_id_t));
 
@@ -323,10 +320,7 @@ public:
 	page_undirected_vertex(const page_byte_array &arr): array(arr) {
 		unsigned size = arr.get_size();
 		assert((unsigned) size >= sizeof(ext_mem_undirected_vertex));
-		ext_mem_undirected_vertex v;
-		page_byte_array::const_iterator<ext_mem_undirected_vertex> head_it
-			= arr.begin<ext_mem_undirected_vertex>();
-		v = *head_it;
+		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 		assert((unsigned) size >= sizeof(ext_mem_undirected_vertex)
 				+ sizeof(vertex_id_t) * v.get_num_edges(BOTH_EDGES));
 
@@ -354,6 +348,12 @@ public:
 		return id;
 	}
 };
+
+/**
+ * This is the size of a page vertex (either directed or undirected).
+ * It's mainly used for allocating a buffer from the stack for a page vertex.
+ */
+const int STACK_PAGE_VERTEX_SIZE = sizeof(page_directed_vertex);
 
 class in_mem_directed_vertex
 {

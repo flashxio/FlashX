@@ -55,7 +55,7 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
-	void run(graph_engine &graph, const ext_mem_vertex vertices[],
+	void run(graph_engine &graph, const page_vertex *vertices[],
 			int num);
 };
 

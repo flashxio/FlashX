@@ -23,6 +23,7 @@
 #endif
 
 #include "io_interface.h"
+#include "slab_allocator.h"
 
 #include "graph_config.h"
 #include "graph_engine.h"
@@ -34,17 +35,58 @@ graph_config graph_conf;
 /**
  * This callback is to process a vertex.
  */
-class vertex_callback: public callback
+class vertex_compute: public user_compute
 {
 	graph_engine *graph;
-	io_interface *io;
 public:
-	vertex_callback(graph_engine *graph, io_interface *io) {
+	vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): user_compute(alloc) {
 		this->graph = graph;
-		this->io = io;
 	}
 
-	int invoke(io_request *reqs[], int num);
+	virtual int serialize(char *buf, int size) const {
+		return 0;
+	}
+
+	virtual int get_serialized_size() const {
+		return 0;
+	}
+
+	virtual void run(page_byte_array &);
+};
+
+class vertex_compute_allocator: public compute_allocator
+{
+	class compute_initiator: public obj_initiator<vertex_compute>
+	{
+		graph_engine *graph;
+		vertex_compute_allocator *alloc;
+	public:
+		compute_initiator(graph_engine *graph, vertex_compute_allocator *alloc) {
+			this->graph = graph;
+			this->alloc = alloc;
+		}
+
+		virtual void init(vertex_compute *obj) {
+			new (obj) vertex_compute(graph, alloc);
+		}
+	};
+
+	obj_allocator<vertex_compute> allocator;
+public:
+	vertex_compute_allocator(graph_engine *graph, thread *t): allocator(
+			"vertex-compute-allocator", t->get_node_id(), PAGE_SIZE, INT_MAX,
+			// TODO memory leak here
+			new compute_initiator(graph, this)) {
+	}
+
+	virtual user_compute *alloc() {
+		return allocator.alloc_obj();
+	}
+
+	virtual void free(user_compute *obj) {
+		allocator.free((vertex_compute *) obj);
+	}
 };
 
 #if 0
@@ -57,7 +99,7 @@ class pending_vertex: public ext_mem_vertex
 	pending_vertex(const ext_mem_vertex &v,
 			edge_type required_neighbor_type): ext_mem_vertex(v) {
 		num_completed_neighbors = 0;
-		this->required_neighbor_type = required_neighbor_type;
+		 this->required_neighbor_type = required_neighbor_type;
 	}
 
 	pending_vertex(char *buf, int size, bool directed,
@@ -137,6 +179,7 @@ class worker_thread: public thread
 	file_io_factory *factory;
 	io_interface *io;
 	graph_engine *graph;
+	compute_allocator *alloc;
 
 #if 0
 	/* 
@@ -164,6 +207,11 @@ public:
 		this->graph = graph;
 		this->io = NULL;
 		this->factory = factory;
+		alloc = new vertex_compute_allocator(graph, this);
+	}
+
+	~worker_thread() {
+		delete alloc;
 	}
 
 	void run();
@@ -186,60 +234,56 @@ public:
 	int process_activated_vertices(int max);
 };
 
-int vertex_callback::invoke(io_request *reqs[], int num)
+void vertex_compute::run(page_byte_array &array)
 {
-	worker_thread *curr_thread = (worker_thread *) thread::get_curr_thread();
-	for (int i = 0; i < num; i++) {
-		char *req_buf = reqs[i]->get_buf();
-		size_t req_size = reqs[i]->get_size();
-		assert(this->io == reqs[i]->get_io());
-		ext_mem_vertex ext_v(req_buf, req_size, graph->is_directed());
-		// If the algorithm doesn't need to get the full information
-		// of their neighbors
-		if (graph->get_required_neighbor_type() == edge_type::NONE
-				// Or the vertex doesn't have neighbors.
-				|| (reqs[i]->get_user_data() == NULL
-					&& ext_v.get_num_edges(graph->get_required_neighbor_type()) == 0)) {
-			// We can run user's code immediately on the vertex.
-			compute_vertex &v = graph->get_vertex(ext_v.get_id());
-			v.materialize(ext_v);
-			v.run(*graph, NULL, 0);
-			v.dematerialize();
-			delete [] req_buf;
-		}
-#if 0
-		// We just fetched a vertex, we need to fetch its neighbors to
-		// perform computation.
-		else if (reqs[i]->get_user_data() == NULL) {
-			curr_thread->add_pending_vertex(ext_v);
-		}
-		else {
-			// Now a neighbor has been fetched, now we can do some computation
-			// between the original pending vertex and its neighbor.
-			pending_vertex *pending
-				= (pending_vertex *) reqs[i]->get_user_data();
-			compute_vertex &v = graph->get_vertex(
-					pending->get_id());
-			// We materialize the vertex and perform computation.
-			// The callback function is guaranteed to be called in the thread
-			// where a request is issued. Since all requests of fetching
-			// neighbors are issued by one thread, we don't need to use a lock
-			// to protect the pending vertex from concurrent access.
-			v.materialize(*pending);
-			v.run(*graph, &ext_v, 1);
-			v.dematerialize();
-			// The buffer contains the info of the neighbor, no we don't need
-			// it any more.
-			delete [] req_buf;
-			pending->complete_neighbor();
-			// Once we perform computation on all neighbors. We can destroy
-			// the pending vertex.
-			if (pending->is_complete())
-				pending_vertex::destroy(pending);
-		}
-#endif
+	char buf[STACK_PAGE_VERTEX_SIZE];
+	page_vertex *ext_v;
+	if (graph->is_directed())
+		ext_v = new (buf) page_directed_vertex(array);
+	else
+		ext_v = new (buf) page_undirected_vertex(array);
+	// If the algorithm doesn't need to get the full information
+	// of their neighbors
+	if (graph->get_required_neighbor_type() == edge_type::NONE
+			// Or the vertex doesn't have neighbors.
+			|| ext_v->get_num_edges(graph->get_required_neighbor_type()) == 0) {
+		// We can run user's code immediately on the vertex.
+		compute_vertex &v = graph->get_vertex(ext_v->get_id());
+		v.materialize(ext_v);
+		v.run(*graph, NULL, 0);
+		v.dematerialize();
 	}
-	return 0;
+#if 0
+	// We just fetched a vertex, we need to fetch its neighbors to
+	// perform computation.
+	else if (reqs[i]->get_user_data() == NULL) {
+		curr_thread->add_pending_vertex(ext_v);
+	}
+	else {
+		// Now a neighbor has been fetched, now we can do some computation
+		// between the original pending vertex and its neighbor.
+		pending_vertex *pending
+			= (pending_vertex *) reqs[i]->get_user_data();
+		compute_vertex &v = graph->get_vertex(
+				pending->get_id());
+		// We materialize the vertex and perform computation.
+		// The callback function is guaranteed to be called in the thread
+		// where a request is issued. Since all requests of fetching
+		// neighbors are issued by one thread, we don't need to use a lock
+		// to protect the pending vertex from concurrent access.
+		v.materialize(*pending);
+		v.run(*graph, &ext_v, 1);
+		v.dematerialize();
+		// The buffer contains the info of the neighbor, no we don't need
+		// it any more.
+		delete [] req_buf;
+		pending->complete_neighbor();
+		// Once we perform computation on all neighbors. We can destroy
+		// the pending vertex.
+		if (pending->is_complete())
+			pending_vertex::destroy(pending);
+	}
+#endif
 }
 
 class sorted_vertex_queue
@@ -353,7 +397,6 @@ void worker_thread::init()
 {
 	io = factory->create_io(this);
 	io->init();
-	io->set_callback(new vertex_callback(graph, io));
 }
 
 #if 0
@@ -441,7 +484,7 @@ int worker_thread::process_activated_vertices(int max)
 	for (int i = 0; i < num; i++) {
 		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
 		data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
-		reqs[i].init(new char[info.get_ext_mem_size()], loc,
+		reqs[i] = io_request(alloc->alloc(), loc,
 				// TODO I might need to set the node id.
 				info.get_ext_mem_size(), READ, io, -1);
 	}
