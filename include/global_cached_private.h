@@ -210,7 +210,8 @@ inline void original_io_request::compute()
 		assert(status_arr[i].pg);
 		status_arr[i].pg->dec_ref();
 	}
-	delete get_compute();
+	compute_allocator *alloc = get_compute()->get_allocator();
+	alloc->free(get_compute());
 }
 
 class global_cached_io: public io_interface

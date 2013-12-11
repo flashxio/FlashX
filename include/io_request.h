@@ -161,14 +161,31 @@ public:
 const int MAX_INLINE_SIZE=128;
 
 class page_byte_array;
+class compute_allocator;
 class user_compute
 {
+	compute_allocator *alloc;
 public:
+	user_compute(compute_allocator *alloc) {
+		this->alloc = alloc;
+	}
+
+	compute_allocator *get_allocator() const {
+		return alloc;
+	}
+
 	virtual ~user_compute() {
 	}
 	virtual int serialize(char *buf, int size) const = 0;
 	virtual int get_serialized_size() const = 0;
 	virtual void run(page_byte_array &) = 0;
+};
+
+class compute_allocator
+{
+public:
+	virtual user_compute *alloc() = 0;
+	virtual void free(user_compute *) = 0;
 };
 
 typedef int file_id_t;
