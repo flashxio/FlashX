@@ -9,3 +9,4 @@ buf_size=16777216
 root_conf=conf/data_files.txt
 #use_flusher=
 cache_large_write=
+merge_reqs=
