@@ -47,6 +47,7 @@ public:
 	int invoke(io_request *reqs[], int num);
 };
 
+#if 0
 class pending_vertex: public ext_mem_vertex
 {
 	// The number of neighbors that have been fetched from disks.
@@ -129,6 +130,7 @@ public:
 		return vertex;
 	}
 };
+#endif
 
 class worker_thread: public thread
 {
@@ -136,6 +138,7 @@ class worker_thread: public thread
 	io_interface *io;
 	graph_engine *graph;
 
+#if 0
 	/* 
 	 * Some graph algorithms such as triangle counting require to join
 	 * the adjacency lists of two vertices. When we fetch one of the vertices,
@@ -152,12 +155,12 @@ class worker_thread: public thread
 	 * number of the adjacency lists of the neighbors until we fetch all.
 	 */
 	pending_neighbor_collection curr_pending;
+#endif
 
 	std::vector<vertex_id_t> activated_vertices;
 public:
 	worker_thread(graph_engine *graph, file_io_factory *factory,
-			int node_id): thread("worker_thread", node_id), pending_vertices(
-				-1, 1024, true) {
+			int node_id): thread("worker_thread", node_id) {
 		this->graph = graph;
 		this->io = NULL;
 		this->factory = factory;
@@ -170,15 +173,17 @@ public:
 		return activated_vertices;
 	}
 
+#if 0
 	void add_pending_vertex(ext_mem_vertex v) {
 		if (pending_vertices.is_full())
 			pending_vertices.expand_queue(pending_vertices.get_size() * 2);
 		pending_vertices.push_back(v);
 	}
-
 	int process_pending_vertex(int max);
-	int process_activated_vertices(int max);
 	int process_pending_vertices(int max);
+#endif
+
+	int process_activated_vertices(int max);
 };
 
 int vertex_callback::invoke(io_request *reqs[], int num)
@@ -202,6 +207,7 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 			v.dematerialize();
 			delete [] req_buf;
 		}
+#if 0
 		// We just fetched a vertex, we need to fetch its neighbors to
 		// perform computation.
 		else if (reqs[i]->get_user_data() == NULL) {
@@ -231,6 +237,7 @@ int vertex_callback::invoke(io_request *reqs[], int num)
 			if (pending->is_complete())
 				pending_vertex::destroy(pending);
 		}
+#endif
 	}
 	return 0;
 }
@@ -349,6 +356,7 @@ void worker_thread::init()
 	io->set_callback(new vertex_callback(graph, io));
 }
 
+#if 0
 /**
  * When we fetch all neighbors of a vertex, the number of neighbors of
  * a vertex may exceeds the maximal number of pending I/O requests allowed
@@ -417,6 +425,7 @@ int worker_thread::process_pending_vertices(int max)
 	}
 	return num_processed;
 }
+#endif
 
 /**
  * This is to process the activated vertices in the current iteration.
@@ -453,9 +462,11 @@ void worker_thread::run()
 		printf("thread %d process %d activated vertices\n", get_id(), num);
 		num_visited += num;
 		while (graph->get_num_curr_activated_vertices() > 0) {
+#if 0
 			while (process_pending_vertices(
 						MAX_IO_PEND_VERTICES - io->num_pending_ios()) > 0)
 				io->wait4complete(io->num_pending_ios() / 10);
+#endif
 			num = process_activated_vertices(
 					MAX_IO_PEND_VERTICES - io->num_pending_ios());
 			num_visited += num;
@@ -465,7 +476,9 @@ void worker_thread::run()
 		// We have completed processing the activated vertices in this iteration.
 		while (io->num_pending_ios() > 0) {
 			io->wait4complete(1);
+#if 0
 			process_pending_vertices(MAX_IO_PEND_VERTICES - io->num_pending_ios());
+#endif
 		}
 		printf("thread %d visited %d vertices\n", this->get_id(), num_visited);
 

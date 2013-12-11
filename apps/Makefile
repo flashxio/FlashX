@@ -42,7 +42,7 @@ CC = gcc
 CXX = g++
 endif
 
-all: libgraph graph-bfs triangle-counting tools
+all: libgraph graph-bfs tools
 
 libgraph: $(OBJS)
 	rm -f libgraph.a
