@@ -27,6 +27,8 @@
 #include "config.h"
 
 class cleanup_callback;
+class sum_compute_allocator;
+class write_compute_allocator;
 
 /* this data structure stores the thread-private info. */
 class thread_private: public thread
@@ -56,6 +58,9 @@ class thread_private: public thread
 	
 	struct timeval start_time, end_time;
 
+	sum_compute_allocator *sum_alloc;
+	write_compute_allocator *write_alloc;
+
 #ifdef STATISTICS
 public:
 	atomic_integer num_completes;
@@ -75,21 +80,7 @@ public:
 	}
 
 	thread_private(int node_id, int idx, int entry_size,
-			file_io_factory *factory, workload_gen *gen): thread(
-				std::string("test_thread") + itoa(idx), node_id) {
-		this->cb = NULL;
-		this->node_id = node_id;
-		this->idx = idx;
-		buf = NULL;
-		this->gen = gen;
-		this->io = NULL;
-		this->factory = factory;
-		read_bytes = 0;
-		num_accesses = 0;
-		num_sampling = 0;
-		tot_num_pending = 0;
-		max_num_pending = 0;
-	}
+			file_io_factory *factory, workload_gen *gen);
 
 	int attach2cpu();
 

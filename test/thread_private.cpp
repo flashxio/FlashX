@@ -92,6 +92,9 @@ public:
 class sum_user_compute: public user_compute
 {
 public:
+	sum_user_compute(compute_allocator *alloc): user_compute(alloc) {
+	}
+
 	virtual int serialize(char *buf, int size) const {
 		assert(0);
 		return 0;
@@ -120,7 +123,12 @@ class write_user_compute: public user_compute
 {
 	int file_id;
 public:
-	write_user_compute(int file_id) {
+	write_user_compute(compute_allocator *alloc): user_compute(
+			alloc) {
+		this->file_id = -1;
+	}
+
+	void init(int file_id) {
 		this->file_id = file_id;
 	}
 
@@ -145,11 +153,95 @@ public:
 	}
 };
 
+class write_compute_allocator: public compute_allocator
+{
+	class compute_initiator: public obj_initiator<write_user_compute>
+	{
+		write_compute_allocator *alloc;
+	public:
+		compute_initiator(write_compute_allocator *alloc) {
+			this->alloc = alloc;
+		}
+
+		virtual void init(write_user_compute *obj) {
+			new (obj) write_user_compute(alloc);
+		}
+	};
+
+	obj_allocator<write_user_compute> allocator;
+public:
+	write_compute_allocator(thread *t): allocator("write-compute-allocator",
+			t->get_node_id(), PAGE_SIZE, INT_MAX,
+			// TODO memory leak
+			new compute_initiator(this)) {
+	}
+
+	virtual user_compute *alloc() {
+		return allocator.alloc_obj();
+	}
+
+	virtual void free(user_compute *obj) {
+		allocator.free((write_user_compute *) obj);
+	}
+};
+
+class sum_compute_allocator: public compute_allocator
+{
+	class compute_initiator: public obj_initiator<sum_user_compute>
+	{
+		sum_compute_allocator *alloc;
+	public:
+		compute_initiator(sum_compute_allocator *alloc) {
+			this->alloc = alloc;
+		}
+
+		virtual void init(sum_user_compute *obj) {
+			new (obj) sum_user_compute(alloc);
+		}
+	};
+
+	obj_allocator<sum_user_compute> allocator;
+public:
+	sum_compute_allocator(thread *t): allocator("sum-compute-allocator",
+			t->get_node_id(), PAGE_SIZE, INT_MAX,
+			// TODO memory leak
+			new compute_initiator(this)) {
+	}
+
+	virtual user_compute *alloc() {
+		return allocator.alloc_obj();
+	}
+
+	virtual void free(user_compute *obj) {
+		allocator.free((sum_user_compute *) obj);
+	}
+};
+
 ssize_t thread_private::get_read_bytes() {
 	if (cb)
 		return cb->get_size();
 	else
 		return read_bytes;
+}
+
+thread_private::thread_private(int node_id, int idx, int entry_size,
+		file_io_factory *factory, workload_gen *gen): thread(
+			std::string("test_thread") + itoa(idx), node_id)
+{
+	this->cb = NULL;
+	this->node_id = node_id;
+	this->idx = idx;
+	buf = NULL;
+	this->gen = gen;
+	this->io = NULL;
+	this->factory = factory;
+	read_bytes = 0;
+	num_accesses = 0;
+	num_sampling = 0;
+	tot_num_pending = 0;
+	max_num_pending = 0;
+	sum_alloc = new sum_compute_allocator(this);
+	write_alloc = new write_compute_allocator(this);
 }
 
 void thread_private::init() {
@@ -172,14 +264,19 @@ class work2req_converter
 	int align_size;
 	rand_buf *buf;
 	io_interface *io;
+	sum_compute_allocator *sum_alloc;
+	write_compute_allocator *write_alloc;
 public:
-	work2req_converter(io_interface *io, rand_buf * buf, int align_size) {
+	work2req_converter(io_interface *io, rand_buf * buf, int align_size,
+			sum_compute_allocator *sum_alloc, write_compute_allocator *write_alloc) {
 		workload.off = -1;
 		workload.size = -1;
 		workload.read = 0;
 		this->align_size = align_size;
 		this->buf = buf;
 		this->io = io;
+		this->sum_alloc = sum_alloc;
+		this->write_alloc = write_alloc;
 	}
 
 	void init(const workload_t &workload) {
@@ -231,12 +328,17 @@ int work2req_converter::to_reqs(io_interface *io, int buf_type, int num,
 
 			if (config.is_user_compute()) {
 				data_loc_t loc(io->get_file_id(), off);
-				if (access_method == READ)
-					reqs[i] = io_request(new sum_user_compute(), loc,
-							next_off - off, access_method, io, node_id);
-				else
-					reqs[i] = io_request(new write_user_compute(io->get_file_id()),
-							loc, next_off - off, access_method, io, node_id);
+				if (access_method == READ) {
+					sum_user_compute *compute = (sum_user_compute *) sum_alloc->alloc();
+					reqs[i] = io_request(compute, loc, next_off - off,
+							access_method, io, node_id);
+				}
+				else {
+					write_user_compute *compute = (write_user_compute *) write_alloc->alloc();
+					compute->init(io->get_file_id());
+					reqs[i] = io_request(compute, loc, next_off - off,
+							access_method, io, node_id);
+				}
 			}
 			else {
 
@@ -260,12 +362,17 @@ int work2req_converter::to_reqs(io_interface *io, int buf_type, int num,
 	else {
 		if (config.is_user_compute()) {
 			data_loc_t loc(io->get_file_id(), off);
-			if (access_method == READ)
-				reqs[0] = io_request(new sum_user_compute(), loc, size,
-						access_method, io, node_id);
-			else
-				reqs[0] = io_request(new write_user_compute(io->get_file_id()),
-						loc, size, access_method, io, node_id);
+			if (access_method == READ) {
+				sum_user_compute *compute = (sum_user_compute *) sum_alloc->alloc();
+				reqs[0] = io_request(compute, loc, size, access_method,
+						io, node_id);
+			}
+			else {
+				write_user_compute *compute = (write_user_compute *) write_alloc->alloc();
+				compute->init(io->get_file_id());
+				reqs[0] = io_request(compute, loc, size, access_method, io,
+						node_id);
+			}
 			workload.off += size;
 			workload.size = 0;
 			return 1;
@@ -295,7 +402,7 @@ void thread_private::run()
 	if (!config.is_use_aio()) {
 		entry = (char *) valloc(config.get_entry_size());
 	}
-	work2req_converter converter(io, buf, align_size);
+	work2req_converter converter(io, buf, align_size, sum_alloc, write_alloc);
 	while (gen->has_next()) {
 		if (config.is_use_aio()) {
 			int i;
