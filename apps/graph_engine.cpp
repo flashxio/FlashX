@@ -498,7 +498,7 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	assert(num_threads % num_nodes == 0);
 	for (int i = 0; i < num_threads; i++) {
 		worker_thread *t = new worker_thread(this, factory,
-				num_threads % num_nodes);
+				i % num_nodes);
 		worker_threads.push_back(t);
 	}
 	first_thread = worker_threads[0];
