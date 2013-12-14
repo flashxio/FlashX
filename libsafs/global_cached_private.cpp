@@ -1048,7 +1048,8 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 				}
 
 				/* The page is evicted in this thread */
-				if (old_id.get_offset() != ROUND_PAGE(offset) && old_id.get_offset() != -1) {
+				assert(old_id.get_offset() != tmp_off);
+				if (old_id.get_offset() != -1) {
 					/*
 					 * Only one thread can come here because only one thread
 					 * can evict the dirty page and the thread gets its old
