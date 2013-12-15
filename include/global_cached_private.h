@@ -216,31 +216,98 @@ inline void original_io_request::compute()
 
 class global_cached_io: public io_interface
 {
+	/**
+	 * This class represents a request that is being processed by global_cached_io.
+	 */
+	class partial_request
+	{
+		io_request req;
+		off_t begin_pg_offset;
+		off_t end_pg_offset;
+		off_t curr_pg_offset;
+		original_io_request *orig;
+	public:
+		void init(const io_request &req) {
+			this->req = req;
+			begin_pg_offset = ROUND_PAGE(req.get_offset());
+			end_pg_offset = ROUNDUP_PAGE(req.get_offset() + req.get_size());
+			curr_pg_offset = begin_pg_offset;
+			orig = NULL;
+		}
+
+		bool is_empty() const {
+			return curr_pg_offset == end_pg_offset;
+		}
+
+		page_id_t get_curr_page_id() const {
+			page_id_t pg_id(req.get_file_id(), curr_pg_offset);
+			return pg_id;
+		}
+
+		void move_next() {
+			curr_pg_offset += PAGE_SIZE;
+		}
+
+		const io_request &get_request() const {
+			return req;
+		}
+
+		void init_orig(original_io_request *orig, io_interface *io) {
+			this->orig = orig;
+			orig->init(req);
+			io_interface *orig_io = orig->get_io();
+			orig->set_io(io);
+			orig->set_orig_io(orig_io);
+		}
+
+		original_io_request *get_orig() const {
+			return orig;
+		}
+
+		size_t get_remaining_size() const {
+			off_t curr = curr_pg_offset;
+			if (curr < req.get_offset())
+				curr = req.get_offset();
+			return req.get_offset() + req.get_size() - curr;
+		}
+	};
+
 	long cache_size;
 	page_cache *global_cache;
 	/* the underlying IO. */
 	io_interface *underlying;
 	callback *cb;
 
-	/**
-	 * If a thread wants to issue a request but only allows non-blocking
-	 * operations, the request should be added to the queue. All requests
-	 * will be issued to the underlying IO in the user's thread when 
-	 * the next user IO comes.
-	 */
-	thread_safe_FIFO_queue<page_req_pair> pending_requests;
-
 	request_allocator *req_allocator;
 	req_ext_allocator *ext_allocator;
 
+	// This contains the original requests issued by the application.
+	// An original request is placed in this queue when the I/O on a page
+	// covered by the request is complete.
+	// We need this queue because there is no guarantee that the requests
+	// queued on the page are from the same global_cached_io. Once the I/O
+	// on the page completes, all requests on the page will be sent to the
+	// global_cached_io where the requests were generated.
+	thread_safe_FIFO_queue<page_req_pair> pending_requests;
+
 	// It contains the completed asynchronous user requests.
 	thread_safe_FIFO_queue<original_io_request *> complete_queue;
+	// It contains the completed requests issued to the underlying IO by
+	// global_cached_io.
 	thread_safe_FIFO_queue<io_request> completed_disk_queue;
 
 	// This contains the requests issued to the underlying IO.
 	// There is only one thread that can access the request buffer,
 	// it doesn't need to be thread-safe.
 	std::vector<io_request> underlying_requests;
+
+	// This contains the requests in the fast process path.
+	std::vector<std::pair<io_request, thread_safe_page *> > cached_requests;
+	// This contains the requests from the application.
+	fifo_queue<io_request> user_requests;
+	// This contains a request from the application. It contains a request
+	// in progress.
+	partial_request processing_req;
 
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
@@ -254,9 +321,8 @@ class global_cached_io: public io_interface
 	// Count the number of async requests.
 	atomic_integer num_completed_areqs;
 	atomic_integer num_issued_areqs;
-#ifdef STATISTICS
+	atomic_integer num_to_underlying;
 	atomic_integer num_from_underlying;
-#endif
 
 	/**
 	 * It's another version of read() and write(), but it's responsible
@@ -275,6 +341,7 @@ class global_cached_io: public io_interface
 		}
 		else {
 			io_status status;
+			num_to_underlying.inc(1);
 			underlying->access(&req, 1, &status);
 			if (status == IO_FAIL) {
 				abort();
@@ -315,8 +382,13 @@ public:
 	ssize_t read(io_request &req, thread_safe_page *pages[], int npages,
 			original_io_request *orig);
 
-	void process_cached_reqs(io_request *cached_reqs[],
-			thread_safe_page *cached_pages[], int num_cached_reqs);
+	// Finish processing cached I/O requests.
+	void process_cached_reqs();
+	// Process a request from the application.
+	void process_user_req(std::vector<thread_safe_page *> &dirty_pages,
+			io_status *status);
+	// Process the remaining requests issued by the application.
+	void process_user_reqs();
 
 	void queue_requests(page_req_pair reqs[], int num) {
 		pending_requests.addByForce(reqs, num);
@@ -375,9 +447,9 @@ public:
 	 */
 	int process_completed_requests();
 	/**
-	 * Process all completed users' requests as well as pending requests.
+	 * Process all queued requests.
 	 */
-	void process_all_completed_requests();
+	void process_all_requests();
 
 	bool has_pending_requests() {
 		return !pending_requests.is_empty();

@@ -355,9 +355,7 @@ int global_cached_io::multibuf_completion(io_request *request)
 void global_cached_io::process_disk_completed_requests(io_request requests[],
 		int num)
 {
-#ifdef STATISTICS
 	num_from_underlying.inc(num);
-#endif
 	std::vector<page_req_pair> pending_reqs;
 	for (int i = 0; i < num; i++) {
 		io_request *request = &requests[i];
@@ -439,7 +437,8 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 			COMPLETE_QUEUE_SIZE, INT_MAX),
 	completed_disk_queue(std::string("gcached_complete_disk_queue-") + itoa(
 				underlying->get_node_id()), underlying->get_node_id(),
-			COMPLETE_QUEUE_SIZE, INT_MAX)
+			COMPLETE_QUEUE_SIZE, INT_MAX),
+	user_requests(underlying->get_node_id(), COMPLETE_QUEUE_SIZE, true)
 {
 	assert(t == underlying->get_thread());
 	ext_allocator = new req_ext_allocator(underlying->get_node_id(),
@@ -593,7 +592,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 {
 	ssize_t ret = 0;
 
-	assert(npages <= MAX_NUM_IOVECS);
+	assert(npages <= params.get_RAID_block_size());
 
 	io_req_extension *ext = ext_allocator->alloc_obj();
 	io_request multibuf_req(ext, INVALID_DATA_LOC, req.get_access_method(), this,
@@ -823,6 +822,7 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	 * it with other flushes.
 	 */
 	io_status status;
+	num_to_underlying.inc(1);
 	underlying->access(&req, 1, &status);
 	if (status == IO_FAIL) {
 		abort();
@@ -897,26 +897,241 @@ thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
 	}
 }
 
-void global_cached_io::process_cached_reqs(io_request *cached_reqs[],
-		thread_safe_page *cached_pages[], int num_cached_reqs)
+void global_cached_io::process_cached_reqs()
 {
-	io_request *async_reqs[num_cached_reqs];
+	int num_cached_reqs = cached_requests.size();
+	stack_array<io_request *, 128> async_reqs(num_cached_reqs);
 	int num_async_reqs = 0;
 	num_fast_process += num_cached_reqs;
 	for (int i = 0; i < num_cached_reqs; i++) {
-		io_request *req = cached_reqs[i];
-		thread_safe_page *dirty = complete_cached_req(req, cached_pages[i]);
+		io_request *req = &cached_requests[i].first;
+		thread_safe_page *dirty = complete_cached_req(req,
+				cached_requests[i].second);
 		page_cache *cache = get_global_cache();
 		if (dirty)
 			cache->mark_dirty_pages(&dirty, 1, underlying);
-		cached_pages[i]->dec_ref();
+		cached_requests[i].second->dec_ref();
 		if (!req->is_sync())
 			async_reqs[num_async_reqs++] = req;
 	}
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
 	num_completed_areqs.inc(num_async_reqs);
-	::notify_completion(this, async_reqs, num_async_reqs);
+	::notify_completion(this, async_reqs.data(), num_async_reqs);
+	cached_requests.clear();
+}
+
+void global_cached_io::process_user_req(
+		std::vector<thread_safe_page *> &dirty_pages, io_status *status)
+{
+	size_t remaining_size = processing_req.get_remaining_size();
+	int pg_idx = 0;
+	// In max, we use the number of pages in the RAID block.
+	thread_safe_page *pages[params.get_RAID_block_size()];
+	int num_pages_hit = 0;
+	int num_bytes_completed = 0;
+	while (!processing_req.is_empty()) {
+		thread_safe_page *p;
+		page_id_t pg_id = processing_req.get_curr_page_id();
+		page_id_t old_id;
+		do {
+			p = (thread_safe_page *) (get_global_cache()
+					->search(pg_id, old_id));
+			// If the cache can't evict a page, it's probably because
+			// all pages have been referenced. It's likely that we issued
+			// too many requests. Let's stop issuing more requests for now.
+			if (p == NULL) {
+				fprintf(stderr, "thread %d can't evict a page\n", get_io_idx());
+				goto end;
+			}
+		} while (p == NULL);
+		processing_req.move_next();
+
+		num_accesses++;
+		if (num_accesses % 100 < params.get_test_hit_rate()) {
+			if (!p->data_ready()) {
+				p->set_io_pending(false);
+				p->set_data_ready(true);
+				old_id = page_id_t();
+				if (p->is_old_dirty()) {
+					p->set_dirty(false);
+					p->set_old_dirty(false);
+					p->set_io_pending(false);
+				}
+			}
+		}
+		/* 
+		 * If old_off is -1, it means search() didn't evict a page, i.e.,
+		 * it's a cache hit.
+		 */
+		if (old_id.get_offset() == -1) {
+#ifdef STATISTICS
+			cache_hits++;
+#endif
+			num_pages_hit++;
+			// Let's optimize for cached single-page requests by stealing
+			// them from normal code path of processing them.
+			if (processing_req.get_request().within_1page() && p->data_ready()) {
+				std::pair<io_request, thread_safe_page *> cached(
+						processing_req.get_request(), p);
+				cached_requests.push_back(cached);
+				break;
+			}
+		}
+		// We delay copying the IO request until here, so we don't
+		// need to do it for cached single-page requests..
+		if (processing_req.get_orig() == NULL) {
+			processing_req.init_orig(req_allocator->alloc_obj(), this);
+		}
+		/*
+		 * Cache may evict a dirty page and return the dirty page
+		 * to the user before it is written back to a file.
+		 *
+		 * We encounter a situation that two threads get the old dirty
+		 * evicted page, one thread gets its old offset thanks to
+		 * old_off, the other can't, so the other thread has to wait
+		 * until the dirty page is written to the file, and we need to
+		 * give the page another status to indicate it's an old dirty
+		 * page.
+		 */
+
+		/* This page has been evicted. */
+		if (p->is_old_dirty()) {
+			num_evicted_dirty_pages++;
+			/*
+			 * We got a few contiguous pages for read, so we should split
+			 * the request and issue reads for the contiguous pages first.
+			 * We always break write requests into pages, so it has to be
+			 * read requests.
+			 */
+			if (pg_idx) {
+				io_request req;
+				processing_req.get_orig()->extract(pages[0]->get_offset(),
+						pg_idx * PAGE_SIZE, req);
+				read(req, pages, pg_idx, processing_req.get_orig());
+				pg_idx = 0;
+			}
+
+			/* The page is evicted in this thread */
+			assert(old_id.get_offset() != pg_id.get_offset());
+			if (old_id.get_offset() != -1) {
+				/*
+				 * Only one thread can come here because only one thread
+				 * can evict the dirty page and the thread gets its old
+				 * offset, and only this thread can write back the old
+				 * dirty page.
+				 */
+				write_dirty_page(p, old_id, processing_req.get_orig());
+				continue;
+			}
+			else {
+				// At this moment, the page is being written back to the file
+				// by another thread. We should queue the request to tht page,
+				// so when the dirty page completes writing back, we can proceed
+				// writing.
+				p->lock();
+				if (p->is_old_dirty()) {
+					p->add_req(processing_req.get_orig());
+					p->unlock();
+					// the request has been added to the page, when the old dirty
+					// data is written back to the file, the write request will be
+					// reissued to the file.
+					continue;
+				}
+				else
+					p->unlock();
+			}
+		}
+
+		/*
+		 * Large access only makes sense for reading. As large writes
+		 * essentially overwrite entire pages in the memory, so we may
+		 * only need to read the first and the last pages.
+		 */
+		if (processing_req.get_orig()->get_access_method() == WRITE) {
+			num_bytes_completed += __write(processing_req.get_orig(), p,
+					dirty_pages);
+		}
+		else {
+			// Right now, we don't care in which nodes the pages are.
+			pages[pg_idx++] = p;
+			assert(pg_idx <= params.get_RAID_block_size());
+			if ((pages[0]->get_offset() + PAGE_SIZE * pg_idx)
+					% (params.get_RAID_block_size() * PAGE_SIZE) == 0) {
+				io_request req;
+				processing_req.get_orig()->extract(pages[0]->get_offset(),
+						pg_idx * PAGE_SIZE, req);
+				num_bytes_completed += read(req, pages, pg_idx,
+						processing_req.get_orig());
+				pg_idx = 0;
+			}
+		}
+	}
+
+end:
+	/*
+	 * The only reason that pg_idx > 0 is that there is a large read request.
+	 */
+	if (pg_idx) {
+		io_request req;
+		processing_req.get_orig()->extract(pages[0]->get_offset(),
+				pg_idx * PAGE_SIZE, req);
+		read(req, pages, pg_idx, processing_req.get_orig());
+	}
+
+	// If all pages accessed by the request are in the cache, the request
+	// can be completed by the time when the functions returns.
+	if (status) {
+		if (num_pages_hit == processing_req.get_request().get_num_covered_pages()
+				// It's possible that a request is completed in the slow path.
+				// The requested pages may become ready in the slow path;
+				// or we write the entire page.
+				|| num_bytes_completed == processing_req.get_request().get_size())
+			*status = IO_OK;
+		else {
+			assert(processing_req.get_orig());
+			*status = IO_PENDING;
+			status->set_priv_data((long) processing_req.get_orig());
+		}
+	}
+
+	// This is the amount of data processed in this function.
+	num_bytes += (remaining_size - processing_req.get_remaining_size());
+}
+
+void global_cached_io::process_user_reqs()
+{
+	std::vector<thread_safe_page *> dirty_pages;
+
+	// If we haven't finished processing a request, we need to continue
+	// processing it.
+	if (!processing_req.is_empty())
+		process_user_req(dirty_pages, NULL);
+
+	// Now we can process the remaining requests.
+	// If processing_req isn't empty, it's likely because there are too many
+	// referenced pages in the cache and we can't evict a page from a page set.
+	// So we can stop processing the remaining requests for now.
+	while (processing_req.is_empty() && !user_requests.is_empty()) {
+		io_request req = user_requests.pop_front();
+		// We don't allow the user's requests to be extended requests.
+		assert(!req.is_extended_req());
+		// TODO right now it only supports single-buf requests.
+		assert(req.get_num_bufs() == 1);
+
+		if (req.is_flush()) {
+			num_completed_areqs.inc(1);
+			continue;
+		}
+		processing_req.init(req);
+		process_user_req(dirty_pages, NULL);
+	}
+
+	process_cached_reqs();
+	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
+				dirty_pages.size(), underlying);
+
+	underlying->flush_requests();
 }
 
 void global_cached_io::access(io_request *requests, int num, io_status *status)
@@ -927,24 +1142,22 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	num_issued_areqs.inc(num);
 
-	stack_array<io_request *, 128> cached_reqs(num);
-	stack_array<thread_safe_page *, 128> cached_pages(num);
-	int num_cached_reqs = 0;
-
 	bool syncd = false;
 	std::vector<thread_safe_page *> dirty_pages;
+
+	if (!processing_req.is_empty()) {
+		process_user_req(dirty_pages, NULL);
+		if (!processing_req.is_empty()) {
+			user_requests.add(requests, num);
+			goto end;
+		}
+	}
+
 	for (int i = 0; i < num; i++) {
-		off_t offset = requests[i].get_offset();
-		int size = requests[i].get_size();
-		num_bytes += size;
 		// We don't allow the user's requests to be extended requests.
 		assert(!requests[i].is_extended_req());
-		off_t begin_pg_offset = ROUND_PAGE(offset);
-		off_t end_pg_offset = ROUNDUP_PAGE(offset + size);
-		thread_safe_page *pages[MAX_NUM_IOVECS];
 		// TODO right now it only supports single-buf requests.
 		assert(requests[i].get_num_bufs() == 1);
-		original_io_request *orig = NULL;
 
 		if (requests[i].is_flush()) {
 			syncd = true;
@@ -954,177 +1167,21 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		else if (requests[i].is_sync()) {
 			syncd = true;
 		}
-
-		int pg_idx = 0;
-		int num_pages_hit = 0;
-		int num_bytes_completed = 0;
-		for (off_t tmp_off = begin_pg_offset; tmp_off < end_pg_offset;
-				tmp_off += PAGE_SIZE) {
-			thread_safe_page *p;
-			
-			page_id_t pg_id(requests[i].get_file_id(), tmp_off);
-			page_id_t old_id;
-			do {
-				p = (thread_safe_page *) (get_global_cache()
-						->search(pg_id, old_id));
-				// If the cache can't evict a page, it's probably because
-				// all pages have been referenced. Let's flush all requests
-				// from the cached IO and process all completed requests,
-				// hopefully we can dereference the pages in the cache.
-				if (p == NULL) {
-					fprintf(stderr, "can't evict a page\n");
-					flush_requests();
-					process_all_completed_requests();
-				}
-			} while (p == NULL);
-
-			num_accesses++;
-			if (num_accesses % 100 < params.get_test_hit_rate()) {
-				if (!p->data_ready()) {
-					p->set_io_pending(false);
-					p->set_data_ready(true);
-					old_id = page_id_t();
-					if (p->is_old_dirty()) {
-						p->set_dirty(false);
-						p->set_old_dirty(false);
-						p->set_io_pending(false);
-					}
-				}
-			}
-			/* 
-			 * If old_off is -1, it means search() didn't evict a page, i.e.,
-			 * it's a cache hit.
-			 */
-			if (old_id.get_offset() == -1) {
-#ifdef STATISTICS
-				cache_hits++;
-#endif
-				num_pages_hit++;
-				// Let's optimize for cached single-page requests by stealing
-				// them from normal code path of processing them.
-				assert(requests[i].is_valid());
-				if (requests[i].within_1page() && p->data_ready()) {
-					cached_reqs[num_cached_reqs] = &requests[i];
-					cached_pages[num_cached_reqs] = p;
-					num_cached_reqs++;
-					break;
-				}
-			}
-			// We delay copying the IO request until here, so we don't
-			// need to do it for cached single-page requests..
-			if (orig == NULL) {
-				orig = req_allocator->alloc_obj();
-				orig->init(requests[i]);
-				io_interface *orig_io = orig->get_io();
-				orig->set_io(this);
-				orig->set_orig_io(orig_io);
-			}
-			/*
-			 * Cache may evict a dirty page and return the dirty page
-			 * to the user before it is written back to a file.
-			 *
-			 * We encounter a situation that two threads get the old dirty
-			 * evicted page, one thread gets its old offset thanks to
-			 * old_off, the other can't, so the other thread has to wait
-			 * until the dirty page is written to the file, and we need to
-			 * give the page another status to indicate it's an old dirty
-			 * page.
-			 */
-
-			/* This page has been evicted. */
-			if (p->is_old_dirty()) {
-				num_evicted_dirty_pages++;
-				/*
-				 * We got a few contiguous pages for read, so we should split
-				 * the request and issue reads for the contiguous pages first.
-				 * We always break write requests into pages, so it has to be
-				 * read requests.
-				 */
-				if (pg_idx) {
-					io_request req;
-					orig->extract(pages[0]->get_offset(), pg_idx * PAGE_SIZE, req);
-					read(req, pages, pg_idx, orig);
-					pg_idx = 0;
-				}
-
-				/* The page is evicted in this thread */
-				assert(old_id.get_offset() != tmp_off);
-				if (old_id.get_offset() != -1) {
-					/*
-					 * Only one thread can come here because only one thread
-					 * can evict the dirty page and the thread gets its old
-					 * offset, and only this thread can write back the old
-					 * dirty page.
-					 */
-					write_dirty_page(p, old_id, orig);
-					continue;
-				}
-				else {
-					// At this moment, the page is being written back to the file
-					// by another thread. We should queue the request to tht page,
-					// so when the dirty page completes writing back, we can proceed
-					// writing.
-					p->lock();
-					if (p->is_old_dirty()) {
-						p->add_req(orig);
-						p->unlock();
-						// the request has been added to the page, when the old dirty
-						// data is written back to the file, the write request will be
-						// reissued to the file.
-						continue;
-					}
-					else
-						p->unlock();
-				}
-			}
-
-			/*
-			 * Large access only makes sense for reading. As large writes
-			 * essentially overwrite entire pages in the memory, so we may
-			 * only need to read the first and the last pages.
-			 */
-			if (orig->get_access_method() == WRITE) {
-				num_bytes_completed += __write(orig, p, dirty_pages);
-			}
-			else {
-				// Right now, we don't care in which nodes the pages are.
-				pages[pg_idx++] = p;
-				if (pg_idx == MAX_NUM_IOVECS
-						|| (pages[0]->get_offset() + PAGE_SIZE * pg_idx)
-						% (params.get_RAID_block_size() * PAGE_SIZE) == 0) {
-					io_request req;
-					orig->extract(pages[0]->get_offset(), pg_idx * PAGE_SIZE, req);
-					num_bytes_completed += read(req, pages, pg_idx, orig);
-					pg_idx = 0;
-				}
-			}
-		}
-		/*
-		 * The only reason that pg_idx > 0 is that there is a large read request.
-		 */
-		if (pg_idx) {
-			io_request req;
-			orig->extract(pages[0]->get_offset(), pg_idx * PAGE_SIZE, req);
-			read(req, pages, pg_idx, orig);
-		}
-
-		// If all pages accessed by the request are in the cache, the request
-		// can be completed by the time when the functions returns.
-		if (status) {
-			if (num_pages_hit == (end_pg_offset - begin_pg_offset) / PAGE_SIZE
-					// It's possible that a request is completed in the slow path.
-					// The requested pages may become ready in the slow path;
-					// or we write the entire page.
-					|| num_bytes_completed == requests[i].get_size())
-				status[i] = IO_OK;
-			else {
-				assert(orig);
-				status[i] = IO_PENDING;
-				status[i].set_priv_data((long) orig);
-			}
+		assert(processing_req.is_empty());
+		processing_req.init(requests[i]);
+		io_status *stat_p = NULL;
+		if (status)
+			stat_p = &status[i];
+		process_user_req(dirty_pages, stat_p);
+		// We can't process all requests. Let's queue the remaining requests.
+		if (!processing_req.is_empty() && i < num - 1) {
+			user_requests.add(&requests[i + 1], num - i - 1);
+			break;
 		}
 	}
-	process_cached_reqs(cached_reqs.data(), cached_pages.data(), num_cached_reqs);
+
+end:
+	process_cached_reqs();
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), underlying);
 
@@ -1172,9 +1229,11 @@ int global_cached_io::preload(off_t start, long size) {
 	return 0;
 }
 
-void global_cached_io::process_all_completed_requests()
+void global_cached_io::process_all_requests()
 {
 	// We first process the completed requests from the disk.
+	// It will add completed user requests and pending requests to queues
+	// for further processing.
 	while (!completed_disk_queue.is_empty()) {
 		int num = completed_disk_queue.get_num_entries();
 		stack_array<io_request> reqs(num);
@@ -1182,25 +1241,27 @@ void global_cached_io::process_all_completed_requests()
 		process_disk_completed_requests(reqs.data(), ret);
 	}
 
-	// User requests are placed in the queue, so we need to process them
-	// here.
-	process_completed_requests();
-
 	// Process the requests that are pending on the pages.
+	// It may add completed user requests to queues for further processing. 
 	if (!pending_requests.is_empty()) {
 		handle_pending_requests();
 		// When processing the pending requests on the pages, we might issue
 		// more I/O requests. We need to flush these requests.
 		flush_requests();
-		// When handling pending requests, we may complete more user requests.
-		process_completed_requests();
 	}
+
+	// Process buffered user requests.
+	// It may add completed user requests to queues for further processing. 
+	process_user_reqs();
+
+	// Process completed user requests.
+	process_completed_requests();
 }
 
 void global_cached_io::wait4req(original_io_request *req)
 {
 	while (!req->is_complete()) {
-		process_all_completed_requests();
+		process_all_requests();
 		if (req->is_complete())
 			break;
 		get_thread()->wait();
@@ -1216,12 +1277,15 @@ int global_cached_io::wait4complete(int num_to_complete)
 	int pending = num_pending_ios();
 	num_to_complete = min(pending, num_to_complete);
 
-	process_all_completed_requests();
+	process_all_requests();
 	int iters = 0;
 	while (pending - num_pending_ios() < num_to_complete) {
 		iters++;
-		get_thread()->wait();
-		process_all_completed_requests();
+		// We only wait when there are pending requests in the underlying IO.
+		if (num_to_underlying.get() - num_from_underlying.get() > 0) {
+			get_thread()->wait();
+		}
+		process_all_requests();
 	}
 	return pending - num_pending_ios();
 }
@@ -1302,6 +1366,7 @@ void global_cached_io::flush_requests()
 			std::sort(underlying_requests.begin(),
 					underlying_requests.end(), req_off_comparator);
 		io_request req = underlying_requests[0];
+		int num_sent = 0;
 		for (unsigned i = 1; i < underlying_requests.size(); i++) {
 			io_request *under_req = &underlying_requests[i];
 
@@ -1317,6 +1382,7 @@ void global_cached_io::flush_requests()
 						req.get_size() + under_req->get_size())
 					// We can't merge the two requests.
 					|| !merge_req(req, *under_req)) {
+				num_sent++;
 				::access(underlying, req);
 
 				req = *under_req;
@@ -1328,6 +1394,8 @@ void global_cached_io::flush_requests()
 			}
 		}
 		underlying_requests.clear();
+		num_sent++;
+		num_to_underlying.inc(num_sent);
 		::access(underlying, req);
 	}
 	underlying->flush_requests();

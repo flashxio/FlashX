@@ -557,10 +557,10 @@ int node_cached_io::process_requests()
 	num_processed += num_received;
 	if (num_processed > 0) {
 		flush_requests();
-		process_all_completed_requests();
+		process_all_requests();
 	}
 	else
-		process_all_completed_requests();
+		process_all_requests();
 
 	num_requests += num_processed;
 	return num_processed;
