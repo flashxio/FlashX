@@ -161,6 +161,7 @@ void hash_cell::sanity_check()
 {
 	pthread_spin_lock(&_lock);
 	buf.sanity_check();
+	assert(!is_referenced());
 	pthread_spin_unlock(&_lock);
 }
 

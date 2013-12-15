@@ -273,6 +273,7 @@ file_io_factory *create_io_factory(const std::string &file_name,
 void destroy_io_factory(file_io_factory *factory);
 
 void init_io_system(const config_map &map);
+void destroy_io_system();
 const RAID_config &get_sys_RAID_conf();
 
 // This interface is used for debugging.

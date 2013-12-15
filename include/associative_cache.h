@@ -129,6 +129,13 @@ public:
 		return ret;
 	}
 
+	const T *get_page(int i) const {
+		int real_idx = maps[i];
+		const T *ret = &buf[real_idx];
+		assert(ret->get_data());
+		return ret;
+	}
+
 	int get_idx(T *page) const {
 		int idx = page - buf;
 		assert (idx >= 0 && idx < num_pages);
@@ -378,6 +385,12 @@ public:
 
 	/* For test. */
 	void sanity_check();
+	bool is_referenced() const {
+		for (unsigned i = 0; i < buf.get_num_pages(); i++)
+			if (buf.get_page(i)->get_ref() > 0)
+				return true;
+		return false;
+	}
 
 	long get_num_accesses() const {
 		return num_accesses;
@@ -576,7 +589,7 @@ public:
 
 	/* For test */
 	int get_num_used_pages() const;
-	void sanity_check() const;
+	virtual void sanity_check() const;
 
 	int get_num_dirty_pages() const;
 

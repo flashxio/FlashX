@@ -13,7 +13,7 @@ CFLAGS = -g -O3 -I.. -I../include $(TRACE_FLAGS)
 
 LDFLAGS = -L../libsafs -lsafs -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -lrt
 
-TARGETS = stat create_file create_files workload-gen memory-fill eval_expand_SA_cache verify_file print_file
+TARGETS = stat create_file create_files workload-gen memory-fill eval_expand_SA_cache print_file
 LIBFILE = ../libsafs/libsafs.a
 
 all: $(TARGETS)
@@ -41,9 +41,6 @@ cache_evaluator: cache_evaluator.o $(LIBFILE)
 
 eval_expand_SA_cache: eval_expand_SA_cache.o $(LIBFILE)
 	$(CXX) -o eval_expand_SA_cache eval_expand_SA_cache.o $(LDFLAGS)
-
-verify_file: verify_file.o
-	$(CXX) -o verify_file verify_file.o $(LDFLAGS)
 
 print_file: print_file.o $(LIBFILE)
 	$(CXX) -o print_file print_file.o $(LDFLAGS)
