@@ -438,4 +438,5 @@ int main(int argc, char *argv[])
 #ifdef STATISTICS
 	print_io_thread_stat();
 #endif
+	destroy_io_system();
 }
