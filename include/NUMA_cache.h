@@ -114,6 +114,12 @@ public:
 		}
 		return tot;
 	}
+
+	virtual void sanity_check() const {
+		for (size_t i = 0; i < caches.size(); i++) {
+			caches[i]->sanity_check();
+		}
+	}
 };
 
 #endif

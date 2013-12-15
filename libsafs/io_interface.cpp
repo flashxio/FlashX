@@ -193,6 +193,7 @@ void init_io_system(const config_map &configs)
 
 void destroy_io_system()
 {
+	global_data.global_cache->sanity_check();
 	// TODO
 }
 

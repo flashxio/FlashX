@@ -440,8 +440,11 @@ public:
 		return -1;
 	}
 
+	// For test
 	virtual void print_stat() const {
 	}
+
+	virtual void sanity_check() const = 0;
 };
 
 /**
