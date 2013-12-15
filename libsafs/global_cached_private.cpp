@@ -1127,7 +1127,6 @@ void global_cached_io::process_user_reqs()
 		process_user_req(dirty_pages, NULL);
 	}
 
-	process_cached_reqs();
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), underlying);
 
@@ -1181,7 +1180,6 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	}
 
 end:
-	process_cached_reqs();
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), underlying);
 
@@ -1253,6 +1251,9 @@ void global_cached_io::process_all_requests()
 	// Process buffered user requests.
 	// It may add completed user requests to queues for further processing. 
 	process_user_reqs();
+
+	// Process the completed requests served in the cache directly.
+	process_cached_reqs();
 
 	// Process completed user requests.
 	process_completed_requests();
