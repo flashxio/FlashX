@@ -1131,7 +1131,7 @@ void global_cached_io::process_user_reqs()
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), underlying);
 
-	underlying->flush_requests();
+	flush_requests();
 }
 
 void global_cached_io::access(io_request *requests, int num, io_status *status)
@@ -1186,7 +1186,7 @@ end:
 				dirty_pages.size(), underlying);
 
 	if (syncd)
-		underlying->flush_requests();
+		flush_requests();
 }
 
 io_status global_cached_io::access(char *buf, off_t offset,
