@@ -19,6 +19,7 @@
 
 #include "io_request.h"
 #include "cache.h"
+#include "io_interface.h"
 
 void *io_buf::get_buf() const
 {
@@ -131,7 +132,15 @@ void io_req_extension::add_buf_front(char *buf, int size, bool is_page)
 	num_bufs++;
 }
 
-void user_compute::issue_requests(io_interface *io)
+void user_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
+		std::vector<io_request> &reqs)
 {
+	for (int i = 0; i < num_reqs; i++) {
+		request_range range = ranges[i];
+		user_compute *comp = alloc->alloc();
+		io_request req(comp, range.get_loc(), range.get_size(),
+				range.get_access_method(), io, io->get_node_id());
+		reqs.push_back(req);
+	}
 	num_reqs = 0;
 }

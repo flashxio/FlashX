@@ -29,6 +29,7 @@
 #include "common.h"
 #include "concurrency.h"
 #include "container.h"
+#include "pointer.h"
 
 class thread_safe_page;
 class io_interface;
@@ -193,15 +194,18 @@ const data_loc_t INVALID_DATA_LOC;
 class request_range
 {
 	data_loc_t loc;
-	size_t size;
+	unsigned long size: 63;
+	unsigned long access_method: 1;
 public:
 	request_range() {
 		size = 0;
+		access_method = 0;
 	}
 
-	request_range(const data_loc_t &loc, size_t size) {
+	request_range(const data_loc_t &loc, size_t size, int access_method) {
 		this->loc = loc;
 		this->size = size;
+		this->access_method = access_method & 0x1;
 	}
 
 	const data_loc_t &get_loc() const {
@@ -211,21 +215,23 @@ public:
 	size_t get_size() const {
 		return size;
 	}
+
+	int get_access_method() const {
+		return access_method & 0x1;
+	}
 };
 
 class page_byte_array;
 class compute_allocator;
-class user_compute
+class user_compute: public ptr_interface
 {
 	compute_allocator *alloc;
 	embedded_array<request_range> ranges;
 	int num_reqs;
-	int num_refs;
 public:
 	user_compute(compute_allocator *alloc) {
 		this->alloc = alloc;
 		num_reqs = 0;
-		num_refs = 0;
 	}
 
 	compute_allocator *get_allocator() const {
@@ -252,11 +258,21 @@ public:
 		num_reqs++;
 	}
 
-	int get_num_requests() const {
+	virtual int get_num_requests() const {
 		return num_reqs;
 	}
 
-	void issue_requests(io_interface *io);
+	virtual request_range get_request(int idx) const {
+		assert(idx < num_reqs);
+		return ranges[idx];
+	}
+
+	virtual void reset_requests() {
+		num_reqs = 0;
+	}
+
+	virtual void fetch_requests(io_interface *io, compute_allocator *alloc,
+			std::vector<io_request> &reqs);
 };
 
 class compute_allocator

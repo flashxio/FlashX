@@ -26,6 +26,7 @@
 
 class request_allocator;
 class req_ext_allocator;
+class join_compute_allocator;
 
 typedef std::pair<thread_safe_page *, original_io_request *> page_req_pair;
 
@@ -142,7 +143,8 @@ public:
 		orig_io = io;
 	}
 
-	void compute();
+	void compute(io_interface *io, join_compute_allocator *compute_alloc,
+			std::vector<io_request> &requests);
 
 	friend class original_req_byte_array;
 };
@@ -180,20 +182,6 @@ public:
 		assert(0);
 	}
 };
-
-inline void original_io_request::compute()
-{
-	assert(this->get_req_type() == io_request::USER_COMPUTE);
-	original_req_byte_array byte_arr(this);
-	get_compute()->run(byte_arr);
-	int num_pages = get_num_covered_pages();
-	for (int i = 0; i < num_pages; i++) {
-		assert(status_arr[i].pg);
-		status_arr[i].pg->dec_ref();
-	}
-	compute_allocator *alloc = get_compute()->get_allocator();
-	alloc->free(get_compute());
-}
 
 class global_cached_io: public io_interface
 {
@@ -261,6 +249,7 @@ class global_cached_io: public io_interface
 
 	request_allocator *req_allocator;
 	req_ext_allocator *ext_allocator;
+	join_compute_allocator *comp_allocator;
 
 	// This contains the original requests issued by the application.
 	// An original request is placed in this queue when the I/O on a page
@@ -364,7 +353,8 @@ public:
 			original_io_request *orig);
 
 	// Finish processing cached I/O requests.
-	void process_cached_reqs();
+	// The user request may issue more requests.
+	void process_cached_reqs(std::vector<io_request> &requests);
 	// Process a request from the application.
 	void process_user_req(std::vector<thread_safe_page *> &dirty_pages,
 			io_status *status);
@@ -425,8 +415,9 @@ public:
 	void process_disk_completed_requests(io_request requests[], int num);
 	/**
 	 * Process all completed users' requests.
+	 * User compute may issue more requests.
 	 */
-	int process_completed_requests();
+	int process_completed_requests(std::vector<io_request> &requests);
 	/**
 	 * Process all queued requests.
 	 */
