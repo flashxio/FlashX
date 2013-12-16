@@ -883,9 +883,16 @@ thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
 	else {
 		user_compute *compute = req->get_compute();
 		simple_page_byte_array arr(req, p);
-		compute->run(arr);
-		compute_allocator *alloc = compute->get_allocator();
-		alloc->free(compute);
+		bool ret = compute->run(arr);
+		if (ret) {
+			// Deallocate the user compute when it's completed.
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+		}
+		else {
+			// TODO
+			assert(0);
+		}
 		return NULL;
 	}
 }

@@ -130,3 +130,8 @@ void io_req_extension::add_buf_front(char *buf, int size, bool is_page)
 	vec_pointer[0].init((void *) buf, size, is_page);
 	num_bufs++;
 }
+
+void user_compute::issue_requests(io_interface *io)
+{
+	num_reqs = 0;
+}

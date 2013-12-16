@@ -28,6 +28,7 @@
 
 #include "common.h"
 #include "concurrency.h"
+#include "container.h"
 
 class thread_safe_page;
 class io_interface;
@@ -160,34 +161,6 @@ public:
 
 const int MAX_INLINE_SIZE=128;
 
-class page_byte_array;
-class compute_allocator;
-class user_compute
-{
-	compute_allocator *alloc;
-public:
-	user_compute(compute_allocator *alloc) {
-		this->alloc = alloc;
-	}
-
-	compute_allocator *get_allocator() const {
-		return alloc;
-	}
-
-	virtual ~user_compute() {
-	}
-	virtual int serialize(char *buf, int size) const = 0;
-	virtual int get_serialized_size() const = 0;
-	virtual void run(page_byte_array &) = 0;
-};
-
-class compute_allocator
-{
-public:
-	virtual user_compute *alloc() = 0;
-	virtual void free(user_compute *) = 0;
-};
-
 typedef int file_id_t;
 const int INVALID_FILE_ID = -1;
 
@@ -216,6 +189,82 @@ public:
 };
 
 const data_loc_t INVALID_DATA_LOC;
+
+class request_range
+{
+	data_loc_t loc;
+	size_t size;
+public:
+	request_range() {
+		size = 0;
+	}
+
+	request_range(const data_loc_t &loc, size_t size) {
+		this->loc = loc;
+		this->size = size;
+	}
+
+	const data_loc_t &get_loc() const {
+		return loc;
+	};
+
+	size_t get_size() const {
+		return size;
+	}
+};
+
+class page_byte_array;
+class compute_allocator;
+class user_compute
+{
+	compute_allocator *alloc;
+	embedded_array<request_range> ranges;
+	int num_reqs;
+	int num_refs;
+public:
+	user_compute(compute_allocator *alloc) {
+		this->alloc = alloc;
+		num_reqs = 0;
+		num_refs = 0;
+	}
+
+	compute_allocator *get_allocator() const {
+		return alloc;
+	}
+
+	virtual ~user_compute() {
+	}
+	virtual int serialize(char *buf, int size) const = 0;
+	virtual int get_serialized_size() const = 0;
+	/**
+	 * It should return true when the computation completes.
+	 * Otherwise, false.
+	 */
+	virtual bool run(page_byte_array &) = 0;
+
+	/**
+	 * This allows user compute to fetch more data.
+	 */
+	void request_data(const request_range &range) {
+		if (ranges.get_capacity() <= num_reqs)
+			ranges.resize(ranges.get_capacity() * 2);
+		ranges[num_reqs] = range;
+		num_reqs++;
+	}
+
+	int get_num_requests() const {
+		return num_reqs;
+	}
+
+	void issue_requests(io_interface *io);
+};
+
+class compute_allocator
+{
+public:
+	virtual user_compute *alloc() = 0;
+	virtual void free(user_compute *) = 0;
+};
 
 /**
  * This class contains the request info.
