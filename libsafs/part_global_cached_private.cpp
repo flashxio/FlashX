@@ -272,6 +272,9 @@ public:
 		global_cached_io::print_state();
 	}
 
+	// TODO I need to decide how to respond to the completed requests from
+	// the disk.
+#if 0
 	// This method is used for IO requests that need to be sent to disks.
 	// Thanks to the IO proxy, it runs in the underlying IO thread,
 	// which is on the same NUMA node as the request process thread where
@@ -288,6 +291,7 @@ public:
 		if (has_pending_requests())
 			get_thread()->activate();
 	}
+#endif
 
 	int get_file_id() const {
 		assert(0);
