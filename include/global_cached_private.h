@@ -45,11 +45,6 @@ class original_io_request: public io_request
 		}
 	};
 
-	/* 
-	 * This is to protect the object from being removed
-	 * while others are still using it.
-	 */
-	atomic_number<short> refcnt;
 	atomic_number<ssize_t> completed_size;
 
 	embedded_array<page_status> status_arr;
@@ -84,7 +79,6 @@ public:
 
 	void init() {
 		io_request::init();
-		refcnt = atomic_number<short>(0);
 		completed_size = atomic_number<ssize_t>(0);
 		orig_io = NULL;
 	}
@@ -100,24 +94,11 @@ public:
 		else
 			assert(0);
 
-		refcnt = atomic_number<short>(0);
 		completed_size = atomic_number<ssize_t>(0);
 		orig_io = NULL;
 		status_arr.resize(get_num_covered_pages());
 		memset(status_arr.data(), 0,
 				sizeof(page_status) * get_num_covered_pages());
-	}
-
-	int inc_ref() {
-		return refcnt.inc(1);
-	}
-
-	int dec_ref() {
-		return refcnt.dec(1);
-	}
-
-	void wait4unref() {
-		while (refcnt.get() > 0) {}
 	}
 
 	thread_safe_page *complete_req(thread_safe_page *p, bool lock);

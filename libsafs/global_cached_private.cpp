@@ -231,7 +231,6 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 void global_cached_io::finalize_partial_request(io_request &partial,
 		original_io_request *orig)
 {
-	orig->inc_ref();
 	if (orig->complete_range(partial.get_offset(), partial.get_size())) {
 		orig->set_io(orig->get_orig_io());
 		// It's important to notify the IO interface that issues the request.
@@ -243,19 +242,14 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 			assert(orig->get_req_type() == io_request::BASIC_REQ);
 			assert(orig->get_io() == this);
 			((global_cached_io *) orig->get_io())->wakeup_on_req(orig, IO_OK);
-			orig->dec_ref();
-			orig->wait4unref();
 			// Now we can delete it.
 			req_allocator->free(orig);
 		}
 		else {
 			num_completed_areqs.inc(1);
-			orig->dec_ref();
 			complete_queue.push_back(orig);
 		}
 	}
-	else
-		orig->dec_ref();
 }
 
 void global_cached_io::finalize_partial_request(thread_safe_page *p,
@@ -419,7 +413,6 @@ int global_cached_io::process_completed_requests()
 		}
 		::notify_completion(this, (io_request **) reqs.data(), ret);
 		for (int i = 0; i < ret; i++) {
-			reqs[i]->wait4unref();
 			req_allocator->free(reqs[i]);
 		}
 		return ret;
