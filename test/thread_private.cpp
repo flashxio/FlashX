@@ -260,28 +260,23 @@ void thread_private::init() {
 	}
 }
 
-class work2req_converter
+/**
+ * This converts a workload to I/O access ranges.
+ */
+class work2req_range_converter
 {
+	int file_id;
 	workload_t workload;
-	int align_size;
-	rand_buf *buf;
-	io_interface *io;
-	sum_compute_allocator *sum_alloc;
-	write_compute_allocator *write_alloc;
 public:
-	work2req_converter(io_interface *io, rand_buf * buf, int align_size,
-			sum_compute_allocator *sum_alloc, write_compute_allocator *write_alloc) {
+	work2req_range_converter() {
+		file_id = -1;
 		workload.off = -1;
 		workload.size = -1;
 		workload.read = 0;
-		this->align_size = align_size;
-		this->buf = buf;
-		this->io = io;
-		this->sum_alloc = sum_alloc;
-		this->write_alloc = write_alloc;
 	}
 
-	void init(const workload_t &workload) {
+	work2req_range_converter(int file_id, const workload_t &workload, int align_size) {
+		this->file_id = file_id;
 		this->workload = workload;
 		if (align_size > 0) {
 			this->workload.off = ROUND(workload.off, align_size);
@@ -295,6 +290,78 @@ public:
 		return workload.size <= 0;
 	}
 
+	request_range get_request(int buf_type) {
+		int access_method = workload.read ? READ : WRITE;
+		if (buf_type == MULTI_BUF) {
+			throw unsupported_exception();
+#if 0
+			assert(off % PAGE_SIZE == 0);
+			int num_vecs = size / PAGE_SIZE;
+			reqs[i].init(off, io, access_method, node_id);
+			assert(buf->get_entry_size() >= PAGE_SIZE);
+			for (int k = 0; k < num_vecs; k++) {
+				reqs[i].add_buf(buf->next_entry(PAGE_SIZE), PAGE_SIZE);
+			}
+			workload.off += size;
+			workload.size = 0;
+#endif
+		}
+		else if (buf_type == SINGLE_SMALL_BUF) {
+			off_t off = workload.off;
+			int size = workload.size;
+			// Get to the next page.
+			off_t next_off = ROUNDUP_PAGE(off + 1);
+			if (next_off > off + size)
+				next_off = off + size;
+			size -= next_off - off;
+			workload.off = next_off;
+			workload.size = size;
+
+			data_loc_t loc(file_id, off);
+			return request_range(loc, next_off - off, access_method);
+		}
+		else {
+			int size = workload.size;
+			off_t off = workload.off;
+			workload.off += size;
+			workload.size = 0;
+
+			data_loc_t loc(file_id, off);
+			return request_range(loc, size, access_method);
+		}
+	}
+};
+
+/**
+ * This converts workloads to IO requests.
+ */
+class work2req_converter
+{
+	work2req_range_converter workload;
+	int align_size;
+	rand_buf *buf;
+	io_interface *io;
+	sum_compute_allocator *sum_alloc;
+	write_compute_allocator *write_alloc;
+public:
+	work2req_converter(io_interface *io, rand_buf * buf, int align_size,
+			sum_compute_allocator *sum_alloc, write_compute_allocator *write_alloc) {
+		this->align_size = align_size;
+		this->buf = buf;
+		this->io = io;
+		this->sum_alloc = sum_alloc;
+		this->write_alloc = write_alloc;
+	}
+
+	void init(const workload_t &workload) {
+		this->workload = work2req_range_converter(io->get_file_id(),
+				workload, align_size);
+	}
+
+	bool has_complete() const {
+		return workload.has_complete();
+	}
+
 	int to_reqs(io_interface *io, int buf_type, int num, io_request reqs[]);
 };
 
@@ -302,96 +369,39 @@ int work2req_converter::to_reqs(io_interface *io, int buf_type, int num,
 		io_request reqs[])
 {
 	int node_id = io->get_node_id();
-	int access_method = workload.read ? READ : WRITE;
-	off_t off = workload.off;
-	int size = workload.size;
 
-	if (buf_type == MULTI_BUF) {
-		throw unsupported_exception();
-#if 0
-		assert(off % PAGE_SIZE == 0);
-		int num_vecs = size / PAGE_SIZE;
-		reqs[i].init(off, io, access_method, node_id);
-		assert(buf->get_entry_size() >= PAGE_SIZE);
-		for (int k = 0; k < num_vecs; k++) {
-			reqs[i].add_buf(buf->next_entry(PAGE_SIZE), PAGE_SIZE);
-		}
-		workload.off += size;
-		workload.size = 0;
-#endif
-	}
-	else if (buf_type == SINGLE_SMALL_BUF) {
-		int i = 0;
-		while (size > 0 && i < num) {
-			// Get to the next page.
-			off_t next_off = ROUNDUP_PAGE(off + 1);
-			if (next_off > off + size)
-				next_off = off + size;
 
-			if (config.is_user_compute()) {
-				data_loc_t loc(io->get_file_id(), off);
-				if (access_method == READ) {
-					sum_user_compute *compute = (sum_user_compute *) sum_alloc->alloc();
-					reqs[i] = io_request(compute, loc, next_off - off,
-							access_method, io, node_id);
-				}
-				else {
-					write_user_compute *compute = (write_user_compute *) write_alloc->alloc();
-					compute->init(io->get_file_id());
-					reqs[i] = io_request(compute, loc, next_off - off,
-							access_method, io, node_id);
-				}
-			}
-			else {
+	int i = 0;
+	while (!workload.has_complete() && i < num) {
+		request_range range = workload.get_request(buf_type);
 
-				char *p = buf->next_entry(next_off - off);
-				if (p == NULL)
-					break;
-				if (access_method == WRITE && params.is_verify_content())
-					create_write_data(p, next_off - off, off, io->get_file_id());
-				data_loc_t loc(io->get_file_id(), off);
-				reqs[i].init(p, loc, next_off - off, access_method,
-						io, node_id);
-			}
-			size -= next_off - off;
-			off = next_off;
-			i++;
-		}
-		workload.off = off;
-		workload.size = size;
-		return i;
-	}
-	else {
 		if (config.is_user_compute()) {
-			data_loc_t loc(io->get_file_id(), off);
-			if (access_method == READ) {
+			if (range.get_access_method() == READ) {
 				sum_user_compute *compute = (sum_user_compute *) sum_alloc->alloc();
-				reqs[0] = io_request(compute, loc, size, access_method,
-						io, node_id);
+				reqs[i] = io_request(compute, range.get_loc(), range.get_size(),
+						range.get_access_method(), io, node_id);
 			}
 			else {
 				write_user_compute *compute = (write_user_compute *) write_alloc->alloc();
 				compute->init(io->get_file_id());
-				reqs[0] = io_request(compute, loc, size, access_method, io,
-						node_id);
+				reqs[i] = io_request(compute, range.get_loc(), range.get_size(),
+						range.get_access_method(), io, node_id);
 			}
-			workload.off += size;
-			workload.size = 0;
-			return 1;
 		}
 		else {
-			char *p = buf->next_entry(size);
-			if (p == NULL)
-				return 0;
-			if (access_method == WRITE && params.is_verify_content())
-				create_write_data(p, size, off, io->get_file_id());
-			data_loc_t loc(io->get_file_id(), off);
-			reqs[0].init(p, loc, size, access_method, io, node_id);
-			workload.off += size;
-			workload.size = 0;
-			return 1;
+			data_loc_t loc = range.get_loc();
+			char *p = buf->next_entry(range.get_size());
+			assert(p);
+			if (range.get_access_method() == WRITE && params.is_verify_content())
+				create_write_data(p, range.get_size(), loc.get_offset(),
+						io->get_file_id());
+			reqs[i].init(p, loc, range.get_size(), range.get_access_method(),
+					io, node_id);
 		}
+		i++;
 	}
+
+	return i;
 }
 
 void thread_private::run()
