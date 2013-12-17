@@ -1383,12 +1383,8 @@ void global_cached_io::process_all_requests()
 
 	// Process the requests that are pending on the pages.
 	// It may add completed user requests to queues for further processing. 
-	if (!pending_requests.is_empty()) {
+	if (!pending_requests.is_empty())
 		handle_pending_requests();
-		// When processing the pending requests on the pages, we might issue
-		// more I/O requests. We need to flush these requests.
-		flush_requests();
-	}
 
 	// Process buffered user requests.
 	// It may add completed user requests to queues for further processing. 
@@ -1407,6 +1403,10 @@ void global_cached_io::process_all_requests()
 	// the OS's elevator algorithm to merge the requests from different
 	// global_cached_io.
 	access(requests.data(), requests.size(), NULL);
+
+	// Processing the pending requests on the pages might issue
+	// more I/O requests.
+	flush_requests();
 }
 
 void global_cached_io::wait4req(original_io_request *req)
