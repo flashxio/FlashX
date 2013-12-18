@@ -395,6 +395,13 @@ public:
 	virtual void cleanup() {
 		wait4complete(num_pending_ios());
 		underlying->cleanup();
+		assert(pending_requests.is_empty());
+		assert(complete_queue.is_empty());
+		assert(completed_disk_queue.is_empty());
+		assert(underlying_requests.empty());
+		assert(cached_requests.empty());
+		assert(user_requests.is_empty());
+		assert(processing_req.is_empty());
 	}
 
 	int get_cache_hits() const {
