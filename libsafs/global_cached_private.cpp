@@ -115,6 +115,123 @@ public:
 	}
 };
 
+/**
+ * This is to join the original user compute with the data requested
+ * in the user compute.
+ */
+class join_compute: public user_compute
+{
+	user_compute *compute;
+public:
+	join_compute(user_compute *compute,
+			compute_allocator *alloc): user_compute(alloc) {
+		this->compute = compute;
+		compute->inc_ref();
+	}
+
+	virtual int serialize(char *buf, int size) const {
+		assert(0);
+		return 0;
+	}
+
+	virtual int get_serialized_size() const {
+		assert(0);
+		return 0;
+	}
+
+	bool run(page_byte_array &array) {
+		assert(compute != NULL);
+		compute->run(array);
+		compute->dec_ref();
+		// The last run doesn't generate more requests. It means
+		// the computation has been completed. We can deallocate
+		// the user compute.
+		if (compute->get_num_requests() == 0) {
+			assert(compute->get_ref() == 0);
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+			compute = NULL;
+		}
+		return true;
+	}
+
+	virtual int get_num_requests() const {
+		return compute->get_num_requests();
+	}
+
+	virtual void fetch_requests(io_interface *io, compute_allocator *alloc,
+			std::vector<io_request> &reqs);
+};
+
+class join_compute_allocator: public compute_allocator
+{
+	class compute_initiator: public obj_initiator<join_compute>
+	{
+		join_compute_allocator *alloc;
+		user_compute *compute;
+	public:
+		compute_initiator(join_compute_allocator *alloc) {
+			this->alloc = alloc;
+			compute = NULL;
+		}
+
+		virtual void init(join_compute *obj) {
+			assert(compute);
+			new (obj) join_compute(compute, alloc);
+		}
+
+		void set_compute(user_compute *compute) {
+			this->compute = compute;
+		}
+	};
+
+	obj_allocator<join_compute> *allocator;
+	compute_initiator *init;
+public:
+	join_compute_allocator(int node_id) {
+		init = new compute_initiator(this);
+		allocator = new obj_allocator<join_compute>("join-compute-allocator",
+			node_id, PAGE_SIZE, INT_MAX, init);
+	}
+
+	~join_compute_allocator() {
+		delete init;
+		delete allocator;
+	}
+
+	virtual user_compute *alloc() {
+		return allocator->alloc_obj();
+	}
+
+	virtual void free(user_compute *obj) {
+		allocator->free((join_compute *) obj);
+	}
+
+	void set_compute(user_compute *compute) {
+		init->set_compute(compute);
+	}
+};
+
+void join_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
+		std::vector<io_request> &reqs)
+{
+	// We have completed `compute' and deallocated it.
+	if (compute == NULL)
+		return;
+
+	((join_compute_allocator *) alloc)->set_compute(compute);
+	for (int i = 0; i < compute->get_num_requests(); i++) {
+		request_range range = compute->get_request(i);
+		assert(io->get_file_id() == range.get_loc().get_file_id());
+		user_compute *comp = alloc->alloc();
+		io_request req(comp, range.get_loc(), range.get_size(),
+				range.get_access_method(), io, io->get_node_id());
+		reqs.push_back(req);
+	}
+	((join_compute_allocator *) alloc)->set_compute(NULL);
+	compute->reset_requests();
+}
+
 thread_safe_page *original_io_request::complete_req(thread_safe_page *p,
 		bool lock)
 {
@@ -155,6 +272,28 @@ thread_safe_page *original_io_request::complete_req(thread_safe_page *p,
 		p->inc_ref();
 		get_page_status(p).pg = p;
 		return NULL;
+	}
+}
+
+void original_io_request::compute(io_interface *io,
+		join_compute_allocator *compute_alloc, std::vector<io_request> &requests)
+{
+	assert(this->get_req_type() == io_request::USER_COMPUTE);
+	original_req_byte_array byte_arr(this);
+	get_compute()->run(byte_arr);
+	compute_alloc->set_compute(get_compute());
+	get_compute()->fetch_requests(io, compute_alloc, requests);
+	compute_alloc->set_compute(NULL);
+	int num_pages = get_num_covered_pages();
+	for (int i = 0; i < num_pages; i++) {
+		assert(status_arr[i].pg);
+		status_arr[i].pg->dec_ref();
+	}
+	// If no one else is referencing the user compute, it means the computation
+	// is complete now.
+	if (get_compute()->get_ref() == 0) {
+		compute_allocator *alloc = get_compute()->get_allocator();
+		alloc->free(get_compute());
 	}
 }
 
@@ -231,7 +370,6 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 void global_cached_io::finalize_partial_request(io_request &partial,
 		original_io_request *orig)
 {
-	orig->inc_ref();
 	if (orig->complete_range(partial.get_offset(), partial.get_size())) {
 		orig->set_io(orig->get_orig_io());
 		// It's important to notify the IO interface that issues the request.
@@ -243,19 +381,13 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 			assert(orig->get_req_type() == io_request::BASIC_REQ);
 			assert(orig->get_io() == this);
 			((global_cached_io *) orig->get_io())->wakeup_on_req(orig, IO_OK);
-			orig->dec_ref();
-			orig->wait4unref();
 			// Now we can delete it.
 			req_allocator->free(orig);
 		}
 		else {
-			num_completed_areqs.inc(1);
-			orig->dec_ref();
 			complete_queue.push_back(orig);
 		}
 	}
-	else
-		orig->dec_ref();
 }
 
 void global_cached_io::finalize_partial_request(thread_safe_page *p,
@@ -404,7 +536,7 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 	}
 }
 
-int global_cached_io::process_completed_requests()
+int global_cached_io::process_completed_requests(std::vector<io_request> &requests)
 {
 	int num = complete_queue.get_num_entries();
 	if (num > 0) {
@@ -414,12 +546,12 @@ int global_cached_io::process_completed_requests()
 			if (reqs[i]->get_req_type() == io_request::USER_COMPUTE) {
 				// This is a user-compute request.
 				assert(reqs[i]->get_req_type() == io_request::USER_COMPUTE);
-				reqs[i]->compute();
+				reqs[i]->compute(this, comp_allocator, requests);
 			}
 		}
+		num_completed_areqs.inc(ret);
 		::notify_completion(this, (io_request **) reqs.data(), ret);
 		for (int i = 0; i < ret; i++) {
-			reqs[i]->wait4unref();
 			req_allocator->free(reqs[i]);
 		}
 		return ret;
@@ -445,6 +577,7 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 			sizeof(io_req_extension) * 1024);
 	req_allocator = new request_allocator(underlying->get_node_id(),
 			sizeof(original_io_request) * 1024);
+	comp_allocator = new join_compute_allocator(underlying->get_node_id());
 	cb = NULL;
 	cache_hits = 0;
 	num_accesses = 0;
@@ -863,7 +996,9 @@ public:
 	}
 };
 
-thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
+thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p,
+		io_interface *io, join_compute_allocator *compute_alloc,
+		std::vector<io_request> &requests)
 {
 	if (req->get_req_type() == io_request::BASIC_REQ) {
 		int page_off;
@@ -888,16 +1023,23 @@ thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
 		return ret;
 	}
 	else {
-		user_compute *compute = req->get_compute();
 		simple_page_byte_array arr(req, p);
+		user_compute *compute = req->get_compute();
 		compute->run(arr);
-		compute_allocator *alloc = compute->get_allocator();
-		alloc->free(compute);
+		compute_alloc->set_compute(compute);
+		compute->fetch_requests(io, compute_alloc, requests);
+		compute_alloc->set_compute(NULL);
+		// If no one else is referencing the user compute, it means the computation
+		// is complete now.
+		if (compute->get_ref() == 0) {
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+		}
 		return NULL;
 	}
 }
 
-void global_cached_io::process_cached_reqs()
+void global_cached_io::process_cached_reqs(std::vector<io_request> &requests)
 {
 	int num_cached_reqs = cached_requests.size();
 	stack_array<io_request *, 128> async_reqs(num_cached_reqs);
@@ -906,7 +1048,7 @@ void global_cached_io::process_cached_reqs()
 	for (int i = 0; i < num_cached_reqs; i++) {
 		io_request *req = &cached_requests[i].first;
 		thread_safe_page *dirty = complete_cached_req(req,
-				cached_requests[i].second);
+				cached_requests[i].second, this, comp_allocator, requests);
 		page_cache *cache = get_global_cache();
 		if (dirty)
 			cache->mark_dirty_pages(&dirty, 1, underlying);
@@ -1127,7 +1269,6 @@ void global_cached_io::process_user_reqs()
 		process_user_req(dirty_pages, NULL);
 	}
 
-	process_cached_reqs();
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), underlying);
 
@@ -1181,7 +1322,6 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	}
 
 end:
-	process_cached_reqs();
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), underlying);
 
@@ -1243,19 +1383,30 @@ void global_cached_io::process_all_requests()
 
 	// Process the requests that are pending on the pages.
 	// It may add completed user requests to queues for further processing. 
-	if (!pending_requests.is_empty()) {
+	if (!pending_requests.is_empty())
 		handle_pending_requests();
-		// When processing the pending requests on the pages, we might issue
-		// more I/O requests. We need to flush these requests.
-		flush_requests();
-	}
 
 	// Process buffered user requests.
 	// It may add completed user requests to queues for further processing. 
 	process_user_reqs();
 
+	std::vector<io_request> requests;
+	// Process the completed requests served in the cache directly.
+	process_cached_reqs(requests);
+
 	// Process completed user requests.
-	process_completed_requests();
+	process_completed_requests(requests);
+
+	// Process requests issued in the user compute.
+	// We try to gather all requests so we can merge them. However, we only
+	// have the local collection of the requests. We still need to rely on
+	// the OS's elevator algorithm to merge the requests from different
+	// global_cached_io.
+	access(requests.data(), requests.size(), NULL);
+
+	// Processing the pending requests on the pages might issue
+	// more I/O requests.
+	flush_requests();
 }
 
 void global_cached_io::wait4req(original_io_request *req)
@@ -1278,9 +1429,7 @@ int global_cached_io::wait4complete(int num_to_complete)
 	num_to_complete = min(pending, num_to_complete);
 
 	process_all_requests();
-	int iters = 0;
 	while (pending - num_pending_ios() < num_to_complete) {
-		iters++;
 		// We only wait when there are pending requests in the underlying IO.
 		if (num_to_underlying.get() - num_from_underlying.get() > 0) {
 			get_thread()->wait();

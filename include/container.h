@@ -545,6 +545,11 @@ public:
 		return real_buf[idx];
 	}
 
+	const T &operator[](int idx) const {
+		assert(idx < capacity);
+		return real_buf[idx];
+	}
+
 	// This can only increase the capacity of the array.
 	void resize(int new_size) {
 		if (new_size <= capacity)
