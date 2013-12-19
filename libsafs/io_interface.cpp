@@ -210,6 +210,11 @@ public:
 
 	virtual void destroy_io(io_interface *io) {
 	}
+
+	virtual int get_file_id() const {
+		assert(0);
+		return -1;
+	}
 };
 
 class aio_factory: public file_io_factory
@@ -221,6 +226,11 @@ public:
 	virtual io_interface *create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io) {
+	}
+
+	virtual int get_file_id() const {
+		assert(0);
+		return -1;
 	}
 };
 
@@ -236,6 +246,10 @@ public:
 	virtual io_interface *create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io) {
+	}
+
+	virtual int get_file_id() const {
+		return mapper->get_file_id();
 	}
 };
 

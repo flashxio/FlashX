@@ -257,6 +257,8 @@ public:
 		return name;
 	}
 
+	virtual int get_file_id() const = 0;
+
 	virtual io_interface *create_io(thread *t) = 0;
 	virtual void destroy_io(io_interface *) = 0;
 	virtual void print_state() {
