@@ -385,7 +385,6 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 			req_allocator->free(orig);
 		}
 		else {
-			num_completed_areqs.inc(1);
 			complete_queue.push_back(orig);
 		}
 	}
@@ -550,6 +549,7 @@ int global_cached_io::process_completed_requests(std::vector<io_request> &reques
 				reqs[i]->compute(this, comp_allocator, requests);
 			}
 		}
+		num_completed_areqs.inc(ret);
 		::notify_completion(this, (io_request **) reqs.data(), ret);
 		for (int i = 0; i < ret; i++) {
 			req_allocator->free(reqs[i]);
