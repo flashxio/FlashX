@@ -146,7 +146,7 @@ public:
 		// The last run doesn't generate more requests. It means
 		// the computation has been completed. We can deallocate
 		// the user compute.
-		if (compute->get_num_requests() == 0) {
+		if (!compute->has_requests()) {
 			assert(compute->get_ref() == 0);
 			compute_allocator *alloc = compute->get_allocator();
 			alloc->free(compute);
@@ -155,8 +155,12 @@ public:
 		return true;
 	}
 
-	virtual int get_num_requests() const {
-		return compute->get_num_requests();
+	virtual int has_requests() const {
+		return compute->has_requests();
+	}
+
+	virtual request_range get_next_request() {
+		return compute->get_next_request();
 	}
 
 	virtual void fetch_requests(io_interface *io, compute_allocator *alloc,
@@ -220,8 +224,8 @@ void join_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 		return;
 
 	((join_compute_allocator *) alloc)->set_compute(compute);
-	for (int i = 0; i < compute->get_num_requests(); i++) {
-		request_range range = compute->get_request(i);
+	while (compute->has_requests()) {
+		request_range range = compute->get_next_request();
 		assert(io->get_file_id() == range.get_loc().get_file_id());
 		user_compute *comp = alloc->alloc();
 		io_request req(comp, range.get_loc(), range.get_size(),
@@ -229,7 +233,6 @@ void join_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 		reqs.push_back(req);
 	}
 	((join_compute_allocator *) alloc)->set_compute(NULL);
-	compute->reset_requests();
 }
 
 thread_safe_page *original_io_request::complete_req(thread_safe_page *p,

@@ -226,12 +226,9 @@ class compute_allocator;
 class user_compute: public ptr_interface
 {
 	compute_allocator *alloc;
-	embedded_array<request_range> ranges;
-	int num_reqs;
 public:
 	user_compute(compute_allocator *alloc) {
 		this->alloc = alloc;
-		num_reqs = 0;
 	}
 
 	compute_allocator *get_allocator() const {
@@ -248,28 +245,9 @@ public:
 	 */
 	virtual bool run(page_byte_array &) = 0;
 
-	/**
-	 * This allows user compute to fetch more data.
-	 */
-	void request_data(const request_range &range) {
-		if (ranges.get_capacity() <= num_reqs)
-			ranges.resize(ranges.get_capacity() * 2);
-		ranges[num_reqs] = range;
-		num_reqs++;
-	}
+	virtual int has_requests() const = 0;
 
-	virtual int get_num_requests() const {
-		return num_reqs;
-	}
-
-	virtual request_range get_request(int idx) const {
-		assert(idx < num_reqs);
-		return ranges[idx];
-	}
-
-	virtual void reset_requests() {
-		num_reqs = 0;
-	}
+	virtual request_range get_next_request() = 0;
 
 	virtual void fetch_requests(io_interface *io, compute_allocator *alloc,
 			std::vector<io_request> &reqs);

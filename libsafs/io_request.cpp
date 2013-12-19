@@ -135,12 +135,11 @@ void io_req_extension::add_buf_front(char *buf, int size, bool is_page)
 void user_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 		std::vector<io_request> &reqs)
 {
-	for (int i = 0; i < num_reqs; i++) {
-		request_range range = ranges[i];
+	while (has_requests()) {
+		request_range range = get_next_request();
 		user_compute *comp = alloc->alloc();
 		io_request req(comp, range.get_loc(), range.get_size(),
 				range.get_access_method(), io, io->get_node_id());
 		reqs.push_back(req);
 	}
-	num_reqs = 0;
 }

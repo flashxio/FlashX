@@ -189,6 +189,14 @@ public:
 		return 0;
 	}
 
+	virtual int has_requests() const {
+		return !converter.has_complete();
+	}
+
+	virtual request_range get_next_request() {
+		return converter.get_request(buf_type);
+	}
+
 	virtual bool run(page_byte_array &array) {
 		long sum = 0;
 		const page_byte_array &const_array = page_byte_array::const_cast_ref(
@@ -197,11 +205,6 @@ public:
 		for (page_byte_array::const_iterator<long> it = const_array.begin<long>();
 				it != end; ++it) {
 			sum += *it;
-		}
-
-		while (!converter.has_complete()) {
-			request_range range = converter.get_request(buf_type);
-			request_data(range);
 		}
 
 		global_sum.inc(sum);
@@ -238,6 +241,14 @@ public:
 		return 0;
 	}
 
+	virtual int has_requests() const {
+		return !converter.has_complete();
+	}
+
+	virtual request_range get_next_request() {
+		return converter.get_request(buf_type);
+	}
+
 	virtual bool run(page_byte_array &array) {
 		page_byte_array::iterator<long> end = array.end<long>();
 		off_t off = array.get_offset();
@@ -245,11 +256,6 @@ public:
 				it != end; ++it) {
 			*it = off / sizeof(off_t) + file_id;
 			off += sizeof(off_t);
-		}
-
-		while (!converter.has_complete()) {
-			request_range range = converter.get_request(buf_type);
-			request_data(range);
 		}
 
 		return true;
