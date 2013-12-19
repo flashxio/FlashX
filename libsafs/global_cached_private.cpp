@@ -1429,9 +1429,7 @@ int global_cached_io::wait4complete(int num_to_complete)
 	num_to_complete = min(pending, num_to_complete);
 
 	process_all_requests();
-	int iters = 0;
 	while (pending - num_pending_ios() < num_to_complete) {
-		iters++;
 		// We only wait when there are pending requests in the underlying IO.
 		if (num_to_underlying.get() - num_from_underlying.get() > 0) {
 			get_thread()->wait();
