@@ -83,6 +83,17 @@ public:
 		return vertex->get_num_edges(type);
 	}
 
+	int get_all_edges(edge_type type, std::vector<vertex_id_t> &edges) {
+		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
+		page_byte_array::const_iterator<vertex_id_t> end = get_neigh_end(type);
+		int num = 0;
+		for (; it != end; ++it) {
+			edges.push_back(*it);
+			num++;
+		}
+		return num;
+	}
+
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			edge_type type) const {
 		return vertex->get_neigh_begin(type);
