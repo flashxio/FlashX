@@ -35,7 +35,6 @@ class compute_vertex: public in_mem_vertex_info
 	atomic_flags<long> activated_levels;
 	const page_vertex *vertex;
 public:
-
 	compute_vertex(vertex_id_t id, off_t off, int size): in_mem_vertex_info(
 			id, off, size) {
 	}
@@ -92,6 +91,15 @@ public:
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			edge_type type) const {
 		return vertex->get_neigh_end(type);
+	}
+
+	virtual bool has_required_vertices() const {
+		return false;
+	}
+
+	virtual vertex_id_t get_next_required_vertex() {
+		assert(0);
+		return -1;
 	}
 
 	virtual void run(graph_engine &graph, const page_vertex *vertices[],
@@ -186,6 +194,8 @@ class graph_engine
 
 	trace_logger *logger;
 
+	int file_id;
+
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index, bool directed);
@@ -252,6 +262,13 @@ public:
 	void cleanup() {
 		if (logger)
 			logger->close();
+	}
+
+	/**
+	 * Get the file id where the graph data is stored.
+	 */
+	int get_file_id() const {
+		return file_id;
 	}
 };
 
