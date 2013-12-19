@@ -52,7 +52,15 @@ public:
 		return 0;
 	}
 
-	virtual void run(page_byte_array &);
+	virtual int has_requests() const {
+		return false;
+	}
+
+	virtual request_range get_next_request() {
+		return request_range();
+	}
+
+	virtual bool run(page_byte_array &);
 };
 
 class vertex_compute_allocator: public compute_allocator
@@ -234,7 +242,7 @@ public:
 	int process_activated_vertices(int max);
 };
 
-void vertex_compute::run(page_byte_array &array)
+bool vertex_compute::run(page_byte_array &array)
 {
 	char buf[STACK_PAGE_VERTEX_SIZE];
 	page_vertex *ext_v;
@@ -284,6 +292,7 @@ void vertex_compute::run(page_byte_array &array)
 			pending_vertex::destroy(pending);
 	}
 #endif
+	return true;
 }
 
 class sorted_vertex_queue
