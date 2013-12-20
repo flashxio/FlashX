@@ -25,6 +25,7 @@
 #include <limits.h>
 
 #include <algorithm>
+#include <queue>
 
 #include "common.h"
 #include "concurrency.h"
@@ -221,6 +222,7 @@ public:
 	}
 };
 
+class user_comp_req_queue;
 class page_byte_array;
 class compute_allocator;
 class user_compute: public ptr_interface
@@ -250,7 +252,7 @@ public:
 	virtual request_range get_next_request() = 0;
 
 	virtual void fetch_requests(io_interface *io, compute_allocator *alloc,
-			std::vector<io_request> &reqs);
+			user_comp_req_queue &reqs);
 };
 
 class compute_allocator
@@ -900,5 +902,37 @@ static inline void process_reqs_on_io(io_request *reqs[],
 
 	process_reqs_on_io(reqs, num, io_func, proc_func);
 }
+
+// We use a priority queue here because we want requests to be popped
+// in a sorted order.
+class user_comp_req_queue: public queue_interface<io_request>
+{
+	class req_comp {
+	public:
+		bool operator()(const io_request &req1, const io_request &req2) {
+			return req1.get_offset() < req2.get_offset();
+		}
+	} comp;
+
+	std::priority_queue<io_request, std::vector<io_request>, req_comp> queue;
+public:
+	virtual io_request pop_front() {
+		io_request ele = queue.top();
+		queue.pop();
+		return ele;
+	}
+
+	virtual void push_back(io_request &v) {
+		queue.push(v);
+	}
+
+	virtual int get_num_entries() {
+		return queue.size();
+	}
+
+	virtual bool is_empty() {
+		return queue.empty();
+	}
+};
 
 #endif

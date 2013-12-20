@@ -133,7 +133,7 @@ void io_req_extension::add_buf_front(char *buf, int size, bool is_page)
 }
 
 void user_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
-		std::vector<io_request> &reqs)
+		user_comp_req_queue &reqs)
 {
 	while (has_requests()) {
 		request_range range = get_next_request();
