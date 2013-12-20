@@ -143,23 +143,16 @@ public:
 		assert(compute != NULL);
 		compute->run(array);
 		compute->dec_ref();
-		// The last run doesn't generate more requests. It means
-		// the computation has been completed. We can deallocate
-		// the user compute.
-		if (!compute->has_requests()) {
-			assert(compute->get_ref() == 0);
-			compute_allocator *alloc = compute->get_allocator();
-			alloc->free(compute);
-			compute = NULL;
-		}
 		return true;
 	}
 
 	virtual int has_requests() const {
+		assert(compute);
 		return compute->has_requests();
 	}
 
 	virtual request_range get_next_request() {
+		assert(compute);
 		return compute->get_next_request();
 	}
 
@@ -233,6 +226,14 @@ void join_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 		reqs.push_back(req);
 	}
 	((join_compute_allocator *) alloc)->set_compute(NULL);
+
+	// If the compute didn't request any more data, the compute won't be
+	// invoked again. We can free it now.
+	if (compute->get_ref() == 0) {
+		compute_allocator *alloc = compute->get_allocator();
+		alloc->free(compute);
+		compute = NULL;
+	}
 }
 
 thread_safe_page *original_io_request::complete_req(thread_safe_page *p,
