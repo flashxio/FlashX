@@ -32,12 +32,25 @@
 #include "common.h"
 #include "debugger.h"
 
+template<class T>
+class queue_interface
+{
+public:
+	virtual ~queue_interface() {
+	}
+
+	virtual T pop_front() = 0;
+	virtual void push_back(T &v) = 0;
+	virtual int get_num_entries() = 0;
+	virtual bool is_empty() = 0;
+};
+
 /**
  * this is a first-in-first-out queue.
  * However, the location of an entry in the queue never changes.
  */
 template<class T>
-class fifo_queue
+class fifo_queue: public queue_interface<T>
 {
 	int size_mask;
 	T *buf;			// a circular buffer to keep pages.
