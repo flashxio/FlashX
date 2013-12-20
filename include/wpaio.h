@@ -43,7 +43,7 @@ class aio_ctx
 public:
 	aio_ctx(int node_id, int max_aio): iocb_allocator(std::string(
 				"iocb_allocator-") + itoa(node_id), node_id,
-			sizeof(struct iocb) * max_aio) {
+			sizeof(struct iocb) * max_aio, params.get_max_obj_alloc_size()) {
 	}
 	virtual ~aio_ctx() {
 	}

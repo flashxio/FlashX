@@ -107,6 +107,7 @@ class sys_parameters
 	int numa_num_process_threads;
 	int num_nodes;
 	bool merge_reqs;
+	int max_obj_alloc_size;
 public:
 	sys_parameters();
 
@@ -174,6 +175,10 @@ public:
 
 	bool is_merge_reqs() const {
 		return merge_reqs;
+	}
+
+	int get_max_obj_alloc_size() const {
+		return max_obj_alloc_size;
 	}
 };
 

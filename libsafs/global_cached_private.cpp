@@ -85,7 +85,7 @@ class req_ext_allocator: public obj_allocator<io_req_extension>
 	} initiator;
 public:
 	req_ext_allocator(int node_id, long increase_size,
-			long max_size = INT_MAX): obj_allocator<io_req_extension>(
+			long max_size = params.get_max_obj_alloc_size()): obj_allocator<io_req_extension>(
 				std::string("req_ext_allocator-") + itoa(node_id), node_id,
 				increase_size, max_size, &initiator) {
 	}
@@ -109,7 +109,7 @@ class request_allocator: public obj_allocator<original_io_request>
 	} initiator;
 public:
 	request_allocator(int node_id, long increase_size,
-			long max_size = INT_MAX): obj_allocator<original_io_request>(
+			long max_size = params.get_max_obj_alloc_size()): obj_allocator<original_io_request>(
 				std::string("gcached_req_allocator-") + itoa(node_id), node_id,
 				increase_size, max_size, &initiator) {
 	}
@@ -188,7 +188,7 @@ public:
 	join_compute_allocator(int node_id) {
 		init = new compute_initiator(this);
 		allocator = new obj_allocator<join_compute>("join-compute-allocator",
-			node_id, PAGE_SIZE, INT_MAX, init);
+			node_id, PAGE_SIZE, params.get_max_obj_alloc_size(), init);
 	}
 
 	~join_compute_allocator() {
