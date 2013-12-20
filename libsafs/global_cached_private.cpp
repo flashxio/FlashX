@@ -1258,7 +1258,14 @@ void global_cached_io::process_user_reqs()
 	// If processing_req isn't empty, it's likely because there are too many
 	// referenced pages in the cache and we can't evict a page from a page set.
 	// So we can stop processing the remaining requests for now.
-	while (processing_req.is_empty() && !user_requests.is_empty()) {
+	while (processing_req.is_empty() && !user_requests.is_empty()
+			// TODO this isn't a very good way to limit the number of pending
+			// requests in the underlying IO.
+			// For one, max_num_pending_ios is the total number of pending
+			// requests in this IO instance, so it might be too large.
+			// Furthermore, a request might be very large. I might need to
+			// limit the number of pending pages in the underlying IO.
+			&& num_underlying_reqs.get() < get_max_num_pending_ios()) {
 		io_request req = user_requests.pop_front();
 		// We don't allow the user's requests to be extended requests.
 		assert(!req.is_extended_req());
