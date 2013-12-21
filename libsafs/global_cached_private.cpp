@@ -495,6 +495,7 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 	std::vector<page_req_pair> pending_reqs;
 	for (int i = 0; i < num; i++) {
 		io_request *request = &requests[i];
+		num_underlying_pages.dec(request->get_num_bufs());
 
 		if (request->get_num_bufs() > 1) {
 			multibuf_completion(request);
@@ -960,6 +961,7 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	 */
 	io_status status;
 	num_to_underlying.inc(1);
+	num_underlying_pages.inc(req.get_num_bufs());
 	underlying->access(&req, 1, &status);
 	if (status == IO_FAIL) {
 		abort();
@@ -1087,7 +1089,8 @@ void global_cached_io::process_user_req(
 			// all pages have been referenced. It's likely that we issued
 			// too many requests. Let's stop issuing more requests for now.
 			if (p == NULL) {
-				fprintf(stderr, "thread %d can't evict a page\n", get_io_idx());
+				fprintf(stderr, "thread %d can't evict a page, pending pages: %d\n",
+						get_io_idx(), num_underlying_pages.get());
 				goto end;
 			}
 		} while (p == NULL);
@@ -1265,7 +1268,9 @@ void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
 			// requests in this IO instance, so it might be too large.
 			// Furthermore, a request might be very large. I might need to
 			// limit the number of pending pages in the underlying IO.
-			&& get_num_underlying_reqs() < get_max_num_pending_ios()) {
+			&& get_num_underlying_reqs() < get_max_num_pending_ios()
+			// TODO the maximal number should be configurable.
+			&& num_underlying_pages.get() < 100) {
 		io_request req = queue.pop_front();
 		// We don't allow the user's requests to be extended requests.
 		assert(!req.is_extended_req());
@@ -1539,6 +1544,7 @@ void global_cached_io::flush_requests()
 					underlying_requests.end(), req_off_comparator);
 		io_request req = underlying_requests[0];
 		int num_sent = 0;
+		int num_pages = 0;
 		for (unsigned i = 1; i < underlying_requests.size(); i++) {
 			io_request *under_req = &underlying_requests[i];
 
@@ -1555,6 +1561,7 @@ void global_cached_io::flush_requests()
 					// We can't merge the two requests.
 					|| !merge_req(req, *under_req)) {
 				num_sent++;
+				num_pages += req.get_num_bufs();
 				::access(underlying, req);
 
 				req = *under_req;
@@ -1567,7 +1574,9 @@ void global_cached_io::flush_requests()
 		}
 		underlying_requests.clear();
 		num_sent++;
+		num_pages += req.get_num_bufs();
 		num_to_underlying.inc(num_sent);
+		num_underlying_pages.inc(num_pages);
 		::access(underlying, req);
 	}
 	underlying->flush_requests();

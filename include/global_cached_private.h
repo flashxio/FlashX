@@ -295,6 +295,7 @@ class global_cached_io: public io_interface
 	atomic_integer num_issued_areqs;
 	atomic_integer num_to_underlying;
 	atomic_integer num_from_underlying;
+	atomic_integer num_underlying_pages;
 
 	/**
 	 * It's another version of read() and write(), but it's responsible
@@ -318,6 +319,7 @@ class global_cached_io: public io_interface
 		else {
 			io_status status;
 			num_to_underlying.inc(1);
+			num_underlying_pages.inc(req.get_num_bufs());
 			underlying->access(&req, 1, &status);
 			if (status == IO_FAIL) {
 				abort();
@@ -401,6 +403,8 @@ public:
 	virtual void cleanup() {
 		wait4complete(num_pending_ios());
 		underlying->cleanup();
+		assert(get_num_underlying_reqs() == 0);
+		assert(num_underlying_pages.get() == 0);
 		assert(pending_requests.is_empty());
 		assert(complete_queue.is_empty());
 		assert(completed_disk_queue.is_empty());
