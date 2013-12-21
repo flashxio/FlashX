@@ -575,6 +575,7 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 	completed_disk_queue(std::string("gcached_complete_disk_queue-") + itoa(
 				underlying->get_node_id()), underlying->get_node_id(),
 			COMPLETE_QUEUE_SIZE, INT_MAX),
+	cached_requests(underlying->get_node_id(), COMPLETE_QUEUE_SIZE, true),
 	user_requests(underlying->get_node_id(), COMPLETE_QUEUE_SIZE, true)
 {
 	assert(t == underlying->get_thread());
@@ -1047,26 +1048,42 @@ thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p,
 
 void global_cached_io::process_cached_reqs(user_comp_req_queue &requests)
 {
-	int num_cached_reqs = cached_requests.size();
-	stack_array<io_request *, 128> async_reqs(num_cached_reqs);
+	const int REQ_BUF_SIZE = 64;
+
+	if (cached_requests.is_empty())
+		return;
+
 	int num_async_reqs = 0;
-	num_fast_process += num_cached_reqs;
-	for (int i = 0; i < num_cached_reqs; i++) {
-		io_request *req = &cached_requests[i].first;
-		thread_safe_page *dirty = complete_cached_req(req,
-				cached_requests[i].second, this, comp_allocator, requests);
+	int num_reqs_in_buf = 0;
+	io_request req_buf[REQ_BUF_SIZE];
+	io_request *reqp_buf[REQ_BUF_SIZE];
+	while (!cached_requests.is_empty()) {
+		num_fast_process++;
+		std::pair<io_request, thread_safe_page *> pair
+			= cached_requests.pop_front();
+		thread_safe_page *dirty = complete_cached_req(&pair.first,
+				pair.second, this, comp_allocator, requests);
 		page_cache *cache = get_global_cache();
 		if (dirty)
 			cache->mark_dirty_pages(&dirty, 1, underlying);
-		cached_requests[i].second->dec_ref();
-		if (!req->is_sync())
-			async_reqs[num_async_reqs++] = req;
+		pair.second->dec_ref();
+		if (!pair.first.is_sync()) {
+			req_buf[num_reqs_in_buf] = pair.first;
+			reqp_buf[num_reqs_in_buf] = &req_buf[num_reqs_in_buf];
+			num_reqs_in_buf++;
+			num_async_reqs++;
+		}
+
+		if (num_reqs_in_buf == REQ_BUF_SIZE) {
+			::notify_completion(this, reqp_buf, num_reqs_in_buf);
+			num_reqs_in_buf = 0;
+		}
 	}
 	// We don't need to notify completion for sync requests.
 	// Actually, we don't even need to do anything for sync requests.
 	num_completed_areqs.inc(num_async_reqs);
-	::notify_completion(this, async_reqs.data(), num_async_reqs);
-	cached_requests.clear();
+	if (num_reqs_in_buf > 0)
+		::notify_completion(this, reqp_buf, num_reqs_in_buf);
 }
 
 void global_cached_io::process_user_req(
@@ -1412,7 +1429,7 @@ void global_cached_io::process_all_requests()
 	// It may add completed user requests to queues for further processing. 
 	process_user_reqs(user_requests);
 
-	while (!cached_requests.empty() || !complete_queue.is_empty()) {
+	while (!cached_requests.is_empty() || !complete_queue.is_empty()) {
 		int orig_num = user_comp_requests.get_num_entries();
 
 		// Process the completed requests served in the cache directly.
