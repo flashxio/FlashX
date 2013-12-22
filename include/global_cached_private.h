@@ -379,7 +379,8 @@ public:
 			user_comp_req_queue &requests);
 
 	void queue_requests(page_req_pair reqs[], int num) {
-		pending_requests.addByForce(reqs, num);
+		int num_added = pending_requests.add(reqs, num);
+		assert(num_added == num);
 		get_thread()->activate();
 	}
 

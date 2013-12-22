@@ -52,6 +52,11 @@
 const int COMPLETE_QUEUE_SIZE = 10240;
 const int REQ_BUF_SIZE = 64;
 
+/**
+ * The initial size of the queue for pending IO requests
+ */
+const int INIT_GCACHE_PENDING_SIZE = 1000;
+
 void thread_safe_page::add_req(original_io_request *req)
 {
 	req->set_next_req_on_page(this, reqs);
@@ -616,7 +621,7 @@ int global_cached_io::process_completed_requests(user_comp_req_queue &requests)
 global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 		page_cache *cache): io_interface(t), pending_requests(
 			std::string("pending_req_queue-") + itoa(underlying->get_node_id()),
-			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE),
+			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE, INT_MAX),
 	complete_queue(std::string("gcached_complete_queue-") + itoa(
 				underlying->get_node_id()), underlying->get_node_id(),
 			COMPLETE_QUEUE_SIZE, INT_MAX),

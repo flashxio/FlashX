@@ -220,12 +220,6 @@ const int MAX_DISK_CACHED_REQS = 1000;
 const int NUM_REQS_BY_USER = 1000;
 
 /**
- * The initial size of the queue for pending IO requests
- * in the global cache.
- */
-const int INIT_GCACHE_PENDING_SIZE = NUM_REQS_BY_USER * 100;
-
-/**
  * The min size of IO vector allocated for an IO request..
  */
 const int MIN_NUM_ALLOC_IOVECS = 16;
