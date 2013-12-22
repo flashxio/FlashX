@@ -143,8 +143,7 @@ public:
 		orig_io = io;
 	}
 
-	void compute(io_interface *io, join_compute_allocator *compute_alloc,
-			user_comp_req_queue &requests);
+	void compute();
 
 	friend class original_req_byte_array;
 };
@@ -280,6 +279,11 @@ class global_cached_io: public io_interface
 	// This contains a request from the application. It contains a request
 	// in progress.
 	partial_request processing_req;
+	// If user computation has generated too many requests, we may not
+	// complete a user computation (we can't fetch all requests generated
+	// by it). We have to keep the incomplete computation here, and we
+	// will try to fetch more requests from it later.
+	user_compute *incomplete_compute;
 
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
@@ -368,6 +372,11 @@ public:
 			io_status *status);
 	// Process the remaining requests issued by the application.
 	void process_user_reqs(queue_interface<io_request> &queue);
+
+	// This function performs post-computation steps, after we perform the user
+	// computation.
+	bool complete_user_compute(user_compute *compute,
+			user_comp_req_queue &requests);
 
 	void queue_requests(page_req_pair reqs[], int num) {
 		pending_requests.addByForce(reqs, num);

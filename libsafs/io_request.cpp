@@ -136,8 +136,11 @@ void user_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 		user_comp_req_queue &reqs)
 {
 	while (has_requests()) {
-		request_range range = get_next_request();
 		user_compute *comp = alloc->alloc();
+		if (comp == NULL) {
+			break;
+		}
+		request_range range = get_next_request();
 		io_request req(comp, range.get_loc(), range.get_size(),
 				range.get_access_method(), io, io->get_node_id());
 		reqs.push_back(req);

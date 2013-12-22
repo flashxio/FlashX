@@ -242,6 +242,10 @@ public:
 
 	virtual T *alloc_obj() {
 		char *addr = slab_allocator::alloc();
+		if (addr == NULL) {
+			return NULL;
+		}
+
 		T *obj = (T *) (addr + sizeof(slab_allocator::linked_obj));
 		initiator->init(obj);
 		return obj;
