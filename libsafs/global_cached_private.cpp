@@ -51,6 +51,7 @@
 
 const int COMPLETE_QUEUE_SIZE = 10240;
 const int REQ_BUF_SIZE = 64;
+const int OBJ_ALLOC_INC_SIZE = 1024 * 1024;
 
 /**
  * The initial size of the queue for pending IO requests
@@ -90,10 +91,10 @@ class req_ext_allocator: public obj_allocator<io_req_extension>
 		}
 	} initiator;
 public:
-	req_ext_allocator(int node_id, long increase_size,
-			long max_size = params.get_max_obj_alloc_size()): obj_allocator<io_req_extension>(
+	req_ext_allocator(int node_id, long max_size = params.get_max_obj_alloc_size(
+				)): obj_allocator<io_req_extension>(
 				std::string("req_ext_allocator-") + itoa(node_id), node_id,
-				increase_size, max_size, &initiator) {
+				OBJ_ALLOC_INC_SIZE, max_size, &initiator) {
 	}
 	
 	virtual io_req_extension *alloc_obj() {
@@ -120,10 +121,10 @@ class request_allocator: public obj_allocator<original_io_request>
 		}
 	} initiator;
 public:
-	request_allocator(int node_id, long increase_size,
-			long max_size = params.get_max_obj_alloc_size()): obj_allocator<original_io_request>(
+	request_allocator(int node_id, long max_size = params.get_max_obj_alloc_size(
+				)): obj_allocator<original_io_request>(
 				std::string("gcached_req_allocator-") + itoa(node_id), node_id,
-				increase_size, max_size, &initiator) {
+				OBJ_ALLOC_INC_SIZE, max_size, &initiator) {
 	}
 
 	virtual original_io_request *alloc_obj() {
@@ -208,7 +209,7 @@ public:
 	join_compute_allocator(int node_id) {
 		init = new compute_initiator(this);
 		allocator = new obj_allocator<join_compute>("join-compute-allocator",
-				node_id, PAGE_SIZE, params.get_max_join_compute() * sizeof(
+				node_id, OBJ_ALLOC_INC_SIZE, params.get_max_join_compute() * sizeof(
 					join_compute), init);
 	}
 
@@ -644,10 +645,8 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 	user_requests(underlying->get_node_id(), COMPLETE_QUEUE_SIZE, true)
 {
 	assert(t == underlying->get_thread());
-	ext_allocator = new req_ext_allocator(underlying->get_node_id(),
-			sizeof(io_req_extension) * 1024);
-	req_allocator = new request_allocator(underlying->get_node_id(),
-			sizeof(original_io_request) * 1024);
+	ext_allocator = new req_ext_allocator(underlying->get_node_id());
+	req_allocator = new request_allocator(underlying->get_node_id());
 	comp_allocator = new join_compute_allocator(underlying->get_node_id());
 	cb = NULL;
 	cache_hits = 0;
