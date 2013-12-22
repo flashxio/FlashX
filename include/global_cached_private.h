@@ -295,8 +295,15 @@ class global_cached_io: public io_interface
 	int num_evicted_dirty_pages;
 
 	// Count the number of async requests.
+	// The number of async requests that have been completed.
 	atomic_integer num_completed_areqs;
+	// The number of async requests issued by the application.
 	atomic_integer num_issued_areqs;
+	// The number of async requests that have been processed.
+	// It is useful when we want to count the number of requests being
+	// processed.
+	atomic_integer num_processed_areqs;
+
 	atomic_integer num_to_underlying;
 	atomic_integer num_from_underlying;
 	atomic_integer num_underlying_pages;
@@ -413,6 +420,8 @@ public:
 	virtual void cleanup() {
 		wait4complete(num_pending_ios());
 		underlying->cleanup();
+		assert(num_processed_areqs.get() == num_completed_areqs.get());
+		assert(num_processed_areqs.get() == num_issued_areqs.get());
 		assert(get_num_underlying_reqs() == 0);
 		assert(num_underlying_pages.get() == 0);
 		assert(pending_requests.is_empty());

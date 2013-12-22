@@ -1344,18 +1344,16 @@ void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
 	// referenced pages in the cache and we can't evict a page from a page set.
 	// So we can stop processing the remaining requests for now.
 	while (processing_req.is_empty() && !queue.is_empty()
-			// TODO this isn't a very good way to limit the number of pending
-			// requests in the underlying IO.
-			// For one, max_num_pending_ios is the total number of pending
-			// requests in this IO instance, so it might be too large.
-			// Furthermore, a request might be very large. I might need to
-			// limit the number of pending pages in the underlying IO.
-			&& get_num_underlying_reqs() < get_max_num_pending_ios()
+			// Limit the number of async requests being processed.
+			&& num_processed_areqs.get() - num_completed_areqs.get(
+				) < get_max_num_pending_ios()
 			// TODO the maximal number should be configurable.
 			&& num_underlying_pages.get() < 100) {
 		io_request req = queue.pop_front();
+		num_processed_areqs.inc(1);
 		// We don't allow the user's requests to be extended requests.
 		assert(!req.is_extended_req());
+		assert(!req.is_sync());
 		// TODO right now it only supports single-buf requests.
 		assert(req.get_num_bufs() == 1);
 
@@ -1399,14 +1397,17 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		assert(requests[i].get_num_bufs() == 1);
 
 		if (requests[i].is_flush()) {
+			assert(!requests[i].is_sync());
 			syncd = true;
 			num_completed_areqs.inc(1);
+			num_processed_areqs.inc(1);
 			continue;
 		}
 		else if (requests[i].is_sync()) {
 			syncd = true;
 		}
 		assert(processing_req.is_empty());
+		num_processed_areqs.inc(1);
 		processing_req.init(requests[i]);
 		io_status *stat_p = NULL;
 		if (status)
