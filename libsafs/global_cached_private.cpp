@@ -95,6 +95,12 @@ public:
 				std::string("req_ext_allocator-") + itoa(node_id), node_id,
 				increase_size, max_size, &initiator) {
 	}
+	
+	virtual io_req_extension *alloc_obj() {
+		io_req_extension *ext = obj_allocator<io_req_extension>::alloc_obj();
+		assert(ext);
+		return ext;
+	}
 };
 
 /**
@@ -118,6 +124,12 @@ public:
 			long max_size = params.get_max_obj_alloc_size()): obj_allocator<original_io_request>(
 				std::string("gcached_req_allocator-") + itoa(node_id), node_id,
 				increase_size, max_size, &initiator) {
+	}
+
+	virtual original_io_request *alloc_obj() {
+		original_io_request *req = obj_allocator<original_io_request>::alloc_obj();
+		assert(req);
+		return req;
 	}
 };
 
