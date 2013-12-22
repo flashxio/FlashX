@@ -263,8 +263,6 @@ bool vertex_compute::run(page_byte_array &array)
 	// If the algorithm doesn't need to get the full information
 	// of their neighbors
 	if (graph->get_required_neighbor_type() == edge_type::NONE
-			// Or the vertex doesn't have neighbors.
-			|| ext_v->get_num_edges(graph->get_required_neighbor_type()) == 0
 			// Or we haven't perform computation on the vertex yet.
 			|| v == NULL) {
 		v = &graph->get_vertex(ext_v->get_id());
