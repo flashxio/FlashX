@@ -162,19 +162,31 @@ public:
 		assert(compute != NULL);
 		compute->run(array);
 		compute->dec_ref();
+		if (compute->get_ref() == 0) {
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+		}
 		return true;
 	}
 
+	// TODO this is a temporary solution. It allows a user compute
+	// to generate more IO requests only once.
 	virtual int has_requests() const {
+#if 0
 		if (compute)
 			return compute->has_requests();
 		else
+#endif
 			return false;
 	}
 
 	virtual request_range get_next_request() {
+#if 0
 		assert(compute);
 		return compute->get_next_request();
+#endif
+		assert(0);
+		return request_range();
 	}
 
 	virtual void fetch_requests(io_interface *io, compute_allocator *alloc,
@@ -234,6 +246,7 @@ public:
 void join_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 		user_comp_req_queue &reqs)
 {
+#if 0
 	// We have completed `compute' and deallocated it.
 	if (compute == NULL)
 		return;
@@ -259,6 +272,7 @@ void join_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 		alloc->free(compute);
 		compute = NULL;
 	}
+#endif
 }
 
 thread_safe_page *original_io_request::complete_req(thread_safe_page *p,
