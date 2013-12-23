@@ -27,6 +27,8 @@
 #include "graph_config.h"
 
 atomic_number<long> num_triangles;
+atomic_number<long> num_working_vertices;
+atomic_number<long> num_completed_vertices;
 
 class triangle_vertex: public compute_vertex
 {
@@ -85,6 +87,9 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 		num_required = out_edges.size();
 		num_joined = 0;
 		num_fetched = 0;
+		long ret = num_working_vertices.inc(1);
+		if (ret % 1000 == 0)
+			fprintf(stderr, "%ld working vertices\n", ret);
 		return;
 	}
 
@@ -118,6 +123,10 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (num_joined == num_required) {
+		long ret = num_completed_vertices.inc(1);
+		if (ret % 1000 == 0)
+			printf("%ld completed vertices, %ld triangles\n",
+					ret, num_triangles.get());
 		in_edges = std::vector<vertex_id_t>();
 		out_edges = std::vector<vertex_id_t>();
 	}
