@@ -283,7 +283,7 @@ class global_cached_io: public io_interface
 	// complete a user computation (we can't fetch all requests generated
 	// by it). We have to keep the incomplete computation here, and we
 	// will try to fetch more requests from it later.
-	user_compute *incomplete_compute;
+	fifo_queue<user_compute *> incomplete_computes;
 
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
@@ -380,6 +380,7 @@ public:
 	// Process the remaining requests issued by the application.
 	void process_user_reqs(queue_interface<io_request> &queue);
 
+	void process_incomplete_computes(user_comp_req_queue &requests);
 	// This function performs post-computation steps, after we perform the user
 	// computation.
 	bool complete_user_compute(user_compute *compute,
