@@ -110,3 +110,5 @@ echo "the basic test for global cached IO under my own triangle counting workloa
 ./test/test_rand_io test/conf/run_parted_cache_real.txt test workload=test/workload/triangle-counting.data user_compute=
 
 apps/graph-bfs/graph-bfs test/conf/run_graph.txt twitter ~/graph-data/twitter_rv.net.index 12 1
+
+apps/triangle-counting/triangle-counting test/conf/run_graph.txt twitter ~/graph-data/twitter_rv.net.index 1
