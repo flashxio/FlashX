@@ -92,7 +92,7 @@ class vertex_compute_allocator: public compute_allocator
 	obj_allocator<vertex_compute> allocator;
 public:
 	vertex_compute_allocator(graph_engine *graph, thread *t): allocator(
-			"vertex-compute-allocator", t->get_node_id(), PAGE_SIZE,
+			"vertex-compute-allocator", t->get_node_id(), 1024 * 1024,
 			params.get_max_obj_alloc_size(),
 			// TODO memory leak here
 			new compute_initiator(graph, this)) {
