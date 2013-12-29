@@ -98,21 +98,37 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 	if (num == 0) {
 		assert(in_edges.size() == 0);
 		assert(out_edges.size() == 0);
+
+		long ret = num_working_vertices.inc(1);
+		if (ret % 100000 == 0)
+			printf("%ld working vertices\n", ret);
 		// A vertex has to have in-edges and out-edges in order to form
 		// a triangle. so we can simply skip the vertices that don't have
 		// either of them.
 		if (get_num_edges(edge_type::OUT_EDGE) == 0
-				|| get_num_edges(edge_type::IN_EDGE) == 0)
+				|| get_num_edges(edge_type::IN_EDGE) == 0) {
+			long ret = num_completed_vertices.inc(1);
+			if (ret % 100000 == 0)
+				printf("%ld completed vertices, %ld triangles\n",
+						ret, num_triangles.get());
 			return;
+		}
 
 		this->get_required_edges(edge_type::IN_EDGE, in_edges);
 		this->get_required_edges(edge_type::OUT_EDGE, out_edges);
 		num_required = out_edges.size();
 		num_joined = 0;
 		num_fetched = 0;
-		long ret = num_working_vertices.inc(1);
-		if (ret % 1000 == 0)
-			fprintf(stderr, "%ld working vertices\n", ret);
+
+		if (in_edges.empty() || out_edges.empty()) {
+			num_required = 0;
+			long ret = num_completed_vertices.inc(1);
+			if (ret % 100000 == 0)
+				printf("%ld completed vertices, %ld triangles\n",
+						ret, num_triangles.get());
+			in_edges = std::vector<vertex_id_t>();
+			out_edges = std::vector<vertex_id_t>();
+		}
 		return;
 	}
 
@@ -149,7 +165,7 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 	// the computation. We can release the memory now.
 	if (num_joined == num_required) {
 		long ret = num_completed_vertices.inc(1);
-		if (ret % 1000 == 0)
+		if (ret % 100000 == 0)
 			printf("%ld completed vertices, %ld triangles\n",
 					ret, num_triangles.get());
 		in_edges = std::vector<vertex_id_t>();
@@ -207,6 +223,9 @@ int main(int argc, char *argv[])
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	graph->cleanup();
+	printf("There are %ld vertices\n", index->get_num_vertices());
+	printf("process %ld vertices and complete %ld vertices\n",
+			num_working_vertices.get(), num_completed_vertices.get());
 	printf("there are %ld triangles. It takes %f seconds\n",
 			num_triangles.get(), time_diff(start, end));
 }
