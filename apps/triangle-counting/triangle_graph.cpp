@@ -26,6 +26,8 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
+const double BIN_SEARCH_RATIO = 100;
+
 atomic_number<long> num_triangles;
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
@@ -62,7 +64,7 @@ public:
 		num_pv_triangles = 0;
 	}
 
-	int count_triangle(const ext_mem_vertex &neighbor) const;
+	int count_triangles(const page_vertex *v) const;
 
 	virtual bool has_required_vertices() const {
 		return num_fetched < num_required;
@@ -89,6 +91,73 @@ public:
 
 	void run(graph_engine &graph, const page_vertex *vertices[], int num);
 };
+
+int triangle_vertex::count_triangles(const page_vertex *v) const
+{
+	int num_local_triangles = 0;
+	assert(v->get_id() != this->get_id());
+
+	if (v->get_num_edges(edge_type::OUT_EDGE) == 0)
+		return 0;
+
+	// If the neighbor vertex has way more edges than this vertex.
+	if (v->get_num_edges(edge_type::OUT_EDGE) / in_edges.size() > BIN_SEARCH_RATIO) {
+		std::vector<vertex_id_t>::const_iterator this_it = in_edges.begin();
+		std::vector<vertex_id_t>::const_iterator this_end = in_edges.end();
+		while (this_it != this_end) {
+			vertex_id_t this_neighbor = *this_it;
+			// We need to skip loops.
+			if (this_neighbor != v->get_id()
+					&& this_neighbor != this->get_id()) {
+				if (v->contain_edge(edge_type::OUT_EDGE, this_neighbor))
+					num_local_triangles++;
+			}
+			++this_it;
+		}
+	}
+	// If this vertex has way more edges than the neighbor vertex.
+	else if (in_edges.size() / v->get_num_edges(edge_type::OUT_EDGE) > BIN_SEARCH_RATIO) {
+		page_byte_array::const_iterator<vertex_id_t> other_it
+			= v->get_neigh_begin(edge_type::OUT_EDGE);
+		page_byte_array::const_iterator<vertex_id_t> other_end
+			= v->get_neigh_end(edge_type::OUT_EDGE);
+		while (other_it != other_end) {
+			vertex_id_t neigh_neighbor = *other_it;
+			if (neigh_neighbor != v->get_id()
+					&& neigh_neighbor != this->get_id()) {
+				if (std::binary_search(in_edges.begin(), in_edges.end(),
+							neigh_neighbor))
+					num_local_triangles++;
+			}
+			++other_it;
+		}
+	}
+	else {
+		std::vector<vertex_id_t>::const_iterator this_it = in_edges.begin();
+		std::vector<vertex_id_t>::const_iterator this_end = in_edges.end();
+		page_byte_array::const_iterator<vertex_id_t> other_it
+			= v->get_neigh_begin(edge_type::OUT_EDGE);
+		page_byte_array::const_iterator<vertex_id_t> other_end
+			= v->get_neigh_end(edge_type::OUT_EDGE);
+		while (this_it != this_end && other_it != other_end) {
+			vertex_id_t this_neighbor = *this_it;
+			vertex_id_t neigh_neighbor = *other_it;
+			if (this_neighbor == neigh_neighbor) {
+				// skip loop
+				if (neigh_neighbor != v->get_id()
+						&& neigh_neighbor != this->get_id())
+					num_local_triangles++;
+				++this_it;
+				++other_it;
+			}
+			else if (this_neighbor < neigh_neighbor)
+				++this_it;
+			else
+				++other_it;
+		}
+	}
+	return num_local_triangles;
+}
 
 void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 			int num)
@@ -134,31 +203,7 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 
 	num_joined++;
 	for (int i = 0; i < num; i++) {
-		const page_vertex *v = vertices[i];
-		std::vector<vertex_id_t>::const_iterator this_it = in_edges.begin();
-		std::vector<vertex_id_t>::const_iterator this_end = in_edges.end();
-		assert(v->get_id() != this->get_id());
-
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(edge_type::OUT_EDGE);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(edge_type::OUT_EDGE);
-		while (this_it != this_end && other_it != other_end) {
-			vertex_id_t this_neighbor = *this_it;
-			vertex_id_t neigh_neighbor = *other_it;
-			if (this_neighbor == neigh_neighbor) {
-				// skip loop
-				if (neigh_neighbor != v->get_id()
-						&& neigh_neighbor != this->get_id())
-					num_pv_triangles++;
-				++this_it;
-				++other_it;
-			}
-			else if (this_neighbor < neigh_neighbor)
-				++this_it;
-			else
-				++other_it;
-		}
+		num_pv_triangles += count_triangles(vertices[i]);
 	}
 
 	// If we have seen all required neighbors, we have complete

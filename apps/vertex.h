@@ -25,6 +25,7 @@
 #include <assert.h>
 
 #include <vector>
+#include <algorithm>
 
 #include "container.h"
 #include "cache.h"
@@ -247,6 +248,9 @@ public:
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			edge_type type) const = 0;
 	virtual vertex_id_t get_id() const = 0;
+	bool contain_edge(edge_type type, vertex_id_t id) const {
+		return std::binary_search(get_neigh_begin(type), get_neigh_end(type), id);
+	}
 };
 
 /**
