@@ -544,7 +544,7 @@ public:
 	}
 
 	template<class T>
-	class const_iterator
+	class const_iterator: public std::iterator<std::random_access_iterator_tag, T>
 	{
 		const page_byte_array *arr;
 
@@ -553,6 +553,9 @@ public:
 		// The end byte offset in the pages.
 		int end;
 	public:
+		typedef typename std::iterator<std::random_access_iterator_tag,
+				T>::difference_type difference_type;
+
 		const_iterator(const page_byte_array *arr, int byte_off, int byte_end) {
 			this->arr = arr;
 			off = arr->get_offset_in_first_page() + byte_off;
@@ -570,6 +573,10 @@ public:
 			int off_in_pg = off % PAGE_SIZE;
 			char *data = (char *) arr->get_page(pg_idx)->get_data();
 			return *(T *) (data + off_in_pg);
+		}
+
+		difference_type operator-(const const_iterator<T> &it) const {
+			return (off - it.off) / sizeof(T);
 		}
 
 		// Prefix ++
@@ -599,7 +606,7 @@ public:
 	};
 
 	template<class T>
-	class iterator
+	class iterator: public std::iterator<std::random_access_iterator_tag, T>
 	{
 		const page_byte_array *arr;
 
@@ -608,6 +615,9 @@ public:
 		// The end byte offset in the page array.
 		int end;
 	public:
+		typedef typename std::iterator<std::random_access_iterator_tag,
+				T>::difference_type difference_type;
+
 		iterator(page_byte_array *arr, int byte_off, int byte_end) {
 			this->arr = arr;
 			off = arr->get_offset_in_first_page() + byte_off;
@@ -631,6 +641,10 @@ public:
 			int off_in_pg = off % PAGE_SIZE;
 			char *data = (char *) arr->get_page(pg_idx)->get_data();
 			return *(T *) (data + off_in_pg);
+		}
+
+		difference_type operator-(const iterator<T> &it) const {
+			return (off - it.off) / sizeof(T);
 		}
 
 		// Prefix ++
