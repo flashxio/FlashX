@@ -99,6 +99,9 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 		const page_vertex *v = vertices[i];
 		std::vector<vertex_id_t>::const_iterator this_it = in_edges.begin();
 		std::vector<vertex_id_t>::const_iterator this_end = in_edges.end();
+		if (v->get_id() == this->get_id())
+			continue;
+
 		page_byte_array::const_iterator<vertex_id_t> other_it
 			= v->get_neigh_begin(edge_type::OUT_EDGE);
 		page_byte_array::const_iterator<vertex_id_t> other_end
@@ -107,7 +110,10 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 			vertex_id_t this_neighbor = *this_it;
 			vertex_id_t neigh_neighbor = *other_it;
 			if (this_neighbor == neigh_neighbor) {
-				num_local_triangles++;
+				// skip loop
+				if (neigh_neighbor != v->get_id()
+						&& neigh_neighbor != this->get_id())
+					num_local_triangles++;
 				++this_it;
 				++other_it;
 			}
