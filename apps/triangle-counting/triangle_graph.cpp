@@ -98,6 +98,8 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 	if (num == 0) {
 		assert(in_edges.size() == 0);
 		assert(out_edges.size() == 0);
+		assert(num_joined == 0);
+		assert(num_fetched == 0);
 
 		long ret = num_working_vertices.inc(1);
 		if (ret % 100000 == 0)
@@ -117,8 +119,6 @@ void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
 		this->get_required_edges(edge_type::IN_EDGE, in_edges);
 		this->get_required_edges(edge_type::OUT_EDGE, out_edges);
 		num_required = out_edges.size();
-		num_joined = 0;
-		num_fetched = 0;
 
 		if (in_edges.empty() || out_edges.empty()) {
 			num_required = 0;
