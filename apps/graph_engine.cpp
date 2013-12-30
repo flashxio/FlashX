@@ -107,117 +107,12 @@ public:
 	}
 };
 
-#if 0
-class pending_vertex: public ext_mem_vertex
-{
-	// The number of neighbors that have been fetched from disks.
-	int num_completed_neighbors;
-	edge_type required_neighbor_type;
-
-	pending_vertex(const ext_mem_vertex &v,
-			edge_type required_neighbor_type): ext_mem_vertex(v) {
-		num_completed_neighbors = 0;
-		 this->required_neighbor_type = required_neighbor_type;
-	}
-
-	pending_vertex(char *buf, int size, bool directed,
-			edge_type required_neighbor_type): ext_mem_vertex(buf, size, directed) {
-		num_completed_neighbors = 0;
-		this->required_neighbor_type = required_neighbor_type;
-	}
-public:
-	static pending_vertex *create(char *buf, int size, graph_engine *graph) {
-		return new pending_vertex(buf, size, graph->is_directed(),
-				graph->get_required_neighbor_type());
-	}
-	static pending_vertex *create(const ext_mem_vertex &v, graph_engine *graph) {
-		return new pending_vertex(v, graph->get_required_neighbor_type());
-	}
-
-	static void destroy(pending_vertex *v) {
-		delete [] v->get_buf();
-		delete v;
-	}
-
-	void complete_neighbor() {
-		num_completed_neighbors++;
-	}
-
-	bool is_complete() const {
-		return num_completed_neighbors == get_num_edges(required_neighbor_type);
-	}
-
-	int get_num_neighbors() const {
-		return get_num_edges(required_neighbor_type);
-	}
-
-	int fetch_neighbors(fifo_queue<vertex_id_t> &neighbors) const {
-		return ext_mem_vertex::get_neighbors(required_neighbor_type, neighbors);
-	}
-};
-
-class pending_neighbor_collection
-{
-	fifo_queue<vertex_id_t> neighbors;
-	pending_vertex *vertex;
-public:
-	pending_neighbor_collection(): neighbors(-1, 1024, true) {
-		this->vertex = NULL;
-	}
-
-	void init(pending_vertex *vertex) {
-		assert(neighbors.is_empty());
-		this->vertex = vertex;
-		if (neighbors.get_size() < vertex->get_num_neighbors())
-			neighbors.expand_queue(vertex->get_num_neighbors());
-		assert(neighbors.get_size() >= vertex->get_num_neighbors());
-		vertex->fetch_neighbors(neighbors);
-	}
-
-	bool is_empty() {
-		return get_num_neighbors() == 0;
-	}
-
-	int get_num_neighbors() {
-		return neighbors.get_num_entries();
-	}
-
-	int fetch_neighbors(vertex_id_t neighbors[], int num) {
-		return this->neighbors.fetch(neighbors, num);
-	}
-
-	pending_vertex *get_pending_vertex() const {
-		return vertex;
-	}
-};
-#endif
-
 class worker_thread: public thread
 {
 	file_io_factory *factory;
 	io_interface *io;
 	graph_engine *graph;
 	compute_allocator *alloc;
-
-#if 0
-	/* 
-	 * Some graph algorithms such as triangle counting require to join
-	 * the adjacency lists of two vertices. When we fetch one of the vertices,
-	 * we need to buffer the vertex and wait for the other vertex to
-	 * become available.
-	 */
-	fifo_queue<ext_mem_vertex> pending_vertices;
-
-	/*
-	 * When we join a vertex with its neighbors, we need to fetch them
-	 * fist. However, some vertex has a very large number of neighbors.
-	 * Whenever we need to fetch all neighbors of a vertex, we first keep
-	 * them in this data structure. Each time we only fetch a certain
-	 * number of the adjacency lists of the neighbors until we fetch all.
-	 */
-	pending_neighbor_collection curr_pending;
-#endif
-
 	std::vector<vertex_id_t> activated_vertices;
 public:
 	worker_thread(graph_engine *graph, file_io_factory *factory,
@@ -238,16 +133,6 @@ public:
 	std::vector<vertex_id_t> &get_activated_vertices() {
 		return activated_vertices;
 	}
-
-#if 0
-	void add_pending_vertex(ext_mem_vertex v) {
-		if (pending_vertices.is_full())
-			pending_vertices.expand_queue(pending_vertices.get_size() * 2);
-		pending_vertices.push_back(v);
-	}
-	int process_pending_vertex(int max);
-	int process_pending_vertices(int max);
-#endif
 
 	int process_activated_vertices(int max);
 };
@@ -389,77 +274,6 @@ void worker_thread::init()
 	io->init();
 }
 
-#if 0
-/**
- * When we fetch all neighbors of a vertex, the number of neighbors of
- * a vertex may exceeds the maximal number of pending I/O requests allowed
- * by the graph engine. This method tries to fetch the neighbors of a vertex
- * incrementally. Namely, we only fetch a certain number of neighbors of
- * the vertex in each invocation until all neighbors are fetched.
- */
-int worker_thread::process_pending_vertex(int max)
-{
-	int num_neighbors = min(max, curr_pending.get_num_neighbors());
-	if (num_neighbors <= 0)
-		return 0;
-
-	stack_array<io_request> reqs(num_neighbors);
-	stack_array<vertex_id_t> remain_neighs(num_neighbors);
-
-	int ret = curr_pending.fetch_neighbors(remain_neighs.data(),
-			num_neighbors);
-	assert(ret == num_neighbors);
-	for (int j = 0; j < num_neighbors; j++) {
-		vertex_id_t neighbor = remain_neighs[j];
-		compute_vertex &info = graph->get_vertex(neighbor);
-		data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
-		reqs[j].init(new char[info.get_ext_mem_size()], loc,
-				// TODO I might need to set the node id.
-				info.get_ext_mem_size(), READ, io, -1);
-		reqs[j].set_user_data(curr_pending.get_pending_vertex());
-	}
-	if (graph->get_logger())
-		graph->get_logger()->log(reqs.data(), num_neighbors);
-	io->access(reqs.data(), num_neighbors);
-	return num_neighbors;
-}
-
-/**
- * In the graph algorithms that need to join the adjacency lists of two
- * vertices, the first fetched vertex is kept in the memory, waiting for
- * its neighbors to become available. This method is to issue up to
- * the specified number of I/O requests to fetch neighbors of vertices.
- */
-int worker_thread::process_pending_vertices(int max)
-{
-	if (max <= 0)
-		return 0;
-
-	int num_processed = 0;
-	while (max > 0 && (!pending_vertices.is_empty() || !curr_pending.is_empty())) {
-		if (!curr_pending.is_empty()) {
-			int ret = process_pending_vertex(max);
-			num_processed += ret;
-			max -= ret;
-			assert(max >= 0);
-		}
-		else {
-			ext_mem_vertex ext_v = pending_vertices.pop_front();
-			int num_neighbors = ext_v.get_num_edges(
-					graph->get_required_neighbor_type());
-			assert(num_neighbors > 0);
-			curr_pending.init(pending_vertex::create(ext_v, graph));
-			int ret = process_pending_vertex(max);
-			assert(ret > 0);
-			num_processed += ret;
-			max -= ret;
-			assert(max >= 0);
-		}
-	}
-	return num_processed;
-}
-#endif
-
 /**
  * This is to process the activated vertices in the current iteration.
  */
@@ -495,11 +309,6 @@ void worker_thread::run()
 		printf("thread %d process %d activated vertices\n", get_id(), num);
 		num_visited += num;
 		while (graph->get_num_curr_activated_vertices() > 0) {
-#if 0
-			while (process_pending_vertices(
-						MAX_IO_PEND_VERTICES - io->num_pending_ios()) > 0)
-				io->wait4complete(io->num_pending_ios() / 10);
-#endif
 			num = process_activated_vertices(
 					MAX_IO_PEND_VERTICES - io->num_pending_ios());
 			num_visited += num;
@@ -509,9 +318,6 @@ void worker_thread::run()
 		// We have completed processing the activated vertices in this iteration.
 		while (io->num_pending_ios() > 0) {
 			io->wait4complete(1);
-#if 0
-			process_pending_vertices(MAX_IO_PEND_VERTICES - io->num_pending_ios());
-#endif
 		}
 		printf("thread %d visited %d vertices\n", this->get_id(), num_visited);
 
