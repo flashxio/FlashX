@@ -80,6 +80,7 @@ public:
 	}
 
 	int get_num_edges(edge_type type) const {
+		assert(vertex);
 		return vertex->get_num_edges(type);
 	}
 
@@ -96,11 +97,13 @@ public:
 
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			edge_type type) const {
+		assert(vertex);
 		return vertex->get_neigh_begin(type);
 	}
 
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			edge_type type) const {
+		assert(vertex);
 		return vertex->get_neigh_end(type);
 	}
 
