@@ -260,7 +260,7 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = graph_index_impl<triangle_vertex>::create(index_file);
+	graph_index *index = graph_index_impl<triangle_vertex>::create(index_file, directed);
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index, directed);
 	graph->set_required_neighbor_type(edge_type::OUT_EDGE);

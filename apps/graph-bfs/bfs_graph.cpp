@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = graph_index_impl<bfs_vertex>::create(index_file);
+	graph_index *index = graph_index_impl<bfs_vertex>::create(index_file, directed);
 	bfs_graph *graph = bfs_graph::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index, directed);
 	printf("BFS starts\n");

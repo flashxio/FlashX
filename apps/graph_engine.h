@@ -147,25 +147,56 @@ public:
 template<class vertex_type>
 class graph_index_impl: public graph_index
 {
+	// This is an index to the vertex array blow. Some vertices don't have
+	// edges so they don't appear in the vertex array blow.
+	std::vector<long> in_mem_index;
+	// This contains the vertices with edges.
 	std::vector<vertex_type> vertices;
 	
-	graph_index_impl(const std::string &index_file) {
+	graph_index_impl(const std::string &index_file, bool directed) {
+		int min_vertex_size;
+		if (directed)
+			min_vertex_size = sizeof(ext_mem_directed_vertex);
+		else
+			min_vertex_size = sizeof(ext_mem_undirected_vertex);
+
 		vertex_index *indices = vertex_index::load(index_file);
-		vertices.resize(indices->get_num_vertices());
-		for (size_t i = 0; i < vertices.size(); i++) {
+		in_mem_index.resize(indices->get_num_vertices(), -1);
+		size_t num_vertices = in_mem_index.size();
+		// Count the number of non-empty vertices.
+		// When we know the number of non-empty vertices in advance,
+		// we can reduce memory footprint.
+		size_t num_non_empty = 0;
+		for (size_t i = 0; i < num_vertices; i++) {
+			if (indices->get_vertex_size(i) > min_vertex_size)
+				num_non_empty++;
+		}
+		vertices.resize(num_non_empty);
+
+		size_t non_empty_idx = 0;
+		for (size_t i = 0; i < num_vertices; i++) {
 			off_t off = indices->get_vertex_off(i);
 			int size = indices->get_vertex_size(i);
-			vertices[i] = vertex_type(i, off, size);
+			// We ignore the vertices without edges.
+			if (size > min_vertex_size) {
+				in_mem_index[i] = non_empty_idx;
+				vertices[non_empty_idx++] = vertex_type(i, off, size);
+			}
 		}
+		assert(non_empty_idx == num_non_empty);
+		printf("There are %ld vertices and %ld non-empty, vertex array capacity: %ld\n",
+				num_vertices, vertices.size(), vertices.capacity());
 		vertex_index::destroy(indices);
 	}
 public:
-	static graph_index *create(const std::string &index_file) {
-		return new graph_index_impl<vertex_type>(index_file);
+	static graph_index *create(const std::string &index_file, bool directed) {
+		return new graph_index_impl<vertex_type>(index_file, directed);
 	}
 
 	virtual compute_vertex &get_vertex(vertex_id_t id) {
-		return vertices[id];
+		long idx = in_mem_index[id];
+		assert(idx >= 0);
+		return vertices[idx];
 	}
 
 	virtual size_t get_num_vertices() const {
