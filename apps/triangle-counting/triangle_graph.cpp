@@ -89,7 +89,10 @@ public:
 		return num;
 	}
 
-	void run(graph_engine &graph, const page_vertex *vertices[], int num);
+	void run(graph_engine &graph);
+
+	void run_on_neighbors(graph_engine &graph,
+			const page_vertex *vertices[], int num);
 };
 
 int triangle_vertex::count_triangles(const page_vertex *v) const
@@ -159,48 +162,46 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 	return num_local_triangles;
 }
 
-void triangle_vertex::run(graph_engine &graph, const page_vertex *vertices[],
-			int num)
+void triangle_vertex::run(graph_engine &graph)
 {
-	// If there aren't neighbors passed to the vertex's user code,
-	// it's because the vertex doesn't have neighbors.
-	if (num == 0) {
-		assert(in_edges.size() == 0);
-		assert(out_edges.size() == 0);
-		assert(num_joined == 0);
-		assert(num_fetched == 0);
+	assert(in_edges.size() == 0);
+	assert(out_edges.size() == 0);
+	assert(num_joined == 0);
+	assert(num_fetched == 0);
 
-		long ret = num_working_vertices.inc(1);
+	long ret = num_working_vertices.inc(1);
+	if (ret % 100000 == 0)
+		printf("%ld working vertices\n", ret);
+	// A vertex has to have in-edges and out-edges in order to form
+	// a triangle. so we can simply skip the vertices that don't have
+	// either of them.
+	if (get_num_edges(edge_type::OUT_EDGE) == 0
+			|| get_num_edges(edge_type::IN_EDGE) == 0) {
+		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld working vertices\n", ret);
-		// A vertex has to have in-edges and out-edges in order to form
-		// a triangle. so we can simply skip the vertices that don't have
-		// either of them.
-		if (get_num_edges(edge_type::OUT_EDGE) == 0
-				|| get_num_edges(edge_type::IN_EDGE) == 0) {
-			long ret = num_completed_vertices.inc(1);
-			if (ret % 100000 == 0)
-				printf("%ld completed vertices, %ld triangles\n",
-						ret, num_triangles.get());
-			return;
-		}
-
-		this->get_required_edges(edge_type::IN_EDGE, in_edges);
-		this->get_required_edges(edge_type::OUT_EDGE, out_edges);
-		num_required = out_edges.size();
-
-		if (in_edges.empty() || out_edges.empty()) {
-			num_required = 0;
-			long ret = num_completed_vertices.inc(1);
-			if (ret % 100000 == 0)
-				printf("%ld completed vertices, %ld triangles\n",
-						ret, num_triangles.get());
-			in_edges = std::vector<vertex_id_t>();
-			out_edges = std::vector<vertex_id_t>();
-		}
+			printf("%ld completed vertices, %ld triangles\n",
+					ret, num_triangles.get());
 		return;
 	}
 
+	this->get_required_edges(edge_type::IN_EDGE, in_edges);
+	this->get_required_edges(edge_type::OUT_EDGE, out_edges);
+	num_required = out_edges.size();
+
+	if (in_edges.empty() || out_edges.empty()) {
+		num_required = 0;
+		long ret = num_completed_vertices.inc(1);
+		if (ret % 100000 == 0)
+			printf("%ld completed vertices, %ld triangles\n",
+					ret, num_triangles.get());
+		in_edges = std::vector<vertex_id_t>();
+		out_edges = std::vector<vertex_id_t>();
+	}
+}
+
+void triangle_vertex::run_on_neighbors(graph_engine &graph,
+		const page_vertex *vertices[], int num)
+{
 	num_joined++;
 	for (int i = 0; i < num; i++) {
 		num_pv_triangles += count_triangles(vertices[i]);

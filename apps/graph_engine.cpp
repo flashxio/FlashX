@@ -267,11 +267,11 @@ bool vertex_compute::run(page_byte_array &array)
 			|| v == NULL) {
 		v = &graph->get_vertex(ext_v->get_id());
 		v->materialize(ext_v);
-		v->run(*graph, NULL, 0);
+		v->run(*graph);
 		v->dematerialize();
 	}
 	else {
-		v->run(*graph, &ext_v, 1);
+		v->run_on_neighbors(*graph, &ext_v, 1);
 	}
 	return true;
 }

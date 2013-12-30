@@ -28,8 +28,7 @@
 
 atomic_integer num_visited_vertices;
 
-void bfs_vertex::run(graph_engine &graph, const page_vertex *vertices[],
-			int num)
+void bfs_vertex::run(graph_engine &graph)
 {
 	vertex_id_t max_id = graph.get_max_vertex_id();
 	vertex_id_t min_id = graph.get_min_vertex_id();

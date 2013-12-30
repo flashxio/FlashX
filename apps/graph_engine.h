@@ -113,8 +113,18 @@ public:
 		return -1;
 	}
 
-	virtual void run(graph_engine &graph, const page_vertex *vertices[],
-			int num) = 0;
+	/**
+	 * Run user's code when the adjacency list of the vertex is read
+	 * from disks.
+	 */
+	virtual void run(graph_engine &graph) = 0;
+
+	/**
+	 * Run user's code when the adjacency lists of its neighbors are read
+	 * from disks.
+	 */
+	virtual void run_on_neighbors(graph_engine &graph,
+			const page_vertex *vertices[], int num) = 0;
 };
 
 class graph_index

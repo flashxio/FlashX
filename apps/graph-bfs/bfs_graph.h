@@ -55,8 +55,11 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
-	void run(graph_engine &graph, const page_vertex *vertices[],
-			int num);
+	void run(graph_engine &graph);
+
+	void run_on_neighbors(graph_engine &graph, const page_vertex *vertices[],
+			int num) {
+	}
 };
 
 class bfs_graph: public graph_engine
