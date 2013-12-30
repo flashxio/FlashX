@@ -79,7 +79,7 @@ public:
 		return vertex != NULL;
 	}
 
-	int get_num_edges(edge_type type) {
+	int get_num_edges(edge_type type) const {
 		return vertex->get_num_edges(type);
 	}
 
