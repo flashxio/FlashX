@@ -30,6 +30,11 @@
 
 class graph_engine;
 
+class vertex_message
+{
+};
+
+
 class compute_vertex: public in_mem_vertex_info
 {
 	atomic_flags<long> activated_levels;
@@ -128,6 +133,12 @@ public:
 	 */
 	virtual void run_on_neighbors(graph_engine &graph,
 			const page_vertex *vertices[], int num) = 0;
+
+	/**
+	 * Run user's code when the vertex receives messages from other.
+	 */
+	virtual void run_on_messages(graph_engine &,
+			const vertex_message *msgs[], int num) = 0;
 };
 
 class graph_index
@@ -324,6 +335,13 @@ public:
 	 */
 	int get_file_id() const {
 		return file_id;
+	}
+
+	void send_msg(vertex_id_t id, const vertex_message &msg) {
+		const vertex_message *msgs[1];
+		msgs[0] = &msg;
+		// TODO This is a temporary solution.
+		get_vertex(id).run_on_messages(*this, msgs, 1);
 	}
 };
 

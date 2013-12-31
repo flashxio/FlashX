@@ -60,6 +60,10 @@ public:
 	void run_on_neighbors(graph_engine &graph, const page_vertex *vertices[],
 			int num) {
 	}
+
+	virtual void run_on_messages(graph_engine &,
+			const vertex_message *msgs[], int num) {
+	}
 };
 
 class bfs_graph: public graph_engine
