@@ -135,29 +135,45 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 	if (v->get_num_edges(edge_type::OUT_EDGE) == 0)
 		return 0;
 
+	/*
+	 * We search for triangles with two different ways:
+	 * binary search if two adjacency lists have very different sizes,
+	 * scan otherwise.
+	 *
+	 * when binary search for multiple neighbors, we can reduce binary search
+	 * overhead by using the new end in the search range. We can further reduce
+	 * overhead by searching in a reverse order (start from the largest neighbor).
+	 * Since vertices of smaller ID has more neighbors, it's more likely
+	 * that a neighbor is in the beginning of the adjacency list, and
+	 * the search range will be narrowed faster.
+	 */
+
 	assert(in_edges);
 	// If the neighbor vertex has way more edges than this vertex.
 	if (v->get_num_edges(edge_type::OUT_EDGE) / in_edges->size() > BIN_SEARCH_RATIO) {
-		std::vector<vertex_id_t>::const_iterator this_it = in_edges->begin();
-		std::vector<int>::iterator count_it = triangles->begin();
-		std::vector<vertex_id_t>::const_iterator this_end = in_edges->end();
-		while (this_it != this_end) {
-			vertex_id_t this_neighbor = *this_it;
+		page_byte_array::const_iterator<vertex_id_t> other_it
+			= v->get_neigh_begin(edge_type::OUT_EDGE);
+		page_byte_array::const_iterator<vertex_id_t> other_end
+			= v->get_neigh_end(edge_type::OUT_EDGE);
+		for (int i = in_edges->size() - 1; i >= 0; i--) {
+			vertex_id_t this_neighbor = in_edges->at(i);
 			// We need to skip loops.
 			if (this_neighbor != v->get_id()
 					&& this_neighbor != this->get_id()) {
-				if (v->contain_edge(edge_type::OUT_EDGE, this_neighbor)) {
+				page_byte_array::const_iterator<vertex_id_t> first
+					= std::lower_bound(other_it, other_end, this_neighbor);
+				if (first != other_end && this_neighbor == *first) {
 					num_local_triangles++;
-					(*count_it)++;
+					(triangles->at(i))++;
 				}
+				other_end = first;
 			}
-			++this_it;
-			++count_it;
 		}
 	}
 	// If this vertex has way more edges than the neighbor vertex.
 	else if (in_edges->size() / v->get_num_edges(edge_type::OUT_EDGE)
 			> BIN_SEARCH_RATIO) {
+		// TODO the same as above.
 		page_byte_array::const_iterator<vertex_id_t> other_it
 			= v->get_neigh_begin(edge_type::OUT_EDGE);
 		page_byte_array::const_iterator<vertex_id_t> other_end
