@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
 
-CFLAGS = -g -O3 -DSTATISTICS -DENABLE_AIO #-DPROFILER
+CFLAGS = -g -O3 -DSTATISTICS #-DPROFILER
 ifdef MEMCHECK
 TRACE_FLAGS = -faddress-sanitizer
 else
@@ -24,8 +24,8 @@ endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -rdynamic $(OMP_FLAG)
-CXXFLAGS = -g -O3 -I../include -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) $(OMP_FLAG)
+LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -L../../libsafs -lsafs -L.. -lgraph -laio -lnuma $(OMP_FLAG)
+CXXFLAGS = -g -O3 -I../../include -I.. -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) $(OMP_FLAG)
 CPPFLAGS := -MD
 
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -42,33 +42,15 @@ CC = gcc
 CXX = g++
 endif
 
-all: libgraph graph-bfs triangle-counting scan-statistics tools
+all: scan-statistics
 
-libgraph: $(OBJS)
-	rm -f libgraph.a
-	ar -cvq libgraph.a $(OBJS)
-
-graph-bfs: libgraph
-	$(MAKE) -C graph-bfs
-
-triangle-counting: libgraph
-	$(MAKE) -C triangle-counting
-
-scan-statistics: libgraph
-	$(MAKE) -C scan-statistics
-
-tools: libgraph
-	$(MAKE) -C tools
+scan-statistics: $(OBJS) ../libgraph.a
+	$(CXX) -o scan-statistics $(OBJS) $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f libgraph.a
-	find -name core -delete
-	$(MAKE) clean -C tools
-	$(MAKE) clean -C graph-bfs
-	$(MAKE) clean -C triangle-counting
-	$(MAKE) clean -C scan-statistics
+	rm -f scan-statistics
 
 -include $(DEPS) 
