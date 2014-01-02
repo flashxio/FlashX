@@ -297,13 +297,15 @@ public:
 			return num_in_edges;
 		else if (type == OUT_EDGE)
 			return num_out_edges;
-		else
+		else if (type == BOTH_EDGES)
 			return num_in_edges + num_out_edges;
+		else
+			assert(0);
 	}
 
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			edge_type type) const {
-		if (type == IN_EDGE)
+		if (type == IN_EDGE || type == BOTH_EDGES)
 			return array.begin<vertex_id_t>(sizeof(ext_mem_directed_vertex));
 		else if (type == OUT_EDGE)
 			return array.begin<vertex_id_t>(sizeof(ext_mem_directed_vertex)
@@ -315,12 +317,7 @@ public:
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			edge_type type) const {
 		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
-		if (type == IN_EDGE)
-			it += num_in_edges;
-		else if (type == OUT_EDGE)
-			it += num_out_edges;
-		else
-			assert(0);
+		it += get_num_edges(type);
 		return it;
 	}
 
