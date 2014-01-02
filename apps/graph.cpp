@@ -23,27 +23,6 @@
 #include "common.h"
 #include "native_file.h"
 
-size_t read_edge_list(const std::string &file, std::vector<edge> &edge_vector)
-{
-	native_file local_f(file);
-	ssize_t file_size = local_f.get_size();
-	assert(file_size > (ssize_t) sizeof(edge));
-	assert(file_size % sizeof(edge) == 0);
-	int num_edges = file_size / sizeof(edge);
-	edge *edges = new edge[num_edges];
-	FILE *f = fopen(file.c_str(), "r");
-	if (f == NULL) {
-		perror("fopen");
-		assert(0);
-	}
-	size_t ret = fread(edges, file_size, 1, f);
-	assert(ret == 1);
-	fclose(f);
-	edge_vector.assign(edges, edges + num_edges);
-	delete [] edges;
-	return edge_vector.size();
-}
-
 size_t read_edge_list_text(const std::string &file, std::vector<edge> &edges)
 {
 	FILE *f = fopen(file.c_str(), "r");
@@ -131,13 +110,6 @@ undirected_graph *undirected_graph::create(edge edges[], size_t num_edges)
 	g->add_vertex(v);
 	delete [] edges;
 	return g;
-}
-
-undirected_graph *undirected_graph::load_edge_list(const std::string &file)
-{
-	std::vector<edge> edges;
-	read_edge_list(file, edges);
-	return create(edges.data(), edges.size());
 }
 
 undirected_graph *undirected_graph::load_edge_list_text(const std::string &file)
@@ -255,13 +227,6 @@ directed_graph *directed_graph::create(edge edges[], size_t num_edges)
 	assert(g->get_num_out_edges() == num_edges);
 	delete [] copied_edges;
 	return g;
-}
-
-directed_graph *directed_graph::load_edge_list(const std::string &file)
-{
-	std::vector<edge> edges;
-	read_edge_list(file, edges);
-	return create(edges.data(), edges.size());
 }
 
 directed_graph *directed_graph::load_edge_list_text(const std::string &file)
