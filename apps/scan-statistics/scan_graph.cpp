@@ -97,6 +97,10 @@ public:
 		return num;
 	}
 
+	int get_num_edges_in_neigh() const {
+		return num_edges.get();
+	}
+
 	void run(graph_engine &graph);
 
 	void run_on_neighbors(graph_engine &graph,
@@ -258,7 +262,7 @@ void int_handler(int sig_num)
 int main(int argc, char *argv[])
 {
 	if (argc < 5) {
-		fprintf(stderr, "scan-statistics conf_file graph_file index_file directed\n");
+		fprintf(stderr, "scan-statistics conf_file graph_file index_file directed [output_file]\n");
 		graph_conf.print_help();
 		params.print_help();
 		exit(-1);
@@ -269,6 +273,11 @@ int main(int argc, char *argv[])
 	std::string index_file = argv[3];
 	bool directed = atoi(argv[4]);
 	assert(directed);
+	std::string output_file;
+	if (argc == 6) {
+		output_file = argv[5];
+		argc--;
+	}
 
 	config_map configs(conf_file);
 	configs.add_options(argv + 5, argc - 5);
@@ -305,4 +314,19 @@ int main(int argc, char *argv[])
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());
+
+	if (!output_file.empty()) {
+		FILE *f = fopen(output_file.c_str(), "w");
+		if (f == NULL) {
+			perror("fopen");
+			return -1;
+		}
+		std::vector<vertex_id_t> vertices;
+		index->get_all_vertices(vertices);
+		for (size_t i = 0; i < index->get_num_vertices(); i++) {
+			scan_vertex &v = (scan_vertex &) index->get_vertex(vertices[i]);
+			fprintf(f, "v%ld: %d\n", v.get_id(), v.get_num_edges_in_neigh());
+		}
+		fclose(f);
+	}
 }
