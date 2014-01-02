@@ -711,29 +711,37 @@ public:
 
 	template<class T>
 	T get(int idx) const {
-		int off = get_offset_in_first_page() + sizeof(T) * idx;
-		int end = off + sizeof(T);
+		T ele;
+		memcpy(sizeof(T) * idx, (char *) &ele, sizeof(T));
+		return ele;
+	}
+
+	/**
+	 * rel_off: the offset relative to the beginning of the array.
+	 */
+	void memcpy(off_t rel_off, char buf[], size_t size) const {
+		// The offset relative to the beginning of the page array.
+		int off = get_offset_in_first_page() + rel_off;
+		int end = off + size;
 		assert(end <= get_size() + get_offset_in_first_page());
 
 		off_t page_begin = ROUND(off, PAGE_SIZE);
 		// If the element crosses the page boundary.
 		if (end - page_begin > PAGE_SIZE) {
-			assert(sizeof(T) <= PAGE_SIZE);
+			assert(size <= PAGE_SIZE);
 			int pg_idx = off / PAGE_SIZE;
 			int off_in_pg = off % PAGE_SIZE;
-			T ele;
 			int part1_size = PAGE_SIZE - off_in_pg;
-			int part2_size = sizeof(T) - part1_size;
-			memcpy(&ele, ((char *) get_page(pg_idx)->get_data()) + off_in_pg,
+			int part2_size = size - part1_size;
+			::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg,
 					part1_size);
-			memcpy(((char *) &ele) + part1_size,
+			::memcpy(buf + part1_size,
 					((char *) get_page(pg_idx + 1)->get_data()), part2_size);
-			return ele;
 		}
 		else {
 			int pg_idx = off / PAGE_SIZE;
 			int off_in_pg = off % PAGE_SIZE;
-			return *(T *) (((char *) get_page(pg_idx)->get_data()) + off_in_pg);
+			::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg, size);
 		}
 	}
 
