@@ -254,6 +254,23 @@ public:
 };
 
 /**
+ * Time-series page vertex
+ */
+class TS_page_vertex: public page_vertex
+{
+public:
+	virtual int get_num_edges(int timestamp, edge_type type) const = 0;
+	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
+			int timestamp, edge_type type) const = 0;
+	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
+			int timestamp, edge_type type) const = 0;
+	bool contain_edge(int timestamp, edge_type type, vertex_id_t id) const {
+		return std::binary_search(get_neigh_begin(timestamp, type),
+				get_neigh_end(timestamp, type), id);
+	}
+};
+
+/**
  * This vertex represents a directed vertex stored in the page cache.
  */
 class page_directed_vertex: public page_vertex
@@ -350,6 +367,146 @@ public:
 
 	vertex_id_t get_id() const {
 		return id;
+	}
+};
+
+/**
+ * This is a data structure to interpret a time-series directed vertex
+ * in the external memory.
+ * The memory layout of a time-series directed vertex is as follows:
+ *	id
+ *	the total number of edges
+ *	edge offsets of each timestamp (in-edge offset and out-edge offset)
+ *	edges
+ *
+ * The size of this object is defined at the runtime, so it can only be
+ * allocated from the heap.
+ */
+class TS_page_directed_vertex: public TS_page_vertex
+{
+	struct edge_off
+	{
+		int in_off;
+		int out_off;
+	};
+
+	struct TS_directed_vertex_header
+	{
+		vertex_id_t id;
+		int num_edges;
+	};
+
+	vertex_id_t id;
+	int num_timestamps;
+	// The total number of edges in the vertex
+	int num_edges;
+	const page_byte_array &array;
+	// The edge offsets of each timestamp in the edge list
+	// They are offsets in edges (not in bytes).
+	edge_off ts_edge_offs[0];
+
+	TS_page_directed_vertex(int num_timestamps,
+			const page_byte_array &arr): array(arr) {
+		this->num_timestamps = num_timestamps;
+
+		unsigned size = arr.get_size();
+		assert((unsigned) size >= sizeof(TS_directed_vertex_header));
+		TS_directed_vertex_header v = arr.get<TS_directed_vertex_header>(0);
+		assert((unsigned) size >= sizeof(TS_directed_vertex_header)
+				+ num_timestamps * sizeof(edge_off));
+		assert((unsigned) size >= sizeof(TS_directed_vertex_header)
+				+ num_timestamps * sizeof(edge_off)
+				+ v.num_edges * sizeof(vertex_id_t));
+
+		id = v.id;
+		this->num_edges = v.num_edges;
+		arr.memcpy(sizeof(TS_directed_vertex_header), (char *) ts_edge_offs,
+				sizeof(edge_off) * num_timestamps);
+	}
+
+	// This object is not allowed to be copied.
+	// Disable the copy constructor and the assign operator.
+	TS_page_directed_vertex(const TS_page_directed_vertex &);
+	TS_page_directed_vertex &operator=(const TS_page_directed_vertex &);
+public:
+	// We don't allow this object to be allocated in the stack.
+	TS_page_directed_vertex *create(int num_timestamps,
+			const page_byte_array &arr) {
+		return NULL;
+	}
+
+	virtual int get_num_edges(edge_type type) const {
+		assert(0);
+	}
+
+	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
+			edge_type type) const {
+		assert(0);
+	}
+
+	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
+			edge_type type) const {
+		assert(0);
+	}
+
+	virtual vertex_id_t get_id() const {
+		return id;
+	}
+
+	virtual int get_num_edges(int timestamp, edge_type type) const {
+		switch (type) {
+			case edge_type::IN_EDGE:
+				return ts_edge_offs[timestamp].out_off
+					- ts_edge_offs[timestamp].in_off;
+			case edge_type::OUT_EDGE:
+				if (timestamp == num_timestamps - 1)
+					return num_edges - ts_edge_offs[timestamp].out_off;
+				else
+					return ts_edge_offs[timestamp + 1].in_off
+						- ts_edge_offs[timestamp].out_off;
+			case edge_type::BOTH_EDGES:
+				if (timestamp == num_timestamps - 1)
+					return num_edges - ts_edge_offs[timestamp].in_off;
+				else
+					return ts_edge_offs[timestamp + 1].in_off
+						- ts_edge_offs[timestamp].in_off;
+			default:
+				assert(0);
+		}
+	}
+
+	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
+			int timestamp, edge_type type) const {
+		// The start location of the edge list.
+		page_byte_array::const_iterator<vertex_id_t> it
+			= array.begin<vertex_id_t>(sizeof(TS_directed_vertex_header)
+				+ num_timestamps * sizeof(edge_off));
+		if (type == edge_type::IN_EDGE)
+			it += ts_edge_offs[timestamp].in_off;
+		else if (type == edge_type::OUT_EDGE)
+			it += ts_edge_offs[timestamp].out_off;
+		else
+			assert(0);
+		return it;
+	}
+
+	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
+			int timestamp, edge_type type) const {
+		// The start location of the edge list.
+		page_byte_array::const_iterator<vertex_id_t> it
+			= array.begin<vertex_id_t>(sizeof(TS_directed_vertex_header)
+				+ num_timestamps * sizeof(edge_off));
+		if (type == edge_type::IN_EDGE)
+			it += ts_edge_offs[timestamp].out_off;
+		else if (type == edge_type::OUT_EDGE) {
+			if (timestamp == num_timestamps - 1)
+				it += num_edges;
+			else
+				it += ts_edge_offs[timestamp + 1].in_off;
+		}
+		else
+			assert(0);
+		return it;
 	}
 };
 
