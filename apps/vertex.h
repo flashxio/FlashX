@@ -656,26 +656,32 @@ public:
 		return has_data;
 	}
 
-	void add_in_edge(vertex_id_t id) {
-		assert(!has_edge_data());
-		in_edges.push_back(id);
+	/**
+	 * Add an in-edge to the vertex.
+	 * We allow to have multiple same edges, but all edges must be added
+	 * in a sorted order.
+	 */
+	void add_in_edge(const edge<edge_data_type> &e) {
+		assert(e.get_to() == id);
+		if (!in_edges.empty())
+			assert(e.get_from() >= in_edges.back());
+		in_edges.push_back(e.get_from());
+		if (has_edge_data())
+			in_data.push_back(e.get_data());
 	}
 
-	void add_out_edge(vertex_id_t id) {
-		assert(!has_edge_data());
-		out_edges.push_back(id);
-	}
-
-	void add_in_edge(vertex_id_t id, const edge_data_type &data) {
-		assert(has_edge_data());
-		in_edges.push_back(id);
-		in_data.push_back(data);
-	}
-
-	void add_out_edge(vertex_id_t id, const edge_data_type &data) {
-		assert(has_edge_data());
-		out_edges.push_back(id);
-		out_data.push_back(data);
+	/**
+	 * Add an out-edge to the vertex.
+	 * We allow to have multiple same edges, but all edges must be added
+	 * in a sorted order.
+	 */
+	void add_out_edge(const edge<edge_data_type> &e) {
+		assert(e.get_from() == id);
+		if (!out_edges.empty())
+			assert(e.get_to() >= out_edges.back());
+		out_edges.push_back(e.get_to());
+		if (has_edge_data())
+			out_data.push_back(e.get_data());
 	}
 
 	int get_num_in_edges() const {
@@ -731,15 +737,18 @@ public:
 		return has_data;
 	}
 
-	void add_edge(vertex_id_t id) {
-		assert(!has_edge_data());
-		edges.push_back(id);
-	}
-
-	void add_edge(vertex_id_t id, const edge_data_type &data) {
-		assert(has_edge_data());
-		edges.push_back(id);
-		data_arr.push_back(data);
+	/**
+	 * Add an edge to the vertex.
+	 * We allow to have multiple same edges, but all edges must be added
+	 * in a sorted order.
+	 */
+	void add_edge(const edge<edge_data_type> &e) {
+		assert(e.get_from() == id);
+		if (!edges.empty())
+			assert(e.get_to() >= edges.back());
+		edges.push_back(e.get_to());
+		if (has_edge_data())
+			data_arr.push_back(e.get_data());
 	}
 
 	int get_num_edges() const {

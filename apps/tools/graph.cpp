@@ -94,8 +94,7 @@ undirected_graph<edge_data_type> *undirected_graph<edge_data_type>::create(
 		vertex_id_t id = edges[i].get_from();
 		if (curr == id) {
 			// We have to make sure the edge doesn't exist.
-			assert(!v.has_edge(edges[i].get_to()));
-			v.add_edge(edges[i].get_to());
+			v.add_edge(edges[i]);
 		}
 		else {
 			g->add_vertex(v);
@@ -110,7 +109,7 @@ undirected_graph<edge_data_type> *undirected_graph<edge_data_type>::create(
 				g->add_vertex(v);
 			}
 			v = in_mem_undirected_vertex<edge_data_type>(curr);
-			v.add_edge(edges[i].get_to());
+			v.add_edge(edges[i]);
 		}
 	}
 	g->add_vertex(v);
@@ -175,11 +174,11 @@ directed_graph<edge_data_type> *directed_graph<edge_data_type>::create(
 	while (out_idx < num_edges && in_idx < num_edges) {
 		while (sorted_out_edges[out_idx].get_from() == curr
 				&& out_idx < num_edges) {
-			v.add_out_edge(sorted_out_edges[out_idx++].get_to());
+			v.add_out_edge(sorted_out_edges[out_idx++]);
 		}
 		while (sorted_in_edges[in_idx].get_to() == curr
 				&& in_idx < num_edges) {
-			v.add_in_edge(sorted_in_edges[in_idx++].get_from());
+			v.add_in_edge(sorted_in_edges[in_idx++]);
 		}
 		g->add_vertex(v);
 		vertex_id_t prev = curr + 1;

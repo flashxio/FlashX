@@ -267,11 +267,11 @@ directed_graph<> *directed_edge_graph::create() const
 	while (out_idx < num_edges && in_idx < num_edges) {
 		while (out_edges[out_idx].get_from() == curr
 				&& out_idx < num_edges) {
-			v.add_out_edge(out_edges[out_idx++].get_to());
+			v.add_out_edge(out_edges[out_idx++]);
 		}
 		while (in_edges[in_idx].get_to() == curr
 				&& in_idx < num_edges) {
-			v.add_in_edge(in_edges[in_idx++].get_from());
+			v.add_in_edge(in_edges[in_idx++]);
 		}
 		g->add_vertex(v);
 		vertex_id_t prev = curr + 1;
