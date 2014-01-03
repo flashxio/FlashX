@@ -44,8 +44,8 @@ endif
 
 all: el2al
 
-el2al: el2al.o ../libgraph.a
-	$(CXX) -o el2al el2al.o $(LDFLAGS)
+el2al: el2al.o graph.o ../libgraph.a
+	$(CXX) -o el2al el2al.o graph.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
