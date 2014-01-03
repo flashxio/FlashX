@@ -154,6 +154,77 @@ char *graph_file_io::read_edge_list_text(const size_t wanted_bytes,
 	return line_buf;
 }
 
+class ts_edge_data
+{
+	time_t timestamp;
+	float weight;
+public:
+	ts_edge_data() {
+		timestamp = 0;
+		weight = 1;
+	}
+
+	ts_edge_data(time_t timestamp, float weight) {
+		this->timestamp = timestamp;
+		this->weight = weight;
+	}
+
+	time_t get_timestamp() const {
+		return timestamp;
+	}
+
+	float get_weight() const {
+		return weight;
+	}
+};
+
+size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
+{
+	int len = strlen(line);
+	/*
+	 * The format of a line should be
+	 * from_vertex to_vertex "time" weight
+	 * Fields are separated by tabs.
+	 */
+	if (line[len - 1] == '\n')
+		line[len - 1] = 0;
+	if (line[len - 2] == '\r')
+		line[len - 2] = 0;
+	if (line[0] == '#')
+		return -1;
+	char *second = strchr(line, '\t');
+	assert(second);
+	*second = 0;
+	second++;
+
+	char *third = strchr(second, '\t');
+	assert(third);
+	*third = 0;
+	third++;
+	if (*third == '"')
+		third++;
+
+	char *forth = strchr(third, '\t');
+	assert(forth);
+	*forth = 0;
+	if (*(forth - 1) == '"')
+		*(forth - 1) = 0;
+
+	if (!isnumeric(line) || !isnumeric(second)) {
+		printf("%s\t%s\t%s\n", line, second, third);
+		return -1;
+	}
+	vertex_id_t from = atol(line);
+	vertex_id_t to = atol(second);
+	struct tm tm;
+	strptime(third, "%Y-%m-%d %H:%M:%S", &tm);
+	time_t timestamp = mktime(&tm);
+	// Let's ignore the weight on the edge first.
+	ts_edge_data data(timestamp, 1);
+	e = edge<ts_edge_data>(from, to, data);
+	return 1;
+}
+
 int parse_edge_list_line(char *line, edge<> &e)
 {
 	if (line[0] == '#')
