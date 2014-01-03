@@ -73,19 +73,35 @@ public:
 	}
 };
 
+class empty_data
+{
+};
+
+template<class data_type = empty_data>
 class edge
 {
+	bool has_data;
 	vertex_id_t from;
 	vertex_id_t to;
+	data_type data;
 public:
 	edge() {
 		this->from = -1;
 		this->to = -1;
+		has_data = false;
 	}
 
 	edge(vertex_id_t from, vertex_id_t to) {
 		this->from = from;
 		this->to = to;
+		has_data = false;
+	}
+
+	edge(vertex_id_t from, vertex_id_t to, const data_type &data) {
+		this->from = from;
+		this->to = to;
+		this->data = data;
+		has_data = true;
 	}
 
 	vertex_id_t get_from() const {
@@ -95,12 +111,22 @@ public:
 	vertex_id_t get_to() const {
 		return to;
 	}
+
+	bool has_edge_data() const {
+		return has_data;
+	}
+
+	const data_type &get_data() const {
+		assert(has_data);
+		return data;
+	}
 };
 
+template<class edge_data_type>
 class in_mem_directed_vertex;
+
+template<class edge_data_type>
 class in_mem_undirected_vertex;
-class ext_mem_directed_vertex;
-class ext_mem_undirected_vertex;
 
 /**
  * This vertex represents a directed vertex stored in the external memory.
@@ -111,6 +137,41 @@ class ext_mem_directed_vertex
 	int num_in_edges;
 	int num_out_edges;
 	vertex_id_t neighbors[0];
+
+	void set_edge_data(bool has_data) {
+		if (has_data) {
+			// the max long is 0x80000000 in a 64-bit machine.
+			id = id | LONG_MIN;
+		}
+		else {
+			// the max long is 0x7FFFFFFF in a 64-bit machine.
+			// This is more portable.
+			id = id & LONG_MAX;
+		}
+	}
+
+	bool has_edge_data() const {
+		return id >> (sizeof(id) * 8 - 1);
+	}
+
+	void set_id(vertex_id_t id) {
+		bool has_data = has_edge_data();
+		this->id = id;
+		set_edge_data(has_data);
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_data_type *get_edge_data_begin(edge_type type) {
+		switch (type) {
+			case edge_type::IN_EDGE:
+				return (edge_data_type *) (neighbors + num_in_edges + num_out_edges);
+			case edge_type::OUT_EDGE:
+				return get_edge_data_begin<edge_data_type>(edge_type::IN_EDGE)
+					+ num_in_edges;
+			default:
+				assert(0);
+		}
+	}
 public:
 	static ext_mem_directed_vertex *deserialize(char *buf, int size) {
 		assert((unsigned) size >= sizeof(ext_mem_directed_vertex));
@@ -120,8 +181,40 @@ public:
 		return v;
 	}
 
-	static int serialize(const in_mem_directed_vertex &in_v, char *buf,
-			int size);
+	template<class edge_data_type = empty_data>
+	static int serialize(const in_mem_directed_vertex<edge_data_type> &in_v,
+			char *buf, int size) {
+		int mem_size = in_v.get_serialize_size();
+		assert(size >= mem_size);
+		ext_mem_directed_vertex *ext_v = (ext_mem_directed_vertex *) buf;
+		ext_v->set_id(in_v.get_id());
+		ext_v->set_edge_data(in_v.has_edge_data());
+		ext_v->num_in_edges = in_v.get_num_in_edges();
+		ext_v->num_out_edges = in_v.get_num_out_edges();
+
+		vertex_id_t *neighbors = ext_v->neighbors;
+		for (int i = 0; i < in_v.get_num_in_edges(); i++) {
+			neighbors[i] = in_v.get_in_edge(i).get_from();
+		}
+		for (int i = 0; i < in_v.get_num_out_edges(); i++) {
+			neighbors[i + in_v.get_num_in_edges()] = in_v.get_out_edge(i).get_to();
+		}
+
+		// serialize edge data
+		if (in_v.has_edge_data()) {
+			for (int i = 0; i < in_v.get_num_in_edges(); i++) {
+				edge<edge_data_type> e = in_v.get_in_edge(i);
+				ext_v->get_edge_data_begin<edge_data_type>(edge_type::IN_EDGE)[i]
+					= e.get_data();
+			}
+			for (int i = 0; i < in_v.get_num_out_edges(); i++) {
+				edge<edge_data_type> e = in_v.get_out_edge(i);
+				ext_v->get_edge_data_begin<edge_data_type>(edge_type::OUT_EDGE)[i]
+					= e.get_data();
+			}
+		}
+		return mem_size;
+	}
 
 	int get_num_edges(edge_type type) const {
 		if (type == IN_EDGE)
@@ -130,15 +223,6 @@ public:
 			return get_num_out_edges();
 		else
 			return get_num_in_edges() + get_num_out_edges();
-	}
-
-	const edge get_edge(edge_type type, int idx) const {
-		if (type == IN_EDGE)
-			return get_in_edge(idx);
-		else if (type == OUT_EDGE)
-			return get_out_edge(idx);
-		else
-			assert(0);
 	}
 
 	vertex_id_t get_neighbor(edge_type type, int idx) const {
@@ -158,20 +242,8 @@ public:
 		return num_out_edges;
 	}
 
-	const edge get_in_edge(int idx) const {
-		assert(idx < num_in_edges);
-		edge e(neighbors[idx], id);
-		return e;
-	}
-
-	const edge get_out_edge(int idx) const {
-		assert(idx < num_out_edges);
-		edge e(id, neighbors[num_in_edges + idx]);
-		return e;
-	}
-
 	const vertex_id_t get_id() const {
-		return id;
+		return id & LONG_MAX;
 	}
 
 	bool is_edge_list_sorted(edge_type type) const;
@@ -199,6 +271,33 @@ class ext_mem_undirected_vertex
 	vertex_id_t id;
 	int num_edges;
 	vertex_id_t neighbors[0];
+
+	void set_edge_data(bool has_data) {
+		if (has_data) {
+			// the max long is 0x80000000 in a 64-bit machine.
+			id = id | LONG_MIN;
+		}
+		else {
+			// the max long is 0x7FFFFFFF in a 64-bit machine.
+			// This is more portable.
+			id = id & LONG_MAX;
+		}
+	}
+
+	bool has_edge_data() const {
+		return id >> (sizeof(id) * 8 - 1);
+	}
+
+	void set_id(vertex_id_t id) {
+		bool has_data = has_edge_data();
+		this->id = id;
+		set_edge_data(has_data);
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_data_type *get_edge_data_begin() {
+		return (edge_data_type *) (neighbors + num_edges);
+	}
 public:
 	static ext_mem_undirected_vertex *deserialize(char *buf, int size) {
 		assert((unsigned) size >= sizeof(ext_mem_undirected_vertex));
@@ -208,17 +307,34 @@ public:
 		return v;
 	}
 
-	static int serialize(const in_mem_undirected_vertex &v, char *buf,
-			int size);
+	template<class edge_data_type = empty_data>
+	static int serialize(const in_mem_undirected_vertex<edge_data_type> &v,
+			char *buf, int size) {
+		int mem_size = v.get_serialize_size();
+		assert(size >= mem_size);
+		ext_mem_undirected_vertex *ext_v = (ext_mem_undirected_vertex *) buf;
+		ext_v->set_id(v.get_id());
+		ext_v->set_edge_data(v.has_edge_data());
+		ext_v->num_edges = v.get_num_edges();
+
+		vertex_id_t *neighbors = ext_v->neighbors;
+		for (int i = 0; i < v.get_num_edges(); i++) {
+			neighbors[i] = v.get_edge(i).get_to();
+		}
+
+		// serialize edge data
+		if (v.has_edge_data()) {
+			for (int i = 0; i < v.get_num_edges(); i++) {
+				edge<edge_data_type> e = v.get_edge(i);
+				ext_v->get_edge_data_begin<edge_data_type>()[i] = e.get_data();
+			}
+		}
+
+		return mem_size;
+	}
 
 	int get_num_edges(edge_type type) const {
 		return num_edges;
-	}
-
-	const edge get_edge(edge_type type, int idx) const {
-		assert(idx < num_edges);
-		edge e(id, neighbors[idx]);
-		return e;
 	}
 
 	vertex_id_t get_neighbor(edge_type type, int idx) const {
@@ -226,7 +342,7 @@ public:
 	}
 
 	vertex_id_t get_id() const {
-		return id;
+		return id & LONG_MAX;
 	}
 
 	bool is_edge_list_sorted(edge_type type) const;
@@ -282,6 +398,8 @@ class page_directed_vertex: public page_vertex
 public:
 	page_directed_vertex(const page_byte_array &arr): array(arr) {
 		unsigned size = arr.get_size();
+		// We only want to know the header of the vertex, so we don't need to
+		// know what data type an edge has.
 		assert((unsigned) size >= sizeof(ext_mem_directed_vertex));
 		ext_mem_directed_vertex v = arr.get<ext_mem_directed_vertex>(0);
 		assert((unsigned) size >= sizeof(ext_mem_directed_vertex)
@@ -338,6 +456,8 @@ public:
 	page_undirected_vertex(const page_byte_array &arr): array(arr) {
 		unsigned size = arr.get_size();
 		assert((unsigned) size >= sizeof(ext_mem_undirected_vertex));
+		// We only want to know the header of the vertex, so we don't need to
+		// know what data type an edge has.
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 		assert((unsigned) size >= sizeof(ext_mem_undirected_vertex)
 				+ sizeof(vertex_id_t) * v.get_num_edges(BOTH_EDGES));
@@ -513,26 +633,49 @@ public:
  */
 const int STACK_PAGE_VERTEX_SIZE = sizeof(page_directed_vertex);
 
+template<class edge_data_type = empty_data>
 class in_mem_directed_vertex
 {
 	vertex_id_t id;
+	bool has_data;
 	std::vector<vertex_id_t> out_edges;
 	std::vector<vertex_id_t> in_edges;
+	std::vector<edge_data_type> out_data;
+	std::vector<edge_data_type> in_data;
 public:
 	in_mem_directed_vertex(vertex_id_t id) {
 		this->id = id;
+		has_data = false;
 	}
 
 	vertex_id_t get_id() const {
 		return id;
 	}
 
+	bool has_edge_data() const {
+		return has_data;
+	}
+
 	void add_in_edge(vertex_id_t id) {
+		assert(!has_edge_data());
 		in_edges.push_back(id);
 	}
 
 	void add_out_edge(vertex_id_t id) {
+		assert(!has_edge_data());
 		out_edges.push_back(id);
+	}
+
+	void add_in_edge(vertex_id_t id, const edge_data_type &data) {
+		assert(has_edge_data());
+		in_edges.push_back(id);
+		in_data.push_back(data);
+	}
+
+	void add_out_edge(vertex_id_t id, const edge_data_type &data) {
+		assert(has_edge_data());
+		out_edges.push_back(id);
+		out_data.push_back(data);
 	}
 
 	int get_num_in_edges() const {
@@ -543,37 +686,60 @@ public:
 		return out_edges.size();
 	}
 
-	const edge get_in_edge(int idx) const {
-		edge e(in_edges[idx], id);
-		return e;
+	const edge<edge_data_type> get_in_edge(int idx) const {
+		if (has_edge_data())
+			return edge<edge_data_type>(in_edges[idx], id, in_data[idx]);
+		else
+			return edge<edge_data_type>(in_edges[idx], id);
 	}
 
-	const edge get_out_edge(int idx) const {
-		edge e(id, out_edges[idx]);
-		return e;
+	const edge<edge_data_type> get_out_edge(int idx) const {
+		if (has_edge_data())
+			return edge<edge_data_type>(id, out_edges[idx], out_data[idx]);
+		else
+			return edge<edge_data_type>(id, out_edges[idx]);
 	}
 
 	int get_serialize_size() const {
-		return sizeof(ext_mem_directed_vertex)
+		int size = sizeof(ext_mem_directed_vertex)
 			+ sizeof(vertex_id_t) * (get_num_in_edges() + get_num_out_edges());
+		if (has_edge_data())
+			size += sizeof(edge_data_type) * (get_num_in_edges()
+					+ get_num_out_edges());
+		return size;
 	}
 };
 
+template<class edge_data_type = empty_data>
 class in_mem_undirected_vertex
 {
+	bool has_data;
 	vertex_id_t id;
 	std::vector<vertex_id_t> edges;
+	std::vector<edge_data_type> data_arr;
 public:
 	in_mem_undirected_vertex(vertex_id_t id) {
 		this->id = id;
+		has_data = false;
 	}
 
 	vertex_id_t get_id() const {
 		return id;
 	}
 
+	bool has_edge_data() const {
+		return has_data;
+	}
+
 	void add_edge(vertex_id_t id) {
+		assert(!has_edge_data());
 		edges.push_back(id);
+	}
+
+	void add_edge(vertex_id_t id, const edge_data_type &data) {
+		assert(has_edge_data());
+		edges.push_back(id);
+		data_arr.push_back(data);
 	}
 
 	int get_num_edges() const {
@@ -587,14 +753,19 @@ public:
 		return false;
 	}
 
-	const edge get_edge(int idx) const {
-		edge e(id, edges[idx]);
-		return e;
+	const edge<edge_data_type> get_edge(int idx) const {
+		if (has_edge_data())
+			return edge<edge_data_type>(id, edges[idx], data_arr[idx]);
+		else
+			return edge<edge_data_type>(id, edges[idx]);
 	}
 
 	int get_serialize_size() const {
-		return sizeof(ext_mem_undirected_vertex)
+		int size = sizeof(ext_mem_undirected_vertex)
 			+ sizeof(vertex_id_t) * get_num_edges();
+		if (has_edge_data())
+			size += sizeof(edge_data_type) * get_num_edges();
+		return size;
 	}
 };
 

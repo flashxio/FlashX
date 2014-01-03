@@ -32,38 +32,43 @@ const int NUM_THREADS = 32;
 const int NUM_NODES = 4;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
 
-directed_graph *par_load_edge_list_text(const std::string &file);
+directed_graph<> *par_load_edge_list_text(const std::string &file);
 
-static struct comp_edge {
-	bool operator() (const edge &e1, const edge &e2) {
+struct comp_edge {
+	bool operator() (const edge<> &e1, const edge<> &e2) {
 		if (e1.get_from() == e2.get_from())
 			return e1.get_to() < e2.get_to();
 		else
 			return e1.get_from() < e2.get_from();
 	}
-} edge_comparator;
+};
 
-static struct comp_in_edge {
-	bool operator() (const edge &e1, const edge &e2) {
+struct comp_in_edge {
+	bool operator() (const edge<> &e1, const edge<> &e2) {
 		if (e1.get_to() == e2.get_to())
 			return e1.get_from() < e2.get_from();
 		else
 			return e1.get_to() < e2.get_to();
 	}
-} in_edge_comparator;
+};
 
+/**
+ * This represents a directed graph in the form of edge list.
+ * It maintains a sorted list of out-edges (sorted on the from vertices)
+ * and a sorted list of in-edges (sorted on the to vertices).
+ */
 class directed_edge_graph
 {
-	std::vector<edge> in_edges;
-	std::vector<edge> out_edges;
+	std::vector<edge<> > in_edges;
+	std::vector<edge<> > out_edges;
 	pthread_mutex_t lock;
 public:
 	directed_edge_graph() {
 		pthread_mutex_init(&lock, NULL);
 	}
 	void sort_edges();
-	void add_edges(std::vector<edge> &edges);
-	directed_graph *create() const;
+	void add_edges(std::vector<edge<> > &edges);
+	directed_graph<> *create() const;
 };
 
 class graph_file_io
@@ -149,7 +154,7 @@ char *graph_file_io::read_edge_list_text(const size_t wanted_bytes,
 	return line_buf;
 }
 
-int parse_edge_list_line(char *line, edge &e)
+int parse_edge_list_line(char *line, edge<> &e)
 {
 	if (line[0] == '#')
 		return 0;
@@ -166,7 +171,7 @@ int parse_edge_list_line(char *line, edge &e)
 	}
 	vertex_id_t from = atol(line);
 	vertex_id_t to = atol(second);
-	e = edge(from, to);
+	e = edge<>(from, to);
 
 	return 1;
 }
@@ -176,7 +181,7 @@ int parse_edge_list_line(char *line, edge &e)
  * `size' doesn't include '\0'.
  */
 size_t parse_edge_list_text(char *line_buf, size_t size,
-		std::vector<edge> &edges)
+		std::vector<edge<> > &edges)
 {
 	char *line_end;
 	char *line = line_buf;
@@ -185,7 +190,7 @@ size_t parse_edge_list_text(char *line_buf, size_t size,
 		*line_end = 0;
 		if (*(line_end - 1) == '\r')
 			*(line_end - 1) = 0;
-		edge e;
+		edge<> e;
 		int num = parse_edge_list_line(line, e);
 		if (num > 0)
 			edges.push_back(e);
@@ -194,7 +199,7 @@ size_t parse_edge_list_text(char *line_buf, size_t size,
 		assert(line - line_end <= (ssize_t) size);
 	}
 	if (line - line_buf < (ssize_t) size) {
-		edge e;
+		edge<> e;
 		int num = parse_edge_list_line(line, e);
 		if (num > 0)
 			edges.push_back(e);
@@ -220,15 +225,15 @@ public:
 
 void text_edge_task::run()
 {
-	std::vector<edge> edges;
+	std::vector<edge<> > edges;
 	parse_edge_list_text(line_buf, size, edges);
-	std::vector<edge> *local_edge_buf
-		= (std::vector<edge> *) thread::get_curr_thread()->get_user_data();
+	std::vector<edge<> > *local_edge_buf
+		= (std::vector<edge<> > *) thread::get_curr_thread()->get_user_data();
 	local_edge_buf->insert(local_edge_buf->end(), edges.begin(), edges.end());
 	delete [] line_buf;
 }
 
-void directed_edge_graph::add_edges(std::vector<edge> &edges)
+void directed_edge_graph::add_edges(std::vector<edge<> > &edges)
 {
 	pthread_mutex_lock(&lock);
 	in_edges.insert(in_edges.end(), edges.begin(), edges.end());
@@ -238,6 +243,8 @@ void directed_edge_graph::add_edges(std::vector<edge> &edges)
 
 void directed_edge_graph::sort_edges()
 {
+	comp_edge edge_comparator;
+	comp_in_edge in_edge_comparator;
 #ifdef MEMCHECK
 	std::sort(out_edges.begin(), out_edges.end(), edge_comparator);
 	std::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
@@ -247,12 +254,12 @@ void directed_edge_graph::sort_edges()
 #endif
 }
 
-directed_graph *directed_edge_graph::create() const
+directed_graph<> *directed_edge_graph::create() const
 {
-	directed_graph *g = new directed_graph();
+	directed_graph<> *g = new directed_graph<>();
 
 	vertex_id_t curr = 0;
-	in_mem_directed_vertex v(curr);
+	in_mem_directed_vertex<> v(curr);
 	size_t out_idx = 0;
 	size_t in_idx = 0;
 	size_t num_edges = in_edges.size();
@@ -281,11 +288,11 @@ directed_graph *directed_edge_graph::create() const
 		// but we need to fill the gap in the vertex Id space with empty
 		// vertices.
 		while (prev < curr) {
-			v = in_mem_directed_vertex(prev);
+			v = in_mem_directed_vertex<>(prev);
 			prev++;
 			g->add_vertex(v);
 		}
-		v = in_mem_directed_vertex(curr);
+		v = in_mem_directed_vertex<>(curr);
 	}
 
 	assert(g->get_num_in_edges() == num_edges);
@@ -293,7 +300,11 @@ directed_graph *directed_edge_graph::create() const
 	return g;
 }
 
-directed_graph *par_load_edge_list_text(const std::string &file)
+/**
+ * This function loads edge lists from a tex file, parses them in parallel,
+ * and convert the graph into the form of adjacency lists.
+ */
+directed_graph<> *par_load_edge_list_text(const std::string &file)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -301,7 +312,7 @@ directed_graph *par_load_edge_list_text(const std::string &file)
 	for (int i = 0; i < NUM_THREADS; i++) {
 		task_thread *t = new task_thread(std::string(
 					"graph-task-thread") + itoa(i), i % NUM_NODES);
-		t->set_user_data(new std::vector<edge>());
+		t->set_user_data(new std::vector<edge<> >());
 		t->start();
 		threads[i] = t;
 	}
@@ -319,11 +330,13 @@ directed_graph *par_load_edge_list_text(const std::string &file)
 	for (int i = 0; i < NUM_THREADS; i++)
 		threads[i]->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to construct edge list\n", time_diff(start, end));
+	printf("It takes %f seconds to construct edge list\n",
+			time_diff(start, end));
 
 	start = end;
 	for (int i = 0; i < NUM_THREADS; i++) {
-		std::vector<edge> *local_edges = (std::vector<edge> *) threads[i]->get_user_data();
+		std::vector<edge<> > *local_edges
+			= (std::vector<edge<> > *) threads[i]->get_user_data();
 		edge_g.add_edges(*local_edges);
 		delete local_edges;
 	}
@@ -336,7 +349,7 @@ directed_graph *par_load_edge_list_text(const std::string &file)
 	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
 
 	start = end;
-	directed_graph *g = edge_g.create();
+	directed_graph<> *g = edge_g.create();
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
 	return g;
@@ -357,7 +370,7 @@ int main(int argc, char *argv[])
 
 	if (directed) {
 		struct timeval start, end;
-		directed_graph *g = par_load_edge_list_text(
+		directed_graph<> *g = par_load_edge_list_text(
 				edge_list_file);
 		gettimeofday(&start, NULL);
 		vertex_index *index = g->create_vertex_index();
@@ -379,10 +392,10 @@ int main(int argc, char *argv[])
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_in_edges());
-		directed_graph::destroy(g);
+		directed_graph<>::destroy(g);
 	}
 	else {
-		undirected_graph *g = undirected_graph::load_edge_list_text(
+		undirected_graph<> *g = undirected_graph<>::load_edge_list_text(
 				edge_list_file);
 		vertex_index *index = g->create_vertex_index();
 		g->dump(adjacency_list_file);
@@ -390,6 +403,6 @@ int main(int argc, char *argv[])
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
-		undirected_graph::destroy(g);
+		undirected_graph<>::destroy(g);
 	}
 }
