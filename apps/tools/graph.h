@@ -84,20 +84,7 @@ template<class edge_data_type = empty_data>
 class directed_graph
 {
 	std::vector<in_mem_directed_vertex<edge_data_type> > vertices;
-
-	static directed_graph *create(edge<edge_data_type> edges[], size_t num_edges);
 public:
-	static directed_graph *load_edge_list_text(const std::string &file) {
-		std::vector<edge<edge_data_type> > edges;
-		read_edge_list_text(file, edges);
-		return create(edges.data(), edges.size());
-	}
-
-	static directed_graph *load_adjacency_list(const std::string &file) {
-		assert(0);
-		return NULL;
-	}
-
 	static void destroy(directed_graph *g) {
 		delete g;
 	}
