@@ -525,6 +525,18 @@ class ts_ext_mem_directed_vertex
 		return get_edge_list_begin() + ts_edge_offs[timestamp].out_off;
 	}
 
+	const vertex_id_t *get_edge_list_begin() const {
+		return (vertex_id_t *) (ts_edge_offs + num_timestamps);
+	}
+
+	const vertex_id_t *get_in_edge_list(int timestamp) const {
+		return get_edge_list_begin() + ts_edge_offs[timestamp].in_off;
+	}
+
+	const vertex_id_t *get_out_edge_list(int timestamp) const {
+		return get_edge_list_begin() + ts_edge_offs[timestamp].out_off;
+	}
+
 	template<class edge_data_type = empty_data>
 	edge_data_type *get_edge_data_begin() {
 		return (edge_data_type *) (get_edge_list_begin() + num_edges);
@@ -551,6 +563,8 @@ public:
 		v->num_edges = in_v.get_num_edges();
 		v->num_timestamps = in_v.get_num_timestamps();
 		int off = 0;
+		// TODO I think I should shrink the timestamp table.
+		// It's likely that many vertices don't have edges in most of timestamps.
 		for (int i = 0; i < v->num_timestamps; i++) {
 			v->ts_edge_offs[i].in_off = off;
 			off += in_v.get_num_in_edges(i);
@@ -592,6 +606,55 @@ public:
 
 	int get_num_timestamps() const {
 		return num_timestamps;
+	}
+
+	int get_num_in_edges(int timestamp) const {
+		return get_out_edge_list(timestamp) - get_in_edge_list(timestamp);
+	}
+
+	int get_num_out_edges(int timestamp) const {
+		if (timestamp == num_timestamps - 1)
+			return num_edges - (get_out_edge_list(timestamp)
+					- get_edge_list_begin());
+		else
+			return get_in_edge_list(timestamp + 1) - get_out_edge_list(timestamp);
+	}
+
+	int get_num_in_edges() const {
+		int num = 0;
+		for (int i = 0; i < num_timestamps; i++)
+			num += get_num_in_edges(i);
+		return num;
+	}
+
+	int get_num_out_edges() const {
+		int num = 0;
+		for (int i = 0; i < num_timestamps; i++)
+			num += get_num_out_edges(i);
+		return num;
+	}
+
+	void print() const {
+		printf("v%ld has edge data: %d\n", get_id(), 0);
+		for (int timestamp = 0; timestamp < num_timestamps; timestamp++) {
+			// We need to skip the timestamps without edges.
+			if (get_num_in_edges(timestamp) + get_num_out_edges(timestamp) == 0)
+				continue;
+
+			printf("timestamp %d\n", timestamp);
+			int num_in_edges = get_num_in_edges(timestamp);
+			printf("in-edges (%d): ", num_in_edges);
+			for (int i = 0; i < num_in_edges; i++) {
+				printf("%ld, ", get_in_edge_list(timestamp)[i]);
+			}
+			printf("\n");
+			int num_out_edges = get_num_out_edges(timestamp);
+			printf("out-edges (%d): ", num_out_edges);
+			for (int i = 0; i < num_out_edges; i++) {
+				printf("%ld, ", get_out_edge_list(timestamp)[i]);
+			}
+			printf("\n");
+		}
 	}
 
 	template<class edge_data_type>
@@ -1062,12 +1125,12 @@ public:
 		for (typename std::map<int, ts_edge_pair>::const_iterator it
 				= ts_edges.begin(); it != ts_edges.end(); it++) {
 			printf("timestamp %d\n", it->first);
-			printf("in-edges: ");
+			printf("in-edges (%d): ", get_num_in_edges(it->first));
 			for (size_t i = 0; i < it->second.in_edges.size(); i++) {
 				printf("%ld, ", it->second.in_edges[i]);
 			}
 			printf("\n");
-			printf("out-edges: ");
+			printf("out-edges (%d): ", get_num_out_edges(it->first));
 			for (size_t i = 0; i < it->second.out_edges.size(); i++) {
 				printf("%ld, ", it->second.out_edges[i]);
 			}
