@@ -42,15 +42,19 @@ CC = gcc
 CXX = g++
 endif
 
-all: el2al
+all: el2al print_ts_graph
 
 el2al: el2al.o graph.o ../libgraph.a
 	$(CXX) -o el2al el2al.o graph.o $(LDFLAGS)
+
+print_ts_graph: print_ts_graph.o ../libgraph.a
+	$(CXX) -o print_ts_graph print_ts_graph.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f el2al
+	rm -f print_ts_graph
 
 -include $(DEPS) 
