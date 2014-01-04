@@ -31,6 +31,7 @@
 const int NUM_THREADS = 32;
 const int NUM_NODES = 4;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
+const char delimiter = '\t';
 
 directed_graph<> *par_load_edge_list_text(const std::string &file);
 
@@ -192,19 +193,19 @@ size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 		line[len - 2] = 0;
 	if (line[0] == '#')
 		return -1;
-	char *second = strchr(line, '\t');
+	char *second = strchr(line, delimiter);
 	assert(second);
 	*second = 0;
 	second++;
 
-	char *third = strchr(second, '\t');
+	char *third = strchr(second, delimiter);
 	assert(third);
 	*third = 0;
 	third++;
 	if (*third == '"')
 		third++;
 
-	char *forth = strchr(third, '\t');
+	char *forth = strchr(third, delimiter);
 	assert(forth);
 	*forth = 0;
 	if (*(forth - 1) == '"')
@@ -229,7 +230,7 @@ int parse_edge_list_line(char *line, edge<> &e)
 {
 	if (line[0] == '#')
 		return 0;
-	char *second = strchr(line, '\t');
+	char *second = strchr(line, delimiter);
 	if (second == NULL) {
 		fprintf(stderr, "wrong format 1: %s\n", line);
 		return -1;
