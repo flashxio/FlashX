@@ -493,6 +493,111 @@ struct edge_off
 	int out_off;
 };
 
+template<class edge_data_type>
+class ts_in_mem_directed_vertex;
+
+/**
+ * This class represents a time-series directed vertex in the external memory.
+ * The memory layout of a time-series directed vertex is as follows:
+ *	id
+ *	the total number of edges
+ *	the number of timestamps
+ *	edge offsets of each timestamp (in-edge offset and out-edge offset)
+ *	edges
+ *	edge data
+ */
+class ts_ext_mem_directed_vertex
+{
+	vertex_id_t id;
+	int num_edges;
+	int num_timestamps;
+	edge_off ts_edge_offs[0];
+
+	vertex_id_t *get_edge_list_begin() {
+		return (vertex_id_t *) (ts_edge_offs + num_timestamps);
+	}
+
+	vertex_id_t *get_in_edge_list(int timestamp) {
+		return get_edge_list_begin() + ts_edge_offs[timestamp].in_off;
+	}
+
+	vertex_id_t *get_out_edge_list(int timestamp) {
+		return get_edge_list_begin() + ts_edge_offs[timestamp].out_off;
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_data_type *get_edge_data_begin() {
+		return (edge_data_type *) (get_edge_list_begin() + num_edges);
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_data_type *get_in_edge_data(int timestamp) {
+		return get_edge_data_begin() + ts_edge_offs[timestamp].in_off;
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_data_type *get_out_edge_data(int timestamp) {
+		return get_edge_data_begin() + ts_edge_offs[timestamp].out_off;
+	}
+public:
+	template<class edge_data_type = empty_data>
+	static int serialize(const ts_in_mem_directed_vertex<edge_data_type> &in_v,
+			char *buf, int size) {
+		int mem_size = in_v.get_serialize_size();
+		assert(size >= mem_size);
+
+		ts_ext_mem_directed_vertex *v = (ts_ext_mem_directed_vertex *) buf;
+		v->id = in_v.get_id();
+		v->num_edges = in_v.get_num_edges();
+		v->num_timestamps = in_v.get_num_timestamps();
+		int off = 0;
+		for (int i = 0; i < v->num_timestamps; i++) {
+			v->ts_edge_offs[i].in_off = off;
+			off += in_v.get_num_in_edges(i);
+			v->ts_edge_offs[i].out_off = off;
+			off += in_v.get_num_out_edges(i);
+		}
+		assert(v->num_edges == off);
+		for (int i = 0; i < v->num_timestamps; i++) {
+			int num_edges;
+			num_edges = in_v.get_num_in_edges(i);
+			typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator it
+				= in_v.get_in_edge_begin(i);
+			for (int j = 0; j < num_edges; j++) {
+				edge<edge_data_type> e = *it;
+				++it;
+				v->get_in_edge_list(i)[j] = e.get_from();
+				v->get_in_edge_data(i)[j] = e.get_data();
+			}
+
+			num_edges = in_v.get_num_out_edges(i);
+			it = in_v.get_out_edge_begin(i);
+			for (int j = 0; j < num_edges; j++) {
+				edge<edge_data_type> e = *it;
+				++it;
+				v->get_out_edge_list(i)[j] = e.get_to();
+				v->get_out_edge_data(i)[j] = e.get_data();
+			}
+		}
+		return mem_size;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
+
+	int get_num_edges() const {
+		return num_edges;
+	}
+
+	int get_num_timestamps() const {
+		return num_timestamps;
+	}
+
+	template<class edge_data_type>
+	friend class ts_in_mem_directed_vertex;
+};
+
 /**
  * This is a data structure to interpret a time-series directed vertex
  * in the external memory.
@@ -509,12 +614,6 @@ struct edge_off
  */
 class TS_page_directed_vertex: public TS_page_vertex
 {
-	struct TS_directed_vertex_header
-	{
-		vertex_id_t id;
-		int num_edges;
-	};
-
 	vertex_id_t id;
 	int num_timestamps;
 	// The total number of edges in the vertex
@@ -529,17 +628,17 @@ class TS_page_directed_vertex: public TS_page_vertex
 		this->num_timestamps = num_timestamps;
 
 		unsigned size = arr.get_size();
-		assert((unsigned) size >= sizeof(TS_directed_vertex_header));
-		TS_directed_vertex_header v = arr.get<TS_directed_vertex_header>(0);
-		assert((unsigned) size >= sizeof(TS_directed_vertex_header)
+		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex));
+		ts_ext_mem_directed_vertex v = arr.get<ts_ext_mem_directed_vertex>(0);
+		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex)
 				+ num_timestamps * sizeof(edge_off));
-		assert((unsigned) size >= sizeof(TS_directed_vertex_header)
+		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex)
 				+ num_timestamps * sizeof(edge_off)
-				+ v.num_edges * sizeof(vertex_id_t));
+				+ v.get_num_edges() * sizeof(vertex_id_t));
 
-		id = v.id;
-		this->num_edges = v.num_edges;
-		arr.memcpy(sizeof(TS_directed_vertex_header), (char *) ts_edge_offs,
+		id = v.get_id();
+		this->num_edges = v.get_num_edges();
+		arr.memcpy(sizeof(ts_ext_mem_directed_vertex), (char *) ts_edge_offs,
 				sizeof(edge_off) * num_timestamps);
 	}
 
@@ -598,7 +697,7 @@ public:
 			int timestamp, edge_type type) const {
 		// The start location of the edge list.
 		page_byte_array::const_iterator<vertex_id_t> it
-			= array.begin<vertex_id_t>(sizeof(TS_directed_vertex_header)
+			= array.begin<vertex_id_t>(sizeof(ts_ext_mem_directed_vertex)
 				+ num_timestamps * sizeof(edge_off));
 		if (type == edge_type::IN_EDGE)
 			it += ts_edge_offs[timestamp].in_off;
@@ -613,7 +712,7 @@ public:
 			int timestamp, edge_type type) const {
 		// The start location of the edge list.
 		page_byte_array::const_iterator<vertex_id_t> it
-			= array.begin<vertex_id_t>(sizeof(TS_directed_vertex_header)
+			= array.begin<vertex_id_t>(sizeof(ts_ext_mem_directed_vertex)
 				+ num_timestamps * sizeof(edge_off));
 		if (type == edge_type::IN_EDGE)
 			it += ts_edge_offs[timestamp].out_off;
@@ -634,9 +733,6 @@ public:
  * It's mainly used for allocating a buffer from the stack for a page vertex.
  */
 const int STACK_PAGE_VERTEX_SIZE = sizeof(page_directed_vertex);
-
-template<class edge_data_type>
-class ts_in_mem_directed_vertex;
 
 template<class edge_data_type = empty_data>
 class in_mem_directed_vertex
@@ -783,108 +879,6 @@ public:
 			size += sizeof(edge_data_type) * get_num_edges();
 		return size;
 	}
-};
-
-/**
- * This class represents a time-series directed vertex in the external memory.
- * The memory layout of a time-series directed vertex is as follows:
- *	id
- *	the total number of edges
- *	the number of timestamps
- *	edge offsets of each timestamp (in-edge offset and out-edge offset)
- *	edges
- *	edge data
- */
-class ts_ext_mem_directed_vertex
-{
-	vertex_id_t id;
-	int num_edges;
-	int num_timestamps;
-	edge_off ts_edge_offs[0];
-
-	vertex_id_t *get_edge_list_begin() {
-		return (vertex_id_t *) (ts_edge_offs + num_timestamps);
-	}
-
-	vertex_id_t *get_in_edge_list(int timestamp) {
-		return get_edge_list_begin() + ts_edge_offs[timestamp].in_off;
-	}
-
-	vertex_id_t *get_out_edge_list(int timestamp) {
-		return get_edge_list_begin() + ts_edge_offs[timestamp].out_off;
-	}
-
-	template<class edge_data_type = empty_data>
-	edge_data_type *get_edge_data_begin() {
-		return (edge_data_type *) (get_edge_list_begin() + num_edges);
-	}
-
-	template<class edge_data_type = empty_data>
-	edge_data_type *get_in_edge_data(int timestamp) {
-		return get_edge_data_begin() + ts_edge_offs[timestamp].in_off;
-	}
-
-	template<class edge_data_type = empty_data>
-	edge_data_type *get_out_edge_data(int timestamp) {
-		return get_edge_data_begin() + ts_edge_offs[timestamp].out_off;
-	}
-public:
-	template<class edge_data_type = empty_data>
-	static int serialize(const ts_in_mem_directed_vertex<edge_data_type> &in_v,
-			char *buf, int size) {
-		int mem_size = in_v.get_serialize_size();
-		assert(size >= mem_size);
-
-		ts_ext_mem_directed_vertex *v = (ts_ext_mem_directed_vertex *) buf;
-		v->id = in_v.get_id();
-		v->num_edges = in_v.get_num_edges();
-		v->num_timestamps = in_v.get_num_timestamps();
-		int off = 0;
-		for (int i = 0; i < v->num_timestamps; i++) {
-			v->ts_edge_offs[i].in_off = off;
-			off += in_v.get_num_in_edges(i);
-			v->ts_edge_offs[i].out_off = off;
-			off += in_v.get_num_out_edges(i);
-		}
-		assert(v->num_edges == off);
-		for (int i = 0; i < v->num_timestamps; i++) {
-			int num_edges;
-			num_edges = in_v.get_num_in_edges(i);
-			typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator it
-				= in_v.get_in_edge_begin(i);
-			for (int j = 0; j < num_edges; j++) {
-				edge<edge_data_type> e = *it;
-				++it;
-				v->get_in_edge_list(i)[j] = e.get_from();
-				v->get_in_edge_data(i)[j] = e.get_data();
-			}
-
-			num_edges = in_v.get_num_out_edges(i);
-			it = in_v.get_out_edge_begin(i);
-			for (int j = 0; j < num_edges; j++) {
-				edge<edge_data_type> e = *it;
-				++it;
-				v->get_out_edge_list(i)[j] = e.get_to();
-				v->get_out_edge_data(i)[j] = e.get_data();
-			}
-		}
-		return mem_size;
-	}
-
-	vertex_id_t get_id() const {
-		return id;
-	}
-
-	int get_num_edges() const {
-		return num_edges;
-	}
-
-	int get_num_timestamps() const {
-		return num_timestamps;
-	}
-
-	template<class edge_data_type>
-	friend class ts_in_mem_directed_vertex;
 };
 
 template<class edge_data_type = empty_data>
