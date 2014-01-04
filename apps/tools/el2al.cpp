@@ -367,6 +367,52 @@ directed_graph<> *directed_edge_graph::create() const
 		v = in_mem_directed_vertex<>(curr);
 	}
 
+	// Add remaining out-edges.
+	while (out_idx < num_edges) {
+		while (out_edges[out_idx].get_from() == curr
+				&& out_idx < num_edges) {
+			v.add_out_edge(out_edges[out_idx++]);
+		}
+		g->add_vertex(v);
+		vertex_id_t prev = curr + 1;
+		if (out_idx < num_edges)
+			curr = out_edges[out_idx].get_from();
+		else
+			break;
+		// The vertices without edges won't show up in the edge list,
+		// but we need to fill the gap in the vertex Id space with empty
+		// vertices.
+		while (prev < curr) {
+			v = in_mem_directed_vertex<>(prev);
+			prev++;
+			g->add_vertex(v);
+		}
+		v = in_mem_directed_vertex<>(curr);
+	}
+
+	// Add remaining in-edges
+	while (in_idx < num_edges) {
+		while (in_edges[in_idx].get_to() == curr
+				&& in_idx < num_edges) {
+			v.add_in_edge(in_edges[in_idx++]);
+		}
+		g->add_vertex(v);
+		vertex_id_t prev = curr + 1;
+		if (in_idx < num_edges)
+			curr = in_edges[in_idx].get_to();
+		else
+			break;
+		// The vertices without edges won't show up in the edge list,
+		// but we need to fill the gap in the vertex Id space with empty
+		// vertices.
+		while (prev < curr) {
+			v = in_mem_directed_vertex<>(prev);
+			prev++;
+			g->add_vertex(v);
+		}
+		v = in_mem_directed_vertex<>(curr);
+	}
+
 	assert(g->get_num_in_edges() == num_edges);
 	assert(g->get_num_out_edges() == num_edges);
 	return g;
