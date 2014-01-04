@@ -38,6 +38,7 @@ public:
 	virtual size_t get_num_edges() const = 0;
 	virtual size_t get_num_vertices() const = 0;
 	virtual size_t get_num_non_empty_vertices() const = 0;
+	virtual void print() const = 0;
 };
 
 template<class edge_data_type = empty_data>
@@ -94,6 +95,10 @@ public:
 			if (vertices[i].get_num_edges() > 0)
 				num_vertices++;
 		return num_vertices;
+	}
+
+	virtual void print() const {
+		assert(0);
 	}
 };
 
@@ -178,6 +183,10 @@ public:
 					|| vertices[i].get_num_out_edges() > 0)
 				num_vertices++;
 		return num_vertices;
+	}
+
+	virtual void print() const {
+		assert(0);
 	}
 };
 
@@ -272,6 +281,13 @@ public:
 				num++;
 		}
 		return num;
+	}
+
+	virtual void print() const {
+		for (size_t i = 0; i < vertices.size(); i++) {
+			if (vertices[i].get_num_edges() > 0)
+				vertices[i].print();
+		}
 	}
 };
 

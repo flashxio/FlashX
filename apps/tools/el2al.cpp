@@ -526,6 +526,7 @@ int main(int argc, char *argv[])
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
+		g->print();
 		delete g;
 	}
 	else {

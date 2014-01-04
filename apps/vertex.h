@@ -1062,6 +1062,24 @@ public:
 					+ get_num_out_edges());
 		return size;
 	}
+
+	void print() const {
+		printf("v%ld has edge data: %d\n", get_id(), has_edge_data());
+		for (typename std::map<int, ts_edge_pair>::const_iterator it
+				= ts_edges.begin(); it != ts_edges.end(); it++) {
+			printf("timestamp %d\n", it->first);
+			printf("in-edges: ");
+			for (size_t i = 0; i < it->second.in_edges.size(); i++) {
+				printf("%ld, ", it->second.in_edges[i]);
+			}
+			printf("\n");
+			printf("out-edges: ");
+			for (size_t i = 0; i < it->second.out_edges.size(); i++) {
+				printf("%ld, ", it->second.out_edges[i]);
+			}
+			printf("\n");
+		}
+	}
 };
 
 #endif
