@@ -487,26 +487,28 @@ public:
 	}
 };
 
+struct edge_off
+{
+	int in_off;
+	int out_off;
+};
+
 /**
  * This is a data structure to interpret a time-series directed vertex
  * in the external memory.
  * The memory layout of a time-series directed vertex is as follows:
  *	id
  *	the total number of edges
+ *	the number of timestamps
  *	edge offsets of each timestamp (in-edge offset and out-edge offset)
  *	edges
+ *	edge data
  *
  * The size of this object is defined at the runtime, so it can only be
  * allocated from the heap.
  */
 class TS_page_directed_vertex: public TS_page_vertex
 {
-	struct edge_off
-	{
-		int in_off;
-		int out_off;
-	};
-
 	struct TS_directed_vertex_header
 	{
 		vertex_id_t id;
@@ -633,6 +635,9 @@ public:
  */
 const int STACK_PAGE_VERTEX_SIZE = sizeof(page_directed_vertex);
 
+template<class edge_data_type>
+class ts_in_mem_directed_vertex;
+
 template<class edge_data_type = empty_data>
 class in_mem_directed_vertex
 {
@@ -714,6 +719,8 @@ public:
 					+ get_num_out_edges());
 		return size;
 	}
+
+	friend class ts_in_mem_directed_vertex<edge_data_type>;
 };
 
 template<class edge_data_type = empty_data>
@@ -774,6 +781,285 @@ public:
 			+ sizeof(vertex_id_t) * get_num_edges();
 		if (has_edge_data())
 			size += sizeof(edge_data_type) * get_num_edges();
+		return size;
+	}
+};
+
+/**
+ * This class represents a time-series directed vertex in the external memory.
+ * The memory layout of a time-series directed vertex is as follows:
+ *	id
+ *	the total number of edges
+ *	the number of timestamps
+ *	edge offsets of each timestamp (in-edge offset and out-edge offset)
+ *	edges
+ *	edge data
+ */
+class ts_ext_mem_directed_vertex
+{
+	vertex_id_t id;
+	int num_edges;
+	int num_timestamps;
+	edge_off ts_edge_offs[0];
+
+	vertex_id_t *get_edge_list_begin() {
+		return (vertex_id_t *) (ts_edge_offs + num_timestamps);
+	}
+
+	vertex_id_t *get_in_edge_list(int timestamp) {
+		return get_edge_list_begin() + ts_edge_offs[timestamp].in_off;
+	}
+
+	vertex_id_t *get_out_edge_list(int timestamp) {
+		return get_edge_list_begin() + ts_edge_offs[timestamp].out_off;
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_data_type *get_edge_data_begin() {
+		return (edge_data_type *) (get_edge_list_begin() + num_edges);
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_data_type *get_in_edge_data(int timestamp) {
+		return get_edge_data_begin() + ts_edge_offs[timestamp].in_off;
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_data_type *get_out_edge_data(int timestamp) {
+		return get_edge_data_begin() + ts_edge_offs[timestamp].out_off;
+	}
+public:
+	template<class edge_data_type = empty_data>
+	static int serialize(const ts_in_mem_directed_vertex<edge_data_type> &in_v,
+			char *buf, int size) {
+		int mem_size = in_v.get_serialize_size();
+		assert(size >= mem_size);
+
+		ts_ext_mem_directed_vertex *v = (ts_ext_mem_directed_vertex *) buf;
+		v->id = in_v.get_id();
+		v->num_edges = in_v.get_num_edges();
+		v->num_timestamps = in_v.get_num_timestamps();
+		int off = 0;
+		for (int i = 0; i < v->num_timestamps; i++) {
+			v->ts_edge_offs[i].in_off = off;
+			off += in_v.get_num_in_edges(i);
+			v->ts_edge_offs[i].out_off = off;
+			off += in_v.get_num_out_edges(i);
+		}
+		assert(v->num_edges == off);
+		for (int i = 0; i < v->num_timestamps; i++) {
+			int num_edges;
+			num_edges = in_v.get_num_in_edges(i);
+			typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator it
+				= in_v.get_in_edge_begin(i);
+			for (int j = 0; j < num_edges; j++) {
+				edge<edge_data_type> e = *it;
+				++it;
+				v->get_in_edge_list(i)[j] = e.get_from();
+				v->get_in_edge_data(i)[j] = e.get_data();
+			}
+
+			num_edges = in_v.get_num_out_edges(i);
+			it = in_v.get_out_edge_begin(i);
+			for (int j = 0; j < num_edges; j++) {
+				edge<edge_data_type> e = *it;
+				++it;
+				v->get_out_edge_list(i)[j] = e.get_to();
+				v->get_out_edge_data(i)[j] = e.get_data();
+			}
+		}
+		return mem_size;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
+
+	int get_num_edges() const {
+		return num_edges;
+	}
+
+	int get_num_timestamps() const {
+		return num_timestamps;
+	}
+
+	template<class edge_data_type>
+	friend class ts_in_mem_directed_vertex;
+};
+
+template<class edge_data_type = empty_data>
+class ts_in_mem_directed_vertex
+{
+	struct ts_edge_pair {
+		std::vector<vertex_id_t> in_edges;
+		std::vector<vertex_id_t> out_edges;
+	};
+
+	struct ts_edge_data_pair {
+		std::vector<edge_data_type> in_data;
+		std::vector<edge_data_type> out_data;
+	};
+
+	vertex_id_t id;
+	bool has_data;
+	std::map<int, ts_edge_pair> ts_edges;
+	std::map<int, ts_edge_data_pair> ts_data;
+public:
+	class edge_const_iterator {
+		bool is_in_edge;
+		vertex_id_t id;
+		std::vector<vertex_id_t>::const_iterator it;
+		typename std::vector<edge_data_type>::const_iterator data_it;
+	public:
+		edge_const_iterator(vertex_id_t id, bool is_in_edge,
+				const std::vector<vertex_id_t> &edges,
+				const std::vector<edge_data_type> &data_arr) {
+			this->is_in_edge = is_in_edge;
+			this->id = id;
+			it = edges.begin();
+			data_it = data_arr.begin();
+		}
+
+		edge<edge_data_type> operator*() const {
+			if (is_in_edge)
+				return edge<edge_data_type>(*it, id, *data_it);
+			else
+				return edge<edge_data_type>(id, *it, *data_it);
+		}
+
+		edge_const_iterator &operator++() {
+			it++;
+			data_it++;
+			return *this;
+		}
+
+		bool operator==(const edge_const_iterator &it) const {
+			return this->it == it.it;
+		}
+
+		bool operator!=(const edge_const_iterator &it) const {
+			return this->it != it.it;
+		}
+
+		edge_const_iterator &operator+=(int num) {
+			it += num;
+			data_it += num;
+			return *this;
+		}
+	};
+
+	ts_in_mem_directed_vertex(vertex_id_t id) {
+		this->id = id;
+		has_data = false;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
+
+	bool has_edge_data() const {
+		return has_data;
+	}
+
+	int get_num_in_edges(int timestamp) const {
+		typename std::map<int, ts_edge_pair>::const_iterator it
+			= ts_edges.find(timestamp);
+		if (it == ts_edges.end())
+			return 0;
+		else
+			return it->second.in_edges.size();
+	}
+
+	int get_num_out_edges(int timestamp) const {
+		typename std::map<int, ts_edge_pair>::const_iterator it
+			= ts_edges.find(timestamp);
+		if (it == ts_edges.end())
+			return 0;
+		else
+			return it->second.out_edges.size();
+	}
+
+	int get_num_in_edges() const {
+		int num_edges = 0;
+		for (typename std::map<int, ts_edge_pair>::const_iterator it
+				= ts_edges.begin(); it != ts_edges.end(); it++)
+			num_edges += it->second.in_edges.size();
+		return num_edges;
+	}
+
+	int get_num_out_edges() const {
+		int num_edges = 0;
+		for (typename std::map<int, ts_edge_pair>::const_iterator it
+				= ts_edges.begin(); it != ts_edges.end(); it++)
+			num_edges += it->second.out_edges.size();
+		return num_edges;
+	}
+
+	int get_num_edges() const {
+		return get_num_in_edges() + get_num_out_edges();
+	}
+
+	int get_num_timestamps() const {
+		if (ts_edges.size() > 0)
+			// The last timestamp + 1.
+			return ts_edges.rbegin()->first + 1;
+		else
+			return 0;
+	}
+
+	edge_const_iterator get_in_edge_begin(int timestamp) const {
+		typename std::map<int, ts_edge_pair>::const_iterator it = ts_edges.find(
+				timestamp);
+		typename std::map<int, ts_edge_data_pair>::const_iterator data_it
+			= ts_data.find(timestamp);
+		return edge_const_iterator(id, true, it->second.in_edges,
+				data_it->second.in_data);
+	}
+
+	edge_const_iterator get_in_edge_end(int timestamp) const {
+		return get_in_edge_begin(timestamp) + get_num_in_edges(timestamp);
+	}
+
+	edge_const_iterator get_out_edge_begin(int timestamp) const {
+		typename std::map<int, ts_edge_pair>::const_iterator it = ts_edges.find(
+				timestamp);
+		typename std::map<int, ts_edge_data_pair>::const_iterator data_it
+			= ts_data.find(timestamp);
+		return edge_const_iterator(id, false, it->second.out_edges,
+				data_it->second.out_data);
+	}
+
+	edge_const_iterator get_out_edge_end(int timestamp) const {
+		return get_out_edge_begin(timestamp) + get_num_out_edges(timestamp);
+	}
+
+	void add_timestamp(int timestamp,
+			const in_mem_directed_vertex<edge_data_type> &v) {
+		assert(id == v.get_id());
+		assert(has_data == v.has_edge_data());
+		assert(ts_edges.find(timestamp) == ts_edges.end());
+		assert(v.get_num_in_edges() + v.get_num_out_edges() > 0);
+
+		ts_edge_pair edge_pair;
+		edge_pair.in_edges = v.in_edges;
+		edge_pair.out_edges = v.out_edges;
+
+		ts_edge_data_pair data_pair;
+		data_pair.in_data = v.in_data;
+		data_pair.out_data = v.out_data;
+
+		ts_edges.insert(std::pair<int, ts_edge_pair>(timestamp, edge_pair));
+		ts_data.insert(std::pair<int, ts_edge_data_pair>(timestamp, data_pair));
+	}
+
+	int get_serialize_size() const {
+		int num_timestamps = get_num_timestamps();
+		int size = sizeof(ts_ext_mem_directed_vertex)
+			+ sizeof(edge_off) * num_timestamps
+			+ sizeof(vertex_id_t) * (get_num_in_edges() + get_num_out_edges());
+		if (has_edge_data())
+			size += sizeof(edge_data_type) * (get_num_in_edges()
+					+ get_num_out_edges());
 		return size;
 	}
 };

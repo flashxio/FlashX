@@ -477,19 +477,35 @@ int main(int argc, char *argv[])
 {
 	if (argc < 5) {
 		fprintf(stderr,
-				"el2al edge_list_file adjacency_list_file index_file directed\n");
+				"el2al adjacency_list_file index_file directed edge_list_file [edge_list_files]\n");
 		exit(-1);
 	}
 
-	const std::string edge_list_file = argv[1];
-	const std::string adjacency_list_file = argv[2];
-	const std::string index_file = argv[3];
-	bool directed = atoi(argv[4]) != 0;
+	const std::string adjacency_list_file = argv[1];
+	const std::string index_file = argv[2];
+	bool directed = atoi(argv[3]) != 0;
+	std::vector<std::string> edge_list_files;
+	edge_list_files.push_back(argv[4]);
+	for (int i = 5; i < argc; i++)
+		edge_list_files.push_back(argv[i]);
 
 	if (directed) {
 		struct timeval start, end;
-		directed_graph<> *g = par_load_edge_list_text(
-				edge_list_file);
+		std::vector<directed_graph<> *> graphs;
+		for (unsigned i = 0; i < edge_list_files.size(); i++) {
+			directed_graph<> *g = par_load_edge_list_text(
+					edge_list_files[i]);
+			graphs.push_back(g);
+		}
+		in_mem_graph *g = NULL;
+		if (graphs.size() == 1)
+			g = graphs[0];
+		else {
+			g = ts_directed_graph<>::merge_graphs(graphs);
+			for (unsigned i = 0; i < graphs.size(); i++)
+				delete graphs[i];
+		}
+
 		gettimeofday(&start, NULL);
 		vertex_index *index = g->create_vertex_index();
 		gettimeofday(&end, NULL);
@@ -509,12 +525,12 @@ int main(int argc, char *argv[])
 				time_diff(start, end));
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
-				g->get_num_in_edges());
-		directed_graph<>::destroy(g);
+				g->get_num_edges());
+		delete g;
 	}
 	else {
 		undirected_graph<> *g = undirected_graph<>::load_edge_list_text(
-				edge_list_file);
+				edge_list_files[0]);
 		vertex_index *index = g->create_vertex_index();
 		g->dump(adjacency_list_file);
 		index->dump(index_file);
