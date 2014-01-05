@@ -375,7 +375,9 @@ public:
 class TS_page_vertex: public page_vertex
 {
 public:
+	virtual int get_num_edges() const = 0;
 	virtual int get_num_edges(int timestamp, edge_type type) const = 0;
+	virtual int get_num_timestamps() const = 0;
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			int timestamp, edge_type type) const = 0;
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
@@ -738,6 +740,14 @@ public:
 
 	virtual vertex_id_t get_id() const {
 		return id;
+	}
+
+	virtual int get_num_edges() const {
+		return num_edges;
+	}
+
+	virtual int get_num_timestamps() const {
+		return num_timestamps;
 	}
 
 	virtual int get_num_edges(int timestamp, edge_type type) const {
