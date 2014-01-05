@@ -66,17 +66,4 @@ public:
 	}
 };
 
-class bfs_graph: public graph_engine
-{
-	bfs_graph(int num_threads, int num_nodes, const std::string &graph_file,
-			graph_index *index, bool directed): graph_engine(num_threads, num_nodes,
-				graph_file, index, directed) {
-	}
-public:
-	static bfs_graph *create(int num_threads, int num_nodes,
-			const std::string &graph_file, graph_index *index, bool directed) {
-		return new bfs_graph(num_threads, num_nodes, graph_file, index, directed);
-	}
-};
-
 #endif

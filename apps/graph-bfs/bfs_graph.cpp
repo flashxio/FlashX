@@ -88,8 +88,13 @@ int main(int argc, char *argv[])
 	init_io_system(configs);
 
 	graph_index *index = graph_index_impl<bfs_vertex>::create(index_file, directed);
-	bfs_graph *graph = bfs_graph::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index, directed);
+	ext_mem_vertex_interpreter *interpreter;
+	if (directed)
+		interpreter = new ext_mem_directed_vertex_interpreter();
+	else
+		interpreter = new ext_mem_undirected_vertex_interpreter();
+	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
+			params.get_num_nodes(), graph_file, index, interpreter, directed);
 	printf("BFS starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

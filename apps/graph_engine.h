@@ -182,9 +182,75 @@ public:
 class vertex_collection;
 class sorted_vertex_queue;
 
+/**
+ * This defines the interface of interpreting vertices in the external memory.
+ */
+class ext_mem_vertex_interpreter
+{
+public:
+	/**
+	 * Interpret the data in the page byte array, and construct the page vertex
+	 * in the buffer.
+	 */
+	virtual page_vertex *interpret(page_byte_array &, char *buf,
+			int size) const = 0;
+	/**
+	 * The size of the vertex object.
+	 */
+	virtual int get_vertex_size() const = 0;
+};
+
+class ext_mem_directed_vertex_interpreter: public ext_mem_vertex_interpreter
+{
+public:
+	virtual page_vertex *interpret(page_byte_array &array, char *buf,
+			int size) const {
+		assert(size >= (int) sizeof(page_directed_vertex));
+		return new (buf) page_directed_vertex(array);
+	}
+
+	virtual int get_vertex_size() const {
+		return sizeof(page_directed_vertex);
+	}
+};
+
+class ext_mem_undirected_vertex_interpreter: public ext_mem_vertex_interpreter
+{
+public:
+	virtual page_vertex *interpret(page_byte_array &array, char *buf,
+			int size) const {
+		assert(size >= (int) sizeof(page_undirected_vertex));
+		return new (buf) page_undirected_vertex(array);
+	}
+
+	virtual int get_vertex_size() const {
+		return sizeof(page_undirected_vertex);
+	}
+};
+
+class ts_ext_mem_vertex_interpreter: public ext_mem_vertex_interpreter
+{
+	int num_timestamps;
+public:
+	ts_ext_mem_vertex_interpreter(int num_timestamps) {
+		this->num_timestamps = num_timestamps;
+	}
+
+	virtual page_vertex *interpret(page_byte_array &array, char *buf,
+			int size) const {
+		assert(size >= TS_page_directed_vertex::get_size(num_timestamps));
+		return TS_page_directed_vertex::create(array, buf, size);
+	}
+
+	virtual int get_vertex_size() const {
+		return TS_page_directed_vertex::get_size(num_timestamps);
+	}
+};
+
 class graph_engine
 {
 	graph_index *vertices;
+	ext_mem_vertex_interpreter *interpreter;
 
 	// These are two global queues. One contains the vertices that are being
 	// processed in the current level. The other contains the vertices that
@@ -213,11 +279,14 @@ class graph_engine
 
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
-			graph_index *index, bool directed);
+			graph_index *index, ext_mem_vertex_interpreter *interpreter,
+			bool directed);
 public:
 	static graph_engine *create(int num_threads, int num_nodes,
-			const std::string &graph_file, graph_index *index, bool directed) {
-		return new graph_engine(num_threads, num_nodes, graph_file, index, directed);
+			const std::string &graph_file, graph_index *index,
+			ext_mem_vertex_interpreter *interpreter, bool directed) {
+		return new graph_engine(num_threads, num_nodes, graph_file, index,
+				interpreter, directed);
 	}
 
 	compute_vertex &get_vertex(vertex_id_t id) {
@@ -291,6 +360,10 @@ public:
 		msgs[0] = &msg;
 		// TODO This is a temporary solution.
 		get_vertex(id).run_on_messages(*this, msgs, 1);
+	}
+
+	ext_mem_vertex_interpreter *get_vertex_interpreter() const {
+		return interpreter;
 	}
 };
 

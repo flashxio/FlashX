@@ -686,10 +686,7 @@ class TS_page_directed_vertex: public TS_page_vertex
 	// They are offsets in edges (not in bytes).
 	edge_off ts_edge_offs[0];
 
-	TS_page_directed_vertex(int num_timestamps,
-			const page_byte_array &arr): array(arr) {
-		this->num_timestamps = num_timestamps;
-
+	TS_page_directed_vertex(const page_byte_array &arr): array(arr) {
 		unsigned size = arr.get_size();
 		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex));
 		ts_ext_mem_directed_vertex v = arr.get<ts_ext_mem_directed_vertex>(0);
@@ -701,6 +698,7 @@ class TS_page_directed_vertex: public TS_page_vertex
 
 		id = v.get_id();
 		this->num_edges = v.get_num_edges();
+		this->num_timestamps = v.get_num_timestamps();
 		arr.memcpy(sizeof(ts_ext_mem_directed_vertex), (char *) ts_edge_offs,
 				sizeof(edge_off) * num_timestamps);
 	}
@@ -710,10 +708,16 @@ class TS_page_directed_vertex: public TS_page_vertex
 	TS_page_directed_vertex(const TS_page_directed_vertex &);
 	TS_page_directed_vertex &operator=(const TS_page_directed_vertex &);
 public:
-	// We don't allow this object to be allocated in the stack.
-	TS_page_directed_vertex *create(int num_timestamps,
-			const page_byte_array &arr) {
-		return NULL;
+	// The size of the vertex object.
+	static int get_size(int num_timestamps) {
+		return sizeof(TS_page_directed_vertex)
+			+ sizeof(edge_off) * num_timestamps;
+	}
+
+	// We create the vertex object in the given buffer.
+	static TS_page_directed_vertex *create(const page_byte_array &arr,
+			char *buf, int size) {
+		return new (buf) TS_page_directed_vertex(arr);
 	}
 
 	virtual int get_num_edges(edge_type type) const {

@@ -342,9 +342,14 @@ int main(int argc, char *argv[])
 
 	graph_index *index = graph_index_impl<triangle_vertex>::create(
 			index_file, directed);
+	ext_mem_vertex_interpreter *interpreter;
+	if (directed)
+		interpreter = new ext_mem_directed_vertex_interpreter();
+	else
+		interpreter = new ext_mem_undirected_vertex_interpreter();
 	graph_engine *graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(),
-			graph_file, index, directed);
+			graph_file, index, interpreter, directed);
 	graph->set_required_neighbor_type(edge_type::OUT_EDGE);
 	printf("triangle counting starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());

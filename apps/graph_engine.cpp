@@ -139,12 +139,10 @@ public:
 
 bool vertex_compute::run(page_byte_array &array)
 {
-	char buf[STACK_PAGE_VERTEX_SIZE];
-	const page_vertex *ext_v;
-	if (graph->is_directed())
-		ext_v = new (buf) page_directed_vertex(array);
-	else
-		ext_v = new (buf) page_undirected_vertex(array);
+	ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
+	char buf[interpreter->get_vertex_size()];
+	const page_vertex *ext_v = interpreter->interpret(array, buf,
+			interpreter->get_vertex_size());
 	// If the algorithm doesn't need to get the full information
 	// of their neighbors
 	if (graph->get_required_neighbor_type() == edge_type::NONE
@@ -331,8 +329,10 @@ void worker_thread::run()
 }
 
 graph_engine::graph_engine(int num_threads, int num_nodes,
-		const std::string &graph_file, graph_index *index, bool directed)
+		const std::string &graph_file, graph_index *index,
+		ext_mem_vertex_interpreter *interpreter, bool directed)
 {
+	this->interpreter = interpreter;
 	this->required_neighbor_type = edge_type::NONE;
 	this->directed = directed;
 	is_complete = false;
