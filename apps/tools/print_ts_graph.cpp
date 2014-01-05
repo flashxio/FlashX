@@ -50,11 +50,20 @@ int main(int argc, char *argv[])
 	assert(ret == 1);
 
 	vertex_index *index = vertex_index::load(index_file_name);
+	int num_edges = 0;
+	int num_vertices = 0;
 	for (size_t i = 0; i < index->get_num_vertices(); i++) {
 		off_t off = index->get_vertex_off(i);
+		int size = index->get_vertex_size(i);
 		ts_ext_mem_directed_vertex *v
 			= (ts_ext_mem_directed_vertex *) (adj_list + off);
-		if (v->get_num_edges() > 0)
+		if (v->get_num_edges() > 0) {
 			v->print();
+			num_vertices++;
+			num_edges += v->get_num_edges();
+		}
+		assert(size == (int) v->get_size());
+		assert(i == v->get_id());
 	}
+	printf("There are %d vertices and %d edges\n", num_vertices, num_edges);
 }
