@@ -28,7 +28,7 @@
 
 atomic_integer num_visited_vertices;
 
-void bfs_vertex::run(graph_engine &graph)
+void bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
 	vertex_id_t max_id = graph.get_max_vertex_id();
 	vertex_id_t min_id = graph.get_min_vertex_id();
@@ -37,9 +37,9 @@ void bfs_vertex::run(graph_engine &graph)
 	// the next level.
 	std::vector<vertex_id_t> activated_vertices;
 	page_byte_array::const_iterator<vertex_id_t> end_it
-		= this->get_neigh_end(OUT_EDGE);
+		= vertex->get_neigh_end(OUT_EDGE);
 	for (page_byte_array::const_iterator<vertex_id_t> it
-			= this->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
+			= vertex->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
 		assert(id >= min_id && id <= max_id);
 		bfs_vertex &info = (bfs_vertex &) graph.get_vertex(id);

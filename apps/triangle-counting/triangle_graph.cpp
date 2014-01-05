@@ -94,26 +94,11 @@ public:
 		return out_edges->at(num_fetched++);
 	}
 
-	// We only use the neighbors whose ID is smaller than this vertex.
-	int get_required_edges(edge_type type, std::vector<vertex_id_t> &edges) {
-		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
-		page_byte_array::const_iterator<vertex_id_t> end = get_neigh_end(type);
-		int num = 0;
-		for (; it != end; ++it) {
-			vertex_id_t id = *it;
-			if (id < get_id()) {
-				edges.push_back(id);
-				num++;
-			}
-		}
-		return num;
-	}
-
 	int get_num_triangles() const {
 		return num_pv_triangles.get();
 	}
 
-	void run(graph_engine &graph);
+	void run(graph_engine &graph, const page_vertex *vertex);
 
 	void run_on_neighbors(graph_engine &graph,
 			const page_vertex *vertices[], int num);
@@ -226,7 +211,26 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 	return num_local_triangles;
 }
 
-void triangle_vertex::run(graph_engine &graph)
+// We only use the neighbors whose ID is smaller than this vertex.
+static int get_required_edges(const page_vertex *vertex, edge_type type,
+		std::vector<vertex_id_t> &edges)
+{
+	page_byte_array::const_iterator<vertex_id_t> it
+		= vertex->get_neigh_begin(type);
+	page_byte_array::const_iterator<vertex_id_t> end
+		= vertex->get_neigh_end(type);
+	int num = 0;
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		if (id < vertex->get_id()) {
+			edges.push_back(id);
+			num++;
+		}
+	}
+	return num;
+}
+
+void triangle_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
 	assert(in_edges == NULL);
 	assert(out_edges == NULL);
@@ -239,8 +243,8 @@ void triangle_vertex::run(graph_engine &graph)
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
 	// either of them.
-	if (get_num_edges(edge_type::OUT_EDGE) == 0
-			|| get_num_edges(edge_type::IN_EDGE) == 0) {
+	if (vertex->get_num_edges(edge_type::OUT_EDGE) == 0
+			|| vertex->get_num_edges(edge_type::IN_EDGE) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -249,8 +253,8 @@ void triangle_vertex::run(graph_engine &graph)
 
 	in_edges = new std::vector<vertex_id_t>();
 	out_edges = new std::vector<vertex_id_t>();
-	this->get_required_edges(edge_type::IN_EDGE, *in_edges);
-	this->get_required_edges(edge_type::OUT_EDGE, *out_edges);
+	get_required_edges(vertex, edge_type::IN_EDGE, *in_edges);
+	get_required_edges(vertex, edge_type::OUT_EDGE, *out_edges);
 	num_required = out_edges->size();
 
 	if (in_edges->empty() || out_edges->empty()) {

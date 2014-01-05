@@ -151,9 +151,7 @@ bool vertex_compute::run(page_byte_array &array)
 			// Or we haven't perform computation on the vertex yet.
 			|| v == NULL) {
 		v = &graph->get_vertex(ext_v->get_id());
-		v->materialize(ext_v);
-		v->run(*graph);
-		v->dematerialize();
+		v->run(*graph, ext_v);
 	}
 	else {
 		v->run_on_neighbors(*graph, &ext_v, 1);

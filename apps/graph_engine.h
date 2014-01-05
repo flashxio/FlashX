@@ -38,7 +38,6 @@ class vertex_message
 class compute_vertex: public in_mem_vertex_info
 {
 	atomic_flags<long> activated_levels;
-	const page_vertex *vertex;
 public:
 	compute_vertex(vertex_id_t id, off_t off, int size): in_mem_vertex_info(
 			id, off, size) {
@@ -62,56 +61,6 @@ public:
 		return activated_levels.test_flag(level);
 	}
 
-	/**
-	 * This method materializes the vertex so it has the full information of
-	 * the vertex.
-	 */
-	void materialize(const page_vertex *vertex) {
-		this->vertex = vertex;
-	}
-
-	/**
-	 * This method removes the adjacency list of the vertex.
-	 */
-	void dematerialize() {
-		this->vertex = NULL;
-	}
-
-	/**
-	 * Test whether if the vertex has the full information.
-	 */
-	bool is_materialized() const {
-		return vertex != NULL;
-	}
-
-	int get_num_edges(edge_type type) const {
-		assert(vertex);
-		return vertex->get_num_edges(type);
-	}
-
-	int get_all_edges(edge_type type, std::vector<vertex_id_t> &edges) {
-		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
-		page_byte_array::const_iterator<vertex_id_t> end = get_neigh_end(type);
-		int num = 0;
-		for (; it != end; ++it) {
-			edges.push_back(*it);
-			num++;
-		}
-		return num;
-	}
-
-	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
-			edge_type type) const {
-		assert(vertex);
-		return vertex->get_neigh_begin(type);
-	}
-
-	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
-			edge_type type) const {
-		assert(vertex);
-		return vertex->get_neigh_end(type);
-	}
-
 	virtual bool has_required_vertices() const {
 		return false;
 	}
@@ -125,7 +74,7 @@ public:
 	 * Run user's code when the adjacency list of the vertex is read
 	 * from disks.
 	 */
-	virtual void run(graph_engine &graph) = 0;
+	virtual void run(graph_engine &graph, const page_vertex *vertex) = 0;
 
 	/**
 	 * Run user's code when the adjacency lists of its neighbors are read

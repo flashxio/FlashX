@@ -82,26 +82,11 @@ public:
 		return neighbors->at(num_fetched++);
 	}
 
-	// We only use the neighbors whose ID is smaller than this vertex.
-	int get_required_edges(edge_type type, std::vector<vertex_id_t> &edges) {
-		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
-		page_byte_array::const_iterator<vertex_id_t> end = get_neigh_end(type);
-		int num = 0;
-		for (; it != end; ++it) {
-			vertex_id_t id = *it;
-			if (id != get_id()) {
-				edges.push_back(id);
-				num++;
-			}
-		}
-		return num;
-	}
-
 	int get_num_edges_in_neigh() const {
 		return num_edges.get();
 	}
 
-	void run(graph_engine &graph);
+	void run(graph_engine &graph, const page_vertex *vertex);
 
 	void run_on_neighbors(graph_engine &graph,
 			const page_vertex *vertices[], int num);
@@ -203,7 +188,24 @@ int scan_vertex::count_edges(const page_vertex *v) const
 	return num_local_edges;
 }
 
-void scan_vertex::run(graph_engine &graph)
+// We only use the neighbors whose ID is smaller than this vertex.
+static int get_required_edges(const page_vertex *vertex, edge_type type,
+		std::vector<vertex_id_t> &edges)
+{
+	page_byte_array::const_iterator<vertex_id_t> it = vertex->get_neigh_begin(type);
+	page_byte_array::const_iterator<vertex_id_t> end = vertex->get_neigh_end(type);
+	int num = 0;
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		if (id != vertex->get_id()) {
+			edges.push_back(id);
+			num++;
+		}
+	}
+	return num;
+}
+
+void scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
@@ -212,7 +214,7 @@ void scan_vertex::run(graph_engine &graph)
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
-	if (get_num_edges(edge_type::BOTH_EDGES) == 0) {
+	if (vertex->get_num_edges(edge_type::BOTH_EDGES) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -220,7 +222,7 @@ void scan_vertex::run(graph_engine &graph)
 	}
 
 	neighbors = new std::vector<vertex_id_t>();
-	this->get_required_edges(edge_type::BOTH_EDGES, *neighbors);
+	get_required_edges(vertex, edge_type::BOTH_EDGES, *neighbors);
 	num_required = neighbors->size();
 	num_edges.inc(neighbors->size());
 }
