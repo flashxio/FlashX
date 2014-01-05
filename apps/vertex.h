@@ -367,6 +367,8 @@ public:
 	bool contain_edge(edge_type type, vertex_id_t id) const {
 		return std::binary_search(get_neigh_begin(type), get_neigh_end(type), id);
 	}
+	virtual void print() const {
+	}
 };
 
 /**
@@ -805,6 +807,39 @@ public:
 		else
 			assert(0);
 		return it;
+	}
+
+	virtual void print() const {
+		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
+				get_id(), 0, get_num_timestamps(), get_num_edges());
+		for (int timestamp = 0; timestamp < get_num_timestamps();
+				timestamp++) {
+			// We need to skip the timestamps without edges.
+			if (get_num_edges(timestamp, edge_type::IN_EDGE)
+					+ get_num_edges(timestamp, edge_type::OUT_EDGE) == 0)
+				continue;
+
+			printf("timestamp %d\n", timestamp);
+			int num_in_edges = get_num_edges(timestamp, edge_type::IN_EDGE);
+			printf("in-edges (%d): ", num_in_edges);
+			page_byte_array::const_iterator<vertex_id_t> end_it
+				= get_neigh_end(timestamp, edge_type::IN_EDGE);
+			for (page_byte_array::const_iterator<vertex_id_t> it
+					= get_neigh_begin(timestamp, edge_type::IN_EDGE);
+					it != end_it; ++it) {
+				printf("%ld, ", *it);
+			}
+			printf("\n");
+			int num_out_edges = get_num_edges(timestamp, edge_type::OUT_EDGE);
+			printf("out-edges (%d): ", num_out_edges);
+			end_it = get_neigh_end(timestamp, edge_type::OUT_EDGE);
+			for (page_byte_array::const_iterator<vertex_id_t> it
+					= get_neigh_begin(timestamp, edge_type::OUT_EDGE);
+					it != end_it; ++it) {
+				printf("%ld, ", *it);
+			}
+			printf("\n");
+		}
 	}
 };
 
