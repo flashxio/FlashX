@@ -643,7 +643,8 @@ public:
 	}
 
 	void print() const {
-		printf("v%ld has edge data: %d\n", get_id(), 0);
+		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
+				get_id(), 0, num_timestamps, get_num_edges());
 		for (int timestamp = 0; timestamp < num_timestamps; timestamp++) {
 			// We need to skip the timestamps without edges.
 			if (get_num_in_edges(timestamp) + get_num_out_edges(timestamp) == 0)
@@ -1137,7 +1138,8 @@ public:
 	}
 
 	void print() const {
-		printf("v%ld has edge data: %d\n", get_id(), has_edge_data());
+		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
+				get_id(), has_edge_data(), get_num_timestamps(), get_num_edges());
 		for (typename std::map<int, ts_edge_pair>::const_iterator it
 				= ts_edges.begin(); it != ts_edges.end(); it++) {
 			printf("timestamp %d\n", it->first);
