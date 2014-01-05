@@ -600,6 +600,12 @@ public:
 		return id;
 	}
 
+	size_t get_size() const {
+		return sizeof(ts_ext_mem_directed_vertex)
+			+ sizeof(ts_edge_offs[0]) * num_timestamps
+			+ sizeof(vertex_id_t) * num_edges;
+	}
+
 	int get_num_edges() const {
 		return num_edges;
 	}
@@ -690,11 +696,7 @@ class TS_page_directed_vertex: public TS_page_vertex
 		unsigned size = arr.get_size();
 		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex));
 		ts_ext_mem_directed_vertex v = arr.get<ts_ext_mem_directed_vertex>(0);
-		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex)
-				+ num_timestamps * sizeof(edge_off));
-		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex)
-				+ num_timestamps * sizeof(edge_off)
-				+ v.get_num_edges() * sizeof(vertex_id_t));
+		assert((unsigned) size >= v.get_size());
 
 		id = v.get_id();
 		this->num_edges = v.get_num_edges();
