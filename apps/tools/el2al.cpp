@@ -477,7 +477,7 @@ int main(int argc, char *argv[])
 {
 	if (argc < 5) {
 		fprintf(stderr,
-				"el2al adjacency_list_file index_file directed edge_list_file [edge_list_files]\n");
+				"el2al adjacency_list_file index_file directed edge_list_files (or directories)\n");
 		exit(-1);
 	}
 
@@ -485,9 +485,21 @@ int main(int argc, char *argv[])
 	const std::string index_file = argv[2];
 	bool directed = atoi(argv[3]) != 0;
 	std::vector<std::string> edge_list_files;
-	edge_list_files.push_back(argv[4]);
-	for (int i = 5; i < argc; i++)
-		edge_list_files.push_back(argv[i]);
+	for (int i = 4; i < argc; i++) {
+		native_dir dir(argv[i]);
+		if (dir.is_dir()) {
+			std::vector<std::string> files;
+			std::string dir_name = argv[i];
+			dir.read_all_files(files);
+			for (size_t i = 0; i < files.size(); i++)
+				edge_list_files.push_back(dir_name + "/" + files[i]);
+		}
+		else
+			edge_list_files.push_back(argv[i]);
+	}
+
+	for (size_t i = 0; i < edge_list_files.size(); i++)
+		printf("edge list file: %s\n", edge_list_files[i].c_str());
 
 	if (directed) {
 		struct timeval start, end;
