@@ -60,7 +60,7 @@ public:
 		struct stat stats;
 		if (stat(file_name.c_str(), &stats) < 0) {
 			perror("stat");
-			return -1;
+			return false;
 		}
 		return S_ISDIR(stats.st_mode);
 	}
