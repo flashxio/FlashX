@@ -140,8 +140,8 @@ public:
 bool vertex_compute::run(page_byte_array &array)
 {
 	ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
-	char buf[interpreter->get_vertex_size()];
-	const page_vertex *ext_v = interpreter->interpret(array, buf,
+	stack_array<char, 64> buf(interpreter->get_vertex_size());
+	const page_vertex *ext_v = interpreter->interpret(array, buf.data(),
 			interpreter->get_vertex_size());
 	// If the algorithm doesn't need to get the full information
 	// of their neighbors
