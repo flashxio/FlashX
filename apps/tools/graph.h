@@ -300,6 +300,58 @@ public:
 			char *buf = new char[mem_size];
 			ts_ext_mem_directed_vertex::serialize<edge_data_type>(vertices[i],
 					buf, mem_size);
+
+			// Test the correctness of ts_ext_mem_directed_vertex.
+			ts_ext_mem_directed_vertex *ext_v = (ts_ext_mem_directed_vertex *) buf;
+			assert(ext_v->get_id() == vertices[i].get_id());
+			assert(ext_v->get_num_edges() == vertices[i].get_num_edges());
+			assert(ext_v->get_num_timestamps() == vertices[i].get_num_timestamps());
+			std::vector<int> all_timestamps;
+			vertices[i].get_all_timestamps(all_timestamps);
+			assert(all_timestamps.size() == (size_t) ext_v->get_num_timestamps());
+			for (std::vector<int>::const_iterator it = all_timestamps.begin();
+					it != all_timestamps.end(); it++) {
+				assert(ext_v->get_num_in_edges(*it)
+						== vertices[i].get_num_in_edges(*it));
+				assert(ext_v->get_num_out_edges(*it)
+						== vertices[i].get_num_out_edges(*it));
+				ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> in_it1
+					= ext_v->get_in_edge_begin(*it);
+				ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> in_end1
+					= ext_v->get_in_edge_end(*it);
+				typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator in_it2
+					= vertices[i].get_in_edge_begin(*it);
+				typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator in_end2
+					= vertices[i].get_in_edge_end(*it);
+				while (in_it1 != in_end1 && in_it2 != in_end2) {
+					edge<edge_data_type> e1 = *in_it1;
+					edge<edge_data_type> e2 = *in_it2;
+					assert(e1.get_from() == e2.get_from());
+					assert(e1.get_to() == e2.get_to());
+					++in_it1;
+					++in_it2;
+				}
+				assert(in_it1 == in_end1 && in_it2 == in_end2);
+
+				ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> out_it1
+					= ext_v->get_out_edge_begin(*it);
+				ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> out_end1
+					= ext_v->get_out_edge_end(*it);
+				typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator out_it2
+					= vertices[i].get_out_edge_begin(*it);
+				typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator out_end2
+					= vertices[i].get_out_edge_end(*it);
+				while (out_it1 != out_end1 && out_it2 != out_end2) {
+					edge<edge_data_type> e1 = *out_it1;
+					edge<edge_data_type> e2 = *out_it2;
+					assert(e1.get_from() == e2.get_from());
+					assert(e1.get_to() == e2.get_to());
+					++out_it1;
+					++out_it2;
+				}
+				assert(out_it1 == out_end1 && out_it2 == out_end2);
+			}
+
 			ssize_t ret = fwrite(buf, mem_size, 1, f);
 			delete [] buf;
 			assert(ret == 1);

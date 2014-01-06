@@ -506,7 +506,8 @@ class ts_in_mem_directed_vertex;
  *	id
  *	the total number of edges
  *	the number of timestamps
- *	edge offsets of each timestamp (in-edge offset and out-edge offset)
+ *	timestamps
+ *	edge offsets of existing timestamp (in-edge offset and out-edge offset)
  *	edges
  *	edge data
  */
@@ -515,89 +516,146 @@ class ts_ext_mem_directed_vertex
 	vertex_id_t id;
 	int num_edges;
 	int num_timestamps;
-	edge_off ts_edge_offs[0];
+	short timestamps[0];
+	// TODO the edge off list may not align well with the word size.
+
+	short *get_timestamps_begin() {
+		return timestamps;
+	}
+
+	edge_off *get_edge_off_begin() {
+		return (edge_off *) (get_timestamps_begin() + num_timestamps);
+	}
 
 	vertex_id_t *get_edge_list_begin() {
-		return (vertex_id_t *) (ts_edge_offs + num_timestamps);
+		return (vertex_id_t *) (get_edge_off_begin() + num_timestamps);
 	}
 
-	vertex_id_t *get_in_edge_list(int timestamp) {
-		return get_edge_list_begin() + ts_edge_offs[timestamp].in_off;
+	int find_timestamp(int timestamp) const {
+		for (int i = 0; i < num_timestamps; i++)
+			if (timestamps[i] == timestamp)
+				return i;
+		return -1;
 	}
 
-	vertex_id_t *get_out_edge_list(int timestamp) {
-		return get_edge_list_begin() + ts_edge_offs[timestamp].out_off;
+	const short *get_timestamps_begin() const {
+		return timestamps;
+	}
+
+	const edge_off *get_edge_off_begin() const {
+		return (edge_off *) (get_timestamps_begin() + num_timestamps);
 	}
 
 	const vertex_id_t *get_edge_list_begin() const {
-		return (vertex_id_t *) (ts_edge_offs + num_timestamps);
-	}
-
-	const vertex_id_t *get_in_edge_list(int timestamp) const {
-		return get_edge_list_begin() + ts_edge_offs[timestamp].in_off;
-	}
-
-	const vertex_id_t *get_out_edge_list(int timestamp) const {
-		return get_edge_list_begin() + ts_edge_offs[timestamp].out_off;
+		return (vertex_id_t *) (get_edge_off_begin() + num_timestamps);
 	}
 
 	template<class edge_data_type = empty_data>
 	edge_data_type *get_edge_data_begin() {
 		return (edge_data_type *) (get_edge_list_begin() + num_edges);
 	}
-
-	template<class edge_data_type = empty_data>
-	edge_data_type *get_in_edge_data(int timestamp) {
-		return get_edge_data_begin() + ts_edge_offs[timestamp].in_off;
-	}
-
-	template<class edge_data_type = empty_data>
-	edge_data_type *get_out_edge_data(int timestamp) {
-		return get_edge_data_begin() + ts_edge_offs[timestamp].out_off;
-	}
 public:
+	template<class edge_data_type>
+	class edge_const_iterator {
+		bool is_in_edge;
+		vertex_id_t id;
+		const vertex_id_t *ptr;
+	public:
+		edge_const_iterator(const ts_ext_mem_directed_vertex &v,
+				int timestamp, bool is_in_edge) {
+			this->is_in_edge = is_in_edge;
+			this->id = v.get_id();
+			int idx = v.find_timestamp(timestamp);
+			if (is_in_edge)
+				ptr = v.get_edge_list_begin() + v.get_edge_off_begin()[idx].in_off;
+			else
+				ptr = v.get_edge_list_begin() + v.get_edge_off_begin()[idx].out_off;
+		}
+
+		edge<edge_data_type> operator*() const {
+			// TODO I need to add data to the edge later.
+			if (is_in_edge)
+				return edge<edge_data_type>(*ptr, id);
+			else
+				return edge<edge_data_type>(id, *ptr);
+		}
+
+		edge_const_iterator &operator++() {
+			ptr++;
+			return *this;
+		}
+
+		bool operator==(const edge_const_iterator &it) const {
+			return this->ptr == it.ptr;
+		}
+
+		bool operator!=(const edge_const_iterator &it) const {
+			return this->ptr != it.ptr;
+		}
+
+		edge_const_iterator &operator+=(int num) {
+			ptr += num;
+			return *this;
+		}
+	};
+
 	template<class edge_data_type = empty_data>
 	static int serialize(const ts_in_mem_directed_vertex<edge_data_type> &in_v,
 			char *buf, int size) {
-		int mem_size = in_v.get_serialize_size();
-		assert(size >= mem_size);
-
 		ts_ext_mem_directed_vertex *v = (ts_ext_mem_directed_vertex *) buf;
 		v->id = in_v.get_id();
 		v->num_edges = in_v.get_num_edges();
 		v->num_timestamps = in_v.get_num_timestamps();
-		int off = 0;
-		// TODO I think I should shrink the timestamp table.
+		assert(v->get_size() <= (size_t) size);
+
+		// Generate the timestamp table.
 		// It's likely that many vertices don't have edges in most of timestamps.
+		std::vector<int> all_timestamps;
+		in_v.get_all_timestamps(all_timestamps);
+		assert(v->num_timestamps == (int) all_timestamps.size());
+		int off = 0;
 		for (int i = 0; i < v->num_timestamps; i++) {
-			v->ts_edge_offs[i].in_off = off;
-			off += in_v.get_num_in_edges(i);
-			v->ts_edge_offs[i].out_off = off;
-			off += in_v.get_num_out_edges(i);
+			int timestamp = all_timestamps[i];
+			v->get_timestamps_begin()[i] = timestamp;
+			v->get_edge_off_begin()[i].in_off = off;
+			off += in_v.get_num_in_edges(timestamp);
+			v->get_edge_off_begin()[i].out_off = off;
+			off += in_v.get_num_out_edges(timestamp);
 		}
 		assert(v->num_edges == off);
+
+		// Generate the edge list.
 		for (int i = 0; i < v->num_timestamps; i++) {
+			int timestamp = all_timestamps[i];
 			int num_edges;
-			num_edges = in_v.get_num_in_edges(i);
+			num_edges = in_v.get_num_in_edges(timestamp);
 			typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator it
-				= in_v.get_in_edge_begin(i);
+				= in_v.get_in_edge_begin(timestamp);
+			vertex_id_t *in_edge_list = v->get_edge_list_begin()
+				+ v->get_edge_off_begin()[i].in_off;
 			for (int j = 0; j < num_edges; j++) {
 				edge<edge_data_type> e = *it;
 				++it;
-				v->get_in_edge_list(i)[j] = e.get_from();
+				in_edge_list[j] = e.get_from();
+#if 0
 				v->get_in_edge_data(i)[j] = e.get_data();
+#endif
 			}
 
-			num_edges = in_v.get_num_out_edges(i);
-			it = in_v.get_out_edge_begin(i);
+			num_edges = in_v.get_num_out_edges(timestamp);
+			it = in_v.get_out_edge_begin(timestamp);
+			vertex_id_t *out_edge_list = v->get_edge_list_begin()
+				+ v->get_edge_off_begin()[i].out_off;
 			for (int j = 0; j < num_edges; j++) {
 				edge<edge_data_type> e = *it;
 				++it;
-				v->get_out_edge_list(i)[j] = e.get_to();
+				out_edge_list[j] = e.get_to();
+#if 0
 				v->get_out_edge_data(i)[j] = e.get_data();
+#endif
 			}
 		}
-		return mem_size;
+		return v->get_size();
 	}
 
 	vertex_id_t get_id() const {
@@ -606,8 +664,10 @@ public:
 
 	size_t get_size() const {
 		return sizeof(ts_ext_mem_directed_vertex)
-			+ sizeof(ts_edge_offs[0]) * num_timestamps
+			+ sizeof(timestamps[0]) * num_timestamps
+			+ sizeof(edge_off) * num_timestamps
 			+ sizeof(vertex_id_t) * num_edges;
+		// TODO I should also include the size of edge data later.
 	}
 
 	int get_num_edges() const {
@@ -619,35 +679,75 @@ public:
 	}
 
 	int get_num_in_edges(int timestamp) const {
-		return get_out_edge_list(timestamp) - get_in_edge_list(timestamp);
+		int idx = find_timestamp(timestamp);
+		if (idx < 0)
+			return 0;
+		else
+			return get_edge_off_begin()[idx].out_off
+				- get_edge_off_begin()[idx].in_off;
 	}
 
 	int get_num_out_edges(int timestamp) const {
-		if (timestamp == num_timestamps - 1)
-			return num_edges - (get_out_edge_list(timestamp)
-					- get_edge_list_begin());
-		else
-			return get_in_edge_list(timestamp + 1) - get_out_edge_list(timestamp);
+		int idx = find_timestamp(timestamp);
+		if (idx < 0)
+			return 0;
+
+		// The last timestamp
+		if (idx == num_timestamps - 1)
+			return num_edges - get_edge_off_begin()[idx].out_off;
+		else {
+			return get_edge_off_begin()[idx + 1].in_off
+				- get_edge_off_begin()[idx].out_off;
+		}
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_const_iterator<edge_data_type> get_out_edge_begin(int timestamp) const {
+		return edge_const_iterator<edge_data_type>(*this, timestamp, false);
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_const_iterator<edge_data_type> get_out_edge_end(int timestamp) const {
+		edge_const_iterator<edge_data_type> it
+			= get_out_edge_begin<edge_data_type>(timestamp);
+		it += get_num_out_edges(timestamp);
+		return it;
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_const_iterator<edge_data_type> get_in_edge_begin(int timestamp) const {
+		return edge_const_iterator<edge_data_type>(*this, timestamp, true);
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_const_iterator<edge_data_type> get_in_edge_end(int timestamp) const {
+		edge_const_iterator<edge_data_type> it
+			= get_in_edge_begin<edge_data_type>(timestamp);
+		it += get_num_in_edges(timestamp);
+		return it;
 	}
 
 	int get_num_in_edges() const {
 		int num = 0;
+		// TODO I should use a simpler way to compute the result.
 		for (int i = 0; i < num_timestamps; i++)
-			num += get_num_in_edges(i);
+			num += get_num_in_edges(get_timestamps_begin()[i]);
 		return num;
 	}
 
 	int get_num_out_edges() const {
 		int num = 0;
+		// TODO I should use a simpler way to compute the result.
 		for (int i = 0; i < num_timestamps; i++)
-			num += get_num_out_edges(i);
+			num += get_num_out_edges(get_timestamps_begin()[i]);
 		return num;
 	}
 
 	void print() const {
 		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
 				get_id(), 0, num_timestamps, get_num_edges());
-		for (int timestamp = 0; timestamp < num_timestamps; timestamp++) {
+		for (int i = 0; i < num_timestamps; i++) {
+			int timestamp = get_timestamps_begin()[i];
 			// We need to skip the timestamps without edges.
 			if (get_num_in_edges(timestamp) + get_num_out_edges(timestamp) == 0)
 				continue;
@@ -655,14 +755,18 @@ public:
 			printf("timestamp %d\n", timestamp);
 			int num_in_edges = get_num_in_edges(timestamp);
 			printf("in-edges (%d): ", num_in_edges);
-			for (int i = 0; i < num_in_edges; i++) {
-				printf("%ld, ", get_in_edge_list(timestamp)[i]);
+			const vertex_id_t *in_edge_list = get_edge_list_begin()
+				+ get_edge_off_begin()[i].in_off;
+			for (int j = 0; j < num_in_edges; j++) {
+				printf("%ld, ", in_edge_list[j]);
 			}
 			printf("\n");
 			int num_out_edges = get_num_out_edges(timestamp);
 			printf("out-edges (%d): ", num_out_edges);
-			for (int i = 0; i < num_out_edges; i++) {
-				printf("%ld, ", get_out_edge_list(timestamp)[i]);
+			const vertex_id_t *out_edge_list = get_edge_list_begin()
+				+ get_edge_off_begin()[i].out_off;
+			for (int j = 0; j < num_out_edges; j++) {
+				printf("%ld, ", out_edge_list[j]);
 			}
 			printf("\n");
 		}
@@ -679,7 +783,8 @@ public:
  *	id
  *	the total number of edges
  *	the number of timestamps
- *	edge offsets of each timestamp (in-edge offset and out-edge offset)
+ *	timestamps
+ *	edge offsets of existing timestamp (in-edge offset and out-edge offset)
  *	edges
  *	edge data
  *
@@ -693,9 +798,31 @@ class TS_page_directed_vertex: public TS_page_vertex
 	// The total number of edges in the vertex
 	int num_edges;
 	const page_byte_array &array;
-	// The edge offsets of each timestamp in the edge list
-	// They are offsets in edges (not in bytes).
-	edge_off ts_edge_offs[0];
+	short timestamps[0];
+
+	edge_off *get_edge_off_begin() {
+		return (edge_off *) (timestamps + num_timestamps);
+	}
+
+	const edge_off *get_edge_off_begin() const {
+		return (edge_off *) (timestamps + num_timestamps);
+	}
+
+	int get_header_size() const {
+		return sizeof(ts_ext_mem_directed_vertex) + get_ts_table_size();
+	}
+
+	int get_ts_table_size() const {
+		return sizeof(short) * num_timestamps
+			+ sizeof(edge_off) * num_timestamps;
+	}
+
+	int find_timestamp(int timestamp) const {
+		for (int i = 0; i < num_timestamps; i++)
+			if (timestamps[i] == timestamp)
+				return i;
+		return -1;
+	}
 
 	TS_page_directed_vertex(const page_byte_array &arr): array(arr) {
 		unsigned size = arr.get_size();
@@ -706,8 +833,8 @@ class TS_page_directed_vertex: public TS_page_vertex
 		id = v.get_id();
 		this->num_edges = v.get_num_edges();
 		this->num_timestamps = v.get_num_timestamps();
-		arr.memcpy(sizeof(ts_ext_mem_directed_vertex), (char *) ts_edge_offs,
-				sizeof(edge_off) * num_timestamps);
+		arr.memcpy(sizeof(ts_ext_mem_directed_vertex), (char *) timestamps,
+				get_ts_table_size());
 	}
 
 	// This object is not allowed to be copied.
@@ -718,6 +845,7 @@ public:
 	// The size of the vertex object.
 	static int get_size(int num_timestamps) {
 		return sizeof(TS_page_directed_vertex)
+			+ sizeof(short) * num_timestamps
 			+ sizeof(edge_off) * num_timestamps;
 	}
 
@@ -754,25 +882,27 @@ public:
 	}
 
 	virtual int get_num_edges(int timestamp, edge_type type) const {
-		if (timestamp >= num_timestamps)
+		int idx = find_timestamp(timestamp);
+		// Can't find the timestamp;
+		if (idx < 0)
 			return 0;
 
 		switch (type) {
 			case edge_type::IN_EDGE:
-				return ts_edge_offs[timestamp].out_off
-					- ts_edge_offs[timestamp].in_off;
+				return get_edge_off_begin()[idx].out_off
+					- get_edge_off_begin()[idx].in_off;
 			case edge_type::OUT_EDGE:
-				if (timestamp == num_timestamps - 1)
-					return num_edges - ts_edge_offs[timestamp].out_off;
+				if (idx == num_timestamps - 1)
+					return num_edges - get_edge_off_begin()[idx].out_off;
 				else
-					return ts_edge_offs[timestamp + 1].in_off
-						- ts_edge_offs[timestamp].out_off;
+					return get_edge_off_begin()[idx + 1].in_off
+						- get_edge_off_begin()[idx].out_off;
 			case edge_type::BOTH_EDGES:
-				if (timestamp == num_timestamps - 1)
-					return num_edges - ts_edge_offs[timestamp].in_off;
+				if (idx == num_timestamps - 1)
+					return num_edges - get_edge_off_begin()[idx].in_off;
 				else
-					return ts_edge_offs[timestamp + 1].in_off
-						- ts_edge_offs[timestamp].in_off;
+					return get_edge_off_begin()[idx + 1].in_off
+						- get_edge_off_begin()[idx].in_off;
 			default:
 				assert(0);
 		}
@@ -782,18 +912,18 @@ public:
 			int timestamp, edge_type type) const {
 		// The start location of the edge list.
 		page_byte_array::const_iterator<vertex_id_t> it
-			= array.begin<vertex_id_t>(sizeof(ts_ext_mem_directed_vertex)
-				+ num_timestamps * sizeof(edge_off));
+			= array.begin<vertex_id_t>(get_header_size());
 
-		if (timestamp >= num_timestamps) {
+		int idx = find_timestamp(timestamp);
+		if (idx < 0) {
 			it += num_edges;
 			return it;
 		}
 
 		if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES)
-			it += ts_edge_offs[timestamp].in_off;
+			it += get_edge_off_begin()[idx].in_off;
 		else if (type == edge_type::OUT_EDGE)
-			it += ts_edge_offs[timestamp].out_off;
+			it += get_edge_off_begin()[idx].out_off;
 		else
 			assert(0);
 		return it;
@@ -803,21 +933,21 @@ public:
 			int timestamp, edge_type type) const {
 		// The start location of the edge list.
 		page_byte_array::const_iterator<vertex_id_t> it
-			= array.begin<vertex_id_t>(sizeof(ts_ext_mem_directed_vertex)
-				+ num_timestamps * sizeof(edge_off));
+			= array.begin<vertex_id_t>(get_header_size());
 
-		if (timestamp >= num_timestamps) {
+		int idx = find_timestamp(timestamp);
+		if (idx < 0) {
 			it += num_edges;
 			return it;
 		}
 
 		if (type == edge_type::IN_EDGE)
-			it += ts_edge_offs[timestamp].out_off;
+			it += get_edge_off_begin()[idx].out_off;
 		else if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
-			if (timestamp == num_timestamps - 1)
+			if (idx == num_timestamps - 1)
 				it += num_edges;
 			else
-				it += ts_edge_offs[timestamp + 1].in_off;
+				it += get_edge_off_begin()[idx + 1].in_off;
 		}
 		else
 			assert(0);
@@ -827,8 +957,8 @@ public:
 	virtual void print() const {
 		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
 				get_id(), 0, get_num_timestamps(), get_num_edges());
-		for (int timestamp = 0; timestamp < get_num_timestamps();
-				timestamp++) {
+		for (int i = 0; i < get_num_timestamps(); i++) {
+			int timestamp = timestamps[i];
 			// We need to skip the timestamps without edges.
 			if (get_num_edges(timestamp, edge_type::IN_EDGE)
 					+ get_num_edges(timestamp, edge_type::OUT_EDGE) == 0)
@@ -1136,11 +1266,14 @@ public:
 	}
 
 	int get_num_timestamps() const {
-		if (ts_edges.size() > 0)
-			// The last timestamp + 1.
-			return ts_edges.rbegin()->first + 1;
-		else
-			return 0;
+		return ts_edges.size();
+	}
+
+	void get_all_timestamps(std::vector<int> &timestamps) const {
+		for (typename std::map<int, ts_edge_pair>::const_iterator it
+				= ts_edges.begin(); it != ts_edges.end(); it++) {
+			timestamps.push_back(it->first);
+		}
 	}
 
 	edge_const_iterator get_in_edge_begin(int timestamp) const {
@@ -1153,7 +1286,9 @@ public:
 	}
 
 	edge_const_iterator get_in_edge_end(int timestamp) const {
-		return get_in_edge_begin(timestamp) + get_num_in_edges(timestamp);
+		edge_const_iterator it = get_in_edge_begin(timestamp);
+		it += get_num_in_edges(timestamp);
+		return it;
 	}
 
 	edge_const_iterator get_out_edge_begin(int timestamp) const {
@@ -1166,7 +1301,9 @@ public:
 	}
 
 	edge_const_iterator get_out_edge_end(int timestamp) const {
-		return get_out_edge_begin(timestamp) + get_num_out_edges(timestamp);
+		edge_const_iterator it = get_out_edge_begin(timestamp);
+		it += get_num_out_edges(timestamp);
+		return it;
 	}
 
 	void add_timestamp(int timestamp,
@@ -1189,14 +1326,11 @@ public:
 	}
 
 	int get_serialize_size() const {
-		int num_timestamps = get_num_timestamps();
-		int size = sizeof(ts_ext_mem_directed_vertex)
-			+ sizeof(edge_off) * num_timestamps
-			+ sizeof(vertex_id_t) * (get_num_in_edges() + get_num_out_edges());
-		if (has_edge_data())
-			size += sizeof(edge_data_type) * (get_num_in_edges()
-					+ get_num_out_edges());
-		return size;
+		ts_ext_mem_directed_vertex v;
+		v.id = get_id();
+		v.num_edges = get_num_edges();
+		v.num_timestamps = get_num_timestamps();
+		return v.get_size();
 	}
 
 	void print() const {
