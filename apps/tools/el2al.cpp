@@ -473,6 +473,32 @@ directed_graph<> *par_load_edge_list_text(const std::string &file)
 	return g;
 }
 
+static int get_file_id(const std::string &file)
+{
+	size_t begin = file.rfind('-');
+	assert(begin != std::string::npos);
+	size_t end = file.rfind('.');
+	std::string sub = file.substr(begin + 1, end - begin - 1);
+	return atoi(sub.c_str());
+}
+
+/**
+ * I assume all files are named with numbers.
+ * I need to sort the files in a numeric order.
+ */
+static void sort_edge_list_files(std::vector<std::string> &files)
+{
+	std::map<int, std::string> sorted_files;
+	for (size_t i = 0; i < files.size(); i++) {
+		int id = get_file_id(files[i]);
+		sorted_files.insert(std::pair<int, std::string>(id, files[i]));
+	}
+	files.clear();
+	for (std::map<int, std::string>::const_iterator it = sorted_files.begin();
+			it != sorted_files.end(); it++)
+		files.push_back(it->second);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 5) {
@@ -497,6 +523,7 @@ int main(int argc, char *argv[])
 		else
 			edge_list_files.push_back(argv[i]);
 	}
+	sort_edge_list_files(edge_list_files);
 
 	for (size_t i = 0; i < edge_list_files.size(); i++)
 		printf("edge list file: %s\n", edge_list_files[i].c_str());
