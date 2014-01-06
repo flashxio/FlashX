@@ -59,6 +59,10 @@ class scan_vertex: public compute_vertex
 	atomic_integer num_edges1;
 	// in timestamp 2
 	atomic_integer num_edges2;
+	// The number of edges of the vertex in timestamp 1.
+	int num_local_edges1;
+	// The number of edges of the vertex in timestamp 2.
+	int num_local_edges2;
 	// All neighbors (in both in-edges and out-edges)
 	// neighbors in timestamp 1
 	std::set<vertex_id_t> *neighbors1;
@@ -67,6 +71,8 @@ class scan_vertex: public compute_vertex
 public:
 	scan_vertex(): compute_vertex(-1, -1, 0) {
 		num_joined = 0;
+		num_local_edges1 = 0;
+		num_local_edges2 = 0;
 		neighbors1 = NULL;
 		neighbors2 = NULL;
 	}
@@ -74,6 +80,8 @@ public:
 	scan_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
 			id, off, size) {
 		num_joined = 0;
+		num_local_edges1 = 0;
+		num_local_edges2 = 0;
 		neighbors1 = NULL;
 		neighbors2 = NULL;
 	}
@@ -90,8 +98,12 @@ public:
 		return id;
 	}
 
-	int get_num_edges_diff() const {
-		return num_edges1.get() - num_edges2.get();
+	int get_num_edges1() const {
+		return num_edges1.get();
+	}
+
+	int get_num_edges2() const {
+		return num_edges2.get();
 	}
 
 	int count_edges(const TS_page_vertex *v,
@@ -115,70 +127,19 @@ int scan_vertex::count_edges(const TS_page_vertex *v,
 			|| neighbors->empty())
 		return 0;
 
-	// If the neighbor vertex has way more edges than this vertex.
-	if (v->get_num_edges(timestamp,
-				edge_type::BOTH_EDGES) / neighbors->size() > BIN_SEARCH_RATIO) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(timestamp, edge_type::BOTH_EDGES);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(timestamp, edge_type::BOTH_EDGES);
-		for (std::set<vertex_id_t>::const_iterator it = neighbors->begin();
-				it != neighbors->end(); it++) {
-			vertex_id_t this_neighbor = *it;
-			// We need to skip loops.
-			if (this_neighbor != v->get_id()
-					&& this_neighbor != this->get_id()) {
-				page_byte_array::const_iterator<vertex_id_t> first
-					= std::lower_bound(other_it, other_end, this_neighbor);
-				if (first != other_end && this_neighbor == *first) {
-					num_local_edges++;
-				}
+	page_byte_array::const_iterator<vertex_id_t> other_it
+		= v->get_neigh_begin(timestamp, edge_type::BOTH_EDGES);
+	page_byte_array::const_iterator<vertex_id_t> other_end
+		= v->get_neigh_end(timestamp, edge_type::BOTH_EDGES);
+	while (other_it != other_end) {
+		vertex_id_t neigh_neighbor = *other_it;
+		if (neigh_neighbor != v->get_id()
+				&& neigh_neighbor != this->get_id()) {
+			if (neighbors->find(neigh_neighbor) != neighbors->end()) {
+				num_local_edges++;
 			}
 		}
-	}
-	// If this vertex has way more edges than the neighbor vertex.
-	else if (neighbors->size() / v->get_num_edges(timestamp,
-				edge_type::BOTH_EDGES) > BIN_SEARCH_RATIO) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(timestamp, edge_type::BOTH_EDGES);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(timestamp, edge_type::BOTH_EDGES);
-		while (other_it != other_end) {
-			vertex_id_t neigh_neighbor = *other_it;
-			if (neigh_neighbor != v->get_id()
-					&& neigh_neighbor != this->get_id()) {
-				if (neighbors->find(neigh_neighbor) != neighbors->end()) {
-					num_local_edges++;
-				}
-			}
-			++other_it;
-		}
-	}
-	else {
-		std::set<vertex_id_t>::const_iterator this_it = neighbors->begin();
-		std::set<vertex_id_t>::const_iterator this_end = neighbors->end();
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(timestamp, edge_type::BOTH_EDGES);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(timestamp, edge_type::BOTH_EDGES);
-		while (this_it != this_end && other_it != other_end) {
-			vertex_id_t this_neighbor = *this_it;
-			vertex_id_t neigh_neighbor = *other_it;
-			if (this_neighbor == neigh_neighbor) {
-				// skip loop
-				if (neigh_neighbor != v->get_id()
-						&& neigh_neighbor != this->get_id()) {
-					num_local_edges++;
-				}
-				++this_it;
-				++other_it;
-			}
-			else if (this_neighbor < neigh_neighbor) {
-				++this_it;
-			}
-			else
-				++other_it;
-		}
+		++other_it;
 	}
 	return num_local_edges;
 }
@@ -211,6 +172,7 @@ void scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		vertex_id_t id = *it;
 		// Ignore loops
 		if (id != ts_vertex->get_id()) {
+			num_local_edges1++;
 			neighbors1->insert(id);
 		}
 	}
@@ -222,13 +184,13 @@ void scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		// Ignore loop
 		if (id != ts_vertex->get_id()
 				// The neighbor needs to exist in timestamp 1.
-				|| neighbors1->find(id) != neighbors1->end())
+				&& neighbors1->find(id) != neighbors1->end()) {
+			num_local_edges2++;
 			neighbors2->insert(id);
+		}
 	}
 
 	fetch_it = neighbors1->begin();
-	num_edges1.inc(neighbors1->size());
-	num_edges2.inc(neighbors2->size());
 }
 
 void scan_vertex::run_on_neighbors(graph_engine &graph,
@@ -241,7 +203,7 @@ void scan_vertex::run_on_neighbors(graph_engine &graph,
 		int ret1 = count_edges((const TS_page_vertex *) vertices[i],
 				neighbors1, timestamp1);
 		int ret2 = count_edges((const TS_page_vertex *) vertices[i],
-				neighbors2, timestamp2);
+				neighbors1, timestamp2);
 		// If we find triangles with the neighbor, notify the neighbor
 		// as well.
 		if (ret1 > 0) {
@@ -258,6 +220,11 @@ void scan_vertex::run_on_neighbors(graph_engine &graph,
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
+
+		assert(num_edges1.get() % 2 == 0);
+		assert(num_edges2.get() % 2 == 0);
+		num_edges1 = num_edges1.get() / 2 + num_local_edges1;
+		num_edges2 = num_edges2.get() / 2 + num_local_edges2;
 
 		delete neighbors1;
 		delete neighbors2;
@@ -343,7 +310,7 @@ int main(int argc, char *argv[])
 		index->get_all_vertices(vertices);
 		for (size_t i = 0; i < index->get_num_vertices(); i++) {
 			scan_vertex &v = (scan_vertex &) index->get_vertex(vertices[i]);
-			fprintf(f, "v%ld: %d\n", v.get_id(), v.get_num_edges_diff());
+			fprintf(f, "\"%ld\" %d %d\n", v.get_id(), v.get_num_edges1(), v.get_num_edges2());
 		}
 		fclose(f);
 	}
