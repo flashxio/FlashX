@@ -781,7 +781,8 @@ public:
 		page_byte_array::const_iterator<vertex_id_t> it
 			= array.begin<vertex_id_t>(sizeof(ts_ext_mem_directed_vertex)
 				+ num_timestamps * sizeof(edge_off));
-		if (type == edge_type::IN_EDGE)
+
+		if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES)
 			it += ts_edge_offs[timestamp].in_off;
 		else if (type == edge_type::OUT_EDGE)
 			it += ts_edge_offs[timestamp].out_off;
@@ -796,9 +797,10 @@ public:
 		page_byte_array::const_iterator<vertex_id_t> it
 			= array.begin<vertex_id_t>(sizeof(ts_ext_mem_directed_vertex)
 				+ num_timestamps * sizeof(edge_off));
+
 		if (type == edge_type::IN_EDGE)
 			it += ts_edge_offs[timestamp].out_off;
-		else if (type == edge_type::OUT_EDGE) {
+		else if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
 			if (timestamp == num_timestamps - 1)
 				it += num_edges;
 			else
