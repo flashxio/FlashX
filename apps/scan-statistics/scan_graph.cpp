@@ -20,6 +20,8 @@
 #include <signal.h>
 #include <google/profiler.h>
 
+#include <set>
+
 #include "thread.h"
 #include "io_interface.h"
 
@@ -30,6 +32,9 @@ const double BIN_SEARCH_RATIO = 100;
 
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
+
+int timestamp1;
+int timestamp2;
 
 class count_msg: public vertex_message
 {
@@ -46,45 +51,51 @@ public:
 
 class scan_vertex: public compute_vertex
 {
-	// The number of required vertices to join with this vertex.
-	int num_required;
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
-	// The number of vertices that have been asked to fetch.
-	int num_fetched;
+	std::set<vertex_id_t>::const_iterator fetch_it;
 	// The number of edges in its neighborhood.
-	atomic_integer num_edges;
+	// in timestamp 1
+	atomic_integer num_edges1;
+	// in timestamp 2
+	atomic_integer num_edges2;
 	// All neighbors (in both in-edges and out-edges)
-	std::vector<vertex_id_t> *neighbors;
+	// neighbors in timestamp 1
+	std::set<vertex_id_t> *neighbors1;
+	// neighbors in timestamp 2, which are also in timestamp 1.
+	std::set<vertex_id_t> *neighbors2;
 public:
 	scan_vertex(): compute_vertex(-1, -1, 0) {
-		num_required = 0;
 		num_joined = 0;
-		num_fetched = 0;
-		neighbors = NULL;
+		neighbors1 = NULL;
+		neighbors2 = NULL;
 	}
 
 	scan_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
 			id, off, size) {
-		num_required = 0;
 		num_joined = 0;
-		num_fetched = 0;
-		neighbors = NULL;
+		neighbors1 = NULL;
+		neighbors2 = NULL;
 	}
 
-	int count_edges(const page_vertex *v) const;
-
 	virtual bool has_required_vertices() const {
-		return num_fetched < num_required;
+		if (neighbors1 == NULL)
+			return false;
+		return fetch_it != neighbors1->end();
 	}
 
 	virtual vertex_id_t get_next_required_vertex() {
-		return neighbors->at(num_fetched++);
+		vertex_id_t id = *fetch_it;
+		fetch_it++;
+		return id;
 	}
 
-	int get_num_edges_in_neigh() const {
-		return num_edges.get();
+	int get_num_edges_diff() const {
+		return num_edges1.get() - num_edges2.get();
 	}
+
+	int count_edges(const TS_page_vertex *v,
+			const std::set<vertex_id_t> *neighbors, int timestamp);
 
 	void run(graph_engine &graph, const page_vertex *vertex);
 
@@ -96,36 +107,24 @@ public:
 	}
 };
 
-int scan_vertex::count_edges(const page_vertex *v) const
+int scan_vertex::count_edges(const TS_page_vertex *v,
+		const std::set<vertex_id_t> *neighbors, int timestamp)
 {
 	int num_local_edges = 0;
-	assert(v->get_id() != this->get_id());
-
-	if (v->get_num_edges(edge_type::BOTH_EDGES) == 0)
+	if (v->get_num_edges(timestamp, edge_type::BOTH_EDGES) == 0
+			|| neighbors->empty())
 		return 0;
 
-	/*
-	 * We search for triangles with two different ways:
-	 * binary search if two adjacency lists have very different sizes,
-	 * scan otherwise.
-	 *
-	 * when binary search for multiple neighbors, we can reduce binary search
-	 * overhead by using the new end in the search range. We can further reduce
-	 * overhead by searching in a reverse order (start from the largest neighbor).
-	 * Since vertices of smaller ID has more neighbors, it's more likely
-	 * that a neighbor is in the beginning of the adjacency list, and
-	 * the search range will be narrowed faster.
-	 */
-
-	assert(neighbors);
 	// If the neighbor vertex has way more edges than this vertex.
-	if (v->get_num_edges(edge_type::BOTH_EDGES) / neighbors->size() > BIN_SEARCH_RATIO) {
+	if (v->get_num_edges(timestamp,
+				edge_type::BOTH_EDGES) / neighbors->size() > BIN_SEARCH_RATIO) {
 		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(edge_type::BOTH_EDGES);
+			= v->get_neigh_begin(timestamp, edge_type::BOTH_EDGES);
 		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(edge_type::BOTH_EDGES);
-		for (int i = neighbors->size() - 1; i >= 0; i--) {
-			vertex_id_t this_neighbor = neighbors->at(i);
+			= v->get_neigh_end(timestamp, edge_type::BOTH_EDGES);
+		for (std::set<vertex_id_t>::const_iterator it = neighbors->begin();
+				it != neighbors->end(); it++) {
+			vertex_id_t this_neighbor = *it;
 			// We need to skip loops.
 			if (this_neighbor != v->get_id()
 					&& this_neighbor != this->get_id()) {
@@ -134,25 +133,21 @@ int scan_vertex::count_edges(const page_vertex *v) const
 				if (first != other_end && this_neighbor == *first) {
 					num_local_edges++;
 				}
-				other_end = first;
 			}
 		}
 	}
 	// If this vertex has way more edges than the neighbor vertex.
-	else if (neighbors->size() / v->get_num_edges(edge_type::BOTH_EDGES)
-			> BIN_SEARCH_RATIO) {
-		// TODO the same as above.
+	else if (neighbors->size() / v->get_num_edges(timestamp,
+				edge_type::BOTH_EDGES) > BIN_SEARCH_RATIO) {
 		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(edge_type::BOTH_EDGES);
+			= v->get_neigh_begin(timestamp, edge_type::BOTH_EDGES);
 		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(edge_type::BOTH_EDGES);
+			= v->get_neigh_end(timestamp, edge_type::BOTH_EDGES);
 		while (other_it != other_end) {
 			vertex_id_t neigh_neighbor = *other_it;
 			if (neigh_neighbor != v->get_id()
 					&& neigh_neighbor != this->get_id()) {
-				std::vector<vertex_id_t>::const_iterator first = std::lower_bound(
-						neighbors->begin(), neighbors->end(), neigh_neighbor);
-				if (first != neighbors->end() && neigh_neighbor == *first) {
+				if (neighbors->find(neigh_neighbor) != neighbors->end()) {
 					num_local_edges++;
 				}
 			}
@@ -160,12 +155,12 @@ int scan_vertex::count_edges(const page_vertex *v) const
 		}
 	}
 	else {
-		std::vector<vertex_id_t>::const_iterator this_it = neighbors->begin();
-		std::vector<vertex_id_t>::const_iterator this_end = neighbors->end();
+		std::set<vertex_id_t>::const_iterator this_it = neighbors->begin();
+		std::set<vertex_id_t>::const_iterator this_end = neighbors->end();
 		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(edge_type::BOTH_EDGES);
+			= v->get_neigh_begin(timestamp, edge_type::BOTH_EDGES);
 		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(edge_type::BOTH_EDGES);
+			= v->get_neigh_end(timestamp, edge_type::BOTH_EDGES);
 		while (this_it != this_end && other_it != other_end) {
 			vertex_id_t this_neighbor = *this_it;
 			vertex_id_t neigh_neighbor = *other_it;
@@ -188,69 +183,86 @@ int scan_vertex::count_edges(const page_vertex *v) const
 	return num_local_edges;
 }
 
-// We only use the neighbors whose ID is smaller than this vertex.
-static int get_required_edges(const page_vertex *vertex, edge_type type,
-		std::vector<vertex_id_t> &edges)
-{
-	page_byte_array::const_iterator<vertex_id_t> it = vertex->get_neigh_begin(type);
-	page_byte_array::const_iterator<vertex_id_t> end = vertex->get_neigh_end(type);
-	int num = 0;
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
-		if (id != vertex->get_id()) {
-			edges.push_back(id);
-			num++;
-		}
-	}
-	return num;
-}
-
 void scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
-	assert(neighbors == NULL);
+	assert(neighbors1 == NULL);
+	assert(neighbors2 == NULL);
 	assert(num_joined == 0);
-	assert(num_fetched == 0);
 
+	const TS_page_vertex *ts_vertex = (const TS_page_vertex *) vertex;
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
-	if (vertex->get_num_edges(edge_type::BOTH_EDGES) == 0) {
+	if (ts_vertex->get_num_edges(timestamp1, edge_type::BOTH_EDGES) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
 		return;
 	}
 
-	neighbors = new std::vector<vertex_id_t>();
-	get_required_edges(vertex, edge_type::BOTH_EDGES, *neighbors);
-	num_required = neighbors->size();
-	num_edges.inc(neighbors->size());
+	neighbors1 = new std::set<vertex_id_t>();
+	neighbors2 = new std::set<vertex_id_t>();
+
+	page_byte_array::const_iterator<vertex_id_t> it = ts_vertex->get_neigh_begin(
+			timestamp1, edge_type::BOTH_EDGES);
+	page_byte_array::const_iterator<vertex_id_t> end = ts_vertex->get_neigh_end(
+			timestamp1, edge_type::BOTH_EDGES);
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		// Ignore loops
+		if (id != ts_vertex->get_id()) {
+			neighbors1->insert(id);
+		}
+	}
+
+	it = ts_vertex->get_neigh_begin(timestamp2, edge_type::BOTH_EDGES);
+	end = ts_vertex->get_neigh_end(timestamp2, edge_type::BOTH_EDGES);
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		// Ignore loop
+		if (id != ts_vertex->get_id()
+				// The neighbor needs to exist in timestamp 1.
+				|| neighbors1->find(id) != neighbors1->end())
+			neighbors2->insert(id);
+	}
+
+	fetch_it = neighbors1->begin();
+	num_edges1.inc(neighbors1->size());
+	num_edges2.inc(neighbors2->size());
 }
 
 void scan_vertex::run_on_neighbors(graph_engine &graph,
 		const page_vertex *vertices[], int num)
 {
 	num_joined++;
+	assert(neighbors1);
+	assert(neighbors2);
 	for (int i = 0; i < num; i++) {
-		int ret = count_edges(vertices[i]);
+		int ret1 = count_edges((const TS_page_vertex *) vertices[i],
+				neighbors1, timestamp1);
+		int ret2 = count_edges((const TS_page_vertex *) vertices[i],
+				neighbors2, timestamp2);
 		// If we find triangles with the neighbor, notify the neighbor
 		// as well.
-		if (ret > 0) {
-			num_edges.inc(ret);
+		if (ret1 > 0) {
+			num_edges1.inc(ret1);
+		}
+		if (ret2 > 0) {
+			num_edges2.inc(ret2);
 		}
 	}
 
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
-	if (num_joined == num_required) {
+	if (num_joined == (int) neighbors1->size()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
 
-//		printf("v%ld (%ld neighbors): %d\n", get_id(), neighbors->size(),
-//				num_edges.get());
-		delete neighbors;
-		neighbors = NULL;
+		delete neighbors1;
+		delete neighbors2;
+		neighbors1 = NULL;
+		neighbors2 = NULL;
 	}
 }
 
@@ -263,8 +275,9 @@ void int_handler(int sig_num)
 
 int main(int argc, char *argv[])
 {
-	if (argc < 5) {
-		fprintf(stderr, "scan-statistics conf_file graph_file index_file directed [output_file]\n");
+	if (argc < 8) {
+		fprintf(stderr,
+				"scan-statistics conf_file graph_file index_file directed num_timestamps timestamp1 timestamp2 [output_file]\n");
 		graph_conf.print_help();
 		params.print_help();
 		exit(-1);
@@ -274,15 +287,18 @@ int main(int argc, char *argv[])
 	std::string graph_file = argv[2];
 	std::string index_file = argv[3];
 	bool directed = atoi(argv[4]);
+	int num_timestamps = atoi(argv[5]);
+	timestamp1 = atoi(argv[6]);
+	timestamp2 = atoi(argv[7]);
 	assert(directed);
 	std::string output_file;
-	if (argc == 6) {
-		output_file = argv[5];
+	if (argc == 9) {
+		output_file = argv[8];
 		argc--;
 	}
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 5, argc - 5);
+	configs.add_options(argv + 8, argc - 8);
 	graph_conf.init(configs);
 	graph_conf.print();
 
@@ -291,14 +307,9 @@ int main(int argc, char *argv[])
 
 	graph_index *index = graph_index_impl<scan_vertex>::create(
 			index_file, directed);
-	ext_mem_vertex_interpreter *interpreter;
-	if (directed)
-		interpreter = new ext_mem_directed_vertex_interpreter();
-	else
-		interpreter = new ext_mem_undirected_vertex_interpreter();
 	graph_engine *graph = graph_engine::create(
-			graph_conf.get_num_threads(), params.get_num_nodes(),
-			graph_file, index, interpreter, directed);
+			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
+			index, new ts_ext_mem_vertex_interpreter(num_timestamps), directed);
 	// TODO I need to redefine this interface.
 	graph->set_required_neighbor_type(edge_type::BOTH_EDGES);
 	printf("scan statistics starts\n");
@@ -332,7 +343,7 @@ int main(int argc, char *argv[])
 		index->get_all_vertices(vertices);
 		for (size_t i = 0; i < index->get_num_vertices(); i++) {
 			scan_vertex &v = (scan_vertex &) index->get_vertex(vertices[i]);
-			fprintf(f, "v%ld: %d\n", v.get_id(), v.get_num_edges_in_neigh());
+			fprintf(f, "v%ld: %d\n", v.get_id(), v.get_num_edges_diff());
 		}
 		fclose(f);
 	}
