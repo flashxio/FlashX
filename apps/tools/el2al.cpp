@@ -31,7 +31,7 @@
 const int NUM_THREADS = 32;
 const int NUM_NODES = 4;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
-const char delimiter = '\t';
+const char *delimiter = "\t";
 
 directed_graph<> *par_load_edge_list_text(const std::string &file);
 
@@ -193,19 +193,19 @@ size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 		line[len - 2] = 0;
 	if (line[0] == '#')
 		return -1;
-	char *second = strchr(line, delimiter);
+	char *second = strstr(line, delimiter);
 	assert(second);
 	*second = 0;
-	second++;
+	second += strlen(delimiter);
 
-	char *third = strchr(second, delimiter);
+	char *third = strstr(second, delimiter);
 	assert(third);
 	*third = 0;
-	third++;
+	third += strlen(delimiter);
 	if (*third == '"')
 		third++;
 
-	char *forth = strchr(third, delimiter);
+	char *forth = strstr(third, delimiter);
 	assert(forth);
 	*forth = 0;
 	if (*(forth - 1) == '"')
@@ -230,13 +230,13 @@ int parse_edge_list_line(char *line, edge<> &e)
 {
 	if (line[0] == '#')
 		return 0;
-	char *second = strchr(line, delimiter);
+	char *second = strstr(line, delimiter);
 	if (second == NULL) {
 		fprintf(stderr, "wrong format 1: %s\n", line);
 		return -1;
 	}
 	*second = 0;
-	second++;
+	second += strlen(delimiter);
 	if (!isnumeric(line) || !isnumeric(second)) {
 		fprintf(stderr, "wrong format 2: %s\t%s\n", line, second);
 		return -1;
@@ -501,17 +501,18 @@ static void sort_edge_list_files(std::vector<std::string> &files)
 
 int main(int argc, char *argv[])
 {
-	if (argc < 5) {
+	if (argc < 6) {
 		fprintf(stderr,
-				"el2al adjacency_list_file index_file directed edge_list_files (or directories)\n");
+				"el2al adjacency_list_file index_file directed delimiter edge_list_files (or directories)\n");
 		exit(-1);
 	}
 
 	const std::string adjacency_list_file = argv[1];
 	const std::string index_file = argv[2];
 	bool directed = atoi(argv[3]) != 0;
+	delimiter = argv[4];
 	std::vector<std::string> edge_list_files;
-	for (int i = 4; i < argc; i++) {
+	for (int i = 5; i < argc; i++) {
 		native_dir dir(argv[i]);
 		if (dir.is_dir()) {
 			std::vector<std::string> files;
