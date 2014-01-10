@@ -116,6 +116,14 @@ public:
 		vertices.push_back(v);
 	}
 
+	typename std::vector<in_mem_directed_vertex<edge_data_type> >::const_iterator begin() const {
+		return vertices.begin();
+	}
+
+	typename std::vector<in_mem_directed_vertex<edge_data_type> >::const_iterator end() const {
+		return vertices.end();
+	}
+
 	const in_mem_directed_vertex<edge_data_type> *get_vertex(
 			vertex_id_t id) const {
 		for (size_t i = 0; i < vertices.size(); i++)
@@ -190,6 +198,38 @@ public:
 	}
 };
 
+static inline void unique_merge(const std::vector<vertex_id_t> &v1,
+		const std::vector<vertex_id_t> &v2, std::vector<vertex_id_t> &v)
+{
+	std::vector<vertex_id_t>::const_iterator it1 = v1.begin();
+	std::vector<vertex_id_t>::const_iterator it2 = v2.begin();
+	while (it1 != v1.end() && it2 != v2.end()) {
+		if (*it1 > *it2) {
+			v.push_back(*it2);
+			it2++;
+		}
+		else if (*it1 < *it2) {
+			v.push_back(*it1);
+			it1++;
+		}
+		else {
+			v.push_back(*it1);
+			it1++;
+			it2++;
+		}
+	}
+
+	while (it1 != v1.end()) {
+		v.push_back(*it1);
+		it1++;
+	}
+
+	while (it2 != v2.end()) {
+		v.push_back(*it2);
+		it2++;
+	}
+}
+
 template<class edge_data_type = empty_data>
 class ts_directed_graph: public in_mem_graph
 {
@@ -198,24 +238,36 @@ public:
 	static ts_directed_graph<edge_data_type> *merge_graphs(
 			const std::vector<directed_graph<edge_data_type> *> &graphs) {
 		// Get all vertex Ids.
-		std::set<vertex_id_t> vertex_ids;
+		std::vector<vertex_id_t> vertex_ids;
 		for (unsigned i = 0; i < graphs.size(); i++) {
 			std::vector<vertex_id_t> ids;
+			// The vertices in the graph should have been sorted.
 			graphs[i]->get_all_vertices(ids);
-			vertex_ids.insert(ids.begin(), ids.end());
+			std::vector<vertex_id_t> tmp;
+			unique_merge(vertex_ids, ids, tmp);
+			vertex_ids = tmp;
 		}
 
 		ts_directed_graph<edge_data_type> *g
 			= new ts_directed_graph<edge_data_type>();
+		std::vector<typename std::vector<in_mem_directed_vertex<edge_data_type> >::const_iterator> its;
+		for (unsigned i = 0; i < graphs.size(); i++) {
+			its.push_back(graphs[i]->begin());
+		}
 		// Construct one time-series vertex at a time.
-		for (std::set<vertex_id_t>::const_iterator it = vertex_ids.begin();
+		for (std::vector<vertex_id_t>::const_iterator it = vertex_ids.begin();
 				it != vertex_ids.end(); it++) {
 			vertex_id_t id = *it;
 			ts_in_mem_directed_vertex<edge_data_type> ts_v(id);
-			for (unsigned i = 0; i < graphs.size(); i++) {
-				const in_mem_directed_vertex<edge_data_type> *v = graphs[i]->get_vertex(id);
-				if (v && v->get_num_in_edges() + v->get_num_out_edges() > 0)
-					ts_v.add_timestamp(i, *v);
+			for (unsigned i = 0; i < its.size(); i++) {
+				if (its[i] == graphs[i]->end())
+					continue;
+				assert(its[i]->get_id() >= id);
+				if (its[i]->get_id() == id
+						&& its[i]->get_num_in_edges() + its[i]->get_num_out_edges() > 0)
+					ts_v.add_timestamp(i, *its[i]);
+				if (its[i]->get_id() == id)
+					its[i]++;
 			}
 			g->vertices.push_back(ts_v);
 		}
