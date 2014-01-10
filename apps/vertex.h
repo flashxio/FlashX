@@ -946,6 +946,18 @@ public:
 		return size;
 	}
 
+	void print() const {
+		printf("v%ld has edge data: %d\n", get_id(), has_edge_data());
+		printf("There are %ld in-edges: ", in_edges.size());
+		for (size_t i = 0; i < in_edges.size(); i++)
+			printf("%ld, ", in_edges[i]);
+		printf("\n");
+		printf("There are %ld out-edges: ", out_edges.size());
+		for (size_t i = 0; i < out_edges.size(); i++)
+			printf("%ld, ", out_edges[i]);
+		printf("\n");
+	}
+
 	friend class ts_in_mem_directed_vertex<edge_data_type>;
 };
 

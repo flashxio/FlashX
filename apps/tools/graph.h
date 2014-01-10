@@ -194,7 +194,11 @@ public:
 	}
 
 	virtual void print() const {
-		assert(0);
+		for (size_t i = 0; i < vertices.size(); i++) {
+			if (vertices[i].get_num_in_edges()
+					+ vertices[i].get_num_out_edges() > 0)
+				vertices[i].print();
+		}
 	}
 };
 
