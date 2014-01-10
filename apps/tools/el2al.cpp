@@ -68,8 +68,13 @@ public:
 		pthread_mutex_init(&lock, NULL);
 	}
 	void sort_edges();
+	void compress_edges();
 	void add_edges(std::vector<edge<> > &edges);
 	directed_graph<> *create() const;
+	size_t get_num_edges() const {
+		assert(in_edges.size() == out_edges.size());
+		return in_edges.size();
+	}
 };
 
 class graph_file_io
@@ -313,6 +318,32 @@ void directed_edge_graph::add_edges(std::vector<edge<> > &edges)
 	pthread_mutex_unlock(&lock);
 }
 
+void directed_edge_graph::compress_edges()
+{
+	std::vector<edge<> > tmp_in_edges, tmp_out_edges;
+	printf("before: %ld in-edges and %ld out-edges\n", in_edges.size(), out_edges.size());
+	if (!in_edges.empty()) {
+		tmp_in_edges.push_back(in_edges[0]);
+		for (size_t i = 1; i < in_edges.size(); i++) {
+			if (in_edges[i].get_from() != tmp_in_edges.back().get_from()
+					|| in_edges[i].get_to() != tmp_in_edges.back().get_to())
+				tmp_in_edges.push_back(in_edges[i]);
+		}
+	}
+
+	if (!out_edges.empty()) {
+		tmp_out_edges.push_back(out_edges[0]);
+		for (size_t i = 1; i < out_edges.size(); i++) {
+			if (out_edges[i].get_from() != tmp_out_edges.back().get_from()
+					|| out_edges[i].get_to() != tmp_out_edges.back().get_to())
+				tmp_out_edges.push_back(out_edges[i]);
+		}
+	}
+	in_edges = tmp_in_edges;
+	out_edges = tmp_out_edges;
+	printf("after: %ld in-edges and %ld out-edges\n", in_edges.size(), out_edges.size());
+}
+
 void directed_edge_graph::sort_edges()
 {
 	comp_edge edge_comparator;
@@ -437,6 +468,7 @@ directed_graph<> *par_load_edge_list_text(const std::string &file)
 	graph_file_io io(file);
 	directed_edge_graph edge_g;
 	int thread_no = 0;
+	printf("start to read the edge list\n");
 	while (io.get_num_remaining_bytes() > 0) {
 		size_t size = 0;
 		char *line_buf = io.read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size);
@@ -465,6 +497,13 @@ directed_graph<> *par_load_edge_list_text(const std::string &file)
 	edge_g.sort_edges();
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
+
+	start = end;
+	size_t orig_num_edges = edge_g.get_num_edges();
+	edge_g.compress_edges();
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to compress edge list from %ld to %ld\n",
+			time_diff(start, end), orig_num_edges, edge_g.get_num_edges());
 
 	start = end;
 	directed_graph<> *g = edge_g.create();
@@ -537,11 +576,16 @@ int main(int argc, char *argv[])
 					edge_list_files[i]);
 			graphs.push_back(g);
 		}
+		printf("load all edge lists\n");
 		in_mem_graph *g = NULL;
 		if (graphs.size() == 1)
 			g = graphs[0];
 		else {
+			gettimeofday(&start, NULL);
 			g = ts_directed_graph<>::merge_graphs(graphs);
+			gettimeofday(&end, NULL);
+			printf("It takes %f seconds to merge graphs\n",
+					time_diff(start, end));
 			for (unsigned i = 0; i < graphs.size(); i++)
 				delete graphs[i];
 		}
