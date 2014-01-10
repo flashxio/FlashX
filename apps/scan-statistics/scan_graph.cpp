@@ -99,9 +99,9 @@ public:
 	int count_edges(const TS_page_vertex *v,
 			const std::set<vertex_id_t> *neighbors, int timestamp);
 
-	void run(graph_engine &graph, const page_vertex *vertex);
+	bool run(graph_engine &graph, const page_vertex *vertex);
 
-	void run_on_neighbors(graph_engine &graph,
+	bool run_on_neighbors(graph_engine &graph,
 			const page_vertex *vertices[], int num);
 
 	void run_on_messages(graph_engine &graph,
@@ -134,7 +134,7 @@ int scan_vertex::count_edges(const TS_page_vertex *v,
 	return num_local_edges;
 }
 
-void scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
+bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
@@ -147,7 +147,7 @@ void scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
-		return;
+		return true;
 	}
 
 	num_edges = new std::vector<atomic_integer>(timestamp_range);
@@ -183,9 +183,10 @@ void scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	}
 
 	fetch_it = neighbors->begin();
+	return false;
 }
 
-void scan_vertex::run_on_neighbors(graph_engine &graph,
+bool scan_vertex::run_on_neighbors(graph_engine &graph,
 		const page_vertex *vertices[], int num)
 {
 	num_joined++;
@@ -242,7 +243,9 @@ void scan_vertex::run_on_neighbors(graph_engine &graph,
 		num_local_edges = NULL;
 		num_edges = NULL;
 		neighbors = NULL;
+		return true;
 	}
+	return false;
 }
 
 void int_handler(int sig_num)

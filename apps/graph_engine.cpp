@@ -32,6 +32,8 @@ const int MAX_IO_PEND_VERTICES = 1000;
 
 graph_config graph_conf;
 
+class worker_thread;
+
 /**
  * This callback is to process a vertex.
  */
@@ -39,11 +41,14 @@ class vertex_compute: public user_compute
 {
 	graph_engine *graph;
 	compute_vertex *v;
+	// The thread that creates the vertex compute.
+	worker_thread *issue_thread;
 public:
 	vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
 		this->graph = graph;
 		v = NULL;
+		issue_thread = (worker_thread *) thread::get_curr_thread();
 	}
 
 	virtual int serialize(char *buf, int size) const {
@@ -113,7 +118,13 @@ class worker_thread: public thread
 	io_interface *io;
 	graph_engine *graph;
 	compute_allocator *alloc;
+	// This is to collect vertices activated in the next level.
 	std::vector<vertex_id_t> activated_vertices;
+
+	// The number of activated vertices processed in the current level.
+	atomic_number<long> num_activated_vertices_in_level;
+	// The number of vertices completed in the current level.
+	atomic_number<long> num_completed_vertices_in_level;
 public:
 	worker_thread(graph_engine *graph, file_io_factory *factory,
 			int node_id): thread("worker_thread", node_id) {
@@ -135,6 +146,10 @@ public:
 	}
 
 	int process_activated_vertices(int max);
+
+	void complete_vertex(const compute_vertex &v) {
+		num_completed_vertices_in_level.inc(1);
+	}
 };
 
 bool vertex_compute::run(page_byte_array &array)
@@ -143,17 +158,22 @@ bool vertex_compute::run(page_byte_array &array)
 	stack_array<char, 64> buf(interpreter->get_vertex_size());
 	const page_vertex *ext_v = interpreter->interpret(array, buf.data(),
 			interpreter->get_vertex_size());
+	bool completed;
 	// If the algorithm doesn't need to get the full information
 	// of their neighbors
 	if (graph->get_required_neighbor_type() == edge_type::NONE
 			// Or we haven't perform computation on the vertex yet.
 			|| v == NULL) {
 		v = &graph->get_vertex(ext_v->get_id());
-		v->run(*graph, ext_v);
+		completed = v->run(*graph, ext_v);
 	}
 	else {
-		v->run_on_neighbors(*graph, &ext_v, 1);
+		completed = v->run_on_neighbors(*graph, &ext_v, 1);
 	}
+	// We need to notify the thread that initiate processing the vertex
+	// of the completion of the vertex.
+	if (completed)
+		issue_thread->complete_vertex(*v);
 	return true;
 }
 
@@ -281,6 +301,7 @@ int worker_thread::process_activated_vertices(int max)
 	vertex_id_t vertex_buf[max];
 	stack_array<io_request> reqs(max);
 	int num = graph->get_curr_activated_vertices(vertex_buf, max);
+	num_activated_vertices_in_level.inc(num);
 	for (int i = 0; i < num; i++) {
 		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
 		data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
@@ -312,12 +333,15 @@ void worker_thread::run()
 						io->num_pending_ios() - MAX_IO_PEND_VERTICES));
 		}
 		// We have completed processing the activated vertices in this iteration.
-		while (io->num_pending_ios() > 0) {
+		while (num_activated_vertices_in_level.get()
+				- num_completed_vertices_in_level.get() > 0) {
 			io->wait4complete(1);
 		}
 		printf("thread %d visited %d vertices\n", this->get_id(), num_visited);
 
 		// Now we have finished this level, we can progress to the next level.
+		num_activated_vertices_in_level = atomic_number<long>(0);
+		num_completed_vertices_in_level = atomic_number<long>(0);
 		bool completed = graph->progress_next_level();
 		printf("thread %d finish in a level, completed? %d\n", get_id(), completed);
 		if (completed)

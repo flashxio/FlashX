@@ -28,7 +28,7 @@
 
 atomic_integer num_visited_vertices;
 
-void bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
+bool bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
 	vertex_id_t max_id = graph.get_max_vertex_id();
 	vertex_id_t min_id = graph.get_min_vertex_id();
@@ -55,6 +55,8 @@ void bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 
 	graph.activate_vertices(activated_vertices.data(),
 			activated_vertices.size());
+
+	return true;
 }
 
 void int_handler(int sig_num)

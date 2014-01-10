@@ -73,14 +73,16 @@ public:
 	/**
 	 * Run user's code when the adjacency list of the vertex is read
 	 * from disks.
+	 * It returns true if the vertex has completed the iteration.
 	 */
-	virtual void run(graph_engine &graph, const page_vertex *vertex) = 0;
+	virtual bool run(graph_engine &graph, const page_vertex *vertex) = 0;
 
 	/**
 	 * Run user's code when the adjacency lists of its neighbors are read
 	 * from disks.
+	 * It returns true if the vertex has completed the iteration.
 	 */
-	virtual void run_on_neighbors(graph_engine &graph,
+	virtual bool run_on_neighbors(graph_engine &graph,
 			const page_vertex *vertices[], int num) = 0;
 
 	/**

@@ -55,10 +55,11 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
-	void run(graph_engine &graph, const page_vertex *vertex);
+	bool run(graph_engine &graph, const page_vertex *vertex);
 
-	void run_on_neighbors(graph_engine &graph, const page_vertex *vertices[],
+	bool run_on_neighbors(graph_engine &graph, const page_vertex *vertices[],
 			int num) {
+		return true;
 	}
 
 	virtual void run_on_messages(graph_engine &,
