@@ -509,6 +509,12 @@ directed_graph<> *par_load_edge_list_text(const std::string &file)
 	directed_graph<> *g = edge_g.create();
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
+
+	for (int i = 0; i < NUM_THREADS; i++) {
+		threads[i]->stop();
+		threads[i]->join();
+		delete threads[i];
+	}
 	return g;
 }
 
