@@ -166,6 +166,18 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 			neighbors->insert(id);
 		}
 	}
+	if (neighbors->size() == 0) {
+		delete num_edges;
+		delete num_local_edges;
+		delete neighbors;
+		num_edges = NULL;
+		num_local_edges = NULL;
+		neighbors = NULL;
+		long ret = num_completed_vertices.inc(1);
+		if (ret % 100000 == 0)
+			printf("%ld completed vertices\n", ret);
+		return true;
+	}
 
 	for (int i = 1; i < timestamp_range && timestamp - i >= 0; i++) {
 		int timestamp2 = timestamp - i;
