@@ -28,7 +28,7 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-const double BIN_SEARCH_RATIO = 100;
+const double BIN_SEARCH_RATIO = 10;
 
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
@@ -98,6 +98,9 @@ public:
 
 	int count_edges(const TS_page_vertex *v,
 			const std::set<vertex_id_t> *neighbors, int timestamp);
+	int count_edges(const TS_page_vertex *v,
+			const std::set<vertex_id_t> *neighbors, int timestamp,
+			edge_type type);
 
 	bool run(graph_engine &graph, const page_vertex *vertex);
 
@@ -110,28 +113,102 @@ public:
 };
 
 int scan_vertex::count_edges(const TS_page_vertex *v,
-		const std::set<vertex_id_t> *neighbors, int timestamp)
+		const std::set<vertex_id_t> *neighbors, int timestamp, edge_type type)
 {
 	int num_local_edges = 0;
+	int num_v_edges = v->get_num_edges(timestamp, type);
+	if (num_v_edges == 0)
+		return 0;
+
+	if (num_v_edges / neighbors->size() > BIN_SEARCH_RATIO) {
+		page_byte_array::const_iterator<vertex_id_t> other_it
+			= v->get_neigh_begin(timestamp, type);
+		page_byte_array::const_iterator<vertex_id_t> other_end
+			= v->get_neigh_end(timestamp, type);
+		for (std::set<vertex_id_t>::const_iterator it = neighbors->begin();
+				it != neighbors->end(); it++) {
+			vertex_id_t this_neighbor = *it;
+			// We need to skip loops.
+			if (this_neighbor == v->get_id()
+					|| this_neighbor == this->get_id()) {
+				continue;
+			}
+
+			page_byte_array::const_iterator<vertex_id_t> first
+				= std::lower_bound(other_it, other_end, this_neighbor);
+			// found it.
+			if (first != other_end && !(this_neighbor < *first)) {
+				do {
+					// Edges in the v's neighbor lists may duplicated.
+					// The duplicated neighbors need to be counted
+					// multiple times.
+					num_local_edges++;
+					++first;
+				} while (first != other_end && this_neighbor == *first);
+			}
+		}
+	}
+	else if (neighbors->size() / num_v_edges > BIN_SEARCH_RATIO) {
+		page_byte_array::const_iterator<vertex_id_t> other_it
+			= v->get_neigh_begin(timestamp, type);
+		page_byte_array::const_iterator<vertex_id_t> other_end
+			= v->get_neigh_end(timestamp, type);
+		while (other_it != other_end) {
+			vertex_id_t neigh_neighbor = *other_it;
+			if (neigh_neighbor != v->get_id()
+					&& neigh_neighbor != this->get_id()) {
+				if (neighbors->find(neigh_neighbor) != neighbors->end()) {
+					num_local_edges++;
+				}
+			}
+			++other_it;
+		}
+	}
+	else {
+		page_byte_array::const_iterator<vertex_id_t> other_it
+			= v->get_neigh_begin(timestamp, type);
+		page_byte_array::const_iterator<vertex_id_t> other_end
+			= v->get_neigh_end(timestamp, type);
+		std::set<vertex_id_t>::const_iterator this_it = neighbors->begin();
+		std::set<vertex_id_t>::const_iterator this_end = neighbors->end();
+		while (other_it != other_end && this_it != this_end) {
+			vertex_id_t this_neighbor = *this_it;
+			vertex_id_t neigh_neighbor = *other_it;
+			if (neigh_neighbor == v->get_id()
+					|| neigh_neighbor == this->get_id()) {
+				++other_it;
+				continue;
+			}
+			if (this_neighbor == neigh_neighbor) {
+				do {
+					// Edges in the v's neighbor lists may duplicated.
+					// The duplicated neighbors need to be counted
+					// multiple times.
+					num_local_edges++;
+					++other_it;
+				} while (other_it != other_end && this_neighbor == *other_it);
+				++this_it;
+			}
+			else if (this_neighbor < neigh_neighbor) {
+				++this_it;
+			}
+			else {
+				++other_it;
+			}
+		}
+	}
+	return num_local_edges;
+}
+
+int scan_vertex::count_edges(const TS_page_vertex *v,
+		const std::set<vertex_id_t> *neighbors, int timestamp)
+{
 	if (v->get_num_edges(timestamp, edge_type::BOTH_EDGES) == 0
 			|| neighbors->empty())
 		return 0;
 
-	page_byte_array::const_iterator<vertex_id_t> other_it
-		= v->get_neigh_begin(timestamp, edge_type::BOTH_EDGES);
-	page_byte_array::const_iterator<vertex_id_t> other_end
-		= v->get_neigh_end(timestamp, edge_type::BOTH_EDGES);
-	while (other_it != other_end) {
-		vertex_id_t neigh_neighbor = *other_it;
-		if (neigh_neighbor != v->get_id()
-				&& neigh_neighbor != this->get_id()) {
-			if (neighbors->find(neigh_neighbor) != neighbors->end()) {
-				num_local_edges++;
-			}
-		}
-		++other_it;
-	}
-	return num_local_edges;
+	return count_edges(v, neighbors, timestamp, edge_type::IN_EDGE)
+		+ count_edges(v, neighbors, timestamp, edge_type::OUT_EDGE);
 }
 
 bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
