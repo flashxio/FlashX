@@ -112,3 +112,6 @@ echo "the basic test for global cached IO under my own triangle counting workloa
 apps/graph-bfs/graph-bfs test/conf/run_graph.txt twitter ~/graph-data/twitter_rv.net.index 12 1
 
 apps/triangle-counting/triangle-counting test/conf/run_graph.txt twitter ~/graph-data/twitter_rv.net.index 1
+
+# this is used for testing the correctness of the time-series graph engine.
+apps/scan-statistics/scan-statistics test/conf/run_graph.txt enron tmp/enron.index 1 190 169 168 /tmp/tmp.txt
