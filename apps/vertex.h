@@ -524,7 +524,9 @@ class ts_ext_mem_directed_vertex
 	}
 
 	edge_off *get_edge_off_begin() {
-		return (edge_off *) (get_timestamps_begin() + num_timestamps);
+		// The edge off list need to align with the word size.
+		int num = ROUNDUP(num_timestamps, 8);
+		return (edge_off *) (get_timestamps_begin() + num);
 	}
 
 	vertex_id_t *get_edge_list_begin() {
@@ -543,7 +545,9 @@ class ts_ext_mem_directed_vertex
 	}
 
 	const edge_off *get_edge_off_begin() const {
-		return (edge_off *) (get_timestamps_begin() + num_timestamps);
+		// The edge off list need to align with the word size.
+		int num = ROUNDUP(num_timestamps, 8);
+		return (edge_off *) (get_timestamps_begin() + num);
 	}
 
 	const vertex_id_t *get_edge_list_begin() const {
@@ -663,8 +667,10 @@ public:
 	}
 
 	size_t get_size() const {
+		// The edge off list need to align with the word size.
+		int num = ROUNDUP(num_timestamps, 8);
 		return sizeof(ts_ext_mem_directed_vertex)
-			+ sizeof(timestamps[0]) * num_timestamps
+			+ sizeof(timestamps[0]) * num
 			+ sizeof(edge_off) * num_timestamps
 			+ sizeof(vertex_id_t) * num_edges;
 		// TODO I should also include the size of edge data later.
@@ -801,11 +807,15 @@ class TS_page_directed_vertex: public TS_page_vertex
 	short timestamps[0];
 
 	edge_off *get_edge_off_begin() {
-		return (edge_off *) (timestamps + num_timestamps);
+		// The edge off list need to align with the word size.
+		int num = ROUNDUP(num_timestamps, 8);
+		return (edge_off *) (timestamps + num);
 	}
 
 	const edge_off *get_edge_off_begin() const {
-		return (edge_off *) (timestamps + num_timestamps);
+		// The edge off list need to align with the word size.
+		int num = ROUNDUP(num_timestamps, 8);
+		return (edge_off *) (timestamps + num);
 	}
 
 	int get_header_size() const {
@@ -813,8 +823,9 @@ class TS_page_directed_vertex: public TS_page_vertex
 	}
 
 	int get_ts_table_size() const {
-		return sizeof(short) * num_timestamps
-			+ sizeof(edge_off) * num_timestamps;
+		// The edge off list need to align with the word size.
+		int num = ROUNDUP(num_timestamps, 8);
+		return sizeof(short) * num + sizeof(edge_off) * num_timestamps;
 	}
 
 	int find_timestamp(int timestamp) const {
@@ -844,9 +855,10 @@ class TS_page_directed_vertex: public TS_page_vertex
 public:
 	// The size of the vertex object.
 	static int get_size(int num_timestamps) {
+		// The edge off list need to align with the word size.
+		int num = ROUNDUP(num_timestamps, 8);
 		return sizeof(TS_page_directed_vertex)
-			+ sizeof(short) * num_timestamps
-			+ sizeof(edge_off) * num_timestamps;
+			+ sizeof(short) * num + sizeof(edge_off) * num_timestamps;
 	}
 
 	// We create the vertex object in the given buffer.
