@@ -37,6 +37,7 @@ public:
 	virtual void dump(const std::string &file) const = 0;
 	virtual size_t get_num_edges() const = 0;
 	virtual size_t get_num_vertices() const = 0;
+	virtual bool has_edge_data() const = 0;
 	virtual size_t get_num_non_empty_vertices() const = 0;
 	virtual void print() const = 0;
 };
@@ -60,6 +61,10 @@ public:
 
 	static void destroy(undirected_graph *g) {
 		delete g;
+	}
+
+	bool has_edge_data() const {
+		return false;
 	}
 
 	void add_vertex(const in_mem_undirected_vertex<edge_data_type> &v) {
@@ -105,14 +110,24 @@ public:
 template<class edge_data_type = empty_data>
 class directed_graph: public in_mem_graph
 {
+	bool has_data;
 	std::vector<in_mem_directed_vertex<edge_data_type> > vertices;
 public:
 	static void destroy(directed_graph *g) {
 		delete g;
 	}
 
+	directed_graph(bool has_data) {
+		this->has_data = has_data;
+	}
+
+	bool has_edge_data() const {
+		return has_data;
+	}
+
 	void add_vertex(const in_mem_directed_vertex<edge_data_type> &v) {
 		assert(vertices.size() == v.get_id());
+		assert(v.has_edge_data() == has_data);
 		vertices.push_back(v);
 	}
 
@@ -237,11 +252,16 @@ static inline void unique_merge(const std::vector<vertex_id_t> &v1,
 template<class edge_data_type = empty_data>
 class ts_directed_graph: public in_mem_graph
 {
+	bool has_data;
 	std::vector<ts_in_mem_directed_vertex<edge_data_type> > vertices;
 public:
 	static ts_directed_graph<edge_data_type> *merge_graphs(
 			const std::vector<directed_graph<edge_data_type> *> &graphs) {
+		if (graphs.empty())
+			return NULL;
+
 		// Get all vertex Ids.
+		bool has_edge_data = graphs[0]->has_edge_data();
 		std::vector<vertex_id_t> vertex_ids;
 		for (unsigned i = 0; i < graphs.size(); i++) {
 			std::vector<vertex_id_t> ids;
@@ -250,10 +270,12 @@ public:
 			std::vector<vertex_id_t> tmp;
 			unique_merge(vertex_ids, ids, tmp);
 			vertex_ids = tmp;
+			assert(has_edge_data == graphs[i]->has_edge_data());
 		}
 
 		ts_directed_graph<edge_data_type> *g
 			= new ts_directed_graph<edge_data_type>();
+		g->has_data = has_edge_data;
 		std::vector<typename std::vector<in_mem_directed_vertex<edge_data_type> >::const_iterator> its;
 		for (unsigned i = 0; i < graphs.size(); i++) {
 			its.push_back(graphs[i]->begin());
@@ -262,7 +284,7 @@ public:
 		for (std::vector<vertex_id_t>::const_iterator it = vertex_ids.begin();
 				it != vertex_ids.end(); it++) {
 			vertex_id_t id = *it;
-			ts_in_mem_directed_vertex<edge_data_type> ts_v(id);
+			ts_in_mem_directed_vertex<edge_data_type> ts_v(id, has_edge_data);
 			for (unsigned i = 0; i < its.size(); i++) {
 				if (its[i] == graphs[i]->end())
 					continue;
@@ -276,6 +298,10 @@ public:
 			g->vertices.push_back(ts_v);
 		}
 		return g;
+	}
+
+	bool has_edge_data() const {
+		return has_data;
 	}
 
 	void get_all_vertices(std::vector<vertex_id_t> &ids) const {
@@ -316,9 +342,9 @@ public:
 				assert(ext_v->get_num_out_edges(*it)
 						== vertices[i].get_num_out_edges(*it));
 				ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> in_it1
-					= ext_v->get_in_edge_begin(*it);
+					= ext_v->get_in_edge_begin<edge_data_type>(*it);
 				ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> in_end1
-					= ext_v->get_in_edge_end(*it);
+					= ext_v->get_in_edge_end<edge_data_type>(*it);
 				typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator in_it2
 					= vertices[i].get_in_edge_begin(*it);
 				typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator in_end2
@@ -334,9 +360,9 @@ public:
 				assert(in_it1 == in_end1 && in_it2 == in_end2);
 
 				ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> out_it1
-					= ext_v->get_out_edge_begin(*it);
+					= ext_v->get_out_edge_begin<edge_data_type>(*it);
 				ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> out_end1
-					= ext_v->get_out_edge_end(*it);
+					= ext_v->get_out_edge_end<edge_data_type>(*it);
 				typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator out_it2
 					= vertices[i].get_out_edge_begin(*it);
 				typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator out_end2

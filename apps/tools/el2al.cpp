@@ -35,12 +35,12 @@ const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
 const char *delimiter = "\t";
 
 bool compress = false;
+bool simplfy = false;
 bool print_graph = false;
 
-directed_graph<> *par_load_edge_list_text(const std::string &file);
-
+template<class edge_data_type>
 struct comp_edge {
-	bool operator() (const edge<> &e1, const edge<> &e2) {
+	bool operator() (const edge<edge_data_type> &e1, const edge<edge_data_type> &e2) {
 		if (e1.get_from() == e2.get_from())
 			return e1.get_to() < e2.get_to();
 		else
@@ -48,8 +48,9 @@ struct comp_edge {
 	}
 };
 
+template<class edge_data_type>
 struct comp_in_edge {
-	bool operator() (const edge<> &e1, const edge<> &e2) {
+	bool operator() (const edge<edge_data_type> &e1, const edge<edge_data_type> &e2) {
 		if (e1.get_to() == e2.get_to())
 			return e1.get_from() < e2.get_from();
 		else
@@ -62,24 +63,39 @@ struct comp_in_edge {
  * It maintains a sorted list of out-edges (sorted on the from vertices)
  * and a sorted list of in-edges (sorted on the to vertices).
  */
+template<class edge_data_type = edge_count>
 class directed_edge_graph
 {
-	std::vector<edge<> > in_edges;
-	std::vector<edge<> > out_edges;
+	bool has_edge_data;
+	std::vector<edge<edge_data_type> > in_edges;
+	std::vector<edge<edge_data_type> > out_edges;
 	pthread_mutex_t lock;
 public:
-	directed_edge_graph() {
+	directed_edge_graph(bool has_edge_data) {
+		this->has_edge_data = has_edge_data;
 		pthread_mutex_init(&lock, NULL);
 	}
 	void sort_edges();
-	void compress_edges();
-	void add_edges(std::vector<edge<> > &edges);
-	directed_graph<> *create() const;
+	directed_edge_graph<edge_count> *compress_edges() const;
+	directed_edge_graph<edge_data_type> *simplify_edges() const;
+	directed_graph<edge_data_type> *create() const;
+
+	void add_edges(std::vector<edge<edge_data_type> > &edges) {
+		pthread_mutex_lock(&lock);
+		in_edges.insert(in_edges.end(), edges.begin(), edges.end());
+		out_edges.insert(out_edges.end(), edges.begin(), edges.end());
+		pthread_mutex_unlock(&lock);
+	}
+
 	size_t get_num_edges() const {
 		assert(in_edges.size() == out_edges.size());
 		return in_edges.size();
 	}
 };
+
+template<class edge_data_type = edge_count>
+directed_edge_graph<edge_data_type> *par_load_edge_list_text(
+		const std::string &file);
 
 class graph_file_io
 {
@@ -235,6 +251,29 @@ size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 	return 1;
 }
 
+int parse_edge_list_line(char *line, edge<edge_count> &e)
+{
+	if (line[0] == '#')
+		return 0;
+	char *second = strstr(line, delimiter);
+	if (second == NULL) {
+		fprintf(stderr, "wrong format 1: %s\n", line);
+		return -1;
+	}
+	*second = 0;
+	second += strlen(delimiter);
+	if (!isnumeric(line) || !isnumeric(second)) {
+		fprintf(stderr, "wrong format 2: %s\t%s\n", line, second);
+		return -1;
+	}
+	vertex_id_t from = atol(line);
+	vertex_id_t to = atol(second);
+	edge_count c(1);
+	e = edge<edge_count>(from, to, c);
+
+	return 1;
+}
+
 int parse_edge_list_line(char *line, edge<> &e)
 {
 	if (line[0] == '#')
@@ -261,8 +300,9 @@ int parse_edge_list_line(char *line, edge<> &e)
  * Parse the edge list in the character buffer.
  * `size' doesn't include '\0'.
  */
+template<class edge_data_type>
 size_t parse_edge_list_text(char *line_buf, size_t size,
-		std::vector<edge<> > &edges)
+		std::vector<edge<edge_data_type> > &edges)
 {
 	char *line_end;
 	char *line = line_buf;
@@ -271,7 +311,7 @@ size_t parse_edge_list_text(char *line_buf, size_t size,
 		*line_end = 0;
 		if (*(line_end - 1) == '\r')
 			*(line_end - 1) = 0;
-		edge<> e;
+		edge<edge_data_type> e;
 		int num = parse_edge_list_line(line, e);
 		if (num > 0)
 			edges.push_back(e);
@@ -280,7 +320,7 @@ size_t parse_edge_list_text(char *line_buf, size_t size,
 		assert(line - line_end <= (ssize_t) size);
 	}
 	if (line - line_buf < (ssize_t) size) {
-		edge<> e;
+		edge<edge_data_type> e;
 		int num = parse_edge_list_line(line, e);
 		if (num > 0)
 			edges.push_back(e);
@@ -289,69 +329,120 @@ size_t parse_edge_list_text(char *line_buf, size_t size,
 	return num_edges;
 }
 
+template<class edge_data_type>
 class text_edge_task: public thread_task
 {
 	char *line_buf;
 	size_t size;
-	directed_edge_graph *graph;
 public:
-	text_edge_task(directed_edge_graph *graph, char *line_buf, size_t size) {
-		this->graph = graph;
+	text_edge_task(char *line_buf, size_t size) {
 		this->line_buf = line_buf;
 		this->size = size;
 	}
 
-	void run();
+	void run() {
+		std::vector<edge<edge_data_type> > edges;
+		parse_edge_list_text(line_buf, size, edges);
+		std::vector<edge<edge_data_type> > *local_edge_buf
+			= (std::vector<edge<edge_data_type> > *) thread::get_curr_thread()->get_user_data();
+		local_edge_buf->insert(local_edge_buf->end(), edges.begin(), edges.end());
+		delete [] line_buf;
+	}
 };
 
-void text_edge_task::run()
+template<class edge_data_type>
+directed_edge_graph<edge_count> *
+directed_edge_graph<edge_data_type>::compress_edges() const
 {
-	std::vector<edge<> > edges;
-	parse_edge_list_text(line_buf, size, edges);
-	std::vector<edge<> > *local_edge_buf
-		= (std::vector<edge<> > *) thread::get_curr_thread()->get_user_data();
-	local_edge_buf->insert(local_edge_buf->end(), edges.begin(), edges.end());
-	delete [] line_buf;
-}
-
-void directed_edge_graph::add_edges(std::vector<edge<> > &edges)
-{
-	pthread_mutex_lock(&lock);
-	in_edges.insert(in_edges.end(), edges.begin(), edges.end());
-	out_edges.insert(out_edges.end(), edges.begin(), edges.end());
-	pthread_mutex_unlock(&lock);
-}
-
-void directed_edge_graph::compress_edges()
-{
-	std::vector<edge<> > tmp_in_edges, tmp_out_edges;
-	printf("before: %ld in-edges and %ld out-edges\n", in_edges.size(), out_edges.size());
+	directed_edge_graph<edge_count> *new_graph
+		= new directed_edge_graph<edge_count>(true);
+	printf("before: %ld in-edges and %ld out-edges\n", in_edges.size(),
+			out_edges.size());
 	if (!in_edges.empty()) {
-		tmp_in_edges.push_back(in_edges[0]);
+		vertex_id_t from = in_edges[0].get_from();
+		vertex_id_t to = in_edges[0].get_to();
+		int num_duplicates = 1;
 		for (size_t i = 1; i < in_edges.size(); i++) {
-			if (in_edges[i].get_from() != tmp_in_edges.back().get_from()
-					|| in_edges[i].get_to() != tmp_in_edges.back().get_to())
-				tmp_in_edges.push_back(in_edges[i]);
+			if (in_edges[i].get_from() == from && in_edges[i].get_to() == to) {
+				num_duplicates++;
+			}
+			else {
+				edge_count c(num_duplicates);
+				edge<edge_count> e(from, to, num_duplicates);
+				new_graph->in_edges.push_back(e);
+
+				num_duplicates = 1;
+				from = in_edges[i].get_from();
+				to = in_edges[i].get_to();
+			}
+		}
+		edge_count c(num_duplicates);
+		edge<edge_count> e(from, to, num_duplicates);
+		new_graph->in_edges.push_back(e);
+	}
+
+	if (!out_edges.empty()) {
+		vertex_id_t from = out_edges[0].get_from();
+		vertex_id_t to = out_edges[0].get_to();
+		int num_duplicates = 1;
+		for (size_t i = 1; i < out_edges.size(); i++) {
+			if (out_edges[i].get_from() == from && out_edges[i].get_to() == to) {
+				num_duplicates++;
+			}
+			else {
+				edge_count c(num_duplicates);
+				edge<edge_count> e(from, to, num_duplicates);
+				new_graph->out_edges.push_back(e);
+
+				num_duplicates = 1;
+				from = out_edges[i].get_from();
+				to = out_edges[i].get_to();
+			}
+		}
+		edge_count c(num_duplicates);
+		edge<edge_count> e(from, to, num_duplicates);
+		new_graph->out_edges.push_back(e);
+	}
+	printf("after: %ld in-edges and %ld out-edges\n", new_graph->in_edges.size(),
+			new_graph->out_edges.size());
+	return new_graph;
+}
+
+template<class edge_data_type>
+directed_edge_graph<edge_data_type> *
+directed_edge_graph<edge_data_type>::simplify_edges() const
+{
+	directed_edge_graph<edge_data_type> *new_graph
+		= new directed_edge_graph<edge_data_type>(false);
+	printf("before: %ld in-edges and %ld out-edges\n", in_edges.size(),
+			out_edges.size());
+	if (!in_edges.empty()) {
+		new_graph->in_edges.push_back(in_edges[0]);
+		for (size_t i = 1; i < in_edges.size(); i++) {
+			if (in_edges[i].get_from() != new_graph->in_edges.back().get_from()
+					|| in_edges[i].get_to() != new_graph->in_edges.back().get_to())
+				new_graph->in_edges.push_back(in_edges[i]);
 		}
 	}
 
 	if (!out_edges.empty()) {
-		tmp_out_edges.push_back(out_edges[0]);
+		new_graph->out_edges.push_back(out_edges[0]);
 		for (size_t i = 1; i < out_edges.size(); i++) {
-			if (out_edges[i].get_from() != tmp_out_edges.back().get_from()
-					|| out_edges[i].get_to() != tmp_out_edges.back().get_to())
-				tmp_out_edges.push_back(out_edges[i]);
+			if (out_edges[i].get_from() != new_graph->out_edges.back().get_from()
+					|| out_edges[i].get_to() != new_graph->out_edges.back().get_to())
+				new_graph->out_edges.push_back(out_edges[i]);
 		}
 	}
-	in_edges = tmp_in_edges;
-	out_edges = tmp_out_edges;
-	printf("after: %ld in-edges and %ld out-edges\n", in_edges.size(), out_edges.size());
+	printf("after: %ld in-edges and %ld out-edges\n", new_graph->in_edges.size(),
+			new_graph->out_edges.size());
+	return new_graph;
 }
 
-void directed_edge_graph::sort_edges()
+template<class edge_data_type>
+void directed_edge_graph<edge_data_type>::sort_edges()
 {
-	comp_edge edge_comparator;
-	comp_in_edge in_edge_comparator;
+	comp_edge<edge_data_type> edge_comparator;
+	comp_in_edge<edge_data_type> in_edge_comparator;
 #ifdef MEMCHECK
 	std::sort(out_edges.begin(), out_edges.end(), edge_comparator);
 	std::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
@@ -361,12 +452,14 @@ void directed_edge_graph::sort_edges()
 #endif
 }
 
-directed_graph<> *directed_edge_graph::create() const
+template<class edge_data_type>
+directed_graph<edge_data_type> *directed_edge_graph<edge_data_type>::create() const
 {
-	directed_graph<> *g = new directed_graph<>();
+	directed_graph<edge_data_type> *g = new directed_graph<edge_data_type>(
+			has_edge_data);
 
 	vertex_id_t curr = 0;
-	in_mem_directed_vertex<> v(curr);
+	in_mem_directed_vertex<edge_data_type> v(curr, has_edge_data);
 	size_t out_idx = 0;
 	size_t in_idx = 0;
 	size_t num_edges = in_edges.size();
@@ -395,11 +488,11 @@ directed_graph<> *directed_edge_graph::create() const
 		// but we need to fill the gap in the vertex Id space with empty
 		// vertices.
 		while (prev < curr) {
-			v = in_mem_directed_vertex<>(prev);
+			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data);
 			prev++;
 			g->add_vertex(v);
 		}
-		v = in_mem_directed_vertex<>(curr);
+		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data);
 	}
 
 	// Add remaining out-edges.
@@ -418,11 +511,11 @@ directed_graph<> *directed_edge_graph::create() const
 		// but we need to fill the gap in the vertex Id space with empty
 		// vertices.
 		while (prev < curr) {
-			v = in_mem_directed_vertex<>(prev);
+			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data);
 			prev++;
 			g->add_vertex(v);
 		}
-		v = in_mem_directed_vertex<>(curr);
+		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data);
 	}
 
 	// Add remaining in-edges
@@ -441,11 +534,11 @@ directed_graph<> *directed_edge_graph::create() const
 		// but we need to fill the gap in the vertex Id space with empty
 		// vertices.
 		while (prev < curr) {
-			v = in_mem_directed_vertex<>(prev);
+			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data);
 			prev++;
 			g->add_vertex(v);
 		}
-		v = in_mem_directed_vertex<>(curr);
+		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data);
 	}
 
 	assert(g->get_num_in_edges() == num_edges);
@@ -457,7 +550,8 @@ directed_graph<> *directed_edge_graph::create() const
  * This function loads edge lists from a tex file, parses them in parallel,
  * and convert the graph into the form of adjacency lists.
  */
-directed_graph<> *par_load_edge_list_text(const std::string &file)
+template<class edge_data_type = edge_count>
+directed_edge_graph<edge_data_type> *par_load_edge_list_text(const std::string &file)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -465,19 +559,20 @@ directed_graph<> *par_load_edge_list_text(const std::string &file)
 	for (int i = 0; i < NUM_THREADS; i++) {
 		task_thread *t = new task_thread(std::string(
 					"graph-task-thread") + itoa(i), i % NUM_NODES);
-		t->set_user_data(new std::vector<edge<> >());
+		t->set_user_data(new std::vector<edge<edge_data_type> >());
 		t->start();
 		threads[i] = t;
 	}
 	graph_file_io io(file);
-	directed_edge_graph edge_g;
+	directed_edge_graph<edge_data_type> *edge_g
+		= new directed_edge_graph<edge_data_type>(true);
 	int thread_no = 0;
 	printf("start to read the edge list\n");
 	while (io.get_num_remaining_bytes() > 0) {
 		size_t size = 0;
 		char *line_buf = io.read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size);
 		assert(line_buf);
-		thread_task *task = new text_edge_task(&edge_g, line_buf, size);
+		thread_task *task = new text_edge_task<edge_data_type>(line_buf, size);
 		threads[thread_no % NUM_THREADS]->add_task(task);
 		thread_no++;
 	}
@@ -489,39 +584,21 @@ directed_graph<> *par_load_edge_list_text(const std::string &file)
 
 	start = end;
 	for (int i = 0; i < NUM_THREADS; i++) {
-		std::vector<edge<> > *local_edges
-			= (std::vector<edge<> > *) threads[i]->get_user_data();
-		edge_g.add_edges(*local_edges);
+		std::vector<edge<edge_data_type> > *local_edges
+			= (std::vector<edge<edge_data_type> > *) threads[i]->get_user_data();
+		edge_g->add_edges(*local_edges);
 		delete local_edges;
 	}
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to combine edge list\n", time_diff(start, end));
-
-	start = end;
-	edge_g.sort_edges();
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
-
-	if (compress) {
-		start = end;
-		size_t orig_num_edges = edge_g.get_num_edges();
-		edge_g.compress_edges();
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to compress edge list from %ld to %ld\n",
-				time_diff(start, end), orig_num_edges, edge_g.get_num_edges());
-	}
-
-	start = end;
-	directed_graph<> *g = edge_g.create();
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
 
 	for (int i = 0; i < NUM_THREADS; i++) {
 		threads[i]->stop();
 		threads[i]->join();
 		delete threads[i];
 	}
-	return g;
+
+	return edge_g;
 }
 
 static int get_file_id(const std::string &file)
@@ -548,6 +625,65 @@ static void sort_edge_list_files(std::vector<std::string> &files)
 	for (std::map<int, std::string>::const_iterator it = sorted_files.begin();
 			it != sorted_files.end(); it++)
 		files.push_back(it->second);
+}
+
+in_mem_graph *construct_directed_graph(const std::vector<std::string> &edge_list_files)
+{
+	struct timeval start, end;
+	std::vector<directed_graph<edge_count> *> graphs;
+	for (unsigned i = 0; i < edge_list_files.size(); i++) {
+		directed_edge_graph<> *edge_g = par_load_edge_list_text<>(
+				edge_list_files[i]);
+
+		start = end;
+		edge_g->sort_edges();
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
+
+		if (compress) {
+			start = end;
+			size_t orig_num_edges = edge_g->get_num_edges();
+			directed_edge_graph<> *new_edge_g = edge_g->compress_edges();
+			delete edge_g;
+			edge_g = new_edge_g;
+			gettimeofday(&end, NULL);
+			printf("It takes %f seconds to compress edge list from %ld to %ld\n",
+					time_diff(start, end), orig_num_edges, edge_g->get_num_edges());
+		}
+		else if (simplfy) {
+			start = end;
+			size_t orig_num_edges = edge_g->get_num_edges();
+			directed_edge_graph<> *new_edge_g = edge_g->simplify_edges();
+			delete edge_g;
+			edge_g = new_edge_g;
+			gettimeofday(&end, NULL);
+			printf("It takes %f seconds to remove duplicated edges from %ld to %ld\n",
+					time_diff(start, end), orig_num_edges, edge_g->get_num_edges());
+		}
+
+		start = end;
+		directed_graph<edge_count> *g = edge_g->create();
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
+		delete edge_g;
+
+		graphs.push_back(g);
+	}
+
+	printf("load all edge lists\n");
+	in_mem_graph *g = NULL;
+	if (graphs.size() == 1)
+		g = graphs[0];
+	else {
+		gettimeofday(&start, NULL);
+		g = ts_directed_graph<edge_count>::merge_graphs(graphs);
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to merge graphs\n",
+				time_diff(start, end));
+		for (unsigned i = 0; i < graphs.size(); i++)
+			delete graphs[i];
+	}
+	return g;
 }
 
 void print_usage()
@@ -614,27 +750,9 @@ int main(int argc, char *argv[])
 		printf("edge list file: %s\n", edge_list_files[i].c_str());
 
 	if (directed) {
-		struct timeval start, end;
-		std::vector<directed_graph<> *> graphs;
-		for (unsigned i = 0; i < edge_list_files.size(); i++) {
-			directed_graph<> *g = par_load_edge_list_text(
-					edge_list_files[i]);
-			graphs.push_back(g);
-		}
-		printf("load all edge lists\n");
-		in_mem_graph *g = NULL;
-		if (graphs.size() == 1)
-			g = graphs[0];
-		else {
-			gettimeofday(&start, NULL);
-			g = ts_directed_graph<>::merge_graphs(graphs);
-			gettimeofday(&end, NULL);
-			printf("It takes %f seconds to merge graphs\n",
-					time_diff(start, end));
-			for (unsigned i = 0; i < graphs.size(); i++)
-				delete graphs[i];
-		}
+		in_mem_graph *g = construct_directed_graph(edge_list_files);
 
+		struct timeval start, end;
 		gettimeofday(&start, NULL);
 		vertex_index *index = g->create_vertex_index();
 		gettimeofday(&end, NULL);

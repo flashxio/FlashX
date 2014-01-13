@@ -514,10 +514,22 @@ class ts_in_mem_directed_vertex;
 class ts_ext_mem_directed_vertex
 {
 	vertex_id_t id;
+	int edge_data_size;
 	int num_edges;
 	int num_timestamps;
 	short timestamps[0];
-	// TODO the edge off list may not align well with the word size.
+
+	void set_edge_data_size(int size) {
+		this->edge_data_size = size;
+	}
+
+	bool has_edge_data() const {
+		return edge_data_size > 0;
+	}
+
+	void set_id(vertex_id_t id) {
+		this->id = id;
+	}
 
 	short *get_timestamps_begin() {
 		return timestamps;
@@ -558,34 +570,68 @@ class ts_ext_mem_directed_vertex
 	edge_data_type *get_edge_data_begin() {
 		return (edge_data_type *) (get_edge_list_begin() + num_edges);
 	}
+
+	template<class edge_data_type = empty_data>
+	const edge_data_type *get_edge_data_begin() const {
+		return (edge_data_type *) (get_edge_list_begin() + num_edges);
+	}
+
+	ts_ext_mem_directed_vertex(vertex_id_t id, int num_edges,
+			int num_timestamps, int edge_data_size) {
+		this->id = id;
+		this->num_edges = num_edges;
+		this->num_timestamps = num_timestamps;
+		this->edge_data_size = edge_data_size;
+	}
 public:
 	template<class edge_data_type>
 	class edge_const_iterator {
 		bool is_in_edge;
 		vertex_id_t id;
 		const vertex_id_t *ptr;
+		const edge_data_type *data_ptr;
 	public:
 		edge_const_iterator(const ts_ext_mem_directed_vertex &v,
 				int timestamp, bool is_in_edge) {
 			this->is_in_edge = is_in_edge;
 			this->id = v.get_id();
 			int idx = v.find_timestamp(timestamp);
-			if (is_in_edge)
-				ptr = v.get_edge_list_begin() + v.get_edge_off_begin()[idx].in_off;
-			else
-				ptr = v.get_edge_list_begin() + v.get_edge_off_begin()[idx].out_off;
+			data_ptr = NULL;
+			if (is_in_edge) {
+				ptr = v.get_edge_list_begin()
+					+ v.get_edge_off_begin()[idx].in_off;
+				if (v.has_edge_data())
+					data_ptr = v.get_edge_data_begin<edge_data_type>()
+						+ v.get_edge_off_begin()[idx].in_off;
+			}
+			else {
+				ptr = v.get_edge_list_begin()
+					+ v.get_edge_off_begin()[idx].out_off;
+				if (v.has_edge_data())
+					data_ptr = v.get_edge_data_begin<edge_data_type>()
+						+ v.get_edge_off_begin()[idx].out_off;
+			}
 		}
 
 		edge<edge_data_type> operator*() const {
-			// TODO I need to add data to the edge later.
-			if (is_in_edge)
-				return edge<edge_data_type>(*ptr, id);
-			else
-				return edge<edge_data_type>(id, *ptr);
+			if (data_ptr) {
+				if (is_in_edge)
+					return edge<edge_data_type>(*ptr, id, *data_ptr);
+				else
+					return edge<edge_data_type>(id, *ptr, *data_ptr);
+			}
+			else {
+				if (is_in_edge)
+					return edge<edge_data_type>(*ptr, id);
+				else
+					return edge<edge_data_type>(id, *ptr);
+			}
 		}
 
 		edge_const_iterator &operator++() {
 			ptr++;
+			if (data_ptr)
+				data_ptr++;
 			return *this;
 		}
 
@@ -599,6 +645,8 @@ public:
 
 		edge_const_iterator &operator+=(int num) {
 			ptr += num;
+			if (data_ptr)
+				data_ptr += num;
 			return *this;
 		}
 	};
@@ -606,10 +654,9 @@ public:
 	template<class edge_data_type = empty_data>
 	static int serialize(const ts_in_mem_directed_vertex<edge_data_type> &in_v,
 			char *buf, int size) {
-		ts_ext_mem_directed_vertex *v = (ts_ext_mem_directed_vertex *) buf;
-		v->id = in_v.get_id();
-		v->num_edges = in_v.get_num_edges();
-		v->num_timestamps = in_v.get_num_timestamps();
+		ts_ext_mem_directed_vertex *v = new (buf) ts_ext_mem_directed_vertex(
+				in_v.get_id(), in_v.get_num_edges(), in_v.get_num_timestamps(),
+				in_v.has_edge_data() ? sizeof(edge_data_type) : 0);
 		assert(v->get_size() <= (size_t) size);
 
 		// Generate the timestamp table.
@@ -637,29 +684,38 @@ public:
 				= in_v.get_in_edge_begin(timestamp);
 			vertex_id_t *in_edge_list = v->get_edge_list_begin()
 				+ v->get_edge_off_begin()[i].in_off;
+			edge_data_type *in_edge_data = v->get_edge_data_begin<edge_data_type>()
+				+ v->get_edge_off_begin()[i].in_off;
 			for (int j = 0; j < num_edges; j++) {
 				edge<edge_data_type> e = *it;
 				++it;
 				in_edge_list[j] = e.get_from();
-#if 0
-				v->get_in_edge_data(i)[j] = e.get_data();
-#endif
+				if (v->has_edge_data())
+					in_edge_data[j] = e.get_data();
 			}
 
 			num_edges = in_v.get_num_out_edges(timestamp);
 			it = in_v.get_out_edge_begin(timestamp);
 			vertex_id_t *out_edge_list = v->get_edge_list_begin()
 				+ v->get_edge_off_begin()[i].out_off;
+			edge_data_type *out_edge_data = v->get_edge_data_begin<edge_data_type>()
+				+ v->get_edge_off_begin()[i].out_off;
 			for (int j = 0; j < num_edges; j++) {
 				edge<edge_data_type> e = *it;
 				++it;
 				out_edge_list[j] = e.get_to();
-#if 0
-				v->get_out_edge_data(i)[j] = e.get_data();
-#endif
+				if (v->has_edge_data())
+					out_edge_data[j] = e.get_data();
 			}
 		}
 		return v->get_size();
+	}
+
+	ts_ext_mem_directed_vertex() {
+		this->id = 0;
+		this->num_edges = 0;
+		this->num_timestamps = 0;
+		this->edge_data_size = 0;
 	}
 
 	vertex_id_t get_id() const {
@@ -669,11 +725,13 @@ public:
 	size_t get_size() const {
 		// The edge off list need to align with the word size.
 		int num = ROUNDUP(num_timestamps, 8);
-		return sizeof(ts_ext_mem_directed_vertex)
+		size_t size = sizeof(ts_ext_mem_directed_vertex)
 			+ sizeof(timestamps[0]) * num
 			+ sizeof(edge_off) * num_timestamps
 			+ sizeof(vertex_id_t) * num_edges;
-		// TODO I should also include the size of edge data later.
+		if (has_edge_data())
+			size += edge_data_size * num_edges;
+		return size;
 	}
 
 	int get_num_edges() const {
@@ -1016,9 +1074,9 @@ class in_mem_directed_vertex
 	std::vector<edge_data_type> out_data;
 	std::vector<edge_data_type> in_data;
 public:
-	in_mem_directed_vertex(vertex_id_t id) {
+	in_mem_directed_vertex(vertex_id_t id, bool has_data) {
 		this->id = id;
-		has_data = false;
+		this->has_data = has_data;
 	}
 
 	vertex_id_t get_id() const {
@@ -1226,9 +1284,9 @@ public:
 		}
 	};
 
-	ts_in_mem_directed_vertex(vertex_id_t id) {
+	ts_in_mem_directed_vertex(vertex_id_t id, bool has_data) {
 		this->id = id;
-		has_data = false;
+		this->has_data = has_data;
 	}
 
 	vertex_id_t get_id() const {
@@ -1338,10 +1396,9 @@ public:
 	}
 
 	int get_serialize_size() const {
-		ts_ext_mem_directed_vertex v;
-		v.id = get_id();
-		v.num_edges = get_num_edges();
-		v.num_timestamps = get_num_timestamps();
+		ts_ext_mem_directed_vertex v(get_id(), get_num_edges(),
+				get_num_timestamps(),
+				has_edge_data() ? sizeof(edge_data_type) : 0);
 		return v.get_size();
 	}
 
@@ -1362,6 +1419,27 @@ public:
 			}
 			printf("\n");
 		}
+	}
+};
+
+/**
+ * The number of duplicated edges.
+ * It is used as edge data type.
+ */
+class edge_count
+{
+	size_t num;
+public:
+	edge_count() {
+		num = 1;
+	}
+
+	edge_count(int n) {
+		num = n;
+	}
+
+	int get_count() const {
+		return num;
 	}
 };
 
