@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <unistd.h>
 
 #include "graph.h"
 
@@ -32,6 +33,9 @@ const int NUM_THREADS = 32;
 const int NUM_NODES = 4;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
 const char *delimiter = "\t";
+
+bool compress = false;
+bool print_graph = false;
 
 directed_graph<> *par_load_edge_list_text(const std::string &file);
 
@@ -498,12 +502,14 @@ directed_graph<> *par_load_edge_list_text(const std::string &file)
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
 
-	start = end;
-	size_t orig_num_edges = edge_g.get_num_edges();
-	edge_g.compress_edges();
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to compress edge list from %ld to %ld\n",
-			time_diff(start, end), orig_num_edges, edge_g.get_num_edges());
+	if (compress) {
+		start = end;
+		size_t orig_num_edges = edge_g.get_num_edges();
+		edge_g.compress_edges();
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to compress edge list from %ld to %ld\n",
+				time_diff(start, end), orig_num_edges, edge_g.get_num_edges());
+	}
 
 	start = end;
 	directed_graph<> *g = edge_g.create();
@@ -544,20 +550,53 @@ static void sort_edge_list_files(std::vector<std::string> &files)
 		files.push_back(it->second);
 }
 
+void print_usage()
+{
+	fprintf(stderr, "convert an edge list to adjacency lists\n");
+	fprintf(stderr,
+			"el2al [options] adj_list_file index_file edge_list_files (or directories)\n");
+	fprintf(stderr, "-u: undirected graph\n");
+	fprintf(stderr, "-d delimiter: the delimiter to seperate the input edge list\n");
+	fprintf(stderr, "-c: compress the graph (remove duplicated edges)\n");
+	fprintf(stderr, "-p: print adjacency list\n");
+}
+
 int main(int argc, char *argv[])
 {
-	if (argc < 6) {
-		fprintf(stderr,
-				"el2al adjacency_list_file index_file directed delimiter edge_list_files (or directories)\n");
+	int opt;
+	bool directed = true;
+	int num_opts = 0;
+	while ((opt = getopt(argc, argv, "ud:cp")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'u':
+				directed = false;
+				break;
+			case 'd':
+				delimiter = optarg;
+				num_opts++;
+				break;
+			case 'c':
+				compress = true;
+				break;
+			case 'p':
+				print_graph = true;
+				break;
+			default:
+				print_usage();
+		}
+	}
+	argv += 1 + num_opts;
+	argc -= 1 + num_opts;
+	if (argc < 3) {
+		print_usage();
 		exit(-1);
 	}
 
-	const std::string adjacency_list_file = argv[1];
-	const std::string index_file = argv[2];
-	bool directed = atoi(argv[3]) != 0;
-	delimiter = argv[4];
+	const std::string adjacency_list_file = argv[0];
+	const std::string index_file = argv[1];
 	std::vector<std::string> edge_list_files;
-	for (int i = 5; i < argc; i++) {
+	for (int i = 2; i < argc; i++) {
 		native_dir dir(argv[i]);
 		if (dir.is_dir()) {
 			std::vector<std::string> files;
@@ -616,7 +655,8 @@ int main(int argc, char *argv[])
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
-		g->print();
+		if (print_graph)
+			g->print();
 		delete g;
 	}
 	else {
