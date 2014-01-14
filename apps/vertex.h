@@ -741,6 +741,10 @@ public:
 		return num_timestamps;
 	}
 
+	int get_edge_data_size() const {
+		return edge_data_size;
+	}
+
 	int get_num_in_edges(int timestamp) const {
 		int idx = find_timestamp(timestamp);
 		if (idx < 0)
@@ -858,6 +862,7 @@ class TS_page_directed_vertex: public TS_page_vertex
 {
 	vertex_id_t id;
 	int num_timestamps;
+	int edge_data_size;
 	// The total number of edges in the vertex
 	int num_edges;
 	const page_byte_array &array;
@@ -901,6 +906,7 @@ class TS_page_directed_vertex: public TS_page_vertex
 		id = v.get_id();
 		this->num_edges = v.get_num_edges();
 		this->num_timestamps = v.get_num_timestamps();
+		this->edge_data_size = v.get_edge_data_size();
 		arr.memcpy(sizeof(ts_ext_mem_directed_vertex), (char *) timestamps,
 				get_ts_table_size());
 	}
@@ -1003,6 +1009,58 @@ public:
 		// The start location of the edge list.
 		page_byte_array::const_iterator<vertex_id_t> it
 			= array.begin<vertex_id_t>(get_header_size());
+
+		int idx = find_timestamp(timestamp);
+		if (idx < 0) {
+			it += num_edges;
+			return it;
+		}
+
+		if (type == edge_type::IN_EDGE)
+			it += get_edge_off_begin()[idx].out_off;
+		else if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
+			if (idx == num_timestamps - 1)
+				it += num_edges;
+			else
+				it += get_edge_off_begin()[idx + 1].in_off;
+		}
+		else
+			assert(0);
+		return it;
+	}
+
+	template<class edge_data_type>
+	page_byte_array::const_iterator<edge_data_type> get_edge_data_begin(
+			int timestamp, edge_type type) const {
+		assert(edge_data_size == sizeof(edge_data_type));
+		// The start location of the edge list.
+		page_byte_array::const_iterator<edge_data_type> it
+			= array.begin<edge_data_type>(get_header_size()
+					+ sizeof(vertex_id_t) * num_edges);
+
+		int idx = find_timestamp(timestamp);
+		if (idx < 0) {
+			it += num_edges;
+			return it;
+		}
+
+		if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES)
+			it += get_edge_off_begin()[idx].in_off;
+		else if (type == edge_type::OUT_EDGE)
+			it += get_edge_off_begin()[idx].out_off;
+		else
+			assert(0);
+		return it;
+	}
+
+	template<class edge_data_type>
+	page_byte_array::const_iterator<edge_data_type> get_edge_data_end(
+			int timestamp, edge_type type) const {
+		assert(edge_data_size == sizeof(edge_data_type));
+		// The start location of the edge list.
+		page_byte_array::const_iterator<edge_data_type> it
+			= array.begin<edge_data_type>(get_header_size()
+					+ sizeof(vertex_id_t) * num_edges);
 
 		int idx = find_timestamp(timestamp);
 		if (idx < 0) {
