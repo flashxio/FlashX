@@ -37,6 +37,7 @@ const char *delimiter = "\t";
 bool compress = false;
 bool simplfy = false;
 bool print_graph = false;
+bool check_graph = false;
 
 template<class edge_data_type>
 struct comp_edge {
@@ -695,6 +696,7 @@ void print_usage()
 	fprintf(stderr, "-d delimiter: the delimiter to seperate the input edge list\n");
 	fprintf(stderr, "-c: compress the graph (remove duplicated edges)\n");
 	fprintf(stderr, "-p: print adjacency list\n");
+	fprintf(stderr, "-v: verify the created adjacency list\n");
 }
 
 int main(int argc, char *argv[])
@@ -717,6 +719,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'p':
 				print_graph = true;
+				break;
+			case 'v':
+				check_graph = true;
 				break;
 			default:
 				print_usage();
@@ -773,6 +778,8 @@ int main(int argc, char *argv[])
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
+		if (check_graph)
+			g->check_ext_graph(index_file, adjacency_list_file);
 		if (print_graph)
 			g->print();
 		delete g;
