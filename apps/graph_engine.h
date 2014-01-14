@@ -115,13 +115,7 @@ class graph_index_impl: public graph_index
 	// This contains the vertices with edges.
 	std::vector<vertex_type> vertices;
 	
-	graph_index_impl(const std::string &index_file, bool directed) {
-		int min_vertex_size;
-		if (directed)
-			min_vertex_size = sizeof(ext_mem_directed_vertex);
-		else
-			min_vertex_size = sizeof(ext_mem_undirected_vertex);
-
+	graph_index_impl(const std::string &index_file, int min_vertex_size) {
 		vertex_index *indices = vertex_index::load(index_file);
 		in_mem_index.resize(indices->get_num_vertices(), -1);
 		size_t num_vertices = in_mem_index.size();
@@ -151,8 +145,9 @@ class graph_index_impl: public graph_index
 		vertex_index::destroy(indices);
 	}
 public:
-	static graph_index *create(const std::string &index_file, bool directed) {
-		return new graph_index_impl<vertex_type>(index_file, directed);
+	static graph_index *create(const std::string &index_file,
+			int min_vertex_size) {
+		return new graph_index_impl<vertex_type>(index_file, min_vertex_size);
 	}
 
 	virtual compute_vertex &get_vertex(vertex_id_t id) {

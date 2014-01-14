@@ -89,7 +89,13 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = graph_index_impl<bfs_vertex>::create(index_file, directed);
+	int min_vertex_size;
+	if (directed)
+		min_vertex_size = sizeof(ext_mem_directed_vertex);
+	else
+		min_vertex_size = sizeof(ext_mem_undirected_vertex);
+
+	graph_index *index = graph_index_impl<bfs_vertex>::create(index_file, min_vertex_size);
 	ext_mem_vertex_interpreter *interpreter;
 	if (directed)
 		interpreter = new ext_mem_directed_vertex_interpreter();

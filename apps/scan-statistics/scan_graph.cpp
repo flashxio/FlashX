@@ -377,7 +377,7 @@ int main(int argc, char *argv[])
 	init_io_system(configs);
 
 	graph_index *index = graph_index_impl<scan_vertex>::create(
-			index_file, directed);
+			index_file, sizeof(ts_ext_mem_directed_vertex));
 	graph_engine *graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
 			index, new ts_ext_mem_vertex_interpreter(num_timestamps), directed);
