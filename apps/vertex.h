@@ -517,7 +517,6 @@ class ts_ext_mem_directed_vertex
 	int edge_data_size;
 	int num_edges;
 	int num_timestamps;
-	short timestamps[0];
 
 	void set_edge_data_size(int size) {
 		this->edge_data_size = size;
@@ -532,7 +531,7 @@ class ts_ext_mem_directed_vertex
 	}
 
 	short *get_timestamps_begin() {
-		return timestamps;
+		return (short *) (this + 1);
 	}
 
 	edge_off *get_edge_off_begin() {
@@ -547,13 +546,13 @@ class ts_ext_mem_directed_vertex
 
 	int find_timestamp(int timestamp) const {
 		for (int i = 0; i < num_timestamps; i++)
-			if (timestamps[i] == timestamp)
+			if (get_timestamps_begin()[i] == timestamp)
 				return i;
 		return -1;
 	}
 
 	const short *get_timestamps_begin() const {
-		return timestamps;
+		return (short *) (this + 1);
 	}
 
 	const edge_off *get_edge_off_begin() const {
@@ -726,7 +725,7 @@ public:
 		// The edge off list need to align with the word size.
 		int num = ROUNDUP(num_timestamps, 8);
 		size_t size = sizeof(ts_ext_mem_directed_vertex)
-			+ sizeof(timestamps[0]) * num
+			+ sizeof(short) * num
 			+ sizeof(edge_off) * num_timestamps
 			+ sizeof(vertex_id_t) * num_edges;
 		if (has_edge_data())
