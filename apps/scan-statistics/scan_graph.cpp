@@ -127,13 +127,15 @@ int scan_vertex::count_edges(const TS_page_vertex *v1,
 	page_byte_array::const_iterator<edge_count> other_data_it
 		= v->get_edge_data_begin<edge_count>(timestamp, type);
 	page_byte_array::const_iterator<vertex_id_t> other_end
-		= v->get_neigh_end(timestamp, type);
+		= std::lower_bound(other_it, v->get_neigh_end(timestamp, type),
+				v1->get_id());
 
 	std::vector<vertex_id_t>::const_iterator this_it = neighbors->begin();
-	std::vector<vertex_id_t>::const_iterator this_end = neighbors->end();
+	std::vector<vertex_id_t>::const_iterator this_end
+		= std::lower_bound(this_it, neighbors->end(), v1->get_id());
 
 	if (num_v_edges / neighbors->size() > BIN_SEARCH_RATIO) {
-		for (; this_it != neighbors->end(); this_it++) {
+		for (; this_it != this_end; this_it++) {
 			vertex_id_t this_neighbor = *this_it;
 			// We need to skip loops.
 			if (this_neighbor == v->get_id()
@@ -164,8 +166,7 @@ int scan_vertex::count_edges(const TS_page_vertex *v1,
 			vertex_id_t neigh_neighbor = *other_it;
 			if (neigh_neighbor != v->get_id()
 					&& neigh_neighbor != this->get_id()) {
-				if (std::binary_search(neighbors->begin(), neighbors->end(),
-							neigh_neighbor)) {
+				if (std::binary_search(this_it, this_end, neigh_neighbor)) {
 					num_local_edges += (*other_data_it).get_count();
 				}
 			}
@@ -386,8 +387,7 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 			printf("%ld completed vertices\n", ret);
 
 		for (int i = 0; i < timestamp_range; i++) {
-			assert(num_edges->at(i).get() % 2 == 0);
-			num_edges->at(i) = num_edges->at(i).get() / 2
+			num_edges->at(i) = num_edges->at(i).get()
 				+ num_local_edges->at(i);
 		}
 
