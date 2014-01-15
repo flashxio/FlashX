@@ -21,6 +21,7 @@
 #include <google/profiler.h>
 
 #include <set>
+#include <vector>
 
 #include "thread.h"
 #include "io_interface.h"
@@ -53,14 +54,14 @@ class scan_vertex: public compute_vertex
 {
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
-	std::set<vertex_id_t>::const_iterator fetch_it;
+	std::vector<vertex_id_t>::const_iterator fetch_it;
 	// The number of edges in its neighborhood in different timestamps.
 	std::vector<atomic_integer> *num_edges;
 	// The number of edges of the vertex in different timestamps.
 	std::vector<int> *num_local_edges;
 	// All neighbors (in both in-edges and out-edges)
 	// in the specified timestamp.
-	std::set<vertex_id_t> *neighbors;
+	std::vector<vertex_id_t> *neighbors;
 
 	// The final result.
 	double result;
@@ -97,9 +98,9 @@ public:
 	}
 
 	int count_edges(const TS_page_vertex *v,
-			const std::set<vertex_id_t> *neighbors, int timestamp);
+			const std::vector<vertex_id_t> *neighbors, int timestamp);
 	int count_edges(const TS_page_vertex *v,
-			const std::set<vertex_id_t> *neighbors, int timestamp,
+			const std::vector<vertex_id_t> *neighbors, int timestamp,
 			edge_type type);
 
 	bool run(graph_engine &graph, const page_vertex *vertex);
@@ -113,7 +114,7 @@ public:
 };
 
 int scan_vertex::count_edges(const TS_page_vertex *v1,
-		const std::set<vertex_id_t> *neighbors, int timestamp, edge_type type)
+		const std::vector<vertex_id_t> *neighbors, int timestamp, edge_type type)
 {
 	const TS_page_directed_vertex *v = (const TS_page_directed_vertex *) v1;
 	int num_local_edges = 0;
@@ -121,16 +122,19 @@ int scan_vertex::count_edges(const TS_page_vertex *v1,
 	if (num_v_edges == 0)
 		return 0;
 
+	page_byte_array::const_iterator<vertex_id_t> other_it
+		= v->get_neigh_begin(timestamp, type);
+	page_byte_array::const_iterator<edge_count> other_data_it
+		= v->get_edge_data_begin<edge_count>(timestamp, type);
+	page_byte_array::const_iterator<vertex_id_t> other_end
+		= v->get_neigh_end(timestamp, type);
+
+	std::vector<vertex_id_t>::const_iterator this_it = neighbors->begin();
+	std::vector<vertex_id_t>::const_iterator this_end = neighbors->end();
+
 	if (num_v_edges / neighbors->size() > BIN_SEARCH_RATIO) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(timestamp, type);
-		page_byte_array::const_iterator<edge_count> other_data_begin
-			= v->get_edge_data_begin<edge_count>(timestamp, type);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(timestamp, type);
-		for (std::set<vertex_id_t>::const_iterator it = neighbors->begin();
-				it != neighbors->end(); it++) {
-			vertex_id_t this_neighbor = *it;
+		for (; this_it != neighbors->end(); this_it++) {
+			vertex_id_t this_neighbor = *this_it;
 			// We need to skip loops.
 			if (this_neighbor == v->get_id()
 					|| this_neighbor == this->get_id()) {
@@ -143,7 +147,7 @@ int scan_vertex::count_edges(const TS_page_vertex *v1,
 			if (first != other_end && !(this_neighbor < *first)) {
 				do {
 					page_byte_array::const_iterator<edge_count> data_it
-						= other_data_begin;
+						= other_data_it;
 					data_it += first - other_it;
 					// Edges in the v's neighbor lists may duplicated.
 					// The duplicated neighbors need to be counted
@@ -156,17 +160,12 @@ int scan_vertex::count_edges(const TS_page_vertex *v1,
 		}
 	}
 	else if (neighbors->size() / num_v_edges > BIN_SEARCH_RATIO) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(timestamp, type);
-		page_byte_array::const_iterator<edge_count> other_data_it
-			= v->get_edge_data_begin<edge_count>(timestamp, type);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(timestamp, type);
 		while (other_it != other_end) {
 			vertex_id_t neigh_neighbor = *other_it;
 			if (neigh_neighbor != v->get_id()
 					&& neigh_neighbor != this->get_id()) {
-				if (neighbors->find(neigh_neighbor) != neighbors->end()) {
+				if (std::binary_search(neighbors->begin(), neighbors->end(),
+							neigh_neighbor)) {
 					num_local_edges += (*other_data_it).get_count();
 				}
 			}
@@ -175,14 +174,6 @@ int scan_vertex::count_edges(const TS_page_vertex *v1,
 		}
 	}
 	else {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(timestamp, type);
-		page_byte_array::const_iterator<edge_count> other_data_it
-			= v->get_edge_data_begin<edge_count>(timestamp, type);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(timestamp, type);
-		std::set<vertex_id_t>::const_iterator this_it = neighbors->begin();
-		std::set<vertex_id_t>::const_iterator this_end = neighbors->end();
 		while (other_it != other_end && this_it != this_end) {
 			vertex_id_t this_neighbor = *this_it;
 			vertex_id_t neigh_neighbor = *other_it;
@@ -216,7 +207,7 @@ int scan_vertex::count_edges(const TS_page_vertex *v1,
 }
 
 int scan_vertex::count_edges(const TS_page_vertex *v,
-		const std::set<vertex_id_t> *neighbors, int timestamp)
+		const std::vector<vertex_id_t> *neighbors, int timestamp)
 {
 	if (v->get_num_edges(timestamp, edge_type::BOTH_EDGES) == 0
 			|| neighbors->empty())
@@ -224,6 +215,57 @@ int scan_vertex::count_edges(const TS_page_vertex *v,
 
 	return count_edges(v, neighbors, timestamp, edge_type::IN_EDGE)
 		+ count_edges(v, neighbors, timestamp, edge_type::OUT_EDGE);
+}
+
+template<class InputIterator1, class InputIterator2, class Skipper,
+	class OutputIterator>
+int unique_merge(InputIterator1 it1, InputIterator1 last1,
+		InputIterator2 it2, InputIterator2 last2, Skipper skip,
+		OutputIterator result)
+{
+	OutputIterator result_begin = result;
+	while (it1 != last1 && it2 != last2) {
+		if (*it1 > *it2) {
+			typename std::iterator_traits<InputIterator2>::value_type v = *it2;
+			if (!skip(v))
+				*(result++) = v;
+			while (*it2 == v && it2 != last2)
+				++it2;
+		}
+		else if (*it1 < *it2) {
+			typename std::iterator_traits<InputIterator1>::value_type v = *it1;
+			if (!skip(v))
+				*(result++) = v;
+			while (*it1 == v && it1 != last1)
+				++it1;
+		}
+		else {
+			typename std::iterator_traits<InputIterator1>::value_type v = *it1;
+			if (!skip(v))
+				*(result++) = v;
+			while (*it1 == v && it1 != last1)
+				++it1;
+			while (*it2 == v && it2 != last2)
+				++it2;
+		}
+	}
+
+	while (it1 != last1) {
+		typename std::iterator_traits<InputIterator1>::value_type v = *it1;
+		if (!skip(v))
+			*(result++) = v;
+		while (*it1 == v && it1 != last1)
+			++it1;
+	}
+
+	while (it2 != last2) {
+		typename std::iterator_traits<InputIterator2>::value_type v = *it2;
+		if (!skip(v))
+			*(result++) = v;
+		while (*it2 == v && it2 != last2)
+			++it2;
+	}
+	return result - result_begin;
 }
 
 bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
@@ -245,7 +287,29 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 
 	num_edges = new std::vector<atomic_integer>(timestamp_range);
 	num_local_edges = new std::vector<int>(timestamp_range);
-	neighbors = new std::set<vertex_id_t>();
+	neighbors = new std::vector<vertex_id_t>(ts_vertex->get_num_edges(
+				timestamp, edge_type::BOTH_EDGES));
+
+	class skip_self {
+		vertex_id_t id;
+	public:
+		skip_self(vertex_id_t id) {
+			this->id = id;
+		}
+
+		bool operator()(vertex_id_t id) {
+			return this->id == id;
+		}
+	};
+
+	int num_neighbors = unique_merge(
+			ts_vertex->get_neigh_begin(timestamp, edge_type::IN_EDGE),
+			ts_vertex->get_neigh_end(timestamp, edge_type::IN_EDGE),
+			ts_vertex->get_neigh_begin(timestamp, edge_type::OUT_EDGE),
+			ts_vertex->get_neigh_end(timestamp, edge_type::OUT_EDGE),
+			skip_self(ts_vertex->get_id()),
+			neighbors->begin());
+	neighbors->resize(num_neighbors);
 
 	page_byte_array::const_iterator<vertex_id_t> it = ts_vertex->get_neigh_begin(
 			timestamp, edge_type::BOTH_EDGES);
@@ -259,9 +323,9 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		// Ignore loops
 		if (id != ts_vertex->get_id()) {
 			num_local_edges->at(0) += (*data_it).get_count();
-			neighbors->insert(id);
 		}
 	}
+
 	if (neighbors->size() == 0) {
 		delete num_edges;
 		delete num_local_edges;
@@ -277,16 +341,20 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 
 	for (int i = 1; i < timestamp_range && timestamp - i >= 0; i++) {
 		int timestamp2 = timestamp - i;
-		it = ts_vertex->get_neigh_begin(timestamp2, edge_type::BOTH_EDGES);
-		data_it = ts_vertex->get_edge_data_begin<edge_count>(timestamp2,
+		page_byte_array::const_iterator<vertex_id_t> it
+			= ts_vertex->get_neigh_begin(timestamp2, edge_type::BOTH_EDGES);
+		page_byte_array::const_iterator<edge_count> data_it
+			= ts_vertex->get_edge_data_begin<edge_count>(timestamp2,
 				edge_type::BOTH_EDGES);
-		end = ts_vertex->get_neigh_end(timestamp2, edge_type::BOTH_EDGES);
+		page_byte_array::const_iterator<vertex_id_t> end
+			= ts_vertex->get_neigh_end(timestamp2, edge_type::BOTH_EDGES);
 		for (; it != end; ++it, ++data_it) {
 			vertex_id_t id = *it;
 			// Ignore loop
 			if (id != ts_vertex->get_id()
 					// The neighbor needs to exist in timestamp 1.
-					&& neighbors->find(id) != neighbors->end()) {
+					&& std::binary_search(neighbors->begin(),
+						neighbors->end(), id)) {
 				num_local_edges->at(i) += (*data_it).get_count();
 			}
 		}
