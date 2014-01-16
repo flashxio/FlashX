@@ -368,7 +368,7 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 bool scan_vertex::run_on_neighbors(graph_engine &graph,
 		const page_vertex *vertices[], int num)
 {
-	num_joined++;
+	num_joined += num;
 	assert(neighbors);
 	for (int i = 0; i < num; i++) {
 		for (int j = 0; j < timestamp_range && timestamp - j >= 0; j++) {
