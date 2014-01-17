@@ -64,7 +64,7 @@ struct comp_in_edge {
  * It maintains a sorted list of out-edges (sorted on the from vertices)
  * and a sorted list of in-edges (sorted on the to vertices).
  */
-template<class edge_data_type = edge_count>
+template<class edge_data_type = empty_data>
 class directed_edge_graph
 {
 	bool has_edge_data;
@@ -81,6 +81,11 @@ public:
 	directed_edge_graph<edge_data_type> *simplify_edges() const;
 	directed_graph<edge_data_type> *create() const;
 
+	void add_edge(const edge<edge_data_type> &e) {
+		in_edges.push_back(e);
+		out_edges.push_back(e);
+	}
+
 	void add_edges(std::vector<edge<edge_data_type> > &edges) {
 		pthread_mutex_lock(&lock);
 		in_edges.insert(in_edges.end(), edges.begin(), edges.end());
@@ -94,9 +99,9 @@ public:
 	}
 };
 
-template<class edge_data_type = edge_count>
+template<class edge_data_type = empty_data>
 directed_edge_graph<edge_data_type> *par_load_edge_list_text(
-		const std::string &file);
+		const std::string &file, bool has_edge_data);
 
 class graph_file_io
 {
@@ -357,8 +362,7 @@ directed_edge_graph<edge_data_type>::compress_edges() const
 {
 	directed_edge_graph<edge_count> *new_graph
 		= new directed_edge_graph<edge_count>(true);
-	printf("before: %ld in-edges and %ld out-edges\n", in_edges.size(),
-			out_edges.size());
+	printf("before: %ld edges\n", get_num_edges());
 	if (!in_edges.empty()) {
 		vertex_id_t from = in_edges[0].get_from();
 		vertex_id_t to = in_edges[0].get_to();
@@ -370,7 +374,7 @@ directed_edge_graph<edge_data_type>::compress_edges() const
 			else {
 				edge_count c(num_duplicates);
 				edge<edge_count> e(from, to, num_duplicates);
-				new_graph->in_edges.push_back(e);
+				new_graph->add_edge(e);
 
 				num_duplicates = 1;
 				from = in_edges[i].get_from();
@@ -379,33 +383,11 @@ directed_edge_graph<edge_data_type>::compress_edges() const
 		}
 		edge_count c(num_duplicates);
 		edge<edge_count> e(from, to, num_duplicates);
-		new_graph->in_edges.push_back(e);
+		new_graph->add_edge(e);
 	}
+	new_graph->sort_edges();
 
-	if (!out_edges.empty()) {
-		vertex_id_t from = out_edges[0].get_from();
-		vertex_id_t to = out_edges[0].get_to();
-		int num_duplicates = 1;
-		for (size_t i = 1; i < out_edges.size(); i++) {
-			if (out_edges[i].get_from() == from && out_edges[i].get_to() == to) {
-				num_duplicates++;
-			}
-			else {
-				edge_count c(num_duplicates);
-				edge<edge_count> e(from, to, num_duplicates);
-				new_graph->out_edges.push_back(e);
-
-				num_duplicates = 1;
-				from = out_edges[i].get_from();
-				to = out_edges[i].get_to();
-			}
-		}
-		edge_count c(num_duplicates);
-		edge<edge_count> e(from, to, num_duplicates);
-		new_graph->out_edges.push_back(e);
-	}
-	printf("after: %ld in-edges and %ld out-edges\n", new_graph->in_edges.size(),
-			new_graph->out_edges.size());
+	printf("after: %ld edges\n", new_graph->get_num_edges());
 	return new_graph;
 }
 
@@ -551,8 +533,9 @@ directed_graph<edge_data_type> *directed_edge_graph<edge_data_type>::create() co
  * This function loads edge lists from a tex file, parses them in parallel,
  * and convert the graph into the form of adjacency lists.
  */
-template<class edge_data_type = edge_count>
-directed_edge_graph<edge_data_type> *par_load_edge_list_text(const std::string &file)
+template<class edge_data_type = empty_data>
+directed_edge_graph<edge_data_type> *par_load_edge_list_text(
+		const std::string &file, bool has_edge_data)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -566,7 +549,7 @@ directed_edge_graph<edge_data_type> *par_load_edge_list_text(const std::string &
 	}
 	graph_file_io io(file);
 	directed_edge_graph<edge_data_type> *edge_g
-		= new directed_edge_graph<edge_data_type>(true);
+		= new directed_edge_graph<edge_data_type>(has_edge_data);
 	int thread_no = 0;
 	printf("start to read the edge list\n");
 	while (io.get_num_remaining_bytes() > 0) {
@@ -628,33 +611,76 @@ static void sort_edge_list_files(std::vector<std::string> &files)
 		files.push_back(it->second);
 }
 
-in_mem_graph *construct_directed_graph(const std::vector<std::string> &edge_list_files)
+template<class edge_data_type = empty_data>
+in_mem_graph *construct_directed_graph_compressed(
+		const std::vector<std::string> &edge_list_files)
 {
 	struct timeval start, end;
 	std::vector<directed_graph<edge_count> *> graphs;
 	for (unsigned i = 0; i < edge_list_files.size(); i++) {
-		directed_edge_graph<> *edge_g = par_load_edge_list_text<>(
-				edge_list_files[i]);
+		directed_edge_graph<edge_data_type> *edge_g
+			= par_load_edge_list_text<edge_data_type>(edge_list_files[i],
+					true);
 
 		start = end;
 		edge_g->sort_edges();
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
 
-		if (compress) {
+		start = end;
+		size_t orig_num_edges = edge_g->get_num_edges();
+		directed_edge_graph<edge_count> *new_edge_g = edge_g->compress_edges();
+		delete edge_g;
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to compress edge list from %ld to %ld\n",
+				time_diff(start, end), orig_num_edges,
+				new_edge_g->get_num_edges());
+
+		start = end;
+		directed_graph<edge_count> *g = new_edge_g->create();
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
+		delete new_edge_g;
+		graphs.push_back(g);
+	}
+
+	printf("load all edge lists\n");
+	in_mem_graph *g = NULL;
+	if (graphs.size() == 1)
+		g = graphs[0];
+	else {
+		gettimeofday(&start, NULL);
+		g = ts_directed_graph<edge_count>::merge_graphs(graphs);
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to merge graphs\n",
+				time_diff(start, end));
+		for (unsigned i = 0; i < graphs.size(); i++)
+			delete graphs[i];
+	}
+	return g;
+}
+
+template<class edge_data_type = empty_data>
+in_mem_graph *construct_directed_graph(
+		const std::vector<std::string> &edge_list_files, bool has_edge_data)
+{
+	struct timeval start, end;
+	std::vector<directed_graph<edge_data_type> *> graphs;
+	for (unsigned i = 0; i < edge_list_files.size(); i++) {
+		directed_edge_graph<edge_data_type> *edge_g
+			= par_load_edge_list_text<edge_data_type>(edge_list_files[i],
+					has_edge_data);
+
+		start = end;
+		edge_g->sort_edges();
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
+
+		if (simplfy) {
 			start = end;
 			size_t orig_num_edges = edge_g->get_num_edges();
-			directed_edge_graph<> *new_edge_g = edge_g->compress_edges();
-			delete edge_g;
-			edge_g = new_edge_g;
-			gettimeofday(&end, NULL);
-			printf("It takes %f seconds to compress edge list from %ld to %ld\n",
-					time_diff(start, end), orig_num_edges, edge_g->get_num_edges());
-		}
-		else if (simplfy) {
-			start = end;
-			size_t orig_num_edges = edge_g->get_num_edges();
-			directed_edge_graph<> *new_edge_g = edge_g->simplify_edges();
+			directed_edge_graph<edge_data_type> *new_edge_g
+				= edge_g->simplify_edges();
 			delete edge_g;
 			edge_g = new_edge_g;
 			gettimeofday(&end, NULL);
@@ -663,7 +689,7 @@ in_mem_graph *construct_directed_graph(const std::vector<std::string> &edge_list
 		}
 
 		start = end;
-		directed_graph<edge_count> *g = edge_g->create();
+		directed_graph<edge_data_type> *g = edge_g->create();
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
 		delete edge_g;
@@ -677,7 +703,7 @@ in_mem_graph *construct_directed_graph(const std::vector<std::string> &edge_list
 		g = graphs[0];
 	else {
 		gettimeofday(&start, NULL);
-		g = ts_directed_graph<edge_count>::merge_graphs(graphs);
+		g = ts_directed_graph<edge_data_type>::merge_graphs(graphs);
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds to merge graphs\n",
 				time_diff(start, end));
@@ -755,7 +781,11 @@ int main(int argc, char *argv[])
 		printf("edge list file: %s\n", edge_list_files[i].c_str());
 
 	if (directed) {
-		in_mem_graph *g = construct_directed_graph(edge_list_files);
+		in_mem_graph *g;
+		if (compress)
+			g = construct_directed_graph_compressed<>(edge_list_files);
+		else
+			g = construct_directed_graph<>(edge_list_files, false);
 
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
