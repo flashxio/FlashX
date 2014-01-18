@@ -58,6 +58,7 @@ request_range ts_compute_vertex::get_next_request(graph_engine *graph)
  */
 class vertex_compute: public user_compute
 {
+	bool completed;
 	graph_engine *graph;
 	compute_vertex *v;
 	// The thread that creates the vertex compute.
@@ -68,6 +69,7 @@ public:
 		this->graph = graph;
 		v = NULL;
 		issue_thread = (worker_thread *) thread::get_curr_thread();
+		completed = false;
 	}
 
 	virtual int serialize(char *buf, int size) const {
@@ -90,7 +92,11 @@ public:
 		return v->get_next_request(graph);
 	}
 
-	virtual bool run(page_byte_array &);
+	virtual void run(page_byte_array &);
+
+	virtual bool has_completed() const {
+		return completed;
+	}
 };
 
 class vertex_compute_allocator: public compute_allocator
@@ -168,13 +174,13 @@ public:
 	}
 };
 
-bool vertex_compute::run(page_byte_array &array)
+void vertex_compute::run(page_byte_array &array)
 {
+	assert(!has_completed());
 	ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
 	stack_array<char, 64> buf(interpreter->get_vertex_size());
 	const page_vertex *ext_v = interpreter->interpret(array, buf.data(),
 			interpreter->get_vertex_size());
-	bool completed;
 	// If the algorithm doesn't need to get the full information
 	// of their neighbors
 	if (graph->get_required_neighbor_type() == edge_type::NONE
@@ -190,7 +196,6 @@ bool vertex_compute::run(page_byte_array &array)
 	// of the completion of the vertex.
 	if (completed)
 		issue_thread->complete_vertex(*v);
-	return true;
 }
 
 class sorted_vertex_queue
