@@ -50,7 +50,7 @@ public:
 	}
 };
 
-class scan_vertex: public compute_vertex
+class scan_vertex: public ts_compute_vertex
 {
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
@@ -66,14 +66,14 @@ class scan_vertex: public compute_vertex
 	// The final result.
 	double result;
 public:
-	scan_vertex(): compute_vertex(-1, -1, 0) {
+	scan_vertex(): ts_compute_vertex(-1, -1, 0) {
 		num_joined = 0;
 		num_edges = NULL;
 		num_local_edges = NULL;
 		neighbors = NULL;
 	}
 
-	scan_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
+	scan_vertex(vertex_id_t id, off_t off, int size): ts_compute_vertex(
 			id, off, size) {
 		num_joined = 0;
 		num_edges = NULL;
@@ -91,10 +91,11 @@ public:
 		return fetch_it != neighbors->end();
 	}
 
-	virtual vertex_id_t get_next_required_vertex() {
+	virtual void get_next_required_ts_vertex(ts_vertex_request &req) {
 		vertex_id_t id = *fetch_it;
 		fetch_it++;
-		return id;
+		req.set_vertex(id);
+		req.set_require_all(true);
 	}
 
 	int count_edges(const TS_page_vertex *v,

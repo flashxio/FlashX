@@ -65,6 +65,11 @@ public:
 		return false;
 	}
 
+	/**
+	 * This translate the required vertex to an I/O request to the file.
+	 */
+	virtual request_range get_next_request(graph_engine *graph);
+
 	virtual vertex_id_t get_next_required_vertex() {
 		assert(0);
 		return -1;
@@ -90,6 +95,22 @@ public:
 	 */
 	virtual void run_on_messages(graph_engine &,
 			const vertex_message *msgs[], int num) = 0;
+};
+
+class ts_vertex_request;
+
+class ts_compute_vertex: public compute_vertex
+{
+	vertex_id_t get_next_required_vertex() {
+		return -1;
+	}
+public:
+	ts_compute_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
+			id, off, size) {
+	}
+
+	virtual request_range get_next_request(graph_engine *graph);
+	virtual void get_next_required_ts_vertex(ts_vertex_request &) = 0;
 };
 
 class graph_index
@@ -361,6 +382,74 @@ public:
 
 	ext_mem_vertex_interpreter *get_vertex_interpreter() const {
 		return interpreter;
+	}
+};
+
+/**
+ * This class contains the request of a time-series vertex
+ * from the user application.
+ */
+class ts_vertex_request
+{
+	vertex_id_t id;
+	std::vector<int> timestamps;
+	edge_type type;
+	bool require_all;
+	graph_engine *graph;
+public:
+	ts_vertex_request(graph_engine *graph) {
+		id = 0;
+		type = edge_type::BOTH_EDGES;
+		require_all = false;
+		this->graph = graph;
+	}
+
+	void set_require_all(bool require_all) {
+		this->require_all = require_all;
+	}
+
+	void set_vertex(vertex_id_t id) {
+		this->id = id;
+		compute_vertex &info = graph->get_vertex(id);
+		// If the vertex is small enough, we can read the entire vertex.
+		if (info.get_ext_mem_size() < PAGE_SIZE)
+			require_all = true;
+	}
+
+	void add_timestamp(int timestamp) {
+		if (!require_all)
+			timestamps.push_back(timestamp);
+	}
+
+	void set_edge_type(edge_type type) {
+		this->type = type;
+	}
+
+	void clear() {
+		id = 0;
+		timestamps.clear();
+		type = edge_type::BOTH_EDGES;
+		require_all = false;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
+
+	std::vector<int>::const_iterator get_timestamp_begin() const {
+		return timestamps.begin();
+	}
+
+	std::vector<int>::const_iterator get_timestamp_end() const {
+		return timestamps.end();
+	}
+
+	edge_type get_edge_type() const {
+		return type;
+	}
+
+	bool is_require_all() const {
+		return require_all;
 	}
 };
 

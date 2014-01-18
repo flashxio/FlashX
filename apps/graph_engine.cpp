@@ -34,6 +34,25 @@ graph_config graph_conf;
 
 class worker_thread;
 
+request_range compute_vertex::get_next_request(graph_engine *graph)
+{
+	vertex_id_t id = get_next_required_vertex();
+	compute_vertex &info = graph->get_vertex(id);
+	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+	return request_range(loc, info.get_ext_mem_size(), READ);
+}
+
+request_range ts_compute_vertex::get_next_request(graph_engine *graph)
+{
+	ts_vertex_request ts_req(graph);
+	get_next_required_ts_vertex(ts_req);
+	assert(ts_req.get_edge_type() == edge_type::BOTH_EDGES);
+
+	compute_vertex &info = graph->get_vertex(ts_req.get_id());
+	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+	return request_range(loc, info.get_ext_mem_size(), READ);
+}
+
 /**
  * This callback is to process a vertex.
  */
@@ -68,10 +87,7 @@ public:
 
 	virtual request_range get_next_request() {
 		assert(v);
-		vertex_id_t id = v->get_next_required_vertex();
-		compute_vertex &info = graph->get_vertex(id);
-		data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
-		return request_range(loc, info.get_ext_mem_size(), READ);
+		return v->get_next_request(graph);
 	}
 
 	virtual bool run(page_byte_array &);
