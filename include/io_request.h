@@ -230,6 +230,10 @@ public:
 	user_compute *get_compute() const {
 		return compute;
 	}
+
+	void set_compute(user_compute *compute) {
+		this->compute = compute;
+	}
 };
 
 class user_comp_req_queue;

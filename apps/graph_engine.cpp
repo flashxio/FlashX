@@ -39,7 +39,7 @@ request_range compute_vertex::get_next_request(graph_engine *graph)
 	vertex_id_t id = get_next_required_vertex();
 	compute_vertex &info = graph->get_vertex(id);
 	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
-	return request_range(loc, info.get_ext_mem_size(), READ);
+	return request_range(loc, info.get_ext_mem_size(), READ, NULL);
 }
 
 request_range ts_compute_vertex::get_next_request(graph_engine *graph)
@@ -50,7 +50,7 @@ request_range ts_compute_vertex::get_next_request(graph_engine *graph)
 
 	compute_vertex &info = graph->get_vertex(ts_req.get_id());
 	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
-	return request_range(loc, info.get_ext_mem_size(), READ);
+	return request_range(loc, info.get_ext_mem_size(), READ, NULL);
 }
 
 /**
@@ -89,7 +89,10 @@ public:
 
 	virtual request_range get_next_request() {
 		assert(v);
-		return v->get_next_request(graph);
+		request_range range = v->get_next_request(graph);
+		if (range.get_compute() == NULL)
+			range.set_compute(this);
+		return range;
 	}
 
 	virtual void run(page_byte_array &);
