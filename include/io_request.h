@@ -192,21 +192,27 @@ public:
 
 const data_loc_t INVALID_DATA_LOC;
 
+class user_compute;
+
 class request_range
 {
 	data_loc_t loc;
 	unsigned long size: 63;
 	unsigned long access_method: 1;
+	user_compute *compute;
 public:
 	request_range() {
 		size = 0;
 		access_method = 0;
+		compute = NULL;
 	}
 
-	request_range(const data_loc_t &loc, size_t size, int access_method) {
+	request_range(const data_loc_t &loc, size_t size, int access_method,
+			user_compute *compute) {
 		this->loc = loc;
 		this->size = size;
 		this->access_method = access_method & 0x1;
+		this->compute = compute;
 	}
 
 	const data_loc_t &get_loc() const {
@@ -220,6 +226,10 @@ public:
 	int get_access_method() const {
 		return access_method & 0x1;
 	}
+
+	user_compute *get_compute() const {
+		return compute;
+	}
 };
 
 class user_comp_req_queue;
@@ -228,7 +238,12 @@ class compute_allocator;
 class user_compute: public ptr_interface
 {
 	compute_allocator *alloc;
+	atomic_flags<int> flags;
 public:
+	enum {
+		IN_QUEUE,
+	};
+
 	user_compute(compute_allocator *alloc) {
 		this->alloc = alloc;
 	}
@@ -253,8 +268,23 @@ public:
 
 	virtual request_range get_next_request() = 0;
 
-	virtual int fetch_requests(io_interface *io, compute_allocator *alloc,
-			user_comp_req_queue &reqs);
+	virtual void set_flag(int flag, bool value) {
+		if (value)
+			flags.set_flag(flag);
+		else
+			flags.clear_flag(flag);
+	}
+
+	virtual bool test_flag(int flag) const {
+		return flags.test_flag(flag);
+	}
+
+	int fetch_requests(io_interface *io, user_comp_req_queue &reqs);
+	void complete_request(page_byte_array &arr) {
+		assert(get_ref() > 0);
+		run(arr);
+		dec_ref();
+	}
 };
 
 class compute_allocator

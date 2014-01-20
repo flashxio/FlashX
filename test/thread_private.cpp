@@ -123,7 +123,7 @@ public:
 		return file_id;
 	}
 
-	request_range get_request(int buf_type) {
+	request_range get_request(int buf_type, user_compute *compute) {
 		int access_method = workload.read ? READ : WRITE;
 		if (buf_type == MULTI_BUF) {
 			throw unsupported_exception();
@@ -151,7 +151,7 @@ public:
 			workload.size = size;
 
 			data_loc_t loc(file_id, off);
-			return request_range(loc, next_off - off, access_method);
+			return request_range(loc, next_off - off, access_method, compute);
 		}
 		else {
 			int size = workload.size;
@@ -160,7 +160,7 @@ public:
 			workload.size = 0;
 
 			data_loc_t loc(file_id, off);
-			return request_range(loc, size, access_method);
+			return request_range(loc, size, access_method, compute);
 		}
 	}
 };
@@ -169,12 +169,15 @@ class sum_user_compute: public user_compute
 {
 	work2req_range_converter converter;
 	int buf_type;
+	int num_pending;
 public:
 	sum_user_compute(compute_allocator *alloc): user_compute(alloc) {
 		buf_type = SINGLE_LARGE_BUF;
+		num_pending = 0;
 	}
 
 	void init(const work2req_range_converter &converter, int buf_type) {
+		num_pending = 1;
 		this->converter = converter;
 		this->buf_type = buf_type;
 	}
@@ -194,11 +197,12 @@ public:
 	}
 
 	virtual request_range get_next_request() {
-		return converter.get_request(buf_type);
+		num_pending++;
+		return converter.get_request(buf_type, this);
 	}
 
 	virtual bool has_completed() const {
-		return true;
+		return num_pending == 0 && !has_requests();
 	}
 
 	virtual void run(page_byte_array &array) {
@@ -212,6 +216,7 @@ public:
 		}
 
 		global_sum.inc(sum);
+		num_pending--;
 	}
 };
 
@@ -220,15 +225,18 @@ class write_user_compute: public user_compute
 	int file_id;
 	work2req_range_converter converter;
 	int buf_type;
+	int num_pending;
 public:
 	write_user_compute(compute_allocator *alloc): user_compute(
 			alloc) {
 		this->file_id = -1;
 		buf_type = SINGLE_LARGE_BUF;
+		num_pending = 0;
 	}
 
 	void init(int file_id, const work2req_range_converter &converter,
 			int buf_type) {
+		num_pending = 1;
 		this->file_id = file_id;
 		this->converter = converter;
 		this->buf_type = buf_type;
@@ -249,11 +257,12 @@ public:
 	}
 
 	virtual request_range get_next_request() {
-		return converter.get_request(buf_type);
+		num_pending++;
+		return converter.get_request(buf_type, this);
 	}
 
 	virtual bool has_completed() const {
-		return true;
+		return num_pending == 0 && !has_requests();
 	}
 
 	virtual void run(page_byte_array &array) {
@@ -264,6 +273,7 @@ public:
 			*it = off / sizeof(off_t) + file_id;
 			off += sizeof(off_t);
 		}
+		num_pending--;
 	}
 };
 
@@ -414,7 +424,7 @@ int work2req_converter::to_reqs(workload_gen *gen, io_interface *io,
 
 	int i = 0;
 	while (!workload.has_complete() && i < num) {
-		request_range range = workload.get_request(buf_type);
+		request_range range = workload.get_request(buf_type, NULL);
 
 		if (config.is_user_compute()) {
 			if (range.get_access_method() == READ) {

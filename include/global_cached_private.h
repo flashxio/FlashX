@@ -26,7 +26,6 @@
 
 class request_allocator;
 class req_ext_allocator;
-class join_compute_allocator;
 
 typedef std::pair<thread_safe_page *, original_io_request *> page_req_pair;
 
@@ -248,7 +247,6 @@ class global_cached_io: public io_interface
 
 	request_allocator *req_allocator;
 	req_ext_allocator *ext_allocator;
-	join_compute_allocator *comp_allocator;
 
 	// This contains the original requests issued by the application.
 	// An original request is placed in this queue when the I/O on a page

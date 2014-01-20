@@ -108,7 +108,6 @@ class sys_parameters
 	int num_nodes;
 	bool merge_reqs;
 	int max_obj_alloc_size;
-	int max_join_compute;
 public:
 	sys_parameters();
 
@@ -180,10 +179,6 @@ public:
 
 	int get_max_obj_alloc_size() const {
 		return max_obj_alloc_size;
-	}
-
-	int get_max_join_compute() const {
-		return max_join_compute;
 	}
 };
 

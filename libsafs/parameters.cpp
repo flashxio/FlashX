@@ -59,7 +59,6 @@ sys_parameters::sys_parameters()
 	num_nodes = 1;
 	merge_reqs = false;
 	max_obj_alloc_size = 100 * 1024 * 1024;
-	max_join_compute = 1024 * 1024;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -157,11 +156,6 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		max_obj_alloc_size = str2size(it->second);
 	}
-
-	it = configs.find("max_join_compute");
-	if (it != configs.end()) {
-		max_join_compute = str2size(it->second);
-	}
 }
 
 void sys_parameters::print()
@@ -183,7 +177,6 @@ void sys_parameters::print()
 	std::cout << "\tnum_nodes: " << num_nodes << std::endl;
 	std::cout << "\tmerge_reqs: " << merge_reqs << std::endl;
 	std::cout << "\tmax_obj_alloc_size: " << max_obj_alloc_size << std::endl;
-	std::cout << "\tmax_join_compute: " << max_join_compute << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -217,8 +210,6 @@ void sys_parameters::print_help()
 	std::cout << "\tmerge_reqs: whether or not merge requests in the cached IO"
 		<< std::endl;
 	std::cout << "\tmax_obj_alloc_size: the maximal size that an object allocator can use."
-		<< std::endl;
-	std::cout << "\tmax_join_compute: the maximal number of join compute in global_cached_io"
 		<< std::endl;
 }
 
