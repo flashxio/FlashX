@@ -132,9 +132,10 @@ void io_req_extension::add_buf_front(char *buf, int size, bool is_page)
 	num_bufs++;
 }
 
-void user_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
+int user_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 		user_comp_req_queue &reqs)
 {
+	int orig_size = reqs.get_num_entries();
 	while (has_requests()) {
 		user_compute *comp = alloc->alloc();
 		if (comp == NULL) {
@@ -145,4 +146,5 @@ void user_compute::fetch_requests(io_interface *io, compute_allocator *alloc,
 				range.get_access_method(), io, io->get_node_id());
 		reqs.push_back(req);
 	}
+	return reqs.get_num_entries() - orig_size;
 }

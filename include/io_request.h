@@ -245,13 +245,15 @@ public:
 	 * It should return true when the computation completes.
 	 * Otherwise, false.
 	 */
-	virtual bool run(page_byte_array &) = 0;
+	virtual void run(page_byte_array &) = 0;
+
+	virtual bool has_completed() const = 0;
 
 	virtual int has_requests() const = 0;
 
 	virtual request_range get_next_request() = 0;
 
-	virtual void fetch_requests(io_interface *io, compute_allocator *alloc,
+	virtual int fetch_requests(io_interface *io, compute_allocator *alloc,
 			user_comp_req_queue &reqs);
 };
 

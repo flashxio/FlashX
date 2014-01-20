@@ -197,7 +197,11 @@ public:
 		return converter.get_request(buf_type);
 	}
 
-	virtual bool run(page_byte_array &array) {
+	virtual bool has_completed() const {
+		return true;
+	}
+
+	virtual void run(page_byte_array &array) {
 		long sum = 0;
 		const page_byte_array &const_array = page_byte_array::const_cast_ref(
 				array);
@@ -208,7 +212,6 @@ public:
 		}
 
 		global_sum.inc(sum);
-		return true;
 	}
 };
 
@@ -249,7 +252,11 @@ public:
 		return converter.get_request(buf_type);
 	}
 
-	virtual bool run(page_byte_array &array) {
+	virtual bool has_completed() const {
+		return true;
+	}
+
+	virtual void run(page_byte_array &array) {
 		page_byte_array::iterator<long> end = array.end<long>();
 		off_t off = array.get_offset();
 		for (page_byte_array::iterator<long> it = array.begin<long>();
@@ -257,8 +264,6 @@ public:
 			*it = off / sizeof(off_t) + file_id;
 			off += sizeof(off_t);
 		}
-
-		return true;
 	}
 };
 
