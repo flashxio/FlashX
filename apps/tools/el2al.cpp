@@ -268,13 +268,20 @@ int parse_edge_list_line(char *line, edge<edge_count> &e)
 	}
 	*second = 0;
 	second += strlen(delimiter);
-	if (!isnumeric(line) || !isnumeric(second)) {
-		fprintf(stderr, "wrong format 2: %s\t%s\n", line, second);
+	char *third = strstr(second, delimiter);
+	if (third == NULL) {
+		fprintf(stderr, "wrong format 2: %s\n", second);
+		return -1;
+	}
+	*third = 0;
+	third += strlen(delimiter);
+	if (!isnumeric(line) || !isnumeric(second) || !isnumeric(third)) {
+		fprintf(stderr, "wrong format 3: %s\t%s\t%s\n", line, second, third);
 		return -1;
 	}
 	vertex_id_t from = atol(line);
 	vertex_id_t to = atol(second);
-	edge_count c(1);
+	edge_count c(atol(third));
 	e = edge<edge_count>(from, to, c);
 
 	return 1;
@@ -713,6 +720,25 @@ in_mem_graph *construct_directed_graph(
 	return g;
 }
 
+/**
+ * The type of edge data.
+ */
+enum {
+	DEFAULT_TYPE,
+	EDGE_COUNT,
+	EDGE_TIMESTAMP,
+};
+
+struct str2int_pair {
+	std::string str;
+	int number;
+};
+struct str2int_pair edge_type_map[] = {
+	{"count", EDGE_COUNT},
+	{"timestamp", EDGE_TIMESTAMP},
+};
+int type_map_size = sizeof(edge_type_map) / sizeof(edge_type_map[0]);
+
 void print_usage()
 {
 	fprintf(stderr, "convert an edge list to adjacency lists\n");
@@ -723,6 +749,11 @@ void print_usage()
 	fprintf(stderr, "-c: compress the graph (remove duplicated edges)\n");
 	fprintf(stderr, "-p: print adjacency list\n");
 	fprintf(stderr, "-v: verify the created adjacency list\n");
+	fprintf(stderr, "-t type: the type of edge data. Supported type: ");
+	for (int i = 0; i < type_map_size; i++) {
+		fprintf(stderr, "%s, ", edge_type_map[i].str.c_str());
+	}
+	fprintf(stderr, "\n");
 }
 
 int main(int argc, char *argv[])
@@ -730,7 +761,8 @@ int main(int argc, char *argv[])
 	int opt;
 	bool directed = true;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "ud:cp")) != -1) {
+	char *type_str = NULL;
+	while ((opt = getopt(argc, argv, "ud:cpt:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -749,6 +781,10 @@ int main(int argc, char *argv[])
 			case 'v':
 				check_graph = true;
 				break;
+			case 't':
+				type_str = optarg;
+				num_opts++;
+				break;
 			default:
 				print_usage();
 		}
@@ -758,6 +794,16 @@ int main(int argc, char *argv[])
 	if (argc < 3) {
 		print_usage();
 		exit(-1);
+	}
+
+	int input_type = DEFAULT_TYPE;
+	if (type_str) {
+		for (int i = 0; i < type_map_size; i++) {
+			if (edge_type_map[i].str == type_str) {
+				input_type = edge_type_map[i].number;
+				break;
+			}
+		}
 	}
 
 	const std::string adjacency_list_file = argv[0];
@@ -781,11 +827,30 @@ int main(int argc, char *argv[])
 		printf("edge list file: %s\n", edge_list_files[i].c_str());
 
 	if (directed) {
-		in_mem_graph *g;
-		if (compress)
-			g = construct_directed_graph_compressed<>(edge_list_files);
-		else
-			g = construct_directed_graph<>(edge_list_files, false);
+		in_mem_graph *g = NULL;
+		switch(input_type) {
+			case EDGE_COUNT:
+				if (compress)
+					g = construct_directed_graph_compressed<edge_count>(
+							edge_list_files);
+				else
+					g = construct_directed_graph<edge_count>(
+							edge_list_files, true);
+				break;
+			case EDGE_TIMESTAMP:
+				if (compress)
+					g = construct_directed_graph_compressed<ts_edge_data>(
+							edge_list_files);
+				else
+					g = construct_directed_graph<ts_edge_data>(
+							edge_list_files, true);
+				break;
+			default:
+				if (compress)
+					g = construct_directed_graph_compressed<>(edge_list_files);
+				else
+					g = construct_directed_graph<>(edge_list_files, false);
+		}
 
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
