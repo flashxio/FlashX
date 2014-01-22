@@ -81,8 +81,10 @@ public:
 	}
 
 	vertex_index *create_vertex_index() const {
+		graph_header header(graph_type::UNDIRECTED, vertices.size(),
+				get_num_edges(), false);
 		return vertex_index::create<in_mem_undirected_vertex<edge_data_type> >(
-				vertices);
+				header, vertices);
 	}
 
 	void dump(const std::string &file) const;
@@ -162,8 +164,10 @@ public:
 	}
 
 	vertex_index *create_vertex_index() const {
+		graph_header header(graph_type::DIRECTED, vertices.size(),
+				get_num_edges(), has_data);
 		return vertex_index::create<in_mem_directed_vertex<edge_data_type> >(
-				vertices);
+				header, vertices);
 	}
 
 	void dump(const std::string &file) const {
@@ -172,6 +176,11 @@ public:
 			perror("fopen");
 			assert(0);
 		}
+
+		graph_header header(graph_type::DIRECTED, vertices.size(),
+				get_num_edges(), has_data);
+		ssize_t ret = fwrite(&header, sizeof(header), 1, f);
+		assert(ret == 1);
 
 		for (size_t i = 0; i < vertices.size(); i++) {
 			int mem_size = vertices[i].get_serialize_size();
@@ -320,8 +329,14 @@ void check_vertex(ts_in_mem_directed_vertex<edge_data_type> in_v,
 template<class edge_data_type = empty_data>
 class ts_directed_graph: public in_mem_graph
 {
+	int max_num_timestamps;
 	bool has_data;
 	std::vector<ts_in_mem_directed_vertex<edge_data_type> > vertices;
+
+	ts_directed_graph() {
+		has_data = false;
+		max_num_timestamps = 0;
+	}
 public:
 	static ts_directed_graph<edge_data_type> *merge_graphs(
 			const std::vector<directed_graph<edge_data_type> *> &graphs) {
@@ -344,6 +359,7 @@ public:
 		ts_directed_graph<edge_data_type> *g
 			= new ts_directed_graph<edge_data_type>();
 		g->has_data = has_edge_data;
+		g->max_num_timestamps = graphs.size();
 		std::vector<typename std::vector<in_mem_directed_vertex<edge_data_type> >::const_iterator> its;
 		for (unsigned i = 0; i < graphs.size(); i++) {
 			its.push_back(graphs[i]->begin());
@@ -363,9 +379,13 @@ public:
 				if (its[i]->get_id() == id)
 					its[i]++;
 			}
-			g->vertices.push_back(ts_v);
+			g->add_vertex(ts_v);
 		}
 		return g;
+	}
+
+	void add_vertex(const ts_in_mem_directed_vertex<edge_data_type> &v) {
+		vertices.push_back(v);
 	}
 
 	bool has_edge_data() const {
@@ -378,8 +398,10 @@ public:
 	}
 
 	virtual vertex_index *create_vertex_index() const {
+		graph_header header(TS_DIRECTED, vertices.size(), get_num_edges(),
+				has_data, max_num_timestamps);
 		return vertex_index::create<ts_in_mem_directed_vertex<edge_data_type> >(
-				vertices);
+				header, vertices);
 	}
 
 	virtual void dump(const std::string &file) const {
@@ -388,6 +410,11 @@ public:
 			perror("fopen");
 			assert(0);
 		}
+
+		graph_header header(graph_type::TS_DIRECTED, vertices.size(),
+				get_num_edges(), has_data, max_num_timestamps);
+		ssize_t ret = fwrite(&header, sizeof(header), 1, f);
+		assert(ret == 1);
 
 		for (size_t i = 0; i < vertices.size(); i++) {
 			int mem_size = vertices[i].get_serialize_size();
@@ -458,6 +485,9 @@ public:
 		size_t ret = fread(adj_buf, adj_file_size, 1, adj_f);
 		assert(ret == 1);
 		fclose(adj_f);
+
+		graph_header *header = (graph_header *) adj_buf;
+		header->verify();
 		for (vertex_id_t id = 0; id < index->get_num_vertices(); id++) {
 			int size = index->get_vertex_size(id);
 			off_t off = index->get_vertex_off(id);

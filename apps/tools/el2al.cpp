@@ -806,8 +806,10 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	const std::string adjacency_list_file = argv[0];
-	const std::string index_file = argv[1];
+	std::string adjacency_list_file = argv[0];
+	adjacency_list_file += std::string("-v") + itoa(CURR_VERSION);
+	std::string index_file = argv[1];
+	index_file += std::string("-v") + itoa(CURR_VERSION);
 	std::vector<std::string> edge_list_files;
 	for (int i = 2; i < argc; i++) {
 		native_dir dir(argv[i]);

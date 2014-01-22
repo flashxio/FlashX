@@ -392,6 +392,13 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 
 	file_io_factory *factory = create_io_factory(graph_file,
 			GLOBAL_CACHE_ACCESS);
+
+	graph_header header;
+	io_interface *io = factory->create_io(thread::get_curr_thread());
+	io->access((char *) &header, 0, sizeof(header), READ);
+	header.verify();
+	factory->destroy_io(io);
+
 	file_id = factory->get_file_id();
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);

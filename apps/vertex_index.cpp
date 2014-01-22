@@ -34,7 +34,9 @@ vertex_index *vertex_index::load(const std::string &index_file)
 
 	vertex_index *idx = (vertex_index *) buf;
 	assert((unsigned) size >= sizeof(vertex_index)
-			+ idx->num_vertices * sizeof(idx->vertex_offs[0]));
+			+ idx->get_num_vertices() * sizeof(idx->vertex_offs[0]));
+	idx->header.verify();
+
 	return idx;
 }
 

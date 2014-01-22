@@ -126,6 +126,10 @@ void undirected_graph<edge_data_type>::dump(const std::string &file) const
 		assert(0);
 	}
 
+	graph_header header(graph_type::UNDIRECTED, vertices.size(),
+			get_num_edges(), false);
+	ssize_t ret = fwrite(&header, sizeof(header), 1, f);
+	assert(ret == 1);
 	for (size_t i = 0; i < vertices.size(); i++) {
 		int mem_size = vertices[i].get_serialize_size();
 		char *buf = new char[mem_size];
