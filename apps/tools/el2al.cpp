@@ -762,7 +762,7 @@ int main(int argc, char *argv[])
 	bool directed = true;
 	int num_opts = 0;
 	char *type_str = NULL;
-	while ((opt = getopt(argc, argv, "ud:cpt:")) != -1) {
+	while ((opt = getopt(argc, argv, "ud:cpvt:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
