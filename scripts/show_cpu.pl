@@ -3,22 +3,19 @@
 use strict;
 
 my $num_args = @ARGV;
-
-my $iterations = 100000000;
-my $interval = 1;	# 1 second
-if ($num_args < 0) {
-	print "show_cpu.pl node_id\n";
+if ($num_args < 1) {
+	print STDERR "show_cpu.pl prog_name\n";
+	exit;
+}
+my $prog_name = $ARGV[0];
+my @pids = `ps -aux 2>/dev/null | awk '{print \$2, \$11}' | grep $prog_name | awk '{print \$1}'`;
+my $num_pids = @pids;
+if ($num_pids != 1) {
+	print STDERR "There are $num_pids processes named after $prog_name\n";
+	foreach(@pids) {
+		print $_, "\n";
+	}
 	exit;
 }
 
-my $node_id = $ARGV[0];
-
-my @cores;
-for (my $i = 0; $i < 8; $i++) {
-	push(@cores, $node_id + 4 * $i);
-}
-
-my $str = join(',', @cores);
-print $str, "\n";
-
-system("mpstat -P $str $interval");
+system("top -b -p $pids[0] -d 1");
