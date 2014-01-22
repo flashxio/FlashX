@@ -1439,6 +1439,12 @@ public:
 		assert(has_data == v.has_edge_data());
 		assert(ts_edges.find(timestamp) == ts_edges.end());
 		assert(v.get_num_in_edges() + v.get_num_out_edges() > 0);
+		if (has_data) {
+			if (!v.in_edges.empty())
+				assert(!v.in_data.empty());
+			if (!v.out_edges.empty())
+				assert(!v.out_data.empty());
+		}
 
 		ts_edge_pair edge_pair;
 		edge_pair.in_edges = v.in_edges;
