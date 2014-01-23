@@ -364,12 +364,22 @@ public:
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			edge_type type) const = 0;
 	virtual vertex_id_t get_id() const = 0;
+	virtual bool is_complete() const {
+		return true;
+	}
 	bool contain_edge(edge_type type, vertex_id_t id) const {
 		return std::binary_search(get_neigh_begin(type), get_neigh_end(type), id);
 	}
 	virtual void print() const {
 	}
 };
+
+/**
+ * These two ranges are defined as [first, second),
+ * i.e., inclusive in the beginning and exclusive in the end.
+ */
+typedef std::pair<int, int> timestamp_pair;
+typedef std::pair<off_t, off_t> offset_pair;
 
 /**
  * Time-series page vertex
@@ -384,6 +394,10 @@ public:
 			int timestamp, edge_type type) const = 0;
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			int timestamp, edge_type type) const = 0;
+	// This method should translate the timestamp range to the absolute
+	// location of the adjacency list in the timestamp range.
+	virtual offset_pair get_edge_list_offset(
+			const timestamp_pair &range) const = 0;
 	bool contain_edge(int timestamp, edge_type type, vertex_id_t id) const {
 		return std::binary_search(get_neigh_begin(timestamp, type),
 				get_neigh_end(timestamp, type), id);
@@ -641,6 +655,16 @@ class ts_ext_mem_directed_vertex
 		return (short *) (this + 1);
 	}
 
+	short get_first_timestamp() const {
+		assert(num_timestamps > 0);
+		return get_timestamps_begin()[0];
+	}
+
+	short get_last_timestamp() const {
+		assert(num_timestamps > 0);
+		return get_timestamps_begin()[num_timestamps - 1];
+	}
+
 	edge_off *get_edge_off_begin() {
 		char *p = (char *) get_timestamps_begin();
 		return (edge_off *) (p + get_timestamp_list_size(num_timestamps));
@@ -699,18 +723,24 @@ class ts_ext_mem_directed_vertex
 		return const_edge_list::to_edge_list(list);
 	}
 
+	const_edge_list get_const_edge_list_idx(int idx) const {
+		assert(idx < num_timestamps);
+		char *edge_list_start = (char *) get_edge_list_begin();
+		int num_prev_edges = get_edge_off_begin()[idx].in_off;
+		int prev_edge_list_size = num_prev_edges * (sizeof(vertex_id_t)
+				+ edge_data_size);
+		return const_edge_list((vertex_id_t *) (edge_list_start
+					+ prev_edge_list_size), get_num_in_edges_idx(idx),
+				get_num_out_edges_idx(idx));
+	}
+
 	const_edge_list get_const_edge_list(int timestamp) const {
 		int idx = find_timestamp(timestamp);
-		char *edge_list_start = (char *) get_edge_list_begin();
 		if (idx >= 0) {
-			int num_prev_edges = get_edge_off_begin()[idx].in_off;
-			int prev_edge_list_size = num_prev_edges * (sizeof(vertex_id_t)
-					+ edge_data_size);
-			return const_edge_list((vertex_id_t *) (edge_list_start
-						+ prev_edge_list_size), get_num_in_edges_idx(idx),
-					get_num_out_edges_idx(idx));
+			return get_const_edge_list_idx(idx);
 		}
 		else {
+			char *edge_list_start = (char *) get_edge_list_begin();
 			int prev_edge_list_size = num_edges * (sizeof(vertex_id_t)
 					+ edge_data_size);
 			return const_edge_list((vertex_id_t *) (edge_list_start
@@ -721,6 +751,8 @@ class ts_ext_mem_directed_vertex
 	/**
 	 * This returns the offset (in bytes) of the edge list of the specified
 	 * timestamp in the external memory.
+	 * If the timestamp doesn't exist, return the offset of the end
+	 * of the vertex.
 	 */
 	int get_edge_list_offset(int timestamp, edge_type type) const {
 		const_edge_list edges = get_const_edge_list(timestamp);
@@ -733,8 +765,20 @@ class ts_ext_mem_directed_vertex
 	}
 
 	/**
+	 * This construct a header of the vertex based on the original vertex
+	 * header passed to the method.
+	 * @edge_list_off: the relative location (in bytes) of the edge lists
+	 * in the vertex.
+	 * @edge_list_size: the size (in bytes) of the edge lists.
+	 */
+	void construct_header(const ts_ext_mem_directed_vertex &header,
+			int edge_list_off, int edge_list_size);
+
+	/**
 	 * This returns the offset (in bytes) of the edge data list of the specified
 	 * timestamp in the external memory.
+	 * If the timestamp doesn't exist, return the offset of the end
+	 * of the vertex.
 	 */
 	template<class edge_data_type>
 	int get_edge_data_offset(int timestamp, edge_type type) const {
@@ -1012,20 +1056,41 @@ class TS_page_directed_vertex: public TS_page_vertex
 {
 	// The entire size of the vertex in the external memory.
 	int entire_vertex_size;
-	const page_byte_array &array;
+	// The location of the vertex in the file.
+	off_t vertex_begin_off;
+	const page_byte_array *array;
 	ts_ext_mem_directed_vertex ext_v;
 
-	TS_page_directed_vertex(const page_byte_array &arr): array(arr) {
+	TS_page_directed_vertex(const page_byte_array &arr): array(&arr) {
 		unsigned size = arr.get_size();
 		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex));
 		ts_ext_mem_directed_vertex v = arr.get<ts_ext_mem_directed_vertex>(0);
 		entire_vertex_size = v.get_size();
+		vertex_begin_off = arr.get_offset();
 		// We have to make sure the array size must be larger than the header
 		// of the ts-vertex.
 		int header_size = v.get_header_size();
 		assert(arr.get_size() >= header_size);
 		assert(header_size <= PAGE_SIZE);
 		arr.memcpy(0, (char *) &ext_v, header_size);
+		// If the vertex isn't complete, we probably only has the header
+		// of the vertex. Don't give a uaser a chance to access it.
+		if (!is_complete())
+			array = NULL;
+	}
+
+	/**
+	 * This is to create a vertex based on the header of the vertex
+	 * read in the last time and the edge list in the array.
+	 * The constructed vertex has only part of the vertex.
+	 */
+	TS_page_directed_vertex(const TS_page_directed_vertex *header,
+			const page_byte_array &arr): array(&arr) {
+		this->entire_vertex_size = header->entire_vertex_size;
+		this->vertex_begin_off = header->vertex_begin_off;
+		off_t rel_off = arr.get_offset() - vertex_begin_off;
+		assert(rel_off >= header->ext_v.get_header_size());
+		ext_v.construct_header(header->ext_v, rel_off, arr.get_size());
 	}
 
 	// This object is not allowed to be copied.
@@ -1034,12 +1099,14 @@ class TS_page_directed_vertex: public TS_page_vertex
 	TS_page_directed_vertex &operator=(const TS_page_directed_vertex &);
 
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_end() const {
-		return array.begin<vertex_id_t>(entire_vertex_size);
+		assert(array);
+		return array->begin<vertex_id_t>(array->get_size());
 	}
 
 	template<class edge_data_type>
 	page_byte_array::const_iterator<edge_data_type> get_edge_data_end() const {
-		return array.begin<edge_data_type>(entire_vertex_size);
+		assert(array);
+		return array->begin<edge_data_type>(array->get_size());
 	}
 public:
 	// The size of the vertex object.
@@ -1052,6 +1119,24 @@ public:
 	static TS_page_directed_vertex *create(const page_byte_array &arr,
 			char *buf, int size) {
 		return new (buf) TS_page_directed_vertex(arr);
+	}
+
+	static TS_page_directed_vertex *create(const TS_page_directed_vertex *header,
+			const page_byte_array &arr, char *buf, int size) {
+		return new (buf) TS_page_directed_vertex(header, arr);
+	}
+
+	/**
+	 * This returns the relative offset of the edge lists specified
+	 * in the timestamp range in the vertex.
+	 */
+	virtual offset_pair get_edge_list_offset(const timestamp_pair &range) const;
+
+	virtual bool is_complete() const {
+		if (array == NULL)
+			return false;
+		else
+			return array->get_size() >= entire_vertex_size;
 	}
 
 	virtual int get_num_edges(edge_type type) const {
@@ -1104,10 +1189,18 @@ public:
 			offset = ext_v.get_edge_list_offset(timestamp, edge_type::OUT_EDGE);
 		else
 			assert(0);
+		assert(array);
 		if (offset < 0)
 			return get_neigh_end();
-		else
-			return array.begin<vertex_id_t>(offset);
+		else {
+			if (array->get_size() == entire_vertex_size)
+				return array->begin<vertex_id_t>(offset);
+			else
+				// If the vertex isn't complete, the array only contains
+				// the data of edge lists. We need to substract the header
+				// size from the offset.
+				return array->begin<vertex_id_t>(offset - ext_v.get_header_size());
+		}
 	}
 
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
@@ -1135,10 +1228,18 @@ public:
 					edge_type::OUT_EDGE);
 		else
 			assert(0);
+		assert(array);
 		if (offset < 0)
 			return get_edge_data_end<edge_data_type>();
-		else
-			return array.begin<edge_data_type>(offset);
+		else {
+			if (array->get_size() == entire_vertex_size)
+				return array->begin<edge_data_type>(offset);
+			else
+				// If the vertex isn't complete, the array only contains
+				// the data of edge lists. We need to substract the header
+				// size from the offset.
+				return array->begin<edge_data_type>(offset - ext_v.get_header_size());
+		}
 	}
 
 	template<class edge_data_type>

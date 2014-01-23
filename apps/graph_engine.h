@@ -23,6 +23,7 @@
 #include "thread.h"
 #include "container.h"
 #include "concurrency.h"
+#include "slab_allocator.h"
 
 #include "vertex.h"
 #include "vertex_index.h"
@@ -59,6 +60,11 @@ public:
 
 	bool is_activated(int level) const {
 		return activated_levels.test_flag(level);
+	}
+
+	virtual compute_allocator *create_part_compute_allocator(
+			graph_engine *graph, thread *t) {
+		return NULL;
 	}
 
 	virtual bool has_required_vertices() const {
@@ -104,13 +110,26 @@ class ts_compute_vertex: public compute_vertex
 	vertex_id_t get_next_required_vertex() {
 		return -1;
 	}
+	virtual bool has_required_vertices() const {
+		return has_required_ts_vertices();
+	}
 public:
 	ts_compute_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
 			id, off, size) {
 	}
 
+	virtual compute_allocator *create_part_compute_allocator(
+			graph_engine *graph, thread *t);
+
+	virtual bool run_on_neighbors(graph_engine &graph,
+			const page_vertex *vertices[], int num);
+
 	virtual request_range get_next_request(graph_engine *graph);
+
 	virtual void get_next_required_ts_vertex(ts_vertex_request &) = 0;
+	virtual bool has_required_ts_vertices() const = 0;
+	virtual bool run_on_neighbors(graph_engine &graph,
+			const TS_page_vertex *vertices[], int num) = 0;
 };
 
 class graph_index
@@ -212,6 +231,8 @@ public:
 	 */
 	virtual page_vertex *interpret(page_byte_array &, char *buf,
 			int size) const = 0;
+	virtual page_vertex *interpret_part(const page_vertex *header,
+			page_byte_array &, char *buf, int size) const = 0;
 	/**
 	 * The size of the vertex object.
 	 */
@@ -227,6 +248,12 @@ public:
 		return new (buf) page_directed_vertex(array);
 	}
 
+	virtual page_vertex *interpret_part(const page_vertex *header,
+			page_byte_array &, char *buf, int size) const {
+		assert(0);
+		return NULL;
+	}
+
 	virtual int get_vertex_size() const {
 		return sizeof(page_directed_vertex);
 	}
@@ -239,6 +266,12 @@ public:
 			int size) const {
 		assert(size >= (int) sizeof(page_undirected_vertex));
 		return new (buf) page_undirected_vertex(array);
+	}
+
+	virtual page_vertex *interpret_part(const page_vertex *header,
+			page_byte_array &, char *buf, int size) const {
+		assert(0);
+		return NULL;
 	}
 
 	virtual int get_vertex_size() const {
@@ -258,6 +291,13 @@ public:
 			int size) const {
 		assert(size >= TS_page_directed_vertex::get_size(num_timestamps));
 		return TS_page_directed_vertex::create(array, buf, size);
+	}
+
+	virtual page_vertex *interpret_part(const page_vertex *header,
+			page_byte_array &array, char *buf, int size) const {
+		assert(size >= TS_page_directed_vertex::get_size(num_timestamps));
+		return TS_page_directed_vertex::create(
+				(const TS_page_directed_vertex *) header, array, buf, size);
 	}
 
 	virtual int get_vertex_size() const {
@@ -383,6 +423,13 @@ public:
 	ext_mem_vertex_interpreter *get_vertex_interpreter() const {
 		return interpreter;
 	}
+
+	compute_allocator *create_part_compute_allocator(thread *t) {
+		// We only need to get a vertex that exists.
+		int min_id = vertices->get_min_vertex_id();
+		return vertices->get_vertex(min_id).create_part_compute_allocator(
+				this, t);
+	}
 };
 
 /**
@@ -392,13 +439,14 @@ public:
 class ts_vertex_request
 {
 	vertex_id_t id;
-	std::vector<int> timestamps;
+	timestamp_pair range;
 	edge_type type;
 	bool require_all;
 	graph_engine *graph;
 public:
 	ts_vertex_request(graph_engine *graph) {
 		id = 0;
+		range = timestamp_pair(INT_MAX, INT_MIN);
 		type = edge_type::BOTH_EDGES;
 		require_all = false;
 		this->graph = graph;
@@ -408,17 +456,15 @@ public:
 		this->require_all = require_all;
 	}
 
-	void set_vertex(vertex_id_t id) {
-		this->id = id;
-		compute_vertex &info = graph->get_vertex(id);
-		// If the vertex is small enough, we can read the entire vertex.
-		if (info.get_ext_mem_size() < PAGE_SIZE)
-			require_all = true;
-	}
+	void set_vertex(vertex_id_t id);
 
 	void add_timestamp(int timestamp) {
-		if (!require_all)
-			timestamps.push_back(timestamp);
+		if (!require_all) {
+			if (range.second < timestamp)
+				range.second = timestamp + 1;
+			if (range.first > timestamp)
+				range.first = timestamp;
+		}
 	}
 
 	void set_edge_type(edge_type type) {
@@ -427,7 +473,7 @@ public:
 
 	void clear() {
 		id = 0;
-		timestamps.clear();
+		range = timestamp_pair(INT_MAX, INT_MIN);
 		type = edge_type::BOTH_EDGES;
 		require_all = false;
 	}
@@ -436,12 +482,8 @@ public:
 		return id;
 	}
 
-	std::vector<int>::const_iterator get_timestamp_begin() const {
-		return timestamps.begin();
-	}
-
-	std::vector<int>::const_iterator get_timestamp_end() const {
-		return timestamps.end();
+	const timestamp_pair &get_range() const {
+		return range;
 	}
 
 	edge_type get_edge_type() const {

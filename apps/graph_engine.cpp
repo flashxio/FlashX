@@ -23,7 +23,6 @@
 #endif
 
 #include "io_interface.h"
-#include "slab_allocator.h"
 
 #include "graph_config.h"
 #include "graph_engine.h"
@@ -42,15 +41,18 @@ request_range compute_vertex::get_next_request(graph_engine *graph)
 	return request_range(loc, info.get_ext_mem_size(), READ, NULL);
 }
 
-request_range ts_compute_vertex::get_next_request(graph_engine *graph)
+void ts_vertex_request::set_vertex(vertex_id_t id)
 {
-	ts_vertex_request ts_req(graph);
-	get_next_required_ts_vertex(ts_req);
-	assert(ts_req.get_edge_type() == edge_type::BOTH_EDGES);
-
-	compute_vertex &info = graph->get_vertex(ts_req.get_id());
-	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
-	return request_range(loc, info.get_ext_mem_size(), READ, NULL);
+	this->id = id;
+	compute_vertex &info = graph->get_vertex(id);
+	// There is some overhead to fetch part of a vertex, so we should
+	// minize the number of vertices fetched partially.
+	// If a vertex is small enough (stored on <= 3 pages), we fetch the entire
+	// vertex.
+	off_t start_pg = ROUND_PAGE(info.get_ext_mem_off());
+	off_t end_pg = ROUNDUP_PAGE(info.get_ext_mem_off() + info.get_ext_mem_size());
+	if (end_pg - start_pg <= PAGE_SIZE * 3)
+		require_all = true;
 }
 
 /**
@@ -58,7 +60,11 @@ request_range ts_compute_vertex::get_next_request(graph_engine *graph)
  */
 class vertex_compute: public user_compute
 {
-	bool completed;
+	// The number of requested vertices that will be read in the user compute.
+	int num_complete_issues;
+	// The number of vertices read by the user compute.
+	int num_complete_fetched;
+
 	graph_engine *graph;
 	compute_vertex *v;
 	// The thread that creates the vertex compute.
@@ -69,7 +75,8 @@ public:
 		this->graph = graph;
 		v = NULL;
 		issue_thread = (worker_thread *) thread::get_curr_thread();
-		completed = false;
+		num_complete_issues = 0;
+		num_complete_fetched = 0;
 	}
 
 	virtual int serialize(char *buf, int size) const {
@@ -90,36 +97,102 @@ public:
 	virtual request_range get_next_request() {
 		assert(v);
 		request_range range = v->get_next_request(graph);
-		if (range.get_compute() == NULL)
+		if (range.get_compute() == NULL) {
+			num_complete_issues++;
 			range.set_compute(this);
+		}
 		return range;
 	}
 
 	virtual void run(page_byte_array &);
 
 	virtual bool has_completed() const {
-		return completed;
+		// If the user compute has got all requested data and it has
+		// no more requests to issue, we can consider the user compute
+		// has been completed.
+		// NOTE: it's possible that requested data may not be passed to
+		// this user compute, so we only count the requests that are going
+		// to be passed to this user compute.
+		return num_complete_issues == num_complete_fetched && !has_requests();
 	}
 };
 
+/**
+ * Sometimes a vertex only needs to read part of its neighbors.
+ * This class is to read part of a neighbor and pass the neighbor to
+ * the specified vertex to perform computation.
+ * An instance of the class only reads one neighbor.
+ */
+class part_ts_vertex_compute: public user_compute
+{
+	graph_engine *graph;
+	// The vertex where computation should perform.
+	compute_vertex *comp_v;
+	const TS_page_vertex *required_vertex_header;
+	// The part of the vertex will be read and passed to
+	// the computation vertex.
+	ts_vertex_request required_part;
+	// The thread that creates the vertex compute.
+	worker_thread *issue_thread;
+	int num_issued;
+	int num_fetched;
+public:
+	part_ts_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): user_compute(alloc), required_part(graph) {
+		this->graph = graph;
+		comp_v = NULL;
+		issue_thread = (worker_thread *) thread::get_curr_thread();
+		required_vertex_header = NULL;
+		num_issued = 0;
+		num_fetched = 0;
+	}
+
+	void init(compute_vertex *v, const ts_vertex_request &req) {
+		comp_v = v;
+		required_part = req;
+	}
+
+	virtual int serialize(char *buf, int size) const {
+		return 0;
+	}
+
+	virtual int get_serialized_size() const {
+		return 0;
+	}
+
+	virtual int has_requests() const {
+		return num_issued == 0;
+	}
+
+	virtual request_range get_next_request();
+
+	virtual void run(page_byte_array &);
+
+	virtual bool has_completed() const {
+		return num_fetched > 0;
+	}
+};
+
+template<class compute_type>
 class vertex_compute_allocator: public compute_allocator
 {
-	class compute_initiator: public obj_initiator<vertex_compute>
+	class compute_initiator: public obj_initiator<compute_type>
 	{
 		graph_engine *graph;
-		vertex_compute_allocator *alloc;
+		vertex_compute_allocator<compute_type> *alloc;
 	public:
-		compute_initiator(graph_engine *graph, vertex_compute_allocator *alloc) {
+		compute_initiator(graph_engine *graph,
+				vertex_compute_allocator<compute_type> *alloc) {
 			this->graph = graph;
 			this->alloc = alloc;
 		}
 
-		virtual void init(vertex_compute *obj) {
-			new (obj) vertex_compute(graph, alloc);
+		virtual void init(compute_type *obj) {
+			new (obj) compute_type(graph, alloc);
 		}
 	};
 
-	obj_allocator<vertex_compute> allocator;
+	obj_allocator<compute_type> allocator;
 public:
 	vertex_compute_allocator(graph_engine *graph, thread *t): allocator(
 			"vertex-compute-allocator", t->get_node_id(), 1024 * 1024,
@@ -133,7 +206,7 @@ public:
 	}
 
 	virtual void free(user_compute *obj) {
-		allocator.free((vertex_compute *) obj);
+		allocator.free((compute_type *) obj);
 	}
 };
 
@@ -143,6 +216,7 @@ class worker_thread: public thread
 	io_interface *io;
 	graph_engine *graph;
 	compute_allocator *alloc;
+	compute_allocator *part_alloc;
 	// This is to collect vertices activated in the next level.
 	std::vector<vertex_id_t> activated_vertices;
 
@@ -156,7 +230,9 @@ public:
 		this->graph = graph;
 		this->io = NULL;
 		this->factory = factory;
-		alloc = new vertex_compute_allocator(graph, this);
+		alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
+		// TODO we need to fix this.
+		part_alloc = graph->create_part_compute_allocator(this);
 	}
 
 	~worker_thread() {
@@ -165,6 +241,10 @@ public:
 
 	void run();
 	void init();
+
+	compute_allocator *get_part_compute_allocator() const {
+		return part_alloc;
+	}
 
 	std::vector<vertex_id_t> &get_activated_vertices() {
 		return activated_vertices;
@@ -177,13 +257,96 @@ public:
 	}
 };
 
-void vertex_compute::run(page_byte_array &array)
+request_range ts_compute_vertex::get_next_request(graph_engine *graph)
+{
+	ts_vertex_request ts_req(graph);
+	get_next_required_ts_vertex(ts_req);
+	assert(ts_req.get_edge_type() == edge_type::BOTH_EDGES);
+
+	compute_vertex &info = graph->get_vertex(ts_req.get_id());
+	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+	if (ts_req.is_require_all()) {
+		return request_range(loc, info.get_ext_mem_size(), READ, NULL);
+	}
+	else {
+		worker_thread *t = (worker_thread *) thread::get_curr_thread();
+		compute_allocator *alloc = t->get_part_compute_allocator();
+		assert(alloc);
+		part_ts_vertex_compute *comp = (part_ts_vertex_compute *) alloc->alloc();
+		comp->init(this, ts_req);
+		// We assume the header of a ts-vertex is never larger than a page.
+		return request_range(loc, PAGE_SIZE, READ, comp);
+	}
+}
+
+bool ts_compute_vertex::run_on_neighbors(graph_engine &graph,
+		const page_vertex *vertices[], int num)
+{
+	const TS_page_vertex **ts_vertices = (const TS_page_vertex **) vertices;
+	return run_on_neighbors(graph, ts_vertices, num);
+}
+
+compute_allocator *ts_compute_vertex::create_part_compute_allocator(
+		graph_engine *graph, thread *t)
+{
+	return new vertex_compute_allocator<part_ts_vertex_compute>(
+			graph, t);
+}
+
+request_range part_ts_vertex_compute::get_next_request()
+{
+	assert(required_vertex_header);
+	assert(num_issued == 0);
+	num_issued++;
+
+	compute_vertex &info = graph->get_vertex(
+			required_vertex_header->get_id());
+	offset_pair rel_offsets = required_vertex_header->get_edge_list_offset(
+			required_part.get_range());
+	data_loc_t loc(graph->get_file_id(), rel_offsets.first
+			+ info.get_ext_mem_off());
+	return request_range(loc, rel_offsets.second - rel_offsets.first,
+			READ, this);
+}
+
+void part_ts_vertex_compute::run(page_byte_array &array)
 {
 	assert(!has_completed());
+	bool completed = false;
+	if (required_vertex_header == NULL) {
+		ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
+		char *buf = new char[interpreter->get_vertex_size()];
+		required_vertex_header = (const TS_page_vertex *) interpreter->interpret(
+				array, buf, interpreter->get_vertex_size());
+		assert(!required_vertex_header->is_complete());
+	}
+	else {
+		ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
+		stack_array<char, 64> buf(interpreter->get_vertex_size());
+		const page_vertex *ext_v = interpreter->interpret_part(
+				required_vertex_header, array, buf.data(),
+				interpreter->get_vertex_size());
+
+		num_fetched++;
+		assert(comp_v);
+		completed = comp_v->run_on_neighbors(*graph, &ext_v, 1);
+
+		char *tmp = (char *) required_vertex_header;
+		delete [] tmp;
+	}
+	// We need to notify the thread that initiate processing the vertex
+	// of the completion of the vertex.
+	if (completed)
+		issue_thread->complete_vertex(*comp_v);
+}
+
+void vertex_compute::run(page_byte_array &array)
+{
 	ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
 	stack_array<char, 64> buf(interpreter->get_vertex_size());
 	const page_vertex *ext_v = interpreter->interpret(array, buf.data(),
 			interpreter->get_vertex_size());
+	bool completed = false;
 	// If the algorithm doesn't need to get the full information
 	// of their neighbors
 	if (graph->get_required_neighbor_type() == edge_type::NONE
@@ -193,12 +356,17 @@ void vertex_compute::run(page_byte_array &array)
 		completed = v->run(*graph, ext_v);
 	}
 	else {
+		num_complete_fetched++;
 		completed = v->run_on_neighbors(*graph, &ext_v, 1);
 	}
 	// We need to notify the thread that initiate processing the vertex
 	// of the completion of the vertex.
-	if (completed)
+	if (completed) {
+		// If the vertex has completed computation, the user compute should
+		// also finish its computation.
+		assert(has_completed());
 		issue_thread->complete_vertex(*v);
+	}
 }
 
 class sorted_vertex_queue

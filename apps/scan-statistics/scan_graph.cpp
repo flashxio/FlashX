@@ -85,7 +85,7 @@ public:
 		return result;
 	}
 
-	virtual bool has_required_vertices() const {
+	virtual bool has_required_ts_vertices() const {
 		if (neighbors == NULL)
 			return false;
 		return fetch_it != neighbors->end();
@@ -95,7 +95,8 @@ public:
 		vertex_id_t id = *fetch_it;
 		fetch_it++;
 		req.set_vertex(id);
-		req.set_require_all(true);
+		for (int i = 0; i < timestamp_range && timestamp - i >= 0; i++)
+			req.add_timestamp(timestamp - i);
 	}
 
 	int count_edges(const TS_page_vertex *v,
@@ -107,7 +108,7 @@ public:
 	bool run(graph_engine &graph, const page_vertex *vertex);
 
 	bool run_on_neighbors(graph_engine &graph,
-			const page_vertex *vertices[], int num);
+			const TS_page_vertex *vertices[], int num);
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
@@ -367,14 +368,13 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 }
 
 bool scan_vertex::run_on_neighbors(graph_engine &graph,
-		const page_vertex *vertices[], int num)
+		const TS_page_vertex *vertices[], int num)
 {
 	num_joined += num;
 	assert(neighbors);
 	for (int i = 0; i < num; i++) {
 		for (int j = 0; j < timestamp_range && timestamp - j >= 0; j++) {
-			int ret = count_edges((const TS_page_vertex *) vertices[i],
-					neighbors, timestamp - j);
+			int ret = count_edges(vertices[i], neighbors, timestamp - j);
 			if (ret > 0)
 				num_edges->at(j).inc(ret);
 		}
