@@ -23,7 +23,7 @@
 #include <stdlib.h>
 
 const int64_t MAGIC_NUMBER = 0x123456789ABCDEFL;
-const int CURR_VERSION = 0;
+const int CURR_VERSION = 1;
 
 enum graph_type {
 	DIRECTED,

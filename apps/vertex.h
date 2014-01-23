@@ -513,10 +513,106 @@ class ts_in_mem_directed_vertex;
  */
 class ts_ext_mem_directed_vertex
 {
+	class edge_list {
+		vertex_id_t *neighbors;
+		int num_in_edges;
+		int num_out_edges;
+	public:
+		edge_list(vertex_id_t *neighbors, int num_in_edges,
+				int num_out_edges) {
+			this->neighbors = neighbors;
+			this->num_in_edges = num_in_edges;
+			this->num_out_edges = num_out_edges;
+		}
+
+		int get_num_in_edges() const {
+			return num_in_edges;
+		}
+
+		int get_num_out_edges() const {
+			return num_out_edges;
+		}
+
+		vertex_id_t *get_in_edge_begin() {
+			return neighbors;
+		}
+
+		vertex_id_t *get_out_edge_begin() {
+			return neighbors + num_in_edges;
+		}
+
+		// The edge data is stored right at the end of the edge list.
+		template<class edge_data_type>
+		edge_data_type *get_in_edge_data() {
+			return (edge_data_type *) (neighbors + num_in_edges + num_out_edges);
+		}
+
+		template<class edge_data_type>
+		edge_data_type *get_out_edge_data() {
+			return get_in_edge_data<edge_data_type>() + num_in_edges;
+		}
+	};
+
+	class const_edge_list {
+		const vertex_id_t *neighbors;
+		int num_in_edges;
+		int num_out_edges;
+	public:
+		static edge_list to_edge_list(const_edge_list &list) {
+			return edge_list((vertex_id_t *) list.neighbors, list.num_in_edges,
+					list.num_out_edges);
+		}
+
+		const_edge_list(const vertex_id_t *neighbors, int num_in_edges,
+				int num_out_edges) {
+			this->neighbors = neighbors;
+			this->num_in_edges = num_in_edges;
+			this->num_out_edges = num_out_edges;
+		}
+
+		int get_num_in_edges() const {
+			return num_in_edges;
+		}
+
+		int get_num_out_edges() const {
+			return num_out_edges;
+		}
+
+		const vertex_id_t *get_in_edge_begin() const {
+			return neighbors;
+		}
+
+		const vertex_id_t *get_out_edge_begin() const {
+			return neighbors + num_in_edges;
+		}
+
+		// The edge data is stored right at the end of the edge list.
+		template<class edge_data_type>
+		const edge_data_type *get_in_edge_data() const {
+			return (edge_data_type *) (neighbors + num_in_edges + num_out_edges);
+		}
+
+		template<class edge_data_type>
+			const edge_data_type *get_out_edge_data() const {
+				return get_in_edge_data<edge_data_type>() + num_in_edges;
+			}
+	};
+
 	vertex_id_t id;
 	int edge_data_size;
 	int num_edges;
 	int num_timestamps;
+
+	static int get_timestamp_list_size(int num_timestamps) {
+		// The edge off list need to align with the word size.
+		int num = ROUNDUP(num_timestamps, 8);
+		return sizeof(short) * num;
+	}
+
+	static int get_timestamp_table_size(int num_timestamps) {
+		return get_timestamp_list_size(num_timestamps)
+			+ sizeof(edge_off) * num_timestamps;
+	}
 
 	void set_edge_data_size(int size) {
 		this->edge_data_size = size;
@@ -530,20 +626,6 @@ class ts_ext_mem_directed_vertex
 		this->id = id;
 	}
 
-	short *get_timestamps_begin() {
-		return (short *) (this + 1);
-	}
-
-	edge_off *get_edge_off_begin() {
-		// The edge off list need to align with the word size.
-		int num = ROUNDUP(num_timestamps, 8);
-		return (edge_off *) (get_timestamps_begin() + num);
-	}
-
-	vertex_id_t *get_edge_list_begin() {
-		return (vertex_id_t *) (get_edge_off_begin() + num_timestamps);
-	}
-
 	int find_timestamp(int timestamp) const {
 		for (int i = 0; i < num_timestamps; i++)
 			if (get_timestamps_begin()[i] == timestamp)
@@ -551,28 +633,121 @@ class ts_ext_mem_directed_vertex
 		return -1;
 	}
 
+	short *get_timestamps_begin() {
+		return (short *) (this + 1);
+	}
+
 	const short *get_timestamps_begin() const {
 		return (short *) (this + 1);
 	}
 
+	edge_off *get_edge_off_begin() {
+		char *p = (char *) get_timestamps_begin();
+		return (edge_off *) (p + get_timestamp_list_size(num_timestamps));
+	}
+
 	const edge_off *get_edge_off_begin() const {
-		// The edge off list need to align with the word size.
-		int num = ROUNDUP(num_timestamps, 8);
-		return (edge_off *) (get_timestamps_begin() + num);
+		const char *p = (const char *) get_timestamps_begin();
+		return (const edge_off *) (p + get_timestamp_list_size(num_timestamps));
+	}
+
+	vertex_id_t *get_edge_list_begin() {
+		char *p = (char *) get_timestamps_begin();
+		return (vertex_id_t *) (p + get_timestamp_table_size(num_timestamps));
 	}
 
 	const vertex_id_t *get_edge_list_begin() const {
-		return (vertex_id_t *) (get_edge_off_begin() + num_timestamps);
+		const char *p = (const char *) get_timestamps_begin();
+		return (const vertex_id_t *) (p
+				+ get_timestamp_table_size(num_timestamps));
 	}
 
-	template<class edge_data_type = empty_data>
-	edge_data_type *get_edge_data_begin() {
-		return (edge_data_type *) (get_edge_list_begin() + num_edges);
+	// The header size of the ts-vertex in the external memory.
+	int get_header_size() const {
+		return sizeof(ts_ext_mem_directed_vertex)
+			+ get_timestamp_table_size(num_timestamps);
 	}
 
-	template<class edge_data_type = empty_data>
-	const edge_data_type *get_edge_data_begin() const {
-		return (edge_data_type *) (get_edge_list_begin() + num_edges);
+	int get_num_in_edges_idx(int idx) const {
+		if (idx < 0)
+			return 0;
+		else
+			return get_edge_off_begin()[idx].out_off
+				- get_edge_off_begin()[idx].in_off;
+	}
+
+	int get_num_out_edges_idx(int idx) const {
+		if (idx < 0)
+			return 0;
+
+		// The last timestamp
+		if (idx == num_timestamps - 1)
+			return num_edges - get_edge_off_begin()[idx].out_off;
+		else {
+			return get_edge_off_begin()[idx + 1].in_off
+				- get_edge_off_begin()[idx].out_off;
+		}
+	}
+
+	/**
+	 * These functions define the data layout of the edge list
+	 * in the external memory.
+	 */
+
+	edge_list get_edge_list(int timestamp) {
+		const_edge_list list = get_const_edge_list(timestamp);
+		return const_edge_list::to_edge_list(list);
+	}
+
+	const_edge_list get_const_edge_list(int timestamp) const {
+		int idx = find_timestamp(timestamp);
+		char *edge_list_start = (char *) get_edge_list_begin();
+		if (idx >= 0) {
+			int num_prev_edges = get_edge_off_begin()[idx].in_off;
+			int prev_edge_list_size = num_prev_edges * (sizeof(vertex_id_t)
+					+ edge_data_size);
+			return const_edge_list((vertex_id_t *) (edge_list_start
+						+ prev_edge_list_size), get_num_in_edges_idx(idx),
+					get_num_out_edges_idx(idx));
+		}
+		else {
+			int prev_edge_list_size = num_edges * (sizeof(vertex_id_t)
+					+ edge_data_size);
+			return const_edge_list((vertex_id_t *) (edge_list_start
+						+ prev_edge_list_size), 0, 0);
+		}
+	}
+
+	/**
+	 * This returns the offset (in bytes) of the edge list of the specified
+	 * timestamp in the external memory.
+	 */
+	int get_edge_list_offset(int timestamp, edge_type type) const {
+		const_edge_list edges = get_const_edge_list(timestamp);
+		if (type == edge_type::IN_EDGE)
+			return ((char *) edges.get_in_edge_begin()) - ((char *) this);
+		else if (type == edge_type::OUT_EDGE)
+			return ((char *) edges.get_out_edge_begin()) - ((char *) this);
+		else
+			assert(0);
+	}
+
+	/**
+	 * This returns the offset (in bytes) of the edge data list of the specified
+	 * timestamp in the external memory.
+	 */
+	template<class edge_data_type>
+	int get_edge_data_offset(int timestamp, edge_type type) const {
+		assert(sizeof(edge_data_type) == edge_data_size);
+		const_edge_list edges = get_const_edge_list(timestamp);
+		if (type == edge_type::IN_EDGE)
+			return ((char *) edges.get_in_edge_data<edge_data_type>())
+				- ((char *) this);
+		else if (type == edge_type::OUT_EDGE)
+			return ((char *) edges.get_out_edge_data<edge_data_type>())
+				- ((char *) this);
+		else
+			assert(0);
 	}
 
 	ts_ext_mem_directed_vertex(vertex_id_t id, int num_edges,
@@ -594,21 +769,17 @@ public:
 				int timestamp, bool is_in_edge) {
 			this->is_in_edge = is_in_edge;
 			this->id = v.get_id();
-			int idx = v.find_timestamp(timestamp);
+			const_edge_list edges = v.get_const_edge_list(timestamp);
 			data_ptr = NULL;
 			if (is_in_edge) {
-				ptr = v.get_edge_list_begin()
-					+ v.get_edge_off_begin()[idx].in_off;
+				ptr = edges.get_in_edge_begin();
 				if (v.has_edge_data())
-					data_ptr = v.get_edge_data_begin<edge_data_type>()
-						+ v.get_edge_off_begin()[idx].in_off;
+					data_ptr = edges.get_in_edge_data<edge_data_type>();
 			}
 			else {
-				ptr = v.get_edge_list_begin()
-					+ v.get_edge_off_begin()[idx].out_off;
+				ptr = edges.get_out_edge_begin();
 				if (v.has_edge_data())
-					data_ptr = v.get_edge_data_begin<edge_data_type>()
-						+ v.get_edge_off_begin()[idx].out_off;
+					data_ptr = edges.get_out_edge_data<edge_data_type>();
 			}
 		}
 
@@ -677,34 +848,28 @@ public:
 		// Generate the edge list.
 		for (int i = 0; i < v->num_timestamps; i++) {
 			int timestamp = all_timestamps[i];
-			int num_edges;
-			num_edges = in_v.get_num_in_edges(timestamp);
+			int num_in_edges = in_v.get_num_in_edges(timestamp);
+			edge_list edges = v->get_edge_list(timestamp);
 			typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator it
 				= in_v.get_in_edge_begin(timestamp);
-			vertex_id_t *in_edge_list = v->get_edge_list_begin()
-				+ v->get_edge_off_begin()[i].in_off;
-			edge_data_type *in_edge_data = v->get_edge_data_begin<edge_data_type>()
-				+ v->get_edge_off_begin()[i].in_off;
-			for (int j = 0; j < num_edges; j++) {
+			assert(edges.get_num_in_edges() == num_in_edges);
+			for (int j = 0; j < num_in_edges; j++) {
 				edge<edge_data_type> e = *it;
 				++it;
-				in_edge_list[j] = e.get_from();
+				edges.get_in_edge_begin()[j] = e.get_from();
 				if (v->has_edge_data())
-					in_edge_data[j] = e.get_data();
+					edges.get_in_edge_data<edge_data_type>()[j] = e.get_data();
 			}
 
-			num_edges = in_v.get_num_out_edges(timestamp);
+			int num_out_edges = in_v.get_num_out_edges(timestamp);
 			it = in_v.get_out_edge_begin(timestamp);
-			vertex_id_t *out_edge_list = v->get_edge_list_begin()
-				+ v->get_edge_off_begin()[i].out_off;
-			edge_data_type *out_edge_data = v->get_edge_data_begin<edge_data_type>()
-				+ v->get_edge_off_begin()[i].out_off;
-			for (int j = 0; j < num_edges; j++) {
+			assert(edges.get_num_out_edges() == num_out_edges);
+			for (int j = 0; j < num_out_edges; j++) {
 				edge<edge_data_type> e = *it;
 				++it;
-				out_edge_list[j] = e.get_to();
+				edges.get_out_edge_begin()[j] = e.get_to();
 				if (v->has_edge_data())
-					out_edge_data[j] = e.get_data();
+					edges.get_out_edge_data<edge_data_type>()[j] = e.get_data();
 			}
 		}
 		return v->get_size();
@@ -722,11 +887,8 @@ public:
 	}
 
 	size_t get_size() const {
-		// The edge off list need to align with the word size.
-		int num = ROUNDUP(num_timestamps, 8);
 		size_t size = sizeof(ts_ext_mem_directed_vertex)
-			+ sizeof(short) * num
-			+ sizeof(edge_off) * num_timestamps
+			+ get_timestamp_table_size(num_timestamps)
 			+ sizeof(vertex_id_t) * num_edges;
 		if (has_edge_data())
 			size += edge_data_size * num_edges;
@@ -747,25 +909,12 @@ public:
 
 	int get_num_in_edges(int timestamp) const {
 		int idx = find_timestamp(timestamp);
-		if (idx < 0)
-			return 0;
-		else
-			return get_edge_off_begin()[idx].out_off
-				- get_edge_off_begin()[idx].in_off;
+		return get_num_in_edges_idx(idx);
 	}
 
 	int get_num_out_edges(int timestamp) const {
 		int idx = find_timestamp(timestamp);
-		if (idx < 0)
-			return 0;
-
-		// The last timestamp
-		if (idx == num_timestamps - 1)
-			return num_edges - get_edge_off_begin()[idx].out_off;
-		else {
-			return get_edge_off_begin()[idx + 1].in_off
-				- get_edge_off_begin()[idx].out_off;
-		}
+		return get_num_out_edges_idx(idx);
 	}
 
 	template<class edge_data_type = empty_data>
@@ -841,6 +990,7 @@ public:
 
 	template<class edge_data_type>
 	friend class ts_in_mem_directed_vertex;
+	friend class TS_page_directed_vertex;
 };
 
 /**
@@ -860,68 +1010,42 @@ public:
  */
 class TS_page_directed_vertex: public TS_page_vertex
 {
-	vertex_id_t id;
-	int num_timestamps;
-	int edge_data_size;
-	// The total number of edges in the vertex
-	int num_edges;
+	// The entire size of the vertex in the external memory.
+	int entire_vertex_size;
 	const page_byte_array &array;
-	short timestamps[0];
-
-	edge_off *get_edge_off_begin() {
-		// The edge off list need to align with the word size.
-		int num = ROUNDUP(num_timestamps, 8);
-		return (edge_off *) (timestamps + num);
-	}
-
-	const edge_off *get_edge_off_begin() const {
-		// The edge off list need to align with the word size.
-		int num = ROUNDUP(num_timestamps, 8);
-		return (edge_off *) (timestamps + num);
-	}
-
-	int get_header_size() const {
-		return sizeof(ts_ext_mem_directed_vertex) + get_ts_table_size();
-	}
-
-	int get_ts_table_size() const {
-		// The edge off list need to align with the word size.
-		int num = ROUNDUP(num_timestamps, 8);
-		return sizeof(short) * num + sizeof(edge_off) * num_timestamps;
-	}
-
-	int find_timestamp(int timestamp) const {
-		for (int i = 0; i < num_timestamps; i++)
-			if (timestamps[i] == timestamp)
-				return i;
-		return -1;
-	}
+	ts_ext_mem_directed_vertex ext_v;
 
 	TS_page_directed_vertex(const page_byte_array &arr): array(arr) {
 		unsigned size = arr.get_size();
 		assert((unsigned) size >= sizeof(ts_ext_mem_directed_vertex));
 		ts_ext_mem_directed_vertex v = arr.get<ts_ext_mem_directed_vertex>(0);
-		assert((unsigned) size >= v.get_size());
-
-		id = v.get_id();
-		this->num_edges = v.get_num_edges();
-		this->num_timestamps = v.get_num_timestamps();
-		this->edge_data_size = v.get_edge_data_size();
-		arr.memcpy(sizeof(ts_ext_mem_directed_vertex), (char *) timestamps,
-				get_ts_table_size());
+		entire_vertex_size = v.get_size();
+		// We have to make sure the array size must be larger than the header
+		// of the ts-vertex.
+		int header_size = v.get_header_size();
+		assert(arr.get_size() >= header_size);
+		assert(header_size <= PAGE_SIZE);
+		arr.memcpy(0, (char *) &ext_v, header_size);
 	}
 
 	// This object is not allowed to be copied.
 	// Disable the copy constructor and the assign operator.
 	TS_page_directed_vertex(const TS_page_directed_vertex &);
 	TS_page_directed_vertex &operator=(const TS_page_directed_vertex &);
+
+	page_byte_array::const_iterator<vertex_id_t> get_neigh_end() const {
+		return array.begin<vertex_id_t>(entire_vertex_size);
+	}
+
+	template<class edge_data_type>
+	page_byte_array::const_iterator<edge_data_type> get_edge_data_end() const {
+		return array.begin<edge_data_type>(entire_vertex_size);
+	}
 public:
 	// The size of the vertex object.
 	static int get_size(int num_timestamps) {
-		// The edge off list need to align with the word size.
-		int num = ROUNDUP(num_timestamps, 8);
 		return sizeof(TS_page_directed_vertex)
-			+ sizeof(short) * num + sizeof(edge_off) * num_timestamps;
+			+ ts_ext_mem_directed_vertex::get_timestamp_table_size(num_timestamps);
 	}
 
 	// We create the vertex object in the given buffer.
@@ -945,39 +1069,26 @@ public:
 	}
 
 	virtual vertex_id_t get_id() const {
-		return id;
+		return ext_v.get_id();
 	}
 
 	virtual int get_num_edges() const {
-		return num_edges;
+		return ext_v.get_num_edges();
 	}
 
 	virtual int get_num_timestamps() const {
-		return num_timestamps;
+		return ext_v.get_num_timestamps();
 	}
 
 	virtual int get_num_edges(int timestamp, edge_type type) const {
-		int idx = find_timestamp(timestamp);
-		// Can't find the timestamp;
-		if (idx < 0)
-			return 0;
-
 		switch (type) {
 			case edge_type::IN_EDGE:
-				return get_edge_off_begin()[idx].out_off
-					- get_edge_off_begin()[idx].in_off;
+				return ext_v.get_num_in_edges(timestamp);
 			case edge_type::OUT_EDGE:
-				if (idx == num_timestamps - 1)
-					return num_edges - get_edge_off_begin()[idx].out_off;
-				else
-					return get_edge_off_begin()[idx + 1].in_off
-						- get_edge_off_begin()[idx].out_off;
+				return ext_v.get_num_out_edges(timestamp);
 			case edge_type::BOTH_EDGES:
-				if (idx == num_timestamps - 1)
-					return num_edges - get_edge_off_begin()[idx].in_off;
-				else
-					return get_edge_off_begin()[idx + 1].in_off
-						- get_edge_off_begin()[idx].in_off;
+				return ext_v.get_num_in_edges(timestamp)
+					+ ext_v.get_num_out_edges(timestamp);
 			default:
 				assert(0);
 		}
@@ -985,99 +1096,62 @@ public:
 
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			int timestamp, edge_type type) const {
+		int offset = 0;
 		// The start location of the edge list.
-		page_byte_array::const_iterator<vertex_id_t> it
-			= array.begin<vertex_id_t>(get_header_size());
-
-		int idx = find_timestamp(timestamp);
-		if (idx < 0) {
-			it += num_edges;
-			return it;
-		}
-
 		if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES)
-			it += get_edge_off_begin()[idx].in_off;
+			offset = ext_v.get_edge_list_offset(timestamp, edge_type::IN_EDGE);
 		else if (type == edge_type::OUT_EDGE)
-			it += get_edge_off_begin()[idx].out_off;
+			offset = ext_v.get_edge_list_offset(timestamp, edge_type::OUT_EDGE);
 		else
 			assert(0);
-		return it;
+		if (offset < 0)
+			return get_neigh_end();
+		else
+			return array.begin<vertex_id_t>(offset);
 	}
 
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			int timestamp, edge_type type) const {
 		// The start location of the edge list.
 		page_byte_array::const_iterator<vertex_id_t> it
-			= array.begin<vertex_id_t>(get_header_size());
-
-		int idx = find_timestamp(timestamp);
-		if (idx < 0) {
-			it += num_edges;
+			= get_neigh_begin(timestamp, type);
+		// because the timestamp doesn't exist.
+		if (it == get_neigh_end())
 			return it;
-		}
 
-		if (type == edge_type::IN_EDGE)
-			it += get_edge_off_begin()[idx].out_off;
-		else if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
-			if (idx == num_timestamps - 1)
-				it += num_edges;
-			else
-				it += get_edge_off_begin()[idx + 1].in_off;
-		}
-		else
-			assert(0);
+		it += get_num_edges(timestamp, type);
 		return it;
 	}
 
 	template<class edge_data_type>
 	page_byte_array::const_iterator<edge_data_type> get_edge_data_begin(
 			int timestamp, edge_type type) const {
-		assert(edge_data_size == sizeof(edge_data_type));
-		// The start location of the edge list.
-		page_byte_array::const_iterator<edge_data_type> it
-			= array.begin<edge_data_type>(get_header_size()
-					+ sizeof(vertex_id_t) * num_edges);
-
-		int idx = find_timestamp(timestamp);
-		if (idx < 0) {
-			it += num_edges;
-			return it;
-		}
-
+		int offset = 0;
 		if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES)
-			it += get_edge_off_begin()[idx].in_off;
+			offset = ext_v.get_edge_data_offset<edge_data_type>(timestamp,
+					edge_type::IN_EDGE);
 		else if (type == edge_type::OUT_EDGE)
-			it += get_edge_off_begin()[idx].out_off;
+			offset = ext_v.get_edge_data_offset<edge_data_type>(timestamp,
+					edge_type::OUT_EDGE);
 		else
 			assert(0);
-		return it;
+		if (offset < 0)
+			return get_edge_data_end<edge_data_type>();
+		else
+			return array.begin<edge_data_type>(offset);
 	}
 
 	template<class edge_data_type>
 	page_byte_array::const_iterator<edge_data_type> get_edge_data_end(
 			int timestamp, edge_type type) const {
-		assert(edge_data_size == sizeof(edge_data_type));
 		// The start location of the edge list.
 		page_byte_array::const_iterator<edge_data_type> it
-			= array.begin<edge_data_type>(get_header_size()
-					+ sizeof(vertex_id_t) * num_edges);
-
-		int idx = find_timestamp(timestamp);
-		if (idx < 0) {
-			it += num_edges;
+			= get_edge_data_begin<edge_data_type>(timestamp, type);
+		// because the timestamp doesn't exist.
+		if (it == get_edge_data_end<edge_data_type>())
 			return it;
-		}
 
-		if (type == edge_type::IN_EDGE)
-			it += get_edge_off_begin()[idx].out_off;
-		else if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
-			if (idx == num_timestamps - 1)
-				it += num_edges;
-			else
-				it += get_edge_off_begin()[idx + 1].in_off;
-		}
-		else
-			assert(0);
+		it += get_num_edges(timestamp, type);
 		return it;
 	}
 
@@ -1085,7 +1159,7 @@ public:
 		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
 				get_id(), 0, get_num_timestamps(), get_num_edges());
 		for (int i = 0; i < get_num_timestamps(); i++) {
-			int timestamp = timestamps[i];
+			int timestamp = ext_v.get_timestamps_begin()[i];
 			// We need to skip the timestamps without edges.
 			if (get_num_edges(timestamp, edge_type::IN_EDGE)
 					+ get_num_edges(timestamp, edge_type::OUT_EDGE) == 0)
