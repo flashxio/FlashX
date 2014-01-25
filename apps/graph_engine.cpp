@@ -515,7 +515,6 @@ void worker_thread::run()
 	while (true) {
 		int num_visited = 0;
 		int num = process_activated_vertices(MAX_IO_PEND_VERTICES);
-		printf("thread %d process %d activated vertices\n", get_id(), num);
 		num_visited += num;
 		while (graph->get_num_curr_activated_vertices() > 0) {
 			num = process_activated_vertices(
