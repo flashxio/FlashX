@@ -20,11 +20,58 @@
 #include <signal.h>
 #include <google/profiler.h>
 
+#include <vector>
+
 #include "thread.h"
 #include "io_interface.h"
+#include "container.h"
+#include "concurrency.h"
 
-#include "bfs_graph.h"
+#include "vertex_index.h"
+#include "graph_engine.h"
 #include "graph_config.h"
+
+class bfs_vertex: public compute_vertex
+{
+	enum {
+		VISITED,
+	};
+
+	atomic_flags<int> flags;
+public:
+	bfs_vertex(): compute_vertex(-1, -1, 0) {
+	}
+
+	bfs_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
+			id, off, size) {
+	}
+
+	bool has_visited() const {
+		return flags.test_flag(VISITED);
+	}
+
+	bool set_visited(bool visited) {
+		if (visited)
+			return flags.set_flag(VISITED);
+		else
+			return flags.clear_flag(VISITED);
+	}
+
+	bool run(graph_engine &graph) {
+		return !has_visited();
+	}
+
+	bool run(graph_engine &graph, const page_vertex *vertex);
+
+	bool run_on_neighbors(graph_engine &graph, const page_vertex *vertices[],
+			int num) {
+		return true;
+	}
+
+	virtual void run_on_messages(graph_engine &,
+			const vertex_message *msgs[], int num) {
+	}
+};
 
 bool bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
