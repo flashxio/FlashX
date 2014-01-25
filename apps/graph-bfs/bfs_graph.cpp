@@ -26,8 +26,6 @@
 #include "bfs_graph.h"
 #include "graph_config.h"
 
-atomic_integer num_visited_vertices;
-
 bool bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
 	vertex_id_t max_id = graph.get_max_vertex_id();
@@ -35,23 +33,20 @@ bool bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 
 	assert(!has_visited());
 	set_visited(true);
-	num_visited_vertices.inc(1);
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	std::vector<vertex_id_t> activated_vertices;
 	page_byte_array::const_iterator<vertex_id_t> end_it
 		= vertex->get_neigh_end(OUT_EDGE);
+	stack_array<vertex_id_t, 1024> buf(vertex->get_num_edges(OUT_EDGE));
+	int num_activated = 0;
 	for (page_byte_array::const_iterator<vertex_id_t> it
 			= vertex->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
 		assert(id >= min_id && id <= max_id);
-		activated_vertices.push_back(id);
+		buf[num_activated++] = id;
 	}
-
-	graph.activate_vertices(activated_vertices.data(),
-			activated_vertices.size());
-
+	graph.activate_vertices(buf.data(), num_activated);
 	return true;
 }
 
@@ -110,12 +105,20 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
+	std::vector<vertex_id_t> vertices;
+	index->get_all_vertices(vertices);
+	int num_visited = 0;
+	for (size_t i = 0; i < index->get_num_vertices(); i++) {
+		bfs_vertex &v = (bfs_vertex &) index->get_vertex(vertices[i]);
+		if (v.has_visited())
+			num_visited++;
+	}
+
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	graph->cleanup();
 	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
-			start_vertex, num_visited_vertices.get(),
-			time_diff(start, end));
+			start_vertex, num_visited, time_diff(start, end));
 }
