@@ -24,6 +24,7 @@
 
 #include "io_interface.h"
 
+#include "bitmap.h"
 #include "graph_config.h"
 #include "graph_engine.h"
 
@@ -218,7 +219,7 @@ class worker_thread: public thread
 	compute_allocator *alloc;
 	compute_allocator *part_alloc;
 	// This is to collect vertices activated in the next level.
-	std::vector<vertex_id_t> activated_vertices;
+	bitmap activated_vertices;
 
 	// The number of activated vertices processed in the current level.
 	atomic_number<long> num_activated_vertices_in_level;
@@ -226,7 +227,8 @@ class worker_thread: public thread
 	atomic_number<long> num_completed_vertices_in_level;
 public:
 	worker_thread(graph_engine *graph, file_io_factory *factory,
-			int node_id): thread("worker_thread", node_id) {
+			int node_id): thread("worker_thread", node_id), activated_vertices(
+				graph->get_max_vertex_id() + 1) {
 		this->graph = graph;
 		this->io = NULL;
 		this->factory = factory;
@@ -246,7 +248,7 @@ public:
 		return part_alloc;
 	}
 
-	std::vector<vertex_id_t> &get_activated_vertices() {
+	bitmap &get_activated_vertices() {
 		return activated_vertices;
 	}
 
@@ -388,30 +390,21 @@ public:
 			std::sort(sorted_vertices.begin(), sorted_vertices.end());
 	}
 
-	void init(std::vector<vertex_id_t> *vecs[], int num_vecs) {
-		// all vertices have been sorted in each vector, we only need to
-		// merge them.
+	void init(bitmap *vecs[], int num_vecs) {
 		fetch_idx = 0;
 		sorted_vertices.clear();
-#ifndef MEMCHECK
-		std::vector<std::pair<std::vector<vertex_id_t>::iterator,
-			std::vector<vertex_id_t>::iterator> > seqs;
-		size_t tot_length = 0;
+		if (num_vecs == 0)
+			return;
+
+		size_t size = vecs[0]->get_num_bits();
+		for (int i = 1; i < num_vecs; i++)
+			assert(size == vecs[i]->get_num_bits());
+
+		bitmap tmp(size);
 		for (int i = 0; i < num_vecs; i++) {
-			seqs.push_back(std::make_pair<std::vector<vertex_id_t>::iterator,
-					std::vector<vertex_id_t>::iterator>(
-						vecs[i]->begin(), vecs[i]->end()));
-			tot_length += vecs[i]->size();
+			tmp.merge(*vecs[i]);
 		}
-		sorted_vertices.resize(tot_length);
-		__gnu_parallel::multiway_merge(seqs.begin(), seqs.end(),
-				sorted_vertices.begin(), tot_length, std::less<int>());
-#else
-		for (int i = 0; i < num_vecs; i++)
-			sorted_vertices.insert(sorted_vertices.end(), vecs[i]->begin(),
-					vecs[i]->end());
-		std::sort(sorted_vertices.begin(), sorted_vertices.end());
-#endif
+		tmp.get_set_bits(sorted_vertices);
 	}
 
 	int fetch(vertex_id_t vertices[], int num) {
@@ -445,25 +438,22 @@ public:
 class vertex_collection
 {
 	std::vector<thread *> threads;
+	vertex_id_t max_id;
 public:
 	vertex_collection(const std::vector<thread *> &threads) {
 		this->threads = threads;
+		this->max_id = max_id;
 	}
 
 	void add(vertex_id_t vertices[], int num) {
-		std::vector<vertex_id_t> &vec = ((worker_thread *) thread::get_curr_thread(
+		bitmap &vec = ((worker_thread *) thread::get_curr_thread(
 					))->get_activated_vertices();
-		vec.insert(vec.end(), vertices, vertices + num);
-	}
-
-	void local_sort() {
-		std::vector<vertex_id_t> &vec = ((worker_thread *) thread::get_curr_thread(
-					))->get_activated_vertices();
-		std::sort(vec.begin(), vec.end());
+		for (int i = 0; i < num; i++)
+			vec.set(vertices[i]);
 	}
 
 	void sort(sorted_vertex_queue &sorted_vertices) const {
-		std::vector<vertex_id_t> *vecs[threads.size()];
+		bitmap *vecs[threads.size()];
 		for (unsigned i = 0; i < threads.size(); i++) {
 			vecs[i] = &((worker_thread *) threads[i])->get_activated_vertices();
 		}
@@ -607,18 +597,7 @@ void graph_engine::start_all()
 
 void graph_engine::activate_vertices(vertex_id_t vertices[], int num)
 {
-	vertex_id_t to_add[num];
-	int num_to_add = 0;
-
-	for (int i = 0; i < num; i++) {
-		compute_vertex &v = get_vertex(vertices[i]);
-		// When a vertex is added to the queue, we mark it as visited.
-		// Therefore, a vertex can only be added to the queue once and
-		// can only be visited once.
-		if (v.activate_in(level.get()))
-			to_add[num_to_add++] = vertices[i];
-	}
-	activated_vertex_buf->add(to_add, num_to_add);
+	activated_vertex_buf->add(vertices, num);
 }
 
 int graph_engine::get_curr_activated_vertices(vertex_id_t vertices[], int num)
@@ -633,7 +612,6 @@ size_t graph_engine::get_num_curr_activated_vertices() const
 
 bool graph_engine::progress_next_level()
 {
-	activated_vertex_buf->local_sort();
 	// We have to make sure all threads have reach here, so we can switch
 	// queues to progress to the next level.
 	// If the queue of the next level is empty, the program can terminate.

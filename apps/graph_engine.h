@@ -38,28 +38,9 @@ class vertex_message
 
 class compute_vertex: public in_mem_vertex_info
 {
-	atomic_flags<long> activated_levels;
 public:
 	compute_vertex(vertex_id_t id, off_t off, int size): in_mem_vertex_info(
 			id, off, size) {
-	}
-
-	/**
-	 * This is an atomic operation. We can only activate a vertex in a level
-	 * higher than the level where it was activated. i.e., the level of
-	 * a vertex can only increase monotonically.
-	 * Return true if the vertex is activated in the level successfully.
-	 */
-	bool activate_in(int level) {
-		// This implementation is fast, but it's kind of tricky.
-		// We can have only 64 levels at most. Maybe it's enough for
-		// most graph algorithms and graphs.
-		assert(level < activated_levels.get_num_tot_flags());
-		return !activated_levels.set_flag(level);
-	}
-
-	bool is_activated(int level) const {
-		return activated_levels.test_flag(level);
 	}
 
 	virtual compute_allocator *create_part_compute_allocator(
