@@ -558,12 +558,17 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 	ext_allocator = new req_ext_allocator(underlying->get_node_id());
 	req_allocator = new request_allocator(underlying->get_node_id());
 	cb = NULL;
+
+	// Initialize the stat values.
 	cache_hits = 0;
-	num_accesses = 0;
+	num_pg_accesses = 0;
+	num_bytes = 0;
+	num_fast_process = 0;
+	num_evicted_dirty_pages = 0;
+
 	this->underlying = underlying;
 	this->cache_size = cache->size();
 	global_cache = cache;
-	num_evicted_dirty_pages = 0;
 }
 
 global_cached_io::~global_cached_io()
@@ -1054,7 +1059,6 @@ void global_cached_io::process_cached_reqs(user_comp_req_queue &requests)
 void global_cached_io::process_user_req(
 		std::vector<thread_safe_page *> &dirty_pages, io_status *status)
 {
-	size_t remaining_size = processing_req.get_remaining_size();
 	int pg_idx = 0;
 	// In max, we use the number of pages in the RAID block.
 	thread_safe_page *pages[params.get_RAID_block_size()];
@@ -1078,8 +1082,8 @@ void global_cached_io::process_user_req(
 		} while (p == NULL);
 		processing_req.move_next();
 
-		num_accesses++;
-		if (num_accesses % 100 < params.get_test_hit_rate()) {
+		num_pg_accesses++;
+		if (num_pg_accesses % 100 < params.get_test_hit_rate()) {
 			if (!p->data_ready()) {
 				p->set_io_pending(false);
 				p->set_data_ready(true);
@@ -1225,9 +1229,6 @@ end:
 			status->set_priv_data((long) processing_req.get_orig());
 		}
 	}
-
-	// This is the amount of data processed in this function.
-	num_bytes += (remaining_size - processing_req.get_remaining_size());
 }
 
 void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
@@ -1262,6 +1263,7 @@ void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
 			continue;
 		}
 		processing_req.init(req);
+		num_bytes += req.get_size();
 		process_user_req(dirty_pages, NULL);
 	}
 
@@ -1318,6 +1320,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		assert(processing_req.is_empty());
 		num_processed_areqs.inc(1);
 		processing_req.init(requests[i]);
+		num_bytes += requests[i].get_size();
 		io_status *stat_p = NULL;
 		if (status)
 			stat_p = &status[i];

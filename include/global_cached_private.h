@@ -286,7 +286,7 @@ class global_cached_io: public io_interface
 	// This only counts the requests that use the slow path.
 	long curr_req_id;
 
-	long num_accesses;
+	long num_pg_accesses;
 	size_t num_bytes;		// The number of accessed bytes
 	int cache_hits;
 	int num_fast_process;
@@ -489,11 +489,11 @@ public:
 		static int seen_threads = 0;
 		seen_threads++;
 		tot_bytes += num_bytes;
-		tot_accesses += num_accesses;
+		tot_accesses += num_pg_accesses;
 		tot_hits += cache_hits;
 		tot_fast_process += num_fast_process;
-		printf("global_cached_io: %d requests are completed from the underlying io\n",
-				num_from_underlying.get());
+		printf("global_cached_io: %d reqs, %ld bytes, %d reqs to the underlying io\n",
+				num_processed_areqs.get(), num_bytes, num_from_underlying.get());
 		printf("global_cached_io: There are %d evicted dirty pages\n", num_evicted_dirty_pages);
 		if (seen_threads == nthreads) {
 			printf("global_cached_io: in total, there are %ld accessed bytes, %ld pages\n",
