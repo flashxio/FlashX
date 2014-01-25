@@ -118,6 +118,48 @@ public:
 	}
 };
 
+template<class edge_data_type>
+void check_vertex(in_mem_directed_vertex<edge_data_type> in_v,
+		ext_mem_directed_vertex *ext_v)
+{
+	assert(ext_v->get_id() == in_v.get_id());
+	assert(ext_v->get_num_in_edges() == in_v.get_num_in_edges());
+	assert(ext_v->get_num_out_edges() == in_v.get_num_out_edges());
+	edge_const_iterator<edge_data_type> in_it1
+		= ext_v->get_in_edge_begin<edge_data_type>();
+	edge_const_iterator<edge_data_type> in_end1
+		= ext_v->get_in_edge_end<edge_data_type>();
+	edge_const_iterator<edge_data_type> in_it2
+		= in_v.get_in_edge_begin();
+	edge_const_iterator<edge_data_type> in_end2
+		= in_v.get_in_edge_end();
+	while (in_it1 != in_end1 && in_it2 != in_end2) {
+		edge<edge_data_type> e1 = *in_it1;
+		edge<edge_data_type> e2 = *in_it2;
+		assert(e1.get_from() == e2.get_from());
+		assert(e1.get_to() == e2.get_to());
+		++in_it1;
+		++in_it2;
+	}
+	assert(in_it1 == in_end1 && in_it2 == in_end2);
+
+	edge_const_iterator<edge_data_type> out_it1
+		= ext_v->get_out_edge_begin<edge_data_type>();
+	edge_const_iterator<edge_data_type> out_end1
+		= ext_v->get_out_edge_end<edge_data_type>();
+	edge_const_iterator<edge_data_type> out_it2 = in_v.get_out_edge_begin();
+	edge_const_iterator<edge_data_type> out_end2 = in_v.get_out_edge_end();
+	while (out_it1 != out_end1 && out_it2 != out_end2) {
+		edge<edge_data_type> e1 = *out_it1;
+		edge<edge_data_type> e2 = *out_it2;
+		assert(e1.get_from() == e2.get_from());
+		assert(e1.get_to() == e2.get_to());
+		++out_it1;
+		++out_it2;
+	}
+	assert(out_it1 == out_end1 && out_it2 == out_end2);
+}
+
 template<class edge_data_type = empty_data>
 class directed_graph: public in_mem_graph
 {
@@ -236,7 +278,29 @@ public:
 
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const {
-		assert(0);
+		printf("check the graph in the external memory\n");
+		vertex_index *index = vertex_index::load(index_file);
+		
+		native_file file(adj_file);
+		size_t adj_file_size = file.get_size();
+		FILE *adj_f = fopen(adj_file.c_str(), "r");
+		assert(adj_f);
+		char *adj_buf = new char[adj_file_size];
+		size_t ret = fread(adj_buf, adj_file_size, 1, adj_f);
+		assert(ret == 1);
+		fclose(adj_f);
+
+		graph_header *header = (graph_header *) adj_buf;
+		header->verify();
+		for (vertex_id_t id = 0; id < index->get_num_vertices(); id++) {
+			int size = index->get_vertex_size(id);
+			off_t off = index->get_vertex_off(id);
+			ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) (adj_buf + off);
+			assert(v->get_size() == (size_t) size);
+			check_vertex(vertices[id], v);
+		}
+		vertex_index::destroy(index);
+		delete [] adj_buf;
 	}
 };
 
@@ -288,14 +352,12 @@ void check_vertex(ts_in_mem_directed_vertex<edge_data_type> in_v,
 				== in_v.get_num_in_edges(*it));
 		assert(ext_v->get_num_out_edges(*it)
 				== in_v.get_num_out_edges(*it));
-		ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> in_it1
+		edge_const_iterator<edge_data_type> in_it1
 			= ext_v->get_in_edge_begin<edge_data_type>(*it);
-		ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> in_end1
+		edge_const_iterator<edge_data_type> in_end1
 			= ext_v->get_in_edge_end<edge_data_type>(*it);
-		typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator in_it2
-			= in_v.get_in_edge_begin(*it);
-		typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator in_end2
-			= in_v.get_in_edge_end(*it);
+		edge_const_iterator<edge_data_type> in_it2 = in_v.get_in_edge_begin(*it);
+		edge_const_iterator<edge_data_type> in_end2 = in_v.get_in_edge_end(*it);
 		while (in_it1 != in_end1 && in_it2 != in_end2) {
 			edge<edge_data_type> e1 = *in_it1;
 			edge<edge_data_type> e2 = *in_it2;
@@ -306,13 +368,13 @@ void check_vertex(ts_in_mem_directed_vertex<edge_data_type> in_v,
 		}
 		assert(in_it1 == in_end1 && in_it2 == in_end2);
 
-		ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> out_it1
+		edge_const_iterator<edge_data_type> out_it1
 			= ext_v->get_out_edge_begin<edge_data_type>(*it);
-		ts_ext_mem_directed_vertex::edge_const_iterator<edge_data_type> out_end1
+		edge_const_iterator<edge_data_type> out_end1
 			= ext_v->get_out_edge_end<edge_data_type>(*it);
-		typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator out_it2
+		edge_const_iterator<edge_data_type> out_it2
 			= in_v.get_out_edge_begin(*it);
-		typename ts_in_mem_directed_vertex<edge_data_type>::edge_const_iterator out_end2
+		edge_const_iterator<edge_data_type> out_end2
 			= in_v.get_out_edge_end(*it);
 		while (out_it1 != out_end1 && out_it2 != out_end2) {
 			edge<edge_data_type> e1 = *out_it1;
