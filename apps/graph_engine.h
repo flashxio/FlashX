@@ -63,6 +63,17 @@ public:
 	}
 
 	/**
+	 * This is a pre-run before users get any information of adjacency list
+	 * of vertices.
+	 * If it returns true, the graph engine will fetch the adjacency list
+	 * of itself. So by default, the graph engine will fetch its adjacency
+	 * list.
+	 */
+	virtual bool run(graph_engine &graph) {
+		return true;
+	}
+
+	/**
 	 * Run user's code when the adjacency list of the vertex is read
 	 * from disks.
 	 * It returns true if the vertex has completed the iteration.

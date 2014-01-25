@@ -28,7 +28,7 @@
 #include "graph_config.h"
 #include "graph_engine.h"
 
-const int MAX_IO_PEND_VERTICES = 1000;
+const int MAX_IO_PEND_VERTICES = 2000;
 
 graph_config graph_conf;
 
@@ -484,16 +484,26 @@ int worker_thread::process_activated_vertices(int max)
 	stack_array<io_request> reqs(max);
 	int num = graph->get_curr_activated_vertices(vertex_buf, max);
 	num_activated_vertices_in_level.inc(num);
+	int num_completed = 0;
+	int num_to_process = 0;
 	for (int i = 0; i < num; i++) {
 		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
-		data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
-		reqs[i] = io_request(alloc->alloc(), loc,
-				// TODO I might need to set the node id.
-				info.get_ext_mem_size(), READ, io, -1);
+		// We need to execute the pre-run to determine if we should
+		// fetch the adjacency list of itself.
+		if (info.run(*graph)) {
+			data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
+			reqs[num_to_process++] = io_request(alloc->alloc(), loc,
+					// TODO I might need to set the node id.
+					info.get_ext_mem_size(), READ, io, -1);
+		}
+		else
+			num_completed++;
 	}
+	if (num_completed > 0)
+		num_completed_vertices_in_level.inc(num_completed);
 	if (graph->get_logger())
-		graph->get_logger()->log(reqs.data(), num);
-	io->access(reqs.data(), num);
+		graph->get_logger()->log(reqs.data(), num_to_process);
+	io->access(reqs.data(), num_to_process);
 	return num;
 }
 

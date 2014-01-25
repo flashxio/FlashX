@@ -33,6 +33,10 @@ bool bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	vertex_id_t max_id = graph.get_max_vertex_id();
 	vertex_id_t min_id = graph.get_min_vertex_id();
 
+	assert(!has_visited());
+	set_visited(true);
+	num_visited_vertices.inc(1);
+
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	std::vector<vertex_id_t> activated_vertices;
@@ -42,16 +46,8 @@ bool bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 			= vertex->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
 		assert(id >= min_id && id <= max_id);
-		bfs_vertex &info = (bfs_vertex &) graph.get_vertex(id);
-		// If the vertex has been visited, we can skip it.
-		if (info.has_visited())
-			continue;
-		if (info.set_visited(true))
-			continue;
 		activated_vertices.push_back(id);
 	}
-	if (activated_vertices.size() > 0)
-		num_visited_vertices.inc(activated_vertices.size());
 
 	graph.activate_vertices(activated_vertices.data(),
 			activated_vertices.size());

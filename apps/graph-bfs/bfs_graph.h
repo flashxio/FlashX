@@ -55,6 +55,10 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
+	bool run(graph_engine &graph) {
+		return !has_visited();
+	}
+
 	bool run(graph_engine &graph, const page_vertex *vertex);
 
 	bool run_on_neighbors(graph_engine &graph, const page_vertex *vertices[],
