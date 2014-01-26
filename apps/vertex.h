@@ -30,7 +30,7 @@
 #include "container.h"
 #include "cache.h"
 
-typedef unsigned long vertex_id_t;
+typedef unsigned int vertex_id_t;
 
 enum edge_type {
 	NONE,
@@ -1002,7 +1002,7 @@ public:
 
 	void print() const {
 		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
-				get_id(), 0, num_timestamps, get_num_edges());
+				(unsigned long) get_id(), 0, num_timestamps, get_num_edges());
 		for (int i = 0; i < num_timestamps; i++) {
 			int timestamp = get_timestamps_begin()[i];
 			// We need to skip the timestamps without edges.
@@ -1015,7 +1015,7 @@ public:
 			const vertex_id_t *in_edge_list = get_edge_list_begin()
 				+ get_edge_off_begin()[i].in_off;
 			for (int j = 0; j < num_in_edges; j++) {
-				printf("%ld, ", in_edge_list[j]);
+				printf("%ld, ", (unsigned long) in_edge_list[j]);
 			}
 			printf("\n");
 			int num_out_edges = get_num_out_edges(timestamp);
@@ -1023,7 +1023,7 @@ public:
 			const vertex_id_t *out_edge_list = get_edge_list_begin()
 				+ get_edge_off_begin()[i].out_off;
 			for (int j = 0; j < num_out_edges; j++) {
-				printf("%ld, ", out_edge_list[j]);
+				printf("%ld, ", (unsigned long) out_edge_list[j]);
 			}
 			printf("\n");
 		}
@@ -1255,7 +1255,7 @@ public:
 
 	virtual void print() const {
 		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
-				get_id(), 0, get_num_timestamps(), get_num_edges());
+				(unsigned long) get_id(), 0, get_num_timestamps(), get_num_edges());
 		for (int i = 0; i < get_num_timestamps(); i++) {
 			int timestamp = ext_v.get_timestamps_begin()[i];
 			// We need to skip the timestamps without edges.
@@ -1271,7 +1271,7 @@ public:
 			for (page_byte_array::const_iterator<vertex_id_t> it
 					= get_neigh_begin(timestamp, edge_type::IN_EDGE);
 					it != end_it; ++it) {
-				printf("%ld, ", *it);
+				printf("%ld, ", (unsigned long) *it);
 			}
 			printf("\n");
 			int num_out_edges = get_num_edges(timestamp, edge_type::OUT_EDGE);
@@ -1280,7 +1280,7 @@ public:
 			for (page_byte_array::const_iterator<vertex_id_t> it
 					= get_neigh_begin(timestamp, edge_type::OUT_EDGE);
 					it != end_it; ++it) {
-				printf("%ld, ", *it);
+				printf("%ld, ", (unsigned long) *it);
 			}
 			printf("\n");
 		}
@@ -1398,14 +1398,14 @@ public:
 	}
 
 	void print() const {
-		printf("v%ld has edge data: %d\n", get_id(), has_edge_data());
+		printf("v%ld has edge data: %d\n", (unsigned long) get_id(), has_edge_data());
 		printf("There are %ld in-edges: ", in_edges.size());
 		for (size_t i = 0; i < in_edges.size(); i++)
-			printf("%ld, ", in_edges[i]);
+			printf("%ld, ", (unsigned long) in_edges[i]);
 		printf("\n");
 		printf("There are %ld out-edges: ", out_edges.size());
 		for (size_t i = 0; i < out_edges.size(); i++)
-			printf("%ld, ", out_edges[i]);
+			printf("%ld, ", (unsigned long) out_edges[i]);
 		printf("\n");
 	}
 
@@ -1626,18 +1626,19 @@ public:
 
 	void print() const {
 		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
-				get_id(), has_edge_data(), get_num_timestamps(), get_num_edges());
+				(unsigned long) get_id(), has_edge_data(),
+				get_num_timestamps(), get_num_edges());
 		for (typename std::map<int, ts_edge_pair>::const_iterator it
 				= ts_edges.begin(); it != ts_edges.end(); it++) {
 			printf("timestamp %d\n", it->first);
 			printf("in-edges (%d): ", get_num_in_edges(it->first));
 			for (size_t i = 0; i < it->second.in_edges.size(); i++) {
-				printf("%ld, ", it->second.in_edges[i]);
+				printf("%ld, ", (unsigned long) it->second.in_edges[i]);
 			}
 			printf("\n");
 			printf("out-edges (%d): ", get_num_out_edges(it->first));
 			for (size_t i = 0; i < it->second.out_edges.size(); i++) {
-				printf("%ld, ", it->second.out_edges[i]);
+				printf("%ld, ",  (unsigned long)it->second.out_edges[i]);
 			}
 			printf("\n");
 		}
@@ -1650,7 +1651,7 @@ public:
  */
 class edge_count
 {
-	size_t num;
+	int num;
 public:
 	edge_count() {
 		num = 1;

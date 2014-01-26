@@ -167,5 +167,5 @@ int main(int argc, char *argv[])
 		print_io_thread_stat();
 	graph->cleanup();
 	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
-			start_vertex, num_visited, time_diff(start, end));
+			(unsigned long) start_vertex, num_visited, time_diff(start, end));
 }

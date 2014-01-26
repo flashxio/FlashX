@@ -495,7 +495,7 @@ int main(int argc, char *argv[])
 			num_working_vertices.get(), num_completed_vertices.get());
 
 	double max_res = LONG_MIN;
-	vertex_id_t max_v;
+	vertex_id_t max_v = -1;
 	std::vector<vertex_id_t> vertices;
 	index->get_all_vertices(vertices);
 	for (size_t i = 0; i < index->get_num_vertices(); i++) {
@@ -505,7 +505,7 @@ int main(int argc, char *argv[])
 			max_res = v.get_result();
 		}
 	}
-	printf("max value is on v%ld: %f\n", max_v, max_res);
+	printf("max value is on v%ld: %f\n", (unsigned long) max_v, max_res);
 
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
@@ -517,7 +517,7 @@ int main(int argc, char *argv[])
 		index->get_all_vertices(vertices);
 		for (size_t i = 0; i < index->get_num_vertices(); i++) {
 			scan_vertex &v = (scan_vertex &) index->get_vertex(vertices[i]);
-			fprintf(f, "\"%ld\" %f\n", v.get_id(), v.get_result());
+			fprintf(f, "\"%ld\" %f\n", (unsigned long) v.get_id(), v.get_result());
 		}
 		fclose(f);
 	}

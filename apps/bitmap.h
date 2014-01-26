@@ -41,7 +41,8 @@ class bitmap
 		return ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
 	}
 
-	static void get_set_bits_long(long value, size_t idx, std::vector<size_t> &v) {
+	template<class T>
+	static void get_set_bits_long(long value, size_t idx, std::vector<T> &v) {
 		for (int i = 0; i < NUM_BITS_LONG; i++) {
 			if (value & (1L << i))
 				v.push_back(i + idx * NUM_BITS_LONG);
@@ -124,7 +125,8 @@ public:
 	/**
 	 * This method collects all bits that have been set to 1.
 	 */
-	size_t get_set_bits(std::vector<size_t> &v) {
+	template<class T>
+	size_t get_set_bits(std::vector<T> &v) {
 		size_t size = get_num_longs();
 		for (size_t i = 0; i < size; i++) {
 			if (ptr[i])

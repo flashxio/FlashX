@@ -166,5 +166,5 @@ int main(int argc, char *argv[])
 		print_io_thread_stat();
 	graph->cleanup();
 	printf("SSSP starts from vertex %ld. It takes %f seconds\n",
-			start_vertex, time_diff(start, end));
+			(unsigned long) start_vertex, time_diff(start, end));
 }
