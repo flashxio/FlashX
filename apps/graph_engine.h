@@ -310,6 +310,13 @@ class graph_engine
 
 	int file_id;
 
+	void cleanup() {
+		if (logger) {
+			logger->close();
+			logger = NULL;
+		}
+	}
+
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index, ext_mem_vertex_interpreter *interpreter,
@@ -321,6 +328,13 @@ public:
 		return new graph_engine(num_threads, num_nodes, graph_file, index,
 				interpreter, directed);
 	}
+
+	static void destroy(graph_engine *graph) {
+		graph->cleanup();
+		delete graph;
+	}
+
+	~graph_engine();
 
 	compute_vertex &get_vertex(vertex_id_t id) {
 		return vertices->get_vertex(id);
@@ -376,11 +390,6 @@ public:
 		return logger;
 	}
 
-	void cleanup() {
-		if (logger)
-			logger->close();
-	}
-
 	/**
 	 * Get the file id where the graph data is stored.
 	 */
@@ -404,6 +413,10 @@ public:
 		int min_id = vertices->get_min_vertex_id();
 		return vertices->get_vertex(min_id).create_part_compute_allocator(
 				this, t);
+	}
+
+	void destroy_part_compute_allocator(compute_allocator *alloc) {
+		delete alloc;
 	}
 };
 

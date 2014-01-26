@@ -239,10 +239,15 @@ public:
 
 	~worker_thread() {
 		delete alloc;
+		graph->destroy_part_compute_allocator(part_alloc);
+		factory->destroy_io(io);
 	}
 
 	void run();
-	void init();
+	void init() {
+		io = factory->create_io(this);
+		io->init();
+	}
 
 	compute_allocator *get_part_compute_allocator() const {
 		return part_alloc;
@@ -466,12 +471,6 @@ public:
 	}
 };
 
-void worker_thread::init()
-{
-	io = factory->create_io(this);
-	io->init();
-}
-
 /**
  * This is to process the activated vertices in the current iteration.
  */
@@ -583,6 +582,16 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 		logger = NULL;
 	else
 		logger = new trace_logger(graph_conf.get_trace_file());
+}
+
+graph_engine::~graph_engine()
+{
+	delete activated_vertices;
+	delete activated_vertex_buf;
+	for (unsigned i = 0; i < worker_threads.size(); i++)
+		delete worker_threads[i];
+	if (logger)
+		delete logger;
 }
 
 void graph_engine::start(vertex_id_t ids[], int num)

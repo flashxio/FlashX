@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph->cleanup();
+	graph_engine::destroy(graph);
 	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
 			(unsigned long) start_vertex, num_visited_vertices.get(),
 			time_diff(start, end));
