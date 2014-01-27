@@ -35,7 +35,7 @@ class count_msg: public vertex_message
 {
 	int num;
 public:
-	count_msg(int num) {
+	count_msg(vertex_id_t id, int num): vertex_message(id, sizeof(count_msg)) {
 		this->num = num;
 	}
 
@@ -284,8 +284,8 @@ bool triangle_vertex::run_on_neighbors(graph_engine &graph,
 		// as well.
 		if (ret > 0) {
 			num_pv_triangles.inc(ret);
-			count_msg msg(ret);
-			graph.send_msg(vertices[i]->get_id(), msg);
+			count_msg msg(vertices[i]->get_id(), ret);
+			graph.send_msg(msg);
 		}
 	}
 
@@ -300,8 +300,8 @@ bool triangle_vertex::run_on_neighbors(graph_engine &graph,
 		for (size_t i = 0; i < triangles->size(); i++) {
 			// Inform the neighbor if they share triangles.
 			if (triangles->at(i) > 0) {
-				count_msg msg(triangles->at(i));
-				graph.send_msg(in_edges->at(i), msg);
+				count_msg msg(in_edges->at(i), triangles->at(i));
+				graph.send_msg(msg);
 			}
 		}
 

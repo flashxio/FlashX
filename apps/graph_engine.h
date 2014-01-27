@@ -28,13 +28,54 @@
 #include "vertex.h"
 #include "vertex_index.h"
 #include "trace_logger.h"
+#include "messaging.h"
+
+/**
+ * The size of a message buffer used to pass vertex messages to other threads.
+ */
+const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
 
 class graph_engine;
 
 class vertex_message
 {
-};
+	vertex_id_t dest;
+	int size;
+public:
+	static vertex_message *deserialize(char *buf, int size) {
+		vertex_message *msg = (vertex_message *) buf;
+		assert(msg->size <= size);
+		return msg;
+	}
 
+	vertex_message(vertex_id_t dest) {
+		this->dest = dest;
+		this->size = sizeof(vertex_message);
+	}
+
+	vertex_message(vertex_id_t dest, int size) {
+		this->dest = dest;
+		this->size = size;
+	}
+
+	vertex_id_t get_dest() const {
+		return dest;
+	}
+
+	int get_serialized_size() const {
+		return size;
+	}
+
+	bool is_empty() const {
+		return (size_t) size == sizeof(vertex_message);
+	}
+
+	int serialize(char *buf, int size) const {
+		assert(this->size <= size);
+		memcpy(buf, this, this->size);
+		return this->size;
+	}
+};
 
 class compute_vertex: public in_mem_vertex_info
 {
@@ -129,6 +170,8 @@ class graph_index
 public:
 	virtual compute_vertex &get_vertex(vertex_id_t id) = 0;
 
+	virtual int is_empty_vertex(vertex_id_t) const = 0;
+
 	virtual vertex_id_t get_max_vertex_id() const = 0;
 
 	virtual vertex_id_t get_min_vertex_id() const = 0;
@@ -143,8 +186,10 @@ class graph_index_impl: public graph_index
 {
 	// This contains the vertices with edges.
 	std::vector<vertex_type> vertices;
+	int min_vertex_size;
 	
 	graph_index_impl(const std::string &index_file, int min_vertex_size) {
+		this->min_vertex_size = min_vertex_size;
 		vertex_index *indices = vertex_index::load(index_file);
 		size_t num_vertices = indices->get_num_vertices();
 		size_t num_non_empty = 0;
@@ -189,10 +234,11 @@ public:
 	virtual vertex_id_t get_min_vertex_id() const {
 		return vertices.front().get_id();
 	}
-};
 
-class vertex_collection;
-class sorted_vertex_queue;
+	virtual int is_empty_vertex(vertex_id_t id) const {
+		return vertices[id].get_ext_mem_size() == min_vertex_size;
+	}
+};
 
 /**
  * This defines the interface of interpreting vertices in the external memory.
@@ -280,18 +326,39 @@ public:
 	}
 };
 
+class vertex_partitioner
+{
+	int num_parts_log;
+	vertex_id_t mask;
+public:
+	vertex_partitioner(int num_parts) {
+		this->num_parts_log = log2(num_parts);
+		assert((1 << num_parts_log) == num_parts);
+		mask = (1 << num_parts_log) - 1;
+	}
+
+	int map(vertex_id_t id) const {
+		return id & mask;
+	}
+
+	void map2loc(vertex_id_t id, int &part_id, off_t &off) const {
+		part_id = id & mask;
+		off = id >> num_parts_log;
+	}
+
+	void loc2map(int part_id, off_t off, vertex_id_t &id) const {
+		id = (off << num_parts_log) + part_id;
+	}
+};
+
+class worker_thread;
+
 class graph_engine
 {
 	graph_index *vertices;
 	ext_mem_vertex_interpreter *interpreter;
+	vertex_partitioner *partitioner;
 
-	// These are two global queues. One contains the vertices that are being
-	// processed in the current level. The other contains the vertices that
-	// will be processed in the next level.
-	// The queue for the current level.
-	sorted_vertex_queue *activated_vertices;
-	// The queue for the next level.
-	vertex_collection *activated_vertex_buf;
 	atomic_integer level;
 	volatile bool is_complete;
 
@@ -301,7 +368,7 @@ class graph_engine
 	pthread_barrier_t barrier2;
 
 	thread *first_thread;
-	std::vector<thread *> worker_threads;
+	std::vector<worker_thread *> worker_threads;
 
 	bool directed;
 	edge_type required_neighbor_type;
@@ -317,6 +384,11 @@ class graph_engine
 		}
 	}
 
+	/**
+	 * This method returns the message sender of the current thread that
+	 * sends messages to the thread with the specified thread id.
+	 */
+	simple_msg_sender *get_msg_sender(int thread_id) const;
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index, ext_mem_vertex_interpreter *interpreter,
@@ -376,6 +448,10 @@ public:
 		return vertices->get_min_vertex_id();
 	}
 
+	bool is_empty_vertex(vertex_id_t id) const {
+		return vertices->is_empty_vertex(id);
+	}
+
 	void wait4complete();
 
 	int get_num_threads() const {
@@ -397,11 +473,11 @@ public:
 		return file_id;
 	}
 
-	void send_msg(vertex_id_t id, const vertex_message &msg) {
-		const vertex_message *msgs[1];
-		msgs[0] = &msg;
-		// TODO This is a temporary solution.
-		get_vertex(id).run_on_messages(*this, msgs, 1);
+	template<class T>
+	void send_msg(const T &msg) {
+		vertex_id_t id = msg.get_dest();
+		simple_msg_sender *sender = get_msg_sender(partitioner->map(id));
+		sender->send_cached(msg);
 	}
 
 	ext_mem_vertex_interpreter *get_vertex_interpreter() const {
@@ -417,6 +493,14 @@ public:
 
 	void destroy_part_compute_allocator(compute_allocator *alloc) {
 		delete alloc;
+	}
+
+	const vertex_partitioner *get_partitioner() const {
+		return partitioner;
+	}
+
+	worker_thread *get_thread(int idx) const {
+		return worker_threads[idx];
 	}
 };
 

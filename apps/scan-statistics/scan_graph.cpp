@@ -37,19 +37,6 @@ atomic_number<long> num_completed_vertices;
 int timestamp;
 int timestamp_range;
 
-class count_msg: public vertex_message
-{
-	int num;
-public:
-	count_msg(int num) {
-		this->num = num;
-	}
-
-	int get_num() const {
-		return num;
-	}
-};
-
 class scan_vertex: public ts_compute_vertex
 {
 	// The number of vertices that have joined with the vertex.

@@ -126,7 +126,7 @@ public:
 	 * This method collects all bits that have been set to 1.
 	 */
 	template<class T>
-	size_t get_set_bits(std::vector<T> &v) {
+	size_t get_set_bits(std::vector<T> &v) const {
 		size_t size = get_num_longs();
 		for (size_t i = 0; i < size; i++) {
 			if (ptr[i])
