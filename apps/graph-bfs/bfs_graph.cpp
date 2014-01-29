@@ -130,7 +130,10 @@ int main(int argc, char *argv[])
 	else
 		min_vertex_size = sizeof(ext_mem_undirected_vertex);
 
-	graph_index *index = graph_index_impl<bfs_vertex>::create(index_file, min_vertex_size);
+	graph_index *index = NUMA_graph_index<bfs_vertex>::create(index_file,
+			min_vertex_size, graph_conf.get_num_threads(),
+			params.get_num_nodes());
+
 	ext_mem_vertex_interpreter *interpreter;
 	if (directed)
 		interpreter = new ext_mem_directed_vertex_interpreter();
@@ -149,12 +152,12 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	std::vector<bfs_vertex>::const_iterator it
-		= ((graph_index_impl<bfs_vertex> *) index)->begin();
-	std::vector<bfs_vertex>::const_iterator end_it
-		= ((graph_index_impl<bfs_vertex> *) index)->end();
+	NUMA_graph_index<bfs_vertex>::const_iterator it
+		= ((NUMA_graph_index<bfs_vertex> *) index)->begin();
+	NUMA_graph_index<bfs_vertex>::const_iterator end_it
+		= ((NUMA_graph_index<bfs_vertex> *) index)->end();
 	int num_visited = 0;
-	for (; it != end_it; it++) {
+	for (; it != end_it; ++it) {
 		const bfs_vertex &v = *it;
 		if (v.has_visited())
 			num_visited++;

@@ -158,7 +158,9 @@ int main(int argc, char *argv[])
 	else
 		min_vertex_size = sizeof(ext_mem_undirected_vertex);
 
-	graph_index *index = graph_index_impl<sssp_vertex>::create(index_file, min_vertex_size);
+	graph_index *index = NUMA_graph_index<sssp_vertex>::create(index_file,
+			min_vertex_size, graph_conf.get_num_threads(),
+			params.get_num_nodes());
 	ext_mem_vertex_interpreter *interpreter;
 	if (directed)
 		interpreter = new ext_mem_directed_vertex_interpreter();
