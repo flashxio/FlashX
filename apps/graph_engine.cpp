@@ -716,14 +716,6 @@ void graph_engine::start_all()
 		worker_threads[i]->start();
 }
 
-void graph_engine::activate_vertices(vertex_id_t vertices[], int num)
-{
-	for (int i = 0; i < num; i++) {
-		vertex_message msg(vertices[i]);
-		send_msg(msg);
-	}
-}
-
 bool graph_engine::progress_next_level()
 {
 	static atomic_number<long> tot_num_activates;

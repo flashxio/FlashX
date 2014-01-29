@@ -85,15 +85,12 @@ bool bfs_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	// the next level.
 	page_byte_array::const_iterator<vertex_id_t> end_it
 		= vertex->get_neigh_end(OUT_EDGE);
-	stack_array<vertex_id_t, 1024> buf(vertex->get_num_edges(OUT_EDGE));
-	int num_activated = 0;
 	for (page_byte_array::const_iterator<vertex_id_t> it
 			= vertex->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
 		assert(id >= min_id && id <= max_id);
-		buf[num_activated++] = id;
+		graph.activate_vertex(id);
 	}
-	graph.activate_vertices(buf.data(), num_activated);
 	return true;
 }
 
