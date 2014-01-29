@@ -31,18 +31,44 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
+class dist_message: public vertex_message
+{
+	int parent_dist;
+	vertex_id_t parent;
+public:
+	dist_message(vertex_id_t id, vertex_id_t parent,
+			int parent_dist): vertex_message(id, sizeof(dist_message)) {
+		this->parent = parent;
+		this->parent_dist = parent_dist;
+	}
+
+	vertex_id_t get_parent() const {
+		return parent;
+	}
+
+	int get_parent_dist() const {
+		return parent_dist;
+	}
+};
+
 class sssp_vertex: public compute_vertex
 {
+	int parent_dist;
+	vertex_id_t tmp_parent;
 	int distance;
 	vertex_id_t parent;
 public:
 	sssp_vertex(): compute_vertex(-1, -1, 0) {
+		parent_dist = INT_MAX;
+		tmp_parent = -1;
 		distance = INT_MAX;
 		parent = -1;
 	}
 
 	sssp_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
 			id, off, size) {
+		parent_dist = INT_MAX;
+		tmp_parent = -1;
 		distance = INT_MAX;
 		parent = -1;
 	}
@@ -50,6 +76,16 @@ public:
 	void init(int distance) {
 		this->distance = distance;
 		parent = -1;
+	}
+
+	bool run(graph_engine &graph) {
+		if (parent_dist + 1 < distance) {
+			distance = parent_dist + 1;
+			parent = tmp_parent;
+			return true;
+		}
+		else
+			return false;
 	}
 
 	bool run(graph_engine &graph, const page_vertex *vertex);
@@ -61,43 +97,27 @@ public:
 
 	virtual void run_on_messages(graph_engine &,
 			const vertex_message *msgs[], int num) {
+		for (int i = 0; i < num; i++) {
+			dist_message *msg = (dist_message *) msgs[i];
+			if (parent_dist > msg->get_parent_dist()) {
+				parent_dist = msg->get_parent_dist();
+				tmp_parent = msg->get_parent();
+			}
+		}
 	}
 };
 
 bool sssp_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
-	// It is guaranteed that only one thread can process a vertex at a time.
-	// So there is no concurrent access to a vertex.
+	// We need to add the neighbors of the vertex to the queue of
+	// the next level.
 	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex->get_neigh_end(IN_EDGE);
-	int distance = this->distance;
-	vertex_id_t parent = this->parent;
+		= vertex->get_neigh_end(OUT_EDGE);
 	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex->get_neigh_begin(IN_EDGE); it != end_it; ++it) {
+			= vertex->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
-		sssp_vertex &v = (sssp_vertex &) graph.get_vertex(id);
-		if (v.distance + 1 < distance) {
-			parent = id;
-			distance = v.distance + 1;
-		}
-	}
-
-	if (distance < this->distance) {
-		this->distance = distance;
-		this->parent = parent;
-
-		// We need to add the neighbors of the vertex to the queue of
-		// the next level.
-		page_byte_array::const_iterator<vertex_id_t> end_it
-			= vertex->get_neigh_end(OUT_EDGE);
-		stack_array<vertex_id_t, 1024> buf(vertex->get_num_edges(OUT_EDGE));
-		int num_activated = 0;
-		for (page_byte_array::const_iterator<vertex_id_t> it
-				= vertex->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
-			vertex_id_t id = *it;
-			buf[num_activated++] = id;
-		}
-		graph.activate_vertices(buf.data(), num_activated);
+		dist_message msg(id, get_id(), distance);
+		graph.send_msg(msg);
 	}
 	return true;
 }
@@ -146,7 +166,7 @@ int main(int argc, char *argv[])
 		interpreter = new ext_mem_undirected_vertex_interpreter();
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index, interpreter, directed);
-	printf("BFS starts\n");
+	printf("SSSP starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
