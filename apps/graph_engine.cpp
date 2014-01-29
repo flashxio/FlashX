@@ -582,7 +582,11 @@ void worker_thread::process_msg(message &msg)
 			off_t off;
 			graph->get_partitioner()->map2loc(id, part_id, off);
 			assert(part_id == worker_id);
-			assert(v_msgs[i]->is_empty());
+			if (!v_msgs[i]->is_empty()) {
+				compute_vertex &info = graph->get_vertex(id);
+				info.run_on_messages(*graph,
+						(const vertex_message **) &v_msgs[i], 1);
+			}
 			next_activated_vertices.set(off);
 		}
 	}
