@@ -483,10 +483,12 @@ int main(int argc, char *argv[])
 
 	double max_res = LONG_MIN;
 	vertex_id_t max_v = -1;
-	std::vector<vertex_id_t> vertices;
-	index->get_all_vertices(vertices);
-	for (size_t i = 0; i < index->get_num_vertices(); i++) {
-		scan_vertex &v = (scan_vertex &) index->get_vertex(vertices[i]);
+	std::vector<scan_vertex>::const_iterator it
+		= ((graph_index_impl<scan_vertex> *) index)->begin();
+	std::vector<scan_vertex>::const_iterator end_it
+		= ((graph_index_impl<scan_vertex> *) index)->end();
+	for (; it != end_it; it++) {
+		const scan_vertex &v = *it;
 		if (max_res < v.get_result()) {
 			max_v = v.get_id();
 			max_res = v.get_result();
@@ -500,10 +502,12 @@ int main(int argc, char *argv[])
 			perror("fopen");
 			return -1;
 		}
-		std::vector<vertex_id_t> vertices;
-		index->get_all_vertices(vertices);
-		for (size_t i = 0; i < index->get_num_vertices(); i++) {
-			scan_vertex &v = (scan_vertex &) index->get_vertex(vertices[i]);
+		std::vector<scan_vertex>::const_iterator it
+			= ((graph_index_impl<scan_vertex> *) index)->begin();
+		std::vector<scan_vertex>::const_iterator end_it
+			= ((graph_index_impl<scan_vertex> *) index)->end();
+		for (; it != end_it; it++) {
+			const scan_vertex &v = *it;
 			fprintf(f, "\"%ld\" %f\n", (unsigned long) v.get_id(), v.get_result());
 		}
 		fclose(f);

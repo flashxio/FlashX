@@ -149,11 +149,13 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	std::vector<vertex_id_t> vertices;
-	index->get_all_vertices(vertices);
+	std::vector<bfs_vertex>::const_iterator it
+		= ((graph_index_impl<bfs_vertex> *) index)->begin();
+	std::vector<bfs_vertex>::const_iterator end_it
+		= ((graph_index_impl<bfs_vertex> *) index)->end();
 	int num_visited = 0;
-	for (size_t i = 0; i < index->get_num_vertices(); i++) {
-		bfs_vertex &v = (bfs_vertex &) index->get_vertex(vertices[i]);
+	for (; it != end_it; it++) {
+		const bfs_vertex &v = *it;
 		if (v.has_visited())
 			num_visited++;
 	}

@@ -373,12 +373,13 @@ int main(int argc, char *argv[])
 	gettimeofday(&end, NULL);
 
 	// Count the total number of triangles in the graph.
-	std::vector<vertex_id_t> vertices;
-	index->get_all_vertices(vertices);
+	std::vector<triangle_vertex>::const_iterator it
+		= ((graph_index_impl<triangle_vertex> *) index)->begin();
+	std::vector<triangle_vertex>::const_iterator end_it
+		= ((graph_index_impl<triangle_vertex> *) index)->end();
 	long num_triangles = 0;
-	for (size_t i = 0; i < vertices.size(); i++) {
-		vertex_id_t id = vertices[i];
-		triangle_vertex &v = (triangle_vertex &) index->get_vertex(id);
+	for (; it != end_it; it++) {
+		const triangle_vertex &v = *it;
 		num_triangles += v.get_num_triangles();
 	}
 
