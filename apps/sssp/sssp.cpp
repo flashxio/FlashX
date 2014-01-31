@@ -31,6 +31,8 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
+atomic_number<long> num_visits;
+
 class dist_message: public vertex_message
 {
 	int parent_dist;
@@ -109,6 +111,9 @@ public:
 
 bool sssp_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
+#ifdef DEBUG
+	num_visits.inc(1);
+#endif
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	page_byte_array::const_iterator<vertex_id_t> end_it
@@ -192,4 +197,7 @@ int main(int argc, char *argv[])
 	graph_engine::destroy(graph);
 	printf("SSSP starts from vertex %ld. It takes %f seconds\n",
 			(unsigned long) start_vertex, time_diff(start, end));
+#ifdef DEBUG
+	printf("%ld vertices are visited\n", num_visits.get());
+#endif
 }
