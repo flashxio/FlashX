@@ -167,6 +167,7 @@ class graph_engine
 	 */
 	simple_msg_sender *get_msg_sender(int thread_id) const;
 	multicast_msg_sender *get_multicast_sender(int thread_id) const;
+	multicast_msg_sender *get_activate_sender(int thread_id) const;
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index, ext_mem_vertex_interpreter *interpreter,
@@ -210,14 +211,27 @@ public:
 	/**
 	 * Activate vertices that may be processed in the next level.
 	 */
-	void activate_vertices(vertex_id_t vertices[], int num) {
-		vertex_message msg(0);
-		multicast_msg(vertices, num, msg);
+	void activate_vertices(vertex_id_t ids[], int num) {
+		for (int i = 0; i < num; i++) {
+			int part_id = partitioner->map(ids[i]);
+			multicast_msg_sender *sender = get_activate_sender(part_id);
+			bool ret = false;
+			if (sender->has_msg()) {
+				ret = sender->add_dest(ids[i]);
+			}
+			// If we can't add a destination vertex to the multicast msg,
+			// or there isn't a msg in the sender.
+			if (!ret) {
+				vertex_message msg(0);
+				sender->init(msg);
+				ret = sender->add_dest(ids[i]);
+				assert(ret);
+			}
+		}
 	}
 
 	void activate_vertex(vertex_id_t vertex) {
-		vertex_message msg(vertex);
-		send_msg(msg);
+		activate_vertices(&vertex, 1);
 	}
 
 	/**

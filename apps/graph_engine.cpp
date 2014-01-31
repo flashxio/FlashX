@@ -299,6 +299,7 @@ class worker_thread: public thread
 	// the graph engine.
 	std::vector<simple_msg_sender *> msg_senders;
 	std::vector<multicast_msg_sender *> multicast_senders;
+	std::vector<multicast_msg_sender *> activate_senders;
 	// This is to collect vertices activated in the next level.
 	bitmap next_activated_vertices;
 	// This contains the vertices activated in the current level.
@@ -328,6 +329,10 @@ public:
 		return part_alloc;
 	}
 
+	multicast_msg_sender *get_activate_sender(int thread_id) const {
+		return activate_senders[thread_id];
+	}
+
 	multicast_msg_sender *get_multicast_sender(int thread_id) const {
 		return multicast_senders[thread_id];
 	}
@@ -347,6 +352,8 @@ public:
 			msg_senders[i]->flush();
 		for (size_t i = 0; i < multicast_senders.size(); i++)
 			multicast_senders[i]->flush();
+		for (size_t i = 0; i < activate_senders.size(); i++)
+			activate_senders[i]->flush();
 	}
 
 	void process_msgs();
@@ -499,6 +506,8 @@ worker_thread::~worker_thread()
 		simple_msg_sender::destroy(msg_senders[i]);
 	for (unsigned i = 0; i < multicast_senders.size(); i++)
 		multicast_msg_sender::destroy(multicast_senders[i]);
+	for (unsigned i = 0; i < activate_senders.size(); i++)
+		multicast_msg_sender::destroy(activate_senders[i]);
 	graph->destroy_part_compute_allocator(part_alloc);
 	factory->destroy_io(io);
 }
@@ -518,6 +527,8 @@ void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 		msg_senders.push_back(simple_msg_sender::create(get_node_id(),
 					msg_alloc, &threads[i]->msg_q));
 		multicast_senders.push_back(multicast_msg_sender::create(msg_alloc,
+					&threads[i]->msg_q));
+		activate_senders.push_back(multicast_msg_sender::create(msg_alloc,
 					&threads[i]->msg_q));
 	}
 	assert(num_self == 1);
@@ -728,6 +739,12 @@ graph_engine::~graph_engine()
 		delete worker_threads[i];
 	if (logger)
 		delete logger;
+}
+
+multicast_msg_sender *graph_engine::get_activate_sender(int thread_id) const
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	return curr->get_activate_sender(thread_id);
 }
 
 multicast_msg_sender *graph_engine::get_multicast_sender(int thread_id) const
