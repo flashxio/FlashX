@@ -40,46 +40,6 @@ const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
 
 class graph_engine;
 
-class vertex_message
-{
-	vertex_id_t dest;
-	int size;
-public:
-	static vertex_message *deserialize(char *buf, int size) {
-		vertex_message *msg = (vertex_message *) buf;
-		assert(msg->size <= size);
-		return msg;
-	}
-
-	vertex_message(vertex_id_t dest) {
-		this->dest = dest;
-		this->size = sizeof(vertex_message);
-	}
-
-	vertex_message(vertex_id_t dest, int size) {
-		this->dest = dest;
-		this->size = size;
-	}
-
-	vertex_id_t get_dest() const {
-		return dest;
-	}
-
-	int get_serialized_size() const {
-		return size;
-	}
-
-	bool is_empty() const {
-		return (size_t) size == sizeof(vertex_message);
-	}
-
-	int serialize(char *buf, int size) const {
-		assert(this->size <= size);
-		memcpy(buf, this, this->size);
-		return this->size;
-	}
-};
-
 class compute_vertex: public in_mem_vertex_info
 {
 public:
@@ -206,6 +166,7 @@ class graph_engine
 	 * sends messages to the thread with the specified thread id.
 	 */
 	simple_msg_sender *get_msg_sender(int thread_id) const;
+	multicast_msg_sender *get_multicast_sender(int thread_id) const;
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index, ext_mem_vertex_interpreter *interpreter,
@@ -250,10 +211,8 @@ public:
 	 * Activate vertices that may be processed in the next level.
 	 */
 	void activate_vertices(vertex_id_t vertices[], int num) {
-		for (int i = 0; i < num; i++) {
-			vertex_message msg(vertices[i]);
-			send_msg(msg);
-		}
+		vertex_message msg(0);
+		multicast_msg(vertices, num, msg);
 	}
 
 	void activate_vertex(vertex_id_t vertex) {
@@ -294,6 +253,39 @@ public:
 	 */
 	int get_file_id() const {
 		return file_id;
+	}
+
+	template<class T>
+	void multicast_msg(vertex_id_t ids[], int num, const T &msg) {
+		for (int i = 0; i < num; i++) {
+			int part_id = partitioner->map(ids[i]);
+			multicast_msg_sender *sender = get_multicast_sender(part_id);
+			bool ret = false;
+			if (sender->has_msg()) {
+				ret = sender->add_dest(ids[i]);
+			}
+			// If we can't add a destination vertex to the multicast msg,
+			// or there isn't a msg in the sender.
+			if (!ret) {
+				int retries = 0;
+				do {
+					retries++;
+					sender->init(msg);
+					ret = sender->add_dest(ids[i]);
+				} while (!ret);
+				// We shouldn't try it more than twice.
+				assert(retries <= 2);
+			}
+		}
+		// Now we have multicast the message, we need to notify all senders
+		// of the end of multicast.
+		for (int i = 0; i < this->get_num_threads(); i++) {
+			multicast_msg_sender *sender = get_multicast_sender(i);
+			// We only send the multicast on the sender that has received
+			// the multicast message.
+			if (sender->has_msg())
+				sender->end_multicast();
+		}
 	}
 
 	template<class T>

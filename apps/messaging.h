@@ -111,13 +111,22 @@ public:
 	}
 
 	template<class T>
-	int add(T &obj) {
+	T *add(T &obj) {
 		int remaining = size() - curr_add_off;
 		if (remaining < obj.get_serialized_size())
-			return 0;
+			return NULL;
+		T *obj_p = (T *) &buf[curr_add_off];
 		curr_add_off += obj.serialize(&buf[curr_add_off], remaining);
 		num_objs++;
-		return 1;
+		return obj_p;
+	}
+
+	int inc_msg_size(int msg_size) {
+		int remaining = size() - curr_add_off;
+		if (remaining < msg_size)
+			return 0;
+		curr_add_off += msg_size;
+		return msg_size;
 	}
 
 	template<class T>
@@ -250,17 +259,244 @@ public:
 	template<class T>
 	int send_cached(T &msg) {
 		num_objs++;
-		int ret = buf.add(msg);
-		if (ret == 0) {
+		T *ret = buf.add(msg);
+		if (ret == NULL) {
 			flush();
 			ret = buf.add(msg);
-			assert(ret == 1);
+			assert(ret != NULL);
 		}
 		return 1;
 	}
 
 	msg_queue *get_queue() const {
 		return queue;
+	}
+};
+
+/**
+ * The following part is more vertex-specific message passing.
+ */
+
+class vertex_message
+{
+protected:
+	unsigned multicast: 1;
+	unsigned size: 31;
+	union {
+		vertex_id_t dest;
+		int num_dests;
+	} u;
+public:
+	static vertex_message *deserialize(char *buf, int size) {
+		vertex_message *msg = (vertex_message *) buf;
+		assert(msg->size <= size);
+		return msg;
+	}
+
+	vertex_message(vertex_id_t dest) {
+		this->multicast = 0;
+		this->u.dest = dest;
+		this->size = sizeof(vertex_message);
+	}
+
+	vertex_message(vertex_id_t dest, int size) {
+		this->multicast = 0;
+		this->u.dest = dest;
+		this->size = size;
+		assert(size % 4 == 0);
+	}
+
+	bool is_multicast() const {
+		return multicast;
+	}
+
+	vertex_id_t get_dest() const {
+		return u.dest;
+	}
+
+	int get_serialized_size() const {
+		return size;
+	}
+
+	bool is_empty() const {
+		return (size_t) size == sizeof(vertex_message);
+	}
+
+	int serialize(char *buf, int size) const {
+		assert(this->size <= size);
+		memcpy(buf, this, this->size);
+		return this->size;
+	}
+};
+
+class multicast_message;
+
+class multicast_dest_list
+{
+	multicast_message *msg;
+	vertex_id_t *dest_list;
+public:
+	multicast_dest_list() {
+		msg = NULL;
+		dest_list = NULL;
+	}
+
+	void clear() {
+		msg = NULL;
+		dest_list = NULL;
+	}
+
+	multicast_dest_list(multicast_message *msg);
+	void add_dest(vertex_id_t id);
+	int get_num_dests() const;
+	vertex_id_t get_dest(int idx) const;
+};
+
+class multicast_message: public vertex_message
+{
+	const vertex_id_t *get_dest_begin() const {
+		return (vertex_id_t *) (((char *) this) + get_orig_msg_size());
+	}
+
+	vertex_id_t *get_dest_begin() {
+		return (vertex_id_t *) (((char *) this) + get_orig_msg_size());
+	}
+
+	int get_orig_msg_size() const {
+		return size - u.num_dests * sizeof(vertex_id_t);
+	}
+public:
+	static multicast_message *convert2multicast(vertex_message *msg) {
+		multicast_message *mmsg = (multicast_message *) msg;
+		mmsg->u.num_dests = 0;
+		mmsg->multicast = 1;
+		return mmsg;
+	}
+
+	static multicast_message *cast2multicast(vertex_message *msg) {
+		multicast_message *mmsg = (multicast_message *) msg;
+		assert(mmsg->multicast);
+		return mmsg;
+	}
+
+	bool is_empty() const {
+		return (size_t) get_orig_msg_size() == sizeof(vertex_message);
+	}
+
+	bool is_multicast() const {
+		return multicast;
+	}
+
+	int get_num_dests() const {
+		return u.num_dests;
+	}
+
+	multicast_dest_list get_dest_list() {
+		return multicast_dest_list(this);
+	}
+
+	int get_serialized_size() const {
+		return size;
+	}
+
+	friend class multicast_dest_list;
+};
+
+inline multicast_dest_list::multicast_dest_list(multicast_message *msg)
+{
+	this->msg = msg;
+	dest_list = msg->get_dest_begin();
+}
+
+inline void multicast_dest_list::add_dest(vertex_id_t id)
+{
+	dest_list[msg->u.num_dests++] = id;
+	msg->size += sizeof(id);
+}
+
+inline int multicast_dest_list::get_num_dests() const
+{
+	return msg->u.num_dests;
+}
+
+inline vertex_id_t multicast_dest_list::get_dest(int idx) const
+{
+	return dest_list[idx];
+}
+
+class multicast_msg_sender
+{
+	slab_allocator *alloc;
+	message buf;
+	msg_queue *queue;
+	multicast_message *mmsg;
+	multicast_dest_list dest_list;
+
+	multicast_msg_sender(slab_allocator *alloc,
+			msg_queue *queue): buf(alloc) {
+		this->alloc = alloc;
+		this->queue = queue;
+		this->mmsg = NULL;
+	}
+public:
+	static multicast_msg_sender *create(slab_allocator *alloc,
+			msg_queue *queue) {
+		return new multicast_msg_sender(alloc, queue);
+	}
+
+	static void destroy(multicast_msg_sender *s) {
+		delete s;
+	}
+
+	int flush() {
+		if (buf.is_empty()) {
+			assert(mmsg == NULL);
+			return 0;
+		}
+		this->mmsg = NULL;
+		dest_list.clear();
+		queue->add(&buf, 1);
+		if (buf.get_num_objs() > 1)
+			printf("there are %d objs in the msg\n", buf.get_num_objs());
+		// We have to make sure all messages have been sent to the queue.
+		assert(buf.is_empty());
+		message tmp(alloc);
+		buf = tmp;
+		return 1;
+	}
+
+	template<class T>
+	void init(const T &msg) {
+		assert(mmsg == NULL);
+		vertex_message *p = (vertex_message *) buf.add(msg);
+		if (p == NULL) {
+			flush();
+			p = (vertex_message *) buf.add(msg);
+			assert(p);
+		}
+		this->mmsg = multicast_message::convert2multicast(p);
+		dest_list = this->mmsg->get_dest_list();
+	}
+
+	bool add_dest(vertex_id_t id) {
+		int ret = buf.inc_msg_size(sizeof(id));
+		if (ret == 0) {
+			flush();
+			return false;
+		}
+		else {
+			dest_list.add_dest(id);
+			return true;
+		}
+	}
+
+	bool has_msg() const {
+		return mmsg != NULL;
+	}
+
+	void end_multicast() {
+		mmsg = NULL;
+		dest_list.clear();
 	}
 };
 

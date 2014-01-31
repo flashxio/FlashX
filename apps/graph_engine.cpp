@@ -298,6 +298,7 @@ class worker_thread: public thread
 	// There are n senders, n is the total number of threads used by
 	// the graph engine.
 	std::vector<simple_msg_sender *> msg_senders;
+	std::vector<multicast_msg_sender *> multicast_senders;
 	// This is to collect vertices activated in the next level.
 	bitmap next_activated_vertices;
 	// This contains the vertices activated in the current level.
@@ -327,6 +328,10 @@ public:
 		return part_alloc;
 	}
 
+	multicast_msg_sender *get_multicast_sender(int thread_id) const {
+		return multicast_senders[thread_id];
+	}
+
 	simple_msg_sender *get_msg_sender(int thread_id) const {
 		return msg_senders[thread_id];
 	}
@@ -340,10 +345,13 @@ public:
 	void flush_msgs() {
 		for (size_t i = 0; i < msg_senders.size(); i++)
 			msg_senders[i]->flush();
+		for (size_t i = 0; i < multicast_senders.size(); i++)
+			multicast_senders[i]->flush();
 	}
 
 	void process_msgs();
 	void process_msg(message &msg);
+	void process_multicast_msg(multicast_message &mmsg);
 	int enter_next_level();
 
 	int steal_activated_vertices(vertex_id_t buf[], int num) {
@@ -489,6 +497,8 @@ worker_thread::~worker_thread()
 	delete msg_alloc;
 	for (unsigned i = 0; i < msg_senders.size(); i++)
 		simple_msg_sender::destroy(msg_senders[i]);
+	for (unsigned i = 0; i < multicast_senders.size(); i++)
+		multicast_msg_sender::destroy(multicast_senders[i]);
 	graph->destroy_part_compute_allocator(part_alloc);
 	factory->destroy_io(io);
 }
@@ -507,6 +517,8 @@ void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 			num_self++;
 		msg_senders.push_back(simple_msg_sender::create(get_node_id(),
 					msg_alloc, &threads[i]->msg_q));
+		multicast_senders.push_back(multicast_msg_sender::create(msg_alloc,
+					&threads[i]->msg_q));
 	}
 	assert(num_self == 1);
 }
@@ -570,6 +582,27 @@ int worker_thread::enter_next_level()
 	return curr_activated_vertices.get_num_vertices();
 }
 
+void worker_thread::process_multicast_msg(multicast_message &mmsg)
+{
+	int num_dests = mmsg.get_num_dests();
+	multicast_dest_list dest_list = mmsg.get_dest_list();
+	for (int i = 0; i < num_dests; i++) {
+		vertex_id_t id = dest_list.get_dest(i);
+		int part_id;
+		off_t off;
+		graph->get_partitioner()->map2loc(id, part_id, off);
+		assert(part_id == worker_id);
+		// TODO now the size is the entire message. Now the message
+		// is considered as non-empty.
+		if (!mmsg.is_empty()) {
+			compute_vertex &info = graph->get_vertex(id);
+			const vertex_message *msgs[] = {&mmsg};
+			info.run_on_messages(*graph, msgs, 1);
+		}
+		next_activated_vertices.set(off);
+	}
+}
+
 void worker_thread::process_msg(message &msg)
 {
 	const int VMSG_BUF_SIZE = 128;
@@ -577,6 +610,11 @@ void worker_thread::process_msg(message &msg)
 	while (!msg.is_empty()) {
 		int num = msg.get_next(v_msgs, VMSG_BUF_SIZE);
 		for (int i = 0; i < num; i++) {
+			if (v_msgs[i]->is_multicast()) {
+				process_multicast_msg(*multicast_message::cast2multicast(
+							v_msgs[i]));
+				continue;
+			}
 			vertex_id_t id = v_msgs[i]->get_dest();
 			int part_id;
 			off_t off;
@@ -690,6 +728,12 @@ graph_engine::~graph_engine()
 		delete worker_threads[i];
 	if (logger)
 		delete logger;
+}
+
+multicast_msg_sender *graph_engine::get_multicast_sender(int thread_id) const
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	return curr->get_multicast_sender(thread_id);
 }
 
 simple_msg_sender *graph_engine::get_msg_sender(int thread_id) const
