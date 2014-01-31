@@ -222,7 +222,7 @@ public:
 			// If we can't add a destination vertex to the multicast msg,
 			// or there isn't a msg in the sender.
 			if (!ret) {
-				vertex_message msg(0);
+				vertex_message msg(sizeof(vertex_message));
 				sender->init(msg);
 				ret = sender->add_dest(ids[i]);
 				assert(ret);
@@ -303,9 +303,10 @@ public:
 	}
 
 	template<class T>
-	void send_msg(const T &msg) {
-		vertex_id_t id = msg.get_dest();
+	void send_msg(vertex_id_t dest, T &msg) {
+		vertex_id_t id = dest;
 		simple_msg_sender *sender = get_msg_sender(partitioner->map(id));
+		msg.set_dest(dest);
 		sender->send_cached(msg);
 	}
 

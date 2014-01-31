@@ -293,17 +293,15 @@ public:
 		return msg;
 	}
 
-	vertex_message(vertex_id_t dest) {
+	vertex_message(int size) {
 		this->multicast = 0;
-		this->u.dest = dest;
-		this->size = sizeof(vertex_message);
-	}
-
-	vertex_message(vertex_id_t dest, int size) {
-		this->multicast = 0;
-		this->u.dest = dest;
+		this->u.dest = -1;
 		this->size = size;
 		assert(size % 4 == 0);
+	}
+
+	void set_dest(vertex_id_t id) {
+		this->u.dest = id;
 	}
 
 	bool is_multicast() const {

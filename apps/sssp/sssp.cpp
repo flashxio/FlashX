@@ -36,8 +36,8 @@ class dist_message: public vertex_message
 	int parent_dist;
 	vertex_id_t parent;
 public:
-	dist_message(vertex_id_t id, vertex_id_t parent,
-			int parent_dist): vertex_message(id, sizeof(dist_message)) {
+	dist_message(vertex_id_t parent, int parent_dist): vertex_message(
+			sizeof(dist_message)) {
 		this->parent = parent;
 		this->parent_dist = parent_dist;
 	}
@@ -120,7 +120,7 @@ bool sssp_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		vertex_id_t id = *it;
 		dest_buf[num_dests++] = id;
 	}
-	dist_message msg(0, get_id(), distance);
+	dist_message msg(get_id(), distance);
 	graph.multicast_msg(dest_buf.data(), num_dests, msg);
 	return true;
 }
