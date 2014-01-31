@@ -38,6 +38,34 @@ class graph_index
 	graph_index(const graph_index &);
 	graph_index &operator=(const graph_index &);
 public:
+	class const_iterator
+	{
+		vertex_id_t id;
+		graph_index *index;
+	public:
+		const_iterator(graph_index *index, vertex_id_t id) {
+			this->index = index;
+			this->id = id;
+		}
+
+		const compute_vertex &operator*() const {
+			return index->get_vertex(id);
+		}
+
+		const_iterator &operator++() {
+			id++;
+			return *this;
+		}
+
+		bool operator==(const const_iterator &it) const {
+			return id == it.id;
+		}
+
+		bool operator!=(const const_iterator &it) const {
+			return id != it.id;
+		}
+	};
+
 	graph_index() {
 	}
 
@@ -48,6 +76,15 @@ public:
 	virtual vertex_id_t get_min_vertex_id() const = 0;
 
 	virtual size_t get_num_vertices() const = 0;
+
+	const_iterator begin() const {
+		return const_iterator((graph_index *) this, this->get_min_vertex_id());
+	}
+
+	const_iterator end() const {
+		return const_iterator((graph_index *) this,
+				this->get_max_vertex_id() + 1);
+	}
 };
 
 template<class vertex_type>
@@ -201,34 +238,6 @@ class NUMA_graph_index: public graph_index
 		vertex_index::destroy(index);
 	}
 public:
-	class const_iterator
-	{
-		vertex_id_t id;
-		NUMA_graph_index *index;
-	public:
-		const_iterator(NUMA_graph_index *index, vertex_id_t id) {
-			this->index = index;
-			this->id = id;
-		}
-
-		const vertex_type &operator*() const {
-			return (const vertex_type &) index->get_vertex(id);
-		}
-
-		const_iterator &operator++() {
-			id++;
-			return *this;
-		}
-
-		bool operator==(const const_iterator &it) const {
-			return id == it.id;
-		}
-
-		bool operator!=(const const_iterator &it) const {
-			return id != it.id;
-		}
-	};
-
 	static graph_index *create(const std::string &index_file,
 			int min_vertex_size, int num_threads, int num_nodes) {
 		return new NUMA_graph_index<vertex_type>(index_file, min_vertex_size,
@@ -252,16 +261,6 @@ public:
 
 	virtual size_t get_num_vertices() const {
 		return num_vertices;
-	}
-
-	const_iterator begin() const {
-		return const_iterator((NUMA_graph_index *) this,
-				this->get_min_vertex_id());
-	}
-
-	const_iterator end() const {
-		return const_iterator((NUMA_graph_index *) this,
-				this->get_max_vertex_id() + 1);
 	}
 };
 
@@ -310,14 +309,6 @@ public:
 
 	virtual vertex_id_t get_min_vertex_id() const {
 		return vertices.front().get_id();
-	}
-
-	typename std::vector<vertex_type>::const_iterator begin() const {
-		return vertices.begin();
-	}
-
-	typename std::vector<vertex_type>::const_iterator end() const {
-		return vertices.end();
 	}
 };
 

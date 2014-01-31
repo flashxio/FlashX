@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
 		= ((NUMA_graph_index<bfs_vertex> *) index)->end();
 	int num_visited = 0;
 	for (; it != end_it; ++it) {
-		const bfs_vertex &v = *it;
+		const bfs_vertex &v = (const bfs_vertex &) *it;
 		if (v.has_visited())
 			num_visited++;
 	}
