@@ -777,10 +777,19 @@ void graph_engine::start(vertex_id_t ids[], int num)
 
 void graph_engine::start_all()
 {
-	// TODO activate vertices.
-	assert(0);
-	for (unsigned i = 0; i < worker_threads.size(); i++)
+	int num_threads = get_num_threads();
+	std::vector<vertex_id_t> start_vertices[num_threads];
+	graph_index::const_iterator it = vertices->begin();
+	graph_index::const_iterator end = vertices->end();
+	for (; it != end; ++it) {
+		vertex_id_t id = (*it).get_id();
+		int idx = get_partitioner()->map(id);
+		start_vertices[idx].push_back(id);
+	}
+	for (unsigned i = 0; i < worker_threads.size(); i++) {
+		worker_threads[i]->start_vertices(start_vertices[i]);
 		worker_threads[i]->start();
+	}
 }
 
 bool graph_engine::progress_next_level()
