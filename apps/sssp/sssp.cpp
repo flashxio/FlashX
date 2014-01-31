@@ -39,7 +39,7 @@ class dist_message: public vertex_message
 	vertex_id_t parent;
 public:
 	dist_message(vertex_id_t parent, int parent_dist): vertex_message(
-			sizeof(dist_message)) {
+			sizeof(dist_message), true) {
 		this->parent = parent;
 		this->parent_dist = parent_dist;
 	}

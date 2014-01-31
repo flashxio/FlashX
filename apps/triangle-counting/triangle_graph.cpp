@@ -35,7 +35,7 @@ class count_msg: public vertex_message
 {
 	int num;
 public:
-	count_msg(int num): vertex_message(sizeof(count_msg)) {
+	count_msg(int num): vertex_message(sizeof(count_msg), false) {
 		this->num = num;
 	}
 

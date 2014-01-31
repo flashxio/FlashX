@@ -610,7 +610,8 @@ void worker_thread::process_multicast_msg(multicast_message &mmsg)
 			const vertex_message *msgs[] = {&mmsg};
 			info.run_on_messages(*graph, msgs, 1);
 		}
-		next_activated_vertices.set(off);
+		if (mmsg.is_activate())
+			next_activated_vertices.set(off);
 	}
 }
 
@@ -636,7 +637,8 @@ void worker_thread::process_msg(message &msg)
 				info.run_on_messages(*graph,
 						(const vertex_message **) &v_msgs[i], 1);
 			}
-			next_activated_vertices.set(off);
+			if (v_msgs[i]->is_activate())
+				next_activated_vertices.set(off);
 		}
 	}
 }

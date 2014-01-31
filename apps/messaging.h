@@ -281,7 +281,8 @@ class vertex_message
 {
 protected:
 	unsigned multicast: 1;
-	unsigned size: 31;
+	unsigned activate: 1;
+	unsigned size: 30;
 	union {
 		vertex_id_t dest;
 		int num_dests;
@@ -293,7 +294,8 @@ public:
 		return msg;
 	}
 
-	vertex_message(int size) {
+	vertex_message(int size, bool activate) {
+		this->activate = activate;
 		this->multicast = 0;
 		this->u.dest = -1;
 		this->size = size;
@@ -302,6 +304,10 @@ public:
 
 	void set_dest(vertex_id_t id) {
 		this->u.dest = id;
+	}
+
+	bool is_activate() const {
+		return activate;
 	}
 
 	bool is_multicast() const {

@@ -222,7 +222,7 @@ public:
 			// If we can't add a destination vertex to the multicast msg,
 			// or there isn't a msg in the sender.
 			if (!ret) {
-				vertex_message msg(sizeof(vertex_message));
+				vertex_message msg(sizeof(vertex_message), true);
 				sender->init(msg);
 				ret = sender->add_dest(ids[i]);
 				assert(ret);
