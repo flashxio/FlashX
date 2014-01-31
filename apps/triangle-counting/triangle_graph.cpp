@@ -369,6 +369,10 @@ int main(int argc, char *argv[])
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph->start_all();
+	gettimeofday(&end, NULL);
+	float activate_time = time_diff(start, end);
+
+	start = end;
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
@@ -389,6 +393,7 @@ int main(int argc, char *argv[])
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());
-	printf("there are %ld triangles. It takes %f seconds\n",
-			num_triangles, time_diff(start, end));
+	printf("there are %ld triangles.\n", num_triangles);
+	printf("It takes %f seconds to activate all and %f seconds to finish\n",
+			activate_time, time_diff(start, end));
 }
