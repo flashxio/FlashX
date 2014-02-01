@@ -194,6 +194,13 @@ class global_cached_io: public io_interface
 		off_t curr_pg_offset;
 		original_io_request *orig;
 	public:
+		partial_request() {
+			begin_pg_offset = 0;
+			end_pg_offset = 0;
+			curr_pg_offset = 0;
+			orig = NULL;
+		}
+
 		void init(const io_request &req) {
 			this->req = req;
 			begin_pg_offset = ROUND_PAGE(req.get_offset());

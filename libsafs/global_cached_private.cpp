@@ -569,6 +569,7 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 	this->underlying = underlying;
 	this->cache_size = cache->size();
 	global_cache = cache;
+	assert(processing_req.is_empty());
 }
 
 global_cached_io::~global_cached_io()
