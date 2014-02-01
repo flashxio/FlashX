@@ -31,6 +31,7 @@
 #include "cache.h"
 
 typedef unsigned int vertex_id_t;
+const vertex_id_t MAX_VERTEX_ID = UINT_MAX;
 
 enum edge_type {
 	NONE,
@@ -224,6 +225,10 @@ public:
 				+ (v->num_in_edges + v->num_out_edges) * sizeof(v->neighbors[0]));
 		return v;
 	}
+
+	static ext_mem_directed_vertex *merge(
+			const std::vector<const ext_mem_directed_vertex *> &vertices,
+			char *vertex_buf, size_t buf_size);
 
 	template<class edge_data_type = empty_data>
 	static int serialize(const in_mem_directed_vertex<edge_data_type> &in_v,
@@ -901,6 +906,10 @@ public:
 		}
 		return v->get_size();
 	}
+
+	static ts_ext_mem_directed_vertex *merge(
+			const std::vector<ext_mem_directed_vertex *> &vertices,
+			char *buf, size_t size);
 
 	ts_ext_mem_directed_vertex() {
 		this->id = 0;

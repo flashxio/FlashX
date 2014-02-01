@@ -607,7 +607,7 @@ static int get_file_id(const std::string &file)
  */
 static void sort_edge_list_files(std::vector<std::string> &files)
 {
-	std::map<int, std::string> sorted_files;
+	std::multimap<int, std::string> sorted_files;
 	for (size_t i = 0; i < files.size(); i++) {
 		int id = get_file_id(files[i]);
 		sorted_files.insert(std::pair<int, std::string>(id, files[i]));
@@ -620,107 +620,66 @@ static void sort_edge_list_files(std::vector<std::string> &files)
 
 template<class edge_data_type = empty_data>
 in_mem_graph *construct_directed_graph_compressed(
-		const std::vector<std::string> &edge_list_files)
+		const std::string &edge_list_file)
 {
 	struct timeval start, end;
+	directed_edge_graph<edge_data_type> *edge_g
+		= par_load_edge_list_text<edge_data_type>(edge_list_file,
+				true);
+
 	gettimeofday(&start, NULL);
-	end = start;
-	std::vector<directed_graph<edge_count> *> graphs;
-	for (unsigned i = 0; i < edge_list_files.size(); i++) {
-		directed_edge_graph<edge_data_type> *edge_g
-			= par_load_edge_list_text<edge_data_type>(edge_list_files[i],
-					true);
+	edge_g->sort_edges();
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
 
-		start = end;
-		edge_g->sort_edges();
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
+	start = end;
+	size_t orig_num_edges = edge_g->get_num_edges();
+	directed_edge_graph<edge_count> *new_edge_g = edge_g->compress_edges();
+	delete edge_g;
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to compress edge list from %ld to %ld\n",
+			time_diff(start, end), orig_num_edges,
+			new_edge_g->get_num_edges());
 
-		start = end;
-		size_t orig_num_edges = edge_g->get_num_edges();
-		directed_edge_graph<edge_count> *new_edge_g = edge_g->compress_edges();
-		delete edge_g;
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to compress edge list from %ld to %ld\n",
-				time_diff(start, end), orig_num_edges,
-				new_edge_g->get_num_edges());
-
-		start = end;
-		directed_graph<edge_count> *g = new_edge_g->create();
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
-		delete new_edge_g;
-		graphs.push_back(g);
-	}
-
-	printf("load all edge lists\n");
-	in_mem_graph *g = NULL;
-	if (graphs.size() == 1)
-		g = graphs[0];
-	else {
-		gettimeofday(&start, NULL);
-		g = ts_directed_graph<edge_count>::merge_graphs(graphs);
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to merge graphs\n",
-				time_diff(start, end));
-		for (unsigned i = 0; i < graphs.size(); i++)
-			delete graphs[i];
-	}
+	start = end;
+	directed_graph<edge_count> *g = new_edge_g->create();
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
+	delete new_edge_g;
 	return g;
 }
 
 template<class edge_data_type = empty_data>
 in_mem_graph *construct_directed_graph(
-		const std::vector<std::string> &edge_list_files, bool has_edge_data)
+		const std::string &edge_list_file, bool has_edge_data)
 {
 	struct timeval start, end;
+	directed_edge_graph<edge_data_type> *edge_g
+		= par_load_edge_list_text<edge_data_type>(edge_list_file,
+				has_edge_data);
+
 	gettimeofday(&start, NULL);
-	end = start;
-	std::vector<directed_graph<edge_data_type> *> graphs;
-	for (unsigned i = 0; i < edge_list_files.size(); i++) {
-		directed_edge_graph<edge_data_type> *edge_g
-			= par_load_edge_list_text<edge_data_type>(edge_list_files[i],
-					has_edge_data);
+	edge_g->sort_edges();
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
 
+	if (simplfy) {
 		start = end;
-		edge_g->sort_edges();
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
-
-		if (simplfy) {
-			start = end;
-			size_t orig_num_edges = edge_g->get_num_edges();
-			directed_edge_graph<edge_data_type> *new_edge_g
-				= edge_g->simplify_edges();
-			delete edge_g;
-			edge_g = new_edge_g;
-			gettimeofday(&end, NULL);
-			printf("It takes %f seconds to remove duplicated edges from %ld to %ld\n",
-					time_diff(start, end), orig_num_edges, edge_g->get_num_edges());
-		}
-
-		start = end;
-		directed_graph<edge_data_type> *g = edge_g->create();
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
+		size_t orig_num_edges = edge_g->get_num_edges();
+		directed_edge_graph<edge_data_type> *new_edge_g
+			= edge_g->simplify_edges();
 		delete edge_g;
-
-		graphs.push_back(g);
-	}
-
-	printf("load all edge lists\n");
-	in_mem_graph *g = NULL;
-	if (graphs.size() == 1)
-		g = graphs[0];
-	else {
-		gettimeofday(&start, NULL);
-		g = ts_directed_graph<edge_data_type>::merge_graphs(graphs);
+		edge_g = new_edge_g;
 		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to merge graphs\n",
-				time_diff(start, end));
-		for (unsigned i = 0; i < graphs.size(); i++)
-			delete graphs[i];
+		printf("It takes %f seconds to remove duplicated edges from %ld to %ld\n",
+				time_diff(start, end), orig_num_edges, edge_g->get_num_edges());
 	}
+
+	start = end;
+	directed_graph<edge_data_type> *g = edge_g->create();
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
+	delete edge_g;
 	return g;
 }
 
@@ -758,6 +717,336 @@ void print_usage()
 		fprintf(stderr, "%s, ", edge_type_map[i].str.c_str());
 	}
 	fprintf(stderr, "\n");
+	fprintf(stderr, "-T: merge graphs into a time-series graph. \n");
+}
+
+const int MEM_BUF_SIZE = 1024 * 1024 * 100;
+
+class vertex_buffer
+{
+	vertex_index *index;
+	char *buf;
+	// The offset of the data in the external memory
+	off_t off;
+	// THe size of the data.
+	size_t size;
+public:
+	vertex_buffer(vertex_index *index, off_t off, char *buf, size_t size) {
+		this->index = index;
+		this->off = off;
+		this->buf = buf;
+		this->size = size;
+	}
+
+	const ext_mem_directed_vertex *get_directed_vertex(vertex_id_t id) const {
+		assert(is_valid());
+		if (id >= index->get_num_vertices())
+			return NULL;
+
+		off_t v_off = get_vertex_off(index, id);
+		size_t v_size = get_vertex_size(index, id);
+		assert(off <= v_off && (size_t) v_off < off + size);
+		assert(v_off + v_size <= off + size);
+		ext_mem_directed_vertex *v
+			= (ext_mem_directed_vertex *) (buf + (v_off - off));
+		assert(v->get_id() == id);
+		assert(v->get_size() == v_size);
+		return v;
+	}
+
+	vertex_buffer get_vertex(vertex_id_t id) const {
+		assert(is_valid());
+		if (id >= index->get_num_vertices())
+			return vertex_buffer(NULL, -1, NULL, 0);
+
+		off_t v_off = get_vertex_off(index, id);
+		size_t v_size = get_vertex_size(index, id);
+		assert(off <= v_off && (size_t) v_off < off + size);
+		assert(v_off + v_size <= off + size);
+		return vertex_buffer(index, v_off, buf + (v_off - off), v_size);
+	}
+
+	size_t get_size() const {
+		return size;
+	}
+
+	bool is_valid() const {
+		return index != NULL;
+	}
+};
+
+class graph_reader
+{
+	char *buf;
+	vertex_index *index;
+	FILE *graph_fd;
+public:
+	graph_reader() {
+		buf = NULL;
+		index = NULL;
+		graph_fd = NULL;
+	}
+
+	void init(const std::string &graph_file, vertex_index *index) {
+		buf = new char[MEM_BUF_SIZE];
+		this->index = index;
+		graph_fd = fopen(graph_file.c_str(), "r");
+		assert(graph_fd);
+	}
+
+	~graph_reader() {
+		if (graph_fd)
+			fclose(graph_fd);
+		if (buf)
+			delete [] buf;
+	}
+
+	/**
+	 * Get the vertex interval that can be buffered in the pre-allocated
+	 * memory.
+	 * It takes the lower end of the interval and returns the higher end
+	 * of the interval. The higher end is excluded from the interval.
+	 * Once we reach the end of the graph, it returns the maximal vertex ID.
+	 */
+	vertex_id_t get_buffered_interval(vertex_id_t since);
+
+	vertex_buffer read_interval(
+			const std::pair<vertex_id_t, vertex_id_t> interval);
+};
+
+vertex_id_t graph_reader::get_buffered_interval(vertex_id_t since)
+{
+	size_t size = 0;
+	vertex_id_t id = since;
+	while (size <= (size_t) MEM_BUF_SIZE && id <= index->get_max_id()) {
+		size += get_vertex_size(index, id);
+		id++;
+	}
+	if (size > (size_t) MEM_BUF_SIZE) {
+		// The upper boundary is exclusive.
+		id -= 1;
+	}
+	else {
+		id = MAX_VERTEX_ID;
+	}
+	assert(id > since);
+	return id;
+}
+
+vertex_buffer graph_reader::read_interval(
+		const std::pair<vertex_id_t, vertex_id_t> interval)
+{
+	off_t start_off = get_vertex_off(index, interval.first);
+	off_t end_off;
+	if (interval.second < index->get_num_vertices())
+		end_off = get_vertex_off(index, interval.second);
+	else
+		end_off = index->get_graph_size();
+	size_t size = end_off - start_off;
+	assert(size <= (size_t) MEM_BUF_SIZE);
+	int seek_ret = fseek(graph_fd, start_off, SEEK_SET);
+	assert(seek_ret == 0);
+	size_t ret = fread(buf, size, 1, graph_fd);
+	assert(ret == 1);
+	return vertex_buffer(index, start_off, buf, size);
+}
+
+class graph_stat
+{
+	size_t num_non_empty;
+	size_t num_vertices;
+	size_t num_edges;
+public:
+	graph_stat() {
+		num_vertices = 0;
+		num_edges = 0;
+	}
+
+	void inc_num_non_empty_vertices(size_t num) {
+		num_non_empty += num;
+	}
+
+	void inc_num_vertices(size_t num) {
+		num_vertices += num;
+	}
+
+	void inc_num_edges(size_t num) {
+		num_edges += num;
+	}
+
+	size_t get_num_non_empty_vertices() const {
+		return num_non_empty;
+	}
+
+	size_t get_num_vertices() const {
+		return num_vertices;
+	}
+
+	size_t get_num_edges() const {
+		return num_edges;
+	}
+};
+
+size_t merge_directed_vertex(vertex_id_t id,
+		const std::vector<vertex_buffer> &buffers,
+		graph_stat &stat, char *vertex_buf, size_t buf_size)
+{
+	std::vector<const ext_mem_directed_vertex *> vertices;
+	for (size_t i = 0; i < buffers.size(); i++) {
+		if (buffers[i].is_valid())
+			vertices.push_back(buffers[i].get_directed_vertex(id));
+	}
+	ext_mem_directed_vertex *v = ext_mem_directed_vertex::merge(
+			vertices, vertex_buf, buf_size);
+	int num_edges = v->get_num_in_edges() + v->get_num_out_edges();
+	if (num_edges > 0) {
+		stat.inc_num_non_empty_vertices(1);
+		stat.inc_num_edges(num_edges);
+	}
+	size_t ret = v->get_size();
+	assert(ret <= buf_size);
+	return ret;
+}
+
+void merge_dump_part(const std::vector<vertex_buffer> &buffers,
+		std::pair<vertex_id_t, vertex_id_t> interval,
+		in_mem_vertex_index &in_mem_index, graph_type type,
+		graph_stat &stat, FILE *adjacency_fd)
+{
+	for (vertex_id_t id = interval.first; id < interval.second; id++) {
+		std::vector<vertex_buffer> vertices;
+		size_t buf_size = 0;
+		for (size_t i = 0; i < buffers.size(); i++) {
+			vertex_buffer buf = buffers[i].get_vertex(id);
+			buf_size += buf.get_size();
+			vertices.push_back(buf);
+		}
+		char *merged_vertex_buf = new char[buf_size];
+		stat.inc_num_vertices(1);
+		size_t used_size = 0;
+		switch(type) {
+			case graph_type::DIRECTED:
+				used_size = merge_directed_vertex(id, vertices, stat,
+						merged_vertex_buf, buf_size);
+				break;
+			case graph_type::TS_DIRECTED:
+			case graph_type::TS_UNDIRECTED:
+			case graph_type::UNDIRECTED:
+			default:
+				assert(0);
+		}
+		assert(used_size <= buf_size);
+		in_mem_index.add_vertex(merged_vertex_buf);
+		size_t ret = fwrite(merged_vertex_buf, used_size, 1, adjacency_fd);
+		assert(ret);
+		delete [] merged_vertex_buf;
+	}
+}
+
+void merge_dump(const std::vector<std::string> &graph_files,
+		const std::vector<vertex_index *> &indices, graph_type type,
+		const std::string &adjacency_list_file, const std::string &index_file)
+{
+	assert(graph_files.size() > 0);
+	assert(graph_files.size() == indices.size());
+	std::vector<graph_reader> graphs(graph_files.size());
+	for (size_t i = 0; i < graph_files.size(); i++)
+		graphs[i].init(graph_files[i], indices[i]);
+
+	FILE *adjacency_fd = fopen(adjacency_list_file.c_str(), "w");
+	assert(adjacency_fd);
+	// We don't know enough information about the graph, let's just
+	// write some dump data to occupy the space for the graph header.
+	graph_header header;
+	size_t ret = fwrite(&header, sizeof(header), 1, adjacency_fd);
+	assert(ret == 1);
+
+	in_mem_vertex_index *in_mem_index;
+	if (type == graph_type::DIRECTED)
+		in_mem_index = new directed_in_mem_vertex_index();
+	else
+		assert(0);
+
+	// Find the number of vertices in the merged graph.
+	size_t num_vertices = indices[0]->get_num_vertices();
+	for (size_t i = 0; i < indices.size(); i++)
+		num_vertices = max(num_vertices, indices[i]->get_num_vertices());
+
+	graph_stat stat;
+	vertex_id_t since = 0;
+	while (true) {
+		vertex_id_t higher = graphs[0].get_buffered_interval(since);
+		for (size_t i = 1; i < graphs.size(); i++)
+			higher = min(higher, graphs[i].get_buffered_interval(since));
+		if (higher == MAX_VERTEX_ID)
+			higher = num_vertices;
+		// If no graphs have vertices left, we have merged all vertices
+		// in the graphs.
+		if (since == higher)
+			break;
+
+		std::vector<vertex_buffer> buffers;
+		for (size_t i = 0; i < graphs.size(); i++)
+			buffers.push_back(graphs[i].read_interval(
+						std::pair<vertex_id_t, vertex_id_t>(since, higher)));
+		std::pair<vertex_id_t, vertex_id_t> interval(since, higher);
+		merge_dump_part(buffers, interval, *in_mem_index, type, stat,
+				adjacency_fd);
+		since = higher;
+	}
+
+	assert(indices.size() > 0);
+	bool has_edge_data = indices[0]->get_graph_header().has_edge_data();
+	for (size_t i = 1; i < indices.size(); i++)
+		assert(indices[i]->get_graph_header().has_edge_data() == has_edge_data);
+
+	int num_timestamps = 0;
+	if (type == graph_type::TS_DIRECTED || type == graph_type::TS_UNDIRECTED)
+		num_timestamps = graph_files.size();
+	header = graph_header(type, stat.get_num_vertices(), stat.get_num_edges(),
+			has_edge_data, num_timestamps);
+	int seek_ret = fseek(adjacency_fd, 0, SEEK_SET);
+	assert(seek_ret == 0);
+	ret = fwrite(&header, sizeof(header), 1, adjacency_fd);
+	assert(ret == 1);
+	fclose(adjacency_fd);
+
+	in_mem_index->dump(index_file, header);
+	delete in_mem_index;
+
+	printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
+			stat.get_num_vertices(), stat.get_num_non_empty_vertices(),
+			stat.get_num_edges());
+}
+
+in_mem_graph *construct_graph(const std::string &edge_list_file,
+		int input_type)
+{
+	in_mem_graph *g = NULL;
+	switch(input_type) {
+		case EDGE_COUNT:
+			if (compress)
+				g = construct_directed_graph_compressed<edge_count>(
+						edge_list_file);
+			else
+				g = construct_directed_graph<edge_count>(
+						edge_list_file, true);
+			break;
+		case EDGE_TIMESTAMP:
+			if (compress)
+				g = construct_directed_graph_compressed<ts_edge_data>(
+						edge_list_file);
+			else
+				g = construct_directed_graph<ts_edge_data>(
+						edge_list_file, true);
+			break;
+		default:
+			if (compress)
+				g = construct_directed_graph_compressed<>(edge_list_file);
+			else
+				g = construct_directed_graph<>(edge_list_file, false);
+	}
+	return g;
 }
 
 int main(int argc, char *argv[])
@@ -766,7 +1055,8 @@ int main(int argc, char *argv[])
 	bool directed = true;
 	int num_opts = 0;
 	char *type_str = NULL;
-	while ((opt = getopt(argc, argv, "ud:cpvt:")) != -1) {
+	bool ts_merge = false;
+	while ((opt = getopt(argc, argv, "ud:cpvt:T")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -788,6 +1078,9 @@ int main(int argc, char *argv[])
 			case 't':
 				type_str = optarg;
 				num_opts++;
+				break;
+			case 'T':
+				ts_merge = true;
 				break;
 			default:
 				print_usage();
@@ -832,68 +1125,56 @@ int main(int argc, char *argv[])
 	for (size_t i = 0; i < edge_list_files.size(); i++)
 		printf("edge list file: %s\n", edge_list_files[i].c_str());
 
-	if (directed) {
-		in_mem_graph *g = NULL;
-		switch(input_type) {
-			case EDGE_COUNT:
-				if (compress)
-					g = construct_directed_graph_compressed<edge_count>(
-							edge_list_files);
-				else
-					g = construct_directed_graph<edge_count>(
-							edge_list_files, true);
-				break;
-			case EDGE_TIMESTAMP:
-				if (compress)
-					g = construct_directed_graph_compressed<ts_edge_data>(
-							edge_list_files);
-				else
-					g = construct_directed_graph<ts_edge_data>(
-							edge_list_files, true);
-				break;
-			default:
-				if (compress)
-					g = construct_directed_graph_compressed<>(edge_list_files);
-				else
-					g = construct_directed_graph<>(edge_list_files, false);
-		}
-
-		struct timeval start, end;
+	assert(directed);
+	struct timeval start, end;
+	std::vector<std::string> graph_files;
+	std::vector<vertex_index *> indices;
+	for (size_t i = 0; i < edge_list_files.size(); i++) {
+		// construct individual graphs.
 		gettimeofday(&start, NULL);
+		in_mem_graph *g = construct_graph(edge_list_files[i], input_type);
+
+		// Write the constructed individual graph to a file.
 		vertex_index *index = g->create_vertex_index();
+		std::string adjacency_file1 = adjacency_list_file + "-" + itoa(i);
+		std::string index_file1 = index_file + "-" + itoa(i);
+		g->dump(adjacency_file1);
+		index->dump(index_file1);
+		graph_files.push_back(adjacency_file1);
+		indices.push_back(index);
+
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds to create vertex index\n",
 				time_diff(start, end));
-
-		start = end;
-		g->dump(adjacency_list_file);
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to dump adjacency list\n",
-				time_diff(start, end));
-
-		start = end;
-		index->dump(index_file);
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to dump index\n",
-				time_diff(start, end));
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
-		if (check_graph)
-			g->check_ext_graph(index_file, adjacency_list_file);
 		if (print_graph)
 			g->print();
+		if (check_graph)
+			g->check_ext_graph(index_file1, adjacency_file1);
 		delete g;
 	}
-	else {
-		undirected_graph<> *g = undirected_graph<>::load_edge_list_text(
-				edge_list_files[0]);
-		vertex_index *index = g->create_vertex_index();
-		g->dump(adjacency_list_file);
-		index->dump(index_file);
-		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
-				g->get_num_vertices(), g->get_num_non_empty_vertices(),
-				g->get_num_edges());
-		undirected_graph<>::destroy(g);
+
+	graph_type type;
+	if (ts_merge && directed)
+		type = graph_type::TS_DIRECTED;
+	else if (ts_merge && !directed)
+		type = graph_type::TS_UNDIRECTED;
+	else if (directed)
+		type = graph_type::DIRECTED;
+	else
+		type = graph_type::UNDIRECTED;
+
+	// If we get more than one graph, we need to merge them and will have
+	// a time-series graph.
+	if (indices.size() > 1) {
+		gettimeofday(&start, NULL);
+		merge_dump(graph_files, indices, type, adjacency_list_file, index_file);
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds to merge graphs\n",
+				time_diff(start, end));
 	}
+	for (size_t i = 0; i < indices.size(); i++)
+		vertex_index::destroy(indices[i]);
 }

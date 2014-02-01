@@ -91,6 +91,13 @@ public:
 		return header.get_num_vertices();
 	}
 
+	vertex_id_t get_max_id() const {
+		return get_num_vertices() - 1;
+	}
+
+	size_t get_graph_size() const {
+		return tot_size;
+	}
 };
 
 /**
@@ -100,6 +107,10 @@ template <class vertex_entry_type>
 class vertex_index_temp: public vertex_index
 {
 	vertex_entry_type vertices[0];
+
+protected:
+	vertex_index_temp() {
+	}
 
 	vertex_index_temp(size_t num) {
 		memset(vertices, 0, sizeof(vertices[0]) * num);
@@ -146,6 +157,10 @@ public:
 			return vertices[id + 1].get_off() - vertices[id].get_off();
 		else
 			return tot_size - vertices[id].get_off();
+	}
+
+	static int get_header_size() {
+		return sizeof(vertex_index);
 	}
 };
 
@@ -197,6 +212,12 @@ public:
 		out_edges = 0;
 	}
 
+	directed_vertex_entry(off_t off, int in_edges, int out_edges) {
+		this->off = off;
+		this->in_edges = in_edges;
+		this->out_edges = out_edges;
+	}
+
 	void init(off_t off, const in_mem_vertex &v) {
 		this->off = off;
 		this->in_edges = v.get_num_edges(edge_type::IN_EDGE);
@@ -216,8 +237,12 @@ public:
 	}
 };
 
+class directed_in_mem_vertex_index;
+
 class directed_vertex_index: public vertex_index_temp<directed_vertex_entry>
 {
+	directed_vertex_index() {
+	}
 public:
 	static directed_vertex_index *load(const std::string &index_file) {
 		directed_vertex_index *ret
@@ -240,6 +265,8 @@ public:
 	int get_num_out_edges(vertex_id_t id) const {
 		return this->get_vertex(id).get_num_out_edges();
 	}
+
+	friend class directed_in_mem_vertex_index;
 };
 
 static inline off_t get_vertex_off(vertex_index *index, vertex_id_t id)
@@ -257,5 +284,55 @@ static inline size_t get_vertex_size(vertex_index *index, vertex_id_t id)
 	else
 		return ((default_vertex_index *) index)->get_vertex_size(id);
 }
+
+/**
+ * These are the in-mem counterparts of vertex index above.
+ */
+
+class in_mem_vertex_index
+{
+public:
+	virtual void add_vertex(char *ext_mem_vertex) = 0;
+	virtual void dump(const std::string &file, const graph_header &header) = 0;
+};
+
+class directed_in_mem_vertex_index: public in_mem_vertex_index
+{
+	size_t tot_size;
+	std::vector<directed_vertex_entry> vertices;
+public:
+	directed_in_mem_vertex_index() {
+		tot_size = sizeof(graph_header);
+	}
+
+	virtual void add_vertex(char *ext_mem_vertex) {
+		ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) ext_mem_vertex;
+		vertices.push_back(directed_vertex_entry(tot_size, v->get_num_in_edges(),
+					v->get_num_out_edges()));
+		assert((size_t) v->get_id() + 1 == vertices.size());
+		tot_size += v->get_size();
+	}
+
+	virtual void dump(const std::string &file, const graph_header &header) {
+		directed_vertex_index index;
+		index.header = header;
+		index.tot_size = tot_size;
+		index.index_size = directed_vertex_index::get_header_size()
+			+ sizeof(directed_vertex_entry) * vertices.size();
+
+		FILE *f = fopen(file.c_str(), "w");
+		if (f == NULL) {
+			perror("fopen");
+			assert(0);
+		}
+		ssize_t ret = fwrite(&index, directed_vertex_index::get_header_size(),
+				1, f);
+		assert(ret == 1);
+		ret = fwrite(vertices.data(),
+				sizeof(directed_vertex_entry) * vertices.size(), 1, f);
+		assert(ret == 1);
+		fclose(f);
+	}
+};
 
 #endif
