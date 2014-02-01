@@ -218,23 +218,23 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 			typename std::iterator_traits<InputIterator2>::value_type v = *it2;
 			if (!skip(v))
 				*(result++) = v;
-			while (*it2 == v && it2 != last2)
+			while (it2 != last2 && *it2 == v)
 				++it2;
 		}
 		else if (*it1 < *it2) {
 			typename std::iterator_traits<InputIterator1>::value_type v = *it1;
 			if (!skip(v))
 				*(result++) = v;
-			while (*it1 == v && it1 != last1)
+			while (it1 != last1 && *it1 == v)
 				++it1;
 		}
 		else {
 			typename std::iterator_traits<InputIterator1>::value_type v = *it1;
 			if (!skip(v))
 				*(result++) = v;
-			while (*it1 == v && it1 != last1)
+			while (it1 != last1 && *it1 == v)
 				++it1;
-			while (*it2 == v && it2 != last2)
+			while (it2 != last2 && *it2 == v)
 				++it2;
 		}
 	}
@@ -243,7 +243,7 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 		typename std::iterator_traits<InputIterator1>::value_type v = *it1;
 		if (!skip(v))
 			*(result++) = v;
-		while (*it1 == v && it1 != last1)
+		while (it1 != last1 && *it1 == v)
 			++it1;
 	}
 
@@ -251,7 +251,7 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 		typename std::iterator_traits<InputIterator2>::value_type v = *it2;
 		if (!skip(v))
 			*(result++) = v;
-		while (*it2 == v && it2 != last2)
+		while (it2 != last2 && *it2 == v)
 			++it2;
 	}
 	return result - result_begin;
