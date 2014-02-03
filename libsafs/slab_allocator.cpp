@@ -199,6 +199,8 @@ int slab_allocator::alloc(char **objs, int nobjs) {
 			// If we can't allocate all objects, then free all objects that
 			// have been allocated, and return 0.
 			free(objs, num);
+			fprintf(stderr, "the slab allocator %s uses %ld bytes\n",
+					name.c_str(), get_curr_size());
 			return 0;
 		}
 	}
