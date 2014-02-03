@@ -29,7 +29,7 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-const double BIN_SEARCH_RATIO = 10;
+const double BIN_SEARCH_RATIO = 100;
 
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
@@ -107,11 +107,13 @@ class scan_vertex: public compute_vertex
 	atomic_integer num_edges;
 	// All neighbors (in both in-edges and out-edges)
 	std::vector<weighted_edge> *neighbors;
+	std::vector<int> *edge_counts;
 public:
 	scan_vertex(): compute_vertex(-1, -1, 0) {
 		num_joined = 0;
 		num_required = 0;
 		neighbors = NULL;
+		edge_counts = NULL;
 	}
 
 	scan_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
@@ -119,6 +121,7 @@ public:
 		num_joined = 0;
 		num_required = 0;
 		neighbors = NULL;
+		edge_counts = NULL;
 	}
 
 	int get_result() const {
@@ -344,18 +347,10 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 	return result - result_begin;
 }
 
-int get_num_dups(const std::vector<weighted_edge> &edges, vertex_id_t id)
-{
-	std::vector<weighted_edge>::const_iterator it = std::lower_bound(
-			edges.begin(), edges.end(), weighted_edge(id), comp_edge());
-	assert(it != edges.end());
-	return it->get_num_dups();
-}
-
 int scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 {
-	if (v->get_num_edges(edge_type::BOTH_EDGES) == 0
-			|| neighbors->empty())
+	assert(!neighbors->empty());
+	if (v->get_num_edges(edge_type::BOTH_EDGES) == 0)
 		return 0;
 
 	std::vector<vertex_id_t> common_neighs1;
@@ -387,19 +382,27 @@ int scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 	common_neighs.resize(num_neighbors);
 
 	// The number of duplicated edges between v and this vertex.
-	int num_v_dups = get_num_dups(*neighbors, v->get_id());
+	std::vector<weighted_edge>::const_iterator v_it = std::lower_bound(
+			neighbors->begin(), neighbors->end(),
+			weighted_edge(v->get_id()), comp_edge());
+	assert(v_it != neighbors->end());
+	int v_idx = v_it - neighbors->begin();
+	int num_v_dups = v_it->get_num_dups();
 	assert(num_v_dups > 0);
 	int num_edges = 0;
 	for (std::vector<vertex_id_t>::const_iterator it = common_neighs.begin();
 			it != common_neighs.end(); it++) {
-		count_msg msg(num_v_dups);
-		graph.send_msg(*it, msg);
-		num_edges += get_num_dups(*neighbors, *it);
+		std::vector<weighted_edge>::const_iterator v_it = std::lower_bound(
+				neighbors->begin(), neighbors->end(),
+				weighted_edge(*it), comp_edge());
+		assert(v_it != neighbors->end());
+		int v_idx = v_it - neighbors->begin();
+		num_edges += v_it->get_num_dups();
+
+		edge_counts->at(v_idx) += num_v_dups;
 	}
-	if (num_edges > 0) {
-		count_msg msg(num_edges);
-		graph.send_msg(v->get_id(), msg);
-	}
+	if (num_edges > 0)
+		edge_counts->at(v_idx) += num_edges;
 	return ret;
 }
 
@@ -468,6 +471,7 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 #if 0
 	for (; it != end; ++it, ++data_it) {
 #endif
+	int tmp = 0;
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		// Ignore loops
@@ -475,9 +479,10 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 #if 0
 			num_edges.inc((*data_it).get_count());
 #endif
-			num_edges.inc(1);
+			tmp++;
 		}
 	}
+	num_edges.inc(tmp);
 
 	if (neighbors->size() == 0) {
 		delete neighbors;
@@ -502,6 +507,8 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 			printf("%ld completed vertices\n", ret);
 		return true;
 	}
+	neighbors->resize(num_required);
+	edge_counts = new std::vector<int>(num_required);
 	return false;
 }
 
@@ -523,8 +530,18 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
 
+		// Inform all neighbors in the in-edges.
+		for (size_t i = 0; i < edge_counts->size(); i++) {
+			if (edge_counts->at(i) > 0) {
+				count_msg msg(edge_counts->at(i));
+				graph.send_msg(neighbors->at(i).get_id(), msg);
+			}
+		}
+
 		delete neighbors;
+		delete edge_counts;
 		neighbors = NULL;
+		edge_counts = NULL;
 		return true;
 	}
 	return false;
