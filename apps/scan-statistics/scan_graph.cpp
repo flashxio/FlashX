@@ -508,6 +508,7 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		return true;
 	}
 	neighbors->resize(num_required);
+	fetch_end = neighbors->end();
 	edge_counts = new std::vector<int>(num_required);
 	return false;
 }
