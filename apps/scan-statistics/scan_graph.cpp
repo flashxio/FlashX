@@ -424,19 +424,30 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	neighbors = new std::vector<weighted_edge>(vertex->get_num_edges(
 				edge_type::BOTH_EDGES));
 
-	class skip_self {
+	class skip_larger {
 		vertex_id_t id;
+		int size;
+		graph_engine &graph;
 	public:
-		skip_self(vertex_id_t id) {
+		skip_larger(graph_engine &_graph, vertex_id_t id): graph(_graph) {
 			this->id = id;
+			size = graph.get_vertex(id).get_ext_mem_size();
 		}
 
 		bool operator()(weighted_edge &e) {
-			return this->id == e.get_id();
+			return operator()(e.get_id());
 		}
 
+		/**
+		 * We are going to count edges on the vertices with the most edges.
+		 * If two vertices have the same number of edges, we compute
+		 * on the vertices with the largest Id.
+		 */
 		bool operator()(vertex_id_t id) {
-			return this->id == id;
+			compute_vertex &info = graph.get_vertex(id);
+			if (info.get_ext_mem_size() == size)
+				return id >= this->id;
+			return info.get_ext_mem_size() > size;
 		}
 	};
 
@@ -455,7 +466,7 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 			vertex->get_neigh_end(edge_type::IN_EDGE),
 			vertex->get_neigh_begin(edge_type::OUT_EDGE),
 			vertex->get_neigh_end(edge_type::OUT_EDGE),
-			skip_self(vertex->get_id()), merge_edge(),
+			skip_larger(graph, vertex->get_id()), merge_edge(),
 			neighbors->begin());
 	neighbors->resize(num_neighbors);
 
@@ -494,21 +505,8 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	}
 
 	fetch_it = neighbors->begin();
-	// We use the same optimization as triangle counting.
-	// We only count edges in the neighborhood of a vertex with the largest ID.
-	fetch_end = std::lower_bound(neighbors->begin(), neighbors->end(),
-			weighted_edge(get_id()), comp_edge());
-	num_required = fetch_end - fetch_it;
-	if (num_required == 0) {
-		delete neighbors;
-		neighbors = NULL;
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
-		return true;
-	}
-	neighbors->resize(num_required);
 	fetch_end = neighbors->end();
+	num_required = fetch_end - fetch_it;
 	edge_counts = new std::vector<int>(num_required);
 	return false;
 }
