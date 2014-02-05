@@ -597,6 +597,15 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
+	graph_index::const_iterator it = index->begin();
+	graph_index::const_iterator end_it = index->end();
+	int max_scan = 0;
+	for (; it != end_it; ++it) {
+		const scan_vertex &v = (const scan_vertex &) *it;
+		if (v.get_result() > max_scan)
+			max_scan = v.get_result();
+	}
+
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
@@ -606,6 +615,7 @@ int main(int argc, char *argv[])
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());
+	printf("The scan statistics: %d\n", max_scan);
 
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
