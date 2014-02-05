@@ -575,7 +575,6 @@ int main(int argc, char *argv[])
 	}
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 5, argc - 5);
 	graph_conf.init(configs);
 	graph_conf.print();
 

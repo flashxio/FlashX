@@ -152,7 +152,6 @@ int main(int argc, char *argv[])
 	vertex_id_t start_vertex = atoi(argv[4]);
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 5, argc - 5);
 	graph_conf.init(configs);
 	graph_conf.print();
 

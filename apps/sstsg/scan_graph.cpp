@@ -443,7 +443,6 @@ int main(int argc, char *argv[])
 	}
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 6, argc - 6);
 	graph_conf.init(configs);
 	graph_conf.print();
 

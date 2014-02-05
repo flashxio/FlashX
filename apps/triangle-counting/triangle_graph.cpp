@@ -336,7 +336,6 @@ int main(int argc, char *argv[])
 	std::string index_file = argv[3];
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 4, argc - 4);
 	graph_conf.init(configs);
 	graph_conf.print();
 
