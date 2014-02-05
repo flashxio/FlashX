@@ -329,6 +329,10 @@ public:
 	worker_thread *get_thread(int idx) const {
 		return worker_threads[idx];
 	}
+
+	const graph_header &get_graph_header() const {
+		return header;
+	}
 };
 
 /**
