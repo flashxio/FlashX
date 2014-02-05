@@ -139,8 +139,8 @@ void int_handler(int sig_num)
 
 int main(int argc, char *argv[])
 {
-	if (argc < 6) {
-		fprintf(stderr, "sssp conf_file graph_file index_file start_vertex directed\n");
+	if (argc < 5) {
+		fprintf(stderr, "sssp conf_file graph_file index_file start_vertex\n");
 		graph_conf.print_help();
 		params.print_help();
 		exit(-1);
@@ -150,32 +150,19 @@ int main(int argc, char *argv[])
 	std::string graph_file = argv[2];
 	std::string index_file = argv[3];
 	vertex_id_t start_vertex = atoi(argv[4]);
-	bool directed = atoi(argv[5]);
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 6, argc - 6);
+	configs.add_options(argv + 5, argc - 5);
 	graph_conf.init(configs);
 	graph_conf.print();
 
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	int min_vertex_size;
-	if (directed)
-		min_vertex_size = sizeof(ext_mem_directed_vertex);
-	else
-		min_vertex_size = sizeof(ext_mem_undirected_vertex);
-
 	graph_index *index = NUMA_graph_index<sssp_vertex>::create(index_file,
-			min_vertex_size, graph_conf.get_num_threads(),
-			params.get_num_nodes());
-	ext_mem_vertex_interpreter *interpreter;
-	if (directed)
-		interpreter = new ext_mem_directed_vertex_interpreter();
-	else
-		interpreter = new ext_mem_undirected_vertex_interpreter();
+			graph_conf.get_num_threads(), params.get_num_nodes());
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index, interpreter, directed);
+			params.get_num_nodes(), graph_file, index);
 	printf("SSSP starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

@@ -132,6 +132,7 @@ class worker_thread;
 
 class graph_engine
 {
+	graph_header header;
 	graph_index *vertices;
 	ext_mem_vertex_interpreter *interpreter;
 	vertex_partitioner *partitioner;
@@ -147,7 +148,6 @@ class graph_engine
 	thread *first_thread;
 	std::vector<worker_thread *> worker_threads;
 
-	bool directed;
 	edge_type required_neighbor_type;
 
 	trace_logger *logger;
@@ -170,14 +170,11 @@ class graph_engine
 	multicast_msg_sender *get_activate_sender(int thread_id) const;
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
-			graph_index *index, ext_mem_vertex_interpreter *interpreter,
-			bool directed);
+			graph_index *index);
 public:
 	static graph_engine *create(int num_threads, int num_nodes,
-			const std::string &graph_file, graph_index *index,
-			ext_mem_vertex_interpreter *interpreter, bool directed) {
-		return new graph_engine(num_threads, num_nodes, graph_file, index,
-				interpreter, directed);
+			const std::string &graph_file, graph_index *index) {
+		return new graph_engine(num_threads, num_nodes, graph_file, index);
 	}
 
 	static void destroy(graph_engine *graph) {
@@ -255,7 +252,7 @@ public:
 	}
 
 	bool is_directed() const {
-		return directed;
+		return header.is_directed_graph();
 	}
 
 	trace_logger *get_logger() const {

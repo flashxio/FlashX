@@ -423,9 +423,9 @@ void int_handler(int sig_num)
 
 int main(int argc, char *argv[])
 {
-	if (argc < 8) {
+	if (argc < 6) {
 		fprintf(stderr,
-				"scan-statistics conf_file graph_file index_file directed num_timestamps timestamp timestamp_range [output_file]\n");
+				"scan-statistics conf_file graph_file index_file timestamp timestamp_range [output_file]\n");
 		graph_conf.print_help();
 		params.print_help();
 		exit(-1);
@@ -434,19 +434,16 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	std::string graph_file = argv[2];
 	std::string index_file = argv[3];
-	bool directed = atoi(argv[4]);
-	int num_timestamps = atoi(argv[5]);
-	timestamp = atoi(argv[6]);
-	timestamp_range = atoi(argv[7]);
-	assert(directed);
+	timestamp = atoi(argv[4]);
+	timestamp_range = atoi(argv[5]);
 	std::string output_file;
-	if (argc == 9) {
-		output_file = argv[8];
+	if (argc == 7) {
+		output_file = argv[6];
 		argc--;
 	}
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 8, argc - 8);
+	configs.add_options(argv + 6, argc - 6);
 	graph_conf.init(configs);
 	graph_conf.print();
 
@@ -454,10 +451,10 @@ int main(int argc, char *argv[])
 	init_io_system(configs);
 
 	graph_index *index = graph_index_impl<scan_vertex>::create(
-			index_file, sizeof(ts_ext_mem_directed_vertex));
+			index_file);
 	graph_engine *graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
-			index, new ts_ext_mem_vertex_interpreter(num_timestamps), directed);
+			index);
 	// TODO I need to redefine this interface.
 	graph->set_required_neighbor_type(edge_type::BOTH_EDGES);
 	printf("scan statistics starts\n");

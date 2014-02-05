@@ -556,9 +556,9 @@ void int_handler(int sig_num)
 
 int main(int argc, char *argv[])
 {
-	if (argc < 5) {
+	if (argc < 4) {
 		fprintf(stderr,
-				"scan-statistics conf_file graph_file index_file directed [output_file]\n");
+				"scan-statistics conf_file graph_file index_file [output_file]\n");
 		graph_conf.print_help();
 		params.print_help();
 		exit(-1);
@@ -567,11 +567,9 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	std::string graph_file = argv[2];
 	std::string index_file = argv[3];
-	bool directed = atoi(argv[4]);
-	assert(directed);
 	std::string output_file;
-	if (argc == 6) {
-		output_file = argv[5];
+	if (argc == 5) {
+		output_file = argv[4];
 		argc--;
 	}
 
@@ -584,10 +582,10 @@ int main(int argc, char *argv[])
 	init_io_system(configs);
 
 	graph_index *index = graph_index_impl<scan_vertex>::create(
-			index_file, sizeof(ext_mem_directed_vertex));
+			index_file);
 	graph_engine *graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
-			index, new ext_mem_directed_vertex_interpreter(), directed);
+			index);
 	// TODO I need to redefine this interface.
 	graph->set_required_neighbor_type(edge_type::BOTH_EDGES);
 	printf("scan statistics starts\n");

@@ -692,13 +692,10 @@ void worker_thread::run()
 }
 
 graph_engine::graph_engine(int num_threads, int num_nodes,
-		const std::string &graph_file, graph_index *index,
-		ext_mem_vertex_interpreter *interpreter, bool directed)
+		const std::string &graph_file, graph_index *index)
 {
 	this->partitioner = new vertex_partitioner(num_threads);
-	this->interpreter = interpreter;
 	this->required_neighbor_type = edge_type::NONE;
-	this->directed = directed;
 	is_complete = false;
 	this->vertices = index;
 
@@ -709,11 +706,28 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	file_io_factory *factory = create_io_factory(graph_file,
 			GLOBAL_CACHE_ACCESS);
 
-	graph_header header;
 	io_interface *io = factory->create_io(thread::get_curr_thread());
 	io->access((char *) &header, 0, sizeof(header), READ);
 	header.verify();
 	factory->destroy_io(io);
+
+	switch (header.get_graph_type()) {
+		case graph_type::DIRECTED:
+			interpreter = new ext_mem_directed_vertex_interpreter();
+			break;
+		case graph_type::UNDIRECTED:
+			interpreter = new ext_mem_undirected_vertex_interpreter();
+			break;
+		case graph_type::TS_DIRECTED:
+			interpreter = new ts_ext_mem_vertex_interpreter(
+					header.get_max_num_timestamps());
+			break;
+		case graph_type::TS_UNDIRECTED:
+			assert(0);
+			break;
+		default:
+			assert(0);
+	}
 
 	file_id = factory->get_file_id();
 	assert(num_threads > 0 && num_nodes > 0);

@@ -83,6 +83,11 @@ public:
 		return h.data.version_number == CURR_VERSION;
 	}
 
+	bool is_directed_graph() const {
+		return h.data.type == graph_type::DIRECTED
+			|| h.data.type == graph_type::TS_DIRECTED;
+	}
+
 	graph_type get_graph_type() const {
 		return h.data.type;
 	}

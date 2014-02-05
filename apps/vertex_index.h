@@ -74,6 +74,10 @@ public:
 
 	void dump(const std::string &file);
 
+	const graph_header &get_graph_header() const {
+		return header;
+	}
+
 	off_t get_vertex_off(vertex_id_t id) const {
 		assert(id < get_num_vertices());
 		return vertex_offs[id];

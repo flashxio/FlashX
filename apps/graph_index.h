@@ -178,6 +178,23 @@ public:
 	friend class NUMA_graph_index<vertex_type>;
 };
 
+static inline int get_min_ext_mem_vertex_size(graph_type type)
+{
+	switch(type) {
+		case graph_type::DIRECTED:
+			return sizeof(ext_mem_directed_vertex);
+		case graph_type::UNDIRECTED:
+			return sizeof(ext_mem_undirected_vertex);
+		case graph_type::TS_DIRECTED:
+			return sizeof(ts_ext_mem_directed_vertex);
+		case graph_type::TS_UNDIRECTED:
+			assert(0);
+			break;
+		default:
+			assert(0);
+	}
+}
+
 template<class vertex_type>
 class NUMA_graph_index: public graph_index
 {
@@ -203,9 +220,11 @@ class NUMA_graph_index: public graph_index
 		}
 	};
 
-	NUMA_graph_index(const std::string &index_file, int min_vertex_size,
+	NUMA_graph_index(const std::string &index_file,
 			int num_threads, int num_nodes): partitioner(num_threads) {
 		vertex_index *index = vertex_index::load(index_file);
+		int min_vertex_size = get_min_ext_mem_vertex_size(
+				index->get_graph_header().get_graph_type());
 		num_vertices = index->get_num_vertices();
 		int num_vertices_per_thread = (num_vertices + num_threads
 				- 1) / num_threads;
@@ -239,8 +258,8 @@ class NUMA_graph_index: public graph_index
 	}
 public:
 	static graph_index *create(const std::string &index_file,
-			int min_vertex_size, int num_threads, int num_nodes) {
-		return new NUMA_graph_index<vertex_type>(index_file, min_vertex_size,
+			int num_threads, int num_nodes) {
+		return new NUMA_graph_index<vertex_type>(index_file,
 				num_threads, num_nodes);
 	}
 
@@ -271,9 +290,10 @@ class graph_index_impl: public graph_index
 	std::vector<vertex_type> vertices;
 	int min_vertex_size;
 	
-	graph_index_impl(const std::string &index_file, int min_vertex_size) {
-		this->min_vertex_size = min_vertex_size;
+	graph_index_impl(const std::string &index_file) {
 		vertex_index *indices = vertex_index::load(index_file);
+		this->min_vertex_size = get_min_ext_mem_vertex_size(
+				indices->get_graph_header().get_graph_type());
 		size_t num_vertices = indices->get_num_vertices();
 		size_t num_non_empty = 0;
 		vertices.resize(num_vertices);
@@ -290,9 +310,8 @@ class graph_index_impl: public graph_index
 		vertex_index::destroy(indices);
 	}
 public:
-	static graph_index *create(const std::string &index_file,
-			int min_vertex_size) {
-		return new graph_index_impl<vertex_type>(index_file, min_vertex_size);
+	static graph_index *create(const std::string &index_file) {
+		return new graph_index_impl<vertex_type>(index_file);
 	}
 
 	virtual compute_vertex &get_vertex(vertex_id_t id) {
