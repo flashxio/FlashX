@@ -35,15 +35,29 @@ graph_config graph_conf;
 
 class worker_thread;
 
+class default_vertex_scheduler: public vertex_scheduler
+{
+public:
+	void schedule(std::vector<vertex_id_t> &vertices) {
+		std::sort(vertices.begin(), vertices.end());
+	}
+} default_scheduler;
+
 class sorted_vertex_queue
 {
 	pthread_spinlock_t lock;
 	std::vector<vertex_id_t> sorted_vertices;
 	size_t fetch_idx;
+	vertex_scheduler *scheduler;
 public:
 	sorted_vertex_queue() {
 		fetch_idx = 0;
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		this->scheduler = &default_scheduler;
+	}
+
+	void set_vertex_scheduler(vertex_scheduler *scheduler) {
+		this->scheduler = scheduler;
 	}
 
 	void init(const std::vector<vertex_id_t> &vec, bool sorted) {
@@ -51,7 +65,7 @@ public:
 		sorted_vertices.clear();
 		sorted_vertices.assign(vec.begin(), vec.end());
 		if (!sorted)
-			std::sort(sorted_vertices.begin(), sorted_vertices.end());
+			scheduler->schedule(sorted_vertices);
 	}
 
 	void init(const bitmap &map, int part_id,
@@ -66,6 +80,9 @@ public:
 			partitioner->loc2map(part_id, sorted_vertices[i], id);
 			sorted_vertices[i] = id;
 		}
+
+		if (scheduler != &default_scheduler)
+			scheduler->schedule(sorted_vertices);
 	}
 
 	int fetch(vertex_id_t vertices[], int num) {
@@ -368,6 +385,10 @@ public:
 	void start_vertices(const std::vector<vertex_id_t> &vertices) {
 		assert(curr_activated_vertices.is_empty());
 		curr_activated_vertices.init(vertices, false);
+	}
+
+	void set_vertex_scheduler(vertex_scheduler *scheduler) {
+		curr_activated_vertices.set_vertex_scheduler(scheduler);
 	}
 };
 
@@ -694,6 +715,7 @@ void worker_thread::run()
 graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index *index)
 {
+	this->scheduler = &default_scheduler;
 	this->partitioner = new vertex_partitioner(num_threads);
 	this->required_neighbor_type = edge_type::NONE;
 	is_complete = false;
@@ -849,4 +871,10 @@ void graph_engine::wait4complete()
 	for (unsigned i = 0; i < worker_threads.size(); i++) {
 		worker_threads[i]->join();
 	}
+}
+
+void graph_engine::set_vertex_scheduler(vertex_scheduler *scheduler)
+{
+	for (size_t i = 0; i < worker_threads.size(); i++)
+		worker_threads[i]->set_vertex_scheduler(scheduler);
 }

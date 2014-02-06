@@ -128,6 +128,12 @@ public:
 			const TS_page_vertex *vertices[], int num) = 0;
 };
 
+class vertex_scheduler
+{
+public:
+	virtual void schedule(std::vector<vertex_id_t> &vertices) = 0;
+};
+
 class worker_thread;
 
 class graph_engine
@@ -136,6 +142,7 @@ class graph_engine
 	graph_index *vertices;
 	ext_mem_vertex_interpreter *interpreter;
 	vertex_partitioner *partitioner;
+	vertex_scheduler *scheduler;
 
 	atomic_integer level;
 	volatile bool is_complete;
@@ -333,6 +340,8 @@ public:
 	const graph_header &get_graph_header() const {
 		return header;
 	}
+
+	void set_vertex_scheduler(vertex_scheduler *scheduler);
 };
 
 /**
