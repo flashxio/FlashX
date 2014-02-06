@@ -34,6 +34,59 @@ const double BIN_SEARCH_RATIO = 100;
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
 
+class vertex_size_scheduler: public vertex_scheduler
+{
+	graph_engine *graph;
+public:
+	vertex_size_scheduler(graph_engine *graph) {
+		this->graph = graph;
+	}
+
+	void schedule(std::vector<vertex_id_t> &vertices);
+};
+
+void vertex_size_scheduler::schedule(std::vector<vertex_id_t> &vertices)
+{
+	class vertex_size
+	{
+		vertex_id_t id;
+		int size;
+	public:
+		vertex_size() {
+			id = -1;
+			size = 0;
+		}
+
+		void init(graph_engine *graph, vertex_id_t id) {
+			this->id = id;
+			this->size = graph->get_vertex(id).get_ext_mem_size();
+		}
+
+		int get_size() const {
+			return size;
+		}
+
+		vertex_id_t get_id() const {
+			return id;
+		}
+	};
+
+	class comp_size
+	{
+	public:
+		bool operator()(const vertex_size &v1, const vertex_size &v2) {
+			return v1.get_size() > v2.get_size();
+		}
+	};
+
+	std::vector<vertex_size> vertex_sizes(vertices.size());
+	for (size_t i = 0; i < vertices.size(); i++)
+		vertex_sizes[i].init(graph, vertices[i]);
+	std::sort(vertex_sizes.begin(), vertex_sizes.end(), comp_size());
+	for (size_t i = 0; i < vertices.size(); i++)
+		vertices[i] = vertex_sizes[i].get_id();
+}
+
 class global_max
 {
 	volatile size_t value;
@@ -620,6 +673,11 @@ int main(int argc, char *argv[])
 	graph_engine *graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
 			index);
+	// Let's schedule the order of processing activated vertices according
+	// to the size of vertices. We start with processing vertices with higher
+	// degrees in the hope we can find the max scan as early as possible,
+	// so that we can simple ignore the rest of vertices.
+	graph->set_vertex_scheduler(new vertex_size_scheduler(graph));
 	// TODO I need to redefine this interface.
 	graph->set_required_neighbor_type(edge_type::BOTH_EDGES);
 	printf("scan statistics starts\n");
