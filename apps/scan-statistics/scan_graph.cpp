@@ -34,6 +34,36 @@ const double BIN_SEARCH_RATIO = 100;
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
 
+class global_max
+{
+	volatile size_t value;
+	pthread_spinlock_t lock;
+public:
+	global_max() {
+		value = 0;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	global_max(size_t init) {
+		value = init;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	void update(size_t new_v) {
+		if (new_v <= value)
+			return;
+
+		pthread_spin_lock(&lock);
+		if (new_v > value)
+			value = new_v;
+		pthread_spin_unlock(&lock);
+	}
+
+	size_t get() const {
+		return value;
+	}
+} max_scan;
+
 class count_msg: public vertex_message
 {
 	int num;
@@ -155,6 +185,7 @@ public:
 			const count_msg *msg = (const count_msg *) msgs[i];
 			num_edges.inc(msg->get_num());
 		}
+		max_scan.update(num_edges.get());
 	}
 };
 
@@ -411,6 +442,10 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
 
+	size_t num_local_edges = vertex->get_num_edges(edge_type::BOTH_EDGES);
+	if (num_local_edges * num_local_edges < max_scan.get())
+		return true;
+
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
@@ -525,6 +560,7 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (num_joined == num_required) {
+		max_scan.update(num_edges.get());
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -597,15 +633,6 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	graph_index::const_iterator it = index->begin();
-	graph_index::const_iterator end_it = index->end();
-	int max_scan = 0;
-	for (; it != end_it; ++it) {
-		const scan_vertex &v = (const scan_vertex &) *it;
-		if (v.get_result() > max_scan)
-			max_scan = v.get_result();
-	}
-
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
@@ -615,7 +642,7 @@ int main(int argc, char *argv[])
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());
-	printf("The scan statistics: %d\n", max_scan);
+	printf("global max scan: %ld\n", max_scan.get());
 
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
