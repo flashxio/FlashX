@@ -35,6 +35,7 @@
 
 const double BIN_SEARCH_RATIO = 100;
 
+struct timeval graph_start;
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
 
@@ -106,14 +107,18 @@ public:
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	void update(size_t new_v) {
+	bool update(size_t new_v) {
 		if (new_v <= value)
-			return;
+			return false;
 
+		bool ret = false;
 		pthread_spin_lock(&lock);
-		if (new_v > value)
+		if (new_v > value) {
 			value = new_v;
+			ret = true;
+		}
 		pthread_spin_unlock(&lock);
+		return ret;
 	}
 
 	size_t get() const {
@@ -534,7 +539,13 @@ public:
 			const count_msg *msg = (const count_msg *) msgs[i];
 			num_edges.inc(msg->get_num());
 		}
-		max_scan.update(num_edges.get());
+		if (max_scan.update(num_edges.get())) {
+			struct timeval curr;
+			gettimeofday(&curr, NULL);
+			printf("%d: new max scan: %d at v%d\n",
+					(int) time_diff(graph_start, curr),
+					num_edges.get(), get_id());
+		}
 	}
 };
 
@@ -896,7 +907,13 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (num_joined == num_required) {
-		max_scan.update(num_edges.get());
+		if (max_scan.update(num_edges.get())) {
+			struct timeval curr;
+			gettimeofday(&curr, NULL);
+			printf("%d: new max scan: %d at v%d\n",
+					(int) time_diff(graph_start, curr),
+					num_edges.get(), get_id());
+		}
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -978,6 +995,7 @@ int main(int argc, char *argv[])
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
+	graph_start = start;
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
