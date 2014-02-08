@@ -363,6 +363,53 @@ class neighbor_list
 	std::vector<attributed_neighbor> neighbors;
 	edge_set_t *neighbor_set;
 public:
+	class id_iterator: public std::iterator<std::random_access_iterator_tag, vertex_id_t>
+	{
+		std::vector<attributed_neighbor>::const_iterator it;
+	public:
+		typedef typename std::iterator<std::random_access_iterator_tag,
+				vertex_id_t>::difference_type difference_type;
+
+		id_iterator() {
+		}
+
+		id_iterator(const std::vector<attributed_neighbor> &v) {
+			it = v.begin();
+		}
+
+		difference_type operator-(const id_iterator &it) const {
+			return this->it - it.it;
+		}
+
+		vertex_id_t operator*() const {
+			return it->get_id();
+		}
+
+		id_iterator &operator++() {
+			it++;
+			return *this;
+		}
+
+		id_iterator operator++(int) {
+			id_iterator ret = *this;
+			it++;
+			return ret;
+		}
+
+		bool operator==(const id_iterator &it) const {
+			return it.it == this->it;
+		}
+		
+		bool operator!=(const id_iterator &it) const {
+			return it.it != this->it;
+		}
+
+		id_iterator &operator+=(int num) {
+			it += num;
+			return *this;
+		}
+	};
+
 	neighbor_list(graph_engine &graph, const page_vertex *vertex): neighbors(
 			vertex->get_num_edges(edge_type::BOTH_EDGES)) {
 		merge_edge merge;
@@ -408,12 +455,14 @@ public:
 		return it != neighbor_set->end();
 	}
 
-	std::vector<attributed_neighbor>::const_iterator get_sorted_begin() const {
-		return neighbors.begin();
+	id_iterator get_id_begin() const {
+		return id_iterator(neighbors);
 	}
 
-	std::vector<attributed_neighbor>::const_iterator get_sorted_end() const {
-		return neighbors.end();
+	id_iterator get_id_end() const {
+		id_iterator ret(neighbors);
+		ret += neighbors.size();
+		return ret;
 	}
 
 	size_t size() const {
@@ -431,8 +480,8 @@ class scan_vertex: public compute_vertex
 	int num_joined;
 	// The number of vertices required to join with the vertex.
 	int num_required;
-	std::vector<attributed_neighbor>::const_iterator fetch_it;
-	std::vector<attributed_neighbor>::const_iterator fetch_end;
+	neighbor_list::id_iterator fetch_it;
+	neighbor_list::id_iterator fetch_end;
 	atomic_integer num_edges;
 	// All neighbors (in both in-edges and out-edges)
 	neighbor_list *neighbors;
@@ -497,7 +546,7 @@ public:
 	}
 
 	virtual vertex_id_t get_next_required_vertex() {
-		vertex_id_t id = fetch_it->get_id();
+		vertex_id_t id = *fetch_it;
 		fetch_it++;
 		return id;
 	}
@@ -510,20 +559,20 @@ public:
 			page_byte_array::const_iterator<vertex_id_t> other_end,
 			std::vector<vertex_id_t> &common_neighs);
 	int count_edges_bin_search_this(graph_engine &graph, const page_vertex *v,
-			std::vector<attributed_neighbor>::const_iterator this_it,
-			std::vector<attributed_neighbor>::const_iterator this_end,
+			neighbor_list::id_iterator this_it,
+			neighbor_list::id_iterator this_end,
 			page_byte_array::const_iterator<vertex_id_t> other_it,
 			page_byte_array::const_iterator<vertex_id_t> other_end,
 			std::vector<vertex_id_t> &common_neighs);
 	int count_edges_bin_search_other(graph_engine &graph, const page_vertex *v,
-			std::vector<attributed_neighbor>::const_iterator this_it,
-			std::vector<attributed_neighbor>::const_iterator this_end,
+			neighbor_list::id_iterator this_it,
+			neighbor_list::id_iterator this_end,
 			page_byte_array::const_iterator<vertex_id_t> other_it,
 			page_byte_array::const_iterator<vertex_id_t> other_end,
 			std::vector<vertex_id_t> &common_neighs);
 	int count_edges_scan(graph_engine &graph, const page_vertex *v,
-			std::vector<attributed_neighbor>::const_iterator this_it,
-			std::vector<attributed_neighbor>::const_iterator this_end,
+			neighbor_list::id_iterator this_it,
+			neighbor_list::id_iterator this_end,
 			page_byte_array::const_iterator<vertex_id_t> other_it,
 			page_byte_array::const_iterator<vertex_id_t> other_end,
 			std::vector<vertex_id_t> &common_neighs);
@@ -615,8 +664,8 @@ int scan_vertex::count_edges_bin_search_this(graph_engine &graph,
 
 int scan_vertex::count_edges_bin_search_other(graph_engine &graph,
 		const page_vertex *v,
-		std::vector<attributed_neighbor>::const_iterator this_it,
-		std::vector<attributed_neighbor>::const_iterator this_end,
+		neighbor_list::id_iterator this_it,
+		neighbor_list::id_iterator this_end,
 		page_byte_array::const_iterator<vertex_id_t> other_it,
 		page_byte_array::const_iterator<vertex_id_t> other_end,
 		std::vector<vertex_id_t> &common_neighs)
@@ -624,7 +673,7 @@ int scan_vertex::count_edges_bin_search_other(graph_engine &graph,
 	int num_local_edges = 0;
 
 	for (; this_it != this_end; this_it++) {
-		vertex_id_t this_neighbor = this_it->get_id();
+		vertex_id_t this_neighbor = *this_it;
 		// We need to skip loops.
 		if (this_neighbor == v->get_id()
 				|| this_neighbor == this->get_id()) {
@@ -658,15 +707,15 @@ int scan_vertex::count_edges_bin_search_other(graph_engine &graph,
 }
 
 int scan_vertex::count_edges_scan(graph_engine &graph, const page_vertex *v,
-		std::vector<attributed_neighbor>::const_iterator this_it,
-		std::vector<attributed_neighbor>::const_iterator this_end,
+		neighbor_list::id_iterator this_it,
+		neighbor_list::id_iterator this_end,
 		page_byte_array::const_iterator<vertex_id_t> other_it,
 		page_byte_array::const_iterator<vertex_id_t> other_end,
 		std::vector<vertex_id_t> &common_neighs)
 {
 	int num_local_edges = 0;
 	while (other_it != other_end && this_it != this_end) {
-		vertex_id_t this_neighbor = this_it->get_id();
+		vertex_id_t this_neighbor = *this_it;
 		vertex_id_t neigh_neighbor = *other_it;
 		if (neigh_neighbor == v->get_id()
 				|| neigh_neighbor == this->get_id()) {
@@ -677,7 +726,7 @@ int scan_vertex::count_edges_scan(graph_engine &graph, const page_vertex *v,
 			continue;
 		}
 		if (this_neighbor == neigh_neighbor) {
-			common_neighs.push_back(this_it->get_id());
+			common_neighs.push_back(*this_it);
 			do {
 				// Edges in the v's neighbor lists may duplicated.
 				// The duplicated neighbors need to be counted
@@ -727,10 +776,8 @@ int scan_vertex::count_edges(graph_engine &graph, const page_vertex *v,
 	if (num_v_edges == 0)
 		return 0;
 
-	std::vector<attributed_neighbor>::const_iterator this_it
-		= neighbors->get_sorted_begin();
-	std::vector<attributed_neighbor>::const_iterator this_end
-		= neighbors->get_sorted_end();
+	neighbor_list::id_iterator this_it = neighbors->get_id_begin();
+	neighbor_list::id_iterator this_end = neighbors->get_id_end();
 	this_end = std::lower_bound(this_it, this_end,
 			attributed_neighbor(v->get_id()), comp_edge());
 
@@ -879,8 +926,8 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		return true;
 	}
 
-	fetch_it = neighbors->get_sorted_begin();
-	fetch_end = neighbors->get_sorted_end();
+	fetch_it = neighbors->get_id_begin();
+	fetch_end = neighbors->get_id_end();
 	num_required = neighbors->size();
 	return false;
 }
