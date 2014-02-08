@@ -148,24 +148,28 @@ class attributed_neighbor
 {
 	vertex_id_t id;
 	int num_dups;
-	int count;
+	int *count;
 public:
 	attributed_neighbor() {
 		id = -1;
 		num_dups = 0;
-		count = 0;
+		count = NULL;
 	}
 
 	attributed_neighbor(vertex_id_t id) {
 		this->id = id;
 		num_dups = 1;
-		count = 0;
+		count = NULL;
 	}
 
-	attributed_neighbor(vertex_id_t id, int num_dups) {
+	attributed_neighbor(vertex_id_t id, int num_dups, int *count) {
 		this->id = id;
 		this->num_dups = num_dups;
-		count = 0;
+		this->count = count;
+	}
+
+	bool is_valid() const {
+		return count != NULL;
 	}
 
 	vertex_id_t get_id() const {
@@ -177,11 +181,11 @@ public:
 	}
 
 	int get_count() const {
-		return count;
+		return *count;
 	}
 
 	void inc_count(int count) {
-		this->count += count;
+		(*this->count) += count;
 	}
 
 	bool operator<(const attributed_neighbor &e) const {
@@ -356,16 +360,18 @@ class neighbor_list
 				const attributed_neighbor &e2) {
 			assert(e1.get_id() == e2.get_id());
 			return attributed_neighbor(e1.get_id(),
-					e1.get_num_dups() + e2.get_num_dups());
+					e1.get_num_dups() + e2.get_num_dups(), NULL);
 		}
 	};
 
-	std::vector<attributed_neighbor> neighbors;
+	std::vector<vertex_id_t> id_list;
+	std::vector<int> num_dup_list;
+	std::vector<int> count_list;
 	edge_set_t *neighbor_set;
 public:
 	class id_iterator: public std::iterator<std::random_access_iterator_tag, vertex_id_t>
 	{
-		std::vector<attributed_neighbor>::const_iterator it;
+		std::vector<vertex_id_t>::const_iterator it;
 	public:
 		typedef typename std::iterator<std::random_access_iterator_tag,
 				vertex_id_t>::difference_type difference_type;
@@ -373,7 +379,7 @@ public:
 		id_iterator() {
 		}
 
-		id_iterator(const std::vector<attributed_neighbor> &v) {
+		id_iterator(const std::vector<vertex_id_t> &v) {
 			it = v.begin();
 		}
 
@@ -382,7 +388,7 @@ public:
 		}
 
 		vertex_id_t operator*() const {
-			return it->get_id();
+			return *it;
 		}
 
 		id_iterator &operator++() {
@@ -410,9 +416,10 @@ public:
 		}
 	};
 
-	neighbor_list(graph_engine &graph, const page_vertex *vertex): neighbors(
-			vertex->get_num_edges(edge_type::BOTH_EDGES)) {
+	neighbor_list(graph_engine &graph, const page_vertex *vertex) {
 		merge_edge merge;
+		std::vector<attributed_neighbor> neighbors(
+				vertex->get_num_edges(edge_type::BOTH_EDGES));
 		int num_neighbors = unique_merge(
 				vertex->get_neigh_begin(edge_type::IN_EDGE),
 				vertex->get_neigh_end(edge_type::IN_EDGE),
@@ -421,6 +428,13 @@ public:
 				skip_larger(graph, vertex->get_id()), merge,
 				neighbors.begin());
 		neighbors.resize(num_neighbors);
+		id_list.resize(num_neighbors);
+		num_dup_list.resize(num_neighbors);
+		count_list.resize(num_neighbors);
+		for (int i = 0; i < num_neighbors; i++) {
+			id_list[i] = neighbors[i].get_id();
+			num_dup_list[i] = neighbors[i].get_num_dups();
+		}
 		neighbor_set = NULL;
 		if (num_neighbors > 0) {
 			neighbor_set = new edge_set_t(index_entry(),
@@ -435,19 +449,20 @@ public:
 			delete neighbor_set;
 	}
 
-	attributed_neighbor *find(vertex_id_t id) {
+	attributed_neighbor find(vertex_id_t id) {
 		edge_set_t::const_iterator it = neighbor_set->find(id);
 		if (it == neighbor_set->end())
-			return NULL;
+			return attributed_neighbor();
 		else {
 			int idx = (*it).get_idx();
-			assert(idx < (int) neighbors.size());
-			return &neighbors[idx];
+			assert(idx < (int) id_list.size());
+			return at(idx);
 		}
 	}
 
-	attributed_neighbor &at(int idx) {
-		return neighbors[idx];
+	attributed_neighbor at(int idx) {
+		return attributed_neighbor(id_list[idx], num_dup_list[idx],
+				&count_list[idx]);
 	}
 
 	bool contains(vertex_id_t id) {
@@ -456,21 +471,21 @@ public:
 	}
 
 	id_iterator get_id_begin() const {
-		return id_iterator(neighbors);
+		return id_iterator(id_list);
 	}
 
 	id_iterator get_id_end() const {
-		id_iterator ret(neighbors);
-		ret += neighbors.size();
+		id_iterator ret(id_list);
+		ret += id_list.size();
 		return ret;
 	}
 
 	size_t size() const {
-		return neighbors.size();
+		return id_list.size();
 	}
 
 	bool empty() const {
-		return neighbors.empty();
+		return id_list.empty();
 	}
 };
 
@@ -609,14 +624,12 @@ int scan_vertex::count_edges_hash(graph_engine &graph, const page_vertex *v,
 		vertex_id_t neigh_neighbor = *other_it;
 		if (neigh_neighbor != v->get_id()
 				&& neigh_neighbor != this->get_id()) {
-			attributed_neighbor *neigh
-				= neighbors->find(neigh_neighbor);
-			if (neigh) {
+			if (neighbors->contains(neigh_neighbor)) {
 #if 0
 				num_local_edges += (*other_data_it).get_count();
 #endif
 				num_local_edges++;
-				common_neighs.push_back(neigh->get_id());
+				common_neighs.push_back(neigh_neighbor);
 			}
 		}
 		++other_it;
@@ -779,12 +792,12 @@ int scan_vertex::count_edges(graph_engine &graph, const page_vertex *v,
 	neighbor_list::id_iterator this_it = neighbors->get_id_begin();
 	neighbor_list::id_iterator this_end = neighbors->get_id_end();
 	this_end = std::lower_bound(this_it, this_end,
-			attributed_neighbor(v->get_id()), comp_edge());
+			v->get_id(), comp_edge());
 
 	if (num_v_edges / neighbors->size() > BIN_SEARCH_RATIO) {
 #ifdef PV_STAT
 		int size_log2 = log2(num_v_edges);
-		scan_bytes += neighbors->size() * sizeof(attributed_neighbor);
+		scan_bytes += neighbors->size() * sizeof(vertex_id_t);
 		rand_jumps += size_log2 * neighbors->size();
 #endif
 		return count_edges_bin_search_other(graph, v, this_it, this_end,
@@ -800,7 +813,7 @@ int scan_vertex::count_edges(graph_engine &graph, const page_vertex *v,
 	else {
 #ifdef PV_STAT
 		scan_bytes += num_v_edges * sizeof(vertex_id_t);
-		scan_bytes += neighbors->size() * sizeof(attributed_neighbor);
+		scan_bytes += neighbors->size() * sizeof(vertex_id_t);
 #endif
 		return count_edges_scan(graph, v, this_it, this_end,
 				other_it, other_end, common_neighs);
@@ -845,20 +858,20 @@ int scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 	rand_jumps += common_neighs.size() + 1;
 #endif
 	// The number of duplicated edges between v and this vertex.
-	attributed_neighbor *neigh = neighbors->find(v->get_id());
-	assert(neigh);
-	int num_v_dups = neigh->get_num_dups();
+	attributed_neighbor neigh = neighbors->find(v->get_id());
+	assert(neigh.is_valid());
+	int num_v_dups = neigh.get_num_dups();
 	assert(num_v_dups > 0);
 	int num_edges = 0;
 	for (std::vector<vertex_id_t>::const_iterator it = common_neighs.begin();
 			it != common_neighs.end(); it++) {
-		attributed_neighbor *n = neighbors->find(*it);
-		assert(n);
-		num_edges += n->get_num_dups();
-		n->inc_count(num_v_dups);
+		attributed_neighbor n = neighbors->find(*it);
+		assert(n.is_valid());
+		num_edges += n.get_num_dups();
+		n.inc_count(num_v_dups);
 	}
 	if (num_edges > 0)
-		neigh->inc_count(num_edges);
+		neigh.inc_count(num_edges);
 	return ret;
 }
 
