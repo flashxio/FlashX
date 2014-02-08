@@ -31,6 +31,7 @@ vertex_index *vertex_index::load(const std::string &index_file)
 	FILE *fd = fopen(index_file.c_str(), "r");
 	size_t ret = fread(buf, size, 1, fd);
 	assert(ret == 1);
+	fclose(fd);
 
 	vertex_index *idx = (vertex_index *) buf;
 	assert((unsigned) size >= sizeof(vertex_index)
