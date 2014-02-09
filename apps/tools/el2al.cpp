@@ -623,6 +623,8 @@ in_mem_graph *construct_directed_graph_compressed(
 		const std::vector<std::string> &edge_list_files)
 {
 	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	end = start;
 	std::vector<directed_graph<edge_count> *> graphs;
 	for (unsigned i = 0; i < edge_list_files.size(); i++) {
 		directed_edge_graph<edge_data_type> *edge_g
@@ -672,6 +674,8 @@ in_mem_graph *construct_directed_graph(
 		const std::vector<std::string> &edge_list_files, bool has_edge_data)
 {
 	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	end = start;
 	std::vector<directed_graph<edge_data_type> *> graphs;
 	for (unsigned i = 0; i < edge_list_files.size(); i++) {
 		directed_edge_graph<edge_data_type> *edge_g
