@@ -25,6 +25,16 @@
 
 class compute_vertex;
 
+static inline vertex_index *load_vertex_index(const std::string &index_file)
+{
+	vertex_index *index = vertex_index::load(index_file);
+	if (index->get_graph_header().get_graph_type() == graph_type::DIRECTED)
+		((directed_vertex_index *) index)->verify();
+	else
+		((default_vertex_index *) index)->verify();
+	return index;
+}
+
 /**
  * This file contains a set of graph index implementation.
  * The graph index not only indexes vertices in a graph, but also is
@@ -101,9 +111,9 @@ class NUMA_local_graph_index: public graph_index
 	size_t num_non_empty;
 	vertex_type *vertex_arr;
 	vertex_partitioner *partitioner;
-	vertex_index *index;
+	const vertex_index *index;
 
-	NUMA_local_graph_index(vertex_index *index,
+	NUMA_local_graph_index(const vertex_index *index,
 			vertex_partitioner *partitioner, int part_id, int node_id,
 			size_t tot_num_vertices, size_t num_vertices, int min_vertex_size) {
 		this->part_id = part_id;
@@ -132,12 +142,9 @@ public:
 			if (this->part_id != part_id)
 				continue;
 
-			off_t off = index->get_vertex_off(i);
-			int size = index->get_vertex_size(i);
-
 			num_init++;
-			new (vertex_arr + part_off) vertex_type(i, off, size);
-			if (size > min_vertex_size) {
+			new (vertex_arr + part_off) vertex_type(i, index);
+			if (vertex_arr[part_off].get_ext_mem_size() > min_vertex_size) {
 				num_non_empty++;
 			}
 		}
@@ -222,7 +229,7 @@ class NUMA_graph_index: public graph_index
 
 	NUMA_graph_index(const std::string &index_file,
 			int num_threads, int num_nodes): partitioner(num_threads) {
-		vertex_index *index = vertex_index::load(index_file);
+		vertex_index *index = load_vertex_index(index_file);
 		int min_vertex_size = get_min_ext_mem_vertex_size(
 				index->get_graph_header().get_graph_type());
 		num_vertices = index->get_num_vertices();
@@ -291,23 +298,21 @@ class graph_index_impl: public graph_index
 	int min_vertex_size;
 	
 	graph_index_impl(const std::string &index_file) {
-		vertex_index *indices = vertex_index::load(index_file);
+		vertex_index *index = load_vertex_index(index_file);
 		this->min_vertex_size = get_min_ext_mem_vertex_size(
-				indices->get_graph_header().get_graph_type());
-		size_t num_vertices = indices->get_num_vertices();
+				index->get_graph_header().get_graph_type());
+		size_t num_vertices = index->get_num_vertices();
 		size_t num_non_empty = 0;
 		vertices.resize(num_vertices);
 		for (size_t i = 0; i < num_vertices; i++) {
-			off_t off = indices->get_vertex_off(i);
-			int size = indices->get_vertex_size(i);
-			vertices[i] = vertex_type(i, off, size);
-			if (size > min_vertex_size) {
+			vertices[i] = vertex_type(i, index);
+			if (vertices[i].get_ext_mem_size() > min_vertex_size) {
 				num_non_empty++;
 			}
 		}
 		printf("There are %ld vertices and %ld non-empty, vertex array capacity: %ld\n",
 				num_vertices, num_non_empty, vertices.capacity());
-		vertex_index::destroy(indices);
+		vertex_index::destroy(index);
 	}
 public:
 	static graph_index *create(const std::string &index_file) {

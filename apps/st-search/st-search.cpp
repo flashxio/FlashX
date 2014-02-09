@@ -37,11 +37,11 @@ class st_vertex: public compute_vertex
 
 	atomic_flags<int> flags;
 public:
-	st_vertex(): compute_vertex(-1, -1, 0) {
+	st_vertex() {
 	}
 
-	st_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
-			id, off, size) {
+	st_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+			id, index) {
 	}
 
 	bool has_visited() const {

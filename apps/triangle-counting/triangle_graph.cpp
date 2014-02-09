@@ -65,7 +65,7 @@ class triangle_vertex: public compute_vertex
 	// We only read neighbors whose ID is smaller than this vertex.
 	std::vector<vertex_id_t> *out_edges;
 public:
-	triangle_vertex(): compute_vertex(-1, -1, 0) {
+	triangle_vertex() {
 		num_required = 0;
 		num_joined = 0;
 		num_fetched = 0;
@@ -74,8 +74,8 @@ public:
 		out_edges = NULL;
 	}
 
-	triangle_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
-			id, off, size) {
+	triangle_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+			id, index) {
 		num_required = 0;
 		num_joined = 0;
 		num_fetched = 0;

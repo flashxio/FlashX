@@ -43,8 +43,11 @@ class graph_engine;
 class compute_vertex: public in_mem_vertex_info
 {
 public:
-	compute_vertex(vertex_id_t id, off_t off, int size): in_mem_vertex_info(
-			id, off, size) {
+	compute_vertex() {
+	}
+
+	compute_vertex(vertex_id_t id, const vertex_index *index): in_mem_vertex_info(
+			id, index) {
 	}
 
 	virtual compute_allocator *create_part_compute_allocator(
@@ -110,8 +113,11 @@ class ts_compute_vertex: public compute_vertex
 		return has_required_ts_vertices();
 	}
 public:
-	ts_compute_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
-			id, off, size) {
+	ts_compute_vertex() {
+	}
+
+	ts_compute_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+			id, index) {
 	}
 
 	virtual compute_allocator *create_part_compute_allocator(

@@ -60,15 +60,15 @@ class sssp_vertex: public compute_vertex
 	int distance;
 	vertex_id_t parent;
 public:
-	sssp_vertex(): compute_vertex(-1, -1, 0) {
+	sssp_vertex() {
 		parent_dist = INT_MAX;
 		tmp_parent = -1;
 		distance = INT_MAX;
 		parent = -1;
 	}
 
-	sssp_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
-			id, off, size) {
+	sssp_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+			id, index) {
 		parent_dist = INT_MAX;
 		tmp_parent = -1;
 		distance = INT_MAX;

@@ -39,14 +39,16 @@ enum edge_type {
 	BOTH_EDGES,
 };
 
+class vertex_index;
+
 /**
  * This class contains the basic information of a vertex in the memory.
  */
 class in_mem_vertex_info
 {
 	vertex_id_t id;
-	off_t off;
 	int size;
+	off_t off;
 public:
 	in_mem_vertex_info() {
 		off = 0;
@@ -54,11 +56,7 @@ public:
 		id = -1;
 	}
 
-	in_mem_vertex_info(vertex_id_t id, off_t off, int size) {
-		this->id = id;
-		this->off = off;
-		this->size = size;
-	}
+	in_mem_vertex_info(vertex_id_t id, const vertex_index *index);
 
 	off_t get_ext_mem_off() const {
 		return off;
@@ -1287,6 +1285,15 @@ public:
 	}
 };
 
+class in_mem_vertex
+{
+public:
+	virtual vertex_id_t get_id() const = 0;
+	virtual bool has_edge_data() const = 0;
+	virtual int get_serialize_size() const = 0;
+	virtual int get_num_edges(edge_type type) const = 0;
+};
+
 /**
  * This is the size of a page vertex (either directed or undirected).
  * It's mainly used for allocating a buffer from the stack for a page vertex.
@@ -1294,7 +1301,7 @@ public:
 const int STACK_PAGE_VERTEX_SIZE = sizeof(page_directed_vertex);
 
 template<class edge_data_type = empty_data>
-class in_mem_directed_vertex
+class in_mem_directed_vertex: public in_mem_vertex
 {
 	vertex_id_t id;
 	bool has_data;
@@ -1342,6 +1349,19 @@ public:
 		out_edges.push_back(e.get_to());
 		if (has_edge_data())
 			out_data.push_back(e.get_data());
+	}
+
+	int get_num_edges(edge_type type) const {
+		switch(type) {
+			case edge_type::IN_EDGE:
+				return get_num_in_edges();
+			case edge_type::OUT_EDGE:
+				return get_num_out_edges();
+			case edge_type::BOTH_EDGES:
+				return get_num_in_edges() + get_num_out_edges();
+			default:
+				assert(0);
+		}
 	}
 
 	int get_num_in_edges() const {
@@ -1413,7 +1433,7 @@ public:
 };
 
 template<class edge_data_type = empty_data>
-class in_mem_undirected_vertex
+class in_mem_undirected_vertex: public in_mem_vertex
 {
 	bool has_data;
 	vertex_id_t id;
@@ -1447,7 +1467,7 @@ public:
 			data_arr.push_back(e.get_data());
 	}
 
-	int get_num_edges() const {
+	int get_num_edges(edge_type type = edge_type::BOTH_EDGES) const {
 		return edges.size();
 	}
 
@@ -1475,7 +1495,7 @@ public:
 };
 
 template<class edge_data_type = empty_data>
-class ts_in_mem_directed_vertex
+class ts_in_mem_directed_vertex: public in_mem_vertex
 {
 	struct ts_edge_pair {
 		std::vector<vertex_id_t> in_edges;
@@ -1521,6 +1541,19 @@ public:
 			return 0;
 		else
 			return it->second.out_edges.size();
+	}
+
+	int get_num_edges(edge_type type) const {
+		switch(type) {
+			case edge_type::IN_EDGE:
+				return get_num_in_edges();
+			case edge_type::OUT_EDGE:
+				return get_num_out_edges();
+			case edge_type::BOTH_EDGES:
+				return get_num_in_edges() + get_num_out_edges();
+			default:
+				assert(0);
+		}
 	}
 
 	int get_num_in_edges() const {

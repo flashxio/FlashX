@@ -53,15 +53,15 @@ class scan_vertex: public ts_compute_vertex
 	// The final result.
 	double result;
 public:
-	scan_vertex(): ts_compute_vertex(-1, -1, 0) {
+	scan_vertex() {
 		num_joined = 0;
 		num_edges = NULL;
 		num_local_edges = NULL;
 		neighbors = NULL;
 	}
 
-	scan_vertex(vertex_id_t id, off_t off, int size): ts_compute_vertex(
-			id, off, size) {
+	scan_vertex(vertex_id_t id, const vertex_index *index): ts_compute_vertex(
+			id, index) {
 		num_joined = 0;
 		num_edges = NULL;
 		num_local_edges = NULL;

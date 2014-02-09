@@ -18,6 +18,23 @@
  */
 
 #include "vertex.h"
+#include "vertex_index.h"
+
+in_mem_vertex_info::in_mem_vertex_info(vertex_id_t id,
+		const vertex_index *index1)
+{
+	this->id = id;
+	if (index1->get_graph_header().get_graph_type() == graph_type::DIRECTED) {
+		directed_vertex_index *index = (directed_vertex_index *) index1;
+		this->off = index->get_vertex_off(id);
+		this->size = index->get_vertex_size(id);
+	}
+	else {
+		default_vertex_index *index = (default_vertex_index *) index1;
+		this->off = index->get_vertex_off(id);
+		this->size = index->get_vertex_size(id);
+	}
+}
 
 void ts_ext_mem_directed_vertex::construct_header(
 		const ts_ext_mem_directed_vertex &header,

@@ -83,7 +83,7 @@ public:
 	vertex_index *create_vertex_index() const {
 		graph_header header(graph_type::UNDIRECTED, vertices.size(),
 				get_num_edges(), false);
-		return vertex_index::create<in_mem_undirected_vertex<edge_data_type> >(
+		return default_vertex_index::create<in_mem_undirected_vertex<edge_data_type> >(
 				header, vertices);
 	}
 
@@ -208,7 +208,7 @@ public:
 	vertex_index *create_vertex_index() const {
 		graph_header header(graph_type::DIRECTED, vertices.size(),
 				get_num_edges(), has_data);
-		return vertex_index::create<in_mem_directed_vertex<edge_data_type> >(
+		return directed_vertex_index::create<in_mem_directed_vertex<edge_data_type> >(
 				header, vertices);
 	}
 
@@ -279,7 +279,7 @@ public:
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const {
 		printf("check the graph in the external memory\n");
-		vertex_index *index = vertex_index::load(index_file);
+		directed_vertex_index *index = directed_vertex_index::load(index_file);
 		
 		native_file file(adj_file);
 		size_t adj_file_size = file.get_size();
@@ -462,7 +462,7 @@ public:
 	virtual vertex_index *create_vertex_index() const {
 		graph_header header(TS_DIRECTED, vertices.size(), get_num_edges(),
 				has_data, max_num_timestamps);
-		return vertex_index::create<ts_in_mem_directed_vertex<edge_data_type> >(
+		return default_vertex_index::create<ts_in_mem_directed_vertex<edge_data_type> >(
 				header, vertices);
 	}
 
@@ -537,7 +537,7 @@ public:
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const {
 		printf("check the graph in the external memory\n");
-		vertex_index *index = vertex_index::load(index_file);
+		default_vertex_index *index = default_vertex_index::load(index_file);
 		
 		native_file file(adj_file);
 		size_t adj_file_size = file.get_size();

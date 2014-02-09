@@ -511,7 +511,7 @@ class scan_vertex: public compute_vertex
 	struct timeval vertex_start;
 #endif
 public:
-	scan_vertex(): compute_vertex(-1, -1, 0) {
+	scan_vertex() {
 		num_joined = 0;
 		num_required = 0;
 		neighbors = NULL;
@@ -525,8 +525,8 @@ public:
 #endif
 	}
 
-	scan_vertex(vertex_id_t id, off_t off, int size): compute_vertex(
-			id, off, size) {
+	scan_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+			id, index) {
 		num_joined = 0;
 		num_required = 0;
 		neighbors = NULL;
