@@ -491,6 +491,8 @@ public:
 
 class scan_vertex: public compute_vertex
 {
+	int num_in_edges;
+	int num_out_edges;
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
 	// The number of vertices required to join with the vertex.
@@ -500,6 +502,7 @@ class scan_vertex: public compute_vertex
 	atomic_integer num_edges;
 	// All neighbors (in both in-edges and out-edges)
 	neighbor_list *neighbors;
+	size_t est_local_scan;
 
 #ifdef PV_STAT
 	// For testing
@@ -512,9 +515,12 @@ class scan_vertex: public compute_vertex
 #endif
 public:
 	scan_vertex() {
+		num_in_edges = 0;
+		num_out_edges = 0;
 		num_joined = 0;
 		num_required = 0;
 		neighbors = NULL;
+		est_local_scan = 0;
 
 #ifdef PV_STAT
 		num_all_edges = 0;
@@ -525,11 +531,15 @@ public:
 #endif
 	}
 
-	scan_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
-			id, index) {
+	scan_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
+			id, index1) {
+		const directed_vertex_index *index = (const directed_vertex_index *) index1;
+		num_in_edges = index->get_num_in_edges(id);
+		num_out_edges = index->get_num_out_edges(id);
 		num_joined = 0;
 		num_required = 0;
 		neighbors = NULL;
+		est_local_scan = 0;
 
 #ifdef PV_STAT
 		num_all_edges = 0;
@@ -591,6 +601,11 @@ public:
 			page_byte_array::const_iterator<vertex_id_t> other_it,
 			page_byte_array::const_iterator<vertex_id_t> other_end,
 			std::vector<vertex_id_t> &common_neighs);
+
+	bool run(graph_engine &graph) {
+		size_t num_local_edges = num_in_edges + num_out_edges;
+		return num_local_edges * num_local_edges >= max_scan.get();
+	}
 
 	bool run(graph_engine &graph, const page_vertex *vertex);
 
@@ -881,21 +896,59 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	assert(num_joined == 0);
 
 	size_t num_local_edges = vertex->get_num_edges(edge_type::BOTH_EDGES);
-	if (num_local_edges * num_local_edges < max_scan.get())
-		return true;
+	assert(num_local_edges == (size_t) num_in_edges + num_out_edges);
 #ifdef PV_STAT
 	num_all_edges = num_local_edges;
 #endif
+	if (num_local_edges == 0)
+		return true;
+
+	class skip_self {
+		vertex_id_t id;
+	public:
+		skip_self(vertex_id_t id) {
+			this->id = id;
+		}
+
+		bool operator()(vertex_id_t id) {
+			return this->id == id;
+		}
+	};
+
+	class merge_edge {
+	public:
+		vertex_id_t operator()(vertex_id_t e1, vertex_id_t e2) {
+			assert(e1 == e2);
+			return e1;
+		}
+	};
+
+	std::vector<vertex_id_t> all_neighbors(
+			vertex->get_num_edges(edge_type::BOTH_EDGES));
+	size_t num_neighbors = unique_merge(
+			vertex->get_neigh_begin(edge_type::IN_EDGE),
+			vertex->get_neigh_end(edge_type::IN_EDGE),
+			vertex->get_neigh_begin(edge_type::OUT_EDGE),
+			vertex->get_neigh_end(edge_type::OUT_EDGE),
+			skip_self(vertex->get_id()), merge_edge(),
+			all_neighbors.begin());
+	all_neighbors.resize(num_neighbors);
+
+	size_t tot_edges = num_local_edges;
+	for (size_t i = 0; i < all_neighbors.size(); i++) {
+		scan_vertex &v = (scan_vertex &) graph.get_vertex(all_neighbors[i]);
+		// The max number of common neighbors should be smaller than all neighbors
+		// in the neighborhood, assuming there aren't duplicated edges.
+		tot_edges += min(v.num_in_edges + v.num_out_edges, num_neighbors * 2);
+	}
+	tot_edges /= 2;
+	est_local_scan = tot_edges;
+	if (tot_edges < max_scan.get())
+		return true;
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
-	if (vertex->get_num_edges(edge_type::BOTH_EDGES) == 0) {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
-		return true;
-	}
 
 #ifdef PV_STAT
 	gettimeofday(&vertex_start, NULL);
@@ -949,6 +1002,8 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 		const page_vertex *vertices[], int num)
 {
 	num_joined += num;
+	if (est_local_scan < max_scan.get())
+		return num_joined == num_required;
 	assert(neighbors);
 #ifdef PV_STAT
 	struct timeval start, end;
