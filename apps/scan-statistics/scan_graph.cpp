@@ -950,13 +950,13 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
 
+	neighbors = new neighbor_list(graph, vertex);
 #ifdef PV_STAT
 	gettimeofday(&vertex_start, NULL);
-	fprintf(stderr, "compute v%d (with %d edges) on thread %d at %.f seconds\n",
-			get_id(), num_all_edges, thread::get_curr_thread()->get_id(),
+	fprintf(stderr, "compute v%d (with %d edges, compute on %ld edges, potential %ld inter-edges) on thread %d at %.f seconds\n",
+			get_id(), num_all_edges, neighbors->size(), tot_edges, thread::get_curr_thread()->get_id(),
 			time_diff(graph_start, vertex_start));
 #endif
-	neighbors = new neighbor_list(graph, vertex);
 
 	page_byte_array::const_iterator<vertex_id_t> it = vertex->get_neigh_begin(
 			edge_type::BOTH_EDGES);
@@ -1037,9 +1037,8 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
 		fprintf(stderr,
-				"v%d: # edges: %d, scan bytes: %ld, # rand jumps: %ld, # comps: %ld, time: %ldms, tot time: %ldms\n",
-				get_id(), num_all_edges, scan_bytes, rand_jumps, min_comps, time_us / 1000,
-				time_diff_us(vertex_start, curr) / 1000);
+				"v%d: # edges: %d, scan: %d, scan bytes: %ld, # rand jumps: %ld, # comps: %ld, time: %ldms\n",
+				get_id(), num_all_edges, num_edges.get(), scan_bytes, rand_jumps, min_comps, time_us / 1000);
 #endif
 
 		// Inform all neighbors in the in-edges.
