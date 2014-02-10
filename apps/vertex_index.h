@@ -242,4 +242,20 @@ public:
 	}
 };
 
+static inline off_t get_vertex_off(vertex_index *index, vertex_id_t id)
+{
+	if (index->get_graph_header().get_graph_type() == graph_type::DIRECTED)
+		return ((directed_vertex_index *) index)->get_vertex_off(id);
+	else
+		return ((default_vertex_index *) index)->get_vertex_off(id);
+}
+
+static inline size_t get_vertex_size(vertex_index *index, vertex_id_t id)
+{
+	if (index->get_graph_header().get_graph_type() == graph_type::DIRECTED)
+		return ((directed_vertex_index *) index)->get_vertex_size(id);
+	else
+		return ((default_vertex_index *) index)->get_vertex_size(id);
+}
+
 #endif
