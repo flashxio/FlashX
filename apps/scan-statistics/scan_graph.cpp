@@ -31,8 +31,6 @@
 
 #include "graphlab/cuckoo_set_pow2.hpp"
 
-#define PV_STAT
-
 const double BIN_SEARCH_RATIO = 100;
 
 struct timeval graph_start;
@@ -368,6 +366,9 @@ class neighbor_list
 	std::vector<int> num_dup_list;
 	std::vector<int> count_list;
 	edge_set_t *neighbor_set;
+
+	// This helps to iterate on the id list.
+	std::vector<vertex_id_t>::const_iterator it;
 public:
 	class id_iterator: public std::iterator<std::random_access_iterator_tag, vertex_id_t>
 	{
@@ -442,6 +443,8 @@ public:
 			for (size_t i = 0; i < neighbors.size(); i++)
 				neighbor_set->insert(index_entry(neighbors[i].get_id(), i));
 		}
+
+		start_id_iterator();
 	}
 
 	~neighbor_list() {
@@ -487,6 +490,24 @@ public:
 	bool empty() const {
 		return id_list.empty();
 	}
+
+	/**
+	 * These methods are another way of iterating over the id list.
+	 */
+
+	bool has_next() const {
+		return it != id_list.end();
+	}
+
+	vertex_id_t next() {
+		vertex_id_t ret = *it;
+		it++;
+		return ret;
+	}
+
+	void start_id_iterator() {
+		it = id_list.begin();
+	}
 };
 
 class scan_vertex: public compute_vertex
@@ -495,10 +516,6 @@ class scan_vertex: public compute_vertex
 	int num_out_edges;
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
-	// The number of vertices required to join with the vertex.
-	int num_required;
-	neighbor_list::id_iterator fetch_it;
-	neighbor_list::id_iterator fetch_end;
 	atomic_integer num_edges;
 	// All neighbors (in both in-edges and out-edges)
 	neighbor_list *neighbors;
@@ -518,7 +535,6 @@ public:
 		num_in_edges = 0;
 		num_out_edges = 0;
 		num_joined = 0;
-		num_required = 0;
 		neighbors = NULL;
 		est_local_scan = 0;
 
@@ -537,7 +553,6 @@ public:
 		num_in_edges = index->get_num_in_edges(id);
 		num_out_edges = index->get_num_out_edges(id);
 		num_joined = 0;
-		num_required = 0;
 		neighbors = NULL;
 		est_local_scan = 0;
 
@@ -567,13 +582,11 @@ public:
 	virtual bool has_required_vertices() const {
 		if (neighbors == NULL)
 			return false;
-		return fetch_it != fetch_end;
+		return neighbors->has_next();
 	}
 
 	virtual vertex_id_t get_next_required_vertex() {
-		vertex_id_t id = *fetch_it;
-		fetch_it++;
-		return id;
+		return neighbors->next();
 	}
 
 	int count_edges(graph_engine &graph, const page_vertex *v);
@@ -992,9 +1005,6 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		return true;
 	}
 
-	fetch_it = neighbors->get_id_begin();
-	fetch_end = neighbors->get_id_end();
-	num_required = neighbors->size();
 	return false;
 }
 
@@ -1003,7 +1013,7 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 {
 	num_joined += num;
 	if (est_local_scan < max_scan.get())
-		return num_joined == num_required;
+		return (unsigned) num_joined == neighbors->size();
 	assert(neighbors);
 #ifdef PV_STAT
 	struct timeval start, end;
@@ -1021,7 +1031,7 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
-	if (num_joined == num_required) {
+	if ((unsigned) num_joined == neighbors->size()) {
 		if (max_scan.update(num_edges.get())) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
