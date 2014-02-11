@@ -1137,9 +1137,21 @@ int main(int argc, char *argv[])
 	for (size_t i = 0; i < edge_list_files.size(); i++)
 		printf("edge list file: %s\n", edge_list_files[i].c_str());
 
+	std::vector<std::string> graph_files;
+	std::vector<std::string> index_files;
+	if (edge_list_files.size() > 1) {
+		for (size_t i = 0; i < edge_list_files.size(); i++) {
+			graph_files.push_back(adjacency_list_file + "-" + itoa(i));
+			index_files.push_back(index_file + "-" + itoa(i));
+		}
+	}
+	else {
+		graph_files.push_back(adjacency_list_file);
+		index_files.push_back(index_file);
+	}
+
 	assert(directed);
 	struct timeval start, end;
-	std::vector<std::string> graph_files;
 	std::vector<vertex_index *> indices;
 	for (size_t i = 0; i < edge_list_files.size(); i++) {
 		// construct individual graphs.
@@ -1148,11 +1160,8 @@ int main(int argc, char *argv[])
 
 		// Write the constructed individual graph to a file.
 		vertex_index *index = g->create_vertex_index();
-		std::string adjacency_file1 = adjacency_list_file + "-" + itoa(i);
-		std::string index_file1 = index_file + "-" + itoa(i);
-		g->dump(adjacency_file1);
-		index->dump(index_file1);
-		graph_files.push_back(adjacency_file1);
+		g->dump(graph_files[i]);
+		index->dump(index_files[i]);
 		indices.push_back(index);
 
 		gettimeofday(&end, NULL);
@@ -1164,7 +1173,7 @@ int main(int argc, char *argv[])
 		if (print_graph)
 			g->print();
 		if (check_graph)
-			g->check_ext_graph(index_file1, adjacency_file1);
+			g->check_ext_graph(index_files[i], graph_files[i]);
 		delete g;
 	}
 
