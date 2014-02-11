@@ -33,6 +33,7 @@
 typedef unsigned int vsize_t;
 typedef unsigned int vertex_id_t;
 const vertex_id_t MAX_VERTEX_ID = UINT_MAX;
+const size_t MAX_VERTEX_SIZE = INT_MAX;
 
 enum edge_type {
 	NONE,
@@ -235,6 +236,7 @@ public:
 	static size_t serialize(const in_mem_directed_vertex<edge_data_type> &in_v,
 			char *buf, size_t size) {
 		size_t mem_size = in_v.get_serialize_size();
+		assert(mem_size <= MAX_VERTEX_SIZE);
 		assert(size >= mem_size);
 		ext_mem_directed_vertex *ext_v = (ext_mem_directed_vertex *) buf;
 		ext_v->set_id(in_v.get_id());
@@ -366,6 +368,7 @@ public:
 	static size_t serialize(const in_mem_undirected_vertex<edge_data_type> &v,
 			char *buf, size_t size) {
 		size_t mem_size = v.get_serialize_size();
+		assert(mem_size <= MAX_VERTEX_SIZE);
 		assert(size >= mem_size);
 		ext_mem_undirected_vertex *ext_v = (ext_mem_undirected_vertex *) buf;
 		ext_v->set_id(v.get_id());
@@ -874,6 +877,7 @@ public:
 		ts_ext_mem_directed_vertex *v = new (buf) ts_ext_mem_directed_vertex(
 				in_v.get_id(), in_v.get_num_edges(), in_v.get_num_timestamps(),
 				in_v.has_edge_data() ? sizeof(edge_data_type) : 0);
+		assert(v->get_size() <= MAX_VERTEX_SIZE);
 		assert(v->get_size() <= size);
 
 		// Generate the timestamp table.

@@ -246,8 +246,12 @@ size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 		printf("%s\t%s\t%s\n", line, second, third);
 		return -1;
 	}
-	vertex_id_t from = atol(line);
-	vertex_id_t to = atol(second);
+	long lfrom = atol(line);
+	long lto = atol(second);
+	assert(lfrom >= 0 && lfrom < MAX_VERTEX_ID);
+	assert(lto >= 0 && lto < MAX_VERTEX_ID);
+	vertex_id_t from = lfrom;
+	vertex_id_t to = lto;
 	struct tm tm;
 	strptime(third, "%Y-%m-%d %H:%M:%S", &tm);
 	time_t timestamp = mktime(&tm);
@@ -279,8 +283,12 @@ int parse_edge_list_line(char *line, edge<edge_count> &e)
 		fprintf(stderr, "wrong format 3: %s\t%s\t%s\n", line, second, third);
 		return -1;
 	}
-	vertex_id_t from = atol(line);
-	vertex_id_t to = atol(second);
+	long lfrom = atol(line);
+	long lto = atol(second);
+	assert(lfrom >= 0 && lfrom < MAX_VERTEX_ID);
+	assert(lto >= 0 && lto < MAX_VERTEX_ID);
+	vertex_id_t from = lfrom;
+	vertex_id_t to = lto;
 	edge_count c(atol(third));
 	e = edge<edge_count>(from, to, c);
 
@@ -302,8 +310,12 @@ int parse_edge_list_line(char *line, edge<> &e)
 		fprintf(stderr, "wrong format 2: %s\t%s\n", line, second);
 		return -1;
 	}
-	vertex_id_t from = atol(line);
-	vertex_id_t to = atol(second);
+	long lfrom = atol(line);
+	long lto = atol(second);
+	assert(lfrom >= 0 && lfrom < MAX_VERTEX_ID);
+	assert(lto >= 0 && lto < MAX_VERTEX_ID);
+	vertex_id_t from = lfrom;
+	vertex_id_t to = lto;
 	e = edge<>(from, to);
 
 	return 1;
