@@ -293,10 +293,10 @@ public:
 		graph_header *header = (graph_header *) adj_buf;
 		header->verify();
 		for (vertex_id_t id = 0; id < index->get_num_vertices(); id++) {
-			int size = index->get_vertex_size(id);
+			size_t size = index->get_vertex_size(id);
 			off_t off = index->get_vertex_off(id);
 			ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) (adj_buf + off);
-			assert(v->get_size() == (size_t) size);
+			assert(v->get_size() == size);
 			check_vertex(vertices[id], v);
 		}
 		vertex_index::destroy(index);
@@ -551,10 +551,10 @@ public:
 		graph_header *header = (graph_header *) adj_buf;
 		header->verify();
 		for (vertex_id_t id = 0; id < index->get_num_vertices(); id++) {
-			int size = index->get_vertex_size(id);
+			size_t size = index->get_vertex_size(id);
 			off_t off = index->get_vertex_off(id);
 			ts_ext_mem_directed_vertex *v = (ts_ext_mem_directed_vertex *) (adj_buf + off);
-			assert(v->get_size() == (size_t) size);
+			assert(v->get_size() == size);
 			check_vertex(vertices[id], v);
 		}
 		vertex_index::destroy(index);

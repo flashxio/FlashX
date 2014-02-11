@@ -323,7 +323,7 @@ public:
 	}
 
 	bool is_empty() const {
-		return (size_t) size == sizeof(vertex_message);
+		return size == sizeof(vertex_message);
 	}
 
 	int serialize(char *buf, int size) const {

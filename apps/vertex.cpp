@@ -72,21 +72,21 @@ ext_mem_directed_vertex *ext_mem_directed_vertex::merge(
 
 void ts_ext_mem_directed_vertex::construct_header(
 		const ts_ext_mem_directed_vertex &header,
-		int edge_list_off, int edge_list_size)
+		off_t edge_list_off, size_t edge_list_size)
 {
 	*this = header;
 	int timestamp_idx_start = -1;
 	int timestamp_idx_end = -1;
-	int edge_list_end = edge_list_off + edge_list_size;
+	off_t edge_list_end = edge_list_off + edge_list_size;
 	for (int i = 0; i < num_timestamps; i++) {
 		const_edge_list list = header.get_const_edge_list_idx(i);
-		int off = ((char *) list.get_in_edge_begin()) - ((char *) &header);
+		off_t off = ((char *) list.get_in_edge_begin()) - ((char *) &header);
 		if (edge_list_off == off)
 			timestamp_idx_start = i;
 		if (edge_list_end == off)
 			timestamp_idx_end = i;
 	}
-	if (edge_list_end == (int) header.get_size())
+	if ((size_t) edge_list_end == header.get_size())
 		timestamp_idx_end = num_timestamps;
 
 	assert(timestamp_idx_start >= 0);
@@ -94,7 +94,7 @@ void ts_ext_mem_directed_vertex::construct_header(
 	this->num_timestamps = timestamp_idx_end - timestamp_idx_start;
 	memcpy(this->get_timestamps_begin(), header.get_timestamps_begin()
 			+ timestamp_idx_start, sizeof(short) * this->num_timestamps);
-	int num_prev_edges
+	size_t num_prev_edges
 		= header.get_edge_off_begin()[timestamp_idx_start].in_off;
 	for (int i = 0; i < this->num_timestamps; i++) {
 		this->get_edge_off_begin()[i].in_off
@@ -139,18 +139,18 @@ offset_pair TS_page_directed_vertex::get_edge_list_offset(
 			new_range.second = ext_v.get_last_timestamp() + 1;
 	}
 
-	int begin = ext_v.get_edge_list_offset(new_range.first,
+	off_t begin = ext_v.get_edge_list_offset(new_range.first,
 			edge_type::IN_EDGE);
 	// The beginning of the timestamp range has to exist.
-	assert(begin != entire_vertex_size);
-	int end;
+	assert((size_t) begin != entire_vertex_size);
+	off_t end;
 	if (new_range.second > ext_v.get_last_timestamp())
 		end = entire_vertex_size;
 	else {
 		end = ext_v.get_edge_list_offset(new_range.second,
 				edge_type::IN_EDGE); 
 		// The end of the timestamp range also has to exist.
-		assert(end != entire_vertex_size);
+		assert((size_t) end != entire_vertex_size);
 	}
 	return offset_pair(begin, end);
 }

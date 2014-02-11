@@ -151,7 +151,7 @@ public:
 		return vertices[id].get_off();
 	}
 
-	int get_vertex_size(vertex_id_t id) const {
+	size_t get_vertex_size(vertex_id_t id) const {
 		assert(id < get_num_vertices());
 		if (id < get_num_vertices() - 1)
 			return vertices[id + 1].get_off() - vertices[id].get_off();
@@ -309,7 +309,7 @@ public:
 		ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) ext_mem_vertex;
 		vertices.push_back(directed_vertex_entry(tot_size, v->get_num_in_edges(),
 					v->get_num_out_edges()));
-		assert((size_t) v->get_id() + 1 == vertices.size());
+		assert(v->get_id() + 1 == vertices.size());
 		tot_size += v->get_size();
 	}
 

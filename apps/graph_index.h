@@ -103,7 +103,7 @@ class NUMA_graph_index;
 template<class vertex_type>
 class NUMA_local_graph_index: public graph_index
 {
-	int min_vertex_size;
+	size_t min_vertex_size;
 	int node_id;
 	int part_id;
 	size_t tot_num_vertices;
@@ -115,7 +115,7 @@ class NUMA_local_graph_index: public graph_index
 
 	NUMA_local_graph_index(const vertex_index *index,
 			vertex_partitioner *partitioner, int part_id, int node_id,
-			size_t tot_num_vertices, size_t num_vertices, int min_vertex_size) {
+			size_t tot_num_vertices, size_t num_vertices, size_t min_vertex_size) {
 		this->part_id = part_id;
 		this->index = index;
 		this->tot_num_vertices = tot_num_vertices;
@@ -185,7 +185,7 @@ public:
 	friend class NUMA_graph_index<vertex_type>;
 };
 
-static inline int get_min_ext_mem_vertex_size(graph_type type)
+static inline size_t get_min_ext_mem_vertex_size(graph_type type)
 {
 	switch(type) {
 		case graph_type::DIRECTED:
@@ -230,10 +230,10 @@ class NUMA_graph_index: public graph_index
 	NUMA_graph_index(const std::string &index_file,
 			int num_threads, int num_nodes): partitioner(num_threads) {
 		vertex_index *index = load_vertex_index(index_file);
-		int min_vertex_size = get_min_ext_mem_vertex_size(
+		size_t min_vertex_size = get_min_ext_mem_vertex_size(
 				index->get_graph_header().get_graph_type());
 		num_vertices = index->get_num_vertices();
-		int num_vertices_per_thread = (num_vertices + num_threads
+		vsize_t num_vertices_per_thread = (num_vertices + num_threads
 				- 1) / num_threads;
 		// Construct the indices.
 		for (int i = 0; i < num_threads; i++)
@@ -295,7 +295,7 @@ class graph_index_impl: public graph_index
 {
 	// This contains the vertices with edges.
 	std::vector<vertex_type> vertices;
-	int min_vertex_size;
+	size_t min_vertex_size;
 	
 	graph_index_impl(const std::string &index_file) {
 		vertex_index *index = load_vertex_index(index_file);

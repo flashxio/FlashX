@@ -327,7 +327,7 @@ class neighbor_list
 
 	class skip_larger {
 		vertex_id_t id;
-		int size;
+		size_t size;
 		graph_engine &graph;
 	public:
 		skip_larger(graph_engine &_graph, vertex_id_t id): graph(_graph) {
@@ -512,8 +512,8 @@ public:
 
 class scan_vertex: public compute_vertex
 {
-	int num_in_edges;
-	int num_out_edges;
+	vsize_t num_in_edges;
+	vsize_t num_out_edges;
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
 	atomic_integer num_edges;

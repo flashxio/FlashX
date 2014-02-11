@@ -35,31 +35,31 @@ public:
 	 * in the buffer.
 	 */
 	virtual page_vertex *interpret(page_byte_array &, char *buf,
-			int size) const = 0;
+			size_t size) const = 0;
 	virtual page_vertex *interpret_part(const page_vertex *header,
-			page_byte_array &, char *buf, int size) const = 0;
+			page_byte_array &, char *buf, size_t size) const = 0;
 	/**
 	 * The size of the vertex object.
 	 */
-	virtual int get_vertex_size() const = 0;
+	virtual size_t get_vertex_size() const = 0;
 };
 
 class ext_mem_directed_vertex_interpreter: public ext_mem_vertex_interpreter
 {
 public:
 	virtual page_vertex *interpret(page_byte_array &array, char *buf,
-			int size) const {
-		assert(size >= (int) sizeof(page_directed_vertex));
+			size_t size) const {
+		assert(size >= sizeof(page_directed_vertex));
 		return new (buf) page_directed_vertex(array);
 	}
 
 	virtual page_vertex *interpret_part(const page_vertex *header,
-			page_byte_array &, char *buf, int size) const {
+			page_byte_array &, char *buf, size_t size) const {
 		assert(0);
 		return NULL;
 	}
 
-	virtual int get_vertex_size() const {
+	virtual size_t get_vertex_size() const {
 		return sizeof(page_directed_vertex);
 	}
 };
@@ -68,18 +68,18 @@ class ext_mem_undirected_vertex_interpreter: public ext_mem_vertex_interpreter
 {
 public:
 	virtual page_vertex *interpret(page_byte_array &array, char *buf,
-			int size) const {
-		assert(size >= (int) sizeof(page_undirected_vertex));
+			size_t size) const {
+		assert(size >= sizeof(page_undirected_vertex));
 		return new (buf) page_undirected_vertex(array);
 	}
 
 	virtual page_vertex *interpret_part(const page_vertex *header,
-			page_byte_array &, char *buf, int size) const {
+			page_byte_array &, char *buf, size_t size) const {
 		assert(0);
 		return NULL;
 	}
 
-	virtual int get_vertex_size() const {
+	virtual size_t get_vertex_size() const {
 		return sizeof(page_undirected_vertex);
 	}
 };
@@ -93,19 +93,19 @@ public:
 	}
 
 	virtual page_vertex *interpret(page_byte_array &array, char *buf,
-			int size) const {
+			size_t size) const {
 		assert(size >= TS_page_directed_vertex::get_size(num_timestamps));
 		return TS_page_directed_vertex::create(array, buf, size);
 	}
 
 	virtual page_vertex *interpret_part(const page_vertex *header,
-			page_byte_array &array, char *buf, int size) const {
+			page_byte_array &array, char *buf, size_t size) const {
 		assert(size >= TS_page_directed_vertex::get_size(num_timestamps));
 		return TS_page_directed_vertex::create(
 				(const TS_page_directed_vertex *) header, array, buf, size);
 	}
 
-	virtual int get_vertex_size() const {
+	virtual size_t get_vertex_size() const {
 		return TS_page_directed_vertex::get_size(num_timestamps);
 	}
 };
