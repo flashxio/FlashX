@@ -64,7 +64,7 @@ public:
 		h.data.max_num_timestamps = 0;
 	}
 
-	graph_header(graph_type type, int num_vertices, int num_edges,
+	graph_header(graph_type type, size_t num_vertices, size_t num_edges,
 			bool has_edge_data, int max_num_timestamps = 0) {
 		assert(sizeof(*this) == PAGE_SIZE);
 		memset(this, 0, sizeof(*this));
