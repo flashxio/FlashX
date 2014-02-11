@@ -158,7 +158,7 @@ public:
 		this->req = req;
 	}
 
-	virtual int get_offset_in_first_page() const {
+	virtual off_t get_offset_in_first_page() const {
 		return req->get_offset() % PAGE_SIZE;
 	}
 
@@ -166,7 +166,7 @@ public:
 		return req->status_arr[pg_idx].pg;
 	}
 
-	virtual int get_size() const {
+	virtual size_t get_size() const {
 		return req->get_size();
 	}
 

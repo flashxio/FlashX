@@ -534,9 +534,9 @@ class page_byte_array
 public:
 	virtual void lock() = 0;
 	virtual void unlock() = 0;
-	virtual int get_offset_in_first_page() const = 0;
+	virtual off_t get_offset_in_first_page() const = 0;
 	virtual thread_safe_page *get_page(int idx) const = 0;
-	virtual int get_size() const = 0;
+	virtual size_t get_size() const = 0;
 
 	off_t get_offset() const {
 		const thread_safe_page *p = get_page(0);
@@ -549,18 +549,18 @@ public:
 		const page_byte_array *arr;
 
 		// The byte offset in the pages.
-		int off;
+		off_t off;
 		// The end byte offset in the pages.
-		int end;
+		off_t end;
 	public:
 		typedef typename std::iterator<std::random_access_iterator_tag,
 				T>::difference_type difference_type;
 
-		const_iterator(const page_byte_array *arr, int byte_off, int byte_end) {
+		const_iterator(const page_byte_array *arr, off_t byte_off, off_t byte_end) {
 			this->arr = arr;
 			off = arr->get_offset_in_first_page() + byte_off;
 			end = arr->get_offset_in_first_page() + byte_end;
-			assert(byte_end <= arr->get_size());
+			assert((size_t) byte_end <= arr->get_size());
 			// Either no elements cross the page boundary,
 			assert((PAGE_SIZE - (off % PAGE_SIZE)) % sizeof(T) == 0
 					// or the entire range is inside a page.
@@ -569,8 +569,8 @@ public:
 		}
 
 		T operator*() const {
-			int pg_idx = off / PAGE_SIZE;
-			int off_in_pg = off % PAGE_SIZE;
+			off_t pg_idx = off / PAGE_SIZE;
+			off_t off_in_pg = off % PAGE_SIZE;
 			char *data = (char *) arr->get_page(pg_idx)->get_data();
 			return *(T *) (data + off_in_pg);
 		}
@@ -611,18 +611,18 @@ public:
 		const page_byte_array *arr;
 
 		// The byte offset in the page array.
-		int off;
+		off_t off;
 		// The end byte offset in the page array.
-		int end;
+		off_t end;
 	public:
 		typedef typename std::iterator<std::random_access_iterator_tag,
 				T>::difference_type difference_type;
 
-		iterator(page_byte_array *arr, int byte_off, int byte_end) {
+		iterator(page_byte_array *arr, off_t byte_off, off_t byte_end) {
 			this->arr = arr;
 			off = arr->get_offset_in_first_page() + byte_off;
 			end = arr->get_offset_in_first_page() + byte_end;
-			assert(byte_end <= arr->get_size());
+			assert((size_t) byte_end <= arr->get_size());
 			// Either no elements cross the page boundary,
 			assert((PAGE_SIZE - (off % PAGE_SIZE)) % sizeof(T) == 0
 					// or the entire range is inside a page.
@@ -631,14 +631,14 @@ public:
 
 			// This iterator can change data, so I set all pages that can be
 			// accessed by the iterator dirty.
-			int num_pages = ROUNDUP_PAGE(end) / PAGE_SIZE;
-			for (int i = off / PAGE_SIZE; i < num_pages; i++)
+			off_t num_pages = ROUNDUP_PAGE(end) / PAGE_SIZE;
+			for (off_t i = off / PAGE_SIZE; i < num_pages; i++)
 				arr->get_page(i)->set_dirty(true);
 		}
 
 		T &operator*() {
-			int pg_idx = off / PAGE_SIZE;
-			int off_in_pg = off % PAGE_SIZE;
+			off_t pg_idx = off / PAGE_SIZE;
+			off_t off_in_pg = off % PAGE_SIZE;
 			char *data = (char *) arr->get_page(pg_idx)->get_data();
 			return *(T *) (data + off_in_pg);
 		}
@@ -674,7 +674,7 @@ public:
 	};
 
 	template<class T>
-	const_iterator<T> begin(int byte_off = 0) const {
+	const_iterator<T> begin(off_t byte_off = 0) const {
 		return const_iterator<T>(this, byte_off, this->get_size());
 	}
 
@@ -685,14 +685,14 @@ public:
 
 	template<class T>
 	std::pair<const_iterator<T>, const_iterator<T> > get_iterator(
-			int byte_off, int byte_end) const {
+			off_t byte_off, off_t byte_end) const {
 		return std::pair<const_iterator<T>, const_iterator<T> >(
 				const_iterator<T>(this, byte_off, byte_end),
 				const_iterator<T>(this, byte_end, byte_end));
 	}
 
 	template<class T>
-	iterator<T> begin(int byte_off = 0) {
+	iterator<T> begin(off_t byte_off = 0) {
 		return iterator<T>(this, byte_off, this->get_size());
 	}
 
@@ -703,14 +703,14 @@ public:
 
 	template<class T>
 	std::pair<iterator<T>, iterator<T> > get_iterator(
-			int byte_off, int byte_end) const {
+			off_t byte_off, off_t byte_end) const {
 		return std::pair<iterator<T>, iterator<T> >(
 				iterator<T>(this, byte_off, byte_end),
 				iterator<T>(this, byte_end, byte_end));
 	}
 
 	template<class T>
-	T get(int idx) const {
+	T get(off_t idx) const {
 		T ele;
 		memcpy(sizeof(T) * idx, (char *) &ele, sizeof(T));
 		return ele;
@@ -721,26 +721,26 @@ public:
 	 */
 	void memcpy(off_t rel_off, char buf[], size_t size) const {
 		// The offset relative to the beginning of the page array.
-		int off = get_offset_in_first_page() + rel_off;
-		int end = off + size;
-		assert(end <= get_size() + get_offset_in_first_page());
+		off_t off = get_offset_in_first_page() + rel_off;
+		off_t end = off + size;
+		assert((size_t) end <= get_size() + get_offset_in_first_page());
 
 		off_t page_begin = ROUND(off, PAGE_SIZE);
 		// If the element crosses the page boundary.
 		if (end - page_begin > PAGE_SIZE) {
 			assert(size <= PAGE_SIZE);
-			int pg_idx = off / PAGE_SIZE;
-			int off_in_pg = off % PAGE_SIZE;
-			int part1_size = PAGE_SIZE - off_in_pg;
-			int part2_size = size - part1_size;
+			off_t pg_idx = off / PAGE_SIZE;
+			off_t off_in_pg = off % PAGE_SIZE;
+			size_t part1_size = PAGE_SIZE - off_in_pg;
+			size_t part2_size = size - part1_size;
 			::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg,
 					part1_size);
 			::memcpy(buf + part1_size,
 					((char *) get_page(pg_idx + 1)->get_data()), part2_size);
 		}
 		else {
-			int pg_idx = off / PAGE_SIZE;
-			int off_in_pg = off % PAGE_SIZE;
+			off_t pg_idx = off / PAGE_SIZE;
+			off_t off_in_pg = off % PAGE_SIZE;
 			::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg, size);
 		}
 	}
