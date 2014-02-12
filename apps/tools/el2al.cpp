@@ -158,6 +158,17 @@ public:
 		this->has_data = has_data;
 		pthread_mutex_init(&lock, NULL);
 	}
+
+	/**
+	 * num_edges tells the edge graph that there will be num_edges
+	 * edges added to the graph.
+	 */
+	directed_edge_graph(size_t num_edges, bool has_data) {
+		this->has_data = has_data;
+		pthread_mutex_init(&lock, NULL);
+		in_edges.reserve(num_edges);
+		out_edges.reserve(num_edges);
+	}
 	void sort_edges();
 	directed_edge_graph<edge_count> *compress_edges() const;
 	directed_edge_graph<edge_data_type> *simplify_edges() const;
@@ -703,8 +714,6 @@ directed_edge_graph<edge_data_type> *par_load_edge_list_text(
 		t->start();
 		threads[i] = t;
 	}
-	directed_edge_graph<edge_data_type> *edge_g
-		= new directed_edge_graph<edge_data_type>(has_edge_data);
 	int thread_no = 0;
 	printf("start to read the edge list\n");
 	for (size_t i = 0; i < files.size(); i++) {
@@ -735,6 +744,8 @@ directed_edge_graph<edge_data_type> *par_load_edge_list_text(
 	}
 	printf("There are %ld edges and use %ld bytes\n", num_edges, mem_size);
 
+	directed_edge_graph<edge_data_type> *edge_g
+		= new directed_edge_graph<edge_data_type>(num_edges, has_edge_data);
 	start = end;
 	for (int i = 0; i < NUM_THREADS; i++) {
 		std::vector<edge<edge_data_type> > *local_edges
