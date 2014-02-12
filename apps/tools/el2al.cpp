@@ -187,6 +187,9 @@ public:
 		pthread_mutex_lock(&lock);
 		in_edges.insert(in_edges.end(), edges.begin(), edges.end());
 		out_edges.insert(out_edges.end(), edges.begin(), edges.end());
+		printf("the edge graph has %ld edges and use %ld bytes\n",
+				in_edges.size() + out_edges.size(), (in_edges.capacity()
+					+ out_edges.capacity()) * sizeof(edge<edge_data_type>));
 		pthread_mutex_unlock(&lock);
 	}
 
@@ -722,6 +725,16 @@ directed_edge_graph<edge_data_type> *par_load_edge_list_text(
 	printf("It takes %f seconds to construct edge list\n",
 			time_diff(start, end));
 
+	size_t mem_size = 0;
+	size_t num_edges = 0;
+	for (int i = 0; i < NUM_THREADS; i++) {
+		std::vector<edge<edge_data_type> > *local_edges
+			= (std::vector<edge<edge_data_type> > *) threads[i]->get_user_data();
+		num_edges += local_edges->size();
+		mem_size += local_edges->capacity() * sizeof(edge<edge_data_type>);
+	}
+	printf("There are %ld edges and use %ld bytes\n", num_edges, mem_size);
+
 	start = end;
 	for (int i = 0; i < NUM_THREADS; i++) {
 		std::vector<edge<edge_data_type> > *local_edges
@@ -975,7 +988,7 @@ int main(int argc, char *argv[])
 		g->dump(index_file, adjacency_list_file);
 
 		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to create vertex index\n",
+		printf("It takes %f seconds to dump the graph to a file\n",
 				time_diff(start, end));
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
@@ -1012,7 +1025,7 @@ int main(int argc, char *argv[])
 			g->dump(index_files[i], graph_files[i]);
 
 			gettimeofday(&end, NULL);
-			printf("It takes %f seconds to create vertex index\n",
+			printf("It takes %f seconds to dump the graph to a file\n",
 					time_diff(start, end));
 			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 					g->get_num_vertices(), g->get_num_non_empty_vertices(),
