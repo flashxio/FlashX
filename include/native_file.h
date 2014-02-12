@@ -131,4 +131,10 @@ public:
 	bool delete_dir(bool recursive);
 };
 
+static inline bool file_exist(const std::string &file)
+{
+	native_file f(file);
+	return f.exist();
+}
+
 #endif
