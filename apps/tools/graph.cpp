@@ -118,9 +118,10 @@ undirected_graph<edge_data_type> *undirected_graph<edge_data_type>::create(
 }
 
 template<class edge_data_type>
-void undirected_graph<edge_data_type>::dump(const std::string &file) const
+void undirected_graph<edge_data_type>::dump(const std::string &index_file,
+		const std::string &graph_file)
 {
-	FILE *f = fopen(file.c_str(), "w");
+	FILE *f = fopen(graph_file.c_str(), "w");
 	if (f == NULL) {
 		perror("fopen");
 		assert(0);
@@ -141,6 +142,10 @@ void undirected_graph<edge_data_type>::dump(const std::string &file) const
 	}
 
 	fclose(f);
+
+	vertex_index *index = create_vertex_index();
+	index->dump(index_file);
+	vertex_index::destroy(index);
 }
 
 template class undirected_graph<>;

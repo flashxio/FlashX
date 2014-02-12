@@ -31,12 +31,14 @@
 size_t read_edge_list_text(const std::string &file,
 		std::vector<edge<> > &edges);
 
-class in_mem_graph
+class graph
 {
 public:
+	virtual void add_vertex(const in_mem_vertex &v) = 0;
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const = 0;
 	virtual vertex_index *create_vertex_index() const = 0;
-	virtual void dump(const std::string &file) const = 0;
+	virtual void dump(const std::string &index_file,
+			const std::string &graph_file) = 0;
 	virtual size_t get_num_edges() const = 0;
 	virtual size_t get_num_vertices() const = 0;
 	virtual bool has_edge_data() const = 0;
@@ -47,7 +49,7 @@ public:
 };
 
 template<class edge_data_type = empty_data>
-class undirected_graph: public in_mem_graph
+class undirected_graph: public graph
 {
 	std::vector<in_mem_undirected_vertex<edge_data_type> > vertices;
 
@@ -71,7 +73,9 @@ public:
 		return false;
 	}
 
-	void add_vertex(const in_mem_undirected_vertex<edge_data_type> &v) {
+	void add_vertex(const in_mem_vertex &v1) {
+		const in_mem_undirected_vertex<edge_data_type> &v
+			= (const in_mem_undirected_vertex<edge_data_type> &) v1;
 		vertices.push_back(v);
 	}
 
@@ -87,7 +91,8 @@ public:
 				header, vertices);
 	}
 
-	void dump(const std::string &file) const;
+	void dump(const std::string &index_file,
+			const std::string &graph_file);
 
 	size_t get_num_edges() const {
 		size_t num_edges = 0;
@@ -161,7 +166,7 @@ void check_vertex(in_mem_directed_vertex<edge_data_type> in_v,
 }
 
 template<class edge_data_type = empty_data>
-class directed_graph: public in_mem_graph
+class directed_graph: public graph
 {
 	bool has_data;
 	std::vector<in_mem_directed_vertex<edge_data_type> > vertices;
@@ -178,7 +183,9 @@ public:
 		return has_data;
 	}
 
-	void add_vertex(const in_mem_directed_vertex<edge_data_type> &v) {
+	void add_vertex(const in_mem_vertex &v1) {
+		const in_mem_directed_vertex<edge_data_type> &v
+			= (const in_mem_directed_vertex<edge_data_type> &) v1;
 		assert(vertices.size() == v.get_id());
 		assert(v.has_edge_data() == has_data);
 		vertices.push_back(v);
@@ -212,8 +219,9 @@ public:
 				header, vertices);
 	}
 
-	void dump(const std::string &file) const {
-		FILE *f = fopen(file.c_str(), "w");
+	void dump(const std::string &index_file,
+			const std::string &graph_file) {
+		FILE *f = fopen(graph_file.c_str(), "w");
 		if (f == NULL) {
 			perror("fopen");
 			assert(0);
@@ -235,6 +243,10 @@ public:
 		}
 
 		fclose(f);
+
+		vertex_index *index = create_vertex_index();
+		index->dump(index_file);
+		vertex_index::destroy(index);
 	}
 
 	size_t get_num_in_edges() const {
@@ -389,7 +401,7 @@ void check_vertex(ts_in_mem_directed_vertex<edge_data_type> in_v,
 }
 
 template<class edge_data_type = empty_data>
-class ts_directed_graph: public in_mem_graph
+class ts_directed_graph: public graph
 {
 	int max_num_timestamps;
 	bool has_data;
@@ -446,7 +458,9 @@ public:
 		return g;
 	}
 
-	void add_vertex(const ts_in_mem_directed_vertex<edge_data_type> &v) {
+	void add_vertex(const in_mem_vertex &v1) {
+		const ts_in_mem_directed_vertex<edge_data_type> &v
+			= (const ts_in_mem_directed_vertex<edge_data_type> &) v1;
 		vertices.push_back(v);
 	}
 
@@ -466,8 +480,9 @@ public:
 				header, vertices);
 	}
 
-	virtual void dump(const std::string &file) const {
-		FILE *f = fopen(file.c_str(), "w");
+	virtual void dump(const std::string &index_file,
+			const std::string &graph_file) {
+		FILE *f = fopen(graph_file.c_str(), "w");
 		if (f == NULL) {
 			perror("fopen");
 			assert(0);
@@ -494,6 +509,10 @@ public:
 		}
 
 		fclose(f);
+
+		vertex_index *index = create_vertex_index();
+		index->dump(index_file);
+		vertex_index::destroy(index);
 	}
 
 	size_t get_num_in_edges() const {

@@ -59,6 +59,88 @@ struct comp_in_edge {
 	}
 };
 
+template<class edge_data_type>
+class directed_edge_graph;
+
+/**
+ * This is a disk-backed directed graph.
+ */
+template<class edge_data_type>
+class disk_directed_graph: public graph
+{
+	size_t num_edges;
+	size_t num_vertices;
+	size_t num_non_empty;
+	FILE *f;
+	const directed_edge_graph<edge_data_type> *g;
+	directed_in_mem_vertex_index index;
+public:
+	disk_directed_graph(const directed_edge_graph<edge_data_type> *g) {
+		num_edges = 0;
+		num_vertices = 0;
+		num_non_empty = 0;
+		this->g = g;
+		f = NULL;
+	}
+
+	~disk_directed_graph() {
+		delete g;
+	}
+
+	void add_vertex(const in_mem_vertex &v1) {
+		assert(f);
+		const in_mem_directed_vertex<edge_data_type> &v
+			= (const in_mem_directed_vertex<edge_data_type> &) v1;
+		num_vertices++;
+		// To get the total number of edges, I only accumulate on in-edges
+		// or out-edges.
+		num_edges += v.get_num_edges(edge_type::IN_EDGE);
+		if (v.get_num_edges(edge_type::BOTH_EDGES) > 0)
+			num_non_empty++;
+
+		int mem_size = v.get_serialize_size();
+		char *buf = new char[mem_size];
+		ext_mem_directed_vertex::serialize<edge_data_type>(v,
+				buf, mem_size);
+		index.add_vertex(buf);
+		ssize_t ret = fwrite(buf, mem_size, 1, f);
+		delete [] buf;
+		assert(ret == 1);
+	}
+
+	virtual size_t get_num_edges() const {
+		return num_edges;
+	}
+
+	virtual size_t get_num_vertices() const {
+		return num_vertices;
+	}
+
+	virtual bool has_edge_data() const;
+
+	virtual size_t get_num_non_empty_vertices() const {
+		return num_non_empty;
+	}
+
+	virtual void dump(const std::string &index_file,
+			const std::string &graph_file);
+
+	virtual void check_ext_graph(const std::string &index_file,
+			const std::string &adj_file) const;
+
+	virtual vertex_index *create_vertex_index() const {
+		assert(0);
+	}
+
+	void get_all_vertices(std::vector<vertex_id_t> &ids) const {
+		assert(0);
+	}
+
+	virtual void print() const {
+		assert(0);
+	}
+};
+
 /**
  * This represents a directed graph in the form of edge list.
  * It maintains a sorted list of out-edges (sorted on the from vertices)
@@ -67,19 +149,34 @@ struct comp_in_edge {
 template<class edge_data_type = empty_data>
 class directed_edge_graph
 {
-	bool has_edge_data;
+	bool has_data;
 	std::vector<edge<edge_data_type> > in_edges;
 	std::vector<edge<edge_data_type> > out_edges;
 	pthread_mutex_t lock;
 public:
-	directed_edge_graph(bool has_edge_data) {
-		this->has_edge_data = has_edge_data;
+	directed_edge_graph(bool has_data) {
+		this->has_data = has_data;
 		pthread_mutex_init(&lock, NULL);
 	}
 	void sort_edges();
 	directed_edge_graph<edge_count> *compress_edges() const;
 	directed_edge_graph<edge_data_type> *simplify_edges() const;
-	directed_graph<edge_data_type> *create() const;
+	void construct_graph(graph *g) const;
+
+	bool has_edge_data() const {
+		return has_data;
+	}
+
+	directed_graph<edge_data_type> *create_in_mem_graph() const {
+		directed_graph<edge_data_type> *g
+			= new directed_graph<edge_data_type>(has_data);
+		construct_graph(g);
+		return g;
+	}
+
+	disk_directed_graph<edge_data_type> *create_disk_graph() const {
+		return new disk_directed_graph<edge_data_type>(this);
+	}
 
 	void add_edge(const edge<edge_data_type> &e) {
 		in_edges.push_back(e);
@@ -98,6 +195,50 @@ public:
 		return in_edges.size();
 	}
 };
+
+template<class edge_data_type>
+void disk_directed_graph<edge_data_type>::check_ext_graph(
+		const std::string &index_file, const std::string &adj_file) const
+{
+	directed_graph<edge_data_type> *dg = g->create_in_mem_graph();
+	dg->check_ext_graph(index_file, adj_file);
+	delete g;
+}
+
+template<class edge_data_type>
+bool disk_directed_graph<edge_data_type>::has_edge_data() const
+{
+	return g->has_edge_data();
+}
+
+template<class edge_data_type>
+void disk_directed_graph<edge_data_type>::dump(
+		const std::string &index_file, const std::string &graph_file)
+{
+	assert(g);
+	f = fopen(graph_file.c_str(), "w");
+	graph_header header;
+	// Write a dumb header to the file to occupy the space.
+	ssize_t ret = fwrite(&header, sizeof(header), 1, f);
+	assert(ret);
+
+	// Write the adjacency lists to the graph file.
+	g->construct_graph(this);
+	assert(g->get_num_edges() == get_num_edges());
+
+	// Write the real graph header.
+	header = graph_header(graph_type::DIRECTED, num_vertices,
+			num_edges, g->has_edge_data());
+	int seek_ret = fseek(f, 0, SEEK_SET);
+	assert(seek_ret == 0);
+	ret = fwrite(&header, sizeof(header), 1, f);
+	assert(ret == 1);
+	fclose(f);
+	f = NULL;
+
+	assert(this->get_num_edges() == g->get_num_edges());
+	index.dump(index_file, header);
+}
 
 template<class edge_data_type = empty_data>
 directed_edge_graph<edge_data_type> *par_load_edge_list_text(
@@ -455,13 +596,10 @@ void directed_edge_graph<edge_data_type>::sort_edges()
 }
 
 template<class edge_data_type>
-directed_graph<edge_data_type> *directed_edge_graph<edge_data_type>::create() const
+void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 {
-	directed_graph<edge_data_type> *g = new directed_graph<edge_data_type>(
-			has_edge_data);
-
 	vertex_id_t curr = 0;
-	in_mem_directed_vertex<edge_data_type> v(curr, has_edge_data);
+	in_mem_directed_vertex<edge_data_type> v(curr, has_edge_data());
 	size_t out_idx = 0;
 	size_t in_idx = 0;
 	size_t num_edges = in_edges.size();
@@ -490,11 +628,11 @@ directed_graph<edge_data_type> *directed_edge_graph<edge_data_type>::create() co
 		// but we need to fill the gap in the vertex Id space with empty
 		// vertices.
 		while (prev < curr) {
-			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data);
+			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data());
 			prev++;
 			g->add_vertex(v);
 		}
-		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data);
+		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data());
 	}
 
 	// Add remaining out-edges.
@@ -513,11 +651,11 @@ directed_graph<edge_data_type> *directed_edge_graph<edge_data_type>::create() co
 		// but we need to fill the gap in the vertex Id space with empty
 		// vertices.
 		while (prev < curr) {
-			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data);
+			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data());
 			prev++;
 			g->add_vertex(v);
 		}
-		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data);
+		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data());
 	}
 
 	// Add remaining in-edges
@@ -536,16 +674,12 @@ directed_graph<edge_data_type> *directed_edge_graph<edge_data_type>::create() co
 		// but we need to fill the gap in the vertex Id space with empty
 		// vertices.
 		while (prev < curr) {
-			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data);
+			v = in_mem_directed_vertex<edge_data_type>(prev, has_edge_data());
 			prev++;
 			g->add_vertex(v);
 		}
-		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data);
+		v = in_mem_directed_vertex<edge_data_type>(curr, has_edge_data());
 	}
-
-	assert(g->get_num_in_edges() == num_edges);
-	assert(g->get_num_out_edges() == num_edges);
-	return g;
 }
 
 /**
@@ -634,7 +768,7 @@ static void sort_edge_list_files(std::vector<std::string> &files)
 }
 
 template<class edge_data_type = empty_data>
-in_mem_graph *construct_directed_graph_compressed(
+graph *construct_directed_graph_compressed(
 		const std::vector<std::string> &edge_list_files)
 {
 	struct timeval start, end;
@@ -656,16 +790,11 @@ in_mem_graph *construct_directed_graph_compressed(
 			time_diff(start, end), orig_num_edges,
 			new_edge_g->get_num_edges());
 
-	start = end;
-	directed_graph<edge_count> *g = new_edge_g->create();
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
-	delete new_edge_g;
-	return g;
+	return new_edge_g->create_disk_graph();
 }
 
 template<class edge_data_type = empty_data>
-in_mem_graph *construct_directed_graph(
+graph *construct_directed_graph(
 		const std::vector<std::string> &edge_list_files, bool has_edge_data)
 {
 	struct timeval start, end;
@@ -690,12 +819,7 @@ in_mem_graph *construct_directed_graph(
 				time_diff(start, end), orig_num_edges, edge_g->get_num_edges());
 	}
 
-	start = end;
-	directed_graph<edge_data_type> *g = edge_g->create();
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to construct the graph\n", time_diff(start, end));
-	delete edge_g;
-	return g;
+	return edge_g->create_disk_graph();
 }
 
 /**
@@ -735,10 +859,10 @@ void print_usage()
 	fprintf(stderr, "-m: merge multiple edge lists into a single graph. \n");
 }
 
-in_mem_graph *construct_graph(const std::vector<std::string> &edge_list_files,
+graph *construct_graph(const std::vector<std::string> &edge_list_files,
 		int input_type)
 {
-	in_mem_graph *g = NULL;
+	graph *g = NULL;
 	switch(input_type) {
 		case EDGE_COUNT:
 			if (compress)
@@ -845,12 +969,10 @@ int main(int argc, char *argv[])
 	if (merge_graph) {
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
-		in_mem_graph *g = construct_graph(edge_list_files, input_type);
+		graph *g = construct_graph(edge_list_files, input_type);
 
 		// Write the constructed individual graph to a file.
-		vertex_index *index = g->create_vertex_index();
-		g->dump(adjacency_list_file);
-		index->dump(index_file);
+		g->dump(index_file, adjacency_list_file);
 
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds to create vertex index\n",
@@ -863,8 +985,6 @@ int main(int argc, char *argv[])
 		if (check_graph)
 			g->check_ext_graph(index_file, adjacency_list_file);
 		delete g;
-
-		vertex_index::destroy(index);
 	}
 	else {
 		std::vector<std::string> graph_files;
@@ -881,19 +1001,15 @@ int main(int argc, char *argv[])
 		}
 
 		struct timeval start, end;
-		std::vector<vertex_index *> indices;
 		for (size_t i = 0; i < edge_list_files.size(); i++) {
 			// construct individual graphs.
 			gettimeofday(&start, NULL);
 			std::vector<std::string> files(1);
 			files[0] = edge_list_files[i];
-			in_mem_graph *g = construct_graph(files, input_type);
+			graph *g = construct_graph(files, input_type);
 
 			// Write the constructed individual graph to a file.
-			vertex_index *index = g->create_vertex_index();
-			g->dump(graph_files[i]);
-			index->dump(index_files[i]);
-			indices.push_back(index);
+			g->dump(index_files[i], graph_files[i]);
 
 			gettimeofday(&end, NULL);
 			printf("It takes %f seconds to create vertex index\n",
@@ -907,8 +1023,5 @@ int main(int argc, char *argv[])
 				g->check_ext_graph(index_files[i], graph_files[i]);
 			delete g;
 		}
-
-		for (size_t i = 0; i < indices.size(); i++)
-			vertex_index::destroy(indices[i]);
 	}
 }
