@@ -228,7 +228,7 @@ public:
 		}
 
 		graph_header header(graph_type::DIRECTED, vertices.size(),
-				get_num_edges(), has_data);
+				get_num_edges() / 2, has_data);
 		ssize_t ret = fwrite(&header, sizeof(header), 1, f);
 		assert(ret == 1);
 
@@ -489,7 +489,7 @@ public:
 		}
 
 		graph_header header(graph_type::TS_DIRECTED, vertices.size(),
-				get_num_edges(), has_data, max_num_timestamps);
+				get_num_edges() / 2, has_data, max_num_timestamps);
 		ssize_t ret = fwrite(&header, sizeof(header), 1, f);
 		assert(ret == 1);
 
