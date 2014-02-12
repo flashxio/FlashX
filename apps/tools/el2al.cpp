@@ -320,6 +320,8 @@ template<class edge_data_type>
 void disk_directed_graph<edge_data_type>::dump(
 		const std::string &index_file, const std::string &graph_file)
 {
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	assert(g);
 	f = fopen(graph_file.c_str(), "w");
 	graph_header header;
@@ -340,9 +342,16 @@ void disk_directed_graph<edge_data_type>::dump(
 	assert(ret == 1);
 	fclose(f);
 	f = NULL;
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to dump the graph\n",
+			time_diff(start, end));
 
+	start = end;
 	assert(this->get_num_edges() == g->get_num_edges());
 	index.dump(index_file, header);
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to dump the index\n",
+			time_diff(start, end));
 }
 
 template<class edge_data_type = empty_data>
@@ -1082,16 +1091,9 @@ int main(int argc, char *argv[])
 
 	assert(directed);
 	if (merge_graph) {
-		struct timeval start, end;
-		gettimeofday(&start, NULL);
 		graph *g = construct_graph(edge_list_files, input_type);
-
 		// Write the constructed individual graph to a file.
 		g->dump(index_file, adjacency_list_file);
-
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to dump the graph to a file\n",
-				time_diff(start, end));
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
@@ -1115,20 +1117,13 @@ int main(int argc, char *argv[])
 			index_files.push_back(index_file);
 		}
 
-		struct timeval start, end;
 		for (size_t i = 0; i < edge_list_files.size(); i++) {
 			// construct individual graphs.
-			gettimeofday(&start, NULL);
 			std::vector<std::string> files(1);
 			files[0] = edge_list_files[i];
 			graph *g = construct_graph(files, input_type);
-
 			// Write the constructed individual graph to a file.
 			g->dump(index_files[i], graph_files[i]);
-
-			gettimeofday(&end, NULL);
-			printf("It takes %f seconds to dump the graph to a file\n",
-					time_diff(start, end));
 			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 					g->get_num_vertices(), g->get_num_non_empty_vertices(),
 					g->get_num_edges());
