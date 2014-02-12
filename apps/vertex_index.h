@@ -52,15 +52,17 @@ public:
 	static vertex_index *load(const std::string &index_file) {
 		native_file local_f(index_file);
 		ssize_t size = local_f.get_size();
-		assert((unsigned) size >= sizeof(vertex_index));
+		assert(size > 0);
+		assert((size_t) size >= sizeof(vertex_index));
 		char *buf = (char *) malloc(size);
+		assert(buf);
 		FILE *fd = fopen(index_file.c_str(), "r");
 		size_t ret = fread(buf, size, 1, fd);
 		assert(ret == 1);
 		fclose(fd);
 
 		vertex_index *idx = (vertex_index *) buf;
-		assert((unsigned) size >= idx->index_size);
+		assert((size_t) size >= idx->index_size);
 		idx->header.verify();
 
 		return idx;
