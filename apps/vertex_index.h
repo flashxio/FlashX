@@ -205,8 +205,8 @@ public:
 class directed_vertex_entry
 {
 	off_t off;
-	int in_edges;
-	int out_edges;
+	vsize_t in_edges;
+	vsize_t out_edges;
 public:
 	directed_vertex_entry() {
 		off = 0;
@@ -230,11 +230,11 @@ public:
 		return off;
 	}
 
-	int get_num_in_edges() const {
+	size_t get_num_in_edges() const {
 		return in_edges;
 	}
 
-	int get_num_out_edges() const {
+	size_t get_num_out_edges() const {
 		return out_edges;
 	}
 };
@@ -260,11 +260,11 @@ public:
 			+ get_num_vertices() * sizeof(directed_vertex_entry));
 	}
 
-	int get_num_in_edges(vertex_id_t id) const {
+	size_t get_num_in_edges(vertex_id_t id) const {
 		return this->get_vertex(id).get_num_in_edges();
 	}
 
-	int get_num_out_edges(vertex_id_t id) const {
+	size_t get_num_out_edges(vertex_id_t id) const {
 		return this->get_vertex(id).get_num_out_edges();
 	}
 
