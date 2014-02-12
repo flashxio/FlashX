@@ -208,15 +208,106 @@ public:
 		assert(in_edges.size() == out_edges.size());
 		return in_edges.size();
 	}
+
+	void check_vertices(
+			const std::vector<ext_mem_directed_vertex *> &vertices) const;
 };
+
+template<class edge_data_type>
+void directed_edge_graph<edge_data_type>::check_vertices(
+		const std::vector<ext_mem_directed_vertex *> &vertices) const
+{
+	assert(!vertices.empty());
+	typename std::vector<edge<edge_data_type> >::const_iterator in_it
+		= std::lower_bound(in_edges.begin(), in_edges.end(),
+				edge<edge_data_type>(0, vertices[0]->get_id()),
+				comp_in_edge<edge_data_type>());
+	typename std::vector<edge<edge_data_type> >::const_iterator out_it
+		= std::lower_bound(out_edges.begin(), out_edges.end(),
+				edge<edge_data_type>(vertices[0]->get_id(), 0),
+				comp_edge<edge_data_type>());
+
+	for (size_t i = 0; i < vertices.size(); i++) {
+		// Check in-edges
+		edge_const_iterator<edge_data_type> v_in_it
+			= vertices[i]->get_in_edge_begin<edge_data_type>();
+		edge_const_iterator<edge_data_type> v_in_end
+			= vertices[i]->get_in_edge_end<edge_data_type>();
+		for (; v_in_it != v_in_end; ++v_in_it, in_it++) {
+			assert(in_it != in_edges.end());
+			edge<edge_data_type> ve = *v_in_it;
+			edge<edge_data_type> e = *in_it;
+			assert(ve.get_from() == e.get_from());
+			assert(ve.get_to() == e.get_to());
+		}
+
+		// Check out-edges
+		edge_const_iterator<edge_data_type> v_out_it
+			= vertices[i]->get_out_edge_begin<edge_data_type>();
+		edge_const_iterator<edge_data_type> v_out_end
+			= vertices[i]->get_out_edge_end<edge_data_type>();
+		for (; v_out_it != v_out_end; ++v_out_it, out_it++) {
+			assert(out_it != out_edges.end());
+			edge<edge_data_type> ve = *v_out_it;
+			edge<edge_data_type> e = *out_it;
+			assert(ve.get_from() == e.get_from());
+			assert(ve.get_to() == e.get_to());
+		}
+	}
+}
 
 template<class edge_data_type>
 void disk_directed_graph<edge_data_type>::check_ext_graph(
 		const std::string &index_file, const std::string &adj_file) const
 {
-	directed_graph<edge_data_type> *dg = g->create_in_mem_graph();
-	dg->check_ext_graph(index_file, adj_file);
-	delete g;
+	printf("check the graph in the external memory\n");
+	directed_vertex_index *index = directed_vertex_index::load(index_file);
+	vertex_id_t start_id = 0;
+	vertex_id_t end_id = 0;
+	const int MEM_SIZE = 100 * 1024 * 1024;
+
+	FILE *adj_f = fopen(adj_file.c_str(), "r");
+	assert(adj_f);
+	char *adj_buf = new char[MEM_SIZE];
+
+	// Skip the header.
+	int seek_ret = fseek(adj_f, sizeof(graph_header), SEEK_SET);
+	assert(seek_ret == 0);
+
+	while (end_id < index->get_num_vertices()) {
+		// Find the number of vertices that can be stored in the allocated buffer.
+		for (; end_id < index->get_num_vertices()
+				&& index->get_vertex_off(end_id)
+				- index->get_vertex_off(start_id) < MEM_SIZE; end_id++) {
+		}
+		if (end_id < index->get_num_vertices())
+			end_id--;
+		assert(end_id > start_id);
+		size_t read_size;
+		if (end_id == index->get_num_vertices())
+			read_size = index->get_graph_size() - index->get_vertex_off(start_id);
+		else
+			read_size = index->get_vertex_off(end_id)
+				- index->get_vertex_off(start_id);
+		size_t ret = fread(adj_buf, read_size, 1, adj_f);
+		assert(ret == 1);
+
+		off_t start_off = index->get_vertex_off(start_id);
+		std::vector<ext_mem_directed_vertex *> vertices;
+		for (vertex_id_t id = start_id; id < end_id; id++) {
+			size_t size = index->get_vertex_size(id);
+			off_t off = index->get_vertex_off(id) - start_off;
+			ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) (adj_buf + off);
+			assert(v->get_size() == size);
+			assert(v->get_id() == id);
+			vertices.push_back(v);
+		}
+		g->check_vertices(vertices);
+		start_id = end_id;
+	}
+	fclose(adj_f);
+	vertex_index::destroy(index);
+	delete [] adj_buf;
 }
 
 template<class edge_data_type>
