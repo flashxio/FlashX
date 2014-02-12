@@ -221,6 +221,8 @@ public:
 
 	void dump(const std::string &index_file,
 			const std::string &graph_file) {
+		assert(!file_exist(index_file));
+		assert(!file_exist(graph_file));
 		FILE *f = fopen(graph_file.c_str(), "w");
 		if (f == NULL) {
 			perror("fopen");
@@ -482,6 +484,8 @@ public:
 
 	virtual void dump(const std::string &index_file,
 			const std::string &graph_file) {
+		assert(!file_exist(index_file));
+		assert(!file_exist(graph_file));
 		FILE *f = fopen(graph_file.c_str(), "w");
 		if (f == NULL) {
 			perror("fopen");

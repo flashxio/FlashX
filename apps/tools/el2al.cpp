@@ -323,6 +323,8 @@ void disk_directed_graph<edge_data_type>::dump(
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	assert(g);
+	assert(!file_exist(index_file));
+	assert(!file_exist(graph_file));
 	f = fopen(graph_file.c_str(), "w");
 	graph_header header;
 	// Write a dumb header to the file to occupy the space.
