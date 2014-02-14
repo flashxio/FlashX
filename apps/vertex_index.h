@@ -337,4 +337,99 @@ public:
 	}
 };
 
+template<class entry_type>
+class vertex_index_iterator
+{
+	static const int BUF_SIZE = 1024 * 1024;
+	size_t index_file_size;
+	size_t graph_file_size;
+	FILE *f;
+
+	entry_type entry_buf[BUF_SIZE];
+	off_t idx;
+	size_t num_entries;
+	vertex_id_t curr_id;
+
+	vertex_index_iterator(const vertex_index_iterator &);
+	vertex_index_iterator &operator=(const vertex_index_iterator &);
+
+	void read_block() {
+		size_t read_size = min(index_file_size - ftell(f), sizeof(entry_buf));
+		assert(read_size % sizeof(entry_type) == 0);
+		size_t ret = fread(entry_buf, read_size, 1, f);
+		assert(ret == 1);
+		idx = 0;
+		num_entries = read_size / sizeof(entry_type);
+	}
+
+	vertex_index_iterator(const std::string &index_file) {
+		curr_id = 0;
+		memset(entry_buf, 0, sizeof(entry_buf));
+		native_file nf(index_file);
+		index_file_size = nf.get_size();
+		f = fopen(index_file.c_str(), "r");
+		assert(f);
+		int header_size = vertex_index_temp<entry_type>::get_header_size();
+		char header_buf[header_size];
+		size_t ret = fread(header_buf, header_size, 1, f);
+		assert(ret == 1);
+		vertex_index_temp<entry_type> *header
+			= (vertex_index_temp<entry_type> *) header_buf;
+		graph_file_size = header->get_graph_size();
+		read_block();
+	}
+
+	~vertex_index_iterator() {
+		fclose(f);
+	}
+public:
+	static vertex_index_iterator<entry_type> *create(
+			const std::string &index_file) {
+		return new vertex_index_iterator(index_file);
+	}
+
+	static void destroy(vertex_index_iterator<entry_type> *it) {
+		delete it;
+	}
+
+	in_mem_vertex_info next() {
+		assert((size_t) idx < num_entries);
+		if ((size_t) idx == num_entries - 1) {
+			// End of the file
+			if (index_file_size - ftell(f) == 0) {
+				entry_type entry = entry_buf[idx++];
+				vertex_id_t id = curr_id++;
+				return in_mem_vertex_info(id, entry.get_off(),
+						graph_file_size - entry.get_off());
+			}
+			else {
+				// Read a block and compute the size of the vertx.
+				entry_type entry1 = entry_buf[idx];
+				read_block();
+				entry_type entry2 = entry_buf[idx];
+				vertex_id_t id = curr_id++;
+				return in_mem_vertex_info(id, entry1.get_off(),
+						entry2.get_off() - entry1.get_off());
+			}
+		}
+		else {
+			entry_type entry1 = entry_buf[idx++];
+			entry_type entry2 = entry_buf[idx];
+			vertex_id_t id = curr_id++;
+			return in_mem_vertex_info(id, entry1.get_off(),
+					entry2.get_off() - entry1.get_off());
+		}
+	}
+
+	bool has_next() const {
+		assert((size_t) idx <= num_entries);
+		if ((size_t) idx == num_entries)
+			return index_file_size - ftell(f) > 0;
+		else
+			return true;
+	}
+};
+
+typedef vertex_index_iterator<directed_vertex_entry> directed_vertex_index_iterator;
+
 #endif

@@ -261,10 +261,9 @@ void disk_directed_graph<edge_data_type>::check_ext_graph(
 		const std::string &index_file, const std::string &adj_file) const
 {
 	printf("check the graph in the external memory\n");
-	directed_vertex_index *index = directed_vertex_index::load(index_file);
-	vertex_id_t start_id = 0;
-	vertex_id_t end_id = 0;
-	const int MEM_SIZE = 1024 * 1024 * 1024;
+	directed_vertex_index_iterator *index_it
+		= directed_vertex_index_iterator::create(index_file);
+	const size_t MEM_SIZE = 1024 * 1024 * 1024;
 
 	FILE *adj_f = fopen(adj_file.c_str(), "r");
 	assert(adj_f);
@@ -274,39 +273,49 @@ void disk_directed_graph<edge_data_type>::check_ext_graph(
 	int seek_ret = fseek(adj_f, sizeof(graph_header), SEEK_SET);
 	assert(seek_ret == 0);
 
-	while (end_id < index->get_num_vertices()) {
+	std::vector<in_mem_vertex_info> vinfos;
+	while (index_it->has_next()) {
 		// Find the number of vertices that can be stored in the allocated buffer.
-		for (; end_id < index->get_num_vertices()
-				&& index->get_vertex_off(end_id)
-				- index->get_vertex_off(start_id) < MEM_SIZE; end_id++) {
+		size_t read_size = 0;
+		for (size_t i = 0; i < vinfos.size(); i++)
+			read_size += vinfos[i].get_ext_mem_size();
+		std::vector<in_mem_vertex_info> overflow_vinfos;
+		while (index_it->has_next()) {
+			in_mem_vertex_info info = index_it->next();
+			if (read_size + info.get_ext_mem_size() < MEM_SIZE) {
+				vinfos.push_back(info);
+				read_size += info.get_ext_mem_size();
+			}
+			else {
+				overflow_vinfos.push_back(info);
+				break;
+			}
 		}
-		if (end_id < index->get_num_vertices())
-			end_id--;
-		assert(end_id > start_id);
-		size_t read_size;
-		if (end_id == index->get_num_vertices())
-			read_size = index->get_graph_size() - index->get_vertex_off(start_id);
-		else
-			read_size = index->get_vertex_off(end_id)
-				- index->get_vertex_off(start_id);
+		assert(!vinfos.empty());
+		assert((size_t) vinfos.back().get_ext_mem_off()
+				- vinfos.front().get_ext_mem_off()
+				+ vinfos.back().get_ext_mem_size() == read_size);
+		assert(ftell(adj_f) == vinfos.front().get_ext_mem_off());
+
 		size_t ret = fread(adj_buf, read_size, 1, adj_f);
 		assert(ret == 1);
 
-		off_t start_off = index->get_vertex_off(start_id);
+		off_t start_off = vinfos.front().get_ext_mem_off();
 		std::vector<ext_mem_directed_vertex *> vertices;
-		for (vertex_id_t id = start_id; id < end_id; id++) {
-			size_t size = index->get_vertex_size(id);
-			off_t off = index->get_vertex_off(id) - start_off;
+		for (size_t i = 0; i < vinfos.size(); i++) {
+			size_t size = vinfos[i].get_ext_mem_size();
+			off_t off = vinfos[i].get_ext_mem_off() - start_off;
 			ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) (adj_buf + off);
+			assert(off + v->get_size() <= read_size);
 			assert(v->get_size() == size);
-			assert(v->get_id() == id);
+			assert(v->get_id() == vinfos[i].get_id());
 			vertices.push_back(v);
 		}
 		g->check_vertices(vertices);
-		start_id = end_id;
+		vinfos = overflow_vinfos;
 	}
 	fclose(adj_f);
-	vertex_index::destroy(index);
+	directed_vertex_index_iterator::destroy(index_it);
 	delete [] adj_buf;
 }
 

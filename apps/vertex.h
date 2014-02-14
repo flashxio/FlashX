@@ -59,6 +59,12 @@ public:
 		id = -1;
 	}
 
+	in_mem_vertex_info(vertex_id_t id, off_t off, size_t size) {
+		this->id = id;
+		this->off = off;
+		this->size = size;
+	}
+
 	in_mem_vertex_info(vertex_id_t id, const vertex_index *index);
 
 	off_t get_ext_mem_off() const {
