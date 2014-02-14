@@ -983,6 +983,7 @@ void print_usage()
 	}
 	fprintf(stderr, "\n");
 	fprintf(stderr, "-m: merge multiple edge lists into a single graph. \n");
+	fprintf(stderr, "-w: write the graph to a file\n");
 }
 
 graph *construct_graph(const std::vector<std::string> &edge_list_files,
@@ -1022,7 +1023,8 @@ int main(int argc, char *argv[])
 	int num_opts = 0;
 	char *type_str = NULL;
 	bool merge_graph = false;
-	while ((opt = getopt(argc, argv, "ud:cpvt:m")) != -1) {
+	bool write_graph = false;
+	while ((opt = getopt(argc, argv, "ud:cpvt:mw")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -1047,6 +1049,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'm':
 				merge_graph = true;
+				break;
+			case 'w':
+				write_graph = true;
 				break;
 			default:
 				print_usage();
@@ -1095,7 +1100,8 @@ int main(int argc, char *argv[])
 	if (merge_graph) {
 		graph *g = construct_graph(edge_list_files, input_type);
 		// Write the constructed individual graph to a file.
-		g->dump(index_file, adjacency_list_file);
+		if (write_graph)
+			g->dump(index_file, adjacency_list_file);
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
@@ -1125,7 +1131,8 @@ int main(int argc, char *argv[])
 			files[0] = edge_list_files[i];
 			graph *g = construct_graph(files, input_type);
 			// Write the constructed individual graph to a file.
-			g->dump(index_files[i], graph_files[i]);
+			if (write_graph)
+				g->dump(index_files[i], graph_files[i]);
 			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 					g->get_num_vertices(), g->get_num_non_empty_vertices(),
 					g->get_num_edges());
