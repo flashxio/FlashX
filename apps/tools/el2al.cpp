@@ -269,6 +269,7 @@ void disk_directed_graph<edge_data_type>::check_ext_graph(
 		num_vertices += vertices.size();
 		g->check_vertices(vertices);
 	}
+	printf("%ld vertices are checked\n", num_vertices);
 	assert(vit.get_graph_header().get_num_vertices() == num_vertices);
 }
 
