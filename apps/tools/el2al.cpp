@@ -264,7 +264,7 @@ void disk_directed_graph<edge_data_type>::check_ext_graph(
 	directed_vertex_index *index = directed_vertex_index::load(index_file);
 	vertex_id_t start_id = 0;
 	vertex_id_t end_id = 0;
-	const int MEM_SIZE = 100 * 1024 * 1024;
+	const int MEM_SIZE = 1024 * 1024 * 1024;
 
 	FILE *adj_f = fopen(adj_file.c_str(), "r");
 	assert(adj_f);
