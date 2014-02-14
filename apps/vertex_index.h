@@ -337,8 +337,15 @@ public:
 	}
 };
 
-template<class entry_type>
 class vertex_index_iterator
+{
+public:
+	virtual in_mem_vertex_info next() = 0;
+	virtual bool has_next() const = 0;
+};
+
+template<class entry_type>
+class vertex_index_iterator_impl: public vertex_index_iterator
 {
 	static const int BUF_SIZE = 1024 * 1024;
 	size_t index_file_size;
@@ -350,8 +357,9 @@ class vertex_index_iterator
 	size_t num_entries;
 	vertex_id_t curr_id;
 
-	vertex_index_iterator(const vertex_index_iterator &);
-	vertex_index_iterator &operator=(const vertex_index_iterator &);
+	vertex_index_iterator_impl(const vertex_index_iterator_impl<entry_type> &);
+	vertex_index_iterator_impl &operator=(
+			const vertex_index_iterator_impl<entry_type> &);
 
 	void read_block() {
 		size_t read_size = min(index_file_size - ftell(f), sizeof(entry_buf));
@@ -362,7 +370,7 @@ class vertex_index_iterator
 		num_entries = read_size / sizeof(entry_type);
 	}
 
-	vertex_index_iterator(const std::string &index_file) {
+	vertex_index_iterator_impl(const std::string &index_file) {
 		curr_id = 0;
 		memset(entry_buf, 0, sizeof(entry_buf));
 		native_file nf(index_file);
@@ -379,16 +387,16 @@ class vertex_index_iterator
 		read_block();
 	}
 
-	~vertex_index_iterator() {
+	~vertex_index_iterator_impl() {
 		fclose(f);
 	}
 public:
-	static vertex_index_iterator<entry_type> *create(
+	static vertex_index_iterator_impl<entry_type> *create(
 			const std::string &index_file) {
-		return new vertex_index_iterator(index_file);
+		return new vertex_index_iterator_impl<entry_type>(index_file);
 	}
 
-	static void destroy(vertex_index_iterator<entry_type> *it) {
+	static void destroy(vertex_index_iterator_impl<entry_type> *it) {
 		delete it;
 	}
 
@@ -430,6 +438,7 @@ public:
 	}
 };
 
-typedef vertex_index_iterator<directed_vertex_entry> directed_vertex_index_iterator;
+typedef vertex_index_iterator_impl<directed_vertex_entry> directed_vertex_index_iterator;
+typedef vertex_index_iterator_impl<vertex_offset> default_vertex_index_iterator;
 
 #endif

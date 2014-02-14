@@ -261,62 +261,15 @@ void disk_directed_graph<edge_data_type>::check_ext_graph(
 		const std::string &index_file, const std::string &adj_file) const
 {
 	printf("check the graph in the external memory\n");
-	directed_vertex_index_iterator *index_it
-		= directed_vertex_index_iterator::create(index_file);
-	const size_t MEM_SIZE = 1024 * 1024 * 1024;
-
-	FILE *adj_f = fopen(adj_file.c_str(), "r");
-	assert(adj_f);
-	char *adj_buf = new char[MEM_SIZE];
-
-	// Skip the header.
-	int seek_ret = fseek(adj_f, sizeof(graph_header), SEEK_SET);
-	assert(seek_ret == 0);
-
-	std::vector<in_mem_vertex_info> vinfos;
-	while (index_it->has_next()) {
-		// Find the number of vertices that can be stored in the allocated buffer.
-		size_t read_size = 0;
-		for (size_t i = 0; i < vinfos.size(); i++)
-			read_size += vinfos[i].get_ext_mem_size();
-		std::vector<in_mem_vertex_info> overflow_vinfos;
-		while (index_it->has_next()) {
-			in_mem_vertex_info info = index_it->next();
-			if (read_size + info.get_ext_mem_size() < MEM_SIZE) {
-				vinfos.push_back(info);
-				read_size += info.get_ext_mem_size();
-			}
-			else {
-				overflow_vinfos.push_back(info);
-				break;
-			}
-		}
-		assert(!vinfos.empty());
-		assert((size_t) vinfos.back().get_ext_mem_off()
-				- vinfos.front().get_ext_mem_off()
-				+ vinfos.back().get_ext_mem_size() == read_size);
-		assert(ftell(adj_f) == vinfos.front().get_ext_mem_off());
-
-		size_t ret = fread(adj_buf, read_size, 1, adj_f);
-		assert(ret == 1);
-
-		off_t start_off = vinfos.front().get_ext_mem_off();
+	ext_mem_vertex_iterator vit(index_file, adj_file);
+	size_t num_vertices = 0;
+	while (vit.has_next()) {
 		std::vector<ext_mem_directed_vertex *> vertices;
-		for (size_t i = 0; i < vinfos.size(); i++) {
-			size_t size = vinfos[i].get_ext_mem_size();
-			off_t off = vinfos[i].get_ext_mem_off() - start_off;
-			ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) (adj_buf + off);
-			assert(off + v->get_size() <= read_size);
-			assert(v->get_size() == size);
-			assert(v->get_id() == vinfos[i].get_id());
-			vertices.push_back(v);
-		}
+		vit.next_vertices(vertices);
+		num_vertices += vertices.size();
 		g->check_vertices(vertices);
-		vinfos = overflow_vinfos;
 	}
-	fclose(adj_f);
-	directed_vertex_index_iterator::destroy(index_it);
-	delete [] adj_buf;
+	assert(vit.get_graph_header().get_num_vertices() == num_vertices);
 }
 
 template<class edge_data_type>

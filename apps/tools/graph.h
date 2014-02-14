@@ -585,4 +585,107 @@ public:
 	}
 };
 
+class ext_mem_vertex_iterator
+{
+	static const size_t MEM_SIZE = 1024 * 1024 * 1024;
+	graph_header header;
+	vertex_index_iterator *index_it;
+	FILE *adj_f;
+	char *adj_buf;
+	std::vector<in_mem_vertex_info> overflow_vinfos;
+	std::vector<char *> vertices;
+	std::vector<char *>::const_iterator vit;
+
+	void read_vertices();
+	ext_mem_vertex_iterator(const ext_mem_vertex_iterator &);
+	ext_mem_vertex_iterator &operator=(const ext_mem_vertex_iterator &);
+public:
+	ext_mem_vertex_iterator() {
+		index_it = NULL;
+		adj_f = NULL;
+		adj_buf = NULL;
+	}
+
+	ext_mem_vertex_iterator(const std::string &index_file,
+			const std::string &adj_file) {
+		init(index_file, adj_file);
+	}
+
+	~ext_mem_vertex_iterator() {
+		if (is_valid()) {
+			fclose(adj_f);
+			graph_type type = header.get_graph_type();
+			if (type == graph_type::DIRECTED)
+				directed_vertex_index_iterator::destroy(
+						(directed_vertex_index_iterator *) index_it);
+			else
+				default_vertex_index_iterator::destroy(
+						(default_vertex_index_iterator *) index_it);
+			delete [] adj_buf;
+		}
+	}
+
+	bool is_valid() const {
+		return index_it != NULL;
+	}
+
+	void init(const std::string &index_file, const std::string &adj_file) {
+		adj_f = fopen(adj_file.c_str(), "r");
+		assert(adj_f);
+		size_t ret = fread(&header, sizeof(header), 1, adj_f);
+		assert(ret == 1);
+
+		graph_type type = header.get_graph_type();
+		if (type == graph_type::DIRECTED)
+			index_it = directed_vertex_index_iterator::create(index_file);
+		else
+			index_it = default_vertex_index_iterator::create(index_file);
+
+		adj_buf = new char[MEM_SIZE];
+		read_vertices();
+	}
+
+	const graph_header &get_graph_header() const {
+		return header;
+	}
+
+	bool has_next() const {
+		if (vit != vertices.end())
+			return true;
+		else if (!overflow_vinfos.empty())
+			return true;
+		else
+			return index_it->has_next();
+	}
+
+	/*
+	 * The iterator uses an internal memory buffer to keep the vertices
+	 * read from the disks. Once next() or next_vertices() is invoked,
+	 * all vertices returned by the previous next() and next_vertices()
+	 * will become invalid.
+	 */
+
+	template<class vertex_type>
+	vertex_type *next() {
+		if (vit == vertices.end())
+			read_vertices();
+
+		vertex_type *v = (vertex_type *) *vit;
+		vit++;
+		return v;
+	}
+
+	template<class vertex_type>
+	size_t next_vertices(std::vector<vertex_type *> &ret) {
+		if (vit == vertices.end())
+			read_vertices();
+
+		while (vit != vertices.end()) {
+			ret.push_back((vertex_type *) *vit);
+			vit++;
+		}
+		return ret.size();
+	}
+};
+
 #endif

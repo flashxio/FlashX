@@ -151,3 +151,65 @@ void undirected_graph<edge_data_type>::dump(const std::string &index_file,
 }
 
 template class undirected_graph<>;
+
+void ext_mem_vertex_iterator::read_vertices()
+{
+	std::vector<in_mem_vertex_info> vinfos = overflow_vinfos;
+	overflow_vinfos.clear();
+
+	// Find the number of vertices that can be stored in the allocated buffer.
+	size_t read_size = 0;
+	for (size_t i = 0; i < vinfos.size(); i++)
+		read_size += vinfos[i].get_ext_mem_size();
+	assert(read_size <= MEM_SIZE);
+	while (index_it->has_next()) {
+		in_mem_vertex_info info = index_it->next();
+		if (read_size + info.get_ext_mem_size() < MEM_SIZE) {
+			vinfos.push_back(info);
+			read_size += info.get_ext_mem_size();
+		}
+		else {
+			overflow_vinfos.push_back(info);
+			break;
+		}
+	}
+	assert(!vinfos.empty());
+	assert((size_t) vinfos.back().get_ext_mem_off()
+			- vinfos.front().get_ext_mem_off()
+			+ vinfos.back().get_ext_mem_size() == read_size);
+	assert(ftell(adj_f) == vinfos.front().get_ext_mem_off());
+
+	size_t ret = fread(adj_buf, read_size, 1, adj_f);
+	assert(ret == 1);
+
+	graph_type type = header.get_graph_type();
+	vertices.clear();
+	off_t start_off = vinfos.front().get_ext_mem_off();
+	for (size_t i = 0; i < vinfos.size(); i++) {
+		size_t size = vinfos[i].get_ext_mem_size();
+		off_t off = vinfos[i].get_ext_mem_off() - start_off;
+		vertices.push_back(adj_buf + off);
+
+		size_t vsize;
+		vertex_id_t id;
+		if (type == graph_type::DIRECTED) {
+			ext_mem_directed_vertex *v
+				= (ext_mem_directed_vertex *) vertices.back();
+			vsize = v->get_size();
+			id = v->get_id();
+		}
+		else if (type == graph_type::TS_DIRECTED) {
+			ts_ext_mem_directed_vertex *v
+				= (ts_ext_mem_directed_vertex *) vertices.back();
+			vsize = v->get_size();
+			id = v->get_id();
+		}
+		else {
+			assert(0);
+		}
+		assert(off + vsize <= read_size);
+		assert(vsize == size);
+		assert(id == vinfos[i].get_id());
+	}
+	vit = vertices.begin();
+}
