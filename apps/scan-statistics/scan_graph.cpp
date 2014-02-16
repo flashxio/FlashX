@@ -1100,8 +1100,8 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = graph_index_impl<scan_vertex>::create(
-			index_file);
+	graph_index *index = NUMA_graph_index<scan_vertex>::create(
+			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
 	graph_engine *graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
 			index);

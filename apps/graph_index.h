@@ -282,6 +282,7 @@ public:
 	}
 };
 
+#if 0
 template<class vertex_type>
 class graph_index_impl: public graph_index
 {
@@ -327,5 +328,6 @@ public:
 		return vertices.front().get_id();
 	}
 };
+#endif
 
 #endif

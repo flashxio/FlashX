@@ -149,10 +149,13 @@ int main(int argc, char *argv[])
 
 	init_io_system(configs);
 
-	graph_index *index = graph_index_impl<stat_vertex>::create(index_file);
+	graph_index *index = NUMA_graph_index<stat_vertex>::create(index_file,
+			graph_conf.get_num_threads(), params.get_num_nodes());
+	printf("finish loading the graph index\n");
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
 	const graph_header &header = graph->get_graph_header();
+	printf("start the graph algorithm\n");
 	graph->start_all();
 	graph->wait4complete();
 
