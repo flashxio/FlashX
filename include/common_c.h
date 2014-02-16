@@ -79,12 +79,12 @@ inline static long time_diff_us(struct timeval time1, struct timeval time2)
 			+ (time2.tv_usec - time1.tv_usec);
 }
 
-inline static int min(int v1, int v2)
+inline static long min(long v1, long v2)
 {
 	return v1 > v2 ? v2 : v1;
 }
 
-inline static int max(int v1, int v2)
+inline static long max(long v1, long v2)
 {
 	return v1 < v2 ? v2 : v1;
 }
