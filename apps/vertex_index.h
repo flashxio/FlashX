@@ -100,6 +100,10 @@ public:
 	size_t get_graph_size() const {
 		return tot_size;
 	}
+
+	size_t get_index_size() const {
+		return index_size;
+	}
 };
 
 /**

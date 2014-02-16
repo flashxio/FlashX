@@ -25,15 +25,7 @@
 
 class compute_vertex;
 
-static inline vertex_index *load_vertex_index(const std::string &index_file)
-{
-	vertex_index *index = vertex_index::load(index_file);
-	if (index->get_graph_header().get_graph_type() == graph_type::DIRECTED)
-		((directed_vertex_index *) index)->verify();
-	else
-		((default_vertex_index *) index)->verify();
-	return index;
-}
+vertex_index *load_vertex_index(const std::string &index_file);
 
 /**
  * This file contains a set of graph index implementation.
