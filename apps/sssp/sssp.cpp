@@ -137,21 +137,46 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
+void print_usage()
+{
+	fprintf(stderr,
+			"sssp [options] conf_file graph_file index_file start_vertex\n");
+	fprintf(stderr, "-c confs: add more configurations to the system\n");
+	graph_conf.print_help();
+	params.print_help();
+}
+
 int main(int argc, char *argv[])
 {
-	if (argc < 5) {
-		fprintf(stderr, "sssp conf_file graph_file index_file start_vertex\n");
-		graph_conf.print_help();
-		params.print_help();
+	int opt;
+	std::string confs;
+	int num_opts = 0;
+	while ((opt = getopt(argc, argv, "c:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'c':
+				confs = optarg;
+				num_opts++;
+				break;
+			default:
+				print_usage();
+		}
+	}
+	argv += 1 + num_opts;
+	argc -= 1 + num_opts;
+
+	if (argc < 4) {
+		print_usage();
 		exit(-1);
 	}
 
-	std::string conf_file = argv[1];
-	std::string graph_file = argv[2];
-	std::string index_file = argv[3];
-	vertex_id_t start_vertex = atoi(argv[4]);
+	std::string conf_file = argv[0];
+	std::string graph_file = argv[1];
+	std::string index_file = argv[2];
+	vertex_id_t start_vertex = atoi(argv[3]);
 
 	config_map configs(conf_file);
+	configs.add_options(confs);
 	graph_conf.init(configs);
 	graph_conf.print();
 

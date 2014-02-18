@@ -322,20 +322,51 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
+void print_usage()
+{
+	fprintf(stderr,
+			"triangle-counting [options] conf_file graph_file index_file\n");
+	fprintf(stderr, "-o file: output local scan of each vertex to a file\n");
+	fprintf(stderr, "-c confs: add more configurations to the system\n");
+	graph_conf.print_help();
+	params.print_help();
+}
+
 int main(int argc, char *argv[])
 {
-	if (argc < 4) {
-		fprintf(stderr, "triangle-counting conf_file graph_file index_file\n");
-		graph_conf.print_help();
-		params.print_help();
+	int opt;
+	std::string output_file;
+	std::string confs;
+	int num_opts = 0;
+	while ((opt = getopt(argc, argv, "o:c:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'o':
+				output_file = optarg;
+				num_opts++;
+				break;
+			case 'c':
+				confs = optarg;
+				num_opts++;
+				break;
+			default:
+				print_usage();
+		}
+	}
+	argv += 1 + num_opts;
+	argc -= 1 + num_opts;
+
+	if (argc < 3) {
+		print_usage();
 		exit(-1);
 	}
 
-	std::string conf_file = argv[1];
-	std::string graph_file = argv[2];
-	std::string index_file = argv[3];
+	std::string conf_file = argv[0];
+	std::string graph_file = argv[1];
+	std::string index_file = argv[2];
 
 	config_map configs(conf_file);
+	configs.add_options(confs);
 	graph_conf.init(configs);
 	graph_conf.print();
 
