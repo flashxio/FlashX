@@ -198,9 +198,6 @@ public:
 		pthread_mutex_lock(&lock);
 		in_edges.insert(in_edges.end(), edges.begin(), edges.end());
 		out_edges.insert(out_edges.end(), edges.begin(), edges.end());
-		printf("the edge graph has %ld edges and use %ld bytes\n",
-				in_edges.size() + out_edges.size(), (in_edges.capacity()
-					+ out_edges.capacity()) * sizeof(edge<edge_data_type>));
 		pthread_mutex_unlock(&lock);
 	}
 
@@ -782,6 +779,7 @@ directed_edge_graph<edge_data_type> *par_load_edge_list_text(
 	int thread_no = 0;
 	printf("start to read the edge list\n");
 	for (size_t i = 0; i < files.size(); i++) {
+		printf("read file %s\n", files[i].c_str());
 		graph_file_io io(files[i]);
 		while (io.get_num_remaining_bytes() > 0) {
 			size_t size = 0;
