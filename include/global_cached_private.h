@@ -424,10 +424,14 @@ public:
 	}
 
 	virtual void cleanup() {
-		wait4complete(num_pending_ios());
+		// wait4complete may generate more requests because of user compute
+		// tasks. We have to make sure all requests are completed.
+		while (num_pending_ios() > 0 || !incomplete_computes.is_empty())
+			wait4complete(num_pending_ios());
 		underlying->cleanup();
 		assert(num_processed_areqs.get() == num_completed_areqs.get());
 		assert(num_processed_areqs.get() == num_issued_areqs.get());
+		assert(incomplete_computes.is_empty());
 		assert(get_num_underlying_reqs() == 0);
 		assert(num_underlying_pages.get() == 0);
 		assert(pending_requests.is_empty());

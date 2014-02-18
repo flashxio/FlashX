@@ -1463,18 +1463,20 @@ void global_cached_io::wait4req(original_io_request *req)
 int global_cached_io::wait4complete(int num_to_complete)
 {
 	flush_requests();
+	size_t prev_completed_areqs = num_completed_areqs.get();
 	int pending = num_pending_ios();
 	num_to_complete = min(pending, num_to_complete);
 
 	process_all_requests();
-	while (pending - num_pending_ios() < num_to_complete) {
+	while (num_completed_areqs.get()
+			- prev_completed_areqs < (size_t) num_to_complete) {
 		// We only wait when there are pending requests in the underlying IO.
 		if (num_to_underlying.get() - num_from_underlying.get() > 0) {
 			get_thread()->wait();
 		}
 		process_all_requests();
 	}
-	return pending - num_pending_ios();
+	return num_completed_areqs.get() - prev_completed_areqs;
 }
 
 void global_cached_io::notify_completion(io_request *reqs[], int num)
