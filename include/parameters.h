@@ -45,7 +45,10 @@ public:
 
 	config_map(const std::string &conf_file);
 
-	void add_options(char *opts[], int num);
+	void add_options(const char *opts[], int num);
+	// Multiple options may exist in the input string and
+	// the options are separated by space.
+	void add_options(const std::string &opts);
 
 	const std::string &get_option(const std::string &name) const {
 		std::map<std::string, std::string>::const_iterator it

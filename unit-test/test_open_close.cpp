@@ -27,9 +27,9 @@ int main()
 	const int NUM_THREADS = 10;
 
 	config_map configs;
-	char *opts[1];
+	const char *opts[1];
 	std::string opt = "root_conf=conf/TEST_ROOTS.txt";
-	opts[0] = (char *) opt.c_str();
+	opts[0] = opt.c_str();
 	configs.add_options(opts, 1);
 
 	init_io_system(configs);

@@ -301,7 +301,7 @@ int main(int argc, char *argv[])
 	// The file that contains all data files.
 
 	config_map configs(conf_file);
-	configs.add_options(argv + 3, argc - 3);
+	configs.add_options((const char **) argv + 3, argc - 3);
 	config.init(configs.get_options());
 	config.print();
 

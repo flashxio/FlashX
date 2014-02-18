@@ -18,6 +18,7 @@
  */
 
 #include<algorithm>
+#include <sstream>
 
 #include "parameters.h"
 #include "common.h"
@@ -263,7 +264,7 @@ config_map::config_map(const std::string &conf_file)
  *		key=value.
  * All options that don't have the format are ignored.
  */
-void config_map::add_options(char *argv[], int argc)
+void config_map::add_options(const char *argv[], int argc)
 {
 	for (int i = 0; i < argc; i++) {
 		std::string str = argv[i];
@@ -284,4 +285,29 @@ void config_map::add_options(char *argv[], int argc)
 		if (!res)
 			configs[key] = value;
 	}
+}
+
+size_t split_string(const std::string &str, const std::string &delimiter,
+		std::vector<std::string> &splits)
+{
+	std::stringstream ss(str);
+	size_t num = 0;
+	while (ss.good()) {
+		std::string s;
+		ss >> s;
+		splits.push_back(s);
+		num++;
+	}
+	return num;
+}
+
+void config_map::add_options(const std::string &opts)
+{
+	std::vector<std::string> parts;
+	split_string(opts, " ", parts);
+	std::vector<const char *> part_chars;
+	for (size_t i = 0; i < parts.size(); i++) {
+		part_chars.push_back(parts[i].c_str());
+	}
+	config_map::add_options(part_chars.data(), part_chars.size());
 }
