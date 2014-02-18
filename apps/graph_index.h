@@ -20,6 +20,8 @@
  * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <boost/foreach.hpp>
+
 #include "vertex.h"
 #include "partitioner.h"
 
@@ -126,24 +128,24 @@ public:
 	}
 
 	void init() {
-		size_t num_init = 0;
-		for (size_t i = 0; i < tot_num_vertices; i++) {
+		std::vector<vertex_id_t> local_ids;
+		local_ids.reserve(num_vertices);
+		partitioner->get_all_vertices_in_part(this->part_id, tot_num_vertices,
+				local_ids);
+		BOOST_FOREACH(vertex_id_t vid, local_ids) {
 			int part_id;
 			off_t part_off;
-			partitioner->map2loc(i, part_id, part_off);
-			if (this->part_id != part_id)
-				continue;
-
-			num_init++;
-			new (vertex_arr + part_off) vertex_type(i, index);
+			partitioner->map2loc(vid, part_id, part_off);
+			assert(this->part_id == part_id);
+			new (vertex_arr + part_off) vertex_type(vid, index);
 			if (vertex_arr[part_off].get_ext_mem_size() > min_vertex_size) {
 				num_non_empty++;
 			}
 		}
-		assert(num_init <= num_vertices);
-		if (num_init < num_vertices) {
-			assert(num_init == num_vertices - 1);
-			new (vertex_arr + num_init) vertex_type();
+		assert(local_ids.size() <= num_vertices);
+		if (local_ids.size() < num_vertices) {
+			assert(local_ids.size() == num_vertices - 1);
+			new (vertex_arr + local_ids.size()) vertex_type();
 		}
 	}
 

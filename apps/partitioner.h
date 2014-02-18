@@ -47,6 +47,14 @@ public:
 	void loc2map(int part_id, off_t off, vertex_id_t &id) const {
 		id = (off << num_parts_log) + part_id;
 	}
+
+	size_t get_all_vertices_in_part(int part_id, size_t tot_num_vertices,
+			std::vector<vertex_id_t> &ids) const {
+		int num_parts = 1 << num_parts_log;
+		for (size_t i = part_id; i < tot_num_vertices; i += num_parts)
+			ids.push_back(i);
+		return ids.size();
+	}
 };
 
 
