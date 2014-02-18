@@ -322,6 +322,9 @@ class worker_thread: public thread
 	// The thread where we should steal activated vertices from.
 	int steal_thread_id;
 
+	// Indicate that we need to start all vertices.
+	bool start_all;
+
 	// The number of activated vertices processed in the current level.
 	atomic_number<long> num_activated_vertices_in_level;
 	// The number of vertices completed in the current level.
@@ -338,6 +341,15 @@ public:
 	void init() {
 		io = factory->create_io(this);
 		io->init();
+
+		// If a user wants to start all vertices.
+		if (start_all) {
+			std::vector<vertex_id_t> local_ids;
+			graph->get_partitioner()->get_all_vertices_in_part(worker_id,
+					graph->get_num_vertices(), local_ids);
+			assert(curr_activated_vertices.is_empty());
+			curr_activated_vertices.init(local_ids, false);
+		}
 	}
 
 	compute_allocator *get_part_compute_allocator() const {
@@ -383,6 +395,10 @@ public:
 	void start_vertices(const std::vector<vertex_id_t> &vertices) {
 		assert(curr_activated_vertices.is_empty());
 		curr_activated_vertices.init(vertices, false);
+	}
+
+	void start_all_vertices() {
+		start_all = true;
 	}
 
 	void set_vertex_scheduler(vertex_scheduler *scheduler) {
@@ -516,6 +532,7 @@ worker_thread::worker_thread(graph_engine *graph, file_io_factory *factory,
 		next_activated_vertices((size_t) ceil(((double) graph->get_max_vertex_id()
 						+ 1) / num_threads))
 {
+	start_all = false;
 	this->worker_id = worker_id;
 	this->graph = graph;
 	this->io = NULL;
@@ -818,18 +835,9 @@ void graph_engine::start(vertex_id_t ids[], int num)
 
 void graph_engine::start_all()
 {
-	int num_threads = get_num_threads();
-	std::vector<vertex_id_t> start_vertices[num_threads];
-	graph_index::const_iterator it = vertices->begin();
-	graph_index::const_iterator end = vertices->end();
-	for (; it != end; ++it) {
-		vertex_id_t id = (*it).get_id();
-		int idx = get_partitioner()->map(id);
-		start_vertices[idx].push_back(id);
-	}
-	for (unsigned i = 0; i < worker_threads.size(); i++) {
-		worker_threads[i]->start_vertices(start_vertices[i]);
-		worker_threads[i]->start();
+	BOOST_FOREACH(worker_thread *t, worker_threads) {
+		t->start_all_vertices();
+		t->start();
 	}
 }
 

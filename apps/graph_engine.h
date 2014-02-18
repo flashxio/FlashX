@@ -258,6 +258,10 @@ public:
 		return vertices->get_min_vertex_id();
 	}
 
+	size_t get_num_vertices() const {
+		return vertices->get_num_vertices();
+	}
+
 	void wait4complete();
 
 	int get_num_threads() const {
