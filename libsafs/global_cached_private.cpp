@@ -1490,12 +1490,6 @@ void global_cached_io::notify_completion(io_request *reqs[], int num)
 	get_thread()->activate();
 }
 
-static struct comp_req_off {
-	bool operator() (const io_request &req1, const io_request &req2) {
-		return req1.get_offset() < req2.get_offset();
-	}
-} req_off_comparator;
-
 static bool cross_RAID_block_bound(off_t off, size_t size)
 {
 	off_t end = off + size;
@@ -1548,21 +1542,15 @@ void global_cached_io::flush_requests()
 	if (!params.is_merge_reqs())
 		assert(underlying_requests.empty());
 	else if (underlying_requests.size() > 0) {
-		if (underlying_requests.size() > 1)
-			std::sort(underlying_requests.begin(),
-					underlying_requests.end(), req_off_comparator);
 		io_request req = underlying_requests[0];
 		int num_sent = 0;
 		int num_pages = 0;
 		for (unsigned i = 1; i < underlying_requests.size(); i++) {
 			io_request *under_req = &underlying_requests[i];
 
-			// The requests shouldn't overlap.
-			assert(under_req->get_offset()
-					>= req.get_offset() + req.get_size());
 			// If the two requests are not connected
 			if (under_req->get_offset()
-					> req.get_offset() + req.get_size()
+					!= req.get_offset() + req.get_size()
 					// The merged request will cross the boundary of
 					// a RAID block.
 					|| cross_RAID_block_bound(req.get_offset(),
