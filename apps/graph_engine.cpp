@@ -390,6 +390,14 @@ public:
 	void set_vertex_scheduler(vertex_scheduler *scheduler) {
 		curr_activated_vertices.set_vertex_scheduler(scheduler);
 	}
+
+	/**
+	 * Get the number of vertices being processed in the current level.
+	 */
+	int get_num_vertices_processing() const {
+		return num_activated_vertices_in_level.get()
+			- num_completed_vertices_in_level.get();
+	}
 };
 
 request_range ts_compute_vertex::get_next_request(graph_engine *graph)
@@ -683,18 +691,15 @@ void worker_thread::run()
 	while (true) {
 		int num_visited = 0;
 		int num;
-		while ((num = process_activated_vertices(MAX_IO_PEND_VERTICES
-						- io->num_pending_ios())) > 0) {
+		while (get_num_vertices_processing() > 0
+				|| !curr_activated_vertices.is_empty()) {
+			num = process_activated_vertices(MAX_IO_PEND_VERTICES
+					- io->num_pending_ios());
 			num_visited += num;
 			process_msgs();
-			io->wait4complete(io->num_pending_ios() / 10 + max<int>(0,
-						io->num_pending_ios() - MAX_IO_PEND_VERTICES));
+			io->wait4complete(min(io->num_pending_ios() / 10, 2));
 		}
-		// We have completed processing the activated vertices in this iteration.
-		while (num_activated_vertices_in_level.get()
-				- num_completed_vertices_in_level.get() > 0) {
-			io->wait4complete(1);
-		}
+		assert(curr_activated_vertices.is_empty());
 		printf("thread %d visited %d vertices\n", this->get_id(), num_visited);
 
 		// Now we have finished this level, we can progress to the next level.
