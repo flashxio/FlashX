@@ -29,8 +29,6 @@
 #include "graph_engine.h"
 #include "messaging.h"
 
-const int MAX_IO_PEND_VERTICES = 2000;
-
 graph_config graph_conf;
 
 class worker_thread;
@@ -693,7 +691,8 @@ void worker_thread::run()
 		int num;
 		while (get_num_vertices_processing() > 0
 				|| !curr_activated_vertices.is_empty()) {
-			num = process_activated_vertices(MAX_IO_PEND_VERTICES
+			num = process_activated_vertices(
+					graph_conf.get_max_processing_vertices()
 					- io->num_pending_ios());
 			num_visited += num;
 			process_msgs();

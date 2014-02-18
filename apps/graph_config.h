@@ -28,10 +28,12 @@ class graph_config
 	std::string prof_file;
 	bool print_io_stat;
 	std::string trace_file;
+	int max_processing_vertices;
 public:
 	graph_config() {
 		num_threads = 4;
 		print_io_stat = false;
+		max_processing_vertices = 2000;
 	}
 
 	void print_help();
@@ -54,6 +56,10 @@ public:
 	const std::string &get_trace_file() const {
 		return trace_file;
 	}
+
+	int get_max_processing_vertices() const {
+		return max_processing_vertices;
+	}
 };
 
 inline void graph_config::print_help()
@@ -62,6 +68,7 @@ inline void graph_config::print_help()
 	printf("\tthreads: the number of threads processing the graph\n");
 	printf("\tprint_io_stat: print the status of IO instances after the program completes\n");
 	printf("\ttrace_file: log IO requests\n");
+	printf("\tmax_processing_vertices: the max number of vertices being processed\n");
 }
 
 inline void graph_config::print()
@@ -70,6 +77,7 @@ inline void graph_config::print()
 	printf("\tthreads: %d\n", num_threads);
 	printf("\tprint_io_stat: %d\n", print_io_stat);
 	printf("\ttrace_file: %s\n", trace_file.c_str());
+	printf("\tmax_processing_vertices: %d\n", max_processing_vertices);
 }
 
 inline void graph_config::init(const config_map &map)
@@ -78,6 +86,7 @@ inline void graph_config::init(const config_map &map)
 	map.read_option("prof_file", prof_file);
 	map.read_option_bool("print_io_stat", print_io_stat);
 	map.read_option("trace_file", trace_file);
+	map.read_option_int("max_processing_vertices", max_processing_vertices);
 }
 
 extern graph_config graph_conf;
