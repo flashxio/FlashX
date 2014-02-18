@@ -510,16 +510,32 @@ public:
 	}
 };
 
+/**
+ * This data structure contains all data required when the vertex is
+ * computing local scan.
+ * It doesn't need to exist before or after the vertex computes local scan.
+ */
+struct runtime_data_t
+{
+	// All neighbors (in both in-edges and out-edges)
+	neighbor_list neighbors;
+	size_t est_local_scan;
+	// The number of vertices that have joined with the vertex.
+	unsigned num_joined;
+
+	runtime_data_t(graph_engine &graph,
+			const page_vertex *vertex): neighbors(graph, vertex) {
+		est_local_scan = 0;
+		num_joined = 0;
+	}
+};
+
 class scan_vertex: public compute_vertex
 {
 	vsize_t num_in_edges;
 	vsize_t num_out_edges;
-	// The number of vertices that have joined with the vertex.
-	int num_joined;
 	atomic_number<size_t> num_edges;
-	// All neighbors (in both in-edges and out-edges)
-	neighbor_list *neighbors;
-	size_t est_local_scan;
+	runtime_data_t *data;
 
 #ifdef PV_STAT
 	// For testing
@@ -534,9 +550,7 @@ public:
 	scan_vertex() {
 		num_in_edges = 0;
 		num_out_edges = 0;
-		num_joined = 0;
-		neighbors = NULL;
-		est_local_scan = 0;
+		data = NULL;
 
 #ifdef PV_STAT
 		num_all_edges = 0;
@@ -552,9 +566,7 @@ public:
 		const directed_vertex_index *index = (const directed_vertex_index *) index1;
 		num_in_edges = index->get_num_in_edges(id);
 		num_out_edges = index->get_num_out_edges(id);
-		num_joined = 0;
-		neighbors = NULL;
-		est_local_scan = 0;
+		data = NULL;
 
 #ifdef PV_STAT
 		num_all_edges = 0;
@@ -580,13 +592,13 @@ public:
 	}
 
 	virtual bool has_required_vertices() const {
-		if (neighbors == NULL)
+		if (data == NULL)
 			return false;
-		return neighbors->has_next();
+		return data->neighbors.has_next();
 	}
 
 	virtual vertex_id_t get_next_required_vertex() {
-		return neighbors->next();
+		return data->neighbors.next();
 	}
 
 	size_t count_edges(graph_engine &graph, const page_vertex *v);
@@ -652,7 +664,7 @@ size_t scan_vertex::count_edges_hash(graph_engine &graph, const page_vertex *v,
 		vertex_id_t neigh_neighbor = *other_it;
 		if (neigh_neighbor != v->get_id()
 				&& neigh_neighbor != this->get_id()) {
-			if (neighbors->contains(neigh_neighbor)) {
+			if (data->neighbors.contains(neigh_neighbor)) {
 #if 0
 				num_local_edges += (*other_data_it).get_count();
 #endif
@@ -802,7 +814,7 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v,
 		return 0;
 
 #ifdef PV_STAT
-	min_comps += min(num_v_edges, neighbors->size());
+	min_comps += min(num_v_edges, data->neighbors.size());
 #endif
 	page_byte_array::const_iterator<vertex_id_t> other_it
 		= v->get_neigh_begin(type);
@@ -817,21 +829,21 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v,
 	if (num_v_edges == 0)
 		return 0;
 
-	neighbor_list::id_iterator this_it = neighbors->get_id_begin();
-	neighbor_list::id_iterator this_end = neighbors->get_id_end();
+	neighbor_list::id_iterator this_it = data->neighbors.get_id_begin();
+	neighbor_list::id_iterator this_end = data->neighbors.get_id_end();
 	this_end = std::lower_bound(this_it, this_end,
 			v->get_id(), comp_edge());
 
-	if (num_v_edges / neighbors->size() > BIN_SEARCH_RATIO) {
+	if (num_v_edges / data->neighbors.size() > BIN_SEARCH_RATIO) {
 #ifdef PV_STAT
 		int size_log2 = log2(num_v_edges);
-		scan_bytes += neighbors->size() * sizeof(vertex_id_t);
-		rand_jumps += size_log2 * neighbors->size();
+		scan_bytes += data->neighbors.size() * sizeof(vertex_id_t);
+		rand_jumps += size_log2 * data->neighbors.size();
 #endif
 		return count_edges_bin_search_other(graph, v, this_it, this_end,
 				other_it, other_end, common_neighs);
 	}
-	else if (neighbors->size() / num_v_edges > 4) {
+	else if (data->neighbors.size() / num_v_edges > 4) {
 #ifdef PV_STAT
 		scan_bytes += num_v_edges * sizeof(vertex_id_t);
 		rand_jumps += num_v_edges;
@@ -841,7 +853,7 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v,
 	else {
 #ifdef PV_STAT
 		scan_bytes += num_v_edges * sizeof(vertex_id_t);
-		scan_bytes += neighbors->size() * sizeof(vertex_id_t);
+		scan_bytes += data->neighbors.size() * sizeof(vertex_id_t);
 #endif
 		return count_edges_scan(graph, v, this_it, this_end,
 				other_it, other_end, common_neighs);
@@ -850,7 +862,7 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v,
 
 size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 {
-	assert(!neighbors->empty());
+	assert(!data->neighbors.empty());
 	if (v->get_num_edges(edge_type::BOTH_EDGES) == 0)
 		return 0;
 
@@ -886,14 +898,14 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 	rand_jumps += common_neighs.size() + 1;
 #endif
 	// The number of duplicated edges between v and this vertex.
-	attributed_neighbor neigh = neighbors->find(v->get_id());
+	attributed_neighbor neigh = data->neighbors.find(v->get_id());
 	assert(neigh.is_valid());
 	int num_v_dups = neigh.get_num_dups();
 	assert(num_v_dups > 0);
 	size_t num_edges = 0;
 	for (std::vector<vertex_id_t>::const_iterator it = common_neighs.begin();
 			it != common_neighs.end(); it++) {
-		attributed_neighbor n = neighbors->find(*it);
+		attributed_neighbor n = data->neighbors.find(*it);
 		assert(n.is_valid());
 		num_edges += n.get_num_dups();
 		n.inc_count(num_v_dups);
@@ -905,8 +917,7 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 
 bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 {
-	assert(neighbors == NULL);
-	assert(num_joined == 0);
+	assert(data == NULL);
 
 	size_t num_local_edges = vertex->get_num_edges(edge_type::BOTH_EDGES);
 	assert(num_local_edges == (size_t) num_in_edges + num_out_edges);
@@ -955,7 +966,6 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		tot_edges += min(v.num_in_edges + v.num_out_edges, num_neighbors * 2);
 	}
 	tot_edges /= 2;
-	est_local_scan = tot_edges;
 	if (tot_edges < max_scan.get())
 		return true;
 
@@ -963,11 +973,12 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
 
-	neighbors = new neighbor_list(graph, vertex);
+	data = new runtime_data_t(graph, vertex);
+	data->est_local_scan = tot_edges;
 #ifdef PV_STAT
 	gettimeofday(&vertex_start, NULL);
 	fprintf(stderr, "compute v%u (with %d edges, compute on %ld edges, potential %ld inter-edges) on thread %d at %.f seconds\n",
-			get_id(), num_all_edges, neighbors->size(), tot_edges, thread::get_curr_thread()->get_id(),
+			get_id(), num_all_edges, data->neighbors.size(), tot_edges, thread::get_curr_thread()->get_id(),
 			time_diff(graph_start, vertex_start));
 #endif
 
@@ -996,9 +1007,9 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	}
 	num_edges.inc(tmp);
 
-	if (neighbors->empty()) {
-		delete neighbors;
-		neighbors = NULL;
+	if (data->neighbors.empty()) {
+		delete data;
+		data = NULL;
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -1011,10 +1022,10 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 bool scan_vertex::run_on_neighbors(graph_engine &graph,
 		const page_vertex *vertices[], int num)
 {
-	num_joined += num;
-	if (est_local_scan < max_scan.get())
-		return (unsigned) num_joined == neighbors->size();
-	assert(neighbors);
+	assert(data);
+	data->num_joined += num;
+	if (data->est_local_scan < max_scan.get())
+		return data->num_joined == data->neighbors.size();
 #ifdef PV_STAT
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -1031,7 +1042,7 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
-	if ((unsigned) num_joined == neighbors->size()) {
+	if (data->num_joined == data->neighbors.size()) {
 		if (max_scan.update(num_edges.get())) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
@@ -1052,16 +1063,16 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 #endif
 
 		// Inform all neighbors in the in-edges.
-		for (size_t i = 0; i < neighbors->size(); i++) {
-			size_t count = neighbors->at(i).get_count();
+		for (size_t i = 0; i < data->neighbors.size(); i++) {
+			size_t count = data->neighbors.at(i).get_count();
 			if (count > 0) {
 				count_msg msg(count);
-				graph.send_msg(neighbors->at(i).get_id(), msg);
+				graph.send_msg(data->neighbors.at(i).get_id(), msg);
 			}
 		}
 
-		delete neighbors;
-		neighbors = NULL;
+		delete data;
+		data = NULL;
 		return true;
 	}
 	return false;
