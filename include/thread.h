@@ -26,6 +26,7 @@
 
 #include "concurrency.h"
 #include "common.h"
+#include "container.h"
 
 class thread
 {
@@ -192,43 +193,48 @@ public:
 
 class task_thread: public thread
 {
-	std::vector<thread_task *> tasks;
-	pthread_spinlock_t lock;
-	atomic_integer num_pending_tasks;
+	fifo_queue<thread_task *> tasks;
+	pthread_mutex_t mutex;
+	pthread_cond_t cond;
 public:
-	task_thread(const std::string &name, int node): thread(name, node) {
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	task_thread(const std::string &name, int node): thread(name,
+			node), tasks(node, 1024, true) {
+		pthread_mutex_init(&mutex, NULL);
+		pthread_cond_init(&cond, NULL);
 	}
 
 	void add_task(thread_task *t) {
-		pthread_spin_lock(&lock);
+		pthread_mutex_lock(&mutex);
+		if (tasks.is_full())
+			tasks.expand_queue(tasks.get_size() * 2);
 		tasks.push_back(t);
-		pthread_spin_unlock(&lock);
-		num_pending_tasks.inc(1);
+		pthread_mutex_unlock(&mutex);
 		activate();
 	}
 
 	void run() {
-		std::vector<thread_task *> local_tasks;
-		pthread_spin_lock(&lock);
-		local_tasks = tasks;
-		tasks.clear();
-		pthread_spin_unlock(&lock);
-		for (unsigned i = 0; i < local_tasks.size(); i++) {
-			local_tasks[i]->run();
-			delete local_tasks[i];
+		const int TASK_BUF_SIZE = 128;
+		thread_task *local_tasks[TASK_BUF_SIZE];
+		pthread_mutex_lock(&mutex);
+		while (!tasks.is_empty()) {
+			int num_tasks = tasks.fetch(local_tasks, TASK_BUF_SIZE);
+			pthread_mutex_unlock(&mutex);
+			for (int i = 0; i < num_tasks; i++) {
+				local_tasks[i]->run();
+				delete local_tasks[i];
+			}
+			pthread_mutex_lock(&mutex);
 		}
-		num_pending_tasks.dec(local_tasks.size());
-	}
-
-	bool complete_all_tasks() const {
-		return num_pending_tasks.get() == 0;
+		pthread_mutex_unlock(&mutex);
+		pthread_cond_signal(&cond);
 	}
 
 	void wait4complete() {
-		// TODO this is a temporary solution.
-		while (!complete_all_tasks())
-			sleep(1);
+		pthread_mutex_lock(&mutex);
+		while (!tasks.is_empty()) {
+			pthread_cond_wait(&cond, &mutex);
+		}
+		pthread_mutex_unlock(&mutex);
 	}
 };
 
