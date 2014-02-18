@@ -334,9 +334,11 @@ public:
 		ssize_t ret = fwrite(&index, directed_vertex_index::get_header_size(),
 				1, f);
 		assert(ret == 1);
-		ret = fwrite(vertices.data(),
-				sizeof(directed_vertex_entry) * vertices.size(), 1, f);
-		assert(ret == 1);
+		if (!vertices.empty()) {
+			ret = fwrite(vertices.data(),
+					sizeof(directed_vertex_entry) * vertices.size(), 1, f);
+			assert(ret == 1);
+		}
 		fclose(f);
 	}
 };
@@ -368,8 +370,10 @@ class vertex_index_iterator_impl: public vertex_index_iterator
 	void read_block() {
 		size_t read_size = min(index_file_size - ftell(f), sizeof(entry_buf));
 		assert(read_size % sizeof(entry_type) == 0);
-		size_t ret = fread(entry_buf, read_size, 1, f);
-		assert(ret == 1);
+		if (read_size > 0) {
+			size_t ret = fread(entry_buf, read_size, 1, f);
+			assert(ret == 1);
+		}
 		idx = 0;
 		num_entries = read_size / sizeof(entry_type);
 	}

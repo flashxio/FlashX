@@ -642,7 +642,9 @@ public:
 			index_it = default_vertex_index_iterator::create(index_file);
 
 		adj_buf = new char[MEM_SIZE];
-		read_vertices();
+		// It's possible the graph has no vertices at all.
+		if (index_it->has_next())
+			read_vertices();
 	}
 
 	const graph_header &get_graph_header() const {
