@@ -1075,11 +1075,8 @@ void global_cached_io::process_user_req(
 			// If the cache can't evict a page, it's probably because
 			// all pages have been referenced. It's likely that we issued
 			// too many requests. Let's stop issuing more requests for now.
-			if (p == NULL) {
-				fprintf(stderr, "thread %d can't evict a page, pending pages: %d\n",
-						get_io_idx(), num_underlying_pages.get());
+			if (p == NULL)
 				goto end;
-			}
 		} while (p == NULL);
 		processing_req.move_next();
 
