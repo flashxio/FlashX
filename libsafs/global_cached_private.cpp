@@ -432,6 +432,10 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 
 void global_cached_io::process_incomplete_computes(user_comp_req_queue &requests)
 {
+	// If the request queue is already full, don't do anything.
+	if (requests.get_num_entries() >= MAX_COMP_REQS)
+		return;
+
 	// We go through all user computations in the queue one by one at most once.
 	// For each user computation, we fetch as many requests as possible.
 	// We exit the loop if we run out of space to allocate more requests
