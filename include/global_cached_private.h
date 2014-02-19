@@ -377,8 +377,7 @@ public:
 			original_io_request *orig);
 
 	// Finish processing cached I/O requests.
-	// The user request may issue more requests.
-	void process_cached_reqs(user_comp_req_queue &requests);
+	void process_cached_reqs();
 	// Process a request from the application.
 	void process_user_req(std::vector<thread_safe_page *> &dirty_pages,
 			io_status *status);
@@ -388,8 +387,7 @@ public:
 	void process_incomplete_computes(user_comp_req_queue &requests);
 	// This function performs post-computation steps, after we perform the user
 	// computation.
-	bool complete_user_compute(user_compute *compute,
-			user_comp_req_queue &requests);
+	void complete_user_compute(user_compute *compute);
 
 	void queue_requests(page_req_pair reqs[], int num) {
 		int num_added = pending_requests.add(reqs, num);
@@ -461,9 +459,8 @@ public:
 	void process_disk_completed_requests(io_request requests[], int num);
 	/**
 	 * Process all completed users' requests.
-	 * User compute may issue more requests.
 	 */
-	int process_completed_requests(user_comp_req_queue &requests);
+	int process_completed_requests();
 	/**
 	 * Process all queued requests.
 	 */
