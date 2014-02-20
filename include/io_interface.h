@@ -240,18 +240,34 @@ public:
 	}
 };
 
+class comp_io_sched_creater
+{
+public:
+	virtual comp_io_scheduler *create(int node_id) const = 0;
+};
+
 /**
  * The interface of creating IOs to access a file.
  */
 class file_io_factory
 {
+	comp_io_sched_creater *creater;
 	// The name of the file.
 	const std::string name;
 public:
 	file_io_factory(const std::string _name): name(_name) {
+		creater = NULL;
 	}
 
 	virtual ~file_io_factory() {
+	}
+
+	void set_sched_creater(comp_io_sched_creater *creater) {
+		this->creater = creater;
+	}
+
+	comp_io_sched_creater *get_sched_creater() const {
+		return creater;
 	}
 
 	const std::string &get_name() const {

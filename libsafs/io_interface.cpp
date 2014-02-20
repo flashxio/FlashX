@@ -364,8 +364,11 @@ io_interface *global_cached_io_factory::create_io(thread *t)
 {
 	io_interface *underlying = new remote_io(
 			global_data.read_threads, mapper, t);
+	comp_io_scheduler *scheduler = NULL;
+	if (get_sched_creater())
+		scheduler = get_sched_creater()->create(underlying->get_node_id());
 	global_cached_io *io = new global_cached_io(t, underlying,
-			global_cache);
+			global_cache, scheduler);
 #ifdef DEBUG
 	global_data.register_io(io);
 #endif
