@@ -29,6 +29,7 @@
 #include "concurrency.h"
 #include "thread.h"
 #include "io_request.h"
+#include "comp_io_scheduler.h"
 
 class io_request;
 
