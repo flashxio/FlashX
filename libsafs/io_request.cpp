@@ -132,10 +132,11 @@ void io_req_extension::add_buf_front(char *buf, int size, bool is_page)
 	num_bufs++;
 }
 
-int user_compute::fetch_requests(io_interface *io, user_comp_req_queue &reqs)
+int user_compute::fetch_requests(io_interface *io, user_comp_req_queue &reqs,
+		int max_fetch)
 {
 	int num_issues = 0;
-	while (has_requests()) {
+	while (has_requests() && num_issues < max_fetch) {
 		request_range range = get_next_request();
 		user_compute *compute = range.get_compute();
 		compute->inc_ref();

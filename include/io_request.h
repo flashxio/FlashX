@@ -283,7 +283,8 @@ public:
 		return flags.test_flag(flag);
 	}
 
-	int fetch_requests(io_interface *io, user_comp_req_queue &reqs);
+	int fetch_requests(io_interface *io, user_comp_req_queue &reqs,
+			int max_fetch);
 	void complete_request(page_byte_array &arr) {
 		assert(get_ref() > 0);
 		run(arr);
