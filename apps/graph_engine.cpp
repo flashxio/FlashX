@@ -33,6 +33,111 @@ graph_config graph_conf;
 
 class worker_thread;
 
+/**
+ * This I/O scheduler is to favor maximizing throughput.
+ * Therefore, it processes all user tasks together to potentially increase
+ * the page cache hit rate.
+ */
+class throughput_comp_io_scheduler: public comp_io_scheduler
+{
+	fifo_queue<io_request> req_buf;
+public:
+	throughput_comp_io_scheduler(int node_id): comp_io_scheduler(
+			node_id), req_buf(node_id, 512, true) {
+	}
+
+	size_t get_requests(fifo_queue<io_request> &reqs);
+};
+
+class throughput_comp_io_sched_creater: public comp_io_sched_creater
+{
+public:
+	comp_io_scheduler *create(int node_id) const {
+		return new throughput_comp_io_scheduler(node_id);
+	}
+};
+
+struct prio_compute
+{
+	user_compute *compute;
+	io_request req;
+
+	prio_compute(io_interface *io, user_compute *compute) {
+		this->compute = compute;
+		bool ret = compute->fetch_request(io, req);
+		assert(ret);
+	}
+};
+
+class comp_prio_compute
+{
+public:
+	bool operator()(const prio_compute &c1, const prio_compute &c2) {
+		// We want the priority queue returns requests with
+		// the smallest offset first. If we use less, the priority queue
+		// will return the request with the greatest offset.
+		return c1.req.get_offset() > c2.req.get_offset();
+	}
+};
+
+size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
+{
+	size_t num = 0;
+	// Let's add the buffered requests first.
+	if (!req_buf.is_empty()) {
+		num = reqs.add(&req_buf);
+	}
+
+	if (!reqs.is_full()) {
+		// Construct a priority queue on user tasks, ordered by the offset
+		// of their next requests.
+		std::priority_queue<prio_compute, std::vector<prio_compute>,
+			comp_prio_compute> user_computes;
+		compute_iterator it = this->get_begin();
+		compute_iterator end = this->get_end();
+		for (; it != end; ++it) {
+			user_compute *compute = *it;
+			// Skip the ones without user tasks.
+			if (!compute->has_requests())
+				continue;
+
+			prio_compute prio_comp(get_io(), compute);
+			user_computes.push(prio_comp);
+		}
+
+		// Add requests to the queue in a sorted order.
+		off_t prev = 0;
+		int num = 0;
+		while (!reqs.is_full() && !user_computes.empty()) {
+			num++;
+			prio_compute prio_comp = user_computes.top();
+			assert(prev <= prio_comp.req.get_offset());
+			prev = prio_comp.req.get_offset();
+			user_computes.pop();
+			assert(prev <= user_computes.top().req.get_offset());
+			reqs.push_back(prio_comp.req);
+			num++;
+			user_compute *compute = prio_comp.compute;
+			if (compute->has_requests()) {
+				prio_compute prio_comp(get_io(), compute);
+				assert(prio_comp.req.get_offset() >= prev);
+				user_computes.push(prio_comp);
+			}
+		}
+
+		// We have got a request from each user task. We can't add them to
+		// the queue this time. We need to buffer them.
+		while (!user_computes.empty()) {
+			prio_compute prio_comp = user_computes.top();
+			user_computes.pop();
+			if (req_buf.is_full())
+				req_buf.expand_queue(req_buf.get_size() * 2);
+			req_buf.push_back(prio_comp.req);
+		}
+	}
+	return num;
+}
+
 class default_vertex_scheduler: public vertex_scheduler
 {
 public:
@@ -749,6 +854,7 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	// Right now only the cached I/O can support async I/O
 	file_io_factory *factory = create_io_factory(graph_file,
 			GLOBAL_CACHE_ACCESS);
+	factory->set_sched_creater(new throughput_comp_io_sched_creater());
 
 	io_interface *io = factory->create_io(thread::get_curr_thread());
 	io->access((char *) &header, 0, sizeof(header), READ);
