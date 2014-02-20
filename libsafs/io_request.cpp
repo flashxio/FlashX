@@ -147,3 +147,16 @@ int user_compute::fetch_requests(io_interface *io, user_comp_req_queue &reqs,
 	}
 	return num_issues;
 }
+
+bool user_compute::fetch_request(io_interface *io, io_request &req)
+{
+	if (!has_requests())
+		return false;
+
+	request_range range = get_next_request();
+	user_compute *compute = range.get_compute();
+	compute->inc_ref();
+	req = io_request(compute, range.get_loc(), range.get_size(),
+			range.get_access_method(), io, io->get_node_id());
+	return true;
+}
