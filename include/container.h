@@ -60,7 +60,7 @@ class fifo_queue: public queue_interface<T>
 	bool resizable;
 	int node_id;
 
-	long loc_in_queue(long idx) {
+	long loc_in_queue(long idx) const {
 		return idx & size_mask;
 	}
 
@@ -85,6 +85,41 @@ class fifo_queue: public queue_interface<T>
 	}
 
 public:
+	class const_iterator {
+		const fifo_queue<T> *q;
+		long idx;
+	public:
+		const_iterator(const fifo_queue<T> *q) {
+			this->q = q;
+			this->idx = q->start;
+		}
+
+		const T &operator*() const {
+			long real_idx = q->loc_in_queue(idx);
+			return q->buf[real_idx];
+		}
+
+		const_iterator &operator++() {
+			idx++;
+			return *this;
+		}
+
+		bool operator==(const const_iterator &it) const {
+			return this->idx == it.idx;
+		}
+
+		bool operator!=(const const_iterator &it) const {
+			return this->idx != it.idx;
+		}
+
+		const_iterator &operator+=(int num) {
+			assert(num >= 0);
+			idx += num;
+			assert(idx <= q->end);
+			return *this;
+		}
+	};
+
 	fifo_queue(T *entries, int num) {
 		size_mask = INT_MAX;
 		buf = entries;
@@ -127,6 +162,17 @@ public:
 	static void destroy(fifo_queue<T> *q) {
 		q->~fifo_queue();
 		numa_free(q, sizeof(*q));
+	}
+
+	const_iterator get_begin() const {
+		return const_iterator(this);
+	}
+
+	const_iterator get_end() const {
+		const_iterator it(this);
+		assert(end >= start);
+		it += (end - start);
+		return it;
 	}
 
 	bool expand_queue(int new_size);
