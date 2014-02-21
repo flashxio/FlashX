@@ -150,6 +150,9 @@ class graph_engine
 	vertex_partitioner *partitioner;
 	vertex_scheduler *scheduler;
 
+	// The number of activated vertices that haven't been processed
+	// in the current level.
+	atomic_number<size_t> num_remaining_vertices_in_level;
 	atomic_integer level;
 	volatile bool is_complete;
 
@@ -352,6 +355,17 @@ public:
 	}
 
 	void set_vertex_scheduler(vertex_scheduler *scheduler);
+
+	// We have processed the specified number of vertices.
+	void process_vertices(int num) {
+		num_remaining_vertices_in_level.dec(num);
+	}
+
+	// Get the number of activated vertices that still haven't been
+	// processed in the current level.
+	size_t get_num_remaining_vertices() const {
+		return num_remaining_vertices_in_level.get();
+	}
 };
 
 /**

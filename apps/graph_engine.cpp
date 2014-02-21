@@ -517,6 +517,10 @@ public:
 		return num_activated_vertices_in_level.get()
 			- num_completed_vertices_in_level.get();
 	}
+
+	size_t get_num_activated_on_others() {
+		return graph->get_num_remaining_vertices();
+	}
 };
 
 request_range ts_compute_vertex::get_next_request(graph_engine *graph)
@@ -697,17 +701,22 @@ int worker_thread::process_activated_vertices(int max)
 	if (num == 0) {
 		if (steal_thread_id == this->worker_id)
 			steal_thread_id = (steal_thread_id + 1) % graph->get_num_threads();
+		int num_tries = 0;
 		do {
 			worker_thread *t = graph->get_thread(steal_thread_id);
+			num_tries++;
 			num = t->steal_activated_vertices(vertex_buf, max);
 			// If we can't steal vertices from the thread, we should move
 			// to the next thread.
 			if (num == 0)
 				steal_thread_id = (steal_thread_id + 1) % graph->get_num_threads();
 			// If we have tried to steal vertices from all threads.
-		} while (num == 0 && steal_thread_id != this->worker_id);
+		} while (num == 0 && num_tries < graph->get_num_threads());
 	}
-	num_activated_vertices_in_level.inc(num);
+	if (num > 0) {
+		num_activated_vertices_in_level.inc(num);
+		graph->process_vertices(num);
+	}
 
 	int num_completed = 0;
 	int num_to_process = 0;
@@ -811,15 +820,22 @@ void worker_thread::run()
 	while (true) {
 		int num_visited = 0;
 		int num;
-		while (get_num_vertices_processing() > 0
-				|| !curr_activated_vertices.is_empty()) {
+		do {
 			num = process_activated_vertices(
 					graph_conf.get_max_processing_vertices()
 					- io->num_pending_ios());
 			num_visited += num;
 			process_msgs();
 			io->wait4complete(min(io->num_pending_ios() / 10, 2));
-		}
+			// If there are vertices being processed, we need to call
+			// wait4complete to complete processing them.
+		} while (get_num_vertices_processing() > 0
+				// We still have vertices remaining for processing
+				|| !curr_activated_vertices.is_empty()
+				// Even if we have processed all activated vertices belonging
+				// to this thread, we still need to process vertices from
+				// other threads in order to balance the load.
+				|| get_num_activated_on_others() > 0);
 		assert(curr_activated_vertices.is_empty());
 		printf("thread %d visited %d vertices\n", this->get_id(), num_visited);
 
@@ -927,6 +943,7 @@ simple_msg_sender *graph_engine::get_msg_sender(int thread_id) const
 
 void graph_engine::start(vertex_id_t ids[], int num)
 {
+	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<vertex_id_t> start_vertices[num_threads];
 	for (int i = 0; i < num; i++) {
@@ -941,6 +958,7 @@ void graph_engine::start(vertex_id_t ids[], int num)
 
 void graph_engine::start_all()
 {
+	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices();
 		t->start();
@@ -968,6 +986,9 @@ bool graph_engine::progress_next_level()
 		level.inc(1);
 		printf("progress to level %d, there are %ld vertices in this level\n",
 				level.get(), tot_num_activates.get());
+		assert(num_remaining_vertices_in_level.get() == 0);
+		num_remaining_vertices_in_level = atomic_number<size_t>(
+				tot_num_activates.get());
 		// If there aren't more activated vertices.
 		is_complete = tot_num_activates.get() == 0;
 		tot_num_activates = 0;
