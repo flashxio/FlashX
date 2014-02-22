@@ -32,6 +32,7 @@
 #include "vertex_interpreter.h"
 #include "partitioner.h"
 #include "graph_index.h"
+#include "graph_config.h"
 
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
@@ -170,6 +171,7 @@ class graph_engine
 	edge_type required_neighbor_type;
 	trace_logger *logger;
 	file_io_factory *factory;
+	int max_processing_vertices;
 
 	void cleanup() {
 		if (logger) {
@@ -366,6 +368,17 @@ public:
 	// processed in the current level.
 	size_t get_num_remaining_vertices() const {
 		return num_remaining_vertices_in_level.get();
+	}
+
+	int get_max_processing_vertices() const {
+		if (max_processing_vertices > 0)
+			return max_processing_vertices;
+		else
+			return graph_conf.get_max_processing_vertices();
+	}
+
+	void set_max_processing_vertices(int max) {
+		max_processing_vertices = max;
 	}
 };
 

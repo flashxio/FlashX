@@ -874,7 +874,7 @@ void worker_thread::run()
 		int num;
 		do {
 			num = process_activated_vertices(
-					graph_conf.get_max_processing_vertices()
+					graph->get_max_processing_vertices()
 					- io->num_pending_ios());
 			num_visited += num;
 			process_msgs();
@@ -909,6 +909,7 @@ void worker_thread::run()
 graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index *index)
 {
+	max_processing_vertices = 0;
 	this->scheduler = &default_scheduler;
 	this->partitioner = new vertex_partitioner(num_threads);
 	this->required_neighbor_type = edge_type::NONE;
