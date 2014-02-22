@@ -29,6 +29,8 @@
 #include "graph_engine.h"
 #include "messaging.h"
 
+const int MAX_STOLEN_VERTICES = 1024;
+
 graph_config graph_conf;
 
 class worker_thread;
@@ -163,16 +165,29 @@ public:
 		this->scheduler = scheduler;
 	}
 
+	void init(vertex_id_t buf[], int size, bool sorted) {
+		pthread_spin_lock(&lock);
+		fetch_idx = 0;
+		sorted_vertices.clear();
+		sorted_vertices.assign(buf, buf + size);
+		if (!sorted)
+			scheduler->schedule(sorted_vertices);
+		pthread_spin_unlock(&lock);
+	}
+
 	void init(const std::vector<vertex_id_t> &vec, bool sorted) {
+		pthread_spin_lock(&lock);
 		fetch_idx = 0;
 		sorted_vertices.clear();
 		sorted_vertices.assign(vec.begin(), vec.end());
 		if (!sorted)
 			scheduler->schedule(sorted_vertices);
+		pthread_spin_unlock(&lock);
 	}
 
 	void init(const bitmap &map, int part_id,
 			const vertex_partitioner *partitioner) {
+		pthread_spin_lock(&lock);
 		fetch_idx = 0;
 		sorted_vertices.clear();
 		map.get_set_bits(sorted_vertices);
@@ -186,6 +201,7 @@ public:
 
 		if (scheduler != &default_scheduler)
 			scheduler->schedule(sorted_vertices);
+		pthread_spin_unlock(&lock);
 	}
 
 	int fetch(vertex_id_t vertices[], int num) {
@@ -493,9 +509,7 @@ public:
 	void process_multicast_msg(multicast_message &mmsg);
 	int enter_next_level();
 
-	int steal_activated_vertices(vertex_id_t buf[], int num) {
-		return curr_activated_vertices.fetch(buf, num);
-	}
+	int steal_activated_vertices(vertex_id_t buf[], int num);
 
 	void start_vertices(const std::vector<vertex_id_t> &vertices) {
 		assert(curr_activated_vertices.is_empty());
@@ -688,6 +702,47 @@ void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 }
 
 /**
+ * This steals vertices from other threads. It tries to steal more vertices
+ * than it can process, and the remaining vertices will be placed in its
+ * own activated vertex queue.
+ */
+int worker_thread::steal_activated_vertices(vertex_id_t vertex_buf[], int buf_size)
+{
+	if (steal_thread_id == this->worker_id)
+		steal_thread_id = (steal_thread_id + 1) % graph->get_num_threads();
+	int num_tries = 0;
+	vertex_id_t *steal_buf = new vertex_id_t[MAX_STOLEN_VERTICES];
+	int num;
+	do {
+		worker_thread *t = graph->get_thread(steal_thread_id);
+		num_tries++;
+
+		// We want to steal as much as possible, but we don't want
+		// to overloaded by the stolen vertices.
+		size_t num_steal = max(1,
+				t->curr_activated_vertices.get_num_vertices() / graph->get_num_threads());
+		num = t->curr_activated_vertices.fetch(steal_buf,
+				min(MAX_STOLEN_VERTICES, num_steal));
+
+		// If we can't steal vertices from the thread, we should move
+		// to the next thread.
+		if (num == 0)
+			steal_thread_id = (steal_thread_id + 1) % graph->get_num_threads();
+		// If we have tried to steal vertices from all threads.
+	} while (num == 0 && num_tries < graph->get_num_threads());
+
+	int ret = min(buf_size, num);
+	memcpy(vertex_buf, steal_buf, sizeof(vertex_buf[0]) * ret);
+	// We stole more vertices than we can process this time.
+	// The vertices stolen from another thread will also be placed in
+	// the queue for currently activated vertices.
+	if (num - ret > 0)
+		curr_activated_vertices.init(steal_buf + ret, num - ret, true);
+	delete [] steal_buf;
+	return ret;
+}
+
+/**
  * This is to process the activated vertices in the current iteration.
  */
 int worker_thread::process_activated_vertices(int max)
@@ -698,21 +753,8 @@ int worker_thread::process_activated_vertices(int max)
 	vertex_id_t vertex_buf[max];
 	stack_array<io_request> reqs(max);
 	int num = curr_activated_vertices.fetch(vertex_buf, max);
-	if (num == 0) {
-		if (steal_thread_id == this->worker_id)
-			steal_thread_id = (steal_thread_id + 1) % graph->get_num_threads();
-		int num_tries = 0;
-		do {
-			worker_thread *t = graph->get_thread(steal_thread_id);
-			num_tries++;
-			num = t->steal_activated_vertices(vertex_buf, max);
-			// If we can't steal vertices from the thread, we should move
-			// to the next thread.
-			if (num == 0)
-				steal_thread_id = (steal_thread_id + 1) % graph->get_num_threads();
-			// If we have tried to steal vertices from all threads.
-		} while (num == 0 && num_tries < graph->get_num_threads());
-	}
+	if (num == 0)
+		num = steal_activated_vertices(vertex_buf, max);
 	if (num > 0) {
 		num_activated_vertices_in_level.inc(num);
 		graph->process_vertices(num);
