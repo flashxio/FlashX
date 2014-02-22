@@ -69,6 +69,9 @@ public:
 		return -1;
 	}
 
+	virtual void init() {
+	}
+
 	/**
 	 * This is a pre-run before users get any information of adjacency list
 	 * of vertices.
@@ -161,14 +164,12 @@ class graph_engine
 	pthread_barrier_t barrier1;
 	pthread_barrier_t barrier2;
 
-	thread *first_thread;
+	int num_nodes;
 	std::vector<worker_thread *> worker_threads;
 
 	edge_type required_neighbor_type;
-
 	trace_logger *logger;
-
-	int file_id;
+	file_io_factory *factory;
 
 	void cleanup() {
 		if (logger) {
@@ -283,7 +284,7 @@ public:
 	 * Get the file id where the graph data is stored.
 	 */
 	int get_file_id() const {
-		return file_id;
+		return factory->get_file_id();
 	}
 
 	template<class T>

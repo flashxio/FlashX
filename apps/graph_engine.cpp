@@ -227,6 +227,15 @@ public:
 		pthread_spin_unlock(&lock);
 		return num;
 	}
+
+	void init_vertices(graph_engine &graph) {
+		pthread_spin_lock(&lock);
+		BOOST_FOREACH(vertex_id_t id, sorted_vertices) {
+			compute_vertex &v = graph.get_vertex(id);
+			v.init();
+		}
+		pthread_spin_unlock(&lock);
+	}
 };
 
 request_range compute_vertex::get_next_request(graph_engine *graph)
@@ -471,6 +480,7 @@ public:
 			assert(curr_activated_vertices.is_empty());
 			curr_activated_vertices.init(local_ids, false);
 		}
+		curr_activated_vertices.init_vertices(*graph);
 	}
 
 	compute_allocator *get_part_compute_allocator() const {
@@ -910,7 +920,7 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
 	// Right now only the cached I/O can support async I/O
-	file_io_factory *factory = create_io_factory(graph_file,
+	factory = create_io_factory(graph_file,
 			GLOBAL_CACHE_ACCESS);
 	factory->set_sched_creater(new throughput_comp_io_sched_creater());
 
@@ -937,18 +947,10 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 			assert(0);
 	}
 
-	file_id = factory->get_file_id();
+	this->num_nodes = num_nodes;
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);
-	for (int i = 0; i < num_threads; i++) {
-		worker_thread *t = new worker_thread(this, factory,
-				i % num_nodes, i, num_threads);
-		worker_threads.push_back(t);
-	}
-	for (int i = 0; i < num_threads; i++) {
-		worker_threads[i]->init_messaging(worker_threads);
-	}
-	first_thread = worker_threads[0];
+	worker_threads.resize(num_threads);
 
 	if (graph_conf.get_trace_file().empty())
 		logger = NULL;
@@ -985,13 +987,25 @@ simple_msg_sender *graph_engine::get_msg_sender(int thread_id) const
 
 void graph_engine::start(vertex_id_t ids[], int num)
 {
-	num_remaining_vertices_in_level.inc(num);
+	// Prepare the worker threads.
 	int num_threads = get_num_threads();
+	for (int i = 0; i < num_threads; i++) {
+		worker_thread *t = new worker_thread(this, factory,
+				i % num_nodes, i, num_threads);
+		worker_threads[i] = t;
+		worker_threads[i]->set_vertex_scheduler(scheduler);
+	}
+	for (int i = 0; i < num_threads; i++) {
+		worker_threads[i]->init_messaging(worker_threads);
+	}
+
+	num_remaining_vertices_in_level.inc(num);
 	std::vector<vertex_id_t> start_vertices[num_threads];
 	for (int i = 0; i < num; i++) {
 		int idx = get_partitioner()->map(ids[i]);
 		start_vertices[idx].push_back(ids[i]);
 	}
+
 	for (int i = 0; i < num_threads; i++) {
 		worker_threads[i]->start_vertices(start_vertices[i]);
 		worker_threads[i]->start();
@@ -1000,6 +1014,18 @@ void graph_engine::start(vertex_id_t ids[], int num)
 
 void graph_engine::start_all()
 {
+	// Prepare the worker threads.
+	int num_threads = get_num_threads();
+	for (int i = 0; i < num_threads; i++) {
+		worker_thread *t = new worker_thread(this, factory,
+				i % num_nodes, i, num_threads);
+		worker_threads[i] = t;
+		worker_threads[i]->set_vertex_scheduler(scheduler);
+	}
+	for (int i = 0; i < num_threads; i++) {
+		worker_threads[i]->init_messaging(worker_threads);
+	}
+
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices();
@@ -1052,13 +1078,14 @@ void graph_engine::wait4complete()
 {
 	for (unsigned i = 0; i < worker_threads.size(); i++) {
 		worker_threads[i]->join();
+		delete worker_threads[i];
+		worker_threads[i] = NULL;
 	}
 }
 
 void graph_engine::set_vertex_scheduler(vertex_scheduler *scheduler)
 {
-	for (size_t i = 0; i < worker_threads.size(); i++)
-		worker_threads[i]->set_vertex_scheduler(scheduler);
+	this->scheduler = scheduler;
 }
 
 vertex_index *load_vertex_index(const std::string &index_file)
