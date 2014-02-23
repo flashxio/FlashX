@@ -124,6 +124,59 @@ public:
 	}
 } max_scan;
 
+typedef std::pair<vertex_id_t, size_t> vertex_scan;
+
+/**
+ * This class maintains the local scan that have been computed.
+ */
+class scan_collection
+{
+	bool sorted;
+	std::vector<vertex_scan> scans;
+	pthread_spinlock_t lock;
+
+	class greater {
+	public:
+		bool operator()(const vertex_scan &s1, const vertex_scan &s2) {
+			return s1.second > s2.second;
+		}
+	};
+public:
+	scan_collection() {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		sorted = false;
+	}
+
+	/**
+	 * Get the ith largest scan.
+	 */
+	vertex_scan get(int idx) {
+		pthread_spin_lock(&lock);
+		if (!sorted) {
+			// It needs to stored in the descending order on scan.
+			std::sort(scans.begin(), scans.end(), greater());
+			sorted = true;
+		}
+		vertex_scan ret = scans[idx];
+		pthread_spin_unlock(&lock);
+		return ret;
+	}
+
+	void add(vertex_id_t id, size_t scan) {
+		pthread_spin_lock(&lock);
+		sorted = false;
+		scans.push_back(vertex_scan(id, scan));
+		pthread_spin_unlock(&lock);
+	}
+
+	size_t get_size() {
+		pthread_spin_lock(&lock);
+		size_t ret = scans.size();
+		pthread_spin_unlock(&lock);
+		return ret;
+	}
+} known_scans;
+
 class count_msg: public vertex_message
 {
 	size_t num;
@@ -541,13 +594,11 @@ struct runtime_data_t
 {
 	// All neighbors (in both in-edges and out-edges)
 	neighbor_list neighbors;
-	size_t est_local_scan;
 	// The number of vertices that have joined with the vertex.
 	unsigned num_joined;
 
 	runtime_data_t(graph_engine &graph,
 			const page_vertex *vertex): neighbors(graph, vertex) {
-		est_local_scan = 0;
 		num_joined = 0;
 	}
 };
@@ -557,7 +608,10 @@ class scan_vertex: public compute_vertex
 	vsize_t num_in_edges;
 	vsize_t num_out_edges;
 	atomic_number<size_t> num_edges;
+	size_t est_local_scan;
 	runtime_data_t *data;
+
+	size_t get_est_local_scan(graph_engine &graph, const page_vertex *vertex);
 
 #ifdef PV_STAT
 	// For testing
@@ -572,6 +626,7 @@ public:
 	scan_vertex() {
 		num_in_edges = 0;
 		num_out_edges = 0;
+		est_local_scan = 0;
 		data = NULL;
 
 #ifdef PV_STAT
@@ -588,6 +643,7 @@ public:
 		const directed_vertex_index *index = (const directed_vertex_index *) index1;
 		num_in_edges = index->get_num_in_edges(id);
 		num_out_edges = index->get_num_out_edges(id);
+		est_local_scan = 0;
 		data = NULL;
 
 #ifdef PV_STAT
@@ -650,8 +706,18 @@ public:
 			std::vector<vertex_id_t> &common_neighs);
 
 	bool run(graph_engine &graph) {
-		size_t num_local_edges = num_in_edges + num_out_edges;
-		return num_local_edges * num_local_edges >= max_scan.get();
+		// If we have computed local scan on the vertex, skip the vertex.
+		if (num_edges.get() > 0)
+			return false;
+		// If we have estimated the local scan, we should use the estimated one.
+		else if (est_local_scan > 0)
+			return est_local_scan > max_scan.get();
+		else {
+			// If this is the first time to compute on the vertex, we can still
+			// skip a lot of vertices with this condition.
+			size_t num_local_edges = num_in_edges + num_out_edges;
+			return num_local_edges * num_local_edges >= max_scan.get();
+		}
 	}
 
 	bool run(graph_engine &graph, const page_vertex *vertex);
@@ -941,17 +1007,12 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 	return ret;
 }
 
-bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
+size_t scan_vertex::get_est_local_scan(graph_engine &graph, const page_vertex *vertex)
 {
-	assert(data == NULL);
-
-	size_t num_local_edges = vertex->get_num_edges(edge_type::BOTH_EDGES);
-	assert(num_local_edges == (size_t) num_in_edges + num_out_edges);
-#ifdef PV_STAT
-	num_all_edges = num_local_edges;
-#endif
-	if (num_local_edges == 0)
-		return true;
+	// We have estimated the local scan of this vertex, return
+	// the estimated one
+	if (est_local_scan > 0)
+		return est_local_scan;
 
 	class skip_self {
 		vertex_id_t id;
@@ -984,7 +1045,7 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 			all_neighbors.begin());
 	all_neighbors.resize(num_neighbors);
 
-	size_t tot_edges = num_local_edges;
+	size_t tot_edges = (size_t) num_in_edges + num_out_edges;
 	for (size_t i = 0; i < all_neighbors.size(); i++) {
 		scan_vertex &v = (scan_vertex &) graph.get_vertex(all_neighbors[i]);
 		// The max number of common neighbors should be smaller than all neighbors
@@ -992,7 +1053,23 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		tot_edges += min(v.num_in_edges + v.num_out_edges, num_neighbors * 2);
 	}
 	tot_edges /= 2;
-	if (tot_edges < max_scan.get())
+	est_local_scan = tot_edges;
+	return est_local_scan;
+}
+
+bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
+{
+	assert(data == NULL);
+
+	size_t num_local_edges = vertex->get_num_edges(edge_type::BOTH_EDGES);
+	assert(num_local_edges == (size_t) num_in_edges + num_out_edges);
+#ifdef PV_STAT
+	num_all_edges = num_local_edges;
+#endif
+	if (num_local_edges == 0)
+		return true;
+
+	if (get_est_local_scan(graph, vertex) < max_scan.get())
 		return true;
 
 	long ret = num_working_vertices.inc(1);
@@ -1000,11 +1077,11 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		printf("%ld working vertices\n", ret);
 
 	data = new runtime_data_t(graph, vertex);
-	data->est_local_scan = tot_edges;
 #ifdef PV_STAT
 	gettimeofday(&vertex_start, NULL);
 	fprintf(stderr, "compute v%u (with %d edges, compute on %ld edges, potential %ld inter-edges) on thread %d at %.f seconds\n",
-			get_id(), num_all_edges, data->neighbors.size(), tot_edges, thread::get_curr_thread()->get_id(),
+			get_id(), num_all_edges, data->neighbors.size(),
+			get_est_local_scan(graph, vertex), thread::get_curr_thread()->get_id(),
 			time_diff(graph_start, vertex_start));
 #endif
 
@@ -1050,8 +1127,6 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 {
 	assert(data);
 	data->num_joined += num;
-	if (data->est_local_scan < max_scan.get())
-		return data->num_joined == data->neighbors.size();
 #ifdef PV_STAT
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -1076,6 +1151,7 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 					(int) time_diff(graph_start, curr),
 					num_edges.get(), get_id());
 		}
+		known_scans.add(get_id(), num_edges.get());
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -1125,6 +1201,7 @@ void print_usage()
 
 int main(int argc, char *argv[])
 {
+	size_t topK = 200;
 	int opt;
 	std::string output_file;
 	std::string confs;
@@ -1184,20 +1261,55 @@ int main(int argc, char *argv[])
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_start = start;
-	graph->start_all();
-	graph->wait4complete();
-	gettimeofday(&end, NULL);
+	printf("Computing local scan on at least %ld vertices\n", topK);
+	while (known_scans.get_size() < topK) {
+		gettimeofday(&start, NULL);
+		graph->start_all();
+		graph->wait4complete();
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds\n", time_diff(start, end));
+		printf("process %ld vertices and complete %ld vertices\n",
+				num_working_vertices.get(), num_completed_vertices.get());
+		printf("global max scan: %ld\n", max_scan.get());
+		max_scan = global_max(0);
+	}
+
+	printf("Compute local scan on %ld vertices\n", known_scans.get_size());
+	printf("Looking for top %ld local scan\n", topK);
+	size_t prev_topK_scan;
+	do {
+		prev_topK_scan = known_scans.get(topK - 1).second;
+		// Let's use the topK as the max scan for unknown vertices
+		// and see if we can find a new vertex that has larger local scan.
+		max_scan = global_max(prev_topK_scan);
+
+		gettimeofday(&start, NULL);
+		graph->start_all();
+		graph->wait4complete();
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds\n", time_diff(start, end));
+		printf("process %ld vertices and complete %ld vertices\n",
+				num_working_vertices.get(), num_completed_vertices.get());
+		printf("global max scan: %ld\n", max_scan.get());
+		// If the previous topK is different from the current one,
+		// it means we have found new local scans that are larger
+		// than the previous topK. We should use the new topK and
+		// try again.
+	} while (prev_topK_scan != known_scans.get(topK - 1).second);
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
-	printf("It takes %f seconds\n", time_diff(start, end));
-	printf("There are %ld vertices\n", index->get_num_vertices());
-	printf("process %ld vertices and complete %ld vertices\n",
-			num_working_vertices.get(), num_completed_vertices.get());
-	printf("global max scan: %ld\n", max_scan.get());
+
+	assert(known_scans.get_size() >= topK);
+	for (size_t i = 0; i < topK; i++) {
+		vertex_scan scan = known_scans.get(i);
+		printf("No. %ld: %u, %ld\n", i, scan.first, scan.second);
+	}
+	printf("It takes %f seconds for top %ld\n", time_diff(graph_start, end),
+			topK);
 
 #ifdef PV_STAT
 	graph_index::const_iterator it = index->begin();
