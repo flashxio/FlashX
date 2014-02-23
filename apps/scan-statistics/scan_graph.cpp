@@ -146,20 +146,32 @@ class attributed_neighbor
 {
 	vertex_id_t id;
 	int num_dups;
+#if 0
 	uint32_t *count;
+#endif
 public:
 	attributed_neighbor() {
 		id = -1;
 		num_dups = 0;
+#if 0
 		count = NULL;
+#endif
 	}
 
 	attributed_neighbor(vertex_id_t id) {
 		this->id = id;
 		num_dups = 1;
+#if 0
 		count = NULL;
+#endif
 	}
 
+	attributed_neighbor(vertex_id_t id, int num_dups) {
+		this->id = id;
+		this->num_dups = num_dups;
+	}
+
+#if 0
 	attributed_neighbor(vertex_id_t id, int num_dups, uint32_t *count) {
 		this->id = id;
 		this->num_dups = num_dups;
@@ -169,6 +181,7 @@ public:
 	bool is_valid() const {
 		return count != NULL;
 	}
+#endif
 
 	vertex_id_t get_id() const {
 		return id;
@@ -178,6 +191,7 @@ public:
 		return num_dups;
 	}
 
+#if 0
 	size_t get_count() const {
 		return *count;
 	}
@@ -185,6 +199,7 @@ public:
 	void inc_count(size_t count) {
 		(*this->count) += count;
 	}
+#endif
 
 	bool operator<(const attributed_neighbor &e) const {
 		return this->id < e.id;
@@ -325,20 +340,23 @@ class neighbor_list
 	typedef graphlab::cuckoo_set_pow2<index_entry, 3, size_t,
 			index_hash> edge_set_t;
 
-	class skip_larger {
+	class skip_self {
 		vertex_id_t id;
-		size_t size;
 		graph_engine &graph;
 	public:
-		skip_larger(graph_engine &_graph, vertex_id_t id): graph(_graph) {
+		skip_self(graph_engine &_graph, vertex_id_t id): graph(_graph) {
 			this->id = id;
-			size = graph.get_vertex(id).get_ext_mem_size();
 		}
 
 		bool operator()(attributed_neighbor &e) {
 			return operator()(e.get_id());
 		}
 
+		bool operator()(vertex_id_t id) {
+			return this->id == id;
+		}
+
+#if 0
 		/**
 		 * We are going to count edges on the vertices with the most edges.
 		 * If two vertices have the same number of edges, we compute
@@ -350,6 +368,7 @@ class neighbor_list
 				return id >= this->id;
 			return info.get_ext_mem_size() > size;
 		}
+#endif
 	};
 
 	class merge_edge {
@@ -358,13 +377,15 @@ class neighbor_list
 				const attributed_neighbor &e2) {
 			assert(e1.get_id() == e2.get_id());
 			return attributed_neighbor(e1.get_id(),
-					e1.get_num_dups() + e2.get_num_dups(), NULL);
+					e1.get_num_dups() + e2.get_num_dups());
 		}
 	};
 
 	std::vector<vertex_id_t> id_list;
 	std::vector<int> num_dup_list;
+#if 0
 	std::vector<uint32_t> count_list;
+#endif
 	edge_set_t *neighbor_set;
 
 	// This helps to iterate on the id list.
@@ -426,12 +447,14 @@ public:
 				vertex->get_neigh_end(edge_type::IN_EDGE),
 				vertex->get_neigh_begin(edge_type::OUT_EDGE),
 				vertex->get_neigh_end(edge_type::OUT_EDGE),
-				skip_larger(graph, vertex->get_id()), merge,
+				skip_self(graph, vertex->get_id()), merge,
 				neighbors.begin());
 		neighbors.resize(num_neighbors);
 		id_list.resize(num_neighbors);
 		num_dup_list.resize(num_neighbors);
+#if 0
 		count_list.resize(num_neighbors);
+#endif
 		for (size_t i = 0; i < num_neighbors; i++) {
 			id_list[i] = neighbors[i].get_id();
 			num_dup_list[i] = neighbors[i].get_num_dups();
@@ -464,8 +487,7 @@ public:
 	}
 
 	attributed_neighbor at(size_t idx) {
-		return attributed_neighbor(id_list[idx], num_dup_list[idx],
-				&count_list[idx]);
+		return attributed_neighbor(id_list[idx], num_dup_list[idx]);
 	}
 
 	bool contains(vertex_id_t id) {
@@ -639,6 +661,7 @@ public:
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
+#if 0
 		for (int i = 0; i < num; i++) {
 			const count_msg *msg = (const count_msg *) msgs[i];
 			num_edges.inc(msg->get_num());
@@ -650,6 +673,7 @@ public:
 					(int) time_diff(graph_start, curr),
 					num_edges.get(), get_id());
 		}
+#endif
 	}
 };
 
@@ -871,6 +895,7 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 	size_t ret = count_edges(graph, v, edge_type::IN_EDGE, common_neighs1)
 		+ count_edges(graph, v, edge_type::OUT_EDGE, common_neighs2);
 
+#if 0
 	class skip_self {
 	public:
 		bool operator()(vertex_id_t id) {
@@ -912,6 +937,7 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v)
 	}
 	if (num_edges > 0)
 		neigh.inc_count(num_edges);
+#endif
 	return ret;
 }
 
@@ -1062,6 +1088,7 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 				get_id(), num_all_edges, num_edges.get(), scan_bytes, rand_jumps, min_comps, time_us / 1000);
 #endif
 
+#if 0
 		// Inform all neighbors in the in-edges.
 		for (size_t i = 0; i < data->neighbors.size(); i++) {
 			size_t count = data->neighbors.at(i).get_count();
@@ -1070,6 +1097,7 @@ bool scan_vertex::run_on_neighbors(graph_engine &graph,
 				graph.send_msg(data->neighbors.at(i).get_id(), msg);
 			}
 		}
+#endif
 
 		delete data;
 		data = NULL;
