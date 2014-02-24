@@ -51,6 +51,12 @@ public:
 	}
 };
 
+static void destroy_queue(void *arg)
+{
+	fifo_queue<char *> *q = (fifo_queue<char *> *) arg;
+	fifo_queue<char *>::destroy(q);
+}
+
 slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 		long _increase_size, long _max_size, int _node_id,
 		// We allow pages to be pinned when allocated.
@@ -71,8 +77,8 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 	this->pinned = pinned;
 	assert((unsigned) obj_size >= sizeof(linked_obj));
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-	pthread_key_create(&local_buf_key, NULL);
-	pthread_key_create(&local_free_key, NULL);
+	pthread_key_create(&local_buf_key, destroy_queue);
+	pthread_key_create(&local_free_key, destroy_queue);
 }
 
 void slab_allocator::free(char *obj)
@@ -221,6 +227,8 @@ slab_allocator::~slab_allocator()
 #endif
 		numa_free(alloc_bufs[i], increase_size);
 	}
+	pthread_key_delete(local_buf_key);
+	pthread_key_delete(local_free_key);
 	pthread_spin_destroy(&lock);
 }
 
