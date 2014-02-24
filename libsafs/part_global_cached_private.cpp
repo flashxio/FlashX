@@ -419,6 +419,11 @@ public:
 		req_buf = tmp;
 	}
 
+	~req_stealer() {
+		delete flush_timer;
+		delete alloc;
+	}
+
 	virtual int get_file_id() const {
 		assert(file_id >= 0);
 		return file_id;
@@ -964,6 +969,7 @@ part_global_cached_io::~part_global_cached_io()
 	msg_queue<io_reply>::destroy(reply_queue);
 	thread_safe_msg_sender<io_reply>::destroy(reply_sender);
 	global_table->destroy_req_senders(req_senders);
+	delete underlying;
 }
 
 int part_global_cached_io::process_reply(io_reply *reply) {

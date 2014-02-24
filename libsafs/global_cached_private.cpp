@@ -611,6 +611,7 @@ global_cached_io::~global_cached_io()
 {
 	delete underlying;
 	delete req_allocator;
+	delete ext_allocator;
 	delete comp_io_sched;
 }
 

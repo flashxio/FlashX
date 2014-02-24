@@ -40,8 +40,6 @@
 #include "native_file.h"
 #include "safs_file.h"
 
-#define DEBUG
-
 /**
  * This global data collection is very static.
  * Once the data is initialized, no data needs to be changed.
@@ -77,6 +75,11 @@ struct global_data_collection
 		pthread_spin_lock(&ios_lock);
 		ios.insert(io);
 		pthread_spin_unlock(&ios_lock);
+	}
+
+	void delete_io(io_interface *io) {
+		// TODO
+		assert(0);
 	}
 #endif
 };
@@ -208,8 +211,7 @@ public:
 
 	virtual io_interface *create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io) {
-	}
+	virtual void destroy_io(io_interface *io);
 
 	virtual int get_file_id() const {
 		assert(0);
@@ -225,8 +227,7 @@ public:
 
 	virtual io_interface *create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io) {
-	}
+	virtual void destroy_io(io_interface *io);
 
 	virtual int get_file_id() const {
 		assert(0);
@@ -245,8 +246,7 @@ public:
 
 	virtual io_interface *create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io) {
-	}
+	virtual void destroy_io(io_interface *io);
 
 	virtual int get_file_id() const {
 		return mapper->get_file_id();
@@ -265,8 +265,7 @@ public:
 
 	virtual io_interface *create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io) {
-	}
+	virtual void destroy_io(io_interface *io);
 };
 
 class part_global_cached_io_factory: public remote_io_factory
@@ -278,8 +277,7 @@ public:
 
 	virtual io_interface *create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io) {
-	}
+	virtual void destroy_io(io_interface *io);
 };
 
 io_interface *posix_io_factory::create_io(thread *t)
@@ -311,6 +309,14 @@ io_interface *posix_io_factory::create_io(thread *t)
 	return io;
 }
 
+void posix_io_factory::destroy_io(io_interface *io)
+{
+#ifdef DEBUG
+	global_data.delete_io(io);
+#endif
+	delete io;
+}
+
 io_interface *aio_factory::create_io(thread *t)
 {
 	file_mapper *mapper = global_data.raid_conf.create_file_mapper(get_name());
@@ -328,6 +334,14 @@ io_interface *aio_factory::create_io(thread *t)
 	global_data.register_io(io);
 #endif
 	return io;
+}
+
+void aio_factory::destroy_io(io_interface *io)
+{
+#ifdef DEBUG
+	global_data.delete_io(io);
+#endif
+	delete io;
 }
 
 remote_io_factory::remote_io_factory(const std::string &file_name): file_io_factory(
@@ -360,6 +374,14 @@ io_interface *remote_io_factory::create_io(thread *t)
 	return io;
 }
 
+void remote_io_factory::destroy_io(io_interface *io)
+{
+#ifdef DEBUG
+	global_data.delete_io(io);
+#endif
+	delete io;
+}
+
 io_interface *global_cached_io_factory::create_io(thread *t)
 {
 	io_interface *underlying = new remote_io(
@@ -375,6 +397,15 @@ io_interface *global_cached_io_factory::create_io(thread *t)
 	return io;
 }
 
+void global_cached_io_factory::destroy_io(io_interface *io)
+{
+#ifdef DEBUG
+	global_data.delete_io(io);
+#endif
+	// The underlying IO is deleted in global_cached_io's destructor.
+	delete io;
+}
+
 
 io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
@@ -385,6 +416,14 @@ io_interface *part_global_cached_io_factory::create_io(thread *t)
 	global_data.register_io(io);
 #endif
 	return io;
+}
+
+void part_global_cached_io_factory::destroy_io(io_interface *io)
+{
+#ifdef DEBUG
+	global_data.delete_io(io);
+#endif
+	part_global_cached_io::destroy((part_global_cached_io *) io);
 }
 
 file_io_factory *create_io_factory(const std::string &file_name,

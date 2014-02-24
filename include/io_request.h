@@ -296,6 +296,8 @@ public:
 class compute_allocator
 {
 public:
+	virtual ~compute_allocator() {
+	}
 	virtual user_compute *alloc() = 0;
 	virtual void free(user_compute *) = 0;
 };

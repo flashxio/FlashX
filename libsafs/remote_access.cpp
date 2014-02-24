@@ -112,6 +112,7 @@ remote_io::~remote_io()
 		request_sender::destroy(senders[i]);
 		request_sender::destroy(low_prio_senders[i]);
 	}
+	delete msg_allocator;
 }
 
 io_interface *remote_io::clone(thread *t) const
