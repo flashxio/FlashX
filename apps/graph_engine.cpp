@@ -678,13 +678,13 @@ worker_thread::worker_thread(graph_engine *graph, file_io_factory *factory,
 worker_thread::~worker_thread()
 {
 	delete alloc;
-	delete msg_alloc;
 	for (unsigned i = 0; i < msg_senders.size(); i++)
 		simple_msg_sender::destroy(msg_senders[i]);
 	for (unsigned i = 0; i < multicast_senders.size(); i++)
 		multicast_msg_sender::destroy(multicast_senders[i]);
 	for (unsigned i = 0; i < activate_senders.size(); i++)
 		multicast_msg_sender::destroy(activate_senders[i]);
+	delete msg_alloc;
 	graph->destroy_part_compute_allocator(part_alloc);
 	factory->destroy_io(io);
 }
