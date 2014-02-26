@@ -42,10 +42,13 @@ CC = gcc
 CXX = g++
 endif
 
-all: scan-statistics
+all: scan-statistics overlap
 
-scan-statistics: $(OBJS) ../libgraph.a
-	$(CXX) -o scan-statistics $(OBJS) $(LDFLAGS)
+scan-statistics: scan_graph.o ../libgraph.a
+	$(CXX) -o scan-statistics scan_graph.o $(LDFLAGS)
+
+overlap: overlap.o ../libgraph.a
+	$(CXX) -o overlap overlap.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
