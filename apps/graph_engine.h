@@ -24,6 +24,7 @@
 #include "container.h"
 #include "concurrency.h"
 #include "slab_allocator.h"
+#include "io_interface.h"
 
 #include "vertex.h"
 #include "vertex_index.h"
