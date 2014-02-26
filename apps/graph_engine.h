@@ -145,6 +145,15 @@ public:
 	virtual void schedule(std::vector<vertex_id_t> &vertices) = 0;
 };
 
+class default_vertex_scheduler: public vertex_scheduler
+{
+public:
+	void schedule(std::vector<vertex_id_t> &vertices) {
+		std::sort(vertices.begin(), vertices.end());
+	}
+};
+extern default_vertex_scheduler default_scheduler;
+
 class worker_thread;
 
 class graph_engine
