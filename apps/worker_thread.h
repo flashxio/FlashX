@@ -97,6 +97,8 @@ public:
 	}
 };
 
+class vertex_compute;
+
 class worker_thread: public thread
 {
 	int worker_id;
@@ -105,6 +107,11 @@ class worker_thread: public thread
 	graph_engine *graph;
 	compute_allocator *alloc;
 	compute_allocator *part_alloc;
+
+	// When a thread process a vertex, the worker thread should point to
+	// a vertex compute. This is useful when a user-defined compute vertex
+	// needs to reference its vertex compute.
+	vertex_compute *curr_compute;
 
 	/**
 	 * A vertex is allowed to send messages to other vertices.
@@ -226,6 +233,21 @@ public:
 
 	size_t get_num_activated_on_others() {
 		return graph->get_num_remaining_vertices();
+	}
+
+	vertex_compute *get_curr_vertex_compute() {
+		if (curr_compute == NULL)
+			curr_compute = (vertex_compute *) alloc->alloc();
+		return curr_compute;
+	}
+
+	void set_curr_vertex_compute(vertex_compute *compute) {
+		assert(this->curr_compute == NULL);
+		curr_compute = compute;
+	}
+
+	void reset_curr_vertex_compute() {
+		curr_compute = NULL;
 	}
 };
 

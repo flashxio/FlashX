@@ -440,9 +440,6 @@ class neighbor_list
 	std::vector<uint32_t> count_list;
 #endif
 	edge_set_t *neighbor_set;
-
-	// This helps to iterate on the id list.
-	std::vector<vertex_id_t>::const_iterator it;
 public:
 	class id_iterator: public std::iterator<std::random_access_iterator_tag, vertex_id_t>
 	{
@@ -519,8 +516,6 @@ public:
 			for (size_t i = 0; i < neighbors.size(); i++)
 				neighbor_set->insert(index_entry(neighbors[i].get_id(), i));
 		}
-
-		start_id_iterator();
 	}
 
 	~neighbor_list() {
@@ -566,22 +561,9 @@ public:
 		return id_list.empty();
 	}
 
-	/**
-	 * These methods are another way of iterating over the id list.
-	 */
-
-	bool has_next() const {
-		return it != id_list.end();
-	}
-
-	vertex_id_t next() {
-		vertex_id_t ret = *it;
-		it++;
-		return ret;
-	}
-
-	void start_id_iterator() {
-		it = id_list.begin();
+	size_t get_neighbors(std::vector<vertex_id_t> &neighbors) {
+		neighbors = id_list;
+		return neighbors.size();
 	}
 };
 
@@ -667,16 +649,6 @@ public:
 
 	size_t get_result() const {
 		return num_edges.get();
-	}
-
-	virtual bool has_required_vertices() const {
-		if (data == NULL)
-			return false;
-		return data->neighbors.has_next();
-	}
-
-	virtual vertex_id_t get_next_required_vertex() {
-		return data->neighbors.next();
 	}
 
 	size_t count_edges(graph_engine &graph, const page_vertex *v);
@@ -1118,6 +1090,10 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 			printf("%ld completed vertices\n", ret);
 		return true;
 	}
+
+	std::vector<vertex_id_t> neighbors;
+	data->neighbors.get_neighbors(neighbors);
+	graph.request_vertices(*this, neighbors.data(), neighbors.size());
 
 	return false;
 }

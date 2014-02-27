@@ -19,12 +19,17 @@
  * You should have received a copy of the GNU General Public License
  * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <algorithm>
+#include <deque>
 
 #include "io_interface.h"
+#include "slab_allocator.h"
 
-#include "graph_engine.h"
+#include "vertex_request.h"
 
 class worker_thread;
+class graph_engine;
+class compute_vertex;
 
 /**
  * This callback is to process a vertex.
@@ -40,6 +45,8 @@ class vertex_compute: public user_compute
 	compute_vertex *v;
 	// The thread that creates the vertex compute.
 	worker_thread *issue_thread;
+
+	std::deque<vertex_id_t> requested_vertices;
 public:
 	vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
@@ -59,21 +66,10 @@ public:
 	}
 
 	virtual int has_requests() const {
-		if (v == NULL)
-			return false;
-		else
-			return v->has_required_vertices();
+		return !requested_vertices.empty();
 	}
 
-	virtual request_range get_next_request() {
-		assert(v);
-		request_range range = v->get_next_request(graph);
-		if (range.get_compute() == NULL) {
-			num_complete_issues++;
-			range.set_compute(this);
-		}
-		return range;
-	}
+	virtual request_range get_next_request();
 
 	virtual void run(page_byte_array &);
 
@@ -85,6 +81,16 @@ public:
 		// this user compute, so we only count the requests that are going
 		// to be passed to this user compute.
 		return num_complete_issues == num_complete_fetched && !has_requests();
+	}
+
+	virtual void request_vertices(vertex_id_t ids[], int num) {
+		requested_vertices.insert(requested_vertices.end(), ids, ids + num);
+		if (!std::is_sorted(requested_vertices.begin(),
+					requested_vertices.end()))
+			std::sort(requested_vertices.begin(), requested_vertices.end());
+	}
+	virtual void request_partial_vertices(vertex_request *reqs[], int num) {
+		assert(0);
 	}
 };
 

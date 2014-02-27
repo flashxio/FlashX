@@ -30,6 +30,7 @@
 #include "messaging.h"
 #include "worker_thread.h"
 #include "vertex_compute.h"
+#include "vertex_request.h"
 
 graph_config graph_conf;
 default_vertex_scheduler default_scheduler;
@@ -139,14 +140,6 @@ size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
 	return num;
 }
 
-request_range compute_vertex::get_next_request(graph_engine *graph)
-{
-	vertex_id_t id = get_next_required_vertex();
-	compute_vertex &info = graph->get_vertex(id);
-	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
-	return request_range(loc, info.get_ext_mem_size(), READ, NULL);
-}
-
 void ts_vertex_request::set_vertex(vertex_id_t id)
 {
 	this->id = id;
@@ -161,27 +154,27 @@ void ts_vertex_request::set_vertex(vertex_id_t id)
 		require_all = true;
 }
 
-request_range ts_compute_vertex::get_next_request(graph_engine *graph)
-{
-	ts_vertex_request ts_req(graph);
-	get_next_required_ts_vertex(ts_req);
-	assert(ts_req.get_edge_type() == edge_type::BOTH_EDGES);
-
-	compute_vertex &info = graph->get_vertex(ts_req.get_id());
-	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
-	if (ts_req.is_require_all()) {
-		return request_range(loc, info.get_ext_mem_size(), READ, NULL);
-	}
-	else {
-		worker_thread *t = (worker_thread *) thread::get_curr_thread();
-		compute_allocator *alloc = t->get_part_compute_allocator();
-		assert(alloc);
-		part_ts_vertex_compute *comp = (part_ts_vertex_compute *) alloc->alloc();
-		comp->init(this, ts_req);
-		// We assume the header of a ts-vertex is never larger than a page.
-		return request_range(loc, PAGE_SIZE, READ, comp);
-	}
-}
+//request_range ts_compute_vertex::get_next_request(graph_engine *graph)
+//{
+//	ts_vertex_request ts_req(graph);
+//	get_next_required_ts_vertex(ts_req);
+//	assert(ts_req.get_edge_type() == edge_type::BOTH_EDGES);
+//
+//	compute_vertex &info = graph->get_vertex(ts_req.get_id());
+//	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+//	if (ts_req.is_require_all()) {
+//		return request_range(loc, info.get_ext_mem_size(), READ, NULL);
+//	}
+//	else {
+//		worker_thread *t = (worker_thread *) thread::get_curr_thread();
+//		compute_allocator *alloc = t->get_part_compute_allocator();
+//		assert(alloc);
+//		part_ts_vertex_compute *comp = (part_ts_vertex_compute *) alloc->alloc();
+//		comp->init(this, ts_req);
+//		// We assume the header of a ts-vertex is never larger than a page.
+//		return request_range(loc, PAGE_SIZE, READ, comp);
+//	}
+//}
 
 bool ts_compute_vertex::run_on_neighbors(graph_engine &graph,
 		const page_vertex *vertices[], int num)
@@ -378,6 +371,24 @@ void graph_engine::wait4complete()
 void graph_engine::set_vertex_scheduler(vertex_scheduler *scheduler)
 {
 	this->scheduler = scheduler;
+}
+
+void graph_engine::request_vertices(compute_vertex &vertex, vertex_id_t ids[],
+		int num)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	vertex_compute *compute = curr->get_curr_vertex_compute();
+	assert(compute);
+	compute->request_vertices(ids, num);
+}
+
+void graph_engine::request_partial_vertices(compute_vertex &vertex,
+		vertex_request *reqs[], int num)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	vertex_compute *compute = curr->get_curr_vertex_compute();
+	assert(compute);
+	compute->request_partial_vertices(reqs, num);
 }
 
 vertex_index *load_vertex_index(const std::string &index_file)

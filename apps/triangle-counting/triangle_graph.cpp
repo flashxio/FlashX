@@ -50,8 +50,6 @@ class triangle_vertex: public compute_vertex
 	int num_required;
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
-	// The number of vertices that have been asked to fetch.
-	int num_fetched;
 	// The number of triangles per vertex.
 	atomic_integer num_pv_triangles;
 	// It contains part of in-edges.
@@ -68,7 +66,6 @@ public:
 	triangle_vertex() {
 		num_required = 0;
 		num_joined = 0;
-		num_fetched = 0;
 		in_edges = NULL;
 		triangles = NULL;
 		out_edges = NULL;
@@ -78,21 +75,12 @@ public:
 			id, index) {
 		num_required = 0;
 		num_joined = 0;
-		num_fetched = 0;
 		in_edges = NULL;
 		triangles = NULL;
 		out_edges = NULL;
 	}
 
 	int count_triangles(const page_vertex *v) const;
-
-	virtual bool has_required_vertices() const {
-		return num_fetched < num_required;
-	}
-
-	virtual vertex_id_t get_next_required_vertex() {
-		return out_edges->at(num_fetched++);
-	}
 
 	int get_num_triangles() const {
 		return num_pv_triangles.get();
@@ -235,7 +223,6 @@ bool triangle_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	assert(in_edges == NULL);
 	assert(out_edges == NULL);
 	assert(num_joined == 0);
-	assert(num_fetched == 0);
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
@@ -271,6 +258,8 @@ bool triangle_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	else {
 		triangles = new std::vector<int>(in_edges->size());
 	}
+
+	graph.request_vertices(*this, out_edges->data(), out_edges->size());
 	return false;
 }
 

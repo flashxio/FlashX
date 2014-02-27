@@ -62,6 +62,7 @@ worker_thread::worker_thread(graph_engine *graph, file_io_factory *factory,
 	this->graph = graph;
 	this->io = NULL;
 	this->factory = factory;
+	this->curr_compute = NULL;
 	alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
 	// TODO we need to fix this.
 	part_alloc = graph->create_part_compute_allocator(this);

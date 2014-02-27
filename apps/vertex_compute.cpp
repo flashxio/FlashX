@@ -2,6 +2,20 @@
 #include "graph_engine.h"
 #include "worker_thread.h"
 
+request_range vertex_compute::get_next_request()
+{
+	num_complete_issues++;
+
+	// Get the next vertex.
+	vertex_id_t id = requested_vertices.front();
+	requested_vertices.pop_front();
+
+	// Find the location of the vertex.
+	compute_vertex &info = graph->get_vertex(id);
+	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+	return request_range(loc, info.get_ext_mem_size(), READ, this);
+}
+
 void vertex_compute::run(page_byte_array &array)
 {
 	ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
@@ -9,6 +23,8 @@ void vertex_compute::run(page_byte_array &array)
 	const page_vertex *ext_v = interpreter->interpret(array, buf.data(),
 			interpreter->get_vertex_size());
 	bool completed = false;
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	t->set_curr_vertex_compute(this);
 	// If the algorithm doesn't need to get the full information
 	// of their neighbors
 	if (graph->get_required_neighbor_type() == edge_type::NONE
@@ -29,6 +45,7 @@ void vertex_compute::run(page_byte_array &array)
 		assert(has_completed());
 		issue_thread->complete_vertex(*v);
 	}
+	t->reset_curr_vertex_compute();
 }
 
 request_range part_ts_vertex_compute::get_next_request()

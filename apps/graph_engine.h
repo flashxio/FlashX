@@ -34,6 +34,7 @@
 #include "partitioner.h"
 #include "graph_index.h"
 #include "graph_config.h"
+#include "vertex_request.h"
 
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
@@ -41,6 +42,7 @@
 const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
 
 class graph_engine;
+class vertex_request;
 
 class compute_vertex: public in_mem_vertex_info
 {
@@ -55,20 +57,6 @@ public:
 	virtual compute_allocator *create_part_compute_allocator(
 			graph_engine *graph, thread *t) {
 		return NULL;
-	}
-
-	virtual bool has_required_vertices() const {
-		return false;
-	}
-
-	/**
-	 * This translate the required vertex to an I/O request to the file.
-	 */
-	virtual request_range get_next_request(graph_engine *graph);
-
-	virtual vertex_id_t get_next_required_vertex() {
-		assert(0);
-		return -1;
 	}
 
 	virtual void init() {
@@ -111,12 +99,6 @@ class ts_vertex_request;
 
 class ts_compute_vertex: public compute_vertex
 {
-	vertex_id_t get_next_required_vertex() {
-		return -1;
-	}
-	virtual bool has_required_vertices() const {
-		return has_required_ts_vertices();
-	}
 public:
 	ts_compute_vertex() {
 	}
@@ -130,11 +112,6 @@ public:
 
 	virtual bool run_on_neighbors(graph_engine &graph,
 			const page_vertex *vertices[], int num);
-
-	virtual request_range get_next_request(graph_engine *graph);
-
-	virtual void get_next_required_ts_vertex(ts_vertex_request &) = 0;
-	virtual bool has_required_ts_vertices() const = 0;
 	virtual bool run_on_neighbors(graph_engine &graph,
 			const TS_page_vertex *vertices[], int num) = 0;
 };
@@ -340,6 +317,22 @@ public:
 		sender->send_cached(msg);
 	}
 
+	/**
+	 * This allows a vertex to request other vertices in the graph.
+	 * @vertex: the vertex that sends the requests.
+	 * @ids: the Ids of vertices requested by @vertex.
+	 */
+	void request_vertices(compute_vertex &vertex, vertex_id_t ids[], int num);
+	/**
+	 * This allows a vertex to request other vertices in the graph as above.
+	 * The difference is that this interface allows a vertex to request
+	 * part of other vertices.
+	 * @vertex: the vertex that sends the requests.
+	 * @reqs: defines part of vertices requested by @vertex.
+	 */
+	void request_partial_vertices(compute_vertex &vertex,
+			vertex_request *reqs[], int num);
+
 	ext_mem_vertex_interpreter *get_vertex_interpreter() const {
 		return interpreter;
 	}
@@ -389,69 +382,6 @@ public:
 
 	void set_max_processing_vertices(int max) {
 		max_processing_vertices = max;
-	}
-};
-
-/**
- * This class contains the request of a time-series vertex
- * from the user application.
- */
-class ts_vertex_request
-{
-	vertex_id_t id;
-	timestamp_pair range;
-	edge_type type;
-	bool require_all;
-	graph_engine *graph;
-public:
-	ts_vertex_request(graph_engine *graph) {
-		id = 0;
-		range = timestamp_pair(INT_MAX, INT_MIN);
-		type = edge_type::BOTH_EDGES;
-		require_all = false;
-		this->graph = graph;
-	}
-
-	void set_require_all(bool require_all) {
-		this->require_all = require_all;
-	}
-
-	void set_vertex(vertex_id_t id);
-
-	void add_timestamp(int timestamp) {
-		if (!require_all) {
-			if (range.second < timestamp)
-				range.second = timestamp + 1;
-			if (range.first > timestamp)
-				range.first = timestamp;
-		}
-	}
-
-	void set_edge_type(edge_type type) {
-		this->type = type;
-	}
-
-	void clear() {
-		id = 0;
-		range = timestamp_pair(INT_MAX, INT_MIN);
-		type = edge_type::BOTH_EDGES;
-		require_all = false;
-	}
-
-	vertex_id_t get_id() const {
-		return id;
-	}
-
-	const timestamp_pair &get_range() const {
-		return range;
-	}
-
-	edge_type get_edge_type() const {
-		return type;
-	}
-
-	bool is_require_all() const {
-		return require_all;
 	}
 };
 
