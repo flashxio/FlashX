@@ -7,13 +7,30 @@ request_range vertex_compute::get_next_request()
 	num_complete_issues++;
 
 	// Get the next vertex.
-	vertex_id_t id = requested_vertices.front();
-	requested_vertices.pop_front();
+	vertex_id_t id = requested_vertices[fetch_idx++];
 
 	// Find the location of the vertex.
 	compute_vertex &info = graph->get_vertex(id);
 	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
 	return request_range(loc, info.get_ext_mem_size(), READ, this);
+}
+
+void vertex_compute::request_vertices(vertex_id_t ids[], int num)
+{
+	if (requested_vertices.empty()) {
+		requested_vertices.insert(requested_vertices.end(), ids, ids + num);
+		if (!std::is_sorted(requested_vertices.begin(),
+					requested_vertices.end()))
+			std::sort(requested_vertices.begin(), requested_vertices.end());
+	}
+	else {
+		std::vector<vertex_id_t> merged(
+				requested_vertices.size() - fetch_idx + num);
+		std::merge(requested_vertices.begin() + fetch_idx, requested_vertices.end(),
+				ids, ids + num, merged.begin());
+		requested_vertices.swap(merged);
+	}
+	fetch_idx = 0;
 }
 
 void vertex_compute::run(page_byte_array &array)

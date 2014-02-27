@@ -46,7 +46,8 @@ class vertex_compute: public user_compute
 	// The thread that creates the vertex compute.
 	worker_thread *issue_thread;
 
-	std::deque<vertex_id_t> requested_vertices;
+	std::vector<vertex_id_t> requested_vertices;
+	size_t fetch_idx;
 public:
 	vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
@@ -55,6 +56,7 @@ public:
 		issue_thread = (worker_thread *) thread::get_curr_thread();
 		num_complete_issues = 0;
 		num_complete_fetched = 0;
+		fetch_idx = 0;
 	}
 
 	virtual int serialize(char *buf, int size) const {
@@ -66,7 +68,7 @@ public:
 	}
 
 	virtual int has_requests() const {
-		return !requested_vertices.empty();
+		return fetch_idx < requested_vertices.size();
 	}
 
 	virtual request_range get_next_request();
@@ -83,12 +85,7 @@ public:
 		return num_complete_issues == num_complete_fetched && !has_requests();
 	}
 
-	virtual void request_vertices(vertex_id_t ids[], int num) {
-		requested_vertices.insert(requested_vertices.end(), ids, ids + num);
-		if (!std::is_sorted(requested_vertices.begin(),
-					requested_vertices.end()))
-			std::sort(requested_vertices.begin(), requested_vertices.end());
-	}
+	virtual void request_vertices(vertex_id_t ids[], int num);
 	virtual void request_partial_vertices(vertex_request *reqs[], int num) {
 		assert(0);
 	}
