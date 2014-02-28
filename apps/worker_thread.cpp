@@ -63,14 +63,21 @@ worker_thread::worker_thread(graph_engine *graph, file_io_factory *factory,
 	this->io = NULL;
 	this->factory = factory;
 	this->curr_compute = NULL;
-	alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
-	// TODO we need to fix this.
-	part_alloc = graph->create_part_compute_allocator(this);
+	switch(graph->get_graph_header().get_graph_type()) {
+		case graph_type::DIRECTED:
+			alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
+			part_alloc = NULL;
+			break;
+		default:
+			assert(0);
+
+	}
 }
 
 worker_thread::~worker_thread()
 {
 	delete alloc;
+	delete part_alloc;
 	for (unsigned i = 0; i < msg_senders.size(); i++)
 		simple_msg_sender::destroy(msg_senders[i]);
 	for (unsigned i = 0; i < multicast_senders.size(); i++)
@@ -78,7 +85,6 @@ worker_thread::~worker_thread()
 	for (unsigned i = 0; i < activate_senders.size(); i++)
 		multicast_msg_sender::destroy(activate_senders[i]);
 	delete msg_alloc;
-	graph->destroy_part_compute_allocator(part_alloc);
 	factory->destroy_io(io);
 }
 

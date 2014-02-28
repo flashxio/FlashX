@@ -54,11 +54,6 @@ public:
 			id, index) {
 	}
 
-	virtual compute_allocator *create_part_compute_allocator(
-			graph_engine *graph, thread *t) {
-		return NULL;
-	}
-
 	virtual void init() {
 	}
 
@@ -106,9 +101,6 @@ public:
 	ts_compute_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
 			id, index) {
 	}
-
-	virtual compute_allocator *create_part_compute_allocator(
-			graph_engine *graph, thread *t);
 
 	virtual bool run_on_neighbors(graph_engine &graph,
 			const page_vertex *vertices[], int num);
@@ -335,17 +327,6 @@ public:
 
 	ext_mem_vertex_interpreter *get_vertex_interpreter() const {
 		return interpreter;
-	}
-
-	compute_allocator *create_part_compute_allocator(thread *t) {
-		// We only need to get a vertex that exists.
-		int min_id = vertices->get_min_vertex_id();
-		return vertices->get_vertex(min_id).create_part_compute_allocator(
-				this, t);
-	}
-
-	void destroy_part_compute_allocator(compute_allocator *alloc) {
-		delete alloc;
 	}
 
 	const vertex_partitioner *get_partitioner() const {

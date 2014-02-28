@@ -183,13 +183,6 @@ bool ts_compute_vertex::run_on_neighbors(graph_engine &graph,
 	return run_on_neighbors(graph, ts_vertices, num);
 }
 
-compute_allocator *ts_compute_vertex::create_part_compute_allocator(
-		graph_engine *graph, thread *t)
-{
-	return new vertex_compute_allocator<part_ts_vertex_compute>(
-			graph, t);
-}
-
 graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index *index)
 {
