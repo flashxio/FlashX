@@ -194,6 +194,7 @@ public:
 class task_thread: public thread
 {
 	fifo_queue<thread_task *> tasks;
+	bool all_complete;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 public:
@@ -201,10 +202,12 @@ public:
 			node), tasks(node, 1024, true) {
 		pthread_mutex_init(&mutex, NULL);
 		pthread_cond_init(&cond, NULL);
+		all_complete = false;
 	}
 
 	void add_task(thread_task *t) {
 		pthread_mutex_lock(&mutex);
+		all_complete = false;
 		if (tasks.is_full())
 			tasks.expand_queue(tasks.get_size() * 2);
 		tasks.push_back(t);
@@ -225,13 +228,14 @@ public:
 			}
 			pthread_mutex_lock(&mutex);
 		}
+		all_complete = true;
 		pthread_mutex_unlock(&mutex);
 		pthread_cond_signal(&cond);
 	}
 
 	void wait4complete() {
 		pthread_mutex_lock(&mutex);
-		while (!tasks.is_empty()) {
+		while (!all_complete) {
 			pthread_cond_wait(&cond, &mutex);
 		}
 		pthread_mutex_unlock(&mutex);
