@@ -20,6 +20,7 @@
 
 #include "graph.h"
 
+#include <memory>
 #ifdef MEMCHECK
 #include <algorithm>
 #else
@@ -340,7 +341,8 @@ public:
 			fclose(f);
 	}
 
-	char *read_edge_list_text(const size_t wanted_bytes, size_t &read_bytes);
+	std::unique_ptr<char[]> read_edge_list_text(const size_t wanted_bytes,
+			size_t &read_bytes);
 
 	size_t get_num_remaining_bytes() const {
 		off_t curr_off = ftell(f);
@@ -354,8 +356,8 @@ public:
  * it's guaranteed that all lines are complete.
  * The returned string ends with '\0'.
  */
-char *graph_file_io::read_edge_list_text(const size_t wanted_bytes,
-		size_t &read_bytes)
+std::unique_ptr<char[]> graph_file_io::read_edge_list_text(
+		const size_t wanted_bytes, size_t &read_bytes)
 {
 	off_t curr_off = ftell(f);
 	off_t off = curr_off + wanted_bytes;
@@ -400,7 +402,7 @@ char *graph_file_io::read_edge_list_text(const size_t wanted_bytes,
 	assert(ret == 1);
 	line_buf[read_bytes] = 0;
 
-	return line_buf;
+	return std::unique_ptr<char[]>(line_buf);
 }
 
 class ts_edge_data
@@ -574,21 +576,20 @@ size_t parse_edge_list_text(char *line_buf, size_t size,
 template<class edge_data_type>
 class text_edge_task: public thread_task
 {
-	char *line_buf;
+	std::unique_ptr<char[]> line_buf;
 	size_t size;
 public:
-	text_edge_task(char *line_buf, size_t size) {
-		this->line_buf = line_buf;
+	text_edge_task(std::unique_ptr<char[]> line_buf, size_t size) {
+		this->line_buf = std::move(line_buf);
 		this->size = size;
 	}
 
 	void run() {
 		std::vector<edge<edge_data_type> > edges;
-		parse_edge_list_text(line_buf, size, edges);
+		parse_edge_list_text(line_buf.get(), size, edges);
 		std::vector<edge<edge_data_type> > *local_edge_buf
 			= (std::vector<edge<edge_data_type> > *) thread::get_curr_thread()->get_user_data();
 		local_edge_buf->insert(local_edge_buf->end(), edges.begin(), edges.end());
-		delete [] line_buf;
 	}
 };
 
@@ -783,9 +784,8 @@ directed_edge_graph<edge_data_type> *par_load_edge_list_text(
 		graph_file_io io(files[i]);
 		while (io.get_num_remaining_bytes() > 0) {
 			size_t size = 0;
-			char *line_buf = io.read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size);
-			assert(line_buf);
-			thread_task *task = new text_edge_task<edge_data_type>(line_buf,
+			thread_task *task = new text_edge_task<edge_data_type>(
+					io.read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size),
 					size);
 			threads[thread_no % NUM_THREADS]->add_task(task);
 			thread_no++;
