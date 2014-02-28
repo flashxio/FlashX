@@ -30,6 +30,8 @@
 #include "thread.h"
 #include "native_file.h"
 
+#include "edge_type.h"
+
 const int NUM_THREADS = 32;
 const int NUM_NODES = 4;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
@@ -404,30 +406,6 @@ std::unique_ptr<char[]> graph_file_io::read_edge_list_text(
 
 	return std::unique_ptr<char[]>(line_buf);
 }
-
-class ts_edge_data
-{
-	time_t timestamp;
-	float weight;
-public:
-	ts_edge_data() {
-		timestamp = 0;
-		weight = 1;
-	}
-
-	ts_edge_data(time_t timestamp, float weight) {
-		this->timestamp = timestamp;
-		this->weight = weight;
-	}
-
-	time_t get_timestamp() const {
-		return timestamp;
-	}
-
-	float get_weight() const {
-		return weight;
-	}
-};
 
 size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 {
@@ -883,25 +861,6 @@ graph *construct_directed_graph(
 	return edge_g->create_disk_graph();
 }
 
-/**
- * The type of edge data.
- */
-enum {
-	DEFAULT_TYPE,
-	EDGE_COUNT,
-	EDGE_TIMESTAMP,
-};
-
-struct str2int_pair {
-	std::string str;
-	int number;
-};
-struct str2int_pair edge_type_map[] = {
-	{"count", EDGE_COUNT},
-	{"timestamp", EDGE_TIMESTAMP},
-};
-int type_map_size = sizeof(edge_type_map) / sizeof(edge_type_map[0]);
-
 void print_usage()
 {
 	fprintf(stderr, "convert an edge list to adjacency lists\n");
@@ -1001,12 +960,7 @@ int main(int argc, char *argv[])
 
 	int input_type = DEFAULT_TYPE;
 	if (type_str) {
-		for (int i = 0; i < type_map_size; i++) {
-			if (edge_type_map[i].str == type_str) {
-				input_type = edge_type_map[i].number;
-				break;
-			}
-		}
+		input_type = conv_edge_type_str2int(type_str);
 	}
 
 	std::string adjacency_list_file = argv[0];

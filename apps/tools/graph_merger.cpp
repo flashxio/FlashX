@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include "graph.h"
+#include "edge_type.h"
 
 bool print_graph = false;
 bool check_graph = false;
@@ -103,6 +104,38 @@ void merge_dump(std::vector<ext_mem_vertex_iterator> &its, graph_type type,
 			tot_vertices, tot_non_empty, tot_edges);
 }
 
+template<class edge_data_type>
+void verify_ts_directed_graph(const std::vector<std::string> &in_graph_files,
+		const std::vector<std::string> &in_index_files,
+		const std::string &out_graph_file, const std::string &out_index_file)
+{
+	assert(in_graph_files.size() == in_index_files.size());
+	std::vector<typename directed_graph<edge_data_type>::unique_ptr> graphs;
+	for (size_t i = 0; i < in_graph_files.size(); i++) {
+		graphs.emplace_back(directed_graph<edge_data_type>::load(
+					in_index_files[i], in_graph_files[i]));
+	}
+	typename ts_directed_graph<edge_data_type>::unique_ptr ts_g
+		= ts_directed_graph<edge_data_type>::merge_graphs(graphs);
+	ts_g->check_ext_graph(out_index_file, out_graph_file);
+}
+
+template<class edge_data_type = empty_data>
+void verify_graph(const std::vector<std::string> &in_graph_files,
+		const std::vector<std::string> &in_index_files,
+		const std::string &out_graph_file, const std::string &out_index_file,
+		graph_type out_type)
+{
+	switch(out_type) {
+		case graph_type::TS_DIRECTED:
+			verify_ts_directed_graph<edge_count>(in_graph_files,
+					in_index_files, out_graph_file, out_index_file);
+			break;
+		default:
+			assert(0);
+	}
+}
+
 void print_usage()
 {
 	fprintf(stderr, "merge multiple graphs to a single graph\n");
@@ -111,6 +144,11 @@ void print_usage()
 	fprintf(stderr, "-p: print adjacency list\n");
 	fprintf(stderr, "-v: verify the created adjacency list\n");
 	fprintf(stderr, "-t: merge graphs into a time-series graph. \n");
+	fprintf(stderr, "-T type: the type of edge data. Supported type: ");
+	for (int i = 0; i < type_map_size; i++) {
+		fprintf(stderr, "%s, ", edge_type_map[i].str.c_str());
+	}
+	fprintf(stderr, "\n");
 }
 
 size_t read_file_list(const std::string &file, std::vector<std::string> &file_list)
@@ -138,7 +176,8 @@ int main(int argc, char *argv[])
 	int opt;
 	int num_opts = 0;
 	bool ts_merge = false;
-	while ((opt = getopt(argc, argv, "pvt")) != -1) {
+	char *type_str = NULL;
+	while ((opt = getopt(argc, argv, "pvtT:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'p':
@@ -149,6 +188,10 @@ int main(int argc, char *argv[])
 				break;
 			case 't':
 				ts_merge = true;
+				break;
+			case 'T':
+				type_str = optarg;
+				num_opts++;
 				break;
 			default:
 				print_usage();
@@ -216,9 +259,26 @@ int main(int argc, char *argv[])
 			assert(0);
 		}
 
-
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds to merge graphs\n",
 				time_diff(start, end));
+
+		if (check_graph) {
+			int edge_type = DEFAULT_TYPE;
+			if (type_str)
+				edge_type = conv_edge_type_str2int(type_str);
+			switch(edge_type) {
+				case DEFAULT_TYPE:
+					verify_graph<>(in_graph_files, in_index_files,
+							out_graph_file, out_index_file, out_type);
+					break;
+				case EDGE_COUNT:
+					verify_graph<edge_count>(in_graph_files, in_index_files,
+							out_graph_file, out_index_file, out_type);
+					break;
+				default:
+					assert(0);
+			}
+		}
 	}
 }

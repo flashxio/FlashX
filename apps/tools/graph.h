@@ -171,7 +171,46 @@ class directed_graph: public graph
 	bool has_data;
 	std::vector<in_mem_directed_vertex<edge_data_type> > vertices;
 public:
-	static void destroy(directed_graph *g) {
+	struct delete_graph {
+		void operator()(directed_graph<edge_data_type> *g) {
+			directed_graph<edge_data_type>::destroy(g);
+		}
+	};
+
+	typedef std::unique_ptr<directed_graph<edge_data_type>, delete_graph> unique_ptr;
+
+	static unique_ptr load(const std::string &index_file,
+			const std::string &graph_file) {
+		directed_vertex_index *index = directed_vertex_index::load(index_file);
+		
+		native_file file(graph_file);
+		size_t adj_file_size = file.get_size();
+		FILE *adj_f = fopen(graph_file.c_str(), "r");
+		assert(adj_f);
+		char *adj_buf = new char[adj_file_size];
+		size_t ret = fread(adj_buf, adj_file_size, 1, adj_f);
+		assert(ret == 1);
+		fclose(adj_f);
+
+		graph_header *header = (graph_header *) adj_buf;
+		header->verify();
+		directed_graph<edge_data_type>::unique_ptr g
+			= unique_ptr(new directed_graph<edge_data_type>(
+						header->has_edge_data()));
+		for (vertex_id_t id = 0; id < index->get_num_vertices(); id++) {
+			size_t size = index->get_vertex_size(id);
+			off_t off = index->get_vertex_off(id);
+			ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) (adj_buf + off);
+			assert(v->get_size() == size);
+			g->vertices.emplace_back(v);
+			assert(g->has_data == v->has_edge_data());
+		}
+		vertex_index::destroy(index);
+		delete [] adj_buf;
+		return g;
+	}
+
+	static void destroy(directed_graph<edge_data_type> *g) {
 		delete g;
 	}
 
@@ -414,8 +453,10 @@ class ts_directed_graph: public graph
 		max_num_timestamps = 0;
 	}
 public:
-	static ts_directed_graph<edge_data_type> *merge_graphs(
-			const std::vector<directed_graph<edge_data_type> *> &graphs) {
+	typedef std::unique_ptr<ts_directed_graph<edge_data_type> > unique_ptr;
+
+	static unique_ptr merge_graphs(
+			const std::vector<typename directed_graph<edge_data_type>::unique_ptr> &graphs) {
 		if (graphs.empty())
 			return NULL;
 
@@ -432,8 +473,7 @@ public:
 			assert(has_edge_data == graphs[i]->has_edge_data());
 		}
 
-		ts_directed_graph<edge_data_type> *g
-			= new ts_directed_graph<edge_data_type>();
+		unique_ptr g = unique_ptr(new ts_directed_graph<edge_data_type>());
 		g->has_data = has_edge_data;
 		g->max_num_timestamps = graphs.size();
 		std::vector<typename std::vector<in_mem_directed_vertex<edge_data_type> >::const_iterator> its;

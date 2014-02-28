@@ -215,12 +215,21 @@ class ext_mem_directed_vertex
 	vsize_t num_out_edges;
 	vertex_id_t neighbors[0];
 
-	bool has_edge_data() const {
-		return edge_data_size > 0;
-	}
-
 	void set_id(vertex_id_t id) {
 		this->id = id;
+	}
+
+	template<class edge_data_type = empty_data>
+	const edge_data_type *get_edge_data_begin(edge_type type) const {
+		switch (type) {
+			case edge_type::IN_EDGE:
+				return (edge_data_type *) (neighbors + num_in_edges + num_out_edges);
+			case edge_type::OUT_EDGE:
+				return get_edge_data_begin<edge_data_type>(edge_type::IN_EDGE)
+					+ num_in_edges;
+			default:
+				assert(0);
+		}
 	}
 
 	template<class edge_data_type = empty_data>
@@ -293,6 +302,10 @@ public:
 		return mem_size;
 	}
 
+	bool has_edge_data() const {
+		return edge_data_size > 0;
+	}
+
 	size_t get_edge_data_size() const {
 		return edge_data_size;
 	}
@@ -320,8 +333,11 @@ public:
 
 	template<class edge_data_type = empty_data>
 	edge_const_iterator<edge_data_type> get_out_edge_begin() const {
+		const edge_data_type *data = NULL;
+		if (has_edge_data())
+			data = get_edge_data_begin<edge_data_type>(edge_type::OUT_EDGE);
 		return edge_const_iterator<edge_data_type>(get_id(),
-				neighbors + num_in_edges, NULL, false);
+				neighbors + num_in_edges, data, false);
 	}
 
 	template<class edge_data_type = empty_data>
@@ -334,8 +350,11 @@ public:
 
 	template<class edge_data_type = empty_data>
 	edge_const_iterator<edge_data_type> get_in_edge_begin() const {
+		const edge_data_type *data = NULL;
+		if (has_edge_data())
+			data = get_edge_data_begin<edge_data_type>(edge_type::IN_EDGE);
 		return edge_const_iterator<edge_data_type>(get_id(),
-				neighbors, NULL, true);
+				neighbors, data, true);
 	}
 
 	template<class edge_data_type = empty_data>
@@ -1378,6 +1397,25 @@ public:
 		this->has_data = has_data;
 	}
 
+	in_mem_directed_vertex(const ext_mem_directed_vertex *v) {
+		id = v->get_id();
+		has_data = v->has_edge_data();
+
+		edge_const_iterator<edge_data_type> in_it
+			= v->get_in_edge_begin<edge_data_type>();
+		edge_const_iterator<edge_data_type> in_end
+			= v->get_in_edge_end<edge_data_type>();
+		for (; in_it != in_end; ++in_it)
+			this->add_in_edge(*in_it);
+
+		edge_const_iterator<edge_data_type> out_it
+			= v->get_out_edge_begin<edge_data_type>();
+		edge_const_iterator<edge_data_type> out_end
+			= v->get_out_edge_end<edge_data_type>();
+		for (; out_it != out_end; ++out_it)
+			this->add_out_edge(*out_it);
+	}
+
 	vertex_id_t get_id() const {
 		return id;
 	}
@@ -1721,18 +1759,18 @@ public:
 	}
 
 	void print() const {
-		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %d\n",
+		printf("v%ld has edge data: %d, # timestamps: %d, # edges: %ld\n",
 				(unsigned long) get_id(), has_edge_data(),
 				get_num_timestamps(), get_num_edges());
 		for (typename std::map<int, ts_edge_pair>::const_iterator it
 				= ts_edges.begin(); it != ts_edges.end(); it++) {
 			printf("timestamp %d\n", it->first);
-			printf("in-edges (%d): ", get_num_in_edges(it->first));
+			printf("in-edges (%ld): ", get_num_in_edges(it->first));
 			for (size_t i = 0; i < it->second.in_edges.size(); i++) {
 				printf("%ld, ", (unsigned long) it->second.in_edges[i]);
 			}
 			printf("\n");
-			printf("out-edges (%d): ", get_num_out_edges(it->first));
+			printf("out-edges (%ld): ", get_num_out_edges(it->first));
 			for (size_t i = 0; i < it->second.out_edges.size(); i++) {
 				printf("%ld, ",  (unsigned long)it->second.out_edges[i]);
 			}
