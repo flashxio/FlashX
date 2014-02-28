@@ -65,6 +65,57 @@ void vertex_compute::run(page_byte_array &array)
 	t->reset_curr_vertex_compute();
 }
 
+class comp_ts_vertex_request
+{
+public:
+	bool operator()(const ts_vertex_request &req1,
+			const ts_vertex_request &req2) {
+		return req1.get_id() < req2.get_id();
+	}
+};
+
+void ts_vertex_compute::request_partial_vertices(vertex_request *reqs[], int num)
+{
+	for (int i = 0; i < num; i++) {
+		this->reqs.push_back(*(ts_vertex_request *) reqs[i]);
+	}
+	if (!std::is_sorted(this->reqs.begin(), this->reqs.end(),
+				comp_ts_vertex_request()))
+		std::sort(this->reqs.begin(), this->reqs.end(),
+				comp_ts_vertex_request());
+}
+
+request_range ts_vertex_compute::get_next_request()
+{
+	if (vertex_compute::has_requests())
+		return vertex_compute::get_next_request();
+	else {
+		ts_vertex_request ts_req = reqs[fetch_idx++];
+		compute_vertex &info = get_graph().get_vertex(ts_req.get_id());
+		data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off());
+		// There is some overhead to fetch part of a vertex, so we should
+		// minize the number of vertices fetched partially.
+		// If a vertex is small enough (stored on <= 3 pages), we fetch the entire
+		// vertex.
+		off_t start_pg = ROUND_PAGE(info.get_ext_mem_off());
+		off_t end_pg = ROUNDUP_PAGE(info.get_ext_mem_off() + info.get_ext_mem_size());
+		if (end_pg - start_pg <= PAGE_SIZE * 3) {
+			// We need to increase the number of issues, so we know when
+			// the user task is completed.
+			num_complete_issues++;
+			return request_range(loc, info.get_ext_mem_size(), READ, this);
+		}
+
+		worker_thread *t = (worker_thread *) thread::get_curr_thread();
+		compute_allocator *alloc = t->get_part_compute_allocator();
+		assert(alloc);
+		part_ts_vertex_compute *comp = (part_ts_vertex_compute *) alloc->alloc();
+		comp->init(v, ts_req);
+		// We assume the header of a ts-vertex is never larger than a page.
+		return request_range(loc, PAGE_SIZE, READ, comp);
+	}
+}
+
 request_range part_ts_vertex_compute::get_next_request()
 {
 	assert(required_vertex_header);

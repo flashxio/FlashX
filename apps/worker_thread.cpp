@@ -68,6 +68,11 @@ worker_thread::worker_thread(graph_engine *graph, file_io_factory *factory,
 			alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
 			part_alloc = NULL;
 			break;
+		case graph_type::TS_DIRECTED:
+			alloc = new vertex_compute_allocator<ts_vertex_compute>(graph, this);
+			part_alloc = new vertex_compute_allocator<part_ts_vertex_compute>(
+					graph, this);
+			break;
 		default:
 			assert(0);
 

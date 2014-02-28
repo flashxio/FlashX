@@ -41,7 +41,6 @@ class scan_vertex: public ts_compute_vertex
 {
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
-	std::vector<vertex_id_t>::const_iterator fetch_it;
 	// The number of edges in its neighborhood in different timestamps.
 	std::vector<atomic_integer> *num_edges;
 	// The number of edges of the vertex in different timestamps.
@@ -70,20 +69,6 @@ public:
 
 	double get_result() const {
 		return result;
-	}
-
-	virtual bool has_required_ts_vertices() const {
-		if (neighbors == NULL)
-			return false;
-		return fetch_it != neighbors->end();
-	}
-
-	virtual void get_next_required_ts_vertex(ts_vertex_request &req) {
-		vertex_id_t id = *fetch_it;
-		fetch_it++;
-		req.set_vertex(id);
-		for (int i = 0; i < timestamp_range && timestamp - i >= 0; i++)
-			req.add_timestamp(timestamp - i);
 	}
 
 	int count_edges(const TS_page_vertex *v,
@@ -350,7 +335,15 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 		}
 	}
 
-	fetch_it = neighbors->begin();
+	std::vector<ts_vertex_request> reqs(neighbors->size());
+	std::vector<vertex_request *> req_ptrs(neighbors->size());
+	for (size_t i = 0; i < neighbors->size(); i++) {
+		vertex_id_t id = neighbors->at(i);
+		timestamp_pair range(timestamp + 1 - timestamp_range, timestamp + 1);
+		reqs[i] = ts_vertex_request(id, range);
+		req_ptrs[i] = &reqs[i];
+	}
+	graph.request_partial_vertices(*this, req_ptrs.data(), req_ptrs.size());
 	return false;
 }
 

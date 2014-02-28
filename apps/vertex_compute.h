@@ -36,18 +36,19 @@ class compute_vertex;
  */
 class vertex_compute: public user_compute
 {
-	// The number of requested vertices that will be read in the user compute.
-	int num_complete_issues;
-	// The number of vertices read by the user compute.
-	int num_complete_fetched;
-
 	graph_engine *graph;
-	compute_vertex *v;
 	// The thread that creates the vertex compute.
 	worker_thread *issue_thread;
 
 	std::vector<vertex_id_t> requested_vertices;
 	size_t fetch_idx;
+
+protected:
+	compute_vertex *v;
+	// The number of requested vertices that will be read in the user compute.
+	int num_complete_issues;
+	// The number of vertices read by the user compute.
+	int num_complete_fetched;
 public:
 	vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
@@ -89,6 +90,29 @@ public:
 	virtual void request_partial_vertices(vertex_request *reqs[], int num) {
 		assert(0);
 	}
+
+	graph_engine &get_graph() {
+		return *graph;
+	}
+};
+
+class ts_vertex_compute: public vertex_compute
+{
+	std::vector<ts_vertex_request> reqs;
+	size_t fetch_idx;
+public:
+	ts_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): vertex_compute(graph, alloc) {
+		fetch_idx = 0;
+	}
+
+	virtual int has_requests() const {
+		return vertex_compute::has_requests() || fetch_idx < reqs.size();
+	}
+
+	virtual request_range get_next_request();
+
+	virtual void request_partial_vertices(vertex_request *reqs[], int num);
 };
 
 /**
@@ -112,7 +136,7 @@ class part_ts_vertex_compute: public user_compute
 	int num_fetched;
 public:
 	part_ts_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): user_compute(alloc), required_part(graph) {
+			compute_allocator *alloc): user_compute(alloc) {
 		this->graph = graph;
 		comp_v = NULL;
 		issue_thread = (worker_thread *) thread::get_curr_thread();

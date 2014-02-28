@@ -26,6 +26,19 @@ class graph_engine;
 
 class vertex_request
 {
+	vertex_id_t id;
+public:
+	vertex_request() {
+		id = -1;
+	}
+
+	vertex_request(vertex_id_t id) {
+		this->id = id;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
 };
 
 /**
@@ -34,60 +47,34 @@ class vertex_request
  */
 class ts_vertex_request: public vertex_request
 {
-	vertex_id_t id;
 	timestamp_pair range;
-	edge_type type;
-	bool require_all;
-	graph_engine *graph;
 public:
-	ts_vertex_request(graph_engine *graph) {
-		id = 0;
+	ts_vertex_request() {
 		range = timestamp_pair(INT_MAX, INT_MIN);
-		type = edge_type::BOTH_EDGES;
-		require_all = false;
-		this->graph = graph;
 	}
 
-	void set_require_all(bool require_all) {
-		this->require_all = require_all;
+	ts_vertex_request(vertex_id_t id): vertex_request(id) {
+		range = timestamp_pair(INT_MAX, INT_MIN);
 	}
 
-	void set_vertex(vertex_id_t id);
+	ts_vertex_request(vertex_id_t id, timestamp_pair range): vertex_request(
+			id) {
+		this->range = range;
+	}
 
 	void add_timestamp(int timestamp) {
-		if (!require_all) {
-			if (range.second < timestamp)
-				range.second = timestamp + 1;
-			if (range.first > timestamp)
-				range.first = timestamp;
-		}
-	}
-
-	void set_edge_type(edge_type type) {
-		this->type = type;
-	}
-
-	void clear() {
-		id = 0;
-		range = timestamp_pair(INT_MAX, INT_MIN);
-		type = edge_type::BOTH_EDGES;
-		require_all = false;
-	}
-
-	vertex_id_t get_id() const {
-		return id;
+		if (range.second < timestamp)
+			range.second = timestamp + 1;
+		if (range.first > timestamp)
+			range.first = timestamp;
 	}
 
 	const timestamp_pair &get_range() const {
 		return range;
 	}
 
-	edge_type get_edge_type() const {
-		return type;
-	}
-
 	bool is_require_all() const {
-		return require_all;
+		return range.first == INT_MAX && range.second == INT_MIN;
 	}
 };
 
