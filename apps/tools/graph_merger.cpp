@@ -39,6 +39,8 @@ void merge_dump(std::vector<ext_mem_vertex_iterator> &its, graph_type type,
 	in_mem_vertex_index *in_mem_index;
 	if (type == graph_type::DIRECTED)
 		in_mem_index = new directed_in_mem_vertex_index();
+	else if (type == graph_type::TS_DIRECTED)
+		in_mem_index = new ts_directed_in_mem_vertex_index();
 	else
 		assert(0);
 
@@ -51,33 +53,30 @@ void merge_dump(std::vector<ext_mem_vertex_iterator> &its, graph_type type,
 
 		// Get all vertices of the same vertex id.
 		std::vector<const in_vertex_type *> vertices;
-		size_t buf_size = 0;
 		for (size_t i = 0; i < its.size(); i++) {
 			if (its[i].has_next()) {
 				in_vertex_type *v = its[i].next<in_vertex_type>();
 				vertices.push_back(v);
-				buf_size += v->get_size();
 				has_next |= its[i].has_next();
 			}
+			else
+				vertices.push_back(NULL);
 		}
+		assert(vertices.size() == its.size());
 		tot_vertices++;
 
 		// Merge the vertices
-		char *merged_vertex_buf = new char[buf_size];
-		out_vertex_type *v = out_vertex_type::merge(vertices, merged_vertex_buf,
-				buf_size);
+		typename out_vertex_type::unique_ptr v = out_vertex_type::merge(vertices);
 		int num_edges = v->get_num_in_edges() + v->get_num_out_edges();
 		if (num_edges > 0) {
 			tot_non_empty++;
 			tot_edges += num_edges;
 		}
-		assert(v->get_size() <= buf_size);
 		
 		// Output the merged vertex.
-		in_mem_index->add_vertex(merged_vertex_buf);
-		size_t ret = fwrite(merged_vertex_buf, v->get_size(), 1, adjacency_fd);
+		in_mem_index->add_vertex((char *) v.get());
+		size_t ret = fwrite((char *) v.get(), v->get_size(), 1, adjacency_fd);
 		assert(ret);
-		delete [] merged_vertex_buf;
 	} while (has_next);
 	tot_edges /= 2;
 
@@ -201,7 +200,9 @@ int main(int argc, char *argv[])
 
 		graph_type out_type;
 		if (ts_merge && directed) {
-			assert(0);
+			out_type = graph_type::TS_DIRECTED;
+			merge_dump<ext_mem_directed_vertex, ts_ext_mem_directed_vertex>(its,
+					out_type, out_graph_file, out_index_file);
 		}
 		else if (ts_merge && !directed) {
 			assert(0);

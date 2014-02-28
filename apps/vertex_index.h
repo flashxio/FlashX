@@ -178,6 +178,10 @@ public:
 		off = 0;
 	}
 
+	void init(off_t off) {
+		this->off = off;
+	}
+
 	void init(off_t off, const in_mem_vertex &v) {
 		this->off = off;
 	}
@@ -186,6 +190,8 @@ public:
 		return off;
 	}
 };
+
+class default_in_mem_vertex_index;
 
 class default_vertex_index: public vertex_index_temp<vertex_offset>
 {
@@ -204,6 +210,8 @@ public:
 		assert(index_size == sizeof(default_vertex_index)
 			+ get_num_vertices() * sizeof(vertex_offset));
 	}
+
+	friend class default_in_mem_vertex_index;
 };
 
 class directed_vertex_entry
@@ -300,6 +308,66 @@ class in_mem_vertex_index
 public:
 	virtual void add_vertex(char *ext_mem_vertex) = 0;
 	virtual void dump(const std::string &file, const graph_header &header) = 0;
+};
+
+class default_in_mem_vertex_index: public in_mem_vertex_index
+{
+	size_t tot_size;
+	std::vector<vertex_offset> vertices;
+public:
+	default_in_mem_vertex_index() {
+		tot_size = sizeof(graph_header);
+	}
+
+	virtual vsize_t get_vertex_size(char *ext_mem_vertex) = 0;
+	virtual vertex_id_t get_vertex_id(char *ext_mem_vertex) = 0;
+
+	virtual void add_vertex(char *ext_mem_vertex) {
+		vertex_offset off;
+		off.init(tot_size);
+		vertices.push_back(off);
+		assert(get_vertex_id(ext_mem_vertex) + 1 == vertices.size());
+		tot_size += get_vertex_size(ext_mem_vertex);
+	}
+
+	virtual void dump(const std::string &file, const graph_header &header) {
+		default_vertex_index index;
+		index.header = header;
+		index.tot_size = tot_size;
+		index.index_size = default_vertex_index::get_header_size()
+			+ sizeof(vertex_offset) * vertices.size();
+
+		FILE *f = fopen(file.c_str(), "w");
+		if (f == NULL) {
+			perror("fopen");
+			assert(0);
+		}
+		ssize_t ret = fwrite(&index, default_vertex_index::get_header_size(),
+				1, f);
+		assert(ret == 1);
+		if (!vertices.empty()) {
+			ret = fwrite(vertices.data(),
+					sizeof(vertex_offset) * vertices.size(), 1, f);
+			assert(ret == 1);
+		}
+		fclose(f);
+	}
+};
+
+class ts_directed_in_mem_vertex_index: public default_in_mem_vertex_index
+{
+public:
+	virtual vsize_t get_vertex_size(char *ext_mem_vertex) {
+		ts_ext_mem_directed_vertex *v
+			= (ts_ext_mem_directed_vertex *) ext_mem_vertex;
+		return v->get_size();
+	}
+
+	virtual vertex_id_t get_vertex_id(char *ext_mem_vertex) {
+		ts_ext_mem_directed_vertex *v
+			= (ts_ext_mem_directed_vertex *) ext_mem_vertex;
+		return v->get_id();
+	}
 };
 
 class directed_in_mem_vertex_index: public in_mem_vertex_index

@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include <memory>
 #include <vector>
 #include <algorithm>
 
@@ -33,6 +34,7 @@
 typedef unsigned int vsize_t;
 typedef unsigned int vertex_id_t;
 const vertex_id_t MAX_VERTEX_ID = UINT_MAX;
+const vertex_id_t INVALID_VERTEX_ID = -1;
 const size_t MAX_VERTEX_SIZE = INT_MAX;
 
 enum edge_type {
@@ -190,6 +192,18 @@ public:
 	}
 };
 
+class ts_ext_mem_directed_vertex;
+
+template<class T>
+struct delete_as_chararr
+{
+public:
+	void operator()(T *obj) const {
+		char *char_p = (char *) obj;
+		delete [] char_p;
+	}
+};
+
 /**
  * This vertex represents a directed vertex stored in the external memory.
  */
@@ -222,6 +236,9 @@ class ext_mem_directed_vertex
 		}
 	}
 public:
+	typedef std::unique_ptr<ext_mem_directed_vertex,
+			delete_as_chararr<ext_mem_directed_vertex> > unique_ptr;
+
 	static size_t get_header_size() {
 		return offsetof(ext_mem_directed_vertex, neighbors);
 	}
@@ -234,9 +251,8 @@ public:
 		return v;
 	}
 
-	static ext_mem_directed_vertex *merge(
-			const std::vector<const ext_mem_directed_vertex *> &vertices,
-			char *vertex_buf, size_t buf_size);
+	static unique_ptr merge(
+			const std::vector<const ext_mem_directed_vertex *> &vertices);
 
 	template<class edge_data_type = empty_data>
 	static size_t serialize(const in_mem_directed_vertex<edge_data_type> &in_v,
@@ -275,6 +291,10 @@ public:
 			}
 		}
 		return mem_size;
+	}
+
+	size_t get_edge_data_size() const {
+		return edge_data_size;
 	}
 
 	size_t get_num_edges(edge_type type) const {
@@ -333,6 +353,8 @@ public:
 			size += edge_data_size * (num_in_edges + num_out_edges);
 		return size;
 	}
+
+	friend class ts_ext_mem_directed_vertex;
 };
 
 /**
@@ -877,6 +899,19 @@ class ts_ext_mem_directed_vertex
 		this->edge_data_size = edge_data_size;
 	}
 public:
+	typedef std::unique_ptr<ts_ext_mem_directed_vertex,
+			delete_as_chararr<ts_ext_mem_directed_vertex> > unique_ptr;
+
+	static size_t get_vertex_size(int num_timestamps, vsize_t num_edges,
+			int edge_data_size) {
+		size_t size = sizeof(ts_ext_mem_directed_vertex)
+			+ get_timestamp_table_size(num_timestamps)
+			+ sizeof(vertex_id_t) * num_edges;
+		if (edge_data_size > 0)
+			size += edge_data_size * num_edges;
+		return size;
+	}
+
 	template<class edge_data_type = empty_data>
 	static size_t serialize(const ts_in_mem_directed_vertex<edge_data_type> &in_v,
 			char *buf, size_t size) {
@@ -932,9 +967,8 @@ public:
 		return v->get_size();
 	}
 
-	static ts_ext_mem_directed_vertex *merge(
-			const std::vector<ext_mem_directed_vertex *> &vertices,
-			char *buf, size_t size);
+	static unique_ptr merge(
+			const std::vector<const ext_mem_directed_vertex *> &vertices);
 
 	ts_ext_mem_directed_vertex() {
 		this->id = 0;
@@ -948,12 +982,7 @@ public:
 	}
 
 	size_t get_size() const {
-		size_t size = sizeof(ts_ext_mem_directed_vertex)
-			+ get_timestamp_table_size(num_timestamps)
-			+ sizeof(vertex_id_t) * num_edges;
-		if (has_edge_data())
-			size += edge_data_size * num_edges;
-		return size;
+		return get_vertex_size(num_timestamps, num_edges, edge_data_size);
 	}
 
 	size_t get_num_edges() const {
