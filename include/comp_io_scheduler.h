@@ -111,6 +111,10 @@ public:
 		alloc->free(compute);
 	}
 
+	size_t get_num_incomplete_computes() {
+		return incomplete_computes.get_num_entries();
+	}
+
 	bool is_empty() {
 		return incomplete_computes.is_empty();
 	}
