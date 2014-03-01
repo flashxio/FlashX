@@ -39,7 +39,6 @@ void vertex_compute::run(page_byte_array &array)
 	stack_array<char, 64> buf(interpreter->get_vertex_size());
 	const page_vertex *ext_v = interpreter->interpret(array, buf.data(),
 			interpreter->get_vertex_size());
-	bool completed = false;
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	t->set_curr_vertex_compute(this);
 	// If the algorithm doesn't need to get the full information
@@ -48,20 +47,16 @@ void vertex_compute::run(page_byte_array &array)
 			// Or we haven't perform computation on the vertex yet.
 			|| v == NULL) {
 		v = &graph->get_vertex(ext_v->get_id());
-		completed = v->run(*graph, *ext_v);
+		v->run(*graph, *ext_v);
 	}
 	else {
 		num_complete_fetched++;
-		completed = v->run(*graph, *ext_v);
+		v->run(*graph, *ext_v);
 	}
 	// We need to notify the thread that initiate processing the vertex
 	// of the completion of the vertex.
-	if (completed) {
-		// If the vertex has completed computation, the user compute should
-		// also finish its computation.
-		assert(has_completed());
+	if (has_completed())
 		issue_thread->complete_vertex(*v);
-	}
 	t->reset_curr_vertex_compute();
 }
 
@@ -90,6 +85,10 @@ request_range ts_vertex_compute::get_next_request()
 	if (vertex_compute::has_requests())
 		return vertex_compute::get_next_request();
 	else {
+		// We need to increase the number of issues, so we know when
+		// the user task is completed.
+		num_complete_issues++;
+
 		ts_vertex_request ts_req = reqs[fetch_idx++];
 		compute_vertex &info = get_graph().get_vertex(ts_req.get_id());
 		data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off());
@@ -99,21 +98,24 @@ request_range ts_vertex_compute::get_next_request()
 		// vertex.
 		off_t start_pg = ROUND_PAGE(info.get_ext_mem_off());
 		off_t end_pg = ROUNDUP_PAGE(info.get_ext_mem_off() + info.get_ext_mem_size());
-		if (end_pg - start_pg <= PAGE_SIZE * 3) {
-			// We need to increase the number of issues, so we know when
-			// the user task is completed.
-			num_complete_issues++;
+		if (end_pg - start_pg <= PAGE_SIZE * 3)
 			return request_range(loc, info.get_ext_mem_size(), READ, this);
-		}
 
 		worker_thread *t = (worker_thread *) thread::get_curr_thread();
 		compute_allocator *alloc = t->get_part_compute_allocator();
 		assert(alloc);
 		part_ts_vertex_compute *comp = (part_ts_vertex_compute *) alloc->alloc();
-		comp->init(v, ts_req);
+		comp->init(v, this, ts_req);
 		// We assume the header of a ts-vertex is never larger than a page.
 		return request_range(loc, PAGE_SIZE, READ, comp);
 	}
+}
+
+void ts_vertex_compute::complete_partial(part_ts_vertex_compute &compute)
+{
+	num_complete_fetched++;
+	if (has_completed())
+		issue_thread->complete_vertex(*v);
 }
 
 request_range part_ts_vertex_compute::get_next_request()
@@ -135,7 +137,6 @@ request_range part_ts_vertex_compute::get_next_request()
 void part_ts_vertex_compute::run(page_byte_array &array)
 {
 	assert(!has_completed());
-	bool completed = false;
 	if (required_vertex_header == NULL) {
 		ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
 		char *buf = new char[interpreter->get_vertex_size()];
@@ -152,13 +153,16 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 
 		num_fetched++;
 		assert(comp_v);
-		completed = comp_v->run(*graph, *ext_v);
+		comp_v->run(*graph, *ext_v);
+		ts_compute->complete_partial(*this);
+		ts_compute->dec_ref();
+		worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+		// Let's just assume the user doesn't issue new requests here.
+		// It's easy to change it to work with the case that the user
+		// wants to issue new requests.
+		assert(curr->get_curr_vertex_compute() == NULL);
 
 		char *tmp = (char *) required_vertex_header;
 		delete [] tmp;
 	}
-	// We need to notify the thread that initiate processing the vertex
-	// of the completion of the vertex.
-	if (completed)
-		issue_thread->complete_vertex(*comp_v);
 }

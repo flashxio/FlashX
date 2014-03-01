@@ -37,13 +37,13 @@ class compute_vertex;
 class vertex_compute: public user_compute
 {
 	graph_engine *graph;
-	// The thread that creates the vertex compute.
-	worker_thread *issue_thread;
 
 	std::vector<vertex_id_t> requested_vertices;
 	size_t fetch_idx;
 
 protected:
+	// The thread that creates the vertex compute.
+	worker_thread *issue_thread;
 	compute_vertex *v;
 	// The number of requested vertices that will be read in the user compute.
 	int num_complete_issues;
@@ -96,6 +96,8 @@ public:
 	}
 };
 
+class part_ts_vertex_compute;
+
 class ts_vertex_compute: public vertex_compute
 {
 	std::vector<ts_vertex_request> reqs;
@@ -113,6 +115,11 @@ public:
 	virtual request_range get_next_request();
 
 	virtual void request_partial_vertices(vertex_request *reqs[], int num);
+
+	/**
+	 * A request of accessing a partial vertex has complete.
+	 */
+	void complete_partial(part_ts_vertex_compute &compute);
 };
 
 /**
@@ -126,12 +133,11 @@ class part_ts_vertex_compute: public user_compute
 	graph_engine *graph;
 	// The vertex where computation should perform.
 	compute_vertex *comp_v;
+	ts_vertex_compute *ts_compute;
 	const TS_page_vertex *required_vertex_header;
 	// The part of the vertex will be read and passed to
 	// the computation vertex.
 	ts_vertex_request required_part;
-	// The thread that creates the vertex compute.
-	worker_thread *issue_thread;
 	int num_issued;
 	int num_fetched;
 public:
@@ -139,14 +145,17 @@ public:
 			compute_allocator *alloc): user_compute(alloc) {
 		this->graph = graph;
 		comp_v = NULL;
-		issue_thread = (worker_thread *) thread::get_curr_thread();
+		ts_compute = NULL;
 		required_vertex_header = NULL;
 		num_issued = 0;
 		num_fetched = 0;
 	}
 
-	void init(compute_vertex *v, const ts_vertex_request &req) {
+	void init(compute_vertex *v, ts_vertex_compute *compute,
+			const ts_vertex_request &req) {
 		comp_v = v;
+		compute->inc_ref();
+		ts_compute = compute;
 		required_part = req;
 	}
 
