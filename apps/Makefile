@@ -42,7 +42,7 @@ CC = gcc
 CXX = g++
 endif
 
-all: libgraph graph-bfs triangle-counting scan-statistics st-search sssp sstsg unit-test tools graph-stat
+all: libgraph graph-bfs triangle-counting scan-statistics sssp sstsg unit-test tools graph-stat
 
 libgraph: $(OBJS)
 	rm -f libgraph.a
@@ -56,9 +56,6 @@ triangle-counting: libgraph
 
 scan-statistics: libgraph
 	$(MAKE) -C scan-statistics
-
-st-search: libgraph
-	$(MAKE) -C st-search
 
 sssp: libgraph
 	$(MAKE) -C sssp
