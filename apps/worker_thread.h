@@ -235,9 +235,13 @@ public:
 		return graph->get_num_remaining_vertices();
 	}
 
-	vertex_compute *get_curr_vertex_compute() {
-		if (curr_compute == NULL)
-			curr_compute = (vertex_compute *) alloc->alloc();
+	vertex_compute *get_curr_vertex_compute() const {
+		return curr_compute;
+	}
+
+	vertex_compute *create_vertex_compute() {
+		assert(curr_compute == NULL);
+		curr_compute = (vertex_compute *) alloc->alloc();
 		return curr_compute;
 	}
 

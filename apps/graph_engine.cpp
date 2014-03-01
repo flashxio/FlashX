@@ -328,7 +328,8 @@ void graph_engine::request_vertices(compute_vertex &vertex, vertex_id_t ids[],
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_compute *compute = curr->get_curr_vertex_compute();
-	assert(compute);
+	if (compute == NULL)
+		compute = curr->create_vertex_compute();
 	compute->request_vertices(ids, num);
 }
 
@@ -337,7 +338,8 @@ void graph_engine::request_partial_vertices(compute_vertex &vertex,
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_compute *compute = curr->get_curr_vertex_compute();
-	assert(compute);
+	if (compute == NULL)
+		compute = curr->create_vertex_compute();
 	compute->request_partial_vertices(reqs, num);
 }
 
