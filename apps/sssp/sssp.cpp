@@ -84,10 +84,10 @@ public:
 		if (parent_dist + 1 < distance) {
 			distance = parent_dist + 1;
 			parent = tmp_parent;
-			return true;
+			return false;
 		}
 		else
-			return false;
+			return true;
 	}
 
 	bool run(graph_engine &graph, const page_vertex &vertex);

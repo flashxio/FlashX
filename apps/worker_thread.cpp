@@ -178,9 +178,9 @@ int worker_thread::process_activated_vertices(int max)
 	int num_to_process = 0;
 	for (int i = 0; i < num; i++) {
 		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
-		// We need to execute the pre-run to determine if we should
-		// fetch the adjacency list of itself.
-		if (info.run(*graph)) {
+		// We execute the pre-run to determine if the vertex has completed
+		// in the current iteration.
+		if (!info.run(*graph)) {
 			data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
 			reqs[num_to_process++] = io_request(alloc->alloc(), loc,
 					// TODO I might need to set the node id.

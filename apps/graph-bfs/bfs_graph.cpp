@@ -58,7 +58,7 @@ public:
 	}
 
 	bool run(graph_engine &graph) {
-		return !has_visited();
+		return has_visited();
 	}
 
 	bool run(graph_engine &graph, const page_vertex &vertex);

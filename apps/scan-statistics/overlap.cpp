@@ -262,10 +262,6 @@ public:
 		neighbors = NULL;
 	}
 
-	bool run(graph_engine &graph) {
-		return true;
-	}
-
 	bool run(graph_engine &graph, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
 			return run_on_itself(graph, vertex);

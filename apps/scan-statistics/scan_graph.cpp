@@ -680,15 +680,15 @@ public:
 	bool run(graph_engine &graph) {
 		// If we have computed local scan on the vertex, skip the vertex.
 		if (num_edges.get() > 0)
-			return false;
+			return true;
 		// If we have estimated the local scan, we should use the estimated one.
 		else if (est_local_scan > 0)
-			return est_local_scan > max_scan.get();
+			return est_local_scan <= max_scan.get();
 		else {
 			// If this is the first time to compute on the vertex, we can still
 			// skip a lot of vertices with this condition.
 			size_t num_local_edges = num_in_edges + num_out_edges;
-			return num_local_edges * num_local_edges >= max_scan.get();
+			return num_local_edges * num_local_edges < max_scan.get();
 		}
 	}
 

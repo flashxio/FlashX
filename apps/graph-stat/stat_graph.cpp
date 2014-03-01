@@ -47,10 +47,6 @@ public:
 		num_out_edges = 0;
 	}
 
-	bool run(graph_engine &graph) {
-		return true;
-	}
-
 	bool run(graph_engine &graph, const page_vertex &vertex) {
 		num_in_edges = vertex.get_num_edges(edge_type::IN_EDGE);
 		num_out_edges = vertex.get_num_edges(edge_type::OUT_EDGE);
