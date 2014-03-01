@@ -248,37 +248,18 @@ void intersection_set::add(const std::vector<vertex_id_t> &vec)
 
 class overlap_vertex: public compute_vertex
 {
-	unsigned fetch_idx;
 	unsigned num_joined;
 	std::vector<vertex_id_t> *neighbors;
 public:
 	overlap_vertex() {
-		fetch_idx = 0;
 		num_joined = 0;
 		neighbors = NULL;
 	}
 
 	overlap_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
 			id, index1) {
-		fetch_idx = 0;
 		num_joined = 0;
-		if (id == overlap_vertices[0])
-			fetch_idx = 1;
 		neighbors = NULL;
-	}
-
-	virtual bool has_required_vertices() const {
-		return fetch_idx < overlap_vertices.size();
-	}
-
-	virtual vertex_id_t get_next_required_vertex() {
-		// TODO the return vertices must be sorted.
-		// This has to be changed.
-		vertex_id_t id = overlap_vertices[fetch_idx++];
-		assert(id != get_id());
-		if (overlap_vertices[fetch_idx] == get_id())
-			fetch_idx++;
-		return id;
 	}
 
 	bool run(graph_engine &graph) {
@@ -291,6 +272,12 @@ public:
 		std::sort(neighbors->begin(), neighbors->end());
 		vertex_union.add(*neighbors);
 		vertex_intersection.add(*neighbors);
+		std::vector<vertex_id_t> req_vertices;
+		BOOST_FOREACH(vertex_id_t id, overlap_vertices) {
+			if (id != get_id())
+				req_vertices.push_back(id);
+		}
+		graph.request_vertices(*this, req_vertices.data(), req_vertices.size());
 		return false;
 	}
 
@@ -359,7 +346,6 @@ int main(int argc, char *argv[])
 	std::string vertex_file = argv[4];
 
 	read_vertices(vertex_file, overlap_vertices);
-	std::sort(overlap_vertices.begin(), overlap_vertices.end());
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
