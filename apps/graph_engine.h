@@ -73,39 +73,13 @@ public:
 	 * from disks.
 	 * It returns true if the vertex has completed the iteration.
 	 */
-	virtual bool run(graph_engine &graph, const page_vertex *vertex) = 0;
-
-	/**
-	 * Run user's code when the adjacency lists of its neighbors are read
-	 * from disks.
-	 * It returns true if the vertex has completed the iteration.
-	 */
-	virtual bool run_on_neighbors(graph_engine &graph,
-			const page_vertex *vertices[], int num) = 0;
+	virtual bool run(graph_engine &graph, const page_vertex &vertex) = 0;
 
 	/**
 	 * Run user's code when the vertex receives messages from other.
 	 */
 	virtual void run_on_messages(graph_engine &,
 			const vertex_message *msgs[], int num) = 0;
-};
-
-class ts_vertex_request;
-
-class ts_compute_vertex: public compute_vertex
-{
-public:
-	ts_compute_vertex() {
-	}
-
-	ts_compute_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
-			id, index) {
-	}
-
-	virtual bool run_on_neighbors(graph_engine &graph,
-			const page_vertex *vertices[], int num);
-	virtual bool run_on_neighbors(graph_engine &graph,
-			const TS_page_vertex *vertices[], int num) = 0;
 };
 
 class vertex_scheduler

@@ -692,10 +692,15 @@ public:
 		}
 	}
 
-	bool run(graph_engine &graph, const page_vertex *vertex);
+	bool run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			return run_on_itself(graph, vertex);
+		else
+			return run_on_neighbor(graph, vertex);
+	}
 
-	bool run_on_neighbors(graph_engine &graph,
-			const page_vertex *vertices[], int num);
+	bool run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	bool run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
@@ -1029,11 +1034,11 @@ size_t scan_vertex::get_est_local_scan(graph_engine &graph, const page_vertex *v
 	return est_local_scan;
 }
 
-bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
+bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
 	assert(data == NULL);
 
-	size_t num_local_edges = vertex->get_num_edges(edge_type::BOTH_EDGES);
+	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
 	assert(num_local_edges == (size_t) num_in_edges + num_out_edges);
 #ifdef PV_STAT
 	num_all_edges = num_local_edges;
@@ -1041,30 +1046,30 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	if (num_local_edges == 0)
 		return true;
 
-	if (get_est_local_scan(graph, vertex) < max_scan.get())
+	if (get_est_local_scan(graph, &vertex) < max_scan.get())
 		return true;
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
 
-	data = new runtime_data_t(graph, vertex);
+	data = new runtime_data_t(graph, &vertex);
 #ifdef PV_STAT
 	gettimeofday(&vertex_start, NULL);
 	fprintf(stderr, "compute v%u (with %d edges, compute on %ld edges, potential %ld inter-edges) on thread %d at %.f seconds\n",
 			get_id(), num_all_edges, data->neighbors.size(),
-			get_est_local_scan(graph, vertex), thread::get_curr_thread()->get_id(),
+			get_est_local_scan(graph, &vertex), thread::get_curr_thread()->get_id(),
 			time_diff(graph_start, vertex_start));
 #endif
 
-	page_byte_array::const_iterator<vertex_id_t> it = vertex->get_neigh_begin(
+	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
 			edge_type::BOTH_EDGES);
 #if 0
 	page_byte_array::const_iterator<edge_count> data_it
 		= vertex->get_edge_data_begin<edge_count>(
 				edge_type::BOTH_EDGES);
 #endif
-	page_byte_array::const_iterator<vertex_id_t> end = vertex->get_neigh_end(
+	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
 			edge_type::BOTH_EDGES);
 #if 0
 	for (; it != end; ++it, ++data_it) {
@@ -1073,7 +1078,7 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		// Ignore loops
-		if (id != vertex->get_id()) {
+		if (id != vertex.get_id()) {
 #if 0
 			num_edges.inc((*data_it).get_count());
 #endif
@@ -1098,20 +1103,17 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	return false;
 }
 
-bool scan_vertex::run_on_neighbors(graph_engine &graph,
-		const page_vertex *vertices[], int num)
+bool scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
 {
 	assert(data);
-	data->num_joined += num;
+	data->num_joined++;
 #ifdef PV_STAT
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 #endif
-	for (int i = 0; i < num; i++) {
-		size_t ret = count_edges(graph, vertices[i]);
-		if (ret > 0)
-			num_edges.inc(ret);
-	}
+	size_t ret = count_edges(graph, &vertex);
+	if (ret > 0)
+		num_edges.inc(ret);
 #ifdef PV_STAT
 	gettimeofday(&end, NULL);
 	time_us += time_diff_us(start, end);

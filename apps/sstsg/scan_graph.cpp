@@ -37,7 +37,7 @@ atomic_number<long> num_completed_vertices;
 int timestamp;
 int timestamp_range;
 
-class scan_vertex: public ts_compute_vertex
+class scan_vertex: public compute_vertex
 {
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
@@ -59,7 +59,7 @@ public:
 		neighbors = NULL;
 	}
 
-	scan_vertex(vertex_id_t id, const vertex_index *index): ts_compute_vertex(
+	scan_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
 			id, index) {
 		num_joined = 0;
 		num_edges = NULL;
@@ -77,10 +77,15 @@ public:
 			const std::vector<vertex_id_t> *neighbors, int timestamp,
 			edge_type type);
 
-	bool run(graph_engine &graph, const page_vertex *vertex);
+	bool run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			return run_on_itself(graph, vertex);
+		else
+			return run_on_neighbor(graph, vertex);
+	}
 
-	bool run_on_neighbors(graph_engine &graph,
-			const TS_page_vertex *vertices[], int num);
+	bool run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	bool run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
@@ -243,17 +248,17 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 	return result - result_begin;
 }
 
-bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
+bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
 
-	const TS_page_directed_vertex *ts_vertex
-		= (const TS_page_directed_vertex *) vertex;
+	const TS_page_directed_vertex &ts_vertex
+		= (const TS_page_directed_vertex &) vertex;
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
-	if (ts_vertex->get_num_edges(timestamp, edge_type::BOTH_EDGES) == 0) {
+	if (ts_vertex.get_num_edges(timestamp, edge_type::BOTH_EDGES) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -262,7 +267,7 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 
 	num_edges = new std::vector<atomic_integer>(timestamp_range);
 	num_local_edges = new std::vector<int>(timestamp_range);
-	neighbors = new std::vector<vertex_id_t>(ts_vertex->get_num_edges(
+	neighbors = new std::vector<vertex_id_t>(ts_vertex.get_num_edges(
 				timestamp, edge_type::BOTH_EDGES));
 
 	class skip_self {
@@ -278,25 +283,25 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	};
 
 	int num_neighbors = unique_merge(
-			ts_vertex->get_neigh_begin(timestamp, edge_type::IN_EDGE),
-			ts_vertex->get_neigh_end(timestamp, edge_type::IN_EDGE),
-			ts_vertex->get_neigh_begin(timestamp, edge_type::OUT_EDGE),
-			ts_vertex->get_neigh_end(timestamp, edge_type::OUT_EDGE),
-			skip_self(ts_vertex->get_id()),
+			ts_vertex.get_neigh_begin(timestamp, edge_type::IN_EDGE),
+			ts_vertex.get_neigh_end(timestamp, edge_type::IN_EDGE),
+			ts_vertex.get_neigh_begin(timestamp, edge_type::OUT_EDGE),
+			ts_vertex.get_neigh_end(timestamp, edge_type::OUT_EDGE),
+			skip_self(ts_vertex.get_id()),
 			neighbors->begin());
 	neighbors->resize(num_neighbors);
 
-	page_byte_array::const_iterator<vertex_id_t> it = ts_vertex->get_neigh_begin(
+	page_byte_array::const_iterator<vertex_id_t> it = ts_vertex.get_neigh_begin(
 			timestamp, edge_type::BOTH_EDGES);
 	page_byte_array::const_iterator<edge_count> data_it
-		= ts_vertex->get_edge_data_begin<edge_count>(timestamp,
+		= ts_vertex.get_edge_data_begin<edge_count>(timestamp,
 				edge_type::BOTH_EDGES);
-	page_byte_array::const_iterator<vertex_id_t> end = ts_vertex->get_neigh_end(
+	page_byte_array::const_iterator<vertex_id_t> end = ts_vertex.get_neigh_end(
 			timestamp, edge_type::BOTH_EDGES);
 	for (; it != end; ++it, ++data_it) {
 		vertex_id_t id = *it;
 		// Ignore loops
-		if (id != ts_vertex->get_id()) {
+		if (id != ts_vertex.get_id()) {
 			num_local_edges->at(0) += (*data_it).get_count();
 		}
 	}
@@ -317,16 +322,16 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	for (int i = 1; i < timestamp_range && timestamp - i >= 0; i++) {
 		int timestamp2 = timestamp - i;
 		page_byte_array::const_iterator<vertex_id_t> it
-			= ts_vertex->get_neigh_begin(timestamp2, edge_type::BOTH_EDGES);
+			= ts_vertex.get_neigh_begin(timestamp2, edge_type::BOTH_EDGES);
 		page_byte_array::const_iterator<edge_count> data_it
-			= ts_vertex->get_edge_data_begin<edge_count>(timestamp2,
+			= ts_vertex.get_edge_data_begin<edge_count>(timestamp2,
 				edge_type::BOTH_EDGES);
 		page_byte_array::const_iterator<vertex_id_t> end
-			= ts_vertex->get_neigh_end(timestamp2, edge_type::BOTH_EDGES);
+			= ts_vertex.get_neigh_end(timestamp2, edge_type::BOTH_EDGES);
 		for (; it != end; ++it, ++data_it) {
 			vertex_id_t id = *it;
 			// Ignore loop
-			if (id != ts_vertex->get_id()
+			if (id != ts_vertex.get_id()
 					// The neighbor needs to exist in timestamp 1.
 					&& std::binary_search(neighbors->begin(),
 						neighbors->end(), id)) {
@@ -347,17 +352,15 @@ bool scan_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	return false;
 }
 
-bool scan_vertex::run_on_neighbors(graph_engine &graph,
-		const TS_page_vertex *vertices[], int num)
+bool scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
 {
-	num_joined += num;
+	num_joined++;
 	assert(neighbors);
-	for (int i = 0; i < num; i++) {
-		for (int j = 0; j < timestamp_range && timestamp - j >= 0; j++) {
-			int ret = count_edges(vertices[i], neighbors, timestamp - j);
-			if (ret > 0)
-				num_edges->at(j).inc(ret);
-		}
+	const TS_page_vertex &ts_vertex = (const TS_page_vertex &) vertex;
+	for (int j = 0; j < timestamp_range && timestamp - j >= 0; j++) {
+		int ret = count_edges(&ts_vertex, neighbors, timestamp - j);
+		if (ret > 0)
+			num_edges->at(j).inc(ret);
 	}
 
 	// If we have seen all required neighbors, we have complete

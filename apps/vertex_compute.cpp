@@ -48,11 +48,11 @@ void vertex_compute::run(page_byte_array &array)
 			// Or we haven't perform computation on the vertex yet.
 			|| v == NULL) {
 		v = &graph->get_vertex(ext_v->get_id());
-		completed = v->run(*graph, ext_v);
+		completed = v->run(*graph, *ext_v);
 	}
 	else {
 		num_complete_fetched++;
-		completed = v->run_on_neighbors(*graph, &ext_v, 1);
+		completed = v->run(*graph, *ext_v);
 	}
 	// We need to notify the thread that initiate processing the vertex
 	// of the completion of the vertex.
@@ -152,7 +152,7 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 
 		num_fetched++;
 		assert(comp_v);
-		completed = comp_v->run_on_neighbors(*graph, &ext_v, 1);
+		completed = comp_v->run(*graph, *ext_v);
 
 		char *tmp = (char *) required_vertex_header;
 		delete [] tmp;

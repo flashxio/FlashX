@@ -90,12 +90,7 @@ public:
 			return false;
 	}
 
-	bool run(graph_engine &graph, const page_vertex *vertex);
-
-	bool run_on_neighbors(graph_engine &graph, const page_vertex *vertices[],
-			int num) {
-		return true;
-	}
+	bool run(graph_engine &graph, const page_vertex &vertex);
 
 	virtual void run_on_messages(graph_engine &,
 			const vertex_message *msgs[], int num) {
@@ -109,7 +104,7 @@ public:
 	}
 };
 
-bool sssp_vertex::run(graph_engine &graph, const page_vertex *vertex)
+bool sssp_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
 #ifdef DEBUG
 	num_visits.inc(1);
@@ -117,11 +112,11 @@ bool sssp_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex->get_neigh_end(OUT_EDGE);
-	stack_array<vertex_id_t, 1024> dest_buf(vertex->get_num_edges(OUT_EDGE));
+		= vertex.get_neigh_end(OUT_EDGE);
+	stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(OUT_EDGE));
 	int num_dests = 0;
 	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex->get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
+			= vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
 		dest_buf[num_dests++] = id;
 	}

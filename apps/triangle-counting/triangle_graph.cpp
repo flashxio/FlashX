@@ -86,10 +86,15 @@ public:
 		return num_pv_triangles.get();
 	}
 
-	bool run(graph_engine &graph, const page_vertex *vertex);
+	bool run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			return run_on_itself(graph, vertex);
+		else
+			return run_on_neighbor(graph, vertex);
+	}
 
-	bool run_on_neighbors(graph_engine &graph,
-			const page_vertex *vertices[], int num);
+	bool run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	bool run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
@@ -218,7 +223,7 @@ static int get_required_edges(const page_vertex *vertex, edge_type type,
 	return num;
 }
 
-bool triangle_vertex::run(graph_engine &graph, const page_vertex *vertex)
+bool triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
 	assert(in_edges == NULL);
 	assert(out_edges == NULL);
@@ -230,8 +235,8 @@ bool triangle_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
 	// either of them.
-	if (vertex->get_num_edges(edge_type::OUT_EDGE) == 0
-			|| vertex->get_num_edges(edge_type::IN_EDGE) == 0) {
+	if (vertex.get_num_edges(edge_type::OUT_EDGE) == 0
+			|| vertex.get_num_edges(edge_type::IN_EDGE) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -240,8 +245,8 @@ bool triangle_vertex::run(graph_engine &graph, const page_vertex *vertex)
 
 	in_edges = new std::vector<vertex_id_t>();
 	out_edges = new std::vector<vertex_id_t>();
-	get_required_edges(vertex, edge_type::IN_EDGE, *in_edges);
-	get_required_edges(vertex, edge_type::OUT_EDGE, *out_edges);
+	get_required_edges(&vertex, edge_type::IN_EDGE, *in_edges);
+	get_required_edges(&vertex, edge_type::OUT_EDGE, *out_edges);
 	num_required = out_edges->size();
 
 	if (in_edges->empty() || out_edges->empty()) {
@@ -263,19 +268,17 @@ bool triangle_vertex::run(graph_engine &graph, const page_vertex *vertex)
 	return false;
 }
 
-bool triangle_vertex::run_on_neighbors(graph_engine &graph,
-		const page_vertex *vertices[], int num)
+bool triangle_vertex::run_on_neighbor(graph_engine &graph,
+		const page_vertex &vertex)
 {
 	num_joined++;
-	for (int i = 0; i < num; i++) {
-		int ret = count_triangles(vertices[i]);
-		// If we find triangles with the neighbor, notify the neighbor
-		// as well.
-		if (ret > 0) {
-			num_pv_triangles.inc(ret);
-			count_msg msg(ret);
-			graph.send_msg(vertices[i]->get_id(), msg);
-		}
+	int ret = count_triangles(&vertex);
+	// If we find triangles with the neighbor, notify the neighbor
+	// as well.
+	if (ret > 0) {
+		num_pv_triangles.inc(ret);
+		count_msg msg(ret);
+		graph.send_msg(vertex.get_id(), msg);
 	}
 
 	// If we have seen all required neighbors, we have complete

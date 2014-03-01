@@ -266,9 +266,16 @@ public:
 		return true;
 	}
 
-	bool run(graph_engine &graph, const page_vertex *vertex) {
+	bool run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			return run_on_itself(graph, vertex);
+		else
+			return run_on_neighbor(graph, vertex);
+	}
+
+	bool run_on_itself(graph_engine &graph, const page_vertex &vertex) {
 		neighbors = new std::vector<vertex_id_t>();
-		get_unique_neighbors(*vertex, *neighbors);
+		get_unique_neighbors(vertex, *neighbors);
 		std::sort(neighbors->begin(), neighbors->end());
 		vertex_union.add(*neighbors);
 		vertex_intersection.add(*neighbors);
@@ -281,20 +288,17 @@ public:
 		return false;
 	}
 
-	bool run_on_neighbors(graph_engine &graph,
-			const page_vertex *vertices[], int num) {
-		num_joined += num;
-		for (int i = 0; i < num; i++) {
-			std::vector<vertex_id_t> neigh_neighbors;
-			get_unique_neighbors(*vertices[i], neigh_neighbors);
-			std::sort(neigh_neighbors.begin(), neigh_neighbors.end());
-			size_t common = get_common_vertices(*neighbors, neigh_neighbors);
-			size_t vunion = get_union_vertices(*neighbors,
-					neigh_neighbors);
-			printf("v%u:v%u, common: %ld, union: %ld, overlap: %f\n",
-					get_id(), vertices[i]->get_id(), common, vunion,
-					((double) common) / vunion);
-		}
+	bool run_on_neighbor(graph_engine &graph, const page_vertex &vertex) {
+		num_joined++;
+		std::vector<vertex_id_t> neigh_neighbors;
+		get_unique_neighbors(vertex, neigh_neighbors);
+		std::sort(neigh_neighbors.begin(), neigh_neighbors.end());
+		size_t common = get_common_vertices(*neighbors, neigh_neighbors);
+		size_t vunion = get_union_vertices(*neighbors,
+				neigh_neighbors);
+		printf("v%u:v%u, common: %ld, union: %ld, overlap: %f\n",
+				get_id(), vertex.get_id(), common, vunion,
+				((double) common) / vunion);
 		// We only need to join with all other vertices.
 		return num_joined == overlap_vertices.size() - 1;
 	}

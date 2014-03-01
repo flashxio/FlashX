@@ -140,13 +140,6 @@ size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
 	return num;
 }
 
-bool ts_compute_vertex::run_on_neighbors(graph_engine &graph,
-		const page_vertex *vertices[], int num)
-{
-	const TS_page_vertex **ts_vertices = (const TS_page_vertex **) vertices;
-	return run_on_neighbors(graph, ts_vertices, num);
-}
-
 graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index *index)
 {
