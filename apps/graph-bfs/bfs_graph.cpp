@@ -57,18 +57,21 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
-	bool run(graph_engine &graph) {
-		return has_visited();
+	void run(graph_engine &graph) {
+		if (!has_visited()) {
+			vertex_id_t id = get_id();
+			graph.request_vertices(*this, &id, 1);
+		}
 	}
 
-	bool run(graph_engine &graph, const page_vertex &vertex);
+	void run(graph_engine &graph, const page_vertex &vertex);
 
 	virtual void run_on_messages(graph_engine &,
 			const vertex_message *msgs[], int num) {
 	}
 };
 
-bool bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
 	vertex_id_t max_id = graph.get_max_vertex_id();
 	vertex_id_t min_id = graph.get_min_vertex_id();
@@ -89,7 +92,6 @@ bool bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
 		dest_buf[num_dests++] = id;
 	}
 	graph.activate_vertices(dest_buf.data(), num_dests);
-	return true;
 }
 
 void int_handler(int sig_num)

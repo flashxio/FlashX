@@ -86,15 +86,20 @@ public:
 		return num_pv_triangles.get();
 	}
 
-	bool run(graph_engine &graph, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
-			return run_on_itself(graph, vertex);
-		else
-			return run_on_neighbor(graph, vertex);
+	virtual void run(graph_engine &graph) {
+		vertex_id_t id = get_id();
+		graph.request_vertices(*this, &id, 1);
 	}
 
-	bool run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	bool run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
+	void run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			run_on_itself(graph, vertex);
+		else
+			run_on_neighbor(graph, vertex);
+	}
+
+	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
@@ -223,7 +228,7 @@ static int get_required_edges(const page_vertex *vertex, edge_type type,
 	return num;
 }
 
-bool triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
 	assert(in_edges == NULL);
 	assert(out_edges == NULL);
@@ -240,7 +245,7 @@ bool triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
-		return true;
+		return;
 	}
 
 	in_edges = new std::vector<vertex_id_t>();
@@ -258,17 +263,16 @@ bool triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 		delete out_edges;
 		in_edges = NULL;
 		out_edges = NULL;
-		return true;
+		return;
 	}
 	else {
 		triangles = new std::vector<int>(in_edges->size());
 	}
 
 	graph.request_vertices(*this, out_edges->data(), out_edges->size());
-	return false;
 }
 
-bool triangle_vertex::run_on_neighbor(graph_engine &graph,
+void triangle_vertex::run_on_neighbor(graph_engine &graph,
 		const page_vertex &vertex)
 {
 	num_joined++;
@@ -302,9 +306,7 @@ bool triangle_vertex::run_on_neighbor(graph_engine &graph,
 		delete out_edges;
 		in_edges = NULL;
 		out_edges = NULL;
-		return true;
 	}
-	return false;
 }
 
 void int_handler(int sig_num)

@@ -60,18 +60,14 @@ public:
 	/**
 	 * This is a pre-run before users get any information of adjacency list
 	 * of vertices.
-	 * It returns true if the vertex has completed the iteration.
 	 */
-	virtual bool run(graph_engine &graph) {
-		return false;
-	}
+	virtual void run(graph_engine &graph) = 0;
 
 	/**
 	 * Run user's code when the adjacency list of the vertex is read
 	 * from disks.
-	 * It returns true if the vertex has completed the iteration.
 	 */
-	virtual bool run(graph_engine &graph, const page_vertex &vertex) = 0;
+	virtual void run(graph_engine &graph, const page_vertex &vertex) = 0;
 
 	/**
 	 * Run user's code when the vertex receives messages from other.

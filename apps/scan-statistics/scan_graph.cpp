@@ -677,30 +677,35 @@ public:
 			page_byte_array::const_iterator<vertex_id_t> other_end,
 			std::vector<vertex_id_t> &common_neighs);
 
-	bool run(graph_engine &graph) {
+	void run(graph_engine &graph) {
+		bool req_itself = false;
 		// If we have computed local scan on the vertex, skip the vertex.
 		if (num_edges.get() > 0)
-			return true;
+			return;
 		// If we have estimated the local scan, we should use the estimated one.
 		else if (est_local_scan > 0)
-			return est_local_scan <= max_scan.get();
+			req_itself = est_local_scan > max_scan.get();
 		else {
 			// If this is the first time to compute on the vertex, we can still
 			// skip a lot of vertices with this condition.
 			size_t num_local_edges = num_in_edges + num_out_edges;
-			return num_local_edges * num_local_edges < max_scan.get();
+			req_itself = num_local_edges * num_local_edges >= max_scan.get();
+		}
+		if (req_itself) {
+			vertex_id_t id = get_id();
+			graph.request_vertices(*this, &id, 1);
 		}
 	}
 
-	bool run(graph_engine &graph, const page_vertex &vertex) {
+	void run(graph_engine &graph, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
-			return run_on_itself(graph, vertex);
+			run_on_itself(graph, vertex);
 		else
-			return run_on_neighbor(graph, vertex);
+			run_on_neighbor(graph, vertex);
 	}
 
-	bool run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	bool run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
@@ -1034,7 +1039,7 @@ size_t scan_vertex::get_est_local_scan(graph_engine &graph, const page_vertex *v
 	return est_local_scan;
 }
 
-bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
 	assert(data == NULL);
 
@@ -1044,10 +1049,10 @@ bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	num_all_edges = num_local_edges;
 #endif
 	if (num_local_edges == 0)
-		return true;
+		return;
 
 	if (get_est_local_scan(graph, &vertex) < max_scan.get())
-		return true;
+		return;
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
@@ -1093,17 +1098,15 @@ bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
-		return true;
+		return;
 	}
 
 	std::vector<vertex_id_t> neighbors;
 	data->neighbors.get_neighbors(neighbors);
 	graph.request_vertices(*this, neighbors.data(), neighbors.size());
-
-	return false;
 }
 
-bool scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
 {
 	assert(data);
 	data->num_joined++;
@@ -1155,9 +1158,7 @@ bool scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 
 		delete data;
 		data = NULL;
-		return true;
 	}
-	return false;
 }
 
 void int_handler(int sig_num)

@@ -180,14 +180,20 @@ int worker_thread::process_activated_vertices(int max)
 		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
-		if (!info.run(*graph)) {
-			data_loc_t loc(io->get_file_id(), info.get_ext_mem_off());
-			reqs[num_to_process++] = io_request(alloc->alloc(), loc,
+		info.run(*graph);
+		if (curr_compute) {
+			assert(curr_compute->has_requests());
+			// It's mostly likely that it is requesting the adjacency list
+			// of itself. But it doesn't really matter what the vertex
+			// wants to request here.
+			request_range range = curr_compute->get_next_request();
+			reqs[num_to_process++] = io_request(curr_compute, range.get_loc(),
 					// TODO I might need to set the node id.
-					info.get_ext_mem_size(), READ, io, -1);
+					range.get_size(), range.get_access_method(), io, -1);
 		}
 		else
 			num_completed++;
+		reset_curr_vertex_compute();
 	}
 	if (num_completed > 0)
 		num_completed_vertices_in_level.inc(num_completed);

@@ -80,17 +80,17 @@ public:
 		parent = -1;
 	}
 
-	bool run(graph_engine &graph) {
+	void run(graph_engine &graph) {
 		if (parent_dist + 1 < distance) {
 			distance = parent_dist + 1;
 			parent = tmp_parent;
-			return false;
+
+			vertex_id_t id = get_id();
+			graph.request_vertices(*this, &id, 1);
 		}
-		else
-			return true;
 	}
 
-	bool run(graph_engine &graph, const page_vertex &vertex);
+	void run(graph_engine &graph, const page_vertex &vertex);
 
 	virtual void run_on_messages(graph_engine &,
 			const vertex_message *msgs[], int num) {
@@ -104,7 +104,7 @@ public:
 	}
 };
 
-bool sssp_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void sssp_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
 #ifdef DEBUG
 	num_visits.inc(1);
@@ -122,7 +122,6 @@ bool sssp_vertex::run(graph_engine &graph, const page_vertex &vertex)
 	}
 	dist_message msg(get_id(), distance);
 	graph.multicast_msg(dest_buf.data(), num_dests, msg);
-	return true;
 }
 
 void int_handler(int sig_num)

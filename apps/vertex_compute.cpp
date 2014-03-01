@@ -50,9 +50,9 @@ void vertex_compute::run(page_byte_array &array)
 		v->run(*graph, *ext_v);
 	}
 	else {
-		num_complete_fetched++;
 		v->run(*graph, *ext_v);
 	}
+	num_complete_fetched++;
 	// We need to notify the thread that initiate processing the vertex
 	// of the completion of the vertex.
 	if (has_completed())

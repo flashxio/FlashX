@@ -77,15 +77,20 @@ public:
 			const std::vector<vertex_id_t> *neighbors, int timestamp,
 			edge_type type);
 
-	bool run(graph_engine &graph, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
-			return run_on_itself(graph, vertex);
-		else
-			return run_on_neighbor(graph, vertex);
+	virtual void run(graph_engine &graph) {
+		vertex_id_t id = get_id();
+		graph.request_vertices(*this, &id, 1);
 	}
 
-	bool run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	bool run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
+	void run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			run_on_itself(graph, vertex);
+		else
+			run_on_neighbor(graph, vertex);
+	}
+
+	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
@@ -248,7 +253,7 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 	return result - result_begin;
 }
 
-bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
@@ -262,7 +267,7 @@ bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
-		return true;
+		return;
 	}
 
 	num_edges = new std::vector<atomic_integer>(timestamp_range);
@@ -316,7 +321,7 @@ bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
-		return true;
+		return;
 	}
 
 	for (int i = 1; i < timestamp_range && timestamp - i >= 0; i++) {
@@ -349,10 +354,9 @@ bool scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 		req_ptrs[i] = &reqs[i];
 	}
 	graph.request_partial_vertices(*this, req_ptrs.data(), req_ptrs.size());
-	return false;
 }
 
-bool scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
 {
 	num_joined++;
 	assert(neighbors);
@@ -405,9 +409,7 @@ bool scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 		num_local_edges = NULL;
 		num_edges = NULL;
 		neighbors = NULL;
-		return true;
 	}
-	return false;
 }
 
 void int_handler(int sig_num)
