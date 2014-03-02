@@ -23,11 +23,20 @@ void vertex_compute::request_vertices(vertex_id_t ids[], int num)
 					requested_vertices.end()))
 			std::sort(requested_vertices.begin(), requested_vertices.end());
 	}
-	else {
+	else if(std::is_sorted(ids, ids + num)) {
 		std::vector<vertex_id_t> merged(
 				requested_vertices.size() - fetch_idx + num);
 		std::merge(requested_vertices.begin() + fetch_idx, requested_vertices.end(),
 				ids, ids + num, merged.begin());
+		requested_vertices.swap(merged);
+	}
+	else {
+		std::vector<vertex_id_t> new_ids(ids, ids + num);
+		std::sort(new_ids.begin(), new_ids.end());
+		std::vector<vertex_id_t> merged(
+				requested_vertices.size() - fetch_idx + num);
+		std::merge(requested_vertices.begin() + fetch_idx, requested_vertices.end(),
+				new_ids.begin(), new_ids.end(), merged.begin());
 		requested_vertices.swap(merged);
 	}
 	fetch_idx = 0;
