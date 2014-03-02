@@ -1230,8 +1230,6 @@ int main(int argc, char *argv[])
 	// degrees in the hope we can find the max scan as early as possible,
 	// so that we can simple ignore the rest of vertices.
 	graph->set_vertex_scheduler(new vertex_size_scheduler(graph));
-	// TODO I need to redefine this interface.
-	graph->set_required_neighbor_type(edge_type::BOTH_EDGES);
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

@@ -115,7 +115,6 @@ class graph_engine
 	int num_nodes;
 	std::vector<worker_thread *> worker_threads;
 
-	edge_type required_neighbor_type;
 	trace_logger *logger;
 	file_io_factory *factory;
 	int max_processing_vertices;
@@ -156,14 +155,6 @@ public:
 
 	void start(vertex_id_t ids[], int num);
 	void start_all();
-
-	void set_required_neighbor_type(edge_type type) {
-		required_neighbor_type = type;
-	}
-
-	edge_type get_required_neighbor_type() const {
-		return required_neighbor_type;
-	}
 
 	/**
 	 * The algorithm progresses to the next level.

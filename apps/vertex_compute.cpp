@@ -50,11 +50,8 @@ void vertex_compute::run(page_byte_array &array)
 			interpreter->get_vertex_size());
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	t->set_curr_vertex_compute(this);
-	// If the algorithm doesn't need to get the full information
-	// of their neighbors
-	if (graph->get_required_neighbor_type() == edge_type::NONE
-			// Or we haven't perform computation on the vertex yet.
-			|| v == NULL) {
+	// We haven't perform computation on the vertex yet.
+	if (v == NULL) {
 		v = &graph->get_vertex(ext_v->get_id());
 		v->run(*graph, *ext_v);
 	}
