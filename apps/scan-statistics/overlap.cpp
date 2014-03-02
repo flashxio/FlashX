@@ -29,6 +29,12 @@
 
 #include "graph_engine.h"
 
+enum overlap_stage_t
+{
+	CONSTRUCT_NEIGHBORS,
+	COMP_OVERLAP,
+} overlap_stage;
+
 /**
  * This contains all vertices that we want to compute pair-wise overlap.
  */
@@ -248,57 +254,64 @@ void intersection_set::add(const std::vector<vertex_id_t> &vec)
 
 class overlap_vertex: public compute_vertex
 {
-	unsigned num_joined;
-	std::vector<vertex_id_t> *neighbors;
+	std::vector<vertex_id_t> *neighborhood;
 public:
 	overlap_vertex() {
-		num_joined = 0;
-		neighbors = NULL;
+		neighborhood = NULL;
 	}
 
 	overlap_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
 			id, index1) {
-		num_joined = 0;
-		neighbors = NULL;
+		neighborhood = NULL;
 	}
 
-	virtual void run(graph_engine &graph) {
+	void run(graph_engine &graph) {
+		switch(overlap_stage) {
+			case overlap_stage_t::CONSTRUCT_NEIGHBORS:
+				run_stage1(graph);
+				break;
+			case overlap_stage_t::COMP_OVERLAP:
+				run_stage2(graph);
+				break;
+			default:
+				assert(0);
+		}
+	}
+
+	void run_stage1(graph_engine &graph) {
 		vertex_id_t id = get_id();
 		graph.request_vertices(*this, &id, 1);
 	}
 
+	void run_stage2(graph_engine &graph) {
+		BOOST_FOREACH(vertex_id_t id, overlap_vertices) {
+			if (id == get_id())
+				continue;
+			overlap_vertex &neigh = (overlap_vertex &) graph.get_vertex(id);
+			size_t common = get_common_vertices(*neighborhood, *neigh.neighborhood);
+			size_t vunion = get_union_vertices(*neighborhood, *neigh.neighborhood);
+			printf("v%u:v%u, common: %ld, union: %ld, overlap: %f\n",
+					get_id(), id, common, vunion,
+					((double) common) / vunion);
+		}
+	}
+
 	void run(graph_engine &graph, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
-			run_on_itself(graph, vertex);
-		else
-			run_on_neighbor(graph, vertex);
+		assert(vertex.get_id() == get_id());
+		run_on_itself(graph, vertex);
 	}
 
 	void run_on_itself(graph_engine &graph, const page_vertex &vertex) {
-		neighbors = new std::vector<vertex_id_t>();
-		get_unique_neighbors(vertex, *neighbors);
-		std::sort(neighbors->begin(), neighbors->end());
-		vertex_union.add(*neighbors);
-		vertex_intersection.add(*neighbors);
-		std::vector<vertex_id_t> req_vertices;
-		BOOST_FOREACH(vertex_id_t id, overlap_vertices) {
-			if (id != get_id())
-				req_vertices.push_back(id);
-		}
-		graph.request_vertices(*this, req_vertices.data(), req_vertices.size());
-	}
+		neighborhood = new std::vector<vertex_id_t>();
+		get_unique_neighbors(vertex, *neighborhood);
+		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
 
-	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex) {
-		num_joined++;
-		std::vector<vertex_id_t> neigh_neighbors;
-		get_unique_neighbors(vertex, neigh_neighbors);
-		std::sort(neigh_neighbors.begin(), neigh_neighbors.end());
-		size_t common = get_common_vertices(*neighbors, neigh_neighbors);
-		size_t vunion = get_union_vertices(*neighbors,
-				neigh_neighbors);
-		printf("v%u:v%u, common: %ld, union: %ld, overlap: %f\n",
-				get_id(), vertex.get_id(), common, vunion,
-				((double) common) / vunion);
+		std::vector<vertex_id_t>::iterator it = std::lower_bound(
+				neighborhood->begin(), neighborhood->end(), get_id());
+		if (it != neighborhood->end())
+			assert(*it != get_id());
+		neighborhood->insert(it, get_id());
+		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
 	}
 
 	void run_on_messages(graph_engine &,
@@ -366,11 +379,22 @@ int main(int argc, char *argv[])
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
 	struct timeval start, end;
+
 	gettimeofday(&start, NULL);
+	overlap_stage = overlap_stage_t::CONSTRUCT_NEIGHBORS;
 	graph->start(overlap_vertices.data(), overlap_vertices.size());
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("It takes %f seconds\n", time_diff(start, end));
+	printf("It takes %f seconds to construct neighborhoods\n",
+			time_diff(start, end));
+
+	gettimeofday(&start, NULL);
+	overlap_stage = overlap_stage_t::COMP_OVERLAP;
+	graph->start(overlap_vertices.data(), overlap_vertices.size());
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds to compute overlaps\n", time_diff(start, end));
+
 	printf("All vertices have %ld common neighbors and cover %ld vertices\n",
 			vertex_intersection.get_size(), vertex_union.get_size());
 	for (size_t i = 0; i < vertex_intersection.get_size(); i++)
