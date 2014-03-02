@@ -262,14 +262,19 @@ public:
 		neighbors = NULL;
 	}
 
-	bool run(graph_engine &graph, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
-			return run_on_itself(graph, vertex);
-		else
-			return run_on_neighbor(graph, vertex);
+	virtual void run(graph_engine &graph) {
+		vertex_id_t id = get_id();
+		graph.request_vertices(*this, &id, 1);
 	}
 
-	bool run_on_itself(graph_engine &graph, const page_vertex &vertex) {
+	void run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			run_on_itself(graph, vertex);
+		else
+			run_on_neighbor(graph, vertex);
+	}
+
+	void run_on_itself(graph_engine &graph, const page_vertex &vertex) {
 		neighbors = new std::vector<vertex_id_t>();
 		get_unique_neighbors(vertex, *neighbors);
 		std::sort(neighbors->begin(), neighbors->end());
@@ -281,10 +286,9 @@ public:
 				req_vertices.push_back(id);
 		}
 		graph.request_vertices(*this, req_vertices.data(), req_vertices.size());
-		return false;
 	}
 
-	bool run_on_neighbor(graph_engine &graph, const page_vertex &vertex) {
+	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex) {
 		num_joined++;
 		std::vector<vertex_id_t> neigh_neighbors;
 		get_unique_neighbors(vertex, neigh_neighbors);
@@ -295,8 +299,6 @@ public:
 		printf("v%u:v%u, common: %ld, union: %ld, overlap: %f\n",
 				get_id(), vertex.get_id(), common, vunion,
 				((double) common) / vunion);
-		// We only need to join with all other vertices.
-		return num_joined == overlap_vertices.size() - 1;
 	}
 
 	void run_on_messages(graph_engine &,
