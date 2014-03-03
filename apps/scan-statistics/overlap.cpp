@@ -172,10 +172,44 @@ size_t get_common_vertices(const std::vector<vertex_id_t> &vertices1,
 size_t get_union_vertices(const std::vector<vertex_id_t> &vertices1,
 		const std::vector<vertex_id_t> &vertices2)
 {
-	std::tr1::unordered_set<vertex_id_t> set(vertices1.begin(),
-			vertices1.end());
-	set.insert(vertices2.begin(), vertices2.end());
-	return set.size();
+	class skip_none {
+	public:
+		bool operator()(vertex_id_t id) {
+			return false;
+		}
+	};
+
+	class null_iterator: public std::iterator<std::random_access_iterator_tag, vertex_id_t> {
+		vertex_id_t id;
+		int idx;
+	public:
+		typedef typename std::iterator<std::random_access_iterator_tag,
+				vertex_id_t>::difference_type difference_type;
+
+		null_iterator() {
+			idx = 0;
+			id = 0;
+		}
+
+		vertex_id_t &operator*() {
+			return id;
+		}
+
+		null_iterator operator++(int) {
+			null_iterator it = *this;
+			idx++;
+			return it;
+		}
+
+		difference_type operator-(const null_iterator &it) {
+			return idx - it.idx;
+		}
+	};
+
+	size_t num_eles = unique_merge(vertices1.begin(), vertices1.end(),
+			vertices2.begin(), vertices2.end(), skip_none(), merge_edge(),
+			null_iterator());
+	return num_eles;
 }
 
 class union_set
