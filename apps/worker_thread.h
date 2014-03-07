@@ -98,6 +98,9 @@ public:
 };
 
 class vertex_compute;
+class steal_state_t;
+class message_processor;
+class load_balancer;
 
 class worker_thread: public thread
 {
@@ -125,8 +128,6 @@ class worker_thread: public thread
 	 * the right message holder.
 	 */
 
-	// The queue of messages sent from other threads.
-	msg_queue msg_q;
 	slab_allocator *msg_alloc;
 	// The message senders to send messages to all other threads.
 	// There are n senders, n is the total number of threads used by
@@ -134,12 +135,14 @@ class worker_thread: public thread
 	std::vector<simple_msg_sender *> msg_senders;
 	std::vector<multicast_msg_sender *> multicast_senders;
 	std::vector<multicast_msg_sender *> activate_senders;
+	std::unique_ptr<message_processor> msg_processor;
+
+	std::unique_ptr<load_balancer> balancer;
+
 	// This is to collect vertices activated in the next level.
 	bitmap next_activated_vertices;
 	// This contains the vertices activated in the current level.
 	sorted_vertex_queue curr_activated_vertices;
-	// The thread where we should steal activated vertices from.
-	int steal_thread_id;
 
 	// Indicate that we need to start all vertices.
 	bool start_all;
@@ -188,11 +191,12 @@ public:
 		return msg_senders[thread_id];
 	}
 
-	int process_activated_vertices(int max);
-
-	void complete_vertex(const compute_vertex &v) {
-		num_completed_vertices_in_level.inc(1);
-	}
+	/**
+	 * When a vertex has been completed for the current iteration, this
+	 * method is invoked to notify the worker thread, so that the worker
+	 * thread can update its statistics on the number of completed vertices.
+	 */
+	void complete_vertex(const compute_vertex &v);
 
 	void flush_msgs() {
 		for (size_t i = 0; i < msg_senders.size(); i++)
@@ -203,12 +207,8 @@ public:
 			activate_senders[i]->flush();
 	}
 
-	void process_msgs();
-	void process_msg(message &msg);
-	void process_multicast_msg(multicast_message &mmsg);
+	int process_activated_vertices(int max);
 	int enter_next_level();
-
-	int steal_activated_vertices(vertex_id_t buf[], int num);
 
 	void start_vertices(const std::vector<vertex_id_t> &vertices) {
 		assert(curr_activated_vertices.is_empty());
@@ -253,6 +253,28 @@ public:
 	void reset_curr_vertex_compute() {
 		curr_compute = NULL;
 	}
+
+	/**
+	 * Activate a vertex for the next iteration.
+	 */
+	void activate_vertex(vertex_id_t id);
+
+	int steal_activated_vertices(vertex_id_t ids[], int num);
+	void return_vertices(vertex_id_t ids[], int num);
+
+	size_t get_num_local_vertices() const {
+		return next_activated_vertices.get_num_bits();
+	}
+
+	int get_worker_id() const {
+		return worker_id;
+	}
+
+	slab_allocator *get_msg_allocator() const {
+		return msg_alloc;
+	}
+
+	friend class load_balancer;
 };
 
 #endif

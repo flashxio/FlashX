@@ -23,8 +23,11 @@
 #include <stdlib.h>
 
 #include <vector>
+#include <atomic>
 
 #include "common.h"
+
+static const int NUM_BITS_LONG = sizeof(long) * 8;
 
 /**
  * The functionality of this bitmap is very similar to std::vector<bool>
@@ -33,7 +36,6 @@
  */
 class bitmap
 {
-	static const int NUM_BITS_LONG = sizeof(long) * 8;
 	size_t max_num_bits;
 	long *ptr;
 
@@ -81,15 +83,15 @@ public:
 	};
 #endif
 
-	bitmap(size_t max_num_bits) {
+	bitmap(size_t max_num_bits, int node_id) {
 		this->max_num_bits = max_num_bits;
-		size_t size = ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
-		ptr = new long[size];
-		memset(ptr, 0, sizeof(ptr[0]) * size);
+		size_t num_longs = get_num_longs();
+		ptr = (long *) numa_alloc_onnode(num_longs * sizeof(ptr[0]), node_id);
+		memset(ptr, 0, sizeof(ptr[0]) * num_longs);
 	}
 
 	~bitmap() {
-		delete [] ptr;
+		numa_free(ptr, get_num_longs() * sizeof(ptr[0]));
 	}
 
 	size_t get_num_bits() const {
@@ -133,6 +135,62 @@ public:
 				get_set_bits_long(ptr[i], i, v);
 		}
 		return v.size();
+	}
+};
+
+/**
+ * This is a thread-safe bitmap.
+ * All set/clear operations on the bitmap is atomic. However, users of
+ * the bitmap need to insert memory barrier themselves.
+ */
+class thread_safe_bitmap
+{
+	size_t max_num_bits;
+	std::atomic_ulong *ptr;
+public:
+	thread_safe_bitmap(size_t max_num_bits, int node_id) {
+		this->max_num_bits = max_num_bits;
+		size_t num_longs = ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
+		ptr = (std::atomic_ulong *) numa_alloc_onnode(
+				num_longs * sizeof(*ptr), node_id);
+		clear();
+	}
+
+	~thread_safe_bitmap() {
+		size_t num_longs = ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
+		numa_free(ptr, num_longs * sizeof(*ptr));
+	}
+
+	size_t get_num_bits() const {
+		return max_num_bits;
+	}
+
+	void set(size_t idx) {
+		assert(idx < max_num_bits);
+		size_t arr_off = idx / NUM_BITS_LONG;
+		size_t inside_off = idx % NUM_BITS_LONG;
+		// We only want atomicity here.
+		ptr[arr_off].fetch_or(1L << inside_off, std::memory_order_relaxed);
+	}
+
+	bool get(size_t idx) const {
+		assert(idx < max_num_bits);
+		size_t arr_off = idx / NUM_BITS_LONG;
+		size_t inside_off = idx % NUM_BITS_LONG;
+		return ptr[arr_off].load(std::memory_order_relaxed) & (1L << inside_off);
+	}
+
+	void clear(size_t idx) {
+		assert(idx < max_num_bits);
+		size_t arr_off = idx / NUM_BITS_LONG;
+		size_t inside_off = idx % NUM_BITS_LONG;
+		ptr[arr_off].fetch_and(~(1L << inside_off), std::memory_order_relaxed);
+	}
+
+	void clear() {
+		size_t num_longs = ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
+		for (size_t i = 0; i < num_longs; i++)
+			new (ptr + i) std::atomic_ulong();
 	}
 };
 

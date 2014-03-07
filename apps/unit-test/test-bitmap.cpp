@@ -8,8 +8,8 @@ const int max_bits = 1024 * 1024 * 128;
 int main()
 {
 	int num = 100000;
-	bitmap map1(max_bits);
-	bitmap map2(max_bits);
+	bitmap map1(max_bits, 0);
+	bitmap map2(max_bits, 0);
 	std::set<size_t> elements;
 
 	for (int test = 0; test < 10; test++) {
