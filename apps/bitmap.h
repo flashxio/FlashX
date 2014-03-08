@@ -81,15 +81,15 @@ public:
 	};
 #endif
 
-	bitmap(size_t max_num_bits) {
+	bitmap(size_t max_num_bits, int node_id) {
 		this->max_num_bits = max_num_bits;
-		size_t size = ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
-		ptr = new long[size];
-		memset(ptr, 0, sizeof(ptr[0]) * size);
+		size_t num_longs = get_num_longs();
+		ptr = (long *) numa_alloc_onnode(num_longs * sizeof(ptr[0]), node_id);
+		memset(ptr, 0, sizeof(ptr[0]) * num_longs);
 	}
 
 	~bitmap() {
-		delete [] ptr;
+		numa_free(ptr, get_num_longs() * sizeof(ptr[0]));
 	}
 
 	size_t get_num_bits() const {

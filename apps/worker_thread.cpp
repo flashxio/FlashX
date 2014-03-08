@@ -55,7 +55,7 @@ worker_thread::worker_thread(graph_engine *graph, file_io_factory *factory,
 		int node_id, int worker_id, int num_threads): thread("worker_thread",
 			node_id), msg_q(get_node_id(), "graph_msg_queue", 16, INT_MAX),
 		next_activated_vertices((size_t) ceil(((double) graph->get_max_vertex_id()
-						+ 1) / num_threads))
+						+ 1) / num_threads), node_id)
 {
 	start_all = false;
 	this->worker_id = worker_id;
