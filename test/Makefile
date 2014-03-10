@@ -15,34 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
 
-CC = gcc
-CXX = g++
-
-PROFILER=1
-
-ifdef MEMCHECK
-TRACE_FLAGS = -faddress-sanitizer
-CC = clang
-CXX = clang++
-TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
-TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
-CLANG_FLAGS = -Wno-attributes
-endif
+include ../Makefile.common
 
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
-LDFLAGS = -L../libsafs -lsafs -lpthread -lnuma -laio $(TRACE_FLAGS) -lrt -rdynamic
-CPPFLAGS := -MD
-CXXFLAGS = -I.. -I../include -g -O3 -Wall -std=c++0x -DSTATISTICS $(TRACE_FLAGS) $(CLANG_FLAGS)
-
-ifdef PROFILER
-	LDFLAGS += -lprofiler
-	CXXFLAGS += -DPROFILER
-endif
-
-SOURCE := $(wildcard *.c) $(wildcard *.cpp)
-OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
-DEPS := $(patsubst %.o,%.d,$(OBJS))
+LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
+CXXFLAGS += -I.. -I../include
 
 all: test_c_interface test_rand_io
 

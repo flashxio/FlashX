@@ -1,17 +1,9 @@
-ifdef MEMCHECK
-TRACE_FLAGS = -faddress-sanitizer
-CC = clang
-CXX = clang++
-else
-CC = gcc
-CXX = g++
-endif
-TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
-TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
-CXXFLAGS = -g -O3 -I.. -I../include -std=c++0x $(TRACE_FLAGS)
+include ../Makefile.common
+
+CXXFLAGS += -I.. -I../include
 CFLAGS = -g -O3 -I.. -I../include $(TRACE_FLAGS)
 
-LDFLAGS = -L../libsafs -lsafs -lpthread -lnuma -laio $(TRACE_FLAGS) -lprofiler -lrt
+LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
 
 TARGETS = stat create_file create_files workload-gen memory-fill eval_expand_SA_cache print_file
 LIBFILE = ../libsafs/libsafs.a

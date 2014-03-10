@@ -1,18 +1,8 @@
-CC = gcc
-CXX = g++
-
-ifdef MEMCHECK
-TRACE_FLAGS = -faddress-sanitizer
-CC = clang
-CXX = clang++
-TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
-TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
-CLANG_FLAGS = -Wno-attributes
-endif
+include ../Makefile.common
 
 CFLAGS = -g -I../include $(TRACE_FLAGS)
+LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
 
-LDFLAGS = -L../libsafs -lsafs -lpthread -lnuma -laio -lprofiler $(TRACE_FLAGS) -lrt -rdynamic
 UNITTEST = file_mapper_unit_test slab_allocator_test test_mem_tracker native_file_unit_test	\
 		   safs_file_unit_test unique_ptr_unit_test timer_unit_test test_open_close
 CPPFLAGS := -MD
