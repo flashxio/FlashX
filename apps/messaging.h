@@ -22,6 +22,8 @@
 
 #include "slab_allocator.h"
 
+#include "vertex.h"
+
 class message
 {
 	// The allocator of the message buffer.
