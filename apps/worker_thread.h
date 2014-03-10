@@ -86,15 +86,6 @@ public:
 		pthread_spin_unlock(&lock);
 		return num;
 	}
-
-	void init_vertices(graph_engine &graph) {
-		pthread_spin_lock(&lock);
-		BOOST_FOREACH(vertex_id_t id, sorted_vertices) {
-			compute_vertex &v = graph.get_vertex(id);
-			v.init();
-		}
-		pthread_spin_unlock(&lock);
-	}
 };
 
 class vertex_compute;
@@ -164,15 +155,18 @@ public:
 		io = factory->create_io(this);
 		io->init();
 
+		std::vector<vertex_id_t> local_ids;
+		graph->get_partitioner()->get_all_vertices_in_part(worker_id,
+				graph->get_num_vertices(), local_ids);
+		BOOST_FOREACH(vertex_id_t id, local_ids) {
+			compute_vertex &v = graph->get_vertex(id);
+			v.init();
+		}
 		// If a user wants to start all vertices.
 		if (start_all) {
-			std::vector<vertex_id_t> local_ids;
-			graph->get_partitioner()->get_all_vertices_in_part(worker_id,
-					graph->get_num_vertices(), local_ids);
 			assert(curr_activated_vertices.is_empty());
 			curr_activated_vertices.init(local_ids, false);
 		}
-		curr_activated_vertices.init_vertices(*graph);
 	}
 
 	compute_allocator *get_part_compute_allocator() const {
