@@ -1,19 +1,10 @@
-CC = gcc
-CXX = g++
+include ../../Makefile.common
 
-ifdef MEMCHECK
-TRACE_FLAGS = -faddress-sanitizer
-CC = clang
-CXX = clang++
-TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
-TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
-CLANG_FLAGS = -Wno-attributes
-endif
-
-LDFLAGS = -L../../libsafs -lsafs -L.. -lgraph -lpthread -lnuma -laio -lprofiler $(TRACE_FLAGS) -lrt -rdynamic
-UNITTEST = test-bitmap
-CPPFLAGS := -MD
+OMP_FLAG = -fopenmp
+LDFLAGS := -L../../libsafs -lsafs -L.. -lgraph -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS = -I.. -I../../include -g -std=c++0x
+
+UNITTEST = test-bitmap
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))

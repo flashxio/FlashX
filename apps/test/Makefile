@@ -15,32 +15,11 @@
 # You should have received a copy of the GNU General Public License
 # along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
 
-CFLAGS = -g -O3 -DSTATISTICS #-DPROFILER
-ifdef MEMCHECK
-TRACE_FLAGS = -faddress-sanitizer
-else
-	OMP_FLAG = -fopenmp
-endif
-TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
-TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
-CLANG_FLAGS = -Wno-attributes
-LDFLAGS = -lpthread $(TRACE_FLAGS) -lprofiler -rdynamic -L../../libsafs -lsafs -L.. -lgraph -laio -lnuma -lrt $(OMP_FLAG)
-CXXFLAGS = -g -O3 -I../../include -I.. -I. -Wall -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) $(OMP_FLAG)
-CPPFLAGS := -MD
+include ../../Makefile.common
 
-SOURCE := $(wildcard *.c) $(wildcard *.cpp)
-OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
-DEPS := $(patsubst %.o,%.d,$(OBJS))
-MISSING_DEPS := $(filter-out $(wildcard $(DEPS)),$(DEPS))
-MISSING_DEPS_SOURCES := $(wildcard $(patsubst %.d,%.c,$(MISSING_DEPS)) $(patsubst %.d,%.cc,$(MISSING_DEPS)))
-ifdef MEMCHECK
-CXXFLAGS += -DMEMCHECK
-CC = clang
-CXX = clang++
-else
-CC = gcc
-CXX = g++
-endif
+OMP_FLAG = -fopenmp
+LDFLAGS := -L../../libsafs -lsafs -L.. -lgraph -lrt $(OMP_FLAG) $(LDFLAGS)
+CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
 all: test_load_balancer
 
