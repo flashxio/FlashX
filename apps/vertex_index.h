@@ -306,6 +306,9 @@ static inline size_t get_vertex_size(vertex_index *index, vertex_id_t id)
 class in_mem_vertex_index
 {
 public:
+	virtual ~in_mem_vertex_index() {
+	}
+
 	virtual void add_vertex(char *ext_mem_vertex) = 0;
 	virtual void dump(const std::string &file, const graph_header &header) = 0;
 };
@@ -414,6 +417,9 @@ public:
 class vertex_index_iterator
 {
 public:
+	virtual ~vertex_index_iterator() {
+	}
+
 	virtual in_mem_vertex_info next() = 0;
 	virtual bool has_next() const = 0;
 };

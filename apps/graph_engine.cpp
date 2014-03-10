@@ -234,7 +234,7 @@ void graph_engine::start(vertex_id_t ids[], int num)
 	}
 
 	num_remaining_vertices_in_level.inc(num);
-	std::vector<vertex_id_t> start_vertices[num_threads];
+	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
 		int idx = get_partitioner()->map(ids[i]);
 		start_vertices[idx].push_back(ids[i]);

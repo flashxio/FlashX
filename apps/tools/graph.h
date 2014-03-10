@@ -34,6 +34,9 @@ size_t read_edge_list_text(const std::string &file,
 class graph
 {
 public:
+	virtual ~graph() {
+	}
+
 	virtual void add_vertex(const in_mem_vertex &v) = 0;
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const = 0;
 	virtual vertex_index *create_vertex_index() const = 0;

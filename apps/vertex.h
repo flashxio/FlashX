@@ -486,9 +486,12 @@ typedef std::pair<off_t, off_t> offset_pair;
 class TS_page_vertex: public page_vertex
 {
 public:
+	using page_vertex::get_num_edges;
 	virtual size_t get_num_edges() const = 0;
 	virtual size_t get_num_edges(int timestamp, edge_type type) const = 0;
 	virtual int get_num_timestamps() const = 0;
+	using page_vertex::get_neigh_begin;
+	using page_vertex::get_neigh_end;
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			int timestamp, edge_type type) const = 0;
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(

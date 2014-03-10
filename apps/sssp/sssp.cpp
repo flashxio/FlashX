@@ -75,6 +75,7 @@ public:
 		parent = -1;
 	}
 
+	using compute_vertex::init;
 	void init(int distance) {
 		this->distance = distance;
 		parent = -1;

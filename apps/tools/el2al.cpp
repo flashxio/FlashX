@@ -741,7 +741,7 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
  * This function loads edge lists from a tex file, parses them in parallel,
  * and convert the graph into the form of adjacency lists.
  */
-template<class edge_data_type = empty_data>
+template<class edge_data_type>
 directed_edge_graph<edge_data_type> *par_load_edge_list_text(
 		const std::vector<std::string> &files, bool has_edge_data)
 {
