@@ -349,7 +349,7 @@ ssize_t thread_private::get_read_bytes() {
 }
 
 thread_private::thread_private(int node_id, int idx, int entry_size,
-		file_io_factory *factory, workload_gen *gen): thread(
+		file_io_factory::shared_ptr factory, workload_gen *gen): thread(
 			std::string("test_thread") + itoa(idx), node_id)
 {
 	this->cb = NULL;

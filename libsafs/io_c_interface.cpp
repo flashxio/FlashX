@@ -181,9 +181,11 @@ void ssd_file_io_init(const char *name, int flags, int num_threads, int num_node
 	if (flags | O_DIRECT)
 		access_option = REMOTE_ACCESS;
 
-	file_io_factory *factory = create_io_factory(name, access_option);
+	file_io_factory::shared_ptr factory = create_io_factory(name, access_option);
+	// The shared pointer is going to destroy the I/O factory.
+	assert(0);
 	opened_files.insert(std::pair<std::string, file_io_factory *>(name,
-				factory));
+				factory.get()));
 
 	pthread_mutex_unlock(&mutex);
 }

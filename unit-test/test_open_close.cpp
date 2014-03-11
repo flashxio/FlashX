@@ -13,9 +13,7 @@ public:
 
 	void run() {
 		for (unsigned i = 0; i < data_files.size(); i++) {
-			file_io_factory *factory = create_io_factory(
-					data_files[i], REMOTE_ACCESS);
-			destroy_io_factory(factory);
+			create_io_factory(data_files[i], REMOTE_ACCESS);
 		}
 		this->stop();
 	}

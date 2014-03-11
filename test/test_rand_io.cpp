@@ -320,9 +320,9 @@ int main(int argc, char *argv[])
 
 	assert(config.get_nthreads() % params.get_num_nodes() == 0);
 	init_io_system(configs);
-	std::vector<file_io_factory *> factories;
+	std::vector<file_io_factory::shared_ptr> factories;
 	for (unsigned i = 0; i < data_files.size(); i++) {
-		file_io_factory *factory = create_io_factory(data_files[i],
+		file_io_factory::shared_ptr factory = create_io_factory(data_files[i],
 				config.get_access_option());
 		assert(factory);
 		factories.push_back(factory);
@@ -339,7 +339,7 @@ int main(int argc, char *argv[])
 		int node_idx = i / nthread_per_node;
 		int file_idx = i / nthread_per_file;
 		int node_id = node_id_array[node_idx];
-		file_io_factory *factory = factories[file_idx];
+		file_io_factory::shared_ptr factory = factories[file_idx];
 		/*
 		 * we still assign each thread a range regardless of the number
 		 * of threads. read_private will choose the right file descriptor
@@ -433,8 +433,6 @@ int main(int argc, char *argv[])
 		delete workload_gens[i];
 	for (int i = 0; i < config.get_nthreads(); i++)
 		delete threads[i];
-	for (unsigned i = 0; i < factories.size(); i++)
-		destroy_io_factory(factories[i]);
 #ifdef STATISTICS
 	print_io_thread_stat();
 #endif

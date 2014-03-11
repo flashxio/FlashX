@@ -425,7 +425,15 @@ void part_global_cached_io_factory::destroy_io(io_interface *io)
 	part_global_cached_io::destroy((part_global_cached_io *) io);
 }
 
-file_io_factory *create_io_factory(const std::string &file_name,
+class destroy_io_factory
+{
+public:
+	void operator()(file_io_factory *factory) {
+		delete factory;
+	}
+};
+
+file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		const int access_option)
 {
 	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
@@ -435,7 +443,7 @@ file_io_factory *create_io_factory(const std::string &file_name,
 		if (!f.exist()) {
 			fprintf(stderr, "the underlying file %s doesn't exist\n",
 					abs_path.c_str());
-			return NULL;
+			return file_io_factory::shared_ptr();
 		}
 	}
 
@@ -462,12 +470,7 @@ file_io_factory *create_io_factory(const std::string &file_name,
 			fprintf(stderr, "a wrong access option\n");
 			assert(0);
 	}
-	return factory;
-}
-
-void destroy_io_factory(file_io_factory *factory)
-{
-	delete factory;
+	return file_io_factory::shared_ptr(factory, destroy_io_factory());
 }
 
 void print_io_thread_stat()

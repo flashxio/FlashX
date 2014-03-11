@@ -23,6 +23,7 @@
 #include <stdlib.h>
 
 #include <vector>
+#include <memory>
 
 #include "exception.h"
 #include "common.h"
@@ -258,6 +259,8 @@ class file_io_factory
 	// The name of the file.
 	const std::string name;
 public:
+	typedef std::shared_ptr<file_io_factory> shared_ptr;
+
 	file_io_factory(const std::string _name): name(_name) {
 		creater = NULL;
 	}
@@ -290,9 +293,8 @@ public:
 class cache_config;
 class RAID_config;
 
-file_io_factory *create_io_factory(const std::string &file_name,
+file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		const int access_option);
-void destroy_io_factory(file_io_factory *factory);
 
 void init_io_system(const config_map &map);
 void destroy_io_system();

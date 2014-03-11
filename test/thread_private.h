@@ -39,7 +39,7 @@ class thread_private: public thread
 	workload_gen *gen;
 	rand_buf *buf;
 	io_interface *io;
-	file_io_factory *factory;
+	file_io_factory::shared_ptr factory;
 
 	ssize_t read_bytes;
 	long num_accesses;
@@ -75,7 +75,7 @@ public:
 	}
 
 	thread_private(int node_id, int idx, int entry_size,
-			file_io_factory *factory, workload_gen *gen);
+			file_io_factory::shared_ptr factory, workload_gen *gen);
 
 	int attach2cpu();
 
