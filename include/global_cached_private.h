@@ -287,9 +287,6 @@ class global_cached_io: public io_interface
 	partial_request processing_req;
 	comp_io_scheduler *comp_io_sched;
 
-	// This only counts the requests that use the slow path.
-	long curr_req_id;
-
 	long num_pg_accesses;
 	size_t num_bytes;		// The number of accessed bytes
 	int cache_hits;

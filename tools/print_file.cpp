@@ -26,8 +26,6 @@ int main(int argc, char *argv[])
 	char *file_name;
 	long size;
 	char last;
-	long num = 0;
-	ssize_t ret;
 
 	if (argc < 3) {
 		fprintf(stderr, "verify_file file_name size\n");

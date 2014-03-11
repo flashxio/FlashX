@@ -82,7 +82,6 @@ void write_thread::run()
 		block_identifier bid;
 		mapper->map(block_off, bid);
 		assert(bid.idx == thread_id);
-		off_t off_in_file = bid.off * PAGE_SIZE;
 		init_block(buf, block_size * PAGE_SIZE, block_ids[i]);
 		write_buf(fd, buf, block_size * PAGE_SIZE, bid.off * PAGE_SIZE);
 	}

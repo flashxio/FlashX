@@ -36,6 +36,9 @@ class io_request;
 class callback
 {
 public:
+	virtual ~callback() {
+	}
+
 	virtual int invoke(io_request *reqs[], int num) = 0;
 };
 

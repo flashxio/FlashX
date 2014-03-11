@@ -139,6 +139,7 @@ public:
 		assert(ret == read_bytes);
 		verified_bytes += read_bytes;
 		verify_bytes(rqs[0]->get_buf(), orig_buf, read_bytes);
+		return 0;
 	}
 
 	size_t get_verified_bytes() const {

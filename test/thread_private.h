@@ -33,11 +33,6 @@ class write_compute_allocator;
 /* this data structure stores the thread-private info. */
 class thread_private: public thread
 {
-#ifdef USE_PROCESS
-	pid_t id;
-#else
-	pthread_t id;
-#endif
 	/* the location in the thread descriptor array. */
 	int idx;
 	int node_id;

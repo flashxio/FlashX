@@ -255,7 +255,6 @@ public:
 
 class global_cached_io_factory: public remote_io_factory
 {
-	const cache_config *cache_conf;
 	page_cache *global_cache;
 public:
 	global_cached_io_factory(const std::string &file_name,

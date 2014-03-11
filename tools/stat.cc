@@ -28,7 +28,6 @@ int main(int argc, char *argv[])
 		perror("open");
 		exit(1);
 	}
-	long max_pos = 0;
 
 	/* get the file size */
 	struct stat stats;
@@ -41,7 +40,7 @@ int main(int argc, char *argv[])
 	/* the numbers of accesses of each page */
 	int num_accesses = (int) (file_size / sizeof(workload_t));
 	workload_t *workloads = new workload_t[num_accesses];
-	ssize_t ret = read(fd, (void *) workloads, file_size);
+	read(fd, (void *) workloads, file_size);
 
 	std::tr1::unordered_map<off_t, int> page_map;
 	int num_page_reads = 0;

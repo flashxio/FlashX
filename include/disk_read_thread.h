@@ -136,7 +136,6 @@ class disk_io_thread: public thread
 	thread_safe_FIFO_queue<remote_comm *> comm_queue;
 	logical_file_partition partition;
 
-	pthread_t id;
 	async_io *aio;
 #ifdef STATISTICS
 	long num_empty;
