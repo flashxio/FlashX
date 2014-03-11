@@ -401,6 +401,7 @@ int main(int argc, char *argv[])
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
+	destroy_io_system();
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());

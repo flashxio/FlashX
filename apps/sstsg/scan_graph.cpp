@@ -468,6 +468,7 @@ int main(int argc, char *argv[])
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
+	destroy_io_system();
 	printf("It takes %f seconds\n", time_diff(start, end));
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",

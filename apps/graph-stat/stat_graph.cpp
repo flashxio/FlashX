@@ -288,4 +288,5 @@ int main(int argc, char *argv[])
 					hist_out_edges[i].get_count());
 		}
 	}
+	destroy_io_system();
 }
