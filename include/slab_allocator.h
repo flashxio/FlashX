@@ -205,6 +205,13 @@ public:
 };
 
 template<class T>
+class obj_destructor
+{
+public:
+	virtual void destroy(T *obj) = 0;
+};
+
+template<class T>
 class default_obj_initiator: public obj_initiator<T>
 {
 public:
@@ -215,19 +222,30 @@ public:
 };
 
 template<class T>
+class default_obj_destructor: public obj_destructor<T>
+{
+public:
+	void destroy(T *obj) {
+	}
+};
+
+template<class T>
 class obj_allocator: public slab_allocator
 {
 	obj_initiator<T> *initiator;
+	obj_destructor<T> *destructor;
 public:
 	obj_allocator(const std::string &name, int node_id, long increase_size,
 			long max_size = INT_MAX,
-			obj_initiator<T> *initiator = new default_obj_initiator<T>(
+			obj_initiator<T> *initiator = new default_obj_initiator<T>(),
+			obj_destructor<T> *destructor = new default_obj_destructor<T>()
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
-				)): slab_allocator(name, sizeof(T) + sizeof(slab_allocator::linked_obj),
+				): slab_allocator(name, sizeof(T) + sizeof(slab_allocator::linked_obj),
 				increase_size, max_size, node_id, true) {
 		assert(increase_size <= max_size);
 		this->initiator = initiator;
+		this->destructor = destructor;
 	}
 
 	virtual int alloc_objs(T **objs, int num) {
@@ -254,6 +272,7 @@ public:
 	virtual void free(T **objs, int num) {
 		char *addrs[num];
 		for (int i = 0; i < num; i++) {
+			destructor->destroy(objs[i]);
 			addrs[i] = ((char *) objs[i]) - sizeof(slab_allocator::linked_obj);
 		}
 		slab_allocator::free(addrs, num);
@@ -261,6 +280,7 @@ public:
 
 	virtual void free(T *obj) {
 		char *addr = ((char *) obj) - sizeof(slab_allocator::linked_obj);
+		destructor->destroy(obj);
 		slab_allocator::free(addr);
 	}
 };
