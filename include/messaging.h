@@ -306,7 +306,7 @@ class msg_buffer: public fifo_queue<message<T> >
 
 public:
 	msg_buffer(int node_id, slab_allocator *alloc,
-			bool accpet_inline): fifo_queue<message<T> >(
+			bool accept_inline): fifo_queue<message<T> >(
 			node_id, INIT_MSG_BUF_SIZE, true) {
 		this->alloc = alloc;
 		this->accept_inline = accept_inline;
