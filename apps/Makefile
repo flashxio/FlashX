@@ -67,5 +67,7 @@ clean:
 	$(MAKE) clean -C unit-test
 	$(MAKE) clean -C sssp
 	$(MAKE) clean -C test
+	$(MAKE) clean -C sstsg
+	$(MAKE) clean -C graph-stat
 
 -include $(DEPS) 
