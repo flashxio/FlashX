@@ -660,12 +660,12 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 	size_t num_edges = in_edges.size();
 	assert(in_edges.size() == out_edges.size());
 	while (out_idx < num_edges && in_idx < num_edges) {
-		while (out_edges[out_idx].get_from() == curr
-				&& out_idx < num_edges) {
+		while (out_idx < num_edges
+				&& out_edges[out_idx].get_from() == curr) {
 			v.add_out_edge(out_edges[out_idx++]);
 		}
-		while (in_edges[in_idx].get_to() == curr
-				&& in_idx < num_edges) {
+		while (in_idx < num_edges
+				&& in_edges[in_idx].get_to() == curr) {
 			v.add_in_edge(in_edges[in_idx++]);
 		}
 		g->add_vertex(v);
@@ -692,8 +692,8 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 
 	// Add remaining out-edges.
 	while (out_idx < num_edges) {
-		while (out_edges[out_idx].get_from() == curr
-				&& out_idx < num_edges) {
+		while (out_idx < num_edges
+				&& out_edges[out_idx].get_from() == curr) {
 			v.add_out_edge(out_edges[out_idx++]);
 		}
 		g->add_vertex(v);
@@ -715,8 +715,8 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 
 	// Add remaining in-edges
 	while (in_idx < num_edges) {
-		while (in_edges[in_idx].get_to() == curr
-				&& in_idx < num_edges) {
+		while (in_idx < num_edges
+				&& in_edges[in_idx].get_to() == curr) {
 			v.add_in_edge(in_edges[in_idx++]);
 		}
 		g->add_vertex(v);
