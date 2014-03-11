@@ -986,7 +986,6 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 		int node_id, int offset_factor, int _max_num_pending_flush,
 		bool expandable): max_num_pending_flush(_max_num_pending_flush)
 {
-	_flusher = NULL;
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
 	printf("max num flushes: %d\n", max_num_pending_flush);
@@ -1140,8 +1139,8 @@ class associative_flusher: public dirty_page_flusher
 	associative_cache *local_cache;
 	int node_id;
 
-	flush_io *io;
-	select_dirty_pages_policy *policy;
+	std::unique_ptr<flush_io> io;
+	std::unique_ptr<select_dirty_pages_policy> policy;
 public:
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
 	associative_flusher(page_cache *cache, associative_cache *local_cache,
@@ -1154,8 +1153,8 @@ public:
 		if (this->cache == NULL)
 			this->cache = local_cache;
 
-		this->io = new flush_io(io, local_cache, this);
-		policy = new eviction_select_dirty_pages_policy();
+		this->io = std::unique_ptr<flush_io>(new flush_io(io, local_cache, this));
+		policy = std::unique_ptr<select_dirty_pages_policy>(new eviction_select_dirty_pages_policy());
 	}
 
 	int get_node_id() const {
@@ -1311,7 +1310,7 @@ int associative_flusher::flush_cell(hash_cell *cell,
 				&& p->is_dirty()) {
 			data_loc_t loc(p->get_file_id(), p->get_offset());
 			new (req_array + num_init_reqs) io_request(
-					new io_req_extension(), loc, WRITE, io, get_node_id());
+					new io_req_extension(), loc, WRITE, io.get(), get_node_id());
 			req_array[num_init_reqs].set_priv(cache);
 			req_array[num_init_reqs].add_page(p);
 			req_array[num_init_reqs].set_high_prio(false);
@@ -1378,18 +1377,17 @@ void associative_flusher::run()
 	io->flush_requests();
 }
 
-dirty_page_flusher *associative_cache::create_flusher(io_interface *io,
-		page_cache *global_cache)
+void associative_cache::create_flusher(io_interface *io, page_cache *global_cache)
 {
 	pthread_mutex_lock(&init_mutex);
 	if (_flusher == NULL && io
 			// The IO instance should be on the same node or we don't know
 			// in which node the cache is.
 			&& (io->get_node_id() == node_id || node_id == -1)) {
-		_flusher = new associative_flusher(global_cache, this, io, node_id);
+		_flusher = std::unique_ptr<dirty_page_flusher>(
+				new associative_flusher(global_cache, this, io, node_id));
 	}
 	pthread_mutex_unlock(&init_mutex);
-	return _flusher;
 }
 
 void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num,

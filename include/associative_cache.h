@@ -24,6 +24,7 @@
 #include <math.h>
 
 #include <vector>
+#include <memory>
 
 #include "cache.h"
 #include "concurrency.h"
@@ -439,7 +440,7 @@ class associative_cache: public page_cache
 	int level;
 	int split;
 
-	dirty_page_flusher *_flusher;
+	std::unique_ptr<dirty_page_flusher> _flusher;
 	pthread_mutex_t init_mutex;
 
 	associative_cache(long cache_size, long max_cache_size, int node_id,
@@ -447,6 +448,8 @@ class associative_cache: public page_cache
 			bool expandable = false);
 
 	~associative_cache();
+
+	void create_flusher(io_interface *io, page_cache *global_cache);
 
 	memory_manager *get_manager() {
 		return manager;
@@ -570,11 +573,6 @@ public:
 
 	/* Methods for flushing dirty pages. */
 
-	dirty_page_flusher *create_flusher(io_interface *io,
-			page_cache *global_cache);
-	dirty_page_flusher *get_flusher() const {
-		return _flusher;
-	}
 	void mark_dirty_pages(thread_safe_page *pages[], int num, io_interface *);
 	virtual int flush_dirty_pages(page_filter *filter, int max_num);
 

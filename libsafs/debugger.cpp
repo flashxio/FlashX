@@ -20,6 +20,8 @@
 #include <signal.h>
 #include <stdio.h>
 
+#include <boost/foreach.hpp>
+
 #include "debugger.h"
 
 static bool enable_debug = false;
@@ -54,6 +56,14 @@ debugger::debugger()
 {
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	set_enable_debug_signal();
+}
+
+debugger::~debugger()
+{
+	typedef std::map<int, debug_task *> task_map_t;
+	BOOST_FOREACH(task_map_t::value_type &p, tasks) {
+		delete p.second;
+	}
 }
 
 void debugger::run()

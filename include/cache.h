@@ -424,9 +424,7 @@ public:
 	virtual bool shrink(int npages, char *pages[]) {
 		return false;
 	}
-	virtual dirty_page_flusher *create_flusher(io_interface *io,
-			page_cache *global_cache) {
-		return NULL;
+	virtual void create_flusher(io_interface *io, page_cache *global_cache) {
 	}
 	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
 			io_interface *io) {

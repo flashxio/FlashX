@@ -29,6 +29,9 @@
 class debug_task
 {
 public:
+	virtual ~debug_task() {
+	}
+
 	virtual void run() = 0;
 };
 
@@ -41,6 +44,8 @@ class debugger
 	atomic_integer task_id_gen;
 public:
 	debugger();
+
+	~debugger();
 
 	int register_task(debug_task *task) {
 		int id = task_id_gen.inc(1);
