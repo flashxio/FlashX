@@ -156,19 +156,22 @@ class req_ext_allocator: public obj_allocator<io_req_extension>
 	{
 	public:
 		void init(io_req_extension *ext) {
-			if (ext->is_valid()) {
-				ext->init();
-			}
-			else {
-				new (ext) io_req_extension();
-			}
+			new (ext) io_req_extension();
 		}
 	} initiator;
+
+	class ext_destructor: public obj_destructor<io_req_extension>
+	{
+	public:
+		void destroy(io_req_extension *ext) {
+			ext->~io_req_extension();
+		}
+	} destructor;
 public:
 	req_ext_allocator(int node_id, long max_size = params.get_max_obj_alloc_size(
 				)): obj_allocator<io_req_extension>(
 				std::string("req_ext_allocator-") + itoa(node_id), node_id,
-				OBJ_ALLOC_INC_SIZE, max_size, &initiator) {
+				OBJ_ALLOC_INC_SIZE, max_size, &initiator, &destructor) {
 	}
 	
 	virtual io_req_extension *alloc_obj() {
