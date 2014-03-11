@@ -151,17 +151,11 @@ public:
 
 	static fifo_queue<T> *create(int node_id, int size,
 			bool resizable = false) {
-		void *addr;
-		if (node_id < 0)
-			addr = numa_alloc_local(sizeof(fifo_queue<T>));
-		else
-			addr = numa_alloc_onnode(sizeof(fifo_queue<T>), node_id);
-		return new(addr) fifo_queue<T>(node_id, size, resizable);
+		return new fifo_queue<T>(node_id, size, resizable);
 	}
 
 	static void destroy(fifo_queue<T> *q) {
-		q->~fifo_queue();
-		numa_free(q, sizeof(*q));
+		delete q;
 	}
 
 	const_iterator get_begin() const {
@@ -320,17 +314,11 @@ public:
 
 	static thread_safe_FIFO_queue<T> *create(const std::string &name,
 			int node_id, int size) {
-		void *addr;
-		if (node_id < 0)
-			addr = numa_alloc_local(sizeof(thread_safe_FIFO_queue<T>));
-		else
-			addr = numa_alloc_onnode(sizeof(thread_safe_FIFO_queue<T>), node_id);
-		return new(addr) thread_safe_FIFO_queue<T>(name, node_id, size);
+		return new thread_safe_FIFO_queue<T>(name, node_id, size);
 	}
 
 	static void destroy(thread_safe_FIFO_queue<T> *q) {
-		q->~thread_safe_FIFO_queue();
-		numa_free(q, sizeof(*q));
+		delete q;
 	}
 
 	virtual int fetch(T *entries, int num) {
@@ -468,17 +456,11 @@ public:
 
 	static blocking_FIFO_queue<T> *create(int node_id, const std::string name,
 			int init_size, int max_size) {
-		void *addr;
-		if (node_id < 0)
-			addr = numa_alloc_local(sizeof(blocking_FIFO_queue<T>));
-		else
-			addr = numa_alloc_onnode(sizeof(blocking_FIFO_queue<T>), node_id);
-		return new(addr) blocking_FIFO_queue<T>(node_id, name, init_size, max_size);
+		return new blocking_FIFO_queue<T>(node_id, name, init_size, max_size);
 	}
 
 	static void destroy(blocking_FIFO_queue<T> *q) {
-		q->~blocking_FIFO_queue();
-		numa_free(q, sizeof(*q));
+		delete q;
 	}
 
 	virtual int fetch(T *entries, int num) {

@@ -104,13 +104,11 @@ public:
 			part_io_process_table *table) {
 		int node_id = underlying->get_node_id();
 		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(part_global_cached_io), node_id);
-		return new(addr) part_global_cached_io(underlying, table);
+		return new part_global_cached_io(underlying, table);
 	}
 
 	static void destroy(part_global_cached_io *io) {
-		io->~part_global_cached_io();
-		numa_free(io, sizeof(*io));
+		delete io;
 	}
 
 	int init();

@@ -41,13 +41,11 @@ class memory_manager: public slab_allocator
 public:
 	static memory_manager *create(long max_size, int node_id) {
 		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(memory_manager), node_id);
-		return new(addr) memory_manager(max_size, node_id);
+		return new memory_manager(max_size, node_id);
 	}
 
 	static void destroy(memory_manager *m) {
-		m->~memory_manager();
-		numa_free(m, sizeof(*m));
+		delete m;
 	}
 
 	void register_cache(page_cache *cache) {

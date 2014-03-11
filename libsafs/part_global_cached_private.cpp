@@ -91,8 +91,7 @@ public:
 			const std::vector<process_request_thread *> &threads);
 
 	static void destroy(group_request_sender *s) {
-		s->~group_request_sender();
-		numa_free(s, sizeof(*s));
+		delete s;
 	}
 
 	int flush();
@@ -242,14 +241,11 @@ public:
 	static node_cached_io *create(io_interface *underlying,
 			struct thread_group *local_group) {
 		assert(underlying->get_node_id() >= 0);
-		void *addr = numa_alloc_onnode(sizeof(node_cached_io),
-				underlying->get_node_id());
-		return new(addr) node_cached_io(underlying, local_group);
+		return new node_cached_io(underlying, local_group);
 	}
 
 	static void destroy(node_cached_io *io) {
-		io->~node_cached_io();
-		numa_free(io, sizeof(*io));
+		delete io;
 	}
 
 	virtual page_cache *get_global_cache() {
@@ -659,9 +655,7 @@ class process_request_thread: public thread
 	}
 public:
 	static process_request_thread *create(struct thread_group *group) {
-		void *addr = numa_alloc_onnode(sizeof(process_request_thread),
-				group->id);
-		return new(addr) process_request_thread(group);
+		return new process_request_thread(group);
 	}
 
 	static void destroy(process_request_thread *t,
@@ -671,8 +665,7 @@ public:
 			usleep(10000);
 		}
 		t->join();
-		t->~process_request_thread();
-		numa_free(t, sizeof(*t));
+		delete t;
 	}
 
 	void init() {
@@ -723,8 +716,7 @@ group_request_sender *group_request_sender::create(slab_allocator *alloc,
 	int node_id = threads[0]->get_node_id();
 	for (unsigned i = 1; i < threads.size(); i++)
 		assert(node_id == threads[i]->get_node_id());
-	void *addr = numa_alloc_onnode(sizeof(group_request_sender), node_id);
-	return new(addr) group_request_sender(alloc, threads);
+	return new group_request_sender(alloc, threads);
 }
 
 group_request_sender::group_request_sender(slab_allocator *alloc,

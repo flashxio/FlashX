@@ -350,18 +350,12 @@ public:
 
 	static msg_queue<T> *create(int node_id, const std::string name,
 			int init_size, int max_size, bool accept_inline) {
-		void *addr;
-		if (node_id < 0)
-			addr = numa_alloc_local(sizeof(msg_queue<T>));
-		else
-			addr = numa_alloc_onnode(sizeof(msg_queue<T>), node_id);
-		return new(addr) msg_queue<T>(node_id, name, init_size, max_size,
+		return new msg_queue<T>(node_id, name, init_size, max_size,
 				accept_inline);
 	}
 
 	static void destroy(msg_queue<T> *q) {
-		q->~msg_queue();
-		numa_free(q, sizeof(*q));
+		delete q;
 	}
 
 	bool is_accept_inline() const {
@@ -412,14 +406,11 @@ public:
 	static thread_safe_msg_sender<T> *create(int node_id, slab_allocator *alloc,
 			msg_queue<T> *queue) {
 		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(thread_safe_msg_sender<T>),
-				node_id);
-		return new(addr) thread_safe_msg_sender<T>(alloc, queue);
+		return new thread_safe_msg_sender<T>(alloc, queue);
 	}
 
 	static void destroy(thread_safe_msg_sender<T> *s) {
-		s->~thread_safe_msg_sender();
-		numa_free(s, sizeof(*s));
+		delete s;
 	}
 
 	/**
@@ -479,13 +470,11 @@ public:
 	static simple_msg_sender<T> *create(int node_id, slab_allocator *alloc,
 			msg_queue<T> *queue) {
 		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(simple_msg_sender<T>), node_id);
-		return new(addr) simple_msg_sender<T>(node_id, alloc, queue);
+		return new simple_msg_sender<T>(node_id, alloc, queue);
 	}
 
 	static void destroy(simple_msg_sender<T> *s) {
-		s->~simple_msg_sender();
-		numa_free(s, sizeof(*s));
+		delete s;
 	}
 
 	int flush() {
@@ -528,13 +517,11 @@ public:
 	static request_sender *create(int node_id, slab_allocator *alloc,
 			msg_queue<io_request> *queue) {
 		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(request_sender), node_id);
-		return new(addr) request_sender(node_id, alloc, queue);
+		return new request_sender(node_id, alloc, queue);
 	}
 
 	static void destroy(request_sender *s) {
-		s->~request_sender();
-		numa_free(s, sizeof(*s));
+		delete s;
 	}
 };
 

@@ -466,14 +466,12 @@ public:
 			int node_id, int offset_factor, int _max_num_pending_flush,
 			bool expandable = false) {
 		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(associative_cache), node_id);
-		return new(addr) associative_cache(cache_size, max_cache_size,
+		return new associative_cache(cache_size, max_cache_size,
 				node_id, offset_factor, _max_num_pending_flush, expandable);
 	}
 
 	static void destroy(associative_cache *cache) {
-		cache->~associative_cache();
-		numa_free(cache, sizeof(*cache));
+		delete cache;
 	}
 
 	int get_node_id() const {
