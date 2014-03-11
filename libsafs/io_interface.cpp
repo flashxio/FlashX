@@ -24,6 +24,7 @@
 
 #include <tr1/unordered_set>
 #include <vector>
+#include <boost/foreach.hpp>
 
 #include "RAID_config.h"
 #include "io_interface.h"
@@ -52,6 +53,7 @@ struct global_data_collection
 	RAID_config raid_conf;
 	std::vector<disk_io_thread *> read_threads;
 	pthread_mutex_t mutex;
+	cache_config *cache_conf;
 	page_cache *global_cache;
 	// For part_global_cached_io
 	part_io_process_table *table;
@@ -63,6 +65,7 @@ struct global_data_collection
 
 	global_data_collection() {
 		table = NULL;
+		cache_conf = NULL;
 		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
 #ifdef DEBUG
@@ -163,10 +166,9 @@ void init_io_system(const config_map &configs)
 		for (int i = 0; i < params.get_num_nodes(); i++)
 			node_id_array.push_back(i);
 
-		cache_config *cache_conf = new even_cache_config(
-				params.get_cache_size(),
+		global_data.cache_conf = new even_cache_config(params.get_cache_size(),
 				params.get_cache_type(), node_id_array);
-		global_data.global_cache = cache_conf->create_cache(
+		global_data.global_cache = global_data.cache_conf->create_cache(
 				MAX_NUM_FLUSHES_PER_FILE *
 				global_data.raid_conf.get_num_disks());
 		int num_files = global_data.read_threads.size();
@@ -197,7 +199,24 @@ void init_io_system(const config_map &configs)
 void destroy_io_system()
 {
 	global_data.global_cache->sanity_check();
-	// TODO
+	// TODO destroy part global cached io table.
+#if 0
+	if (global_data.table) {
+		part_global_cached_io::destroy_subsystem(global_data.table);
+		global_data.table = NULL;
+	}
+#endif
+	if (global_data.cache_conf) {
+		global_data.cache_conf->destroy_cache(global_data.global_cache);
+		global_data.global_cache = NULL;
+		delete global_data.cache_conf;
+		global_data.cache_conf = NULL;
+	}
+	BOOST_FOREACH(disk_io_thread *t, global_data.read_threads) {
+		delete t;
+	}
+	global_data.read_threads.resize(0);
+	destroy_aio();
 }
 
 class posix_io_factory: public file_io_factory

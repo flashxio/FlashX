@@ -139,5 +139,6 @@ public:
 };
 
 void init_aio(std::vector<int> node_ids);
+void destroy_aio();
 
 #endif

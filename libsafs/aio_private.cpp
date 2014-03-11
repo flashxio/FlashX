@@ -322,6 +322,11 @@ void init_aio(std::vector<int> node_ids)
 	}
 }
 
+void destroy_aio()
+{
+	// TODO
+}
+
 void aio_complete_thread::process_completed_reqs(thread_callback_s *tcbs[],
 		int num)
 {
