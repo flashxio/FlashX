@@ -172,17 +172,11 @@ public:
 
 	static msg_queue *create(int node_id, const std::string name,
 			int init_size, int max_size) {
-		void *addr;
-		if (node_id < 0)
-			addr = numa_alloc_local(sizeof(msg_queue));
-		else
-			addr = numa_alloc_onnode(sizeof(msg_queue), node_id);
-		return new(addr) msg_queue(node_id, name, init_size, max_size);
+		return new msg_queue(node_id, name, init_size, max_size);
 	}
 
 	static void destroy(msg_queue *q) {
-		q->~msg_queue();
-		numa_free(q, sizeof(*q));
+		delete q;
 	}
 
 	/**
@@ -228,13 +222,11 @@ public:
 	static simple_msg_sender *create(int node_id, slab_allocator *alloc,
 			msg_queue *queue) {
 		assert(node_id >= 0);
-		void *addr = numa_alloc_onnode(sizeof(simple_msg_sender), node_id);
-		return new(addr) simple_msg_sender(node_id, alloc, queue);
+		return new simple_msg_sender(node_id, alloc, queue);
 	}
 
 	static void destroy(simple_msg_sender *s) {
-		s->~simple_msg_sender();
-		numa_free(s, sizeof(*s));
+		delete s;
 	}
 
 	int flush() {
