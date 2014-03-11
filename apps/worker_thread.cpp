@@ -54,7 +54,7 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 	pthread_spin_unlock(&lock);
 }
 
-worker_thread::worker_thread(graph_engine *graph, file_io_factory *factory,
+worker_thread::worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
 		int node_id, int worker_id, int num_threads): thread("worker_thread",
 			node_id),
 		next_activated_vertices((size_t) ceil(((double) graph->get_max_vertex_id()

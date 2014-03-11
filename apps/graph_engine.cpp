@@ -351,7 +351,7 @@ vertex_index *load_vertex_index(const std::string &index_file)
 	const int READ_SIZE = 100 * 1024 * 1024;
 
 	// Right now only the cached I/O can support async I/O
-	file_io_factory *factory = create_io_factory(index_file,
+	file_io_factory::shared_ptr factory = create_io_factory(index_file,
 			REMOTE_ACCESS);
 	assert(factory->get_file_size() >= INDEX_HEADER_SIZE);
 	io_interface *io = factory->create_io(thread::get_curr_thread());

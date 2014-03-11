@@ -116,7 +116,7 @@ class graph_engine
 	std::vector<worker_thread *> worker_threads;
 
 	trace_logger *logger;
-	file_io_factory *factory;
+	file_io_factory::shared_ptr factory;
 	int max_processing_vertices;
 
 	void cleanup() {

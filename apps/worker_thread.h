@@ -96,7 +96,7 @@ class load_balancer;
 class worker_thread: public thread
 {
 	int worker_id;
-	file_io_factory *factory;
+	file_io_factory::shared_ptr factory;
 	io_interface *io;
 	graph_engine *graph;
 	compute_allocator *alloc;
@@ -143,8 +143,8 @@ class worker_thread: public thread
 	// The number of vertices completed in the current level.
 	atomic_number<long> num_completed_vertices_in_level;
 public:
-	worker_thread(graph_engine *graph, file_io_factory *factory, int node_id,
-			int worker_id, int num_threads);
+	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
+			int node_id, int worker_id, int num_threads);
 
 	~worker_thread();
 
