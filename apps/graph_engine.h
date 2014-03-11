@@ -97,7 +97,7 @@ class graph_engine
 {
 	graph_header header;
 	graph_index *vertices;
-	ext_mem_vertex_interpreter *interpreter;
+	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
 	vertex_partitioner *partitioner;
 	vertex_scheduler *scheduler;
 
@@ -284,8 +284,8 @@ public:
 	void request_partial_vertices(compute_vertex &vertex,
 			vertex_request *reqs[], int num);
 
-	ext_mem_vertex_interpreter *get_vertex_interpreter() const {
-		return interpreter;
+	ext_mem_vertex_interpreter &get_vertex_interpreter() const {
+		return *interpreter;
 	}
 
 	const vertex_partitioner *get_partitioner() const {

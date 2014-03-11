@@ -165,14 +165,17 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 
 	switch (header.get_graph_type()) {
 		case graph_type::DIRECTED:
-			interpreter = new ext_mem_directed_vertex_interpreter();
+			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
+					new ext_mem_directed_vertex_interpreter());
 			break;
 		case graph_type::UNDIRECTED:
-			interpreter = new ext_mem_undirected_vertex_interpreter();
+			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
+					new ext_mem_undirected_vertex_interpreter());
 			break;
 		case graph_type::TS_DIRECTED:
-			interpreter = new ts_ext_mem_vertex_interpreter(
-					header.get_max_num_timestamps());
+			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
+					new ts_ext_mem_vertex_interpreter(
+					header.get_max_num_timestamps()));
 			break;
 		case graph_type::TS_UNDIRECTED:
 			assert(0);

@@ -44,10 +44,10 @@ void vertex_compute::request_vertices(vertex_id_t ids[], int num)
 
 void vertex_compute::run(page_byte_array &array)
 {
-	ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
-	stack_array<char, 64> buf(interpreter->get_vertex_size());
-	const page_vertex *ext_v = interpreter->interpret(array, buf.data(),
-			interpreter->get_vertex_size());
+	ext_mem_vertex_interpreter &interpreter = graph->get_vertex_interpreter();
+	stack_array<char, 64> buf(interpreter.get_vertex_size());
+	const page_vertex *ext_v = interpreter.interpret(array, buf.data(),
+			interpreter.get_vertex_size());
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	t->set_curr_vertex_compute(this);
 	// We haven't perform computation on the vertex yet.
@@ -144,18 +144,18 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 {
 	assert(!has_completed());
 	if (required_vertex_header == NULL) {
-		ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
-		char *buf = new char[interpreter->get_vertex_size()];
-		required_vertex_header = (const TS_page_vertex *) interpreter->interpret(
-				array, buf, interpreter->get_vertex_size());
+		ext_mem_vertex_interpreter &interpreter = graph->get_vertex_interpreter();
+		char *buf = new char[interpreter.get_vertex_size()];
+		required_vertex_header = (const TS_page_vertex *) interpreter.interpret(
+				array, buf, interpreter.get_vertex_size());
 		assert(!required_vertex_header->is_complete());
 	}
 	else {
-		ext_mem_vertex_interpreter *interpreter = graph->get_vertex_interpreter();
-		stack_array<char, 64> buf(interpreter->get_vertex_size());
-		const page_vertex *ext_v = interpreter->interpret_part(
+		ext_mem_vertex_interpreter &interpreter = graph->get_vertex_interpreter();
+		stack_array<char, 64> buf(interpreter.get_vertex_size());
+		const page_vertex *ext_v = interpreter.interpret_part(
 				required_vertex_header, array, buf.data(),
-				interpreter->get_vertex_size());
+				interpreter.get_vertex_size());
 
 		num_fetched++;
 		assert(comp_v);
