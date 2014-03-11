@@ -199,13 +199,21 @@ class vertex_compute_allocator: public compute_allocator
 		}
 	};
 
+	class compute_destructor: public obj_destructor<compute_type>
+	{
+	public:
+		void destroy(compute_type *obj) {
+			obj->~compute_type();
+		}
+	};
+
 	obj_allocator<compute_type> allocator;
 public:
 	vertex_compute_allocator(graph_engine *graph, thread *t): allocator(
 			"vertex-compute-allocator", t->get_node_id(), 1024 * 1024,
 			params.get_max_obj_alloc_size(),
 			// TODO memory leak here
-			new compute_initiator(graph, this)) {
+			new compute_initiator(graph, this), new compute_destructor()) {
 	}
 
 	virtual user_compute *alloc() {
