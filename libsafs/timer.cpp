@@ -273,6 +273,7 @@ periodic_timer::periodic_timer(thread *t, timer_task *task)
 		exit(1);
 	}
 
+	memset(&sev, 0, sizeof(sev));
 	// This is a Linux feature, but we really want the signal sent to a dedicated
 	// thread, so whatever the timer task does, there won't be deadlock.
 	sev.sigev_notify = SIGEV_THREAD_ID;
