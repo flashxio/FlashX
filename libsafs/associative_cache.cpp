@@ -986,6 +986,7 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 		int node_id, int offset_factor, int _max_num_pending_flush,
 		bool expandable): max_num_pending_flush(_max_num_pending_flush)
 {
+	_flusher = NULL;
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
 	printf("max num flushes: %d\n", max_num_pending_flush);
