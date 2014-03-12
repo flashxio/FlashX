@@ -134,10 +134,20 @@ public:
 
 	void reset() {
 		assert(num_stolen == num_returned);
+		num_stolen = 0;
+		num_returned = 0;
 		prepare_steal = 0;
 		steal_state = 0;
 		guard = 0;
 		stolen_bitmap.clear();
+	}
+
+	size_t get_num_stolen() const {
+		return num_stolen.load(std::memory_order_relaxed);
+	}
+
+	size_t get_num_returned() const {
+		return num_returned.load(std::memory_order_relaxed);
 	}
 };
 

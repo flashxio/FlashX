@@ -50,9 +50,6 @@ class message_processor
 	// This is a message buffer to keep all messages whose destination vertices
 	// have been stolen by other threads.
 	fifo_queue<message> stolenv_msgs;
-	// The stolen vertices returned by other threads. It only maintains
-	// the number since last check.
-	thread_safe_FIFO_queue<vertex_id_t> returned_vertices;
 
 	void buf_msg(vertex_message &msg);
 	void buf_mmsg(vertex_id_t id, multicast_message &mmsg);

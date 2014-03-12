@@ -7,9 +7,7 @@
 message_processor::message_processor(graph_engine &_graph,
 		worker_thread &_owner): graph(_graph),
 	owner(_owner), msg_q(_owner.get_node_id(), "graph_msg_queue", 16, INT_MAX),
-	stolenv_msgs(_owner.get_node_id(), PAGE_SIZE, true),
-	returned_vertices("graph_return_vertex_queue", owner.get_node_id(),
-			PAGE_SIZE, INT_MAX)
+	stolenv_msgs(_owner.get_node_id(), PAGE_SIZE, true)
 {
 	steal_state = std::unique_ptr<steal_state_t>(new steal_state_t(graph, owner));
 }
@@ -118,7 +116,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 
 void message_processor::process_msgs()
 {
-	if (!returned_vertices.is_empty() && !stolenv_msgs.is_empty()) {
+	if (steal_state->get_num_returned() > 0 && !stolenv_msgs.is_empty()) {
 		// TODO we might have to make sure that a lot of messages can be
 		// processed. Otherwise, we are wasting time.
 		// The vertices have been processed so no other threads will steal
@@ -151,14 +149,12 @@ void message_processor::steal_vertices(vertex_id_t ids[], int num)
 
 void message_processor::reset()
 {
+	steal_state->reset();
 	assert(msg_q.is_empty());
 	assert(stolenv_msgs.is_empty());
-	steal_state->reset();
 }
 
 void message_processor::return_vertices(vertex_id_t ids[], int num)
 {
 	steal_state->return_vertices(ids, num);
-	int ret = returned_vertices.add(ids, num);
-	assert(ret == num);
 }
