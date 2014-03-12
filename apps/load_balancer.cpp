@@ -35,13 +35,12 @@ int load_balancer::steal_activated_vertices(vertex_id_t vertex_buf[], int buf_si
 	if (steal_thread_id == owner.get_worker_id())
 		steal_thread_id = (steal_thread_id + 1) % graph.get_num_threads();
 	int num_tries = 0;
-	vertex_id_t *steal_buf = new vertex_id_t[MAX_STOLEN_VERTICES];
 	int num;
 	do {
 		worker_thread *t = graph.get_thread(steal_thread_id);
 		num_tries++;
 
-		num = t->steal_activated_vertices(steal_buf, MAX_STOLEN_VERTICES);
+		num = t->steal_activated_vertices(vertex_buf, buf_size);
 		// If we can't steal vertices from the thread, we should move
 		// to the next thread.
 		if (num == 0)
@@ -49,15 +48,7 @@ int load_balancer::steal_activated_vertices(vertex_id_t vertex_buf[], int buf_si
 		// If we have tried to steal vertices from all threads.
 	} while (num == 0 && num_tries < graph.get_num_threads());
 
-	int ret = min(buf_size, num);
-	memcpy(vertex_buf, steal_buf, sizeof(vertex_buf[0]) * ret);
-	// We stole more vertices than we can process this time.
-	// The vertices stolen from another thread will also be placed in
-	// the queue for currently activated vertices.
-	if (num - ret > 0)
-		owner.curr_activated_vertices.init(steal_buf + ret, num - ret, true);
-	delete [] steal_buf;
-	return ret;
+	return num;
 }
 
 void load_balancer::process_completed_stolen_vertices()
