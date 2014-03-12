@@ -58,12 +58,12 @@ class wcc_vertex: public compute_vertex
 {
 	vertex_id_t component_id;
 	vertex_id_t neigh_min;
-	bool empty;
+	int num_edges;
 public:
 	wcc_vertex() {
 		component_id = UINT_MAX;
 		neigh_min = UINT_MAX;
-		empty = false;
+		num_edges = 0;
 	}
 
 	wcc_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
@@ -71,12 +71,15 @@ public:
 		component_id = UINT_MAX;
 		neigh_min = id;
 		const directed_vertex_index *index = (const directed_vertex_index *) index1;
-		empty = (index->get_num_in_edges(id)
-				+ index->get_num_out_edges(id)) == 0;
+		num_edges = (index->get_num_in_edges(id) + index->get_num_out_edges(id));
+		if (num_edges == 0) {
+			component_id = id;
+			neigh_min = id;
+		}
 	}
 
-	bool is_empty() const {
-		return empty;
+	bool get_num_edges() const {
+		return num_edges;
 	}
 
 	bool belong2component() const {
@@ -88,24 +91,6 @@ public:
 	}
 
 	void run(graph_engine &graph) {
-		switch(wcc_stage) {
-			case wcc_stage_t::REMOVE_EMPTY:
-				run_stage1(graph);
-				break;
-			case wcc_stage_t::FIND_COMPONENTS:
-				run_stage2(graph);
-				break;
-		}
-	}
-
-	void run_stage1(graph_engine &graph) {
-		if (empty) {
-			component_id = get_id();
-			neigh_min = get_id();
-		}
-	}
-
-	void run_stage2(graph_engine &graph) {
 		if (neigh_min < component_id) {
 			component_id = neigh_min;
 			vertex_id_t id = get_id();
@@ -214,11 +199,6 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
-	wcc_stage = wcc_stage_t::REMOVE_EMPTY;
-	graph->start_all();
-	graph->wait4complete();
-
-	wcc_stage = wcc_stage_t::FIND_COMPONENTS;
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph->start_all();
@@ -239,7 +219,7 @@ int main(int argc, char *argv[])
 	graph_index::const_iterator end_it = index->end();
 	for (; it != end_it; ++it) {
 		const wcc_vertex &v = (const wcc_vertex &) *it;
-		if (v.is_empty())
+		if (v.get_num_edges() == 0)
 			continue;
 
 		comp_map_t::iterator map_it = comp_counts.find(v.get_component_id());
