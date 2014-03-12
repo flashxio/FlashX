@@ -10,6 +10,9 @@
 #include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "worker_thread.h"
+
+std::vector<int> thread_delays;
 
 class count_message: public vertex_message
 {
@@ -66,6 +69,16 @@ public:
 
 void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	int worker_id = t->get_worker_id();
+	if ((size_t) worker_id < thread_delays.size() / 2) {
+		if (thread_delays[worker_id] == 0) {
+			int slp_time = random() % 10;
+			printf("worker %d sleeps %d seconds\n", worker_id, slp_time);
+			sleep(slp_time);
+			thread_delays[worker_id] = 1;
+		}
+	}
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	page_byte_array::const_iterator<vertex_id_t> end_it
@@ -108,8 +121,10 @@ int main(int argc, char *argv[])
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+	thread_delays.resize(graph->get_num_threads());
 
 	for (int i = 0; i < 1000; i++) {
+		printf("test %d\n", i);
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 		graph->start_all();
