@@ -56,9 +56,8 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 
 worker_thread::worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
 		int node_id, int worker_id, int num_threads): thread("worker_thread",
-			node_id),
-		next_activated_vertices((size_t) ceil(((double) graph->get_max_vertex_id()
-						+ 1) / num_threads), node_id)
+			node_id), next_activated_vertices(graph->get_partitioner(
+					)->get_part_size(worker_id, graph->get_num_vertices()), node_id)
 {
 	start_all = false;
 	this->worker_id = worker_id;

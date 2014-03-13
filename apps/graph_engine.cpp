@@ -145,7 +145,6 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 {
 	max_processing_vertices = 0;
 	this->scheduler = &default_scheduler;
-	this->partitioner = new vertex_partitioner(num_threads);
 	is_complete = false;
 	this->vertices = index;
 
@@ -197,7 +196,6 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 
 graph_engine::~graph_engine()
 {
-	delete partitioner;
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
 	if (logger)

@@ -98,7 +98,6 @@ class graph_engine
 	graph_header header;
 	graph_index *vertices;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
-	vertex_partitioner *partitioner;
 	vertex_scheduler *scheduler;
 
 	// The number of activated vertices that haven't been processed
@@ -167,7 +166,7 @@ public:
 	 */
 	void activate_vertices(vertex_id_t ids[], int num) {
 		for (int i = 0; i < num; i++) {
-			int part_id = partitioner->map(ids[i]);
+			int part_id = get_partitioner()->map(ids[i]);
 			multicast_msg_sender *sender = get_activate_sender(part_id);
 			bool ret = false;
 			if (sender->has_msg()) {
@@ -230,7 +229,7 @@ public:
 	template<class T>
 	void multicast_msg(vertex_id_t ids[], int num, const T &msg) {
 		for (int i = 0; i < num; i++) {
-			int part_id = partitioner->map(ids[i]);
+			int part_id = get_partitioner()->map(ids[i]);
 			multicast_msg_sender *sender = get_multicast_sender(part_id);
 			bool ret = false;
 			if (sender->has_msg()) {
@@ -263,7 +262,7 @@ public:
 	template<class T>
 	void send_msg(vertex_id_t dest, T &msg) {
 		vertex_id_t id = dest;
-		simple_msg_sender *sender = get_msg_sender(partitioner->map(id));
+		simple_msg_sender *sender = get_msg_sender(get_partitioner()->map(id));
 		msg.set_dest(dest);
 		sender->send_cached(msg);
 	}
@@ -289,7 +288,7 @@ public:
 	}
 
 	const vertex_partitioner *get_partitioner() const {
-		return partitioner;
+		return &vertices->get_partitioner();
 	}
 
 	worker_thread *get_thread(int idx) const {

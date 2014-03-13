@@ -81,6 +81,8 @@ public:
 
 	virtual size_t get_num_vertices() const = 0;
 
+	virtual const vertex_partitioner &get_partitioner() const = 0;
+
 	const_iterator begin() const {
 		return const_iterator((graph_index *) this, this->get_min_vertex_id());
 	}
@@ -109,11 +111,12 @@ class NUMA_local_graph_index: public graph_index
 
 	NUMA_local_graph_index(const vertex_index *index,
 			vertex_partitioner *partitioner, int part_id, int node_id,
-			size_t tot_num_vertices, size_t num_vertices, size_t min_vertex_size) {
+			size_t tot_num_vertices, size_t min_vertex_size) {
 		this->part_id = part_id;
 		this->index = index;
 		this->tot_num_vertices = tot_num_vertices;
-		this->num_vertices = num_vertices;
+		this->num_vertices = partitioner->get_part_size(part_id,
+				tot_num_vertices);
 		this->num_non_empty = 0;
 		this->partitioner = partitioner;
 		this->min_vertex_size = min_vertex_size;
@@ -132,6 +135,7 @@ public:
 		local_ids.reserve(num_vertices);
 		partitioner->get_all_vertices_in_part(this->part_id, tot_num_vertices,
 				local_ids);
+		assert(local_ids.size() == num_vertices);
 		BOOST_FOREACH(vertex_id_t vid, local_ids) {
 			int part_id;
 			off_t part_off;
@@ -142,7 +146,6 @@ public:
 				num_non_empty++;
 			}
 		}
-		assert(local_ids.size() <= num_vertices);
 		if (local_ids.size() < num_vertices) {
 			assert(local_ids.size() == num_vertices - 1);
 			new (vertex_arr + local_ids.size()) vertex_type();
@@ -176,6 +179,10 @@ public:
 		return node_id;
 	}
 
+	virtual const vertex_partitioner &get_partitioner() const {
+		return *partitioner;
+	}
+
 	friend class NUMA_graph_index<vertex_type>;
 };
 
@@ -202,7 +209,7 @@ class NUMA_graph_index: public graph_index
 	vertex_id_t max_vertex_id;
 	vertex_id_t min_vertex_id;
 	size_t num_vertices;
-	vertex_partitioner partitioner;
+	range_vertex_partitioner partitioner;
 	// A graph index per thread
 	std::vector<NUMA_local_graph_index<vertex_type> *> index_arr;
 
@@ -227,16 +234,15 @@ class NUMA_graph_index: public graph_index
 		size_t min_vertex_size = get_min_ext_mem_vertex_size(
 				index->get_graph_header().get_graph_type());
 		num_vertices = index->get_num_vertices();
-		vsize_t num_vertices_per_thread = (num_vertices + num_threads
-				- 1) / num_threads;
 		// Construct the indices.
-		for (int i = 0; i < num_threads; i++)
+		for (int i = 0; i < num_threads; i++) {
 			index_arr.push_back(new NUMA_local_graph_index<vertex_type>(
 						// The partitions are assigned to worker threads.
 						// The memory used to store the partitions should
 						// be on the same NUMA as the worker threads.
 						index, &partitioner, i, i % num_nodes,
-						num_vertices, num_vertices_per_thread, min_vertex_size));
+						num_vertices, min_vertex_size));
+		}
 
 		std::vector<init_thread *> threads(num_threads);
 		for (int i = 0; i < num_threads; i++) {
@@ -281,6 +287,10 @@ public:
 
 	virtual size_t get_num_vertices() const {
 		return num_vertices;
+	}
+
+	virtual const vertex_partitioner &get_partitioner() const {
+		return partitioner;
 	}
 };
 
