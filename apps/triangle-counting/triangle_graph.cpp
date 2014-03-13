@@ -25,11 +25,14 @@
 
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "graphlab/cuckoo_set_pow2.hpp"
 
 const double BIN_SEARCH_RATIO = 100;
 
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
+
+int hash_threshold = 1000;
 
 class count_msg: public vertex_message
 {
@@ -44,46 +47,102 @@ public:
 	}
 };
 
-class triangle_vertex: public compute_vertex
+struct runtime_data_t
 {
-	// The number of required vertices to join with this vertex.
-	int num_required;
-	// The number of vertices that have joined with the vertex.
-	int num_joined;
-	// The number of triangles per vertex.
-	atomic_integer num_pv_triangles;
+	class index_entry
+	{
+		vertex_id_t id;
+		uint32_t idx;
+	public:
+		index_entry() {
+			id = -1;
+			idx = -1;
+		}
+
+		index_entry(vertex_id_t id) {
+			this->id = id;
+			this->idx = -1;
+		}
+
+		index_entry(vertex_id_t id, uint32_t idx) {
+			this->id = id;
+			this->idx = idx;
+		}
+
+		vertex_id_t get_id() const {
+			return id;
+		}
+
+		uint32_t get_idx() const {
+			return idx;
+		}
+
+		bool operator==(const index_entry &e) const {
+			return id == e.get_id();
+		}
+	};
+
+	class index_hash
+	{
+		boost::hash<vertex_id_t> id_hash;
+	public:
+		size_t operator()(const index_entry &e) const {
+			return id_hash(e.get_id());
+		}
+	};
+	typedef graphlab::cuckoo_set_pow2<index_entry, 3, size_t,
+			index_hash> edge_set_t;
 	// It contains part of in-edges.
 	// We only use the neighbors whose ID is smaller than this vertex.
-	std::vector<vertex_id_t> *in_edges;
+	std::vector<vertex_id_t> in_edges;
 	// The vector contains the number of the neighbors' triangles shared
 	// with this vertex. It only keeps the triangles of neighbors in the
 	// in-edges.
-	std::vector<int> *triangles;
+	std::vector<int> triangles;
 	// It contains part of out-edges.
 	// We only read neighbors whose ID is smaller than this vertex.
-	std::vector<vertex_id_t> *out_edges;
+	std::vector<vertex_id_t> out_edges;
+	// The number of vertices that have joined with the vertex.
+	size_t num_joined;
+
+	edge_set_t in_edge_set;
+public:
+	runtime_data_t(const std::vector<vertex_id_t> &in_edges,
+			const std::vector<vertex_id_t> &out_edges): in_edge_set(
+				index_entry(), 0, 2 * in_edges.size()) {
+		num_joined = 0;
+		this->in_edges = in_edges;
+		this->out_edges = out_edges;
+		triangles.resize(in_edges.size());
+
+		// We only build a hash table on large vertices
+		if (in_edges.size() > (size_t) hash_threshold)
+			for (size_t i = 0; i < in_edges.size(); i++)
+				in_edge_set.insert(index_entry(in_edges[i], i));
+	}
+};
+
+class triangle_vertex: public compute_vertex
+{
+	// The number of triangles per vertex.
+	size_t num_pv_triangles;
+	runtime_data_t *data;
 public:
 	triangle_vertex() {
-		num_required = 0;
-		num_joined = 0;
-		in_edges = NULL;
-		triangles = NULL;
-		out_edges = NULL;
+		data = NULL;
+		num_pv_triangles = 0;
 	}
 
 	triangle_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
 			id, index) {
-		num_required = 0;
-		num_joined = 0;
-		in_edges = NULL;
-		triangles = NULL;
-		out_edges = NULL;
+		data = NULL;
+		num_pv_triangles = 0;
 	}
 
 	int count_triangles(const page_vertex *v) const;
 
 	int get_num_triangles() const {
-		return num_pv_triangles.get();
+		return num_pv_triangles;
 	}
 
 	virtual void run(graph_engine &graph) {
@@ -106,7 +165,7 @@ public:
 		int sum = 0;
 		for (int i = 0; i < num; i++)
 			sum += ((count_msg *) msgs[i])->get_num();
-		num_pv_triangles.inc(sum);
+		num_pv_triangles += sum;
 	}
 };
 
@@ -131,15 +190,35 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 	 * the search range will be narrowed faster.
 	 */
 
-	assert(in_edges);
-	// If the neighbor vertex has way more edges than this vertex.
-	if (v->get_num_edges(edge_type::OUT_EDGE) / in_edges->size() > BIN_SEARCH_RATIO) {
+	if (data->in_edge_set.size() > 0
+			&& data->in_edges.size() > 2 * v->get_num_edges(edge_type::OUT_EDGE)) {
 		page_byte_array::const_iterator<vertex_id_t> other_it
 			= v->get_neigh_begin(edge_type::OUT_EDGE);
 		page_byte_array::const_iterator<vertex_id_t> other_end
 			= v->get_neigh_end(edge_type::OUT_EDGE);
-		for (int i = in_edges->size() - 1; i >= 0; i--) {
-			vertex_id_t this_neighbor = in_edges->at(i);
+		for (; other_it != other_end; ++other_it) {
+			vertex_id_t neigh_neighbor = *other_it;
+			runtime_data_t::edge_set_t::const_iterator it
+				= data->in_edge_set.find(neigh_neighbor);
+			if (it != data->in_edge_set.end()) {
+				if (neigh_neighbor != v->get_id()
+						&& neigh_neighbor != this->get_id()) {
+					num_local_triangles++;
+					int idx = (*it).get_idx();
+					data->triangles[idx]++;
+				}
+			}
+		}
+	}
+	// If the neighbor vertex has way more edges than this vertex.
+	else if (v->get_num_edges(edge_type::OUT_EDGE) / data->in_edges.size(
+				) > BIN_SEARCH_RATIO) {
+		page_byte_array::const_iterator<vertex_id_t> other_it
+			= v->get_neigh_begin(edge_type::OUT_EDGE);
+		page_byte_array::const_iterator<vertex_id_t> other_end
+			= v->get_neigh_end(edge_type::OUT_EDGE);
+		for (int i = data->in_edges.size() - 1; i >= 0; i--) {
+			vertex_id_t this_neighbor = data->in_edges.at(i);
 			// We need to skip loops.
 			if (this_neighbor != v->get_id()
 					&& this_neighbor != this->get_id()) {
@@ -147,39 +226,16 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 					= std::lower_bound(other_it, other_end, this_neighbor);
 				if (first != other_end && this_neighbor == *first) {
 					num_local_triangles++;
-					(triangles->at(i))++;
+					data->triangles[i]++;
 				}
 				other_end = first;
 			}
 		}
 	}
-	// If this vertex has way more edges than the neighbor vertex.
-	else if (in_edges->size() / v->get_num_edges(edge_type::OUT_EDGE)
-			> BIN_SEARCH_RATIO) {
-		// TODO the same as above.
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(edge_type::OUT_EDGE);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(edge_type::OUT_EDGE);
-		while (other_it != other_end) {
-			vertex_id_t neigh_neighbor = *other_it;
-			if (neigh_neighbor != v->get_id()
-					&& neigh_neighbor != this->get_id()) {
-				std::vector<vertex_id_t>::const_iterator first = std::lower_bound(
-						in_edges->begin(), in_edges->end(), neigh_neighbor);
-				if (first != in_edges->end() && neigh_neighbor == *first) {
-					num_local_triangles++;
-					int distance = first - in_edges->begin();
-					(triangles->at(distance))++;
-				}
-			}
-			++other_it;
-		}
-	}
 	else {
-		std::vector<vertex_id_t>::const_iterator this_it = in_edges->begin();
-		std::vector<int>::iterator count_it = triangles->begin();
-		std::vector<vertex_id_t>::const_iterator this_end = in_edges->end();
+		std::vector<vertex_id_t>::const_iterator this_it = data->in_edges.begin();
+		std::vector<int>::iterator count_it = data->triangles.begin();
+		std::vector<vertex_id_t>::const_iterator this_end = data->in_edges.end();
 		page_byte_array::const_iterator<vertex_id_t> other_it
 			= v->get_neigh_begin(edge_type::OUT_EDGE);
 		page_byte_array::const_iterator<vertex_id_t> other_end
@@ -230,9 +286,7 @@ static int get_required_edges(const page_vertex *vertex, edge_type type,
 
 void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
-	assert(in_edges == NULL);
-	assert(out_edges == NULL);
-	assert(num_joined == 0);
+	assert(data == NULL);
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
@@ -248,64 +302,57 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 		return;
 	}
 
-	in_edges = new std::vector<vertex_id_t>();
-	out_edges = new std::vector<vertex_id_t>();
-	get_required_edges(&vertex, edge_type::IN_EDGE, *in_edges);
-	get_required_edges(&vertex, edge_type::OUT_EDGE, *out_edges);
-	num_required = out_edges->size();
+	std::vector<vertex_id_t> in_edges;
+	std::vector<vertex_id_t> out_edges;
+	get_required_edges(&vertex, edge_type::IN_EDGE, in_edges);
+	get_required_edges(&vertex, edge_type::OUT_EDGE, out_edges);
+	data = new runtime_data_t(in_edges, out_edges);
 
-	if (in_edges->empty() || out_edges->empty()) {
-		num_required = 0;
+	if (data->in_edges.empty() || data->out_edges.empty()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
-		delete in_edges;
-		delete out_edges;
-		in_edges = NULL;
-		out_edges = NULL;
+		delete data;
+		data = NULL;
 		return;
 	}
-	else {
-		triangles = new std::vector<int>(in_edges->size());
-	}
 
-	graph.request_vertices(*this, out_edges->data(), out_edges->size());
+	graph.request_vertices(*this, data->out_edges.data(),
+			data->out_edges.size());
 }
 
 void triangle_vertex::run_on_neighbor(graph_engine &graph,
 		const page_vertex &vertex)
 {
-	num_joined++;
+	assert(data);
+	data->num_joined++;
 	int ret = count_triangles(&vertex);
 	// If we find triangles with the neighbor, notify the neighbor
 	// as well.
 	if (ret > 0) {
-		num_pv_triangles.inc(ret);
+		num_pv_triangles += ret;
 		count_msg msg(ret);
 		graph.send_msg(vertex.get_id(), msg);
 	}
 
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
-	if (num_joined == num_required) {
+	if (data->num_joined == data->out_edges.size()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
 
 		// Inform all neighbors in the in-edges.
-		for (size_t i = 0; i < triangles->size(); i++) {
+		for (size_t i = 0; i < data->triangles.size(); i++) {
 			// Inform the neighbor if they share triangles.
-			if (triangles->at(i) > 0) {
-				count_msg msg(triangles->at(i));
-				graph.send_msg(in_edges->at(i), msg);
+			if (data->triangles[i] > 0) {
+				count_msg msg(data->triangles[i]);
+				graph.send_msg(data->in_edges[i], msg);
 			}
 		}
 
-		delete triangles;
-		delete in_edges;
-		delete out_edges;
-		in_edges = NULL;
-		out_edges = NULL;
+		delete data;
+		data = NULL;
 	}
 }
 
