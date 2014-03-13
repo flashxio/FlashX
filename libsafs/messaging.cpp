@@ -113,5 +113,3 @@ template class blocking_FIFO_queue<message<io_reply> >;
 template class thread_safe_msg_sender<io_reply>;
 template class message<io_request>;
 template class message<io_reply>;
-
-atomic_unsigned_integer io_req_extension::num_creates;

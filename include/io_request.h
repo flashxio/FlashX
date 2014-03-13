@@ -81,7 +81,6 @@ class io_request;
 
 class io_req_extension
 {
-	static atomic_unsigned_integer num_creates;
 	void *priv;
 
 	int num_bufs: 16;
@@ -94,7 +93,6 @@ class io_req_extension
 
 public:
 	io_req_extension() {
-		num_creates.inc(1);
 		vec_pointer = embedded_vecs;
 		vec_capacity = NUM_EMBEDDED_IOVECS;
 		init();
