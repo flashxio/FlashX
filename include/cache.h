@@ -604,6 +604,98 @@ public:
 	};
 
 	template<class T>
+	class seq_const_page_iterator
+	{
+		thread_safe_page *pg;
+		T *data;
+		T *data_end;
+	public:
+		seq_const_page_iterator() {
+			pg = NULL;
+			data = NULL;
+			data_end = NULL;
+		}
+
+		seq_const_page_iterator(thread_safe_page *pg, off_t byte_off,
+				off_t byte_end) {
+			this->pg = pg;
+			data = (T *) (((char *) pg->get_data()) + byte_off);
+			data_end = (T *) (((char *) pg->get_data()) + byte_end);
+		}
+
+		bool has_next() const {
+			return data < data_end;
+		}
+
+		T next() {
+			T *old_data = data;
+			data++;
+			return *old_data;
+		}
+
+		T curr() const {
+			return *data;
+		}
+	};
+
+	template<class T>
+	class seq_const_iterator
+	{
+		const page_byte_array *arr;
+		seq_const_page_iterator<T> curr_page_it;
+
+		// The byte offset in the pages.
+		off_t off;
+		// The end byte offset in the pages.
+		off_t end;
+	public:
+		seq_const_iterator(const page_byte_array *arr, off_t byte_off,
+				off_t byte_end) {
+			this->arr = arr;
+			assert((size_t) byte_end <= arr->get_size());
+
+			off = arr->get_offset_in_first_page() + byte_off;
+			end = arr->get_offset_in_first_page() + byte_end;
+			off_t pg_end;
+			if (end - ROUND_PAGE(off) >= PAGE_SIZE)
+				pg_end = PAGE_SIZE;
+			else
+				pg_end = end - ROUND_PAGE(off);
+			curr_page_it = seq_const_page_iterator<T>(arr->get_page(
+						off / PAGE_SIZE), off % PAGE_SIZE, pg_end);
+			// TODO remove the constraints later.
+			assert((PAGE_SIZE - (off % PAGE_SIZE)) % sizeof(T) == 0
+					// or the entire range is inside a page.
+					|| end < PAGE_SIZE);
+			assert((byte_end - byte_off) % sizeof(T) == 0);
+		}
+
+		bool has_next() {
+			if (curr_page_it.has_next())
+				return true;
+			else {
+				off = ROUNDUP_PAGE(off + 1);
+				if (off < end) {
+					curr_page_it = seq_const_page_iterator<T>(arr->get_page(
+								off / PAGE_SIZE), 0, min(PAGE_SIZE, end - off));
+					return true;
+				}
+				else {
+					return false;
+				}
+			}
+		}
+
+		T next() {
+			return curr_page_it.next();
+		}
+
+		T curr() const {
+			return curr_page_it.curr();
+		}
+	};
+
+	template<class T>
 	class iterator: public std::iterator<std::random_access_iterator_tag, T>
 	{
 		const page_byte_array *arr;
@@ -687,6 +779,11 @@ public:
 		return std::pair<const_iterator<T>, const_iterator<T> >(
 				const_iterator<T>(this, byte_off, byte_end),
 				const_iterator<T>(this, byte_end, byte_end));
+	}
+
+	template<class T>
+	seq_const_iterator<T> get_seq_iterator(off_t byte_off, off_t byte_end) const {
+		return seq_const_iterator<T>(this, byte_off, byte_end);
 	}
 
 	template<class T>

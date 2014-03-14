@@ -139,6 +139,9 @@ void bind2node_id(int node_id);
 void bind_mem2node_id(int node_id);
 void bind2cpu(int cpu_id);
 
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
+
 #ifdef __cplusplus
 }
 #endif
