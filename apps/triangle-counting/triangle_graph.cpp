@@ -256,13 +256,11 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 		std::vector<vertex_id_t>::const_iterator this_it = data->in_edges.begin();
 		std::vector<int>::iterator count_it = data->triangles.begin();
 		std::vector<vertex_id_t>::const_iterator this_end = data->in_edges.end();
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(edge_type::OUT_EDGE);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(edge_type::OUT_EDGE);
-		while (this_it != this_end && other_it != other_end) {
+		page_byte_array::seq_const_iterator<vertex_id_t> other_it
+			= v->get_neigh_seq_it(edge_type::OUT_EDGE);
+		while (this_it != this_end && other_it.has_next()) {
 			vertex_id_t this_neighbor = *this_it;
-			vertex_id_t neigh_neighbor = *other_it;
+			vertex_id_t neigh_neighbor = other_it.curr();
 			if (this_neighbor == neigh_neighbor) {
 				// skip loop
 				if (neigh_neighbor != v->get_id()
@@ -271,7 +269,7 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 					(*count_it)++;
 				}
 				++this_it;
-				++other_it;
+				other_it.next();
 				++count_it;
 			}
 			else if (this_neighbor < neigh_neighbor) {
@@ -279,7 +277,7 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 				++count_it;
 			}
 			else
-				++other_it;
+				other_it.next();
 		}
 	}
 	return num_local_triangles;
