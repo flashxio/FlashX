@@ -28,6 +28,7 @@
 #include "graphlab/cuckoo_set_pow2.hpp"
 
 const double BIN_SEARCH_RATIO = 100;
+const int HASH_SEARCH_RATIO = 16;
 
 atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
@@ -211,7 +212,8 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 	 */
 
 	if (data->in_edge_set.size() > 0
-			&& data->in_edges.size() > 2 * v->get_num_edges(edge_type::OUT_EDGE)) {
+			&& data->in_edges.size() > HASH_SEARCH_RATIO * v->get_num_edges(
+				edge_type::OUT_EDGE)) {
 		page_byte_array::const_iterator<vertex_id_t> other_it
 			= v->get_neigh_begin(edge_type::OUT_EDGE);
 		page_byte_array::const_iterator<vertex_id_t> other_end
