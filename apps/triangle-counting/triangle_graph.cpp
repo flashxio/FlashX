@@ -153,11 +153,9 @@ struct runtime_data_t
 	// with this vertex. It only keeps the triangles of neighbors in the
 	// in-edges.
 	std::vector<int> triangles;
-	// It contains part of out-edges.
-	// We only read neighbors whose ID is smaller than this vertex.
-	std::vector<vertex_id_t> out_edges;
 	// The number of vertices that have joined with the vertex.
 	size_t num_joined;
+	size_t num_required;
 
 	edge_set_t in_edge_set;
 public:
@@ -165,8 +163,8 @@ public:
 			const std::vector<vertex_id_t> &out_edges): in_edge_set(
 				index_entry(), 0, 2 * in_edges.size()) {
 		num_joined = 0;
+		num_required = out_edges.size();
 		this->in_edges = in_edges;
-		this->out_edges = out_edges;
 		triangles.resize(in_edges.size());
 
 		// We only build a hash table on large vertices
@@ -391,7 +389,7 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 
 	data = new runtime_data_t(in_edges, out_edges);
 
-	if (data->in_edges.empty() || data->out_edges.empty()) {
+	if (in_edges.empty() || out_edges.empty()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -400,8 +398,7 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 		return;
 	}
 
-	graph.request_vertices(*this, data->out_edges.data(),
-			data->out_edges.size());
+	graph.request_vertices(*this, out_edges.data(), out_edges.size());
 }
 
 void triangle_vertex::run_on_neighbor(graph_engine &graph,
@@ -420,7 +417,7 @@ void triangle_vertex::run_on_neighbor(graph_engine &graph,
 
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
-	if (data->num_joined == data->out_edges.size()) {
+	if (data->num_joined == data->num_required) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
