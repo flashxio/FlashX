@@ -213,6 +213,8 @@ void destroy_io_system()
 		global_data.cache_conf = NULL;
 	}
 	BOOST_FOREACH(disk_io_thread *t, global_data.read_threads) {
+		t->stop();
+		t->join();
 		delete t;
 	}
 	global_data.read_threads.resize(0);
@@ -494,11 +496,6 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 
 void print_io_thread_stat()
 {
-	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
-		disk_io_thread *t = global_data.read_threads[i];
-		if (t)
-			t->stop();
-	}
 	sleep(1);
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
 		disk_io_thread *t = global_data.read_threads[i];
