@@ -673,8 +673,7 @@ public:
 	size_t count_edges_scan(graph_engine &graph, const page_vertex *v,
 			neighbor_list::id_iterator this_it,
 			neighbor_list::id_iterator this_end,
-			page_byte_array::const_iterator<vertex_id_t> other_it,
-			page_byte_array::const_iterator<vertex_id_t> other_end,
+			page_byte_array::seq_const_iterator<vertex_id_t> other_it,
 			std::vector<vertex_id_t> &common_neighs);
 
 	void run(graph_engine &graph) {
@@ -834,17 +833,16 @@ size_t scan_vertex::count_edges_bin_search_other(graph_engine &graph,
 size_t scan_vertex::count_edges_scan(graph_engine &graph, const page_vertex *v,
 		neighbor_list::id_iterator this_it,
 		neighbor_list::id_iterator this_end,
-		page_byte_array::const_iterator<vertex_id_t> other_it,
-		page_byte_array::const_iterator<vertex_id_t> other_end,
+		page_byte_array::seq_const_iterator<vertex_id_t> other_it,
 		std::vector<vertex_id_t> &common_neighs)
 {
 	size_t num_local_edges = 0;
-	while (other_it != other_end && this_it != this_end) {
+	while (other_it.has_next() && this_it != this_end) {
 		vertex_id_t this_neighbor = *this_it;
-		vertex_id_t neigh_neighbor = *other_it;
+		vertex_id_t neigh_neighbor = other_it.curr();
 		if (neigh_neighbor == v->get_id()
 				|| neigh_neighbor == this->get_id()) {
-			++other_it;
+			other_it.next();
 #if 0
 			++other_data_it;
 #endif
@@ -861,15 +859,15 @@ size_t scan_vertex::count_edges_scan(graph_engine &graph, const page_vertex *v,
 				++other_data_it;
 #endif
 				num_local_edges++;
-				++other_it;
-			} while (other_it != other_end && this_neighbor == *other_it);
+				other_it.next();
+			} while (other_it.has_next() && this_neighbor == other_it.curr());
 			++this_it;
 		}
 		else if (this_neighbor < neigh_neighbor) {
 			++this_it;
 		}
 		else {
-			++other_it;
+			other_it.next();
 #if 0
 			++other_data_it;
 #endif
@@ -928,7 +926,7 @@ size_t scan_vertex::count_edges(graph_engine &graph, const page_vertex *v,
 		scan_bytes += data->neighbors.size() * sizeof(vertex_id_t);
 #endif
 		return count_edges_scan(graph, v, this_it, this_end,
-				other_it, other_end, common_neighs);
+				v->get_neigh_seq_it(type, 0, num_v_edges), common_neighs);
 	}
 }
 

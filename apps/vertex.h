@@ -463,7 +463,7 @@ public:
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			edge_type type) const = 0;
 	virtual page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type) const = 0;
+			edge_type type, size_t start, size_t end) const = 0;
 	virtual vertex_id_t get_id() const = 0;
 	virtual bool is_complete() const {
 		return true;
@@ -564,20 +564,24 @@ public:
 	}
 
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type) const {
+			edge_type type, size_t start, size_t end) const {
+		assert(start <= end);
 		switch(type) {
 			case IN_EDGE:
 			case BOTH_EDGES:
+				assert(end <= get_num_edges(type));
 				return array.get_seq_iterator<vertex_id_t>(
-						ext_mem_directed_vertex::get_header_size(),
 						ext_mem_directed_vertex::get_header_size()
-						+ get_num_edges(type) * sizeof(vertex_id_t));
+						+ start * sizeof(vertex_id_t),
+						ext_mem_directed_vertex::get_header_size()
+						+ end * sizeof(vertex_id_t));
 			case OUT_EDGE:
+				assert(end <= num_out_edges);
 				return array.get_seq_iterator<vertex_id_t>(
 						ext_mem_directed_vertex::get_header_size()
-						+ num_in_edges * sizeof(vertex_id_t),
+						+ (num_in_edges + start) * sizeof(vertex_id_t),
 						ext_mem_directed_vertex::get_header_size()
-						+ (num_in_edges + num_out_edges) * sizeof(vertex_id_t));
+						+ (num_in_edges + end) * sizeof(vertex_id_t));
 			default:
 				assert(0);
 		}
@@ -628,7 +632,7 @@ public:
 	}
 
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type) const {
+			edge_type type, size_t start, size_t end) const {
 		assert(0);
 	}
 
@@ -1261,7 +1265,7 @@ public:
 	}
 
 	virtual page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type) const {
+			edge_type type, size_t start, size_t end) const {
 		assert(0);
 	}
 

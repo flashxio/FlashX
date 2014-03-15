@@ -310,7 +310,8 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 		std::vector<int>::iterator count_it = data->triangles.begin();
 		std::vector<vertex_id_t>::const_iterator this_end = data->in_edges.end();
 		page_byte_array::seq_const_iterator<vertex_id_t> other_it
-			= v->get_neigh_seq_it(edge_type::OUT_EDGE);
+			= v->get_neigh_seq_it(edge_type::OUT_EDGE, 0,
+					v->get_num_edges(edge_type::OUT_EDGE));
 		while (this_it != this_end && other_it.has_next()) {
 			vertex_id_t this_neighbor = *this_it;
 			vertex_id_t neigh_neighbor = other_it.curr();
