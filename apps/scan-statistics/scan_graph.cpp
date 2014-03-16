@@ -651,6 +651,14 @@ public:
 		return num_edges.get();
 	}
 
+	vsize_t get_num_in_edges() const {
+		return num_in_edges;
+	}
+
+	vsize_t get_num_out_edges() const {
+		return num_out_edges;
+	}
+
 	size_t count_edges(graph_engine &graph, const page_vertex *v);
 	size_t count_edges(graph_engine &graph, const page_vertex *v,
 			edge_type type);
@@ -1167,6 +1175,7 @@ void print_usage()
 int main(int argc, char *argv[])
 {
 	size_t topK = 200;
+	size_t min_edges = 1000;
 	int opt;
 	std::string output_file;
 	std::string confs;
@@ -1221,13 +1230,29 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
+	class remove_small_filter: public vertex_filter
+	{
+		size_t min;
+	public:
+		remove_small_filter(size_t min) {
+			this->min = min;
+		}
+
+		bool keep(compute_vertex &v) {
+			scan_vertex &scan_v = (scan_vertex &) v;
+			return scan_v.get_num_in_edges() + scan_v.get_num_out_edges() >= min;
+		}
+	};
+
+	std::shared_ptr<vertex_filter> filter
+		= std::shared_ptr<vertex_filter>(new remove_small_filter(min_edges));
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_start = start;
 	printf("Computing local scan on at least %ld vertices\n", topK);
 	while (known_scans.get_size() < topK) {
 		gettimeofday(&start, NULL);
-		graph->start_all();
+		graph->start(filter);
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds\n", time_diff(start, end));
@@ -1236,6 +1261,22 @@ int main(int argc, char *argv[])
 		printf("global max scan: %ld\n", max_scan.get());
 		max_scan = global_max(0);
 	}
+
+	class remove_small_scan_filter: public vertex_filter
+	{
+		size_t min;
+	public:
+		remove_small_scan_filter(size_t min) {
+			this->min = min;
+		}
+
+		bool keep(compute_vertex &v) {
+			scan_vertex &scan_v = (scan_vertex &) v;
+			size_t num_local_edges = scan_v.get_num_in_edges()
+				+ scan_v.get_num_out_edges();
+			return num_local_edges * num_local_edges >= min;
+		}
+	};
 
 	printf("Compute local scan on %ld vertices\n", known_scans.get_size());
 	printf("Looking for top %ld local scan\n", topK);
@@ -1247,7 +1288,8 @@ int main(int argc, char *argv[])
 		max_scan = global_max(prev_topK_scan);
 
 		gettimeofday(&start, NULL);
-		graph->start_all();
+		graph->start(std::shared_ptr<vertex_filter>(
+					new remove_small_scan_filter(prev_topK_scan)));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds\n", time_diff(start, end));

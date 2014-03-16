@@ -91,6 +91,16 @@ public:
 };
 extern default_vertex_scheduler default_scheduler;
 
+/**
+ * When the graph engine starts, a user can use this filter to decide
+ * what vertices are activated for the first time.
+ */
+class vertex_filter
+{
+public:
+	virtual bool keep(compute_vertex &v) = 0;
+};
+
 class worker_thread;
 
 class graph_engine
@@ -132,6 +142,7 @@ class graph_engine
 	simple_msg_sender *get_msg_sender(int thread_id) const;
 	multicast_msg_sender *get_multicast_sender(int thread_id) const;
 	multicast_msg_sender *get_activate_sender(int thread_id) const;
+	void init_threads();
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index);
@@ -152,6 +163,7 @@ public:
 		return vertices->get_vertex(id);
 	}
 
+	void start(std::shared_ptr<vertex_filter> filter);
 	void start(vertex_id_t ids[], int num);
 	void start_all();
 

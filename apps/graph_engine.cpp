@@ -220,21 +220,27 @@ simple_msg_sender *graph_engine::get_msg_sender(int thread_id) const
 	return curr->get_msg_sender(thread_id);
 }
 
-void graph_engine::start(vertex_id_t ids[], int num)
+void graph_engine::init_threads()
 {
 	// Prepare the worker threads.
 	int num_threads = get_num_threads();
 	for (int i = 0; i < num_threads; i++) {
 		worker_thread *t = new worker_thread(this, factory,
 				i % num_nodes, i, num_threads);
+		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
 		worker_threads[i]->set_vertex_scheduler(scheduler);
 	}
 	for (int i = 0; i < num_threads; i++) {
 		worker_threads[i]->init_messaging(worker_threads);
 	}
+}
 
+void graph_engine::start(vertex_id_t ids[], int num)
+{
+	init_threads();
 	num_remaining_vertices_in_level.inc(num);
+	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
 		int idx = get_partitioner()->map(ids[i]);
@@ -247,20 +253,20 @@ void graph_engine::start(vertex_id_t ids[], int num)
 	}
 }
 
+void graph_engine::start(std::shared_ptr<vertex_filter> filter)
+{
+	init_threads();
+	// Let's assume all vertices will be activated first.
+	num_remaining_vertices_in_level.inc(get_num_vertices());
+	BOOST_FOREACH(worker_thread *t, worker_threads) {
+		t->start_vertices(filter);
+		t->start();
+	}
+}
+
 void graph_engine::start_all()
 {
-	// Prepare the worker threads.
-	int num_threads = get_num_threads();
-	for (int i = 0; i < num_threads; i++) {
-		worker_thread *t = new worker_thread(this, factory,
-				i % num_nodes, i, num_threads);
-		worker_threads[i] = t;
-		worker_threads[i]->set_vertex_scheduler(scheduler);
-	}
-	for (int i = 0; i < num_threads; i++) {
-		worker_threads[i]->init_messaging(worker_threads);
-	}
-
+	init_threads();
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices();
