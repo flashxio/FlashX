@@ -30,18 +30,19 @@
 class worker_thread;
 class graph_engine;
 class compute_vertex;
+class compute_directed_vertex;
 
 /**
  * This callback is to process a vertex.
  */
 class vertex_compute: public user_compute
 {
-	graph_engine *graph;
-
 	std::vector<vertex_id_t> requested_vertices;
 	size_t fetch_idx;
 
 protected:
+	graph_engine *graph;
+
 	// The thread that creates the vertex compute.
 	worker_thread *issue_thread;
 	compute_vertex *v;
@@ -94,6 +95,77 @@ public:
 	graph_engine &get_graph() {
 		return *graph;
 	}
+
+	void complete_request();
+};
+
+class part_directed_vertex_compute;
+
+class directed_vertex_compute: public vertex_compute
+{
+	std::vector<directed_vertex_request> reqs;
+	size_t fetch_idx;
+public:
+	directed_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): vertex_compute(graph, alloc) {
+		fetch_idx = 0;
+	}
+
+	virtual int has_requests() const {
+		return vertex_compute::has_requests() || fetch_idx < reqs.size();
+	}
+
+	virtual request_range get_next_request();
+
+	virtual void request_partial_vertices(vertex_request *reqs[], int num);
+};
+
+class part_directed_vertex_compute: public user_compute
+{
+	graph_engine *graph;
+	compute_directed_vertex *comp_v;
+	directed_vertex_compute *compute;
+	directed_vertex_request req;
+	int num_fetched;
+public:
+	part_directed_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): user_compute(alloc) {
+		this->graph = graph;
+		num_fetched = 0;
+		comp_v = NULL;
+		compute = NULL;
+	}
+
+	void init(compute_directed_vertex *v, directed_vertex_compute *compute,
+			const directed_vertex_request &req) {
+		this->comp_v = v;
+		this->compute = compute;
+		compute->inc_ref();
+		this->req = req;
+	}
+
+	virtual int serialize(char *buf, int size) const {
+		return 0;
+	}
+
+	virtual int get_serialized_size() const {
+		return 0;
+	}
+
+	virtual int has_requests() const {
+		return false;
+	}
+
+	virtual request_range get_next_request() {
+		// It shouldn't be invoked.
+		assert(0);
+	}
+
+	virtual void run(page_byte_array &);
+
+	virtual bool has_completed() const {
+		return num_fetched > 0;
+	}
 };
 
 class part_ts_vertex_compute;
@@ -115,11 +187,6 @@ public:
 	virtual request_range get_next_request();
 
 	virtual void request_partial_vertices(vertex_request *reqs[], int num);
-
-	/**
-	 * A request of accessing a partial vertex has complete.
-	 */
-	void complete_partial(part_ts_vertex_compute &compute);
 };
 
 /**

@@ -517,6 +517,7 @@ class page_directed_vertex: public page_vertex
 	vsize_t num_in_edges;
 	vsize_t num_out_edges;
 	const page_byte_array &array;
+	bool partial;
 public:
 	page_directed_vertex(const page_byte_array &arr): array(arr) {
 		size_t size = arr.get_size();
@@ -530,6 +531,19 @@ public:
 		id = v.get_id();
 		num_in_edges = v.get_num_in_edges();
 		num_out_edges = v.get_num_out_edges();
+		partial = false;
+	}
+
+	// This constructor is for partial directed vertex.
+	page_directed_vertex(vertex_id_t id, vsize_t num_in_edges,
+			vsize_t num_out_edges, const page_byte_array &arr): array(arr) {
+		this->id = id;
+		this->num_in_edges = num_in_edges;
+		this->num_out_edges = num_out_edges;
+		assert(arr.get_size() % sizeof(vertex_id_t) == 0);
+		assert(arr.get_size() / sizeof(vertex_id_t) == num_in_edges
+				|| arr.get_size() / sizeof(vertex_id_t) == num_out_edges);
+		this->partial = true;
 	}
 
 	size_t get_num_edges(edge_type type) const {
@@ -545,7 +559,9 @@ public:
 
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			edge_type type) const {
-		if (type == IN_EDGE || type == BOTH_EDGES)
+		if (partial)
+			return array.begin<vertex_id_t>(0);
+		else if (type == IN_EDGE || type == BOTH_EDGES)
 			return array.begin<vertex_id_t>(
 					ext_mem_directed_vertex::get_header_size());
 		else if (type == OUT_EDGE)
@@ -565,6 +581,10 @@ public:
 
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start, size_t end) const {
+		if (partial)
+			return array.get_seq_iterator<vertex_id_t>(
+					start * sizeof(vertex_id_t), end * sizeof(vertex_id_t));
+
 		assert(start <= end);
 		switch(type) {
 			case IN_EDGE:

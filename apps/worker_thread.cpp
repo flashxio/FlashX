@@ -70,8 +70,9 @@ worker_thread::worker_thread(graph_engine *graph, file_io_factory::shared_ptr fa
 	balancer = std::unique_ptr<load_balancer>(new load_balancer(*graph, *this));
 	switch(graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
-			alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
-			part_alloc = NULL;
+			alloc = new vertex_compute_allocator<directed_vertex_compute>(graph, this);
+			part_alloc = new vertex_compute_allocator<part_directed_vertex_compute>(
+					graph, this);
 			break;
 		case graph_type::TS_DIRECTED:
 			alloc = new vertex_compute_allocator<ts_vertex_compute>(graph, this);

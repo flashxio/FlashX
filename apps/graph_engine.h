@@ -76,6 +76,33 @@ public:
 			const vertex_message *msgs[], int num) = 0;
 };
 
+class compute_directed_vertex: public compute_vertex
+{
+	vsize_t num_in_edges;
+	vsize_t num_out_edges;
+public:
+	compute_directed_vertex() {
+		num_in_edges = 0;
+		num_out_edges = 0;
+	}
+
+	compute_directed_vertex(vertex_id_t id,
+			const vertex_index *index1): compute_vertex(id, index1) {
+		const directed_vertex_index *index
+			= (const directed_vertex_index *) index1;
+		num_in_edges = index->get_num_in_edges(id);
+		num_out_edges = index->get_num_out_edges(id);
+	}
+
+	vsize_t get_num_in_edges() const {
+		return num_in_edges;
+	}
+
+	vsize_t get_num_out_edges() const {
+		return num_out_edges;
+	}
+};
+
 class vertex_scheduler
 {
 public:

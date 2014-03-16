@@ -174,10 +174,8 @@ public:
 	}
 };
 
-class triangle_vertex: public compute_vertex
+class triangle_vertex: public compute_directed_vertex
 {
-	int num_in_edges;
-	int num_out_edges;
 	// The number of triangles per vertex.
 	size_t num_pv_triangles;
 	runtime_data_t *data;
@@ -185,30 +183,12 @@ public:
 	triangle_vertex() {
 		data = NULL;
 		num_pv_triangles = 0;
-		num_in_edges = 0;
-		num_out_edges = 0;
 	}
 
-	triangle_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
-			id, index1) {
+	triangle_vertex(vertex_id_t id,
+			const vertex_index *index): compute_directed_vertex(id, index) {
 		data = NULL;
 		num_pv_triangles = 0;
-		const directed_vertex_index *index = (const directed_vertex_index *) index1;
-		num_in_edges = index->get_num_in_edges(id);
-		num_out_edges = index->get_num_out_edges(id);
-	}
-
-	int get_num_edges(edge_type type) const {
-		switch(type) {
-			case edge_type::IN_EDGE:
-				return num_in_edges;
-			case edge_type::OUT_EDGE:
-				return num_out_edges;
-			case edge_type::BOTH_EDGES:
-				return num_in_edges + num_out_edges;
-			default:
-				assert(0);
-		}
 	}
 
 	int count_triangles(const page_vertex *v) const;
@@ -362,11 +342,11 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 		= vertex.get_neigh_begin(edge_type::IN_EDGE);
 	page_byte_array::const_iterator<vertex_id_t> end
 		= vertex.get_neigh_end(edge_type::IN_EDGE);
-	int num_local_edges = this->get_num_edges(edge_type::BOTH_EDGES);
+	int num_local_edges = this->get_num_in_edges() + this->get_num_out_edges();
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		triangle_vertex &v1 = (triangle_vertex &) graph.get_vertex(id);
-		int num_local_edges1 = v1.get_num_edges(edge_type::BOTH_EDGES);
+		int num_local_edges1 = v1.get_num_in_edges() + v1.get_num_out_edges();
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
@@ -376,11 +356,10 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 
 	it = vertex.get_neigh_begin(edge_type::OUT_EDGE);
 	end = vertex.get_neigh_end(edge_type::OUT_EDGE);
-	num_local_edges = this->get_num_edges(edge_type::BOTH_EDGES);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		triangle_vertex &v1 = (triangle_vertex &) graph.get_vertex(id);
-		int num_local_edges1 = v1.get_num_edges(edge_type::BOTH_EDGES);
+		int num_local_edges1 = v1.get_num_in_edges() + v1.get_num_out_edges();
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
@@ -399,7 +378,14 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 		return;
 	}
 
-	graph.request_vertices(*this, out_edges.data(), out_edges.size());
+	std::vector<directed_vertex_request> reqs(out_edges.size());
+	std::vector<vertex_request *> req_ptrs(out_edges.size());
+	for (size_t i = 0; i < out_edges.size(); i++) {
+		vertex_id_t id = out_edges[i];
+		reqs[i] = directed_vertex_request(id, edge_type::OUT_EDGE);
+		req_ptrs[i] = &reqs[i];
+	}
+	graph.request_partial_vertices(*this, req_ptrs.data(), req_ptrs.size());
 }
 
 void triangle_vertex::run_on_neighbor(graph_engine &graph,

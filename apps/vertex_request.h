@@ -41,6 +41,23 @@ public:
 	}
 };
 
+class directed_vertex_request: public vertex_request
+{
+	edge_type type;
+public:
+	directed_vertex_request() {
+		type = edge_type::BOTH_EDGES;
+	}
+
+	directed_vertex_request(vertex_id_t id, edge_type type): vertex_request(id) {
+		this->type = type;
+	}
+
+	edge_type get_type() const {
+		return type;
+	}
+};
+
 /**
  * This class contains the request of a time-series vertex
  * from the user application.
