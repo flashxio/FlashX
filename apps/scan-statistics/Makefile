@@ -21,10 +21,13 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L../../libsafs -lsafs -L.. -lgraph -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: scan-statistics overlap
+all: topK-scan local-scan overlap
 
-scan-statistics: scan_graph.o ../libgraph.a
-	$(CXX) -o scan-statistics scan_graph.o $(LDFLAGS)
+topK-scan: scan_graph.o topK_scan_graph.o ../libgraph.a
+	$(CXX) -o topK-scan scan_graph.o topK_scan_graph.o $(LDFLAGS)
+
+local-scan: scan_graph.o local_scan_graph.o ../libgraph.a
+	$(CXX) -o local_scan scan_graph.o local_scan_graph.o $(LDFLAGS)
 
 overlap: overlap.o ../libgraph.a
 	$(CXX) -o overlap overlap.o $(LDFLAGS)
@@ -33,6 +36,7 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f scan-statistics
+	rm -f topK-scan
+	rm -f local-scan
 
 -include $(DEPS) 
