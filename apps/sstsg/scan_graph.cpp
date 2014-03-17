@@ -37,7 +37,7 @@ atomic_number<long> num_completed_vertices;
 int timestamp;
 int timestamp_range;
 
-class scan_vertex: public compute_vertex
+class scan_vertex: public compute_ts_vertex
 {
 	// The number of vertices that have joined with the vertex.
 	int num_joined;
@@ -59,7 +59,7 @@ public:
 		neighbors = NULL;
 	}
 
-	scan_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+	scan_vertex(vertex_id_t id, const vertex_index *index): compute_ts_vertex(
 			id, index) {
 		num_joined = 0;
 		num_edges = NULL;
@@ -79,7 +79,7 @@ public:
 
 	virtual void run(graph_engine &graph) {
 		vertex_id_t id = get_id();
-		graph.request_vertices(*this, &id, 1);
+		request_vertices(&id, 1);
 	}
 
 	void run(graph_engine &graph, const page_vertex &vertex) {
@@ -346,14 +346,12 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	}
 
 	std::vector<ts_vertex_request> reqs(neighbors->size());
-	std::vector<vertex_request *> req_ptrs(neighbors->size());
 	for (size_t i = 0; i < neighbors->size(); i++) {
 		vertex_id_t id = neighbors->at(i);
 		timestamp_pair range(timestamp + 1 - timestamp_range, timestamp + 1);
 		reqs[i] = ts_vertex_request(id, range);
-		req_ptrs[i] = &reqs[i];
 	}
-	graph.request_partial_vertices(*this, req_ptrs.data(), req_ptrs.size());
+	request_partial_vertices(reqs.data(), reqs.size());
 }
 
 void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)

@@ -314,7 +314,7 @@ public:
 
 	void run_stage1(graph_engine &graph) {
 		vertex_id_t id = get_id();
-		graph.request_vertices(*this, &id, 1);
+		request_vertices(&id, 1);
 	}
 
 	void run_stage2(graph_engine &graph) {

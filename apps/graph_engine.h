@@ -74,6 +74,12 @@ public:
 	 */
 	virtual void run_on_messages(graph_engine &,
 			const vertex_message *msgs[], int num) = 0;
+
+	/**
+	 * This allows a vertex to request other vertices in the graph.
+	 * @ids: the Ids of vertices.
+	 */
+	void request_vertices(vertex_id_t ids[], int num);
 };
 
 class compute_directed_vertex: public compute_vertex
@@ -88,6 +94,8 @@ public:
 
 	compute_directed_vertex(vertex_id_t id,
 			const vertex_index *index1): compute_vertex(id, index1) {
+		assert(index1->get_graph_header().get_graph_type()
+				== graph_type::DIRECTED);
 		const directed_vertex_index *index
 			= (const directed_vertex_index *) index1;
 		num_in_edges = index->get_num_in_edges(id);
@@ -101,6 +109,32 @@ public:
 	vsize_t get_num_out_edges() const {
 		return num_out_edges;
 	}
+
+	/**
+	 * This allows a vertex to request partial vertices in the graph.
+	 * @reqs: defines part of vertices..
+	 */
+	void request_partial_vertices(directed_vertex_request reqs[], int num);
+};
+
+class compute_ts_vertex: public compute_vertex
+{
+public:
+	compute_ts_vertex() {
+	}
+
+	compute_ts_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(id, index) {
+		assert(index->get_graph_header().get_graph_type()
+				== graph_type::TS_DIRECTED
+				|| index->get_graph_header().get_graph_type()
+				== graph_type::TS_UNDIRECTED);
+	}
+
+	/**
+	 * This allows a vertex to request partial vertices in the graph.
+	 * @reqs: defines part of vertices..
+	 */
+	void request_partial_vertices(ts_vertex_request reqs[], int num);
 };
 
 class vertex_scheduler
@@ -305,22 +339,6 @@ public:
 		msg.set_dest(dest);
 		sender->send_cached(msg);
 	}
-
-	/**
-	 * This allows a vertex to request other vertices in the graph.
-	 * @vertex: the vertex that sends the requests.
-	 * @ids: the Ids of vertices requested by @vertex.
-	 */
-	void request_vertices(compute_vertex &vertex, vertex_id_t ids[], int num);
-	/**
-	 * This allows a vertex to request other vertices in the graph as above.
-	 * The difference is that this interface allows a vertex to request
-	 * part of other vertices.
-	 * @vertex: the vertex that sends the requests.
-	 * @reqs: defines part of vertices requested by @vertex.
-	 */
-	void request_partial_vertices(compute_vertex &vertex,
-			vertex_request *reqs[], int num);
 
 	ext_mem_vertex_interpreter &get_vertex_interpreter() const {
 		return *interpreter;

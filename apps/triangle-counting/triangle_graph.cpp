@@ -199,7 +199,7 @@ public:
 
 	virtual void run(graph_engine &graph) {
 		vertex_id_t id = get_id();
-		graph.request_vertices(*this, &id, 1);
+		request_vertices(&id, 1);
 	}
 
 	void run(graph_engine &graph, const page_vertex &vertex) {
@@ -379,13 +379,11 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 	}
 
 	std::vector<directed_vertex_request> reqs(out_edges.size());
-	std::vector<vertex_request *> req_ptrs(out_edges.size());
 	for (size_t i = 0; i < out_edges.size(); i++) {
 		vertex_id_t id = out_edges[i];
 		reqs[i] = directed_vertex_request(id, edge_type::OUT_EDGE);
-		req_ptrs[i] = &reqs[i];
 	}
-	graph.request_partial_vertices(*this, req_ptrs.data(), req_ptrs.size());
+	request_partial_vertices(reqs.data(), reqs.size());
 }
 
 void triangle_vertex::run_on_neighbor(graph_engine &graph,

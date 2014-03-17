@@ -140,6 +140,37 @@ size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
 	return num;
 }
 
+void compute_vertex::request_vertices(vertex_id_t ids[], int num)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	vertex_compute *compute = curr->get_curr_vertex_compute();
+	if (compute == NULL)
+		compute = curr->create_vertex_compute();
+	compute->request_vertices(ids, num);
+}
+
+void compute_directed_vertex::request_partial_vertices(
+		directed_vertex_request reqs[], int num)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	directed_vertex_compute *compute
+		= (directed_vertex_compute *) curr->get_curr_vertex_compute();
+	if (compute == NULL)
+		compute = (directed_vertex_compute *) curr->create_vertex_compute();
+	compute->request_partial_vertices(reqs, num);
+}
+
+void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
+		int num)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	ts_vertex_compute *compute
+		= (ts_vertex_compute *) curr->get_curr_vertex_compute();
+	if (compute == NULL)
+		compute = (ts_vertex_compute *) curr->create_vertex_compute();
+	compute->request_partial_vertices(reqs, num);
+}
+
 graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index *index)
 {
@@ -327,26 +358,6 @@ void graph_engine::wait4complete()
 void graph_engine::set_vertex_scheduler(vertex_scheduler *scheduler)
 {
 	this->scheduler = scheduler;
-}
-
-void graph_engine::request_vertices(compute_vertex &vertex, vertex_id_t ids[],
-		int num)
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	vertex_compute *compute = curr->get_curr_vertex_compute();
-	if (compute == NULL)
-		compute = curr->create_vertex_compute();
-	compute->request_vertices(ids, num);
-}
-
-void graph_engine::request_partial_vertices(compute_vertex &vertex,
-		vertex_request *reqs[], int num)
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	vertex_compute *compute = curr->get_curr_vertex_compute();
-	if (compute == NULL)
-		compute = curr->create_vertex_compute();
-	compute->request_partial_vertices(reqs, num);
 }
 
 vertex_index *load_vertex_index(const std::string &index_file)

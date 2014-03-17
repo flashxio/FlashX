@@ -87,7 +87,7 @@ public:
 			parent = tmp_parent;
 
 			vertex_id_t id = get_id();
-			graph.request_vertices(*this, &id, 1);
+			request_vertices(&id, 1);
 		}
 	}
 

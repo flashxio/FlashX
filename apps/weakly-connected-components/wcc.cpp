@@ -94,7 +94,7 @@ public:
 		if (neigh_min < component_id) {
 			component_id = neigh_min;
 			vertex_id_t id = get_id();
-			graph.request_vertices(*this, &id, 1);
+			request_vertices(&id, 1);
 		}
 	}
 

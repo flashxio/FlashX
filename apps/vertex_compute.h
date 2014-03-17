@@ -88,9 +88,6 @@ public:
 	}
 
 	virtual void request_vertices(vertex_id_t ids[], int num);
-	virtual void request_partial_vertices(vertex_request *reqs[], int num) {
-		assert(0);
-	}
 
 	graph_engine &get_graph() {
 		return *graph;
@@ -117,7 +114,7 @@ public:
 
 	virtual request_range get_next_request();
 
-	virtual void request_partial_vertices(vertex_request *reqs[], int num);
+	void request_partial_vertices(directed_vertex_request reqs[], int num);
 };
 
 class part_directed_vertex_compute: public user_compute
@@ -186,7 +183,7 @@ public:
 
 	virtual request_range get_next_request();
 
-	virtual void request_partial_vertices(vertex_request *reqs[], int num);
+	void request_partial_vertices(ts_vertex_request reqs[], int num);
 };
 
 /**

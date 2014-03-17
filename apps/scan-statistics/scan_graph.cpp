@@ -696,7 +696,7 @@ public:
 		}
 		if (req_itself) {
 			vertex_id_t id = get_id();
-			graph.request_vertices(*this, &id, 1);
+			request_vertices(&id, 1);
 		}
 	}
 
@@ -1097,7 +1097,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 
 	std::vector<vertex_id_t> neighbors;
 	data->neighbors.get_neighbors(neighbors);
-	graph.request_vertices(*this, neighbors.data(), neighbors.size());
+	request_vertices(neighbors.data(), neighbors.size());
 }
 
 void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)

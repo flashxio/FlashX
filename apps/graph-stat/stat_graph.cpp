@@ -49,7 +49,7 @@ public:
 
 	virtual void run(graph_engine &graph) {
 		vertex_id_t id = get_id();
-		graph.request_vertices(*this, &id, 1);
+		request_vertices(&id, 1);
 	}
 
 	void run(graph_engine &graph, const page_vertex &vertex) {

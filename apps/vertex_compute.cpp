@@ -167,12 +167,12 @@ public:
 	}
 };
 
-void directed_vertex_compute::request_partial_vertices(vertex_request *reqs[],
-		int num)
+void directed_vertex_compute::request_partial_vertices(
+		directed_vertex_request reqs[], int num)
 {
 	assert(this->reqs.empty());
 	for (int i = 0; i < num; i++) {
-		directed_vertex_request *req = (directed_vertex_request *) reqs[i];
+		directed_vertex_request *req = &reqs[i];
 		compute_directed_vertex &info
 			= (compute_directed_vertex &) get_graph().get_vertex(req->get_id());
 		// If the requested edge list is empty, we can just serve the request now.
@@ -208,12 +208,11 @@ public:
 	}
 };
 
-void ts_vertex_compute::request_partial_vertices(vertex_request *reqs[], int num)
+void ts_vertex_compute::request_partial_vertices(ts_vertex_request reqs[],
+		int num)
 {
 	assert(this->reqs.empty());
-	for (int i = 0; i < num; i++) {
-		this->reqs.push_back(*(ts_vertex_request *) reqs[i]);
-	}
+	this->reqs.insert(this->reqs.end(), reqs, reqs + num);
 	if (!std::is_sorted(this->reqs.begin(), this->reqs.end(),
 				comp_ts_vertex_request()))
 		std::sort(this->reqs.begin(), this->reqs.end(),
