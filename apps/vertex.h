@@ -610,6 +610,10 @@ public:
 	vertex_id_t get_id() const {
 		return id;
 	}
+
+	bool is_complete() const {
+		return !partial;
+	}
 };
 
 /**
