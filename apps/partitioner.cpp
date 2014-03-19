@@ -19,7 +19,7 @@
 
 #include "partitioner.h"
 
-size_t modulo_vertex_partitioner::get_all_vertices_in_part(int part_id,
+size_t modulo_graph_partitioner::get_all_vertices_in_part(int part_id,
 		size_t tot_num_vertices, std::vector<vertex_id_t> &ids) const
 {
 	int num_parts = 1 << num_parts_log;
@@ -28,7 +28,7 @@ size_t modulo_vertex_partitioner::get_all_vertices_in_part(int part_id,
 	return ids.size();
 }
 
-size_t range_vertex_partitioner::get_all_vertices_in_part(int part_id,
+size_t range_graph_partitioner::get_all_vertices_in_part(int part_id,
 			size_t tot_num_vertices, std::vector<vertex_id_t> &ids) const
 {
 	vertex_id_t vid_end = get_part_end(part_id, tot_num_vertices);
@@ -42,7 +42,7 @@ size_t range_vertex_partitioner::get_all_vertices_in_part(int part_id,
 	return ids.size();
 }
 
-vertex_id_t range_vertex_partitioner::get_part_end(int part_id,
+vertex_id_t range_graph_partitioner::get_part_end(int part_id,
 		size_t tot_num_vertices) const
 {
 	// The number of vertex ID ranges in the partition, excluding the range

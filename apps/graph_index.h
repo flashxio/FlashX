@@ -81,7 +81,7 @@ public:
 
 	virtual size_t get_num_vertices() const = 0;
 
-	virtual const vertex_partitioner &get_partitioner() const = 0;
+	virtual const graph_partitioner &get_partitioner() const = 0;
 
 	const_iterator begin() const {
 		return const_iterator((graph_index *) this, this->get_min_vertex_id());
@@ -106,11 +106,11 @@ class NUMA_local_graph_index: public graph_index
 	size_t num_vertices;
 	size_t num_non_empty;
 	vertex_type *vertex_arr;
-	vertex_partitioner *partitioner;
+	graph_partitioner *partitioner;
 	const vertex_index *index;
 
 	NUMA_local_graph_index(const vertex_index *index,
-			vertex_partitioner *partitioner, int part_id, int node_id,
+			graph_partitioner *partitioner, int part_id, int node_id,
 			size_t tot_num_vertices, size_t min_vertex_size) {
 		this->part_id = part_id;
 		this->index = index;
@@ -179,7 +179,7 @@ public:
 		return node_id;
 	}
 
-	virtual const vertex_partitioner &get_partitioner() const {
+	virtual const graph_partitioner &get_partitioner() const {
 		return *partitioner;
 	}
 
@@ -209,7 +209,7 @@ class NUMA_graph_index: public graph_index
 	vertex_id_t max_vertex_id;
 	vertex_id_t min_vertex_id;
 	size_t num_vertices;
-	range_vertex_partitioner partitioner;
+	range_graph_partitioner partitioner;
 	// A graph index per thread
 	std::vector<NUMA_local_graph_index<vertex_type> *> index_arr;
 
@@ -289,7 +289,7 @@ public:
 		return num_vertices;
 	}
 
-	virtual const vertex_partitioner &get_partitioner() const {
+	virtual const graph_partitioner &get_partitioner() const {
 		return partitioner;
 	}
 };

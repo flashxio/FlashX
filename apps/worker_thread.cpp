@@ -35,7 +35,7 @@ sorted_vertex_queue::sorted_vertex_queue()
 }
 
 void sorted_vertex_queue::init(const bitmap &map, int part_id,
-		const vertex_partitioner *partitioner)
+		const graph_partitioner *partitioner)
 {
 	pthread_spin_lock(&lock);
 	fetch_idx = 0;

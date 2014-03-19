@@ -344,7 +344,7 @@ public:
 		return *interpreter;
 	}
 
-	const vertex_partitioner *get_partitioner() const {
+	const graph_partitioner *get_partitioner() const {
 		return &vertices->get_partitioner();
 	}
 

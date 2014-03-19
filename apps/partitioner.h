@@ -24,7 +24,7 @@
 
 #include "vertex.h"
 
-class vertex_partitioner
+class graph_partitioner
 {
 public:
 	virtual int map(vertex_id_t id) const = 0;
@@ -35,12 +35,12 @@ public:
 	virtual size_t get_part_size(int part_id, size_t num_vertices) const = 0;
 };
 
-class modulo_vertex_partitioner: public vertex_partitioner
+class modulo_graph_partitioner: public graph_partitioner
 {
 	int num_parts_log;
 	vertex_id_t mask;
 public:
-	modulo_vertex_partitioner(int num_parts) {
+	modulo_graph_partitioner(int num_parts) {
 		this->num_parts_log = log2(num_parts);
 		assert((1 << num_parts_log) == num_parts);
 		mask = (1 << num_parts_log) - 1;
@@ -68,7 +68,7 @@ public:
 	}
 };
 
-class range_vertex_partitioner: public vertex_partitioner
+class range_graph_partitioner: public graph_partitioner
 {
 	static const int RANGE_SIZE_LOG = 10;
 	static const int RANGE_SIZE = 1 << RANGE_SIZE_LOG;
@@ -79,7 +79,7 @@ class range_vertex_partitioner: public vertex_partitioner
 
 	vertex_id_t get_part_end(int part_id, size_t num_vertices) const;
 public:
-	range_vertex_partitioner(int num_parts): num_parts_log(
+	range_graph_partitioner(int num_parts): num_parts_log(
 			log2(num_parts)), mask((1 << num_parts_log) - 1) {
 		assert((1 << num_parts_log) == num_parts);
 	}

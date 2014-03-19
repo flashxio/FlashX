@@ -61,7 +61,7 @@ public:
 	}
 
 	void init(const bitmap &map, int part_id,
-			const vertex_partitioner *partitioner);
+			const graph_partitioner *partitioner);
 
 	int fetch(vertex_id_t vertices[], int num) {
 		pthread_spin_lock(&lock);
