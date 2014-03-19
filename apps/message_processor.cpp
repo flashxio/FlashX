@@ -142,9 +142,9 @@ void message_processor::process_msgs()
 	steal_state->unguard_msg_processing();
 }
 
-void message_processor::steal_vertices(vertex_id_t ids[], int num)
+void message_processor::steal_vertices(compute_vertex *vertices[], int num)
 {
-	steal_state->steal_vertices(ids, num);
+	steal_state->steal_vertices(vertices, num);
 }
 
 void message_processor::reset()
@@ -157,4 +157,41 @@ void message_processor::reset()
 void message_processor::return_vertices(vertex_id_t ids[], int num)
 {
 	steal_state->return_vertices(ids, num);
+}
+
+void steal_state_t::steal_vertices(compute_vertex *vertices[], int num)
+{
+	prepare_steal.fetch_add(1);
+	int num_locals = 0;
+	for (int i = 0; i < num; i++) {
+		int part_id;
+		off_t off;
+		graph.get_partitioner()->map2loc(vertices[i]->get_id(), part_id, off);
+		// It's possible that a vertex that the current thread tries to
+		// steal doesn't belong to the owner thread.
+		if (part_id == worker_id) {
+			stolen_bitmap.set(off);
+			num_locals++;
+		}
+	}
+	// TODO I need a memory barrier here.
+	// If the guard is odd, it means the owner thread is processing
+	// messages. Wait for it to finish processing messages.
+	// The thread can't proceed regardless of the state of the owner
+	// thread if the owner thread is processing messages.
+	while (guard.load() % 2 > 0);
+	num_stolen += num_locals;
+}
+
+void steal_state_t::return_vertices(vertex_id_t ids[], int num)
+{
+	num_returned += num;
+	for (int i = 0; i < num; i++) {
+		int part_id;
+		off_t off;
+		graph.get_partitioner()->map2loc(ids[i], part_id, off);
+		// The vertices have to be returned to the owner thread.
+		assert(worker_id == part_id);
+		stolen_bitmap.clear(off);
+	}
 }

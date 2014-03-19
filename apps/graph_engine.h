@@ -140,14 +140,19 @@ public:
 class vertex_scheduler
 {
 public:
-	virtual void schedule(std::vector<vertex_id_t> &vertices) = 0;
+	virtual void schedule(std::vector<compute_vertex *> &vertices) = 0;
 };
 
 class default_vertex_scheduler: public vertex_scheduler
 {
+	struct compare {
+		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
+			return v1->get_id() < v2->get_id();
+		}
+	};
 public:
-	void schedule(std::vector<vertex_id_t> &vertices) {
-		std::sort(vertices.begin(), vertices.end());
+	void schedule(std::vector<compute_vertex *> &vertices) {
+		std::sort(vertices.begin(), vertices.end(), compare());
 	}
 };
 extern default_vertex_scheduler default_scheduler;

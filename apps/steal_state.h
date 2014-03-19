@@ -24,6 +24,8 @@
 
 #include "bitmap.h"
 
+class compute_vertex;
+
 /**
  * This class maintains the states to handle vertices being stolen by
  * other threads.
@@ -70,40 +72,9 @@ public:
 	 * The two methods below are used by other worker threads.
 	 */
 
-	void steal_vertices(vertex_id_t ids[], int num) {
-		prepare_steal.fetch_add(1);
-		int num_locals = 0;
-		for (int i = 0; i < num; i++) {
-			int part_id;
-			off_t off;
-			graph.get_partitioner()->map2loc(ids[i], part_id, off);
-			// It's possible that a vertex that the current thread tries to
-			// steal doesn't belong to the owner thread.
-			if (part_id == worker_id) {
-				stolen_bitmap.set(off);
-				num_locals++;
-			}
-		}
-		// TODO I need a memory barrier here.
-		// If the guard is odd, it means the owner thread is processing
-		// messages. Wait for it to finish processing messages.
-		// The thread can't proceed regardless of the state of the owner
-		// thread if the owner thread is processing messages.
-		while (guard.load() % 2 > 0);
-		num_stolen += num_locals;
-	}
+	void steal_vertices(compute_vertex *vertices[], int num);
 
-	void return_vertices(vertex_id_t ids[], int num) {
-		num_returned += num;
-		for (int i = 0; i < num; i++) {
-			int part_id;
-			off_t off;
-			graph.get_partitioner()->map2loc(ids[i], part_id, off);
-			// The vertices have to be returned to the owner thread.
-			assert(worker_id == part_id);
-			stolen_bitmap.clear(off);
-		}
-	}
+	void return_vertices(vertex_id_t ids[], int num);
 
 	bool steal_mode_enabled() const {
 		// It should be fine to use the relaxed memory order. steal_state
