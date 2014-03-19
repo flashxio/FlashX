@@ -79,7 +79,7 @@ public:
 	 * This allows a vertex to request other vertices in the graph.
 	 * @ids: the Ids of vertices.
 	 */
-	void request_vertices(vertex_id_t ids[], int num);
+	void request_vertices(vertex_id_t ids[], size_t num);
 };
 
 class compute_directed_vertex: public compute_vertex
@@ -114,7 +114,7 @@ public:
 	 * This allows a vertex to request partial vertices in the graph.
 	 * @reqs: defines part of vertices..
 	 */
-	void request_partial_vertices(directed_vertex_request reqs[], int num);
+	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 };
 
 class compute_ts_vertex: public compute_vertex
@@ -134,7 +134,7 @@ public:
 	 * This allows a vertex to request partial vertices in the graph.
 	 * @reqs: defines part of vertices..
 	 */
-	void request_partial_vertices(ts_vertex_request reqs[], int num);
+	void request_partial_vertices(ts_vertex_request reqs[], size_t num);
 };
 
 class vertex_scheduler

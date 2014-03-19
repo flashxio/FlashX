@@ -15,7 +15,7 @@ request_range vertex_compute::get_next_request()
 	return request_range(loc, info.get_ext_mem_size(), READ, this);
 }
 
-void vertex_compute::request_vertices(vertex_id_t ids[], int num)
+void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 {
 	if (requested_vertices.empty()) {
 		requested_vertices.insert(requested_vertices.end(), ids, ids + num);
@@ -168,10 +168,10 @@ public:
 };
 
 void directed_vertex_compute::request_partial_vertices(
-		directed_vertex_request reqs[], int num)
+		directed_vertex_request reqs[], size_t num)
 {
 	assert(this->reqs.empty());
-	for (int i = 0; i < num; i++) {
+	for (size_t i = 0; i < num; i++) {
 		directed_vertex_request *req = &reqs[i];
 		compute_directed_vertex &info
 			= (compute_directed_vertex &) get_graph().get_vertex(req->get_id());
@@ -209,7 +209,7 @@ public:
 };
 
 void ts_vertex_compute::request_partial_vertices(ts_vertex_request reqs[],
-		int num)
+		size_t num)
 {
 	assert(this->reqs.empty());
 	this->reqs.insert(this->reqs.end(), reqs, reqs + num);

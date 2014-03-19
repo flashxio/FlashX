@@ -47,9 +47,9 @@ protected:
 	worker_thread *issue_thread;
 	compute_vertex *v;
 	// The number of requested vertices that will be read in the user compute.
-	int num_complete_issues;
+	size_t num_complete_issues;
 	// The number of vertices read by the user compute.
-	int num_complete_fetched;
+	size_t num_complete_fetched;
 public:
 	vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
@@ -87,7 +87,7 @@ public:
 		return num_complete_issues == num_complete_fetched && !has_requests();
 	}
 
-	virtual void request_vertices(vertex_id_t ids[], int num);
+	virtual void request_vertices(vertex_id_t ids[], size_t num);
 
 	graph_engine &get_graph() {
 		return *graph;
@@ -114,7 +114,7 @@ public:
 
 	virtual request_range get_next_request();
 
-	void request_partial_vertices(directed_vertex_request reqs[], int num);
+	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 };
 
 class part_directed_vertex_compute: public user_compute
@@ -183,7 +183,7 @@ public:
 
 	virtual request_range get_next_request();
 
-	void request_partial_vertices(ts_vertex_request reqs[], int num);
+	void request_partial_vertices(ts_vertex_request reqs[], size_t num);
 };
 
 /**
