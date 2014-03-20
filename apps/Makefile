@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -I../include $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libgraph graph-bfs triangle-counting scan-statistics sssp sstsg unit-test tools graph-stat test wcc
+all: libgraph graph-bfs triangle-counting scan-statistics sssp sstsg unit-test tools graph-stat test wcc k-core
 
 libgraph: $(OBJS)
 	rm -f libgraph.a
@@ -57,6 +57,9 @@ test: libgraph
 wcc: libgraph
 	$(MAKE) -C weakly-connected-components
 
+k-core: libgraph
+	$(MAKE) -C k-core
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -72,6 +75,7 @@ clean:
 	$(MAKE) clean -C test
 	$(MAKE) clean -C sstsg
 	$(MAKE) clean -C graph-stat
+	$(MAKE) clean -C k-core
 	$(MAKE) clean -C weakly-connected-components
 
 -include $(DEPS) 
