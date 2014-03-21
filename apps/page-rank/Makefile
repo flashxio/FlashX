@@ -24,7 +24,7 @@ CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 all: page-rank
 
 page-rank: $(OBJS) ../libgraph.a
-	$(CXX) -o k-core $(OBJS) $(LDFLAGS)
+	$(CXX) -o page-rank	$(OBJS) $(LDFLAGS)
 
 clean:
 	rm -f *.d

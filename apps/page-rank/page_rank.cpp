@@ -53,7 +53,16 @@ public:
     }
     // else
     curr_itr_pr = prev_itr_pr;
+    vertex_id_t id = get_id();
     request_vertices(&id, 1); // put my edgelist in page cache
+  }
+
+  float get_prev_itr_pr() {
+    return prev_itr_pr;
+  }
+
+  float get_curr_itr_pr() const{
+    return curr_itr_pr;
   }
 
 	void run(graph_engine &graph, const page_vertex &vertex);
@@ -65,56 +74,41 @@ public:
 // If my page rank changed since the last iteration I need to tell my neighbors
 class update_pr_message: public vertex_message
 {
-  float new_pr;
+  float norm_pr; // My new page rank
   public:
-  update_pr_message(float new_pr): vertex_message(sizeof(update_pr_message), true) {
-    this->new_pr = new_pr;
+  update_pr_message(float norm_pr): vertex_message(sizeof(update_pr_message), true) {
+    this->norm_pr = norm_pr;
   }
+
+  float* get_norm_pr() {
+    return &norm_pr;
+  }
+
 };
 
-// TODO: del
-void multicast_delete_msg(graph_engine &graph, const page_vertex &vertex, edge_type E)
-{
-    page_byte_array::const_iterator<vertex_id_t> end_it
-      = vertex.get_neigh_end(E);
-    stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(E));
-    int num_dests = 0;
-    for (page_byte_array::const_iterator<vertex_id_t> it
-        = vertex.get_neigh_begin(E); it != end_it; ++it) {
-      vertex_id_t id = *it;
-      dest_buf[num_dests++] = id;
-    } 
-
-    // Doesn't matter who sent it, just --degree on reception 
-    if (num_dests > 0) {
-      graph.multicast_msg(dest_buf.data(), num_dests, update_pr_message());
-    }
-}
-
-// This is only run by 1st iteration active vertices
 void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
-  if(is_deleted()) {
-    return; // Nothing to be done here
+  if (prev_itr_pr == curr_itr_pr) {
+    return; // converged
   }
 
-  if ( get_degree() < K ) {
-    _delete();
-   
-    // Send two multicast messages - [IN_EDGE, OUT_EDGE] 
-    multicast_delete_msg(graph, vertex, IN_EDGE);
-    multicast_delete_msg(graph, vertex, OUT_EDGE);
-    
-  }
+  page_byte_array::const_iterator<vertex_id_t> end_it
+    = vertex.get_neigh_end(OUT_EDGE);
+  stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(OUT_EDGE));
+  int num_dests = 0;
+  for (page_byte_array::const_iterator<vertex_id_t> it
+      = vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
+    vertex_id_t id = *it;
+    dest_buf[num_dests++] = id;
+  } 
+  float norm_pr = get_prev_itr_pr()/get_num_out_edges();
+  graph.multicast_msg(dest_buf.data(), num_dests, update_pr_message(norm_pr));
 }
 
 void pgrank_vertex::run_on_messages(graph_engine &,
     const vertex_message *msgs[], int num) {
-  if (is_deleted()) {
-    return; // nothing to be done here
-  }
-
   for (int i = 0; i < num; i++) {
-    degree--;
+    update_pr_message* msg = (update_pr_message*) msgs[i];
+    this->curr_itr_pr += DAMPING_FACTOR*(*(msg->get_norm_pr()));
   }
 }
 
@@ -161,10 +155,10 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[0];
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
-	DAMPING_FACTOR = atof((argv[3]).c_str());
+	DAMPING_FACTOR = atof(argv[3]);
 
   if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-    fprintf("stderr", "Damping factor must be between 0 and 1 inclusive");
+    fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
     exit(-1);
   }
 
@@ -198,11 +192,11 @@ int main(int argc, char *argv[])
 		= ((NUMA_graph_index<pgrank_vertex> *) index)->end();
 
 	float mean_pgrank = 0;
-  size_t count = 0;
-  // Check number of visited vertices
+  vsize_t count = 0;
+
 	for (; it != end_it; ++it) {
 		const pgrank_vertex &v = (const pgrank_vertex &) *it;
-    mean_pgrank += v.get_current_rank();
+    mean_pgrank += v.get_curr_itr_pr();
     count++;
 	}
 
