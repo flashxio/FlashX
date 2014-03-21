@@ -450,11 +450,13 @@ int main(int argc, char *argv[])
 	graph_engine *graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(),
 			graph_file, index);
+#if 0
 	// Let's schedule the order of processing activated vertices according
 	// to the size of vertices. We start with processing vertices with higher
 	// degrees in the hope we can find the max scan as early as possible,
 	// so that we can simple ignore the rest of vertices.
 	graph->set_vertex_scheduler(new vertex_size_scheduler());
+#endif
 
 	printf("triangle counting starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
