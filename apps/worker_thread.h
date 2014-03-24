@@ -178,6 +178,11 @@ public:
 			assert(curr_activated_vertices.is_empty());
 			curr_activated_vertices.init(local_ids, false);
 		}
+		else if (filter) {
+			// Although we don't process the filtered vertices, we treat
+			// them as if they were processed.
+			graph->process_vertices(local_ids.size());
+		}
 	}
 
 	compute_allocator *get_part_compute_allocator() const {
