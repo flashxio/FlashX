@@ -20,7 +20,10 @@
 #include <signal.h>
 #include <google/profiler.h>
 
-#include <vector>
+// #include <vector>
+#include <sstream>
+#include <fstream>
+#include <limits>
 
 #include "thread.h"
 #include "io_interface.h"
@@ -34,33 +37,28 @@
 float DAMPING_FACTOR;
 // Same as powergraph
 float TOLERANCE = 1.0E-2; 
-size_t ITERATIONS = 0;
+// size_t ITERATIONS = 0;
 
+// TODO: Maybe use a count of num_out_neighs who have sent messages
+// to know when I can update the prev_itr_pr. So I Know I have all
+// neighbors I need
 vsize_t converged_count = 0;
 
 class pgrank_vertex: public compute_directed_vertex
 {
-  bool first_itr; // Is it the first iteration
-  bool converged; // Has the vertex page rank converged
   float prev_itr_pr; // Previous iteration's page rank
   float curr_itr_pr; // Current iteration's page rank
-  vsize_t num_diverged_out_neighs; // num of out-edge vertices that haven't converged
-  bool sent_converged_msg; // Tell in-neigh vertices I've converged 
 
 public:
 	pgrank_vertex() {
 	}
 
   pgrank_vertex(vertex_id_t id, const vertex_index *index): compute_directed_vertex(id, index) {
-    first_itr = true;
-    converged = false;
-    sent_converged_msg = false;
-    this->prev_itr_pr = 1 - DAMPING_FACTOR;
-    this->curr_itr_pr = 0; // Must be 0
-    this->num_diverged_out_neighs = get_num_out_edges();
+    this->prev_itr_pr = std::numeric_limits<float>::min(); // Must be < -1
+    this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
   }
 
-  float get_prev_itr_pr() {
+  float get_prev_itr_pr() const{
     return prev_itr_pr;
   }
 
@@ -68,89 +66,27 @@ public:
     return curr_itr_pr;
   }
 
-  /**
-  * Vertex is only complete once it has converged AND
-  * all its out-edge neighbors have also converged
-  **/
-  bool is_complete() {
-    return (converged && (num_diverged_out_neighs == 0) && sent_converged_msg);
-  }
+  void run(graph_engine &graph) { 
+    vertex_id_t id = get_id();
+    request_vertices(&id, 1); // put my edgelist in page cache
+  };
 
-  void run(graph_engine &graph); 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
 	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num); 
+			const vertex_message *msgs[], int num) { }; // Only serves to activate on the next iteration
 };
 
-// If my page rank changed since the last iteration I need to tell my neighbors
-// Also used to tell out-edge neighbors you've converged
+// Alerts every out-neighbor that my page rank has changed
+// and they should update their own page rank accordingly
 class pgrank_message: public vertex_message
 {
-  float norm_pr; // My new page rank
-  bool converged;
-  vsize_t sender_id; // FIXME: rm testing
+  int dummy; // TODO: see if rm this still works
   public:
-  // FIXME: rm `sender_id' testing
-  pgrank_message(float norm_pr, bool converged, vsize_t sender_id, bool activate): 
-        vertex_message(sizeof(pgrank_message), activate) {
-    this->norm_pr = norm_pr;
-    this->converged = converged;
-    this->sender_id = sender_id; // FIXME: rm testing
-  }
-
-  vsize_t get_sender_id() { return sender_id; } // FIXME: rm testing
-
-  float* get_norm_pr() {
-    return &norm_pr;
-  }
-
-  bool* has_converged() {
-    return &converged;
-  }
+  pgrank_message( ): 
+        vertex_message(sizeof(pgrank_message), true) { // Always activate. Only place vertices are activated
+        }
 };
-
-void multicast_pgrank_msg(graph_engine &graph, const page_vertex &vertex,
-              float norm_pr, bool complete, edge_type E, bool activate)
-{
-    page_byte_array::const_iterator<vertex_id_t> end_it
-      = vertex.get_neigh_end(E);
-    stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(E));
-    int num_dests = 0;
-    for (page_byte_array::const_iterator<vertex_id_t> it
-        = vertex.get_neigh_begin(E); it != end_it; ++it) {
-      vertex_id_t id = *it;
-      dest_buf[num_dests++] = id;
-    } 
-
-    if (num_dests > 0) {
-      graph.multicast_msg(dest_buf.data(), num_dests, pgrank_message(norm_pr, complete, vertex.get_id(), activate)); // FIXME: rm `vertex.get_id()' testing
-    }
-}
-
-void pgrank_vertex::run(graph_engine &graph) {
-  if (is_complete()) { return; }
-  // else
-  if (first_itr) {
-    first_itr = false;
-  }
-  else {
-    if ( !converged ) { 
-      float new_prev_itr_pr = 1 - DAMPING_FACTOR + curr_itr_pr;
-      if (std::fabs(new_prev_itr_pr - prev_itr_pr) < TOLERANCE) {
-        printf("Vertex %d converged with page rank = %f\n", get_id(), new_prev_itr_pr);
-        converged = true; // Only place convergence is tested
-        printf("%d vertices converged!\n", ++converged_count);
-      } else { printf("Vertex: %d changed its PR from %f to %f\n", get_id(), prev_itr_pr, new_prev_itr_pr); } // FIXME: rm testing
-
-      prev_itr_pr = new_prev_itr_pr;
-      curr_itr_pr = 0; // reset this value
-    }
-  }
-
-  vertex_id_t id = get_id();
-  request_vertices(&id, 1); // put my edgelist in page cache
-}
 
 void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
 
@@ -162,48 +98,43 @@ void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
     vertex_id_t id = *it;
     printf("%d %d\n", get_id(), id);
   } 
-
-#endif
-  if (is_complete()) { return; }
-  // else
-  float norm_pr = get_prev_itr_pr()/get_num_out_edges(); // FIXME: Many of these may be expensive
-  multicast_pgrank_msg(graph, vertex, norm_pr, false, OUT_EDGE, true);
-
-  if (!(sent_converged_msg) && converged) {
-    // Send message to all in-edge neighs to say decrease
-    // your num_diverged_out_neighs by 1
-    multicast_pgrank_msg(graph, vertex, 0, true, IN_EDGE, false);
-    printf("Vertex %d has sent converged message\n", get_id());
-    sent_converged_msg = true;
-  }
-}
-
-void pgrank_vertex::run_on_messages(graph_engine &,
-    const vertex_message *msgs[], int num) {
-#if 0
-  // FIXME: Testing
-  if (get_id() == 3073) {
-    printf("Vertex: %d received: %d messages\n", get_id(), num);
-    for (int i = 0; i < num; i++) {
-      pgrank_message* msg = (pgrank_message*) msgs[i];
-      printf("Message sent by Vertex: %d, sender converged? %d \n", msg->get_sender_id(), ( *msg->has_converged() == true ? 1 : 0));
-    }
-    // printf("\n");
-
-    assert(false);
-  }
-  // End Testing
 #endif
 
-  for (int i = 0; i < num; i++) {
-    pgrank_message* msg = (pgrank_message*) msgs[i];
-    this->curr_itr_pr += *(msg->get_norm_pr());
-    if (msg->has_converged()) { 
-      this->num_diverged_out_neighs--; // This is a message from one of my out-edge neighs
-      // if (num_diverged_out_neighs < 0) { assert(false)}; // FIXME: rm testing
-    }
+  // Gather
+  float accum = 0;
+  page_byte_array::const_iterator<vertex_id_t> end_it
+    = vertex.get_neigh_end(IN_EDGE);
+  
+  for (page_byte_array::const_iterator<vertex_id_t> it
+      = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
+    vertex_id_t id = *it;
+    pgrank_vertex& v = (pgrank_vertex&) graph.get_vertex(id);
+    accum += (v.get_curr_itr_pr()/v.get_num_out_edges())  ; // Notice I want this iterations pagerank
+  }   
+
+  // Apply
+  if (get_num_in_edges() > 0) {
+    float update_pr = ((1 - DAMPING_FACTOR)) + (DAMPING_FACTOR*(accum)); // FIXME: Many of these may be expensive
+    curr_itr_pr = update_pr;
   }
-  this->curr_itr_pr *= DAMPING_FACTOR;
+  prev_itr_pr = curr_itr_pr; // Happens no matter what
+
+  // Scatter (activate your out-neighbors ... if you have any :) 
+  if ( std::fabs( curr_itr_pr - prev_itr_pr ) > TOLERANCE ) {
+    page_byte_array::const_iterator<vertex_id_t> end_it
+      = vertex.get_neigh_end(OUT_EDGE);
+    stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(OUT_EDGE));
+    int num_dests = 0;
+    for (page_byte_array::const_iterator<vertex_id_t> it
+        = vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
+      vertex_id_t id = *it;
+      dest_buf[num_dests++] = id; 
+    }   
+
+    if (num_dests > 0) {
+      graph.multicast_msg(dest_buf.data(), num_dests, pgrank_message( )) ;
+    }   
+  }
 }
 
 void int_handler(int sig_num)
@@ -284,7 +215,28 @@ int main(int argc, char *argv[])
 		= ((NUMA_graph_index<pgrank_vertex> *) index)->begin();
 	NUMA_graph_index<pgrank_vertex>::const_iterator end_it
 		= ((NUMA_graph_index<pgrank_vertex> *) index)->end();
+  
+#if 1
+	for (; it != end_it; ++it) {
+		const pgrank_vertex &v = (const pgrank_vertex &) *it;
+    printf("%d:%f\n", v.get_id()+1, v.get_curr_itr_pr());
+	}
+#endif
 
+#if 0
+  // Write pgrank to file for comparison
+  std::ostringstream dict_str;
+	for (; it != end_it; ++it) {
+		const pgrank_vertex &v = (const pgrank_vertex &) *it;
+    dict_str << v.get_id() << ":" << v.get_curr_itr_pr() << "\n";
+	}
+  std::ofstream outFile;
+  outFile.open("/home/disa/graph-engine/apps/page-rank/compare/wiki-Vote-pagerank.edge");
+  outFile << dict_str.rdbuf();
+  outFile.close();
+#endif
+
+#if 0
 	float mean_pgrank = 0;
   vsize_t count = 0;
 
@@ -304,4 +256,5 @@ int main(int argc, char *argv[])
   printf("Count: %d\n", count);
 
   printf("The average page rank of %d vertices is: %f\n", count, (mean_pgrank/count));
+#endif
 }
