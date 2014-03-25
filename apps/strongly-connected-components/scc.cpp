@@ -47,6 +47,20 @@ public:
 	}
 };
 
+class trim2_message: public vertex_message
+{
+	vertex_id_t comp_id;
+public:
+	trim2_message(vertex_id_t comp_id): vertex_message(
+			sizeof(trim1_message), false) {
+		this->comp_id = comp_id;
+	}
+
+	vertex_id_t get_comp_id() const {
+		return comp_id;
+	}
+};
+
 class fwbw_message: public vertex_message
 {
 	uint64_t color;
@@ -459,59 +473,84 @@ void scc_vertex::run_on_messages_stage_trim1(graph_engine &graph,
 
 void scc_vertex::run_stage_trim2(graph_engine &graph)
 {
-#if 0
-	if (num_in_edges == 1) {
-		directed_vertex_request req(get_id(), edge_type::IN_EDGE);
-		request_partial_vertices(&req, 1);
+	vertex_id_t id = get_id();
+	if (get_num_in_edges() == 1) {
+		// TODO requesting partial vertices causes errors.
+		request_vertices(&id, 1);
 	}
-	else if (num_out_edges == 1) {
-		directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
-		request_partial_vertices(&req, 1);
+	else if (get_num_out_edges() == 1) {
+		// TODO requesting partial vertices causes errors.
+		request_vertices(&id, 1);
 	}
-#endif
 }
+
+std::atomic_ulong trim2_vertices;
 
 void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
 {
-#if 0
 	if (vertex.get_id() == get_id()) {
-		edge_type type;
-		if (num_in_edges == 1) {
-			type = edge_type::IN_EDGE;
+		// Ideally, we should use the remaining in-edges or out-edges,
+		// but we don't know which edges have been removed, so we just
+		// use the original number of edges.
+		if (get_num_in_edges() == 1) {
 			page_byte_array::const_iterator<vertex_id_t> it
-				= vertex.get_neigh_begin(type);
-			// TODO this is wrong. We should use the remaining neighbor.
+				= vertex.get_neigh_begin(edge_type::IN_EDGE);
 			vertex_id_t neighbor = *it;
-			scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
-			if (neigh_v.get_num_remain_out_edges() == 1) {
-				directed_vertex_request req(neighbor, edge_type::OUT_EDGE);
-				request_partial_vertices(&req, 1);
+			// If the only in-edge is to itself, it's a SCC itself.
+			if (neighbor == get_id()) {
+				fwbw_state.assign_comp(get_id());
+				trim2_vertices++;
+			}
+			else {
+				scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
+				// If the vertex's out-edge list contains the neighbor,
+				// it means the neighbor's only in-edge connect to this vertex.
+				if (fwbw_state.get_color() == neigh_v.fwbw_state.get_color()
+						&& get_id() < neighbor
+						&& neigh_v.get_num_in_edges() == 1
+						&& vertex.contain_edge(edge_type::OUT_EDGE, neighbor)) {
+					fwbw_state.assign_comp(get_id());
+					trim2_message msg(get_id());
+					graph.send_msg(neighbor, msg);
+					trim2_vertices += 2;
+				}
 			}
 		}
-		else if (num_out_edges == 1) {
-			type = edge_type::OUT_EDGE;
+		else if (get_num_out_edges() == 1) {
 			page_byte_array::const_iterator<vertex_id_t> it
-				= vertex.get_neigh_begin(type);
+				= vertex.get_neigh_begin(edge_type::OUT_EDGE);
 			vertex_id_t neighbor = *it;
-			scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
-			if (neigh_v.get_num_remain_in_edges() == 1) {
-				directed_vertex_request req(neighbor, edge_type::IN_EDGE);
-				request_partial_vertices(&req, 1);
+			// If the only in-edge is to itself, it's a SCC itself.
+			if (neighbor == get_id()) {
+				fwbw_state.assign_comp(get_id());
+				trim2_vertices++;
+			}
+			else {
+				scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
+				// The same as above.
+				if (fwbw_state.get_color() == neigh_v.fwbw_state.get_color()
+						&& get_id() < neighbor
+						&& neigh_v.get_num_out_edges() == 1
+						&& vertex.contain_edge(edge_type::IN_EDGE, neighbor)) {
+					fwbw_state.assign_comp(get_id());
+					trim2_message msg(get_id());
+					graph.send_msg(neighbor, msg);
+					trim2_vertices += 2;
+				}
 			}
 		}
 		else
 			assert(0);
 	}
-	else {
-		// TODO now we need to check the remaining neighbor of the neighbor
-		// points to itself.
-	}
-#endif
 }
 
 void scc_vertex::run_on_messages_stage_trim2(graph_engine &graph,
 		const vertex_message *msgs[], int num)
 {
+	for (int i = 0; i < num; i++) {
+		const trim2_message *msg = (const trim2_message *) msgs[i];
+		fwbw_state.assign_comp(msg->get_comp_id());
+	}
 }
 
 void scc_vertex::run_stage_trim3(graph_engine &graph)
@@ -861,8 +900,17 @@ int main(int argc, char *argv[])
 			max_v = v.get_id();
 		}
 	}
-	printf("It takes %f seconds. There are %ld vertices trimmed\n",
+	printf("trim1 takes %f seconds. It trims %ld vertices\n",
 			time_diff(start, end), num_assigned);
+
+	scc_stage = scc_stage_t::TRIM2;
+	gettimeofday(&start, NULL);
+	graph->start_all();
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+	printf("trim2 takes %f seconds. It trims %ld vertices\n",
+			time_diff(start, end),
+			trim2_vertices.load(std::memory_order_relaxed));
 
 	scc_stage = scc_stage_t::FWBW;
 	scc_vertex &v = (scc_vertex &) index->get_vertex(max_v);
