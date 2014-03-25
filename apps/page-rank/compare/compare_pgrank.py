@@ -9,29 +9,31 @@ def read_igraph():
     igraph_dict[idx+1] = float(entry)
   return igraph_dict
 
-def read_flashgraph():
+def read(fn):
   # Get Flash_graph pagerank
   flashgraph_dict = {}
-  f = open("flashgraph_pgrank.txt", "rb")
+  f = open(fn, "rb")
   arr = f.read().splitlines()
   for entry in arr:
     key, val = entry.split(":")
     flashgraph_dict[int(key)] = float(val)
   return flashgraph_dict
 
-def compare(igraph_dict, flashgraph_dict):
-  assert set(igraph_dict.keys()) == set(flashgraph_dict.keys()), "The sets of keys are different"
+def compare(essential_dict, non_essential_dict, essential, skip=False):
+  if not skip:
+    assert set(essential_dict.keys()) == set(non_essential_dict.keys()), "The sets of keys are different"
   
   count = 0
-  for key in igraph_dict.keys():
-    if not within(igraph_dict[key], flashgraph_dict[key], 0.01):
-      print "Mismatch Vertex id: %d. IGRAPH: %f != FLASHGRAPH: %f" % (key, igraph_dict[key], flashgraph_dict[key])
+  for key in essential_dict.keys():
+    if not within(essential_dict[key], non_essential_dict[key], 0.05):
+      print "Mismatch Vertex id: %d. %s: %f != FLASHGRAPH: %f" % (key, essential, essential_dict[key], non_essential_dict[key])
       count += 1
 
-  print "The number of mismatches =", count
+  print "The number of mismatches between FlashGraph and %s=%d" % ( essential.capitalize(), count)
 
 def within(arg1, arg2, thresh):
   return abs(arg1-arg2) < thresh
 
 # main
-compare(read_igraph(), read_flashgraph())
+compare(read_igraph(), read("flashgraph_pgrank.txt"), "IGRAPH")
+compare(read("powergraph_pgrank.txt"), read_igraph(), "POWERGRAPH", True)
