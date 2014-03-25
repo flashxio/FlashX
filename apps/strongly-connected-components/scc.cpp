@@ -98,6 +98,8 @@ enum scc_stage_t {
 	TRIM1,
 	// Trim vertices in a SCC of size 2.
 	TRIM2,
+	// Additional trimming before each WCC.
+	TRIM3,
 	FWBW,
 	// After the FWBW phase, we need to partition the remaining vertices.
 	PARTITION,
@@ -293,6 +295,9 @@ public:
 			case scc_stage_t::TRIM2:
 				run_stage_trim2(graph);
 				break;
+			case scc_stage_t::TRIM3:
+				run_stage_trim3(graph);
+				break;
 			case scc_stage_t::FWBW:
 				run_stage_FWBW(graph);
 				break;
@@ -309,6 +314,7 @@ public:
 
 	void run_stage_trim1(graph_engine &graph);
 	void run_stage_trim2(graph_engine &graph);
+	void run_stage_trim3(graph_engine &graph);
 	void run_stage_FWBW(graph_engine &graph);
 	void run_stage_part(graph_engine &graph);
 	void run_stage_wcc(graph_engine &graph);
@@ -323,6 +329,9 @@ public:
 				break;
 			case scc_stage_t::TRIM2:
 				run_stage_trim2(graph, vertex);
+				break;
+			case scc_stage_t::TRIM3:
+				run_stage_trim3(graph, vertex);
 				break;
 			case scc_stage_t::FWBW:
 				run_stage_FWBW(graph, vertex);
@@ -340,6 +349,7 @@ public:
 
 	void run_stage_trim1(graph_engine &graph, const page_vertex &vertex);
 	void run_stage_trim2(graph_engine &graph, const page_vertex &vertex);
+	void run_stage_trim3(graph_engine &graph, const page_vertex &vertex);
 	void run_stage_FWBW(graph_engine &graph, const page_vertex &vertex);
 	void run_stage_part(graph_engine &graph, const page_vertex &vertex);
 	void run_stage_wcc(graph_engine &graph, const page_vertex &vertex);
@@ -355,6 +365,9 @@ public:
 				break;
 			case scc_stage_t::TRIM2:
 				run_on_messages_stage_trim2(graph, msgs, num);
+				break;
+			case scc_stage_t::TRIM3:
+				run_on_messages_stage_trim3(graph, msgs, num);
 				break;
 			case scc_stage_t::FWBW:
 				run_on_messages_stage_FWBW(graph, msgs, num);
@@ -373,6 +386,8 @@ public:
 	void run_on_messages_stage_trim1(graph_engine &graph,
 			const vertex_message *msgs[], int num);
 	void run_on_messages_stage_trim2(graph_engine &graph,
+			const vertex_message *msgs[], int num);
+	void run_on_messages_stage_trim3(graph_engine &graph,
 			const vertex_message *msgs[], int num);
 	void run_on_messages_stage_FWBW(graph_engine &graph,
 			const vertex_message *msgs[], int num);
@@ -495,6 +510,65 @@ void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
 }
 
 void scc_vertex::run_on_messages_stage_trim2(graph_engine &graph,
+		const vertex_message *msgs[], int num)
+{
+}
+
+void scc_vertex::run_stage_trim3(graph_engine &graph)
+{
+	vertex_id_t id = get_id();
+	request_vertices(&id, 1);
+}
+
+std::atomic_long trim3_vertices;
+
+void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
+{
+	page_byte_array::const_iterator<vertex_id_t> end_it
+		= vertex.get_neigh_end(IN_EDGE);
+	stack_array<vertex_id_t, 1024> in_neighs(vertex.get_num_edges(IN_EDGE));
+	int num_in_neighs = 0;
+	for (page_byte_array::const_iterator<vertex_id_t> it
+			= vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
+		vertex_id_t id = *it;
+		scc_vertex &neigh = (scc_vertex &) graph.get_vertex(id);
+		// We should ignore the neighbors that has been assigned to a component.
+		// or has a different color.
+		if (neigh.is_assigned()
+				|| neigh.fwbw_state.get_color() != fwbw_state.get_color())
+			continue;
+
+		in_neighs[num_in_neighs++] = id;
+	}
+
+	end_it = vertex.get_neigh_end(OUT_EDGE);
+	stack_array<vertex_id_t, 1024> out_neighs(vertex.get_num_edges(OUT_EDGE));
+	int num_out_neighs = 0;
+	for (page_byte_array::const_iterator<vertex_id_t> it
+			= vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
+		vertex_id_t id = *it;
+		scc_vertex &neigh = (scc_vertex &) graph.get_vertex(id);
+		// We should ignore the neighbors that has been assigned to a component.
+		// or has a different color.
+		if (neigh.is_assigned()
+				|| neigh.fwbw_state.get_color() != fwbw_state.get_color())
+			continue;
+
+		out_neighs[num_out_neighs++] = id;
+	}
+
+	if (num_in_neighs == 0 || num_out_neighs == 0) {
+		trim3_vertices++;
+		// This vertex has been isolated, it can assign to a SCC now.
+		fwbw_state.assign_comp(get_id());
+		if (num_in_neighs > 0)
+			graph.activate_vertices(in_neighs.data(), num_in_neighs);
+		if (num_out_neighs > 0)
+			graph.activate_vertices(out_neighs.data(), num_out_neighs);
+	}
+}
+
+void scc_vertex::run_on_messages_stage_trim3(graph_engine &graph,
 		const vertex_message *msgs[], int num)
 {
 }
@@ -809,6 +883,16 @@ int main(int argc, char *argv[])
 	printf("partition takes %f seconds\n", time_diff(start, end));
 
 	while (true) {
+		scc_stage = scc_stage_t::TRIM3;
+		trim3_vertices = 0;
+		gettimeofday(&start, NULL);
+		graph->start(std::shared_ptr<vertex_filter>(new scc_filter()));
+		graph->wait4complete();
+		gettimeofday(&end, NULL);
+		printf("trim3 takes %f seconds, and trime %ld vertices\n",
+				time_diff(start, end),
+				trim3_vertices.load(std::memory_order_relaxed));
+
 		std::shared_ptr<vertex_filter> wfilter
 			= std::shared_ptr<vertex_filter>(new wcc_filter());
 		scc_stage = scc_stage_t::WCC;
