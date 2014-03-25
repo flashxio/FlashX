@@ -577,6 +577,13 @@ public:
 			return (off - it.off) / sizeof(T);
 		}
 
+		const_iterator<T> operator+(size_t num) const {
+			const_iterator<T> ret = *this;
+			ret.off += num * sizeof(T);
+			assert(ret.end >= ret.off);
+			return ret;
+		}
+
 		// Prefix ++
 		const_iterator<T> &operator++() {
 			off += sizeof(T);
@@ -591,8 +598,7 @@ public:
 			return !(*this == it);
 		}
 
-		const_iterator<T> &operator+=(int num) {
-			assert(num >= 0);
+		const_iterator<T> &operator+=(size_t num) {
 			off += num * sizeof(T);
 			assert(end >= off);
 			return *this;

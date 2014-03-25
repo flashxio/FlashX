@@ -27,7 +27,7 @@
 #include "load_balancer.h"
 #include "steal_state.h"
 
-sorted_vertex_queue::sorted_vertex_queue()
+sorted_vertex_queue::sorted_vertex_queue(graph_engine &_graph): graph(_graph)
 {
 	fetch_idx = 0;
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
@@ -35,18 +35,20 @@ sorted_vertex_queue::sorted_vertex_queue()
 }
 
 void sorted_vertex_queue::init(const bitmap &map, int part_id,
-		const vertex_partitioner *partitioner)
+		const graph_partitioner *partitioner)
 {
 	pthread_spin_lock(&lock);
 	fetch_idx = 0;
 	sorted_vertices.clear();
-	map.get_set_bits(sorted_vertices);
+	std::vector<vertex_id_t> local_ids;
+	map.get_set_bits(local_ids);
 	// the bitmap only contains the locations of vertices in the bitmap.
 	// We have to translate them back to vertex ids.
-	for (size_t i = 0; i < sorted_vertices.size(); i++) {
+	sorted_vertices.resize(local_ids.size());
+	for (size_t i = 0; i < local_ids.size(); i++) {
 		vertex_id_t id;
-		partitioner->loc2map(part_id, sorted_vertices[i], id);
-		sorted_vertices[i] = id;
+		partitioner->loc2map(part_id, local_ids[i], id);
+		sorted_vertices[i] = &graph.get_vertex(id);
 	}
 
 	if (scheduler != &default_scheduler)
@@ -57,7 +59,8 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 worker_thread::worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
 		int node_id, int worker_id, int num_threads): thread("worker_thread",
 			node_id), next_activated_vertices(graph->get_partitioner(
-					)->get_part_size(worker_id, graph->get_num_vertices()), node_id)
+					)->get_part_size(worker_id, graph->get_num_vertices()), node_id),
+			curr_activated_vertices(*graph)
 {
 	start_all = false;
 	this->worker_id = worker_id;
@@ -128,7 +131,7 @@ int worker_thread::process_activated_vertices(int max)
 	if (max <= 0)
 		return 0;
 
-	vertex_id_t vertex_buf[max];
+	compute_vertex *vertex_buf[max];
 	stack_array<io_request> reqs(max);
 	int num = curr_activated_vertices.fetch(vertex_buf, max);
 	if (num == 0) {
@@ -141,10 +144,10 @@ int worker_thread::process_activated_vertices(int max)
 
 	int num_to_process = 0;
 	for (int i = 0; i < num; i++) {
-		compute_vertex &info = graph->get_vertex(vertex_buf[i]);
+		compute_vertex *info = vertex_buf[i];
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
-		info.run(*graph);
+		info->run(*graph);
 		if (curr_compute) {
 			assert(curr_compute->has_requests());
 			// It's mostly likely that it is requesting the adjacency list
@@ -156,7 +159,7 @@ int worker_thread::process_activated_vertices(int max)
 					range.get_size(), range.get_access_method(), io, -1);
 		}
 		else
-			complete_vertex(info);
+			complete_vertex(*info);
 		reset_curr_vertex_compute();
 	}
 	if (graph->get_logger())
@@ -226,18 +229,18 @@ void worker_thread::run()
 		io->print_stat(graph->get_num_threads());
 }
 
-int worker_thread::steal_activated_vertices(vertex_id_t ids[], int num)
+int worker_thread::steal_activated_vertices(compute_vertex *vertices[], int num)
 {
 	// We want to steal as much as possible, but we don't want
 	// to overloaded by the stolen vertices.
 	size_t num_steal = max(1,
 			curr_activated_vertices.get_num_vertices() / graph->get_num_threads());
-	num = curr_activated_vertices.fetch(ids,
+	num = curr_activated_vertices.fetch(vertices,
 			min(num, num_steal));
 	if (num > 0)
 		// If the thread steals vertices from another thread successfully,
 		// it needs to notify the thread of the stolen vertices.
-		msg_processor->steal_vertices(ids, num);
+		msg_processor->steal_vertices(vertices, num);
 	return num;
 }
 

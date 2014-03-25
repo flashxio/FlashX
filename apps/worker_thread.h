@@ -30,44 +30,41 @@
 class sorted_vertex_queue
 {
 	pthread_spinlock_t lock;
-	std::vector<vertex_id_t> sorted_vertices;
+	std::vector<compute_vertex *> sorted_vertices;
 	size_t fetch_idx;
 	vertex_scheduler *scheduler;
+	graph_engine &graph;
 public:
-	sorted_vertex_queue();
+	sorted_vertex_queue(graph_engine &graph);
 
 	void set_vertex_scheduler(vertex_scheduler *scheduler) {
 		this->scheduler = scheduler;
 	}
 
-	void init(vertex_id_t buf[], int size, bool sorted) {
+	void init(const vertex_id_t buf[], size_t size, bool sorted) {
 		pthread_spin_lock(&lock);
 		fetch_idx = 0;
 		sorted_vertices.clear();
-		sorted_vertices.assign(buf, buf + size);
+		sorted_vertices.resize(size);
+		for (size_t i = 0; i < size; i++)
+			sorted_vertices[i] = &graph.get_vertex(buf[i]);
 		if (!sorted)
 			scheduler->schedule(sorted_vertices);
 		pthread_spin_unlock(&lock);
 	}
 
 	void init(const std::vector<vertex_id_t> &vec, bool sorted) {
-		pthread_spin_lock(&lock);
-		fetch_idx = 0;
-		sorted_vertices.clear();
-		sorted_vertices.assign(vec.begin(), vec.end());
-		if (!sorted)
-			scheduler->schedule(sorted_vertices);
-		pthread_spin_unlock(&lock);
+		init(vec.data(), vec.size(), sorted);
 	}
 
 	void init(const bitmap &map, int part_id,
-			const vertex_partitioner *partitioner);
+			const graph_partitioner *partitioner);
 
-	int fetch(vertex_id_t vertices[], int num) {
+	int fetch(compute_vertex *vertices[], int num) {
 		pthread_spin_lock(&lock);
 		int num_fetches = min(num, sorted_vertices.size() - fetch_idx);
 		memcpy(vertices, sorted_vertices.data() + fetch_idx,
-				num_fetches * sizeof(vertex_id_t));
+				num_fetches * sizeof(compute_vertex *));
 		fetch_idx += num_fetches;
 		pthread_spin_unlock(&lock);
 		return num_fetches;
@@ -181,6 +178,11 @@ public:
 			assert(curr_activated_vertices.is_empty());
 			curr_activated_vertices.init(local_ids, false);
 		}
+		else if (filter) {
+			// Although we don't process the filtered vertices, we treat
+			// them as if they were processed.
+			graph->process_vertices(local_ids.size());
+		}
 	}
 
 	compute_allocator *get_part_compute_allocator() const {
@@ -271,7 +273,7 @@ public:
 	 */
 	void activate_vertex(vertex_id_t id);
 
-	int steal_activated_vertices(vertex_id_t ids[], int num);
+	int steal_activated_vertices(compute_vertex *vertices[], int num);
 	void return_vertices(vertex_id_t ids[], int num);
 
 	size_t get_num_local_vertices() const {

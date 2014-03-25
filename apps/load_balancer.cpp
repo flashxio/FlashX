@@ -30,7 +30,7 @@ load_balancer::~load_balancer()
  * than it can process, and the remaining vertices will be placed in its
  * own activated vertex queue.
  */
-int load_balancer::steal_activated_vertices(vertex_id_t vertex_buf[], int buf_size)
+int load_balancer::steal_activated_vertices(compute_vertex *vertex_buf[], int buf_size)
 {
 	if (steal_thread_id == owner.get_worker_id())
 		steal_thread_id = (steal_thread_id + 1) % graph.get_num_threads();

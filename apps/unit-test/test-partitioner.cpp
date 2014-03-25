@@ -5,7 +5,7 @@
 const int num_parts = 16;
 const int M = 1024 * 1024;
 
-void test_partitioner(vertex_partitioner &partitioner)
+void test_partitioner(graph_partitioner &partitioner)
 {
 	for (int k = 0; k < 100; k++) {
 		std::vector<vertex_id_t> parts[num_parts];
@@ -41,12 +41,12 @@ void test_partitioner(vertex_partitioner &partitioner)
 
 int main()
 {
-	printf("test range_vertex_partitioner\n");
-	range_vertex_partitioner r_partitioner(num_parts);
+	printf("test range_graph_partitioner\n");
+	range_graph_partitioner r_partitioner(num_parts);
 	test_partitioner(r_partitioner);
 
-	printf("test modulo_vertex_partitioner\n");
-	modulo_vertex_partitioner m_partitioner(num_parts);
+	printf("test modulo_graph_partitioner\n");
+	modulo_graph_partitioner m_partitioner(num_parts);
 	test_partitioner(m_partitioner);
 
 }

@@ -24,6 +24,7 @@
 
 class worker_thread;
 class graph_engine;
+class compute_vertex;
 
 /**
  * This class is to help balance the load.
@@ -46,7 +47,7 @@ public:
 
 	~load_balancer();
 
-	int steal_activated_vertices(vertex_id_t ids[], int num);
+	int steal_activated_vertices(compute_vertex *vertices[], int num);
 	/**
 	 * After the thread finishes processing the stolen vertices, it needs to
 	 * return all the vertices to their owner threads.

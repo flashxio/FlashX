@@ -79,7 +79,7 @@ public:
 	 * This allows a vertex to request other vertices in the graph.
 	 * @ids: the Ids of vertices.
 	 */
-	void request_vertices(vertex_id_t ids[], int num);
+	void request_vertices(vertex_id_t ids[], size_t num);
 };
 
 class compute_directed_vertex: public compute_vertex
@@ -114,7 +114,7 @@ public:
 	 * This allows a vertex to request partial vertices in the graph.
 	 * @reqs: defines part of vertices..
 	 */
-	void request_partial_vertices(directed_vertex_request reqs[], int num);
+	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 };
 
 class compute_ts_vertex: public compute_vertex
@@ -134,20 +134,25 @@ public:
 	 * This allows a vertex to request partial vertices in the graph.
 	 * @reqs: defines part of vertices..
 	 */
-	void request_partial_vertices(ts_vertex_request reqs[], int num);
+	void request_partial_vertices(ts_vertex_request reqs[], size_t num);
 };
 
 class vertex_scheduler
 {
 public:
-	virtual void schedule(std::vector<vertex_id_t> &vertices) = 0;
+	virtual void schedule(std::vector<compute_vertex *> &vertices) = 0;
 };
 
 class default_vertex_scheduler: public vertex_scheduler
 {
+	struct compare {
+		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
+			return v1->get_id() < v2->get_id();
+		}
+	};
 public:
-	void schedule(std::vector<vertex_id_t> &vertices) {
-		std::sort(vertices.begin(), vertices.end());
+	void schedule(std::vector<compute_vertex *> &vertices) {
+		std::sort(vertices.begin(), vertices.end(), compare());
 	}
 };
 extern default_vertex_scheduler default_scheduler;
@@ -344,7 +349,7 @@ public:
 		return *interpreter;
 	}
 
-	const vertex_partitioner *get_partitioner() const {
+	const graph_partitioner *get_partitioner() const {
 		return &vertices->get_partitioner();
 	}
 
