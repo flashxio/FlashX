@@ -87,12 +87,39 @@ public:
 	}
 };
 
+class wcc_id_t
+{
+	vsize_t deg;
+	vertex_id_t id;
+public:
+	wcc_id_t() {
+		deg = 0;
+		id = 0;
+	}
+
+	wcc_id_t(vsize_t deg, vertex_id_t id) {
+		this->deg = deg;
+		this->id = id;
+	}
+
+	bool operator>(const wcc_id_t &id) const {
+		if (this->deg == id.deg)
+			return this->id > id.id;
+		else
+			return this->deg > id.deg;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
+};
+
 class wcc_comp_message: public vertex_message
 {
-	vertex_id_t id;
+	wcc_id_t id;
 	uint64_t color;
 public:
-	wcc_comp_message(vertex_id_t id, uint64_t color): vertex_message(
+	wcc_comp_message(const wcc_id_t &id, uint64_t color): vertex_message(
 			sizeof(wcc_comp_message), true) {
 		this->id = id;
 		this->color = color;
@@ -102,7 +129,7 @@ public:
 		return color;
 	}
 
-	vertex_id_t get_id() const {
+	const wcc_id_t &get_wcc_id() const {
 		return id;
 	}
 };
@@ -152,6 +179,7 @@ class fwbw_state_t
 		ASSIGNED,
 		FW_VISITED,
 		BW_VISITED,
+		WCC_UPDATED,
 	};
 
 	static const int COLOR_OFF = 60;
@@ -254,6 +282,18 @@ public:
 	bool is_bw() const {
 		return flags.test_flag(BW_BFS);
 	}
+
+	bool is_wcc_updated() const {
+		return flags.test_flag(WCC_UPDATED);
+	}
+
+	void set_wcc_updated() {
+		flags.set_flag(WCC_UPDATED);
+	}
+
+	void clear_wcc_updated() {
+		flags.clear_flag(WCC_UPDATED);
+	}
 };
 
 class scc_vertex: public compute_directed_vertex
@@ -262,21 +302,19 @@ class scc_vertex: public compute_directed_vertex
 	vsize_t num_in_edges;
 	vsize_t num_out_edges;
 
-	vertex_id_t wcc_neigh_min;
 public:
+	wcc_id_t wcc_max;
 	fwbw_state_t fwbw_state;
 
 	scc_vertex() {
 		num_in_edges = 0;
 		num_out_edges = 0;
-		wcc_neigh_min = UINT_MAX;
 	}
 
 	scc_vertex(vertex_id_t id, const vertex_index *index): compute_directed_vertex(
 			id, index) {
 		num_in_edges = get_num_in_edges();
 		num_out_edges = get_num_out_edges();
-		wcc_neigh_min = id;
 	}
 
 	bool is_assigned() const {
@@ -288,8 +326,8 @@ public:
 	}
 
 	void init_wcc() {
-		wcc_neigh_min = get_id();
-		fwbw_state.set_pivot(UINT_MAX);
+		wcc_max = wcc_id_t(get_num_in_edges() + get_num_out_edges(), get_id());
+		fwbw_state.set_wcc_updated();
 	}
 
 	void init_fwbw() {
@@ -716,8 +754,8 @@ void scc_vertex::run_on_messages_stage_part(graph_engine &graph,
 
 void scc_vertex::run_stage_wcc(graph_engine &graph)
 {
-	if (wcc_neigh_min < fwbw_state.get_pivot()) {
-		fwbw_state.set_pivot(wcc_neigh_min);
+	if (fwbw_state.is_wcc_updated()) {
+		fwbw_state.clear_wcc_updated();
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
@@ -736,7 +774,7 @@ void scc_vertex::run_stage_wcc(graph_engine &graph, const page_vertex &vertex)
 		vertex_id_t id = *it;
 		dest_buf[num_dests++] = id;
 	}
-	wcc_comp_message msg(fwbw_state.get_pivot(), fwbw_state.get_color());
+	wcc_comp_message msg(wcc_max, fwbw_state.get_color());
 	graph.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
@@ -749,7 +787,11 @@ void scc_vertex::run_on_messages_stage_wcc(graph_engine &graph,
 		// a different partition. The vertex can just ignore the message.
 		if (msg->get_color() != fwbw_state.get_color())
 			continue;
-		wcc_neigh_min = min(wcc_neigh_min, msg->get_id());
+
+		if (msg->get_wcc_id() > wcc_max) {
+			wcc_max = msg->get_wcc_id();
+			fwbw_state.set_wcc_updated();
+		}
 	}
 }
 
@@ -798,11 +840,11 @@ public:
 	virtual bool keep(compute_vertex &v) {
 		scc_vertex &scc_v = (scc_vertex &) v;
 		bool activate = !scc_v.is_assigned()
-			&& scc_v.fwbw_state.get_pivot() == scc_v.get_id();
+			&& scc_v.wcc_max.get_id() == scc_v.get_id();
 		// If the vertex hasn't been assigned to a component,
 		// let's use the result of wcc (which is stored in pivot) as the color
 		if (!scc_v.is_assigned())
-			scc_v.fwbw_state.assign_new_color(scc_v.fwbw_state.get_pivot());
+			scc_v.fwbw_state.assign_new_color(scc_v.wcc_max.get_id());
 		if (activate)
 			scc_v.init_fwbw();
 		return activate;
