@@ -20,6 +20,8 @@
  * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <atomic>
+
 #include "io_interface.h"
 #include "cache.h"
 #include "container.h"
@@ -488,12 +490,11 @@ public:
 #ifdef STATISTICS
 	void print_stat(int nthreads) {
 		underlying->print_stat(nthreads);
-		static size_t tot_bytes = 0;
-		static size_t tot_accesses = 0;
-		static size_t tot_hits = 0;
-		static size_t tot_fast_process = 0;
-		static int seen_threads = 0;
-		seen_threads++;
+		static std::atomic_ulong tot_bytes;
+		static std::atomic_ulong tot_accesses;
+		static std::atomic_ulong tot_hits;
+		static std::atomic_ulong tot_fast_process;
+		static std::atomic_int seen_threads;
 		tot_bytes += num_bytes;
 		tot_accesses += num_pg_accesses;
 		tot_hits += cache_hits;
@@ -501,11 +502,11 @@ public:
 		printf("global_cached_io: %d reqs, %ld bytes, %d reqs to the underlying io\n",
 				num_processed_areqs.get(), num_bytes, num_from_underlying.get());
 		printf("global_cached_io: There are %d evicted dirty pages\n", num_evicted_dirty_pages);
-		if (seen_threads == nthreads) {
+		if (seen_threads.fetch_add(1) == nthreads - 1) {
 			printf("global_cached_io: in total, there are %ld accessed bytes, %ld pages\n",
-					tot_bytes, tot_accesses);
+					tot_bytes.load(), tot_accesses.load());
 			printf("and there are %ld cache hits and %ld processed in the fast path\n",
-					tot_hits, tot_fast_process);
+					tot_hits.load(), tot_fast_process.load());
 			global_cache->print_stat();
 		}
 	}
