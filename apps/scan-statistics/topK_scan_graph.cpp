@@ -45,7 +45,10 @@ void vertex_size_scheduler::schedule(std::vector<compute_vertex *> &vertices)
 	{
 	public:
 		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
-			return v1->get_ext_mem_size() > v2->get_ext_mem_size();
+			const compute_directed_vertex *dv1 = (const compute_directed_vertex *) v1;
+			const compute_directed_vertex *dv2 = (const compute_directed_vertex *) v2;
+			return dv1->get_num_in_edges() + dv1->get_num_out_edges()
+				> dv2->get_num_in_edges() + dv2->get_num_out_edges();
 		}
 	};
 

@@ -51,18 +51,15 @@ class vertex_index;
  */
 class in_mem_vertex_info
 {
-	vertex_id_t id;
 	vsize_t size;
 	off_t off;
 public:
 	in_mem_vertex_info() {
 		off = 0;
 		size = 0;
-		id = -1;
 	}
 
 	in_mem_vertex_info(vertex_id_t id, off_t off, size_t size) {
-		this->id = id;
 		this->off = off;
 		this->size = size;
 	}
@@ -75,10 +72,6 @@ public:
 
 	vsize_t get_ext_mem_size() const {
 		return size;
-	}
-
-	vertex_id_t get_id() const {
-		return id;
 	}
 };
 

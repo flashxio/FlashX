@@ -181,7 +181,7 @@ class skip_larger {
 	graph_engine &graph;
 public:
 	skip_larger(graph_engine &_graph, vertex_id_t id): graph(_graph) {
-		this->size = graph.get_vertex(id).get_ext_mem_size();
+		this->size = graph.get_vertex_info(id).get_ext_mem_size();
 		this->id = id;
 	}
 
@@ -195,7 +195,7 @@ public:
 	 * on the vertices with the largest Id.
 	 */
 	bool operator()(vertex_id_t id) {
-		compute_vertex &info = graph.get_vertex(id);
+		const in_mem_vertex_info &info = graph.get_vertex_info(id);
 		if (info.get_ext_mem_size() == size)
 			return id >= this->id;
 		return info.get_ext_mem_size() > size;

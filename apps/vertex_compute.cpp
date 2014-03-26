@@ -10,7 +10,7 @@ request_range vertex_compute::get_next_request()
 	vertex_id_t id = requested_vertices[fetch_idx++];
 
 	// Find the location of the vertex.
-	compute_vertex &info = graph->get_vertex(id);
+	const in_mem_vertex_info &info = graph->get_vertex_info(id);
 	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
 	return request_range(loc, info.get_ext_mem_size(), READ, this);
 }
@@ -101,8 +101,7 @@ request_range directed_vertex_compute::get_next_request()
 		num_complete_issues++;
 
 		directed_vertex_request req = reqs[fetch_idx++];
-		compute_directed_vertex &info
-			= (compute_directed_vertex &) get_graph().get_vertex(req.get_id());
+		const in_mem_vertex_info &info = get_graph().get_vertex_info(req.get_id());
 
 		off_t start_pg = ROUND_PAGE(info.get_ext_mem_off());
 		off_t end_pg = ROUNDUP_PAGE(info.get_ext_mem_off() + info.get_ext_mem_size());
@@ -118,8 +117,10 @@ request_range directed_vertex_compute::get_next_request()
 			part_directed_vertex_compute *comp
 				= (part_directed_vertex_compute *) alloc->alloc();
 			comp->init((compute_directed_vertex *) v, this, req);
-			vsize_t num_in_edges = info.get_num_in_edges();
-			vsize_t num_out_edges = info.get_num_out_edges();
+			compute_directed_vertex &directed_v
+				= (compute_directed_vertex &) get_graph().get_vertex(req.get_id());
+			vsize_t num_in_edges = directed_v.get_num_in_edges();
+			vsize_t num_out_edges = directed_v.get_num_out_edges();
 			if (req.get_type() == edge_type::IN_EDGE) {
 				data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off()
 						+ ext_mem_directed_vertex::get_header_size());
@@ -229,7 +230,7 @@ request_range ts_vertex_compute::get_next_request()
 		num_complete_issues++;
 
 		ts_vertex_request ts_req = reqs[fetch_idx++];
-		compute_vertex &info = get_graph().get_vertex(ts_req.get_id());
+		const in_mem_vertex_info &info = get_graph().get_vertex_info(ts_req.get_id());
 		data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off());
 		// There is some overhead to fetch part of a vertex, so we should
 		// minize the number of vertices fetched partially.
@@ -256,7 +257,7 @@ request_range part_ts_vertex_compute::get_next_request()
 	assert(num_issued == 0);
 	num_issued++;
 
-	compute_vertex &info = graph->get_vertex(
+	const in_mem_vertex_info &info = graph->get_vertex_info(
 			required_vertex_header->get_id());
 	offset_pair rel_offsets = required_vertex_header->get_edge_list_offset(
 			required_part.get_range());

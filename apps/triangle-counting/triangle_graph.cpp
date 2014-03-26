@@ -35,6 +35,7 @@ atomic_number<long> num_completed_vertices;
 
 int hash_threshold = 1000;
 
+#if 0
 class vertex_size_scheduler: public vertex_scheduler
 {
 public:
@@ -53,6 +54,7 @@ void vertex_size_scheduler::schedule(std::vector<compute_vertex *> &vertices)
 
 	std::sort(vertices.begin(), vertices.end(), comp_size());
 }
+#endif
 
 class count_msg: public vertex_message
 {

@@ -74,6 +74,7 @@ public:
 	}
 
 	virtual compute_vertex &get_vertex(vertex_id_t id) = 0;
+	virtual const in_mem_vertex_info &get_vertex_info(vertex_id_t id) const = 0;
 
 	virtual vertex_id_t get_max_vertex_id() const = 0;
 
@@ -106,6 +107,7 @@ class NUMA_local_graph_index: public graph_index
 	size_t num_vertices;
 	size_t num_non_empty;
 	vertex_type *vertex_arr;
+	in_mem_vertex_info *info_arr;
 	graph_partitioner *partitioner;
 	const vertex_index *index;
 
@@ -123,11 +125,15 @@ class NUMA_local_graph_index: public graph_index
 		this->node_id = node_id;
 		vertex_arr = (vertex_type *) numa_alloc_onnode(
 				sizeof(vertex_arr[0]) * num_vertices, node_id);
+		info_arr = (in_mem_vertex_info *) numa_alloc_onnode(
+				sizeof(info_arr[0]) * num_vertices, node_id);
 	}
 public:
 	~NUMA_local_graph_index() {
 		if (vertex_arr)
 			numa_free(vertex_arr, sizeof(vertex_arr[0]) * num_vertices);
+		if (info_arr)
+			numa_free(info_arr, sizeof(info_arr[0]) * num_vertices);
 	}
 
 	void init() {
@@ -142,14 +148,23 @@ public:
 			partitioner->map2loc(vid, part_id, part_off);
 			assert(this->part_id == part_id);
 			new (vertex_arr + part_off) vertex_type(vid, index);
-			if (vertex_arr[part_off].get_ext_mem_size() > min_vertex_size) {
+			new (info_arr + part_off) in_mem_vertex_info(vid, index);
+			if (info_arr[part_off].get_ext_mem_size() > min_vertex_size) {
 				num_non_empty++;
 			}
 		}
 		if (local_ids.size() < num_vertices) {
 			assert(local_ids.size() == num_vertices - 1);
 			new (vertex_arr + local_ids.size()) vertex_type();
+			new (info_arr + local_ids.size()) in_mem_vertex_info();
 		}
+	}
+
+	virtual const in_mem_vertex_info &get_vertex_info(vertex_id_t id) const {
+		int part_id;
+		off_t part_off;
+		partitioner->map2loc(id, part_id, part_off);
+		return info_arr[part_off];
 	}
 
 	virtual compute_vertex &get_vertex(vertex_id_t id) {
@@ -275,6 +290,13 @@ public:
 		off_t part_off;
 		partitioner.map2loc(id, part_id, part_off);
 		return index_arr[part_id]->vertex_arr[part_off];
+	}
+
+	virtual const in_mem_vertex_info &get_vertex_info(vertex_id_t id) const {
+		int part_id;
+		off_t part_off;
+		partitioner.map2loc(id, part_id, part_off);
+		return index_arr[part_id]->info_arr[part_off];
 	}
 
 	virtual vertex_id_t get_max_vertex_id() const {

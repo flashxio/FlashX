@@ -44,14 +44,16 @@ const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
 class graph_engine;
 class vertex_request;
 
-class compute_vertex: public in_mem_vertex_info
+class compute_vertex
 {
+	vertex_id_t id;
 public:
 	compute_vertex() {
+		id = INVALID_VERTEX_ID;
 	}
 
-	compute_vertex(vertex_id_t id, const vertex_index *index): in_mem_vertex_info(
-			id, index) {
+	compute_vertex(vertex_id_t id, const vertex_index *index) {
+		this->id = id;
 	}
 
 	virtual void init() {
@@ -80,6 +82,10 @@ public:
 	 * @ids: the Ids of vertices.
 	 */
 	void request_vertices(vertex_id_t ids[], size_t num);
+
+	vertex_id_t get_id() const {
+		return id;
+	}
 };
 
 class compute_directed_vertex: public compute_vertex
@@ -227,6 +233,10 @@ public:
 
 	compute_vertex &get_vertex(vertex_id_t id) {
 		return vertices->get_vertex(id);
+	}
+
+	const in_mem_vertex_info &get_vertex_info(vertex_id_t id) const {
+		return vertices->get_vertex_info(id);
 	}
 
 	void start(std::shared_ptr<vertex_filter> filter);
