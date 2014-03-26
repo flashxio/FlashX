@@ -21,10 +21,13 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L../../libsafs -lsafs -L.. -lgraph -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: test_load_balancer
+all: test_load_balancer test_mem_alloc
 
 test_load_balancer: test_load_balancer.o ../libgraph.a
 	$(CXX) -o test_load_balancer test_load_balancer.o $(LDFLAGS)
+
+test_mem_alloc: test_mem_alloc.o ../libgraph.a
+	$(CXX) -o test_mem_alloc test_mem_alloc.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
