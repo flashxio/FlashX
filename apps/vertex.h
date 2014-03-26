@@ -465,6 +465,11 @@ public:
 	virtual page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start, size_t end) const = 0;
 	virtual vertex_id_t get_id() const = 0;
+	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
+			size_t num) const {
+		assert(0);
+		return 0;
+	}
 	virtual bool is_complete() const {
 		return true;
 	}
@@ -605,6 +610,16 @@ public:
 			default:
 				assert(0);
 		}
+	}
+
+	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
+			size_t num) const {
+		page_byte_array::seq_const_iterator<vertex_id_t> it
+			= get_neigh_seq_it(type, 0, get_num_edges(type)); 
+		size_t i;
+		for (i = 0; i < num && it.has_next(); i++)
+			edges[i] = it.next();
+		return i;
 	}
 
 	vertex_id_t get_id() const {
