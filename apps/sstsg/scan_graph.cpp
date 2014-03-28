@@ -77,7 +77,7 @@ public:
 			const std::vector<vertex_id_t> *neighbors, int timestamp,
 			edge_type type);
 
-	virtual void run(graph_engine &graph) {
+	void run(graph_engine &graph) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}

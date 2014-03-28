@@ -406,7 +406,7 @@ public:
 	void run_stage_part(graph_engine &graph, const page_vertex &vertex);
 	void run_stage_wcc(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &graph,
+	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
 		if (is_assigned())
 			return;

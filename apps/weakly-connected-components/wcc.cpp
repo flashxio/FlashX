@@ -100,7 +100,7 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &,
+	void run_on_messages(graph_engine &,
 			const vertex_message *msgs[], int num) {
 		for (int i = 0; i < num; i++) {
 			component_message *msg = (component_message *) msgs[i];

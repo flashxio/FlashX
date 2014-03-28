@@ -165,7 +165,7 @@ public:
 		return num_pv_triangles;
 	}
 
-	virtual void run(graph_engine &graph) {
+	void run(graph_engine &graph) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
