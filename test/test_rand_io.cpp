@@ -436,5 +436,6 @@ int main(int argc, char *argv[])
 #ifdef STATISTICS
 	print_io_thread_stat();
 #endif
+	factories.clear();
 	destroy_io_system();
 }
