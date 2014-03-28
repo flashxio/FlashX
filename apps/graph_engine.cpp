@@ -251,12 +251,17 @@ simple_msg_sender *graph_engine::get_msg_sender(int thread_id) const
 	return curr->get_msg_sender(thread_id);
 }
 
-void graph_engine::init_threads()
+void graph_engine::init_threads(vertex_program::ptr prog)
 {
 	// Prepare the worker threads.
 	int num_threads = get_num_threads();
 	for (int i = 0; i < num_threads; i++) {
-		worker_thread *t = new worker_thread(this, factory,
+		vertex_program::ptr new_prog;
+		if (prog)
+			new_prog = prog->clone();
+		else
+			new_prog = vertices->create_def_vertex_program();
+		worker_thread *t = new worker_thread(this, factory, std::move(new_prog),
 				i % num_nodes, i, num_threads);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
@@ -267,9 +272,9 @@ void graph_engine::init_threads()
 	}
 }
 
-void graph_engine::start(vertex_id_t ids[], int num)
+void graph_engine::start(vertex_id_t ids[], int num, vertex_program::ptr prog)
 {
-	init_threads();
+	init_threads(std::move(prog));
 	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
@@ -284,9 +289,10 @@ void graph_engine::start(vertex_id_t ids[], int num)
 	}
 }
 
-void graph_engine::start(std::shared_ptr<vertex_filter> filter)
+void graph_engine::start(std::shared_ptr<vertex_filter> filter,
+		vertex_program::ptr prog)
 {
-	init_threads();
+	init_threads(std::move(prog));
 	// Let's assume all vertices will be activated first.
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
@@ -295,9 +301,9 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter)
 	}
 }
 
-void graph_engine::start_all()
+void graph_engine::start_all(vertex_program::ptr prog)
 {
-	init_threads();
+	init_threads(std::move(prog));
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices();

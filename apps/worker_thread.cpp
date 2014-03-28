@@ -57,11 +57,13 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 }
 
 worker_thread::worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
-		int node_id, int worker_id, int num_threads): thread("worker_thread",
+		vertex_program::ptr prog, int node_id, int worker_id,
+		int num_threads): thread("worker_thread",
 			node_id), next_activated_vertices(graph->get_partitioner(
 					)->get_part_size(worker_id, graph->get_num_vertices()), node_id),
 			curr_activated_vertices(*graph)
 {
+	this->vprogram = std::move(prog);
 	start_all = false;
 	this->worker_id = worker_id;
 	this->graph = graph;
@@ -147,7 +149,8 @@ int worker_thread::process_activated_vertices(int max)
 		compute_vertex *info = vertex_buf[i];
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
-		info->run(*graph);
+		vertex_program &curr_vprog = get_vertex_program();
+		curr_vprog.run(*graph, *info);
 		if (curr_compute) {
 			assert(curr_compute->has_requests());
 			// It's mostly likely that it is requesting the adjacency list

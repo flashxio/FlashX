@@ -64,6 +64,9 @@ void message_processor::buf_mmsg(vertex_id_t id, multicast_message &mmsg)
 void message_processor::process_multicast_msg(multicast_message &mmsg,
 		bool check_steal)
 {
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	vertex_program &curr_vprog = t->get_vertex_program();
+
 	int num_dests = mmsg.get_num_dests();
 	multicast_dest_list dest_list = mmsg.get_dest_list();
 	for (int i = 0; i < num_dests; i++) {
@@ -76,8 +79,7 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 			}
 			else {
 				compute_vertex &info = graph.get_vertex(id);
-				const vertex_message *msgs[] = {&mmsg};
-				info.run_on_messages(graph, msgs, 1);
+				curr_vprog.run_on_message(graph, info, mmsg);
 			}
 		}
 		if (mmsg.is_activate())
@@ -87,6 +89,9 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 
 void message_processor::process_msg(message &msg, bool check_steal)
 {
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	vertex_program &curr_vprog = t->get_vertex_program();
+
 	const int VMSG_BUF_SIZE = 128;
 	vertex_message *v_msgs[VMSG_BUF_SIZE];
 	while (!msg.is_empty()) {
@@ -104,8 +109,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 				}
 				else {
 					compute_vertex &info = graph.get_vertex(id);
-					info.run_on_messages(graph,
-							(const vertex_message **) &v_msgs[i], 1);
+					curr_vprog.run_on_message(graph, info, *v_msgs[i]);
 				}
 			}
 			if (v_msgs[i]->is_activate())

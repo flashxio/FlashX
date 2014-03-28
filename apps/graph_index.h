@@ -24,6 +24,7 @@
 
 #include "vertex.h"
 #include "partitioner.h"
+#include "vertex_program.h"
 
 class compute_vertex;
 
@@ -83,6 +84,8 @@ public:
 	virtual size_t get_num_vertices() const = 0;
 
 	virtual const graph_partitioner &get_partitioner() const = 0;
+
+	virtual vertex_program::ptr create_def_vertex_program() const = 0;
 
 	const_iterator begin() const {
 		return const_iterator((graph_index *) this, this->get_min_vertex_id());
@@ -196,6 +199,11 @@ public:
 
 	virtual const graph_partitioner &get_partitioner() const {
 		return *partitioner;
+	}
+
+	virtual vertex_program::ptr create_def_vertex_program() const {
+		assert(0);
+		return vertex_program::ptr();
 	}
 
 	friend class NUMA_graph_index<vertex_type>;
@@ -313,6 +321,11 @@ public:
 
 	virtual const graph_partitioner &get_partitioner() const {
 		return partitioner;
+	}
+
+	virtual vertex_program::ptr create_def_vertex_program(
+			) const {
+		return vertex_program::ptr(new vertex_program_impl<vertex_type>());
 	}
 };
 

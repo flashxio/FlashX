@@ -98,6 +98,7 @@ class worker_thread: public thread
 	graph_engine *graph;
 	compute_allocator *alloc;
 	compute_allocator *part_alloc;
+	vertex_program::ptr vprogram;
 
 	// When a thread process a vertex, the worker thread should point to
 	// a vertex compute. This is useful when a user-defined compute vertex
@@ -142,7 +143,7 @@ class worker_thread: public thread
 	atomic_number<long> num_completed_vertices_in_level;
 public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
-			int node_id, int worker_id, int num_threads);
+			vertex_program::ptr prog, int node_id, int worker_id, int num_threads);
 
 	~worker_thread();
 
@@ -160,7 +161,6 @@ public:
 		std::vector<vertex_id_t> kept_ids;
 		BOOST_FOREACH(vertex_id_t id, local_ids) {
 			compute_vertex &v = graph->get_vertex(id);
-			v.init();
 			if (filter && filter->keep(v))
 				kept_ids.push_back(id);
 		}
@@ -286,6 +286,10 @@ public:
 
 	slab_allocator *get_msg_allocator() const {
 		return msg_alloc;
+	}
+
+	vertex_program &get_vertex_program() {
+		return *vprogram;
 	}
 
 	friend class load_balancer;

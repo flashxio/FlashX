@@ -156,6 +156,8 @@ public:
 	}
 
 	size_t get_est_local_scan(graph_engine &graph, const page_vertex *vertex);
+
+	using scan_vertex::run;
 	void run(graph_engine &graph);
 	virtual void run_on_itself(graph_engine &graph, const page_vertex &vertex);
 	virtual void finding_triangles_end(graph_engine &graph) {

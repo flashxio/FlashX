@@ -145,6 +145,8 @@ public:
 			const vertex_index *index): scan_vertex(id, index) {
 	}
 
+	using scan_vertex::run;
+
 	void run(graph_engine &graph) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);

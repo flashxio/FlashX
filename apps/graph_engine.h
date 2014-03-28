@@ -35,6 +35,7 @@
 #include "graph_index.h"
 #include "graph_config.h"
 #include "vertex_request.h"
+#include "vertex_program.h"
 
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
@@ -55,27 +56,6 @@ public:
 	compute_vertex(vertex_id_t id, const vertex_index *index) {
 		this->id = id;
 	}
-
-	virtual void init() {
-	}
-
-	/**
-	 * This is a pre-run before users get any information of adjacency list
-	 * of vertices.
-	 */
-	virtual void run(graph_engine &graph) = 0;
-
-	/**
-	 * Run user's code when the adjacency list of the vertex is read
-	 * from disks.
-	 */
-	virtual void run(graph_engine &graph, const page_vertex &vertex) = 0;
-
-	/**
-	 * Run user's code when the vertex receives messages from other.
-	 */
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) = 0;
 
 	/**
 	 * This allows a vertex to request other vertices in the graph.
@@ -214,7 +194,7 @@ class graph_engine
 	simple_msg_sender *get_msg_sender(int thread_id) const;
 	multicast_msg_sender *get_multicast_sender(int thread_id) const;
 	multicast_msg_sender *get_activate_sender(int thread_id) const;
-	void init_threads();
+	void init_threads(vertex_program::ptr prog);
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index);
@@ -239,9 +219,11 @@ public:
 		return vertices->get_vertex_info(id);
 	}
 
-	void start(std::shared_ptr<vertex_filter> filter);
-	void start(vertex_id_t ids[], int num);
-	void start_all();
+	void start(std::shared_ptr<vertex_filter> filter,
+			vertex_program::ptr prog = vertex_program::ptr());
+	void start(vertex_id_t ids[], int num,
+			vertex_program::ptr prog = vertex_program::ptr());
+	void start_all(vertex_program::ptr prog = vertex_program::ptr());
 
 	/**
 	 * The algorithm progresses to the next level.

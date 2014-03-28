@@ -50,13 +50,14 @@ void vertex_compute::run(page_byte_array &array)
 			interpreter.get_vertex_size());
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	t->set_curr_vertex_compute(this);
+	vertex_program &curr_vprog = t->get_vertex_program();
 	// We haven't perform computation on the vertex yet.
 	if (v == NULL) {
 		v = &graph->get_vertex(ext_v->get_id());
-		v->run(*graph, *ext_v);
+		curr_vprog.run(*graph, *v, *ext_v);
 	}
 	else {
-		v->run(*graph, *ext_v);
+		curr_vprog.run(*graph, *v, *ext_v);
 	}
 	complete_request();
 	t->reset_curr_vertex_compute();
@@ -85,7 +86,10 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 		assert(0);
 	page_directed_vertex pg_v(req.get_id(), num_in_edges,
 			num_out_edges, array);
-	comp_v->run(*graph, pg_v);
+
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	vertex_program &curr_vprog = t->get_vertex_program();
+	curr_vprog.run(*graph, *comp_v, pg_v);
 	num_fetched++;
 	compute->complete_request();
 	compute->dec_ref();
@@ -171,6 +175,9 @@ public:
 void directed_vertex_compute::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	vertex_program &curr_vprog = t->get_vertex_program();
+
 	assert(this->reqs.empty());
 	for (size_t i = 0; i < num; i++) {
 		directed_vertex_request *req = &reqs[i];
@@ -183,7 +190,7 @@ void directed_vertex_compute::request_partial_vertices(
 					&& info.get_num_out_edges() == 0)) {
 			empty_page_byte_array array;
 			page_directed_vertex pg_v(req->get_id(), 0, 0, array);
-			v->run(*graph, pg_v);
+			curr_vprog.run(*graph, *v, pg_v);
 			// We don't need to call complete_request() here.
 		}
 		else
@@ -286,7 +293,10 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 
 		num_fetched++;
 		assert(comp_v);
-		comp_v->run(*graph, *ext_v);
+
+		worker_thread *t = (worker_thread *) thread::get_curr_thread();
+		vertex_program &curr_vprog = t->get_vertex_program();
+		curr_vprog.run(*graph, *comp_v, *ext_v);
 		ts_compute->complete_request();
 		ts_compute->dec_ref();
 		worker_thread *curr = (worker_thread *) thread::get_curr_thread();
