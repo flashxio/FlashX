@@ -43,7 +43,8 @@ public:
 	kcore_vertex() {
 	}
 
-  kcore_vertex(vertex_id_t id, const vertex_index *index): compute_directed_vertex(id, index) {
+  kcore_vertex(vertex_id_t id, const vertex_index *index):
+    compute_directed_vertex(id, index) {
     this->deleted = false;
     this->degree = get_num_in_edges() + get_num_out_edges();
   }
@@ -85,7 +86,8 @@ class deleted_message: public vertex_message
   }
 };
 
-void multicast_delete_msg(graph_engine &graph, const page_vertex &vertex, edge_type E)
+void multicast_delete_msg(graph_engine &graph, 
+      const page_vertex &vertex, edge_type E)
 {
     page_byte_array::const_iterator<vertex_id_t> end_it
       = vertex.get_neigh_end(E);
@@ -96,7 +98,6 @@ void multicast_delete_msg(graph_engine &graph, const page_vertex &vertex, edge_t
       vertex_id_t id = *it;
       dest_buf[num_dests++] = id;
     } 
-
     // Doesn't matter who sent it, just --degree on reception 
     if (num_dests > 0) {
       graph.multicast_msg(dest_buf.data(), num_dests, deleted_message());

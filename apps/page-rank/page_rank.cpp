@@ -41,7 +41,8 @@ class pgrank_vertex: public compute_directed_vertex
 public:
 	pgrank_vertex() { }
 
-  pgrank_vertex(vertex_id_t id, const vertex_index *index): compute_directed_vertex(id, index) {
+  pgrank_vertex(vertex_id_t id, const vertex_index *index): 
+        compute_directed_vertex(id, index) {
     this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
   }
 
@@ -57,7 +58,8 @@ public:
 	void run(graph_engine &graph, const page_vertex &vertex);
 
 	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) { }; // Only serves to activate on the next iteration
+/* Only serves to activate on the next iteration */
+			const vertex_message *msgs[], int num) { }; 
 };
 
 // Alerts every out-neighbor that my page rank has changed
@@ -66,7 +68,8 @@ class pgrank_message: public vertex_message
 {
   public:
   pgrank_message( ): 
-        vertex_message(sizeof(pgrank_message), true) { // Always activate. Only place vertices are activated
+  // Always activate. Only place vertices are activated
+        vertex_message(sizeof(pgrank_message), true) { 
         }
 };
 
@@ -80,7 +83,8 @@ void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
       = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
     vertex_id_t id = *it;
     pgrank_vertex& v = (pgrank_vertex&) graph.get_vertex(id);
-    accum += (v.get_curr_itr_pr()/v.get_num_out_edges()); // Notice I want this iteration's pagerank
+    // Notice I want this iteration's pagerank
+    accum += (v.get_curr_itr_pr()/v.get_num_out_edges()); 
   }   
 
   // Apply
@@ -212,6 +216,7 @@ int main(int argc, char *argv[])
 	graph_engine::destroy(graph);
 	destroy_io_system();
   
-  printf("The %d vertices have page rank sum: %f\n in %f seconds\n", count, total, time_diff(start, end));
+  printf("The %d vertices have page rank sum: %f\n in %f seconds\n", 
+      count, total, time_diff(start, end));
 #endif
 }
