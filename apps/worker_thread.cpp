@@ -27,9 +27,9 @@
 #include "load_balancer.h"
 #include "steal_state.h"
 
-sorted_vertex_queue::sorted_vertex_queue(graph_engine &_graph): graph(_graph)
+sorted_vertex_queue::sorted_vertex_queue(graph_engine &_graph): fetch_idx(
+		0, true), graph(_graph)
 {
-	fetch_idx = 0;
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	this->scheduler = &default_scheduler;
 }
@@ -38,7 +38,6 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 		const graph_partitioner *partitioner)
 {
 	pthread_spin_lock(&lock);
-	fetch_idx = 0;
 	sorted_vertices.clear();
 	std::vector<vertex_id_t> local_ids;
 	map.get_set_bits(local_ids);
@@ -53,6 +52,8 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 
 	if (scheduler != &default_scheduler)
 		scheduler->schedule(sorted_vertices);
+	fetch_idx = scan_pointer(sorted_vertices.size(),
+			graph.get_curr_level() % 2);
 	pthread_spin_unlock(&lock);
 }
 

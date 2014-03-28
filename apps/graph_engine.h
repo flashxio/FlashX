@@ -376,6 +376,10 @@ public:
 	void set_max_processing_vertices(int max) {
 		max_processing_vertices = max;
 	}
+
+	int get_curr_level() const {
+		return level.get();
+	}
 };
 
 #endif

@@ -29,9 +29,43 @@
 
 class sorted_vertex_queue
 {
+	struct scan_pointer {
+		size_t size;
+		size_t idx;
+		bool forward;
+	public:
+		scan_pointer(size_t size, bool forward) {
+			this->forward = forward;
+			this->size = size;
+			if (forward)
+				idx = 0;
+			else
+				idx = size;
+		}
+
+		size_t get_num_remaining() const {
+			if (forward)
+				return size - idx;
+			else
+				return idx;
+		}
+
+		size_t get_curr_loc() const {
+			return idx;
+		}
+
+		size_t move(size_t dist) {
+			if (forward)
+				idx += dist;
+			else
+				idx -= dist;
+			return idx;
+		}
+	};
+
 	pthread_spinlock_t lock;
 	std::vector<compute_vertex *> sorted_vertices;
-	size_t fetch_idx;
+	scan_pointer fetch_idx;
 	vertex_scheduler *scheduler;
 	graph_engine &graph;
 public:
@@ -43,7 +77,7 @@ public:
 
 	void init(const vertex_id_t buf[], size_t size, bool sorted) {
 		pthread_spin_lock(&lock);
-		fetch_idx = 0;
+		this->fetch_idx = scan_pointer(size, graph.get_curr_level() % 2);
 		sorted_vertices.clear();
 		sorted_vertices.resize(size);
 		for (size_t i = 0; i < size; i++)
@@ -62,24 +96,27 @@ public:
 
 	int fetch(compute_vertex *vertices[], int num) {
 		pthread_spin_lock(&lock);
-		int num_fetches = min(num, sorted_vertices.size() - fetch_idx);
-		memcpy(vertices, sorted_vertices.data() + fetch_idx,
-				num_fetches * sizeof(compute_vertex *));
-		fetch_idx += num_fetches;
+		int num_fetches = min(num, fetch_idx.get_num_remaining());
+		if (num_fetches > 0) {
+			size_t curr_loc = fetch_idx.get_curr_loc();
+			size_t new_loc = fetch_idx.move(num_fetches);
+			memcpy(vertices, sorted_vertices.data() + min(curr_loc, new_loc),
+					num_fetches * sizeof(compute_vertex *));
+		}
 		pthread_spin_unlock(&lock);
 		return num_fetches;
 	}
 
 	bool is_empty() {
 		pthread_spin_lock(&lock);
-		bool ret = sorted_vertices.size() - fetch_idx == 0;
+		bool ret = fetch_idx.get_num_remaining() == 0;
 		pthread_spin_unlock(&lock);
 		return ret;
 	}
 
 	size_t get_num_vertices() {
 		pthread_spin_lock(&lock);
-		size_t num = sorted_vertices.size() - fetch_idx;
+		size_t num = fetch_idx.get_num_remaining();
 		pthread_spin_unlock(&lock);
 		return num;
 	}
