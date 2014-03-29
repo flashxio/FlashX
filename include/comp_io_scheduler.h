@@ -34,7 +34,7 @@ class comp_io_scheduler
 	// The I/O instance where the I/O scheduler works on.
 	io_interface *io;
 
-protected:
+public:
 	class compute_iterator {
 		fifo_queue<user_compute *>::const_iterator it;
 	public:
@@ -75,7 +75,6 @@ protected:
 		return compute_iterator(incomplete_computes, true);
 	}
 
-public:
 	comp_io_scheduler(int node_id);
 
 	virtual ~comp_io_scheduler() {
