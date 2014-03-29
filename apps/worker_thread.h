@@ -26,43 +26,10 @@
 
 #include "graph_engine.h"
 #include "bitmap.h"
+#include "scan_pointer.h"
 
 class sorted_vertex_queue
 {
-	struct scan_pointer {
-		size_t size;
-		size_t idx;
-		bool forward;
-	public:
-		scan_pointer(size_t size, bool forward) {
-			this->forward = forward;
-			this->size = size;
-			if (forward)
-				idx = 0;
-			else
-				idx = size;
-		}
-
-		size_t get_num_remaining() const {
-			if (forward)
-				return size - idx;
-			else
-				return idx;
-		}
-
-		size_t get_curr_loc() const {
-			return idx;
-		}
-
-		size_t move(size_t dist) {
-			if (forward)
-				idx += dist;
-			else
-				idx -= dist;
-			return idx;
-		}
-	};
-
 	pthread_spinlock_t lock;
 	std::vector<compute_vertex *> sorted_vertices;
 	scan_pointer fetch_idx;

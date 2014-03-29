@@ -7,7 +7,9 @@ request_range vertex_compute::get_next_request()
 	num_complete_issues++;
 
 	// Get the next vertex.
-	vertex_id_t id = requested_vertices[fetch_idx++];
+	size_t curr_loc = fetch_idx.get_curr_loc();
+	size_t new_loc = fetch_idx.move(1);
+	vertex_id_t id = requested_vertices[min(curr_loc, new_loc)];
 
 	// Find the location of the vertex.
 	const in_mem_vertex_info &info = graph->get_vertex_info(id);
@@ -24,22 +26,30 @@ void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 			std::sort(requested_vertices.begin(), requested_vertices.end());
 	}
 	else if(std::is_sorted(ids, ids + num)) {
-		std::vector<vertex_id_t> merged(
-				requested_vertices.size() - fetch_idx + num);
-		std::merge(requested_vertices.begin() + fetch_idx, requested_vertices.end(),
-				ids, ids + num, merged.begin());
+		size_t num_remaining = fetch_idx.get_num_remaining();
+		std::vector<vertex_id_t> merged(num_remaining + num);
+		size_t curr_loc = fetch_idx.get_curr_loc();
+		size_t new_loc = fetch_idx.move(num_remaining);
+		std::vector<vertex_id_t>::const_iterator req_it
+			= requested_vertices.begin() + min(curr_loc, new_loc);
+		std::merge(req_it, req_it + num_remaining, ids, ids + num,
+				merged.begin());
 		requested_vertices.swap(merged);
 	}
 	else {
 		std::vector<vertex_id_t> new_ids(ids, ids + num);
 		std::sort(new_ids.begin(), new_ids.end());
-		std::vector<vertex_id_t> merged(
-				requested_vertices.size() - fetch_idx + num);
-		std::merge(requested_vertices.begin() + fetch_idx, requested_vertices.end(),
+		size_t num_remaining = fetch_idx.get_num_remaining();
+		std::vector<vertex_id_t> merged(num_remaining + num);
+		size_t curr_loc = fetch_idx.get_curr_loc();
+		size_t new_loc = fetch_idx.move(num_remaining);
+		std::vector<vertex_id_t>::const_iterator req_it
+			= requested_vertices.begin() + min(curr_loc, new_loc);
+		std::merge(req_it, req_it + num_remaining,
 				new_ids.begin(), new_ids.end(), merged.begin());
 		requested_vertices.swap(merged);
 	}
-	fetch_idx = 0;
+	fetch_idx = scan_pointer(requested_vertices.size(), true);
 }
 
 void vertex_compute::run(page_byte_array &array)
@@ -106,7 +116,9 @@ request_range directed_vertex_compute::get_next_request()
 		// the user task is completed.
 		num_complete_issues++;
 
-		directed_vertex_request req = reqs[fetch_idx++];
+		size_t curr_loc = fetch_idx.get_curr_loc();
+		size_t new_loc = fetch_idx.move(1);
+		directed_vertex_request req = reqs[min(curr_loc, new_loc)];
 		const in_mem_vertex_info &info = get_graph().get_vertex_info(req.get_id());
 
 		off_t start_pg = ROUND_PAGE(info.get_ext_mem_off());
@@ -208,6 +220,7 @@ void directed_vertex_compute::request_partial_vertices(
 	// TODO is this a right way to complete a vertex?
 	if (this->reqs.empty() && has_completed())
 		issue_thread->complete_vertex(*v);
+	fetch_idx = scan_pointer(this->reqs.size(), true);
 }
 
 class comp_ts_vertex_request
@@ -228,6 +241,7 @@ void ts_vertex_compute::request_partial_vertices(ts_vertex_request reqs[],
 				comp_ts_vertex_request()))
 		std::sort(this->reqs.begin(), this->reqs.end(),
 				comp_ts_vertex_request());
+	fetch_idx = scan_pointer(this->reqs.size(), true);
 }
 
 request_range ts_vertex_compute::get_next_request()
@@ -239,7 +253,9 @@ request_range ts_vertex_compute::get_next_request()
 		// the user task is completed.
 		num_complete_issues++;
 
-		ts_vertex_request ts_req = reqs[fetch_idx++];
+		size_t curr_loc = fetch_idx.get_curr_loc();
+		size_t new_loc = fetch_idx.move(1);
+		ts_vertex_request ts_req = reqs[min(curr_loc, new_loc)];
 		const in_mem_vertex_info &info = get_graph().get_vertex_info(ts_req.get_id());
 		data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off());
 		// There is some overhead to fetch part of a vertex, so we should
