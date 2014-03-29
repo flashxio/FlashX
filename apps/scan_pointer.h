@@ -27,24 +27,26 @@
  */
 struct scan_pointer
 {
+	size_t range_start;
 	size_t size;
 	size_t idx;
 	bool forward;
 public:
 	scan_pointer(size_t size, bool forward) {
 		this->forward = forward;
+		this->range_start = 0;
 		this->size = size;
 		if (forward)
-			idx = 0;
+			idx = range_start;
 		else
-			idx = size;
+			idx = size + range_start;
 	}
 
 	size_t get_num_remaining() const {
 		if (forward)
-			return size - idx;
+			return size + range_start - idx;
 		else
-			return idx;
+			return idx - range_start;
 	}
 
 	size_t get_curr_loc() const {
@@ -57,6 +59,44 @@ public:
 		else
 			idx -= dist;
 		return idx;
+	}
+
+	size_t get_range_start() const {
+		return range_start;
+	}
+
+	size_t get_range_end() const {
+		return range_start + size;
+	}
+
+	size_t get_range_size() const {
+		return size;
+	}
+
+	void set_scan_dir(bool forward) {
+		if (this->forward == forward)
+			return;
+
+		size_t new_range_start;
+		size_t new_range_size;
+		if (forward) {
+			// So the original direction is backward.
+			new_range_start = get_range_start();
+			new_range_size
+				= get_curr_loc() - get_range_start();
+			idx = new_range_start;
+		}
+		else {
+			// So the original direction is forward.
+			new_range_start = get_curr_loc();
+			new_range_size
+				= get_range_end() - get_curr_loc();
+			idx = new_range_start + new_range_size;
+
+		}
+		range_start = new_range_start;
+		size = new_range_size;
+		this->forward = forward;
 	}
 };
 

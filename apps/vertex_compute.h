@@ -74,8 +74,7 @@ public:
 	}
 
 	virtual void set_scan_dir(bool forward) {
-		assert(fetch_idx.get_num_remaining() == requested_vertices.size());
-		fetch_idx = scan_pointer(requested_vertices.size(), forward);
+		fetch_idx.set_scan_dir(forward);
 	}
 
 	virtual int has_requests() const {
@@ -119,8 +118,7 @@ public:
 
 	virtual void set_scan_dir(bool forward) {
 		vertex_compute::set_scan_dir(forward);
-		assert(fetch_idx.get_num_remaining() == reqs.size());
-		fetch_idx = scan_pointer(reqs.size(), forward);
+		fetch_idx.set_scan_dir(forward);
 	}
 
 	virtual int has_requests() const {
@@ -195,8 +193,7 @@ public:
 
 	virtual void set_scan_dir(bool forward) {
 		vertex_compute::set_scan_dir(forward);
-		assert(fetch_idx.get_num_remaining() == reqs.size());
-		fetch_idx = scan_pointer(reqs.size(), forward);
+		fetch_idx.set_scan_dir(forward);
 	}
 
 	virtual int has_requests() const {

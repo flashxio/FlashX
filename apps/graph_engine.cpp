@@ -47,7 +47,7 @@ struct prio_compute
 	}
 };
 
-class comp_prio_compute
+class forward_comp_prio_compute
 {
 public:
 	bool operator()(const prio_compute &c1, const prio_compute &c2) {
@@ -58,6 +58,91 @@ public:
 	}
 };
 
+class backward_comp_prio_compute
+{
+public:
+	bool operator()(const prio_compute &c1, const prio_compute &c2) {
+		// We want the priority queue returns requests with
+		// the smallest offset first. If we use less, the priority queue
+		// will return the request with the greatest offset.
+		return c1.req.get_offset() < c2.req.get_offset();
+	}
+};
+
+template<class prio_queue_type>
+class comp_io_schedule_queue
+{
+	bool forward;
+	// Construct a priority queue on user tasks, ordered by the offset
+	// of their next requests.
+	prio_queue_type user_computes;
+	comp_io_scheduler *scheduler;
+public:
+	comp_io_schedule_queue(comp_io_scheduler *scheduler, bool forward) {
+		this->scheduler = scheduler;
+		this->forward = forward;
+	}
+
+	size_t get_requests(fifo_queue<io_request> &reqs);
+
+	bool is_empty() const {
+		return user_computes.empty();
+	}
+};
+
+template<class prio_queue_type>
+size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
+		fifo_queue<io_request> &reqs)
+{
+	size_t num = 0;
+
+	if (!reqs.is_full()) {
+		// we don't have user computes, we can get some from the queue of
+		// incomplete user computes in comp_io_scheduler.
+		if (user_computes.empty()) {
+			comp_io_scheduler::compute_iterator it = scheduler->get_begin();
+			comp_io_scheduler::compute_iterator end = scheduler->get_end();
+			for (; it != end; ++it) {
+				user_compute *compute = *it;
+				// Skip the ones without user tasks.
+				if (!compute->has_requests())
+					continue;
+
+				// We have a reference to the user compute. Let's increase
+				// its ref count. User computes should be in the queue of
+				// comp_io_scheduler as long as they can generate more
+				// requests. It might not be necessary to increase the ref
+				// count, but it can work as a sanity check.
+				compute->inc_ref();
+				((vertex_compute *) compute)->set_scan_dir(forward);
+				prio_compute prio_comp(scheduler->get_io(), compute);
+				user_computes.push(prio_comp);
+			}
+		}
+
+		// Add requests to the queue in a sorted order.
+		int num = 0;
+		while (!reqs.is_full() && !user_computes.empty()) {
+			num++;
+			prio_compute prio_comp = user_computes.top();
+			user_computes.pop();
+			reqs.push_back(prio_comp.req);
+			num++;
+			user_compute *compute = prio_comp.compute;
+			if (compute->has_requests()) {
+				prio_compute prio_comp(scheduler->get_io(), compute);
+				user_computes.push(prio_comp);
+			}
+			else {
+				// This user compute no longer needs to stay in the priority
+				// queue. We can decrease its ref count.
+				compute->dec_ref();
+			}
+		}
+	}
+	return num;
+}
+
 /**
  * This I/O scheduler is to favor maximizing throughput.
  * Therefore, it processes all user tasks together to potentially increase
@@ -65,12 +150,18 @@ public:
  */
 class throughput_comp_io_scheduler: public comp_io_scheduler
 {
-	// Construct a priority queue on user tasks, ordered by the offset
-	// of their next requests.
-	std::priority_queue<prio_compute, std::vector<prio_compute>,
-		comp_prio_compute> user_computes;
+	// The scheduler process user computes in batches. It reads all
+	// available user computes in the beginning of a batch and then processes
+	// them. A batch ends if the scheduler processes all of the user computes.
+	size_t batch_num;
+	comp_io_schedule_queue<std::priority_queue<prio_compute,
+		std::vector<prio_compute>, forward_comp_prio_compute> > forward_queue;
+	comp_io_schedule_queue<std::priority_queue<prio_compute,
+		std::vector<prio_compute>, backward_comp_prio_compute> > backward_queue;
 public:
-	throughput_comp_io_scheduler(int node_id): comp_io_scheduler(node_id) {
+	throughput_comp_io_scheduler(int node_id): comp_io_scheduler(
+			node_id), forward_queue(this, true), backward_queue(this, false) {
+		batch_num = 0;
 	}
 
 	size_t get_requests(fifo_queue<io_request> &reqs);
@@ -86,57 +177,18 @@ public:
 
 size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
 {
-	size_t num = 0;
-
-	if (!reqs.is_full()) {
-		// we don't have user computes, we can get some from the queue of
-		// incomplete user computes in comp_io_scheduler.
-		if (user_computes.empty()) {
-			compute_iterator it = this->get_begin();
-			compute_iterator end = this->get_end();
-			for (; it != end; ++it) {
-				user_compute *compute = *it;
-				// Skip the ones without user tasks.
-				if (!compute->has_requests())
-					continue;
-
-				// We have a reference to the user compute. Let's increase
-				// its ref count. User computes should be in the queue of
-				// comp_io_scheduler as long as they can generate more
-				// requests. It might not be necessary to increase the ref
-				// count, but it can work as a sanity check.
-				compute->inc_ref();
-				prio_compute prio_comp(get_io(), compute);
-				user_computes.push(prio_comp);
-			}
-		}
-
-		// Add requests to the queue in a sorted order.
-		off_t prev = 0;
-		int num = 0;
-		while (!reqs.is_full() && !user_computes.empty()) {
-			num++;
-			prio_compute prio_comp = user_computes.top();
-			assert(prev <= prio_comp.req.get_offset());
-			prev = prio_comp.req.get_offset();
-			user_computes.pop();
-			assert(prev <= user_computes.top().req.get_offset());
-			reqs.push_back(prio_comp.req);
-			num++;
-			user_compute *compute = prio_comp.compute;
-			if (compute->has_requests()) {
-				prio_compute prio_comp(get_io(), compute);
-				assert(prio_comp.req.get_offset() >= prev);
-				user_computes.push(prio_comp);
-			}
-			else {
-				// This user compute no longer needs to stay in the priority
-				// queue. We can decrease its ref count.
-				compute->dec_ref();
-			}
-		}
+	size_t ret;
+	if (batch_num % 2 == 0) {
+		ret = forward_queue.get_requests(reqs);
+		if (forward_queue.is_empty())
+			batch_num++;
 	}
-	return num;
+	else {
+		ret = backward_queue.get_requests(reqs);
+		if (backward_queue.is_empty())
+			batch_num++;
+	}
+	return ret;
 }
 
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
