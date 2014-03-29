@@ -168,6 +168,16 @@ int worker_thread::process_activated_vertices(int max)
 						// TODO I might need to set the node id.
 						range.get_access_method(), io, -1);
 			}
+			else {
+				// The reason we reach here is that the vertex requests some
+				// partial vertices and the request parts are empty.
+				// The user compute is only referenced here. We need to delete
+				// it.
+				assert(curr_compute->get_ref() == 0);
+				assert(curr_compute->has_completed());
+				compute_allocator *alloc = curr_compute->get_allocator();
+				alloc->free(curr_compute);
+			}
 		}
 		else
 			complete_vertex(*info);

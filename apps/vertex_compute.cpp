@@ -87,6 +87,14 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 	num_fetched++;
 	compute->complete_request();
 	compute->dec_ref();
+	// If the original user compute hasn't been issued to the filesystem,
+	// it's possible that the reference count on it reaches 0 here.
+	// We should deallocate the user compute if its ref count reaches 0.
+	if (compute->get_ref() == 0) {
+		assert(compute->has_completed());
+		compute_allocator *alloc = compute->get_allocator();
+		alloc->free(compute);
+	}
 }
 
 request_range directed_vertex_compute::get_next_request()
@@ -294,6 +302,14 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 		curr_vprog.run(*graph, *comp_v, *ext_v);
 		ts_compute->complete_request();
 		ts_compute->dec_ref();
+		// If the original user compute hasn't been issued to the filesystem,
+		// it's possible that the reference count on it reaches 0 here.
+		// We should deallocate the user compute if its ref count reaches 0.
+		if (ts_compute->get_ref() == 0) {
+			assert(ts_compute->has_completed());
+			compute_allocator *alloc = ts_compute->get_allocator();
+			alloc->free(ts_compute);
+		}
 		worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 		// Let's just assume the user doesn't issue new requests here.
 		// It's easy to change it to work with the case that the user
