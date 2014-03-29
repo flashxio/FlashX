@@ -53,7 +53,7 @@ public:
 	}
 };
 
-class sssp_vertex: public compute_vertex
+class sssp_vertex: public compute_directed_vertex
 {
 	int parent_dist;
 	vertex_id_t tmp_parent;
@@ -67,8 +67,8 @@ public:
 		parent = -1;
 	}
 
-	sssp_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
-			id, index) {
+	sssp_vertex(vertex_id_t id,
+			const vertex_index *index): compute_directed_vertex(id, index) {
 		parent_dist = INT_MAX;
 		tmp_parent = -1;
 		distance = INT_MAX;
@@ -85,8 +85,8 @@ public:
 			distance = parent_dist + 1;
 			parent = tmp_parent;
 
-			vertex_id_t id = get_id();
-			request_vertices(&id, 1);
+			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+			request_partial_vertices(&req, 1);
 		}
 	}
 

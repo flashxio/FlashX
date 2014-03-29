@@ -31,7 +31,7 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-class bfs_vertex: public compute_vertex
+class bfs_vertex: public compute_directed_vertex
 {
 	enum {
 		VISITED,
@@ -42,8 +42,8 @@ public:
 	bfs_vertex() {
 	}
 
-	bfs_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
-			id, index) {
+	bfs_vertex(vertex_id_t id,
+			const vertex_index *index): compute_directed_vertex(id, index) {
 	}
 
 	bool has_visited() const {
@@ -59,8 +59,8 @@ public:
 
 	void run(graph_engine &graph) {
 		if (!has_visited()) {
-			vertex_id_t id = get_id();
-			request_vertices(&id, 1);
+			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+			request_partial_vertices(&req, 1);
 		}
 	}
 
