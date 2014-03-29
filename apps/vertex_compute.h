@@ -61,6 +61,10 @@ public:
 		fetch_idx = 0;
 	}
 
+	void init(compute_vertex *v) {
+		this->v = v;
+	}
+
 	virtual int serialize(char *buf, int size) const {
 		return 0;
 	}

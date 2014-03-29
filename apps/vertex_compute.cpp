@@ -51,14 +51,7 @@ void vertex_compute::run(page_byte_array &array)
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	t->set_curr_vertex_compute(this);
 	vertex_program &curr_vprog = t->get_vertex_program();
-	// We haven't perform computation on the vertex yet.
-	if (v == NULL) {
-		v = &graph->get_vertex(ext_v->get_id());
-		curr_vprog.run(*graph, *v, *ext_v);
-	}
-	else {
-		curr_vprog.run(*graph, *v, *ext_v);
-	}
+	curr_vprog.run(*graph, *v, *ext_v);
 	complete_request();
 	t->reset_curr_vertex_compute();
 }
@@ -90,6 +83,7 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	vertex_program &curr_vprog = t->get_vertex_program();
 	curr_vprog.run(*graph, *comp_v, pg_v);
+	assert(t->get_curr_vertex_compute() == NULL);
 	num_fetched++;
 	compute->complete_request();
 	compute->dec_ref();
@@ -183,6 +177,7 @@ void directed_vertex_compute::request_partial_vertices(
 		directed_vertex_request *req = &reqs[i];
 		compute_directed_vertex &info
 			= (compute_directed_vertex &) get_graph().get_vertex(req->get_id());
+
 		// If the requested edge list is empty, we can just serve the request now.
 		if ((req->get_type() == edge_type::IN_EDGE
 					&& info.get_num_in_edges() == 0)

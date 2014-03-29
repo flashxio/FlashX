@@ -290,11 +290,7 @@ public:
 		return curr_compute;
 	}
 
-	vertex_compute *create_vertex_compute() {
-		assert(curr_compute == NULL);
-		curr_compute = (vertex_compute *) alloc->alloc();
-		return curr_compute;
-	}
+	vertex_compute *create_vertex_compute(compute_vertex *v);
 
 	void set_curr_vertex_compute(vertex_compute *compute) {
 		assert(this->curr_compute == NULL);

@@ -151,16 +151,23 @@ int worker_thread::process_activated_vertices(int max)
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
 		vertex_program &curr_vprog = get_vertex_program();
+		assert(curr_compute == NULL);
 		curr_vprog.run(*graph, *info);
 		if (curr_compute) {
-			assert(curr_compute->has_requests());
-			// It's mostly likely that it is requesting the adjacency list
-			// of itself. But it doesn't really matter what the vertex
-			// wants to request here.
-			request_range range = curr_compute->get_next_request();
-			reqs[num_to_process++] = io_request(curr_compute, range.get_loc(),
-					// TODO I might need to set the node id.
-					range.get_size(), range.get_access_method(), io, -1);
+			// If the user code requests the vertices that are empty or whose
+			// requested part is empty. These empty requests can be handled
+			// immediately, so it's possible that the current vertex compute
+			// may not have requests.
+			if (curr_compute->has_requests()) {
+				// It's mostly likely that it is requesting the adjacency list
+				// of itself. But it doesn't really matter what the vertex
+				// wants to request here.
+				request_range range = curr_compute->get_next_request();
+				reqs[num_to_process++] = io_request(range.get_compute(),
+						range.get_loc(), range.get_size(),
+						// TODO I might need to set the node id.
+						range.get_access_method(), io, -1);
+			}
 		}
 		else
 			complete_vertex(*info);
@@ -212,6 +219,10 @@ void worker_thread::run()
 		assert(curr_activated_vertices.is_empty());
 		printf("worker %d visited %d vertices\n", worker_id, num_visited);
 		assert(num_visited == num_activated_vertices_in_level.get());
+		if (num_visited != num_completed_vertices_in_level.get()) {
+			printf("worker %d: visits %d vertices and completes %ld\n",
+					worker_id, num_visited, num_completed_vertices_in_level.get());
+		}
 		assert(num_visited == num_completed_vertices_in_level.get());
 
 		// Now we have finished this level, we can progress to the next level.
@@ -272,4 +283,12 @@ void worker_thread::activate_vertex(vertex_id_t id)
 	graph->get_partitioner()->map2loc(id, part_id, off);
 	assert(part_id == worker_id);
 	next_activated_vertices.set(off);
+}
+
+vertex_compute *worker_thread::create_vertex_compute(compute_vertex *v)
+{
+	assert(curr_compute == NULL);
+	curr_compute = (vertex_compute *) alloc->alloc();
+	curr_compute->init(v);
+	return curr_compute;
 }
