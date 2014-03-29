@@ -35,30 +35,6 @@
 graph_config graph_conf;
 default_vertex_scheduler default_scheduler;
 
-/**
- * This I/O scheduler is to favor maximizing throughput.
- * Therefore, it processes all user tasks together to potentially increase
- * the page cache hit rate.
- */
-class throughput_comp_io_scheduler: public comp_io_scheduler
-{
-	fifo_queue<io_request> req_buf;
-public:
-	throughput_comp_io_scheduler(int node_id): comp_io_scheduler(
-			node_id), req_buf(node_id, 512, true) {
-	}
-
-	size_t get_requests(fifo_queue<io_request> &reqs);
-};
-
-class throughput_comp_io_sched_creater: public comp_io_sched_creater
-{
-public:
-	comp_io_scheduler *create(int node_id) const {
-		return new throughput_comp_io_scheduler(node_id);
-	}
-};
-
 struct prio_compute
 {
 	user_compute *compute;
@@ -82,29 +58,57 @@ public:
 	}
 };
 
+/**
+ * This I/O scheduler is to favor maximizing throughput.
+ * Therefore, it processes all user tasks together to potentially increase
+ * the page cache hit rate.
+ */
+class throughput_comp_io_scheduler: public comp_io_scheduler
+{
+	// Construct a priority queue on user tasks, ordered by the offset
+	// of their next requests.
+	std::priority_queue<prio_compute, std::vector<prio_compute>,
+		comp_prio_compute> user_computes;
+public:
+	throughput_comp_io_scheduler(int node_id): comp_io_scheduler(node_id) {
+	}
+
+	size_t get_requests(fifo_queue<io_request> &reqs);
+};
+
+class throughput_comp_io_sched_creater: public comp_io_sched_creater
+{
+public:
+	comp_io_scheduler *create(int node_id) const {
+		return new throughput_comp_io_scheduler(node_id);
+	}
+};
+
 size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
 {
 	size_t num = 0;
-	// Let's add the buffered requests first.
-	if (!req_buf.is_empty()) {
-		num = reqs.add(&req_buf);
-	}
 
 	if (!reqs.is_full()) {
-		// Construct a priority queue on user tasks, ordered by the offset
-		// of their next requests.
-		std::priority_queue<prio_compute, std::vector<prio_compute>,
-			comp_prio_compute> user_computes;
-		compute_iterator it = this->get_begin();
-		compute_iterator end = this->get_end();
-		for (; it != end; ++it) {
-			user_compute *compute = *it;
-			// Skip the ones without user tasks.
-			if (!compute->has_requests())
-				continue;
+		// we don't have user computes, we can get some from the queue of
+		// incomplete user computes in comp_io_scheduler.
+		if (user_computes.empty()) {
+			compute_iterator it = this->get_begin();
+			compute_iterator end = this->get_end();
+			for (; it != end; ++it) {
+				user_compute *compute = *it;
+				// Skip the ones without user tasks.
+				if (!compute->has_requests())
+					continue;
 
-			prio_compute prio_comp(get_io(), compute);
-			user_computes.push(prio_comp);
+				// We have a reference to the user compute. Let's increase
+				// its ref count. User computes should be in the queue of
+				// comp_io_scheduler as long as they can generate more
+				// requests. It might not be necessary to increase the ref
+				// count, but it can work as a sanity check.
+				compute->inc_ref();
+				prio_compute prio_comp(get_io(), compute);
+				user_computes.push(prio_comp);
+			}
 		}
 
 		// Add requests to the queue in a sorted order.
@@ -125,16 +129,11 @@ size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
 				assert(prio_comp.req.get_offset() >= prev);
 				user_computes.push(prio_comp);
 			}
-		}
-
-		// We have got a request from each user task. We can't add them to
-		// the queue this time. We need to buffer them.
-		while (!user_computes.empty()) {
-			prio_compute prio_comp = user_computes.top();
-			user_computes.pop();
-			if (req_buf.is_full())
-				req_buf.expand_queue(req_buf.get_size() * 2);
-			req_buf.push_back(prio_comp.req);
+			else {
+				// This user compute no longer needs to stay in the priority
+				// queue. We can decrease its ref count.
+				compute->dec_ref();
+			}
 		}
 	}
 	return num;
