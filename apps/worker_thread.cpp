@@ -122,8 +122,13 @@ void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 					msg_alloc, &threads[i]->msg_processor->get_msg_queue()));
 		multicast_senders.push_back(multicast_msg_sender::create(msg_alloc,
 					&threads[i]->msg_processor->get_msg_queue()));
-		activate_senders.push_back(multicast_msg_sender::create(msg_alloc,
-					&threads[i]->msg_processor->get_msg_queue()));
+		multicast_msg_sender *activate_sender = multicast_msg_sender::create(
+				msg_alloc, &threads[i]->msg_processor->get_msg_queue());
+		// All activation messages are the same. We can initialize the sender
+		// here.
+		vertex_message msg(sizeof(vertex_message), true);
+		activate_sender->init(msg);
+		activate_senders.push_back(activate_sender);
 	}
 	assert(num_self == 1);
 }

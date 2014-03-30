@@ -238,18 +238,9 @@ public:
 		for (int i = 0; i < num; i++) {
 			int part_id = get_partitioner()->map(ids[i]);
 			multicast_msg_sender *sender = get_activate_sender(part_id);
-			bool ret = false;
-			if (sender->has_msg()) {
-				ret = sender->add_dest(ids[i]);
-			}
-			// If we can't add a destination vertex to the multicast msg,
-			// or there isn't a msg in the sender.
-			if (!ret) {
-				vertex_message msg(sizeof(vertex_message), true);
-				sender->init(msg);
-				ret = sender->add_dest(ids[i]);
-				assert(ret);
-			}
+			assert(sender->has_msg());
+			bool ret = sender->add_dest(ids[i]);
+			assert(ret);
 		}
 	}
 

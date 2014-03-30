@@ -220,8 +220,11 @@ public:
 			msg_senders[i]->flush();
 		for (size_t i = 0; i < multicast_senders.size(); i++)
 			multicast_senders[i]->flush();
-		for (size_t i = 0; i < activate_senders.size(); i++)
+		for (size_t i = 0; i < activate_senders.size(); i++) {
 			activate_senders[i]->flush();
+			vertex_message msg(sizeof(vertex_message), true);
+			activate_senders[i]->init(msg);
+		}
 	}
 
 	int process_activated_vertices(int max);

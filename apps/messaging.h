@@ -424,10 +424,12 @@ inline vertex_id_t multicast_dest_list::get_dest(int idx) const
 
 class multicast_msg_sender
 {
+	const static int MMSG_BUF_SIZE = PAGE_SIZE;
 	slab_allocator *alloc;
 	message buf;
 	msg_queue *queue;
 	multicast_message *mmsg;
+	char mmsg_temp_buf[MMSG_BUF_SIZE];
 	multicast_dest_list dest_list;
 
 	multicast_msg_sender(slab_allocator *alloc,
@@ -473,6 +475,8 @@ public:
 			assert(p);
 		}
 		this->mmsg = multicast_message::convert2multicast(p);
+		assert(this->mmsg->get_serialized_size() <= MMSG_BUF_SIZE);
+		this->mmsg->serialize(mmsg_temp_buf, MMSG_BUF_SIZE);
 		dest_list = this->mmsg->get_dest_list();
 	}
 
@@ -480,12 +484,18 @@ public:
 		int ret = buf.inc_msg_size(sizeof(id));
 		if (ret == 0) {
 			flush();
-			return false;
+
+			multicast_message *mmsg_template
+				= (multicast_message *) mmsg_temp_buf;
+			vertex_message *p = (vertex_message *) buf.add(*mmsg_template);
+			// We just add the buffer. We should be able to add the new message.
+			assert(p);
+			this->mmsg = multicast_message::convert2multicast(p);
+			dest_list = this->mmsg->get_dest_list();
+			buf.inc_msg_size(sizeof(id));
 		}
-		else {
-			dest_list.add_dest(id);
-			return true;
-		}
+		dest_list.add_dest(id);
+		return true;
 	}
 
 	bool has_msg() const {
