@@ -288,6 +288,14 @@ public:
 
 	template<class T>
 	void multicast_msg(vertex_id_t ids[], int num, const T &msg) {
+		if (num < get_num_threads()) {
+			for (int i = 0; i < num; i++) {
+				T local_msg = msg;
+				send_msg(ids[i], local_msg);
+			}
+			return;
+		}
+
 		multicast_msg_sender *senders[this->get_num_threads()];
 		for (int i = 0; i < this->get_num_threads(); i++) {
 			senders[i] = get_multicast_sender(i);
