@@ -44,7 +44,10 @@ public:
 
 	void init(const vertex_id_t buf[], size_t size, bool sorted) {
 		pthread_spin_lock(&lock);
-		this->fetch_idx = scan_pointer(size, graph.get_curr_level() % 2);
+		bool forward = true;
+		if (graph_conf.get_elevator_enabled())
+			forward = graph.get_curr_level() % 2;
+		this->fetch_idx = scan_pointer(size, forward);
 		sorted_vertices.clear();
 		sorted_vertices.resize(size);
 		for (size_t i = 0; i < size; i++)

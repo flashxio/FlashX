@@ -52,8 +52,10 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 
 	if (scheduler != &default_scheduler)
 		scheduler->schedule(sorted_vertices);
-	fetch_idx = scan_pointer(sorted_vertices.size(),
-			graph.get_curr_level() % 2);
+	bool forward = true;
+	if (graph_conf.get_elevator_enabled())
+		forward = graph.get_curr_level() % 2;
+	fetch_idx = scan_pointer(sorted_vertices.size(), forward);
 	pthread_spin_unlock(&lock);
 }
 
