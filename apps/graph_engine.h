@@ -238,7 +238,6 @@ public:
 		for (int i = 0; i < num; i++) {
 			int part_id = get_partitioner()->map(ids[i]);
 			multicast_msg_sender *sender = get_activate_sender(part_id);
-			assert(sender->has_msg());
 			bool ret = sender->add_dest(ids[i]);
 			assert(ret);
 		}
@@ -290,36 +289,21 @@ public:
 	template<class T>
 	void multicast_msg(vertex_id_t ids[], int num, const T &msg) {
 		multicast_msg_sender *senders[this->get_num_threads()];
-		for (int i = 0; i < this->get_num_threads(); i++)
+		for (int i = 0; i < this->get_num_threads(); i++) {
 			senders[i] = get_multicast_sender(i);
+			senders[i]->init(msg);
+		}
 		for (int i = 0; i < num; i++) {
 			int part_id = get_partitioner()->map(ids[i]);
 			multicast_msg_sender *sender = senders[part_id];
-			bool ret = false;
-			if (sender->has_msg()) {
-				ret = sender->add_dest(ids[i]);
-			}
-			// If we can't add a destination vertex to the multicast msg,
-			// or there isn't a msg in the sender.
-			if (!ret) {
-				int retries = 0;
-				do {
-					retries++;
-					sender->init(msg);
-					ret = sender->add_dest(ids[i]);
-				} while (!ret);
-				// We shouldn't try it more than twice.
-				assert(retries <= 2);
-			}
+			bool ret = sender->add_dest(ids[i]);
+			assert(ret);
 		}
 		// Now we have multicast the message, we need to notify all senders
 		// of the end of multicast.
 		for (int i = 0; i < this->get_num_threads(); i++) {
 			multicast_msg_sender *sender = senders[i];
-			// We only send the multicast on the sender that has received
-			// the multicast message.
-			if (sender->has_msg())
-				sender->end_multicast();
+			sender->end_multicast();
 		}
 	}
 

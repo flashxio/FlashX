@@ -145,6 +145,16 @@ public:
 		return num_added;
 	}
 
+	template<class T>
+	void remove_last_obj(T &obj) {
+		assert(num_objs > 0);
+		assert(curr_add_off >= obj.get_serialized_size());
+		T *obj_p = (T *) &buf[curr_add_off - obj.get_serialized_size()];
+		assert(obj_p->get_serialized_size() == obj.get_serialized_size());
+		num_objs--;
+		curr_add_off -= obj.get_serialized_size();
+	}
+
 	bool copy_to(message &msg) {
 		assert(msg.alloc);
 		assert(msg.size() >= this->size());
@@ -426,9 +436,15 @@ class multicast_msg_sender
 {
 	const static int MMSG_BUF_SIZE = PAGE_SIZE;
 	slab_allocator *alloc;
+	// The local buffer of vertex messages.
 	message buf;
+	// The destination queue of the sender.
 	msg_queue *queue;
+	// The initialized multicast vertex message.
 	multicast_message *mmsg;
+	// The number of destinations in the multicast message.
+	int num_dests;
+	// This stores the body of the multicast message.
 	char mmsg_temp_buf[MMSG_BUF_SIZE];
 	multicast_dest_list dest_list;
 
@@ -437,6 +453,7 @@ class multicast_msg_sender
 		this->alloc = alloc;
 		this->queue = queue;
 		this->mmsg = NULL;
+		this->num_dests = 0;
 	}
 public:
 	static multicast_msg_sender *create(slab_allocator *alloc,
@@ -454,6 +471,7 @@ public:
 			return 0;
 		}
 		this->mmsg = NULL;
+		this->num_dests = 0;
 		dest_list.clear();
 		queue->add(&buf, 1);
 		if (buf.get_num_objs() > 1)
@@ -468,6 +486,7 @@ public:
 	template<class T>
 	void init(const T &msg) {
 		assert(mmsg == NULL);
+		num_dests = 0;
 		vertex_message *p = (vertex_message *) buf.add(msg);
 		if (p == NULL) {
 			flush();
@@ -494,16 +513,19 @@ public:
 			dest_list = this->mmsg->get_dest_list();
 			buf.inc_msg_size(sizeof(id));
 		}
+		num_dests++;
 		dest_list.add_dest(id);
 		return true;
 	}
 
-	bool has_msg() const {
-		return mmsg != NULL;
-	}
-
 	void end_multicast() {
+		if (num_dests == 0) {
+			multicast_message *mmsg_template
+				= (multicast_message *) mmsg_temp_buf;
+			buf.remove_last_obj(*mmsg_template);
+		}
 		mmsg = NULL;
+		num_dests = 0;
 		dest_list.clear();
 	}
 };
