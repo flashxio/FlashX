@@ -27,7 +27,7 @@ topK-scan: scan_graph.o topK_scan_graph.o ../libgraph.a
 	$(CXX) -o topK-scan scan_graph.o topK_scan_graph.o $(LDFLAGS)
 
 local-scan: scan_graph.o local_scan_graph.o ../libgraph.a
-	$(CXX) -o local_scan scan_graph.o local_scan_graph.o $(LDFLAGS)
+	$(CXX) -o local-scan scan_graph.o local_scan_graph.o $(LDFLAGS)
 
 overlap: overlap.o ../libgraph.a
 	$(CXX) -o overlap overlap.o $(LDFLAGS)
@@ -38,5 +38,6 @@ clean:
 	rm -f *~
 	rm -f topK-scan
 	rm -f local-scan
+	rm -f overlap
 
 -include $(DEPS) 
