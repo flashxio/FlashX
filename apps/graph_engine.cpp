@@ -200,6 +200,16 @@ void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 	compute->request_vertices(ids, num);
 }
 
+vsize_t compute_vertex::get_num_edges() const
+{
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	in_mem_vertex_info info = t->get_graph().get_vertex_info(get_id());
+	assert(!t->get_graph().get_graph_header().has_edge_data());
+	int vertex_header_size = t->get_graph().get_vertex_header_size();
+	assert(vertex_header_size > 0);
+	return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
+}
+
 void compute_directed_vertex::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
@@ -248,15 +258,18 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 		case graph_type::DIRECTED:
 			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
 					new ext_mem_directed_vertex_interpreter());
+			vertex_header_size = ext_mem_directed_vertex::get_header_size();
 			break;
 		case graph_type::UNDIRECTED:
 			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
 					new ext_mem_undirected_vertex_interpreter());
+			vertex_header_size = ext_mem_undirected_vertex::get_header_size();
 			break;
 		case graph_type::TS_DIRECTED:
 			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
 					new ts_ext_mem_vertex_interpreter(
 					header.get_max_num_timestamps()));
+			vertex_header_size = -1;
 			break;
 		case graph_type::TS_UNDIRECTED:
 			assert(0);

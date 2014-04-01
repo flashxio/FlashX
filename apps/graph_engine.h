@@ -57,6 +57,8 @@ public:
 		this->id = id;
 	}
 
+	vsize_t get_num_edges() const;
+
 	/**
 	 * This allows a vertex to request other vertices in the graph.
 	 * @ids: the Ids of vertices.
@@ -71,11 +73,9 @@ public:
 class compute_directed_vertex: public compute_vertex
 {
 	vsize_t num_in_edges;
-	vsize_t num_out_edges;
 public:
 	compute_directed_vertex() {
 		num_in_edges = 0;
-		num_out_edges = 0;
 	}
 
 	compute_directed_vertex(vertex_id_t id,
@@ -85,7 +85,6 @@ public:
 		const directed_vertex_index *index
 			= (const directed_vertex_index *) index1;
 		num_in_edges = index->get_num_in_edges(id);
-		num_out_edges = index->get_num_out_edges(id);
 	}
 
 	vsize_t get_num_in_edges() const {
@@ -93,7 +92,7 @@ public:
 	}
 
 	vsize_t get_num_out_edges() const {
-		return num_out_edges;
+		return get_num_edges() - num_in_edges;
 	}
 
 	/**
@@ -157,6 +156,7 @@ class worker_thread;
 
 class graph_engine
 {
+	int vertex_header_size;
 	graph_header header;
 	graph_index *vertices;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
@@ -365,6 +365,10 @@ public:
 
 	int get_curr_level() const {
 		return level.get();
+	}
+
+	int get_vertex_header_size() const {
+		return vertex_header_size;
 	}
 };
 

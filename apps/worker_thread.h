@@ -298,6 +298,10 @@ public:
 		return *vprogram;
 	}
 
+	graph_engine &get_graph() {
+		return *graph;
+	}
+
 	friend class load_balancer;
 };
 
