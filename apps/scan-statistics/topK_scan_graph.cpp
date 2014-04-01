@@ -47,8 +47,7 @@ void vertex_size_scheduler::schedule(std::vector<compute_vertex *> &vertices)
 		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
 			const compute_directed_vertex *dv1 = (const compute_directed_vertex *) v1;
 			const compute_directed_vertex *dv2 = (const compute_directed_vertex *) v2;
-			return dv1->get_num_in_edges() + dv1->get_num_out_edges()
-				> dv2->get_num_in_edges() + dv2->get_num_out_edges();
+			return dv1->get_num_edges() > dv2->get_num_edges();
 		}
 	};
 
@@ -184,7 +183,7 @@ void topK_scan_vertex::run(graph_engine &graph)
 	else {
 		// If this is the first time to compute on the vertex, we can still
 		// skip a lot of vertices with this condition.
-		size_t num_local_edges = get_num_in_edges() + get_num_out_edges();
+		size_t num_local_edges = get_num_edges();
 		req_itself = num_local_edges * num_local_edges >= max_scan.get();
 	}
 	if (req_itself) {
@@ -231,13 +230,12 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 			all_neighbors.begin());
 	all_neighbors.resize(num_neighbors);
 
-	size_t tot_edges = (size_t) get_num_in_edges() + get_num_out_edges();
+	size_t tot_edges = get_num_edges();
 	for (size_t i = 0; i < all_neighbors.size(); i++) {
 		scan_vertex &v = (scan_vertex &) graph.get_vertex(all_neighbors[i]);
 		// The max number of common neighbors should be smaller than all neighbors
 		// in the neighborhood, assuming there aren't duplicated edges.
-		tot_edges += min(v.get_num_in_edges() + v.get_num_out_edges(),
-				num_neighbors * 2);
+		tot_edges += min(v.get_num_edges(), num_neighbors * 2);
 	}
 	tot_edges /= 2;
 	est_local_scan = tot_edges;
@@ -249,7 +247,7 @@ void topK_scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &ver
 	assert(data == NULL);
 
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
-	assert(num_local_edges == (size_t) get_num_in_edges() + get_num_out_edges());
+	assert(num_local_edges == get_num_edges());
 	if (num_local_edges == 0)
 		return;
 
@@ -337,7 +335,7 @@ int main(int argc, char *argv[])
 
 		bool keep(compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
-			return scan_v.get_num_in_edges() + scan_v.get_num_out_edges() >= min;
+			return scan_v.get_num_edges() >= min;
 		}
 	};
 
@@ -369,8 +367,7 @@ int main(int argc, char *argv[])
 
 		bool keep(compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
-			size_t num_local_edges = scan_v.get_num_in_edges()
-				+ scan_v.get_num_out_edges();
+			size_t num_local_edges = scan_v.get_num_edges();
 			return num_local_edges * num_local_edges >= min;
 		}
 	};

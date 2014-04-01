@@ -169,7 +169,7 @@ public:
 			const vertex_message *msgs[], int num) {
 		for (int i = 0; i < num; i++) {
 			const count_msg *msg = (const count_msg *) msgs[i];
-			num_edges.inc(msg->get_num());
+			num_edges += msg->get_num();
 		}
 	}
 

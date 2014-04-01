@@ -351,10 +351,10 @@ struct runtime_data_t
 	}
 };
 
-class scan_vertex: public compute_directed_vertex
+class scan_vertex: public compute_vertex
 {
 protected:
-	atomic_number<size_t> num_edges;
+	size_t num_edges;
 
 #ifdef PV_STAT
 	// For testing
@@ -380,7 +380,7 @@ public:
 #endif
 	}
 
-	scan_vertex(vertex_id_t id, const vertex_index *index): compute_directed_vertex(
+	scan_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
 			id, index) {
 		data = NULL;
 
@@ -404,7 +404,7 @@ public:
 #endif
 
 	size_t get_local_scan() const {
-		return num_edges.get();
+		return num_edges;
 	}
 
 	void run(graph_engine &graph, const page_vertex &vertex) {

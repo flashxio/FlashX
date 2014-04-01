@@ -257,7 +257,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	assert(data == NULL);
 
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
-	assert(num_local_edges == (size_t) get_num_in_edges() + get_num_out_edges());
+	assert(num_local_edges == get_num_edges());
 #ifdef PV_STAT
 	num_all_edges = num_local_edges;
 #endif
@@ -300,7 +300,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 			tmp++;
 		}
 	}
-	num_edges.inc(tmp);
+	num_edges += tmp;
 
 	if (data->neighbors->empty()) {
 		destroy_runtime(data);
@@ -326,7 +326,7 @@ void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 #endif
 	size_t ret = data->neighbors->count_edges(&vertex);
 	if (ret > 0)
-		num_edges.inc(ret);
+		num_edges += ret;
 #ifdef PV_STAT
 	gettimeofday(&end, NULL);
 	time_us += time_diff_us(start, end);
@@ -344,7 +344,7 @@ void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 		gettimeofday(&curr, NULL);
 		fprintf(stderr,
 				"v%u: # edges: %d, scan: %d, scan bytes: %ld, # rand jumps: %ld, # comps: %ld, time: %ldms\n",
-				get_id(), num_all_edges, num_edges.get(), scan_bytes, rand_jumps, min_comps, time_us / 1000);
+				get_id(), num_all_edges, num_edges, scan_bytes, rand_jumps, min_comps, time_us / 1000);
 #endif
 
 		finding_triangles_end(graph);
