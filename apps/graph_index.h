@@ -260,6 +260,7 @@ class NUMA_graph_index: public graph_index
 		// We use the last entry in the array to store the location of
 		// the end of the graph file.
 		off_arr = new off_t[num_vertices + 1];
+#pragma omp parallel for reduction(+:num_non_empty)
 		for (size_t i = 0; i < num_vertices; i++) {
 			off_arr[i] = ::get_vertex_off(index, i);
 			if (::get_vertex_size(index, i) > min_vertex_size) {
