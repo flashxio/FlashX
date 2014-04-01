@@ -143,15 +143,20 @@ public:
 
 class topK_scan_vertex: public scan_vertex
 {
-	size_t est_local_scan;
 public:
 	topK_scan_vertex() {
-		est_local_scan = 0;
 	}
 
 	topK_scan_vertex(vertex_id_t id, const vertex_index *index): scan_vertex(
 			id, index) {
-		est_local_scan = 0;
+	}
+
+	bool has_est_local() const {
+		return local_value.has_est_local();
+	}
+
+	size_t get_est_local_scan() const {
+		return local_value.get_est_local();
 	}
 
 	size_t get_est_local_scan(graph_engine &graph, const page_vertex *vertex);
@@ -175,11 +180,11 @@ void topK_scan_vertex::run(graph_engine &graph)
 {
 	bool req_itself = false;
 	// If we have computed local scan on the vertex, skip the vertex.
-	if (get_local_scan() > 0)
+	if (has_local_scan())
 		return;
 	// If we have estimated the local scan, we should use the estimated one.
-	else if (est_local_scan > 0)
-		req_itself = est_local_scan > max_scan.get();
+	else if (has_est_local())
+		req_itself = get_est_local_scan() > max_scan.get();
 	else {
 		// If this is the first time to compute on the vertex, we can still
 		// skip a lot of vertices with this condition.
@@ -196,8 +201,8 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 {
 	// We have estimated the local scan of this vertex, return
 	// the estimated one
-	if (est_local_scan > 0)
-		return est_local_scan;
+	if (has_est_local())
+		return get_est_local_scan();
 
 	class skip_self {
 		vertex_id_t id;
@@ -238,8 +243,8 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 		tot_edges += min(v.get_num_edges(), num_neighbors * 2);
 	}
 	tot_edges /= 2;
-	est_local_scan = tot_edges;
-	return est_local_scan;
+	local_value.set_est_local(tot_edges);
+	return tot_edges;
 }
 
 void topK_scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)

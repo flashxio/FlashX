@@ -139,10 +139,12 @@ class local_scan_vertex: public scan_vertex
 {
 public:
 	local_scan_vertex() {
+		local_value.set_real_local(0);
 	}
 
 	local_scan_vertex(vertex_id_t id,
 			const vertex_index *index): scan_vertex(id, index) {
+		local_value.set_real_local(0);
 	}
 
 	using scan_vertex::run;
@@ -169,7 +171,7 @@ public:
 			const vertex_message *msgs[], int num) {
 		for (int i = 0; i < num; i++) {
 			const count_msg *msg = (const count_msg *) msgs[i];
-			num_edges += msg->get_num();
+			local_value.inc_real_local(msg->get_num());
 		}
 	}
 

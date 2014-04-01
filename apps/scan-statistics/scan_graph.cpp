@@ -300,7 +300,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 			tmp++;
 		}
 	}
-	num_edges += tmp;
+	data->local_scan += tmp;
 
 	if (data->neighbors->empty()) {
 		destroy_runtime(data);
@@ -326,7 +326,7 @@ void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 #endif
 	size_t ret = data->neighbors->count_edges(&vertex);
 	if (ret > 0)
-		num_edges += ret;
+		data->local_scan += ret;
 #ifdef PV_STAT
 	gettimeofday(&end, NULL);
 	time_us += time_diff_us(start, end);
@@ -335,6 +335,8 @@ void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (data->num_joined == data->neighbors->size()) {
+		local_value.set_real_local(data->local_scan);
+
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -344,7 +346,7 @@ void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 		gettimeofday(&curr, NULL);
 		fprintf(stderr,
 				"v%u: # edges: %d, scan: %d, scan bytes: %ld, # rand jumps: %ld, # comps: %ld, time: %ldms\n",
-				get_id(), num_all_edges, num_edges, scan_bytes, rand_jumps, min_comps, time_us / 1000);
+				get_id(), num_all_edges, data->local_scan, scan_bytes, rand_jumps, min_comps, time_us / 1000);
 #endif
 
 		finding_triangles_end(graph);
