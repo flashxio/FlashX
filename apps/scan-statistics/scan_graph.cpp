@@ -268,7 +268,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
 
-	data = create_runtime(graph, &vertex);
+	data = create_runtime(graph, *this, vertex);
 #ifdef PV_STAT
 	gettimeofday(&vertex_start, NULL);
 	fprintf(stderr, "compute v%u (with %d edges, compute on %ld edges, potential %ld inter-edges) on thread %d at %.f seconds\n",
@@ -303,7 +303,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	data->local_scan += tmp;
 
 	if (data->neighbors->empty()) {
-		destroy_runtime(data);
+		destroy_runtime(*this, data);
 		data = NULL;
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
@@ -349,9 +349,9 @@ void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 				get_id(), num_all_edges, data->local_scan, scan_bytes, rand_jumps, min_comps, time_us / 1000);
 #endif
 
-		finding_triangles_end(graph);
+		::finding_triangles_end(graph, *this);
 
-		destroy_runtime(data);
+		destroy_runtime(*this, data);
 		data = NULL;
 	}
 }
@@ -384,24 +384,31 @@ public:
 	}
 };
 
-runtime_data_t *scan_vertex::create_runtime(graph_engine &graph,
-		const page_vertex *vertex)
+runtime_data_t *default_create_runtime(graph_engine &graph, scan_vertex &scan_v,
+		const page_vertex &pg_v)
 {
 	merge_edge merge;
 	std::vector<attributed_neighbor> neighbors(
-			vertex->get_num_edges(edge_type::BOTH_EDGES));
+			pg_v.get_num_edges(edge_type::BOTH_EDGES));
 	size_t num_neighbors = unique_merge(
-			vertex->get_neigh_begin(edge_type::IN_EDGE),
-			vertex->get_neigh_end(edge_type::IN_EDGE),
-			vertex->get_neigh_begin(edge_type::OUT_EDGE),
-			vertex->get_neigh_end(edge_type::OUT_EDGE),
-			skip_self(graph, vertex->get_id()), merge,
+			pg_v.get_neigh_begin(edge_type::IN_EDGE),
+			pg_v.get_neigh_end(edge_type::IN_EDGE),
+			pg_v.get_neigh_begin(edge_type::OUT_EDGE),
+			pg_v.get_neigh_end(edge_type::OUT_EDGE),
+			skip_self(graph, pg_v.get_id()), merge,
 			neighbors.begin());
 	neighbors.resize(num_neighbors);
 	return new runtime_data_t(std::unique_ptr<neighbor_list>(
-				new neighbor_list(*vertex, neighbors)));
+				new neighbor_list(pg_v, neighbors)));
 }
-void scan_vertex::destroy_runtime(runtime_data_t *data)
+
+void default_destroy_runtime(scan_vertex &graph, runtime_data_t *data)
 {
 	delete data;
 }
+
+void (*finding_triangles_end)(graph_engine &, scan_vertex &);
+runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
+		const page_vertex &) = default_create_runtime;
+void (*destroy_runtime)(scan_vertex &,
+		runtime_data_t *) = default_destroy_runtime;

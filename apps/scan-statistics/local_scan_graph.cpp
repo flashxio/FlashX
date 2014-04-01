@@ -154,7 +154,7 @@ public:
 		request_vertices(&id, 1);
 	}
 
-	virtual void finding_triangles_end(graph_engine &graph) {
+	void finding_triangles_end(graph_engine &graph) {
 		extended_neighbor_list *neighbors
 			= (extended_neighbor_list *) data->neighbors.get();
 		// Inform all neighbors in the in-edges.
@@ -174,9 +174,6 @@ public:
 			local_value.inc_real_local(msg->get_num());
 		}
 	}
-
-	virtual runtime_data_t *create_runtime(graph_engine &graph,
-			const page_vertex *vertex);
 };
 
 class skip_larger {
@@ -217,22 +214,28 @@ public:
 	}
 };
 
-runtime_data_t *local_scan_vertex::create_runtime(graph_engine &graph,
-		const page_vertex *vertex)
+runtime_data_t *ls_create_runtime(graph_engine &graph, scan_vertex &scan_v,
+		const page_vertex &vertex)
 {
 	merge_edge merge;
 	std::vector<attributed_neighbor> neighbors(
-			vertex->get_num_edges(edge_type::BOTH_EDGES));
+			vertex.get_num_edges(edge_type::BOTH_EDGES));
 	size_t num_neighbors = unique_merge(
-			vertex->get_neigh_begin(edge_type::IN_EDGE),
-			vertex->get_neigh_end(edge_type::IN_EDGE),
-			vertex->get_neigh_begin(edge_type::OUT_EDGE),
-			vertex->get_neigh_end(edge_type::OUT_EDGE),
-			skip_larger(graph, vertex->get_id()), merge,
+			vertex.get_neigh_begin(edge_type::IN_EDGE),
+			vertex.get_neigh_end(edge_type::IN_EDGE),
+			vertex.get_neigh_begin(edge_type::OUT_EDGE),
+			vertex.get_neigh_end(edge_type::OUT_EDGE),
+			skip_larger(graph, vertex.get_id()), merge,
 			neighbors.begin());
 	neighbors.resize(num_neighbors);
 	return new runtime_data_t(std::unique_ptr<neighbor_list>(
-				new extended_neighbor_list(*vertex, neighbors)));
+				new extended_neighbor_list(vertex, neighbors)));
+}
+
+void ls_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v)
+{
+	local_scan_vertex &ls_v = (local_scan_vertex &) scan_v;
+	ls_v.finding_triangles_end(graph);
 }
 
 void int_handler(int sig_num)
@@ -292,6 +295,9 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
+
+	finding_triangles_end = ls_finding_triangles_end;
+	create_runtime = ls_create_runtime;
 
 	graph_index *index = NUMA_graph_index<local_scan_vertex>::create(
 			index_file, graph_conf.get_num_threads(), params.get_num_nodes());

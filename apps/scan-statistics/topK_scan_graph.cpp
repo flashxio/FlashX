@@ -163,8 +163,15 @@ public:
 
 	using scan_vertex::run;
 	void run(graph_engine &graph);
-	virtual void run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	virtual void finding_triangles_end(graph_engine &graph) {
+	void run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			run_on_itself(graph, vertex);
+		else
+			run_on_neighbor(graph, vertex);
+	}
+	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+
+	void finding_triangles_end(graph_engine &graph) {
 		if (max_scan.update(get_local_scan())) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
@@ -261,6 +268,12 @@ void topK_scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &ver
 	scan_vertex::run_on_itself(graph, vertex);
 }
 
+void topK_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v)
+{
+	topK_scan_vertex &topK_v = (topK_scan_vertex &) scan_v;
+	topK_v.finding_triangles_end(graph);
+}
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -314,6 +327,8 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
+
+	finding_triangles_end = topK_finding_triangles_end;
 
 	graph_index *index = NUMA_graph_index<topK_scan_vertex>::create(
 			index_file, graph_conf.get_num_threads(), params.get_num_nodes());

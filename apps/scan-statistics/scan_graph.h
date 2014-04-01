@@ -413,6 +413,12 @@ public:
 	}
 };
 
+class scan_vertex;
+extern void (*finding_triangles_end)(graph_engine &, scan_vertex &);
+extern runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
+		const page_vertex &);
+extern void (*destroy_runtime)(scan_vertex &, runtime_data_t *);
+
 class scan_vertex: public compute_vertex
 {
 protected:
@@ -480,13 +486,8 @@ public:
 			run_on_neighbor(graph, vertex);
 	}
 
-	virtual void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
 	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
-	virtual void finding_triangles_end(graph_engine &graph) = 0;
-
-	virtual runtime_data_t *create_runtime(graph_engine &graph,
-			const page_vertex *vertex);
-	virtual void destroy_runtime(runtime_data_t *data);
 
 	void run_on_messages(graph_engine &graph,
 			const vertex_message *msgs[], int num) {
