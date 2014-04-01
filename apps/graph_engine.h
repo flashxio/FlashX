@@ -215,7 +215,7 @@ public:
 		return vertices->get_vertex(id);
 	}
 
-	const in_mem_vertex_info &get_vertex_info(vertex_id_t id) const {
+	const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
 		return vertices->get_vertex_info(id);
 	}
 

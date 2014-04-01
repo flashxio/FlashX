@@ -12,7 +12,7 @@ request_range vertex_compute::get_next_request()
 	vertex_id_t id = requested_vertices[min(curr_loc, new_loc)];
 
 	// Find the location of the vertex.
-	const in_mem_vertex_info &info = graph->get_vertex_info(id);
+	const in_mem_vertex_info info = graph->get_vertex_info(id);
 	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
 	return request_range(loc, info.get_ext_mem_size(), READ, this);
 }
@@ -119,7 +119,7 @@ request_range directed_vertex_compute::get_next_request()
 		size_t curr_loc = fetch_idx.get_curr_loc();
 		size_t new_loc = fetch_idx.move(1);
 		directed_vertex_request req = reqs[min(curr_loc, new_loc)];
-		const in_mem_vertex_info &info = get_graph().get_vertex_info(req.get_id());
+		const in_mem_vertex_info info = get_graph().get_vertex_info(req.get_id());
 
 		off_t start_pg = ROUND_PAGE(info.get_ext_mem_off());
 		off_t end_pg = ROUNDUP_PAGE(info.get_ext_mem_off() + info.get_ext_mem_size());
@@ -256,7 +256,7 @@ request_range ts_vertex_compute::get_next_request()
 		size_t curr_loc = fetch_idx.get_curr_loc();
 		size_t new_loc = fetch_idx.move(1);
 		ts_vertex_request ts_req = reqs[min(curr_loc, new_loc)];
-		const in_mem_vertex_info &info = get_graph().get_vertex_info(ts_req.get_id());
+		const in_mem_vertex_info info = get_graph().get_vertex_info(ts_req.get_id());
 		data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off());
 		// There is some overhead to fetch part of a vertex, so we should
 		// minize the number of vertices fetched partially.
@@ -283,7 +283,7 @@ request_range part_ts_vertex_compute::get_next_request()
 	assert(num_issued == 0);
 	num_issued++;
 
-	const in_mem_vertex_info &info = graph->get_vertex_info(
+	const in_mem_vertex_info info = graph->get_vertex_info(
 			required_vertex_header->get_id());
 	offset_pair rel_offsets = required_vertex_header->get_edge_list_offset(
 			required_part.get_range());

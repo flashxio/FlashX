@@ -197,7 +197,7 @@ public:
 	 * on the vertices with the largest Id.
 	 */
 	bool operator()(vertex_id_t id) {
-		const in_mem_vertex_info &info = graph.get_vertex_info(id);
+		const in_mem_vertex_info info = graph.get_vertex_info(id);
 		if (info.get_ext_mem_size() == size)
 			return id >= this->id;
 		return info.get_ext_mem_size() > size;
