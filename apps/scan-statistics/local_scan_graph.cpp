@@ -154,7 +154,7 @@ public:
 		request_vertices(&id, 1);
 	}
 
-	void finding_triangles_end(graph_engine &graph) {
+	void finding_triangles_end(graph_engine &graph, runtime_data_t *data) {
 		extended_neighbor_list *neighbors
 			= (extended_neighbor_list *) data->neighbors.get();
 		// Inform all neighbors in the in-edges.
@@ -232,10 +232,11 @@ runtime_data_t *ls_create_runtime(graph_engine &graph, scan_vertex &scan_v,
 				new extended_neighbor_list(vertex, neighbors)));
 }
 
-void ls_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v)
+void ls_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v,
+		runtime_data_t *data)
 {
 	local_scan_vertex &ls_v = (local_scan_vertex &) scan_v;
-	ls_v.finding_triangles_end(graph);
+	ls_v.finding_triangles_end(graph, data);
 }
 
 void int_handler(int sig_num)

@@ -171,15 +171,15 @@ public:
 	}
 	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
 
-	void finding_triangles_end(graph_engine &graph) {
-		if (max_scan.update(get_local_scan())) {
+	void finding_triangles_end(graph_engine &graph, runtime_data_t *data) {
+		if (max_scan.update(data->local_scan)) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
 			printf("%d: new max scan: %ld at v%u\n",
 					(int) time_diff(graph_start, curr),
-					get_local_scan(), get_id());
+					data->local_scan, get_id());
 		}
-		known_scans.add(get_id(), get_local_scan());
+		known_scans.add(get_id(), data->local_scan);
 	}
 };
 
@@ -256,8 +256,6 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 
 void topK_scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
-	assert(data == NULL);
-
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
 	assert(num_local_edges == get_num_edges());
 	if (num_local_edges == 0)
@@ -268,10 +266,11 @@ void topK_scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &ver
 	scan_vertex::run_on_itself(graph, vertex);
 }
 
-void topK_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v)
+void topK_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v,
+		runtime_data_t *data)
 {
 	topK_scan_vertex &topK_v = (topK_scan_vertex &) scan_v;
-	topK_v.finding_triangles_end(graph);
+	topK_v.finding_triangles_end(graph, data);
 }
 
 void int_handler(int sig_num)

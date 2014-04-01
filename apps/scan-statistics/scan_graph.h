@@ -379,6 +379,10 @@ public:
 		value = 0;
 	}
 
+	/**
+	 * Estimated local scan.
+	 */
+
 	void set_est_local(size_t num) {
 		value = num;
 		set_flag(EST_LOCAL);
@@ -392,6 +396,10 @@ public:
 		assert(has_flag(EST_LOCAL));
 		return value & FLAGS_MASK;
 	}
+
+	/**
+	 * Real local scan.
+	 */
 
 	void set_real_local(size_t num) {
 		value = num;
@@ -411,10 +419,29 @@ public:
 		assert(has_flag(REAL_LOCAL));
 		return value & FLAGS_MASK;
 	}
+
+	/**
+	 * Pointer to the runtime data.
+	 */
+
+	void set_runtime_data(runtime_data_t *data) {
+		value = (size_t) data;
+		set_flag(POINTER);
+	}
+
+	bool has_runtime_data() const {
+		return has_flag(POINTER);
+	}
+
+	runtime_data_t *get_runtime_data() const {
+		assert(has_flag(POINTER));
+		return (runtime_data_t *) (value & FLAGS_MASK);
+	}
 };
 
 class scan_vertex;
-extern void (*finding_triangles_end)(graph_engine &, scan_vertex &);
+extern void (*finding_triangles_end)(graph_engine &, scan_vertex &,
+		runtime_data_t *);
 extern runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
 		const page_vertex &);
 extern void (*destroy_runtime)(scan_vertex &, runtime_data_t *);
@@ -434,11 +461,7 @@ protected:
 	struct timeval vertex_start;
 #endif
 public:
-	runtime_data_t *data;
-
 	scan_vertex() {
-		data = NULL;
-
 #ifdef PV_STAT
 		num_all_edges = 0;
 		scan_bytes = 0;
@@ -450,8 +473,6 @@ public:
 
 	scan_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
 			id, index) {
-		data = NULL;
-
 #ifdef PV_STAT
 		num_all_edges = 0;
 		scan_bytes = 0;
