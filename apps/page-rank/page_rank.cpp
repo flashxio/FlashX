@@ -62,17 +62,6 @@ public:
 			const vertex_message *msgs[], int num) { }; 
 };
 
-// Alerts every out-neighbor that my page rank has changed
-// and they should update their own page rank accordingly
-class pgrank_message: public vertex_message
-{
-  public:
-  pgrank_message( ): 
-  // Always activate. Only place vertices are activated
-        vertex_message(sizeof(pgrank_message), true) { 
-        }
-};
-
 void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
   // Gather
   float accum = 0;
@@ -108,7 +97,7 @@ void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
     }   
 
     if (num_dests > 0) {
-      graph.multicast_msg(dest_buf.data(), num_dests, pgrank_message( )) ;
+      graph.activate_vertices(dest_buf.data(), num_dests) ;
     }   
   }
 }
