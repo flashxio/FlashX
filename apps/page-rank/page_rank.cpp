@@ -57,7 +57,7 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &,
+	void run_on_messages(graph_engine &,
 /* Only serves to activate on the next iteration */
 			const vertex_message *msgs[], int num) { }; 
 };
