@@ -50,8 +50,16 @@ public:
 	virtual void run_on_message(graph_engine &, compute_vertex &,
 			const vertex_message &msg) = 0;
 
+	virtual void run_on_messages(graph_engine &graph, const vertex_message *v_msgs[],
+			int num) = 0;
+
+	virtual void run_on_multicast_message(graph_engine &graph,
+			multicast_message &mmsg) = 0;
+
 	virtual vertex_program::ptr clone() const = 0;
 };
+
+compute_vertex &graph_get_vertex(graph_engine &, vertex_id_t id);
 
 template<class vertex_type>
 class vertex_program_impl: public vertex_program
@@ -85,6 +93,33 @@ public:
 
 	virtual vertex_program::ptr clone() const {
 		return vertex_program::ptr(new vertex_program_impl<vertex_type>());
+	}
+
+	virtual void run_on_messages(graph_engine &graph, const vertex_message *v_msgs[],
+			int num) {
+		for (int i = 0; i < num; i++) {
+			assert(!v_msgs[i]->is_multicast());
+			vertex_id_t id = v_msgs[i]->get_dest();
+			vertex_type &v = (vertex_type &) graph_get_vertex(graph, id);
+			v.run_on_messages(graph, &v_msgs[i], 1);
+		}
+	}
+
+	virtual void run_on_multicast_message(graph_engine &graph,
+			multicast_message &mmsg) {
+		int num_dests = mmsg.get_num_dests();
+		multicast_dest_list dest_list = mmsg.get_dest_list();
+
+		const vertex_message *msgs[1] = {&mmsg};
+		for (int i = 0; i < num_dests; i++) {
+			vertex_id_t id = dest_list.get_dest(i);
+			// TODO now the size is the entire message. Now the message
+			// is considered as non-empty.
+			if (!mmsg.is_empty()) {
+				vertex_type &v = (vertex_type &) graph_get_vertex(graph, id);
+				v.run_on_messages(graph, msgs, 1);
+			}
+		}
 	}
 };
 

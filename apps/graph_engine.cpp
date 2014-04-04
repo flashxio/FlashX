@@ -499,3 +499,9 @@ vertex_index *load_vertex_index(const std::string &index_file)
 		((default_vertex_index *) index)->verify();
 	return index;
 }
+
+// TODO this is a temporary solution.
+compute_vertex &graph_get_vertex(graph_engine &graph, vertex_id_t id)
+{
+	return graph.get_vertex(id);
+}
