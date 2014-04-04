@@ -22,6 +22,8 @@
 
 #include <memory>
 
+#include "container.h"
+
 class graph_engine;
 class compute_vertex;
 class page_vertex;
@@ -59,11 +61,14 @@ public:
 	virtual vertex_program::ptr clone() const = 0;
 };
 
-compute_vertex &graph_get_vertex(graph_engine &, vertex_id_t id);
+size_t graph_get_vertices(graph_engine &graph, const vertex_id_t ids[],
+		int num_ids, compute_vertex *v_buf[]);
 
 template<class vertex_type>
 class vertex_program_impl: public vertex_program
 {
+	embedded_array<compute_vertex *, 1024> vertex_buf;
+	embedded_array<vertex_id_t, 1024> id_buf;
 public:
 	/**
 	 * This is a pre-run before users get any information of adjacency list
@@ -97,11 +102,15 @@ public:
 
 	virtual void run_on_messages(graph_engine &graph, const vertex_message *v_msgs[],
 			int num) {
+		vertex_buf.resize(num);
+		id_buf.resize(num);
+		for (int i = 0; i < num; i++)
+			id_buf[i] = v_msgs[i]->get_dest();
+		graph_get_vertices(graph, id_buf.data(), num, vertex_buf.data());
 		for (int i = 0; i < num; i++) {
 			assert(!v_msgs[i]->is_multicast());
-			vertex_id_t id = v_msgs[i]->get_dest();
-			vertex_type &v = (vertex_type &) graph_get_vertex(graph, id);
-			v.run_on_messages(graph, &v_msgs[i], 1);
+			vertex_type *v = (vertex_type *) vertex_buf[i];
+			v->run_on_messages(graph, &v_msgs[i], 1);
 		}
 	}
 
@@ -110,11 +119,16 @@ public:
 		int num_dests = mmsg.get_num_dests();
 		multicast_dest_list dest_list = mmsg.get_dest_list();
 
+		vertex_buf.resize(num_dests);
+		id_buf.resize(num_dests);
+		for (int i = 0; i < num_dests; i++)
+			id_buf[i] = dest_list.get_dest(i);
+		graph_get_vertices(graph, id_buf.data(), num_dests, vertex_buf.data());
+
 		const vertex_message *msgs[1] = {&mmsg};
 		for (int i = 0; i < num_dests; i++) {
-			vertex_id_t id = dest_list.get_dest(i);
-			vertex_type &v = (vertex_type &) graph_get_vertex(graph, id);
-			v.run_on_messages(graph, msgs, 1);
+			vertex_type *v = (vertex_type *) vertex_buf[i];
+			v->run_on_messages(graph, msgs, 1);
 		}
 	}
 };

@@ -74,6 +74,8 @@ public:
 	graph_index() {
 	}
 
+	virtual size_t get_vertices(const vertex_id_t ids[], int num,
+			compute_vertex *v_buf[]) const = 0;
 	virtual compute_vertex &get_vertex(vertex_id_t id) = 0;
 	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const = 0;
 
@@ -150,6 +152,11 @@ public:
 	}
 
 	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
+		assert(0);
+	}
+
+	virtual size_t get_vertices(const vertex_id_t ids[], int num,
+			compute_vertex *v_buf[]) const {
 		assert(0);
 	}
 
@@ -286,6 +293,18 @@ public:
 			int num_threads, int num_nodes) {
 		return new NUMA_graph_index<vertex_type>(index_file,
 				num_threads, num_nodes);
+	}
+
+	virtual size_t get_vertices(const vertex_id_t ids[], int num,
+			compute_vertex *v_buf[]) const {
+		for (int i = 0; i < num; i++) {
+			vertex_id_t id = ids[i];
+			int part_id;
+			off_t part_off;
+			partitioner.map2loc(id, part_id, part_off);
+			v_buf[i] = &index_arr[part_id]->vertex_arr[part_off];
+		}
+		return num;
 	}
 
 	virtual compute_vertex &get_vertex(vertex_id_t id) {

@@ -500,8 +500,8 @@ vertex_index *load_vertex_index(const std::string &index_file)
 	return index;
 }
 
-// TODO this is a temporary solution.
-compute_vertex &graph_get_vertex(graph_engine &graph, vertex_id_t id)
+size_t graph_get_vertices(graph_engine &graph, const vertex_id_t ids[],
+		int num_ids, compute_vertex *v_buf[])
 {
-	return graph.get_vertex(id);
+	return graph.get_vertices(ids, num_ids, v_buf);
 }

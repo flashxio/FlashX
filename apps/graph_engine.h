@@ -215,6 +215,10 @@ public:
 		return vertices->get_vertex(id);
 	}
 
+	size_t get_vertices(const vertex_id_t ids[], int num, compute_vertex *v_buf[]) {
+		return vertices->get_vertices(ids, num, v_buf);
+	}
+
 	const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
 		return vertices->get_vertex_info(id);
 	}
