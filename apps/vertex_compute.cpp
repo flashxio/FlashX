@@ -19,6 +19,18 @@ request_range vertex_compute::get_next_request()
 
 void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 {
+	// Logging the requests.
+	if (graph->get_logger()) {
+		std::vector<request_range> reqs;
+		for (size_t i = 0; i < num; i++) {
+			const in_mem_vertex_info info = graph->get_vertex_info(ids[i]);
+			data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+			request_range req(loc, info.get_ext_mem_size(), READ, this);
+			reqs.push_back(req);
+		}
+		graph->get_logger()->log(reqs.data(), reqs.size());
+	}
+
 	if (requested_vertices.empty()) {
 		requested_vertices.insert(requested_vertices.end(), ids, ids + num);
 		if (!std::is_sorted(requested_vertices.begin(),
@@ -126,7 +138,10 @@ request_range directed_vertex_compute::get_next_request()
 		if (end_pg - start_pg <= PAGE_SIZE
 				|| req.get_type() == edge_type::BOTH_EDGES) {
 			data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off());
-			return request_range(loc, info.get_ext_mem_size(), READ, this);
+			request_range req(loc, info.get_ext_mem_size(), READ, this);
+			if (graph->get_logger())
+				graph->get_logger()->log(&req, 1);
+			return req;
 		}
 		else {
 			worker_thread *t = (worker_thread *) thread::get_curr_thread();
@@ -143,16 +158,22 @@ request_range directed_vertex_compute::get_next_request()
 				data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off()
 						+ ext_mem_directed_vertex::get_header_size());
 				assert(num_in_edges > 0);
-				return request_range(loc, num_in_edges * sizeof(vertex_id_t),
+				request_range req(loc, num_in_edges * sizeof(vertex_id_t),
 						READ, comp);
+				if (graph->get_logger())
+					graph->get_logger()->log(&req, 1);
+				return req;
 			}
 			else {
 				data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off()
 						+ ext_mem_directed_vertex::get_header_size()
 						+ num_in_edges * sizeof(vertex_id_t));
 				assert(num_out_edges > 0);
-				return request_range(loc, num_out_edges * sizeof(vertex_id_t),
+				request_range req(loc, num_out_edges * sizeof(vertex_id_t),
 						READ, comp);
+				if (graph->get_logger())
+					graph->get_logger()->log(&req, 1);
+				return req;
 			}
 		}
 	}

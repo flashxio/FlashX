@@ -170,6 +170,8 @@ int worker_thread::process_activated_vertices(int max)
 				// of itself. But it doesn't really matter what the vertex
 				// wants to request here.
 				request_range range = curr_compute->get_next_request();
+				if (graph->get_logger())
+					graph->get_logger()->log(&range, 1);
 				reqs[num_to_process++] = io_request(range.get_compute(),
 						range.get_loc(), range.get_size(),
 						// TODO I might need to set the node id.
@@ -190,8 +192,6 @@ int worker_thread::process_activated_vertices(int max)
 			complete_vertex(*info);
 		reset_curr_vertex_compute();
 	}
-	if (graph->get_logger())
-		graph->get_logger()->log(reqs.data(), num_to_process);
 	io->access(reqs.data(), num_to_process);
 	return num;
 }
