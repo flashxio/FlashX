@@ -36,7 +36,7 @@ class log_thread: public thread
 	thread_safe_FIFO_queue<std::vector<request_range> *> queue;
 public:
 	log_thread(const std::string &trace_file): thread(
-			"trace_log_thread", 0), queue("log_queue", 0, 1024) {
+			"trace_log_thread", 0), queue("log_queue", 0, 1024, INT_MAX) {
 		f = fopen(trace_file.c_str(), "w");
 	}
 
