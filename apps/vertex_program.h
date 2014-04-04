@@ -113,12 +113,8 @@ public:
 		const vertex_message *msgs[1] = {&mmsg};
 		for (int i = 0; i < num_dests; i++) {
 			vertex_id_t id = dest_list.get_dest(i);
-			// TODO now the size is the entire message. Now the message
-			// is considered as non-empty.
-			if (!mmsg.is_empty()) {
-				vertex_type &v = (vertex_type &) graph_get_vertex(graph, id);
-				v.run_on_messages(graph, msgs, 1);
-			}
+			vertex_type &v = (vertex_type &) graph_get_vertex(graph, id);
+			v.run_on_messages(graph, msgs, 1);
 		}
 	}
 };

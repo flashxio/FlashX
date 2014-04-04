@@ -222,7 +222,7 @@ public:
 			multicast_senders[i]->flush();
 		for (size_t i = 0; i < activate_senders.size(); i++) {
 			activate_senders[i]->flush();
-			vertex_message msg(sizeof(vertex_message), true);
+			activation_message msg;
 			activate_senders[i]->init(msg);
 		}
 	}

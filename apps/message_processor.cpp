@@ -80,18 +80,23 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 		return;
 	}
 
+	if (mmsg.is_activation_msg()) {
+		for (int i = 0; i < num_dests; i++) {
+			vertex_id_t id = dest_list.get_dest(i);
+			if (mmsg.is_activate())
+				owner.activate_vertex(id);
+		}
+		return;
+	}
+
 	for (int i = 0; i < num_dests; i++) {
 		vertex_id_t id = dest_list.get_dest(i);
-		// TODO now the size is the entire message. Now the message
-		// is considered as non-empty.
-		if (!mmsg.is_empty()) {
-			if (check_steal && steal_state->is_stolen(id)) {
-				buf_mmsg(id, mmsg);
-			}
-			else {
-				compute_vertex &info = graph.get_vertex(id);
-				curr_vprog.run_on_message(graph, info, mmsg);
-			}
+		if (check_steal && steal_state->is_stolen(id)) {
+			buf_mmsg(id, mmsg);
+		}
+		else {
+			compute_vertex &info = graph.get_vertex(id);
+			curr_vprog.run_on_message(graph, info, mmsg);
 		}
 		if (mmsg.is_activate())
 			owner.activate_vertex(id);
@@ -134,14 +139,12 @@ void message_processor::process_msg(message &msg, bool check_steal)
 		assert(check_steal);
 		for (int i = 0; i < num; i++) {
 			vertex_id_t id = v_msgs[i]->get_dest();
-			if (!v_msgs[i]->is_empty()) {
-				if (steal_state->is_stolen(id)) {
-					buf_msg(*v_msgs[i]);
-				}
-				else {
-					compute_vertex &info = graph.get_vertex(id);
-					curr_vprog.run_on_message(graph, info, *v_msgs[i]);
-				}
+			if (steal_state->is_stolen(id)) {
+				buf_msg(*v_msgs[i]);
+			}
+			else {
+				compute_vertex &info = graph.get_vertex(id);
+				curr_vprog.run_on_message(graph, info, *v_msgs[i]);
 			}
 			if (v_msgs[i]->is_activate())
 				owner.activate_vertex(id);

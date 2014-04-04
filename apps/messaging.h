@@ -285,8 +285,12 @@ class vertex_message
 {
 protected:
 	unsigned multicast: 1;
+	// This is a flag to indicate that a user also wants to activate
+	// the destination vertex.
 	unsigned activate: 1;
-	unsigned size: 30;
+	// This is a flag to indicate that it's a system's activation message.
+	unsigned activation_msg: 1;
+	unsigned size: 29;
 	union {
 		vertex_id_t dest;
 		int num_dests;
@@ -301,6 +305,7 @@ public:
 	vertex_message(int size, bool activate) {
 		this->activate = activate;
 		this->multicast = 0;
+		this->activation_msg = 0;
 		this->u.dest = -1;
 		this->size = size;
 		assert(size % 4 == 0);
@@ -308,6 +313,10 @@ public:
 
 	void set_dest(vertex_id_t id) {
 		this->u.dest = id;
+	}
+
+	bool is_activation_msg() const {
+		return activation_msg;
 	}
 
 	bool is_activate() const {
@@ -387,6 +396,12 @@ public:
 		return mmsg;
 	}
 
+	multicast_message(int size, bool activate): vertex_message(size,
+			activate) {
+		this->multicast = 1;
+		this->u.num_dests = 0;
+	}
+
 	bool is_empty() const {
 		return (size_t) get_orig_msg_size() == sizeof(vertex_message);
 	}
@@ -408,6 +423,14 @@ public:
 	}
 
 	friend class multicast_dest_list;
+};
+
+class activation_message: public multicast_message
+{
+public:
+	activation_message(): multicast_message(sizeof(vertex_message), true) {
+		this->activation_msg = 1;
+	}
 };
 
 inline multicast_dest_list::multicast_dest_list(multicast_message *msg)

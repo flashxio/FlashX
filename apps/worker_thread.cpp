@@ -126,7 +126,7 @@ void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 				msg_alloc, &threads[i]->msg_processor->get_msg_queue());
 		// All activation messages are the same. We can initialize the sender
 		// here.
-		vertex_message msg(sizeof(vertex_message), true);
+		activation_message msg;
 		activate_sender->init(msg);
 		activate_senders.push_back(activate_sender);
 	}

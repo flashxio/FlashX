@@ -81,7 +81,6 @@ public:
 // and activate them
 class deleted_message: public vertex_message
 {
-  int dummy;
   public:
   deleted_message(): vertex_message(sizeof(deleted_message), true) {
   }
