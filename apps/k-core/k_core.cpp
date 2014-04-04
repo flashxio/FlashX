@@ -43,10 +43,11 @@ public:
 	kcore_vertex() {
 	}
 
-  kcore_vertex(vertex_id_t id, const vertex_index *index):
-    compute_directed_vertex(id, index) {
+  kcore_vertex(vertex_id_t id, const vertex_index *index1):
+    compute_directed_vertex(id, index1) {
     this->deleted = false;
-    this->degree = get_num_in_edges() + get_num_out_edges();
+	directed_vertex_index *index = (directed_vertex_index *) index1;
+    this->degree = index->get_num_in_edges(id) + index->get_num_out_edges(id);
   }
 
   bool is_deleted() const {
