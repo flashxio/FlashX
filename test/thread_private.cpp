@@ -178,16 +178,22 @@ class sum_user_compute: public user_compute
 	work2req_range_converter converter;
 	int buf_type;
 	int num_pending;
+	long sum;
 public:
 	sum_user_compute(compute_allocator *alloc): user_compute(alloc) {
 		buf_type = SINGLE_LARGE_BUF;
 		num_pending = 0;
+		sum = 0;
 	}
 
 	void init(const work2req_range_converter &converter, int buf_type) {
 		num_pending = 1;
 		this->converter = converter;
 		this->buf_type = buf_type;
+	}
+
+	long get_sum() const {
+		return sum;
 	}
 
 	virtual int serialize(char *buf, int size) const {
@@ -214,7 +220,6 @@ public:
 	}
 
 	virtual void run(page_byte_array &array) {
-		long sum = 0;
 		const page_byte_array &const_array = page_byte_array::const_cast_ref(
 				array);
 		for (page_byte_array::seq_const_iterator<int> it
@@ -222,8 +227,6 @@ public:
 				it.has_next();) {
 			sum += it.next();
 		}
-
-		global_sum.inc(sum);
 		num_pending--;
 	}
 };
