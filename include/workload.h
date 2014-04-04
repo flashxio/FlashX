@@ -36,7 +36,7 @@
 
 #define CHUNK_SLOTS 1024
 
-const int WORKLOAD_BUF_SIZE = 20;
+const int WORKLOAD_BUF_SIZE = 1024 * 32;
 
 typedef struct workload_type
 {
@@ -283,59 +283,76 @@ public:
  */
 class file_workload: public workload_gen
 {
-	static thread_safe_FIFO_queue<workload_t> *workload_queue;
-	fifo_queue<workload_t> local_buf;
+	static thread_safe_FIFO_queue<fifo_queue<workload_t> *> *workload_queue;
+	fifo_queue<workload_t> *local_buf;
 	workload_t curr;
 public:
 	file_workload(workload_t workloads[], long length, int thread_id,
-			int nthreads, int read_percent = -1): local_buf(-1, WORKLOAD_BUF_SIZE) {
+			int nthreads, int read_percent = -1) {
 		if (workload_queue == NULL) {
-			workload_queue = thread_safe_FIFO_queue<workload_t>::create(
-					"file_workload_queue", -1, length);
+			workload_queue = thread_safe_FIFO_queue<fifo_queue<workload_t> *>::create(
+					"file_workload_queue", -1, length / WORKLOAD_BUF_SIZE + 1);
 			if (read_percent >= 0) {
-				for (int i = 0; i < length; i++) {
+				for (long i = 0; i < length; i++) {
 					if (random() % 100 < read_percent)
 						workloads[i].read = 1;
 					else
 						workloads[i].read = 0;
 				}
 			}
-			int ret = workload_queue->add(workloads, length);
-			assert(ret == length);
+			for (long i = 0; i < length; i += WORKLOAD_BUF_SIZE) {
+				fifo_queue<workload_t> *q = new fifo_queue<workload_t>(-1,
+						WORKLOAD_BUF_SIZE);
+				int local_len = min(WORKLOAD_BUF_SIZE, length - i);
+				q->add(workloads + i, local_len);
+				workload_queue->push_back(q);
+			}
+			printf("There are %ld I/O accesses, and there are %d in the queue\n",
+					length, workload_queue->get_num_entries() * WORKLOAD_BUF_SIZE);
 		}
+		local_buf = NULL;
 	}
 
 	virtual ~file_workload() {
 		if (workload_queue) {
-			thread_safe_FIFO_queue<workload_t>::destroy(workload_queue);
+			while (!workload_queue->is_empty()) {
+				fifo_queue<workload_t> *q = workload_queue->pop_front();
+				delete q;
+			}
+			thread_safe_FIFO_queue<fifo_queue<workload_t> *>::destroy(workload_queue);
 			workload_queue = NULL;
 		}
 	}
 
 	const workload_t &next() {
-		assert(!local_buf.is_empty());
-		curr = local_buf.pop_front();
+		assert(local_buf && !local_buf->is_empty());
+		curr = local_buf->pop_front();
 		return curr;
 	}
 
 	off_t next_offset() {
-		assert(!local_buf.is_empty());
-		workload_t access = local_buf.pop_front();
+		assert(local_buf && !local_buf->is_empty());
+		workload_t access = local_buf->pop_front();
 		return access.off;
 	}
 
 	bool has_next() {
-		if (local_buf.is_empty()) {
-			workload_t buf[WORKLOAD_BUF_SIZE];
-			int num = workload_queue->fetch(buf, WORKLOAD_BUF_SIZE);
-			local_buf.add(buf, num);
+		if (local_buf && local_buf->is_empty()) {
+			delete local_buf;
+			local_buf = NULL;
 		}
-		return !local_buf.is_empty();
+
+		if (local_buf == NULL) {
+			int num = workload_queue->fetch(&local_buf, 1);
+			if (num == 0)
+				local_buf = NULL;
+		}
+		return local_buf != NULL;
 	}
 
 	virtual void print_state() {
-		printf("file workload has %d global works and %d local works\n",
-				workload_queue->get_num_entries(), local_buf.get_num_entries());
+		printf("file workload has %d global works\n",
+				workload_queue->get_num_entries());
 	}
 };
 
