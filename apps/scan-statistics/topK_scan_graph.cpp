@@ -35,23 +35,30 @@ struct timeval graph_start;
 
 class vertex_size_scheduler: public vertex_scheduler
 {
+	graph_engine *graph;
 public:
-	void schedule(std::vector<compute_vertex *> &vertices);
+	vertex_size_scheduler(graph_engine *graph) {
+		this->graph = graph;
+	}
+	void schedule(std::vector<vertex_id_t> &vertices);
 };
 
-void vertex_size_scheduler::schedule(std::vector<compute_vertex *> &vertices)
+void vertex_size_scheduler::schedule(std::vector<vertex_id_t> &ids)
 {
+	std::vector<compute_vertex *> vertices(ids.size());
+	for (size_t i = 0; i < ids.size(); i++)
+		vertices[i] = &graph->get_vertex(ids[i]);
 	class comp_size
 	{
 	public:
 		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
-			const compute_directed_vertex *dv1 = (const compute_directed_vertex *) v1;
-			const compute_directed_vertex *dv2 = (const compute_directed_vertex *) v2;
-			return dv1->get_num_edges() > dv2->get_num_edges();
+			return v1->get_num_edges() > v2->get_num_edges();
 		}
 	};
 
 	std::sort(vertices.begin(), vertices.end(), comp_size());
+	for (size_t i = 0; i < ids.size(); i++)
+		ids[i] = vertices[i]->get_id();
 }
 
 class global_max
@@ -338,7 +345,7 @@ int main(int argc, char *argv[])
 	// to the size of vertices. We start with processing vertices with higher
 	// degrees in the hope we can find the max scan as early as possible,
 	// so that we can simple ignore the rest of vertices.
-	graph->set_vertex_scheduler(new vertex_size_scheduler());
+	graph->set_vertex_scheduler(new vertex_size_scheduler(graph));
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

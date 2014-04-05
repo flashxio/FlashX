@@ -47,7 +47,7 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 	for (size_t i = 0; i < local_ids.size(); i++) {
 		vertex_id_t id;
 		partitioner->loc2map(part_id, local_ids[i], id);
-		sorted_vertices[i] = &graph.get_vertex(id);
+		sorted_vertices[i] = id;
 	}
 
 	if (scheduler != &default_scheduler)

@@ -31,7 +31,7 @@
 class sorted_vertex_queue
 {
 	pthread_spinlock_t lock;
-	std::vector<compute_vertex *> sorted_vertices;
+	std::vector<vertex_id_t> sorted_vertices;
 	scan_pointer fetch_idx;
 	vertex_scheduler *scheduler;
 	graph_engine &graph;
@@ -49,9 +49,7 @@ public:
 			forward = graph.get_curr_level() % 2;
 		this->fetch_idx = scan_pointer(size, forward);
 		sorted_vertices.clear();
-		sorted_vertices.resize(size);
-		for (size_t i = 0; i < size; i++)
-			sorted_vertices[i] = &graph.get_vertex(buf[i]);
+		sorted_vertices.insert(sorted_vertices.end(), buf, buf + size);
 		if (!sorted)
 			scheduler->schedule(sorted_vertices);
 		pthread_spin_unlock(&lock);
@@ -67,13 +65,16 @@ public:
 	int fetch(compute_vertex *vertices[], int num) {
 		pthread_spin_lock(&lock);
 		int num_fetches = min(num, fetch_idx.get_num_remaining());
+		stack_array<vertex_id_t, 128> buf(num_fetches);
 		if (num_fetches > 0) {
 			size_t curr_loc = fetch_idx.get_curr_loc();
 			size_t new_loc = fetch_idx.move(num_fetches);
-			memcpy(vertices, sorted_vertices.data() + min(curr_loc, new_loc),
-					num_fetches * sizeof(compute_vertex *));
+			memcpy(buf.data(), sorted_vertices.data() + min(curr_loc, new_loc),
+					num_fetches * sizeof(vertex_id_t));
 		}
 		pthread_spin_unlock(&lock);
+		for (int i = 0; i < num_fetches; i++)
+			vertices[i] = &graph.get_vertex(buf[i]);
 		return num_fetches;
 	}
 
