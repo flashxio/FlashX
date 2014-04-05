@@ -296,8 +296,10 @@ public:
 	}
 };
 
-class scc_vertex: public compute_directed_vertex
+class scc_vertex: public compute_vertex
 {
+	vsize_t real_num_in_edges;
+	vsize_t real_num_out_edges;
 	// for trimming
 	vsize_t num_in_edges;
 	vsize_t num_out_edges;
@@ -307,14 +309,23 @@ public:
 	fwbw_state_t fwbw_state;
 
 	scc_vertex() {
-		num_in_edges = 0;
-		num_out_edges = 0;
+		real_num_in_edges = num_in_edges = 0;
+		real_num_out_edges = num_out_edges = 0;
 	}
 
-	scc_vertex(vertex_id_t id, const vertex_index *index): compute_directed_vertex(
-			id, index) {
-		num_in_edges = get_num_in_edges();
-		num_out_edges = get_num_out_edges();
+	scc_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
+			id, index1) {
+		directed_vertex_index *index = (directed_vertex_index *) index1;
+		real_num_out_edges = num_out_edges = index->get_num_out_edges(id);
+		real_num_in_edges = num_in_edges = index->get_num_in_edges(id);
+	}
+
+	vsize_t get_num_out_edges() const {
+		return real_num_out_edges;
+	}
+
+	vsize_t get_num_in_edges() const {
+		return real_num_in_edges;
 	}
 
 	bool is_assigned() const {
