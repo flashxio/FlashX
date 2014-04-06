@@ -209,7 +209,8 @@ void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 	// We increase the allocator by 1M each time.
 	// It shouldn't need to allocate much memory.
 	msg_alloc = new slab_allocator("graph-message-allocator",
-			GRAPH_MSG_BUF_SIZE, 1024 * 1024, INT_MAX, get_node_id());
+			GRAPH_MSG_BUF_SIZE, 1024 * 1024, INT_MAX, get_node_id(),
+			false /* init */, false /* pinned */, 5 /* local_buf_size*/);
 
 	int num_self = 0;
 	for (unsigned i = 0; i < threads.size(); i++) {
