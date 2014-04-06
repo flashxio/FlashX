@@ -54,10 +54,14 @@ public:
 	}
 
 	size_t move(size_t dist) {
-		if (forward)
+		if (forward) {
 			idx += dist;
-		else
+			idx = min(idx, size);
+		}
+		else if (idx >= dist)
 			idx -= dist;
+		else
+			idx = 0;
 		return idx;
 	}
 
