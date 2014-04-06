@@ -27,15 +27,106 @@
 #include "load_balancer.h"
 #include "steal_state.h"
 
-sorted_vertex_queue::sorted_vertex_queue(graph_engine &_graph): fetch_idx(
-		0, true), graph(_graph)
+void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorted)
 {
-	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-	this->scheduler = &default_scheduler;
+	pthread_spin_lock(&lock);
+	vertex_buf.clear();
+	active_bitmap.clear();
+	vertex_buf.resize(size);
+	// The buffer contains the vertex Ids and we only store the location of
+	// vertices in the local partition.
+	for (size_t i = 0; i < size; i++) {
+		int part_id;
+		off_t off;
+		graph.get_partitioner()->map2loc(buf[i], part_id, off);
+		vertex_buf[i] = off;
+	}
+	buf_fetch_idx = scan_pointer(size, true);
+	if (!sorted)
+		std::sort(vertex_buf.begin(), vertex_buf.end());
+	num_active = size;
+
+	this->bitmap_fetch_idx = scan_pointer(0, true);
+	pthread_spin_unlock(&lock);
 }
 
-void sorted_vertex_queue::init(const bitmap &map, int part_id,
-		const graph_partitioner *partitioner)
+void default_vertex_queue::init(const bitmap &map)
+{
+	pthread_spin_lock(&lock);
+	vertex_buf.clear();
+	active_bitmap.clear();
+	map.copy_to(active_bitmap);
+	num_active = map.get_num_set_bits();
+
+	bool forward = true;
+	if (graph_conf.get_elevator_enabled())
+		forward = graph.get_curr_level() % 2;
+	bitmap_fetch_idx = scan_pointer(active_bitmap.get_num_longs(), forward);
+	buf_fetch_idx = scan_pointer(0, true);
+	pthread_spin_unlock(&lock);
+}
+
+void default_vertex_queue::fetch_from_map()
+{
+	assert(buf_fetch_idx.get_num_remaining() == 0);
+	vertex_buf.clear();
+	while (vertex_buf.size() < VERTEX_BUF_SIZE
+			&& bitmap_fetch_idx.get_num_remaining() > 0) {
+		size_t curr_loc = bitmap_fetch_idx.get_curr_loc();
+		size_t new_loc = bitmap_fetch_idx.move(VERTEX_BUF_SIZE);
+		// bitmap_fetch_idx points to the locations of longs.
+		active_bitmap.get_set_bits(min(curr_loc, new_loc) * NUM_BITS_LONG,
+				max(curr_loc, new_loc) * NUM_BITS_LONG, vertex_buf);
+	}
+	bool forward = true;
+	if (graph_conf.get_elevator_enabled())
+		forward = graph.get_curr_level() % 2;
+	buf_fetch_idx = scan_pointer(vertex_buf.size(), forward);
+}
+
+int default_vertex_queue::fetch(compute_vertex *vertices[], int num)
+{
+	int num_fetched = 0;
+	stack_array<vertex_id_t, 128> local_ids(num);
+	pthread_spin_lock(&lock);
+	if (buf_fetch_idx.get_num_remaining() > 0) {
+		int num_to_fetch = min(num, buf_fetch_idx.get_num_remaining());
+		size_t curr_loc = buf_fetch_idx.get_curr_loc();
+		size_t new_loc = buf_fetch_idx.move(num_to_fetch);
+		memcpy(local_ids.data(), vertex_buf.data() + min(curr_loc, new_loc),
+				num_to_fetch * sizeof(vertex_id_t));
+		num_fetched += num_to_fetch;
+	}
+	// We have fetched all we need.
+	assert(num == num_fetched
+			// the vertex buffer is empty.
+			|| buf_fetch_idx.get_num_remaining() == 0);
+	// If the vertex buffer is empty, let's get some from the bitmap.
+	if (buf_fetch_idx.get_num_remaining() == 0) {
+		fetch_from_map();
+	}
+	// If we still need some vertices.
+	if (buf_fetch_idx.get_num_remaining() > 0 && num_fetched < num) {
+		int fetch_again = min(num - num_fetched, buf_fetch_idx.get_num_remaining());
+		size_t curr_loc = buf_fetch_idx.get_curr_loc();
+		size_t new_loc = buf_fetch_idx.move(fetch_again);
+		memcpy(local_ids.data() + num_fetched,
+				vertex_buf.data() + min(curr_loc, new_loc),
+				fetch_again * sizeof(vertex_id_t));
+		num_fetched += fetch_again;
+	}
+	num_active -= num_fetched;
+	pthread_spin_unlock(&lock);
+
+	for (int i = 0; i < num_fetched; i++) {
+		vertex_id_t id;
+		graph.get_partitioner()->loc2map(part_id, local_ids[i], id);
+		vertices[i] = &graph.get_vertex(id);
+	}
+	return num_fetched;
+}
+
+void customized_vertex_queue::init(const bitmap &map)
 {
 	pthread_spin_lock(&lock);
 	sorted_vertices.clear();
@@ -46,12 +137,11 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 	sorted_vertices.resize(local_ids.size());
 	for (size_t i = 0; i < local_ids.size(); i++) {
 		vertex_id_t id;
-		partitioner->loc2map(part_id, local_ids[i], id);
+		graph.get_partitioner()->loc2map(part_id, local_ids[i], id);
 		sorted_vertices[i] = id;
 	}
 
-	if (scheduler != &default_scheduler)
-		scheduler->schedule(sorted_vertices);
+	scheduler->schedule(sorted_vertices);
 	bool forward = true;
 	if (graph_conf.get_elevator_enabled())
 		forward = graph.get_curr_level() % 2;
@@ -59,12 +149,12 @@ void sorted_vertex_queue::init(const bitmap &map, int part_id,
 	pthread_spin_unlock(&lock);
 }
 
-worker_thread::worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
+worker_thread::worker_thread(graph_engine *graph,
+		file_io_factory::shared_ptr factory,
 		vertex_program::ptr prog, int node_id, int worker_id,
-		int num_threads): thread("worker_thread",
+		int num_threads, vertex_scheduler *scheduler): thread("worker_thread",
 			node_id), next_activated_vertices(graph->get_partitioner(
-					)->get_part_size(worker_id, graph->get_num_vertices()), node_id),
-			curr_activated_vertices(*graph)
+					)->get_part_size(worker_id, graph->get_num_vertices()), node_id)
 {
 	this->vprogram = std::move(prog);
 	start_all = false;
@@ -91,6 +181,12 @@ worker_thread::worker_thread(graph_engine *graph, file_io_factory::shared_ptr fa
 			assert(0);
 
 	}
+	if (scheduler)
+		curr_activated_vertices = new customized_vertex_queue(*graph,
+				scheduler, worker_id);
+	else
+		curr_activated_vertices = new default_vertex_queue(*graph, worker_id,
+				node_id);
 }
 
 worker_thread::~worker_thread()
@@ -105,6 +201,7 @@ worker_thread::~worker_thread()
 		multicast_msg_sender::destroy(activate_senders[i]);
 	delete msg_alloc;
 	factory->destroy_io(io);
+	delete curr_activated_vertices;
 }
 
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
@@ -143,8 +240,9 @@ int worker_thread::process_activated_vertices(int max)
 
 	compute_vertex *vertex_buf[max];
 	stack_array<io_request> reqs(max);
-	int num = curr_activated_vertices.fetch(vertex_buf, max);
+	int num = curr_activated_vertices->fetch(vertex_buf, max);
 	if (num == 0) {
+		assert(curr_activated_vertices->is_empty());
 		num = balancer->steal_activated_vertices(vertex_buf, max);
 	}
 	if (num > 0) {
@@ -200,12 +298,11 @@ int worker_thread::enter_next_level()
 {
 	// We have to make sure all messages sent by other threads are processed.
 	msg_processor->process_msgs();
-	curr_activated_vertices.init(next_activated_vertices, worker_id,
-			graph->get_partitioner());
+	curr_activated_vertices->init(next_activated_vertices);
 	next_activated_vertices.clear();
 	balancer->reset();
 	msg_processor->reset();
-	return curr_activated_vertices.get_num_vertices();
+	return curr_activated_vertices->get_num_vertices();
 }
 
 /**
@@ -228,12 +325,12 @@ void worker_thread::run()
 			// wait4complete to complete processing them.
 		} while (get_num_vertices_processing() > 0
 				// We still have vertices remaining for processing
-				|| !curr_activated_vertices.is_empty()
+				|| !curr_activated_vertices->is_empty()
 				// Even if we have processed all activated vertices belonging
 				// to this thread, we still need to process vertices from
 				// other threads in order to balance the load.
 				|| get_num_activated_on_others() > 0);
-		assert(curr_activated_vertices.is_empty());
+		assert(curr_activated_vertices->is_empty());
 		printf("worker %d visited %d vertices\n", worker_id, num_visited);
 		assert(num_visited == num_activated_vertices_in_level.get());
 		if (num_visited != num_completed_vertices_in_level.get()) {
@@ -266,8 +363,8 @@ int worker_thread::steal_activated_vertices(compute_vertex *vertices[], int num)
 	// We want to steal as much as possible, but we don't want
 	// to overloaded by the stolen vertices.
 	size_t num_steal = max(1,
-			curr_activated_vertices.get_num_vertices() / graph->get_num_threads());
-	num = curr_activated_vertices.fetch(vertices,
+			curr_activated_vertices->get_num_vertices() / graph->get_num_threads());
+	num = curr_activated_vertices->fetch(vertices,
 			min(num, num_steal));
 	if (num > 0)
 		// If the thread steals vertices from another thread successfully,

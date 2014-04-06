@@ -40,10 +40,6 @@ class bitmap
 	size_t max_num_bits;
 	long *ptr;
 
-	size_t get_num_longs() const {
-		return ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
-	}
-
 	template<class T>
 	static void get_set_bits_long(long value, size_t idx, std::vector<T> &v) {
 		for (int i = 0; i < NUM_BITS_LONG; i++) {
@@ -94,6 +90,10 @@ public:
 
 	~bitmap() {
 		numa_free(ptr, get_num_longs() * sizeof(ptr[0]));
+	}
+
+	size_t get_num_longs() const {
+		return ROUNDUP(max_num_bits, NUM_BITS_LONG) / NUM_BITS_LONG;
 	}
 
 	size_t get_num_bits() const {

@@ -33,7 +33,6 @@
 #include "vertex_request.h"
 
 graph_config graph_conf;
-default_vertex_scheduler default_scheduler;
 
 struct prio_compute
 {
@@ -236,7 +235,7 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index *index)
 {
 	max_processing_vertices = 0;
-	this->scheduler = &default_scheduler;
+	this->scheduler = NULL;
 	is_complete = false;
 	this->vertices = index;
 
@@ -326,10 +325,9 @@ void graph_engine::init_threads(vertex_program::ptr prog)
 		else
 			new_prog = vertices->create_def_vertex_program();
 		worker_thread *t = new worker_thread(this, factory, std::move(new_prog),
-				i % num_nodes, i, num_threads);
+				i % num_nodes, i, num_threads, scheduler);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
-		worker_threads[i]->set_vertex_scheduler(scheduler);
 	}
 	for (int i = 0; i < num_threads; i++) {
 		worker_threads[i]->init_messaging(worker_threads);

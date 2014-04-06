@@ -28,18 +28,80 @@
 #include "bitmap.h"
 #include "scan_pointer.h"
 
-class sorted_vertex_queue
+/**
+ * The queue for active vertices.
+ */
+class active_vertex_queue
+{
+public:
+	virtual void init(const vertex_id_t buf[], size_t size, bool sorted) = 0;
+	virtual void init(const bitmap &map) = 0;
+	virtual int fetch(compute_vertex *vertices[], int num) = 0;
+	virtual bool is_empty() = 0;
+	virtual size_t get_num_vertices() = 0;
+
+	void init(const std::vector<vertex_id_t> &vec, bool sorted) {
+		init(vec.data(), vec.size(), sorted);
+	}
+};
+
+/**
+ * This vertex queue is sorted based on the vertex ID.
+ */
+class default_vertex_queue: public active_vertex_queue
+{
+	static const size_t VERTEX_BUF_SIZE = 1024 * 1024;
+	pthread_spinlock_t lock;
+	// It contains the offset of the vertex in the local partition
+	// instead of the real vertex Ids.
+	std::vector<vertex_id_t> vertex_buf;
+	bitmap active_bitmap;
+	// The fetch index in the vertex buffer.
+	scan_pointer buf_fetch_idx;
+	// The fetech index in the active bitmap. It indicates the index of longs.
+	scan_pointer bitmap_fetch_idx;
+	graph_engine &graph;
+	size_t num_active;
+	int part_id;
+
+	void fetch_from_map();
+public:
+	default_vertex_queue(graph_engine &_graph, int part_id,
+			int node_id): active_bitmap(_graph.get_partitioner()->get_part_size(
+					part_id, _graph.get_num_vertices()), node_id),
+			buf_fetch_idx(0, true), bitmap_fetch_idx(0, true), graph(_graph) {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+		num_active = 0;
+		this->part_id = part_id;
+	}
+
+	virtual void init(const vertex_id_t buf[], size_t size, bool sorted);
+	virtual void init(const bitmap &map);
+	virtual int fetch(compute_vertex *vertices[], int num);
+
+	virtual bool is_empty() {
+		return num_active == 0;
+	}
+
+	virtual size_t get_num_vertices() {
+		return num_active;
+	}
+};
+
+class customized_vertex_queue: public active_vertex_queue
 {
 	pthread_spinlock_t lock;
 	std::vector<vertex_id_t> sorted_vertices;
 	scan_pointer fetch_idx;
 	vertex_scheduler *scheduler;
 	graph_engine &graph;
+	int part_id;
 public:
-	sorted_vertex_queue(graph_engine &graph);
-
-	void set_vertex_scheduler(vertex_scheduler *scheduler) {
+	customized_vertex_queue(graph_engine &_graph, vertex_scheduler *scheduler,
+			int part_id): fetch_idx(0, true), graph(_graph) {
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->scheduler = scheduler;
+		this->part_id = part_id;
 	}
 
 	void init(const vertex_id_t buf[], size_t size, bool sorted) {
@@ -55,12 +117,7 @@ public:
 		pthread_spin_unlock(&lock);
 	}
 
-	void init(const std::vector<vertex_id_t> &vec, bool sorted) {
-		init(vec.data(), vec.size(), sorted);
-	}
-
-	void init(const bitmap &map, int part_id,
-			const graph_partitioner *partitioner);
+	void init(const bitmap &map);
 
 	int fetch(compute_vertex *vertices[], int num) {
 		pthread_spin_lock(&lock);
@@ -139,7 +196,7 @@ class worker_thread: public thread
 	// This is to collect vertices activated in the next level.
 	bitmap next_activated_vertices;
 	// This contains the vertices activated in the current level.
-	sorted_vertex_queue curr_activated_vertices;
+	active_vertex_queue *curr_activated_vertices;
 
 	// Indicate that we need to start all vertices.
 	bool start_all;
@@ -151,7 +208,8 @@ class worker_thread: public thread
 	atomic_number<long> num_completed_vertices_in_level;
 public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
-			vertex_program::ptr prog, int node_id, int worker_id, int num_threads);
+			vertex_program::ptr prog, int node_id, int worker_id,
+			int num_threads, vertex_scheduler *scheduler);
 
 	~worker_thread();
 
@@ -173,18 +231,18 @@ public:
 				kept_ids.push_back(id);
 		}
 		if (!kept_ids.empty()) {
-			assert(curr_activated_vertices.is_empty());
+			assert(curr_activated_vertices->is_empty());
 			// Although we don't process the filtered vertices, we treat
 			// them as if they were processed.
 			graph->process_vertices(local_ids.size() - kept_ids.size());
-			curr_activated_vertices.init(kept_ids, false);
+			curr_activated_vertices->init(kept_ids, false);
 			printf("worker %d has %ld vertices and activates %ld of them\n",
 					worker_id, local_ids.size(), kept_ids.size());
 		}
 		// If a user wants to start all vertices.
 		else if (start_all) {
-			assert(curr_activated_vertices.is_empty());
-			curr_activated_vertices.init(local_ids, false);
+			assert(curr_activated_vertices->is_empty());
+			curr_activated_vertices->init(local_ids, false);
 		}
 		else if (filter) {
 			// Although we don't process the filtered vertices, we treat
@@ -232,8 +290,8 @@ public:
 	int enter_next_level();
 
 	void start_vertices(const std::vector<vertex_id_t> &vertices) {
-		assert(curr_activated_vertices.is_empty());
-		curr_activated_vertices.init(vertices, false);
+		assert(curr_activated_vertices->is_empty());
+		curr_activated_vertices->init(vertices, false);
 	}
 
 	void start_all_vertices() {
@@ -242,10 +300,6 @@ public:
 
 	void start_vertices(std::shared_ptr<vertex_filter> filter) {
 		this->filter = filter;
-	}
-
-	void set_vertex_scheduler(vertex_scheduler *scheduler) {
-		curr_activated_vertices.set_vertex_scheduler(scheduler);
 	}
 
 	/**

@@ -128,15 +128,6 @@ public:
 	virtual void schedule(std::vector<vertex_id_t> &vertices) = 0;
 };
 
-class default_vertex_scheduler: public vertex_scheduler
-{
-public:
-	void schedule(std::vector<vertex_id_t> &vertices) {
-		std::sort(vertices.begin(), vertices.end());
-	}
-};
-extern default_vertex_scheduler default_scheduler;
-
 /**
  * When the graph engine starts, a user can use this filter to decide
  * what vertices are activated for the first time.
