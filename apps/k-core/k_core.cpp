@@ -73,8 +73,7 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num); 
+	virtual void run_on_message(graph_engine &, const vertex_message &msg); 
 };
 
 // If I am to be deleted, multicast this message to all my neighbors
@@ -120,15 +119,12 @@ void kcore_vertex::run(graph_engine &graph, const page_vertex &vertex) {
   }
 }
 
-void kcore_vertex::run_on_messages(graph_engine &,
-    const vertex_message *msgs[], int num) {
+void kcore_vertex::run_on_message(graph_engine &, const vertex_message &msg) {
   if (is_deleted()) {
     return; // nothing to be done here
   }
 
-  for (int i = 0; i < num; i++) {
-    degree--;
-  }
+  degree--;
 }
 
 void int_handler(int sig_num)

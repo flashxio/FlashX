@@ -167,12 +167,9 @@ public:
 		}
 	}
 
-	void run_on_messages(graph_engine &graph,
-			const vertex_message *msgs[], int num) {
-		for (int i = 0; i < num; i++) {
-			const count_msg *msg = (const count_msg *) msgs[i];
-			local_value.inc_real_local(msg->get_num());
-		}
+	void run_on_message(graph_engine &graph, const vertex_message &msg1) {
+		const count_msg &msg = (const count_msg &) msg1;
+		local_value.inc_real_local(msg.get_num());
 	}
 };
 

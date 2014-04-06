@@ -92,8 +92,7 @@ public:
 	 */
 	virtual void run_on_message(graph_engine &graph, compute_vertex &comp_v,
 			const vertex_message &msg) {
-		const vertex_message *msgs[1] = {&msg};
-		((vertex_type &) comp_v).run_on_messages(graph, msgs, 1);
+		((vertex_type &) comp_v).run_on_message(graph, msg);
 	}
 
 	virtual vertex_program::ptr clone() const {
@@ -110,7 +109,7 @@ public:
 		for (int i = 0; i < num; i++) {
 			assert(!v_msgs[i]->is_multicast());
 			vertex_type *v = (vertex_type *) vertex_buf[i];
-			v->run_on_messages(graph, &v_msgs[i], 1);
+			v->run_on_message(graph, *v_msgs[i]);
 		}
 	}
 
@@ -125,10 +124,9 @@ public:
 			id_buf[i] = dest_list.get_dest(i);
 		graph_get_vertices(graph, id_buf.data(), num_dests, vertex_buf.data());
 
-		const vertex_message *msgs[1] = {&mmsg};
 		for (int i = 0; i < num_dests; i++) {
 			vertex_type *v = (vertex_type *) vertex_buf[i];
-			v->run_on_messages(graph, msgs, 1);
+			v->run_on_message(graph, mmsg);
 		}
 	}
 };

@@ -58,12 +58,9 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) {
-		for (int i = 0; i < num; i++) {
-			const count_message *msg = (const count_message *) msgs[i];
-			add1_count += msg->get_count();
-		}
+	virtual void run_on_message(graph_engine &, const vertex_message &msg1) {
+		const count_message &msg = (const count_message &) msg1;
+		add1_count += msg.get_count();
 	}
 };
 

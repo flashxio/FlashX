@@ -92,14 +92,11 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) {
-		for (int i = 0; i < num; i++) {
-			dist_message *msg = (dist_message *) msgs[i];
-			if (parent_dist > msg->get_parent_dist()) {
-				parent_dist = msg->get_parent_dist();
-				tmp_parent = msg->get_parent();
-			}
+	void run_on_message(graph_engine &, const vertex_message &msg1) {
+		const dist_message &msg = (const dist_message &) msg1;
+		if (parent_dist > msg.get_parent_dist()) {
+			parent_dist = msg.get_parent_dist();
+			tmp_parent = msg.get_parent();
 		}
 	}
 };

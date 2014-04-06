@@ -52,8 +52,7 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) {
+	virtual void run_on_message(graph_engine &, const vertex_message &msg) {
 	}
 
 	friend class part_test_vertex;

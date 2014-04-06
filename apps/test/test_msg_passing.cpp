@@ -71,12 +71,9 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) {
-		for (int i = 0; i < num; i++) {
-			const test_message *msg = (const test_message *) msgs[i];
-			sum += msg->get_value();
-		}
+	virtual void run_on_message(graph_engine &, const vertex_message &msg1) {
+		const test_message &msg = (const test_message &) msg1;
+		sum += msg.get_value();
 	}
 };
 

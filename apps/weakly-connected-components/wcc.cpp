@@ -98,14 +98,11 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) {
-		for (int i = 0; i < num; i++) {
-			component_message *msg = (component_message *) msgs[i];
-			if (msg->get_id() < component_id) {
-				updated = true;
-				component_id = msg->get_id();
-			}
+	void run_on_message(graph_engine &, const vertex_message &msg1) {
+		component_message &msg = (component_message &) msg1;
+		if (msg.get_id() < component_id) {
+			updated = true;
+			component_id = msg.get_id();
 		}
 	}
 };

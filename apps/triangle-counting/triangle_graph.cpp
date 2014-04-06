@@ -248,12 +248,8 @@ public:
 	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
 	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
-	void run_on_messages(graph_engine &graph,
-			const vertex_message *msgs[], int num) {
-		int sum = 0;
-		for (int i = 0; i < num; i++)
-			sum += ((count_msg *) msgs[i])->get_num();
-		inc_num_triangles(sum);
+	void run_on_message(graph_engine &graph, const vertex_message &msg) {
+		inc_num_triangles(((count_msg &) msg).get_num());
 	}
 };
 

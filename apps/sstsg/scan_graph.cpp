@@ -92,8 +92,7 @@ public:
 	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
 	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
-	void run_on_messages(graph_engine &graph,
-			const vertex_message *msgs[], int num) {
+	void run_on_message(graph_engine &graph, const vertex_message &msg) {
 	}
 };
 

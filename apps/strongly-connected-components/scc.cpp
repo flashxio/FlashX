@@ -417,47 +417,40 @@ public:
 	void run_stage_part(graph_engine &graph, const page_vertex &vertex);
 	void run_stage_wcc(graph_engine &graph, const page_vertex &vertex);
 
-	void run_on_messages(graph_engine &graph,
-			const vertex_message *msgs[], int num) {
+	void run_on_message(graph_engine &graph, const vertex_message &msg) {
 		if (is_assigned())
 			return;
 
 		switch(scc_stage) {
 			case scc_stage_t::TRIM1:
-				run_on_messages_stage_trim1(graph, msgs, num);
+				run_on_message_stage_trim1(graph, msg);
 				break;
 			case scc_stage_t::TRIM2:
-				run_on_messages_stage_trim2(graph, msgs, num);
+				run_on_message_stage_trim2(graph, msg);
 				break;
 			case scc_stage_t::TRIM3:
-				run_on_messages_stage_trim3(graph, msgs, num);
+				run_on_message_stage_trim3(graph, msg);
 				break;
 			case scc_stage_t::FWBW:
-				run_on_messages_stage_FWBW(graph, msgs, num);
+				run_on_message_stage_FWBW(graph, msg);
 				break;
 			case scc_stage_t::PARTITION:
-				run_on_messages_stage_part(graph, msgs, num);
+				run_on_message_stage_part(graph, msg);
 				break;
 			case scc_stage_t::WCC:
-				run_on_messages_stage_wcc(graph, msgs, num);
+				run_on_message_stage_wcc(graph, msg);
 				break;
 			default:
 				assert(0);
 		}
 	}
 
-	void run_on_messages_stage_trim1(graph_engine &graph,
-			const vertex_message *msgs[], int num);
-	void run_on_messages_stage_trim2(graph_engine &graph,
-			const vertex_message *msgs[], int num);
-	void run_on_messages_stage_trim3(graph_engine &graph,
-			const vertex_message *msgs[], int num);
-	void run_on_messages_stage_FWBW(graph_engine &graph,
-			const vertex_message *msgs[], int num);
-	void run_on_messages_stage_part(graph_engine &graph,
-			const vertex_message *msgs[], int num);
-	void run_on_messages_stage_wcc(graph_engine &graph,
-			const vertex_message *msgs[], int num);
+	void run_on_message_stage_trim1(graph_engine &graph, const vertex_message &msg);
+	void run_on_message_stage_trim2(graph_engine &graph, const vertex_message &msg);
+	void run_on_message_stage_trim3(graph_engine &graph, const vertex_message &msg);
+	void run_on_message_stage_FWBW(graph_engine &graph, const vertex_message &msg);
+	void run_on_message_stage_part(graph_engine &graph, const vertex_message &msg);
+	void run_on_message_stage_wcc(graph_engine &graph, const vertex_message &msg);
 };
 
 void scc_vertex::run_stage_trim1(graph_engine &graph)
@@ -500,23 +493,21 @@ void scc_vertex::run_stage_trim1(graph_engine &graph, const page_vertex &vertex)
 	}
 }
 
-void scc_vertex::run_on_messages_stage_trim1(graph_engine &graph,
-		const vertex_message *msgs[], int num)
+void scc_vertex::run_on_message_stage_trim1(graph_engine &graph,
+		const vertex_message &msg1)
 {
-	for (int i = 0; i < num; i++) {
-		const trim1_message *msg = (const trim1_message *) msgs[i];
-		switch(msg->get_type()) {
-			case edge_type::IN_EDGE:
-				assert(num_in_edges > 0);
-				num_in_edges--;
-				break;
-			case edge_type::OUT_EDGE:
-				assert(num_out_edges > 0);
-				num_out_edges--;
-				break;
-			default:
-				assert(0);
-		}
+	const trim1_message &msg = (const trim1_message &) msg1;
+	switch(msg.get_type()) {
+		case edge_type::IN_EDGE:
+			assert(num_in_edges > 0);
+			num_in_edges--;
+			break;
+		case edge_type::OUT_EDGE:
+			assert(num_out_edges > 0);
+			num_out_edges--;
+			break;
+		default:
+			assert(0);
 	}
 }
 
@@ -593,13 +584,11 @@ void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
 	}
 }
 
-void scc_vertex::run_on_messages_stage_trim2(graph_engine &graph,
-		const vertex_message *msgs[], int num)
+void scc_vertex::run_on_message_stage_trim2(graph_engine &graph,
+		const vertex_message &msg1)
 {
-	for (int i = 0; i < num; i++) {
-		const trim2_message *msg = (const trim2_message *) msgs[i];
-		fwbw_state.assign_comp(msg->get_comp_id());
-	}
+	const trim2_message &msg = (const trim2_message &) msg1;
+	fwbw_state.assign_comp(msg.get_comp_id());
 }
 
 void scc_vertex::run_stage_trim3(graph_engine &graph)
@@ -656,8 +645,8 @@ void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
 	}
 }
 
-void scc_vertex::run_on_messages_stage_trim3(graph_engine &graph,
-		const vertex_message *msgs[], int num)
+void scc_vertex::run_on_message_stage_trim3(graph_engine &graph,
+		const vertex_message &msg)
 {
 }
 
@@ -724,23 +713,21 @@ void scc_vertex::run_stage_FWBW(graph_engine &graph, const page_vertex &vertex)
 	assert(do_some);
 }
 
-void scc_vertex::run_on_messages_stage_FWBW(graph_engine &graph,
-		const vertex_message *msgs[], int num)
+void scc_vertex::run_on_message_stage_FWBW(graph_engine &graph,
+		const vertex_message &msg1)
 {
 	uint64_t color = fwbw_state.get_color();
-	for (int i = 0; i < num; i++) {
-		const fwbw_message *msg = (const fwbw_message *) msgs[i];
-		// If the current vertex has a different color, it means it's in
-		// a different partition. The vertex can just ignore the message.
-		if (msg->get_color() != color)
-			continue;
+	const fwbw_message &msg = (const fwbw_message &) msg1;
+	// If the current vertex has a different color, it means it's in
+	// a different partition. The vertex can just ignore the message.
+	if (msg.get_color() != color)
+		return;
 
-		fwbw_state.set_pivot(msg->get_pivot());
-		if (msg->is_forward())
-			fwbw_state.set_fw();
-		else
-			fwbw_state.set_bw();
-	}
+	fwbw_state.set_pivot(msg.get_pivot());
+	if (msg.is_forward())
+		fwbw_state.set_fw();
+	else
+		fwbw_state.set_bw();
 }
 
 void scc_vertex::run_stage_part(graph_engine &graph)
@@ -758,8 +745,8 @@ void scc_vertex::run_stage_part(graph_engine &graph, const page_vertex &vertex)
 {
 }
 
-void scc_vertex::run_on_messages_stage_part(graph_engine &graph,
-		const vertex_message *msgs[], int num)
+void scc_vertex::run_on_message_stage_part(graph_engine &graph,
+		const vertex_message &msg)
 {
 }
 
@@ -789,20 +776,18 @@ void scc_vertex::run_stage_wcc(graph_engine &graph, const page_vertex &vertex)
 	graph.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
-void scc_vertex::run_on_messages_stage_wcc(graph_engine &graph,
-		const vertex_message *msgs[], int num)
+void scc_vertex::run_on_message_stage_wcc(graph_engine &graph,
+		const vertex_message &msg1)
 {
-	for (int i = 0; i < num; i++) {
-		wcc_comp_message *msg = (wcc_comp_message *) msgs[i];
-		// If the current vertex has a different color, it means it's in
-		// a different partition. The vertex can just ignore the message.
-		if (msg->get_color() != fwbw_state.get_color())
-			continue;
+	wcc_comp_message &msg = (wcc_comp_message &) msg1;
+	// If the current vertex has a different color, it means it's in
+	// a different partition. The vertex can just ignore the message.
+	if (msg.get_color() != fwbw_state.get_color())
+		return;
 
-		if (msg->get_wcc_id() > wcc_max) {
-			wcc_max = msg->get_wcc_id();
-			fwbw_state.set_wcc_updated();
-		}
+	if (msg.get_wcc_id() > wcc_max) {
+		wcc_max = msg.get_wcc_id();
+		fwbw_state.set_wcc_updated();
 	}
 }
 

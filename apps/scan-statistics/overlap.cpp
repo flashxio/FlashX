@@ -348,8 +348,7 @@ public:
 		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
 	}
 
-	void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) {
+	void run_on_message(graph_engine &, const vertex_message &msg) {
 	}
 };
 

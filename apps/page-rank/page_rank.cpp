@@ -70,9 +70,9 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	void run_on_messages(graph_engine &,
+	void run_on_message(graph_engine &,
 /* Only serves to activate on the next iteration */
-			const vertex_message *msgs[], int num) { }; 
+			const vertex_message &msg) { }; 
 };
 
 void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
