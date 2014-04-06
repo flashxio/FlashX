@@ -607,12 +607,21 @@ public:
 
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
 			size_t num) const {
-		page_byte_array::seq_const_iterator<vertex_id_t> it
-			= get_neigh_seq_it(type, 0, get_num_edges(type)); 
-		size_t i;
-		for (i = 0; i < num && it.has_next(); i++)
-			edges[i] = it.next();
-		return i;
+		vsize_t num_edges = get_num_edges(type);
+		assert(num_edges <= num);
+		if (partial)
+			array.memcpy(0, (char *) edges, sizeof(vertex_id_t) * num_edges);
+		else if (type == IN_EDGE || type == BOTH_EDGES)
+			array.memcpy(ext_mem_directed_vertex::get_header_size(),
+					(char *) edges, sizeof(vertex_id_t) * num_edges);
+		else if (type == OUT_EDGE)
+			array.memcpy(ext_mem_directed_vertex::get_header_size()
+				+ num_in_edges * sizeof(vertex_id_t), (char *) edges,
+				sizeof(vertex_id_t) * num_edges);
+		else
+			assert(0);
+
+		return num_edges;
 	}
 
 	vertex_id_t get_id() const {
