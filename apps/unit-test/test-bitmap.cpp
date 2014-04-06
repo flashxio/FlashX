@@ -44,5 +44,10 @@ int main()
 		assert(s_it == elements.end());
 		map1.clear();
 		elements.clear();
+
+		bitmap tmp(random() % max_bits, 0);
+		tmp.set_all();
+		std::vector<size_t> result2;
+		tmp.get_set_bits(result2);
 	}
 }

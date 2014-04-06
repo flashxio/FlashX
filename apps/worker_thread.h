@@ -216,40 +216,7 @@ public:
 	void init_messaging(const std::vector<worker_thread *> &threads);
 
 	void run();
-	void init() {
-		io = factory->create_io(this);
-		io->init();
-
-		std::vector<vertex_id_t> local_ids;
-		graph->get_partitioner()->get_all_vertices_in_part(worker_id,
-				graph->get_num_vertices(), local_ids);
-
-		std::vector<vertex_id_t> kept_ids;
-		BOOST_FOREACH(vertex_id_t id, local_ids) {
-			compute_vertex &v = graph->get_vertex(id);
-			if (filter && filter->keep(v))
-				kept_ids.push_back(id);
-		}
-		if (!kept_ids.empty()) {
-			assert(curr_activated_vertices->is_empty());
-			// Although we don't process the filtered vertices, we treat
-			// them as if they were processed.
-			graph->process_vertices(local_ids.size() - kept_ids.size());
-			curr_activated_vertices->init(kept_ids, false);
-			printf("worker %d has %ld vertices and activates %ld of them\n",
-					worker_id, local_ids.size(), kept_ids.size());
-		}
-		// If a user wants to start all vertices.
-		else if (start_all) {
-			assert(curr_activated_vertices->is_empty());
-			curr_activated_vertices->init(local_ids, false);
-		}
-		else if (filter) {
-			// Although we don't process the filtered vertices, we treat
-			// them as if they were processed.
-			graph->process_vertices(local_ids.size());
-		}
-	}
+	void init();
 
 	compute_allocator *get_part_compute_allocator() const {
 		return part_alloc;

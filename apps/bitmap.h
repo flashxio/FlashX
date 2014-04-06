@@ -104,6 +104,13 @@ public:
 		return num_set_bits;
 	}
 
+	void set_all() {
+		memset(ptr, 0xff, sizeof(ptr[0]) * (get_num_longs() - 1));
+		num_set_bits = NUM_BITS_LONG * (get_num_longs() - 1);
+		for (size_t i = num_set_bits; i < max_num_bits; i++)
+			set(i);
+	}
+
 	void set(size_t idx) {
 		assert(idx < max_num_bits);
 		size_t arr_off = idx / NUM_BITS_LONG;
