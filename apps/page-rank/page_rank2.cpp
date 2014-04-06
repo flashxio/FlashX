@@ -70,7 +70,7 @@ public:
 	}
 
 	float get_curr_itr_pr() const{
-		return curr_itr_pr;
+		return new_pr;
 	}
 
 	void run(graph_engine &graph) { 
