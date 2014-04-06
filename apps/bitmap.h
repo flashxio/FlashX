@@ -36,6 +36,7 @@ static const int NUM_BITS_LONG = sizeof(long) * 8;
  */
 class bitmap
 {
+	size_t num_set_bits;
 	size_t max_num_bits;
 	long *ptr;
 
@@ -85,6 +86,7 @@ public:
 
 	bitmap(size_t max_num_bits, int node_id) {
 		this->max_num_bits = max_num_bits;
+		this->num_set_bits = 0;
 		size_t num_longs = get_num_longs();
 		ptr = (long *) numa_alloc_onnode(num_longs * sizeof(ptr[0]), node_id);
 		memset(ptr, 0, sizeof(ptr[0]) * num_longs);
@@ -98,11 +100,19 @@ public:
 		return max_num_bits;
 	}
 
+	size_t get_num_set_bits() const {
+		return num_set_bits;
+	}
+
 	void set(size_t idx) {
 		assert(idx < max_num_bits);
 		size_t arr_off = idx / NUM_BITS_LONG;
 		size_t inside_off = idx % NUM_BITS_LONG;
-		ptr[arr_off] |= (1L << inside_off);
+		// If the bit hasn't been set, we now need to increase the count.
+		if (!(ptr[arr_off] & (1L << inside_off))) {
+			num_set_bits++;
+			ptr[arr_off] |= (1L << inside_off);
+		}
 	}
 
 	bool get(size_t idx) const {
@@ -112,16 +122,9 @@ public:
 		return ptr[arr_off] & (1L << inside_off);
 	}
 
-	void merge(const bitmap &map) {
-		assert(this->get_num_bits() >= map.get_num_bits());
-		size_t size = map.get_num_longs();
-		for (size_t i = 0; i < size; i++) {
-			ptr[i] |= map.ptr[i];
-		}
-	}
-
 	void clear() {
 		memset(ptr, 0, sizeof(ptr[0]) * get_num_longs());
+		num_set_bits = 0;
 	}
 
 	/**
@@ -134,7 +137,38 @@ public:
 			if (ptr[i])
 				get_set_bits_long(ptr[i], i, v);
 		}
+		assert(v.size() == num_set_bits);
 		return v.size();
+	}
+
+	/**
+	 * This method collects a specified number of bits that have been
+	 * set to 1.
+	 */
+	template<class T>
+	size_t get_set_bits(size_t begin_idx, size_t end_idx, std::vector<T> &v) const {
+		// For simplicity, begin_index has to referent to the beginning
+		// of a long.
+		assert(begin_idx % NUM_BITS_LONG == 0);
+		if (end_idx == get_num_bits())
+			end_idx = ROUNDUP(end_idx, NUM_BITS_LONG);
+		assert(end_idx % NUM_BITS_LONG == 0);
+		// Find the last long we should visit (excluded).
+		size_t long_end = end_idx / NUM_BITS_LONG;
+		if (long_end > get_num_longs())
+			long_end = get_num_longs();
+		size_t orig_size = v.size();
+		for (size_t i = begin_idx / NUM_BITS_LONG; i < long_end; i++) {
+			if (ptr[i])
+				get_set_bits_long(ptr[i], i, v);
+		}
+		return v.size() - orig_size;
+	}
+
+	void copy_to(bitmap &map) const {
+		assert(max_num_bits == map.max_num_bits);
+		map.num_set_bits = num_set_bits;
+		memcpy(map.ptr, ptr, map.get_num_longs() * sizeof(long));
 	}
 };
 
