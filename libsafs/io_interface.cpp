@@ -55,8 +55,10 @@ struct global_data_collection
 	pthread_mutex_t mutex;
 	cache_config *cache_conf;
 	page_cache *global_cache;
+#ifdef PART_IO
 	// For part_global_cached_io
 	part_io_process_table *table;
+#endif
 
 #ifdef DEBUG
 	std::tr1::unordered_set<io_interface *> ios;
@@ -64,7 +66,9 @@ struct global_data_collection
 #endif
 
 	global_data_collection() {
+#ifdef PART_IO
 		table = NULL;
+#endif
 		cache_conf = NULL;
 		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
@@ -187,20 +191,22 @@ void init_io_system(const config_map &configs)
 				mapper, curr);
 		global_data.global_cache->init(underlying);
 	}
+#ifdef PART_IO
 	if (global_data.table == NULL) {
 		if (params.get_num_nodes() > 1)
 			global_data.table = part_global_cached_io::init_subsystem(
 					global_data.read_threads, mapper,
 					(NUMA_cache *) global_data.global_cache);
 	}
+#endif
 	pthread_mutex_unlock(&global_data.mutex);
 }
 
 void destroy_io_system()
 {
 	global_data.global_cache->sanity_check();
+#ifdef PART_IO
 	// TODO destroy part global cached io table.
-#if 0
 	if (global_data.table) {
 		part_global_cached_io::destroy_subsystem(global_data.table);
 		global_data.table = NULL;
@@ -288,6 +294,7 @@ public:
 	virtual void destroy_io(io_interface *io);
 };
 
+#ifdef PART_IO
 class part_global_cached_io_factory: public remote_io_factory
 {
 public:
@@ -299,6 +306,7 @@ public:
 
 	virtual void destroy_io(io_interface *io);
 };
+#endif
 
 io_interface *posix_io_factory::create_io(thread *t)
 {
@@ -427,6 +435,7 @@ void global_cached_io_factory::destroy_io(io_interface *io)
 }
 
 
+#ifdef PART_IO
 io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
@@ -445,6 +454,7 @@ void part_global_cached_io_factory::destroy_io(io_interface *io)
 #endif
 	part_global_cached_io::destroy((part_global_cached_io *) io);
 }
+#endif
 
 class destroy_io_factory
 {
@@ -484,9 +494,11 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 			factory = new global_cached_io_factory(file_name,
 					global_data.global_cache);
 			break;
+#ifdef PART_IO
 		case PART_GLOBAL_ACCESS:
 			factory = new part_global_cached_io_factory(file_name);
 			break;
+#endif
 		default:
 			fprintf(stderr, "a wrong access option\n");
 			assert(0);
