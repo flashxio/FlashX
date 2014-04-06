@@ -820,31 +820,7 @@ public:
 	/**
 	 * rel_off: the offset relative to the beginning of the array.
 	 */
-	void memcpy(off_t rel_off, char buf[], size_t size) const {
-		// The offset relative to the beginning of the page array.
-		off_t off = get_offset_in_first_page() + rel_off;
-		off_t end = off + size;
-		assert((size_t) end <= get_size() + get_offset_in_first_page());
-
-		off_t page_begin = ROUND(off, PAGE_SIZE);
-		// If the element crosses the page boundary.
-		if (end - page_begin > PAGE_SIZE) {
-			assert(size <= PAGE_SIZE);
-			off_t pg_idx = off / PAGE_SIZE;
-			off_t off_in_pg = off % PAGE_SIZE;
-			size_t part1_size = PAGE_SIZE - off_in_pg;
-			size_t part2_size = size - part1_size;
-			::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg,
-					part1_size);
-			::memcpy(buf + part1_size,
-					((char *) get_page(pg_idx + 1)->get_data()), part2_size);
-		}
-		else {
-			off_t pg_idx = off / PAGE_SIZE;
-			off_t off_in_pg = off % PAGE_SIZE;
-			::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg, size);
-		}
-	}
+	void memcpy(off_t rel_off, char buf[], size_t size) const;
 
 	static const page_byte_array &const_cast_ref(page_byte_array &arr) {
 		return (const page_byte_array &) arr;
