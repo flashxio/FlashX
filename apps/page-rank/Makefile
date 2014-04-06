@@ -21,10 +21,13 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L../../libsafs -lsafs -L.. -lgraph -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: page-rank
+all: page-rank page-rank2
 
-page-rank: $(OBJS) ../libgraph.a
-	$(CXX) -o page-rank	$(OBJS) $(LDFLAGS)
+page-rank: page_rank.o ../libgraph.a
+	$(CXX) -o page-rank	page_rank.o $(LDFLAGS)
+
+page-rank2: page_rank2.o ../libgraph.a
+	$(CXX) -o page-rank2 page_rank2.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
