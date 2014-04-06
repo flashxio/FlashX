@@ -53,7 +53,7 @@ public:
 	}
 };
 
-class pgrank_vertex: public compute_vertex
+class pgrank_vertex: public compute_directed_vertex
 {
 	float new_pr;
 	float curr_itr_pr; // Current iteration's page rank
@@ -63,7 +63,8 @@ public:
 		this->new_pr = curr_itr_pr;
 	}
 
-	pgrank_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(id, index) {
+	pgrank_vertex(vertex_id_t id,
+			const vertex_index *index): compute_directed_vertex(id, index) {
 		this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
 		this->new_pr = curr_itr_pr;
 	}
@@ -73,8 +74,8 @@ public:
 	}
 
 	void run(graph_engine &graph) { 
-		vertex_id_t id = get_id();
-		request_vertices(&id, 1); // put my edgelist in page cache
+		directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+		request_partial_vertices(&req, 1);
 	};
 
 	void run(graph_engine &graph, const page_vertex &vertex);
