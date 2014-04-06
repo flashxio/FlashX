@@ -72,24 +72,14 @@ public:
 
 void bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
-	vertex_id_t max_id = graph.get_max_vertex_id();
-	vertex_id_t min_id = graph.get_min_vertex_id();
-
 	assert(!has_visited());
 	set_visited(true);
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex.get_neigh_end(OUT_EDGE);
-	stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(OUT_EDGE));
-	int num_dests = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
-		vertex_id_t id = *it;
-		assert(id >= min_id && id <= max_id);
-		dest_buf[num_dests++] = id;
-	}
+	int num_dests = vertex.get_num_edges(OUT_EDGE);
+	stack_array<vertex_id_t, 1024> dest_buf(num_dests);
+	vertex.read_edges(OUT_EDGE, dest_buf.data(), num_dests);
 	graph.activate_vertices(dest_buf.data(), num_dests);
 }
 

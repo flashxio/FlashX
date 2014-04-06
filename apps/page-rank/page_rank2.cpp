@@ -87,23 +87,17 @@ public:
 
 void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
-	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex.get_neigh_end(OUT_EDGE);
-	stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(OUT_EDGE));
-	int num_dests = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
-		vertex_id_t id = *it;
-		dest_buf[num_dests++] = id;
-	}
+	int num_dests = vertex.get_num_edges(OUT_EDGE);
+	stack_array<vertex_id_t, 1024> dest_buf(num_dests);
+	vertex.read_edges(OUT_EDGE, dest_buf.data(), num_dests);
 
 	// If this is the first iteration.
 	if (graph.get_curr_level() == 0) {
-		pr_message msg(curr_itr_pr / vertex.get_num_edges(OUT_EDGE) * DAMPING_FACTOR);
+		pr_message msg(curr_itr_pr / num_dests * DAMPING_FACTOR);
 		graph.multicast_msg(dest_buf.data(), num_dests, msg);
 	}
 	else if (std::fabs(new_pr - curr_itr_pr) > TOLERANCE) {
-		pr_message msg((new_pr - curr_itr_pr) / vertex.get_num_edges(OUT_EDGE) * DAMPING_FACTOR);
+		pr_message msg((new_pr - curr_itr_pr) / num_dests * DAMPING_FACTOR);
 		graph.multicast_msg(dest_buf.data(), num_dests, msg);
 		curr_itr_pr = new_pr;
 	}
