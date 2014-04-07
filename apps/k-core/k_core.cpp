@@ -32,7 +32,39 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-vsize_t K; // Min degree necessary to be part of the k-core graph
+vsize_t CURRENT_K; // Min degree necessary to be part of the k-core graph
+
+class global_variable
+{
+	volatile size_t value;
+	pthread_spinlock_t lock;
+public:
+	global_variable() {
+		value = 0;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	global_variable(size_t init) {
+		value = init;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	void update(size_t new_v) {
+		pthread_spin_lock(&lock);
+    value = new_v;
+		pthread_spin_unlock(&lock);
+	}
+
+  void minus_minus() {
+    pthread_spin_lock(&lock);
+    --value;
+    pthread_spin_unlock(&lock);
+  }
+
+	size_t get() const {
+		return value;
+	}
+} IN_CORE_VERTICES;
 
 class kcore_vertex: public compute_directed_vertex
 {
@@ -55,6 +87,7 @@ public:
 
   void _delete() {
     this->deleted = true;
+    IN_CORE_VERTICES.minus_minus(); // Lower vertices still in CURRENT_K-core 
   }
 
   vsize_t get_degree() {
@@ -62,7 +95,7 @@ public:
   }
 
   void run(graph_engine &graph) {
-    if (degree > K) { return; }
+    if (degree > CURRENT_K) { return; }
 
     if (!is_deleted()) {
 			vertex_id_t id = get_id();
@@ -110,7 +143,7 @@ void kcore_vertex::run(graph_engine &graph, const page_vertex &vertex) {
     return; // Nothing to be done here
   }
 
-  if ( get_degree() < K ) {
+  if ( get_degree() < CURRENT_K ) {
     _delete();
    
     // Send two multicast messages - [IN_EDGE, OUT_EDGE] 
@@ -141,7 +174,7 @@ void int_handler(int sig_num)
 void print_usage()
 {
 	fprintf(stderr,
-			"k-core [options] conf_file graph_file index_file K\n");
+			"k-core [options] conf_file graph_file index_file kmin [kmax] (Default=Max Degree)\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	graph_conf.print_help();
 	params.print_help();
@@ -174,9 +207,9 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[0];
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
-	K = atoi(argv[3]); // set K
+	vsize_t kmin = atol(argv[3]); // set kmin
 
-  //printf("Here!\n");
+
 	config_map configs(conf_file);
 	configs.add_options(confs);
 	graph_conf.init(configs);
@@ -193,43 +226,43 @@ int main(int argc, char *argv[])
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+  
+  vsize_t kmax; 
+  if (argc > 4) {
+    kmax = atol(argv[4]);
+  }
+  else { // compute largest degree and set it
+    printf("Computing kmax as max_degree ...\n");
+    kmax = 0; 
 
-  // Filter for activation first time around
-  class activate_k_filter: public vertex_filter {
-    vsize_t min;
-    public:
-    activate_k_filter (vsize_t min) {
-      this->min = min;
-    }
-    bool keep(compute_vertex &v) {
-      kcore_vertex &kcore_v = (kcore_vertex &) v;
-      return kcore_v.get_num_in_edges() + kcore_v.get_num_out_edges() < min;
-    }
-  };
+    NUMA_graph_index<kcore_vertex>::const_iterator it
+      = ((NUMA_graph_index<kcore_vertex> *) index)->begin();
+    NUMA_graph_index<kcore_vertex>::const_iterator end_it
+      = ((NUMA_graph_index<kcore_vertex> *) index)->end();
 
-	std::shared_ptr<vertex_filter> filter
-		= std::shared_ptr<vertex_filter>(new activate_k_filter(K));
+    // Get max degree
+    for (; it != end_it; ++it) {
+      const kcore_vertex &v = (const kcore_vertex &) *it;
+      if ((v.get_num_in_edges() + v.get_num_out_edges()) > kmax) 
+        kmax++;
+    } 
+  } 
+  printf("Setting kmax to %u ... \n", kmax);
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
-	graph->start(filter); 
-  graph->wait4complete();
-	gettimeofday(&end, NULL);
+  IN_CORE_VERTICES.update(graph->get_max_vertex_id()+1); // Set active vertices
+  printf("IN_CORE_VERTICES starts at %lu\n", IN_CORE_VERTICES.get());
+  struct timeval start, end;
+  gettimeofday(&start, NULL);
 
-	NUMA_graph_index<kcore_vertex>::const_iterator it
-		= ((NUMA_graph_index<kcore_vertex> *) index)->begin();
-	NUMA_graph_index<kcore_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<kcore_vertex> *) index)->end();
+  for (CURRENT_K = kmin; CURRENT_K <= kmax; CURRENT_K++) {
+    graph->start_all(); 
+    graph->wait4complete();
 
-	vsize_t in_k_core = 0;
-
-  // Check number of visited vertices
-	for (; it != end_it; ++it) {
-		const kcore_vertex &v = (const kcore_vertex &) *it;
-		if ( !(v.is_deleted()) ) {
-			in_k_core++;
-    }
-	}
+    printf("\n******************************************\n K = %u has %lu" 
+        " vertices >= %u\n******************************************\n",
+        CURRENT_K, IN_CORE_VERTICES.get(), CURRENT_K); 
+  }
+  gettimeofday(&end, NULL);
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -237,6 +270,5 @@ int main(int argc, char *argv[])
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
 	destroy_io_system();
-	printf("\n%d-core shows %d vertices > %d degree in %f seconds\n",
-			K, in_k_core, K, time_diff(start, end));
+  printf("K-core completed in %f seconds\n", time_diff(start, end));
 }
