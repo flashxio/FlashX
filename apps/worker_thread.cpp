@@ -31,7 +31,7 @@ void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorte
 {
 	pthread_spin_lock(&lock);
 	vertex_buf.clear();
-	active_bitmap.clear();
+	active_bitmap->clear();
 	vertex_buf.resize(size);
 	// The buffer contains the vertex Ids and we only store the location of
 	// vertices in the local partition.
@@ -50,18 +50,22 @@ void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorte
 	pthread_spin_unlock(&lock);
 }
 
-void default_vertex_queue::init(const bitmap &map)
+void default_vertex_queue::init(worker_thread &t)
 {
 	pthread_spin_lock(&lock);
 	vertex_buf.clear();
-	active_bitmap.clear();
-	map.copy_to(active_bitmap);
-	num_active = map.get_num_set_bits();
+	assert(active_bitmap->get_num_set_bits() == 0);
+	// This process only happens in a single thread, so we can swap
+	// the two bitmap safely.
+	bitmap *tmp = active_bitmap;
+	active_bitmap = t.next_activated_vertices;
+	t.next_activated_vertices = tmp;
+	num_active = active_bitmap->get_num_set_bits();
 
 	bool forward = true;
 	if (graph_conf.get_elevator_enabled())
 		forward = graph.get_curr_level() % 2;
-	bitmap_fetch_idx = scan_pointer(active_bitmap.get_num_longs(), forward);
+	bitmap_fetch_idx = scan_pointer(active_bitmap->get_num_longs(), forward);
 	buf_fetch_idx = scan_pointer(0, true);
 	pthread_spin_unlock(&lock);
 }
@@ -75,7 +79,7 @@ void default_vertex_queue::fetch_from_map()
 		size_t curr_loc = bitmap_fetch_idx.get_curr_loc();
 		size_t new_loc = bitmap_fetch_idx.move(VERTEX_BUF_SIZE);
 		// bitmap_fetch_idx points to the locations of longs.
-		active_bitmap.get_set_bits(min(curr_loc, new_loc) * NUM_BITS_LONG,
+		active_bitmap->get_reset_set_bits(min(curr_loc, new_loc) * NUM_BITS_LONG,
 				max(curr_loc, new_loc) * NUM_BITS_LONG, vertex_buf);
 	}
 	bool forward = true;
@@ -126,12 +130,12 @@ int default_vertex_queue::fetch(compute_vertex *vertices[], int num)
 	return num_fetched;
 }
 
-void customized_vertex_queue::init(const bitmap &map)
+void customized_vertex_queue::init(worker_thread &t)
 {
 	pthread_spin_lock(&lock);
 	sorted_vertices.clear();
 	std::vector<vertex_id_t> local_ids;
-	map.get_set_bits(local_ids);
+	t.next_activated_vertices->get_reset_set_bits(local_ids);
 	// the bitmap only contains the locations of vertices in the bitmap.
 	// We have to translate them back to vertex ids.
 	sorted_vertices.resize(local_ids.size());
@@ -153,9 +157,10 @@ worker_thread::worker_thread(graph_engine *graph,
 		file_io_factory::shared_ptr factory,
 		vertex_program::ptr prog, int node_id, int worker_id,
 		int num_threads, vertex_scheduler *scheduler): thread("worker_thread",
-			node_id), next_activated_vertices(graph->get_partitioner(
-					)->get_part_size(worker_id, graph->get_num_vertices()), node_id)
+			node_id)
 {
+	next_activated_vertices = new bitmap(graph->get_partitioner(
+				)->get_part_size(worker_id, graph->get_num_vertices()), node_id);
 	this->vprogram = std::move(prog);
 	start_all = false;
 	this->worker_id = worker_id;
@@ -202,6 +207,7 @@ worker_thread::~worker_thread()
 	delete msg_alloc;
 	factory->destroy_io(io);
 	delete curr_activated_vertices;
+	delete next_activated_vertices;
 }
 
 void worker_thread::init()
@@ -230,10 +236,10 @@ void worker_thread::init()
 	}
 	// If a user wants to start all vertices.
 	else if (start_all) {
-		bitmap tmp(get_num_local_vertices(), get_node_id());
-		tmp.set_all();
+		next_activated_vertices->set_all();
 		assert(curr_activated_vertices->is_empty());
-		curr_activated_vertices->init(tmp);
+		curr_activated_vertices->init(*this);
+		assert(next_activated_vertices->get_num_set_bits() == 0);
 	}
 }
 
@@ -332,8 +338,8 @@ int worker_thread::enter_next_level()
 {
 	// We have to make sure all messages sent by other threads are processed.
 	msg_processor->process_msgs();
-	curr_activated_vertices->init(next_activated_vertices);
-	next_activated_vertices.clear();
+	curr_activated_vertices->init(*this);
+	assert(next_activated_vertices->get_num_set_bits() == 0);
 	balancer->reset();
 	msg_processor->reset();
 	return curr_activated_vertices->get_num_vertices();
@@ -365,7 +371,7 @@ void worker_thread::run()
 				// other threads in order to balance the load.
 				|| get_num_activated_on_others() > 0);
 		assert(curr_activated_vertices->is_empty());
-		printf("worker %d visited %d vertices\n", worker_id, num_visited);
+//		printf("worker %d visited %d vertices\n", worker_id, num_visited);
 		assert(num_visited == num_activated_vertices_in_level.get());
 		if (num_visited != num_completed_vertices_in_level.get()) {
 			printf("worker %d: visits %d vertices and completes %ld\n",
@@ -383,7 +389,7 @@ void worker_thread::run()
 		balancer->process_completed_stolen_vertices();
 		balancer->reset();
 		bool completed = graph->progress_next_level();
-		printf("thread %d finish in a level, completed? %d\n", get_id(), completed);
+//		printf("thread %d finish in a level, completed? %d\n", get_id(), completed);
 		if (completed)
 			break;
 	}
@@ -430,7 +436,7 @@ void worker_thread::activate_vertex(vertex_id_t id)
 	off_t off;
 	graph->get_partitioner()->map2loc(id, part_id, off);
 	assert(part_id == worker_id);
-	next_activated_vertices.set(off);
+	next_activated_vertices->set(off);
 }
 
 vertex_compute *worker_thread::create_vertex_compute(compute_vertex *v)

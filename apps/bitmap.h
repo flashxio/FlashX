@@ -36,7 +36,7 @@ static const int NUM_BITS_LONG = sizeof(long) * 8;
  */
 class bitmap
 {
-	size_t num_set_bits;
+	long num_set_bits;
 	size_t max_num_bits;
 	long *ptr;
 
@@ -144,7 +144,21 @@ public:
 			if (ptr[i])
 				get_set_bits_long(ptr[i], i, v);
 		}
-		assert(v.size() == num_set_bits);
+		assert(v.size() == (size_t) num_set_bits);
+		return v.size();
+	}
+
+	template<class T>
+	size_t get_reset_set_bits(std::vector<T> &v) {
+		size_t size = get_num_longs();
+		for (size_t i = 0; i < size; i++) {
+			if (ptr[i]) {
+				get_set_bits_long(ptr[i], i, v);
+				ptr[i] = 0;
+			}
+		}
+		assert(v.size() == (size_t) num_set_bits);
+		num_set_bits = 0;
 		return v.size();
 	}
 
@@ -169,6 +183,30 @@ public:
 			if (ptr[i])
 				get_set_bits_long(ptr[i], i, v);
 		}
+		return v.size() - orig_size;
+	}
+
+	template<class T>
+	size_t get_reset_set_bits(size_t begin_idx, size_t end_idx, std::vector<T> &v) {
+		// For simplicity, begin_index has to referent to the beginning
+		// of a long.
+		assert(begin_idx % NUM_BITS_LONG == 0);
+		if (end_idx == get_num_bits())
+			end_idx = ROUNDUP(end_idx, NUM_BITS_LONG);
+		assert(end_idx % NUM_BITS_LONG == 0);
+		// Find the last long we should visit (excluded).
+		size_t long_end = end_idx / NUM_BITS_LONG;
+		if (long_end > get_num_longs())
+			long_end = get_num_longs();
+		size_t orig_size = v.size();
+		for (size_t i = begin_idx / NUM_BITS_LONG; i < long_end; i++) {
+			if (ptr[i]) {
+				get_set_bits_long(ptr[i], i, v);
+				ptr[i] = 0;
+			}
+		}
+		num_set_bits -= (v.size() - orig_size);
+		assert(num_set_bits >= 0);
 		return v.size() - orig_size;
 	}
 
