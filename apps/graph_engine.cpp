@@ -177,16 +177,20 @@ public:
 size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
 {
 	size_t ret;
-	if (batch_num % 2 == 0) {
+	if (graph_conf.get_elevator_enabled()) {
+		if (batch_num % 2 == 0) {
+			ret = forward_queue.get_requests(reqs);
+			if (forward_queue.is_empty())
+				batch_num++;
+		}
+		else {
+			ret = backward_queue.get_requests(reqs);
+			if (backward_queue.is_empty())
+				batch_num++;
+		}
+	}
+	else
 		ret = forward_queue.get_requests(reqs);
-		if (forward_queue.is_empty())
-			batch_num++;
-	}
-	else {
-		ret = backward_queue.get_requests(reqs);
-		if (backward_queue.is_empty())
-			batch_num++;
-	}
 	return ret;
 }
 
