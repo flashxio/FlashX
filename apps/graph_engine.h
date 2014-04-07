@@ -360,6 +360,8 @@ public:
 	int get_vertex_header_size() const {
 		return vertex_header_size;
 	}
+
+	void preload_graph();
 };
 
 #endif

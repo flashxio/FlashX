@@ -138,6 +138,7 @@ void print_usage()
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-s size: the output min component size\n");
 	fprintf(stderr, "-o file: output the component size to the file\n");
+	fprintf(stderr, "-p: preload the graph\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -149,7 +150,8 @@ int main(int argc, char *argv[])
 	std::string output_file;
 	size_t min_comp_size = 0;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:s:o:")) != -1) {
+	bool preload = false;
+	while ((opt = getopt(argc, argv, "c:s:o:p")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -163,6 +165,9 @@ int main(int argc, char *argv[])
 			case 'o':
 				output_file = optarg;
 				num_opts++;
+				break;
+			case 'p':
+				preload = true;
 				break;
 			default:
 				print_usage();
@@ -192,6 +197,8 @@ int main(int argc, char *argv[])
 			graph_conf.get_num_threads(), params.get_num_nodes());
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
+	if (preload)
+		graph->preload_graph();
 	printf("weakly connected components starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

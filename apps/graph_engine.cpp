@@ -432,6 +432,19 @@ void graph_engine::set_vertex_scheduler(vertex_scheduler *scheduler)
 	this->scheduler = scheduler;
 }
 
+void graph_engine::preload_graph()
+{
+	const int BLOCK_SIZE = 1024 * 1024 * 32;
+	io_interface *io = factory->create_io(thread::get_curr_thread());
+	size_t preload_size = min(params.get_cache_size(), factory->get_file_size());
+	printf("preload %ld bytes\n", preload_size);
+	char *buf = new char[BLOCK_SIZE];
+	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
+		io->access(buf, i, BLOCK_SIZE, READ);
+	factory->destroy_io(io);
+	printf("successfully preload\n");
+}
+
 vertex_index *load_vertex_index(const std::string &index_file)
 {
 	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;

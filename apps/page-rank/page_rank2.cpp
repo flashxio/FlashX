@@ -116,6 +116,7 @@ void print_usage()
 	fprintf(stderr,
 			"page-rank [options] conf_file graph_file index_file damping_factor\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
+	fprintf(stderr, "-p: preload the graph\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -125,12 +126,16 @@ int main(int argc, char *argv[])
 	int opt;
 	std::string confs;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:")) != -1) {
+	bool preload = false;
+	while ((opt = getopt(argc, argv, "c:p")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
 				confs = optarg;
 				num_opts++;
+				break;
+			case 'p':
+				preload = true;
 				break;
 			default:
 				print_usage();
@@ -166,6 +171,8 @@ int main(int argc, char *argv[])
 			graph_conf.get_num_threads(), params.get_num_nodes());
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
+	if (preload)
+		graph->preload_graph();
 	printf("Pagerank starting\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
