@@ -33,6 +33,7 @@
 
 float DAMPING_FACTOR = 0.85;
 float TOLERANCE = 1.0E-2; 
+int num_iters = INT_MAX;
 
 class pgrank_vertex: public compute_vertex
 {
@@ -64,6 +65,9 @@ public:
   }
 
   void run(graph_engine &graph) { 
+	// We perform pagerank for at most `num_iters' iterations.
+	if (graph.get_curr_level() >= num_iters)
+		return;
     vertex_id_t id = get_id();
     request_vertices(&id, 1); // put my edgelist in page cache
   };
@@ -128,6 +132,7 @@ void print_usage()
 			"page-rank [options] conf_file graph_file index_file damping_factor\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-p: preload the graph\n");
+	fprintf(stderr, "-i num: specify the maximal number of iterations\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -138,7 +143,7 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:p")) != -1) {
+	while ((opt = getopt(argc, argv, "c:pi:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -147,6 +152,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'p':
 				preload = true;
+				break;
+			case 'i':
+				num_iters = atoi(optarg);
+				num_opts++;
 				break;
 			default:
 				print_usage();
@@ -184,7 +193,7 @@ int main(int argc, char *argv[])
 			params.get_num_nodes(), graph_file, index);
 	if (preload)
 		graph->preload_graph();
-	printf("Pagerank starting\n");
+	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
