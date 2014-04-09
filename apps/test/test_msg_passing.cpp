@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <google/profiler.h>
 
+#include <atomic>
 #include <vector>
 
 #include "thread.h"
@@ -31,56 +32,64 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-class bfs_vertex: public compute_directed_vertex
+/**
+ * Measure the performance of message passing.
+ * It can remove remote random memory access, but still generates
+ * a lot of random access in the local memory.
+ */
+
+class test_message: public vertex_message
 {
-	enum {
-		VISITED,
-	};
-
-	atomic_flags<int> flags;
+	int v;
 public:
-	bfs_vertex() {
+	test_message(int v): vertex_message(sizeof(test_message), false) {
+		this->v = v;
 	}
 
-	bfs_vertex(vertex_id_t id,
-			const vertex_index *index): compute_directed_vertex(id, index) {
+	int get_value() const {
+		return v;
+	}
+};
+
+class test_vertex: public compute_directed_vertex
+{
+	long sum;
+public:
+	test_vertex() {
+		sum = 0;
 	}
 
-	bool has_visited() const {
-		return flags.test_flag(VISITED);
-	}
-
-	bool set_visited(bool visited) {
-		if (visited)
-			return flags.set_flag(VISITED);
-		else
-			return flags.clear_flag(VISITED);
+	test_vertex(vertex_id_t id, const vertex_index *index): compute_directed_vertex(
+			id, index) {
+		sum = 0;
 	}
 
 	void run(graph_engine &graph) {
-		if (!has_visited()) {
-			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
-			request_partial_vertices(&req, 1);
-		}
+		vertex_id_t id = get_id();
+		request_vertices(&id, 1);
 	}
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg) {
+	virtual void run_on_message(graph_engine &, const vertex_message &msg1) {
+		const test_message &msg = (const test_message &) msg1;
+		sum += msg.get_value();
 	}
 };
 
-void bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
-	assert(!has_visited());
-	set_visited(true);
-
-	// We need to add the neighbors of the vertex to the queue of
-	// the next level.
-	int num_dests = vertex.get_num_edges(OUT_EDGE);
-	stack_array<vertex_id_t, 1024> dest_buf(num_dests);
-	vertex.read_edges(OUT_EDGE, dest_buf.data(), num_dests);
-	graph.activate_vertices(dest_buf.data(), num_dests);
+	stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(BOTH_EDGES));
+	page_byte_array::const_iterator<vertex_id_t> end_it
+		= vertex.get_neigh_end(BOTH_EDGES);
+	int num_dests = 0;
+	for (page_byte_array::const_iterator<vertex_id_t> it
+			= vertex.get_neigh_begin(BOTH_EDGES); it != end_it; ++it) {
+		vertex_id_t id = *it;
+		dest_buf[num_dests++] = id;
+	}
+	test_message msg(1);
+	graph.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
 void int_handler(int sig_num)
@@ -93,9 +102,8 @@ void int_handler(int sig_num)
 void print_usage()
 {
 	fprintf(stderr,
-			"bfs [options] conf_file graph_file index_file start_vertex\n");
+			"test [options] conf_file graph_file index_file\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-p: preload the graph\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -105,16 +113,12 @@ int main(int argc, char *argv[])
 	int opt;
 	std::string confs;
 	int num_opts = 0;
-	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:p")) != -1) {
+	while ((opt = getopt(argc, argv, "c:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
 				confs = optarg;
 				num_opts++;
-				break;
-			case 'p':
-				preload = true;
 				break;
 			default:
 				print_usage();
@@ -123,7 +127,7 @@ int main(int argc, char *argv[])
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
 
-	if (argc < 4) {
+	if (argc < 3) {
 		print_usage();
 		exit(-1);
 	}
@@ -131,44 +135,30 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[0];
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
-	vertex_id_t start_vertex = atoi(argv[3]);
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
 	graph_conf.init(configs);
 	graph_conf.print();
+	printf("The size of vertex state: %ld\n", sizeof(test_vertex));
 
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<bfs_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-
+	graph_index *index = NUMA_graph_index<test_vertex>::create(
+			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
-	if (preload)
-		graph->preload_graph();
-	printf("BFS starts\n");
+	printf("test starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph->start(&start_vertex, 1);
+	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-
-	NUMA_graph_index<bfs_vertex>::const_iterator it
-		= ((NUMA_graph_index<bfs_vertex> *) index)->begin();
-	NUMA_graph_index<bfs_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<bfs_vertex> *) index)->end();
-	int num_visited = 0;
-	for (; it != end_it; ++it) {
-		const bfs_vertex &v = (const bfs_vertex &) *it;
-		if (v.has_visited())
-			num_visited++;
-	}
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -176,6 +166,5 @@ int main(int argc, char *argv[])
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
 	destroy_io_system();
-	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
-			(unsigned long) start_vertex, num_visited, time_diff(start, end));
+	printf("It takes %f seconds\n", time_diff(start, end));
 }

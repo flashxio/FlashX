@@ -33,28 +33,29 @@ class log_thread: public thread
 {
 	FILE *f;
 	std::string trace_file;
-	thread_safe_FIFO_queue<std::vector<io_request> *> queue;
+	thread_safe_FIFO_queue<std::vector<request_range> *> queue;
 public:
 	log_thread(const std::string &trace_file): thread(
-			"trace_log_thread", 0), queue("log_queue", 0, 1024) {
+			"trace_log_thread", 0), queue("log_queue", 0, 1024, INT_MAX) {
 		f = fopen(trace_file.c_str(), "w");
 	}
 
-	void add(std::vector<io_request> *reqs) {
+	void add(std::vector<request_range> *reqs) {
 		int ret = queue.add(&reqs, 1);
 		if (ret < 1)
-			fprintf(stderr, "can't add traced requests to the queue");
+			fprintf(stderr, "can't add traced requests to the queue\n");
 		activate();
 	}
 
 	void run() {
 		while (!queue.is_empty()) {
-			std::vector<io_request> *reqs = queue.pop_front();
+			std::vector<request_range> *reqs = queue.pop_front();
 			for (size_t i = 0; i < reqs->size(); i++) {
-				io_request req = reqs->at(i);
+				request_range req = reqs->at(i);
 				fprintf(f, ",%ld,%ld,R,%ld\n",
-						req.get_offset(), req.get_size(), req.get_size());
+						req.get_loc().get_offset(), req.get_size(), req.get_size());
 			}
+			delete reqs;
 		}
 	}
 
@@ -65,38 +66,46 @@ public:
 	}
 };
 
-const size_t MAX_LOG_BUF = 1024 * 1024;
+const size_t MAX_LOG_BUF = 1024 * 32;
+
+static void destroy_queue(void *p)
+{
+	std::vector<request_range> *q = (std::vector<request_range> *) p;
+	delete q;
+}
 
 class trace_logger
 {
 	log_thread *thread;
-	std::vector<io_request> *logged_reqs;
-	pthread_spinlock_t lock;
+	pthread_key_t queue_key;
+
+	std::vector<request_range> *get_per_thread_queue() {
+		std::vector<request_range> *p
+			= (std::vector<request_range> *) pthread_getspecific(queue_key);
+		if (p == NULL) {
+			p = new std::vector<request_range>();
+			pthread_setspecific(queue_key, p);
+		}
+		return p;
+	}
 public:
 	trace_logger(const std::string &trace_file) {
-		logged_reqs = new std::vector<io_request>();
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		thread = new log_thread(trace_file);
 		thread->start();
+		pthread_key_create(&queue_key, destroy_queue);
 	}
 
-	void log(io_request reqs[], int num) {
-		pthread_spin_lock(&lock);
-		assert(logged_reqs);
-		logged_reqs->insert(logged_reqs->end(), reqs, reqs + num);
-		if (logged_reqs->size() >= MAX_LOG_BUF) {
-			thread->add(logged_reqs);
-			logged_reqs = new std::vector<io_request>();
+	void log(request_range reqs[], int num) {
+		std::vector<request_range> *q = get_per_thread_queue();
+		q->insert(q->end(), reqs, reqs + num);
+		if (q->size() >= MAX_LOG_BUF) {
+			thread->add(q);
+			pthread_setspecific(queue_key, new std::vector<request_range>());
 		}
-		pthread_spin_unlock(&lock);
 	}
 
 	void close() {
-		pthread_spin_lock(&lock);
-		if (!logged_reqs->empty())
-			thread->add(logged_reqs);
-		logged_reqs = NULL;
-		pthread_spin_unlock(&lock);
+		// TODO we don't add all requests to the logging thread.
 		thread->close();
 	}
 };

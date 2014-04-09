@@ -75,10 +75,11 @@ public:
 	kcore_vertex() {
 	}
 
-  kcore_vertex(vertex_id_t id, const vertex_index *index):
-    compute_directed_vertex(id, index) {
+  kcore_vertex(vertex_id_t id, const vertex_index *index1):
+    compute_directed_vertex(id, index1) {
     this->deleted = false;
-    this->degree = get_num_in_edges() + get_num_out_edges();
+	directed_vertex_index *index = (directed_vertex_index *) index1;
+    this->degree = index->get_num_in_edges(id) + index->get_num_out_edges(id);
   }
 
   bool is_deleted() const {
@@ -105,15 +106,13 @@ public:
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num); 
+	virtual void run_on_message(graph_engine &, const vertex_message &msg); 
 };
 
 // If I am to be deleted, multicast this message to all my neighbors
 // and activate them
 class deleted_message: public vertex_message
 {
-  int dummy;
   public:
   deleted_message(): vertex_message(sizeof(deleted_message), true) {
   }
@@ -153,15 +152,12 @@ void kcore_vertex::run(graph_engine &graph, const page_vertex &vertex) {
   }
 }
 
-void kcore_vertex::run_on_messages(graph_engine &,
-    const vertex_message *msgs[], int num) {
+void kcore_vertex::run_on_message(graph_engine &, const vertex_message &msg) {
   if (is_deleted()) {
     return; // nothing to be done here
   }
 
-  for (int i = 0; i < num; i++) {
-    degree--;
-  }
+  degree--;
 }
 
 void int_handler(int sig_num)

@@ -22,6 +22,7 @@
 #include "thread_private.h"
 #include "parameters.h"
 #include "exception.h"
+#include "slab_allocator.h"
 
 bool align_req = false;
 int align_size = PAGE_SIZE;
@@ -38,56 +39,63 @@ struct issued_workload_t
 
 class cleanup_callback: public callback
 {
-	rand_buf *buf;
 	ssize_t read_bytes;
 	int thread_id;
 	thread_private *thread;
 	int file_id;
+	size_t sum;
 public:
 #ifdef DEBUG
 	std::tr1::unordered_map<char *, issued_workload_t> pending_reqs;
 #endif
 
-	cleanup_callback(rand_buf *buf, int idx, thread_private *thread, int file_id) {
-		this->buf = buf;
+	cleanup_callback(int idx, thread_private *thread, int file_id) {
 		read_bytes = 0;
 		this->thread_id = idx;
 		this->thread = thread;
 		this->file_id = file_id;
+		this->sum = 0;
 	}
 
-	int invoke(io_request *rqs[], int num) {
-		assert(thread == thread::get_curr_thread());
-		for (int i = 0; i < num; i++) {
-			io_request *rq = rqs[i];
-			if (rq->get_access_method() == READ && params.is_verify_content()) {
-				off_t off = rq->get_offset();
-				for (int i = 0; i < rq->get_num_bufs(); i++) {
-					assert(check_read_content(rq->get_buf(i),
-								rq->get_buf_size(i), off, file_id));
-					off += rq->get_buf_size(i);
-				}
-			}
-#ifdef DEBUG
-			assert(rq->get_num_bufs() == 1);
-			pending_reqs.erase(rq->get_buf(0));
-#endif
-			for (int i = 0; i < rq->get_num_bufs(); i++)
-				buf->free_entry(rq->get_buf(i));
-			read_bytes += rq->get_size();
-		}
-#ifdef STATISTICS
-		thread->num_completes.inc(num);
-		int res = thread->num_pending.dec(num);
-		assert(res >= 0);
-#endif
-		return 0;
-	}
+	int invoke(io_request *rqs[], int num);
 
 	ssize_t get_size() {
 		return read_bytes;
 	}
 };
+
+int cleanup_callback::invoke(io_request *rqs[], int num)
+{
+	assert(thread == thread::get_curr_thread());
+	for (int i = 0; i < num; i++) {
+		io_request *rq = rqs[i];
+		if (rq->get_access_method() == READ && params.is_verify_content()) {
+			off_t off = rq->get_offset();
+			for (int j = 0; j < rq->get_num_bufs(); j++) {
+				assert(check_read_content(rq->get_buf(j),
+							rq->get_buf_size(j), off, file_id));
+				int *buf = (int *) rq->get_buf(j);
+				int buf_size = rq->get_buf_size(j) / sizeof(int);
+				for (int k = 0; k < buf_size; k++)
+					sum += buf[k];
+				off += rq->get_buf_size(j);
+			}
+		}
+#ifdef DEBUG
+		assert(rq->get_num_bufs() == 1);
+		pending_reqs.erase(rq->get_buf(0));
+#endif
+		for (int i = 0; i < rq->get_num_bufs(); i++)
+			delete [] rq->get_buf(i);
+		read_bytes += rq->get_size();
+	}
+#ifdef STATISTICS
+	thread->num_completes.inc(num);
+	int res = thread->num_pending.dec(num);
+	assert(res >= 0);
+#endif
+	return 0;
+}
 
 /**
  * This converts a workload to I/O access ranges.
@@ -170,16 +178,22 @@ class sum_user_compute: public user_compute
 	work2req_range_converter converter;
 	int buf_type;
 	int num_pending;
+	long sum;
 public:
 	sum_user_compute(compute_allocator *alloc): user_compute(alloc) {
 		buf_type = SINGLE_LARGE_BUF;
 		num_pending = 0;
+		sum = 0;
 	}
 
 	void init(const work2req_range_converter &converter, int buf_type) {
 		num_pending = 1;
 		this->converter = converter;
 		this->buf_type = buf_type;
+	}
+
+	long get_sum() const {
+		return sum;
 	}
 
 	virtual int serialize(char *buf, int size) const {
@@ -206,16 +220,13 @@ public:
 	}
 
 	virtual void run(page_byte_array &array) {
-		long sum = 0;
 		const page_byte_array &const_array = page_byte_array::const_cast_ref(
 				array);
-		page_byte_array::const_iterator<long> end = const_array.end<long>();
-		for (page_byte_array::const_iterator<long> it = const_array.begin<long>();
-				it != end; ++it) {
-			sum += *it;
+		for (page_byte_array::seq_const_iterator<int> it
+				= const_array.get_seq_iterator<int>(0, const_array.get_size());
+				it.has_next();) {
+			sum += it.next();
 		}
-
-		global_sum.inc(sum);
 		num_pending--;
 	}
 };
@@ -355,7 +366,6 @@ thread_private::thread_private(int node_id, int idx, int entry_size,
 	this->cb = NULL;
 	this->node_id = node_id;
 	this->idx = idx;
-	buf = NULL;
 	this->gen = gen;
 	this->io = NULL;
 	this->factory = factory;
@@ -373,11 +383,8 @@ void thread_private::init() {
 	io->set_max_num_pending_ios(params.get_aio_depth_per_file());
 	io->init();
 
-	rand_buf *buf = new rand_buf(config.get_buf_size(),
-			config.get_entry_size(), node_id);
-	this->buf = buf;
 	if (io->support_aio()) {
-		cb = new cleanup_callback(buf, idx, this, io->get_file_id());
+		cb = new cleanup_callback(idx, this, io->get_file_id());
 		io->set_callback(cb);
 	}
 }
@@ -389,15 +396,13 @@ class work2req_converter
 {
 	work2req_range_converter workload;
 	int align_size;
-	rand_buf *buf;
 	io_interface *io;
 	sum_compute_allocator *sum_alloc;
 	write_compute_allocator *write_alloc;
 public:
-	work2req_converter(io_interface *io, rand_buf * buf, int align_size,
+	work2req_converter(io_interface *io, int align_size,
 			sum_compute_allocator *sum_alloc, write_compute_allocator *write_alloc) {
 		this->align_size = align_size;
-		this->buf = buf;
 		this->io = io;
 		this->sum_alloc = sum_alloc;
 		this->write_alloc = write_alloc;
@@ -458,7 +463,7 @@ int work2req_converter::to_reqs(workload_gen *gen, io_interface *io,
 		}
 		else {
 			data_loc_t loc = range.get_loc();
-			char *p = buf->next_entry(range.get_size());
+			char *p = new char[range.get_size()];
 			assert(p);
 			if (range.get_access_method() == WRITE && params.is_verify_content())
 				create_write_data(p, range.get_size(), loc.get_offset(),
@@ -482,7 +487,7 @@ void thread_private::run()
 	if (!config.is_use_aio()) {
 		entry = (char *) valloc(config.get_entry_size());
 	}
-	work2req_converter converter(io, buf, align_size, sum_alloc, write_alloc);
+	work2req_converter converter(io, align_size, sum_alloc, write_alloc);
 	while (gen->has_next()) {
 		if (config.is_use_aio()) {
 			int i;

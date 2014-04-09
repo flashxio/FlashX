@@ -64,21 +64,39 @@ void message_processor::buf_mmsg(vertex_id_t id, multicast_message &mmsg)
 void message_processor::process_multicast_msg(multicast_message &mmsg,
 		bool check_steal)
 {
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	vertex_program &curr_vprog = t->get_vertex_program();
+
 	int num_dests = mmsg.get_num_dests();
 	multicast_dest_list dest_list = mmsg.get_dest_list();
+
+	if (!check_steal) {
+		curr_vprog.run_on_multicast_message(graph, mmsg);
+		for (int i = 0; i < num_dests; i++) {
+			vertex_id_t id = dest_list.get_dest(i);
+			if (mmsg.is_activate())
+				owner.activate_vertex(id);
+		}
+		return;
+	}
+
+	if (mmsg.is_activation_msg()) {
+		for (int i = 0; i < num_dests; i++) {
+			vertex_id_t id = dest_list.get_dest(i);
+			if (mmsg.is_activate())
+				owner.activate_vertex(id);
+		}
+		return;
+	}
+
 	for (int i = 0; i < num_dests; i++) {
 		vertex_id_t id = dest_list.get_dest(i);
-		// TODO now the size is the entire message. Now the message
-		// is considered as non-empty.
-		if (!mmsg.is_empty()) {
-			if (check_steal && steal_state->is_stolen(id)) {
-				buf_mmsg(id, mmsg);
-			}
-			else {
-				compute_vertex &info = graph.get_vertex(id);
-				const vertex_message *msgs[] = {&mmsg};
-				info.run_on_messages(graph, msgs, 1);
-			}
+		if (check_steal && steal_state->is_stolen(id)) {
+			buf_mmsg(id, mmsg);
+		}
+		else {
+			compute_vertex &info = graph.get_vertex(id);
+			curr_vprog.run_on_message(graph, info, mmsg);
 		}
 		if (mmsg.is_activate())
 			owner.activate_vertex(id);
@@ -87,26 +105,46 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 
 void message_processor::process_msg(message &msg, bool check_steal)
 {
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	vertex_program &curr_vprog = t->get_vertex_program();
+
 	const int VMSG_BUF_SIZE = 128;
 	vertex_message *v_msgs[VMSG_BUF_SIZE];
 	while (!msg.is_empty()) {
 		int num = msg.get_next(v_msgs, VMSG_BUF_SIZE);
-		for (int i = 0; i < num; i++) {
-			if (v_msgs[i]->is_multicast()) {
+		assert(num > 0);
+		// If we aren't in the mode of load balancing and these aren't
+		// multicast messages, we can use the fast path.
+		// We only need to check the first message. All messages are
+		// of the same type.
+		if (!check_steal && !v_msgs[0]->is_multicast()) {
+			curr_vprog.run_on_messages(graph,
+					(const vertex_message **) v_msgs, num);
+			for (int i = 0; i < num; i++) {
+				vertex_id_t id = v_msgs[i]->get_dest();
+				if (v_msgs[i]->is_activate())
+					owner.activate_vertex(id);
+			}
+			continue;
+		}
+
+		if (v_msgs[0]->is_multicast()) {
+			for (int i = 0; i < num; i++)
 				process_multicast_msg(*multicast_message::cast2multicast(
 							v_msgs[i]), check_steal);
-				continue;
-			}
+			continue;
+		}
+
+		// If we are here, we are in the load balancing mode.
+		assert(check_steal);
+		for (int i = 0; i < num; i++) {
 			vertex_id_t id = v_msgs[i]->get_dest();
-			if (!v_msgs[i]->is_empty()) {
-				if (check_steal && steal_state->is_stolen(id)) {
-					buf_msg(*v_msgs[i]);
-				}
-				else {
-					compute_vertex &info = graph.get_vertex(id);
-					info.run_on_messages(graph,
-							(const vertex_message **) &v_msgs[i], 1);
-				}
+			if (steal_state->is_stolen(id)) {
+				buf_msg(*v_msgs[i]);
+			}
+			else {
+				compute_vertex &info = graph.get_vertex(id);
+				curr_vprog.run_on_message(graph, info, *v_msgs[i]);
 			}
 			if (v_msgs[i]->is_activate())
 				owner.activate_vertex(id);

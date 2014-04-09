@@ -48,7 +48,6 @@ class test_config
 	int entry_size;
 	int nthreads;
 	int buf_type;
-	int buf_size;
 	bool high_prio;
 	bool use_aio;
 	int workload;
@@ -64,7 +63,6 @@ public:
 		entry_size = PAGE_SIZE;
 		nthreads = 1;
 		buf_type = SINGLE_LARGE_BUF;
-		buf_size = PAGE_SIZE;
 		high_prio = false;
 		use_aio = true;
 		workload = RAND_OFFSET;
@@ -95,10 +93,6 @@ public:
 
 	int get_buf_type() const {
 		return buf_type;
-	}
-
-	int get_buf_size() const {
-		return buf_size;
 	}
 
 	bool is_high_prio() const {

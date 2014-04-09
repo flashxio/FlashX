@@ -35,21 +35,30 @@ struct timeval graph_start;
 
 class vertex_size_scheduler: public vertex_scheduler
 {
+	graph_engine *graph;
 public:
-	void schedule(std::vector<compute_vertex *> &vertices);
+	vertex_size_scheduler(graph_engine *graph) {
+		this->graph = graph;
+	}
+	void schedule(std::vector<vertex_id_t> &vertices);
 };
 
-void vertex_size_scheduler::schedule(std::vector<compute_vertex *> &vertices)
+void vertex_size_scheduler::schedule(std::vector<vertex_id_t> &ids)
 {
+	std::vector<compute_vertex *> vertices(ids.size());
+	for (size_t i = 0; i < ids.size(); i++)
+		vertices[i] = &graph->get_vertex(ids[i]);
 	class comp_size
 	{
 	public:
 		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
-			return v1->get_ext_mem_size() > v2->get_ext_mem_size();
+			return v1->get_num_edges() > v2->get_num_edges();
 		}
 	};
 
 	std::sort(vertices.begin(), vertices.end(), comp_size());
+	for (size_t i = 0; i < ids.size(); i++)
+		ids[i] = vertices[i]->get_id();
 }
 
 class global_max
@@ -141,29 +150,43 @@ public:
 
 class topK_scan_vertex: public scan_vertex
 {
-	size_t est_local_scan;
 public:
 	topK_scan_vertex() {
-		est_local_scan = 0;
 	}
 
 	topK_scan_vertex(vertex_id_t id, const vertex_index *index): scan_vertex(
 			id, index) {
-		est_local_scan = 0;
+	}
+
+	bool has_est_local() const {
+		return local_value.has_est_local();
+	}
+
+	size_t get_est_local_scan() const {
+		return local_value.get_est_local();
 	}
 
 	size_t get_est_local_scan(graph_engine &graph, const page_vertex *vertex);
+
+	using scan_vertex::run;
 	void run(graph_engine &graph);
-	virtual void run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	virtual void finding_triangles_end(graph_engine &graph) {
-		if (max_scan.update(get_local_scan())) {
+	void run(graph_engine &graph, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			run_on_itself(graph, vertex);
+		else
+			run_on_neighbor(graph, vertex);
+	}
+	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+
+	void finding_triangles_end(graph_engine &graph, runtime_data_t *data) {
+		if (max_scan.update(data->local_scan)) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
 			printf("%d: new max scan: %ld at v%u\n",
 					(int) time_diff(graph_start, curr),
-					get_local_scan(), get_id());
+					data->local_scan, get_id());
 		}
-		known_scans.add(get_id(), get_local_scan());
+		known_scans.add(get_id(), data->local_scan);
 	}
 };
 
@@ -171,15 +194,15 @@ void topK_scan_vertex::run(graph_engine &graph)
 {
 	bool req_itself = false;
 	// If we have computed local scan on the vertex, skip the vertex.
-	if (get_local_scan() > 0)
+	if (has_local_scan())
 		return;
 	// If we have estimated the local scan, we should use the estimated one.
-	else if (est_local_scan > 0)
-		req_itself = est_local_scan > max_scan.get();
+	else if (has_est_local())
+		req_itself = get_est_local_scan() > max_scan.get();
 	else {
 		// If this is the first time to compute on the vertex, we can still
 		// skip a lot of vertices with this condition.
-		size_t num_local_edges = get_num_in_edges() + get_num_out_edges();
+		size_t num_local_edges = get_num_edges();
 		req_itself = num_local_edges * num_local_edges >= max_scan.get();
 	}
 	if (req_itself) {
@@ -192,8 +215,8 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 {
 	// We have estimated the local scan of this vertex, return
 	// the estimated one
-	if (est_local_scan > 0)
-		return est_local_scan;
+	if (has_est_local())
+		return get_est_local_scan();
 
 	class skip_self {
 		vertex_id_t id;
@@ -226,31 +249,35 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 			all_neighbors.begin());
 	all_neighbors.resize(num_neighbors);
 
-	size_t tot_edges = (size_t) get_num_in_edges() + get_num_out_edges();
+	size_t tot_edges = get_num_edges();
 	for (size_t i = 0; i < all_neighbors.size(); i++) {
 		scan_vertex &v = (scan_vertex &) graph.get_vertex(all_neighbors[i]);
 		// The max number of common neighbors should be smaller than all neighbors
 		// in the neighborhood, assuming there aren't duplicated edges.
-		tot_edges += min(v.get_num_in_edges() + v.get_num_out_edges(),
-				num_neighbors * 2);
+		tot_edges += min(v.get_num_edges(), num_neighbors * 2);
 	}
 	tot_edges /= 2;
-	est_local_scan = tot_edges;
-	return est_local_scan;
+	local_value.set_est_local(tot_edges);
+	return tot_edges;
 }
 
 void topK_scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 {
-	assert(data == NULL);
-
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
-	assert(num_local_edges == (size_t) get_num_in_edges() + get_num_out_edges());
+	assert(num_local_edges == get_num_edges());
 	if (num_local_edges == 0)
 		return;
 
 	if (get_est_local_scan(graph, &vertex) < max_scan.get())
 		return;
 	scan_vertex::run_on_itself(graph, vertex);
+}
+
+void topK_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v,
+		runtime_data_t *data)
+{
+	topK_scan_vertex &topK_v = (topK_scan_vertex &) scan_v;
+	topK_v.finding_triangles_end(graph, data);
 }
 
 void int_handler(int sig_num)
@@ -307,6 +334,8 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
+	finding_triangles_end = topK_finding_triangles_end;
+
 	graph_index *index = NUMA_graph_index<topK_scan_vertex>::create(
 			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
 	graph_engine *graph = graph_engine::create(
@@ -316,7 +345,7 @@ int main(int argc, char *argv[])
 	// to the size of vertices. We start with processing vertices with higher
 	// degrees in the hope we can find the max scan as early as possible,
 	// so that we can simple ignore the rest of vertices.
-	graph->set_vertex_scheduler(new vertex_size_scheduler());
+	graph->set_vertex_scheduler(new vertex_size_scheduler(graph));
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
@@ -332,7 +361,7 @@ int main(int argc, char *argv[])
 
 		bool keep(compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
-			return scan_v.get_num_in_edges() + scan_v.get_num_out_edges() >= min;
+			return scan_v.get_num_edges() >= min;
 		}
 	};
 
@@ -364,8 +393,7 @@ int main(int argc, char *argv[])
 
 		bool keep(compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
-			size_t num_local_edges = scan_v.get_num_in_edges()
-				+ scan_v.get_num_out_edges();
+			size_t num_local_edges = scan_v.get_num_edges();
 			return num_local_edges * num_local_edges >= min;
 		}
 	};

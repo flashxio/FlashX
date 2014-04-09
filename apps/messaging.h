@@ -145,6 +145,16 @@ public:
 		return num_added;
 	}
 
+	template<class T>
+	void remove_last_obj(T &obj) {
+		assert(num_objs > 0);
+		assert(curr_add_off >= obj.get_serialized_size());
+		T *obj_p = (T *) &buf[curr_add_off - obj.get_serialized_size()];
+		assert(obj_p->get_serialized_size() == obj.get_serialized_size());
+		num_objs--;
+		curr_add_off -= obj.get_serialized_size();
+	}
+
 	bool copy_to(message &msg) {
 		assert(msg.alloc);
 		assert(msg.size() >= this->size());
@@ -275,8 +285,12 @@ class vertex_message
 {
 protected:
 	unsigned multicast: 1;
+	// This is a flag to indicate that a user also wants to activate
+	// the destination vertex.
 	unsigned activate: 1;
-	unsigned size: 30;
+	// This is a flag to indicate that it's a system's activation message.
+	unsigned activation_msg: 1;
+	unsigned size: 29;
 	union {
 		vertex_id_t dest;
 		int num_dests;
@@ -291,6 +305,7 @@ public:
 	vertex_message(int size, bool activate) {
 		this->activate = activate;
 		this->multicast = 0;
+		this->activation_msg = 0;
 		this->u.dest = -1;
 		this->size = size;
 		assert(size % 4 == 0);
@@ -298,6 +313,10 @@ public:
 
 	void set_dest(vertex_id_t id) {
 		this->u.dest = id;
+	}
+
+	bool is_activation_msg() const {
+		return activation_msg;
 	}
 
 	bool is_activate() const {
@@ -377,6 +396,12 @@ public:
 		return mmsg;
 	}
 
+	multicast_message(int size, bool activate): vertex_message(size,
+			activate) {
+		this->multicast = 1;
+		this->u.num_dests = 0;
+	}
+
 	bool is_empty() const {
 		return (size_t) get_orig_msg_size() == sizeof(vertex_message);
 	}
@@ -398,6 +423,14 @@ public:
 	}
 
 	friend class multicast_dest_list;
+};
+
+class activation_message: public multicast_message
+{
+public:
+	activation_message(): multicast_message(sizeof(vertex_message), true) {
+		this->activation_msg = 1;
+	}
 };
 
 inline multicast_dest_list::multicast_dest_list(multicast_message *msg)
@@ -424,10 +457,18 @@ inline vertex_id_t multicast_dest_list::get_dest(int idx) const
 
 class multicast_msg_sender
 {
+	const static int MMSG_BUF_SIZE = PAGE_SIZE;
 	slab_allocator *alloc;
+	// The local buffer of vertex messages.
 	message buf;
+	// The destination queue of the sender.
 	msg_queue *queue;
+	// The initialized multicast vertex message.
 	multicast_message *mmsg;
+	// The number of destinations in the multicast message.
+	int num_dests;
+	// This stores the body of the multicast message.
+	char mmsg_temp_buf[MMSG_BUF_SIZE];
 	multicast_dest_list dest_list;
 
 	multicast_msg_sender(slab_allocator *alloc,
@@ -435,6 +476,7 @@ class multicast_msg_sender
 		this->alloc = alloc;
 		this->queue = queue;
 		this->mmsg = NULL;
+		this->num_dests = 0;
 	}
 public:
 	static multicast_msg_sender *create(slab_allocator *alloc,
@@ -452,6 +494,7 @@ public:
 			return 0;
 		}
 		this->mmsg = NULL;
+		this->num_dests = 0;
 		dest_list.clear();
 		queue->add(&buf, 1);
 		if (buf.get_num_objs() > 1)
@@ -466,6 +509,7 @@ public:
 	template<class T>
 	void init(const T &msg) {
 		assert(mmsg == NULL);
+		num_dests = 0;
 		vertex_message *p = (vertex_message *) buf.add(msg);
 		if (p == NULL) {
 			flush();
@@ -473,6 +517,8 @@ public:
 			assert(p);
 		}
 		this->mmsg = multicast_message::convert2multicast(p);
+		assert(this->mmsg->get_serialized_size() <= MMSG_BUF_SIZE);
+		this->mmsg->serialize(mmsg_temp_buf, MMSG_BUF_SIZE);
 		dest_list = this->mmsg->get_dest_list();
 	}
 
@@ -480,20 +526,29 @@ public:
 		int ret = buf.inc_msg_size(sizeof(id));
 		if (ret == 0) {
 			flush();
-			return false;
-		}
-		else {
-			dest_list.add_dest(id);
-			return true;
-		}
-	}
 
-	bool has_msg() const {
-		return mmsg != NULL;
+			multicast_message *mmsg_template
+				= (multicast_message *) mmsg_temp_buf;
+			vertex_message *p = (vertex_message *) buf.add(*mmsg_template);
+			// We just add the buffer. We should be able to add the new message.
+			assert(p);
+			this->mmsg = multicast_message::convert2multicast(p);
+			dest_list = this->mmsg->get_dest_list();
+			buf.inc_msg_size(sizeof(id));
+		}
+		num_dests++;
+		dest_list.add_dest(id);
+		return true;
 	}
 
 	void end_multicast() {
+		if (num_dests == 0) {
+			multicast_message *mmsg_template
+				= (multicast_message *) mmsg_temp_buf;
+			buf.remove_last_obj(*mmsg_template);
+		}
 		mmsg = NULL;
+		num_dests = 0;
 		dest_list.clear();
 	}
 };

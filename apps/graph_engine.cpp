@@ -33,31 +33,6 @@
 #include "vertex_request.h"
 
 graph_config graph_conf;
-default_vertex_scheduler default_scheduler;
-
-/**
- * This I/O scheduler is to favor maximizing throughput.
- * Therefore, it processes all user tasks together to potentially increase
- * the page cache hit rate.
- */
-class throughput_comp_io_scheduler: public comp_io_scheduler
-{
-	fifo_queue<io_request> req_buf;
-public:
-	throughput_comp_io_scheduler(int node_id): comp_io_scheduler(
-			node_id), req_buf(node_id, 512, true) {
-	}
-
-	size_t get_requests(fifo_queue<io_request> &reqs);
-};
-
-class throughput_comp_io_sched_creater: public comp_io_sched_creater
-{
-public:
-	comp_io_scheduler *create(int node_id) const {
-		return new throughput_comp_io_scheduler(node_id);
-	}
-};
 
 struct prio_compute
 {
@@ -71,7 +46,7 @@ struct prio_compute
 	}
 };
 
-class comp_prio_compute
+class forward_comp_prio_compute
 {
 public:
 	bool operator()(const prio_compute &c1, const prio_compute &c2) {
@@ -82,62 +57,141 @@ public:
 	}
 };
 
-size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
+class backward_comp_prio_compute
 {
-	size_t num = 0;
-	// Let's add the buffered requests first.
-	if (!req_buf.is_empty()) {
-		num = reqs.add(&req_buf);
+public:
+	bool operator()(const prio_compute &c1, const prio_compute &c2) {
+		// We want the priority queue returns requests with
+		// the smallest offset first. If we use less, the priority queue
+		// will return the request with the greatest offset.
+		return c1.req.get_offset() < c2.req.get_offset();
+	}
+};
+
+template<class prio_queue_type>
+class comp_io_schedule_queue
+{
+	bool forward;
+	// Construct a priority queue on user tasks, ordered by the offset
+	// of their next requests.
+	prio_queue_type user_computes;
+	comp_io_scheduler *scheduler;
+public:
+	comp_io_schedule_queue(comp_io_scheduler *scheduler, bool forward) {
+		this->scheduler = scheduler;
+		this->forward = forward;
 	}
 
+	size_t get_requests(fifo_queue<io_request> &reqs);
+
+	bool is_empty() const {
+		return user_computes.empty();
+	}
+};
+
+template<class prio_queue_type>
+size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
+		fifo_queue<io_request> &reqs)
+{
+	size_t num = 0;
+
 	if (!reqs.is_full()) {
-		// Construct a priority queue on user tasks, ordered by the offset
-		// of their next requests.
-		std::priority_queue<prio_compute, std::vector<prio_compute>,
-			comp_prio_compute> user_computes;
-		compute_iterator it = this->get_begin();
-		compute_iterator end = this->get_end();
-		for (; it != end; ++it) {
-			user_compute *compute = *it;
-			// Skip the ones without user tasks.
-			if (!compute->has_requests())
-				continue;
+		// we don't have user computes, we can get some from the queue of
+		// incomplete user computes in comp_io_scheduler.
+		if (user_computes.empty()) {
+			comp_io_scheduler::compute_iterator it = scheduler->get_begin();
+			comp_io_scheduler::compute_iterator end = scheduler->get_end();
+			for (; it != end; ++it) {
+				user_compute *compute = *it;
+				// Skip the ones without user tasks.
+				if (!compute->has_requests())
+					continue;
 
-			prio_compute prio_comp(get_io(), compute);
-			user_computes.push(prio_comp);
-		}
-
-		// Add requests to the queue in a sorted order.
-		off_t prev = 0;
-		int num = 0;
-		while (!reqs.is_full() && !user_computes.empty()) {
-			num++;
-			prio_compute prio_comp = user_computes.top();
-			assert(prev <= prio_comp.req.get_offset());
-			prev = prio_comp.req.get_offset();
-			user_computes.pop();
-			assert(prev <= user_computes.top().req.get_offset());
-			reqs.push_back(prio_comp.req);
-			num++;
-			user_compute *compute = prio_comp.compute;
-			if (compute->has_requests()) {
-				prio_compute prio_comp(get_io(), compute);
-				assert(prio_comp.req.get_offset() >= prev);
+				// We have a reference to the user compute. Let's increase
+				// its ref count. User computes should be in the queue of
+				// comp_io_scheduler as long as they can generate more
+				// requests. It might not be necessary to increase the ref
+				// count, but it can work as a sanity check.
+				compute->inc_ref();
+				((vertex_compute *) compute)->set_scan_dir(forward);
+				prio_compute prio_comp(scheduler->get_io(), compute);
 				user_computes.push(prio_comp);
 			}
 		}
 
-		// We have got a request from each user task. We can't add them to
-		// the queue this time. We need to buffer them.
-		while (!user_computes.empty()) {
+		// Add requests to the queue in a sorted order.
+		int num = 0;
+		while (!reqs.is_full() && !user_computes.empty()) {
+			num++;
 			prio_compute prio_comp = user_computes.top();
 			user_computes.pop();
-			if (req_buf.is_full())
-				req_buf.expand_queue(req_buf.get_size() * 2);
-			req_buf.push_back(prio_comp.req);
+			reqs.push_back(prio_comp.req);
+			num++;
+			user_compute *compute = prio_comp.compute;
+			if (compute->has_requests()) {
+				prio_compute prio_comp(scheduler->get_io(), compute);
+				user_computes.push(prio_comp);
+			}
+			else {
+				// This user compute no longer needs to stay in the priority
+				// queue. We can decrease its ref count.
+				compute->dec_ref();
+			}
 		}
 	}
 	return num;
+}
+
+/**
+ * This I/O scheduler is to favor maximizing throughput.
+ * Therefore, it processes all user tasks together to potentially increase
+ * the page cache hit rate.
+ */
+class throughput_comp_io_scheduler: public comp_io_scheduler
+{
+	// The scheduler process user computes in batches. It reads all
+	// available user computes in the beginning of a batch and then processes
+	// them. A batch ends if the scheduler processes all of the user computes.
+	size_t batch_num;
+	comp_io_schedule_queue<std::priority_queue<prio_compute,
+		std::vector<prio_compute>, forward_comp_prio_compute> > forward_queue;
+	comp_io_schedule_queue<std::priority_queue<prio_compute,
+		std::vector<prio_compute>, backward_comp_prio_compute> > backward_queue;
+public:
+	throughput_comp_io_scheduler(int node_id): comp_io_scheduler(
+			node_id), forward_queue(this, true), backward_queue(this, false) {
+		batch_num = 0;
+	}
+
+	size_t get_requests(fifo_queue<io_request> &reqs);
+};
+
+class throughput_comp_io_sched_creater: public comp_io_sched_creater
+{
+public:
+	comp_io_scheduler *create(int node_id) const {
+		return new throughput_comp_io_scheduler(node_id);
+	}
+};
+
+size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
+{
+	size_t ret;
+	if (graph_conf.get_elevator_enabled()) {
+		if (batch_num % 2 == 0) {
+			ret = forward_queue.get_requests(reqs);
+			if (forward_queue.is_empty())
+				batch_num++;
+		}
+		else {
+			ret = backward_queue.get_requests(reqs);
+			if (backward_queue.is_empty())
+				batch_num++;
+		}
+	}
+	else
+		ret = forward_queue.get_requests(reqs);
+	return ret;
 }
 
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
@@ -145,8 +199,18 @@ void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_compute *compute = curr->get_curr_vertex_compute();
 	if (compute == NULL)
-		compute = curr->create_vertex_compute();
+		compute = curr->create_vertex_compute(this);
 	compute->request_vertices(ids, num);
+}
+
+vsize_t compute_vertex::get_num_edges() const
+{
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	in_mem_vertex_info info = t->get_graph().get_vertex_info(get_id());
+	assert(!t->get_graph().get_graph_header().has_edge_data());
+	int vertex_header_size = t->get_graph().get_vertex_header_size();
+	assert(vertex_header_size > 0);
+	return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
 }
 
 void compute_directed_vertex::request_partial_vertices(
@@ -156,7 +220,7 @@ void compute_directed_vertex::request_partial_vertices(
 	directed_vertex_compute *compute
 		= (directed_vertex_compute *) curr->get_curr_vertex_compute();
 	if (compute == NULL)
-		compute = (directed_vertex_compute *) curr->create_vertex_compute();
+		compute = (directed_vertex_compute *) curr->create_vertex_compute(this);
 	compute->request_partial_vertices(reqs, num);
 }
 
@@ -167,7 +231,7 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 	ts_vertex_compute *compute
 		= (ts_vertex_compute *) curr->get_curr_vertex_compute();
 	if (compute == NULL)
-		compute = (ts_vertex_compute *) curr->create_vertex_compute();
+		compute = (ts_vertex_compute *) curr->create_vertex_compute(this);
 	compute->request_partial_vertices(reqs, num);
 }
 
@@ -175,7 +239,7 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index *index)
 {
 	max_processing_vertices = 0;
-	this->scheduler = &default_scheduler;
+	this->scheduler = NULL;
 	is_complete = false;
 	this->vertices = index;
 
@@ -197,15 +261,18 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 		case graph_type::DIRECTED:
 			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
 					new ext_mem_directed_vertex_interpreter());
+			vertex_header_size = ext_mem_directed_vertex::get_header_size();
 			break;
 		case graph_type::UNDIRECTED:
 			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
 					new ext_mem_undirected_vertex_interpreter());
+			vertex_header_size = ext_mem_undirected_vertex::get_header_size();
 			break;
 		case graph_type::TS_DIRECTED:
 			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
 					new ts_ext_mem_vertex_interpreter(
 					header.get_max_num_timestamps()));
+			vertex_header_size = -1;
 			break;
 		case graph_type::TS_UNDIRECTED:
 			assert(0);
@@ -251,25 +318,29 @@ simple_msg_sender *graph_engine::get_msg_sender(int thread_id) const
 	return curr->get_msg_sender(thread_id);
 }
 
-void graph_engine::init_threads()
+void graph_engine::init_threads(vertex_program::ptr prog)
 {
 	// Prepare the worker threads.
 	int num_threads = get_num_threads();
 	for (int i = 0; i < num_threads; i++) {
-		worker_thread *t = new worker_thread(this, factory,
-				i % num_nodes, i, num_threads);
+		vertex_program::ptr new_prog;
+		if (prog)
+			new_prog = prog->clone();
+		else
+			new_prog = vertices->create_def_vertex_program();
+		worker_thread *t = new worker_thread(this, factory, std::move(new_prog),
+				i % num_nodes, i, num_threads, scheduler);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
-		worker_threads[i]->set_vertex_scheduler(scheduler);
 	}
 	for (int i = 0; i < num_threads; i++) {
 		worker_threads[i]->init_messaging(worker_threads);
 	}
 }
 
-void graph_engine::start(vertex_id_t ids[], int num)
+void graph_engine::start(vertex_id_t ids[], int num, vertex_program::ptr prog)
 {
-	init_threads();
+	init_threads(std::move(prog));
 	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
@@ -284,9 +355,10 @@ void graph_engine::start(vertex_id_t ids[], int num)
 	}
 }
 
-void graph_engine::start(std::shared_ptr<vertex_filter> filter)
+void graph_engine::start(std::shared_ptr<vertex_filter> filter,
+		vertex_program::ptr prog)
 {
-	init_threads();
+	init_threads(std::move(prog));
 	// Let's assume all vertices will be activated first.
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
@@ -295,9 +367,9 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter)
 	}
 }
 
-void graph_engine::start_all()
+void graph_engine::start_all(vertex_program::ptr prog)
 {
-	init_threads();
+	init_threads(std::move(prog));
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices();
@@ -358,6 +430,19 @@ void graph_engine::wait4complete()
 void graph_engine::set_vertex_scheduler(vertex_scheduler *scheduler)
 {
 	this->scheduler = scheduler;
+}
+
+void graph_engine::preload_graph()
+{
+	const int BLOCK_SIZE = 1024 * 1024 * 32;
+	io_interface *io = factory->create_io(thread::get_curr_thread());
+	size_t preload_size = min(params.get_cache_size(), factory->get_file_size());
+	printf("preload %ld bytes\n", preload_size);
+	char *buf = new char[BLOCK_SIZE];
+	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
+		io->access(buf, i, BLOCK_SIZE, READ);
+	factory->destroy_io(io);
+	printf("successfully preload\n");
 }
 
 vertex_index *load_vertex_index(const std::string &index_file)
@@ -428,4 +513,10 @@ vertex_index *load_vertex_index(const std::string &index_file)
 	else
 		((default_vertex_index *) index)->verify();
 	return index;
+}
+
+size_t graph_get_vertices(graph_engine &graph, const vertex_id_t ids[],
+		int num_ids, compute_vertex *v_buf[])
+{
+	return graph.get_vertices(ids, num_ids, v_buf);
 }

@@ -24,6 +24,7 @@
 
 #include "vertex.h"
 #include "partitioner.h"
+#include "vertex_program.h"
 
 class compute_vertex;
 
@@ -73,7 +74,10 @@ public:
 	graph_index() {
 	}
 
+	virtual size_t get_vertices(const vertex_id_t ids[], int num,
+			compute_vertex *v_buf[]) const = 0;
 	virtual compute_vertex &get_vertex(vertex_id_t id) = 0;
+	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const = 0;
 
 	virtual vertex_id_t get_max_vertex_id() const = 0;
 
@@ -82,6 +86,8 @@ public:
 	virtual size_t get_num_vertices() const = 0;
 
 	virtual const graph_partitioner &get_partitioner() const = 0;
+
+	virtual vertex_program::ptr create_def_vertex_program() const = 0;
 
 	const_iterator begin() const {
 		return const_iterator((graph_index *) this, this->get_min_vertex_id());
@@ -99,27 +105,23 @@ class NUMA_graph_index;
 template<class vertex_type>
 class NUMA_local_graph_index: public graph_index
 {
-	size_t min_vertex_size;
 	int node_id;
 	int part_id;
 	size_t tot_num_vertices;
 	size_t num_vertices;
-	size_t num_non_empty;
 	vertex_type *vertex_arr;
 	graph_partitioner *partitioner;
 	const vertex_index *index;
 
 	NUMA_local_graph_index(const vertex_index *index,
 			graph_partitioner *partitioner, int part_id, int node_id,
-			size_t tot_num_vertices, size_t min_vertex_size) {
+			size_t tot_num_vertices) {
 		this->part_id = part_id;
 		this->index = index;
 		this->tot_num_vertices = tot_num_vertices;
 		this->num_vertices = partitioner->get_part_size(part_id,
 				tot_num_vertices);
-		this->num_non_empty = 0;
 		this->partitioner = partitioner;
-		this->min_vertex_size = min_vertex_size;
 		this->node_id = node_id;
 		vertex_arr = (vertex_type *) numa_alloc_onnode(
 				sizeof(vertex_arr[0]) * num_vertices, node_id);
@@ -142,14 +144,20 @@ public:
 			partitioner->map2loc(vid, part_id, part_off);
 			assert(this->part_id == part_id);
 			new (vertex_arr + part_off) vertex_type(vid, index);
-			if (vertex_arr[part_off].get_ext_mem_size() > min_vertex_size) {
-				num_non_empty++;
-			}
 		}
 		if (local_ids.size() < num_vertices) {
 			assert(local_ids.size() == num_vertices - 1);
 			new (vertex_arr + local_ids.size()) vertex_type();
 		}
+	}
+
+	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
+		assert(0);
+	}
+
+	virtual size_t get_vertices(const vertex_id_t ids[], int num,
+			compute_vertex *v_buf[]) const {
+		assert(0);
 	}
 
 	virtual compute_vertex &get_vertex(vertex_id_t id) {
@@ -171,16 +179,17 @@ public:
 		return num_vertices;
 	}
 
-	size_t get_num_non_empty() const {
-		return num_non_empty;
-	}
-
 	int get_node_id() const {
 		return node_id;
 	}
 
 	virtual const graph_partitioner &get_partitioner() const {
 		return *partitioner;
+	}
+
+	virtual vertex_program::ptr create_def_vertex_program() const {
+		assert(0);
+		return vertex_program::ptr();
 	}
 
 	friend class NUMA_graph_index<vertex_type>;
@@ -212,6 +221,7 @@ class NUMA_graph_index: public graph_index
 	range_graph_partitioner partitioner;
 	// A graph index per thread
 	std::vector<NUMA_local_graph_index<vertex_type> *> index_arr;
+	off_t *off_arr;
 
 	class init_thread: public thread
 	{
@@ -240,8 +250,7 @@ class NUMA_graph_index: public graph_index
 						// The partitions are assigned to worker threads.
 						// The memory used to store the partitions should
 						// be on the same NUMA as the worker threads.
-						index, &partitioner, i, i % num_nodes,
-						num_vertices, min_vertex_size));
+						index, &partitioner, i, i % num_nodes, num_vertices));
 		}
 
 		std::vector<init_thread *> threads(num_threads);
@@ -249,12 +258,23 @@ class NUMA_graph_index: public graph_index
 			threads[i] = new init_thread(index_arr[i]);
 			threads[i]->start();
 		}
-		size_t num_non_empty = 0;
 		for (int i = 0; i < num_threads; i++) {
 			threads[i]->join();
 			delete threads[i];
-			num_non_empty += index_arr[i]->get_num_non_empty();
 		}
+
+		size_t num_non_empty = 0;
+		// We use the last entry in the array to store the location of
+		// the end of the graph file.
+		off_arr = new off_t[num_vertices + 1];
+#pragma omp parallel for reduction(+:num_non_empty)
+		for (size_t i = 0; i < num_vertices; i++) {
+			off_arr[i] = ::get_vertex_off(index, i);
+			if (::get_vertex_size(index, i) > min_vertex_size) {
+				num_non_empty++;
+			}
+		}
+		off_arr[num_vertices] = index->get_graph_size();
 
 		min_vertex_id = 0;
 		max_vertex_id = num_vertices - 1;
@@ -264,10 +284,27 @@ class NUMA_graph_index: public graph_index
 		vertex_index::destroy(index);
 	}
 public:
+	~NUMA_graph_index() {
+		if (off_arr)
+			delete [] off_arr;
+	}
+
 	static graph_index *create(const std::string &index_file,
 			int num_threads, int num_nodes) {
 		return new NUMA_graph_index<vertex_type>(index_file,
 				num_threads, num_nodes);
+	}
+
+	virtual size_t get_vertices(const vertex_id_t ids[], int num,
+			compute_vertex *v_buf[]) const {
+		for (int i = 0; i < num; i++) {
+			vertex_id_t id = ids[i];
+			int part_id;
+			off_t part_off;
+			partitioner.map2loc(id, part_id, part_off);
+			v_buf[i] = &index_arr[part_id]->vertex_arr[part_off];
+		}
+		return num;
 	}
 
 	virtual compute_vertex &get_vertex(vertex_id_t id) {
@@ -275,6 +312,13 @@ public:
 		off_t part_off;
 		partitioner.map2loc(id, part_id, part_off);
 		return index_arr[part_id]->vertex_arr[part_off];
+	}
+
+	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
+		off_t off = off_arr[id];
+		off_t off1 = off_arr[id + 1];
+		in_mem_vertex_info info(id, off, off1 - off);
+		return info;
 	}
 
 	virtual vertex_id_t get_max_vertex_id() const {
@@ -291,6 +335,11 @@ public:
 
 	virtual const graph_partitioner &get_partitioner() const {
 		return partitioner;
+	}
+
+	virtual vertex_program::ptr create_def_vertex_program(
+			) const {
+		return vertex_program::ptr(new vertex_program_impl<vertex_type>());
 	}
 };
 

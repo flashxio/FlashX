@@ -77,7 +77,7 @@ public:
 			const std::vector<vertex_id_t> *neighbors, int timestamp,
 			edge_type type);
 
-	virtual void run(graph_engine &graph) {
+	void run(graph_engine &graph) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
@@ -92,8 +92,7 @@ public:
 	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
 	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
-	void run_on_messages(graph_engine &graph,
-			const vertex_message *msgs[], int num) {
+	void run_on_message(graph_engine &graph, const vertex_message &msg) {
 	}
 };
 

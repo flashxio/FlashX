@@ -51,18 +51,15 @@ class vertex_index;
  */
 class in_mem_vertex_info
 {
-	vertex_id_t id;
 	vsize_t size;
 	off_t off;
 public:
 	in_mem_vertex_info() {
 		off = 0;
 		size = 0;
-		id = -1;
 	}
 
 	in_mem_vertex_info(vertex_id_t id, off_t off, size_t size) {
-		this->id = id;
 		this->off = off;
 		this->size = size;
 	}
@@ -75,10 +72,6 @@ public:
 
 	vsize_t get_ext_mem_size() const {
 		return size;
-	}
-
-	vertex_id_t get_id() const {
-		return id;
 	}
 };
 
@@ -465,6 +458,11 @@ public:
 	virtual page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start, size_t end) const = 0;
 	virtual vertex_id_t get_id() const = 0;
+	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
+			size_t num) const {
+		assert(0);
+		return 0;
+	}
 	virtual bool is_complete() const {
 		return true;
 	}
@@ -605,6 +603,25 @@ public:
 			default:
 				assert(0);
 		}
+	}
+
+	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
+			size_t num) const {
+		vsize_t num_edges = get_num_edges(type);
+		assert(num_edges <= num);
+		if (partial)
+			array.memcpy(0, (char *) edges, sizeof(vertex_id_t) * num_edges);
+		else if (type == IN_EDGE || type == BOTH_EDGES)
+			array.memcpy(ext_mem_directed_vertex::get_header_size(),
+					(char *) edges, sizeof(vertex_id_t) * num_edges);
+		else if (type == OUT_EDGE)
+			array.memcpy(ext_mem_directed_vertex::get_header_size()
+				+ num_in_edges * sizeof(vertex_id_t), (char *) edges,
+				sizeof(vertex_id_t) * num_edges);
+		else
+			assert(0);
+
+		return num_edges;
 	}
 
 	vertex_id_t get_id() const {

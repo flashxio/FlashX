@@ -56,30 +56,28 @@ public:
 
 class wcc_vertex: public compute_vertex
 {
+	bool empty;
+	bool updated;
 	vertex_id_t component_id;
-	vertex_id_t neigh_min;
-	int num_edges;
 public:
 	wcc_vertex() {
 		component_id = UINT_MAX;
-		neigh_min = UINT_MAX;
-		num_edges = 0;
+		empty = false;
+		updated = true;
 	}
 
 	wcc_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
 			id, index1) {
-		component_id = UINT_MAX;
-		neigh_min = id;
+		component_id = id;
 		const directed_vertex_index *index = (const directed_vertex_index *) index1;
-		num_edges = (index->get_num_in_edges(id) + index->get_num_out_edges(id));
-		if (num_edges == 0) {
-			component_id = id;
-			neigh_min = id;
-		}
+		int num_edges = (index->get_num_in_edges(id)
+				+ index->get_num_out_edges(id));
+		empty = (num_edges == 0);
+		updated = true;
 	}
 
-	bool get_num_edges() const {
-		return num_edges;
+	bool is_empty() const {
+		return empty;
 	}
 
 	bool belong2component() const {
@@ -91,20 +89,20 @@ public:
 	}
 
 	void run(graph_engine &graph) {
-		if (neigh_min < component_id) {
-			component_id = neigh_min;
+		if (updated) {
 			vertex_id_t id = get_id();
 			request_vertices(&id, 1);
+			updated = false;
 		}
 	}
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) {
-		for (int i = 0; i < num; i++) {
-			component_message *msg = (component_message *) msgs[i];
-			neigh_min = min(neigh_min, msg->get_id());
+	void run_on_message(graph_engine &, const vertex_message &msg1) {
+		component_message &msg = (component_message &) msg1;
+		if (msg.get_id() < component_id) {
+			updated = true;
+			component_id = msg.get_id();
 		}
 	}
 };
@@ -140,6 +138,7 @@ void print_usage()
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-s size: the output min component size\n");
 	fprintf(stderr, "-o file: output the component size to the file\n");
+	fprintf(stderr, "-p: preload the graph\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -151,7 +150,8 @@ int main(int argc, char *argv[])
 	std::string output_file;
 	size_t min_comp_size = 0;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:s:o:")) != -1) {
+	bool preload = false;
+	while ((opt = getopt(argc, argv, "c:s:o:p")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -165,6 +165,9 @@ int main(int argc, char *argv[])
 			case 'o':
 				output_file = optarg;
 				num_opts++;
+				break;
+			case 'p':
+				preload = true;
 				break;
 			default:
 				print_usage();
@@ -194,6 +197,8 @@ int main(int argc, char *argv[])
 			graph_conf.get_num_threads(), params.get_num_nodes());
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
+	if (preload)
+		graph->preload_graph();
 	printf("weakly connected components starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
@@ -219,7 +224,7 @@ int main(int argc, char *argv[])
 	graph_index::const_iterator end_it = index->end();
 	for (; it != end_it; ++it) {
 		const wcc_vertex &v = (const wcc_vertex &) *it;
-		if (v.get_num_edges() == 0)
+		if (v.is_empty())
 			continue;
 
 		comp_map_t::iterator map_it = comp_counts.find(v.get_component_id());

@@ -191,25 +191,21 @@ void ext_mem_vertex_iterator::read_vertices()
 		vertices.push_back(adj_buf + off);
 
 		size_t vsize;
-		vertex_id_t id;
 		if (type == graph_type::DIRECTED) {
 			ext_mem_directed_vertex *v
 				= (ext_mem_directed_vertex *) vertices.back();
 			vsize = v->get_size();
-			id = v->get_id();
 		}
 		else if (type == graph_type::TS_DIRECTED) {
 			ts_ext_mem_directed_vertex *v
 				= (ts_ext_mem_directed_vertex *) vertices.back();
 			vsize = v->get_size();
-			id = v->get_id();
 		}
 		else {
 			assert(0);
 		}
 		assert(off + vsize <= read_size);
 		assert(vsize == size);
-		assert(id == vinfos[i].get_id());
 	}
 	vit = vertices.begin();
 }

@@ -35,6 +35,7 @@
 #include "graph_index.h"
 #include "graph_config.h"
 #include "vertex_request.h"
+#include "vertex_program.h"
 
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
@@ -44,52 +45,37 @@ const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
 class graph_engine;
 class vertex_request;
 
-class compute_vertex: public in_mem_vertex_info
+class compute_vertex
 {
+	vertex_id_t id;
 public:
 	compute_vertex() {
+		id = INVALID_VERTEX_ID;
 	}
 
-	compute_vertex(vertex_id_t id, const vertex_index *index): in_mem_vertex_info(
-			id, index) {
+	compute_vertex(vertex_id_t id, const vertex_index *index) {
+		this->id = id;
 	}
 
-	virtual void init() {
-	}
-
-	/**
-	 * This is a pre-run before users get any information of adjacency list
-	 * of vertices.
-	 */
-	virtual void run(graph_engine &graph) = 0;
-
-	/**
-	 * Run user's code when the adjacency list of the vertex is read
-	 * from disks.
-	 */
-	virtual void run(graph_engine &graph, const page_vertex &vertex) = 0;
-
-	/**
-	 * Run user's code when the vertex receives messages from other.
-	 */
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) = 0;
+	vsize_t get_num_edges() const;
 
 	/**
 	 * This allows a vertex to request other vertices in the graph.
 	 * @ids: the Ids of vertices.
 	 */
 	void request_vertices(vertex_id_t ids[], size_t num);
+
+	vertex_id_t get_id() const {
+		return id;
+	}
 };
 
 class compute_directed_vertex: public compute_vertex
 {
 	vsize_t num_in_edges;
-	vsize_t num_out_edges;
 public:
 	compute_directed_vertex() {
 		num_in_edges = 0;
-		num_out_edges = 0;
 	}
 
 	compute_directed_vertex(vertex_id_t id,
@@ -99,7 +85,6 @@ public:
 		const directed_vertex_index *index
 			= (const directed_vertex_index *) index1;
 		num_in_edges = index->get_num_in_edges(id);
-		num_out_edges = index->get_num_out_edges(id);
 	}
 
 	vsize_t get_num_in_edges() const {
@@ -107,7 +92,7 @@ public:
 	}
 
 	vsize_t get_num_out_edges() const {
-		return num_out_edges;
+		return get_num_edges() - num_in_edges;
 	}
 
 	/**
@@ -140,22 +125,8 @@ public:
 class vertex_scheduler
 {
 public:
-	virtual void schedule(std::vector<compute_vertex *> &vertices) = 0;
+	virtual void schedule(std::vector<vertex_id_t> &vertices) = 0;
 };
-
-class default_vertex_scheduler: public vertex_scheduler
-{
-	struct compare {
-		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
-			return v1->get_id() < v2->get_id();
-		}
-	};
-public:
-	void schedule(std::vector<compute_vertex *> &vertices) {
-		std::sort(vertices.begin(), vertices.end(), compare());
-	}
-};
-extern default_vertex_scheduler default_scheduler;
 
 /**
  * When the graph engine starts, a user can use this filter to decide
@@ -171,6 +142,7 @@ class worker_thread;
 
 class graph_engine
 {
+	int vertex_header_size;
 	graph_header header;
 	graph_index *vertices;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
@@ -208,7 +180,7 @@ class graph_engine
 	simple_msg_sender *get_msg_sender(int thread_id) const;
 	multicast_msg_sender *get_multicast_sender(int thread_id) const;
 	multicast_msg_sender *get_activate_sender(int thread_id) const;
-	void init_threads();
+	void init_threads(vertex_program::ptr prog);
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index);
@@ -229,9 +201,19 @@ public:
 		return vertices->get_vertex(id);
 	}
 
-	void start(std::shared_ptr<vertex_filter> filter);
-	void start(vertex_id_t ids[], int num);
-	void start_all();
+	size_t get_vertices(const vertex_id_t ids[], int num, compute_vertex *v_buf[]) {
+		return vertices->get_vertices(ids, num, v_buf);
+	}
+
+	const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
+		return vertices->get_vertex_info(id);
+	}
+
+	void start(std::shared_ptr<vertex_filter> filter,
+			vertex_program::ptr prog = vertex_program::ptr());
+	void start(vertex_id_t ids[], int num,
+			vertex_program::ptr prog = vertex_program::ptr());
+	void start_all(vertex_program::ptr prog = vertex_program::ptr());
 
 	/**
 	 * The algorithm progresses to the next level.
@@ -246,18 +228,8 @@ public:
 		for (int i = 0; i < num; i++) {
 			int part_id = get_partitioner()->map(ids[i]);
 			multicast_msg_sender *sender = get_activate_sender(part_id);
-			bool ret = false;
-			if (sender->has_msg()) {
-				ret = sender->add_dest(ids[i]);
-			}
-			// If we can't add a destination vertex to the multicast msg,
-			// or there isn't a msg in the sender.
-			if (!ret) {
-				vertex_message msg(sizeof(vertex_message), true);
-				sender->init(msg);
-				ret = sender->add_dest(ids[i]);
-				assert(ret);
-			}
+			bool ret = sender->add_dest(ids[i]);
+			assert(ret);
 		}
 	}
 
@@ -306,34 +278,30 @@ public:
 
 	template<class T>
 	void multicast_msg(vertex_id_t ids[], int num, const T &msg) {
+		if (num < get_num_threads()) {
+			for (int i = 0; i < num; i++) {
+				T local_msg = msg;
+				send_msg(ids[i], local_msg);
+			}
+			return;
+		}
+
+		multicast_msg_sender *senders[this->get_num_threads()];
+		for (int i = 0; i < this->get_num_threads(); i++) {
+			senders[i] = get_multicast_sender(i);
+			senders[i]->init(msg);
+		}
 		for (int i = 0; i < num; i++) {
 			int part_id = get_partitioner()->map(ids[i]);
-			multicast_msg_sender *sender = get_multicast_sender(part_id);
-			bool ret = false;
-			if (sender->has_msg()) {
-				ret = sender->add_dest(ids[i]);
-			}
-			// If we can't add a destination vertex to the multicast msg,
-			// or there isn't a msg in the sender.
-			if (!ret) {
-				int retries = 0;
-				do {
-					retries++;
-					sender->init(msg);
-					ret = sender->add_dest(ids[i]);
-				} while (!ret);
-				// We shouldn't try it more than twice.
-				assert(retries <= 2);
-			}
+			multicast_msg_sender *sender = senders[part_id];
+			bool ret = sender->add_dest(ids[i]);
+			assert(ret);
 		}
 		// Now we have multicast the message, we need to notify all senders
 		// of the end of multicast.
 		for (int i = 0; i < this->get_num_threads(); i++) {
-			multicast_msg_sender *sender = get_multicast_sender(i);
-			// We only send the multicast on the sender that has received
-			// the multicast message.
-			if (sender->has_msg())
-				sender->end_multicast();
+			multicast_msg_sender *sender = senders[i];
+			sender->end_multicast();
 		}
 	}
 
@@ -384,6 +352,16 @@ public:
 	void set_max_processing_vertices(int max) {
 		max_processing_vertices = max;
 	}
+
+	int get_curr_level() const {
+		return level.get();
+	}
+
+	int get_vertex_header_size() const {
+		return vertex_header_size;
+	}
+
+	void preload_graph();
 };
 
 #endif

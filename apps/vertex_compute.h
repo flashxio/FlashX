@@ -26,6 +26,7 @@
 #include "slab_allocator.h"
 
 #include "vertex_request.h"
+#include "scan_pointer.h"
 
 class worker_thread;
 class graph_engine;
@@ -38,7 +39,7 @@ class compute_directed_vertex;
 class vertex_compute: public user_compute
 {
 	std::vector<vertex_id_t> requested_vertices;
-	size_t fetch_idx;
+	scan_pointer fetch_idx;
 
 protected:
 	graph_engine *graph;
@@ -52,13 +53,16 @@ protected:
 	size_t num_complete_fetched;
 public:
 	vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): user_compute(alloc) {
+			compute_allocator *alloc): user_compute(alloc), fetch_idx(0, true) {
 		this->graph = graph;
 		v = NULL;
 		issue_thread = (worker_thread *) thread::get_curr_thread();
 		num_complete_issues = 0;
 		num_complete_fetched = 0;
-		fetch_idx = 0;
+	}
+
+	void init(compute_vertex *v) {
+		this->v = v;
 	}
 
 	virtual int serialize(char *buf, int size) const {
@@ -69,8 +73,12 @@ public:
 		return 0;
 	}
 
+	virtual void set_scan_dir(bool forward) {
+		fetch_idx.set_scan_dir(forward);
+	}
+
 	virtual int has_requests() const {
-		return fetch_idx < requested_vertices.size();
+		return fetch_idx.get_num_remaining() > 0;
 	}
 
 	virtual request_range get_next_request();
@@ -101,15 +109,21 @@ class part_directed_vertex_compute;
 class directed_vertex_compute: public vertex_compute
 {
 	std::vector<directed_vertex_request> reqs;
-	size_t fetch_idx;
+	scan_pointer fetch_idx;
 public:
 	directed_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): vertex_compute(graph, alloc) {
-		fetch_idx = 0;
+			compute_allocator *alloc): vertex_compute(graph,
+				alloc), fetch_idx(0, true) {
+	}
+
+	virtual void set_scan_dir(bool forward) {
+		vertex_compute::set_scan_dir(forward);
+		fetch_idx.set_scan_dir(forward);
 	}
 
 	virtual int has_requests() const {
-		return vertex_compute::has_requests() || fetch_idx < reqs.size();
+		return vertex_compute::has_requests()
+			|| fetch_idx.get_num_remaining() > 0;
 	}
 
 	virtual request_range get_next_request();
@@ -170,15 +184,21 @@ class part_ts_vertex_compute;
 class ts_vertex_compute: public vertex_compute
 {
 	std::vector<ts_vertex_request> reqs;
-	size_t fetch_idx;
+	scan_pointer fetch_idx;
 public:
 	ts_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): vertex_compute(graph, alloc) {
-		fetch_idx = 0;
+			compute_allocator *alloc): vertex_compute(graph,
+				alloc), fetch_idx(0, true) {
+	}
+
+	virtual void set_scan_dir(bool forward) {
+		vertex_compute::set_scan_dir(forward);
+		fetch_idx.set_scan_dir(forward);
 	}
 
 	virtual int has_requests() const {
-		return vertex_compute::has_requests() || fetch_idx < reqs.size();
+		return vertex_compute::has_requests()
+			|| fetch_idx.get_num_remaining() > 0;
 	}
 
 	virtual request_range get_next_request();

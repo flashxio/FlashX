@@ -21,7 +21,6 @@
  */
 
 #include "workload.h"
-#include "rand_buf.h"
 #include "io_interface.h"
 #include "thread.h"
 #include "config.h"
@@ -37,7 +36,6 @@ class thread_private: public thread
 	int idx;
 	int node_id;
 	workload_gen *gen;
-	rand_buf *buf;
 	io_interface *io;
 	file_io_factory::shared_ptr factory;
 
@@ -64,8 +62,6 @@ public:
 
 public:
 	~thread_private() {
-		if (buf)
-			delete buf;
 	}
 
 	void init();

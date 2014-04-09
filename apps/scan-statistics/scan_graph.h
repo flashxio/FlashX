@@ -344,17 +344,112 @@ struct runtime_data_t
 	std::unique_ptr<neighbor_list> neighbors;
 	// The number of vertices that have joined with the vertex.
 	unsigned num_joined;
+	size_t local_scan;
 
 	runtime_data_t(std::unique_ptr<neighbor_list> neighbors) {
 		this->neighbors = std::move(neighbors);
 		num_joined = 0;
+		local_scan = 0;
 	}
 };
 
-class scan_vertex: public compute_directed_vertex
+enum multi_func_flags
+{
+	EST_LOCAL,
+	REAL_LOCAL,
+	POINTER,
+	NUM_FLAGS,
+};
+
+class multi_func_value
+{
+	static const int VALUE_BITS = sizeof(size_t) * 8 - NUM_FLAGS;
+	static const size_t FLAGS_MASK = ((1UL << VALUE_BITS) - 1);
+	size_t value;
+
+	void set_flag(int flag) {
+		value |= 1UL << (VALUE_BITS + flag);
+	}
+
+	bool has_flag(int flag) const {
+		return value & (1UL << (VALUE_BITS + flag));
+	}
+public:
+	multi_func_value() {
+		value = 0;
+	}
+
+	/**
+	 * Estimated local scan.
+	 */
+
+	void set_est_local(size_t num) {
+		value = num;
+		set_flag(EST_LOCAL);
+	}
+
+	bool has_est_local() const {
+		return has_flag(EST_LOCAL);
+	}
+
+	size_t get_est_local() const {
+		assert(has_flag(EST_LOCAL));
+		return value & FLAGS_MASK;
+	}
+
+	/**
+	 * Real local scan.
+	 */
+
+	void set_real_local(size_t num) {
+		value = num;
+		set_flag(REAL_LOCAL);
+	}
+
+	void inc_real_local(size_t num) {
+		assert(REAL_LOCAL);
+		value += num;
+	}
+
+	bool has_real_local() const {
+		return has_flag(REAL_LOCAL);
+	}
+
+	size_t get_real_local() const {
+		assert(has_flag(REAL_LOCAL));
+		return value & FLAGS_MASK;
+	}
+
+	/**
+	 * Pointer to the runtime data.
+	 */
+
+	void set_runtime_data(runtime_data_t *data) {
+		value = (size_t) data;
+		set_flag(POINTER);
+	}
+
+	bool has_runtime_data() const {
+		return has_flag(POINTER);
+	}
+
+	runtime_data_t *get_runtime_data() const {
+		assert(has_flag(POINTER));
+		return (runtime_data_t *) (value & FLAGS_MASK);
+	}
+};
+
+class scan_vertex;
+extern void (*finding_triangles_end)(graph_engine &, scan_vertex &,
+		runtime_data_t *);
+extern runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
+		const page_vertex &);
+extern void (*destroy_runtime)(scan_vertex &, runtime_data_t *);
+
+class scan_vertex: public compute_vertex
 {
 protected:
-	atomic_number<size_t> num_edges;
+	multi_func_value local_value;
 
 #ifdef PV_STAT
 	// For testing
@@ -366,11 +461,7 @@ protected:
 	struct timeval vertex_start;
 #endif
 public:
-	runtime_data_t *data;
-
 	scan_vertex() {
-		data = NULL;
-
 #ifdef PV_STAT
 		num_all_edges = 0;
 		scan_bytes = 0;
@@ -380,10 +471,8 @@ public:
 #endif
 	}
 
-	scan_vertex(vertex_id_t id, const vertex_index *index): compute_directed_vertex(
+	scan_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
 			id, index) {
-		data = NULL;
-
 #ifdef PV_STAT
 		num_all_edges = 0;
 		scan_bytes = 0;
@@ -403,8 +492,12 @@ public:
 	}
 #endif
 
+	bool has_local_scan() const {
+		return local_value.has_real_local();
+	}
+
 	size_t get_local_scan() const {
-		return num_edges.get();
+		return local_value.get_real_local();
 	}
 
 	void run(graph_engine &graph, const page_vertex &vertex) {
@@ -414,16 +507,10 @@ public:
 			run_on_neighbor(graph, vertex);
 	}
 
-	virtual void run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	virtual void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
-	virtual void finding_triangles_end(graph_engine &graph) = 0;
+	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
 
-	virtual runtime_data_t *create_runtime(graph_engine &graph,
-			const page_vertex *vertex);
-	virtual void destroy_runtime(runtime_data_t *data);
-
-	void run_on_messages(graph_engine &graph,
-			const vertex_message *msgs[], int num) {
+	void run_on_message(graph_engine &graph, const vertex_message &msg) {
 	}
 };
 

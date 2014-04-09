@@ -18,18 +18,30 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L../../libsafs -lsafs -L.. -lgraph -lrt $(OMP_FLAG) $(LDFLAGS)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: test_load_balancer
+all: test_load_balancer test_mem_alloc test_msg_passing test_get
 
 test_load_balancer: test_load_balancer.o ../libgraph.a
 	$(CXX) -o test_load_balancer test_load_balancer.o $(LDFLAGS)
+
+test_mem_alloc: test_mem_alloc.o ../libgraph.a
+	$(CXX) -o test_mem_alloc test_mem_alloc.o $(LDFLAGS)
+
+test_msg_passing: test_msg_passing.o ../libgraph.a
+	$(CXX) -o test_msg_passing test_msg_passing.o $(LDFLAGS)
+
+test_get: test_get.o ../libgraph.a
+	$(CXX) -o test_get test_get.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f test_load_balancer
+	rm -f test_mem_alloc
+	rm -f test_msg_passing
+	rm -f test_get
 
 -include $(DEPS) 

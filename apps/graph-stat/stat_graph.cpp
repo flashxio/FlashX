@@ -57,8 +57,7 @@ public:
 		num_out_edges = vertex.get_num_edges(edge_type::OUT_EDGE);
 	}
 
-	virtual void run_on_messages(graph_engine &,
-			const vertex_message *msgs[], int num) {
+	virtual void run_on_message(graph_engine &, const vertex_message &msg) {
 	}
 
 	int get_num_edges(edge_type type) const {
