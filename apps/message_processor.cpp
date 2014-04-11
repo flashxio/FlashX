@@ -27,16 +27,15 @@ void message_processor::buf_msg(vertex_message &vmsg)
  */
 class multicast_p2p_converter
 {
-	vertex_id_t dest;
+	local_vid_t dest;
 	multicast_message &mmsg;
 public:
-	multicast_p2p_converter(vertex_id_t dest,
-			multicast_message &_mmsg): mmsg(_mmsg) {
-		this->dest = dest;
+	multicast_p2p_converter(local_vid_t _dest,
+			multicast_message &_mmsg): dest(_dest), mmsg(_mmsg) {
 	}
 
 	int get_serialized_size() const {
-		return mmsg.get_serialized_size() - mmsg.get_num_dests() * sizeof(vertex_id_t);
+		return mmsg.get_body_size();
 	}
 
 	int serialize(char *buf, int size) const {
@@ -50,7 +49,7 @@ public:
 	}
 };
 
-void message_processor::buf_mmsg(vertex_id_t id, multicast_message &mmsg)
+void message_processor::buf_mmsg(local_vid_t id, multicast_message &mmsg)
 {
 	multicast_p2p_converter converter(id, mmsg);
 	if (stolenv_msgs.is_empty() || stolenv_msgs.back().add(converter) == NULL) {
@@ -73,7 +72,7 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 	if (!check_steal) {
 		curr_vprog.run_on_multicast_message(graph, mmsg);
 		for (int i = 0; i < num_dests; i++) {
-			vertex_id_t id = dest_list.get_dest(i);
+			local_vid_t id = dest_list.get_dest(i);
 			if (mmsg.is_activate())
 				owner.activate_vertex(id);
 		}
@@ -82,7 +81,7 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 
 	if (mmsg.is_activation_msg()) {
 		for (int i = 0; i < num_dests; i++) {
-			vertex_id_t id = dest_list.get_dest(i);
+			local_vid_t id = dest_list.get_dest(i);
 			if (mmsg.is_activate())
 				owner.activate_vertex(id);
 		}
@@ -90,12 +89,12 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 	}
 
 	for (int i = 0; i < num_dests; i++) {
-		vertex_id_t id = dest_list.get_dest(i);
+		local_vid_t id = dest_list.get_dest(i);
 		if (check_steal && steal_state->is_stolen(id)) {
 			buf_mmsg(id, mmsg);
 		}
 		else {
-			compute_vertex &info = graph.get_vertex(id);
+			compute_vertex &info = graph.get_vertex(owner.get_worker_id(), id);
 			curr_vprog.run_on_message(graph, info, mmsg);
 		}
 		if (mmsg.is_activate())
@@ -121,7 +120,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 			curr_vprog.run_on_messages(graph,
 					(const vertex_message **) v_msgs, num);
 			for (int i = 0; i < num; i++) {
-				vertex_id_t id = v_msgs[i]->get_dest();
+				local_vid_t id = v_msgs[i]->get_dest();
 				if (v_msgs[i]->is_activate())
 					owner.activate_vertex(id);
 			}
@@ -138,12 +137,12 @@ void message_processor::process_msg(message &msg, bool check_steal)
 		// If we are here, we are in the load balancing mode.
 		assert(check_steal);
 		for (int i = 0; i < num; i++) {
-			vertex_id_t id = v_msgs[i]->get_dest();
+			local_vid_t id = v_msgs[i]->get_dest();
 			if (steal_state->is_stolen(id)) {
 				buf_msg(*v_msgs[i]);
 			}
 			else {
-				compute_vertex &info = graph.get_vertex(id);
+				compute_vertex &info = graph.get_vertex(owner.get_worker_id(), id);
 				curr_vprog.run_on_message(graph, info, *v_msgs[i]);
 			}
 			if (v_msgs[i]->is_activate())

@@ -28,11 +28,18 @@ class graph_engine;
 class compute_vertex;
 class page_vertex;
 class vertex_message;
+class worker_thread;
 
 class vertex_program
 {
+	worker_thread *t;
 public:
 	typedef std::unique_ptr<vertex_program> ptr;
+
+	void init(worker_thread *t) {
+		this->t = t;
+	}
+
 	/**
 	 * This is a pre-run before users get any information of adjacency list
 	 * of vertices.
@@ -59,16 +66,20 @@ public:
 			multicast_message &mmsg) = 0;
 
 	virtual vertex_program::ptr clone() const = 0;
+
+	const worker_thread &get_thread() const {
+		return *t;
+	}
 };
 
-size_t graph_get_vertices(graph_engine &graph, const vertex_id_t ids[],
-		int num_ids, compute_vertex *v_buf[]);
+size_t graph_get_vertices(graph_engine &graph, const worker_thread &,
+		const local_vid_t ids[], int num_ids, compute_vertex *v_buf[]);
 
 template<class vertex_type>
 class vertex_program_impl: public vertex_program
 {
 	embedded_array<compute_vertex *, 1024> vertex_buf;
-	embedded_array<vertex_id_t, 1024> id_buf;
+	embedded_array<local_vid_t, 1024> id_buf;
 public:
 	/**
 	 * This is a pre-run before users get any information of adjacency list
@@ -105,7 +116,8 @@ public:
 		id_buf.resize(num);
 		for (int i = 0; i < num; i++)
 			id_buf[i] = v_msgs[i]->get_dest();
-		graph_get_vertices(graph, id_buf.data(), num, vertex_buf.data());
+		graph_get_vertices(graph, get_thread(), id_buf.data(), num,
+				vertex_buf.data());
 		for (int i = 0; i < num; i++) {
 			assert(!v_msgs[i]->is_multicast());
 			vertex_type *v = (vertex_type *) vertex_buf[i];
@@ -122,7 +134,8 @@ public:
 		id_buf.resize(num_dests);
 		for (int i = 0; i < num_dests; i++)
 			id_buf[i] = dest_list.get_dest(i);
-		graph_get_vertices(graph, id_buf.data(), num_dests, vertex_buf.data());
+		graph_get_vertices(graph, get_thread(), id_buf.data(), num_dests,
+				vertex_buf.data());
 
 		for (int i = 0; i < num_dests; i++) {
 			vertex_type *v = (vertex_type *) vertex_buf[i];

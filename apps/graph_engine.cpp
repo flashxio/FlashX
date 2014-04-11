@@ -515,8 +515,8 @@ vertex_index *load_vertex_index(const std::string &index_file)
 	return index;
 }
 
-size_t graph_get_vertices(graph_engine &graph, const vertex_id_t ids[],
-		int num_ids, compute_vertex *v_buf[])
+size_t graph_get_vertices(graph_engine &graph, const worker_thread &t,
+		const local_vid_t ids[], int num_ids, compute_vertex *v_buf[])
 {
-	return graph.get_vertices(ids, num_ids, v_buf);
+	return graph.get_vertices(t.get_worker_id(), ids, num_ids, v_buf);
 }

@@ -93,6 +93,10 @@ public:
 		return stolen_bitmap.get(off);
 	}
 
+	bool is_stolen(local_vid_t id) const {
+		return stolen_bitmap.get(id.id);
+	}
+
 	void guard_msg_processing() {
 		guard.fetch_add(1);
 		if (prepare_steal.load() > 0)

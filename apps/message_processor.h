@@ -53,7 +53,7 @@ class message_processor
 	fifo_queue<message> stolenv_msgs;
 
 	void buf_msg(vertex_message &msg);
-	void buf_mmsg(vertex_id_t id, multicast_message &mmsg);
+	void buf_mmsg(local_vid_t id, multicast_message &mmsg);
 
 	void process_msg(message &msg, bool check_steal);
 	void process_multicast_msg(multicast_message &mmsg, bool check_steal);

@@ -308,6 +308,7 @@ public:
 	 * Activate a vertex for the next iteration.
 	 */
 	void activate_vertex(vertex_id_t id);
+	void activate_vertex(local_vid_t id);
 
 	int steal_activated_vertices(compute_vertex *vertices[], int num);
 	void return_vertices(vertex_id_t ids[], int num);

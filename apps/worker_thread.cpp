@@ -162,6 +162,7 @@ worker_thread::worker_thread(graph_engine *graph,
 	next_activated_vertices = new bitmap(graph->get_partitioner(
 				)->get_part_size(worker_id, graph->get_num_vertices()), node_id);
 	this->vprogram = std::move(prog);
+	vprogram->init(this);
 	start_all = false;
 	this->worker_id = worker_id;
 	this->graph = graph;
@@ -428,6 +429,11 @@ void worker_thread::complete_vertex(const compute_vertex &v)
 		vertex_id_t id = v.get_id();
 		balancer->return_vertices(&id, 1);
 	}
+}
+
+void worker_thread::activate_vertex(local_vid_t id)
+{
+	next_activated_vertices->set(id.id);
 }
 
 void worker_thread::activate_vertex(vertex_id_t id)

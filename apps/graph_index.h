@@ -76,7 +76,10 @@ public:
 
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
 			compute_vertex *v_buf[]) const = 0;
+	virtual size_t get_vertices(int part_id, const local_vid_t ids[], int num,
+			compute_vertex *v_buf[]) const = 0;
 	virtual compute_vertex &get_vertex(vertex_id_t id) = 0;
+	virtual compute_vertex &get_vertex(int part_id, local_vid_t id) = 0;
 	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const = 0;
 
 	virtual vertex_id_t get_max_vertex_id() const = 0;
@@ -165,6 +168,15 @@ public:
 		off_t part_off;
 		partitioner->map2loc(id, part_id, part_off);
 		return vertex_arr[part_off];
+	}
+
+	virtual size_t get_vertices(int part_id, const local_vid_t ids[], int num,
+			compute_vertex *v_buf[]) const {
+		assert(0);
+	}
+
+	virtual compute_vertex &get_vertex(int part_id, local_vid_t id) {
+		assert(0);
 	}
 
 	virtual vertex_id_t get_max_vertex_id() const {
@@ -312,6 +324,17 @@ public:
 		off_t part_off;
 		partitioner.map2loc(id, part_id, part_off);
 		return index_arr[part_id]->vertex_arr[part_off];
+	}
+
+	virtual size_t get_vertices(int part_id, const local_vid_t ids[], int num,
+			compute_vertex *v_buf[]) const {
+		for (int i = 0; i < num; i++)
+			v_buf[i] = &index_arr[part_id]->vertex_arr[ids[i].id];
+		return num;
+	}
+
+	virtual compute_vertex &get_vertex(int part_id, local_vid_t id) {
+		return index_arr[part_id]->vertex_arr[id.id];
 	}
 
 	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {

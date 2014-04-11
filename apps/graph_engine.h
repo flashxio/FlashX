@@ -201,8 +201,17 @@ public:
 		return vertices->get_vertex(id);
 	}
 
+	compute_vertex &get_vertex(int part_id, local_vid_t id) {
+		return vertices->get_vertex(part_id, id);
+	}
+
 	size_t get_vertices(const vertex_id_t ids[], int num, compute_vertex *v_buf[]) {
 		return vertices->get_vertices(ids, num, v_buf);
+	}
+
+	size_t get_vertices(int part_id, const local_vid_t ids[], int num,
+			compute_vertex *v_buf[]) {
+		return vertices->get_vertices(part_id, ids, num, v_buf);
 	}
 
 	const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
@@ -226,9 +235,13 @@ public:
 	 */
 	void activate_vertices(vertex_id_t ids[], int num) {
 		for (int i = 0; i < num; i++) {
-			int part_id = get_partitioner()->map(ids[i]);
+			int part_id;
+			// We are going to use the offset of a vertex in a partition as
+			// the ID of the vertex.
+			off_t local_id;
+			get_partitioner()->map2loc(ids[i], part_id, local_id);
 			multicast_msg_sender *sender = get_activate_sender(part_id);
-			bool ret = sender->add_dest(ids[i]);
+			bool ret = sender->add_dest(local_vid_t(local_id));
 			assert(ret);
 		}
 	}
@@ -292,9 +305,13 @@ public:
 			senders[i]->init(msg);
 		}
 		for (int i = 0; i < num; i++) {
-			int part_id = get_partitioner()->map(ids[i]);
+			int part_id;
+			// We are going to use the offset of a vertex in a partition as
+			// the ID of the vertex.
+			off_t local_id;
+			get_partitioner()->map2loc(ids[i], part_id, local_id);
 			multicast_msg_sender *sender = senders[part_id];
-			bool ret = sender->add_dest(ids[i]);
+			bool ret = sender->add_dest(local_vid_t(local_id));
 			assert(ret);
 		}
 		// Now we have multicast the message, we need to notify all senders
@@ -307,9 +324,13 @@ public:
 
 	template<class T>
 	void send_msg(vertex_id_t dest, T &msg) {
-		vertex_id_t id = dest;
-		simple_msg_sender *sender = get_msg_sender(get_partitioner()->map(id));
-		msg.set_dest(dest);
+		int part_id;
+		// We are going to use the offset of a vertex in a partition as
+		// the ID of the vertex.
+		off_t local_id;
+		get_partitioner()->map2loc(dest, part_id, local_id);
+		simple_msg_sender *sender = get_msg_sender(part_id);
+		msg.set_dest(local_vid_t(local_id));
 		sender->send_cached(msg);
 	}
 
