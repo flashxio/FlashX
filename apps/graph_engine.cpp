@@ -451,6 +451,19 @@ void graph_engine::activate_vertices(vertex_id_t ids[], int num)
 	curr->send_activation(ids, num);
 }
 
+void graph_engine::multicast_msg(vertex_id_t ids[], int num,
+		const vertex_message &msg)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->multicast_msg(ids, num, msg);
+}
+
+void graph_engine::send_msg(vertex_id_t dest, vertex_message &msg)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->send_msg(dest, msg);
+}
+
 vertex_index *load_vertex_index(const std::string &index_file)
 {
 	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;

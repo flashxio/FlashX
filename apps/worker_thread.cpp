@@ -467,3 +467,51 @@ vertex_compute *worker_thread::create_vertex_compute(compute_vertex *v)
 	curr_compute->init(v);
 	return curr_compute;
 }
+
+void worker_thread::multicast_msg(vertex_id_t ids[], int num,
+		const vertex_message &msg)
+{
+	if (num < graph->get_num_threads()) {
+		char msg_buf[msg.get_serialized_size()];
+		memcpy(msg_buf, &msg, msg.get_serialized_size());
+		vertex_message *local_msg = (vertex_message *) msg_buf;
+		for (int i = 0; i < num; i++)
+			send_msg(ids[i], *local_msg);
+		return;
+	}
+
+	multicast_msg_sender *senders[graph->get_num_threads()];
+	for (int i = 0; i < graph->get_num_threads(); i++) {
+		senders[i] = get_multicast_sender(i);
+		senders[i]->init(msg);
+	}
+	vertex_loc_buf.resize(num);
+	graph->get_partitioner()->map2loc(ids, num, vertex_loc_buf.data());
+	for (int i = 0; i < num; i++) {
+		int part_id = vertex_loc_buf[i].first;
+		// We are going to use the offset of a vertex in a partition as
+		// the ID of the vertex.
+		local_vid_t local_id = vertex_loc_buf[i].second;
+		multicast_msg_sender *sender = senders[part_id];
+		bool ret = sender->add_dest(local_id);
+		assert(ret);
+	}
+	// Now we have multicast the message, we need to notify all senders
+	// of the end of multicast.
+	for (int i = 0; i < graph->get_num_threads(); i++) {
+		multicast_msg_sender *sender = senders[i];
+		sender->end_multicast();
+	}
+}
+
+void worker_thread::send_msg(vertex_id_t dest, vertex_message &msg)
+{
+	int part_id;
+	// We are going to use the offset of a vertex in a partition as
+	// the ID of the vertex.
+	off_t local_id;
+	graph->get_partitioner()->map2loc(dest, part_id, local_id);
+	simple_msg_sender *sender = get_msg_sender(part_id);
+	msg.set_dest(local_vid_t(local_id));
+	sender->send_cached(msg);
+}

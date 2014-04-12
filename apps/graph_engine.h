@@ -278,50 +278,9 @@ public:
 		return factory->get_file_id();
 	}
 
-	template<class T>
-	void multicast_msg(vertex_id_t ids[], int num, const T &msg) {
-		if (num < get_num_threads()) {
-			for (int i = 0; i < num; i++) {
-				T local_msg = msg;
-				send_msg(ids[i], local_msg);
-			}
-			return;
-		}
+	void multicast_msg(vertex_id_t ids[], int num, const vertex_message &msg);
 
-		multicast_msg_sender *senders[this->get_num_threads()];
-		for (int i = 0; i < this->get_num_threads(); i++) {
-			senders[i] = get_multicast_sender(i);
-			senders[i]->init(msg);
-		}
-		for (int i = 0; i < num; i++) {
-			int part_id;
-			// We are going to use the offset of a vertex in a partition as
-			// the ID of the vertex.
-			off_t local_id;
-			get_partitioner()->map2loc(ids[i], part_id, local_id);
-			multicast_msg_sender *sender = senders[part_id];
-			bool ret = sender->add_dest(local_vid_t(local_id));
-			assert(ret);
-		}
-		// Now we have multicast the message, we need to notify all senders
-		// of the end of multicast.
-		for (int i = 0; i < this->get_num_threads(); i++) {
-			multicast_msg_sender *sender = senders[i];
-			sender->end_multicast();
-		}
-	}
-
-	template<class T>
-	void send_msg(vertex_id_t dest, T &msg) {
-		int part_id;
-		// We are going to use the offset of a vertex in a partition as
-		// the ID of the vertex.
-		off_t local_id;
-		get_partitioner()->map2loc(dest, part_id, local_id);
-		simple_msg_sender *sender = get_msg_sender(part_id);
-		msg.set_dest(local_vid_t(local_id));
-		sender->send_cached(msg);
-	}
+	void send_msg(vertex_id_t dest, vertex_message &msg);
 
 	ext_mem_vertex_interpreter &get_vertex_interpreter() const {
 		return *interpreter;
