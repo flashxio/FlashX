@@ -66,3 +66,24 @@ vertex_id_t range_graph_partitioner::get_part_end(int part_id,
 		vid_end += min(num, RANGE_SIZE);
 	return vid_end;
 }
+
+void modulo_graph_partitioner::map2loc(vertex_id_t ids[], int num,
+		vertex_loc_t locs[]) const
+{
+	for (int i = 0; i < num; i++) {
+		locs[i].first = ids[i] & mask;
+		locs[i].second = local_vid_t(ids[i] >> num_parts_log);
+	}
+}
+
+void range_graph_partitioner::map2loc(vertex_id_t ids[], int num,
+		vertex_loc_t locs[]) const
+{
+	for (int i = 0; i < num; i++) {
+		vertex_id_t id = ids[i];
+		vertex_id_t shifted_id = id >> RANGE_SIZE_LOG;
+		locs[i].first = shifted_id & mask;
+		locs[i].second = local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
+				+ (id & RANGE_MASK));
+	}
+}

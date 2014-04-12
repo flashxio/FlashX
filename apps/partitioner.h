@@ -22,13 +22,41 @@
 
 #include <math.h>
 
+#include <utility>
+
 #include "vertex.h"
+
+/**
+ * This data structure represents the local Id of a vertex used
+ * in its own partition.
+ */
+struct local_vid_t
+{
+	vertex_id_t id;
+
+	local_vid_t() {
+		id = INVALID_VERTEX_ID;
+	}
+
+	explicit local_vid_t(vertex_id_t id) {
+		this->id = id;
+	}
+};
+
+/**
+ * The vertex location in a partition.
+ * first: the partition ID.
+ * second: the location in the partition.
+ */
+typedef std::pair<int, struct local_vid_t> vertex_loc_t;
 
 class graph_partitioner
 {
 public:
 	virtual int map(vertex_id_t id) const = 0;
 	virtual void map2loc(vertex_id_t id, int &part_id, off_t &off) const = 0;
+	virtual void map2loc(vertex_id_t ids[], int num,
+			vertex_loc_t locs[]) const = 0;
 	virtual void loc2map(int part_id, off_t off, vertex_id_t &id) const = 0;
 	virtual size_t get_all_vertices_in_part(int part_id,
 			size_t tot_num_vertices, std::vector<vertex_id_t> &ids) const = 0;
@@ -54,6 +82,7 @@ public:
 		part_id = id & mask;
 		off = id >> num_parts_log;
 	}
+	void map2loc(vertex_id_t ids[], int num, vertex_loc_t locs[]) const;
 
 	void loc2map(int part_id, off_t off, vertex_id_t &id) const {
 		id = (off << num_parts_log) + part_id;
@@ -93,6 +122,9 @@ public:
 		part_id = shifted_id & mask;
 		off = ((shifted_id >> num_parts_log) << RANGE_SIZE_LOG) + (id & RANGE_MASK);
 	}
+
+	virtual void map2loc(vertex_id_t ids[], int num,
+			vertex_loc_t locs[]) const;
 
 	virtual void loc2map(int part_id, off_t off, vertex_id_t &id) const {
 		off_t local_range_id = off >> RANGE_SIZE_LOG;

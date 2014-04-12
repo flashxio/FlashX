@@ -445,6 +445,21 @@ void worker_thread::activate_vertex(vertex_id_t id)
 	next_activated_vertices->set(off);
 }
 
+void worker_thread::send_activation(vertex_id_t ids[], int num)
+{
+	vertex_loc_buf.resize(num);
+	graph->get_partitioner()->map2loc(ids, num, vertex_loc_buf.data());
+	for (int i = 0; i < num; i++) {
+		int part_id = vertex_loc_buf[i].first;
+		// We are going to use the offset of a vertex in a partition as
+		// the ID of the vertex.
+		local_vid_t local_id = vertex_loc_buf[i].second;
+		multicast_msg_sender *sender = get_activate_sender(part_id);
+		bool ret = sender->add_dest(local_id);
+		assert(ret);
+	}
+}
+
 vertex_compute *worker_thread::create_vertex_compute(compute_vertex *v)
 {
 	assert(curr_compute == NULL);

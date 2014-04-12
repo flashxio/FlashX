@@ -233,18 +233,7 @@ public:
 	/**
 	 * Activate vertices that may be processed in the next level.
 	 */
-	void activate_vertices(vertex_id_t ids[], int num) {
-		for (int i = 0; i < num; i++) {
-			int part_id;
-			// We are going to use the offset of a vertex in a partition as
-			// the ID of the vertex.
-			off_t local_id;
-			get_partitioner()->map2loc(ids[i], part_id, local_id);
-			multicast_msg_sender *sender = get_activate_sender(part_id);
-			bool ret = sender->add_dest(local_vid_t(local_id));
-			assert(ret);
-		}
-	}
+	void activate_vertices(vertex_id_t ids[], int num);
 
 	void activate_vertex(vertex_id_t vertex) {
 		activate_vertices(&vertex, 1);

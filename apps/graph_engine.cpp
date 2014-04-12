@@ -445,6 +445,12 @@ void graph_engine::preload_graph()
 	printf("successfully preload\n");
 }
 
+void graph_engine::activate_vertices(vertex_id_t ids[], int num)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->send_activation(ids, num);
+}
+
 vertex_index *load_vertex_index(const std::string &index_file)
 {
 	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;

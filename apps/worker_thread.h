@@ -214,6 +214,8 @@ class worker_thread: public thread
 	atomic_number<long> num_activated_vertices_in_level;
 	// The number of vertices completed in the current level.
 	atomic_number<long> num_completed_vertices_in_level;
+
+	embedded_array<vertex_loc_t, 1024> vertex_loc_buf;
 public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
 			vertex_program::ptr prog, int node_id, int worker_id,
@@ -305,10 +307,15 @@ public:
 	}
 
 	/**
-	 * Activate a vertex for the next iteration.
+	 * Activate the vertex in its own partition for the next iteration.
 	 */
 	void activate_vertex(vertex_id_t id);
 	void activate_vertex(local_vid_t id);
+
+	/**
+	 * Send activation messages to activate vertices in the graph.
+	 */
+	void send_activation(vertex_id_t ids[], int num);
 
 	int steal_activated_vertices(compute_vertex *vertices[], int num);
 	void return_vertices(vertex_id_t ids[], int num);

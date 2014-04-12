@@ -23,6 +23,7 @@
 #include "slab_allocator.h"
 
 #include "vertex.h"
+#include "partitioner.h"
 
 class message
 {
@@ -274,23 +275,6 @@ public:
 
 	msg_queue *get_queue() const {
 		return queue;
-	}
-};
-
-/**
- * This data structure represents the local Id of a vertex used
- * in its own partition.
- */
-struct local_vid_t
-{
-	vertex_id_t id;
-
-	local_vid_t() {
-		id = INVALID_VERTEX_ID;
-	}
-
-	explicit local_vid_t(vertex_id_t id) {
-		this->id = id;
 	}
 };
 
