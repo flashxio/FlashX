@@ -440,6 +440,12 @@ void graph_engine::multicast_msg(vertex_id_t ids[], int num,
 	curr->multicast_msg(ids, num, msg);
 }
 
+void graph_engine::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->multicast_msg(it, msg);
+}
+
 void graph_engine::send_msg(vertex_id_t dest, vertex_message &msg)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();

@@ -318,6 +318,7 @@ public:
 	void send_activation(vertex_id_t ids[], int num);
 
 	void multicast_msg(vertex_id_t ids[], int num, const vertex_message &msg);
+	void multicast_msg(edge_seq_iterator &it, vertex_message &msg);
 	void send_msg(vertex_id_t id, vertex_message &msg);
 
 	int steal_activated_vertices(compute_vertex *vertices[], int num);

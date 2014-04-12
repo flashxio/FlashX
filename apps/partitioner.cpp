@@ -87,3 +87,27 @@ void range_graph_partitioner::map2loc(vertex_id_t ids[], int num,
 				+ (id & RANGE_MASK));
 	}
 }
+
+void modulo_graph_partitioner::map2loc(edge_seq_iterator &it,
+		vertex_loc_t locs[]) const
+{
+	int loc_idx = 0;
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		locs[loc_idx].first = id & mask;
+		locs[loc_idx].second = local_vid_t(id >> num_parts_log);
+		loc_idx++;
+	} PAGE_FOREACH_END
+}
+
+void range_graph_partitioner::map2loc(edge_seq_iterator &it,
+		vertex_loc_t locs[]) const
+{
+	int loc_idx = 0;
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		vertex_id_t shifted_id = id >> RANGE_SIZE_LOG;
+		locs[loc_idx].first = shifted_id & mask;
+		locs[loc_idx].second = local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
+				+ (id & RANGE_MASK));
+		loc_idx++;
+	} PAGE_FOREACH_END
+}

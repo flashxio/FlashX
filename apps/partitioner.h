@@ -57,6 +57,7 @@ public:
 	virtual void map2loc(vertex_id_t id, int &part_id, off_t &off) const = 0;
 	virtual void map2loc(vertex_id_t ids[], int num,
 			vertex_loc_t locs[]) const = 0;
+	virtual void map2loc(edge_seq_iterator &, vertex_loc_t locs[]) const = 0;
 	virtual void loc2map(int part_id, off_t off, vertex_id_t &id) const = 0;
 	virtual size_t get_all_vertices_in_part(int part_id,
 			size_t tot_num_vertices, std::vector<vertex_id_t> &ids) const = 0;
@@ -83,6 +84,7 @@ public:
 		off = id >> num_parts_log;
 	}
 	void map2loc(vertex_id_t ids[], int num, vertex_loc_t locs[]) const;
+	void map2loc(edge_seq_iterator &, vertex_loc_t locs[]) const;
 
 	void loc2map(int part_id, off_t off, vertex_id_t &id) const {
 		id = (off << num_parts_log) + part_id;
@@ -125,6 +127,7 @@ public:
 
 	virtual void map2loc(vertex_id_t ids[], int num,
 			vertex_loc_t locs[]) const;
+	virtual void map2loc(edge_seq_iterator &, vertex_loc_t locs[]) const;
 
 	virtual void loc2map(int part_id, off_t off, vertex_id_t &id) const {
 		off_t local_range_id = off >> RANGE_SIZE_LOG;
