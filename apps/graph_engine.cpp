@@ -300,24 +300,6 @@ graph_engine::~graph_engine()
 		delete logger;
 }
 
-multicast_msg_sender *graph_engine::get_activate_sender(int thread_id) const
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	return curr->get_activate_sender(thread_id);
-}
-
-multicast_msg_sender *graph_engine::get_multicast_sender(int thread_id) const
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	return curr->get_multicast_sender(thread_id);
-}
-
-simple_msg_sender *graph_engine::get_msg_sender(int thread_id) const
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	return curr->get_msg_sender(thread_id);
-}
-
 void graph_engine::init_threads(vertex_program::ptr prog)
 {
 	// Prepare the worker threads.

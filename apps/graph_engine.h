@@ -173,13 +173,6 @@ class graph_engine
 		}
 	}
 
-	/**
-	 * This method returns the message sender of the current thread that
-	 * sends messages to the thread with the specified thread id.
-	 */
-	simple_msg_sender *get_msg_sender(int thread_id) const;
-	multicast_msg_sender *get_multicast_sender(int thread_id) const;
-	multicast_msg_sender *get_activate_sender(int thread_id) const;
 	void init_threads(vertex_program::ptr prog);
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,

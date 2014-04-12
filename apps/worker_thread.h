@@ -216,6 +216,18 @@ class worker_thread: public thread
 	atomic_number<long> num_completed_vertices_in_level;
 
 	embedded_array<vertex_loc_t, 1024> vertex_loc_buf;
+
+	multicast_msg_sender *get_activate_sender(int thread_id) const {
+		return activate_senders[thread_id];
+	}
+
+	multicast_msg_sender *get_multicast_sender(int thread_id) const {
+		return multicast_senders[thread_id];
+	}
+
+	simple_msg_sender *get_msg_sender(int thread_id) const {
+		return msg_senders[thread_id];
+	}
 public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
 			vertex_program::ptr prog, int node_id, int worker_id,
@@ -230,18 +242,6 @@ public:
 
 	compute_allocator *get_part_compute_allocator() const {
 		return part_alloc;
-	}
-
-	multicast_msg_sender *get_activate_sender(int thread_id) const {
-		return activate_senders[thread_id];
-	}
-
-	multicast_msg_sender *get_multicast_sender(int thread_id) const {
-		return multicast_senders[thread_id];
-	}
-
-	simple_msg_sender *get_msg_sender(int thread_id) const {
-		return msg_senders[thread_id];
 	}
 
 	/**
