@@ -498,23 +498,7 @@ public:
 		delete s;
 	}
 
-	int flush() {
-		if (buf.is_empty()) {
-			assert(mmsg == NULL);
-			return 0;
-		}
-		this->mmsg = NULL;
-		this->num_dests = 0;
-		dest_list.clear();
-		queue->add(&buf, 1);
-		if (buf.get_num_objs() > 1)
-			printf("there are %d objs in the msg\n", buf.get_num_objs());
-		// We have to make sure all messages have been sent to the queue.
-		assert(buf.is_empty());
-		message tmp(alloc);
-		buf = tmp;
-		return 1;
-	}
+	int flush();
 
 	template<class T>
 	void init(const T &msg) {
@@ -532,24 +516,7 @@ public:
 		dest_list = this->mmsg->get_dest_list();
 	}
 
-	bool add_dest(local_vid_t id) {
-		int ret = buf.inc_msg_size(sizeof(id.id));
-		if (ret == 0) {
-			flush();
-
-			multicast_message *mmsg_template
-				= (multicast_message *) mmsg_temp_buf;
-			vertex_message *p = (vertex_message *) buf.add(*mmsg_template);
-			// We just add the buffer. We should be able to add the new message.
-			assert(p);
-			this->mmsg = multicast_message::convert2multicast(p);
-			dest_list = this->mmsg->get_dest_list();
-			buf.inc_msg_size(sizeof(id.id));
-		}
-		num_dests++;
-		dest_list.add_dest(id);
-		return true;
-	}
+	bool add_dest(local_vid_t id);
 
 	void end_multicast() {
 		if (num_dests == 0) {
