@@ -227,6 +227,7 @@ public:
 	 * Activate vertices that may be processed in the next level.
 	 */
 	void activate_vertices(vertex_id_t ids[], int num);
+	void activate_vertices(edge_seq_iterator &it);
 
 	void activate_vertex(vertex_id_t vertex) {
 		activate_vertices(&vertex, 1);

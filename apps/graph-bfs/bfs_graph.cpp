@@ -75,12 +75,14 @@ void bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
 	assert(!has_visited());
 	set_visited(true);
 
+	int num_dests = vertex.get_num_edges(OUT_EDGE);
+	if (num_dests == 0)
+		return;
+
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	int num_dests = vertex.get_num_edges(OUT_EDGE);
-	stack_array<vertex_id_t, 1024> dest_buf(num_dests);
-	vertex.read_edges(OUT_EDGE, dest_buf.data(), num_dests);
-	graph.activate_vertices(dest_buf.data(), num_dests);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
+	graph.activate_vertices(it);
 }
 
 void int_handler(int sig_num)

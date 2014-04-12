@@ -316,6 +316,7 @@ public:
 	 * Send activation messages to activate vertices in the graph.
 	 */
 	void send_activation(vertex_id_t ids[], int num);
+	void send_activation(edge_seq_iterator &it);
 
 	void multicast_msg(vertex_id_t ids[], int num, const vertex_message &msg);
 	void multicast_msg(edge_seq_iterator &it, vertex_message &msg);

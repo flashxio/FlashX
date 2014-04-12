@@ -433,6 +433,12 @@ void graph_engine::activate_vertices(vertex_id_t ids[], int num)
 	curr->send_activation(ids, num);
 }
 
+void graph_engine::activate_vertices(edge_seq_iterator &it)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->send_activation(it);
+}
+
 void graph_engine::multicast_msg(vertex_id_t ids[], int num,
 		const vertex_message &msg)
 {
