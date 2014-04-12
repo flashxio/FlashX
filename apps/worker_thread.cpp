@@ -159,6 +159,8 @@ worker_thread::worker_thread(graph_engine *graph,
 		int num_threads, vertex_scheduler *scheduler): thread("worker_thread",
 			node_id)
 {
+	vid_bufs = std::unique_ptr<std::vector<local_vid_t>[]>(
+			new std::vector<local_vid_t>[graph->get_num_threads()]);
 	next_activated_vertices = new bitmap(graph->get_partitioner(
 				)->get_part_size(worker_id, graph->get_num_vertices()), node_id);
 	this->vprogram = std::move(prog);
@@ -447,32 +449,29 @@ void worker_thread::activate_vertex(vertex_id_t id)
 
 void worker_thread::send_activation(edge_seq_iterator &it)
 {
-	int num = it.get_num_tot_entries();
-	vertex_loc_buf.resize(num);
-	graph->get_partitioner()->map2loc(it, vertex_loc_buf.data());
-	for (int i = 0; i < num; i++) {
-		int part_id = vertex_loc_buf[i].first;
-		// We are going to use the offset of a vertex in a partition as
-		// the ID of the vertex.
-		local_vid_t local_id = vertex_loc_buf[i].second;
-		multicast_msg_sender *sender = get_activate_sender(part_id);
-		bool ret = sender->add_dest(local_id);
-		assert(ret);
+	graph->get_partitioner()->map2loc(it, vid_bufs.get(),
+			graph->get_num_threads());
+	for (int i = 0; i < graph->get_num_threads(); i++) {
+		multicast_msg_sender *sender = get_activate_sender(i);
+		if (vid_bufs[i].empty())
+			continue;
+		int ret = sender->add_dests(vid_bufs[i].data(), vid_bufs[i].size());
+		assert((size_t) ret == vid_bufs[i].size());
+		vid_bufs[i].clear();
 	}
 }
 
 void worker_thread::send_activation(vertex_id_t ids[], int num)
 {
-	vertex_loc_buf.resize(num);
-	graph->get_partitioner()->map2loc(ids, num, vertex_loc_buf.data());
-	for (int i = 0; i < num; i++) {
-		int part_id = vertex_loc_buf[i].first;
-		// We are going to use the offset of a vertex in a partition as
-		// the ID of the vertex.
-		local_vid_t local_id = vertex_loc_buf[i].second;
-		multicast_msg_sender *sender = get_activate_sender(part_id);
-		bool ret = sender->add_dest(local_id);
-		assert(ret);
+	graph->get_partitioner()->map2loc(ids, num, vid_bufs.get(),
+			graph->get_num_threads());
+	for (int i = 0; i < graph->get_num_threads(); i++) {
+		multicast_msg_sender *sender = get_activate_sender(i);
+		if (vid_bufs[i].empty())
+			continue;
+		int ret = sender->add_dests(vid_bufs[i].data(), vid_bufs[i].size());
+		assert((size_t) ret == vid_bufs[i].size());
+		vid_bufs[i].clear();
 	}
 }
 
@@ -490,34 +489,24 @@ void worker_thread::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
 	if (num_dests == 0)
 		return;
 
-	if (num_dests < graph->get_num_threads() * 4) {
+	if (num_dests < graph->get_num_threads() * 2) {
 		PAGE_FOREACH(vertex_id_t, id, it) {
 			this->send_msg(id, msg);
 		} PAGE_FOREACH_END
 		return;
 	}
 
-	multicast_msg_sender *senders[graph->get_num_threads()];
+	graph->get_partitioner()->map2loc(it, vid_bufs.get(),
+			graph->get_num_threads());
 	for (int i = 0; i < graph->get_num_threads(); i++) {
-		senders[i] = get_multicast_sender(i);
-		senders[i]->init(msg);
-	}
-	vertex_loc_buf.resize(num_dests);
-	graph->get_partitioner()->map2loc(it, vertex_loc_buf.data());
+		if (vid_bufs[i].empty())
+			continue;
 
-	for (int i = 0; i < num_dests; i++) {
-		int part_id = vertex_loc_buf[i].first;
-		// We are going to use the offset of a vertex in a partition as
-		// the ID of the vertex.
-		local_vid_t local_id = vertex_loc_buf[i].second;
-		multicast_msg_sender *sender = senders[part_id];
-		bool ret = sender->add_dest(local_id);
-		assert(ret);
-	}
-	// Now we have multicast the message, we need to notify all senders
-	// of the end of multicast.
-	for (int i = 0; i < graph->get_num_threads(); i++) {
-		multicast_msg_sender *sender = senders[i];
+		multicast_msg_sender *sender = get_multicast_sender(i);
+		sender->init(msg);
+		int ret = sender->add_dests(vid_bufs[i].data(), vid_bufs[i].size());
+		assert((size_t) ret == vid_bufs[i].size());
+		vid_bufs[i].clear();
 		sender->end_multicast();
 	}
 }
@@ -534,26 +523,17 @@ void worker_thread::multicast_msg(vertex_id_t ids[], int num,
 		return;
 	}
 
-	multicast_msg_sender *senders[graph->get_num_threads()];
+	graph->get_partitioner()->map2loc(ids, num, vid_bufs.get(),
+			graph->get_num_threads());
 	for (int i = 0; i < graph->get_num_threads(); i++) {
-		senders[i] = get_multicast_sender(i);
-		senders[i]->init(msg);
-	}
-	vertex_loc_buf.resize(num);
-	graph->get_partitioner()->map2loc(ids, num, vertex_loc_buf.data());
-	for (int i = 0; i < num; i++) {
-		int part_id = vertex_loc_buf[i].first;
-		// We are going to use the offset of a vertex in a partition as
-		// the ID of the vertex.
-		local_vid_t local_id = vertex_loc_buf[i].second;
-		multicast_msg_sender *sender = senders[part_id];
-		bool ret = sender->add_dest(local_id);
-		assert(ret);
-	}
-	// Now we have multicast the message, we need to notify all senders
-	// of the end of multicast.
-	for (int i = 0; i < graph->get_num_threads(); i++) {
-		multicast_msg_sender *sender = senders[i];
+		if (vid_bufs[i].empty())
+			continue;
+
+		multicast_msg_sender *sender = get_multicast_sender(i);
+		sender->init(msg);
+		int ret = sender->add_dests(vid_bufs[i].data(), vid_bufs[i].size());
+		assert((size_t) ret == vid_bufs[i].size());
+		vid_bufs[i].clear();
 		sender->end_multicast();
 	}
 }

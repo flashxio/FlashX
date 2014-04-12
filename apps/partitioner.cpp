@@ -68,46 +68,46 @@ vertex_id_t range_graph_partitioner::get_part_end(int part_id,
 }
 
 void modulo_graph_partitioner::map2loc(vertex_id_t ids[], int num,
-		vertex_loc_t locs[]) const
+		std::vector<local_vid_t> locs[], int num_parts) const
 {
+	assert(num_parts <= get_num_parts());
 	for (int i = 0; i < num; i++) {
-		locs[i].first = ids[i] & mask;
-		locs[i].second = local_vid_t(ids[i] >> num_parts_log);
+		int part_id = ids[i] & mask;
+		locs[part_id].push_back(local_vid_t(ids[i] >> num_parts_log));
 	}
 }
 
 void range_graph_partitioner::map2loc(vertex_id_t ids[], int num,
-		vertex_loc_t locs[]) const
+		std::vector<local_vid_t> locs[], int num_parts) const
 {
+	assert(num_parts <= get_num_parts());
 	for (int i = 0; i < num; i++) {
 		vertex_id_t id = ids[i];
 		vertex_id_t shifted_id = id >> RANGE_SIZE_LOG;
-		locs[i].first = shifted_id & mask;
-		locs[i].second = local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
-				+ (id & RANGE_MASK));
+		int part_id = shifted_id & mask;
+		locs[part_id].push_back(local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
+					+ (id & RANGE_MASK)));
 	}
 }
 
 void modulo_graph_partitioner::map2loc(edge_seq_iterator &it,
-		vertex_loc_t locs[]) const
+		std::vector<local_vid_t> locs[], int num_parts) const
 {
-	int loc_idx = 0;
+	assert(num_parts <= get_num_parts());
 	PAGE_FOREACH(vertex_id_t, id, it) {
-		locs[loc_idx].first = id & mask;
-		locs[loc_idx].second = local_vid_t(id >> num_parts_log);
-		loc_idx++;
+		int part_id = id & mask;
+		locs[part_id].push_back(local_vid_t(id >> num_parts_log));
 	} PAGE_FOREACH_END
 }
 
 void range_graph_partitioner::map2loc(edge_seq_iterator &it,
-		vertex_loc_t locs[]) const
+		std::vector<local_vid_t> locs[], int num_parts) const
 {
-	int loc_idx = 0;
+	assert(num_parts <= get_num_parts());
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		vertex_id_t shifted_id = id >> RANGE_SIZE_LOG;
-		locs[loc_idx].first = shifted_id & mask;
-		locs[loc_idx].second = local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
-				+ (id & RANGE_MASK));
-		loc_idx++;
+		int part_id = shifted_id & mask;
+		locs[part_id].push_back(local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
+					+ (id & RANGE_MASK)));
 	} PAGE_FOREACH_END
 }

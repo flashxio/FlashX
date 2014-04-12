@@ -57,3 +57,34 @@ bool multicast_msg_sender::add_dest(local_vid_t id)
 	dest_list.add_dest(id);
 	return true;
 }
+
+int multicast_msg_sender::add_dests(local_vid_t ids[], int num)
+{
+	int orig_num = num;
+	while (num > 0) {
+		int num_allowed = min(buf.get_remaining_size(),
+				num * sizeof(ids[0].id)) / sizeof(ids[0].id);
+		if (num_allowed == 0) {
+			flush();
+
+			multicast_message *mmsg_template
+				= (multicast_message *) mmsg_temp_buf;
+			vertex_message *p = (vertex_message *) buf.add(*mmsg_template);
+			// We just add the buffer. We should be able to add the new message.
+			assert(p);
+			this->mmsg = multicast_message::convert2multicast(p);
+			dest_list = this->mmsg->get_dest_list();
+
+			num_allowed = min(buf.get_remaining_size(),
+					num * sizeof(ids[0].id)) / sizeof(ids[0].id);
+			assert(num_allowed > 0);
+		}
+		buf.inc_msg_size(num_allowed * sizeof(ids[0].id));
+		num_dests += num_allowed;
+		dest_list.add_dests(ids, num_allowed);
+		ids += num_allowed;
+		num -= num_allowed;
+		assert(num >= 0);
+	}
+	return orig_num;
+}

@@ -215,7 +215,7 @@ class worker_thread: public thread
 	// The number of vertices completed in the current level.
 	atomic_number<long> num_completed_vertices_in_level;
 
-	embedded_array<vertex_loc_t, 1024> vertex_loc_buf;
+	std::unique_ptr<std::vector<local_vid_t>[]> vid_bufs;
 
 	multicast_msg_sender *get_activate_sender(int thread_id) const {
 		return activate_senders[thread_id];

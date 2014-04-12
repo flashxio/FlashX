@@ -101,6 +101,10 @@ public:
 		return num_objs > 0;
 	}
 
+	int get_remaining_size() const {
+		return size() - curr_add_off;
+	}
+
 	template<class T>
 	int get_next(T *objs[], int num) {
 		int i;
@@ -366,6 +370,7 @@ public:
 
 	multicast_dest_list(multicast_message *msg);
 	void add_dest(local_vid_t id);
+	void add_dests(local_vid_t ids[], int num);
 	int get_num_dests() const;
 	local_vid_t get_dest(int idx) const;
 };
@@ -455,6 +460,14 @@ inline void multicast_dest_list::add_dest(local_vid_t id)
 	msg->size += sizeof(id.id);
 }
 
+inline void multicast_dest_list::add_dests(local_vid_t ids[], int num)
+{
+	assert(sizeof(ids[0]) == sizeof(ids[0].id));
+	memcpy(&dest_list[msg->u.num_dests], ids, sizeof(ids[0].id) * num);
+	msg->u.num_dests += num;
+	msg->size += sizeof(ids[0].id) * num;
+}
+
 inline int multicast_dest_list::get_num_dests() const
 {
 	return msg->u.num_dests;
@@ -515,6 +528,8 @@ public:
 		this->mmsg->serialize(mmsg_temp_buf, MMSG_BUF_SIZE);
 		dest_list = this->mmsg->get_dest_list();
 	}
+
+	int add_dests(local_vid_t ids[], int num);
 
 	bool add_dest(local_vid_t id);
 
