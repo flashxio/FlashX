@@ -486,6 +486,10 @@ void worker_thread::send_activation(edge_seq_iterator &it)
 
 void worker_thread::send_activation(vertex_id_t ids[], int num)
 {
+	// TODO we should do the same optimization as above.
+	// But currently, no application is using this method,
+	// the code path isn't tested. Let's disable it first.
+	assert(0);
 	graph->get_partitioner()->map2loc(ids, num, vid_bufs.get(),
 			graph->get_num_threads());
 	for (int i = 0; i < graph->get_num_threads(); i++) {
@@ -537,6 +541,10 @@ void worker_thread::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
 void worker_thread::multicast_msg(vertex_id_t ids[], int num,
 		const vertex_message &msg)
 {
+	// TODO we should do the same optimization as above.
+	// But currently, no application is using this method,
+	// the code path isn't tested. Let's disable it first.
+	assert(0);
 	if (num < graph->get_num_threads()) {
 		char msg_buf[msg.get_serialized_size()];
 		memcpy(msg_buf, &msg, msg.get_serialized_size());
