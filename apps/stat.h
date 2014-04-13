@@ -64,9 +64,6 @@ public:
 	log_histogram(int num_buckets): buckets(num_buckets) {
 		for (int i = 0; i < num_buckets; i++)
 			buckets[i] = log_hist_bucket(i);
-		printf("There are %d buckets for edges to cover [%ld, %ld)\n",
-				num_buckets, buckets.front().get_lower_bound(),
-				buckets.back().get_upper_bound());
 	}
 
 	log_hist_bucket &find_bucket(size_t v) {
