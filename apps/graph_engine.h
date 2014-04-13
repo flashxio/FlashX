@@ -211,6 +211,12 @@ public:
 		return vertices->get_vertex_info(id);
 	}
 
+	const vsize_t get_vertex_edges(vertex_id_t id) const {
+		in_mem_vertex_info info = get_vertex_info(id);
+		int vertex_header_size = get_vertex_header_size();
+		return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
+	}
+
 	void start(std::shared_ptr<vertex_filter> filter,
 			vertex_program::ptr prog = vertex_program::ptr());
 	void start(vertex_id_t ids[], int num,
