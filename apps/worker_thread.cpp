@@ -161,6 +161,8 @@ worker_thread::worker_thread(graph_engine *graph,
 {
 	vid_bufs = std::unique_ptr<std::vector<local_vid_t>[]>(
 			new std::vector<local_vid_t>[graph->get_num_threads()]);
+	vloc_size = graph->get_num_threads() * 2;
+	vertex_locs = std::unique_ptr<vertex_loc_t[]>(new vertex_loc_t[vloc_size]);
 	next_activated_vertices = new bitmap(graph->get_partitioner(
 				)->get_part_size(worker_id, graph->get_num_vertices()), node_id);
 	this->vprogram = std::move(prog);
@@ -449,6 +451,27 @@ void worker_thread::activate_vertex(vertex_id_t id)
 
 void worker_thread::send_activation(edge_seq_iterator &it)
 {
+	size_t num_dests = it.get_num_tot_entries();
+	if (num_dests == 0)
+		return;
+
+	// When there are very few destinations, this way is cheaper.
+	if (num_dests <= vloc_size) {
+		size_t ret = graph->get_partitioner()->map2loc(it, vertex_locs.get(),
+				vloc_size);
+		assert(ret == num_dests);
+		for (size_t i = 0; i < ret; i++) {
+			int part_id = vertex_locs[i].first;
+			// We are going to use the offset of a vertex in a partition as
+			// the ID of the vertex.
+			local_vid_t local_id = vertex_locs[i].second;
+			multicast_msg_sender *sender = get_activate_sender(part_id);
+			bool ret = sender->add_dest(local_id);
+			assert(ret);
+		}
+		return;
+	}
+
 	graph->get_partitioner()->map2loc(it, vid_bufs.get(),
 			graph->get_num_threads());
 	for (int i = 0; i < graph->get_num_threads(); i++) {

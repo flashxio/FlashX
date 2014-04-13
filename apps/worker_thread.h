@@ -216,6 +216,8 @@ class worker_thread: public thread
 	atomic_number<long> num_completed_vertices_in_level;
 
 	std::unique_ptr<std::vector<local_vid_t>[]> vid_bufs;
+	std::unique_ptr<vertex_loc_t[]> vertex_locs;
+	size_t vloc_size;
 
 	multicast_msg_sender *get_activate_sender(int thread_id) const {
 		return activate_senders[thread_id];

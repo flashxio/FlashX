@@ -111,3 +111,34 @@ void range_graph_partitioner::map2loc(edge_seq_iterator &it,
 					+ (id & RANGE_MASK)));
 	} PAGE_FOREACH_END
 }
+
+size_t modulo_graph_partitioner::map2loc(edge_seq_iterator &it,
+		vertex_loc_t locs[], size_t num) const
+{
+	size_t ret = 0;
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		if ((size_t) idx == num)
+			break;
+		vertex_loc_t loc(id & mask, local_vid_t(id >> num_parts_log));
+		locs[idx] = loc;
+		ret++;
+	} PAGE_FOREACH_END
+	return ret;
+}
+
+size_t range_graph_partitioner::map2loc(edge_seq_iterator &it,
+		vertex_loc_t locs[], size_t num) const
+{
+	size_t ret = 0;
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		if ((size_t) idx == num)
+			break;
+		vertex_id_t shifted_id = id >> RANGE_SIZE_LOG;
+		vertex_loc_t loc(shifted_id & mask,
+				local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
+					+ (id & RANGE_MASK)));
+		locs[idx] = loc;
+		ret++;
+	} PAGE_FOREACH_END
+	return ret;
+}

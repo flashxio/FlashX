@@ -57,6 +57,8 @@ public:
 	virtual void map2loc(vertex_id_t id, int &part_id, off_t &off) const = 0;
 	virtual void map2loc(vertex_id_t ids[], int num,
 			std::vector<local_vid_t> locs[], int num_parts) const = 0;
+	virtual size_t map2loc(edge_seq_iterator &,
+			vertex_loc_t locs[], size_t size) const = 0;
 	virtual void map2loc(edge_seq_iterator &, std::vector<local_vid_t> locs[],
 			int num_parts) const = 0;
 	virtual void loc2map(int part_id, off_t off, vertex_id_t &id) const = 0;
@@ -91,6 +93,8 @@ public:
 			std::vector<local_vid_t> locs[], int num_parts) const;
 	void map2loc(edge_seq_iterator &, std::vector<local_vid_t> locs[],
 			int num_parts) const;
+	size_t map2loc(edge_seq_iterator &,
+			vertex_loc_t locs[], size_t size) const;
 
 	void loc2map(int part_id, off_t off, vertex_id_t &id) const {
 		id = (off << num_parts_log) + part_id;
@@ -139,6 +143,8 @@ public:
 			std::vector<local_vid_t> locs[], int num_parts) const;
 	virtual void map2loc(edge_seq_iterator &, std::vector<local_vid_t> locs[],
 			int num_parts) const;
+	virtual size_t map2loc(edge_seq_iterator &,
+			vertex_loc_t locs[], size_t num) const;
 
 	virtual void loc2map(int part_id, off_t off, vertex_id_t &id) const {
 		off_t local_range_id = off >> RANGE_SIZE_LOG;
