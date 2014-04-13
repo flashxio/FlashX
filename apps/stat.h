@@ -90,7 +90,9 @@ public:
 	}
 
 	void print(FILE *f) const {
-		for (int i = 0; i < get_num_buckets(); i++) {
+		int non_empty = get_num_buckets() - 1;
+		for (; non_empty > 0 && get_bucket(non_empty).get_count() == 0; non_empty--);
+		for (int i = 0; i <= non_empty; i++) {
 			fprintf(f, "[%ld, %ld): %ld\n", get_bucket(i).get_lower_bound(),
 					get_bucket(i).get_upper_bound(),
 					get_bucket(i).get_count());
