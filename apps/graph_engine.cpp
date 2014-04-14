@@ -320,13 +320,18 @@ void graph_engine::init_threads(vertex_program::ptr prog)
 	}
 }
 
-void graph_engine::start(vertex_id_t ids[], int num, vertex_program::ptr prog)
+void graph_engine::start(vertex_id_t ids[], int num,
+		vertex_initiator::ptr init, vertex_program::ptr prog)
 {
 	init_threads(std::move(prog));
 	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
+		if (init) {
+			compute_vertex &v = this->get_vertex(ids[i]);
+			init->init(v);
+		}
 		int idx = get_partitioner()->map(ids[i]);
 		start_vertices[idx].push_back(ids[i]);
 	}

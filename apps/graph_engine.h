@@ -138,6 +138,13 @@ public:
 	virtual bool keep(compute_vertex &v) = 0;
 };
 
+class vertex_initiator
+{
+public:
+	typedef std::shared_ptr<vertex_initiator> ptr;
+	virtual void init(compute_vertex &) = 0;
+};
+
 class worker_thread;
 
 class graph_engine
@@ -220,6 +227,7 @@ public:
 	void start(std::shared_ptr<vertex_filter> filter,
 			vertex_program::ptr prog = vertex_program::ptr());
 	void start(vertex_id_t ids[], int num,
+			vertex_initiator::ptr init = vertex_initiator::ptr(),
 			vertex_program::ptr prog = vertex_program::ptr());
 	void start_all(vertex_program::ptr prog = vertex_program::ptr());
 
