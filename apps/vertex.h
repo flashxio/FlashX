@@ -506,6 +506,9 @@ public:
 	}
 };
 
+typedef page_byte_array::const_iterator<vertex_id_t> edge_iterator;
+typedef page_byte_array::seq_const_iterator<vertex_id_t>  edge_seq_iterator;
+
 /**
  * This vertex represents a directed vertex stored in the page cache.
  */

@@ -21,6 +21,7 @@
 #include <google/profiler.h>
 
 #include <vector>
+#include <unordered_map>
 
 #include "thread.h"
 #include "io_interface.h"
@@ -31,59 +32,116 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-class bfs_vertex: public compute_directed_vertex
+class bitmap
 {
-	enum {
-		VISITED,
-	};
-
-	atomic_flags<int> flags;
+	uint32_t v;
 public:
-	bfs_vertex() {
+	bitmap() {
+		v = 0;
 	}
 
-	bfs_vertex(vertex_id_t id,
-			const vertex_index *index): compute_directed_vertex(id, index) {
+	void set(int bit) {
+		v |= 0x1U << bit;
 	}
 
-	bool has_visited() const {
-		return flags.test_flag(VISITED);
+	bitmap &operator|=(const bitmap &map) {
+		v |= map.v;
+		return *this;
 	}
 
-	bool set_visited(bool visited) {
-		if (visited)
-			return flags.set_flag(VISITED);
-		else
-			return flags.clear_flag(VISITED);
+	bool operator!=(const bitmap &map) const {
+		return v != map.v;
+	}
+
+	uint32_t get_value() const {
+		return v;
+	}
+};
+
+class diameter_message: public vertex_message
+{
+	bitmap bfs_map;
+public:
+	diameter_message(bitmap bfs_map): vertex_message(
+			sizeof(diameter_message), true) {
+		this->bfs_map = bfs_map;
+	}
+
+	const bitmap &get_bfs_map() const {
+		return bfs_map;
+	}
+};
+
+class diameter_vertex: public compute_vertex
+{
+	bitmap bfs_map;
+	bool updated;
+public:
+	diameter_vertex() {
+		updated = false;
+	}
+
+	diameter_vertex(vertex_id_t id,
+			const vertex_index *index): compute_vertex(id, index) {
+		updated = false;
+	}
+
+	void init(int bfs_id) {
+		bfs_map.set(bfs_id);
+		updated = true;
+		printf("v%u gets %x\n", get_id(), bfs_map.get_value());
 	}
 
 	void run(graph_engine &graph) {
-		if (!has_visited()) {
-			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
-			request_partial_vertices(&req, 1);
+		if (updated) {
+			updated = false;
+			vertex_id_t id = get_id();
+			request_vertices(&id, 1);
 		}
 	}
 
 	void run(graph_engine &graph, const page_vertex &vertex);
 
 	void run_on_message(graph_engine &, const vertex_message &msg) {
+		const diameter_message &dmsg = (const diameter_message &) msg;
+		bitmap old_map = bfs_map;
+		bfs_map |= dmsg.get_bfs_map();
+		if (bfs_map != old_map)
+			updated = true;
 	}
 };
 
-void bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void diameter_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
-	assert(!has_visited());
-	set_visited(true);
-
-	int num_dests = vertex.get_num_edges(OUT_EDGE);
+	int num_dests = vertex.get_num_edges(BOTH_EDGES);
 	if (num_dests == 0)
 		return;
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
-	graph.activate_vertices(it);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
+	diameter_message msg(bfs_map);
+	graph.multicast_msg(it, msg);
 }
+
+class diameter_initiator: public vertex_initiator
+{
+	std::unordered_map<vertex_id_t, int> start_vertices;
+public:
+	diameter_initiator(std::vector<vertex_id_t> &vertices) {
+		for (size_t i = 0; i < vertices.size(); i++) {
+			start_vertices.insert(std::pair<vertex_id_t, int>(vertices[i], i));
+		}
+	}
+
+	void init(compute_vertex &v) {
+		diameter_vertex &dv = (diameter_vertex &) v;
+		std::unordered_map<vertex_id_t, int>::const_iterator it
+			= start_vertices.find(v.get_id());
+		assert(it != start_vertices.end());
+		dv.init(it->second);
+	}
+};
 
 void int_handler(int sig_num)
 {
@@ -95,9 +153,10 @@ void int_handler(int sig_num)
 void print_usage()
 {
 	fprintf(stderr,
-			"bfs [options] conf_file graph_file index_file start_vertex\n");
+			"diameter_estimator [options] conf_file graph_file index_file\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-p: preload the graph\n");
+	fprintf(stderr, "-n: the number of paprallel BFS\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -108,7 +167,8 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:p")) != -1) {
+	size_t num_bfs = 1;
+	while ((opt = getopt(argc, argv, "c:pn:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -118,6 +178,11 @@ int main(int argc, char *argv[])
 			case 'p':
 				preload = true;
 				break;
+			case 'n':
+				num_bfs = atoi(optarg);
+				assert(num_bfs < sizeof(bitmap) * 8);
+				num_opts++;
+				break;
 			default:
 				print_usage();
 		}
@@ -125,7 +190,7 @@ int main(int argc, char *argv[])
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
 
-	if (argc < 4) {
+	if (argc < 3) {
 		print_usage();
 		exit(-1);
 	}
@@ -133,7 +198,6 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[0];
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
-	vertex_id_t start_vertex = atoi(argv[3]);
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
@@ -143,7 +207,7 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<bfs_vertex>::create(index_file,
+	graph_index *index = NUMA_graph_index<diameter_vertex>::create(index_file,
 			graph_conf.get_num_threads(), params.get_num_nodes());
 
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
@@ -157,20 +221,19 @@ int main(int argc, char *argv[])
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph->start(&start_vertex, 1);
+	std::vector<vertex_id_t> start_vertices;
+	while (start_vertices.size() < num_bfs) {
+		vertex_id_t id = random() % graph->get_max_vertex_id();
+		// We should skip the empty vertices.
+		if (graph->get_vertex_edges(id) == 0)
+			continue;
+
+		start_vertices.push_back(id);
+	}
+	graph->start(start_vertices.data(), start_vertices.size(),
+			vertex_initiator::ptr(new diameter_initiator(start_vertices)));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-
-	NUMA_graph_index<bfs_vertex>::const_iterator it
-		= ((NUMA_graph_index<bfs_vertex> *) index)->begin();
-	NUMA_graph_index<bfs_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<bfs_vertex> *) index)->end();
-	int num_visited = 0;
-	for (; it != end_it; ++it) {
-		const bfs_vertex &v = (const bfs_vertex &) *it;
-		if (v.has_visited())
-			num_visited++;
-	}
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -178,6 +241,5 @@ int main(int argc, char *argv[])
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
 	destroy_io_system();
-	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
-			(unsigned long) start_vertex, num_visited, time_diff(start, end));
+	printf("It takes %f seconds\n", time_diff(start, end));
 }

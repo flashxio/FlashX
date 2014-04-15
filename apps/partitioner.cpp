@@ -66,3 +66,79 @@ vertex_id_t range_graph_partitioner::get_part_end(int part_id,
 		vid_end += min(num, RANGE_SIZE);
 	return vid_end;
 }
+
+void modulo_graph_partitioner::map2loc(vertex_id_t ids[], int num,
+		std::vector<local_vid_t> locs[], int num_parts) const
+{
+	assert(num_parts <= get_num_parts());
+	for (int i = 0; i < num; i++) {
+		int part_id = ids[i] & mask;
+		locs[part_id].push_back(local_vid_t(ids[i] >> num_parts_log));
+	}
+}
+
+void range_graph_partitioner::map2loc(vertex_id_t ids[], int num,
+		std::vector<local_vid_t> locs[], int num_parts) const
+{
+	assert(num_parts <= get_num_parts());
+	for (int i = 0; i < num; i++) {
+		vertex_id_t id = ids[i];
+		vertex_id_t shifted_id = id >> RANGE_SIZE_LOG;
+		int part_id = shifted_id & mask;
+		locs[part_id].push_back(local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
+					+ (id & RANGE_MASK)));
+	}
+}
+
+void modulo_graph_partitioner::map2loc(edge_seq_iterator &it,
+		std::vector<local_vid_t> locs[], int num_parts) const
+{
+	assert(num_parts <= get_num_parts());
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		int part_id = id & mask;
+		locs[part_id].push_back(local_vid_t(id >> num_parts_log));
+	} PAGE_FOREACH_END
+}
+
+void range_graph_partitioner::map2loc(edge_seq_iterator &it,
+		std::vector<local_vid_t> locs[], int num_parts) const
+{
+	assert(num_parts <= get_num_parts());
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		vertex_id_t shifted_id = id >> RANGE_SIZE_LOG;
+		int part_id = shifted_id & mask;
+		locs[part_id].push_back(local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
+					+ (id & RANGE_MASK)));
+	} PAGE_FOREACH_END
+}
+
+size_t modulo_graph_partitioner::map2loc(edge_seq_iterator &it,
+		vertex_loc_t locs[], size_t num) const
+{
+	size_t ret = 0;
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		if ((size_t) idx == num)
+			break;
+		vertex_loc_t loc(id & mask, local_vid_t(id >> num_parts_log));
+		locs[idx] = loc;
+		ret++;
+	} PAGE_FOREACH_END
+	return ret;
+}
+
+size_t range_graph_partitioner::map2loc(edge_seq_iterator &it,
+		vertex_loc_t locs[], size_t num) const
+{
+	size_t ret = 0;
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		if ((size_t) idx == num)
+			break;
+		vertex_id_t shifted_id = id >> RANGE_SIZE_LOG;
+		vertex_loc_t loc(shifted_id & mask,
+				local_vid_t(((shifted_id >> num_parts_log) << RANGE_SIZE_LOG)
+					+ (id & RANGE_MASK)));
+		locs[idx] = loc;
+		ret++;
+	} PAGE_FOREACH_END
+	return ret;
+}

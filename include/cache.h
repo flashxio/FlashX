@@ -629,6 +629,10 @@ public:
 			data_end = (T *) (((char *) pg->get_data()) + byte_end);
 		}
 
+		int get_num_entries() const {
+			return data_end - data;
+		}
+
 		bool has_next() const {
 			return data < data_end;
 		}
@@ -659,6 +663,7 @@ public:
 				off_t byte_end) {
 			this->arr = arr;
 			assert((size_t) byte_end <= arr->get_size());
+			assert(byte_off < byte_end);
 
 			off = arr->get_offset_in_first_page() + byte_off;
 			end = arr->get_offset_in_first_page() + byte_end;
@@ -692,6 +697,14 @@ public:
 			}
 		}
 
+		int get_num_tot_entries() const {
+			return (end - off) / sizeof(T);
+		}
+
+		int get_num_entries_in_page() const {
+			return curr_page_it.get_num_entries();
+		}
+
 		T next() {
 			return curr_page_it.next();
 		}
@@ -700,6 +713,14 @@ public:
 			return curr_page_it.curr();
 		}
 	};
+
+#define PAGE_FOREACH(type, v, it)					\
+	for (int idx = 0; (it).has_next();) {			\
+		for (int i = 0; i < (it).get_num_entries_in_page(); i++, idx++) {	\
+			type v = it.next();
+
+
+#define PAGE_FOREACH_END }}
 
 	template<class T>
 	class iterator: public std::iterator<std::random_access_iterator_tag, T>

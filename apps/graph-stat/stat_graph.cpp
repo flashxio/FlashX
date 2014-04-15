@@ -30,6 +30,7 @@
 #include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "stat.h"
 
 class stat_vertex: public compute_vertex
 {
@@ -75,55 +76,6 @@ public:
 };
 
 const int POWER_CONST = 10;
-
-class hist_bucket
-{
-	size_t lower_bound;
-	size_t upper_bound;
-	size_t count;
-public:
-	hist_bucket() {
-		count = 0;
-		lower_bound = 0;
-		upper_bound = INT_MAX;
-	}
-
-	hist_bucket(int idx) {
-		count = 0;
-		lower_bound = pow(10, idx);
-		if (idx == 0)
-			lower_bound = 0;
-		upper_bound = pow(10, idx + 1);
-	}
-
-	size_t get_lower_bound() const {
-		return lower_bound;
-	}
-
-	size_t get_upper_bound() const {
-		return upper_bound;
-	}
-
-	size_t get_count() const {
-		return count;
-	}
-
-	void inc_count(size_t num) {
-		count += num;
-	}
-};
-
-hist_bucket &find_bucket(std::vector<hist_bucket> &buckets, size_t v)
-{
-	for (size_t i = 0; i < buckets.size(); i++)
-		if (buckets[i].get_lower_bound() <= v
-				&& v < buckets[i].get_upper_bound())
-			return buckets[i];
-	printf("can't find a bucket for %ld. All buckets cover [%ld, %ld).\n",
-			v, buckets.front().get_lower_bound(),
-			buckets.back().get_upper_bound());
-	assert(0);
-}
 
 int main(int argc, char *argv[])
 {
@@ -230,62 +182,29 @@ int main(int argc, char *argv[])
 	it = index->begin();
 	end_it = index->end();
 	int num_buckets = ceil(log(max_num_edges) / log(POWER_CONST));
-	std::vector<hist_bucket> hist_edges(num_buckets);
-	for (int i = 0; i < num_buckets; i++)
-		hist_edges[i] = hist_bucket(i);
-	printf("There are %d buckets for edges to cover [%ld, %ld)\n",
-			num_buckets, hist_edges.front().get_lower_bound(),
-			hist_edges.back().get_upper_bound());
-
+	log_histogram hist_edges(num_buckets);
 	num_buckets = ceil(log(max_num_in_edges) / log(POWER_CONST));
-	std::vector<hist_bucket> hist_in_edges(num_buckets);
-	for (int i = 0; i < num_buckets; i++)
-		hist_in_edges[i] = hist_bucket(i);
-	printf("There are %d buckets for in-edges to cover [%ld, %ld)\n",
-			num_buckets, hist_in_edges.front().get_lower_bound(),
-			hist_in_edges.back().get_upper_bound());
-
+	log_histogram hist_in_edges(num_buckets);
 	num_buckets = ceil(log(max_num_out_edges) / log(POWER_CONST));
-	std::vector<hist_bucket> hist_out_edges(num_buckets);
-	for (int i = 0; i < num_buckets; i++)
-		hist_out_edges[i] = hist_bucket(i);
-	printf("There are %d buckets for out-edges to cover [%ld, %ld)\n",
-			num_buckets, hist_out_edges.front().get_lower_bound(),
-			hist_out_edges.back().get_upper_bound());
+	log_histogram hist_out_edges(num_buckets);
 
 	for (; it != end_it; ++it) {
 		const stat_vertex &v = (const stat_vertex &) *it;
 		if (directed) {
-			find_bucket(hist_edges,
-					v.get_num_edges(edge_type::BOTH_EDGES)).inc_count(1);
-			find_bucket(hist_in_edges,
-					v.get_num_edges(edge_type::IN_EDGE)).inc_count(1);
-			find_bucket(hist_out_edges,
-					v.get_num_edges(edge_type::OUT_EDGE)).inc_count(1);
+			hist_edges.add_value(v.get_num_edges(edge_type::BOTH_EDGES));
+			hist_in_edges.add_value(v.get_num_edges(edge_type::IN_EDGE));
+			hist_out_edges.add_value(v.get_num_edges(edge_type::OUT_EDGE));
 		}
-		else {
-			find_bucket(hist_edges,
-					v.get_num_edges(edge_type::IN_EDGE)).inc_count(1);
-		}
+		else
+			hist_edges.add_value(v.get_num_edges(edge_type::IN_EDGE));
 	}
 	printf("edge histogram\n");
-	for (size_t i = 0; i < hist_edges.size(); i++) {
-		printf("[%ld, %ld): %ld\n", hist_edges[i].get_lower_bound(),
-				hist_edges[i].get_upper_bound(), hist_edges[i].get_count());
-	}
+	hist_edges.print(stdout);
 	if (directed) {
 		printf("in-edges histogram: \n");
-		for (size_t i = 0; i < hist_in_edges.size(); i++) {
-			printf("[%ld, %ld): %ld\n", hist_in_edges[i].get_lower_bound(),
-					hist_in_edges[i].get_upper_bound(),
-					hist_in_edges[i].get_count());
-		}
+		hist_in_edges.print(stdout);
 		printf("out-edges histogram: \n");
-		for (size_t i = 0; i < hist_out_edges.size(); i++) {
-			printf("[%ld, %ld): %ld\n", hist_out_edges[i].get_lower_bound(),
-					hist_out_edges[i].get_upper_bound(),
-					hist_out_edges[i].get_count());
-		}
+		hist_out_edges.print(stdout);
 	}
 	destroy_io_system();
 }

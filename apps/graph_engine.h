@@ -138,6 +138,13 @@ public:
 	virtual bool keep(compute_vertex &v) = 0;
 };
 
+class vertex_initiator
+{
+public:
+	typedef std::shared_ptr<vertex_initiator> ptr;
+	virtual void init(compute_vertex &) = 0;
+};
+
 class worker_thread;
 
 class graph_engine
@@ -173,13 +180,6 @@ class graph_engine
 		}
 	}
 
-	/**
-	 * This method returns the message sender of the current thread that
-	 * sends messages to the thread with the specified thread id.
-	 */
-	simple_msg_sender *get_msg_sender(int thread_id) const;
-	multicast_msg_sender *get_multicast_sender(int thread_id) const;
-	multicast_msg_sender *get_activate_sender(int thread_id) const;
 	void init_threads(vertex_program::ptr prog);
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
@@ -201,17 +201,33 @@ public:
 		return vertices->get_vertex(id);
 	}
 
+	compute_vertex &get_vertex(int part_id, local_vid_t id) {
+		return vertices->get_vertex(part_id, id);
+	}
+
 	size_t get_vertices(const vertex_id_t ids[], int num, compute_vertex *v_buf[]) {
 		return vertices->get_vertices(ids, num, v_buf);
+	}
+
+	size_t get_vertices(int part_id, const local_vid_t ids[], int num,
+			compute_vertex *v_buf[]) {
+		return vertices->get_vertices(part_id, ids, num, v_buf);
 	}
 
 	const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
 		return vertices->get_vertex_info(id);
 	}
 
+	const vsize_t get_vertex_edges(vertex_id_t id) const {
+		in_mem_vertex_info info = get_vertex_info(id);
+		int vertex_header_size = get_vertex_header_size();
+		return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
+	}
+
 	void start(std::shared_ptr<vertex_filter> filter,
 			vertex_program::ptr prog = vertex_program::ptr());
 	void start(vertex_id_t ids[], int num,
+			vertex_initiator::ptr init = vertex_initiator::ptr(),
 			vertex_program::ptr prog = vertex_program::ptr());
 	void start_all(vertex_program::ptr prog = vertex_program::ptr());
 
@@ -224,14 +240,8 @@ public:
 	/**
 	 * Activate vertices that may be processed in the next level.
 	 */
-	void activate_vertices(vertex_id_t ids[], int num) {
-		for (int i = 0; i < num; i++) {
-			int part_id = get_partitioner()->map(ids[i]);
-			multicast_msg_sender *sender = get_activate_sender(part_id);
-			bool ret = sender->add_dest(ids[i]);
-			assert(ret);
-		}
-	}
+	void activate_vertices(vertex_id_t ids[], int num);
+	void activate_vertices(edge_seq_iterator &it);
 
 	void activate_vertex(vertex_id_t vertex) {
 		activate_vertices(&vertex, 1);
@@ -276,42 +286,10 @@ public:
 		return factory->get_file_id();
 	}
 
-	template<class T>
-	void multicast_msg(vertex_id_t ids[], int num, const T &msg) {
-		if (num < get_num_threads()) {
-			for (int i = 0; i < num; i++) {
-				T local_msg = msg;
-				send_msg(ids[i], local_msg);
-			}
-			return;
-		}
+	void multicast_msg(vertex_id_t ids[], int num, const vertex_message &msg);
+	void multicast_msg(edge_seq_iterator &it, vertex_message &msg);
 
-		multicast_msg_sender *senders[this->get_num_threads()];
-		for (int i = 0; i < this->get_num_threads(); i++) {
-			senders[i] = get_multicast_sender(i);
-			senders[i]->init(msg);
-		}
-		for (int i = 0; i < num; i++) {
-			int part_id = get_partitioner()->map(ids[i]);
-			multicast_msg_sender *sender = senders[part_id];
-			bool ret = sender->add_dest(ids[i]);
-			assert(ret);
-		}
-		// Now we have multicast the message, we need to notify all senders
-		// of the end of multicast.
-		for (int i = 0; i < this->get_num_threads(); i++) {
-			multicast_msg_sender *sender = senders[i];
-			sender->end_multicast();
-		}
-	}
-
-	template<class T>
-	void send_msg(vertex_id_t dest, T &msg) {
-		vertex_id_t id = dest;
-		simple_msg_sender *sender = get_msg_sender(get_partitioner()->map(id));
-		msg.set_dest(dest);
-		sender->send_cached(msg);
-	}
+	void send_msg(vertex_id_t dest, vertex_message &msg);
 
 	ext_mem_vertex_interpreter &get_vertex_interpreter() const {
 		return *interpreter;

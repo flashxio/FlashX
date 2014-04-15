@@ -23,6 +23,7 @@
 #include "slab_allocator.h"
 
 #include "vertex.h"
+#include "partitioner.h"
 
 class message
 {
@@ -98,6 +99,10 @@ public:
 
 	bool has_next() const {
 		return num_objs > 0;
+	}
+
+	int get_remaining_size() const {
+		return size() - curr_add_off;
 	}
 
 	template<class T>
@@ -311,8 +316,8 @@ public:
 		assert(size % 4 == 0);
 	}
 
-	void set_dest(vertex_id_t id) {
-		this->u.dest = id;
+	void set_dest(local_vid_t id) {
+		this->u.dest = id.id;
 	}
 
 	bool is_activation_msg() const {
@@ -327,8 +332,8 @@ public:
 		return multicast;
 	}
 
-	vertex_id_t get_dest() const {
-		return u.dest;
+	local_vid_t get_dest() const {
+		return local_vid_t(u.dest);
 	}
 
 	int get_serialized_size() const {
@@ -364,9 +369,10 @@ public:
 	}
 
 	multicast_dest_list(multicast_message *msg);
-	void add_dest(vertex_id_t id);
+	void add_dest(local_vid_t id);
+	void add_dests(local_vid_t ids[], int num);
 	int get_num_dests() const;
-	vertex_id_t get_dest(int idx) const;
+	local_vid_t get_dest(int idx) const;
 };
 
 class multicast_message: public vertex_message
@@ -422,6 +428,15 @@ public:
 		return size;
 	}
 
+	/**
+	 * This is the body size of a multicast message.
+	 * The destination list is excluded, but it includes the header
+	 * of vertex_message.
+	 */
+	int get_body_size() const {
+		return get_serialized_size() - get_num_dests() * sizeof(vertex_id_t);
+	}
+
 	friend class multicast_dest_list;
 };
 
@@ -439,10 +454,18 @@ inline multicast_dest_list::multicast_dest_list(multicast_message *msg)
 	dest_list = msg->get_dest_begin();
 }
 
-inline void multicast_dest_list::add_dest(vertex_id_t id)
+inline void multicast_dest_list::add_dest(local_vid_t id)
 {
-	dest_list[msg->u.num_dests++] = id;
-	msg->size += sizeof(id);
+	dest_list[msg->u.num_dests++] = id.id;
+	msg->size += sizeof(id.id);
+}
+
+inline void multicast_dest_list::add_dests(local_vid_t ids[], int num)
+{
+	assert(sizeof(ids[0]) == sizeof(ids[0].id));
+	memcpy(&dest_list[msg->u.num_dests], ids, sizeof(ids[0].id) * num);
+	msg->u.num_dests += num;
+	msg->size += sizeof(ids[0].id) * num;
 }
 
 inline int multicast_dest_list::get_num_dests() const
@@ -450,9 +473,9 @@ inline int multicast_dest_list::get_num_dests() const
 	return msg->u.num_dests;
 }
 
-inline vertex_id_t multicast_dest_list::get_dest(int idx) const
+inline local_vid_t multicast_dest_list::get_dest(int idx) const
 {
-	return dest_list[idx];
+	return local_vid_t(dest_list[idx]);
 }
 
 class multicast_msg_sender
@@ -488,23 +511,7 @@ public:
 		delete s;
 	}
 
-	int flush() {
-		if (buf.is_empty()) {
-			assert(mmsg == NULL);
-			return 0;
-		}
-		this->mmsg = NULL;
-		this->num_dests = 0;
-		dest_list.clear();
-		queue->add(&buf, 1);
-		if (buf.get_num_objs() > 1)
-			printf("there are %d objs in the msg\n", buf.get_num_objs());
-		// We have to make sure all messages have been sent to the queue.
-		assert(buf.is_empty());
-		message tmp(alloc);
-		buf = tmp;
-		return 1;
-	}
+	int flush();
 
 	template<class T>
 	void init(const T &msg) {
@@ -522,24 +529,9 @@ public:
 		dest_list = this->mmsg->get_dest_list();
 	}
 
-	bool add_dest(vertex_id_t id) {
-		int ret = buf.inc_msg_size(sizeof(id));
-		if (ret == 0) {
-			flush();
+	int add_dests(local_vid_t ids[], int num);
 
-			multicast_message *mmsg_template
-				= (multicast_message *) mmsg_temp_buf;
-			vertex_message *p = (vertex_message *) buf.add(*mmsg_template);
-			// We just add the buffer. We should be able to add the new message.
-			assert(p);
-			this->mmsg = multicast_message::convert2multicast(p);
-			dest_list = this->mmsg->get_dest_list();
-			buf.inc_msg_size(sizeof(id));
-		}
-		num_dests++;
-		dest_list.add_dest(id);
-		return true;
-	}
+	bool add_dest(local_vid_t id);
 
 	void end_multicast() {
 		if (num_dests == 0) {

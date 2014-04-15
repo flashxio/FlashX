@@ -63,15 +63,16 @@ public:
 
 void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
-	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex.get_neigh_end(BOTH_EDGES);
 	long local_sum = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(BOTH_EDGES); it != end_it; ++it) {
-		vertex_id_t id = *it;
+	int num_dests = vertex.get_num_edges(BOTH_EDGES);
+	if (num_dests == 0)
+		return;
+
+	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
+	PAGE_FOREACH(vertex_id_t, id, it) {
 		test_vertex &v = (test_vertex &) graph.get_vertex(id);
 		local_sum += v.sum;
-	}
+	} PAGE_FOREACH_END
 	this->sum = local_sum;
 }
 
@@ -132,6 +133,7 @@ int main(int argc, char *argv[])
 			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
 	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
+	graph->preload_graph();
 	printf("test starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

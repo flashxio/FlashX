@@ -300,24 +300,6 @@ graph_engine::~graph_engine()
 		delete logger;
 }
 
-multicast_msg_sender *graph_engine::get_activate_sender(int thread_id) const
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	return curr->get_activate_sender(thread_id);
-}
-
-multicast_msg_sender *graph_engine::get_multicast_sender(int thread_id) const
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	return curr->get_multicast_sender(thread_id);
-}
-
-simple_msg_sender *graph_engine::get_msg_sender(int thread_id) const
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	return curr->get_msg_sender(thread_id);
-}
-
 void graph_engine::init_threads(vertex_program::ptr prog)
 {
 	// Prepare the worker threads.
@@ -338,13 +320,18 @@ void graph_engine::init_threads(vertex_program::ptr prog)
 	}
 }
 
-void graph_engine::start(vertex_id_t ids[], int num, vertex_program::ptr prog)
+void graph_engine::start(vertex_id_t ids[], int num,
+		vertex_initiator::ptr init, vertex_program::ptr prog)
 {
 	init_threads(std::move(prog));
 	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
+		if (init) {
+			compute_vertex &v = this->get_vertex(ids[i]);
+			init->init(v);
+		}
 		int idx = get_partitioner()->map(ids[i]);
 		start_vertices[idx].push_back(ids[i]);
 	}
@@ -445,6 +432,37 @@ void graph_engine::preload_graph()
 	printf("successfully preload\n");
 }
 
+void graph_engine::activate_vertices(vertex_id_t ids[], int num)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->send_activation(ids, num);
+}
+
+void graph_engine::activate_vertices(edge_seq_iterator &it)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->send_activation(it);
+}
+
+void graph_engine::multicast_msg(vertex_id_t ids[], int num,
+		const vertex_message &msg)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->multicast_msg(ids, num, msg);
+}
+
+void graph_engine::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->multicast_msg(it, msg);
+}
+
+void graph_engine::send_msg(vertex_id_t dest, vertex_message &msg)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->send_msg(dest, msg);
+}
+
 vertex_index *load_vertex_index(const std::string &index_file)
 {
 	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;
@@ -515,8 +533,8 @@ vertex_index *load_vertex_index(const std::string &index_file)
 	return index;
 }
 
-size_t graph_get_vertices(graph_engine &graph, const vertex_id_t ids[],
-		int num_ids, compute_vertex *v_buf[])
+size_t graph_get_vertices(graph_engine &graph, const worker_thread &t,
+		const local_vid_t ids[], int num_ids, compute_vertex *v_buf[])
 {
-	return graph.get_vertices(ids, num_ids, v_buf);
+	return graph.get_vertices(t.get_worker_id(), ids, num_ids, v_buf);
 }

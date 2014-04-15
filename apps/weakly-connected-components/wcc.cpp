@@ -31,6 +31,7 @@
 #include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "stat.h"
 
 atomic_number<long> num_visits;
 
@@ -111,17 +112,13 @@ void wcc_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex.get_neigh_end(BOTH_EDGES);
-	stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(BOTH_EDGES));
-	int num_dests = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(BOTH_EDGES); it != end_it; ++it) {
-		vertex_id_t id = *it;
-		dest_buf[num_dests++] = id;
-	}
+	int num_dests = vertex.get_num_edges(BOTH_EDGES);
+	if (num_dests == 0)
+		return;
+
+	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
 	component_message msg(component_id);
-	graph.multicast_msg(dest_buf.data(), num_dests, msg);
+	graph.multicast_msg(it, msg);
 }
 
 void int_handler(int sig_num)
@@ -215,8 +212,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 
 	typedef std::unordered_map<vertex_id_t, size_t> comp_map_t;
 	comp_map_t comp_counts;
@@ -238,16 +233,39 @@ int main(int argc, char *argv[])
 	}
 	printf("There are %ld components\n", comp_counts.size());
 
-	FILE *f = stdout;
 	if (!output_file.empty()) {
-		f = fopen(output_file.c_str(), "w");
+		FILE *f = fopen(output_file.c_str(), "w");
 		assert(f);
-	}
-	BOOST_FOREACH(comp_map_t::value_type &p, comp_counts) {
-		if (p.second >= min_comp_size)
-			fprintf(f, "component %u: %ld\n", p.first, p.second);
-	}
-	if (!output_file.empty()) {
+		std::unordered_map<vertex_id_t, log_histogram> comp_hist_map;
+		BOOST_FOREACH(comp_map_t::value_type &p, comp_counts) {
+			if (p.second >= min_comp_size) {
+				comp_hist_map.insert(std::pair<vertex_id_t, log_histogram>(p.first,
+							log_histogram(10)));
+				fprintf(f, "component %u: %ld\n", p.first, p.second);
+			}
+		}
+
+		it = index->begin();
+		end_it = index->end();
+		for (; it != end_it; ++it) {
+			const wcc_vertex &v = (const wcc_vertex &) *it;
+			if (v.is_empty())
+				continue;
+
+			std::unordered_map<vertex_id_t, log_histogram>::iterator map_it
+				= comp_hist_map.find(v.get_component_id());
+			if (map_it != comp_hist_map.end())
+				map_it->second.add_value(graph->get_vertex_edges(v.get_id()));
+		}
+		for (std::unordered_map<vertex_id_t, log_histogram>::iterator it
+				= comp_hist_map.begin(); it != comp_hist_map.end(); it++) {
+			fprintf(f, "comp %u:\n", it->first);
+			it->second.print(f);
+		}
+
 		fclose(f);
 	}
+
+	graph_engine::destroy(graph);
+	destroy_io_system();
 }
