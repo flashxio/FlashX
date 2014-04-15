@@ -21,19 +21,19 @@ graph_index=$2
 #graph=page-graph-v3
 #graph_index=page-graph-index-v3
 
-for CACHE_SIZE in 4 16 64 256
+for CACHE_SIZE in 16 64 256 #4
 do
   echo "Running bfs with cache size = $CACHE_SIZE... "
   ./sleep_top.sh graph-bfs $outdir/bfs_"$CACHE_SIZE"gb_cache.out &
   apps/graph-bfs/graph-bfs $conf $graph $graph_index 0 -c "cache_size="$CACHE_SIZE"G enable_elevator=" 
   kill `pgrep sleep_top` 
   kill_tops
-  
-  echo "Running triangle counting with cache size = $CACHE_SIZE... "
-  ./sleep_top.sh triangle-counting $outdir/tri_"$CACHE_SIZE"gb_cache.out &
-  apps/triangle-counting/triangle-counting $conf $graph $graph_index -c "cache_size="$CACHE_SIZE"G"
-  kill `pgrep sleep_top` 
-  kill_tops
+
+  #echo "Running triangle counting with cache size = $CACHE_SIZE... "
+  #./sleep_top.sh triangle-counting $outdir/tri_"$CACHE_SIZE"gb_cache.out &
+  #apps/triangle-counting/triangle-counting $conf $graph $graph_index -c "cache_size="$CACHE_SIZE"G"
+  #kill `pgrep sleep_top` 
+  #kill_tops
 
   echo "Running wcc with cache size = $CACHE_SIZE... "
   ./sleep_top.sh wcc $outdir/wcc_"$CACHE_SIZE"gb_cache.out &
@@ -48,7 +48,7 @@ do
   kill_tops
 
   echo "Running page-rank2 with cache size = $CACHE_SIZE... "
-  ./sleep_top.sh page-rank2 $outdir/pgrnk_"$CACHE_SIZE"gb_top_out.txt &
+  ./sleep_top.sh page-rank2 $outdir/pgrnk_"$CACHE_SIZE"gb_top_out &
   apps/page-rank/page-rank2 $conf $graph $graph_index 0.85 -c "cache_size="$CACHE_SIZE"G" -i 30
   kill `pgrep sleep_top` 
   kill_tops
