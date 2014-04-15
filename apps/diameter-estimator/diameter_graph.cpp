@@ -32,71 +32,86 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-class bitmap
+class global_max
 {
-	uint32_t v;
+	volatile size_t value;
+	pthread_spinlock_t lock;
 public:
-	bitmap() {
-		v = 0;
+	global_max() {
+		value = 0;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	void set(int bit) {
-		v |= 0x1U << bit;
+	global_max(size_t init) {
+		value = init;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	bitmap &operator|=(const bitmap &map) {
-		v |= map.v;
-		return *this;
+	bool update(size_t new_v) {
+		if (new_v <= value)
+			return false;
+
+		bool ret = false;
+		pthread_spin_lock(&lock);
+		if (new_v > value) {
+			value = new_v;
+			ret = true;
+		}
+		pthread_spin_unlock(&lock);
+		return ret;
 	}
 
-	bool operator!=(const bitmap &map) const {
-		return v != map.v;
+	size_t get() const {
+		return value;
 	}
+} max_dist;
 
-	uint32_t get_value() const {
-		return v;
-	}
-};
+const int K = 10;
+int num_bfs = 1;
 
 class diameter_message: public vertex_message
 {
-	bitmap bfs_map;
+	uint16_t dists[K];
 public:
-	diameter_message(bitmap bfs_map): vertex_message(
+	diameter_message(uint16_t dists[], int num): vertex_message(
 			sizeof(diameter_message), true) {
-		this->bfs_map = bfs_map;
+		memcpy(this->dists, dists, sizeof(dists[0]) * num);
 	}
 
-	const bitmap &get_bfs_map() const {
-		return bfs_map;
+	uint16_t get_dist(int idx) const {
+		return dists[idx];
 	}
 };
 
-class diameter_vertex: public compute_vertex
+class diameter_vertex: public compute_directed_vertex
 {
-	bitmap bfs_map;
+	uint16_t dists[K];
 	bool updated;
 public:
 	diameter_vertex() {
 		updated = false;
+		for (int i = 0; i < K; i++)
+			dists[i] = USHRT_MAX;
 	}
 
 	diameter_vertex(vertex_id_t id,
-			const vertex_index *index): compute_vertex(id, index) {
+			const vertex_index *index): compute_directed_vertex(id, index) {
 		updated = false;
+		for (int i = 0; i < K; i++)
+			dists[i] = USHRT_MAX;
 	}
 
 	void init(int bfs_id) {
-		bfs_map.set(bfs_id);
+		dists[bfs_id] = 0;
 		updated = true;
-		printf("v%u gets %x\n", get_id(), bfs_map.get_value());
+		printf("BFS %d starts at v%u\n", bfs_id, get_id());
 	}
 
 	void run(graph_engine &graph) {
 		if (updated) {
 			updated = false;
-			vertex_id_t id = get_id();
-			request_vertices(&id, 1);
+			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+			request_partial_vertices(&req, 1);
 		}
 	}
 
@@ -104,23 +119,26 @@ public:
 
 	void run_on_message(graph_engine &, const vertex_message &msg) {
 		const diameter_message &dmsg = (const diameter_message &) msg;
-		bitmap old_map = bfs_map;
-		bfs_map |= dmsg.get_bfs_map();
-		if (bfs_map != old_map)
-			updated = true;
+		for (int i = 0; i < num_bfs; i++) {
+			if (dmsg.get_dist(i) + 1 < dists[i]) {
+				dists[i] = dmsg.get_dist(i) + 1;
+				updated = true;
+				max_dist.update(dists[i]);
+			}
+		}
 	}
 };
 
 void diameter_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
-	int num_dests = vertex.get_num_edges(BOTH_EDGES);
+	int num_dests = vertex.get_num_edges(OUT_EDGE);
 	if (num_dests == 0)
 		return;
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
-	diameter_message msg(bfs_map);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
+	diameter_message msg(dists, num_bfs);
 	graph.multicast_msg(it, msg);
 }
 
@@ -156,7 +174,6 @@ void print_usage()
 			"diameter_estimator [options] conf_file graph_file index_file\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-p: preload the graph\n");
-	fprintf(stderr, "-n: the number of paprallel BFS\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -167,7 +184,6 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	bool preload = false;
-	size_t num_bfs = 1;
 	while ((opt = getopt(argc, argv, "c:pn:")) != -1) {
 		num_opts++;
 		switch (opt) {
@@ -180,7 +196,7 @@ int main(int argc, char *argv[])
 				break;
 			case 'n':
 				num_bfs = atoi(optarg);
-				assert(num_bfs < sizeof(bitmap) * 8);
+				num_bfs = min(num_bfs, K);
 				num_opts++;
 				break;
 			default:
@@ -222,7 +238,8 @@ int main(int argc, char *argv[])
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	std::vector<vertex_id_t> start_vertices;
-	while (start_vertices.size() < num_bfs) {
+	srandom(time(NULL));
+	while (start_vertices.size() < (size_t) num_bfs) {
 		vertex_id_t id = random() % graph->get_max_vertex_id();
 		// We should skip the empty vertices.
 		if (graph->get_vertex_edges(id) == 0)
@@ -242,4 +259,5 @@ int main(int argc, char *argv[])
 	graph_engine::destroy(graph);
 	destroy_io_system();
 	printf("It takes %f seconds\n", time_diff(start, end));
+	printf("The max dist: %ld\n", max_dist.get());
 }
