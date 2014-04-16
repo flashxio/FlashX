@@ -144,7 +144,7 @@ bool diam_vertex::visit(const std::bitset<NUM_PARR_SEARCH> &msg_bits) const {
     return false;
   // TODO: More bit ops to reduce redundancy 
   else {
-    const_cast<diam_vertex*>(this) pthis;
+    diam_vertex* pthis = const_cast<diam_vertex*>(this);
 
     // std::bitset<NUM_PARR_SEARCH>* pbfs_bits = const_cast<std::bitset<NUM_PARR_SEARCH>* >(&(this->bfs_bits));
     //*pbfs_bits |= msg_bits;
@@ -152,7 +152,7 @@ bool diam_vertex::visit(const std::bitset<NUM_PARR_SEARCH> &msg_bits) const {
     std::bitset<NUM_PARR_SEARCH> ones;
     ones.set();
     if ((bfs_bits & ones) == ones) { // I've received all the msgs I can
-      deactivate();
+      pthis->deactivate();
     }
     return true;
   }
@@ -165,12 +165,12 @@ void diam_vertex::run(graph_engine &graph, const page_vertex &vertex) {
   
   // Only multicast if I have something to send
   const std::bitset<NUM_PARR_SEARCH> zeros;
-  if (this->bfs | zeros != this->bfs) {
+  if ((this->bfs_bits | zeros) != this->bfs_bits) {
     int num_dests = vertex.get_num_edges(BOTH_EDGES);
     if (num_dests == 0)
       return;
     edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
-    depth_message msg(this->bitset, this->depth);
+    depth_message msg(this->bfs_bits, this->depth);
     graph.multicast_msg(it, msg);
   }
 }
@@ -180,9 +180,9 @@ void diam_vertex::run_on_message(graph_engine &graph, const vertex_message &msg)
     return;
   // If visit is true I haven't already received this bfs depth msg
   depth_message &dmsg = (depth_message&) msg;
-  if (visit(dmsg.get_idx())) {
+  if (visit(dmsg.get_bits())) {
     // This means I haven't received this msg before so broadcast to my neighs this dfs
-    update_depth(msg.get_depth()); // try to update max depth
+    update_depth(dmsg.get_depth()); // try to update max depth
   }
 }
 
@@ -249,7 +249,7 @@ int main(int argc, char *argv[]) {
 		graph->preload_graph();
   
 	if (argc > 3) {
-    uint32_t ptr = const_cast<uint32_t*>(NUM_PARR_SEARCH);
+    uint32_t* ptr = const_cast<uint32_t*>(&NUM_PARR_SEARCH);
      *ptr = (uint32_t) atoi(argv[3]);
      printf("The value of NUM_PARR_SEARCH is %d", NUM_PARR_SEARCH);
     if (NUM_PARR_SEARCH > graph->get_max_vertex_id()) {
@@ -268,10 +268,11 @@ int main(int argc, char *argv[]) {
   
   // Choose the random vertices
   while (START_VERTICES.size() != NUM_PARR_SEARCH) {
-    vertex_id_t v = (vertex_id_t) (rand() % graph->get_max_vertex_id());
+    vertex_id_t id = (vertex_id_t) (rand() % graph->get_max_vertex_id());
 		if (graph->get_vertex_edges(id) > 0)
-      START_VERTICES.push_back(v);
-    printf("Choosing vertex: %d to randomly start\n", START_VERTICES[i]);
+      START_VERTICES.push_back(id);
+
+    printf("Choosing vertex: %d to randomly start\n", START_VERTICES.back());
   }  
 
   //  Sort em for binary search
