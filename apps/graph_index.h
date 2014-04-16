@@ -126,8 +126,7 @@ class NUMA_local_graph_index: public graph_index
 				tot_num_vertices);
 		this->partitioner = partitioner;
 		this->node_id = node_id;
-		vertex_arr = (vertex_type *) numa_alloc_onnode(
-				sizeof(vertex_arr[0]) * num_vertices, node_id);
+		vertex_arr = NULL;
 	}
 public:
 	~NUMA_local_graph_index() {
@@ -136,6 +135,8 @@ public:
 	}
 
 	void init() {
+		vertex_arr = (vertex_type *) numa_alloc_local(
+				sizeof(vertex_arr[0]) * num_vertices);
 		std::vector<vertex_id_t> local_ids;
 		local_ids.reserve(num_vertices);
 		partitioner->get_all_vertices_in_part(this->part_id, tot_num_vertices,
