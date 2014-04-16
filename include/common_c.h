@@ -134,6 +134,7 @@ void permute_offsets(int num, int repeats, int stride, off_t start,
  * This returns the first node id where the process can allocate memory.
  */
 int numa_get_mem_node();
+int get_numa_run_node();
 
 void bind2node_id(int node_id);
 void bind_mem2node_id(int node_id);

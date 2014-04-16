@@ -64,6 +64,22 @@ void bind2node_id(int node_id)
 	numa_free_nodemask(bmp);
 }
 
+int get_numa_run_node()
+{
+	struct bitmask *bmp = numa_get_run_node_mask();
+	int nbytes = numa_bitmask_nbytes(bmp);
+	int num_nodes = 0;
+	int node_id = -1;
+	int i;
+	for (i = 0; i < nbytes * 8; i++)
+		if (numa_bitmask_isbitset(bmp, i)) {
+			num_nodes++;
+			printf("bind to node %d\n", i);
+			node_id = i;
+		}
+	return node_id;
+}
+
 int numa_get_mem_node()
 {
 	struct bitmask *bmp = numa_get_membind();
