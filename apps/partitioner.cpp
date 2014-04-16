@@ -18,6 +18,14 @@
  */
 
 #include "partitioner.h"
+#include "graph_config.h"
+
+range_graph_partitioner::range_graph_partitioner(int num_parts): RANGE_SIZE_LOG(
+		graph_conf.get_part_range_size_log()), RANGE_SIZE(1 << RANGE_SIZE_LOG),
+	RANGE_MASK((1UL << RANGE_SIZE_LOG) - 1), num_parts_log(log2(num_parts)),
+	mask((1 << num_parts_log) - 1) {
+		assert((1 << num_parts_log) == num_parts);
+}
 
 size_t modulo_graph_partitioner::get_all_vertices_in_part(int part_id,
 		size_t tot_num_vertices, std::vector<vertex_id_t> &ids) const

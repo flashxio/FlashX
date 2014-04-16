@@ -111,9 +111,9 @@ public:
 
 class range_graph_partitioner: public graph_partitioner
 {
-	static const int RANGE_SIZE_LOG = 10;
-	static const int RANGE_SIZE = 1 << RANGE_SIZE_LOG;
-	static const unsigned long RANGE_MASK = (1UL << RANGE_SIZE_LOG) - 1;
+	const int RANGE_SIZE_LOG;
+	const int RANGE_SIZE;
+	const unsigned long RANGE_MASK;
 
 	const int num_parts_log;
 	const vertex_id_t mask;
@@ -124,10 +124,7 @@ class range_graph_partitioner: public graph_partitioner
 
 	vertex_id_t get_part_end(int part_id, size_t num_vertices) const;
 public:
-	range_graph_partitioner(int num_parts): num_parts_log(
-			log2(num_parts)), mask((1 << num_parts_log) - 1) {
-		assert((1 << num_parts_log) == num_parts);
-	}
+	range_graph_partitioner(int num_parts);
 
 	virtual int map(vertex_id_t id) const {
 		return (id >> RANGE_SIZE_LOG) & mask;
