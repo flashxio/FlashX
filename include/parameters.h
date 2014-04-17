@@ -232,7 +232,7 @@ const int NUM_WRITEBACK_DIRTY_PAGES = 2;
 const int MAX_NUM_WRITEBACK = 4;
 const int DISCARD_FLUSH_THRESHOLD = 6;
 
-const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024 * 16;
+const long MAX_CACHE_SIZE = 512L * 1024 * 1024 * 1024;
 
 const int NUMA_MSG_SIZE = 4096;
 const int NUMA_REPLY_CACHE_SIZE = 50;
