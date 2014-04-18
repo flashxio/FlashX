@@ -103,9 +103,9 @@ void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
   
   // Scatter (activate your out-neighbors ... if you have any :) 
   if ( std::fabs( last_change ) > TOLERANCE ) {
-	int num_dests = vertex.get_num_edges(BOTH_EDGES);
+	int num_dests = vertex.get_num_edges(OUT_EDGE);
     if (num_dests > 0) {
-		edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
+		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
 		graph.activate_vertices(it) ;
     }   
   }
