@@ -107,6 +107,16 @@ public:
 		printf("BFS %d starts at v%u\n", bfs_id, get_id());
 	}
 
+	void reset() {
+		updated = false;
+		for (int i = 0; i < K; i++)
+			dists[i] = USHRT_MAX;
+	}
+
+	uint16_t get_dist(int idx) const {
+		return dists[idx];
+	}
+
 	void run(graph_engine &graph) {
 		if (updated) {
 			updated = false;
@@ -184,7 +194,8 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:pn:")) != -1) {
+	bool in_parallel = false;
+	while ((opt = getopt(argc, argv, "c:pn:P")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -198,6 +209,9 @@ int main(int argc, char *argv[])
 				num_bfs = atoi(optarg);
 				num_bfs = min(num_bfs, K);
 				num_opts++;
+				break;
+			case 'P':
+				in_parallel = true;
 				break;
 			default:
 				print_usage();
@@ -235,8 +249,6 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
 	std::vector<vertex_id_t> start_vertices;
 	srandom(time(NULL));
 	while (start_vertices.size() < (size_t) num_bfs) {
@@ -247,10 +259,54 @@ int main(int argc, char *argv[])
 
 		start_vertices.push_back(id);
 	}
-	graph->start(start_vertices.data(), start_vertices.size(),
-			vertex_initiator::ptr(new diameter_initiator(start_vertices)));
-	graph->wait4complete();
-	gettimeofday(&end, NULL);
+
+	if (in_parallel) {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+		graph->start(start_vertices.data(), start_vertices.size(),
+				vertex_initiator::ptr(new diameter_initiator(start_vertices)));
+		graph->wait4complete();
+		gettimeofday(&end, NULL);
+		printf("It takes %f seconds\n", time_diff(start, end));
+
+#if 0
+		for (size_t i = 0; i < start_vertices.size(); i++) {
+			graph_index::const_iterator it = index->begin();
+			graph_index::const_iterator end_it = index->end();
+			for (; it != end_it; ++it) {
+				diameter_vertex &v = (diameter_vertex &) *it;
+				if (v.get_dist(i) != USHRT_MAX)
+					fprintf(stderr, "v%u: %d\n", v.get_id(), v.get_dist(i));
+			}
+		}
+#endif
+	}
+	else {
+		num_bfs = 1;
+		for (size_t i = 0; i < start_vertices.size(); i++) {
+			struct timeval start, end;
+			gettimeofday(&start, NULL);
+			std::vector<vertex_id_t> local_starts;
+			local_starts.push_back(start_vertices[i]);
+			graph->start(local_starts.data(), local_starts.size(),
+					vertex_initiator::ptr(new diameter_initiator(local_starts)));
+			graph->wait4complete();
+			gettimeofday(&end, NULL);
+
+			// Clean up all vertices.
+			graph_index::const_iterator it = index->begin();
+			graph_index::const_iterator end_it = index->end();
+			for (; it != end_it; ++it) {
+				diameter_vertex &v = (diameter_vertex &) *it;
+#if 0
+				if (v.get_dist(0) != USHRT_MAX)
+					fprintf(stderr, "v%u: %d\n", v.get_id(), v.get_dist(0));
+#endif
+				v.reset();
+			}
+			printf("BFS %ld takes %f seconds\n", i, time_diff(start, end));
+		}
+	}
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -258,6 +314,5 @@ int main(int argc, char *argv[])
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
 	destroy_io_system();
-	printf("It takes %f seconds\n", time_diff(start, end));
 	printf("The max dist: %ld\n", max_dist.get());
 }
