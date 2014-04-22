@@ -113,9 +113,6 @@ void wcc_vertex::run(graph_engine &graph, const page_vertex &vertex)
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	int num_dests = vertex.get_num_edges(BOTH_EDGES);
-	if (num_dests == 0)
-		return;
-
 	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
 	component_message msg(component_id);
 	graph.multicast_msg(it, msg);

@@ -93,9 +93,6 @@ public:
 void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex)
 {
 	int num_dests = vertex.get_num_edges(OUT_EDGE);
-	if (num_dests == 0)
-		return;
-
 	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
 
 	// If this is the first iteration.
