@@ -53,6 +53,7 @@ typedef std::pair<int, struct local_vid_t> vertex_loc_t;
 class graph_partitioner
 {
 public:
+	virtual int get_num_partitions() const = 0;
 	virtual int map(vertex_id_t id) const = 0;
 	virtual void map2loc(vertex_id_t id, int &part_id, off_t &off) const = 0;
 	virtual void map2loc(vertex_id_t ids[], int num,
@@ -79,6 +80,10 @@ public:
 		this->num_parts_log = log2(num_parts);
 		assert((1 << num_parts_log) == num_parts);
 		mask = (1 << num_parts_log) - 1;
+	}
+
+	int get_num_partitions() const {
+		return 1 << num_parts_log;
 	}
 
 	int map(vertex_id_t id) const {
@@ -125,6 +130,10 @@ class range_graph_partitioner: public graph_partitioner
 	vertex_id_t get_part_end(int part_id, size_t num_vertices) const;
 public:
 	range_graph_partitioner(int num_parts);
+
+	int get_num_partitions() const {
+		return 1 << num_parts_log;
+	}
 
 	virtual int map(vertex_id_t id) const {
 		return (id >> RANGE_SIZE_LOG) & mask;
