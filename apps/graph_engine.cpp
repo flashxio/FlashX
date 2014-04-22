@@ -445,7 +445,7 @@ void graph_engine::activate_vertices(edge_seq_iterator &it)
 }
 
 void graph_engine::multicast_msg(vertex_id_t ids[], int num,
-		const vertex_message &msg)
+		vertex_message &msg)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	curr->multicast_msg(ids, num, msg);

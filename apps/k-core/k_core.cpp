@@ -99,7 +99,8 @@ void multicast_delete_msg(graph_engine &graph,
     } 
     // Doesn't matter who sent it, just --degree on reception 
     if (num_dests > 0) {
-      graph.multicast_msg(dest_buf.data(), num_dests, deleted_message());
+		deleted_message msg;
+      graph.multicast_msg(dest_buf.data(), num_dests, msg);
     }
 }
 

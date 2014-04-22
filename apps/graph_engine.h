@@ -286,7 +286,7 @@ public:
 		return factory->get_file_id();
 	}
 
-	void multicast_msg(vertex_id_t ids[], int num, const vertex_message &msg);
+	void multicast_msg(vertex_id_t ids[], int num, vertex_message &msg);
 	void multicast_msg(edge_seq_iterator &it, vertex_message &msg);
 
 	void send_msg(vertex_id_t dest, vertex_message &msg);

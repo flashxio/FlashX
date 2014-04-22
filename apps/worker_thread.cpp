@@ -539,18 +539,14 @@ void worker_thread::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
 }
 
 void worker_thread::multicast_msg(vertex_id_t ids[], int num,
-		const vertex_message &msg)
+		vertex_message &msg)
 {
-	// TODO we should do the same optimization as above.
-	// But currently, no application is using this method,
-	// the code path isn't tested. Let's disable it first.
-	assert(0);
-	if (num < graph->get_num_threads()) {
-		char msg_buf[msg.get_serialized_size()];
-		memcpy(msg_buf, &msg, msg.get_serialized_size());
-		vertex_message *local_msg = (vertex_message *) msg_buf;
+	if (num == 0)
+		return;
+
+	if (num < graph->get_num_threads() * 2) {
 		for (int i = 0; i < num; i++)
-			send_msg(ids[i], *local_msg);
+			this->send_msg(ids[i], msg);
 		return;
 	}
 
