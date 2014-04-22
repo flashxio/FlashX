@@ -663,17 +663,23 @@ public:
 				off_t byte_end) {
 			this->arr = arr;
 			assert((size_t) byte_end <= arr->get_size());
-			assert(byte_off < byte_end);
+			assert(byte_off <= byte_end);
 
 			off = arr->get_offset_in_first_page() + byte_off;
 			end = arr->get_offset_in_first_page() + byte_end;
-			off_t pg_end;
-			if (end - ROUND_PAGE(off) >= PAGE_SIZE)
-				pg_end = PAGE_SIZE;
-			else
-				pg_end = end - ROUND_PAGE(off);
-			curr_page_it = seq_const_page_iterator<T>(arr->get_page(
-						off / PAGE_SIZE), off % PAGE_SIZE, pg_end);
+
+			if (byte_off == byte_end) {
+				curr_page_it = seq_const_page_iterator<T>();
+			}
+			else {
+				off_t pg_end;
+				if (end - ROUND_PAGE(off) >= PAGE_SIZE)
+					pg_end = PAGE_SIZE;
+				else
+					pg_end = end - ROUND_PAGE(off);
+				curr_page_it = seq_const_page_iterator<T>(arr->get_page(
+							off / PAGE_SIZE), off % PAGE_SIZE, pg_end);
+			}
 			// TODO remove the constraints later.
 			assert((PAGE_SIZE - (off % PAGE_SIZE)) % sizeof(T) == 0
 					// or the entire range is inside a page.
