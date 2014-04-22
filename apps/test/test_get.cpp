@@ -40,6 +40,7 @@
 class test_vertex: public compute_directed_vertex
 {
 	long sum;
+	char stuffing[64 - sizeof(compute_directed_vertex) - sizeof(long)];
 public:
 	test_vertex() {
 		sum = 0;
