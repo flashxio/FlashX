@@ -486,10 +486,24 @@ void worker_thread::send_activation(edge_seq_iterator &it)
 
 void worker_thread::send_activation(vertex_id_t ids[], int num)
 {
-	// TODO we should do the same optimization as above.
-	// But currently, no application is using this method,
-	// the code path isn't tested. Let's disable it first.
-	assert(0);
+	if (num == 0)
+		return;
+
+	// When there are very few destinations, this way is cheaper.
+	if ((size_t) num <= vloc_size) {
+		for (int i = 0; i < num; i++) {
+			int part_id;
+			// We are going to use the offset of a vertex in a partition as
+			// the ID of the vertex.
+			off_t local_id;
+			graph->get_partitioner()->map2loc(ids[i], part_id, local_id);
+			multicast_msg_sender *sender = get_activate_sender(part_id);
+			bool ret = sender->add_dest((local_vid_t) local_id);
+			assert(ret);
+		}
+		return;
+	}
+
 	graph->get_partitioner()->map2loc(ids, num, vid_bufs.get(),
 			graph->get_num_threads());
 	for (int i = 0; i < graph->get_num_threads(); i++) {
