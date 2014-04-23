@@ -113,7 +113,7 @@ size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
 				// requests. It might not be necessary to increase the ref
 				// count, but it can work as a sanity check.
 				compute->inc_ref();
-				((vertex_compute *) compute)->set_scan_dir(forward);
+				compute->set_scan_dir(forward);
 				prio_compute prio_comp(scheduler->get_io(), compute);
 				user_computes.push(prio_comp);
 			}
