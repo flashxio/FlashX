@@ -1,3 +1,12 @@
+FlashGraph is a SSD-based semi-external memory graph processing engine.
+It stores vertex state in memory and the edge lists of vertices on SSDs.
+It exposes a vertex-centric programming interface for users to express
+graph algorithms and FlashGraph executes the user graph applications
+in parallel and fetch data from SSDs. Its goal is to perform graph algorithms
+on SSDs without much performance loss compared with in-memory graph engines.
+The current implementation is tightly integrated with SAFS to take advantage
+of the high I/O throughput of an SSD array.
+
 SAFSlib is an open-source library that implements the design described
 in the paper "Toward Millions of File System IOPS on Low-Cost, Commodity Hardware".
 The goal of the library is to provide a filesystem-like interface
