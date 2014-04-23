@@ -152,6 +152,9 @@ void init_io_system(const config_map &configs)
 	 * the function, they all can see the global data.
 	 */
 	pthread_mutex_lock(&global_data.mutex);
+	int flags = O_RDONLY;
+	if (params.is_writable())
+		flags = O_RDWR;
 	// The global data hasn't been initialized.
 	if (global_data.read_threads.size() == 0) {
 		global_data.read_threads.resize(num_files);
@@ -160,7 +163,7 @@ void init_io_system(const config_map &configs)
 			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
 			global_data.read_threads[k] = new disk_io_thread(partition,
-					global_data.raid_conf.get_disk(k).node_id, NULL, k);
+					global_data.raid_conf.get_disk(k).node_id, NULL, k, flags);
 		}
 		debug.register_task(new debug_global_data());
 	}
@@ -357,7 +360,8 @@ io_interface *aio_factory::create_io(thread *t)
 	logical_file_partition global_partition(indices, mapper);
 
 	io_interface *io;
-	io = new async_io(global_partition, params.get_aio_depth_per_file(), t);
+	io = new async_io(global_partition, params.get_aio_depth_per_file(),
+			t, O_RDWR);
 #ifdef DEBUG
 	global_data.register_io(io);
 #endif

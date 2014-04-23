@@ -45,6 +45,7 @@ class async_io: public io_interface
 	callback *cb;
 	const int AIO_DEPTH;
 	callback_allocator *cb_allocator;
+	int open_flags;
 
 	int num_iowait;
 	int num_completed_reqs;
@@ -62,7 +63,7 @@ public:
 	 * @node_id: the NUMA node where the disks to be read are connected to.
 	 */
 	async_io(const logical_file_partition &partition,
-			int aio_depth_per_file, thread *t);
+			int aio_depth_per_file, thread *t, int flags);
 
 	virtual ~async_io();
 

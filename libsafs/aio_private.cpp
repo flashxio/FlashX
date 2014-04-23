@@ -133,7 +133,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 }
 
 async_io::async_io(const logical_file_partition &partition,
-		int aio_depth_per_file, thread *t): io_interface(t), AIO_DEPTH(
+		int aio_depth_per_file, thread *t, int flags): io_interface(t), AIO_DEPTH(
 			aio_depth_per_file)
 {
 	int node_id = t->get_node_id();
@@ -152,9 +152,10 @@ async_io::async_io(const logical_file_partition &partition,
 	cb = NULL;
 	num_iowait = 0;
 	num_completed_reqs = 0;
+	open_flags = flags;
 	if (partition.is_active()) {
 		int file_id = partition.get_file_id();
-		buffered_io *io = new buffered_io(partition, t, O_DIRECT | O_RDWR);
+		buffered_io *io = new buffered_io(partition, t, O_DIRECT | flags);
 		default_io = io;
 		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
 		if (data)
@@ -420,7 +421,7 @@ int async_io::open_file(const logical_file_partition &partition)
 	int file_id = partition.get_file_id();
 	if (open_files.find(file_id) == open_files.end()) {
 		buffered_io *io = new buffered_io(partition, get_thread(),
-				O_DIRECT | O_RDWR);
+				O_DIRECT | open_flags);
 		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
 		if (data)
 			data->add_new_file(io);

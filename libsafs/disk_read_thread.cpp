@@ -29,7 +29,7 @@ const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 // The partition contains a file mapper but the file mapper doesn't point
 // to a file in the SAFS filesystem.
 disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
-		int node_id, page_cache *cache, int _disk_id): thread(
+		int node_id, page_cache *cache, int _disk_id, int flags): thread(
 			std::string("io-thread-") + itoa(node_id), node_id),
 		disk_id(_disk_id),
 		queue(node_id, std::string("io-queue-") + itoa(node_id),
@@ -47,7 +47,7 @@ disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 	// We don't want AIO to open any files yet, so we pass a file partition
 	// definition without a file mapper.
 	logical_file_partition part(_partition.get_phy_file_indices());
-	aio = new async_io(part, AIO_DEPTH_PER_FILE, this);
+	aio = new async_io(part, AIO_DEPTH_PER_FILE, this, flags);
 #ifdef STATISTICS
 	num_empty = 0;
 	num_reads = 0;

@@ -196,7 +196,7 @@ class disk_io_thread: public thread
 	}
 public:
 	disk_io_thread(const logical_file_partition &partition, int node_id,
-			page_cache *cache, int disk_id);
+			page_cache *cache, int disk_id, int flags);
 
 	msg_queue<io_request> *get_queue() {
 		return &queue;

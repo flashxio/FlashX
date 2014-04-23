@@ -111,6 +111,7 @@ class sys_parameters
 	int num_nodes;
 	bool merge_reqs;
 	int max_obj_alloc_size;
+	bool writable;
 public:
 	sys_parameters();
 
@@ -182,6 +183,10 @@ public:
 
 	int get_max_obj_alloc_size() const {
 		return max_obj_alloc_size;
+	}
+
+	bool is_writable() const {
+		return writable;
 	}
 };
 
