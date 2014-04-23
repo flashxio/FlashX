@@ -86,7 +86,7 @@ int cleanup_callback::invoke(io_request *rqs[], int num)
 		pending_reqs.erase(rq->get_buf(0));
 #endif
 		for (int i = 0; i < rq->get_num_bufs(); i++)
-			delete [] rq->get_buf(i);
+			free(rq->get_buf(i));
 		read_bytes += rq->get_size();
 	}
 #ifdef STATISTICS
@@ -463,8 +463,9 @@ int work2req_converter::to_reqs(workload_gen *gen, io_interface *io,
 		}
 		else {
 			data_loc_t loc = range.get_loc();
-			char *p = new char[range.get_size()];
-			assert(p);
+			char *p = NULL;
+			int ret = posix_memalign((void **) &p, PAGE_SIZE, range.get_size());
+			assert(ret == 0);
 			if (range.get_access_method() == WRITE && params.is_verify_content())
 				create_write_data(p, range.get_size(), loc.get_offset(),
 						io->get_file_id());
