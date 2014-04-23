@@ -281,6 +281,9 @@ public:
 		return flags.test_flag(flag);
 	}
 
+	virtual void set_scan_dir(bool forward) {
+	}
+
 	bool fetch_request(io_interface *io, io_request &req);
 	int fetch_requests(io_interface *io, user_comp_req_queue &reqs,
 			int max_fetch);
