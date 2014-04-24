@@ -229,7 +229,8 @@ public:
 	void start(vertex_id_t ids[], int num,
 			vertex_initiator::ptr init = vertex_initiator::ptr(),
 			vertex_program::ptr prog = vertex_program::ptr());
-	void start_all(vertex_program::ptr prog = vertex_program::ptr());
+	void start_all(vertex_initiator::ptr init = vertex_initiator::ptr(),
+			vertex_program::ptr prog = vertex_program::ptr());
 
 	/**
 	 * The algorithm progresses to the next level.

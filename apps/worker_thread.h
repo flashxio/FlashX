@@ -209,6 +209,7 @@ class worker_thread: public thread
 	// Indicate that we need to start all vertices.
 	bool start_all;
 	std::shared_ptr<vertex_filter> filter;
+	vertex_initiator::ptr vinitiator;
 
 	// The number of activated vertices processed in the current level.
 	atomic_number<long> num_activated_vertices_in_level;
@@ -345,6 +346,10 @@ public:
 
 	graph_engine &get_graph() {
 		return *graph;
+	}
+
+	void set_vinitiator(vertex_initiator::ptr init) {
+		this->vinitiator = init;
 	}
 
 	friend class load_balancer;

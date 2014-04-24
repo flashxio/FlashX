@@ -245,6 +245,15 @@ void worker_thread::init()
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(*this);
 		assert(next_activated_vertices->get_num_set_bits() == 0);
+		if (vinitiator) {
+			std::vector<vertex_id_t> local_ids;
+			graph->get_partitioner()->get_all_vertices_in_part(worker_id,
+					graph->get_num_vertices(), local_ids);
+			BOOST_FOREACH(vertex_id_t id, local_ids) {
+				compute_vertex &v = graph->get_vertex(id);
+				vinitiator->init(v);
+			}
+		}
 	}
 }
 

@@ -354,12 +354,13 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 	}
 }
 
-void graph_engine::start_all(vertex_program::ptr prog)
+void graph_engine::start_all(vertex_initiator::ptr init, vertex_program::ptr prog)
 {
 	init_threads(std::move(prog));
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices();
+		t->set_vinitiator(init);
 		t->start();
 	}
 }
