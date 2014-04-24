@@ -341,6 +341,8 @@ public:
 	}
 
 	void preload_graph();
+
+	void init_all_vertices(vertex_initiator::ptr init);
 };
 
 #endif

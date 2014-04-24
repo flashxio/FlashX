@@ -464,6 +464,15 @@ void graph_engine::send_msg(vertex_id_t dest, vertex_message &msg)
 	curr->send_msg(dest, msg);
 }
 
+void graph_engine::init_all_vertices(vertex_initiator::ptr init)
+{
+	vertex_id_t max_id = get_max_vertex_id();
+#pragma omp parallel for
+	for (vertex_id_t id = 0; id <= max_id; id++) {
+		init->init(get_vertex(id));
+	}
+}
+
 vertex_index *load_vertex_index(const std::string &index_file)
 {
 	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;
