@@ -116,10 +116,10 @@ public:
 
 class wcc_comp_message: public vertex_message
 {
-	wcc_id_t id;
+	vertex_id_t id;
 	uint64_t color;
 public:
-	wcc_comp_message(const wcc_id_t &id, uint64_t color): vertex_message(
+	wcc_comp_message(vertex_id_t id, uint64_t color): vertex_message(
 			sizeof(wcc_comp_message), true) {
 		this->id = id;
 		this->color = color;
@@ -129,7 +129,7 @@ public:
 		return color;
 	}
 
-	const wcc_id_t &get_wcc_id() const {
+	vertex_id_t get_wcc_id() const {
 		return id;
 	}
 };
@@ -169,7 +169,7 @@ public:
 	}
 };
 
-class fwbw_state_t
+class fwbw_state
 {
 	enum {
 		FW_COLOR,
@@ -188,7 +188,7 @@ class fwbw_state_t
 	vertex_id_t pivot;
 	bit_flags<short> flags;
 public:
-	fwbw_state_t() {
+	fwbw_state() {
 		base_color = 0;
 		pivot = INVALID_VERTEX_ID;
 	}
@@ -205,15 +205,6 @@ public:
 
 	vertex_id_t get_pivot() const {
 		return pivot;
-	}
-
-	void assign_comp(vertex_id_t comp) {
-		pivot = comp;
-		flags.set_flag(ASSIGNED);
-	}
-
-	void assign_comp() {
-		flags.set_flag(ASSIGNED);
 	}
 
 	vertex_id_t get_comp_id() const {
@@ -296,55 +287,78 @@ public:
 	}
 };
 
-class scc_vertex: public compute_vertex
+struct trim1_state
 {
-	vsize_t real_num_in_edges;
-	vsize_t real_num_out_edges;
 	// for trimming
 	vsize_t num_in_edges;
 	vsize_t num_out_edges;
+};
+
+struct wcc_state
+{
+	fwbw_state fwbw;
+	vertex_id_t wcc_max;
+};
+
+class scc_vertex: public compute_directed_vertex
+{
+	vsize_t comp_id;
+	union scc_state {
+		trim1_state trim1;
+		fwbw_state fwbw;
+		wcc_state wcc;
+
+		scc_state() {
+			memset(this, 0, sizeof(*this));
+		}
+	} state;
 
 public:
-	wcc_id_t wcc_max;
-	fwbw_state_t fwbw_state;
-
 	scc_vertex() {
-		real_num_in_edges = num_in_edges = 0;
-		real_num_out_edges = num_out_edges = 0;
+		comp_id = INVALID_VERTEX_ID;
 	}
 
-	scc_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
+	scc_vertex(vertex_id_t id, const vertex_index *index1): compute_directed_vertex(
 			id, index1) {
-		directed_vertex_index *index = (directed_vertex_index *) index1;
-		real_num_out_edges = num_out_edges = index->get_num_out_edges(id);
-		real_num_in_edges = num_in_edges = index->get_num_in_edges(id);
-	}
-
-	vsize_t get_num_out_edges() const {
-		return real_num_out_edges;
-	}
-
-	vsize_t get_num_in_edges() const {
-		return real_num_in_edges;
+		comp_id = INVALID_VERTEX_ID;
 	}
 
 	bool is_assigned() const {
-		return fwbw_state.is_assigned();
+		return comp_id != INVALID_VERTEX_ID;
 	}
 
 	vertex_id_t get_comp_id() const {
-		return fwbw_state.get_comp_id();
+		return comp_id;
+	}
+
+	uint64_t get_color() const {
+		return state.fwbw.get_color();
+	}
+
+	void init_trim1() {
+		state.trim1.num_out_edges = get_num_out_edges();
+		state.trim1.num_in_edges = get_num_in_edges();
 	}
 
 	void init_wcc() {
-		wcc_max = wcc_id_t(get_num_in_edges() + get_num_out_edges(), get_id());
-		fwbw_state.set_wcc_updated();
+		state.wcc.wcc_max = get_id();
+		state.fwbw.set_wcc_updated();
+	}
+
+	void reset_for_fwbw() {
+		state.fwbw = fwbw_state();
 	}
 
 	void init_fwbw() {
-		fwbw_state.set_fw();
-		fwbw_state.set_bw();
-		fwbw_state.set_pivot(get_id());
+		state.fwbw.set_fw();
+		state.fwbw.set_bw();
+		state.fwbw.set_pivot(get_id());
+	}
+
+	void post_wcc_init() {
+		assert(!state.fwbw.has_fw_visited());
+		assert(!state.fwbw.has_bw_visited());
+		state.fwbw.assign_new_color(state.wcc.wcc_max);
 	}
 
 	void run(graph_engine &graph) {
@@ -453,29 +467,22 @@ public:
 	void run_on_message_stage_wcc(graph_engine &graph, const vertex_message &msg);
 };
 
+std::atomic_ulong trim1_vertices;
+
 void scc_vertex::run_stage_trim1(graph_engine &graph)
 {
-	if (num_in_edges == 0 || num_out_edges == 0) {
+	if (state.trim1.num_in_edges == 0 || state.trim1.num_out_edges == 0) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 
 		// This vertex has to be a SCC itself.
-		fwbw_state.assign_comp(id);
+		comp_id = id;
+		trim1_vertices++;
 	}
 }
 
 void scc_vertex::run_stage_trim1(graph_engine &graph, const page_vertex &vertex)
 {
-	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex.get_neigh_end(BOTH_EDGES);
-	stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(BOTH_EDGES));
-	int num_dests = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(BOTH_EDGES); it != end_it; ++it) {
-		vertex_id_t id = *it;
-		dest_buf[num_dests++] = id;
-	}
-
 	// The vertices on the other side of the edges should reduce their degree
 	// by 1. They have the opposite direction of the edges.
 	edge_type type = edge_type::NONE;
@@ -489,7 +496,10 @@ void scc_vertex::run_stage_trim1(graph_engine &graph, const page_vertex &vertex)
 	}
 	if (type != edge_type::NONE) {
 		trim1_message msg(type);
-		graph.multicast_msg(dest_buf.data(), num_dests, msg);
+		int num_edges = vertex.get_num_edges(BOTH_EDGES);
+		edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0,
+				num_edges);
+		graph.multicast_msg(it, msg);
 	}
 }
 
@@ -499,12 +509,12 @@ void scc_vertex::run_on_message_stage_trim1(graph_engine &graph,
 	const trim1_message &msg = (const trim1_message &) msg1;
 	switch(msg.get_type()) {
 		case edge_type::IN_EDGE:
-			assert(num_in_edges > 0);
-			num_in_edges--;
+			assert(state.trim1.num_in_edges > 0);
+			state.trim1.num_in_edges--;
 			break;
 		case edge_type::OUT_EDGE:
-			assert(num_out_edges > 0);
-			num_out_edges--;
+			assert(state.trim1.num_out_edges > 0);
+			state.trim1.num_out_edges--;
 			break;
 		default:
 			assert(0);
@@ -528,67 +538,64 @@ std::atomic_ulong trim2_vertices;
 
 void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
 {
-	if (vertex.get_id() == get_id()) {
-		// Ideally, we should use the remaining in-edges or out-edges,
-		// but we don't know which edges have been removed, so we just
-		// use the original number of edges.
-		if (get_num_in_edges() == 1) {
-			page_byte_array::const_iterator<vertex_id_t> it
-				= vertex.get_neigh_begin(edge_type::IN_EDGE);
-			vertex_id_t neighbor = *it;
-			// If the only in-edge is to itself, it's a SCC itself.
-			if (neighbor == get_id()) {
-				fwbw_state.assign_comp(get_id());
-				trim2_vertices++;
-			}
-			else {
-				scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
-				// If the vertex's out-edge list contains the neighbor,
-				// it means the neighbor's only in-edge connect to this vertex.
-				if (fwbw_state.get_color() == neigh_v.fwbw_state.get_color()
-						&& get_id() < neighbor
-						&& neigh_v.get_num_in_edges() == 1
-						&& vertex.contain_edge(edge_type::OUT_EDGE, neighbor)) {
-					fwbw_state.assign_comp(get_id());
-					trim2_message msg(get_id());
-					graph.send_msg(neighbor, msg);
-					trim2_vertices += 2;
-				}
+	assert(vertex.get_id() == get_id());
+	// Ideally, we should use the remaining in-edges or out-edges,
+	// but we don't know which edges have been removed, so we just
+	// use the original number of edges.
+	if (get_num_in_edges() == 1) {
+		page_byte_array::const_iterator<vertex_id_t> it
+			= vertex.get_neigh_begin(edge_type::IN_EDGE);
+		vertex_id_t neighbor = *it;
+		// If the only in-edge is to itself, it's a SCC itself.
+		if (neighbor == get_id()) {
+			comp_id = get_id();
+			trim2_vertices++;
+		}
+		else {
+			scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
+			// If the vertex's out-edge list contains the neighbor,
+			// it means the neighbor's only in-edge connect to this vertex.
+			if (get_id() < neighbor
+					&& neigh_v.get_num_in_edges() == 1
+					&& vertex.contain_edge(edge_type::OUT_EDGE, neighbor)) {
+				comp_id = get_id();
+				trim2_message msg(get_id());
+				graph.send_msg(neighbor, msg);
+				trim2_vertices += 2;
 			}
 		}
-		else if (get_num_out_edges() == 1) {
-			page_byte_array::const_iterator<vertex_id_t> it
-				= vertex.get_neigh_begin(edge_type::OUT_EDGE);
-			vertex_id_t neighbor = *it;
-			// If the only in-edge is to itself, it's a SCC itself.
-			if (neighbor == get_id()) {
-				fwbw_state.assign_comp(get_id());
-				trim2_vertices++;
-			}
-			else {
-				scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
-				// The same as above.
-				if (fwbw_state.get_color() == neigh_v.fwbw_state.get_color()
-						&& get_id() < neighbor
-						&& neigh_v.get_num_out_edges() == 1
-						&& vertex.contain_edge(edge_type::IN_EDGE, neighbor)) {
-					fwbw_state.assign_comp(get_id());
-					trim2_message msg(get_id());
-					graph.send_msg(neighbor, msg);
-					trim2_vertices += 2;
-				}
-			}
-		}
-		else
-			assert(0);
 	}
+	else if (get_num_out_edges() == 1) {
+		page_byte_array::const_iterator<vertex_id_t> it
+			= vertex.get_neigh_begin(edge_type::OUT_EDGE);
+		vertex_id_t neighbor = *it;
+		// If the only in-edge is to itself, it's a SCC itself.
+		if (neighbor == get_id()) {
+			comp_id = get_id();
+			trim2_vertices++;
+		}
+		else {
+			scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
+			// The same as above.
+			if (get_id() < neighbor
+					&& neigh_v.get_num_out_edges() == 1
+					&& vertex.contain_edge(edge_type::IN_EDGE, neighbor)) {
+				comp_id = get_id();
+				trim2_message msg(get_id());
+				graph.send_msg(neighbor, msg);
+				trim2_vertices += 2;
+			}
+		}
+	}
+	else
+		assert(0);
 }
 
 void scc_vertex::run_on_message_stage_trim2(graph_engine &graph,
 		const vertex_message &msg1)
 {
 	const trim2_message &msg = (const trim2_message &) msg1;
-	fwbw_state.assign_comp(msg.get_comp_id());
+	comp_id = msg.get_comp_id();
 }
 
 void scc_vertex::run_stage_trim3(graph_engine &graph)
@@ -612,7 +619,7 @@ void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
 		// We should ignore the neighbors that has been assigned to a component.
 		// or has a different color.
 		if (neigh.is_assigned()
-				|| neigh.fwbw_state.get_color() != fwbw_state.get_color())
+				|| neigh.state.fwbw.get_color() != state.fwbw.get_color())
 			continue;
 
 		in_neighs[num_in_neighs++] = id;
@@ -628,7 +635,7 @@ void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
 		// We should ignore the neighbors that has been assigned to a component.
 		// or has a different color.
 		if (neigh.is_assigned()
-				|| neigh.fwbw_state.get_color() != fwbw_state.get_color())
+				|| neigh.state.fwbw.get_color() != state.fwbw.get_color())
 			continue;
 
 		out_neighs[num_out_neighs++] = id;
@@ -637,7 +644,7 @@ void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
 	if (num_in_neighs == 0 || num_out_neighs == 0) {
 		trim3_vertices++;
 		// This vertex has been isolated, it can assign to a SCC now.
-		fwbw_state.assign_comp(get_id());
+		comp_id = get_id();
 		if (num_in_neighs > 0)
 			graph.activate_vertices(in_neighs.data(), num_in_neighs);
 		if (num_out_neighs > 0)
@@ -654,21 +661,21 @@ void scc_vertex::run_stage_FWBW(graph_engine &graph)
 {
 	// If the vertex has been visited in both directions,
 	// we don't need to do anything.
-	if (fwbw_state.has_fw_visited() && fwbw_state.has_bw_visited())
+	if (state.fwbw.has_fw_visited() && state.fwbw.has_bw_visited())
 		return;
 	// If the vertex has been visisted in forward direction, and it doesn't
 	// need to visit other in the backwoard direction, then we don't need to
 	// do anything.
-	if (fwbw_state.has_fw_visited() && !fwbw_state.is_bw())
+	if (state.fwbw.has_fw_visited() && !state.fwbw.is_bw())
 		return;
 	// The same for the other direction.
-	if (fwbw_state.has_bw_visited() && !fwbw_state.is_fw())
+	if (state.fwbw.has_bw_visited() && !state.fwbw.is_fw())
 		return;
 
 	// It's possible that the vertex is activated by another vertex of
 	// a different color. If that is the case, the vertex may not have
 	// the forward BFS flag nor the backward BFS flag. Do nothing.
-	if (!fwbw_state.is_bw() && !fwbw_state.is_fw())
+	if (!state.fwbw.is_bw() && !state.fwbw.is_fw())
 		return;
 
 	vertex_id_t id = get_id();
@@ -679,36 +686,24 @@ void scc_vertex::run_stage_FWBW(graph_engine &graph, const page_vertex &vertex)
 {
 	bool do_some = false;
 
-	if (fwbw_state.is_bw()) {
+	if (state.fwbw.is_bw()) {
 		do_some = true;
-		fwbw_state.set_bw_visited();
-		page_byte_array::const_iterator<vertex_id_t> end_it
-			= vertex.get_neigh_end(IN_EDGE);
-		stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(IN_EDGE));
-		int num_dests = 0;
-		for (page_byte_array::const_iterator<vertex_id_t> it
-				= vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
-			vertex_id_t id = *it;
-			dest_buf[num_dests++] = id;
-		}
-		fwbw_message msg(fwbw_state.get_color(), fwbw_state.get_pivot(), false);
-		graph.multicast_msg(dest_buf.data(), num_dests, msg);
+		state.fwbw.set_bw_visited();
+		fwbw_message msg(state.fwbw.get_color(), state.fwbw.get_pivot(), false);
+		int num_edges = vertex.get_num_edges(IN_EDGE);
+		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE, 0,
+				num_edges);
+		graph.multicast_msg(it, msg);
 	}
 
-	if (fwbw_state.is_fw()) {
+	if (state.fwbw.is_fw()) {
 		do_some = true;
-		fwbw_state.set_fw_visited();
-		page_byte_array::const_iterator<vertex_id_t> end_it
-			= vertex.get_neigh_end(OUT_EDGE);
-		stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(OUT_EDGE));
-		int num_dests = 0;
-		for (page_byte_array::const_iterator<vertex_id_t> it
-				= vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
-			vertex_id_t id = *it;
-			dest_buf[num_dests++] = id;
-		}
-		fwbw_message msg(fwbw_state.get_color(), fwbw_state.get_pivot(), true);
-		graph.multicast_msg(dest_buf.data(), num_dests, msg);
+		state.fwbw.set_fw_visited();
+		fwbw_message msg(state.fwbw.get_color(), state.fwbw.get_pivot(), true);
+		int num_edges = vertex.get_num_edges(OUT_EDGE);
+		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0,
+				num_edges);
+		graph.multicast_msg(it, msg);
 	}
 	assert(do_some);
 }
@@ -716,29 +711,33 @@ void scc_vertex::run_stage_FWBW(graph_engine &graph, const page_vertex &vertex)
 void scc_vertex::run_on_message_stage_FWBW(graph_engine &graph,
 		const vertex_message &msg1)
 {
-	uint64_t color = fwbw_state.get_color();
+	uint64_t color = state.fwbw.get_color();
 	const fwbw_message &msg = (const fwbw_message &) msg1;
 	// If the current vertex has a different color, it means it's in
 	// a different partition. The vertex can just ignore the message.
 	if (msg.get_color() != color)
 		return;
 
-	fwbw_state.set_pivot(msg.get_pivot());
+	state.fwbw.set_pivot(msg.get_pivot());
 	if (msg.is_forward())
-		fwbw_state.set_fw();
+		state.fwbw.set_fw();
 	else
-		fwbw_state.set_bw();
+		state.fwbw.set_bw();
 }
+
+std::atomic_ulong fwbw_vertices;
 
 void scc_vertex::run_stage_part(graph_engine &graph)
 {
-	if (fwbw_state.is_fw() && fwbw_state.is_bw())
-		fwbw_state.assign_comp();
-	else if (fwbw_state.is_fw())
-		fwbw_state.assign_new_fw_color();
-	else if (fwbw_state.is_bw())
-		fwbw_state.assign_new_bw_color();
-	fwbw_state.clear_flags();
+	if (state.fwbw.is_fw() && state.fwbw.is_bw()) {
+		comp_id = state.fwbw.get_pivot();
+		fwbw_vertices++;
+	}
+	else if (state.fwbw.is_fw())
+		state.fwbw.assign_new_fw_color();
+	else if (state.fwbw.is_bw())
+		state.fwbw.assign_new_bw_color();
+	state.fwbw.clear_flags();
 }
 
 void scc_vertex::run_stage_part(graph_engine &graph, const page_vertex &vertex)
@@ -752,8 +751,8 @@ void scc_vertex::run_on_message_stage_part(graph_engine &graph,
 
 void scc_vertex::run_stage_wcc(graph_engine &graph)
 {
-	if (fwbw_state.is_wcc_updated()) {
-		fwbw_state.clear_wcc_updated();
+	if (state.fwbw.is_wcc_updated()) {
+		state.fwbw.clear_wcc_updated();
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
@@ -763,17 +762,11 @@ void scc_vertex::run_stage_wcc(graph_engine &graph, const page_vertex &vertex)
 {
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex.get_neigh_end(BOTH_EDGES);
-	stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(BOTH_EDGES));
-	int num_dests = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(BOTH_EDGES); it != end_it; ++it) {
-		vertex_id_t id = *it;
-		dest_buf[num_dests++] = id;
-	}
-	wcc_comp_message msg(wcc_max, fwbw_state.get_color());
-	graph.multicast_msg(dest_buf.data(), num_dests, msg);
+	wcc_comp_message msg(state.wcc.wcc_max, state.fwbw.get_color());
+	int num_edges = vertex.get_num_edges(BOTH_EDGES);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0,
+			num_edges);
+	graph.multicast_msg(it, msg);
 }
 
 void scc_vertex::run_on_message_stage_wcc(graph_engine &graph,
@@ -782,12 +775,12 @@ void scc_vertex::run_on_message_stage_wcc(graph_engine &graph,
 	wcc_comp_message &msg = (wcc_comp_message &) msg1;
 	// If the current vertex has a different color, it means it's in
 	// a different partition. The vertex can just ignore the message.
-	if (msg.get_color() != fwbw_state.get_color())
+	if (msg.get_color() != state.fwbw.get_color())
 		return;
 
-	if (msg.get_wcc_id() > wcc_max) {
-		wcc_max = msg.get_wcc_id();
-		fwbw_state.set_wcc_updated();
+	if (msg.get_wcc_id() > state.wcc.wcc_max) {
+		state.wcc.wcc_max = msg.get_wcc_id();
+		state.fwbw.set_wcc_updated();
 	}
 }
 
@@ -830,6 +823,7 @@ public:
 	}
 };
 
+#if 0
 class sec_fwbw_filter: public vertex_filter
 {
 public:
@@ -844,6 +838,175 @@ public:
 		if (activate)
 			scc_v.init_fwbw();
 		return activate;
+	}
+};
+#endif
+
+class trim1_initiator: public vertex_initiator
+{
+public:
+	void init(compute_vertex &v) {
+		scc_vertex &sv = (scc_vertex &) v;
+		sv.init_trim1();
+	}
+};
+
+/**
+ * This initializes the start vertices for forward-backward BFS.
+ */
+class fwbw_initiator: public vertex_initiator
+{
+public:
+	void init(compute_vertex &v) {
+		scc_vertex &sv = (scc_vertex &) v;
+		assert(!sv.is_assigned());
+		sv.init_fwbw();
+	}
+};
+
+/**
+ * This prepares all vertices in the graph for forward-backward BFS.
+ */
+class fwbw_reset: public vertex_initiator
+{
+public:
+	void init(compute_vertex &v) {
+		scc_vertex &sv = (scc_vertex &) v;
+		sv.reset_for_fwbw();
+	}
+};
+
+class post_wcc_initiator: public vertex_initiator
+{
+public:
+	void init(compute_vertex &v) {
+		scc_vertex &sv = (scc_vertex &) v;
+		if (sv.is_assigned())
+			return;
+		sv.post_wcc_init();
+	}
+};
+
+class max_degree_query: public vertex_query
+{
+	vsize_t max_degree;
+	vertex_id_t max_id;
+public:
+	max_degree_query() {
+		max_degree = 0;
+		max_id = INVALID_VERTEX_ID;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		scc_vertex &scc_v = (scc_vertex &) v;
+		if (graph.get_vertex_edges(v.get_id()) > max_degree
+				&& !scc_v.is_assigned()) {
+			max_degree = graph.get_vertex_edges(v.get_id());
+			max_id = v.get_id();
+		}
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		max_degree_query *mdq = (max_degree_query *) q.get();
+		if (max_degree < mdq->max_degree) {
+			max_degree = mdq->max_degree;
+			max_id = mdq->max_id;
+		}
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new max_degree_query());
+	}
+
+	vertex_id_t get_max_id() const {
+		return max_id;
+	}
+};
+
+class max_degree_query1: public vertex_query
+{
+	// The largest-degree vertices in each color
+	typedef std::unordered_map<uint64_t, vertex_id_t> color_map_t;
+	color_map_t max_ids;
+public:
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		scc_vertex &scc_v = (scc_vertex &) v;
+		// Ignore the assigned vertex
+		if (scc_v.is_assigned())
+			return;
+
+		color_map_t::iterator it = max_ids.find(scc_v.get_color());
+		// The color doesn't exist;
+		if (it == max_ids.end()) {
+			max_ids.insert(std::pair<uint64_t, vertex_id_t>(scc_v.get_color(),
+						v.get_id()));
+		}
+		else {
+			vertex_id_t curr_max_id = it->second;
+			if (graph.get_vertex_edges(v.get_id())
+					> graph.get_vertex_edges(curr_max_id))
+				it->second = v.get_id();
+		}
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		max_degree_query1 *mdq = (max_degree_query1 *) q.get();
+		for (color_map_t::const_iterator it = mdq->max_ids.begin();
+				it != mdq->max_ids.end(); it++) {
+			uint64_t color = it->first;
+			vertex_id_t id = it->second;
+			scc_vertex &scc_v = (scc_vertex &) graph.get_vertex(id);
+			assert(!scc_v.is_assigned());
+			color_map_t::iterator it1 = this->max_ids.find(color);
+			// The same color exists.
+			if (it1 != this->max_ids.end()) {
+				// If the vertex of the same color in the other query is larger
+				if (graph.get_vertex_edges(id) > graph.get_vertex_edges(it1->second))
+					it1->second = id;
+			}
+			else
+				this->max_ids.insert(std::pair<uint64_t, vertex_id_t>(color, id));
+		}
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new max_degree_query1());
+	}
+
+	size_t get_max_ids(std::vector<vertex_id_t> &ids) const {
+		for (color_map_t::const_iterator it = max_ids.begin();
+				it != max_ids.end(); it++) {
+			ids.push_back(it->second);
+		}
+		return max_ids.size();
+	}
+};
+
+class remain_vertex_query: public vertex_query
+{
+	size_t num_remain;
+public:
+	remain_vertex_query() {
+		num_remain = 0;
+	}
+
+	virtual void run(graph_engine &, compute_vertex &v) {
+		scc_vertex &scc_v = (scc_vertex &) v;
+		if (!scc_v.is_assigned())
+			num_remain++;
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		remain_vertex_query *rvq = (remain_vertex_query *) q.get();
+		num_remain += rvq->num_remain;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new remain_vertex_query());
+	}
+
+	size_t get_num_remaining() const {
+		return num_remain;
 	}
 };
 
@@ -918,57 +1081,54 @@ int main(int argc, char *argv[])
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
 	scc_start = start;
-	graph->start_all();
+	graph->start_all(vertex_initiator::ptr(new trim1_initiator()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-
-	NUMA_graph_index<scc_vertex>::const_iterator it
-		= ((NUMA_graph_index<scc_vertex> *) index)->begin();
-	NUMA_graph_index<scc_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<scc_vertex> *) index)->end();
-	size_t num_assigned = 0;
-	vertex_id_t max_v = -1;
-	vertex_id_t max_degree = 0;
-	for (; it != end_it; ++it) {
-		const scc_vertex &v = (const scc_vertex &) *it;
-		if (v.is_assigned())
-			num_assigned++;
-		if (v.get_num_in_edges() + v.get_num_out_edges() > max_degree) {
-			max_degree = v.get_num_in_edges() + v.get_num_out_edges();
-			max_v = v.get_id();
-		}
-	}
 	printf("trim1 takes %f seconds. It trims %ld vertices\n",
-			time_diff(start, end), num_assigned);
+			time_diff(start, end), trim1_vertices.load());
 
 	scc_stage = scc_stage_t::TRIM2;
 	gettimeofday(&start, NULL);
-	graph->start_all();
+	graph->start_all(vertex_initiator::ptr());
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("trim2 takes %f seconds. It trims %ld vertices\n",
-			time_diff(start, end),
-			trim2_vertices.load(std::memory_order_relaxed));
+			time_diff(start, end), trim2_vertices.load());
 
+	vertex_query::ptr mdq(new max_degree_query());
+	graph->query_on_all(mdq);
+	vertex_id_t max_v = ((max_degree_query *) mdq.get())->get_max_id();
 	scc_stage = scc_stage_t::FWBW;
-	scc_vertex &v = (scc_vertex &) index->get_vertex(max_v);
-	printf("the remaining max vertex: %u (%d, %d)\n", max_v,
-			v.get_num_in_edges(), v.get_num_out_edges());
-	v.init_fwbw();
 	gettimeofday(&start, NULL);
+	graph->init_all_vertices(vertex_initiator::ptr(new fwbw_reset()));
+	scc_vertex &v = (scc_vertex &) index->get_vertex(max_v);
+	v.init_fwbw();
 	graph->start(&max_v, 1);
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("FWBW takes %f seconds\n", time_diff(start, end));
 
 	scc_stage = scc_stage_t::PARTITION;
+	fwbw_vertices = 0;
 	gettimeofday(&start, NULL);
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("partition takes %f seconds\n", time_diff(start, end));
+	printf("partition takes %f seconds. Assign %ld vertices to components.\n",
+			time_diff(start, end), fwbw_vertices.load());
 
-	while (true) {
+	std::shared_ptr<vertex_filter> wfilter
+		= std::shared_ptr<vertex_filter>(new wcc_filter());
+	scc_stage = scc_stage_t::WCC;
+	gettimeofday(&start, NULL);
+	graph->start(wfilter);
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+	printf("WCC takes %f seconds\n", time_diff(start, end));
+	graph->init_all_vertices(vertex_initiator::ptr(new post_wcc_initiator()));
+
+	size_t num_remain;
+	do {
 		scc_stage = scc_stage_t::TRIM3;
 		trim3_vertices = 0;
 		gettimeofday(&start, NULL);
@@ -979,38 +1139,40 @@ int main(int argc, char *argv[])
 				time_diff(start, end),
 				trim3_vertices.load(std::memory_order_relaxed));
 
-		std::shared_ptr<vertex_filter> wfilter
-			= std::shared_ptr<vertex_filter>(new wcc_filter());
-		scc_stage = scc_stage_t::WCC;
-		gettimeofday(&start, NULL);
-		graph->start(wfilter);
-		graph->wait4complete();
-		gettimeofday(&end, NULL);
-		printf("WCC takes %f seconds\n", time_diff(start, end));
-		size_t count = std::static_pointer_cast<wcc_filter, vertex_filter>(
-				wfilter)->get_count();
-		if (count == 0)
-			break;
-		printf("There are %ld vertices at the stage of WCC\n", count);
-
+		vertex_query::ptr mdq1(new max_degree_query1());
+		graph->query_on_all(mdq1);
+		std::vector<vertex_id_t> fwbw_starts;
+		((max_degree_query1 *) mdq1.get())->get_max_ids(fwbw_starts);
+		printf("FWBW starts on %ld vertices\n", fwbw_starts.size());
 		scc_stage = scc_stage_t::FWBW;
 		gettimeofday(&start, NULL);
-		graph->start(std::shared_ptr<vertex_filter>(new sec_fwbw_filter()));
+		graph->start(fwbw_starts.data(), fwbw_starts.size(),
+				vertex_initiator::ptr(new fwbw_initiator()));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("FWBW takes %f seconds\n", time_diff(start, end));
 
 		scc_stage = scc_stage_t::PARTITION;
+		fwbw_vertices = 0;
 		gettimeofday(&start, NULL);
 		graph->start(std::shared_ptr<vertex_filter>(new scc_filter()));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
-		printf("partition takes %f seconds\n", time_diff(start, end));
-	}
+		printf("partition takes %f seconds. Assign %ld vertices to components.\n",
+				time_diff(start, end), fwbw_vertices.load());
 
+		vertex_query::ptr remain_q(new remain_vertex_query());
+		graph->query_on_all(remain_q);
+		num_remain = ((remain_vertex_query *) remain_q.get())->get_num_remaining();
+	} while (num_remain > 0);
+
+	NUMA_graph_index<scc_vertex>::const_iterator it
+		= ((NUMA_graph_index<scc_vertex> *) index)->begin();
+	NUMA_graph_index<scc_vertex>::const_iterator end_it
+		= ((NUMA_graph_index<scc_vertex> *) index)->end();
 	it = ((NUMA_graph_index<scc_vertex> *) index)->begin();
 	size_t max_comp_size = 0;
-	num_assigned = 0;
+	size_t num_assigned = 0;
 	for (; it != end_it; ++it) {
 		const scc_vertex &v = (const scc_vertex &) *it;
 		if (v.is_assigned())
@@ -1053,16 +1215,13 @@ int main(int argc, char *argv[])
 	printf("There are %ld components\n", comp_counts.size());
 
 	// Output the summary of the result.
-	FILE *f = stdout;
 	if (!output_file.empty()) {
-		f = fopen(output_file.c_str(), "w");
+		FILE *f = fopen(output_file.c_str(), "w");
 		assert(f);
-	}
-	BOOST_FOREACH(comp_map_t::value_type &p, comp_counts) {
-		if (p.second >= min_comp_size)
-			fprintf(f, "component %u: %ld\n", p.first, p.second);
-	}
-	if (!output_file.empty()) {
+		BOOST_FOREACH(comp_map_t::value_type &p, comp_counts) {
+			if (p.second >= min_comp_size)
+				fprintf(f, "component %u: %ld\n", p.first, p.second);
+		}
 		fclose(f);
 	}
 
