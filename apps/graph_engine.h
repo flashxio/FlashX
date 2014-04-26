@@ -145,6 +145,16 @@ public:
 	virtual void init(compute_vertex &) = 0;
 };
 
+class graph_engine;
+class vertex_query
+{
+public:
+	typedef std::shared_ptr<vertex_query> ptr;
+	virtual void run(graph_engine &, compute_vertex &v) = 0;
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) = 0;
+	virtual ptr clone() = 0;
+};
+
 class worker_thread;
 
 class graph_engine
@@ -343,6 +353,7 @@ public:
 	void preload_graph();
 
 	void init_all_vertices(vertex_initiator::ptr init);
+	void query_on_all(vertex_query::ptr query);
 };
 
 #endif

@@ -473,6 +473,53 @@ void graph_engine::init_all_vertices(vertex_initiator::ptr init)
 	}
 }
 
+class query_thread: public thread
+{
+	graph_engine &graph;
+	vertex_query::ptr query;
+	int part_id;
+public:
+	query_thread(graph_engine &_graph, vertex_query::ptr query, int part_id,
+			int node_id): thread("query_thread", node_id), graph(_graph) {
+		this->query = query;
+		this->part_id = part_id;
+	}
+
+	void run();
+
+	vertex_query::ptr get_query() {
+		return query;
+	}
+};
+
+void query_thread::run()
+{
+	size_t part_size = graph.get_partitioner()->get_part_size(part_id,
+			graph.get_num_vertices());
+	// We only iterate over the vertices in the local partition.
+	for (vertex_id_t id = 0; id < part_size; id++) {
+		local_vid_t local_id(id);
+		compute_vertex &v = graph.get_vertex(part_id, local_id);
+		query->run(graph, v);
+	}
+	stop();
+}
+
+void graph_engine::query_on_all(vertex_query::ptr query)
+{
+	std::vector<query_thread *> threads(get_num_threads());
+	for (size_t i = 0; i < threads.size(); i++) {
+		threads[i] = new query_thread(*this, query->clone(),
+				i, i % num_nodes);
+		threads[i]->start();
+	}
+	for (size_t i = 0; i < threads.size(); i++) {
+		threads[i]->join();
+		query->merge(*this, threads[i]->get_query());
+		delete threads[i];
+	}
+}
+
 vertex_index *load_vertex_index(const std::string &index_file)
 {
 	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;
