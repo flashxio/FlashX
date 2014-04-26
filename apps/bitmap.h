@@ -83,13 +83,18 @@ public:
 	bitmap(size_t max_num_bits, int node_id) {
 		this->max_num_bits = max_num_bits;
 		this->num_set_bits = 0;
-		size_t num_longs = get_num_longs();
-		ptr = (long *) numa_alloc_onnode(num_longs * sizeof(ptr[0]), node_id);
-		memset(ptr, 0, sizeof(ptr[0]) * num_longs);
+		if (max_num_bits > 0) {
+			size_t num_longs = get_num_longs();
+			ptr = (long *) numa_alloc_onnode(num_longs * sizeof(ptr[0]), node_id);
+			memset(ptr, 0, sizeof(ptr[0]) * num_longs);
+		}
+		else
+			ptr = NULL;
 	}
 
 	~bitmap() {
-		numa_free(ptr, get_num_longs() * sizeof(ptr[0]));
+		if (ptr)
+			numa_free(ptr, get_num_longs() * sizeof(ptr[0]));
 	}
 
 	size_t get_num_longs() const {
@@ -105,10 +110,12 @@ public:
 	}
 
 	void set_all() {
-		memset(ptr, 0xff, sizeof(ptr[0]) * (get_num_longs() - 1));
-		num_set_bits = NUM_BITS_LONG * (get_num_longs() - 1);
-		for (size_t i = num_set_bits; i < max_num_bits; i++)
-			set(i);
+		if (max_num_bits > 0) {
+			memset(ptr, 0xff, sizeof(ptr[0]) * (get_num_longs() - 1));
+			num_set_bits = NUM_BITS_LONG * (get_num_longs() - 1);
+			for (size_t i = num_set_bits; i < max_num_bits; i++)
+				set(i);
+		}
 	}
 
 	void set(size_t idx) {
