@@ -821,38 +821,6 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-class scc_filter: public vertex_filter
-{
-public:
-	virtual bool keep(compute_vertex &v) {
-		scc_vertex &scc_v = (scc_vertex &) v;
-		return !scc_v.is_assigned();
-	}
-};
-
-class wcc_filter: public vertex_filter
-{
-	std::atomic_ulong count;
-public:
-	wcc_filter() {
-		count = 0;
-	}
-
-	virtual bool keep(compute_vertex &v) {
-		scc_vertex &scc_v = (scc_vertex &) v;
-		bool activate = !scc_v.is_assigned();
-		if (activate) {
-			scc_v.init_wcc();
-			count.fetch_add(1, std::memory_order_relaxed);
-		}
-		return activate;
-	}
-
-	unsigned long get_count() const {
-		return count;
-	}
-};
-
 #if 0
 class sec_fwbw_filter: public vertex_filter
 {
@@ -903,6 +871,16 @@ public:
 	void init(compute_vertex &v) {
 		scc_vertex &sv = (scc_vertex &) v;
 		sv.reset_for_fwbw();
+	}
+};
+
+class wcc_initiator: public vertex_initiator
+{
+public:
+	virtual void init(compute_vertex &v) {
+		scc_vertex &scc_v = (scc_vertex &) v;
+		assert(!scc_v.is_assigned());
+		scc_v.init_wcc();
 	}
 };
 
@@ -1009,34 +987,6 @@ public:
 			ids.push_back(it->second);
 		}
 		return max_ids.size();
-	}
-};
-
-class remain_vertex_query: public vertex_query
-{
-	size_t num_remain;
-public:
-	remain_vertex_query() {
-		num_remain = 0;
-	}
-
-	virtual void run(graph_engine &, compute_vertex &v) {
-		scc_vertex &scc_v = (scc_vertex &) v;
-		if (!scc_v.is_assigned())
-			num_remain++;
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		remain_vertex_query *rvq = (remain_vertex_query *) q.get();
-		num_remain += rvq->num_remain;
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new remain_vertex_query());
-	}
-
-	size_t get_num_remaining() const {
-		return num_remain;
 	}
 };
 
@@ -1148,22 +1098,31 @@ int main(int argc, char *argv[])
 	printf("partition takes %f seconds. Assign %ld vertices to components.\n",
 			time_diff(start, end), fwbw_vertices.load());
 
-	std::shared_ptr<vertex_filter> wfilter
-		= std::shared_ptr<vertex_filter>(new wcc_filter());
+	std::vector<vertex_program::ptr> part_vprogs;
+	graph->get_vertex_programs(part_vprogs);
+	std::vector<vertex_id_t> active_vertices;
+	BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
+		part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
+		active_vertices.insert(active_vertices.begin(),
+				part_vprog->get_remain_vertices().begin(),
+				part_vprog->get_remain_vertices().end());
+	}
+
 	scc_stage = scc_stage_t::WCC;
 	gettimeofday(&start, NULL);
-	graph->start(wfilter);
+	graph->start(active_vertices.data(), active_vertices.size(),
+			std::shared_ptr<vertex_initiator>(new wcc_initiator()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("WCC takes %f seconds\n", time_diff(start, end));
-	graph->init_all_vertices(vertex_initiator::ptr(new post_wcc_initiator()));
+	graph->init_vertices(active_vertices.data(), active_vertices.size(),
+			vertex_initiator::ptr(new post_wcc_initiator()));
 
-	size_t num_remain;
 	do {
 		scc_stage = scc_stage_t::TRIM3;
 		trim3_vertices = 0;
 		gettimeofday(&start, NULL);
-		graph->start(std::shared_ptr<vertex_filter>(new scc_filter()));
+		graph->start(active_vertices.data(), active_vertices.size());
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("trim3 takes %f seconds, and trime %ld vertices\n",
@@ -1186,7 +1145,8 @@ int main(int argc, char *argv[])
 		scc_stage = scc_stage_t::PARTITION;
 		fwbw_vertices = 0;
 		gettimeofday(&start, NULL);
-		graph->start(std::shared_ptr<vertex_filter>(new scc_filter()),
+		graph->start(active_vertices.data(), active_vertices.size(),
+				vertex_initiator::ptr(),
 				vertex_program_creater::ptr(new part_vertex_program_creater()));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
@@ -1195,12 +1155,15 @@ int main(int argc, char *argv[])
 
 		std::vector<vertex_program::ptr> part_vprogs;
 		graph->get_vertex_programs(part_vprogs);
-		num_remain = 0;
+		active_vertices.clear();
 		BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
-			num_remain += part_vertex_program::cast2(vprog)->get_remain_vertices().size();
+			part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
+			active_vertices.insert(active_vertices.begin(),
+					part_vprog->get_remain_vertices().begin(),
+					part_vprog->get_remain_vertices().end());
 		}
-		printf("There are %ld vertices left unassigned\n", num_remain);
-	} while (num_remain > 0);
+		printf("There are %ld vertices left unassigned\n", active_vertices.size());
+	} while (!active_vertices.empty());
 
 	NUMA_graph_index<scc_vertex>::const_iterator it
 		= ((NUMA_graph_index<scc_vertex> *) index)->begin();
