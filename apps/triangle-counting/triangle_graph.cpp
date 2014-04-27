@@ -233,22 +233,22 @@ public:
 		return local_value.get_num_triangles();
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
-			run_on_itself(graph, vertex);
+			run_on_itself(prog, vertex);
 		else
-			run_on_neighbor(graph, vertex);
+			run_on_neighbor(prog, vertex);
 	}
 
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
+	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &graph, const vertex_message &msg) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
 };
@@ -350,7 +350,7 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 	return num_local_triangles;
 }
 
-void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void triangle_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(!local_value.has_runtime_data());
 
@@ -378,7 +378,7 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 	int num_local_edges = this->get_num_in_edges() + this->get_num_out_edges();
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
-		triangle_vertex &v1 = (triangle_vertex &) graph.get_vertex(id);
+		triangle_vertex &v1 = (triangle_vertex &) prog.get_graph().get_vertex(id);
 		int num_local_edges1 = v1.get_num_in_edges() + v1.get_num_out_edges();
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
@@ -391,7 +391,7 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 	end = vertex.get_neigh_end(edge_type::OUT_EDGE);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
-		triangle_vertex &v1 = (triangle_vertex &) graph.get_vertex(id);
+		triangle_vertex &v1 = (triangle_vertex &) prog.get_graph().get_vertex(id);
 		int num_local_edges1 = v1.get_num_in_edges() + v1.get_num_out_edges();
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
@@ -421,7 +421,7 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 	request_partial_vertices(reqs.data(), reqs.size());
 }
 
-void triangle_vertex::run_on_neighbor(graph_engine &graph,
+void triangle_vertex::run_on_neighbor(vertex_program &prog,
 		const page_vertex &vertex)
 {
 	assert(local_value.has_runtime_data());
@@ -433,7 +433,7 @@ void triangle_vertex::run_on_neighbor(graph_engine &graph,
 	if (ret > 0) {
 		inc_num_triangles(ret);
 		count_msg msg(ret);
-		graph.send_msg(vertex.get_id(), msg);
+		prog.send_msg(vertex.get_id(), msg);
 	}
 
 	// If we have seen all required neighbors, we have complete
@@ -448,7 +448,7 @@ void triangle_vertex::run_on_neighbor(graph_engine &graph,
 			// Inform the neighbor if they share triangles.
 			if (data->triangles[i] > 0) {
 				count_msg msg(data->triangles[i]);
-				graph.send_msg(data->in_edges[i], msg);
+				prog.send_msg(data->in_edges[i], msg);
 			}
 		}
 		size_t num_curr_triangles = data->num_triangles;

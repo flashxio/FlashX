@@ -117,7 +117,7 @@ public:
 		return dists[idx];
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		if (updated) {
 			updated = false;
 			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
@@ -125,9 +125,9 @@ public:
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg) {
+	void run_on_message(vertex_program &, const vertex_message &msg) {
 		const diameter_message &dmsg = (const diameter_message &) msg;
 		for (int i = 0; i < num_bfs; i++) {
 			if (dmsg.get_dist(i) + 1 < dists[i]) {
@@ -139,7 +139,7 @@ public:
 	}
 };
 
-void diameter_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void diameter_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	int num_dests = vertex.get_num_edges(OUT_EDGE);
 	if (num_dests == 0)
@@ -149,7 +149,7 @@ void diameter_vertex::run(graph_engine &graph, const page_vertex &vertex)
 	// the next level.
 	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
 	diameter_message msg(dists, num_bfs);
-	graph.multicast_msg(it, msg);
+	prog.multicast_msg(it, msg);
 }
 
 class diameter_initiator: public vertex_initiator

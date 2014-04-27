@@ -45,20 +45,20 @@ public:
 		adj_list = NULL;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	virtual void run_on_message(graph_engine &, const vertex_message &msg) {
+	void run_on_message(vertex_program &, const vertex_message &msg) {
 	}
 
 	friend class part_test_vertex;
 };
 
-void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	adj_list = new vertex_id_t[vertex.get_num_edges(BOTH_EDGES)];
 	page_byte_array::const_iterator<vertex_id_t> end_it

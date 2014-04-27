@@ -65,20 +65,20 @@ public:
 		sum = 0;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	virtual void run_on_message(graph_engine &, const vertex_message &msg1) {
+	virtual void run_on_message(vertex_program &, const vertex_message &msg1) {
 		const test_message &msg = (const test_message &) msg1;
 		sum += msg.get_value();
 	}
 };
 
-void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	int num_dests = vertex.get_num_edges(BOTH_EDGES);
 	if (num_dests == 0)
@@ -86,7 +86,7 @@ void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
 
 	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
 	test_message msg(1);
-	graph.multicast_msg(it, msg);
+	prog.multicast_msg(it, msg);
 }
 
 void int_handler(int sig_num)

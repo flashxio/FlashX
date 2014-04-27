@@ -285,6 +285,7 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);
 	worker_threads.resize(num_threads);
+	vprograms.resize(num_threads);
 
 	if (graph_conf.get_trace_file().empty())
 		logger = NULL;
@@ -300,20 +301,21 @@ graph_engine::~graph_engine()
 		delete logger;
 }
 
-void graph_engine::init_threads(vertex_program::ptr prog)
+void graph_engine::init_threads(vertex_program_creater::ptr creater)
 {
 	// Prepare the worker threads.
 	int num_threads = get_num_threads();
 	for (int i = 0; i < num_threads; i++) {
 		vertex_program::ptr new_prog;
-		if (prog)
-			new_prog = prog->clone();
+		if (creater)
+			new_prog = creater->create();
 		else
 			new_prog = vertices->create_def_vertex_program();
-		worker_thread *t = new worker_thread(this, factory, std::move(new_prog),
+		worker_thread *t = new worker_thread(this, factory, new_prog,
 				i % num_nodes, i, num_threads, scheduler);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
+		vprograms[i] = new_prog;
 	}
 	for (int i = 0; i < num_threads; i++) {
 		worker_threads[i]->init_messaging(worker_threads);
@@ -321,9 +323,9 @@ void graph_engine::init_threads(vertex_program::ptr prog)
 }
 
 void graph_engine::start(vertex_id_t ids[], int num,
-		vertex_initiator::ptr init, vertex_program::ptr prog)
+		vertex_initiator::ptr init, vertex_program_creater::ptr creater)
 {
-	init_threads(std::move(prog));
+	init_threads(std::move(creater));
 	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
@@ -343,9 +345,9 @@ void graph_engine::start(vertex_id_t ids[], int num,
 }
 
 void graph_engine::start(std::shared_ptr<vertex_filter> filter,
-		vertex_program::ptr prog)
+		vertex_program_creater::ptr creater)
 {
-	init_threads(std::move(prog));
+	init_threads(std::move(creater));
 	// Let's assume all vertices will be activated first.
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
@@ -354,9 +356,10 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 	}
 }
 
-void graph_engine::start_all(vertex_initiator::ptr init, vertex_program::ptr prog)
+void graph_engine::start_all(vertex_initiator::ptr init,
+		vertex_program_creater::ptr creater)
 {
-	init_threads(std::move(prog));
+	init_threads(std::move(creater));
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices();
@@ -431,37 +434,6 @@ void graph_engine::preload_graph()
 		io->access(buf, i, BLOCK_SIZE, READ);
 	factory->destroy_io(io);
 	printf("successfully preload\n");
-}
-
-void graph_engine::activate_vertices(vertex_id_t ids[], int num)
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->send_activation(ids, num);
-}
-
-void graph_engine::activate_vertices(edge_seq_iterator &it)
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->send_activation(it);
-}
-
-void graph_engine::multicast_msg(vertex_id_t ids[], int num,
-		vertex_message &msg)
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->multicast_msg(ids, num, msg);
-}
-
-void graph_engine::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->multicast_msg(it, msg);
-}
-
-void graph_engine::send_msg(vertex_id_t dest, vertex_message &msg)
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->send_msg(dest, msg);
 }
 
 void graph_engine::init_all_vertices(vertex_initiator::ptr init)

@@ -64,22 +64,22 @@ public:
     return curr_itr_pr;
   }
 
-  void run(graph_engine &graph) { 
+  void run(vertex_program &prog) { 
 	// We perform pagerank for at most `num_iters' iterations.
-	if (graph.get_curr_level() >= num_iters)
+	if (prog.get_graph().get_curr_level() >= num_iters)
 		return;
     vertex_id_t id = get_id();
     request_vertices(&id, 1); // put my edgelist in page cache
   };
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &,
+	void run_on_message(vertex_program &,
 /* Only serves to activate on the next iteration */
 			const vertex_message &msg) { }; 
 };
 
-void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
+void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   // Gather
   float accum = 0;
   page_byte_array::const_iterator<vertex_id_t> end_it
@@ -88,7 +88,7 @@ void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
   for (page_byte_array::const_iterator<vertex_id_t> it
       = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
     vertex_id_t id = *it;
-    pgrank_vertex& v = (pgrank_vertex&) graph.get_vertex(id);
+    pgrank_vertex& v = (pgrank_vertex&) prog.get_graph().get_vertex(id);
     // Notice I want this iteration's pagerank
     accum += (v.get_curr_itr_pr()/v.get_num_out_edges()); 
   }   
@@ -106,7 +106,7 @@ void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
 	int num_dests = vertex.get_num_edges(OUT_EDGE);
     if (num_dests > 0) {
 		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
-		graph.activate_vertices(it) ;
+		prog.activate_vertices(it) ;
     }   
   }
 }

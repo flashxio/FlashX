@@ -57,20 +57,20 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		if (!has_visited()) {
 			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
 			request_partial_vertices(&req, 1);
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 };
 
-void bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void bfs_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(!has_visited());
 	set_visited(true);
@@ -84,10 +84,10 @@ void bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
 #ifdef USE_ARRAY
 	stack_array<vertex_id_t, 1024> neighs(num_dests);
 	vertex.read_edges(OUT_EDGE, neighs.data(), num_dests);
-	graph.activate_vertices(neighs.data(), num_dests);
+	prog.activate_vertices(neighs.data(), num_dests);
 #else
 	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
-	graph.activate_vertices(it);
+	prog.activate_vertices(it);
 #endif
 }
 

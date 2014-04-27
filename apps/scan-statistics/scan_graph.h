@@ -440,7 +440,7 @@ public:
 };
 
 class scan_vertex;
-extern void (*finding_triangles_end)(graph_engine &, scan_vertex &,
+extern void (*finding_triangles_end)(vertex_program &, scan_vertex &,
 		runtime_data_t *);
 extern runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
 		const page_vertex &);
@@ -500,17 +500,17 @@ public:
 		return local_value.get_real_local();
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
-			run_on_itself(graph, vertex);
+			run_on_itself(prog, vertex);
 		else
-			run_on_neighbor(graph, vertex);
+			run_on_neighbor(prog, vertex);
 	}
 
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
+	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &graph, const vertex_message &msg) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 };
 

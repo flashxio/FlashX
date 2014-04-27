@@ -80,7 +80,7 @@ public:
 		parent = -1;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		if (parent_dist + 1 < distance) {
 			distance = parent_dist + 1;
 			parent = tmp_parent;
@@ -90,9 +90,9 @@ public:
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg1) {
+	void run_on_message(vertex_program &, const vertex_message &msg1) {
 		const dist_message &msg = (const dist_message &) msg1;
 		if (parent_dist > msg.get_parent_dist()) {
 			parent_dist = msg.get_parent_dist();
@@ -101,7 +101,7 @@ public:
 	}
 };
 
-void sssp_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void sssp_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 #ifdef DEBUG
 	num_visits.inc(1);
@@ -118,7 +118,7 @@ void sssp_vertex::run(graph_engine &graph, const page_vertex &vertex)
 		dest_buf[num_dests++] = id;
 	}
 	dist_message msg(get_id(), distance);
-	graph.multicast_msg(dest_buf.data(), num_dests, msg);
+	prog.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
 void int_handler(int sig_num)

@@ -62,7 +62,7 @@ public:
     return degree;
   }
 
-  void run(graph_engine &graph) {
+  void run(vertex_program &prog) {
     if (degree > K) { return; }
 
     if (!is_deleted()) {
@@ -71,9 +71,9 @@ public:
     }
   }
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	virtual void run_on_message(graph_engine &, const vertex_message &msg); 
+	void run_on_message(vertex_program &prog, const vertex_message &msg); 
 };
 
 // If I am to be deleted, multicast this message to all my neighbors
@@ -85,7 +85,7 @@ class deleted_message: public vertex_message
   }
 };
 
-void multicast_delete_msg(graph_engine &graph, 
+void multicast_delete_msg(vertex_program &prog, 
       const page_vertex &vertex, edge_type E)
 {
     page_byte_array::const_iterator<vertex_id_t> end_it
@@ -100,12 +100,12 @@ void multicast_delete_msg(graph_engine &graph,
     // Doesn't matter who sent it, just --degree on reception 
     if (num_dests > 0) {
 		deleted_message msg;
-      graph.multicast_msg(dest_buf.data(), num_dests, msg);
+      prog.multicast_msg(dest_buf.data(), num_dests, msg);
     }
 }
 
 // This is only run by 1st iteration active vertices
-void kcore_vertex::run(graph_engine &graph, const page_vertex &vertex) {
+void kcore_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   if(is_deleted()) {
     return; // Nothing to be done here
   }
@@ -114,13 +114,13 @@ void kcore_vertex::run(graph_engine &graph, const page_vertex &vertex) {
     _delete();
    
     // Send two multicast messages - [IN_EDGE, OUT_EDGE] 
-    multicast_delete_msg(graph, vertex, IN_EDGE);
-    multicast_delete_msg(graph, vertex, OUT_EDGE);
+    multicast_delete_msg(prog, vertex, IN_EDGE);
+    multicast_delete_msg(prog, vertex, OUT_EDGE);
     
   }
 }
 
-void kcore_vertex::run_on_message(graph_engine &, const vertex_message &msg) {
+void kcore_vertex::run_on_message(vertex_program &, const vertex_message &msg) {
   if (is_deleted()) {
     return; // nothing to be done here
   }

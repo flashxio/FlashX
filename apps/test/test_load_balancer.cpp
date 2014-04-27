@@ -51,20 +51,20 @@ public:
 		assert(add1_count == num_edges * 2);
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	virtual void run_on_message(graph_engine &, const vertex_message &msg1) {
+	virtual void run_on_message(vertex_program &, const vertex_message &msg1) {
 		const count_message &msg = (const count_message &) msg1;
 		add1_count += msg.get_count();
 	}
 };
 
-void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	int worker_id = t->get_worker_id();
@@ -90,7 +90,7 @@ void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
 		add1_count++;
 	}
 	count_message msg;
-	graph.multicast_msg(dest_buf.data(), num_dests, msg);
+	prog.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
 int main(int argc, char *argv[])

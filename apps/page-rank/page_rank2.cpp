@@ -74,35 +74,35 @@ public:
 		return new_pr;
 	}
 
-	void run(graph_engine &graph) { 
+	void run(vertex_program &prog) { 
 		// We perform pagerank for at most `num_iters' iterations.
-		if (graph.get_curr_level() >= num_iters)
+		if (prog.get_graph().get_curr_level() >= num_iters)
 			return;
 		directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
 		request_partial_vertices(&req, 1);
 	};
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg1) {
+	void run_on_message(vertex_program &, const vertex_message &msg1) {
 		const pr_message &msg = (const pr_message &) msg1;
 		new_pr += msg.get_delta();
 	}
 };
 
-void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	int num_dests = vertex.get_num_edges(OUT_EDGE);
 	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
 
 	// If this is the first iteration.
-	if (graph.get_curr_level() == 0) {
+	if (prog.get_graph().get_curr_level() == 0) {
 		pr_message msg(curr_itr_pr / num_dests * DAMPING_FACTOR);
-		graph.multicast_msg(it, msg);
+		prog.multicast_msg(it, msg);
 	}
 	else if (std::fabs(new_pr - curr_itr_pr) > TOLERANCE) {
 		pr_message msg((new_pr - curr_itr_pr) / num_dests * DAMPING_FACTOR);
-		graph.multicast_msg(it, msg);
+		prog.multicast_msg(it, msg);
 		curr_itr_pr = new_pr;
 	}
 }

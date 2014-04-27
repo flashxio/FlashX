@@ -169,16 +169,16 @@ public:
 	size_t get_est_local_scan(graph_engine &graph, const page_vertex *vertex);
 
 	using scan_vertex::run;
-	void run(graph_engine &graph);
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog);
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
-			run_on_itself(graph, vertex);
+			run_on_itself(prog, vertex);
 		else
-			run_on_neighbor(graph, vertex);
+			run_on_neighbor(prog, vertex);
 	}
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
 
-	void finding_triangles_end(graph_engine &graph, runtime_data_t *data) {
+	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
 		if (max_scan.update(data->local_scan)) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
@@ -190,7 +190,7 @@ public:
 	}
 };
 
-void topK_scan_vertex::run(graph_engine &graph)
+void topK_scan_vertex::run(vertex_program &prog)
 {
 	bool req_itself = false;
 	// If we have computed local scan on the vertex, skip the vertex.
@@ -261,23 +261,23 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 	return tot_edges;
 }
 
-void topK_scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
 	assert(num_local_edges == get_num_edges());
 	if (num_local_edges == 0)
 		return;
 
-	if (get_est_local_scan(graph, &vertex) < max_scan.get())
+	if (get_est_local_scan(prog.get_graph(), &vertex) < max_scan.get())
 		return;
-	scan_vertex::run_on_itself(graph, vertex);
+	scan_vertex::run_on_itself(prog, vertex);
 }
 
-void topK_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v,
+void topK_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 		runtime_data_t *data)
 {
 	topK_scan_vertex &topK_v = (topK_scan_vertex &) scan_v;
-	topK_v.finding_triangles_end(graph, data);
+	topK_v.finding_triangles_end(prog, data);
 }
 
 void int_handler(int sig_num)

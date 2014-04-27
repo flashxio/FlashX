@@ -178,6 +178,7 @@ class graph_engine
 
 	int num_nodes;
 	std::vector<worker_thread *> worker_threads;
+	std::vector<vertex_program::ptr> vprograms;
 
 	trace_logger *logger;
 	file_io_factory::shared_ptr factory;
@@ -190,7 +191,7 @@ class graph_engine
 		}
 	}
 
-	void init_threads(vertex_program::ptr prog);
+	void init_threads(vertex_program_creater::ptr creater);
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
 			graph_index *index);
@@ -235,28 +236,18 @@ public:
 	}
 
 	void start(std::shared_ptr<vertex_filter> filter,
-			vertex_program::ptr prog = vertex_program::ptr());
+			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
 	void start(vertex_id_t ids[], int num,
 			vertex_initiator::ptr init = vertex_initiator::ptr(),
-			vertex_program::ptr prog = vertex_program::ptr());
+			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
 	void start_all(vertex_initiator::ptr init = vertex_initiator::ptr(),
-			vertex_program::ptr prog = vertex_program::ptr());
+			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
 
 	/**
 	 * The algorithm progresses to the next level.
 	 * It returns true if no more work can progress.
 	 */
 	bool progress_next_level();
-
-	/**
-	 * Activate vertices that may be processed in the next level.
-	 */
-	void activate_vertices(vertex_id_t ids[], int num);
-	void activate_vertices(edge_seq_iterator &it);
-
-	void activate_vertex(vertex_id_t vertex) {
-		activate_vertices(&vertex, 1);
-	}
 
 	/**
 	 * Get vertices to be processed in the current level.
@@ -296,11 +287,6 @@ public:
 	int get_file_id() const {
 		return factory->get_file_id();
 	}
-
-	void multicast_msg(vertex_id_t ids[], int num, vertex_message &msg);
-	void multicast_msg(edge_seq_iterator &it, vertex_message &msg);
-
-	void send_msg(vertex_id_t dest, vertex_message &msg);
 
 	ext_mem_vertex_interpreter &get_vertex_interpreter() const {
 		return *interpreter;
@@ -354,6 +340,10 @@ public:
 
 	void init_all_vertices(vertex_initiator::ptr init);
 	void query_on_all(vertex_query::ptr query);
+
+	void get_vertex_programs(std::vector<vertex_program::ptr> &programs) {
+		programs = vprograms;
+	}
 };
 
 #endif

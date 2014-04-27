@@ -77,22 +77,22 @@ public:
 			const std::vector<vertex_id_t> *neighbors, int timestamp,
 			edge_type type);
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
-			run_on_itself(graph, vertex);
+			run_on_itself(prog, vertex);
 		else
-			run_on_neighbor(graph, vertex);
+			run_on_neighbor(prog, vertex);
 	}
 
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
+	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &graph, const vertex_message &msg) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 };
 
@@ -252,7 +252,7 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 	return result - result_begin;
 }
 
-void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
@@ -353,7 +353,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	request_partial_vertices(reqs.data(), reqs.size());
 }
 
-void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &vertex)
 {
 	num_joined++;
 	assert(neighbors);

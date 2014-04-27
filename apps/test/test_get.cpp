@@ -51,18 +51,18 @@ public:
 		sum = 0;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	virtual void run_on_message(graph_engine &, const vertex_message &msg) {
+	virtual void run_on_message(vertex_program &, const vertex_message &msg) {
 	}
 };
 
-void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	long local_sum = 0;
 	int num_dests = vertex.get_num_edges(BOTH_EDGES);
@@ -71,7 +71,7 @@ void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
 
 	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
 	PAGE_FOREACH(vertex_id_t, id, it) {
-		test_vertex &v = (test_vertex &) graph.get_vertex(id);
+		test_vertex &v = (test_vertex &) prog.get_graph().get_vertex(id);
 		local_sum += v.sum;
 	} PAGE_FOREACH_END
 	this->sum = local_sum;

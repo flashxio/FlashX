@@ -166,7 +166,7 @@ worker_thread::worker_thread(graph_engine *graph,
 	next_activated_vertices = new bitmap(graph->get_partitioner(
 				)->get_part_size(worker_id, graph->get_num_vertices()), node_id);
 	this->vprogram = std::move(prog);
-	vprogram->init(this);
+	vprogram->init(graph, this);
 	start_all = false;
 	this->worker_id = worker_id;
 	this->graph = graph;
@@ -311,7 +311,7 @@ int worker_thread::process_activated_vertices(int max)
 		// in the current iteration.
 		vertex_program &curr_vprog = get_vertex_program();
 		assert(curr_compute == NULL);
-		curr_vprog.run(*graph, *info);
+		curr_vprog.run(*info);
 		if (curr_compute) {
 			// If the user code requests the vertices that are empty or whose
 			// requested part is empty. These empty requests can be handled

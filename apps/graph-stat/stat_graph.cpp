@@ -48,17 +48,17 @@ public:
 		num_out_edges = 0;
 	}
 
-	virtual void run(graph_engine &graph) {
+	virtual void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		num_in_edges = vertex.get_num_edges(edge_type::IN_EDGE);
 		num_out_edges = vertex.get_num_edges(edge_type::OUT_EDGE);
 	}
 
-	virtual void run_on_message(graph_engine &, const vertex_message &msg) {
+	virtual void run_on_message(vertex_program &, const vertex_message &msg) {
 	}
 
 	int get_num_edges(edge_type type) const {

@@ -73,7 +73,7 @@ void vertex_compute::run(page_byte_array &array)
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	t->set_curr_vertex_compute(this);
 	vertex_program &curr_vprog = t->get_vertex_program();
-	curr_vprog.run(*graph, *v, *ext_v);
+	curr_vprog.run(*v, *ext_v);
 	complete_request();
 	t->reset_curr_vertex_compute();
 }
@@ -104,7 +104,7 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	vertex_program &curr_vprog = t->get_vertex_program();
-	curr_vprog.run(*graph, *comp_v, pg_v);
+	curr_vprog.run(*comp_v, pg_v);
 	assert(t->get_curr_vertex_compute() == NULL);
 	num_fetched++;
 	compute->complete_request();
@@ -226,7 +226,7 @@ void directed_vertex_compute::request_partial_vertices(
 					&& info.get_num_out_edges() == 0)) {
 			empty_page_byte_array array;
 			page_directed_vertex pg_v(req->get_id(), 0, 0, array);
-			curr_vprog.run(*graph, *v, pg_v);
+			curr_vprog.run(*v, pg_v);
 			// We don't need to call complete_request() here.
 		}
 		else
@@ -336,7 +336,7 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 
 		worker_thread *t = (worker_thread *) thread::get_curr_thread();
 		vertex_program &curr_vprog = t->get_vertex_program();
-		curr_vprog.run(*graph, *comp_v, *ext_v);
+		curr_vprog.run(*comp_v, *ext_v);
 		ts_compute->complete_request();
 		ts_compute->dec_ref();
 		// If the original user compute hasn't been issued to the filesystem,

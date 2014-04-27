@@ -361,115 +361,115 @@ public:
 		state.fwbw.assign_new_color(state.wcc.wcc_max);
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		if (is_assigned())
 			return;
 
 		switch(scc_stage) {
 			case scc_stage_t::TRIM1:
-				run_stage_trim1(graph);
+				run_stage_trim1(prog);
 				break;
 			case scc_stage_t::TRIM2:
-				run_stage_trim2(graph);
+				run_stage_trim2(prog);
 				break;
 			case scc_stage_t::TRIM3:
-				run_stage_trim3(graph);
+				run_stage_trim3(prog);
 				break;
 			case scc_stage_t::FWBW:
-				run_stage_FWBW(graph);
+				run_stage_FWBW(prog);
 				break;
 			case scc_stage_t::PARTITION:
-				run_stage_part(graph);
+				run_stage_part(prog);
 				break;
 			case scc_stage_t::WCC:
-				run_stage_wcc(graph);
+				run_stage_wcc(prog);
 				break;
 			default:
 				assert(0);
 		}
 	}
 
-	void run_stage_trim1(graph_engine &graph);
-	void run_stage_trim2(graph_engine &graph);
-	void run_stage_trim3(graph_engine &graph);
-	void run_stage_FWBW(graph_engine &graph);
-	void run_stage_part(graph_engine &graph);
-	void run_stage_wcc(graph_engine &graph);
+	void run_stage_trim1(vertex_program &prog);
+	void run_stage_trim2(vertex_program &prog);
+	void run_stage_trim3(vertex_program &prog);
+	void run_stage_FWBW(vertex_program &prog);
+	void run_stage_part(vertex_program &prog);
+	void run_stage_wcc(vertex_program &prog);
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		if (is_assigned())
 			return;
 
 		switch(scc_stage) {
 			case scc_stage_t::TRIM1:
-				run_stage_trim1(graph, vertex);
+				run_stage_trim1(prog, vertex);
 				break;
 			case scc_stage_t::TRIM2:
-				run_stage_trim2(graph, vertex);
+				run_stage_trim2(prog, vertex);
 				break;
 			case scc_stage_t::TRIM3:
-				run_stage_trim3(graph, vertex);
+				run_stage_trim3(prog, vertex);
 				break;
 			case scc_stage_t::FWBW:
-				run_stage_FWBW(graph, vertex);
+				run_stage_FWBW(prog, vertex);
 				break;
 			case scc_stage_t::PARTITION:
-				run_stage_part(graph, vertex);
+				run_stage_part(prog, vertex);
 				break;
 			case scc_stage_t::WCC:
-				run_stage_wcc(graph, vertex);
+				run_stage_wcc(prog, vertex);
 				break;
 			default:
 				assert(0);
 		}
 	}
 
-	void run_stage_trim1(graph_engine &graph, const page_vertex &vertex);
-	void run_stage_trim2(graph_engine &graph, const page_vertex &vertex);
-	void run_stage_trim3(graph_engine &graph, const page_vertex &vertex);
-	void run_stage_FWBW(graph_engine &graph, const page_vertex &vertex);
-	void run_stage_part(graph_engine &graph, const page_vertex &vertex);
-	void run_stage_wcc(graph_engine &graph, const page_vertex &vertex);
+	void run_stage_trim1(vertex_program &prog, const page_vertex &vertex);
+	void run_stage_trim2(vertex_program &prog, const page_vertex &vertex);
+	void run_stage_trim3(vertex_program &prog, const page_vertex &vertex);
+	void run_stage_FWBW(vertex_program &prog, const page_vertex &vertex);
+	void run_stage_part(vertex_program &prog, const page_vertex &vertex);
+	void run_stage_wcc(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &graph, const vertex_message &msg) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 		if (is_assigned())
 			return;
 
 		switch(scc_stage) {
 			case scc_stage_t::TRIM1:
-				run_on_message_stage_trim1(graph, msg);
+				run_on_message_stage_trim1(prog, msg);
 				break;
 			case scc_stage_t::TRIM2:
-				run_on_message_stage_trim2(graph, msg);
+				run_on_message_stage_trim2(prog, msg);
 				break;
 			case scc_stage_t::TRIM3:
-				run_on_message_stage_trim3(graph, msg);
+				run_on_message_stage_trim3(prog, msg);
 				break;
 			case scc_stage_t::FWBW:
-				run_on_message_stage_FWBW(graph, msg);
+				run_on_message_stage_FWBW(prog, msg);
 				break;
 			case scc_stage_t::PARTITION:
-				run_on_message_stage_part(graph, msg);
+				run_on_message_stage_part(prog, msg);
 				break;
 			case scc_stage_t::WCC:
-				run_on_message_stage_wcc(graph, msg);
+				run_on_message_stage_wcc(prog, msg);
 				break;
 			default:
 				assert(0);
 		}
 	}
 
-	void run_on_message_stage_trim1(graph_engine &graph, const vertex_message &msg);
-	void run_on_message_stage_trim2(graph_engine &graph, const vertex_message &msg);
-	void run_on_message_stage_trim3(graph_engine &graph, const vertex_message &msg);
-	void run_on_message_stage_FWBW(graph_engine &graph, const vertex_message &msg);
-	void run_on_message_stage_part(graph_engine &graph, const vertex_message &msg);
-	void run_on_message_stage_wcc(graph_engine &graph, const vertex_message &msg);
+	void run_on_message_stage_trim1(vertex_program &prog, const vertex_message &msg);
+	void run_on_message_stage_trim2(vertex_program &prog, const vertex_message &msg);
+	void run_on_message_stage_trim3(vertex_program &prog, const vertex_message &msg);
+	void run_on_message_stage_FWBW(vertex_program &prog, const vertex_message &msg);
+	void run_on_message_stage_part(vertex_program &prog, const vertex_message &msg);
+	void run_on_message_stage_wcc(vertex_program &prog, const vertex_message &msg);
 };
 
 std::atomic_ulong trim1_vertices;
 
-void scc_vertex::run_stage_trim1(graph_engine &graph)
+void scc_vertex::run_stage_trim1(vertex_program &prog)
 {
 	if (state.trim1.num_in_edges == 0 || state.trim1.num_out_edges == 0) {
 		vertex_id_t id = get_id();
@@ -481,7 +481,7 @@ void scc_vertex::run_stage_trim1(graph_engine &graph)
 	}
 }
 
-void scc_vertex::run_stage_trim1(graph_engine &graph, const page_vertex &vertex)
+void scc_vertex::run_stage_trim1(vertex_program &prog, const page_vertex &vertex)
 {
 	// The vertices on the other side of the edges should reduce their degree
 	// by 1. They have the opposite direction of the edges.
@@ -499,11 +499,11 @@ void scc_vertex::run_stage_trim1(graph_engine &graph, const page_vertex &vertex)
 		int num_edges = vertex.get_num_edges(BOTH_EDGES);
 		edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0,
 				num_edges);
-		graph.multicast_msg(it, msg);
+		prog.multicast_msg(it, msg);
 	}
 }
 
-void scc_vertex::run_on_message_stage_trim1(graph_engine &graph,
+void scc_vertex::run_on_message_stage_trim1(vertex_program &prog,
 		const vertex_message &msg1)
 {
 	const trim1_message &msg = (const trim1_message &) msg1;
@@ -521,7 +521,7 @@ void scc_vertex::run_on_message_stage_trim1(graph_engine &graph,
 	}
 }
 
-void scc_vertex::run_stage_trim2(graph_engine &graph)
+void scc_vertex::run_stage_trim2(vertex_program &prog)
 {
 	vertex_id_t id = get_id();
 	if (get_num_in_edges() == 1) {
@@ -536,7 +536,7 @@ void scc_vertex::run_stage_trim2(graph_engine &graph)
 
 std::atomic_ulong trim2_vertices;
 
-void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
+void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(vertex.get_id() == get_id());
 	// Ideally, we should use the remaining in-edges or out-edges,
@@ -552,7 +552,7 @@ void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
 			trim2_vertices++;
 		}
 		else {
-			scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
+			scc_vertex &neigh_v = (scc_vertex &) prog.get_graph().get_vertex(neighbor);
 			// If the vertex's out-edge list contains the neighbor,
 			// it means the neighbor's only in-edge connect to this vertex.
 			if (get_id() < neighbor
@@ -560,7 +560,7 @@ void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
 					&& vertex.contain_edge(edge_type::OUT_EDGE, neighbor)) {
 				comp_id = get_id();
 				trim2_message msg(get_id());
-				graph.send_msg(neighbor, msg);
+				prog.send_msg(neighbor, msg);
 				trim2_vertices += 2;
 			}
 		}
@@ -575,14 +575,14 @@ void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
 			trim2_vertices++;
 		}
 		else {
-			scc_vertex &neigh_v = (scc_vertex &) graph.get_vertex(neighbor);
+			scc_vertex &neigh_v = (scc_vertex &) prog.get_graph().get_vertex(neighbor);
 			// The same as above.
 			if (get_id() < neighbor
 					&& neigh_v.get_num_out_edges() == 1
 					&& vertex.contain_edge(edge_type::IN_EDGE, neighbor)) {
 				comp_id = get_id();
 				trim2_message msg(get_id());
-				graph.send_msg(neighbor, msg);
+				prog.send_msg(neighbor, msg);
 				trim2_vertices += 2;
 			}
 		}
@@ -591,14 +591,14 @@ void scc_vertex::run_stage_trim2(graph_engine &graph, const page_vertex &vertex)
 		assert(0);
 }
 
-void scc_vertex::run_on_message_stage_trim2(graph_engine &graph,
+void scc_vertex::run_on_message_stage_trim2(vertex_program &prog,
 		const vertex_message &msg1)
 {
 	const trim2_message &msg = (const trim2_message &) msg1;
 	comp_id = msg.get_comp_id();
 }
 
-void scc_vertex::run_stage_trim3(graph_engine &graph)
+void scc_vertex::run_stage_trim3(vertex_program &prog)
 {
 	vertex_id_t id = get_id();
 	request_vertices(&id, 1);
@@ -606,7 +606,7 @@ void scc_vertex::run_stage_trim3(graph_engine &graph)
 
 std::atomic_long trim3_vertices;
 
-void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
+void scc_vertex::run_stage_trim3(vertex_program &prog, const page_vertex &vertex)
 {
 	page_byte_array::const_iterator<vertex_id_t> end_it
 		= vertex.get_neigh_end(IN_EDGE);
@@ -615,7 +615,7 @@ void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
 	for (page_byte_array::const_iterator<vertex_id_t> it
 			= vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
-		scc_vertex &neigh = (scc_vertex &) graph.get_vertex(id);
+		scc_vertex &neigh = (scc_vertex &) prog.get_graph().get_vertex(id);
 		// We should ignore the neighbors that has been assigned to a component.
 		// or has a different color.
 		if (neigh.is_assigned()
@@ -631,7 +631,7 @@ void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
 	for (page_byte_array::const_iterator<vertex_id_t> it
 			= vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
-		scc_vertex &neigh = (scc_vertex &) graph.get_vertex(id);
+		scc_vertex &neigh = (scc_vertex &) prog.get_graph().get_vertex(id);
 		// We should ignore the neighbors that has been assigned to a component.
 		// or has a different color.
 		if (neigh.is_assigned()
@@ -646,18 +646,18 @@ void scc_vertex::run_stage_trim3(graph_engine &graph, const page_vertex &vertex)
 		// This vertex has been isolated, it can assign to a SCC now.
 		comp_id = get_id();
 		if (num_in_neighs > 0)
-			graph.activate_vertices(in_neighs.data(), num_in_neighs);
+			prog.activate_vertices(in_neighs.data(), num_in_neighs);
 		if (num_out_neighs > 0)
-			graph.activate_vertices(out_neighs.data(), num_out_neighs);
+			prog.activate_vertices(out_neighs.data(), num_out_neighs);
 	}
 }
 
-void scc_vertex::run_on_message_stage_trim3(graph_engine &graph,
+void scc_vertex::run_on_message_stage_trim3(vertex_program &prog,
 		const vertex_message &msg)
 {
 }
 
-void scc_vertex::run_stage_FWBW(graph_engine &graph)
+void scc_vertex::run_stage_FWBW(vertex_program &prog)
 {
 	// If the vertex has been visited in both directions,
 	// we don't need to do anything.
@@ -682,7 +682,7 @@ void scc_vertex::run_stage_FWBW(graph_engine &graph)
 	request_vertices(&id, 1);
 }
 
-void scc_vertex::run_stage_FWBW(graph_engine &graph, const page_vertex &vertex)
+void scc_vertex::run_stage_FWBW(vertex_program &prog, const page_vertex &vertex)
 {
 	bool do_some = false;
 
@@ -693,7 +693,7 @@ void scc_vertex::run_stage_FWBW(graph_engine &graph, const page_vertex &vertex)
 		int num_edges = vertex.get_num_edges(IN_EDGE);
 		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE, 0,
 				num_edges);
-		graph.multicast_msg(it, msg);
+		prog.multicast_msg(it, msg);
 	}
 
 	if (state.fwbw.is_fw()) {
@@ -703,12 +703,12 @@ void scc_vertex::run_stage_FWBW(graph_engine &graph, const page_vertex &vertex)
 		int num_edges = vertex.get_num_edges(OUT_EDGE);
 		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0,
 				num_edges);
-		graph.multicast_msg(it, msg);
+		prog.multicast_msg(it, msg);
 	}
 	assert(do_some);
 }
 
-void scc_vertex::run_on_message_stage_FWBW(graph_engine &graph,
+void scc_vertex::run_on_message_stage_FWBW(vertex_program &prog,
 		const vertex_message &msg1)
 {
 	uint64_t color = state.fwbw.get_color();
@@ -727,7 +727,7 @@ void scc_vertex::run_on_message_stage_FWBW(graph_engine &graph,
 
 std::atomic_ulong fwbw_vertices;
 
-void scc_vertex::run_stage_part(graph_engine &graph)
+void scc_vertex::run_stage_part(vertex_program &prog)
 {
 	if (state.fwbw.is_fw() && state.fwbw.is_bw()) {
 		comp_id = state.fwbw.get_pivot();
@@ -740,16 +740,16 @@ void scc_vertex::run_stage_part(graph_engine &graph)
 	state.fwbw.clear_flags();
 }
 
-void scc_vertex::run_stage_part(graph_engine &graph, const page_vertex &vertex)
+void scc_vertex::run_stage_part(vertex_program &prog, const page_vertex &vertex)
 {
 }
 
-void scc_vertex::run_on_message_stage_part(graph_engine &graph,
+void scc_vertex::run_on_message_stage_part(vertex_program &prog,
 		const vertex_message &msg)
 {
 }
 
-void scc_vertex::run_stage_wcc(graph_engine &graph)
+void scc_vertex::run_stage_wcc(vertex_program &prog)
 {
 	if (state.fwbw.is_wcc_updated()) {
 		state.fwbw.clear_wcc_updated();
@@ -758,7 +758,7 @@ void scc_vertex::run_stage_wcc(graph_engine &graph)
 	}
 }
 
-void scc_vertex::run_stage_wcc(graph_engine &graph, const page_vertex &vertex)
+void scc_vertex::run_stage_wcc(vertex_program &prog, const page_vertex &vertex)
 {
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
@@ -766,10 +766,10 @@ void scc_vertex::run_stage_wcc(graph_engine &graph, const page_vertex &vertex)
 	int num_edges = vertex.get_num_edges(BOTH_EDGES);
 	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0,
 			num_edges);
-	graph.multicast_msg(it, msg);
+	prog.multicast_msg(it, msg);
 }
 
-void scc_vertex::run_on_message_stage_wcc(graph_engine &graph,
+void scc_vertex::run_on_message_stage_wcc(vertex_program &prog,
 		const vertex_message &msg1)
 {
 	wcc_comp_message &msg = (wcc_comp_message &) msg1;

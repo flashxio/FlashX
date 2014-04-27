@@ -299,29 +299,29 @@ public:
 		neighborhood = NULL;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		switch(overlap_stage) {
 			case overlap_stage_t::CONSTRUCT_NEIGHBORS:
-				run_stage1(graph);
+				run_stage1(prog);
 				break;
 			case overlap_stage_t::COMP_OVERLAP:
-				run_stage2(graph);
+				run_stage2(prog);
 				break;
 			default:
 				assert(0);
 		}
 	}
 
-	void run_stage1(graph_engine &graph) {
+	void run_stage1(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run_stage2(graph_engine &graph) {
+	void run_stage2(vertex_program &prog) {
 		BOOST_FOREACH(vertex_id_t id, overlap_vertices) {
 			if (id == get_id())
 				continue;
-			overlap_vertex &neigh = (overlap_vertex &) graph.get_vertex(id);
+			overlap_vertex &neigh = (overlap_vertex &) prog.get_graph().get_vertex(id);
 			size_t common = get_common_vertices(*neighborhood, *neigh.neighborhood);
 			size_t vunion = get_union_vertices(*neighborhood, *neigh.neighborhood);
 			printf("v%u:v%u, common: %ld, union: %ld, overlap: %f\n",
@@ -330,12 +330,12 @@ public:
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		assert(vertex.get_id() == get_id());
-		run_on_itself(graph, vertex);
+		run_on_itself(prog, vertex);
 	}
 
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex) {
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex) {
 		neighborhood = new std::vector<vertex_id_t>();
 		get_unique_neighbors(vertex, *neighborhood);
 		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
@@ -348,7 +348,7 @@ public:
 		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
 	}
 
-	void run_on_message(graph_engine &, const vertex_message &msg) {
+	void run_on_message(vertex_program &, const vertex_message &msg) {
 	}
 };
 

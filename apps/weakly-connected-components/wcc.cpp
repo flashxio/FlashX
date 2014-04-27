@@ -89,7 +89,7 @@ public:
 		return component_id;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		if (updated) {
 			vertex_id_t id = get_id();
 			request_vertices(&id, 1);
@@ -97,9 +97,9 @@ public:
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg1) {
+	void run_on_message(vertex_program &, const vertex_message &msg1) {
 		component_message &msg = (component_message &) msg1;
 		if (msg.get_id() < component_id) {
 			updated = true;
@@ -108,14 +108,14 @@ public:
 	}
 };
 
-void wcc_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	int num_dests = vertex.get_num_edges(BOTH_EDGES);
 	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
 	component_message msg(component_id);
-	graph.multicast_msg(it, msg);
+	prog.multicast_msg(it, msg);
 }
 
 void int_handler(int sig_num)

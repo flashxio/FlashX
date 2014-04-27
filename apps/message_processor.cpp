@@ -70,7 +70,7 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 	multicast_dest_list dest_list = mmsg.get_dest_list();
 
 	if (!check_steal) {
-		curr_vprog.run_on_multicast_message(graph, mmsg);
+		curr_vprog.run_on_multicast_message(mmsg);
 		for (int i = 0; i < num_dests; i++) {
 			local_vid_t id = dest_list.get_dest(i);
 			if (mmsg.is_activate())
@@ -95,7 +95,7 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 		}
 		else {
 			compute_vertex &info = graph.get_vertex(owner.get_worker_id(), id);
-			curr_vprog.run_on_message(graph, info, mmsg);
+			curr_vprog.run_on_message(info, mmsg);
 		}
 		if (mmsg.is_activate())
 			owner.activate_vertex(id);
@@ -117,8 +117,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 		// We only need to check the first message. All messages are
 		// of the same type.
 		if (!check_steal && !v_msgs[0]->is_multicast()) {
-			curr_vprog.run_on_messages(graph,
-					(const vertex_message **) v_msgs, num);
+			curr_vprog.run_on_messages((const vertex_message **) v_msgs, num);
 			for (int i = 0; i < num; i++) {
 				local_vid_t id = v_msgs[i]->get_dest();
 				if (v_msgs[i]->is_activate())
@@ -143,7 +142,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 			}
 			else {
 				compute_vertex &info = graph.get_vertex(owner.get_worker_id(), id);
-				curr_vprog.run_on_message(graph, info, *v_msgs[i]);
+				curr_vprog.run_on_message(info, *v_msgs[i]);
 			}
 			if (v_msgs[i]->is_activate())
 				owner.activate_vertex(id);

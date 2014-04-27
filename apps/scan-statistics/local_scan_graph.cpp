@@ -149,12 +149,12 @@ public:
 
 	using scan_vertex::run;
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void finding_triangles_end(graph_engine &graph, runtime_data_t *data) {
+	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
 		extended_neighbor_list *neighbors
 			= (extended_neighbor_list *) data->neighbors.get();
 		// Inform all neighbors in the in-edges.
@@ -162,12 +162,12 @@ public:
 			size_t count = neighbors->get_count(i);
 			if (count > 0) {
 				count_msg msg(count);
-				graph.send_msg(data->neighbors->get_neighbor_id(i), msg);
+				prog.send_msg(data->neighbors->get_neighbor_id(i), msg);
 			}
 		}
 	}
 
-	void run_on_message(graph_engine &graph, const vertex_message &msg1) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg1) {
 		const count_msg &msg = (const count_msg &) msg1;
 		local_value.inc_real_local(msg.get_num());
 	}
@@ -229,11 +229,11 @@ runtime_data_t *ls_create_runtime(graph_engine &graph, scan_vertex &scan_v,
 				new extended_neighbor_list(vertex, neighbors)));
 }
 
-void ls_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v,
+void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 		runtime_data_t *data)
 {
 	local_scan_vertex &ls_v = (local_scan_vertex &) scan_v;
-	ls_v.finding_triangles_end(graph, data);
+	ls_v.finding_triangles_end(prog, data);
 }
 
 void int_handler(int sig_num)
