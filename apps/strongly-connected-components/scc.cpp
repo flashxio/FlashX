@@ -467,6 +467,33 @@ public:
 	void run_on_message_stage_wcc(vertex_program &prog, const vertex_message &msg);
 };
 
+class part_vertex_program: public vertex_program_impl<scc_vertex>
+{
+	std::vector<vertex_id_t> remain_vertices;
+public:
+	typedef std::shared_ptr<part_vertex_program> ptr;
+
+	static ptr cast2(vertex_program::ptr prog) {
+		return std::static_pointer_cast<part_vertex_program, vertex_program>(prog);
+	}
+
+	void add_remain_vertex(vertex_id_t id) {
+		remain_vertices.push_back(id);
+	}
+
+	const std::vector<vertex_id_t> &get_remain_vertices() const {
+		return remain_vertices;
+	}
+};
+
+class part_vertex_program_creater: public vertex_program_creater
+{
+public:
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new part_vertex_program());
+	}
+};
+
 std::atomic_ulong trim1_vertices;
 
 void scc_vertex::run_stage_trim1(vertex_program &prog)
@@ -738,6 +765,9 @@ void scc_vertex::run_stage_part(vertex_program &prog)
 	else if (state.fwbw.is_bw())
 		state.fwbw.assign_new_bw_color();
 	state.fwbw.clear_flags();
+
+	if (!is_assigned())
+		((part_vertex_program &) prog).add_remain_vertex(get_id());
 }
 
 void scc_vertex::run_stage_part(vertex_program &prog, const page_vertex &vertex)
@@ -1111,7 +1141,8 @@ int main(int argc, char *argv[])
 	scc_stage = scc_stage_t::PARTITION;
 	fwbw_vertices = 0;
 	gettimeofday(&start, NULL);
-	graph->start_all();
+	graph->start_all(vertex_initiator::ptr(),
+			vertex_program_creater::ptr(new part_vertex_program_creater()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("partition takes %f seconds. Assign %ld vertices to components.\n",
@@ -1155,15 +1186,20 @@ int main(int argc, char *argv[])
 		scc_stage = scc_stage_t::PARTITION;
 		fwbw_vertices = 0;
 		gettimeofday(&start, NULL);
-		graph->start(std::shared_ptr<vertex_filter>(new scc_filter()));
+		graph->start(std::shared_ptr<vertex_filter>(new scc_filter()),
+				vertex_program_creater::ptr(new part_vertex_program_creater()));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("partition takes %f seconds. Assign %ld vertices to components.\n",
 				time_diff(start, end), fwbw_vertices.load());
 
-		vertex_query::ptr remain_q(new remain_vertex_query());
-		graph->query_on_all(remain_q);
-		num_remain = ((remain_vertex_query *) remain_q.get())->get_num_remaining();
+		std::vector<vertex_program::ptr> part_vprogs;
+		graph->get_vertex_programs(part_vprogs);
+		num_remain = 0;
+		BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
+			num_remain += part_vertex_program::cast2(vprog)->get_remain_vertices().size();
+		}
+		printf("There are %ld vertices left unassigned\n", num_remain);
 	} while (num_remain > 0);
 
 	NUMA_graph_index<scc_vertex>::const_iterator it
