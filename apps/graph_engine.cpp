@@ -436,6 +436,15 @@ void graph_engine::preload_graph()
 	printf("successfully preload\n");
 }
 
+void graph_engine::init_vertices(vertex_id_t ids[], int num,
+		vertex_initiator::ptr init)
+{
+#pragma omp parallel for
+	for (int i = 0; i < num; i++) {
+		init->init(get_vertex(ids[i]));
+	}
+}
+
 void graph_engine::init_all_vertices(vertex_initiator::ptr init)
 {
 	vertex_id_t max_id = get_max_vertex_id();

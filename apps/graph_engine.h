@@ -338,6 +338,7 @@ public:
 
 	void preload_graph();
 
+	void init_vertices(vertex_id_t ids[], int num, vertex_initiator::ptr init);
 	void init_all_vertices(vertex_initiator::ptr init);
 	void query_on_all(vertex_query::ptr query);
 
