@@ -471,6 +471,7 @@ public:
 class part_vertex_program: public vertex_program_impl<scc_vertex>
 {
 	std::vector<vertex_id_t> remain_vertices;
+	size_t num_assigned;
 public:
 	typedef std::shared_ptr<part_vertex_program> ptr;
 
@@ -478,8 +479,20 @@ public:
 		return std::static_pointer_cast<part_vertex_program, vertex_program>(prog);
 	}
 
+	part_vertex_program() {
+		num_assigned = 0;
+	}
+
 	void add_remain_vertex(vertex_id_t id) {
 		remain_vertices.push_back(id);
+	}
+
+	void assign_vertex() {
+		num_assigned++;
+	}
+
+	size_t get_num_assigned() const {
+		return num_assigned;
 	}
 
 	const std::vector<vertex_id_t> &get_remain_vertices() const {
@@ -495,7 +508,36 @@ public:
 	}
 };
 
-std::atomic_ulong trim1_vertices;
+class trim_vertex_program: public vertex_program_impl<scc_vertex>
+{
+	size_t num_trims;
+public:
+	typedef std::shared_ptr<trim_vertex_program> ptr;
+
+	static ptr cast2(vertex_program::ptr prog) {
+		return std::static_pointer_cast<trim_vertex_program, vertex_program>(prog);
+	}
+
+	trim_vertex_program() {
+		num_trims = 0;
+	}
+
+	void trim_vertex(int num) {
+		num_trims += num;
+	}
+
+	size_t get_num_trimmed() const {
+		return num_trims;
+	}
+};
+
+class trim_vertex_program_creater: public vertex_program_creater
+{
+public:
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new trim_vertex_program());
+	}
+};
 
 void scc_vertex::run_stage_trim1(vertex_program &prog)
 {
@@ -505,7 +547,7 @@ void scc_vertex::run_stage_trim1(vertex_program &prog)
 
 		// This vertex has to be a SCC itself.
 		comp_id = id;
-		trim1_vertices++;
+		((trim_vertex_program &) prog).trim_vertex(1);
 	}
 }
 
@@ -562,8 +604,6 @@ void scc_vertex::run_stage_trim2(vertex_program &prog)
 	}
 }
 
-std::atomic_ulong trim2_vertices;
-
 void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(vertex.get_id() == get_id());
@@ -577,7 +617,7 @@ void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex
 		// If the only in-edge is to itself, it's a SCC itself.
 		if (neighbor == get_id()) {
 			comp_id = get_id();
-			trim2_vertices++;
+			((trim_vertex_program &) prog).trim_vertex(1);
 		}
 		else {
 			scc_vertex &neigh_v = (scc_vertex &) prog.get_graph().get_vertex(neighbor);
@@ -589,7 +629,7 @@ void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex
 				comp_id = get_id();
 				trim2_message msg(get_id());
 				prog.send_msg(neighbor, msg);
-				trim2_vertices += 2;
+				((trim_vertex_program &) prog).trim_vertex(2);
 			}
 		}
 	}
@@ -600,7 +640,7 @@ void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex
 		// If the only in-edge is to itself, it's a SCC itself.
 		if (neighbor == get_id()) {
 			comp_id = get_id();
-			trim2_vertices++;
+			((trim_vertex_program &) prog).trim_vertex(1);
 		}
 		else {
 			scc_vertex &neigh_v = (scc_vertex &) prog.get_graph().get_vertex(neighbor);
@@ -611,7 +651,7 @@ void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex
 				comp_id = get_id();
 				trim2_message msg(get_id());
 				prog.send_msg(neighbor, msg);
-				trim2_vertices += 2;
+				((trim_vertex_program &) prog).trim_vertex(2);
 			}
 		}
 	}
@@ -753,13 +793,11 @@ void scc_vertex::run_on_message_stage_FWBW(vertex_program &prog,
 		state.fwbw.set_bw();
 }
 
-std::atomic_ulong fwbw_vertices;
-
 void scc_vertex::run_stage_part(vertex_program &prog)
 {
 	if (state.fwbw.is_fw() && state.fwbw.is_bw()) {
 		comp_id = state.fwbw.get_pivot();
-		fwbw_vertices++;
+		((part_vertex_program &) prog).assign_vertex();
 	}
 	else if (state.fwbw.is_fw())
 		state.fwbw.assign_new_fw_color();
@@ -1022,19 +1060,34 @@ int main(int argc, char *argv[])
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
 	scc_start = start;
-	graph->start_all(vertex_initiator::ptr(new trim1_initiator()));
+	graph->start_all(vertex_initiator::ptr(new trim1_initiator()),
+			vertex_program_creater::ptr(new trim_vertex_program_creater()));
 	graph->wait4complete();
+	std::vector<vertex_program::ptr> trim_vprogs;
+	graph->get_vertex_programs(trim_vprogs);
+	size_t num_trim1 = 0;
+	BOOST_FOREACH(vertex_program::ptr vprog, trim_vprogs) {
+		trim_vertex_program::ptr trim_vprog = trim_vertex_program::cast2(vprog);
+		num_trim1 += trim_vprog->get_num_trimmed();
+	}
 	gettimeofday(&end, NULL);
 	printf("trim1 takes %f seconds. It trims %ld vertices\n",
-			time_diff(start, end), trim1_vertices.load());
+			time_diff(start, end), num_trim1);
 
 	scc_stage = scc_stage_t::TRIM2;
 	gettimeofday(&start, NULL);
-	graph->start_all();
+	graph->start_all(vertex_initiator::ptr(),
+			vertex_program_creater::ptr(new trim_vertex_program_creater()));
 	graph->wait4complete();
+	graph->get_vertex_programs(trim_vprogs);
+	size_t num_trim2 = 0;
+	BOOST_FOREACH(vertex_program::ptr vprog, trim_vprogs) {
+		trim_vertex_program::ptr trim_vprog = trim_vertex_program::cast2(vprog);
+		num_trim2 += trim_vprog->get_num_trimmed();
+	}
 	gettimeofday(&end, NULL);
 	printf("trim2 takes %f seconds. It trims %ld vertices\n",
-			time_diff(start, end), trim2_vertices.load());
+			time_diff(start, end), num_trim2);
 
 	vertex_query::ptr mdq(new max_degree_query());
 	graph->query_on_all(mdq);
@@ -1050,26 +1103,25 @@ int main(int argc, char *argv[])
 	printf("FWBW takes %f seconds\n", time_diff(start, end));
 
 	scc_stage = scc_stage_t::PARTITION;
-	fwbw_vertices = 0;
 	gettimeofday(&start, NULL);
 	graph->start_all(vertex_initiator::ptr(),
 			vertex_program_creater::ptr(new part_vertex_program_creater()));
 	graph->wait4complete();
-	gettimeofday(&end, NULL);
-	printf("partition takes %f seconds. Assign %ld vertices to components.\n",
-			time_diff(start, end), fwbw_vertices.load());
 
-	gettimeofday(&start, NULL);
 	std::vector<vertex_program::ptr> part_vprogs;
 	graph->get_vertex_programs(part_vprogs);
 	std::vector<vertex_id_t> active_vertices;
+	size_t fwbw_vertices = 0;
 	BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
 		part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
+		fwbw_vertices += part_vprog->get_num_assigned();
 		active_vertices.insert(active_vertices.begin(),
 				part_vprog->get_remain_vertices().begin(),
 				part_vprog->get_remain_vertices().end());
 	}
 	gettimeofday(&end, NULL);
+	printf("partition takes %f seconds. Assign %ld vertices to components.\n",
+			time_diff(start, end), fwbw_vertices);
 	printf("after partition, finding %ld active vertices takes %f seconds.\n",
 			active_vertices.size(), time_diff(start, end));
 
@@ -1106,7 +1158,6 @@ int main(int argc, char *argv[])
 		printf("FWBW takes %f seconds\n", time_diff(start, end));
 
 		scc_stage = scc_stage_t::PARTITION;
-		fwbw_vertices = 0;
 		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
 				vertex_initiator::ptr(),
@@ -1116,15 +1167,17 @@ int main(int argc, char *argv[])
 		std::vector<vertex_program::ptr> part_vprogs;
 		graph->get_vertex_programs(part_vprogs);
 		active_vertices.clear();
+		fwbw_vertices = 0;
 		BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
 			part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
+			fwbw_vertices += part_vprog->get_num_assigned();
 			active_vertices.insert(active_vertices.begin(),
 					part_vprog->get_remain_vertices().begin(),
 					part_vprog->get_remain_vertices().end());
 		}
 		gettimeofday(&end, NULL);
 		printf("partition takes %f seconds. Assign %ld vertices to components.\n",
-				time_diff(start, end), fwbw_vertices.load());
+				time_diff(start, end), fwbw_vertices);
 		printf("There are %ld vertices left unassigned\n", active_vertices.size());
 	} while (!active_vertices.empty());
 
