@@ -116,10 +116,10 @@ public:
 
 class wcc_comp_message: public vertex_message
 {
-	vertex_id_t id;
+	wcc_id_t id;
 	uint64_t color;
 public:
-	wcc_comp_message(vertex_id_t id, uint64_t color): vertex_message(
+	wcc_comp_message(const wcc_id_t &id, uint64_t color): vertex_message(
 			sizeof(wcc_comp_message), true) {
 		this->id = id;
 		this->color = color;
@@ -129,7 +129,7 @@ public:
 		return color;
 	}
 
-	vertex_id_t get_wcc_id() const {
+	const wcc_id_t &get_wcc_id() const {
 		return id;
 	}
 };
@@ -297,7 +297,7 @@ struct trim1_state
 struct wcc_state
 {
 	fwbw_state fwbw;
-	vertex_id_t wcc_max;
+	wcc_id_t wcc_max;
 };
 
 class scc_vertex: public compute_directed_vertex
@@ -341,7 +341,7 @@ public:
 	}
 
 	void init_wcc() {
-		state.wcc.wcc_max = get_id();
+		state.wcc.wcc_max = wcc_id_t(get_num_out_edges() + get_num_in_edges(), get_id());
 		state.fwbw.set_wcc_updated();
 	}
 
@@ -358,7 +358,7 @@ public:
 	void post_wcc_init() {
 		assert(!state.fwbw.has_fw_visited());
 		assert(!state.fwbw.has_bw_visited());
-		state.fwbw.assign_new_color(state.wcc.wcc_max);
+		state.fwbw.assign_new_color(state.wcc.wcc_max.get_id());
 	}
 
 	void run(vertex_program &prog) {
@@ -1069,7 +1069,7 @@ int main(int argc, char *argv[])
 
 	scc_stage = scc_stage_t::TRIM2;
 	gettimeofday(&start, NULL);
-	graph->start_all(vertex_initiator::ptr());
+	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("trim2 takes %f seconds. It trims %ld vertices\n",
