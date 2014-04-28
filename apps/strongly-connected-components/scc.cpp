@@ -1059,6 +1059,7 @@ int main(int argc, char *argv[])
 	printf("partition takes %f seconds. Assign %ld vertices to components.\n",
 			time_diff(start, end), fwbw_vertices.load());
 
+	gettimeofday(&start, NULL);
 	std::vector<vertex_program::ptr> part_vprogs;
 	graph->get_vertex_programs(part_vprogs);
 	std::vector<vertex_id_t> active_vertices;
@@ -1068,6 +1069,9 @@ int main(int argc, char *argv[])
 				part_vprog->get_remain_vertices().begin(),
 				part_vprog->get_remain_vertices().end());
 	}
+	gettimeofday(&end, NULL);
+	printf("after partition, finding %ld active vertices takes %f seconds.\n",
+			active_vertices.size(), time_diff(start, end));
 
 	do {
 		scc_stage = scc_stage_t::TRIM3;
@@ -1088,13 +1092,13 @@ int main(int argc, char *argv[])
 		gettimeofday(&end, NULL);
 		printf("WCC takes %f seconds\n", time_diff(start, end));
 
+		gettimeofday(&start, NULL);
 		vertex_query::ptr mdq1(new post_wcc_query());
 		graph->query_on_all(mdq1);
 		std::vector<vertex_id_t> fwbw_starts;
 		((post_wcc_query *) mdq1.get())->get_max_ids(fwbw_starts);
 		printf("FWBW starts on %ld vertices\n", fwbw_starts.size());
 		scc_stage = scc_stage_t::FWBW;
-		gettimeofday(&start, NULL);
 		graph->start(fwbw_starts.data(), fwbw_starts.size(),
 				vertex_initiator::ptr(new fwbw_initiator()));
 		graph->wait4complete();
@@ -1108,9 +1112,6 @@ int main(int argc, char *argv[])
 				vertex_initiator::ptr(),
 				vertex_program_creater::ptr(new part_vertex_program_creater()));
 		graph->wait4complete();
-		gettimeofday(&end, NULL);
-		printf("partition takes %f seconds. Assign %ld vertices to components.\n",
-				time_diff(start, end), fwbw_vertices.load());
 
 		std::vector<vertex_program::ptr> part_vprogs;
 		graph->get_vertex_programs(part_vprogs);
@@ -1121,6 +1122,9 @@ int main(int argc, char *argv[])
 					part_vprog->get_remain_vertices().begin(),
 					part_vprog->get_remain_vertices().end());
 		}
+		gettimeofday(&end, NULL);
+		printf("partition takes %f seconds. Assign %ld vertices to components.\n",
+				time_diff(start, end), fwbw_vertices.load());
 		printf("There are %ld vertices left unassigned\n", active_vertices.size());
 	} while (!active_vertices.empty());
 
