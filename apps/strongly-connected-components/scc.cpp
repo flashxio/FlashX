@@ -879,7 +879,8 @@ class wcc_initiator: public vertex_initiator
 public:
 	virtual void init(compute_vertex &v) {
 		scc_vertex &scc_v = (scc_vertex &) v;
-		assert(!scc_v.is_assigned());
+		if (scc_v.is_assigned())
+			return;
 		scc_v.init_wcc();
 	}
 };
@@ -1108,16 +1109,6 @@ int main(int argc, char *argv[])
 				part_vprog->get_remain_vertices().end());
 	}
 
-	scc_stage = scc_stage_t::WCC;
-	gettimeofday(&start, NULL);
-	graph->start(active_vertices.data(), active_vertices.size(),
-			std::shared_ptr<vertex_initiator>(new wcc_initiator()));
-	graph->wait4complete();
-	gettimeofday(&end, NULL);
-	printf("WCC takes %f seconds\n", time_diff(start, end));
-	graph->init_vertices(active_vertices.data(), active_vertices.size(),
-			vertex_initiator::ptr(new post_wcc_initiator()));
-
 	do {
 		scc_stage = scc_stage_t::TRIM3;
 		trim3_vertices = 0;
@@ -1128,6 +1119,16 @@ int main(int argc, char *argv[])
 		printf("trim3 takes %f seconds, and trime %ld vertices\n",
 				time_diff(start, end),
 				trim3_vertices.load(std::memory_order_relaxed));
+
+		scc_stage = scc_stage_t::WCC;
+		gettimeofday(&start, NULL);
+		graph->start(active_vertices.data(), active_vertices.size(),
+				std::shared_ptr<vertex_initiator>(new wcc_initiator()));
+		graph->wait4complete();
+		gettimeofday(&end, NULL);
+		printf("WCC takes %f seconds\n", time_diff(start, end));
+		graph->init_vertices(active_vertices.data(), active_vertices.size(),
+				vertex_initiator::ptr(new post_wcc_initiator()));
 
 		vertex_query::ptr mdq1(new max_degree_query1());
 		graph->query_on_all(mdq1);
