@@ -23,6 +23,7 @@
 #include <atomic>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "thread.h"
 #include "io_interface.h"
@@ -885,17 +886,6 @@ public:
 	}
 };
 
-class post_wcc_initiator: public vertex_initiator
-{
-public:
-	void init(compute_vertex &v) {
-		scc_vertex &sv = (scc_vertex &) v;
-		if (sv.is_assigned())
-			return;
-		sv.post_wcc_init();
-	}
-};
-
 class max_degree_query: public vertex_query
 {
 	vsize_t max_degree;
@@ -932,62 +922,32 @@ public:
 	}
 };
 
-class max_degree_query1: public vertex_query
+class post_wcc_query: public vertex_query
 {
-	// The largest-degree vertices in each color
-	typedef std::unordered_map<uint64_t, vertex_id_t> color_map_t;
-	color_map_t max_ids;
+	std::unordered_set<vertex_id_t> start_vertices;
 public:
 	virtual void run(graph_engine &graph, compute_vertex &v) {
-		scc_vertex &scc_v = (scc_vertex &) v;
+		scc_vertex &sv = (scc_vertex &) v;
 		// Ignore the assigned vertex
-		if (scc_v.is_assigned())
+		if (sv.is_assigned())
 			return;
-
-		color_map_t::iterator it = max_ids.find(scc_v.get_color());
-		// The color doesn't exist;
-		if (it == max_ids.end()) {
-			max_ids.insert(std::pair<uint64_t, vertex_id_t>(scc_v.get_color(),
-						v.get_id()));
-		}
-		else {
-			vertex_id_t curr_max_id = it->second;
-			if (graph.get_vertex_edges(v.get_id())
-					> graph.get_vertex_edges(curr_max_id))
-				it->second = v.get_id();
-		}
+		sv.post_wcc_init();
+		assert(sv.get_color() < INVALID_VERTEX_ID);
+		start_vertices.insert(sv.get_color());
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		max_degree_query1 *mdq = (max_degree_query1 *) q.get();
-		for (color_map_t::const_iterator it = mdq->max_ids.begin();
-				it != mdq->max_ids.end(); it++) {
-			uint64_t color = it->first;
-			vertex_id_t id = it->second;
-			scc_vertex &scc_v = (scc_vertex &) graph.get_vertex(id);
-			assert(!scc_v.is_assigned());
-			color_map_t::iterator it1 = this->max_ids.find(color);
-			// The same color exists.
-			if (it1 != this->max_ids.end()) {
-				// If the vertex of the same color in the other query is larger
-				if (graph.get_vertex_edges(id) > graph.get_vertex_edges(it1->second))
-					it1->second = id;
-			}
-			else
-				this->max_ids.insert(std::pair<uint64_t, vertex_id_t>(color, id));
-		}
+		post_wcc_query *pwq = (post_wcc_query *) q.get();
+		start_vertices.insert(pwq->start_vertices.begin(), pwq->start_vertices.end());
 	}
 
 	virtual ptr clone() {
-		return vertex_query::ptr(new max_degree_query1());
+		return vertex_query::ptr(new post_wcc_query());
 	}
 
 	size_t get_max_ids(std::vector<vertex_id_t> &ids) const {
-		for (color_map_t::const_iterator it = max_ids.begin();
-				it != max_ids.end(); it++) {
-			ids.push_back(it->second);
-		}
-		return max_ids.size();
+		ids.insert(ids.begin(), start_vertices.begin(), start_vertices.end());
+		return start_vertices.size();
 	}
 };
 
@@ -1127,13 +1087,11 @@ int main(int argc, char *argv[])
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("WCC takes %f seconds\n", time_diff(start, end));
-		graph->init_vertices(active_vertices.data(), active_vertices.size(),
-				vertex_initiator::ptr(new post_wcc_initiator()));
 
-		vertex_query::ptr mdq1(new max_degree_query1());
+		vertex_query::ptr mdq1(new post_wcc_query());
 		graph->query_on_all(mdq1);
 		std::vector<vertex_id_t> fwbw_starts;
-		((max_degree_query1 *) mdq1.get())->get_max_ids(fwbw_starts);
+		((post_wcc_query *) mdq1.get())->get_max_ids(fwbw_starts);
 		printf("FWBW starts on %ld vertices\n", fwbw_starts.size());
 		scc_stage = scc_stage_t::FWBW;
 		gettimeofday(&start, NULL);
