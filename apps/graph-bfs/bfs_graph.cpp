@@ -31,6 +31,8 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
+edge_type traverse_edge = edge_type::OUT_EDGE;
+
 class bfs_vertex: public compute_directed_vertex
 {
 	enum {
@@ -59,7 +61,7 @@ public:
 
 	void run(vertex_program &prog) {
 		if (!has_visited()) {
-			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+			directed_vertex_request req(get_id(), traverse_edge);
 			request_partial_vertices(&req, 1);
 		}
 	}
@@ -75,7 +77,7 @@ void bfs_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	assert(!has_visited());
 	set_visited(true);
 
-	int num_dests = vertex.get_num_edges(OUT_EDGE);
+	int num_dests = vertex.get_num_edges(traverse_edge);
 	if (num_dests == 0)
 		return;
 
@@ -83,10 +85,10 @@ void bfs_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	// the next level.
 #ifdef USE_ARRAY
 	stack_array<vertex_id_t, 1024> neighs(num_dests);
-	vertex.read_edges(OUT_EDGE, neighs.data(), num_dests);
+	vertex.read_edges(traverse_edge, neighs.data(), num_dests);
 	prog.activate_vertices(neighs.data(), num_dests);
 #else
-	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge, 0, num_dests);
 	prog.activate_vertices(it);
 #endif
 }
@@ -104,6 +106,7 @@ void print_usage()
 			"bfs [options] conf_file graph_file index_file start_vertex\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-p: preload the graph\n");
+	fprintf(stderr, "-b: traverse with both in-edges and out-edges\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -114,7 +117,7 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:p")) != -1) {
+	while ((opt = getopt(argc, argv, "c:pb")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -123,6 +126,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'p':
 				preload = true;
+				break;
+			case 'b':
+				traverse_edge = edge_type::BOTH_EDGES;
 				break;
 			default:
 				print_usage();
