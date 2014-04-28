@@ -208,6 +208,7 @@ class worker_thread: public thread
 
 	// Indicate that we need to start all vertices.
 	bool start_all;
+	std::vector<vertex_id_t> started_vertices;
 	std::shared_ptr<vertex_filter> filter;
 	vertex_initiator::ptr vinitiator;
 
@@ -269,9 +270,10 @@ public:
 	int process_activated_vertices(int max);
 	int enter_next_level();
 
-	void start_vertices(const std::vector<vertex_id_t> &vertices) {
-		assert(curr_activated_vertices->is_empty());
-		curr_activated_vertices->init(vertices, false);
+	void start_vertices(const std::vector<vertex_id_t> &vertices,
+			vertex_initiator::ptr initiator) {
+		this->vinitiator = initiator;
+		started_vertices = vertices;
 	}
 
 	void start_all_vertices() {

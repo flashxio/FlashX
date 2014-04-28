@@ -220,6 +220,18 @@ void worker_thread::init()
 	io = factory->create_io(this);
 	io->init();
 
+	if (!started_vertices.empty()) {
+		assert(curr_activated_vertices->is_empty());
+		curr_activated_vertices->init(started_vertices, false);
+		if (vinitiator) {
+			BOOST_FOREACH(vertex_id_t id, started_vertices) {
+				compute_vertex &v = graph->get_vertex(id);
+				vinitiator->init(v);
+			}
+		}
+		// Free the space used by the vector.
+		started_vertices = std::vector<vertex_id_t>();
+	}
 	if (filter) {
 		std::vector<vertex_id_t> local_ids;
 		graph->get_partitioner()->get_all_vertices_in_part(worker_id,
