@@ -989,6 +989,63 @@ public:
 	}
 };
 
+class count_vertex_query: public vertex_query
+{
+public:
+	typedef std::unordered_map<vertex_id_t, size_t> comp_map_t;
+private:
+	comp_map_t comp_counts;
+	size_t num_assigned;
+public:
+	count_vertex_query() {
+		num_assigned = 0;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		const scc_vertex &scc_v = (const scc_vertex &) v;
+		// If a vertex hasn't been assigned to a component, ignore it.
+		if (!scc_v.is_assigned())
+			return;
+
+		num_assigned++;
+		comp_map_t::iterator map_it = comp_counts.find(scc_v.get_comp_id());
+		if (map_it == comp_counts.end()) {
+			comp_counts.insert(std::pair<vertex_id_t, size_t>(
+						scc_v.get_comp_id(), 1));
+		}
+		else {
+			map_it->second++;
+		}
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		count_vertex_query *cvq = (count_vertex_query *) q.get();
+		for (comp_map_t::const_iterator it = cvq->comp_counts.begin();
+				it != cvq->comp_counts.end(); it++) {
+			vertex_id_t comp_id = it->first;
+			size_t size = it->second;
+			comp_map_t::iterator it1 = comp_counts.find(comp_id);
+			if (it1 != comp_counts.end())
+				it1->second += size;
+			else
+				comp_counts.insert(std::pair<vertex_id_t, size_t>(comp_id, size));
+		}
+		num_assigned += cvq->num_assigned;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new count_vertex_query());
+	}
+
+	size_t get_num_assigned() const {
+		return num_assigned;
+	}
+
+	const comp_map_t &get_map() const {
+		return comp_counts;
+	}
+};
+
 void print_usage()
 {
 	fprintf(stderr,
@@ -1181,23 +1238,6 @@ int main(int argc, char *argv[])
 		printf("There are %ld vertices left unassigned\n", active_vertices.size());
 	} while (!active_vertices.empty());
 
-	NUMA_graph_index<scc_vertex>::const_iterator it
-		= ((NUMA_graph_index<scc_vertex> *) index)->begin();
-	NUMA_graph_index<scc_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<scc_vertex> *) index)->end();
-	it = ((NUMA_graph_index<scc_vertex> *) index)->begin();
-	size_t max_comp_size = 0;
-	size_t num_assigned = 0;
-	for (; it != end_it; ++it) {
-		const scc_vertex &v = (const scc_vertex &) *it;
-		if (v.is_assigned())
-			num_assigned++;
-		if (v.is_assigned() && v.get_comp_id() == max_v)
-			max_comp_size++;
-	}
-	printf("%ld vertices are assigned to components. max SCC has %ld vertices\n",
-			num_assigned, max_comp_size);
-
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
@@ -1206,34 +1246,22 @@ int main(int argc, char *argv[])
 	destroy_io_system();
 
 	// Compute the summary of the result.
-	typedef std::unordered_map<vertex_id_t, size_t> comp_map_t;
-	comp_map_t comp_counts;
-	it = index->begin();
-	for (; it != end_it; ++it) {
-		const scc_vertex &v = (const scc_vertex &) *it;
-//		if (v.get_num_in_edges() + v.get_num_out_edges() == 0)
-//			continue;
-
-		// If a vertex hasn't been assigned to a component, ignore it.
-		if (!v.is_assigned())
-			continue;
-
-		comp_map_t::iterator map_it = comp_counts.find(v.get_comp_id());
-		if (map_it == comp_counts.end()) {
-			comp_counts.insert(std::pair<vertex_id_t, size_t>(
-						v.get_comp_id(), 1));
-		}
-		else {
-			map_it->second++;
-		}
-	}
+	vertex_query::ptr cvq(new count_vertex_query());
+	graph->query_on_all(cvq);
+	size_t num_assigned = ((count_vertex_query *) cvq.get())->get_num_assigned();
+	const count_vertex_query::comp_map_t &comp_counts
+		= ((count_vertex_query *) cvq.get())->get_map();
+	count_vertex_query::comp_map_t::const_iterator it = comp_counts.find(max_v);
+	assert(it != comp_counts.end());
 	printf("There are %ld components\n", comp_counts.size());
+	printf("%ld vertices are assigned to components. max SCC has %ld vertices\n",
+			num_assigned, it->second);
 
 	// Output the summary of the result.
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
 		assert(f);
-		BOOST_FOREACH(comp_map_t::value_type &p, comp_counts) {
+		BOOST_FOREACH(const count_vertex_query::comp_map_t::value_type &p, comp_counts) {
 			if (p.second >= min_comp_size)
 				fprintf(f, "component %u: %ld\n", p.first, p.second);
 		}
