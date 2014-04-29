@@ -111,6 +111,33 @@ void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   }
 }
 
+class count_vertex_query: public vertex_query
+{
+	double num;
+public:
+	count_vertex_query() {
+		num = 0;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		pgrank_vertex &pr_v = (pgrank_vertex &) v;
+		num += pr_v.get_curr_itr_pr();
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		count_vertex_query *cvq = (count_vertex_query *) q.get();
+		num += cvq->num;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new count_vertex_query());
+	}
+
+	double get_num() const {
+		return num;
+	}
+};
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -197,27 +224,9 @@ int main(int argc, char *argv[])
   graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	NUMA_graph_index<pgrank_vertex>::const_iterator it
-		= ((NUMA_graph_index<pgrank_vertex> *) index)->begin();
-	NUMA_graph_index<pgrank_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<pgrank_vertex> *) index)->end();
-  
-#if 0
-	for (; it != end_it; ++it) {
-		const pgrank_vertex &v = (const pgrank_vertex &) *it;
-    printf("%d:%f\n", v.get_id()+1, v.get_curr_itr_pr());
-	}
-#endif
-
-#if 1
-	float total = 0;
-  vsize_t count = 0;
-
-	for (; it != end_it; ++it) {
-		const pgrank_vertex &v = (const pgrank_vertex &) *it;
-    total += v.get_curr_itr_pr();
-    count++;
-	}
+	vertex_query::ptr cvq(new count_vertex_query());
+	graph->query_on_all(cvq);
+	double total = ((count_vertex_query *) cvq.get())->get_num();
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -226,7 +235,6 @@ int main(int argc, char *argv[])
 	graph_engine::destroy(graph);
 	destroy_io_system();
   
-  printf("The %d vertices have page rank sum: %f\n in %f seconds\n", 
-      count, total, time_diff(start, end));
-#endif
+  printf("The %ld vertices have page rank sum: %lf\n in %f seconds\n", 
+      graph->get_num_vertices(), total, time_diff(start, end));
 }
