@@ -93,6 +93,34 @@ void bfs_vertex::run(vertex_program &prog, const page_vertex &vertex)
 #endif
 }
 
+class count_vertex_query: public vertex_query
+{
+	size_t num_visited;
+public:
+	count_vertex_query() {
+		num_visited = 0;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		bfs_vertex &bfs_v = (bfs_vertex &) v;
+		if (bfs_v.has_visited())
+			num_visited++;
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		count_vertex_query *cvq = (count_vertex_query *) q.get();
+		num_visited += cvq->num_visited;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new count_vertex_query());
+	}
+
+	size_t get_num_visited() const {
+		return num_visited;
+	}
+};
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -173,16 +201,9 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	NUMA_graph_index<bfs_vertex>::const_iterator it
-		= ((NUMA_graph_index<bfs_vertex> *) index)->begin();
-	NUMA_graph_index<bfs_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<bfs_vertex> *) index)->end();
-	int num_visited = 0;
-	for (; it != end_it; ++it) {
-		const bfs_vertex &v = (const bfs_vertex &) *it;
-		if (v.has_visited())
-			num_visited++;
-	}
+	vertex_query::ptr cvq(new count_vertex_query());
+	graph->query_on_all(cvq);
+	size_t num_visited = ((count_vertex_query *) cvq.get())->get_num_visited();
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -190,6 +211,6 @@ int main(int argc, char *argv[])
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
 	destroy_io_system();
-	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
+	printf("BFS from vertex %ld visits %ld vertices. It takes %f seconds\n",
 			(unsigned long) start_vertex, num_visited, time_diff(start, end));
 }
