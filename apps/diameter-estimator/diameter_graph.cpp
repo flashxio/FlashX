@@ -95,7 +95,7 @@ public:
 	}
 
 	diameter_vertex(vertex_id_t id,
-			const vertex_index *index): compute_directed_vertex(id, index) {
+			const vertex_index &index): compute_directed_vertex(id, index) {
 		updated = false;
 		for (int i = 0; i < K; i++)
 			dists[i] = USHRT_MAX;
@@ -237,10 +237,10 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<diameter_vertex>::create(index_file,
+	graph_index::ptr index = NUMA_graph_index<diameter_vertex>::create(index_file,
 			graph_conf.get_num_threads(), params.get_num_nodes());
 
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
+	graph_engine::ptr graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
 	if (preload)
 		graph->preload_graph();
@@ -312,7 +312,5 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 	printf("The max dist: %ld\n", max_dist.get());
 }

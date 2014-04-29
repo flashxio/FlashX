@@ -236,7 +236,7 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 }
 
 graph_engine::graph_engine(int num_threads, int num_nodes,
-		const std::string &graph_file, graph_index *index)
+		const std::string &graph_file, graph_index::ptr index)
 {
 	max_processing_vertices = 0;
 	this->scheduler = NULL;
@@ -295,10 +295,12 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 
 graph_engine::~graph_engine()
 {
+	if (logger) {
+		logger->close();
+		delete logger;
+	}
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
-	if (logger)
-		delete logger;
 }
 
 void graph_engine::init_threads(vertex_program_creater::ptr creater)

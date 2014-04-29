@@ -35,9 +35,9 @@ struct timeval graph_start;
 
 class vertex_size_scheduler: public vertex_scheduler
 {
-	graph_engine *graph;
+	graph_engine::ptr graph;
 public:
-	vertex_size_scheduler(graph_engine *graph) {
+	vertex_size_scheduler(graph_engine::ptr graph) {
 		this->graph = graph;
 	}
 	void schedule(std::vector<vertex_id_t> &vertices);
@@ -154,7 +154,7 @@ public:
 	topK_scan_vertex() {
 	}
 
-	topK_scan_vertex(vertex_id_t id, const vertex_index *index): scan_vertex(
+	topK_scan_vertex(vertex_id_t id, const vertex_index &index): scan_vertex(
 			id, index) {
 	}
 
@@ -341,9 +341,9 @@ int main(int argc, char *argv[])
 
 	finding_triangles_end = topK_finding_triangles_end;
 
-	graph_index *index = NUMA_graph_index<topK_scan_vertex>::create(
+	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex>::create(
 			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
+	graph_engine::ptr graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
 			index);
 	if (preload)
@@ -433,8 +433,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 
 	assert(known_scans.get_size() >= topK);
 	for (size_t i = 0; i < topK; i++) {

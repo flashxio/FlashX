@@ -224,7 +224,7 @@ public:
 	}
 
 	triangle_vertex(vertex_id_t id,
-			const vertex_index *index): compute_directed_vertex(id, index) {
+			const vertex_index &index): compute_directed_vertex(id, index) {
 	}
 
 	int count_triangles(const page_vertex *v) const;
@@ -520,9 +520,9 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<triangle_vertex>::create(
+	graph_index::ptr index = NUMA_graph_index<triangle_vertex>::create(
 			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
+	graph_engine::ptr graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(),
 			graph_file, index);
 	if (preload)
@@ -563,8 +563,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());

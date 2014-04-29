@@ -471,7 +471,7 @@ public:
 #endif
 	}
 
-	scan_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+	scan_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(
 			id, index) {
 #ifdef PV_STAT
 		num_all_edges = 0;

@@ -143,7 +143,7 @@ public:
 	}
 
 	local_scan_vertex(vertex_id_t id,
-			const vertex_index *index): scan_vertex(id, index) {
+			const vertex_index &index): scan_vertex(id, index) {
 		local_value.set_real_local(0);
 	}
 
@@ -297,9 +297,9 @@ int main(int argc, char *argv[])
 	finding_triangles_end = ls_finding_triangles_end;
 	create_runtime = ls_create_runtime;
 
-	graph_index *index = NUMA_graph_index<local_scan_vertex>::create(
+	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
 			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
+	graph_engine::ptr graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
 			index);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
@@ -321,8 +321,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 
 #ifdef PV_STAT
 	graph_index::const_iterator it = index->begin();

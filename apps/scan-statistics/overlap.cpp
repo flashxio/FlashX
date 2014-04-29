@@ -294,7 +294,7 @@ public:
 		neighborhood = NULL;
 	}
 
-	overlap_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
+	overlap_vertex(vertex_id_t id, const vertex_index &index1): compute_vertex(
 			id, index1) {
 		neighborhood = NULL;
 	}
@@ -403,9 +403,9 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<overlap_vertex>::create(
+	graph_index::ptr index = NUMA_graph_index<overlap_vertex>::create(
 			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
+	graph_engine::ptr graph = graph_engine::create(
 			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
 			index);
 	if (!graph_conf.get_prof_file().empty())
@@ -437,5 +437,4 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
 }

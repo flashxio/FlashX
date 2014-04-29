@@ -53,7 +53,7 @@ public:
 		id = INVALID_VERTEX_ID;
 	}
 
-	compute_vertex(vertex_id_t id, const vertex_index *index) {
+	compute_vertex(vertex_id_t id, const vertex_index &index) {
 		this->id = id;
 	}
 
@@ -79,12 +79,12 @@ public:
 	}
 
 	compute_directed_vertex(vertex_id_t id,
-			const vertex_index *index1): compute_vertex(id, index1) {
-		assert(index1->get_graph_header().get_graph_type()
+			const vertex_index &index1): compute_vertex(id, index1) {
+		assert(index1.get_graph_header().get_graph_type()
 				== graph_type::DIRECTED);
-		const directed_vertex_index *index
-			= (const directed_vertex_index *) index1;
-		num_in_edges = index->get_num_in_edges(id);
+		const directed_vertex_index &index
+			= (const directed_vertex_index &) index1;
+		num_in_edges = index.get_num_in_edges(id);
 	}
 
 	vsize_t get_num_in_edges() const {
@@ -108,10 +108,10 @@ public:
 	compute_ts_vertex() {
 	}
 
-	compute_ts_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(id, index) {
-		assert(index->get_graph_header().get_graph_type()
+	compute_ts_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(id, index) {
+		assert(index.get_graph_header().get_graph_type()
 				== graph_type::TS_DIRECTED
-				|| index->get_graph_header().get_graph_type()
+				|| index.get_graph_header().get_graph_type()
 				== graph_type::TS_UNDIRECTED);
 	}
 
@@ -161,7 +161,7 @@ class graph_engine
 {
 	int vertex_header_size;
 	graph_header header;
-	graph_index *vertices;
+	graph_index::ptr vertices;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
 	vertex_scheduler *scheduler;
 
@@ -184,26 +184,16 @@ class graph_engine
 	file_io_factory::shared_ptr factory;
 	int max_processing_vertices;
 
-	void cleanup() {
-		if (logger) {
-			logger->close();
-			logger = NULL;
-		}
-	}
-
 	void init_threads(vertex_program_creater::ptr creater);
 protected:
 	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
-			graph_index *index);
+			graph_index::ptr index);
 public:
-	static graph_engine *create(int num_threads, int num_nodes,
-			const std::string &graph_file, graph_index *index) {
-		return new graph_engine(num_threads, num_nodes, graph_file, index);
-	}
-
-	static void destroy(graph_engine *graph) {
-		graph->cleanup();
-		delete graph;
+	typedef std::shared_ptr<graph_engine> ptr;
+	static graph_engine::ptr create(int num_threads, int num_nodes,
+			const std::string &graph_file, graph_index::ptr index) {
+		return graph_engine::ptr(new graph_engine(num_threads, num_nodes,
+					graph_file, index));
 	}
 
 	~graph_engine();

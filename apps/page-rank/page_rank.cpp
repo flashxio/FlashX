@@ -45,11 +45,11 @@ public:
 		num_out_edges = 0;
 	}
 
-  pgrank_vertex(vertex_id_t id, const vertex_index *index1): 
+  pgrank_vertex(vertex_id_t id, const vertex_index &index1): 
         compute_vertex(id, index1) {
     this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
-	directed_vertex_index *index = (directed_vertex_index *) index1;
-	num_out_edges = index->get_num_out_edges(id);
+	const directed_vertex_index &index = (const directed_vertex_index &) index1;
+	num_out_edges = index.get_num_out_edges(id);
   }
 
   vsize_t get_num_out_edges() const {
@@ -206,9 +206,9 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<pgrank_vertex>::create(index_file,
+	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(index_file,
 			graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
+	graph_engine::ptr graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
 	if (preload)
 		graph->preload_graph();
@@ -232,8 +232,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
   
   printf("The %ld vertices have page rank sum: %lf\n in %f seconds\n", 
       graph->get_num_vertices(), total, time_diff(start, end));

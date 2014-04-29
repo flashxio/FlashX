@@ -67,12 +67,12 @@ public:
 		updated = true;
 	}
 
-	wcc_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
+	wcc_vertex(vertex_id_t id, const vertex_index &index1): compute_vertex(
 			id, index1) {
 		component_id = id;
-		const directed_vertex_index *index = (const directed_vertex_index *) index1;
-		int num_edges = (index->get_num_in_edges(id)
-				+ index->get_num_out_edges(id));
+		const directed_vertex_index &index = (const directed_vertex_index &) index1;
+		int num_edges = (index.get_num_in_edges(id)
+				+ index.get_num_out_edges(id));
 		empty = (num_edges == 0);
 		updated = true;
 	}
@@ -187,9 +187,9 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<wcc_vertex>::create(index_file,
+	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(index_file,
 			graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
+	graph_engine::ptr graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
 	if (preload)
 		graph->preload_graph();
@@ -262,7 +262,4 @@ int main(int argc, char *argv[])
 
 		fclose(f);
 	}
-
-	graph_engine::destroy(graph);
-	destroy_io_system();
 }

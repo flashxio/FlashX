@@ -42,7 +42,7 @@ public:
 		num_out_edges = 0;
 	}
 
-	stat_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+	stat_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(
 			id, index) {
 		num_in_edges = 0;
 		num_out_edges = 0;
@@ -95,10 +95,10 @@ int main(int argc, char *argv[])
 
 	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<stat_vertex>::create(index_file,
+	graph_index::ptr index = NUMA_graph_index<stat_vertex>::create(index_file,
 			graph_conf.get_num_threads(), params.get_num_nodes());
 	printf("finish loading the graph index\n");
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
+	graph_engine::ptr graph = graph_engine::create(graph_conf.get_num_threads(),
 			params.get_num_nodes(), graph_file, index);
 	const graph_header &header = graph->get_graph_header();
 	printf("start the graph algorithm\n");
@@ -164,7 +164,6 @@ int main(int argc, char *argv[])
 				max_num_edges = v.get_num_edges(edge_type::IN_EDGE);
 		}
 	}
-	graph_engine::destroy(graph);
 
 	printf("min id: %ld, max id: %ld\n", (long) min_id, (long) max_id);
 	printf("There are %ld non-empty vertices\n", num_non_empty_vertices);
@@ -206,5 +205,4 @@ int main(int argc, char *argv[])
 		printf("out-edges histogram: \n");
 		hist_out_edges.print(stdout);
 	}
-	destroy_io_system();
 }
