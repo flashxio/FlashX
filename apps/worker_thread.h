@@ -101,11 +101,11 @@ class customized_vertex_queue: public active_vertex_queue
 	pthread_spinlock_t lock;
 	std::vector<vertex_id_t> sorted_vertices;
 	scan_pointer fetch_idx;
-	vertex_scheduler *scheduler;
+	vertex_scheduler::ptr scheduler;
 	graph_engine &graph;
 	int part_id;
 public:
-	customized_vertex_queue(graph_engine &_graph, vertex_scheduler *scheduler,
+	customized_vertex_queue(graph_engine &_graph, vertex_scheduler::ptr scheduler,
 			int part_id): fetch_idx(0, true), graph(_graph) {
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->scheduler = scheduler;
@@ -235,7 +235,7 @@ class worker_thread: public thread
 public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
 			vertex_program::ptr prog, int node_id, int worker_id,
-			int num_threads, vertex_scheduler *scheduler);
+			int num_threads, vertex_scheduler::ptr scheduler);
 
 	~worker_thread();
 

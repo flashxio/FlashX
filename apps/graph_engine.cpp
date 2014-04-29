@@ -239,7 +239,6 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 		const std::string &graph_file, graph_index::ptr index)
 {
 	max_processing_vertices = 0;
-	this->scheduler = NULL;
 	is_complete = false;
 	this->vertices = index;
 
@@ -287,18 +286,12 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 	worker_threads.resize(num_threads);
 	vprograms.resize(num_threads);
 
-	if (graph_conf.get_trace_file().empty())
-		logger = NULL;
-	else
-		logger = new trace_logger(graph_conf.get_trace_file());
+	if (!graph_conf.get_trace_file().empty())
+		logger = trace_logger::ptr(new trace_logger(graph_conf.get_trace_file()));
 }
 
 graph_engine::~graph_engine()
 {
-	if (logger) {
-		logger->close();
-		delete logger;
-	}
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
 }
@@ -416,7 +409,7 @@ void graph_engine::wait4complete()
 	}
 }
 
-void graph_engine::set_vertex_scheduler(vertex_scheduler *scheduler)
+void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 {
 	this->scheduler = scheduler;
 }

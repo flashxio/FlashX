@@ -352,7 +352,8 @@ int main(int argc, char *argv[])
 	// to the size of vertices. We start with processing vertices with higher
 	// degrees in the hope we can find the max scan as early as possible,
 	// so that we can simple ignore the rest of vertices.
-	graph->set_vertex_scheduler(new vertex_size_scheduler(graph));
+	graph->set_vertex_scheduler(vertex_scheduler::ptr(
+				new vertex_size_scheduler(graph)));
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

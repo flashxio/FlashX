@@ -156,7 +156,7 @@ void customized_vertex_queue::init(worker_thread &t)
 worker_thread::worker_thread(graph_engine *graph,
 		file_io_factory::shared_ptr factory,
 		vertex_program::ptr prog, int node_id, int worker_id,
-		int num_threads, vertex_scheduler *scheduler): thread("worker_thread",
+		int num_threads, vertex_scheduler::ptr scheduler): thread("worker_thread",
 			node_id)
 {
 	vid_bufs = std::unique_ptr<std::vector<local_vid_t>[]>(

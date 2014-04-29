@@ -89,10 +89,16 @@ class trace_logger
 		return p;
 	}
 public:
+	typedef std::shared_ptr<trace_logger> ptr;
+
 	trace_logger(const std::string &trace_file) {
 		thread = new log_thread(trace_file);
 		thread->start();
 		pthread_key_create(&queue_key, destroy_queue);
+	}
+
+	~trace_logger() {
+		close();
 	}
 
 	void log(request_range reqs[], int num) {

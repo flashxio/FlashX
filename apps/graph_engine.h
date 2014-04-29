@@ -125,6 +125,7 @@ public:
 class vertex_scheduler
 {
 public:
+	typedef std::shared_ptr<vertex_scheduler> ptr;
 	virtual void schedule(std::vector<vertex_id_t> &vertices) = 0;
 };
 
@@ -163,7 +164,7 @@ class graph_engine
 	graph_header header;
 	graph_index::ptr vertices;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
-	vertex_scheduler *scheduler;
+	vertex_scheduler::ptr scheduler;
 
 	// The number of activated vertices that haven't been processed
 	// in the current level.
@@ -180,7 +181,7 @@ class graph_engine
 	std::vector<worker_thread *> worker_threads;
 	std::vector<vertex_program::ptr> vprograms;
 
-	trace_logger *logger;
+	trace_logger::ptr logger;
 	file_io_factory::shared_ptr factory;
 	int max_processing_vertices;
 
@@ -267,7 +268,7 @@ public:
 		return header.is_directed_graph();
 	}
 
-	trace_logger *get_logger() const {
+	trace_logger::ptr get_logger() const {
 		return logger;
 	}
 
@@ -294,7 +295,7 @@ public:
 		return header;
 	}
 
-	void set_vertex_scheduler(vertex_scheduler *scheduler);
+	void set_vertex_scheduler(vertex_scheduler::ptr scheduler);
 
 	// We have processed the specified number of vertices.
 	void process_vertices(int num) {
