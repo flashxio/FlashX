@@ -36,6 +36,9 @@ class worker_thread;
 class active_vertex_queue
 {
 public:
+	virtual ~active_vertex_queue() {
+	}
+
 	virtual void init(const vertex_id_t buf[], size_t size, bool sorted) = 0;
 	// This is the common case for iterations.
 	virtual void init(worker_thread &) = 0;
