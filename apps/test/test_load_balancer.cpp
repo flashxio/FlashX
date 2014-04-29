@@ -93,6 +93,22 @@ void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	prog.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
+class verify_vertex_query: public vertex_query
+{
+public:
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		const test_vertex &test_v = (const test_vertex &) v;
+		test_v.verify_result();
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new verify_vertex_query());
+	}
+};
+
 int main(int argc, char *argv[])
 {
 	if (argc < 4) {
@@ -127,16 +143,10 @@ int main(int argc, char *argv[])
 		graph->start_all();
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
-
-		NUMA_graph_index<test_vertex>::const_iterator it
-			= ((NUMA_graph_index<test_vertex> *) index)->begin();
-		NUMA_graph_index<test_vertex>::const_iterator end_it
-			= ((NUMA_graph_index<test_vertex> *) index)->end();
-		for (; it != end_it; ++it) {
-			const test_vertex &v = (const test_vertex &) *it;
-			v.verify_result();
-		}
 		printf("It takes %f seconds\n", time_diff(start, end));
+
+		vertex_query::ptr vvq(new verify_vertex_query());
+		graph->query_on_all(vvq);
 	}
 
 	if (!graph_conf.get_prof_file().empty())
