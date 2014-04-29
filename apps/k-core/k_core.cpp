@@ -128,6 +128,34 @@ void kcore_vertex::run_on_message(vertex_program &, const vertex_message &msg) {
   degree--;
 }
 
+class count_vertex_query: public vertex_query
+{
+	size_t num;
+public:
+	count_vertex_query() {
+		num = 0;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		kcore_vertex &kcore_v = (kcore_vertex &) v;
+		if (kcore_v.is_deleted())
+			num++;
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		count_vertex_query *cvq = (count_vertex_query *) q.get();
+		num += cvq->num;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new count_vertex_query());
+	}
+
+	size_t get_num() const {
+		return num;
+	}
+};
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -213,20 +241,9 @@ int main(int argc, char *argv[])
   graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	NUMA_graph_index<kcore_vertex>::const_iterator it
-		= ((NUMA_graph_index<kcore_vertex> *) index)->begin();
-	NUMA_graph_index<kcore_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<kcore_vertex> *) index)->end();
-
-	vsize_t in_k_core = 0;
-
-  // Check number of visited vertices
-	for (; it != end_it; ++it) {
-		const kcore_vertex &v = (const kcore_vertex &) *it;
-		if ( !(v.is_deleted()) ) {
-			in_k_core++;
-    }
-	}
+	vertex_query::ptr cvq(new count_vertex_query());
+	graph->query_on_all(cvq);
+	size_t in_k_core = ((count_vertex_query *) cvq.get())->get_num();
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
@@ -234,6 +251,6 @@ int main(int argc, char *argv[])
 		print_io_thread_stat();
 	graph_engine::destroy(graph);
 	destroy_io_system();
-	printf("\n%d-core shows %d vertices > %d degree in %f seconds\n",
+	printf("\n%d-core shows %ld vertices > %d degree in %f seconds\n",
 			K, in_k_core, K, time_diff(start, end));
 }
