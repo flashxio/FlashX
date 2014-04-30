@@ -107,12 +107,13 @@ class callback_allocator: public obj_allocator<thread_callback_s>
 		void init(thread_callback_s *cb) {
 			new (&cb->req) io_request();
 		}
-	} initiator;
+	};
 public:
 	callback_allocator(int node_id, long increase_size,
 			long max_size = params.get_max_obj_alloc_size()): obj_allocator<thread_callback_s>(
 				std::string("aio_cb_allocator-") + itoa(node_id), node_id,
-				increase_size, max_size, &initiator) {
+				increase_size, max_size,
+				obj_initiator<thread_callback_s>::ptr(new callback_initiator())) {
 	}
 };
 

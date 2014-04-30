@@ -23,6 +23,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include <memory>
+
 #include "concurrency.h"
 #include "aligned_allocator.h"
 #include "parameters.h"
@@ -201,6 +203,7 @@ template<class T>
 class obj_initiator
 {
 public:
+	typedef typename std::unique_ptr<obj_initiator<T> > ptr;
 	virtual void init(T *obj) = 0;
 };
 
@@ -208,6 +211,7 @@ template<class T>
 class obj_destructor
 {
 public:
+	typedef typename std::unique_ptr<obj_destructor<T> > ptr;
 	virtual void destroy(T *obj) = 0;
 };
 
@@ -232,20 +236,22 @@ public:
 template<class T>
 class obj_allocator: public slab_allocator
 {
-	obj_initiator<T> *initiator;
-	obj_destructor<T> *destructor;
+	typename obj_initiator<T>::ptr initiator;
+	typename obj_destructor<T>::ptr destructor;
 public:
 	obj_allocator(const std::string &name, int node_id, long increase_size,
 			long max_size = INT_MAX,
-			obj_initiator<T> *initiator = new default_obj_initiator<T>(),
-			obj_destructor<T> *destructor = new default_obj_destructor<T>()
+			typename obj_initiator<T>::ptr initiator = typename obj_initiator<T>::ptr(
+				new default_obj_initiator<T>()),
+			typename obj_destructor<T>::ptr destructor = typename obj_destructor<T>::ptr(
+				new default_obj_destructor<T>())
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
 				): slab_allocator(name, sizeof(T) + sizeof(slab_allocator::linked_obj),
 				increase_size, max_size, node_id, true) {
 		assert(increase_size <= max_size);
-		this->initiator = initiator;
-		this->destructor = destructor;
+		this->initiator = std::move(initiator);
+		this->destructor = std::move(destructor);
 	}
 
 	virtual int alloc_objs(T **objs, int num) {

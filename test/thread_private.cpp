@@ -307,8 +307,7 @@ class write_compute_allocator: public compute_allocator
 public:
 	write_compute_allocator(thread *t): allocator("write-compute-allocator",
 			t->get_node_id(), PAGE_SIZE, params.get_max_obj_alloc_size(),
-			// TODO memory leak
-			new compute_initiator(this)) {
+			obj_initiator<write_user_compute>::ptr(new compute_initiator(this))) {
 	}
 
 	virtual user_compute *alloc() {
@@ -339,8 +338,7 @@ class sum_compute_allocator: public compute_allocator
 public:
 	sum_compute_allocator(thread *t): allocator("sum-compute-allocator",
 			t->get_node_id(), PAGE_SIZE, params.get_max_obj_alloc_size(),
-			// TODO memory leak
-			new compute_initiator(this)) {
+			obj_initiator<sum_user_compute>::ptr(new compute_initiator(this))) {
 	}
 
 	virtual user_compute *alloc() {
