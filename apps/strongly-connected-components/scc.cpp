@@ -90,24 +90,18 @@ public:
 
 class wcc_id_t
 {
-	vsize_t deg;
 	vertex_id_t id;
 public:
 	wcc_id_t() {
-		deg = 0;
 		id = 0;
 	}
 
-	wcc_id_t(vsize_t deg, vertex_id_t id) {
-		this->deg = deg;
+	wcc_id_t(vertex_id_t id) {
 		this->id = id;
 	}
 
-	bool operator>(const wcc_id_t &id) const {
-		if (this->deg == id.deg)
-			return this->id > id.id;
-		else
-			return this->deg > id.deg;
+	bool operator<(const wcc_id_t &id) const {
+		return this->id < id.id;
 	}
 
 	vertex_id_t get_id() const {
@@ -298,7 +292,7 @@ struct trim1_state
 struct wcc_state
 {
 	fwbw_state fwbw;
-	wcc_id_t wcc_max;
+	wcc_id_t wcc_min;
 };
 
 class scc_vertex: public compute_directed_vertex
@@ -342,7 +336,7 @@ public:
 	}
 
 	void init_wcc() {
-		state.wcc.wcc_max = wcc_id_t(get_num_out_edges() + get_num_in_edges(), get_id());
+		state.wcc.wcc_min = wcc_id_t(get_id());
 		state.fwbw.set_wcc_updated();
 	}
 
@@ -359,7 +353,7 @@ public:
 	void post_wcc_init() {
 		assert(!state.fwbw.has_fw_visited());
 		assert(!state.fwbw.has_bw_visited());
-		state.fwbw.assign_new_color(state.wcc.wcc_max.get_id());
+		state.fwbw.assign_new_color(state.wcc.wcc_min.get_id());
 	}
 
 	void run(vertex_program &prog) {
@@ -831,7 +825,7 @@ void scc_vertex::run_stage_wcc(vertex_program &prog, const page_vertex &vertex)
 {
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	wcc_comp_message msg(state.wcc.wcc_max, state.fwbw.get_color());
+	wcc_comp_message msg(state.wcc.wcc_min, state.fwbw.get_color());
 	int num_edges = vertex.get_num_edges(BOTH_EDGES);
 	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0,
 			num_edges);
@@ -847,8 +841,8 @@ void scc_vertex::run_on_message_stage_wcc(vertex_program &prog,
 	if (msg.get_color() != state.fwbw.get_color())
 		return;
 
-	if (msg.get_wcc_id() > state.wcc.wcc_max) {
-		state.wcc.wcc_max = msg.get_wcc_id();
+	if (msg.get_wcc_id() < state.wcc.wcc_min) {
+		state.wcc.wcc_min = msg.get_wcc_id();
 		state.fwbw.set_wcc_updated();
 	}
 }
@@ -867,11 +861,11 @@ public:
 	virtual bool keep(compute_vertex &v) {
 		scc_vertex &scc_v = (scc_vertex &) v;
 		bool activate = !scc_v.is_assigned()
-			&& scc_v.wcc_max.get_id() == scc_v.get_id();
+			&& scc_v.wcc_min.get_id() == scc_v.get_id();
 		// If the vertex hasn't been assigned to a component,
 		// let's use the result of wcc (which is stored in pivot) as the color
 		if (!scc_v.is_assigned())
-			scc_v.fwbw_state.assign_new_color(scc_v.wcc_max.get_id());
+			scc_v.fwbw_state.assign_new_color(scc_v.wcc_min.get_id());
 		if (activate)
 			scc_v.init_fwbw();
 		return activate;
@@ -962,21 +956,50 @@ public:
 
 class post_wcc_query: public vertex_query
 {
-	std::unordered_set<vertex_id_t> start_vertices;
+	// The largest-degree vertices in each color
+	typedef std::unordered_map<uint64_t, vertex_id_t> color_map_t;
+	color_map_t max_ids;
 public:
 	virtual void run(graph_engine &graph, compute_vertex &v) {
-		scc_vertex &sv = (scc_vertex &) v;
+		scc_vertex &scc_v = (scc_vertex &) v;
 		// Ignore the assigned vertex
-		if (sv.is_assigned())
+		if (scc_v.is_assigned())
 			return;
-		sv.post_wcc_init();
-		assert(sv.get_color() < INVALID_VERTEX_ID);
-		start_vertices.insert(sv.get_color());
+		scc_v.post_wcc_init();
+		assert(scc_v.get_color() < INVALID_VERTEX_ID);
+
+		color_map_t::iterator it = max_ids.find(scc_v.get_color());
+		// The color doesn't exist;
+		if (it == max_ids.end()) {
+			max_ids.insert(std::pair<uint64_t, vertex_id_t>(scc_v.get_color(),
+						v.get_id()));
+		}
+		else {
+			vertex_id_t curr_max_id = it->second;
+			if (graph.get_vertex_edges(v.get_id())
+					> graph.get_vertex_edges(curr_max_id))
+				it->second = v.get_id();
+		}
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
 		post_wcc_query *pwq = (post_wcc_query *) q.get();
-		start_vertices.insert(pwq->start_vertices.begin(), pwq->start_vertices.end());
+		for (color_map_t::const_iterator it = pwq->max_ids.begin();
+				it != pwq->max_ids.end(); it++) {
+			uint64_t color = it->first;
+			vertex_id_t id = it->second;
+			scc_vertex &scc_v = (scc_vertex &) graph.get_vertex(id);
+			assert(!scc_v.is_assigned());
+			color_map_t::iterator it1 = this->max_ids.find(color);
+			// The same color exists.
+			if (it1 != this->max_ids.end()) {
+				// If the vertex of the same color in the other query is larger
+				if (graph.get_vertex_edges(id) > graph.get_vertex_edges(it1->second))
+					it1->second = id;
+			}
+			else
+				this->max_ids.insert(std::pair<uint64_t, vertex_id_t>(color, id));
+		}
 	}
 
 	virtual ptr clone() {
@@ -984,8 +1007,10 @@ public:
 	}
 
 	size_t get_max_ids(std::vector<vertex_id_t> &ids) const {
-		ids.insert(ids.begin(), start_vertices.begin(), start_vertices.end());
-		return start_vertices.size();
+		for (color_map_t::const_iterator it = max_ids.begin();
+				it != max_ids.end(); it++)
+			ids.push_back(it->second);
+		return max_ids.size();
 	}
 };
 
