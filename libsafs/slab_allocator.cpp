@@ -51,19 +51,14 @@ public:
 	}
 };
 
-static void destroy_queue(void *arg)
-{
-	fifo_queue<char *> *q = (fifo_queue<char *> *) arg;
-	fifo_queue<char *>::destroy(q);
-}
-
 slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 		long _increase_size, long _max_size, int _node_id,
 		// We allow pages to be pinned when allocated.
 		bool init, bool pinned, int _local_buf_size, bool _thread_safe): obj_size(
 			_obj_size), increase_size(ROUNDUP_PAGE(_increase_size)),
 		max_size(_max_size), node_id(_node_id), local_buf_size(_local_buf_size),
-		thread_safe(_thread_safe)
+		thread_safe(_thread_safe), per_thread_queues("per-thread-queue-queue",
+				_node_id, 1000)
 #ifdef MEMCHECK
 		   , allocator(obj_size)
 #endif
@@ -77,8 +72,8 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 	this->pinned = pinned;
 	assert((unsigned) obj_size >= sizeof(linked_obj));
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-	pthread_key_create(&local_buf_key, destroy_queue);
-	pthread_key_create(&local_free_key, destroy_queue);
+	pthread_key_create(&local_buf_key, NULL);
+	pthread_key_create(&local_free_key, NULL);
 }
 
 void slab_allocator::free(char *obj)
@@ -91,6 +86,7 @@ void slab_allocator::free(char *obj)
 			= (fifo_queue<char *> *) pthread_getspecific(local_free_key);
 		if (local_free_refs == NULL) {
 			local_free_refs = fifo_queue<char *>::create(node_id, local_buf_size);
+			per_thread_queues.add(&local_free_refs, 1);
 			pthread_setspecific(local_free_key, local_free_refs);
 		}
 		if (local_free_refs->is_full()) {
@@ -118,6 +114,7 @@ char *slab_allocator::alloc()
 		if (local_buf_refs == NULL) {
 			assert(node_id >= 0);
 			local_buf_refs = fifo_queue<char *>::create(node_id, local_buf_size);
+			per_thread_queues.add(&local_buf_refs, 1);
 			pthread_setspecific(local_buf_key, local_buf_refs);
 		}
 
@@ -230,6 +227,14 @@ slab_allocator::~slab_allocator()
 	pthread_key_delete(local_buf_key);
 	pthread_key_delete(local_free_key);
 	pthread_spin_destroy(&lock);
+
+	// Destroy all the per-thread queues.
+	fifo_queue<char *> *queues[128];
+	while (!per_thread_queues.is_empty()) {
+		int ret = per_thread_queues.fetch(queues, 128);
+		for (int i = 0; i < ret; i++)
+			fifo_queue<char *>::destroy(queues[i]);
+	}
 }
 
 void slab_allocator::free(char **objs, int nobjs) {

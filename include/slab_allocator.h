@@ -150,6 +150,8 @@ private:
 	// added the main buffer.
 	pthread_key_t local_free_key;
 
+	thread_safe_FIFO_queue<fifo_queue<char *> *> per_thread_queues;
+
 	std::string name;
 	static atomic_integer alloc_counter;
 
