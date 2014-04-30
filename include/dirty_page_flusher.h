@@ -28,6 +28,9 @@ class io_interface;
 class dirty_page_flusher
 {
 public:
+	virtual ~dirty_page_flusher() {
+	}
+
 	/**
 	 * This method flushes dirty pages with the specified io instance.
 	 * The method has to be thread-safe, as it will be invoked in different
