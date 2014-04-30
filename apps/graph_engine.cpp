@@ -235,9 +235,16 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 	compute->request_partial_vertices(reqs, num);
 }
 
-graph_engine::graph_engine(int num_threads, int num_nodes,
-		const std::string &graph_file, graph_index::ptr index)
+graph_engine::graph_engine(const std::string &graph_file,
+		graph_index::ptr index, const config_map &configs)
 {
+	graph_conf.init(configs);
+	graph_conf.print();
+	init_io_system(configs);
+	int num_threads = graph_conf.get_num_threads();
+	this->num_nodes = params.get_num_nodes();
+	index->init(num_threads, num_nodes);
+
 	max_processing_vertices = 0;
 	is_complete = false;
 	this->vertices = index;
@@ -280,7 +287,6 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 			assert(0);
 	}
 
-	this->num_nodes = num_nodes;
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);
 	worker_threads.resize(num_threads);
@@ -294,6 +300,8 @@ graph_engine::~graph_engine()
 {
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
+	factory = file_io_factory::shared_ptr();
+	destroy_io_system();
 }
 
 void graph_engine::init_threads(vertex_program_creater::ptr creater)

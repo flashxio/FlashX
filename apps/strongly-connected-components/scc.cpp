@@ -1099,16 +1099,11 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine::ptr graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("SCC starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

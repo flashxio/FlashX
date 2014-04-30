@@ -79,6 +79,9 @@ public:
 	virtual ~graph_index() {
 	}
 
+	virtual void init(int num_threads, int num_nodes) {
+	}
+
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
 			compute_vertex *v_buf[]) const = 0;
 	virtual size_t get_vertices(int part_id, const local_vid_t ids[], int num,
@@ -231,10 +234,12 @@ static inline size_t get_min_ext_mem_vertex_size(graph_type type)
 template<class vertex_type>
 class NUMA_graph_index: public graph_index
 {
+	std::string index_file;
+
 	vertex_id_t max_vertex_id;
 	vertex_id_t min_vertex_id;
 	size_t num_vertices;
-	range_graph_partitioner partitioner;
+	std::unique_ptr<range_graph_partitioner> partitioner;
 	// A graph index per thread
 	std::vector<std::unique_ptr<NUMA_local_graph_index<vertex_type> > > index_arr;
 	std::unique_ptr<off_t[]> off_arr;
@@ -254,8 +259,17 @@ class NUMA_graph_index: public graph_index
 		}
 	};
 
-	NUMA_graph_index(const std::string &index_file,
-			int num_threads, int num_nodes): partitioner(num_threads) {
+	NUMA_graph_index(const std::string &index_file) {
+		this->index_file = index_file;
+	}
+public:
+	static graph_index::ptr create(const std::string &index_file) {
+		return graph_index::ptr(new NUMA_graph_index<vertex_type>(index_file));
+	}
+
+	void init(int num_threads, int num_nodes) {
+		partitioner = std::unique_ptr<range_graph_partitioner>(
+				new range_graph_partitioner(num_threads));
 		vertex_index *index = load_vertex_index(index_file);
 		size_t min_vertex_size = get_min_ext_mem_vertex_size(
 				index->get_graph_header().get_graph_type());
@@ -266,7 +280,7 @@ class NUMA_graph_index: public graph_index
 						// The partitions are assigned to worker threads.
 						// The memory used to store the partitions should
 						// be on the same NUMA as the worker threads.
-						*index, partitioner, i, i % num_nodes, num_vertices));
+						*index, *partitioner, i, i % num_nodes, num_vertices));
 		}
 
 		std::vector<init_thread *> threads(num_threads);
@@ -299,12 +313,6 @@ class NUMA_graph_index: public graph_index
 				num_non_empty);
 		vertex_index::destroy(index);
 	}
-public:
-	static graph_index::ptr create(const std::string &index_file,
-			int num_threads, int num_nodes) {
-		return graph_index::ptr(new NUMA_graph_index<vertex_type>(index_file,
-				num_threads, num_nodes));
-	}
 
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
 			compute_vertex *v_buf[]) const {
@@ -312,7 +320,7 @@ public:
 			vertex_id_t id = ids[i];
 			int part_id;
 			off_t part_off;
-			partitioner.map2loc(id, part_id, part_off);
+			partitioner->map2loc(id, part_id, part_off);
 			v_buf[i] = &index_arr[part_id]->vertex_arr[part_off];
 		}
 		return num;
@@ -321,7 +329,7 @@ public:
 	virtual compute_vertex &get_vertex(vertex_id_t id) {
 		int part_id;
 		off_t part_off;
-		partitioner.map2loc(id, part_id, part_off);
+		partitioner->map2loc(id, part_id, part_off);
 		return index_arr[part_id]->vertex_arr[part_off];
 	}
 
@@ -356,7 +364,7 @@ public:
 	}
 
 	virtual const graph_partitioner &get_partitioner() const {
-		return partitioner;
+		return *partitioner;
 	}
 
 	virtual vertex_program::ptr create_def_vertex_program(

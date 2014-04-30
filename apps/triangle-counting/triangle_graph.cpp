@@ -514,17 +514,12 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
 	graph_index::ptr index = NUMA_graph_index<triangle_vertex>::create(
-			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine::ptr graph = graph_engine::create(
-			graph_conf.get_num_threads(), params.get_num_nodes(),
-			graph_file, index);
+			index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (preload)
 		graph->preload_graph();
 #if 0

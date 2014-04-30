@@ -187,14 +187,13 @@ class graph_engine
 
 	void init_threads(vertex_program_creater::ptr creater);
 protected:
-	graph_engine(int num_threads, int num_nodes, const std::string &graph_file,
-			graph_index::ptr index);
+	graph_engine(const std::string &graph_file, graph_index::ptr index,
+			const config_map &configs);
 public:
 	typedef std::shared_ptr<graph_engine> ptr;
-	static graph_engine::ptr create(int num_threads, int num_nodes,
-			const std::string &graph_file, graph_index::ptr index) {
-		return graph_engine::ptr(new graph_engine(num_threads, num_nodes,
-					graph_file, index));
+	static graph_engine::ptr create(const std::string &graph_file,
+			graph_index::ptr index, const config_map &configs) {
+		return graph_engine::ptr(new graph_engine(graph_file, index, configs));
 	}
 
 	~graph_engine();

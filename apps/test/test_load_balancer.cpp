@@ -121,16 +121,9 @@ int main(int argc, char *argv[])
 	std::string index_file = argv[3];
 
 	config_map configs(conf_file);
-	graph_conf.init(configs);
-	graph_conf.print();
 
-	init_io_system(configs);
-
-	graph_index::ptr index = NUMA_graph_index<test_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-
-	graph_engine::ptr graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<test_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());

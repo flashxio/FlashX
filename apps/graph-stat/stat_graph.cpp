@@ -93,13 +93,8 @@ int main(int argc, char *argv[])
 	config_map configs(conf_file);
 	graph_conf.init(configs);
 
-	init_io_system(configs);
-
-	graph_index::ptr index = NUMA_graph_index<stat_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-	printf("finish loading the graph index\n");
-	graph_engine::ptr graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<stat_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	const graph_header &header = graph->get_graph_header();
 	printf("start the graph algorithm\n");
 	graph->start_all();
