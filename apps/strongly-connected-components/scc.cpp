@@ -139,7 +139,10 @@ enum scc_stage_t {
 	FWBW,
 	// After the FWBW phase, we need to partition the remaining vertices.
 	PARTITION,
-	WCC,
+	// Use label propagation with only in-edges.
+	IN_WCC,
+	// Use label propagation with only out-edges.
+	OUT_WCC,
 } scc_stage;
 
 template<class T>
@@ -376,7 +379,8 @@ public:
 			case scc_stage_t::PARTITION:
 				run_stage_part(prog);
 				break;
-			case scc_stage_t::WCC:
+			case scc_stage_t::IN_WCC:
+			case scc_stage_t::OUT_WCC:
 				run_stage_wcc(prog);
 				break;
 			default:
@@ -411,7 +415,8 @@ public:
 			case scc_stage_t::PARTITION:
 				run_stage_part(prog, vertex);
 				break;
-			case scc_stage_t::WCC:
+			case scc_stage_t::IN_WCC:
+			case scc_stage_t::OUT_WCC:
 				run_stage_wcc(prog, vertex);
 				break;
 			default:
@@ -446,7 +451,8 @@ public:
 			case scc_stage_t::PARTITION:
 				run_on_message_stage_part(prog, msg);
 				break;
-			case scc_stage_t::WCC:
+			case scc_stage_t::IN_WCC:
+			case scc_stage_t::OUT_WCC:
 				run_on_message_stage_wcc(prog, msg);
 				break;
 			default:
@@ -825,10 +831,14 @@ void scc_vertex::run_stage_wcc(vertex_program &prog, const page_vertex &vertex)
 {
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
+	edge_type type;
+	if (scc_stage == IN_WCC)
+		type = IN_EDGE;
+	else
+		type = OUT_EDGE;
 	wcc_comp_message msg(state.wcc.wcc_min, state.fwbw.get_color());
-	int num_edges = vertex.get_num_edges(BOTH_EDGES);
-	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0,
-			num_edges);
+	int num_edges = vertex.get_num_edges(type);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(type, 0, num_edges);
 	prog.multicast_msg(it, msg);
 }
 
@@ -971,7 +981,7 @@ public:
 		color_map_t::iterator it = max_ids.find(scc_v.get_color());
 		// The color doesn't exist;
 		if (it == max_ids.end()) {
-			max_ids.insert(std::pair<uint64_t, vertex_id_t>(scc_v.get_color(),
+			max_ids.insert(color_map_t::value_type(scc_v.get_color(),
 						v.get_id()));
 		}
 		else {
@@ -998,7 +1008,7 @@ public:
 					it1->second = id;
 			}
 			else
-				this->max_ids.insert(std::pair<uint64_t, vertex_id_t>(color, id));
+				this->max_ids.insert(color_map_t::value_type(color, it->second));
 		}
 	}
 
@@ -1134,6 +1144,9 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
+	std::vector<vertex_id_t> active_vertices;
+	vertex_id_t max_v = 0;
+
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
 	scc_start = start;
@@ -1168,7 +1181,7 @@ int main(int argc, char *argv[])
 
 	vertex_query::ptr mdq(new max_degree_query());
 	graph->query_on_all(mdq);
-	vertex_id_t max_v = ((max_degree_query *) mdq.get())->get_max_id();
+	max_v = ((max_degree_query *) mdq.get())->get_max_id();
 	scc_stage = scc_stage_t::FWBW;
 	gettimeofday(&start, NULL);
 	graph->init_all_vertices(vertex_initiator::ptr(new fwbw_reset()));
@@ -1187,7 +1200,6 @@ int main(int argc, char *argv[])
 
 	std::vector<vertex_program::ptr> part_vprogs;
 	graph->get_vertex_programs(part_vprogs);
-	std::vector<vertex_id_t> active_vertices;
 	size_t fwbw_vertices = 0;
 	BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
 		part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
@@ -1213,17 +1225,27 @@ int main(int argc, char *argv[])
 				time_diff(start, end),
 				trim3_vertices.load(std::memory_order_relaxed));
 
-		scc_stage = scc_stage_t::WCC;
+		scc_stage = scc_stage_t::IN_WCC;
 		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
 				std::shared_ptr<vertex_initiator>(new wcc_initiator()));
 		graph->wait4complete();
-		gettimeofday(&end, NULL);
-		printf("WCC takes %f seconds\n", time_diff(start, end));
-
-		gettimeofday(&start, NULL);
 		vertex_query::ptr mdq1(new post_wcc_query());
 		graph->query_on_all(mdq1);
+		gettimeofday(&end, NULL);
+		printf("IN_WCC takes %f seconds\n", time_diff(start, end));
+
+		scc_stage = scc_stage_t::OUT_WCC;
+		gettimeofday(&start, NULL);
+		graph->start(active_vertices.data(), active_vertices.size(),
+				std::shared_ptr<vertex_initiator>(new wcc_initiator()));
+		graph->wait4complete();
+		mdq1 = vertex_query::ptr(new post_wcc_query());
+		graph->query_on_all(mdq1);
+		gettimeofday(&end, NULL);
+		printf("IN_WCC takes %f seconds\n", time_diff(start, end));
+
+		gettimeofday(&start, NULL);
 		std::vector<vertex_id_t> fwbw_starts;
 		((post_wcc_query *) mdq1.get())->get_max_ids(fwbw_starts);
 		printf("FWBW starts on %ld vertices\n", fwbw_starts.size());
@@ -1244,7 +1266,7 @@ int main(int argc, char *argv[])
 		std::vector<vertex_program::ptr> part_vprogs;
 		graph->get_vertex_programs(part_vprogs);
 		active_vertices.clear();
-		fwbw_vertices = 0;
+		size_t fwbw_vertices = 0;
 		BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
 			part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
 			fwbw_vertices += part_vprog->get_num_assigned();
