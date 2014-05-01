@@ -917,13 +917,28 @@ public:
 	}
 };
 
-class wcc_initiator: public vertex_initiator
+class in_wcc_initiator: public vertex_initiator
 {
 public:
 	virtual void init(compute_vertex &v) {
 		scc_vertex &scc_v = (scc_vertex &) v;
 		if (scc_v.is_assigned())
 			return;
+		scc_v.init_wcc();
+	}
+};
+
+class out_wcc_initiator: public vertex_initiator
+{
+public:
+	virtual void init(compute_vertex &v) {
+		scc_vertex &scc_v = (scc_vertex &) v;
+		if (scc_v.is_assigned())
+			return;
+		// OUT_WCC runs after IN_WCC, so we need to do post-WCC
+		// initialization.
+		scc_v.post_wcc_init();
+		assert(scc_v.get_color() < INVALID_VERTEX_ID);
 		scc_v.init_wcc();
 	}
 };
@@ -1228,19 +1243,17 @@ int main(int argc, char *argv[])
 		scc_stage = scc_stage_t::IN_WCC;
 		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
-				std::shared_ptr<vertex_initiator>(new wcc_initiator()));
+				std::shared_ptr<vertex_initiator>(new in_wcc_initiator()));
 		graph->wait4complete();
-		vertex_query::ptr mdq1(new post_wcc_query());
-		graph->query_on_all(mdq1);
 		gettimeofday(&end, NULL);
 		printf("IN_WCC takes %f seconds\n", time_diff(start, end));
 
 		scc_stage = scc_stage_t::OUT_WCC;
 		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
-				std::shared_ptr<vertex_initiator>(new wcc_initiator()));
+				std::shared_ptr<vertex_initiator>(new out_wcc_initiator()));
 		graph->wait4complete();
-		mdq1 = vertex_query::ptr(new post_wcc_query());
+		vertex_query::ptr mdq1(new post_wcc_query());
 		graph->query_on_all(mdq1);
 		gettimeofday(&end, NULL);
 		printf("IN_WCC takes %f seconds\n", time_diff(start, end));
