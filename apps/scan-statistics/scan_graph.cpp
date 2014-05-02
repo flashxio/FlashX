@@ -254,7 +254,6 @@ size_t neighbor_list::count_edges(const page_vertex *v)
 
 void scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
-	assert(!local_value.has_real_local());
 	assert(!local_value.has_runtime_data());
 
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
@@ -305,8 +304,9 @@ void scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 	local_data->local_scan += tmp;
 
 	if (local_data->neighbors->empty()) {
+		local_value.set_real_local(local_data->local_scan);
+		::finding_triangles_end(prog, *this, local_data);
 		destroy_runtime(*this, local_data);
-		local_value.set_real_local(0);
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);

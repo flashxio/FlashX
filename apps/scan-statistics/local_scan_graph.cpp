@@ -169,7 +169,10 @@ public:
 
 	void run_on_message(vertex_program &prog, const vertex_message &msg1) {
 		const count_msg &msg = (const count_msg &) msg1;
-		local_value.inc_real_local(msg.get_num());
+		if (local_value.has_runtime_data())
+			local_value.get_runtime_data()->local_scan += msg.get_num();
+		else
+			local_value.inc_real_local(msg.get_num());
 	}
 };
 
@@ -226,7 +229,8 @@ runtime_data_t *ls_create_runtime(graph_engine &graph, scan_vertex &scan_v,
 			neighbors.begin());
 	neighbors.resize(num_neighbors);
 	return new runtime_data_t(std::unique_ptr<neighbor_list>(
-				new extended_neighbor_list(vertex, neighbors)));
+				new extended_neighbor_list(vertex, neighbors)),
+			scan_v.get_local_scan());
 }
 
 void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,

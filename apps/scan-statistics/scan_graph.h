@@ -351,6 +351,13 @@ struct runtime_data_t
 		num_joined = 0;
 		local_scan = 0;
 	}
+
+	runtime_data_t(std::unique_ptr<neighbor_list> neighbors,
+			size_t curr_local_scan) {
+		this->neighbors = std::move(neighbors);
+		num_joined = 0;
+		local_scan = curr_local_scan;
+	}
 };
 
 enum multi_func_flags
@@ -407,7 +414,7 @@ public:
 	}
 
 	void inc_real_local(size_t num) {
-		assert(REAL_LOCAL);
+		assert(has_real_local());
 		value += num;
 	}
 
