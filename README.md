@@ -11,11 +11,10 @@ SAFSlib is an open-source library that implements the design described
 in the paper "Toward Millions of File System IOPS on Low-Cost, Commodity Hardware".
 The goal of the library is to provide a filesystem-like interface
 in the userspace for accessing SSD arrays. It is designed to eliminate overhead
-in the block stack, especially the overhead from lock contention, without
-modifying the kernel. It can achieve optimal performance of a large SSD array
-in a NUMA machine.
+in the block stack, without modifying the kernel. It can achieve optimal performance
+of a large SSD array in a NUMA machine.
 
-The user manual of SAFSlib can be found
-https://docs.google.com/document/d/1OpsuLZw60MGCZAg4xO-j-1_AEWm3Yc2nqKKu8kXotkA/edit?usp=sharing
-The design document can be found
-https://docs.google.com/document/d/1iiAev0-6IB7zB98eK-Ax3XVYoJa0BTejykltnD4D1cI/edit?usp=sharing
+The user manual of SAFSlib can be found [here](https://docs.google.com/document/d/1OpsuLZw60MGCZAg4xO-j-1_AEWm3Yc2nqKKu8kXotkA/edit?usp=sharing).
+
+The user manual of FlashGraph can be found [here](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
+
