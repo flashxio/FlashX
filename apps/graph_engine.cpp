@@ -357,8 +357,7 @@ void graph_engine::start_all(vertex_initiator::ptr init,
 	init_threads(std::move(creater));
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
-		t->start_all_vertices();
-		t->set_vinitiator(init);
+		t->start_all_vertices(init);
 		t->start();
 	}
 }

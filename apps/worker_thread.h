@@ -212,6 +212,15 @@ class worker_thread: public thread
 	atomic_number<long> num_activated_vertices_in_level;
 	// The number of vertices completed in the current level.
 	atomic_number<long> num_completed_vertices_in_level;
+
+	/**
+	 * Get the number of vertices being processed in the current level.
+	 */
+	int get_num_vertices_processing() const {
+		return num_activated_vertices_in_level.get()
+			- num_completed_vertices_in_level.get();
+	}
+	int process_activated_vertices(int max);
 public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
 			vertex_program::ptr prog, int node_id, int worker_id,
@@ -235,7 +244,6 @@ public:
 	 */
 	void complete_vertex(const compute_vertex &v);
 
-	int process_activated_vertices(int max);
 	int enter_next_level();
 
 	void start_vertices(const std::vector<vertex_id_t> &vertices,
@@ -244,24 +252,13 @@ public:
 		started_vertices = vertices;
 	}
 
-	void start_all_vertices() {
+	void start_all_vertices(vertex_initiator::ptr init) {
 		start_all = true;
+		this->vinitiator = init;
 	}
 
 	void start_vertices(std::shared_ptr<vertex_filter> filter) {
 		this->filter = filter;
-	}
-
-	/**
-	 * Get the number of vertices being processed in the current level.
-	 */
-	int get_num_vertices_processing() const {
-		return num_activated_vertices_in_level.get()
-			- num_completed_vertices_in_level.get();
-	}
-
-	size_t get_num_activated_on_others() {
-		return graph->get_num_remaining_vertices();
 	}
 
 	vertex_compute *get_curr_vertex_compute() const {
@@ -306,10 +303,6 @@ public:
 
 	message_processor &get_msg_processor() {
 		return *msg_processor;
-	}
-
-	void set_vinitiator(vertex_initiator::ptr init) {
-		this->vinitiator = init;
 	}
 
 	friend class load_balancer;

@@ -367,7 +367,7 @@ void worker_thread::run()
 				// Even if we have processed all activated vertices belonging
 				// to this thread, we still need to process vertices from
 				// other threads in order to balance the load.
-				|| get_num_activated_on_others() > 0);
+				|| graph->get_num_remaining_vertices() > 0);
 		assert(curr_activated_vertices->is_empty());
 //		printf("worker %d visited %d vertices\n", worker_id, num_visited);
 		assert(num_visited == num_activated_vertices_in_level.get());
