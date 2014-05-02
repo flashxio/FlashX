@@ -61,7 +61,7 @@ class default_vertex_queue: public active_vertex_queue
 	// It contains the offset of the vertex in the local partition
 	// instead of the real vertex Ids.
 	std::vector<vertex_id_t> vertex_buf;
-	bitmap *active_bitmap;
+	std::unique_ptr<bitmap> active_bitmap;
 	// The fetch index in the vertex buffer.
 	scan_pointer buf_fetch_idx;
 	// The fetech index in the active bitmap. It indicates the index of longs.
@@ -78,12 +78,9 @@ public:
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		num_active = 0;
 		this->part_id = part_id;
-		this->active_bitmap = new bitmap(_graph.get_partitioner()->get_part_size(
-					part_id, _graph.get_num_vertices()), node_id);
-	}
-
-	~default_vertex_queue() {
-		delete active_bitmap;
+		this->active_bitmap = std::unique_ptr<bitmap>(new bitmap(
+					_graph.get_partitioner()->get_part_size(
+					part_id, _graph.get_num_vertices()), node_id));
 	}
 
 	virtual void init(const vertex_id_t buf[], size_t size, bool sorted);
@@ -198,9 +195,9 @@ class worker_thread: public thread
 	std::unique_ptr<load_balancer> balancer;
 
 	// This is to collect vertices activated in the next level.
-	bitmap *next_activated_vertices;
+	std::unique_ptr<bitmap> next_activated_vertices;
 	// This contains the vertices activated in the current level.
-	active_vertex_queue *curr_activated_vertices;
+	std::unique_ptr<active_vertex_queue> curr_activated_vertices;
 
 	// Indicate that we need to start all vertices.
 	bool start_all;
