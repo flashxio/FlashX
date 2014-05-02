@@ -1071,6 +1071,15 @@ void print_usage()
 	params.print_help();
 }
 
+class comp_size_compare
+{
+public:
+	bool operator()(const std::pair<vsize_t, int> &p1,
+			const std::pair<vsize_t, int> &p2) {
+		return p1.first < p2.first;
+	}
+};
+
 int main(int argc, char *argv[])
 {
 	struct timeval start, end, scc_start;
@@ -1126,6 +1135,7 @@ int main(int argc, char *argv[])
 	std::vector<vertex_id_t> active_vertices;
 	vertex_id_t max_v = 0;
 	size_t num_comp1 = 0;
+	std::unordered_set<vertex_id_t> large_comps;
 
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
@@ -1171,6 +1181,7 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("FWBW takes %f seconds\n", time_diff(start, end));
+	large_comps.insert(max_v);
 
 	scc_stage = scc_stage_t::PARTITION;
 	gettimeofday(&start, NULL);
@@ -1274,6 +1285,9 @@ int main(int argc, char *argv[])
 				else
 					it->second++;
 			}
+
+			if (v.second >= min_comp_size)
+				large_comps.insert(v.first);
 		}
 		assert(num_assigned_vertices == fwbw_vertices);
 	} while (!active_vertices.empty());
@@ -1300,5 +1314,25 @@ int main(int argc, char *argv[])
 	printf("SCC takes %f seconds\n", time_diff(scc_start, end));
 	printf("There are %ld components. # comp1: %ld, # max SCC: %ld\n",
 			num_comps, num_comp1, largest_comp_size);
+	printf("There are %ld components of size >= %ld\n", large_comps.size(),
+			min_comp_size);
 	printf("There are %ld vertices assigned to components\n", num_assigned);
+
+	if (!output_file.empty()) {
+		typedef std::pair<vsize_t, int> num_comp_size_t;
+		std::vector<num_comp_size_t> num_comp_size_vec;
+		num_comp_size_vec.push_back(num_comp_size_t(1, num_comp1));
+		num_comp_size_vec.push_back(num_comp_size_t(largest_comp_size, 1));
+		num_comp_size_vec.insert(num_comp_size_vec.begin(),
+				num_comp_size_map.begin(), num_comp_size_map.end());
+		std::sort(num_comp_size_vec.begin(), num_comp_size_vec.end(),
+				comp_size_compare());
+
+		FILE *f = fopen(output_file.c_str(), "w");
+		assert(f);
+		BOOST_FOREACH(num_comp_size_t v, num_comp_size_vec) {
+			fprintf(f, "%u %d\n", v.first, v.second);
+		}
+		fclose(f);
+	}
 }
