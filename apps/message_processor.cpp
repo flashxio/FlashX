@@ -16,6 +16,8 @@ void message_processor::buf_msg(vertex_message &vmsg)
 {
 	if (stolenv_msgs.is_empty() || stolenv_msgs.back().add(vmsg) == NULL) {
 		message msg(owner.get_msg_allocator());
+		if (stolenv_msgs.is_full())
+			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
 		// We have to make sure this is successful.
 		assert(stolenv_msgs.back().add(vmsg));
@@ -54,6 +56,8 @@ void message_processor::buf_mmsg(local_vid_t id, multicast_message &mmsg)
 	multicast_p2p_converter converter(id, mmsg);
 	if (stolenv_msgs.is_empty() || stolenv_msgs.back().add(converter) == NULL) {
 		message msg(owner.get_msg_allocator());
+		if (stolenv_msgs.is_full())
+			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
 		// We have to make sure this is successful.
 		assert(stolenv_msgs.back().add(converter));
