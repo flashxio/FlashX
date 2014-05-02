@@ -218,3 +218,13 @@ void vertex_program::flush_msgs()
 		activate_senders[i]->init(msg);
 	}
 }
+
+void vertex_program::request_notify_iter_end(const compute_vertex &v)
+{
+	int part_id;
+	off_t off;
+	graph->get_partitioner()->map2loc(v.get_id(), part_id, off);
+	assert(t->get_worker_id() == part_id);
+	local_vid_t local_id(off);
+	t->request_notify_iter_end(local_id);
+}

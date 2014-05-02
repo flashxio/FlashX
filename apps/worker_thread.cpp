@@ -163,6 +163,9 @@ worker_thread::worker_thread(graph_engine *graph,
 	next_activated_vertices = std::unique_ptr<bitmap>(
 			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
 					graph->get_num_vertices()), node_id));
+	notify_vertices = std::unique_ptr<bitmap>(
+			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices()), node_id));
 	this->vprogram = std::move(prog);
 	vprogram->init(graph, this);
 	start_all = false;
@@ -336,6 +339,24 @@ int worker_thread::enter_next_level()
 {
 	// We have to make sure all messages sent by other threads are processed.
 	msg_processor->process_msgs();
+
+	// If vertices have request the notification of the end of an iteration,
+	// this is the place to notify them.
+	if (notify_vertices->get_num_set_bits() > 0) {
+		std::vector<vertex_id_t> vertex_buf;
+		const size_t stride = 1024 * 64;
+		for (size_t i = 0; i < notify_vertices->get_num_bits(); i += stride) {
+			vertex_buf.clear();
+			notify_vertices->get_reset_set_bits(i,
+					min(i + stride, notify_vertices->get_num_bits()), vertex_buf);
+			BOOST_FOREACH(vertex_id_t id, vertex_buf) {
+				local_vid_t local_id(id);
+				compute_vertex &v = graph->get_vertex(worker_id, local_id);
+				vprogram->notify_iteration_end(v);
+			}
+		}
+	}
+
 	curr_activated_vertices->init(*this);
 	assert(next_activated_vertices->get_num_set_bits() == 0);
 	balancer->reset();

@@ -68,6 +68,9 @@ public:
 	vertex_id_t get_id() const {
 		return id;
 	}
+
+	void notify_iteration_end(vertex_program &) {
+	}
 };
 
 class compute_directed_vertex: public compute_vertex

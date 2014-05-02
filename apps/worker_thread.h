@@ -194,6 +194,9 @@ class worker_thread: public thread
 	std::unique_ptr<message_processor> msg_processor;
 	std::unique_ptr<load_balancer> balancer;
 
+	// This indicates the vertices that request the notification of the end
+	// of an iteration.
+	std::unique_ptr<bitmap> notify_vertices;
 	// This is to collect vertices activated in the next level.
 	std::unique_ptr<bitmap> next_activated_vertices;
 	// This contains the vertices activated in the current level.
@@ -278,6 +281,10 @@ public:
 	 */
 	void activate_vertex(vertex_id_t id);
 	void activate_vertex(local_vid_t id);
+
+	void request_notify_iter_end(local_vid_t id) {
+		notify_vertices->set(id.id);
+	}
 
 	int steal_activated_vertices(compute_vertex *vertices[], int num);
 	void return_vertices(vertex_id_t ids[], int num);
