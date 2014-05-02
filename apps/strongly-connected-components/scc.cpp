@@ -34,6 +34,8 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
+typedef std::unordered_map<vertex_id_t, vsize_t> comp_map_t;
+
 class trim1_message: public vertex_message
 {
 	edge_type type;
@@ -471,6 +473,7 @@ public:
 class part_vertex_program: public vertex_program_impl<scc_vertex>
 {
 	std::vector<vertex_id_t> remain_vertices;
+	comp_map_t comp_sizes;
 	size_t num_assigned;
 public:
 	typedef std::shared_ptr<part_vertex_program> ptr;
@@ -487,8 +490,13 @@ public:
 		remain_vertices.push_back(id);
 	}
 
-	void assign_vertex() {
+	void assign_vertex(vertex_id_t comp_id) {
 		num_assigned++;
+		comp_map_t::iterator it = comp_sizes.find(comp_id);
+		if (it == comp_sizes.end())
+			comp_sizes.insert(comp_map_t::value_type(comp_id, 1));
+		else
+			it->second++;
 	}
 
 	size_t get_num_assigned() const {
@@ -497,6 +505,19 @@ public:
 
 	const std::vector<vertex_id_t> &get_remain_vertices() const {
 		return remain_vertices;
+	}
+
+	void merge_comp_size(comp_map_t &merged_comp_sizes) const {
+		for (comp_map_t::const_iterator it = comp_sizes.begin();
+				it != comp_sizes.end(); it++) {
+			vertex_id_t comp_id = it->first;
+			size_t size = it->second;
+			comp_map_t::iterator it1 = merged_comp_sizes.find(comp_id);
+			if (it1 != merged_comp_sizes.end())
+				it1->second += size;
+			else
+				merged_comp_sizes.insert(comp_map_t::value_type(comp_id, size));
+		}
 	}
 };
 
@@ -797,7 +818,7 @@ void scc_vertex::run_stage_part(vertex_program &prog)
 {
 	if (state.fwbw.is_fw() && state.fwbw.is_bw()) {
 		comp_id = state.fwbw.get_pivot();
-		((part_vertex_program &) prog).assign_vertex();
+		((part_vertex_program &) prog).assign_vertex(comp_id);
 	}
 	else if (state.fwbw.is_fw())
 		state.fwbw.assign_new_fw_color();
@@ -1039,63 +1060,6 @@ public:
 	}
 };
 
-class count_vertex_query: public vertex_query
-{
-public:
-	typedef std::unordered_map<vertex_id_t, size_t> comp_map_t;
-private:
-	comp_map_t comp_counts;
-	size_t num_assigned;
-public:
-	count_vertex_query() {
-		num_assigned = 0;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		const scc_vertex &scc_v = (const scc_vertex &) v;
-		// If a vertex hasn't been assigned to a component, ignore it.
-		if (!scc_v.is_assigned())
-			return;
-
-		num_assigned++;
-		comp_map_t::iterator map_it = comp_counts.find(scc_v.get_comp_id());
-		if (map_it == comp_counts.end()) {
-			comp_counts.insert(std::pair<vertex_id_t, size_t>(
-						scc_v.get_comp_id(), 1));
-		}
-		else {
-			map_it->second++;
-		}
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		count_vertex_query *cvq = (count_vertex_query *) q.get();
-		for (comp_map_t::const_iterator it = cvq->comp_counts.begin();
-				it != cvq->comp_counts.end(); it++) {
-			vertex_id_t comp_id = it->first;
-			size_t size = it->second;
-			comp_map_t::iterator it1 = comp_counts.find(comp_id);
-			if (it1 != comp_counts.end())
-				it1->second += size;
-			else
-				comp_counts.insert(std::pair<vertex_id_t, size_t>(comp_id, size));
-		}
-		num_assigned += cvq->num_assigned;
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new count_vertex_query());
-	}
-
-	size_t get_num_assigned() const {
-		return num_assigned;
-	}
-
-	const comp_map_t &get_map() const {
-		return comp_counts;
-	}
-};
-
 void print_usage()
 {
 	fprintf(stderr,
@@ -1161,6 +1125,7 @@ int main(int argc, char *argv[])
 
 	std::vector<vertex_id_t> active_vertices;
 	vertex_id_t max_v = 0;
+	size_t num_comp1 = 0;
 
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
@@ -1170,29 +1135,29 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	std::vector<vertex_program::ptr> trim_vprogs;
 	graph->get_vertex_programs(trim_vprogs);
-	size_t num_trim1 = 0;
 	BOOST_FOREACH(vertex_program::ptr vprog, trim_vprogs) {
 		trim_vertex_program::ptr trim_vprog = trim_vertex_program::cast2(vprog);
-		num_trim1 += trim_vprog->get_num_trimmed();
+		num_comp1 += trim_vprog->get_num_trimmed();
 	}
 	gettimeofday(&end, NULL);
 	printf("trim1 takes %f seconds. It trims %ld vertices\n",
-			time_diff(start, end), num_trim1);
+			time_diff(start, end), num_comp1);
 
+#if 0
 	scc_stage = scc_stage_t::TRIM2;
 	gettimeofday(&start, NULL);
 	graph->start_all(vertex_initiator::ptr(),
 			vertex_program_creater::ptr(new trim_vertex_program_creater()));
 	graph->wait4complete();
 	graph->get_vertex_programs(trim_vprogs);
-	size_t num_trim2 = 0;
 	BOOST_FOREACH(vertex_program::ptr vprog, trim_vprogs) {
 		trim_vertex_program::ptr trim_vprog = trim_vertex_program::cast2(vprog);
-		num_trim2 += trim_vprog->get_num_trimmed();
+		num_comp2 += trim_vprog->get_num_trimmed();
 	}
 	gettimeofday(&end, NULL);
 	printf("trim2 takes %f seconds. It trims %ld vertices\n",
-			time_diff(start, end), num_trim2);
+			time_diff(start, end), num_comp2);
+#endif
 
 	vertex_query::ptr mdq(new max_degree_query());
 	graph->query_on_all(mdq);
@@ -1215,20 +1180,22 @@ int main(int argc, char *argv[])
 
 	std::vector<vertex_program::ptr> part_vprogs;
 	graph->get_vertex_programs(part_vprogs);
-	size_t fwbw_vertices = 0;
+	size_t largest_comp_size = 0;
 	BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
 		part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
-		fwbw_vertices += part_vprog->get_num_assigned();
+		largest_comp_size += part_vprog->get_num_assigned();
 		active_vertices.insert(active_vertices.begin(),
 				part_vprog->get_remain_vertices().begin(),
 				part_vprog->get_remain_vertices().end());
 	}
 	gettimeofday(&end, NULL);
 	printf("partition takes %f seconds. Assign %ld vertices to components.\n",
-			time_diff(start, end), fwbw_vertices);
+			time_diff(start, end), largest_comp_size);
 	printf("after partition, finding %ld active vertices takes %f seconds.\n",
 			active_vertices.size(), time_diff(start, end));
 
+	// This is a hashtable to count the number of components of different sizes.
+	std::unordered_map<vsize_t, int> num_comp_size_map;
 	do {
 		scc_stage = scc_stage_t::TRIM3;
 		trim3_vertices = 0;
@@ -1237,8 +1204,8 @@ int main(int argc, char *argv[])
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("trim3 takes %f seconds, and trime %ld vertices\n",
-				time_diff(start, end),
-				trim3_vertices.load(std::memory_order_relaxed));
+				time_diff(start, end), trim3_vertices.load());
+		num_comp1 += trim3_vertices.load();
 
 		scc_stage = scc_stage_t::IN_WCC;
 		gettimeofday(&start, NULL);
@@ -1280,17 +1247,35 @@ int main(int argc, char *argv[])
 		graph->get_vertex_programs(part_vprogs);
 		active_vertices.clear();
 		size_t fwbw_vertices = 0;
+		comp_map_t comp_sizes;
 		BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
 			part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
 			fwbw_vertices += part_vprog->get_num_assigned();
 			active_vertices.insert(active_vertices.begin(),
 					part_vprog->get_remain_vertices().begin(),
 					part_vprog->get_remain_vertices().end());
+			part_vprog->merge_comp_size(comp_sizes);
 		}
 		gettimeofday(&end, NULL);
 		printf("partition takes %f seconds. Assign %ld vertices to components.\n",
 				time_diff(start, end), fwbw_vertices);
 		printf("There are %ld vertices left unassigned\n", active_vertices.size());
+
+		size_t num_assigned_vertices = 0;
+		BOOST_FOREACH(comp_map_t::value_type v, comp_sizes) {
+			num_assigned_vertices += v.second;
+			if (v.second == 1)
+				num_comp1++;
+			else {
+				std::unordered_map<vsize_t, int>::iterator it
+					= num_comp_size_map.find(v.second);
+				if (it == num_comp_size_map.end())
+					num_comp_size_map.insert(std::pair<vsize_t, int>(v.second, 1));
+				else
+					it->second++;
+			}
+		}
+		assert(num_assigned_vertices == fwbw_vertices);
 	} while (!active_vertices.empty());
 
 	if (!graph_conf.get_prof_file().empty())
@@ -1298,28 +1283,22 @@ int main(int argc, char *argv[])
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 
-	// Compute the summary of the result.
-	vertex_query::ptr cvq(new count_vertex_query());
-	graph->query_on_all(cvq);
-	size_t num_assigned = ((count_vertex_query *) cvq.get())->get_num_assigned();
-	const count_vertex_query::comp_map_t &comp_counts
-		= ((count_vertex_query *) cvq.get())->get_map();
-	count_vertex_query::comp_map_t::const_iterator it = comp_counts.find(max_v);
-	assert(it != comp_counts.end());
-	printf("There are %ld components\n", comp_counts.size());
-	printf("%ld vertices are assigned to components. max SCC has %ld vertices\n",
-			num_assigned, it->second);
-
-	// Output the summary of the result.
-	if (!output_file.empty()) {
-		FILE *f = fopen(output_file.c_str(), "w");
-		assert(f);
-		BOOST_FOREACH(const count_vertex_query::comp_map_t::value_type &p, comp_counts) {
-			if (p.second >= min_comp_size)
-				fprintf(f, "component %u: %ld\n", p.first, p.second);
-		}
-		fclose(f);
+	// Count the number of components.
+	size_t num_comps = 0;
+	size_t num_assigned = 0;
+	for (std::unordered_map<vsize_t, int>::const_iterator it = num_comp_size_map.begin();
+			it != num_comp_size_map.end(); it++) {
+		num_comps += it->second;
+		num_assigned += it->first * it->second;
 	}
-
+	// Add the number of components of size 1 and 2.
+	num_comps += num_comp1;
+	num_assigned += num_comp1;
+	// Add the largest component.
+	num_comps++;
+	num_assigned += largest_comp_size;
 	printf("SCC takes %f seconds\n", time_diff(scc_start, end));
+	printf("There are %ld components. # comp1: %ld, # max SCC: %ld\n",
+			num_comps, num_comp1, largest_comp_size);
+	printf("There are %ld vertices assigned to components\n", num_assigned);
 }
