@@ -33,7 +33,7 @@ int multicast_msg_sender::flush()
 		printf("there are %d objs in the msg\n", buf.get_num_objs());
 	// We have to make sure all messages have been sent to the queue.
 	assert(buf.is_empty());
-	message tmp(alloc);
+	message tmp(alloc.get());
 	buf = tmp;
 	return 1;
 }

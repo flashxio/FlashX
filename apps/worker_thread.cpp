@@ -159,10 +159,6 @@ worker_thread::worker_thread(graph_engine *graph,
 		int num_threads, vertex_scheduler::ptr scheduler): thread("worker_thread",
 			node_id)
 {
-	vid_bufs = std::unique_ptr<std::vector<local_vid_t>[]>(
-			new std::vector<local_vid_t>[graph->get_num_threads()]);
-	vloc_size = graph->get_num_threads() * 2;
-	vertex_locs = std::unique_ptr<vertex_loc_t[]>(new vertex_loc_t[vloc_size]);
 	next_activated_vertices = new bitmap(graph->get_partitioner(
 				)->get_part_size(worker_id, graph->get_num_vertices()), node_id);
 	this->vprogram = std::move(prog);
@@ -173,8 +169,13 @@ worker_thread::worker_thread(graph_engine *graph,
 	this->io = NULL;
 	this->factory = factory;
 	this->curr_compute = NULL;
+	// We increase the allocator by 1M each time.
+	// It shouldn't need to allocate much memory.
+	msg_alloc = std::shared_ptr<slab_allocator>(new slab_allocator("graph-message-allocator",
+			GRAPH_MSG_BUF_SIZE, 1024 * 1024, INT_MAX, get_node_id(),
+			false /* init */, false /* pinned */, 5 /* local_buf_size*/));
 	msg_processor = std::unique_ptr<message_processor>(new message_processor(
-				*graph, *this));
+				*graph, *this, msg_alloc));
 	balancer = std::unique_ptr<load_balancer>(new load_balancer(*graph, *this));
 	switch(graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
@@ -203,13 +204,6 @@ worker_thread::~worker_thread()
 {
 	delete alloc;
 	delete part_alloc;
-	for (unsigned i = 0; i < msg_senders.size(); i++)
-		simple_msg_sender::destroy(msg_senders[i]);
-	for (unsigned i = 0; i < multicast_senders.size(); i++)
-		multicast_msg_sender::destroy(multicast_senders[i]);
-	for (unsigned i = 0; i < activate_senders.size(); i++)
-		multicast_msg_sender::destroy(activate_senders[i]);
-	delete msg_alloc;
 	factory->destroy_io(io);
 	delete curr_activated_vertices;
 	delete next_activated_vertices;
@@ -271,29 +265,7 @@ void worker_thread::init()
 
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 {
-	// We increase the allocator by 1M each time.
-	// It shouldn't need to allocate much memory.
-	msg_alloc = new slab_allocator("graph-message-allocator",
-			GRAPH_MSG_BUF_SIZE, 1024 * 1024, INT_MAX, get_node_id(),
-			false /* init */, false /* pinned */, 5 /* local_buf_size*/);
-
-	int num_self = 0;
-	for (unsigned i = 0; i < threads.size(); i++) {
-		if (threads[i] == this)
-			num_self++;
-		msg_senders.push_back(simple_msg_sender::create(get_node_id(),
-					msg_alloc, &threads[i]->msg_processor->get_msg_queue()));
-		multicast_senders.push_back(multicast_msg_sender::create(msg_alloc,
-					&threads[i]->msg_processor->get_msg_queue()));
-		multicast_msg_sender *activate_sender = multicast_msg_sender::create(
-				msg_alloc, &threads[i]->msg_processor->get_msg_queue());
-		// All activation messages are the same. We can initialize the sender
-		// here.
-		activation_message msg;
-		activate_sender->init(msg);
-		activate_senders.push_back(activate_sender);
-	}
-	assert(num_self == 1);
+	vprogram->init_messaging(threads, msg_alloc);
 }
 
 /**
@@ -409,7 +381,7 @@ void worker_thread::run()
 		num_activated_vertices_in_level = atomic_number<long>(0);
 		num_completed_vertices_in_level = atomic_number<long>(0);
 
-		flush_msgs();
+		vprogram->flush_msgs();
 		// We have to make sure all stolen vertices are returned to their owner
 		// threads.
 		balancer->process_completed_stolen_vertices();
@@ -470,144 +442,10 @@ void worker_thread::activate_vertex(vertex_id_t id)
 	next_activated_vertices->set(off);
 }
 
-void worker_thread::send_activation(edge_seq_iterator &it)
-{
-	size_t num_dests = it.get_num_tot_entries();
-	if (num_dests == 0)
-		return;
-
-	// When there are very few destinations, this way is cheaper.
-	if (num_dests <= vloc_size) {
-		size_t ret = graph->get_partitioner()->map2loc(it, vertex_locs.get(),
-				vloc_size);
-		assert(ret == num_dests);
-		for (size_t i = 0; i < ret; i++) {
-			int part_id = vertex_locs[i].first;
-			// We are going to use the offset of a vertex in a partition as
-			// the ID of the vertex.
-			local_vid_t local_id = vertex_locs[i].second;
-			multicast_msg_sender *sender = get_activate_sender(part_id);
-			bool ret = sender->add_dest(local_id);
-			assert(ret);
-		}
-		return;
-	}
-
-	graph->get_partitioner()->map2loc(it, vid_bufs.get(),
-			graph->get_num_threads());
-	for (int i = 0; i < graph->get_num_threads(); i++) {
-		multicast_msg_sender *sender = get_activate_sender(i);
-		if (vid_bufs[i].empty())
-			continue;
-		int ret = sender->add_dests(vid_bufs[i].data(), vid_bufs[i].size());
-		assert((size_t) ret == vid_bufs[i].size());
-		vid_bufs[i].clear();
-	}
-}
-
-void worker_thread::send_activation(vertex_id_t ids[], int num)
-{
-	if (num == 0)
-		return;
-
-	// When there are very few destinations, this way is cheaper.
-	if ((size_t) num <= vloc_size) {
-		for (int i = 0; i < num; i++) {
-			int part_id;
-			// We are going to use the offset of a vertex in a partition as
-			// the ID of the vertex.
-			off_t local_id;
-			graph->get_partitioner()->map2loc(ids[i], part_id, local_id);
-			multicast_msg_sender *sender = get_activate_sender(part_id);
-			bool ret = sender->add_dest((local_vid_t) local_id);
-			assert(ret);
-		}
-		return;
-	}
-
-	graph->get_partitioner()->map2loc(ids, num, vid_bufs.get(),
-			graph->get_num_threads());
-	for (int i = 0; i < graph->get_num_threads(); i++) {
-		multicast_msg_sender *sender = get_activate_sender(i);
-		if (vid_bufs[i].empty())
-			continue;
-		int ret = sender->add_dests(vid_bufs[i].data(), vid_bufs[i].size());
-		assert((size_t) ret == vid_bufs[i].size());
-		vid_bufs[i].clear();
-	}
-}
-
 vertex_compute *worker_thread::create_vertex_compute(compute_vertex *v)
 {
 	assert(curr_compute == NULL);
 	curr_compute = (vertex_compute *) alloc->alloc();
 	curr_compute->init(v);
 	return curr_compute;
-}
-
-void worker_thread::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
-{
-	int num_dests = it.get_num_tot_entries();
-	if (num_dests == 0)
-		return;
-
-	if (num_dests < graph->get_num_threads() * 2) {
-		PAGE_FOREACH(vertex_id_t, id, it) {
-			this->send_msg(id, msg);
-		} PAGE_FOREACH_END
-		return;
-	}
-
-	graph->get_partitioner()->map2loc(it, vid_bufs.get(),
-			graph->get_num_threads());
-	for (int i = 0; i < graph->get_num_threads(); i++) {
-		if (vid_bufs[i].empty())
-			continue;
-
-		multicast_msg_sender *sender = get_multicast_sender(i);
-		sender->init(msg);
-		int ret = sender->add_dests(vid_bufs[i].data(), vid_bufs[i].size());
-		assert((size_t) ret == vid_bufs[i].size());
-		vid_bufs[i].clear();
-		sender->end_multicast();
-	}
-}
-
-void worker_thread::multicast_msg(vertex_id_t ids[], int num,
-		vertex_message &msg)
-{
-	if (num == 0)
-		return;
-
-	if (num < graph->get_num_threads() * 2) {
-		for (int i = 0; i < num; i++)
-			this->send_msg(ids[i], msg);
-		return;
-	}
-
-	graph->get_partitioner()->map2loc(ids, num, vid_bufs.get(),
-			graph->get_num_threads());
-	for (int i = 0; i < graph->get_num_threads(); i++) {
-		if (vid_bufs[i].empty())
-			continue;
-
-		multicast_msg_sender *sender = get_multicast_sender(i);
-		sender->init(msg);
-		int ret = sender->add_dests(vid_bufs[i].data(), vid_bufs[i].size());
-		assert((size_t) ret == vid_bufs[i].size());
-		vid_bufs[i].clear();
-		sender->end_multicast();
-	}
-}
-
-void worker_thread::send_msg(vertex_id_t dest, vertex_message &msg)
-{
-	int part_id;
-	// We are going to use the offset of a vertex in a partition as
-	// the ID of the vertex.
-	off_t local_id;
-	graph->get_partitioner()->map2loc(dest, part_id, local_id);
-	simple_msg_sender *sender = get_msg_sender(part_id);
-	msg.set_dest(local_vid_t(local_id));
-	sender->send_cached(msg);
 }

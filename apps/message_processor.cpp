@@ -5,17 +5,18 @@
 #include "steal_state.h"
 
 message_processor::message_processor(graph_engine &_graph,
-		worker_thread &_owner): graph(_graph),
+		worker_thread &_owner, std::shared_ptr<slab_allocator> msg_alloc): graph(_graph),
 	owner(_owner), msg_q(_owner.get_node_id(), "graph_msg_queue", 16, INT_MAX),
 	stolenv_msgs(_owner.get_node_id(), PAGE_SIZE, true)
 {
 	steal_state = std::unique_ptr<steal_state_t>(new steal_state_t(graph, owner));
+	this->msg_alloc = msg_alloc;
 }
 
 void message_processor::buf_msg(vertex_message &vmsg)
 {
 	if (stolenv_msgs.is_empty() || stolenv_msgs.back().add(vmsg) == NULL) {
-		message msg(owner.get_msg_allocator());
+		message msg(msg_alloc.get());
 		if (stolenv_msgs.is_full())
 			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
@@ -55,7 +56,7 @@ void message_processor::buf_mmsg(local_vid_t id, multicast_message &mmsg)
 {
 	multicast_p2p_converter converter(id, mmsg);
 	if (stolenv_msgs.is_empty() || stolenv_msgs.back().add(converter) == NULL) {
-		message msg(owner.get_msg_allocator());
+		message msg(msg_alloc.get());
 		if (stolenv_msgs.is_full())
 			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);

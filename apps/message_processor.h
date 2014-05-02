@@ -42,6 +42,8 @@ class message_processor
 	graph_engine &graph;
 	worker_thread &owner;
 
+	std::shared_ptr<slab_allocator> msg_alloc;
+
 	// The queue of messages sent from other threads.
 	msg_queue msg_q;
 
@@ -59,7 +61,8 @@ class message_processor
 	void process_multicast_msg(multicast_message &mmsg, bool check_steal);
 
 public:
-	message_processor(graph_engine &_graph, worker_thread &_owner);
+	message_processor(graph_engine &_graph, worker_thread &_owner,
+			std::shared_ptr<slab_allocator> msg_alloc);
 
 	void process_msgs();
 

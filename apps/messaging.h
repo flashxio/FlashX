@@ -217,7 +217,7 @@ public:
 
 class simple_msg_sender
 {
-	slab_allocator *alloc;
+	std::shared_ptr<slab_allocator> alloc;
 	message buf;
 	msg_queue *queue;
 	int num_objs;
@@ -226,16 +226,16 @@ protected:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	simple_msg_sender(int node_id, slab_allocator *alloc,
-			msg_queue *queue): buf(alloc) {
+	simple_msg_sender(int node_id, std::shared_ptr<slab_allocator> alloc,
+			msg_queue *queue): buf(alloc.get()) {
 		this->alloc = alloc;
 		this->queue = queue;
 		num_objs = 0;
 	}
 
 public:
-	static simple_msg_sender *create(int node_id, slab_allocator *alloc,
-			msg_queue *queue) {
+	static simple_msg_sender *create(int node_id,
+			std::shared_ptr<slab_allocator> alloc, msg_queue *queue) {
 		assert(node_id >= 0);
 		return new simple_msg_sender(node_id, alloc, queue);
 	}
@@ -252,7 +252,7 @@ public:
 		queue->add(&buf, 1);
 		// We have to make sure all messages have been sent to the queue.
 		assert(buf.is_empty());
-		message tmp(alloc);
+		message tmp(alloc.get());
 		buf = tmp;
 		return 1;
 	}
@@ -481,7 +481,7 @@ inline local_vid_t multicast_dest_list::get_dest(int idx) const
 class multicast_msg_sender
 {
 	const static int MMSG_BUF_SIZE = PAGE_SIZE;
-	slab_allocator *alloc;
+	std::shared_ptr<slab_allocator> alloc;
 	// The local buffer of vertex messages.
 	message buf;
 	// The destination queue of the sender.
@@ -494,15 +494,15 @@ class multicast_msg_sender
 	char mmsg_temp_buf[MMSG_BUF_SIZE];
 	multicast_dest_list dest_list;
 
-	multicast_msg_sender(slab_allocator *alloc,
-			msg_queue *queue): buf(alloc) {
+	multicast_msg_sender(std::shared_ptr<slab_allocator> alloc,
+			msg_queue *queue): buf(alloc.get()) {
 		this->alloc = alloc;
 		this->queue = queue;
 		this->mmsg = NULL;
 		this->num_dests = 0;
 	}
 public:
-	static multicast_msg_sender *create(slab_allocator *alloc,
+	static multicast_msg_sender *create(std::shared_ptr<slab_allocator> alloc,
 			msg_queue *queue) {
 		return new multicast_msg_sender(alloc, queue);
 	}

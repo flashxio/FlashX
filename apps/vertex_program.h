@@ -36,13 +36,40 @@ class vertex_program
 {
 	worker_thread *t;
 	graph_engine *graph;
+
+	std::unique_ptr<std::vector<local_vid_t>[]> vid_bufs;
+	std::unique_ptr<vertex_loc_t[]> vertex_locs;
+	size_t vloc_size;
+
+	// The message senders to send messages to all other threads.
+	// There are n senders, n is the total number of threads used by
+	// the graph engine.
+	std::vector<simple_msg_sender *> msg_senders;
+	std::vector<multicast_msg_sender *> multicast_senders;
+	std::vector<multicast_msg_sender *> activate_senders;
+
+	multicast_msg_sender &get_activate_sender(int thread_id) const {
+		return *activate_senders[thread_id];
+	}
+
+	multicast_msg_sender &get_multicast_sender(int thread_id) const {
+		return *multicast_senders[thread_id];
+	}
+
+	simple_msg_sender &get_msg_sender(int thread_id) const {
+		return *msg_senders[thread_id];
+	}
 public:
 	typedef std::shared_ptr<vertex_program> ptr;
+
+	~vertex_program();
 
 	void init(graph_engine *graph, worker_thread *t) {
 		this->t = t;
 		this->graph = graph;
 	}
+	void init_messaging(const std::vector<worker_thread *> &threads,
+			std::shared_ptr<slab_allocator> msg_alloc);
 
 	/**
 	 * This is a pre-run before users get any information of adjacency list
@@ -87,6 +114,8 @@ public:
 	void activate_vertex(vertex_id_t vertex) {
 		activate_vertices(&vertex, 1);
 	}
+
+	void flush_msgs();
 };
 
 class vertex_program_creater
