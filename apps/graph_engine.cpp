@@ -206,11 +206,7 @@ void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 vsize_t compute_vertex::get_num_edges() const
 {
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	in_mem_vertex_info info = t->get_graph().get_vertex_info(get_id());
-	assert(!t->get_graph().get_graph_header().has_edge_data());
-	int vertex_header_size = t->get_graph().get_vertex_header_size();
-	assert(vertex_header_size > 0);
-	return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
+	return t->get_graph().get_vertex_edges(get_id());
 }
 
 void compute_directed_vertex::request_partial_vertices(

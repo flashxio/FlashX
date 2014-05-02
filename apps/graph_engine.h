@@ -198,6 +198,16 @@ public:
 
 	~graph_engine();
 
+	/*
+	 * Query graph information.
+	 */
+
+	/**
+	 * The following four variants of get_vertex return the same compute_vertex
+	 * but with slightly lower overhead.
+	 * These can only be used in a shared machine.
+	 */
+
 	compute_vertex &get_vertex(vertex_id_t id) {
 		return vertices->get_vertex(id);
 	}
@@ -215,35 +225,20 @@ public:
 		return vertices->get_vertices(part_id, ids, num, v_buf);
 	}
 
+	/**
+	 * This returns the location and the size of a vertex in the file.
+	 */
 	const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
 		return vertices->get_vertex_info(id);
 	}
 
+	/**
+	 * This returns the number of edges of a vertex.
+	 */
 	const vsize_t get_vertex_edges(vertex_id_t id) const {
 		in_mem_vertex_info info = get_vertex_info(id);
-		int vertex_header_size = get_vertex_header_size();
 		return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
 	}
-
-	void start(std::shared_ptr<vertex_filter> filter,
-			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
-	void start(vertex_id_t ids[], int num,
-			vertex_initiator::ptr init = vertex_initiator::ptr(),
-			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
-	void start_all(vertex_initiator::ptr init = vertex_initiator::ptr(),
-			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
-
-	/**
-	 * The algorithm progresses to the next level.
-	 * It returns true if no more work can progress.
-	 */
-	bool progress_next_level();
-
-	/**
-	 * Get vertices to be processed in the current level.
-	 */
-	int get_curr_activated_vertices(vertex_id_t vertices[], int num);
-	size_t get_num_curr_activated_vertices() const;
 
 	vertex_id_t get_max_vertex_id() const {
 		return vertices->get_max_vertex_id();
@@ -257,15 +252,62 @@ public:
 		return vertices->get_num_vertices();
 	}
 
-	void wait4complete();
-
-	int get_num_threads() const {
-		return worker_threads.size();
-	}
-
 	bool is_directed() const {
 		return header.is_directed_graph();
 	}
+
+	const graph_header &get_graph_header() const {
+		return header;
+	}
+
+	void set_vertex_scheduler(vertex_scheduler::ptr scheduler);
+
+	void start(std::shared_ptr<vertex_filter> filter,
+			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
+	void start(vertex_id_t ids[], int num,
+			vertex_initiator::ptr init = vertex_initiator::ptr(),
+			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
+	void start_all(vertex_initiator::ptr init = vertex_initiator::ptr(),
+			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
+
+	void wait4complete();
+
+	/**
+	 * This method preloads the entire graph to the page cache.
+	 */
+	void preload_graph();
+
+	/**
+	 * These two methods allow users to initialize vertices to certain state.
+	 */
+	void init_vertices(vertex_id_t ids[], int num, vertex_initiator::ptr init);
+	void init_all_vertices(vertex_initiator::ptr init);
+
+	/**
+	 * This method allows users to query the information on the state of all vertices.
+	 */
+	void query_on_all(vertex_query::ptr query);
+
+	void get_vertex_programs(std::vector<vertex_program::ptr> &programs) {
+		programs = vprograms;
+	}
+
+	/**
+	 * This returns the current iteration No.
+	 */
+	int get_curr_level() const {
+		return level.get();
+	}
+
+	/**
+	 * The methods below should be used internally.
+	 */
+
+	/**
+	 * The algorithm progresses to the next level.
+	 * It returns true if no more work can progress.
+	 */
+	bool progress_next_level();
 
 	trace_logger::ptr get_logger() const {
 		return logger;
@@ -286,15 +328,18 @@ public:
 		return &vertices->get_partitioner();
 	}
 
+	int get_num_threads() const {
+		return worker_threads.size();
+	}
+
 	worker_thread *get_thread(int idx) const {
 		return worker_threads[idx];
 	}
 
-	const graph_header &get_graph_header() const {
-		return header;
-	}
-
-	void set_vertex_scheduler(vertex_scheduler::ptr scheduler);
+	/**
+	 * The following two methods keep track of the number of active vertices
+	 * globally in the current iteration.
+	 */
 
 	// We have processed the specified number of vertices.
 	void process_vertices(int num) {
@@ -305,35 +350,6 @@ public:
 	// processed in the current level.
 	size_t get_num_remaining_vertices() const {
 		return num_remaining_vertices_in_level.get();
-	}
-
-	int get_max_processing_vertices() const {
-		if (max_processing_vertices > 0)
-			return max_processing_vertices;
-		else
-			return graph_conf.get_max_processing_vertices();
-	}
-
-	void set_max_processing_vertices(int max) {
-		max_processing_vertices = max;
-	}
-
-	int get_curr_level() const {
-		return level.get();
-	}
-
-	int get_vertex_header_size() const {
-		return vertex_header_size;
-	}
-
-	void preload_graph();
-
-	void init_vertices(vertex_id_t ids[], int num, vertex_initiator::ptr init);
-	void init_all_vertices(vertex_initiator::ptr init);
-	void query_on_all(vertex_query::ptr query);
-
-	void get_vertex_programs(std::vector<vertex_program::ptr> &programs) {
-		programs = vprograms;
 	}
 };
 
