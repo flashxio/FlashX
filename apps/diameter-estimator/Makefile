@@ -21,15 +21,19 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: diameter-estimator
+all: diameter-estimator serial-diameter-estimator
 
-diameter-estimator: $(OBJS) ../libgraph.a
-	$(CXX) -o diameter-estimator $(OBJS) $(LDFLAGS)
+diameter-estimator: diameter_graph.o ../libgraph.a
+	$(CXX) -o diameter-estimator diameter_graph.o $(LDFLAGS)
+
+serial-diameter-estimator: serial_diameter_graph.o ../libgraph.a
+	$(CXX) -o serial-diameter-estimator serial_diameter_graph.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f diameter-estimator
+	rm -f serial-diameter-estimator
 
 -include $(DEPS) 

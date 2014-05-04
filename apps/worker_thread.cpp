@@ -57,9 +57,10 @@ void default_vertex_queue::init(worker_thread &t)
 	assert(active_bitmap->get_num_set_bits() == 0);
 	// This process only happens in a single thread, so we can swap
 	// the two bitmap safely.
-	bitmap *tmp = active_bitmap;
-	active_bitmap = t.next_activated_vertices;
-	t.next_activated_vertices = tmp;
+	std::unique_ptr<bitmap> tmp;
+	tmp = std::move(active_bitmap);
+	active_bitmap = std::move(t.next_activated_vertices);
+	t.next_activated_vertices = std::move(tmp);
 	num_active = active_bitmap->get_num_set_bits();
 
 	bool forward = true;
@@ -159,8 +160,12 @@ worker_thread::worker_thread(graph_engine *graph,
 		int num_threads, vertex_scheduler::ptr scheduler): thread("worker_thread",
 			node_id)
 {
-	next_activated_vertices = new bitmap(graph->get_partitioner(
-				)->get_part_size(worker_id, graph->get_num_vertices()), node_id);
+	next_activated_vertices = std::unique_ptr<bitmap>(
+			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices()), node_id));
+	notify_vertices = std::unique_ptr<bitmap>(
+			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices()), node_id));
 	this->vprogram = std::move(prog);
 	vprogram->init(graph, this);
 	start_all = false;
@@ -193,11 +198,11 @@ worker_thread::worker_thread(graph_engine *graph,
 
 	}
 	if (scheduler)
-		curr_activated_vertices = new customized_vertex_queue(*graph,
-				scheduler, worker_id);
+		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
+				new customized_vertex_queue(*graph, scheduler, worker_id));
 	else
-		curr_activated_vertices = new default_vertex_queue(*graph, worker_id,
-				node_id);
+		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
+				new default_vertex_queue(*graph, worker_id, node_id));
 }
 
 worker_thread::~worker_thread()
@@ -205,8 +210,6 @@ worker_thread::~worker_thread()
 	delete alloc;
 	delete part_alloc;
 	factory->destroy_io(io);
-	delete curr_activated_vertices;
-	delete next_activated_vertices;
 }
 
 void worker_thread::init()
@@ -336,6 +339,24 @@ int worker_thread::enter_next_level()
 {
 	// We have to make sure all messages sent by other threads are processed.
 	msg_processor->process_msgs();
+
+	// If vertices have request the notification of the end of an iteration,
+	// this is the place to notify them.
+	if (notify_vertices->get_num_set_bits() > 0) {
+		std::vector<vertex_id_t> vertex_buf;
+		const size_t stride = 1024 * 64;
+		for (size_t i = 0; i < notify_vertices->get_num_bits(); i += stride) {
+			vertex_buf.clear();
+			notify_vertices->get_reset_set_bits(i,
+					min(i + stride, notify_vertices->get_num_bits()), vertex_buf);
+			BOOST_FOREACH(vertex_id_t id, vertex_buf) {
+				local_vid_t local_id(id);
+				compute_vertex &v = graph->get_vertex(worker_id, local_id);
+				vprogram->notify_iteration_end(v);
+			}
+		}
+	}
+
 	curr_activated_vertices->init(*this);
 	assert(next_activated_vertices->get_num_set_bits() == 0);
 	balancer->reset();

@@ -92,6 +92,8 @@ public:
 
 	virtual void run_on_multicast_message(multicast_message &mmsg) = 0;
 
+	virtual void notify_iteration_end(compute_vertex &) = 0;
+
 	const worker_thread &get_thread() const {
 		return *t;
 	}
@@ -116,6 +118,13 @@ public:
 	}
 
 	void flush_msgs();
+
+	/**
+	 * A vertex requests the end of an iteration.
+	 * `notify_iteration_end' of the vertex will be invoked at the end
+	 * of an iteration.
+	 */
+	void request_notify_iter_end(const compute_vertex &v);
 };
 
 class vertex_program_creater
@@ -189,6 +198,10 @@ public:
 			vertex_type *v = (vertex_type *) vertex_buf[i];
 			v->run_on_message(*this, mmsg);
 		}
+	}
+
+	virtual void notify_iteration_end(compute_vertex &comp_v) {
+		((vertex_type &) comp_v).notify_iteration_end(*this);
 	}
 };
 
