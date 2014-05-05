@@ -21,6 +21,7 @@
 #include <google/profiler.h>
 
 #include <vector>
+#include <set>
 #include <unordered_map>
 
 #include "thread.h"
@@ -32,8 +33,10 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
+size_t num_bfs = 1;
 const int K = sizeof(uint64_t) * 8;
 edge_type traverse_edge = edge_type::OUT_EDGE;
+int start_level;
 
 template<class T>
 class embedded_bitmap
@@ -138,9 +141,12 @@ public:
 	void notify_iteration_end(vertex_program &vprog);
 };
 
+typedef std::pair<vertex_id_t, int> vertex_dist_t;
 class diameter_vertex_program: public vertex_program_impl<diameter_vertex>
 {
-	short max_dist;
+	int curr_iter;
+	std::vector<vertex_dist_t> curr_vertices;
+	std::deque<vertex_dist_t> prev_vertices;
 public:
 	typedef std::shared_ptr<diameter_vertex_program> ptr;
 
@@ -149,16 +155,34 @@ public:
 	}
 
 	diameter_vertex_program() {
-		max_dist = 0;
+		curr_iter = 0;
 	}
 
-	void set_max_dist(short max_dist) {
-		if (this->max_dist < max_dist)
-			this->max_dist = max_dist;
+	void set_max_dist(diameter_vertex &v, int iter_no) {
+		if (curr_iter == iter_no) {
+			if (curr_vertices.size() < num_bfs)
+				curr_vertices.push_back(vertex_dist_t(v.get_id(), curr_iter));
+		}
+		else {
+			assert(curr_iter < iter_no);
+			curr_iter = iter_no;
+			prev_vertices.insert(prev_vertices.end(),
+					curr_vertices.begin(), curr_vertices.end());
+			curr_vertices.clear();
+			curr_vertices.push_back(vertex_dist_t(v.get_id(), curr_iter));
+
+			// Remove vertices in the previous iterations.
+			while (prev_vertices.size() > num_bfs)
+				prev_vertices.pop_front();
+		}
 	}
 
-	size_t get_max_dist() const {
-		return max_dist;
+	void get_max_dist_vertices(std::vector<vertex_dist_t> &vertices) const {
+		vertices.insert(vertices.end(), curr_vertices.begin(),
+				curr_vertices.end());
+		for (std::deque<vertex_dist_t>::const_reverse_iterator it
+				= prev_vertices.crbegin(); it != prev_vertices.crend(); it++)
+			vertices.push_back(*it);
 	}
 };
 
@@ -187,8 +211,9 @@ void diameter_vertex::notify_iteration_end(vertex_program &vprog)
 {
 	if (bfs_ids != new_bfs_ids) {
 		updated = true;
-		max_dist = max(vprog.get_graph().get_curr_level() + 1, max_dist);
-		((diameter_vertex_program &) vprog).set_max_dist(max_dist);
+		int iter_no = vprog.get_graph().get_curr_level() + 1 - start_level;
+		max_dist = max(iter_no, max_dist);
+		((diameter_vertex_program &) vprog).set_max_dist(*this, iter_no);
 	}
 	bfs_ids = new_bfs_ids;
 }
@@ -212,6 +237,15 @@ public:
 	}
 };
 
+class diameter_reset: public vertex_initiator
+{
+public:
+	void init(compute_vertex &v) {
+		diameter_vertex &dv = (diameter_vertex &) v;
+		dv.reset();
+	}
+};
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -228,19 +262,28 @@ void print_usage()
 	fprintf(stderr, "-n: the number of BFS\n");
 	fprintf(stderr, "-o: the output file\n");
 	fprintf(stderr, "-b: traverse with both in-edges and out-edges\n");
+	fprintf(stderr, "-s: the number of sweeps\n");
 	graph_conf.print_help();
 	params.print_help();
 }
+
+class dist_compare
+{
+public:
+	bool operator()(const vertex_dist_t &v1, const vertex_dist_t &v2) {
+		return v1.second > v2.second;
+	}
+};
 
 int main(int argc, char *argv[])
 {
 	int opt;
 	std::string confs;
 	int num_opts = 0;
-	int num_bfs = 1;
+	int num_sweeps = 1;
 	bool preload = false;
 	std::string output_file;
-	while ((opt = getopt(argc, argv, "c:pn:o:b")) != -1) {
+	while ((opt = getopt(argc, argv, "c:pn:o:bs:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -260,6 +303,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'o':
 				output_file = optarg;
+				num_opts++;
+				break;
+			case 's':
+				num_sweeps = atoi(optarg);
 				num_opts++;
 				break;
 			default:
@@ -293,7 +340,7 @@ int main(int argc, char *argv[])
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
 	std::vector<vertex_id_t> start_vertices;
-	while (start_vertices.size() < (size_t) num_bfs) {
+	while (start_vertices.size() < num_bfs) {
 		vertex_id_t id = random() % graph->get_max_vertex_id();
 		// We should skip the empty vertices.
 		if (graph->get_vertex_edges(id) == 0)
@@ -302,22 +349,64 @@ int main(int argc, char *argv[])
 		start_vertices.push_back(id);
 	}
 
-	short max_dist = 0;
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
-	graph->start(start_vertices.data(), start_vertices.size(),
-			vertex_initiator::ptr(new diameter_initiator(start_vertices)),
-			vertex_program_creater::ptr(new diameter_vertex_program_creater()));
-	graph->wait4complete();
-	gettimeofday(&end, NULL);
+	short global_max = 0;
+	for (int i = 0; i < num_sweeps; i++) {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+		start_level = graph->get_curr_level();
+		graph->init_all_vertices(vertex_initiator::ptr(new diameter_reset()));
+		printf("Sweep %d starts on %ld vertices, traverse edge: %d\n",
+				i, start_vertices.size(), traverse_edge);
+		graph->start(start_vertices.data(), start_vertices.size(),
+				vertex_initiator::ptr(new diameter_initiator(start_vertices)),
+				vertex_program_creater::ptr(new diameter_vertex_program_creater()));
+		graph->wait4complete();
+		gettimeofday(&end, NULL);
 
-	std::vector<vertex_program::ptr> vprogs;
-	graph->get_vertex_programs(vprogs);
-	BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
-		diameter_vertex_program::ptr diameter_vprog = diameter_vertex_program::cast2(vprog);
-		max_dist = max(max_dist, diameter_vprog->get_max_dist());
+		std::vector<vertex_program::ptr> vprogs;
+		graph->get_vertex_programs(vprogs);
+		std::vector<vertex_dist_t> max_dist_vertices;
+		BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
+			diameter_vertex_program::ptr diameter_vprog
+				= diameter_vertex_program::cast2(vprog);
+			diameter_vprog->get_max_dist_vertices(max_dist_vertices);
+		}
+		if (max_dist_vertices.empty()) {
+			start_vertices.clear();
+			while (start_vertices.size() < num_bfs) {
+				vertex_id_t id = random() % graph->get_max_vertex_id();
+				// We should skip the empty vertices.
+				if (graph->get_vertex_edges(id) == 0)
+					continue;
+
+				start_vertices.push_back(id);
+			}
+		}
+		else {
+			std::sort(max_dist_vertices.begin(), max_dist_vertices.end(),
+					dist_compare());
+			assert(max_dist_vertices.front().second
+					>= max_dist_vertices.back().second);
+			start_vertices.clear();
+			std::set<vertex_id_t> start_set;
+			for (size_t i = 0; start_set.size() < num_bfs
+					&& i < max_dist_vertices.size(); i++) {
+				start_set.insert(max_dist_vertices[i].first);
+			}
+			start_vertices.insert(start_vertices.begin(), start_set.begin(),
+					start_set.end());
+			short max_dist = max_dist_vertices.front().second;
+			printf("It takes %f seconds. The current max dist: %d\n",
+					time_diff(start, end), max_dist);
+			global_max = max(global_max, max_dist);
+			// We should switch the direction if we search for the longest
+			// directed path
+			if (traverse_edge == edge_type::IN_EDGE)
+				traverse_edge = edge_type::OUT_EDGE;
+			else if (traverse_edge == edge_type::OUT_EDGE)
+				traverse_edge = edge_type::IN_EDGE;
+		}
 	}
-	printf("It takes %f seconds\n", time_diff(start, end));
 
 #if 0
 	for (size_t i = 0; i < start_vertices.size(); i++) {
@@ -335,7 +424,7 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	printf("The max dist: %d\n", max_dist);
+	printf("The max dist: %d\n", global_max);
 
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
