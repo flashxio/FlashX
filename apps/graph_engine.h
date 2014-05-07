@@ -188,6 +188,9 @@ class graph_engine
 	file_io_factory::shared_ptr factory;
 	int max_processing_vertices;
 
+	// The time when the current iteration starts.
+	struct timeval start_time;
+
 	void init_threads(vertex_program_creater::ptr creater);
 protected:
 	graph_engine(const std::string &graph_file, graph_index::ptr index,

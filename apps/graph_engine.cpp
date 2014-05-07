@@ -337,6 +337,7 @@ void graph_engine::start(vertex_id_t ids[], int num,
 		worker_threads[i]->start_vertices(start_vertices[i], init);
 		worker_threads[i]->start();
 	}
+	gettimeofday(&start_time, NULL);
 }
 
 void graph_engine::start(std::shared_ptr<vertex_filter> filter,
@@ -349,6 +350,7 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 		t->start_vertices(filter);
 		t->start();
 	}
+	gettimeofday(&start_time, NULL);
 }
 
 void graph_engine::start_all(vertex_initiator::ptr init,
@@ -360,6 +362,7 @@ void graph_engine::start_all(vertex_initiator::ptr init,
 		t->start_all_vertices(init);
 		t->start();
 	}
+	gettimeofday(&start_time, NULL);
 }
 
 bool graph_engine::progress_next_level()
@@ -381,8 +384,12 @@ bool graph_engine::progress_next_level()
 	// If all threads have reached here.
 	if (num_threads.inc(1) == get_num_threads()) {
 		level.inc(1);
-		printf("progress to level %d, there are %ld vertices in this level\n",
-				level.get(), tot_num_activates.get());
+		struct timeval curr;
+		gettimeofday(&curr, NULL);
+		printf("Iter %d takes %.2f seconds, and %ld vertices are in iter %d\n",
+				level.get() - 1, time_diff(start_time, curr),
+				tot_num_activates.get(), level.get());
+		start_time = curr;
 		assert(num_remaining_vertices_in_level.get() == 0);
 		num_remaining_vertices_in_level = atomic_number<size_t>(
 				tot_num_activates.get());
