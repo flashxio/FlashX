@@ -234,6 +234,7 @@ public:
 	void init();
 
 	compute_allocator *get_part_compute_allocator() const {
+		assert(part_alloc);
 		return part_alloc;
 	}
 

@@ -704,7 +704,22 @@ public:
 
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start, size_t end) const {
-		assert(0);
+		assert(start <= end);
+		assert(end <= get_num_edges(type));
+		return array.get_seq_iterator<vertex_id_t>(
+				ext_mem_undirected_vertex::get_header_size()
+				+ start * sizeof(vertex_id_t),
+				ext_mem_undirected_vertex::get_header_size()
+				+ end * sizeof(vertex_id_t));
+	}
+
+	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
+			size_t num) const {
+		vsize_t num_edges = get_num_edges(type);
+		assert(num_edges <= num);
+		array.memcpy(ext_mem_undirected_vertex::get_header_size(),
+				(char *) edges, sizeof(vertex_id_t) * num_edges);
+		return num_edges;
 	}
 
 	vertex_id_t get_id() const {
