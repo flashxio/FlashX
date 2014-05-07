@@ -21,10 +21,13 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: graph-bfs
+all: graph-bfs undirected-graph-bfs
 
-graph-bfs: $(OBJS) ../libgraph.a
-	$(CXX) -o graph-bfs $(OBJS) $(LDFLAGS)
+graph-bfs: bfs_graph.o ../libgraph.a
+	$(CXX) -o graph-bfs bfs_graph.o $(LDFLAGS)
+
+undirected-graph-bfs: bfs_undirected_graph.o ../libgraph.a
+	$(CXX) -o undirected-graph-bfs bfs_undirected_graph.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
