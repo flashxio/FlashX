@@ -357,6 +357,22 @@ public:
 	}
 };
 
+class undirected_in_mem_vertex_index: public default_in_mem_vertex_index
+{
+public:
+	virtual vsize_t get_vertex_size(char *ext_mem_vertex) {
+		ext_mem_undirected_vertex *v
+			= (ext_mem_undirected_vertex *) ext_mem_vertex;
+		return v->get_size();
+	}
+
+	virtual vertex_id_t get_vertex_id(char *ext_mem_vertex) {
+		ext_mem_undirected_vertex *v
+			= (ext_mem_undirected_vertex *) ext_mem_vertex;
+		return v->get_id();
+	}
+};
+
 class ts_directed_in_mem_vertex_index: public default_in_mem_vertex_index
 {
 public:

@@ -68,6 +68,7 @@ struct comp_edge {
 	}
 };
 
+#if 0
 template<class edge_data_type>
 undirected_graph<edge_data_type> *undirected_graph<edge_data_type>::create(
 		edge<edge_data_type> edges[], size_t num_edges)
@@ -151,6 +152,7 @@ void undirected_graph<edge_data_type>::dump(const std::string &index_file,
 }
 
 template class undirected_graph<>;
+#endif
 
 void ext_mem_vertex_iterator::read_vertices()
 {
@@ -194,6 +196,11 @@ void ext_mem_vertex_iterator::read_vertices()
 		if (type == graph_type::DIRECTED) {
 			ext_mem_directed_vertex *v
 				= (ext_mem_directed_vertex *) vertices.back();
+			vsize = v->get_size();
+		}
+		else if (type == graph_type::UNDIRECTED) {
+			ext_mem_undirected_vertex *v
+				= (ext_mem_undirected_vertex *) vertices.back();
 			vsize = v->get_size();
 		}
 		else if (type == graph_type::TS_DIRECTED) {

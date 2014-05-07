@@ -51,6 +51,7 @@ public:
 			const std::string &adj_file) const = 0;
 };
 
+#if 0
 template<class edge_data_type = empty_data>
 class undirected_graph: public graph
 {
@@ -125,6 +126,7 @@ public:
 		assert(0);
 	}
 };
+#endif
 
 template<class edge_data_type>
 void check_vertex(in_mem_directed_vertex<edge_data_type> in_v,
@@ -168,6 +170,7 @@ void check_vertex(in_mem_directed_vertex<edge_data_type> in_v,
 	assert(out_it1 == out_end1 && out_it2 == out_end2);
 }
 
+#if 0
 template<class edge_data_type = empty_data>
 class directed_graph: public graph
 {
@@ -359,6 +362,7 @@ public:
 		delete [] adj_buf;
 	}
 };
+#endif
 
 static inline void unique_merge(const std::vector<vertex_id_t> &v1,
 		const std::vector<vertex_id_t> &v2, std::vector<vertex_id_t> &v)
@@ -444,6 +448,7 @@ void check_vertex(ts_in_mem_directed_vertex<edge_data_type> in_v,
 	}
 }
 
+#if 0
 template<class edge_data_type = empty_data>
 class ts_directed_graph: public graph
 {
@@ -627,6 +632,7 @@ public:
 		delete [] adj_buf;
 	}
 };
+#endif
 
 class ext_mem_vertex_iterator
 {

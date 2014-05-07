@@ -104,6 +104,7 @@ void merge_dump(std::vector<ext_mem_vertex_iterator> &its, graph_type type,
 			tot_vertices, tot_non_empty, tot_edges);
 }
 
+#if 0
 template<class edge_data_type>
 void verify_ts_directed_graph(const std::vector<std::string> &in_graph_files,
 		const std::vector<std::string> &in_index_files,
@@ -135,6 +136,7 @@ void verify_graph(const std::vector<std::string> &in_graph_files,
 			assert(0);
 	}
 }
+#endif
 
 void print_usage()
 {
@@ -263,6 +265,7 @@ int main(int argc, char *argv[])
 		printf("It takes %f seconds to merge graphs\n",
 				time_diff(start, end));
 
+#if 0
 		if (check_graph) {
 			int edge_type = DEFAULT_TYPE;
 			if (type_str)
@@ -280,5 +283,6 @@ int main(int argc, char *argv[])
 					assert(0);
 			}
 		}
+#endif
 	}
 }
