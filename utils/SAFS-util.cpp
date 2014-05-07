@@ -380,6 +380,7 @@ int main(int argc, char *argv[])
 	std::string command = argv[2];
 
 	config_map configs(conf_file);
+	configs.add_options("writable=1");
 	init_io_system(configs);
 
 	const struct command *comm = get_command(command);
