@@ -27,6 +27,8 @@
 #include <parallel/algorithm>
 #endif
 
+#include <boost/foreach.hpp>
+
 #include "thread.h"
 #include "native_file.h"
 
@@ -76,7 +78,6 @@ public:
 	virtual edge_graph<edge_data_type> *simplify_edges() const = 0;
 	virtual void construct_graph(graph *g) const = 0;
 	virtual graph *create_disk_graph() const = 0;
-	virtual void add_edge(const edge<edge_data_type> &e) = 0;
 	virtual void add_edges(std::vector<edge<edge_data_type> > &edges) = 0;
 	virtual size_t get_num_edges() const = 0;
 
@@ -207,6 +208,10 @@ public:
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const;
 
+	virtual size_t get_num_edges() const {
+		return disk_graph<edge_data_type>::get_num_edges() / 2;
+	}
+
 	virtual int serialize_vertex(const in_mem_vertex &v,
 			embedded_array<char> &buf) {
 		int mem_size = v.get_serialize_size();
@@ -226,10 +231,8 @@ template<class edge_data_type = empty_data>
 class undirected_edge_graph: public edge_graph<edge_data_type>
 {
 	std::vector<edge<edge_data_type> > edges;
-	pthread_mutex_t lock;
 public:
 	undirected_edge_graph(bool has_data): edge_graph<edge_data_type>(has_data) {
-		pthread_mutex_init(&lock, NULL);
 	}
 
 	/**
@@ -238,7 +241,6 @@ public:
 	 */
 	undirected_edge_graph(size_t num_edges,
 			bool has_data): edge_graph<edge_data_type>(has_data) {
-		pthread_mutex_init(&lock, NULL);
 		edges.reserve(num_edges);
 	}
 
@@ -255,18 +257,32 @@ public:
 		return new disk_undirected_graph<edge_data_type>(this);
 	}
 
+	/**
+	 * This is used by compress_edges, so the edge graph has all the edges.
+	 */
 	void add_edge(const edge<edge_data_type> &e) {
 		edges.push_back(e);
 	}
 
+	/**
+	 * The input edges are read from the edge list file.
+	 * Each edge may appear only once, so we need to reverse them for
+	 * the other end of the edges.
+	 */
 	void add_edges(std::vector<edge<edge_data_type> > &edges) {
-		pthread_mutex_lock(&lock);
 		this->edges.insert(this->edges.end(), edges.begin(), edges.end());
-		pthread_mutex_unlock(&lock);
+		BOOST_FOREACH(edge<edge_data_type> &e, edges) {
+			if (e.has_edge_data())
+				this->edges.push_back(edge<edge_data_type>(e.get_to(),
+							e.get_from(), e.get_data()));
+			else
+				this->edges.push_back(edge<edge_data_type>(e.get_to(),
+							e.get_from()));
+		}
 	}
 
 	size_t get_num_edges() const {
-		return edges.size();
+		return edges.size() / 2;
 	}
 
 	edge_graph<edge_count> *compress_edges() const;
@@ -286,10 +302,8 @@ class directed_edge_graph: public edge_graph<edge_data_type>
 {
 	std::vector<edge<edge_data_type> > in_edges;
 	std::vector<edge<edge_data_type> > out_edges;
-	pthread_mutex_t lock;
 public:
 	directed_edge_graph(bool has_data): edge_graph<edge_data_type>(has_data) {
-		pthread_mutex_init(&lock, NULL);
 	}
 
 	/**
@@ -298,7 +312,6 @@ public:
 	 */
 	directed_edge_graph(size_t num_edges,
 			bool has_data): edge_graph<edge_data_type>(has_data) {
-		pthread_mutex_init(&lock, NULL);
 		in_edges.reserve(num_edges);
 		out_edges.reserve(num_edges);
 	}
@@ -329,10 +342,8 @@ public:
 	}
 
 	void add_edges(std::vector<edge<edge_data_type> > &edges) {
-		pthread_mutex_lock(&lock);
 		in_edges.insert(in_edges.end(), edges.begin(), edges.end());
 		out_edges.insert(out_edges.end(), edges.begin(), edges.end());
-		pthread_mutex_unlock(&lock);
 	}
 
 	size_t get_num_edges() const {
@@ -436,6 +447,7 @@ template<class edge_data_type>
 void undirected_edge_graph<edge_data_type>::check_vertices(
 		const std::vector<ext_mem_undirected_vertex *> &vertices) const
 {
+	printf("There are %ld edges in the graph\n", get_num_edges());
 	assert(!vertices.empty());
 	typename std::vector<edge<edge_data_type> >::const_iterator it
 		= std::lower_bound(edges.begin(), edges.end(),
