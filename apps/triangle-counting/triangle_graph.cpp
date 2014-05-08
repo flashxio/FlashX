@@ -375,11 +375,10 @@ void triangle_vertex::run_on_itself(vertex_program &prog, const page_vertex &ver
 		= vertex.get_neigh_begin(edge_type::IN_EDGE);
 	page_byte_array::const_iterator<vertex_id_t> end
 		= vertex.get_neigh_end(edge_type::IN_EDGE);
-	int num_local_edges = this->get_num_in_edges() + this->get_num_out_edges();
+	int num_local_edges = this->get_num_edges();
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
-		triangle_vertex &v1 = (triangle_vertex &) prog.get_graph().get_vertex(id);
-		int num_local_edges1 = v1.get_num_in_edges() + v1.get_num_out_edges();
+		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
@@ -391,8 +390,7 @@ void triangle_vertex::run_on_itself(vertex_program &prog, const page_vertex &ver
 	end = vertex.get_neigh_end(edge_type::OUT_EDGE);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
-		triangle_vertex &v1 = (triangle_vertex &) prog.get_graph().get_vertex(id);
-		int num_local_edges1 = v1.get_num_in_edges() + v1.get_num_out_edges();
+		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
