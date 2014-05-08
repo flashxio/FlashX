@@ -1668,7 +1668,7 @@ class in_mem_undirected_vertex: public in_mem_vertex
 public:
 	in_mem_undirected_vertex(vertex_id_t id, bool has_data) {
 		this->id = id;
-		has_data = has_data;
+		this->has_data = has_data;
 	}
 
 	vertex_id_t get_id() const {
