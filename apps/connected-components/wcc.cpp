@@ -217,7 +217,13 @@ int main(int argc, char *argv[])
 			map_it->second++;
 		}
 	}
-	printf("There are %ld components\n", comp_counts.size());
+	size_t max_comp_size = 0;
+	BOOST_FOREACH(comp_map_t::value_type v, comp_counts) {
+		if (max_comp_size < v.second)
+			max_comp_size = v.second;
+	}
+	printf("There are %ld components, and largest comp has %ld vertices\n",
+			comp_counts.size(), max_comp_size);
 
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
