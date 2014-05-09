@@ -585,6 +585,15 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+	if (graph_conf.get_print_io_stat())
+		print_io_thread_stat();
+
+	FILE *f = NULL;
+	if (!output_file.empty()) {
+		f = fopen(output_file.c_str(), "w");
+	}
 	// Count the total number of triangles in the graph.
 	graph_index::const_iterator it = index->begin();
 	graph_index::const_iterator end_it = index->end();
@@ -592,12 +601,13 @@ int main(int argc, char *argv[])
 	for (; it != end_it; ++it) {
 		const triangle_vertex &v = (const triangle_vertex &) *it;
 		num_triangles += v.get_num_triangles();
+		if (f)
+			fprintf(f, "%u %d\n", v.get_id(), v.get_num_triangles());
 	}
 
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
+	if (f)
+		fclose(f);
+
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());
