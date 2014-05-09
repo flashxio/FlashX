@@ -21,10 +21,19 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: triangle-counting
+all: circular-triangle-counting undirected-triangle-counting
 
-triangle-counting: $(OBJS) ../libgraph.a
-	$(CXX) -o triangle-counting $(OBJS) $(LDFLAGS)
+circular_triangle_graph.o: triangle_graph.cpp
+	$(CXX) -o circular_triangle_graph.o -c triangle_graph.cpp $(CXXFLAGS) -DUSE_DIRECTED
+
+undirected_triangle_graph.o: triangle_graph.cpp
+	$(CXX) -o undirected_triangle_graph.o -c triangle_graph.cpp $(CXXFLAGS)
+
+circular-triangle-counting: circular_triangle_graph.o ../libgraph.a
+	$(CXX) -o circular-triangle-counting circular_triangle_graph.o $(LDFLAGS)
+
+undirected-triangle-counting: undirected_triangle_graph.o ../libgraph.a
+	$(CXX) -o undirected-triangle-counting undirected_triangle_graph.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
