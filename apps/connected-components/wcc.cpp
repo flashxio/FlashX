@@ -57,28 +57,22 @@ public:
 
 class wcc_vertex: public compute_vertex
 {
-	bool empty;
 	bool updated;
 	vertex_id_t component_id;
 public:
 	wcc_vertex() {
 		component_id = UINT_MAX;
-		empty = false;
 		updated = true;
 	}
 
 	wcc_vertex(vertex_id_t id, const vertex_index &index1): compute_vertex(
 			id, index1) {
 		component_id = id;
-		const directed_vertex_index &index = (const directed_vertex_index &) index1;
-		int num_edges = (index.get_num_in_edges(id)
-				+ index.get_num_out_edges(id));
-		empty = (num_edges == 0);
 		updated = true;
 	}
 
-	bool is_empty() const {
-		return empty;
+	bool is_empty(graph_engine &graph) const {
+		return graph.get_vertex_edges(get_id()) == 0;
 	}
 
 	bool belong2component() const {
@@ -211,7 +205,7 @@ int main(int argc, char *argv[])
 	graph_index::const_iterator end_it = index->end();
 	for (; it != end_it; ++it) {
 		const wcc_vertex &v = (const wcc_vertex &) *it;
-		if (v.is_empty())
+		if (v.is_empty(*graph))
 			continue;
 
 		comp_map_t::iterator map_it = comp_counts.find(v.get_component_id());
@@ -241,7 +235,7 @@ int main(int argc, char *argv[])
 		end_it = index->end();
 		for (; it != end_it; ++it) {
 			const wcc_vertex &v = (const wcc_vertex &) *it;
-			if (v.is_empty())
+			if (v.is_empty(*graph))
 				continue;
 
 			std::unordered_map<vertex_id_t, log_histogram>::iterator map_it
