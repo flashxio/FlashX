@@ -40,7 +40,7 @@ const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
 const char *delimiter = "\t";
 
 bool compress = false;
-bool simplfy = false;
+bool simplify = false;
 bool print_graph = false;
 bool check_graph = false;
 
@@ -1116,7 +1116,7 @@ graph *construct_graph(
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
 
-	if (simplfy) {
+	if (simplify) {
 		start = end;
 		size_t orig_num_edges = edge_g->get_num_edges();
 		edge_graph<edge_data_type> *new_edge_g = edge_g->simplify_edges();
@@ -1147,6 +1147,7 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "-m: merge multiple edge lists into a single graph. \n");
 	fprintf(stderr, "-w: write the graph to a file\n");
+	fprintf(stderr, "-s: simplify a graph (remove duplicated edges)\n");
 }
 
 graph *construct_graph(const std::vector<std::string> &edge_list_files,
@@ -1189,7 +1190,7 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "ud:cpvt:mw")) != -1) {
+	while ((opt = getopt(argc, argv, "ud:cpvt:mws")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -1217,6 +1218,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'w':
 				write_graph = true;
+				break;
+			case 's':
+				simplify = true;
 				break;
 			default:
 				print_usage();
