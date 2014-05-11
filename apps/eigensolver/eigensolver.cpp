@@ -22,6 +22,9 @@
 
 #include <vector>
 
+#include <Eigen/Eigenvalues>
+
+
 #include "thread.h"
 #include "io_interface.h"
 #include "container.h"
@@ -183,6 +186,7 @@ void print_usage()
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-p: preload the graph\n");
 	fprintf(stderr, "-m: the dimension of the tridiagonal matrix\n");
+	fprintf(stderr, "-k: the number of required eigenvalues\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -194,7 +198,8 @@ int main(int argc, char *argv[])
 	int num_opts = 0;
 	bool preload = false;
 	int m = 0;
-	while ((opt = getopt(argc, argv, "c:pm:")) != -1) {
+	int nv = 0;
+	while ((opt = getopt(argc, argv, "c:pm:k:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -206,6 +211,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'm':
 				m = atoi(optarg);
+				num_opts++;
+				break;
+			case 'k':
+				nv = atoi(optarg);
 				num_opts++;
 				break;
 			default:
@@ -238,36 +247,71 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
-	printf("There are %d iterations\n", m);
-	for (int i = 0; i < m; i++) {
-		struct timeval start, end;
-		gettimeofday(&start, NULL);
-		if (beta)
-			graph->start_all(vertex_initiator::ptr(new eigen_vertex_initiator()),
-					vertex_program_creater::ptr(new eigen_vertex_program_creater()));
-		else
-			graph->start_all(vertex_initiator::ptr(),
-					vertex_program_creater::ptr(new eigen_vertex_program_creater()));
-		graph->wait4complete();
+	int num_curr = 0;
+	int dimT = 0;
+	int k = 0;
+	Eigen::VectorXf alphas;
+	std::vector<float> betas;
+	while (num_curr < nv) {
+		printf("There are %d iterations\n", m);
+		dimT += m;
+		alphas.conservativeResize(dimT);
 
-		// Compute alpha_j = w_j . v_j
-		std::vector<vertex_program::ptr> vprogs;
-		graph->get_vertex_programs(vprogs);
-		float alpha = 0;
-		BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
-			eigen_vertex_program::ptr eigen_vprog = eigen_vertex_program::cast2(vprog);
-			alpha += eigen_vprog->get_alpha();
+		for (int i = 0; i < m; i++) {
+			struct timeval start, end;
+			gettimeofday(&start, NULL);
+			if (beta)
+				graph->start_all(vertex_initiator::ptr(new eigen_vertex_initiator()),
+						vertex_program_creater::ptr(new eigen_vertex_program_creater()));
+			else
+				graph->start_all(vertex_initiator::ptr(),
+						vertex_program_creater::ptr(new eigen_vertex_program_creater()));
+			graph->wait4complete();
+
+			// Compute alpha_j = w_j . v_j
+			std::vector<vertex_program::ptr> vprogs;
+			graph->get_vertex_programs(vprogs);
+			float alpha = 0;
+			BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
+				eigen_vertex_program::ptr eigen_vprog = eigen_vertex_program::cast2(vprog);
+				alpha += eigen_vprog->get_alpha();
+			}
+			alphas(k * m + i) = alpha;
+
+			// Compute w_j = w_j - alpha_j * v_j - beta_j * v_j-1
+			// beta_j+1 = || w_j ||
+			vertex_query::ptr wq(new w_query(alpha));
+			graph->query_on_all(wq);
+			beta = ((w_query *) wq.get())->get_new_beta();
+			betas.push_back(beta);
+			printf("a%d: %f, b%d: %f\n", i, alpha, i + 1, beta);
+
+			gettimeofday(&end, NULL);
+			printf("Iteration %d takes %f seconds\n", i, time_diff(start, end));
 		}
+		k++;
 
-		// Compute w_j = w_j - alpha_j * v_j - beta_j * v_j-1
-		// beta_j+1 = || w_j ||
-		vertex_query::ptr wq(new w_query(alpha));
-		graph->query_on_all(wq);
-		beta = ((w_query *) wq.get())->get_new_beta();
-		printf("a%d: %f, b%d: %f\n", i, alpha, i + 1, beta);
+		Eigen::MatrixXf T = alphas.asDiagonal();
+		for (int i = 0; i < k * m - 1; i++) {
+			T(i, i + 1) = betas[i];
+			T(i + 1, i) = betas[i];
+		}
+		Eigen::EigenSolver<Eigen::MatrixXf> es(T);
+		std::cout << "The eigenvalues: " << std::endl << es.eigenvalues() << std::endl;
 
-		gettimeofday(&end, NULL);
-		printf("Iteration %d takes %f seconds\n", i, time_diff(start, end));
+		Eigen::MatrixXcf eigen_vectors = es.eigenvectors();
+		Eigen::VectorXcf eigen_values = es.eigenvalues();
+		float tol = 1e-8;
+		int kk = 0;
+		for (int i = 0; i < k * m; i++) {
+			if (abs(beta * eigen_vectors(k * m - 1, i).real()) < tol) {
+				kk++;
+				printf("eigen value[%d]: %f\n", i, eigen_values(i).real());
+			}
+		}
+		printf("There are %d eigenvalues\n", kk);
+		if (kk >= nv)
+			break;
 	}
 
 	if (!graph_conf.get_prof_file().empty())
