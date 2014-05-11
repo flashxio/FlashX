@@ -57,8 +57,12 @@ public:
 	eigen_vertex(vertex_id_t id,
 			const vertex_index &index): compute_vertex(id, index) {
 		v0 = 0;
-		v1 = sqrt(1.0 / index.get_num_vertices());
+		v1 = random() % 1000;
 		w = 0;
+	}
+
+	void first_init(float normalize) {
+		v1 /= normalize;
 	}
 
 	void init_eigen() {
@@ -127,6 +131,20 @@ void eigen_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	((eigen_vertex_program &) prog).add_vertex(*this);
 }
 
+class first_initiator: public vertex_initiator
+{
+	float normalize;
+public:
+	first_initiator(float normalize) {
+		this->normalize = normalize;
+	}
+
+	void init(compute_vertex &v) {
+		eigen_vertex &ev = (eigen_vertex &) v;
+		ev.first_init(normalize);
+	}
+};
+
 class eigen_vertex_initiator: public vertex_initiator
 {
 public:
@@ -141,6 +159,32 @@ class eigen_vertex_program_creater: public vertex_program_creater
 public:
 	vertex_program::ptr create() const {
 		return vertex_program::ptr(new eigen_vertex_program());
+	}
+};
+
+class norm2_query: public vertex_query
+{
+	float v_sq_sum;
+public:
+	norm2_query() {
+		v_sq_sum = 0;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		eigen_vertex &eigen_v = (eigen_vertex &) v;
+		v_sq_sum += eigen_v.get_v() * eigen_v.get_v();
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		v_sq_sum += ((norm2_query *) q.get())->v_sq_sum;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new norm2_query());
+	}
+
+	float get_norm2() const {
+		return sqrt(v_sq_sum);
 	}
 };
 
@@ -247,6 +291,10 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
+	vertex_query::ptr norm2_q(new norm2_query());
+	graph->query_on_all(norm2_q);
+	float norm2_v = ((norm2_query *) norm2_q.get())->get_norm2();
+
 	int num_curr = 0;
 	int dimT = 0;
 	int k = 0;
@@ -264,7 +312,7 @@ int main(int argc, char *argv[])
 				graph->start_all(vertex_initiator::ptr(new eigen_vertex_initiator()),
 						vertex_program_creater::ptr(new eigen_vertex_program_creater()));
 			else
-				graph->start_all(vertex_initiator::ptr(),
+				graph->start_all(vertex_initiator::ptr(new first_initiator(norm2_v)),
 						vertex_program_creater::ptr(new eigen_vertex_program_creater()));
 			graph->wait4complete();
 
