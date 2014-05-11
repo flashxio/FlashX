@@ -35,6 +35,7 @@
 #include "graph_config.h"
 
 float beta = 0;
+const int VS_SIZE = 11;
 
 /**
  * This eigensolver implements the Lanzcos algorithm.
@@ -42,36 +43,36 @@ float beta = 0;
 
 class eigen_vertex: public compute_vertex
 {
-	// v of the current iteration
-	float v1;
-	// v of the previous iteration
-	float v0;
+	float vs[VS_SIZE];
 	float w;
+	int curr_v;
 public:
 	eigen_vertex() {
-		v0 = 0;
-		v1 = 0;
+		memset(vs, 0, sizeof(vs));
 		w = 0;
+		curr_v = 0;
 	}
 
 	eigen_vertex(vertex_id_t id,
 			const vertex_index &index): compute_vertex(id, index) {
-		v0 = 0;
-		v1 = random() % 1000;
+		memset(vs, 0, sizeof(vs));
+		vs[1] = random() % 1000;
 		w = 0;
+		curr_v = 0;
 	}
 
 	void first_init(float normalize) {
-		v1 /= normalize;
+		curr_v = 1;
+		vs[1] /= normalize;
 	}
 
 	void init_eigen() {
-		v0 = v1;
-		v1 = w / beta;
+		curr_v++;
+		vs[curr_v] = w / beta;
 	}
 
 	float adjust_w(float alpha) {
-		w = w - alpha * v1 - beta * v0;
+		w = w - alpha * vs[curr_v] - beta * vs[curr_v - 1];
 		return w;
 	}
 
@@ -79,8 +80,12 @@ public:
 		return w;
 	}
 
+	float get_v1() const {
+		return vs[1];
+	}
+
 	float get_v() const {
-		return v1;
+		return vs[curr_v];
 	}
 
 	void run(vertex_program &prog) {
@@ -125,7 +130,7 @@ void eigen_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	w = 0;
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		const eigen_vertex &eigen_v = (const eigen_vertex &) prog.get_graph().get_vertex(id);
-		w += eigen_v.v1;
+		w += eigen_v.get_v();
 	} PAGE_FOREACH_END
 
 	((eigen_vertex_program &) prog).add_vertex(*this);
@@ -172,7 +177,7 @@ public:
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		eigen_vertex &eigen_v = (eigen_vertex &) v;
-		v_sq_sum += eigen_v.get_v() * eigen_v.get_v();
+		v_sq_sum += eigen_v.get_v1() * eigen_v.get_v1();
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
@@ -305,6 +310,7 @@ int main(int argc, char *argv[])
 		dimT += m;
 		alphas.conservativeResize(dimT);
 
+		assert(VS_SIZE > dimT);
 		for (int i = 0; i < m; i++) {
 			struct timeval start, end;
 			gettimeofday(&start, NULL);
