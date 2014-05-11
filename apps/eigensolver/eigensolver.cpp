@@ -61,6 +61,20 @@ public:
 		curr_v = 0;
 	}
 
+	void orthogonalize_w(std::vector<float> &orth_v) {
+		assert(orth_v.size() == (size_t) curr_v + 1);
+		float res = 0;
+		for (int i = 0; i <= curr_v; i++)
+			res += orth_v[i] * vs[i];
+		w -= res;
+	}
+
+	void vs_times_w(std::vector<float> &res) {
+		res.resize(curr_v + 1);
+		for (int i = 0; i <= curr_v; i++)
+			res[i] = vs[i] * w;
+	}
+
 	void first_init(float normalize) {
 		curr_v = 1;
 		vs[1] /= normalize;
@@ -221,6 +235,88 @@ public:
 	}
 };
 
+class VTW_query: public vertex_query
+{
+	std::vector<float> res;
+	std::vector<float> tmp_res;
+public:
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		eigen_vertex &eigen_v = (eigen_vertex &) v;
+		tmp_res.clear();
+		eigen_v.vs_times_w(tmp_res);
+		if (res.empty())
+			res = tmp_res;
+		else {
+			assert(res.size() == tmp_res.size());
+			for (size_t i = 0; i < tmp_res.size(); i++)
+				res[i] += tmp_res[i];
+		}
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		std::vector<float> &other_res = ((VTW_query *) q.get())->res;
+		if (res.empty())
+			res.resize(other_res.size());
+		if (res.size() != other_res.size())
+			printf("%ld, %ld\n", res.size(), other_res.size());
+		assert(res.size() == other_res.size());
+		for (size_t i = 0; i < res.size(); i++)
+			res[i] += other_res[i];
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new VTW_query());
+	}
+
+	size_t get_result(std::vector<float> &res) {
+		res = this->res;
+		return res.size();
+	}
+};
+
+class VVTW_query: public vertex_query
+{
+	std::vector<float> orth_v;
+	float w_sq_sum;
+public:
+	VVTW_query(std::vector<float> &v) {
+		orth_v = v;
+		w_sq_sum = 0;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		eigen_vertex &eigen_v = (eigen_vertex &) v;
+		eigen_v.orthogonalize_w(orth_v);
+		w_sq_sum += eigen_v.get_w() * eigen_v.get_w();
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		w_sq_sum += ((VVTW_query *) q.get())->w_sq_sum;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new VVTW_query(orth_v));
+	}
+
+	float get_new_beta() {
+		return sqrt(w_sq_sum);
+	}
+};
+
+float orthogonalization(graph_engine::ptr graph)
+{
+	// transpose(V) * w
+	vertex_query::ptr q(new VTW_query());
+	graph->query_on_all(q);
+	std::vector<float> res;
+	((VTW_query *) q.get())->get_result(res);
+
+	// V * (transpose(V) * w)
+	q = vertex_query::ptr(new VVTW_query(res));
+	graph->query_on_all(q);
+	return ((VVTW_query *) q.get())->get_new_beta();
+}
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -337,6 +433,8 @@ int main(int argc, char *argv[])
 			vertex_query::ptr wq(new w_query(alpha));
 			graph->query_on_all(wq);
 			beta = ((w_query *) wq.get())->get_new_beta();
+
+			beta = orthogonalization(graph);
 			betas.push_back(beta);
 			printf("a%d: %f, b%d: %f\n", i, alpha, i + 1, beta);
 
