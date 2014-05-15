@@ -50,7 +50,7 @@ public:
 	eigen_vertex() {
 		memset(vs, 0, sizeof(vs));
 		w = 0;
-		curr_v = 0;
+		curr_v = 1;
 	}
 
 	eigen_vertex(vertex_id_t id,
@@ -58,21 +58,7 @@ public:
 		memset(vs, 0, sizeof(vs));
 		vs[1] = random() % 1000;
 		w = 0;
-		curr_v = 0;
-	}
-
-	void orthogonalize_w(std::vector<float> &orth_v) {
-		assert(orth_v.size() == (size_t) curr_v + 1);
-		float res = 0;
-		for (int i = 0; i <= curr_v; i++)
-			res += orth_v[i] * vs[i];
-		w -= res;
-	}
-
-	void vs_times_w(std::vector<float> &res) {
-		res.resize(curr_v + 1);
-		for (int i = 0; i <= curr_v; i++)
-			res[i] = vs[i] * w;
+		curr_v = 1;
 	}
 
 	void first_init(float normalize) {
@@ -90,16 +76,25 @@ public:
 		return w;
 	}
 
+	void set_w(float w) {
+		this->w = w;
+	}
+
 	float get_w() const {
 		return w;
 	}
 
-	float get_v1() const {
-		return vs[1];
-	}
-
 	float get_v() const {
 		return vs[curr_v];
+	}
+
+	float get_v(int idx) const {
+		assert(idx <= curr_v);
+		return vs[idx];
+	}
+
+	int get_num_vs() const {
+		return curr_v + 1;
 	}
 
 	void run(vertex_program &prog) {
@@ -191,7 +186,7 @@ public:
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		eigen_vertex &eigen_v = (eigen_vertex &) v;
-		v_sq_sum += eigen_v.get_v1() * eigen_v.get_v1();
+		v_sq_sum += eigen_v.get_v(1) * eigen_v.get_v(1);
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
@@ -235,26 +230,33 @@ public:
 	}
 };
 
-class VTW_query: public vertex_query
+/**
+ * This class multiplies the transpose of a matrix (n x k) with a vector of size n.
+ * A row of the matrix is stored in a vertex.
+ */
+template<class GetLeft, class GetRight>
+class matrixT_vector_multiply: public vertex_query
 {
 	std::vector<float> res;
-	std::vector<float> tmp_res;
+	GetLeft get_left;
+	GetRight get_right;
 public:
+	matrixT_vector_multiply(GetLeft get_left, GetRight get_right,
+			int matrix_width) {
+		this->get_left = get_left;
+		this->get_right = get_right;
+		res.resize(matrix_width);
+	}
+
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		eigen_vertex &eigen_v = (eigen_vertex &) v;
-		tmp_res.clear();
-		eigen_v.vs_times_w(tmp_res);
-		if (res.empty())
-			res = tmp_res;
-		else {
-			assert(res.size() == tmp_res.size());
-			for (size_t i = 0; i < tmp_res.size(); i++)
-				res[i] += tmp_res[i];
+		for (size_t i = 0; i < res.size(); i++) {
+			res[i] += get_left(eigen_v, i) * get_right(eigen_v);
 		}
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		std::vector<float> &other_res = ((VTW_query *) q.get())->res;
+		std::vector<float> &other_res = ((matrixT_vector_multiply *) q.get())->res;
 		if (res.empty())
 			res.resize(other_res.size());
 		if (res.size() != other_res.size())
@@ -265,7 +267,8 @@ public:
 	}
 
 	virtual ptr clone() {
-		return vertex_query::ptr(new VTW_query());
+		return vertex_query::ptr(new matrixT_vector_multiply(get_left,
+					get_right, res.size()));
 	}
 
 	size_t get_result(std::vector<float> &res) {
@@ -274,28 +277,43 @@ public:
 	}
 };
 
-class VVTW_query: public vertex_query
+/**
+ * This multiplies a large matrix (n x k) with a vector of size k.
+ * A row of the matrix is stored in a vertex.
+ */
+template<class GetLeft, class Store>
+class matrix_vector_multiply: public vertex_query
 {
-	std::vector<float> orth_v;
+	std::vector<float> vec;
 	float w_sq_sum;
+	GetLeft get_left;
+	Store store;
 public:
-	VVTW_query(std::vector<float> &v) {
-		orth_v = v;
+	matrix_vector_multiply(std::vector<float> &vec, GetLeft get_left,
+			Store store) {
+		this->vec = vec;
+		this->get_left = get_left;
+		this->store = store;
 		w_sq_sum = 0;
 	}
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		eigen_vertex &eigen_v = (eigen_vertex &) v;
-		eigen_v.orthogonalize_w(orth_v);
+		assert((size_t) eigen_v.get_num_vs() == vec.size());
+		float res = 0;
+		for (size_t i = 0; i < vec.size(); i++)
+			res += get_left(eigen_v, i) * vec[i];
+		store(eigen_v, res);
 		w_sq_sum += eigen_v.get_w() * eigen_v.get_w();
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		w_sq_sum += ((VVTW_query *) q.get())->w_sq_sum;
+		w_sq_sum += ((matrix_vector_multiply *) q.get())->w_sq_sum;
 	}
 
 	virtual ptr clone() {
-		return vertex_query::ptr(new VVTW_query(orth_v));
+		return vertex_query::ptr(new matrix_vector_multiply(vec, get_left,
+					store));
 	}
 
 	float get_new_beta() {
@@ -303,18 +321,46 @@ public:
 	}
 };
 
-float orthogonalization(graph_engine::ptr graph)
+class get_matrix_row
+{
+public:
+	float operator()(const eigen_vertex &v, int idx) {
+		return v.get_v(idx);
+	}
+};
+
+class get_vector_element
+{
+public:
+	float operator()(const eigen_vertex &v) {
+		return v.get_w();
+	}
+};
+
+class store_vector_element
+{
+public:
+	void operator()(eigen_vertex &v, float res) {
+		v.set_w(v.get_w() - res);
+	}
+};
+
+float orthogonalization(graph_engine::ptr graph, int matrix_width)
 {
 	// transpose(V) * w
-	vertex_query::ptr q(new VTW_query());
+	vertex_query::ptr q(new matrixT_vector_multiply<get_matrix_row,
+			get_vector_element>(get_matrix_row(), get_vector_element(), matrix_width));
 	graph->query_on_all(q);
 	std::vector<float> res;
-	((VTW_query *) q.get())->get_result(res);
+	((matrixT_vector_multiply<get_matrix_row, get_vector_element> *) q.get(
+		))->get_result(res);
 
 	// V * (transpose(V) * w)
-	q = vertex_query::ptr(new VVTW_query(res));
+	q = vertex_query::ptr(new matrix_vector_multiply<get_matrix_row,
+			store_vector_element>(res, get_matrix_row(), store_vector_element()));
 	graph->query_on_all(q);
-	return ((VVTW_query *) q.get())->get_new_beta();
+	return ((matrix_vector_multiply<get_matrix_row, store_vector_element> *) q.get(
+				))->get_new_beta();
 }
 
 void int_handler(int sig_num)
@@ -434,7 +480,7 @@ int main(int argc, char *argv[])
 			graph->query_on_all(wq);
 			beta = ((w_query *) wq.get())->get_new_beta();
 
-			beta = orthogonalization(graph);
+			beta = orthogonalization(graph, k * m + i + 2);
 			betas.push_back(beta);
 			printf("a%d: %f, b%d: %f\n", i, alpha, i + 1, beta);
 
