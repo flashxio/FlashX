@@ -34,8 +34,10 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-float beta = 0;
-const int VS_SIZE = 11;
+const int VS_SIZE = 10;
+const int RHO = 1;
+
+typedef double ev_float_t;
 
 /**
  * This eigensolver implements the Lanzcos algorithm.
@@ -43,58 +45,50 @@ const int VS_SIZE = 11;
 
 class eigen_vertex: public compute_vertex
 {
-	float vs[VS_SIZE];
-	float w;
-	int curr_v;
+	ev_float_t vs[VS_SIZE];
+	ev_float_t w;
 public:
 	eigen_vertex() {
 		memset(vs, 0, sizeof(vs));
 		w = 0;
-		curr_v = 1;
 	}
 
 	eigen_vertex(vertex_id_t id,
 			const vertex_index &index): compute_vertex(id, index) {
 		memset(vs, 0, sizeof(vs));
-		vs[1] = random() % 1000;
-		w = 0;
-		curr_v = 1;
+		w = 1;
+//		w = random() % 1000;
 	}
 
-	void first_init(float normalize) {
-		curr_v = 1;
-		vs[1] /= normalize;
-	}
-
-	void init_eigen() {
-		curr_v++;
+	void init_eigen(ev_float_t beta, int curr_v) {
 		vs[curr_v] = w / beta;
 	}
 
-	float adjust_w(float alpha) {
-		w = w - alpha * vs[curr_v] - beta * vs[curr_v - 1];
+	ev_float_t adjust_w(ev_float_t alpha, ev_float_t beta, int curr_v) {
+		w = w - alpha * vs[curr_v];
+		if (curr_v > 0)
+			w = w - beta * vs[curr_v - 1];
 		return w;
 	}
 
-	void set_w(float w) {
+	void adjust_w2(int k, ev_float_t beta, ev_float_t sigma) {
+		this->w = vs[k] * beta + w * sigma;
+	}
+
+	void set_w(ev_float_t w) {
 		this->w = w;
 	}
 
-	float get_w() const {
+	ev_float_t get_w() const {
 		return w;
 	}
 
-	float get_v() const {
-		return vs[curr_v];
+	void set_v(int idx, ev_float_t v) {
+		this->vs[idx] = v;
 	}
 
-	float get_v(int idx) const {
-		assert(idx <= curr_v);
+	ev_float_t get_v(int idx) const {
 		return vs[idx];
-	}
-
-	int get_num_vs() const {
-		return curr_v + 1;
 	}
 
 	void run(vertex_program &prog) {
@@ -110,7 +104,8 @@ public:
 
 class eigen_vertex_program: public vertex_program_impl<eigen_vertex>
 {
-	float alpha;
+	ev_float_t alpha;
+	int curr_v;
 public:
 	typedef std::shared_ptr<eigen_vertex_program> ptr;
 
@@ -119,101 +114,108 @@ public:
 				prog);
 	}
 
-	eigen_vertex_program() {
+	eigen_vertex_program(int curr_v) {
 		alpha = 0;
+		this->curr_v = curr_v;
 	}
 
 	void add_vertex(const eigen_vertex &v) {
-		alpha += v.get_w() * v.get_v();
+		alpha += v.get_w() * v.get_v(curr_v);
 	}
 
-	float get_alpha() const {
+	int get_curr_vidx() const {
+		return curr_v;
+	}
+
+	ev_float_t get_alpha() const {
 		return alpha;
 	}
 };
 
 void eigen_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
+	eigen_vertex_program &eigen_vprog = (eigen_vertex_program &) prog;
+	int curr_v = eigen_vprog.get_curr_vidx();
 	edge_seq_iterator it = vertex.get_neigh_seq_it(edge_type::BOTH_EDGES, 0,
 			vertex.get_num_edges(edge_type::BOTH_EDGES));
 	w = 0;
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		const eigen_vertex &eigen_v = (const eigen_vertex &) prog.get_graph().get_vertex(id);
-		w += eigen_v.get_v();
+		w += eigen_v.get_v(curr_v);
 	} PAGE_FOREACH_END
-
-	((eigen_vertex_program &) prog).add_vertex(*this);
+	eigen_vprog.add_vertex(*this);
 }
-
-class first_initiator: public vertex_initiator
-{
-	float normalize;
-public:
-	first_initiator(float normalize) {
-		this->normalize = normalize;
-	}
-
-	void init(compute_vertex &v) {
-		eigen_vertex &ev = (eigen_vertex &) v;
-		ev.first_init(normalize);
-	}
-};
 
 class eigen_vertex_initiator: public vertex_initiator
 {
+	ev_float_t beta;
+	int curr_v;
 public:
+	eigen_vertex_initiator(ev_float_t beta, int curr_v) {
+		this->beta = beta;
+		this->curr_v = curr_v;
+	}
+
 	void init(compute_vertex &v) {
 		eigen_vertex &ev = (eigen_vertex &) v;
-		ev.init_eigen();
+		ev.init_eigen(beta, curr_v);
 	}
 };
 
 class eigen_vertex_program_creater: public vertex_program_creater
 {
+	int curr_v;
 public:
+	eigen_vertex_program_creater(int curr_v) {
+		this->curr_v = curr_v;
+	}
+
 	vertex_program::ptr create() const {
-		return vertex_program::ptr(new eigen_vertex_program());
+		return vertex_program::ptr(new eigen_vertex_program(curr_v));
 	}
 };
 
-class norm2_query: public vertex_query
+class norm2w_query: public vertex_query
 {
-	float v_sq_sum;
+	ev_float_t v_sq_sum;
 public:
-	norm2_query() {
+	norm2w_query() {
 		v_sq_sum = 0;
 	}
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		eigen_vertex &eigen_v = (eigen_vertex &) v;
-		v_sq_sum += eigen_v.get_v(1) * eigen_v.get_v(1);
+		v_sq_sum += eigen_v.get_w() * eigen_v.get_w();
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		v_sq_sum += ((norm2_query *) q.get())->v_sq_sum;
+		v_sq_sum += ((norm2w_query *) q.get())->v_sq_sum;
 	}
 
 	virtual ptr clone() {
-		return vertex_query::ptr(new norm2_query());
+		return vertex_query::ptr(new norm2w_query());
 	}
 
-	float get_norm2() const {
+	ev_float_t get_norm2() const {
 		return sqrt(v_sq_sum);
 	}
 };
 
 class w_query: public vertex_query
 {
-	const float alpha;
-	float w_sq_sum;
+	const ev_float_t alpha;
+	const ev_float_t beta;
+	ev_float_t w_sq_sum;
+	int curr_v;
 public:
-	w_query(float _alpha): alpha(_alpha) {
+	w_query(ev_float_t _alpha, ev_float_t _beta, int curr_v): alpha(_alpha), beta(_beta) {
 		w_sq_sum = 0;
+		this->curr_v = curr_v;
 	}
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		eigen_vertex &eigen_v = (eigen_vertex &) v;
-		float w = eigen_v.adjust_w(alpha);
+		ev_float_t w = eigen_v.adjust_w(alpha, beta, curr_v);
 		w_sq_sum += w * w;
 	}
 
@@ -222,10 +224,10 @@ public:
 	}
 
 	virtual ptr clone() {
-		return vertex_query::ptr(new w_query(alpha));
+		return vertex_query::ptr(new w_query(alpha, beta, curr_v));
 	}
 
-	float get_new_beta() {
+	ev_float_t get_new_beta() {
 		return sqrt(w_sq_sum);
 	}
 };
@@ -237,7 +239,7 @@ public:
 template<class GetLeft, class GetRight>
 class matrixT_vector_multiply: public vertex_query
 {
-	std::vector<float> res;
+	std::vector<ev_float_t> res;
 	GetLeft get_left;
 	GetRight get_right;
 public:
@@ -256,7 +258,7 @@ public:
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		std::vector<float> &other_res = ((matrixT_vector_multiply *) q.get())->res;
+		std::vector<ev_float_t> &other_res = ((matrixT_vector_multiply *) q.get())->res;
 		if (res.empty())
 			res.resize(other_res.size());
 		if (res.size() != other_res.size())
@@ -267,11 +269,11 @@ public:
 	}
 
 	virtual ptr clone() {
-		return vertex_query::ptr(new matrixT_vector_multiply(get_left,
-					get_right, res.size()));
+		return vertex_query::ptr(new matrixT_vector_multiply<GetLeft, GetRight>(
+					get_left, get_right, res.size()));
 	}
 
-	size_t get_result(std::vector<float> &res) {
+	size_t get_result(std::vector<ev_float_t> &res) {
 		res = this->res;
 		return res.size();
 	}
@@ -284,47 +286,97 @@ public:
 template<class GetLeft, class Store>
 class matrix_vector_multiply: public vertex_query
 {
-	std::vector<float> vec;
-	float w_sq_sum;
+	std::vector<ev_float_t> vec;
 	GetLeft get_left;
 	Store store;
 public:
-	matrix_vector_multiply(std::vector<float> &vec, GetLeft get_left,
+	matrix_vector_multiply(std::vector<ev_float_t> &vec, GetLeft get_left,
 			Store store) {
 		this->vec = vec;
 		this->get_left = get_left;
 		this->store = store;
-		w_sq_sum = 0;
 	}
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		eigen_vertex &eigen_v = (eigen_vertex &) v;
-		assert((size_t) eigen_v.get_num_vs() == vec.size());
-		float res = 0;
+		ev_float_t res = 0;
 		for (size_t i = 0; i < vec.size(); i++)
 			res += get_left(eigen_v, i) * vec[i];
 		store(eigen_v, res);
-		w_sq_sum += eigen_v.get_w() * eigen_v.get_w();
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		w_sq_sum += ((matrix_vector_multiply *) q.get())->w_sq_sum;
 	}
 
 	virtual ptr clone() {
-		return vertex_query::ptr(new matrix_vector_multiply(vec, get_left,
-					store));
+		return vertex_query::ptr(new matrix_vector_multiply<GetLeft, Store>(
+					vec, get_left, store));
+	}
+};
+
+template<class GetLeft, class Store>
+class matrix_small_matrix_multiply: public vertex_query
+{
+	Eigen::MatrixXd Q;
+	int n_rows;
+	int n_cols;
+	GetLeft get_left;
+	Store store;
+	std::vector<ev_float_t> buf;
+public:
+	matrix_small_matrix_multiply(Eigen::MatrixXd &Q, int n_rows, int n_cols,
+			GetLeft get_left, Store store) {
+		this->Q = Q;
+		this->n_rows = n_rows;
+		this->n_cols = n_cols;
+		this->get_left = get_left;
+		this->store = store;
+		buf.resize(n_cols);
 	}
 
-	float get_new_beta() {
-		return sqrt(w_sq_sum);
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		eigen_vertex &eigen_v = (eigen_vertex &) v;
+		for (int j = 0; j < n_cols; j++) {
+			ev_float_t res = 0;
+			for (int i = 0; i < n_rows; i++)
+				res += get_left(eigen_v, i) * Q(i, j);
+			buf[j] = res;
+		}
+		for (int j = 0; j < n_cols; j++)
+			store(eigen_v, j, buf[j]);
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new matrix_small_matrix_multiply<GetLeft, Store>(
+					Q, n_rows, n_cols, get_left, store));
+	}
+};
+
+class post_QR_adjust_w: public vertex_initiator
+{
+	int nv;
+	ev_float_t beta;
+	ev_float_t sigma;
+public:
+	post_QR_adjust_w(int nv, ev_float_t beta, ev_float_t sigma) {
+		this->nv = nv;
+		this->beta = beta;
+		this->sigma = sigma;
+	}
+
+	void init(compute_vertex &v) {
+		eigen_vertex &ev = (eigen_vertex &) v;
+		ev.adjust_w2(nv, beta, sigma);
 	}
 };
 
 class get_matrix_row
 {
 public:
-	float operator()(const eigen_vertex &v, int idx) {
+	ev_float_t operator()(const eigen_vertex &v, int idx) {
 		return v.get_v(idx);
 	}
 };
@@ -332,7 +384,7 @@ public:
 class get_vector_element
 {
 public:
-	float operator()(const eigen_vertex &v) {
+	ev_float_t operator()(const eigen_vertex &v) {
 		return v.get_w();
 	}
 };
@@ -340,27 +392,114 @@ public:
 class store_vector_element
 {
 public:
-	void operator()(eigen_vertex &v, float res) {
+	void operator()(eigen_vertex &v, ev_float_t res) {
 		v.set_w(v.get_w() - res);
 	}
 };
 
-float orthogonalization(graph_engine::ptr graph, int matrix_width)
+class store_matrix_row
+{
+public:
+	void operator()(eigen_vertex &v, int idx, ev_float_t res) {
+		v.set_v(idx, res);
+	}
+};
+
+void orthogonalization(graph_engine::ptr graph, int matrix_width,
+		ev_float_t &alpha, ev_float_t &beta)
 {
 	// transpose(V) * w
 	vertex_query::ptr q(new matrixT_vector_multiply<get_matrix_row,
 			get_vector_element>(get_matrix_row(), get_vector_element(), matrix_width));
 	graph->query_on_all(q);
-	std::vector<float> res;
+	std::vector<ev_float_t> res;
 	((matrixT_vector_multiply<get_matrix_row, get_vector_element> *) q.get(
 		))->get_result(res);
+	assert(matrix_width >= 2);
+	alpha += res[matrix_width - 1];
+	beta += res[matrix_width - 2];
 
 	// V * (transpose(V) * w)
 	q = vertex_query::ptr(new matrix_vector_multiply<get_matrix_row,
 			store_vector_element>(res, get_matrix_row(), store_vector_element()));
 	graph->query_on_all(q);
-	return ((matrix_vector_multiply<get_matrix_row, store_vector_element> *) q.get(
-				))->get_new_beta();
+}
+
+/**
+ * This computes norm2 of the w vector stored in the vertex state of the graph.
+ */
+ev_float_t norm2w(graph_engine::ptr graph)
+{
+	vertex_query::ptr norm2_q(new norm2w_query());
+	graph->query_on_all(norm2_q);
+	return ((norm2w_query *) norm2_q.get())->get_norm2();
+}
+
+void lanczos_factorization(graph_engine::ptr graph, int k, int m,
+		Eigen::VectorXd &alphas, Eigen::VectorXd &betas, Eigen::MatrixXd &T)
+{
+	ev_float_t beta = norm2w(graph);
+	if (k > 0) {
+		T(k, k - 1) = beta;
+		T(k - 1, k) = beta;
+	}
+	printf("first beta: %f\n", beta);
+	for (int i = k; i < m; i++) {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+		graph->start_all(vertex_initiator::ptr(new eigen_vertex_initiator(beta, i)),
+				vertex_program_creater::ptr(new eigen_vertex_program_creater(i)));
+		graph->wait4complete();
+
+		// Compute alpha_j = w_j . v_j
+		std::vector<vertex_program::ptr> vprogs;
+		graph->get_vertex_programs(vprogs);
+		ev_float_t alpha = 0;
+		BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
+			eigen_vertex_program::ptr eigen_vprog = eigen_vertex_program::cast2(vprog);
+			alpha += eigen_vprog->get_alpha();
+		}
+		ev_float_t orth_threshold = sqrt(alpha * alpha + beta * beta) * RHO;
+
+		// Compute w_j = w_j - alpha_j * v_j - beta_j * v_j-1
+		// beta_j+1 = || w_j ||
+		vertex_query::ptr wq(new w_query(alpha, beta, i));
+		graph->query_on_all(wq);
+		beta = ((w_query *) wq.get())->get_new_beta();
+
+		if (beta < orth_threshold && i > 0)
+			orthogonalization(graph, i + 1, alpha, beta);
+
+		alphas(i) = alpha;
+		betas(i) = beta;
+		T(i, i) = alpha;
+		if (i < m - 1) {
+			T(i, i + 1) = beta;
+			T(i + 1, i) = beta;
+		}
+		printf("a%d: %f, b%d: %f\n", i, alpha, i + 1, beta);
+
+		gettimeofday(&end, NULL);
+		printf("Iteration %d takes %f seconds\n", i, time_diff(start, end));
+	}
+}
+
+void reset_matrix(Eigen::MatrixXd &T, std::pair<int, int> &size)
+{
+	for (int i = 0; i < size.first; i++)
+		for (int j = 0; j < size.second; j++)
+			T(i, j) = 0;
+}
+
+void reset_matrix_remain(Eigen::MatrixXd &T, std::pair<int, int> &size,
+		std::pair<int, int> &keep_region_size)
+{
+	for (int i = keep_region_size.first; i < size.first; i++)
+		for (int j = 0; j < size.second; j++)
+			T(i, j) = 0;
+	for (int j = keep_region_size.second; j < size.second; j++)
+		for (int i = 0; i < size.first; i++)
+			T(i, j) = 0;
 }
 
 void int_handler(int sig_num)
@@ -429,6 +568,8 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, int_handler);
 
+	assert(m <= VS_SIZE);
+	assert(nv < m);
 	graph_index::ptr index = NUMA_graph_index<eigen_vertex>::create(index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (preload)
@@ -438,71 +579,31 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
-	vertex_query::ptr norm2_q(new norm2_query());
-	graph->query_on_all(norm2_q);
-	float norm2_v = ((norm2_query *) norm2_q.get())->get_norm2();
+	Eigen::MatrixXd T;
+	Eigen::VectorXd betas;
+	Eigen::VectorXd alphas;
+	T.conservativeResize(m, m);
+	std::pair<int, int> matrix_size(m, m);
+	reset_matrix(T, matrix_size);
+	betas.conservativeResize(m);
+	alphas.conservativeResize(m);
+	lanczos_factorization(graph, 0, m, alphas, betas, T);
+	Eigen::VectorXd I_vec;
+	I_vec.conservativeResize(m);
+	for (int i = 0; i < m; i++)
+		I_vec(i) = 1;
+	Eigen::MatrixXd I = I_vec.asDiagonal();
 
-	int num_curr = 0;
-	int dimT = 0;
-	int k = 0;
-	Eigen::VectorXf alphas;
-	std::vector<float> betas;
-	while (num_curr < nv) {
-		printf("There are %d iterations\n", m);
-		dimT += m;
-		alphas.conservativeResize(dimT);
+	while (true) {
+		Eigen::EigenSolver<Eigen::MatrixXd> es(T);
 
-		assert(VS_SIZE > dimT);
-		for (int i = 0; i < m; i++) {
-			struct timeval start, end;
-			gettimeofday(&start, NULL);
-			if (beta)
-				graph->start_all(vertex_initiator::ptr(new eigen_vertex_initiator()),
-						vertex_program_creater::ptr(new eigen_vertex_program_creater()));
-			else
-				graph->start_all(vertex_initiator::ptr(new first_initiator(norm2_v)),
-						vertex_program_creater::ptr(new eigen_vertex_program_creater()));
-			graph->wait4complete();
-
-			// Compute alpha_j = w_j . v_j
-			std::vector<vertex_program::ptr> vprogs;
-			graph->get_vertex_programs(vprogs);
-			float alpha = 0;
-			BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
-				eigen_vertex_program::ptr eigen_vprog = eigen_vertex_program::cast2(vprog);
-				alpha += eigen_vprog->get_alpha();
-			}
-			alphas(k * m + i) = alpha;
-
-			// Compute w_j = w_j - alpha_j * v_j - beta_j * v_j-1
-			// beta_j+1 = || w_j ||
-			vertex_query::ptr wq(new w_query(alpha));
-			graph->query_on_all(wq);
-			beta = ((w_query *) wq.get())->get_new_beta();
-
-			beta = orthogonalization(graph, k * m + i + 2);
-			betas.push_back(beta);
-			printf("a%d: %f, b%d: %f\n", i, alpha, i + 1, beta);
-
-			gettimeofday(&end, NULL);
-			printf("Iteration %d takes %f seconds\n", i, time_diff(start, end));
-		}
-		k++;
-
-		Eigen::MatrixXf T = alphas.asDiagonal();
-		for (int i = 0; i < k * m - 1; i++) {
-			T(i, i + 1) = betas[i];
-			T(i + 1, i) = betas[i];
-		}
-		Eigen::EigenSolver<Eigen::MatrixXf> es(T);
-		std::cout << "The eigenvalues: " << std::endl << es.eigenvalues() << std::endl;
-
-		Eigen::MatrixXcf eigen_vectors = es.eigenvectors();
-		Eigen::VectorXcf eigen_values = es.eigenvalues();
-		float tol = 1e-8;
+		Eigen::MatrixXcd eigen_vectors = es.eigenvectors();
+		Eigen::VectorXcd eigen_values = es.eigenvalues();
+		ev_float_t tol = 1e-8;
 		int kk = 0;
-		for (int i = 0; i < k * m; i++) {
-			if (abs(beta * eigen_vectors(k * m - 1, i).real()) < tol) {
+		ev_float_t last_beta = betas(m - 1);
+		for (int i = 0; i < m; i++) {
+			if (abs(last_beta * eigen_vectors(m - 1, i).real()) < tol) {
 				kk++;
 				printf("eigen value[%d]: %f\n", i, eigen_values(i).real());
 			}
@@ -510,6 +611,42 @@ int main(int argc, char *argv[])
 		printf("There are %d eigenvalues\n", kk);
 		if (kk >= nv)
 			break;
+
+		// The p largest eigenvalues are not wanted.
+		std::vector<ev_float_t> eigen_val_vec(m);
+		for (int i = 0; i < m; i++)
+			eigen_val_vec[i] = eigen_values(i).real();
+		std::sort(eigen_val_vec.begin(), eigen_val_vec.end(),
+				std::greater<ev_float_t>());
+
+		Eigen::MatrixXd Q = I;
+		for (int i = nv; i < m; i++) {
+			ev_float_t mu = eigen_val_vec[i];
+			Eigen::MatrixXd tmp = T - (I * mu);
+			Eigen::HouseholderQR<Eigen::MatrixXd> qr = tmp.householderQr();
+			Eigen::MatrixXd Qj = qr.householderQ();
+			T = Qj.transpose() * T;
+			T = T * Qj;
+			Q = Q * Qj;
+		}
+
+		// w_k = v_k+1 + beta_k + w_m * sigma_k,
+		// where beta_k = T_m[k + 1, k] and sigma_k = Q[m, k]
+		ev_float_t beta_k = T(nv, nv - 1);
+		std::cout << "beta: " << beta_k
+			<< ", sigma: " << Q(m - 1, nv - 1) << std::endl;
+		graph->init_all_vertices(vertex_initiator::ptr(new post_QR_adjust_w(
+						nv, 0, Q(m - 1, nv - 1))));
+		// V_k = V_m * Q[:, 1:k]
+		graph->query_on_all(vertex_query::ptr(
+					new matrix_small_matrix_multiply<get_matrix_row,
+					store_matrix_row>(Q, m, nv, get_matrix_row(),
+						store_matrix_row())));
+		// T_k = T_m[1:k, 1:k]
+		std::pair<int, int> keep_region_size(nv, nv);
+		reset_matrix_remain(T, matrix_size, keep_region_size);
+
+		lanczos_factorization(graph, nv, m, alphas, betas, T);
 	}
 
 	if (!graph_conf.get_prof_file().empty())
