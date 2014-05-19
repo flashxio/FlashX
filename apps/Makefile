@@ -85,9 +85,8 @@ clean:
 	$(MAKE) clean -C sstsg
 	$(MAKE) clean -C graph-stat
 	$(MAKE) clean -C k-core
-	$(MAKE) clean -C weakly-connected-components
+	$(MAKE) clean -C connected-components
 	$(MAKE) clean -C page-rank
-	$(MAKE) clean -C strongly-connected-components
 	$(MAKE) clean -C diameter-estimator
 	$(MAKE) clean -C eigensolver
 

@@ -34,5 +34,6 @@ clean:
 	rm -f *.o
 	rm -f *~
 	rm -f graph-bfs
+	rm -f undirected-graph-bfs
 
 -include $(DEPS) 

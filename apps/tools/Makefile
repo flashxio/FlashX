@@ -42,5 +42,6 @@ clean:
 	rm -f el2al
 	rm -f graph_merger
 	rm -f print_ts_graph
+	rm -f rmat-gen
 
 -include $(DEPS) 

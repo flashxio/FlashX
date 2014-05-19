@@ -39,6 +39,7 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f triangle-counting
+	rm -f circular-triangle-counting
+	rm -f undirected-triangle-counting
 
 -include $(DEPS) 

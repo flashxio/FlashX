@@ -35,5 +35,6 @@ clean:
 	rm -f *.o
 	rm -f *~
 	rm -f page-rank
+	rm -f page-rank2
 
 -include $(DEPS) 
