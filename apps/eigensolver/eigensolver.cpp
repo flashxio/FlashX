@@ -446,12 +446,17 @@ void lanczos_factorization(graph_engine::ptr graph, int k, int m,
 	printf("first beta: %f\n", beta);
 	for (int i = k; i < m; i++) {
 		struct timeval start, end;
+		struct timeval iter_start;
 		gettimeofday(&start, NULL);
+		iter_start = start;
 		graph->start_all(vertex_initiator::ptr(new eigen_vertex_initiator(beta, i)),
 				vertex_program_creater::ptr(new eigen_vertex_program_creater(i)));
 		graph->wait4complete();
+		gettimeofday(&end, NULL);
+		printf("SPMV takes %f seconds\n", time_diff(start, end));
 
 		// Compute alpha_j = w_j . v_j
+		start = end;
 		std::vector<vertex_program::ptr> vprogs;
 		graph->get_vertex_programs(vprogs);
 		ev_float_t alpha = 0;
@@ -460,15 +465,24 @@ void lanczos_factorization(graph_engine::ptr graph, int k, int m,
 			alpha += eigen_vprog->get_alpha();
 		}
 		ev_float_t orth_threshold = sqrt(alpha * alpha + beta * beta) * RHO;
+		gettimeofday(&end, NULL);
+		printf("dot product takes %f seconds\n", time_diff(start, end));
 
 		// Compute w_j = w_j - alpha_j * v_j - beta_j * v_j-1
 		// beta_j+1 = || w_j ||
+		start = end;
 		vertex_query::ptr wq(new w_query(alpha, beta, i));
 		graph->query_on_all(wq);
 		beta = ((w_query *) wq.get())->get_new_beta();
+		gettimeofday(&end, NULL);
+		printf("adjusting w takes %f seconds\n", time_diff(start, end));
 
-		if (beta < orth_threshold && i > 0)
+		if (beta < orth_threshold && i > 0) {
+			start = end;
 			orthogonalization(graph, i + 1, alpha, beta);
+			gettimeofday(&end, NULL);
+			printf("orthogonalization takes %f seconds\n", time_diff(start, end));
+		}
 
 		alphas(i) = alpha;
 		betas(i) = beta;
@@ -480,7 +494,7 @@ void lanczos_factorization(graph_engine::ptr graph, int k, int m,
 		printf("a%d: %f, b%d: %f\n", i, alpha, i + 1, beta);
 
 		gettimeofday(&end, NULL);
-		printf("Iteration %d takes %f seconds\n", i, time_diff(start, end));
+		printf("Iteration %d takes %f seconds\n", i, time_diff(iter_start, end));
 	}
 }
 
@@ -579,6 +593,8 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	Eigen::MatrixXd T;
 	Eigen::VectorXd betas;
 	Eigen::VectorXd alphas;
@@ -595,6 +611,8 @@ int main(int argc, char *argv[])
 	Eigen::MatrixXd I = I_vec.asDiagonal();
 
 	while (true) {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
 		Eigen::EigenSolver<Eigen::MatrixXd> es(T);
 
 		Eigen::MatrixXcd eigen_vectors = es.eigenvectors();
@@ -645,9 +663,13 @@ int main(int argc, char *argv[])
 		// T_k = T_m[1:k, 1:k]
 		std::pair<int, int> keep_region_size(nv, nv);
 		reset_matrix_remain(T, matrix_size, keep_region_size);
+		gettimeofday(&end, NULL);
+		printf("Eigen lib takes %f seconds\n", time_diff(start, end));
 
 		lanczos_factorization(graph, nv, m, alphas, betas, T);
 	}
+	gettimeofday(&end, NULL);
+	printf("The total running time is %f seconds\n", time_diff(start, end));
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
