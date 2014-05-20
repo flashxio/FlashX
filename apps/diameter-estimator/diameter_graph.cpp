@@ -1,26 +1,27 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
 #include <google/profiler.h>
 
 #include <vector>
+#include <set>
 #include <unordered_map>
 
 #include "thread.h"
@@ -32,114 +33,189 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-class global_max
+size_t num_bfs = 1;
+const int K = sizeof(uint64_t) * 8;
+edge_type traverse_edge = edge_type::OUT_EDGE;
+int start_level;
+
+template<class T>
+class embedded_bitmap
 {
-	volatile size_t value;
-	pthread_spinlock_t lock;
+	T map;
 public:
-	global_max() {
-		value = 0;
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	embedded_bitmap() {
+		map = 0;
 	}
 
-	global_max(size_t init) {
-		value = init;
-		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	void set(int idx) {
+		assert((size_t) idx < sizeof(T) * 8);
+		map |= ((T) 1) << idx;
 	}
 
-	bool update(size_t new_v) {
-		if (new_v <= value)
-			return false;
-
-		bool ret = false;
-		pthread_spin_lock(&lock);
-		if (new_v > value) {
-			value = new_v;
-			ret = true;
-		}
-		pthread_spin_unlock(&lock);
-		return ret;
+	void clear() {
+		map = 0;
 	}
 
-	size_t get() const {
-		return value;
+	void merge(const embedded_bitmap<T> &map) {
+		this->map |= map.map;
 	}
-} max_dist;
 
-const int K = 10;
-int num_bfs = 1;
+	bool operator!=(const embedded_bitmap<T> &map) {
+		return this->map != map.map;
+	}
+
+	T get_value() const {
+		return map;
+	}
+};
 
 class diameter_message: public vertex_message
 {
-	uint16_t dists[K];
+	embedded_bitmap<uint64_t> bfs_ids;
 public:
-	diameter_message(uint16_t dists[], int num): vertex_message(
+	diameter_message(embedded_bitmap<uint64_t> bfs_ids): vertex_message(
 			sizeof(diameter_message), true) {
-		memcpy(this->dists, dists, sizeof(dists[0]) * num);
+		this->bfs_ids = bfs_ids;
 	}
 
-	uint16_t get_dist(int idx) const {
-		return dists[idx];
+	embedded_bitmap<uint64_t> get_bfs_ids() const {
+		return bfs_ids;
 	}
 };
 
 class diameter_vertex: public compute_directed_vertex
 {
-	uint16_t dists[K];
+	embedded_bitmap<uint64_t> bfs_ids;
+	embedded_bitmap<uint64_t> new_bfs_ids;
+	// The largest distance from a start vertex among the BFS.
+	short max_dist;
 	bool updated;
 public:
 	diameter_vertex() {
 		updated = false;
-		for (int i = 0; i < K; i++)
-			dists[i] = USHRT_MAX;
+		max_dist = 0;
 	}
 
 	diameter_vertex(vertex_id_t id,
-			const vertex_index *index): compute_directed_vertex(id, index) {
+			const vertex_index &index): compute_directed_vertex(id, index) {
 		updated = false;
-		for (int i = 0; i < K; i++)
-			dists[i] = USHRT_MAX;
+		max_dist = 0;
+	}
+
+	short get_max_dist() const {
+		return max_dist;
 	}
 
 	void init(int bfs_id) {
-		dists[bfs_id] = 0;
+		max_dist = 0;
+		bfs_ids.clear();
+		bfs_ids.set(bfs_id);
+		new_bfs_ids = bfs_ids;
 		updated = true;
 		printf("BFS %d starts at v%u\n", bfs_id, get_id());
 	}
 
-	void run(graph_engine &graph) {
+	void reset() {
+		max_dist = 0;
+		updated = false;
+		bfs_ids.clear();
+		new_bfs_ids.clear();
+	}
+
+	void run(vertex_program &prog) {
 		if (updated) {
 			updated = false;
-			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+			directed_vertex_request req(get_id(), traverse_edge);
 			request_partial_vertices(&req, 1);
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg) {
+	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
 		const diameter_message &dmsg = (const diameter_message &) msg;
-		for (int i = 0; i < num_bfs; i++) {
-			if (dmsg.get_dist(i) + 1 < dists[i]) {
-				dists[i] = dmsg.get_dist(i) + 1;
-				updated = true;
-				max_dist.update(dists[i]);
-			}
+		new_bfs_ids.merge(dmsg.get_bfs_ids());
+		vprog.request_notify_iter_end(*this);
+	}
+
+	void notify_iteration_end(vertex_program &vprog);
+};
+
+typedef std::pair<vertex_id_t, int> vertex_dist_t;
+class diameter_vertex_program: public vertex_program_impl<diameter_vertex>
+{
+	int curr_iter;
+	std::vector<vertex_dist_t> curr_vertices;
+	std::deque<vertex_dist_t> prev_vertices;
+public:
+	typedef std::shared_ptr<diameter_vertex_program> ptr;
+
+	static ptr cast2(vertex_program::ptr prog) {
+		return std::static_pointer_cast<diameter_vertex_program, vertex_program>(prog);
+	}
+
+	diameter_vertex_program() {
+		curr_iter = 0;
+	}
+
+	void set_max_dist(diameter_vertex &v, int iter_no) {
+		if (curr_iter == iter_no) {
+			if (curr_vertices.size() < num_bfs)
+				curr_vertices.push_back(vertex_dist_t(v.get_id(), curr_iter));
 		}
+		else {
+			assert(curr_iter < iter_no);
+			curr_iter = iter_no;
+			prev_vertices.insert(prev_vertices.end(),
+					curr_vertices.begin(), curr_vertices.end());
+			curr_vertices.clear();
+			curr_vertices.push_back(vertex_dist_t(v.get_id(), curr_iter));
+
+			// Remove vertices in the previous iterations.
+			while (prev_vertices.size() > num_bfs)
+				prev_vertices.pop_front();
+		}
+	}
+
+	void get_max_dist_vertices(std::vector<vertex_dist_t> &vertices) const {
+		vertices.insert(vertices.end(), curr_vertices.begin(),
+				curr_vertices.end());
+		for (std::deque<vertex_dist_t>::const_reverse_iterator it
+				= prev_vertices.crbegin(); it != prev_vertices.crend(); it++)
+			vertices.push_back(*it);
 	}
 };
 
-void diameter_vertex::run(graph_engine &graph, const page_vertex &vertex)
+class diameter_vertex_program_creater: public vertex_program_creater
 {
-	int num_dests = vertex.get_num_edges(OUT_EDGE);
+public:
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new diameter_vertex_program());
+	}
+};
+
+void diameter_vertex::run(vertex_program &prog, const page_vertex &vertex)
+{
+	int num_dests = vertex.get_num_edges(traverse_edge);
 	if (num_dests == 0)
 		return;
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
-	diameter_message msg(dists, num_bfs);
-	graph.multicast_msg(it, msg);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge, 0, num_dests);
+	diameter_message msg(bfs_ids);
+	prog.multicast_msg(it, msg);
+}
+
+void diameter_vertex::notify_iteration_end(vertex_program &vprog)
+{
+	if (bfs_ids != new_bfs_ids) {
+		updated = true;
+		int iter_no = vprog.get_graph().get_curr_level() + 1 - start_level;
+		max_dist = max(iter_no, max_dist);
+		((diameter_vertex_program &) vprog).set_max_dist(*this, iter_no);
+	}
+	bfs_ids = new_bfs_ids;
 }
 
 class diameter_initiator: public vertex_initiator
@@ -161,6 +237,15 @@ public:
 	}
 };
 
+class diameter_reset: public vertex_initiator
+{
+public:
+	void init(compute_vertex &v) {
+		diameter_vertex &dv = (diameter_vertex &) v;
+		dv.reset();
+	}
+};
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -174,17 +259,31 @@ void print_usage()
 			"diameter_estimator [options] conf_file graph_file index_file\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-p: preload the graph\n");
+	fprintf(stderr, "-n: the number of BFS\n");
+	fprintf(stderr, "-o: the output file\n");
+	fprintf(stderr, "-b: traverse with both in-edges and out-edges\n");
+	fprintf(stderr, "-s: the number of sweeps\n");
 	graph_conf.print_help();
 	params.print_help();
 }
+
+class dist_compare
+{
+public:
+	bool operator()(const vertex_dist_t &v1, const vertex_dist_t &v2) {
+		return v1.second > v2.second;
+	}
+};
 
 int main(int argc, char *argv[])
 {
 	int opt;
 	std::string confs;
 	int num_opts = 0;
+	int num_sweeps = 1;
 	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:pn:")) != -1) {
+	std::string output_file;
+	while ((opt = getopt(argc, argv, "c:pn:o:bs:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -197,6 +296,17 @@ int main(int argc, char *argv[])
 			case 'n':
 				num_bfs = atoi(optarg);
 				num_bfs = min(num_bfs, K);
+				num_opts++;
+				break;
+			case 'b':
+				traverse_edge = edge_type::BOTH_EDGES;
+				break;
+			case 'o':
+				output_file = optarg;
+				num_opts++;
+				break;
+			case 's':
+				num_sweeps = atoi(optarg);
 				num_opts++;
 				break;
 			default:
@@ -217,17 +327,11 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<diameter_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<diameter_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (preload)
 		graph->preload_graph();
 	printf("BFS starts\n");
@@ -235,11 +339,8 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
 	std::vector<vertex_id_t> start_vertices;
-	srandom(time(NULL));
-	while (start_vertices.size() < (size_t) num_bfs) {
+	while (start_vertices.size() < num_bfs) {
 		vertex_id_t id = random() % graph->get_max_vertex_id();
 		// We should skip the empty vertices.
 		if (graph->get_vertex_edges(id) == 0)
@@ -247,17 +348,93 @@ int main(int argc, char *argv[])
 
 		start_vertices.push_back(id);
 	}
-	graph->start(start_vertices.data(), start_vertices.size(),
-			vertex_initiator::ptr(new diameter_initiator(start_vertices)));
-	graph->wait4complete();
-	gettimeofday(&end, NULL);
+
+	short global_max = 0;
+	for (int i = 0; i < num_sweeps; i++) {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+		start_level = graph->get_curr_level();
+		graph->init_all_vertices(vertex_initiator::ptr(new diameter_reset()));
+		printf("Sweep %d starts on %ld vertices, traverse edge: %d\n",
+				i, start_vertices.size(), traverse_edge);
+		graph->start(start_vertices.data(), start_vertices.size(),
+				vertex_initiator::ptr(new diameter_initiator(start_vertices)),
+				vertex_program_creater::ptr(new diameter_vertex_program_creater()));
+		graph->wait4complete();
+		gettimeofday(&end, NULL);
+
+		std::vector<vertex_program::ptr> vprogs;
+		graph->get_vertex_programs(vprogs);
+		std::vector<vertex_dist_t> max_dist_vertices;
+		BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
+			diameter_vertex_program::ptr diameter_vprog
+				= diameter_vertex_program::cast2(vprog);
+			diameter_vprog->get_max_dist_vertices(max_dist_vertices);
+		}
+		if (max_dist_vertices.empty()) {
+			start_vertices.clear();
+			while (start_vertices.size() < num_bfs) {
+				vertex_id_t id = random() % graph->get_max_vertex_id();
+				// We should skip the empty vertices.
+				if (graph->get_vertex_edges(id) == 0)
+					continue;
+
+				start_vertices.push_back(id);
+			}
+		}
+		else {
+			std::sort(max_dist_vertices.begin(), max_dist_vertices.end(),
+					dist_compare());
+			assert(max_dist_vertices.front().second
+					>= max_dist_vertices.back().second);
+			start_vertices.clear();
+			std::set<vertex_id_t> start_set;
+			for (size_t i = 0; start_set.size() < num_bfs
+					&& i < max_dist_vertices.size(); i++) {
+				start_set.insert(max_dist_vertices[i].first);
+			}
+			start_vertices.insert(start_vertices.begin(), start_set.begin(),
+					start_set.end());
+			short max_dist = max_dist_vertices.front().second;
+			printf("It takes %f seconds. The current max dist: %d\n",
+					time_diff(start, end), max_dist);
+			global_max = max(global_max, max_dist);
+			// We should switch the direction if we search for the longest
+			// directed path
+			if (traverse_edge == edge_type::IN_EDGE)
+				traverse_edge = edge_type::OUT_EDGE;
+			else if (traverse_edge == edge_type::OUT_EDGE)
+				traverse_edge = edge_type::IN_EDGE;
+		}
+	}
+
+#if 0
+	for (size_t i = 0; i < start_vertices.size(); i++) {
+		graph_index::const_iterator it = index->begin();
+		graph_index::const_iterator end_it = index->end();
+		for (; it != end_it; ++it) {
+			diameter_vertex &v = (diameter_vertex &) *it;
+			if (v.get_dist(i) != USHRT_MAX)
+				fprintf(stderr, "v%u: %d\n", v.get_id(), v.get_dist(i));
+		}
+	}
+#endif
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
-	printf("It takes %f seconds\n", time_diff(start, end));
-	printf("The max dist: %ld\n", max_dist.get());
+	printf("The max dist: %d\n", global_max);
+
+	if (!output_file.empty()) {
+		FILE *f = fopen(output_file.c_str(), "w");
+		assert(f);
+		graph_index::const_iterator it = index->begin();
+		graph_index::const_iterator end_it = index->end();
+		for (; it != end_it; ++it) {
+			diameter_vertex &v = (diameter_vertex &) *it;
+			fprintf(f, "%d\n", v.get_max_dist());
+		}
+		fclose(f);
+	}
 }

@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -57,28 +57,22 @@ public:
 
 class wcc_vertex: public compute_vertex
 {
-	bool empty;
 	bool updated;
 	vertex_id_t component_id;
 public:
 	wcc_vertex() {
 		component_id = UINT_MAX;
-		empty = false;
 		updated = true;
 	}
 
-	wcc_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
+	wcc_vertex(vertex_id_t id, const vertex_index &index1): compute_vertex(
 			id, index1) {
 		component_id = id;
-		const directed_vertex_index *index = (const directed_vertex_index *) index1;
-		int num_edges = (index->get_num_in_edges(id)
-				+ index->get_num_out_edges(id));
-		empty = (num_edges == 0);
 		updated = true;
 	}
 
-	bool is_empty() const {
-		return empty;
+	bool is_empty(graph_engine &graph) const {
+		return graph.get_vertex_edges(get_id()) == 0;
 	}
 
 	bool belong2component() const {
@@ -89,7 +83,7 @@ public:
 		return component_id;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		if (updated) {
 			vertex_id_t id = get_id();
 			request_vertices(&id, 1);
@@ -97,9 +91,9 @@ public:
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg1) {
+	void run_on_message(vertex_program &, const vertex_message &msg1) {
 		component_message &msg = (component_message &) msg1;
 		if (msg.get_id() < component_id) {
 			updated = true;
@@ -108,17 +102,14 @@ public:
 	}
 };
 
-void wcc_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	int num_dests = vertex.get_num_edges(BOTH_EDGES);
-	if (num_dests == 0)
-		return;
-
 	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
 	component_message msg(component_id);
-	graph.multicast_msg(it, msg);
+	prog.multicast_msg(it, msg);
 }
 
 void int_handler(int sig_num)
@@ -184,16 +175,11 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<wcc_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (preload)
 		graph->preload_graph();
 	printf("weakly connected components starts\n");
@@ -219,7 +205,7 @@ int main(int argc, char *argv[])
 	graph_index::const_iterator end_it = index->end();
 	for (; it != end_it; ++it) {
 		const wcc_vertex &v = (const wcc_vertex &) *it;
-		if (v.is_empty())
+		if (v.is_empty(*graph))
 			continue;
 
 		comp_map_t::iterator map_it = comp_counts.find(v.get_component_id());
@@ -231,7 +217,13 @@ int main(int argc, char *argv[])
 			map_it->second++;
 		}
 	}
-	printf("There are %ld components\n", comp_counts.size());
+	size_t max_comp_size = 0;
+	BOOST_FOREACH(comp_map_t::value_type v, comp_counts) {
+		if (max_comp_size < v.second)
+			max_comp_size = v.second;
+	}
+	printf("There are %ld components, and largest comp has %ld vertices\n",
+			comp_counts.size(), max_comp_size);
 
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
@@ -249,7 +241,7 @@ int main(int argc, char *argv[])
 		end_it = index->end();
 		for (; it != end_it; ++it) {
 			const wcc_vertex &v = (const wcc_vertex &) *it;
-			if (v.is_empty())
+			if (v.is_empty(*graph))
 				continue;
 
 			std::unordered_map<vertex_id_t, log_histogram>::iterator map_it
@@ -265,7 +257,4 @@ int main(int argc, char *argv[])
 
 		fclose(f);
 	}
-
-	graph_engine::destroy(graph);
-	destroy_io_system();
 }

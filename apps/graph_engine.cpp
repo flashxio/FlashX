@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <algorithm>
@@ -113,7 +113,7 @@ size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
 				// requests. It might not be necessary to increase the ref
 				// count, but it can work as a sanity check.
 				compute->inc_ref();
-				((vertex_compute *) compute)->set_scan_dir(forward);
+				compute->set_scan_dir(forward);
 				prio_compute prio_comp(scheduler->get_io(), compute);
 				user_computes.push(prio_comp);
 			}
@@ -206,11 +206,7 @@ void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 vsize_t compute_vertex::get_num_edges() const
 {
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	in_mem_vertex_info info = t->get_graph().get_vertex_info(get_id());
-	assert(!t->get_graph().get_graph_header().has_edge_data());
-	int vertex_header_size = t->get_graph().get_vertex_header_size();
-	assert(vertex_header_size > 0);
-	return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
+	return t->get_graph().get_vertex_edges(get_id());
 }
 
 void compute_directed_vertex::request_partial_vertices(
@@ -235,11 +231,17 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 	compute->request_partial_vertices(reqs, num);
 }
 
-graph_engine::graph_engine(int num_threads, int num_nodes,
-		const std::string &graph_file, graph_index *index)
+graph_engine::graph_engine(const std::string &graph_file,
+		graph_index::ptr index, const config_map &configs)
 {
+	graph_conf.init(configs);
+	graph_conf.print();
+	init_io_system(configs);
+	int num_threads = graph_conf.get_num_threads();
+	this->num_nodes = params.get_num_nodes();
+	index->init(num_threads, num_nodes);
+
 	max_processing_vertices = 0;
-	this->scheduler = NULL;
 	is_complete = false;
 	this->vertices = index;
 
@@ -281,39 +283,38 @@ graph_engine::graph_engine(int num_threads, int num_nodes,
 			assert(0);
 	}
 
-	this->num_nodes = num_nodes;
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);
 	worker_threads.resize(num_threads);
+	vprograms.resize(num_threads);
 
-	if (graph_conf.get_trace_file().empty())
-		logger = NULL;
-	else
-		logger = new trace_logger(graph_conf.get_trace_file());
+	if (!graph_conf.get_trace_file().empty())
+		logger = trace_logger::ptr(new trace_logger(graph_conf.get_trace_file()));
 }
 
 graph_engine::~graph_engine()
 {
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
-	if (logger)
-		delete logger;
+	factory = file_io_factory::shared_ptr();
+	destroy_io_system();
 }
 
-void graph_engine::init_threads(vertex_program::ptr prog)
+void graph_engine::init_threads(vertex_program_creater::ptr creater)
 {
 	// Prepare the worker threads.
 	int num_threads = get_num_threads();
 	for (int i = 0; i < num_threads; i++) {
 		vertex_program::ptr new_prog;
-		if (prog)
-			new_prog = prog->clone();
+		if (creater)
+			new_prog = creater->create();
 		else
 			new_prog = vertices->create_def_vertex_program();
-		worker_thread *t = new worker_thread(this, factory, std::move(new_prog),
+		worker_thread *t = new worker_thread(this, factory, new_prog,
 				i % num_nodes, i, num_threads, scheduler);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
+		vprograms[i] = new_prog;
 	}
 	for (int i = 0; i < num_threads; i++) {
 		worker_threads[i]->init_messaging(worker_threads);
@@ -321,47 +322,47 @@ void graph_engine::init_threads(vertex_program::ptr prog)
 }
 
 void graph_engine::start(vertex_id_t ids[], int num,
-		vertex_initiator::ptr init, vertex_program::ptr prog)
+		vertex_initiator::ptr init, vertex_program_creater::ptr creater)
 {
-	init_threads(std::move(prog));
+	init_threads(std::move(creater));
 	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
-		if (init) {
-			compute_vertex &v = this->get_vertex(ids[i]);
-			init->init(v);
-		}
 		int idx = get_partitioner()->map(ids[i]);
 		start_vertices[idx].push_back(ids[i]);
 	}
 
 	for (int i = 0; i < num_threads; i++) {
-		worker_threads[i]->start_vertices(start_vertices[i]);
+		worker_threads[i]->start_vertices(start_vertices[i], init);
 		worker_threads[i]->start();
 	}
+	gettimeofday(&start_time, NULL);
 }
 
 void graph_engine::start(std::shared_ptr<vertex_filter> filter,
-		vertex_program::ptr prog)
+		vertex_program_creater::ptr creater)
 {
-	init_threads(std::move(prog));
+	init_threads(std::move(creater));
 	// Let's assume all vertices will be activated first.
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_vertices(filter);
 		t->start();
 	}
+	gettimeofday(&start_time, NULL);
 }
 
-void graph_engine::start_all(vertex_program::ptr prog)
+void graph_engine::start_all(vertex_initiator::ptr init,
+		vertex_program_creater::ptr creater)
 {
-	init_threads(std::move(prog));
+	init_threads(std::move(creater));
 	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
-		t->start_all_vertices();
+		t->start_all_vertices(init);
 		t->start();
 	}
+	gettimeofday(&start_time, NULL);
 }
 
 bool graph_engine::progress_next_level()
@@ -383,8 +384,12 @@ bool graph_engine::progress_next_level()
 	// If all threads have reached here.
 	if (num_threads.inc(1) == get_num_threads()) {
 		level.inc(1);
-		printf("progress to level %d, there are %ld vertices in this level\n",
-				level.get(), tot_num_activates.get());
+		struct timeval curr;
+		gettimeofday(&curr, NULL);
+		printf("Iter %d takes %.2f seconds, and %ld vertices are in iter %d\n",
+				level.get() - 1, time_diff(start_time, curr),
+				tot_num_activates.get(), level.get());
+		start_time = curr;
 		assert(num_remaining_vertices_in_level.get() == 0);
 		num_remaining_vertices_in_level = atomic_number<size_t>(
 				tot_num_activates.get());
@@ -414,7 +419,7 @@ void graph_engine::wait4complete()
 	}
 }
 
-void graph_engine::set_vertex_scheduler(vertex_scheduler *scheduler)
+void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 {
 	this->scheduler = scheduler;
 }
@@ -432,35 +437,69 @@ void graph_engine::preload_graph()
 	printf("successfully preload\n");
 }
 
-void graph_engine::activate_vertices(vertex_id_t ids[], int num)
+void graph_engine::init_vertices(vertex_id_t ids[], int num,
+		vertex_initiator::ptr init)
 {
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->send_activation(ids, num);
+#pragma omp parallel for
+	for (int i = 0; i < num; i++) {
+		init->init(get_vertex(ids[i]));
+	}
 }
 
-void graph_engine::activate_vertices(edge_seq_iterator &it)
+void graph_engine::init_all_vertices(vertex_initiator::ptr init)
 {
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->send_activation(it);
+	vertex_id_t max_id = get_max_vertex_id();
+#pragma omp parallel for
+	for (vertex_id_t id = 0; id <= max_id; id++) {
+		init->init(get_vertex(id));
+	}
 }
 
-void graph_engine::multicast_msg(vertex_id_t ids[], int num,
-		const vertex_message &msg)
+class query_thread: public thread
 {
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->multicast_msg(ids, num, msg);
+	graph_engine &graph;
+	vertex_query::ptr query;
+	int part_id;
+public:
+	query_thread(graph_engine &_graph, vertex_query::ptr query, int part_id,
+			int node_id): thread("query_thread", node_id), graph(_graph) {
+		this->query = query;
+		this->part_id = part_id;
+	}
+
+	void run();
+
+	vertex_query::ptr get_query() {
+		return query;
+	}
+};
+
+void query_thread::run()
+{
+	size_t part_size = graph.get_partitioner()->get_part_size(part_id,
+			graph.get_num_vertices());
+	// We only iterate over the vertices in the local partition.
+	for (vertex_id_t id = 0; id < part_size; id++) {
+		local_vid_t local_id(id);
+		compute_vertex &v = graph.get_vertex(part_id, local_id);
+		query->run(graph, v);
+	}
+	stop();
 }
 
-void graph_engine::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
+void graph_engine::query_on_all(vertex_query::ptr query)
 {
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->multicast_msg(it, msg);
-}
-
-void graph_engine::send_msg(vertex_id_t dest, vertex_message &msg)
-{
-	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->send_msg(dest, msg);
+	std::vector<query_thread *> threads(get_num_threads());
+	for (size_t i = 0; i < threads.size(); i++) {
+		threads[i] = new query_thread(*this, query->clone(),
+				i, i % num_nodes);
+		threads[i]->start();
+	}
+	for (size_t i = 0; i < threads.size(); i++) {
+		threads[i]->join();
+		query->merge(*this, threads[i]->get_query());
+		delete threads[i];
+	}
 }
 
 vertex_index *load_vertex_index(const std::string &index_file)

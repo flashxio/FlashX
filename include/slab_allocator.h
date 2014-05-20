@@ -2,26 +2,28 @@
 #define __SLAB_ALLOCATOR_H__
 
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <stdlib.h>
 #include <assert.h>
+
+#include <memory>
 
 #include "concurrency.h"
 #include "aligned_allocator.h"
@@ -148,6 +150,8 @@ private:
 	// added the main buffer.
 	pthread_key_t local_free_key;
 
+	thread_safe_FIFO_queue<fifo_queue<char *> *> per_thread_queues;
+
 	std::string name;
 	static atomic_integer alloc_counter;
 
@@ -201,6 +205,7 @@ template<class T>
 class obj_initiator
 {
 public:
+	typedef typename std::unique_ptr<obj_initiator<T> > ptr;
 	virtual void init(T *obj) = 0;
 };
 
@@ -208,6 +213,7 @@ template<class T>
 class obj_destructor
 {
 public:
+	typedef typename std::unique_ptr<obj_destructor<T> > ptr;
 	virtual void destroy(T *obj) = 0;
 };
 
@@ -232,20 +238,22 @@ public:
 template<class T>
 class obj_allocator: public slab_allocator
 {
-	obj_initiator<T> *initiator;
-	obj_destructor<T> *destructor;
+	typename obj_initiator<T>::ptr initiator;
+	typename obj_destructor<T>::ptr destructor;
 public:
 	obj_allocator(const std::string &name, int node_id, long increase_size,
 			long max_size = INT_MAX,
-			obj_initiator<T> *initiator = new default_obj_initiator<T>(),
-			obj_destructor<T> *destructor = new default_obj_destructor<T>()
+			typename obj_initiator<T>::ptr initiator = typename obj_initiator<T>::ptr(
+				new default_obj_initiator<T>()),
+			typename obj_destructor<T>::ptr destructor = typename obj_destructor<T>::ptr(
+				new default_obj_destructor<T>())
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
 				): slab_allocator(name, sizeof(T) + sizeof(slab_allocator::linked_obj),
 				increase_size, max_size, node_id, true) {
 		assert(increase_size <= max_size);
-		this->initiator = initiator;
-		this->destructor = destructor;
+		this->initiator = std::move(initiator);
+		this->destructor = std::move(destructor);
 	}
 
 	virtual int alloc_objs(T **objs, int num) {

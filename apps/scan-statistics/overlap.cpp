@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /**
@@ -294,34 +294,34 @@ public:
 		neighborhood = NULL;
 	}
 
-	overlap_vertex(vertex_id_t id, const vertex_index *index1): compute_vertex(
+	overlap_vertex(vertex_id_t id, const vertex_index &index1): compute_vertex(
 			id, index1) {
 		neighborhood = NULL;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		switch(overlap_stage) {
 			case overlap_stage_t::CONSTRUCT_NEIGHBORS:
-				run_stage1(graph);
+				run_stage1(prog);
 				break;
 			case overlap_stage_t::COMP_OVERLAP:
-				run_stage2(graph);
+				run_stage2(prog);
 				break;
 			default:
 				assert(0);
 		}
 	}
 
-	void run_stage1(graph_engine &graph) {
+	void run_stage1(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run_stage2(graph_engine &graph) {
+	void run_stage2(vertex_program &prog) {
 		BOOST_FOREACH(vertex_id_t id, overlap_vertices) {
 			if (id == get_id())
 				continue;
-			overlap_vertex &neigh = (overlap_vertex &) graph.get_vertex(id);
+			overlap_vertex &neigh = (overlap_vertex &) prog.get_graph().get_vertex(id);
 			size_t common = get_common_vertices(*neighborhood, *neigh.neighborhood);
 			size_t vunion = get_union_vertices(*neighborhood, *neigh.neighborhood);
 			printf("v%u:v%u, common: %ld, union: %ld, overlap: %f\n",
@@ -330,12 +330,12 @@ public:
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		assert(vertex.get_id() == get_id());
-		run_on_itself(graph, vertex);
+		run_on_itself(prog, vertex);
 	}
 
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex) {
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex) {
 		neighborhood = new std::vector<vertex_id_t>();
 		get_unique_neighbors(vertex, *neighborhood);
 		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
@@ -348,7 +348,7 @@ public:
 		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
 	}
 
-	void run_on_message(graph_engine &, const vertex_message &msg) {
+	void run_on_message(vertex_program &, const vertex_message &msg) {
 	}
 };
 
@@ -397,17 +397,12 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<overlap_vertex>::create(
-			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
-			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
-			index);
+	graph_index::ptr index = NUMA_graph_index<overlap_vertex>::create(
+			index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
@@ -437,5 +432,4 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
 }

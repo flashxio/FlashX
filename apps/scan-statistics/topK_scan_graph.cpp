@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -35,9 +35,9 @@ struct timeval graph_start;
 
 class vertex_size_scheduler: public vertex_scheduler
 {
-	graph_engine *graph;
+	graph_engine::ptr graph;
 public:
-	vertex_size_scheduler(graph_engine *graph) {
+	vertex_size_scheduler(graph_engine::ptr graph) {
 		this->graph = graph;
 	}
 	void schedule(std::vector<vertex_id_t> &vertices);
@@ -154,7 +154,7 @@ public:
 	topK_scan_vertex() {
 	}
 
-	topK_scan_vertex(vertex_id_t id, const vertex_index *index): scan_vertex(
+	topK_scan_vertex(vertex_id_t id, const vertex_index &index): scan_vertex(
 			id, index) {
 	}
 
@@ -169,16 +169,16 @@ public:
 	size_t get_est_local_scan(graph_engine &graph, const page_vertex *vertex);
 
 	using scan_vertex::run;
-	void run(graph_engine &graph);
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog);
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
-			run_on_itself(graph, vertex);
+			run_on_itself(prog, vertex);
 		else
-			run_on_neighbor(graph, vertex);
+			run_on_neighbor(prog, vertex);
 	}
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
 
-	void finding_triangles_end(graph_engine &graph, runtime_data_t *data) {
+	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
 		if (max_scan.update(data->local_scan)) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
@@ -190,7 +190,7 @@ public:
 	}
 };
 
-void topK_scan_vertex::run(graph_engine &graph)
+void topK_scan_vertex::run(vertex_program &prog)
 {
 	bool req_itself = false;
 	// If we have computed local scan on the vertex, skip the vertex.
@@ -261,23 +261,23 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 	return tot_edges;
 }
 
-void topK_scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
 	assert(num_local_edges == get_num_edges());
 	if (num_local_edges == 0)
 		return;
 
-	if (get_est_local_scan(graph, &vertex) < max_scan.get())
+	if (get_est_local_scan(prog.get_graph(), &vertex) < max_scan.get())
 		return;
-	scan_vertex::run_on_itself(graph, vertex);
+	scan_vertex::run_on_itself(prog, vertex);
 }
 
-void topK_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v,
+void topK_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 		runtime_data_t *data)
 {
 	topK_scan_vertex &topK_v = (topK_scan_vertex &) scan_v;
-	topK_v.finding_triangles_end(graph, data);
+	topK_v.finding_triangles_end(prog, data);
 }
 
 void int_handler(int sig_num)
@@ -333,26 +333,22 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
 	finding_triangles_end = topK_finding_triangles_end;
 
-	graph_index *index = NUMA_graph_index<topK_scan_vertex>::create(
-			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
-			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
-			index);
+	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex>::create(
+			index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (preload)
 		graph->preload_graph();
 	// Let's schedule the order of processing activated vertices according
 	// to the size of vertices. We start with processing vertices with higher
 	// degrees in the hope we can find the max scan as early as possible,
 	// so that we can simple ignore the rest of vertices.
-	graph->set_vertex_scheduler(new vertex_size_scheduler(graph));
+	graph->set_vertex_scheduler(vertex_scheduler::ptr(
+				new vertex_size_scheduler(graph)));
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
@@ -433,8 +429,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 
 	assert(known_scans.get_size() >= topK);
 	for (size_t i = 0; i < topK; i++) {

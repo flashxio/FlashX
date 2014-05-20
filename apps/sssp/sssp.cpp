@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -68,7 +68,7 @@ public:
 	}
 
 	sssp_vertex(vertex_id_t id,
-			const vertex_index *index): compute_directed_vertex(id, index) {
+			const vertex_index &index): compute_directed_vertex(id, index) {
 		parent_dist = INT_MAX;
 		tmp_parent = -1;
 		distance = INT_MAX;
@@ -80,7 +80,7 @@ public:
 		parent = -1;
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		if (parent_dist + 1 < distance) {
 			distance = parent_dist + 1;
 			parent = tmp_parent;
@@ -90,9 +90,9 @@ public:
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg1) {
+	void run_on_message(vertex_program &, const vertex_message &msg1) {
 		const dist_message &msg = (const dist_message &) msg1;
 		if (parent_dist > msg.get_parent_dist()) {
 			parent_dist = msg.get_parent_dist();
@@ -101,7 +101,7 @@ public:
 	}
 };
 
-void sssp_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void sssp_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 #ifdef DEBUG
 	num_visits.inc(1);
@@ -118,7 +118,7 @@ void sssp_vertex::run(graph_engine &graph, const page_vertex &vertex)
 		dest_buf[num_dests++] = id;
 	}
 	dist_message msg(get_id(), distance);
-	graph.multicast_msg(dest_buf.data(), num_dests, msg);
+	prog.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
 void int_handler(int sig_num)
@@ -168,16 +168,11 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<sssp_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<sssp_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("SSSP starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
@@ -196,8 +191,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 	printf("SSSP starts from vertex %ld. It takes %f seconds\n",
 			(unsigned long) start_vertex, time_diff(start, end));
 #ifdef DEBUG

@@ -29,7 +29,7 @@ java_dump2c_dump: java_dump2c_dump.o
 	$(CXX) -o java_dump2c_dump java_dump2c_dump.o $(LDFLAGS)
 
 cache_evaluator: cache_evaluator.o $(LIBFILE)
-	$(CXX) -o cache_evaluator cache_evaluator.o $(LDFLAGS) -L../nbds.0.4.3/ -lnbds
+	$(CXX) -o cache_evaluator cache_evaluator.o $(LDFLAGS)
 
 eval_expand_SA_cache: eval_expand_SA_cache.o $(LIBFILE)
 	$(CXX) -o eval_expand_SA_cache eval_expand_SA_cache.o $(LDFLAGS)

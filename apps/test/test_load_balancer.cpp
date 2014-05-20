@@ -1,3 +1,21 @@
+/**
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
+ *
+ * This file is part of FlashGraph.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #include <google/profiler.h>
 
 #include <vector>
@@ -37,7 +55,7 @@ public:
 		add1_count = 0;
 	}
 
-	test_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+	test_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(
 			id, index) {
 		num_edges = 0;
 		add1_count = 0;
@@ -51,20 +69,20 @@ public:
 		assert(add1_count == num_edges * 2);
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	virtual void run_on_message(graph_engine &, const vertex_message &msg1) {
+	virtual void run_on_message(vertex_program &, const vertex_message &msg1) {
 		const count_message &msg = (const count_message &) msg1;
 		add1_count += msg.get_count();
 	}
 };
 
-void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	int worker_id = t->get_worker_id();
@@ -90,8 +108,24 @@ void test_vertex::run(graph_engine &graph, const page_vertex &vertex)
 		add1_count++;
 	}
 	count_message msg;
-	graph.multicast_msg(dest_buf.data(), num_dests, msg);
+	prog.multicast_msg(dest_buf.data(), num_dests, msg);
 }
+
+class verify_vertex_query: public vertex_query
+{
+public:
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		const test_vertex &test_v = (const test_vertex &) v;
+		test_v.verify_result();
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new verify_vertex_query());
+	}
+};
 
 int main(int argc, char *argv[])
 {
@@ -105,16 +139,9 @@ int main(int argc, char *argv[])
 	std::string index_file = argv[3];
 
 	config_map configs(conf_file);
-	graph_conf.init(configs);
-	graph_conf.print();
 
-	init_io_system(configs);
-
-	graph_index *index = NUMA_graph_index<test_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<test_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -127,22 +154,14 @@ int main(int argc, char *argv[])
 		graph->start_all();
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
-
-		NUMA_graph_index<test_vertex>::const_iterator it
-			= ((NUMA_graph_index<test_vertex> *) index)->begin();
-		NUMA_graph_index<test_vertex>::const_iterator end_it
-			= ((NUMA_graph_index<test_vertex> *) index)->end();
-		for (; it != end_it; ++it) {
-			const test_vertex &v = (const test_vertex &) *it;
-			v.verify_result();
-		}
 		printf("It takes %f seconds\n", time_diff(start, end));
+
+		vertex_query::ptr vvq(new verify_vertex_query());
+		graph->query_on_all(vvq);
 	}
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 }

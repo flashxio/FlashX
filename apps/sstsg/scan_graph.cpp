@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -59,7 +59,7 @@ public:
 		neighbors = NULL;
 	}
 
-	scan_vertex(vertex_id_t id, const vertex_index *index): compute_ts_vertex(
+	scan_vertex(vertex_id_t id, const vertex_index &index): compute_ts_vertex(
 			id, index) {
 		num_joined = 0;
 		num_edges = NULL;
@@ -77,22 +77,22 @@ public:
 			const std::vector<vertex_id_t> *neighbors, int timestamp,
 			edge_type type);
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
-			run_on_itself(graph, vertex);
+			run_on_itself(prog, vertex);
 		else
-			run_on_neighbor(graph, vertex);
+			run_on_neighbor(prog, vertex);
 	}
 
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
+	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &graph, const vertex_message &msg) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 };
 
@@ -252,7 +252,7 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 	return result - result_begin;
 }
 
-void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
@@ -353,7 +353,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	request_partial_vertices(reqs.data(), reqs.size());
 }
 
-void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &vertex)
 {
 	num_joined++;
 	assert(neighbors);
@@ -438,17 +438,11 @@ int main(int argc, char *argv[])
 	}
 
 	config_map configs(conf_file);
-	graph_conf.init(configs);
-	graph_conf.print();
-
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<scan_vertex>::create(
-			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
-			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
-			index);
+	graph_index::ptr index = NUMA_graph_index<scan_vertex>::create(
+			index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
@@ -464,8 +458,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 	printf("It takes %f seconds\n", time_diff(start, end));
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",

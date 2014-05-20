@@ -252,9 +252,8 @@ size_t neighbor_list::count_edges(const page_vertex *v)
 	return ret;
 }
 
-void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
-	assert(!local_value.has_real_local());
 	assert(!local_value.has_runtime_data());
 
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
@@ -269,7 +268,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
 
-	runtime_data_t *local_data = create_runtime(graph, *this, vertex);
+	runtime_data_t *local_data = create_runtime(prog.get_graph(), *this, vertex);
 	local_value.set_runtime_data(local_data);
 #ifdef PV_STAT
 	gettimeofday(&vertex_start, NULL);
@@ -305,8 +304,9 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	local_data->local_scan += tmp;
 
 	if (local_data->neighbors->empty()) {
+		local_value.set_real_local(local_data->local_scan);
+		::finding_triangles_end(prog, *this, local_data);
 		destroy_runtime(*this, local_data);
-		local_value.set_real_local(0);
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -318,7 +318,7 @@ void scan_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
 	request_vertices(neighbors.data(), neighbors.size());
 }
 
-void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex)
+void scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(local_value.has_runtime_data());
 	runtime_data_t *local_data = local_value.get_runtime_data();
@@ -352,7 +352,7 @@ void scan_vertex::run_on_neighbor(graph_engine &graph, const page_vertex &vertex
 				get_id(), num_all_edges, local_data->local_scan, scan_bytes, rand_jumps, min_comps, time_us / 1000);
 #endif
 
-		::finding_triangles_end(graph, *this, local_data);
+		::finding_triangles_end(prog, *this, local_data);
 
 		destroy_runtime(*this, local_data);
 	}
@@ -409,7 +409,7 @@ void default_destroy_runtime(scan_vertex &graph, runtime_data_t *data)
 	delete data;
 }
 
-void (*finding_triangles_end)(graph_engine &, scan_vertex &, runtime_data_t *);
+void (*finding_triangles_end)(vertex_program &, scan_vertex &, runtime_data_t *);
 runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
 		const page_vertex &) = default_create_runtime;
 void (*destroy_runtime)(scan_vertex &,

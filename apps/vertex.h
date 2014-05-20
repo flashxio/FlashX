@@ -388,6 +388,11 @@ class ext_mem_undirected_vertex
 	}
 
 	template<class edge_data_type = empty_data>
+	const edge_data_type *get_edge_data_begin() const {
+		return (edge_data_type *) (neighbors + num_edges);
+	}
+
+	template<class edge_data_type = empty_data>
 	edge_data_type *get_edge_data_begin() {
 		return (edge_data_type *) (neighbors + num_edges);
 	}
@@ -434,12 +439,34 @@ public:
 		return mem_size;
 	}
 
+	size_t get_size() const {
+		return get_header_size() + num_edges * sizeof(neighbors[0])
+			+ num_edges * edge_data_size;
+	}
+
 	size_t get_num_edges(edge_type type) const {
 		return num_edges;
 	}
 
 	vertex_id_t get_neighbor(edge_type type, size_t idx) const {
 		return neighbors[idx];
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_const_iterator<edge_data_type> get_edge_begin() const {
+		const edge_data_type *data = NULL;
+		if (has_edge_data())
+			data = get_edge_data_begin<edge_data_type>();
+		return edge_const_iterator<edge_data_type>(get_id(),
+				neighbors, data, false);
+	}
+
+	template<class edge_data_type = empty_data>
+	edge_const_iterator<edge_data_type> get_edge_end() const {
+		edge_const_iterator<edge_data_type> it
+			= get_edge_begin<edge_data_type>();
+		it += num_edges;
+		return it;
 	}
 
 	vertex_id_t get_id() const {
@@ -677,7 +704,22 @@ public:
 
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start, size_t end) const {
-		assert(0);
+		assert(start <= end);
+		assert(end <= get_num_edges(type));
+		return array.get_seq_iterator<vertex_id_t>(
+				ext_mem_undirected_vertex::get_header_size()
+				+ start * sizeof(vertex_id_t),
+				ext_mem_undirected_vertex::get_header_size()
+				+ end * sizeof(vertex_id_t));
+	}
+
+	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
+			size_t num) const {
+		vsize_t num_edges = get_num_edges(type);
+		assert(num_edges <= num);
+		array.memcpy(ext_mem_undirected_vertex::get_header_size(),
+				(char *) edges, sizeof(vertex_id_t) * num_edges);
+		return num_edges;
 	}
 
 	vertex_id_t get_id() const {
@@ -1624,9 +1666,9 @@ class in_mem_undirected_vertex: public in_mem_vertex
 	std::vector<vertex_id_t> edges;
 	std::vector<edge_data_type> data_arr;
 public:
-	in_mem_undirected_vertex(vertex_id_t id) {
+	in_mem_undirected_vertex(vertex_id_t id, bool has_data) {
 		this->id = id;
-		has_data = false;
+		this->has_data = has_data;
 	}
 
 	vertex_id_t get_id() const {

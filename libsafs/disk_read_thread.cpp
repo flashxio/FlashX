@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include "cache.h"
@@ -29,7 +29,7 @@ const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 // The partition contains a file mapper but the file mapper doesn't point
 // to a file in the SAFS filesystem.
 disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
-		int node_id, page_cache *cache, int _disk_id): thread(
+		int node_id, page_cache *cache, int _disk_id, int flags): thread(
 			std::string("io-thread-") + itoa(node_id), node_id),
 		disk_id(_disk_id),
 		queue(node_id, std::string("io-queue-") + itoa(node_id),
@@ -47,7 +47,7 @@ disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 	// We don't want AIO to open any files yet, so we pass a file partition
 	// definition without a file mapper.
 	logical_file_partition part(_partition.get_phy_file_indices());
-	aio = new async_io(part, AIO_DEPTH_PER_FILE, this);
+	aio = new async_io(part, AIO_DEPTH_PER_FILE, this, flags);
 #ifdef STATISTICS
 	num_empty = 0;
 	num_reads = 0;

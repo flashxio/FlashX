@@ -1,20 +1,20 @@
 /**
- * Copyright 2014 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -143,18 +143,18 @@ public:
 	}
 
 	local_scan_vertex(vertex_id_t id,
-			const vertex_index *index): scan_vertex(id, index) {
+			const vertex_index &index): scan_vertex(id, index) {
 		local_value.set_real_local(0);
 	}
 
 	using scan_vertex::run;
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void finding_triangles_end(graph_engine &graph, runtime_data_t *data) {
+	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
 		extended_neighbor_list *neighbors
 			= (extended_neighbor_list *) data->neighbors.get();
 		// Inform all neighbors in the in-edges.
@@ -162,14 +162,17 @@ public:
 			size_t count = neighbors->get_count(i);
 			if (count > 0) {
 				count_msg msg(count);
-				graph.send_msg(data->neighbors->get_neighbor_id(i), msg);
+				prog.send_msg(data->neighbors->get_neighbor_id(i), msg);
 			}
 		}
 	}
 
-	void run_on_message(graph_engine &graph, const vertex_message &msg1) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg1) {
 		const count_msg &msg = (const count_msg &) msg1;
-		local_value.inc_real_local(msg.get_num());
+		if (local_value.has_runtime_data())
+			local_value.get_runtime_data()->local_scan += msg.get_num();
+		else
+			local_value.inc_real_local(msg.get_num());
 	}
 };
 
@@ -226,14 +229,15 @@ runtime_data_t *ls_create_runtime(graph_engine &graph, scan_vertex &scan_v,
 			neighbors.begin());
 	neighbors.resize(num_neighbors);
 	return new runtime_data_t(std::unique_ptr<neighbor_list>(
-				new extended_neighbor_list(vertex, neighbors)));
+				new extended_neighbor_list(vertex, neighbors)),
+			scan_v.get_local_scan());
 }
 
-void ls_finding_triangles_end(graph_engine &graph, scan_vertex &scan_v,
+void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 		runtime_data_t *data)
 {
 	local_scan_vertex &ls_v = (local_scan_vertex &) scan_v;
-	ls_v.finding_triangles_end(graph, data);
+	ls_v.finding_triangles_end(prog, data);
 }
 
 void int_handler(int sig_num)
@@ -288,20 +292,15 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
 	finding_triangles_end = ls_finding_triangles_end;
 	create_runtime = ls_create_runtime;
 
-	graph_index *index = NUMA_graph_index<local_scan_vertex>::create(
-			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
-			graph_conf.get_num_threads(), params.get_num_nodes(), graph_file,
-			index);
+	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
+			index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -321,8 +320,6 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
 
 #ifdef PV_STAT
 	graph_index::const_iterator it = index->begin();

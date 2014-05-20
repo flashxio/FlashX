@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -114,9 +114,9 @@ struct runtime_data_t
 	};
 	typedef graphlab::cuckoo_set_pow2<index_entry, 3, size_t,
 			index_hash> edge_set_t;
-	// It contains part of in-edges.
+	// It contains part of the edge list.
 	// We only use the neighbors whose ID is smaller than this vertex.
-	std::vector<vertex_id_t> in_edges;
+	std::vector<vertex_id_t> edges;
 	// The vector contains the number of the neighbors' triangles shared
 	// with this vertex. It only keeps the triangles of neighbors in the
 	// in-edges.
@@ -126,21 +126,21 @@ struct runtime_data_t
 	size_t num_required;
 	size_t num_triangles;
 
-	edge_set_t in_edge_set;
+	edge_set_t edge_set;
 public:
-	runtime_data_t(const std::vector<vertex_id_t> &in_edges,
-			const std::vector<vertex_id_t> &out_edges, size_t num_triangles): in_edge_set(
-				index_entry(), 0, 2 * in_edges.size()) {
+	runtime_data_t(const std::vector<vertex_id_t> &edges,
+			size_t num_required, size_t num_triangles): edge_set(
+				index_entry(), 0, 2 * edges.size()) {
 		num_joined = 0;
-		num_required = out_edges.size();
-		this->in_edges = in_edges;
-		triangles.resize(in_edges.size());
+		this->num_required = num_required;
+		this->edges = edges;
+		triangles.resize(edges.size());
 		this->num_triangles = num_triangles;
 
 		// We only build a hash table on large vertices
-		if (in_edges.size() > (size_t) hash_threshold)
-			for (size_t i = 0; i < in_edges.size(); i++)
-				in_edge_set.insert(index_entry(in_edges[i], i));
+		if (edges.size() > (size_t) hash_threshold)
+			for (size_t i = 0; i < edges.size(); i++)
+				edge_set.insert(index_entry(edges[i], i));
 	}
 };
 
@@ -209,7 +209,12 @@ public:
 	}
 };
 
-class triangle_vertex: public compute_directed_vertex
+class triangle_vertex:
+#ifdef USE_DIRECTED
+	public compute_directed_vertex
+#else
+	public compute_vertex
+#endif
 {
 	multi_func_value local_value;
 
@@ -223,9 +228,12 @@ public:
 	triangle_vertex() {
 	}
 
-	triangle_vertex(vertex_id_t id,
-			const vertex_index *index): compute_directed_vertex(id, index) {
-	}
+	triangle_vertex(vertex_id_t id, const vertex_index &index):
+#ifdef USE_DIRECTED
+		compute_directed_vertex(id, index) {}
+#else
+		compute_vertex(id, index) {}
+#endif
 
 	int count_triangles(const page_vertex *v) const;
 
@@ -233,22 +241,22 @@ public:
 		return local_value.get_num_triangles();
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		if (vertex.get_id() == get_id())
-			run_on_itself(graph, vertex);
+			run_on_itself(prog, vertex);
 		else
-			run_on_neighbor(graph, vertex);
+			run_on_neighbor(prog, vertex);
 	}
 
-	void run_on_itself(graph_engine &graph, const page_vertex &vertex);
-	void run_on_neighbor(graph_engine &graph, const page_vertex &vertex);
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
+	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &graph, const vertex_message &msg) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
 };
@@ -275,8 +283,8 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 	 */
 
 	runtime_data_t *data = local_value.get_runtime_data();
-	if (data->in_edge_set.size() > 0
-			&& data->in_edges.size() > HASH_SEARCH_RATIO * v->get_num_edges(
+	if (data->edge_set.size() > 0
+			&& data->edges.size() > HASH_SEARCH_RATIO * v->get_num_edges(
 				edge_type::OUT_EDGE)) {
 		page_byte_array::const_iterator<vertex_id_t> other_it
 			= v->get_neigh_begin(edge_type::OUT_EDGE);
@@ -285,8 +293,8 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 		for (; other_it != other_end; ++other_it) {
 			vertex_id_t neigh_neighbor = *other_it;
 			runtime_data_t::edge_set_t::const_iterator it
-				= data->in_edge_set.find(neigh_neighbor);
-			if (it != data->in_edge_set.end()) {
+				= data->edge_set.find(neigh_neighbor);
+			if (it != data->edge_set.end()) {
 				if (neigh_neighbor != v->get_id()
 						&& neigh_neighbor != this->get_id()) {
 					num_local_triangles++;
@@ -297,14 +305,14 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 		}
 	}
 	// If the neighbor vertex has way more edges than this vertex.
-	else if (v->get_num_edges(edge_type::OUT_EDGE) / data->in_edges.size(
+	else if (v->get_num_edges(edge_type::OUT_EDGE) / data->edges.size(
 				) > BIN_SEARCH_RATIO) {
 		page_byte_array::const_iterator<vertex_id_t> other_it
 			= v->get_neigh_begin(edge_type::OUT_EDGE);
 		page_byte_array::const_iterator<vertex_id_t> other_end
 			= v->get_neigh_end(edge_type::OUT_EDGE);
-		for (int i = data->in_edges.size() - 1; i >= 0; i--) {
-			vertex_id_t this_neighbor = data->in_edges.at(i);
+		for (int i = data->edges.size() - 1; i >= 0; i--) {
+			vertex_id_t this_neighbor = data->edges.at(i);
 			// We need to skip loops.
 			if (this_neighbor != v->get_id()
 					&& this_neighbor != this->get_id()) {
@@ -319,9 +327,9 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 		}
 	}
 	else {
-		std::vector<vertex_id_t>::const_iterator this_it = data->in_edges.begin();
+		std::vector<vertex_id_t>::const_iterator this_it = data->edges.begin();
 		std::vector<int>::iterator count_it = data->triangles.begin();
-		std::vector<vertex_id_t>::const_iterator this_end = data->in_edges.end();
+		std::vector<vertex_id_t>::const_iterator this_end = data->edges.end();
 		page_byte_array::seq_const_iterator<vertex_id_t> other_it
 			= v->get_neigh_seq_it(edge_type::OUT_EDGE, 0,
 					v->get_num_edges(edge_type::OUT_EDGE));
@@ -350,7 +358,7 @@ int triangle_vertex::count_triangles(const page_vertex *v) const
 	return num_local_triangles;
 }
 
-void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vertex)
+void triangle_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(!local_value.has_runtime_data());
 
@@ -368,6 +376,7 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 		return;
 	}
 
+#ifdef USE_DIRECTED
 	std::vector<vertex_id_t> in_edges;
 	std::vector<vertex_id_t> out_edges;
 
@@ -375,11 +384,10 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 		= vertex.get_neigh_begin(edge_type::IN_EDGE);
 	page_byte_array::const_iterator<vertex_id_t> end
 		= vertex.get_neigh_end(edge_type::IN_EDGE);
-	int num_local_edges = this->get_num_in_edges() + this->get_num_out_edges();
+	int num_local_edges = this->get_num_edges();
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
-		triangle_vertex &v1 = (triangle_vertex &) graph.get_vertex(id);
-		int num_local_edges1 = v1.get_num_in_edges() + v1.get_num_out_edges();
+		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
@@ -391,8 +399,7 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 	end = vertex.get_neigh_end(edge_type::OUT_EDGE);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
-		triangle_vertex &v1 = (triangle_vertex &) graph.get_vertex(id);
-		int num_local_edges1 = v1.get_num_in_edges() + v1.get_num_out_edges();
+		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
@@ -416,12 +423,45 @@ void triangle_vertex::run_on_itself(graph_engine &graph, const page_vertex &vert
 	// It's possible that the request to a partial vertex can be completed
 	// immediately and run_on_neighbor is called in request_partial_vertices.
 	// TODO Maybe I should avoid that.
-	local_value.set_runtime_data(new runtime_data_t(in_edges, out_edges,
+	local_value.set_runtime_data(new runtime_data_t(in_edges, out_edges.size(),
 				local_value.get_num_triangles()));
 	request_partial_vertices(reqs.data(), reqs.size());
+#else
+	std::vector<vertex_id_t> edges;
+
+	page_byte_array::const_iterator<vertex_id_t> it
+		= vertex.get_neigh_begin(edge_type::IN_EDGE);
+	page_byte_array::const_iterator<vertex_id_t> end
+		= vertex.get_neigh_end(edge_type::IN_EDGE);
+	int num_local_edges = this->get_num_edges();
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
+		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
+				|| (num_local_edges1 == num_local_edges
+					&& id < vertex.get_id())) {
+			edges.push_back(id);
+		}
+	}
+
+	if (edges.empty()) {
+		long ret = num_completed_vertices.inc(1);
+		if (ret % 100000 == 0)
+			printf("%ld completed vertices\n", ret);
+		return;
+	}
+
+	// We have to set runtime data before calling request_partial_vertices.
+	// It's possible that the request to a partial vertex can be completed
+	// immediately and run_on_neighbor is called in request_partial_vertices.
+	// TODO Maybe I should avoid that.
+	local_value.set_runtime_data(new runtime_data_t(edges, edges.size(),
+				local_value.get_num_triangles()));
+	request_vertices(edges.data(), edges.size());
+#endif
 }
 
-void triangle_vertex::run_on_neighbor(graph_engine &graph,
+void triangle_vertex::run_on_neighbor(vertex_program &prog,
 		const page_vertex &vertex)
 {
 	assert(local_value.has_runtime_data());
@@ -433,7 +473,7 @@ void triangle_vertex::run_on_neighbor(graph_engine &graph,
 	if (ret > 0) {
 		inc_num_triangles(ret);
 		count_msg msg(ret);
-		graph.send_msg(vertex.get_id(), msg);
+		prog.send_msg(vertex.get_id(), msg);
 	}
 
 	// If we have seen all required neighbors, we have complete
@@ -448,7 +488,7 @@ void triangle_vertex::run_on_neighbor(graph_engine &graph,
 			// Inform the neighbor if they share triangles.
 			if (data->triangles[i] > 0) {
 				count_msg msg(data->triangles[i]);
-				graph.send_msg(data->in_edges[i], msg);
+				prog.send_msg(data->edges[i], msg);
 			}
 		}
 		size_t num_curr_triangles = data->num_triangles;
@@ -514,17 +554,12 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<triangle_vertex>::create(
-			index_file, graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(
-			graph_conf.get_num_threads(), params.get_num_nodes(),
-			graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<triangle_vertex>::create(
+			index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (preload)
 		graph->preload_graph();
 #if 0
@@ -550,6 +585,15 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+	if (graph_conf.get_print_io_stat())
+		print_io_thread_stat();
+
+	FILE *f = NULL;
+	if (!output_file.empty()) {
+		f = fopen(output_file.c_str(), "w");
+	}
 	// Count the total number of triangles in the graph.
 	graph_index::const_iterator it = index->begin();
 	graph_index::const_iterator end_it = index->end();
@@ -557,17 +601,19 @@ int main(int argc, char *argv[])
 	for (; it != end_it; ++it) {
 		const triangle_vertex &v = (const triangle_vertex &) *it;
 		num_triangles += v.get_num_triangles();
+		if (f)
+			fprintf(f, "%u %d\n", v.get_id(), v.get_num_triangles());
 	}
 
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
+	if (f)
+		fclose(f);
+
 	printf("There are %ld vertices\n", index->get_num_vertices());
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());
+#ifndef USE_DIRECTED
+	num_triangles /= 6;
+#endif
 	printf("there are %ld triangles.\n", num_triangles);
 	printf("It takes %f seconds to activate all and %f seconds to finish\n",
 			activate_time, time_diff(start, end));

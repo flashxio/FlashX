@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Disa Mhembere
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Disa Mhembere (disa@jhu.edu)
  *
  * This file is part of FlashGraph.
  *
- * FlashGraph is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * FlashGraph is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with FlashGraph.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -45,11 +45,11 @@ public:
 		num_out_edges = 0;
 	}
 
-  pgrank_vertex(vertex_id_t id, const vertex_index *index1): 
+  pgrank_vertex(vertex_id_t id, const vertex_index &index1): 
         compute_vertex(id, index1) {
     this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
-	directed_vertex_index *index = (directed_vertex_index *) index1;
-	num_out_edges = index->get_num_out_edges(id);
+	const directed_vertex_index &index = (const directed_vertex_index &) index1;
+	num_out_edges = index.get_num_out_edges(id);
   }
 
   vsize_t get_num_out_edges() const {
@@ -64,22 +64,22 @@ public:
     return curr_itr_pr;
   }
 
-  void run(graph_engine &graph) { 
+  void run(vertex_program &prog) { 
 	// We perform pagerank for at most `num_iters' iterations.
-	if (graph.get_curr_level() >= num_iters)
+	if (prog.get_graph().get_curr_level() >= num_iters)
 		return;
     vertex_id_t id = get_id();
     request_vertices(&id, 1); // put my edgelist in page cache
   };
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &,
+	void run_on_message(vertex_program &,
 /* Only serves to activate on the next iteration */
 			const vertex_message &msg) { }; 
 };
 
-void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
+void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   // Gather
   float accum = 0;
   page_byte_array::const_iterator<vertex_id_t> end_it
@@ -88,7 +88,7 @@ void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
   for (page_byte_array::const_iterator<vertex_id_t> it
       = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
     vertex_id_t id = *it;
-    pgrank_vertex& v = (pgrank_vertex&) graph.get_vertex(id);
+    pgrank_vertex& v = (pgrank_vertex&) prog.get_graph().get_vertex(id);
     // Notice I want this iteration's pagerank
     accum += (v.get_curr_itr_pr()/v.get_num_out_edges()); 
   }   
@@ -103,13 +103,40 @@ void pgrank_vertex::run(graph_engine &graph, const page_vertex &vertex) {
   
   // Scatter (activate your out-neighbors ... if you have any :) 
   if ( std::fabs( last_change ) > TOLERANCE ) {
-	int num_dests = vertex.get_num_edges(BOTH_EDGES);
+	int num_dests = vertex.get_num_edges(OUT_EDGE);
     if (num_dests > 0) {
-		edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
-		graph.activate_vertices(it) ;
+		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
+		prog.activate_vertices(it) ;
     }   
   }
 }
+
+class count_vertex_query: public vertex_query
+{
+	double num;
+public:
+	count_vertex_query() {
+		num = 0;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		pgrank_vertex &pr_v = (pgrank_vertex &) v;
+		num += pr_v.get_curr_itr_pr();
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		count_vertex_query *cvq = (count_vertex_query *) q.get();
+		num += cvq->num;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new count_vertex_query());
+	}
+
+	double get_num() const {
+		return num;
+	}
+};
 
 void int_handler(int sig_num)
 {
@@ -173,16 +200,11 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<pgrank_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (preload)
 		graph->preload_graph();
 	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
@@ -197,36 +219,15 @@ int main(int argc, char *argv[])
   graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	NUMA_graph_index<pgrank_vertex>::const_iterator it
-		= ((NUMA_graph_index<pgrank_vertex> *) index)->begin();
-	NUMA_graph_index<pgrank_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<pgrank_vertex> *) index)->end();
-  
-#if 0
-	for (; it != end_it; ++it) {
-		const pgrank_vertex &v = (const pgrank_vertex &) *it;
-    printf("%d:%f\n", v.get_id()+1, v.get_curr_itr_pr());
-	}
-#endif
-
-#if 1
-	float total = 0;
-  vsize_t count = 0;
-
-	for (; it != end_it; ++it) {
-		const pgrank_vertex &v = (const pgrank_vertex &) *it;
-    total += v.get_curr_itr_pr();
-    count++;
-	}
+	vertex_query::ptr cvq(new count_vertex_query());
+	graph->query_on_all(cvq);
+	double total = ((count_vertex_query *) cvq.get())->get_num();
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
   
-  printf("The %d vertices have page rank sum: %f\n in %f seconds\n", 
-      count, total, time_diff(start, end));
-#endif
+  printf("The %ld vertices have page rank sum: %lf\n in %f seconds\n", 
+      graph->get_num_vertices(), total, time_diff(start, end));
 }

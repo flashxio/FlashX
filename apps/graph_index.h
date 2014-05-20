@@ -2,22 +2,22 @@
 #define __GRAPH_INDEX_H__
 
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <boost/foreach.hpp>
@@ -43,6 +43,8 @@ class graph_index
 	graph_index(const graph_index &);
 	graph_index &operator=(const graph_index &);
 public:
+	typedef std::shared_ptr<graph_index> ptr;
+
 	class const_iterator
 	{
 		vertex_id_t id;
@@ -72,6 +74,12 @@ public:
 	};
 
 	graph_index() {
+	}
+
+	virtual ~graph_index() {
+	}
+
+	virtual void init(int num_threads, int num_nodes) {
 	}
 
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
@@ -113,18 +121,16 @@ class NUMA_local_graph_index: public graph_index
 	size_t tot_num_vertices;
 	size_t num_vertices;
 	vertex_type *vertex_arr;
-	graph_partitioner *partitioner;
-	const vertex_index *index;
+	const graph_partitioner &partitioner;
+	const vertex_index &index;
 
-	NUMA_local_graph_index(const vertex_index *index,
-			graph_partitioner *partitioner, int part_id, int node_id,
-			size_t tot_num_vertices) {
+	NUMA_local_graph_index(const vertex_index &_index,
+			const graph_partitioner &_partitioner, int part_id, int node_id,
+			size_t tot_num_vertices): partitioner(_partitioner), index(_index) {
 		this->part_id = part_id;
-		this->index = index;
 		this->tot_num_vertices = tot_num_vertices;
-		this->num_vertices = partitioner->get_part_size(part_id,
+		this->num_vertices = partitioner.get_part_size(part_id,
 				tot_num_vertices);
-		this->partitioner = partitioner;
 		this->node_id = node_id;
 		vertex_arr = NULL;
 	}
@@ -139,13 +145,13 @@ public:
 				sizeof(vertex_arr[0]) * num_vertices);
 		std::vector<vertex_id_t> local_ids;
 		local_ids.reserve(num_vertices);
-		partitioner->get_all_vertices_in_part(this->part_id, tot_num_vertices,
+		partitioner.get_all_vertices_in_part(this->part_id, tot_num_vertices,
 				local_ids);
 		assert(local_ids.size() == num_vertices);
 		BOOST_FOREACH(vertex_id_t vid, local_ids) {
 			int part_id;
 			off_t part_off;
-			partitioner->map2loc(vid, part_id, part_off);
+			partitioner.map2loc(vid, part_id, part_off);
 			assert(this->part_id == part_id);
 			new (vertex_arr + part_off) vertex_type(vid, index);
 		}
@@ -167,7 +173,7 @@ public:
 	virtual compute_vertex &get_vertex(vertex_id_t id) {
 		int part_id;
 		off_t part_off;
-		partitioner->map2loc(id, part_id, part_off);
+		partitioner.map2loc(id, part_id, part_off);
 		return vertex_arr[part_off];
 	}
 
@@ -197,7 +203,7 @@ public:
 	}
 
 	virtual const graph_partitioner &get_partitioner() const {
-		return *partitioner;
+		return partitioner;
 	}
 
 	virtual vertex_program::ptr create_def_vertex_program() const {
@@ -228,13 +234,15 @@ static inline size_t get_min_ext_mem_vertex_size(graph_type type)
 template<class vertex_type>
 class NUMA_graph_index: public graph_index
 {
+	std::string index_file;
+
 	vertex_id_t max_vertex_id;
 	vertex_id_t min_vertex_id;
 	size_t num_vertices;
-	range_graph_partitioner partitioner;
+	std::unique_ptr<range_graph_partitioner> partitioner;
 	// A graph index per thread
-	std::vector<NUMA_local_graph_index<vertex_type> *> index_arr;
-	off_t *off_arr;
+	std::vector<std::unique_ptr<NUMA_local_graph_index<vertex_type> > > index_arr;
+	std::unique_ptr<off_t[]> off_arr;
 
 	class init_thread: public thread
 	{
@@ -251,24 +259,33 @@ class NUMA_graph_index: public graph_index
 		}
 	};
 
-	NUMA_graph_index(const std::string &index_file,
-			int num_threads, int num_nodes): partitioner(num_threads) {
+	NUMA_graph_index(const std::string &index_file) {
+		this->index_file = index_file;
+	}
+public:
+	static graph_index::ptr create(const std::string &index_file) {
+		return graph_index::ptr(new NUMA_graph_index<vertex_type>(index_file));
+	}
+
+	void init(int num_threads, int num_nodes) {
+		partitioner = std::unique_ptr<range_graph_partitioner>(
+				new range_graph_partitioner(num_threads));
 		vertex_index *index = load_vertex_index(index_file);
 		size_t min_vertex_size = get_min_ext_mem_vertex_size(
 				index->get_graph_header().get_graph_type());
 		num_vertices = index->get_num_vertices();
 		// Construct the indices.
 		for (int i = 0; i < num_threads; i++) {
-			index_arr.push_back(new NUMA_local_graph_index<vertex_type>(
+			index_arr.emplace_back(new NUMA_local_graph_index<vertex_type>(
 						// The partitions are assigned to worker threads.
 						// The memory used to store the partitions should
 						// be on the same NUMA as the worker threads.
-						index, &partitioner, i, i % num_nodes, num_vertices));
+						*index, *partitioner, i, i % num_nodes, num_vertices));
 		}
 
 		std::vector<init_thread *> threads(num_threads);
 		for (int i = 0; i < num_threads; i++) {
-			threads[i] = new init_thread(index_arr[i]);
+			threads[i] = new init_thread(index_arr[i].get());
 			threads[i]->start();
 		}
 		for (int i = 0; i < num_threads; i++) {
@@ -279,7 +296,7 @@ class NUMA_graph_index: public graph_index
 		size_t num_non_empty = 0;
 		// We use the last entry in the array to store the location of
 		// the end of the graph file.
-		off_arr = new off_t[num_vertices + 1];
+		off_arr = std::unique_ptr<off_t[]>(new off_t[num_vertices + 1]);
 #pragma omp parallel for reduction(+:num_non_empty)
 		for (size_t i = 0; i < num_vertices; i++) {
 			off_arr[i] = ::get_vertex_off(index, i);
@@ -296,17 +313,6 @@ class NUMA_graph_index: public graph_index
 				num_non_empty);
 		vertex_index::destroy(index);
 	}
-public:
-	~NUMA_graph_index() {
-		if (off_arr)
-			delete [] off_arr;
-	}
-
-	static graph_index *create(const std::string &index_file,
-			int num_threads, int num_nodes) {
-		return new NUMA_graph_index<vertex_type>(index_file,
-				num_threads, num_nodes);
-	}
 
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
 			compute_vertex *v_buf[]) const {
@@ -314,7 +320,7 @@ public:
 			vertex_id_t id = ids[i];
 			int part_id;
 			off_t part_off;
-			partitioner.map2loc(id, part_id, part_off);
+			partitioner->map2loc(id, part_id, part_off);
 			v_buf[i] = &index_arr[part_id]->vertex_arr[part_off];
 		}
 		return num;
@@ -323,7 +329,7 @@ public:
 	virtual compute_vertex &get_vertex(vertex_id_t id) {
 		int part_id;
 		off_t part_off;
-		partitioner.map2loc(id, part_id, part_off);
+		partitioner->map2loc(id, part_id, part_off);
 		return index_arr[part_id]->vertex_arr[part_off];
 	}
 
@@ -358,7 +364,7 @@ public:
 	}
 
 	virtual const graph_partitioner &get_partitioner() const {
-		return partitioner;
+		return *partitioner;
 	}
 
 	virtual vertex_program::ptr create_def_vertex_program(

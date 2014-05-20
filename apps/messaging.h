@@ -2,22 +2,22 @@
 #define __GRAPH_MESSAGING_H__
 
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include "slab_allocator.h"
@@ -217,7 +217,7 @@ public:
 
 class simple_msg_sender
 {
-	slab_allocator *alloc;
+	std::shared_ptr<slab_allocator> alloc;
 	message buf;
 	msg_queue *queue;
 	int num_objs;
@@ -226,16 +226,16 @@ protected:
 	/**
 	 * buf_size: the number of messages that can be buffered in the sender.
 	 */
-	simple_msg_sender(int node_id, slab_allocator *alloc,
-			msg_queue *queue): buf(alloc) {
+	simple_msg_sender(int node_id, std::shared_ptr<slab_allocator> alloc,
+			msg_queue *queue): buf(alloc.get()) {
 		this->alloc = alloc;
 		this->queue = queue;
 		num_objs = 0;
 	}
 
 public:
-	static simple_msg_sender *create(int node_id, slab_allocator *alloc,
-			msg_queue *queue) {
+	static simple_msg_sender *create(int node_id,
+			std::shared_ptr<slab_allocator> alloc, msg_queue *queue) {
 		assert(node_id >= 0);
 		return new simple_msg_sender(node_id, alloc, queue);
 	}
@@ -252,7 +252,7 @@ public:
 		queue->add(&buf, 1);
 		// We have to make sure all messages have been sent to the queue.
 		assert(buf.is_empty());
-		message tmp(alloc);
+		message tmp(alloc.get());
 		buf = tmp;
 		return 1;
 	}
@@ -481,7 +481,7 @@ inline local_vid_t multicast_dest_list::get_dest(int idx) const
 class multicast_msg_sender
 {
 	const static int MMSG_BUF_SIZE = PAGE_SIZE;
-	slab_allocator *alloc;
+	std::shared_ptr<slab_allocator> alloc;
 	// The local buffer of vertex messages.
 	message buf;
 	// The destination queue of the sender.
@@ -494,15 +494,15 @@ class multicast_msg_sender
 	char mmsg_temp_buf[MMSG_BUF_SIZE];
 	multicast_dest_list dest_list;
 
-	multicast_msg_sender(slab_allocator *alloc,
-			msg_queue *queue): buf(alloc) {
+	multicast_msg_sender(std::shared_ptr<slab_allocator> alloc,
+			msg_queue *queue): buf(alloc.get()) {
 		this->alloc = alloc;
 		this->queue = queue;
 		this->mmsg = NULL;
 		this->num_dests = 0;
 	}
 public:
-	static multicast_msg_sender *create(slab_allocator *alloc,
+	static multicast_msg_sender *create(std::shared_ptr<slab_allocator> alloc,
 			msg_queue *queue) {
 		return new multicast_msg_sender(alloc, queue);
 	}

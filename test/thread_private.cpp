@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <sys/time.h>
@@ -86,7 +86,7 @@ int cleanup_callback::invoke(io_request *rqs[], int num)
 		pending_reqs.erase(rq->get_buf(0));
 #endif
 		for (int i = 0; i < rq->get_num_bufs(); i++)
-			delete [] rq->get_buf(i);
+			free(rq->get_buf(i));
 		read_bytes += rq->get_size();
 	}
 #ifdef STATISTICS
@@ -307,8 +307,7 @@ class write_compute_allocator: public compute_allocator
 public:
 	write_compute_allocator(thread *t): allocator("write-compute-allocator",
 			t->get_node_id(), PAGE_SIZE, params.get_max_obj_alloc_size(),
-			// TODO memory leak
-			new compute_initiator(this)) {
+			obj_initiator<write_user_compute>::ptr(new compute_initiator(this))) {
 	}
 
 	virtual user_compute *alloc() {
@@ -339,8 +338,7 @@ class sum_compute_allocator: public compute_allocator
 public:
 	sum_compute_allocator(thread *t): allocator("sum-compute-allocator",
 			t->get_node_id(), PAGE_SIZE, params.get_max_obj_alloc_size(),
-			// TODO memory leak
-			new compute_initiator(this)) {
+			obj_initiator<sum_user_compute>::ptr(new compute_initiator(this))) {
 	}
 
 	virtual user_compute *alloc() {
@@ -463,8 +461,9 @@ int work2req_converter::to_reqs(workload_gen *gen, io_interface *io,
 		}
 		else {
 			data_loc_t loc = range.get_loc();
-			char *p = new char[range.get_size()];
-			assert(p);
+			char *p = NULL;
+			int ret = posix_memalign((void **) &p, PAGE_SIZE, range.get_size());
+			assert(ret == 0);
 			if (range.get_access_method() == WRITE && params.is_verify_content())
 				create_write_data(p, range.get_size(), loc.get_offset(),
 						io->get_file_id());

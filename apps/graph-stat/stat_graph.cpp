@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -42,23 +42,23 @@ public:
 		num_out_edges = 0;
 	}
 
-	stat_vertex(vertex_id_t id, const vertex_index *index): compute_vertex(
+	stat_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(
 			id, index) {
 		num_in_edges = 0;
 		num_out_edges = 0;
 	}
 
-	virtual void run(graph_engine &graph) {
+	virtual void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		request_vertices(&id, 1);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &prog, const page_vertex &vertex) {
 		num_in_edges = vertex.get_num_edges(edge_type::IN_EDGE);
 		num_out_edges = vertex.get_num_edges(edge_type::OUT_EDGE);
 	}
 
-	virtual void run_on_message(graph_engine &, const vertex_message &msg) {
+	virtual void run_on_message(vertex_program &, const vertex_message &msg) {
 	}
 
 	int get_num_edges(edge_type type) const {
@@ -93,13 +93,8 @@ int main(int argc, char *argv[])
 	config_map configs(conf_file);
 	graph_conf.init(configs);
 
-	init_io_system(configs);
-
-	graph_index *index = NUMA_graph_index<stat_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-	printf("finish loading the graph index\n");
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<stat_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	const graph_header &header = graph->get_graph_header();
 	printf("start the graph algorithm\n");
 	graph->start_all();
@@ -164,7 +159,6 @@ int main(int argc, char *argv[])
 				max_num_edges = v.get_num_edges(edge_type::IN_EDGE);
 		}
 	}
-	graph_engine::destroy(graph);
 
 	printf("min id: %ld, max id: %ld\n", (long) min_id, (long) max_id);
 	printf("There are %ld non-empty vertices\n", num_non_empty_vertices);
@@ -206,5 +200,4 @@ int main(int argc, char *argv[])
 		printf("out-edges histogram: \n");
 		hist_out_edges.print(stdout);
 	}
-	destroy_io_system();
 }

@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SA-GraphLib.
+ * This file is part of FlashGraph.
  *
- * SA-GraphLib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SA-GraphLib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <signal.h>
@@ -31,6 +31,8 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
+edge_type traverse_edge = edge_type::OUT_EDGE;
+
 class bfs_vertex: public compute_directed_vertex
 {
 	enum {
@@ -43,7 +45,7 @@ public:
 	}
 
 	bfs_vertex(vertex_id_t id,
-			const vertex_index *index): compute_directed_vertex(id, index) {
+			const vertex_index &index): compute_directed_vertex(id, index) {
 	}
 
 	bool has_visited() const {
@@ -57,33 +59,67 @@ public:
 			return flags.clear_flag(VISITED);
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &prog) {
 		if (!has_visited()) {
-			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+			directed_vertex_request req(get_id(), traverse_edge);
 			request_partial_vertices(&req, 1);
 		}
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex);
 
-	void run_on_message(graph_engine &, const vertex_message &msg) {
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 };
 
-void bfs_vertex::run(graph_engine &graph, const page_vertex &vertex)
+void bfs_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(!has_visited());
 	set_visited(true);
 
-	int num_dests = vertex.get_num_edges(OUT_EDGE);
+	int num_dests = vertex.get_num_edges(traverse_edge);
 	if (num_dests == 0)
 		return;
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
-	graph.activate_vertices(it);
+#ifdef USE_ARRAY
+	stack_array<vertex_id_t, 1024> neighs(num_dests);
+	vertex.read_edges(traverse_edge, neighs.data(), num_dests);
+	prog.activate_vertices(neighs.data(), num_dests);
+#else
+	edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge, 0, num_dests);
+	prog.activate_vertices(it);
+#endif
 }
+
+class count_vertex_query: public vertex_query
+{
+	size_t num_visited;
+public:
+	count_vertex_query() {
+		num_visited = 0;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		bfs_vertex &bfs_v = (bfs_vertex &) v;
+		if (bfs_v.has_visited())
+			num_visited++;
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+		count_vertex_query *cvq = (count_vertex_query *) q.get();
+		num_visited += cvq->num_visited;
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new count_vertex_query());
+	}
+
+	size_t get_num_visited() const {
+		return num_visited;
+	}
+};
 
 void int_handler(int sig_num)
 {
@@ -98,6 +134,7 @@ void print_usage()
 			"bfs [options] conf_file graph_file index_file start_vertex\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-p: preload the graph\n");
+	fprintf(stderr, "-b: traverse with both in-edges and out-edges\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -108,7 +145,7 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:p")) != -1) {
+	while ((opt = getopt(argc, argv, "c:pb")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -117,6 +154,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'p':
 				preload = true;
+				break;
+			case 'b':
+				traverse_edge = edge_type::BOTH_EDGES;
 				break;
 			default:
 				print_usage();
@@ -137,17 +177,11 @@ int main(int argc, char *argv[])
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
-	graph_conf.init(configs);
-	graph_conf.print();
 
 	signal(SIGINT, int_handler);
-	init_io_system(configs);
 
-	graph_index *index = NUMA_graph_index<bfs_vertex>::create(index_file,
-			graph_conf.get_num_threads(), params.get_num_nodes());
-
-	graph_engine *graph = graph_engine::create(graph_conf.get_num_threads(),
-			params.get_num_nodes(), graph_file, index);
+	graph_index::ptr index = NUMA_graph_index<bfs_vertex>::create(index_file);
+	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	if (preload)
 		graph->preload_graph();
 	printf("BFS starts\n");
@@ -161,23 +195,14 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	NUMA_graph_index<bfs_vertex>::const_iterator it
-		= ((NUMA_graph_index<bfs_vertex> *) index)->begin();
-	NUMA_graph_index<bfs_vertex>::const_iterator end_it
-		= ((NUMA_graph_index<bfs_vertex> *) index)->end();
-	int num_visited = 0;
-	for (; it != end_it; ++it) {
-		const bfs_vertex &v = (const bfs_vertex &) *it;
-		if (v.has_visited())
-			num_visited++;
-	}
+	vertex_query::ptr cvq(new count_vertex_query());
+	graph->query_on_all(cvq);
+	size_t num_visited = ((count_vertex_query *) cvq.get())->get_num_visited();
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	graph_engine::destroy(graph);
-	destroy_io_system();
-	printf("BFS from vertex %ld visits %d vertices. It takes %f seconds\n",
+	printf("BFS from vertex %ld visits %ld vertices. It takes %f seconds\n",
 			(unsigned long) start_vertex, num_visited, time_diff(start, end));
 }

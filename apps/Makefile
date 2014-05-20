@@ -1,19 +1,19 @@
-# Copyright 2013 Da Zheng
+# Copyright 2014 Open Connectome Project (http://openconnecto.me)
+# Written by Da Zheng (zhengda1936@gmail.com)
 #
-# This file is part of SA-GraphLib.
+# This file is part of FlashGraph.
 #
-# SA-GraphLib is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# SA-GraphLib is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
-# You should have received a copy of the GNU General Public License
-# along with SA-GraphLib.  If not, see <http://www.gnu.org/licenses/>.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 include ../Makefile.common
 
@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -I../include $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libgraph graph-bfs triangle-counting scan-statistics sssp sstsg unit-test tools graph-stat test wcc k-core page-rank scc diameter-estimator graph-diameter
+all: libgraph graph-bfs triangle-counting scan-statistics sssp sstsg unit-test tools graph-stat test cc k-core page-rank diameter-estimator eigensolver
 
 libgraph: $(OBJS)
 	rm -f libgraph.a
@@ -54,8 +54,8 @@ graph-stat: libgraph
 test: libgraph
 	$(MAKE) -C test
 
-wcc: libgraph
-	$(MAKE) -C weakly-connected-components
+cc: libgraph
+	$(MAKE) -C connected-components
 
 k-core: libgraph
 	$(MAKE) -C k-core
@@ -63,14 +63,11 @@ k-core: libgraph
 page-rank: libgraph
 	$(MAKE) -C page-rank
 
-scc: libgraph
-	$(MAKE) -C strongly-connected-components
-
 diameter-estimator: libgraph
 	$(MAKE) -C diameter-estimator
 
-graph-diameter: libgraph
-	$(MAKE) -C graph-diameter
+eigensolver: libgraph
+	$(MAKE) -C eigensolver
 
 clean:
 	rm -f *.d
@@ -88,10 +85,9 @@ clean:
 	$(MAKE) clean -C sstsg
 	$(MAKE) clean -C graph-stat
 	$(MAKE) clean -C k-core
-	$(MAKE) clean -C weakly-connected-components
+	$(MAKE) clean -C connected-components
 	$(MAKE) clean -C page-rank
-	$(MAKE) clean -C strongly-connected-components
 	$(MAKE) clean -C diameter-estimator
-	$(MAKE) clean -C graph-diameter
+	$(MAKE) clean -C eigensolver
 
 -include $(DEPS) 

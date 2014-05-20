@@ -1,3 +1,22 @@
+/**
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
+ *
+ * This file is part of FlashGraph.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "message_processor.h"
 #include "messaging.h"
 #include "graph_engine.h"
@@ -5,17 +24,20 @@
 #include "steal_state.h"
 
 message_processor::message_processor(graph_engine &_graph,
-		worker_thread &_owner): graph(_graph),
+		worker_thread &_owner, std::shared_ptr<slab_allocator> msg_alloc): graph(_graph),
 	owner(_owner), msg_q(_owner.get_node_id(), "graph_msg_queue", 16, INT_MAX),
 	stolenv_msgs(_owner.get_node_id(), PAGE_SIZE, true)
 {
 	steal_state = std::unique_ptr<steal_state_t>(new steal_state_t(graph, owner));
+	this->msg_alloc = msg_alloc;
 }
 
 void message_processor::buf_msg(vertex_message &vmsg)
 {
 	if (stolenv_msgs.is_empty() || stolenv_msgs.back().add(vmsg) == NULL) {
-		message msg(owner.get_msg_allocator());
+		message msg(msg_alloc.get());
+		if (stolenv_msgs.is_full())
+			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
 		// We have to make sure this is successful.
 		assert(stolenv_msgs.back().add(vmsg));
@@ -53,7 +75,9 @@ void message_processor::buf_mmsg(local_vid_t id, multicast_message &mmsg)
 {
 	multicast_p2p_converter converter(id, mmsg);
 	if (stolenv_msgs.is_empty() || stolenv_msgs.back().add(converter) == NULL) {
-		message msg(owner.get_msg_allocator());
+		message msg(msg_alloc.get());
+		if (stolenv_msgs.is_full())
+			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
 		// We have to make sure this is successful.
 		assert(stolenv_msgs.back().add(converter));
@@ -70,7 +94,7 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 	multicast_dest_list dest_list = mmsg.get_dest_list();
 
 	if (!check_steal) {
-		curr_vprog.run_on_multicast_message(graph, mmsg);
+		curr_vprog.run_on_multicast_message(mmsg);
 		for (int i = 0; i < num_dests; i++) {
 			local_vid_t id = dest_list.get_dest(i);
 			if (mmsg.is_activate())
@@ -95,7 +119,7 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 		}
 		else {
 			compute_vertex &info = graph.get_vertex(owner.get_worker_id(), id);
-			curr_vprog.run_on_message(graph, info, mmsg);
+			curr_vprog.run_on_message(info, mmsg);
 		}
 		if (mmsg.is_activate())
 			owner.activate_vertex(id);
@@ -117,8 +141,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 		// We only need to check the first message. All messages are
 		// of the same type.
 		if (!check_steal && !v_msgs[0]->is_multicast()) {
-			curr_vprog.run_on_messages(graph,
-					(const vertex_message **) v_msgs, num);
+			curr_vprog.run_on_messages((const vertex_message **) v_msgs, num);
 			for (int i = 0; i < num; i++) {
 				local_vid_t id = v_msgs[i]->get_dest();
 				if (v_msgs[i]->is_activate())
@@ -143,7 +166,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 			}
 			else {
 				compute_vertex &info = graph.get_vertex(owner.get_worker_id(), id);
-				curr_vprog.run_on_message(graph, info, *v_msgs[i]);
+				curr_vprog.run_on_message(info, *v_msgs[i]);
 			}
 			if (v_msgs[i]->is_activate())
 				owner.activate_vertex(id);
