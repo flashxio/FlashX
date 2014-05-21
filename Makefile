@@ -17,7 +17,7 @@
 
 include Makefile.common
 
-all: build_lib unit_test tools apps test utils
+all: build_lib unit_test tools flash-graph test utils
 
 build_lib:
 	$(MAKE) -C libsafs
@@ -36,8 +36,8 @@ tools: build_lib
 utils: build_lib
 	$(MAKE) -C utils
 
-apps: build_lib
-	$(MAKE) -C apps
+flash-graph: build_lib
+	$(MAKE) -C flash-graph
 
 clean:
 	rm -f *.d
@@ -50,6 +50,6 @@ clean:
 	make --ignore-errors -C libsafs clean
 	make --ignore-errors -C tools clean
 	make --ignore-errors -C utils clean
-	make --ignore-errors -C apps clean
+	make --ignore-errors -C flash-graph clean
 
 -include $(DEPS) 
