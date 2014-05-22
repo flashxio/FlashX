@@ -33,10 +33,12 @@
 #include "graph_config.h"
 
 vsize_t CURRENT_K; // Min degree necessary to be part of the k-core graph
+vsize_t PREVIOUS_K; 
 
 class kcore_vertex: public compute_directed_vertex
 {
   bool deleted;
+  vsize_t core;
   vsize_t degree; 
 
 public:
@@ -48,6 +50,7 @@ public:
     this->deleted = false;
 	const directed_vertex_index &index = (const directed_vertex_index &) index1;
     this->degree = index.get_num_in_edges(id) + index.get_num_out_edges(id);
+    this->core = -1; // Everyone between kmin < core > kmax will get this core
   }
 
   bool is_deleted() const {
@@ -58,18 +61,19 @@ public:
     this->deleted = true;
   }
 
+  void set_core(vsize_t core) {
+    this->core = core;
+  }
+
+  const vsize_t get_core() const {
+    return this->core;
+  }
+
   vsize_t get_degree() {
     return degree;
   }
 
-  void run(vertex_program &prog) {
-    if (degree > CURRENT_K) { return; }
-
-    if (!is_deleted()) {
-			vertex_id_t id = get_id();
-			request_vertices(&id, 1); // put my edgelist in page cache
-    }
-  }
+  void run(vertex_program &prog);
 
 	void run(vertex_program &prog, const page_vertex &vertex);
 
@@ -116,14 +120,6 @@ public:
   }
 
   const std::vector<vertex_id_t>& get_next_engine_active_vert() const{
-    printf("Length of next_engine_active_vert is %lu\n", next_engine_active_vert.size());
-    std::cout << "\n";
-    for (vsize_t i=0; i < next_engine_active_vert.size(); i++) {
-      printf("Index is: %u\n", i);
-
-      std::cout << next_engine_active_vert.at(i) << " ";
-    }
-    std::cout << "\n";
     return next_engine_active_vert;
   }
 };
@@ -136,6 +132,20 @@ public:
   }
 };
 
+void kcore_vertex::run(vertex_program &prog) {
+  if (degree > CURRENT_K) { return; }
+
+  if (!is_deleted()) {
+    vertex_id_t id = get_id();
+    request_vertices(&id, 1); // put my edgelist in page cache
+
+    // This is how to tell who to activate next engine.
+    // This happens no more than once per vertex.
+    if (get_degree() == CURRENT_K - PREVIOUS_K + 1) {
+      ((kcore_vertex_program&) prog).activate_next_engine(get_id());
+    }
+  }
+}
 
 // This is only run by 1st iteration active vertices
 void kcore_vertex::run(vertex_program &prog, const page_vertex &vertex) {
@@ -150,11 +160,6 @@ void kcore_vertex::run(vertex_program &prog, const page_vertex &vertex) {
     multicast_delete_msg(prog, vertex, IN_EDGE);
     multicast_delete_msg(prog, vertex, OUT_EDGE);
   }
-  // This is how to tell who to activiate next engine.
-  // This SHOULD happen exactly one.
-  else if (get_degree() == CURRENT_K + 1) {
-    ((kcore_vertex_program&) prog).activate_next_engine(vertex.get_id());
- }
 
 }
 
@@ -234,15 +239,17 @@ public:
   }
 
   virtual void run(graph_engine &graph, compute_vertex &v) {
-    vsize_t degree = ((kcore_vertex&) v).get_degree();
-    if (degree < min_degree) {
-      min_degree = degree;
+    kcore_vertex kcore_v = (kcore_vertex&) v;
+    if (!kcore_v.is_deleted()) {
+      if (kcore_v.get_degree() < min_degree) {
+        min_degree = kcore_v.get_degree();
+      }
     }
   }
 
   virtual void merge(graph_engine &graph, vertex_query::ptr q) {
     min_degree_query *mdq = (min_degree_query *) q.get();
-    if (min_degree > mdq->min_degree) { // TODO: Verify
+    if (min_degree > mdq->min_degree) {
       min_degree = mdq->min_degree;
     }
   }
@@ -351,13 +358,15 @@ int main(int argc, char *argv[])
     }
   };
 
+  PREVIOUS_K = CURRENT_K;
   // First K only
   std::shared_ptr<vertex_filter> filter
     = std::shared_ptr<vertex_filter>(new activate_k_filter(CURRENT_K));
 
   struct timeval start, end;
   gettimeofday(&start, NULL);
-  graph->start(filter); 
+  graph->start(filter, 
+      vertex_program_creater::ptr(new kcore_vertex_program_creater())); 
   graph->wait4complete();
   gettimeofday(&end, NULL);
 
@@ -368,53 +377,62 @@ int main(int argc, char *argv[])
       "%d-core shows %ld vertices > %d degree in %f seconds\n"
       "\n******************************************\n",
       CURRENT_K, in_k_core, CURRENT_K, time_diff(start, end));
-
+   
+  vsize_t last_processed_K = CURRENT_K;
+  CURRENT_K++;
   // Subsequent K's
-  if (CURRENT_K + 1 <= kmax) {
-    for (; CURRENT_K <= kmax; CURRENT_K++) {
-      std::vector<vertex_id_t> active_vertices;
-      
-      std::vector<vertex_program::ptr> vertex_progs_th;
-      graph->get_vertex_programs(vertex_progs_th);
-      printf("The length of vertex progs is %lu\n", vertex_progs_th.size());
-      
-      BOOST_FOREACH(vertex_program::ptr vprog, vertex_progs_th) {
-        kcore_vertex_program::ptr kcore_vprog = kcore_vertex_program::cast2(vprog);
-        printf("Here!");
-        print_active(kcore_vprog->get_next_engine_active_vert());
+  for (; CURRENT_K <= kmax; ++CURRENT_K) {
+    std::vector<vertex_id_t> active_vertices;
 
-        active_vertices.insert(active_vertices.begin(),
-            kcore_vprog->get_next_engine_active_vert().begin(),
-            kcore_vprog->get_next_engine_active_vert().end());
-        print_active(active_vertices);
-      }
+    std::vector<vertex_program::ptr> vertex_progs_th;
+    graph->get_vertex_programs(vertex_progs_th);
+    printf("The length of vertex progs is %lu\n", vertex_progs_th.size());
 
-      std::cout << "The following are active in the next engine: " << std::endl;
-      print_active(active_vertices);
-
-      // This means the CURRENT_K is an empty core
-      // so hop to next viable CURRENT_K
-      if (active_vertices.empty()) {
-        vertex_query::ptr mdq(new min_degree_query());
-        graph->query_on_all(mdq);
-        CURRENT_K = ((min_degree_query *) mdq.get())->get_min_degree();
-
-        if (CURRENT_K > kmax) break;
-      }
-      struct timeval start, end;
-      gettimeofday(&start, NULL);
-      graph->start(&active_vertices[0], active_vertices.size()); // TODO: Verify if OK
-      graph->wait4complete();
-      gettimeofday(&end, NULL);
-
-      vertex_query::ptr cvq(new count_vertex_query());
-      graph->query_on_all(cvq);
-      size_t in_k_core = ((count_vertex_query *) cvq.get())->get_num();
-      printf("\n******************************************\n"
-          "%d-core shows %ld vertices <= %d degree in %f seconds\n"
-          "\n******************************************\n",
-          CURRENT_K, in_k_core, CURRENT_K, time_diff(start, end));
+    BOOST_FOREACH(vertex_program::ptr vprog, vertex_progs_th) {
+      kcore_vertex_program::ptr kcore_vprog = kcore_vertex_program::cast2(vprog);
+      active_vertices.insert(active_vertices.begin(),
+          kcore_vprog->get_next_engine_active_vert().begin(),
+          kcore_vprog->get_next_engine_active_vert().end());
     }
+
+    printf("\n\nThe following are active in the next engine: \n");
+    print_active(active_vertices);
+    printf("\n");
+    std::cout << "CURRENT_K = " << CURRENT_K << std::endl;
+    std::cout << "PREVIOUS_K = " << PREVIOUS_K << std::endl;
+    printf("\n");
+
+    // This means the CURRENT_K is an empty core
+    // so hop to next viable CURRENT_K
+    if (active_vertices.empty()) {
+      printf("\n\nNo active vertices in %d core\n\n", CURRENT_K);
+      vertex_query::ptr mdq(new min_degree_query());
+      graph->query_on_all(mdq);
+
+      vsize_t min_degree_remaining = ((min_degree_query *) mdq.get())->get_min_degree();
+      printf("\n\nThe graphs minimum degree remaining is %u\n\n", min_degree_remaining);
+      CURRENT_K = min_degree_remaining;
+      
+      // TODO: Remove this if and TEST
+      if (CURRENT_K > kmax || CURRENT_K == last_processed_K) 
+        break;
+    }
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+    graph->start(&active_vertices[0], active_vertices.size(), 
+        vertex_initiator::ptr(), 
+        vertex_program_creater::ptr(new kcore_vertex_program_creater()));
+    graph->wait4complete();
+    gettimeofday(&end, NULL);
+
+    vertex_query::ptr cvq(new count_vertex_query());
+    graph->query_on_all(cvq);
+    size_t in_k_core = ((count_vertex_query *) cvq.get())->get_num();
+    printf("\n******************************************\n"
+        "%d-core shows %ld vertices <= %d degree in %f seconds\n"
+        "\n******************************************\n",
+        CURRENT_K, in_k_core, CURRENT_K, time_diff(start, end));
+    PREVIOUS_K = CURRENT_K;
   }
   
 	if (!graph_conf.get_prof_file().empty())
