@@ -34,6 +34,8 @@ size_t read_edge_list_text(const std::string &file,
 class graph
 {
 public:
+	typedef std::shared_ptr<graph> ptr;
+
 	virtual ~graph() {
 	}
 
@@ -42,6 +44,10 @@ public:
 	virtual vertex_index *create_vertex_index() const = 0;
 	virtual void dump(const std::string &index_file,
 			const std::string &graph_file) = 0;
+	virtual void dump_as_edge_list(const std::string &file) const {
+		// TODO
+		assert(0);
+	}
 	virtual size_t get_num_edges() const = 0;
 	virtual size_t get_num_vertices() const = 0;
 	virtual bool has_edge_data() const = 0;
@@ -49,16 +55,22 @@ public:
 	virtual void print() const = 0;
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const = 0;
+	// Merge the graph to this graph.
+	virtual void merge(graph::ptr g) {
+		// TODO
+		assert(0);
+	}
 };
 
-#if 0
 template<class edge_data_type = empty_data>
 class undirected_graph: public graph
 {
 	std::vector<in_mem_undirected_vertex<edge_data_type> > vertices;
 
-	static undirected_graph *create(edge<edge_data_type> edges[], size_t num_edges);
+	undirected_graph() {
+	}
 public:
+#if 0
 	static undirected_graph *load_edge_list_text(const std::string &file) {
 		std::vector<edge<edge_data_type> > edges;
 		read_edge_list_text(file, edges);
@@ -68,9 +80,10 @@ public:
 	static undirected_graph *load_adjacency_list(const std::string &file) {
 		assert(0);
 	}
-
-	static void destroy(undirected_graph *g) {
-		delete g;
+	static ptr create(edge<edge_data_type> edges[], size_t num_edges);
+#endif
+	static ptr create(bool has_data) {
+		return ptr(new undirected_graph<edge_data_type>());
 	}
 
 	bool has_edge_data() const {
@@ -96,7 +109,9 @@ public:
 	}
 
 	void dump(const std::string &index_file,
-			const std::string &graph_file);
+			const std::string &graph_file) {
+		assert(0);
+	}
 
 	size_t get_num_edges() const {
 		size_t num_edges = 0;
@@ -126,10 +141,9 @@ public:
 		assert(0);
 	}
 };
-#endif
 
 template<class edge_data_type>
-void check_vertex(in_mem_directed_vertex<edge_data_type> in_v,
+void check_vertex(const in_mem_directed_vertex<edge_data_type> &in_v,
 		ext_mem_directed_vertex *ext_v)
 {
 	assert(ext_v->get_id() == in_v.get_id());
@@ -170,13 +184,31 @@ void check_vertex(in_mem_directed_vertex<edge_data_type> in_v,
 	assert(out_it1 == out_end1 && out_it2 == out_end2);
 }
 
-#if 0
 template<class edge_data_type = empty_data>
 class directed_graph: public graph
 {
 	bool has_data;
-	std::vector<in_mem_directed_vertex<edge_data_type> > vertices;
+	size_t num_in_edges;
+	size_t num_out_edges;
+	size_t num_non_empty_vertices;
+
+	typedef std::pair<vertex_id_t, in_mem_directed_vertex<edge_data_type> > v_pair_t;
+	typedef std::map<vertex_id_t, in_mem_directed_vertex<edge_data_type> > v_map_t;
+	v_map_t vertices;
+
+	directed_graph(bool has_data) {
+		this->has_data = has_data;
+		num_in_edges = 0;
+		num_out_edges = 0;
+		num_non_empty_vertices = 0;
+	}
+
+	bool exist_vertex(vertex_id_t id) const {
+		typename v_map_t::const_iterator it = vertices.find(id);
+		return it != vertices.end();
+	}
 public:
+#if 0
 	struct delete_graph {
 		void operator()(directed_graph<edge_data_type> *g) {
 			directed_graph<edge_data_type>::destroy(g);
@@ -219,9 +251,9 @@ public:
 	static void destroy(directed_graph<edge_data_type> *g) {
 		delete g;
 	}
-
-	directed_graph(bool has_data) {
-		this->has_data = has_data;
+#endif
+	static ptr create(bool has_data) {
+		return ptr(new directed_graph<edge_data_type>(has_data));
 	}
 
 	bool has_edge_data() const {
@@ -231,41 +263,34 @@ public:
 	void add_vertex(const in_mem_vertex &v1) {
 		const in_mem_directed_vertex<edge_data_type> &v
 			= (const in_mem_directed_vertex<edge_data_type> &) v1;
-		assert(vertices.size() == v.get_id());
 		assert(v.has_edge_data() == has_data);
-		vertices.push_back(v);
-	}
-
-	typename std::vector<in_mem_directed_vertex<edge_data_type> >::const_iterator begin() const {
-		return vertices.begin();
-	}
-
-	typename std::vector<in_mem_directed_vertex<edge_data_type> >::const_iterator end() const {
-		return vertices.end();
-	}
-
-	const in_mem_directed_vertex<edge_data_type> *get_vertex(
-			vertex_id_t id) const {
-		for (size_t i = 0; i < vertices.size(); i++)
-			if (vertices[i].get_id() == id)
-				return &vertices[i];
-		return NULL;
+		std::pair<typename v_map_t::iterator, bool> ret = vertices.insert(v_pair_t(v.get_id(), v));
+		assert(ret.second);
+		num_in_edges += v.get_num_in_edges();
+		num_out_edges += v.get_num_out_edges();
+		if (v.get_num_edges(edge_type::BOTH_EDGES) > 0)
+			num_non_empty_vertices++;
 	}
 
 	void get_all_vertices(std::vector<vertex_id_t> &ids) const {
-		for (size_t i = 0; i < vertices.size(); i++)
-			ids.push_back(vertices[i].get_id());
+		for (typename v_map_t::const_iterator it = vertices.begin();
+				it != vertices.end(); it++)
+			ids.push_back(it->second.get_id());
 	}
 
 	vertex_index *create_vertex_index() const {
+		return NULL;
+#if 0
 		graph_header header(graph_type::DIRECTED, vertices.size(),
 				get_num_edges(), has_data);
 		return directed_vertex_index::create<in_mem_directed_vertex<edge_data_type> >(
 				header, vertices);
+#endif
 	}
 
 	void dump(const std::string &index_file,
 			const std::string &graph_file) {
+#if 0
 		assert(!file_exist(index_file));
 		assert(!file_exist(graph_file));
 		FILE *f = fopen(graph_file.c_str(), "w");
@@ -294,19 +319,14 @@ public:
 		vertex_index *index = create_vertex_index();
 		index->dump(index_file);
 		vertex_index::destroy(index);
+#endif
 	}
 
 	size_t get_num_in_edges() const {
-		size_t num_in_edges = 0;
-		for (size_t i = 0; i < vertices.size(); i++)
-			num_in_edges += vertices[i].get_num_in_edges();
 		return num_in_edges;
 	}
 
 	size_t get_num_out_edges() const {
-		size_t num_out_edges = 0;
-		for (size_t i = 0; i < vertices.size(); i++)
-			num_out_edges += vertices[i].get_num_out_edges();
 		return num_out_edges;
 	}
 
@@ -319,20 +339,17 @@ public:
 	}
 
 	size_t get_num_non_empty_vertices() const {
-		size_t num_vertices = 0;
-		for (size_t i = 0; i < vertices.size(); i++)
-			if (vertices[i].get_num_in_edges() > 0
-					|| vertices[i].get_num_out_edges() > 0)
-				num_vertices++;
-		return num_vertices;
+		return num_non_empty_vertices;
 	}
 
 	virtual void print() const {
+#if 0
 		for (size_t i = 0; i < vertices.size(); i++) {
 			if (vertices[i].get_num_in_edges()
 					+ vertices[i].get_num_out_edges() > 0)
 				vertices[i].print();
 		}
+#endif
 	}
 
 	virtual void check_ext_graph(const std::string &index_file,
@@ -356,13 +373,54 @@ public:
 			off_t off = index->get_vertex_off(id);
 			ext_mem_directed_vertex *v = (ext_mem_directed_vertex *) (adj_buf + off);
 			assert(v->get_size() == size);
-			check_vertex(vertices[id], v);
+			typename v_map_t::const_iterator it = vertices.find(id);
+			assert(it != vertices.end());
+			check_vertex(it->second, v);
 		}
 		vertex_index::destroy(index);
 		delete [] adj_buf;
 	}
+
+	virtual void merge(graph::ptr g) {
+		directed_graph<edge_data_type> &other
+			= (directed_graph<edge_data_type> &) *g;
+		assert(this->has_data == other.has_data);
+		for (typename v_map_t::const_iterator it = other.vertices.begin();
+				it != other.vertices.end(); it++) {
+			std::pair<typename v_map_t::iterator, bool> ret = this->vertices.insert(*it);
+			assert(ret.second);
+		}
+		this->num_in_edges += other.num_in_edges;
+		this->num_out_edges += other.num_out_edges;
+		this->num_non_empty_vertices += other.num_non_empty_vertices;
+	}
+
+	virtual void dump_as_edge_list(const std::string &file) const {
+		assert(!file_exist(file));
+		FILE *f = fopen(file.c_str(), "w");
+		if (f == NULL) {
+			perror("fopen");
+			assert(0);
+		}
+
+		for (typename v_map_t::const_iterator vit = vertices.begin();
+				vit != vertices.end(); vit++) {
+			edge_const_iterator<edge_data_type> eit
+				= vit->second.get_out_edge_begin();
+			edge_const_iterator<edge_data_type> end
+				= vit->second.get_out_edge_end();
+			for (; eit != end; ++eit) {
+				edge<edge_data_type> e = *eit;
+				assert(e.get_from() == vit->first);
+				// We only print the edges inside the graph or subgraph.
+				if (exist_vertex(e.get_to()))
+					fprintf(f, "%u\t%u\n", e.get_from(), e.get_to());
+			}
+		}
+
+		fclose(f);
+	}
 };
-#endif
 
 static inline void unique_merge(const std::vector<vertex_id_t> &v1,
 		const std::vector<vertex_id_t> &v2, std::vector<vertex_id_t> &v)
@@ -633,110 +691,5 @@ public:
 	}
 };
 #endif
-
-class ext_mem_vertex_iterator
-{
-	static const size_t MEM_SIZE = 1024 * 1024 * 1024;
-	graph_header header;
-	vertex_index_iterator *index_it;
-	FILE *adj_f;
-	char *adj_buf;
-	std::vector<in_mem_vertex_info> overflow_vinfos;
-	std::vector<char *> vertices;
-	std::vector<char *>::const_iterator vit;
-
-	void read_vertices();
-	ext_mem_vertex_iterator(const ext_mem_vertex_iterator &);
-	ext_mem_vertex_iterator &operator=(const ext_mem_vertex_iterator &);
-public:
-	ext_mem_vertex_iterator() {
-		index_it = NULL;
-		adj_f = NULL;
-		adj_buf = NULL;
-	}
-
-	ext_mem_vertex_iterator(const std::string &index_file,
-			const std::string &adj_file) {
-		init(index_file, adj_file);
-	}
-
-	~ext_mem_vertex_iterator() {
-		if (is_valid()) {
-			fclose(adj_f);
-			graph_type type = header.get_graph_type();
-			if (type == graph_type::DIRECTED)
-				directed_vertex_index_iterator::destroy(
-						(directed_vertex_index_iterator *) index_it);
-			else
-				default_vertex_index_iterator::destroy(
-						(default_vertex_index_iterator *) index_it);
-			delete [] adj_buf;
-		}
-	}
-
-	bool is_valid() const {
-		return index_it != NULL;
-	}
-
-	void init(const std::string &index_file, const std::string &adj_file) {
-		adj_f = fopen(adj_file.c_str(), "r");
-		assert(adj_f);
-		size_t ret = fread(&header, sizeof(header), 1, adj_f);
-		assert(ret == 1);
-
-		graph_type type = header.get_graph_type();
-		if (type == graph_type::DIRECTED)
-			index_it = directed_vertex_index_iterator::create(index_file);
-		else
-			index_it = default_vertex_index_iterator::create(index_file);
-
-		adj_buf = new char[MEM_SIZE];
-		// It's possible the graph has no vertices at all.
-		if (index_it->has_next())
-			read_vertices();
-	}
-
-	const graph_header &get_graph_header() const {
-		return header;
-	}
-
-	bool has_next() const {
-		if (vit != vertices.end())
-			return true;
-		else if (!overflow_vinfos.empty())
-			return true;
-		else
-			return index_it->has_next();
-	}
-
-	/*
-	 * The iterator uses an internal memory buffer to keep the vertices
-	 * read from the disks. Once next() or next_vertices() is invoked,
-	 * all vertices returned by the previous next() and next_vertices()
-	 * will become invalid.
-	 */
-
-	template<class vertex_type>
-	vertex_type *next() {
-		if (vit == vertices.end())
-			read_vertices();
-
-		vertex_type *v = (vertex_type *) *vit;
-		vit++;
-		return v;
-	}
-
-	template<class vertex_type>
-	size_t next_vertices(std::vector<vertex_type *> &ret) {
-		if (vit == vertices.end())
-			read_vertices();
-
-		while (vit != vertices.end()) {
-			ret.push_back((vertex_type *) *vit);
-			vit++;
-		}
-		return ret.size();
-	}
-};
 
 #endif

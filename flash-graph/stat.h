@@ -20,6 +20,16 @@
  * limitations under the License.
  */
 
+#include <limits.h>
+#include <math.h>
+#include <assert.h>
+
+#include <map>
+#include <vector>
+#include <boost/foreach.hpp>
+
+#include "FG_basic_types.h"
+
 class log_hist_bucket
 {
 	size_t lower_bound;
@@ -97,6 +107,57 @@ public:
 					get_bucket(i).get_upper_bound(),
 					get_bucket(i).get_count());
 		}
+	}
+};
+
+/**
+ * This count the apperances of each value of type T.
+ */
+template<class T>
+class count_map
+{
+	typedef std::map<T, size_t> map_t;
+	map_t map;
+public:
+	void add(const T &value) {
+		typename map_t::iterator it = map.find(value);
+		if (it == map.end())
+			map.insert(std::pair<T, vsize_t>(value, 1));
+		else
+			it->second++;
+	}
+
+	void merge(const count_map &map) {
+		BOOST_FOREACH(typename map_t::value_type v, map.map) {
+			typename map_t::iterator it = this->map.find(v.first);
+			if (it == this->map.begin())
+				this->map.insert(std::pair<T, size_t>(v.first, v.second));
+			else
+				it->second += v.second;
+		}
+	}
+
+	std::pair<T, size_t> get_max_count() const {
+		size_t max_counts = 0;
+		vertex_id_t max_v = T();
+		BOOST_FOREACH(typename map_t::value_type v, map) {
+			if (max_counts < v.second) {
+				max_counts = v.second;
+				max_v = v.first;
+			}
+		}
+		return std::pair<T, size_t>(max_v, max_counts);
+	}
+
+	template<class ApplyFunc>
+	void apply(ApplyFunc func) const {
+		BOOST_FOREACH(const typename map_t::value_type v, map) {
+			func(v);
+		}
+	}
+
+	size_t get_size() const {
+		return map.size();
 	}
 };
 

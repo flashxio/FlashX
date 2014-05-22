@@ -21,13 +21,10 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: scc wcc
+all: cc
 
-scc: scc.o ../libgraph.a
-	$(CXX) -o scc scc.o $(LDFLAGS)
-
-wcc: wcc.o ../libgraph.a
-	$(CXX) -o wcc wcc.o $(LDFLAGS)
+cc: $(OBJS) ../libgraph.a
+	$(CXX) -o cc $(OBJS)  $(LDFLAGS)
 
 clean:
 	rm -f *.d

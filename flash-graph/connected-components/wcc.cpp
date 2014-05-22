@@ -31,7 +31,8 @@
 #include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
-#include "stat.h"
+#include "FG_vector.h"
+#include "FGlib.h"
 
 atomic_number<long> num_visits;
 
@@ -112,78 +113,41 @@ void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	prog.multicast_msg(it, msg);
 }
 
-void int_handler(int sig_num)
+/**
+ * This query is to save the component IDs to a FG vector.
+ */
+class save_cid_query: public vertex_query
 {
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	exit(0);
-}
-
-void print_usage()
-{
-	fprintf(stderr,
-			"wcc [options] conf_file graph_file index_file\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-s size: the output min component size\n");
-	fprintf(stderr, "-o file: output the component size to the file\n");
-	fprintf(stderr, "-p: preload the graph\n");
-	graph_conf.print_help();
-	params.print_help();
-}
-
-int main(int argc, char *argv[])
-{
-	int opt;
-	std::string confs;
-	std::string output_file;
-	size_t min_comp_size = 0;
-	int num_opts = 0;
-	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:s:o:p")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 's':
-				min_comp_size = atoi(optarg);
-				num_opts++;
-				break;
-			case 'o':
-				output_file = optarg;
-				num_opts++;
-				break;
-			case 'p':
-				preload = true;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
-	if (argc < 3) {
-		print_usage();
-		exit(-1);
+	FG_vector<vertex_id_t>::ptr vec;
+public:
+	save_cid_query(FG_vector<vertex_id_t>::ptr vec) {
+		this->vec = vec;
 	}
 
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		wcc_vertex &wcc_v = (wcc_vertex &) v;
+		vec->set(wcc_v.get_id(), wcc_v.get_component_id());
+	}
 
-	config_map configs(conf_file);
-	configs.add_options(confs);
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	}
 
-	signal(SIGINT, int_handler);
+	virtual ptr clone() {
+		return vertex_query::ptr(new save_cid_query(vec));
+	}
+};
 
-	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
+{
+	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+#if 0
 	if (preload)
 		graph->preload_graph();
+#endif
 	printf("weakly connected components starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
@@ -192,69 +156,14 @@ int main(int argc, char *argv[])
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("It takes %f seconds\n", time_diff(start, end));
+	printf("WCC takes %f seconds\n", time_diff(start, end));
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 
-	typedef std::unordered_map<vertex_id_t, size_t> comp_map_t;
-	comp_map_t comp_counts;
-	graph_index::const_iterator it = index->begin();
-	graph_index::const_iterator end_it = index->end();
-	for (; it != end_it; ++it) {
-		const wcc_vertex &v = (const wcc_vertex &) *it;
-		if (v.is_empty(*graph))
-			continue;
-
-		comp_map_t::iterator map_it = comp_counts.find(v.get_component_id());
-		if (map_it == comp_counts.end()) {
-			comp_counts.insert(std::pair<vertex_id_t, size_t>(
-						v.get_component_id(), 1));
-		}
-		else {
-			map_it->second++;
-		}
-	}
-	size_t max_comp_size = 0;
-	BOOST_FOREACH(comp_map_t::value_type v, comp_counts) {
-		if (max_comp_size < v.second)
-			max_comp_size = v.second;
-	}
-	printf("There are %ld components, and largest comp has %ld vertices\n",
-			comp_counts.size(), max_comp_size);
-
-	if (!output_file.empty()) {
-		FILE *f = fopen(output_file.c_str(), "w");
-		assert(f);
-		std::unordered_map<vertex_id_t, log_histogram> comp_hist_map;
-		BOOST_FOREACH(comp_map_t::value_type &p, comp_counts) {
-			if (p.second >= min_comp_size) {
-				comp_hist_map.insert(std::pair<vertex_id_t, log_histogram>(p.first,
-							log_histogram(10)));
-				fprintf(f, "component %u: %ld\n", p.first, p.second);
-			}
-		}
-
-		it = index->begin();
-		end_it = index->end();
-		for (; it != end_it; ++it) {
-			const wcc_vertex &v = (const wcc_vertex &) *it;
-			if (v.is_empty(*graph))
-				continue;
-
-			std::unordered_map<vertex_id_t, log_histogram>::iterator map_it
-				= comp_hist_map.find(v.get_component_id());
-			if (map_it != comp_hist_map.end())
-				map_it->second.add_value(graph->get_vertex_edges(v.get_id()));
-		}
-		for (std::unordered_map<vertex_id_t, log_histogram>::iterator it
-				= comp_hist_map.begin(); it != comp_hist_map.end(); it++) {
-			fprintf(f, "comp %u:\n", it->first);
-			it->second.print(f);
-		}
-
-		fclose(f);
-	}
+	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	graph->query_on_all(vertex_query::ptr(new save_cid_query(vec)));
+	return vec;
 }

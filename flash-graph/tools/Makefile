@@ -23,11 +23,11 @@ CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
 all: el2al print_ts_graph graph_merger rmat-gen
 
-el2al: el2al.o graph.o ../libgraph.a
-	$(CXX) -o el2al el2al.o graph.o $(LDFLAGS)
+el2al: el2al.o ext_mem_vertex_iterator.o ../libgraph.a
+	$(CXX) -o el2al el2al.o ext_mem_vertex_iterator.o $(LDFLAGS)
 
-graph_merger: graph_merger.o graph.o ../libgraph.a
-	$(CXX) -o graph_merger graph_merger.o graph.o $(LDFLAGS)
+graph_merger: graph_merger.o ext_mem_vertex_iterator.o ../libgraph.a
+	$(CXX) -o graph_merger graph_merger.o ext_mem_vertex_iterator.o $(LDFLAGS)
 
 print_ts_graph: print_ts_graph.o ../libgraph.a
 	$(CXX) -o print_ts_graph print_ts_graph.o $(LDFLAGS)

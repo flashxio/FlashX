@@ -33,6 +33,8 @@
 #include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "FG_vector.h"
+#include "FGlib.h"
 
 typedef std::unordered_map<vertex_id_t, vsize_t> comp_map_t;
 
@@ -878,13 +880,6 @@ void scc_vertex::run_on_message_stage_wcc(vertex_program &prog,
 	}
 }
 
-void int_handler(int sig_num)
-{
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	exit(0);
-}
-
 #if 0
 class sec_fwbw_filter: public vertex_filter
 {
@@ -1060,17 +1055,6 @@ public:
 	}
 };
 
-void print_usage()
-{
-	fprintf(stderr,
-			"scc [options] conf_file graph_file index_file\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-s size: the output min component size\n");
-	fprintf(stderr, "-o file: output the component size to the file\n");
-	graph_conf.print_help();
-	params.print_help();
-}
-
 class comp_size_compare
 {
 public:
@@ -1080,6 +1064,7 @@ public:
 	}
 };
 
+#if 0
 int main(int argc, char *argv[])
 {
 	struct timeval start, end, scc_start;
@@ -1335,4 +1320,10 @@ int main(int argc, char *argv[])
 		}
 		fclose(f);
 	}
+}
+#endif
+
+FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
+{
+	assert(0);
 }

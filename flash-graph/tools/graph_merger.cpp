@@ -21,6 +21,7 @@
 
 #include "graph.h"
 #include "edge_type.h"
+#include "ext_mem_vertex_iterator.h"
 
 bool print_graph = false;
 bool check_graph = false;

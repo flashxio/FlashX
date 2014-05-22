@@ -30,12 +30,7 @@
 
 #include "container.h"
 #include "cache.h"
-
-typedef unsigned int vsize_t;
-typedef unsigned int vertex_id_t;
-const vertex_id_t MAX_VERTEX_ID = UINT_MAX;
-const vertex_id_t INVALID_VERTEX_ID = -1;
-const size_t MAX_VERTEX_SIZE = INT_MAX;
+#include "FG_basic_types.h"
 
 enum edge_type {
 	NONE,
@@ -1522,6 +1517,19 @@ public:
 		this->has_data = has_data;
 	}
 
+	in_mem_directed_vertex(const page_directed_vertex &vertex,
+			bool has_data) {
+		this->id = vertex.get_id();
+		this->has_data = has_data;
+		in_edges.resize(vertex.get_num_edges(edge_type::IN_EDGE));
+		vertex.read_edges(edge_type::IN_EDGE, in_edges.data(),
+				vertex.get_num_edges(edge_type::IN_EDGE));
+		out_edges.resize(vertex.get_num_edges(edge_type::OUT_EDGE));
+		vertex.read_edges(edge_type::OUT_EDGE, out_edges.data(),
+				vertex.get_num_edges(edge_type::OUT_EDGE));
+		assert(!has_data);
+	}
+
 	in_mem_directed_vertex(const ext_mem_directed_vertex *v) {
 		id = v->get_id();
 		has_data = v->has_edge_data();
@@ -1669,6 +1677,16 @@ public:
 	in_mem_undirected_vertex(vertex_id_t id, bool has_data) {
 		this->id = id;
 		this->has_data = has_data;
+	}
+
+	in_mem_undirected_vertex(const page_undirected_vertex &vertex,
+			bool has_data) {
+		this->id = vertex.get_id();
+		this->has_data = has_data;
+		edges.resize(vertex.get_num_edges(edge_type::BOTH_EDGES));
+		vertex.read_edges(edge_type::BOTH_EDGES, edges.data(),
+				vertex.get_num_edges(edge_type::BOTH_EDGES));
+		assert(!has_data);
 	}
 
 	vertex_id_t get_id() const {
