@@ -125,27 +125,12 @@ int main(int argc, char *argv[])
 		}
 	};
 
-	std::set<vertex_id_t> wanted_clusters;
-	map.apply(large_comp_apply(wanted_clusters, min_comp_size));
+	std::set<vertex_id_t> wanted_comps;
+	map.apply(large_comp_apply(wanted_comps, min_comp_size));
 	// We ignore the largest component.
-	wanted_clusters.erase(max_comp.first);
+	wanted_comps.erase(max_comp.first);
 	printf("There are %ld components of the size larger than %ld\n",
-			wanted_clusters.size() + 1, min_comp_size);
-
-	std::map<vertex_id_t, graph::ptr> clusters;
-	fetch_subgraphs(graph, comp_ids, wanted_clusters, clusters);
-
-	struct print_apply
-	{
-		FILE *f;
-		print_apply(FILE *f) {
-			this->f = f;
-		}
-
-		void operator()(const std::pair<vertex_id_t, size_t> &v) {
-			fprintf(f, "comp %u: %ld\n", v.first, v.second);
-		}
-	};
+			wanted_comps.size() + 1, min_comp_size);
 
 	if (!output_file.empty()) {
 		FILE *f = fopen(output_file.c_str(), "w");
@@ -153,7 +138,24 @@ int main(int argc, char *argv[])
 			perror("fopen");
 			assert(0);
 		}
-		map.apply(print_apply(f));
+
+		std::map<vertex_id_t, graph::ptr> clusters;
+		fetch_subgraphs(graph, comp_ids, wanted_comps, clusters);
+
+		typedef std::map<vertex_id_t, std::pair<size_t, size_t> > size_map_t;
+		size_map_t cluster_sizes;
+		compute_subgraph_sizes(graph, comp_ids, wanted_comps, cluster_sizes);
+
+		BOOST_FOREACH(size_map_t::value_type v, cluster_sizes) {
+			std::map<vertex_id_t, graph::ptr>::const_iterator it
+				= clusters.find(v.first);
+			assert(it != clusters.end());
+			assert(v.second.first == it->second->get_num_vertices());
+			assert(v.second.second == it->second->get_num_edges());
+			fprintf(f, "comp %u: %ld, %ld\n", v.first, v.second.first,
+					v.second.second);
+		}
+
 		fclose(f);
 
 		typedef std::pair<vertex_id_t, directed_graph<>::ptr> id_graph_t;

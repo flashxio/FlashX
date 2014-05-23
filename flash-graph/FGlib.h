@@ -66,4 +66,11 @@ void fetch_subgraphs(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr comp_ids,
 		const std::set<vertex_id_t> &wanted_clusters, std::map<vertex_id_t,
 		graph::ptr> &clusters);
 
+/**
+ * Compute the size of each subgraph identified by cluster IDs.
+ */
+void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr comp_ids,
+		const std::set<vertex_id_t> &wanted_clusters,
+		std::map<vertex_id_t, std::pair<size_t, size_t> > &sizes);
+
 #endif
