@@ -331,7 +331,10 @@ public:
 	}
 
 	size_t get_num_edges() const {
-		return get_num_in_edges() + get_num_out_edges();
+		assert(get_num_in_edges() == get_num_out_edges());
+		// The total number of edges should be the total number of in-edges
+		// or out-edges.
+		return get_num_in_edges();
 	}
 
 	size_t get_num_vertices() const {
