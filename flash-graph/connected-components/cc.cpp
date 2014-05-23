@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 		typedef std::pair<vertex_id_t, directed_graph<>::ptr> id_graph_t;
 		BOOST_FOREACH(id_graph_t v, clusters) {
 			v.second->dump_as_edge_list(output_file
-					+ "-" + itoa(v.first));
+					+ "-" + ltoa(v.first));
 		}
 	}
 }
