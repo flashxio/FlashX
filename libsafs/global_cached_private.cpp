@@ -1288,7 +1288,7 @@ void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
 	while (processing_req.is_empty() && !queue.is_empty()
 			// Limit the number of async requests being processed.
 			&& num_processed_areqs.get() - num_completed_areqs.get(
-				) < get_max_num_pending_ios()
+				) < (size_t) get_max_num_pending_ios()
 			// TODO the maximal number should be configurable.
 			&& num_underlying_pages.get() < 100) {
 		io_request req = queue.pop_front();
