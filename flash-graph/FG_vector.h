@@ -84,6 +84,22 @@ public:
 		return sqrt(ret);
 	}
 
+	T norm1() const {
+		T ret = 0;
+#pragma omp parallel for reduction(+:ret)
+		for (size_t i = 0; i < get_size(); i++)
+			ret += fabs(get(i));
+		return ret;
+	}
+
+	T sum() const {
+		T ret = 0;
+#pragma omp parallel for reduction(+:ret)
+		for (size_t i = 0; i < get_size(); i++)
+			ret += get(i);
+		return ret;
+	}
+
 	void div_by_in_place(T v) {
 #pragma omp parallel for
 		for (size_t i = 0; i < get_size(); i++)

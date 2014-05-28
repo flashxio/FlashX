@@ -228,7 +228,7 @@ public:
 int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 		ev_float_t last_beta, int k, int m,
 		std::vector<ev_float_t> &wanted, std::vector<ev_float_t> &unwanted,
-		std::vector<std::vector<ev_float_t> > &wanted_eigen_vectors)
+		std::vector<FG_vector<ev_float_t>::ptr> &wanted_eigen_vectors)
 {
 	Eigen::EigenSolver<Eigen::MatrixXd> es(T);
 
@@ -265,9 +265,10 @@ int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 			printf("converged ev[%d]: %f\n", i, wanted.back());
 
 			// Get the eigen vectors corresponding to the wanted eigen values.
-			std::vector<ev_float_t> eigen_vector(m);
+			FG_vector<ev_float_t>::ptr eigen_vector
+				= FG_vector<ev_float_t>::create(m);
 			for (int j = 0; j < m; j++)
-				eigen_vector[j] = eigen_vectors(j, idx).real();
+				eigen_vector->set(j, eigen_vectors(j, idx).real());
 			wanted_eigen_vectors.push_back(eigen_vector);
 		}
 	}
@@ -394,6 +395,7 @@ int main(int argc, char *argv[])
 		I_vec(i) = 1;
 	Eigen::MatrixXd I = I_vec.asDiagonal();
 
+	std::vector<FG_vector<ev_float_t>::ptr> wanted_eigen_vectors;
 	lanczos_factorization(smatrix, V, r, 0, m, alphas, betas, T);
 	while (true) {
 		struct timeval start, end;
@@ -401,7 +403,7 @@ int main(int argc, char *argv[])
 
 		std::vector<ev_float_t> unwanted;
 		std::vector<ev_float_t> wanted;
-		std::vector<std::vector<ev_float_t> > wanted_eigen_vectors;
+		wanted_eigen_vectors.clear();
 		int num_converged = get_converged_eigen(T, which, betas(m - 1),
 				nv, m, wanted, unwanted, wanted_eigen_vectors);
 		if (num_converged >= nv)
@@ -444,6 +446,13 @@ int main(int argc, char *argv[])
 	}
 	gettimeofday(&end, NULL);
 	printf("The total running time is %f seconds\n", time_diff(start, end));
+
+	assert((size_t) nv == wanted_eigen_vectors.size());
+	std::vector<FG_vector<ev_float_t>::ptr> orig_eigen_vectors(nv);
+	for (int i = 0; i < nv; i++) {
+		orig_eigen_vectors[i] = V->multiply(*wanted_eigen_vectors[i]);
+		printf("eigen vector: %f\n", orig_eigen_vectors[i]->norm1());
+	}
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
