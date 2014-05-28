@@ -42,6 +42,16 @@ typedef double ev_float_t;
 const int RHO = 1;
 const ev_float_t TOL = 1e-8;
 
+class SPMV
+{
+public:
+	virtual void compute(const FG_vector<ev_float_t> &input,
+			FG_vector<ev_float_t> &output) = 0;
+	virtual size_t get_vector_size() = 0;
+};
+
+typedef std::pair<ev_float_t, FG_vector<ev_float_t>::ptr> eigen_pair_t;
+
 class substract_store
 {
 	FG_vector<ev_float_t>::ptr r;
@@ -101,7 +111,7 @@ public:
 	}
 };
 
-void lanczos_factorization(FG_sym_adj_matrix::ptr A,
+void lanczos_factorization(SPMV &spmv,
 		FG_col_wise_matrix<ev_float_t>::ptr V, FG_vector<ev_float_t>::ptr r,
 		int k, int m, Eigen::VectorXd &alphas, Eigen::VectorXd &betas,
 		Eigen::MatrixXd &T)
@@ -111,7 +121,7 @@ void lanczos_factorization(FG_sym_adj_matrix::ptr A,
 		T(k, k - 1) = beta;
 		T(k - 1, k) = beta;
 	}
-	size_t num_rows = A->get_num_rows();
+	size_t num_rows = spmv.get_vector_size();
 	printf("first beta: %f\n", beta);
 	for (int i = k; i < m; i++) {
 		struct timeval start, end;
@@ -124,7 +134,7 @@ void lanczos_factorization(FG_sym_adj_matrix::ptr A,
 		V->resize(num_rows, i + 1);
 		FG_vector<ev_float_t>::ptr vi = V->get_col_ref(i);
 		r->apply(divide_apply(beta), *vi);
-		A->multiply(*vi, *r);
+		spmv.compute(*vi, *r);
 		gettimeofday(&end, NULL);
 		printf("SPMV takes %f seconds\n", time_diff(start, end));
 
@@ -295,6 +305,117 @@ public:
 	}
 };
 
+class eigen_SPMV: public SPMV
+{
+	FG_sym_adj_matrix::ptr A;
+public:
+	eigen_SPMV(FG_sym_adj_matrix::ptr A) {
+		this->A = A;
+	}
+
+	virtual void compute(const FG_vector<ev_float_t> &input,
+			FG_vector<ev_float_t> &output) {
+		A->multiply(input, output);
+	}
+
+	virtual size_t get_vector_size() {
+		return A->get_num_rows();
+	}
+};
+
+void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
+		std::vector<eigen_pair_t> &eigen_pairs)
+{
+	FG_col_wise_matrix<ev_float_t>::ptr V
+		= FG_col_wise_matrix<ev_float_t>::create(spmv.get_vector_size(), m);
+	FG_vector<ev_float_t>::ptr r = FG_vector<ev_float_t>::create(
+			spmv.get_vector_size());
+	r->init(1);
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	Eigen::MatrixXd T;
+	Eigen::VectorXd betas;
+	Eigen::VectorXd alphas;
+	T.conservativeResize(m, m);
+	std::pair<int, int> matrix_size(m, m);
+	reset_matrix(T, matrix_size);
+	betas.conservativeResize(m);
+	alphas.conservativeResize(m);
+
+	Eigen::VectorXd I_vec;
+	I_vec.conservativeResize(m);
+	for (int i = 0; i < m; i++)
+		I_vec(i) = 1;
+	Eigen::MatrixXd I = I_vec.asDiagonal();
+
+	std::vector<FG_vector<ev_float_t>::ptr> wanted_eigen_vectors;
+	std::vector<ev_float_t> wanted_eigen_values;
+	lanczos_factorization(spmv, V, r, 0, m, alphas, betas, T);
+	while (true) {
+		struct timeval start, end;
+		gettimeofday(&start, NULL);
+
+		std::vector<ev_float_t> unwanted;
+		wanted_eigen_vectors.clear();
+		wanted_eigen_values.clear();
+		int num_converged = get_converged_eigen(T, which, betas(m - 1),
+				nv, m, wanted_eigen_values, unwanted, wanted_eigen_vectors);
+		if (num_converged >= nv)
+			break;
+
+		Eigen::MatrixXd Q = I;
+		assert(unwanted.size() == (size_t) (m - nv));
+		for (int i = 0; i < m - nv; i++) {
+			ev_float_t mu = unwanted[i];
+			Eigen::MatrixXd tmp = T - (I * mu);
+			Eigen::HouseholderQR<Eigen::MatrixXd> qr = tmp.householderQr();
+			Eigen::MatrixXd Qj = qr.householderQ();
+			T = Qj.transpose() * T;
+			T = T * Qj;
+			Q = Q * Qj;
+		}
+
+		// w_k = v_k+1 * beta_k + w_m * sigma_k,
+		// where beta_k = T_m[k + 1, k] and sigma_k = Q[m, k]
+		ev_float_t beta_k = T(nv, nv - 1);
+		std::cout << "beta: " << beta_k
+			<< ", sigma: " << Q(m - 1, nv - 1) << std::endl;
+		std::vector<FG_vector<ev_float_t>::ptr> inputs(2);
+		inputs[0] = V->get_col_ref(nv);
+		inputs[1] = r;
+		post_QR_apply apply(beta_k, Q(m - 1, nv - 1));
+		multi_vec_apply<ev_float_t, post_QR_apply>(inputs, r, apply);
+		// V_k = V_m * Q[:, 1:k]
+		FG_eigen_matrix<ev_float_t> subQ(Q, m, nv);
+		printf("subQ: %ld, %ld\n", subQ.get_num_rows(), subQ.get_num_cols());
+		printf("V: %ld, %ld\n", V->get_num_rows(), V->get_num_cols());
+		V->multiply_in_place(subQ);
+		// T_k = T_m[1:k, 1:k]
+		std::pair<int, int> keep_region_size(nv, nv);
+		reset_matrix_remain(T, matrix_size, keep_region_size);
+		gettimeofday(&end, NULL);
+		printf("Eigen lib takes %f seconds\n", time_diff(start, end));
+
+		lanczos_factorization(spmv, V, r, nv, m, alphas, betas, T);
+	}
+	gettimeofday(&end, NULL);
+	printf("The total running time is %f seconds\n", time_diff(start, end));
+
+	assert((size_t) nv == wanted_eigen_vectors.size());
+	std::vector<FG_vector<ev_float_t>::ptr> orig_eigen_vectors(nv);
+	for (int i = 0; i < nv; i++) {
+		orig_eigen_vectors[i] = V->multiply(*wanted_eigen_vectors[i]);
+		printf("eigen vector: %f\n", orig_eigen_vectors[i]->norm1());
+	}
+
+	assert(wanted_eigen_values.size() == orig_eigen_vectors.size());
+	for (size_t i = 0; i < wanted_eigen_values.size(); i++) {
+		eigen_pairs.push_back(eigen_pair_t(wanted_eigen_values[i],
+					orig_eigen_vectors[i]));
+	}
+}
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -370,87 +491,11 @@ int main(int argc, char *argv[])
 
 	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
 	FG_sym_adj_matrix::ptr smatrix = FG_sym_adj_matrix::create(graph);
-	FG_col_wise_matrix<ev_float_t>::ptr V
-		= FG_col_wise_matrix<ev_float_t>::create(smatrix->get_num_rows(), m);
-	FG_vector<ev_float_t>::ptr r = FG_vector<ev_float_t>::create(
-			smatrix->get_num_rows());
-	r->init(1);
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
-	Eigen::MatrixXd T;
-	Eigen::VectorXd betas;
-	Eigen::VectorXd alphas;
-	T.conservativeResize(m, m);
-	std::pair<int, int> matrix_size(m, m);
-	reset_matrix(T, matrix_size);
-	betas.conservativeResize(m);
-	alphas.conservativeResize(m);
-
-	Eigen::VectorXd I_vec;
-	I_vec.conservativeResize(m);
-	for (int i = 0; i < m; i++)
-		I_vec(i) = 1;
-	Eigen::MatrixXd I = I_vec.asDiagonal();
-
-	std::vector<FG_vector<ev_float_t>::ptr> wanted_eigen_vectors;
-	lanczos_factorization(smatrix, V, r, 0, m, alphas, betas, T);
-	while (true) {
-		struct timeval start, end;
-		gettimeofday(&start, NULL);
-
-		std::vector<ev_float_t> unwanted;
-		std::vector<ev_float_t> wanted;
-		wanted_eigen_vectors.clear();
-		int num_converged = get_converged_eigen(T, which, betas(m - 1),
-				nv, m, wanted, unwanted, wanted_eigen_vectors);
-		if (num_converged >= nv)
-			break;
-
-		Eigen::MatrixXd Q = I;
-		assert(unwanted.size() == (size_t) (m - nv));
-		for (int i = 0; i < m - nv; i++) {
-			ev_float_t mu = unwanted[i];
-			Eigen::MatrixXd tmp = T - (I * mu);
-			Eigen::HouseholderQR<Eigen::MatrixXd> qr = tmp.householderQr();
-			Eigen::MatrixXd Qj = qr.householderQ();
-			T = Qj.transpose() * T;
-			T = T * Qj;
-			Q = Q * Qj;
-		}
-
-		// w_k = v_k+1 * beta_k + w_m * sigma_k,
-		// where beta_k = T_m[k + 1, k] and sigma_k = Q[m, k]
-		ev_float_t beta_k = T(nv, nv - 1);
-		std::cout << "beta: " << beta_k
-			<< ", sigma: " << Q(m - 1, nv - 1) << std::endl;
-		std::vector<FG_vector<ev_float_t>::ptr> inputs(2);
-		inputs[0] = V->get_col_ref(nv);
-		inputs[1] = r;
-		post_QR_apply apply(beta_k, Q(m - 1, nv - 1));
-		multi_vec_apply<ev_float_t, post_QR_apply>(inputs, r, apply);
-		// V_k = V_m * Q[:, 1:k]
-		FG_eigen_matrix<ev_float_t> subQ(Q, m, nv);
-		printf("subQ: %ld, %ld\n", subQ.get_num_rows(), subQ.get_num_cols());
-		printf("V: %ld, %ld\n", V->get_num_rows(), V->get_num_cols());
-		V->multiply_in_place(subQ);
-		// T_k = T_m[1:k, 1:k]
-		std::pair<int, int> keep_region_size(nv, nv);
-		reset_matrix_remain(T, matrix_size, keep_region_size);
-		gettimeofday(&end, NULL);
-		printf("Eigen lib takes %f seconds\n", time_diff(start, end));
-
-		lanczos_factorization(smatrix, V, r, nv, m, alphas, betas, T);
-	}
-	gettimeofday(&end, NULL);
-	printf("The total running time is %f seconds\n", time_diff(start, end));
-
-	assert((size_t) nv == wanted_eigen_vectors.size());
-	std::vector<FG_vector<ev_float_t>::ptr> orig_eigen_vectors(nv);
-	for (int i = 0; i < nv; i++) {
-		orig_eigen_vectors[i] = V->multiply(*wanted_eigen_vectors[i]);
-		printf("eigen vector: %f\n", orig_eigen_vectors[i]->norm1());
-	}
+	eigen_SPMV spmv(smatrix);
+	std::vector<eigen_pair_t> eigen_pairs;
+	eigen_solver(spmv, m, nv, which, eigen_pairs);
+	assert(eigen_pairs.size() == (size_t) nv);
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
