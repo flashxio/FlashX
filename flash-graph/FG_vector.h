@@ -30,11 +30,13 @@ class FG_vector
 {
 	// TODO I might need to split the vector into partitions.
 	std::vector<T> eles;
-	graph_engine::ptr graph;
 
 	FG_vector(graph_engine::ptr graph) {
-		this->graph = graph;
 		eles.resize(graph->get_num_vertices());
+	}
+
+	FG_vector(size_t size) {
+		eles.resize(size);
 	}
 
 public:
@@ -42,6 +44,16 @@ public:
 
 	static ptr create(graph_engine::ptr graph) {
 		return ptr(new FG_vector<T>(graph));
+	}
+
+	static ptr create(size_t size) {
+		return ptr(new FG_vector<T>(size));
+	}
+
+	void init(T v) {
+#pragma omp parallel for
+		for (size_t i = 0; i < eles.size(); i++)
+			eles[i] = v;
 	}
 
 	void count_unique(count_map<T> &map) {
@@ -55,6 +67,48 @@ public:
 		return eles.size();
 	}
 
+	T dot_product(const FG_vector<T> &other) const {
+		assert(this->get_size() == other.get_size());
+		T ret = 0;
+#pragma omp parallel for reduction(+:ret)
+		for (size_t i = 0; i < get_size(); i++)
+			ret += get(i) * other.get(i);
+		return ret;
+	}
+
+	T norm2() const {
+		T ret = 0;
+#pragma omp parallel for reduction(+:ret)
+		for (size_t i = 0; i < get_size(); i++)
+			ret += get(i) * get(i);
+		return sqrt(ret);
+	}
+
+	void div_by_in_place(T v) {
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] /= v;
+	}
+
+	void normalize(int type) {
+		T norm;
+		switch(type) {
+			case 2:
+				norm = norm2();
+				break;
+			default:
+				assert(0);
+		}
+		div_by_in_place(norm);
+	}
+
+	template<class ApplyFunc>
+	void apply(ApplyFunc func, FG_vector<T> &output) {
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
+			output.set(i, func(eles[i]));
+	}
+
 	// TODO these interfaces assume shared memory.
 
 	void set(vertex_id_t id, const T &v) {
@@ -65,5 +119,16 @@ public:
 		return eles[id];
 	}
 };
+
+template<class T, class ApplyFunc>
+void multi_vec_apply(const std::vector<typename FG_vector<T>::ptr> &inputs,
+		typename FG_vector<T>::ptr output, ApplyFunc apply)
+{
+	for (size_t i = 0; i < inputs.size(); i++)
+		assert(output->get_size() == inputs[i]->get_size());
+#pragma omp parallel for
+	for (size_t i = 0; i < output->get_size(); i++)
+		output->set(i, apply(i, inputs));
+}
 
 #endif
