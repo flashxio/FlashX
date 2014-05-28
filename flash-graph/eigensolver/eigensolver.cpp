@@ -517,8 +517,8 @@ void reset_matrix_remain(Eigen::MatrixXd &T, std::pair<int, int> &size,
 			T(i, j) = 0;
 }
 
-// eigen values, bounds
-typedef std::pair<ev_float_t, ev_float_t> ev_pair_t;
+// eigen values, index
+typedef std::pair<ev_float_t, int> ev_pair_t;
 
 class LA_comp
 {
@@ -554,7 +554,8 @@ public:
 
 int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 		ev_float_t last_beta, int k, int m,
-		std::vector<ev_float_t> &wanted, std::vector<ev_float_t> &unwanted)
+		std::vector<ev_float_t> &wanted, std::vector<ev_float_t> &unwanted,
+		std::vector<std::vector<ev_float_t> > &wanted_eigen_vectors)
 {
 	Eigen::EigenSolver<Eigen::MatrixXd> es(T);
 
@@ -564,7 +565,7 @@ int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 	std::vector<ev_pair_t> eigen_val_vec(m);
 	for (int i = 0; i < m; i++) {
 		eigen_val_vec[i].first = eigen_values(i).real();
-		eigen_val_vec[i].second = abs(last_beta * eigen_vectors(m - 1, i).real());
+		eigen_val_vec[i].second = i;
 	}
 
 	// sort the vector of eigen values so that the first k are wanted eigenvalues.
@@ -583,10 +584,18 @@ int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 
 	int num_converged = 0;
 	for (int i = 0; i < k; i++) {
-		if (eigen_val_vec[i].second < TOL * abs(eigen_val_vec[i].first)) {
+		int idx = eigen_val_vec[i].second;
+		ev_float_t bound = abs(last_beta * eigen_vectors(m - 1, i).real());
+		if (bound < TOL * abs(eigen_val_vec[i].first)) {
 			wanted.push_back(eigen_val_vec[i].first);
 			num_converged++;
 			printf("converged ev[%d]: %f\n", i, wanted.back());
+
+			// Get the eigen vectors corresponding to the wanted eigen values.
+			std::vector<ev_float_t> eigen_vector(m);
+			for (int j = 0; j < m; j++)
+				eigen_vector[j] = eigen_vectors(j, idx).real();
+			wanted_eigen_vectors.push_back(eigen_vector);
 		}
 	}
 
@@ -702,8 +711,9 @@ int main(int argc, char *argv[])
 
 		std::vector<ev_float_t> unwanted;
 		std::vector<ev_float_t> wanted;
+		std::vector<std::vector<ev_float_t> > wanted_eigen_vectors;
 		int num_converged = get_converged_eigen(T, which, betas(m - 1),
-				nv, m, wanted, unwanted);
+				nv, m, wanted, unwanted, wanted_eigen_vectors);
 		if (num_converged >= nv)
 			break;
 
