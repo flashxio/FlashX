@@ -39,7 +39,6 @@
 
 typedef double ev_float_t;
 
-const int VS_SIZE = 10;
 const int RHO = 1;
 const ev_float_t TOL = 1e-8;
 
@@ -363,7 +362,6 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, int_handler);
 
-	assert(m <= VS_SIZE);
 	assert(nv < m);
 	printf("Eigensolver starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
