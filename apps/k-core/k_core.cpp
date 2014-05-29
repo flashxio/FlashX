@@ -123,14 +123,13 @@ void kcore_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   }
 
   if ( get_degree() < CURRENT_K ) {
-    set_core(CURRENT_K - (CURRENT_K - get_degree())); // TODO: Verify
+    set_core(CURRENT_K - 1); // This is true because you must make it past CURRENT_K-1 to be here
     _delete();
 
     // Send two multicast messages - [IN_EDGE, OUT_EDGE] 
     multicast_delete_msg(prog, vertex, IN_EDGE);
     multicast_delete_msg(prog, vertex, OUT_EDGE);
   }
-
 }
 
 void kcore_vertex::run_on_message(vertex_program &prog, const vertex_message &msg) {
@@ -356,10 +355,11 @@ int main(int argc, char *argv[])
       }
       
       printf("\n\nThe graphs minimum degree remaining is %u\n\n", min_degree_remaining);
-      CURRENT_K = min_degree_remaining;
+      // Effectively jumps us to the CURRENT_K + 1th core
+      CURRENT_K = min_degree_remaining; // NOTE: Careful - messing with the loop variable :/
       
-      // TODO: Remove this if and TEST
-      if (CURRENT_K > kmax || CURRENT_K == PREVIOUS_K) 
+      if (CURRENT_K > kmax) 
+        printf("\nTerminating computation at kmax\n");
         break;
     }
     all_greater_than_core = true;
@@ -376,7 +376,17 @@ int main(int argc, char *argv[])
     PREVIOUS_K = CURRENT_K;
 
   }
-  
+
+  // Print out
+  graph_index::const_iterator it = index->begin();
+  graph_index::const_iterator end_it = index->end();
+  printf("Cores by vertex:\n");
+  for (; it != end_it; ++it) {
+    const kcore_vertex &v = (const kcore_vertex &) *it;
+    printf("%u, ", v.get_core());
+  }
+  printf("\n");
+
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	//if (graph_conf.get_print_io_stat())
