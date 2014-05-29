@@ -23,6 +23,14 @@
 #include "graph_engine.h"
 #include "FGlib.h"
 
+enum FG_sparse_type
+{
+	ADJACENCY,
+	LAPLACIAN,
+	GENERAL,
+	INVALID,
+};
+
 class SPMV_vertex: public compute_vertex
 {
 public:
@@ -38,38 +46,17 @@ public:
 		request_vertices(&id, 1);
 	}
 
-	void run(vertex_program &prog, const page_vertex &vertex);
+	void run(vertex_program &prog, const page_vertex &vertex) {
+	}
 
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 };
 
+template<class T>
 class SPMV_vertex_program: public vertex_program_impl<SPMV_vertex>
 {
 	edge_type type;
-public:
-	SPMV_vertex_program(edge_type type) {
-		this->type = type;
-	}
-
-	edge_type get_edge_type() const {
-		return type;
-	}
-
-	virtual void compute(vertex_id_t vertex_id, edge_seq_iterator &it) = 0;
-};
-
-inline void SPMV_vertex::run(vertex_program &prog, const page_vertex &vertex)
-{
-	SPMV_vertex_program &SPMV_vprog = (SPMV_vertex_program &) prog;
-	edge_seq_iterator it = vertex.get_neigh_seq_it(SPMV_vprog.get_edge_type(),
-			0, vertex.get_num_edges(SPMV_vprog.get_edge_type()));
-	SPMV_vprog.compute(get_id(), it);
-}
-
-template<class T>
-class T_SPMV_vertex_program: public SPMV_vertex_program
-{
 	const FG_vector<T> &input;
 	FG_vector<T> &output;
 
@@ -80,25 +67,31 @@ class T_SPMV_vertex_program: public SPMV_vertex_program
 	void set_output(off_t idx, const T &v) {
 		output.set(idx, v);
 	}
+
+	edge_type get_edge_type() const {
+		return type;
+	}
 public:
-	typedef std::shared_ptr<T_SPMV_vertex_program<T> > ptr;
+	typedef std::shared_ptr<SPMV_vertex_program<T> > ptr;
 
 	static ptr cast2(vertex_program::ptr prog) {
-		return std::static_pointer_cast<T_SPMV_vertex_program<T>, vertex_program>(
-				prog);
+		return std::static_pointer_cast<SPMV_vertex_program<T>,
+			   vertex_program>(prog);
 	}
 
-	T_SPMV_vertex_program(edge_type type, const FG_vector<T> &_input,
-			FG_vector<T> &_output): SPMV_vertex_program(type), input(
-				_input), output(_output) {
+	SPMV_vertex_program(edge_type type, const FG_vector<T> &_input,
+			FG_vector<T> &_output): input(_input), output(_output) {
+		this->type = type;
 	}
 
-	void compute(vertex_id_t vertex_id, edge_seq_iterator &it) {
+	virtual void run(compute_vertex &, const page_vertex &vertex) {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(get_edge_type(),
+				0, vertex.get_num_edges(get_edge_type()));
 		T w = 0;
 		PAGE_FOREACH(vertex_id_t, id, it) {
 			w += get_input(id);
 		} PAGE_FOREACH_END
-		set_output(vertex_id, w);
+		set_output(vertex.get_id(), w);
 	}
 };
 
@@ -107,47 +100,58 @@ class SPMV_vertex_program_creater: public vertex_program_creater
 {
 	const FG_vector<T> &input;
 	FG_vector<T> &output;
-	edge_type type;
+	edge_type etype;
+	FG_sparse_type mtype;
 public:
-	SPMV_vertex_program_creater(edge_type type, const FG_vector<T> &_input,
-			FG_vector<T> &_output): input(_input), output(_output) {
-		this->type = type;
+	SPMV_vertex_program_creater(edge_type etype, FG_sparse_type mtype,
+			const FG_vector<T> &_input, FG_vector<T> &_output): input(
+				_input), output(_output) {
+		this->etype = etype;
+		this->mtype = mtype;
 	}
 
 	vertex_program::ptr create() const {
-		return vertex_program::ptr(new T_SPMV_vertex_program<T>(type, input, output));
+		switch(mtype) {
+			case FG_sparse_type::ADJACENCY:
+				return vertex_program::ptr(new SPMV_vertex_program<T>(
+							etype, input, output));
+			default:
+				assert(0);
+		}
 	}
 };
 
-class FG_adj_matrix
+class FG_sparse_matrix
 {
+	// The type of matrix represented by the graph.
+	FG_sparse_type mtype;
 	// The type of edges that multiplication occurs.
 	// For a symmetric matrix, the edge type does not matter.
-	edge_type type;
+	edge_type etype;
 	graph_engine::ptr graph;
 
-	FG_adj_matrix() {
+	FG_sparse_matrix() {
+		etype = edge_type::NONE;
+		mtype = FG_sparse_type::INVALID;
 	}
 
-	FG_adj_matrix(FG_graph::ptr fg) {
+protected:
+	FG_sparse_matrix(FG_graph::ptr fg, FG_sparse_type mtype) {
 		graph_index::ptr index = NUMA_graph_index<SPMV_vertex>::create(
 				fg->get_index_file());
 		graph = graph_engine::create(fg->get_graph_file(),
 				index, fg->get_configs());
-		type = edge_type::OUT_EDGE;
+		etype = edge_type::OUT_EDGE;
+		this->mtype = mtype;
 	}
 public:
-	typedef std::shared_ptr<FG_adj_matrix> ptr;
-
-	static ptr create(FG_graph::ptr fg) {
-		return ptr(new FG_adj_matrix(fg));
-	}
+	typedef std::shared_ptr<FG_sparse_matrix> ptr;
 
 	template<class T>
 	void multiply(const FG_vector<T> &input, FG_vector<T> &output) const {
 		graph->start_all(vertex_initiator::ptr(),
 				vertex_program_creater::ptr(new SPMV_vertex_program_creater<T>(
-						type, input, output)));
+						etype, mtype, input, output)));
 		graph->wait4complete();
 	}
 
@@ -159,16 +163,28 @@ public:
 		return graph->get_num_vertices();
 	}
 
-	FG_adj_matrix::ptr transpose() const {
-		FG_adj_matrix::ptr t = FG_adj_matrix::ptr(new FG_adj_matrix());
-		if (this->type == IN_EDGE)
-			t->type = OUT_EDGE;
-		else if (this->type == OUT_EDGE)
-			t->type = IN_EDGE;
+	FG_sparse_matrix::ptr transpose() const {
+		FG_sparse_matrix::ptr t = FG_sparse_matrix::ptr(new FG_sparse_matrix());
+		if (this->etype == IN_EDGE)
+			t->etype = OUT_EDGE;
+		else if (this->etype == OUT_EDGE)
+			t->etype = IN_EDGE;
 		else
 			assert(0);
 		t->graph = this->graph;
+		t->mtype = this->mtype;
 		return t;
+	}
+};
+
+class FG_adj_matrix: public FG_sparse_matrix
+{
+	FG_adj_matrix(FG_graph::ptr fg): FG_sparse_matrix(fg,
+			FG_sparse_type::ADJACENCY) {
+	}
+public:
+	static ptr create(FG_graph::ptr fg) {
+		return ptr(new FG_adj_matrix(fg));
 	}
 };
 
