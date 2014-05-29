@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -I../include $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libgraph graph-bfs triangle-counting scan-statistics sssp sstsg unit-test tools graph-stat test cc k-core page-rank diameter-estimator eigensolver
+all: libgraph graph-bfs triangle-counting scan-statistics sssp sstsg unit-test tools graph-stat test cc k-core page-rank diameter-estimator eigensolver matrix
 
 libgraph: $(OBJS)
 	rm -f libgraph.a
@@ -69,6 +69,9 @@ diameter-estimator: libgraph
 eigensolver: libgraph
 	$(MAKE) -C eigensolver
 
+matrix: libgraph
+	$(MAKE) -C matrix
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -89,5 +92,6 @@ clean:
 	$(MAKE) clean -C page-rank
 	$(MAKE) clean -C diameter-estimator
 	$(MAKE) clean -C eigensolver
+	$(MAKE) clean -C matrix
 
 -include $(DEPS) 

@@ -31,13 +31,13 @@ enum FG_sparse_type
 	INVALID,
 };
 
-class SPMV_vertex: public compute_vertex
+class matrix_vertex: public compute_vertex
 {
 public:
-	SPMV_vertex() {
+	matrix_vertex() {
 	}
 
-	SPMV_vertex(vertex_id_t id,
+	matrix_vertex(vertex_id_t id,
 			const vertex_index &index): compute_vertex(id, index) {
 	}
 
@@ -54,7 +54,7 @@ public:
 };
 
 template<class T>
-class SPMV_vertex_program: public vertex_program_impl<SPMV_vertex>
+class SPMV_vertex_program: public vertex_program_impl<matrix_vertex>
 {
 	edge_type type;
 	const FG_vector<T> &input;
@@ -72,13 +72,6 @@ class SPMV_vertex_program: public vertex_program_impl<SPMV_vertex>
 		return type;
 	}
 public:
-	typedef std::shared_ptr<SPMV_vertex_program<T> > ptr;
-
-	static ptr cast2(vertex_program::ptr prog) {
-		return std::static_pointer_cast<SPMV_vertex_program<T>,
-			   vertex_program>(prog);
-	}
-
 	SPMV_vertex_program(edge_type type, const FG_vector<T> &_input,
 			FG_vector<T> &_output): input(_input), output(_output) {
 		this->type = type;
@@ -121,11 +114,93 @@ public:
 	}
 };
 
+template<class T, class AggOp>
+class groupby_vertex_program: public vertex_program_impl<matrix_vertex>
+{
+public:
+	typedef std::map<int, typename FG_vector<AggOp>::ptr> agg_map_t;
+
+private:
+	edge_type row_type;
+	bool row_wise;
+	const FG_vector<int> &labels;
+	agg_map_t &agg_results;
+
+	static edge_type reverse_dir(edge_type type) {
+		switch(type) {
+			case IN_EDGE:
+				return OUT_EDGE;
+			case OUT_EDGE:
+				return IN_EDGE;
+			default:
+				assert(0);
+		}
+	}
+
+	edge_type get_edge_type() const {
+		if (row_wise)
+			return row_type;
+		else
+			return reverse_dir(row_type);
+	}
+
+	void aggregate(vertex_id_t id, T v) {
+		int label = labels.get(id);
+		typename agg_map_t::const_iterator it = agg_results.find(label);
+		assert(it != agg_results.end());
+		it->second->get(id) += v;
+	}
+public:
+	groupby_vertex_program(edge_type row_type, bool row_wise,
+			const FG_vector<int> &_labels,
+			agg_map_t &_agg_results): labels(_labels), agg_results(_agg_results) {
+		this->row_type = row_type;
+		this->row_wise = row_wise;
+	}
+
+	virtual void run(compute_vertex &, const page_vertex &vertex) {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(get_edge_type(),
+				0, vertex.get_num_edges(get_edge_type()));
+		PAGE_FOREACH(vertex_id_t, id, it) {
+			aggregate(id, 1);
+		} PAGE_FOREACH_END
+	}
+};
+
+template<class T, class AggOp>
+class groupby_vertex_program_creater: public vertex_program_creater
+{
+	edge_type row_type;
+	FG_sparse_type mtype;
+	bool row_wise;
+	const FG_vector<int> &labels;
+	typename groupby_vertex_program<T, AggOp>::agg_map_t &agg_results;
+public:
+	groupby_vertex_program_creater(edge_type row_type, FG_sparse_type mtype,
+			bool row_wise, const FG_vector<int> &_labels,
+			typename groupby_vertex_program<T, AggOp>::agg_map_t &_agg_results): labels(
+				_labels), agg_results(_agg_results) {
+		this->row_type = row_type;
+		this->mtype = mtype;
+		this->row_wise = row_wise;
+	}
+
+	vertex_program::ptr create() const {
+		switch(mtype) {
+			case FG_sparse_type::ADJACENCY:
+				return vertex_program::ptr(new groupby_vertex_program<T, AggOp>(
+							row_type, row_wise, labels, agg_results));
+			default:
+				assert(0);
+		}
+	}
+};
+
 class FG_sparse_matrix
 {
 	// The type of matrix represented by the graph.
 	FG_sparse_type mtype;
-	// The type of edges that multiplication occurs.
+	// The type of edges that specifies the rows of the matrix.
 	// For a symmetric matrix, the edge type does not matter.
 	edge_type etype;
 	graph_engine::ptr graph;
@@ -137,7 +212,7 @@ class FG_sparse_matrix
 
 protected:
 	FG_sparse_matrix(FG_graph::ptr fg, FG_sparse_type mtype) {
-		graph_index::ptr index = NUMA_graph_index<SPMV_vertex>::create(
+		graph_index::ptr index = NUMA_graph_index<matrix_vertex>::create(
 				fg->get_index_file());
 		graph = graph_engine::create(fg->get_graph_file(),
 				index, fg->get_configs());
@@ -154,6 +229,36 @@ public:
 						etype, mtype, input, output)));
 		graph->wait4complete();
 	}
+
+	/**
+	 * Group rows or columns based on labels and compute aggregation info
+	 * of each group in each column or row. It returns a Kxn dense matrix
+	 * where K is the number of groups and n is the number of columns or
+	 * rows.
+	 */
+	template<class T, class AggOp>
+	void group_by(const FG_vector<int> &labels, bool row_wise,
+			std::map<int, typename FG_vector<AggOp>::ptr> &agg_results) {
+		std::set<int> set;
+		labels.unique(set);
+		vsize_t vec_size;
+		if (row_wise)
+			vec_size = get_num_cols();
+		else
+			vec_size = get_num_rows();
+		BOOST_FOREACH(int label, set) {
+			agg_results.insert(std::pair<int, typename FG_vector<AggOp>::ptr>(
+						label, FG_vector<AggOp>::create(vec_size)));
+		}
+		graph->start_all(vertex_initiator::ptr(),
+				vertex_program_creater::ptr(
+					new groupby_vertex_program_creater<T, AggOp>(
+						etype, mtype, row_wise, labels, agg_results)));
+		graph->wait4complete();
+	}
+
+	void group_by_mean(const FG_vector<int> &labels, bool row_wise,
+			std::map<int, FG_vector<double>::ptr> &agg_results);
 
 	size_t get_num_rows() const {
 		return graph->get_num_vertices();

@@ -21,6 +21,7 @@
  */
 
 #include <memory>
+#include <set>
 
 #include "graph_engine.h"
 #include "stat.h"
@@ -56,7 +57,14 @@ public:
 			eles[i] = v;
 	}
 
-	void count_unique(count_map<T> &map) {
+	void unique(std::set<T> &set) const {
+		// TODO we need a parallel implementation.
+		BOOST_FOREACH(T v, eles) {
+			set.insert(v);
+		}
+	}
+
+	void count_unique(count_map<T> &map) const {
 		// TODO we need a parallel implementation.
 		BOOST_FOREACH(T v, eles) {
 			map.add(v);
@@ -132,6 +140,10 @@ public:
 	}
 
 	const T &get(vertex_id_t id) const {
+		return eles[id];
+	}
+
+	T &get(vertex_id_t id) {
 		return eles[id];
 	}
 };

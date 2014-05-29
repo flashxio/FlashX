@@ -159,6 +159,12 @@ public:
 	size_t get_size() const {
 		return map.size();
 	}
+
+	size_t get(const T &key) const {
+		typename map_t::const_iterator it = map.find(key);
+		assert(it != map.end());
+		return it->second;
+	}
 };
 
 #endif
