@@ -271,7 +271,6 @@ int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 		if (bound < TOL * abs(eigen_val_vec[i].first)) {
 			wanted.push_back(eigen_val_vec[i].first);
 			num_converged++;
-			printf("converged ev[%d]: %f\n", i, wanted.back());
 
 			// Get the eigen vectors corresponding to the wanted eigen values.
 			FG_vector<ev_float_t>::ptr eigen_vector
@@ -307,15 +306,57 @@ public:
 
 class eigen_SPMV: public SPMV
 {
-	FG_sym_adj_matrix::ptr A;
+	FG_adj_matrix::ptr A;
 public:
-	eigen_SPMV(FG_sym_adj_matrix::ptr A) {
+	eigen_SPMV(FG_adj_matrix::ptr A) {
 		this->A = A;
 	}
 
 	virtual void compute(const FG_vector<ev_float_t> &input,
 			FG_vector<ev_float_t> &output) {
 		A->multiply(input, output);
+	}
+
+	virtual size_t get_vector_size() {
+		return A->get_num_rows();
+	}
+};
+
+class LS_SPMV: public SPMV
+{
+	FG_adj_matrix::ptr A;
+	FG_vector<ev_float_t>::ptr tmp;
+public:
+	LS_SPMV(FG_adj_matrix::ptr A) {
+		this->A = A;
+		tmp = FG_vector<ev_float_t>::create(A->get_num_rows());
+	}
+
+	virtual void compute(const FG_vector<ev_float_t> &input,
+			FG_vector<ev_float_t> &output) {
+		A->transpose()->multiply(input, *tmp);
+		A->multiply(*tmp, output);
+	}
+
+	virtual size_t get_vector_size() {
+		return A->get_num_rows();
+	}
+};
+
+class RS_SPMV: public SPMV
+{
+	FG_adj_matrix::ptr A;
+	FG_vector<ev_float_t>::ptr tmp;
+public:
+	RS_SPMV(FG_adj_matrix::ptr A) {
+		this->A = A;
+		tmp = FG_vector<ev_float_t>::create(A->get_num_rows());
+	}
+
+	virtual void compute(const FG_vector<ev_float_t> &input,
+			FG_vector<ev_float_t> &output) {
+		A->multiply(input, *tmp);
+		A->transpose()->multiply(*tmp, output);
 	}
 
 	virtual size_t get_vector_size() {
@@ -404,10 +445,8 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 
 	assert((size_t) nv == wanted_eigen_vectors.size());
 	std::vector<FG_vector<ev_float_t>::ptr> orig_eigen_vectors(nv);
-	for (int i = 0; i < nv; i++) {
+	for (int i = 0; i < nv; i++)
 		orig_eigen_vectors[i] = V->multiply(*wanted_eigen_vectors[i]);
-		printf("eigen vector: %f\n", orig_eigen_vectors[i]->norm1());
-	}
 
 	assert(wanted_eigen_values.size() == orig_eigen_vectors.size());
 	for (size_t i = 0; i < wanted_eigen_values.size(); i++) {
@@ -431,6 +470,10 @@ void print_usage()
 	fprintf(stderr, "-m: the dimension of the tridiagonal matrix\n");
 	fprintf(stderr, "-k: the number of required eigenvalues\n");
 	fprintf(stderr, "-w: which type of eigenvalues\n");
+	fprintf(stderr, "-t: the type of eigenvalues and eigenvectors.\n");
+	fprintf(stderr, "\tEV (eigen vectors of a symmetric matrix),\n");
+	fprintf(stderr, "\tLS (left-singular vectors of SVD),\n");
+	fprintf(stderr, "\tRS (right-singular vectors of SVD)\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -443,7 +486,8 @@ int main(int argc, char *argv[])
 	int m = 0;
 	int nv = 0;
 	std::string which = "LA";
-	while ((opt = getopt(argc, argv, "c:m:k:w:")) != -1) {
+	std::string type = "EV";
+	while ((opt = getopt(argc, argv, "c:m:k:w:t:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -460,6 +504,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'w':
 				which = optarg;
+				num_opts++;
+				break;
+			case 't':
+				type = optarg;
 				num_opts++;
 				break;
 			default:
@@ -490,12 +538,31 @@ int main(int argc, char *argv[])
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
 	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
-	FG_sym_adj_matrix::ptr smatrix = FG_sym_adj_matrix::create(graph);
 
-	eigen_SPMV spmv(smatrix);
 	std::vector<eigen_pair_t> eigen_pairs;
-	eigen_solver(spmv, m, nv, which, eigen_pairs);
+	if (type == "EV") {
+		eigen_SPMV spmv(FG_adj_matrix::create(graph));
+		eigen_solver(spmv, m, nv, which, eigen_pairs);
+	}
+	else if (type == "LS") {
+		LS_SPMV spmv(FG_adj_matrix::create(graph));
+		eigen_solver(spmv, m, nv, which, eigen_pairs);
+	}
+	else if (type == "RS") {
+		RS_SPMV spmv(FG_adj_matrix::create(graph));
+		eigen_solver(spmv, m, nv, which, eigen_pairs);
+	}
+	else
+		assert(0);
 	assert(eigen_pairs.size() == (size_t) nv);
+
+	for (int i = 0; i < nv; i++) {
+		ev_float_t v = eigen_pairs[i].first;
+		if (type == "LS" || type == "RS")
+			v = sqrt(v);
+		printf("eigen value: %f, norm1(vector): %f\n",
+				v, eigen_pairs[i].second->norm1());
+	}
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();

@@ -119,28 +119,35 @@ public:
 	}
 };
 
-class FG_sym_adj_matrix
+class FG_adj_matrix
 {
+	// The type of edges that multiplication occurs.
+	// For a symmetric matrix, the edge type does not matter.
+	edge_type type;
 	graph_engine::ptr graph;
 
-	FG_sym_adj_matrix(FG_graph::ptr fg) {
+	FG_adj_matrix() {
+	}
+
+	FG_adj_matrix(FG_graph::ptr fg) {
 		graph_index::ptr index = NUMA_graph_index<SPMV_vertex>::create(
 				fg->get_index_file());
 		graph = graph_engine::create(fg->get_graph_file(),
 				index, fg->get_configs());
+		type = edge_type::OUT_EDGE;
 	}
 public:
-	typedef std::shared_ptr<FG_sym_adj_matrix> ptr;
+	typedef std::shared_ptr<FG_adj_matrix> ptr;
 
 	static ptr create(FG_graph::ptr fg) {
-		return ptr(new FG_sym_adj_matrix(fg));
+		return ptr(new FG_adj_matrix(fg));
 	}
 
 	template<class T>
 	void multiply(const FG_vector<T> &input, FG_vector<T> &output) const {
 		graph->start_all(vertex_initiator::ptr(),
 				vertex_program_creater::ptr(new SPMV_vertex_program_creater<T>(
-						edge_type::BOTH_EDGES, input, output)));
+						type, input, output)));
 		graph->wait4complete();
 	}
 
@@ -150,6 +157,18 @@ public:
 
 	size_t get_num_cols() const {
 		return graph->get_num_vertices();
+	}
+
+	FG_adj_matrix::ptr transpose() const {
+		FG_adj_matrix::ptr t = FG_adj_matrix::ptr(new FG_adj_matrix());
+		if (this->type == IN_EDGE)
+			t->type = OUT_EDGE;
+		else if (this->type == OUT_EDGE)
+			t->type = IN_EDGE;
+		else
+			assert(0);
+		t->graph = this->graph;
+		return t;
 	}
 };
 
