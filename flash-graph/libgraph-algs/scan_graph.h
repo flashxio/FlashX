@@ -521,7 +521,4 @@ public:
 	}
 };
 
-extern atomic_number<long> num_working_vertices;
-extern atomic_number<long> num_completed_vertices;
-
 #endif

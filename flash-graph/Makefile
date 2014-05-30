@@ -21,7 +21,10 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -I../include $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libgraph graph-bfs triangle-counting scan-statistics sssp sstsg unit-test tools graph-stat test cc k-core page-rank diameter-estimator eigensolver matrix
+all: libgraph graph-bfs sssp sstsg unit-test tools graph-stat test k-core page-rank diameter-estimator eigensolver matrix libgraph-algs
+
+libgraph-algs: libgraph
+	$(MAKE) -C libgraph-algs
 
 libgraph: $(OBJS)
 	rm -f libgraph.a
@@ -29,12 +32,6 @@ libgraph: $(OBJS)
 
 graph-bfs: libgraph
 	$(MAKE) -C graph-bfs
-
-triangle-counting: libgraph
-	$(MAKE) -C triangle-counting
-
-scan-statistics: libgraph
-	$(MAKE) -C scan-statistics
 
 sssp: libgraph
 	$(MAKE) -C sssp
@@ -53,9 +50,6 @@ graph-stat: libgraph
 
 test: libgraph
 	$(MAKE) -C test
-
-cc: libgraph
-	$(MAKE) -C connected-components
 
 k-core: libgraph
 	$(MAKE) -C k-core
@@ -80,8 +74,6 @@ clean:
 	find -name core -delete
 	$(MAKE) clean -C tools
 	$(MAKE) clean -C graph-bfs
-	$(MAKE) clean -C triangle-counting
-	$(MAKE) clean -C scan-statistics
 	$(MAKE) clean -C unit-test
 	$(MAKE) clean -C sssp
 	$(MAKE) clean -C test
@@ -93,5 +85,6 @@ clean:
 	$(MAKE) clean -C diameter-estimator
 	$(MAKE) clean -C eigensolver
 	$(MAKE) clean -C matrix
+	$(MAKE) clean -C libgraph-algs
 
 -include $(DEPS) 

@@ -30,6 +30,8 @@
 #include "graph_config.h"
 
 #include "scan_graph.h"
+#include "FG_vector.h"
+#include "FGlib.h"
 
 struct timeval graph_start;
 
@@ -280,69 +282,15 @@ void topK_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 	topK_v.finding_triangles_end(prog, data);
 }
 
-void int_handler(int sig_num)
+FG_vector<size_t>::ptr compute_topK_scan(FG_graph::ptr fg, size_t topK)
 {
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	exit(0);
-}
-
-void print_usage()
-{
-	fprintf(stderr,
-			"topK-scan [options] conf_file graph_file index_file\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-p: preload the graph\n");
-	graph_conf.print_help();
-	params.print_help();
-}
-
-int main(int argc, char *argv[])
-{
-	size_t topK = 1;
-	size_t min_edges = 1000;
-	int opt;
-	std::string confs;
-	int num_opts = 0;
-	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:p")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 'p':
-				preload = true;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
-	if (argc < 3) {
-		print_usage();
-		exit(-1);
-	}
-
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
-
-	config_map configs(conf_file);
-	configs.add_options(confs);
-
-	signal(SIGINT, int_handler);
-
 	finding_triangles_end = topK_finding_triangles_end;
 
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex>::create(
-			index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
-	if (preload)
-		graph->preload_graph();
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+
 	// Let's schedule the order of processing activated vertices according
 	// to the size of vertices. We start with processing vertices with higher
 	// degrees in the hope we can find the max scan as early as possible,
@@ -368,6 +316,7 @@ int main(int argc, char *argv[])
 		}
 	};
 
+	size_t min_edges = 1000;
 	std::shared_ptr<vertex_filter> filter
 		= std::shared_ptr<vertex_filter>(new remove_small_filter(min_edges));
 	struct timeval start, end;
@@ -380,8 +329,6 @@ int main(int argc, char *argv[])
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds\n", time_diff(start, end));
-		printf("process %ld vertices and complete %ld vertices\n",
-				num_working_vertices.get(), num_completed_vertices.get());
 		printf("global max scan: %ld\n", max_scan.get());
 		max_scan = global_max(0);
 	}
@@ -416,39 +363,23 @@ int main(int argc, char *argv[])
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("It takes %f seconds\n", time_diff(start, end));
-		printf("process %ld vertices and complete %ld vertices\n",
-				num_working_vertices.get(), num_completed_vertices.get());
 		printf("global max scan: %ld\n", max_scan.get());
 		// If the previous topK is different from the current one,
 		// it means we have found new local scans that are larger
 		// than the previous topK. We should use the new topK and
 		// try again.
 	} while (prev_topK_scan != known_scans.get(topK - 1).second);
+	assert(known_scans.get_size() >= topK);
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-
-	assert(known_scans.get_size() >= topK);
-	for (size_t i = 0; i < topK; i++) {
-		vertex_scan scan = known_scans.get(i);
-		printf("No. %ld: %u, %ld\n", i, scan.first, scan.second);
-	}
 	printf("It takes %f seconds for top %ld\n", time_diff(graph_start, end),
 			topK);
 
-#ifdef PV_STAT
-	graph_index::const_iterator it = index->begin();
-	graph_index::const_iterator end_it = index->end();
-	size_t tot_scan_bytes = 0;
-	size_t tot_rand_jumps = 0;
-	for (; it != end_it; ++it) {
-		const topK_scan_vertex &v = (const topK_scan_vertex &) *it;
-		tot_scan_bytes += v.get_scan_bytes();
-		tot_rand_jumps += v.get_rand_jumps();
-	}
-	printf("scan %ld bytes, %ld rand jumps\n",
-			tot_scan_bytes, tot_rand_jumps);
-#endif
+	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(topK);
+	for (size_t i = 0; i < topK; i++)
+		vec->set(i, known_scans.get(i).second);
+	return vec;
 }

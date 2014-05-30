@@ -31,8 +31,8 @@
 
 const double BIN_SEARCH_RATIO = 100;
 
-atomic_number<long> num_working_vertices;
-atomic_number<long> num_completed_vertices;
+static atomic_number<long> num_working_vertices;
+static atomic_number<long> num_completed_vertices;
 
 size_t neighbor_list::count_edges_hash(const page_vertex *v,
 		page_byte_array::const_iterator<vertex_id_t> other_it,
