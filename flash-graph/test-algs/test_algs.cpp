@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
 
-	if (argc < 3) {
+	if (argc < 4) {
 		print_usage();
 		exit(-1);
 	}
