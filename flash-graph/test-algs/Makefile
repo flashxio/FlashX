@@ -21,13 +21,16 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: test_algs test_cc
+all: test_algs test_cc test_lcc
 
 test_algs: test_algs.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
 	$(CXX) -o test_algs test_algs.o $(LDFLAGS)
 
 test_cc: test_cc.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
 	$(CXX) -o test_cc test_cc.o $(LDFLAGS)
+
+test_lcc: test_lcc.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
+	$(CXX) -o test_lcc test_lcc.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
