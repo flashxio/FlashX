@@ -108,6 +108,13 @@ public:
 		return ret;
 	}
 
+	T max() const {
+		T ret = std::numeric_limits<T>::min();
+		for (size_t i = 0; i < get_size(); i++)
+			ret = ::max(get(i), ret);
+		return ret;
+	}
+
 	void div_by_in_place(T v) {
 #pragma omp parallel for
 		for (size_t i = 0; i < get_size(); i++)
