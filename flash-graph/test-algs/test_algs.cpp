@@ -121,7 +121,13 @@ int main(int argc, char *argv[])
 		count_map<vertex_id_t> map;
 		comp_ids->count_unique(map);
 		std::pair<vertex_id_t, size_t> max_comp = map.get_max_count();
-		printf("There are %ld components, and largest comp has %ld vertices\n",
-				map.get_size(), max_comp.second);
+		int has_empty = 0;
+		if (map.exists(INVALID_VERTEX_ID)) {
+			printf("There are %ld empty vertices\n",
+					map.get(INVALID_VERTEX_ID));
+			has_empty = 1;
+		}
+		printf("There are %ld components (exclude empty vertices), and largest comp has %ld vertices\n",
+				map.get_size() - has_empty, max_comp.second);
 	}
 }
