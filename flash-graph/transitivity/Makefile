@@ -22,9 +22,9 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: transitivity
+all: graph-transitivity
 
-transitivity: $(OBJS) ../libgraph.a
+graph-transitivity: $(OBJS) ../libgraph.a
 	$(CXX) -o graph-transitivity $(OBJS) $(LDFLAGS)
 
 clean:
