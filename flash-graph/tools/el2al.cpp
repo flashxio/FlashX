@@ -34,6 +34,7 @@
 #include "native_file.h"
 
 #include "edge_type.h"
+#include "ext_mem_vertex_iterator.h"
 
 const int NUM_THREADS = 32;
 const int NUM_NODES = 4;

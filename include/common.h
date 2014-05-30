@@ -101,6 +101,13 @@ static inline std::string itoa(int n)
 	return buf;
 }
 
+static inline std::string ltoa(long n)
+{
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%ld", n);
+	return buf;
+}
+
 long str2size(std::string str);
 
 int split_string(const std::string &str, char delim,

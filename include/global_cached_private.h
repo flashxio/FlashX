@@ -62,13 +62,13 @@ class original_io_request: public io_request
 
 	page_status &get_page_status(thread_safe_page *pg) {
 		off_t first_pg_off = get_first_page_offset();
-		int idx = (pg->get_offset() - first_pg_off) / PAGE_SIZE;
+		off_t idx = (pg->get_offset() - first_pg_off) / PAGE_SIZE;
 		return status_arr[idx];
 	}
 
 	page_status &get_page_status(off_t off) {
 		off_t first_pg_off = get_first_page_offset();
-		int idx = (off - first_pg_off) / PAGE_SIZE;
+		off_t idx = (off - first_pg_off) / PAGE_SIZE;
 		return status_arr[idx];
 	}
 public:
@@ -291,23 +291,23 @@ class global_cached_io: public io_interface
 
 	long num_pg_accesses;
 	size_t num_bytes;		// The number of accessed bytes
-	int cache_hits;
-	int num_fast_process;
-	int num_evicted_dirty_pages;
+	size_t cache_hits;
+	size_t num_fast_process;
+	size_t num_evicted_dirty_pages;
 
 	// Count the number of async requests.
 	// The number of async requests that have been completed.
-	atomic_integer num_completed_areqs;
+	atomic_number<size_t> num_completed_areqs;
 	// The number of async requests issued by the application.
-	atomic_integer num_issued_areqs;
+	atomic_number<size_t> num_issued_areqs;
 	// The number of async requests that have been processed.
 	// It is useful when we want to count the number of requests being
 	// processed.
-	atomic_integer num_processed_areqs;
+	atomic_number<size_t> num_processed_areqs;
 
-	atomic_integer num_to_underlying;
-	atomic_integer num_from_underlying;
-	atomic_integer num_underlying_pages;
+	atomic_number<size_t> num_to_underlying;
+	atomic_number<size_t> num_from_underlying;
+	atomic_number<size_t> num_underlying_pages;
 
 	/**
 	 * It's another version of read() and write(), but it's responsible
@@ -436,11 +436,11 @@ public:
 		assert(processing_req.is_empty());
 	}
 
-	int get_cache_hits() const {
+	size_t get_cache_hits() const {
 		return cache_hits;
 	}
 
-	int get_num_fast_process() const {
+	size_t get_num_fast_process() const {
 		return num_fast_process;
 	}
 
@@ -499,9 +499,9 @@ public:
 		tot_accesses += num_pg_accesses;
 		tot_hits += cache_hits;
 		tot_fast_process += num_fast_process;
-		printf("global_cached_io: %d reqs, %ld bytes, %d reqs to the underlying io\n",
+		printf("global_cached_io: %ld reqs, %ld bytes, %ld reqs to the underlying io\n",
 				num_processed_areqs.get(), num_bytes, num_from_underlying.get());
-		printf("global_cached_io: There are %d evicted dirty pages\n", num_evicted_dirty_pages);
+		printf("global_cached_io: There are %ld evicted dirty pages\n", num_evicted_dirty_pages);
 		if (seen_threads.fetch_add(1) == nthreads - 1) {
 			printf("global_cached_io: in total, there are %ld accessed bytes, %ld pages\n",
 					tot_bytes.load(), tot_accesses.load());
@@ -514,7 +514,7 @@ public:
 
 	virtual void print_state() {
 #ifdef STATISTICS
-		printf("global cached io %d has %d pending reqs and %d reqs from underlying\n",
+		printf("global cached io %d has %d pending reqs and %ld reqs from underlying\n",
 				get_io_idx(), num_pending_ios(), num_from_underlying.get());
 #endif
 		printf("%d completed pending reqs, %d queued completed reqs from underlying\n",

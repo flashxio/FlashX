@@ -34,10 +34,11 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
+typedef double ev_float_t;
+
 const int VS_SIZE = 10;
 const int RHO = 1;
-
-typedef double ev_float_t;
+const ev_float_t TOL = 1e-8;
 
 /**
  * This eigensolver implements the Lanzcos algorithm.
@@ -516,6 +517,94 @@ void reset_matrix_remain(Eigen::MatrixXd &T, std::pair<int, int> &size,
 			T(i, j) = 0;
 }
 
+// eigen values, index
+typedef std::pair<ev_float_t, int> ev_pair_t;
+
+class LA_comp
+{
+public:
+	bool operator()(const ev_pair_t &v1, const ev_pair_t &v2) {
+		return v1.first >= v2.first;
+	}
+};
+
+class SA_comp
+{
+public:
+	bool operator()(const ev_pair_t &v1, const ev_pair_t &v2) {
+		return v1.first < v2.first;
+	}
+};
+
+class LM_comp
+{
+public:
+	bool operator()(const ev_pair_t &v1, const ev_pair_t &v2) {
+		return abs(v1.first) >= abs(v2.first);
+	}
+};
+
+class SM_comp
+{
+public:
+	bool operator()(const ev_pair_t &v1, const ev_pair_t &v2) {
+		return abs(v1.first) < abs(v2.first);
+	}
+};
+
+int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
+		ev_float_t last_beta, int k, int m,
+		std::vector<ev_float_t> &wanted, std::vector<ev_float_t> &unwanted,
+		std::vector<std::vector<ev_float_t> > &wanted_eigen_vectors)
+{
+	Eigen::EigenSolver<Eigen::MatrixXd> es(T);
+
+	Eigen::MatrixXcd eigen_vectors = es.eigenvectors();
+	Eigen::VectorXcd eigen_values = es.eigenvalues();
+
+	std::vector<ev_pair_t> eigen_val_vec(m);
+	for (int i = 0; i < m; i++) {
+		eigen_val_vec[i].first = eigen_values(i).real();
+		eigen_val_vec[i].second = i;
+	}
+
+	// sort the vector of eigen values so that the first k are wanted eigenvalues.
+	if (which == "LA") {
+		std::sort(eigen_val_vec.begin(), eigen_val_vec.end(), LA_comp());
+	}
+	else if (which == "SA") {
+		std::sort(eigen_val_vec.begin(), eigen_val_vec.end(), SA_comp());
+	}
+	else if (which == "LM") {
+		std::sort(eigen_val_vec.begin(), eigen_val_vec.end(), LM_comp());
+	}
+	else if (which == "SM") {
+		std::sort(eigen_val_vec.begin(), eigen_val_vec.end(), SM_comp());
+	}
+
+	int num_converged = 0;
+	for (int i = 0; i < k; i++) {
+		int idx = eigen_val_vec[i].second;
+		ev_float_t bound = abs(last_beta * eigen_vectors(m - 1, i).real());
+		if (bound < TOL * abs(eigen_val_vec[i].first)) {
+			wanted.push_back(eigen_val_vec[i].first);
+			num_converged++;
+			printf("converged ev[%d]: %f\n", i, wanted.back());
+
+			// Get the eigen vectors corresponding to the wanted eigen values.
+			std::vector<ev_float_t> eigen_vector(m);
+			for (int j = 0; j < m; j++)
+				eigen_vector[j] = eigen_vectors(j, idx).real();
+			wanted_eigen_vectors.push_back(eigen_vector);
+		}
+	}
+
+	for (int i = k; i < m; i++)
+		unwanted.push_back(eigen_val_vec[i].first);
+
+	return num_converged;
+}
+
 void int_handler(int sig_num)
 {
 	if (!graph_conf.get_prof_file().empty())
@@ -531,6 +620,7 @@ void print_usage()
 	fprintf(stderr, "-p: preload the graph\n");
 	fprintf(stderr, "-m: the dimension of the tridiagonal matrix\n");
 	fprintf(stderr, "-k: the number of required eigenvalues\n");
+	fprintf(stderr, "-w: which type of eigenvalues\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -543,7 +633,8 @@ int main(int argc, char *argv[])
 	bool preload = false;
 	int m = 0;
 	int nv = 0;
-	while ((opt = getopt(argc, argv, "c:pm:k:")) != -1) {
+	std::string which = "LA";
+	while ((opt = getopt(argc, argv, "c:pm:k:w:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -559,6 +650,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'k':
 				nv = atoi(optarg);
+				num_opts++;
+				break;
+			case 'w':
+				which = optarg;
 				num_opts++;
 				break;
 			default:
@@ -613,33 +708,19 @@ int main(int argc, char *argv[])
 	while (true) {
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
-		Eigen::EigenSolver<Eigen::MatrixXd> es(T);
 
-		Eigen::MatrixXcd eigen_vectors = es.eigenvectors();
-		Eigen::VectorXcd eigen_values = es.eigenvalues();
-		ev_float_t tol = 1e-8;
-		int kk = 0;
-		ev_float_t last_beta = betas(m - 1);
-		for (int i = 0; i < m; i++) {
-			if (abs(last_beta * eigen_vectors(m - 1, i).real()) < tol) {
-				kk++;
-				printf("eigen value[%d]: %f\n", i, eigen_values(i).real());
-			}
-		}
-		printf("There are %d eigenvalues\n", kk);
-		if (kk >= nv)
+		std::vector<ev_float_t> unwanted;
+		std::vector<ev_float_t> wanted;
+		std::vector<std::vector<ev_float_t> > wanted_eigen_vectors;
+		int num_converged = get_converged_eigen(T, which, betas(m - 1),
+				nv, m, wanted, unwanted, wanted_eigen_vectors);
+		if (num_converged >= nv)
 			break;
 
-		// The p largest eigenvalues are not wanted.
-		std::vector<ev_float_t> eigen_val_vec(m);
-		for (int i = 0; i < m; i++)
-			eigen_val_vec[i] = eigen_values(i).real();
-		std::sort(eigen_val_vec.begin(), eigen_val_vec.end(),
-				std::greater<ev_float_t>());
-
 		Eigen::MatrixXd Q = I;
-		for (int i = nv; i < m; i++) {
-			ev_float_t mu = eigen_val_vec[i];
+		assert(unwanted.size() == (size_t) (m - nv));
+		for (int i = 0; i < m - nv; i++) {
+			ev_float_t mu = unwanted[i];
 			Eigen::MatrixXd tmp = T - (I * mu);
 			Eigen::HouseholderQR<Eigen::MatrixXd> qr = tmp.householderQr();
 			Eigen::MatrixXd Qj = qr.householderQ();

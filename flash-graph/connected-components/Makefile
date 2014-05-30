@@ -19,17 +19,18 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG) -I/usr/local/include/eigen3/
+CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: eigensolver
+all: cc
 
-eigensolver: $(OBJS) ../libgraph.a
-	$(CXX) -o eigensolver $(OBJS) $(LDFLAGS)
+cc: $(OBJS) ../libgraph.a
+	$(CXX) -o cc $(OBJS)  $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f eigensolver
+	rm -f scc
+	rm -f wcc
 
 -include $(DEPS) 
