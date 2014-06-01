@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
 	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
 	FG_vector<size_t>::ptr counts;
 	if (alg == "cycle_triangle")
-		counts = compute_cycle_triangles(graph);
+		counts = compute_directed_triangles(graph, directed_triangle_type::CYCLE);
 	else if (alg == "triangle")
 		counts = compute_undirected_triangles(graph);
 	else if (alg == "local_scan")

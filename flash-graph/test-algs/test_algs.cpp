@@ -93,7 +93,8 @@ int main(int argc, char *argv[])
 	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
 	if (alg == "cycle_triangle") {
 		FG_vector<size_t>::ptr triangles;
-		triangles = compute_cycle_triangles(graph);
+		triangles = compute_directed_triangles(graph,
+				directed_triangle_type::CYCLE);
 		printf("There are %ld cycle triangles\n", triangles->sum());
 	}
 	else if (alg == "triangle") {

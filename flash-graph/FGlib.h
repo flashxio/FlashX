@@ -56,9 +56,16 @@ public:
 	}
 };
 
+enum directed_triangle_type
+{
+	CYCLE,
+	ALL,
+};
+
 FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg);
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg);
-FG_vector<size_t>::ptr compute_cycle_triangles(FG_graph::ptr fg);
+FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
+		directed_triangle_type type);
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr);
 FG_vector<size_t>::ptr compute_topK_scan(FG_graph::ptr, size_t topK);
