@@ -174,7 +174,7 @@ void comm_verify_file(int argc, char *argv[])
 	verify_callback *cb = new verify_callback(source);
 	io->set_callback(cb);
 
-	size_t file_size = source->get_size();
+	ssize_t file_size = source->get_size();
 	printf("verify %ld bytes\n", file_size);
 	assert(factory->get_file_size() >= file_size);
 	file_size = ROUNDUP(file_size, BUF_SIZE);
@@ -218,7 +218,7 @@ void comm_load_file2fs(int argc, char *argv[])
 	file_io_factory::shared_ptr factory = create_io_factory(int_file_name,
 			REMOTE_ACCESS);
 	assert(factory);
-	assert(factory->get_file_size() >= source->get_size());
+	assert((size_t) factory->get_file_size() >= source->get_size());
 	printf("source size: %ld\n", source->get_size());
 
 	thread *curr_thread = thread::get_curr_thread();
@@ -228,7 +228,7 @@ void comm_load_file2fs(int argc, char *argv[])
 	char *buf = (char *) valloc(BUF_SIZE);
 	off_t off = 0;
 
-	while (off < source->get_size()) {
+	while (off < (off_t) source->get_size()) {
 		size_t size = min<size_t>(BUF_SIZE, source->get_size() - off);
 		size_t ret = source->get_data(off, size, buf);
 		assert(ret == size);
