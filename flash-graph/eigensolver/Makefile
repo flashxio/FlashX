@@ -21,10 +21,7 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG) -I/usr/local/include/eigen3/
 
-all: eigensolver matrix_eigensolver
-
-eigensolver: eigensolver.o ../libgraph.a
-	$(CXX) -o eigensolver eigensolver.o $(LDFLAGS)
+all: matrix_eigensolver
 
 matrix_eigensolver: matrix_eigensolver.o ../libgraph.a
 	$(CXX) -o matrix_eigensolver matrix_eigensolver.o $(LDFLAGS)
@@ -33,7 +30,6 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f eigensolver
 	rm -f matrix_eigensolver
 
 -include $(DEPS) 
