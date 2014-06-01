@@ -170,15 +170,18 @@ int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
 	 * that a neighbor is in the beginning of the adjacency list, and
 	 * the search range will be narrowed faster.
 	 */
+	page_byte_array::const_iterator<vertex_id_t> other_it
+		= v->get_neigh_begin(edge_type::OUT_EDGE);
+	page_byte_array::const_iterator<vertex_id_t> other_end
+		= std::lower_bound(other_it, v->get_neigh_end(edge_type::OUT_EDGE),
+				v->get_id());
+	size_t num_v_edges = other_end - other_it;
+	if (num_v_edges == 0)
+		return 0;
 
 	runtime_data_t *data = local_value.get_runtime_data();
 	if (data->edge_set.size() > 0
-			&& data->edges.size() > HASH_SEARCH_RATIO * v->get_num_edges(
-				edge_type::OUT_EDGE)) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(edge_type::OUT_EDGE);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(edge_type::OUT_EDGE);
+			&& data->edges.size() > HASH_SEARCH_RATIO * num_v_edges) {
 		for (; other_it != other_end; ++other_it) {
 			vertex_id_t neigh_neighbor = *other_it;
 			runtime_data_t::edge_set_t::const_iterator it
@@ -194,12 +197,7 @@ int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
 		}
 	}
 	// If the neighbor vertex has way more edges than this vertex.
-	else if (v->get_num_edges(edge_type::OUT_EDGE) / data->edges.size(
-				) > BIN_SEARCH_RATIO) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v->get_neigh_begin(edge_type::OUT_EDGE);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v->get_neigh_end(edge_type::OUT_EDGE);
+	else if (num_v_edges / data->edges.size() > BIN_SEARCH_RATIO) {
 		for (int i = data->edges.size() - 1; i >= 0; i--) {
 			vertex_id_t this_neighbor = data->edges.at(i);
 			// We need to skip loops.
@@ -216,9 +214,11 @@ int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
 		}
 	}
 	else {
-		std::vector<vertex_id_t>::const_iterator this_it = data->edges.begin();
+		std::vector<vertex_id_t>::const_iterator this_it = data->edges.cbegin();
+		std::vector<vertex_id_t>::const_iterator this_end
+			= std::lower_bound(this_it, data->edges.cend(), v->get_id());
 		std::vector<int>::iterator count_it = data->triangles.begin();
-		std::vector<vertex_id_t>::const_iterator this_end = data->edges.end();
+
 		page_byte_array::seq_const_iterator<vertex_id_t> other_it
 			= v->get_neigh_seq_it(edge_type::OUT_EDGE, 0,
 					v->get_num_edges(edge_type::OUT_EDGE));
