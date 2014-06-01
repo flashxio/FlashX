@@ -38,5 +38,6 @@ clean:
 	rm -f *~
 	rm -f test_algs
 	rm -f test_cc
+	rm -f test_lcc
 
 -include $(DEPS) 
