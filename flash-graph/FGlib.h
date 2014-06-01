@@ -70,6 +70,16 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr);
 FG_vector<size_t>::ptr compute_topK_scan(FG_graph::ptr, size_t topK);
 
+typedef double ev_float_t;
+typedef std::pair<ev_float_t, FG_vector<ev_float_t>::ptr> eigen_pair_t;
+
+class FG_adj_matrix;
+void compute_eigen(std::shared_ptr<FG_adj_matrix> matrix, int m, int nv,
+		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs);
+void compute_SVD(std::shared_ptr<FG_adj_matrix> matrix, int m, int nv,
+		const std::string &which, const std::string &type,
+		std::vector<eigen_pair_t> &eigen_pairs);
+
 /**
  * Fetch the clusters with the wanted cluster IDs.
  */
