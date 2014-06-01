@@ -31,4 +31,5 @@ SAFS-util: SAFS-util.o ../libsafs/libsafs.a
 clean:
 	rm -f *.o
 	rm -f *~
+	rm -f *.d
 	rm -f $(TARGETS)

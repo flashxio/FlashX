@@ -379,7 +379,7 @@ int main(int argc, char *argv[])
 
 	const struct command *comm = get_command(command);
 	if (comm == NULL) {
-		fprintf(stderr, "wrong command %s\n", comm->name.c_str());
+		fprintf(stderr, "wrong command %s\n", command.c_str());
 		print_help();
 		return -1;
 	}
