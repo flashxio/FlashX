@@ -303,9 +303,9 @@ public:
 
 class eigen_SPMV: public SPMV
 {
-	FG_adj_matrix::ptr A;
+	FG_sparse_matrix::ptr A;
 public:
-	eigen_SPMV(FG_adj_matrix::ptr A) {
+	eigen_SPMV(FG_sparse_matrix::ptr A) {
 		this->A = A;
 	}
 
@@ -321,10 +321,10 @@ public:
 
 class LS_SPMV: public SPMV
 {
-	FG_adj_matrix::ptr A;
+	FG_sparse_matrix::ptr A;
 	FG_vector<ev_float_t>::ptr tmp;
 public:
-	LS_SPMV(FG_adj_matrix::ptr A) {
+	LS_SPMV(FG_sparse_matrix::ptr A) {
 		this->A = A;
 		tmp = FG_vector<ev_float_t>::create(A->get_num_rows());
 	}
@@ -342,10 +342,10 @@ public:
 
 class RS_SPMV: public SPMV
 {
-	FG_adj_matrix::ptr A;
+	FG_sparse_matrix::ptr A;
 	FG_vector<ev_float_t>::ptr tmp;
 public:
-	RS_SPMV(FG_adj_matrix::ptr A) {
+	RS_SPMV(FG_sparse_matrix::ptr A) {
 		this->A = A;
 		tmp = FG_vector<ev_float_t>::create(A->get_num_rows());
 	}
@@ -452,14 +452,14 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 	}
 }
 
-void compute_eigen(FG_adj_matrix::ptr matrix, int m, int nv,
+void compute_eigen(FG_sparse_matrix::ptr matrix, int m, int nv,
 		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs)
 {
 	eigen_SPMV spmv(matrix);
 	eigen_solver(spmv, m, nv, which, eigen_pairs);
 }
 
-void compute_SVD(FG_adj_matrix::ptr matrix, int m, int nv,
+void compute_SVD(FG_sparse_matrix::ptr matrix, int m, int nv,
 		const std::string &which, const std::string &type,
 		std::vector<eigen_pair_t> &eigen_pairs)
 {

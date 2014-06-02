@@ -222,6 +222,10 @@ protected:
 public:
 	typedef std::shared_ptr<FG_sparse_matrix> ptr;
 
+	static ptr create(FG_graph::ptr fg, FG_sparse_type mtype) {
+		return ptr(new FG_sparse_matrix(fg, mtype));
+	}
+
 	template<class T>
 	void multiply(const FG_vector<T> &input, FG_vector<T> &output) const {
 		graph->start_all(vertex_initiator::ptr(),
