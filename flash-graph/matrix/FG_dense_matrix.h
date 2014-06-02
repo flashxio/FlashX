@@ -26,6 +26,7 @@
 #include <Eigen/Dense>
 
 #include "FG_vector.h"
+#include "graph.h"
 
 template<class T>
 class col_wise_matrix_store
@@ -269,9 +270,10 @@ class FG_row_wise_matrix: public FG_dense_matrix<T, row_wise_matrix_store<T> >
 	FG_row_wise_matrix(size_t nrow,
 			size_t ncol): FG_dense_matrix<T, row_wise_matrix_store<T> >(
 				nrow, ncol) {
+		// We assume the row-wise matrix has more columns than rows.
+		assert(nrow < ncol);
 	}
 
-public:
 	FG_row_wise_matrix(const FG_col_wise_matrix<T> &mat, bool transpose) {
 		if (transpose) {
 			this->nrow = mat.get_num_cols();
@@ -282,13 +284,47 @@ public:
 			// TODO
 			assert(0);
 		}
+		// We assume the row-wise matrix has more columns than rows.
+		assert(this->nrow < this->ncol);
 	}
-
+public:
 	typedef std::shared_ptr<FG_row_wise_matrix<T> > ptr;
+
+	static ptr create(size_t nrow, size_t ncol) {
+		return ptr(new FG_row_wise_matrix<T>(nrow, ncol));
+	}
 
 	typename FG_vector<T>::ptr get_row_ref(size_t row) {
 		assert(row < this->get_num_rows());
 		return this->matrix_store.get(row);
+	}
+
+	graph::ptr conv2graph() const {
+		// TODO we can generate an undirected graph for a symmetric matrix.
+		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
+		for (size_t i = 0; i < this->get_num_rows(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_cols(); j++) {
+				edge<T> e(i, j, this->get(i, j));
+				v.add_out_edge(e);
+			}
+			for (size_t j = 0; j < this->get_num_rows(); j++) {
+				edge<T> e(j, i, this->get(j, i));
+				v.add_in_edge(e);
+			}
+			g->add_vertex(v);
+		}
+		// There are more columns than rows in the matrix.
+		for (size_t i = this->get_num_rows(); i < this->get_num_cols(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_rows(); j++) {
+				edge<T> e(j, i, this->get(j, i));
+				v.add_in_edge(e);
+			}
+			g->add_vertex(v);
+		}
+
+		return g;
 	}
 
 	template<class T1>
