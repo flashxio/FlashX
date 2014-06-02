@@ -28,9 +28,6 @@
 #include "vertex_index.h"
 #include "vertex.h"
 
-size_t read_edge_list_text(const std::string &file,
-		std::vector<edge<> > &edges);
-
 class graph
 {
 public:
@@ -61,6 +58,9 @@ public:
 		assert(0);
 	}
 };
+
+size_t read_edge_list_text(const std::string &file,
+		std::vector<edge<> > &edges);
 
 template<class edge_data_type = empty_data>
 class undirected_graph: public graph
@@ -279,18 +279,14 @@ public:
 	}
 
 	vertex_index *create_vertex_index() const {
-		return NULL;
-#if 0
 		graph_header header(graph_type::DIRECTED, vertices.size(),
 				get_num_edges(), has_data);
 		return directed_vertex_index::create<in_mem_directed_vertex<edge_data_type> >(
 				header, vertices);
-#endif
 	}
 
 	void dump(const std::string &index_file,
 			const std::string &graph_file) {
-#if 0
 		assert(!file_exist(index_file));
 		assert(!file_exist(graph_file));
 		FILE *f = fopen(graph_file.c_str(), "w");
@@ -304,10 +300,12 @@ public:
 		ssize_t ret = fwrite(&header, sizeof(header), 1, f);
 		assert(ret == 1);
 
-		for (size_t i = 0; i < vertices.size(); i++) {
-			int mem_size = vertices[i].get_serialize_size();
+		for (typename v_map_t::const_iterator it = vertices.begin();
+				it != vertices.end(); it++) {
+			const in_mem_directed_vertex<edge_data_type> &v = it->second;
+			int mem_size = v.get_serialize_size();
 			char *buf = new char[mem_size];
-			ext_mem_directed_vertex::serialize<edge_data_type>(vertices[i],
+			ext_mem_directed_vertex::serialize<edge_data_type>(v,
 					buf, mem_size);
 			ssize_t ret = fwrite(buf, mem_size, 1, f);
 			delete [] buf;
@@ -319,7 +317,6 @@ public:
 		vertex_index *index = create_vertex_index();
 		index->dump(index_file);
 		vertex_index::destroy(index);
-#endif
 	}
 
 	size_t get_num_in_edges() const {

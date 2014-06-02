@@ -147,6 +147,45 @@ public:
 		return index;
 	}
 
+	template<class vertex_type>
+	static vertex_index_temp<vertex_entry_type> *create(const graph_header &header,
+			const std::map<vertex_id_t, vertex_type> &vertices) {
+		assert(!vertices.empty());
+		vsize_t num_vertices = vertices.rbegin()->first + 1;
+		bool has_edge_data = vertices.rbegin()->second.has_edge_data();
+		void *addr = malloc(sizeof(vertex_index_temp<vertex_entry_type>)
+				+ sizeof(vertex_entry_type) * num_vertices);
+		assert(addr);
+		assert(header.get_num_vertices() == num_vertices);
+		vertex_index_temp<vertex_entry_type> *index
+			= new (addr) vertex_index_temp<vertex_entry_type>(num_vertices);
+		index->header = header;
+		assert(sizeof(index->header) == PAGE_SIZE);
+		// All data of adjacency lists are stored after the header.
+		size_t tot_size = sizeof(header);
+		vertex_id_t id = 0;
+		for (typename std::map<vertex_id_t, vertex_type>::const_iterator it
+				= vertices.begin(); it != vertices.end(); it++) {
+			const vertex_type &v = it->second;
+			assert(v.has_edge_data() == has_edge_data);
+			while (id < v.get_id()) {
+				vertex_type empty_v(id, has_edge_data);
+				index->vertices[id].init(tot_size, empty_v);
+				tot_size += empty_v.get_serialize_size();
+				id++;
+			}
+			assert(id == v.get_id());
+			index->vertices[id].init(tot_size, v);
+			tot_size += v.get_serialize_size();
+			id++;
+		}
+		index->tot_size = tot_size;
+		index->index_size = sizeof(vertex_index_temp<vertex_entry_type>)
+			+ index->get_num_vertices() * sizeof(index->vertices[0]);
+
+		return index;
+	}
+
 	const vertex_entry_type &get_vertex(vertex_id_t id) const {
 		assert(id < get_num_vertices());
 		return vertices[id];
