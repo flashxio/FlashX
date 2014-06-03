@@ -278,6 +278,9 @@ public:
 
 class FG_sparse_matrix
 {
+	size_t nrow;
+	size_t ncol;
+
 	// The type of matrix represented by the graph.
 	FG_sparse_type mtype;
 	// The type of edges that specifies the rows of the matrix.
@@ -288,6 +291,8 @@ class FG_sparse_matrix
 	FG_sparse_matrix() {
 		etype = edge_type::NONE;
 		mtype = FG_sparse_type::INVALID;
+		nrow = 0;
+		ncol = 0;
 	}
 
 protected:
@@ -298,6 +303,8 @@ protected:
 				index, fg->get_configs());
 		etype = edge_type::OUT_EDGE;
 		this->mtype = mtype;
+		this->nrow = graph->get_num_vertices();
+		this->ncol = graph->get_num_vertices();
 	}
 public:
 	typedef std::shared_ptr<FG_sparse_matrix> ptr;
@@ -306,8 +313,18 @@ public:
 		return ptr(new FG_sparse_matrix(fg, mtype));
 	}
 
+	void resize(size_t nrow, size_t ncol) {
+		this->nrow = nrow;
+		this->ncol = ncol;
+		assert(nrow <= graph->get_num_vertices());
+		assert(ncol <= graph->get_num_vertices());
+		// TODO we need to check if we can resize like this.
+	}
+
 	template<class T>
 	void multiply(const FG_vector<T> &input, FG_vector<T> &output) const {
+		assert(input.get_size() == get_num_cols());
+		assert(output.get_size() == get_num_rows());
 		graph->start_all(vertex_initiator::ptr(),
 				vertex_program_creater::ptr(new SPMV_vertex_program_creater<T>(
 						etype, mtype, input, output)));
@@ -326,10 +343,15 @@ public:
 		std::set<int> set;
 		labels.unique(set);
 		vsize_t vec_size;
-		if (row_wise)
+		if (row_wise) {
+			assert(labels.get_size() == get_num_rows());
 			vec_size = get_num_cols();
-		else
+		}
+		else {
+			assert(labels.get_size() == get_num_cols());
 			vec_size = get_num_rows();
+		}
+		assert(vec_size == graph->get_num_vertices());
 		BOOST_FOREACH(int label, set) {
 			agg_results.insert(std::pair<int, typename FG_vector<AggOp>::ptr>(
 						label, FG_vector<AggOp>::create(vec_size)));
@@ -345,11 +367,11 @@ public:
 			std::map<int, FG_vector<double>::ptr> &agg_results);
 
 	size_t get_num_rows() const {
-		return graph->get_num_vertices();
+		return nrow;
 	}
 
 	size_t get_num_cols() const {
-		return graph->get_num_vertices();
+		return ncol;
 	}
 
 	FG_sparse_matrix::ptr transpose() const {
@@ -362,6 +384,8 @@ public:
 			assert(0);
 		t->graph = this->graph;
 		t->mtype = this->mtype;
+		t->nrow = this->ncol;
+		t->ncol = this->nrow;
 		return t;
 	}
 };
