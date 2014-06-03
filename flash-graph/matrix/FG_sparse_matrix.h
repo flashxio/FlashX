@@ -25,8 +25,10 @@
 
 enum FG_sparse_type
 {
+	// The adjacency matrix. Each element is a binary.
 	ADJACENCY,
 	LAPLACIAN,
+	// The general sparse matrix. Each element is a real value.
 	GENERAL,
 	INVALID,
 };
@@ -53,12 +55,21 @@ public:
 	}
 };
 
+/**
+ * The default vertex program for sparse matrix vector multiplication.
+ * It works on the adjacency matrix.
+ */
 template<class T>
 class SPMV_vertex_program: public vertex_program_impl<matrix_vertex>
 {
 	edge_type type;
 	const FG_vector<T> &input;
 	FG_vector<T> &output;
+public:
+	SPMV_vertex_program(edge_type type, const FG_vector<T> &_input,
+			FG_vector<T> &_output): input(_input), output(_output) {
+		this->type = type;
+	}
 
 	const T &get_input(off_t idx) const {
 		return input.get(idx);
@@ -71,11 +82,6 @@ class SPMV_vertex_program: public vertex_program_impl<matrix_vertex>
 	edge_type get_edge_type() const {
 		return type;
 	}
-public:
-	SPMV_vertex_program(edge_type type, const FG_vector<T> &_input,
-			FG_vector<T> &_output): input(_input), output(_output) {
-		this->type = type;
-	}
 
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
 		edge_seq_iterator it = vertex.get_neigh_seq_it(get_edge_type(),
@@ -85,6 +91,38 @@ public:
 			w += get_input(id);
 		} PAGE_FOREACH_END
 		set_output(vertex.get_id(), w);
+	}
+};
+
+/**
+ * This vertex program implements sparse matrix vector multiplication
+ * on a general sparse matrix.
+ */
+template<class T>
+class general_SPMV_vertex_program: public SPMV_vertex_program<T>
+{
+public:
+	general_SPMV_vertex_program(edge_type type, const FG_vector<T> &input,
+			FG_vector<T> &output): SPMV_vertex_program<T>(type, input, output) {
+		assert(this->get_graph().get_graph_header().get_graph_type()
+				== graph_type::DIRECTED);
+	}
+
+	virtual void run(compute_vertex &, const page_vertex &vertex1) {
+		const page_directed_vertex &vertex = (const page_directed_vertex &) vertex1;
+		page_byte_array::const_iterator<vertex_id_t> n_it
+			= vertex.get_neigh_begin(this->get_edge_type());
+		page_byte_array::const_iterator<vertex_id_t> n_end
+			= vertex.get_neigh_end(this->get_edge_type());
+		page_byte_array::const_iterator<T> d_it
+			= vertex.get_data_begin<T>(this->get_edge_type());
+		T w = 0;
+		for (; n_it != n_end; ++n_it, ++d_it) {
+			vertex_id_t id = *n_it;
+			T v = *d_it;
+			w += this->get_input(id) * v;
+		}
+		this->set_output(vertex.get_id(), w);
 	}
 };
 
@@ -108,12 +146,20 @@ public:
 			case FG_sparse_type::ADJACENCY:
 				return vertex_program::ptr(new SPMV_vertex_program<T>(
 							etype, input, output));
+			case FG_sparse_type::GENERAL:
+				return vertex_program::ptr(new general_SPMV_vertex_program<T>(
+							etype, input, output));
 			default:
 				assert(0);
 		}
 	}
 };
 
+/**
+ * The default vertex program that groups rows or columns of a sparse matrix
+ * and aggregates rows or columns in each group.
+ * It works on the adjacency matrix.
+ */
 template<class T, class AggOp>
 class groupby_vertex_program: public vertex_program_impl<matrix_vertex>
 {
@@ -136,6 +182,13 @@ private:
 				assert(0);
 		}
 	}
+public:
+	groupby_vertex_program(edge_type row_type, bool row_wise,
+			const FG_vector<int> &_labels,
+			agg_map_t &_agg_results): labels(_labels), agg_results(_agg_results) {
+		this->row_type = row_type;
+		this->row_wise = row_wise;
+	}
 
 	edge_type get_edge_type() const {
 		if (row_wise)
@@ -150,13 +203,6 @@ private:
 		assert(it != agg_results.end());
 		it->second->get(id) += v;
 	}
-public:
-	groupby_vertex_program(edge_type row_type, bool row_wise,
-			const FG_vector<int> &_labels,
-			agg_map_t &_agg_results): labels(_labels), agg_results(_agg_results) {
-		this->row_type = row_type;
-		this->row_wise = row_wise;
-	}
 
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
 		edge_seq_iterator it = vertex.get_neigh_seq_it(get_edge_type(),
@@ -164,6 +210,36 @@ public:
 		PAGE_FOREACH(vertex_id_t, id, it) {
 			aggregate(id, 1);
 		} PAGE_FOREACH_END
+	}
+};
+
+/**
+ * This vertex program works on a general sparse matrix.
+ */
+template<class T, class AggOp>
+class general_groupby_vertex_program: public groupby_vertex_program<T, AggOp>
+{
+	typedef typename groupby_vertex_program<T, AggOp>::agg_map_t agg_map_t;
+public:
+	general_groupby_vertex_program(edge_type row_type, bool row_wise,
+			const FG_vector<int> &labels,
+			agg_map_t &agg_results): groupby_vertex_program<T, AggOp>(
+				row_type, row_wise, labels, agg_results) {
+		assert(this->get_graph().get_graph_header().get_graph_type()
+				== graph_type::DIRECTED);
+	}
+
+	virtual void run(compute_vertex &, const page_vertex &vertex1) {
+		const page_directed_vertex &vertex = (const page_directed_vertex &) vertex1;
+		page_byte_array::const_iterator<vertex_id_t> n_it
+			= vertex.get_neigh_begin(this->get_edge_type());
+		page_byte_array::const_iterator<vertex_id_t> n_end
+			= vertex.get_neigh_end(this->get_edge_type());
+		page_byte_array::const_iterator<T> d_it
+			= vertex.get_data_begin<T>(this->get_edge_type());
+		for (; n_it != n_end; ++n_it, ++d_it) {
+			this->aggregate(*n_it, *d_it);
+		}
 	}
 };
 
@@ -189,6 +265,10 @@ public:
 		switch(mtype) {
 			case FG_sparse_type::ADJACENCY:
 				return vertex_program::ptr(new groupby_vertex_program<T, AggOp>(
+							row_type, row_wise, labels, agg_results));
+			case FG_sparse_type::GENERAL:
+				return vertex_program::ptr(
+						new general_groupby_vertex_program<T, AggOp>(
 							row_type, row_wise, labels, agg_results));
 			default:
 				assert(0);
