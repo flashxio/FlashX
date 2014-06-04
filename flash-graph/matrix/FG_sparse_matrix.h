@@ -135,6 +135,7 @@ public:
 	}
 
 	const ResType &get_input(off_t idx) const {
+		assert((size_t) idx < input.get_size());
 		return input.get(idx);
 	}
 
@@ -147,6 +148,10 @@ public:
 	}
 
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
+		// TODO we should only start vertices that represent the rows or columns.
+		if (vertex.get_id() >= output.get_size())
+			return;
+
 		typename GetEdgeIterator::iterator it
 			= get_edge_iterator(vertex, get_edge_type());
 		ResType w = 0;
@@ -229,6 +234,10 @@ public:
 	}
 
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
+		// TODO we should only start vertices that represent the rows or columns.
+		if (vertex.get_id() >= labels.get_size())
+			return;
+
 		typename GetEdgeIterator::iterator it
 			= get_edge_iterator(vertex, get_edge_type());
 		assert(labels.get_size() > vertex.get_id());
