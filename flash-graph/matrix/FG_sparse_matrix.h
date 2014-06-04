@@ -222,8 +222,7 @@ public:
 	}
 
 	template<class T>
-	void aggregate(vertex_id_t id, T v) {
-		int label = labels.get(id);
+	void aggregate(int label, vertex_id_t id, T v) {
 		typename agg_map_t::const_iterator it = agg_results.find(label);
 		assert(it != agg_results.end());
 		it->second->get(id) += v;
@@ -232,10 +231,12 @@ public:
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
 		typename GetEdgeIterator::iterator it
 			= get_edge_iterator(vertex, get_edge_type());
+		assert(labels.get_size() > vertex.get_id());
+		int label = labels.get(vertex.get_id());
 		while (it.has_next()) {
 			vertex_id_t id = it.get_curr_id();
 			typename GetEdgeIterator::value_type v = it.get_curr_value();
-			aggregate(id, v);
+			aggregate(label, id, v);
 			it.next();
 		}
 	}
