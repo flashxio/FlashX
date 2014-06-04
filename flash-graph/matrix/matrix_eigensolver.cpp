@@ -34,20 +34,13 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FG_vector.h"
-#include "matrix/FG_dense_matrix.h"
-#include "matrix/FG_sparse_matrix.h"
+#include "FG_dense_matrix.h"
+#include "FG_sparse_matrix.h"
 #include "FGlib.h"
+#include "matrix_eigensolver.h"
 
-const int RHO = 1;
 const ev_float_t TOL = 1e-8;
-
-class SPMV
-{
-public:
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) = 0;
-	virtual size_t get_vector_size() = 0;
-};
+const int RHO = 1;
 
 class substract_store
 {
@@ -301,69 +294,6 @@ public:
 	}
 };
 
-template<class SparseMatrixType>
-class eigen_SPMV: public SPMV
-{
-	typename SparseMatrixType::ptr A;
-public:
-	eigen_SPMV(typename SparseMatrixType::ptr A) {
-		this->A = A;
-	}
-
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) {
-		A->multiply(input, output);
-	}
-
-	virtual size_t get_vector_size() {
-		return A->get_num_rows();
-	}
-};
-
-template<class SparseMatrixType>
-class LS_SPMV: public SPMV
-{
-	typename SparseMatrixType::ptr A;
-	FG_vector<ev_float_t>::ptr tmp;
-public:
-	LS_SPMV(typename SparseMatrixType::ptr A) {
-		this->A = A;
-		tmp = FG_vector<ev_float_t>::create(A->get_num_rows());
-	}
-
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) {
-		A->transpose()->multiply(input, *tmp);
-		A->multiply(*tmp, output);
-	}
-
-	virtual size_t get_vector_size() {
-		return A->get_num_rows();
-	}
-};
-
-template<class SparseMatrixType>
-class RS_SPMV: public SPMV
-{
-	typename SparseMatrixType::ptr A;
-	FG_vector<ev_float_t>::ptr tmp;
-public:
-	RS_SPMV(typename SparseMatrixType::ptr A) {
-		this->A = A;
-		tmp = FG_vector<ev_float_t>::create(A->get_num_rows());
-	}
-
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) {
-		A->multiply(input, *tmp);
-		A->transpose()->multiply(*tmp, output);
-	}
-
-	virtual size_t get_vector_size() {
-		return A->get_num_rows();
-	}
-};
-
 void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		std::vector<eigen_pair_t> &eigen_pairs)
 {
@@ -453,49 +383,4 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		eigen_pairs.push_back(eigen_pair_t(wanted_eigen_values[i],
 					orig_eigen_vectors[i]));
 	}
-}
-
-template<class SparseMatrixType>
-void compute_eigen_temp(typename SparseMatrixType::ptr matrix, int m, int nv,
-		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs)
-{
-	eigen_SPMV<SparseMatrixType> spmv(matrix);
-	eigen_solver(spmv, m, nv, which, eigen_pairs);
-}
-
-template<class SparseMatrixType>
-void compute_SVD_temp(typename SparseMatrixType::ptr matrix, int m, int nv,
-		const std::string &which, const std::string &type,
-		std::vector<eigen_pair_t> &eigen_pairs)
-{
-	// left-singular vectors of SVD
-	if (type == "LS") {
-		LS_SPMV<SparseMatrixType> spmv(matrix);
-		eigen_solver(spmv, m, nv, which, eigen_pairs);
-	}
-	// right-singular vectors of SVD
-	else if (type == "RS") {
-		RS_SPMV<SparseMatrixType> spmv(matrix);
-		eigen_solver(spmv, m, nv, which, eigen_pairs);
-	}
-	else
-		assert(0);
-
-	for (int i = 0; i < nv; i++) {
-		ev_float_t v = eigen_pairs[i].first;
-		eigen_pairs[i].first = sqrt(v);
-	}
-}
-
-void compute_eigen(FG_adj_matrix::ptr matrix, int m, int nv,
-		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs)
-{
-	compute_eigen_temp<FG_adj_matrix>(matrix, m, nv, which, eigen_pairs);
-}
-
-void compute_SVD(FG_adj_matrix::ptr matrix, int m, int nv,
-		const std::string &which, const std::string &type,
-		std::vector<eigen_pair_t> &eigen_pairs)
-{
-	compute_SVD_temp<FG_adj_matrix>(matrix, m, nv, which, type, eigen_pairs);
 }
