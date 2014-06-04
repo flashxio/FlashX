@@ -157,6 +157,9 @@ public:
 		ResType w = 0;
 		while (it.has_next()) {
 			vertex_id_t id = it.get_curr_id();
+			// TODO it might be an expensive way to resize #columns.
+			if (id >= input.get_size())
+				break;
 			typename GetEdgeIterator::value_type v = it.get_curr_value();
 			w += get_input(id) * v;
 			it.next();
