@@ -93,7 +93,7 @@ public:
 	}
 
 	virtual size_t get_vector_size() {
-		return A->get_num_rows();
+		return A->get_num_cols();
 	}
 };
 
