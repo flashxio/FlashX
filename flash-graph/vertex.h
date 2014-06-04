@@ -631,29 +631,25 @@ public:
 	}
 
 	template<class edge_data_type>
-	page_byte_array::const_iterator<edge_data_type> get_data_begin(
+	page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
 			edge_type type) const {
+		// TODO we currently don't support to request a partial vertex.
 		assert(!partial);
-		if (type == IN_EDGE || type == BOTH_EDGES)
-			return array.begin<edge_data_type>(
-					ext_mem_directed_vertex::get_header_size()
-					+ (num_in_edges + num_out_edges) * sizeof(vertex_id_t));
-		else if (type == OUT_EDGE)
-			return array.begin<edge_data_type>(
-					ext_mem_directed_vertex::get_header_size()
-					+ (num_in_edges + num_out_edges) * sizeof(vertex_id_t)
-					+ num_in_edges * sizeof(edge_data_type));
-		else
-			assert(0);
-	}
-
-	template<class edge_data_type>
-	page_byte_array::const_iterator<edge_data_type> get_data_end(
-			edge_type type) const {
-		page_byte_array::const_iterator<edge_data_type> it
-			= get_data_begin<edge_data_type>(type);
-		it += get_num_edges(type);
-		return it;
+		off_t edge_end = ext_mem_directed_vertex::get_header_size()
+			+ get_num_edges(type) * sizeof(vertex_id_t);
+		switch(type) {
+			case IN_EDGE:
+			case BOTH_EDGES:
+				return array.get_seq_iterator<edge_data_type>(
+						edge_end, edge_end
+						+ get_num_edges(type) * sizeof(edge_data_type));
+			case OUT_EDGE:
+				return array.get_seq_iterator<edge_data_type>(
+						edge_end + num_in_edges * sizeof(edge_data_type),
+						edge_end + (num_in_edges + num_out_edges) * sizeof(edge_data_type));
+			default:
+				assert(0);
+		}
 	}
 
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
