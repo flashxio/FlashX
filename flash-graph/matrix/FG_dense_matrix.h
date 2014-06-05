@@ -115,6 +115,8 @@ class Eigen_matrix_store
 	size_t ncol;
 	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> mat;
 public:
+	typename Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> matrix_type;
+
 	Eigen_matrix_store(size_t nrow, size_t ncol) {
 		this->nrow = nrow;
 		this->ncol = ncol;
@@ -143,6 +145,10 @@ public:
 
 	size_t get_num_cols() const {
 		return ncol;
+	}
+
+	const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &get_matrix() const {
+		return mat;
 	}
 };
 
@@ -362,13 +368,28 @@ public:
 template<class T>
 class FG_eigen_matrix: public FG_dense_matrix<T, Eigen_matrix_store<T> >
 {
+	FG_eigen_matrix(size_t nrow,
+			size_t ncol): FG_dense_matrix<T, Eigen_matrix_store<T> >(nrow, ncol) {
+	}
 public:
+	typedef std::shared_ptr<FG_eigen_matrix<T> > ptr;
+
 	FG_eigen_matrix(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat,
 			size_t nrow, size_t ncol): FG_dense_matrix<T, Eigen_matrix_store<T> >(
 				nrow, ncol) {
 		this->matrix_store = Eigen_matrix_store<T>(mat, nrow, ncol);
 		this->nrow = nrow;
 		this->ncol = ncol;
+	}
+
+	static ptr create(size_t nrow, size_t ncol) {
+		return ptr(new FG_eigen_matrix<T>(nrow, ncol));
+	}
+
+	void set_col(size_t idx, const FG_vector<T> &vec) {
+		assert(vec.get_size() == this->get_num_rows());
+		for (size_t i = 0; i < vec.get_size(); i++)
+			this->matrix_store.set(i, idx, vec.get(i));
 	}
 };
 
