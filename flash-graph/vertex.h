@@ -635,8 +635,9 @@ public:
 			edge_type type) const {
 		// TODO we currently don't support to request a partial vertex.
 		assert(!partial);
+		vsize_t num_edges = num_in_edges + num_out_edges;
 		off_t edge_end = ext_mem_directed_vertex::get_header_size()
-			+ get_num_edges(type) * sizeof(vertex_id_t);
+			+ (num_edges) * sizeof(vertex_id_t);
 		switch(type) {
 			case IN_EDGE:
 			case BOTH_EDGES:
@@ -646,7 +647,7 @@ public:
 			case OUT_EDGE:
 				return array.get_seq_iterator<edge_data_type>(
 						edge_end + num_in_edges * sizeof(edge_data_type),
-						edge_end + (num_in_edges + num_out_edges) * sizeof(edge_data_type));
+						edge_end + (num_edges) * sizeof(edge_data_type));
 			default:
 				assert(0);
 		}
