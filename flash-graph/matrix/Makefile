@@ -19,27 +19,18 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
+CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG) -I/usr/local/include/eigen3/
 
-all: circular-triangle-counting undirected-triangle-counting
+all: libmatrix
 
-circular_triangle_graph.o: triangle_graph.cpp
-	$(CXX) -o circular_triangle_graph.o -c triangle_graph.cpp $(CXXFLAGS) -DUSE_DIRECTED
-
-undirected_triangle_graph.o: triangle_graph.cpp
-	$(CXX) -o undirected_triangle_graph.o -c triangle_graph.cpp $(CXXFLAGS)
-
-circular-triangle-counting: circular_triangle_graph.o ../libgraph.a
-	$(CXX) -o circular-triangle-counting circular_triangle_graph.o $(LDFLAGS)
-
-undirected-triangle-counting: undirected_triangle_graph.o ../libgraph.a
-	$(CXX) -o undirected-triangle-counting undirected_triangle_graph.o $(LDFLAGS)
+libmatrix: $(OBJS)
+	rm -f libmatrix.a
+	ar -cvq libmatrix.a $(OBJS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f circular-triangle-counting
-	rm -f undirected-triangle-counting
+	rm -f libmatrix.a
 
 -include $(DEPS) 

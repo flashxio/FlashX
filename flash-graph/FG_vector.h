@@ -21,6 +21,7 @@
  */
 
 #include <memory>
+#include <set>
 
 #include "graph_engine.h"
 #include "stat.h"
@@ -56,7 +57,14 @@ public:
 			eles[i] = v;
 	}
 
-	void count_unique(count_map<T> &map) {
+	void unique(std::set<T> &set) const {
+		// TODO we need a parallel implementation.
+		BOOST_FOREACH(T v, eles) {
+			set.insert(v);
+		}
+	}
+
+	void count_unique(count_map<T> &map) const {
 		// TODO we need a parallel implementation.
 		BOOST_FOREACH(T v, eles) {
 			map.add(v);
@@ -100,6 +108,13 @@ public:
 		return ret;
 	}
 
+	T max() const {
+		T ret = std::numeric_limits<T>::min();
+		for (size_t i = 0; i < get_size(); i++)
+			ret = ::max(get(i), ret);
+		return ret;
+	}
+
 	void div_by_in_place(T v) {
 #pragma omp parallel for
 		for (size_t i = 0; i < get_size(); i++)
@@ -132,6 +147,10 @@ public:
 	}
 
 	const T &get(vertex_id_t id) const {
+		return eles[id];
+	}
+
+	T &get(vertex_id_t id) {
 		return eles[id];
 	}
 };

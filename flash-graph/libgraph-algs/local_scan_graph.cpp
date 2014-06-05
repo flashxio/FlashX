@@ -21,6 +21,8 @@
 #include <google/profiler.h>
 
 #include "scan_graph.h"
+#include "FG_vector.h"
+#include "FGlib.h"
 
 class count_msg: public vertex_message
 {
@@ -240,132 +242,56 @@ void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 	ls_v.finding_triangles_end(prog, data);
 }
 
-void int_handler(int sig_num)
+class save_scan_query: public vertex_query
 {
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	exit(0);
-}
-
-void print_usage()
-{
-	fprintf(stderr,
-			"local-scan [options] conf_file graph_file index_file\n");
-	fprintf(stderr, "-o file: output local scan of each vertex to a file\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	graph_conf.print_help();
-	params.print_help();
-}
-
-int main(int argc, char *argv[])
-{
-	int opt;
-	std::string output_file;
-	std::string confs;
-	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "o:c:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'o':
-				output_file = optarg;
-				num_opts++;
-				break;
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
-	if (argc < 3) {
-		print_usage();
-		exit(-1);
+	FG_vector<size_t>::ptr vec;
+public:
+	save_scan_query(FG_vector<size_t>::ptr vec) {
+		this->vec = vec;
 	}
 
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		local_scan_vertex &lv = (local_scan_vertex &) v;
+		vec->set(lv.get_id(), lv.get_local_scan());
+	}
 
-	config_map configs(conf_file);
-	configs.add_options(confs);
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	}
 
-	signal(SIGINT, int_handler);
+	virtual ptr clone() {
+		return vertex_query::ptr(new save_scan_query(vec));
+	}
+};
 
+FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
+{
 	finding_triangles_end = ls_finding_triangles_end;
 	create_runtime = ls_create_runtime;
 
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
-			index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+
+	printf("local scan starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	printf("Computing local scan\n");
-	gettimeofday(&start, NULL);
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("It takes %f seconds\n", time_diff(start, end));
-	printf("process %ld vertices and complete %ld vertices\n",
-			num_working_vertices.get(), num_completed_vertices.get());
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
+	printf("It takes %f seconds to compute all local scan\n",
+			time_diff(start, end));
 
-#ifdef PV_STAT
-	graph_index::const_iterator it = index->begin();
-	graph_index::const_iterator end_it = index->end();
-	size_t tot_scan_bytes = 0;
-	size_t tot_rand_jumps = 0;
-	for (; it != end_it; ++it) {
-		const local_scan_vertex &v = (const local_scan_vertex &) *it;
-		tot_scan_bytes += v.get_scan_bytes();
-		tot_rand_jumps += v.get_rand_jumps();
-	}
-	printf("scan %ld bytes, %ld rand jumps\n",
-			tot_scan_bytes, tot_rand_jumps);
-#endif
-
-	size_t max_scan = 0;
-	vertex_id_t max_v = -1;
-	if (!output_file.empty()) {
-		FILE *f = fopen(output_file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			return -1;
-		}
-		graph_index::const_iterator it = index->begin();
-		graph_index::const_iterator end_it = index->end();
-		for (; it != end_it; ++it) {
-			const local_scan_vertex &v = (const local_scan_vertex &) *it;
-			fprintf(f, "\"%ld\" %ld\n", (unsigned long) v.get_id(), v.get_local_scan());
-			if (max_scan < v.get_local_scan()) {
-				max_scan = v.get_local_scan();
-				max_v = v.get_id();
-			}
-		}
-		fclose(f);
-	}
-
-	if (max_scan == 0) {
-		graph_index::const_iterator it = index->begin();
-		graph_index::const_iterator end_it = index->end();
-		for (; it != end_it; ++it) {
-			const local_scan_vertex &v = (const local_scan_vertex &) *it;
-			if (max_scan < v.get_local_scan()) {
-				max_scan = v.get_local_scan();
-				max_v = v.get_id();
-			}
-		}
-	}
-	printf("max scan: %ld, on v%u\n", max_scan, max_v);
+	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
+	graph->query_on_all(vertex_query::ptr(new save_scan_query(vec)));
+	return vec;
 }

@@ -34,23 +34,13 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FG_vector.h"
-#include "matrix/FG_dense_matrix.h"
-#include "matrix/FG_sparse_matrix.h"
+#include "FG_dense_matrix.h"
+#include "FG_sparse_matrix.h"
+#include "FGlib.h"
+#include "matrix_eigensolver.h"
 
-typedef double ev_float_t;
-
-const int RHO = 1;
 const ev_float_t TOL = 1e-8;
-
-class SPMV
-{
-public:
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) = 0;
-	virtual size_t get_vector_size() = 0;
-};
-
-typedef std::pair<ev_float_t, FG_vector<ev_float_t>::ptr> eigen_pair_t;
+const int RHO = 1;
 
 class substract_store
 {
@@ -304,66 +294,6 @@ public:
 	}
 };
 
-class eigen_SPMV: public SPMV
-{
-	FG_adj_matrix::ptr A;
-public:
-	eigen_SPMV(FG_adj_matrix::ptr A) {
-		this->A = A;
-	}
-
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) {
-		A->multiply(input, output);
-	}
-
-	virtual size_t get_vector_size() {
-		return A->get_num_rows();
-	}
-};
-
-class LS_SPMV: public SPMV
-{
-	FG_adj_matrix::ptr A;
-	FG_vector<ev_float_t>::ptr tmp;
-public:
-	LS_SPMV(FG_adj_matrix::ptr A) {
-		this->A = A;
-		tmp = FG_vector<ev_float_t>::create(A->get_num_rows());
-	}
-
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) {
-		A->transpose()->multiply(input, *tmp);
-		A->multiply(*tmp, output);
-	}
-
-	virtual size_t get_vector_size() {
-		return A->get_num_rows();
-	}
-};
-
-class RS_SPMV: public SPMV
-{
-	FG_adj_matrix::ptr A;
-	FG_vector<ev_float_t>::ptr tmp;
-public:
-	RS_SPMV(FG_adj_matrix::ptr A) {
-		this->A = A;
-		tmp = FG_vector<ev_float_t>::create(A->get_num_rows());
-	}
-
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) {
-		A->multiply(input, *tmp);
-		A->transpose()->multiply(*tmp, output);
-	}
-
-	virtual size_t get_vector_size() {
-		return A->get_num_rows();
-	}
-};
-
 void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		std::vector<eigen_pair_t> &eigen_pairs)
 {
@@ -453,119 +383,4 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		eigen_pairs.push_back(eigen_pair_t(wanted_eigen_values[i],
 					orig_eigen_vectors[i]));
 	}
-}
-
-void int_handler(int sig_num)
-{
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	exit(0);
-}
-
-void print_usage()
-{
-	fprintf(stderr,
-			"eigensolver [options] conf_file graph_file index_file\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-m: the dimension of the tridiagonal matrix\n");
-	fprintf(stderr, "-k: the number of required eigenvalues\n");
-	fprintf(stderr, "-w: which type of eigenvalues\n");
-	fprintf(stderr, "-t: the type of eigenvalues and eigenvectors.\n");
-	fprintf(stderr, "\tEV (eigen vectors of a symmetric matrix),\n");
-	fprintf(stderr, "\tLS (left-singular vectors of SVD),\n");
-	fprintf(stderr, "\tRS (right-singular vectors of SVD)\n");
-	graph_conf.print_help();
-	params.print_help();
-}
-
-int main(int argc, char *argv[])
-{
-	int opt;
-	std::string confs;
-	int num_opts = 0;
-	int m = 0;
-	int nv = 0;
-	std::string which = "LA";
-	std::string type = "EV";
-	while ((opt = getopt(argc, argv, "c:m:k:w:t:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 'm':
-				m = atoi(optarg);
-				num_opts++;
-				break;
-			case 'k':
-				nv = atoi(optarg);
-				num_opts++;
-				break;
-			case 'w':
-				which = optarg;
-				num_opts++;
-				break;
-			case 't':
-				type = optarg;
-				num_opts++;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
-	if (argc < 3) {
-		print_usage();
-		exit(-1);
-	}
-
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
-
-	config_map configs(conf_file);
-	configs.add_options(confs);
-
-	signal(SIGINT, int_handler);
-
-	assert(nv < m);
-	printf("Eigensolver starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStart(graph_conf.get_prof_file().c_str());
-
-	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
-
-	std::vector<eigen_pair_t> eigen_pairs;
-	if (type == "EV") {
-		eigen_SPMV spmv(FG_adj_matrix::create(graph));
-		eigen_solver(spmv, m, nv, which, eigen_pairs);
-	}
-	else if (type == "LS") {
-		LS_SPMV spmv(FG_adj_matrix::create(graph));
-		eigen_solver(spmv, m, nv, which, eigen_pairs);
-	}
-	else if (type == "RS") {
-		RS_SPMV spmv(FG_adj_matrix::create(graph));
-		eigen_solver(spmv, m, nv, which, eigen_pairs);
-	}
-	else
-		assert(0);
-	assert(eigen_pairs.size() == (size_t) nv);
-
-	for (int i = 0; i < nv; i++) {
-		ev_float_t v = eigen_pairs[i].first;
-		if (type == "LS" || type == "RS")
-			v = sqrt(v);
-		printf("eigen value: %f, norm1(vector): %f\n",
-				v, eigen_pairs[i].second->norm1());
-	}
-
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 }

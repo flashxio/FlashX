@@ -126,7 +126,10 @@ public:
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		wcc_vertex &wcc_v = (wcc_vertex &) v;
-		vec->set(wcc_v.get_id(), wcc_v.get_component_id());
+		if (!wcc_v.is_empty(graph))
+			vec->set(wcc_v.get_id(), wcc_v.get_component_id());
+		else
+			vec->set(wcc_v.get_id(), INVALID_VERTEX_ID);
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {

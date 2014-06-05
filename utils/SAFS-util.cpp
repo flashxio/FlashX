@@ -174,7 +174,7 @@ void comm_verify_file(int argc, char *argv[])
 	verify_callback *cb = new verify_callback(source);
 	io->set_callback(cb);
 
-	size_t file_size = source->get_size();
+	ssize_t file_size = source->get_size();
 	printf("verify %ld bytes\n", file_size);
 	assert(factory->get_file_size() >= file_size);
 	file_size = ROUNDUP(file_size, BUF_SIZE);
@@ -194,47 +194,41 @@ void comm_verify_file(int argc, char *argv[])
 
 void comm_load_file2fs(int argc, char *argv[])
 {
-	if (argc < 1) {
-		fprintf(stderr, "load file_name [ext_file]\n");
+	if (argc < 2) {
+		fprintf(stderr, "load file_name ext_file\n");
 		fprintf(stderr, "file_name is the file name in the SA-FS file system\n");
 		fprintf(stderr, "ext_file is the file in the external file system\n");
 		exit(-1);
 	}
 
 	std::string int_file_name = argv[0];
-	std::string ext_file;
-	if (argc >= 2)
-		ext_file = argv[1];
+	std::string ext_file = argv[1];
+
+	data_source *source = new file_data_source(ext_file);
 
 	safs_file file(get_sys_RAID_conf(), int_file_name);
+	// If the file in SAFS doesn't exist, create a new one.
 	if (!file.exist()) {
-		fprintf(stderr, "%s doesn't exist\n", int_file_name.c_str());
-		return;
+		safs_file file(get_sys_RAID_conf(), int_file_name);
+		file.create_file(source->get_size());
+		printf("create file %s of %ld bytes\n", int_file_name.c_str(),
+				file.get_file_size());
 	}
 
 	file_io_factory::shared_ptr factory = create_io_factory(int_file_name,
 			REMOTE_ACCESS);
 	assert(factory);
+	assert((size_t) factory->get_file_size() >= source->get_size());
+	printf("source size: %ld\n", source->get_size());
+
 	thread *curr_thread = thread::get_curr_thread();
 	assert(curr_thread);
 	io_interface *io = factory->create_io(curr_thread);
 
-	data_source *source;
-	if (ext_file.empty()) {
-		printf("use synthetic data\n");
-		source = new synthetic_data_source(factory->get_file_size());
-	}
-	else {
-		printf("use file %s\n", ext_file.c_str());
-		source = new file_data_source(ext_file);
-	}
-	assert(factory->get_file_size() >= source->get_size());
-	printf("source size: %ld\n", source->get_size());
-
 	char *buf = (char *) valloc(BUF_SIZE);
 	off_t off = 0;
 
-	while (off < source->get_size()) {
+	while (off < (off_t) source->get_size()) {
 		size_t size = min<size_t>(BUF_SIZE, source->get_size() - off);
 		size_t ret = source->get_data(off, size, buf);
 		assert(ret == size);
@@ -385,7 +379,7 @@ int main(int argc, char *argv[])
 
 	const struct command *comm = get_command(command);
 	if (comm == NULL) {
-		fprintf(stderr, "wrong command %s\n", comm->name.c_str());
+		fprintf(stderr, "wrong command %s\n", command.c_str());
 		print_help();
 		return -1;
 	}
