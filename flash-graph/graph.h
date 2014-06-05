@@ -343,13 +343,12 @@ public:
 	}
 
 	virtual void print() const {
-#if 0
-		for (size_t i = 0; i < vertices.size(); i++) {
-			if (vertices[i].get_num_in_edges()
-					+ vertices[i].get_num_out_edges() > 0)
-				vertices[i].print();
+		for (typename v_map_t::const_iterator it = vertices.begin();
+				it != vertices.end(); it++) {
+			const in_mem_directed_vertex<edge_data_type> &v = it->second;
+			if (v.get_num_in_edges() + v.get_num_out_edges() > 0)
+				v.print();
 		}
-#endif
 	}
 
 	virtual void check_ext_graph(const std::string &index_file,
