@@ -25,7 +25,7 @@ const int NUM_SAMPLES = 100;
 
 FG_vector<unsigned char>::ptr read_mnist_label(const std::string file, int num_samples);
 
-void train(FG_general_sparse_matrix<unsigned char>::ptr input,
+FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_matrix<unsigned char>::ptr input,
 		FG_vector<int>::ptr labels, int k)
 {
 	typedef std::map<int, FG_vector<double>::ptr> mean_map_t;
@@ -34,9 +34,6 @@ void train(FG_general_sparse_matrix<unsigned char>::ptr input,
 	std::vector<eigen_pair_t> eigens;
 	compute_SVD<FG_general_sparse_matrix<unsigned char> >(input, 2 * k, k,
 			"LA", "RS", eigens);
-	BOOST_FOREACH(eigen_pair_t p, eigens) {
-		printf("value: %f, ||vector||: %f\n", p.first, p.second->norm1());
-	}
 
 	size_t nrow = input->get_num_cols();
 	size_t ncol = mean.size() + k;
@@ -51,6 +48,7 @@ void train(FG_general_sparse_matrix<unsigned char>::ptr input,
 	}
 	for (int i = 0; i < k; i++)
 		qr_matrix->set_col(col_idx++, *eigens[i].second);
+	return qr_matrix->householderQ();
 }
 
 void print_usage()
@@ -128,5 +126,6 @@ int main(int argc, char *argv[])
 		= FG_vector<int>::create(train_label_tmp->get_size());
 	for (size_t i = 0; i < train_label_tmp->get_size(); i++)
 		train_labels->set(i, train_label_tmp->get(i));
-	train(train_matrix, train_labels, 10);
+	FG_eigen_matrix<double>::ptr q = LOL(train_matrix, train_labels, 10);
+	printf("q size: %ld, %ld\n", q->get_num_rows(), q->get_num_cols());
 }
