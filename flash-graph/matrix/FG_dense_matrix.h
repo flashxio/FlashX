@@ -405,6 +405,24 @@ public:
 		ret->ncol = ret->matrix_store.get_num_cols();
 		return ret;
 	}
+
+	typename FG_vector<T>::ptr get_col(size_t col) const {
+		assert(col < this->ncol);
+		typename FG_vector<T>::ptr vec
+			= FG_vector<T>::create(this->get_num_rows());
+		for (size_t i = 0; i < this->get_num_rows(); i++)
+			vec->set(i, this->get(i, col));
+		return vec;
+	}
+
+	typename FG_vector<T>::ptr get_row(size_t row) const {
+		assert(row < this->nrow);
+		typename FG_vector<T>::ptr vec
+			= FG_vector<T>::create(this->get_num_cols());
+		for (size_t i = 0; i < this->get_num_cols(); i++)
+			vec->set(i, this->get(row, i));
+		return vec;
+	}
 };
 
 #endif

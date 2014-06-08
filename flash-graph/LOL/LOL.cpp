@@ -128,4 +128,6 @@ int main(int argc, char *argv[])
 		train_labels->set(i, train_label_tmp->get(i));
 	FG_eigen_matrix<double>::ptr q = LOL(train_matrix, train_labels, 10);
 	printf("q size: %ld, %ld\n", q->get_num_rows(), q->get_num_cols());
+	for (size_t i = 0; i < q->get_num_cols(); i++)
+		printf("||col%ld||: %f\n", i, q->get_col(i)->norm1());
 }
