@@ -39,14 +39,6 @@ int main(int argc, char *argv[])
 
 	FG_row_wise_matrix<unsigned char>::ptr m = read_mnist_data(input_file, NUM_SAMPLES);
 	printf("There are %ld rows and %ld columns\n", m->get_num_rows(), m->get_num_cols());
-	for (size_t i = 0; i < m->get_num_rows(); i++) {
-		for (size_t j = 0; j < m->get_num_cols(); j++) {
-			fprintf(stderr, "%d,", m->get(i, j));
-		}
-		fprintf(stderr, "\n");
-	}
-	exit(1);
-
 	graph::ptr g = m->conv2graph();
 	printf("There are %ld vertices and %ld edges in the graph\n",
 			g->get_num_vertices(), g->get_num_edges());
