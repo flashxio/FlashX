@@ -111,24 +111,19 @@ public:
 template<class T>
 class Eigen_matrix_store
 {
-	size_t nrow;
-	size_t ncol;
 	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> mat;
 public:
 	typename Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> matrix_type;
 
 	Eigen_matrix_store(size_t nrow, size_t ncol) {
-		this->nrow = nrow;
-		this->ncol = ncol;
-		mat.conservativeResize(nrow, ncol);
+		mat.resize(nrow, ncol);
+		assert((size_t) mat.rows() == nrow);
+		assert((size_t) mat.cols() == ncol);
 	}
 
 	Eigen_matrix_store(
-			const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat,
-			size_t nrow, size_t ncol) {
+			const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat) {
 		this->mat = mat;
-		this->nrow = nrow;
-		this->ncol = ncol;
 	}
 
 	void set(size_t row, size_t col, const T &v) {
@@ -140,11 +135,11 @@ public:
 	}
 
 	size_t get_num_rows() const {
-		return nrow;
+		return mat.rows();
 	}
 
 	size_t get_num_cols() const {
-		return ncol;
+		return mat.cols();
 	}
 
 	const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &get_matrix() const {
@@ -377,7 +372,9 @@ public:
 	FG_eigen_matrix(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat,
 			size_t nrow, size_t ncol): FG_dense_matrix<T, Eigen_matrix_store<T> >(
 				nrow, ncol) {
-		this->matrix_store = Eigen_matrix_store<T>(mat, nrow, ncol);
+		this->matrix_store = Eigen_matrix_store<T>(mat);
+		assert(nrow <= this->matrix_store.get_num_rows());
+		assert(ncol <= this->matrix_store.get_num_cols());
 		this->nrow = nrow;
 		this->ncol = ncol;
 	}
