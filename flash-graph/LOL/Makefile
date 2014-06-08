@@ -21,13 +21,16 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG) -I/usr/local/include/eigen3/
 
-all: LOL m2g
+all: LOL m2g print_mnist
 
 LOL: LOL.o mnist_io.o ../libgraph.a ../matrix/libmatrix.a
 	$(CXX) -o LOL LOL.o mnist_io.o $(LDFLAGS)
 
 m2g: m2g.o mnist_io.o ../libgraph.a ../matrix/libmatrix.a
 	$(CXX) -o m2g m2g.o mnist_io.o $(LDFLAGS)
+
+print_mnist: print_mnist.o mnist_io.o ../libgraph.a ../matrix/libmatrix.a
+	$(CXX) -o print_mnist print_mnist.o mnist_io.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
