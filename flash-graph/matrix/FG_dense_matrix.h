@@ -145,6 +145,10 @@ public:
 	const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &get_matrix() const {
 		return mat;
 	}
+
+	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &get_matrix() {
+		return mat;
+	}
 };
 
 template<class T, class MatrixStore>
@@ -387,6 +391,19 @@ public:
 		assert(vec.get_size() == this->get_num_rows());
 		for (size_t i = 0; i < vec.get_size(); i++)
 			this->matrix_store.set(i, idx, vec.get(i));
+	}
+
+	typename FG_eigen_matrix<T>::ptr householderQ() const {
+		size_t nrows = this->matrix_store.get_num_rows();
+		size_t ncols = this->matrix_store.get_num_cols();
+		typename FG_eigen_matrix<T>::ptr ret = FG_eigen_matrix<T>::ptr(
+				new FG_eigen_matrix(nrows, ncols));
+		ret->matrix_store.get_matrix()
+			= this->matrix_store.get_matrix().householderQr().householderQ(
+					) * Eigen::MatrixXd::Identity(nrows, ncols);
+		ret->nrow = ret->matrix_store.get_num_rows();
+		ret->ncol = ret->matrix_store.get_num_cols();
+		return ret;
 	}
 };
 
