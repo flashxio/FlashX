@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
 				break;
 			case 'K':
 				topK = atoi(optarg);
+				num_opts++;
 				break;
 			default:
 				print_usage();
