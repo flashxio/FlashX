@@ -17,6 +17,8 @@ interface for users to express graph algorithms. Users encapsulate their graph
 algorithms in vertex programs and `FlashGraph` executes the vertex programs
 in parallel and fetches data from SSDs for the vertex programs.
 
+The FlashGraph user manual can be found [here](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
+
 SAFSlib
 ========
 
@@ -28,6 +30,4 @@ in the block stack, without modifying the kernel. It can achieve the optimal per
 of a large SSD array in a [NUMA](http://en.wikipedia.org/wiki/Non-uniform_memory_access) machine.
 
 The SAFSlib user manual can be found [here](https://docs.google.com/document/d/1OpsuLZw60MGCZAg4xO-j-1_AEWm3Yc2nqKKu8kXotkA/edit?usp=sharing).
-
-The FlashGraph user manual can be found [here](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
 
