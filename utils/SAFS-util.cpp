@@ -47,14 +47,6 @@ ssize_t complete_read(int fd, char *buf, size_t count)
 	return bytes;
 }
 
-int verify_bytes(const char *bs1, const char *bs2, int size)
-{
-	for (int i = 0; i < size; i++) {
-		assert(bs1[i] == bs2[i]);
-	}
-	return 0;
-}
-
 class data_source
 {
 public:
@@ -121,9 +113,11 @@ class verify_callback: public callback
 	char *orig_buf;
 	data_source *source;
 	size_t verified_bytes;
+	const file_mapper *fmapper;
 public:
-	verify_callback(data_source *source) {
+	verify_callback(data_source *source, const file_mapper *fmapper) {
 		this->source = source;
+		this->fmapper = fmapper;
 		orig_buf = (char *) malloc(BUF_SIZE);
 		verified_bytes = 0;
 	}
@@ -140,7 +134,15 @@ public:
 		fprintf(stderr, "verify block %lx of %ld bytes\n", rqs[0]->get_offset(), read_bytes);
 		assert(ret == read_bytes);
 		verified_bytes += read_bytes;
-		verify_bytes(rqs[0]->get_buf(), orig_buf, read_bytes);
+		for (size_t i = 0; i < read_bytes; i++) {
+			if (rqs[0]->get_buf()[i] != orig_buf[i]) {
+				struct block_identifier bid;
+				fmapper->map((rqs[0]->get_offset() + i) / PAGE_SIZE, bid);
+				fprintf(stderr, "bytes at %ld (in partition %d) doesn't match\n",
+						rqs[0]->get_offset() + i, bid.idx);
+				assert(0);
+			}
+		}
 		return 0;
 	}
 
@@ -174,7 +176,8 @@ void comm_verify_file(int argc, char *argv[])
 		source = new synthetic_data_source(factory->get_file_size());
 	else
 		source = new file_data_source(ext_file);
-	verify_callback *cb = new verify_callback(source);
+	const RAID_config &conf = get_sys_RAID_conf();
+	verify_callback *cb = new verify_callback(source, conf.create_file_mapper());
 	io->set_callback(cb);
 
 	ssize_t file_size = source->get_size();
