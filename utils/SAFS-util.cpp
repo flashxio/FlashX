@@ -29,6 +29,8 @@
 
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
 
+config_map configs;
+
 ssize_t complete_read(int fd, char *buf, size_t count)
 {
 	ssize_t bytes = 0;
@@ -161,6 +163,7 @@ void comm_verify_file(int argc, char *argv[])
 	if (argc >= 2)
 		ext_file = argv[1];
 
+	init_io_system(configs);
 	file_io_factory::shared_ptr factory = create_io_factory(int_file_name,
 			REMOTE_ACCESS);
 	thread *curr_thread = thread::get_curr_thread();
@@ -204,6 +207,8 @@ void comm_load_file2fs(int argc, char *argv[])
 	std::string int_file_name = argv[0];
 	std::string ext_file = argv[1];
 
+	configs.add_options("writable=1");
+	init_io_system(configs);
 	data_source *source = new file_data_source(ext_file);
 
 	safs_file file(get_sys_RAID_conf(), int_file_name);
@@ -253,6 +258,8 @@ void comm_create_file(int argc, char *argv[])
 		exit(-1);
 	}
 
+	configs.add_options("writable=1");
+	init_io_system(configs);
 	std::string file_name = argv[0];
 	size_t file_size = str2size(argv[1]);
 	safs_file file(get_sys_RAID_conf(), file_name);
@@ -270,6 +277,7 @@ void comm_help(int argc, char *argv[])
 
 void comm_list(int argc, char *argv[])
 {
+	init_io_system(configs);
 	std::set<std::string> files;
 	const RAID_config &conf = get_sys_RAID_conf();
 
@@ -302,6 +310,8 @@ void comm_delete_file(int argc, char *argv[])
 		return;
 	}
 
+	configs.add_options("writable=1");
+	init_io_system(configs);
 	std::string file_name = argv[0];
 	safs_file file(get_sys_RAID_conf(), file_name);
 	if (!file.exist()) {
@@ -373,10 +383,7 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	std::string command = argv[2];
 
-	config_map configs(conf_file);
-	configs.add_options("writable=1");
-	init_io_system(configs);
-
+	configs = config_map(conf_file);
 	const struct command *comm = get_command(command);
 	if (comm == NULL) {
 		fprintf(stderr, "wrong command %s\n", command.c_str());
