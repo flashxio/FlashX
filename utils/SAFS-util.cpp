@@ -250,6 +250,70 @@ void comm_load_file2fs(int argc, char *argv[])
 	factory->destroy_io(io);
 }
 
+void comm_load_part_file2fs(int argc, char *argv[])
+{
+	if (argc < 3) {
+		fprintf(stderr, "load_part file_name ext_file part_id\n");
+		fprintf(stderr, "file_name is the file name in the SA-FS file system\n");
+		fprintf(stderr, "ext_file is the file in the external file system\n");
+		fprintf(stderr, "part_id is the partition of the file loaded to SAFS\n");
+		exit(-1);
+	}
+
+	std::string int_file_name = argv[0];
+	std::string ext_file = argv[1];
+	int part_id = atoi(argv[2]);
+
+	configs.add_options("writable=1");
+	init_io_system(configs);
+	const RAID_config &conf = get_sys_RAID_conf();
+	file_mapper *fmapper = conf.create_file_mapper();
+	std::string part_path = fmapper->get_file_name(part_id) + "/"
+		+ int_file_name;
+
+	// Create the directory in the native filesystem for the partition
+	// of the specified file.
+	native_dir dir(part_path);
+	assert(!dir.exist());
+	bool ret = dir.create_dir(false);
+	assert(ret);
+
+	std::string file_path = part_path + "/" + std::string(argv[2]);
+	FILE *out_f = fopen(file_path.c_str(), "w");
+	assert(out_f);
+	FILE *in_f = fopen(ext_file.c_str(), "r");
+	assert(in_f);
+	native_file nfile(ext_file);
+	size_t ext_file_size = nfile.get_size();
+	// The last write location in the partition file in SAFS.
+	off_t expected_write_pos = 0;
+	const size_t block_size = fmapper->STRIPE_BLOCK_SIZE * PAGE_SIZE;
+	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[block_size]);
+	for (size_t off = 0; off < ext_file_size; off += block_size) {
+		struct block_identifier bid;
+		fmapper->map(off / PAGE_SIZE, bid);
+		// If the block doesn't belong to the specified partition, skip it.
+		if (bid.idx != part_id)
+			continue;
+		int ret = fseek(in_f, off, SEEK_SET);
+		if (ret < 0) {
+			perror("fseek");
+			exit(1);
+		}
+		size_t remain_size = ext_file_size - off;
+		size_t read_size = min(block_size, remain_size);
+		size_t rret = fread(buf.get(), read_size, 1, in_f);
+		assert(rret == 1);
+		assert(expected_write_pos == bid.off * PAGE_SIZE);
+		rret = fwrite(buf.get(), read_size, 1, out_f);
+		assert(rret == 1);
+		expected_write_pos = bid.off * PAGE_SIZE + read_size;
+	}
+
+	fclose(out_f);
+	fclose(in_f);
+}
+
 void comm_create_file(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -340,6 +404,8 @@ struct command commands[] = {
 	{"list", comm_list, "list: list existing files in SAFS"},
 	{"load", comm_load_file2fs,
 		"load file_name [ext_file]: load data to the file"},
+	{"load_part", comm_load_part_file2fs,
+		"load_part file_name ext_file part_id: load part of the file to SAFS"},
 	{"verify", comm_verify_file,
 		"verify file_name [ext_file]: verify data in the file"},
 };
