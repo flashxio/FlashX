@@ -6,14 +6,16 @@ semi-external memory graph processing engine. FlashGraph stores vertex state
 in memory and the edge lists of vertices on SSDs. It is optimized for a high-speed
 SSD array or other high-speed flash storage. Its current implementation is tightly
 integrated with `SAFS` (Set Associative File System) to take advantage of
-the high I/O throughput of an SSD array. It has very short load time and
-small memory consumption when processing very large graphs.
-Thanks to the high-speed SSDs, it also has performance comparable to
-in-memory graph engines.
+the high I/O throughput of an SSD array. Due to the natural of semi-external memory
+graph engine, FlashGraph has very short load time and small memory consumption
+when processing very large graphs, which enables us to process a billion-node
+graph in a single machine. Thanks to the high-speed SSDs, it also has performance
+comparable to in-memory graph engines.
 
-It exposes a vertex-centric programming interface for users to express
-graph algorithms and `FlashGraph` executes the user graph applications
-in parallel and fetches data from SSDs. 
+Flashgraph is implemented with C++ and provides a vertex-centric programming
+interface for users to express graph algorithms. Users encapsulate their graph
+algorithms in vertex programs and `FlashGraph` executes the vertex programs
+in parallel and fetches data from SSDs for the vertex programs.
 
 SAFSlib
 ========
