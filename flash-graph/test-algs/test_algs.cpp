@@ -108,10 +108,10 @@ int main(int argc, char *argv[])
 		printf("Max local scan is %ld\n", scan->max());
 	}
 	else if (alg == "topK_scan") {
-		FG_vector<size_t>::ptr scan = compute_topK_scan(graph, topK);
+		FG_vector<std::pair<vertex_id_t, size_t> >::ptr scan = compute_topK_scan(graph, topK);
 		printf("The top %d scans:\n", topK);
 		for (int i = 0; i < topK; i++)
-			printf("%ld\n", scan->get(i));
+			printf("%u\t%ld\n", scan->get(i).first, scan->get(i).second);
 	}
 	else if (alg == "wcc" || alg == "scc") {
 		FG_vector<vertex_id_t>::ptr comp_ids;
