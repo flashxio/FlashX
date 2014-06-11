@@ -31,6 +31,7 @@ class graph_config
 	int max_processing_vertices;
 	bool enable_elevator;
 	int part_range_size_log;
+	bool _preload;
 public:
 	graph_config() {
 		num_threads = 4;
@@ -38,6 +39,7 @@ public:
 		max_processing_vertices = 2000;
 		enable_elevator = false;
 		part_range_size_log = 10;
+		_preload = false;
 	}
 
 	void print_help();
@@ -72,6 +74,10 @@ public:
 	int get_part_range_size_log() const {
 		return part_range_size_log;
 	}
+
+	bool preload() const {
+		return _preload;
+	}
 };
 
 inline void graph_config::print_help()
@@ -83,6 +89,7 @@ inline void graph_config::print_help()
 	printf("\tmax_processing_vertices: the max number of vertices being processed\n");
 	printf("\tenable_elevator: enable the elevator algorithm for scheduling vertices\n");
 	printf("\tpart_range_size_log: the log2 of the range size in range partitioning\n");
+	printf("\tpreload: preload the graph data to the page cache\n");
 }
 
 inline void graph_config::print()
@@ -94,6 +101,7 @@ inline void graph_config::print()
 	printf("\tmax_processing_vertices: %d\n", max_processing_vertices);
 	printf("\tenable_elevator: %d\n", enable_elevator);
 	printf("\tpart_range_size_log: %d\n", part_range_size_log);
+	printf("\tpreload: %d\n", _preload);
 }
 
 inline void graph_config::init(const config_map &map)
@@ -105,6 +113,7 @@ inline void graph_config::init(const config_map &map)
 	map.read_option_int("max_processing_vertices", max_processing_vertices);
 	map.read_option_bool("enable_elevator", enable_elevator);
 	map.read_option_int("part_range_size_log", part_range_size_log);
+	map.read_option_bool("preload", _preload);
 }
 
 extern graph_config graph_conf;

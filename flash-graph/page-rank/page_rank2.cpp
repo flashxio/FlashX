@@ -147,7 +147,6 @@ void print_usage()
 	fprintf(stderr,
 			"page-rank [options] conf_file graph_file index_file damping_factor\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-p: preload the graph\n");
 	fprintf(stderr, "-i num: specify the maximal number of iterations\n");
 	graph_conf.print_help();
 	params.print_help();
@@ -158,16 +157,12 @@ int main(int argc, char *argv[])
 	int opt;
 	std::string confs;
 	int num_opts = 0;
-	bool preload = false;
-	while ((opt = getopt(argc, argv, "c:pi:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:i:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
 				confs = optarg;
 				num_opts++;
-				break;
-			case 'p':
-				preload = true;
 				break;
 			case 'i':
 				num_iters = atoi(optarg);
@@ -202,8 +197,6 @@ int main(int argc, char *argv[])
 
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
-	if (preload)
-		graph->preload_graph();
 	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

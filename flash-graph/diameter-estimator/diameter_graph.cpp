@@ -258,7 +258,6 @@ void print_usage()
 	fprintf(stderr,
 			"diameter_estimator [options] conf_file graph_file index_file\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-p: preload the graph\n");
 	fprintf(stderr, "-n: the number of BFS\n");
 	fprintf(stderr, "-o: the output file\n");
 	fprintf(stderr, "-b: traverse with both in-edges and out-edges\n");
@@ -281,17 +280,13 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	int num_sweeps = 1;
-	bool preload = false;
 	std::string output_file;
-	while ((opt = getopt(argc, argv, "c:pn:o:bs:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:n:o:bs:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
 				confs = optarg;
 				num_opts++;
-				break;
-			case 'p':
-				preload = true;
 				break;
 			case 'n':
 				num_bfs = atoi(optarg);
@@ -332,8 +327,6 @@ int main(int argc, char *argv[])
 
 	graph_index::ptr index = NUMA_graph_index<diameter_vertex>::create(index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
-	if (preload)
-		graph->preload_graph();
 	printf("BFS starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())

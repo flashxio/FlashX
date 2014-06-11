@@ -290,6 +290,9 @@ graph_engine::graph_engine(const std::string &graph_file,
 
 	if (!graph_conf.get_trace_file().empty())
 		logger = trace_logger::ptr(new trace_logger(graph_conf.get_trace_file()));
+
+	if (graph_conf.preload())
+		preload_graph();
 }
 
 graph_engine::~graph_engine()

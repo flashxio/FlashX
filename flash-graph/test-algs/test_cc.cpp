@@ -38,7 +38,6 @@ void print_usage()
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-s size: the output min component size\n");
 	fprintf(stderr, "-o file: output the component size to the file\n");
-	fprintf(stderr, "-p: preload the graph\n");
 	fprintf(stderr, "-t: the type of connected components\n");
 	graph_conf.print_help();
 	params.print_help();
@@ -51,9 +50,8 @@ int main(int argc, char *argv[])
 	std::string output_file;
 	size_t min_comp_size = 0;
 	int num_opts = 0;
-	bool preload = false;
 	std::string type = "wcc";
-	while ((opt = getopt(argc, argv, "c:s:o:pt:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:s:o:t:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -67,9 +65,6 @@ int main(int argc, char *argv[])
 			case 'o':
 				output_file = optarg;
 				num_opts++;
-				break;
-			case 'p':
-				preload = true;
 				break;
 			case 't':
 				type = optarg;
