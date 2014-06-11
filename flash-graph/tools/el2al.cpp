@@ -36,8 +36,7 @@
 #include "edge_type.h"
 #include "ext_mem_vertex_iterator.h"
 
-const int NUM_THREADS = 32;
-const int NUM_NODES = 4;
+int num_threads = 32;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
 const char *delimiter = "\t";
 
@@ -1012,10 +1011,10 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	std::vector<task_thread *> threads(NUM_THREADS);
-	for (int i = 0; i < NUM_THREADS; i++) {
+	std::vector<task_thread *> threads(num_threads);
+	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
-					"graph-task-thread") + itoa(i), i % NUM_NODES);
+					"graph-task-thread") + itoa(i), -1);
 		t->set_user_data(new std::vector<edge<edge_data_type> >());
 		t->start();
 		threads[i] = t;
@@ -1030,11 +1029,11 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 			thread_task *task = new text_edge_task<edge_data_type>(
 					io.read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size),
 					size);
-			threads[thread_no % NUM_THREADS]->add_task(task);
+			threads[thread_no % num_threads]->add_task(task);
 			thread_no++;
 		}
 	}
-	for (int i = 0; i < NUM_THREADS; i++)
+	for (int i = 0; i < num_threads; i++)
 		threads[i]->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to construct edge list\n",
@@ -1042,7 +1041,7 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 
 	size_t mem_size = 0;
 	size_t num_edges = 0;
-	for (int i = 0; i < NUM_THREADS; i++) {
+	for (int i = 0; i < num_threads; i++) {
 		std::vector<edge<edge_data_type> > *local_edges
 			= (std::vector<edge<edge_data_type> > *) threads[i]->get_user_data();
 		num_edges += local_edges->size();
@@ -1058,7 +1057,7 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 		edge_g = new undirected_edge_graph<edge_data_type>(num_edges,
 				has_edge_data);
 	start = end;
-	for (int i = 0; i < NUM_THREADS; i++) {
+	for (int i = 0; i < num_threads; i++) {
 		std::vector<edge<edge_data_type> > *local_edges
 			= (std::vector<edge<edge_data_type> > *) threads[i]->get_user_data();
 		edge_g->add_edges(*local_edges);
@@ -1068,7 +1067,7 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 	printf("There are %ld edges in the edge graph\n", edge_g->get_num_edges());
 	printf("It takes %f seconds to combine edge list\n", time_diff(start, end));
 
-	for (int i = 0; i < NUM_THREADS; i++) {
+	for (int i = 0; i < num_threads; i++) {
 		threads[i]->stop();
 		threads[i]->join();
 		delete threads[i];
@@ -1108,11 +1107,13 @@ graph *construct_graph(
 		const std::vector<std::string> &edge_list_files,
 		bool has_edge_data, bool directed)
 {
+	printf("beofre load edge list\n");
 	struct timeval start, end;
 	edge_graph<edge_data_type> *edge_g
 		= par_load_edge_list_text<edge_data_type>(edge_list_files,
 				has_edge_data, directed);
 
+	printf("before sorting edges\n");
 	gettimeofday(&start, NULL);
 	edge_g->sort_edges();
 	gettimeofday(&end, NULL);
@@ -1150,6 +1151,7 @@ void print_usage()
 	fprintf(stderr, "-m: merge multiple edge lists into a single graph. \n");
 	fprintf(stderr, "-w: write the graph to a file\n");
 	fprintf(stderr, "-s: simplify a graph (remove duplicated edges)\n");
+	fprintf(stderr, "-T: the number of threads to process in parallel\n");
 }
 
 graph *construct_graph(const std::vector<std::string> &edge_list_files,
@@ -1192,7 +1194,7 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "ud:cpvt:mws")) != -1) {
+	while ((opt = getopt(argc, argv, "ud:cpvt:mwsT:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -1223,6 +1225,10 @@ int main(int argc, char *argv[])
 				break;
 			case 's':
 				simplify = true;
+				break;
+			case 'T':
+				num_threads = atoi(optarg);
+				num_opts++;
 				break;
 			default:
 				print_usage();
