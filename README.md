@@ -17,7 +17,9 @@ interface for users to express graph algorithms. Users encapsulate their graph
 algorithms in vertex programs and `FlashGraph` executes the vertex programs
 in parallel and fetches data from SSDs for the vertex programs.
 
-The FlashGraph user manual can be found [here](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
+[Quickstart](https://github.com/icoming/FlashGraph/wiki/Quick-start-guide-of-FlashGraph)
+
+[User manual](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
 
 SAFSlib
 ========
