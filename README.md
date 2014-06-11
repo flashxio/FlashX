@@ -1,3 +1,5 @@
+
+
 FlashGraph
 ===========
 
@@ -10,7 +12,7 @@ the high I/O throughput of an SSD array. Due to the natural of semi-external mem
 graph engine, FlashGraph has very short load time and small memory consumption
 when processing very large graphs, which enables us to process a billion-node
 graph in a single machine. Thanks to the high-speed SSDs, it also has performance
-comparable to in-memory graph engines.
+comparable to or exceed in-memory graph engines such as PowerGraph.
 
 Flashgraph is implemented with C++ and provides a vertex-centric programming
 interface for users to express graph algorithms. Users encapsulate their graph
