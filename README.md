@@ -17,7 +17,7 @@ interface for users to express graph algorithms. Users encapsulate their graph
 algorithms in vertex programs and `FlashGraph` executes the vertex programs
 in parallel and fetches data from SSDs for the vertex programs.
 
-[Quickstart](https://github.com/icoming/FlashGraph/wiki/Quick-start-guide-of-FlashGraph)
+[Quickstart](https://github.com/icoming/FlashGraph/wiki/FlashGraph-Quick-Start-Guide)
 
 [User manual](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
 
