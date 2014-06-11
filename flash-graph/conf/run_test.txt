@@ -1,0 +1,11 @@
+RAID_mapping=RAID0
+io_depth=64
+cache_size=512M
+num_nodes=1
+# change FG_TOP to the path of the top directory of FlashGraph.
+root_conf=FG_TOP/flash-graph/conf/data_files.txt
+
+threads=1
+print_io_stat=
+prof_file=graph.prof
+merge_reqs=
