@@ -30,6 +30,7 @@
 #include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "FGlib.h"
 
 float DAMPING_FACTOR = 0.85;
 float TOLERANCE = 1.0E-2; 
@@ -111,116 +112,141 @@ void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   }
 }
 
-class count_vertex_query: public vertex_query
+class pr_message: public vertex_message
 {
-	double num;
+	float delta;
 public:
-	count_vertex_query() {
-		num = 0;
+	pr_message(float delta): vertex_message(sizeof(pr_message),
+			true) {
+		this->delta = delta;
 	}
 
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		pgrank_vertex &pr_v = (pgrank_vertex &) v;
-		num += pr_v.get_curr_itr_pr();
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-		count_vertex_query *cvq = (count_vertex_query *) q.get();
-		num += cvq->num;
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new count_vertex_query());
-	}
-
-	double get_num() const {
-		return num;
+	float get_delta() const {
+		return delta;
 	}
 };
 
-void int_handler(int sig_num)
+class pgrank_vertex2: public compute_directed_vertex
 {
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	exit(0);
-}
-
-void print_usage()
-{
-	fprintf(stderr,
-			"page-rank [options] conf_file graph_file index_file damping_factor\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-i num: specify the maximal number of iterations\n");
-	graph_conf.print_help();
-	params.print_help();
-}
-
-int main(int argc, char *argv[])
-{
-	int opt;
-	std::string confs;
-	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:i:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 'i':
-				num_iters = atoi(optarg);
-				num_opts++;
-				break;
-			default:
-				print_usage();
-		}
+	float new_pr;
+	float curr_itr_pr; // Current iteration's page rank
+public:
+	pgrank_vertex2() {
+		this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
+		this->new_pr = curr_itr_pr;
 	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
 
-	if (argc < 4) {
-		print_usage();
+	pgrank_vertex2(vertex_id_t id,
+			const vertex_index &index): compute_directed_vertex(id, index) {
+		this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
+		this->new_pr = curr_itr_pr;
+	}
+
+	float get_curr_itr_pr() const{
+		return new_pr;
+	}
+
+	void run(vertex_program &prog) { 
+		// We perform pagerank for at most `num_iters' iterations.
+		if (prog.get_graph().get_curr_level() >= num_iters)
+			return;
+		directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+		request_partial_vertices(&req, 1);
+	};
+
+	void run(vertex_program &, const page_vertex &vertex);
+
+	void run_on_message(vertex_program &, const vertex_message &msg1) {
+		const pr_message &msg = (const pr_message &) msg1;
+		new_pr += msg.get_delta();
+	}
+};
+
+void pgrank_vertex2::run(vertex_program &prog, const page_vertex &vertex)
+{
+	int num_dests = vertex.get_num_edges(OUT_EDGE);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
+
+	// If this is the first iteration.
+	if (prog.get_graph().get_curr_level() == 0) {
+		pr_message msg(curr_itr_pr / num_dests * DAMPING_FACTOR);
+		prog.multicast_msg(it, msg);
+	}
+	else if (std::fabs(new_pr - curr_itr_pr) > TOLERANCE) {
+		pr_message msg((new_pr - curr_itr_pr) / num_dests * DAMPING_FACTOR);
+		prog.multicast_msg(it, msg);
+		curr_itr_pr = new_pr;
+	}
+}
+
+template<class vertex_type>
+class fetch_vertex_query: public vertex_query
+{
+	FG_vector<float>::ptr pr_vec;
+public:
+	fetch_vertex_query(FG_vector<float>::ptr vec) {
+		this->pr_vec = vec;
+	}
+
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		vertex_type &pr_v = (vertex_type &) v;
+		pr_vec->set(pr_v.get_id(), pr_v.get_curr_itr_pr());
+	}
+
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new fetch_vertex_query<vertex_type>(pr_vec));
+	}
+};
+
+template<class vertex_type>
+FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
+		float damping_factor)
+{
+	DAMPING_FACTOR = damping_factor;
+	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
+		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
 		exit(-1);
 	}
 
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
-	DAMPING_FACTOR = atof(argv[3]);
-
-  if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-    fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
-    exit(-1);
-  }
-
-	config_map configs(conf_file);
-	configs.add_options(confs);
-
-	signal(SIGINT, int_handler);
-
-	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+	graph_index::ptr index = NUMA_graph_index<vertex_type>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
 	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
-
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph->start_all(); 
-  graph->wait4complete();
+	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
-	vertex_query::ptr cvq(new count_vertex_query());
-	graph->query_on_all(cvq);
-	double total = ((count_vertex_query *) cvq.get())->get_num();
+	FG_vector<float>::ptr ret = FG_vector<float>::create(
+			graph->get_num_vertices());
+	graph->query_on_all(vertex_query::ptr(new fetch_vertex_query<vertex_type>(ret)));
 
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-  
-  printf("The %ld vertices have page rank sum: %lf\n in %f seconds\n", 
-      graph->get_num_vertices(), total, time_diff(start, end));
+
+	printf("It takes %f seconds\n", time_diff(start, end));
+	return ret;
+}
+
+FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
+		float damping_factor)
+{
+	return compute_pagerank<pgrank_vertex>(fg, num_iters, damping_factor);
+}
+
+FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
+		float damping_factor)
+{
+	return compute_pagerank<pgrank_vertex2>(fg, num_iters, damping_factor);
 }

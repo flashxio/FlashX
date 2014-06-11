@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -I../include $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libgraph graph-bfs sssp sstsg unit-test tools graph-stat test k-core page-rank diameter-estimator matrix libgraph-algs test-algs LOL
+all: libgraph graph-bfs sssp sstsg unit-test tools graph-stat test k-core matrix libgraph-algs test-algs LOL
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -53,12 +53,6 @@ test: libgraph
 
 k-core: libgraph
 	$(MAKE) -C k-core
-
-page-rank: libgraph
-	$(MAKE) -C page-rank
-
-diameter-estimator: libgraph
-	$(MAKE) -C diameter-estimator
 
 matrix: libgraph
 	$(MAKE) -C matrix
