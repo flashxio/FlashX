@@ -1,0 +1,3 @@
+// the configured options and settings for Tutorial
+#define FlashGraph_VERSION_MAJOR @FlashGraph_VERSION_MAJOR@
+#define FlashGraph_VERSION_MINOR @FlashGraph_VERSION_MINOR@
