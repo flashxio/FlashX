@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <limits.h>
@@ -48,17 +48,18 @@ bool safs_file::exist() const
 
 size_t safs_file::get_file_size() const
 {
-	size_t min_size = LONG_MAX;
 	if (!exist())
 		return -1;
+	size_t ret = 0;
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_dir dir(native_dirs[i].name);
 		std::vector<std::string> local_files;
 		dir.read_all_files(local_files);
+		assert(local_files.size() == 1);
 		native_file f(dir.get_name() + "/" + local_files[0]);
-		min_size = min<size_t>(min_size, f.get_size());
+		ret += f.get_size();
 	}
-	return min_size * native_dirs.size();
+	return ret;
 }
 
 bool safs_file::create_file(size_t file_size)

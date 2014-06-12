@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <sys/types.h>
@@ -28,6 +28,8 @@
 #include "safs_file.h"
 
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
+
+config_map configs;
 
 ssize_t complete_read(int fd, char *buf, size_t count)
 {
@@ -43,14 +45,6 @@ ssize_t complete_read(int fd, char *buf, size_t count)
 		buf += ret;
 	} while (count > 0);
 	return bytes;
-}
-
-int verify_bytes(const char *bs1, const char *bs2, int size)
-{
-	for (int i = 0; i < size; i++) {
-		assert(bs1[i] == bs2[i]);
-	}
-	return 0;
 }
 
 class data_source
@@ -119,9 +113,11 @@ class verify_callback: public callback
 	char *orig_buf;
 	data_source *source;
 	size_t verified_bytes;
+	const file_mapper *fmapper;
 public:
-	verify_callback(data_source *source) {
+	verify_callback(data_source *source, const file_mapper *fmapper) {
 		this->source = source;
+		this->fmapper = fmapper;
 		orig_buf = (char *) malloc(BUF_SIZE);
 		verified_bytes = 0;
 	}
@@ -138,7 +134,15 @@ public:
 		fprintf(stderr, "verify block %lx of %ld bytes\n", rqs[0]->get_offset(), read_bytes);
 		assert(ret == read_bytes);
 		verified_bytes += read_bytes;
-		verify_bytes(rqs[0]->get_buf(), orig_buf, read_bytes);
+		for (size_t i = 0; i < read_bytes; i++) {
+			if (rqs[0]->get_buf()[i] != orig_buf[i]) {
+				struct block_identifier bid;
+				fmapper->map((rqs[0]->get_offset() + i) / PAGE_SIZE, bid);
+				fprintf(stderr, "bytes at %ld (in partition %d) doesn't match\n",
+						rqs[0]->get_offset() + i, bid.idx);
+				assert(0);
+			}
+		}
 		return 0;
 	}
 
@@ -161,6 +165,7 @@ void comm_verify_file(int argc, char *argv[])
 	if (argc >= 2)
 		ext_file = argv[1];
 
+	init_io_system(configs);
 	file_io_factory::shared_ptr factory = create_io_factory(int_file_name,
 			REMOTE_ACCESS);
 	thread *curr_thread = thread::get_curr_thread();
@@ -171,10 +176,11 @@ void comm_verify_file(int argc, char *argv[])
 		source = new synthetic_data_source(factory->get_file_size());
 	else
 		source = new file_data_source(ext_file);
-	verify_callback *cb = new verify_callback(source);
+	const RAID_config &conf = get_sys_RAID_conf();
+	verify_callback *cb = new verify_callback(source, conf.create_file_mapper());
 	io->set_callback(cb);
 
-	size_t file_size = source->get_size();
+	ssize_t file_size = source->get_size();
 	printf("verify %ld bytes\n", file_size);
 	assert(factory->get_file_size() >= file_size);
 	file_size = ROUNDUP(file_size, BUF_SIZE);
@@ -194,47 +200,43 @@ void comm_verify_file(int argc, char *argv[])
 
 void comm_load_file2fs(int argc, char *argv[])
 {
-	if (argc < 1) {
-		fprintf(stderr, "load file_name [ext_file]\n");
+	if (argc < 2) {
+		fprintf(stderr, "load file_name ext_file\n");
 		fprintf(stderr, "file_name is the file name in the SA-FS file system\n");
 		fprintf(stderr, "ext_file is the file in the external file system\n");
 		exit(-1);
 	}
 
 	std::string int_file_name = argv[0];
-	std::string ext_file;
-	if (argc >= 2)
-		ext_file = argv[1];
+	std::string ext_file = argv[1];
+
+	configs.add_options("writable=1");
+	init_io_system(configs);
+	data_source *source = new file_data_source(ext_file);
 
 	safs_file file(get_sys_RAID_conf(), int_file_name);
+	// If the file in SAFS doesn't exist, create a new one.
 	if (!file.exist()) {
-		fprintf(stderr, "%s doesn't exist\n", int_file_name.c_str());
-		return;
+		safs_file file(get_sys_RAID_conf(), int_file_name);
+		file.create_file(source->get_size());
+		printf("create file %s of %ld bytes\n", int_file_name.c_str(),
+				file.get_file_size());
 	}
 
 	file_io_factory::shared_ptr factory = create_io_factory(int_file_name,
 			REMOTE_ACCESS);
 	assert(factory);
+	assert((size_t) factory->get_file_size() >= source->get_size());
+	printf("source size: %ld\n", source->get_size());
+
 	thread *curr_thread = thread::get_curr_thread();
 	assert(curr_thread);
 	io_interface *io = factory->create_io(curr_thread);
 
-	data_source *source;
-	if (ext_file.empty()) {
-		printf("use synthetic data\n");
-		source = new synthetic_data_source(factory->get_file_size());
-	}
-	else {
-		printf("use file %s\n", ext_file.c_str());
-		source = new file_data_source(ext_file);
-	}
-	assert(factory->get_file_size() >= source->get_size());
-	printf("source size: %ld\n", source->get_size());
-
 	char *buf = (char *) valloc(BUF_SIZE);
 	off_t off = 0;
 
-	while (off < source->get_size()) {
+	while (off < (off_t) source->get_size()) {
 		size_t size = min<size_t>(BUF_SIZE, source->get_size() - off);
 		size_t ret = source->get_data(off, size, buf);
 		assert(ret == size);
@@ -251,6 +253,70 @@ void comm_load_file2fs(int argc, char *argv[])
 	factory->destroy_io(io);
 }
 
+void comm_load_part_file2fs(int argc, char *argv[])
+{
+	if (argc < 3) {
+		fprintf(stderr, "load_part file_name ext_file part_id\n");
+		fprintf(stderr, "file_name is the file name in the SA-FS file system\n");
+		fprintf(stderr, "ext_file is the file in the external file system\n");
+		fprintf(stderr, "part_id is the partition of the file loaded to SAFS\n");
+		exit(-1);
+	}
+
+	std::string int_file_name = argv[0];
+	std::string ext_file = argv[1];
+	int part_id = atoi(argv[2]);
+
+	configs.add_options("writable=1");
+	init_io_system(configs);
+	const RAID_config &conf = get_sys_RAID_conf();
+	file_mapper *fmapper = conf.create_file_mapper();
+	std::string part_path = fmapper->get_file_name(part_id) + "/"
+		+ int_file_name;
+
+	// Create the directory in the native filesystem for the partition
+	// of the specified file.
+	native_dir dir(part_path);
+	assert(!dir.exist());
+	bool ret = dir.create_dir(false);
+	assert(ret);
+
+	std::string file_path = part_path + "/" + std::string(argv[2]);
+	FILE *out_f = fopen(file_path.c_str(), "w");
+	assert(out_f);
+	FILE *in_f = fopen(ext_file.c_str(), "r");
+	assert(in_f);
+	native_file nfile(ext_file);
+	size_t ext_file_size = nfile.get_size();
+	// The last write location in the partition file in SAFS.
+	off_t expected_write_pos = 0;
+	const size_t block_size = fmapper->STRIPE_BLOCK_SIZE * PAGE_SIZE;
+	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[block_size]);
+	for (size_t off = 0; off < ext_file_size; off += block_size) {
+		struct block_identifier bid;
+		fmapper->map(off / PAGE_SIZE, bid);
+		// If the block doesn't belong to the specified partition, skip it.
+		if (bid.idx != part_id)
+			continue;
+		int ret = fseek(in_f, off, SEEK_SET);
+		if (ret < 0) {
+			perror("fseek");
+			exit(1);
+		}
+		size_t remain_size = ext_file_size - off;
+		size_t read_size = min(block_size, remain_size);
+		size_t rret = fread(buf.get(), read_size, 1, in_f);
+		assert(rret == 1);
+		assert(expected_write_pos == bid.off * PAGE_SIZE);
+		rret = fwrite(buf.get(), read_size, 1, out_f);
+		assert(rret == 1);
+		expected_write_pos = bid.off * PAGE_SIZE + read_size;
+	}
+
+	fclose(out_f);
+	fclose(in_f);
+}
+
 void comm_create_file(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -259,6 +325,8 @@ void comm_create_file(int argc, char *argv[])
 		exit(-1);
 	}
 
+	configs.add_options("writable=1");
+	init_io_system(configs);
 	std::string file_name = argv[0];
 	size_t file_size = str2size(argv[1]);
 	safs_file file(get_sys_RAID_conf(), file_name);
@@ -276,6 +344,7 @@ void comm_help(int argc, char *argv[])
 
 void comm_list(int argc, char *argv[])
 {
+	init_io_system(configs);
 	std::set<std::string> files;
 	const RAID_config &conf = get_sys_RAID_conf();
 
@@ -308,6 +377,8 @@ void comm_delete_file(int argc, char *argv[])
 		return;
 	}
 
+	configs.add_options("writable=1");
+	init_io_system(configs);
 	std::string file_name = argv[0];
 	safs_file file(get_sys_RAID_conf(), file_name);
 	if (!file.exist()) {
@@ -336,6 +407,8 @@ struct command commands[] = {
 	{"list", comm_list, "list: list existing files in SAFS"},
 	{"load", comm_load_file2fs,
 		"load file_name [ext_file]: load data to the file"},
+	{"load_part", comm_load_part_file2fs,
+		"load_part file_name ext_file part_id: load part of the file to SAFS"},
 	{"verify", comm_verify_file,
 		"verify file_name [ext_file]: verify data in the file"},
 };
@@ -379,12 +452,10 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	std::string command = argv[2];
 
-	config_map configs(conf_file);
-	init_io_system(configs);
-
+	configs = config_map(conf_file);
 	const struct command *comm = get_command(command);
 	if (comm == NULL) {
-		fprintf(stderr, "wrong command %s\n", comm->name.c_str());
+		fprintf(stderr, "wrong command %s\n", command.c_str());
 		print_help();
 		return -1;
 	}
