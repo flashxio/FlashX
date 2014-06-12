@@ -48,17 +48,18 @@ bool safs_file::exist() const
 
 size_t safs_file::get_file_size() const
 {
-	size_t min_size = LONG_MAX;
 	if (!exist())
 		return -1;
+	size_t ret = 0;
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_dir dir(native_dirs[i].name);
 		std::vector<std::string> local_files;
 		dir.read_all_files(local_files);
+		assert(local_files.size() == 1);
 		native_file f(dir.get_name() + "/" + local_files[0]);
-		min_size = min<size_t>(min_size, f.get_size());
+		ret += f.get_size();
 	}
-	return min_size * native_dirs.size();
+	return ret;
 }
 
 bool safs_file::create_file(size_t file_size)

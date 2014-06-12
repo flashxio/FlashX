@@ -36,6 +36,9 @@ std::string supported_algs[] = {
 	"topK_scan",
 	"wcc",
 	"scc",
+	"diameter",
+	"pagerank",
+	"pagerank2",
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -44,7 +47,19 @@ void print_usage()
 	fprintf(stderr,
 			"test_algs [options] conf_file graph_file index_file algorithm\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "scan-statistics:\n");
 	fprintf(stderr, "-K topK: topK vertices in topK scan\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "diameter estimation:\n");
+	fprintf(stderr, "-p num_para_bfs: the number of parallel bfs to estimate diameter\n");
+	fprintf(stderr, "-d: whether we respect the direction of edges\n");
+	fprintf(stderr, "-s num: the number of sweeps performed in diameter estimation\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "pagerank\n");
+	fprintf(stderr, "-i num: the maximum number of iterations\n");
+	fprintf(stderr, "-D v: damping factor\n");
+
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
 		fprintf(stderr, "\t%s\n", supported_algs[i].c_str());
@@ -58,7 +73,12 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	int topK = 1;
-	while ((opt = getopt(argc, argv, "c:K:")) != -1) {
+	int num_para_bfs = 1;
+	bool directed = false;
+	int num_sweeps = 5;
+	int num_iters = 30;
+	float damping_factor = 0.85;
+	while ((opt = getopt(argc, argv, "c:K:p:ds:i:D:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -67,6 +87,26 @@ int main(int argc, char *argv[])
 				break;
 			case 'K':
 				topK = atoi(optarg);
+				num_opts++;
+				break;
+			case 'p':
+				num_para_bfs = atoi(optarg);
+				num_opts++;
+				break;
+			case 'd':
+				directed = true;
+				break;
+			case 's':
+				num_sweeps = atoi(optarg);
+				num_opts++;
+				break;
+			case 'i':
+				num_iters = atoi(optarg);
+				num_opts++;
+				break;
+			case 'D':
+				damping_factor = atof(optarg);
+				num_opts++;
 				break;
 			default:
 				print_usage();
@@ -107,10 +147,25 @@ int main(int argc, char *argv[])
 		printf("Max local scan is %ld\n", scan->max());
 	}
 	else if (alg == "topK_scan") {
-		FG_vector<size_t>::ptr scan = compute_topK_scan(graph, topK);
+		FG_vector<std::pair<vertex_id_t, size_t> >::ptr scan = compute_topK_scan(graph, topK);
 		printf("The top %d scans:\n", topK);
 		for (int i = 0; i < topK; i++)
-			printf("%ld\n", scan->get(i));
+			printf("%u\t%ld\n", scan->get(i).first, scan->get(i).second);
+	}
+	else if (alg == "diameter") {
+		size_t diameter = estimate_diameter(graph, num_para_bfs, directed,
+				num_sweeps);
+		printf("The estimated diameter is %ld\n", diameter);
+	}
+	else if (alg == "pagerank") {
+		FG_vector<float>::ptr pr = compute_pagerank(graph, num_iters,
+				damping_factor);
+		printf("The sum of pagerank of all vertices: %f\n", pr->sum());
+	}
+	else if (alg == "pagerank2") {
+		FG_vector<float>::ptr pr = compute_pagerank2(graph, num_iters,
+				damping_factor);
+		printf("The sum of pagerank of all vertices: %f\n", pr->sum());
 	}
 	else if (alg == "wcc" || alg == "scc") {
 		FG_vector<vertex_id_t>::ptr comp_ids;

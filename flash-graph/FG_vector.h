@@ -75,6 +75,14 @@ public:
 		return eles.size();
 	}
 
+	T *get_data() {
+		return eles.data();
+	}
+
+	const T*get_data() const {
+		return eles.data();
+	}
+
 	T dot_product(const FG_vector<T> &other) const {
 		assert(this->get_size() == other.get_size());
 		T ret = 0;

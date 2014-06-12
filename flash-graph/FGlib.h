@@ -68,7 +68,14 @@ FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type);
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr);
-FG_vector<size_t>::ptr compute_topK_scan(FG_graph::ptr, size_t topK);
+FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
+		FG_graph::ptr, size_t topK);
+size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed,
+		int num_sweeps);
+FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
+		float damping_factor);
+FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr, int num_iters,
+		float damping_factor);
 
 /**
  * Fetch the clusters with the wanted cluster IDs.

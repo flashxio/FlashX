@@ -282,7 +282,8 @@ void topK_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 	topK_v.finding_triangles_end(prog, data);
 }
 
-FG_vector<size_t>::ptr compute_topK_scan(FG_graph::ptr fg, size_t topK)
+FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
+		FG_graph::ptr fg, size_t topK)
 {
 	finding_triangles_end = topK_finding_triangles_end;
 
@@ -378,8 +379,9 @@ FG_vector<size_t>::ptr compute_topK_scan(FG_graph::ptr fg, size_t topK)
 	printf("It takes %f seconds for top %ld\n", time_diff(graph_start, end),
 			topK);
 
-	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(topK);
+	FG_vector<std::pair<vertex_id_t, size_t> >::ptr vec
+		= FG_vector<std::pair<vertex_id_t, size_t> >::create(topK);
 	for (size_t i = 0; i < topK; i++)
-		vec->set(i, known_scans.get(i).second);
+		vec->set(i, known_scans.get(i));
 	return vec;
 }

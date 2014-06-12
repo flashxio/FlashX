@@ -1,6 +1,5 @@
 # Copyright 2014 Open Connectome Project (http://openconnecto.me)
-# Written by Disa Mhembere (disa@jhu.edu)
-#            Da Zheng (zhengda1936@gmail.com)
+# Written by Da Zheng (zhengda1936@gmail.com)
 #
 # This file is part of FlashGraph.
 #
@@ -22,19 +21,15 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: page-rank page-rank2
+all: overlap
 
-page-rank: page_rank.o ../libgraph.a
-	$(CXX) -o page-rank	page_rank.o $(LDFLAGS)
-
-page-rank2: page_rank2.o ../libgraph.a
-	$(CXX) -o page-rank2 page_rank2.o $(LDFLAGS)
+overlap: $(OBJS) ../libgraph.a
+	$(CXX) -o overlap $(OBJS) $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f page-rank
-	rm -f page-rank2
+	rm -f overlap
 
 -include $(DEPS) 

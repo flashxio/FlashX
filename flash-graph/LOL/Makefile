@@ -18,22 +18,25 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
+LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
+CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG) -I/usr/include/eigen3/
 
-all: diameter-estimator serial-diameter-estimator
+all: LOL m2g print_mnist
 
-diameter-estimator: diameter_graph.o ../libgraph.a
-	$(CXX) -o diameter-estimator diameter_graph.o $(LDFLAGS)
+LOL: LOL.o mnist_io.o ../libgraph.a ../matrix/libmatrix.a
+	$(CXX) -o LOL LOL.o mnist_io.o $(LDFLAGS)
 
-serial-diameter-estimator: serial_diameter_graph.o ../libgraph.a
-	$(CXX) -o serial-diameter-estimator serial_diameter_graph.o $(LDFLAGS)
+m2g: m2g.o mnist_io.o ../libgraph.a ../matrix/libmatrix.a
+	$(CXX) -o m2g m2g.o mnist_io.o $(LDFLAGS)
+
+print_mnist: print_mnist.o mnist_io.o ../libgraph.a ../matrix/libmatrix.a
+	$(CXX) -o print_mnist print_mnist.o mnist_io.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f diameter-estimator
-	rm -f serial-diameter-estimator
+	rm -f m2g
+	rm -f LOL
 
 -include $(DEPS) 

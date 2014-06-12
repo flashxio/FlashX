@@ -37,7 +37,7 @@ buffered_io::buffered_io(const logical_file_partition &partition_,
 		if (fds[i] < 0) {
 			char err_msg[128];
 			snprintf(err_msg, sizeof(err_msg),
-					"open %s\n", partition.get_file_name(i).c_str());
+					"open %s", partition.get_file_name(i).c_str());
 			perror(err_msg);
 			exit (1);
 		}

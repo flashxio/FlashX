@@ -1064,54 +1064,39 @@ public:
 	}
 };
 
-#if 0
-int main(int argc, char *argv[])
+/**
+ * This query is to save the component IDs to a FG vector.
+ */
+class save_cid_query: public vertex_query
 {
-	struct timeval start, end, scc_start;
-	int opt;
-	std::string confs;
-	std::string output_file;
-	size_t min_comp_size = 0;
-	int num_opts = 0;
-
-	while ((opt = getopt(argc, argv, "c:s:o:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 's':
-				min_comp_size = atoi(optarg);
-				num_opts++;
-				break;
-			case 'o':
-				output_file = optarg;
-				num_opts++;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
-	if (argc < 3) {
-		print_usage();
-		exit(-1);
+	FG_vector<vertex_id_t>::ptr vec;
+public:
+	save_cid_query(FG_vector<vertex_id_t>::ptr vec) {
+		this->vec = vec;
 	}
 
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		scc_vertex &scc_v = (scc_vertex &) v;
+		if (graph.get_vertex_edges(scc_v.get_id()) > 0)
+			vec->set(scc_v.get_id(), scc_v.get_comp_id());
+		else
+			vec->set(scc_v.get_id(), INVALID_VERTEX_ID);
+	}
 
-	config_map configs(conf_file);
-	configs.add_options(confs);
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	}
 
-	signal(SIGINT, int_handler);
+	virtual ptr clone() {
+		return vertex_query::ptr(new save_cid_query(vec));
+	}
+};
 
-	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
+{
+	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
 	printf("SCC starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
@@ -1120,8 +1105,8 @@ int main(int argc, char *argv[])
 	std::vector<vertex_id_t> active_vertices;
 	vertex_id_t max_v = 0;
 	size_t num_comp1 = 0;
-	std::unordered_set<vertex_id_t> large_comps;
 
+	struct timeval start, end, scc_start;
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
 	scc_start = start;
@@ -1166,7 +1151,6 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("FWBW takes %f seconds\n", time_diff(start, end));
-	large_comps.insert(max_v);
 
 	scc_stage = scc_stage_t::PARTITION;
 	gettimeofday(&start, NULL);
@@ -1190,8 +1174,6 @@ int main(int argc, char *argv[])
 	printf("after partition, finding %ld active vertices takes %f seconds.\n",
 			active_vertices.size(), time_diff(start, end));
 
-	// This is a hashtable to count the number of components of different sizes.
-	std::unordered_map<vsize_t, int> num_comp_size_map;
 	do {
 		scc_stage = scc_stage_t::TRIM3;
 		trim3_vertices = 0;
@@ -1243,38 +1225,20 @@ int main(int argc, char *argv[])
 		graph->get_vertex_programs(part_vprogs);
 		active_vertices.clear();
 		size_t fwbw_vertices = 0;
-		comp_map_t comp_sizes;
 		BOOST_FOREACH(vertex_program::ptr vprog, part_vprogs) {
 			part_vertex_program::ptr part_vprog = part_vertex_program::cast2(vprog);
+			// Count the number of vertices assigned to a component by FWBW.
 			fwbw_vertices += part_vprog->get_num_assigned();
+			// We figure out here the vertices that haven't been assigned to
+			// a component.
 			active_vertices.insert(active_vertices.begin(),
 					part_vprog->get_remain_vertices().begin(),
 					part_vprog->get_remain_vertices().end());
-			part_vprog->merge_comp_size(comp_sizes);
 		}
 		gettimeofday(&end, NULL);
 		printf("partition takes %f seconds. Assign %ld vertices to components.\n",
 				time_diff(start, end), fwbw_vertices);
 		printf("There are %ld vertices left unassigned\n", active_vertices.size());
-
-		size_t num_assigned_vertices = 0;
-		BOOST_FOREACH(comp_map_t::value_type v, comp_sizes) {
-			num_assigned_vertices += v.second;
-			if (v.second == 1)
-				num_comp1++;
-			else {
-				std::unordered_map<vsize_t, int>::iterator it
-					= num_comp_size_map.find(v.second);
-				if (it == num_comp_size_map.end())
-					num_comp_size_map.insert(std::pair<vsize_t, int>(v.second, 1));
-				else
-					it->second++;
-			}
-
-			if (v.second >= min_comp_size)
-				large_comps.insert(v.first);
-		}
-		assert(num_assigned_vertices == fwbw_vertices);
 	} while (!active_vertices.empty());
 
 	if (!graph_conf.get_prof_file().empty())
@@ -1282,48 +1246,7 @@ int main(int argc, char *argv[])
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 
-	// Count the number of components.
-	size_t num_comps = 0;
-	size_t num_assigned = 0;
-	for (std::unordered_map<vsize_t, int>::const_iterator it = num_comp_size_map.begin();
-			it != num_comp_size_map.end(); it++) {
-		num_comps += it->second;
-		num_assigned += it->first * it->second;
-	}
-	// Add the number of components of size 1 and 2.
-	num_comps += num_comp1;
-	num_assigned += num_comp1;
-	// Add the largest component.
-	num_comps++;
-	num_assigned += largest_comp_size;
-	printf("SCC takes %f seconds\n", time_diff(scc_start, end));
-	printf("There are %ld components. # comp1: %ld, # max SCC: %ld\n",
-			num_comps, num_comp1, largest_comp_size);
-	printf("There are %ld components of size >= %ld\n", large_comps.size(),
-			min_comp_size);
-	printf("There are %ld vertices assigned to components\n", num_assigned);
-
-	if (!output_file.empty()) {
-		typedef std::pair<vsize_t, int> num_comp_size_t;
-		std::vector<num_comp_size_t> num_comp_size_vec;
-		num_comp_size_vec.push_back(num_comp_size_t(1, num_comp1));
-		num_comp_size_vec.push_back(num_comp_size_t(largest_comp_size, 1));
-		num_comp_size_vec.insert(num_comp_size_vec.begin(),
-				num_comp_size_map.begin(), num_comp_size_map.end());
-		std::sort(num_comp_size_vec.begin(), num_comp_size_vec.end(),
-				comp_size_compare());
-
-		FILE *f = fopen(output_file.c_str(), "w");
-		assert(f);
-		BOOST_FOREACH(num_comp_size_t v, num_comp_size_vec) {
-			fprintf(f, "%u %d\n", v.first, v.second);
-		}
-		fclose(f);
-	}
-}
-#endif
-
-FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
-{
-	assert(0);
+	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	graph->query_on_all(vertex_query::ptr(new save_cid_query(vec)));
+	return vec;
 }

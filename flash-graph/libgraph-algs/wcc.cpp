@@ -146,10 +146,6 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
-#if 0
-	if (preload)
-		graph->preload_graph();
-#endif
 	printf("weakly connected components starts\n");
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());

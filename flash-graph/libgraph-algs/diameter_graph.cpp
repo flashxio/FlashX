@@ -32,6 +32,7 @@
 #include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "FGlib.h"
 
 size_t num_bfs = 1;
 const int K = sizeof(uint64_t) * 8;
@@ -246,27 +247,6 @@ public:
 	}
 };
 
-void int_handler(int sig_num)
-{
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-	exit(0);
-}
-
-void print_usage()
-{
-	fprintf(stderr,
-			"diameter_estimator [options] conf_file graph_file index_file\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-p: preload the graph\n");
-	fprintf(stderr, "-n: the number of BFS\n");
-	fprintf(stderr, "-o: the output file\n");
-	fprintf(stderr, "-b: traverse with both in-edges and out-edges\n");
-	fprintf(stderr, "-s: the number of sweeps\n");
-	graph_conf.print_help();
-	params.print_help();
-}
-
 class dist_compare
 {
 public:
@@ -275,66 +255,18 @@ public:
 	}
 };
 
-int main(int argc, char *argv[])
+size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
+		bool directed, int num_sweeps)
 {
-	int opt;
-	std::string confs;
-	int num_opts = 0;
-	int num_sweeps = 1;
-	bool preload = false;
-	std::string output_file;
-	while ((opt = getopt(argc, argv, "c:pn:o:bs:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 'p':
-				preload = true;
-				break;
-			case 'n':
-				num_bfs = atoi(optarg);
-				num_bfs = min(num_bfs, K);
-				num_opts++;
-				break;
-			case 'b':
-				traverse_edge = edge_type::BOTH_EDGES;
-				break;
-			case 'o':
-				output_file = optarg;
-				num_opts++;
-				break;
-			case 's':
-				num_sweeps = atoi(optarg);
-				num_opts++;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
+	num_bfs = num_para_bfs;
+	if (!directed)
+		traverse_edge = edge_type::BOTH_EDGES;
 
-	if (argc < 3) {
-		print_usage();
-		exit(-1);
-	}
-
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
-
-	config_map configs(conf_file);
-	configs.add_options(confs);
-
-	signal(SIGINT, int_handler);
-
-	graph_index::ptr index = NUMA_graph_index<diameter_vertex>::create(index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
-	if (preload)
-		graph->preload_graph();
-	printf("BFS starts\n");
+	graph_index::ptr index = NUMA_graph_index<diameter_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+	printf("diameter estimation starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -408,33 +340,10 @@ int main(int argc, char *argv[])
 		}
 	}
 
-#if 0
-	for (size_t i = 0; i < start_vertices.size(); i++) {
-		graph_index::const_iterator it = index->begin();
-		graph_index::const_iterator end_it = index->end();
-		for (; it != end_it; ++it) {
-			diameter_vertex &v = (diameter_vertex &) *it;
-			if (v.get_dist(i) != USHRT_MAX)
-				fprintf(stderr, "v%u: %d\n", v.get_id(), v.get_dist(i));
-		}
-	}
-#endif
-
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
-	printf("The max dist: %d\n", global_max);
 
-	if (!output_file.empty()) {
-		FILE *f = fopen(output_file.c_str(), "w");
-		assert(f);
-		graph_index::const_iterator it = index->begin();
-		graph_index::const_iterator end_it = index->end();
-		for (; it != end_it; ++it) {
-			diameter_vertex &v = (diameter_vertex &) *it;
-			fprintf(f, "%d\n", v.get_max_dist());
-		}
-		fclose(f);
-	}
+	return global_max;
 }

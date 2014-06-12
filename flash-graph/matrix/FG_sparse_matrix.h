@@ -96,7 +96,10 @@ public:
 		}
 
 		bool has_next() {
-			return n_it.has_next();
+			bool ret1 = n_it.has_next();
+			bool ret2 = d_it.has_next();
+			assert(ret1 == ret2);
+			return ret1;
 		}
 
 		vertex_id_t get_curr_id() const {
@@ -117,6 +120,18 @@ public:
 		return iterator(v, type);
 	}
 };
+
+inline static edge_type reverse_dir(edge_type type)
+{
+	switch(type) {
+		case IN_EDGE:
+			return OUT_EDGE;
+		case OUT_EDGE:
+			return IN_EDGE;
+		default:
+			assert(0);
+	}
+}
 
 /**
  * The vertex program for sparse matrix vector multiplication.
@@ -203,17 +218,6 @@ private:
 	const FG_vector<int> &labels;
 	agg_map_t &agg_results;
 	GetEdgeIterator get_edge_iterator;
-
-	static edge_type reverse_dir(edge_type type) {
-		switch(type) {
-			case IN_EDGE:
-				return OUT_EDGE;
-			case OUT_EDGE:
-				return IN_EDGE;
-			default:
-				assert(0);
-		}
-	}
 public:
 	groupby_vertex_program(edge_type row_type, bool row_wise,
 			const FG_vector<int> &_labels,
@@ -274,6 +278,53 @@ public:
 		return vertex_program::ptr(
 				new groupby_vertex_program<AggOp, GetEdgeIterator>(
 					row_type, row_wise, labels, agg_results));
+	}
+};
+
+template<class Func, class GetEdgeIterator>
+class apply_vertex_program: public vertex_program_impl<matrix_vertex>
+{
+	Func &func;
+	edge_type etype;
+	size_t nrow;
+	size_t ncol;
+	GetEdgeIterator get_edge_iterator;
+public:
+	apply_vertex_program(edge_type etype, size_t nrow, size_t ncol,
+			Func &_func): func(_func) {
+		this->etype = etype;
+		this->nrow = nrow;
+		this->ncol = ncol;
+	}
+
+	virtual void run(compute_vertex &, const page_vertex &vertex) {
+		if (vertex.get_id() >= nrow)
+			return;
+		typename GetEdgeIterator::iterator it
+			= get_edge_iterator(vertex, etype);
+		func(vertex.get_id(), it, ncol);
+	}
+};
+
+template<class Func, class GetEdgeIterator>
+class apply_vertex_program_creater: public vertex_program_creater
+{
+	Func &func;
+	edge_type etype;
+	size_t nrow;
+	size_t ncol;
+public:
+	apply_vertex_program_creater(edge_type etype, size_t nrow, size_t ncol,
+			Func &_func): func(_func) {
+		this->etype = etype;
+		this->nrow = nrow;
+		this->ncol = ncol;
+	}
+
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(
+				new apply_vertex_program<Func, GetEdgeIterator>(etype,
+					nrow, ncol, func));
 	}
 };
 
@@ -377,6 +428,27 @@ public:
 			for (size_t i = 0; i < sum->get_size(); i++)
 				sum->set(i, sum->get(i) / count);
 		}
+	}
+
+	template<class Func>
+	void apply(bool row_wise, Func &func) const {
+		edge_type etype;
+		size_t nrow, ncol;
+		if (row_wise) {
+			etype = this->etype;
+			nrow = this->nrow;
+			ncol = this->ncol;
+		}
+		else {
+			etype = reverse_dir(this->etype);
+			nrow = this->ncol;
+			ncol = this->nrow;
+		}
+		graph->start_all(vertex_initiator::ptr(),
+				vertex_program_creater::ptr(
+					new apply_vertex_program_creater<Func, GetEdgeIterator>(
+						etype, nrow, ncol, func)));
+		graph->wait4complete();
 	}
 
 	size_t get_num_rows() const {
