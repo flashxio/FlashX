@@ -1,3 +1,5 @@
+
+
 FlashGraph
 ===========
 
@@ -25,19 +27,20 @@ in parallel and fetches data from SSDs for the vertex programs.
 
 [FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
 
-The detailed design of FlashGraph is documented in
+The detailed design of FlashGraph is documented in the paper
 "FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs",
 submitted to Supercomputing'14.
 
 SAFSlib
 ========
 
-`SAFSlib` is an open-source library that implements the design described
-in the paper "[Toward Millions of File System IOPS on Low-Cost, Commodity Hardware](http://dl.acm.org/citation.cfm?id=2503225&dl=ACM&coll=DL&CFID=350399128&CFTOKEN=49883861)".
-SAFS is designed as a standalone library. It provides a filesystem-like interface
-in the userspace to users to access an SSD array. It is designed to eliminate overhead
-in the block stack, without modifying the kernel. It can achieve the optimal performance
-of a large SSD array in a [NUMA](http://en.wikipedia.org/wiki/Non-uniform_memory_access) machine.
+`SAFSlib` is an open-source library that provides a filesystem-like interface
+in the userspace to help users access a large SSD array in a [NUMA](http://en.wikipedia.org/wiki/Non-uniform_memory_access) machine.
+It is designed to eliminate overhead in the block stack, without modifying the kernel,
+and achieves the maximal performance of a large SSD array in a NUMA machine.
 FlashGraph is an application to demonstrate the power of SAFS.
 
 [SAFS user manual](https://docs.google.com/document/d/1OpsuLZw60MGCZAg4xO-j-1_AEWm3Yc2nqKKu8kXotkA/edit?usp=sharing).
+
+The detailed design of SAFS is documented in the paper
+"[Toward Millions of File System IOPS on Low-Cost, Commodity Hardware](http://dl.acm.org/citation.cfm?id=2503225&dl=ACM&coll=DL&CFID=350399128&CFTOKEN=49883861)".
