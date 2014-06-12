@@ -25,6 +25,10 @@ in parallel and fetches data from SSDs for the vertex programs.
 
 [FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
 
+The detailed design of FlashGraph is documented in
+"FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs",
+submitted to Supercomputing'14.
+
 SAFSlib
 ========
 
