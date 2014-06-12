@@ -25,7 +25,7 @@ in parallel and fetches data from SSDs for the vertex programs.
 
 [FlashGraph Quickstart](https://github.com/icoming/FlashGraph/wiki/FlashGraph-Quick-Start-Guide)
 
-[FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/User-manual-of-FlashGraph).
+[FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/FlashGraph-User-Manual).
 
 The detailed design of FlashGraph is documented in the paper
 "FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs",
