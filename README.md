@@ -1,4 +1,4 @@
-
+There are main components in the repository: FlashGraph and SAFS.
 
 FlashGraph
 ===========
@@ -35,8 +35,9 @@ SAFSlib
 ========
 
 `SAFSlib` is an open-source library that provides a filesystem-like interface
-in the userspace to help users access a large SSD array in a [NUMA](http://en.wikipedia.org/wiki/Non-uniform_memory_access) machine.
-It is designed to eliminate overhead in the block stack, without modifying the kernel,
+in the userspace to help users access a large SSD array in a
+[NUMA](http://en.wikipedia.org/wiki/Non-uniform_memory_access) machine.
+It is designed to eliminate overhead in the block subsystem in Linux, without modifying the kernel,
 and achieves the maximal performance of a large SSD array in a NUMA machine.
 FlashGraph is an application to demonstrate the power of SAFS.
 
