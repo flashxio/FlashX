@@ -57,7 +57,7 @@ k-core: libgraph
 matrix: libgraph
 	$(MAKE) -C matrix
 
-test-algs: libgraph libgraph-algs
+test-algs: libgraph libgraph-algs matrix
 	$(MAKE) -C test-algs
 
 LOL: libgraph matrix
