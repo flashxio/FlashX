@@ -13,8 +13,8 @@ configure_file (
 	"${PROJECT_BINARY_DIR}/config.h"
 )
 
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x" )
-set(CMAKE_BUILD_TYPE Release)
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3" )
+#set(CMAKE_BUILD_TYPE Release)
 
 # add the binary tree to the search path for include files
 # so that we will find TutorialConfig.h
