@@ -3,7 +3,6 @@ project (FlashGraph)
 add_library(safs STATIC
 	aio_private.cpp
 	debugger.cpp
-	io_c_interface.cpp
 	messaging.cpp
 	read_private.cpp
 	thread.cpp
