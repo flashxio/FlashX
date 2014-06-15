@@ -18,7 +18,9 @@
  */
 
 #include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <set>
 #include <vector>
@@ -411,8 +413,10 @@ void scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &verte
 
 void int_handler(int sig_num)
 {
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	exit(0);
 }
 
@@ -445,8 +449,10 @@ int main(int argc, char *argv[])
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -454,8 +460,10 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	printf("It takes %f seconds\n", time_diff(start, end));

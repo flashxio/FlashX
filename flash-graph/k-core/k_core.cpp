@@ -18,7 +18,9 @@
  */
 
 #include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <vector>
 #include <algorithm>
@@ -158,8 +160,10 @@ public:
 
 void int_handler(int sig_num)
 {
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	exit(0);
 }
 
@@ -210,8 +214,10 @@ int main(int argc, char *argv[])
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("K-core starting\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
   // Filter for activation first time around
   class activate_k_filter: public vertex_filter {
@@ -239,8 +245,10 @@ int main(int argc, char *argv[])
 	graph->query_on_all(cvq);
 	size_t in_k_core = ((count_vertex_query *) cvq.get())->get_num();
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	printf("\n%d-core shows %ld vertices > %d degree in %f seconds\n",
