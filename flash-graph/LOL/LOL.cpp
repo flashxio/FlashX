@@ -22,6 +22,7 @@
 #include <shogun/features/DenseFeatures.h>
 #include <shogun/labels/Labels.h>
 #include <shogun/base/init.h>
+#include <shogun/multiclass/QDA.h>
 
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/FG_dense_matrix.h"
@@ -77,7 +78,7 @@ FG_col_wise_matrix<double>::ptr multiply(
 
 void print_usage()
 {
-	fprintf(stderr, "LOL conf-file train-data train-index train-label\n");
+	fprintf(stderr, "LOL conf-file train-data train-index train-label classify_type\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	graph_conf.print_help();
 	params.print_help();
@@ -103,7 +104,7 @@ int main(int argc, char *argv[])
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
 
-	if (argc < 4) {
+	if (argc < 5) {
 		print_usage();
 		exit(-1);
 	}
@@ -112,6 +113,7 @@ int main(int argc, char *argv[])
 	const std::string train_data_file = argv[1];
 	const std::string train_index_file = argv[2];
 	const std::string train_label_file = argv[3];
+	const std::string classify_type = argv[4];
 
 	config_map configs(conf_file);
 	configs.add_options(confs);
@@ -159,7 +161,7 @@ int main(int argc, char *argv[])
 
 	shogun::init_shogun_with_defaults();
 
-	// Training.
+	// Prepare training data.
 	FG_col_wise_matrix<double>::ptr proj_train = multiply(*train_matrix, *q);
 	printf("There are %ld rows and %ld cols in the projected train matrix\n",
 			proj_train->get_num_rows(), proj_train->get_num_cols());
@@ -180,13 +182,10 @@ int main(int argc, char *argv[])
 			train_labels->get_size());
 	for (size_t i = 0; i < train_labels->get_size(); i++)
 		sg_train_labels->set_label(i, train_labels->get(i));
-	shogun::CMCLDA* lda = new shogun::CMCLDA(sg_train_features, sg_train_labels);
-	SG_REF(lda);
-	lda->train();
 	shogun::SGVector<double>::display_vector(sg_train_labels->get_labels(),
 			sg_train_labels->get_num_labels());
 
-	// Testing.
+	// Prepare testing data.
 	// For now, we just test on the training data.
 	FG_col_wise_matrix<double>::ptr proj_test = multiply(*train_matrix, *q);
 	shogun::SGMatrix<double> sg_test(proj_test->get_num_cols(),
@@ -202,14 +201,47 @@ int main(int argc, char *argv[])
 	printf("There are %d feature vectors and %d features in the testing data\n",
 			sg_test_features->get_num_vectors(),
 			sg_test_features->get_num_features());
-	shogun::CMulticlassLabels* output = shogun::CLabelsFactory::to_multiclass(
-			lda->apply(sg_test_features));
-	SG_REF(output);
-	shogun::SGVector<double>::display_vector(output->get_labels().vector,
-			output->get_num_labels());
 
-	// Free memory
-	SG_UNREF(output);
-	SG_UNREF(lda);
+	if (classify_type == "LDA") {
+		shogun::CMCLDA* lda = new shogun::CMCLDA(sg_train_features, sg_train_labels);
+		SG_REF(lda);
+		lda->train();
+		shogun::CMulticlassLabels* output = shogun::CLabelsFactory::to_multiclass(
+				lda->apply(sg_test_features));
+		SG_REF(output);
+		shogun::SGVector< float64_t > output_labels = output->get_labels();
+		shogun::SGVector<double>::display_vector(output_labels.vector,
+				output->get_num_labels());
+
+		size_t num_same = 0;
+		for (size_t i = 0; i < train_labels->get_size(); i++)
+			if (train_labels->get(i) == output_labels[i])
+				num_same++;
+		printf("accuracy rate: %f\n", ((double) num_same) / train_labels->get_size());
+		// Free memory
+		SG_UNREF(output);
+		SG_UNREF(lda);
+	}
+	else if (classify_type == "QDA") {
+		shogun::CQDA* qda = new shogun::CQDA(sg_train_features, sg_train_labels);
+		SG_REF(qda);
+		qda->train();
+		shogun::CMulticlassLabels* output = shogun::CLabelsFactory::to_multiclass(
+				qda->apply(sg_test_features));
+		SG_REF(output);
+		shogun::SGVector< float64_t > output_labels = output->get_labels();
+		shogun::SGVector<double>::display_vector(output_labels.vector,
+				output->get_num_labels());
+
+		size_t num_same = 0;
+		for (size_t i = 0; i < train_labels->get_size(); i++)
+			if (train_labels->get(i) == output_labels[i])
+				num_same++;
+		printf("accuracy rate: %f\n", ((double) num_same) / train_labels->get_size());
+		// Free memory
+		SG_UNREF(output);
+		SG_UNREF(qda);
+	}
+
 	shogun::exit_shogun();
 }
