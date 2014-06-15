@@ -17,6 +17,12 @@
  * limitations under the License.
  */
 
+#include <shogun/labels/MulticlassLabels.h>
+#include <shogun/multiclass/MCLDA.h>
+#include <shogun/features/DenseFeatures.h>
+#include <shogun/labels/Labels.h>
+#include <shogun/base/init.h>
+
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/FG_dense_matrix.h"
 #include "matrix/matrix_eigensolver.h"
@@ -25,6 +31,9 @@ const int NUM_SAMPLES = 100;
 
 FG_vector<unsigned char>::ptr read_mnist_label(const std::string file, int num_samples);
 
+/**
+ * This procedure generates a dense projection matrix of Dxk.
+ */
 FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_matrix<unsigned char>::ptr input,
 		FG_vector<int>::ptr labels, int k)
 {
@@ -49,6 +58,21 @@ FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_matrix<unsigned char>::ptr in
 	for (int i = 0; i < k; i++)
 		qr_matrix->set_col(col_idx++, *eigens[i].second);
 	return qr_matrix->householderQ();
+}
+
+FG_col_wise_matrix<double>::ptr multiply(
+		FG_general_sparse_matrix<unsigned char> &input1,
+		FG_eigen_matrix<double> &input2)
+{
+	assert(input1.get_num_cols() == input2.get_num_rows());
+	FG_col_wise_matrix<double>::ptr ret = FG_col_wise_matrix<double>::create(
+			input1.get_num_rows(), input2.get_num_cols());
+	ret->resize(input1.get_num_rows(), input2.get_num_cols());
+	for (size_t i = 0; i < input2.get_num_cols(); i++) {
+		FG_vector<double>::ptr vec = input2.get_col(i);
+		input1.multiply(*vec, *ret->get_col_ref(i));
+	}
+	return ret;
 }
 
 void print_usage()
@@ -93,10 +117,10 @@ int main(int argc, char *argv[])
 	configs.add_options(confs);
 
 	printf("LOL starts\n");
-	FG_graph::ptr graph = FG_graph::create(train_data_file, train_index_file,
-			configs);
 	FG_general_sparse_matrix<unsigned char>::ptr train_matrix
-		= FG_general_sparse_matrix<unsigned char>::create(graph);
+		= FG_general_sparse_matrix<unsigned char>::create(
+				FG_graph::create(train_data_file, train_index_file, configs));
+	// TODO a matrix needs to detect the number of rows or the number of cols.
 	train_matrix->resize(NUM_SAMPLES, train_matrix->get_num_cols());
 
 #if 0
@@ -126,8 +150,66 @@ int main(int argc, char *argv[])
 		= FG_vector<int>::create(train_label_tmp->get_size());
 	for (size_t i = 0; i < train_label_tmp->get_size(); i++)
 		train_labels->set(i, train_label_tmp->get(i));
+
+	// Create the projection matrix
 	FG_eigen_matrix<double>::ptr q = LOL(train_matrix, train_labels, 10);
 	printf("q size: %ld, %ld\n", q->get_num_rows(), q->get_num_cols());
 	for (size_t i = 0; i < q->get_num_cols(); i++)
 		printf("||col%ld||: %f\n", i, q->get_col(i)->norm1());
+
+	shogun::init_shogun_with_defaults();
+
+	// Training.
+	FG_col_wise_matrix<double>::ptr proj_train = multiply(*train_matrix, *q);
+	printf("There are %ld rows and %ld cols in the projected train matrix\n",
+			proj_train->get_num_rows(), proj_train->get_num_cols());
+	shogun::SGMatrix<double> sg_train(proj_train->get_num_cols(),
+			proj_train->get_num_rows());
+	for (size_t i = 0; i < proj_train->get_num_cols(); i++) {
+		for (size_t j = 0; j < proj_train->get_num_rows(); j++) {
+			sg_train(i, j) = proj_train->get(j, i);
+		}
+	}
+	shogun::CDenseFeatures<double>* sg_train_features
+		= new shogun::CDenseFeatures<double>();
+	sg_train_features->set_feature_matrix(sg_train);
+	printf("There are %d feature vectors and %d features in the training data\n",
+			sg_train_features->get_num_vectors(),
+			sg_train_features->get_num_features());
+	shogun::CMulticlassLabels* sg_train_labels=new shogun::CMulticlassLabels(
+			train_labels->get_size());
+	for (size_t i = 0; i < train_labels->get_size(); i++)
+		sg_train_labels->set_label(i, train_labels->get(i));
+	shogun::CMCLDA* lda = new shogun::CMCLDA(sg_train_features, sg_train_labels);
+	SG_REF(lda);
+	lda->train();
+	shogun::SGVector<double>::display_vector(sg_train_labels->get_labels(),
+			sg_train_labels->get_num_labels());
+
+	// Testing.
+	// For now, we just test on the training data.
+	FG_col_wise_matrix<double>::ptr proj_test = multiply(*train_matrix, *q);
+	shogun::SGMatrix<double> sg_test(proj_test->get_num_cols(),
+			proj_test->get_num_rows());
+	for (size_t i = 0; i < proj_test->get_num_cols(); i++) {
+		for (size_t j = 0; j < proj_test->get_num_rows(); j++) {
+			sg_test(i, j) = proj_test->get(j, i);
+		}
+	}
+	shogun::CDenseFeatures<double>* sg_test_features
+		= new shogun::CDenseFeatures<double>();
+	sg_test_features->set_feature_matrix(sg_test);
+	printf("There are %d feature vectors and %d features in the testing data\n",
+			sg_test_features->get_num_vectors(),
+			sg_test_features->get_num_features());
+	shogun::CMulticlassLabels* output = shogun::CLabelsFactory::to_multiclass(
+			lda->apply(sg_test_features));
+	SG_REF(output);
+	shogun::SGVector<double>::display_vector(output->get_labels().vector,
+			output->get_num_labels());
+
+	// Free memory
+	SG_UNREF(output);
+	SG_UNREF(lda);
+	shogun::exit_shogun();
 }
