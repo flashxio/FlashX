@@ -481,6 +481,8 @@ class FG_adj_matrix: public FG_sparse_matrix<adj_get_edge_iter>
 	FG_adj_matrix(FG_graph::ptr fg): FG_sparse_matrix<adj_get_edge_iter>(fg) {
 	}
 public:
+	typedef std::shared_ptr<FG_adj_matrix> ptr;
+
 	static ptr create(FG_graph::ptr fg) {
 		return ptr(new FG_adj_matrix(fg));
 	}
@@ -493,10 +495,10 @@ class FG_general_sparse_matrix: public FG_sparse_matrix<general_get_edge_iter<T>
 			FG_graph::ptr fg): FG_sparse_matrix<general_get_edge_iter<T> >(fg) {
 	}
 public:
-	static typename FG_sparse_matrix<general_get_edge_iter<T> >::ptr create(
-			FG_graph::ptr fg) {
-		return typename FG_sparse_matrix<general_get_edge_iter<T> >::ptr(
-				new FG_general_sparse_matrix<T>(fg));
+	typedef std::shared_ptr<FG_general_sparse_matrix<T> > ptr;
+
+	static ptr create(FG_graph::ptr fg) {
+		return ptr(new FG_general_sparse_matrix<T>(fg));
 	}
 };
 
