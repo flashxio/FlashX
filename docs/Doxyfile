@@ -778,7 +778,38 @@ RECURSIVE              = YES
 # Note that relative paths are relative to the directory from which doxygen is
 # run.
 
-EXCLUDE                =
+EXCLUDE                = build							\
+						 cmake							\
+						 conf							\
+						 docs							\
+						 kernel_module					\
+						 scripts						\
+						 systemtap						\
+						 test							\
+						 tools							\
+						 unit-test						\
+						 unused							\
+						 utils							\
+						 include/aligned_allocator.h	\
+						 include/debugger.h				\
+						 include/dirty_page_flusher.h	\
+						 include/disk_read_thread.h		\
+						 include/exception.h			\
+						 include/LRU2Q.h				\
+						 include/mem_tracker.h			\
+						 include/pointer.h				\
+						 include/shadow_cell.h			\
+						 include/timer.h				\
+						 include/virt_aio_ctx.h			\
+						 include/wpaio.h				\
+						 libsafs/debugger.cpp			\
+						 libsafs/disk_read_thread.cpp	\
+						 libsafs/mem_tracker.cpp		\
+						 libsafs/shadow_cell.cpp		\
+						 libsafs/timer.cpp				\
+						 libsafs/virt_aio_ctx.cpp		\
+						 libsafs/wpaio.cpp
+
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or
 # directories that are symbolic links (a Unix file system feature) are excluded
