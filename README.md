@@ -20,7 +20,7 @@ It is designed to eliminate overhead in the block subsystem in Linux, without mo
 and achieves the maximal performance of a large SSD array in a NUMA machine.
 FlashGraph is an application to demonstrate the power of SAFS.
 
-Documentations
+Documentation
 ========
 
 [FlashGraph Quick start guide](https://github.com/icoming/FlashGraph/wiki/FlashGraph-Quick-Start-Guide)
