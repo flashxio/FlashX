@@ -10,10 +10,6 @@ It enables us to process a billion-node graph in a single machine
 and has performance comparable to or exceed in-memory graph engines such as
 [PowerGraph](http://graphlab.org/).
 
-[FlashGraph Quick start guide](https://github.com/icoming/FlashGraph/wiki/FlashGraph-Quick-Start-Guide)
-
-[FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/FlashGraph-User-Manual).
-
 SAFSlib
 ========
 
@@ -24,12 +20,19 @@ It is designed to eliminate overhead in the block subsystem in Linux, without mo
 and achieves the maximal performance of a large SSD array in a NUMA machine.
 FlashGraph is an application to demonstrate the power of SAFS.
 
+Documentations
+========
+
+[FlashGraph Quick start guide](https://github.com/icoming/FlashGraph/wiki/FlashGraph-Quick-Start-Guide)
+
+[FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/FlashGraph-User-Manual).
+
 [SAFS user manual](https://docs.google.com/document/d/1OpsuLZw60MGCZAg4xO-j-1_AEWm3Yc2nqKKu8kXotkA/edit?usp=sharing).
 
-The detailed design of SAFS is documented in the paper
-"[Toward Millions of File System IOPS on Low-Cost, Commodity Hardware](http://dl.acm.org/citation.cfm?id=2503225&dl=ACM&coll=DL&CFID=350399128&CFTOKEN=49883861)".
+Publications
+========
 
-
+Da Zheng, Randal Burns, Alexander S. Szalay, Toward Millions of File System IOPS on Low-Cost, Commodity Hardware, in Proceeding SC '13 Proceedings of the International Conference on High Performance Computing, Networking, Storage and Analysis
 
 Contact
 ========
