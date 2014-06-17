@@ -3,33 +3,16 @@ There are main components in the repository: FlashGraph and SAFS.
 FlashGraph
 ===========
 
-FlashGraph is an [SSD](http://en.wikipedia.org/wiki/Solid-state_drive)-based
-semi-external memory graph processing engine, and is optimized for a high-speed
-SSD array. It enables us to process a billion-node graph in a single machine
+FlashGraph is a semi-external memory graph processing engine, optimized for a high-speed
+SSD array. It helps us develop parallel graph algorithms with minimum efforts and
+executes users' graph algorithms in parallel and out of core.
+It enables us to process a billion-node graph in a single machine
 and has performance comparable to or exceed in-memory graph engines such as
-[PowerGraph](http://graphlab.org/). It also has very short loading time.
+[PowerGraph](http://graphlab.org/).
 
-As a semi-external memory graph engine, FlashGraph stores vertex state
-in memory and the edge lists of vertices on SSDs. FlashGraph loads the edge
-lists of vertices to memory whenever required by the graph algorithms.
-Its current implementation is tightly
-integrated with `SAFS` (Set Associative File System) to take advantage of
-the high I/O throughput of an SSD array.
-
-FlashGraph is deisnged to help users develop parallal and out-of-core
-implementations of graph algorithms with minimum effort.
-Flashgraph is implemented with C++ and provides a vertex-centric programming
-interface for users to express graph algorithms. Users encapsulate their graph
-algorithms in vertex programs and `FlashGraph` executes the vertex programs
-in parallel and fetches data from SSDs for the vertex programs.
-
-[FlashGraph Quickstart](https://github.com/icoming/FlashGraph/wiki/FlashGraph-Quick-Start-Guide)
+[FlashGraph Quick start guide](https://github.com/icoming/FlashGraph/wiki/FlashGraph-Quick-Start-Guide)
 
 [FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/FlashGraph-User-Manual).
-
-The detailed design of FlashGraph is documented in the paper
-"FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs",
-submitted to Supercomputing'14.
 
 SAFSlib
 ========
@@ -45,3 +28,10 @@ FlashGraph is an application to demonstrate the power of SAFS.
 
 The detailed design of SAFS is documented in the paper
 "[Toward Millions of File System IOPS on Low-Cost, Commodity Hardware](http://dl.acm.org/citation.cfm?id=2503225&dl=ACM&coll=DL&CFID=350399128&CFTOKEN=49883861)".
+
+
+
+Contact
+========
+
+Mailing list: flashgraph-dev@googlegroups.com
