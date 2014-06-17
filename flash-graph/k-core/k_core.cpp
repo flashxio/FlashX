@@ -18,7 +18,9 @@
  */
 
 #include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <vector>
 #include <algorithm>
@@ -235,8 +237,10 @@ public:
 
 void int_handler(int sig_num)
 {
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	exit(0);
 }
 
@@ -302,9 +306,15 @@ int main(int argc, char *argv[])
 	graph_index::ptr index = NUMA_graph_index<kcore_vertex>::create(index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("K-core starting\n");
+<<<<<<< HEAD
 	// printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+=======
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
+>>>>>>> graph-zd
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
   // Set kmax
   vsize_t kmax;
@@ -387,8 +397,13 @@ int main(int argc, char *argv[])
   }
   printf("\n");
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
-	//if (graph_conf.get_print_io_stat())
-		//print_io_thread_stat();
+#endif
+
+	if (graph_conf.get_print_io_stat())
+		print_io_thread_stat();
+	printf("\n%d-core shows %ld vertices > %d degree in %f seconds\n",
+			K, in_k_core, K, time_diff(start, end));
 }

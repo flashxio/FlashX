@@ -74,6 +74,9 @@ public:
 		this->has_data = has_data;
 	}
 
+	virtual ~edge_graph() {
+	}
+
 	virtual void sort_edges() = 0;
 	virtual edge_graph<edge_count> *compress_edges() const = 0;
 	virtual edge_graph<edge_data_type> *simplify_edges() const = 0;

@@ -29,6 +29,7 @@
 #include <numa.h>
 #include <assert.h>
 #include <execinfo.h>
+#include <unistd.h>
 
 #define gettid() syscall(__NR_gettid)
 

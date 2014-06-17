@@ -22,10 +22,7 @@ CFLAGS = -g -I../include $(TRACE_FLAGS)
 LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
 CXXFLAGS += -I.. -I../include
 
-all: test_c_interface test_rand_io
-
-test_c_interface: test_c_interface.o ../libsafs/libsafs.a
-	$(CXX) -o test_c_interface test_c_interface.o $(LDFLAGS)
+all: test_rand_io
 
 test_rand_io: test_rand_io.o thread_private.o ../libsafs/libsafs.a
 	$(CXX) -o test_rand_io test_rand_io.o thread_private.o $(LDFLAGS)
@@ -34,7 +31,6 @@ clean:
 	rm -f *.o
 	rm -f *.d
 	rm -f *~
-	rm -f test_c_interface
 	rm -f test_rand_io
 
 -include $(DEPS) 

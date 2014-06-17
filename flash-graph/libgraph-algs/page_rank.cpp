@@ -16,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <limits>
 
@@ -217,8 +217,10 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 			index, fg->get_configs());
 	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -230,8 +232,10 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 			graph->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(new fetch_vertex_query<vertex_type>(ret)));
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 

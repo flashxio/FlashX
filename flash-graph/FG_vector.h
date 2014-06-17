@@ -26,6 +26,10 @@
 #include "graph_engine.h"
 #include "stat.h"
 
+/**
+  * 
+  *
+  */
 template<class T>
 class FG_vector
 {

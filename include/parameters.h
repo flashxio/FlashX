@@ -198,7 +198,7 @@ extern sys_parameters params;
  * The size of an I/O message sent to an I/O thread.
  * It is in the number of I/O requests.
  */
-const int IO_MSG_SIZE = AIO_DEPTH_PER_FILE;
+#define IO_MSG_SIZE AIO_DEPTH_PER_FILE
 /**
  * The size of a high-priority I/O queue.
  * It's in the number of I/O messages.

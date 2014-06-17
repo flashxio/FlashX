@@ -17,9 +17,6 @@
  * limitations under the License.
  */
 
-#include <signal.h>
-#include <google/profiler.h>
-
 #include <vector>
 
 #include "thread.h"

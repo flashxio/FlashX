@@ -16,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <atomic>
 #include <vector>
@@ -1099,8 +1099,10 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 			index, fg->get_configs());
 	printf("SCC starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	std::vector<vertex_id_t> active_vertices;
 	vertex_id_t max_v = 0;
@@ -1241,8 +1243,10 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 		printf("There are %ld vertices left unassigned\n", active_vertices.size());
 	} while (!active_vertices.empty());
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 

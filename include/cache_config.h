@@ -62,6 +62,9 @@ public:
 		this->type = type;
 	}
 
+	virtual ~cache_config() {
+	}
+
 	long get_size() const {
 		return size;
 	}

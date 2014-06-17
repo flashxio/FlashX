@@ -16,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <vector>
 #include <set>
@@ -268,8 +268,10 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 			index, fg->get_configs());
 	printf("diameter estimation starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	std::vector<vertex_id_t> start_vertices;
 	while (start_vertices.size() < num_bfs) {
@@ -340,8 +342,10 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 		}
 	}
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 

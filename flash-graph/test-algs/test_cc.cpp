@@ -18,7 +18,9 @@
  */
 
 #include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include "stat.h"
 #include "FGlib.h"
@@ -26,8 +28,10 @@
 
 void int_handler(int sig_num)
 {
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	exit(0);
 }
 

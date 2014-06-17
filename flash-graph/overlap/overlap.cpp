@@ -23,7 +23,9 @@
  */
 
 #include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <tr1/unordered_set>
 
@@ -354,8 +356,10 @@ public:
 
 void int_handler(int sig_num)
 {
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	exit(0);
 }
 
@@ -403,8 +407,10 @@ int main(int argc, char *argv[])
 	graph_index::ptr index = NUMA_graph_index<overlap_vertex>::create(
 			index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	struct timeval start, end;
 
@@ -428,8 +434,10 @@ int main(int argc, char *argv[])
 	for (size_t i = 0; i < vertex_intersection.get_size(); i++)
 		printf("%u\n", vertex_intersection.get(i));
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 }

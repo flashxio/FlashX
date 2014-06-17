@@ -16,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include "scan_graph.h"
 #include "FG_vector.h"
@@ -275,8 +275,10 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 
 	printf("local scan starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -284,8 +286,10 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	printf("It takes %f seconds to compute all local scan\n",

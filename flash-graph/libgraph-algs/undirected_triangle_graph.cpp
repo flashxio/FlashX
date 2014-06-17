@@ -16,6 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifdef PROFILER
+#include <google/profiler.h>
+#endif
 
 #include "triangle_shared.h"
 
@@ -277,8 +280,10 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 			index, fg->get_configs());
 
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -286,8 +291,10 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	printf("It takes %f seconds to count all triangles\n",

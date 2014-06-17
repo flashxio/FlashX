@@ -18,7 +18,9 @@
  */
 
 #include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <vector>
 
@@ -123,8 +125,10 @@ public:
 
 void int_handler(int sig_num)
 {
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	exit(0);
 }
 
@@ -179,8 +183,10 @@ int main(int argc, char *argv[])
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("BFS starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -192,8 +198,10 @@ int main(int argc, char *argv[])
 	graph->query_on_all(cvq);
 	size_t num_visited = ((count_vertex_query *) cvq.get())->get_num_visited();
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	printf("BFS from vertex %ld visits %ld vertices. It takes %f seconds\n",

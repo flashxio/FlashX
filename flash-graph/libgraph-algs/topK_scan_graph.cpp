@@ -16,9 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <set>
 #include <vector>
@@ -300,8 +300,10 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 				new vertex_size_scheduler(graph)));
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	class remove_small_filter: public vertex_filter
 	{
@@ -372,8 +374,10 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	} while (prev_topK_scan != known_scans.get(topK - 1).second);
 	assert(known_scans.get_size() >= topK);
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 	printf("It takes %f seconds for top %ld\n", time_diff(graph_start, end),

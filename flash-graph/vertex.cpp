@@ -188,7 +188,7 @@ void ts_ext_mem_directed_vertex::construct_header(
 		this->num_edges = header.get_edge_off_begin()[timestamp_idx_end].in_off
 			- num_prev_edges;
 	assert(this->num_edges * (sizeof(vertex_id_t) + this->edge_data_size)
-			== (long) edge_list_size);
+			== edge_list_size);
 	assert(this->get_edge_off_begin()[0].in_off == 0);
 }
 
