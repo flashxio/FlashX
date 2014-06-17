@@ -1,7 +1,7 @@
 #ifndef __FG_BASIC_TYPES_H__
 #define __FG_BASIC_TYPES_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -20,8 +20,12 @@
  * limitations under the License.
  */
 
-typedef unsigned int vsize_t;
-typedef unsigned int vertex_id_t;
+/**
+  * \brief Basic data types used in FlashGraph
+*/
+
+typedef unsigned int vsize_t; 
+typedef unsigned int vertex_id_t; /** Used to represent vertex IDs in graph */
 const vertex_id_t MAX_VERTEX_ID = UINT_MAX;
 const vertex_id_t INVALID_VERTEX_ID = -1;
 const size_t MAX_VERTEX_SIZE = INT_MAX;
