@@ -24,8 +24,8 @@ CXXFLAGS += -I.. -I../include
 
 all: test_rand_io
 
-test_rand_io: test_rand_io.o thread_private.o ../libsafs/libsafs.a
-	$(CXX) -o test_rand_io test_rand_io.o thread_private.o $(LDFLAGS)
+test_rand_io: $(OBJS) ../libsafs/libsafs.a
+	$(CXX) -o test_rand_io $(OBJS) $(LDFLAGS)
 
 clean:
 	rm -f *.o
