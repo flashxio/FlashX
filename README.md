@@ -27,7 +27,9 @@ Documentations
 
 [FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/FlashGraph-User-Manual).
 
-[SAFS user manual](https://docs.google.com/document/d/1OpsuLZw60MGCZAg4xO-j-1_AEWm3Yc2nqKKu8kXotkA/edit?usp=sharing).
+[FlashGraph performance](https://github.com/icoming/FlashGraph/wiki/Performance-of-FlashGraph)
+
+[SAFS user manual](https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual).
 
 Publications
 ========
