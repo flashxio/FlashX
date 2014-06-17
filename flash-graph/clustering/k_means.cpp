@@ -19,6 +19,7 @@
 
 #include <signal.h>
 #include <google/profiler.h>
+#include <stdlib.h>
 
 #include <vector>
 #include <limits> 
@@ -32,93 +33,15 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "math.h"
+#include "matrix/FG_sparse_matrix.h"
+#include "matrix/matrix_eigensolver.h"
 
-int g_MAX_ITERS = 100;
-// float g_TERM_FRAC_SWITCHES = .05; // If I have < than this then end the k-means routine
-
-class km_vector
-{
-  std::vector<float> data;
-
-  public:
-    km_vector() { };
-
-    km_vector(std::vector<float>& data) { 
-      this->data = data;
-    };
-
-    km_vector(vsize_t n) {
-      data.resize(n);
-    }
-
-    void resize(vsize_t n) {
-      data.resize(n);
-    }
-
-    km_vector& operator+=(km_vector& other) {
-      assert(this->data.size() == other.data.size());
-      // #pragma omp parallel for
-      for (vsize_t i=0; i < this->data.size(); i++) {
-        this->data[i]+= other.data[i];
-      }
-      return *this;
-    }
-
-    km_vector& operator=(km_vector& other) {
-     this->data = other.data; 
-     return *this;
-    }
-
-    float L2Norm(km_vector& other_v) {
-      // Assumption is a dense vector
-      float sum = 0;
-      for (vsize_t i=0; i< other_v.size(); i++) {
-        float diff = get_elem(i) - other_v.get_elem(i);
-        sum += diff * diff;
-      }
-      return sqrt(sum);
-    } 
-
-    float get_elem(vsize_t i) {
-      return this->data[i];
-    }
-
-    void set_elem(vsize_t idx, float val) {
-      this->data[idx] = val;
-    }
-
-    vsize_t size() {
-      return this->data.size();
-    }
-
-    void push_back(float val) {
-      this->data.push_back(val);
-    }
-
-    bool empty() {
-      return this->data.empty();
-    }
-
-    void set_data(std::vector<float> v) {
-      this->data = v;
-    }
-
-    std::vector<float>& get_data() {
-      return this->data;
-    }
-
-    void assign(vsize_t size, int val) {
-      this->data.assign(size, val);
-    }
-
-    void print() {
-      std::cout << "[";
-      for (vsize_t i = 0; i < size(); i++) {
-        std::cout << " " << this->data[i];
-      }
-      std::cout <<  " ]\n";
-    }
-};
+int g_MAX_ITERS = std::numeric_limits<vsize_t>::max(); //  FIXME: Why is this -1 ???
+std::vector<eigen_pair_t> g_eigen_pairs;
+vsize_t K = 1;
+int g_NV;
+float g_MIN_EIGV = std::numeric_limits<float>::max();
+float g_MAX_EIGV = std::numeric_limits<float>::min();
 
 enum phase_t {
   e_step, /* Update cluster_id for each vertex */
@@ -128,52 +51,73 @@ enum phase_t {
 // Parallel functions
 #if 0
 km_vector& compute_mean(km_vector& kmv, float num_members) {
-  
-      // #pragma omp parallel for firstprivate(num_members, kmv)
-      for (vsize_t i=0; i < kmv.size(); i++) {
-        kmv[i] /= num_members;
-      }
-      return kmv;
+
+  // #pragma omp parallel for firstprivate(num_members, kmv)
+  for (vsize_t i=0; i < kmv.size(); i++) {
+    kmv[i] /= num_members;
+  }
+  return kmv;
 }
 #endif
+
+float gen_random_float() {
+    float random = ((float) rand()) / (float) RAND_MAX;
+    float diff = g_MAX_EIGV - g_MIN_EIGV;
+    float r = random * diff;
+    return g_MIN_EIGV + r;
+}
 
 class cluster 
 {
   // Cluster_id implicit in its position in the vector<cluster>
 
-  km_vector curr_cluster_mean;
-  km_vector next_cluster_mean; // Cluster mean for the next round of K-means
+  std::vector<float> curr_cluster_mean;
+  std::vector<float> next_cluster_mean; // Cluster mean for the next round of K-means
   bool changed; 
-  km_vector member_sum;
   vsize_t num_members;
+  pthread_spinlock_t lock;
 
   public:
 
   cluster() {
     changed = false;
+    pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+    // Random init mean
+    for (int i = 0; i < g_NV; i++) {
+      curr_cluster_mean.push_back(gen_random_float());
+    }
+  }
+
+  bool has_changed() {
+    return changed;
   }
 
   void set_curr_cluster_mean(std::vector<float>& v) {
-    curr_cluster_mean.set_data(v);
+    curr_cluster_mean = v;
   }
   
-  void add_member(km_vector& vec) {
-    if (next_cluster_mean.empty()) { next_cluster_mean.resize(vec.size()); }
+  // TODO: Add locking on method
+  void add_member(vertex_id_t id) {
+    pthread_spin_lock(&lock);
+
+    if ( next_cluster_mean.empty() ) { next_cluster_mean.resize(g_NV); }
     if (!changed) { 
       changed = true;
       num_members = 0;
     }
-
-    next_cluster_mean += vec; // TODO: Locking for no races
+    
+    for (vsize_t i = 0; i < next_cluster_mean.size(); i++) {
+      next_cluster_mean[i] += g_eigen_pairs[i].second->get(id);
+    }
     num_members++;
+    pthread_spin_unlock(&lock);
   }
 
   void update_cluster_mean() {
     if (changed) {
-    //  curr_cluster_mean = compute_mean(next_cluster_mean, (float)num_members);
-
+      // TODO: OMP for
       for (vsize_t i=0; i < next_cluster_mean.size(); i++) {
-        next_cluster_mean.set_elem(i, (next_cluster_mean.get_elem(i)/(float)num_members));
+        next_cluster_mean[i] /= (float)num_members;
       }
       curr_cluster_mean = next_cluster_mean;
     }
@@ -181,7 +125,7 @@ class cluster
     changed = false; // reset the changed val
   }
 
-  km_vector& get_mean() {
+  std::vector<float>& get_mean() {
     return this->curr_cluster_mean;
   }
 };
@@ -189,33 +133,38 @@ class cluster
 /* VarDecl */ 
 std::vector<cluster> g_clusters;
 
+float L2Norm(std::vector<float>& cluster_mean, vertex_id_t id) {
+  float sum = 0;
+  // float eig_vec_val;
+
+  for (vsize_t i=0; i < cluster_mean.size(); i++) {
+    float diff = cluster_mean[i] - g_eigen_pairs[i].second->get(id); 
+    sum += diff * diff;
+  }
+  return sqrt(sum);
+}
+
 class kmeans_vertex: public compute_vertex
 {
-  km_vector comp_vector; // comparison vector
   vsize_t cluster_id; // TODO: Use this later to reduce computation
   phase_t phase;
 
-public:
-	kmeans_vertex() {
-    cluster_id = -1; // Every vertex is in an invalid cluster initially
+  public:
+  kmeans_vertex() {
+    cluster_id = rand() % K; // Every vertex is randomly assigned cluster initially
     phase = e_step;
-	}
+    g_clusters[cluster_id].add_member(get_id());
+  }
 
   kmeans_vertex(vertex_id_t id, const vertex_index &index1):
-    compute_vertex(id, index1) {
-  }
+    compute_vertex(id, index1) { }
 
-  void set_comp_vector(km_vector& kmv) {
-    this->comp_vector = kmv;
-  }
-
-  
   vsize_t compute_cluster() {
     float min_diff = std::numeric_limits<float>::max();
     int new_cluster = INT_MAX;
 
     for (uint32_t i = 0; i < g_clusters.size(); i++) {
-      float diff = comp_vector.L2Norm(g_clusters[i].get_mean());
+      float diff = L2Norm(g_clusters[i].get_mean(), get_id());
       if (diff < min_diff ) { 
         min_diff = diff; 
         new_cluster = i;
@@ -224,63 +173,83 @@ public:
     return new_cluster;
   }
 
+  void toggle_phase() {
+    phase = phase == e_step ? m_step : e_step;
+  }
+
+  const vsize_t get_cluster() const {
+    return cluster_id;
+  }
+
   void run(vertex_program &prog);
 
-	void run(vertex_program &prog, const page_vertex &vertex) { };
+  void run(vertex_program &prog, const page_vertex &vertex) { }
 
-	void run_on_message(vertex_program &prog, const vertex_message &msg) { };
+  void run_on_message(vertex_program &prog, const vertex_message &msg) { }
 };
 
+// Return true if converged else false
+bool recompute_cluster_means() {
+
+  bool converged = true;
+
+  #pragma omp parallel for 
+  for (vsize_t idx = 0; idx < g_clusters.size(); idx++) {
+    if (g_clusters[idx].has_changed()) {
+      converged = false;
+      g_clusters[idx].update_cluster_mean();
+
+      std::cout << "Cluster "<< idx <<" out of " 
+        << g_clusters.size() - 1 << " caused no convergence!\n";
+    }
+  }
+
+  return converged;
+}
+
 void kmeans_vertex::run(vertex_program &prog) {
-  switch (phase) {
-    case e_step:
-      if (get_id() == 0) {
-        printf("Activating vertex 0 for the m_step ...\n");
-        vertex_id_t id = get_id();
-        prog.activate_vertices(&id, 1); // Only one is active next itr
-      }
+  cluster_id = compute_cluster();
+  g_clusters[cluster_id].add_member(get_id());
+}
 
-      cluster_id = compute_cluster();
-      g_clusters[cluster_id].add_member(comp_vector);
-      break;
-    case m_step: // This will only happen to only vertex with id == 0
-      printf("Activating all other vertices for the next iteration ...\n");
-      
-      // Activate all  
-      vertex_id_t min_id = prog.get_graph().get_max_vertex_id();
-      const static vertex_id_t range = prog.get_graph().get_max_vertex_id() -
-                                prog.get_graph().get_min_vertex_id() + 1;
-       
-      vertex_id_t ids [range];
+// Helpers
+void assemble_clusters( graph_index::ptr& index, std::vector<float>& v) {
 
-      // #pragma omp parallel for firstprivate(min_id, range)
-      for (vertex_id_t idx = 0; idx <= range; idx++) {
-        ids[idx] = idx + min_id;
-      }
+  // Print out
+  graph_index::const_iterator it = index->begin();
+  graph_index::const_iterator end_it = index->end();
+  printf("Cluster by vertex:\n");
 
-      if ( prog.get_graph().get_curr_level() <= g_MAX_ITERS ) { // TODO: set g_NUM_ITERS = 2*graph iterations
-        prog.activate_vertices(&ids[0], prog.get_graph().get_num_vertices()); // Activate all vertices
-      }
-      break;
+  for (; it != end_it; ++it) {
+    const kmeans_vertex &v = (const kmeans_vertex &) *it;
+    std::cout << v.get_cluster() << ", ";
+  }
+  printf("\n");
+
+// TODO: #pragma omp parallel for firstprivate(v, index)
+  for (vertex_id_t i=0; i < v.size(); i++) {
+    v[i] = ((kmeans_vertex&)(index->get_vertex(i))).get_cluster();
   }
 }
 
-// We need to iniate this with a comp vector derived from Eigs computation
-class kmeans_initiator: public vertex_initiator
-{
-public:
-  std::vector<std::vector<float> > comp_vectors;
+void print_func(vertex_id_t i) {
+  std::cout << " " << i;
+}
+void print_vector(std::vector<float> v) {
+  std::cout << "[";
+    for_each (v.begin(), v.end(), print_func);
+  std::cout <<  " ]\n";
+}
 
-  kmeans_initiator(std::vector<std::vector<float> >& comp_vectors) {
-    this->comp_vectors = comp_vectors;
-  }
-
-	void init(compute_vertex &v) {
-		kmeans_vertex &kmv = (kmeans_vertex &) v;
-    km_vector comp_v_kmv(comp_vectors[v.get_id()]);
-    kmv.set_comp_vector(comp_v_kmv);
-	}
-};
+void print_FG_vector(FG_vector<ev_float_t>::ptr fgv) {
+  std::cout << "[";
+    for (vsize_t i=0; i < fgv->get_size(); i++) {
+      std::cout << " " << fgv->get(i);
+    }
+  std::cout <<  " ]\n\n";
+  
+}
+// End Helpers
 
 
 void int_handler(int sig_num)
@@ -293,50 +262,57 @@ void int_handler(int sig_num)
 void print_usage()
 {
 	fprintf(stderr,
-			"k-means [options] conf_file graph_file index_file max_iters (default=50) \n");
+			"k-means [options] conf_file graph_file index_file K\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
+  fprintf(stderr, "-m type: the type of matrix\n");
+  fprintf(stderr, "-p num: the number of potential eigenvalues\n");
+  fprintf(stderr, "-k num: the number of real eigenvalues\n");
+  fprintf(stderr, "-w which: which side of eigenvalues\n");
+  fprintf(stderr, "-t type: the type of eigenvlaues\n"); 
+  fprintf(stderr, "-i iters: maximum number of iterations\n"); 
+
 	graph_conf.print_help();
 	params.print_help();
 }
-
-// Helpers
-// FIXME: Finish me!
-std::vector<float> assemble_clusters(graph_engine::ptr graph) {
-
-#if 0
-  assigned_clusters(0, num_elem);
-
-#pragma parallel for private(assigned_clusters)
-  for (int i=0; i <= num_elem; i++) {
-    assigned_clusters[i] = 
-  }
-#endif
-
-  return std::vector<float>(); // stub 
-}
-
-void print_func(vertex_id_t i) {
-  std::cout << " " << i;
-}
-void print_vector(std::vector<float> v) {
-  std::cout << "[";
-    for_each (v.begin(), v.end(), print_func);
-  std::cout <<  " ]\n";
-}
-// End Helpers
 
 int main(int argc, char *argv[])
 {
 	int opt;
 	std::string confs;
+  std::string matrix_type = "adj";
+  g_NV = 1;
+  int m = 2; m = m;
+  std::string which = "LA";
+
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:")) != -1) {
+
+	while ((opt = getopt(argc, argv, "c:m:k:p:w:i:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
 				confs = optarg;
 				num_opts++;
 				break;
+      case 'm':
+        matrix_type = optarg;
+        num_opts++;
+        break;
+      case 'k': /**/
+        g_NV = atoi(optarg);
+        num_opts++;
+        break;
+      case 'p': /**/
+        m = atoi(optarg);
+        num_opts++;
+        break;
+      case 'w':
+        which = optarg;
+        num_opts++;
+        break;
+      case 'i':
+        g_MAX_ITERS = atol(optarg);
+        num_opts++;
+        break;
 			default:
 				print_usage();
 		}
@@ -344,7 +320,7 @@ int main(int argc, char *argv[])
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
 
-	if (argc < 4) {
+	if (argc < 3) {
 		print_usage();
 		exit(-1);
 	}
@@ -352,13 +328,63 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[0];
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
-	g_MAX_ITERS = atoi(argv[3]); // Set kmin
+  K = atol(argv[3]);
   
 	config_map configs(conf_file);
 	configs.add_options(confs);
 
 	signal(SIGINT, int_handler);
 
+# if 0
+  FG_graph::ptr _graph = FG_graph::create(graph_file, index_file, configs);
+
+  if (matrix_type == "adj") {
+    FG_adj_matrix::ptr matrix = FG_adj_matrix::create(_graph);
+    compute_eigen<FG_adj_matrix>(matrix, m, g_NV, which, g_eigen_pairs);
+  }
+  else
+    assert (0);
+# endif
+
+# if 1
+  // Fake eigen computation for WIKI
+  std::cout << "Fake eigs" << std::endl;
+  for (int i = 0; i < g_NV; i++) {
+    ev_float_t eigval = (ev_float_t) rand() / (ev_float_t)RAND_MAX;
+    FG_vector<ev_float_t>::ptr eigvect = FG_vector<ev_float_t>::create(8298);
+     
+    for (vertex_id_t ii = 0; ii < 8298; ii++) {
+      eigvect->set(ii, (ev_float_t) rand() / (ev_float_t)RAND_MAX); 
+    } 
+
+    eigen_pair_t ep(eigval, eigvect);
+    g_eigen_pairs.push_back(ep); 
+  }
+# endif
+
+  // Compute eig mins, maxs
+  BOOST_FOREACH(eigen_pair_t &v, g_eigen_pairs) {
+    printf("value: %f, ||vector||: ", v.first);
+    float max = v.second->max();
+    float min = v.second->max();
+
+    if (max > g_MAX_EIGV)
+      g_MAX_EIGV = max;
+    if (min < g_MIN_EIGV)
+      g_MIN_EIGV = min;
+    // print_FG_vector(v.second);
+  }
+
+  // Figure out max and min so we can use it to evenly distribute cluster init
+  printf("\nNew g_MAX_EIGV is %f ...\n", g_MAX_EIGV);
+  printf("\nNew g_MIN_EIGV is %f ...\n", g_MIN_EIGV);
+
+  // Instantiate clusters
+  for (vsize_t i = 0; i < K; i++) {
+    cluster cl;
+    g_clusters.push_back(cl);
+  }
+  
 	graph_index::ptr index = NUMA_graph_index<kmeans_vertex>::create(index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("K-means starting\n");
@@ -366,25 +392,32 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 
-  // TODO: Run Eigensolver return a vector of eigenvectors
-  std::vector<std::vector<float> > eigs;
-
   struct timeval start, end;
   gettimeofday(&start, NULL);
 
-  // TODO: Fix vertex initializer
-#if 0
-  graph->start_all(vertex_initiator::ptr(eigs), 
-      vertex_program_creater::ptr()); // TODO: Fix this mess
-#endif
+  
+  std::cout << "Computing " << g_MAX_ITERS << " iterations\n";
+  for (int iter = 0; iter < g_MAX_ITERS; iter++) {
+    graph->start_all();
+    graph->wait4complete();
+    if (recompute_cluster_means()) {
+      printf("Hurrah convergence!\n");
+      break;
+    }
+  }
 
-  graph->wait4complete();
   gettimeofday(&end, NULL);
 
-  std::vector<float> assigned_clusters = assemble_clusters(graph);
-  printf("Printing clusters: \n");
-  print_vector(assigned_clusters);
+  std::vector<float> cluster_vector( graph->get_max_vertex_id() -
+          graph->get_min_vertex_id() + 1, 0.0); 
+    
+  assemble_clusters(index, cluster_vector);
+
+  // printf("Printing clusters: \n");
+  // print_vector(cluster_vector);
   
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+# if 0
+#endif
 }

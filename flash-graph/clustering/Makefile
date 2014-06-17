@@ -19,7 +19,7 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
+LDFLAGS := -L../matrix -lmatrix -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
 all: k-means
