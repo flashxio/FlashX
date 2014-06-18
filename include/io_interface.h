@@ -144,13 +144,14 @@ class io_interface
 	int max_num_pending_ios;
 	static atomic_integer io_counter;
 
-public:
+protected:
 	io_interface(thread *t) {
 		this->curr = t;
 		this->io_idx = io_counter.inc(1) - 1;
 		max_num_pending_ios = 32;
 	}
 
+public:
 	virtual ~io_interface() { }
 
 	/**
