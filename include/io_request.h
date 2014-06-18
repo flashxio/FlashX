@@ -161,9 +161,19 @@ public:
 
 const int MAX_INLINE_SIZE=128;
 
+/**
+ * The data type for a SAFS file identifier.
+ */
 typedef int file_id_t;
+/**
+ * Invalid SAFS file identifier.
+ */
 const int INVALID_FILE_ID = -1;
 
+/**
+ * This class specifies a data location in SAFS.
+ * It includes a SAFS file ID and the location in the file.
+ */
 class data_loc_t
 {
 	file_id_t file_id;
@@ -174,15 +184,28 @@ public:
 		off = -1;
 	}
 
+	/**
+	 * The constructor.
+	 * \param file_id the SAFS file.
+	 * \param off the location in the file.
+	 */
 	data_loc_t(file_id_t file_id, off_t off) {
 		this->file_id = file_id;
 		this->off = off;
 	}
 
+	/**
+	 * This method gets the SAFS file ID.
+	 * \return the SAFS file ID.
+	 */
 	file_id_t get_file_id() const {
 		return file_id;
 	}
 
+	/**
+	 * This method gets the location in the SAFS file.
+	 * \return the location.
+	 */
 	off_t get_offset() const {
 		return off;
 	}
@@ -192,6 +215,10 @@ const data_loc_t INVALID_DATA_LOC;
 
 class user_compute;
 
+/**
+ * The class defines a compact data structure for containing the info of
+ * an I/O request issued by a user task.
+ */
 class request_range
 {
 	data_loc_t loc;
@@ -205,6 +232,13 @@ public:
 		compute = NULL;
 	}
 
+	/**
+	 * The constructor.
+	 * \param loc the data location in SAFS.
+	 * \param size the data size of the request.
+	 * \param access_method indicates whether to read or write.
+	 * \param compute the user task associated with the I/O request.
+	 */
 	request_range(const data_loc_t &loc, size_t size, int access_method,
 			user_compute *compute) {
 		this->loc = loc;
@@ -213,22 +247,42 @@ public:
 		this->compute = compute;
 	}
 
+	/**
+	 * This method gets the data location in SAFS.
+	 * \return the data location.
+	 */
 	const data_loc_t &get_loc() const {
 		return loc;
 	};
 
+	/**
+	 * This method gets the I/O request size.
+	 * \return the request size.
+	 */
 	size_t get_size() const {
 		return size;
 	}
 
+	/**
+	 * This method indicates whether to read or write.
+	 * \return whether to read or write.
+	 */
 	int get_access_method() const {
 		return access_method & 0x1;
 	}
 
+	/**
+	 * This method gets the user task associated with the I/O request.
+	 * \return the user task.
+	 */
 	user_compute *get_compute() const {
 		return compute;
 	}
 
+	/**
+	 * This method sets the user task associated with the I/O request.
+	 * \param compute the user task.
+	 */
 	void set_compute(user_compute *compute) {
 		this->compute = compute;
 	}
@@ -237,6 +291,19 @@ public:
 typedef fifo_queue<io_request> user_comp_req_queue;
 class page_byte_array;
 class compute_allocator;
+
+/**
+ * This class defines the interface of a user task assocaited with
+ * an I/O request. The user task is executed in the page cache when
+ * the I/O request is complete. It is executd as follows:
+ * upon the completion of an I/O request, run() is invoked;
+ * SAFS invokes has_requests() to check whether the user task has
+ * more I/O requests;
+ * if the user task has more requests, SAFS invokes get_next_request() 
+ * to get more requests;
+ * SAFS invokes has_completed() to check whether the user task has completed;
+ * if a user task has been completed, SAFS destroys the user task.
+ */
 class user_compute: public ptr_interface
 {
 	compute_allocator *alloc;
@@ -246,28 +313,66 @@ public:
 		IN_QUEUE,
 	};
 
+	/**
+	 * The constructor.
+	 * \param alloc the object allocator that allocates the user task.
+	 */
 	user_compute(compute_allocator *alloc) {
 		this->alloc = alloc;
 	}
 
+	/**
+	 * This method gets the object allocator that allocates the user task.
+	 * \return the object allocator.
+	 */
 	compute_allocator *get_allocator() const {
 		return alloc;
 	}
 
 	virtual ~user_compute() {
 	}
+
+	/**
+	 * This method serialize the user task to a buffer.
+	 * It's currently not used.
+	 * \param buf the data buffer where the user task is serialized to.
+	 * \param size the buffer size.
+	 */
 	virtual int serialize(char *buf, int size) const = 0;
+	/**
+	 * This method gets the serialized size of the user task.
+	 * It's currently not used.
+	 * \return the serialized size of the user task.
+	 */
 	virtual int get_serialized_size() const = 0;
 	/**
-	 * It should return true when the computation completes.
-	 * Otherwise, false.
+	 * This method executes the user task on the data read by the I/O request
+	 * that the user task is associated with. The data read by the I/O
+	 * request is stored in the page cache.
+	 * \param arr the byte array that contains the data read by the I/O
+	 * request and is stored in the page cache.
 	 */
-	virtual void run(page_byte_array &) = 0;
+	virtual void run(page_byte_array &arr) = 0;
 
+	/**
+	 * This method indicates whether the user task has been completed.
+	 * \return whether the user task has been completed.
+	 */
 	virtual bool has_completed() const = 0;
 
+	/**
+	 * This method indicates whether the user task has more I/O requests to
+	 * be issued.
+	 * \return whether the user task has more I/O requests to be issued.
+	 */
 	virtual int has_requests() const = 0;
 
+	/**
+	 * This method get the next I/O request generated by the user task.
+	 * When the method is invoked, we have to call has_requests() to check
+	 * that the user task has more I/O requests.
+	 * \return the next I/O request.
+	 */
 	virtual request_range get_next_request() = 0;
 
 	virtual void set_flag(int flag, bool value) {
@@ -281,12 +386,38 @@ public:
 		return flags.test_flag(flag);
 	}
 
+	/**
+	 * FIXME set the direction of iterating the I/O requests generated
+	 * by the user task.
+	 */
 	virtual void set_scan_dir(bool forward) {
 	}
 
+	/**
+	 * This method fetches an I/O request from the user task. This is
+	 * a helper method that wraps on the user-defined get_next_request.
+	 * \param io the I/O instance associated with the fetched I/O request.
+	 * \param req the fetched I/O request.
+	 * \return true if a user can fetch an I/O request.
+	 */
 	bool fetch_request(io_interface *io, io_request &req);
+
+	/**
+	 * This method fetches multiple I/O requests from the user task.
+	 * This is also a helper method that wraps on the user-defined
+	 * get_next_request.
+	 * \param io the I/O instance associated with the fetched I/O request.
+	 * \param reqs the array where the fetched I/O requests should be stored.
+	 * \param max_fetch the maximal number of I/O requests should be fetched
+	 * from the user task.
+	 * \return the number of I/O requests fetched from the user task.
+	 */
 	int fetch_requests(io_interface *io, user_comp_req_queue &reqs,
 			int max_fetch);
+
+	/**
+	 * FIXME This method is a wrapper method on user-defined run().
+	 */
 	void complete_request(page_byte_array &arr) {
 		assert(get_ref() > 0);
 		run(arr);
@@ -294,21 +425,45 @@ public:
 	}
 };
 
+/**
+ * This class defines the interface of allocating customized user tasks.
+ */
 class compute_allocator
 {
 public:
 	virtual ~compute_allocator() {
 	}
+	/**
+	 * This method alloates a user task.
+	 * \return the allocated user task.
+	 */
 	virtual user_compute *alloc() = 0;
-	virtual void free(user_compute *) = 0;
+	/**
+	 * This method deallocates a user task.
+	 * \param compute the user task to be deallocated.
+	 */
+	virtual void free(user_compute *compute) = 0;
 };
 
 /**
- * This class contains the request info.
- * If it's in an extended form, it is created by the global cache
- * and is used within a NUMA machine.
- * It is decided when the request is created whether or not it is
- * an extended request. It can't be changed afterwards.
+ * This class defines an I/O request from users.
+ * There are three forms of I/O reuqests:
+ *	simple form,
+ *	user-task form,
+ *	extended form.
+ *
+ * In the simple form, an I/O request contains a single data buffer where
+ * data read from the disk needs to be stored or data needs to be written
+ * to the disk.
+ *
+ * In the user-task form, an I/O request does not contains a data buffer.
+ * Instead, it contains a user task to be executed on the data covered
+ * by the I/O request. This form is currently only used for read requests.
+ * The user task is executed once the completion of the I/O request.
+ *
+ * In the extended form, an I/O request can contain multiple data buffers
+ * to contain data. This form is currently only used internally and is not
+ * allowed to be used by users.
  */
 class io_request
 {
@@ -402,6 +557,16 @@ public:
 		this->sync = sync;
 	}
 
+	/**
+	 * The constructor of an I/O request in the simple form.
+	 * \param buf the data buffer.
+	 * \param loc the location in SAFS.
+	 * \param size the request size.
+	 * \param access_method indicates whether to read or write.
+	 * \param io the I/O instance associated with the I/O request.
+	 * \param node_id the NUMA node where the I/O request is issued.
+	 * \param sync
+	 */
 	io_request(char *buf, const data_loc_t &loc, ssize_t size,
 			int access_method, io_interface *io, int node_id, bool sync = false) {
 		payload_type = BASIC_REQ;
@@ -423,6 +588,15 @@ public:
 		this->sync = sync;
 	}
 
+	/**
+	 * The constructor of an I/O request in the user-task form.
+	 * \param compute the user task.
+	 * \param loc the location in SAFS.
+	 * \param size the request size.
+	 * \param access_method indicates whether to read or write.
+	 * \param io the I/O instance associated with the I/O request.
+	 * \param node_id the NUMA node where the I/O request is issued.
+	 */
 	io_request(user_compute *compute, const data_loc_t &loc, ssize_t size,
 			int access_method, io_interface *io, int node_id) {
 		payload_type = USER_COMPUTE;
@@ -506,7 +680,7 @@ public:
 
 	file_id_t get_file_id() const;
 
-	/**
+	/*
 	 * Test whether the request is a flush request.
 	 * The difference of a sync'd request and a flush request is that
 	 * a flush request isn't a valid request for accessing data.
@@ -577,7 +751,7 @@ public:
 		this->low_latency = low_latency;
 	}
 
-	/**
+	/*
 	 * The requested data is inside a page on the disk.
 	 */
 	bool within_1page() const {
@@ -588,7 +762,7 @@ public:
 		return get_offset() <= off && off < get_offset() + get_size();
 	}
 
-	/**
+	/*
 	 * Test if the request has overlap with the specified range.
 	 */
 	bool has_overlap(off_t off, ssize_t size) const {
@@ -655,7 +829,7 @@ public:
 		return payload.compute;
 	}
 
-	/**
+	/*
 	 * By default, we get the first buffer. This makes sense
 	 * for a single buffer request.
 	 */
@@ -742,7 +916,7 @@ public:
 		return get_extension()->get_timestamp();
 	}
 
-	/**
+	/*
 	 * Extract a request from the input request.
 	 * The extract request is within the range [off, off + size).
 	 */
@@ -778,7 +952,7 @@ public:
 				this->get_io(), this->get_node_id());
 	}
 
-	/**
+	/*
 	 * We need to serialize an io request to a buffer so it can be sent to
 	 * another thread.
 	 * @accept_inline: indicates whether the IO request can inline data
@@ -828,7 +1002,7 @@ public:
 		return serialized_size;
 	}
 
-	/**
+	/*
 	 * This method returns the size of an IO request after it is serialized.
 	 */
 	int get_serialized_size() const {
@@ -844,7 +1018,7 @@ public:
 		}
 	}
 
-	/**
+	/*
 	 * This method deserialize an request from the buffer.
 	 * If the request data is inline in the buffer, instead of allocating
 	 * memory for the extra objects of the IO request, the extra objects
@@ -894,7 +1068,7 @@ public:
 };
 
 typedef void (*req_process_func_t)(io_interface *io, io_request *reqs[], int num);
-/**
+/*
  * Perform the same function to the requests with the same IO instance.
  * It turns out it's a common function when delivering requests to
  * the upper layer.

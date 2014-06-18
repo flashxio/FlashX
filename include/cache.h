@@ -525,22 +525,48 @@ public:
 };
 
 /**
- * Thie byte array represents an object in multiple pages in the page cache.
+ * This byte array helps users access data in non-contiguous pages
+ * in the page cache. It provides a STL-style iterator and a Java-style
+ * iterator to access elements in the byte array.
  */
 class page_byte_array
 {
 public:
+	/**
+	 * This method locks the byte array.
+	 * It's currently not implemented yet.
+	 */
 	virtual void lock() = 0;
+	/**
+	 * This method unlocks the byte array.
+	 * It's currently not implemented yet.
+	 */
 	virtual void unlock() = 0;
-	virtual off_t get_offset_in_first_page() const = 0;
-	virtual thread_safe_page *get_page(int idx) const = 0;
+	/**
+	 * This method gets the size of the byte array.
+	 * \return the size of the byte array.
+	 */
 	virtual size_t get_size() const = 0;
 
+	/**
+	 * This method gets the location of the byte array in the SAFS file.
+	 * \return the location of the byte array in the SAFS file.
+	 */
 	off_t get_offset() const {
 		const thread_safe_page *p = get_page(0);
 		return p->get_offset() + get_offset_in_first_page();
 	}
 
+	virtual off_t get_offset_in_first_page() const = 0;
+	virtual thread_safe_page *get_page(int idx) const = 0;
+
+	/**
+	 * This is a STL-compatile iterator. Users can redefine the type of
+	 * elements in the byte array and iterate the elements stored in
+	 * the byte array.
+	 * It overrides *, -, +, ++, ==, !=, += operators.
+	 * It supports random access in the byte array.
+	 */
 	template<class T>
 	class const_iterator: public std::iterator<std::random_access_iterator_tag, T>
 	{
@@ -566,6 +592,10 @@ public:
 			assert((byte_end - byte_off) % sizeof(T) == 0);
 		}
 
+		/**
+		 * This method gets the current element.
+		 * \return the current element.
+		 */
 		T operator*() const {
 			off_t pg_idx = off / PAGE_SIZE;
 			off_t off_in_pg = off % PAGE_SIZE;
@@ -573,10 +603,23 @@ public:
 			return *(T *) (data + off_in_pg);
 		}
 
+		/**
+		 * This method calculates the distance between this iterator
+		 * and another iterator.
+		 * \param it the other iterator.
+		 * \return the distance between the two iterators.
+		 */
 		difference_type operator-(const const_iterator<T> &it) const {
 			return (off - it.off) / sizeof(T);
 		}
 
+		/**
+		 * This method creates a new iterator that points to a location
+		 * the specified number of elements after the current iterator.
+		 * The current iterator isn't changed.
+		 * \param num the number of elements after the current location.
+		 * \return the new iterator points to the new location.
+		 */
 		const_iterator<T> operator+(size_t num) const {
 			const_iterator<T> ret = *this;
 			ret.off += num * sizeof(T);
@@ -584,20 +627,43 @@ public:
 			return ret;
 		}
 
-		// Prefix ++
+		/**
+		 * Move the current iterator forward by 1.
+		 * This is prefix ++.
+		 * \return the reference to the current iterator.
+		 */
 		const_iterator<T> &operator++() {
 			off += sizeof(T);
 			return *this;
 		}
 
+		/**
+		 * Test whether the current iterator is the same as
+		 * the other iterator.
+		 * \param it the other iterator.
+		 * \return true if they are the same.
+		 */
 		bool operator==(const const_iterator<T> &it) const {
 			return off == it.off;
 		}
 
+		/**
+		 * Test whether the current iterator isn't the same as
+		 * the other iterator.
+		 * \param it the other iterator.
+		 * \return true if they aren't the same.
+		 */
 		bool operator!=(const const_iterator<T> &it) const {
 			return !(*this == it);
 		}
 
+		/**
+		 * This method moves the current iterator forward
+		 * by the specified number.
+		 * \param num the number of elements that the current iterator
+		 * is moved.
+		 * \return the reference to the current iterator.
+		 */
 		const_iterator<T> &operator+=(size_t num) {
 			off += num * sizeof(T);
 			assert(end >= off);
@@ -648,6 +714,11 @@ public:
 		}
 	};
 
+	/**
+	 * This is a Java-style iterator that accesses elements in the byte
+	 * array sequentially. Users can redefine the type of elements
+	 * in the byte array and iterate the elements stored in the byte array.
+	 */
 	template<class T>
 	class seq_const_iterator
 	{
@@ -687,6 +758,11 @@ public:
 			assert((byte_end - byte_off) % sizeof(T) == 0);
 		}
 
+		/**
+		 * This method tests whether the iterator can move to
+		 * the next element in the byte array.
+		 * \return true if there are more elements in the iterator.
+		 */
 		bool has_next() {
 			if (curr_page_it.has_next())
 				return true;
@@ -703,23 +779,49 @@ public:
 			}
 		}
 
+		/**
+		 * This method gets the total number of remaining elements
+		 * in the iterator.
+		 * \return the total number of remaining elements.
+		 */
 		int get_num_tot_entries() const {
 			return (end - off) / sizeof(T);
 		}
 
+		/**
+		 * This method gets the number of remaining elements
+		 * in the page where the current iterator is on.
+		 * \return the number of remaining elements in the current page.
+		 */
 		int get_num_entries_in_page() const {
 			return curr_page_it.get_num_entries();
 		}
 
+		/**
+		 * This method moves to the next element.
+		 * \return the current element.
+		 */
 		T next() {
 			return curr_page_it.next();
 		}
 
+		/**
+		 * This method gets the current element.
+		 * \return the current element.
+		 */
 		T curr() const {
 			return curr_page_it.curr();
 		}
 	};
 
+	/**
+	 * This macro iterates over all elements in the iterator.
+	 * This is the most light-weight method of iterating over all elements
+	 * in an iterator.
+	 * \param type is the type of element.
+	 * \param v is the variable that stores the current element.
+	 * \param it is the Java-style iterator.
+	 */
 #define PAGE_FOREACH(type, v, it)					\
 	for (int idx = 0; (it).has_next();) {			\
 		for (int i = 0; i < (it).get_num_entries_in_page(); i++, idx++) {	\
@@ -796,16 +898,35 @@ public:
 		}
 	};
 
+	/**
+	 * This method gets the STL-compatible iterator that points to
+	 * the user-specified location in the byte array.
+	 * \param byte_off the offset (in bytes) in the byte array.
+	 * \return the iterator to the specified location in the byte array.
+	 */
 	template<class T>
 	const_iterator<T> begin(off_t byte_off = 0) const {
 		return const_iterator<T>(this, byte_off, this->get_size());
 	}
 
+	/**
+	 * This method gets the STL-compatible iterator that points to the end
+	 * of the byte array.
+	 * \return the iterator to the end of the byte array.
+	 */
 	template<class T>
 	const_iterator<T> end() const {
 		return const_iterator<T>(this, this->get_size(), this->get_size());
 	}
 
+	/**
+	 * This method returns a pair of iterators that iterate over the range
+	 * on the byte array, specified by the user.
+	 * \param byte_off the beginning offset (in bytes) in the byte array.
+	 * \param byte_end the end offset (in bytes) in the byte array.
+	 * \return a pair of iterators. The first iterator points to
+	 * the beginning offset and the second one points to the end offset.
+	 */
 	template<class T>
 	std::pair<const_iterator<T>, const_iterator<T> > get_iterator(
 			off_t byte_off, off_t byte_end) const {
@@ -814,6 +935,13 @@ public:
 				const_iterator<T>(this, byte_end, byte_end));
 	}
 
+	/**
+	 * This method gets the Java-style iterator that iterates elements
+	 * in the specified range in the byte array.
+	 * \param byte_off the beginning offset (in bytes) in the byte array.
+	 * \param byte_end the end offset (in bytes) in the byte array.
+	 * \return the Java-style iterator.
+	 */
 	template<class T>
 	seq_const_iterator<T> get_seq_iterator(off_t byte_off, off_t byte_end) const {
 		return seq_const_iterator<T>(this, byte_off, byte_end);
@@ -845,7 +973,10 @@ public:
 	}
 
 	/**
-	 * rel_off: the offset relative to the beginning of the array.
+	 * This method copies data to a buffer.
+	 * \param rel_off the offset relative to the beginning of the array.
+	 * \param buf the buffer
+	 * \param size the size of data copied to the buffer.
 	 */
 	void memcpy(off_t rel_off, char buf[], size_t size) const;
 
