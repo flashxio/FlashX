@@ -162,7 +162,7 @@ public:
 	 * This method is a static method. It destroys a user task.
 	 * \param compute the user task.
 	 */
-	void delete_compute(user_compute *compute) {
+	static void delete_compute(user_compute *compute) {
 		assert(compute->test_flag(user_compute::IN_QUEUE));
 		compute->set_flag(user_compute::IN_QUEUE, false);
 		compute->dec_ref();
