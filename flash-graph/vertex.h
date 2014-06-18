@@ -119,6 +119,45 @@ public:
 	}
 };
 
+template<>
+class edge<empty_data>
+{
+	static empty_data data;
+	vertex_id_t from;
+	vertex_id_t to;
+public:
+	edge() {
+		this->from = -1;
+		this->to = -1;
+	}
+
+	edge(vertex_id_t from, vertex_id_t to) {
+		this->from = from;
+		this->to = to;
+	}
+
+	edge(vertex_id_t from, vertex_id_t to, const empty_data &data) {
+		this->from = from;
+		this->to = to;
+	}
+
+	vertex_id_t get_from() const {
+		return from;
+	}
+
+	vertex_id_t get_to() const {
+		return to;
+	}
+
+	bool has_edge_data() const {
+		return false;
+	}
+
+	const empty_data &get_data() const {
+		return data;
+	}
+};
+
 template<class edge_data_type>
 class in_mem_directed_vertex;
 
