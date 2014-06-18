@@ -10,9 +10,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 find_package(Boost COMPONENTS system filesystem	REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Numa REQUIRED)
-find_package(Aio REQUIRED)
-find_package(Rt REQUIRED)
+find_package(LibNuma REQUIRED)
+find_package(LibAio REQUIRED)
+find_package(LibRt REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # configure a header file to pass some of the CMake settings
