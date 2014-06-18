@@ -36,7 +36,7 @@ class NUMA_cache: public page_cache
 	std::vector<page_cache *> caches;
 public:
 	NUMA_cache(const cache_config *config, int max_num_pending_flush): caches(
-			config->get_num_caches()) {
+			config->get_num_cache_parts()) {
 		cache_conf = config;
 		std::vector<int> node_ids;
 		cache_conf->get_node_ids(node_ids);

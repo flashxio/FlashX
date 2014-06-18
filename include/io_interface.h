@@ -175,7 +175,7 @@ public:
 	 * This method gets the ID of the I/O instance.
 	 * \return the ID of the I/O instance.
 	 */
-	int get_io_idx() const {
+	int get_io_id() const {
 		return io_idx;
 	}
 

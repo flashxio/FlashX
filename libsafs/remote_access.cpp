@@ -389,7 +389,7 @@ int remote_io::wait4complete(int num_to_complete)
 void remote_io::print_state()
 {
 	printf("remote_io %d has %d pending reqs, %d completed reqs\n",
-			get_io_idx(), num_pending_ios(), complete_queue.get_num_entries());
+			get_io_id(), num_pending_ios(), complete_queue.get_num_entries());
 	for (unsigned i = 0; i < senders.size(); i++)
 		printf("\tsender %d: remain %d reqs\n", i,
 				senders[i]->get_num_remaining());
