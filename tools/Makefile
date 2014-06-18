@@ -5,7 +5,7 @@ CFLAGS = -g -O3 -I.. -I../include $(TRACE_FLAGS)
 
 LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
 
-TARGETS = stat create_file create_files workload-gen memory-fill eval_expand_SA_cache print_file
+TARGETS = stat create_file create_files workload-gen memory-fill print_file
 LIBFILE = ../libsafs/libsafs.a
 
 all: $(TARGETS)
