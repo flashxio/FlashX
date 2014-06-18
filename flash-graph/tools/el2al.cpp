@@ -55,7 +55,7 @@ public:
 	}
 };
 
-int num_threads = 32;
+int num_threads = 1;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
 const char *delimiter = "\t";
 
