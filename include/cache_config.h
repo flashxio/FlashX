@@ -73,7 +73,7 @@ public:
 		return type;
 	}
 
-	int get_num_caches() const {
+	int get_num_cache_parts() const {
 		return (int) part_sizes.size();
 	}
 
@@ -115,7 +115,7 @@ public:
 	}
 
 	virtual int page2cache(const page_id_t &pg_id) const {
-		return (int) (pg_id.get_offset() / PAGE_SIZE) % get_num_caches();
+		return (int) (pg_id.get_offset() / PAGE_SIZE) % get_num_cache_parts();
 	}
 };
 

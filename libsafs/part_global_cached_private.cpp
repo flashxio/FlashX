@@ -264,7 +264,7 @@ public:
 
 	void print_state() {
 		printf("node cached io %d has %d pending requests and %d reqs in the queue\n",
-				get_io_idx(), num_pending_ios(), request_queue->get_num_objs());
+				get_io_id(), num_pending_ios(), request_queue->get_num_objs());
 		global_cached_io::print_state();
 	}
 
@@ -465,7 +465,7 @@ public:
 
 	void print_state() {
 		printf("req_stealer %d has %d buffered reqs in thread %d, timer %d is enabled? %d\n",
-				get_io_idx(), req_buf.get_num_objs(), get_thread()->get_tid(),
+				get_io_id(), req_buf.get_num_objs(), get_thread()->get_tid(),
 				flush_timer->get_id(), flush_timer->is_enabled());
 	}
 };
@@ -513,8 +513,6 @@ node_cached_io::node_cached_io(io_interface *underlying,
 			"request_queue", NUMA_REQ_MSG_QUEUE_SIZE, INT_MAX, false);
 
 	processed_requests = 0;
-	// This IO instance is created inside the right thread.
-	global_cached_io::init();
 	// This IO just dispatches any number of requests sent to it.
 	// So we don't care how many requests are pending.
 	set_max_num_pending_ios(INT_MAX);
@@ -879,13 +877,6 @@ void part_io_process_table::print_stat(int num_user_threads)
 	}
 }
 
-int part_global_cached_io::init()
-{
-	underlying->init();
-
-	return 0;
-}
-
 int part_global_cached_io::destroy_subsystem(part_io_process_table *table)
 {
 	delete table;
@@ -936,7 +927,7 @@ part_global_cached_io::part_global_cached_io(io_interface *underlying,
 #ifdef DEBUG
 	long cache_size = cache_conf->get_part_size(node_id);
 	printf("thread id: %d, group id: %d, num groups: %d, cache size: %ld\n",
-			get_io_idx(), node_id, table->get_num_groups(), cache_size);
+			get_io_id(), node_id, table->get_num_groups(), cache_size);
 #endif
 
 	/* assign a thread to a group. */
@@ -1072,7 +1063,7 @@ void part_global_cached_io::cleanup()
 
 #ifdef STATISTICS
 	printf("thread %d processed %ld requests (%ld remote requests) and %ld replies\n",
-			get_io_idx(), processed_requests, sent_requests, processed_replies.get());
+			get_io_id(), processed_requests, sent_requests, processed_replies.get());
 #endif
 }
 
@@ -1154,7 +1145,7 @@ void part_global_cached_io::flush_requests()
 void part_global_cached_io::print_state()
 {
 	printf("part global cached io %d has %d pending reqs, %ld remote pending reqs, %d local pending reqs %d replies in the queue\n",
-			get_io_idx(), num_pending_ios(), sent_requests - processed_replies.get(),
+			get_io_id(), num_pending_ios(), sent_requests - processed_replies.get(),
 			underlying->num_pending_ios(), reply_queue->get_num_objs());
 	for (std::tr1::unordered_map<int, group_request_sender *>::const_iterator it
 			= req_senders.begin(); it != req_senders.end(); it++) {

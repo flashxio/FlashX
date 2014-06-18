@@ -219,7 +219,6 @@ worker_thread::~worker_thread()
 void worker_thread::init()
 {
 	io = factory->create_io(this);
-	io->init();
 
 	if (!started_vertices.empty()) {
 		assert(curr_activated_vertices->is_empty());

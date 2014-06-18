@@ -20,6 +20,8 @@
 #include "vertex.h"
 #include "vertex_index.h"
 
+empty_data edge<empty_data>::data;
+
 in_mem_vertex_info::in_mem_vertex_info(vertex_id_t id,
 		const vertex_index *index1)
 {

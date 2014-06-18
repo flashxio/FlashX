@@ -379,7 +379,6 @@ thread_private::thread_private(int node_id, int idx, int entry_size,
 void thread_private::init() {
 	io = factory->create_io(this);
 	io->set_max_num_pending_ios(params.get_aio_depth_per_file());
-	io->init();
 
 	if (io->support_aio()) {
 		cb = new cleanup_callback(idx, this, io->get_file_id());
