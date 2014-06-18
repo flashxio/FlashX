@@ -28,12 +28,6 @@
 #include "exception.h"
 #include "memory_manager.h"
 
-#ifdef STATISTICS
-volatile int avail_cells;
-volatile int num_wait_unused;
-volatile int lock_contentions;
-#endif
-
 const long default_init_cache_size = 128 * 1024 * 1024;
 
 template<class T>
@@ -328,14 +322,7 @@ page *hash_cell::search(const page_id_t &pg_id)
 page *hash_cell::search(const page_id_t &pg_id, page_id_t &old_id)
 {
 	thread_safe_page *ret = NULL;
-#ifndef STATISTICS
 	pthread_spin_lock(&_lock);
-#else
-	if (pthread_spin_trylock(&_lock) == EBUSY) {
-		__sync_fetch_and_add(&lock_contentions, 1);
-		pthread_spin_lock(&_lock);
-	}
-#endif
 	num_accesses++;
 
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
