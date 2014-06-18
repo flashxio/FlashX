@@ -513,8 +513,6 @@ node_cached_io::node_cached_io(io_interface *underlying,
 			"request_queue", NUMA_REQ_MSG_QUEUE_SIZE, INT_MAX, false);
 
 	processed_requests = 0;
-	// This IO instance is created inside the right thread.
-	global_cached_io::init();
 	// This IO just dispatches any number of requests sent to it.
 	// So we don't care how many requests are pending.
 	set_max_num_pending_ios(INT_MAX);
@@ -877,13 +875,6 @@ void part_io_process_table::print_stat(int num_user_threads)
 		}
 		printf("group %d gets %d hits\n", group->id, tot_group_hits);
 	}
-}
-
-int part_global_cached_io::init()
-{
-	underlying->init();
-
-	return 0;
 }
 
 int part_global_cached_io::destroy_subsystem(part_io_process_table *table)

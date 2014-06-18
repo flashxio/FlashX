@@ -393,12 +393,6 @@ public:
 
 	int handle_pending_requests();
 
-	/* When a thread begins, this method will be called. */
-	virtual int init() {
-		int ret = underlying->init();
-		return ret;
-	}
-
 	virtual bool set_callback(callback *cb) {
 		if (underlying->support_aio())
 			this->cb = cb;

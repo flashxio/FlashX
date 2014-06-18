@@ -189,11 +189,6 @@ public:
 		return get_max_num_pending_ios() - num_pending_ios();
 	}
 
-	/* When a thread begins, this method will be called. */
-	virtual int init() {
-		return 0;
-	}
-
 	/**
 	 * This method returns the ID of the file being accessed by the IO
 	 * instance.
