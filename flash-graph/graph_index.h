@@ -1,7 +1,7 @@
 #ifndef __GRAPH_INDEX_H__
 #define __GRAPH_INDEX_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -31,20 +31,19 @@ class compute_vertex;
 vertex_index *load_vertex_index(const std::string &index_file);
 
 /**
- * This file contains a set of graph index implementation.
- * The graph index not only indexes vertices in a graph, but also is
- * the in-memory container to keep all vertices of a graph.
- * It's different from vertex_index, which is an index to the adjacency
- * list of vertices in the external memory.
+ * \brief This file contains a set of graph index implementation.
+ * The graph index is the in-memory container to keep all vertices of a graph. <br>
+ *
+ * It's different from `vertex_index`, which is an index to the adjacency
+ * list of vertices in the external memory. **NOTE: This is class is mostly used internally**
  */
-
 class graph_index
 {
 	graph_index(const graph_index &);
 	graph_index &operator=(const graph_index &);
 public:
-	typedef std::shared_ptr<graph_index> ptr;
-
+	typedef std::shared_ptr<graph_index> ptr; /** Type used to access object*/
+    
 	class const_iterator
 	{
 		vertex_id_t id;
