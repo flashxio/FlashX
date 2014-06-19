@@ -36,28 +36,35 @@ FG_vector<unsigned char>::ptr read_mnist_label(const std::string file, int num_s
  * This procedure generates a dense projection matrix of Dxk.
  */
 FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_matrix<unsigned char>::ptr input,
-		FG_vector<int>::ptr labels, int k)
+		FG_vector<int>::ptr labels, int ndim)
 {
 	typedef std::map<int, FG_vector<double>::ptr> mean_map_t;
 	mean_map_t mean;
 	input->group_by_mean(*labels, true, mean);
 	std::vector<eigen_pair_t> eigens;
-	compute_SVD<FG_general_sparse_matrix<unsigned char> >(input, 2 * k, k,
-			"LA", "RS", eigens);
+	int num_eigen = ndim - mean.size();
+	if (num_eigen > 0)
+		compute_SVD<FG_general_sparse_matrix<unsigned char> >(input, 2 * num_eigen,
+				num_eigen, "LA", "RS", eigens);
 
 	size_t nrow = input->get_num_cols();
-	size_t ncol = mean.size() + k;
+	size_t ncol = ndim;
 	FG_eigen_matrix<double>::ptr qr_matrix
 		= FG_eigen_matrix<double>::create(nrow, ncol);
 	qr_matrix->resize(nrow, ncol);
 	printf("construct QR matrix: %ld, %ld\n", qr_matrix->get_num_rows(),
 			qr_matrix->get_num_cols());
-	int col_idx = 0;
+	size_t col_idx = 0;
 	BOOST_FOREACH(mean_map_t::value_type v, mean) {
+		if (col_idx >= ncol)
+			break;
 		qr_matrix->set_col(col_idx++, *v.second);
 	}
-	for (int i = 0; i < k; i++)
+	for (int i = 0; i < num_eigen; i++) {
+		if (col_idx >= ncol)
+			break;
 		qr_matrix->set_col(col_idx++, *eigens[i].second);
+	}
 	return qr_matrix->householderQ();
 }
 
@@ -80,6 +87,7 @@ void print_usage()
 {
 	fprintf(stderr, "LOL conf-file train-data train-index train-label classify_type\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
+	fprintf(stderr, "-d dimensions: the number of dimensions\n");
 	graph_conf.print_help();
 	params.print_help();
 	exit(1);
@@ -90,11 +98,16 @@ int main(int argc, char *argv[])
 	int opt;
 	std::string confs;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:")) != -1) {
+	int ndim = 10;
+	while ((opt = getopt(argc, argv, "c:d:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
 				confs = optarg;
+				num_opts++;
+				break;
+			case 'd':
+				ndim = atoi(optarg);
 				num_opts++;
 				break;
 			default:
@@ -154,7 +167,7 @@ int main(int argc, char *argv[])
 		train_labels->set(i, train_label_tmp->get(i));
 
 	// Create the projection matrix
-	FG_eigen_matrix<double>::ptr q = LOL(train_matrix, train_labels, 10);
+	FG_eigen_matrix<double>::ptr q = LOL(train_matrix, train_labels, ndim);
 	printf("q size: %ld, %ld\n", q->get_num_rows(), q->get_num_cols());
 	for (size_t i = 0; i < q->get_num_cols(); i++)
 		printf("||col%ld||: %f\n", i, q->get_col(i)->norm1());
