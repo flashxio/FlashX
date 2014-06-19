@@ -28,10 +28,10 @@
 
 /**
   * \brief FlashGraph vector that provides several parallelized methods
-  *        when compared to an STL-vector.
+  *        when compared to an STL-vector. <br>
   * **NOTE**: Not an STL-compatible data structure. This vector is also
-  * ideally used with numeric data types.
-  * Methods marked with the keyword **parallel** are parallelized impls
+  * ideally used with numeric data types. <br>
+  * Methods marked with the keyword **parallel** are parallelized implementations.
  */
 template<class T>
 class FG_vector
@@ -149,7 +149,7 @@ public:
 
   /**
     * \brief Compute the [dot product](http://en.wikipedia.org/wiki/Dot_product)
-    *        of two FG vectors.
+    *        of two FG vectors. <br>
     * **parallel**
     *
     * \return A value of data type `T` value that is the dot product.
@@ -165,8 +165,8 @@ public:
 
   /**
     * \brief Compute the 
-    *        [L2 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Euclidean_norm) 
-    *        (also know as Euclidean distance) of a vector.
+    *        [L2 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Euclidean_norm)
+    *        (also know as Euclidean distance) of a vector. <br>
     * **parallel**
     *
     * \return An object of type `T` with the value of the L2 norm. 
@@ -182,7 +182,7 @@ public:
   /**
     * \brief Compute the 
     * [L1 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Taxicab_norm_or_Manhattan_norm) 
-    * (also Taxicab norm) of an FG_vector.
+    * (also Taxicab norm) of an FG_vector. <br>
     * **parallel**
     *
     * \return An object of type `T` with the L1 norm.
@@ -196,7 +196,7 @@ public:
 	}
 
   /**
-    * \brief Compute the sum of all elements in the vector.
+    * \brief Compute the sum of all elements in the vector. <br>
     * **parallel**
     * \return The sum of all items in the vector.
   */
@@ -222,7 +222,7 @@ public:
 
   /**
     * \brief In place division of vector by a single value.
-    * \param v the value by which you want the array divided by
+    * \param v The value by which you want the array divided by.
     * **parallel** 
   */
 	void div_by_in_place(T v) {
