@@ -27,10 +27,9 @@
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/FG_dense_matrix.h"
 #include "matrix/matrix_eigensolver.h"
+#include "mnist_io.h"
 
 const int NUM_SAMPLES = 100;
-
-FG_vector<unsigned char>::ptr read_mnist_label(const std::string file, int num_samples);
 
 /**
  * This procedure generates a dense projection matrix of Dxk.

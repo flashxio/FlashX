@@ -1,3 +1,6 @@
+#ifndef __MNIST_IO_H__
+#define __MNIST_IO_H__
+
 /**
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
@@ -17,26 +20,10 @@
  * limitations under the License.
  */
 
-#include <string>
 
-#include "matrix/FG_dense_matrix.h"
-#include "FG_vector.h"
-#include "mnist_io.h"
+FG_eigen_matrix<unsigned char>::ptr read_mnist_data(const std::string &file,
+		int num_samples = -1);
+FG_vector<unsigned char>::ptr read_mnist_label(const std::string file,
+		int num_samples = -1);
 
-int main(int argc, char *argv[])
-{
-	if (argc < 3) {
-		fprintf(stderr, "m2g input_file output_file\n");
-		exit(1);
-	}
-
-	const std::string input_file = argv[1];
-	const std::string output_file = argv[2];
-
-	FG_eigen_matrix<unsigned char>::ptr m = read_mnist_data(input_file);
-	printf("There are %ld rows and %ld columns\n", m->get_num_rows(), m->get_num_cols());
-	graph::ptr g = m->conv2graph();
-	printf("There are %ld vertices and %ld edges in the graph\n",
-			g->get_num_vertices(), g->get_num_edges());
-	g->dump(output_file + ".index", output_file + ".adj");
-}
+#endif
