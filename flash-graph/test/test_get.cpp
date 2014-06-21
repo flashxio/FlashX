@@ -42,12 +42,7 @@ class test_vertex: public compute_directed_vertex
 	long sum;
 	char stuffing[64 - sizeof(compute_directed_vertex) - sizeof(long)];
 public:
-	test_vertex() {
-		sum = 0;
-	}
-
-	test_vertex(vertex_id_t id, const vertex_index &index): compute_directed_vertex(
-			id, index) {
+	test_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		sum = 0;
 	}
 

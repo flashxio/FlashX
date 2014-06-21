@@ -92,13 +92,7 @@ class diameter_vertex: public compute_directed_vertex
 	short max_dist;
 	bool updated;
 public:
-	diameter_vertex() {
-		updated = false;
-		max_dist = 0;
-	}
-
-	diameter_vertex(vertex_id_t id,
-			const vertex_index &index): compute_directed_vertex(id, index) {
+	diameter_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		updated = false;
 		max_dist = 0;
 	}

@@ -33,11 +33,7 @@ class directed_triangle_vertex: public compute_directed_vertex
 			local_value.get_runtime_data()->num_triangles += num;
 	}
 public:
-	directed_triangle_vertex() {
-	}
-
-	directed_triangle_vertex(vertex_id_t id, const vertex_index &index):
-		compute_directed_vertex(id, index) {}
+	directed_triangle_vertex(vertex_id_t id): compute_directed_vertex(id) {}
 
 	int count_triangles(const page_vertex *v) const;
 

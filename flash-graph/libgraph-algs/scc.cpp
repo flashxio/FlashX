@@ -316,12 +316,7 @@ class scc_vertex: public compute_directed_vertex
 	} state;
 
 public:
-	scc_vertex() {
-		comp_id = INVALID_VERTEX_ID;
-	}
-
-	scc_vertex(vertex_id_t id, const vertex_index &index1): compute_directed_vertex(
-			id, index1) {
+	scc_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		comp_id = INVALID_VERTEX_ID;
 	}
 

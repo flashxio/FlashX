@@ -50,13 +50,7 @@ class test_vertex: public compute_vertex
 	size_t num_edges;
 	size_t add1_count;
 public:
-	test_vertex() {
-		num_edges = 0;
-		add1_count = 0;
-	}
-
-	test_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(
-			id, index) {
+	test_vertex(vertex_id_t id): compute_vertex(id) {
 		num_edges = 0;
 		add1_count = 0;
 	}

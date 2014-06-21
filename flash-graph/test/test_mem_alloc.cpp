@@ -36,12 +36,7 @@ class test_vertex: public compute_directed_vertex
 {
 	vertex_id_t *adj_list;
 public:
-	test_vertex() {
-		adj_list = NULL;
-	}
-
-	test_vertex(vertex_id_t id, const vertex_index &index): compute_directed_vertex(
-			id, index) {
+	test_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		adj_list = NULL;
 	}
 

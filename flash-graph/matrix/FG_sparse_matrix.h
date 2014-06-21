@@ -26,11 +26,7 @@
 class matrix_vertex: public compute_vertex
 {
 public:
-	matrix_vertex() {
-	}
-
-	matrix_vertex(vertex_id_t id,
-			const vertex_index &index): compute_vertex(id, index) {
+	matrix_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
 	void run(vertex_program &prog) {

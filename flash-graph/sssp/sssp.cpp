@@ -62,15 +62,7 @@ class sssp_vertex: public compute_directed_vertex
 	int distance;
 	vertex_id_t parent;
 public:
-	sssp_vertex() {
-		parent_dist = INT_MAX;
-		tmp_parent = -1;
-		distance = INT_MAX;
-		parent = -1;
-	}
-
-	sssp_vertex(vertex_id_t id,
-			const vertex_index &index): compute_directed_vertex(id, index) {
+	sssp_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		parent_dist = INT_MAX;
 		tmp_parent = -1;
 		distance = INT_MAX;

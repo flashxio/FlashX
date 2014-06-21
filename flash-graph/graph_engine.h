@@ -49,12 +49,11 @@ class compute_vertex
 {
 	vertex_id_t id;
 public:
-	compute_vertex() {
-		id = INVALID_VERTEX_ID;
+	compute_vertex(vertex_id_t id) {
+		this->id = id;
 	}
 
-	compute_vertex(vertex_id_t id, const vertex_index &index) {
-		this->id = id;
+	void init_vertex(const vertex_index &index) {
 	}
 
 	vsize_t get_num_edges() const;
@@ -77,17 +76,16 @@ class compute_directed_vertex: public compute_vertex
 {
 	vsize_t num_in_edges;
 public:
-	compute_directed_vertex() {
+	compute_directed_vertex(vertex_id_t id): compute_vertex(id) {
 		num_in_edges = 0;
 	}
 
-	compute_directed_vertex(vertex_id_t id,
-			const vertex_index &index1): compute_vertex(id, index1) {
+	void init_vertex(const vertex_index &index1) {
 		assert(index1.get_graph_header().get_graph_type()
 				== graph_type::DIRECTED);
 		const directed_vertex_index &index
 			= (const directed_vertex_index &) index1;
-		num_in_edges = index.get_num_in_edges(id);
+		num_in_edges = index.get_num_in_edges(get_id());
 	}
 
 	vsize_t get_num_in_edges() const {
@@ -108,10 +106,10 @@ public:
 class compute_ts_vertex: public compute_vertex
 {
 public:
-	compute_ts_vertex() {
+	compute_ts_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
-	compute_ts_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(id, index) {
+	void init_vertex(const vertex_index &index) {
 		assert(index.get_graph_header().get_graph_type()
 				== graph_type::TS_DIRECTED
 				|| index.get_graph_header().get_graph_type()

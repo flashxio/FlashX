@@ -34,13 +34,7 @@ class stat_vertex: public compute_vertex
 	int num_in_edges;
 	int num_out_edges;
 public:
-	stat_vertex() {
-		num_in_edges = 0;
-		num_out_edges = 0;
-	}
-
-	stat_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(
-			id, index) {
+	stat_vertex(vertex_id_t id): compute_vertex(id) {
 		num_in_edges = 0;
 		num_out_edges = 0;
 	}

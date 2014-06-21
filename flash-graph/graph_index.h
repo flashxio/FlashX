@@ -153,11 +153,13 @@ public:
 			off_t part_off;
 			partitioner.map2loc(vid, part_id, part_off);
 			assert(this->part_id == part_id);
-			new (vertex_arr + part_off) vertex_type(vid, index);
+			new (vertex_arr + part_off) vertex_type(vid);
+			vertex_arr[part_off].init_vertex(index);
 		}
 		if (local_ids.size() < num_vertices) {
 			assert(local_ids.size() == num_vertices - 1);
-			new (vertex_arr + local_ids.size()) vertex_type();
+			new (vertex_arr + local_ids.size()) vertex_type(INVALID_VERTEX_ID);
+			vertex_arr[local_ids.size()].init_vertex(index);
 		}
 	}
 
