@@ -22,15 +22,23 @@ CFLAGS = -g -I../include $(TRACE_FLAGS)
 LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
 CXXFLAGS += -I.. -I../include
 
-all: test_rand_io
+all: test_rand_io workload-gen workload-stat
 
-test_rand_io: $(OBJS) ../libsafs/libsafs.a
-	$(CXX) -o test_rand_io $(OBJS) $(LDFLAGS)
+test_rand_io: test_rand_io.o thread_private.o workload.o ../libsafs/libsafs.a
+	$(CXX) -o test_rand_io test_rand_io.o thread_private.o workload.o $(LDFLAGS)
+
+workload-gen: workload-gen.o workload.o ../libsafs/libsafs.a
+	$(CXX) -o workload-gen workload-gen.o workload.o $(LDFLAGS)
+
+workload-stat: workload-stat.o workload.o ../libsafs/libsafs.a
+	$(CXX) -o workload-stat workload-stat.o workload.o $(LDFLAGS)
 
 clean:
 	rm -f *.o
 	rm -f *.d
 	rm -f *~
 	rm -f test_rand_io
+	rm -f workload-gen
+	rm -f workload-stat
 
 -include $(DEPS) 
