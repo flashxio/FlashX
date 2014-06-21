@@ -43,11 +43,7 @@ class bfs_vertex: public compute_directed_vertex
 
 	atomic_flags<int> flags;
 public:
-	bfs_vertex() {
-	}
-
-	bfs_vertex(vertex_id_t id,
-			const vertex_index &index): compute_directed_vertex(id, index) {
+	bfs_vertex(vertex_id_t id): compute_directed_vertex(id) {
 	}
 
 	bool has_visited() const {

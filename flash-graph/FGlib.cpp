@@ -24,11 +24,7 @@
 class cluster_subgraph_vertex: public compute_vertex
 {
 public:
-	cluster_subgraph_vertex() {
-	}
-
-	cluster_subgraph_vertex(vertex_id_t id,
-			const vertex_index &index): compute_vertex(id, index) {
+	cluster_subgraph_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
 	void run(vertex_program &prog);
@@ -194,11 +190,7 @@ typedef std::map<vertex_id_t, std::pair<size_t, size_t> > size_map_t;
 class subgraph_size_vertex: public compute_vertex
 {
 public:
-	subgraph_size_vertex() {
-	}
-
-	subgraph_size_vertex(vertex_id_t id,
-			const vertex_index &index): compute_vertex(id, index) {
+	subgraph_size_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
 	void run(vertex_program &prog);

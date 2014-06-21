@@ -37,12 +37,7 @@ class bfs_vertex: public compute_vertex
 {
 	bool visited;
 public:
-	bfs_vertex() {
-		visited = false;
-	}
-
-	bfs_vertex(vertex_id_t id,
-			const vertex_index &index): compute_vertex(id, index) {
+	bfs_vertex(vertex_id_t id): compute_vertex(id) {
 		visited = false;
 	}
 

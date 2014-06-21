@@ -468,18 +468,7 @@ protected:
 	struct timeval vertex_start;
 #endif
 public:
-	scan_vertex() {
-#ifdef PV_STAT
-		num_all_edges = 0;
-		scan_bytes = 0;
-		rand_jumps = 0;
-		min_comps = 0;
-		time_us = 0;
-#endif
-	}
-
-	scan_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(
-			id, index) {
+	scan_vertex(vertex_id_t id): compute_vertex(id) {
 #ifdef PV_STAT
 		num_all_edges = 0;
 		scan_bytes = 0;

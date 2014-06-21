@@ -153,11 +153,7 @@ public:
 class topK_scan_vertex: public scan_vertex
 {
 public:
-	topK_scan_vertex() {
-	}
-
-	topK_scan_vertex(vertex_id_t id, const vertex_index &index): scan_vertex(
-			id, index) {
+	topK_scan_vertex(vertex_id_t id): scan_vertex(id) {
 	}
 
 	bool has_est_local() const {

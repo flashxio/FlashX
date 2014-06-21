@@ -33,11 +33,7 @@ class undirected_triangle_vertex: public compute_vertex
 			local_value.get_runtime_data()->num_triangles += num;
 	}
 public:
-	undirected_triangle_vertex() {
-	}
-
-	undirected_triangle_vertex(vertex_id_t id, const vertex_index &index):
-		compute_vertex(id, index) {}
+	undirected_triangle_vertex(vertex_id_t id): compute_vertex(id) {}
 
 	int count_triangles(const page_vertex *v) const;
 

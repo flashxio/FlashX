@@ -140,12 +140,7 @@ size_t extended_neighbor_list::count_edges(const page_vertex *v)
 class local_scan_vertex: public scan_vertex
 {
 public:
-	local_scan_vertex() {
-		local_value.set_real_local(0);
-	}
-
-	local_scan_vertex(vertex_id_t id,
-			const vertex_index &index): scan_vertex(id, index) {
+	local_scan_vertex(vertex_id_t id): scan_vertex(id) {
 		local_value.set_real_local(0);
 	}
 

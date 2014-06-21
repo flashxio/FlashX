@@ -292,12 +292,7 @@ class overlap_vertex: public compute_vertex
 {
 	std::vector<vertex_id_t> *neighborhood;
 public:
-	overlap_vertex() {
-		neighborhood = NULL;
-	}
-
-	overlap_vertex(vertex_id_t id, const vertex_index &index1): compute_vertex(
-			id, index1) {
+	overlap_vertex(vertex_id_t id): compute_vertex(id) {
 		neighborhood = NULL;
 	}
 

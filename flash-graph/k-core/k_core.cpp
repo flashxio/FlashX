@@ -42,14 +42,10 @@ class kcore_vertex: public compute_directed_vertex
   vsize_t degree; 
 
 public:
-	kcore_vertex() {
-	}
-
-  kcore_vertex(vertex_id_t id, const vertex_index &index1):
-    compute_directed_vertex(id, index1) {
+  kcore_vertex(vertex_id_t id): compute_directed_vertex(id) {
     this->deleted = false;
-	const directed_vertex_index &index = (const directed_vertex_index &) index1;
-    this->degree = index.get_num_in_edges(id) + index.get_num_out_edges(id);
+	assert(0);
+    this->degree = get_num_edges();
   }
 
   bool is_deleted() const {

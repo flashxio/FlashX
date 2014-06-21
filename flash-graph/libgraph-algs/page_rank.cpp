@@ -36,29 +36,20 @@ float DAMPING_FACTOR = 0.85;
 float TOLERANCE = 1.0E-2; 
 int num_iters = INT_MAX;
 
-class pgrank_vertex: public compute_vertex
+class pgrank_vertex: public compute_directed_vertex
 {
   float curr_itr_pr; // Current iteration's page rank
   vsize_t num_out_edges;
 
 public:
-	pgrank_vertex() {
-		num_out_edges = 0;
-	}
-
-  pgrank_vertex(vertex_id_t id, const vertex_index &index1): 
-        compute_vertex(id, index1) {
+  pgrank_vertex(vertex_id_t id): compute_directed_vertex(id) {
     this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
-	const directed_vertex_index &index = (const directed_vertex_index &) index1;
-	num_out_edges = index.get_num_out_edges(id);
+	assert(0);
+	num_out_edges = compute_directed_vertex::get_num_out_edges();
   }
 
   vsize_t get_num_out_edges() const {
 	  return num_out_edges;
-  }
-
-  vsize_t get_num_in_edges() const {
-	  return get_num_edges() - num_out_edges;
   }
 
   float get_curr_itr_pr() const{
@@ -131,13 +122,7 @@ class pgrank_vertex2: public compute_directed_vertex
 	float new_pr;
 	float curr_itr_pr; // Current iteration's page rank
 public:
-	pgrank_vertex2() {
-		this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
-		this->new_pr = curr_itr_pr;
-	}
-
-	pgrank_vertex2(vertex_id_t id,
-			const vertex_index &index): compute_directed_vertex(id, index) {
+	pgrank_vertex2(vertex_id_t id): compute_directed_vertex(id) {
 		this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
 		this->new_pr = curr_itr_pr;
 	}

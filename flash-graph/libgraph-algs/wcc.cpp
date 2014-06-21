@@ -61,13 +61,7 @@ class wcc_vertex: public compute_vertex
 	bool updated;
 	vertex_id_t component_id;
 public:
-	wcc_vertex() {
-		component_id = UINT_MAX;
-		updated = true;
-	}
-
-	wcc_vertex(vertex_id_t id, const vertex_index &index1): compute_vertex(
-			id, index1) {
+	wcc_vertex(vertex_id_t id): compute_vertex(id) {
 		component_id = id;
 		updated = true;
 	}
