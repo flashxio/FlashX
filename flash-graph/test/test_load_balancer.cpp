@@ -16,7 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <vector>
 
@@ -137,8 +139,10 @@ int main(int argc, char *argv[])
 	graph_index::ptr index = NUMA_graph_index<test_vertex>::create(index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 	thread_delays.resize(graph->get_num_threads());
 
 	for (int i = 0; i < 1000; i++) {
@@ -154,8 +158,10 @@ int main(int argc, char *argv[])
 		graph->query_on_all(vvq);
 	}
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	if (graph_conf.get_print_io_stat())
 		print_io_thread_stat();
 }
