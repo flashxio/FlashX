@@ -27,12 +27,12 @@
  * An IO request may be split into multiple requests.
  * This helper class represents the original I/O request issued by users.
  */
-class original_io_request: public io_request
+class remote_orig_io_request: public io_request
 {
 	atomic_number<ssize_t> completed_size;
 public:
-	static original_io_request *cast2original(io_request *req) {
-		return (original_io_request *) req;
+	static remote_orig_io_request *cast2original(io_request *req) {
+		return (remote_orig_io_request *) req;
 	}
 
 	void init(const io_request &req) {
@@ -204,7 +204,9 @@ void remote_io::access(io_request *requests, int num,
 			// I still use the default memory allocator, but since it is used
 			// when the request size is large, it should normally be OK.
 			// TODO I can use slab allocators later.
-			original_io_request *orig = new original_io_request();
+			printf("new remote_orig_io_request has %ld bytes, io_request has %ld bytes\n",
+					sizeof(remote_orig_io_request), sizeof(io_request));
+			remote_orig_io_request *orig = new remote_orig_io_request();
 			// global_cached_io doesn't issue requests across a block boundary.
 			// It can only be application issued requst, so it shouldn't have
 			// extension.
@@ -287,7 +289,7 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 	int num_from_upper = 0;
 	int num_from_app = 0;
 	int num_part_reqs = 0;
-	std::vector<original_io_request *> completes;
+	std::vector<remote_orig_io_request *> completes;
 	for (int i = 0; i < num; i++) {
 		assert(reqs[i].get_io());
 		// The requests issued by the upper layer IO.
@@ -305,11 +307,11 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 			continue;
 		}
 
-		original_io_request *orig = original_io_request::cast2original(
+		remote_orig_io_request *orig = remote_orig_io_request::cast2original(
 				(io_request *) reqs[i].get_priv());
 		io_request *req = &reqs[i];
 		if (orig->complete_part(*req))
-			completes.push_back(original_io_request::cast2original(orig));
+			completes.push_back(remote_orig_io_request::cast2original(orig));
 		else {
 			num_part_reqs++;
 		}
@@ -323,7 +325,7 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 		this->get_callback()->invoke(from_app, num_from_app);
 
 	for (unsigned i = 0; i < completes.size(); i++) {
-		original_io_request *orig = completes[i];
+		remote_orig_io_request *orig = completes[i];
 		io_request *req = (io_request *) orig;
 		io_interface *io = orig->get_io();
 		// It's from an application.
