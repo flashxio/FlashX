@@ -30,11 +30,12 @@
 #include "mnist_io.h"
 
 const int NUM_SAMPLES = 100;
+typedef FG_sparse_matrix<general_get_edge_iter<unsigned char> > FG_general_sparse_char_matrix;
 
 /**
  * This procedure generates a dense projection matrix of Dxk.
  */
-FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_matrix<unsigned char>::ptr input,
+FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_char_matrix::ptr input,
 		FG_vector<int>::ptr labels, int ndim)
 {
 	typedef std::map<int, FG_vector<double>::ptr> mean_map_t;
@@ -43,8 +44,8 @@ FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_matrix<unsigned char>::ptr in
 	std::vector<eigen_pair_t> eigens;
 	int num_eigen = ndim - mean.size();
 	if (num_eigen > 0)
-		compute_SVD<FG_general_sparse_matrix<unsigned char> >(input, 2 * num_eigen,
-				num_eigen, "LA", "RS", eigens);
+		compute_SVD<FG_general_sparse_char_matrix>(input,
+				2 * num_eigen, num_eigen, "LA", "RS", eigens);
 
 	size_t nrow = input->get_num_cols();
 	size_t ncol = ndim;
@@ -68,7 +69,7 @@ FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_matrix<unsigned char>::ptr in
 }
 
 FG_col_wise_matrix<double>::ptr multiply(
-		FG_general_sparse_matrix<unsigned char> &input1,
+		FG_general_sparse_char_matrix &input1,
 		FG_eigen_matrix<double> &input2)
 {
 	assert(input1.get_num_cols() == input2.get_num_rows());
@@ -87,6 +88,7 @@ void print_usage()
 	fprintf(stderr, "LOL conf-file train-data train-index train-label classify_type\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	fprintf(stderr, "-d dimensions: the number of dimensions\n");
+	fprintf(stderr, "-s num: the number of samples\n");
 	graph_conf.print_help();
 	params.print_help();
 	exit(1);
@@ -131,8 +133,8 @@ int main(int argc, char *argv[])
 	configs.add_options(confs);
 
 	printf("LOL starts\n");
-	FG_general_sparse_matrix<unsigned char>::ptr train_matrix
-		= FG_general_sparse_matrix<unsigned char>::create(
+	FG_general_sparse_char_matrix::ptr train_matrix
+		= FG_general_sparse_char_matrix::create(
 				FG_graph::create(train_data_file, train_index_file, configs));
 	// TODO a matrix needs to detect the number of rows or the number of cols.
 	train_matrix->resize(NUM_SAMPLES, train_matrix->get_num_cols());

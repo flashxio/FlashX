@@ -397,7 +397,6 @@ public:
 			assert(labels.get_size() == get_num_cols());
 			vec_size = get_num_rows();
 		}
-		assert(vec_size == graph->get_num_vertices());
 		BOOST_FOREACH(int label, set) {
 			agg_results.insert(std::pair<int, typename FG_vector<AggOp>::ptr>(
 						label, FG_vector<AggOp>::create(vec_size)));
@@ -472,30 +471,6 @@ public:
 	}
 };
 
-class FG_adj_matrix: public FG_sparse_matrix<adj_get_edge_iter>
-{
-	FG_adj_matrix(FG_graph::ptr fg): FG_sparse_matrix<adj_get_edge_iter>(fg) {
-	}
-public:
-	typedef std::shared_ptr<FG_adj_matrix> ptr;
-
-	static ptr create(FG_graph::ptr fg) {
-		return ptr(new FG_adj_matrix(fg));
-	}
-};
-
-template<class T>
-class FG_general_sparse_matrix: public FG_sparse_matrix<general_get_edge_iter<T> >
-{
-	FG_general_sparse_matrix(
-			FG_graph::ptr fg): FG_sparse_matrix<general_get_edge_iter<T> >(fg) {
-	}
-public:
-	typedef std::shared_ptr<FG_general_sparse_matrix<T> > ptr;
-
-	static ptr create(FG_graph::ptr fg) {
-		return ptr(new FG_general_sparse_matrix<T>(fg));
-	}
-};
+typedef FG_sparse_matrix<adj_get_edge_iter> FG_adj_matrix;
 
 #endif
