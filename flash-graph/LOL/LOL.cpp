@@ -29,7 +29,6 @@
 #include "matrix/matrix_eigensolver.h"
 #include "mnist_io.h"
 
-const int NUM_SAMPLES = 100;
 typedef FG_sparse_matrix<general_get_edge_iter<unsigned char> > FG_general_sparse_char_matrix;
 
 /**
@@ -100,7 +99,8 @@ int main(int argc, char *argv[])
 	std::string confs;
 	int num_opts = 0;
 	int ndim = 10;
-	while ((opt = getopt(argc, argv, "c:d:")) != -1) {
+	int num_samples = 100;
+	while ((opt = getopt(argc, argv, "c:d:s:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -109,6 +109,10 @@ int main(int argc, char *argv[])
 				break;
 			case 'd':
 				ndim = atoi(optarg);
+				num_opts++;
+				break;
+			case 's':
+				num_samples = atoi(optarg);
 				num_opts++;
 				break;
 			default:
@@ -137,7 +141,7 @@ int main(int argc, char *argv[])
 		= FG_general_sparse_char_matrix::create(
 				FG_graph::create(train_data_file, train_index_file, configs));
 	// TODO a matrix needs to detect the number of rows or the number of cols.
-	train_matrix->resize(NUM_SAMPLES, train_matrix->get_num_cols());
+	train_matrix->resize(num_samples, train_matrix->get_num_cols());
 
 #if 0
 	class print_apply
@@ -161,7 +165,7 @@ int main(int argc, char *argv[])
 #endif
 
 	FG_vector<unsigned char>::ptr train_label_tmp = read_mnist_label(train_label_file,
-			NUM_SAMPLES);
+			num_samples);
 	FG_vector<int>::ptr train_labels
 		= FG_vector<int>::create(train_label_tmp->get_size());
 	for (size_t i = 0; i < train_label_tmp->get_size(); i++)
