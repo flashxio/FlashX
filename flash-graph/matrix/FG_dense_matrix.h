@@ -430,6 +430,12 @@ public:
 		return vec;
 	}
 
+	FG_eigen_matrix<T>::ptr transpose() const {
+		return FG_eigen_matrix<T>::ptr(new FG_eigen_matrix<T>(
+					this->matrix_store.get_matrix().transpose(),
+					this->get_num_cols(), this->get_num_rows()));
+	}
+
 	graph::ptr conv2graph_wideM() const {
 		// TODO we can generate an undirected graph for a symmetric matrix.
 		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
