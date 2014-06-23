@@ -214,12 +214,15 @@ private:
 	const FG_vector<int> &labels;
 	agg_map_t &agg_results;
 	GetEdgeIterator get_edge_iterator;
+	int res_length;
 public:
 	groupby_vertex_program(edge_type row_type, bool row_wise,
 			const FG_vector<int> &_labels,
 			agg_map_t &_agg_results): labels(_labels), agg_results(_agg_results) {
 		this->row_type = row_type;
 		this->row_wise = row_wise;
+		assert(!agg_results.empty());
+		res_length = agg_results.begin()->second->get_size();
 	}
 
 	edge_type get_edge_type() const {
@@ -247,6 +250,8 @@ public:
 		int label = labels.get(vertex.get_id());
 		while (it.has_next()) {
 			vertex_id_t id = it.get_curr_id();
+			if (id >= res_length)
+				break;
 			typename GetEdgeIterator::value_type v = it.get_curr_value();
 			aggregate(label, id, v);
 			it.next();
