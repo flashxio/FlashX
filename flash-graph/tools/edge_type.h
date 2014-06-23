@@ -49,28 +49,4 @@ static inline int conv_edge_type_str2int(const std::string &type_str)
 	return DEFAULT_TYPE;
 }
 
-class ts_edge_data
-{
-	time_t timestamp;
-	float weight;
-public:
-	ts_edge_data() {
-		timestamp = 0;
-		weight = 1;
-	}
-
-	ts_edge_data(time_t timestamp, float weight) {
-		this->timestamp = timestamp;
-		this->weight = weight;
-	}
-
-	time_t get_timestamp() const {
-		return timestamp;
-	}
-
-	float get_weight() const {
-		return weight;
-	}
-};
-
 #endif

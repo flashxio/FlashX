@@ -162,6 +162,7 @@ void check_vertex(const in_mem_directed_vertex<edge_data_type> &in_v,
 		edge<edge_data_type> e2 = *in_it2;
 		assert(e1.get_from() == e2.get_from());
 		assert(e1.get_to() == e2.get_to());
+		assert(e1.get_data() == e2.get_data());
 		++in_it1;
 		++in_it2;
 	}
@@ -178,6 +179,7 @@ void check_vertex(const in_mem_directed_vertex<edge_data_type> &in_v,
 		edge<edge_data_type> e2 = *out_it2;
 		assert(e1.get_from() == e2.get_from());
 		assert(e1.get_to() == e2.get_to());
+		assert(e1.get_data() == e2.get_data());
 		++out_it1;
 		++out_it2;
 	}

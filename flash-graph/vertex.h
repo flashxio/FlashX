@@ -72,7 +72,16 @@ public:
 
 class empty_data
 {
+public:
+	bool operator==(const empty_data &data) const {
+		return true;
+	}
 };
+
+static inline std::ostream& operator<<(std::ostream& cout, empty_data obj)
+{
+	return cout;
+}
 
 template<class data_type = empty_data>
 class edge
@@ -157,6 +166,104 @@ public:
 		return data;
 	}
 };
+
+class ts_edge_data
+{
+	time_t timestamp;
+public:
+	ts_edge_data() {
+		timestamp = 0;
+	}
+
+	ts_edge_data(time_t timestamp) {
+		this->timestamp = timestamp;
+	}
+
+	time_t get_timestamp() const {
+		return timestamp;
+	}
+
+	bool operator==(const ts_edge_data &data) const {
+		return this->timestamp == data.timestamp;
+	}
+};
+
+static inline std::ostream& operator<<(std::ostream& cout,
+		const ts_edge_data &obj)
+{
+	return cout << obj.get_timestamp();
+}
+
+template<>
+class edge<ts_edge_data>
+{
+	vertex_id_t from;
+	vertex_id_t to;
+	ts_edge_data data;
+public:
+	edge() {
+		this->from = -1;
+		this->to = -1;
+	}
+
+	edge(vertex_id_t from, vertex_id_t to) {
+		this->from = from;
+		this->to = to;
+	}
+
+	edge(vertex_id_t from, vertex_id_t to, const ts_edge_data &data) {
+		this->from = from;
+		this->to = to;
+		this->data = data;
+	}
+
+	vertex_id_t get_from() const {
+		return from;
+	}
+
+	vertex_id_t get_to() const {
+		return to;
+	}
+
+	bool has_edge_data() const {
+		return true;
+	}
+
+	const ts_edge_data &get_data() const {
+		return data;
+	}
+};
+
+/**
+ * The number of duplicated edges.
+ * It is used as edge data type.
+ */
+class edge_count
+{
+	uint32_t num;
+public:
+	edge_count() {
+		num = 1;
+	}
+
+	edge_count(uint32_t n) {
+		num = n;
+	}
+
+	uint32_t get_count() const {
+		return num;
+	}
+
+	bool operator==(const edge_count &count) const {
+		return this->num == count.num;
+	}
+};
+
+static inline std::ostream& operator<<(std::ostream& cout,
+		const edge_count &obj)
+{
+	return cout << obj.get_count();
+}
 
 template<class edge_data_type>
 class in_mem_directed_vertex;
@@ -1626,8 +1733,6 @@ public:
 	 */
 	void add_in_edge(const edge<edge_data_type> &e) {
 		assert(e.get_to() == id);
-		if (!in_edges.empty())
-			assert(e.get_from() >= in_edges.back());
 		in_edges.push_back(e.get_from());
 		if (has_edge_data())
 			in_data.push_back(e.get_data());
@@ -1640,8 +1745,6 @@ public:
 	 */
 	void add_out_edge(const edge<edge_data_type> &e) {
 		assert(e.get_from() == id);
-		if (!out_edges.empty())
-			assert(e.get_to() >= out_edges.back());
 		out_edges.push_back(e.get_to());
 		if (has_edge_data())
 			out_data.push_back(e.get_data());
@@ -1981,27 +2084,6 @@ public:
 			}
 			printf("\n");
 		}
-	}
-};
-
-/**
- * The number of duplicated edges.
- * It is used as edge data type.
- */
-class edge_count
-{
-	uint32_t num;
-public:
-	edge_count() {
-		num = 1;
-	}
-
-	edge_count(uint32_t n) {
-		num = n;
-	}
-
-	uint32_t get_count() const {
-		return num;
 	}
 };
 

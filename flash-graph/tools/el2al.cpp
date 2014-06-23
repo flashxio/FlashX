@@ -86,6 +86,34 @@ struct comp_edge {
 	}
 };
 
+template<>
+struct comp_edge<ts_edge_data> {
+	comp_edge() {
+		printf("compare timestamp edge\n");
+	}
+
+	bool operator() (const edge<ts_edge_data> &e1, const edge<ts_edge_data> &e2) const {
+		if (e1.get_from() != e2.get_from())
+			return e1.get_from() < e2.get_from();
+		else if (e1.get_data().get_timestamp() != e2.get_data().get_timestamp())
+			return e1.get_data().get_timestamp() < e2.get_data().get_timestamp();
+		else
+			return e1.get_to() < e2.get_to();
+	}
+
+	static edge<ts_edge_data> min_value() {
+		vertex_id_t min_id = std::numeric_limits<vertex_id_t>::min();
+		time_t min_time = std::numeric_limits<time_t>::min();
+		return edge<ts_edge_data>(min_id, min_id, ts_edge_data(min_time));
+	}
+
+	static edge<ts_edge_data> max_value() {
+		vertex_id_t max_id = std::numeric_limits<vertex_id_t>::max();
+		time_t max_time = std::numeric_limits<time_t>::max();
+		return edge<ts_edge_data>(max_id, max_id, ts_edge_data(max_time));
+	}
+};
+
 template<class edge_data_type>
 struct comp_in_edge {
 	bool operator() (const edge<edge_data_type> &e1, const edge<edge_data_type> &e2) const {
@@ -105,6 +133,34 @@ struct comp_in_edge {
 		vertex_id_t max_id = std::numeric_limits<vertex_id_t>::max();
 		assert(max_id == INVALID_VERTEX_ID);
 		return edge<edge_data_type>(max_id, max_id);
+	}
+};
+
+template<>
+struct comp_in_edge<ts_edge_data> {
+	comp_in_edge() {
+		printf("compare timestamp in-edge\n");
+	}
+
+	bool operator() (const edge<ts_edge_data> &e1, const edge<ts_edge_data> &e2) const {
+		if (e1.get_to() != e2.get_to())
+			return e1.get_to() < e2.get_to();
+		else if (e1.get_data().get_timestamp() != e2.get_data().get_timestamp())
+			return e1.get_data().get_timestamp() < e2.get_data().get_timestamp();
+		else
+			return e1.get_from() < e2.get_from();
+	}
+
+	static edge<ts_edge_data> min_value() {
+		vertex_id_t min_id = std::numeric_limits<vertex_id_t>::min();
+		time_t min_time = std::numeric_limits<time_t>::min();
+		return edge<ts_edge_data>(min_id, min_id, ts_edge_data(min_time));
+	}
+
+	static edge<ts_edge_data> max_value() {
+		vertex_id_t max_id = std::numeric_limits<vertex_id_t>::max();
+		time_t max_time = std::numeric_limits<time_t>::max();
+		return edge<ts_edge_data>(max_id, max_id, ts_edge_data(max_time));
 	}
 };
 
@@ -512,6 +568,7 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 			edge<edge_data_type> e = *it;
 			assert(ve.get_from() == e.get_from());
 			assert(ve.get_to() == e.get_to());
+			assert(ve.get_data() == e.get_data());
 		}
 	}
 }
@@ -542,6 +599,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			edge<edge_data_type> e = *in_it;
 			assert(ve.get_from() == e.get_from());
 			assert(ve.get_to() == e.get_to());
+			assert(ve.get_data() == e.get_data());
 		}
 
 		// Check out-edges
@@ -555,6 +613,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			edge<edge_data_type> e = *out_it;
 			assert(ve.get_from() == e.get_from());
 			assert(ve.get_to() == e.get_to());
+			assert(ve.get_data() == e.get_data());
 		}
 	}
 }
@@ -750,12 +809,6 @@ size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 	if (*third == '"')
 		third++;
 
-	char *forth = strstr(third, delimiter);
-	assert(forth);
-	*forth = 0;
-	if (*(forth - 1) == '"')
-		*(forth - 1) = 0;
-
 	if (!isnumeric(line) || !isnumeric(second)) {
 		printf("%s\t%s\t%s\n", line, second, third);
 		return -1;
@@ -766,11 +819,8 @@ size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 	assert(lto >= 0 && lto < MAX_VERTEX_ID);
 	vertex_id_t from = lfrom;
 	vertex_id_t to = lto;
-	struct tm tm;
-	strptime(third, "%Y-%m-%d %H:%M:%S", &tm);
-	time_t timestamp = mktime(&tm);
-	// Let's ignore the weight on the edge first.
-	ts_edge_data data(timestamp, 1);
+	time_t timestamp = atol(third);
+	ts_edge_data data(timestamp);
 	e = edge<ts_edge_data>(from, to, data);
 	return 1;
 }
