@@ -209,7 +209,7 @@ class LM_comp
 {
 public:
 	bool operator()(const ev_pair_t &v1, const ev_pair_t &v2) {
-		return abs(v1.first) >= abs(v2.first);
+		return std::abs(v1.first) >= std::abs(v2.first);
 	}
 };
 
@@ -217,7 +217,7 @@ class SM_comp
 {
 public:
 	bool operator()(const ev_pair_t &v1, const ev_pair_t &v2) {
-		return abs(v1.first) < abs(v2.first);
+		return std::abs(v1.first) < std::abs(v2.first);
 	}
 };
 
@@ -254,8 +254,8 @@ int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 	int num_converged = 0;
 	for (int i = 0; i < k; i++) {
 		int idx = eigen_val_vec[i].second;
-		ev_float_t bound = abs(last_beta * eigen_vectors(m - 1, i).real());
-		if (bound < TOL * abs(eigen_val_vec[i].first)) {
+		ev_float_t bound = std::abs(last_beta * eigen_vectors(m - 1, i).real());
+		if (bound < TOL * std::abs(eigen_val_vec[i].first)) {
 			wanted.push_back(eigen_val_vec[i].first);
 			num_converged++;
 
