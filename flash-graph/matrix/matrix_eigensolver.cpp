@@ -254,7 +254,7 @@ int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 	int num_converged = 0;
 	for (int i = 0; i < k; i++) {
 		int idx = eigen_val_vec[i].second;
-		ev_float_t bound = std::abs(last_beta * eigen_vectors(m - 1, i).real());
+		ev_float_t bound = std::abs(last_beta * eigen_vectors(m - 1, idx).real());
 		if (bound < TOL * std::abs(eigen_val_vec[i].first)) {
 			wanted.push_back(eigen_val_vec[i].first);
 			num_converged++;
