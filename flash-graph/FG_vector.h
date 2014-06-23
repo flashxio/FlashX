@@ -129,6 +129,13 @@ public:
 			eles[i] /= v;
 	}
 
+	void subtract_in_place(const FG_vector<T> &vec) {
+		assert(get_size() == vec.get_size());
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] -= vec.eles[i];
+	}
+
 	void normalize(int type) {
 		T norm;
 		switch(type) {

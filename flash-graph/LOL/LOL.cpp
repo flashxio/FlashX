@@ -41,7 +41,7 @@ FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_char_matrix::ptr input,
 	mean_map_t mean;
 	input->group_by_mean(*labels, true, mean);
 	std::vector<eigen_pair_t> eigens;
-	int num_eigen = ndim - mean.size();
+	int num_eigen = ndim - mean.size() + 1;
 	if (num_eigen > 0)
 		compute_SVD<FG_general_sparse_char_matrix>(input,
 				2 * num_eigen, num_eigen, "LA", "RS", eigens);
@@ -54,9 +54,15 @@ FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_char_matrix::ptr input,
 	printf("construct QR matrix: %ld, %ld\n", qr_matrix->get_num_rows(),
 			qr_matrix->get_num_cols());
 	size_t col_idx = 0;
+	FG_vector<double>::ptr first_mean;
 	BOOST_FOREACH(mean_map_t::value_type v, mean) {
 		if (col_idx >= ncol)
 			break;
+		if (first_mean == NULL) {
+			first_mean = v.second;
+			continue;
+		}
+		v.second->subtract_in_place(*first_mean);
 		qr_matrix->set_col(col_idx++, *v.second);
 	}
 	for (int i = 0; i < num_eigen; i++) {
