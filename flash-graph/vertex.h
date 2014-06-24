@@ -186,6 +186,10 @@ public:
 	bool operator==(const ts_edge_data &data) const {
 		return this->timestamp == data.timestamp;
 	}
+
+	bool operator<(const ts_edge_data &data) const {
+		return this->timestamp < data.timestamp;
+	}
 };
 
 static inline std::ostream& operator<<(std::ostream& cout,
@@ -774,6 +778,31 @@ public:
 			default:
 				assert(0);
 		}
+	}
+
+	template<class edge_data_type>
+	page_byte_array::const_iterator<edge_data_type> get_data_begin(
+			edge_type type) const {
+		assert(!partial);
+		vsize_t num_edges = num_in_edges + num_out_edges;
+		off_t edge_end = ext_mem_directed_vertex::get_header_size()
+			+ (num_edges) * sizeof(vertex_id_t);
+		if (type == IN_EDGE || type == BOTH_EDGES)
+			return array.begin<edge_data_type>(edge_end);
+		else if (type == OUT_EDGE)
+			return array.begin<edge_data_type>(edge_end
+					+ num_in_edges * sizeof(edge_data_type));
+		else
+			assert(0);
+	}
+
+	template<class edge_data_type>
+	page_byte_array::const_iterator<edge_data_type> get_data_end(
+			edge_type type) const {
+		page_byte_array::const_iterator<edge_data_type> it
+			= get_data_begin<edge_data_type>(type);
+		it += get_num_edges(type);
+		return it;
 	}
 
 	template<class edge_data_type>
