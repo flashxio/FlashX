@@ -1,4 +1,4 @@
-There are main components in the repository: FlashGraph and SAFS.
+There are two main components in the repository: FlashGraph and SAFS.
 
 FlashGraph
 ===========
