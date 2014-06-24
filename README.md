@@ -4,8 +4,9 @@ FlashGraph
 ===========
 
 FlashGraph is a semi-external memory graph processing engine, optimized for a high-speed
-SSD array. It helps us develop parallel graph algorithms with minimum efforts and
-executes users' graph algorithms in parallel and out of core.
+SSD array. FlashGraph provides flexible programming interface to help users implement
+graph algorithms. In FlashGraph, users write serial code that reads data in memory
+and FlashGraph executes users' code in parallel and out of core.
 It enables us to process a billion-node graph in a single machine
 and has performance comparable to or exceed in-memory graph engines such as
 [PowerGraph](http://graphlab.org/).
