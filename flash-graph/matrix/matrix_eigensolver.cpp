@@ -53,13 +53,12 @@ public:
 };
 
 void orthogonalization(FG_col_wise_matrix<ev_float_t>::ptr V,
-		FG_vector<ev_float_t>::ptr r, ev_float_t &alpha, ev_float_t &beta)
+		FG_vector<ev_float_t>::ptr r, ev_float_t &alpha)
 {
 	// h = transpose(V) * r
 	FG_vector<ev_float_t>::ptr h = V->transpose_ref()->multiply(*r);
 	assert(V->get_num_cols() >= 2);
 	alpha += h->get(V->get_num_cols() - 1);
-	beta += h->get(V->get_num_cols() - 2);
 
 	// r = r - V * h
 	V->multiply(*h, substract_store(r));
@@ -142,14 +141,15 @@ void lanczos_factorization(SPMV &spmv,
 		if (i > 0)
 			inputs.push_back(V->get_col_ref(i - 1));
 		multi_vec_apply<ev_float_t, r_apply>(inputs, r, apply);
-		beta = r->norm2();
 		gettimeofday(&end, NULL);
 		printf("adjusting w takes %f seconds\n", time_diff(start, end));
 
+		beta = r->norm2();
 		if (beta < orth_threshold && i > 0) {
 			start = end;
 			assert(V->get_num_cols() == (size_t) i + 1);
-			orthogonalization(V, r, alpha, beta);
+			orthogonalization(V, r, alpha);
+			beta = r->norm2();
 			gettimeofday(&end, NULL);
 			printf("orthogonalization takes %f seconds\n", time_diff(start, end));
 		}

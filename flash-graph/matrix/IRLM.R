@@ -39,9 +39,7 @@ lanczos <- function(A.multiply, k, m, r, V, T)
 			s <- (t(V[,1:j]) %*% r)
 			r <- r - (V[,1:j] %*% s)[,1]
 			a <- a + s[j,1]
-			if (j > 1) {
-				new.b <- new.b + s[j-1,1]
-			}
+			new.b <- norm(r, type="2")
 		}
 		b <- new.b
 		T[j,j] <- a
