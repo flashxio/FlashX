@@ -221,13 +221,25 @@ public:
 
   /**
     * \brief In place division of vector by a single value.
-    * \param v The value by which you want the array divided by.
+    * \param v The value by which you want the array divided.
     * **parallel** 
   */
 	void div_by_in_place(T v) {
 #pragma omp parallel for
 		for (size_t i = 0; i < get_size(); i++)
 			eles[i] /= v;
+	}
+
+	/**
+	 * \brief In place subtraction of the vector by another vector.
+	 * \param vec The vector by which you want the array to be subtracted.
+	 * **parallel** 
+	 */
+	void subtract_in_place(const FG_vector<T> &vec) {
+		assert(get_size() == vec.get_size());
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] -= vec.eles[i];
 	}
 
   /**

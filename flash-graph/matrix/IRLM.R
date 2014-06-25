@@ -17,9 +17,8 @@
 
 # This implements Implicit Restart Lanczos Method.
 
-lanczos <- function(A, k, m, r, V, T)
+lanczos <- function(A.multiply, k, m, r, V, T)
 {
-	n <- dim(A)[1]
 	b <- norm(r, type="2")
 	if (k > 0) {
 		T[k, k+1] <- b
@@ -28,7 +27,7 @@ lanczos <- function(A, k, m, r, V, T)
 	for (j in (k+1):m) {
 		vj <- r / b
 		V[,j] <- vj
-		r <- (A %*% vj)[,1]
+		r <- (A.multiply(vj))[,1]
 		vj_1 <- V[, j - 1]
 		a <- (t(r) %*% vj)[1,1]
 		r <- r - vj * a
@@ -40,9 +39,7 @@ lanczos <- function(A, k, m, r, V, T)
 			s <- (t(V[,1:j]) %*% r)
 			r <- r - (V[,1:j] %*% s)[,1]
 			a <- a + s[j,1]
-			if (j > 1) {
-				new.b <- new.b + s[j-1,1]
-			}
+			new.b <- norm(r, type="2")
 		}
 		b <- new.b
 		T[j,j] <- a
@@ -54,15 +51,15 @@ lanczos <- function(A, k, m, r, V, T)
 	list(T, V, r)
 }
 
-IRLM <- function(A, k, m)
+IRLM <- function(A.multiply, n, k, m)
  {
 	p <- m - k
-	n <- dim(A)[1]
+#	n <- dim(A)[1]
 	V <- matrix(rep.int(0, n*m), nrow=n, ncol=m)
 	T <- matrix(rep.int(0, m*m), nrow=m, ncol=m)
 	r <- rep.int(1, n)
 #	r <- runif(n)
-	res <- lanczos.decomp(A, 0, m, r, V, T)
+	res <- lanczos(A.multiply, 0, m, r, V, T)
 	T <- res[[1]]
 	V <- res[[2]]
 	rm <- res[[3]]
@@ -86,7 +83,7 @@ IRLM <- function(A, k, m)
 		tmp[1:k,1:k] <- T[1:k,1:k]
 		T <- tmp
 
-		res <- lanczos.decomp(A, k, m, rk, V, T)
+		res <- lanczos(A.multiply, k, m, rk, V, T)
 		T <- res[[1]]
 		V <- res[[2]]
 		rm <- res[[3]]
@@ -94,4 +91,14 @@ IRLM <- function(A, k, m)
 	eigen.values[1:k]
 }
 
-IRLM(A, 5, 10)
+SVD <- function(A, k, m)
+{
+	A.multiply <- function(x) {
+		t(A) %*% (A %*% x)
+	}
+	ev <- IRLM(A.multiply, dim(A)[2], k, m)
+	sqrt(ev)
+}
+
+#IRLM(A.multiply, dim(A)[1], 5, 10)
+#SVD(A, 5, 10)

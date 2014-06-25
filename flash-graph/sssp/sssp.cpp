@@ -115,6 +115,15 @@ void sssp_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	prog.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
+class sssp_initializer: public vertex_initiator
+{
+public:
+	virtual void init(compute_vertex &v) {
+		sssp_vertex &sv = (sssp_vertex &) v;
+		sv.init(0);
+	}
+};
+
 void int_handler(int sig_num)
 {
 #ifdef PROFILER
@@ -178,10 +187,8 @@ int main(int argc, char *argv[])
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	// TODO this is a simple way to initialize the starting vertex.
-	sssp_vertex &v = (sssp_vertex &) index->get_vertex(start_vertex);
-	v.init(0);
-	graph->start(&start_vertex, 1);
+	graph->start(&start_vertex, 1, vertex_initiator::ptr(
+				new sssp_initializer()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 

@@ -1,11 +1,11 @@
-#ifndef __POINTER_H__
-#define __POINTER_H__
+#ifndef __MNIST_IO_H__
+#define __MNIST_IO_H__
 
 /**
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
- * This file is part of SAFSlib.
+ * This file is part of FlashGraph.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,53 +20,10 @@
  * limitations under the License.
  */
 
-class ptr_interface
-{
-	int num_refs;
-public:
-	ptr_interface() {
-		num_refs = 0;
-	}
 
-	void inc_ref() {
-		num_refs++;
-	}
-
-	void dec_ref() {
-		num_refs--;
-	}
-
-	int get_ref() const {
-		return num_refs;
-	}
-
-	void wait4unref() {
-		while (num_refs > 0) {}
-	}
-};
-
-/**
- * This is a thread-safe version of ptr_interface.
- */
-class TS_ptr_interface
-{
-	atomic_integer num_refs;
-public:
-	void inc_ref() {
-		num_refs.inc(1);
-	}
-
-	void dec_ref() {
-		num_refs.dec(1);
-	}
-
-	int get_ref() const {
-		return num_refs.get();
-	}
-
-	void wait4unref() {
-		while (get_ref() > 0) {}
-	}
-};
+FG_eigen_matrix<unsigned char>::ptr read_mnist_data(const std::string &file,
+		int num_samples = -1);
+FG_vector<unsigned char>::ptr read_mnist_label(const std::string file,
+		int num_samples = -1);
 
 #endif

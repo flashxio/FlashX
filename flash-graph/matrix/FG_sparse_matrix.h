@@ -214,12 +214,15 @@ private:
 	const FG_vector<int> &labels;
 	agg_map_t &agg_results;
 	GetEdgeIterator get_edge_iterator;
+	int res_length;
 public:
 	groupby_vertex_program(edge_type row_type, bool row_wise,
 			const FG_vector<int> &_labels,
 			agg_map_t &_agg_results): labels(_labels), agg_results(_agg_results) {
 		this->row_type = row_type;
 		this->row_wise = row_wise;
+		assert(!agg_results.empty());
+		res_length = agg_results.begin()->second->get_size();
 	}
 
 	edge_type get_edge_type() const {
@@ -247,6 +250,8 @@ public:
 		int label = labels.get(vertex.get_id());
 		while (it.has_next()) {
 			vertex_id_t id = it.get_curr_id();
+			if (id >= res_length)
+				break;
 			typename GetEdgeIterator::value_type v = it.get_curr_value();
 			aggregate(label, id, v);
 			it.next();
@@ -397,7 +402,6 @@ public:
 			assert(labels.get_size() == get_num_cols());
 			vec_size = get_num_rows();
 		}
-		assert(vec_size == graph->get_num_vertices());
 		BOOST_FOREACH(int label, set) {
 			agg_results.insert(std::pair<int, typename FG_vector<AggOp>::ptr>(
 						label, FG_vector<AggOp>::create(vec_size)));
@@ -472,30 +476,6 @@ public:
 	}
 };
 
-class FG_adj_matrix: public FG_sparse_matrix<adj_get_edge_iter>
-{
-	FG_adj_matrix(FG_graph::ptr fg): FG_sparse_matrix<adj_get_edge_iter>(fg) {
-	}
-public:
-	typedef std::shared_ptr<FG_adj_matrix> ptr;
-
-	static ptr create(FG_graph::ptr fg) {
-		return ptr(new FG_adj_matrix(fg));
-	}
-};
-
-template<class T>
-class FG_general_sparse_matrix: public FG_sparse_matrix<general_get_edge_iter<T> >
-{
-	FG_general_sparse_matrix(
-			FG_graph::ptr fg): FG_sparse_matrix<general_get_edge_iter<T> >(fg) {
-	}
-public:
-	typedef std::shared_ptr<FG_general_sparse_matrix<T> > ptr;
-
-	static ptr create(FG_graph::ptr fg) {
-		return ptr(new FG_general_sparse_matrix<T>(fg));
-	}
-};
+typedef FG_sparse_matrix<adj_get_edge_iter> FG_adj_matrix;
 
 #endif

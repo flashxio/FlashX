@@ -53,13 +53,12 @@ public:
 };
 
 void orthogonalization(FG_col_wise_matrix<ev_float_t>::ptr V,
-		FG_vector<ev_float_t>::ptr r, ev_float_t &alpha, ev_float_t &beta)
+		FG_vector<ev_float_t>::ptr r, ev_float_t &alpha)
 {
 	// h = transpose(V) * r
 	FG_vector<ev_float_t>::ptr h = V->transpose_ref()->multiply(*r);
 	assert(V->get_num_cols() >= 2);
 	alpha += h->get(V->get_num_cols() - 1);
-	beta += h->get(V->get_num_cols() - 2);
 
 	// r = r - V * h
 	V->multiply(*h, substract_store(r));
@@ -142,14 +141,15 @@ void lanczos_factorization(SPMV &spmv,
 		if (i > 0)
 			inputs.push_back(V->get_col_ref(i - 1));
 		multi_vec_apply<ev_float_t, r_apply>(inputs, r, apply);
-		beta = r->norm2();
 		gettimeofday(&end, NULL);
 		printf("adjusting w takes %f seconds\n", time_diff(start, end));
 
+		beta = r->norm2();
 		if (beta < orth_threshold && i > 0) {
 			start = end;
 			assert(V->get_num_cols() == (size_t) i + 1);
-			orthogonalization(V, r, alpha, beta);
+			orthogonalization(V, r, alpha);
+			beta = r->norm2();
 			gettimeofday(&end, NULL);
 			printf("orthogonalization takes %f seconds\n", time_diff(start, end));
 		}
@@ -209,7 +209,7 @@ class LM_comp
 {
 public:
 	bool operator()(const ev_pair_t &v1, const ev_pair_t &v2) {
-		return abs(v1.first) >= abs(v2.first);
+		return std::abs(v1.first) >= std::abs(v2.first);
 	}
 };
 
@@ -217,7 +217,7 @@ class SM_comp
 {
 public:
 	bool operator()(const ev_pair_t &v1, const ev_pair_t &v2) {
-		return abs(v1.first) < abs(v2.first);
+		return std::abs(v1.first) < std::abs(v2.first);
 	}
 };
 
@@ -254,8 +254,8 @@ int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 	int num_converged = 0;
 	for (int i = 0; i < k; i++) {
 		int idx = eigen_val_vec[i].second;
-		ev_float_t bound = abs(last_beta * eigen_vectors(m - 1, i).real());
-		if (bound < TOL * abs(eigen_val_vec[i].first)) {
+		ev_float_t bound = std::abs(last_beta * eigen_vectors(m - 1, idx).real());
+		if (bound < TOL * std::abs(eigen_val_vec[i].first)) {
 			wanted.push_back(eigen_val_vec[i].first);
 			num_converged++;
 

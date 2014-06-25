@@ -21,13 +21,7 @@
 
 #include "matrix/FG_dense_matrix.h"
 #include "FG_vector.h"
-
-const int NUM_SAMPLES = 100;
-
-FG_vector<unsigned char>::ptr read_mnist_label(const std::string file,
-		int num_samples);
-FG_row_wise_matrix<unsigned char>::ptr read_mnist_data(const std::string &file,
-		int num_samples);
+#include "mnist_io.h"
 
 int main(int argc, char *argv[])
 {
@@ -43,7 +37,7 @@ int main(int argc, char *argv[])
 
 	FILE *f_data = fopen(out_data.c_str(), "w");
 	assert(f_data);
-	FG_row_wise_matrix<unsigned char>::ptr m = read_mnist_data(in_data, NUM_SAMPLES);
+	FG_eigen_matrix<unsigned char>::ptr m = read_mnist_data(in_data);
 	printf("There are %ld rows and %ld columns\n", m->get_num_rows(), m->get_num_cols());
 	for (size_t i = 0; i < m->get_num_rows(); i++) {
 		for (size_t j = 0; j < m->get_num_cols(); j++) {
@@ -55,7 +49,7 @@ int main(int argc, char *argv[])
 
 	FILE *f_label = fopen(out_label.c_str(), "w");
 	assert(f_label);
-	FG_vector<unsigned char>::ptr labels = read_mnist_label(in_label, NUM_SAMPLES);
+	FG_vector<unsigned char>::ptr labels = read_mnist_label(in_label);
 	for (size_t i = 0; i < labels->get_size(); i++)
 		fprintf(f_label, "%d\n", labels->get(i));
 	fclose(f_label);

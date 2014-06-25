@@ -30,7 +30,6 @@
 #include "common.h"
 #include "concurrency.h"
 #include "container.h"
-#include "pointer.h"
 
 class thread_safe_page;
 class io_interface;
@@ -304,10 +303,11 @@ class compute_allocator;
  * SAFS invokes has_completed() to check whether the user task has completed;
  * if a user task has been completed, SAFS destroys the user task.
  */
-class user_compute: public ptr_interface
+class user_compute
 {
 	compute_allocator *alloc;
 	atomic_flags<int> flags;
+	int num_refs;
 public:
 	enum {
 		IN_QUEUE,
@@ -422,6 +422,28 @@ public:
 		assert(get_ref() > 0);
 		run(arr);
 		dec_ref();
+	}
+
+	/**
+	 * This method increases the reference count of the object.
+	 */
+	void inc_ref() {
+		num_refs++;
+	}
+
+	/**
+	 * This method decreases the reference count of this object.
+	 */
+	void dec_ref() {
+		num_refs--;
+	}
+
+	/**
+	 * This method gets the reference count of this object.
+	 * \return the reference count.
+	 */
+	int get_ref() const {
+		return num_refs;
 	}
 };
 
