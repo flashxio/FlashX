@@ -66,10 +66,10 @@ public:
 		return result;
 	}
 
-	int count_edges(const page_directed_vertex &v,
+	size_t count_edges(const page_directed_vertex &v,
 			const std::vector<vertex_id_t> *neighbors, time_t timestamp,
 			time_t time_interval);
-	int count_edges(const page_directed_vertex &v,
+	size_t count_edges(const page_directed_vertex &v,
 			const std::vector<vertex_id_t> *neighbors, time_t timestamp,
 			time_t time_interval, edge_type type);
 
@@ -120,12 +120,11 @@ page_byte_array::seq_const_iterator<vertex_id_t> get_ts_iterator(
 	return v.get_neigh_seq_it(type, start, end);
 }
 
-int scan_vertex::count_edges(const page_directed_vertex &v,
+size_t scan_vertex::count_edges(const page_directed_vertex &v,
 		const std::vector<vertex_id_t> *neighbors, time_t timestamp,
 		time_t time_interval, edge_type type)
 {
-	int num_local_edges1 = 0;
-	int num_local_edges2 = 0;
+	size_t num_local_edges = 0;
 	page_byte_array::seq_const_iterator<vertex_id_t> it = get_ts_iterator(
 			v, type, timestamp, time_interval);
 	// If there are no edges in the time interval.
@@ -135,46 +134,20 @@ int scan_vertex::count_edges(const page_directed_vertex &v,
 	std::vector<vertex_id_t>::const_iterator this_it = neighbors->begin();
 	std::vector<vertex_id_t>::const_iterator this_end
 		= std::lower_bound(this_it, neighbors->end(), v.get_id());
+	if (this_it == this_end)
+		return 0;
 
-//	if (neighbors->size() / num_v_edges > BIN_SEARCH_RATIO) {
-		PAGE_FOREACH(vertex_id_t, neigh_neighbor, it) {
-			if (neigh_neighbor != v.get_id()
-					&& neigh_neighbor != this->get_id()) {
-				if (std::binary_search(this_it, this_end, neigh_neighbor))
-					num_local_edges1++;
-			}
-		} PAGE_FOREACH_END
-//	}
-//	else {
-		PAGE_FOREACH(vertex_id_t, neigh_neighbor, it) {
-			// Skip self-loop.
-			if (neigh_neighbor == v.get_id()
-					|| neigh_neighbor == this->get_id())
-				continue;
-
-			vertex_id_t this_neighbor = *this_it;
-			// If there is a common neighbor
-			if (this_neighbor == neigh_neighbor) {
-				num_local_edges2++;
-			}
-			else if (this_neighbor < neigh_neighbor) {
-				++this_it;
-				// Skip the neighbors in `neighbors`
-				for (; this_it != this_end; ++this_it) {
-					this_neighbor = *this_it;
-					if (this_neighbor >= neigh_neighbor)
-						break;
-				}
-				if (this_it == this_end)
-					break;
-			}
-		} PAGE_FOREACH_END
-//	}
-	assert(num_local_edges2 == num_local_edges1);
-	return num_local_edges1;
+	PAGE_FOREACH(vertex_id_t, neigh_neighbor, it) {
+		if (neigh_neighbor != v.get_id()
+				&& neigh_neighbor != this->get_id()) {
+			if (std::binary_search(this_it, this_end, neigh_neighbor))
+				num_local_edges++;
+		}
+	} PAGE_FOREACH_END
+	return num_local_edges;
 }
 
-int scan_vertex::count_edges(const page_directed_vertex &v,
+size_t scan_vertex::count_edges(const page_directed_vertex &v,
 		const std::vector<vertex_id_t> *neighbors, time_t timestamp,
 		time_t time_interval)
 {
@@ -353,7 +326,7 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 	assert(neighbors);
 	for (int j = 0; j < num_time_intervals
 			&& timestamp >= j * time_interval; j++) {
-		int ret = count_edges(vertex, neighbors,
+		size_t ret = count_edges(vertex, neighbors,
 				timestamp - j * time_interval, time_interval);
 		if (ret > 0)
 			local_scans->at(j) += ret;
