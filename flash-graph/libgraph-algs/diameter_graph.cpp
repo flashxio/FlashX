@@ -213,11 +213,11 @@ void diameter_vertex::notify_iteration_end(vertex_program &vprog)
 	bfs_ids = new_bfs_ids;
 }
 
-class diameter_initiator: public vertex_initiator
+class diameter_initializer: public vertex_initializer
 {
 	std::unordered_map<vertex_id_t, int> start_vertices;
 public:
-	diameter_initiator(std::vector<vertex_id_t> &vertices) {
+	diameter_initializer(std::vector<vertex_id_t> &vertices) {
 		for (size_t i = 0; i < vertices.size(); i++) {
 			start_vertices.insert(std::pair<vertex_id_t, int>(vertices[i], i));
 		}
@@ -232,7 +232,7 @@ public:
 	}
 };
 
-class diameter_reset: public vertex_initiator
+class diameter_reset: public vertex_initializer
 {
 public:
 	void init(compute_vertex &v) {
@@ -282,11 +282,11 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 		start_level = graph->get_curr_level();
-		graph->init_all_vertices(vertex_initiator::ptr(new diameter_reset()));
+		graph->init_all_vertices(vertex_initializer::ptr(new diameter_reset()));
 		printf("Sweep %d starts on %ld vertices, traverse edge: %d\n",
 				i, start_vertices.size(), traverse_edge);
 		graph->start(start_vertices.data(), start_vertices.size(),
-				vertex_initiator::ptr(new diameter_initiator(start_vertices)),
+				vertex_initializer::ptr(new diameter_initializer(start_vertices)),
 				vertex_program_creater::ptr(new diameter_vertex_program_creater()));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);

@@ -241,10 +241,10 @@ public:
  * \brief A user may be decide to initialize individual vertex state in a custom way not
  *          expressible via the vertex constructor. This provides that capability.
  */
-class vertex_initiator
+class vertex_initializer
 {
 public:
-	typedef std::shared_ptr<vertex_initiator> ptr; /** Type provides access to the object */
+	typedef std::shared_ptr<vertex_initializer> ptr; /** Type provides access to the object */
     
     /**
      * \brief Initialization method to initialize the given vertex.
@@ -469,25 +469,25 @@ public:
     /**
      * \brief Start the graph engine and begin computation on a subset of vertices.
      * \param ids The vertices that should be activated for the first iteration.
-     * \param init An initiator used to alter the state of vertices activated
+     * \param init An initializer used to alter the state of vertices activated
 	 *             in the first iteration.
 	 * \param creater A creator that creates user-defined vertex program.
 	 *                By default, a graph engine creates its own default
 	 *                vertex program.
      */
 	void start(vertex_id_t ids[], int num,
-			vertex_initiator::ptr init = vertex_initiator::ptr(),
+			vertex_initializer::ptr init = vertex_initializer::ptr(),
 			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
     
     /**
      * \brief Start the graph engine and begin computation on **all** vertices.
-     * \param init An initiator used to alter the state of vertices activated
+     * \param init An initializer used to alter the state of vertices activated
 	 *             in the first iteration.
 	 * \param creater A creator that creates user-defined vertex program.
 	 *                By default, a graph engine creates its own default
 	 *                vertex program.
      */
-	void start_all(vertex_initiator::ptr init = vertex_initiator::ptr(),
+	void start_all(vertex_initializer::ptr init = vertex_initializer::ptr(),
 			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
     
     /**
@@ -508,15 +508,15 @@ public:
 	 * \brief Allows users to initialize vertices to certain state.
      * \param ids The vertex ID for which you want initialize.
      * \param num The number of vertices you intend to initialize.
-     * \param init An initiator used to alter the state of a vertex.
+     * \param init An initializer used to alter the state of a vertex.
 	 */
-	void init_vertices(vertex_id_t ids[], int num, vertex_initiator::ptr init);
+	void init_vertices(vertex_id_t ids[], int num, vertex_initializer::ptr init);
     
     /**
      * \brief Allows users to initialize **all** vertices to certain state.
-     * \param init An initiator used to alter the state of a vertex.
+     * \param init An initializer used to alter the state of a vertex.
      */
-	void init_all_vertices(vertex_initiator::ptr init);
+	void init_all_vertices(vertex_initializer::ptr init);
 
 	/**
 	 * \brief Allows users to query the information on the state of all vertices.

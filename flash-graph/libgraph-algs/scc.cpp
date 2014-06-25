@@ -894,7 +894,7 @@ public:
 };
 #endif
 
-class trim1_initiator: public vertex_initiator
+class trim1_initializer: public vertex_initializer
 {
 public:
 	void init(compute_vertex &v) {
@@ -906,7 +906,7 @@ public:
 /**
  * This initializes the start vertices for forward-backward BFS.
  */
-class fwbw_initiator: public vertex_initiator
+class fwbw_initializer: public vertex_initializer
 {
 public:
 	void init(compute_vertex &v) {
@@ -919,7 +919,7 @@ public:
 /**
  * This prepares all vertices in the graph for forward-backward BFS.
  */
-class fwbw_reset: public vertex_initiator
+class fwbw_reset: public vertex_initializer
 {
 public:
 	void init(compute_vertex &v) {
@@ -928,7 +928,7 @@ public:
 	}
 };
 
-class in_wcc_initiator: public vertex_initiator
+class in_wcc_initializer: public vertex_initializer
 {
 public:
 	virtual void init(compute_vertex &v) {
@@ -939,7 +939,7 @@ public:
 	}
 };
 
-class out_wcc_initiator: public vertex_initiator
+class out_wcc_initializer: public vertex_initializer
 {
 public:
 	virtual void init(compute_vertex &v) {
@@ -1107,7 +1107,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
 	scc_start = start;
-	graph->start_all(vertex_initiator::ptr(new trim1_initiator()),
+	graph->start_all(vertex_initializer::ptr(new trim1_initializer()),
 			vertex_program_creater::ptr(new trim_vertex_program_creater()));
 	graph->wait4complete();
 	std::vector<vertex_program::ptr> trim_vprogs;
@@ -1123,7 +1123,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 #if 0
 	scc_stage = scc_stage_t::TRIM2;
 	gettimeofday(&start, NULL);
-	graph->start_all(vertex_initiator::ptr(),
+	graph->start_all(vertex_initializer::ptr(),
 			vertex_program_creater::ptr(new trim_vertex_program_creater()));
 	graph->wait4complete();
 	graph->get_vertex_programs(trim_vprogs);
@@ -1141,7 +1141,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 	max_v = ((max_degree_query *) mdq.get())->get_max_id();
 	scc_stage = scc_stage_t::FWBW;
 	gettimeofday(&start, NULL);
-	graph->init_all_vertices(vertex_initiator::ptr(new fwbw_reset()));
+	graph->init_all_vertices(vertex_initializer::ptr(new fwbw_reset()));
 	scc_vertex &v = (scc_vertex &) index->get_vertex(max_v);
 	v.init_fwbw();
 	graph->start(&max_v, 1);
@@ -1151,7 +1151,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 
 	scc_stage = scc_stage_t::PARTITION;
 	gettimeofday(&start, NULL);
-	graph->start_all(vertex_initiator::ptr(),
+	graph->start_all(vertex_initializer::ptr(),
 			vertex_program_creater::ptr(new part_vertex_program_creater()));
 	graph->wait4complete();
 
@@ -1185,7 +1185,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 		scc_stage = scc_stage_t::IN_WCC;
 		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
-				std::shared_ptr<vertex_initiator>(new in_wcc_initiator()));
+				std::shared_ptr<vertex_initializer>(new in_wcc_initializer()));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("IN_WCC takes %f seconds\n", time_diff(start, end));
@@ -1193,7 +1193,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 		scc_stage = scc_stage_t::OUT_WCC;
 		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
-				std::shared_ptr<vertex_initiator>(new out_wcc_initiator()));
+				std::shared_ptr<vertex_initializer>(new out_wcc_initializer()));
 		graph->wait4complete();
 		vertex_query::ptr mdq1(new post_wcc_query());
 		graph->query_on_all(mdq1);
@@ -1206,7 +1206,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 		printf("FWBW starts on %ld vertices\n", fwbw_starts.size());
 		scc_stage = scc_stage_t::FWBW;
 		graph->start(fwbw_starts.data(), fwbw_starts.size(),
-				vertex_initiator::ptr(new fwbw_initiator()));
+				vertex_initializer::ptr(new fwbw_initializer()));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
 		printf("FWBW takes %f seconds\n", time_diff(start, end));
@@ -1214,7 +1214,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 		scc_stage = scc_stage_t::PARTITION;
 		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
-				vertex_initiator::ptr(),
+				vertex_initializer::ptr(),
 				vertex_program_creater::ptr(new part_vertex_program_creater()));
 		graph->wait4complete();
 

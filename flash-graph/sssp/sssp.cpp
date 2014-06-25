@@ -115,7 +115,7 @@ void sssp_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	prog.multicast_msg(dest_buf.data(), num_dests, msg);
 }
 
-class sssp_initializer: public vertex_initiator
+class sssp_initializer: public vertex_initializer
 {
 public:
 	virtual void init(compute_vertex &v) {
@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph->start(&start_vertex, 1, vertex_initiator::ptr(
+	graph->start(&start_vertex, 1, vertex_initializer::ptr(
 				new sssp_initializer()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);

@@ -155,7 +155,7 @@ void fetch_subgraphs(FG_graph::ptr fg, FG_vector<vertex_id_t>::ptr cluster_ids,
 	graph_type type = graph->get_graph_header().get_graph_type();
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph->start_all(vertex_initiator::ptr(), vertex_program_creater::ptr(
+	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
 				new cluster_subgraph_vertex_program_creater(cluster_ids,
 					wanted_clusters, type)));
 	graph->wait4complete();
@@ -390,7 +390,7 @@ void compute_subgraph_sizes(FG_graph::ptr fg,
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph->start_all(vertex_initiator::ptr(), vertex_program_creater::ptr(
+	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
 				new subgraph_size_vertex_program_creater(cluster_ids,
 					wanted_clusters)));
 	graph->wait4complete();

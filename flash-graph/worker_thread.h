@@ -206,7 +206,7 @@ class worker_thread: public thread
 	bool start_all;
 	std::vector<vertex_id_t> started_vertices;
 	std::shared_ptr<vertex_filter> filter;
-	vertex_initiator::ptr vinitiator;
+	vertex_initializer::ptr vinitializer;
 
 	// The number of activated vertices processed in the current level.
 	atomic_number<long> num_activated_vertices_in_level;
@@ -248,14 +248,14 @@ public:
 	int enter_next_level();
 
 	void start_vertices(const std::vector<vertex_id_t> &vertices,
-			vertex_initiator::ptr initiator) {
-		this->vinitiator = initiator;
+			vertex_initializer::ptr initializer) {
+		this->vinitializer = initializer;
 		started_vertices = vertices;
 	}
 
-	void start_all_vertices(vertex_initiator::ptr init) {
+	void start_all_vertices(vertex_initializer::ptr init) {
 		start_all = true;
-		this->vinitiator = init;
+		this->vinitializer = init;
 	}
 
 	void start_vertices(std::shared_ptr<vertex_filter> filter) {

@@ -325,7 +325,7 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 }
 
 void graph_engine::start(vertex_id_t ids[], int num,
-		vertex_initiator::ptr init, vertex_program_creater::ptr creater)
+		vertex_initializer::ptr init, vertex_program_creater::ptr creater)
 {
 	init_threads(std::move(creater));
 	num_remaining_vertices_in_level.inc(num);
@@ -356,7 +356,7 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 	gettimeofday(&start_time, NULL);
 }
 
-void graph_engine::start_all(vertex_initiator::ptr init,
+void graph_engine::start_all(vertex_initializer::ptr init,
 		vertex_program_creater::ptr creater)
 {
 	init_threads(std::move(creater));
@@ -441,7 +441,7 @@ void graph_engine::preload_graph()
 }
 
 void graph_engine::init_vertices(vertex_id_t ids[], int num,
-		vertex_initiator::ptr init)
+		vertex_initializer::ptr init)
 {
 #pragma omp parallel for
 	for (int i = 0; i < num; i++) {
@@ -449,7 +449,7 @@ void graph_engine::init_vertices(vertex_id_t ids[], int num,
 	}
 }
 
-void graph_engine::init_all_vertices(vertex_initiator::ptr init)
+void graph_engine::init_all_vertices(vertex_initializer::ptr init)
 {
 	vertex_id_t max_id = get_max_vertex_id();
 #pragma omp parallel for

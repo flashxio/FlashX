@@ -375,7 +375,7 @@ public:
 	void multiply(const FG_vector<T> &input, FG_vector<T> &output) const {
 		assert(input.get_size() == get_num_cols());
 		assert(output.get_size() == get_num_rows());
-		graph->start_all(vertex_initiator::ptr(),
+		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(
 					new SPMV_vertex_program_creater<T, GetEdgeIterator>(
 						etype, input, output)));
@@ -406,7 +406,7 @@ public:
 			agg_results.insert(std::pair<int, typename FG_vector<AggOp>::ptr>(
 						label, FG_vector<AggOp>::create(vec_size)));
 		}
-		graph->start_all(vertex_initiator::ptr(),
+		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(
 					new groupby_vertex_program_creater<AggOp, GetEdgeIterator>(
 						etype, row_wise, labels, agg_results)));
@@ -444,7 +444,7 @@ public:
 			nrow = this->ncol;
 			ncol = this->nrow;
 		}
-		graph->start_all(vertex_initiator::ptr(),
+		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(
 					new apply_vertex_program_creater<Func, GetEdgeIterator>(
 						etype, nrow, ncol, func)));

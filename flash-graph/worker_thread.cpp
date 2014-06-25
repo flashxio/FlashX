@@ -223,10 +223,10 @@ void worker_thread::init()
 	if (!started_vertices.empty()) {
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(started_vertices, false);
-		if (vinitiator) {
+		if (vinitializer) {
 			BOOST_FOREACH(vertex_id_t id, started_vertices) {
 				compute_vertex &v = graph->get_vertex(id);
-				vinitiator->init(v);
+				vinitializer->init(v);
 			}
 		}
 		// Free the space used by the vector.
@@ -257,13 +257,13 @@ void worker_thread::init()
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(*this);
 		assert(next_activated_vertices->get_num_set_bits() == 0);
-		if (vinitiator) {
+		if (vinitializer) {
 			std::vector<vertex_id_t> local_ids;
 			graph->get_partitioner()->get_all_vertices_in_part(worker_id,
 					graph->get_num_vertices(), local_ids);
 			BOOST_FOREACH(vertex_id_t id, local_ids) {
 				compute_vertex &v = graph->get_vertex(id);
-				vinitiator->init(v);
+				vinitializer->init(v);
 			}
 		}
 	}
