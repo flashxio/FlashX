@@ -750,17 +750,6 @@ public:
 	}
     
     /**
-     * \brief Determine if an edge between the vertex and another exists.
-     * \param type The type of edges a user wishes to iterate over
-            e.g `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES`.
-     * \param id The ID of the other vertex.
-     * \return A bool true if so else false.
-     */
-	bool contain_edge(edge_type type, vertex_id_t id) const {
-		return std::binary_search(get_neigh_begin(type), get_neigh_end(type), id);
-	}
-    
-    /**
      * \internal
      */
 	virtual void print() const {
@@ -835,19 +824,6 @@ public:
      */
 	virtual offset_pair get_edge_list_offset(
 			const timestamp_pair &range) const = 0;
-    
-    
-    /**
-     *  \brief Determine if an edge exists between the vertex and another at a specific time stamp.
-     *
-     *  \param timpstamp The time stamp of interest.
-     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
-     * \param id The ID of the other vertex.
-     */
-	bool contain_edge(int timestamp, edge_type type, vertex_id_t id) const {
-		return std::binary_search(get_neigh_begin(timestamp, type),
-				get_neigh_end(timestamp, type), id);
-	}
 };
 
 typedef page_byte_array::const_iterator<vertex_id_t> edge_iterator;

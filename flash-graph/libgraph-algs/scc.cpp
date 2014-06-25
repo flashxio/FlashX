@@ -622,6 +622,13 @@ void scc_vertex::run_stage_trim2(vertex_program &prog)
 	}
 }
 
+static inline bool contain_edge(const page_vertex &vertex, edge_type type,
+		vertex_id_t id)
+{
+	return std::binary_search(vertex.get_neigh_begin(type),
+			vertex.get_neigh_end(type), id);
+}
+
 void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(vertex.get_id() == get_id());
@@ -643,7 +650,7 @@ void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex
 			// it means the neighbor's only in-edge connect to this vertex.
 			if (get_id() < neighbor
 					&& neigh_v.get_num_in_edges() == 1
-					&& vertex.contain_edge(edge_type::OUT_EDGE, neighbor)) {
+					&& contain_edge(vertex, edge_type::OUT_EDGE, neighbor)) {
 				comp_id = get_id();
 				trim2_message msg(get_id());
 				prog.send_msg(neighbor, msg);
@@ -665,7 +672,7 @@ void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex
 			// The same as above.
 			if (get_id() < neighbor
 					&& neigh_v.get_num_out_edges() == 1
-					&& vertex.contain_edge(edge_type::IN_EDGE, neighbor)) {
+					&& contain_edge(vertex, edge_type::IN_EDGE, neighbor)) {
 				comp_id = get_id();
 				trim2_message msg(get_id());
 				prog.send_msg(neighbor, msg);
