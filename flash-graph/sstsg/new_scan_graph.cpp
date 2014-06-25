@@ -284,9 +284,9 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 	}
 
 	// Count the degree of the vertex in other time intervals.
-	for (int i = 1; i < num_time_intervals
-			&& timestamp >= i * time_interval; i++) {
-		time_t timestamp2 = timestamp - i * time_interval;
+	for (int ts_idx = 1; ts_idx < num_time_intervals
+			&& timestamp >= ts_idx * time_interval; ts_idx++) {
+		time_t timestamp2 = timestamp - ts_idx * time_interval;
 
 		// For in-edges.
 		page_byte_array::seq_const_iterator<vertex_id_t> it
@@ -298,7 +298,7 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 					// The neighbor needs to exist in timestamp 1.
 					&& std::binary_search(neighbors->begin(),
 						neighbors->end(), id)) {
-				local_scans->at(i)++;
+				local_scans->at(ts_idx)++;
 			}
 		} PAGE_FOREACH_END
 
@@ -311,7 +311,7 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 					// The neighbor needs to exist in timestamp 1.
 					&& std::binary_search(neighbors->begin(),
 						neighbors->end(), id)) {
-				local_scans->at(i)++;
+				local_scans->at(ts_idx)++;
 			}
 		} PAGE_FOREACH_END
 	}
