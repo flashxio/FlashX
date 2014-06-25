@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 		ssize_t ret = pread(fd, buf, sizeof(buf), off);
 		assert(ret == sizeof(buf));
 		tot_size += ret;
-		for (int i = 0; i < sizeof(buf); i += sizeof(long))
+		for (size_t i = 0; i < sizeof(buf); i += sizeof(long))
 			printf("%ld\n", *(long *) (buf + i));
 	}
 	gettimeofday(&end_time, NULL);

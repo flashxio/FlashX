@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /**
@@ -158,7 +158,7 @@ class req_ext_allocator: public obj_allocator<io_req_extension>
 		void init(io_req_extension *ext) {
 			new (ext) io_req_extension();
 		}
-	} initiator;
+	};
 
 	class ext_destructor: public obj_destructor<io_req_extension>
 	{
@@ -166,12 +166,14 @@ class req_ext_allocator: public obj_allocator<io_req_extension>
 		void destroy(io_req_extension *ext) {
 			ext->~io_req_extension();
 		}
-	} destructor;
+	};
 public:
 	req_ext_allocator(int node_id, long max_size = params.get_max_obj_alloc_size(
 				)): obj_allocator<io_req_extension>(
 				std::string("req_ext_allocator-") + itoa(node_id), node_id,
-				OBJ_ALLOC_INC_SIZE, max_size, &initiator, &destructor) {
+				OBJ_ALLOC_INC_SIZE, max_size,
+				obj_initiator<io_req_extension>::ptr(new ext_initiator()),
+				obj_destructor<io_req_extension>::ptr(new ext_destructor())) {
 	}
 	
 	virtual io_req_extension *alloc_obj() {
@@ -196,12 +198,13 @@ class request_allocator: public obj_allocator<original_io_request>
 			else
 				new (req) original_io_request();
 		}
-	} initiator;
+	};
 public:
 	request_allocator(int node_id, long max_size = params.get_max_obj_alloc_size(
 				)): obj_allocator<original_io_request>(
 				std::string("gcached_req_allocator-") + itoa(node_id), node_id,
-				OBJ_ALLOC_INC_SIZE, max_size, &initiator) {
+				OBJ_ALLOC_INC_SIZE, max_size,
+				obj_initiator<original_io_request>::ptr(new req_initiator())) {
 	}
 
 	virtual original_io_request *alloc_obj() {
@@ -1285,7 +1288,7 @@ void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
 	while (processing_req.is_empty() && !queue.is_empty()
 			// Limit the number of async requests being processed.
 			&& num_processed_areqs.get() - num_completed_areqs.get(
-				) < get_max_num_pending_ios()
+				) < (size_t) get_max_num_pending_ios()
 			// TODO the maximal number should be configurable.
 			&& num_underlying_pages.get() < 100) {
 		io_request req = queue.pop_front();
@@ -1501,7 +1504,7 @@ int global_cached_io::wait4complete(int num_to_complete)
 	// of completed requests because completed requests may still have
 	// incomplete user tasks and we need to take into account the number
 	// of incomplete tasks.
-	while (prev_pending - num_pending_ios() < (unsigned) num_to_complete) {
+	while (prev_pending - num_pending_ios() < num_to_complete) {
 		// We only wait when there are pending requests in the underlying IO.
 		if (num_to_underlying.get() - num_from_underlying.get() > 0) {
 			get_thread()->wait();

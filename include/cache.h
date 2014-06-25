@@ -2,22 +2,22 @@
 #define __CACHE_H__
 
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <unistd.h>
@@ -629,6 +629,10 @@ public:
 			data_end = (T *) (((char *) pg->get_data()) + byte_end);
 		}
 
+		int get_num_entries() const {
+			return data_end - data;
+		}
+
 		bool has_next() const {
 			return data < data_end;
 		}
@@ -659,16 +663,23 @@ public:
 				off_t byte_end) {
 			this->arr = arr;
 			assert((size_t) byte_end <= arr->get_size());
+			assert(byte_off <= byte_end);
 
 			off = arr->get_offset_in_first_page() + byte_off;
 			end = arr->get_offset_in_first_page() + byte_end;
-			off_t pg_end;
-			if (end - ROUND_PAGE(off) >= PAGE_SIZE)
-				pg_end = PAGE_SIZE;
-			else
-				pg_end = end - ROUND_PAGE(off);
-			curr_page_it = seq_const_page_iterator<T>(arr->get_page(
-						off / PAGE_SIZE), off % PAGE_SIZE, pg_end);
+
+			if (byte_off == byte_end) {
+				curr_page_it = seq_const_page_iterator<T>();
+			}
+			else {
+				off_t pg_end;
+				if (end - ROUND_PAGE(off) >= PAGE_SIZE)
+					pg_end = PAGE_SIZE;
+				else
+					pg_end = end - ROUND_PAGE(off);
+				curr_page_it = seq_const_page_iterator<T>(arr->get_page(
+							off / PAGE_SIZE), off % PAGE_SIZE, pg_end);
+			}
 			// TODO remove the constraints later.
 			assert((PAGE_SIZE - (off % PAGE_SIZE)) % sizeof(T) == 0
 					// or the entire range is inside a page.
@@ -692,6 +703,14 @@ public:
 			}
 		}
 
+		int get_num_tot_entries() const {
+			return (end - off) / sizeof(T);
+		}
+
+		int get_num_entries_in_page() const {
+			return curr_page_it.get_num_entries();
+		}
+
 		T next() {
 			return curr_page_it.next();
 		}
@@ -700,6 +719,14 @@ public:
 			return curr_page_it.curr();
 		}
 	};
+
+#define PAGE_FOREACH(type, v, it)					\
+	for (int idx = 0; (it).has_next();) {			\
+		for (int i = 0; i < (it).get_num_entries_in_page(); i++, idx++) {	\
+			type v = it.next();
+
+
+#define PAGE_FOREACH_END }}
 
 	template<class T>
 	class iterator: public std::iterator<std::random_access_iterator_tag, T>
@@ -820,31 +847,7 @@ public:
 	/**
 	 * rel_off: the offset relative to the beginning of the array.
 	 */
-	void memcpy(off_t rel_off, char buf[], size_t size) const {
-		// The offset relative to the beginning of the page array.
-		off_t off = get_offset_in_first_page() + rel_off;
-		off_t end = off + size;
-		assert((size_t) end <= get_size() + get_offset_in_first_page());
-
-		off_t page_begin = ROUND(off, PAGE_SIZE);
-		// If the element crosses the page boundary.
-		if (end - page_begin > PAGE_SIZE) {
-			assert(size <= PAGE_SIZE);
-			off_t pg_idx = off / PAGE_SIZE;
-			off_t off_in_pg = off % PAGE_SIZE;
-			size_t part1_size = PAGE_SIZE - off_in_pg;
-			size_t part2_size = size - part1_size;
-			::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg,
-					part1_size);
-			::memcpy(buf + part1_size,
-					((char *) get_page(pg_idx + 1)->get_data()), part2_size);
-		}
-		else {
-			off_t pg_idx = off / PAGE_SIZE;
-			off_t off_in_pg = off % PAGE_SIZE;
-			::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg, size);
-		}
-	}
+	void memcpy(off_t rel_off, char buf[], size_t size) const;
 
 	static const page_byte_array &const_cast_ref(page_byte_array &arr) {
 		return (const page_byte_array &) arr;

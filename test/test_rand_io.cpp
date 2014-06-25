@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <stdio.h>
@@ -174,11 +174,6 @@ void test_config::init(const std::map<std::string, std::string> &configs)
 		buf_type = buf_type_map.map(it->second);
 	}
 
-	it = configs.find("buf_size");
-	if (it != configs.end()) {
-		buf_size = (int) str2size(it->second);
-	}
-
 	it = configs.find("sync");
 	if (it != configs.end()) {
 		use_aio = false;
@@ -209,7 +204,6 @@ void test_config::print()
 	printf("\tworkload: %d\n", workload);
 	printf("\thigh_prio: %d\n", high_prio);
 	printf("\tbuf_type: %d\n", buf_type);
-	printf("\tbuf_size: %d\n", buf_size);
 	printf("\tsync: %d\n", !use_aio);
 	printf("\tuser_compute: %d\n", user_compute);
 }
@@ -233,7 +227,6 @@ void test_config::print_help()
 	workload_map.print("\tworkloads: ");
 	printf("\thigh_prio: run the test program in a higher OS priority\n");
 	buf_type_map.print("\tbuf types: ");
-	printf("\tbuf_size: the buffer size for each access\n");
 	printf("\tsync: whether to use sync or async\n");
 	printf("\troot_conf: a config file to specify the root paths of the RAID\n");
 	printf("\tuser_compute: whether to use user_compute\n");
@@ -436,5 +429,6 @@ int main(int argc, char *argv[])
 #ifdef STATISTICS
 	print_io_thread_stat();
 #endif
+	factories.clear();
 	destroy_io_system();
 }

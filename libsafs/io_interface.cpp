@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <assert.h>
@@ -55,8 +55,10 @@ struct global_data_collection
 	pthread_mutex_t mutex;
 	cache_config *cache_conf;
 	page_cache *global_cache;
+#ifdef PART_IO
 	// For part_global_cached_io
 	part_io_process_table *table;
+#endif
 
 #ifdef DEBUG
 	std::tr1::unordered_set<io_interface *> ios;
@@ -64,7 +66,9 @@ struct global_data_collection
 #endif
 
 	global_data_collection() {
+#ifdef PART_IO
 		table = NULL;
+#endif
 		cache_conf = NULL;
 		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
@@ -148,6 +152,9 @@ void init_io_system(const config_map &configs)
 	 * the function, they all can see the global data.
 	 */
 	pthread_mutex_lock(&global_data.mutex);
+	int flags = O_RDONLY;
+	if (params.is_writable())
+		flags = O_RDWR;
 	// The global data hasn't been initialized.
 	if (global_data.read_threads.size() == 0) {
 		global_data.read_threads.resize(num_files);
@@ -156,7 +163,7 @@ void init_io_system(const config_map &configs)
 			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
 			global_data.read_threads[k] = new disk_io_thread(partition,
-					global_data.raid_conf.get_disk(k).node_id, NULL, k);
+					global_data.raid_conf.get_disk(k).node_id, NULL, k, flags);
 		}
 		debug.register_task(new debug_global_data());
 	}
@@ -187,20 +194,22 @@ void init_io_system(const config_map &configs)
 				mapper, curr);
 		global_data.global_cache->init(underlying);
 	}
+#ifdef PART_IO
 	if (global_data.table == NULL) {
 		if (params.get_num_nodes() > 1)
 			global_data.table = part_global_cached_io::init_subsystem(
 					global_data.read_threads, mapper,
 					(NUMA_cache *) global_data.global_cache);
 	}
+#endif
 	pthread_mutex_unlock(&global_data.mutex);
 }
 
 void destroy_io_system()
 {
 	global_data.global_cache->sanity_check();
+#ifdef PART_IO
 	// TODO destroy part global cached io table.
-#if 0
 	if (global_data.table) {
 		part_global_cached_io::destroy_subsystem(global_data.table);
 		global_data.table = NULL;
@@ -288,6 +297,7 @@ public:
 	virtual void destroy_io(io_interface *io);
 };
 
+#ifdef PART_IO
 class part_global_cached_io_factory: public remote_io_factory
 {
 public:
@@ -299,6 +309,7 @@ public:
 
 	virtual void destroy_io(io_interface *io);
 };
+#endif
 
 io_interface *posix_io_factory::create_io(thread *t)
 {
@@ -349,7 +360,8 @@ io_interface *aio_factory::create_io(thread *t)
 	logical_file_partition global_partition(indices, mapper);
 
 	io_interface *io;
-	io = new async_io(global_partition, params.get_aio_depth_per_file(), t);
+	io = new async_io(global_partition, params.get_aio_depth_per_file(),
+			t, O_RDWR);
 #ifdef DEBUG
 	global_data.register_io(io);
 #endif
@@ -427,6 +439,7 @@ void global_cached_io_factory::destroy_io(io_interface *io)
 }
 
 
+#ifdef PART_IO
 io_interface *part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
@@ -445,6 +458,7 @@ void part_global_cached_io_factory::destroy_io(io_interface *io)
 #endif
 	part_global_cached_io::destroy((part_global_cached_io *) io);
 }
+#endif
 
 class destroy_io_factory
 {
@@ -484,9 +498,11 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 			factory = new global_cached_io_factory(file_name,
 					global_data.global_cache);
 			break;
+#ifdef PART_IO
 		case PART_GLOBAL_ACCESS:
 			factory = new part_global_cached_io_factory(file_name);
 			break;
+#endif
 		default:
 			fprintf(stderr, "a wrong access option\n");
 			assert(0);

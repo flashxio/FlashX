@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #ifndef _GNU_SOURCE
@@ -62,6 +62,22 @@ void bind2node_id(int node_id)
 	numa_bitmask_setbit(bmp, node_id);
 	numa_bind(bmp);
 	numa_free_nodemask(bmp);
+}
+
+int get_numa_run_node()
+{
+	struct bitmask *bmp = numa_get_run_node_mask();
+	int nbytes = numa_bitmask_nbytes(bmp);
+	int num_nodes = 0;
+	int node_id = -1;
+	int i;
+	for (i = 0; i < nbytes * 8; i++)
+		if (numa_bitmask_isbitset(bmp, i)) {
+			num_nodes++;
+			printf("bind to node %d\n", i);
+			node_id = i;
+		}
+	return node_id;
 }
 
 int numa_get_mem_node()

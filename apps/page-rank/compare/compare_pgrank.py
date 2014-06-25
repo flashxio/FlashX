@@ -1,6 +1,6 @@
-def read_igraph():
+def read_igraph(fn):
   # Get igraph pagerank
-  f = open("igraph_pgrank.txt", "rb")
+  f = open(fn, "rb")
   arr = f.read().splitlines()
   f.close()
   igraph_dict = {}
@@ -25,7 +25,7 @@ def compare(essential_dict, non_essential_dict, essential, skip=False):
   
   count = 0
   for key in essential_dict.keys():
-    if not within(essential_dict[key], non_essential_dict[key], 0.05):
+    if not within(essential_dict[key], non_essential_dict[key], 3):
       print "Mismatch Vertex id: %d. %s: %f != FLASHGRAPH: %f" % (key, essential, essential_dict[key], non_essential_dict[key])
       count += 1
 
@@ -34,6 +34,8 @@ def compare(essential_dict, non_essential_dict, essential, skip=False):
 def within(arg1, arg2, thresh):
   return abs(arg1-arg2) < thresh
 
+import sys
 # main
-compare(read_igraph(), read("flashgraph_pgrank.txt"), "IGRAPH")
-compare(read("powergraph_pgrank.txt"), read_igraph(), "POWERGRAPH", True)
+compare(read_igraph(sys.argv[1]), read(sys.argv[2]), "IGRAPH")
+#compare(read("powergraph_pgrank.txt"), read_igraph(), "POWERGRAPH", True)
+#compare(read_igraph(), read("flashgraph_pgrank.txt"), "IGRAPH")

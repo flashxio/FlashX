@@ -113,5 +113,9 @@ apps/graph-bfs/graph-bfs test/conf/run_graph.txt web-graph-v3 web-graph-index-v3
 apps/sssp/sssp test/conf/run_graph.txt web-graph-v3 web-graph-index-v3 0
 apps/triangle-counting/triangle-counting test/conf/run_graph.txt soc-LiveJournal-v3 soc-LiveJournal-index-v3
 apps/sstsg/scan-statistics test/conf/run_graph.txt bitcoin-v3 bitcoin-index-v3 50 5
-apps/scan-statistics/scan-statistics test/conf/run_graph.txt web-graph-v3 web-graph-index-v3 -c "max_processing_vertices=3"
-apps/scan-statistics/overlap test/conf/run_graph.txt page-graph-v3 page-graph-index-v3 apps/scan-statistics/test_vertices.txt
+apps/scan-statistics/topK-scan test/conf/run_graph.txt web-graph-v3 web-graph-index-v3 -c "max_processing_vertices=3"
+apps/scan-statistics/local-scan test/conf/run_graph.txt soc-LiveJournal-v3 soc-LiveJournal-index-v3
+apps/page-rank/page-rank test/conf/run_graph.txt soc-LiveJournal-v3 soc-LiveJournal-index-v3 0.85 -i 30
+apps/page-rank/page-rank2 test/conf/run_graph.txt soc-LiveJournal-v3 soc-LiveJournal-index-v3 0.85 -i 30
+apps/connected-components/wcc test/conf/run_graph.txt web-graph-v3 web-graph-index-v3
+apps/connected-components/scc test/conf/run_graph.txt web-graph-v3 web-graph-index-v3

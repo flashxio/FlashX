@@ -2,22 +2,22 @@
 #define __MY_PARAMETERS_H__
 
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <assert.h>
@@ -111,6 +111,7 @@ class sys_parameters
 	int num_nodes;
 	bool merge_reqs;
 	int max_obj_alloc_size;
+	bool writable;
 public:
 	sys_parameters();
 
@@ -183,6 +184,10 @@ public:
 	int get_max_obj_alloc_size() const {
 		return max_obj_alloc_size;
 	}
+
+	bool is_writable() const {
+		return writable;
+	}
 };
 
 extern sys_parameters params;
@@ -193,7 +198,7 @@ extern sys_parameters params;
  * The size of an I/O message sent to an I/O thread.
  * It is in the number of I/O requests.
  */
-const int IO_MSG_SIZE = AIO_DEPTH_PER_FILE;
+#define IO_MSG_SIZE AIO_DEPTH_PER_FILE
 /**
  * The size of a high-priority I/O queue.
  * It's in the number of I/O messages.
@@ -232,7 +237,7 @@ const int NUM_WRITEBACK_DIRTY_PAGES = 2;
 const int MAX_NUM_WRITEBACK = 4;
 const int DISCARD_FLUSH_THRESHOLD = 6;
 
-const long MAX_CACHE_SIZE = ((long) 4096) * 1024 * 1024 * 16;
+const long MAX_CACHE_SIZE = 512L * 1024 * 1024 * 1024;
 
 const int NUMA_MSG_SIZE = 4096;
 const int NUMA_REPLY_CACHE_SIZE = 50;

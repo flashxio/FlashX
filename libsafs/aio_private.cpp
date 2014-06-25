@@ -1,20 +1,20 @@
 /**
- * Copyright 2013 Da Zheng
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
  *
  * This file is part of SAFSlib.
  *
- * SAFSlib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * SAFSlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with SAFSlib.  If not, see <http://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <limits.h>
@@ -107,12 +107,13 @@ class callback_allocator: public obj_allocator<thread_callback_s>
 		void init(thread_callback_s *cb) {
 			new (&cb->req) io_request();
 		}
-	} initiator;
+	};
 public:
 	callback_allocator(int node_id, long increase_size,
 			long max_size = params.get_max_obj_alloc_size()): obj_allocator<thread_callback_s>(
 				std::string("aio_cb_allocator-") + itoa(node_id), node_id,
-				increase_size, max_size, &initiator) {
+				increase_size, max_size,
+				obj_initiator<thread_callback_s>::ptr(new callback_initiator())) {
 	}
 };
 
@@ -133,7 +134,7 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 }
 
 async_io::async_io(const logical_file_partition &partition,
-		int aio_depth_per_file, thread *t): io_interface(t), AIO_DEPTH(
+		int aio_depth_per_file, thread *t, int flags): io_interface(t), AIO_DEPTH(
 			aio_depth_per_file)
 {
 	int node_id = t->get_node_id();
@@ -152,9 +153,10 @@ async_io::async_io(const logical_file_partition &partition,
 	cb = NULL;
 	num_iowait = 0;
 	num_completed_reqs = 0;
+	open_flags = flags;
 	if (partition.is_active()) {
 		int file_id = partition.get_file_id();
-		buffered_io *io = new buffered_io(partition, t, O_DIRECT | O_RDWR);
+		buffered_io *io = new buffered_io(partition, t, O_DIRECT | flags);
 		default_io = io;
 		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
 		if (data)
@@ -420,7 +422,7 @@ int async_io::open_file(const logical_file_partition &partition)
 	int file_id = partition.get_file_id();
 	if (open_files.find(file_id) == open_files.end()) {
 		buffered_io *io = new buffered_io(partition, get_thread(),
-				O_DIRECT | O_RDWR);
+				O_DIRECT | open_flags);
 		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
 		if (data)
 			data->add_new_file(io);

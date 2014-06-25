@@ -6,8 +6,8 @@
 1:/mnt/ssd6/
 1:/mnt/ssd7/
 1:/mnt/ssd8/
-#2:/mnt/ssd9/
+2:/mnt/ssd9/
 2:/mnt/ssd10/
 2:/mnt/ssd11/
 2:/mnt/ssd12/
-2:/mnt/ssd13/
+#2:/mnt/ssd13/
