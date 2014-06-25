@@ -171,6 +171,9 @@ public:
 	}
 };
 
+/**
+ * The timestamp of an edge.
+ */
 class ts_edge_data
 {
 	time_t timestamp;
@@ -541,7 +544,7 @@ public:
 	friend class ts_ext_mem_directed_vertex;
 };
 
-/**
+/*
  * This vertex represents an undirected vertex in the external memory.
  */
 class ext_mem_undirected_vertex
@@ -696,21 +699,24 @@ public:
 			edge_type type) const = 0;
     
     /**
-     * \brief Get an STL-style const iterator pointing to the *first* neighbor in
+     * \brief Get an STL-style const iterator pointing to the *end* of
                     a vertex's neighbor list.
-     * \return A const iterator pointing to the *last* neighbor in a vertex's neighbor list.
+     * \return A const iterator pointing to the *end* of a vertex's neighbor list.
      * \param type The type of edges a user wishes to iterate over
                 e.g `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES`.
      */
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			edge_type type) const = 0;
     /**
-     * \brief Get a java-style sequential const iterator pointing to the *first* neighbor
-            in a vertex's neighbor list.
-     * \return A sequential const iterator pointing to the *first* neighbor in a 
-            vertex's neighbor list.
+     * \brief Get a java-style sequential const iterator that iterates
+	 *        the neighbors in the specified range.
+     * \return A sequential const iterator.
      * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`, 
-                `OUT_EDGE`, `BOTH_EDGES`.
+     *          `OUT_EDGE`, `BOTH_EDGES`.
+	 * \param start The starting offset in the neighbor list iterated by
+	 *              the sequential iterator.
+	 * \param end The end offset in the neighbor list iterated by the sequential
+	 *            iterator.
      */
 	virtual page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start, size_t end) const = 0;
@@ -722,8 +728,11 @@ public:
 	virtual vertex_id_t get_id() const = 0;
     
     /**
-     *  \brief TODO: Verify
-     *
+     * \brief Read the edges of the specified type.
+     * \param type The type of edges a user wishes to read
+     *      e.g `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES`.
+	 * \param edges The array of edges returned to a user.
+	 * \param num The maximal number of edges read by a user.
      */
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
 			size_t num) const {
@@ -732,15 +741,15 @@ public:
 	}
     
     /**
-     *  \brief TODO: Verify
-     *
+     * \brief Whether the vertex is partial or complete. A user may only
+	 *        request the in-edge or out-edge list of a vertex.
+	 * \return true if the page vertex contains the entire vertex, else false.
      */
 	virtual bool is_complete() const {
 		return true;
 	}
     
     /**
-     * TODO: Verify
      * \brief Determine if an edge between the vertex and another exists.
      * \param type The type of edges a user wishes to iterate over
             e.g `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES`.
@@ -752,8 +761,7 @@ public:
 	}
     
     /**
-     * TODO: Verify
-     *
+     * \internal
      */
 	virtual void print() const {
 	}
@@ -776,14 +784,12 @@ public:
 	using page_vertex::get_num_edges;
     
     /**
-     * TODO: Verify
      * \brief Get the global number of edges associated with a vertex.
      * \return The number of edges associated with a vertex.
      */
 	virtual size_t get_num_edges() const = 0;
     
     /**
-     * TODO: Verify
      * \brief Get the number of edges associated with a vertex at a specific time point.
      * \param timestamp The specific time stamp where you want the vertex metadata evaluated.
      * \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
@@ -792,9 +798,8 @@ public:
 	virtual size_t get_num_edges(int timestamp, edge_type type) const = 0;
     
     /**
-     * TODO: Verify
-     * \brief Get the number of time stamps vertex is in the graph for ??
-     * \return The number of time stamps the vertex is in the graph for.
+     * \brief Get the number of time stamps the vertex has in the graph.
+     * \return The number of time stamps the vertex has in the graph.
      */
 	virtual int get_num_timestamps() const = 0;
 	using page_vertex::get_neigh_begin;
@@ -812,11 +817,11 @@ public:
 			int timestamp, edge_type type) const = 0;
     
     /**
-     * \brief Get an STL-style const iterator pointing to the *last* element in the
+     * \brief Get an STL-style const iterator pointing to the *end* of the
      *         neighbor list of a vertex at a specific time point.
      *  \param timpstamp The time stamp of interest.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
-     *  \return A const iterator pointing to the *last* element in the
+     *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
@@ -825,7 +830,8 @@ public:
 	/** \brief This method should translate the timestamp range to the absolute
      * location of the adjacency list in the timestamp range.
      *
-     *  \param range TODO: Verify
+     *  \param range The timestamp range.
+	 *  \return The location range of the adjacency list within the time range.
      */
 	virtual offset_pair get_edge_list_offset(
 			const timestamp_pair &range) const = 0;
@@ -860,8 +866,10 @@ class page_directed_vertex: public page_vertex
 public:
     
     /**
-     * TODO: Verify 
-     *  \param arr ...
+	 * \internal
+	 * The constructor for a directed vertex in the page cache.
+     *  \param arr The byte array containing the directed vertex
+	 *             in the page cache.
      */
 	page_directed_vertex(const page_byte_array &arr): array(arr) {
 		size_t size = arr.get_size();
@@ -878,12 +886,14 @@ public:
 	}
 
 	/** 
-     * TODO: Verify me
+	 * \internal
      * This constructor is for partial directed vertex.
-     * \param id
-     * \param num_in_edges
-     * \param num_out_edges
-     * \param arr
+     * \param id The vertex ID.
+     * \param num_in_edges The number of in-edges of the vertex brought
+	 *                     to the page cache.
+     * \param num_out_edges The number of out-edges of the vertex brought
+	 *                      to the page cache.
+     * \param arr The byte array containing the partial directed vertex.
      */
 	page_directed_vertex(vertex_id_t id, vsize_t num_in_edges,
 			vsize_t num_out_edges, const page_byte_array &arr): array(arr) {
@@ -896,7 +906,7 @@ public:
 		this->partial = true;
 	}
     
-    /**
+    /*
      * \brief Get the number of edges associated with a vertex.
      * \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
      * \return The number of edges associated with a vertex.
@@ -912,7 +922,7 @@ public:
 			assert(0);
 	}
     
-    /**
+    /*
      * \brief Get an STL-style const iterator pointing to the *first* element in the
      *         neighbor list of a vertex.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
@@ -934,11 +944,11 @@ public:
 			assert(0);
 	}
     
-    /**
-     * \brief Get an STL-style const iterator pointing to the *last* element in the
+    /*
+     * \brief Get an STL-style const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
-     *  \return A const iterator pointing to the *last* element in the
+     *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
@@ -948,15 +958,16 @@ public:
 		return it;
 	}
     
-    /**
-     * \brief Get a java-style sequential const iterator pointing to the *first* 
-                neighbor in a vertex's neighbor list.
-     * \return A sequential const iterator pointing to the *first* neighbor in a
-                vertex's neighbor list.
+    /*
+     * \brief Get a java-style sequential const iterator that iterates
+	 *        the neighbors in the specified range.
+     * \return A sequential const iterator.
      * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`, 
-        `OUT_EDGE`, `BOTH_EDGES`.
-     * \param start TODO: Verify.
-     * \param end TODO: Verify
+     *          `OUT_EDGE`, `BOTH_EDGES`.
+	 * \param start The starting offset in the neighbor list iterated by
+	 *              the sequential iterator.
+	 * \param end The end offset in the neighbor list iterated by the sequential
+	 *            iterator.
      */
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start, size_t end) const {
@@ -986,12 +997,12 @@ public:
 		}
 	}
     
-    /** \brief A java style const sequential iterator.
-     *      If user data access pattern can be posed sequentially, use this class for
-     *      improved performance.
-     *  \parm The type of edges a user wishes to iterate over e.g `IN_EDGE`,
-     *   `OUT_EDGE`, `BOTH_EDGES`.
-     *  \return The const sequential iterator.
+    /**
+     * \brief Get an STL-style const iterator pointing to the *first* element in the
+     *         edge data list of a vertex.
+     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
+     *  \return A const iterator pointing to the *first* element in the
+     *         edge data list of a vertex.
      */
 	template<class edge_data_type>
 	page_byte_array::const_iterator<edge_data_type> get_data_begin(
@@ -1009,6 +1020,13 @@ public:
 			assert(0);
 	}
 
+    /**
+     * \brief Get an STL-style const iterator pointing to the *end* of the
+     *         edge data list of a vertex.
+     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
+     *  \return A const iterator pointing to the *first* element in the
+     *         edge data list of a vertex.
+     */
 	template<class edge_data_type>
 	page_byte_array::const_iterator<edge_data_type> get_data_end(
 			edge_type type) const {
@@ -1018,6 +1036,14 @@ public:
 		return it;
 	}
 
+    /**
+     * \brief Get a java-style sequential const iterator that iterates
+	 *        the edge data list.
+     * \return A sequential const iterator.
+     * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`, 
+     *          `OUT_EDGE`, `BOTH_EDGES`.
+     */
+	// TODO add start, end.
 	template<class edge_data_type>
 	page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
 			edge_type type) const {
@@ -1042,13 +1068,6 @@ public:
 		}
 	}
     
-    /**
-     *  TODO: Verify
-     *  \brief Read the edges ??
-     *  \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`,
-     *  `OUT_EDGE`, `BOTH_EDGES`.
-     *  \param edges The IDs of the edges the user is interest in.
-     */
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
 			size_t num) const {
 		vsize_t num_edges = get_num_edges(type);
@@ -1075,7 +1094,7 @@ public:
 		return id;
 	}
     
-    /** \brief Determine whether the vertex is partial or complete. TODO: Verify
+    /** \brief Determine whether the vertex is partial or complete.
      * \return True if complete else false
      */
 	bool is_complete() const {
@@ -1105,9 +1124,10 @@ public:
 	}
     
     /**
-     * \brief Get the number of edges of a specific `edge_type` associated with the vertex.
-     * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES`.
-     * return The number of edges of a specific `edge_type` associated with the vertex.
+     * \brief Get the number of edges associated with the vertex.
+     * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES` are equivalent,
+	 *             since it's an undirected vertex.
+     * return The number of edges associated with the vertex.
      */
 	size_t get_num_edges(edge_type type) const {
 		return num_edges;
@@ -1116,7 +1136,8 @@ public:
     /**
      * \brief Get an STL-style const iterator pointing to the *first* element in the
      *         neighbor list of a vertex.
-     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
+     * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES` are equivalent,
+	 *             since it's an undirected vertex.
      *  \return A const iterator pointing to the *first* element in the
      *         neighbor list of a vertex.
      */
@@ -1127,10 +1148,11 @@ public:
 	}
 
     /**
-     * \brief Get an STL-style const iterator pointing to the *last* element in the
+     * \brief Get an STL-style const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
-     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
-     *  \return A const iterator pointing to the *last* element in the
+     * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES` are equivalent,
+	 *             since it's an undirected vertex.
+     *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
@@ -1141,14 +1163,16 @@ public:
 	}
     
     /**
-     * \brief Get a java-style sequential const iterator pointing to the *first*
-     neighbor in a vertex's neighbor list.
-     * \return A sequential const iterator pointing to the *first* neighbor in a
-     vertex's neighbor list.
-     * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`,
-     `OUT_EDGE`, `BOTH_EDGES`.
-     * \param start TODO: Verify.
-     * \param end TODO: Verify
+     * \brief Get a java-style sequential const iterator for the specified range
+     * in a vertex's neighbor list.
+     * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES` are equivalent,
+	 *             since it's an undirected vertex.
+	 * \param start The starting offset in the neighbor list iterated by
+	 *              the sequential iterator.
+	 * \param end The end offset in the neighbor list iterated by the sequential
+	 *            iterator.
+     * \return A sequential const iterator for the specified range
+     * in a vertex's neighbor list.
      */
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start, size_t end) const {
@@ -1161,13 +1185,12 @@ public:
 				+ end * sizeof(vertex_id_t));
 	}
     
-    
     /**
-     *  TODO: Verify
-     *  \brief Read the edges ??
-     *  \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`,
-     *  `OUT_EDGE`, `BOTH_EDGES`.
-     *  \param edges The IDs of the edges the user is interest in.
+     * \brief Read the edges of the specified type.
+     * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES` are equivalent,
+	 *             since it's an undirected vertex.
+	 * \param edges The array of edges returned to a user.
+	 * \param num The maximal number of edges read by a user.
      */
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
 			size_t num) const {
@@ -1695,13 +1718,14 @@ public:
 
 /**
  * \brief This is a data structure to interpret a time-series directed vertex
- * in the external memory. <br>
+ * in the page cache. <br>
  *
  * The memory layout of a time-series directed vertex is as follows:
  *      - id
  *      - the total number of edges
  *      - the number of timestamps
- *      - timestamps
+ *      - timestamp table that contains the offsets to the edges for the timestamp
+ *        within the edge list
  *      - edge offsets of existing timestamp (in-edge offset and out-edge offset)
  *      - edges
  *      - edge data <br>
@@ -1719,8 +1743,10 @@ class TS_page_directed_vertex: public TS_page_vertex
 	ts_ext_mem_directed_vertex ext_v;
     
     /**
-     * \brief Constructor TODO: Verify
-     *  \param arr The const page byte array ?
+	 * \internal
+	 * The constructor for a time-series directed vertex in the page cache.
+     *  \param arr The byte array containing the time-series directed vertex
+	 *             in the page cache.
      */
 	TS_page_directed_vertex(const page_byte_array &arr): array(&arr) {
 		unsigned size = arr.get_size();
@@ -1741,8 +1767,9 @@ class TS_page_directed_vertex: public TS_page_vertex
 	}
 
 	/**
+	 * \internal
 	 * \brief This is to create a vertex based on the header of the vertex
-	 * read in the last time and the edge list in the array. <br>
+	 * and the edge list in the array. <br>
 	 * The constructed vertex has only part of the vertex.
 	 */
 	TS_page_directed_vertex(const TS_page_directed_vertex *header,
@@ -1754,8 +1781,9 @@ class TS_page_directed_vertex: public TS_page_vertex
 		ext_v.construct_header(header->ext_v, rel_off, arr.get_size());
 	}
 
-	/** \brief **This object is not allowed to be copied** hence
-            the copy constructor is disabled.
+	/**
+	 * \brief **This object is not allowed to be copied** hence
+     *      the copy constructor is disabled.
     */
 	TS_page_directed_vertex(const TS_page_directed_vertex &);
     
@@ -1765,7 +1793,7 @@ class TS_page_directed_vertex: public TS_page_vertex
 	TS_page_directed_vertex &operator=(const TS_page_directed_vertex &);
     
     /**
-     * \brief Get an STL-style const iterator pointing to the *last* element in the
+     * \brief Get an STL-style const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_end() const {
@@ -1774,9 +1802,8 @@ class TS_page_directed_vertex: public TS_page_vertex
 	}
     
     /**
-     * TODO: Verify
-     * \brief Get an STL-style const iterator pointing to the *last* element 
-     * of the edge data of a vertex.
+     * \brief Get an STL-style const iterator pointing to the *end*
+     * of the edge data list of a vertex.
      */
 	template<class edge_data_type>
 	page_byte_array::const_iterator<edge_data_type> get_edge_data_end() const {
@@ -1784,9 +1811,9 @@ class TS_page_directed_vertex: public TS_page_vertex
 		return array->begin<edge_data_type>(array->get_size());
 	}
 public:
-	/** The size of the vertex object.
-     *  TODO: size in what context ??
-     * \param num_timestamps The number of timestamps in ... TODO: finish ..
+	/** \brief The header size of the vertex.
+     * \param num_timestamps The number of timestamps in the timestamp table of
+	 * the vertex.
      */
 	static size_t get_size(int num_timestamps) {
 		return sizeof(TS_page_directed_vertex)
@@ -1796,7 +1823,10 @@ public:
 	/** 
      * \brief We create the vertex object in the given 
      *           buffer in lieu of calling the constructor.
-     *  \param arr An array of ... TODO: finish
+     *  \param arr A byte array in the page cache that contains the data of
+	 *             the time-series vertex.
+	 *  \param buf A buffer where we construct the object.
+	 *  \param size The buffer size.
      */
 	static TS_page_directed_vertex *create(const page_byte_array &arr,
 			char *buf, size_t size) {
@@ -1807,9 +1837,10 @@ public:
      * \brief We create the vertex object in the given
      *           buffer in lieu of calling the constructor.
      *  \param header A pointer to the time series page directed vertex header.
-     *  \param arr An array of ... TODO: finish
-     *  \param buf A buffer containing ... TODO: finish
-     *  \param size The number of elements in ... TODO: finish
+     *  \param arr A byte array in the page cache that contains the data of
+	 *             the time-series vertex.
+	 *  \param buf A buffer where we construct the object.
+	 *  \param size The buffer size.
      */
 	static TS_page_directed_vertex *create(const TS_page_directed_vertex *header,
 			const page_byte_array &arr, char *buf, size_t size) {
@@ -1817,7 +1848,6 @@ public:
 	}
 
 	/**
-     * TODO: Verify
 	 * \brief This returns the relative offset of the edge lists specified
 	 *          in the timestamp range in the vertex.
      *  \param range The timestamp range in the vertex.
@@ -1860,10 +1890,10 @@ public:
 	}
     
     /**
-     * \brief Get an STL-style const iterator pointing to the *last* element in the
+     * \brief Get an STL-style const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
-     *  \return A const iterator pointing to the *last* element in the
+     *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
@@ -1877,8 +1907,10 @@ public:
      *
      *  \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`,
      *          `OUT_EDGE`, `BOTH_EDGES`.
-     *  \param start TODO: finish me
-     *  \param end TODO: finish me
+	 * \param start The starting offset in the neighbor list iterated by
+	 *              the sequential iterator.
+	 * \param end The end offset in the neighbor list iterated by the sequential
+	 *            iterator.
      *  \return A sequential const iterator pointing to the *first* neighbor in a
      vertex's neighbor list.
      */
@@ -1896,7 +1928,6 @@ public:
 	}
     
     /**
-     * TODO: Verify
      * \brief Get the **global** number of edges associated with the vertex.
      *  \return The number of edges associated with the vertex.
      */
@@ -1905,7 +1936,6 @@ public:
 	}
     
     /**
-     * TODO: Verify
      * \brief Get the number of time stamps where this vertex participates in the graph.
      * \return The number of time stamps where this vertex participates in the graph.
      */
@@ -1936,7 +1966,7 @@ public:
     
     /**
      * \brief Get an STL-style const iterator pointing to the *first* element in
-     *		the neighbor list of a vertex.
+     *		the neighbor list of a vertex at a given timestamp.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`,
      *			`BOTH_EDGES`.
      *  \param timestamp The timestamp of interest.
@@ -1968,12 +1998,12 @@ public:
 	}
     
     /**
-     * \brief Get an STL-style const iterator pointing to the *last* element in
-     *		the neighbor list of a vertex.
+     * \brief Get an STL-style const iterator pointing to the *end* of
+     *		the neighbor list of a vertex at a given timestamp.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`,
      *			`BOTH_EDGES`.
      *  \param timestamp The timestamp of interest.
-     *  \return A const iterator pointing to the *last* element in the
+     *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
 	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
@@ -1990,9 +2020,8 @@ public:
 	}
     
     /**
-     * TODO: Verify
      * \brief Get an STL-style const iterator pointing to the *first* element in
-     *		the edge data of a vertex.
+     *		the edge data list of a vertex at a given timestamp.
      *  \param timestamp The timestamp of interest.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`,
      *			`BOTH_EDGES`.
@@ -2026,13 +2055,12 @@ public:
 	}
     
     /**
-     * TODO: Verify
-     * \brief Get an STL-style const iterator pointing to the *last* element in
-     *		the edge data of a vertex.
+     * \brief Get an STL-style const iterator pointing to the *end* of
+     *		the edge data of a vertex at a given timestamp.
      *  \param timestamp The timestamp of interest.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`,
      *			`BOTH_EDGES`.
-     *  \return A const iterator pointing to the *last* element in the
+     *  \return A const iterator pointing to the *end* of the
      *         edge data of a vertex.
      */
 	template<class edge_data_type>
@@ -2050,6 +2078,7 @@ public:
 	}
     
     /**
+	 * \internal
      * \brief A visual representation of the vertex printed to stdout.
      *  \return The vertex's string representation.
      */

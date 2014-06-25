@@ -51,19 +51,19 @@ public:
 	typedef typename std::shared_ptr<FG_vector<T> > ptr; /** Smart pointer for object access */
 
   /** 
-    * \brief  Create graph using this static method. An object of this
+    * \brief  Create a vector of the length the same as the number of vertices
+	*         in the graph. An object of this
     *         class should be created using this or the `create(size_t size)`
     *         method.
     * \param graph A shared pointer to a graph engine object. This is generally
-    *       the graph for which you are creating the vector. Allows the avoidance
-    *       of computing the number of vertices in the graph.
+    *       the graph for which you are creating the vector.
   */
 	static ptr create(graph_engine::ptr graph) {
 		return ptr(new FG_vector<T>(graph));
 	}
 
   /**
-    * \brief  Create graph using this static method. An object of this
+    * \brief  Create a vector of the specified length. An object of this
     *         class should be created using this or the `create(graph_engine::ptr graph)`
     *         method.
     * \param size The length of the vector you desire.
@@ -94,14 +94,13 @@ public:
 	void unique(std::set<T> &set) const {
 		// TODO we need a parallel implementation.
     
-    assert(set.empty()); // FIXME: `new` a shared/unique ptr & remove param
+		assert(set.empty()); // FIXME: `new` a shared/unique ptr & remove param
 		BOOST_FOREACH(T v, eles) {
 			set.insert(v);
 		}
 	}
 
   /** 
-    * FIXME: Verify
     * \brief  Count the number of unique items in the vector using a
     *         count map.
     * \param map An *empty* `count_map` object that is used to count
@@ -111,7 +110,7 @@ public:
 	void count_unique(count_map<T> &map) const {
 		// TODO we need a parallel implementation.
     
-    assert(map.get_size() == 0); // FIXME: `new` a shared/unique ptr & remove param
+		assert(map.get_size() == 0); // FIXME: `new` a shared/unique ptr & remove param
 		BOOST_FOREACH(T v, eles) {
 			map.add(v);
 		}
@@ -120,14 +119,14 @@ public:
   /**
     * \brief Get the number of elements contained in the vector.
     *
-    * \return The count of the number of elements in the vector
+    * \return The number of elements in the vector
   */
 	size_t get_size() const {
 		return eles.size();
 	}
 
   /**
-    * \brief  Get adirect pointer to the memory array used internally by
+    * \brief  Get a pointer to the memory array used internally by
     *         the vector to store its owned elements.
     * \return A pointer the underlying data memory array.
     *
@@ -137,7 +136,7 @@ public:
 	}
 
   /**
-    * \brief  Const method to get adirect pointer to the memory array 
+    * \brief  Const method to get a pointer to the memory array 
     *         used internally by the vector to store its owned elements.
     * \return A const pointer the underlying data memory array.
     *
@@ -300,11 +299,11 @@ public:
 };
 
   /**
-    * \brief Apply a user defined function to an STL vector of FG_vectors.
+    * \brief Apply a user defined function to multipl FG_vectors.
     * **parallel**
     * \param inputs A vector of FG_vectors that are the inputs.
-    * \param output A vector of FG_vectors that are the outputs.
-    * \param apply  The user-defined function that will be applied to all vecotros.
+    * \param output A FG_vector that are the outputs.
+    * \param apply  The user-defined function that will be applied to all vecotors.
   */
 template<class T, class ApplyFunc>
 void multi_vec_apply(const std::vector<typename FG_vector<T>::ptr> &inputs,
