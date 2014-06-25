@@ -823,8 +823,9 @@ public:
 	 * \param it is the Java-style iterator.
 	 */
 #define PAGE_FOREACH(type, v, it)					\
-	for (int idx = 0; (it).has_next();) {			\
-		for (int i = 0; i < (it).get_num_entries_in_page(); i++, idx++) {	\
+	for (int page_foreach_idx = 0; (it).has_next();) {			\
+		for (int page_foreach_i = 0; page_foreach_i < (it).get_num_entries_in_page();\
+				page_foreach_i++, page_foreach_idx++) {	\
 			type v = it.next();
 
 
