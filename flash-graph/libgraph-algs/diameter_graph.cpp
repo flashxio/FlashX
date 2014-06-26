@@ -340,8 +340,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 
 	return global_max;
 }

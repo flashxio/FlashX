@@ -221,8 +221,6 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 
 	printf("It takes %f seconds\n", time_diff(start, end));
 	return ret;

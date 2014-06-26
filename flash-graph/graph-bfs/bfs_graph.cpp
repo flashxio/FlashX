@@ -198,8 +198,6 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("BFS from vertex %ld visits %ld vertices. It takes %f seconds\n",
 			(unsigned long) start_vertex, num_visited, time_diff(start, end));
 }

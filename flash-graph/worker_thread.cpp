@@ -416,8 +416,6 @@ void worker_thread::run()
 			break;
 	}
 	stop();
-	if (graph_conf.get_print_io_stat())
-		io->print_stat(graph->get_num_threads());
 }
 
 int worker_thread::steal_activated_vertices(compute_vertex *vertices[], int num)
