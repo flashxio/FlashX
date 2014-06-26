@@ -22,6 +22,9 @@
 
 #include "parameters.h"
 
+/**
+ * The data structure contains the configurations for the graph engine.
+ */
 class graph_config
 {
 	int num_threads;
@@ -32,6 +35,10 @@ class graph_config
 	int part_range_size_log;
 	bool _preload;
 public:
+	/**
+	 * \brief The default constructor that set all configurations to
+	 * their default values.
+	 */
 	graph_config() {
 		num_threads = 4;
 		max_processing_vertices = 2000;
@@ -40,35 +47,75 @@ public:
 		_preload = false;
 	}
 
+	/**
+	 * \brief Print the explanations of all configurations.
+	 */
 	void print_help();
+	/**
+	 * \brief Print the current values of all configurations.
+	 */
 	void print();
 
+	/**
+	 * \brief Set the configurations to the user-defined values.
+	 */
 	void init(const config_map &map);
 
+	/**
+	 * \brief Get the output file containing CPU profiling.
+	 * \return the file name.
+	 */
 	const std::string &get_prof_file() const {
 		return prof_file;
 	}
 
+	/**
+	 * \brief Get the number of worker threads used by the graph engine.
+	 * \return The number of worker threads.
+	 */
 	int get_num_threads() const {
 		return num_threads;
 	}
 
+	/**
+	 * \brief Determine whehter to use the elevator algorithm in accessing
+	 * the adjacency lists of vertices from SSDs.
+	 * \return true if the elevator algorithm is used.
+	 */
 	bool get_elevator_enabled() const {
 		return enable_elevator;
 	}
 
+	/**
+	 * \brief Get the I/O trace file that records all I/O requests generated
+	 * by the graph engine.
+	 * \return the I/O trace file anme.
+	 */
 	const std::string &get_trace_file() const {
 		return trace_file;
 	}
 
+	/**
+	 * \brief Get the maximal number of vertices being processed by
+	 * a worker thread.
+	 * \return the maximal number of vertices.
+	 */
 	int get_max_processing_vertices() const {
 		return max_processing_vertices;
 	}
 
+	/**
+	 * \brief Get the size of a partition range at log scale.
+	 * \return the size of a partition range at log scale.
+	 */
 	int get_part_range_size_log() const {
 		return part_range_size_log;
 	}
 
+	/**
+	 * \brief Determine whether to preload the graph data to the page cache.
+	 * \return true if the graph is preloaded; else false.
+	 */
 	bool preload() const {
 		return _preload;
 	}
@@ -78,6 +125,7 @@ inline void graph_config::print_help()
 {
 	printf("Configuration parameters in graph algorithm.\n");
 	printf("\tthreads: the number of threads processing the graph\n");
+	printf("\tprof_file: the output file containing CPU profiling\n");
 	printf("\ttrace_file: log IO requests\n");
 	printf("\tmax_processing_vertices: the max number of vertices being processed\n");
 	printf("\tenable_elevator: enable the elevator algorithm for scheduling vertices\n");
@@ -89,6 +137,7 @@ inline void graph_config::print()
 {
 	printf("Configuration parameters in graph algorithm.\n");
 	printf("\tthreads: %d\n", num_threads);
+	printf("\tprof_file: %s\n", prof_file.c_str());
 	printf("\ttrace_file: %s\n", trace_file.c_str());
 	printf("\tmax_processing_vertices: %d\n", max_processing_vertices);
 	printf("\tenable_elevator: %d\n", enable_elevator);
