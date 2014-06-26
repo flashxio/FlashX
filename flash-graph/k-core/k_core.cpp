@@ -245,8 +245,6 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("\n%d-core shows %ld vertices > %d degree in %f seconds\n",
 			K, in_k_core, K, time_diff(start, end));
 }

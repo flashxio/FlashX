@@ -291,8 +291,6 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("It takes %f seconds to count all triangles\n",
 			time_diff(start, end));
 

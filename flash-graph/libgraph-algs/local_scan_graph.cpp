@@ -285,8 +285,6 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("It takes %f seconds to compute all local scan\n",
 			time_diff(start, end));
 
