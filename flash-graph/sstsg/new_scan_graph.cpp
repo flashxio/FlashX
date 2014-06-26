@@ -234,6 +234,8 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 			in_neighbors);
 	get_neighbors(vertex, edge_type::OUT_EDGE, timestamp, time_interval,
 			out_neighbors);
+	std::sort(in_neighbors.begin(), in_neighbors.end());
+	std::sort(out_neighbors.begin(), out_neighbors.end());
 	if (in_neighbors.size() + out_neighbors.size() == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
