@@ -167,7 +167,7 @@ class worker_thread: public thread
 {
 	int worker_id;
 	file_io_factory::shared_ptr factory;
-	io_interface *io;
+	io_interface::ptr io;
 	graph_engine *graph;
 	compute_allocator *alloc;
 	compute_allocator *part_alloc;

@@ -254,10 +254,9 @@ graph_engine::graph_engine(const std::string &graph_file,
 			GLOBAL_CACHE_ACCESS);
 	factory->set_sched_creater(new throughput_comp_io_sched_creater());
 
-	io_interface *io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
 	io->access((char *) &header, 0, sizeof(header), READ);
 	header.verify();
-	factory->destroy_io(io);
 
 	switch (header.get_graph_type()) {
 		case graph_type::DIRECTED:
@@ -430,13 +429,12 @@ void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 void graph_engine::preload_graph()
 {
 	const int BLOCK_SIZE = 1024 * 1024 * 32;
-	io_interface *io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
 	size_t preload_size = min(params.get_cache_size(), factory->get_file_size());
 	printf("preload %ld bytes\n", preload_size);
 	char *buf = new char[BLOCK_SIZE];
 	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
 		io->access(buf, i, BLOCK_SIZE, READ);
-	factory->destroy_io(io);
 	printf("successfully preload\n");
 }
 
@@ -514,14 +512,14 @@ vertex_index *load_vertex_index(const std::string &index_file)
 	file_io_factory::shared_ptr factory = create_io_factory(index_file,
 			REMOTE_ACCESS);
 	assert(factory->get_file_size() >= INDEX_HEADER_SIZE);
-	io_interface *io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
 
 	// Get the header of the index.
 	char *tmp = NULL;
 	int ret = posix_memalign((void **) &tmp, PAGE_SIZE, INDEX_HEADER_SIZE);
 	assert(ret == 0);
 	data_loc_t loc(factory->get_file_id(), 0);
-	io_request req(tmp, loc, INDEX_HEADER_SIZE, READ, io, -1);
+	io_request req(tmp, loc, INDEX_HEADER_SIZE, READ);
 	io->access(&req, 1);
 	io->wait4complete(1);
 	vertex_index *index = (vertex_index *) tmp;
@@ -544,7 +542,7 @@ vertex_index *load_vertex_index(const std::string &index_file)
 		assert(off % PAGE_SIZE == 0);
 		size_t size = min(READ_SIZE, aligned_index_size - off);
 		data_loc_t loc(factory->get_file_id(), off);
-		io_request req(buf + off, loc, size, READ, io, -1);
+		io_request req(buf + off, loc, size, READ);
 		io->access(&req, 1);
 		off += size;
 		if (io->num_pending_ios() > 100)
@@ -559,13 +557,12 @@ vertex_index *load_vertex_index(const std::string &index_file)
 		int ret = posix_memalign((void **) &tmp, PAGE_SIZE, PAGE_SIZE);
 		assert(ret == 0);
 		data_loc_t loc(factory->get_file_id(), aligned_index_size);
-		io_request req(tmp, loc, PAGE_SIZE, READ, io, -1);
+		io_request req(tmp, loc, PAGE_SIZE, READ);
 		io->access(&req, 1);
 		io->wait4complete(1);
 		memcpy(buf + aligned_index_size, tmp, index_size - aligned_index_size);
 		free(tmp);
 	}
-	factory->destroy_io(io);
 
 	index = (vertex_index *) buf;
 	if (index->get_graph_header().get_graph_type() == graph_type::DIRECTED)

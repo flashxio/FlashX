@@ -213,7 +213,6 @@ worker_thread::~worker_thread()
 {
 	delete alloc;
 	delete part_alloc;
-	factory->destroy_io(io);
 }
 
 void worker_thread::init()
