@@ -36,7 +36,7 @@ class thread_private: public thread
 	int idx;
 	int node_id;
 	workload_gen *gen;
-	io_interface *io;
+	io_interface::ptr io;
 	file_io_factory::shared_ptr factory;
 
 	ssize_t read_bytes;
