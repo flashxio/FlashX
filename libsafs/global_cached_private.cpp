@@ -1325,9 +1325,13 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	bool syncd = false;
 	std::vector<thread_safe_page *> dirty_pages;
 
-	// The user compute will be referenced by IO requests. I need to
-	// increase their references now.
 	for (int i = 0; i < num; i++) {
+		if (requests[i].get_io() == NULL) {
+			requests[i].set_io(this);
+			requests[i].set_node_id(this->get_node_id());
+		}
+		// The user compute will be referenced by IO requests. I need to
+		// increase their references now.
 		if (requests[i].get_req_type() == io_request::USER_COMPUTE) {
 			user_compute *compute = requests[i].get_compute();
 			compute->inc_ref();

@@ -171,6 +171,10 @@ void remote_io::access(io_request *requests, int num,
 
 	bool syncd = false;
 	for (int i = 0; i < num; i++) {
+		if (requests[i].get_io() == NULL) {
+			requests[i].set_io(this);
+			requests[i].set_node_id(this->get_node_id());
+		}
 		assert(requests[i].get_offset() % MIN_BLOCK_SIZE == 0);
 		assert(requests[i].get_size() % MIN_BLOCK_SIZE == 0);
 		assert(requests[i].get_req_type() != io_request::USER_COMPUTE);

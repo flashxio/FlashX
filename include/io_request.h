@@ -590,7 +590,8 @@ public:
 	 * \param sync
 	 */
 	io_request(char *buf, const data_loc_t &loc, ssize_t size,
-			int access_method, io_interface *io, int node_id, bool sync = false) {
+			int access_method, io_interface *io = NULL,
+			int node_id = MAX_NODE_ID, bool sync = false) {
 		payload_type = BASIC_REQ;
 		data_inline = 0;
 		user_data_addr = 0;
@@ -600,14 +601,14 @@ public:
 	}
 
 	io_request(io_req_extension *ext, const data_loc_t &loc, int access_method,
-			io_interface *io, int node_id, bool sync = false) {
+			io_interface *io = NULL, int node_id = MAX_NODE_ID) {
 		payload_type = EXT_REQ;
 		data_inline = 0;
 		payload.ext = ext;
 		user_data_addr =0;
 		init(NULL, loc, 0, access_method, io, node_id);
 		use_default_flags();
-		this->sync = sync;
+		this->sync = false;
 	}
 
 	/**
@@ -620,7 +621,8 @@ public:
 	 * \param node_id the NUMA node where the I/O request is issued.
 	 */
 	io_request(user_compute *compute, const data_loc_t &loc, ssize_t size,
-			int access_method, io_interface *io, int node_id) {
+			int access_method, io_interface *io = NULL,
+			int node_id = MAX_NODE_ID) {
 		payload_type = USER_COMPUTE;
 		data_inline = 0;
 		user_data_addr = 0;
@@ -674,7 +676,7 @@ public:
 		offset = 0;
 		high_prio = 0;
 		sync = 0;
-		node_id = 0;
+		node_id = MAX_NODE_ID;
 		io_addr = 0;
 		access_method = 0;
 		set_int_buf_size(0);

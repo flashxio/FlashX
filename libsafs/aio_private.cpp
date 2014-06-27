@@ -272,6 +272,7 @@ void async_io::access(io_request *requests, int num, io_status *status)
 		int min = slot > num ? num : slot;
 		int num_iocb = 0;
 		for (int i = 0; i < min; i++) {
+			assert(requests->get_io());
 			struct iocb *req = construct_req(*requests, aio_callback);
 			requests++;
 			if (req)
