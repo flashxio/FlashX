@@ -316,8 +316,7 @@ int worker_thread::process_activated_vertices(int max)
 					graph->get_logger()->log(&range, 1);
 				reqs[num_to_process++] = io_request(range.get_compute(),
 						range.get_loc(), range.get_size(),
-						// TODO I might need to set the node id.
-						range.get_access_method(), io, -1);
+						range.get_access_method());
 			}
 			else {
 				// The reason we reach here is that the vertex requests some
