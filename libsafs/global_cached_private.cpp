@@ -1320,16 +1320,18 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		return;
 
 	ASSERT_EQ(get_thread(), thread::get_curr_thread());
-	num_issued_areqs.inc(num);
 
 	bool syncd = false;
 	std::vector<thread_safe_page *> dirty_pages;
 
+	int num_async = 0;
 	for (int i = 0; i < num; i++) {
 		if (requests[i].get_io() == NULL) {
 			requests[i].set_io(this);
 			requests[i].set_node_id(this->get_node_id());
 		}
+		if (!requests[i].is_sync())
+			num_async++;
 		// The user compute will be referenced by IO requests. I need to
 		// increase their references now.
 		if (requests[i].get_req_type() == io_request::USER_COMPUTE) {
@@ -1337,6 +1339,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 			compute->inc_ref();
 		}
 	}
+	num_issued_areqs.inc(num_async);
 
 	if (!processing_req.is_empty()) {
 		process_user_req(dirty_pages, NULL);
