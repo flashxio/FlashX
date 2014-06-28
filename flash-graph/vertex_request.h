@@ -39,6 +39,13 @@ public:
 	vertex_id_t get_id() const {
 		return id;
 	}
+
+	// We override "<" so that they can be used in the priority queue.
+	// We want the priority queue to return the requests with smaller
+	// vertex IDs first.
+	bool operator<(const vertex_request &req) const {
+		return this->get_id() > req.get_id();
+	}
 };
 
 class directed_vertex_request: public vertex_request

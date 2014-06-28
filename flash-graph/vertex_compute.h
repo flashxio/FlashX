@@ -39,9 +39,7 @@ class compute_directed_vertex;
  */
 class vertex_compute: public user_compute
 {
-	std::vector<vertex_id_t> requested_vertices;
-	scan_pointer fetch_idx;
-
+	std::priority_queue<vertex_id_t> requested_vertices;
 protected:
 	graph_engine *graph;
 
@@ -54,7 +52,7 @@ protected:
 	size_t num_complete_fetched;
 public:
 	vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): user_compute(alloc), fetch_idx(0, true) {
+			compute_allocator *alloc): user_compute(alloc) {
 		this->graph = graph;
 		v = NULL;
 		issue_thread = (worker_thread *) thread::get_curr_thread();
@@ -75,11 +73,10 @@ public:
 	}
 
 	virtual void set_scan_dir(bool forward) {
-		fetch_idx.set_scan_dir(forward);
 	}
 
 	virtual int has_requests() const {
-		return fetch_idx.get_num_remaining() > 0;
+		return requested_vertices.size() > 0;
 	}
 
 	virtual request_range get_next_request();
@@ -109,22 +106,18 @@ class part_directed_vertex_compute;
 
 class directed_vertex_compute: public vertex_compute
 {
-	std::vector<directed_vertex_request> reqs;
-	scan_pointer fetch_idx;
+	std::priority_queue<directed_vertex_request> reqs;
 public:
 	directed_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): vertex_compute(graph,
-				alloc), fetch_idx(0, true) {
+			compute_allocator *alloc): vertex_compute(graph, alloc) {
 	}
 
 	virtual void set_scan_dir(bool forward) {
 		vertex_compute::set_scan_dir(forward);
-		fetch_idx.set_scan_dir(forward);
 	}
 
 	virtual int has_requests() const {
-		return vertex_compute::has_requests()
-			|| fetch_idx.get_num_remaining() > 0;
+		return vertex_compute::has_requests() || reqs.size() > 0;
 	}
 
 	virtual request_range get_next_request();
@@ -184,22 +177,18 @@ class part_ts_vertex_compute;
 
 class ts_vertex_compute: public vertex_compute
 {
-	std::vector<ts_vertex_request> reqs;
-	scan_pointer fetch_idx;
+	std::priority_queue<ts_vertex_request> reqs;
 public:
 	ts_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): vertex_compute(graph,
-				alloc), fetch_idx(0, true) {
+			compute_allocator *alloc): vertex_compute(graph, alloc) {
 	}
 
 	virtual void set_scan_dir(bool forward) {
 		vertex_compute::set_scan_dir(forward);
-		fetch_idx.set_scan_dir(forward);
 	}
 
 	virtual int has_requests() const {
-		return vertex_compute::has_requests()
-			|| fetch_idx.get_num_remaining() > 0;
+		return vertex_compute::has_requests() || reqs.size() > 0;
 	}
 
 	virtual request_range get_next_request();
