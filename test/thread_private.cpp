@@ -206,7 +206,7 @@ public:
 		return 0;
 	}
 
-	virtual int has_requests() const {
+	virtual int has_requests() {
 		return !converter.has_complete();
 	}
 
@@ -215,7 +215,7 @@ public:
 		return converter.get_request(buf_type, this);
 	}
 
-	virtual bool has_completed() const {
+	virtual bool has_completed() {
 		return num_pending == 0 && !has_requests();
 	}
 
@@ -263,7 +263,7 @@ public:
 		return 0;
 	}
 
-	virtual int has_requests() const {
+	virtual int has_requests() {
 		return !converter.has_complete();
 	}
 
@@ -272,7 +272,7 @@ public:
 		return converter.get_request(buf_type, this);
 	}
 
-	virtual bool has_completed() const {
+	virtual bool has_completed() {
 		return num_pending == 0 && !has_requests();
 	}
 
