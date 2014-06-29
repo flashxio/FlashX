@@ -26,6 +26,7 @@
 #include "message_processor.h"
 #include "load_balancer.h"
 #include "steal_state.h"
+#include "vertex_index_reader.h"
 
 void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorted)
 {
@@ -155,7 +156,8 @@ void customized_vertex_queue::init(worker_thread &t)
 }
 
 worker_thread::worker_thread(graph_engine *graph,
-		file_io_factory::shared_ptr factory,
+		file_io_factory::shared_ptr graph_factory,
+		file_io_factory::shared_ptr index_factory,
 		vertex_program::ptr prog, int node_id, int worker_id,
 		int num_threads, vertex_scheduler::ptr scheduler): thread("worker_thread",
 			node_id)
@@ -172,7 +174,8 @@ worker_thread::worker_thread(graph_engine *graph,
 	this->worker_id = worker_id;
 	this->graph = graph;
 	this->io = NULL;
-	this->factory = factory;
+	this->graph_factory = graph_factory;
+	this->index_factory = index_factory;
 	this->curr_compute = NULL;
 	// We increase the allocator by 1M each time.
 	// It shouldn't need to allocate much memory.
@@ -192,11 +195,13 @@ worker_thread::worker_thread(graph_engine *graph,
 			alloc = new vertex_compute_allocator<directed_vertex_compute>(graph, this);
 			part_alloc = NULL;
 			break;
+#if 0
 		case graph_type::TS_DIRECTED:
 			alloc = new vertex_compute_allocator<ts_vertex_compute>(graph, this);
 			part_alloc = new vertex_compute_allocator<part_ts_vertex_compute>(
 					graph, this);
 			break;
+#endif
 		default:
 			assert(0);
 
@@ -217,7 +222,23 @@ worker_thread::~worker_thread()
 
 void worker_thread::init()
 {
-	io = factory->create_io(this);
+	io = graph_factory->create_io(this);
+	switch (graph->get_graph_header().get_graph_type()) {
+		case graph_type::DIRECTED:
+			index_reader = directed_vertex_index_reader::create(
+					index_factory->create_io(this),
+					graph_factory->get_file_size(),
+					index_factory->get_file_size());
+			break;
+		case graph_type::UNDIRECTED:
+			index_reader = undirected_vertex_index_reader::create(
+					index_factory->create_io(this),
+					graph_factory->get_file_size(),
+					index_factory->get_file_size());
+			break;
+		default:
+			assert(0);
+	}
 
 	if (!started_vertices.empty()) {
 		assert(curr_activated_vertices->is_empty());
@@ -307,6 +328,7 @@ int worker_thread::process_activated_vertices(int max)
 			// immediately, so it's possible that the current vertex compute
 			// may not have requests.
 			if (curr_compute->has_requests()) {
+				assert(0);
 				// It's mostly likely that it is requesting the adjacency list
 				// of itself. But it doesn't really matter what the vertex
 				// wants to request here.
@@ -317,7 +339,7 @@ int worker_thread::process_activated_vertices(int max)
 						range.get_loc(), range.get_size(),
 						range.get_access_method());
 			}
-			else {
+			else if (curr_compute->has_completed()) {
 				// The reason we reach here is that the vertex requests some
 				// partial vertices and the request parts are empty.
 				// The user compute is only referenced here. We need to delete
@@ -380,6 +402,11 @@ void worker_thread::run()
 					- io->num_pending_ios());
 			num_visited += num;
 			msg_processor->process_msgs();
+			if (index_reader->get_num_pending_tasks()
+					< (size_t) graph_conf.get_max_processing_vertices())
+				index_reader->wait4complete(0);
+			else
+				index_reader->wait4complete(1);
 			io->wait4complete(min(io->num_pending_ios() / 10, 2));
 			// If there are vertices being processed, we need to call
 			// wait4complete to complete processing them.

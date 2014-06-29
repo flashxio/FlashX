@@ -87,7 +87,6 @@ public:
 			compute_vertex *v_buf[]) const = 0;
 	virtual compute_vertex &get_vertex(vertex_id_t id) = 0;
 	virtual compute_vertex &get_vertex(int part_id, local_vid_t id) = 0;
-	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const = 0;
 
 	virtual vertex_id_t get_max_vertex_id() const = 0;
 
@@ -107,6 +106,8 @@ public:
 		return const_iterator((graph_index *) this,
 				this->get_max_vertex_id() + 1);
 	}
+
+	virtual std::string get_index_file() const = 0;
 };
 
 template<class vertex_type>
@@ -162,10 +163,6 @@ public:
 		}
 	}
 
-	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
-		assert(0);
-	}
-
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
 			compute_vertex *v_buf[]) const {
 		assert(0);
@@ -210,6 +207,10 @@ public:
 	virtual vertex_program::ptr create_def_vertex_program() const {
 		assert(0);
 		return vertex_program::ptr();
+	}
+
+	virtual std::string get_index_file() const {
+		assert(0);
 	}
 
 	friend class NUMA_graph_index<vertex_type>;
@@ -345,13 +346,6 @@ public:
 		return index_arr[part_id]->vertex_arr[id.id];
 	}
 
-	virtual const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
-		off_t off = off_arr[id];
-		off_t off1 = off_arr[id + 1];
-		in_mem_vertex_info info(id, off, off1 - off);
-		return info;
-	}
-
 	virtual vertex_id_t get_max_vertex_id() const {
 		return max_vertex_id;
 	}
@@ -371,6 +365,10 @@ public:
 	virtual vertex_program::ptr create_def_vertex_program(
 			) const {
 		return vertex_program::ptr(new vertex_program_impl<vertex_type>());
+	}
+
+	virtual std::string get_index_file() const {
+		return index_file;
 	}
 };
 

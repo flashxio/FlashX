@@ -162,16 +162,19 @@ class vertex_compute;
 class steal_state_t;
 class message_processor;
 class load_balancer;
+class vertex_index_reader;
 
 class worker_thread: public thread
 {
 	int worker_id;
-	file_io_factory::shared_ptr factory;
+	file_io_factory::shared_ptr graph_factory;
+	file_io_factory::shared_ptr index_factory;
 	io_interface::ptr io;
 	graph_engine *graph;
 	compute_allocator *alloc;
 	compute_allocator *part_alloc;
 	vertex_program::ptr vprogram;
+	std::shared_ptr<vertex_index_reader> index_reader;
 
 	// When a thread process a vertex, the worker thread should point to
 	// a vertex compute. This is useful when a user-defined compute vertex
@@ -222,7 +225,8 @@ class worker_thread: public thread
 	}
 	int process_activated_vertices(int max);
 public:
-	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
+	worker_thread(graph_engine *graph, file_io_factory::shared_ptr graph_factory,
+			file_io_factory::shared_ptr index_factory,
 			vertex_program::ptr prog, int node_id, int worker_id,
 			int num_threads, vertex_scheduler::ptr scheduler);
 
@@ -308,6 +312,14 @@ public:
 
 	message_processor &get_msg_processor() {
 		return *msg_processor;
+	}
+
+	vertex_index_reader &get_index_reader() {
+		return *index_reader;
+	}
+
+	void issue_io_request(io_request &req) {
+		io->access(&req, 1);
 	}
 
 	friend class load_balancer;

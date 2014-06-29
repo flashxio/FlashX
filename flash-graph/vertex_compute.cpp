@@ -19,37 +19,47 @@
 #include "vertex_compute.h"
 #include "graph_engine.h"
 #include "worker_thread.h"
+#include "vertex_index_reader.h"
+
+class empty_page_byte_array: public page_byte_array
+{
+public:
+	virtual void lock() {
+	}
+	virtual void unlock() {
+	}
+
+	virtual off_t get_offset_in_first_page() const {
+		return 0;
+	}
+	virtual thread_safe_page *get_page(int idx) const {
+		return NULL;
+	}
+	virtual size_t get_size() const {
+		return 0;
+	}
+};
 
 request_range vertex_compute::get_next_request()
 {
-	num_complete_issues++;
-
 	// Get the next vertex.
-	vertex_id_t id = requested_vertices.top();
+	const in_mem_vertex_info &info = requested_vertices.top();
 	requested_vertices.pop();
-
-	// Find the location of the vertex.
-	const in_mem_vertex_info info = graph->get_vertex_info(id);
 	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
 	return request_range(loc, info.get_ext_mem_size(), READ, this);
 }
 
 void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 {
-	// Logging the requests.
-	if (graph->get_logger()) {
-		std::vector<request_range> reqs;
-		for (size_t i = 0; i < num; i++) {
-			const in_mem_vertex_info info = graph->get_vertex_info(ids[i]);
-			data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
-			request_range req(loc, info.get_ext_mem_size(), READ, this);
-			reqs.push_back(req);
-		}
-		graph->get_logger()->log(reqs.data(), reqs.size());
-	}
+	num_requested += num;
+	issue_thread->get_index_reader().request_vertices(ids, num, *this);
+}
 
-	for (size_t i = 0; i < num; i++)
-		requested_vertices.push(ids[i]);
+void vertex_compute::issue_io_request(const in_mem_vertex_info &info)
+{
+	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+	io_request req(this, loc, info.get_ext_mem_size(), READ);
+	issue_thread->issue_io_request(req);
 }
 
 void vertex_compute::run(page_byte_array &array)
@@ -107,119 +117,140 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 	}
 }
 
+void directed_vertex_compute::complete_empty_part(
+		const directed_vertex_request &req)
+{
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	assert(t == issue_thread);
+	vertex_program &curr_vprog = t->get_vertex_program();
+
+	empty_page_byte_array array;
+	page_directed_vertex pg_v(req.get_id(), 0, 0, array);
+	curr_vprog.run(*v, pg_v);
+	complete_request();
+}
+
+int directed_vertex_compute::has_requests()
+{
+	if (vertex_compute::has_requests())
+		return true;
+	else if (reqs.size() == 0)
+		return false;
+	else {
+		while (!reqs.empty()) {
+			const part_request_info &req_info = reqs.top();
+			const directed_vertex_request &req = req_info.get_request();
+			const in_mem_directed_vertex_info &info = req_info.get_info();
+			vsize_t num_in_edges = info.get_num_in_edges();
+			vsize_t num_out_edges = info.get_num_out_edges();
+			// If the requested edge list is empty, we can just serve the request now.
+			// and try the next request.
+			if ((req.get_type() == edge_type::IN_EDGE && num_in_edges == 0)
+					|| (req.get_type() == edge_type::OUT_EDGE
+						&& num_out_edges == 0)) {
+				reqs.pop();
+				complete_empty_part(req);
+			}
+			else
+				return true;
+		}
+
+		return false;
+	}
+}
+
 request_range directed_vertex_compute::get_next_request()
 {
 	if (vertex_compute::has_requests())
 		return vertex_compute::get_next_request();
 	else {
-		// We need to increase the number of issues, so we know when
-		// the user task is completed.
-		num_complete_issues++;
-
-		directed_vertex_request req = reqs.top();
+		const part_request_info &req_info = reqs.top();
 		reqs.pop();
-		const in_mem_vertex_info info = get_graph().get_vertex_info(req.get_id());
+		const directed_vertex_request &req = req_info.get_request();
+		const in_mem_directed_vertex_info &info = req_info.get_info();
+		return generate_request(req, info);
+	}
+}
 
-		off_t start_pg = ROUND_PAGE(info.get_ext_mem_off());
-		off_t end_pg = ROUNDUP_PAGE(info.get_ext_mem_off() + info.get_ext_mem_size());
-		if (end_pg - start_pg <= PAGE_SIZE
-				|| req.get_type() == edge_type::BOTH_EDGES) {
-			data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off());
-			request_range req(loc, info.get_ext_mem_size(), READ, this);
+request_range directed_vertex_compute::generate_request(
+		const directed_vertex_request &req,
+		const in_mem_directed_vertex_info &info)
+{
+	off_t start_pg = ROUND_PAGE(info.get_ext_mem_off());
+	off_t end_pg = ROUNDUP_PAGE(info.get_ext_mem_off() + info.get_ext_mem_size());
+	if (end_pg - start_pg <= PAGE_SIZE
+			|| req.get_type() == edge_type::BOTH_EDGES) {
+		data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off());
+		request_range req(loc, info.get_ext_mem_size(), READ, this);
+		if (graph->get_logger())
+			graph->get_logger()->log(&req, 1);
+		return req;
+	}
+	else {
+		worker_thread *t = (worker_thread *) thread::get_curr_thread();
+		compute_allocator *alloc = t->get_part_compute_allocator();
+		assert(alloc);
+		part_directed_vertex_compute *comp
+			= (part_directed_vertex_compute *) alloc->alloc();
+		comp->init((compute_directed_vertex *) v, this, req);
+		vsize_t num_in_edges = info.get_num_in_edges();
+		vsize_t num_out_edges = info.get_num_out_edges();
+		if (req.get_type() == edge_type::IN_EDGE) {
+			data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off()
+					+ ext_mem_directed_vertex::get_header_size());
+			assert(num_in_edges > 0);
+			request_range req(loc, num_in_edges * sizeof(vertex_id_t),
+					READ, comp);
 			if (graph->get_logger())
 				graph->get_logger()->log(&req, 1);
 			return req;
 		}
 		else {
-			worker_thread *t = (worker_thread *) thread::get_curr_thread();
-			compute_allocator *alloc = t->get_part_compute_allocator();
-			assert(alloc);
-			part_directed_vertex_compute *comp
-				= (part_directed_vertex_compute *) alloc->alloc();
-			comp->init((compute_directed_vertex *) v, this, req);
-			compute_directed_vertex &directed_v
-				= (compute_directed_vertex &) get_graph().get_vertex(req.get_id());
-			vsize_t num_in_edges = directed_v.get_num_in_edges();
-			vsize_t num_out_edges = directed_v.get_num_out_edges();
-			if (req.get_type() == edge_type::IN_EDGE) {
-				data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off()
-						+ ext_mem_directed_vertex::get_header_size());
-				assert(num_in_edges > 0);
-				request_range req(loc, num_in_edges * sizeof(vertex_id_t),
-						READ, comp);
-				if (graph->get_logger())
-					graph->get_logger()->log(&req, 1);
-				return req;
-			}
-			else {
-				data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off()
-						+ ext_mem_directed_vertex::get_header_size()
-						+ num_in_edges * sizeof(vertex_id_t));
-				assert(num_out_edges > 0);
-				request_range req(loc, num_out_edges * sizeof(vertex_id_t),
-						READ, comp);
-				if (graph->get_logger())
-					graph->get_logger()->log(&req, 1);
-				return req;
-			}
+			data_loc_t loc(get_graph().get_file_id(), info.get_ext_mem_off()
+					+ ext_mem_directed_vertex::get_header_size()
+					+ num_in_edges * sizeof(vertex_id_t));
+			assert(num_out_edges > 0);
+			request_range req(loc, num_out_edges * sizeof(vertex_id_t),
+					READ, comp);
+			if (graph->get_logger())
+				graph->get_logger()->log(&req, 1);
+			return req;
 		}
 	}
 }
 
-class empty_page_byte_array: public page_byte_array
+void directed_vertex_compute::issue_io_request(
+		const directed_vertex_request &req,
+		const in_mem_directed_vertex_info &info)
 {
-public:
-	virtual void lock() {
+	// It's possible the requested part is empty. We can notify the user
+	// immediately.
+	vsize_t num_in_edges = info.get_num_in_edges();
+	vsize_t num_out_edges = info.get_num_out_edges();
+	if ((req.get_type() == edge_type::IN_EDGE && num_in_edges == 0)
+			|| (req.get_type() == edge_type::OUT_EDGE
+				&& num_out_edges == 0))
+		complete_empty_part(req);
+	else {
+		request_range range = generate_request(req, info);
+		io_request io_req(range.get_compute(), range.get_loc(),
+				range.get_size(), READ);
+		issue_thread->issue_io_request(io_req);
 	}
-	virtual void unlock() {
-	}
-
-	virtual off_t get_offset_in_first_page() const {
-		return 0;
-	}
-	virtual thread_safe_page *get_page(int idx) const {
-		return NULL;
-	}
-	virtual size_t get_size() const {
-		return 0;
-	}
-};
+}
 
 void directed_vertex_compute::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
-	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	vertex_program &curr_vprog = t->get_vertex_program();
-
-	assert(this->reqs.empty());
-	for (size_t i = 0; i < num; i++) {
-		directed_vertex_request *req = &reqs[i];
-		compute_directed_vertex &info
-			= (compute_directed_vertex &) get_graph().get_vertex(req->get_id());
-
-		// If the requested edge list is empty, we can just serve the request now.
-		if ((req->get_type() == edge_type::IN_EDGE
-					&& info.get_num_in_edges() == 0)
-				|| (req->get_type() == edge_type::OUT_EDGE
-					&& info.get_num_out_edges() == 0)) {
-			empty_page_byte_array array;
-			page_directed_vertex pg_v(req->get_id(), 0, 0, array);
-			curr_vprog.run(*v, pg_v);
-			// We don't need to call complete_request() here.
-		}
-		else
-			this->reqs.push(*req);
-	}
-	// We need to notify the thread that initiate processing the vertex
-	// of the completion of the vertex.
-	// TODO is this a right way to complete a vertex?
-	if (this->reqs.empty() && has_completed())
-		issue_thread->complete_vertex(*v);
+	num_requested += num;
+	issue_thread->get_index_reader().request_vertices(reqs, num, *this);
 }
 
+#if 0
 void ts_vertex_compute::request_partial_vertices(ts_vertex_request reqs[],
 		size_t num)
 {
+	num_requested += num;
 	for (size_t i = 0; i < num; i++)
 		this->reqs.push(reqs[i]);
 }
@@ -229,10 +260,6 @@ request_range ts_vertex_compute::get_next_request()
 	if (vertex_compute::has_requests())
 		return vertex_compute::get_next_request();
 	else {
-		// We need to increase the number of issues, so we know when
-		// the user task is completed.
-		num_complete_issues++;
-
 		ts_vertex_request ts_req = reqs.top();
 		reqs.pop();
 		const in_mem_vertex_info info = get_graph().get_vertex_info(ts_req.get_id());
@@ -315,3 +342,4 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 		delete [] tmp;
 	}
 }
+#endif

@@ -72,6 +72,10 @@ public:
 		free(index);
 	}
 
+	static size_t get_header_size() {
+		return sizeof(vertex_index);
+	}
+
 	void dump(const std::string &file) {
 		FILE *f = fopen(file.c_str(), "w");
 		if (f == NULL) {
@@ -217,6 +221,10 @@ public:
 		off = 0;
 	}
 
+	vertex_offset(off_t off) {
+		this->off = off;
+	}
+
 	void init(off_t off) {
 		this->off = off;
 	}
@@ -261,6 +269,12 @@ class directed_vertex_entry
 public:
 	directed_vertex_entry() {
 		off = 0;
+		in_edges = 0;
+		out_edges = 0;
+	}
+
+	directed_vertex_entry(off_t off) {
+		this->off = off;
 		in_edges = 0;
 		out_edges = 0;
 	}

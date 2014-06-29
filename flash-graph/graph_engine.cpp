@@ -205,8 +205,8 @@ void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 
 vsize_t compute_vertex::get_num_edges() const
 {
-	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	return t->get_graph().get_vertex_edges(get_id());
+	// TODO
+	assert(0);
 }
 
 void compute_directed_vertex::request_partial_vertices(
@@ -220,6 +220,7 @@ void compute_directed_vertex::request_partial_vertices(
 	compute->request_partial_vertices(reqs, num);
 }
 
+#if 0
 void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 		size_t num)
 {
@@ -230,6 +231,7 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 		compute = (ts_vertex_compute *) curr->create_vertex_compute(this);
 	compute->request_partial_vertices(reqs, num);
 }
+#endif
 
 graph_engine::graph_engine(const std::string &graph_file,
 		graph_index::ptr index, const config_map &configs)
@@ -250,11 +252,11 @@ graph_engine::graph_engine(const std::string &graph_file,
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
 	// Right now only the cached I/O can support async I/O
-	factory = create_io_factory(graph_file,
-			GLOBAL_CACHE_ACCESS);
-	factory->set_sched_creater(new throughput_comp_io_sched_creater());
+	graph_factory = create_io_factory(graph_file, GLOBAL_CACHE_ACCESS);
+	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
+	index_factory = create_io_factory(index->get_index_file(), GLOBAL_CACHE_ACCESS);
 
-	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = graph_factory->create_io(thread::get_curr_thread());
 	io->access((char *) &header, 0, sizeof(header), READ);
 	header.verify();
 
@@ -298,7 +300,8 @@ graph_engine::~graph_engine()
 {
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
-	factory = file_io_factory::shared_ptr();
+	graph_factory = file_io_factory::shared_ptr();
+	index_factory = file_io_factory::shared_ptr();
 	destroy_io_system();
 }
 
@@ -312,8 +315,8 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 			new_prog = creater->create();
 		else
 			new_prog = vertices->create_def_vertex_program();
-		worker_thread *t = new worker_thread(this, factory, new_prog,
-				i % num_nodes, i, num_threads, scheduler);
+		worker_thread *t = new worker_thread(this, graph_factory, index_factory,
+				new_prog, i % num_nodes, i, num_threads, scheduler);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
 		vprograms[i] = new_prog;
@@ -429,8 +432,9 @@ void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 void graph_engine::preload_graph()
 {
 	const int BLOCK_SIZE = 1024 * 1024 * 32;
-	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
-	size_t preload_size = min(params.get_cache_size(), factory->get_file_size());
+	io_interface::ptr io = graph_factory->create_io(thread::get_curr_thread());
+	size_t preload_size = min(params.get_cache_size(),
+			graph_factory->get_file_size());
 	printf("preload %ld bytes\n", preload_size);
 	char *buf = new char[BLOCK_SIZE];
 	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)

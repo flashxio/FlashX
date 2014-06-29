@@ -63,14 +63,38 @@ public:
 		this->size = size;
 	}
 
-	in_mem_vertex_info(vertex_id_t id, const vertex_index *index);
-
 	off_t get_ext_mem_off() const {
 		return off;
 	}
 
 	vsize_t get_ext_mem_size() const {
 		return size;
+	}
+};
+
+class in_mem_directed_vertex_info: public in_mem_vertex_info
+{
+	vsize_t num_in_edges;
+	vsize_t num_out_edges;
+public:
+	in_mem_directed_vertex_info() {
+		num_in_edges = 0;
+		num_out_edges = 0;
+	}
+
+	in_mem_directed_vertex_info(vertex_id_t id, off_t off, size_t size,
+			vsize_t num_in_edges, vsize_t num_out_edges): in_mem_vertex_info(id,
+				off, size) {
+		this->num_in_edges = num_in_edges;
+		this->num_out_edges = num_out_edges;
+	}
+
+	vsize_t get_num_in_edges() const {
+		return num_in_edges;
+	}
+
+	vsize_t get_num_out_edges() const {
+		return num_out_edges;
 	}
 };
 

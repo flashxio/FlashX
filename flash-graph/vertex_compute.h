@@ -39,7 +39,17 @@ class compute_directed_vertex;
  */
 class vertex_compute: public user_compute
 {
-	std::priority_queue<vertex_id_t> requested_vertices;
+	struct vertex_info_comp
+	{
+		bool operator()(const in_mem_vertex_info &info1,
+				const in_mem_vertex_info &info2) {
+			return info1.get_ext_mem_off() > info2.get_ext_mem_off();
+		}
+	};
+
+	// TODO use the embedded array as the container.
+	std::priority_queue<in_mem_vertex_info, std::vector<in_mem_vertex_info>,
+		vertex_info_comp> requested_vertices;
 protected:
 	graph_engine *graph;
 
@@ -47,7 +57,7 @@ protected:
 	worker_thread *issue_thread;
 	compute_vertex *v;
 	// The number of requested vertices that will be read in the user compute.
-	size_t num_complete_issues;
+	size_t num_requested;
 	// The number of vertices read by the user compute.
 	size_t num_complete_fetched;
 public:
@@ -56,7 +66,7 @@ public:
 		this->graph = graph;
 		v = NULL;
 		issue_thread = (worker_thread *) thread::get_curr_thread();
-		num_complete_issues = 0;
+		num_requested = 0;
 		num_complete_fetched = 0;
 	}
 
@@ -75,7 +85,13 @@ public:
 	virtual void set_scan_dir(bool forward) {
 	}
 
-	virtual int has_requests() const {
+	void add_request_info(const in_mem_vertex_info &info) {
+		requested_vertices.push(info);
+	}
+
+	void issue_io_request(const in_mem_vertex_info &info);
+
+	virtual int has_requests() {
 		return requested_vertices.size() > 0;
 	}
 
@@ -83,14 +99,14 @@ public:
 
 	virtual void run(page_byte_array &);
 
-	virtual bool has_completed() const {
+	virtual bool has_completed() {
 		// If the user compute has got all requested data and it has
 		// no more requests to issue, we can consider the user compute
 		// has been completed.
 		// NOTE: it's possible that requested data may not be passed to
 		// this user compute, so we only count the requests that are going
 		// to be passed to this user compute.
-		return num_complete_issues == num_complete_fetched && !has_requests();
+		return num_requested == num_complete_fetched && !has_requests();
 	}
 
 	virtual void request_vertices(vertex_id_t ids[], size_t num);
@@ -106,7 +122,34 @@ class part_directed_vertex_compute;
 
 class directed_vertex_compute: public vertex_compute
 {
-	std::priority_queue<directed_vertex_request> reqs;
+	class part_request_info
+	{
+		directed_vertex_request req;
+		in_mem_directed_vertex_info info;
+	public:
+		part_request_info(const directed_vertex_request &req,
+				const in_mem_directed_vertex_info &info) {
+			this->req = req;
+			this->info = info;
+		}
+
+		const directed_vertex_request &get_request() const {
+			return req;
+		}
+
+		const in_mem_directed_vertex_info &get_info() const {
+			return info;
+		}
+
+		bool operator<(const part_request_info &info) const {
+			return this->req.get_id() > info.req.get_id();
+		}
+	};
+
+	std::priority_queue<part_request_info> reqs;
+
+	request_range generate_request(const directed_vertex_request &req,
+			const in_mem_directed_vertex_info &info);
 public:
 	directed_vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): vertex_compute(graph, alloc) {
@@ -116,13 +159,26 @@ public:
 		vertex_compute::set_scan_dir(forward);
 	}
 
-	virtual int has_requests() const {
-		return vertex_compute::has_requests() || reqs.size() > 0;
-	}
+	virtual int has_requests();
 
 	virtual request_range get_next_request();
 
+	/*
+	 * The requested part of the vertex may have no edges.
+	 * We can notify the user immediately.
+	 */
+	void complete_empty_part(const directed_vertex_request &req);
+
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
+
+	void issue_io_request(const directed_vertex_request &req,
+			const in_mem_directed_vertex_info &info);
+
+	void add_request_info(const directed_vertex_request &req,
+			const in_mem_directed_vertex_info &info) {
+		part_request_info req_info(req, info);
+		reqs.push(req_info);
+	}
 };
 
 class part_directed_vertex_compute: public user_compute
@@ -157,7 +213,7 @@ public:
 		return 0;
 	}
 
-	virtual int has_requests() const {
+	virtual int has_requests() {
 		return false;
 	}
 
@@ -168,11 +224,12 @@ public:
 
 	virtual void run(page_byte_array &);
 
-	virtual bool has_completed() const {
+	virtual bool has_completed() {
 		return num_fetched > 0;
 	}
 };
 
+#if 0
 class part_ts_vertex_compute;
 
 class ts_vertex_compute: public vertex_compute
@@ -253,6 +310,7 @@ public:
 		return num_fetched > 0;
 	}
 };
+#endif
 
 template<class compute_type>
 class vertex_compute_allocator: public compute_allocator
