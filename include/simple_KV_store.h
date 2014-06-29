@@ -37,12 +37,14 @@ public:
 		has_run = false;
 	}
 
-	void init(ValueTaskType tasks[], int num) {
-		this->tasks.resize(num);
-		for (int i = 0; i < num; i++) {
-			this->tasks[i] = tasks[i];
-		}
-		this->num_tasks = num;
+	bool has_tasks() const {
+		return num_tasks > 0;
+	}
+
+	void add_task(const ValueTaskType &task) {
+		if (tasks.get_capacity() <= num_tasks)
+			tasks.resize(num_tasks * 2);
+		tasks[num_tasks++] = task;
 		has_run = false;
 	}
 
@@ -60,8 +62,11 @@ public:
 		for (int i = 0; i < num_tasks; i++) {
 			off_t idx = tasks[i].get_idx();
 			assert(idx >= start_off && idx < end_off);
-			ValueType v = arr.get<ValueType>(idx - start_off);
-			tasks[i].run(v);
+			int num_entries = tasks[i].get_num_entries();
+			ValueType vs[num_entries];
+			arr.memcpy((idx - start_off) * sizeof(ValueType), (char *) vs,
+					sizeof(ValueType) * num_entries);
+			tasks[i].run(vs, num_entries);
 		}
 		has_run = true;
 	}
@@ -135,6 +140,14 @@ class simple_KV_store
 	io_interface::ptr io;
 	KV_compute_allocator<ValueType, TaskType> alloc;
 
+	struct task_comp {
+		bool operator()(const TaskType &task1, const TaskType &task2) {
+			return task1.get_idx() > task2.get_idx();
+		}
+	};
+
+	std::priority_queue<TaskType, std::vector<TaskType>, task_comp> task_buf;
+
 	embedded_array<io_request> req_buf;
 	int num_reqs;
 
@@ -146,7 +159,6 @@ class simple_KV_store
 	}
 
 	void flush_io_requests() {
-		printf("issue %d requests\n", num_reqs);
 		io->access(req_buf.data(), num_reqs);
 		num_reqs = 0;
 	}
@@ -163,13 +175,8 @@ public:
 		return ptr(new simple_KV_store<ValueType, TaskType>(io));
 	}
 
-	/**
-	 * Serve user requests asynchronously.
-	 * It assumes that all user tasks have been sorted based on the locations
-	 * of the entries accessed by the user tasks.
-	 */
-	void async_request(TaskType tasks[], int num) {
-		if (num == 0)
+	void flush_requests() {
+		if (task_buf.empty())
 			return;
 
 		// Each time we issue a single request to serve as many user tasks
@@ -178,51 +185,59 @@ public:
 		// in the input array are adjacent to each other.
 
 		// The offset of the first page accessed by the I/O request.
-		off_t first_page_off = ROUND_PAGE(tasks[0].get_idx() * sizeof(ValueType));
+		const TaskType &task = task_buf.top();
+		task_buf.pop();
+		off_t first_page_off = ROUND_PAGE(task.get_idx() * sizeof(ValueType));
 		// The offset of the last page accessed by the I/O request.
 		// The page is excluded by the I/O request.
-		off_t last_page_off = first_page_off + PAGE_SIZE;
-		// The first task covered by the I/O request.
-		int first_task_idx = 0;
-		int i = 1;
-		for (; i < num; i++) {
-			off_t task_off = tasks[i].get_idx() * sizeof(ValueType);
-			off_t page_off = ROUND_PAGE(task_off);
-			assert(page_off >= first_page_off);
+		off_t last_page_off = ROUNDUP_PAGE((task.get_idx()
+					+ task.get_num_entries()) * sizeof(ValueType));
+		KV_compute<ValueType, TaskType> *compute
+			= (KV_compute<ValueType, TaskType> *) alloc.alloc();
+		compute->add_task(task);
+		while (!task_buf.empty()) {
+			const TaskType &task = task_buf.top();
+			task_buf.pop();
+			off_t end_page_off = ROUNDUP_PAGE((task.get_idx()
+					+ task.get_num_entries()) * sizeof(ValueType));
 			// If the task access the page covered by the I/O request.
-			if (page_off < last_page_off)
+			if (end_page_off <= last_page_off) {
+				compute->add_task(task);
 				continue;
+			}
 			// If the task access the page right behind the range covered
 			// by the I/O request.
-			if (page_off == last_page_off) {
-				last_page_off += PAGE_SIZE;
+			else if (end_page_off == last_page_off + PAGE_SIZE) {
+				last_page_off = end_page_off;
+				compute->add_task(task);
 				continue;
 			}
 
 			// The user task accesses a page far away from the range covered
 			// by the current I/O request.
-			// Issue a request to serve tasks between `first_task_idx` and `i`.
-			KV_compute<ValueType, TaskType> *compute
-				= (KV_compute<ValueType, TaskType> *) alloc.alloc();
-			compute->init(&tasks[first_task_idx], i - first_task_idx);
 			data_loc_t loc(io->get_file_id(), first_page_off);
 			io_request req(compute, loc, last_page_off - first_page_off, READ);
 			add_io_request(req);
 
 			// Re-initialize the range covered by the new I/O request.
-			first_page_off = page_off;
-			last_page_off = first_page_off + PAGE_SIZE;
-			first_task_idx = i;
+			compute = (KV_compute<ValueType, TaskType> *) alloc.alloc();
+			compute->add_task(task);
+			first_page_off = ROUND_PAGE(task.get_idx() * sizeof(ValueType));
+			last_page_off = end_page_off;
 		}
 
-		assert(first_task_idx < num);
-		KV_compute<ValueType, TaskType> *compute
-			= (KV_compute<ValueType, TaskType> *) alloc.alloc();
-		compute->init(&tasks[first_task_idx], num - first_task_idx);
+		assert(compute->has_tasks());
 		data_loc_t loc(io->get_file_id(), first_page_off);
 		io_request req(compute, loc, last_page_off - first_page_off, READ);
 		add_io_request(req);
 		flush_io_requests();
+	}
+
+	/**
+	 * Serve user requests asynchronously.
+	 */
+	void async_request(TaskType &task) {
+		task_buf.push(task);
 	}
 };
 

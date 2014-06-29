@@ -21,8 +21,14 @@ public:
 		return idx;
 	}
 
-	void run(int32_t value) {
-		assert(int_arr[idx] == value);
+	size_t get_num_entries() const {
+		return 2;
+	}
+
+	void run(int32_t values[], int num) {
+		assert(num == 2);
+		assert(int_arr[idx] == values[0]);
+		assert(int_arr[idx + 1] == values[1]);
 		num_runs++;
 	}
 
@@ -56,14 +62,13 @@ int main(int argc, char *argv[])
 	simple_KV_store<int32_t, data_check>::ptr store
 		= simple_KV_store<int32_t, data_check>::create(io);
 	int num_checks = 1000;
-	data_check *checks = new data_check[num_checks];
 	for (int test = 0; test < 5; test++) {
 		for (int i = 0; i < num_checks; i++) {
 			size_t idx = random() % arr_len;
-			checks[i] = data_check(idx);
+			data_check check(idx);
+			store->async_request(check);
 		}
-		std::sort(checks, checks + num_checks);
-		store->async_request(checks, num_checks);
+		store->flush_requests();
 		printf("There are %d pending IOs\n", io->num_pending_ios());
 		while (io->num_pending_ios() > 0) {
 			io->wait4complete(1);
