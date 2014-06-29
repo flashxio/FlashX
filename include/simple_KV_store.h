@@ -71,11 +71,11 @@ public:
 		has_run = true;
 	}
 
-	virtual bool has_completed() const {
+	virtual bool has_completed() {
 		return has_run;
 	}
 
-	virtual int has_requests() const {
+	virtual int has_requests() {
 		return false;
 	}
 
