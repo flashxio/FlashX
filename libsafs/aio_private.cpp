@@ -220,10 +220,8 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	buffered_io *io;
 	std::tr1::unordered_map<int, buffered_io *>::iterator it
 		= open_files.find(io_req.get_file_id());
-	if (it != open_files.end())
-		io = it->second;
-	else
-		io = default_io;
+	assert(it != open_files.end());
+	io = it->second;
 	assert(io);
 	io->get_partition().map(tcb->req.get_offset() / PAGE_SIZE, bid);
 	if (tcb->req.get_num_bufs() == 1)
@@ -428,18 +426,13 @@ int async_io::open_file(const logical_file_partition &partition)
 		if (data)
 			data->add_new_file(io);
 	}
-	else {
-		fprintf(stderr, "the file id has been used\n");
-		assert(0);
-	}
 	return 0;
 }
 
 int async_io::close_file(int file_id)
 {
 	buffered_io *io = open_files[file_id];
-	// TODO I don't delete the entry.
-	open_files[file_id] = NULL;
+	open_files.erase(file_id);
 	io->cleanup();
 	delete io;
 	return 0;

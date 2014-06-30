@@ -72,11 +72,11 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 
 	switch (RAID_mapping_option) {
 		case RAID0:
-			return new RAID0_mapper(files, RAID_block_size);
+			return new RAID0_mapper(file_name, files, RAID_block_size);
 		case RAID5:
-			return new RAID5_mapper(files, RAID_block_size);
+			return new RAID5_mapper(file_name, files, RAID_block_size);
 		case HASH:
-			return new hash_mapper(files, RAID_block_size);
+			return new hash_mapper(file_name, files, RAID_block_size);
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
 			exit(1);
@@ -87,11 +87,11 @@ file_mapper *RAID_config::create_file_mapper() const
 {
 	switch (RAID_mapping_option) {
 		case RAID0:
-			return new RAID0_mapper(root_paths, RAID_block_size);
+			return new RAID0_mapper("root", root_paths, RAID_block_size);
 		case RAID5:
-			return new RAID5_mapper(root_paths, RAID_block_size);
+			return new RAID5_mapper("root", root_paths, RAID_block_size);
 		case HASH:
-			return new hash_mapper(root_paths, RAID_block_size);
+			return new hash_mapper("root", root_paths, RAID_block_size);
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
 			exit(1);
