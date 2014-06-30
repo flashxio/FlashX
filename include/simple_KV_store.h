@@ -25,14 +25,20 @@
 #include "cache.h"
 #include "slab_allocator.h"
 
+template<class ValueType, class TaskType>
+class simple_KV_store;
+
 template<class ValueType, class ValueTaskType>
 class KV_compute: public user_compute
 {
 	embedded_array<ValueTaskType> tasks;
 	int num_tasks;
 	bool has_run;
+	simple_KV_store<ValueType, ValueTaskType> *store;
 public:
-	KV_compute(compute_allocator *alloc): user_compute(alloc) {
+	KV_compute(simple_KV_store<ValueType, ValueTaskType> *store,
+			compute_allocator *alloc): user_compute(alloc) {
+		this->store = store;
 		num_tasks = 0;
 		has_run = false;
 	}
@@ -69,6 +75,7 @@ public:
 			tasks[i].run(vs, num_entries);
 		}
 		has_run = true;
+		store->complete_tasks(num_tasks);
 	}
 
 	virtual bool has_completed() {
@@ -90,14 +97,17 @@ class KV_compute_allocator: public compute_allocator
 	class compute_initializer: public obj_initiator<KV_compute<ValueType, ValueTaskType> >
 	{
 		KV_compute_allocator<ValueType, ValueTaskType> *alloc;
+		simple_KV_store<ValueType, ValueTaskType> *store;
 	public:
 		compute_initializer(
+				simple_KV_store<ValueType, ValueTaskType> *store,
 				KV_compute_allocator<ValueType, ValueTaskType> *alloc) {
+			this->store = store;
 			this->alloc = alloc;
 		}
 
 		virtual void init(KV_compute<ValueType, ValueTaskType> *obj) {
-			new (obj) KV_compute<ValueType, ValueTaskType>(alloc);
+			new (obj) KV_compute<ValueType, ValueTaskType>(store, alloc);
 		}
 	};
 
@@ -111,10 +121,11 @@ class KV_compute_allocator: public compute_allocator
 
 	obj_allocator<KV_compute<ValueType, ValueTaskType> > allocator;
 public:
-	KV_compute_allocator(int node_id): allocator("KV_compute_allocator",
+	KV_compute_allocator(simple_KV_store<ValueType, ValueTaskType> *store,
+			int node_id): allocator("KV_compute_allocator",
 			node_id, 1024 * 1024, params.get_max_obj_alloc_size(),
 			typename obj_initiator<KV_compute<ValueType, ValueTaskType> >::ptr(
-				new compute_initializer(this)),
+				new compute_initializer(store, this)),
 			typename obj_destructor<KV_compute<ValueType, ValueTaskType> >::ptr(
 				new compute_destructor())) {
 	}
@@ -147,6 +158,7 @@ class simple_KV_store
 	};
 
 	std::priority_queue<TaskType, std::vector<TaskType>, task_comp> task_buf;
+	ssize_t num_pending_tasks;
 
 	embedded_array<io_request> req_buf;
 	int num_reqs;
@@ -163,10 +175,11 @@ class simple_KV_store
 		num_reqs = 0;
 	}
 
-	simple_KV_store(io_interface::ptr io): alloc(io->get_node_id()) {
+	simple_KV_store(io_interface::ptr io): alloc(this, io->get_node_id()) {
 		this->io = io;
 		num_reqs = 0;
 		assert(PAGE_SIZE % sizeof(ValueType) == 0);
+		num_pending_tasks = 0;
 	}
 public:
 	typedef std::shared_ptr<simple_KV_store<ValueType, TaskType> > ptr;
@@ -238,6 +251,16 @@ public:
 	 */
 	void async_request(TaskType &task) {
 		task_buf.push(task);
+		num_pending_tasks++;
+	}
+
+	void complete_tasks(int num_tasks) {
+		num_pending_tasks -= num_tasks;
+		assert(num_pending_tasks >= 0);
+	}
+
+	size_t get_num_pending_tasks() const {
+		return num_pending_tasks;
 	}
 };
 
