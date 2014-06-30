@@ -432,13 +432,22 @@ void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 void graph_engine::preload_graph()
 {
 	const int BLOCK_SIZE = 1024 * 1024 * 32;
-	io_interface::ptr io = graph_factory->create_io(thread::get_curr_thread());
-	size_t preload_size = min(params.get_cache_size(),
-			graph_factory->get_file_size());
-	printf("preload %ld bytes\n", preload_size);
-	char *buf = new char[BLOCK_SIZE];
+	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[BLOCK_SIZE]);
+
+	size_t cache_size = params.get_cache_size();
+	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
+	size_t preload_size = min(cache_size,
+			index_factory->get_file_size());
+	cache_size -= preload_size;
+	printf("preload %ld bytes of the index file\n", preload_size);
 	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
-		io->access(buf, i, BLOCK_SIZE, READ);
+		io->access(buf.get(), i, BLOCK_SIZE, READ);
+
+	io = graph_factory->create_io(thread::get_curr_thread());
+	preload_size = min(cache_size, graph_factory->get_file_size());
+	printf("preload %ld bytes of the graph file\n", preload_size);
+	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
+		io->access(buf.get(), i, BLOCK_SIZE, READ);
 	printf("successfully preload\n");
 }
 
