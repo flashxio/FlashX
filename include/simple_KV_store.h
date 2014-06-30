@@ -198,7 +198,7 @@ public:
 		// in the input array are adjacent to each other.
 
 		// The offset of the first page accessed by the I/O request.
-		const TaskType &task = task_buf.top();
+		const TaskType task = task_buf.top();
 		task_buf.pop();
 		off_t first_page_off = ROUND_PAGE(task.get_idx() * sizeof(ValueType));
 		// The offset of the last page accessed by the I/O request.
@@ -209,7 +209,7 @@ public:
 			= (KV_compute<ValueType, TaskType> *) alloc.alloc();
 		compute->add_task(task);
 		while (!task_buf.empty()) {
-			const TaskType &task = task_buf.top();
+			const TaskType task = task_buf.top();
 			task_buf.pop();
 			off_t end_page_off = ROUNDUP_PAGE((task.get_idx()
 					+ task.get_num_entries()) * sizeof(ValueType));
