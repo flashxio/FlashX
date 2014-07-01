@@ -31,6 +31,7 @@
 #include "worker_thread.h"
 #include "vertex_compute.h"
 #include "vertex_request.h"
+#include "vertex_index_reader.h"
 
 graph_config graph_conf;
 
@@ -203,10 +204,11 @@ void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 	compute->request_vertices(ids, num);
 }
 
-vsize_t compute_vertex::get_num_edges() const
+void compute_vertex::request_num_edges(vertex_id_t ids[], size_t num)
 {
-	// TODO
-	assert(0);
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->get_index_reader().request_num_edges(ids, num, *this,
+			curr->get_vertex_program());
 }
 
 void compute_directed_vertex::request_partial_vertices(

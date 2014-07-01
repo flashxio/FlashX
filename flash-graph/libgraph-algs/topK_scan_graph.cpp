@@ -54,7 +54,8 @@ void vertex_size_scheduler::schedule(std::vector<vertex_id_t> &ids)
 	{
 	public:
 		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
-			return v1->get_num_edges() > v2->get_num_edges();
+			return ((const scan_vertex *) v1)->get_degree()
+				> ((const scan_vertex *) v2)->get_degree();
 		}
 	};
 
@@ -200,7 +201,7 @@ void topK_scan_vertex::run(vertex_program &prog)
 	else {
 		// If this is the first time to compute on the vertex, we can still
 		// skip a lot of vertices with this condition.
-		size_t num_local_edges = get_num_edges();
+		size_t num_local_edges = get_degree();
 		req_itself = num_local_edges * num_local_edges >= max_scan.get();
 	}
 	if (req_itself) {
@@ -247,12 +248,12 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 			all_neighbors.begin());
 	all_neighbors.resize(num_neighbors);
 
-	size_t tot_edges = get_num_edges();
+	size_t tot_edges = get_degree();
 	for (size_t i = 0; i < all_neighbors.size(); i++) {
 		scan_vertex &v = (scan_vertex &) graph.get_vertex(all_neighbors[i]);
 		// The max number of common neighbors should be smaller than all neighbors
 		// in the neighborhood, assuming there aren't duplicated edges.
-		tot_edges += min(v.get_num_edges(), num_neighbors * 2);
+		tot_edges += min(v.get_degree(), num_neighbors * 2);
 	}
 	tot_edges /= 2;
 	local_value.set_est_local(tot_edges);
@@ -262,7 +263,6 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
-	assert(num_local_edges == get_num_edges());
 	if (num_local_edges == 0)
 		return;
 
@@ -311,7 +311,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 
 		bool keep(compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
-			return scan_v.get_num_edges() >= min;
+			return scan_v.get_degree() >= min;
 		}
 	};
 
@@ -342,7 +342,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 
 		bool keep(compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
-			size_t num_local_edges = scan_v.get_num_edges();
+			size_t num_local_edges = scan_v.get_degree();
 			return num_local_edges * num_local_edges >= min;
 		}
 	};

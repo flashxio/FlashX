@@ -65,11 +65,6 @@ public:
 		this->id = id;
 	}
 
-    /**
-     *  \brief Get the number of edges in the entire graph.
-    */
-	vsize_t get_num_edges() const;
-
 	/**
 	 * \brief This allows a vertex to request the adjacency lists of vertices
 	 *        in the graph.
@@ -78,6 +73,8 @@ public:
      * \param num The number of vertex IDs you are requesting.
 	 */
 	void request_vertices(vertex_id_t ids[], size_t num);
+
+	void request_num_edges(vertex_id_t ids[], size_t num);
 
     /**
      * \brief Get its own vertex ID.
@@ -94,6 +91,12 @@ public:
      */
 	void notify_iteration_end(vertex_program & prog) {
 	}
+
+	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges, vsize_t num_out_edges) {
+	}
+
+	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
+	}
 };
 
 /**
@@ -103,29 +106,11 @@ public:
  */
 class compute_directed_vertex: public compute_vertex
 {
-	vsize_t num_in_edges;
 public:
     /**
      * \brief The constructor callled by the grah engne.
      */
 	compute_directed_vertex(vertex_id_t id): compute_vertex(id) {
-		num_in_edges = 0;
-	}
-
-    /**
-     * \brief Use to get the number of in-edges of a directed vertex.
-     * \return The number of in-edges of a vertex.
-    */
-	vsize_t get_num_in_edges() const {
-		return num_in_edges;
-	}
-
-    /**
-     * \brief Use to get the number of out-edges of a directed vertex.
-     * \return the number of out-edges of a vertex.
-     */
-	vsize_t get_num_out_edges() const {
-		return get_num_edges() - num_in_edges;
 	}
 
 	/**
@@ -566,6 +551,10 @@ public:
      */
 	size_t get_num_remaining_vertices() const {
 		return num_remaining_vertices_in_level.get();
+	}
+
+	int get_vertex_header_size() const {
+		return vertex_header_size;
 	}
 };
 

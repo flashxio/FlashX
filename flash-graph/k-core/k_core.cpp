@@ -36,16 +36,22 @@
 
 vsize_t K; // Min degree necessary to be part of the k-core graph
 
-class kcore_vertex: public compute_directed_vertex
+enum kcore_stage_t
+{
+	INIT_DEGREE,
+	KCORE,
+};
+kcore_stage_t stage;
+
+class kcore_vertex: public compute_vertex
 {
   bool deleted;
   vsize_t degree; 
 
 public:
-  kcore_vertex(vertex_id_t id): compute_directed_vertex(id) {
+  kcore_vertex(vertex_id_t id): compute_vertex(id) {
     this->deleted = false;
-	assert(0);
-    this->degree = get_num_edges();
+    this->degree = 0;
   }
 
   bool is_deleted() const {
@@ -61,17 +67,27 @@ public:
   }
 
   void run(vertex_program &prog) {
-    if (degree > K) { return; }
+	  if (stage == INIT_DEGREE) {
+		  vertex_id_t id = get_id();
+		  request_num_edges(&id, 1);
+	  }
+	  else {
+		  if (degree > K) { return; }
 
-    if (!is_deleted()) {
-			vertex_id_t id = get_id();
-			request_vertices(&id, 1); // put my edgelist in page cache
-    }
+		  if (!is_deleted()) {
+			  vertex_id_t id = get_id();
+			  request_vertices(&id, 1); // put my edgelist in page cache
+		  }
+	  }
   }
 
 	void run(vertex_program &prog, const page_vertex &vertex);
 
 	void run_on_message(vertex_program &prog, const vertex_message &msg); 
+
+	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
+		degree = num_edges;
+	}
 };
 
 // If I am to be deleted, multicast this message to all my neighbors
@@ -86,12 +102,13 @@ class deleted_message: public vertex_message
 void multicast_delete_msg(vertex_program &prog, 
       const page_vertex &vertex, edge_type E)
 {
+	page_byte_array::const_iterator<vertex_id_t> it
+        = vertex.get_neigh_begin(E);
     page_byte_array::const_iterator<vertex_id_t> end_it
       = vertex.get_neigh_end(E);
-    stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(E));
+    stack_array<vertex_id_t, 1024> dest_buf(end_it - it);
     int num_dests = 0;
-    for (page_byte_array::const_iterator<vertex_id_t> it
-        = vertex.get_neigh_begin(E); it != end_it; ++it) {
+    for (; it != end_it; ++it) {
       vertex_id_t id = *it;
       dest_buf[num_dests++] = id;
     } 
@@ -224,17 +241,23 @@ int main(int argc, char *argv[])
     }
     bool keep(compute_vertex &v) {
       kcore_vertex &kcore_v = (kcore_vertex &) v;
-      return kcore_v.get_num_in_edges() + kcore_v.get_num_out_edges() < min;
+      return kcore_v.get_degree() < min;
     }
   };
 
-	std::shared_ptr<vertex_filter> filter
-		= std::shared_ptr<vertex_filter>(new activate_k_filter(K));
-
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
+	printf("Run the stage of init degree\n");
+	stage = INIT_DEGREE;
+	graph->start_all(); 
+	graph->wait4complete();
+
+	std::shared_ptr<vertex_filter> filter
+		= std::shared_ptr<vertex_filter>(new activate_k_filter(K));
+	printf("Run the stage of computing K-core\n");
+	stage = KCORE;
 	graph->start(filter); 
-  graph->wait4complete();
+	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
 	vertex_query::ptr cvq(new count_vertex_query());

@@ -107,14 +107,23 @@ public:
 template<class ValueType>
 class req_edge_task
 {
+	// The vertex whose edges the task requests.
 	vertex_id_t vid;
+	// The vertex who issues the request.
+	compute_vertex *v;
+	vertex_program *vprog;
 public:
 	req_edge_task() {
 		vid = 0;
+		v = NULL;
+		vprog = NULL;
 	}
 
-	req_edge_task(vertex_id_t vid) {
+	req_edge_task(vertex_id_t vid, compute_vertex &v,
+			vertex_program &vprog) {
 		this->vid = vid;
+		this->v = &v;
+		this->vprog = &vprog;
 	}
 
 	size_t get_idx() const {
@@ -122,10 +131,13 @@ public:
 	}
 
 	size_t get_num_entries() const {
-		return 1;
+		return 2;
 	}
 
 	void run(ValueType entries[], int num) {
+		assert(num == 2);
+		vprog->run_on_vertex_size(*v, vid,
+				entries[1].get_off() - entries[0].get_off());
 	}
 
 	// Override the operator so it can be used in a priority queue.
@@ -147,7 +159,8 @@ public:
 
 	virtual void request_vertices(vertex_id_t ids[], size_t num,
 			vertex_compute &compute) = 0;
-	virtual void request_num_edges(vertex_id_t vertices[], size_t num) = 0;
+	virtual void request_num_edges(vertex_id_t vertices[], size_t num,
+			compute_vertex &v, vertex_program &vprog) = 0;
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
 			directed_vertex_compute &compute) = 0;
 	virtual void wait4complete(int num) = 0;
@@ -223,7 +236,21 @@ public:
 		}
 	}
 
-	void request_num_edges(vertex_id_t vertices[], size_t num) {
+	void request_num_edges(vertex_id_t ids[], size_t num,
+			compute_vertex &v, vertex_program &vprog) {
+		for (size_t i = 0; i < num; i++) {
+			req_edge_task<ValueType> task(ids[i], v, vprog);
+			if (ids[i] >= get_cached_index_start()) {
+				int off_in_cache = ids[i] - get_cached_index_start();
+				int num_entries = task.get_num_entries();
+				ValueType vs[num_entries];
+				for (int j = 0; j < num_entries; j++)
+					vs[j] = get_cached_entry(off_in_cache + j);
+				task.run(vs, num_entries);
+			}
+			else
+				req_edge_store->async_request(task);
+		}
 	}
 
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,

@@ -22,6 +22,18 @@
 
 #include "triangle_shared.h"
 
+struct undirected_runtime_data_t: public runtime_data_t
+{
+	vsize_t num_edge_reqs;
+	vsize_t degree;
+
+	undirected_runtime_data_t(vsize_t num_exist_triangles,
+			vsize_t degree): runtime_data_t(degree, num_exist_triangles) {
+		this->degree = degree;
+		num_edge_reqs = 0;
+	}
+};
+
 class undirected_triangle_vertex: public compute_vertex
 {
 	multi_func_value local_value;
@@ -59,7 +71,41 @@ public:
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
+
+	void run_on_num_edges(vertex_id_t id, vsize_t num_edges);
+
+	void destroy_runtime() {
+		undirected_runtime_data_t *data
+			= (undirected_runtime_data_t *) local_value.get_runtime_data();
+		size_t num_curr_triangles = data->num_triangles;
+		delete data;
+		local_value.set_num_triangles(num_curr_triangles);
+	}
 };
+
+void undirected_triangle_vertex::run_on_num_edges(vertex_id_t id, vsize_t num_edges)
+{
+	undirected_runtime_data_t *data
+		= (undirected_runtime_data_t *) local_value.get_runtime_data();
+	data->num_edge_reqs++;
+
+	if ((num_edges < data->degree && id != get_id())
+			|| (num_edges == data->degree && id < get_id())) {
+		data->edges.push_back(id);
+		data->num_required++;
+	}
+	if (data->num_edge_reqs == data->degree) {
+		if (data->edges.empty()) {
+			long ret = num_completed_vertices.inc(1);
+			if (ret % 100000 == 0)
+				printf("%ld completed vertices\n", ret);
+			return;
+		}
+		data->finalize_init();
+		// We now can request the neighbors.
+		request_vertices(data->edges.data(), data->edges.size());
+	}
+}
 
 void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 		const page_vertex &vertex)
@@ -77,40 +123,18 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
+
+		destroy_runtime();
 		return;
 	}
 
-	std::vector<vertex_id_t> edges;
+	std::vector<vertex_id_t> edges(vertex.get_num_edges(edge_type::IN_EDGE));
+	vertex.read_edges(edge_type::IN_EDGE, edges.data(), edges.size());
 
-	page_byte_array::const_iterator<vertex_id_t> it
-		= vertex.get_neigh_begin(edge_type::IN_EDGE);
-	page_byte_array::const_iterator<vertex_id_t> end
-		= vertex.get_neigh_end(edge_type::IN_EDGE);
-	int num_local_edges = this->get_num_edges();
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
-		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
-		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
-				|| (num_local_edges1 == num_local_edges
-					&& id < vertex.get_id())) {
-			edges.push_back(id);
-		}
-	}
-
-	if (edges.empty()) {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
-		return;
-	}
-
-	// We have to set runtime data before calling request_partial_vertices.
-	// It's possible that the request to a partial vertex can be completed
-	// immediately and run_on_neighbor is called in request_partial_vertices.
-	// TODO Maybe I should avoid that.
-	local_value.set_runtime_data(new runtime_data_t(edges, edges.size(),
-				local_value.get_num_triangles()));
-	request_vertices(edges.data(), edges.size());
+	local_value.set_runtime_data(new undirected_runtime_data_t(
+				local_value.get_num_triangles(),
+				vertex.get_num_edges(edge_type::IN_EDGE)));
+	request_num_edges(edges.data(), edges.size());
 }
 
 void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
@@ -143,9 +167,7 @@ void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
 				prog.send_msg(data->edges[i], msg);
 			}
 		}
-		size_t num_curr_triangles = data->num_triangles;
-		delete data;
-		local_value.set_num_triangles(num_curr_triangles);
+		destroy_runtime();
 	}
 }
 

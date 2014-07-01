@@ -65,6 +65,8 @@ class vertex_program
 	simple_msg_sender &get_msg_sender(int thread_id) const {
 		return *msg_senders[thread_id];
 	}
+protected:
+	size_t get_vertex_header_size() const;
 public:
 	typedef std::shared_ptr<vertex_program> ptr; /**Smart pointer by which `vertex_program`s should be accessed.*/
     
@@ -122,6 +124,11 @@ public:
      *  \param mmsg The message(s) received by the vertex.
      */
 	virtual void run_on_multicast_message(multicast_message &mmsg) = 0;
+
+	virtual void run_on_vertex_size(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t vertex_size) = 0;
+	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t num_in_edges, vsize_t num_out_edges) = 0;
     
     /**
      * \brief Perform some user defined action on a vertex when the current iteration comes to an end.
@@ -273,6 +280,19 @@ public:
 			vertex_type *v = (vertex_type *) vertex_buf[i];
 			v->run_on_message(*this, mmsg);
 		}
+	}
+
+	virtual void run_on_vertex_size(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t vertex_size) {
+		vsize_t num_edges = (vertex_size
+				- get_vertex_header_size()) / sizeof(vertex_id_t);
+		((vertex_type &) c_vertex).run_on_num_edges(id, num_edges);
+	}
+
+	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t num_in_edges, vsize_t num_out_edges) {
+		((vertex_type &) c_vertex).run_on_num_dedges(id, num_in_edges,
+			num_out_edges);
 	}
     
 	virtual void notify_iteration_end(compute_vertex &comp_v) {

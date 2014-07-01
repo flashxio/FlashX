@@ -257,7 +257,6 @@ void scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 	assert(!local_value.has_runtime_data());
 
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
-	assert(num_local_edges == get_num_edges());
 #ifdef PV_STAT
 	num_all_edges = num_local_edges;
 #endif
