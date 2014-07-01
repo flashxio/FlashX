@@ -209,7 +209,7 @@ public:
 
 	void request_vertices(vertex_id_t ids[], size_t num, vertex_compute &compute) {
 		for (size_t i = 0; i < num; i++) {
-			req_vertex_task<ValueType> task(ids[i] / sizeof(ValueType), compute);
+			req_vertex_task<ValueType> task(ids[i], compute);
 			if (ids[i] >= get_cached_index_start()) {
 				int off_in_cache = ids[i] - get_cached_index_start();
 				int num_entries = task.get_num_entries();
