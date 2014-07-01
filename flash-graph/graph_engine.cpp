@@ -198,9 +198,7 @@ size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	vertex_compute *compute = curr->get_curr_vertex_compute();
-	if (compute == NULL)
-		compute = curr->create_vertex_compute(this);
+	vertex_compute *compute = curr->get_vertex_compute(*this);
 	compute->request_vertices(ids, num);
 }
 
@@ -216,9 +214,7 @@ void compute_directed_vertex::request_partial_vertices(
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	directed_vertex_compute *compute
-		= (directed_vertex_compute *) curr->get_curr_vertex_compute();
-	if (compute == NULL)
-		compute = (directed_vertex_compute *) curr->create_vertex_compute(this);
+		= (directed_vertex_compute *) curr->get_vertex_compute(*this);
 	compute->request_partial_vertices(reqs, num);
 }
 
@@ -228,9 +224,7 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	ts_vertex_compute *compute
-		= (ts_vertex_compute *) curr->get_curr_vertex_compute();
-	if (compute == NULL)
-		compute = (ts_vertex_compute *) curr->create_vertex_compute(this);
+		= (ts_vertex_compute *) curr->get_vertex_compute(*this);
 	compute->request_partial_vertices(reqs, num);
 }
 #endif

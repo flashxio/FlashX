@@ -176,7 +176,6 @@ worker_thread::worker_thread(graph_engine *graph,
 	this->io = NULL;
 	this->graph_factory = graph_factory;
 	this->index_factory = index_factory;
-	this->curr_compute = NULL;
 	// We increase the allocator by 1M each time.
 	// It shouldn't need to allocate much memory.
 	msg_alloc = std::shared_ptr<slab_allocator>(new slab_allocator("graph-message-allocator",
@@ -303,7 +302,6 @@ int worker_thread::process_activated_vertices(int max)
 		return 0;
 
 	compute_vertex *vertex_buf[max];
-	stack_array<io_request> reqs(max);
 	int num = curr_activated_vertices->fetch(vertex_buf, max);
 	if (num == 0) {
 		assert(curr_activated_vertices->is_empty());
@@ -314,47 +312,17 @@ int worker_thread::process_activated_vertices(int max)
 		graph->process_vertices(num);
 	}
 
-	int num_to_process = 0;
 	for (int i = 0; i < num; i++) {
 		compute_vertex *info = vertex_buf[i];
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
 		vertex_program &curr_vprog = get_vertex_program();
-		assert(curr_compute == NULL);
 		curr_vprog.run(*info);
-		if (curr_compute) {
-			// If the user code requests the vertices that are empty or whose
-			// requested part is empty. These empty requests can be handled
-			// immediately, so it's possible that the current vertex compute
-			// may not have requests.
-			if (curr_compute->has_requests()) {
-				assert(0);
-				// It's mostly likely that it is requesting the adjacency list
-				// of itself. But it doesn't really matter what the vertex
-				// wants to request here.
-				request_range range = curr_compute->get_next_request();
-				if (graph->get_logger())
-					graph->get_logger()->log(&range, 1);
-				reqs[num_to_process++] = io_request(range.get_compute(),
-						range.get_loc(), range.get_size(),
-						range.get_access_method());
-			}
-			else if (curr_compute->has_completed()) {
-				// The reason we reach here is that the vertex requests some
-				// partial vertices and the request parts are empty.
-				// The user compute is only referenced here. We need to delete
-				// it.
-				assert(curr_compute->get_ref() == 0);
-				assert(curr_compute->has_completed());
-				compute_allocator *alloc = curr_compute->get_allocator();
-				alloc->free(curr_compute);
-			}
-		}
-		else
+		// If the user code doesn't generate a vertex_compute, we are done
+		// with the vertex in this iteration.
+		if (!has_vertex_compute(info->get_id()))
 			complete_vertex(*info);
-		reset_curr_vertex_compute();
 	}
-	io->access(reqs.data(), num_to_process);
 	return num;
 }
 
@@ -465,6 +433,25 @@ void worker_thread::return_vertices(vertex_id_t ids[], int num)
 
 void worker_thread::complete_vertex(const compute_vertex &v)
 {
+	std::unordered_map<vertex_id_t, vertex_compute *>::iterator it
+		= active_computes.find(v.get_id());
+	// It's possible that a vertex_compute isn't created for the active
+	// compute_vertex.
+	if (it != active_computes.end()) {
+		vertex_compute *compute = it->second;
+		// Since we have finished the computation on the vertex, we can
+		// delete the vertex_compute now.
+		active_computes.erase(it);
+		compute->dec_ref();
+		// It's possible that the vertex_compute is issued to SAFS.
+		// In this case, SAFS will delete it.
+		if (compute->get_ref() == 0) {
+			assert(compute->has_completed());
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+		}
+	}
+
 	num_completed_vertices_in_level.inc(1);
 	// The vertex might be stolen from another thread. Now we have
 	// finished processing it, we should return it to its owner thread.
@@ -489,10 +476,19 @@ void worker_thread::activate_vertex(vertex_id_t id)
 	next_activated_vertices->set(off);
 }
 
-vertex_compute *worker_thread::create_vertex_compute(compute_vertex *v)
+vertex_compute *worker_thread::get_vertex_compute(compute_vertex &v)
 {
-	assert(curr_compute == NULL);
-	curr_compute = (vertex_compute *) alloc->alloc();
-	curr_compute->init(v);
-	return curr_compute;
+	vertex_id_t id = v.get_id();
+	std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
+		= active_computes.find(id);
+	if (it == active_computes.end()) {
+		vertex_compute *compute = (vertex_compute *) alloc->alloc();
+		compute->init(&v);
+		active_computes.insert(std::pair<vertex_id_t, vertex_compute *>(
+					id, compute));
+		compute->inc_ref();
+		return compute;
+	}
+	else
+		return it->second;
 }

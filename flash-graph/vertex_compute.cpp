@@ -69,11 +69,9 @@ void vertex_compute::run(page_byte_array &array)
 	const page_vertex *ext_v = interpreter.interpret(array, buf.data(),
 			interpreter.get_vertex_size());
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	t->set_curr_vertex_compute(this);
 	vertex_program &curr_vprog = t->get_vertex_program();
 	curr_vprog.run(*v, *ext_v);
 	complete_request();
-	t->reset_curr_vertex_compute();
 }
 
 void vertex_compute::complete_request()
@@ -103,18 +101,9 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	vertex_program &curr_vprog = t->get_vertex_program();
 	curr_vprog.run(*comp_v, pg_v);
-	assert(t->get_curr_vertex_compute() == NULL);
 	num_fetched++;
-	compute->complete_request();
 	compute->dec_ref();
-	// If the original user compute hasn't been issued to the filesystem,
-	// it's possible that the reference count on it reaches 0 here.
-	// We should deallocate the user compute if its ref count reaches 0.
-	if (compute->get_ref() == 0) {
-		assert(compute->has_completed());
-		compute_allocator *alloc = compute->get_allocator();
-		alloc->free(compute);
-	}
+	compute->complete_request();
 }
 
 void directed_vertex_compute::complete_empty_part(
@@ -322,8 +311,8 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 		worker_thread *t = (worker_thread *) thread::get_curr_thread();
 		vertex_program &curr_vprog = t->get_vertex_program();
 		curr_vprog.run(*comp_v, *ext_v);
-		ts_compute->complete_request();
 		ts_compute->dec_ref();
+		ts_compute->complete_request();
 		// If the original user compute hasn't been issued to the filesystem,
 		// it's possible that the reference count on it reaches 0 here.
 		// We should deallocate the user compute if its ref count reaches 0.
