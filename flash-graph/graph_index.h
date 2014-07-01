@@ -25,10 +25,9 @@
 #include "vertex.h"
 #include "partitioner.h"
 #include "vertex_program.h"
+#include "graph_file_header.h"
 
 class compute_vertex;
-
-vertex_index *load_vertex_index(const std::string &index_file);
 
 /**
  * \brief This file contains a set of graph index implementation.
@@ -122,11 +121,9 @@ class NUMA_local_graph_index: public graph_index
 	size_t num_vertices;
 	vertex_type *vertex_arr;
 	const graph_partitioner &partitioner;
-	const vertex_index &index;
 
-	NUMA_local_graph_index(const vertex_index &_index,
-			const graph_partitioner &_partitioner, int part_id, int node_id,
-			size_t tot_num_vertices): partitioner(_partitioner), index(_index) {
+	NUMA_local_graph_index(const graph_partitioner &_partitioner, int part_id,
+			int node_id, size_t tot_num_vertices): partitioner(_partitioner) {
 		this->part_id = part_id;
 		this->tot_num_vertices = tot_num_vertices;
 		this->num_vertices = partitioner.get_part_size(part_id,
@@ -154,12 +151,10 @@ public:
 			partitioner.map2loc(vid, part_id, part_off);
 			assert(this->part_id == part_id);
 			new (vertex_arr + part_off) vertex_type(vid);
-			vertex_arr[part_off].init_vertex(index);
 		}
 		if (local_ids.size() < num_vertices) {
 			assert(local_ids.size() == num_vertices - 1);
 			new (vertex_arr + local_ids.size()) vertex_type(INVALID_VERTEX_ID);
-			vertex_arr[local_ids.size()].init_vertex(index);
 		}
 	}
 
@@ -237,14 +232,13 @@ template<class vertex_type>
 class NUMA_graph_index: public graph_index
 {
 	std::string index_file;
+	graph_header header;
 
 	vertex_id_t max_vertex_id;
 	vertex_id_t min_vertex_id;
-	size_t num_vertices;
 	std::unique_ptr<range_graph_partitioner> partitioner;
 	// A graph index per thread
 	std::vector<std::unique_ptr<NUMA_local_graph_index<vertex_type> > > index_arr;
-	std::unique_ptr<off_t[]> off_arr;
 
 	class init_thread: public thread
 	{
@@ -272,17 +266,20 @@ public:
 	void init(int num_threads, int num_nodes) {
 		partitioner = std::unique_ptr<range_graph_partitioner>(
 				new range_graph_partitioner(num_threads));
-		vertex_index *index = load_vertex_index(index_file);
-		size_t min_vertex_size = get_min_ext_mem_vertex_size(
-				index->get_graph_header().get_graph_type());
-		num_vertices = index->get_num_vertices();
+
+		file_io_factory::shared_ptr index_factory = create_io_factory(
+				index_file, GLOBAL_CACHE_ACCESS);
+		io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
+		io->access((char *) &header, 0, sizeof(header), READ);
+
 		// Construct the indices.
 		for (int i = 0; i < num_threads; i++) {
 			index_arr.emplace_back(new NUMA_local_graph_index<vertex_type>(
 						// The partitions are assigned to worker threads.
 						// The memory used to store the partitions should
 						// be on the same NUMA as the worker threads.
-						*index, *partitioner, i, i % num_nodes, num_vertices));
+						*partitioner, i, i % num_nodes,
+						header.get_num_vertices()));
 		}
 
 		std::vector<init_thread *> threads(num_threads);
@@ -295,25 +292,10 @@ public:
 			delete threads[i];
 		}
 
-		size_t num_non_empty = 0;
-		// We use the last entry in the array to store the location of
-		// the end of the graph file.
-		off_arr = std::unique_ptr<off_t[]>(new off_t[num_vertices + 1]);
-#pragma omp parallel for reduction(+:num_non_empty)
-		for (size_t i = 0; i < num_vertices; i++) {
-			off_arr[i] = ::get_vertex_off(index, i);
-			if (::get_vertex_size(index, i) > min_vertex_size) {
-				num_non_empty++;
-			}
-		}
-		off_arr[num_vertices] = index->get_graph_size();
-
 		min_vertex_id = 0;
-		max_vertex_id = num_vertices - 1;
+		max_vertex_id = header.get_num_vertices() - 1;
 
-		printf("There are %ld vertices and %ld non-empty\n", num_vertices,
-				num_non_empty);
-		vertex_index::destroy(index);
+		printf("There are %ld vertices\n", header.get_num_vertices());
 	}
 
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
@@ -355,7 +337,7 @@ public:
 	}
 
 	virtual size_t get_num_vertices() const {
-		return num_vertices;
+		return header.get_num_vertices();
 	}
 
 	virtual const graph_partitioner &get_partitioner() const {

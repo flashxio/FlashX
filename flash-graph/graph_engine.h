@@ -65,15 +65,6 @@ public:
 		this->id = id;
 	}
 
-	/**
-	 * \internal
-	 * \brief This is called by graph engine with a mapping for
-	 *         vertex adjacency lists on disk.
-	 * \param index A mapping for vertex adjacency lists on disk.
-	 */
-	void init_vertex(const vertex_index &index) {
-	}
-    
     /**
      *  \brief Get the number of edges in the entire graph.
     */
@@ -122,26 +113,13 @@ public:
 	}
 
     /**
-	 * \internal
-     * \brief This is called by the graph engine.
-     * \param index1 A mapping for vertex adjacency lists on disk.
-     */
-	void init_vertex(const vertex_index &index1) {
-		assert(index1.get_graph_header().get_graph_type()
-				== graph_type::DIRECTED);
-		const directed_vertex_index &index
-			= (const directed_vertex_index &) index1;
-		num_in_edges = index.get_num_in_edges(get_id());
-	}
-    
-    /**
      * \brief Use to get the number of in-edges of a directed vertex.
      * \return The number of in-edges of a vertex.
     */
 	vsize_t get_num_in_edges() const {
 		return num_in_edges;
 	}
-    
+
     /**
      * \brief Use to get the number of out-edges of a directed vertex.
      * \return the number of out-edges of a vertex.
