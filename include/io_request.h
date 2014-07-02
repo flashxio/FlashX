@@ -416,15 +416,6 @@ public:
 			int max_fetch);
 
 	/**
-	 * FIXME This method is a wrapper method on user-defined run().
-	 */
-	void complete_request(page_byte_array &arr) {
-		assert(get_ref() > 0);
-		run(arr);
-		dec_ref();
-	}
-
-	/**
 	 * This method increases the reference count of the object.
 	 */
 	void inc_ref() {
