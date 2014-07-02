@@ -43,7 +43,7 @@ public:
 request_range vertex_compute::get_next_request()
 {
 	// Get the next vertex.
-	const in_mem_vertex_info &info = requested_vertices.top();
+	const in_mem_vertex_info info = requested_vertices.top();
 	requested_vertices.pop();
 	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
 	return request_range(loc, info.get_ext_mem_size(), READ, this);
@@ -137,8 +137,8 @@ int directed_vertex_compute::has_requests()
 			if ((req.get_type() == edge_type::IN_EDGE && num_in_edges == 0)
 					|| (req.get_type() == edge_type::OUT_EDGE
 						&& num_out_edges == 0)) {
-				reqs.pop();
 				complete_empty_part(req);
+				reqs.pop();
 			}
 			else
 				return true;
@@ -153,7 +153,7 @@ request_range directed_vertex_compute::get_next_request()
 	if (vertex_compute::has_requests())
 		return vertex_compute::get_next_request();
 	else {
-		const part_request_info &req_info = reqs.top();
+		const part_request_info req_info = reqs.top();
 		reqs.pop();
 		const directed_vertex_request &req = req_info.get_request();
 		const in_mem_directed_vertex_info &info = req_info.get_info();
