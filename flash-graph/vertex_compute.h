@@ -56,10 +56,18 @@ protected:
 	// The thread that creates the vertex compute.
 	worker_thread *issue_thread;
 	compute_vertex *v;
+
 	// The number of requested vertices that will be read in the user compute.
 	size_t num_requested;
 	// The number of vertices read by the user compute.
 	size_t num_complete_fetched;
+
+	bool issued_to_io() const {
+		// When the vertex_compute is created, it has one reference.
+		// If the vertex_compute has been issued to SAFS, its reference count
+		// should be larger than 1.
+		return get_ref() > 1;
+	}
 public:
 	vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
@@ -85,12 +93,6 @@ public:
 	virtual void set_scan_dir(bool forward) {
 	}
 
-	void add_request_info(const in_mem_vertex_info &info) {
-		requested_vertices.push(info);
-	}
-
-	void issue_io_request(const in_mem_vertex_info &info);
-
 	virtual int has_requests() {
 		return requested_vertices.size() > 0;
 	}
@@ -110,6 +112,13 @@ public:
 	}
 
 	virtual void request_vertices(vertex_id_t ids[], size_t num);
+
+	/*
+	 * This is a callback function. When the location and the size of
+	 * a vertex is ready, the vertex index notifies the vertex compute
+	 * of the information.
+	 */
+	void issue_io_request(const in_mem_vertex_info &info);
 
 	graph_engine &get_graph() {
 		return *graph;
@@ -173,12 +182,6 @@ public:
 
 	void issue_io_request(const directed_vertex_request &req,
 			const in_mem_directed_vertex_info &info);
-
-	void add_request_info(const directed_vertex_request &req,
-			const in_mem_directed_vertex_info &info) {
-		part_request_info req_info(req, info);
-		reqs.push(req_info);
-	}
 };
 
 class part_directed_vertex_compute: public user_compute
@@ -201,7 +204,6 @@ public:
 			const directed_vertex_request &req) {
 		this->comp_v = v;
 		this->compute = compute;
-		compute->inc_ref();
 		this->req = req;
 	}
 
@@ -285,7 +287,6 @@ public:
 	void init(compute_vertex *v, ts_vertex_compute *compute,
 			const ts_vertex_request &req) {
 		comp_v = v;
-		compute->inc_ref();
 		ts_compute = compute;
 		required_part = req;
 	}

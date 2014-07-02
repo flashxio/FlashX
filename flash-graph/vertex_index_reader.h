@@ -56,10 +56,7 @@ public:
 		assert(num == 2);
 		in_mem_vertex_info info(vid, entries[0].get_off(),
 				entries[1].get_off() - entries[0].get_off());
-		if (!compute->get_ref())
-			compute->issue_io_request(info);
-		else
-			compute->add_request_info(info);
+		compute->issue_io_request(info);
 	}
 
 	// Override the operator so it can be used in a priority queue.
@@ -97,10 +94,7 @@ public:
 		in_mem_directed_vertex_info info(req.get_id(), entries[0].get_off(),
 				entries[1].get_off() - entries[0].get_off(),
 				entries[0].get_num_in_edges(), entries[0].get_num_out_edges());
-		if (!compute->get_ref())
-			compute->issue_io_request(req, info);
-		else
-			compute->add_request_info(req, info);
+		compute->issue_io_request(req, info);
 	}
 };
 

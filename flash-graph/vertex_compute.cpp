@@ -57,9 +57,18 @@ void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 
 void vertex_compute::issue_io_request(const in_mem_vertex_info &info)
 {
-	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
-	io_request req(this, loc, info.get_ext_mem_size(), READ);
-	issue_thread->issue_io_request(req);
+	// If the vertex compute has been issued to SAFS, SAFS will get the IO
+	// request from the interface of user_compute. In this case, we only
+	// need to add the I/O request to the queue.
+	if (issued_to_io()) {
+		requested_vertices.push(info);
+	}
+	else {
+		// Otherwise, we need to issue the I/O request to SAFS explicitly.
+		data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+		io_request req(this, loc, info.get_ext_mem_size(), READ);
+		issue_thread->issue_io_request(req);
+	}
 }
 
 void vertex_compute::run(page_byte_array &array)
@@ -102,7 +111,6 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 	vertex_program &curr_vprog = t->get_vertex_program();
 	curr_vprog.run(*comp_v, pg_v);
 	num_fetched++;
-	compute->dec_ref();
 	compute->complete_request();
 }
 
@@ -212,19 +220,26 @@ void directed_vertex_compute::issue_io_request(
 		const directed_vertex_request &req,
 		const in_mem_directed_vertex_info &info)
 {
-	// It's possible the requested part is empty. We can notify the user
-	// immediately.
-	vsize_t num_in_edges = info.get_num_in_edges();
-	vsize_t num_out_edges = info.get_num_out_edges();
-	if ((req.get_type() == edge_type::IN_EDGE && num_in_edges == 0)
-			|| (req.get_type() == edge_type::OUT_EDGE
-				&& num_out_edges == 0))
-		complete_empty_part(req);
+	// This follows the same idea as in vertex_compute.
+	if (issued_to_io()) {
+		part_request_info req_info(req, info);
+		reqs.push(req_info);
+	}
 	else {
-		request_range range = generate_request(req, info);
-		io_request io_req(range.get_compute(), range.get_loc(),
-				range.get_size(), READ);
-		issue_thread->issue_io_request(io_req);
+		// It's possible the requested part is empty. We can notify the user
+		// immediately.
+		vsize_t num_in_edges = info.get_num_in_edges();
+		vsize_t num_out_edges = info.get_num_out_edges();
+		if ((req.get_type() == edge_type::IN_EDGE && num_in_edges == 0)
+				|| (req.get_type() == edge_type::OUT_EDGE
+					&& num_out_edges == 0))
+			complete_empty_part(req);
+		else {
+			request_range range = generate_request(req, info);
+			io_request io_req(range.get_compute(), range.get_loc(),
+					range.get_size(), READ);
+			issue_thread->issue_io_request(io_req);
+		}
 	}
 }
 
@@ -311,7 +326,6 @@ void part_ts_vertex_compute::run(page_byte_array &array)
 		worker_thread *t = (worker_thread *) thread::get_curr_thread();
 		vertex_program &curr_vprog = t->get_vertex_program();
 		curr_vprog.run(*comp_v, *ext_v);
-		ts_compute->dec_ref();
 		ts_compute->complete_request();
 		// If the original user compute hasn't been issued to the filesystem,
 		// it's possible that the reference count on it reaches 0 here.
