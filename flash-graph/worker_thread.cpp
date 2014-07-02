@@ -227,13 +227,13 @@ void worker_thread::init()
 			index_reader = directed_vertex_index_reader::create(
 					index_factory->create_io(this),
 					graph_factory->get_file_size(),
-					index_factory->get_file_size());
+					graph->get_num_vertices());
 			break;
 		case graph_type::UNDIRECTED:
 			index_reader = undirected_vertex_index_reader::create(
 					index_factory->create_io(this),
 					graph_factory->get_file_size(),
-					index_factory->get_file_size());
+					graph->get_num_vertices());
 			break;
 		default:
 			assert(0);

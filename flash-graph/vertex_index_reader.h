@@ -183,17 +183,19 @@ class vertex_index_reader_impl: public vertex_index_reader
 
 protected:
 	vertex_index_reader_impl(io_interface::ptr io, size_t graph_size,
-			size_t index_size) {
+			vsize_t num_vertices) {
 		this->io = io;
 		req_vertex_store = vertex_KV_store::create(io);
 		req_edge_store = edge_KV_store::create(io);
 
 		// Keep the last one or two pages in memory.
 		off_t read_start;
-		if (index_size >= PAGE_SIZE)
-			read_start = ROUND_PAGE(index_size - PAGE_SIZE);
+		size_t index_size = num_vertices * sizeof(ValueType)
+			+ vertex_index::get_header_size();
+		if (num_vertices * sizeof(ValueType) >= PAGE_SIZE)
+			read_start = index_size - PAGE_SIZE;
 		else
-			read_start = 0;
+			read_start = vertex_index::get_header_size();
 		assert(PAGE_SIZE % sizeof(ValueType) == 0);
 		// The index contains a header.
 		cached_index_start = (read_start
@@ -204,6 +206,7 @@ protected:
 		cached_index.resize((index_size - read_start) / sizeof(ValueType) + 1);
 		io->access((char *) cached_index.data(), read_start,
 				(index_size - read_start), READ);
+		// TODO there is unused space in the end of the graph image.
 		cached_index.back() = ValueType(graph_size);
 	}
 
@@ -216,8 +219,9 @@ protected:
 	}
 public:
 	static ptr create(io_interface::ptr io, size_t graph_size,
-			size_t index_size) {
-		return ptr(new vertex_index_reader_impl(io, graph_size, index_size));
+			size_t num_vertices) {
+		return ptr(new vertex_index_reader_impl(io, graph_size,
+					num_vertices));
 	}
 
 	void request_vertices(vertex_id_t ids[], size_t num, vertex_compute &compute) {
@@ -279,14 +283,14 @@ class directed_vertex_index_reader: public vertex_index_reader_impl<directed_ver
 	part_vertex_KV_store::ptr req_part_vertex_store;
 
 	directed_vertex_index_reader(io_interface::ptr io, size_t graph_size,
-			size_t index_size): vertex_index_reader_impl<directed_vertex_entry>(
-				io, graph_size, index_size) {
+			vsize_t num_vertices): vertex_index_reader_impl<directed_vertex_entry>(
+				io, graph_size, num_vertices) {
 		req_part_vertex_store = part_vertex_KV_store::create(io);
 	}
 public:
 	static ptr create(io_interface::ptr io, size_t graph_size,
-			size_t index_size) {
-		return ptr(new directed_vertex_index_reader(io, graph_size, index_size));
+			vsize_t num_vertices) {
+		return ptr(new directed_vertex_index_reader(io, graph_size, num_vertices));
 	}
 
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
