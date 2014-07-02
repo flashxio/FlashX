@@ -103,21 +103,17 @@ class req_edge_task
 {
 	// The vertex whose edges the task requests.
 	vertex_id_t vid;
-	// The vertex who issues the request.
-	compute_vertex *v;
-	vertex_program *vprog;
+	// The vertex compute of the vertex who issues the request.
+	vertex_compute *compute;
 public:
 	req_edge_task() {
 		vid = 0;
-		v = NULL;
-		vprog = NULL;
+		compute = NULL;
 	}
 
-	req_edge_task(vertex_id_t vid, compute_vertex &v,
-			vertex_program &vprog) {
+	req_edge_task(vertex_id_t vid, vertex_compute *compute) {
 		this->vid = vid;
-		this->v = &v;
-		this->vprog = &vprog;
+		this->compute = compute;
 	}
 
 	size_t get_idx() const {
@@ -130,7 +126,7 @@ public:
 
 	void run(ValueType entries[], int num) {
 		assert(num == 2);
-		vprog->run_on_vertex_size(*v, vid,
+		compute->run_on_vertex_size(vid,
 				entries[1].get_off() - entries[0].get_off());
 	}
 
@@ -154,7 +150,7 @@ public:
 	virtual void request_vertices(vertex_id_t ids[], size_t num,
 			vertex_compute &compute) = 0;
 	virtual void request_num_edges(vertex_id_t vertices[], size_t num,
-			compute_vertex &v, vertex_program &vprog) = 0;
+			vertex_compute &compute) = 0;
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
 			directed_vertex_compute &compute) = 0;
 	virtual void wait4complete(int num) = 0;
@@ -235,9 +231,9 @@ public:
 	}
 
 	void request_num_edges(vertex_id_t ids[], size_t num,
-			compute_vertex &v, vertex_program &vprog) {
+			vertex_compute &compute) {
 		for (size_t i = 0; i < num; i++) {
-			req_edge_task<ValueType> task(ids[i], v, vprog);
+			req_edge_task<ValueType> task(ids[i], &compute);
 			if (ids[i] >= get_cached_index_start()) {
 				int off_in_cache = ids[i] - get_cached_index_start();
 				int num_entries = task.get_num_entries();

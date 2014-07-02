@@ -55,6 +55,27 @@ void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 	issue_thread->get_index_reader().request_vertices(ids, num, *this);
 }
 
+void vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)
+{
+	num_edge_requests += num;
+	issue_thread->get_index_reader().request_num_edges(ids, num, *this);
+}
+
+void vertex_compute::run_on_vertex_size(vertex_id_t id, vsize_t size)
+{
+	size_t header_size = issue_thread->get_graph().get_vertex_header_size();
+	vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
+	issue_thread->get_vertex_program().run_on_num_edges(*v, id, num_edges);
+	num_edge_completed++;
+	if (get_num_pending() == 0)
+		issue_thread->complete_vertex(*v);
+}
+
+vertex_id_t vertex_compute::get_id() const
+{
+	return v->get_id();
+}
+
 void vertex_compute::issue_io_request(const in_mem_vertex_info &info)
 {
 	// If the vertex compute has been issued to SAFS, SAFS will get the IO
@@ -89,7 +110,7 @@ void vertex_compute::complete_request()
 	// We need to notify the thread that initiate processing the vertex
 	// of the completion of the vertex.
 	// TODO is this a right way to complete a vertex?
-	if (has_completed())
+	if (get_num_pending() == 0)
 		issue_thread->complete_vertex(*v);
 }
 

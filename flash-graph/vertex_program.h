@@ -65,8 +65,6 @@ class vertex_program
 	simple_msg_sender &get_msg_sender(int thread_id) const {
 		return *msg_senders[thread_id];
 	}
-protected:
-	size_t get_vertex_header_size() const;
 public:
 	typedef std::shared_ptr<vertex_program> ptr; /**Smart pointer by which `vertex_program`s should be accessed.*/
     
@@ -125,8 +123,8 @@ public:
      */
 	virtual void run_on_multicast_message(multicast_message &mmsg) = 0;
 
-	virtual void run_on_vertex_size(compute_vertex &c_vertex, vertex_id_t id,
-			vsize_t vertex_size) = 0;
+	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t num_edges) = 0;
 	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
 			vsize_t num_in_edges, vsize_t num_out_edges) = 0;
     
@@ -282,10 +280,8 @@ public:
 		}
 	}
 
-	virtual void run_on_vertex_size(compute_vertex &c_vertex, vertex_id_t id,
-			vsize_t vertex_size) {
-		vsize_t num_edges = (vertex_size
-				- get_vertex_header_size()) / sizeof(vertex_id_t);
+	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t num_edges) {
 		((vertex_type &) c_vertex).run_on_num_edges(id, num_edges);
 	}
 

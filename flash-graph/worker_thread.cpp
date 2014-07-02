@@ -446,7 +446,7 @@ void worker_thread::complete_vertex(const compute_vertex &v)
 		// It's possible that the vertex_compute is issued to SAFS.
 		// In this case, SAFS will delete it.
 		if (compute->get_ref() == 0) {
-			assert(compute->has_completed());
+			assert(compute->get_num_pending() == 0);
 			compute_allocator *alloc = compute->get_allocator();
 			alloc->free(compute);
 		}

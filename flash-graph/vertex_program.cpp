@@ -228,8 +228,3 @@ void vertex_program::request_notify_iter_end(const compute_vertex &v)
 	local_vid_t local_id(off);
 	t->request_notify_iter_end(local_id);
 }
-
-size_t vertex_program::get_vertex_header_size() const
-{
-	return graph->get_vertex_header_size();
-}

@@ -205,8 +205,8 @@ void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 void compute_vertex::request_num_edges(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	curr->get_index_reader().request_num_edges(ids, num, *this,
-			curr->get_vertex_program());
+	vertex_compute *compute = curr->get_vertex_compute(*this);
+	compute->request_num_edges(ids, num);
 }
 
 void compute_directed_vertex::request_partial_vertices(

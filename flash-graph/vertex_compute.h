@@ -35,7 +35,9 @@ class compute_vertex;
 class compute_directed_vertex;
 
 /**
- * This callback is to process a vertex.
+ * This data structure represents an active vertex that is being processed
+ * in a worker thread. It is used to handle two types of asynchronous
+ * requests: for the adjacency list and the number of edges.
  */
 class vertex_compute: public user_compute
 {
@@ -57,10 +59,23 @@ protected:
 	worker_thread *issue_thread;
 	compute_vertex *v;
 
+	/*
+	 * These two variables keep track of the number of completed requests
+	 * for adjacency lists.
+	 */
+
 	// The number of requested vertices that will be read in the user compute.
 	size_t num_requested;
 	// The number of vertices read by the user compute.
 	size_t num_complete_fetched;
+
+	/*
+	 * These two variables keep track of the number of completed requests
+	 * for the number of edges.
+	 */
+
+	size_t num_edge_requests;
+	size_t num_edge_completed;
 
 	bool issued_to_io() const {
 		// When the vertex_compute is created, it has one reference.
@@ -76,11 +91,17 @@ public:
 		issue_thread = (worker_thread *) thread::get_curr_thread();
 		num_requested = 0;
 		num_complete_fetched = 0;
+		num_edge_requests = 0;
+		num_edge_completed = 0;
 	}
 
 	void init(compute_vertex *v) {
 		this->v = v;
 	}
+
+	/*
+	 * The methods below are from user_compute.
+	 */
 
 	virtual int serialize(char *buf, int size) const {
 		return 0;
@@ -111,6 +132,16 @@ public:
 		return num_requested == num_complete_fetched && !has_requests();
 	}
 
+	/*
+	 * The methods below deal with requesting the adjacency list of vertices.
+	 */
+
+	/*
+	 * The method accepts the requests from graph applications and issues
+	 * the request for the adjacency lists of vertices. It has to get
+	 * the location and the size of the vertices from the vertex index
+	 * before issuing the real requests to SAFS.
+	 */
 	virtual void request_vertices(vertex_id_t ids[], size_t num);
 
 	/*
@@ -120,11 +151,46 @@ public:
 	 */
 	void issue_io_request(const in_mem_vertex_info &info);
 
+	/*
+	 * Complete a request for the adjacency list.
+	 */
+	void complete_request();
+
+	/*
+	 * The methods below deal with requesting # edges of vertices.
+	 */
+
+	/*
+	 * This is a callback function. When the vertex index gets the number of
+	 * edges, it notifies the vertex_compute of this information.
+	 */
+	void run_on_vertex_size(vertex_id_t id, vsize_t size);
+
+	/*
+	 * This methods accepts the requests from graph applications and issues
+	 * the requests to the vertex index.
+	 */
+	void request_num_edges(vertex_id_t ids[], size_t num);
+
+	/*
+	 * The methods are used for both cases (requesting the adjacency list
+	 * and #edges).
+	 */
+
+	/*
+	 * This indicates the total number of pending requests for both adjacency
+	 * lists and #edges.
+	 */
+	virtual size_t get_num_pending() const {
+		return (num_edge_requests - num_edge_completed)
+			+ (num_requested - num_complete_fetched);
+	}
+
+	vertex_id_t get_id() const;
+
 	graph_engine &get_graph() {
 		return *graph;
 	}
-
-	void complete_request();
 };
 
 class part_directed_vertex_compute;
