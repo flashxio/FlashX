@@ -166,9 +166,12 @@ public:
 		assert(compute->test_flag(user_compute::IN_QUEUE));
 		compute->set_flag(user_compute::IN_QUEUE, false);
 		compute->dec_ref();
-		assert(compute->get_ref() == 0);
-		compute_allocator *alloc = compute->get_allocator();
-		alloc->free(compute);
+		// the user compute isn't free'd here, it's the user's responsiblity
+		// of freeing it.
+		if (compute->get_ref() == 0) {
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+		}
 	}
 
 	/**
