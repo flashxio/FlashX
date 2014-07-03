@@ -85,6 +85,51 @@ public:
 	}
 
   /**
+    * \brief Equivalent to += operator. Element by element
+    *     addition of one `FG_vector` to another.
+    * \param other An `FG_vector` smart pointer object.
+    *
+  */
+  void plus_eq(FG_vector<T>::ptr other) {
+    assert(get_size() == other->get_size());
+#pragma omp parallel for
+    for (size_t i = 0; i < get_size(); i++) {
+      eles[i] += other->get(i);
+    }
+  }
+
+  /**
+    * \brief Assign a value `num` many times to the vector.
+    * \param num The number of elements to assign.
+    * \param val The value a user wnats to assign to vector positions.
+  */
+  void assign(size_t num, T val) {
+    eles.assign(num, val);
+  }
+
+  /** 
+  * \brief Make a shallow copy of the vector.
+  * \param other An `FG_vector` smart pointer.
+  */
+  // TODO DM: Do better. 
+  void shallow_copy(FG_vector<T>::ptr other) {
+    assert(this->get_size() == other->get_size());
+    for (size_t i = 0; i < other->get_size(); i++) {
+      this->eles[i] = other->eles[i];
+    }
+  }
+
+  /**
+    * \brief Check for equality between two `FG_vector`s element by
+    *   element.
+    * \param other An `FG_vector` smart pointer.
+    */
+  // TODO DM: Make parallel / smarter 
+  bool eq_all(FG_vector<T>::ptr other) {
+    return std::equal(this->eles.begin(), this->eles.end(), other->eles.begin());
+  }
+
+  /**
     * \brief  Populate an [STL set](http://www.cplusplus.com/reference/set/set/)
     *         with the unique elements in the vector. All duplicates are ignored.
     *
@@ -101,7 +146,6 @@ public:
 	}
 
   /** 
-    * FIXME: Verify
     * \brief  Count the number of unique items in the vector using a
     *         count map.
     * \param map An *empty* `count_map` object that is used to count
@@ -216,8 +260,31 @@ public:
 	T max() const {
 		T ret = std::numeric_limits<T>::min();
 		for (size_t i = 0; i < get_size(); i++)
-			ret = ::max(get(i), ret);
+			ret = std::max(get(i), ret);
 		return ret;
+	}
+
+  /**
+    * \brief Find the index with the minmimal value in the vector and
+    *     return its value.
+    * \return The minimal value in the vector.
+  */
+	T min() const {
+		T ret = std::numeric_limits<T>::max();
+		for (size_t i = 0; i < get_size(); i++)
+			ret = std::min(get(i), ret);
+		return ret;
+	}
+
+  /**
+    * \brief Find the index with the minimal value in the vector and
+    *     return *the index*.
+    * \return The minimal index value in the vector.
+  */
+	size_t argmin() {
+     typename std::vector<T>::iterator res = std::min_element(eles.begin(), eles.end());
+     size_t ret = std::distance(eles.begin(), res);
+     return ret;
 	}
 
   /**
