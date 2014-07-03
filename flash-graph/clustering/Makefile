@@ -20,17 +20,23 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 LDFLAGS := -L../matrix -lmatrix -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
+CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG) -I/usr/include/eigen3/
 
-all: k-means
+all: matrix-k-means k-means
+#all: k-means
 
-k-means: $(OBJS) ../libgraph.a
-	$(CXX) -o k-means $(OBJS) $(LDFLAGS)
+k-means: k_means.o ../libgraph.a
+	$(CXX) -o k-means k_means.o $(LDFLAGS)
+
+matrix-k-means: matrix_k_means.o ../libgraph.a ../matrix/libmatrix.a
+	$(CXX) -o matrix-k-means matrix_k_means.o $(LDFLAGS)
+
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f k-means
+	rm matrix-k-means
 
 -include $(DEPS) 
