@@ -121,9 +121,10 @@ public:
 	/**
 	 * This method gets multiple I/O requests.
 	 * \param reqs the buffer where the fetched requests are stored.
+	 * \param max the maximal number of requests fetched from the scheduler.
 	 * \return the number of fetched requests.
 	 */
-	virtual size_t get_requests(fifo_queue<io_request> &reqs) = 0;
+	virtual size_t get_requests(fifo_queue<io_request> &reqs, size_t max) = 0;
 
 	/**
 	 * This method sets the I/O instance that the I/O scheduler is
