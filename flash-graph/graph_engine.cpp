@@ -83,7 +83,7 @@ public:
 		this->forward = forward;
 	}
 
-	size_t get_requests(fifo_queue<io_request> &reqs);
+	size_t get_requests(fifo_queue<io_request> &reqs, int max);
 
 	bool is_empty() const {
 		return user_computes.empty();
@@ -92,7 +92,7 @@ public:
 
 template<class prio_queue_type>
 size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
-		fifo_queue<io_request> &reqs)
+		fifo_queue<io_request> &reqs, int max)
 {
 	size_t num = 0;
 
@@ -122,7 +122,7 @@ size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
 
 		// Add requests to the queue in a sorted order.
 		int num = 0;
-		while (!reqs.is_full() && !user_computes.empty()) {
+		while (!reqs.is_full() && !user_computes.empty() && num < max) {
 			num++;
 			prio_compute prio_comp = user_computes.top();
 			user_computes.pop();
@@ -164,7 +164,7 @@ public:
 		batch_num = 0;
 	}
 
-	size_t get_requests(fifo_queue<io_request> &reqs);
+	size_t get_requests(fifo_queue<io_request> &reqs, size_t max);
 };
 
 class throughput_comp_io_sched_creater: public comp_io_sched_creater
@@ -175,23 +175,25 @@ public:
 	}
 };
 
-size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
+size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs,
+		size_t max)
 {
 	size_t ret;
 	if (graph_conf.get_elevator_enabled()) {
 		if (batch_num % 2 == 0) {
-			ret = forward_queue.get_requests(reqs);
+			ret = forward_queue.get_requests(reqs, max);
 			if (forward_queue.is_empty())
 				batch_num++;
 		}
 		else {
-			ret = backward_queue.get_requests(reqs);
+			ret = backward_queue.get_requests(reqs, max);
 			if (backward_queue.is_empty())
 				batch_num++;
 		}
 	}
 	else
-		ret = forward_queue.get_requests(reqs);
+		ret = forward_queue.get_requests(reqs, max);
+	assert(ret <= max);
 	return ret;
 }
 
