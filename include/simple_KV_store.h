@@ -191,12 +191,16 @@ public:
 	void flush_requests() {
 		if (task_buf.empty())
 			return;
+		// We can't issue any I/O requests to SAFS.
+		if (io->num_pending_ios() >= io->get_max_num_pending_ios())
+			return;
 
 		// Each time we issue a single request to serve as many user tasks
 		// as possible. Each time we issue a request to read at least one
 		// page. We'll merge requests if the pages touched by user tasks
 		// in the input array are adjacent to each other.
 
+		int avail_io_slots = io->get_remaining_io_slots();
 		// The offset of the first page accessed by the I/O request.
 		const TaskType task = task_buf.top();
 		task_buf.pop();
@@ -208,7 +212,9 @@ public:
 		KV_compute<ValueType, TaskType> *compute
 			= (KV_compute<ValueType, TaskType> *) alloc.alloc();
 		compute->add_task(task);
-		while (!task_buf.empty()) {
+		while (!task_buf.empty()
+				// We have one more request outside of the while loop.
+				&& num_reqs < avail_io_slots - 1) {
 			const TaskType task = task_buf.top();
 			task_buf.pop();
 			off_t end_page_off = ROUNDUP_PAGE((task.get_idx()
