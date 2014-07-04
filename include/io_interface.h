@@ -148,7 +148,7 @@ protected:
 	io_interface(thread *t) {
 		this->curr = t;
 		this->io_idx = io_counter.inc(1) - 1;
-		max_num_pending_ios = 32;
+		max_num_pending_ios = params.get_max_num_pending_ios();
 	}
 
 public:

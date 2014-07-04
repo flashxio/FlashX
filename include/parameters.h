@@ -112,6 +112,7 @@ class sys_parameters
 	bool merge_reqs;
 	int max_obj_alloc_size;
 	bool writable;
+	int max_num_pending_ios;
 public:
 	sys_parameters();
 
@@ -187,6 +188,10 @@ public:
 
 	bool is_writable() const {
 		return writable;
+	}
+
+	int get_max_num_pending_ios() const {
+		return max_num_pending_ios;
 	}
 };
 
