@@ -177,6 +177,9 @@ class worker_thread: public thread
 	vertex_program::ptr vprogram;
 	std::shared_ptr<vertex_index_reader> index_reader;
 
+	// This buffers the I/O requests for adjacency lists.
+	std::vector<io_request> adj_reqs;
+
 	// When a thread process a vertex, the worker thread should keep
 	// a vertex compute for the vertex. This is useful when a user-defined
 	// compute vertex needs to reference its vertex compute.
@@ -313,7 +316,7 @@ public:
 	}
 
 	void issue_io_request(io_request &req) {
-		io->access(&req, 1);
+		adj_reqs.push_back(req);
 	}
 
 	friend class load_balancer;

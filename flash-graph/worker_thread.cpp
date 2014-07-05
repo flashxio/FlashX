@@ -375,6 +375,10 @@ void worker_thread::run()
 				index_reader->wait4complete(0);
 			else
 				index_reader->wait4complete(1);
+			io->access(adj_reqs.data(), adj_reqs.size());
+			adj_reqs.clear();
+			if (io->num_pending_ios() == 0 && index_reader->get_num_pending_tasks() > 0)
+				index_reader->wait4complete(1);
 			io->wait4complete(min(io->num_pending_ios() / 10, 2));
 			// If there are vertices being processed, we need to call
 			// wait4complete to complete processing them.
