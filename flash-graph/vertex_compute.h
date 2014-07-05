@@ -66,6 +66,8 @@ protected:
 
 	// The number of requested vertices that will be read in the user compute.
 	size_t num_requested;
+	// The number of issued requests.
+	size_t num_issued;
 	// The number of vertices read by the user compute.
 	size_t num_complete_fetched;
 
@@ -77,11 +79,16 @@ protected:
 	size_t num_edge_requests;
 	size_t num_edge_completed;
 
+	size_t get_num_pending_ios() const {
+		assert(num_issued >= num_complete_fetched);
+		return num_issued - num_complete_fetched;
+	}
+
 	bool issued_to_io() const {
 		// When the vertex_compute is created, it has one reference.
 		// If the vertex_compute has been issued to SAFS, its reference count
 		// should be larger than 1.
-		return get_ref() > 1;
+		return get_ref() > 1 || get_num_pending_ios() > 0;
 	}
 public:
 	vertex_compute(graph_engine *graph,
@@ -91,6 +98,7 @@ public:
 		issue_thread = (worker_thread *) thread::get_curr_thread();
 		num_requested = 0;
 		num_complete_fetched = 0;
+		num_issued = 0;
 		num_edge_requests = 0;
 		num_edge_completed = 0;
 	}
@@ -202,10 +210,24 @@ class directed_vertex_compute: public vertex_compute
 		directed_vertex_request req;
 		in_mem_directed_vertex_info info;
 	public:
+		part_request_info() {
+		}
+
 		part_request_info(const directed_vertex_request &req,
 				const in_mem_directed_vertex_info &info) {
 			this->req = req;
 			this->info = info;
+		}
+
+		void init(const directed_vertex_request &req,
+				const in_mem_directed_vertex_info &info) {
+			this->req = req;
+			this->info = info;
+		}
+
+		void reset() {
+			req = directed_vertex_request();
+			info = in_mem_directed_vertex_info();
 		}
 
 		const directed_vertex_request &get_request() const {
@@ -216,12 +238,34 @@ class directed_vertex_compute: public vertex_compute
 			return info;
 		}
 
+		bool is_valid() const {
+			return req.is_valid();
+		}
+
+		off_t get_offset() const {
+			if (req.get_type() == edge_type::IN_EDGE)
+				return info.get_ext_mem_off()
+					+ ext_mem_directed_vertex::get_header_size();
+			else
+				return info.get_ext_mem_off()
+					+ ext_mem_directed_vertex::get_header_size()
+					+ info.get_num_in_edges() * sizeof(vertex_id_t);
+		}
+
+		size_t get_size() const {
+			if (req.get_type() == edge_type::IN_EDGE)
+				return info.get_num_in_edges() * sizeof(vertex_id_t);
+			else
+				return info.get_num_out_edges() * sizeof(vertex_id_t);
+		}
+
 		bool operator<(const part_request_info &info) const {
 			return this->req.get_id() > info.req.get_id();
 		}
 	};
 
 	std::priority_queue<part_request_info> reqs;
+	part_request_info part_req;
 
 	request_range generate_request(const directed_vertex_request &req,
 			const in_mem_directed_vertex_info &info);
@@ -237,6 +281,8 @@ public:
 	virtual int has_requests();
 
 	virtual request_range get_next_request();
+
+	virtual void run(page_byte_array &);
 
 	/*
 	 * The requested part of the vertex may have no edges.

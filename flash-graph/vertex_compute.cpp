@@ -46,6 +46,7 @@ request_range vertex_compute::get_next_request()
 	const in_mem_vertex_info info = requested_vertices.top();
 	requested_vertices.pop();
 	data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
+	num_issued++;
 	return request_range(loc, info.get_ext_mem_size(), READ, this);
 }
 
@@ -88,6 +89,7 @@ void vertex_compute::issue_io_request(const in_mem_vertex_info &info)
 		// Otherwise, we need to issue the I/O request to SAFS explicitly.
 		data_loc_t loc(graph->get_file_id(), info.get_ext_mem_off());
 		io_request req(this, loc, info.get_ext_mem_size(), READ);
+		num_issued++;
 		issue_thread->issue_io_request(req);
 	}
 }
@@ -135,6 +137,34 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 	compute->complete_request();
 }
 
+void directed_vertex_compute::run(page_byte_array &array)
+{
+	if (part_req.is_valid()) {
+		assert(part_req.get_offset() == array.get_offset());
+		assert(part_req.get_size() == array.get_size());
+
+		vsize_t num_in_edges = 0;
+		vsize_t num_out_edges = 0;
+		if (part_req.get_request().get_type() == edge_type::IN_EDGE)
+			num_in_edges = array.get_size() / sizeof(vertex_id_t);
+		else if (part_req.get_request().get_type() == edge_type::OUT_EDGE)
+			num_out_edges = array.get_size() / sizeof(vertex_id_t);
+		else
+			assert(0);
+		page_directed_vertex pg_v(part_req.get_request().get_id(),
+				num_in_edges, num_out_edges, array);
+
+		worker_thread *t = (worker_thread *) thread::get_curr_thread();
+		vertex_program &curr_vprog = t->get_vertex_program();
+		curr_vprog.run(*v, pg_v);
+		complete_request();
+
+		part_req.reset();
+	}
+	else
+		vertex_compute::run(array);
+}
+
 void directed_vertex_compute::complete_empty_part(
 		const directed_vertex_request &req)
 {
@@ -166,6 +196,7 @@ int directed_vertex_compute::has_requests()
 			if ((req.get_type() == edge_type::IN_EDGE && num_in_edges == 0)
 					|| (req.get_type() == edge_type::OUT_EDGE
 						&& num_out_edges == 0)) {
+				num_issued++;
 				complete_empty_part(req);
 				reqs.pop();
 			}
@@ -186,7 +217,9 @@ request_range directed_vertex_compute::get_next_request()
 		reqs.pop();
 		const directed_vertex_request &req = req_info.get_request();
 		const in_mem_directed_vertex_info &info = req_info.get_info();
-		return generate_request(req, info);
+		request_range range = generate_request(req, info);
+		num_issued++;
+		return range;
 	}
 }
 
@@ -208,9 +241,15 @@ request_range directed_vertex_compute::generate_request(
 		worker_thread *t = (worker_thread *) thread::get_curr_thread();
 		compute_allocator *alloc = t->get_part_compute_allocator();
 		assert(alloc);
-		part_directed_vertex_compute *comp
-			= (part_directed_vertex_compute *) alloc->alloc();
-		comp->init((compute_directed_vertex *) v, this, req);
+		user_compute *comp;
+		if (issued_to_io()) {
+			part_directed_vertex_compute *part_comp
+				= (part_directed_vertex_compute *) alloc->alloc();
+			part_comp->init((compute_directed_vertex *) v, this, req);
+			comp = part_comp;
+		}
+		else
+			comp = this;
 		vsize_t num_in_edges = info.get_num_in_edges();
 		vsize_t num_out_edges = info.get_num_out_edges();
 		if (req.get_type() == edge_type::IN_EDGE) {
@@ -253,12 +292,23 @@ void directed_vertex_compute::issue_io_request(
 		vsize_t num_out_edges = info.get_num_out_edges();
 		if ((req.get_type() == edge_type::IN_EDGE && num_in_edges == 0)
 				|| (req.get_type() == edge_type::OUT_EDGE
-					&& num_out_edges == 0))
+					&& num_out_edges == 0)) {
+			num_issued++;
 			complete_empty_part(req);
+		}
 		else {
 			request_range range = generate_request(req, info);
+			assert(range.get_compute() == this);
+			// If we request the entire vertex.
+			if (info.get_ext_mem_off() == range.get_loc().get_offset())
+				assert(info.get_ext_mem_size() == range.get_size());
+			else {
+				assert(!part_req.is_valid());
+				part_req.init(req, info);
+			}
 			io_request io_req(range.get_compute(), range.get_loc(),
 					range.get_size(), READ);
+			num_issued++;
 			issue_thread->issue_io_request(io_req);
 		}
 	}

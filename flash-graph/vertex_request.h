@@ -29,7 +29,7 @@ class vertex_request
 	vertex_id_t id;
 public:
 	vertex_request() {
-		id = -1;
+		id = INVALID_VERTEX_ID;
 	}
 
 	vertex_request(vertex_id_t id) {
@@ -38,6 +38,10 @@ public:
 
 	vertex_id_t get_id() const {
 		return id;
+	}
+
+	bool is_valid() const {
+		return id != INVALID_VERTEX_ID;
 	}
 
 	// We override "<" so that they can be used in the priority queue.
