@@ -184,6 +184,9 @@ class worker_thread: public thread
 	// a vertex compute for the vertex. This is useful when a user-defined
 	// compute vertex needs to reference its vertex compute.
 	std::unordered_map<vertex_id_t, vertex_compute *> active_computes;
+	// This references the vertex compute used/created by the current vertex
+	// being processed.
+	vertex_compute *curr_compute;
 
 	/**
 	 * A vertex is allowed to send messages to other vertices.
@@ -228,12 +231,6 @@ class worker_thread: public thread
 			- num_completed_vertices_in_level.get();
 	}
 	int process_activated_vertices(int max);
-
-	bool has_vertex_compute(vertex_id_t id) const {
-		std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
-			= active_computes.find(id);
-		return it != active_computes.end();
-	}
 public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr graph_factory,
 			file_io_factory::shared_ptr index_factory,

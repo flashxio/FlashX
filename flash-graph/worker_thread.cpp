@@ -162,6 +162,7 @@ worker_thread::worker_thread(graph_engine *graph,
 		int num_threads, vertex_scheduler::ptr scheduler): thread("worker_thread",
 			node_id)
 {
+	curr_compute = NULL;
 	next_activated_vertices = std::unique_ptr<bitmap>(
 			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
 					graph->get_num_vertices()), node_id));
@@ -317,10 +318,11 @@ int worker_thread::process_activated_vertices(int max)
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
 		vertex_program &curr_vprog = get_vertex_program();
+		curr_compute = NULL;
 		curr_vprog.run(*info);
 		// If the user code doesn't generate a vertex_compute, we are done
 		// with the vertex in this iteration.
-		if (!has_vertex_compute(info->get_id()))
+		if (curr_compute == NULL)
 			complete_vertex(*info);
 	}
 	return num;
@@ -491,8 +493,9 @@ vertex_compute *worker_thread::get_vertex_compute(compute_vertex &v)
 		active_computes.insert(std::pair<vertex_id_t, vertex_compute *>(
 					id, compute));
 		compute->inc_ref();
-		return compute;
+		curr_compute = compute;
 	}
 	else
-		return it->second;
+		curr_compute = it->second;
+	return curr_compute;
 }
