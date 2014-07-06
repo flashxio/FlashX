@@ -1115,7 +1115,7 @@ void global_cached_io::process_user_req(
 	int pg_idx = 0;
 	// In max, we use the number of pages in the RAID block.
 	thread_safe_page *pages[params.get_RAID_block_size()];
-	int num_pages_hit = 0;
+	int num_pages_ready = 0;
 	int num_bytes_completed = 0;
 	while (!processing_req.is_empty()) {
 		thread_safe_page *p;
@@ -1153,7 +1153,8 @@ void global_cached_io::process_user_req(
 #ifdef STATISTICS
 			cache_hits++;
 #endif
-			num_pages_hit++;
+			if (p->data_ready())
+				num_pages_ready++;
 			// Let's optimize for cached single-page requests by stealing
 			// them from normal code path of processing them.
 			if (processing_req.get_request().within_1page() && p->data_ready()) {
@@ -1267,7 +1268,7 @@ end:
 	// If all pages accessed by the request are in the cache, the request
 	// can be completed by the time when the functions returns.
 	if (status) {
-		if (num_pages_hit == processing_req.get_request().get_num_covered_pages()
+		if (num_pages_ready == processing_req.get_request().get_num_covered_pages()
 				// It's possible that a request is completed in the slow path.
 				// The requested pages may become ready in the slow path;
 				// or we write the entire page.
