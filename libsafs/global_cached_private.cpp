@@ -195,10 +195,15 @@ class request_allocator: public obj_allocator<original_io_request>
 	{
 	public:
 		void init(original_io_request *req) {
-			if (req->is_initialized())
-				req->init();
-			else
-				new (req) original_io_request();
+			new (req) original_io_request();
+		}
+	};
+
+	class req_destructor: public obj_destructor<original_io_request>
+	{
+	public:
+		void destroy(original_io_request *req) {
+			req->~original_io_request();
 		}
 	};
 public:
@@ -206,7 +211,8 @@ public:
 				)): obj_allocator<original_io_request>(
 				std::string("gcached_req_allocator-") + itoa(node_id), node_id,
 				OBJ_ALLOC_INC_SIZE, max_size,
-				obj_initiator<original_io_request>::ptr(new req_initiator())) {
+				obj_initiator<original_io_request>::ptr(new req_initiator()),
+				obj_destructor<original_io_request>::ptr(new req_destructor())) {
 	}
 
 	virtual original_io_request *alloc_obj() {
