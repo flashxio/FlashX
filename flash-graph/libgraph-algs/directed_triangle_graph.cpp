@@ -44,6 +44,10 @@ struct directed_runtime_data_t: public runtime_data_t
 	bool is_in_edge(vertex_id_t id) const {
 		return std::binary_search(in_edges.begin(), in_edges.end(), id);
 	}
+
+	bool is_out_edge(vertex_id_t id) const {
+		return std::binary_search(out_edges.begin(), out_edges.end(), id);
+	}
 };
 
 class directed_triangle_vertex: public compute_directed_vertex
@@ -106,7 +110,7 @@ void directed_triangle_vertex::run_on_num_edges(vertex_id_t id, vsize_t num_edge
 			data->selected_in_edges.push_back(id);
 		}
 	}
-	else {
+	if (data->is_out_edge(id)) {
 		if ((num_edges < data->degree && id != this->get_id())
 				|| (num_edges == data->degree && id < this->get_id())) {
 			data->selected_out_edges.push_back(id);
