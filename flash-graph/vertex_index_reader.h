@@ -54,6 +54,13 @@ public:
 
 	void run(ValueType entries[], int num) {
 		assert(num == 2);
+#ifdef VERIFY_INDEX_READER
+		extern vertex_index *test_vindex;
+		directed_vertex_index *index = (directed_vertex_index *) test_vindex;
+		assert(entries[0].get_off() == index->get_vertex(vid).get_off());
+		if (vid < index->get_max_id())
+			assert(entries[1].get_off() == index->get_vertex(vid + 1).get_off());
+#endif
 		in_mem_vertex_info info(vid, entries[0].get_off(),
 				entries[1].get_off() - entries[0].get_off());
 		compute->issue_io_request(info);
@@ -91,6 +98,13 @@ public:
 
 	void run(directed_vertex_entry entries[], int num) {
 		assert(num == 2);
+#ifdef VERIFY_INDEX_READER
+		extern vertex_index *test_vindex;
+		directed_vertex_index *index = (directed_vertex_index *) test_vindex;
+		assert(entries[0].get_off() == index->get_vertex(req.get_id()).get_off());
+		if (req.get_id() < index->get_max_id())
+			assert(entries[1].get_off() == index->get_vertex(req.get_id() + 1).get_off());
+#endif
 		in_mem_directed_vertex_info info(req.get_id(), entries[0].get_off(),
 				entries[1].get_off() - entries[0].get_off(),
 				entries[0].get_num_in_edges(), entries[0].get_num_out_edges());
@@ -126,6 +140,13 @@ public:
 
 	void run(ValueType entries[], int num) {
 		assert(num == 2);
+#ifdef VERIFY_INDEX_READER
+		extern vertex_index *test_vindex;
+		directed_vertex_index *index = (directed_vertex_index *) test_vindex;
+		assert(entries[0].get_off() == index->get_vertex(vid).get_off());
+		if (vid < index->get_max_id())
+			assert(entries[1].get_off() == index->get_vertex(vid + 1).get_off());
+#endif
 		compute->run_on_vertex_size(vid,
 				entries[1].get_off() - entries[0].get_off());
 	}
