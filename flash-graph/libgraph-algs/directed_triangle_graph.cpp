@@ -140,6 +140,14 @@ void directed_triangle_vertex::run_on_num_edges(vertex_id_t id, vsize_t num_edge
 				reqs[i] = directed_vertex_request(id, edge_type::OUT_EDGE);
 			}
 			data->finalize_init();
+			data->in_edges.clear();
+			data->in_edges.shrink_to_fit();
+			data->out_edges.clear();
+			data->out_edges.shrink_to_fit();
+			data->selected_in_edges.clear();
+			data->selected_in_edges.shrink_to_fit();
+			data->selected_out_edges.clear();
+			data->selected_out_edges.shrink_to_fit();
 			request_partial_vertices(reqs.data(), reqs.size());
 		}
 	}
