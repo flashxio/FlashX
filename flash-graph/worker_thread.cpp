@@ -226,15 +226,11 @@ void worker_thread::init()
 	switch (graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
 			index_reader = directed_vertex_index_reader::create(
-					index_factory->create_io(this),
-					graph_factory->get_file_size(),
-					graph->get_num_vertices());
+					index_factory->create_io(this));
 			break;
 		case graph_type::UNDIRECTED:
 			index_reader = undirected_vertex_index_reader::create(
-					index_factory->create_io(this),
-					graph_factory->get_file_size(),
-					graph->get_num_vertices());
+					index_factory->create_io(this));
 			break;
 		default:
 			assert(0);
