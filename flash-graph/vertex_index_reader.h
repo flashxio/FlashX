@@ -56,7 +56,7 @@ public:
 		assert(num == 2);
 #ifdef VERIFY_INDEX_READER
 		extern vertex_index *test_vindex;
-		directed_vertex_index *index = (directed_vertex_index *) test_vindex;
+		vertex_index_temp<ValueType> *index = (vertex_index_temp<ValueType> *) test_vindex;
 		assert(entries[0].get_off() == index->get_vertex(vid).get_off());
 		if (vid < index->get_max_id())
 			assert(entries[1].get_off() == index->get_vertex(vid + 1).get_off());
@@ -142,7 +142,7 @@ public:
 		assert(num == 2);
 #ifdef VERIFY_INDEX_READER
 		extern vertex_index *test_vindex;
-		directed_vertex_index *index = (directed_vertex_index *) test_vindex;
+		vertex_index_temp<ValueType> *index = (vertex_index_temp<ValueType> *) test_vindex;
 		assert(entries[0].get_off() == index->get_vertex(vid).get_off());
 		if (vid < index->get_max_id())
 			assert(entries[1].get_off() == index->get_vertex(vid + 1).get_off());
