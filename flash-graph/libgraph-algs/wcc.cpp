@@ -38,8 +38,8 @@ atomic_number<long> num_visits;
 
 enum wcc_stage_t
 {
-	REMOVE_EMPTY,
 	FIND_COMPONENTS,
+	REMOVE_EMPTY,
 } wcc_stage;
 
 class component_message: public vertex_message
@@ -65,8 +65,6 @@ public:
 	wcc_vertex(vertex_id_t id): compute_vertex(id) {
 		component_id = id;
 		updated = true;
-		// TODO
-		assert(0);
 		empty = false;
 	}
 
@@ -83,10 +81,15 @@ public:
 	}
 
 	void run(vertex_program &prog) {
-		if (updated) {
-			vertex_id_t id = get_id();
-			request_vertices(&id, 1);
-			updated = false;
+		vertex_id_t id = get_id();
+		if (wcc_stage == wcc_stage_t::FIND_COMPONENTS) {
+			if (updated) {
+				request_vertices(&id, 1);
+				updated = false;
+			}
+		}
+		else {
+			request_num_edges(&id, 1);
 		}
 	}
 
@@ -98,6 +101,11 @@ public:
 			updated = true;
 			component_id = msg.get_id();
 		}
+	}
+
+	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
+		assert(get_id() == id);
+		empty = (num_edges == 0);
 	}
 };
 
@@ -152,6 +160,7 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
+	wcc_stage = wcc_stage_t::FIND_COMPONENTS;
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
@@ -162,6 +171,9 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 		ProfilerStop();
 #endif
 
+	wcc_stage = wcc_stage_t::REMOVE_EMPTY;
+	graph->start_all();
+	graph->wait4complete();
 	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
 	graph->query_on_all(vertex_query::ptr(new save_cid_query(vec)));
 	return vec;
