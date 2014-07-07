@@ -34,7 +34,7 @@
 #include "FG_vector.h"
 #include "FGlib.h"
 
-atomic_number<long> num_visits;
+namespace {
 
 enum wcc_stage_t
 {
@@ -145,6 +145,8 @@ public:
 		return vertex_query::ptr(new save_cid_query(vec));
 	}
 };
+
+}
 
 FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 {

@@ -29,9 +29,12 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-#include "scan_graph.h"
 #include "FG_vector.h"
 #include "FGlib.h"
+
+#include "scan_graph.h"
+
+namespace {
 
 struct timeval graph_start;
 
@@ -276,6 +279,8 @@ void topK_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 {
 	topK_scan_vertex &topK_v = (topK_scan_vertex &) scan_v;
 	topK_v.finding_triangles_end(prog, data);
+}
+
 }
 
 FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(

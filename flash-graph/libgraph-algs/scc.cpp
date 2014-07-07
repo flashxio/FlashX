@@ -36,6 +36,8 @@
 #include "FG_vector.h"
 #include "FGlib.h"
 
+namespace {
+
 typedef std::unordered_map<vertex_id_t, vsize_t> comp_map_t;
 
 class trim1_message: public vertex_message
@@ -1111,6 +1113,8 @@ public:
 		return vertex_query::ptr(new save_cid_query(vec));
 	}
 };
+
+}
 
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 {

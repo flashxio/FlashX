@@ -32,6 +32,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+namespace {
+
 float DAMPING_FACTOR = 0.85;
 float TOLERANCE = 1.0E-2; 
 int num_iters = INT_MAX;
@@ -210,10 +212,6 @@ public:
 	}
 };
 
-template<class vertex_type>
-FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
-		float damping_factor)
-{
 }
 
 FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,

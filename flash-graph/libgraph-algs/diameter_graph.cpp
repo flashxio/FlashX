@@ -34,6 +34,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+namespace {
+
 size_t num_bfs = 1;
 const int K = sizeof(uint64_t) * 8;
 edge_type traverse_edge = edge_type::OUT_EDGE;
@@ -248,6 +250,8 @@ public:
 		return v1.second > v2.second;
 	}
 };
+
+}
 
 size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 		bool directed, int num_sweeps)

@@ -20,9 +20,12 @@
 #include <google/profiler.h>
 #endif
 
-#include "scan_graph.h"
 #include "FG_vector.h"
 #include "FGlib.h"
+
+#include "scan_graph.h"
+
+namespace {
 
 class count_msg: public vertex_message
 {
@@ -261,6 +264,8 @@ public:
 		return vertex_query::ptr(new save_scan_query(vec));
 	}
 };
+
+}
 
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {

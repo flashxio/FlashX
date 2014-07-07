@@ -22,6 +22,8 @@
 
 #include "triangle_shared.h"
 
+namespace {
+
 struct directed_runtime_data_t: public runtime_data_t
 {
 	std::vector<vertex_id_t> in_edges;
@@ -345,6 +347,8 @@ public:
 		return vertex_query::ptr(new save_ntriangles_query(vec));
 	}
 };
+
+}
 
 FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type)

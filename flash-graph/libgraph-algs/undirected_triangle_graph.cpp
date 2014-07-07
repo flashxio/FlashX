@@ -22,6 +22,8 @@
 
 #include "triangle_shared.h"
 
+namespace {
+
 struct undirected_runtime_data_t: public runtime_data_t
 {
 	vsize_t num_edge_reqs;
@@ -288,6 +290,8 @@ public:
 		return vertex_query::ptr(new save_ntriangles_query(vec));
 	}
 };
+
+}
 
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
