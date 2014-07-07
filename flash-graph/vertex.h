@@ -663,7 +663,7 @@ public:
 			return ((size_t) get_edge_data_addr()) - ((size_t) this)
 				+ (num_edges) * edge_data_size;
 		else
-			return ext_mem_directed_vertex::get_header_size()
+			return ext_mem_undirected_vertex::get_header_size()
 				+ (num_edges) * sizeof(neighbors[0]);
 	}
 
