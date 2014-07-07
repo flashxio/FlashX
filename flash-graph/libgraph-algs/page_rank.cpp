@@ -36,6 +36,18 @@ float DAMPING_FACTOR = 0.85;
 float TOLERANCE = 1.0E-2; 
 int num_iters = INT_MAX;
 
+/*
+ * pgrank_vertex needs to be initialized first.
+ * Therefore, it has two stages.
+ * pgrank_vertex2 doesn't need this process.
+ */
+enum pr_stage_t
+{
+	INIT,
+	RUN,
+};
+pr_stage_t pr_stage;
+
 class pgrank_vertex: public compute_directed_vertex
 {
   float curr_itr_pr; // Current iteration's page rank
@@ -44,9 +56,6 @@ class pgrank_vertex: public compute_directed_vertex
 public:
   pgrank_vertex(vertex_id_t id): compute_directed_vertex(id) {
     this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
-	// TODO request # out_edges
-	assert(0);
-	num_out_edges = 0;
   }
 
   vsize_t get_num_out_edges() const {
@@ -57,19 +66,33 @@ public:
     return curr_itr_pr;
   }
 
-  void run(vertex_program &prog) { 
-	// We perform pagerank for at most `num_iters' iterations.
-	if (prog.get_graph().get_curr_level() >= num_iters)
-		return;
-    vertex_id_t id = get_id();
-    request_vertices(&id, 1); // put my edgelist in page cache
-  };
+  void run(vertex_program &prog);
 
 	void run(vertex_program &prog, const page_vertex &vertex);
 
 	void run_on_message(vertex_program &,
 /* Only serves to activate on the next iteration */
 			const vertex_message &msg) { }; 
+
+	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges,
+			vsize_t num_out_edges) {
+		assert(get_id() == id);
+		this->num_out_edges = num_out_edges;
+	}
+};
+
+void pgrank_vertex::run(vertex_program &prog)
+{
+	vertex_id_t id = get_id();
+	if (pr_stage == pr_stage_t::INIT) {
+		request_num_edges(&id, 1);
+	}
+	else if (pr_stage == pr_stage_t::RUN) {
+		// We perform pagerank for at most `num_iters' iterations.
+		if (prog.get_graph().get_curr_level() >= num_iters)
+			return;
+		request_vertices(&id, 1); // put my edgelist in page cache
+	}
 };
 
 void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
@@ -191,13 +214,62 @@ template<class vertex_type>
 FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
+}
+
+FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
+		float damping_factor)
+{
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
 		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
 		exit(-1);
 	}
 
-	graph_index::ptr index = NUMA_graph_index<vertex_type>::create(
+	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
+	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	pr_stage = pr_stage_t::INIT;
+	graph->start_all(); 
+	graph->wait4complete();
+	pr_stage = pr_stage_t::RUN;
+	graph->start_all(); 
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+
+	FG_vector<float>::ptr ret = FG_vector<float>::create(
+			graph->get_num_vertices());
+	graph->query_on_all(vertex_query::ptr(
+				new fetch_vertex_query<pgrank_vertex>(ret)));
+
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
+
+	printf("It takes %f seconds\n", time_diff(start, end));
+	return ret;
+}
+
+FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
+		float damping_factor)
+{
+	DAMPING_FACTOR = damping_factor;
+	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
+		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
+		exit(-1);
+	}
+
+	graph_index::ptr index = NUMA_graph_index<pgrank_vertex2>::create(
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
@@ -216,7 +288,8 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 
 	FG_vector<float>::ptr ret = FG_vector<float>::create(
 			graph->get_num_vertices());
-	graph->query_on_all(vertex_query::ptr(new fetch_vertex_query<vertex_type>(ret)));
+	graph->query_on_all(vertex_query::ptr(
+				new fetch_vertex_query<pgrank_vertex2>(ret)));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -225,16 +298,4 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 
 	printf("It takes %f seconds\n", time_diff(start, end));
 	return ret;
-}
-
-FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
-		float damping_factor)
-{
-	return compute_pagerank<pgrank_vertex>(fg, num_iters, damping_factor);
-}
-
-FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
-		float damping_factor)
-{
-	return compute_pagerank<pgrank_vertex2>(fg, num_iters, damping_factor);
 }
