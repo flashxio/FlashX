@@ -192,7 +192,7 @@ worker_thread::worker_thread(graph_engine *graph,
 					graph, this);
 			break;
 		case graph_type::UNDIRECTED:
-			alloc = new vertex_compute_allocator<directed_vertex_compute>(graph, this);
+			alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
 			part_alloc = NULL;
 			break;
 #if 0
