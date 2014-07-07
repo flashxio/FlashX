@@ -44,8 +44,9 @@ class pgrank_vertex: public compute_directed_vertex
 public:
   pgrank_vertex(vertex_id_t id): compute_directed_vertex(id) {
     this->curr_itr_pr = 1 - DAMPING_FACTOR; // Must be this
+	// TODO request # out_edges
 	assert(0);
-	num_out_edges = compute_directed_vertex::get_num_out_edges();
+	num_out_edges = 0;
   }
 
   vsize_t get_num_out_edges() const {
@@ -87,7 +88,7 @@ void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
 
   // Apply
   float last_change = 0;
-  if (get_num_in_edges() > 0) {
+  if (vertex.get_num_edges(IN_EDGE) > 0) {
     float new_pr = ((1 - DAMPING_FACTOR)) + (DAMPING_FACTOR*(accum));
     last_change = new_pr - curr_itr_pr;
     curr_itr_pr = new_pr;

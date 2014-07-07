@@ -457,6 +457,7 @@ class scan_vertex: public compute_vertex
 {
 protected:
 	multi_func_value local_value;
+	vsize_t degree;
 
 #ifdef PV_STAT
 	// For testing
@@ -469,6 +470,9 @@ protected:
 #endif
 public:
 	scan_vertex(vertex_id_t id): compute_vertex(id) {
+		// TODO request degree
+		assert(0);
+		degree = 0;
 #ifdef PV_STAT
 		num_all_edges = 0;
 		scan_bytes = 0;
@@ -487,6 +491,10 @@ public:
 		return rand_jumps;
 	}
 #endif
+
+	vsize_t get_degree() const {
+		return degree;
+	}
 
 	bool has_local_scan() const {
 		return local_value.has_real_local();

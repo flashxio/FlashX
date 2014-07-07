@@ -66,20 +66,6 @@ public:
 	}
 
 	/**
-	 * \internal
-	 * \brief This is called by graph engine with a mapping for
-	 *         vertex adjacency lists on disk.
-	 * \param index A mapping for vertex adjacency lists on disk.
-	 */
-	void init_vertex(const vertex_index &index) {
-	}
-    
-    /**
-     *  \brief Get the number of edges in the entire graph.
-    */
-	vsize_t get_num_edges() const;
-
-	/**
 	 * \brief This allows a vertex to request the adjacency lists of vertices
 	 *        in the graph.
      *
@@ -87,6 +73,8 @@ public:
      * \param num The number of vertex IDs you are requesting.
 	 */
 	void request_vertices(vertex_id_t ids[], size_t num);
+
+	void request_num_edges(vertex_id_t ids[], size_t num);
 
     /**
      * \brief Get its own vertex ID.
@@ -103,6 +91,12 @@ public:
      */
 	void notify_iteration_end(vertex_program & prog) {
 	}
+
+	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges, vsize_t num_out_edges) {
+	}
+
+	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
+	}
 };
 
 /**
@@ -112,42 +106,11 @@ public:
  */
 class compute_directed_vertex: public compute_vertex
 {
-	vsize_t num_in_edges;
 public:
     /**
      * \brief The constructor callled by the grah engne.
      */
 	compute_directed_vertex(vertex_id_t id): compute_vertex(id) {
-		num_in_edges = 0;
-	}
-
-    /**
-	 * \internal
-     * \brief This is called by the graph engine.
-     * \param index1 A mapping for vertex adjacency lists on disk.
-     */
-	void init_vertex(const vertex_index &index1) {
-		assert(index1.get_graph_header().get_graph_type()
-				== graph_type::DIRECTED);
-		const directed_vertex_index &index
-			= (const directed_vertex_index &) index1;
-		num_in_edges = index.get_num_in_edges(get_id());
-	}
-    
-    /**
-     * \brief Use to get the number of in-edges of a directed vertex.
-     * \return The number of in-edges of a vertex.
-    */
-	vsize_t get_num_in_edges() const {
-		return num_in_edges;
-	}
-    
-    /**
-     * \brief Use to get the number of out-edges of a directed vertex.
-     * \return the number of out-edges of a vertex.
-     */
-	vsize_t get_num_out_edges() const {
-		return get_num_edges() - num_in_edges;
 	}
 
 	/**
@@ -163,6 +126,7 @@ public:
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 };
 
+#if 0
 /**
  *  \brief Time series compute vertex used for time series graph analytics.
  */
@@ -201,6 +165,7 @@ public:
 	 */
 	void request_partial_vertices(ts_vertex_request reqs[], size_t num);
 };
+#endif
 
 /**
  * \breif Order the position of vertex processing via this scheduler.
@@ -319,7 +284,8 @@ class graph_engine
 	std::vector<vertex_program::ptr> vprograms;
 
 	trace_logger::ptr logger;
-	file_io_factory::shared_ptr factory;
+	file_io_factory::shared_ptr graph_factory;
+	file_io_factory::shared_ptr index_factory;
 	int max_processing_vertices;
 
 	// The time when the current iteration starts.
@@ -388,24 +354,6 @@ public:
 	size_t get_vertices(int part_id, const local_vid_t ids[], int num,
 			compute_vertex *v_buf[]) {
 		return vertices->get_vertices(part_id, ids, num, v_buf);
-	}
-
-	/**
-     * \internal
-	 * This returns the location and the size of a vertex in the file.
-	 */
-	const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
-		return vertices->get_vertex_info(id);
-	}
-
-	/**
-     * \brief Get he number of edges belonging to a vertex.
-     * \param id  The unique ID of a vertex.
-	 * \return The number of edges belonging to a vertex.
-	 */
-	const vsize_t get_vertex_edges(vertex_id_t id) const {
-		in_mem_vertex_info info = get_vertex_info(id);
-		return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
 	}
     
     /**
@@ -561,7 +509,7 @@ public:
 	 * Get the file id where the graph data is stored.
 	 */
 	int get_file_id() const {
-		return factory->get_file_id();
+		return graph_factory->get_file_id();
 	}
     
     /**\internal */
@@ -603,6 +551,10 @@ public:
      */
 	size_t get_num_remaining_vertices() const {
 		return num_remaining_vertices_in_level.get();
+	}
+
+	int get_vertex_header_size() const {
+		return vertex_header_size;
 	}
 };
 

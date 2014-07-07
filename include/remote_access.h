@@ -91,7 +91,6 @@ public:
 	virtual int num_pending_ios() const {
 		return num_issued_reqs.get() - num_completed_reqs.get();
 	}
-	virtual int get_max_num_pending_ios() const;
 	virtual io_interface *clone(thread *t) const;
 	void flush_requests(int max_cached);
 	virtual void flush_requests();

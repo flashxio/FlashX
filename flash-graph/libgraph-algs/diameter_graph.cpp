@@ -270,10 +270,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	std::vector<vertex_id_t> start_vertices;
 	while (start_vertices.size() < num_bfs) {
 		vertex_id_t id = random() % graph->get_max_vertex_id();
-		// We should skip the empty vertices.
-		if (graph->get_vertex_edges(id) == 0)
-			continue;
-
 		start_vertices.push_back(id);
 	}
 
@@ -303,10 +299,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 			start_vertices.clear();
 			while (start_vertices.size() < num_bfs) {
 				vertex_id_t id = random() % graph->get_max_vertex_id();
-				// We should skip the empty vertices.
-				if (graph->get_vertex_edges(id) == 0)
-					continue;
-
 				start_vertices.push_back(id);
 			}
 		}

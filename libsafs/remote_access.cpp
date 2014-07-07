@@ -53,17 +53,6 @@ public:
 
 const int NUM_PROCESS_COMPLETED_REQS = 8;
 
-/**
- * The maximal number of pending IOs is decided by the maximal pending IOs
- * allowed on each I/O thread divided by the number of remote_io.
- * Thus, the performance isn't decided by the number of remote_io.
- */
-int remote_io::get_max_num_pending_ios() const
-{
-	return io_interface::get_max_num_pending_ios() *
-		io_threads.size() / num_ios.get();
-}
-
 void remote_io::notify_completion(io_request *reqs[], int num)
 {
 	stack_array<io_request> req_copies(num);
@@ -171,6 +160,10 @@ void remote_io::access(io_request *requests, int num,
 
 	bool syncd = false;
 	for (int i = 0; i < num; i++) {
+		if (requests[i].get_io() == NULL) {
+			requests[i].set_io(this);
+			requests[i].set_node_id(this->get_node_id());
+		}
 		assert(requests[i].get_offset() % MIN_BLOCK_SIZE == 0);
 		assert(requests[i].get_size() % MIN_BLOCK_SIZE == 0);
 		assert(requests[i].get_req_type() != io_request::USER_COMPUTE);

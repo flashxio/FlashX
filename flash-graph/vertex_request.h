@@ -29,7 +29,7 @@ class vertex_request
 	vertex_id_t id;
 public:
 	vertex_request() {
-		id = -1;
+		id = INVALID_VERTEX_ID;
 	}
 
 	vertex_request(vertex_id_t id) {
@@ -38,6 +38,17 @@ public:
 
 	vertex_id_t get_id() const {
 		return id;
+	}
+
+	bool is_valid() const {
+		return id != INVALID_VERTEX_ID;
+	}
+
+	// We override "<" so that they can be used in the priority queue.
+	// We want the priority queue to return the requests with smaller
+	// vertex IDs first.
+	bool operator<(const vertex_request &req) const {
+		return this->get_id() > req.get_id();
 	}
 };
 

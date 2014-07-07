@@ -314,10 +314,28 @@ class scc_vertex: public compute_directed_vertex
 			memset(this, 0, sizeof(*this));
 		}
 	} state;
+	vsize_t num_in_edges;
+	vsize_t num_out_edges;
 
 public:
 	scc_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		comp_id = INVALID_VERTEX_ID;
+		// TODO init #edges
+		assert(0);
+		num_in_edges = 0;
+		num_out_edges = 0;
+	}
+
+	vsize_t get_degree() const {
+		return num_in_edges + num_out_edges;
+	}
+
+	vsize_t get_num_in_edges() const {
+		return num_in_edges;
+	}
+
+	vsize_t get_num_out_edges() const {
+		return num_out_edges;
 	}
 
 	bool is_assigned() const {
@@ -973,9 +991,9 @@ public:
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		scc_vertex &scc_v = (scc_vertex &) v;
-		if (graph.get_vertex_edges(v.get_id()) > max_degree
-				&& !scc_v.is_assigned()) {
-			max_degree = graph.get_vertex_edges(v.get_id());
+		vsize_t degree = scc_v.get_degree();
+		if (degree > max_degree && !scc_v.is_assigned()) {
+			max_degree = degree;
 			max_id = v.get_id();
 		}
 	}
@@ -1019,8 +1037,8 @@ public:
 		}
 		else {
 			vertex_id_t curr_max_id = it->second;
-			if (graph.get_vertex_edges(v.get_id())
-					> graph.get_vertex_edges(curr_max_id))
+			if (scc_v.get_degree()
+					> ((scc_vertex &) graph.get_vertex(curr_max_id)).get_degree())
 				it->second = v.get_id();
 		}
 	}
@@ -1037,7 +1055,8 @@ public:
 			// The same color exists.
 			if (it1 != this->max_ids.end()) {
 				// If the vertex of the same color in the other query is larger
-				if (graph.get_vertex_edges(id) > graph.get_vertex_edges(it1->second))
+				if (scc_v.get_degree()
+						> ((scc_vertex &) graph.get_vertex(it1->second)).get_degree())
 					it1->second = id;
 			}
 			else
@@ -1079,7 +1098,7 @@ public:
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
 		scc_vertex &scc_v = (scc_vertex &) v;
-		if (graph.get_vertex_edges(scc_v.get_id()) > 0)
+		if (scc_v.get_degree() > 0)
 			vec->set(scc_v.get_id(), scc_v.get_comp_id());
 		else
 			vec->set(scc_v.get_id(), INVALID_VERTEX_ID);

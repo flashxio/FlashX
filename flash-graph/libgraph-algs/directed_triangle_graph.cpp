@@ -22,6 +22,34 @@
 
 #include "triangle_shared.h"
 
+struct directed_runtime_data_t: public runtime_data_t
+{
+	std::vector<vertex_id_t> in_edges;
+	std::vector<vertex_id_t> out_edges;
+
+	std::vector<vertex_id_t> selected_in_edges;
+	std::vector<vertex_id_t> selected_out_edges;
+
+	vsize_t num_edge_reqs;
+	vsize_t num_tot_edge_reqs;
+	vsize_t degree;
+
+	directed_runtime_data_t(vsize_t num_exist_triangles, vsize_t num_in_edges,
+			vsize_t degree): runtime_data_t(num_in_edges, num_exist_triangles) {
+		this->num_tot_edge_reqs = 0;
+		this->degree = degree;
+		num_edge_reqs = 0;
+	}
+
+	bool is_in_edge(vertex_id_t id) const {
+		return std::binary_search(in_edges.begin(), in_edges.end(), id);
+	}
+
+	bool is_out_edge(vertex_id_t id) const {
+		return std::binary_search(out_edges.begin(), out_edges.end(), id);
+	}
+};
+
 class directed_triangle_vertex: public compute_directed_vertex
 {
 	multi_func_value local_value;
@@ -59,7 +87,71 @@ public:
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
+
+	void run_on_num_edges(vertex_id_t id, vsize_t num_edges);
+
+	void destroy_runtime() {
+		directed_runtime_data_t *data
+			= (directed_runtime_data_t *) local_value.get_runtime_data();
+		size_t num_curr_triangles = data->num_triangles;
+		delete data;
+		local_value.set_num_triangles(num_curr_triangles);
+	}
 };
+
+void directed_triangle_vertex::run_on_num_edges(vertex_id_t id, vsize_t num_edges)
+{
+	directed_runtime_data_t *data
+		= (directed_runtime_data_t *) local_value.get_runtime_data();
+	data->num_edge_reqs++;
+	if (data->is_in_edge(id)) {
+		if ((num_edges < data->degree && id != this->get_id())
+				|| (num_edges == data->degree && id < this->get_id())) {
+			data->selected_in_edges.push_back(id);
+		}
+	}
+	if (data->is_out_edge(id)) {
+		if ((num_edges < data->degree && id != this->get_id())
+				|| (num_edges == data->degree && id < this->get_id())) {
+			data->selected_out_edges.push_back(id);
+		}
+	}
+
+	if (data->num_edge_reqs == data->num_tot_edge_reqs) {
+		if (data->selected_in_edges.empty()
+				|| data->selected_out_edges.empty()) {
+			long ret = num_completed_vertices.inc(1);
+			if (ret % 100000 == 0)
+				printf("%ld completed vertices\n", ret);
+			destroy_runtime();
+			return;
+		}
+		else {
+			std::sort(data->selected_in_edges.begin(),
+					data->selected_in_edges.end());
+			std::sort(data->selected_out_edges.begin(),
+					data->selected_out_edges.end());
+			data->edges = data->selected_in_edges;
+			data->num_required = data->selected_out_edges.size();
+			std::vector<directed_vertex_request> reqs(
+					data->selected_out_edges.size());
+			for (size_t i = 0; i < data->selected_out_edges.size(); i++) {
+				vertex_id_t id = data->selected_out_edges[i];
+				reqs[i] = directed_vertex_request(id, edge_type::OUT_EDGE);
+			}
+			data->finalize_init();
+			data->in_edges.clear();
+			data->in_edges.shrink_to_fit();
+			data->out_edges.clear();
+			data->out_edges.shrink_to_fit();
+			data->selected_in_edges.clear();
+			data->selected_in_edges.shrink_to_fit();
+			data->selected_out_edges.clear();
+			data->selected_out_edges.shrink_to_fit();
+			request_partial_vertices(reqs.data(), reqs.size());
+		}
+	}
+}
 
 void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 		const page_vertex &vertex)
@@ -80,55 +172,23 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 		return;
 	}
 
-	std::vector<vertex_id_t> in_edges;
-	std::vector<vertex_id_t> out_edges;
+	directed_runtime_data_t *data = new directed_runtime_data_t(
+				local_value.get_num_triangles(),
+				vertex.get_num_edges(edge_type::IN_EDGE),
+				vertex.get_num_edges(edge_type::BOTH_EDGES));
+	data->in_edges.resize(vertex.get_num_edges(edge_type::IN_EDGE));
+	vertex.read_edges(edge_type::IN_EDGE, data->in_edges.data(),
+			data->in_edges.size());
+	data->out_edges.resize(vertex.get_num_edges(edge_type::OUT_EDGE));
+	vertex.read_edges(edge_type::OUT_EDGE, data->out_edges.data(),
+			data->out_edges.size());
+	local_value.set_runtime_data(data);
 
-	page_byte_array::const_iterator<vertex_id_t> it
-		= vertex.get_neigh_begin(edge_type::IN_EDGE);
-	page_byte_array::const_iterator<vertex_id_t> end
-		= vertex.get_neigh_end(edge_type::IN_EDGE);
-	int num_local_edges = this->get_num_edges();
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
-		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
-		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
-				|| (num_local_edges1 == num_local_edges
-					&& id < vertex.get_id())) {
-			in_edges.push_back(id);
-		}
-	}
-
-	it = vertex.get_neigh_begin(edge_type::OUT_EDGE);
-	end = vertex.get_neigh_end(edge_type::OUT_EDGE);
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
-		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
-		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
-				|| (num_local_edges1 == num_local_edges
-					&& id < vertex.get_id())) {
-			out_edges.push_back(id);
-		}
-	}
-
-	if (in_edges.empty() || out_edges.empty()) {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
-		return;
-	}
-
-	std::vector<directed_vertex_request> reqs(out_edges.size());
-	for (size_t i = 0; i < out_edges.size(); i++) {
-		vertex_id_t id = out_edges[i];
-		reqs[i] = directed_vertex_request(id, edge_type::OUT_EDGE);
-	}
-	// We have to set runtime data before calling request_partial_vertices.
-	// It's possible that the request to a partial vertex can be completed
-	// immediately and run_on_neighbor is called in request_partial_vertices.
-	// TODO Maybe I should avoid that.
-	local_value.set_runtime_data(new runtime_data_t(in_edges, out_edges.size(),
-				local_value.get_num_triangles()));
-	request_partial_vertices(reqs.data(), reqs.size());
+	// Request the number of edges of its neighbors.
+	std::vector<vertex_id_t> edges;
+	unique_merge(data->in_edges, data->out_edges, edges);
+	data->num_tot_edge_reqs = edges.size();
+	request_num_edges(edges.data(), edges.size());
 }
 
 void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
@@ -161,9 +221,7 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 				prog.send_msg(data->edges[i], msg);
 			}
 		}
-		size_t num_curr_triangles = data->num_triangles;
-		delete data;
-		local_value.set_num_triangles(num_curr_triangles);
+		destroy_runtime();
 	}
 }
 

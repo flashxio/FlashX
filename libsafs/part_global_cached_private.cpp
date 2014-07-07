@@ -1004,6 +1004,10 @@ void part_global_cached_io::access(io_request *requests, int num, io_status stat
 	int num_local_reqs = 0;
 	// Distribute requests to the corresponding nodes.
 	for (int i = 0; i < num; i++) {
+		if (requests[i].get_io() == NULL) {
+			requests[i].set_io(this);
+			requests[i].set_node_id(this->get_node_id());
+		}
 		assert(requests[i].within_1page());
 		page_id_t pg_id(requests[i].get_file_id(), requests[i].get_offset());
 		int idx = cache_conf->page2cache(pg_id);

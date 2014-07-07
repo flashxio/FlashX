@@ -121,9 +121,10 @@ public:
 	/**
 	 * This method gets multiple I/O requests.
 	 * \param reqs the buffer where the fetched requests are stored.
+	 * \param max the maximal number of requests fetched from the scheduler.
 	 * \return the number of fetched requests.
 	 */
-	virtual size_t get_requests(fifo_queue<io_request> &reqs) = 0;
+	virtual size_t get_requests(fifo_queue<io_request> &reqs, size_t max) = 0;
 
 	/**
 	 * This method sets the I/O instance that the I/O scheduler is
@@ -166,9 +167,12 @@ public:
 		assert(compute->test_flag(user_compute::IN_QUEUE));
 		compute->set_flag(user_compute::IN_QUEUE, false);
 		compute->dec_ref();
-		assert(compute->get_ref() == 0);
-		compute_allocator *alloc = compute->get_allocator();
-		alloc->free(compute);
+		// the user compute isn't free'd here, it's the user's responsiblity
+		// of freeing it.
+		if (compute->get_ref() == 0) {
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+		}
 	}
 
 	/**

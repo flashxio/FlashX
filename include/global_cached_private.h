@@ -461,12 +461,7 @@ public:
 
 	virtual int num_pending_ios() const {
 		assert(num_issued_areqs.get() >= num_completed_areqs.get());
-		// The user tasks can also issue requests. We need to take them
-		// into account when computing the number of pending requests.
-		// However, it's difficult to estimate the number of requests issued
-		// by user tasks. Let's just assume each of them will issue one.
-		return num_issued_areqs.get() - num_completed_areqs.get()
-			+ comp_io_sched->get_num_incomplete_computes();
+		return num_issued_areqs.get() - num_completed_areqs.get();
 	}
 
 	void finalize_partial_request(io_request &partial, original_io_request *orig);

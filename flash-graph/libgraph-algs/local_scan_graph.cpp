@@ -174,12 +174,16 @@ public:
 };
 
 class skip_larger {
-	size_t size;
+	vsize_t degree;
 	vertex_id_t id;
 	graph_engine &graph;
+
+	vsize_t get_degree(vertex_id_t id) const {
+		return ((scan_vertex &) graph.get_vertex(id)).get_degree();
+	}
 public:
 	skip_larger(graph_engine &_graph, vertex_id_t id): graph(_graph) {
-		this->size = graph.get_vertex_info(id).get_ext_mem_size();
+		this->degree = get_degree(id);
 		this->id = id;
 	}
 
@@ -193,10 +197,10 @@ public:
 	 * on the vertices with the largest Id.
 	 */
 	bool operator()(vertex_id_t id) {
-		const in_mem_vertex_info info = graph.get_vertex_info(id);
-		if (info.get_ext_mem_size() == size)
+		vsize_t other_degree = get_degree(id);
+		if (other_degree == degree)
 			return id >= this->id;
-		return info.get_ext_mem_size() > size;
+		return other_degree > degree;
 	}
 };
 

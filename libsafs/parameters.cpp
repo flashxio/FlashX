@@ -61,6 +61,7 @@ sys_parameters::sys_parameters()
 	merge_reqs = false;
 	max_obj_alloc_size = 100 * 1024 * 1024;
 	writable = false;
+	max_num_pending_ios = 1000;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -163,6 +164,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		writable = true;
 	}
+
+	it = configs.find("max_num_pending_ios");
+	if (it != configs.end()) {
+		max_num_pending_ios = str2size(it->second);
+	}
 }
 
 void sys_parameters::print()
@@ -185,6 +191,7 @@ void sys_parameters::print()
 	std::cout << "\tmerge_reqs: " << merge_reqs << std::endl;
 	std::cout << "\tmax_obj_alloc_size: " << max_obj_alloc_size << std::endl;
 	std::cout << "\twritable: " << writable << std::endl;
+	std::cout << "\tmax_num_pending_ios: " << max_num_pending_ios << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -220,6 +227,8 @@ void sys_parameters::print_help()
 	std::cout << "\tmax_obj_alloc_size: the maximal size that an object allocator can use."
 		<< std::endl;
 	std::cout << "\twritable: indicate whether or not to write data" << std::endl;
+	std::cout << "\tmax_num_pending_ios: the max number of pending IOs in an I/O instance"
+		<< std::endl;
 }
 
 static void read_config_file(const std::string &conf_file,

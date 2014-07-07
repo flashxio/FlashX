@@ -20,7 +20,7 @@ int main()
 
 	srandom(time(NULL));
 
-	RAID0_mapper mapper0(files, BLOCK_SIZE);
+	RAID0_mapper mapper0("", files, BLOCK_SIZE);
 	std::vector<struct extended_block_identifier> locs0[num_files];
 	printf("RAID0 mapper\n");
 	for (int i = 0; i < 10000; i++) {
@@ -46,7 +46,7 @@ int main()
 		}
 	}
 
-	RAID5_mapper mapper5(files, BLOCK_SIZE);
+	RAID5_mapper mapper5("", files, BLOCK_SIZE);
 	std::vector<struct extended_block_identifier> locs5[num_files];
 	printf("RAID5 mapper\n");
 	for (int i = 0; i < 32; i++) {

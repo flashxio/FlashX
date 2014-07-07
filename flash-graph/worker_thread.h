@@ -23,6 +23,7 @@
 #include <pthread.h>
 
 #include <vector>
+#include <unordered_map>
 
 #include "graph_engine.h"
 #include "bitmap.h"
@@ -162,20 +163,29 @@ class vertex_compute;
 class steal_state_t;
 class message_processor;
 class load_balancer;
+class vertex_index_reader;
 
 class worker_thread: public thread
 {
 	int worker_id;
-	file_io_factory::shared_ptr factory;
-	io_interface *io;
+	file_io_factory::shared_ptr graph_factory;
+	file_io_factory::shared_ptr index_factory;
+	io_interface::ptr io;
 	graph_engine *graph;
 	compute_allocator *alloc;
 	compute_allocator *part_alloc;
 	vertex_program::ptr vprogram;
+	std::shared_ptr<vertex_index_reader> index_reader;
 
-	// When a thread process a vertex, the worker thread should point to
-	// a vertex compute. This is useful when a user-defined compute vertex
-	// needs to reference its vertex compute.
+	// This buffers the I/O requests for adjacency lists.
+	std::vector<io_request> adj_reqs;
+
+	// When a thread process a vertex, the worker thread should keep
+	// a vertex compute for the vertex. This is useful when a user-defined
+	// compute vertex needs to reference its vertex compute.
+	std::unordered_map<vertex_id_t, vertex_compute *> active_computes;
+	// This references the vertex compute used/created by the current vertex
+	// being processed.
 	vertex_compute *curr_compute;
 
 	/**
@@ -222,7 +232,8 @@ class worker_thread: public thread
 	}
 	int process_activated_vertices(int max);
 public:
-	worker_thread(graph_engine *graph, file_io_factory::shared_ptr factory,
+	worker_thread(graph_engine *graph, file_io_factory::shared_ptr graph_factory,
+			file_io_factory::shared_ptr index_factory,
 			vertex_program::ptr prog, int node_id, int worker_id,
 			int num_threads, vertex_scheduler::ptr scheduler);
 
@@ -262,20 +273,7 @@ public:
 		this->filter = filter;
 	}
 
-	vertex_compute *get_curr_vertex_compute() const {
-		return curr_compute;
-	}
-
-	vertex_compute *create_vertex_compute(compute_vertex *v);
-
-	void set_curr_vertex_compute(vertex_compute *compute) {
-		assert(this->curr_compute == NULL);
-		curr_compute = compute;
-	}
-
-	void reset_curr_vertex_compute() {
-		curr_compute = NULL;
-	}
+	vertex_compute *get_vertex_compute(compute_vertex &v);
 
 	/**
 	 * Activate the vertex in its own partition for the next iteration.
@@ -308,6 +306,14 @@ public:
 
 	message_processor &get_msg_processor() {
 		return *msg_processor;
+	}
+
+	vertex_index_reader &get_index_reader() {
+		return *index_reader;
+	}
+
+	void issue_io_request(io_request &req) {
+		adj_reqs.push_back(req);
 	}
 
 	friend class load_balancer;

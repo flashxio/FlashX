@@ -22,7 +22,8 @@
 #include <time.h>
 #include <pthread.h>
 
-#include <tr1/unordered_set>
+#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 #include <boost/foreach.hpp>
 
@@ -60,11 +61,6 @@ struct global_data_collection
 	part_io_process_table *table;
 #endif
 
-#ifdef DEBUG
-	std::tr1::unordered_set<io_interface *> ios;
-	pthread_spinlock_t ios_lock;
-#endif
-
 	global_data_collection() {
 #ifdef PART_IO
 		table = NULL;
@@ -72,26 +68,32 @@ struct global_data_collection
 		cache_conf = NULL;
 		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
-#ifdef DEBUG
-		pthread_spin_init(&ios_lock, PTHREAD_PROCESS_PRIVATE);
-#endif
 	}
-
-#ifdef DEBUG
-	void register_io(io_interface *io) {
-		pthread_spin_lock(&ios_lock);
-		ios.insert(io);
-		pthread_spin_unlock(&ios_lock);
-	}
-
-	void delete_io(io_interface *io) {
-		// TODO
-		assert(0);
-	}
-#endif
 };
 
 static global_data_collection global_data;
+
+class file_mapper_set
+{
+	std::unordered_map<std::string, file_mapper *> map;
+	spin_lock lock;
+public:
+	file_mapper &get(const std::string &name) {
+		lock.lock();
+		std::unordered_map<std::string, file_mapper *>::const_iterator it
+			= map.find(name);
+		file_mapper *mapper;
+		if (it == map.end()) {
+			mapper = global_data.raid_conf.create_file_mapper(name);
+			map.insert(std::pair<std::string, file_mapper *>(name, mapper));
+		}
+		else
+			mapper = it->second;
+		lock.unlock();
+		return *mapper;
+	}
+};
+static file_mapper_set file_mappers;
 
 class debug_global_data: public debug_task
 {
@@ -103,15 +105,6 @@ void debug_global_data::run()
 {
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++)
 		global_data.read_threads[i]->print_state();
-#ifdef DEBUG
-	pthread_spin_lock(&global_data.ios_lock);
-	std::tr1::unordered_set<io_interface *> ios = global_data.ios;
-	pthread_spin_unlock(&global_data.ios_lock);
-
-	for (std::tr1::unordered_set<io_interface *>::iterator it
-			= ios.begin(); it != ios.end(); it++)
-		(*it)->print_state();
-#endif
 }
 
 const RAID_config &get_sys_RAID_conf()
@@ -233,13 +226,21 @@ void destroy_io_system()
 class posix_io_factory: public file_io_factory
 {
 	int access_option;
+	// The number of existing IO instances.
+	std::atomic<size_t> num_ios;
+	file_mapper &mapper;
 public:
-	posix_io_factory(const std::string &file_name,
-			int access_option): file_io_factory(file_name) {
+	posix_io_factory(file_mapper &_mapper, int access_option): file_io_factory(
+				mapper.get_name()), mapper(_mapper) {
 		this->access_option = access_option;
+		num_ios = 0;
 	}
 
-	virtual io_interface *create_io(thread *t);
+	~posix_io_factory() {
+		assert(num_ios == 0);
+	}
+
+	virtual io_interface::ptr create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io);
 
@@ -251,11 +252,20 @@ public:
 
 class aio_factory: public file_io_factory
 {
+	// The number of existing IO instances.
+	std::atomic<size_t> num_ios;
+	file_mapper &mapper;
 public:
-	aio_factory(const std::string &file_name): file_io_factory(file_name) {
+	aio_factory(file_mapper &_mapper): file_io_factory(
+			mapper.get_name()), mapper(_mapper) {
+		num_ios = 0;
 	}
 
-	virtual io_interface *create_io(thread *t);
+	~aio_factory() {
+		assert(num_ios == 0);
+	}
+
+	virtual io_interface::ptr create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io);
 
@@ -268,18 +278,20 @@ public:
 class remote_io_factory: public file_io_factory
 {
 protected:
-	file_mapper *mapper;
+	// The number of existing IO instances.
+	std::atomic<size_t> num_ios;
+	file_mapper &mapper;
 public:
-	remote_io_factory(const std::string &file_name);
+	remote_io_factory(file_mapper &_mapper);
 
 	~remote_io_factory();
 
-	virtual io_interface *create_io(thread *t);
+	virtual io_interface::ptr create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io);
 
 	virtual int get_file_id() const {
-		return mapper->get_file_id();
+		return mapper.get_file_id();
 	}
 };
 
@@ -287,12 +299,12 @@ class global_cached_io_factory: public remote_io_factory
 {
 	page_cache *global_cache;
 public:
-	global_cached_io_factory(const std::string &file_name,
-			page_cache *cache): remote_io_factory(file_name) {
+	global_cached_io_factory(file_mapper &_mapper,
+			page_cache *cache): remote_io_factory(_mapper) {
 		this->global_cache = cache;
 	}
 
-	virtual io_interface *create_io(thread *t);
+	virtual io_interface::ptr create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io);
 };
@@ -302,25 +314,35 @@ class part_global_cached_io_factory: public remote_io_factory
 {
 public:
 	part_global_cached_io_factory(
-			const std::string &file_name): remote_io_factory(file_name) {
+			file_mapper &_mapper): remote_io_factory(_mapper) {
 	}
 
-	virtual io_interface *create_io(thread *t);
+	virtual io_interface::ptr create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io);
 };
 #endif
 
-io_interface *posix_io_factory::create_io(thread *t)
+class io_deleter
 {
-	file_mapper *mapper = global_data.raid_conf.create_file_mapper(get_name());
-	assert(mapper);
-	int num_files = mapper->get_num_files();
+	file_io_factory &factory;
+public:
+	io_deleter(file_io_factory &_factory): factory(_factory) {
+	}
+
+	void operator()(io_interface *io) {
+		factory.destroy_io(io);
+	}
+};
+
+io_interface::ptr posix_io_factory::create_io(thread *t)
+{
+	int num_files = mapper.get_num_files();
 	std::vector<int> indices;
 	for (int i = 0; i < num_files; i++)
 		indices.push_back(i);
 	// The partition contains all files.
-	logical_file_partition global_partition(indices, mapper);
+	logical_file_partition global_partition(indices, &mapper);
 
 	io_interface *io;
 	switch (access_option) {
@@ -334,128 +356,105 @@ io_interface *posix_io_factory::create_io(thread *t)
 			fprintf(stderr, "a wrong posix access option\n");
 			assert(0);
 	}
-#ifdef DEBUG
-	global_data.register_io(io);
-#endif
-	return io;
+	num_ios++;
+	return io_interface::ptr(io, io_deleter(*this));
 }
 
 void posix_io_factory::destroy_io(io_interface *io)
 {
-#ifdef DEBUG
-	global_data.delete_io(io);
-#endif
+	num_ios--;
 	delete io;
 }
 
-io_interface *aio_factory::create_io(thread *t)
+io_interface::ptr aio_factory::create_io(thread *t)
 {
-	file_mapper *mapper = global_data.raid_conf.create_file_mapper(get_name());
-	assert(mapper);
-	int num_files = mapper->get_num_files();
+	int num_files = mapper.get_num_files();
 	std::vector<int> indices;
 	for (int i = 0; i < num_files; i++)
 		indices.push_back(i);
 	// The partition contains all files.
-	logical_file_partition global_partition(indices, mapper);
+	logical_file_partition global_partition(indices, &mapper);
 
 	io_interface *io;
 	io = new async_io(global_partition, params.get_aio_depth_per_file(),
 			t, O_RDWR);
-#ifdef DEBUG
-	global_data.register_io(io);
-#endif
-	return io;
+	num_ios++;
+	return io_interface::ptr(io, io_deleter(*this));
 }
 
 void aio_factory::destroy_io(io_interface *io)
 {
-#ifdef DEBUG
-	global_data.delete_io(io);
-#endif
+	num_ios--;
 	delete io;
 }
 
-remote_io_factory::remote_io_factory(const std::string &file_name): file_io_factory(
-			file_name)
+remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
+			_mapper.get_name()), mapper(_mapper)
 {
-	mapper = global_data.raid_conf.create_file_mapper(get_name());
-	assert(mapper);
-	int num_files = mapper->get_num_files();
+	num_ios = 0;
+	int num_files = mapper.get_num_files();
 	assert((int) global_data.read_threads.size() == num_files);
 
 	for (int i = 0; i < num_files; i++) {
-		global_data.read_threads[i]->open_file(mapper);
+		global_data.read_threads[i]->open_file(&mapper);
 	}
 }
 
 remote_io_factory::~remote_io_factory()
 {
-	int num_files = mapper->get_num_files();
+	assert(num_ios == 0);
+	int num_files = mapper.get_num_files();
 	for (int i = 0; i < num_files; i++)
-		global_data.read_threads[i]->close_file(mapper);
-	delete mapper;
+		global_data.read_threads[i]->close_file(&mapper);
 }
 
-io_interface *remote_io_factory::create_io(thread *t)
+io_interface::ptr remote_io_factory::create_io(thread *t)
 {
-	io_interface *io = new remote_io(global_data.read_threads, mapper, t);
-#ifdef DEBUG
-	global_data.register_io(io);
-#endif
-	return io;
+	num_ios++;
+	io_interface *io = new remote_io(global_data.read_threads, &mapper, t);
+	return io_interface::ptr(io, io_deleter(*this));
 }
 
 void remote_io_factory::destroy_io(io_interface *io)
 {
-#ifdef DEBUG
-	global_data.delete_io(io);
-#endif
+	num_ios--;
 	delete io;
 }
 
-io_interface *global_cached_io_factory::create_io(thread *t)
+io_interface::ptr global_cached_io_factory::create_io(thread *t)
 {
 	io_interface *underlying = new remote_io(
-			global_data.read_threads, mapper, t);
+			global_data.read_threads, &mapper, t);
 	comp_io_scheduler *scheduler = NULL;
 	if (get_sched_creater())
 		scheduler = get_sched_creater()->create(underlying->get_node_id());
 	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache, scheduler);
-#ifdef DEBUG
-	global_data.register_io(io);
-#endif
-	return io;
+	num_ios++;
+	return io_interface::ptr(io, io_deleter(*this));
 }
 
 void global_cached_io_factory::destroy_io(io_interface *io)
 {
-#ifdef DEBUG
-	global_data.delete_io(io);
-#endif
+	num_ios--;
 	// The underlying IO is deleted in global_cached_io's destructor.
 	delete io;
 }
 
 
 #ifdef PART_IO
-io_interface *part_global_cached_io_factory::create_io(thread *t)
+io_interface::ptr part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
-			new remote_io(global_data.read_threads, mapper, t),
+			new remote_io(global_data.read_threads, &mapper, t),
 			global_data.table);
-#ifdef DEBUG
-	global_data.register_io(io);
-#endif
-	return io;
+	num_ios++;
+	return io_interface::ptr(io, io_deleter(*this));
 }
 
 void part_global_cached_io_factory::destroy_io(io_interface *io)
 {
-#ifdef DEBUG
-	global_data.delete_io(io);
-#endif
+	num_ios--;
 	part_global_cached_io::destroy((part_global_cached_io *) io);
 }
 #endif
@@ -482,20 +481,21 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		}
 	}
 
+	file_mapper &mapper = file_mappers.get(file_name);
 	file_io_factory *factory;
 	switch (access_option) {
 		case READ_ACCESS:
 		case DIRECT_ACCESS:
-			factory = new posix_io_factory(file_name, access_option);
+			factory = new posix_io_factory(mapper, access_option);
 			break;
 		case AIO_ACCESS:
-			factory = new aio_factory(file_name);
+			factory = new aio_factory(mapper);
 			break;
 		case REMOTE_ACCESS:
-			factory = new remote_io_factory(file_name);
+			factory = new remote_io_factory(mapper);
 			break;
 		case GLOBAL_CACHE_ACCESS:
-			factory = new global_cached_io_factory(file_name,
+			factory = new global_cached_io_factory(mapper,
 					global_data.global_cache);
 			break;
 #ifdef PART_IO
@@ -507,6 +507,7 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 			fprintf(stderr, "a wrong access option\n");
 			assert(0);
 	}
+	printf("io factory for %s (%d)\n", file_name.c_str(), factory->get_file_id());
 	return file_io_factory::shared_ptr(factory, destroy_io_factory());
 }
 

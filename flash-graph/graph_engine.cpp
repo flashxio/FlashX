@@ -31,6 +31,7 @@
 #include "worker_thread.h"
 #include "vertex_compute.h"
 #include "vertex_request.h"
+#include "vertex_index_reader.h"
 
 graph_config graph_conf;
 
@@ -82,7 +83,7 @@ public:
 		this->forward = forward;
 	}
 
-	size_t get_requests(fifo_queue<io_request> &reqs);
+	size_t get_requests(fifo_queue<io_request> &reqs, int max);
 
 	bool is_empty() const {
 		return user_computes.empty();
@@ -91,7 +92,7 @@ public:
 
 template<class prio_queue_type>
 size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
-		fifo_queue<io_request> &reqs)
+		fifo_queue<io_request> &reqs, int max)
 {
 	size_t num = 0;
 
@@ -121,7 +122,7 @@ size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
 
 		// Add requests to the queue in a sorted order.
 		int num = 0;
-		while (!reqs.is_full() && !user_computes.empty()) {
+		while (!reqs.is_full() && !user_computes.empty() && num < max) {
 			num++;
 			prio_compute prio_comp = user_computes.top();
 			user_computes.pop();
@@ -163,7 +164,7 @@ public:
 		batch_num = 0;
 	}
 
-	size_t get_requests(fifo_queue<io_request> &reqs);
+	size_t get_requests(fifo_queue<io_request> &reqs, size_t max);
 };
 
 class throughput_comp_io_sched_creater: public comp_io_sched_creater
@@ -174,39 +175,40 @@ public:
 	}
 };
 
-size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs)
+size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs,
+		size_t max)
 {
 	size_t ret;
 	if (graph_conf.get_elevator_enabled()) {
 		if (batch_num % 2 == 0) {
-			ret = forward_queue.get_requests(reqs);
+			ret = forward_queue.get_requests(reqs, max);
 			if (forward_queue.is_empty())
 				batch_num++;
 		}
 		else {
-			ret = backward_queue.get_requests(reqs);
+			ret = backward_queue.get_requests(reqs, max);
 			if (backward_queue.is_empty())
 				batch_num++;
 		}
 	}
 	else
-		ret = forward_queue.get_requests(reqs);
+		ret = forward_queue.get_requests(reqs, max);
+	assert(ret <= max);
 	return ret;
 }
 
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	vertex_compute *compute = curr->get_curr_vertex_compute();
-	if (compute == NULL)
-		compute = curr->create_vertex_compute(this);
+	vertex_compute *compute = curr->get_vertex_compute(*this);
 	compute->request_vertices(ids, num);
 }
 
-vsize_t compute_vertex::get_num_edges() const
+void compute_vertex::request_num_edges(vertex_id_t ids[], size_t num)
 {
-	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	return t->get_graph().get_vertex_edges(get_id());
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	vertex_compute *compute = curr->get_vertex_compute(*this);
+	compute->request_num_edges(ids, num);
 }
 
 void compute_directed_vertex::request_partial_vertices(
@@ -214,22 +216,96 @@ void compute_directed_vertex::request_partial_vertices(
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	directed_vertex_compute *compute
-		= (directed_vertex_compute *) curr->get_curr_vertex_compute();
-	if (compute == NULL)
-		compute = (directed_vertex_compute *) curr->create_vertex_compute(this);
+		= (directed_vertex_compute *) curr->get_vertex_compute(*this);
 	compute->request_partial_vertices(reqs, num);
 }
 
+#if 0
 void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 		size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	ts_vertex_compute *compute
-		= (ts_vertex_compute *) curr->get_curr_vertex_compute();
-	if (compute == NULL)
-		compute = (ts_vertex_compute *) curr->create_vertex_compute(this);
+		= (ts_vertex_compute *) curr->get_vertex_compute(*this);
 	compute->request_partial_vertices(reqs, num);
 }
+#endif
+
+#ifdef VERIFY_INDEX_READER
+
+vertex_index *test_vindex;
+
+vertex_index *load_vertex_index(const std::string &index_file)
+{
+	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;
+	const int READ_SIZE = 100 * 1024 * 1024;
+
+	// Right now only the cached I/O can support async I/O
+	file_io_factory::shared_ptr factory = create_io_factory(index_file,
+			REMOTE_ACCESS);
+	assert(factory->get_file_size() >= INDEX_HEADER_SIZE);
+	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
+
+	// Get the header of the index.
+	char *tmp = NULL;
+	int ret = posix_memalign((void **) &tmp, PAGE_SIZE, INDEX_HEADER_SIZE);
+	assert(ret == 0);
+	data_loc_t loc(factory->get_file_id(), 0);
+	io_request req(tmp, loc, INDEX_HEADER_SIZE, READ);
+	io->access(&req, 1);
+	io->wait4complete(1);
+	vertex_index *index = (vertex_index *) tmp;
+	index->get_graph_header().verify();
+
+	// Initialize the buffer for containing the index.
+	size_t index_size = index->get_index_size();
+	assert((ssize_t) index_size <= factory->get_file_size());
+	char *buf = NULL;
+	printf("allocate %ld bytes\n", index_size);
+	ret = posix_memalign((void **) &buf, PAGE_SIZE, index_size);
+	assert(ret == 0);
+	off_t off = 0;
+	memcpy(buf, tmp, INDEX_HEADER_SIZE);
+	off += INDEX_HEADER_SIZE;
+	free(tmp);
+
+	// Read the index to the memory.
+	size_t aligned_index_size = ROUND_PAGE(index_size);
+	while ((size_t) off < aligned_index_size) {
+		assert(off % PAGE_SIZE == 0);
+		size_t size = min(READ_SIZE, aligned_index_size - off);
+		data_loc_t loc(factory->get_file_id(), off);
+		io_request req(buf + off, loc, size, READ);
+		io->access(&req, 1);
+		off += size;
+		if (io->num_pending_ios() > 100)
+			io->wait4complete(io->num_pending_ios() / 10);
+	}
+	io->wait4complete(io->num_pending_ios());
+
+	// Read the last page.
+	// The data may only occupy part of the page.
+	if (aligned_index_size < index_size) {
+		char *tmp = NULL;
+		int ret = posix_memalign((void **) &tmp, PAGE_SIZE, PAGE_SIZE);
+		assert(ret == 0);
+		data_loc_t loc(factory->get_file_id(), aligned_index_size);
+		io_request req(tmp, loc, PAGE_SIZE, READ);
+		io->access(&req, 1);
+		io->wait4complete(1);
+		memcpy(buf + aligned_index_size, tmp, index_size - aligned_index_size);
+		free(tmp);
+	}
+
+	index = (vertex_index *) buf;
+	if (index->get_graph_header().get_graph_type() == graph_type::DIRECTED)
+		((directed_vertex_index *) index)->verify();
+	else
+		((default_vertex_index *) index)->verify();
+	return index;
+}
+
+#endif
 
 graph_engine::graph_engine(const std::string &graph_file,
 		graph_index::ptr index, const config_map &configs)
@@ -241,6 +317,10 @@ graph_engine::graph_engine(const std::string &graph_file,
 	this->num_nodes = params.get_num_nodes();
 	index->init(num_threads, num_nodes);
 
+#ifdef VERIFY_INDEX_READER
+	test_vindex = load_vertex_index(index->get_index_file());
+#endif
+
 	max_processing_vertices = 0;
 	is_complete = false;
 	this->vertices = index;
@@ -250,14 +330,13 @@ graph_engine::graph_engine(const std::string &graph_file,
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
 	// Right now only the cached I/O can support async I/O
-	factory = create_io_factory(graph_file,
-			GLOBAL_CACHE_ACCESS);
-	factory->set_sched_creater(new throughput_comp_io_sched_creater());
+	graph_factory = create_io_factory(graph_file, GLOBAL_CACHE_ACCESS);
+	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
+	index_factory = create_io_factory(index->get_index_file(), GLOBAL_CACHE_ACCESS);
 
-	io_interface *io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = graph_factory->create_io(thread::get_curr_thread());
 	io->access((char *) &header, 0, sizeof(header), READ);
 	header.verify();
-	factory->destroy_io(io);
 
 	switch (header.get_graph_type()) {
 		case graph_type::DIRECTED:
@@ -299,7 +378,8 @@ graph_engine::~graph_engine()
 {
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
-	factory = file_io_factory::shared_ptr();
+	graph_factory = file_io_factory::shared_ptr();
+	index_factory = file_io_factory::shared_ptr();
 	destroy_io_system();
 }
 
@@ -313,8 +393,8 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 			new_prog = creater->create();
 		else
 			new_prog = vertices->create_def_vertex_program();
-		worker_thread *t = new worker_thread(this, factory, new_prog,
-				i % num_nodes, i, num_threads, scheduler);
+		worker_thread *t = new worker_thread(this, graph_factory, index_factory,
+				new_prog, i % num_nodes, i, num_threads, scheduler);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
 		vprograms[i] = new_prog;
@@ -430,13 +510,22 @@ void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 void graph_engine::preload_graph()
 {
 	const int BLOCK_SIZE = 1024 * 1024 * 32;
-	io_interface *io = factory->create_io(thread::get_curr_thread());
-	size_t preload_size = min(params.get_cache_size(), factory->get_file_size());
-	printf("preload %ld bytes\n", preload_size);
-	char *buf = new char[BLOCK_SIZE];
+	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[BLOCK_SIZE]);
+
+	size_t cache_size = params.get_cache_size();
+	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
+	size_t preload_size = min(cache_size,
+			index_factory->get_file_size());
+	cache_size -= preload_size;
+	printf("preload %ld bytes of the index file\n", preload_size);
 	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
-		io->access(buf, i, BLOCK_SIZE, READ);
-	factory->destroy_io(io);
+		io->access(buf.get(), i, BLOCK_SIZE, READ);
+
+	io = graph_factory->create_io(thread::get_curr_thread());
+	preload_size = min(cache_size, graph_factory->get_file_size());
+	printf("preload %ld bytes of the graph file\n", preload_size);
+	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
+		io->access(buf.get(), i, BLOCK_SIZE, READ);
 	printf("successfully preload\n");
 }
 
@@ -505,78 +594,9 @@ void graph_engine::query_on_all(vertex_query::ptr query)
 	}
 }
 
-vertex_index *load_vertex_index(const std::string &index_file)
-{
-	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;
-	const int READ_SIZE = 100 * 1024 * 1024;
-
-	// Right now only the cached I/O can support async I/O
-	file_io_factory::shared_ptr factory = create_io_factory(index_file,
-			REMOTE_ACCESS);
-	assert(factory->get_file_size() >= INDEX_HEADER_SIZE);
-	io_interface *io = factory->create_io(thread::get_curr_thread());
-
-	// Get the header of the index.
-	char *tmp = NULL;
-	int ret = posix_memalign((void **) &tmp, PAGE_SIZE, INDEX_HEADER_SIZE);
-	assert(ret == 0);
-	data_loc_t loc(factory->get_file_id(), 0);
-	io_request req(tmp, loc, INDEX_HEADER_SIZE, READ, io, -1);
-	io->access(&req, 1);
-	io->wait4complete(1);
-	vertex_index *index = (vertex_index *) tmp;
-	index->get_graph_header().verify();
-
-	// Initialize the buffer for containing the index.
-	size_t index_size = index->get_index_size();
-	assert((ssize_t) index_size <= factory->get_file_size());
-	char *buf = NULL;
-	ret = posix_memalign((void **) &buf, PAGE_SIZE, index_size);
-	assert(ret == 0);
-	off_t off = 0;
-	memcpy(buf, tmp, INDEX_HEADER_SIZE);
-	off += INDEX_HEADER_SIZE;
-	free(tmp);
-
-	// Read the index to the memory.
-	size_t aligned_index_size = ROUND_PAGE(index_size);
-	while ((size_t) off < aligned_index_size) {
-		assert(off % PAGE_SIZE == 0);
-		size_t size = min(READ_SIZE, aligned_index_size - off);
-		data_loc_t loc(factory->get_file_id(), off);
-		io_request req(buf + off, loc, size, READ, io, -1);
-		io->access(&req, 1);
-		off += size;
-		if (io->num_pending_ios() > 100)
-			io->wait4complete(io->num_pending_ios() / 10);
-	}
-	io->wait4complete(io->num_pending_ios());
-
-	// Read the last page.
-	// The data may only occupy part of the page.
-	if (aligned_index_size < index_size) {
-		char *tmp = NULL;
-		int ret = posix_memalign((void **) &tmp, PAGE_SIZE, PAGE_SIZE);
-		assert(ret == 0);
-		data_loc_t loc(factory->get_file_id(), aligned_index_size);
-		io_request req(tmp, loc, PAGE_SIZE, READ, io, -1);
-		io->access(&req, 1);
-		io->wait4complete(1);
-		memcpy(buf + aligned_index_size, tmp, index_size - aligned_index_size);
-		free(tmp);
-	}
-	factory->destroy_io(io);
-
-	index = (vertex_index *) buf;
-	if (index->get_graph_header().get_graph_type() == graph_type::DIRECTED)
-		((directed_vertex_index *) index)->verify();
-	else
-		((default_vertex_index *) index)->verify();
-	return index;
-}
-
 size_t graph_get_vertices(graph_engine &graph, const worker_thread &t,
 		const local_vid_t ids[], int num_ids, compute_vertex *v_buf[])
 {
 	return graph.get_vertices(t.get_worker_id(), ids, num_ids, v_buf);
 }
+

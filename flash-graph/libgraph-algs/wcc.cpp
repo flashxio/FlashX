@@ -59,15 +59,19 @@ public:
 class wcc_vertex: public compute_vertex
 {
 	bool updated;
+	bool empty;
 	vertex_id_t component_id;
 public:
 	wcc_vertex(vertex_id_t id): compute_vertex(id) {
 		component_id = id;
 		updated = true;
+		// TODO
+		assert(0);
+		empty = false;
 	}
 
 	bool is_empty(graph_engine &graph) const {
-		return graph.get_vertex_edges(get_id()) == 0;
+		return empty;
 	}
 
 	bool belong2component() const {

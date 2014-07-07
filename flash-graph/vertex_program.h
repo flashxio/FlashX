@@ -122,6 +122,11 @@ public:
      *  \param mmsg The message(s) received by the vertex.
      */
 	virtual void run_on_multicast_message(multicast_message &mmsg) = 0;
+
+	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t num_edges) = 0;
+	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t num_in_edges, vsize_t num_out_edges) = 0;
     
     /**
      * \brief Perform some user defined action on a vertex when the current iteration comes to an end.
@@ -273,6 +278,17 @@ public:
 			vertex_type *v = (vertex_type *) vertex_buf[i];
 			v->run_on_message(*this, mmsg);
 		}
+	}
+
+	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t num_edges) {
+		((vertex_type &) c_vertex).run_on_num_edges(id, num_edges);
+	}
+
+	virtual void run_on_num_edges(compute_vertex &c_vertex, vertex_id_t id,
+			vsize_t num_in_edges, vsize_t num_out_edges) {
+		((vertex_type &) c_vertex).run_on_num_dedges(id, num_in_edges,
+			num_out_edges);
 	}
     
 	virtual void notify_iteration_end(compute_vertex &comp_v) {

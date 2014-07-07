@@ -148,10 +148,12 @@ protected:
 	io_interface(thread *t) {
 		this->curr = t;
 		this->io_idx = io_counter.inc(1) - 1;
-		max_num_pending_ios = 32;
+		max_num_pending_ios = params.get_max_num_pending_ios();
 	}
 
 public:
+	typedef std::shared_ptr<io_interface> ptr;
+
 	virtual ~io_interface() { }
 
 	/**
@@ -396,9 +398,9 @@ public:
 	 * \param t the thread where the I/O instance can be used.
 	 * \return the I/O instance.
 	 */
-	virtual io_interface *create_io(thread *t) = 0;
+	virtual io_interface::ptr create_io(thread *t) = 0;
 
-	/**
+	/*
 	 * This method destroys an I/O instance created in the I/O factory.
 	 * \param io the I/O instance to be destroyed.
 	 */
