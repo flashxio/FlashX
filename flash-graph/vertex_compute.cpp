@@ -321,6 +321,23 @@ void directed_vertex_compute::request_partial_vertices(
 	issue_thread->get_index_reader().request_vertices(reqs, num, *this);
 }
 
+void directed_vertex_compute::run_on_num_edges(vertex_id_t id,
+		vsize_t num_in_edges, vsize_t num_out_edges)
+{
+	issue_thread->get_vertex_program().run_on_num_edges(*v, id,
+			num_in_edges, num_out_edges);
+	num_edge_completed++;
+	if (get_num_pending() == 0)
+		issue_thread->complete_vertex(*v);
+}
+
+void directed_vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)
+{
+	num_edge_requests += num;
+	((directed_vertex_index_reader &) issue_thread->get_index_reader(
+		)).request_num_directed_edges(ids, num, *this);
+}
+
 #if 0
 void ts_vertex_compute::request_partial_vertices(ts_vertex_request reqs[],
 		size_t num)

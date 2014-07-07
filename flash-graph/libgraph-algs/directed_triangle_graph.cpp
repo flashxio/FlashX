@@ -88,7 +88,8 @@ public:
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
 
-	void run_on_num_edges(vertex_id_t id, vsize_t num_edges);
+	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges,
+			vsize_t num_out_edges);
 
 	void destroy_runtime() {
 		directed_runtime_data_t *data
@@ -99,8 +100,10 @@ public:
 	}
 };
 
-void directed_triangle_vertex::run_on_num_edges(vertex_id_t id, vsize_t num_edges)
+void directed_triangle_vertex::run_on_num_dedges(vertex_id_t id,
+		vsize_t num_in_edges, vsize_t num_out_edges)
 {
+	vsize_t num_edges = num_in_edges + num_out_edges;
 	directed_runtime_data_t *data
 		= (directed_runtime_data_t *) local_value.get_runtime_data();
 	data->num_edge_reqs++;

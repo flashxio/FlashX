@@ -178,7 +178,7 @@ public:
 	 * This methods accepts the requests from graph applications and issues
 	 * the requests to the vertex index.
 	 */
-	void request_num_edges(vertex_id_t ids[], size_t num);
+	virtual void request_num_edges(vertex_id_t ids[], size_t num);
 
 	/*
 	 * The methods are used for both cases (requesting the adjacency list
@@ -294,6 +294,19 @@ public:
 
 	void issue_io_request(const directed_vertex_request &req,
 			const in_mem_directed_vertex_info &info);
+
+	/*
+	 * This is a callback function. When the vertex index gets the number of
+	 * edges, it notifies the vertex_compute of this information.
+	 */
+	void run_on_num_edges(vertex_id_t id, vsize_t num_in_edges,
+			vsize_t num_out_edges);
+
+	/*
+	 * This methods accepts the requests from graph applications and issues
+	 * the requests to the vertex index.
+	 */
+	void request_num_edges(vertex_id_t ids[], size_t num);
 };
 
 class part_directed_vertex_compute: public user_compute

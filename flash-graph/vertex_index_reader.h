@@ -157,6 +157,50 @@ public:
 	}
 };
 
+class req_directed_edge_task
+{
+	// The vertex whose edges the task requests.
+	vertex_id_t vid;
+	// The vertex compute of the vertex who issues the request.
+	directed_vertex_compute *compute;
+public:
+	req_directed_edge_task() {
+		vid = 0;
+		compute = NULL;
+	}
+
+	req_directed_edge_task(vertex_id_t vid, directed_vertex_compute *compute) {
+		this->vid = vid;
+		this->compute = compute;
+	}
+
+	size_t get_idx() const {
+		return vid + vertex_index::get_header_size() / sizeof(directed_vertex_entry);
+	}
+
+	size_t get_num_entries() const {
+		return 1;
+	}
+
+	void run(directed_vertex_entry entries[], int num) {
+		assert(num == 1);
+#ifdef VERIFY_INDEX_READER
+		extern vertex_index *test_vindex;
+		directed_vertex_index *index = (directed_vertex_index *) test_vindex;
+		assert(entries[0].get_off() == index->get_vertex(vid).get_off());
+		if (vid < index->get_max_id())
+			assert(entries[1].get_off() == index->get_vertex(vid + 1).get_off());
+#endif
+		compute->run_on_num_edges(vid, entries[0].get_num_in_edges(),
+				entries[0].get_num_out_edges());
+	}
+
+	// Override the operator so it can be used in a priority queue.
+	bool operator<(const req_directed_edge_task &task) const {
+		return this->get_idx() > task.get_idx();
+	}
+};
+
 /*
  * This interface reads vertex index from SSDs.
  * It accepts the requests of reading vertices or partial vertices as well
@@ -296,10 +340,14 @@ class directed_vertex_index_reader: public vertex_index_reader_impl<directed_ver
 	typedef simple_KV_store<directed_vertex_entry,
 			req_part_vertex_task> part_vertex_KV_store;
 	part_vertex_KV_store::ptr req_part_vertex_store;
+	typedef simple_KV_store<directed_vertex_entry,
+			req_directed_edge_task> directed_edge_KV_store;
+	directed_edge_KV_store::ptr req_directed_edge_store;
 
 	directed_vertex_index_reader(
 			io_interface::ptr io): vertex_index_reader_impl<directed_vertex_entry>(io) {
 		req_part_vertex_store = part_vertex_KV_store::create(io);
+		req_directed_edge_store = directed_edge_KV_store::create(io);
 	}
 public:
 	static ptr create(io_interface::ptr io) {
@@ -323,8 +371,26 @@ public:
 		}
 	}
 
+	void request_num_directed_edges(vertex_id_t ids[], size_t num,
+			directed_vertex_compute &compute) {
+		for (size_t i = 0; i < num; i++) {
+			req_directed_edge_task task(ids[i], &compute);
+			if (ids[i] >= get_cached_index_start()) {
+				int off_in_cache = ids[i] - get_cached_index_start();
+				int num_entries = task.get_num_entries();
+				directed_vertex_entry vs[num_entries];
+				for (int j = 0; j < num_entries; j++)
+					vs[j] = get_cached_entry(off_in_cache + j);
+				task.run(vs, num_entries);
+			}
+			else
+				req_directed_edge_store->async_request(task);
+		}
+	}
+
 	void wait4complete(int num) {
 		req_part_vertex_store->flush_requests();
+		req_directed_edge_store->flush_requests();
 		vertex_index_reader_impl<directed_vertex_entry>::wait4complete(num);
 	}
 
