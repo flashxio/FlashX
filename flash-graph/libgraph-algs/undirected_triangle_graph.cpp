@@ -101,6 +101,7 @@ void undirected_triangle_vertex::run_on_num_edges(vertex_id_t id, vsize_t num_ed
 			long ret = num_completed_vertices.inc(1);
 			if (ret % 100000 == 0)
 				printf("%ld completed vertices\n", ret);
+			destroy_runtime();
 			return;
 		}
 		data->finalize_init();
@@ -125,8 +126,6 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
-
-		destroy_runtime();
 		return;
 	}
 
