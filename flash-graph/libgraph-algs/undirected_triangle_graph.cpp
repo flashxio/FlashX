@@ -104,6 +104,7 @@ void undirected_triangle_vertex::run_on_num_edges(vertex_id_t id, vsize_t num_ed
 			destroy_runtime();
 			return;
 		}
+		std::sort(data->edges.begin(), data->edges.end());
 		data->finalize_init();
 		// We now can request the neighbors.
 		request_vertices(data->edges.data(), data->edges.size());
