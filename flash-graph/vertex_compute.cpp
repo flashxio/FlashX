@@ -66,7 +66,8 @@ void vertex_compute::run_on_vertex_size(vertex_id_t id, vsize_t size)
 {
 	size_t header_size = issue_thread->get_graph().get_vertex_header_size();
 	vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
-	issue_thread->get_vertex_program().run_on_num_edges(*v, id, num_edges);
+	vertex_header header(id, num_edges);
+	issue_thread->get_vertex_program().run_on_num_edges(*v, header);
 	num_edge_completed++;
 	if (get_num_pending() == 0)
 		issue_thread->complete_vertex(*v);
@@ -324,8 +325,8 @@ void directed_vertex_compute::request_partial_vertices(
 void directed_vertex_compute::run_on_num_edges(vertex_id_t id,
 		vsize_t num_in_edges, vsize_t num_out_edges)
 {
-	issue_thread->get_vertex_program().run_on_num_edges(*v, id,
-			num_in_edges, num_out_edges);
+	directed_vertex_header header(id, num_in_edges, num_out_edges);
+	issue_thread->get_vertex_program().run_on_num_edges(*v, header);
 	num_edge_completed++;
 	if (get_num_pending() == 0)
 		issue_thread->complete_vertex(*v);

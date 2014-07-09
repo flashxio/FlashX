@@ -74,7 +74,7 @@ public:
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
 
-	void run_on_num_edges(vertex_id_t id, vsize_t num_edges);
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header);
 
 	void destroy_runtime() {
 		undirected_runtime_data_t *data
@@ -85,15 +85,17 @@ public:
 	}
 };
 
-void undirected_triangle_vertex::run_on_num_edges(vertex_id_t id, vsize_t num_edges)
+void undirected_triangle_vertex::run_on_vertex_header(vertex_program &prog,
+		const vertex_header &header)
 {
 	undirected_runtime_data_t *data
 		= (undirected_runtime_data_t *) local_value.get_runtime_data();
 	data->num_edge_reqs++;
 
-	if ((num_edges < data->degree && id != get_id())
-			|| (num_edges == data->degree && id < get_id())) {
-		data->edges.push_back(id);
+	if ((header.get_num_edges() < data->degree && header.get_id() != get_id())
+			|| (header.get_num_edges() == data->degree
+				&& header.get_id() < get_id())) {
+		data->edges.push_back(header.get_id());
 		data->num_required++;
 	}
 	if (data->num_edge_reqs == data->degree) {
@@ -136,7 +138,7 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 	local_value.set_runtime_data(new undirected_runtime_data_t(
 				local_value.get_num_triangles(),
 				vertex.get_num_edges(edge_type::IN_EDGE)));
-	request_num_edges(edges.data(), edges.size());
+	request_vertex_headers(edges.data(), edges.size());
 }
 
 void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,

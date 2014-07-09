@@ -89,7 +89,7 @@ public:
 			}
 		}
 		else {
-			request_num_edges(&id, 1);
+			request_vertex_headers(&id, 1);
 		}
 	}
 
@@ -103,9 +103,9 @@ public:
 		}
 	}
 
-	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
-		assert(get_id() == id);
-		empty = (num_edges == 0);
+	void run_on_vertex_header(vertex_program &, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		empty = (header.get_num_edges() == 0);
 	}
 };
 

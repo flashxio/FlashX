@@ -98,6 +98,55 @@ public:
 	}
 };
 
+/**
+ * The information of vertex header.
+ * It contains the vertex ID and the number of edges.
+ */
+class vertex_header
+{
+	vertex_id_t id;
+	vsize_t num_edges;
+public:
+	vertex_header(vertex_id_t id, vsize_t num_edges) {
+		this->id = id;
+		this->num_edges = num_edges;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
+
+	vsize_t get_num_edges() const {
+		return num_edges;
+	}
+};
+
+/**
+ * The information of directed vertex header.
+ * In addition to the vertex header, it has the number of in-edges
+ * and out-edges.
+ */
+class directed_vertex_header: public vertex_header
+{
+	vsize_t num_in_edges;
+	vsize_t num_out_edges;
+public:
+	directed_vertex_header(vertex_id_t id, vsize_t num_in_edges,
+			vsize_t num_out_edges): vertex_header(id,
+				num_in_edges + num_out_edges) {
+		this->num_in_edges = num_in_edges;
+		this->num_out_edges = num_out_edges;
+	}
+
+	vsize_t get_num_in_edges() const {
+		return num_in_edges;
+	}
+
+	vsize_t get_num_out_edges() const {
+		return num_out_edges;
+	}
+};
+
 class empty_data
 {
 public:

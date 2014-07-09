@@ -76,10 +76,10 @@ public:
 /* Only serves to activate on the next iteration */
 			const vertex_message &msg) { }; 
 
-	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges,
-			vsize_t num_out_edges) {
-		assert(get_id() == id);
-		this->num_out_edges = num_out_edges;
+	void run_on_vertex_header(vertex_program &, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		directed_vertex_header &dheader = (directed_vertex_header &) header;
+		this->num_out_edges = dheader.get_num_out_edges();
 	}
 };
 
@@ -87,7 +87,7 @@ void pgrank_vertex::run(vertex_program &prog)
 {
 	vertex_id_t id = get_id();
 	if (pr_stage == pr_stage_t::INIT) {
-		request_num_edges(&id, 1);
+		request_vertex_headers(&id, 1);
 	}
 	else if (pr_stage == pr_stage_t::RUN) {
 		// We perform pagerank for at most `num_iters' iterations.

@@ -521,10 +521,9 @@ public:
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 
-	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges,
-			vsize_t num_out_edges) {
-		assert(get_id() == id);
-		degree = num_in_edges + num_out_edges;
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		degree = header.get_num_edges();
 	}
 };
 

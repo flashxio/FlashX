@@ -154,7 +154,7 @@ public:
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		if (scan_stage == scan_stage_t::INIT)
-			request_num_edges(&id, 1);
+			request_vertex_headers(&id, 1);
 		else if (scan_stage == scan_stage_t::RUN)
 			request_vertices(&id, 1);
 	}

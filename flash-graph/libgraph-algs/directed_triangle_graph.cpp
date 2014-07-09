@@ -90,8 +90,7 @@ public:
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
 
-	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges,
-			vsize_t num_out_edges);
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header);
 
 	void destroy_runtime() {
 		directed_runtime_data_t *data
@@ -102,23 +101,25 @@ public:
 	}
 };
 
-void directed_triangle_vertex::run_on_num_dedges(vertex_id_t id,
-		vsize_t num_in_edges, vsize_t num_out_edges)
+void directed_triangle_vertex::run_on_vertex_header(vertex_program &prog,
+		const vertex_header &header)
 {
-	vsize_t num_edges = num_in_edges + num_out_edges;
+	vsize_t num_edges = header.get_num_edges();
 	directed_runtime_data_t *data
 		= (directed_runtime_data_t *) local_value.get_runtime_data();
 	data->num_edge_reqs++;
-	if (data->is_in_edge(id)) {
-		if ((num_edges < data->degree && id != this->get_id())
-				|| (num_edges == data->degree && id < this->get_id())) {
-			data->selected_in_edges.push_back(id);
+	if (data->is_in_edge(header.get_id())) {
+		if ((num_edges < data->degree && header.get_id() != this->get_id())
+				|| (num_edges == data->degree
+					&& header.get_id() < this->get_id())) {
+			data->selected_in_edges.push_back(header.get_id());
 		}
 	}
-	if (data->is_out_edge(id)) {
-		if ((num_edges < data->degree && id != this->get_id())
-				|| (num_edges == data->degree && id < this->get_id())) {
-			data->selected_out_edges.push_back(id);
+	if (data->is_out_edge(header.get_id())) {
+		if ((num_edges < data->degree && header.get_id() != this->get_id())
+				|| (num_edges == data->degree
+					&& header.get_id() < this->get_id())) {
+			data->selected_out_edges.push_back(header.get_id());
 		}
 	}
 
@@ -193,7 +194,7 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 	std::vector<vertex_id_t> edges;
 	unique_merge(data->in_edges, data->out_edges, edges);
 	data->num_tot_edge_reqs = edges.size();
-	request_num_edges(edges.data(), edges.size());
+	request_vertex_headers(edges.data(), edges.size());
 }
 
 void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,

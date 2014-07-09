@@ -412,7 +412,7 @@ public:
 
 	void run_stage_init(vertex_program &prog) {
 		vertex_id_t id = get_id();
-		request_num_edges(&id, 1);
+		request_vertex_headers(&id, 1);
 	}
 
 	void run_stage_trim1(vertex_program &prog);
@@ -494,10 +494,10 @@ public:
 	void run_on_message_stage_part(vertex_program &prog, const vertex_message &msg);
 	void run_on_message_stage_wcc(vertex_program &prog, const vertex_message &msg);
 
-	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges,
-			vsize_t num_out_edges) {
-		this->num_in_edges = num_in_edges;
-		this->num_out_edges = num_out_edges;
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		const directed_vertex_header &dheader = (const directed_vertex_header &) header;
+		this->num_in_edges = dheader.get_num_in_edges();
+		this->num_out_edges = dheader.get_num_out_edges();
 	}
 };
 

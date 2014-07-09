@@ -74,7 +74,14 @@ public:
 	 */
 	void request_vertices(vertex_id_t ids[], size_t num);
 
-	void request_num_edges(vertex_id_t ids[], size_t num);
+	/**
+	 * \brief This requests the vertex headers. It mainly contains the number
+	 *        of edges (the number of in-edges and out-edges for directed
+	 *        vertices).
+	 * \param ids The IDs of vertices.
+     * \param num The number of vertex IDs you are requesting.
+	 */
+	void request_vertex_headers(vertex_id_t ids[], size_t num);
 
     /**
      * \brief Get its own vertex ID.
@@ -92,10 +99,9 @@ public:
 	void notify_iteration_end(vertex_program & prog) {
 	}
 
-	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges, vsize_t num_out_edges) {
-	}
-
-	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
+	void run_on_vertex_header(vertex_program &prog,
+			const vertex_header &header) {
+		assert(0);
 	}
 };
 

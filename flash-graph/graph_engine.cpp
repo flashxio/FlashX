@@ -204,7 +204,7 @@ void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 	compute->request_vertices(ids, num);
 }
 
-void compute_vertex::request_num_edges(vertex_id_t ids[], size_t num)
+void compute_vertex::request_vertex_headers(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_compute *compute = curr->get_vertex_compute(*this);
