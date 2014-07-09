@@ -26,6 +26,8 @@
 #include "io_interface.h"
 #include "native_file.h"
 #include "safs_file.h"
+#include "file_mapper.h"
+#include "RAID_config.h"
 
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
 

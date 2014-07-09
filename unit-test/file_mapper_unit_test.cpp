@@ -16,7 +16,7 @@ int main()
 {
 	int num_files = 18;
 	const int BLOCK_SIZE = 16;
-	std::vector<file_info> files(num_files);
+	std::vector<part_file_info> files(num_files);
 
 	srandom(time(NULL));
 

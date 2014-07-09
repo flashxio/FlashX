@@ -79,13 +79,6 @@ inline static T max(T v1, T v2)
 	return v1 < v2 ? v2 : v1;
 }
 
-struct file_info
-{
-	std::string name;
-	// The NUMA node id where the disk is connected to.
-	int node_id;
-};
-
 /**
  * Check if the integer is a power of two.
  */

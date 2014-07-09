@@ -30,7 +30,7 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 	 * inside the directory, there is exactly one file that stores the data
 	 * of a partition, and the file name is the partition ID.
 	 */
-	std::map<int, file_info> file_map;
+	std::map<int, part_file_info> file_map;
 	for (unsigned i = 0; i < root_paths.size(); i++) {
 		std::string dir_name = root_paths[i].name + std::string("/") + file_name;
 		native_dir dir(dir_name);
@@ -54,9 +54,9 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 			return NULL;
 		}
 		int part_id = atoi(part_ids[0].c_str());
-		file_info info = root_paths[i];
+		part_file_info info = root_paths[i];
 		info.name = dir_name + std::string("/") + part_ids[0];
-		file_map.insert(std::pair<int, file_info>(part_id, info));
+		file_map.insert(std::pair<int, part_file_info>(part_id, info));
 	}
 	if (file_map.size() < root_paths.size()) {
 		fprintf(stderr, "duplicated partition id of the SAFS file %s\n",
@@ -64,8 +64,8 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 		return NULL;
 	}
 
-	std::vector<file_info> files;
-	for (std::map<int, file_info>::const_iterator it = file_map.begin();
+	std::vector<part_file_info> files;
+	for (std::map<int, part_file_info>::const_iterator it = file_map.begin();
 			it != file_map.end(); it++) {
 		files.push_back(it->second);
 	}
@@ -109,7 +109,7 @@ std::set<int> RAID_config::get_node_ids() const
 }
 
 int RAID_config::retrieve_data_files(std::string file_file,
-		std::vector<file_info> &data_files)
+		std::vector<part_file_info> &data_files)
 {
 	char *line = NULL;
 	size_t size = 0;
@@ -126,7 +126,7 @@ int RAID_config::retrieve_data_files(std::string file_file,
 			continue;
 
 		char *colon = strstr(line, ":");
-		file_info info;
+		part_file_info info;
 		char *name = line;
 		if (colon) {
 			*colon = 0;

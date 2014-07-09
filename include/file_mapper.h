@@ -27,6 +27,7 @@
 #include "parameters.h"
 #include "concurrency.h"
 #include "exception.h"
+#include "safs_file.h"
 
 const int FILE_CONST_A = 31;
 const int FILE_CONST_P = 191;
@@ -41,16 +42,16 @@ class file_mapper
 {
 	static atomic_integer file_id_gen;
 	int file_id;
-	std::vector<file_info> files;
+	std::vector<part_file_info> files;
 	std::string file_name;
 protected:
-	const std::vector<file_info> &get_files() const {
+	const std::vector<part_file_info> &get_files() const {
 		return files;
 	}
 public:
 	const int STRIPE_BLOCK_SIZE;
 public:
-	file_mapper(const std::string &name, const std::vector<file_info> &files,
+	file_mapper(const std::string &name, const std::vector<part_file_info> &files,
 			int block_size): STRIPE_BLOCK_SIZE(block_size) {
 		this->file_name = name;
 		ASSERT_TRUE(block_size > 0);
@@ -94,7 +95,7 @@ class RAID0_mapper: public file_mapper
 {
 	static int rand_start;
 public:
-	RAID0_mapper(const std::string &name, const std::vector<file_info> &files,
+	RAID0_mapper(const std::string &name, const std::vector<part_file_info> &files,
 			int block_size): file_mapper(name, files, block_size) {
 #ifdef TEST
 		if (rand_start == 0) {
@@ -133,7 +134,7 @@ class RAID5_mapper: public file_mapper
 {
 	static int rand_start;
 public:
-	RAID5_mapper(const std::string &name, const std::vector<file_info> &files,
+	RAID5_mapper(const std::string &name, const std::vector<part_file_info> &files,
 			int block_size): file_mapper(name, files, block_size) {
 #ifdef TEST
 		if (rand_start == 0) {
@@ -185,7 +186,7 @@ class hash_mapper: public file_mapper
 				+ 1) : (CONST_P / get_num_files());
 	}
 public:
-	hash_mapper(const std::string &name, const std::vector<file_info> &files,
+	hash_mapper(const std::string &name, const std::vector<part_file_info> &files,
 			int block_size): file_mapper(name, files, block_size), P_MOD_N(
 				CONST_P % files.size()) {
 	}
