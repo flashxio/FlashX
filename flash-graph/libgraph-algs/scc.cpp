@@ -136,6 +136,8 @@ public:
 };
 
 enum scc_stage_t {
+	// Initialize #edges.
+	INIT,
 	// Trim vertices with only in-edges or out-edges
 	TRIM1,
 	// Trim vertices in a SCC of size 2.
@@ -322,8 +324,6 @@ class scc_vertex: public compute_directed_vertex
 public:
 	scc_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		comp_id = INVALID_VERTEX_ID;
-		// TODO init #edges
-		assert(0);
 		num_in_edges = 0;
 		num_out_edges = 0;
 	}
@@ -383,6 +383,9 @@ public:
 			return;
 
 		switch(scc_stage) {
+			case scc_stage_t::INIT:
+				run_stage_init(prog);
+				break;
 			case scc_stage_t::TRIM1:
 				run_stage_trim1(prog);
 				break;
@@ -405,6 +408,11 @@ public:
 			default:
 				assert(0);
 		}
+	}
+
+	void run_stage_init(vertex_program &prog) {
+		vertex_id_t id = get_id();
+		request_num_edges(&id, 1);
 	}
 
 	void run_stage_trim1(vertex_program &prog);
@@ -485,6 +493,12 @@ public:
 	void run_on_message_stage_FWBW(vertex_program &prog, const vertex_message &msg);
 	void run_on_message_stage_part(vertex_program &prog, const vertex_message &msg);
 	void run_on_message_stage_wcc(vertex_program &prog, const vertex_message &msg);
+
+	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges,
+			vsize_t num_out_edges) {
+		this->num_in_edges = num_in_edges;
+		this->num_out_edges = num_out_edges;
+	}
 };
 
 class part_vertex_program: public vertex_program_impl<scc_vertex>
@@ -1134,9 +1148,16 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 	size_t num_comp1 = 0;
 
 	struct timeval start, end, scc_start;
-	scc_stage = scc_stage_t::TRIM1;
+	scc_stage = scc_stage_t::INIT;
 	gettimeofday(&start, NULL);
 	scc_start = start;
+	graph->start_all();
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+	printf("init takes %f seconds.\n", time_diff(start, end));
+
+	scc_stage = scc_stage_t::TRIM1;
+	gettimeofday(&start, NULL);
 	graph->start_all(vertex_initializer::ptr(new trim1_initializer()),
 			vertex_program_creater::ptr(new trim_vertex_program_creater()));
 	graph->wait4complete();
