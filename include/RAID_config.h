@@ -37,6 +37,9 @@ class RAID_config
 	int RAID_mapping_option;
 	int RAID_block_size;
 	std::vector<file_info> root_paths;
+
+	static int retrieve_data_files(std::string file_file,
+			std::vector<file_info> &data_files);
 public:
 	RAID_config() {
 	}

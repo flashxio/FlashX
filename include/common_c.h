@@ -128,9 +128,6 @@ static inline int universal_hash(off_t v, int modulo)
 	return (v * CONST_A) % CONST_P % modulo;
 }
 
-void permute_offsets(int num, int repeats, int stride, off_t start,
-		off_t offsets[]);
-
 /**
  * This returns the first node id where the process can allocate memory.
  */

@@ -107,3 +107,39 @@ std::set<int> RAID_config::get_node_ids() const
 	}
 	return node_ids;
 }
+
+int RAID_config::retrieve_data_files(std::string file_file,
+		std::vector<file_info> &data_files)
+{
+	char *line = NULL;
+	size_t size = 0;
+	int line_length;
+	FILE *fd = fopen(file_file.c_str(), "r");
+	if (fd == NULL) {
+		perror("fopen");
+		assert(0);
+	}
+	while ((line_length = getline(&line, &size, fd)) > 0) {
+		line[line_length - 1] = 0;
+		// skip comment lines.
+		if (*line == '#')
+			continue;
+
+		char *colon = strstr(line, ":");
+		file_info info;
+		char *name = line;
+		if (colon) {
+			*colon = 0;
+			info.node_id = atoi(line);
+			colon++;
+			name = colon;
+		}
+		info.name = name;
+		data_files.push_back(info);
+		free(line);
+		line = NULL;
+		size = 0;
+	}
+	fclose(fd);
+	return data_files.size();
+}

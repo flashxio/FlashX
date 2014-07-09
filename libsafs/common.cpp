@@ -96,25 +96,6 @@ int numa_get_mem_node()
 	return node_id;
 }
 
-void permute_offsets(int num, int repeats, int stride, off_t start,
-		off_t offsets[])
-{
-	int idx = 0;
-	for (int k = 0; k < repeats; k++) {
-		for (int i = 0; i < num; i++) {
-			offsets[idx++] = ((off_t) i) * stride + start * stride;
-		}
-	}
-	int tot_length = idx;
-
-	for (int i = tot_length - 1; i >= 1; i--) {
-		int j = random() % tot_length;
-		off_t tmp = offsets[j];
-		offsets[j] = offsets[i];
-		offsets[i] = tmp;
-	}
-}
-
 int isnumeric(char *str)
 {
 	int len = strlen(str);
@@ -213,42 +194,6 @@ long str2size(std::string str)
 		str[len - 1] = 0;
 	}
 	return atol(str.c_str()) * multiply;
-}
-
-int retrieve_data_files(std::string file_file,
-		std::vector<file_info> &data_files)
-{
-	char *line = NULL;
-	size_t size = 0;
-	int line_length;
-	FILE *fd = fopen(file_file.c_str(), "r");
-	if (fd == NULL) {
-		perror("fopen");
-		assert(0);
-	}
-	while ((line_length = getline(&line, &size, fd)) > 0) {
-		line[line_length - 1] = 0;
-		// skip comment lines.
-		if (*line == '#')
-			continue;
-
-		char *colon = strstr(line, ":");
-		file_info info;
-		char *name = line;
-		if (colon) {
-			*colon = 0;
-			info.node_id = atoi(line);
-			colon++;
-			name = colon;
-		}
-		info.name = name;
-		data_files.push_back(info);
-		free(line);
-		line = NULL;
-		size = 0;
-	}
-	fclose(fd);
-	return data_files.size();
 }
 
 int split_string(const std::string &str, char delim,

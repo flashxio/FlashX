@@ -91,9 +91,6 @@ struct file_info
  */
 bool align_check(size_t alignment);
 
-int retrieve_data_files(std::string file_file,
-		std::vector<file_info> &data_files);
-
 static inline std::string itoa(int n)
 {
 	char buf[32];
