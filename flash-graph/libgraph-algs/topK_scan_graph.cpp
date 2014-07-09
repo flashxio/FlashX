@@ -36,6 +36,8 @@
 
 namespace {
 
+scan_stage_t scan_stage;
+
 struct timeval graph_start;
 
 class vertex_size_scheduler: public vertex_scheduler
@@ -173,6 +175,7 @@ public:
 	using scan_vertex::run;
 	void run(vertex_program &prog);
 	void run(vertex_program &prog, const page_vertex &vertex) {
+		assert(scan_stage == scan_stage_t::RUN);
 		if (vertex.get_id() == get_id())
 			run_on_itself(prog, vertex);
 		else
@@ -194,22 +197,26 @@ public:
 
 void topK_scan_vertex::run(vertex_program &prog)
 {
-	bool req_itself = false;
-	// If we have computed local scan on the vertex, skip the vertex.
-	if (has_local_scan())
-		return;
-	// If we have estimated the local scan, we should use the estimated one.
-	else if (has_est_local())
-		req_itself = get_est_local_scan() > max_scan.get();
-	else {
-		// If this is the first time to compute on the vertex, we can still
-		// skip a lot of vertices with this condition.
-		size_t num_local_edges = get_degree();
-		req_itself = num_local_edges * num_local_edges >= max_scan.get();
+	vertex_id_t id = get_id();
+	if (scan_stage == scan_stage_t::INIT) {
+		request_num_edges(&id, 1);
 	}
-	if (req_itself) {
-		vertex_id_t id = get_id();
-		request_vertices(&id, 1);
+	else if (scan_stage == scan_stage_t::RUN) {
+		bool req_itself = false;
+		// If we have computed local scan on the vertex, skip the vertex.
+		if (has_local_scan())
+			return;
+		// If we have estimated the local scan, we should use the estimated one.
+		else if (has_est_local())
+			req_itself = get_est_local_scan() > max_scan.get();
+		else {
+			// If this is the first time to compute on the vertex, we can still
+			// skip a lot of vertices with this condition.
+			size_t num_local_edges = get_degree();
+			req_itself = num_local_edges * num_local_edges >= max_scan.get();
+		}
+		if (req_itself)
+			request_vertices(&id, 1);
 	}
 }
 
@@ -293,18 +300,24 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 
-	// Let's schedule the order of processing activated vertices according
-	// to the size of vertices. We start with processing vertices with higher
-	// degrees in the hope we can find the max scan as early as possible,
-	// so that we can simple ignore the rest of vertices.
-	graph->set_vertex_scheduler(vertex_scheduler::ptr(
-				new vertex_size_scheduler(graph)));
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
+
+	scan_stage = scan_stage_t::INIT;
+	graph->start_all();
+	graph->wait4complete();
+	scan_stage = scan_stage_t::RUN;
+
+	// Let's schedule the order of processing activated vertices according
+	// to the size of vertices. We start with processing vertices with higher
+	// degrees in the hope we can find the max scan as early as possible,
+	// so that we can simple ignore the rest of vertices.
+	graph->set_vertex_scheduler(vertex_scheduler::ptr(
+				new vertex_size_scheduler(graph)));
 
 	class remove_small_filter: public vertex_filter
 	{

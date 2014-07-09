@@ -27,6 +27,8 @@
 
 namespace {
 
+scan_stage_t scan_stage;
+
 class count_msg: public vertex_message
 {
 	size_t num;
@@ -151,7 +153,10 @@ public:
 
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
-		request_vertices(&id, 1);
+		if (scan_stage == scan_stage_t::INIT)
+			request_num_edges(&id, 1);
+		else if (scan_stage == scan_stage_t::RUN)
+			request_vertices(&id, 1);
 	}
 
 	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
@@ -286,6 +291,11 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
+	scan_stage = scan_stage_t::INIT;
+	graph->start_all();
+	graph->wait4complete();
+
+	scan_stage = scan_stage_t::RUN;
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
