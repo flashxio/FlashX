@@ -128,16 +128,6 @@ static inline int universal_hash(off_t v, int modulo)
 	return (v * CONST_A) % CONST_P % modulo;
 }
 
-/**
- * This returns the first node id where the process can allocate memory.
- */
-int numa_get_mem_node();
-int get_numa_run_node();
-
-void bind2node_id(int node_id);
-void bind_mem2node_id(int node_id);
-void bind2cpu(int cpu_id);
-
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
 
