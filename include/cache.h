@@ -198,9 +198,7 @@ public:
 		this->hits = hits;
 	}
 	/* the page is accessed */
-	void hit() {
-		hits++;
-	}
+	void hit();
 
 	virtual void inc_ref() {
 		refcnt++;
