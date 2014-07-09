@@ -8,3 +8,4 @@ max_num_pending_ios=4000
 threads=32
 prof_file=graph.prof
 merge_reqs=
+index_file_weight=1

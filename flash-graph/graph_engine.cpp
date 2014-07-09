@@ -312,7 +312,11 @@ graph_engine::graph_engine(const std::string &graph_file,
 {
 	graph_conf.init(configs);
 	graph_conf.print();
-	init_io_system(configs);
+	config_map configs1 = configs;
+	configs1.add_options(std::string("file_weights=")
+			+ index->get_index_file() + ":"
+			+ itoa(graph_conf.get_index_file_weight()));
+	init_io_system(configs1);
 	int num_threads = graph_conf.get_num_threads();
 	this->num_nodes = params.get_num_nodes();
 	index->init(num_threads, num_nodes);
