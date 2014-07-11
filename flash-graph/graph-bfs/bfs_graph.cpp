@@ -47,7 +47,7 @@ public:
 		return visited;
 	}
 
-	bool set_visited(bool visited) {
+	void set_visited(bool visited) {
 		this->visited = visited;
 	}
 
