@@ -62,6 +62,7 @@ sys_parameters::sys_parameters()
 	max_obj_alloc_size = 100 * 1024 * 1024;
 	writable = false;
 	max_num_pending_ios = 1000;
+	huge_page_enabled = false;
 }
 
 void sys_parameters::init(const std::map<std::string, std::string> &configs)
@@ -169,6 +170,11 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	if (it != configs.end()) {
 		max_num_pending_ios = str2size(it->second);
 	}
+
+	it = configs.find("huge_page");
+	if (it != configs.end()) {
+		huge_page_enabled = true;
+	}
 }
 
 void sys_parameters::print()
@@ -192,6 +198,7 @@ void sys_parameters::print()
 	std::cout << "\tmax_obj_alloc_size: " << max_obj_alloc_size << std::endl;
 	std::cout << "\twritable: " << writable << std::endl;
 	std::cout << "\tmax_num_pending_ios: " << max_num_pending_ios << std::endl;
+	std::cout << "\thuge_page_enabled: " << huge_page_enabled << std::endl;
 }
 
 void sys_parameters::print_help()
@@ -228,6 +235,8 @@ void sys_parameters::print_help()
 		<< std::endl;
 	std::cout << "\twritable: indicate whether or not to write data" << std::endl;
 	std::cout << "\tmax_num_pending_ios: the max number of pending IOs in an I/O instance"
+		<< std::endl;
+	std::cout << "\thuge_page_enabled: determine whether we use huge page for large chunk of memory"
 		<< std::endl;
 }
 

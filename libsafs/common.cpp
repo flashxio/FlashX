@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 
 #include <sstream>
 
@@ -44,6 +45,43 @@ int isnumeric(char *str)
 			return 0;
 	}
 	return 1;
+}
+
+static const int huge_page_size = 2 * 1024 * 1024;
+void *malloc_large(size_t size)
+{
+#define PROTECTION (PROT_READ | PROT_WRITE)
+	/* Only ia64 requires this */
+#ifdef __ia64__
+#define ADDR (void *)(0x8000000000000000UL)
+#define FLAGS (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_FIXED)
+#else
+#define ADDR (void *)(0x0UL)
+#define FLAGS (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB)
+#endif
+	if (params.is_huge_page_enabled()) {
+		size = ROUNDUP(size, huge_page_size);
+		void *addr = mmap(ADDR, size, PROTECTION, FLAGS, 0, 0);
+		if (addr == MAP_FAILED) {
+			perror("mmap");
+			return NULL;
+		}
+		return addr;
+	}
+	else {
+		return numa_alloc_local(size);
+	}
+}
+
+void free_large(void *addr, size_t size)
+{
+	if (params.is_huge_page_enabled()) {
+		size = ROUNDUP(size, huge_page_size);
+		munmap(addr, size);
+	}
+	else {
+		numa_free(addr, size);
+	}
 }
 
 }

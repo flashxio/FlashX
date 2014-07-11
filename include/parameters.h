@@ -113,6 +113,7 @@ class sys_parameters
 	int max_obj_alloc_size;
 	bool writable;
 	int max_num_pending_ios;
+	bool huge_page_enabled;
 public:
 	sys_parameters();
 
@@ -192,6 +193,10 @@ public:
 
 	int get_max_num_pending_ios() const {
 		return max_num_pending_ios;
+	}
+
+	bool is_huge_page_enabled() const {
+		return huge_page_enabled;
 	}
 };
 

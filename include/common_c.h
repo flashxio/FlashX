@@ -128,6 +128,12 @@ static inline int universal_hash(off_t v, int modulo)
 	return (v * CONST_A) % CONST_P % modulo;
 }
 
+/*
+ * These two functions should be used to allocate/free large chunks of memory.
+ */
+void *malloc_large(size_t size);
+void free_large(void *addr, size_t size);
+
 #define likely(x)       __builtin_expect((x),1)
 #define unlikely(x)     __builtin_expect((x),0)
 
