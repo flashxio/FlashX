@@ -211,6 +211,7 @@ class worker_thread: public thread
 	std::unique_ptr<bitmap> next_activated_vertices;
 	// This contains the vertices activated in the current level.
 	std::unique_ptr<active_vertex_queue> curr_activated_vertices;
+	vertex_scheduler::ptr scheduler;
 
 	// Indicate that we need to start all vertices.
 	bool start_all;
@@ -289,7 +290,8 @@ public:
 	void return_vertices(vertex_id_t ids[], int num);
 
 	size_t get_num_local_vertices() const {
-		return next_activated_vertices->get_num_bits();
+		return graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices());
 	}
 
 	int get_worker_id() const {

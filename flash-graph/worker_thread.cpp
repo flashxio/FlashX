@@ -162,13 +162,8 @@ worker_thread::worker_thread(graph_engine *graph,
 		int num_threads, vertex_scheduler::ptr scheduler): thread("worker_thread",
 			node_id)
 {
+	this->scheduler = scheduler;
 	curr_compute = NULL;
-	next_activated_vertices = std::unique_ptr<bitmap>(
-			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
-					graph->get_num_vertices()), node_id));
-	notify_vertices = std::unique_ptr<bitmap>(
-			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
-					graph->get_num_vertices()), node_id));
 	this->vprogram = std::move(prog);
 	vprogram->init(graph, this);
 	start_all = false;
@@ -206,12 +201,6 @@ worker_thread::worker_thread(graph_engine *graph,
 			assert(0);
 
 	}
-	if (scheduler)
-		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
-				new customized_vertex_queue(*graph, scheduler, worker_id));
-	else
-		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
-				new default_vertex_queue(*graph, worker_id, node_id));
 }
 
 worker_thread::~worker_thread()
@@ -222,6 +211,22 @@ worker_thread::~worker_thread()
 
 void worker_thread::init()
 {
+	// We should create these objects in the context of the worker thread,
+	// so we can allocate memory for the objects on the same node as
+	// the worker thread.
+	next_activated_vertices = std::unique_ptr<bitmap>(
+			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices()), get_node_id()));
+	notify_vertices = std::unique_ptr<bitmap>(
+			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices()), get_node_id()));
+	if (scheduler)
+		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
+				new customized_vertex_queue(*graph, scheduler, worker_id));
+	else
+		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
+				new default_vertex_queue(*graph, worker_id, get_node_id()));
+
 	io = graph_factory->create_io(this);
 	switch (graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
@@ -419,6 +424,11 @@ void worker_thread::run()
 
 int worker_thread::steal_activated_vertices(compute_vertex *vertices[], int num)
 {
+	// This method is called in the context of other worker threads,
+	// curr_activated_vertices may not have been initialized. If so,
+	// skip it.
+	if (curr_activated_vertices == NULL)
+		return 0;
 	// We want to steal as much as possible, but we don't want
 	// to overloaded by the stolen vertices.
 	size_t num_steal = max(1,
