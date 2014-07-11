@@ -60,26 +60,13 @@ public:
 	typedef std::shared_ptr<vertex_index> ptr;
 
 	/*
+	 * Load the vertex index from SAFS.
+	 */
+	static vertex_index::ptr safs_load(const std::string &index_file);
+	/*
 	 * Load the vertex index from the Linux filesystem.
 	 */
-	static vertex_index::ptr load(const std::string &index_file) {
-		native_file local_f(index_file);
-		ssize_t size = local_f.get_size();
-		assert(size > 0);
-		assert((size_t) size >= sizeof(vertex_index));
-		char *buf = (char *) malloc(size);
-		assert(buf);
-		FILE *fd = fopen(index_file.c_str(), "r");
-		size_t ret = fread(buf, size, 1, fd);
-		assert(ret == 1);
-		fclose(fd);
-
-		vertex_index::ptr idx((vertex_index *) buf, destroy_index());
-		assert((size_t) size >= idx->index_size);
-		idx->header.verify();
-
-		return idx;
-	}
+	static vertex_index::ptr load(const std::string &index_file);
 
 	static size_t get_header_size() {
 		return sizeof(vertex_index);

@@ -18,7 +18,7 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L../../libsafs -lsafs -L.. -lgraph -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
 all: el2al print_ts_graph graph_merger rmat-gen

@@ -335,8 +335,8 @@ void directed_vertex_compute::run_on_num_edges(vertex_id_t id,
 void directed_vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)
 {
 	num_edge_requests += num;
-	((directed_vertex_index_reader &) issue_thread->get_index_reader(
-		)).request_num_directed_edges(ids, num, *this);
+	issue_thread->get_index_reader().request_num_directed_edges(ids,
+			num, *this);
 }
 
 #if 0

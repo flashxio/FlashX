@@ -271,6 +271,7 @@ class graph_engine
 	int vertex_header_size;
 	graph_header header;
 	graph_index::ptr vertices;
+	vertex_index::ptr vindex;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
 	vertex_scheduler::ptr scheduler;
 
@@ -561,6 +562,14 @@ public:
 
 	int get_vertex_header_size() const {
 		return vertex_header_size;
+	}
+
+	/*
+	 * \internal Get the in-memory vertex index.
+	 */
+	vertex_index::ptr get_in_mem_index() const {
+		assert(vindex);
+		return vindex;
 	}
 };
 

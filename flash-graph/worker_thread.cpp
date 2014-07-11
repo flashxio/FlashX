@@ -230,12 +230,20 @@ void worker_thread::init()
 	io = graph_factory->create_io(this);
 	switch (graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
-			index_reader = directed_vertex_index_reader::create(
-					index_factory->create_io(this));
+			if (graph_conf.use_in_mem_index())
+				index_reader = in_mem_directed_vindex_reader::create(
+						graph->get_in_mem_index());
+			else
+				index_reader = ext_mem_directed_vindex_reader::create(
+						index_factory->create_io(this));
 			break;
 		case graph_type::UNDIRECTED:
-			index_reader = undirected_vertex_index_reader::create(
-					index_factory->create_io(this));
+			if (graph_conf.use_in_mem_index())
+				index_reader = in_mem_undirected_vindex_reader::create(
+						graph->get_in_mem_index());
+			else
+				index_reader = ext_mem_undirected_vindex_reader::create(
+						index_factory->create_io(this));
 			break;
 		default:
 			assert(0);

@@ -35,6 +35,7 @@ class graph_config
 	int part_range_size_log;
 	bool _preload;
 	int index_file_weight;
+	bool _in_mem_index;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -47,6 +48,7 @@ public:
 		part_range_size_log = 10;
 		_preload = false;
 		index_file_weight = 10;
+		_in_mem_index = false;
 	}
 
 	/**
@@ -132,6 +134,10 @@ public:
 	int get_index_file_weight() const {
 		return index_file_weight;
 	}
+
+	bool use_in_mem_index() const {
+		return _in_mem_index;
+	}
 };
 
 inline void graph_config::print_help()
@@ -145,6 +151,7 @@ inline void graph_config::print_help()
 	printf("\tpart_range_size_log: the log2 of the range size in range partitioning\n");
 	printf("\tpreload: preload the graph data to the page cache\n");
 	printf("\tindex_file_weight: the weight for the graph index file\n");
+	printf("\tin_mem_index: indicate whether to use in-mem vertex index\n");
 }
 
 inline void graph_config::print()
@@ -158,6 +165,7 @@ inline void graph_config::print()
 	printf("\tpart_range_size_log: %d\n", part_range_size_log);
 	printf("\tpreload: %d\n", _preload);
 	printf("\tindex_file_weight: %d\n", index_file_weight);
+	printf("\tin_mem_index: %d\n", _in_mem_index);
 }
 
 inline void graph_config::init(const config_map &map)
@@ -170,6 +178,7 @@ inline void graph_config::init(const config_map &map)
 	map.read_option_int("part_range_size_log", part_range_size_log);
 	map.read_option_bool("preload", _preload);
 	map.read_option_int("index_file_weight", index_file_weight);
+	map.read_option_bool("in_mem_index", _in_mem_index);
 }
 
 extern graph_config graph_conf;

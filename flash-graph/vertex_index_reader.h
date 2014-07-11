@@ -216,6 +216,8 @@ public:
 			vertex_compute &compute) = 0;
 	virtual void request_num_edges(vertex_id_t vertices[], size_t num,
 			vertex_compute &compute) = 0;
+	virtual void request_num_directed_edges(vertex_id_t ids[], size_t num,
+			directed_vertex_compute &compute) = 0;
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
 			directed_vertex_compute &compute) = 0;
 	virtual void wait4complete(int num) = 0;
@@ -223,7 +225,7 @@ public:
 };
 
 template<class ValueType>
-class vertex_index_reader_impl: public vertex_index_reader
+class ext_mem_vindex_reader_impl: public vertex_index_reader
 {
 	io_interface::ptr io;
 	typedef simple_KV_store<ValueType, req_vertex_task<ValueType> > vertex_KV_store;
@@ -237,7 +239,7 @@ class vertex_index_reader_impl: public vertex_index_reader
 	std::vector<ValueType> cached_index;
 
 protected:
-	vertex_index_reader_impl(io_interface::ptr io) {
+	ext_mem_vindex_reader_impl(io_interface::ptr io) {
 		this->io = io;
 		req_vertex_store = vertex_KV_store::create(io);
 		req_edge_store = edge_KV_store::create(io);
@@ -280,7 +282,7 @@ protected:
 	}
 public:
 	static ptr create(io_interface::ptr io) {
-		return ptr(new vertex_index_reader_impl(io));
+		return ptr(new ext_mem_vindex_reader_impl(io));
 	}
 
 	void request_vertices(vertex_id_t ids[], size_t num, vertex_compute &compute) {
@@ -316,6 +318,11 @@ public:
 		}
 	}
 
+	virtual void request_num_directed_edges(vertex_id_t ids[], size_t num,
+			directed_vertex_compute &compute) {
+		assert(0);
+	}
+
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
 			directed_vertex_compute &compute) {
 		assert(0);
@@ -333,9 +340,9 @@ public:
 	}
 };
 
-typedef vertex_index_reader_impl<vertex_offset> undirected_vertex_index_reader;
+typedef ext_mem_vindex_reader_impl<vertex_offset> ext_mem_undirected_vindex_reader;
 
-class directed_vertex_index_reader: public vertex_index_reader_impl<directed_vertex_entry>
+class ext_mem_directed_vindex_reader: public ext_mem_vindex_reader_impl<directed_vertex_entry>
 {
 	typedef simple_KV_store<directed_vertex_entry,
 			req_part_vertex_task> part_vertex_KV_store;
@@ -344,14 +351,14 @@ class directed_vertex_index_reader: public vertex_index_reader_impl<directed_ver
 			req_directed_edge_task> directed_edge_KV_store;
 	directed_edge_KV_store::ptr req_directed_edge_store;
 
-	directed_vertex_index_reader(
-			io_interface::ptr io): vertex_index_reader_impl<directed_vertex_entry>(io) {
+	ext_mem_directed_vindex_reader(
+			io_interface::ptr io): ext_mem_vindex_reader_impl<directed_vertex_entry>(io) {
 		req_part_vertex_store = part_vertex_KV_store::create(io);
 		req_directed_edge_store = directed_edge_KV_store::create(io);
 	}
 public:
 	static ptr create(io_interface::ptr io) {
-		return ptr(new directed_vertex_index_reader(io));
+		return ptr(new ext_mem_directed_vindex_reader(io));
 	}
 
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
@@ -391,12 +398,100 @@ public:
 	void wait4complete(int num) {
 		req_part_vertex_store->flush_requests();
 		req_directed_edge_store->flush_requests();
-		vertex_index_reader_impl<directed_vertex_entry>::wait4complete(num);
+		ext_mem_vindex_reader_impl<directed_vertex_entry>::wait4complete(num);
 	}
 
 	size_t get_num_pending_tasks() const {
-		return vertex_index_reader_impl<directed_vertex_entry>::get_num_pending_tasks()
+		return ext_mem_vindex_reader_impl<directed_vertex_entry>::get_num_pending_tasks()
 			+ req_part_vertex_store->get_num_pending_tasks();
+	}
+};
+
+template<class ValueType>
+class in_mem_vindex_reader_impl: public vertex_index_reader
+{
+	typename vertex_index_temp<ValueType>::ptr index;
+
+protected:
+	in_mem_vindex_reader_impl(vertex_index::ptr index) {
+		this->index = vertex_index_temp<ValueType>::cast(index);
+	}
+public:
+	static ptr create(vertex_index::ptr index) {
+		return ptr(new in_mem_vindex_reader_impl<ValueType>(index));
+	}
+
+
+	virtual void request_vertices(vertex_id_t ids[], size_t num,
+			vertex_compute &compute) {
+		for (size_t i = 0; i < num; i++) {
+			vertex_id_t id = ids[i];
+			in_mem_vertex_info info(id, index->get_vertex_off(id),
+					index->get_vertex_size(id));
+			compute.issue_io_request(info);
+		}
+	}
+
+	virtual void request_num_edges(vertex_id_t ids[], size_t num,
+			vertex_compute &compute) {
+		for (size_t i = 0; i < num; i++) {
+			vertex_id_t id = ids[i];
+			compute.run_on_vertex_size(id, index->get_vertex_size(id));
+		}
+	}
+
+	virtual void request_num_directed_edges(vertex_id_t ids[], size_t num,
+			directed_vertex_compute &compute) {
+		assert(0);
+	}
+
+	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
+			directed_vertex_compute &compute) {
+		assert(0);
+	}
+
+	virtual void wait4complete(int num) {
+	}
+
+	virtual size_t get_num_pending_tasks() const {
+		return 0;
+	}
+};
+
+typedef in_mem_vindex_reader_impl<vertex_offset> in_mem_undirected_vindex_reader;
+
+class in_mem_directed_vindex_reader: public in_mem_vindex_reader_impl<directed_vertex_entry>
+{
+	directed_vertex_index::ptr index;
+
+	in_mem_directed_vindex_reader(
+			vertex_index::ptr index): in_mem_vindex_reader_impl<directed_vertex_entry>(
+				index) {
+		this->index = directed_vertex_index::cast(index);
+	}
+public:
+	static ptr create(vertex_index::ptr index) {
+		return ptr(new in_mem_directed_vindex_reader(index));
+	}
+
+	virtual void request_num_directed_edges(vertex_id_t ids[], size_t num,
+			directed_vertex_compute &compute) {
+		for (size_t i = 0; i < num; i++) {
+			vertex_id_t id = ids[0];
+			compute.run_on_num_edges(id, index->get_num_in_edges(id),
+					index->get_num_out_edges(id));
+		}
+	}
+
+	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
+			directed_vertex_compute &compute) {
+		for (size_t i = 0; i < num; i++) {
+			vertex_id_t id = reqs[i].get_id();
+			in_mem_directed_vertex_info info(id, index->get_vertex_off(id),
+					index->get_vertex_size(id), index->get_num_in_edges(id),
+					index->get_num_out_edges(id));
+			compute.issue_io_request(reqs[i], info);
+		}
 	}
 };
 

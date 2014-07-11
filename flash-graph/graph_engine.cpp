@@ -231,82 +231,6 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 }
 #endif
 
-#ifdef VERIFY_INDEX_READER
-
-vertex_index *test_vindex;
-
-vertex_index *load_vertex_index(const std::string &index_file)
-{
-	const int INDEX_HEADER_SIZE = PAGE_SIZE * 2;
-	const int READ_SIZE = 100 * 1024 * 1024;
-
-	// Right now only the cached I/O can support async I/O
-	file_io_factory::shared_ptr factory = create_io_factory(index_file,
-			REMOTE_ACCESS);
-	assert(factory->get_file_size() >= INDEX_HEADER_SIZE);
-	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
-
-	// Get the header of the index.
-	char *tmp = NULL;
-	int ret = posix_memalign((void **) &tmp, PAGE_SIZE, INDEX_HEADER_SIZE);
-	assert(ret == 0);
-	data_loc_t loc(factory->get_file_id(), 0);
-	io_request req(tmp, loc, INDEX_HEADER_SIZE, READ);
-	io->access(&req, 1);
-	io->wait4complete(1);
-	vertex_index *index = (vertex_index *) tmp;
-	index->get_graph_header().verify();
-
-	// Initialize the buffer for containing the index.
-	size_t index_size = index->get_index_size();
-	assert((ssize_t) index_size <= factory->get_file_size());
-	char *buf = NULL;
-	printf("allocate %ld bytes\n", index_size);
-	ret = posix_memalign((void **) &buf, PAGE_SIZE, index_size);
-	assert(ret == 0);
-	off_t off = 0;
-	memcpy(buf, tmp, INDEX_HEADER_SIZE);
-	off += INDEX_HEADER_SIZE;
-	free(tmp);
-
-	// Read the index to the memory.
-	size_t aligned_index_size = ROUND_PAGE(index_size);
-	while ((size_t) off < aligned_index_size) {
-		assert(off % PAGE_SIZE == 0);
-		size_t size = min(READ_SIZE, aligned_index_size - off);
-		data_loc_t loc(factory->get_file_id(), off);
-		io_request req(buf + off, loc, size, READ);
-		io->access(&req, 1);
-		off += size;
-		if (io->num_pending_ios() > 100)
-			io->wait4complete(io->num_pending_ios() / 10);
-	}
-	io->wait4complete(io->num_pending_ios());
-
-	// Read the last page.
-	// The data may only occupy part of the page.
-	if (aligned_index_size < index_size) {
-		char *tmp = NULL;
-		int ret = posix_memalign((void **) &tmp, PAGE_SIZE, PAGE_SIZE);
-		assert(ret == 0);
-		data_loc_t loc(factory->get_file_id(), aligned_index_size);
-		io_request req(tmp, loc, PAGE_SIZE, READ);
-		io->access(&req, 1);
-		io->wait4complete(1);
-		memcpy(buf + aligned_index_size, tmp, index_size - aligned_index_size);
-		free(tmp);
-	}
-
-	index = (vertex_index *) buf;
-	if (index->get_graph_header().get_graph_type() == graph_type::DIRECTED)
-		((directed_vertex_index *) index)->verify();
-	else
-		((default_vertex_index *) index)->verify();
-	return index;
-}
-
-#endif
-
 graph_engine::graph_engine(const std::string &graph_file,
 		graph_index::ptr index, const config_map &configs)
 {
@@ -321,9 +245,8 @@ graph_engine::graph_engine(const std::string &graph_file,
 	this->num_nodes = params.get_num_nodes();
 	index->init(num_threads, num_nodes);
 
-#ifdef VERIFY_INDEX_READER
-	test_vindex = load_vertex_index(index->get_index_file());
-#endif
+	if (graph_conf.use_in_mem_index())
+		vindex = vertex_index::safs_load(index->get_index_file());
 
 	max_processing_vertices = 0;
 	is_complete = false;
