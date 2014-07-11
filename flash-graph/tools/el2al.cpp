@@ -255,7 +255,7 @@ public:
 	virtual void dump(const std::string &index_file,
 			const std::string &graph_file);
 
-	virtual vertex_index *create_vertex_index() const {
+	virtual vertex_index::ptr create_vertex_index() const {
 		assert(0);
 	}
 
