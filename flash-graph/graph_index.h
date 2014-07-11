@@ -134,12 +134,13 @@ class NUMA_local_graph_index: public graph_index
 public:
 	~NUMA_local_graph_index() {
 		if (vertex_arr)
-			numa_free(vertex_arr, sizeof(vertex_arr[0]) * num_vertices);
+			free_large(vertex_arr, sizeof(vertex_arr[0]) * num_vertices);
 	}
 
 	void init() {
-		vertex_arr = (vertex_type *) numa_alloc_local(
+		vertex_arr = (vertex_type *) malloc_large(
 				sizeof(vertex_arr[0]) * num_vertices);
+		assert(vertex_arr);
 		std::vector<vertex_id_t> local_ids;
 		local_ids.reserve(num_vertices);
 		partitioner.get_all_vertices_in_part(this->part_id, tot_num_vertices,

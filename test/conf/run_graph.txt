@@ -4,6 +4,7 @@ cache_size=4G
 num_nodes=4
 root_conf=conf/data_files.txt
 max_num_pending_ios=4000
+huge_page=
 
 threads=32
 prof_file=graph.prof
