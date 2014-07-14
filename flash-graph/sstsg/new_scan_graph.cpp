@@ -40,7 +40,7 @@ atomic_number<long> num_working_vertices;
 atomic_number<long> num_completed_vertices;
 
 time_t timestamp;
-time_t time_interval = 3600 * 24;
+time_t time_interval = 1;
 int num_time_intervals = 1;
 
 class scan_vertex: public compute_vertex
@@ -464,7 +464,8 @@ int main(int argc, char *argv[])
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	assert(graph->get_graph_header().get_graph_type() == graph_type::DIRECTED);
 	assert(graph->get_graph_header().has_edge_data());
-	printf("scan statistics starts\n");
+	printf("scan statistics starts, start: %ld, interval: %ld, #interval: %d\n",
+			timestamp, time_interval, num_time_intervals);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
