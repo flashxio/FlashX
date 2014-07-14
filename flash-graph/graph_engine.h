@@ -132,7 +132,6 @@ public:
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 };
 
-#if 0
 /**
  *  \brief Time series compute vertex used for time series graph analytics.
  */
@@ -145,19 +144,7 @@ public:
 	compute_ts_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
-    /**
-	 * \internal
-     * \brief This is called by graph engine with a mapping for
-     *         vertex adjacency lists on disk.
-     * \param index A mapping for vertex adjacency lists on disk.
-     */
-	void init_vertex(const vertex_index &index) {
-		assert(index.get_graph_header().get_graph_type()
-				== graph_type::TS_DIRECTED
-				|| index.get_graph_header().get_graph_type()
-				== graph_type::TS_UNDIRECTED);
-	}
-
+#if 0
 	/**
      * \brief This allows a vertex to request partial vertices in the graph. <br>
      *  **Defn: ""partial vertices""** -- Part of a vertex's data. Specifically
@@ -170,8 +157,8 @@ public:
 	 * This allows a vertex to request partial vertices in the graph.
 	 */
 	void request_partial_vertices(ts_vertex_request reqs[], size_t num);
-};
 #endif
+};
 
 /**
  * \breif Order the position of vertex processing via this scheduler.
