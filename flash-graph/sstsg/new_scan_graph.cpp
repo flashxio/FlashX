@@ -109,13 +109,7 @@ page_byte_array::seq_const_iterator<vertex_id_t> get_ts_iterator(
 
 	page_byte_array::const_iterator<ts_edge_data> ts_end_it = std::lower_bound(
 			begin_it, end_it, time_start + time_interval);
-	size_t end;
-	if (ts_end_it == end_it
-			|| (*ts_end_it).get_timestamp() >= time_start + time_interval)
-		end = end_it - begin_it;
-	else
-		// The timestamp pointed by ts_end_t may be covered by the range.
-		end = ts_end_it - begin_it + 1;
+	size_t end = ts_end_it - begin_it;
 
 	return v.get_neigh_seq_it(type, start, end);
 }
