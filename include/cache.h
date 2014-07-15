@@ -808,6 +808,8 @@ public:
 		 * \return the current element.
 		 */
 		T curr() const {
+			seq_const_iterator<T> *it = (seq_const_iterator<T> *) this;
+			assert(it->has_next());
 			return curr_page_it.curr();
 		}
 	};
