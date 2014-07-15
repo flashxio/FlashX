@@ -36,9 +36,6 @@ const int HOUR_SECS = 3600;
 const int DAY_SECS = HOUR_SECS * 24;
 const int MONTH_SECS = DAY_SECS * 30;
 
-atomic_number<long> num_working_vertices;
-atomic_number<long> num_completed_vertices;
-
 time_t timestamp;
 time_t time_interval = 1;
 int num_time_intervals = 1;
@@ -219,9 +216,6 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
 
-	long ret = num_working_vertices.inc(1);
-	if (ret % 100000 == 0)
-		printf("%ld working vertices\n", ret);
 	std::vector<vertex_id_t> in_neighbors;
 	std::vector<vertex_id_t> out_neighbors;
 	get_neighbors(vertex, edge_type::IN_EDGE, timestamp, time_interval,
@@ -230,12 +224,8 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 			out_neighbors);
 	std::sort(in_neighbors.begin(), in_neighbors.end());
 	std::sort(out_neighbors.begin(), out_neighbors.end());
-	if (in_neighbors.size() + out_neighbors.size() == 0) {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+	if (in_neighbors.size() + out_neighbors.size() == 0)
 		return;
-	}
 
 	local_scans = new std::vector<size_t>(num_time_intervals);
 	neighbors = new std::vector<vertex_id_t>(
@@ -273,9 +263,6 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 		delete neighbors;
 		local_scans = NULL;
 		neighbors = NULL;
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
 		return;
 	}
 
@@ -331,10 +318,6 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (num_joined == (int) neighbors->size()) {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
-
 		double avg = 0;
 		if (num_time_intervals - 1 > 0) {
 			double sum = 0;
@@ -478,8 +461,6 @@ int main(int argc, char *argv[])
 #endif
 	printf("It takes %f seconds\n", time_diff(start, end));
 	printf("There are %ld vertices\n", index->get_num_vertices());
-	printf("process %ld vertices and complete %ld vertices\n",
-			num_working_vertices.get(), num_completed_vertices.get());
 
 	double max_res = LONG_MIN;
 	vertex_id_t max_v = -1;
