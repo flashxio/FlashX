@@ -21,6 +21,8 @@
 
 /******************* Implementation of fetching clusters *********************/
 
+namespace {
+
 class cluster_subgraph_vertex: public compute_vertex
 {
 public:
@@ -143,6 +145,8 @@ void cluster_subgraph_vertex_program::add_vertex(const page_vertex &vertex)
 		assert(0);
 }
 
+}
+
 void fetch_subgraphs(FG_graph::ptr fg, FG_vector<vertex_id_t>::ptr cluster_ids,
 		const std::set<vertex_id_t> &wanted_clusters,
 		std::map<vertex_id_t, graph::ptr> &clusters)
@@ -182,6 +186,8 @@ void fetch_subgraphs(FG_graph::ptr fg, FG_vector<vertex_id_t>::ptr cluster_ids,
 }
 
 /**************** Implementation of computing cluster sizes ******************/
+
+namespace {
 
 typedef std::set<vertex_id_t> v_set_t;
 typedef std::map<vertex_id_t, v_set_t> cluster_map_t;
@@ -375,6 +381,8 @@ public:
 	}
 };
 
+}
+
 void compute_subgraph_sizes(FG_graph::ptr fg,
 		FG_vector<vertex_id_t>::ptr cluster_ids,
 		const std::set<vertex_id_t> &wanted_cluster_ids, size_map_t &cluster_sizes)
@@ -412,6 +420,8 @@ void compute_subgraph_sizes(FG_graph::ptr fg,
 }
 
 /********************** Get the degree of vertices ****************************/
+
+namespace {
 
 class degree_vertex: public compute_vertex
 {
@@ -487,6 +497,8 @@ void degree_vertex::run_on_vertex_header(vertex_program &prog,
 	}
 	else
 		degree_vprog.set_degree(get_id(), header.get_num_edges());
+}
+
 }
 
 FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type)
