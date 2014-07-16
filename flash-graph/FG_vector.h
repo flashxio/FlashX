@@ -196,11 +196,28 @@ public:
 
   /**
     * \brief Compute the sum of all elements in the vector. <br>
+	* If the type is integer, the sum can overflow.
     * **parallel**
     * \return The sum of all items in the vector.
   */
 	T sum() const {
 		T ret = 0;
+#pragma omp parallel for reduction(+:ret)
+		for (size_t i = 0; i < get_size(); i++)
+			ret += get(i);
+		return ret;
+	}
+
+  /**
+    * \brief Compute the sum of all elements in the vector. <br>
+	* This sum() allows users to specify the type of the result, so users
+	* can avoid integer overflow.
+    * **parallel**
+    * \return The sum of all items in the vector.
+  */
+	template<class ResType>
+	ResType sum() const {
+		ResType ret = 0;
 #pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
 			ret += get(i);
@@ -242,6 +259,18 @@ public:
 #pragma omp parallel for
 		for (size_t i = 0; i < get_size(); i++)
 			eles[i] /= v;
+	}
+
+	/**
+	 * \brief In place element-wise addition by another vector.
+	 * \param vec The vector by which you want to add to this vector.
+	 * **parallel**
+	 */
+	void add_in_place(FG_vector<T>::ptr vec) {
+		assert(this->get_size() == vec->get_size());
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] += vec->get(i);
 	}
 
 	/**
@@ -321,6 +350,16 @@ public:
   */
 	T &get(vertex_id_t id) {
 		return eles[id];
+	}
+
+	log_histogram log_hist(int power) const {
+		T max_v = max();
+		int num_buckets = ceil(log(max_v) / log(power));
+		log_histogram hist(num_buckets);
+		for (size_t i = 0; i < get_size(); i++) {
+			hist.add_value(eles[i]);
+		}
+		return hist;
 	}
 };
 
