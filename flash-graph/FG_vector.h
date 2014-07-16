@@ -208,15 +208,29 @@ public:
 	}
 
   /**
-    * \brief Find the index with the maximal value in the vector and
-    *     return its value.
+    * \brief Find the maximal value in the vector and return its value.
     * \return The maximal value in the vector.
   */
 	T max() const {
+		return max_val_loc().first;
+	}
+
+	/**
+	 * \brief Find the maximal value in the vector and return its value
+	 *        and its location.
+	 * \return A pair that contains the maximal value and its location
+	 *         in the vector.
+	 */
+	std::pair<T, off_t> max_val_loc() const {
 		T ret = std::numeric_limits<T>::min();
-		for (size_t i = 0; i < get_size(); i++)
-			ret = ::max(get(i), ret);
-		return ret;
+		off_t idx = 0;
+		for (size_t i = 0; i < get_size(); i++) {
+			if (ret < get(i)) {
+				ret = get(i);
+				idx = i;
+			}
+		}
+		return std::pair<T, off_t>(ret, idx);
 	}
 
   /**
