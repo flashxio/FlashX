@@ -410,3 +410,99 @@ void compute_subgraph_sizes(FG_graph::ptr fg,
 		v.second.second /= 2;
 	}
 }
+
+/********************** Get the degree of vertices ****************************/
+
+class degree_vertex: public compute_vertex
+{
+public:
+	degree_vertex(vertex_id_t id): compute_vertex(id) {
+	}
+
+	virtual void run(vertex_program &prog) {
+		vertex_id_t id = get_id();
+		request_vertex_headers(&id, 1);
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex) {
+	}
+
+	void run_on_message(vertex_program &, const vertex_message &msg) {
+	}
+
+	void run_on_vertex_header(vertex_program &prog,
+			const vertex_header &header);
+};
+
+class degree_vertex_program: public vertex_program_impl<degree_vertex>
+{
+	edge_type type;
+	FG_vector<vsize_t>::ptr degree_vec;
+public:
+	degree_vertex_program(FG_vector<vsize_t>::ptr degree_vec, edge_type type) {
+		this->degree_vec = degree_vec;
+		this->type = type;
+	}
+
+	edge_type get_edge_type() const {
+		return type;
+	}
+
+	void set_degree(vertex_id_t id, vsize_t degree) {
+		degree_vec->set(id, degree);
+	}
+};
+
+class degree_vertex_program_creater: public vertex_program_creater
+{
+	FG_vector<vertex_id_t>::ptr degree_vec;
+	edge_type type;
+public:
+	degree_vertex_program_creater(
+			FG_vector<vertex_id_t>::ptr degree_vec,
+			edge_type type) {
+		this->degree_vec = degree_vec;
+		this->type = type;
+	}
+
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new degree_vertex_program(
+					degree_vec, type));
+	}
+};
+
+void degree_vertex::run_on_vertex_header(vertex_program &prog,
+		const vertex_header &header)
+{
+	degree_vertex_program &degree_vprog = (degree_vertex_program &) prog;
+	if (prog.get_graph().is_directed()) {
+		const directed_vertex_header &dheader
+			= (const directed_vertex_header &) header;
+		if (degree_vprog.get_edge_type() == IN_EDGE)
+			degree_vprog.set_degree(get_id(), dheader.get_num_in_edges());
+		else if (degree_vprog.get_edge_type() == OUT_EDGE)
+			degree_vprog.set_degree(get_id(), dheader.get_num_out_edges());
+		else
+			degree_vprog.set_degree(get_id(), dheader.get_num_edges());
+	}
+	else
+		degree_vprog.set_degree(get_id(), header.get_num_edges());
+}
+
+FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type)
+{
+	graph_index::ptr index = NUMA_graph_index<degree_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+
+	FG_vector<vsize_t>::ptr degree_vec = FG_vector<vsize_t>::create(graph);
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
+				new degree_vertex_program_creater(degree_vec, type)));
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+	printf("computing subgraph size takes %f seconds\n", time_diff(start, end));
+	return degree_vec;
+}

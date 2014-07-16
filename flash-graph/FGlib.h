@@ -262,4 +262,12 @@ void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr clu
 		const std::set<vertex_id_t> &wanted_clusters,
 		std::map<vertex_id_t, std::pair<size_t, size_t> > &sizes);
 
+/**
+ * Get the degree of all vertices in the graph.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param type The edge type: IN_EDGE, OUT_EDGE, BOTH_EDGES.
+ * \return A vector with an entry for each vertex degree.
+ */
+FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type);
+
 #endif
