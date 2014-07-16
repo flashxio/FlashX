@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -30,6 +30,8 @@ const int HOUR_SECS = 3600;
 const int DAY_SECS = HOUR_SECS * 24;
 const int MONTH_SECS = DAY_SECS * 30;
 
+void print_usage();
+
 void int_handler(int sig_num)
 {
 #ifdef PROFILER
@@ -37,6 +39,253 @@ void int_handler(int sig_num)
 		ProfilerStop();
 #endif
 	exit(0);
+}
+
+void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
+{
+	FG_vector<size_t>::ptr triangles;
+	triangles = compute_directed_triangles(graph,
+			directed_triangle_type::CYCLE);
+	printf("There are %ld cycle triangles\n", triangles->sum());
+}
+
+void run_triangle(FG_graph::ptr graph, int argc, char *argv[])
+{
+	FG_vector<size_t>::ptr triangles;
+	triangles = compute_undirected_triangles(graph);
+	printf("There are %ld triangles\n", triangles->sum());
+}
+
+void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
+{
+	FG_vector<size_t>::ptr scan = compute_local_scan(graph);
+	printf("Max local scan is %ld\n", scan->max());
+}
+
+void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
+{
+	int opt;
+	int num_opts = 0;
+	int topK = 1;
+
+	while ((opt = getopt(argc, argv, "K:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'K':
+				topK = atoi(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	FG_vector<std::pair<vertex_id_t, size_t> >::ptr scan
+		= compute_topK_scan(graph, topK);
+	printf("The top %d scans:\n", topK);
+	for (int i = 0; i < topK; i++)
+		printf("%u\t%ld\n", scan->get(i).first, scan->get(i).second);
+}
+
+void print_cc(FG_vector<vertex_id_t>::ptr comp_ids)
+{
+	count_map<vertex_id_t> map;
+	comp_ids->count_unique(map);
+	std::pair<vertex_id_t, size_t> max_comp = map.get_max_count();
+	int has_empty = 0;
+	if (map.exists(INVALID_VERTEX_ID)) {
+		printf("There are %ld empty vertices\n",
+				map.get(INVALID_VERTEX_ID));
+		has_empty = 1;
+	}
+	printf("There are %ld components (exclude empty vertices), and largest comp has %ld vertices\n",
+			map.get_size() - has_empty, max_comp.second);
+}
+
+void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
+{
+	print_cc(compute_wcc(graph));
+}
+
+void run_scc(FG_graph::ptr graph, int argc, char *argv[])
+{
+	print_cc(compute_scc(graph));
+}
+
+void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
+{
+	int opt;
+	int num_opts = 0;
+
+	int num_para_bfs = 1;
+	bool directed = false;
+	int num_sweeps = 5;
+
+	while ((opt = getopt(argc, argv, "p:ds:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'p':
+				num_para_bfs = atoi(optarg);
+				num_opts++;
+				break;
+			case 'd':
+				directed = true;
+				break;
+			case 's':
+				num_sweeps = atoi(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	size_t diameter = estimate_diameter(graph, num_para_bfs, directed,
+			num_sweeps);
+	printf("The estimated diameter is %ld\n", diameter);
+}
+
+void run_pagerank(FG_graph::ptr graph, int argc, char *argv[])
+{
+	int opt;
+	int num_opts = 0;
+
+	int num_iters = 30;
+	float damping_factor = 0.85;
+
+	while ((opt = getopt(argc, argv, "i:D:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'i':
+				num_iters = atoi(optarg);
+				num_opts++;
+				break;
+			case 'D':
+				damping_factor = atof(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	FG_vector<float>::ptr pr = compute_pagerank(graph, num_iters,
+			damping_factor);
+	printf("The sum of pagerank of all vertices: %f\n", pr->sum());
+}
+
+void run_pagerank2(FG_graph::ptr graph, int argc, char *argv[])
+{
+	int opt;
+	int num_opts = 0;
+
+	int num_iters = 30;
+	float damping_factor = 0.85;
+
+	while ((opt = getopt(argc, argv, "i:D:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'i':
+				num_iters = atoi(optarg);
+				num_opts++;
+				break;
+			case 'D':
+				damping_factor = atof(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	FG_vector<float>::ptr pr = compute_pagerank2(graph, num_iters,
+			damping_factor);
+	printf("The sum of pagerank of all vertices: %f\n", pr->sum());
+}
+
+void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
+{
+	std::string start_time_str;
+	std::string time_unit_str;
+	std::string output_file;
+	int num_time_intervals = 1;
+	long time_interval = 1;
+
+	int opt;
+	int num_opts = 0;
+
+	while ((opt = getopt(argc, argv, "n:u:o:t:l:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'n':
+				num_time_intervals = atoi(optarg);
+				num_opts++;
+				break;
+			case 'u':
+				time_unit_str = optarg;
+				num_opts++;
+				break;
+			case 'o':
+				output_file = optarg;
+				num_opts++;
+				break;
+			case 't':
+				start_time_str = optarg;
+				num_opts++;
+				break;
+			case 'l':
+				time_interval = atol(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	if (time_unit_str == "hour")
+		time_interval *= HOUR_SECS;
+	else if (time_unit_str == "day")
+		time_interval *= DAY_SECS;
+	else if (time_unit_str == "month")
+		time_interval *= MONTH_SECS;
+	else
+		fprintf(stderr, "a wrong time unit: %s\n", optarg);
+
+#if 0
+	namespace bt = boost::posix_time;
+	printf("start time: %s\n", start_time_str.c_str());
+	bt::ptime pt = bt::time_from_string(start_time_str);
+	struct tm tm = bt::to_tm(pt);
+#endif
+	struct tm tm;
+	memset(&tm, 0, sizeof(tm));
+	char *ret = strptime(start_time_str.c_str(), "%Y-%m-%d", &tm);
+	assert(ret);
+
+	printf("%d-%d-%d, %d:%d:%d, %d\n", tm.tm_year, tm.tm_mon, tm.tm_mday,
+			tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_isdst);
+	time_t start_time = mktime(&tm);
+
+	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
+	FG_vector<float>::ptr res = compute_sstsg(graph, start_time,
+			time_interval, num_time_intervals);
+	std::pair<float, off_t> p = res->max_val_loc();
+	printf("v%ld has max scan %f\n", p.second, p.first);
+	if (!output_file.empty()) {
+		FILE *f = fopen(output_file.c_str(), "w");
+		if (f == NULL) {
+			perror("fopen");
+			return;
+		}
+		for (size_t i = 0; i < res->get_size(); i++)
+			fprintf(f, "\"%ld\" %f\n", i, res->get(i));
+		fclose(f);
+	}
 }
 
 std::string supported_algs[] = {
@@ -56,9 +305,7 @@ int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 void print_usage()
 {
 	fprintf(stderr,
-			"test_algs [options] conf_file graph_file index_file algorithm\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "\n");
+			"test_algs conf_file graph_file index_file algorithm [alg-options]\n");
 	fprintf(stderr, "scan-statistics:\n");
 	fprintf(stderr, "-K topK: topK vertices in topK scan\n");
 	fprintf(stderr, "\n");
@@ -87,81 +334,8 @@ void print_usage()
 
 int main(int argc, char *argv[])
 {
-	int opt;
-	std::string confs;
-	int num_opts = 0;
-
-	int topK = 1;
-
-	int num_para_bfs = 1;
-	bool directed = false;
-	int num_sweeps = 5;
-
-	int num_iters = 30;
-	float damping_factor = 0.85;
-
-	std::string start_time_str;
-	std::string time_unit_str;
-	std::string output_file;
-	int num_time_intervals = 1;
-	long time_interval = 1;
-	while ((opt = getopt(argc, argv, "c:K:p:ds:i:D:n:u:o:t:l:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 'K':
-				topK = atoi(optarg);
-				num_opts++;
-				break;
-			case 'p':
-				num_para_bfs = atoi(optarg);
-				num_opts++;
-				break;
-			case 'd':
-				directed = true;
-				break;
-			case 's':
-				num_sweeps = atoi(optarg);
-				num_opts++;
-				break;
-			case 'i':
-				num_iters = atoi(optarg);
-				num_opts++;
-				break;
-			case 'D':
-				damping_factor = atof(optarg);
-				num_opts++;
-				break;
-			case 'n':
-				num_time_intervals = atoi(optarg);
-				num_opts++;
-				break;
-			case 'u':
-				time_unit_str = optarg;
-				num_opts++;
-				break;
-			case 'o':
-				output_file = optarg;
-				num_opts++;
-				break;
-			case 't':
-				start_time_str = optarg;
-				num_opts++;
-				break;
-			case 'l':
-				time_interval = atol(optarg);
-				num_opts++;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
+	argv++;
+	argc--;
 	if (argc < 4) {
 		print_usage();
 		exit(-1);
@@ -171,107 +345,44 @@ int main(int argc, char *argv[])
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
 	std::string alg = argv[3];
+	// We should increase by 3 instead of 4. getopt() ignores the first
+	// argument in the list.
+	argv += 3;
+	argc -= 3;
 
+	printf("conf file: %s\n", conf_file.c_str());
 	config_map configs(conf_file);
-	configs.add_options(confs);
-
 	signal(SIGINT, int_handler);
 
 	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
 	if (alg == "cycle_triangle") {
-		FG_vector<size_t>::ptr triangles;
-		triangles = compute_directed_triangles(graph,
-				directed_triangle_type::CYCLE);
-		printf("There are %ld cycle triangles\n", triangles->sum());
+		run_cycle_triangle(graph, argc, argv);
 	}
 	else if (alg == "triangle") {
-		FG_vector<size_t>::ptr triangles;
-		triangles = compute_undirected_triangles(graph);
-		printf("There are %ld triangles\n", triangles->sum());
+		run_triangle(graph, argc, argv);
 	}
 	else if (alg == "local_scan") {
-		FG_vector<size_t>::ptr scan = compute_local_scan(graph);
-		printf("Max local scan is %ld\n", scan->max());
+		run_local_scan(graph, argc, argv);
 	}
 	else if (alg == "topK_scan") {
-		FG_vector<std::pair<vertex_id_t, size_t> >::ptr scan = compute_topK_scan(graph, topK);
-		printf("The top %d scans:\n", topK);
-		for (int i = 0; i < topK; i++)
-			printf("%u\t%ld\n", scan->get(i).first, scan->get(i).second);
+		run_topK_scan(graph, argc, argv);
 	}
 	else if (alg == "diameter") {
-		size_t diameter = estimate_diameter(graph, num_para_bfs, directed,
-				num_sweeps);
-		printf("The estimated diameter is %ld\n", diameter);
+		run_diameter(graph, argc, argv);
 	}
 	else if (alg == "pagerank") {
-		FG_vector<float>::ptr pr = compute_pagerank(graph, num_iters,
-				damping_factor);
-		printf("The sum of pagerank of all vertices: %f\n", pr->sum());
+		run_pagerank(graph, argc, argv);
 	}
 	else if (alg == "pagerank2") {
-		FG_vector<float>::ptr pr = compute_pagerank2(graph, num_iters,
-				damping_factor);
-		printf("The sum of pagerank of all vertices: %f\n", pr->sum());
+		run_pagerank2(graph, argc, argv);
 	}
-	else if (alg == "wcc" || alg == "scc") {
-		FG_vector<vertex_id_t>::ptr comp_ids;
-		if (alg == "wcc")
-			comp_ids = compute_wcc(graph);
-		else
-			comp_ids = compute_scc(graph);
-
-		count_map<vertex_id_t> map;
-		comp_ids->count_unique(map);
-		std::pair<vertex_id_t, size_t> max_comp = map.get_max_count();
-		int has_empty = 0;
-		if (map.exists(INVALID_VERTEX_ID)) {
-			printf("There are %ld empty vertices\n",
-					map.get(INVALID_VERTEX_ID));
-			has_empty = 1;
-		}
-		printf("There are %ld components (exclude empty vertices), and largest comp has %ld vertices\n",
-				map.get_size() - has_empty, max_comp.second);
+	else if (alg == "wcc") {
+		run_wcc(graph, argc, argv);
+	}
+	else if (alg == "scc") {
+		run_scc(graph, argc, argv);
 	}
 	else if (alg == "sstsg") {
-		if (time_unit_str == "hour")
-			time_interval *= HOUR_SECS;
-		else if (time_unit_str == "day")
-			time_interval *= DAY_SECS;
-		else if (time_unit_str == "month")
-			time_interval *= MONTH_SECS;
-		else
-			fprintf(stderr, "a wrong time unit: %s\n", optarg);
-
-#if 0
-		namespace bt = boost::posix_time;
-		printf("start time: %s\n", start_time_str.c_str());
-		bt::ptime pt = bt::time_from_string(start_time_str);
-		struct tm tm = bt::to_tm(pt);
-#endif
-		struct tm tm;
-		memset(&tm, 0, sizeof(tm));
-		char *ret = strptime(start_time_str.c_str(), "%Y-%m-%d", &tm);
-		assert(ret);
-
-		printf("%d-%d-%d, %d:%d:%d, %d\n", tm.tm_year, tm.tm_mon, tm.tm_mday,
-				tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_isdst);
-		time_t start_time = mktime(&tm);
-
-		printf("start time: %ld, interval: %ld\n", start_time, time_interval);
-		FG_vector<float>::ptr res = compute_sstsg(graph, start_time,
-				time_interval, num_time_intervals);
-		std::pair<float, off_t> p = res->max_val_loc();
-		printf("v%ld has max scan %f\n", p.second, p.first);
-		if (!output_file.empty()) {
-			FILE *f = fopen(output_file.c_str(), "w");
-			if (f == NULL) {
-				perror("fopen");
-				return -1;
-			}
-			for (size_t i = 0; i < res->get_size(); i++)
-				fprintf(f, "\"%ld\" %f\n", i, res->get(i));
-			fclose(f);
-		}
+		run_sstsg(graph, argc, argv);
 	}
 }
