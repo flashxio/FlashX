@@ -107,6 +107,13 @@ public:
 		assert(get_id() == header.get_id());
 		empty = (header.get_num_edges() == 0);
 	}
+
+	vertex_id_t get_result() const {
+		if (!empty)
+			return get_component_id();
+		else
+			return INVALID_VERTEX_ID;
+	}
 };
 
 void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
@@ -119,35 +126,9 @@ void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	prog.multicast_msg(it, msg);
 }
 
-/**
- * This query is to save the component IDs to a FG vector.
- */
-class save_cid_query: public vertex_query
-{
-	FG_vector<vertex_id_t>::ptr vec;
-public:
-	save_cid_query(FG_vector<vertex_id_t>::ptr vec) {
-		this->vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		wcc_vertex &wcc_v = (wcc_vertex &) v;
-		if (!wcc_v.is_empty(graph))
-			vec->set(wcc_v.get_id(), wcc_v.get_component_id());
-		else
-			vec->set(wcc_v.get_id(), INVALID_VERTEX_ID);
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_cid_query(vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(
@@ -177,6 +158,7 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 	graph->start_all();
 	graph->wait4complete();
 	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_cid_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<vertex_id_t, wcc_vertex>(vec)));
 	return vec;
 }

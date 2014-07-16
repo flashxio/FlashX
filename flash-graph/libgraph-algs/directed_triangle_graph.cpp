@@ -67,7 +67,7 @@ public:
 
 	int count_triangles(const page_vertex *v) const;
 
-	int get_num_triangles() const {
+	size_t get_result() const {
 		return local_value.get_num_triangles();
 	}
 
@@ -328,29 +328,9 @@ int directed_triangle_vertex::count_triangles(const page_vertex *v) const
 	return num_local_triangles;
 }
 
-class save_ntriangles_query: public vertex_query
-{
-	FG_vector<size_t>::ptr vec;
-public:
-	save_ntriangles_query(FG_vector<size_t>::ptr vec) {
-		this->vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		directed_triangle_vertex &tv = (directed_triangle_vertex &) v;
-		vec->set(tv.get_id(), tv.get_num_triangles());
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_ntriangles_query(vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
@@ -380,6 +360,7 @@ FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
 			time_diff(start, end));
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_ntriangles_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<size_t, directed_triangle_vertex>(vec)));
 	return vec;
 }

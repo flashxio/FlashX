@@ -350,29 +350,9 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 	}
 }
 
-class save_scan_query: public vertex_query
-{
-	FG_vector<float>::ptr vec;
-public:
-	save_scan_query(FG_vector<float>::ptr vec) {
-		this->vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		scan_vertex &lv = (scan_vertex &) v;
-		vec->set(lv.get_id(), lv.get_result());
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_scan_query(vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals)
 {
@@ -406,6 +386,6 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	printf("It takes %f seconds\n", time_diff(start, end));
 
 	FG_vector<float>::ptr vec = FG_vector<float>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_scan_query(vec)));
+	graph->query_on_all(vertex_query::ptr(new save_query<float, scan_vertex>(vec)));
 	return vec;
 }

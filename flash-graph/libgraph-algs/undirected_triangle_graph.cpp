@@ -51,7 +51,7 @@ public:
 
 	int count_triangles(const page_vertex *v) const;
 
-	int get_num_triangles() const {
+	int get_result() const {
 		return local_value.get_num_triangles();
 	}
 
@@ -272,29 +272,9 @@ int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
 	return num_local_triangles;
 }
 
-class save_ntriangles_query: public vertex_query
-{
-	FG_vector<size_t>::ptr vec;
-public:
-	save_ntriangles_query(FG_vector<size_t>::ptr vec) {
-		this->vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		undirected_triangle_vertex &tv = (undirected_triangle_vertex &) v;
-		vec->set(tv.get_id(), tv.get_num_triangles());
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_ntriangles_query(vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
 	printf("undirected triangle counting starts\n");
@@ -323,6 +303,7 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 			time_diff(start, end));
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_ntriangles_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<size_t, undirected_triangle_vertex>(vec)));
 	return vec;
 }

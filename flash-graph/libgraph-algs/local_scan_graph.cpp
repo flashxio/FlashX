@@ -179,6 +179,10 @@ public:
 		else
 			local_value.inc_real_local(msg.get_num());
 	}
+
+	size_t get_result() const {
+		return get_local_scan();
+	}
 };
 
 class skip_larger {
@@ -249,29 +253,9 @@ void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 	ls_v.finding_triangles_end(prog, data);
 }
 
-class save_scan_query: public vertex_query
-{
-	FG_vector<size_t>::ptr vec;
-public:
-	save_scan_query(FG_vector<size_t>::ptr vec) {
-		this->vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		local_scan_vertex &lv = (local_scan_vertex &) v;
-		vec->set(lv.get_id(), lv.get_local_scan());
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_scan_query(vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
 	finding_triangles_end = ls_finding_triangles_end;
@@ -308,6 +292,7 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 			time_diff(start, end));
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_scan_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<size_t, local_scan_vertex>(vec)));
 	return vec;
 }

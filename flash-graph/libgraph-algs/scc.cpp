@@ -499,6 +499,13 @@ public:
 		this->num_in_edges = dheader.get_num_in_edges();
 		this->num_out_edges = dheader.get_num_out_edges();
 	}
+
+	vertex_id_t get_result() const {
+		if (get_degree() > 0)
+			return get_comp_id();
+		else
+			return INVALID_VERTEX_ID;
+	}
 };
 
 class part_vertex_program: public vertex_program_impl<scc_vertex>
@@ -1101,35 +1108,9 @@ public:
 	}
 };
 
-/**
- * This query is to save the component IDs to a FG vector.
- */
-class save_cid_query: public vertex_query
-{
-	FG_vector<vertex_id_t>::ptr vec;
-public:
-	save_cid_query(FG_vector<vertex_id_t>::ptr vec) {
-		this->vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		scc_vertex &scc_v = (scc_vertex &) v;
-		if (scc_v.get_degree() > 0)
-			vec->set(scc_v.get_id(), scc_v.get_comp_id());
-		else
-			vec->set(scc_v.get_id(), INVALID_VERTEX_ID);
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_cid_query(vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
@@ -1288,6 +1269,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 				time_diff(start, end), fwbw_vertices);
 		printf("There are %ld vertices left unassigned\n", active_vertices.size());
 	} while (!active_vertices.empty());
+	printf("scc takes %f seconds\n", time_diff(scc_start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -1295,6 +1277,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 #endif
 
 	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_cid_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<vertex_id_t, scc_vertex>(vec)));
 	return vec;
 }
