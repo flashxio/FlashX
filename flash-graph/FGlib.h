@@ -23,6 +23,7 @@
 #include "graph_engine.h"
 #include "graph.h"
 #include "FG_vector.h"
+#include "graph_file_header.h"
 
 /**
   * \brief A user-friendly wrapper for FlashGraph's raw graph type.
@@ -35,11 +36,18 @@ class FG_graph
 	std::string graph_file;
 	std::string index_file;
 	config_map configs;
+	graph_header header;
+
 	FG_graph(const std::string &graph_file,
 			const std::string &index_file, const config_map &configs) {
 		this->graph_file = graph_file;
 		this->index_file = index_file;
 		this->configs = configs;
+
+		file_io_factory::shared_ptr index_factory = create_io_factory(
+				index_file, GLOBAL_CACHE_ACCESS);
+		io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
+		io->access((char *) &header, 0, sizeof(header), READ);
 	}
 public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
@@ -85,6 +93,14 @@ public:
 */
 	const config_map &get_configs() const {
 		return configs;
+	}
+
+	/**
+	 * \brief Get the header of the graph.
+	 * \return The graph header.
+	 */
+	const graph_header &get_graph_header() const {
+		return header;
 	}
 };
 
