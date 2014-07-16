@@ -30,11 +30,12 @@
 
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "FGlib.h"
+#include "FG_vector.h"
+
+namespace {
 
 const double BIN_SEARCH_RATIO = 10;
-const int HOUR_SECS = 3600;
-const int DAY_SECS = HOUR_SECS * 24;
-const int MONTH_SECS = DAY_SECS * 30;
 
 time_t timestamp;
 time_t time_interval = 1;
@@ -349,101 +350,44 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 	}
 }
 
-void int_handler(int sig_num)
+class save_scan_query: public vertex_query
 {
-#ifdef PROFILER
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-#endif
-	exit(0);
-}
-
-void print_usage()
-{
-	fprintf(stderr,
-			"scan-statistics conf_file graph_file index_file [output_file]\n");
-	fprintf(stderr, "-c conf\n");
-	fprintf(stderr, "-n num: the number of time intervals\n");
-	fprintf(stderr, "-m: use month for time unit\n");
-	fprintf(stderr, "-d: use day for time unit\n");
-	fprintf(stderr, "-h: use hour for time unit\n");
-	fprintf(stderr, "-o output: the output file\n");
-	fprintf(stderr, "-t time: the start time\n");
-	fprintf(stderr, "-i time: the length of time interval\n");
-	graph_conf.print_help();
-	params.print_help();
-	exit(-1);
-}
-
-int main(int argc, char *argv[])
-{
-	printf("time_t size: %ld\n", sizeof(time_t));
-	int opt;
-	int num_opts = 0;
-	std::string confs;
-	std::string output_file;
-	int time_unit = 1;
-	while ((opt = getopt(argc, argv, "c:n:mdho:t:i:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 'n':
-				num_time_intervals = atoi(optarg);
-				num_opts++;
-				break;
-			case 'm':
-				time_unit = MONTH_SECS;
-				break;
-			case 'd':
-				time_unit = DAY_SECS;
-				break;
-			case 'h':
-				time_unit = HOUR_SECS;
-				break;
-			case 'o':
-				output_file = optarg;
-				num_opts++;
-				break;
-			case 't':
-				timestamp = atol(optarg);
-				num_opts++;
-				break;
-			case 'i':
-				time_interval = atol(optarg);
-				num_opts++;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	timestamp *= time_unit;
-	time_interval *= time_unit;
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
-	if (argc < 3) {
-		print_usage();
-		exit(1);
+	FG_vector<float>::ptr vec;
+public:
+	save_scan_query(FG_vector<float>::ptr vec) {
+		this->vec = vec;
 	}
 
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
+	virtual void run(graph_engine &graph, compute_vertex &v) {
+		scan_vertex &lv = (scan_vertex &) v;
+		vec->set(lv.get_id(), lv.get_result());
+	}
 
-	config_map configs(conf_file);
-	signal(SIGINT, int_handler);
+	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	}
+
+	virtual ptr clone() {
+		return vertex_query::ptr(new save_scan_query(vec));
+	}
+};
+
+}
+
+FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
+		time_t interval, int num_intervals)
+{
+	timestamp = start_time;
+	time_interval = interval;
+	num_time_intervals = num_intervals;
 
 	graph_index::ptr index = NUMA_graph_index<scan_vertex>::create(
-			index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
 	assert(graph->get_graph_header().get_graph_type() == graph_type::DIRECTED);
 	assert(graph->get_graph_header().has_edge_data());
 	printf("scan statistics starts, start: %ld, interval: %ld, #interval: %d\n",
 			timestamp, time_interval, num_time_intervals);
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -460,33 +404,8 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 #endif
 	printf("It takes %f seconds\n", time_diff(start, end));
-	printf("There are %ld vertices\n", index->get_num_vertices());
 
-	double max_res = LONG_MIN;
-	vertex_id_t max_v = -1;
-	graph_index::const_iterator it = index->begin();
-	graph_index::const_iterator end_it = index->end();
-	for (; it != end_it; ++it) {
-		const scan_vertex &v = (const scan_vertex &) *it;
-		if (max_res < v.get_result()) {
-			max_v = v.get_id();
-			max_res = v.get_result();
-		}
-	}
-	printf("max value is on v%ld: %f\n", (unsigned long) max_v, max_res);
-
-	if (!output_file.empty()) {
-		FILE *f = fopen(output_file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			return -1;
-		}
-		graph_index::const_iterator it = index->begin();
-		graph_index::const_iterator end_it = index->end();
-		for (; it != end_it; ++it) {
-			const scan_vertex &v = (const scan_vertex &) *it;
-			fprintf(f, "\"%ld\" %f\n", (unsigned long) v.get_id(), v.get_result());
-		}
-		fclose(f);
-	}
+	FG_vector<float>::ptr vec = FG_vector<float>::create(graph);
+	graph->query_on_all(vertex_query::ptr(new save_scan_query(vec)));
+	return vec;
 }

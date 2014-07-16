@@ -22,7 +22,13 @@
 #include <google/profiler.h>
 #endif
 
+#include <boost/date_time/posix_time/posix_time.hpp>
+
 #include "FGlib.h"
+
+const int HOUR_SECS = 3600;
+const int DAY_SECS = HOUR_SECS * 24;
+const int MONTH_SECS = DAY_SECS * 30;
 
 void int_handler(int sig_num)
 {
@@ -43,6 +49,7 @@ std::string supported_algs[] = {
 	"diameter",
 	"pagerank",
 	"pagerank2",
+	"sstsg",
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -63,6 +70,13 @@ void print_usage()
 	fprintf(stderr, "pagerank\n");
 	fprintf(stderr, "-i num: the maximum number of iterations\n");
 	fprintf(stderr, "-D v: damping factor\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "sstsg\n");
+	fprintf(stderr, "-n num: the number of time intervals\n");
+	fprintf(stderr, "-u unit: time unit (hour, day, month, etc)\n");
+	fprintf(stderr, "-o output: the output file\n");
+	fprintf(stderr, "-t time: the start time\n");
+	fprintf(stderr, "-l time: the length of time interval\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
@@ -76,13 +90,22 @@ int main(int argc, char *argv[])
 	int opt;
 	std::string confs;
 	int num_opts = 0;
+
 	int topK = 1;
+
 	int num_para_bfs = 1;
 	bool directed = false;
 	int num_sweeps = 5;
+
 	int num_iters = 30;
 	float damping_factor = 0.85;
-	while ((opt = getopt(argc, argv, "c:K:p:ds:i:D:")) != -1) {
+
+	std::string start_time_str;
+	std::string time_unit_str;
+	std::string output_file;
+	int num_time_intervals = 1;
+	long time_interval = 1;
+	while ((opt = getopt(argc, argv, "c:K:p:ds:i:D:n:u:o:t:l:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -110,6 +133,26 @@ int main(int argc, char *argv[])
 				break;
 			case 'D':
 				damping_factor = atof(optarg);
+				num_opts++;
+				break;
+			case 'n':
+				num_time_intervals = atoi(optarg);
+				num_opts++;
+				break;
+			case 'u':
+				time_unit_str = optarg;
+				num_opts++;
+				break;
+			case 'o':
+				output_file = optarg;
+				num_opts++;
+				break;
+			case 't':
+				start_time_str = optarg;
+				num_opts++;
+				break;
+			case 'l':
+				time_interval = atol(optarg);
 				num_opts++;
 				break;
 			default:
@@ -189,5 +232,46 @@ int main(int argc, char *argv[])
 		}
 		printf("There are %ld components (exclude empty vertices), and largest comp has %ld vertices\n",
 				map.get_size() - has_empty, max_comp.second);
+	}
+	else if (alg == "sstsg") {
+		if (time_unit_str == "hour")
+			time_interval *= HOUR_SECS;
+		else if (time_unit_str == "day")
+			time_interval *= DAY_SECS;
+		else if (time_unit_str == "month")
+			time_interval *= MONTH_SECS;
+		else
+			fprintf(stderr, "a wrong time unit: %s\n", optarg);
+
+#if 0
+		namespace bt = boost::posix_time;
+		printf("start time: %s\n", start_time_str.c_str());
+		bt::ptime pt = bt::time_from_string(start_time_str);
+		struct tm tm = bt::to_tm(pt);
+#endif
+		struct tm tm;
+		memset(&tm, 0, sizeof(tm));
+		char *ret = strptime(start_time_str.c_str(), "%Y-%m-%d", &tm);
+		assert(ret);
+
+		printf("%d-%d-%d, %d:%d:%d, %d\n", tm.tm_year, tm.tm_mon, tm.tm_mday,
+				tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_isdst);
+		time_t start_time = mktime(&tm);
+
+		printf("start time: %ld, interval: %ld\n", start_time, time_interval);
+		FG_vector<float>::ptr res = compute_sstsg(graph, start_time,
+				time_interval, num_time_intervals);
+		std::pair<float, off_t> p = res->max_val_loc();
+		printf("v%ld has max scan %f\n", p.second, p.first);
+		if (!output_file.empty()) {
+			FILE *f = fopen(output_file.c_str(), "w");
+			if (f == NULL) {
+				perror("fopen");
+				return -1;
+			}
+			for (size_t i = 0; i < res->get_size(); i++)
+				fprintf(f, "\"%ld\" %f\n", i, res->get(i));
+			fclose(f);
+		}
 	}
 }

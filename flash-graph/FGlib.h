@@ -215,6 +215,9 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr, int num_iters,
 		float damping_factor);
 
+FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
+		time_t interval, int num_intervals);
+
 /**
  * \brief Fetch the clusters with the wanted cluster IDs.
  *  

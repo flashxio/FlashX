@@ -21,19 +21,15 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: sstsg new-sstsg
+all: sstsg
 
 sstsg: scan_graph.o ../libgraph.a
 	$(CXX) -o sstsg scan_graph.o $(LDFLAGS)
-
-new-sstsg: new_scan_graph.o ../libgraph.a
-	$(CXX) -o new-sstsg new_scan_graph.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f sstsg
-	rm -f new-sstsg
 
 -include $(DEPS) 
