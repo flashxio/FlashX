@@ -1410,6 +1410,14 @@ io_status global_cached_io::access(char *buf, off_t offset,
 		assert(orig);
 		wait4req(orig);
 	}
+	else {
+		// Process the completed requests served in the cache directly.
+		// For one-page requests served by the page cache, access() processes them
+		// differently. If the sync request is within a single page and is served
+		// by the page cache, it is kept in the cached request queue. We need to
+		// call this function to complete processing this request.
+		process_cached_reqs();
+	}
 	// TODO IO may fail, I need to return an error in case it fails.
 	status = IO_OK;
 	status.set_priv_data(size);
