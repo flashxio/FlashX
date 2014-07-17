@@ -250,7 +250,7 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	else if (time_unit_str == "month")
 		time_interval *= MONTH_SECS;
 	else
-		fprintf(stderr, "a wrong time unit: %s\n", optarg);
+		fprintf(stderr, "a wrong time unit: %s\n", time_unit_str.c_str());
 
 #if 0
 	namespace bt = boost::posix_time;
