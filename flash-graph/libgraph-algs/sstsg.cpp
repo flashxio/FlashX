@@ -32,6 +32,7 @@
 #include "graph_config.h"
 #include "FGlib.h"
 #include "FG_vector.h"
+#include "ts_graph.h"
 
 namespace {
 
@@ -89,28 +90,6 @@ public:
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 };
-
-page_byte_array::seq_const_iterator<vertex_id_t> get_ts_iterator(
-		const page_directed_vertex &v, edge_type type, time_t time_start,
-		time_t time_interval)
-{
-	page_byte_array::const_iterator<ts_edge_data> begin_it
-		= v.get_data_begin<ts_edge_data>(type);
-	page_byte_array::const_iterator<ts_edge_data> end_it
-		= v.get_data_end<ts_edge_data>(type);
-	page_byte_array::const_iterator<ts_edge_data> ts_it = std::lower_bound(
-			begin_it, end_it, ts_edge_data(time_start));
-	// All timestamps are smaller than time_start
-	if (ts_it == end_it)
-		return v.get_neigh_seq_it(type, 0, 0);
-	size_t start = ts_it - begin_it;
-
-	page_byte_array::const_iterator<ts_edge_data> ts_end_it = std::lower_bound(
-			begin_it, end_it, time_start + time_interval);
-	size_t end = ts_end_it - begin_it;
-
-	return v.get_neigh_seq_it(type, start, end);
-}
 
 size_t scan_vertex::count_edges(const page_directed_vertex &v,
 		const std::vector<vertex_id_t> *neighbors, time_t timestamp,

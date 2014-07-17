@@ -22,13 +22,8 @@
 #include <google/profiler.h>
 #endif
 
-#include <boost/date_time/posix_time/posix_time.hpp>
-
 #include "FGlib.h"
-
-const int HOUR_SECS = 3600;
-const int DAY_SECS = HOUR_SECS * 24;
-const int MONTH_SECS = DAY_SECS * 30;
+#include "ts_graph.h"
 
 void print_usage();
 
@@ -262,15 +257,7 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	bt::ptime pt = bt::time_from_string(start_time_str);
 	struct tm tm = bt::to_tm(pt);
 #endif
-	struct tm tm;
-	memset(&tm, 0, sizeof(tm));
-	char *ret = strptime(start_time_str.c_str(), "%Y-%m-%d", &tm);
-	assert(ret);
-
-	printf("%d-%d-%d, %d:%d:%d, %d\n", tm.tm_year, tm.tm_mon, tm.tm_mday,
-			tm.tm_hour, tm.tm_min, tm.tm_sec, tm.tm_isdst);
-	time_t start_time = mktime(&tm);
-
+	time_t start_time = conv_str_to_time(start_time_str);
 	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
 	FG_vector<float>::ptr res = compute_sstsg(graph, start_time,
 			time_interval, num_time_intervals);
