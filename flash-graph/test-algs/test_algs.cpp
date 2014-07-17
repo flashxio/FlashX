@@ -262,6 +262,7 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
 	FG_vector<float>::ptr res = compute_sstsg(graph, start_time,
 			time_interval, num_time_intervals);
+
 	std::pair<float, off_t> p = res->max_val_loc();
 	printf("v%ld has max scan %f\n", p.second, p.first);
 	if (!output_file.empty()) {
@@ -276,6 +277,58 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	}
 }
 
+void run_ts_wcc(FG_graph::ptr graph, int argc, char *argv[])
+{
+	std::string start_time_str;
+	std::string time_unit_str;
+	long time_interval = 1;
+
+	int opt;
+	int num_opts = 0;
+
+	while ((opt = getopt(argc, argv, "u:t:l:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'u':
+				time_unit_str = optarg;
+				num_opts++;
+				break;
+			case 't':
+				start_time_str = optarg;
+				num_opts++;
+				break;
+			case 'l':
+				time_interval = atol(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	if (time_unit_str == "hour")
+		time_interval *= HOUR_SECS;
+	else if (time_unit_str == "day")
+		time_interval *= DAY_SECS;
+	else if (time_unit_str == "month")
+		time_interval *= MONTH_SECS;
+	else
+		fprintf(stderr, "a wrong time unit: %s\n", time_unit_str.c_str());
+
+#if 0
+	namespace bt = boost::posix_time;
+	printf("start time: %s\n", start_time_str.c_str());
+	bt::ptime pt = bt::time_from_string(start_time_str);
+	struct tm tm = bt::to_tm(pt);
+#endif
+	time_t start_time = conv_str_to_time(start_time_str);
+	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
+	FG_vector<vertex_id_t>::ptr comp_ids = compute_ts_wcc(graph, start_time,
+			time_interval);
+	print_cc(comp_ids);
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -287,6 +340,7 @@ std::string supported_algs[] = {
 	"pagerank",
 	"pagerank2",
 	"sstsg",
+	"ts_wcc",
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -310,6 +364,10 @@ void print_usage()
 	fprintf(stderr, "-n num: the number of time intervals\n");
 	fprintf(stderr, "-u unit: time unit (hour, day, month, etc)\n");
 	fprintf(stderr, "-o output: the output file\n");
+	fprintf(stderr, "-t time: the start time\n");
+	fprintf(stderr, "-l time: the length of time interval\n");
+	fprintf(stderr, "ts_wcc\n");
+	fprintf(stderr, "-u unit: time unit (hour, day, month, etc)\n");
 	fprintf(stderr, "-t time: the start time\n");
 	fprintf(stderr, "-l time: the length of time interval\n");
 
@@ -372,5 +430,8 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "sstsg") {
 		run_sstsg(graph, argc, argv);
+	}
+	else if (alg == "ts_wcc") {
+		run_ts_wcc(graph, argc, argv);
 	}
 }
