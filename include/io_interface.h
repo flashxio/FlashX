@@ -451,4 +451,15 @@ const RAID_config &get_sys_RAID_conf();
  */
 void print_io_thread_stat();
 
+/**
+ * The users can set the weight of a file. The file weight is used by
+ * the page cache. The file with a higher weight can have its data in
+ * the page cache longer.
+ * This function isn't thread-safe and should be used before I/O instances
+ * are created.
+ * \param file_name The file name.
+ * \param weight The new weight of the file.
+ */
+void set_file_weight(const std::string &file_name, int weight);
+
 #endif

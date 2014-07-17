@@ -112,7 +112,18 @@ const RAID_config &get_sys_RAID_conf()
 	return global_data.raid_conf;
 }
 
-std::vector<int> file_weights;
+static std::vector<int> file_weights;
+
+void set_file_weight(const std::string &file_name, int weight)
+{
+	file_mapper &mapper = file_mappers.get(file_name);
+	if ((size_t) mapper.get_file_id() >= file_weights.size())
+		file_weights.resize(mapper.get_file_id() + 1);
+	file_weights[mapper.get_file_id()] = weight;
+	printf("%s: id: %d, weight: %d\n", file_name.c_str(),
+			mapper.get_file_id(), weight);
+}
+
 void parse_file_weights(const std::string &str)
 {
 	std::vector<std::string> file_strs;
@@ -128,12 +139,7 @@ void parse_file_weights(const std::string &str)
 		}
 
 		int weight = atoi(ss[1].c_str());
-		file_mapper &mapper = file_mappers.get(ss[0]);
-		if ((size_t) mapper.get_file_id() >= file_weights.size())
-			file_weights.resize(mapper.get_file_id() + 1);
-		file_weights[mapper.get_file_id()] = weight;
-		printf("%s: id: %d, weight: %d\n", ss[0].c_str(),
-				mapper.get_file_id(), weight);
+		set_file_weight(ss[0], weight);
 	}
 	// When we resize the vector, the files that are not assigned a weight
 	// get 0 as weight. We need to make their weight 1.
