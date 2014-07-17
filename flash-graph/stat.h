@@ -170,6 +170,10 @@ public:
 		assert(it != map.end());
 		return it->second;
 	}
+
+	void remove(const T &key) {
+		map.erase(key);
+	}
 };
 
 #endif
