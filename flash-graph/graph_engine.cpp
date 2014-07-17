@@ -234,13 +234,11 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 graph_engine::graph_engine(const std::string &graph_file,
 		graph_index::ptr index, const config_map &configs)
 {
-	graph_conf.init(configs);
-	graph_conf.print();
 	config_map configs1 = configs;
 	configs1.add_options(std::string("file_weights=")
 			+ index->get_index_file() + ":"
 			+ itoa(graph_conf.get_index_file_weight()));
-	init_io_system(configs1);
+	init_flash_graph(configs1);
 	int num_threads = graph_conf.get_num_threads();
 	this->num_nodes = params.get_num_nodes();
 	index->init(num_threads, num_nodes);
@@ -307,7 +305,7 @@ graph_engine::~graph_engine()
 		delete worker_threads[i];
 	graph_factory = file_io_factory::shared_ptr();
 	index_factory = file_io_factory::shared_ptr();
-	destroy_io_system();
+	destroy_flash_graph();
 }
 
 void graph_engine::init_threads(vertex_program_creater::ptr creater)
@@ -527,3 +525,22 @@ size_t graph_get_vertices(graph_engine &graph, const worker_thread &t,
 	return graph.get_vertices(t.get_worker_id(), ids, num_ids, v_buf);
 }
 
+std::atomic<size_t> graph_engine::init_count;
+
+void graph_engine::init_flash_graph(const config_map &configs)
+{
+	size_t count = init_count.fetch_add(1);
+	if (count == 0) {
+		graph_conf.init(configs);
+		graph_conf.print();
+		init_io_system(configs);
+	}
+}
+
+void graph_engine::destroy_flash_graph()
+{
+	size_t count = init_count.fetch_sub(1);
+	if (count == 1) {
+		destroy_io_system();
+	}
+}

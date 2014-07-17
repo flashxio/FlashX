@@ -42,9 +42,15 @@ class FG_graph
 		this->graph_file = graph_file;
 		this->index_file = index_file;
 		this->configs = configs;
+
+		graph_engine::init_flash_graph(configs);
 	}
 public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
+
+	~FG_graph() {
+		graph_engine::destroy_flash_graph();
+	}
 
 /**
   * \brief  Method to instantiate a graph object.

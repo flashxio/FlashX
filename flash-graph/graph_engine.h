@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <atomic>
+
 #include "thread.h"
 #include "container.h"
 #include "concurrency.h"
@@ -255,6 +257,8 @@ class worker_thread;
 */
 class graph_engine
 {
+	static std::atomic<size_t> init_count;
+
 	int vertex_header_size;
 	graph_header header;
 	graph_index::ptr vertices;
@@ -297,6 +301,9 @@ protected:
 			const config_map &configs);
 public:
 	typedef std::shared_ptr<graph_engine> ptr; /** Smart pointer for object access.*/
+
+	static void init_flash_graph(const config_map &configs);
+	static void destroy_flash_graph();
     
     /**
      * \brief Use this method to in lieu of a constructor to create a graph object.
