@@ -234,11 +234,8 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 graph_engine::graph_engine(const std::string &graph_file,
 		graph_index::ptr index, const config_map &configs)
 {
-	config_map configs1 = configs;
-	configs1.add_options(std::string("file_weights=")
-			+ index->get_index_file() + ":"
-			+ itoa(graph_conf.get_index_file_weight()));
-	init_flash_graph(configs1);
+	init_flash_graph(configs);
+	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
 	int num_threads = graph_conf.get_num_threads();
 	this->num_nodes = params.get_num_nodes();
 	index->init(num_threads, num_nodes);
