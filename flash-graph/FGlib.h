@@ -131,6 +131,19 @@ enum directed_triangle_type
 FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg);
 
 /**
+ * \brief Compute all weakly connectected components of a time-series graph
+ *        in a specified time interval.
+ *
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param start_time The start time of the time interval.
+ * \param time_interval The length of the time interval.
+ * \return A vector with a component ID for each vertex in the graph.
+ *
+ */
+FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
+		time_t start_time, time_t time_interval);
+
+/**
   * \brief Compute all strongly connected components of a graph.
   *
   * \param fg The FlashGraph graph object for which you want to compute.

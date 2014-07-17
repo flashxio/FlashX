@@ -33,6 +33,7 @@
 #include "graph_config.h"
 #include "FG_vector.h"
 #include "FGlib.h"
+#include "ts_graph.h"
 
 namespace {
 
@@ -53,8 +54,9 @@ public:
 class wcc_vertex: public compute_vertex
 {
 	bool updated;
-	bool empty;
 	vertex_id_t component_id;
+protected:
+	bool empty;
 public:
 	wcc_vertex(vertex_id_t id): compute_vertex(id) {
 		component_id = id;
@@ -111,6 +113,69 @@ void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	prog.multicast_msg(it, msg);
 }
 
+class ts_wcc_vertex: public wcc_vertex
+{
+public:
+	ts_wcc_vertex(vertex_id_t id): wcc_vertex(id) {
+	}
+
+	void run(vertex_program &prog) {
+		wcc_vertex::run(prog);
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex);
+};
+
+class ts_wcc_vertex_program: public vertex_program_impl<ts_wcc_vertex>
+{
+	time_t start_time;
+	time_t time_interval;
+public:
+	ts_wcc_vertex_program(time_t start_time, time_t time_interval) {
+		this->start_time = start_time;
+		this->time_interval = time_interval;
+	}
+
+	time_t get_start_time() const {
+		return start_time;
+	}
+
+	time_t get_time_interval() const {
+		return time_interval;
+	}
+};
+
+class ts_wcc_vertex_program_creater: public vertex_program_creater
+{
+	time_t start_time;
+	time_t time_interval;
+public:
+	ts_wcc_vertex_program_creater(time_t start_time, time_t time_interval) {
+		this->start_time = start_time;
+		this->time_interval = time_interval;
+	}
+
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new ts_wcc_vertex_program(
+					start_time, time_interval));
+	}
+};
+
+void ts_wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
+{
+	assert(prog.get_graph().is_directed());
+	ts_wcc_vertex_program &wcc_vprog = (ts_wcc_vertex_program &) prog;
+	const page_directed_vertex &dvertex = (const page_directed_vertex &) vertex;
+	edge_seq_iterator in_it = get_ts_iterator(dvertex, edge_type::IN_EDGE,
+			wcc_vprog.get_start_time(), wcc_vprog.get_time_interval());
+	edge_seq_iterator out_it = get_ts_iterator(dvertex, edge_type::OUT_EDGE,
+			wcc_vprog.get_start_time(), wcc_vprog.get_time_interval());
+	empty = !in_it.has_next() && !out_it.has_next();
+	component_message msg(get_component_id());
+	prog.multicast_msg(in_it, msg);
+	prog.multicast_msg(out_it, msg);
+}
+
 }
 
 #include "save_result.h"
@@ -129,6 +194,39 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph->start_all();
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+	printf("WCC takes %f seconds\n", time_diff(start, end));
+
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
+
+	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<vertex_id_t, wcc_vertex>(vec)));
+	return vec;
+}
+
+FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
+		time_t start_time, time_t time_interval)
+{
+	graph_index::ptr index = NUMA_graph_index<ts_wcc_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+	assert(graph->get_graph_header().has_edge_data());
+	printf("TS weakly connected components starts\n");
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
+				new ts_wcc_vertex_program_creater(start_time, time_interval)));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("WCC takes %f seconds\n", time_diff(start, end));
