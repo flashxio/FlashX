@@ -201,11 +201,7 @@ public:
     * \return The sum of all items in the vector.
   */
 	T sum() const {
-		T ret = 0;
-#pragma omp parallel for reduction(+:ret)
-		for (size_t i = 0; i < get_size(); i++)
-			ret += get(i);
-		return ret;
+		return sum<T>();
 	}
 
   /**
@@ -217,10 +213,20 @@ public:
   */
 	template<class ResType>
 	ResType sum() const {
+		struct identity_func {
+			ResType operator()(T v) {
+				return v;
+			}
+		};
+		return aggregate<identity_func, ResType>(identity_func());
+	}
+
+	template<class Func, class ResType>
+	ResType aggregate(Func func) const {
 		ResType ret = 0;
 #pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
-			ret += get(i);
+			ret += func(eles[i]);
 		return ret;
 	}
 
