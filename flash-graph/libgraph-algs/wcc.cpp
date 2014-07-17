@@ -36,12 +36,6 @@
 
 namespace {
 
-enum wcc_stage_t
-{
-	FIND_COMPONENTS,
-	REMOVE_EMPTY,
-} wcc_stage;
-
 class component_message: public vertex_message
 {
 	int id;
@@ -82,14 +76,9 @@ public:
 
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
-		if (wcc_stage == wcc_stage_t::FIND_COMPONENTS) {
-			if (updated) {
-				request_vertices(&id, 1);
-				updated = false;
-			}
-		}
-		else {
-			request_vertex_headers(&id, 1);
+		if (updated) {
+			request_vertices(&id, 1);
+			updated = false;
 		}
 	}
 
@@ -103,11 +92,6 @@ public:
 		}
 	}
 
-	void run_on_vertex_header(vertex_program &, const vertex_header &header) {
-		assert(get_id() == header.get_id());
-		empty = (header.get_num_edges() == 0);
-	}
-
 	vertex_id_t get_result() const {
 		if (!empty)
 			return get_component_id();
@@ -118,6 +102,7 @@ public:
 
 void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
+	empty = (vertex.get_num_edges(BOTH_EDGES) == 0);
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	int num_dests = vertex.get_num_edges(BOTH_EDGES);
@@ -143,7 +128,6 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	wcc_stage = wcc_stage_t::FIND_COMPONENTS;
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
@@ -154,9 +138,6 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 		ProfilerStop();
 #endif
 
-	wcc_stage = wcc_stage_t::REMOVE_EMPTY;
-	graph->start_all();
-	graph->wait4complete();
 	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<vertex_id_t, wcc_vertex>(vec)));
