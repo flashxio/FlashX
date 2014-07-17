@@ -518,3 +518,13 @@ FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type)
 	printf("computing subgraph size takes %f seconds\n", time_diff(start, end));
 	return degree_vec;
 }
+
+graph_header get_graph_header(FG_graph::ptr fg)
+{
+	graph_header header;
+	file_io_factory::shared_ptr index_factory = create_io_factory(
+			fg->get_index_file(), GLOBAL_CACHE_ACCESS);
+	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
+	io->access((char *) &header, 0, sizeof(header), READ);
+	return header;
+}

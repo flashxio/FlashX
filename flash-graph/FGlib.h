@@ -36,18 +36,12 @@ class FG_graph
 	std::string graph_file;
 	std::string index_file;
 	config_map configs;
-	graph_header header;
 
 	FG_graph(const std::string &graph_file,
 			const std::string &index_file, const config_map &configs) {
 		this->graph_file = graph_file;
 		this->index_file = index_file;
 		this->configs = configs;
-
-		file_io_factory::shared_ptr index_factory = create_io_factory(
-				index_file, GLOBAL_CACHE_ACCESS);
-		io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
-		io->access((char *) &header, 0, sizeof(header), READ);
 	}
 public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
@@ -93,14 +87,6 @@ public:
 */
 	const config_map &get_configs() const {
 		return configs;
-	}
-
-	/**
-	 * \brief Get the header of the graph.
-	 * \return The graph header.
-	 */
-	const graph_header &get_graph_header() const {
-		return header;
 	}
 };
 
@@ -269,5 +255,11 @@ void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr clu
  * \return A vector with an entry for each vertex degree.
  */
 FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type);
+
+/**
+ * Get the header of the graph that contains basic information of the graph.
+ * \return The graph header.
+ */
+graph_header get_graph_header(FG_graph::ptr fg);
 
 #endif
