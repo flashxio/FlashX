@@ -43,34 +43,6 @@ class graph_index
 public:
 	typedef std::shared_ptr<graph_index> ptr; /** Type used to access object*/
     
-	class const_iterator
-	{
-		vertex_id_t id;
-		graph_index *index;
-	public:
-		const_iterator(graph_index *index, vertex_id_t id) {
-			this->index = index;
-			this->id = id;
-		}
-
-		const compute_vertex &operator*() const {
-			return index->get_vertex(id);
-		}
-
-		const_iterator &operator++() {
-			id++;
-			return *this;
-		}
-
-		bool operator==(const const_iterator &it) const {
-			return id == it.id;
-		}
-
-		bool operator!=(const const_iterator &it) const {
-			return id != it.id;
-		}
-	};
-
 	graph_index() {
 	}
 
@@ -96,15 +68,6 @@ public:
 	virtual const graph_partitioner &get_partitioner() const = 0;
 
 	virtual vertex_program::ptr create_def_vertex_program() const = 0;
-
-	const_iterator begin() const {
-		return const_iterator((graph_index *) this, this->get_min_vertex_id());
-	}
-
-	const_iterator end() const {
-		return const_iterator((graph_index *) this,
-				this->get_max_vertex_id() + 1);
-	}
 
 	virtual std::string get_index_file() const = 0;
 };

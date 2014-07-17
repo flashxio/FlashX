@@ -464,6 +464,7 @@ int main(int argc, char *argv[])
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());
 
+#if 0
 	double max_res = LONG_MIN;
 	vertex_id_t max_v = -1;
 	graph_index::const_iterator it = index->begin();
@@ -491,4 +492,5 @@ int main(int argc, char *argv[])
 		}
 		fclose(f);
 	}
+#endif
 }
