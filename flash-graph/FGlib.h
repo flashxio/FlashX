@@ -263,6 +263,18 @@ void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr clu
 FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type);
 
 /**
+ * \brief Get the degree of all vertices in a specified time interval in
+ *        a time-series graph.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param type The edge type: IN_EDGE, OUT_EDGE, BOTH_EDGES.
+ * \param start_time The start time of the time interval.
+ * \param time_interval length of the time interval.
+ * \return A vector with an entry for each vertex degree.
+ */
+FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
+		time_t start_time, time_t time_interval);
+
+/**
  * Get the header of the graph that contains basic information of the graph.
  * \return The graph header.
  */

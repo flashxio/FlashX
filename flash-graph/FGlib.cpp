@@ -18,6 +18,7 @@
  */
 
 #include "FGlib.h"
+#include "vertex.h"
 
 /******************* Implementation of fetching clusters *********************/
 
@@ -516,6 +517,125 @@ FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type)
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("computing subgraph size takes %f seconds\n", time_diff(start, end));
+	return degree_vec;
+}
+
+/*************** Get the degree of vertices in a timestamp ********************/
+
+namespace {
+
+class ts_degree_vertex: public compute_vertex
+{
+public:
+	ts_degree_vertex(vertex_id_t id): compute_vertex(id) {
+	}
+
+	virtual void run(vertex_program &prog) {
+		vertex_id_t id = get_id();
+		request_vertices(&id, 1);
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex);
+
+	void run_on_message(vertex_program &, const vertex_message &msg) {
+	}
+};
+
+class ts_degree_vertex_program: public vertex_program_impl<ts_degree_vertex>
+{
+	time_t start_time;
+	time_t time_interval;
+	edge_type type;
+	FG_vector<vsize_t>::ptr degree_vec;
+public:
+	ts_degree_vertex_program(FG_vector<vsize_t>::ptr degree_vec, edge_type type,
+			time_t start_time, time_t time_interval) {
+		this->degree_vec = degree_vec;
+		this->type = type;
+		this->start_time = start_time;
+		this->time_interval = time_interval;
+	}
+
+	time_t get_start_time() const {
+		return start_time;
+	}
+
+	time_t get_time_interval() const {
+		return time_interval;
+	}
+
+	edge_type get_edge_type() const {
+		return type;
+	}
+
+	void set_degree(vertex_id_t id, vsize_t degree) {
+		degree_vec->set(id, degree);
+	}
+};
+
+class ts_degree_vertex_program_creater: public vertex_program_creater
+{
+	time_t start_time;
+	time_t time_interval;
+	FG_vector<vertex_id_t>::ptr degree_vec;
+	edge_type type;
+public:
+	ts_degree_vertex_program_creater(
+			FG_vector<vertex_id_t>::ptr degree_vec, edge_type type,
+			time_t start_time, time_t time_interval) {
+		this->degree_vec = degree_vec;
+		this->type = type;
+		this->start_time = start_time;
+		this->time_interval = time_interval;
+	}
+
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new ts_degree_vertex_program(
+					degree_vec, type, start_time, time_interval));
+	}
+};
+
+void ts_degree_vertex::run(vertex_program &prog, const page_vertex &vertex)
+{
+	ts_degree_vertex_program &degree_vprog = (ts_degree_vertex_program &) prog;
+	edge_type type = degree_vprog.get_edge_type();
+	time_t start_time = degree_vprog.get_start_time();
+	time_t time_interval = degree_vprog.get_time_interval();
+
+	if (prog.get_graph().is_directed()) {
+		const page_directed_vertex &dv = (const page_directed_vertex &) vertex;
+
+		page_byte_array::const_iterator<ts_edge_data> begin_it
+			= dv.get_data_begin<ts_edge_data>(type);
+		page_byte_array::const_iterator<ts_edge_data> end_it
+			= dv.get_data_end<ts_edge_data>(type);
+		page_byte_array::const_iterator<ts_edge_data> ts_it = std::lower_bound(
+				begin_it, end_it, ts_edge_data(start_time));
+		page_byte_array::const_iterator<ts_edge_data> ts_end_it = std::lower_bound(
+				begin_it, end_it, start_time + time_interval);
+		degree_vprog.set_degree(vertex.get_id(), ts_end_it - ts_it);
+	}
+	else {
+		assert(0);
+	}
+}
+
+}
+
+FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
+		time_t start_time, time_t time_interval)
+{
+	graph_index::ptr index = NUMA_graph_index<ts_degree_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+	assert(graph->get_graph_header().has_edge_data());
+
+	FG_vector<vsize_t>::ptr degree_vec = FG_vector<vsize_t>::create(graph);
+	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
+				new ts_degree_vertex_program_creater(degree_vec, type,
+					start_time, time_interval)));
+	graph->wait4complete();
 	return degree_vec;
 }
 
