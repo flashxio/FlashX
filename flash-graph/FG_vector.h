@@ -268,15 +268,32 @@ public:
 	}
 
 	/**
+	 * \brief element-wise merge with another vector and store the result
+	 *        in this vector.
+	 * \param vec The vector that you want to merge with.
+	 * \param func The operator that you want to perform on each pair of
+	 *             elements.
+	 */
+	template<class MergeFunc, class VecType>
+	void merge_in_place(typename FG_vector<VecType>::ptr vec, MergeFunc func) {
+		assert(this->get_size() == vec->get_size());
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] = func(eles[i], vec->get(i));
+	}
+
+	/**
 	 * \brief In place element-wise addition by another vector.
 	 * \param vec The vector by which you want to add to this vector.
 	 * **parallel**
 	 */
 	void add_in_place(FG_vector<T>::ptr vec) {
-		assert(this->get_size() == vec->get_size());
-#pragma omp parallel for
-		for (size_t i = 0; i < get_size(); i++)
-			eles[i] += vec->get(i);
+		struct add_func {
+			T operator()(const T &v1, const T &v2) {
+				return v1 + v2;
+			}
+		};
+		merge_in_place<add_func, T>(vec, add_func());
 	}
 
 	/**
@@ -285,10 +302,12 @@ public:
 	 * **parallel** 
 	 */
 	void subtract_in_place(const FG_vector<T> &vec) {
-		assert(get_size() == vec.get_size());
-#pragma omp parallel for
-		for (size_t i = 0; i < get_size(); i++)
-			eles[i] -= vec.eles[i];
+		struct sub_func {
+			T operator()(const T &v1, const T &v2) {
+				return v1 - v2;
+			}
+		};
+		merge_in_place<sub_func, T>(vec, sub_func());
 	}
 
   /**
