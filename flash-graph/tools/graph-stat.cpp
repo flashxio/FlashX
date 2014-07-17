@@ -71,10 +71,13 @@ int main(int argc, char *argv[])
 	printf("There are %ld vertices and %ld edges\n",
 			header.get_num_vertices(), header.get_num_edges());
 
-	bool directed = header.is_directed_graph();
-	size_t num_non_empty_vertices = 0;
+	struct non_empty_func {
+		size_t operator()(vsize_t v) {
+			return !!v;
+		}
+	};
 
-	printf("There are %ld non-empty vertices\n", num_non_empty_vertices);
+	bool directed = header.is_directed_graph();
 	if (directed) {
 		FG_vector<vsize_t>::ptr in_degrees = get_degree(fg, IN_EDGE);
 		FG_vector<vsize_t>::ptr out_degrees = get_degree(fg, OUT_EDGE);
@@ -93,6 +96,8 @@ int main(int argc, char *argv[])
 		printf("max edges of a vertex: %ld, max in-edges: %ld, max out-edges: %ld\n",
 				(size_t) max_num_edges, (size_t) max_num_in_edges,
 				(size_t) max_num_out_edges);
+		printf("There are %ld non-empty vertices\n",
+				in_degrees->aggregate<non_empty_func, size_t>(non_empty_func()));
 
 		printf("edge histogram\n");
 		hist_edges.print(stdout);
@@ -107,6 +112,8 @@ int main(int argc, char *argv[])
 		vsize_t max_num_edges = degrees->max();
 		printf("There are %ld edges\n", tot_edges);
 		printf("max edges of a vertex: %ld\n", (size_t) max_num_edges);
+		printf("There are %ld non-empty vertices\n",
+				degrees->aggregate<non_empty_func, size_t>(non_empty_func()));
 
 		log_histogram hist_edges = degrees->log_hist(POWER_CONST);
 		printf("edge histogram\n");
