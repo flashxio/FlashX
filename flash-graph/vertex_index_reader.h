@@ -477,7 +477,7 @@ public:
 	virtual void request_num_directed_edges(vertex_id_t ids[], size_t num,
 			directed_vertex_compute &compute) {
 		for (size_t i = 0; i < num; i++) {
-			vertex_id_t id = ids[0];
+			vertex_id_t id = ids[i];
 			compute.run_on_num_edges(id, index->get_num_in_edges(id),
 					index->get_num_out_edges(id));
 		}
