@@ -76,7 +76,7 @@ template<class vertex_type>
 class NUMA_graph_index;
 
 template<class vertex_type>
-class NUMA_local_graph_index: public graph_index
+class graph_local_partition
 {
 	int node_id;
 	int part_id;
@@ -85,7 +85,7 @@ class NUMA_local_graph_index: public graph_index
 	vertex_type *vertex_arr;
 	const graph_partitioner &partitioner;
 
-	NUMA_local_graph_index(const graph_partitioner &_partitioner, int part_id,
+	graph_local_partition(const graph_partitioner &_partitioner, int part_id,
 			int node_id, size_t tot_num_vertices): partitioner(_partitioner) {
 		this->part_id = part_id;
 		this->tot_num_vertices = tot_num_vertices;
@@ -95,7 +95,7 @@ class NUMA_local_graph_index: public graph_index
 		vertex_arr = NULL;
 	}
 public:
-	~NUMA_local_graph_index() {
+	~graph_local_partition() {
 		if (vertex_arr)
 			free_large(vertex_arr, sizeof(vertex_arr[0]) * num_vertices);
 	}
@@ -122,33 +122,8 @@ public:
 		}
 	}
 
-	virtual size_t get_vertices(const vertex_id_t ids[], int num,
-			compute_vertex *v_buf[]) const {
-		assert(0);
-	}
-
-	virtual compute_vertex &get_vertex(vertex_id_t id) {
-		int part_id;
-		off_t part_off;
-		partitioner.map2loc(id, part_id, part_off);
-		return vertex_arr[part_off];
-	}
-
-	virtual size_t get_vertices(int part_id, const local_vid_t ids[], int num,
-			compute_vertex *v_buf[]) const {
-		assert(0);
-	}
-
-	virtual compute_vertex &get_vertex(int part_id, local_vid_t id) {
-		assert(0);
-	}
-
-	virtual vertex_id_t get_max_vertex_id() const {
-		return vertex_arr[num_vertices - 1].get_id();
-	}
-
-	virtual vertex_id_t get_min_vertex_id() const {
-		return vertex_arr[0].get_id();
+	compute_vertex &get_vertex(vertex_id_t id) {
+		return vertex_arr[id];
 	}
 
 	virtual size_t get_num_vertices() const {
@@ -157,19 +132,6 @@ public:
 
 	int get_node_id() const {
 		return node_id;
-	}
-
-	virtual const graph_partitioner &get_partitioner() const {
-		return partitioner;
-	}
-
-	virtual vertex_program::ptr create_def_vertex_program() const {
-		assert(0);
-		return vertex_program::ptr();
-	}
-
-	virtual std::string get_index_file() const {
-		assert(0);
 	}
 
 	friend class NUMA_graph_index<vertex_type>;
@@ -202,13 +164,13 @@ class NUMA_graph_index: public graph_index
 	vertex_id_t min_vertex_id;
 	std::unique_ptr<range_graph_partitioner> partitioner;
 	// A graph index per thread
-	std::vector<std::unique_ptr<NUMA_local_graph_index<vertex_type> > > index_arr;
+	std::vector<std::unique_ptr<graph_local_partition<vertex_type> > > index_arr;
 
 	class init_thread: public thread
 	{
-		NUMA_local_graph_index<vertex_type> *index;
+		graph_local_partition<vertex_type> *index;
 	public:
-		init_thread(NUMA_local_graph_index<vertex_type> *index): thread(
+		init_thread(graph_local_partition<vertex_type> *index): thread(
 				"index-init-thread", index->get_node_id()) {
 			this->index = index;
 		}
@@ -238,7 +200,7 @@ public:
 
 		// Construct the indices.
 		for (int i = 0; i < num_threads; i++) {
-			index_arr.emplace_back(new NUMA_local_graph_index<vertex_type>(
+			index_arr.emplace_back(new graph_local_partition<vertex_type>(
 						// The partitions are assigned to worker threads.
 						// The memory used to store the partitions should
 						// be on the same NUMA as the worker threads.
@@ -269,7 +231,7 @@ public:
 			int part_id;
 			off_t part_off;
 			partitioner->map2loc(id, part_id, part_off);
-			v_buf[i] = &index_arr[part_id]->vertex_arr[part_off];
+			v_buf[i] = &index_arr[part_id]->get_vertex(part_off);
 		}
 		return num;
 	}
@@ -278,18 +240,18 @@ public:
 		int part_id;
 		off_t part_off;
 		partitioner->map2loc(id, part_id, part_off);
-		return index_arr[part_id]->vertex_arr[part_off];
+		return index_arr[part_id]->get_vertex(part_off);
 	}
 
 	virtual size_t get_vertices(int part_id, const local_vid_t ids[], int num,
 			compute_vertex *v_buf[]) const {
 		for (int i = 0; i < num; i++)
-			v_buf[i] = &index_arr[part_id]->vertex_arr[ids[i].id];
+			v_buf[i] = &index_arr[part_id]->get_vertex(ids[i].id);
 		return num;
 	}
 
 	virtual compute_vertex &get_vertex(int part_id, local_vid_t id) {
-		return index_arr[part_id]->vertex_arr[id.id];
+		return index_arr[part_id]->get_vertex(id.id);
 	}
 
 	virtual vertex_id_t get_max_vertex_id() const {
