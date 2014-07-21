@@ -231,19 +231,19 @@ void worker_thread::init()
 	switch (graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
 			if (graph_conf.use_in_mem_index())
-				index_reader = in_mem_directed_vindex_reader::create(
-						graph->get_in_mem_index());
+				index_reader = vertex_index_reader::create(
+						graph->get_in_mem_index(), true);
 			else
-				index_reader = ext_mem_directed_vindex_reader::create(
-						index_factory->create_io(this));
+				index_reader = vertex_index_reader::create(
+						index_factory->create_io(this), true);
 			break;
 		case graph_type::UNDIRECTED:
 			if (graph_conf.use_in_mem_index())
-				index_reader = in_mem_undirected_vindex_reader::create(
-						graph->get_in_mem_index());
+				index_reader = vertex_index_reader::create(
+						graph->get_in_mem_index(), false);
 			else
-				index_reader = ext_mem_undirected_vindex_reader::create(
-						index_factory->create_io(this));
+				index_reader = vertex_index_reader::create(
+						index_factory->create_io(this), false);
 			break;
 		default:
 			assert(0);
