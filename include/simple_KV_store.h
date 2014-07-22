@@ -33,6 +33,7 @@ class KV_compute: public user_compute
 {
 	embedded_array<ValueTaskType> tasks;
 	int num_tasks;
+	int num_added_tasks;
 	bool has_run;
 	simple_KV_store<ValueType, ValueTaskType> *store;
 public:
@@ -40,6 +41,7 @@ public:
 			compute_allocator *alloc): user_compute(alloc) {
 		this->store = store;
 		num_tasks = 0;
+		num_added_tasks = 0;
 		has_run = false;
 	}
 
@@ -48,9 +50,11 @@ public:
 	}
 
 	void add_task(const ValueTaskType &task) {
+		num_added_tasks++;
 		if (tasks.get_capacity() <= num_tasks)
 			tasks.resize(num_tasks * 2);
-		tasks[num_tasks++] = task;
+		if (num_tasks == 0 || !tasks[num_tasks - 1].merge(task))
+			tasks[num_tasks++] = task;
 		has_run = false;
 	}
 
@@ -75,7 +79,7 @@ public:
 			tasks[i].run(vs, num_entries);
 		}
 		has_run = true;
-		store->complete_tasks(num_tasks);
+		store->complete_tasks(num_added_tasks);
 	}
 
 	virtual bool has_completed() {
