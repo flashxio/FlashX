@@ -276,8 +276,10 @@ public:
 	 * Serve user requests asynchronously.
 	 */
 	void async_request(TaskType &task) {
-		task_buf.push_back(task);
-		num_pending_tasks++;
+		if (task_buf.empty() || !task_buf.back().merge(task)) {
+			task_buf.push_back(task);
+			num_pending_tasks++;
+		}
 	}
 
 	void complete_tasks(int num_tasks) {
