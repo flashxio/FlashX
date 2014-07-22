@@ -79,7 +79,7 @@ void default_vertex_queue::fetch_from_map()
 	while (vertex_buf.size() < VERTEX_BUF_SIZE
 			&& bitmap_fetch_idx.get_num_remaining() > 0) {
 		size_t curr_loc = bitmap_fetch_idx.get_curr_loc();
-		size_t new_loc = bitmap_fetch_idx.move(VERTEX_BUF_SIZE);
+		size_t new_loc = bitmap_fetch_idx.move(VERTEX_BUF_SIZE / NUM_BITS_LONG);
 		// bitmap_fetch_idx points to the locations of longs.
 		active_bitmap->get_reset_set_bits(min(curr_loc, new_loc) * NUM_BITS_LONG,
 				max(curr_loc, new_loc) * NUM_BITS_LONG, vertex_buf);
