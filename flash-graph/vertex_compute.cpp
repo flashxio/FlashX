@@ -53,7 +53,11 @@ request_range vertex_compute::get_next_request()
 void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 {
 	num_requested += num;
-	issue_thread->get_index_reader().request_vertices(ids, num, *this);
+	// We treat the request for itself differently from other requests.
+	if (num == 1 && ids[0] == get_id())
+		issue_thread->get_index_reader().request_vertices(ids, num, NULL);
+	else
+		issue_thread->get_index_reader().request_vertices(ids, num, this);
 }
 
 void vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)
@@ -319,7 +323,11 @@ void directed_vertex_compute::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
 	num_requested += num;
-	issue_thread->get_index_reader().request_vertices(reqs, num, *this);
+	// We treat the request for itself differently from other requests.
+	if (num == 1 && reqs[0].get_id() == get_id())
+		issue_thread->get_index_reader().request_vertices(reqs, num, NULL);
+	else
+		issue_thread->get_index_reader().request_vertices(reqs, num, this);
 }
 
 void directed_vertex_compute::run_on_num_edges(vertex_id_t id,

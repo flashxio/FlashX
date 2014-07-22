@@ -43,13 +43,13 @@ public:
 	static ptr create(io_interface::ptr io, bool directed);
 
 	virtual void request_vertices(vertex_id_t ids[], size_t num,
-			vertex_compute &compute) = 0;
+			vertex_compute *compute) = 0;
 	virtual void request_num_edges(vertex_id_t vertices[], size_t num,
 			vertex_compute &compute) = 0;
 	virtual void request_num_directed_edges(vertex_id_t ids[], size_t num,
 			directed_vertex_compute &compute) = 0;
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
-			directed_vertex_compute &compute) = 0;
+			directed_vertex_compute *compute) = 0;
 	virtual void wait4complete(int num) = 0;
 	virtual size_t get_num_pending_tasks() const = 0;
 };

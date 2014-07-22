@@ -25,32 +25,54 @@
 class vertex_compute;
 class directed_vertex_compute;
 
+static const size_t MAX_ENTRIES = 100;
+
 template<class ValueType>
 class req_vertex_task
 {
-	vertex_id_t vid;
+	vertex_id_t vid_start;
+	vertex_id_t vid_end;
 	vertex_compute *compute;
 public:
 	req_vertex_task() {
-		vid = 0;
+		vid_start = 0;
+		vid_end = 0;
 		compute = NULL;
 	}
 
-	req_vertex_task(vertex_id_t vid, vertex_compute &_compute) {
-		this->vid = vid;
-		this->compute = &_compute;
+	req_vertex_task(vertex_id_t vid, vertex_compute *_compute) {
+		this->vid_start = vid;
+		this->vid_end = vid + 1;
+		this->compute = _compute;
 	}
 
 	size_t get_idx() const {
-		return vid + vertex_index::get_header_size() / sizeof(ValueType);
+		return vid_start + vertex_index::get_header_size() / sizeof(ValueType);
 	}
 
 	size_t get_num_entries() const {
-		return 2;
+		return vid_end - vid_start + 1;
+	}
+
+	bool merge(const req_vertex_task<ValueType> &task) {
+		if (get_num_entries() < MAX_ENTRIES && this->compute == task.compute) {
+			if (task.vid_start == vid_end) {
+				vid_end = task.vid_end;
+				return true;
+			}
+			else if (task.vid_end == vid_start) {
+				vid_start = task.vid_start;
+				return true;
+			}
+			else
+				return false;
+		}
+		else
+			return false;
 	}
 
 	void run(ValueType entries[], int num) {
-		assert(num == 2);
+		assert((size_t) num == get_num_entries());
 #ifdef VERIFY_INDEX_READER
 		extern vertex_index *test_vindex;
 		vertex_index_temp<ValueType> *index = (vertex_index_temp<ValueType> *) test_vindex;
@@ -58,9 +80,19 @@ public:
 		if (vid < index->get_max_id())
 			assert(entries[1].get_off() == index->get_vertex(vid + 1).get_off());
 #endif
-		in_mem_vertex_info info(vid, entries[0].get_off(),
-				entries[1].get_off() - entries[0].get_off());
-		compute->issue_io_request(info);
+		for (vertex_id_t vid = vid_start; vid < vid_end; vid++) {
+			int off1 = vid - vid_start;
+			int off2 = vid - vid_start + 1;
+			in_mem_vertex_info info(vid, entries[off1].get_off(),
+					entries[off2].get_off() - entries[off1].get_off());
+			extern vertex_compute *get_vertex_compute_on_thread(vertex_id_t);
+			if (this->compute)
+				compute->issue_io_request(info);
+			else {
+				vertex_compute *compute = get_vertex_compute_on_thread(vid);
+				compute->issue_io_request(info);
+			}
+		}
 	}
 
 	// Override the operator so it can be used in a priority queue.
@@ -71,30 +103,55 @@ public:
 
 class req_part_vertex_task
 {
-	directed_vertex_request req;
+	vertex_id_t vid_start;
+	vertex_id_t vid_end;
+	edge_type type;
 	directed_vertex_compute *compute;
 public:
 	req_part_vertex_task() {
+		vid_start = 0;
+		vid_end = 0;
+		type = edge_type::BOTH_EDGES;
 		compute = NULL;
 	}
 
 	req_part_vertex_task(directed_vertex_request &req,
-			directed_vertex_compute &_compute) {
-		this->req = req;
-		this->compute = &_compute;
+			directed_vertex_compute *_compute) {
+		vid_start = req.get_id();
+		vid_end = req.get_id() + 1;
+		type = req.get_type();
+		this->compute = _compute;
 	}
 
 	size_t get_idx() const {
-		return req.get_id()
+		return vid_start
 			+ vertex_index::get_header_size() / sizeof(directed_vertex_entry);
 	}
 
 	size_t get_num_entries() const {
-		return 2;
+		return vid_end - vid_start + 1;
+	}
+
+	bool merge(const req_part_vertex_task &task) {
+		if (get_num_entries() < MAX_ENTRIES && type == task.type
+				&& this->compute == task.compute) {
+			if (task.vid_start == vid_end) {
+				vid_end = task.vid_end;
+				return true;
+			}
+			else if (task.vid_end == vid_start) {
+				vid_start = task.vid_start;
+				return true;
+			}
+			else
+				return false;
+		}
+		else
+			return false;
 	}
 
 	void run(directed_vertex_entry entries[], int num) {
-		assert(num == 2);
+		assert((size_t) num == get_num_entries());
 #ifdef VERIFY_INDEX_READER
 		extern vertex_index *test_vindex;
 		directed_vertex_index *index = (directed_vertex_index *) test_vindex;
@@ -102,10 +159,22 @@ public:
 		if (req.get_id() < index->get_max_id())
 			assert(entries[1].get_off() == index->get_vertex(req.get_id() + 1).get_off());
 #endif
-		in_mem_directed_vertex_info info(req.get_id(), entries[0].get_off(),
-				entries[1].get_off() - entries[0].get_off(),
-				entries[0].get_num_in_edges(), entries[0].get_num_out_edges());
-		compute->issue_io_request(req, info);
+		for (vertex_id_t vid = vid_start; vid < vid_end; vid++) {
+			int off1 = vid - vid_start;
+			int off2 = vid - vid_start + 1;
+			in_mem_directed_vertex_info info(vid, entries[off1].get_off(),
+					entries[off2].get_off() - entries[off1].get_off(),
+					entries[off1].get_num_in_edges(), entries[off1].get_num_out_edges());
+			directed_vertex_request req(vid, type);
+			if (this->compute)
+				compute->issue_io_request(req, info);
+			else {
+				extern vertex_compute *get_vertex_compute_on_thread(vertex_id_t);
+				directed_vertex_compute *compute
+					= (directed_vertex_compute *) get_vertex_compute_on_thread(vid);
+				compute->issue_io_request(req, info);
+			}
+		}
 	}
 };
 
@@ -133,6 +202,10 @@ public:
 
 	size_t get_num_entries() const {
 		return 2;
+	}
+
+	bool merge(const req_edge_task<ValueType> &task) {
+		return false;
 	}
 
 	void run(ValueType entries[], int num) {
@@ -177,6 +250,10 @@ public:
 
 	size_t get_num_entries() const {
 		return 1;
+	}
+
+	bool merge(const req_directed_edge_task &task) {
+		return false;
 	}
 
 	void run(directed_vertex_entry entries[], int num) {
@@ -259,7 +336,7 @@ public:
 		return ptr(new ext_mem_vindex_reader_impl(io));
 	}
 
-	void request_vertices(vertex_id_t ids[], size_t num, vertex_compute &compute) {
+	void request_vertices(vertex_id_t ids[], size_t num, vertex_compute *compute) {
 		for (size_t i = 0; i < num; i++) {
 			req_vertex_task<ValueType> task(ids[i], compute);
 			if (ids[i] >= get_cached_index_start()) {
@@ -298,7 +375,7 @@ public:
 	}
 
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
-			directed_vertex_compute &compute) {
+			directed_vertex_compute *compute) {
 		assert(0);
 	}
 
@@ -336,7 +413,7 @@ public:
 	}
 
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
-			directed_vertex_compute &compute) {
+			directed_vertex_compute *compute) {
 		for (size_t i = 0; i < num; i++) {
 			req_part_vertex_task task(reqs[i], compute);
 			if (reqs[i].get_id() >= get_cached_index_start()) {
@@ -397,12 +474,12 @@ public:
 
 
 	virtual void request_vertices(vertex_id_t ids[], size_t num,
-			vertex_compute &compute) {
+			vertex_compute *compute) {
 		for (size_t i = 0; i < num; i++) {
 			vertex_id_t id = ids[i];
 			in_mem_vertex_info info(id, index->get_vertex_off(id),
 					index->get_vertex_size(id));
-			compute.issue_io_request(info);
+			compute->issue_io_request(info);
 		}
 	}
 
@@ -420,7 +497,7 @@ public:
 	}
 
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
-			directed_vertex_compute &compute) {
+			directed_vertex_compute *compute) {
 		assert(0);
 	}
 
@@ -458,13 +535,13 @@ public:
 	}
 
 	virtual void request_vertices(directed_vertex_request reqs[], size_t num,
-			directed_vertex_compute &compute) {
+			directed_vertex_compute *compute) {
 		for (size_t i = 0; i < num; i++) {
 			vertex_id_t id = reqs[i].get_id();
 			in_mem_directed_vertex_info info(id, index->get_vertex_off(id),
 					index->get_vertex_size(id), index->get_num_in_edges(id),
 					index->get_num_out_edges(id));
-			compute.issue_io_request(reqs[i], info);
+			compute->issue_io_request(reqs[i], info);
 		}
 	}
 };

@@ -517,3 +517,9 @@ vertex_compute *worker_thread::get_vertex_compute(compute_vertex &v)
 		curr_compute = it->second;
 	return curr_compute;
 }
+
+vertex_compute *get_vertex_compute_on_thread(vertex_id_t id)
+{
+	worker_thread *worker = (worker_thread *) thread::get_curr_thread();
+	return worker->get_vertex_compute(id);
+}

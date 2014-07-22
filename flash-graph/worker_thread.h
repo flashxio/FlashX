@@ -275,6 +275,12 @@ public:
 	}
 
 	vertex_compute *get_vertex_compute(compute_vertex &v);
+	vertex_compute *get_vertex_compute(vertex_id_t id) const {
+		std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
+			= active_computes.find(id);
+		assert(it != active_computes.end());
+		return it->second;
+	}
 
 	/**
 	 * Activate the vertex in its own partition for the next iteration.
