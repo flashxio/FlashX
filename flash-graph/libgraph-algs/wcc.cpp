@@ -33,14 +33,9 @@
 #include "graph_config.h"
 #include "FG_vector.h"
 #include "FGlib.h"
+#include "ts_graph.h"
 
 namespace {
-
-enum wcc_stage_t
-{
-	FIND_COMPONENTS,
-	REMOVE_EMPTY,
-} wcc_stage;
 
 class component_message: public vertex_message
 {
@@ -58,8 +53,10 @@ public:
 
 class wcc_vertex: public compute_vertex
 {
-	bool updated;
+protected:
 	bool empty;
+private:
+	bool updated;
 	vertex_id_t component_id;
 public:
 	wcc_vertex(vertex_id_t id): compute_vertex(id) {
@@ -82,14 +79,9 @@ public:
 
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
-		if (wcc_stage == wcc_stage_t::FIND_COMPONENTS) {
-			if (updated) {
-				request_vertices(&id, 1);
-				updated = false;
-			}
-		}
-		else {
-			request_num_edges(&id, 1);
+		if (updated) {
+			request_vertices(&id, 1);
+			updated = false;
 		}
 	}
 
@@ -103,14 +95,17 @@ public:
 		}
 	}
 
-	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
-		assert(get_id() == id);
-		empty = (num_edges == 0);
+	vertex_id_t get_result() const {
+		if (!empty)
+			return get_component_id();
+		else
+			return INVALID_VERTEX_ID;
 	}
 };
 
 void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
+	empty = (vertex.get_num_edges(BOTH_EDGES) == 0);
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
 	int num_dests = vertex.get_num_edges(BOTH_EDGES);
@@ -119,35 +114,72 @@ void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	prog.multicast_msg(it, msg);
 }
 
-/**
- * This query is to save the component IDs to a FG vector.
- */
-class save_cid_query: public vertex_query
+class ts_wcc_vertex: public wcc_vertex
 {
-	FG_vector<vertex_id_t>::ptr vec;
 public:
-	save_cid_query(FG_vector<vertex_id_t>::ptr vec) {
-		this->vec = vec;
+	ts_wcc_vertex(vertex_id_t id): wcc_vertex(id) {
 	}
 
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		wcc_vertex &wcc_v = (wcc_vertex &) v;
-		if (!wcc_v.is_empty(graph))
-			vec->set(wcc_v.get_id(), wcc_v.get_component_id());
-		else
-			vec->set(wcc_v.get_id(), INVALID_VERTEX_ID);
+	void run(vertex_program &prog) {
+		wcc_vertex::run(prog);
 	}
 
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	void run(vertex_program &prog, const page_vertex &vertex);
+};
+
+class ts_wcc_vertex_program: public vertex_program_impl<ts_wcc_vertex>
+{
+	time_t start_time;
+	time_t time_interval;
+public:
+	ts_wcc_vertex_program(time_t start_time, time_t time_interval) {
+		this->start_time = start_time;
+		this->time_interval = time_interval;
 	}
 
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_cid_query(vec));
+	time_t get_start_time() const {
+		return start_time;
+	}
+
+	time_t get_time_interval() const {
+		return time_interval;
 	}
 };
 
+class ts_wcc_vertex_program_creater: public vertex_program_creater
+{
+	time_t start_time;
+	time_t time_interval;
+public:
+	ts_wcc_vertex_program_creater(time_t start_time, time_t time_interval) {
+		this->start_time = start_time;
+		this->time_interval = time_interval;
+	}
+
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new ts_wcc_vertex_program(
+					start_time, time_interval));
+	}
+};
+
+void ts_wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
+{
+	assert(prog.get_graph().is_directed());
+	ts_wcc_vertex_program &wcc_vprog = (ts_wcc_vertex_program &) prog;
+	const page_directed_vertex &dvertex = (const page_directed_vertex &) vertex;
+	edge_seq_iterator in_it = get_ts_iterator(dvertex, edge_type::IN_EDGE,
+			wcc_vprog.get_start_time(), wcc_vprog.get_time_interval());
+	edge_seq_iterator out_it = get_ts_iterator(dvertex, edge_type::OUT_EDGE,
+			wcc_vprog.get_start_time(), wcc_vprog.get_time_interval());
+	empty = !in_it.has_next() && !out_it.has_next();
+	component_message msg(get_component_id());
+	prog.multicast_msg(in_it, msg);
+	prog.multicast_msg(out_it, msg);
 }
 
+}
+
+#include "save_result.h"
 FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(
@@ -162,7 +194,6 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	wcc_stage = wcc_stage_t::FIND_COMPONENTS;
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
@@ -173,10 +204,41 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 		ProfilerStop();
 #endif
 
-	wcc_stage = wcc_stage_t::REMOVE_EMPTY;
-	graph->start_all();
-	graph->wait4complete();
 	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_cid_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<vertex_id_t, wcc_vertex>(vec)));
+	return vec;
+}
+
+FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
+		time_t start_time, time_t time_interval)
+{
+	graph_index::ptr index = NUMA_graph_index<ts_wcc_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+	assert(graph->get_graph_header().has_edge_data());
+	printf("TS weakly connected components starts\n");
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
+				new ts_wcc_vertex_program_creater(start_time, time_interval)));
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+	printf("WCC takes %f seconds\n", time_diff(start, end));
+
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
+
+	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<vertex_id_t, wcc_vertex>(vec)));
 	return vec;
 }

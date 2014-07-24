@@ -453,11 +453,17 @@ extern runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
 		const page_vertex &);
 extern void (*destroy_runtime)(scan_vertex &, runtime_data_t *);
 
+enum scan_stage_t
+{
+	INIT,
+	RUN,
+};
+
 class scan_vertex: public compute_vertex
 {
 protected:
-	multi_func_value local_value;
 	vsize_t degree;
+	multi_func_value local_value;
 
 #ifdef PV_STAT
 	// For testing
@@ -470,8 +476,6 @@ protected:
 #endif
 public:
 	scan_vertex(vertex_id_t id): compute_vertex(id) {
-		// TODO request degree
-		assert(0);
 		degree = 0;
 #ifdef PV_STAT
 		num_all_edges = 0;
@@ -515,6 +519,11 @@ public:
 	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
+	}
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		degree = header.get_num_edges();
 	}
 };
 

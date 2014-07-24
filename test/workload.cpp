@@ -24,6 +24,25 @@
 int workload_gen::default_entry_size = PAGE_SIZE;
 int workload_gen::default_access_method = -1;
 
+void permute_offsets(int num, int repeats, int stride, off_t start,
+		off_t offsets[])
+{
+	int idx = 0;
+	for (int k = 0; k < repeats; k++) {
+		for (int i = 0; i < num; i++) {
+			offsets[idx++] = ((off_t) i) * stride + start * stride;
+		}
+	}
+	int tot_length = idx;
+
+	for (int i = tot_length - 1; i >= 1; i--) {
+		int j = random() % tot_length;
+		off_t tmp = offsets[j];
+		offsets[j] = offsets[i];
+		offsets[i] = tmp;
+	}
+}
+
 off_t cache_hit_defined_workload::next_offset()
 {
 	if (seq < cache_hit_ratio * 100 && cached_pages.size() > 0) {

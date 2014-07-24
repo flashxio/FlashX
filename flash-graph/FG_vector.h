@@ -206,27 +206,64 @@ public:
 
   /**
     * \brief Compute the sum of all elements in the vector. <br>
+	* If the type is integer, the sum can overflow.
     * **parallel**
     * \return The sum of all items in the vector.
   */
 	T sum() const {
-		T ret = 0;
+		return sum<T>();
+	}
+
+  /**
+    * \brief Compute the sum of all elements in the vector. <br>
+	* This sum() allows users to specify the type of the result, so users
+	* can avoid integer overflow.
+    * **parallel**
+    * \return The sum of all items in the vector.
+  */
+	template<class ResType>
+	ResType sum() const {
+		struct identity_func {
+			ResType operator()(T v) {
+				return v;
+			}
+		};
+		return aggregate<identity_func, ResType>(identity_func());
+	}
+
+	template<class Func, class ResType>
+	ResType aggregate(Func func) const {
+		ResType ret = 0;
 #pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
-			ret += get(i);
+			ret += func(eles[i]);
 		return ret;
 	}
 
   /**
-    * \brief Find the index with the maximal value in the vector and
-    *     return its value.
+    * \brief Find the maximal value in the vector and return its value.
     * \return The maximal value in the vector.
   */
 	T max() const {
+		return max_val_loc().first;
+	}
+
+	/**
+	 * \brief Find the maximal value in the vector and return its value
+	 *        and its location.
+	 * \return A pair that contains the maximal value and its location
+	 *         in the vector.
+	 */
+	std::pair<T, off_t> max_val_loc() const {
 		T ret = std::numeric_limits<T>::min();
-		for (size_t i = 0; i < get_size(); i++)
-			ret = ::max(get(i), ret);
-		return ret;
+		off_t idx = 0;
+		for (size_t i = 0; i < get_size(); i++) {
+			if (ret < get(i)) {
+				ret = get(i);
+				idx = i;
+			}
+		}
+		return std::pair<T, off_t>(ret, idx);
 	}
 
   /**
@@ -241,15 +278,46 @@ public:
 	}
 
 	/**
+	 * \brief element-wise merge with another vector and store the result
+	 *        in this vector.
+	 * \param vec The vector that you want to merge with.
+	 * \param func The operator that you want to perform on each pair of
+	 *             elements.
+	 */
+	template<class MergeFunc, class VecType>
+	void merge_in_place(typename FG_vector<VecType>::ptr vec, MergeFunc func) {
+		assert(this->get_size() == vec->get_size());
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] = func(eles[i], vec->get(i));
+	}
+
+	/**
+	 * \brief In place element-wise addition by another vector.
+	 * \param vec The vector by which you want to add to this vector.
+	 * **parallel**
+	 */
+	void add_in_place(FG_vector<T>::ptr vec) {
+		struct add_func {
+			T operator()(const T &v1, const T &v2) {
+				return v1 + v2;
+			}
+		};
+		merge_in_place<add_func, T>(vec, add_func());
+	}
+
+	/**
 	 * \brief In place subtraction of the vector by another vector.
 	 * \param vec The vector by which you want the array to be subtracted.
 	 * **parallel** 
 	 */
 	void subtract_in_place(const FG_vector<T> &vec) {
-		assert(get_size() == vec.get_size());
-#pragma omp parallel for
-		for (size_t i = 0; i < get_size(); i++)
-			eles[i] -= vec.eles[i];
+		struct sub_func {
+			T operator()(const T &v1, const T &v2) {
+				return v1 - v2;
+			}
+		};
+		merge_in_place<sub_func, T>(vec, sub_func());
 	}
 
   /**
@@ -317,6 +385,16 @@ public:
   */
 	T &get(vertex_id_t id) {
 		return eles[id];
+	}
+
+	log_histogram log_hist(int power) const {
+		T max_v = max();
+		int num_buckets = ceil(log(max_v) / log(power));
+		log_histogram hist(num_buckets);
+		for (size_t i = 0; i < get_size(); i++) {
+			hist.add_value(eles[i]);
+		}
+		return hist;
 	}
 };
 

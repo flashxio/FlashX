@@ -986,7 +986,6 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 	height = params.get_SA_min_cell_size();
 	expand_cell_idx = 0;
 	this->expandable = expandable;
-	bind2node_id(node_id);
 	this->manager = memory_manager::create(max_cache_size, node_id);
 	manager->register_cache(this);
 	long init_cache_size = default_init_cache_size;

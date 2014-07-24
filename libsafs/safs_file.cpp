@@ -21,6 +21,15 @@
 
 #include "native_file.h"
 #include "safs_file.h"
+#include "RAID_config.h"
+
+safs_file::safs_file(const RAID_config &conf, const std::string &file_name)
+{
+	conf.get_disks(native_dirs);
+	for (unsigned i = 0; i < native_dirs.size(); i++)
+		native_dirs[i].name += "/" + file_name;
+	this->name = file_name;
+}
 
 bool safs_file::exist() const
 {

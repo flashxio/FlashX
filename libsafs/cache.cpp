@@ -18,6 +18,7 @@
  */
 
 #include "cache.h"
+#include "io_interface.h"
 
 void page_byte_array::memcpy(off_t rel_off, char buf[], size_t size) const
 {
@@ -55,4 +56,12 @@ void page_byte_array::memcpy(off_t rel_off, char buf[], size_t size) const
 		off_t off_in_pg = off % PAGE_SIZE;
 		::memcpy(buf, ((char *) get_page(pg_idx)->get_data()) + off_in_pg, size);
 	}
+}
+
+void page::hit()
+{
+	int get_file_weight(file_id_t file_id);
+	// Not all files are treated equally. We make the pages of the files with
+	// higher weight stay in the page cache longer.
+	hits += get_file_weight(file_id);
 }

@@ -30,17 +30,16 @@
 
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "FGlib.h"
+#include "FG_vector.h"
+#include "ts_graph.h"
+
+namespace {
 
 const double BIN_SEARCH_RATIO = 10;
-const int HOUR_SECS = 3600;
-const int DAY_SECS = HOUR_SECS * 24;
-const int MONTH_SECS = DAY_SECS * 30;
-
-atomic_number<long> num_working_vertices;
-atomic_number<long> num_completed_vertices;
 
 time_t timestamp;
-time_t time_interval = 3600 * 24;
+time_t time_interval = 1;
 int num_time_intervals = 1;
 
 class scan_vertex: public compute_vertex
@@ -91,34 +90,6 @@ public:
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 	}
 };
-
-page_byte_array::seq_const_iterator<vertex_id_t> get_ts_iterator(
-		const page_directed_vertex &v, edge_type type, time_t time_start,
-		time_t time_interval)
-{
-	page_byte_array::const_iterator<ts_edge_data> begin_it
-		= v.get_data_begin<ts_edge_data>(type);
-	page_byte_array::const_iterator<ts_edge_data> end_it
-		= v.get_data_end<ts_edge_data>(type);
-	page_byte_array::const_iterator<ts_edge_data> ts_it = std::lower_bound(
-			begin_it, end_it, ts_edge_data(time_start));
-	// All timestamps are smaller than time_start
-	if (ts_it == end_it)
-		return v.get_neigh_seq_it(type, 0, 0);
-	size_t start = ts_it - begin_it;
-
-	page_byte_array::const_iterator<ts_edge_data> ts_end_it = std::lower_bound(
-			begin_it, end_it, time_start + time_interval);
-	size_t end;
-	if (ts_end_it == end_it
-			|| (*ts_end_it).get_timestamp() >= time_start + time_interval)
-		end = end_it - begin_it;
-	else
-		// The timestamp pointed by ts_end_t may be covered by the range.
-		end = ts_end_it - begin_it + 1;
-
-	return v.get_neigh_seq_it(type, start, end);
-}
 
 size_t scan_vertex::count_edges(const page_directed_vertex &v,
 		const std::vector<vertex_id_t> *neighbors, time_t timestamp,
@@ -225,9 +196,6 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 	assert(neighbors == NULL);
 	assert(num_joined == 0);
 
-	long ret = num_working_vertices.inc(1);
-	if (ret % 100000 == 0)
-		printf("%ld working vertices\n", ret);
 	std::vector<vertex_id_t> in_neighbors;
 	std::vector<vertex_id_t> out_neighbors;
 	get_neighbors(vertex, edge_type::IN_EDGE, timestamp, time_interval,
@@ -236,12 +204,8 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 			out_neighbors);
 	std::sort(in_neighbors.begin(), in_neighbors.end());
 	std::sort(out_neighbors.begin(), out_neighbors.end());
-	if (in_neighbors.size() + out_neighbors.size() == 0) {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+	if (in_neighbors.size() + out_neighbors.size() == 0)
 		return;
-	}
 
 	local_scans = new std::vector<size_t>(num_time_intervals);
 	neighbors = new std::vector<vertex_id_t>(
@@ -279,9 +243,6 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 		delete neighbors;
 		local_scans = NULL;
 		neighbors = NULL;
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
 		return;
 	}
 
@@ -337,10 +298,6 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (num_joined == (int) neighbors->size()) {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
-
 		double avg = 0;
 		if (num_time_intervals - 1 > 0) {
 			double sum = 0;
@@ -372,100 +329,24 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 	}
 }
 
-void int_handler(int sig_num)
-{
-#ifdef PROFILER
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-#endif
-	exit(0);
 }
 
-void print_usage()
+#include "save_result.h"
+FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
+		time_t interval, int num_intervals)
 {
-	fprintf(stderr,
-			"scan-statistics conf_file graph_file index_file [output_file]\n");
-	fprintf(stderr, "-c conf\n");
-	fprintf(stderr, "-n num: the number of time intervals\n");
-	fprintf(stderr, "-m: use month for time unit\n");
-	fprintf(stderr, "-d: use day for time unit\n");
-	fprintf(stderr, "-h: use hour for time unit\n");
-	fprintf(stderr, "-o output: the output file\n");
-	fprintf(stderr, "-t time: the start time\n");
-	fprintf(stderr, "-i time: the length of time interval\n");
-	graph_conf.print_help();
-	params.print_help();
-	exit(-1);
-}
-
-int main(int argc, char *argv[])
-{
-	printf("time_t size: %ld\n", sizeof(time_t));
-	int opt;
-	int num_opts = 0;
-	std::string confs;
-	std::string output_file;
-	int time_unit = 1;
-	while ((opt = getopt(argc, argv, "c:n:mdho:t:i:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 'n':
-				num_time_intervals = atoi(optarg);
-				num_opts++;
-				break;
-			case 'm':
-				time_unit = MONTH_SECS;
-				break;
-			case 'd':
-				time_unit = DAY_SECS;
-				break;
-			case 'h':
-				time_unit = HOUR_SECS;
-				break;
-			case 'o':
-				output_file = optarg;
-				num_opts++;
-				break;
-			case 't':
-				timestamp = atol(optarg);
-				num_opts++;
-				break;
-			case 'i':
-				time_interval = atol(optarg);
-				num_opts++;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	timestamp *= time_unit;
-	time_interval *= time_unit;
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
-	if (argc < 3) {
-		print_usage();
-		exit(1);
-	}
-
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
-
-	config_map configs(conf_file);
-	signal(SIGINT, int_handler);
+	timestamp = start_time;
+	time_interval = interval;
+	num_time_intervals = num_intervals;
 
 	graph_index::ptr index = NUMA_graph_index<scan_vertex>::create(
-			index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
 	assert(graph->get_graph_header().get_graph_type() == graph_type::DIRECTED);
 	assert(graph->get_graph_header().has_edge_data());
-	printf("scan statistics starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	printf("scan statistics starts, start: %ld, interval: %ld, #interval: %d\n",
+			timestamp, time_interval, num_time_intervals);
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -482,35 +363,8 @@ int main(int argc, char *argv[])
 		ProfilerStop();
 #endif
 	printf("It takes %f seconds\n", time_diff(start, end));
-	printf("There are %ld vertices\n", index->get_num_vertices());
-	printf("process %ld vertices and complete %ld vertices\n",
-			num_working_vertices.get(), num_completed_vertices.get());
 
-	double max_res = LONG_MIN;
-	vertex_id_t max_v = -1;
-	graph_index::const_iterator it = index->begin();
-	graph_index::const_iterator end_it = index->end();
-	for (; it != end_it; ++it) {
-		const scan_vertex &v = (const scan_vertex &) *it;
-		if (max_res < v.get_result()) {
-			max_v = v.get_id();
-			max_res = v.get_result();
-		}
-	}
-	printf("max value is on v%ld: %f\n", (unsigned long) max_v, max_res);
-
-	if (!output_file.empty()) {
-		FILE *f = fopen(output_file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			return -1;
-		}
-		graph_index::const_iterator it = index->begin();
-		graph_index::const_iterator end_it = index->end();
-		for (; it != end_it; ++it) {
-			const scan_vertex &v = (const scan_vertex &) *it;
-			fprintf(f, "\"%ld\" %f\n", (unsigned long) v.get_id(), v.get_result());
-		}
-		fclose(f);
-	}
+	FG_vector<float>::ptr vec = FG_vector<float>::create(graph);
+	graph->query_on_all(vertex_query::ptr(new save_query<float, scan_vertex>(vec)));
+	return vec;
 }

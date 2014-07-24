@@ -25,6 +25,48 @@
 #include "thread.h"
 #include "common.h"
 
+static void bind2node_id(int node_id)
+{
+	struct bitmask *bmp = numa_allocate_nodemask();
+	numa_bitmask_setbit(bmp, node_id);
+	numa_bind(bmp);
+	numa_free_nodemask(bmp);
+}
+
+#if 0
+static int get_numa_run_node()
+{
+	struct bitmask *bmp = numa_get_run_node_mask();
+	int nbytes = numa_bitmask_nbytes(bmp);
+	int num_nodes = 0;
+	int node_id = -1;
+	int i;
+	for (i = 0; i < nbytes * 8; i++)
+		if (numa_bitmask_isbitset(bmp, i)) {
+			num_nodes++;
+			printf("bind to node %d\n", i);
+			node_id = i;
+		}
+	return node_id;
+}
+
+static int numa_get_mem_node()
+{
+	struct bitmask *bmp = numa_get_membind();
+	int nbytes = numa_bitmask_nbytes(bmp);
+	int num_nodes = 0;
+	int node_id = -1;
+	int i;
+	for (i = 0; i < nbytes * 8; i++)
+		if (numa_bitmask_isbitset(bmp, i)) {
+			num_nodes++;
+			node_id = i;
+		}
+	assert(num_nodes == 1);
+	return node_id;
+}
+#endif
+
 void *thread_run(void *arg)
 {
 	thread *t = (thread *) arg;
@@ -32,8 +74,10 @@ void *thread_run(void *arg)
 	t->tid = gettid();
 
 	int node_id = t->get_node_id();
-	if (node_id >= 0)
+	if (node_id >= 0) {
 		bind2node_id(node_id);
+		numa_set_bind_policy(1);
+	}
 	t->init();
 	while (t->is_running()) {
 		t->run();

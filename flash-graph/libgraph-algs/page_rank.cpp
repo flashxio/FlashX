@@ -68,6 +68,10 @@ public:
     return curr_itr_pr;
   }
 
+  float get_result() const {
+	  return get_curr_itr_pr();
+  }
+
   void run(vertex_program &prog);
 
 	void run(vertex_program &prog, const page_vertex &vertex);
@@ -76,10 +80,10 @@ public:
 /* Only serves to activate on the next iteration */
 			const vertex_message &msg) { }; 
 
-	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges,
-			vsize_t num_out_edges) {
-		assert(get_id() == id);
-		this->num_out_edges = num_out_edges;
+	void run_on_vertex_header(vertex_program &, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		directed_vertex_header &dheader = (directed_vertex_header &) header;
+		this->num_out_edges = dheader.get_num_out_edges();
 	}
 };
 
@@ -87,7 +91,7 @@ void pgrank_vertex::run(vertex_program &prog)
 {
 	vertex_id_t id = get_id();
 	if (pr_stage == pr_stage_t::INIT) {
-		request_num_edges(&id, 1);
+		request_vertex_headers(&id, 1);
 	}
 	else if (pr_stage == pr_stage_t::RUN) {
 		// We perform pagerank for at most `num_iters' iterations.
@@ -153,7 +157,7 @@ public:
 		this->new_pr = curr_itr_pr;
 	}
 
-	float get_curr_itr_pr() const{
+	float get_result() const{
 		return new_pr;
 	}
 
@@ -190,30 +194,9 @@ void pgrank_vertex2::run(vertex_program &prog, const page_vertex &vertex)
 	}
 }
 
-template<class vertex_type>
-class fetch_vertex_query: public vertex_query
-{
-	FG_vector<float>::ptr pr_vec;
-public:
-	fetch_vertex_query(FG_vector<float>::ptr vec) {
-		this->pr_vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		vertex_type &pr_v = (vertex_type &) v;
-		pr_vec->set(pr_v.get_id(), pr_v.get_curr_itr_pr());
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new fetch_vertex_query<vertex_type>(pr_vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
@@ -247,7 +230,7 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 	FG_vector<float>::ptr ret = FG_vector<float>::create(
 			graph->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new fetch_vertex_query<pgrank_vertex>(ret)));
+				new save_query<float, pgrank_vertex>(ret)));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -287,7 +270,7 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 	FG_vector<float>::ptr ret = FG_vector<float>::create(
 			graph->get_num_vertices());
 	graph->query_on_all(vertex_query::ptr(
-				new fetch_vertex_query<pgrank_vertex2>(ret)));
+				new save_query<float, pgrank_vertex2>(ret)));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

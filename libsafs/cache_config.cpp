@@ -31,6 +31,16 @@
 page_cache *cache_config::create_cache_on_node(int node_id,
 		int max_num_pending_flush) const
 {
+	create_cache_thread t(*this, max_num_pending_flush,
+			"create_cache_thread", node_id);
+	t.start();
+	t.join();
+	return t.get_cache();
+}
+
+page_cache *cache_config::__create_cache_on_node(int node_id,
+		int max_num_pending_flush) const
+{
 	page_cache *cache;
 	switch (get_type()) {
 #if 0
@@ -50,6 +60,26 @@ page_cache *cache_config::create_cache_on_node(int node_id,
 			exit(1);
 	}
 	return cache;
+}
+
+int cache_config::create_cache_on_nodes(const std::vector<int> &node_ids,
+		int max_num_pending_flush, std::vector<page_cache *> &caches) const
+{
+	std::vector<create_cache_thread *> threads(node_ids.size());
+	for (size_t i = 0; i < node_ids.size(); i++) {
+		int node_id = node_ids[i];
+		threads[i] = new create_cache_thread(*this, max_num_pending_flush,
+				"create_cache_thread", node_id);
+		threads[i]->start();
+	}
+	caches.resize(node_ids.size());
+	for (size_t i = 0; i < node_ids.size(); i++) {
+		threads[i]->join();
+		caches[i] = threads[i]->get_cache();
+		assert(caches[i]->get_node_id() == node_ids[i]);
+		delete threads[i];
+	}
+	return node_ids.size();
 }
 
 void cache_config::destroy_cache_on_node(page_cache *cache) const

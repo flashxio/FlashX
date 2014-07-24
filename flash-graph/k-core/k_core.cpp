@@ -69,7 +69,7 @@ public:
   void run(vertex_program &prog) {
 	  if (stage == INIT_DEGREE) {
 		  vertex_id_t id = get_id();
-		  request_num_edges(&id, 1);
+		  request_vertex_headers(&id, 1);
 	  }
 	  else {
 		  if (degree > K) { return; }
@@ -85,8 +85,8 @@ public:
 
 	void run_on_message(vertex_program &prog, const vertex_message &msg); 
 
-	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
-		degree = num_edges;
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		degree = header.get_num_edges();
 	}
 };
 

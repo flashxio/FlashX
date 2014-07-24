@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -I../include $(OMP_FLAG)
 LDFLAGS += $(OMP_FLAG)
 
-all: libgraph graph-bfs sssp sstsg unit-test tools graph-stat test k-core matrix libgraph-algs test-algs LOL
+all: libgraph graph-bfs sssp sstsg unit-test tools test k-core matrix libgraph-algs test-algs LOL
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -44,9 +44,6 @@ tools: libgraph
 
 unit-test: libgraph
 	$(MAKE) -C unit-test
-
-graph-stat: libgraph
-	$(MAKE) -C graph-stat
 
 test: libgraph
 	$(MAKE) -C test
@@ -75,7 +72,6 @@ clean:
 	$(MAKE) clean -C sssp
 	$(MAKE) clean -C test
 	$(MAKE) clean -C sstsg
-	$(MAKE) clean -C graph-stat
 	$(MAKE) clean -C k-core
 	$(MAKE) clean -C matrix
 	$(MAKE) clean -C libgraph-algs

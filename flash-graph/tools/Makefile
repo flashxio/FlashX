@@ -18,10 +18,10 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L../../libsafs -lsafs -L.. -lgraph -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: el2al print_ts_graph graph_merger rmat-gen
+all: el2al print_ts_graph graph_merger rmat-gen graph-stat
 
 el2al: el2al.o ext_mem_vertex_iterator.o ../libgraph.a
 	$(CXX) -o el2al el2al.o ext_mem_vertex_iterator.o $(LDFLAGS)
@@ -35,6 +35,9 @@ print_ts_graph: print_ts_graph.o ../libgraph.a
 rmat-gen: rmat-gen.o
 	$(CXX) -o rmat-gen rmat-gen.o
 
+graph-stat: graph-stat.o ../libgraph.a
+	$(CXX) -o graph-stat graph-stat.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -43,5 +46,6 @@ clean:
 	rm -f graph_merger
 	rm -f print_ts_graph
 	rm -f rmat-gen
+	rm -f graph-stat
 
 -include $(DEPS) 

@@ -25,6 +25,10 @@ public:
 		return 2;
 	}
 
+	bool merge(const data_check &task) {
+		return false;
+	}
+
 	void run(int32_t values[], int num) {
 		assert(num == 2);
 		assert(int_arr[idx] == values[0]);

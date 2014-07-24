@@ -57,7 +57,7 @@ public:
  */
 class default_vertex_queue: public active_vertex_queue
 {
-	static const size_t VERTEX_BUF_SIZE = 1024 * 1024;
+	static const size_t VERTEX_BUF_SIZE = 10 * 1024;
 	pthread_spinlock_t lock;
 	// It contains the offset of the vertex in the local partition
 	// instead of the real vertex Ids.
@@ -211,6 +211,7 @@ class worker_thread: public thread
 	std::unique_ptr<bitmap> next_activated_vertices;
 	// This contains the vertices activated in the current level.
 	std::unique_ptr<active_vertex_queue> curr_activated_vertices;
+	vertex_scheduler::ptr scheduler;
 
 	// Indicate that we need to start all vertices.
 	bool start_all;
@@ -274,6 +275,12 @@ public:
 	}
 
 	vertex_compute *get_vertex_compute(compute_vertex &v);
+	vertex_compute *get_vertex_compute(vertex_id_t id) const {
+		std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
+			= active_computes.find(id);
+		assert(it != active_computes.end());
+		return it->second;
+	}
 
 	/**
 	 * Activate the vertex in its own partition for the next iteration.
@@ -289,7 +296,8 @@ public:
 	void return_vertices(vertex_id_t ids[], int num);
 
 	size_t get_num_local_vertices() const {
-		return next_activated_vertices->get_num_bits();
+		return graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices());
 	}
 
 	int get_worker_id() const {

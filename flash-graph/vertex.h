@@ -98,6 +98,55 @@ public:
 	}
 };
 
+/**
+ * The information of vertex header.
+ * It contains the vertex ID and the number of edges.
+ */
+class vertex_header
+{
+	vertex_id_t id;
+	vsize_t num_edges;
+public:
+	vertex_header(vertex_id_t id, vsize_t num_edges) {
+		this->id = id;
+		this->num_edges = num_edges;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
+	}
+
+	vsize_t get_num_edges() const {
+		return num_edges;
+	}
+};
+
+/**
+ * The information of directed vertex header.
+ * In addition to the vertex header, it has the number of in-edges
+ * and out-edges.
+ */
+class directed_vertex_header: public vertex_header
+{
+	vsize_t num_in_edges;
+	vsize_t num_out_edges;
+public:
+	directed_vertex_header(vertex_id_t id, vsize_t num_in_edges,
+			vsize_t num_out_edges): vertex_header(id,
+				num_in_edges + num_out_edges) {
+		this->num_in_edges = num_in_edges;
+		this->num_out_edges = num_out_edges;
+	}
+
+	vsize_t get_num_in_edges() const {
+		return num_in_edges;
+	}
+
+	vsize_t get_num_out_edges() const {
+		return num_out_edges;
+	}
+};
+
 class empty_data
 {
 public:
@@ -663,7 +712,7 @@ public:
 			return ((size_t) get_edge_data_addr()) - ((size_t) this)
 				+ (num_edges) * edge_data_size;
 		else
-			return ext_mem_directed_vertex::get_header_size()
+			return ext_mem_undirected_vertex::get_header_size()
 				+ (num_edges) * sizeof(neighbors[0]);
 	}
 
@@ -1036,6 +1085,40 @@ public:
 		return it;
 	}
 
+	/**
+     * \brief Get a java-style sequential const iterator for edge data
+	 *        with additional parameters to define the range to iterate.
+     * \return A sequential const iterator.
+     * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`, 
+     *          `OUT_EDGE`, `BOTH_EDGES`.
+	 * \param start The starting offset in the edge list.
+	 * \param end The end offset in the edge list.
+	 */
+	template<class edge_data_type>
+	page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+			edge_type type, size_t start, size_t end) const {
+		// TODO we currently don't support to request a partial vertex.
+		assert(!partial);
+		off_t edge_end
+			= ext_mem_directed_vertex::get_edge_data_offset(
+					num_in_edges, num_out_edges, sizeof(edge_data_type));
+		switch(type) {
+			case IN_EDGE:
+			case BOTH_EDGES:
+				assert(end <= get_num_edges(type));
+				return array.get_seq_iterator<edge_data_type>(
+						edge_end + start * sizeof(edge_data_type),
+						edge_end + end * sizeof(edge_data_type));
+			case OUT_EDGE:
+				assert(end <= num_out_edges);
+				return array.get_seq_iterator<edge_data_type>(
+						edge_end + (num_in_edges + start) * sizeof(edge_data_type),
+						edge_end + (num_in_edges + end) * sizeof(edge_data_type));
+			default:
+				assert(0);
+		}
+	}
+
     /**
      * \brief Get a java-style sequential const iterator that iterates
 	 *        the edge data list.
@@ -1043,29 +1126,12 @@ public:
      * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`, 
      *          `OUT_EDGE`, `BOTH_EDGES`.
      */
-	// TODO add start, end.
 	template<class edge_data_type>
 	page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
 			edge_type type) const {
-		// TODO we currently don't support to request a partial vertex.
-		assert(!partial);
-		off_t edge_end
-			= ext_mem_directed_vertex::get_edge_data_offset(
-					num_in_edges, num_out_edges, sizeof(edge_data_type));
-		int num_edges = num_in_edges + num_out_edges;
-		switch(type) {
-			case IN_EDGE:
-			case BOTH_EDGES:
-				return array.get_seq_iterator<edge_data_type>(
-						edge_end, edge_end
-						+ get_num_edges(type) * sizeof(edge_data_type));
-			case OUT_EDGE:
-				return array.get_seq_iterator<edge_data_type>(
-						edge_end + num_in_edges * sizeof(edge_data_type),
-						edge_end + (num_edges) * sizeof(edge_data_type));
-			default:
-				assert(0);
-		}
+		size_t start = 0;
+		size_t end = get_num_edges(type);
+		return get_data_seq_it<edge_data_type>(type, start, end);
 	}
     
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],

@@ -197,8 +197,6 @@ void remote_io::access(io_request *requests, int num,
 			// I still use the default memory allocator, but since it is used
 			// when the request size is large, it should normally be OK.
 			// TODO I can use slab allocators later.
-			printf("new remote_orig_io_request has %ld bytes, io_request has %ld bytes\n",
-					sizeof(remote_orig_io_request), sizeof(io_request));
 			remote_orig_io_request *orig = new remote_orig_io_request();
 			// global_cached_io doesn't issue requests across a block boundary.
 			// It can only be application issued requst, so it shouldn't have

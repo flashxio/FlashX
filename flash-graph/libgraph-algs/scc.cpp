@@ -136,6 +136,8 @@ public:
 };
 
 enum scc_stage_t {
+	// Initialize #edges.
+	INIT,
 	// Trim vertices with only in-edges or out-edges
 	TRIM1,
 	// Trim vertices in a SCC of size 2.
@@ -322,8 +324,6 @@ class scc_vertex: public compute_directed_vertex
 public:
 	scc_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		comp_id = INVALID_VERTEX_ID;
-		// TODO init #edges
-		assert(0);
 		num_in_edges = 0;
 		num_out_edges = 0;
 	}
@@ -383,6 +383,9 @@ public:
 			return;
 
 		switch(scc_stage) {
+			case scc_stage_t::INIT:
+				run_stage_init(prog);
+				break;
 			case scc_stage_t::TRIM1:
 				run_stage_trim1(prog);
 				break;
@@ -405,6 +408,11 @@ public:
 			default:
 				assert(0);
 		}
+	}
+
+	void run_stage_init(vertex_program &prog) {
+		vertex_id_t id = get_id();
+		request_vertex_headers(&id, 1);
 	}
 
 	void run_stage_trim1(vertex_program &prog);
@@ -485,6 +493,19 @@ public:
 	void run_on_message_stage_FWBW(vertex_program &prog, const vertex_message &msg);
 	void run_on_message_stage_part(vertex_program &prog, const vertex_message &msg);
 	void run_on_message_stage_wcc(vertex_program &prog, const vertex_message &msg);
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		const directed_vertex_header &dheader = (const directed_vertex_header &) header;
+		this->num_in_edges = dheader.get_num_in_edges();
+		this->num_out_edges = dheader.get_num_out_edges();
+	}
+
+	vertex_id_t get_result() const {
+		if (get_degree() > 0)
+			return get_comp_id();
+		else
+			return INVALID_VERTEX_ID;
+	}
 };
 
 class part_vertex_program: public vertex_program_impl<scc_vertex>
@@ -1087,35 +1108,9 @@ public:
 	}
 };
 
-/**
- * This query is to save the component IDs to a FG vector.
- */
-class save_cid_query: public vertex_query
-{
-	FG_vector<vertex_id_t>::ptr vec;
-public:
-	save_cid_query(FG_vector<vertex_id_t>::ptr vec) {
-		this->vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		scc_vertex &scc_v = (scc_vertex &) v;
-		if (scc_v.get_degree() > 0)
-			vec->set(scc_v.get_id(), scc_v.get_comp_id());
-		else
-			vec->set(scc_v.get_id(), INVALID_VERTEX_ID);
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_cid_query(vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
@@ -1134,9 +1129,16 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 	size_t num_comp1 = 0;
 
 	struct timeval start, end, scc_start;
-	scc_stage = scc_stage_t::TRIM1;
+	scc_stage = scc_stage_t::INIT;
 	gettimeofday(&start, NULL);
 	scc_start = start;
+	graph->start_all();
+	graph->wait4complete();
+	gettimeofday(&end, NULL);
+	printf("init takes %f seconds.\n", time_diff(start, end));
+
+	scc_stage = scc_stage_t::TRIM1;
+	gettimeofday(&start, NULL);
 	graph->start_all(vertex_initializer::ptr(new trim1_initializer()),
 			vertex_program_creater::ptr(new trim_vertex_program_creater()));
 	graph->wait4complete();
@@ -1267,6 +1269,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 				time_diff(start, end), fwbw_vertices);
 		printf("There are %ld vertices left unassigned\n", active_vertices.size());
 	} while (!active_vertices.empty());
+	printf("scc takes %f seconds\n", time_diff(scc_start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -1274,6 +1277,7 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 #endif
 
 	FG_vector<vertex_id_t>::ptr vec = FG_vector<vertex_id_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_cid_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<vertex_id_t, scc_vertex>(vec)));
 	return vec;
 }

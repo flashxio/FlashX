@@ -48,29 +48,25 @@ protected:
 		return index_size;
 	}
 
+	class destroy_index
+	{
+	public:
+		void operator()(vertex_index *index) {
+			free(index);
+		}
+	};
+
 public:
-	static vertex_index *load(const std::string &index_file) {
-		native_file local_f(index_file);
-		ssize_t size = local_f.get_size();
-		assert(size > 0);
-		assert((size_t) size >= sizeof(vertex_index));
-		char *buf = (char *) malloc(size);
-		assert(buf);
-		FILE *fd = fopen(index_file.c_str(), "r");
-		size_t ret = fread(buf, size, 1, fd);
-		assert(ret == 1);
-		fclose(fd);
+	typedef std::shared_ptr<vertex_index> ptr;
 
-		vertex_index *idx = (vertex_index *) buf;
-		assert((size_t) size >= idx->index_size);
-		idx->header.verify();
-
-		return idx;
-	}
-
-	static void destroy(vertex_index *index) {
-		free(index);
-	}
+	/*
+	 * Load the vertex index from SAFS.
+	 */
+	static vertex_index::ptr safs_load(const std::string &index_file);
+	/*
+	 * Load the vertex index from the Linux filesystem.
+	 */
+	static vertex_index::ptr load(const std::string &index_file);
 
 	static size_t get_header_size() {
 		return sizeof(vertex_index);
@@ -126,15 +122,25 @@ protected:
 		memset(vertices, 0, sizeof(vertices[0]) * num);
 	}
 public:
+	typedef std::shared_ptr<vertex_index_temp<vertex_entry_type> > ptr;
+
+	static typename vertex_index_temp<vertex_entry_type>::ptr cast(
+			vertex_index::ptr index) {
+		return std::static_pointer_cast<vertex_index_temp<vertex_entry_type>,
+			   vertex_index>(index);
+	}
+
 	template<class vertex_type>
-	static vertex_index_temp<vertex_entry_type> *create(const graph_header &header,
+	static typename vertex_index_temp<vertex_entry_type>::ptr create(
+			const graph_header &header,
 			const std::vector<vertex_type> &vertices) {
 		void *addr = malloc(sizeof(vertex_index_temp<vertex_entry_type>)
 				+ sizeof(vertex_entry_type) * vertices.size());
 		assert(addr);
 		assert(header.get_num_vertices() == vertices.size());
-		vertex_index_temp<vertex_entry_type> *index
-			= new (addr) vertex_index_temp<vertex_entry_type>(vertices.size());
+		vertex_index_temp<vertex_entry_type>::ptr index(
+				new (addr) vertex_index_temp<vertex_entry_type>(vertices.size()),
+				destroy_index());
 		index->header = header;
 		assert(sizeof(index->header) == PAGE_SIZE);
 		// All data of adjacency lists are stored after the header.
@@ -152,7 +158,8 @@ public:
 	}
 
 	template<class vertex_type>
-	static vertex_index_temp<vertex_entry_type> *create(const graph_header &header,
+	static typename vertex_index_temp<vertex_entry_type>::ptr create(
+			const graph_header &header,
 			const std::map<vertex_id_t, vertex_type> &vertices) {
 		assert(!vertices.empty());
 		vsize_t num_vertices = vertices.rbegin()->first + 1;
@@ -161,8 +168,9 @@ public:
 				+ sizeof(vertex_entry_type) * num_vertices);
 		assert(addr);
 		assert(header.get_num_vertices() == num_vertices);
-		vertex_index_temp<vertex_entry_type> *index
-			= new (addr) vertex_index_temp<vertex_entry_type>(num_vertices);
+		vertex_index_temp<vertex_entry_type>::ptr index(
+				new (addr) vertex_index_temp<vertex_entry_type>(num_vertices),
+				destroy_index());
 		index->header = header;
 		assert(sizeof(index->header) == PAGE_SIZE);
 		// All data of adjacency lists are stored after the header.
@@ -243,10 +251,16 @@ class default_in_mem_vertex_index;
 class default_vertex_index: public vertex_index_temp<vertex_offset>
 {
 public:
-	static default_vertex_index *load(const std::string &index_file) {
-		default_vertex_index *ret
-			= (default_vertex_index *) vertex_index_temp<vertex_offset>::load(
-					index_file);
+	typedef std::shared_ptr<default_vertex_index> ptr;
+
+	static default_vertex_index::ptr cast(vertex_index::ptr index) {
+		return std::static_pointer_cast<default_vertex_index, vertex_index>(
+				index);
+	}
+
+	static default_vertex_index::ptr load(const std::string &index_file) {
+		default_vertex_index::ptr ret
+			= cast(vertex_index_temp<vertex_offset>::load(index_file));
 		ret->verify();
 		return ret;
 	}
@@ -311,10 +325,16 @@ class directed_vertex_index: public vertex_index_temp<directed_vertex_entry>
 	directed_vertex_index() {
 	}
 public:
-	static directed_vertex_index *load(const std::string &index_file) {
-		directed_vertex_index *ret
-			= (directed_vertex_index *) vertex_index_temp<directed_vertex_entry>::load(
-					index_file);
+	typedef std::shared_ptr<directed_vertex_index> ptr;
+
+	static directed_vertex_index::ptr cast(vertex_index::ptr index) {
+		return std::static_pointer_cast<directed_vertex_index, vertex_index>(
+				index);
+	}
+
+	static directed_vertex_index::ptr load(const std::string &index_file) {
+		directed_vertex_index::ptr ret
+			= cast(vertex_index_temp<directed_vertex_entry>::load(index_file));
 		ret->verify();
 		return ret;
 	}

@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 	size_t ret = fread(adj_list, adj_file_size, 1, f);
 	assert(ret == 1);
 
-	default_vertex_index *index = default_vertex_index::load(index_file_name);
+	default_vertex_index::ptr index = default_vertex_index::load(index_file_name);
 	int num_edges = 0;
 	int num_vertices = 0;
 	for (size_t i = 0; i < index->get_num_vertices(); i++) {

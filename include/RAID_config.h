@@ -23,7 +23,9 @@
 #include <vector>
 #include <set>
 
-#include "file_mapper.h"
+#include "safs_file.h"
+
+class file_mapper;
 
 enum {
 	RAID0,
@@ -36,7 +38,10 @@ class RAID_config
 	std::string conf_file;
 	int RAID_mapping_option;
 	int RAID_block_size;
-	std::vector<file_info> root_paths;
+	std::vector<part_file_info> root_paths;
+
+	static int retrieve_data_files(std::string file_file,
+			std::vector<part_file_info> &data_files);
 public:
 	RAID_config() {
 	}
@@ -64,11 +69,11 @@ public:
 	 */
 	std::set<int> get_node_ids() const;
 
-	const file_info &get_disk(int idx) const {
+	const part_file_info &get_disk(int idx) const {
 		return root_paths[idx];
 	}
 
-	int get_disks(std::vector<file_info> &disks) const {
+	int get_disks(std::vector<part_file_info> &disks) const {
 		disks = root_paths;
 		return disks.size();
 	}

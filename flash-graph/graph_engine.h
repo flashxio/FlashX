@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <atomic>
+
 #include "thread.h"
 #include "container.h"
 #include "concurrency.h"
@@ -74,7 +76,14 @@ public:
 	 */
 	void request_vertices(vertex_id_t ids[], size_t num);
 
-	void request_num_edges(vertex_id_t ids[], size_t num);
+	/**
+	 * \brief This requests the vertex headers. It mainly contains the number
+	 *        of edges (the number of in-edges and out-edges for directed
+	 *        vertices).
+	 * \param ids The IDs of vertices.
+     * \param num The number of vertex IDs you are requesting.
+	 */
+	void request_vertex_headers(vertex_id_t ids[], size_t num);
 
     /**
      * \brief Get its own vertex ID.
@@ -92,10 +101,9 @@ public:
 	void notify_iteration_end(vertex_program & prog) {
 	}
 
-	void run_on_num_dedges(vertex_id_t id, vsize_t num_in_edges, vsize_t num_out_edges) {
-	}
-
-	void run_on_num_edges(vertex_id_t id, vsize_t num_edges) {
+	void run_on_vertex_header(vertex_program &prog,
+			const vertex_header &header) {
+		assert(0);
 	}
 };
 
@@ -126,7 +134,6 @@ public:
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 };
 
-#if 0
 /**
  *  \brief Time series compute vertex used for time series graph analytics.
  */
@@ -139,19 +146,7 @@ public:
 	compute_ts_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
-    /**
-	 * \internal
-     * \brief This is called by graph engine with a mapping for
-     *         vertex adjacency lists on disk.
-     * \param index A mapping for vertex adjacency lists on disk.
-     */
-	void init_vertex(const vertex_index &index) {
-		assert(index.get_graph_header().get_graph_type()
-				== graph_type::TS_DIRECTED
-				|| index.get_graph_header().get_graph_type()
-				== graph_type::TS_UNDIRECTED);
-	}
-
+#if 0
 	/**
      * \brief This allows a vertex to request partial vertices in the graph. <br>
      *  **Defn: ""partial vertices""** -- Part of a vertex's data. Specifically
@@ -164,8 +159,8 @@ public:
 	 * This allows a vertex to request partial vertices in the graph.
 	 */
 	void request_partial_vertices(ts_vertex_request reqs[], size_t num);
-};
 #endif
+};
 
 /**
  * \breif Order the position of vertex processing via this scheduler.
@@ -262,9 +257,12 @@ class worker_thread;
 */
 class graph_engine
 {
+	static std::atomic<size_t> init_count;
+
 	int vertex_header_size;
 	graph_header header;
 	graph_index::ptr vertices;
+	vertex_index::ptr vindex;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
 	vertex_scheduler::ptr scheduler;
 
@@ -303,6 +301,9 @@ protected:
 			const config_map &configs);
 public:
 	typedef std::shared_ptr<graph_engine> ptr; /** Smart pointer for object access.*/
+
+	static void init_flash_graph(const config_map &configs);
+	static void destroy_flash_graph();
     
     /**
      * \brief Use this method to in lieu of a constructor to create a graph object.
@@ -555,6 +556,22 @@ public:
 
 	int get_vertex_header_size() const {
 		return vertex_header_size;
+	}
+
+	/*
+	 * \internal Get the in-memory vertex index.
+	 */
+	vertex_index::ptr get_in_mem_index() const {
+		assert(vindex);
+		return vindex;
+	}
+
+	void set_max_processing_vertices(int max) {
+		max_processing_vertices = max;
+	}
+
+	int get_max_processing_vertices() const {
+		return max_processing_vertices;
 	}
 };
 

@@ -33,6 +33,7 @@ class KV_compute: public user_compute
 {
 	embedded_array<ValueTaskType> tasks;
 	int num_tasks;
+	int num_added_tasks;
 	bool has_run;
 	simple_KV_store<ValueType, ValueTaskType> *store;
 public:
@@ -40,6 +41,7 @@ public:
 			compute_allocator *alloc): user_compute(alloc) {
 		this->store = store;
 		num_tasks = 0;
+		num_added_tasks = 0;
 		has_run = false;
 	}
 
@@ -48,9 +50,11 @@ public:
 	}
 
 	void add_task(const ValueTaskType &task) {
+		num_added_tasks++;
 		if (tasks.get_capacity() <= num_tasks)
 			tasks.resize(num_tasks * 2);
-		tasks[num_tasks++] = task;
+		if (num_tasks == 0 || !tasks[num_tasks - 1].merge(task))
+			tasks[num_tasks++] = task;
 		has_run = false;
 	}
 
@@ -75,7 +79,7 @@ public:
 			tasks[i].run(vs, num_entries);
 		}
 		has_run = true;
-		store->complete_tasks(num_tasks);
+		store->complete_tasks(num_added_tasks);
 	}
 
 	virtual bool has_completed() {
@@ -151,13 +155,23 @@ class simple_KV_store
 	io_interface::ptr io;
 	KV_compute_allocator<ValueType, TaskType> alloc;
 
-	struct task_comp {
+	struct task_comp_larger {
+		bool operator()(const TaskType task1, const TaskType task2) {
+			return task1.get_idx() >= task2.get_idx();
+		}
+	};
+	struct task_comp_smaller {
 		bool operator()(const TaskType &task1, const TaskType &task2) {
-			return task1.get_idx() > task2.get_idx();
+			return task1.get_idx() <= task2.get_idx();
+		}
+	};
+	struct task_less {
+		bool operator()(const TaskType &task1, const TaskType &task2) {
+			return task1.get_idx() < task2.get_idx();
 		}
 	};
 
-	std::priority_queue<TaskType, std::vector<TaskType>, task_comp> task_buf;
+	std::deque<TaskType> task_buf;
 	ssize_t num_pending_tasks;
 
 	embedded_array<io_request> req_buf;
@@ -173,6 +187,19 @@ class simple_KV_store
 	void flush_io_requests() {
 		io->access(req_buf.data(), num_reqs);
 		num_reqs = 0;
+	}
+
+	void sort_tasks() {
+		if (task_buf.size() < 2)
+			return;
+		if (task_buf[0].get_idx() > task_buf[1].get_idx()) {
+			if (std::is_sorted(task_buf.begin(), task_buf.end(), task_comp_larger()))
+				return;
+		}
+		else
+			if (std::is_sorted(task_buf.begin(), task_buf.end(), task_comp_smaller()))
+				return;
+		std::sort(task_buf.begin(), task_buf.end(), task_less());
 	}
 
 	simple_KV_store(io_interface::ptr io): alloc(this, io->get_node_id()) {
@@ -200,10 +227,11 @@ public:
 		// page. We'll merge requests if the pages touched by user tasks
 		// in the input array are adjacent to each other.
 
+		sort_tasks();
 		int avail_io_slots = io->get_remaining_io_slots();
 		// The offset of the first page accessed by the I/O request.
-		const TaskType task = task_buf.top();
-		task_buf.pop();
+		const TaskType task = task_buf.front();
+		task_buf.pop_front();
 		off_t first_page_off = ROUND_PAGE(task.get_idx() * sizeof(ValueType));
 		// The offset of the last page accessed by the I/O request.
 		// The page is excluded by the I/O request.
@@ -215,20 +243,17 @@ public:
 		while (!task_buf.empty()
 				// We have one more request outside of the while loop.
 				&& num_reqs < avail_io_slots - 1) {
-			const TaskType task = task_buf.top();
-			task_buf.pop();
+			const TaskType task = task_buf.front();
+			task_buf.pop_front();
+			off_t page_off = ROUND_PAGE(task.get_idx() * sizeof(ValueType));
 			off_t end_page_off = ROUNDUP_PAGE((task.get_idx()
 					+ task.get_num_entries()) * sizeof(ValueType));
-			// If the task access the page covered by the I/O request.
-			if (end_page_off <= last_page_off) {
+			// If the range overlaps.
+			if ((page_off >= first_page_off && page_off <= last_page_off)
+					|| (end_page_off >= first_page_off && end_page_off <= last_page_off)) {
 				compute->add_task(task);
-				continue;
-			}
-			// If the task access the page right behind the range covered
-			// by the I/O request.
-			else if (end_page_off == last_page_off + PAGE_SIZE) {
-				last_page_off = end_page_off;
-				compute->add_task(task);
+				first_page_off = std::min(page_off, first_page_off);
+				last_page_off = std::max(end_page_off, last_page_off);
 				continue;
 			}
 
@@ -256,8 +281,10 @@ public:
 	 * Serve user requests asynchronously.
 	 */
 	void async_request(TaskType &task) {
-		task_buf.push(task);
-		num_pending_tasks++;
+		if (task_buf.empty() || !task_buf.back().merge(task)) {
+			task_buf.push_back(task);
+			num_pending_tasks++;
+		}
 	}
 
 	void complete_tasks(int num_tasks) {

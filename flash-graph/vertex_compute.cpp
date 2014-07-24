@@ -53,7 +53,11 @@ request_range vertex_compute::get_next_request()
 void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 {
 	num_requested += num;
-	issue_thread->get_index_reader().request_vertices(ids, num, *this);
+	// We treat the request for itself differently from other requests.
+	if (num == 1 && ids[0] == get_id())
+		issue_thread->get_index_reader().request_vertices(ids, num, NULL);
+	else
+		issue_thread->get_index_reader().request_vertices(ids, num, this);
 }
 
 void vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)
@@ -66,7 +70,8 @@ void vertex_compute::run_on_vertex_size(vertex_id_t id, vsize_t size)
 {
 	size_t header_size = issue_thread->get_graph().get_vertex_header_size();
 	vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
-	issue_thread->get_vertex_program().run_on_num_edges(*v, id, num_edges);
+	vertex_header header(id, num_edges);
+	issue_thread->get_vertex_program().run_on_num_edges(*v, header);
 	num_edge_completed++;
 	if (get_num_pending() == 0)
 		issue_thread->complete_vertex(*v);
@@ -318,14 +323,18 @@ void directed_vertex_compute::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
 	num_requested += num;
-	issue_thread->get_index_reader().request_vertices(reqs, num, *this);
+	// We treat the request for itself differently from other requests.
+	if (num == 1 && reqs[0].get_id() == get_id())
+		issue_thread->get_index_reader().request_vertices(reqs, num, NULL);
+	else
+		issue_thread->get_index_reader().request_vertices(reqs, num, this);
 }
 
 void directed_vertex_compute::run_on_num_edges(vertex_id_t id,
 		vsize_t num_in_edges, vsize_t num_out_edges)
 {
-	issue_thread->get_vertex_program().run_on_num_edges(*v, id,
-			num_in_edges, num_out_edges);
+	directed_vertex_header header(id, num_in_edges, num_out_edges);
+	issue_thread->get_vertex_program().run_on_num_edges(*v, header);
 	num_edge_completed++;
 	if (get_num_pending() == 0)
 		issue_thread->complete_vertex(*v);
@@ -334,8 +343,8 @@ void directed_vertex_compute::run_on_num_edges(vertex_id_t id,
 void directed_vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)
 {
 	num_edge_requests += num;
-	((directed_vertex_index_reader &) issue_thread->get_index_reader(
-		)).request_num_directed_edges(ids, num, *this);
+	issue_thread->get_index_reader().request_num_directed_edges(ids,
+			num, *this);
 }
 
 #if 0

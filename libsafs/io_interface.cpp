@@ -112,12 +112,62 @@ const RAID_config &get_sys_RAID_conf()
 	return global_data.raid_conf;
 }
 
+static std::vector<int> file_weights;
+
+void set_file_weight(const std::string &file_name, int weight)
+{
+	file_mapper &mapper = file_mappers.get(file_name);
+	if ((size_t) mapper.get_file_id() >= file_weights.size())
+		file_weights.resize(mapper.get_file_id() + 1);
+	file_weights[mapper.get_file_id()] = weight;
+	printf("%s: id: %d, weight: %d\n", file_name.c_str(),
+			mapper.get_file_id(), weight);
+}
+
+void parse_file_weights(const std::string &str)
+{
+	std::vector<std::string> file_strs;
+	split_string(str, ',', file_strs);
+	if (file_strs.size() > 0)
+		file_weights.resize(file_strs.size());
+	BOOST_FOREACH(std::string s, file_strs) {
+		std::vector<std::string> ss;
+		split_string(s, ':', ss);
+		if (ss.size() != 2) {
+			printf("file weight in wrong format: %s\n", s.c_str());
+			continue;
+		}
+
+		int weight = atoi(ss[1].c_str());
+		set_file_weight(ss[0], weight);
+	}
+	// When we resize the vector, the files that are not assigned a weight
+	// get 0 as weight. We need to make their weight 1.
+	for (size_t i = 0; i < file_weights.size(); i++)
+		if (file_weights[i] == 0)
+			file_weights[i] = 1;
+}
+
+/*
+ * This method returns user-defined weight for a SAFS file in
+ * the configuration. If the weight isn't defined, return 1.
+ * By using this mechanism, users can tweak the performance of
+ * the page cache while dealing with multiple files.
+ */
+int get_file_weight(file_id_t file_id)
+{
+	if ((size_t) file_id < file_weights.size())
+		return file_weights[file_id];
+	else
+		return 1;
+}
+
 void init_io_system(const config_map &configs)
 {
 #ifdef ENABLE_MEM_TRACE
 	init_mem_tracker();
 #endif
-
+	
 	params.init(configs.get_options());
 	params.print();
 
@@ -137,6 +187,8 @@ void init_io_system(const config_map &configs)
 	init_aio(disk_node_ids);
 
 	file_mapper *mapper = raid_conf.create_file_mapper();
+	if (configs.has_option("file_weights"))
+		parse_file_weights(configs.get_option("file_weights"));
 	/* 
 	 * The mutex is enough to guarantee that all threads will see initialized
 	 * global data. The first thread that enters the critical area will

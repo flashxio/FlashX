@@ -338,6 +338,7 @@ void scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 		}
 	}
 
+#if 0
 	std::vector<ts_vertex_request> reqs(neighbors->size());
 	for (size_t i = 0; i < neighbors->size(); i++) {
 		vertex_id_t id = neighbors->at(i);
@@ -345,6 +346,8 @@ void scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 		reqs[i] = ts_vertex_request(id, range);
 	}
 	request_partial_vertices(reqs.data(), reqs.size());
+#endif
+	request_vertices(neighbors->data(), neighbors->size());
 }
 
 void scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &vertex)
@@ -461,6 +464,7 @@ int main(int argc, char *argv[])
 	printf("process %ld vertices and complete %ld vertices\n",
 			num_working_vertices.get(), num_completed_vertices.get());
 
+#if 0
 	double max_res = LONG_MIN;
 	vertex_id_t max_v = -1;
 	graph_index::const_iterator it = index->begin();
@@ -488,4 +492,5 @@ int main(int argc, char *argv[])
 		}
 		fclose(f);
 	}
+#endif
 }

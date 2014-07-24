@@ -198,9 +198,7 @@ public:
 		this->hits = hits;
 	}
 	/* the page is accessed */
-	void hit() {
-		hits++;
-	}
+	void hit();
 
 	virtual void inc_ref() {
 		refcnt++;
@@ -810,6 +808,8 @@ public:
 		 * \return the current element.
 		 */
 		T curr() const {
+			seq_const_iterator<T> *it = (seq_const_iterator<T> *) this;
+			assert(it->has_next());
 			return curr_page_it.curr();
 		}
 	};

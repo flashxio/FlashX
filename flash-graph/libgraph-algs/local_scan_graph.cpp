@@ -27,6 +27,8 @@
 
 namespace {
 
+scan_stage_t scan_stage;
+
 class count_msg: public vertex_message
 {
 	size_t num;
@@ -151,7 +153,10 @@ public:
 
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
-		request_vertices(&id, 1);
+		if (scan_stage == scan_stage_t::INIT)
+			request_vertex_headers(&id, 1);
+		else if (scan_stage == scan_stage_t::RUN)
+			request_vertices(&id, 1);
 	}
 
 	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
@@ -173,6 +178,10 @@ public:
 			local_value.get_runtime_data()->local_scan += msg.get_num();
 		else
 			local_value.inc_real_local(msg.get_num());
+	}
+
+	size_t get_result() const {
+		return get_local_scan();
 	}
 };
 
@@ -244,29 +253,9 @@ void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 	ls_v.finding_triangles_end(prog, data);
 }
 
-class save_scan_query: public vertex_query
-{
-	FG_vector<size_t>::ptr vec;
-public:
-	save_scan_query(FG_vector<size_t>::ptr vec) {
-		this->vec = vec;
-	}
-
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		local_scan_vertex &lv = (local_scan_vertex &) v;
-		vec->set(lv.get_id(), lv.get_local_scan());
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_scan_query(vec));
-	}
-};
-
 }
 
+#include "save_result.h"
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
 	finding_triangles_end = ls_finding_triangles_end;
@@ -286,6 +275,11 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
+	scan_stage = scan_stage_t::INIT;
+	graph->start_all();
+	graph->wait4complete();
+
+	scan_stage = scan_stage_t::RUN;
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
@@ -298,6 +292,7 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 			time_diff(start, end));
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_scan_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<size_t, local_scan_vertex>(vec)));
 	return vec;
 }

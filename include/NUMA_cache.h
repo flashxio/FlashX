@@ -40,11 +40,8 @@ public:
 		cache_conf = config;
 		std::vector<int> node_ids;
 		cache_conf->get_node_ids(node_ids);
-		for (size_t i = 0; i < node_ids.size(); i++) {
-			page_cache *cache = cache_conf->create_cache_on_node(node_ids[i],
-					max_num_pending_flush / node_ids.size());
-			caches[i] = cache;
-		}
+		cache_conf->create_cache_on_nodes(node_ids,
+				max_num_pending_flush / node_ids.size(), caches);
 	}
 
 	~NUMA_cache() {
