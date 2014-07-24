@@ -84,6 +84,16 @@ public:
 			eles[i] = v;
 	}
 
+	void init_rand(long max, unsigned int seed = 0) {
+		if (seed > 0)
+			srandom(seed);
+		if (max >= std::numeric_limits<T>::max())
+			max = std::numeric_limits<T>::max();
+#pragma omp parallel for
+		for (size_t i = 0; i < eles.size(); i++)
+			eles[i] = random();
+	}
+
   /**
     * \brief  Populate an [STL set](http://www.cplusplus.com/reference/set/set/)
     *         with the unique elements in the vector. All duplicates are ignored.
