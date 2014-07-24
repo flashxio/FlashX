@@ -1,7 +1,7 @@
 #ifndef __VERTEX_PROGRAM_H__
 #define __VERTEX_PROGRAM_H__
 
-/**
+/*
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Da Zheng (zhengda1936@gmail.com)
  *
@@ -33,7 +33,6 @@ class vertex_message;
 class worker_thread;
 
 /**
- * TODO: Verify, add more ??
  *  This class allows users to customize the default `vertex_program`.
  *  For instance extending this class can allow a user to easily create
  *  & manage per-thread data structures as opposed to per-vertex which is
@@ -70,9 +69,11 @@ public:
 	typedef std::shared_ptr<vertex_program> ptr; /**Smart pointer by which `vertex_program`s should be accessed.*/
     
     /** \brief Destructor */
-	~vertex_program();
+	virtual ~vertex_program();
     
-    /** \brief Initiate function a.k.a constructor.
+    /**
+	 * \internal
+	 * \brief Initiate function a.k.a constructor.
      *  \param graph The graph engine pointer.
      *  \param t The array of worker threads running the program.
      */
@@ -90,22 +91,22 @@ public:
 	 * of vertices. This is commonly where a user would issue a request for the vertex
      * data it needs on disk for the two other run methods.
      *
-     *  \param vertex The current vertex.
+     *  \param vertex The vertex that is executed in the method.
 	 */
 	virtual void run(compute_vertex &vertex) = 0;
 
 	/**
 	 * \brief Run user's code ideally/generally when the adjacency list
      *      of the vertex is read from disks.
-     * \param comp_v The current `compute_vertex`.
-     * \param vertex The curren `page vertex`.
+     * \param comp_v A `compute_vertex` that is executed in the method.
+     * \param vertex A `page vertex` that `comp_v' requested.
 	 */
 	virtual void run(compute_vertex &comp_v, const page_vertex &vertex) = 0;
 
 	/**
-	 * \brief Run user's code when the vertex receives messages from other.
-     *  \param c_vertex The current `compute_vertex`.
-     *  \param vertex_m A *single* `vertex_message` received from a vertex in the current iteration.
+	 * \brief Run user's code when the vertex receives messages from another.
+     * \param c_vertex A `compute_vertex` that is executed in the method.
+     * \param vertex_m A *single* `vertex_message` received from a vertex in the current iteration.
 	 */
 	virtual void run_on_message(compute_vertex &c_vertex, const vertex_message &vertex_m) = 0;
     
@@ -121,10 +122,18 @@ public:
      *  \param mmsg The message(s) received by the vertex.
      */
 	virtual void run_on_multicast_message(multicast_message &mmsg) = 0;
+
+	/**
+	 * \brief Run user's code when the vertex header is read from disks.
+     * \param c_vertex A `compute_vertex` that is executed in the method.
+	 * \param header The vertex header requested by `c_vertex'.
+	 */
+	virtual void run_on_num_edges(compute_vertex &c_vertex,
+			const vertex_header &header) = 0;
     
     /**
-     * \brief Perform some user defined action when the current iteration comes to an end.
-     *  \param cv The current `compute_vertex`.
+     * \brief Perform some user defined action on a vertex when the current iteration comes to an end.
+     * \param cv A `compute_vertex` that is executed in the method.
      */
 	virtual void notify_iteration_end(compute_vertex &cv) = 0;
     
@@ -160,8 +169,8 @@ public:
      */
 	void multicast_msg(edge_seq_iterator &it, vertex_message &msg);
     
-    /** TODO: Verify
-     *  \brief Send a point-to-point message from one vertex to the next.
+    /**
+     *  \brief Send a point-to-point message from one vertex to another.
      *  \param dest The destination ID of the vertex a user is sending to.
      *  \param msg The message intended for the recepient.
      */
@@ -202,7 +211,8 @@ public:
 
 /**
  * \brief Extend/Override when defining a custom vertex program.
- *      TODO: I'm not quite sure why this is useful!
+ *        The graph engine uses this to construct vertex programs for
+ *        each worker thread.
  */
 class vertex_program_creater
 {
@@ -218,6 +228,9 @@ public:
 size_t graph_get_vertices(graph_engine &graph, const worker_thread &,
 		const local_vid_t ids[], int num_ids, compute_vertex *v_buf[]);
 
+/**
+ * \brief The default implementation of a vertex program in the graph engine.
+ */
 template<class vertex_type>
 class vertex_program_impl: public vertex_program
 {
@@ -297,11 +310,16 @@ public:
 		}
 	}
     
+	virtual void run_on_num_edges(compute_vertex &c_vertex,
+			const vertex_header &header) {
+		((vertex_type &) c_vertex).run_on_vertex_header(*this, header);
+	}
+    
     /**
 	 * \brief A vertex requests the end of an iteration.
 	 * `notify_iteration_end' of the vertex will be invoked at the end
 	 * of an iteration.
-     *  \param v The vertex that is requesting the notification.
+	 *  \param v The vertex that is requesting the notification.
 	 */
 	virtual void notify_iteration_end(compute_vertex &comp_v) {
 		((vertex_type &) comp_v).notify_iteration_end(*this);

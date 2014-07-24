@@ -292,12 +292,7 @@ class overlap_vertex: public compute_vertex
 {
 	std::vector<vertex_id_t> *neighborhood;
 public:
-	overlap_vertex() {
-		neighborhood = NULL;
-	}
-
-	overlap_vertex(vertex_id_t id, const vertex_index &index1): compute_vertex(
-			id, index1) {
+	overlap_vertex(vertex_id_t id): compute_vertex(id) {
 		neighborhood = NULL;
 	}
 
@@ -326,9 +321,8 @@ public:
 			overlap_vertex &neigh = (overlap_vertex &) prog.get_graph().get_vertex(id);
 			size_t common = get_common_vertices(*neighborhood, *neigh.neighborhood);
 			size_t vunion = get_union_vertices(*neighborhood, *neigh.neighborhood);
-			printf("v%u:v%u, common: %ld, union: %ld, overlap: %f\n",
-					get_id(), id, common, vunion,
-					((double) common) / vunion);
+			if (common > 0)
+				printf("%u:%u, overlap: %f\n", get_id(), id, ((double) common) / vunion);
 		}
 	}
 
@@ -386,7 +380,7 @@ int main(int argc, char *argv[])
 	std::string output_file;
 	std::string confs;
 
-	if (argc < 3) {
+	if (argc < 5) {
 		fprintf(stderr,
 				"overlap conf_file graph_file index_file vertex_file\n");
 		exit(-1);
@@ -438,6 +432,4 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 }

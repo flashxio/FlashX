@@ -110,19 +110,19 @@ struct runtime_data_t
 
 	edge_set_t edge_set;
 public:
-	runtime_data_t(const std::vector<vertex_id_t> &edges,
-			size_t num_required, size_t num_triangles): edge_set(
-				index_entry(), 0, 2 * edges.size()) {
+	runtime_data_t(size_t num_edges, size_t num_triangles): edge_set(
+				index_entry(), 0, 2 * num_edges) {
 		num_joined = 0;
-		this->num_required = num_required;
-		this->edges = edges;
-		triangles.resize(edges.size());
+		this->num_required = 0;
 		this->num_triangles = num_triangles;
+	}
 
+	void finalize_init() {
 		// We only build a hash table on large vertices
 		if (edges.size() > (size_t) hash_threshold)
 			for (size_t i = 0; i < edges.size(); i++)
 				edge_set.insert(index_entry(edges[i], i));
+		triangles.resize(edges.size());
 	}
 };
 

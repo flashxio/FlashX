@@ -18,7 +18,9 @@
  */
 
 #include <signal.h>
+#ifdef PROFILER
 #include <google/profiler.h>
+#endif
 
 #include <atomic>
 #include <vector>
@@ -36,12 +38,7 @@ class test_vertex: public compute_directed_vertex
 {
 	vertex_id_t *adj_list;
 public:
-	test_vertex() {
-		adj_list = NULL;
-	}
-
-	test_vertex(vertex_id_t id, const vertex_index &index): compute_directed_vertex(
-			id, index) {
+	test_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		adj_list = NULL;
 	}
 
@@ -75,8 +72,10 @@ void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
 
 void int_handler(int sig_num)
 {
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
+#endif
 	exit(0);
 }
 
@@ -128,8 +127,10 @@ int main(int argc, char *argv[])
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("test starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -137,10 +138,10 @@ int main(int argc, char *argv[])
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
+#ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
+#endif
 	printf("It takes %f seconds\n", time_diff(start, end));
 	while (true) {
 	}

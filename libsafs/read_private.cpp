@@ -49,10 +49,6 @@ buffered_io::buffered_io(const logical_file_partition &partition_,
 	}
 }
 
-int buffered_io::init() {
-	return 0;
-}
-
 io_status buffered_io::access(char *buf, off_t offset, ssize_t size, int access_method) {
 	ASSERT_EQ(get_thread(), thread::get_curr_thread());
 	int fd;

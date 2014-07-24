@@ -1,4 +1,5 @@
 #include "safs_file.h"
+#include "RAID_config.h"
 
 int main()
 {

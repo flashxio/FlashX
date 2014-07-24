@@ -26,6 +26,7 @@
 #include "message_processor.h"
 #include "load_balancer.h"
 #include "steal_state.h"
+#include "vertex_index_reader.h"
 
 void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorted)
 {
@@ -78,7 +79,7 @@ void default_vertex_queue::fetch_from_map()
 	while (vertex_buf.size() < VERTEX_BUF_SIZE
 			&& bitmap_fetch_idx.get_num_remaining() > 0) {
 		size_t curr_loc = bitmap_fetch_idx.get_curr_loc();
-		size_t new_loc = bitmap_fetch_idx.move(VERTEX_BUF_SIZE);
+		size_t new_loc = bitmap_fetch_idx.move(VERTEX_BUF_SIZE / NUM_BITS_LONG);
 		// bitmap_fetch_idx points to the locations of longs.
 		active_bitmap->get_reset_set_bits(min(curr_loc, new_loc) * NUM_BITS_LONG,
 				max(curr_loc, new_loc) * NUM_BITS_LONG, vertex_buf);
@@ -155,25 +156,22 @@ void customized_vertex_queue::init(worker_thread &t)
 }
 
 worker_thread::worker_thread(graph_engine *graph,
-		file_io_factory::shared_ptr factory,
+		file_io_factory::shared_ptr graph_factory,
+		file_io_factory::shared_ptr index_factory,
 		vertex_program::ptr prog, int node_id, int worker_id,
 		int num_threads, vertex_scheduler::ptr scheduler): thread("worker_thread",
 			node_id)
 {
-	next_activated_vertices = std::unique_ptr<bitmap>(
-			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
-					graph->get_num_vertices()), node_id));
-	notify_vertices = std::unique_ptr<bitmap>(
-			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
-					graph->get_num_vertices()), node_id));
+	this->scheduler = scheduler;
+	curr_compute = NULL;
 	this->vprogram = std::move(prog);
 	vprogram->init(graph, this);
 	start_all = false;
 	this->worker_id = worker_id;
 	this->graph = graph;
 	this->io = NULL;
-	this->factory = factory;
-	this->curr_compute = NULL;
+	this->graph_factory = graph_factory;
+	this->index_factory = index_factory;
 	// We increase the allocator by 1M each time.
 	// It shouldn't need to allocate much memory.
 	msg_alloc = std::shared_ptr<slab_allocator>(new slab_allocator("graph-message-allocator",
@@ -189,45 +187,75 @@ worker_thread::worker_thread(graph_engine *graph,
 					graph, this);
 			break;
 		case graph_type::UNDIRECTED:
-			alloc = new vertex_compute_allocator<directed_vertex_compute>(graph, this);
+			alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
 			part_alloc = NULL;
 			break;
+#if 0
 		case graph_type::TS_DIRECTED:
 			alloc = new vertex_compute_allocator<ts_vertex_compute>(graph, this);
 			part_alloc = new vertex_compute_allocator<part_ts_vertex_compute>(
 					graph, this);
 			break;
+#endif
 		default:
 			assert(0);
 
 	}
-	if (scheduler)
-		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
-				new customized_vertex_queue(*graph, scheduler, worker_id));
-	else
-		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
-				new default_vertex_queue(*graph, worker_id, node_id));
 }
 
 worker_thread::~worker_thread()
 {
 	delete alloc;
 	delete part_alloc;
-	factory->destroy_io(io);
 }
 
 void worker_thread::init()
 {
-	io = factory->create_io(this);
-	io->init();
+	// We should create these objects in the context of the worker thread,
+	// so we can allocate memory for the objects on the same node as
+	// the worker thread.
+	next_activated_vertices = std::unique_ptr<bitmap>(
+			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices()), get_node_id()));
+	notify_vertices = std::unique_ptr<bitmap>(
+			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
+					graph->get_num_vertices()), get_node_id()));
+	if (scheduler)
+		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
+				new customized_vertex_queue(*graph, scheduler, worker_id));
+	else
+		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
+				new default_vertex_queue(*graph, worker_id, get_node_id()));
+
+	io = graph_factory->create_io(this);
+	switch (graph->get_graph_header().get_graph_type()) {
+		case graph_type::DIRECTED:
+			if (graph_conf.use_in_mem_index())
+				index_reader = vertex_index_reader::create(
+						graph->get_in_mem_index(), true);
+			else
+				index_reader = vertex_index_reader::create(
+						index_factory->create_io(this), true);
+			break;
+		case graph_type::UNDIRECTED:
+			if (graph_conf.use_in_mem_index())
+				index_reader = vertex_index_reader::create(
+						graph->get_in_mem_index(), false);
+			else
+				index_reader = vertex_index_reader::create(
+						index_factory->create_io(this), false);
+			break;
+		default:
+			assert(0);
+	}
 
 	if (!started_vertices.empty()) {
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(started_vertices, false);
-		if (vinitiator) {
+		if (vinitializer) {
 			BOOST_FOREACH(vertex_id_t id, started_vertices) {
 				compute_vertex &v = graph->get_vertex(id);
-				vinitiator->init(v);
+				vinitializer->init(v);
 			}
 		}
 		// Free the space used by the vector.
@@ -258,13 +286,13 @@ void worker_thread::init()
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(*this);
 		assert(next_activated_vertices->get_num_set_bits() == 0);
-		if (vinitiator) {
+		if (vinitializer) {
 			std::vector<vertex_id_t> local_ids;
 			graph->get_partitioner()->get_all_vertices_in_part(worker_id,
 					graph->get_num_vertices(), local_ids);
 			BOOST_FOREACH(vertex_id_t id, local_ids) {
 				compute_vertex &v = graph->get_vertex(id);
-				vinitiator->init(v);
+				vinitializer->init(v);
 			}
 		}
 	}
@@ -284,7 +312,6 @@ int worker_thread::process_activated_vertices(int max)
 		return 0;
 
 	compute_vertex *vertex_buf[max];
-	stack_array<io_request> reqs(max);
 	int num = curr_activated_vertices->fetch(vertex_buf, max);
 	if (num == 0) {
 		assert(curr_activated_vertices->is_empty());
@@ -295,47 +322,18 @@ int worker_thread::process_activated_vertices(int max)
 		graph->process_vertices(num);
 	}
 
-	int num_to_process = 0;
 	for (int i = 0; i < num; i++) {
 		compute_vertex *info = vertex_buf[i];
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
 		vertex_program &curr_vprog = get_vertex_program();
-		assert(curr_compute == NULL);
+		curr_compute = NULL;
 		curr_vprog.run(*info);
-		if (curr_compute) {
-			// If the user code requests the vertices that are empty or whose
-			// requested part is empty. These empty requests can be handled
-			// immediately, so it's possible that the current vertex compute
-			// may not have requests.
-			if (curr_compute->has_requests()) {
-				// It's mostly likely that it is requesting the adjacency list
-				// of itself. But it doesn't really matter what the vertex
-				// wants to request here.
-				request_range range = curr_compute->get_next_request();
-				if (graph->get_logger())
-					graph->get_logger()->log(&range, 1);
-				reqs[num_to_process++] = io_request(range.get_compute(),
-						range.get_loc(), range.get_size(),
-						// TODO I might need to set the node id.
-						range.get_access_method(), io, -1);
-			}
-			else {
-				// The reason we reach here is that the vertex requests some
-				// partial vertices and the request parts are empty.
-				// The user compute is only referenced here. We need to delete
-				// it.
-				assert(curr_compute->get_ref() == 0);
-				assert(curr_compute->has_completed());
-				compute_allocator *alloc = curr_compute->get_allocator();
-				alloc->free(curr_compute);
-			}
-		}
-		else
+		// If the user code doesn't generate a vertex_compute, we are done
+		// with the vertex in this iteration.
+		if (curr_compute == NULL)
 			complete_vertex(*info);
-		reset_curr_vertex_compute();
 	}
-	io->access(reqs.data(), num_to_process);
 	return num;
 }
 
@@ -379,10 +377,20 @@ void worker_thread::run()
 		do {
 			balancer->process_completed_stolen_vertices();
 			num = process_activated_vertices(
-					graph_conf.get_max_processing_vertices()
-					- io->num_pending_ios());
+					graph->get_max_processing_vertices()
+					- max(get_num_vertices_processing(),
+						io->num_pending_ios()));
 			num_visited += num;
 			msg_processor->process_msgs();
+			if (index_reader->get_num_pending_tasks()
+					< (size_t) graph->get_max_processing_vertices())
+				index_reader->wait4complete(0);
+			else
+				index_reader->wait4complete(1);
+			io->access(adj_reqs.data(), adj_reqs.size());
+			adj_reqs.clear();
+			if (io->num_pending_ios() == 0 && index_reader->get_num_pending_tasks() > 0)
+				index_reader->wait4complete(1);
 			io->wait4complete(min(io->num_pending_ios() / 10, 2));
 			// If there are vertices being processed, we need to call
 			// wait4complete to complete processing them.
@@ -393,6 +401,9 @@ void worker_thread::run()
 				// to this thread, we still need to process vertices from
 				// other threads in order to balance the load.
 				|| graph->get_num_remaining_vertices() > 0);
+		assert(index_reader->get_num_pending_tasks() == 0);
+		assert(io->num_pending_ios() == 0);
+		assert(active_computes.size() == 0);
 		assert(curr_activated_vertices->is_empty());
 //		printf("worker %d visited %d vertices\n", worker_id, num_visited);
 		assert(num_visited == num_activated_vertices_in_level.get());
@@ -417,12 +428,15 @@ void worker_thread::run()
 			break;
 	}
 	stop();
-	if (graph_conf.get_print_io_stat())
-		io->print_stat(graph->get_num_threads());
 }
 
 int worker_thread::steal_activated_vertices(compute_vertex *vertices[], int num)
 {
+	// This method is called in the context of other worker threads,
+	// curr_activated_vertices may not have been initialized. If so,
+	// skip it.
+	if (curr_activated_vertices == NULL)
+		return 0;
 	// We want to steal as much as possible, but we don't want
 	// to overloaded by the stolen vertices.
 	size_t num_steal = max(1,
@@ -443,6 +457,25 @@ void worker_thread::return_vertices(vertex_id_t ids[], int num)
 
 void worker_thread::complete_vertex(const compute_vertex &v)
 {
+	std::unordered_map<vertex_id_t, vertex_compute *>::iterator it
+		= active_computes.find(v.get_id());
+	// It's possible that a vertex_compute isn't created for the active
+	// compute_vertex.
+	if (it != active_computes.end()) {
+		vertex_compute *compute = it->second;
+		// Since we have finished the computation on the vertex, we can
+		// delete the vertex_compute now.
+		active_computes.erase(it);
+		compute->dec_ref();
+		// It's possible that the vertex_compute is issued to SAFS.
+		// In this case, SAFS will delete it.
+		if (compute->get_ref() == 0) {
+			assert(compute->get_num_pending() == 0);
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+		}
+	}
+
 	num_completed_vertices_in_level.inc(1);
 	// The vertex might be stolen from another thread. Now we have
 	// finished processing it, we should return it to its owner thread.
@@ -467,10 +500,26 @@ void worker_thread::activate_vertex(vertex_id_t id)
 	next_activated_vertices->set(off);
 }
 
-vertex_compute *worker_thread::create_vertex_compute(compute_vertex *v)
+vertex_compute *worker_thread::get_vertex_compute(compute_vertex &v)
 {
-	assert(curr_compute == NULL);
-	curr_compute = (vertex_compute *) alloc->alloc();
-	curr_compute->init(v);
+	vertex_id_t id = v.get_id();
+	std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
+		= active_computes.find(id);
+	if (it == active_computes.end()) {
+		vertex_compute *compute = (vertex_compute *) alloc->alloc();
+		compute->init(&v);
+		active_computes.insert(std::pair<vertex_id_t, vertex_compute *>(
+					id, compute));
+		compute->inc_ref();
+		curr_compute = compute;
+	}
+	else
+		curr_compute = it->second;
 	return curr_compute;
+}
+
+vertex_compute *get_vertex_compute_on_thread(vertex_id_t id)
+{
+	worker_thread *worker = (worker_thread *) thread::get_curr_thread();
+	return worker->get_vertex_compute(id);
 }

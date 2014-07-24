@@ -5,7 +5,7 @@ CFLAGS = -g -O3 -I.. -I../include $(TRACE_FLAGS)
 
 LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
 
-TARGETS = stat create_file create_files workload-gen memory-fill eval_expand_SA_cache print_file
+TARGETS = create_file memory-fill print_file
 LIBFILE = ../libsafs/libsafs.a
 
 all: $(TARGETS)
@@ -15,9 +15,6 @@ stat: stat.o
 
 create_file: create_file.o
 	$(CXX) -o create_file create_file.o $(LDFLAGS)
-
-create_files: create_files.o $(LIBFILE)
-	$(CXX) -o create_files create_files.o $(LDFLAGS)
 
 workload-gen: workload-gen.o
 	$(CXX) -o workload-gen workload-gen.o $(LDFLAGS)

@@ -37,28 +37,18 @@ edge_type traverse_edge = edge_type::OUT_EDGE;
 
 class bfs_vertex: public compute_directed_vertex
 {
-	enum {
-		VISITED,
-	};
-
-	atomic_flags<int> flags;
+	bool visited;
 public:
-	bfs_vertex() {
-	}
-
-	bfs_vertex(vertex_id_t id,
-			const vertex_index &index): compute_directed_vertex(id, index) {
+	bfs_vertex(vertex_id_t id): compute_directed_vertex(id) {
+		visited = false;
 	}
 
 	bool has_visited() const {
-		return flags.test_flag(VISITED);
+		return visited;
 	}
 
-	bool set_visited(bool visited) {
-		if (visited)
-			return flags.set_flag(VISITED);
-		else
-			return flags.clear_flag(VISITED);
+	void set_visited(bool visited) {
+		this->visited = visited;
 	}
 
 	void run(vertex_program &prog) {
@@ -202,8 +192,6 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("BFS from vertex %ld visits %ld vertices. It takes %f seconds\n",
 			(unsigned long) start_vertex, num_visited, time_diff(start, end));
 }

@@ -62,15 +62,7 @@ class sssp_vertex: public compute_directed_vertex
 	int distance;
 	vertex_id_t parent;
 public:
-	sssp_vertex() {
-		parent_dist = INT_MAX;
-		tmp_parent = -1;
-		distance = INT_MAX;
-		parent = -1;
-	}
-
-	sssp_vertex(vertex_id_t id,
-			const vertex_index &index): compute_directed_vertex(id, index) {
+	sssp_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		parent_dist = INT_MAX;
 		tmp_parent = -1;
 		distance = INT_MAX;
@@ -122,6 +114,15 @@ void sssp_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	dist_message msg(get_id(), distance);
 	prog.multicast_msg(dest_buf.data(), num_dests, msg);
 }
+
+class sssp_initializer: public vertex_initializer
+{
+public:
+	virtual void init(compute_vertex &v) {
+		sssp_vertex &sv = (sssp_vertex &) v;
+		sv.init(0);
+	}
+};
 
 void int_handler(int sig_num)
 {
@@ -186,10 +187,8 @@ int main(int argc, char *argv[])
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	// TODO this is a simple way to initialize the starting vertex.
-	sssp_vertex &v = (sssp_vertex &) index->get_vertex(start_vertex);
-	v.init(0);
-	graph->start(&start_vertex, 1);
+	graph->start(&start_vertex, 1, vertex_initializer::ptr(
+				new sssp_initializer()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 
@@ -197,8 +196,6 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("SSSP starts from vertex %ld. It takes %f seconds\n",
 			(unsigned long) start_vertex, time_diff(start, end));
 #ifdef DEBUG

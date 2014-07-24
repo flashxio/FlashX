@@ -33,7 +33,7 @@ uint32_t read32(FILE *f)
 	return be32toh(v);
 }
 
-FG_row_wise_matrix<unsigned char>::ptr read_mnist_data(const std::string &file,
+FG_eigen_matrix<unsigned char>::ptr read_mnist_data(const std::string &file,
 		int num_samples)
 {
 	FILE *f = fopen(file.c_str(), "r");
@@ -47,13 +47,20 @@ FG_row_wise_matrix<unsigned char>::ptr read_mnist_data(const std::string &file,
 	uint32_t num_cols = read32(f);
 	printf("An image has %d rows and %d columns\n", num_rows, num_cols);
 
-	int num = min(num_samples, num_imgs);
-	FG_row_wise_matrix<unsigned char>::ptr m = FG_row_wise_matrix<unsigned char>::create(
+
+	int num;
+	if (num_samples < 0)
+		num = num_imgs;
+	else
+		num = min(num_samples, num_imgs);
+	FG_eigen_matrix<unsigned char>::ptr m = FG_eigen_matrix<unsigned char>::create(
 			num, num_rows * num_cols);
 	m->resize(num, num_rows * num_cols);
+	FG_vector<unsigned char>::ptr v = FG_vector<unsigned char>::create(
+			num_rows * num_cols);
 	for (int i = 0; i < num; i++) {
-		FG_vector<unsigned char>::ptr v = m->get_row_ref(i);
 		size_t ret = fread(v->get_data(), v->get_size(), 1, f);
+		m->set_row(i, *v);
 		assert(ret == 1);
 	}
 
@@ -71,7 +78,11 @@ FG_vector<unsigned char>::ptr read_mnist_label(const std::string file, int num_s
 	uint32_t num_imgs = read32(f);
 	printf("There are %d images\n", num_imgs);
 
-	int num = min(num_samples, num_imgs);
+	int num;
+	if (num_samples < 0)
+		num = num_imgs;
+	else
+		num = min(num_samples, num_imgs);
 	FG_vector<unsigned char>::ptr v = FG_vector<unsigned char>::create(num);
 	size_t ret = fread(v->get_data(), v->get_size(), 1, f);
 	assert(ret == 1);

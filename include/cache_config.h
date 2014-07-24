@@ -25,6 +25,7 @@
 
 #include "common.h"
 #include "cache.h"
+#include "thread.h"
 
 class page_cache;
 
@@ -51,6 +52,32 @@ class cache_config
 	int type;
 	// node id <-> the size of each partition
 	std::tr1::unordered_map<int, long> part_sizes;
+
+	class create_cache_thread: public thread
+	{
+		const cache_config &config;
+		int max_num_pending_flush;
+		page_cache *cache;
+	public:
+		create_cache_thread(const cache_config &_config, int max_num_pending_flush,
+				std::string name, int node_id): thread(name,
+					node_id), config(_config) {
+			this->max_num_pending_flush = max_num_pending_flush;
+		}
+
+		void run() {
+			cache = config.__create_cache_on_node(get_node_id(),
+					max_num_pending_flush);
+			stop();
+		}
+
+		page_cache *get_cache() {
+			return cache;
+		}
+	};
+
+	page_cache *__create_cache_on_node(int node_id,
+			int max_num_pending_flush) const;
 protected:
 	void init(const std::tr1::unordered_map<int, long> &part_sizes) {
 		this->part_sizes = part_sizes;
@@ -73,7 +100,7 @@ public:
 		return type;
 	}
 
-	int get_num_caches() const {
+	int get_num_cache_parts() const {
 		return (int) part_sizes.size();
 	}
 
@@ -93,6 +120,8 @@ public:
 	}
 
 	page_cache *create_cache_on_node(int node_id, int max_num_pending_flush) const;
+	int create_cache_on_nodes(const std::vector<int> &node_ids,
+			int max_num_pending_flush, std::vector<page_cache *> &caches) const;
 	void destroy_cache_on_node(page_cache *cache) const;
 	page_cache *create_cache(int max_num_pending_flush) const;
 	void destroy_cache(page_cache *cache) const;
@@ -115,7 +144,7 @@ public:
 	}
 
 	virtual int page2cache(const page_id_t &pg_id) const {
-		return (int) (pg_id.get_offset() / PAGE_SIZE) % get_num_caches();
+		return (int) (pg_id.get_offset() / PAGE_SIZE) % get_num_cache_parts();
 	}
 };
 

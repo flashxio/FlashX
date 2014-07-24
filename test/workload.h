@@ -38,6 +38,9 @@
 
 const int WORKLOAD_BUF_SIZE = 1024 * 32;
 
+void permute_offsets(int num, int repeats, int stride, off_t start,
+		off_t offsets[]);
+
 typedef struct workload_type
 {
 	off_t off;

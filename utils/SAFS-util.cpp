@@ -26,6 +26,8 @@
 #include "io_interface.h"
 #include "native_file.h"
 #include "safs_file.h"
+#include "file_mapper.h"
+#include "RAID_config.h"
 
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
 
@@ -170,7 +172,7 @@ void comm_verify_file(int argc, char *argv[])
 			REMOTE_ACCESS);
 	thread *curr_thread = thread::get_curr_thread();
 	assert(curr_thread);
-	io_interface *io = factory->create_io(curr_thread);
+	io_interface::ptr io = factory->create_io(curr_thread);
 	data_source *source;
 	if (ext_file.empty())
 		source = new synthetic_data_source(factory->get_file_size());
@@ -187,7 +189,7 @@ void comm_verify_file(int argc, char *argv[])
 	char *buf = (char *) valloc(BUF_SIZE);
 	for (off_t off = 0; off < file_size; off += BUF_SIZE) {
 		data_loc_t loc(io->get_file_id(), off);
-		io_request req(buf, loc, BUF_SIZE, READ, io, 0);
+		io_request req(buf, loc, BUF_SIZE, READ);
 		io->access(&req, 1);
 		io->wait4complete(1);
 	}
@@ -195,7 +197,6 @@ void comm_verify_file(int argc, char *argv[])
 	
 	io->cleanup();
 	delete io->get_callback();
-	factory->destroy_io(io);
 }
 
 void comm_load_file2fs(int argc, char *argv[])
@@ -231,7 +232,7 @@ void comm_load_file2fs(int argc, char *argv[])
 
 	thread *curr_thread = thread::get_curr_thread();
 	assert(curr_thread);
-	io_interface *io = factory->create_io(curr_thread);
+	io_interface::ptr io = factory->create_io(curr_thread);
 
 	char *buf = (char *) valloc(BUF_SIZE);
 	off_t off = 0;
@@ -242,7 +243,7 @@ void comm_load_file2fs(int argc, char *argv[])
 		assert(ret == size);
 		ssize_t write_bytes = ROUNDUP(ret, 512);
 		data_loc_t loc(io->get_file_id(), off);
-		io_request req(buf, loc, write_bytes, WRITE, io, 0);
+		io_request req(buf, loc, write_bytes, WRITE);
 		io->access(&req, 1);
 		io->wait4complete(1);
 		off += write_bytes;
@@ -250,7 +251,6 @@ void comm_load_file2fs(int argc, char *argv[])
 	printf("write all data\n");
 	
 	io->cleanup();
-	factory->destroy_io(io);
 }
 
 void comm_load_part_file2fs(int argc, char *argv[])

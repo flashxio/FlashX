@@ -22,6 +22,20 @@
 
 #include "triangle_shared.h"
 
+namespace {
+
+struct undirected_runtime_data_t: public runtime_data_t
+{
+	vsize_t num_edge_reqs;
+	vsize_t degree;
+
+	undirected_runtime_data_t(vsize_t num_exist_triangles,
+			vsize_t degree): runtime_data_t(degree, num_exist_triangles) {
+		this->degree = degree;
+		num_edge_reqs = 0;
+	}
+};
+
 class undirected_triangle_vertex: public compute_vertex
 {
 	multi_func_value local_value;
@@ -33,15 +47,11 @@ class undirected_triangle_vertex: public compute_vertex
 			local_value.get_runtime_data()->num_triangles += num;
 	}
 public:
-	undirected_triangle_vertex() {
-	}
-
-	undirected_triangle_vertex(vertex_id_t id, const vertex_index &index):
-		compute_vertex(id, index) {}
+	undirected_triangle_vertex(vertex_id_t id): compute_vertex(id) {}
 
 	int count_triangles(const page_vertex *v) const;
 
-	int get_num_triangles() const {
+	int get_result() const {
 		return local_value.get_num_triangles();
 	}
 
@@ -63,7 +73,45 @@ public:
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header);
+
+	void destroy_runtime() {
+		undirected_runtime_data_t *data
+			= (undirected_runtime_data_t *) local_value.get_runtime_data();
+		size_t num_curr_triangles = data->num_triangles;
+		delete data;
+		local_value.set_num_triangles(num_curr_triangles);
+	}
 };
+
+void undirected_triangle_vertex::run_on_vertex_header(vertex_program &prog,
+		const vertex_header &header)
+{
+	undirected_runtime_data_t *data
+		= (undirected_runtime_data_t *) local_value.get_runtime_data();
+	data->num_edge_reqs++;
+
+	if ((header.get_num_edges() < data->degree && header.get_id() != get_id())
+			|| (header.get_num_edges() == data->degree
+				&& header.get_id() < get_id())) {
+		data->edges.push_back(header.get_id());
+		data->num_required++;
+	}
+	if (data->num_edge_reqs == data->degree) {
+		if (data->edges.empty()) {
+			long ret = num_completed_vertices.inc(1);
+			if (ret % 100000 == 0)
+				printf("%ld completed vertices\n", ret);
+			destroy_runtime();
+			return;
+		}
+		std::sort(data->edges.begin(), data->edges.end());
+		data->finalize_init();
+		// We now can request the neighbors.
+		request_vertices(data->edges.data(), data->edges.size());
+	}
+}
 
 void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 		const page_vertex &vertex)
@@ -84,37 +132,13 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 		return;
 	}
 
-	std::vector<vertex_id_t> edges;
+	std::vector<vertex_id_t> edges(vertex.get_num_edges(edge_type::IN_EDGE));
+	vertex.read_edges(edge_type::IN_EDGE, edges.data(), edges.size());
 
-	page_byte_array::const_iterator<vertex_id_t> it
-		= vertex.get_neigh_begin(edge_type::IN_EDGE);
-	page_byte_array::const_iterator<vertex_id_t> end
-		= vertex.get_neigh_end(edge_type::IN_EDGE);
-	int num_local_edges = this->get_num_edges();
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
-		int num_local_edges1 = prog.get_graph().get_vertex(id).get_num_edges();
-		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
-				|| (num_local_edges1 == num_local_edges
-					&& id < vertex.get_id())) {
-			edges.push_back(id);
-		}
-	}
-
-	if (edges.empty()) {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
-		return;
-	}
-
-	// We have to set runtime data before calling request_partial_vertices.
-	// It's possible that the request to a partial vertex can be completed
-	// immediately and run_on_neighbor is called in request_partial_vertices.
-	// TODO Maybe I should avoid that.
-	local_value.set_runtime_data(new runtime_data_t(edges, edges.size(),
-				local_value.get_num_triangles()));
-	request_vertices(edges.data(), edges.size());
+	local_value.set_runtime_data(new undirected_runtime_data_t(
+				local_value.get_num_triangles(),
+				vertex.get_num_edges(edge_type::IN_EDGE)));
+	request_vertex_headers(edges.data(), edges.size());
 }
 
 void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
@@ -147,9 +171,7 @@ void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
 				prog.send_msg(data->edges[i], msg);
 			}
 		}
-		size_t num_curr_triangles = data->num_triangles;
-		delete data;
-		local_value.set_num_triangles(num_curr_triangles);
+		destroy_runtime();
 	}
 }
 
@@ -250,27 +272,9 @@ int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
 	return num_local_triangles;
 }
 
-class save_ntriangles_query: public vertex_query
-{
-	FG_vector<size_t>::ptr vec;
-public:
-	save_ntriangles_query(FG_vector<size_t>::ptr vec) {
-		this->vec = vec;
-	}
+}
 
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		undirected_triangle_vertex &tv = (undirected_triangle_vertex &) v;
-		vec->set(tv.get_id(), tv.get_num_triangles());
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_ntriangles_query(vec));
-	}
-};
-
+#include "save_result.h"
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
 	printf("undirected triangle counting starts\n");
@@ -295,12 +299,11 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("It takes %f seconds to count all triangles\n",
 			time_diff(start, end));
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_ntriangles_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<size_t, undirected_triangle_vertex>(vec)));
 	return vec;
 }

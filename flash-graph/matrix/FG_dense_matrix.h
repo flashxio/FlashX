@@ -434,6 +434,18 @@ public:
 		return ptr(new FG_eigen_matrix<T>(nrow, ncol));
 	}
 
+	void set_col(size_t idx, const FG_vector<T> &vec) {
+		assert(vec.get_size() == this->get_num_rows());
+		for (size_t i = 0; i < vec.get_size(); i++)
+			this->matrix_store.set(i, idx, vec.get(i));
+	}
+
+	void set_row(size_t idx, const FG_vector<T> &vec) {
+		assert(vec.get_size() == this->get_num_cols());
+		for (size_t i = 0; i < vec.get_size(); i++)
+			this->matrix_store.set(idx, i, vec.get(i));
+	}
+
 	typename FG_eigen_matrix<T>::ptr householderQ() const {
 		size_t nrows = this->matrix_store.get_num_rows();
 		size_t ncols = this->matrix_store.get_num_cols();
@@ -463,6 +475,75 @@ public:
 		for (size_t i = 0; i < this->get_num_cols(); i++)
 			vec->set(i, this->get(row, i));
 		return vec;
+	}
+
+	FG_eigen_matrix<T>::ptr transpose() const {
+		return FG_eigen_matrix<T>::ptr(new FG_eigen_matrix<T>(
+					this->matrix_store.get_matrix().transpose(),
+					this->get_num_cols(), this->get_num_rows()));
+	}
+
+	graph::ptr conv2graph_wideM() const {
+		// TODO we can generate an undirected graph for a symmetric matrix.
+		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
+		for (size_t i = 0; i < this->get_num_rows(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_cols(); j++) {
+				edge<T> e(i, j, this->get(i, j));
+				v.add_out_edge(e);
+			}
+			for (size_t j = 0; j < this->get_num_rows(); j++) {
+				edge<T> e(j, i, this->get(j, i));
+				v.add_in_edge(e);
+			}
+			g->add_vertex(v);
+		}
+		// There are more columns than rows in the matrix.
+		for (size_t i = this->get_num_rows(); i < this->get_num_cols(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_rows(); j++) {
+				edge<T> e(j, i, this->get(j, i));
+				v.add_in_edge(e);
+			}
+			g->add_vertex(v);
+		}
+
+		return g;
+	}
+
+	graph::ptr conv2graph_tallM() const {
+		// TODO we can generate an undirected graph for a symmetric matrix.
+		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
+		for (size_t i = 0; i < this->get_num_cols(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_cols(); j++) {
+				edge<T> e(i, j, this->get(i, j));
+				v.add_out_edge(e);
+			}
+			for (size_t j = 0; j < this->get_num_rows(); j++) {
+				edge<T> e(j, i, this->get(j, i));
+				v.add_in_edge(e);
+			}
+			g->add_vertex(v);
+		}
+		// There are more rows than cols in the matrix.
+		for (size_t i = this->get_num_cols(); i < this->get_num_rows(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_cols(); j++) {
+				edge<T> e(i, j, this->get(i, j));
+				v.add_out_edge(e);
+			}
+			g->add_vertex(v);
+		}
+
+		return g;
+	}
+
+	graph::ptr conv2graph() const {
+		if (this->get_num_rows() > this->get_num_cols())
+			return conv2graph_tallM();
+		else
+			return conv2graph_wideM();
 	}
 };
 

@@ -393,12 +393,6 @@ public:
 
 	int handle_pending_requests();
 
-	/* When a thread begins, this method will be called. */
-	virtual int init() {
-		int ret = underlying->init();
-		return ret;
-	}
-
 	virtual bool set_callback(callback *cb) {
 		if (underlying->support_aio())
 			this->cb = cb;
@@ -467,12 +461,7 @@ public:
 
 	virtual int num_pending_ios() const {
 		assert(num_issued_areqs.get() >= num_completed_areqs.get());
-		// The user tasks can also issue requests. We need to take them
-		// into account when computing the number of pending requests.
-		// However, it's difficult to estimate the number of requests issued
-		// by user tasks. Let's just assume each of them will issue one.
-		return num_issued_areqs.get() - num_completed_areqs.get()
-			+ comp_io_sched->get_num_incomplete_computes();
+		return num_issued_areqs.get() - num_completed_areqs.get();
 	}
 
 	void finalize_partial_request(io_request &partial, original_io_request *orig);
@@ -515,7 +504,7 @@ public:
 	virtual void print_state() {
 #ifdef STATISTICS
 		printf("global cached io %d has %d pending reqs and %ld reqs from underlying\n",
-				get_io_idx(), num_pending_ios(), num_from_underlying.get());
+				get_io_id(), num_pending_ios(), num_from_underlying.get());
 #endif
 		printf("%d completed pending reqs, %d queued completed reqs from underlying\n",
 				pending_requests.get_num_entries(), complete_queue.get_num_entries());

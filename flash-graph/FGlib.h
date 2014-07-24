@@ -23,11 +23,12 @@
 #include "graph_engine.h"
 #include "graph.h"
 #include "FG_vector.h"
+#include "graph_file_header.h"
 
 /**
   * \brief A user-friendly wrapper for FlashGraph's raw graph type.
   *         Very usefule when when utilizing FlashGraph 
-  *         prewritten/Library algorithms.
+  *         pre-written/library algorithms.
   *
 */
 class FG_graph
@@ -35,14 +36,21 @@ class FG_graph
 	std::string graph_file;
 	std::string index_file;
 	config_map configs;
+
 	FG_graph(const std::string &graph_file,
 			const std::string &index_file, const config_map &configs) {
 		this->graph_file = graph_file;
 		this->index_file = index_file;
 		this->configs = configs;
+
+		graph_engine::init_flash_graph(configs);
 	}
 public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
+
+	~FG_graph() {
+		graph_engine::destroy_flash_graph();
+	}
 
 /**
   * \brief  Method to instantiate a graph object.
@@ -114,30 +122,44 @@ enum directed_triangle_type
 };
 
 /**
-  * \brief Compute the weakly connectected components of a graph.
+  * \brief Compute all weakly connectected components of a graph.
   *
   * \param fg The FlashGraph graph object for which you want to compute.
-  * \return A vector with an entry for each vertex in the graph's WCC.
+  * \return A vector with a component ID for each vertex in the graph.
   *
 */
 FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg);
 
 /**
-  * \brief Compute the strongly connected components of a graph.
+ * \brief Compute all weakly connectected components of a time-series graph
+ *        in a specified time interval.
+ *
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param start_time The start time of the time interval.
+ * \param time_interval The length of the time interval.
+ * \return A vector with a component ID for each vertex in the graph.
+ *
+ */
+FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
+		time_t start_time, time_t time_interval);
+
+/**
+  * \brief Compute all strongly connected components of a graph.
   *
   * \param fg The FlashGraph graph object for which you want to compute.
-  * \return A vector with an entry for each vertex in the graph's SCC.
+  * \return A vector with a component ID for each vertex in the graph.
   *
 */
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg);
 
 /**
   * \brief Compute the directed triangle count for each each vertex.
+  *        Currently, it only counts the number of cycle triangles.
   *
   * \param fg The FlashGraph graph object for which you want to compute.
   * \param type The type of triangles you wish to count.
-  * \return A vector with an entry for each vertex in the graph's triangle
-  *         count.
+  * \return A vector that contains the number of triangles associated with
+  *         each vertex in the graph.
   *
 */
 FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
@@ -146,14 +168,14 @@ FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
   * \brief Compute undirected triangle count for each vertex.
   * 
   * \param fg The FlashGraph graph object for which you want to compute.
-  * \return A vector with an entry for each vertex in the graph's 
-  *         undirected triangle count.
+  * \return A vector that contains the number of triangles associated with
+  *         each vertex in the graph.
   *
 */
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
 
 /**
-  * \brief Compute the per vertex local Scan Statistic 
+  * \brief Compute the per-vertex local Scan Statistic 
   * \param fg The FlashGraph graph object for which you want to compute.
   * \return A vector with an entry for each vertex in the graph's 
   *          local scan value.
@@ -188,6 +210,9 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed,
   *       each iteration. Tends to converge to stable values.
   *
   * \param fg The FlashGraph graph object for which you want to compute.
+  * \param num_iters The maximum number of iterations for PageRank.
+  * \param damping_factor The damping factor. Originally .85.
+  *
   * \return A vector with an entry for each vertex in the graph's
   *         PageRank value.
   *
@@ -211,22 +236,61 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr, int num_iters,
 		float damping_factor);
 
+FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
+		time_t interval, int num_intervals);
+
 /**
  * \brief Fetch the clusters with the wanted cluster IDs.
  *  
  * \param fg The FlashGraph graph object for which you want to compute.
-
- * 
+ * \param cluster_ids A vector of the cluster IDs that the vertices
+ *        in the graph belong to.
+ * \param wanted_clusters A set of component IDs that we want to fetch.
+ * \param clusters A set of subgraphs returned by the function. Each subgraph
+ *        contains vertices and edges in the cluster.
  */
-void fetch_subgraphs(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr comp_ids,
+void fetch_subgraphs(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
 		const std::set<vertex_id_t> &wanted_clusters, std::map<vertex_id_t,
 		graph::ptr> &clusters);
 
 /**
  * Compute the size of each subgraph identified by cluster IDs.
+ *  
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param cluster_ids A vector of the cluster IDs that the vertices
+ *        in the graph belong to.
+ * \param wanted_clusters A set of component IDs that we want to fetch.
+ * \param sizes the sizes of the wanted clusters returned by the function.
+ *        Each pair contains the number of vertices and edges in the cluster.
  */
-void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr comp_ids,
+void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
 		const std::set<vertex_id_t> &wanted_clusters,
 		std::map<vertex_id_t, std::pair<size_t, size_t> > &sizes);
+
+/**
+ * Get the degree of all vertices in the graph.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param type The edge type: IN_EDGE, OUT_EDGE, BOTH_EDGES.
+ * \return A vector with an entry for each vertex degree.
+ */
+FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type);
+
+/**
+ * \brief Get the degree of all vertices in a specified time interval in
+ *        a time-series graph.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param type The edge type: IN_EDGE, OUT_EDGE, BOTH_EDGES.
+ * \param start_time The start time of the time interval.
+ * \param time_interval length of the time interval.
+ * \return A vector with an entry for each vertex degree.
+ */
+FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
+		time_t start_time, time_t time_interval);
+
+/**
+ * Get the header of the graph that contains basic information of the graph.
+ * \return The graph header.
+ */
+graph_header get_graph_header(FG_graph::ptr fg);
 
 #endif

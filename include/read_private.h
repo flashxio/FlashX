@@ -77,8 +77,6 @@ public:
 		return partition.get_file_id();
 	}
 
-	int init();
-
 	void cleanup() {
 		for (size_t i = 0; i < fds.size(); i++)
 			fsync(fds[i]);

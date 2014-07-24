@@ -20,6 +20,9 @@
  * limitations under the License.
  */
 
+#include <limits.h>
+#include <stdlib.h>
+
 /**
   * \brief Basic data types used in FlashGraph
 */

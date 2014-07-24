@@ -27,11 +27,11 @@
 #include "stat.h"
 
 /**
-  * \brief FlashGraph vector that provides several parallelized methods
-  *        when compared to an STL-vector. <br>
-  * **NOTE**: Not an STL-compatible data structure. This vector is also
-  * ideally used with numeric data types. <br>
-  * Methods marked with the keyword **parallel** are parallelized implementations.
+ * \brief FlashGraph vector that provides several parallelized methods
+ *        when compared to an STL-vector. <br>
+ * **NOTE**: Not an STL-compatible data structure. This vector is also
+ * ideally used with numeric data types. <br>
+ * Methods marked with the keyword **parallel** are parallelized implementations.
  */
 template<class T>
 class FG_vector
@@ -50,97 +50,107 @@ class FG_vector
 public:
 	typedef typename std::shared_ptr<FG_vector<T> > ptr; /** Smart pointer for object access */
 
-  /** 
-    * \brief  Create graph using this static method. An object of this
-    *         class should be created using this or the `create(size_t size)`
-    *         method.
-    * \param graph A shared pointer to a graph engine object. This is generally
-    *       the graph for which you are creating the vector. Allows the avoidance
-    *       of computing the number of vertices in the graph.
-  */
+	/** 
+	 * \brief  Create a vector of the length the same as the number of vertices
+	 *         in the graph. An object of this
+	 *         class should be created using this or the `create(size_t size)`
+	 *         method.
+	 * \param graph A shared pointer to a graph engine object. This is generally
+	 *       the graph for which you are creating the vector.
+	 */
 	static ptr create(graph_engine::ptr graph) {
 		return ptr(new FG_vector<T>(graph));
 	}
 
-  /**
-    * \brief  Create graph using this static method. An object of this
-    *         class should be created using this or the `create(graph_engine::ptr graph)`
-    *         method.
-    * \param size The length of the vector you desire.
-  */
+	/**
+	 * \brief  Create a vector of the specified length. An object of this
+	 *         class should be created using this or the `create(graph_engine::ptr graph)`
+	 *         method.
+	 * \param size The length of the vector you desire.
+	 */
 	static ptr create(size_t size) {
 		return ptr(new FG_vector<T>(size));
 	}
 
-  /**
-    * \brief Initialize the vector a single value as specified by parameter 1.
-    *
-    * \param v The initialization parameter for the vector data.
-    * **parallel**
-  */
+	/**
+	 * \brief Initialize the vector a single value as specified by parameter 1.
+	 *
+	 * \param v The initialization parameter for the vector data.
+	 * **parallel**
+	 */
 	void init(T v) {
 #pragma omp parallel for
 		for (size_t i = 0; i < eles.size(); i++)
 			eles[i] = v;
 	}
 
-  /**
-    * \brief Equivalent to += operator. Element by element
-    *     addition of one `FG_vector` to another.
-    * \param other An `FG_vector` smart pointer object.
-    * **parallel**
-    *
-  */
-  void plus_eq(FG_vector<T>::ptr other) {
-    assert(get_size() == other->get_size());
-    for (size_t i = 0; i < get_size(); i++) {
-      eles[i] += other->get(i);
-    }
-  }
+	/**
+	 * \brief Equivalent to += operator. Element by element
+	 *     addition of one `FG_vector` to another.
+	 * \param other An `FG_vector` smart pointer object.
+	 * **parallel**
+	 *
+	 */
+	void plus_eq(FG_vector<T>::ptr other) {
+		assert(get_size() == other->get_size());
+		for (size_t i = 0; i < get_size(); i++) {
+			eles[i] += other->get(i);
+		}
+	}
 
-  /**
-    * \brief Assign a value `num` many times to the vector.
-    * \param num The number of elements to assign.
-    * \param val The value a user wnats to assign to vector positions.
-  */
-  void assign(size_t num, T val) {
-    eles.assign(num, val);
-  }
+	/**
+	 * \brief Assign a value `num` many times to the vector.
+	 * \param num The number of elements to assign.
+	 * \param val The value a user wnats to assign to vector positions.
+	 */
+	void assign(size_t num, T val) {
+		eles.assign(num, val);
+	}
 
-  /** 
-  * \brief Make a shallow copy of the vector.
-  * \param other An `FG_vector` smart pointer.
-  * **paralel**
-  */
-  void shallow_copy(FG_vector<T>::ptr other) {
-    assert(this->get_size() == other->get_size());
+	/** 
+	 * \brief Make a shallow copy of the vector.
+	 * \param other An `FG_vector` smart pointer.
+	 * **paralel**
+	 */
+	void shallow_copy(FG_vector<T>::ptr other) {
+		assert(this->get_size() == other->get_size());
 #pragma omp parallel for
-    for (size_t i = 0; i < get_size(); i++) {
-      this->eles[i] = other->eles[i];
-    }
-  }
+		for (size_t i = 0; i < get_size(); i++) {
+			this->eles[i] = other->eles[i];
+		}
+	}
 
-  /**
-    * \brief Check for equality between two `FG_vector`s element by
-    *   element.
-    * \param other An `FG_vector` smart pointer.
-    */
-  // TODO DM: Make parallel / smarter 
-  bool eq_all(FG_vector<T>::ptr other) {
-    return std::equal(this->eles.begin(), this->eles.end(), other->eles.begin());
-  }
+	/**
+	 * \brief Check for equality between two `FG_vector`s element by
+	 *   element.
+	 * \param other An `FG_vector` smart pointer.
+	 */
+	// TODO DM: Make parallel / smarter 
+	bool eq_all(FG_vector<T>::ptr other) {
+		return std::equal(this->eles.begin(), this->eles.end(), other->eles.begin());
+	}
 
-  /**
-    * \brief  Populate an [STL set](http://www.cplusplus.com/reference/set/set/)
-    *         with the unique elements in the vector. All duplicates are ignored.
-    *
-    * \param set The *empty* STL set that will be populated with unique vector members.
-    *
-  */
+	void init_rand(long max, unsigned int seed = 0) {
+		if (seed > 0)
+			srandom(seed);
+		if (max >= std::numeric_limits<T>::max())
+			max = std::numeric_limits<T>::max();
+#pragma omp parallel for
+		for (size_t i = 0; i < eles.size(); i++)
+			eles[i] = random();
+	}
+
+	/**
+	 * \brief  Populate an [STL set](http://www.cplusplus.com/reference/set/set/)
+	 *         with the unique elements in the vector. All duplicates are ignored.
+	 *
+	 * \param set The *empty* STL set that will be populated with unique vector members.
+	 *
+	 */
 	void unique(std::set<T> &set) const {
 		// TODO we need a parallel implementation.
     
-    assert(set.empty()); // FIXME: `new` a shared/unique ptr & remove param
+		assert(set.empty()); // FIXME: `new` a shared/unique ptr & remove param
 		BOOST_FOREACH(T v, eles) {
 			set.insert(v);
 		}
@@ -156,7 +166,7 @@ public:
 	void count_unique(count_map<T> &map) const {
 		// TODO we need a parallel implementation.
     
-    assert(map.get_size() == 0); // FIXME: `new` a shared/unique ptr & remove param
+		assert(map.get_size() == 0); // FIXME: `new` a shared/unique ptr & remove param
 		BOOST_FOREACH(T v, eles) {
 			map.add(v);
 		}
@@ -165,14 +175,14 @@ public:
   /**
     * \brief Get the number of elements contained in the vector.
     *
-    * \return The count of the number of elements in the vector
+    * \return The number of elements in the vector
   */
 	size_t get_size() const {
 		return eles.size();
 	}
 
   /**
-    * \brief  Get adirect pointer to the memory array used internally by
+    * \brief  Get a pointer to the memory array used internally by
     *         the vector to store its owned elements.
     * \return A pointer the underlying data memory array.
     *
@@ -182,7 +192,7 @@ public:
 	}
 
   /**
-    * \brief  Const method to get adirect pointer to the memory array 
+    * \brief  Const method to get a pointer to the memory array 
     *         used internally by the vector to store its owned elements.
     * \return A const pointer the underlying data memory array.
     *
@@ -242,27 +252,64 @@ public:
 
   /**
     * \brief Compute the sum of all elements in the vector. <br>
+	* If the type is integer, the sum can overflow.
     * **parallel**
     * \return The sum of all items in the vector.
   */
 	T sum() const {
-		T ret = 0;
+		return sum<T>();
+	}
+
+  /**
+    * \brief Compute the sum of all elements in the vector. <br>
+	* This sum() allows users to specify the type of the result, so users
+	* can avoid integer overflow.
+    * **parallel**
+    * \return The sum of all items in the vector.
+  */
+	template<class ResType>
+	ResType sum() const {
+		struct identity_func {
+			ResType operator()(T v) {
+				return v;
+			}
+		};
+		return aggregate<identity_func, ResType>(identity_func());
+	}
+
+	template<class Func, class ResType>
+	ResType aggregate(Func func) const {
+		ResType ret = 0;
 #pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
-			ret += get(i);
+			ret += func(eles[i]);
 		return ret;
 	}
 
   /**
-    * \brief Find the index with the maximal value in the vector and
-    *     return its value.
+    * \brief Find the maximal value in the vector and return its value.
     * \return The maximal value in the vector.
   */
 	T max() const {
+		return max_val_loc().first;
+	}
+
+	/**
+	 * \brief Find the maximal value in the vector and return its value
+	 *        and its location.
+	 * \return A pair that contains the maximal value and its location
+	 *         in the vector.
+	 */
+	std::pair<T, off_t> max_val_loc() const {
 		T ret = std::numeric_limits<T>::min();
-		for (size_t i = 0; i < get_size(); i++)
-			ret = std::max(get(i), ret);
-		return ret;
+		off_t idx = 0;
+		for (size_t i = 0; i < get_size(); i++) {
+			if (ret < get(i)) {
+				ret = get(i);
+				idx = i;
+			}
+		}
+		return std::pair<T, off_t>(ret, idx);
 	}
 
   /**
@@ -298,13 +345,56 @@ public:
 
   /**
     * \brief In place division of vector by a single value.
-    * \param v The value by which you want the array divided by.
+    * \param v The value by which you want the array divided.
     * **parallel** 
   */
 	void div_by_in_place(T v) {
 #pragma omp parallel for
 		for (size_t i = 0; i < get_size(); i++)
 			eles[i] /= v;
+	}
+
+	/**
+	 * \brief element-wise merge with another vector and store the result
+	 *        in this vector.
+	 * \param vec The vector that you want to merge with.
+	 * \param func The operator that you want to perform on each pair of
+	 *             elements.
+	 */
+	template<class MergeFunc, class VecType>
+	void merge_in_place(typename FG_vector<VecType>::ptr vec, MergeFunc func) {
+		assert(this->get_size() == vec->get_size());
+#pragma omp parallel for
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] = func(eles[i], vec->get(i));
+	}
+
+	/**
+	 * \brief In place element-wise addition by another vector.
+	 * \param vec The vector by which you want to add to this vector.
+	 * **parallel**
+	 */
+	void add_in_place(FG_vector<T>::ptr vec) {
+		struct add_func {
+			T operator()(const T &v1, const T &v2) {
+				return v1 + v2;
+			}
+		};
+		merge_in_place<add_func, T>(vec, add_func());
+	}
+
+	/**
+	 * \brief In place subtraction of the vector by another vector.
+	 * \param vec The vector by which you want the array to be subtracted.
+	 * **parallel** 
+	 */
+	void subtract_in_place(const FG_vector<T> &vec) {
+		struct sub_func {
+			T operator()(const T &v1, const T &v2) {
+				return v1 - v2;
+			}
+		};
+		merge_in_place<sub_func, T>(vec, sub_func());
 	}
 
   /**
@@ -373,14 +463,24 @@ public:
 	T &get(vertex_id_t id) {
 		return eles[id];
 	}
+
+	log_histogram log_hist(int power) const {
+		T max_v = max();
+		int num_buckets = ceil(log(max_v) / log(power));
+		log_histogram hist(num_buckets);
+		for (size_t i = 0; i < get_size(); i++) {
+			hist.add_value(eles[i]);
+		}
+		return hist;
+	}
 };
 
   /**
-    * \brief Apply a user defined function to an STL vector of FG_vectors.
+    * \brief Apply a user defined function to multipl FG_vectors.
     * **parallel**
     * \param inputs A vector of FG_vectors that are the inputs.
-    * \param output A vector of FG_vectors that are the outputs.
-    * \param apply  The user-defined function that will be applied to all vecotros.
+    * \param output A FG_vector that are the outputs.
+    * \param apply  The user-defined function that will be applied to all vecotors.
   */
 template<class T, class ApplyFunc>
 void multi_vec_apply(const std::vector<typename FG_vector<T>::ptr> &inputs,

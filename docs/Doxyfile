@@ -763,7 +763,7 @@ INPUT_ENCODING         = UTF-8
 # *.md, *.mm, *.dox, *.py, *.f90, *.f, *.for, *.tcl, *.vhd, *.vhdl, *.ucf,
 # *.qsf, *.as and *.js.
 
-FILE_PATTERNS          = *.cpp *.h
+FILE_PATTERNS          = *.h
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
 # be searched for input files as well.
@@ -790,25 +790,40 @@ EXCLUDE                = build							\
 						 unit-test						\
 						 unused							\
 						 utils							\
+						 libsafs						\
+						 include/aio_private.h			\
 						 include/aligned_allocator.h	\
+						 include/associative_cache.h	\
+						 include/cache_config.h			\
+						 include/common_c.h				\
+						 include/common.h				\
+						 include/compute_stat.h			\
+						 include/concurrency.h			\
+						 include/container.h			\
 						 include/debugger.h				\
+						 include/direct_private.h		\
 						 include/dirty_page_flusher.h	\
 						 include/disk_read_thread.h		\
 						 include/exception.h			\
+						 include/file_mapper.h			\
+						 include/file_partition.h		\
+						 include/global_cached_private.h\
 						 include/LRU2Q.h				\
+						 include/memory_manager.h		\
 						 include/mem_tracker.h			\
+						 include/messaging.h			\
+						 include/native_file.h			\
+						 include/NUMA_cache.h			\
+						 include/part_global_cached_private.h\
 						 include/pointer.h				\
+						 include/RAID_config.h			\
+						 include/read_private.h			\
+						 include/remote_access.h		\
 						 include/shadow_cell.h			\
+						 include/slab_allocator.h		\
 						 include/timer.h				\
 						 include/virt_aio_ctx.h			\
-						 include/wpaio.h				\
-						 libsafs/debugger.cpp			\
-						 libsafs/disk_read_thread.cpp	\
-						 libsafs/mem_tracker.cpp		\
-						 libsafs/shadow_cell.cpp		\
-						 libsafs/timer.cpp				\
-						 libsafs/virt_aio_ctx.cpp		\
-						 libsafs/wpaio.cpp
+						 include/wpaio.h
 
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or

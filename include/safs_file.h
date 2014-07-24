@@ -26,20 +26,28 @@
 #include <vector>
 
 #include "common.h"
-#include "RAID_config.h"
+
+/*
+ * This stores the local filesystem file information that stores
+ * each partition of SAFS files.
+ */
+struct part_file_info
+{
+	// The file name in the local filesystem.
+	std::string name;
+	// The NUMA node id where the disk is connected to.
+	int node_id;
+};
+
+class RAID_config;
 
 class safs_file
 {
 	// The collection of native files.
-	std::vector<file_info> native_dirs;
+	std::vector<part_file_info> native_dirs;
 	std::string name;
 public:
-	safs_file(const RAID_config &conf, const std::string &file_name) {
-		conf.get_disks(native_dirs);
-		for (unsigned i = 0; i < native_dirs.size(); i++)
-			native_dirs[i].name += "/" + file_name;
-		this->name = file_name;
-	}
+	safs_file(const RAID_config &conf, const std::string &file_name);
 
 	const std::string &get_name() const {
 		return name;
