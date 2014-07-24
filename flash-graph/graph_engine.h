@@ -565,6 +565,14 @@ public:
 		assert(vindex);
 		return vindex;
 	}
+
+	void set_max_processing_vertices(int max) {
+		max_processing_vertices = max;
+	}
+
+	int get_max_processing_vertices() const {
+		return max_processing_vertices;
+	}
 };
 
 #endif

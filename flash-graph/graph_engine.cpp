@@ -243,7 +243,7 @@ graph_engine::graph_engine(const std::string &graph_file,
 	if (graph_conf.use_in_mem_index())
 		vindex = vertex_index::safs_load(index->get_index_file());
 
-	max_processing_vertices = 0;
+	max_processing_vertices = graph_conf.get_max_processing_vertices();
 	is_complete = false;
 	this->vertices = index;
 

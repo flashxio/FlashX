@@ -318,6 +318,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	// so that we can simple ignore the rest of vertices.
 	graph->set_vertex_scheduler(vertex_scheduler::ptr(
 				new vertex_size_scheduler(graph)));
+	graph->set_max_processing_vertices(3);
 
 	class remove_small_filter: public vertex_filter
 	{

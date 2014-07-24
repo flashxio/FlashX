@@ -377,13 +377,13 @@ void worker_thread::run()
 		do {
 			balancer->process_completed_stolen_vertices();
 			num = process_activated_vertices(
-					graph_conf.get_max_processing_vertices()
+					graph->get_max_processing_vertices()
 					- max(get_num_vertices_processing(),
 						io->num_pending_ios()));
 			num_visited += num;
 			msg_processor->process_msgs();
 			if (index_reader->get_num_pending_tasks()
-					< (size_t) graph_conf.get_max_processing_vertices())
+					< (size_t) graph->get_max_processing_vertices())
 				index_reader->wait4complete(0);
 			else
 				index_reader->wait4complete(1);
