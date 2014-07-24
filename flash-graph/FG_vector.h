@@ -88,11 +88,11 @@ public:
     * \brief Equivalent to += operator. Element by element
     *     addition of one `FG_vector` to another.
     * \param other An `FG_vector` smart pointer object.
+    * **parallel**
     *
   */
   void plus_eq(FG_vector<T>::ptr other) {
     assert(get_size() == other->get_size());
-#pragma omp parallel for
     for (size_t i = 0; i < get_size(); i++) {
       eles[i] += other->get(i);
     }
@@ -110,11 +110,12 @@ public:
   /** 
   * \brief Make a shallow copy of the vector.
   * \param other An `FG_vector` smart pointer.
+  * **paralel**
   */
-  // TODO DM: Do better. 
   void shallow_copy(FG_vector<T>::ptr other) {
     assert(this->get_size() == other->get_size());
-    for (size_t i = 0; i < other->get_size(); i++) {
+#pragma omp parallel for
+    for (size_t i = 0; i < get_size(); i++) {
       this->eles[i] = other->eles[i];
     }
   }
@@ -286,6 +287,14 @@ public:
      size_t ret = std::distance(eles.begin(), res);
      return ret;
 	}
+
+  void print() {
+    std::cout << "[";
+    for (vsize_t i=0; i < get_size(); i++) {
+      std::cout << " " << get(i);
+    }
+    std::cout <<  " ]\n\n";
+  }
 
   /**
     * \brief In place division of vector by a single value.
