@@ -31,7 +31,6 @@ k-means: k_means.o ../libgraph.a
 matrix-k-means: matrix_k_means.o ../libgraph.a ../matrix/libmatrix.a
 	$(CXX) -o matrix-k-means matrix_k_means.o $(LDFLAGS)
 
-
 clean:
 	rm -f *.d
 	rm -f *.o
