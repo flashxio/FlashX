@@ -53,10 +53,11 @@ public:
 
 class wcc_vertex: public compute_vertex
 {
-	bool updated;
-	vertex_id_t component_id;
 protected:
 	bool empty;
+private:
+	bool updated;
+	vertex_id_t component_id;
 public:
 	wcc_vertex(vertex_id_t id): compute_vertex(id) {
 		component_id = id;
