@@ -155,14 +155,19 @@ class simple_KV_store
 	io_interface::ptr io;
 	KV_compute_allocator<ValueType, TaskType> alloc;
 
-	struct task_larger {
+	struct task_comp_larger {
+		bool operator()(const TaskType task1, const TaskType task2) {
+			return task1.get_idx() >= task2.get_idx();
+		}
+	};
+	struct task_comp_smaller {
 		bool operator()(const TaskType &task1, const TaskType &task2) {
-			return task1.get_idx() > task2.get_idx();
+			return task1.get_idx() <= task2.get_idx();
 		}
 	};
 	struct task_less {
 		bool operator()(const TaskType &task1, const TaskType &task2) {
-			return task1.get_idx() <= task2.get_idx();
+			return task1.get_idx() < task2.get_idx();
 		}
 	};
 
@@ -188,11 +193,11 @@ class simple_KV_store
 		if (task_buf.size() < 2)
 			return;
 		if (task_buf[0].get_idx() > task_buf[1].get_idx()) {
-			if (is_sorted(task_buf.begin(), task_buf.end(), task_larger()))
+			if (std::is_sorted(task_buf.begin(), task_buf.end(), task_comp_larger()))
 				return;
 		}
 		else
-			if (is_sorted(task_buf.begin(), task_buf.end(), task_less()))
+			if (std::is_sorted(task_buf.begin(), task_buf.end(), task_comp_smaller()))
 				return;
 		std::sort(task_buf.begin(), task_buf.end(), task_less());
 	}
