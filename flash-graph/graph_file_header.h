@@ -52,6 +52,10 @@ class graph_header
 		char page[PAGE_SIZE];
 	} h;
 public:
+	static int get_header_size() {
+		return sizeof(graph_header);
+	}
+
 	graph_header() {
 		assert(sizeof(*this) == PAGE_SIZE);
 		memset(this, 0, sizeof(*this));

@@ -206,7 +206,7 @@ public:
 		return 0;
 	}
 
-	virtual int has_requests() const {
+	virtual int has_requests() {
 		return !converter.has_complete();
 	}
 
@@ -215,7 +215,7 @@ public:
 		return converter.get_request(buf_type, this);
 	}
 
-	virtual bool has_completed() const {
+	virtual bool has_completed() {
 		return num_pending == 0 && !has_requests();
 	}
 
@@ -263,7 +263,7 @@ public:
 		return 0;
 	}
 
-	virtual int has_requests() const {
+	virtual int has_requests() {
 		return !converter.has_complete();
 	}
 
@@ -272,7 +272,7 @@ public:
 		return converter.get_request(buf_type, this);
 	}
 
-	virtual bool has_completed() const {
+	virtual bool has_completed() {
 		return num_pending == 0 && !has_requests();
 	}
 
@@ -365,7 +365,6 @@ thread_private::thread_private(int node_id, int idx, int entry_size,
 	this->node_id = node_id;
 	this->idx = idx;
 	this->gen = gen;
-	this->io = NULL;
 	this->factory = factory;
 	read_bytes = 0;
 	num_accesses = 0;
@@ -379,7 +378,6 @@ thread_private::thread_private(int node_id, int idx, int entry_size,
 void thread_private::init() {
 	io = factory->create_io(this);
 	io->set_max_num_pending_ios(params.get_aio_depth_per_file());
-	io->init();
 
 	if (io->support_aio()) {
 		cb = new cleanup_callback(idx, this, io->get_file_id());
@@ -394,11 +392,11 @@ class work2req_converter
 {
 	work2req_range_converter workload;
 	int align_size;
-	io_interface *io;
+	io_interface::ptr io;
 	sum_compute_allocator *sum_alloc;
 	write_compute_allocator *write_alloc;
 public:
-	work2req_converter(io_interface *io, int align_size,
+	work2req_converter(io_interface::ptr io, int align_size,
 			sum_compute_allocator *sum_alloc, write_compute_allocator *write_alloc) {
 		this->align_size = align_size;
 		this->io = io;
@@ -415,16 +413,12 @@ public:
 		return workload.has_complete();
 	}
 
-	int to_reqs(workload_gen *gen, io_interface *io, int buf_type, int num,
-			io_request reqs[]);
+	int to_reqs(workload_gen *gen, int buf_type, int num, io_request reqs[]);
 };
 
-int work2req_converter::to_reqs(workload_gen *gen, io_interface *io,
-		int buf_type, int num, io_request reqs[])
+int work2req_converter::to_reqs(workload_gen *gen, int buf_type, int num,
+		io_request reqs[])
 {
-	int node_id = io->get_node_id();
-
-
 	int i = 0;
 	while (!workload.has_complete() && i < num) {
 		request_range range = workload.get_request(buf_type, NULL);
@@ -442,7 +436,7 @@ int work2req_converter::to_reqs(workload_gen *gen, io_interface *io,
 					compute->init(converter, buf_type);
 				}
 				reqs[i] = io_request(compute, range.get_loc(), range.get_size(),
-						range.get_access_method(), io, node_id);
+						range.get_access_method());
 			}
 			else {
 				write_user_compute *compute = (write_user_compute *) write_alloc->alloc();
@@ -456,7 +450,7 @@ int work2req_converter::to_reqs(workload_gen *gen, io_interface *io,
 					compute->init(io->get_file_id(), converter, buf_type);
 				}
 				reqs[i] = io_request(compute, range.get_loc(), range.get_size(),
-						range.get_access_method(), io, node_id);
+						range.get_access_method());
 			}
 		}
 		else {
@@ -468,7 +462,7 @@ int work2req_converter::to_reqs(workload_gen *gen, io_interface *io,
 				create_write_data(p, range.get_size(), loc.get_offset(),
 						io->get_file_id());
 			reqs[i].init(p, loc, range.get_size(), range.get_access_method(),
-					io, node_id);
+					io.get(), io->get_node_id());
 		}
 		i++;
 	}
@@ -498,7 +492,7 @@ void thread_private::run()
 				}
 				if (converter.has_complete())
 					break;
-				int ret = converter.to_reqs(gen, io, config.get_buf_type(),
+				int ret = converter.to_reqs(gen, config.get_buf_type(),
 						num_reqs_by_user - i, reqs + i);
 				if (ret == 0) {
 					no_mem = true;

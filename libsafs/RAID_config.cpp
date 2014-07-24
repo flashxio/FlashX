@@ -30,7 +30,7 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 	 * inside the directory, there is exactly one file that stores the data
 	 * of a partition, and the file name is the partition ID.
 	 */
-	std::map<int, file_info> file_map;
+	std::map<int, part_file_info> file_map;
 	for (unsigned i = 0; i < root_paths.size(); i++) {
 		std::string dir_name = root_paths[i].name + std::string("/") + file_name;
 		native_dir dir(dir_name);
@@ -54,9 +54,9 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 			return NULL;
 		}
 		int part_id = atoi(part_ids[0].c_str());
-		file_info info = root_paths[i];
+		part_file_info info = root_paths[i];
 		info.name = dir_name + std::string("/") + part_ids[0];
-		file_map.insert(std::pair<int, file_info>(part_id, info));
+		file_map.insert(std::pair<int, part_file_info>(part_id, info));
 	}
 	if (file_map.size() < root_paths.size()) {
 		fprintf(stderr, "duplicated partition id of the SAFS file %s\n",
@@ -64,19 +64,19 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 		return NULL;
 	}
 
-	std::vector<file_info> files;
-	for (std::map<int, file_info>::const_iterator it = file_map.begin();
+	std::vector<part_file_info> files;
+	for (std::map<int, part_file_info>::const_iterator it = file_map.begin();
 			it != file_map.end(); it++) {
 		files.push_back(it->second);
 	}
 
 	switch (RAID_mapping_option) {
 		case RAID0:
-			return new RAID0_mapper(files, RAID_block_size);
+			return new RAID0_mapper(file_name, files, RAID_block_size);
 		case RAID5:
-			return new RAID5_mapper(files, RAID_block_size);
+			return new RAID5_mapper(file_name, files, RAID_block_size);
 		case HASH:
-			return new hash_mapper(files, RAID_block_size);
+			return new hash_mapper(file_name, files, RAID_block_size);
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
 			exit(1);
@@ -87,11 +87,11 @@ file_mapper *RAID_config::create_file_mapper() const
 {
 	switch (RAID_mapping_option) {
 		case RAID0:
-			return new RAID0_mapper(root_paths, RAID_block_size);
+			return new RAID0_mapper("root", root_paths, RAID_block_size);
 		case RAID5:
-			return new RAID5_mapper(root_paths, RAID_block_size);
+			return new RAID5_mapper("root", root_paths, RAID_block_size);
 		case HASH:
-			return new hash_mapper(root_paths, RAID_block_size);
+			return new hash_mapper("root", root_paths, RAID_block_size);
 		default:
 			fprintf(stderr, "wrong RAID mapping option\n");
 			exit(1);
@@ -106,4 +106,40 @@ std::set<int> RAID_config::get_node_ids() const
 		node_ids.insert(root_paths[k].node_id);
 	}
 	return node_ids;
+}
+
+int RAID_config::retrieve_data_files(std::string file_file,
+		std::vector<part_file_info> &data_files)
+{
+	char *line = NULL;
+	size_t size = 0;
+	int line_length;
+	FILE *fd = fopen(file_file.c_str(), "r");
+	if (fd == NULL) {
+		perror("fopen");
+		assert(0);
+	}
+	while ((line_length = getline(&line, &size, fd)) > 0) {
+		line[line_length - 1] = 0;
+		// skip comment lines.
+		if (*line == '#')
+			continue;
+
+		char *colon = strstr(line, ":");
+		part_file_info info;
+		char *name = line;
+		if (colon) {
+			*colon = 0;
+			info.node_id = atoi(line);
+			colon++;
+			name = colon;
+		}
+		info.name = name;
+		data_files.push_back(info);
+		free(line);
+		line = NULL;
+		size = 0;
+	}
+	fclose(fd);
+	return data_files.size();
 }

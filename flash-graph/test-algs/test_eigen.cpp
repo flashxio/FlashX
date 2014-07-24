@@ -25,6 +25,8 @@
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/matrix_eigensolver.h"
 
+typedef FG_sparse_matrix<general_get_edge_iter<char> > FG_general_sparse_char_matrix;
+
 void int_handler(int sig_num)
 {
 #ifdef PROFILER
@@ -121,12 +123,12 @@ int main(int argc, char *argv[])
 	}
 	// general sparse matrix of characters
 	else if (matrix_type == "gc") {
-		FG_general_sparse_matrix<char>::ptr matrix
-			= FG_general_sparse_matrix<char>::create(graph);
+		FG_general_sparse_char_matrix::ptr matrix
+			= FG_general_sparse_char_matrix::create(graph);
 		if (type == "EV")
-			compute_eigen<FG_general_sparse_matrix<char> >(matrix, m, nv, which, eigen_pairs);
+			compute_eigen<FG_general_sparse_char_matrix>(matrix, m, nv, which, eigen_pairs);
 		else if (type == "LS" || type == "RS")
-			compute_SVD<FG_general_sparse_matrix<char> >(matrix, m, nv, which, type, eigen_pairs);
+			compute_SVD<FG_general_sparse_char_matrix>(matrix, m, nv, which, type, eigen_pairs);
 	}
 	else
 		assert(0);

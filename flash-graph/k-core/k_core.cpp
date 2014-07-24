@@ -38,23 +38,24 @@ vsize_t CURRENT_K; // Min degree necessary to be part of the k-core graph
 vsize_t PREVIOUS_K; 
 bool all_greater_than_core = true;
 
-class kcore_vertex: public compute_directed_vertex
+enum kcore_stage_t
+{
+	INIT_DEGREE,
+	KCORE,
+};
+kcore_stage_t stage;
+
+class kcore_vertex: public compute_vertex
 {
   bool deleted;
   vsize_t core;
   vsize_t degree; 
 
 public:
-	kcore_vertex() {
-	}
-
-  kcore_vertex(vertex_id_t id, const vertex_index &index1):
-    compute_directed_vertex(id, index1) {
-	const directed_vertex_index &index = (const directed_vertex_index &) index1;
-    this->degree = index.get_num_in_edges(id) + index.get_num_out_edges(id);
-    this->core = degree == 0 ? 0 :
-                degree == 1 ? 1 : -1; // Everyone between kmin < core > kmax will get this core
-    this->deleted = degree == 0 ? true : false; // If your degree you're already deleted
+  kcore_vertex(vertex_id_t id): compute_vertex(id) {
+    this->deleted = false;
+	this->core = -1;
+    this->degree = 0;
   }
 
   bool is_deleted() const {
@@ -82,6 +83,13 @@ public:
 	void run(vertex_program &prog, const page_vertex &vertex);
 
 	void run_on_message(vertex_program &prog, const vertex_message &msg); 
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		degree = header.get_num_edges();
+		this->core = degree == 0 ? 0 :
+			degree == 1 ? 1 : -1; // Everyone between kmin < core > kmax will get this core
+		this->deleted = degree == 0 ? true : false; // If your degree you're already deleted
+	}
 };
 
 // If I am to be deleted, multicast this message to all my neighbors
@@ -105,18 +113,24 @@ void multicast_delete_msg(vertex_program &prog,
 }
 
 void kcore_vertex::run(vertex_program &prog) {
-  if ( degree > CURRENT_K ) { 
-    return; 
-  }
+	if (stage == INIT_DEGREE) {
+		vertex_id_t id = get_id();
+		request_vertex_headers(&id, 1);
+		return;
+	}
 
-  if (!is_deleted()) {
-    vertex_id_t id = get_id();
-    request_vertices(&id, 1); // put my edgelist in page cache
+	if ( degree > CURRENT_K ) { 
+		return; 
+	}
 
-    if (all_greater_than_core) {
-      all_greater_than_core = false;
-    }
-  }
+	if (!is_deleted()) {
+		vertex_id_t id = get_id();
+		request_vertices(&id, 1); // put my edgelist in page cache
+
+		if (all_greater_than_core) {
+			all_greater_than_core = false;
+		}
+	}
 }
 
 void kcore_vertex::run(vertex_program &prog, const page_vertex &vertex) {
@@ -339,6 +353,14 @@ int main(int argc, char *argv[])
     }
   };
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	printf("Run the stage of init degree\n");
+	stage = INIT_DEGREE;
+	graph->start_all(); 
+	graph->wait4complete();
+	stage = KCORE;
+
   for (; CURRENT_K <= kmax; CURRENT_K++) {
 
     std::shared_ptr<vertex_filter> filter
@@ -398,7 +420,6 @@ int main(int argc, char *argv[])
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
+	printf("\n%d-core shows %ld vertices > %d degree in %f seconds\n",
+			K, in_k_core, K, time_diff(start, end));
 }

@@ -23,7 +23,6 @@ add_library(safs STATIC
 	memory_manager.cpp
 	part_global_cached_private.cpp
 	shadow_cell.cpp
-	workload.cpp
 	common.cpp
 	global_cached_private.cpp
 	mem_tracker.cpp

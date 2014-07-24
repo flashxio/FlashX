@@ -20,9 +20,14 @@
 #include <google/profiler.h>
 #endif
 
-#include "scan_graph.h"
 #include "FG_vector.h"
 #include "FGlib.h"
+
+#include "scan_graph.h"
+
+namespace {
+
+scan_stage_t scan_stage;
 
 class count_msg: public vertex_message
 {
@@ -140,12 +145,7 @@ size_t extended_neighbor_list::count_edges(const page_vertex *v)
 class local_scan_vertex: public scan_vertex
 {
 public:
-	local_scan_vertex() {
-		local_value.set_real_local(0);
-	}
-
-	local_scan_vertex(vertex_id_t id,
-			const vertex_index &index): scan_vertex(id, index) {
+	local_scan_vertex(vertex_id_t id): scan_vertex(id) {
 		local_value.set_real_local(0);
 	}
 
@@ -153,7 +153,10 @@ public:
 
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
-		request_vertices(&id, 1);
+		if (scan_stage == scan_stage_t::INIT)
+			request_vertex_headers(&id, 1);
+		else if (scan_stage == scan_stage_t::RUN)
+			request_vertices(&id, 1);
 	}
 
 	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
@@ -176,15 +179,23 @@ public:
 		else
 			local_value.inc_real_local(msg.get_num());
 	}
+
+	size_t get_result() const {
+		return get_local_scan();
+	}
 };
 
 class skip_larger {
-	size_t size;
+	vsize_t degree;
 	vertex_id_t id;
 	graph_engine &graph;
+
+	vsize_t get_degree(vertex_id_t id) const {
+		return ((scan_vertex &) graph.get_vertex(id)).get_degree();
+	}
 public:
 	skip_larger(graph_engine &_graph, vertex_id_t id): graph(_graph) {
-		this->size = graph.get_vertex_info(id).get_ext_mem_size();
+		this->degree = get_degree(id);
 		this->id = id;
 	}
 
@@ -198,10 +209,10 @@ public:
 	 * on the vertices with the largest Id.
 	 */
 	bool operator()(vertex_id_t id) {
-		const in_mem_vertex_info info = graph.get_vertex_info(id);
-		if (info.get_ext_mem_size() == size)
+		vsize_t other_degree = get_degree(id);
+		if (other_degree == degree)
 			return id >= this->id;
-		return info.get_ext_mem_size() > size;
+		return other_degree > degree;
 	}
 };
 
@@ -242,27 +253,9 @@ void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 	ls_v.finding_triangles_end(prog, data);
 }
 
-class save_scan_query: public vertex_query
-{
-	FG_vector<size_t>::ptr vec;
-public:
-	save_scan_query(FG_vector<size_t>::ptr vec) {
-		this->vec = vec;
-	}
+}
 
-	virtual void run(graph_engine &graph, compute_vertex &v) {
-		local_scan_vertex &lv = (local_scan_vertex &) v;
-		vec->set(lv.get_id(), lv.get_local_scan());
-	}
-
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
-	}
-
-	virtual ptr clone() {
-		return vertex_query::ptr(new save_scan_query(vec));
-	}
-};
-
+#include "save_result.h"
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
 	finding_triangles_end = ls_finding_triangles_end;
@@ -282,6 +275,11 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
+	scan_stage = scan_stage_t::INIT;
+	graph->start_all();
+	graph->wait4complete();
+
+	scan_stage = scan_stage_t::RUN;
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
@@ -290,12 +288,11 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("It takes %f seconds to compute all local scan\n",
 			time_diff(start, end));
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
-	graph->query_on_all(vertex_query::ptr(new save_scan_query(vec)));
+	graph->query_on_all(vertex_query::ptr(
+				new save_query<size_t, local_scan_vertex>(vec)));
 	return vec;
 }

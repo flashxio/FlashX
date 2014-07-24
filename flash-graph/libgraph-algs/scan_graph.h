@@ -453,9 +453,16 @@ extern runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
 		const page_vertex &);
 extern void (*destroy_runtime)(scan_vertex &, runtime_data_t *);
 
+enum scan_stage_t
+{
+	INIT,
+	RUN,
+};
+
 class scan_vertex: public compute_vertex
 {
 protected:
+	vsize_t degree;
 	multi_func_value local_value;
 
 #ifdef PV_STAT
@@ -468,18 +475,8 @@ protected:
 	struct timeval vertex_start;
 #endif
 public:
-	scan_vertex() {
-#ifdef PV_STAT
-		num_all_edges = 0;
-		scan_bytes = 0;
-		rand_jumps = 0;
-		min_comps = 0;
-		time_us = 0;
-#endif
-	}
-
-	scan_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(
-			id, index) {
+	scan_vertex(vertex_id_t id): compute_vertex(id) {
+		degree = 0;
 #ifdef PV_STAT
 		num_all_edges = 0;
 		scan_bytes = 0;
@@ -498,6 +495,10 @@ public:
 		return rand_jumps;
 	}
 #endif
+
+	vsize_t get_degree() const {
+		return degree;
+	}
 
 	bool has_local_scan() const {
 		return local_value.has_real_local();
@@ -518,6 +519,11 @@ public:
 	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
+	}
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		degree = header.get_num_edges();
 	}
 };
 

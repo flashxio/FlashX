@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 
 #include <sstream>
 
@@ -35,85 +36,6 @@
 #include "messaging.h"
 
 extern "C" {
-
-void bind2cpu(int cpu_id)
-{
-	cpu_set_t cpu_mask;
-	CPU_ZERO(&cpu_mask);
-	CPU_SET(cpu_id, &cpu_mask);
-	int len = sizeof(cpu_mask);
-	if (sched_setaffinity(gettid(), len, &cpu_mask) < 0) {
-		perror("sched_setaffinity");
-		exit(1);
-	}
-}
-
-void bind_mem2node_id(int node_id)
-{
-	struct bitmask *bmp = numa_allocate_nodemask();
-	numa_bitmask_setbit(bmp, node_id);
-	numa_set_membind(bmp);
-	numa_free_nodemask(bmp);
-}
-
-void bind2node_id(int node_id)
-{
-	struct bitmask *bmp = numa_allocate_nodemask();
-	numa_bitmask_setbit(bmp, node_id);
-	numa_bind(bmp);
-	numa_free_nodemask(bmp);
-}
-
-int get_numa_run_node()
-{
-	struct bitmask *bmp = numa_get_run_node_mask();
-	int nbytes = numa_bitmask_nbytes(bmp);
-	int num_nodes = 0;
-	int node_id = -1;
-	int i;
-	for (i = 0; i < nbytes * 8; i++)
-		if (numa_bitmask_isbitset(bmp, i)) {
-			num_nodes++;
-			printf("bind to node %d\n", i);
-			node_id = i;
-		}
-	return node_id;
-}
-
-int numa_get_mem_node()
-{
-	struct bitmask *bmp = numa_get_membind();
-	int nbytes = numa_bitmask_nbytes(bmp);
-	int num_nodes = 0;
-	int node_id = -1;
-	int i;
-	for (i = 0; i < nbytes * 8; i++)
-		if (numa_bitmask_isbitset(bmp, i)) {
-			num_nodes++;
-			node_id = i;
-		}
-	assert(num_nodes == 1);
-	return node_id;
-}
-
-void permute_offsets(int num, int repeats, int stride, off_t start,
-		off_t offsets[])
-{
-	int idx = 0;
-	for (int k = 0; k < repeats; k++) {
-		for (int i = 0; i < num; i++) {
-			offsets[idx++] = ((off_t) i) * stride + start * stride;
-		}
-	}
-	int tot_length = idx;
-
-	for (int i = tot_length - 1; i >= 1; i--) {
-		int j = random() % tot_length;
-		off_t tmp = offsets[j];
-		offsets[j] = offsets[i];
-		offsets[i] = tmp;
-	}
-}
 
 int isnumeric(char *str)
 {
@@ -123,6 +45,43 @@ int isnumeric(char *str)
 			return 0;
 	}
 	return 1;
+}
+
+static const int huge_page_size = 2 * 1024 * 1024;
+void *malloc_large(size_t size)
+{
+#define PROTECTION (PROT_READ | PROT_WRITE)
+	/* Only ia64 requires this */
+#ifdef __ia64__
+#define ADDR (void *)(0x8000000000000000UL)
+#define FLAGS (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_FIXED)
+#else
+#define ADDR (void *)(0x0UL)
+#define FLAGS (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB)
+#endif
+	if (params.is_huge_page_enabled()) {
+		size = ROUNDUP(size, huge_page_size);
+		void *addr = mmap(ADDR, size, PROTECTION, FLAGS, 0, 0);
+		if (addr == MAP_FAILED) {
+			perror("mmap");
+			return NULL;
+		}
+		return addr;
+	}
+	else {
+		return numa_alloc_local(size);
+	}
+}
+
+void free_large(void *addr, size_t size)
+{
+	if (params.is_huge_page_enabled()) {
+		size = ROUNDUP(size, huge_page_size);
+		munmap(addr, size);
+	}
+	else {
+		numa_free(addr, size);
+	}
 }
 
 }
@@ -213,42 +172,6 @@ long str2size(std::string str)
 		str[len - 1] = 0;
 	}
 	return atol(str.c_str()) * multiply;
-}
-
-int retrieve_data_files(std::string file_file,
-		std::vector<file_info> &data_files)
-{
-	char *line = NULL;
-	size_t size = 0;
-	int line_length;
-	FILE *fd = fopen(file_file.c_str(), "r");
-	if (fd == NULL) {
-		perror("fopen");
-		assert(0);
-	}
-	while ((line_length = getline(&line, &size, fd)) > 0) {
-		line[line_length - 1] = 0;
-		// skip comment lines.
-		if (*line == '#')
-			continue;
-
-		char *colon = strstr(line, ":");
-		file_info info;
-		char *name = line;
-		if (colon) {
-			*colon = 0;
-			info.node_id = atoi(line);
-			colon++;
-			name = colon;
-		}
-		info.name = name;
-		data_files.push_back(info);
-		free(line);
-		line = NULL;
-		size = 0;
-	}
-	fclose(fd);
-	return data_files.size();
 }
 
 int split_string(const std::string &str, char delim,

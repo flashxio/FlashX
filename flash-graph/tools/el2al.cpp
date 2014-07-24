@@ -29,6 +29,7 @@
 #endif
 
 #include <boost/foreach.hpp>
+#include <stxxl.h>
 
 #include "thread.h"
 #include "native_file.h"
@@ -36,7 +37,25 @@
 #include "edge_type.h"
 #include "ext_mem_vertex_iterator.h"
 
-int num_threads = 32;
+template<class edge_data_type>
+class stxxl_edge_vector: public stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result
+{
+public:
+	typedef typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result::const_iterator const_iterator;
+	void append(stxxl_edge_vector<edge_data_type>::const_iterator it,
+			stxxl_edge_vector<edge_data_type>::const_iterator end) {
+		for (; it != end; it++)
+			this->push_back(*it);
+	}
+
+	void append(typename std::vector<edge<edge_data_type> >::const_iterator it,
+			typename std::vector<edge<edge_data_type> >::const_iterator end) {
+		for (; it != end; it++)
+			this->push_back(*it);
+	}
+};
+
+int num_threads = 1;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
 const char *delimiter = "\t";
 
@@ -47,21 +66,101 @@ bool check_graph = false;
 
 template<class edge_data_type>
 struct comp_edge {
-	bool operator() (const edge<edge_data_type> &e1, const edge<edge_data_type> &e2) {
+	bool operator() (const edge<edge_data_type> &e1, const edge<edge_data_type> &e2) const {
 		if (e1.get_from() == e2.get_from())
 			return e1.get_to() < e2.get_to();
 		else
 			return e1.get_from() < e2.get_from();
 	}
+
+	static edge<edge_data_type> min_value() {
+		vertex_id_t min_id = std::numeric_limits<vertex_id_t>::min();
+		assert(min_id == 0);
+		return edge<edge_data_type>(min_id, min_id);
+	}
+
+	static edge<edge_data_type> max_value() {
+		vertex_id_t max_id = std::numeric_limits<vertex_id_t>::max();
+		assert(max_id == INVALID_VERTEX_ID);
+		return edge<edge_data_type>(max_id, max_id);
+	}
+};
+
+template<>
+struct comp_edge<ts_edge_data> {
+	comp_edge() {
+		printf("compare timestamp edge\n");
+	}
+
+	bool operator() (const edge<ts_edge_data> &e1, const edge<ts_edge_data> &e2) const {
+		if (e1.get_from() != e2.get_from())
+			return e1.get_from() < e2.get_from();
+		else if (e1.get_data().get_timestamp() != e2.get_data().get_timestamp())
+			return e1.get_data().get_timestamp() < e2.get_data().get_timestamp();
+		else
+			return e1.get_to() < e2.get_to();
+	}
+
+	static edge<ts_edge_data> min_value() {
+		vertex_id_t min_id = std::numeric_limits<vertex_id_t>::min();
+		time_t min_time = std::numeric_limits<time_t>::min();
+		return edge<ts_edge_data>(min_id, min_id, ts_edge_data(min_time));
+	}
+
+	static edge<ts_edge_data> max_value() {
+		vertex_id_t max_id = std::numeric_limits<vertex_id_t>::max();
+		time_t max_time = std::numeric_limits<time_t>::max();
+		return edge<ts_edge_data>(max_id, max_id, ts_edge_data(max_time));
+	}
 };
 
 template<class edge_data_type>
 struct comp_in_edge {
-	bool operator() (const edge<edge_data_type> &e1, const edge<edge_data_type> &e2) {
+	bool operator() (const edge<edge_data_type> &e1, const edge<edge_data_type> &e2) const {
 		if (e1.get_to() == e2.get_to())
 			return e1.get_from() < e2.get_from();
 		else
 			return e1.get_to() < e2.get_to();
+	}
+
+	static edge<edge_data_type> min_value() {
+		vertex_id_t min_id = std::numeric_limits<vertex_id_t>::min();
+		assert(min_id == 0);
+		return edge<edge_data_type>(min_id, min_id);
+	}
+
+	static edge<edge_data_type> max_value() {
+		vertex_id_t max_id = std::numeric_limits<vertex_id_t>::max();
+		assert(max_id == INVALID_VERTEX_ID);
+		return edge<edge_data_type>(max_id, max_id);
+	}
+};
+
+template<>
+struct comp_in_edge<ts_edge_data> {
+	comp_in_edge() {
+		printf("compare timestamp in-edge\n");
+	}
+
+	bool operator() (const edge<ts_edge_data> &e1, const edge<ts_edge_data> &e2) const {
+		if (e1.get_to() != e2.get_to())
+			return e1.get_to() < e2.get_to();
+		else if (e1.get_data().get_timestamp() != e2.get_data().get_timestamp())
+			return e1.get_data().get_timestamp() < e2.get_data().get_timestamp();
+		else
+			return e1.get_from() < e2.get_from();
+	}
+
+	static edge<ts_edge_data> min_value() {
+		vertex_id_t min_id = std::numeric_limits<vertex_id_t>::min();
+		time_t min_time = std::numeric_limits<time_t>::min();
+		return edge<ts_edge_data>(min_id, min_id, ts_edge_data(min_time));
+	}
+
+	static edge<ts_edge_data> max_value() {
+		vertex_id_t max_id = std::numeric_limits<vertex_id_t>::max();
+		time_t max_time = std::numeric_limits<time_t>::max();
+		return edge<ts_edge_data>(max_id, max_id, ts_edge_data(max_time));
 	}
 };
 
@@ -82,7 +181,7 @@ public:
 	virtual edge_graph<edge_data_type> *simplify_edges() const = 0;
 	virtual void construct_graph(graph *g) const = 0;
 	virtual graph *create_disk_graph() const = 0;
-	virtual void add_edges(std::vector<edge<edge_data_type> > &edges) = 0;
+	virtual void add_edges(stxxl_edge_vector<edge_data_type> &edges) = 0;
 	virtual size_t get_num_edges() const = 0;
 
 	bool has_edge_data() const {
@@ -156,7 +255,7 @@ public:
 	virtual void dump(const std::string &index_file,
 			const std::string &graph_file);
 
-	virtual vertex_index *create_vertex_index() const {
+	virtual vertex_index::ptr create_vertex_index() const {
 		assert(0);
 	}
 
@@ -234,7 +333,7 @@ public:
 template<class edge_data_type = empty_data>
 class undirected_edge_graph: public edge_graph<edge_data_type>
 {
-	std::vector<edge<edge_data_type> > edges;
+	stxxl_edge_vector<edge_data_type> edges;
 public:
 	undirected_edge_graph(bool has_data): edge_graph<edge_data_type>(has_data) {
 	}
@@ -250,11 +349,11 @@ public:
 
 	void sort_edges() {
 		comp_edge<edge_data_type> edge_comparator;
-#ifdef MEMCHECK
-		std::sort(edges.begin(), edges.end(), edge_comparator);
-#else
-		__gnu_parallel::sort(edges.begin(), edges.end(), edge_comparator);
-#endif
+//#ifdef MEMCHECK
+		stxxl::sort(edges.begin(), edges.end(), edge_comparator, 1024 * 1024 * 10);
+//#else
+//		__gnu_parallel::sort(edges.begin(), edges.end(), edge_comparator);
+//#endif
 	}
 
 	graph *create_disk_graph() const {
@@ -273,8 +372,8 @@ public:
 	 * Each edge may appear only once, so we need to reverse them for
 	 * the other end of the edges.
 	 */
-	void add_edges(std::vector<edge<edge_data_type> > &edges) {
-		this->edges.insert(this->edges.end(), edges.begin(), edges.end());
+	void add_edges(stxxl_edge_vector<edge_data_type> &edges) {
+		this->edges.append(edges.begin(), edges.end());
 		BOOST_FOREACH(edge<edge_data_type> &e, edges) {
 			if (e.has_edge_data())
 				this->edges.push_back(edge<edge_data_type>(e.get_to(),
@@ -304,8 +403,8 @@ public:
 template<class edge_data_type = empty_data>
 class directed_edge_graph: public edge_graph<edge_data_type>
 {
-	std::vector<edge<edge_data_type> > in_edges;
-	std::vector<edge<edge_data_type> > out_edges;
+	stxxl_edge_vector<edge_data_type> in_edges;
+	stxxl_edge_vector<edge_data_type> out_edges;
 public:
 	directed_edge_graph(bool has_data): edge_graph<edge_data_type>(has_data) {
 	}
@@ -323,13 +422,13 @@ public:
 	void sort_edges() {
 		comp_edge<edge_data_type> edge_comparator;
 		comp_in_edge<edge_data_type> in_edge_comparator;
-#ifdef MEMCHECK
-		std::sort(out_edges.begin(), out_edges.end(), edge_comparator);
-		std::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
-#else
-		__gnu_parallel::sort(out_edges.begin(), out_edges.end(), edge_comparator);
-		__gnu_parallel::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
-#endif
+//#ifdef MEMCHECK
+		stxxl::sort(out_edges.begin(), out_edges.end(), edge_comparator, 1024 * 1024 * 10);
+		stxxl::sort(in_edges.begin(), in_edges.end(), in_edge_comparator, 1024 * 1024 * 10);
+//#else
+//		__gnu_parallel::sort(out_edges.begin(), out_edges.end(), edge_comparator);
+//		__gnu_parallel::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
+//#endif
 	}
 
 	edge_graph<edge_count> *compress_edges() const;
@@ -345,9 +444,9 @@ public:
 		out_edges.push_back(e);
 	}
 
-	void add_edges(std::vector<edge<edge_data_type> > &edges) {
-		in_edges.insert(in_edges.end(), edges.begin(), edges.end());
-		out_edges.insert(out_edges.end(), edges.begin(), edges.end());
+	void add_edges(stxxl_edge_vector<edge_data_type> &edges) {
+		in_edges.append(edges.begin(), edges.end());
+		out_edges.append(edges.begin(), edges.end());
 	}
 
 	size_t get_num_edges() const {
@@ -399,7 +498,7 @@ undirected_edge_graph<edge_data_type>::simplify_edges() const
 {
 	undirected_edge_graph<edge_data_type> *new_graph
 		= new undirected_edge_graph<edge_data_type>(false);
-	printf("before: %ld edges\n", edges.size());
+	std::cout << "before: " << edges.size() << " edges\n";
 	if (!edges.empty()) {
 		new_graph->edges.push_back(edges[0]);
 		for (size_t i = 1; i < edges.size(); i++) {
@@ -408,7 +507,7 @@ undirected_edge_graph<edge_data_type>::simplify_edges() const
 				new_graph->edges.push_back(edges[i]);
 		}
 	}
-	printf("after: %ld edges\n", new_graph->edges.size());
+	std::cout << "after: " << new_graph->edges.size() << " edges\n";
 	return new_graph;
 }
 
@@ -453,7 +552,7 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 {
 	printf("There are %ld edges in the graph\n", get_num_edges());
 	assert(!vertices.empty());
-	typename std::vector<edge<edge_data_type> >::const_iterator it
+	typename stxxl_edge_vector<edge_data_type>::const_iterator it
 		= std::lower_bound(edges.begin(), edges.end(),
 				edge<edge_data_type>(0, vertices[0]->get_id()),
 				comp_edge<edge_data_type>());
@@ -469,6 +568,7 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 			edge<edge_data_type> e = *it;
 			assert(ve.get_from() == e.get_from());
 			assert(ve.get_to() == e.get_to());
+			assert(ve.get_data() == e.get_data());
 		}
 	}
 }
@@ -478,11 +578,11 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 		const std::vector<ext_mem_directed_vertex *> &vertices) const
 {
 	assert(!vertices.empty());
-	typename std::vector<edge<edge_data_type> >::const_iterator in_it
+	typename stxxl_edge_vector<edge_data_type>::const_iterator in_it
 		= std::lower_bound(in_edges.begin(), in_edges.end(),
 				edge<edge_data_type>(0, vertices[0]->get_id()),
 				comp_in_edge<edge_data_type>());
-	typename std::vector<edge<edge_data_type> >::const_iterator out_it
+	typename stxxl_edge_vector<edge_data_type>::const_iterator out_it
 		= std::lower_bound(out_edges.begin(), out_edges.end(),
 				edge<edge_data_type>(vertices[0]->get_id(), 0),
 				comp_edge<edge_data_type>());
@@ -499,6 +599,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			edge<edge_data_type> e = *in_it;
 			assert(ve.get_from() == e.get_from());
 			assert(ve.get_to() == e.get_to());
+			assert(ve.get_data() == e.get_data());
 		}
 
 		// Check out-edges
@@ -512,6 +613,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			edge<edge_data_type> e = *out_it;
 			assert(ve.get_from() == e.get_from());
 			assert(ve.get_to() == e.get_to());
+			assert(ve.get_data() == e.get_data());
 		}
 	}
 }
@@ -707,12 +809,6 @@ size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 	if (*third == '"')
 		third++;
 
-	char *forth = strstr(third, delimiter);
-	assert(forth);
-	*forth = 0;
-	if (*(forth - 1) == '"')
-		*(forth - 1) = 0;
-
 	if (!isnumeric(line) || !isnumeric(second)) {
 		printf("%s\t%s\t%s\n", line, second, third);
 		return -1;
@@ -723,11 +819,8 @@ size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
 	assert(lto >= 0 && lto < MAX_VERTEX_ID);
 	vertex_id_t from = lfrom;
 	vertex_id_t to = lto;
-	struct tm tm;
-	strptime(third, "%Y-%m-%d %H:%M:%S", &tm);
-	time_t timestamp = mktime(&tm);
-	// Let's ignore the weight on the edge first.
-	ts_edge_data data(timestamp, 1);
+	time_t timestamp = atol(third);
+	ts_edge_data data(timestamp);
 	e = edge<ts_edge_data>(from, to, data);
 	return 1;
 }
@@ -839,9 +932,9 @@ public:
 	void run() {
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(line_buf.get(), size, edges);
-		std::vector<edge<edge_data_type> > *local_edge_buf
-			= (std::vector<edge<edge_data_type> > *) thread::get_curr_thread()->get_user_data();
-		local_edge_buf->insert(local_edge_buf->end(), edges.begin(), edges.end());
+		stxxl_edge_vector<edge_data_type> *local_edge_buf
+			= (stxxl_edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+		local_edge_buf->append(edges.cbegin(), edges.cend());
 	}
 };
 
@@ -886,8 +979,8 @@ directed_edge_graph<edge_data_type>::simplify_edges() const
 {
 	directed_edge_graph<edge_data_type> *new_graph
 		= new directed_edge_graph<edge_data_type>(false);
-	printf("before: %ld in-edges and %ld out-edges\n", in_edges.size(),
-			out_edges.size());
+	std::cout << "before: " << in_edges.size() << " in-edges and "
+		<< out_edges.size() << " out-edges\n";
 	if (!in_edges.empty()) {
 		new_graph->in_edges.push_back(in_edges[0]);
 		for (size_t i = 1; i < in_edges.size(); i++) {
@@ -905,8 +998,8 @@ directed_edge_graph<edge_data_type>::simplify_edges() const
 				new_graph->out_edges.push_back(out_edges[i]);
 		}
 	}
-	printf("after: %ld in-edges and %ld out-edges\n", new_graph->in_edges.size(),
-			new_graph->out_edges.size());
+	std::cout << "after: " << new_graph->in_edges.size() << " in-edges and "
+		<< new_graph->out_edges.size() << " out-edges\n";
 	return new_graph;
 }
 
@@ -1018,7 +1111,7 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
 					"graph-task-thread") + itoa(i), -1);
-		t->set_user_data(new std::vector<edge<edge_data_type> >());
+		t->set_user_data(new stxxl_edge_vector<edge_data_type>());
 		t->start();
 		threads[i] = t;
 	}
@@ -1045,8 +1138,8 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 	size_t mem_size = 0;
 	size_t num_edges = 0;
 	for (int i = 0; i < num_threads; i++) {
-		std::vector<edge<edge_data_type> > *local_edges
-			= (std::vector<edge<edge_data_type> > *) threads[i]->get_user_data();
+		stxxl_edge_vector<edge_data_type> *local_edges
+			= (stxxl_edge_vector<edge_data_type> *) threads[i]->get_user_data();
 		num_edges += local_edges->size();
 		mem_size += local_edges->capacity() * sizeof(edge<edge_data_type>);
 	}
@@ -1061,8 +1154,8 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 				has_edge_data);
 	start = end;
 	for (int i = 0; i < num_threads; i++) {
-		std::vector<edge<edge_data_type> > *local_edges
-			= (std::vector<edge<edge_data_type> > *) threads[i]->get_user_data();
+		stxxl_edge_vector<edge_data_type> *local_edges
+			= (stxxl_edge_vector<edge_data_type> *) threads[i]->get_user_data();
 		edge_g->add_edges(*local_edges);
 		delete local_edges;
 	}

@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <atomic>
+
 #include "thread.h"
 #include "container.h"
 #include "concurrency.h"
@@ -46,7 +48,7 @@ class graph_engine;
 class vertex_request;
 
 /**
-  * \brief Class from which vertex programs inherit.
+  * \brief Class from which users' vertex-centric programs should inherit.
   *         Serial code written when implementing <I>run*</I>.
   *         methods here will be run in parallel within the graph engine.
 */
@@ -54,43 +56,37 @@ class compute_vertex
 {
 	vertex_id_t id;
 public:
-
-  /**
-    * \brief Default constructor called by graph_engine in the event
-    *       that a vertex state vertex has already been created.
-    *
-    * <I>Note that users never need to explictly call this ctor.</I>
-    *         
-  */
-	compute_vertex() {
-		id = INVALID_VERTEX_ID;
-	}
-
-  /**
-    * \brief Constructor called by graph engine with a mapping for
-    *         the vertex's neighbor list on disk.
-    * \param id The ID for a specific vertex.
-    * \param index A mapping for vertex adjacency lists on disk.
-  */
-	compute_vertex(vertex_id_t id, const vertex_index &index) {
+	/**
+	 * \brief The constructor called by graph_engine to create vertex
+	 * state.
+	 *
+	 * <I>Note that users never need to explictly call this ctor.</I>
+	 *         
+	 */
+	compute_vertex(vertex_id_t id) {
 		this->id = id;
 	}
-    
-    /**
-     *  \brief Get the number of edges in the entire graph.
-    */
-	vsize_t get_num_edges() const;
 
 	/**
-	 * \brief This allows a vertex to request other vertices in the graph.
+	 * \brief This allows a vertex to request the adjacency lists of vertices
+	 *        in the graph.
      *
 	 * \param ids The IDs of vertices.
      * \param num The number of vertex IDs you are requesting.
 	 */
 	void request_vertices(vertex_id_t ids[], size_t num);
 
+	/**
+	 * \brief This requests the vertex headers. It mainly contains the number
+	 *        of edges (the number of in-edges and out-edges for directed
+	 *        vertices).
+	 * \param ids The IDs of vertices.
+     * \param num The number of vertex IDs you are requesting.
+	 */
+	void request_vertex_headers(vertex_id_t ids[], size_t num);
+
     /**
-     * \brief Vertex can request it's own vertex ID.
+     * \brief Get its own vertex ID.
      *
      * \return The current vertex's ID in the graph.
     */
@@ -100,10 +96,14 @@ public:
     
     /**
      * \brief Allows a vertex to perform a task at the end of every iteration. 
-     * \param prog The user defined vertex program associated with
-     *         running iterations.
+     * \param prog The vertex program associated with running the graph algorithm.
      */
 	void notify_iteration_end(vertex_program & prog) {
+	}
+
+	void run_on_vertex_header(vertex_program &prog,
+			const vertex_header &header) {
+		assert(0);
 	}
 };
 
@@ -114,43 +114,11 @@ public:
  */
 class compute_directed_vertex: public compute_vertex
 {
-	vsize_t num_in_edges;
 public:
     /**
-     * \brief Default constructor callled by the grah engne.
+     * \brief The constructor callled by the grah engne.
      */
-	compute_directed_vertex() {
-		num_in_edges = 0;
-	}
-    
-    /**
-     * \brief Constructor called by the graph engine.
-     * \param id The unique ID identifying the vertex.
-     * \param index1 A mapping for vertex adjacency lists on disk.
-     */
-	compute_directed_vertex(vertex_id_t id,
-			const vertex_index &index1): compute_vertex(id, index1) {
-		assert(index1.get_graph_header().get_graph_type()
-				== graph_type::DIRECTED);
-		const directed_vertex_index &index
-			= (const directed_vertex_index &) index1;
-		num_in_edges = index.get_num_in_edges(id);
-	}
-    
-    /**
-     * \brief Use to get the number of in-edges of a directed vertex.
-     * \return The number of in-edges of a vertex.
-    */
-	vsize_t get_num_in_edges() const {
-		return num_in_edges;
-	}
-    
-    /**
-     * \brief Use tot get the number of out-edges of a directed vertex.
-     * \return the number of out-edges of a vertex.
-     */
-	vsize_t get_num_out_edges() const {
-		return get_num_edges() - num_in_edges;
+	compute_directed_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
 	/**
@@ -172,38 +140,26 @@ public:
 class compute_ts_vertex: public compute_vertex
 {
 public:
-    
     /**
-     * \brief Default constructor. Nothing initialized here.
+     * \brief The constructor. Nothing initialized here.
      */
-	compute_ts_vertex() {
-	}
-    
-    /**
-     * \brief Constructor called by graph engine with a mapping for
-     *         the vertex's neighbor list on disk.
-     * \param id The ID for a specific vertex.
-     * \param index A mapping for vertex adjacency lists on disk.
-     */
-	compute_ts_vertex(vertex_id_t id, const vertex_index &index): compute_vertex(id, index) {
-		assert(index.get_graph_header().get_graph_type()
-				== graph_type::TS_DIRECTED
-				|| index.get_graph_header().get_graph_type()
-				== graph_type::TS_UNDIRECTED);
+	compute_ts_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
+#if 0
 	/**
      * \brief This allows a vertex to request partial vertices in the graph. <br>
      *  **Defn: ""partial vertices""** -- Part of a vertex's data. Specifically
-     *          either a vertex's *in-edges* OR *out-edges*. This eliminates the overhead
-     *          of bringing both *in* and *out* edges into the page cache when an algorithm
-     *          only requires one of the two.
+     *          a vertex's edges in the specified time range. This eliminates the overhead
+     *          of bringing both all edges into the page cache when an algorithm
+     *          only requires edges in a certain time range.
 	 * \param reqs This is an array corresponding to the vertices you are requesting and defines
-     *              which part of the vertex you want (e.g `IN_EDGE`).
+     *              which time range you want.
      * \param num the number of elements in `reqs`.
 	 * This allows a vertex to request partial vertices in the graph.
 	 */
 	void request_partial_vertices(ts_vertex_request reqs[], size_t num);
+#endif
 };
 
 /**
@@ -232,9 +188,9 @@ class vertex_filter
 public:
     
     /**
-     * \brief The method defines which vertices are active in the following iteration.
+     * \brief The method defines which vertices are active in the first iteration.
      *           If this method returns `true` the vertex will be activated, whereas
-     *           `false` means the vertex will be inactive in the next iteration.
+     *           `false` means the vertex will be inactive in the first iteration.
      * \param v A single `compute_vertex`. **Note:** This parameter is provided by the graph
      *          engine. A user need not ever provide it.
      */
@@ -242,17 +198,16 @@ public:
 };
 
 /**
- * \brief A user may be decide to initialize individual in a custom way not
- *          expressible via the vertex constructor This provides that capability.
+ * \brief A user may be decide to initialize individual vertex state in a custom way not
+ *          expressible via the vertex constructor. This provides that capability.
  */
-class vertex_initiator
+class vertex_initializer
 {
 public:
-	typedef std::shared_ptr<vertex_initiator> ptr; /** Type provides access to the object */
+	typedef std::shared_ptr<vertex_initializer> ptr; /** Type provides access to the object */
     
     /**
-     * \brief Initialization method. The constructor is never explicitly called,
-     *         instead this method is called.
+     * \brief Initialization method to initialize the given vertex.
      */
 	virtual void init(compute_vertex &) = 0;
 };
@@ -261,9 +216,10 @@ public:
 class graph_engine;
 
 /**
- * \brief Parallized query of all vertices in the graph.
- *          Inherit from this class to run queries in parallel in much the same way
- *          as `compute_vertex` and `compute_directed_vertex` do.
+ * \brief Parallized query of the vertex state of all vertices in the graph.
+ *        Each worker thread gets an instance of the query and the per-thread
+ *        query results will be merged in the end.
+ *          Inherit from this class to run queries in parallel.
  */
 class vertex_query
 {
@@ -272,7 +228,7 @@ public:
     
     /**
      * \brief This method is executed on vertices in parallel and contains any user defined
-     *         code much like `compute_vertex::run()`
+     *         code.
      */
 	virtual void run(graph_engine &, compute_vertex &v) = 0;
     
@@ -286,8 +242,9 @@ public:
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) = 0;
     
     /**
-     * \brief Implements a copy constructor.
-     * Used internally by graph engine to as a generic ctor in lieu of using a templated class.
+     * \brief Implements a copy constructor. The graph engine uses this method
+	 *        to create an instance of this query for each thread.
+     * Used internally by graph engine as a generic ctor in lieu of using a templated class.
      */
 	virtual ptr clone() = 0;
 };
@@ -300,9 +257,12 @@ class worker_thread;
 */
 class graph_engine
 {
+	static std::atomic<size_t> init_count;
+
 	int vertex_header_size;
 	graph_header header;
 	graph_index::ptr vertices;
+	vertex_index::ptr vindex;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
 	vertex_scheduler::ptr scheduler;
 
@@ -322,7 +282,8 @@ class graph_engine
 	std::vector<vertex_program::ptr> vprograms;
 
 	trace_logger::ptr logger;
-	file_io_factory::shared_ptr factory;
+	file_io_factory::shared_ptr graph_factory;
+	file_io_factory::shared_ptr index_factory;
 	int max_processing_vertices;
 
 	// The time when the current iteration starts.
@@ -331,7 +292,7 @@ class graph_engine
 	void init_threads(vertex_program_creater::ptr creater);
 protected:
     /**
-     * \brief Constructor usable by inheritign classes.
+     * \brief Constructor usable by inheriting classes.
      * \param graph_file The path to the graph file on disk.
      * \param index The path to the graph index file on disk.
      * \param configs The path to the configuration file on disk.
@@ -340,6 +301,9 @@ protected:
 			const config_map &configs);
 public:
 	typedef std::shared_ptr<graph_engine> ptr; /** Smart pointer for object access.*/
+
+	static void init_flash_graph(const config_map &configs);
+	static void destroy_flash_graph();
     
     /**
      * \brief Use this method to in lieu of a constructor to create a graph object.
@@ -364,7 +328,7 @@ public:
 	 */
     
     /**
-	 * \brief Permits any vertex to pull any other vertex's data from SSD.<br>
+	 * \brief Permits any vertex to pull any other vertex's state.<br>
 	 * **NOTE:** *This can only be used in a shared machine.*
      * \param id the unique vertex ID.
      * \return The `compute_vertex` requested by id.
@@ -379,7 +343,8 @@ public:
 	}
 
     /**
-	 * \brief Permits any vertex to pull any set of other vertexes data from SSD.<br>
+	 * \brief Permits any vertex to pull any set of the vertex state of
+	 *        other vertices.<br>
 	 * **NOTE:** *This can only be used in a shared machine.*
 	 */
 	size_t get_vertices(const vertex_id_t ids[], int num, compute_vertex *v_buf[]) {
@@ -391,36 +356,18 @@ public:
 			compute_vertex *v_buf[]) {
 		return vertices->get_vertices(part_id, ids, num, v_buf);
 	}
-
-	/**
-     * \internal
-	 * This returns the location and the size of a vertex in the file.
-	 */
-	const in_mem_vertex_info get_vertex_info(vertex_id_t id) const {
-		return vertices->get_vertex_info(id);
-	}
-
-	/**
-     * \brief Get he number of edges belonging to a vertex.
-     * \param id  The unique ID of a vertex.
-	 * \return The number of edges belonging to a vertex.
-	 */
-	const vsize_t get_vertex_edges(vertex_id_t id) const {
-		in_mem_vertex_info info = get_vertex_info(id);
-		return (info.get_ext_mem_size() - vertex_header_size) / sizeof(vertex_id_t);
-	}
     
     /**
-     * \brief Get the value of the vertex with the maximum ID in the graph.
-     * \return The value of the vertex with the maximum ID in the graph.
+     * \brief Get the maximum vertex ID in the graph.
+     * \return The maximum vertex ID in the graph.
      */
 	vertex_id_t get_max_vertex_id() const {
 		return vertices->get_max_vertex_id();
 	}
     
     /**
-     * \brief Get the value of the vertex with the minimum ID in the graph.
-     * \return The value of the vertex with the minimum ID in the graph.
+     * \brief Get the minimum vertex ID in the graph.
+     * \return The the minimum vertex ID in the graph.
      */
 	vertex_id_t get_min_vertex_id() const {
 		return vertices->get_min_vertex_id();
@@ -461,6 +408,9 @@ public:
      * \brief Start the graph engine and begin computation on a subset of vertices.
      * \param filter A user defined `vertex_filter` which specifies which vertices
      *      are activated the next iteratoin.
+	 * \param creater A creator that creates user-defined vertex program.
+	 *                By default, a graph engine creates its own default
+	 *                vertex program.
      */
 	void start(std::shared_ptr<vertex_filter> filter,
 			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
@@ -468,44 +418,54 @@ public:
     /**
      * \brief Start the graph engine and begin computation on a subset of vertices.
      * \param ids The vertices that should be activated for the first iteration.
-     * \param init An initiator used to alter the state of a vertex before compuatation.
-     * \param creater The associated `vertex_program_creater` with the graph.
+     * \param init An initializer used to alter the state of vertices activated
+	 *             in the first iteration.
+	 * \param creater A creator that creates user-defined vertex program.
+	 *                By default, a graph engine creates its own default
+	 *                vertex program.
      */
 	void start(vertex_id_t ids[], int num,
-			vertex_initiator::ptr init = vertex_initiator::ptr(),
+			vertex_initializer::ptr init = vertex_initializer::ptr(),
 			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
     
     /**
      * \brief Start the graph engine and begin computation on **all** vertices.
-     * \param init An initiator used to alter the state of a vertex before compuatation.
-     * \param creater The associated `vertex_program_creater` with the graph.
+     * \param init An initializer used to alter the state of vertices activated
+	 *             in the first iteration.
+	 * \param creater A creator that creates user-defined vertex program.
+	 *                By default, a graph engine creates its own default
+	 *                vertex program.
      */
-	void start_all(vertex_initiator::ptr init = vertex_initiator::ptr(),
+	void start_all(vertex_initializer::ptr init = vertex_initializer::ptr(),
 			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
     
     /**
-     * \brief Synchronization barrier that waits for the last vertex to complete computation.
+     * \brief Synchronization barrier that waits for the graph algorithm to
+	 *        complete.
      */
 	void wait4complete();
 
 	/**
 	 * \brief This method preloads the entire graph to the page cache.
+	 *        If the page cache is smaller than the graph, only the first part
+	 *        of the graph image (the same size as the page cache) is preloaded
+	 *        to the page cache.
 	 */
 	void preload_graph();
 
 	/**
 	 * \brief Allows users to initialize vertices to certain state.
-     * \param ids The ID for which you want initialize.
+     * \param ids The vertex ID for which you want initialize.
      * \param num The number of vertices you intend to initialize.
-     * \param init An initiator used to alter the state of a vertex before compuatation.
+     * \param init An initializer used to alter the state of a vertex.
 	 */
-	void init_vertices(vertex_id_t ids[], int num, vertex_initiator::ptr init);
+	void init_vertices(vertex_id_t ids[], int num, vertex_initializer::ptr init);
     
     /**
      * \brief Allows users to initialize **all** vertices to certain state.
-     * \param init An initiator used to alter the state of a vertex before compuatation.
+     * \param init An initializer used to alter the state of a vertex.
      */
-	void init_all_vertices(vertex_initiator::ptr init);
+	void init_all_vertices(vertex_initializer::ptr init);
 
 	/**
 	 * \brief Allows users to query the information on the state of all vertices.
@@ -514,7 +474,7 @@ public:
 	void query_on_all(vertex_query::ptr query);
     
     /**
-     * \brief Return The vertex programs assicated with each vertex of the graph.
+     * \brief Return The per-thread vertex programs used by the graph engine.
      * \param programs An empty vector that will eventully contain all the vertex progrmas.
      */
 	void get_vertex_programs(std::vector<vertex_program::ptr> &programs) {
@@ -522,7 +482,7 @@ public:
 	}
 
 	/**
-	 * \brief This returns the current iteration number.
+	 * \brief This returns the current iteration number in the graph engine.
      * \return The current iteration number.
 	 */
 	int get_curr_level() const {
@@ -550,7 +510,7 @@ public:
 	 * Get the file id where the graph data is stored.
 	 */
 	int get_file_id() const {
-		return factory->get_file_id();
+		return graph_factory->get_file_id();
 	}
     
     /**\internal */
@@ -573,7 +533,7 @@ public:
 		return worker_threads[idx];
 	}
 
-	/**
+	/*
 	 * The following two methods keep track of the number of active vertices
 	 * globally in the current iteration.
 	 */
@@ -592,6 +552,26 @@ public:
      */
 	size_t get_num_remaining_vertices() const {
 		return num_remaining_vertices_in_level.get();
+	}
+
+	int get_vertex_header_size() const {
+		return vertex_header_size;
+	}
+
+	/*
+	 * \internal Get the in-memory vertex index.
+	 */
+	vertex_index::ptr get_in_mem_index() const {
+		assert(vindex);
+		return vindex;
+	}
+
+	void set_max_processing_vertices(int max) {
+		max_processing_vertices = max;
+	}
+
+	int get_max_processing_vertices() const {
+		return max_processing_vertices;
 	}
 };
 

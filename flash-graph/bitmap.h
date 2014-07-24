@@ -85,7 +85,7 @@ public:
 		this->num_set_bits = 0;
 		if (max_num_bits > 0) {
 			size_t num_longs = get_num_longs();
-			ptr = (long *) numa_alloc_onnode(num_longs * sizeof(ptr[0]), node_id);
+			ptr = (long *) malloc_large(num_longs * sizeof(ptr[0]));
 			memset(ptr, 0, sizeof(ptr[0]) * num_longs);
 		}
 		else
@@ -94,7 +94,7 @@ public:
 
 	~bitmap() {
 		if (ptr)
-			numa_free(ptr, get_num_longs() * sizeof(ptr[0]));
+			free_large(ptr, get_num_longs() * sizeof(ptr[0]));
 	}
 
 	size_t get_num_longs() const {

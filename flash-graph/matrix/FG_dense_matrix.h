@@ -182,6 +182,38 @@ public:
 		return ptr(new FG_dense_matrix<T, MatrixStore>(nrow, ncol));
 	}
 
+  /** TODO: DM Test
+  * \brief Set an element value of the matrix given row and column.
+  * \param row The row index a user desires to set.
+  * \param col The col index a user desires to set.
+  * \param value The value you would like to set.
+  */
+  void set(size_t row, size_t col, T value) {
+    matrix_store.set(row, col, value);
+  }
+  
+  /** TODO: DM Test
+  * \brief Set an entire column of a matrix to specific values.
+  * \param idx The column index a user desires to set.
+  * \param vec An `FG_vector` containing the values the column will assume.
+  */
+	void set_col(size_t idx, const FG_vector<T> &vec) {
+		assert(vec.get_size() == this->get_num_rows());
+		for (size_t i = 0; i < vec.get_size(); i++)
+			this->matrix_store.set(i, idx, vec.get(i));
+	}
+  
+  /** TODO: DM Test
+  * \brief Set an entire row of a matrix to specific values.
+  * \param idx The row index a user desires to set.
+  * \param vec An `FG_vector` containing the values the column will assume.
+  */
+	void set_row(size_t idx, const typename FG_vector<T>::ptr vec) {
+		assert(vec->get_size() == this->get_num_cols());
+		for (size_t i = 0; i < vec->get_size(); i++)
+			this->matrix_store.set(idx, i, vec->get(i));
+	}
+
 	/**
 	 * Resize the matrix.
 	 * `nrow' and `ncol' defined the size of the matrix. They must be smaller
@@ -276,7 +308,7 @@ class FG_row_wise_matrix: public FG_dense_matrix<T, row_wise_matrix_store<T> >
 			size_t ncol): FG_dense_matrix<T, row_wise_matrix_store<T> >(
 				nrow, ncol) {
 		// We assume the row-wise matrix has more columns than rows.
-		assert(nrow < ncol);
+	  // assert(nrow < ncol); // FIXME: DM commented
 	}
 
 	FG_row_wise_matrix(const FG_col_wise_matrix<T> &mat, bool transpose) {
@@ -305,6 +337,8 @@ public:
 	}
 
 	graph::ptr conv2graph() const {
+    assert(0);
+#if 0
 		// TODO we can generate an undirected graph for a symmetric matrix.
 		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
 		for (size_t i = 0; i < this->get_num_rows(); i++) {
@@ -330,7 +364,20 @@ public:
 		}
 
 		return g;
+#endif
 	}
+  
+  /**
+    * \brief Assign all values in the matrix a single value
+    * \param val The value a user wishes to assign.
+    */
+  // TODO: DM Test
+  void assign_all(T val) {
+    #pragma omp parallel for
+    for (size_t row = 0; row < this->get_num_rows(); row++) {
+      this->matrix_store.get(row)->assign(this->get_num_cols(), val);
+    }
+  }
 
 	template<class T1>
 	friend class FG_col_wise_matrix;
@@ -393,6 +440,12 @@ public:
 			this->matrix_store.set(i, idx, vec.get(i));
 	}
 
+	void set_row(size_t idx, const FG_vector<T> &vec) {
+		assert(vec.get_size() == this->get_num_cols());
+		for (size_t i = 0; i < vec.get_size(); i++)
+			this->matrix_store.set(idx, i, vec.get(i));
+	}
+
 	typename FG_eigen_matrix<T>::ptr householderQ() const {
 		size_t nrows = this->matrix_store.get_num_rows();
 		size_t ncols = this->matrix_store.get_num_cols();
@@ -422,6 +475,75 @@ public:
 		for (size_t i = 0; i < this->get_num_cols(); i++)
 			vec->set(i, this->get(row, i));
 		return vec;
+	}
+
+	FG_eigen_matrix<T>::ptr transpose() const {
+		return FG_eigen_matrix<T>::ptr(new FG_eigen_matrix<T>(
+					this->matrix_store.get_matrix().transpose(),
+					this->get_num_cols(), this->get_num_rows()));
+	}
+
+	graph::ptr conv2graph_wideM() const {
+		// TODO we can generate an undirected graph for a symmetric matrix.
+		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
+		for (size_t i = 0; i < this->get_num_rows(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_cols(); j++) {
+				edge<T> e(i, j, this->get(i, j));
+				v.add_out_edge(e);
+			}
+			for (size_t j = 0; j < this->get_num_rows(); j++) {
+				edge<T> e(j, i, this->get(j, i));
+				v.add_in_edge(e);
+			}
+			g->add_vertex(v);
+		}
+		// There are more columns than rows in the matrix.
+		for (size_t i = this->get_num_rows(); i < this->get_num_cols(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_rows(); j++) {
+				edge<T> e(j, i, this->get(j, i));
+				v.add_in_edge(e);
+			}
+			g->add_vertex(v);
+		}
+
+		return g;
+	}
+
+	graph::ptr conv2graph_tallM() const {
+		// TODO we can generate an undirected graph for a symmetric matrix.
+		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
+		for (size_t i = 0; i < this->get_num_cols(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_cols(); j++) {
+				edge<T> e(i, j, this->get(i, j));
+				v.add_out_edge(e);
+			}
+			for (size_t j = 0; j < this->get_num_rows(); j++) {
+				edge<T> e(j, i, this->get(j, i));
+				v.add_in_edge(e);
+			}
+			g->add_vertex(v);
+		}
+		// There are more rows than cols in the matrix.
+		for (size_t i = this->get_num_cols(); i < this->get_num_rows(); i++) {
+			in_mem_directed_vertex<T> v(i, true);
+			for (size_t j = 0; j < this->get_num_cols(); j++) {
+				edge<T> e(i, j, this->get(i, j));
+				v.add_out_edge(e);
+			}
+			g->add_vertex(v);
+		}
+
+		return g;
+	}
+
+	graph::ptr conv2graph() const {
+		if (this->get_num_rows() > this->get_num_cols())
+			return conv2graph_tallM();
+		else
+			return conv2graph_wideM();
 	}
 };
 

@@ -34,12 +34,6 @@
 #include "exception.h"
 #include "compute_stat.h"
 
-#ifdef STATISTICS
-volatile extern int avail_cells;
-volatile extern int num_wait_unused;
-volatile extern int lock_contentions;
-#endif
-
 const int CACHE_LINE = 128;
 
 /**

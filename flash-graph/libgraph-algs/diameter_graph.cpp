@@ -34,6 +34,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+namespace {
+
 size_t num_bfs = 1;
 const int K = sizeof(uint64_t) * 8;
 edge_type traverse_edge = edge_type::OUT_EDGE;
@@ -92,13 +94,7 @@ class diameter_vertex: public compute_directed_vertex
 	short max_dist;
 	bool updated;
 public:
-	diameter_vertex() {
-		updated = false;
-		max_dist = 0;
-	}
-
-	diameter_vertex(vertex_id_t id,
-			const vertex_index &index): compute_directed_vertex(id, index) {
+	diameter_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		updated = false;
 		max_dist = 0;
 	}
@@ -219,11 +215,11 @@ void diameter_vertex::notify_iteration_end(vertex_program &vprog)
 	bfs_ids = new_bfs_ids;
 }
 
-class diameter_initiator: public vertex_initiator
+class diameter_initializer: public vertex_initializer
 {
 	std::unordered_map<vertex_id_t, int> start_vertices;
 public:
-	diameter_initiator(std::vector<vertex_id_t> &vertices) {
+	diameter_initializer(std::vector<vertex_id_t> &vertices) {
 		for (size_t i = 0; i < vertices.size(); i++) {
 			start_vertices.insert(std::pair<vertex_id_t, int>(vertices[i], i));
 		}
@@ -238,7 +234,7 @@ public:
 	}
 };
 
-class diameter_reset: public vertex_initiator
+class diameter_reset: public vertex_initializer
 {
 public:
 	void init(compute_vertex &v) {
@@ -254,6 +250,8 @@ public:
 		return v1.second > v2.second;
 	}
 };
+
+}
 
 size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 		bool directed, int num_sweeps)
@@ -276,10 +274,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	std::vector<vertex_id_t> start_vertices;
 	while (start_vertices.size() < num_bfs) {
 		vertex_id_t id = random() % graph->get_max_vertex_id();
-		// We should skip the empty vertices.
-		if (graph->get_vertex_edges(id) == 0)
-			continue;
-
 		start_vertices.push_back(id);
 	}
 
@@ -288,11 +282,11 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 		start_level = graph->get_curr_level();
-		graph->init_all_vertices(vertex_initiator::ptr(new diameter_reset()));
+		graph->init_all_vertices(vertex_initializer::ptr(new diameter_reset()));
 		printf("Sweep %d starts on %ld vertices, traverse edge: %d\n",
 				i, start_vertices.size(), traverse_edge);
 		graph->start(start_vertices.data(), start_vertices.size(),
-				vertex_initiator::ptr(new diameter_initiator(start_vertices)),
+				vertex_initializer::ptr(new diameter_initializer(start_vertices)),
 				vertex_program_creater::ptr(new diameter_vertex_program_creater()));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
@@ -309,10 +303,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 			start_vertices.clear();
 			while (start_vertices.size() < num_bfs) {
 				vertex_id_t id = random() % graph->get_max_vertex_id();
-				// We should skip the empty vertices.
-				if (graph->get_vertex_edges(id) == 0)
-					continue;
-
 				start_vertices.push_back(id);
 			}
 		}
@@ -346,8 +336,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 
 	return global_max;
 }

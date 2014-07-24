@@ -38,7 +38,7 @@ public:
 
 	virtual void add_vertex(const in_mem_vertex &v) = 0;
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const = 0;
-	virtual vertex_index *create_vertex_index() const = 0;
+	virtual vertex_index::ptr create_vertex_index() const = 0;
 	virtual void dump(const std::string &index_file,
 			const std::string &graph_file) = 0;
 	virtual void dump_as_edge_list(const std::string &file) const {
@@ -101,7 +101,7 @@ public:
 			ids.push_back(vertices[i].get_id());
 	}
 
-	vertex_index *create_vertex_index() const {
+	vertex_index::ptr create_vertex_index() const {
 		graph_header header(graph_type::UNDIRECTED, vertices.size(),
 				get_num_edges(), false);
 		return default_vertex_index::create<in_mem_undirected_vertex<edge_data_type> >(
@@ -162,6 +162,7 @@ void check_vertex(const in_mem_directed_vertex<edge_data_type> &in_v,
 		edge<edge_data_type> e2 = *in_it2;
 		assert(e1.get_from() == e2.get_from());
 		assert(e1.get_to() == e2.get_to());
+		assert(e1.get_data() == e2.get_data());
 		++in_it1;
 		++in_it2;
 	}
@@ -178,6 +179,7 @@ void check_vertex(const in_mem_directed_vertex<edge_data_type> &in_v,
 		edge<edge_data_type> e2 = *out_it2;
 		assert(e1.get_from() == e2.get_from());
 		assert(e1.get_to() == e2.get_to());
+		assert(e1.get_data() == e2.get_data());
 		++out_it1;
 		++out_it2;
 	}
@@ -278,7 +280,7 @@ public:
 			ids.push_back(it->second.get_id());
 	}
 
-	vertex_index *create_vertex_index() const {
+	vertex_index::ptr create_vertex_index() const {
 		graph_header header(graph_type::DIRECTED, vertices.size(),
 				get_num_edges(), has_data);
 		return directed_vertex_index::create<in_mem_directed_vertex<edge_data_type> >(
@@ -314,9 +316,8 @@ public:
 
 		fclose(f);
 
-		vertex_index *index = create_vertex_index();
+		vertex_index::ptr index = create_vertex_index();
 		index->dump(index_file);
-		vertex_index::destroy(index);
 	}
 
 	size_t get_num_in_edges() const {
@@ -354,7 +355,7 @@ public:
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const {
 		printf("check the graph in the external memory\n");
-		directed_vertex_index *index = directed_vertex_index::load(index_file);
+		directed_vertex_index::ptr index = directed_vertex_index::load(index_file);
 		
 		native_file file(adj_file);
 		size_t adj_file_size = file.get_size();
@@ -376,7 +377,6 @@ public:
 			assert(it != vertices.end());
 			check_vertex(it->second, v);
 		}
-		vertex_index::destroy(index);
 		delete [] adj_buf;
 	}
 
@@ -580,7 +580,7 @@ public:
 			ids.push_back(vertices[i].get_id());
 	}
 
-	virtual vertex_index *create_vertex_index() const {
+	virtual vertex_index::ptr create_vertex_index() const {
 		graph_header header(TS_DIRECTED, vertices.size(), get_num_edges(),
 				has_data, max_num_timestamps);
 		return default_vertex_index::create<ts_in_mem_directed_vertex<edge_data_type> >(
@@ -619,9 +619,8 @@ public:
 
 		fclose(f);
 
-		vertex_index *index = create_vertex_index();
+		vertex_index::ptr index = create_vertex_index();
 		index->dump(index_file);
-		vertex_index::destroy(index);
 	}
 
 	size_t get_num_in_edges() const {

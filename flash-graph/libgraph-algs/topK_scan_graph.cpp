@@ -29,9 +29,14 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 
-#include "scan_graph.h"
 #include "FG_vector.h"
 #include "FGlib.h"
+
+#include "scan_graph.h"
+
+namespace {
+
+scan_stage_t scan_stage;
 
 struct timeval graph_start;
 
@@ -54,7 +59,8 @@ void vertex_size_scheduler::schedule(std::vector<vertex_id_t> &ids)
 	{
 	public:
 		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
-			return v1->get_num_edges() > v2->get_num_edges();
+			return ((const scan_vertex *) v1)->get_degree()
+				> ((const scan_vertex *) v2)->get_degree();
 		}
 	};
 
@@ -153,11 +159,7 @@ public:
 class topK_scan_vertex: public scan_vertex
 {
 public:
-	topK_scan_vertex() {
-	}
-
-	topK_scan_vertex(vertex_id_t id, const vertex_index &index): scan_vertex(
-			id, index) {
+	topK_scan_vertex(vertex_id_t id): scan_vertex(id) {
 	}
 
 	bool has_est_local() const {
@@ -173,6 +175,7 @@ public:
 	using scan_vertex::run;
 	void run(vertex_program &prog);
 	void run(vertex_program &prog, const page_vertex &vertex) {
+		assert(scan_stage == scan_stage_t::RUN);
 		if (vertex.get_id() == get_id())
 			run_on_itself(prog, vertex);
 		else
@@ -194,22 +197,26 @@ public:
 
 void topK_scan_vertex::run(vertex_program &prog)
 {
-	bool req_itself = false;
-	// If we have computed local scan on the vertex, skip the vertex.
-	if (has_local_scan())
-		return;
-	// If we have estimated the local scan, we should use the estimated one.
-	else if (has_est_local())
-		req_itself = get_est_local_scan() > max_scan.get();
-	else {
-		// If this is the first time to compute on the vertex, we can still
-		// skip a lot of vertices with this condition.
-		size_t num_local_edges = get_num_edges();
-		req_itself = num_local_edges * num_local_edges >= max_scan.get();
+	vertex_id_t id = get_id();
+	if (scan_stage == scan_stage_t::INIT) {
+		request_vertex_headers(&id, 1);
 	}
-	if (req_itself) {
-		vertex_id_t id = get_id();
-		request_vertices(&id, 1);
+	else if (scan_stage == scan_stage_t::RUN) {
+		bool req_itself = false;
+		// If we have computed local scan on the vertex, skip the vertex.
+		if (has_local_scan())
+			return;
+		// If we have estimated the local scan, we should use the estimated one.
+		else if (has_est_local())
+			req_itself = get_est_local_scan() > max_scan.get();
+		else {
+			// If this is the first time to compute on the vertex, we can still
+			// skip a lot of vertices with this condition.
+			size_t num_local_edges = get_degree();
+			req_itself = num_local_edges * num_local_edges >= max_scan.get();
+		}
+		if (req_itself)
+			request_vertices(&id, 1);
 	}
 }
 
@@ -251,12 +258,12 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 			all_neighbors.begin());
 	all_neighbors.resize(num_neighbors);
 
-	size_t tot_edges = get_num_edges();
+	size_t tot_edges = get_degree();
 	for (size_t i = 0; i < all_neighbors.size(); i++) {
 		scan_vertex &v = (scan_vertex &) graph.get_vertex(all_neighbors[i]);
 		// The max number of common neighbors should be smaller than all neighbors
 		// in the neighborhood, assuming there aren't duplicated edges.
-		tot_edges += min(v.get_num_edges(), num_neighbors * 2);
+		tot_edges += min(v.get_degree(), num_neighbors * 2);
 	}
 	tot_edges /= 2;
 	local_value.set_est_local(tot_edges);
@@ -266,7 +273,6 @@ size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vert
 void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
-	assert(num_local_edges == get_num_edges());
 	if (num_local_edges == 0)
 		return;
 
@@ -282,6 +288,8 @@ void topK_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 	topK_v.finding_triangles_end(prog, data);
 }
 
+}
+
 FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		FG_graph::ptr fg, size_t topK)
 {
@@ -292,18 +300,25 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 
-	// Let's schedule the order of processing activated vertices according
-	// to the size of vertices. We start with processing vertices with higher
-	// degrees in the hope we can find the max scan as early as possible,
-	// so that we can simple ignore the rest of vertices.
-	graph->set_vertex_scheduler(vertex_scheduler::ptr(
-				new vertex_size_scheduler(graph)));
 	printf("scan statistics starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
+
+	scan_stage = scan_stage_t::INIT;
+	graph->start_all();
+	graph->wait4complete();
+	scan_stage = scan_stage_t::RUN;
+
+	// Let's schedule the order of processing activated vertices according
+	// to the size of vertices. We start with processing vertices with higher
+	// degrees in the hope we can find the max scan as early as possible,
+	// so that we can simple ignore the rest of vertices.
+	graph->set_vertex_scheduler(vertex_scheduler::ptr(
+				new vertex_size_scheduler(graph)));
+	graph->set_max_processing_vertices(3);
 
 	class remove_small_filter: public vertex_filter
 	{
@@ -315,7 +330,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 
 		bool keep(compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
-			return scan_v.get_num_edges() >= min;
+			return scan_v.get_degree() >= min;
 		}
 	};
 
@@ -346,7 +361,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 
 		bool keep(compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
-			size_t num_local_edges = scan_v.get_num_edges();
+			size_t num_local_edges = scan_v.get_degree();
 			return num_local_edges * num_local_edges >= min;
 		}
 	};
@@ -378,8 +393,6 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	if (graph_conf.get_print_io_stat())
-		print_io_thread_stat();
 	printf("It takes %f seconds for top %ld\n", time_diff(graph_start, end),
 			topK);
 

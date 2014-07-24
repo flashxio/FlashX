@@ -238,7 +238,6 @@ public:
 
 	void run();
 	void init() {
-		aio->init();
 	}
 	virtual void cleanup() {
 		aio->cleanup();

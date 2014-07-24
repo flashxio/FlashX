@@ -135,7 +135,7 @@ public:
 
 	virtual void print_state() {
 		printf("aio %d has %ld open files, %d pending reqs\n",
-				get_io_idx(), open_files.size(), num_pending_ios());
+				get_io_id(), open_files.size(), num_pending_ios());
 	}
 };
 
