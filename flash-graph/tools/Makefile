@@ -33,7 +33,7 @@ print_ts_graph: print_ts_graph.o ../libgraph.a
 	$(CXX) -o print_ts_graph print_ts_graph.o $(LDFLAGS)
 
 rmat-gen: rmat-gen.o
-	$(CXX) -o rmat-gen rmat-gen.o
+	$(CXX) -o rmat-gen rmat-gen.o $(LDFLAGS)
 
 graph-stat: graph-stat.o ../libgraph.a
 	$(CXX) -o graph-stat graph-stat.o $(LDFLAGS)
