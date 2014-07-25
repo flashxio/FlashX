@@ -22,11 +22,7 @@
 #include "graph.h"
 
 #include <memory>
-#ifdef MEMCHECK
 #include <algorithm>
-#else
-#include <parallel/algorithm>
-#endif
 
 #include <boost/foreach.hpp>
 #include <stxxl.h>

@@ -203,7 +203,7 @@ public:
 		struct {
 			typename FG_vector<T>::ptr fg_vec;
 			void operator()(size_t i, const T &v) {
-				fg_vec->set(i, v);
+				this->fg_vec->set(i, v);
 			}
 		} identity_store;
 		identity_store.fg_vec = ret;

@@ -290,6 +290,8 @@ class ext_mem_vindex_reader_impl: public vertex_index_reader
 	std::vector<ValueType> cached_index;
 
 protected:
+	embedded_array<ValueType> value_buf;
+
 	ext_mem_vindex_reader_impl(io_interface::ptr io) {
 		this->io = io;
 		req_vertex_store = vertex_KV_store::create(io);
@@ -342,10 +344,10 @@ public:
 			if (ids[i] >= get_cached_index_start()) {
 				int off_in_cache = ids[i] - get_cached_index_start();
 				int num_entries = task.get_num_entries();
-				ValueType vs[num_entries];
+				value_buf.resize(num_entries);
 				for (int j = 0; j < num_entries; j++)
-					vs[j] = get_cached_entry(off_in_cache + j);
-				task.run(vs, num_entries);
+					value_buf[j] = get_cached_entry(off_in_cache + j);
+				task.run(value_buf.data(), num_entries);
 			}
 			else
 				req_vertex_store->async_request(task);
@@ -359,10 +361,10 @@ public:
 			if (ids[i] >= get_cached_index_start()) {
 				int off_in_cache = ids[i] - get_cached_index_start();
 				int num_entries = task.get_num_entries();
-				ValueType vs[num_entries];
+				value_buf.resize(num_entries);
 				for (int j = 0; j < num_entries; j++)
-					vs[j] = get_cached_entry(off_in_cache + j);
-				task.run(vs, num_entries);
+					value_buf[j] = get_cached_entry(off_in_cache + j);
+				task.run(value_buf.data(), num_entries);
 			}
 			else
 				req_edge_store->async_request(task);
@@ -419,10 +421,10 @@ public:
 			if (reqs[i].get_id() >= get_cached_index_start()) {
 				int off_in_cache = reqs[i].get_id() - get_cached_index_start();
 				int num_entries = task.get_num_entries();
-				directed_vertex_entry vs[num_entries];
+				value_buf.resize(num_entries);
 				for (int j = 0; j < num_entries; j++)
-					vs[j] = get_cached_entry(off_in_cache + j);
-				task.run(vs, num_entries);
+					value_buf[j] = get_cached_entry(off_in_cache + j);
+				task.run(value_buf.data(), num_entries);
 			}
 			else
 				req_part_vertex_store->async_request(task);
@@ -436,10 +438,10 @@ public:
 			if (ids[i] >= get_cached_index_start()) {
 				int off_in_cache = ids[i] - get_cached_index_start();
 				int num_entries = task.get_num_entries();
-				directed_vertex_entry vs[num_entries];
+				value_buf.resize(num_entries);
 				for (int j = 0; j < num_entries; j++)
-					vs[j] = get_cached_entry(off_in_cache + j);
-				task.run(vs, num_entries);
+					value_buf[j] = get_cached_entry(off_in_cache + j);
+				task.run(value_buf.data(), num_entries);
 			}
 			else
 				req_directed_edge_store->async_request(task);

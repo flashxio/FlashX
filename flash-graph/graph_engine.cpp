@@ -18,9 +18,6 @@
  */
 
 #include <algorithm>
-#ifndef MEMCHECK
-#include <parallel/algorithm>
-#endif
 
 #include "io_interface.h"
 
