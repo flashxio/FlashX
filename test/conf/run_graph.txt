@@ -3,10 +3,13 @@ io_depth=64
 cache_size=4G
 num_nodes=4
 root_conf=conf/data_files.txt
-max_num_pending_ios=4000
+max_num_pending_ios=5000
 huge_page=
+part_range_size_log=10
+max_processing_vertices=1000
 
 threads=32
 prof_file=graph.prof
 merge_reqs=
-index_file_weight=1
+index_file_weight=50
+#in_mem_index=
