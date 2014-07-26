@@ -329,6 +329,38 @@ void run_ts_wcc(FG_graph::ptr graph, int argc, char *argv[])
 	print_cc(comp_ids);
 }
 
+void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
+{
+	int opt;
+	int num_opts = 0;
+	size_t kmax = 0;
+	size_t k = 0;
+
+	while ((opt = getopt(argc, argv, "k:m:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'k':
+				k = atol(optarg);
+				num_opts++;
+				break;
+			case 'm':
+				kmax = atol(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	if (k < 2) {
+		fprintf(stderr, "[Error]: kmin cannot be < 2\n");
+		exit(-1);
+	}
+
+	FG_vector<size_t>::ptr kcorev = compute_kcore(graph, k, kmax);
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -341,6 +373,7 @@ std::string supported_algs[] = {
 	"pagerank2",
 	"sstsg",
 	"ts_wcc",
+	"kcore",
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -366,10 +399,16 @@ void print_usage()
 	fprintf(stderr, "-o output: the output file\n");
 	fprintf(stderr, "-t time: the start time\n");
 	fprintf(stderr, "-l time: the length of time interval\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "ts_wcc\n");
 	fprintf(stderr, "-u unit: time unit (hour, day, month, etc)\n");
 	fprintf(stderr, "-t time: the start time\n");
 	fprintf(stderr, "-l time: the length of time interval\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "k-core:\n");
+	fprintf(stderr, "-k k: the minimum k value to compute\n");
+	fprintf(stderr, "-m kmax: the maximum k value to compute\n");
+	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
@@ -433,5 +472,8 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "ts_wcc") {
 		run_ts_wcc(graph, argc, argv);
+	}
+	else if (alg == "kcore") {
+		run_kcore(graph, argc, argv);
 	}
 }
