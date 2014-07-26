@@ -208,7 +208,6 @@ public:
 
 class subgraph_size_vertex_program: public vertex_program_impl<subgraph_size_vertex>
 {
-	graph_type type;
 	FG_vector<vertex_id_t>::ptr cluster_ids;
 	const cluster_map_t &wanted_clusters;
 	size_map_t wanted_cluster_sizes;
