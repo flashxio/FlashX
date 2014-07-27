@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <set>
+#include <fstream>
 
 #include "graph_engine.h"
 #include "stat.h"
@@ -47,7 +48,7 @@ class FG_vector
 		eles.resize(size);
 	}
 
-public:
+	public:
 	typedef typename std::shared_ptr<FG_vector<T> > ptr; /** Smart pointer for object access */
 
 	/** 
@@ -149,66 +150,66 @@ public:
 	 */
 	void unique(std::set<T> &set) const {
 		// TODO we need a parallel implementation.
-    
+
 		assert(set.empty()); // FIXME: `new` a shared/unique ptr & remove param
 		BOOST_FOREACH(T v, eles) {
 			set.insert(v);
 		}
 	}
 
-  /** 
-    * \brief  Count the number of unique items in the vector using a
-    *         count map.
-    * \param map An *empty* `count_map` object that is used to count
-    *         the number of unique elements in the vector.
-    *
-  */
+	/** 
+	 * \brief  Count the number of unique items in the vector using a
+	 *         count map.
+	 * \param map An *empty* `count_map` object that is used to count
+	 *         the number of unique elements in the vector.
+	 *
+	 */
 	void count_unique(count_map<T> &map) const {
 		// TODO we need a parallel implementation.
-    
+
 		assert(map.get_size() == 0); // FIXME: `new` a shared/unique ptr & remove param
 		BOOST_FOREACH(T v, eles) {
 			map.add(v);
 		}
 	}
 
-  /**
-    * \brief Get the number of elements contained in the vector.
-    *
-    * \return The number of elements in the vector
-  */
+	/**
+	 * \brief Get the number of elements contained in the vector.
+	 *
+	 * \return The number of elements in the vector
+	 */
 	size_t get_size() const {
 		return eles.size();
 	}
 
-  /**
-    * \brief  Get a pointer to the memory array used internally by
-    *         the vector to store its owned elements.
-    * \return A pointer the underlying data memory array.
-    *
-  */
+	/**
+	 * \brief  Get a pointer to the memory array used internally by
+	 *         the vector to store its owned elements.
+	 * \return A pointer the underlying data memory array.
+	 *
+	 */
 	T *get_data() {
 		return eles.data();
 	}
 
-  /**
-    * \brief  Const method to get a pointer to the memory array 
-    *         used internally by the vector to store its owned elements.
-    * \return A const pointer the underlying data memory array.
-    *
-    *
-  */
+	/**
+	 * \brief  Const method to get a pointer to the memory array 
+	 *         used internally by the vector to store its owned elements.
+	 * \return A const pointer the underlying data memory array.
+	 *
+	 *
+	 */
 	const T*get_data() const {
 		return eles.data();
 	}
 
-  /**
-    * \brief Compute the [dot product](http://en.wikipedia.org/wiki/Dot_product)
-    *        of two FG vectors. <br>
-    * **parallel**
-    *
-    * \return A value of data type `T` value that is the dot product.
-  */
+	/**
+	 * \brief Compute the [dot product](http://en.wikipedia.org/wiki/Dot_product)
+	 *        of two FG vectors. <br>
+	 * **parallel**
+	 *
+	 * \return A value of data type `T` value that is the dot product.
+	 */
 	T dot_product(const FG_vector<T> &other) const {
 		assert(this->get_size() == other.get_size());
 		T ret = 0;
@@ -218,14 +219,14 @@ public:
 		return ret;
 	}
 
-  /**
-    * \brief Compute the 
-    *        [L2 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Euclidean_norm)
-    *        (also know as Euclidean distance) of a vector. <br>
-    * **parallel**
-    *
-    * \return An object of type `T` with the value of the L2 norm. 
-  */
+	/**
+	 * \brief Compute the 
+	 *        [L2 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Euclidean_norm)
+	 *        (also know as Euclidean distance) of a vector. <br>
+	 * **parallel**
+	 *
+	 * \return An object of type `T` with the value of the L2 norm. 
+	 */
 	T norm2() const {
 		T ret = 0;
 #pragma omp parallel for reduction(+:ret)
@@ -234,14 +235,14 @@ public:
 		return sqrt(ret);
 	}
 
-  /**
-    * \brief Compute the 
-    * [L1 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Taxicab_norm_or_Manhattan_norm) 
-    * (also Taxicab norm) of an FG_vector. <br>
-    * **parallel**
-    *
-    * \return An object of type `T` with the L1 norm.
-  */
+	/**
+	 * \brief Compute the 
+	 * [L1 Norm](http://en.wikipedia.org/wiki/Norm_(mathematics)#Taxicab_norm_or_Manhattan_norm) 
+	 * (also Taxicab norm) of an FG_vector. <br>
+	 * **parallel**
+	 *
+	 * \return An object of type `T` with the L1 norm.
+	 */
 	T norm1() const {
 		T ret = 0;
 #pragma omp parallel for reduction(+:ret)
@@ -250,46 +251,46 @@ public:
 		return ret;
 	}
 
-  /**
-    * \brief Compute the sum of all elements in the vector. <br>
-	* If the type is integer, the sum can overflow.
-    * **parallel**
-    * \return The sum of all items in the vector.
-  */
+	/**
+	 * \brief Compute the sum of all elements in the vector. <br>
+	 * If the type is integer, the sum can overflow.
+	 * **parallel**
+	 * \return The sum of all items in the vector.
+	 */
 	T sum() const {
 		return sum<T>();
 	}
 
-  /**
-    * \brief Compute the sum of all elements in the vector. <br>
-	* This sum() allows users to specify the type of the result, so users
-	* can avoid integer overflow.
-    * **parallel**
-    * \return The sum of all items in the vector.
-  */
+	/**
+	 * \brief Compute the sum of all elements in the vector. <br>
+	 * This sum() allows users to specify the type of the result, so users
+	 * can avoid integer overflow.
+	 * **parallel**
+	 * \return The sum of all items in the vector.
+	 */
 	template<class ResType>
-	ResType sum() const {
-		struct identity_func {
-			ResType operator()(T v) {
-				return v;
-			}
-		};
-		return aggregate<identity_func, ResType>(identity_func());
-	}
+		ResType sum() const {
+			struct identity_func {
+				ResType operator()(T v) {
+					return v;
+				}
+			};
+			return aggregate<identity_func, ResType>(identity_func());
+		}
 
 	template<class Func, class ResType>
-	ResType aggregate(Func func) const {
-		ResType ret = 0;
+		ResType aggregate(Func func) const {
+			ResType ret = 0;
 #pragma omp parallel for reduction(+:ret)
-		for (size_t i = 0; i < get_size(); i++)
-			ret += func(eles[i]);
-		return ret;
-	}
+			for (size_t i = 0; i < get_size(); i++)
+				ret += func(eles[i]);
+			return ret;
+		}
 
-  /**
-    * \brief Find the maximal value in the vector and return its value.
-    * \return The maximal value in the vector.
-  */
+	/**
+	 * \brief Find the maximal value in the vector and return its value.
+	 * \return The maximal value in the vector.
+	 */
 	T max() const {
 		return max_val_loc().first;
 	}
@@ -312,11 +313,11 @@ public:
 		return std::pair<T, off_t>(ret, idx);
 	}
 
-  /**
-    * \brief Find the index with the minmimal value in the vector and
-    *     return its value.
-    * \return The minimal value in the vector.
-  */
+	/**
+	 * \brief Find the index with the minmimal value in the vector and
+	 *     return its value.
+	 * \return The minimal value in the vector.
+	 */
 	T min() const {
 		T ret = std::numeric_limits<T>::max();
 		for (size_t i = 0; i < get_size(); i++)
@@ -324,30 +325,47 @@ public:
 		return ret;
 	}
 
-  /**
-    * \brief Find the index with the minimal value in the vector and
-    *     return *the index*.
-    * \return The minimal index value in the vector.
-  */
+	/**
+	 * \brief Find the index with the minimal value in the vector and
+	 *     return *the index*.
+	 * \return The minimal index value in the vector.
+	 */
 	size_t argmin() {
-     typename std::vector<T>::iterator res = std::min_element(eles.begin(), eles.end());
-     size_t ret = std::distance(eles.begin(), res);
-     return ret;
+		typename std::vector<T>::iterator res = std::min_element(eles.begin(), eles.end());
+		size_t ret = std::distance(eles.begin(), res);
+		return ret;
 	}
 
-  void print() {
-    std::cout << "[";
-    for (vsize_t i=0; i < get_size(); i++) {
-      std::cout << " " << get(i);
-    }
-    std::cout <<  " ]\n\n";
-  }
+	/**
+	 * \brief Serial element-wise print of the vector.
+	 *	**Not intended for very large vectors**
+	 */
+	void print() {
+		std::cout << "[";
+		for (vsize_t i=0; i < get_size(); i++) {
+			std::cout << " " << get(i);
+		}
+		std::cout <<  " ]\n\n";
+	}
 
-  /**
-    * \brief In place division of vector by a single value.
-    * \param v The value by which you want the array divided.
-    * **parallel** 
-  */
+	/**
+	 * \brief Write the space separated vector to file.
+	 * \param fn The file name you wish written to file.
+	 */
+	void to_file(std::string fn) {
+		std::ofstream f;
+		f.open(fn);
+		for (vsize_t i=0; i < get_size(); i++) {
+			f << get(i) << " ";
+		}
+		f.close();
+	}
+
+	/**
+	 * \brief In place division of vector by a single value.
+	 * \param v The value by which you want the array divided.
+	 * **parallel** 
+	 */
 	void div_by_in_place(T v) {
 #pragma omp parallel for
 		for (size_t i = 0; i < get_size(); i++)
@@ -362,12 +380,12 @@ public:
 	 *             elements.
 	 */
 	template<class MergeFunc, class VecType>
-	void merge_in_place(typename FG_vector<VecType>::ptr vec, MergeFunc func) {
-		assert(this->get_size() == vec->get_size());
+		void merge_in_place(typename FG_vector<VecType>::ptr vec, MergeFunc func) {
+			assert(this->get_size() == vec->get_size());
 #pragma omp parallel for
-		for (size_t i = 0; i < get_size(); i++)
-			eles[i] = func(eles[i], vec->get(i));
-	}
+			for (size_t i = 0; i < get_size(); i++)
+				eles[i] = func(eles[i], vec->get(i));
+		}
 
 	/**
 	 * \brief In place element-wise addition by another vector.
@@ -397,69 +415,69 @@ public:
 		merge_in_place<sub_func, T>(vec, sub_func());
 	}
 
-  /**
-    * \brief Normalize vector using an Lx form.
-    * **parallel**
-  */
+	/**
+	 * \brief Normalize vector using an Lx form.
+	 * **parallel**
+	 */
 	void normalize(int type) {
 		T norm;
 		switch(type) {
 			case 2:
 				norm = norm2();
 				break;
-      case 1:
-        norm = norm1();
-        break;
+			case 1:
+				norm = norm1();
+				break;
 			default:
 				assert(0);
 		}
 		div_by_in_place(norm);
 	}
 
-  /**
-    * \brief Apply a function to every element in an FG_vector.
-    *
-    * \param func A user-defined function.
-    * \param output The FG_vector that you want to apply the function to.
-    *
-    * **parallel**
-  */
+	/**
+	 * \brief Apply a function to every element in an FG_vector.
+	 *
+	 * \param func A user-defined function.
+	 * \param output The FG_vector that you want to apply the function to.
+	 *
+	 * **parallel**
+	 */
 	template<class ApplyFunc>
-	void apply(ApplyFunc func, FG_vector<T> &output) {
+		void apply(ApplyFunc func, FG_vector<T> &output) {
 #pragma omp parallel for
-		for (size_t i = 0; i < get_size(); i++)
-			output.set(i, func(eles[i]));
-	}
+			for (size_t i = 0; i < get_size(); i++)
+				output.set(i, func(eles[i]));
+		}
 
 	// TODO these interfaces assume shared memory.
 
-  /**
-    * Set a value of an index in the vector.
-    *
-    * **NOTE:** This function assumes a shared memory environment.
-    * \param id The index where value is being set.
-    * \param v The value that the index will be set to.
-  */
+	/**
+	 * Set a value of an index in the vector.
+	 *
+	 * **NOTE:** This function assumes a shared memory environment.
+	 * \param id The index where value is being set.
+	 * \param v The value that the index will be set to.
+	 */
 	void set(vertex_id_t id, const T &v) {
 		eles[id] = v;
 	}
 
-  /**
-    * \brief Const get the value of a particular index.
-    * \param id The index of the vector from where you want a value.
-    * \return The value requested by param 1
-    *
-  */
+	/**
+	 * \brief Const get the value of a particular index.
+	 * \param id The index of the vector from where you want a value.
+	 * \return The value requested by param 1
+	 *
+	 */
 	const T &get(vertex_id_t id) const {
 		return eles[id];
 	}
 
-  /**
-    * \brief Non-const get the value of a particular index.
-    * \param id The index of the vector from where you want a value.
-    * \return The value requested by param 1
-    *
-  */
+	/**
+	 * \brief Non-const get the value of a particular index.
+	 * \param id The index of the vector from where you want a value.
+	 * \return The value requested by param 1
+	 *
+	 */
 	T &get(vertex_id_t id) {
 		return eles[id];
 	}
@@ -475,14 +493,14 @@ public:
 	}
 };
 
-  /**
-    * \brief Apply a user defined function to multipl FG_vectors.
-    * **parallel**
-    * \param inputs A vector of FG_vectors that are the inputs.
-    * \param output A FG_vector that are the outputs.
-    * \param apply  The user-defined function that will be applied to all vecotors.
-  */
-template<class T, class ApplyFunc>
+/**
+ * \brief Apply a user defined function to multipl FG_vectors.
+ * **parallel**
+ * \param inputs A vector of FG_vectors that are the inputs.
+ * \param output A FG_vector that are the outputs.
+ * \param apply  The user-defined function that will be applied to all vecotors.
+ */
+	template<class T, class ApplyFunc>
 void multi_vec_apply(const std::vector<typename FG_vector<T>::ptr> &inputs,
 		typename FG_vector<T>::ptr output, ApplyFunc apply)
 {
