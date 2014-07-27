@@ -59,7 +59,7 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 		max_size(_max_size), node_id(_node_id),
 		// If we don't want it to be thread safe, there is no reason to keep
 		// a local buffer.
-		local_buf_size(thread_safe ? _local_buf_size : 0),
+		local_buf_size(_thread_safe ? _local_buf_size : 0),
 		thread_safe(_thread_safe), per_thread_queues("per-thread-queue-queue",
 				_node_id, 1000)
 #ifdef MEMCHECK
