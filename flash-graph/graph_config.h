@@ -36,6 +36,8 @@ class graph_config
 	bool _preload;
 	int index_file_weight;
 	bool _in_mem_index;
+	int num_vparts;
+	int min_vpart_degree;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -49,6 +51,8 @@ public:
 		_preload = false;
 		index_file_weight = 10;
 		_in_mem_index = false;
+		num_vparts = 1;
+		min_vpart_degree = std::numeric_limits<int>::max();
 	}
 
 	/**
@@ -135,8 +139,28 @@ public:
 		return index_file_weight;
 	}
 
+	/**
+	 * \brief Determine whether to use in-mem vertex index.
+	 * \return true if the graph engine uses in-mem vertex index.
+	 */
 	bool use_in_mem_index() const {
 		return _in_mem_index;
+	}
+
+	/**
+	 * \brief Get the number of vertical partitions.
+	 * \return The number of vertical partitions.
+	 */
+	int get_num_vparts() const {
+		return num_vparts;
+	}
+
+	/**
+	 * \brief Get the min degree of a vertex to perform vertical partitioning.
+	 * \return The min degree of a vertex to perform vertical partitioning.
+	 */
+	int get_min_vpart_degree() const {
+		return min_vpart_degree;
 	}
 };
 
@@ -152,6 +176,8 @@ inline void graph_config::print_help()
 	printf("\tpreload: preload the graph data to the page cache\n");
 	printf("\tindex_file_weight: the weight for the graph index file\n");
 	printf("\tin_mem_index: indicate whether to use in-mem vertex index\n");
+	printf("\tnum_vparts: the number of vertical partitions\n");
+	printf("\tmin_vpart_degree: the min degree of a vertex to perform vertical partitioning");
 }
 
 inline void graph_config::print()
@@ -166,6 +192,8 @@ inline void graph_config::print()
 	printf("\tpreload: %d\n", _preload);
 	printf("\tindex_file_weight: %d\n", index_file_weight);
 	printf("\tin_mem_index: %d\n", _in_mem_index);
+	printf("\tnum_vparts: %d\n", num_vparts);
+	printf("\tmin_vpart_degree: %d\n", min_vpart_degree);
 }
 
 inline void graph_config::init(const config_map &map)
@@ -179,6 +207,8 @@ inline void graph_config::init(const config_map &map)
 	map.read_option_bool("preload", _preload);
 	map.read_option_int("index_file_weight", index_file_weight);
 	map.read_option_bool("in_mem_index", _in_mem_index);
+	map.read_option_int("num_vparts", num_vparts);
+	map.read_option_int("min_vpart_degree", min_vpart_degree);
 }
 
 extern graph_config graph_conf;

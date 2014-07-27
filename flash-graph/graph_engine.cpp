@@ -228,6 +228,83 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 }
 #endif
 
+#if 0
+namespace {
+
+class init_vpart_thread: public thread
+{
+	graph_index::ptr index;
+	graph_engine &graph;
+	int hpart_id;
+	vertex_index_reader::ptr index_reader;
+public:
+	init_vpart_thread(graph_index::ptr index, graph_engine &graph,
+			int hpart_id): thread("index-init-thread", hpart_id) {
+		this->index = index;
+		this->hpart_id = hpart_id;
+	}
+
+	virtual void run();
+};
+
+class vpart_index_compute: public index_compute
+{
+	std::vector<vertex_id_t> &ids;
+	int header_size;
+	int num_reqs;
+	int num_gets;
+	obj_allocator &alloc;
+public:
+	vpart_index_compute(std::vector<vertex_id_t> &_ids, int num_reqs,
+			int header_size): ids(_ids) {
+		this->num_gets = 0;
+		this->num_reqs = num_reqs;
+		this->header_size = header_size;
+	}
+
+	virtual void run_on_vertex_size(vertex_id_t id, vsize_t size) {
+		num_gets++;
+		vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
+		if (num_edges >= graph_conf.get_min_vpart_degree())
+			ids.push_back(id);
+		if (is_complete())
+			alloc.free(this);
+	}
+
+	virtual void run_on_num_edges(vertex_id_t id, vsize_t num_in_edges,
+			vsize_t num_out_edges) {
+	}
+
+	bool is_complete() const {
+		return num_reqs == num_gets;
+	}
+};
+
+void init_vpart_thread::run()
+{
+	std::vector<vertex_id_t> large_degree_ids;
+	std::vector<vertex_id_t> id_buf;
+	for (vertex_id_t id = 0; id < index->get_num_vertices(); ) {
+		while (id < index->get_num_vertices() && id_buf.size() < 1024 * 1024) {
+			if (partitioner.map(id) == hpart_id)
+				id_buf.push_back(id);
+			id++;
+		}
+		if (!id_buf.empty()) {
+			vpart_index_compute compute(large_degree_ids, id_buf.size(),
+					graph.get_vertex_header_size());
+			index_reader->request_num_edges(id_buf.data(), id_buf.size(), compute);
+			while (!compute.is_complete())
+				index_reader->wait4complete(1);
+		}
+	}
+	index->init_vpart(hpart_id, graph_conf.get_num_vparts(), large_degree_ids);
+	this->stop();
+}
+
+}
+#endif
+
 graph_engine::graph_engine(const std::string &graph_file,
 		graph_index::ptr index, const config_map &configs)
 {
@@ -291,6 +368,13 @@ graph_engine::graph_engine(const std::string &graph_file,
 
 	if (graph_conf.preload())
 		preload_graph();
+
+	if (graph_conf.get_num_vparts() > 1) {
+		if (vindex == NULL)
+			vindex = vertex_index::safs_load(index->get_index_file());
+		if (!graph_conf.use_in_mem_index())
+			vindex.reset();
+	}
 }
 
 graph_engine::~graph_engine()

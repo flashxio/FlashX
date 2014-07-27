@@ -107,6 +107,48 @@ public:
 	}
 };
 
+class part_compute_vertex: public compute_vertex
+{
+	int part_id;
+public:
+	part_compute_vertex(vertex_id_t id, int part_id): compute_vertex(id) {
+		this->part_id = part_id;
+	}
+
+	int get_part_id() const {
+		return part_id;
+	}
+};
+
+/*
+ * This empty compute_vertex is to disable partitioning vertices by default.
+ */
+class empty_part_compute_vertex: public part_compute_vertex
+{
+public:
+	empty_part_compute_vertex(vertex_id_t id,
+			int part_id): part_compute_vertex(id, part_id) {
+	}
+
+	void run(graph_engine &graph) {
+		assert(0);
+	}
+
+	void run(graph_engine &graph, const page_vertex &vertex) {
+		assert(0);
+	}
+
+	void run_on_message(vertex_program &, const vertex_message &msg) {
+		assert(0);
+	}
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+	}
+};
+
+template<class vertex_type, class part_vertex_type = empty_part_compute_vertex>
+class NUMA_graph_index;
+
 /**
  * \brief A directed version of the <c>compute_vertex</c> class that
  *         users inherit from when using the FlashGraph engine.

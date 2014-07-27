@@ -51,6 +51,9 @@ public:
 
 	virtual void init(int num_threads, int num_nodes) {
 	}
+	virtual void init_vpart(int hpart_id, int num_vparts,
+			std::vector<vertex_id_t> &ids) {
+	}
 
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
 			compute_vertex *v_buf[]) const = 0;
@@ -72,17 +75,20 @@ public:
 	virtual std::string get_index_file() const = 0;
 };
 
-template<class vertex_type>
+template<class vertex_type, class part_vertex_type>
 class NUMA_graph_index;
 
-template<class vertex_type>
+template<class vertex_type, class part_vertex_type>
 class graph_local_partition
 {
+	typedef std::pair<size_t, part_vertex_type *> part_vertex_array;
+
 	int node_id;
 	int part_id;
 	size_t tot_num_vertices;
 	size_t num_vertices;
 	vertex_type *vertex_arr;
+	std::vector<part_vertex_array> part_vertex_arrs;
 	const graph_partitioner &partitioner;
 
 	graph_local_partition(const graph_partitioner &_partitioner, int part_id,
@@ -98,6 +104,9 @@ public:
 	~graph_local_partition() {
 		if (vertex_arr)
 			free_large(vertex_arr, sizeof(vertex_arr[0]) * num_vertices);
+
+		BOOST_FOREACH(part_vertex_array arr, part_vertex_arrs)
+			free_large(arr.second, sizeof(arr.second[0]) * arr.first);
 	}
 
 	void init() {
@@ -122,6 +131,28 @@ public:
 		}
 	}
 
+	/*
+	 * This method is to initialize the vertical partitions inside
+	 * the horizontal partition.
+	 */
+	void init_vparts(int num_parts, std::vector<vertex_id_t> &ids) {
+		part_vertex_arrs.resize(num_parts);
+		for (int i = 0; i < num_parts; i++) {
+			part_vertex_arrs[i].first = ids.size();
+			part_vertex_arrs[i].second = (part_vertex_type *) malloc_large(
+					sizeof(part_vertex_arrs[i].second[0]) * ids.size());
+		}
+		for (size_t i = 0; i < ids.size(); i++) {
+			vertex_id_t id = ids[i];
+			// horizontal part id.
+			int hpart_id = partitioner.map(id);
+			assert(this->part_id == hpart_id);
+			// vertical parts.
+			for (int vpart_id = 0; vpart_id < num_parts; vpart_id++)
+				new (part_vertex_arrs[vpart_id].second + i) part_vertex_type(id, vpart_id);
+		}
+	}
+
 	compute_vertex &get_vertex(vertex_id_t id) {
 		return vertex_arr[id];
 	}
@@ -134,7 +165,7 @@ public:
 		return node_id;
 	}
 
-	friend class NUMA_graph_index<vertex_type>;
+	friend class NUMA_graph_index<vertex_type, part_vertex_type>;
 };
 
 static inline size_t get_min_ext_mem_vertex_size(graph_type type)
@@ -154,7 +185,7 @@ static inline size_t get_min_ext_mem_vertex_size(graph_type type)
 	}
 }
 
-template<class vertex_type>
+template<class vertex_type, class part_vertex_type>
 class NUMA_graph_index: public graph_index
 {
 	std::string index_file;
@@ -164,13 +195,13 @@ class NUMA_graph_index: public graph_index
 	vertex_id_t min_vertex_id;
 	std::unique_ptr<range_graph_partitioner> partitioner;
 	// A graph index per thread
-	std::vector<std::unique_ptr<graph_local_partition<vertex_type> > > index_arr;
+	std::vector<std::unique_ptr<graph_local_partition<vertex_type, part_vertex_type> > > index_arr;
 
 	class init_thread: public thread
 	{
-		graph_local_partition<vertex_type> *index;
+		graph_local_partition<vertex_type, part_vertex_type> *index;
 	public:
-		init_thread(graph_local_partition<vertex_type> *index): thread(
+		init_thread(graph_local_partition<vertex_type, part_vertex_type> *index): thread(
 				"index-init-thread", index->get_node_id()) {
 			this->index = index;
 		}
@@ -186,7 +217,8 @@ class NUMA_graph_index: public graph_index
 	}
 public:
 	static graph_index::ptr create(const std::string &index_file) {
-		return graph_index::ptr(new NUMA_graph_index<vertex_type>(index_file));
+		return graph_index::ptr(
+				new NUMA_graph_index<vertex_type, part_vertex_type>(index_file));
 	}
 
 	void init(int num_threads, int num_nodes) {
@@ -200,7 +232,7 @@ public:
 
 		// Construct the indices.
 		for (int i = 0; i < num_threads; i++) {
-			index_arr.emplace_back(new graph_local_partition<vertex_type>(
+			index_arr.emplace_back(new graph_local_partition<vertex_type, part_vertex_type>(
 						// The partitions are assigned to worker threads.
 						// The memory used to store the partitions should
 						// be on the same NUMA as the worker threads.
@@ -222,6 +254,11 @@ public:
 		max_vertex_id = header.get_num_vertices() - 1;
 
 		printf("There are %ld vertices\n", header.get_num_vertices());
+	}
+
+	virtual void init_vparts(int hpart_id, int num_vparts,
+			std::vector<vertex_id_t> &ids) {
+		index_arr[hpart_id]->init_vparts(num_vparts, ids);
 	}
 
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
