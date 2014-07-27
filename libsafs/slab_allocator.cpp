@@ -75,8 +75,13 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 	this->pinned = pinned;
 	assert((unsigned) obj_size >= sizeof(linked_obj));
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-	pthread_key_create(&local_buf_key, NULL);
-	pthread_key_create(&local_free_key, NULL);
+	// we only need to initialize them when we want to buffer objects locally.
+	if (local_buf_size > 0) {
+		int ret = pthread_key_create(&local_buf_key, NULL);
+		assert(ret == 0);
+		ret = pthread_key_create(&local_free_key, NULL);
+		assert(ret == 0);
+	}
 }
 
 void slab_allocator::free(char *obj)
@@ -227,8 +232,10 @@ slab_allocator::~slab_allocator()
 #endif
 		numa_free(alloc_bufs[i], increase_size);
 	}
-	pthread_key_delete(local_buf_key);
-	pthread_key_delete(local_free_key);
+	if (local_buf_size > 0) {
+		pthread_key_delete(local_buf_key);
+		pthread_key_delete(local_free_key);
+	}
 	pthread_spin_destroy(&lock);
 
 	// Destroy all the per-thread queues.
