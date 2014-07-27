@@ -361,8 +361,7 @@ void global_cached_io::finalize_partial_request(io_request &partial,
 			assert(orig->get_req_type() == io_request::BASIC_REQ);
 			assert(orig->get_io() == this);
 			((global_cached_io *) orig->get_io())->wakeup_on_req(orig, IO_OK);
-			// Now we can delete it.
-			req_allocator->free(orig);
+			// The sync I/O request should be deleted in wait4req.
 		}
 		else {
 			complete_queue.push_back(orig);
@@ -553,6 +552,7 @@ int global_cached_io::process_completed_requests()
 	int num_completed = 0;
 	while (!complete_queue.is_empty()) {
 		original_io_request *reqp = complete_queue.pop_front();
+		assert(!reqp->is_sync());
 		reqp_buf[num_reqs++] = reqp;
 		num_completed++;
 		if (reqp->get_req_type() == io_request::USER_COMPUTE) {
@@ -1513,6 +1513,8 @@ void global_cached_io::wait4req(original_io_request *req)
 			break;
 		get_thread()->wait();
 	}
+	// Now we can delete it.
+	req_allocator->free(req);
 }
 
 /**
