@@ -101,6 +101,12 @@ public:
 	void notify_iteration_end(vertex_program & prog) {
 	}
 
+	/**
+	  * \brief This method is invoked by calling the `request_vertex_headers`
+	  *		method and is where one would access the vertex in/out edges.
+	  *	\param prog The vertex program.
+	  *	\param header The vertex header object. 
+	  */
 	void run_on_vertex_header(vertex_program &prog,
 			const vertex_header &header) {
 		assert(0);
