@@ -283,7 +283,7 @@ class index_comp_allocator_impl: public index_comp_allocator
 	obj_allocator<compute_type> allocator;
 public:
 	index_comp_allocator_impl(thread *t): allocator(
-			"index-compute-allocator", t->get_node_id(), 1024 * 1024,
+			"index-compute-allocator", t->get_node_id(), false, 1024 * 1024,
 			params.get_max_obj_alloc_size(),
 			typename obj_initiator<compute_type>::ptr(new compute_initiator(*this)),
 			typename obj_destructor<compute_type>::ptr(new compute_destructor())) {
