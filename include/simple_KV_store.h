@@ -128,7 +128,7 @@ class KV_compute_allocator: public compute_allocator
 public:
 	KV_compute_allocator(simple_KV_store<ValueType, ValueTaskType> *store,
 			int node_id): allocator("KV_compute_allocator",
-			node_id, 1024 * 1024, params.get_max_obj_alloc_size(),
+			node_id, false, 1024 * 1024, params.get_max_obj_alloc_size(),
 			typename obj_initiator<KV_compute<ValueType, ValueTaskType> >::ptr(
 				new compute_initializer(store, this)),
 			typename obj_destructor<KV_compute<ValueType, ValueTaskType> >::ptr(
