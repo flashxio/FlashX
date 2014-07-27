@@ -56,7 +56,10 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 		// We allow pages to be pinned when allocated.
 		bool init, bool pinned, int _local_buf_size, bool _thread_safe): obj_size(
 			_obj_size), increase_size(ROUNDUP_PAGE(_increase_size)),
-		max_size(_max_size), node_id(_node_id), local_buf_size(_local_buf_size),
+		max_size(_max_size), node_id(_node_id),
+		// If we don't want it to be thread safe, there is no reason to keep
+		// a local buffer.
+		local_buf_size(thread_safe ? _local_buf_size : 0),
 		thread_safe(_thread_safe), per_thread_queues("per-thread-queue-queue",
 				_node_id, 1000)
 #ifdef MEMCHECK

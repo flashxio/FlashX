@@ -173,7 +173,7 @@ public:
 	req_ext_allocator(int node_id, long max_size = params.get_max_obj_alloc_size(
 				)): obj_allocator<io_req_extension>(
 				std::string("req_ext_allocator-") + itoa(node_id), node_id,
-				OBJ_ALLOC_INC_SIZE, max_size,
+				true, OBJ_ALLOC_INC_SIZE, max_size,
 				obj_initiator<io_req_extension>::ptr(new ext_initiator()),
 				obj_destructor<io_req_extension>::ptr(new ext_destructor())) {
 	}
@@ -210,7 +210,7 @@ public:
 	request_allocator(int node_id, long max_size = params.get_max_obj_alloc_size(
 				)): obj_allocator<original_io_request>(
 				std::string("gcached_req_allocator-") + itoa(node_id), node_id,
-				OBJ_ALLOC_INC_SIZE, max_size,
+				true, OBJ_ALLOC_INC_SIZE, max_size,
 				obj_initiator<original_io_request>::ptr(new req_initiator()),
 				obj_destructor<original_io_request>::ptr(new req_destructor())) {
 	}

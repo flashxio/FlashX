@@ -241,8 +241,8 @@ class obj_allocator: public slab_allocator
 	typename obj_initiator<T>::ptr initiator;
 	typename obj_destructor<T>::ptr destructor;
 public:
-	obj_allocator(const std::string &name, int node_id, long increase_size,
-			long max_size = INT_MAX,
+	obj_allocator(const std::string &name, int node_id, bool thread_safe,
+			long increase_size, long max_size = INT_MAX,
 			typename obj_initiator<T>::ptr initiator = typename obj_initiator<T>::ptr(
 				new default_obj_initiator<T>()),
 			typename obj_destructor<T>::ptr destructor = typename obj_destructor<T>::ptr(
@@ -250,7 +250,8 @@ public:
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
 				): slab_allocator(name, sizeof(T) + sizeof(slab_allocator::linked_obj),
-				increase_size, max_size, node_id, true) {
+				increase_size, max_size, node_id, true, false, LOCAL_BUF_SIZE,
+				thread_safe) {
 		assert(increase_size <= max_size);
 		this->initiator = std::move(initiator);
 		this->destructor = std::move(destructor);

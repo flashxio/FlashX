@@ -306,7 +306,7 @@ class write_compute_allocator: public compute_allocator
 	obj_allocator<write_user_compute> allocator;
 public:
 	write_compute_allocator(thread *t): allocator("write-compute-allocator",
-			t->get_node_id(), PAGE_SIZE, params.get_max_obj_alloc_size(),
+			t->get_node_id(), false, PAGE_SIZE, params.get_max_obj_alloc_size(),
 			obj_initiator<write_user_compute>::ptr(new compute_initiator(this))) {
 	}
 
@@ -337,7 +337,7 @@ class sum_compute_allocator: public compute_allocator
 	obj_allocator<sum_user_compute> allocator;
 public:
 	sum_compute_allocator(thread *t): allocator("sum-compute-allocator",
-			t->get_node_id(), PAGE_SIZE, params.get_max_obj_alloc_size(),
+			t->get_node_id(), false, PAGE_SIZE, params.get_max_obj_alloc_size(),
 			obj_initiator<sum_user_compute>::ptr(new compute_initiator(this))) {
 	}
 
