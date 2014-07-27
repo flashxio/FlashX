@@ -254,7 +254,7 @@ void fetch_subgraphs(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_id
 		graph::ptr> &clusters);
 
 /**
- * Compute the size of each subgraph identified by cluster IDs.
+ * \brief Compute the size of each subgraph identified by cluster IDs.
  *  
  * \param fg The FlashGraph graph object for which you want to compute.
  * \param cluster_ids A vector of the cluster IDs that the vertices
@@ -268,7 +268,22 @@ void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr clu
 		std::map<vertex_id_t, std::pair<size_t, size_t> > &sizes);
 
 /**
- * Get the degree of all vertices in the graph.
+ * \brief Compute the k-core/coreness of a graph. The algorithm will 
+ *        determine which vertices are between core `k` and `kmax` --
+ *        all other vertices will be assigned to core 0.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param k The core value to be computed.
+ * \param kmax (Optional) The kmax value. If omitted then all cores are
+ *        computed i.e., coreness. *This is not recommended for very large
+ *        graphs.*
+ * \return An `FG_vector` containing the core of each vertex between `k`
+ *         and `kmax`. All other vertices are assigned to core 0.
+ */
+FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
+		                size_t k, size_t kmax=0);
+
+/**
+ * \brief Get the degree of all vertices in the graph.
  * \param fg The FlashGraph graph object for which you want to compute.
  * \param type The edge type: IN_EDGE, OUT_EDGE, BOTH_EDGES.
  * \return A vector with an entry for each vertex degree.
@@ -288,7 +303,7 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval);
 
 /**
- * Get the header of the graph that contains basic information of the graph.
+ * \brief Get the header of the graph that contains basic information of the graph.
  * \return The graph header.
  */
 graph_header get_graph_header(FG_graph::ptr fg);

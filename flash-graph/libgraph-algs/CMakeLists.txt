@@ -10,4 +10,5 @@ add_library(graph-algs STATIC
 	page_rank.cpp
 	scc.cpp
 	undirected_triangle_graph.cpp
+	k_core.cpp
 )

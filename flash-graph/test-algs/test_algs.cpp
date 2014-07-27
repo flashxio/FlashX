@@ -335,8 +335,9 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 	int num_opts = 0;
 	size_t kmax = 0;
 	size_t k = 0;
+	std::string write_out = "";
 
-	while ((opt = getopt(argc, argv, "k:m:")) != -1) {
+	while ((opt = getopt(argc, argv, "k:m:w:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'k':
@@ -346,6 +347,9 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 			case 'm':
 				kmax = atol(optarg);
 				num_opts++;
+				break;
+			case 'w':
+				write_out = optarg;
 				break;
 			default:
 				print_usage();
@@ -359,6 +363,8 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 	}
 
 	FG_vector<size_t>::ptr kcorev = compute_kcore(graph, k, kmax);
+	if (!write_out.empty())
+		kcorev->to_file(write_out);
 }
 
 std::string supported_algs[] = {
@@ -408,6 +414,7 @@ void print_usage()
 	fprintf(stderr, "k-core:\n");
 	fprintf(stderr, "-k k: the minimum k value to compute\n");
 	fprintf(stderr, "-m kmax: the maximum k value to compute\n");
+	fprintf(stderr, "-w output: the file name for a vector written to filen");
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
