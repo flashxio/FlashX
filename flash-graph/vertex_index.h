@@ -216,6 +216,10 @@ public:
 			return tot_size - vertices[id].get_off();
 	}
 
+	vertex_entry_type *get_data() {
+		return vertices;
+	}
+
 	static int get_header_size() {
 		return sizeof(vertex_index);
 	}

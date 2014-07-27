@@ -40,6 +40,7 @@ enum edge_type {
 	IN_EDGE, /**In edges*/
 	OUT_EDGE, /**Out edges*/
 	BOTH_EDGES, /**Both in and out edges*/
+	NUM_TYPES,
 };
 
 class vertex_index;

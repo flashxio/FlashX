@@ -228,26 +228,16 @@ void worker_thread::init()
 				new default_vertex_queue(*graph, worker_id, get_node_id()));
 
 	io = graph_factory->create_io(this);
-	switch (graph->get_graph_header().get_graph_type()) {
-		case graph_type::DIRECTED:
-			if (graph_conf.use_in_mem_index())
-				index_reader = vertex_index_reader::create(
-						graph->get_in_mem_index(), true);
-			else
-				index_reader = vertex_index_reader::create(
-						index_factory->create_io(this), true);
-			break;
-		case graph_type::UNDIRECTED:
-			if (graph_conf.use_in_mem_index())
-				index_reader = vertex_index_reader::create(
-						graph->get_in_mem_index(), false);
-			else
-				index_reader = vertex_index_reader::create(
-						index_factory->create_io(this), false);
-			break;
-		default:
-			assert(0);
-	}
+	if (graph_conf.use_in_mem_index())
+		index_reader = simple_index_reader::create(
+				graph->get_in_mem_index(),
+				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
+				this);
+	else
+		index_reader = simple_index_reader::create(
+				index_factory->create_io(this),
+				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
+				this);
 
 	if (!started_vertices.empty()) {
 		assert(curr_activated_vertices->is_empty());

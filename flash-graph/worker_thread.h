@@ -163,7 +163,7 @@ class vertex_compute;
 class steal_state_t;
 class message_processor;
 class load_balancer;
-class vertex_index_reader;
+class simple_index_reader;
 
 class worker_thread: public thread
 {
@@ -175,7 +175,7 @@ class worker_thread: public thread
 	compute_allocator *alloc;
 	compute_allocator *part_alloc;
 	vertex_program::ptr vprogram;
-	std::shared_ptr<vertex_index_reader> index_reader;
+	std::shared_ptr<simple_index_reader> index_reader;
 
 	// This buffers the I/O requests for adjacency lists.
 	std::vector<io_request> adj_reqs;
@@ -316,7 +316,7 @@ public:
 		return *msg_processor;
 	}
 
-	vertex_index_reader &get_index_reader() {
+	simple_index_reader &get_index_reader() {
 		return *index_reader;
 	}
 
