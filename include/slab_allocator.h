@@ -146,15 +146,22 @@ private:
 	// The buffers pre-allocated to serve allocation requests
 	// from the local threads.
 	pthread_key_t local_buf_key;
-	// The buffers freed in the local threads, which hasn't been
-	// added the main buffer.
-	pthread_key_t local_free_key;
 
 	thread_safe_FIFO_queue<fifo_queue<char *> *> per_thread_queues;
 
 	std::string name;
 	static atomic_integer alloc_counter;
 
+	fifo_queue<char *> *get_local_buf() {
+		fifo_queue<char *> *local_buf_refs
+			= (fifo_queue<char *> *) pthread_getspecific(local_buf_key);
+		if (local_buf_refs == NULL) {
+			local_buf_refs = fifo_queue<char *>::create(node_id, local_buf_size);
+			per_thread_queues.add(&local_buf_refs, 1);
+			pthread_setspecific(local_buf_key, local_buf_refs);
+		}
+		return local_buf_refs;
+	}
 #ifdef MEMCHECK
 	aligned_allocator allocator;
 #endif

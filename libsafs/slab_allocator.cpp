@@ -79,8 +79,6 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 	if (local_buf_size > 0) {
 		int ret = pthread_key_create(&local_buf_key, NULL);
 		assert(ret == 0);
-		ret = pthread_key_create(&local_free_key, NULL);
-		assert(ret == 0);
 	}
 }
 
@@ -90,19 +88,13 @@ void slab_allocator::free(char *obj)
 		slab_allocator::free(&obj, 1);
 	}
 	else {
-		fifo_queue<char *> *local_free_refs
-			= (fifo_queue<char *> *) pthread_getspecific(local_free_key);
-		if (local_free_refs == NULL) {
-			local_free_refs = fifo_queue<char *>::create(node_id, local_buf_size);
-			per_thread_queues.add(&local_free_refs, 1);
-			pthread_setspecific(local_free_key, local_free_refs);
-		}
-		if (local_free_refs->is_full()) {
+		fifo_queue<char *> *local_buf_refs = get_local_buf();
+		if (local_buf_refs->is_full()) {
 			char *objs[local_buf_size];
-			int num = local_free_refs->fetch(objs, local_buf_size);
+			int num = local_buf_refs->fetch(objs, local_buf_size);
 			slab_allocator::free(objs, num);
 		}
-		local_free_refs->push_back(obj);
+		local_buf_refs->push_back(obj);
 	}
 }
 
@@ -117,15 +109,7 @@ char *slab_allocator::alloc()
 			return obj;
 	}
 	else {
-		fifo_queue<char *> *local_buf_refs
-			= (fifo_queue<char *> *) pthread_getspecific(local_buf_key);
-		if (local_buf_refs == NULL) {
-			assert(node_id >= 0);
-			local_buf_refs = fifo_queue<char *>::create(node_id, local_buf_size);
-			per_thread_queues.add(&local_buf_refs, 1);
-			pthread_setspecific(local_buf_key, local_buf_refs);
-		}
-
+		fifo_queue<char *> *local_buf_refs = get_local_buf();
 		if (local_buf_refs->is_empty()) {
 			char *objs[local_buf_size];
 			int num = alloc(objs, local_buf_size);
@@ -234,7 +218,6 @@ slab_allocator::~slab_allocator()
 	}
 	if (local_buf_size > 0) {
 		pthread_key_delete(local_buf_key);
-		pthread_key_delete(local_free_key);
 	}
 	pthread_spin_destroy(&lock);
 
