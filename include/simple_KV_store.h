@@ -69,15 +69,15 @@ public:
 	virtual void run(page_byte_array &arr) {
 		off_t start_off = arr.get_offset() / sizeof(ValueType);
 		off_t end_off = (arr.get_offset() + arr.get_size()) / sizeof(ValueType);
-		embedded_array<ValueType> vs;
 		for (int i = 0; i < num_tasks; i++) {
 			off_t idx = tasks[i].get_idx();
 			assert(idx >= start_off && idx < end_off);
 			int num_entries = tasks[i].get_num_entries();
-			vs.resize(num_entries);
-			arr.memcpy((idx - start_off) * sizeof(ValueType), (char *) vs.data(),
-					sizeof(ValueType) * num_entries);
-			tasks[i].run(vs.data(), num_entries);
+			off_t it_start = (idx - start_off) * sizeof(ValueType);
+			off_t it_end = it_start + sizeof(ValueType) * num_entries;
+			page_byte_array::seq_const_iterator<ValueType> it
+				= arr.get_seq_iterator<ValueType>(it_start, it_end);
+			tasks[i].run(it);
 		}
 		has_run = true;
 		store->complete_tasks(num_added_tasks);

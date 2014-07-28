@@ -29,10 +29,10 @@ public:
 		return false;
 	}
 
-	void run(int32_t values[], int num) {
-		assert(num == 2);
-		assert(int_arr[idx] == values[0]);
-		assert(int_arr[idx + 1] == values[1]);
+	void run(page_byte_array::seq_const_iterator<int32_t> &it) {
+		assert(it.get_num_tot_entries() == 2);
+		assert(int_arr[idx] == it.next());
+		assert(int_arr[idx + 1] == it.next());
 		num_runs++;
 	}
 
