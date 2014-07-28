@@ -149,7 +149,8 @@ public:
 		}
 		else {
 			req_vertex_task<ValueType> task(compute->get_first_vertex(),
-					compute->get_num_vertices(), compute);
+					compute->get_last_vertex() - compute->get_first_vertex() + 1,
+					compute);
 			req_vertex_store->async_request(task);
 		}
 	}
@@ -287,66 +288,65 @@ bool req_directed_edge_compute::run(vertex_id_t vid, index_iterator &it)
 	return num_gets == get_num_vertices();
 }
 
-void simple_index_reader::flush_computes()
+template<class RequestType, class ComputeType>
+void process_requests(std::vector<RequestType> &reqs,
+		index_comp_allocator_impl<ComputeType> &alloc,
+		vertex_index_reader &index_reader)
 {
-	if (!std::is_sorted(vertex_comps.begin(), vertex_comps.end(),
-				id_compute_lesseq()))
-		std::sort(vertex_comps.begin(), vertex_comps.end(), id_compute_less());
-	if (!std::is_sorted(part_vertex_comps.begin(), part_vertex_comps.end(),
-			directed_compute_lesseq()))
-		std::sort(part_vertex_comps.begin(), part_vertex_comps.end(),
-			directed_compute_less());
-	if (!std::is_sorted(edge_comps.begin(), edge_comps.end(),
-				id_compute_lesseq()))
-		std::sort(edge_comps.begin(), edge_comps.end(), id_compute_less());
-	if (!std::is_sorted(directed_edge_comps.begin(), directed_edge_comps.end(),
-			id_compute_lesseq()))
-		std::sort(directed_edge_comps.begin(), directed_edge_comps.end(),
-			id_compute_less());
+	assert(!reqs.empty());
+	ComputeType *compute = (ComputeType *) alloc.alloc();
+	const RequestType &req = reqs[0];
+	compute->init(req.first, req.second);
+	for (size_t i = 1; i < reqs.size(); i++) {
+		const RequestType &req = reqs[i];
 
-	for (size_t i = 0; i < vertex_comps.size(); i++) {
-		id_compute_t &comp = vertex_comps[i];
-		request_vertex(comp.first, comp.second);
-	}
-	for (size_t i = 0; i < part_vertex_comps.size(); i++) {
-		directed_compute_t &comp = part_vertex_comps[i];
-		request_vertex(comp.first, comp.second);
-	}
-	for (size_t i = 0; i < edge_comps.size(); i++) {
-		id_compute_t &comp = edge_comps[i];
-		request_num_edges(comp.first, comp.second);
-	}
-	for (size_t i = 0; i < directed_edge_comps.size(); i++) {
-		id_compute_t &comp = directed_edge_comps[i];
-		request_num_directed_edges(comp.first,
-				(directed_vertex_compute *) comp.second);
-	}
-
-	vertex_comps.clear();
-	part_vertex_comps.clear();
-	edge_comps.clear();
-	directed_edge_comps.clear();
-
-	if (whole_compute->get_num_vertices() > 0) {
-		index_reader->request_index(whole_compute);
-		whole_compute = (req_vertex_compute *) req_vertex_comp_alloc.alloc();
-	}
-	for (int type = edge_type::IN_EDGE; type < edge_type::NUM_TYPES; type++) {
-		if (part_computes[type]->get_num_vertices() > 0) {
-			index_reader->request_index(part_computes[type]);
-			part_computes[type]
-				= (req_part_vertex_compute *) req_part_vertex_comp_alloc.alloc();
-			edge_type etype = (edge_type) type;
-			part_computes[type]->set_type(etype);
+		if (!compute->add_vertex(req.first, req.second)) {
+			index_reader.request_index(compute);
+			compute = (ComputeType *) alloc.alloc();
+			compute->init(req.first, req.second);
 		}
 	}
-	if (edge_compute->get_num_vertices() > 0) {
-		index_reader->request_index(edge_compute);
-		edge_compute = (req_edge_compute *) req_edge_comp_alloc.alloc();
+	assert(!compute->empty());
+	index_reader.request_index(compute);
+	reqs.clear();
+}
+
+void simple_index_reader::flush_computes()
+{
+	if (!vertex_comps.empty()) {
+		if (!std::is_sorted(vertex_comps.begin(), vertex_comps.end(),
+					id_compute_lesseq()))
+			std::sort(vertex_comps.begin(), vertex_comps.end(), id_compute_less());
+		process_requests<id_compute_t, req_vertex_compute>(vertex_comps,
+				req_vertex_comp_alloc, *index_reader);
 	}
-	if (directed_edge_compute->get_num_vertices() > 0) {
-		index_reader->request_index(directed_edge_compute);
-		directed_edge_compute
-			= (req_directed_edge_compute *) req_directed_edge_comp_alloc.alloc();
+
+	for (int type = edge_type::IN_EDGE; type < edge_type::NUM_TYPES; type++) {
+		if (!part_vertex_comps[type].empty()) {
+			if (!std::is_sorted(part_vertex_comps[type].begin(),
+						part_vertex_comps[type].end(), directed_compute_lesseq()))
+				std::sort(part_vertex_comps[type].begin(),
+						part_vertex_comps[type].end(), directed_compute_less());
+			process_requests<directed_compute_t, req_part_vertex_compute>(
+					part_vertex_comps[type], req_part_vertex_comp_alloc,
+					*index_reader);
+		}
+	}
+
+	if (!edge_comps.empty()) {
+		if (!std::is_sorted(edge_comps.begin(), edge_comps.end(),
+					id_compute_lesseq()))
+			std::sort(edge_comps.begin(), edge_comps.end(), id_compute_less());
+		process_requests<id_compute_t, req_edge_compute>(edge_comps,
+				req_edge_comp_alloc, *index_reader);
+	}
+
+	if (!directed_edge_comps.empty()) {
+		if (!std::is_sorted(directed_edge_comps.begin(), directed_edge_comps.end(),
+					id_compute_lesseq()))
+			std::sort(directed_edge_comps.begin(), directed_edge_comps.end(),
+					id_compute_less());
+		process_requests<id_compute_t, req_directed_edge_compute>(
+				directed_edge_comps, req_directed_edge_comp_alloc, *index_reader);
 	}
 }

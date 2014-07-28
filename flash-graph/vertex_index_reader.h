@@ -138,28 +138,27 @@ public:
 		this->id_range.second = INVALID_VERTEX_ID;
 	}
 
-	bool add_vertex(vertex_id_t id) {
-		bool ret;
-		if (id_range.first == INVALID_VERTEX_ID) {
-			id_range.first = id;
-			id_range.second = id + 1;
-			ret = true;
-		}
-		else if (id_range.second == id) {
-			id_range.second++;
-			ret = true;
-		}
-		else
-			ret = false;
-		return ret;
+	void init(vertex_id_t id) {
+		assert(id_range.first == INVALID_VERTEX_ID);
+		id_range.first = id;
+		id_range.second = id + 1;
 	}
 
-	int get_num_vertices() const {
-		return id_range.second - id_range.first;
+	void add_vertex(vertex_id_t id) {
+		assert(id_range.second <= id);
+		id_range.second = id + 1;
+	}
+
+	bool empty() const {
+		return id_range.first == INVALID_VERTEX_ID;
 	}
 
 	vertex_id_t get_first_vertex() const {
 		return id_range.first;
+	}
+
+	vertex_id_t get_last_vertex() const {
+		return id_range.second - 1;
 	}
 
 	const id_range_t &get_range() const {
@@ -212,14 +211,14 @@ public:
  *	# directed edges.
  */
 
-class multi_vertex_compute: public index_compute
+static const int MAX_INDEX_COMPUTE_SIZE = 512;
+class dense_vertex_compute: public index_compute
 {
 protected:
-	static const int MAX_COMPUTE_SIZE = 512;
 	embedded_array<vertex_compute *> computes;
 	int num_gets;
 public:
-	multi_vertex_compute(index_comp_allocator &_alloc): index_compute(_alloc) {
+	dense_vertex_compute(index_comp_allocator &_alloc): index_compute(_alloc) {
 		num_gets = 0;
 	}
 
@@ -228,29 +227,42 @@ public:
 		return computes[id - get_first_vertex()];
 	}
 
+	int get_num_vertices() const {
+		return get_last_vertex() - get_first_vertex() + 1;
+	}
+
+	void init(vertex_id_t id, vertex_compute *compute) {
+		index_compute::init(id);
+		computes[0] = compute;
+	}
+
 	bool add_vertex(vertex_id_t id, vertex_compute *compute) {
 		// We don't want to have too many requests in a compute.
 		// Otherwise, we need to use use malloc to allocate memory.
 		if (computes.get_capacity() <= get_num_vertices()) {
-			if (computes.get_capacity() >= MAX_COMPUTE_SIZE)
+			if (computes.get_capacity() >= MAX_INDEX_COMPUTE_SIZE)
 				return false;
 			else
 				computes.resize(computes.get_capacity() * 2);
 		}
-		bool ret = index_compute::add_vertex(id);
-		if (ret)
+
+		if (get_last_vertex() + 1 == id) {
+			index_compute::add_vertex(id);
 			computes[get_num_vertices() - 1] = compute;
-		return ret;
+			return true;
+		}
+		else
+			return false;
 	}
 };
 
 /*
  * This requests an entire vertex.
  */
-class req_vertex_compute: public multi_vertex_compute
+class req_vertex_compute: public dense_vertex_compute
 {
 public:
-	req_vertex_compute(index_comp_allocator &_alloc): multi_vertex_compute(_alloc) {
+	req_vertex_compute(index_comp_allocator &_alloc): dense_vertex_compute(_alloc) {
 	}
 
 	virtual bool run(vertex_id_t vid, index_iterator &it);
@@ -259,17 +271,23 @@ public:
 /*
  * This requests part of a vertex.
  */
-class req_part_vertex_compute: public multi_vertex_compute
+class req_part_vertex_compute: public dense_vertex_compute
 {
 	edge_type type;
 public:
 	req_part_vertex_compute(
-			index_comp_allocator &_alloc): multi_vertex_compute(_alloc) {
+			index_comp_allocator &_alloc): dense_vertex_compute(_alloc) {
 		this->type = edge_type::NONE;
 	}
 
-	void set_type(edge_type type) {
-		this->type = type;
+	void init(const directed_vertex_request &req, vertex_compute *compute) {
+		dense_vertex_compute::init(req.get_id(), compute);
+		this->type = req.get_type();
+	}
+
+	bool add_vertex(const directed_vertex_request &req, vertex_compute *compute) {
+		assert(this->type == req.get_type());
+		return dense_vertex_compute::add_vertex(req.get_id(), compute);
 	}
 
 	virtual bool run(vertex_id_t vid, index_iterator &it);
@@ -278,10 +296,10 @@ public:
 /*
  * This requests # edges of a vertex.
  */
-class req_edge_compute: public multi_vertex_compute
+class req_edge_compute: public dense_vertex_compute
 {
 public:
-	req_edge_compute(index_comp_allocator &_alloc): multi_vertex_compute(_alloc) {
+	req_edge_compute(index_comp_allocator &_alloc): dense_vertex_compute(_alloc) {
 	}
 
 	virtual bool run(vertex_id_t vid, index_iterator &it);
@@ -290,10 +308,10 @@ public:
 /*
  * This requests # directed edges of a vertex.
  */
-class req_directed_edge_compute: public multi_vertex_compute
+class req_directed_edge_compute: public dense_vertex_compute
 {
 public:
-	req_directed_edge_compute(index_comp_allocator &_alloc): multi_vertex_compute(
+	req_directed_edge_compute(index_comp_allocator &_alloc): dense_vertex_compute(
 			_alloc) {
 	}
 
@@ -377,11 +395,6 @@ public:
  */
 class simple_index_reader
 {
-	req_vertex_compute *whole_compute;
-	req_part_vertex_compute *part_computes[edge_type::NUM_TYPES];
-	req_edge_compute *edge_compute;
-	req_directed_edge_compute *directed_edge_compute;
-
 	index_comp_allocator_impl<req_vertex_compute> req_vertex_comp_alloc;
 	index_comp_allocator_impl<req_part_vertex_compute> req_part_vertex_comp_alloc;
 	index_comp_allocator_impl<req_edge_compute> req_edge_comp_alloc;
@@ -391,7 +404,7 @@ class simple_index_reader
 	typedef std::pair<vertex_id_t, vertex_compute *> id_compute_t;
 	typedef std::pair<directed_vertex_request, directed_vertex_compute *> directed_compute_t;
 	std::vector<id_compute_t> vertex_comps;
-	std::vector<directed_compute_t> part_vertex_comps;
+	std::vector<directed_compute_t> part_vertex_comps[edge_type::NUM_TYPES];
 	std::vector<id_compute_t> edge_comps;
 	std::vector<id_compute_t> directed_edge_comps;
 
@@ -425,30 +438,12 @@ class simple_index_reader
 
 	vertex_index_reader::ptr index_reader;
 
-	void init() {
-		whole_compute = (req_vertex_compute *) req_vertex_comp_alloc.alloc();
-		part_computes[edge_type::NONE] = NULL;
-		part_computes[edge_type::IN_EDGE]
-			= (req_part_vertex_compute *) req_part_vertex_comp_alloc.alloc();
-		part_computes[edge_type::IN_EDGE]->set_type(edge_type::IN_EDGE);
-		part_computes[edge_type::OUT_EDGE]
-			= (req_part_vertex_compute *) req_part_vertex_comp_alloc.alloc();
-		part_computes[edge_type::OUT_EDGE]->set_type(edge_type::OUT_EDGE);
-		part_computes[edge_type::BOTH_EDGES]
-			= (req_part_vertex_compute *) req_part_vertex_comp_alloc.alloc();
-		part_computes[edge_type::BOTH_EDGES]->set_type(edge_type::BOTH_EDGES);
-		edge_compute = (req_edge_compute *) req_edge_comp_alloc.alloc();
-		directed_edge_compute
-			= (req_directed_edge_compute *) req_directed_edge_comp_alloc.alloc();
-	}
-
 	void flush_computes();
 
 	simple_index_reader(vertex_index::ptr index, bool directed,
 			thread *t): req_vertex_comp_alloc(t), req_part_vertex_comp_alloc(
 			t), req_edge_comp_alloc(t), req_directed_edge_comp_alloc(t),
 			single_directed_edge_comp_alloc(t) {
-		init();
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
@@ -456,16 +451,15 @@ class simple_index_reader
 			thread *t): req_vertex_comp_alloc(t), req_part_vertex_comp_alloc(
 			t), req_edge_comp_alloc(t), req_directed_edge_comp_alloc(t),
 			single_directed_edge_comp_alloc(t) {
-		init();
 		index_reader = vertex_index_reader::create(io, directed);
 	}
 
+#if 0
 	void request_vertex(vertex_id_t id, vertex_compute *compute) {
 		if (!whole_compute->add_vertex(id, compute)) {
 			index_reader->request_index(whole_compute);
 			whole_compute = (req_vertex_compute *) req_vertex_comp_alloc.alloc();
-			bool ret = whole_compute->add_vertex(id, compute);
-			assert(ret);
+			whole_compute->init(id, compute);
 		}
 	}
 
@@ -476,10 +470,7 @@ class simple_index_reader
 			index_reader->request_index(part_computes[req.get_type()]);
 			part_computes[req.get_type()]
 				= (req_part_vertex_compute *) req_part_vertex_comp_alloc.alloc();
-			part_computes[req.get_type()]->set_type(req.get_type());
-			bool ret = part_computes[req.get_type()]->add_vertex(req.get_id(),
-					compute);
-			assert(ret);
+			part_computes[req.get_type()]->init(req, compute);
 		}
 	}
 
@@ -487,8 +478,7 @@ class simple_index_reader
 		if (!edge_compute->add_vertex(id, compute)) {
 			index_reader->request_index(edge_compute);
 			edge_compute = (req_edge_compute *) req_edge_comp_alloc.alloc();
-			bool ret = edge_compute->add_vertex(id, compute);
-			assert(ret);
+			edge_compute->init(id, compute);
 		}
 	}
 
@@ -507,10 +497,10 @@ class simple_index_reader
 				directed_edge_compute
 					= (req_directed_edge_compute *) req_directed_edge_comp_alloc.alloc();
 			}
-			bool ret = directed_edge_compute->add_vertex(id, compute);
-			assert(ret);
+			directed_edge_compute->init(id, compute);
 		}
 	}
+#endif
 public:
 	typedef std::shared_ptr<simple_index_reader> ptr;
 
@@ -534,7 +524,8 @@ public:
 	void request_vertices(const directed_vertex_request reqs[], int num,
 			directed_vertex_compute &compute) {
 		for (int i = 0; i < num; i++)
-			part_vertex_comps.push_back(directed_compute_t(reqs[i], &compute));
+			part_vertex_comps[reqs[i].get_type()].push_back(
+					directed_compute_t(reqs[i], &compute));
 	}
 
 	void request_num_edges(vertex_id_t ids[], int num, vertex_compute &compute) {
