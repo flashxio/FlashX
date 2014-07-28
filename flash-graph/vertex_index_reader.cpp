@@ -54,10 +54,8 @@ public:
 		return false;
 	}
 
-	void run(ValueType entries[], int num) {
-		assert((size_t) num == get_num_entries());
-		index_iterator it((char *) entries, (char *) &entries[num],
-				sizeof(ValueType));
+	void run(page_byte_array::seq_const_iterator<ValueType> &seq_it) {
+		page_index_iterator_impl<ValueType> it(seq_it);
 		bool ret = compute->run(compute->get_first_vertex(), it);
 		if (ret)
 			compute->get_allocator().free(compute);
@@ -134,16 +132,16 @@ public:
 		if (range.first >= cached_index_start) {
 			off_t start_off = range.first - cached_index_start;
 			off_t end_off = range.second - cached_index_start;
-			index_iterator it((char *) (cached_index.data() + start_off),
-					(char *) (cached_index.data() + end_off + 1), sizeof(ValueType));
+			array_index_iterator_impl<ValueType> it(cached_index.data() + start_off,
+					cached_index.data() + end_off + 1);
 			bool ret = compute->run(compute->get_first_vertex(), it);
 			assert(ret);
 			compute->get_allocator().free(compute);
 		}
 		else if (range.second > cached_index_start) {
 			off_t end_off = range.second - cached_index_start;
-			index_iterator it((char *) cached_index.data(),
-					(char *) (cached_index.data() + end_off + 1), sizeof(ValueType));
+			array_index_iterator_impl<ValueType> it(cached_index.data(),
+					cached_index.data() + end_off + 1);
 			compute->run(cached_index_start, it);
 			req_vertex_task<ValueType> task(compute->get_first_vertex(),
 					cached_index_start - compute->get_first_vertex(), compute);
@@ -185,24 +183,22 @@ public:
 	virtual void request_index(index_compute *compute) {
 		index_compute::id_range_t range = compute->get_range();
 		if (range.second < index->get_num_vertices()) {
-			index_iterator it((char *) (index->get_data() + range.first),
+			array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
 					// We need an additional entry.
-					(char *) (index->get_data() + range.second + 1),
-					sizeof(ValueType));
+					index->get_data() + range.second + 1);
 			bool ret = compute->run(compute->get_first_vertex(), it);
 			assert(ret);
 		}
 		else {
-			index_iterator it((char *) (index->get_data() + range.first),
-					(char *) (index->get_data() + range.second),
-					sizeof(ValueType));
+			array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
+					index->get_data() + range.second);
 			compute->run(compute->get_first_vertex(), it);
 
 			// For the last vertex,
 			ValueType vs[2];
 			vs[0] = index->get_data()[index->get_num_vertices() - 1];
 			vs[1] = ValueType(index->get_graph_size());
-			it = index_iterator((char *) vs, (char *) &vs[2], sizeof(ValueType));
+			it = array_index_iterator_impl<ValueType>(vs, &vs[2]);
 			bool ret = compute->run(index->get_num_vertices() - 1, it);
 			assert(ret);
 		}

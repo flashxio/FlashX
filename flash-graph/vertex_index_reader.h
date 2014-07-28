@@ -33,43 +33,81 @@ class index_comp_allocator;
  */
 class index_iterator
 {
-	char *p;
-	char *p_end;
-	int entry_size;	// in bytes.
+	static const int BUF_SIZE = sizeof(directed_vertex_entry);
+protected:
+	char curr_buf[BUF_SIZE];
+	char next_buf[BUF_SIZE];
+	bool _has_next;
 public:
-	index_iterator(char *p, char *end, int entry_size) {
-		this->p = p;
-		this->p_end = end;
-		this->entry_size = entry_size;
-		assert(end > p && (end - p) % entry_size == 0);
-	}
-
 	bool has_next() const {
-		// TO iterate over an array of n entries, the actual array
-		// has n + 1 entries because we need to have the next entry
-		// to compute the vertex size.
-		return p < p_end - entry_size;
+		return _has_next;
 	}
 
-	void move_next() {
-		p += entry_size;
-	}
+	virtual void move_next() = 0;
 
 	off_t get_curr_off() const {
-		return ((vertex_offset *) p)->get_off();
+		return ((vertex_offset *) curr_buf)->get_off();
 	}
 
 	vsize_t get_curr_vertex_size() const {
-		return ((vertex_offset *) (p + entry_size))->get_off()
-			- ((vertex_offset *) p)->get_off();
+		return ((vertex_offset *) next_buf)->get_off()
+			- ((vertex_offset *) curr_buf)->get_off();
 	}
 
 	vsize_t get_curr_num_in_edges() const {
-		return ((directed_vertex_entry *) p)->get_num_in_edges();
+		return ((directed_vertex_entry *) curr_buf)->get_num_in_edges();
 	}
 
 	vsize_t get_curr_num_out_edges() const {
-		return ((directed_vertex_entry *) p)->get_num_out_edges();
+		return ((directed_vertex_entry *) curr_buf)->get_num_out_edges();
+	}
+};
+
+template<class EntryType>
+class page_index_iterator_impl: public index_iterator
+{
+	page_byte_array::seq_const_iterator<EntryType> it;
+public:
+	page_index_iterator_impl(page_byte_array::seq_const_iterator<EntryType> &_it): it(_it) {
+		assert(it.get_num_tot_entries() >= 2);
+		assert(it.has_next());
+		*(EntryType *) curr_buf = it.next();
+		assert(it.has_next());
+		*(EntryType *) next_buf = it.next();
+		_has_next = true;
+	}
+
+	virtual void move_next() {
+		_has_next = it.has_next();
+		if (_has_next) {
+			*(EntryType *) curr_buf = *(EntryType *) next_buf;
+			*(EntryType *) next_buf = it.next();
+		}
+	}
+};
+
+template<class EntryType>
+class array_index_iterator_impl: public index_iterator
+{
+	EntryType *p;
+	EntryType *end;
+public:
+	array_index_iterator_impl(EntryType *start, EntryType *end) {
+		this->p = start;
+		this->end = end;
+		assert(end - p >= 2);
+		*(EntryType *) curr_buf = *p;
+		p++;
+		*(EntryType *) next_buf = *p;
+		_has_next = true;
+	}
+
+	virtual void move_next() {
+		*(EntryType *) curr_buf = *(EntryType *) next_buf;
+		p++;
+		_has_next = p < end;
+		if (_has_next)
+			*(EntryType *) next_buf = *p;
 	}
 };
 
