@@ -723,6 +723,7 @@ public:
 		const page_byte_array *arr;
 		seq_const_page_iterator<T> curr_page_it;
 
+		off_t start;
 		// The byte offset in the pages.
 		off_t off;
 		// The end byte offset in the pages.
@@ -734,6 +735,7 @@ public:
 			assert((size_t) byte_end <= arr->get_size());
 			assert(byte_off <= byte_end);
 
+			start = arr->get_offset_in_first_page() + byte_off;
 			off = arr->get_offset_in_first_page() + byte_off;
 			end = arr->get_offset_in_first_page() + byte_end;
 
@@ -803,12 +805,28 @@ public:
 			return curr_page_it.next();
 		}
 
+		bool move_to(size_t idx) {
+			off = start + idx * sizeof(T);
+			if (off >= end)
+				return false;
+
+			off_t pg_end;
+			if (end - ROUND_PAGE(off) >= PAGE_SIZE)
+				pg_end = PAGE_SIZE;
+			else
+				pg_end = end - ROUND_PAGE(off);
+			curr_page_it = seq_const_page_iterator<T>(arr->get_page(
+						off / PAGE_SIZE), off % PAGE_SIZE, pg_end);
+			return true;
+		}
+
 		/**
 		 * This method gets the current element.
 		 * \return the current element.
 		 */
 		T curr() const {
 			seq_const_iterator<T> *it = (seq_const_iterator<T> *) this;
+			// TODO I need to fix this.
 			assert(it->has_next());
 			return curr_page_it.curr();
 		}
