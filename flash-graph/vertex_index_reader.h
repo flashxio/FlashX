@@ -44,6 +44,8 @@ public:
 	}
 
 	virtual void move_next() = 0;
+	virtual bool move_to(int idx) = 0;
+	virtual int get_num_entries() const = 0;
 
 	off_t get_curr_off() const {
 		return ((vertex_offset *) curr_buf)->get_off();
@@ -84,15 +86,37 @@ public:
 			*(EntryType *) next_buf = it.next();
 		}
 	}
+
+	virtual bool move_to(int idx) {
+		bool ret = it.move_to(idx);
+		if (!ret) {
+			_has_next = false;
+			return false;
+		}
+		*(EntryType *) curr_buf = it.next();
+		if (it.has_next()) {
+			_has_next = true;
+			*(EntryType *) next_buf = it.next();
+		}
+		else
+			_has_next = false;
+		return _has_next;
+	}
+
+	virtual int get_num_entries() const {
+		return it.get_num_tot_entries();
+	}
 };
 
 template<class EntryType>
 class array_index_iterator_impl: public index_iterator
 {
+	EntryType *start;
 	EntryType *p;
 	EntryType *end;
 public:
 	array_index_iterator_impl(EntryType *start, EntryType *end) {
+		this->start = start;
 		this->p = start;
 		this->end = end;
 		assert(end - p >= 2);
@@ -108,6 +132,22 @@ public:
 		_has_next = p < end;
 		if (_has_next)
 			*(EntryType *) next_buf = *p;
+	}
+
+	virtual bool move_to(int idx) {
+		p = start + idx;
+		if (p + 1 < end) {
+			*(EntryType *) curr_buf = *p;
+			*(EntryType *) next_buf = *(p + 1);
+			_has_next = true;
+		}
+		else
+			_has_next = false;
+		return _has_next;
+	}
+
+	virtual int get_num_entries() const {
+		return end - p;
 	}
 };
 
@@ -145,7 +185,7 @@ public:
 	}
 
 	void add_vertex(vertex_id_t id) {
-		assert(id_range.second <= id);
+		assert(id_range.second - 1 <= id);
 		id_range.second = id + 1;
 	}
 
@@ -211,9 +251,15 @@ public:
  *	# directed edges.
  */
 
-static const int MAX_INDEX_COMPUTE_SIZE = 512;
+/*
+ * These are the implementation for dense index computes.
+ * The dense index computes are adjacent to each other. The next index compute
+ * runs on the next vertex in the vertex ID space. There are no repeated vertex
+ * IDs or gaps between vertices.
+ */
 class dense_vertex_compute: public index_compute
 {
+	static const int MAX_INDEX_COMPUTE_SIZE = 512;
 protected:
 	embedded_array<vertex_compute *> computes;
 	int num_gets;
@@ -246,6 +292,8 @@ public:
 				computes.resize(computes.get_capacity() * 2);
 		}
 
+		// The next vertex has to be the ID of the previous vertex + 1.
+		// There should be no space.
 		if (get_last_vertex() + 1 == id) {
 			index_compute::add_vertex(id);
 			computes[get_num_vertices() - 1] = compute;
@@ -313,6 +361,148 @@ class req_directed_edge_compute: public dense_vertex_compute
 public:
 	req_directed_edge_compute(index_comp_allocator &_alloc): dense_vertex_compute(
 			_alloc) {
+	}
+
+	virtual bool run(vertex_id_t vid, index_iterator &it);
+};
+
+/*
+ * These index computes handle the general cases. That is, there might be a gap
+ * between vertices as well as repeated vertices.
+ */
+class general_vertex_compute: public index_compute
+{
+	static const int MAX_INDEX_COMPUTE_SIZE = 512;
+	int num_vertices;
+	embedded_array<vertex_id_t> ids;
+	embedded_array<vertex_compute *> computes;
+	int entry_size_log;
+
+	off_t get_page(vertex_id_t id) const {
+		return ROUND_PAGE(id << entry_size_log);
+	}
+
+	off_t get_last_page() const {
+		return get_page(get_last_vertex());
+	}
+protected:
+	int num_gets;
+
+	int get_start_idx(vertex_id_t start_vid) const {
+		if (start_vid == get_id(0))
+			return 0;
+		else {
+			const vertex_id_t *loc = std::lower_bound(ids.data(),
+					ids.data() + num_vertices, start_vid);
+			assert(loc != ids.data() + num_vertices);
+			return loc - ids.data();
+		}
+	}
+public:
+	general_vertex_compute(index_comp_allocator &_alloc,
+			int entry_size_log): index_compute(_alloc) {
+		num_vertices = 0;
+		num_gets = 0;
+		this->entry_size_log = entry_size_log;
+	}
+
+	vertex_compute *get_compute(int idx) const {
+		return computes[idx];
+	}
+
+	vertex_id_t get_id(int idx) const {
+		return ids[idx];
+	}
+
+	int get_num_vertices() const {
+		return num_vertices;
+	}
+
+	void init(vertex_id_t id, vertex_compute *compute) {
+		index_compute::init(id);
+		ids[0] = id;
+		computes[0] = compute;
+		num_vertices++;
+	}
+
+	void clear() {
+		index_compute::clear();
+		num_vertices = 0;
+	}
+
+	bool add_vertex(vertex_id_t id, vertex_compute *compute) {
+		// We don't want to have too many requests in a compute.
+		// Otherwise, we need to use use malloc to allocate memory.
+		if (computes.get_capacity() <= get_num_vertices()) {
+			if (computes.get_capacity() >= MAX_INDEX_COMPUTE_SIZE)
+				return false;
+			else {
+				ids.resize(ids.get_capacity() * 2);
+				computes.resize(computes.get_capacity() * 2);
+			}
+		}
+
+		if (get_last_page() == get_page(id)
+				|| get_last_page() + 1 == get_page(id)) {
+			index_compute::add_vertex(id);
+			computes[get_num_vertices()] = compute;
+			ids[get_num_vertices()] = id;
+			num_vertices++;
+			return true;
+		}
+		else
+			return false;
+	}
+};
+
+class genrq_vertex_compute: public general_vertex_compute
+{
+public:
+	genrq_vertex_compute(index_comp_allocator &_alloc,
+			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
+	}
+
+	virtual bool run(vertex_id_t vid, index_iterator &it);
+};
+
+class genrq_part_vertex_compute: public general_vertex_compute
+{
+	edge_type type;
+public:
+	genrq_part_vertex_compute(index_comp_allocator &_alloc,
+			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
+		this->type = edge_type::NONE;
+	}
+
+
+	void init(const directed_vertex_request &req, vertex_compute *compute) {
+		general_vertex_compute::init(req.get_id(), compute);
+		this->type = req.get_type();
+	}
+
+	bool add_vertex(const directed_vertex_request &req, vertex_compute *compute) {
+		assert(this->type == req.get_type());
+		return general_vertex_compute::add_vertex(req.get_id(), compute);
+	}
+
+	virtual bool run(vertex_id_t vid, index_iterator &it);
+};
+
+class genrq_edge_compute: public general_vertex_compute
+{
+public:
+	genrq_edge_compute(index_comp_allocator &_alloc,
+			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
+	}
+
+	virtual bool run(vertex_id_t vid, index_iterator &it);
+};
+
+class genrq_directed_edge_compute: public general_vertex_compute
+{
+public:
+	genrq_directed_edge_compute(index_comp_allocator &_alloc,
+			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
 	}
 
 	virtual bool run(vertex_id_t vid, index_iterator &it);
@@ -386,6 +576,51 @@ public:
 	}
 };
 
+template<class compute_type>
+class general_index_comp_allocator_impl: public index_comp_allocator
+{
+	class compute_initiator: public obj_initiator<compute_type>
+	{
+		general_index_comp_allocator_impl<compute_type> &alloc;
+		int entry_size_log;
+	public:
+		compute_initiator(general_index_comp_allocator_impl<compute_type> &_alloc,
+				int entry_size_log): alloc(_alloc) {
+			this->entry_size_log = entry_size_log;
+		}
+
+		virtual void init(compute_type *obj) {
+			new (obj) compute_type(alloc, entry_size_log);
+		}
+	};
+
+	class compute_destructor: public obj_destructor<compute_type>
+	{
+	public:
+		void destroy(compute_type *obj) {
+			obj->~compute_type();
+		}
+	};
+
+	obj_allocator<compute_type> allocator;
+public:
+	general_index_comp_allocator_impl(thread *t, int entry_size_log): allocator(
+			"sparse-index-compute-allocator", t->get_node_id(), false, 1024 * 1024,
+			params.get_max_obj_alloc_size(),
+			typename obj_initiator<compute_type>::ptr(new compute_initiator(*this,
+					entry_size_log)),
+			typename obj_destructor<compute_type>::ptr(new compute_destructor())) {
+	}
+
+	virtual index_compute *alloc() {
+		return allocator.alloc_obj();
+	}
+
+	virtual void free(index_compute *obj) {
+		allocator.free((compute_type *) obj);
+	}
+};
+
 /*
  * This is a helper class that requests
  *	vertex,
@@ -399,6 +634,12 @@ class simple_index_reader
 	index_comp_allocator_impl<req_part_vertex_compute> req_part_vertex_comp_alloc;
 	index_comp_allocator_impl<req_edge_compute> req_edge_comp_alloc;
 	index_comp_allocator_impl<req_directed_edge_compute> req_directed_edge_comp_alloc;
+
+	general_index_comp_allocator_impl<genrq_vertex_compute> genrq_vertex_comp_alloc;
+	general_index_comp_allocator_impl<genrq_part_vertex_compute> genrq_part_vertex_comp_alloc;
+	general_index_comp_allocator_impl<genrq_edge_compute> genrq_edge_comp_alloc;
+	general_index_comp_allocator_impl<genrq_directed_edge_compute> genrq_directed_edge_comp_alloc;
+
 	index_comp_allocator_impl<single_directed_edge_compute> single_directed_edge_comp_alloc;
 
 	typedef std::pair<vertex_id_t, vertex_compute *> id_compute_t;
@@ -440,18 +681,87 @@ class simple_index_reader
 
 	void flush_computes();
 
+	static int get_index_entry_size_log(bool directed) {
+		return log2(get_index_entry_size(
+					directed ? graph_type::DIRECTED : graph_type::UNDIRECTED));
+	}
+
 	simple_index_reader(vertex_index::ptr index, bool directed,
 			thread *t): req_vertex_comp_alloc(t), req_part_vertex_comp_alloc(
-			t), req_edge_comp_alloc(t), req_directed_edge_comp_alloc(t),
+				t), req_edge_comp_alloc(t), req_directed_edge_comp_alloc(t),
+			genrq_vertex_comp_alloc(t, get_index_entry_size_log(directed)),
+			genrq_part_vertex_comp_alloc(t, get_index_entry_size_log(directed)),
+			genrq_edge_comp_alloc(t, get_index_entry_size_log(directed)),
+			genrq_directed_edge_comp_alloc(t, get_index_entry_size_log(directed)),
 			single_directed_edge_comp_alloc(t) {
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
 	simple_index_reader(io_interface::ptr io, bool directed,
 			thread *t): req_vertex_comp_alloc(t), req_part_vertex_comp_alloc(
-			t), req_edge_comp_alloc(t), req_directed_edge_comp_alloc(t),
+				t), req_edge_comp_alloc(t), req_directed_edge_comp_alloc(t),
+			genrq_vertex_comp_alloc(t, get_index_entry_size_log(directed)),
+			genrq_part_vertex_comp_alloc(t, get_index_entry_size_log(directed)),
+			genrq_edge_comp_alloc(t, get_index_entry_size_log(directed)),
+			genrq_directed_edge_comp_alloc(t, get_index_entry_size_log(directed)),
 			single_directed_edge_comp_alloc(t) {
 		index_reader = vertex_index_reader::create(io, directed);
+	}
+
+	/*
+	 * This gets the number of partitions in the vector. Each partition
+	 * has all vertices adjacent to each other. There are no gaps or repeated
+	 * vertices in a partition.
+	 */
+	template<class EntryType, class GetId>
+	static int get_num_parts(const std::vector<EntryType> &vec)
+	{
+		GetId get_id;
+		if (get_id(vec.back().first) - get_id(vec.front().first) + 1
+				== vec.size())
+			return 1;
+
+		vertex_id_t id = get_id(vec[0].first);
+		int num_parts = 1;
+		for (size_t i = 1; i < vec.size(); i++) {
+			if (id + 1 == get_id(vec[i].first))
+				id++;
+			else {
+				num_parts++;
+				id = get_id(vec[i].first);
+			}
+		}
+		return num_parts;
+	}
+
+	static bool is_dense(const std::vector<id_compute_t> &vec)
+	{
+		if (vec.size() <= 1)
+			return true;
+		struct get_id {
+			vertex_id_t operator()(vertex_id_t id) {
+				return id;
+			}
+		};
+		int num_parts = get_num_parts<id_compute_t, get_id>(vec);
+		if (num_parts == 1)
+			return true;
+		return vec.size() / num_parts >= 16;
+	}
+
+	static bool is_dense(const std::vector<directed_compute_t> &vec)
+	{
+		if (vec.size() <= 1)
+			return true;
+		struct get_id {
+			vertex_id_t operator()(const directed_vertex_request &req) {
+				return req.get_id();
+			}
+		};
+		int num_parts = get_num_parts<directed_compute_t, get_id>(vec);
+		if (num_parts == 1)
+			return true;
+		return vec.size() / num_parts >= 16;
 	}
 
 #if 0

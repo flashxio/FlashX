@@ -616,4 +616,16 @@ public:
 typedef vertex_index_iterator_impl<directed_vertex_entry> directed_vertex_index_iterator;
 typedef vertex_index_iterator_impl<vertex_offset> default_vertex_index_iterator;
 
+static inline int get_index_entry_size(graph_type type)
+{
+	switch (type) {
+		case graph_type::UNDIRECTED:
+			return sizeof(vertex_offset);
+		case graph_type::DIRECTED:
+			return sizeof(directed_vertex_entry);
+		default:
+			assert(0);
+	}
+}
+
 #endif
