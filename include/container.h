@@ -562,6 +562,10 @@ public:
 	T *data() {
 		return real_buf;
 	}
+
+	const T *data() const {
+		return real_buf;
+	}
 };
 
 template<class T, int size = 32>
@@ -614,6 +618,10 @@ public:
 	}
 
 	T *data() {
+		return real_buf;
+	}
+
+	const T *data() const {
 		return real_buf;
 	}
 };
