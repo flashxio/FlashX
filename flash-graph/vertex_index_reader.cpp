@@ -22,8 +22,6 @@
 #include "vertex_compute.h"
 #include "vertex_index_reader.h"
 
-static const size_t MAX_ENTRIES = 100;
-
 template<class ValueType>
 class req_vertex_task
 {

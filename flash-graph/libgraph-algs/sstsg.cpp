@@ -36,8 +36,6 @@
 
 namespace {
 
-const double BIN_SEARCH_RATIO = 10;
-
 time_t timestamp;
 time_t time_interval = 1;
 int num_time_intervals = 1;

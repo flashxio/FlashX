@@ -21,8 +21,6 @@
 #include "worker_thread.h"
 #include "graph_engine.h"
 
-const int MAX_STOLEN_VERTICES = 1024;
-
 load_balancer::load_balancer(graph_engine &_graph,
 		worker_thread &_owner): owner(_owner), graph(_graph)
 {
