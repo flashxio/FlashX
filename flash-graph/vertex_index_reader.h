@@ -252,6 +252,61 @@ public:
  */
 
 /*
+ * The function class of requesting a vertex.
+ */
+struct req_vertex_func
+{
+	void operator()(vertex_id_t vid, vertex_compute &compute,
+			index_compute &icompute, const index_iterator &it) {
+		in_mem_vertex_info info(vid, it.get_curr_off(),
+				it.get_curr_vertex_size());
+		compute.issue_io_request(info);
+	}
+};
+
+/*
+ * The function class of requesting part of a vertex.
+ */
+template<class IndexCompute>
+struct req_part_vertex_func
+{
+	void operator()(vertex_id_t vid, vertex_compute &compute,
+			index_compute &icompute, const index_iterator &it) {
+		directed_vertex_compute &dcompute = (directed_vertex_compute &) compute;
+		in_mem_directed_vertex_info info(vid, it.get_curr_off(),
+				it.get_curr_vertex_size(), it.get_curr_num_in_edges(),
+				it.get_curr_num_out_edges());
+		directed_vertex_request req(vid, ((IndexCompute &) icompute).get_type());
+		dcompute.issue_io_request(req, info);
+	}
+};
+
+/*
+ * The function class of requesting the number of edges of a vertex.
+ */
+struct req_edge_func
+{
+	void operator()(vertex_id_t vid, vertex_compute &compute,
+			index_compute &icompute, const index_iterator &it) {
+		compute.run_on_vertex_size(vid, it.get_curr_vertex_size());
+	}
+};
+
+/*
+ * The function class of requesting the number of directed edges of a vertex.
+ */
+struct req_directed_edge_func
+{
+	void operator()(vertex_id_t vid, vertex_compute &compute,
+			index_compute &icompute, const index_iterator &it) {
+		directed_vertex_compute &dcompute
+			= (directed_vertex_compute &) compute;
+		dcompute.run_on_num_edges(vid, it.get_curr_num_in_edges(),
+				it.get_curr_num_out_edges());
+	}
+};
+
+/*
  * These are the implementation for dense index computes.
  * The dense index computes are adjacent to each other. The next index compute
  * runs on the next vertex in the vertex ID space. There are no repeated vertex
@@ -302,6 +357,18 @@ public:
 		else
 			return false;
 	}
+
+	template<class Func>
+	bool run_temp(vertex_id_t vid, index_iterator &it) {
+		Func func;
+		while (it.has_next()) {
+			num_gets++;
+			func(vid, *get_compute(vid), *this, it);
+			vid++;
+			it.move_next();
+		}
+		return num_gets == get_num_vertices();
+	}
 };
 
 /*
@@ -313,7 +380,9 @@ public:
 	req_vertex_compute(index_comp_allocator &_alloc): dense_vertex_compute(_alloc) {
 	}
 
-	virtual bool run(vertex_id_t vid, index_iterator &it);
+	virtual bool run(vertex_id_t vid, index_iterator &it) {
+		return run_temp<req_vertex_func>(vid, it);
+	}
 };
 
 /*
@@ -328,6 +397,10 @@ public:
 		this->type = edge_type::NONE;
 	}
 
+	edge_type get_type() const {
+		return type;
+	}
+
 	void init(const directed_vertex_request &req, vertex_compute *compute) {
 		dense_vertex_compute::init(req.get_id(), compute);
 		this->type = req.get_type();
@@ -338,7 +411,9 @@ public:
 		return dense_vertex_compute::add_vertex(req.get_id(), compute);
 	}
 
-	virtual bool run(vertex_id_t vid, index_iterator &it);
+	virtual bool run(vertex_id_t vid, index_iterator &it) {
+		return run_temp<req_part_vertex_func<req_part_vertex_compute> >(vid, it);
+	}
 };
 
 /*
@@ -350,7 +425,9 @@ public:
 	req_edge_compute(index_comp_allocator &_alloc): dense_vertex_compute(_alloc) {
 	}
 
-	virtual bool run(vertex_id_t vid, index_iterator &it);
+	virtual bool run(vertex_id_t vid, index_iterator &it) {
+		return run_temp<req_edge_func>(vid, it);
+	}
 };
 
 /*
@@ -363,7 +440,9 @@ public:
 			_alloc) {
 	}
 
-	virtual bool run(vertex_id_t vid, index_iterator &it);
+	virtual bool run(vertex_id_t vid, index_iterator &it) {
+		return run_temp<req_directed_edge_func>(vid, it);
+	}
 };
 
 /*
@@ -453,6 +532,23 @@ public:
 		else
 			return false;
 	}
+
+	template<class Func>
+	bool run_temp(vertex_id_t start_vid, index_iterator &it) {
+		Func func;
+		int num_vertices = get_num_vertices();
+		for (int i = get_start_idx(start_vid); i < num_vertices; i++) {
+			vertex_id_t id = get_id(i);
+			vertex_compute *compute = get_compute(i);
+			assert(id >= start_vid);
+			if (!it.move_to(id - start_vid)) {
+				break;
+			}
+			func(id, *compute, *this, it);
+			num_gets++;
+		}
+		return num_gets == get_num_vertices();
+	}
 };
 
 class genrq_vertex_compute: public general_vertex_compute
@@ -462,7 +558,9 @@ public:
 			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
 	}
 
-	virtual bool run(vertex_id_t vid, index_iterator &it);
+	virtual bool run(vertex_id_t vid, index_iterator &it) {
+		return run_temp<req_vertex_func>(vid, it);
+	}
 };
 
 class genrq_part_vertex_compute: public general_vertex_compute
@@ -474,6 +572,9 @@ public:
 		this->type = edge_type::NONE;
 	}
 
+	edge_type get_type() const {
+		return type;
+	}
 
 	void init(const directed_vertex_request &req, vertex_compute *compute) {
 		general_vertex_compute::init(req.get_id(), compute);
@@ -485,7 +586,10 @@ public:
 		return general_vertex_compute::add_vertex(req.get_id(), compute);
 	}
 
-	virtual bool run(vertex_id_t vid, index_iterator &it);
+	virtual bool run(vertex_id_t vid, index_iterator &it) {
+		return run_temp<req_part_vertex_func<genrq_part_vertex_compute> >(
+				vid, it);
+	}
 };
 
 class genrq_edge_compute: public general_vertex_compute
@@ -495,7 +599,9 @@ public:
 			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
 	}
 
-	virtual bool run(vertex_id_t vid, index_iterator &it);
+	virtual bool run(vertex_id_t vid, index_iterator &it) {
+		return run_temp<req_edge_func>(vid, it);
+	}
 };
 
 class genrq_directed_edge_compute: public general_vertex_compute
@@ -505,7 +611,9 @@ public:
 			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
 	}
 
-	virtual bool run(vertex_id_t vid, index_iterator &it);
+	virtual bool run(vertex_id_t vid, index_iterator &it) {
+		return run_temp<req_directed_edge_func>(vid, it);
+	}
 };
 
 class single_directed_edge_compute: public index_compute
