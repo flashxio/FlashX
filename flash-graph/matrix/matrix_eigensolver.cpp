@@ -36,7 +36,7 @@
 #include "FGlib.h"
 #include "matrix_eigensolver.h"
 
-const ev_float_t TOL = 1e-8;
+const ev_float_t TOL = 1e-6;
 const int RHO = 1;
 
 class substract_store
@@ -298,7 +298,7 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		= FG_col_wise_matrix<ev_float_t>::create(spmv.get_vector_size(), m);
 	FG_vector<ev_float_t>::ptr r = FG_vector<ev_float_t>::create(
 			spmv.get_vector_size());
-	r->init(1);
+	r->init_rand(1000000, time(NULL));
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
