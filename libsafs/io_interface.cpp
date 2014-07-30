@@ -283,7 +283,7 @@ class posix_io_factory: public file_io_factory
 	file_mapper &mapper;
 public:
 	posix_io_factory(file_mapper &_mapper, int access_option): file_io_factory(
-				mapper.get_name()), mapper(_mapper) {
+				_mapper.get_name()), mapper(_mapper) {
 		this->access_option = access_option;
 		num_ios = 0;
 	}
@@ -309,7 +309,7 @@ class aio_factory: public file_io_factory
 	file_mapper &mapper;
 public:
 	aio_factory(file_mapper &_mapper): file_io_factory(
-			mapper.get_name()), mapper(_mapper) {
+			_mapper.get_name()), mapper(_mapper) {
 		num_ios = 0;
 	}
 
