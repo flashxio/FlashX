@@ -62,7 +62,7 @@ FG_eigen_matrix<double>::ptr LOL(FG_general_sparse_char_matrix::ptr input,
 			first_mean = v.second;
 			continue;
 		}
-		v.second->subtract_in_place(*first_mean);
+		v.second->subtract_in_place(first_mean);
 		qr_matrix->set_col(col_idx++, *v.second);
 	}
 	for (int i = 0; i < num_eigen; i++) {

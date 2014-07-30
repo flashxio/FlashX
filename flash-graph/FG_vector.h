@@ -311,7 +311,7 @@ public:
 	 * \param vec The vector by which you want the array to be subtracted.
 	 * **parallel** 
 	 */
-	void subtract_in_place(const FG_vector<T> &vec) {
+	void subtract_in_place(const FG_vector<T>::ptr &vec) {
 		struct sub_func {
 			T operator()(const T &v1, const T &v2) {
 				return v1 - v2;
