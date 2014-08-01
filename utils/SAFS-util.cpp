@@ -333,6 +333,35 @@ void comm_create_file(int argc, char *argv[])
 	file.create_file(file_size);
 	printf("create file %s of %ld bytes\n", file_name.c_str(),
 			file.get_file_size());
+
+	file_io_factory::shared_ptr factory = create_io_factory(file_name,
+			REMOTE_ACCESS);
+	assert(factory);
+	data_source *source = new synthetic_data_source(factory->get_file_size());
+	assert((size_t) factory->get_file_size() >= source->get_size());
+	printf("source size: %ld\n", source->get_size());
+
+	thread *curr_thread = thread::get_curr_thread();
+	assert(curr_thread);
+	io_interface::ptr io = factory->create_io(curr_thread);
+
+	char *buf = (char *) valloc(BUF_SIZE);
+	off_t off = 0;
+
+	while (off < (off_t) source->get_size()) {
+		size_t size = min<size_t>(BUF_SIZE, source->get_size() - off);
+		size_t ret = source->get_data(off, size, buf);
+		assert(ret == size);
+		ssize_t write_bytes = ROUNDUP(ret, 512);
+		data_loc_t loc(io->get_file_id(), off);
+		io_request req(buf, loc, write_bytes, WRITE);
+		io->access(&req, 1);
+		io->wait4complete(1);
+		off += write_bytes;
+	}
+	printf("write all data\n");
+	
+	io->cleanup();
 }
 
 void print_help();
