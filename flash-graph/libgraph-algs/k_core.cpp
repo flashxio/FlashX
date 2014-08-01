@@ -295,7 +295,7 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 
-	if (k < 0 || k > graph->get_max_vertex_id()) {
+	if (k > graph->get_max_vertex_id()) {
 		fprintf(stderr, "'k' must be between 2 and the number of nodes in the graph\n");
 		exit(-1);
 	}
