@@ -30,7 +30,6 @@ template class blocking_FIFO_queue<thread_callback_s *>;
 
 #define EVEN_DISTRIBUTE
 
-const int MAX_BUF_REQS = 1024 * 3;
 const int MAX_MULTI_BUFS = 64;
 
 /* 

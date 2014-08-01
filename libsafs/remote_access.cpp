@@ -51,8 +51,6 @@ public:
 	}
 };
 
-const int NUM_PROCESS_COMPLETED_REQS = 8;
-
 void remote_io::notify_completion(io_request *reqs[], int num)
 {
 	stack_array<io_request> req_copies(num);

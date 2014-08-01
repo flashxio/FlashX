@@ -37,7 +37,6 @@
 namespace {
 
 size_t num_bfs = 1;
-const int K = sizeof(uint64_t) * 8;
 edge_type traverse_edge = edge_type::OUT_EDGE;
 int start_level;
 

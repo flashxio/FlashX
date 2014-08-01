@@ -22,8 +22,6 @@
 #include "vertex_compute.h"
 #include "vertex_index_reader.h"
 
-static const size_t MAX_ENTRIES = 100;
-
 template<class ValueType>
 class req_vertex_task
 {
@@ -232,129 +230,10 @@ vertex_index_reader::ptr vertex_index_reader::create(io_interface::ptr io,
 		return ext_mem_vindex_reader_impl<vertex_offset>::create(io);
 }
 
-bool req_vertex_compute::run(vertex_id_t vid, index_iterator &it)
-{
-	while (it.has_next()) {
-		num_gets++;
-		in_mem_vertex_info info(vid, it.get_curr_off(),
-				it.get_curr_vertex_size());
-		get_compute(vid)->issue_io_request(info);
-		vid++;
-		it.move_next();
-	}
-	return num_gets == get_num_vertices();
-}
-
-bool genrq_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
-{
-	int num_vertices = get_num_vertices();
-	for (int i = get_start_idx(start_vid); i < num_vertices; i++) {
-		vertex_id_t id = get_id(i);
-		vertex_compute *compute = get_compute(i);
-		assert(id >= start_vid);
-		if (!it.move_to(id - start_vid)) {
-			break;
-		}
-		in_mem_vertex_info info(id, it.get_curr_off(),
-				it.get_curr_vertex_size());
-		compute->issue_io_request(info);
-		num_gets++;
-	}
-	return num_gets == get_num_vertices();
-}
-
-bool req_part_vertex_compute::run(vertex_id_t vid, index_iterator &it)
-{
-	while (it.has_next()) {
-		num_gets++;
-
-		in_mem_directed_vertex_info info(vid, it.get_curr_off(),
-				it.get_curr_vertex_size(), it.get_curr_num_in_edges(),
-				it.get_curr_num_out_edges());
-		directed_vertex_request req(vid, type);
-		directed_vertex_compute *dcompute
-			= (directed_vertex_compute *) get_compute(vid);
-		dcompute->issue_io_request(req, info);
-		vid++;
-		it.move_next();
-	}
-	return num_gets == get_num_vertices();
-}
-
-bool genrq_part_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
-{
-	int num_vertices = get_num_vertices();
-	for (int i = get_start_idx(start_vid); i < num_vertices; i++) {
-		vertex_id_t id = get_id(i);
-		directed_vertex_compute *compute
-			= (directed_vertex_compute *) get_compute(i);
-		assert(id >= start_vid);
-		if (!it.move_to(id - start_vid)) {
-			break;
-		}
-
-		in_mem_directed_vertex_info info(id, it.get_curr_off(),
-				it.get_curr_vertex_size(), it.get_curr_num_in_edges(),
-				it.get_curr_num_out_edges());
-		directed_vertex_request req(id, type);
-		compute->issue_io_request(req, info);
-		num_gets++;
-	}
-	return num_gets == get_num_vertices();
-}
-
-bool req_edge_compute::run(vertex_id_t vid, index_iterator &it)
-{
-	while (it.has_next()) {
-		num_gets++;
-		get_compute(vid)->run_on_vertex_size(vid, it.get_curr_vertex_size());
-		vid++;
-		it.move_next();
-	}
-	return num_gets == get_num_vertices();
-}
-
-bool genrq_edge_compute::run(vertex_id_t vid, index_iterator &it)
-{
-	assert(0);
-}
-
-bool req_directed_edge_compute::run(vertex_id_t vid, index_iterator &it)
-{
-	while (it.has_next()) {
-		num_gets++;
-		directed_vertex_compute *dcompute
-			= (directed_vertex_compute *) get_compute(vid);
-		dcompute->run_on_num_edges(vid, it.get_curr_num_in_edges(),
-				it.get_curr_num_out_edges());
-		vid++;
-		it.move_next();
-	}
-	return num_gets == get_num_vertices();
-}
-
-bool genrq_directed_edge_compute::run(vertex_id_t start_vid, index_iterator &it)
-{
-	int num_vertices = get_num_vertices();
-	for (int i = get_start_idx(start_vid); i < num_vertices; i++) {
-		vertex_id_t id = get_id(i);
-		directed_vertex_compute *compute
-			= (directed_vertex_compute *) get_compute(i);
-		assert(id >= start_vid);
-		if (!it.move_to(id - start_vid)) {
-			break;
-		}
-
-		compute->run_on_num_edges(id, it.get_curr_num_in_edges(),
-				it.get_curr_num_out_edges());
-		num_gets++;
-	}
-	return num_gets == get_num_vertices();
-}
-
-template<class RequestType, class ComputeType, class AllocatorType>
+template<class RequestType, class ComputeType, class AllocatorType, class SingleComputeType>
 void process_requests(std::vector<RequestType> &reqs,
-		AllocatorType &alloc, vertex_index_reader &index_reader)
+		AllocatorType &alloc, vertex_index_reader &index_reader,
+		index_comp_allocator_impl<SingleComputeType> &single_alloc)
 {
 	assert(!reqs.empty());
 	ComputeType *compute = (ComputeType *) alloc.alloc();
@@ -364,13 +243,30 @@ void process_requests(std::vector<RequestType> &reqs,
 		const RequestType &req = reqs[i];
 
 		if (!compute->add_vertex(req.first, req.second)) {
-			index_reader.request_index(compute);
+			if (compute->get_num_vertices() == 1) {
+				SingleComputeType *single_compute
+					= (SingleComputeType *) single_alloc.alloc();
+				single_compute->init(*compute);
+				compute->clear();
+				index_reader.request_index(single_compute);
+			}
+			else
+				index_reader.request_index(compute);
 			compute = (ComputeType *) alloc.alloc();
 			compute->init(req.first, req.second);
 		}
 	}
 	assert(!compute->empty());
-	index_reader.request_index(compute);
+	if (compute->get_num_vertices() == 1) {
+		SingleComputeType *single_compute
+			= (SingleComputeType *) single_alloc.alloc();
+		single_compute->init(*compute);
+		compute->clear();
+		index_reader.request_index(single_compute);
+		alloc.free(compute);
+	}
+	else
+		index_reader.request_index(compute);
 	reqs.clear();
 }
 
@@ -382,12 +278,14 @@ void simple_index_reader::flush_computes()
 			std::sort(vertex_comps.begin(), vertex_comps.end(), id_compute_less());
 		if (is_dense(vertex_comps))
 			process_requests<id_compute_t, req_vertex_compute,
-				index_comp_allocator_impl<req_vertex_compute> >(vertex_comps,
-					req_vertex_comp_alloc, *index_reader);
+				index_comp_allocator_impl<req_vertex_compute>, single_vertex_compute>(
+						vertex_comps, *req_vertex_comp_alloc, *index_reader,
+						*single_vertex_comp_alloc);
 		else
 			process_requests<id_compute_t, genrq_vertex_compute,
-				general_index_comp_allocator_impl<genrq_vertex_compute> >(
-						vertex_comps, genrq_vertex_comp_alloc, *index_reader);
+				general_index_comp_allocator_impl<genrq_vertex_compute>,
+				single_vertex_compute>(vertex_comps, *genrq_vertex_comp_alloc,
+						*index_reader, *single_vertex_comp_alloc);
 	}
 
 	for (int type = edge_type::IN_EDGE; type < edge_type::NUM_TYPES; type++) {
@@ -398,14 +296,16 @@ void simple_index_reader::flush_computes()
 						part_vertex_comps[type].end(), directed_compute_less());
 			if (is_dense(part_vertex_comps[type]))
 				process_requests<directed_compute_t, req_part_vertex_compute,
-					index_comp_allocator_impl<req_part_vertex_compute> >(
-						part_vertex_comps[type], req_part_vertex_comp_alloc,
-						*index_reader);
+					index_comp_allocator_impl<req_part_vertex_compute>,
+					single_part_vertex_compute>(part_vertex_comps[type],
+							*req_part_vertex_comp_alloc, *index_reader,
+							*single_part_vertex_comp_alloc);
 			else
 				process_requests<directed_compute_t, genrq_part_vertex_compute,
-					general_index_comp_allocator_impl<genrq_part_vertex_compute> >(
-						part_vertex_comps[type], genrq_part_vertex_comp_alloc,
-						*index_reader);
+					general_index_comp_allocator_impl<genrq_part_vertex_compute>,
+					single_part_vertex_compute>(part_vertex_comps[type],
+							*genrq_part_vertex_comp_alloc, *index_reader,
+							*single_part_vertex_comp_alloc);
 		}
 	}
 
@@ -413,8 +313,10 @@ void simple_index_reader::flush_computes()
 		if (!std::is_sorted(edge_comps.begin(), edge_comps.end(),
 					id_compute_less()))
 			std::sort(edge_comps.begin(), edge_comps.end(), id_compute_less());
-		process_requests<id_compute_t, req_edge_compute>(edge_comps,
-				req_edge_comp_alloc, *index_reader);
+		process_requests<id_compute_t, req_edge_compute,
+			index_comp_allocator_impl<req_edge_compute>, single_edge_compute>(
+				edge_comps, *req_edge_comp_alloc, *index_reader,
+				*single_edge_comp_alloc);
 	}
 
 	if (!directed_edge_comps.empty()) {
@@ -427,13 +329,15 @@ void simple_index_reader::flush_computes()
 		}
 		if (is_dense(directed_edge_comps))
 			process_requests<id_compute_t, req_directed_edge_compute,
-				index_comp_allocator_impl<req_directed_edge_compute> >(
-					directed_edge_comps, req_directed_edge_comp_alloc,
-					*index_reader);
+				index_comp_allocator_impl<req_directed_edge_compute>,
+				single_directed_edge_compute>(directed_edge_comps,
+						*req_directed_edge_comp_alloc, *index_reader,
+						*single_directed_edge_comp_alloc);
 		else
 			process_requests<id_compute_t, genrq_directed_edge_compute,
-				general_index_comp_allocator_impl<genrq_directed_edge_compute> >(
-					directed_edge_comps, genrq_directed_edge_comp_alloc,
-					*index_reader);
+				general_index_comp_allocator_impl<genrq_directed_edge_compute>,
+				single_directed_edge_compute>(directed_edge_comps,
+						*genrq_directed_edge_comp_alloc, *index_reader,
+						*single_directed_edge_comp_alloc);
 	}
 }
