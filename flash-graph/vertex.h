@@ -956,7 +956,7 @@ public:
 		this->partial = true;
 	}
     
-    /*
+    /**
      * \brief Get the number of edges associated with a vertex.
      * \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
      * \return The number of edges associated with a vertex.
@@ -972,7 +972,7 @@ public:
 			assert(0);
 	}
     
-    /*
+    /**
      * \brief Get an STL-style const iterator pointing to the *first* element in the
      *         neighbor list of a vertex.
      *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `BOTH_EDGES`.
@@ -1191,7 +1191,7 @@ public:
 	}
     
     /**
-     * \brief Get the number of edges associated with the vertex.
+     * \brief Get the number of edges of a specific `edge_type` associated with the vertex.
      * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES` are equivalent,
 	 *             since it's an undirected vertex.
      * return The number of edges associated with the vertex.
@@ -1200,14 +1200,14 @@ public:
 		return num_edges;
 	}
 
-    /**
-     * \brief Get an STL-style const iterator pointing to the *first* element in the
-     *         neighbor list of a vertex.
-     * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES` are equivalent,
+	/**
+	 * \brief Get an STL-style const iterator pointing to the *first* element in the
+	 *         neighbor list of a vertex.
+	 * \param type The type of edge i.e `IN_EDGE`, `OUT_EDGE`, `BOTH_EDGES` are equivalent,
 	 *             since it's an undirected vertex.
-     *  \return A const iterator pointing to the *first* element in the
-     *         neighbor list of a vertex.
-     */
+	 * \return A const iterator pointing to the *first* element in the
+	 *         neighbor list of a vertex.
+	 */
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			edge_type type) const {
 		return array.begin<vertex_id_t>(

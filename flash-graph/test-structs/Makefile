@@ -1,5 +1,5 @@
 # Copyright 2014 Open Connectome Project (http://openconnecto.me)
-# Written by Disa Mhembere (disa@jhu.edu)
+# Written by Da Zheng (zhengda1936@gmail.com)
 #
 # This file is part of FlashGraph.
 #
@@ -15,22 +15,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
+LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
 
-all: k-core
+all: test_FG_vector
 
-k-core: $(OBJS) ../libgraph.a
-	$(CXX) -o k-core $(OBJS) $(LDFLAGS)
+test_FG_vector: test_FG_vector.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
+	$(CXX) -o test_FG_vector test_FG_vector.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f k-core
+	rm -f test_FG_vector
 
 -include $(DEPS) 

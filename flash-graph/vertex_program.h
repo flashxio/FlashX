@@ -91,22 +91,22 @@ public:
 	 * of vertices. This is commonly where a user would issue a request for the vertex
      * data it needs on disk for the two other run methods.
      *
-     *  \param vertex A vertex.
+     *  \param vertex The vertex that is executed in the method.
 	 */
 	virtual void run(compute_vertex &vertex) = 0;
 
 	/**
 	 * \brief Run user's code ideally/generally when the adjacency list
-     *      of a vertex is read from disks.
-     * \param comp_v A `compute_vertex`.
-     * \param vertex A `page vertex`.
+     *      of the vertex is read from disks.
+     * \param comp_v A `compute_vertex` that is executed in the method.
+     * \param vertex A `page vertex` that `comp_v' requested.
 	 */
 	virtual void run(compute_vertex &comp_v, const page_vertex &vertex) = 0;
 
 	/**
-	 * \brief Run user's code when the vertex receives messages from others.
-     *  \param c_vertex A `compute_vertex`.
-     *  \param vertex_m A *single* `vertex_message` received from a vertex in the current iteration.
+	 * \brief Run user's code when the vertex receives messages from another.
+     * \param c_vertex A `compute_vertex` that is executed in the method.
+     * \param vertex_m A *single* `vertex_message` received from a vertex in the current iteration.
 	 */
 	virtual void run_on_message(compute_vertex &c_vertex, const vertex_message &vertex_m) = 0;
     
@@ -123,12 +123,17 @@ public:
      */
 	virtual void run_on_multicast_message(multicast_message &mmsg) = 0;
 
+	/**
+	 * \brief Run user's code when the vertex header is read from disks.
+     * \param c_vertex A `compute_vertex` that is executed in the method.
+	 * \param header The vertex header requested by `c_vertex'.
+	 */
 	virtual void run_on_num_edges(compute_vertex &c_vertex,
 			const vertex_header &header) = 0;
     
     /**
      * \brief Perform some user defined action on a vertex when the current iteration comes to an end.
-     *  \param cv A `compute_vertex`.
+     * \param cv A `compute_vertex` that is executed in the method.
      */
 	virtual void notify_iteration_end(compute_vertex &cv) = 0;
     
@@ -145,7 +150,7 @@ public:
 		return *graph;
 	}
     
-    /** 
+    /**
      * \brief Multicast the same message to several other vertices. If the number of vertices
      *      receiving the message is too small the graph engine will automatically alter the
      *      message type to point-to-point.
@@ -165,7 +170,7 @@ public:
 	void multicast_msg(edge_seq_iterator &it, vertex_message &msg);
     
     /**
-     *  \brief Send a point-to-point message from one vertex to the next.
+     *  \brief Send a point-to-point message from one vertex to another.
      *  \param dest The destination ID of the vertex a user is sending to.
      *  \param msg The message intended for the recepient.
      */
@@ -199,7 +204,7 @@ public:
 	 * \brief A vertex requests the end of an iteration.
 	 * `notify_iteration_end' of the vertex will be invoked at the end
 	 * of an iteration.
-     *  \param v The vertex that will receive the notification.
+     *  \param v The vertex that is requesting the notification.
 	 */
 	void request_notify_iter_end(const compute_vertex &v);
 };
@@ -215,7 +220,7 @@ public:
 	typedef std::unique_ptr<vertex_program_creater> ptr; /** Pointer defining object access. */
     
     /**
-     *  \brief Much like a constructor -- implement this in lieu of that.
+     *  \brief Much like a constructor implement this in lieu of that.
      */
 	virtual vertex_program::ptr create() const = 0;
 };
@@ -233,19 +238,42 @@ class vertex_program_impl: public vertex_program
 	embedded_array<local_vid_t, 1024> id_buf;
 public:
 	
+    /**
+	 * \brief This is a pre-run before users get any information of adjacency list
+	 * of vertices. This is commonly where a user would issue a request for the vertex
+     * data it needs on disk for the two other run methods.
+     *
+     *  \param vertex The current vertex.
+	 */
 	virtual void run(compute_vertex &comp_v) {
 		((vertex_type &) comp_v).run(*this);
 	}
 
+	/**
+	 * \brief Run user's code ideally/generally when the adjacency list
+     *      of the vertex is read from disks.
+     * \param comp_v The current `compute_vertex`.
+     * \param vertex The curren `page vertex`.
+	 */
 	virtual void run(compute_vertex &comp_v, const page_vertex &vertex) {
 		((vertex_type &) comp_v).run(*this, vertex);
 	}
 
+	/**
+	 * \brief Run user's code when the vertex receives messages from other.
+     *  \param c_vertex The current `compute_vertex`.
+     *  \param vertex_m A *single* `vertex_message` received from a vertex in the current iteration.
+	 */
 	virtual void run_on_message(compute_vertex &comp_v,
 			const vertex_message &msg) {
 		((vertex_type &) comp_v).run_on_message(*this, msg);
 	}
 
+    /**
+	 * \brief Run user's code when the vertex receives messages from others.
+     *  \param v_msgs `vertex_message`s received from one or more vertices in the current iteration.
+     *  \param num The number of messages received.
+	 */
 	virtual void run_on_messages(const vertex_message *v_msgs[],
 			int num) {
 		vertex_buf.resize(num);
@@ -261,6 +289,10 @@ public:
 		}
 	}
     
+    /**
+     * \brief Run user's code when a multicast message is received.
+     *  \param mmsg The message(s) received by the vertex.
+     */
 	virtual void run_on_multicast_message(multicast_message &mmsg) {
 		int num_dests = mmsg.get_num_dests();
 		multicast_dest_list dest_list = mmsg.get_dest_list();
@@ -277,12 +309,18 @@ public:
 			v->run_on_message(*this, mmsg);
 		}
 	}
-
+    
 	virtual void run_on_num_edges(compute_vertex &c_vertex,
 			const vertex_header &header) {
 		((vertex_type &) c_vertex).run_on_vertex_header(*this, header);
 	}
     
+    /**
+	 * \brief A vertex requests the end of an iteration.
+	 * `notify_iteration_end' of the vertex will be invoked at the end
+	 * of an iteration.
+	 *  \param v The vertex that is requesting the notification.
+	 */
 	virtual void notify_iteration_end(compute_vertex &comp_v) {
 		((vertex_type &) comp_v).notify_iteration_end(*this);
 	}

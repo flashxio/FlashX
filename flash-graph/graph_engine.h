@@ -101,6 +101,12 @@ public:
 	void notify_iteration_end(vertex_program & prog) {
 	}
 
+	/**
+	  * \brief This method is invoked by calling the `request_vertex_headers`
+	  *		method and is where one would access the vertex in/out edges.
+	  *	\param prog The vertex program.
+	  *	\param header The vertex header object. 
+	  */
 	void run_on_vertex_header(vertex_program &prog,
 			const vertex_header &header) {
 		assert(0);
@@ -192,7 +198,7 @@ public:
 	/**
      * \brief This allows a vertex to request partial vertices in the graph. <br>
      *  **Defn: ""partial vertices""** -- Part of a vertex's data. Specifically
-     *          either a vertex's edges in the specified time range. This eliminates the overhead
+     *          a vertex's edges in the specified time range. This eliminates the overhead
      *          of bringing both all edges into the page cache when an algorithm
      *          only requires edges in a certain time range.
 	 * \param reqs This is an array corresponding to the vertices you are requesting and defines
