@@ -43,7 +43,7 @@ public:
 	virtual void init(const vertex_id_t buf[], size_t size, bool sorted) = 0;
 	// This is the common case for iterations.
 	virtual void init(worker_thread &) = 0;
-	virtual int fetch(compute_vertex *vertices[], int num) = 0;
+	virtual int fetch(compute_vertex_pointer vertices[], int num) = 0;
 	virtual bool is_empty() = 0;
 	virtual size_t get_num_vertices() = 0;
 
@@ -61,17 +61,23 @@ class default_vertex_queue: public active_vertex_queue
 	pthread_spinlock_t lock;
 	// It contains the offset of the vertex in the local partition
 	// instead of the real vertex Ids.
-	std::vector<vertex_id_t> vertex_buf;
+	std::vector<compute_vertex_pointer> vertex_buf;
+	// Pointers to the vertically partitioned vertices that are activated
+	// in this iteration.
+	std::vector<vpart_vertex_pointer> vpart_ps;
+	int curr_vpart;
 	std::unique_ptr<bitmap> active_bitmap;
 	// The fetch index in the vertex buffer.
 	scan_pointer buf_fetch_idx;
 	// The fetech index in the active bitmap. It indicates the index of longs.
 	scan_pointer bitmap_fetch_idx;
 	graph_engine &graph;
+	graph_index::ptr index;
 	size_t num_active;
 	int part_id;
 
 	void fetch_from_map();
+	void fetch_vparts();
 public:
 	default_vertex_queue(graph_engine &_graph, int part_id,
 			int node_id): buf_fetch_idx(0, true), bitmap_fetch_idx(0,
@@ -82,11 +88,13 @@ public:
 		this->active_bitmap = std::unique_ptr<bitmap>(new bitmap(
 					_graph.get_partitioner()->get_part_size(
 					part_id, _graph.get_num_vertices()), node_id));
+		this->index = graph.get_graph_index();
+		curr_vpart = 0;
 	}
 
 	virtual void init(const vertex_id_t buf[], size_t size, bool sorted);
 	virtual void init(worker_thread &);
-	virtual int fetch(compute_vertex *vertices[], int num);
+	virtual int fetch(compute_vertex_pointer vertices[], int num);
 
 	virtual bool is_empty() {
 		return num_active == 0;
@@ -104,10 +112,13 @@ class customized_vertex_queue: public active_vertex_queue
 	scan_pointer fetch_idx;
 	vertex_scheduler::ptr scheduler;
 	graph_engine &graph;
+	graph_index &index;
 	int part_id;
 public:
 	customized_vertex_queue(graph_engine &_graph, vertex_scheduler::ptr scheduler,
-			int part_id): fetch_idx(0, true), graph(_graph) {
+			int part_id): fetch_idx(0, true), graph(_graph), index(
+				*_graph.get_graph_index()) {
+		assert(graph_conf.get_num_vparts() == 1);
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->scheduler = scheduler;
 		this->part_id = part_id;
@@ -128,7 +139,7 @@ public:
 
 	void init(worker_thread &);
 
-	int fetch(compute_vertex *vertices[], int num) {
+	int fetch(compute_vertex_pointer vertices[], int num) {
 		pthread_spin_lock(&lock);
 		int num_fetches = min(num, fetch_idx.get_num_remaining());
 		stack_array<vertex_id_t, 128> buf(num_fetches);
@@ -139,8 +150,8 @@ public:
 					num_fetches * sizeof(vertex_id_t));
 		}
 		pthread_spin_unlock(&lock);
-		for (int i = 0; i < num_fetches; i++)
-			vertices[i] = &graph.get_vertex(buf[i]);
+		index.get_vertices(buf.data(), num_fetches,
+				compute_vertex_pointer::conv(vertices));
 		return num_fetches;
 	}
 
@@ -175,6 +186,8 @@ class worker_thread: public thread
 	compute_allocator *alloc;
 	compute_allocator *part_alloc;
 	vertex_program::ptr vprogram;
+	// Vertex program on the vertically partitioned vertices.
+	vertex_program::ptr vpart_vprogram;
 	std::shared_ptr<simple_index_reader> index_reader;
 
 	// This buffers the I/O requests for adjacency lists.
@@ -219,6 +232,9 @@ class worker_thread: public thread
 	std::shared_ptr<vertex_filter> filter;
 	vertex_initializer::ptr vinitializer;
 
+	// The buffer for processing activated vertex.
+	embedded_array<compute_vertex_pointer> process_vertex_buf;
+
 	// The number of activated vertices processed in the current level.
 	atomic_number<long> num_activated_vertices_in_level;
 	// The number of vertices completed in the current level.
@@ -234,8 +250,8 @@ class worker_thread: public thread
 	int process_activated_vertices(int max);
 public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr graph_factory,
-			file_io_factory::shared_ptr index_factory,
-			vertex_program::ptr prog, int node_id, int worker_id,
+			file_io_factory::shared_ptr index_factory, vertex_program::ptr prog,
+			vertex_program::ptr part_prog, int node_id, int worker_id,
 			int num_threads, vertex_scheduler::ptr scheduler);
 
 	~worker_thread();
@@ -255,7 +271,7 @@ public:
 	 * method is invoked to notify the worker thread, so that the worker
 	 * thread can update its statistics on the number of completed vertices.
 	 */
-	void complete_vertex(const compute_vertex &v);
+	void complete_vertex(const compute_vertex_pointer v);
 
 	size_t enter_next_level();
 
@@ -292,7 +308,7 @@ public:
 		notify_vertices->set(id.id);
 	}
 
-	int steal_activated_vertices(compute_vertex *vertices[], int num);
+	int steal_activated_vertices(compute_vertex_pointer vertices[], int num);
 	void return_vertices(vertex_id_t ids[], int num);
 
 	size_t get_num_local_vertices() const {
@@ -304,8 +320,8 @@ public:
 		return worker_id;
 	}
 
-	vertex_program &get_vertex_program() {
-		return *vprogram;
+	vertex_program &get_vertex_program(bool part) {
+		return part ? *vpart_vprogram : *vprogram;
 	}
 
 	graph_engine &get_graph() {

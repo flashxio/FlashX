@@ -118,6 +118,10 @@ public:
 	int get_part_id() const {
 		return part_id;
 	}
+
+	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
+		assert(0);
+	}
 };
 
 /*
@@ -130,11 +134,11 @@ public:
 			int part_id): part_compute_vertex(id, part_id) {
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &) {
 		assert(0);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &, const page_vertex &vertex) {
 		assert(0);
 	}
 
@@ -616,6 +620,10 @@ public:
 
 	int get_max_processing_vertices() const {
 		return max_processing_vertices;
+	}
+
+	graph_index::ptr get_graph_index() const {
+		return vertices;
 	}
 };
 

@@ -67,10 +67,10 @@ void vertex_compute::run_on_vertex_size(vertex_id_t id, vsize_t size)
 	size_t header_size = issue_thread->get_graph().get_vertex_header_size();
 	vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
 	vertex_header header(id, num_edges);
-	issue_thread->get_vertex_program().run_on_num_edges(*v, header);
+	issue_thread->get_vertex_program(v.is_part()).run_on_num_edges(*v, header);
 	num_edge_completed++;
 	if (get_num_pending() == 0)
-		issue_thread->complete_vertex(*v);
+		issue_thread->complete_vertex(v);
 }
 
 vertex_id_t vertex_compute::get_id() const
@@ -102,7 +102,7 @@ void vertex_compute::run(page_byte_array &array)
 	const page_vertex *ext_v = interpreter.interpret(array, buf.data(),
 			interpreter.get_vertex_size());
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	vertex_program &curr_vprog = t->get_vertex_program();
+	vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
 	curr_vprog.run(*v, *ext_v);
 	complete_request();
 }
@@ -114,7 +114,7 @@ void vertex_compute::complete_request()
 	// of the completion of the vertex.
 	// TODO is this a right way to complete a vertex?
 	if (get_num_pending() == 0)
-		issue_thread->complete_vertex(*v);
+		issue_thread->complete_vertex(v);
 }
 
 void part_directed_vertex_compute::run(page_byte_array &array)
@@ -132,7 +132,8 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 			num_out_edges, array);
 
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	vertex_program &curr_vprog = t->get_vertex_program();
+	// TODO let's deal with vertically partitioned vertices later.
+	vertex_program &curr_vprog = t->get_vertex_program(false);
 	curr_vprog.run(*comp_v, pg_v);
 	num_fetched++;
 	compute->complete_request();
@@ -156,7 +157,7 @@ void directed_vertex_compute::run(page_byte_array &array)
 				num_in_edges, num_out_edges, array);
 
 		worker_thread *t = (worker_thread *) thread::get_curr_thread();
-		vertex_program &curr_vprog = t->get_vertex_program();
+		vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
 		curr_vprog.run(*v, pg_v);
 		complete_request();
 
@@ -171,7 +172,7 @@ void directed_vertex_compute::complete_empty_part(
 {
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	assert(t == issue_thread);
-	vertex_program &curr_vprog = t->get_vertex_program();
+	vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
 
 	empty_page_byte_array array;
 	page_directed_vertex pg_v(req.get_id(), 0, 0, array);
@@ -246,7 +247,7 @@ request_range directed_vertex_compute::generate_request(
 		if (issued_to_io()) {
 			part_directed_vertex_compute *part_comp
 				= (part_directed_vertex_compute *) alloc->alloc();
-			part_comp->init((compute_directed_vertex *) v, this, req);
+			part_comp->init(v, this, req);
 			comp = part_comp;
 		}
 		else
@@ -326,10 +327,10 @@ void directed_vertex_compute::run_on_num_edges(vertex_id_t id,
 		vsize_t num_in_edges, vsize_t num_out_edges)
 {
 	directed_vertex_header header(id, num_in_edges, num_out_edges);
-	issue_thread->get_vertex_program().run_on_num_edges(*v, header);
+	issue_thread->get_vertex_program(v.is_part()).run_on_num_edges(*v, header);
 	num_edge_completed++;
 	if (get_num_pending() == 0)
-		issue_thread->complete_vertex(*v);
+		issue_thread->complete_vertex(v);
 }
 
 void directed_vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)

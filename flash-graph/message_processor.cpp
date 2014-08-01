@@ -88,7 +88,8 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 		bool check_steal)
 {
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	vertex_program &curr_vprog = t->get_vertex_program();
+	// Messages are always processed in the main vertex.
+	vertex_program &curr_vprog = t->get_vertex_program(false);
 
 	int num_dests = mmsg.get_num_dests();
 	multicast_dest_list dest_list = mmsg.get_dest_list();
@@ -129,7 +130,8 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 void message_processor::process_msg(message &msg, bool check_steal)
 {
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	vertex_program &curr_vprog = t->get_vertex_program();
+	// Messages are always processed in the main vertex.
+	vertex_program &curr_vprog = t->get_vertex_program(false);
 
 	const int VMSG_BUF_SIZE = 128;
 	vertex_message *v_msgs[VMSG_BUF_SIZE];
@@ -202,7 +204,7 @@ void message_processor::process_msgs()
 	steal_state->unguard_msg_processing();
 }
 
-void message_processor::steal_vertices(compute_vertex *vertices[], int num)
+void message_processor::steal_vertices(compute_vertex_pointer vertices[], int num)
 {
 	steal_state->steal_vertices(vertices, num);
 }
@@ -219,11 +221,17 @@ void message_processor::return_vertices(vertex_id_t ids[], int num)
 	steal_state->return_vertices(ids, num);
 }
 
-void steal_state_t::steal_vertices(compute_vertex *vertices[], int num)
+void steal_state_t::steal_vertices(compute_vertex_pointer vertices[], int num)
 {
 	prepare_steal.fetch_add(1);
 	int num_locals = 0;
 	for (int i = 0; i < num; i++) {
+		// If the vertex is vertically partitioned, the vertex state doesn't
+		// need to process messages anyway. The messages are processed by
+		// the main vertex.
+		if (vertices[i].is_part())
+			continue;
+
 		int part_id;
 		off_t off;
 		graph.get_partitioner()->map2loc(vertices[i]->get_id(), part_id, off);

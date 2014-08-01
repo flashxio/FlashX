@@ -31,6 +31,7 @@ class graph_engine;
 class worker_thread;
 class steal_state_t;
 class compute_vertex;
+class compute_vertex_pointer;
 
 /**
  * This class is to process the messages sent to the owner thread.
@@ -67,7 +68,7 @@ public:
 
 	void process_msgs();
 
-	void steal_vertices(compute_vertex *vertices[], int num);
+	void steal_vertices(compute_vertex_pointer vertices[], int num);
 	void return_vertices(vertex_id_t ids[], int num);
 
 	msg_queue &get_msg_queue() {

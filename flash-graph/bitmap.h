@@ -118,6 +118,17 @@ public:
 		}
 	}
 
+	void reset(size_t idx) {
+		assert(idx < max_num_bits);
+		size_t arr_off = idx / NUM_BITS_LONG;
+		size_t inside_off = idx % NUM_BITS_LONG;
+		// If the bit has beeen set, we need to decrease the count.
+		if ((ptr[arr_off] & (1L << inside_off))) {
+			num_set_bits--;
+			ptr[arr_off] &= ~(1L << inside_off);
+		}
+	}
+
 	void set(size_t idx) {
 		assert(idx < max_num_bits);
 		size_t arr_off = idx / NUM_BITS_LONG;
