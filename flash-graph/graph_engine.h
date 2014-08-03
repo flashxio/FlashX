@@ -541,6 +541,7 @@ public:
 	 * It returns true if no more work can progress.
 	 */
 	bool progress_next_level();
+	bool progress_first_level();
     
     /** \internal*/
 	trace_logger::ptr get_logger() const {
@@ -585,6 +586,7 @@ public:
 	* We have processed the specified number of vertices.
     */
 	void process_vertices(int num) {
+		assert(num_remaining_vertices_in_level.get() >= num);
 		num_remaining_vertices_in_level.dec(num);
 	}
 

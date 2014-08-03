@@ -257,7 +257,7 @@ public:
 	 */
 	void complete_vertex(const compute_vertex &v);
 
-	int enter_next_level();
+	size_t enter_next_level();
 
 	void start_vertices(const std::vector<vertex_id_t> &vertices,
 			vertex_initializer::ptr initializer) {
@@ -322,6 +322,10 @@ public:
 
 	void issue_io_request(io_request &req) {
 		adj_reqs.push_back(req);
+	}
+
+	size_t get_activates() const {
+		return curr_activated_vertices->get_num_vertices();
 	}
 
 	friend class load_balancer;

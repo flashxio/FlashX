@@ -411,7 +411,6 @@ void graph_engine::start(vertex_id_t ids[], int num,
 		vertex_initializer::ptr init, vertex_program_creater::ptr creater)
 {
 	init_threads(std::move(creater));
-	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
@@ -431,7 +430,6 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 {
 	init_threads(std::move(creater));
 	// Let's assume all vertices will be activated first.
-	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_vertices(filter);
 		t->start();
@@ -443,12 +441,41 @@ void graph_engine::start_all(vertex_initializer::ptr init,
 		vertex_program_creater::ptr creater)
 {
 	init_threads(std::move(creater));
-	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices(init);
 		t->start();
 	}
 	gettimeofday(&start_time, NULL);
+}
+
+bool graph_engine::progress_first_level()
+{
+	static atomic_number<long> tot_num_activates;
+	static atomic_integer num_threads;
+
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	int num_activates = curr->get_activates();
+	tot_num_activates.inc(num_activates);
+	// If all threads have reached here.
+	if (num_threads.inc(1) == get_num_threads()) {
+		assert(num_remaining_vertices_in_level.get() == 0);
+		num_remaining_vertices_in_level = atomic_number<size_t>(
+				tot_num_activates.get());
+		// If there aren't more activated vertices.
+		is_complete = tot_num_activates.get() == 0;
+		tot_num_activates = 0;
+		num_threads = 0;
+	}
+
+	// We need to synchronize again. We have to make sure all threads see
+	// the completion signal.
+	int rc = pthread_barrier_wait(&barrier2);
+	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
+	{
+		printf("Could not wait on barrier\n");
+		exit(-1);
+	}
+	return is_complete;
 }
 
 bool graph_engine::progress_next_level()

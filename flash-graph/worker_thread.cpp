@@ -263,9 +263,6 @@ void worker_thread::init()
 				kept_ids.push_back(id);
 		}
 		assert(curr_activated_vertices->is_empty());
-		// Although we don't process the filtered vertices, we treat
-		// them as if they were processed.
-		graph->process_vertices(local_ids.size() - kept_ids.size());
 		curr_activated_vertices->init(kept_ids, false);
 		printf("worker %d has %ld vertices and activates %ld of them\n",
 				worker_id, local_ids.size(), kept_ids.size());
@@ -286,6 +283,9 @@ void worker_thread::init()
 			}
 		}
 	}
+
+	bool ret = graph->progress_first_level();
+	assert(!ret);
 }
 
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
@@ -327,7 +327,7 @@ int worker_thread::process_activated_vertices(int max)
 	return num;
 }
 
-int worker_thread::enter_next_level()
+size_t worker_thread::enter_next_level()
 {
 	// We have to make sure all messages sent by other threads are processed.
 	msg_processor->process_msgs();
