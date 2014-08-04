@@ -28,29 +28,15 @@
 #include "steal_state.h"
 #include "vertex_index_reader.h"
 
-size_t get_num_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
-{
-	size_t num = 0;
-	BOOST_FOREACH(vertex_id_t id, vec) {
-		if (id == val)
-			num++;
-	}
-	return num;
-}
-
 void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 {
 	size_t curr = 0;
-	size_t num_dels = get_num_val(vec, val);
-	size_t num_remain = vec.size() - num_dels;
 	for (size_t i = 0; i < vec.size(); i++) {
 		if (vec[i] != val) {
 			vec[curr] = vec[i];
 			curr++;
 		}
 	}
-	// TODO just for test.
-	assert(curr == num_remain);
 	vec.resize(curr);
 }
 
@@ -131,8 +117,6 @@ void default_vertex_queue::init(worker_thread &t)
 				num_active--;
 			}
 		}
-		// TODO this is only for testing.
-		assert(num_active == active_bitmap->get_num_set_bits());
 		num_active += vpart_ps.size() * graph_conf.get_num_vparts();
 	}
 

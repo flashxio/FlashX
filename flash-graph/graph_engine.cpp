@@ -480,7 +480,6 @@ graph_engine::graph_engine(const std::string &graph_file,
 	if (graph_conf.preload())
 		preload_graph();
 
-	printf("#vpart: %d\n", graph_conf.get_num_vparts());
 	// If we need to perform vertical partitioning on the graph.
 	if (graph_conf.get_num_vparts() > 1) {
 		std::vector<init_vpart_thread *> threads(num_threads);
