@@ -164,6 +164,8 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg);
 */
 FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type);
+FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
+		directed_triangle_type type);
 /**
   * \brief Compute undirected triangle count for each vertex.
   * 
