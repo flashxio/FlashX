@@ -371,6 +371,7 @@ void worker_thread::init()
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 {
 	vprogram->init_messaging(threads, msg_alloc);
+	vpart_vprogram->init_messaging(threads, msg_alloc);
 }
 
 /**
