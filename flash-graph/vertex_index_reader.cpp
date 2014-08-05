@@ -250,9 +250,10 @@ void process_requests(std::vector<RequestType> &reqs,
 				compute->clear();
 				index_reader.request_index(single_compute);
 			}
-			else
+			else {
 				index_reader.request_index(compute);
-			compute = (ComputeType *) alloc.alloc();
+				compute = (ComputeType *) alloc.alloc();
+			}
 			compute->init(req.first, req.second);
 		}
 	}
