@@ -196,7 +196,7 @@ class worker_thread: public thread
 	// When a thread process a vertex, the worker thread should keep
 	// a vertex compute for the vertex. This is useful when a user-defined
 	// compute vertex needs to reference its vertex compute.
-	std::unordered_map<vertex_id_t, vertex_compute *> active_computes;
+	std::unordered_map<compute_vertex *, vertex_compute *> active_computes;
 	// This references the vertex compute used/created by the current vertex
 	// being processed.
 	vertex_compute *curr_compute;
@@ -306,12 +306,6 @@ public:
 	}
 
 	vertex_compute *get_vertex_compute(compute_vertex_pointer v);
-	vertex_compute *get_vertex_compute(vertex_id_t id) const {
-		std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
-			= active_computes.find(id);
-		assert(it != active_computes.end());
-		return it->second;
-	}
 
 	/**
 	 * Activate the vertex in its own partition for the next iteration.

@@ -531,8 +531,8 @@ void worker_thread::return_vertices(vertex_id_t ids[], int num)
 
 void worker_thread::complete_vertex(const compute_vertex_pointer v)
 {
-	std::unordered_map<vertex_id_t, vertex_compute *>::iterator it
-		= active_computes.find(v->get_id());
+	std::unordered_map<compute_vertex *, vertex_compute *>::iterator it
+		= active_computes.find(v.get());
 	// It's possible that a vertex_compute isn't created for the active
 	// compute_vertex.
 	if (it != active_computes.end()) {
@@ -579,24 +579,17 @@ void worker_thread::activate_vertex(vertex_id_t id)
 
 vertex_compute *worker_thread::get_vertex_compute(compute_vertex_pointer v)
 {
-	vertex_id_t id = v->get_id();
-	std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
-		= active_computes.find(id);
+	std::unordered_map<compute_vertex *, vertex_compute *>::const_iterator it
+		= active_computes.find(v.get());
 	if (it == active_computes.end()) {
 		vertex_compute *compute = (vertex_compute *) alloc->alloc();
 		compute->init(v);
-		active_computes.insert(std::pair<vertex_id_t, vertex_compute *>(
-					id, compute));
+		active_computes.insert(std::pair<compute_vertex *, vertex_compute *>(
+					v.get(), compute));
 		compute->inc_ref();
 		curr_compute = compute;
 	}
 	else
 		curr_compute = it->second;
 	return curr_compute;
-}
-
-vertex_compute *get_vertex_compute_on_thread(vertex_id_t id)
-{
-	worker_thread *worker = (worker_thread *) thread::get_curr_thread();
-	return worker->get_vertex_compute(id);
 }
