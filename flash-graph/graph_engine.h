@@ -124,6 +124,10 @@ public:
 	int get_part_id() const {
 		return part_id;
 	}
+
+	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
+		assert(0);
+	}
 };
 
 /*
@@ -136,11 +140,11 @@ public:
 			int part_id): part_compute_vertex(id, part_id) {
 	}
 
-	void run(graph_engine &graph) {
+	void run(vertex_program &) {
 		assert(0);
 	}
 
-	void run(graph_engine &graph, const page_vertex &vertex) {
+	void run(vertex_program &, const page_vertex &vertex) {
 		assert(0);
 	}
 
@@ -180,6 +184,27 @@ public:
      * \param num the number of elements in `reqs`.
 	 */
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
+};
+
+class part_compute_directed_vertex: public compute_directed_vertex
+{
+	int part_id;
+public:
+    /**
+     * \brief The constructor callled by the grah engne.
+     */
+	part_compute_directed_vertex(vertex_id_t id,
+			int part_id): compute_directed_vertex(id) {
+		this->part_id = part_id;
+	}
+
+	int get_part_id() const {
+		return part_id;
+	}
+
+	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
+		assert(0);
+	}
 };
 
 /**
@@ -547,6 +572,7 @@ public:
 	 * It returns true if no more work can progress.
 	 */
 	bool progress_next_level();
+	bool progress_first_level();
     
     /** \internal*/
 	trace_logger::ptr get_logger() const {
@@ -591,6 +617,7 @@ public:
 	* We have processed the specified number of vertices.
     */
 	void process_vertices(int num) {
+		assert(num_remaining_vertices_in_level.get() >= num);
 		num_remaining_vertices_in_level.dec(num);
 	}
 
@@ -620,6 +647,10 @@ public:
 
 	int get_max_processing_vertices() const {
 		return max_processing_vertices;
+	}
+
+	graph_index::ptr get_graph_index() const {
+		return vertices;
 	}
 };
 

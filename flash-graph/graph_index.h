@@ -28,6 +28,85 @@
 #include "graph_file_header.h"
 
 class compute_vertex;
+class part_compute_vertex;
+
+/**
+ * \brief A pointer to the vertically partitioned vertices in the graph index.
+ */
+class vpart_vertex_pointer
+{
+	vertex_id_t id;
+	vsize_t off;
+public:
+	vpart_vertex_pointer() {
+		id = INVALID_VERTEX_ID;
+		off = -1;
+	}
+
+	vpart_vertex_pointer(vertex_id_t id, vsize_t off) {
+		this->id = id;
+		this->off = off;
+	}
+
+	vertex_id_t get_vertex_id() const {
+		return id;
+	}
+
+	vsize_t get_off() const {
+		return off;
+	}
+};
+
+class compute_vertex_pointer
+{
+	static const int PART_BIT_LOC = 48;
+	// TODO This is Linux specific.
+	static const uint64_t PART_MASK = 0xFFFF000000000000UL;
+	static const uint64_t ADDR_MASK = 0x0000FFFFFFFFFFFFUL;
+	uint64_t addr;
+public:
+	static compute_vertex **conv(compute_vertex_pointer *arr) {
+		assert(sizeof(compute_vertex_pointer) == sizeof(arr[0]));
+		return (compute_vertex **) arr;
+	}
+
+	compute_vertex_pointer() {
+		addr = 0;
+	}
+
+	explicit compute_vertex_pointer(compute_vertex *v) {
+		assert(v);
+		addr = (uint64_t) v;
+		assert(addr > 100000);
+	}
+
+	compute_vertex_pointer(compute_vertex *v, bool part) {
+		assert(v);
+		assert(((uint64_t) v) > 100000);
+		addr = ((uint64_t) v) + (((uint64_t) part) << PART_BIT_LOC);
+	}
+
+	bool is_part() const {
+		return addr & PART_MASK;
+	}
+
+	bool is_valid() const {
+		return (addr & ADDR_MASK) != 0;
+	}
+
+	compute_vertex *get() const {
+		assert((addr & ADDR_MASK) != 0);
+		return (compute_vertex *) (uintptr_t) (addr & ADDR_MASK);
+	}
+
+	compute_vertex *operator->() const {
+		return get();
+	}
+
+	compute_vertex &operator*() const {
+		return *get();
+	}
+};
 
 /**
  * \brief This file contains a set of graph index implementation.
@@ -51,9 +130,8 @@ public:
 
 	virtual void init(int num_threads, int num_nodes) {
 	}
-	virtual void init_vpart(int hpart_id, int num_vparts,
-			std::vector<vertex_id_t> &ids) {
-	}
+	virtual void init_vparts(int hpart_id, int num_vparts,
+			std::vector<vertex_id_t> &ids) = 0;
 
 	virtual size_t get_vertices(const vertex_id_t ids[], int num,
 			compute_vertex *v_buf[]) const = 0;
@@ -61,6 +139,16 @@ public:
 			compute_vertex *v_buf[]) const = 0;
 	virtual compute_vertex &get_vertex(vertex_id_t id) = 0;
 	virtual compute_vertex &get_vertex(int part_id, local_vid_t id) = 0;
+
+	/*
+	 * The interface of getting vertically partitioned vertices.
+	 */
+	virtual size_t get_num_vpart_vertices(int hpart_id) const = 0;
+	virtual size_t get_vpart_vertex_pointers(int hpart_id,
+			vpart_vertex_pointer ps[], int num) const = 0;
+	virtual size_t get_vpart_vertices(int hpart_id, int vpart_id,
+			vpart_vertex_pointer ps[], int num,
+			compute_vertex_pointer vertices[]) const = 0;
 
 	virtual vertex_id_t get_max_vertex_id() const = 0;
 
@@ -71,6 +159,7 @@ public:
 	virtual const graph_partitioner &get_partitioner() const = 0;
 
 	virtual vertex_program::ptr create_def_vertex_program() const = 0;
+	virtual vertex_program::ptr create_def_part_vertex_program() const = 0;
 
 	virtual std::string get_index_file() const = 0;
 };
@@ -136,6 +225,7 @@ public:
 	 * the horizontal partition.
 	 */
 	void init_vparts(int num_parts, std::vector<vertex_id_t> &ids) {
+		assert(num_parts > 1);
 		part_vertex_arrs.resize(num_parts);
 		for (int i = 0; i < num_parts; i++) {
 			part_vertex_arrs[i].first = ids.size();
@@ -157,7 +247,32 @@ public:
 		return vertex_arr[id];
 	}
 
-	virtual size_t get_num_vertices() const {
+	size_t get_num_vpart_vertices() const {
+		if (part_vertex_arrs.empty())
+			return 0;
+		else
+			return part_vertex_arrs[0].first;
+	}
+
+	size_t get_vpart_vertex_pointers(vpart_vertex_pointer ps[],
+			int num) const {
+		int act_num = min(num, get_num_vpart_vertices());
+		for (int i = 0; i < act_num; i++)
+			ps[i] = vpart_vertex_pointer(part_vertex_arrs[0].second[i].get_id(), i);
+		return act_num;
+	}
+
+	size_t get_vpart_vertices(int vpart_id, vpart_vertex_pointer ps[], int num,
+			compute_vertex_pointer vertices[]) const {
+		assert(vpart_id < part_vertex_arrs.size());
+		int act_num = min(num, get_num_vpart_vertices());
+		for (int i = 0; i < act_num; i++)
+			vertices[i] = compute_vertex_pointer(
+					&part_vertex_arrs[vpart_id].second[ps[i].get_off()], true);
+		return act_num;
+	}
+
+	size_t get_num_vertices() const {
 		return num_vertices;
 	}
 
@@ -291,6 +406,22 @@ public:
 		return index_arr[part_id]->get_vertex(id.id);
 	}
 
+	virtual size_t get_num_vpart_vertices(int hpart_id) const {
+		return index_arr[hpart_id]->get_num_vpart_vertices();
+	}
+
+	virtual size_t get_vpart_vertex_pointers(int hpart_id,
+			vpart_vertex_pointer ps[], int num) const {
+		return index_arr[hpart_id]->get_vpart_vertex_pointers(ps, num);
+	}
+
+	virtual size_t get_vpart_vertices(int hpart_id, int vpart_id,
+			vpart_vertex_pointer ps[], int num,
+			compute_vertex_pointer vertices[]) const {
+		return index_arr[hpart_id]->get_vpart_vertices(vpart_id, ps, num,
+				vertices);
+	}
+
 	virtual vertex_id_t get_max_vertex_id() const {
 		return max_vertex_id;
 	}
@@ -310,6 +441,11 @@ public:
 	virtual vertex_program::ptr create_def_vertex_program(
 			) const {
 		return vertex_program::ptr(new vertex_program_impl<vertex_type>());
+	}
+
+	virtual vertex_program::ptr create_def_part_vertex_program(
+			) const {
+		return vertex_program::ptr(new vertex_program_impl<part_vertex_type>());
 	}
 
 	virtual std::string get_index_file() const {

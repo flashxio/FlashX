@@ -38,9 +38,29 @@ void int_handler(int sig_num)
 
 void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
 {
+	int opt;
+	int num_opts = 0;
+	bool fast = false;
+
+	while ((opt = getopt(argc, argv, "f")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'f':
+				fast = true;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
 	FG_vector<size_t>::ptr triangles;
-	triangles = compute_directed_triangles(graph,
-			directed_triangle_type::CYCLE);
+	if (fast)
+		triangles = compute_directed_triangles_fast(graph,
+				directed_triangle_type::CYCLE);
+	else
+		triangles = compute_directed_triangles(graph,
+				directed_triangle_type::CYCLE);
 	printf("There are %ld cycle triangles\n", triangles->sum());
 }
 
@@ -414,6 +434,8 @@ void print_usage()
 	fprintf(stderr, "-m kmax: the maximum k value to compute\n");
 	fprintf(stderr, "-w output: the file name for a vector written to filen");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "cycle_triangle\n");
+	fprintf(stderr, "-f: run the fast implementation\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)

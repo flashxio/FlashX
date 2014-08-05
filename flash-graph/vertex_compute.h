@@ -28,6 +28,7 @@
 
 #include "vertex_request.h"
 #include "scan_pointer.h"
+#include "graph_index.h"
 
 class worker_thread;
 class graph_engine;
@@ -57,7 +58,7 @@ protected:
 
 	// The thread that creates the vertex compute.
 	worker_thread *issue_thread;
-	compute_vertex *v;
+	compute_vertex_pointer v;
 
 	/*
 	 * These two variables keep track of the number of completed requests
@@ -94,7 +95,6 @@ public:
 	vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
 		this->graph = graph;
-		v = NULL;
 		issue_thread = (worker_thread *) thread::get_curr_thread();
 		num_requested = 0;
 		num_complete_fetched = 0;
@@ -103,7 +103,7 @@ public:
 		num_edge_completed = 0;
 	}
 
-	void init(compute_vertex *v) {
+	void init(compute_vertex_pointer v) {
 		this->v = v;
 	}
 
@@ -312,7 +312,7 @@ public:
 class part_directed_vertex_compute: public user_compute
 {
 	graph_engine *graph;
-	compute_directed_vertex *comp_v;
+	compute_vertex_pointer comp_v;
 	directed_vertex_compute *compute;
 	directed_vertex_request req;
 	int num_fetched;
@@ -321,11 +321,10 @@ public:
 			compute_allocator *alloc): user_compute(alloc) {
 		this->graph = graph;
 		num_fetched = 0;
-		comp_v = NULL;
 		compute = NULL;
 	}
 
-	void init(compute_directed_vertex *v, directed_vertex_compute *compute,
+	void init(compute_vertex_pointer v, directed_vertex_compute *compute,
 			const directed_vertex_request &req) {
 		this->comp_v = v;
 		this->compute = compute;

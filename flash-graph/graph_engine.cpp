@@ -197,14 +197,20 @@ size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs,
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	vertex_compute *compute = curr->get_vertex_compute(*this);
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
+	vertex_compute *compute = curr->get_vertex_compute(curr_vertex);
 	compute->request_vertices(ids, num);
 }
 
 void compute_vertex::request_vertex_headers(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	vertex_compute *compute = curr->get_vertex_compute(*this);
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
+	vertex_compute *compute = curr->get_vertex_compute(curr_vertex);
 	compute->request_num_edges(ids, num);
 }
 
@@ -212,8 +218,11 @@ void compute_directed_vertex::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
 	directed_vertex_compute *compute
-		= (directed_vertex_compute *) curr->get_vertex_compute(*this);
+		= (directed_vertex_compute *) curr->get_vertex_compute(curr_vertex);
 	compute->request_partial_vertices(reqs, num);
 }
 
@@ -228,18 +237,107 @@ void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 }
 #endif
 
-#if 0
 namespace {
+
+class vpart_index_compute: public index_compute
+{
+	std::vector<vertex_id_t> *large_degree_ids;
+	int header_size;
+	vsize_t num_gets;
+public:
+	vpart_index_compute(index_comp_allocator &_alloc,
+			std::vector<vertex_id_t> *_ids,
+			int header_size): index_compute(_alloc) {
+		this->large_degree_ids = _ids;
+		this->num_gets = 0;
+		this->header_size = header_size;
+	}
+
+	void init(vertex_id_t start, vertex_id_t end) {
+		index_compute::init(start);
+		add_vertex(end - 1);
+	}
+
+	vsize_t get_num_vertices() const {
+		return this->get_last_vertex() - this->get_first_vertex() + 1;
+	}
+
+	virtual bool run(vertex_id_t start_vid, index_iterator &it);
+};
+
+bool vpart_index_compute::run(vertex_id_t start_vid, index_iterator &it)
+{
+	vertex_id_t vid = start_vid;
+	while (it.has_next()) {
+		vsize_t size = it.get_curr_vertex_size();
+		vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
+		if (num_edges >= graph_conf.get_min_vpart_degree())
+			large_degree_ids->push_back(vid);
+
+		num_gets++;
+		vid++;
+		it.move_next();
+	}
+	return num_gets == get_num_vertices();
+}
+
+class index_comp_allocator_impl: public index_comp_allocator
+{
+	class compute_initiator: public obj_initiator<vpart_index_compute>
+	{
+		index_comp_allocator_impl &alloc;
+	public:
+		compute_initiator(
+				index_comp_allocator_impl &_alloc): alloc(_alloc) {
+		}
+
+		virtual void init(vpart_index_compute *obj) {
+			new (obj) vpart_index_compute(alloc, alloc.large_degree_ids,
+					alloc.header_size);
+		}
+	};
+
+	class compute_destructor: public obj_destructor<vpart_index_compute>
+	{
+	public:
+		void destroy(vpart_index_compute *obj) {
+			obj->~vpart_index_compute();
+		}
+	};
+
+	obj_allocator<vpart_index_compute> allocator;
+	std::vector<vertex_id_t> *large_degree_ids;
+	int header_size;
+public:
+	index_comp_allocator_impl(thread *t, std::vector<vertex_id_t> &ids,
+			int header_size): allocator("index-compute-allocator",
+				t->get_node_id(), false, 1024 * 1024, params.get_max_obj_alloc_size(),
+			obj_initiator<vpart_index_compute>::ptr(new compute_initiator(*this)),
+			obj_destructor<vpart_index_compute>::ptr(new compute_destructor())) {
+		this->large_degree_ids = &ids;
+		this->header_size = header_size;
+	}
+
+	virtual index_compute *alloc() {
+		return allocator.alloc_obj();
+	}
+
+	virtual void free(index_compute *obj) {
+		allocator.free((vpart_index_compute *) obj);
+	}
+};
 
 class init_vpart_thread: public thread
 {
 	graph_index::ptr index;
 	graph_engine &graph;
 	int hpart_id;
-	vertex_index_reader::ptr index_reader;
+	file_io_factory::shared_ptr io_factory;
 public:
-	init_vpart_thread(graph_index::ptr index, graph_engine &graph,
-			int hpart_id): thread("index-init-thread", hpart_id) {
+	init_vpart_thread(graph_index::ptr index, file_io_factory::shared_ptr io_factory,
+			graph_engine &_graph, int hpart_id, int node_id): thread(
+				"index-init-thread", node_id), graph(_graph) {
+		this->io_factory = io_factory;
 		this->index = index;
 		this->hpart_id = hpart_id;
 	}
@@ -247,63 +345,85 @@ public:
 	virtual void run();
 };
 
-class vpart_index_compute: public index_compute
+class id_range_t
 {
-	std::vector<vertex_id_t> &ids;
-	int header_size;
-	int num_reqs;
-	int num_gets;
-	obj_allocator &alloc;
+	vertex_id_t start;
+	vertex_id_t end;
 public:
-	vpart_index_compute(std::vector<vertex_id_t> &_ids, int num_reqs,
-			int header_size): ids(_ids) {
-		this->num_gets = 0;
-		this->num_reqs = num_reqs;
-		this->header_size = header_size;
+	id_range_t() {
+		start = INVALID_VERTEX_ID;
+		end = INVALID_VERTEX_ID;
 	}
 
-	virtual void run_on_vertex_size(vertex_id_t id, vsize_t size) {
-		num_gets++;
-		vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
-		if (num_edges >= graph_conf.get_min_vpart_degree())
-			ids.push_back(id);
-		if (is_complete())
-			alloc.free(this);
+	vertex_id_t get_start() const {
+		return start;
 	}
 
-	virtual void run_on_num_edges(vertex_id_t id, vsize_t num_in_edges,
-			vsize_t num_out_edges) {
+	vertex_id_t get_end() const {
+		return end;
 	}
 
-	bool is_complete() const {
-		return num_reqs == num_gets;
+	bool add_vertex(vertex_id_t id) {
+		if (start == INVALID_VERTEX_ID) {
+			start = id;
+			end = id + 1;
+			return true;
+		}
+		else if (end == id) {
+			end++;
+			return true;
+		}
+		else
+			return false;
 	}
 };
 
 void init_vpart_thread::run()
 {
+	vertex_index_reader::ptr index_reader;
+	if (graph_conf.use_in_mem_index())
+		index_reader = vertex_index_reader::create(graph.get_in_mem_index(),
+				graph.is_directed());
+	else
+		index_reader = vertex_index_reader::create(
+				io_factory->create_io(this), graph.is_directed());
 	std::vector<vertex_id_t> large_degree_ids;
-	std::vector<vertex_id_t> id_buf;
+	std::unique_ptr<index_comp_allocator_impl> alloc
+		= std::unique_ptr<index_comp_allocator_impl>(
+				new index_comp_allocator_impl(this, large_degree_ids,
+					graph.get_vertex_header_size()));
+	const graph_partitioner *partitioner = graph.get_partitioner();
 	for (vertex_id_t id = 0; id < index->get_num_vertices(); ) {
-		while (id < index->get_num_vertices() && id_buf.size() < 1024 * 1024) {
-			if (partitioner.map(id) == hpart_id)
-				id_buf.push_back(id);
-			id++;
+		id_range_t range;
+		while (id < index->get_num_vertices()) {
+			if (partitioner->map(id) == hpart_id) {
+				if (range.add_vertex(id))
+					id++;
+				// If we can't add the vertex, let's stop here
+				// and try it in the next iteration of the for loop.
+				else
+					break;
+			}
+			else
+				id++;
 		}
-		if (!id_buf.empty()) {
-			vpart_index_compute compute(large_degree_ids, id_buf.size(),
-					graph.get_vertex_header_size());
-			index_reader->request_num_edges(id_buf.data(), id_buf.size(), compute);
-			while (!compute.is_complete())
-				index_reader->wait4complete(1);
+		if (range.get_end() - range.get_start() > 0) {
+			vpart_index_compute *compute = (vpart_index_compute *) alloc->alloc();
+			compute->init(range.get_start(), range.get_end());
+			index_reader->request_index(compute);
+			index_reader->wait4complete(1);
 		}
+		index_reader->wait4complete(0);
+		if (index_reader->get_num_pending_tasks() > 100)
+			index_reader->wait4complete(1);
 	}
-	index->init_vpart(hpart_id, graph_conf.get_num_vparts(), large_degree_ids);
+	while (index_reader->get_num_pending_tasks() > 0)
+		index_reader->wait4complete(1);
+	index->init_vparts(hpart_id, graph_conf.get_num_vparts(), large_degree_ids);
 	this->stop();
 }
 
 }
-#endif
 
 graph_engine::graph_engine(const std::string &graph_file,
 		graph_index::ptr index, const config_map &configs)
@@ -369,11 +489,18 @@ graph_engine::graph_engine(const std::string &graph_file,
 	if (graph_conf.preload())
 		preload_graph();
 
+	// If we need to perform vertical partitioning on the graph.
 	if (graph_conf.get_num_vparts() > 1) {
-		if (vindex == NULL)
-			vindex = vertex_index::safs_load(index->get_index_file());
-		if (!graph_conf.use_in_mem_index())
-			vindex.reset();
+		std::vector<init_vpart_thread *> threads(num_threads);
+		for (int i = 0; i < num_threads; i++) {
+			threads[i] = new init_vpart_thread(index, index_factory, *this,
+					i, i % num_nodes);
+			threads[i]->start();
+		}
+		for (int i = 0; i < num_threads; i++) {
+			threads[i]->join();
+			delete threads[i];
+		}
 	}
 }
 
@@ -397,7 +524,8 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 		else
 			new_prog = vertices->create_def_vertex_program();
 		worker_thread *t = new worker_thread(this, graph_factory, index_factory,
-				new_prog, i % num_nodes, i, num_threads, scheduler);
+				new_prog, vertices->create_def_part_vertex_program(),
+				i % num_nodes, i, num_threads, scheduler);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
 		vprograms[i] = new_prog;
@@ -411,7 +539,6 @@ void graph_engine::start(vertex_id_t ids[], int num,
 		vertex_initializer::ptr init, vertex_program_creater::ptr creater)
 {
 	init_threads(std::move(creater));
-	num_remaining_vertices_in_level.inc(num);
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
@@ -431,7 +558,6 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 {
 	init_threads(std::move(creater));
 	// Let's assume all vertices will be activated first.
-	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_vertices(filter);
 		t->start();
@@ -443,12 +569,41 @@ void graph_engine::start_all(vertex_initializer::ptr init,
 		vertex_program_creater::ptr creater)
 {
 	init_threads(std::move(creater));
-	num_remaining_vertices_in_level.inc(get_num_vertices());
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices(init);
 		t->start();
 	}
 	gettimeofday(&start_time, NULL);
+}
+
+bool graph_engine::progress_first_level()
+{
+	static atomic_number<long> tot_num_activates;
+	static atomic_integer num_threads;
+
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	int num_activates = curr->get_activates();
+	tot_num_activates.inc(num_activates);
+	// If all threads have reached here.
+	if (num_threads.inc(1) == get_num_threads()) {
+		assert(num_remaining_vertices_in_level.get() == 0);
+		num_remaining_vertices_in_level = atomic_number<size_t>(
+				tot_num_activates.get());
+		// If there aren't more activated vertices.
+		is_complete = tot_num_activates.get() == 0;
+		tot_num_activates = 0;
+		num_threads = 0;
+	}
+
+	// We need to synchronize again. We have to make sure all threads see
+	// the completion signal.
+	int rc = pthread_barrier_wait(&barrier2);
+	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
+	{
+		printf("Could not wait on barrier\n");
+		exit(-1);
+	}
+	return is_complete;
 }
 
 bool graph_engine::progress_next_level()
