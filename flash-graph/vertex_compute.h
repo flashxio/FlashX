@@ -312,7 +312,7 @@ public:
 class part_directed_vertex_compute: public user_compute
 {
 	graph_engine *graph;
-	compute_directed_vertex *comp_v;
+	compute_vertex_pointer comp_v;
 	directed_vertex_compute *compute;
 	directed_vertex_request req;
 	int num_fetched;
@@ -321,15 +321,12 @@ public:
 			compute_allocator *alloc): user_compute(alloc) {
 		this->graph = graph;
 		num_fetched = 0;
-		comp_v = NULL;
 		compute = NULL;
 	}
 
 	void init(compute_vertex_pointer v, directed_vertex_compute *compute,
 			const directed_vertex_request &req) {
-		// Let's not deal with vertically partitioned vertices here yet.
-		assert(!v.is_part());
-		this->comp_v = (compute_directed_vertex *) v.get();
+		this->comp_v = v;
 		this->compute = compute;
 		this->req = req;
 	}

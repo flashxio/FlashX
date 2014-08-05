@@ -123,7 +123,7 @@ void vertex_compute::complete_request()
 
 void part_directed_vertex_compute::run(page_byte_array &array)
 {
-	assert(comp_v);
+	assert(comp_v.is_valid());
 	vsize_t num_in_edges = 0;
 	vsize_t num_out_edges = 0;
 	if (req.get_type() == edge_type::IN_EDGE)
@@ -136,11 +136,10 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 			num_out_edges, array);
 
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	// TODO let's deal with vertically partitioned vertices later.
-	vertex_program &curr_vprog = t->get_vertex_program(false);
-	t->start_run_vertex(compute_vertex_pointer(comp_v));
+	vertex_program &curr_vprog = t->get_vertex_program(comp_v.is_part());
+	t->start_run_vertex(comp_v);
 	curr_vprog.run(*comp_v, pg_v);
-	t->finish_run_vertex(compute_vertex_pointer(comp_v));
+	t->finish_run_vertex(comp_v);
 	num_fetched++;
 	compute->complete_request();
 }
