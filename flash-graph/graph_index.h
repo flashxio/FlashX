@@ -91,7 +91,7 @@ public:
 	}
 
 	bool is_valid() const {
-		return get() != NULL;
+		return (addr & ADDR_MASK) != 0;
 	}
 
 	compute_vertex *get() const {
