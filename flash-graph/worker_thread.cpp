@@ -395,6 +395,7 @@ int worker_thread::process_activated_vertices(int max)
 
 	for (int i = 0; i < num; i++) {
 		compute_vertex_pointer info = process_vertex_buf[i];
+		curr_vertex = info;
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
 		vertex_program &curr_vprog = get_vertex_program(info.is_part());
@@ -404,6 +405,7 @@ int worker_thread::process_activated_vertices(int max)
 		// with the vertex in this iteration.
 		if (curr_compute == NULL)
 			complete_vertex(info);
+		curr_vertex = compute_vertex_pointer();
 	}
 	return num;
 }
@@ -574,14 +576,14 @@ void worker_thread::activate_vertex(vertex_id_t id)
 	next_activated_vertices->set(off);
 }
 
-vertex_compute *worker_thread::get_vertex_compute(compute_vertex &v)
+vertex_compute *worker_thread::get_vertex_compute(compute_vertex_pointer v)
 {
-	vertex_id_t id = v.get_id();
+	vertex_id_t id = v->get_id();
 	std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
 		= active_computes.find(id);
 	if (it == active_computes.end()) {
 		vertex_compute *compute = (vertex_compute *) alloc->alloc();
-		compute->init(compute_vertex_pointer(&v));
+		compute->init(v);
 		active_computes.insert(std::pair<vertex_id_t, vertex_compute *>(
 					id, compute));
 		compute->inc_ref();

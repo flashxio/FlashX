@@ -67,7 +67,9 @@ void vertex_compute::run_on_vertex_size(vertex_id_t id, vsize_t size)
 	size_t header_size = issue_thread->get_graph().get_vertex_header_size();
 	vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
 	vertex_header header(id, num_edges);
+	issue_thread->start_run_vertex(v);
 	issue_thread->get_vertex_program(v.is_part()).run_on_num_edges(*v, header);
+	issue_thread->finish_run_vertex(v);
 	num_edge_completed++;
 	if (get_num_pending() == 0)
 		issue_thread->complete_vertex(v);
@@ -103,7 +105,9 @@ void vertex_compute::run(page_byte_array &array)
 			interpreter.get_vertex_size());
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
+	issue_thread->start_run_vertex(v);
 	curr_vprog.run(*v, *ext_v);
+	issue_thread->finish_run_vertex(v);
 	complete_request();
 }
 
@@ -134,7 +138,9 @@ void part_directed_vertex_compute::run(page_byte_array &array)
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	// TODO let's deal with vertically partitioned vertices later.
 	vertex_program &curr_vprog = t->get_vertex_program(false);
+	t->start_run_vertex(compute_vertex_pointer(comp_v));
 	curr_vprog.run(*comp_v, pg_v);
+	t->finish_run_vertex(compute_vertex_pointer(comp_v));
 	num_fetched++;
 	compute->complete_request();
 }
@@ -158,7 +164,9 @@ void directed_vertex_compute::run(page_byte_array &array)
 
 		worker_thread *t = (worker_thread *) thread::get_curr_thread();
 		vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
+		issue_thread->start_run_vertex(v);
 		curr_vprog.run(*v, pg_v);
+		issue_thread->finish_run_vertex(v);
 		complete_request();
 
 		part_req.reset();
@@ -176,7 +184,9 @@ void directed_vertex_compute::complete_empty_part(
 
 	empty_page_byte_array array;
 	page_directed_vertex pg_v(req.get_id(), 0, 0, array);
+	issue_thread->start_run_vertex(v);
 	curr_vprog.run(*v, pg_v);
+	issue_thread->finish_run_vertex(v);
 	complete_request();
 }
 
@@ -327,7 +337,9 @@ void directed_vertex_compute::run_on_num_edges(vertex_id_t id,
 		vsize_t num_in_edges, vsize_t num_out_edges)
 {
 	directed_vertex_header header(id, num_in_edges, num_out_edges);
+	issue_thread->start_run_vertex(v);
 	issue_thread->get_vertex_program(v.is_part()).run_on_num_edges(*v, header);
+	issue_thread->finish_run_vertex(v);
 	num_edge_completed++;
 	if (get_num_pending() == 0)
 		issue_thread->complete_vertex(v);

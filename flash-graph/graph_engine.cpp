@@ -197,14 +197,20 @@ size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs,
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	vertex_compute *compute = curr->get_vertex_compute(*this);
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
+	vertex_compute *compute = curr->get_vertex_compute(curr_vertex);
 	compute->request_vertices(ids, num);
 }
 
 void compute_vertex::request_vertex_headers(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	vertex_compute *compute = curr->get_vertex_compute(*this);
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
+	vertex_compute *compute = curr->get_vertex_compute(curr_vertex);
 	compute->request_num_edges(ids, num);
 }
 
@@ -212,8 +218,11 @@ void compute_directed_vertex::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
 	directed_vertex_compute *compute
-		= (directed_vertex_compute *) curr->get_vertex_compute(*this);
+		= (directed_vertex_compute *) curr->get_vertex_compute(curr_vertex);
 	compute->request_partial_vertices(reqs, num);
 }
 

@@ -200,6 +200,8 @@ class worker_thread: public thread
 	// This references the vertex compute used/created by the current vertex
 	// being processed.
 	vertex_compute *curr_compute;
+	// This points to the vertex that is currently being processed.
+	compute_vertex_pointer curr_vertex;
 
 	/**
 	 * A vertex is allowed to send messages to other vertices.
@@ -290,7 +292,20 @@ public:
 		this->filter = filter;
 	}
 
-	vertex_compute *get_vertex_compute(compute_vertex &v);
+	compute_vertex_pointer get_curr_vertex() const {
+		return curr_vertex;
+	}
+	void start_run_vertex(compute_vertex_pointer v) {
+		assert(!curr_vertex.is_valid());
+		curr_vertex = v;
+	}
+	void finish_run_vertex(compute_vertex_pointer v) {
+		assert(curr_vertex.is_valid());
+		assert(curr_vertex.get() == v.get());
+		curr_vertex = compute_vertex_pointer();
+	}
+
+	vertex_compute *get_vertex_compute(compute_vertex_pointer v);
 	vertex_compute *get_vertex_compute(vertex_id_t id) const {
 		std::unordered_map<vertex_id_t, vertex_compute *>::const_iterator it
 			= active_computes.find(id);
