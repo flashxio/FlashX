@@ -492,6 +492,7 @@ void worker_thread::run()
 		num_completed_vertices_in_level = atomic_number<long>(0);
 
 		vprogram->flush_msgs();
+		vpart_vprogram->flush_msgs();
 		// We have to make sure all stolen vertices are returned to their owner
 		// threads.
 		balancer->process_completed_stolen_vertices();
