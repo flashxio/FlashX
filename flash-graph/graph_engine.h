@@ -180,6 +180,27 @@ public:
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 };
 
+class part_compute_directed_vertex: public compute_directed_vertex
+{
+	int part_id;
+public:
+    /**
+     * \brief The constructor callled by the grah engne.
+     */
+	part_compute_directed_vertex(vertex_id_t id,
+			int part_id): compute_directed_vertex(id) {
+		this->part_id = part_id;
+	}
+
+	int get_part_id() const {
+		return part_id;
+	}
+
+	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
+		assert(0);
+	}
+};
+
 /**
  *  \brief Time series compute vertex used for time series graph analytics.
  */
