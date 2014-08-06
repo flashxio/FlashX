@@ -129,14 +129,37 @@ public:
 };
 
 runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &vertex,
-		size_t num_local_edges, std::vector<vertex_id_t> &out_edges)
+		size_t num_local_edges, std::vector<vertex_id_t> &out_edges,
+		vertex_id_t id_start, vertex_id_t id_end)
 {
 	std::vector<vertex_id_t> in_edges;
 
 	page_byte_array::const_iterator<vertex_id_t> it
-		= vertex.get_neigh_begin(edge_type::IN_EDGE);
+		= vertex.get_neigh_begin(edge_type::OUT_EDGE);
 	page_byte_array::const_iterator<vertex_id_t> end
-		= vertex.get_neigh_end(edge_type::IN_EDGE);
+		= vertex.get_neigh_end(edge_type::OUT_EDGE);
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		if (id < id_start || id >= id_end)
+			continue;
+		directed_triangle_vertex &neigh
+			= (directed_triangle_vertex &) prog.get_graph().get_vertex(id);
+		size_t num_local_edges1 = neigh.get_num_edges();
+		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
+				|| (num_local_edges1 == num_local_edges
+					&& id < vertex.get_id())) {
+			out_edges.push_back(id);
+		}
+	}
+	if (out_edges.empty()) {
+		long ret = num_completed_vertices.inc(1);
+		if (ret % 100000 == 0)
+			printf("%ld completed vertices\n", ret);
+		return NULL;
+	}
+
+	it = vertex.get_neigh_begin(edge_type::IN_EDGE);
+	end = vertex.get_neigh_end(edge_type::IN_EDGE);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		directed_triangle_vertex &neigh
@@ -149,21 +172,7 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 		}
 	}
 
-	it = vertex.get_neigh_begin(edge_type::OUT_EDGE);
-	end = vertex.get_neigh_end(edge_type::OUT_EDGE);
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
-		directed_triangle_vertex &neigh
-			= (directed_triangle_vertex &) prog.get_graph().get_vertex(id);
-		size_t num_local_edges1 = neigh.get_num_edges();
-		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
-				|| (num_local_edges1 == num_local_edges
-					&& id < vertex.get_id())) {
-			out_edges.push_back(id);
-		}
-	}
-
-	if (in_edges.empty() || out_edges.empty()) {
+	if (in_edges.empty()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
@@ -294,7 +303,8 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 
 	std::vector<vertex_id_t> selected_out_edges;
 	runtime_data_t *data = construct_runtime(prog, vertex,
-			this->get_num_edges(), selected_out_edges);
+			this->get_num_edges(), selected_out_edges, 0,
+			prog.get_graph().get_max_vertex_id() + 1);
 	if (data == NULL)
 		return;
 
@@ -412,19 +422,19 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 		return;
 	}
 
-	directed_triangle_vertex &self_v
-		= (directed_triangle_vertex &) prog.get_graph().get_vertex(get_id());
-	std::vector<vertex_id_t> selected_out_edges;
-	runtime_data_t *data = construct_runtime(prog, vertex,
-			self_v.get_num_edges(), selected_out_edges);
-	if (data == NULL)
-		return;
-
 	vertex_id_t max_id = prog.get_graph().get_max_vertex_id();
 	vsize_t part_range
 		= ceil(((double) max_id + 1) / graph_conf.get_num_vparts());
 	vertex_id_t id_start = part_range * this->get_part_id();
 	vertex_id_t id_end = id_start + part_range;
+
+	directed_triangle_vertex &self_v
+		= (directed_triangle_vertex &) prog.get_graph().get_vertex(get_id());
+	std::vector<vertex_id_t> selected_out_edges;
+	runtime_data_t *data = construct_runtime(prog, vertex,
+			self_v.get_num_edges(), selected_out_edges, id_start, id_end);
+	if (data == NULL)
+		return;
 
 	// We have to set runtime data before calling request_partial_vertices.
 	// It's possible that the request to a partial vertex can be completed
@@ -435,20 +445,12 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 	std::vector<directed_vertex_request> reqs;
 	for (size_t i = 0; i < selected_out_edges.size(); i++) {
 		vertex_id_t id = selected_out_edges[i];
-		if (id >= id_start && id < id_end)
-			reqs.push_back(directed_vertex_request(id, edge_type::OUT_EDGE));
+		assert(id >= id_start && id < id_end);
+		reqs.push_back(directed_vertex_request(id, edge_type::OUT_EDGE));
 	}
+	assert(!reqs.empty());
 	data->num_required = reqs.size();
-	if (reqs.size() > 0)
-		request_partial_vertices(reqs.data(), reqs.size());
-	else {
-		long ret = num_completed_vertices.inc(1);
-		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
-		size_t num_curr_triangles = data->num_triangles;
-		delete data;
-		local_value.set_num_triangles(num_curr_triangles);
-	}
+	request_partial_vertices(reqs.data(), reqs.size());
 }
 
 void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
