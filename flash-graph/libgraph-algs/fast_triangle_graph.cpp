@@ -134,12 +134,10 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 {
 	std::vector<vertex_id_t> in_edges;
 
-	page_byte_array::const_iterator<vertex_id_t> it
-		= vertex.get_neigh_begin(edge_type::OUT_EDGE);
-	page_byte_array::const_iterator<vertex_id_t> end
-		= vertex.get_neigh_end(edge_type::OUT_EDGE);
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
+	page_byte_array::seq_const_iterator<vertex_id_t> it
+		= vertex.get_neigh_seq_it(edge_type::OUT_EDGE, 0,
+				vertex.get_num_edges(edge_type::OUT_EDGE));
+	PAGE_FOREACH(vertex_id_t, id, it) {
 		if (id < id_start || id >= id_end)
 			continue;
 		directed_triangle_vertex &neigh
@@ -150,7 +148,7 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 					&& id < vertex.get_id())) {
 			out_edges.push_back(id);
 		}
-	}
+	} PAGE_FOREACH_END
 	if (out_edges.empty()) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
@@ -158,10 +156,9 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 		return NULL;
 	}
 
-	it = vertex.get_neigh_begin(edge_type::IN_EDGE);
-	end = vertex.get_neigh_end(edge_type::IN_EDGE);
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
+	it = vertex.get_neigh_seq_it(edge_type::IN_EDGE, 0,
+			vertex.get_num_edges(edge_type::IN_EDGE));
+	PAGE_FOREACH(vertex_id_t, id, it) {
 		directed_triangle_vertex &neigh
 			= (directed_triangle_vertex &) prog.get_graph().get_vertex(id);
 		size_t num_local_edges1 = neigh.get_num_edges();
@@ -170,7 +167,7 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 					&& id < vertex.get_id())) {
 			in_edges.push_back(id);
 		}
-	}
+	} PAGE_FOREACH_END
 
 	if (in_edges.empty()) {
 		long ret = num_completed_vertices.inc(1);
