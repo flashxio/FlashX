@@ -119,9 +119,6 @@ size_t extended_neighbor_list::count_edges(const page_vertex *v)
 			skip_self(), merge_edge(), common_neighs.begin());
 	common_neighs.resize(num_neighbors);
 
-#ifdef PV_STAT
-	rand_jumps += common_neighs.size() + 1;
-#endif
 	// The number of duplicated edges between v and this vertex.
 	off_t neigh_off = this->find_idx(v->get_id());
 	assert(neigh_off >= 0);
@@ -142,14 +139,27 @@ size_t extended_neighbor_list::count_edges(const page_vertex *v)
 	return ret;
 }
 
-class local_scan_vertex: public scan_vertex
+class local_scan_vertex: public compute_vertex
 {
+	vsize_t degree;
+	multi_func_value local_value;
 public:
-	local_scan_vertex(vertex_id_t id): scan_vertex(id) {
+	local_scan_vertex(vertex_id_t id): compute_vertex(id) {
+		degree = 0;
 		local_value.set_real_local(0);
 	}
 
-	using scan_vertex::run;
+	vsize_t get_degree() const {
+		return degree;
+	}
+
+	bool has_local_scan() const {
+		return local_value.has_real_local();
+	}
+
+	size_t get_local_scan() const {
+		return local_value.get_real_local();
+	}
 
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
@@ -157,6 +167,29 @@ public:
 			request_vertex_headers(&id, 1);
 		else if (scan_stage == scan_stage_t::RUN)
 			request_vertices(&id, 1);
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex) {
+		if (vertex.get_id() == get_id())
+			run_on_itself(prog, vertex);
+		else
+			run_on_neighbor(prog, vertex);
+	}
+
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
+	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
+
+	void run_on_message(vertex_program &prog, const vertex_message &msg1) {
+		const count_msg &msg = (const count_msg &) msg1;
+		if (local_value.has_runtime_data())
+			local_value.get_runtime_data()->local_scan += msg.get_num();
+		else
+			local_value.inc_real_local(msg.get_num());
+	}
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		degree = header.get_num_edges();
 	}
 
 	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
@@ -172,64 +205,56 @@ public:
 		}
 	}
 
-	void run_on_message(vertex_program &prog, const vertex_message &msg1) {
-		const count_msg &msg = (const count_msg &) msg1;
-		if (local_value.has_runtime_data())
-			local_value.get_runtime_data()->local_scan += msg.get_num();
-		else
-			local_value.inc_real_local(msg.get_num());
-	}
-
 	size_t get_result() const {
 		return get_local_scan();
 	}
 };
 
-class skip_larger {
-	vsize_t degree;
-	vertex_id_t id;
-	graph_engine &graph;
-
-	vsize_t get_degree(vertex_id_t id) const {
-		return ((scan_vertex &) graph.get_vertex(id)).get_degree();
-	}
-public:
-	skip_larger(graph_engine &_graph, vertex_id_t id): graph(_graph) {
-		this->degree = get_degree(id);
-		this->id = id;
-	}
-
-	bool operator()(attributed_neighbor &e) {
-		return operator()(e.get_id());
-	}
-
-	/**
-	 * We are going to count edges on the vertices with the most edges.
-	 * If two vertices have the same number of edges, we compute
-	 * on the vertices with the largest Id.
-	 */
-	bool operator()(vertex_id_t id) {
-		vsize_t other_degree = get_degree(id);
-		if (other_degree == degree)
-			return id >= this->id;
-		return other_degree > degree;
-	}
-};
-
-class merge_edge
-{
-public:
-	attributed_neighbor operator()(const attributed_neighbor &e1,
-			const attributed_neighbor &e2) {
-		assert(e1.get_id() == e2.get_id());
-		return attributed_neighbor(e1.get_id(),
-				e1.get_num_dups() + e2.get_num_dups());
-	}
-};
-
-runtime_data_t *ls_create_runtime(graph_engine &graph, scan_vertex &scan_v,
+runtime_data_t *create_runtime(graph_engine &graph, local_scan_vertex &scan_v,
 		const page_vertex &vertex)
 {
+	class skip_larger {
+		vsize_t degree;
+		vertex_id_t id;
+		graph_engine &graph;
+
+		vsize_t get_degree(vertex_id_t id) const {
+			return ((local_scan_vertex &) graph.get_vertex(id)).get_degree();
+		}
+	public:
+		skip_larger(graph_engine &_graph, vertex_id_t id): graph(_graph) {
+			this->degree = get_degree(id);
+			this->id = id;
+		}
+
+		bool operator()(attributed_neighbor &e) {
+			return operator()(e.get_id());
+		}
+
+		/**
+		 * We are going to count edges on the vertices with the most edges.
+		 * If two vertices have the same number of edges, we compute
+		 * on the vertices with the largest Id.
+		 */
+		bool operator()(vertex_id_t id) {
+			vsize_t other_degree = get_degree(id);
+			if (other_degree == degree)
+				return id >= this->id;
+			return other_degree > degree;
+		}
+	};
+
+	class merge_edge
+	{
+	public:
+		attributed_neighbor operator()(const attributed_neighbor &e1,
+				const attributed_neighbor &e2) {
+			assert(e1.get_id() == e2.get_id());
+			return attributed_neighbor(e1.get_id(),
+					e1.get_num_dups() + e2.get_num_dups());
+		}
+	};
+
 	merge_edge merge;
 	std::vector<attributed_neighbor> neighbors(
 			vertex.get_num_edges(edge_type::BOTH_EDGES));
@@ -246,11 +271,65 @@ runtime_data_t *ls_create_runtime(graph_engine &graph, scan_vertex &scan_v,
 			scan_v.get_local_scan());
 }
 
-void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
-		runtime_data_t *data)
+void destroy_runtime(runtime_data_t *data)
 {
-	local_scan_vertex &ls_v = (local_scan_vertex &) scan_v;
-	ls_v.finding_triangles_end(prog, data);
+	delete data;
+}
+
+void local_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
+{
+	assert(!local_value.has_runtime_data());
+
+	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
+	if (num_local_edges == 0)
+		return;
+
+	runtime_data_t *local_data = create_runtime(prog.get_graph(), *this, vertex);
+	local_value.set_runtime_data(local_data);
+
+	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
+			edge_type::BOTH_EDGES);
+	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
+			edge_type::BOTH_EDGES);
+	size_t tmp = 0;
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		// Ignore loops
+		if (id != vertex.get_id())
+			tmp++;
+	}
+	local_data->local_scan += tmp;
+
+	if (local_data->neighbors->empty()) {
+		local_value.set_real_local(local_data->local_scan);
+		finding_triangles_end(prog, local_data);
+		destroy_runtime(local_data);
+		return;
+	}
+
+	std::vector<vertex_id_t> neighbors;
+	local_data->neighbors->get_neighbors(neighbors);
+	request_vertices(neighbors.data(), neighbors.size());
+}
+
+void local_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &vertex)
+{
+	assert(local_value.has_runtime_data());
+	runtime_data_t *local_data = local_value.get_runtime_data();
+	local_data->num_joined++;
+	size_t ret = local_data->neighbors->count_edges(&vertex);
+	if (ret > 0)
+		local_data->local_scan += ret;
+
+	// If we have seen all required neighbors, we have complete
+	// the computation. We can release the memory now.
+	if (local_data->num_joined == local_data->neighbors->size()) {
+		local_value.set_real_local(local_data->local_scan);
+
+		finding_triangles_end(prog, local_data);
+
+		destroy_runtime(local_data);
+	}
 }
 
 }
@@ -258,9 +337,6 @@ void ls_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 #include "save_result.h"
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
-	finding_triangles_end = ls_finding_triangles_end;
-	create_runtime = ls_create_runtime;
-
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),

@@ -446,85 +446,10 @@ public:
 	}
 };
 
-class scan_vertex;
-extern void (*finding_triangles_end)(vertex_program &, scan_vertex &,
-		runtime_data_t *);
-extern runtime_data_t *(*create_runtime)(graph_engine &, scan_vertex &,
-		const page_vertex &);
-extern void (*destroy_runtime)(scan_vertex &, runtime_data_t *);
-
 enum scan_stage_t
 {
 	INIT,
 	RUN,
-};
-
-class scan_vertex: public compute_vertex
-{
-protected:
-	vsize_t degree;
-	multi_func_value local_value;
-
-#ifdef PV_STAT
-	// For testing
-	size_t num_all_edges;
-	size_t scan_bytes;
-	size_t rand_jumps;
-	size_t min_comps;
-	long time_us;
-	struct timeval vertex_start;
-#endif
-public:
-	scan_vertex(vertex_id_t id): compute_vertex(id) {
-		degree = 0;
-#ifdef PV_STAT
-		num_all_edges = 0;
-		scan_bytes = 0;
-		rand_jumps = 0;
-		min_comps = 0;
-		time_us = 0;
-#endif
-	}
-
-#ifdef PV_STAT
-	size_t get_scan_bytes() const {
-		return scan_bytes;
-	}
-
-	size_t get_rand_jumps() const {
-		return rand_jumps;
-	}
-#endif
-
-	vsize_t get_degree() const {
-		return degree;
-	}
-
-	bool has_local_scan() const {
-		return local_value.has_real_local();
-	}
-
-	size_t get_local_scan() const {
-		return local_value.get_real_local();
-	}
-
-	void run(vertex_program &prog, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
-			run_on_itself(prog, vertex);
-		else
-			run_on_neighbor(prog, vertex);
-	}
-
-	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
-	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
-
-	void run_on_message(vertex_program &prog, const vertex_message &msg) {
-	}
-
-	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
-		assert(get_id() == header.get_id());
-		degree = header.get_num_edges();
-	}
 };
 
 #endif

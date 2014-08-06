@@ -40,35 +40,6 @@ scan_stage_t scan_stage;
 
 struct timeval graph_start;
 
-class vertex_size_scheduler: public vertex_scheduler
-{
-	graph_engine::ptr graph;
-public:
-	vertex_size_scheduler(graph_engine::ptr graph) {
-		this->graph = graph;
-	}
-	void schedule(std::vector<vertex_id_t> &vertices);
-};
-
-void vertex_size_scheduler::schedule(std::vector<vertex_id_t> &ids)
-{
-	std::vector<compute_vertex *> vertices(ids.size());
-	for (size_t i = 0; i < ids.size(); i++)
-		vertices[i] = &graph->get_vertex(ids[i]);
-	class comp_size
-	{
-	public:
-		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
-			return ((const scan_vertex *) v1)->get_degree()
-				> ((const scan_vertex *) v2)->get_degree();
-		}
-	};
-
-	std::sort(vertices.begin(), vertices.end(), comp_size());
-	for (size_t i = 0; i < ids.size(); i++)
-		ids[i] = vertices[i]->get_id();
-}
-
 class global_max
 {
 	volatile size_t value;
@@ -156,10 +127,26 @@ public:
 	}
 } known_scans;
 
-class topK_scan_vertex: public scan_vertex
+class topK_scan_vertex: public compute_vertex
 {
+protected:
+	vsize_t degree;
+	multi_func_value local_value;
 public:
-	topK_scan_vertex(vertex_id_t id): scan_vertex(id) {
+	topK_scan_vertex(vertex_id_t id): compute_vertex(id) {
+		degree = 0;
+	}
+
+	vsize_t get_degree() const {
+		return degree;
+	}
+
+	bool has_local_scan() const {
+		return local_value.has_real_local();
+	}
+
+	size_t get_local_scan() const {
+		return local_value.get_real_local();
 	}
 
 	bool has_est_local() const {
@@ -170,10 +157,8 @@ public:
 		return local_value.get_est_local();
 	}
 
-	size_t get_est_local_scan(graph_engine &graph, const page_vertex *vertex);
-
-	using scan_vertex::run;
 	void run(vertex_program &prog);
+
 	void run(vertex_program &prog, const page_vertex &vertex) {
 		assert(scan_stage == scan_stage_t::RUN);
 		if (vertex.get_id() == get_id())
@@ -181,7 +166,17 @@ public:
 		else
 			run_on_neighbor(prog, vertex);
 	}
+
 	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
+	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
+
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
+	}
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		degree = header.get_num_edges();
+	}
 
 	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
 		if (max_scan.update(data->local_scan)) {
@@ -194,6 +189,167 @@ public:
 		known_scans.add(get_id(), data->local_scan);
 	}
 };
+
+runtime_data_t *create_runtime(graph_engine &graph, topK_scan_vertex &scan_v,
+		const page_vertex &pg_v)
+{
+	class skip_self {
+		vertex_id_t id;
+		graph_engine &graph;
+	public:
+		skip_self(graph_engine &_graph, vertex_id_t id): graph(_graph) {
+			this->id = id;
+		}
+
+		bool operator()(attributed_neighbor &e) {
+			return operator()(e.get_id());
+		}
+
+		bool operator()(vertex_id_t id) {
+			return this->id == id;
+		}
+	};
+
+	class merge_edge
+	{
+	public:
+		attributed_neighbor operator()(const attributed_neighbor &e1,
+				const attributed_neighbor &e2) {
+			assert(e1.get_id() == e2.get_id());
+			return attributed_neighbor(e1.get_id(),
+					e1.get_num_dups() + e2.get_num_dups());
+		}
+	};
+
+	merge_edge merge;
+	std::vector<attributed_neighbor> neighbors(
+			pg_v.get_num_edges(edge_type::BOTH_EDGES));
+	size_t num_neighbors = unique_merge(
+			pg_v.get_neigh_begin(edge_type::IN_EDGE),
+			pg_v.get_neigh_end(edge_type::IN_EDGE),
+			pg_v.get_neigh_begin(edge_type::OUT_EDGE),
+			pg_v.get_neigh_end(edge_type::OUT_EDGE),
+			skip_self(graph, pg_v.get_id()), merge,
+			neighbors.begin());
+	neighbors.resize(num_neighbors);
+	return new runtime_data_t(std::unique_ptr<neighbor_list>(
+				new neighbor_list(pg_v, neighbors)));
+}
+
+void destroy_runtime(runtime_data_t *data)
+{
+	delete data;
+}
+
+size_t get_est_local_scan(graph_engine &graph, topK_scan_vertex &scan_v,
+		const page_vertex &page_v)
+{
+	// We have estimated the local scan of this vertex, return
+	// the estimated one
+	if (scan_v.has_est_local())
+		return scan_v.get_est_local_scan();
+
+	class skip_self {
+		vertex_id_t id;
+	public:
+		skip_self(vertex_id_t id) {
+			this->id = id;
+		}
+
+		bool operator()(vertex_id_t id) {
+			return this->id == id;
+		}
+	};
+
+	class merge_edge {
+	public:
+		vertex_id_t operator()(vertex_id_t e1, vertex_id_t e2) {
+			assert(e1 == e2);
+			return e1;
+		}
+	};
+
+	std::vector<vertex_id_t> all_neighbors(
+			page_v.get_num_edges(edge_type::BOTH_EDGES));
+	size_t num_neighbors = unique_merge(
+			page_v.get_neigh_begin(edge_type::IN_EDGE),
+			page_v.get_neigh_end(edge_type::IN_EDGE),
+			page_v.get_neigh_begin(edge_type::OUT_EDGE),
+			page_v.get_neigh_end(edge_type::OUT_EDGE),
+			skip_self(page_v.get_id()), merge_edge(),
+			all_neighbors.begin());
+	all_neighbors.resize(num_neighbors);
+
+	size_t tot_edges = scan_v.get_degree();
+	for (size_t i = 0; i < all_neighbors.size(); i++) {
+		topK_scan_vertex &v = (topK_scan_vertex &) graph.get_vertex(all_neighbors[i]);
+		// The max number of common neighbors should be smaller than all neighbors
+		// in the neighborhood, assuming there aren't duplicated edges.
+		tot_edges += min(v.get_degree(), num_neighbors * 2);
+	}
+	tot_edges /= 2;
+	return tot_edges;
+}
+
+void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
+{
+	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
+	if (num_local_edges == 0)
+		return;
+
+	size_t tot_edges = ::get_est_local_scan(prog.get_graph(), *this, vertex);
+	local_value.set_est_local(tot_edges);
+	if (tot_edges < max_scan.get())
+		return;
+
+	assert(!local_value.has_runtime_data());
+
+	runtime_data_t *local_data = create_runtime(prog.get_graph(), *this, vertex);
+	local_value.set_runtime_data(local_data);
+
+	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
+			edge_type::BOTH_EDGES);
+	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
+			edge_type::BOTH_EDGES);
+	size_t tmp = 0;
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		// Ignore loops
+		if (id != vertex.get_id())
+			tmp++;
+	}
+	local_data->local_scan += tmp;
+
+	if (local_data->neighbors->empty()) {
+		local_value.set_real_local(local_data->local_scan);
+		finding_triangles_end(prog, local_data);
+		destroy_runtime(local_data);
+		return;
+	}
+
+	std::vector<vertex_id_t> neighbors;
+	local_data->neighbors->get_neighbors(neighbors);
+	request_vertices(neighbors.data(), neighbors.size());
+}
+
+void topK_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &vertex)
+{
+	assert(local_value.has_runtime_data());
+	runtime_data_t *local_data = local_value.get_runtime_data();
+	local_data->num_joined++;
+	size_t ret = local_data->neighbors->count_edges(&vertex);
+	if (ret > 0)
+		local_data->local_scan += ret;
+
+	// If we have seen all required neighbors, we have complete
+	// the computation. We can release the memory now.
+	if (local_data->num_joined == local_data->neighbors->size()) {
+		local_value.set_real_local(local_data->local_scan);
+
+		finding_triangles_end(prog, local_data);
+		destroy_runtime(local_data);
+	}
+}
 
 void topK_scan_vertex::run(vertex_program &prog)
 {
@@ -220,72 +376,33 @@ void topK_scan_vertex::run(vertex_program &prog)
 	}
 }
 
-size_t topK_scan_vertex::get_est_local_scan(graph_engine &graph, const page_vertex *vertex)
+class vertex_size_scheduler: public vertex_scheduler
 {
-	// We have estimated the local scan of this vertex, return
-	// the estimated one
-	if (has_est_local())
-		return get_est_local_scan();
-
-	class skip_self {
-		vertex_id_t id;
-	public:
-		skip_self(vertex_id_t id) {
-			this->id = id;
-		}
-
-		bool operator()(vertex_id_t id) {
-			return this->id == id;
-		}
-	};
-
-	class merge_edge {
-	public:
-		vertex_id_t operator()(vertex_id_t e1, vertex_id_t e2) {
-			assert(e1 == e2);
-			return e1;
-		}
-	};
-
-	std::vector<vertex_id_t> all_neighbors(
-			vertex->get_num_edges(edge_type::BOTH_EDGES));
-	size_t num_neighbors = unique_merge(
-			vertex->get_neigh_begin(edge_type::IN_EDGE),
-			vertex->get_neigh_end(edge_type::IN_EDGE),
-			vertex->get_neigh_begin(edge_type::OUT_EDGE),
-			vertex->get_neigh_end(edge_type::OUT_EDGE),
-			skip_self(vertex->get_id()), merge_edge(),
-			all_neighbors.begin());
-	all_neighbors.resize(num_neighbors);
-
-	size_t tot_edges = get_degree();
-	for (size_t i = 0; i < all_neighbors.size(); i++) {
-		scan_vertex &v = (scan_vertex &) graph.get_vertex(all_neighbors[i]);
-		// The max number of common neighbors should be smaller than all neighbors
-		// in the neighborhood, assuming there aren't duplicated edges.
-		tot_edges += min(v.get_degree(), num_neighbors * 2);
+	graph_engine::ptr graph;
+public:
+	vertex_size_scheduler(graph_engine::ptr graph) {
+		this->graph = graph;
 	}
-	tot_edges /= 2;
-	local_value.set_est_local(tot_edges);
-	return tot_edges;
-}
+	void schedule(std::vector<vertex_id_t> &vertices);
+};
 
-void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
+void vertex_size_scheduler::schedule(std::vector<vertex_id_t> &ids)
 {
-	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
-	if (num_local_edges == 0)
-		return;
+	std::vector<compute_vertex *> vertices(ids.size());
+	for (size_t i = 0; i < ids.size(); i++)
+		vertices[i] = &graph->get_vertex(ids[i]);
+	class comp_size
+	{
+	public:
+		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
+			return ((const topK_scan_vertex *) v1)->get_degree()
+				> ((const topK_scan_vertex *) v2)->get_degree();
+		}
+	};
 
-	if (get_est_local_scan(prog.get_graph(), &vertex) < max_scan.get())
-		return;
-	scan_vertex::run_on_itself(prog, vertex);
-}
-
-void topK_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
-		runtime_data_t *data)
-{
-	topK_scan_vertex &topK_v = (topK_scan_vertex &) scan_v;
-	topK_v.finding_triangles_end(prog, data);
+	std::sort(vertices.begin(), vertices.end(), comp_size());
+	for (size_t i = 0; i < ids.size(); i++)
+		ids[i] = vertices[i]->get_id();
 }
 
 }
@@ -293,8 +410,6 @@ void topK_finding_triangles_end(vertex_program &prog, scan_vertex &scan_v,
 FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		FG_graph::ptr fg, size_t topK)
 {
-	finding_triangles_end = topK_finding_triangles_end;
-
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex>::create(
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
