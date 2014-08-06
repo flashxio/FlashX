@@ -34,6 +34,30 @@
 
 #include "scan_graph.h"
 
+class part_local_t
+{
+	int num_parts;
+	size_t local_scan;
+public:
+	part_local_t(size_t part) {
+		num_parts = 1;
+		local_scan = part;
+	}
+
+	void add_part(size_t part) {
+		num_parts++;
+		this->local_scan += part;
+	}
+
+	size_t get_local_scan() const {
+		return local_scan;
+	}
+
+	int get_num_parts() const {
+		return num_parts;
+	}
+};
+
 namespace {
 
 scan_stage_t scan_stage;
@@ -127,9 +151,45 @@ public:
 	}
 } known_scans;
 
+enum msg_t
+{
+	/*
+	 * When a vertex is vertically partitioned, its main compute vertex isn't
+	 * executed. However, we use the main compute vertex to store the number
+	 * of edges for a vertex. We need to use this message to notify the main
+	 * compute vertex of the number of edges.
+	 */
+	EDGE_MSG,
+	/*
+	 * Each part of a partitioned vertex sends a portion of its local scan.
+	 * The main vertex needs to collect all portitions to get the complete
+	 * local scan.
+	 */
+	PART_LOCAL_MSG,
+};
+
+class scan_msg: public vertex_message
+{
+	msg_t type;
+	size_t num;
+public:
+	scan_msg(msg_t type, size_t num): vertex_message(
+			sizeof(scan_msg), false) {
+		this->type = type;
+		this->num = num;
+	}
+
+	size_t get() const {
+		return num;
+	}
+
+	msg_t get_type() const {
+		return type;
+	}
+};
+
 class topK_scan_vertex: public compute_vertex
 {
-protected:
 	vsize_t degree;
 	multi_func_value local_value;
 public:
@@ -139,6 +199,10 @@ public:
 
 	vsize_t get_degree() const {
 		return degree;
+	}
+
+	bool has_part_local_scan() const {
+		return local_value.has_part_local();
 	}
 
 	bool has_local_scan() const {
@@ -169,29 +233,36 @@ public:
 
 	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
 	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
-
-	void run_on_message(vertex_program &prog, const vertex_message &msg) {
-	}
+	void run_on_message(vertex_program &prog, const vertex_message &msg1);
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
 		assert(get_id() == header.get_id());
 		degree = header.get_num_edges();
 	}
 
-	void finding_triangles_end(vertex_program &prog, runtime_data_t *data) {
-		if (max_scan.update(data->local_scan)) {
+	void finding_triangles_end(vertex_program &prog, size_t local_scan) {
+		if (max_scan.update(local_scan)) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
 			printf("%d: new max scan: %ld at v%u\n",
 					(int) time_diff(graph_start, curr),
-					data->local_scan, get_id());
+					local_scan, get_id());
 		}
-		known_scans.add(get_id(), data->local_scan);
+		known_scans.add(get_id(), local_scan);
 	}
 };
 
-runtime_data_t *create_runtime(graph_engine &graph, topK_scan_vertex &scan_v,
-		const page_vertex &pg_v)
+struct scan_runtime_data_t: public runtime_data_t
+{
+	vsize_t num_required;
+
+	scan_runtime_data_t(std::unique_ptr<neighbor_list> neighbors): runtime_data_t(
+			std::move(neighbors)) {
+		num_required = this->neighbors->size();
+	}
+};
+
+scan_runtime_data_t *create_runtime(graph_engine &graph, const page_vertex &pg_v)
 {
 	class skip_self {
 		vertex_id_t id;
@@ -232,11 +303,11 @@ runtime_data_t *create_runtime(graph_engine &graph, topK_scan_vertex &scan_v,
 			skip_self(graph, pg_v.get_id()), merge,
 			neighbors.begin());
 	neighbors.resize(num_neighbors);
-	return new runtime_data_t(std::unique_ptr<neighbor_list>(
+	return new scan_runtime_data_t(std::unique_ptr<neighbor_list>(
 				new neighbor_list(pg_v, neighbors)));
 }
 
-void destroy_runtime(runtime_data_t *data)
+void destroy_runtime(scan_runtime_data_t *data)
 {
 	delete data;
 }
@@ -291,6 +362,37 @@ size_t get_est_local_scan(graph_engine &graph, topK_scan_vertex &scan_v,
 	return tot_edges;
 }
 
+void topK_scan_vertex::run_on_message(vertex_program &prog,
+		const vertex_message &msg1)
+{
+	const scan_msg &msg = (const scan_msg &) msg1;
+	switch(msg.get_type()) {
+		case EDGE_MSG:
+			degree = msg.get();
+			break;
+		case PART_LOCAL_MSG:
+			if (!local_value.has_part_local()) {
+				local_value.set_part_local(new part_local_t(msg.get()));
+				assert(local_value.has_part_local());
+			}
+			else {
+				part_local_t *data = local_value.get_part_local();
+				data->add_part(msg.get());
+				// We send the local degree of the vertex and the edges
+				// counted in each partition in separately messages.
+				if (data->get_num_parts() == graph_conf.get_num_vparts() + 1) {
+					size_t local_scan = data->get_local_scan();
+					local_value.set_real_local(local_scan);
+					delete data;
+					finding_triangles_end(prog, local_scan);
+				}
+			}
+			break;
+		default:
+			assert(0);
+	}
+}
+
 void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
@@ -304,7 +406,7 @@ void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &ve
 
 	assert(!local_value.has_runtime_data());
 
-	runtime_data_t *local_data = create_runtime(prog.get_graph(), *this, vertex);
+	scan_runtime_data_t *local_data = create_runtime(prog.get_graph(), vertex);
 	local_value.set_runtime_data(local_data);
 
 	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
@@ -322,7 +424,7 @@ void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &ve
 
 	if (local_data->neighbors->empty()) {
 		local_value.set_real_local(local_data->local_scan);
-		finding_triangles_end(prog, local_data);
+		finding_triangles_end(prog, local_data->local_scan);
 		destroy_runtime(local_data);
 		return;
 	}
@@ -335,7 +437,8 @@ void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &ve
 void topK_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(local_value.has_runtime_data());
-	runtime_data_t *local_data = local_value.get_runtime_data();
+	scan_runtime_data_t *local_data
+		= (scan_runtime_data_t *) local_value.get_runtime_data();
 	local_data->num_joined++;
 	size_t ret = local_data->neighbors->count_edges(&vertex);
 	if (ret > 0)
@@ -346,7 +449,7 @@ void topK_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &
 	if (local_data->num_joined == local_data->neighbors->size()) {
 		local_value.set_real_local(local_data->local_scan);
 
-		finding_triangles_end(prog, local_data);
+		finding_triangles_end(prog, local_data->local_scan);
 		destroy_runtime(local_data);
 	}
 }
@@ -359,6 +462,7 @@ void topK_scan_vertex::run(vertex_program &prog)
 	}
 	else if (scan_stage == scan_stage_t::RUN) {
 		bool req_itself = false;
+		assert(!has_part_local_scan());
 		// If we have computed local scan on the vertex, skip the vertex.
 		if (has_local_scan())
 			return;
@@ -369,6 +473,140 @@ void topK_scan_vertex::run(vertex_program &prog)
 			// If this is the first time to compute on the vertex, we can still
 			// skip a lot of vertices with this condition.
 			size_t num_local_edges = get_degree();
+			req_itself = num_local_edges * num_local_edges >= max_scan.get();
+		}
+		if (req_itself)
+			request_vertices(&id, 1);
+	}
+}
+
+class part_topK_scan_vertex: public part_compute_vertex
+{
+	multi_func_value local_value;
+public:
+	part_topK_scan_vertex(vertex_id_t id, int part_id): part_compute_vertex(id,
+			part_id) {
+	}
+
+	void run(vertex_program &prog);
+
+	void run(vertex_program &prog, const page_vertex &vertex) {
+		assert(scan_stage == scan_stage_t::RUN);
+		if (vertex.get_id() == get_id())
+			run_on_itself(prog, vertex);
+		else
+			run_on_neighbor(prog, vertex);
+	}
+
+	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
+	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
+
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		assert(get_id() == header.get_id());
+		scan_msg msg(EDGE_MSG, header.get_num_edges());
+		prog.send_msg(get_id(), msg);
+	}
+};
+
+void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
+{
+	assert(!local_value.has_runtime_data());
+
+	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
+	if (num_local_edges == 0)
+		return;
+
+	topK_scan_vertex &self_v
+		= (topK_scan_vertex &) prog.get_graph().get_vertex(get_id());
+	size_t tot_edges = ::get_est_local_scan(prog.get_graph(), self_v, vertex);
+	local_value.set_est_local(tot_edges);
+	if (tot_edges < max_scan.get())
+		return;
+
+	scan_runtime_data_t *local_data = create_runtime(prog.get_graph(), vertex);
+	assert(!local_data->neighbors->empty());
+
+	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
+			edge_type::BOTH_EDGES);
+	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
+			edge_type::BOTH_EDGES);
+	size_t tmp = 0;
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		// Ignore loops
+		if (id != vertex.get_id())
+			tmp++;
+	}
+	assert(local_data->local_scan == 0);
+	if (get_part_id() == 0) {
+		scan_msg msg(PART_LOCAL_MSG, tmp);
+		prog.send_msg(get_id(), msg);
+	}
+
+	std::vector<vertex_id_t> neighbors;
+	local_data->neighbors->get_neighbors(neighbors);
+
+	size_t part_size
+		= ceil(((double) neighbors.size()) / graph_conf.get_num_vparts());
+	size_t start_off = std::min(part_size * get_part_id(), neighbors.size());
+	size_t end_off = std::min(part_size * (get_part_id() + 1), neighbors.size());
+	local_data->num_required = end_off - start_off;
+	if (start_off == end_off) {
+		// We need to make sure the main vertex gets enough messages.
+		scan_msg msg(PART_LOCAL_MSG, 0);
+		prog.send_msg(get_id(), msg);
+		destroy_runtime(local_data);
+		local_value.set_real_local(0);
+	}
+	else {
+		local_value.set_runtime_data(local_data);
+		request_vertices(neighbors.data() + start_off, end_off - start_off);
+	}
+}
+
+void part_topK_scan_vertex::run_on_neighbor(vertex_program &prog,
+		const page_vertex &vertex)
+{
+	assert(local_value.has_runtime_data());
+	scan_runtime_data_t *local_data
+		= (scan_runtime_data_t *) local_value.get_runtime_data();
+	local_data->num_joined++;
+	size_t ret = local_data->neighbors->count_edges(&vertex);
+	if (ret > 0)
+		local_data->local_scan += ret;
+
+	// If we have seen all required neighbors, we have complete
+	// the computation. We can release the memory now.
+	if (local_data->num_joined == local_data->num_required) {
+		size_t part_local_scan = local_data->local_scan;
+		scan_msg msg(PART_LOCAL_MSG, part_local_scan);
+		prog.send_msg(get_id(), msg);
+
+		destroy_runtime(local_data);
+		local_value.set_real_local(part_local_scan);
+	}
+}
+
+void part_topK_scan_vertex::run(vertex_program &prog)
+{
+	vertex_id_t id = get_id();
+	if (scan_stage == scan_stage_t::INIT) {
+		request_vertex_headers(&id, 1);
+	}
+	else if (scan_stage == scan_stage_t::RUN) {
+		bool req_itself = false;
+		// If we have computed local scan on the vertex, skip the vertex.
+		if (local_value.has_real_local())
+			return;
+		// If we have estimated the local scan, we should use the estimated one.
+		else if (local_value.has_est_local())
+			req_itself = local_value.get_est_local() > max_scan.get();
+		else {
+			topK_scan_vertex &self_v
+				= (topK_scan_vertex &) prog.get_graph().get_vertex(get_id());
+			// If this is the first time to compute on the vertex, we can still
+			// skip a lot of vertices with this condition.
+			size_t num_local_edges = self_v.get_degree();
 			req_itself = num_local_edges * num_local_edges >= max_scan.get();
 		}
 		if (req_itself)
@@ -420,8 +658,8 @@ void vertex_size_scheduler::schedule(std::vector<compute_vertex_pointer> &vertic
 FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		FG_graph::ptr fg, size_t topK)
 {
-	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex>::create(
-			fg->get_index_file());
+	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex,
+		part_topK_scan_vertex>::create(fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 

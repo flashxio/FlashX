@@ -364,10 +364,17 @@ enum multi_func_flags
 {
 	EST_LOCAL,
 	REAL_LOCAL,
-	POINTER,
+	RUNTIME_POINTER,
+	PART_LOCAL_POINTER,
 	NUM_FLAGS,
 };
 
+class part_local_t;
+
+/*
+ * A data structure of containing vertex state for computing local scan.
+ * This is Linux-specific.
+ */
 class multi_func_value
 {
 	static const int VALUE_BITS = sizeof(size_t) * 8 - NUM_FLAGS;
@@ -433,16 +440,34 @@ public:
 
 	void set_runtime_data(runtime_data_t *data) {
 		value = (size_t) data;
-		set_flag(POINTER);
+		set_flag(RUNTIME_POINTER);
 	}
 
 	bool has_runtime_data() const {
-		return has_flag(POINTER);
+		return has_flag(RUNTIME_POINTER);
 	}
 
 	runtime_data_t *get_runtime_data() const {
-		assert(has_flag(POINTER));
+		assert(has_flag(RUNTIME_POINTER));
 		return (runtime_data_t *) (value & FLAGS_MASK);
+	}
+
+	/*
+	 * Pointer to the partial local scan data.
+	 */
+
+	void set_part_local(part_local_t *data) {
+		value = (size_t) data;
+		set_flag(PART_LOCAL_POINTER);
+	}
+
+	bool has_part_local() const {
+		return has_flag(PART_LOCAL_POINTER);
+	}
+
+	part_local_t *get_part_local() const {
+		assert(has_flag(PART_LOCAL_POINTER));
+		return (part_local_t *) (value & FLAGS_MASK);
 	}
 };
 
