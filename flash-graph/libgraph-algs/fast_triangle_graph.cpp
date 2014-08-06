@@ -42,6 +42,11 @@ enum triangle_stage_t
 	RUN,
 };
 
+// The type of edges we will keep in memory.
+edge_type in_mem_edge_type = OUT_EDGE;
+// The type of edges from which we read neighbors.
+edge_type neigh_edge_type = IN_EDGE;
+
 /*
  * When a vertex is vertically partitioned, its main compute vertex isn't
  * executed. However, we use the main compute vertex to store the number
@@ -129,14 +134,14 @@ public:
 };
 
 runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &vertex,
-		size_t num_local_edges, std::vector<vertex_id_t> &out_edges,
+		size_t num_local_edges, std::vector<vertex_id_t> &neighbors,
 		vertex_id_t id_start, vertex_id_t id_end)
 {
-	std::vector<vertex_id_t> in_edges;
+	std::vector<vertex_id_t> in_mem_edges;
 
 	page_byte_array::seq_const_iterator<vertex_id_t> it
-		= vertex.get_neigh_seq_it(edge_type::OUT_EDGE, 0,
-				vertex.get_num_edges(edge_type::OUT_EDGE));
+		= vertex.get_neigh_seq_it(neigh_edge_type, 0,
+				vertex.get_num_edges(neigh_edge_type));
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		if (id < id_start || id >= id_end)
 			continue;
@@ -146,10 +151,10 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
-			out_edges.push_back(id);
+			neighbors.push_back(id);
 		}
 	} PAGE_FOREACH_END
-	if (out_edges.empty()) {
+	if (neighbors.empty()) {
 #ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
@@ -158,8 +163,8 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 		return NULL;
 	}
 
-	it = vertex.get_neigh_seq_it(edge_type::IN_EDGE, 0,
-			vertex.get_num_edges(edge_type::IN_EDGE));
+	it = vertex.get_neigh_seq_it(in_mem_edge_type, 0,
+			vertex.get_num_edges(in_mem_edge_type));
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		directed_triangle_vertex &neigh
 			= (directed_triangle_vertex &) prog.get_graph().get_vertex(id);
@@ -167,11 +172,11 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
-			in_edges.push_back(id);
+			in_mem_edges.push_back(id);
 		}
 	} PAGE_FOREACH_END
 
-	if (in_edges.empty()) {
+	if (in_mem_edges.empty()) {
 #ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
@@ -180,9 +185,9 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 		return NULL;
 	}
 
-	runtime_data_t *data = new runtime_data_t(in_edges.size(), 0);
-	data->edges = in_edges;
-	data->num_required = out_edges.size();
+	runtime_data_t *data = new runtime_data_t(in_mem_edges.size(), 0);
+	data->edges = in_mem_edges;
+	data->num_required = neighbors.size();
 	data->finalize_init();
 	return data;
 }
@@ -192,7 +197,7 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 {
 	size_t num_local_triangles = 0;
 
-	if (v.get_num_edges(edge_type::OUT_EDGE) == 0)
+	if (v.get_num_edges(neigh_edge_type) == 0)
 		return 0;
 
 	/*
@@ -210,11 +215,11 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 
 	if (data->edge_set.size() > 0
 			&& data->edges.size() > HASH_SEARCH_RATIO * v.get_num_edges(
-				edge_type::OUT_EDGE)) {
+				neigh_edge_type)) {
 		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v.get_neigh_begin(edge_type::OUT_EDGE);
+			= v.get_neigh_begin(neigh_edge_type);
 		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v.get_neigh_end(edge_type::OUT_EDGE);
+			= v.get_neigh_end(neigh_edge_type);
 		for (; other_it != other_end; ++other_it) {
 			vertex_id_t neigh_neighbor = *other_it;
 			runtime_data_t::edge_set_t::const_iterator it
@@ -230,12 +235,12 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 		}
 	}
 	// If the neighbor vertex has way more edges than this vertex.
-	else if (v.get_num_edges(edge_type::OUT_EDGE) / data->edges.size(
+	else if (v.get_num_edges(neigh_edge_type) / data->edges.size(
 				) > BIN_SEARCH_RATIO) {
 		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v.get_neigh_begin(edge_type::OUT_EDGE);
+			= v.get_neigh_begin(neigh_edge_type);
 		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v.get_neigh_end(edge_type::OUT_EDGE);
+			= v.get_neigh_end(neigh_edge_type);
 		for (int i = data->edges.size() - 1; i >= 0; i--) {
 			vertex_id_t this_neighbor = data->edges.at(i);
 			// We need to skip loops.
@@ -256,8 +261,8 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 		std::vector<int>::iterator count_it = data->triangles.begin();
 		std::vector<vertex_id_t>::const_iterator this_end = data->edges.end();
 		page_byte_array::seq_const_iterator<vertex_id_t> other_it
-			= v.get_neigh_seq_it(edge_type::OUT_EDGE, 0,
-					v.get_num_edges(edge_type::OUT_EDGE));
+			= v.get_neigh_seq_it(neigh_edge_type, 0,
+					v.get_num_edges(neigh_edge_type));
 		while (this_it != this_end && other_it.has_next()) {
 			vertex_id_t this_neighbor = *this_it;
 			vertex_id_t neigh_neighbor = other_it.curr();
@@ -306,9 +311,9 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 		return;
 	}
 
-	std::vector<vertex_id_t> selected_out_edges;
+	std::vector<vertex_id_t> selected_neighbors;
 	runtime_data_t *data = construct_runtime(prog, vertex,
-			this->get_num_edges(), selected_out_edges, 0,
+			this->get_num_edges(), selected_neighbors, 0,
 			prog.get_graph().get_max_vertex_id() + 1);
 	if (data == NULL)
 		return;
@@ -319,10 +324,10 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 	// TODO Maybe I should avoid that.
 	data->num_triangles += local_value.get_num_triangles();
 	local_value.set_runtime_data(data);
-	std::vector<directed_vertex_request> reqs(selected_out_edges.size());
-	for (size_t i = 0; i < selected_out_edges.size(); i++) {
-		vertex_id_t id = selected_out_edges[i];
-		reqs[i] = directed_vertex_request(id, edge_type::OUT_EDGE);
+	std::vector<directed_vertex_request> reqs(selected_neighbors.size());
+	for (size_t i = 0; i < selected_neighbors.size(); i++) {
+		vertex_id_t id = selected_neighbors[i];
+		reqs[i] = directed_vertex_request(id, neigh_edge_type);
 	}
 	request_partial_vertices(reqs.data(), reqs.size());
 }
@@ -441,9 +446,9 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 
 	directed_triangle_vertex &self_v
 		= (directed_triangle_vertex &) prog.get_graph().get_vertex(get_id());
-	std::vector<vertex_id_t> selected_out_edges;
+	std::vector<vertex_id_t> selected_neighbors;
 	runtime_data_t *data = construct_runtime(prog, vertex,
-			self_v.get_num_edges(), selected_out_edges, id_start, id_end);
+			self_v.get_num_edges(), selected_neighbors, id_start, id_end);
 	if (data == NULL)
 		return;
 
@@ -454,10 +459,10 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 	assert(local_value.get_num_triangles() == 0);
 	local_value.set_runtime_data(data);
 	std::vector<directed_vertex_request> reqs;
-	for (size_t i = 0; i < selected_out_edges.size(); i++) {
-		vertex_id_t id = selected_out_edges[i];
+	for (size_t i = 0; i < selected_neighbors.size(); i++) {
+		vertex_id_t id = selected_neighbors[i];
 		assert(id >= id_start && id < id_end);
-		reqs.push_back(directed_vertex_request(id, edge_type::OUT_EDGE));
+		reqs.push_back(directed_vertex_request(id, neigh_edge_type));
 	}
 	assert(!reqs.empty());
 	data->num_required = reqs.size();
