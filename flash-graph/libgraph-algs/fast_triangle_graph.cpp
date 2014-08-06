@@ -430,7 +430,7 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 	// It's possible that the request to a partial vertex can be completed
 	// immediately and run_on_neighbor is called in request_partial_vertices.
 	// TODO Maybe I should avoid that.
-	data->num_triangles += local_value.get_num_triangles();
+	assert(local_value.get_num_triangles() == 0);
 	local_value.set_runtime_data(data);
 	std::vector<directed_vertex_request> reqs;
 	for (size_t i = 0; i < selected_out_edges.size(); i++) {
@@ -439,7 +439,16 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 			reqs.push_back(directed_vertex_request(id, edge_type::OUT_EDGE));
 	}
 	data->num_required = reqs.size();
-	request_partial_vertices(reqs.data(), reqs.size());
+	if (reqs.size() > 0)
+		request_partial_vertices(reqs.data(), reqs.size());
+	else {
+		long ret = num_completed_vertices.inc(1);
+		if (ret % 100000 == 0)
+			printf("%ld completed vertices\n", ret);
+		size_t num_curr_triangles = data->num_triangles;
+		delete data;
+		local_value.set_num_triangles(num_curr_triangles);
+	}
 }
 
 void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
