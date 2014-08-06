@@ -150,9 +150,11 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 		}
 	} PAGE_FOREACH_END
 	if (out_edges.empty()) {
+#ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
+#endif
 		return NULL;
 	}
 
@@ -170,9 +172,11 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 	} PAGE_FOREACH_END
 
 	if (in_edges.empty()) {
+#ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
+#endif
 		return NULL;
 	}
 
@@ -284,17 +288,21 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 {
 	assert(!local_value.has_runtime_data());
 
+#ifdef DEBUG
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
+#endif
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
 	// either of them.
 	if (vertex.get_num_edges(edge_type::OUT_EDGE) == 0
 			|| vertex.get_num_edges(edge_type::IN_EDGE) == 0) {
+#ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
+#endif
 		return;
 	}
 
@@ -338,9 +346,11 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (data->num_joined == data->num_required) {
+#ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
+#endif
 
 		// Inform all neighbors in the in-edges.
 		for (size_t i = 0; i < data->triangles.size(); i++) {
@@ -405,17 +415,21 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 {
 	assert(!local_value.has_runtime_data());
 
+#ifdef DEBUG
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
 		printf("%ld working vertices\n", ret);
+#endif
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
 	// either of them.
 	if (vertex.get_num_edges(edge_type::OUT_EDGE) == 0
 			|| vertex.get_num_edges(edge_type::IN_EDGE) == 0) {
+#ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
+#endif
 		return;
 	}
 
@@ -469,9 +483,11 @@ void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (data->num_joined == data->num_required) {
+#ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
 			printf("%ld completed vertices\n", ret);
+#endif
 
 		// Inform all neighbors in the in-edges.
 		for (size_t i = 0; i < data->triangles.size(); i++) {
