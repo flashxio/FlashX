@@ -1,4 +1,4 @@
-There are two main components in the repository: FlashGraph and SAFS.
+There are two main components in the repository: FlashGraph and SAFS. NOTE: FlashGraph is still under heavy development.
 
 FlashGraph
 ===========
@@ -11,10 +11,10 @@ It enables us to process a billion-node graph in a single machine
 and has performance comparable to or exceed in-memory graph engines such as
 [PowerGraph](http://graphlab.org/).
 
-SAFSlib
+SAFS
 ========
 
-`SAFSlib` is an open-source library that provides a filesystem-like interface
+`SAFS` is an open-source library that provides a filesystem-like interface
 in the userspace to help users access a large SSD array in a
 [NUMA](http://en.wikipedia.org/wiki/Non-uniform_memory_access) machine.
 It is designed to eliminate overhead in the block subsystem in Linux, without modifying the kernel,
@@ -34,6 +34,8 @@ Documentation
 
 Publications
 ========
+
+Da Zheng, Disa Mhembere, Randal Burns, Alexander S. Szalay, FlashGraph: Processing Billion-Node Graphs on an Array of Commodity SSDs, arXiv:1408.0500
 
 Da Zheng, Randal Burns, Alexander S. Szalay, Toward Millions of File System IOPS on Low-Cost, Commodity Hardware, in Proceeding SC '13 Proceedings of the International Conference on High Performance Computing, Networking, Storage and Analysis
 
