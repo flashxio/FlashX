@@ -249,7 +249,7 @@ public:
      *  \param vertices An `std::vector` of vertex IDs defining the order in which
      *          vertices in the graph should be processed.
      */
-	virtual void schedule(std::vector<vertex_id_t> &vertices) = 0;
+	virtual void schedule(std::vector<compute_vertex_pointer> &vertices) = 0;
 };
 
 /**

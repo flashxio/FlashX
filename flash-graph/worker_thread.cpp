@@ -28,7 +28,7 @@
 #include "steal_state.h"
 #include "vertex_index_reader.h"
 
-void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
+static void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 {
 	size_t curr = 0;
 	for (size_t i = 0; i < vec.size(); i++) {
@@ -40,28 +40,29 @@ void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 	vec.resize(curr);
 }
 
-void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorted)
+/*
+ * This method split a list of vertices into a list of vertically
+ * partitioned vertices and a list of unpartitioned vertices.
+ * The input vertex list is sorted on vertex ID and will have
+ * the unpartitioned vertices.
+ */
+static void split_vertices(graph_index &index, int part_id,
+		std::vector<vertex_id_t> &vertices,
+		std::vector<vpart_vertex_pointer> &vpart_ps)
 {
-	pthread_spin_lock(&lock);
-	vertex_buf.clear();
-	vpart_ps.clear();
-	active_bitmap->clear();
-	std::vector<vertex_id_t> sorted_vertices(buf, buf + size);
-	if (!sorted)
-		std::sort(sorted_vertices.begin(), sorted_vertices.end());
-
+	assert(std::is_sorted(vertices.begin(), vertices.end()));
 	// Get the vertically partitioned vertices that are activated.
 	std::vector<vpart_vertex_pointer> vpart_ps_tmp(
-			index->get_num_vpart_vertices(part_id));
-	index->get_vpart_vertex_pointers(part_id, vpart_ps_tmp.data(),
+			index.get_num_vpart_vertices(part_id));
+	index.get_vpart_vertex_pointers(part_id, vpart_ps_tmp.data(),
 			vpart_ps_tmp.size());
-	for (size_t i = 0, j = 0; i < vpart_ps_tmp.size() && j < sorted_vertices.size();) {
+	for (size_t i = 0, j = 0; i < vpart_ps_tmp.size() && j < vertices.size();) {
 		vpart_vertex_pointer p = vpart_ps_tmp[i];
-		vertex_id_t id = sorted_vertices[j];
+		vertex_id_t id = vertices[j];
 		if (p.get_vertex_id() == id) {
 			i++;
+			vertices[j] = INVALID_VERTEX_ID;
 			j++;
-			sorted_vertices[j] = INVALID_VERTEX_ID;
 			vpart_ps.push_back(p);
 		}
 		else if (p.get_vertex_id() > id) {
@@ -71,12 +72,27 @@ void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorte
 			i++;
 		}
 	}
-	delete_val(sorted_vertices, INVALID_VERTEX_ID);
+	delete_val(vertices, INVALID_VERTEX_ID);
+}
+
+void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorted)
+{
+	pthread_spin_lock(&lock);
+	vertex_buf.clear();
+	vpart_ps.clear();
+	active_bitmap->clear();
+
+	// The unpartitioned vertices
+	std::vector<vertex_id_t> vertices;
+	vertices.insert(vertices.end(), buf, buf + size);
+	if (!sorted)
+		std::sort(vertices.begin(), vertices.end());
+	split_vertices(*index, part_id, vertices, vpart_ps);
 
 	// The buffer contains the vertex Ids and we only store the location of
 	// vertices in the local partition.
-	vertex_buf.resize(sorted_vertices.size());
-	index->get_vertices(sorted_vertices.data(), sorted_vertices.size(),
+	vertex_buf.resize(vertices.size());
+	index->get_vertices(vertices.data(), vertices.size(),
 			compute_vertex_pointer::conv(vertex_buf.data()));
 
 	buf_fetch_idx = scan_pointer(vertex_buf.size(), true);
@@ -210,20 +226,67 @@ int default_vertex_queue::fetch(compute_vertex_pointer vertices[], int num)
 	return num_fetched;
 }
 
+void customized_vertex_queue::get_compute_vertex_pointers(
+		const std::vector<vertex_id_t> &vertices,
+		std::vector<vpart_vertex_pointer> &vpart_ps)
+{
+	sorted_vertices.resize(vertices.size()
+			+ vpart_ps.size() * graph_conf.get_num_vparts());
+	// Get unpartitioned vertices.
+	index.get_vertices(vertices.data(), vertices.size(),
+			compute_vertex_pointer::conv(sorted_vertices.data()));
+	// Get vertically partitioned vertices.
+	for (int i = 0; i < graph_conf.get_num_vparts(); i++) {
+		off_t start = vertices.size() + i * vpart_ps.size();
+		off_t end = start + vpart_ps.size();
+		assert((size_t) end <= sorted_vertices.size());
+		index.get_vpart_vertices(part_id, i, vpart_ps.data(), vpart_ps.size(),
+				sorted_vertices.data() + start);
+	}
+}
+
+void customized_vertex_queue::init(const vertex_id_t buf[],
+		size_t size, bool sorted)
+{
+	pthread_spin_lock(&lock);
+	bool forward = true;
+	if (graph_conf.get_elevator_enabled())
+		forward = graph.get_curr_level() % 2;
+	this->fetch_idx = scan_pointer(size, forward);
+	sorted_vertices.clear();
+
+	// The unpartitioned vertices
+	std::vector<vertex_id_t> vertices;
+	// The vertically partitioned vertices.
+	std::vector<vpart_vertex_pointer> vpart_ps;
+	vertices.insert(vertices.end(), buf, buf + size);
+	if (!sorted)
+		std::sort(vertices.begin(), vertices.end());
+	split_vertices(index, part_id, vertices, vpart_ps);
+	get_compute_vertex_pointers(vertices, vpart_ps);
+	scheduler->schedule(sorted_vertices);
+	pthread_spin_unlock(&lock);
+}
+
 void customized_vertex_queue::init(worker_thread &t)
 {
 	pthread_spin_lock(&lock);
 	sorted_vertices.clear();
 	std::vector<vertex_id_t> local_ids;
 	t.next_activated_vertices->get_reset_set_bits(local_ids);
+
 	// the bitmap only contains the locations of vertices in the bitmap.
 	// We have to translate them back to vertex ids.
-	sorted_vertices.resize(local_ids.size());
+	std::vector<vertex_id_t> vertices(local_ids.size());
 	for (size_t i = 0; i < local_ids.size(); i++) {
 		vertex_id_t id;
 		graph.get_partitioner()->loc2map(part_id, local_ids[i], id);
-		sorted_vertices[i] = id;
+		vertices[i] = id;
 	}
+	std::vector<vertex_id_t>().swap(local_ids);
+	std::vector<vpart_vertex_pointer> vpart_ps;
+	split_vertices(index, part_id, vertices, vpart_ps);
+	get_compute_vertex_pointers(vertices, vpart_ps);
 
 	scheduler->schedule(sorted_vertices);
 	bool forward = true;

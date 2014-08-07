@@ -108,50 +108,37 @@ public:
 class customized_vertex_queue: public active_vertex_queue
 {
 	pthread_spinlock_t lock;
-	std::vector<vertex_id_t> sorted_vertices;
+	std::vector<compute_vertex_pointer> sorted_vertices;
 	scan_pointer fetch_idx;
 	vertex_scheduler::ptr scheduler;
 	graph_engine &graph;
 	graph_index &index;
 	int part_id;
+
+	void get_compute_vertex_pointers(const std::vector<vertex_id_t> &vertices,
+		std::vector<vpart_vertex_pointer> &vpart_ps);
 public:
 	customized_vertex_queue(graph_engine &_graph, vertex_scheduler::ptr scheduler,
 			int part_id): fetch_idx(0, true), graph(_graph), index(
 				*_graph.get_graph_index()) {
-		assert(graph_conf.get_num_vparts() == 1);
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->scheduler = scheduler;
 		this->part_id = part_id;
 	}
 
-	void init(const vertex_id_t buf[], size_t size, bool sorted) {
-		pthread_spin_lock(&lock);
-		bool forward = true;
-		if (graph_conf.get_elevator_enabled())
-			forward = graph.get_curr_level() % 2;
-		this->fetch_idx = scan_pointer(size, forward);
-		sorted_vertices.clear();
-		sorted_vertices.insert(sorted_vertices.end(), buf, buf + size);
-		if (!sorted)
-			scheduler->schedule(sorted_vertices);
-		pthread_spin_unlock(&lock);
-	}
-
+	void init(const vertex_id_t buf[], size_t size, bool sorted);
 	void init(worker_thread &);
 
 	int fetch(compute_vertex_pointer vertices[], int num) {
 		pthread_spin_lock(&lock);
 		int num_fetches = min(num, fetch_idx.get_num_remaining());
-		stack_array<vertex_id_t, 128> buf(num_fetches);
 		if (num_fetches > 0) {
 			size_t curr_loc = fetch_idx.get_curr_loc();
 			size_t new_loc = fetch_idx.move(num_fetches);
-			memcpy(buf.data(), sorted_vertices.data() + min(curr_loc, new_loc),
-					num_fetches * sizeof(vertex_id_t));
+			memcpy(vertices, sorted_vertices.data() + min(curr_loc, new_loc),
+					num_fetches * sizeof(vertices[0]));
 		}
 		pthread_spin_unlock(&lock);
-		index.get_vertices(buf.data(), num_fetches,
-				compute_vertex_pointer::conv(vertices));
 		return num_fetches;
 	}
 

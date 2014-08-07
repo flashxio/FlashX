@@ -383,26 +383,36 @@ public:
 	vertex_size_scheduler(graph_engine::ptr graph) {
 		this->graph = graph;
 	}
-	void schedule(std::vector<vertex_id_t> &vertices);
+	void schedule(std::vector<compute_vertex_pointer> &vertices);
 };
 
-void vertex_size_scheduler::schedule(std::vector<vertex_id_t> &ids)
+void vertex_size_scheduler::schedule(std::vector<compute_vertex_pointer> &vertices)
 {
-	std::vector<compute_vertex *> vertices(ids.size());
-	for (size_t i = 0; i < ids.size(); i++)
-		vertices[i] = &graph->get_vertex(ids[i]);
 	class comp_size
 	{
+		graph_engine *graph;
+
+		vsize_t get_degree(compute_vertex_pointer v) const {
+			if (!v.is_part())
+				return ((topK_scan_vertex *) v.get())->get_degree();
+			else {
+				part_topK_scan_vertex *part_v = (part_topK_scan_vertex *) v.get();
+				topK_scan_vertex &scan_v
+					= (topK_scan_vertex &) graph->get_vertex(part_v->get_id());
+				return scan_v.get_degree();
+			}
+		}
 	public:
-		bool operator()(const compute_vertex *v1, const compute_vertex *v2) {
-			return ((const topK_scan_vertex *) v1)->get_degree()
-				> ((const topK_scan_vertex *) v2)->get_degree();
+		comp_size(graph_engine *graph) {
+			this->graph = graph;
+		}
+
+		bool operator()(compute_vertex_pointer v1, compute_vertex_pointer v2) {
+			return get_degree(v1) > get_degree(v2);
 		}
 	};
 
-	std::sort(vertices.begin(), vertices.end(), comp_size());
-	for (size_t i = 0; i < ids.size(); i++)
-		ids[i] = vertices[i]->get_id();
+	std::sort(vertices.begin(), vertices.end(), comp_size(graph.get()));
 }
 
 }
