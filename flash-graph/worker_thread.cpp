@@ -235,6 +235,8 @@ void customized_vertex_queue::get_compute_vertex_pointers(
 	// Get unpartitioned vertices.
 	index.get_vertices(vertices.data(), vertices.size(),
 			compute_vertex_pointer::conv(sorted_vertices.data()));
+	if (graph_conf.get_num_vparts() <= 1)
+		return;
 	// Get vertically partitioned vertices.
 	for (int i = 0; i < graph_conf.get_num_vparts(); i++) {
 		off_t start = vertices.size() + i * vpart_ps.size();
@@ -258,7 +260,8 @@ void customized_vertex_queue::init(const vertex_id_t buf[],
 	vertices.insert(vertices.end(), buf, buf + size);
 	if (!sorted)
 		std::sort(vertices.begin(), vertices.end());
-	split_vertices(index, part_id, vertices, vpart_ps);
+	if (graph_conf.get_num_vparts() > 1)
+		split_vertices(index, part_id, vertices, vpart_ps);
 	get_compute_vertex_pointers(vertices, vpart_ps);
 
 	scheduler->schedule(sorted_vertices);
@@ -286,7 +289,8 @@ void customized_vertex_queue::init(worker_thread &t)
 	}
 	std::vector<vertex_id_t>().swap(local_ids);
 	std::vector<vpart_vertex_pointer> vpart_ps;
-	split_vertices(index, part_id, vertices, vpart_ps);
+	if (graph_conf.get_num_vparts() > 1)
+		split_vertices(index, part_id, vertices, vpart_ps);
 	get_compute_vertex_pointers(vertices, vpart_ps);
 
 	scheduler->schedule(sorted_vertices);
