@@ -578,10 +578,10 @@ int worker_thread::steal_activated_vertices(compute_vertex_pointer vertices[], i
 		return 0;
 	// We want to steal as much as possible, but we don't want
 	// to overloaded by the stolen vertices.
-	size_t num_steal = max(1,
+	size_t num_steal = std::max(1UL,
 			curr_activated_vertices->get_num_vertices() / graph->get_num_threads());
 	num = curr_activated_vertices->fetch(vertices,
-			min(num, num_steal));
+			std::min((size_t) num, num_steal));
 	if (num > 0)
 		// If the thread steals vertices from another thread successfully,
 		// it needs to notify the thread of the stolen vertices.
