@@ -249,10 +249,6 @@ void customized_vertex_queue::init(const vertex_id_t buf[],
 		size_t size, bool sorted)
 {
 	pthread_spin_lock(&lock);
-	bool forward = true;
-	if (graph_conf.get_elevator_enabled())
-		forward = graph.get_curr_level() % 2;
-	this->fetch_idx = scan_pointer(size, forward);
 	sorted_vertices.clear();
 
 	// The unpartitioned vertices
@@ -264,7 +260,12 @@ void customized_vertex_queue::init(const vertex_id_t buf[],
 		std::sort(vertices.begin(), vertices.end());
 	split_vertices(index, part_id, vertices, vpart_ps);
 	get_compute_vertex_pointers(vertices, vpart_ps);
+
 	scheduler->schedule(sorted_vertices);
+	bool forward = true;
+	if (graph_conf.get_elevator_enabled())
+		forward = graph.get_curr_level() % 2;
+	this->fetch_idx = scan_pointer(sorted_vertices.size(), forward);
 	pthread_spin_unlock(&lock);
 }
 
