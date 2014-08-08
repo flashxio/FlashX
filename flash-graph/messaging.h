@@ -295,7 +295,8 @@ protected:
 	unsigned activate: 1;
 	// This is a flag to indicate that it's a system's activation message.
 	unsigned activation_msg: 1;
-	unsigned size: 29;
+	unsigned flush: 1;
+	unsigned size: 28;
 	union {
 		vertex_id_t dest;
 		int num_dests;
@@ -311,6 +312,7 @@ public:
 		this->activate = activate;
 		this->multicast = 0;
 		this->activation_msg = 0;
+		this->flush = 0;
 		this->u.dest = -1;
 		this->size = size;
 		assert(size % 4 == 0);
@@ -330,6 +332,14 @@ public:
 
 	bool is_multicast() const {
 		return multicast;
+	}
+
+	bool is_flush() const {
+		return flush;
+	}
+
+	void set_flush(bool flush) {
+		this->flush = flush;
 	}
 
 	local_vid_t get_dest() const {

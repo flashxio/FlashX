@@ -203,6 +203,7 @@ class worker_thread: public thread
 	 */
 
 	std::shared_ptr<slab_allocator> msg_alloc;
+	std::shared_ptr<slab_allocator> flush_msg_alloc;
 	std::unique_ptr<message_processor> msg_processor;
 	std::unique_ptr<load_balancer> balancer;
 

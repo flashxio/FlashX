@@ -28,6 +28,12 @@
 #include "steal_state.h"
 #include "vertex_index_reader.h"
 
+/**
+ * The size of a message buffer used to pass vertex messages to other threads.
+ */
+const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
+const int MAX_FLUSH_MSG_SIZE = 256;
+
 static void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 {
 	size_t curr = 0;
@@ -325,6 +331,10 @@ worker_thread::worker_thread(graph_engine *graph,
 	msg_alloc = std::shared_ptr<slab_allocator>(new slab_allocator("graph-message-allocator",
 			GRAPH_MSG_BUF_SIZE, 1024 * 1024, INT_MAX, get_node_id(),
 			false /* init */, false /* pinned */, 5 /* local_buf_size*/));
+	flush_msg_alloc = std::shared_ptr<slab_allocator>(new slab_allocator(
+				"graph-message-allocator", MAX_FLUSH_MSG_SIZE, 1024 * 1024,
+				INT_MAX, get_node_id(), false /* init */, false /* pinned */,
+				20 /* local_buf_size*/));
 	msg_processor = std::unique_ptr<message_processor>(new message_processor(
 				*graph, *this, msg_alloc));
 	balancer = std::unique_ptr<load_balancer>(new load_balancer(*graph, *this));
@@ -438,8 +448,8 @@ void worker_thread::init()
 
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
 {
-	vprogram->init_messaging(threads, msg_alloc);
-	vpart_vprogram->init_messaging(threads, msg_alloc);
+	vprogram->init_messaging(threads, msg_alloc, flush_msg_alloc);
+	vpart_vprogram->init_messaging(threads, msg_alloc, flush_msg_alloc);
 }
 
 /**

@@ -540,6 +540,7 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 	assert(local_data->local_scan == 0);
 	if (get_part_id() == 0) {
 		scan_msg msg(PART_LOCAL_MSG, tmp);
+		msg.set_flush(true);
 		prog.send_msg(get_id(), msg);
 	}
 
@@ -554,6 +555,7 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 	if (start_off == end_off) {
 		// We need to make sure the main vertex gets enough messages.
 		scan_msg msg(PART_LOCAL_MSG, 0);
+		msg.set_flush(true);
 		prog.send_msg(get_id(), msg);
 		destroy_runtime(local_data);
 		local_value.set_real_local(0);
@@ -580,6 +582,7 @@ void part_topK_scan_vertex::run_on_neighbor(vertex_program &prog,
 	if (local_data->num_joined == local_data->num_required) {
 		size_t part_local_scan = local_data->local_scan;
 		scan_msg msg(PART_LOCAL_MSG, part_local_scan);
+		msg.set_flush(true);
 		prog.send_msg(get_id(), msg);
 
 		destroy_runtime(local_data);

@@ -51,6 +51,7 @@ class vertex_program
 	// There are n senders, n is the total number of threads used by
 	// the graph engine.
 	std::vector<simple_msg_sender *> msg_senders;
+	std::vector<simple_msg_sender *> flush_msg_senders;
 	std::vector<multicast_msg_sender *> multicast_senders;
 	std::vector<multicast_msg_sender *> activate_senders;
     
@@ -60,6 +61,10 @@ class vertex_program
 
 	multicast_msg_sender &get_multicast_sender(int thread_id) const {
 		return *multicast_senders[thread_id];
+	}
+
+	simple_msg_sender &get_flush_msg_sender(int thread_id) const {
+		return *flush_msg_senders[thread_id];
 	}
 
 	simple_msg_sender &get_msg_sender(int thread_id) const {
@@ -84,7 +89,8 @@ public:
     
     /* Internal */
 	void init_messaging(const std::vector<worker_thread *> &threads,
-			std::shared_ptr<slab_allocator> msg_alloc);
+			std::shared_ptr<slab_allocator> msg_alloc,
+			std::shared_ptr<slab_allocator> flush_msg_alloc);
 
 	/**
 	 * \brief This is a pre-run before users get any information of adjacency list

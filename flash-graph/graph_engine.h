@@ -39,11 +39,6 @@
 #include "vertex_request.h"
 #include "vertex_program.h"
 
-/**
- * The size of a message buffer used to pass vertex messages to other threads.
- */
-const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
-
 class graph_engine;
 class vertex_request;
 

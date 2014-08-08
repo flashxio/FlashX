@@ -28,6 +28,8 @@ vertex_program::~vertex_program()
 {
 	for (unsigned i = 0; i < msg_senders.size(); i++)
 		simple_msg_sender::destroy(msg_senders[i]);
+	for (unsigned i = 0; i < flush_msg_senders.size(); i++)
+		simple_msg_sender::destroy(flush_msg_senders[i]);
 	for (unsigned i = 0; i < multicast_senders.size(); i++)
 		multicast_msg_sender::destroy(multicast_senders[i]);
 	for (unsigned i = 0; i < activate_senders.size(); i++)
@@ -35,7 +37,8 @@ vertex_program::~vertex_program()
 }
 
 void vertex_program::init_messaging(const std::vector<worker_thread *> &threads,
-		std::shared_ptr<slab_allocator> msg_alloc)
+		std::shared_ptr<slab_allocator> msg_alloc,
+		std::shared_ptr<slab_allocator> flush_msg_alloc)
 {
 	vid_bufs = std::unique_ptr<std::vector<local_vid_t>[]>(
 			new std::vector<local_vid_t>[graph->get_num_threads()]);
@@ -45,6 +48,8 @@ void vertex_program::init_messaging(const std::vector<worker_thread *> &threads,
 	for (unsigned i = 0; i < threads.size(); i++) {
 		msg_senders.push_back(simple_msg_sender::create(t->get_node_id(),
 					msg_alloc, &threads[i]->get_msg_processor().get_msg_queue()));
+		flush_msg_senders.push_back(simple_msg_sender::create(t->get_node_id(),
+					flush_msg_alloc, &threads[i]->get_msg_processor().get_msg_queue()));
 		multicast_senders.push_back(multicast_msg_sender::create(msg_alloc,
 					&threads[i]->get_msg_processor().get_msg_queue()));
 		multicast_msg_sender *activate_sender = multicast_msg_sender::create(
@@ -60,6 +65,7 @@ void vertex_program::init_messaging(const std::vector<worker_thread *> &threads,
 void vertex_program::multicast_msg(vertex_id_t ids[], int num,
 		vertex_message &msg)
 {
+	assert(!msg.is_flush());
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	assert(t == curr);
 
@@ -89,6 +95,7 @@ void vertex_program::multicast_msg(vertex_id_t ids[], int num,
 
 void vertex_program::multicast_msg(edge_seq_iterator &it, vertex_message &msg)
 {
+	assert(!msg.is_flush());
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	assert(curr == t);
 
@@ -128,9 +135,22 @@ void vertex_program::send_msg(vertex_id_t dest, vertex_message &msg)
 	// the ID of the vertex.
 	off_t local_id;
 	graph->get_partitioner()->map2loc(dest, part_id, local_id);
-	simple_msg_sender &sender = get_msg_sender(part_id);
 	msg.set_dest(local_vid_t(local_id));
-	sender.send_cached(msg);
+	if (msg.is_flush()) {
+		// Let's flush all messages sent by the thread before sending
+		// the flush message.
+		get_activate_sender(part_id).flush();
+		get_multicast_sender(part_id).flush();
+		get_msg_sender(part_id).flush();
+
+		simple_msg_sender &sender = get_flush_msg_sender(part_id);
+		sender.send_cached(msg);
+		sender.flush();
+	}
+	else {
+		simple_msg_sender &sender = get_msg_sender(part_id);
+		sender.send_cached(msg);
+	}
 }
 
 void vertex_program::activate_vertices(vertex_id_t ids[], int num)
