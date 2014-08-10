@@ -58,7 +58,7 @@ public:
 
 	size_t count_edges(const page_vertex *v);
 
-	off_t find_idx(vertex_id_t id) {
+	off_t find_idx(vertex_id_t id) const {
 		edge_set_t::const_iterator it = neighbor_set->find(id);
 		if (it == neighbor_set->end())
 			return -1;
@@ -69,7 +69,7 @@ public:
 		}
 	}
 
-	attributed_neighbor find(vertex_id_t id) {
+	attributed_neighbor find(vertex_id_t id) const {
 		edge_set_t::const_iterator it = neighbor_set->find(id);
 		if (it == neighbor_set->end())
 			return attributed_neighbor();
@@ -80,7 +80,7 @@ public:
 		}
 	}
 
-	attributed_neighbor at(size_t idx) {
+	attributed_neighbor at(size_t idx) const {
 		return attributed_neighbor(id_list[idx], num_dup_list[idx]);
 	}
 };
