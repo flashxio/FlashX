@@ -226,6 +226,18 @@ void compute_directed_vertex::request_partial_vertices(
 	compute->request_partial_vertices(reqs, num);
 }
 
+void part_compute_vertex::broadcast_vpart(const vertex_message &msg)
+{
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	std::vector<compute_vertex_pointer> ps(graph_conf.get_num_vparts());
+	int ret = curr->get_graph().get_graph_index()->get_vpart_vertices(get_id(),
+			ps.data(), ps.size());
+	for (size_t i = 0; i < ret; i++) {
+		compute_vertex_pointer v = ps[i];
+		curr->get_vertex_program(true).run_on_message(*v, msg);
+	}
+}
+
 #if 0
 void compute_ts_vertex::request_partial_vertices(ts_vertex_request reqs[],
 		size_t num)

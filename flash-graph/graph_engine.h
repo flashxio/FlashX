@@ -120,6 +120,8 @@ public:
 		return part_id;
 	}
 
+	void broadcast_vpart(const vertex_message &msg);
+
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
 		assert(0);
 	}

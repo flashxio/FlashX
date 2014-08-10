@@ -20,6 +20,7 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <boost/foreach.hpp>
 
 #include "vertex.h"
@@ -149,6 +150,8 @@ public:
 	virtual size_t get_vpart_vertices(int hpart_id, int vpart_id,
 			vpart_vertex_pointer ps[], int num,
 			compute_vertex_pointer vertices[]) const = 0;
+	virtual size_t get_vpart_vertices(vertex_id_t id,
+			compute_vertex_pointer vertices[], int num) const = 0;
 
 	virtual vertex_id_t get_max_vertex_id() const = 0;
 
@@ -171,6 +174,14 @@ template<class vertex_type, class part_vertex_type>
 class graph_local_partition
 {
 	typedef std::pair<size_t, part_vertex_type *> part_vertex_array;
+
+	struct vpart_vertex_comp
+	{
+		bool operator()(const part_vertex_type &v1,
+				const vertex_id_t v2) const {
+			return v1.get_id() < v2;
+		}
+	};
 
 	int node_id;
 	int part_id;
@@ -225,6 +236,7 @@ public:
 	 * the horizontal partition.
 	 */
 	void init_vparts(int num_parts, std::vector<vertex_id_t> &ids) {
+		assert(std::is_sorted(ids.begin(), ids.end()));
 		assert(num_parts > 1);
 		part_vertex_arrs.resize(num_parts);
 		for (int i = 0; i < num_parts; i++) {
@@ -269,6 +281,23 @@ public:
 		for (int i = 0; i < act_num; i++)
 			vertices[i] = compute_vertex_pointer(
 					&part_vertex_arrs[vpart_id].second[ps[i].get_off()], true);
+		return act_num;
+	}
+
+	size_t get_vpart_vertices(vertex_id_t id,
+			compute_vertex_pointer vertices[], int num) const {
+		assert(!part_vertex_arrs.empty());
+		// All vpart vertices are sorted on vertex Id.
+		part_vertex_type *entry = std::lower_bound(part_vertex_arrs[0].second,
+				part_vertex_arrs[0].second + part_vertex_arrs[0].first, id,
+				vpart_vertex_comp());
+		if (entry == part_vertex_arrs[0].second + part_vertex_arrs[0].first)
+			return 0;
+		off_t off = entry - part_vertex_arrs[0].second;
+		int act_num = std::min((size_t) num, part_vertex_arrs.size());
+		for (int i = 0; i < act_num; i++)
+			vertices[i] = compute_vertex_pointer(
+					part_vertex_arrs[i].second + off, true);
 		return act_num;
 	}
 
@@ -420,6 +449,12 @@ public:
 			compute_vertex_pointer vertices[]) const {
 		return index_arr[hpart_id]->get_vpart_vertices(vpart_id, ps, num,
 				vertices);
+	}
+
+	virtual size_t get_vpart_vertices(vertex_id_t id,
+			compute_vertex_pointer vertices[], int num) const {
+		int part_id = partitioner->map(id);
+		return index_arr[part_id]->get_vpart_vertices(id, vertices, num);
 	}
 
 	virtual vertex_id_t get_max_vertex_id() const {
