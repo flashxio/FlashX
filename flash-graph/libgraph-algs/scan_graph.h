@@ -341,18 +341,18 @@ public:
 struct runtime_data_t
 {
 	// All neighbors (in both in-edges and out-edges)
-	std::unique_ptr<neighbor_list> neighbors;
+	std::shared_ptr<neighbor_list> neighbors;
 	// The number of vertices that have joined with the vertex.
 	unsigned num_joined;
 	size_t local_scan;
 
-	runtime_data_t(std::unique_ptr<neighbor_list> neighbors) {
+	runtime_data_t(std::shared_ptr<neighbor_list> neighbors) {
 		this->neighbors = std::move(neighbors);
 		num_joined = 0;
 		local_scan = 0;
 	}
 
-	runtime_data_t(std::unique_ptr<neighbor_list> neighbors,
+	runtime_data_t(std::shared_ptr<neighbor_list> neighbors,
 			size_t curr_local_scan) {
 		this->neighbors = std::move(neighbors);
 		num_joined = 0;

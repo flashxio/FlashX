@@ -151,7 +151,7 @@ public:
 	}
 } known_scans;
 
-enum msg_t
+enum scan_msg_type
 {
 	/*
 	 * When a vertex is vertically partitioned, its main compute vertex isn't
@@ -170,10 +170,10 @@ enum msg_t
 
 class scan_msg: public vertex_message
 {
-	msg_t type;
+	scan_msg_type type;
 	size_t num;
 public:
-	scan_msg(msg_t type, size_t num): vertex_message(
+	scan_msg(scan_msg_type type, size_t num): vertex_message(
 			sizeof(scan_msg), false) {
 		this->type = type;
 		this->num = num;
@@ -183,7 +183,33 @@ public:
 		return num;
 	}
 
-	msg_t get_type() const {
+	scan_msg_type get_type() const {
+		return type;
+	}
+};
+
+enum part_scan_type
+{
+	EST_LOCAL,
+	NEIGH,
+};
+
+class part_scan_msg: public vertex_message
+{
+	part_scan_type type;
+	size_t est_local;
+public:
+	part_scan_msg(part_scan_type type, size_t est_local): vertex_message(
+			sizeof(part_scan_msg), false) {
+		this->est_local = est_local;
+		this->type = type;
+	}
+
+	size_t get() const {
+		return est_local;
+	}
+
+	part_scan_type get_type() const {
 		return type;
 	}
 };
@@ -256,8 +282,8 @@ struct scan_runtime_data_t: public runtime_data_t
 {
 	vsize_t num_required;
 
-	scan_runtime_data_t(std::unique_ptr<neighbor_list> neighbors): runtime_data_t(
-			std::move(neighbors)) {
+	scan_runtime_data_t(std::shared_ptr<neighbor_list> neighbors): runtime_data_t(
+			neighbors) {
 		num_required = this->neighbors->size();
 	}
 };
@@ -303,7 +329,7 @@ scan_runtime_data_t *create_runtime(graph_engine &graph, const page_vertex &pg_v
 			skip_self(graph, pg_v.get_id()), merge,
 			neighbors.begin());
 	neighbors.resize(num_neighbors);
-	return new scan_runtime_data_t(std::unique_ptr<neighbor_list>(
+	return new scan_runtime_data_t(std::shared_ptr<neighbor_list>(
 				new neighbor_list(pg_v, neighbors)));
 }
 
@@ -482,10 +508,17 @@ void topK_scan_vertex::run(vertex_program &prog)
 
 class part_topK_scan_vertex: public part_compute_vertex
 {
-	multi_func_value local_value;
+	size_t est_local;
+	size_t part_local;
+	scan_runtime_data_t *local_data;
+	pthread_spinlock_t lock;
 public:
 	part_topK_scan_vertex(vertex_id_t id, int part_id): part_compute_vertex(id,
 			part_id) {
+		est_local = 0;
+		part_local = 0;
+		local_data = NULL;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	void run(vertex_program &prog);
@@ -506,25 +539,56 @@ public:
 		scan_msg msg(EDGE_MSG, header.get_num_edges());
 		prog.send_msg(get_id(), msg);
 	}
+
+	void run_on_message(vertex_program &prog, const vertex_message &msg1);
 };
+
+void part_topK_scan_vertex::run_on_message(vertex_program &prog,
+		const vertex_message &msg1)
+{
+	const part_scan_msg &msg = (const part_scan_msg &) msg1;
+	pthread_spin_lock(&lock);
+	switch (msg.get_type()) {
+		case part_scan_type::EST_LOCAL:
+			est_local = msg.get();
+			break;
+		case part_scan_type::NEIGH:
+			if (local_data == NULL) {
+				scan_runtime_data_t *other_data = (scan_runtime_data_t *) msg.get();
+				local_data = new scan_runtime_data_t(std::shared_ptr<neighbor_list>(
+							other_data->neighbors));
+			}
+			break;
+		default:
+			assert(0);
+	}
+	pthread_spin_unlock(&lock);
+}
 
 void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &vertex)
 {
-	assert(!local_value.has_runtime_data());
-
 	size_t num_local_edges = vertex.get_num_edges(edge_type::BOTH_EDGES);
 	if (num_local_edges == 0)
 		return;
 
 	topK_scan_vertex &self_v
 		= (topK_scan_vertex &) prog.get_graph().get_vertex(get_id());
-	size_t tot_edges = ::get_est_local_scan(prog.get_graph(), self_v, vertex);
-	local_value.set_est_local(tot_edges);
-	if (tot_edges < max_scan.get())
+	pthread_spin_lock(&lock);
+	if (est_local == 0)
+		est_local = ::get_est_local_scan(prog.get_graph(), self_v, vertex);
+	pthread_spin_unlock(&lock);
+	broadcast_vpart(part_scan_msg(part_scan_type::EST_LOCAL, est_local));
+	if (est_local < max_scan.get())
 		return;
 
-	scan_runtime_data_t *local_data = create_runtime(prog.get_graph(), vertex);
+	pthread_spin_lock(&lock);
+	if (local_data == NULL)
+		local_data = create_runtime(prog.get_graph(), vertex);
+	pthread_spin_unlock(&lock);
 	assert(!local_data->neighbors->empty());
+	// TODO this is absolute hacking.
+	// There is no guarantee that the message will be delivered.
+	broadcast_vpart(part_scan_msg(part_scan_type::NEIGH, (size_t) local_data));
 
 	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
 			edge_type::BOTH_EDGES);
@@ -558,10 +622,8 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 		msg.set_flush(true);
 		prog.send_msg(get_id(), msg);
 		destroy_runtime(local_data);
-		local_value.set_real_local(0);
 	}
 	else {
-		local_value.set_runtime_data(local_data);
 		request_vertices(neighbors.data() + start_off, end_off - start_off);
 	}
 }
@@ -569,9 +631,7 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 void part_topK_scan_vertex::run_on_neighbor(vertex_program &prog,
 		const page_vertex &vertex)
 {
-	assert(local_value.has_runtime_data());
-	scan_runtime_data_t *local_data
-		= (scan_runtime_data_t *) local_value.get_runtime_data();
+	assert(local_data);
 	local_data->num_joined++;
 	size_t ret = local_data->neighbors->count_edges(&vertex);
 	if (ret > 0)
@@ -580,13 +640,11 @@ void part_topK_scan_vertex::run_on_neighbor(vertex_program &prog,
 	// If we have seen all required neighbors, we have complete
 	// the computation. We can release the memory now.
 	if (local_data->num_joined == local_data->num_required) {
-		size_t part_local_scan = local_data->local_scan;
-		scan_msg msg(PART_LOCAL_MSG, part_local_scan);
+		part_local = local_data->local_scan;
+		scan_msg msg(PART_LOCAL_MSG, part_local);
 		msg.set_flush(true);
 		prog.send_msg(get_id(), msg);
-
 		destroy_runtime(local_data);
-		local_value.set_real_local(part_local_scan);
 	}
 }
 
@@ -599,11 +657,11 @@ void part_topK_scan_vertex::run(vertex_program &prog)
 	else if (scan_stage == scan_stage_t::RUN) {
 		bool req_itself = false;
 		// If we have computed local scan on the vertex, skip the vertex.
-		if (local_value.has_real_local())
+		if (part_local > 0)
 			return;
 		// If we have estimated the local scan, we should use the estimated one.
-		else if (local_value.has_est_local())
-			req_itself = local_value.get_est_local() > max_scan.get();
+		else if (est_local > 0)
+			req_itself = est_local > max_scan.get();
 		else {
 			topK_scan_vertex &self_v
 				= (topK_scan_vertex &) prog.get_graph().get_vertex(get_id());

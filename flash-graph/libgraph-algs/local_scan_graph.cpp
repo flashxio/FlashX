@@ -266,7 +266,7 @@ runtime_data_t *create_runtime(graph_engine &graph, local_scan_vertex &scan_v,
 			skip_larger(graph, vertex.get_id()), merge,
 			neighbors.begin());
 	neighbors.resize(num_neighbors);
-	return new runtime_data_t(std::unique_ptr<neighbor_list>(
+	return new runtime_data_t(std::shared_ptr<neighbor_list>(
 				new extended_neighbor_list(vertex, neighbors)),
 			scan_v.get_local_scan());
 }
