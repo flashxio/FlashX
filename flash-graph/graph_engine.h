@@ -320,6 +320,7 @@ public:
 };
 
 class worker_thread;
+class in_mem_graph;
 
 /**
  * \brief This is the class that coordinates how & where algorithms are run.
@@ -333,6 +334,7 @@ class graph_engine
 	graph_header header;
 	graph_index::ptr vertices;
 	vertex_index::ptr vindex;
+	std::shared_ptr<in_mem_graph> graph_data;
 	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
 	vertex_scheduler::ptr scheduler;
 

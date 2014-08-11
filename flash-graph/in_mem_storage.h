@@ -1,0 +1,56 @@
+#ifndef __IN_MEM_STORAGE_H__
+#define __IN_MEM_STORAGE_H__
+
+/*
+ * Copyright 2014 Open Connectome Project (http://openconnecto.me)
+ * Written by Da Zheng (zhengda1936@gmail.com)
+ *
+ * This file is part of FlashGraph.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "io_interface.h"
+
+class in_mem_io;
+class thread_safe_page;
+
+class in_mem_graph
+{
+	size_t graph_size;
+	char *graph_data;
+	int graph_file_id;
+	std::string graph_file_name;
+	thread_safe_page *graph_pages;
+
+	in_mem_graph() {
+		graph_data = NULL;
+		graph_pages = NULL;
+		graph_size = 0;
+		graph_file_id = -1;
+	}
+public:
+	typedef std::shared_ptr<in_mem_graph> ptr;
+
+	static ptr load_graph(const std::string &graph_file);
+
+	~in_mem_graph() {
+		free(graph_data);
+	}
+
+	file_io_factory::shared_ptr create_io_factory() const;
+
+	friend class in_mem_io;
+};
+
+#endif

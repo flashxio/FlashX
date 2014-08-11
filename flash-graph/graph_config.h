@@ -36,6 +36,7 @@ class graph_config
 	bool _preload;
 	int index_file_weight;
 	bool _in_mem_index;
+	bool _in_mem_graph;
 	int num_vparts;
 	int min_vpart_degree;
 public:
@@ -51,6 +52,7 @@ public:
 		_preload = false;
 		index_file_weight = 10;
 		_in_mem_index = false;
+		_in_mem_graph = false;
 		num_vparts = 1;
 		min_vpart_degree = std::numeric_limits<int>::max();
 	}
@@ -148,6 +150,15 @@ public:
 	}
 
 	/**
+	 * \brief Determine whether to use in-mem graph data.
+	 * \return true if the graph engine loads the entire graph data in memory
+	 * in advance.
+	 */
+	bool use_in_mem_graph() const {
+		return _in_mem_graph;
+	}
+
+	/**
 	 * \brief Get the number of vertical partitions.
 	 * \return The number of vertical partitions.
 	 */
@@ -176,6 +187,7 @@ inline void graph_config::print_help()
 	printf("\tpreload: preload the graph data to the page cache\n");
 	printf("\tindex_file_weight: the weight for the graph index file\n");
 	printf("\tin_mem_index: indicate whether to use in-mem vertex index\n");
+	printf("\tin_mem_graph: indicate whether to load the entire graph to memory in advance\n");
 	printf("\tnum_vparts: the number of vertical partitions\n");
 	printf("\tmin_vpart_degree: the min degree of a vertex to perform vertical partitioning");
 }
@@ -192,6 +204,7 @@ inline void graph_config::print()
 	printf("\tpreload: %d\n", _preload);
 	printf("\tindex_file_weight: %d\n", index_file_weight);
 	printf("\tin_mem_index: %d\n", _in_mem_index);
+	printf("\tin_mem_graph: %d\n", _in_mem_graph);
 	printf("\tnum_vparts: %d\n", num_vparts);
 	printf("\tmin_vpart_degree: %d\n", min_vpart_degree);
 }
@@ -207,6 +220,7 @@ inline void graph_config::init(const config_map &map)
 	map.read_option_bool("preload", _preload);
 	map.read_option_int("index_file_weight", index_file_weight);
 	map.read_option_bool("in_mem_index", _in_mem_index);
+	map.read_option_bool("in_mem_graph", _in_mem_graph);
 	map.read_option_int("num_vparts", num_vparts);
 	map.read_option_int("min_vpart_degree", min_vpart_degree);
 }

@@ -29,6 +29,7 @@
 #include "vertex_compute.h"
 #include "vertex_request.h"
 #include "vertex_index_reader.h"
+#include "in_mem_storage.h"
 
 graph_config graph_conf;
 
@@ -458,7 +459,12 @@ graph_engine::graph_engine(const std::string &graph_file,
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
 	// Right now only the cached I/O can support async I/O
-	graph_factory = create_io_factory(graph_file, GLOBAL_CACHE_ACCESS);
+	if (graph_conf.use_in_mem_graph()) {
+		graph_data = in_mem_graph::load_graph(graph_file);
+		graph_factory = graph_data->create_io_factory();
+	}
+	else
+		graph_factory = create_io_factory(graph_file, GLOBAL_CACHE_ACCESS);
 	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
 	index_factory = create_io_factory(index->get_index_file(), GLOBAL_CACHE_ACCESS);
 
