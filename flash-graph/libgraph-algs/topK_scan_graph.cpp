@@ -509,14 +509,14 @@ void topK_scan_vertex::run(vertex_program &prog)
 class part_topK_scan_vertex: public part_compute_vertex
 {
 	size_t est_local;
-	size_t part_local;
+	int64_t part_local;
 	scan_runtime_data_t *local_data;
 	pthread_spinlock_t lock;
 public:
 	part_topK_scan_vertex(vertex_id_t id, int part_id): part_compute_vertex(id,
 			part_id) {
 		est_local = 0;
-		part_local = 0;
+		part_local = -1;
 		local_data = NULL;
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
@@ -582,10 +582,14 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 		return;
 
 	pthread_spin_lock(&lock);
-	if (local_data == NULL)
+	if (local_data == NULL) {
 		local_data = create_runtime(prog.get_graph(), vertex);
+		assert(!local_data->neighbors->empty());
+		assert(local_data->local_scan == 0);
+	}
+	else
+		assert(local_data->local_scan == 0);
 	pthread_spin_unlock(&lock);
-	assert(!local_data->neighbors->empty());
 	// TODO this is absolute hacking.
 	// There is no guarantee that the message will be delivered.
 	broadcast_vpart(part_scan_msg(part_scan_type::NEIGH, (size_t) local_data));
@@ -601,7 +605,6 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 		if (id != vertex.get_id())
 			tmp++;
 	}
-	assert(local_data->local_scan == 0);
 	if (get_part_id() == 0) {
 		scan_msg msg(PART_LOCAL_MSG, tmp);
 		msg.set_flush(true);
@@ -657,7 +660,7 @@ void part_topK_scan_vertex::run(vertex_program &prog)
 	else if (scan_stage == scan_stage_t::RUN) {
 		bool req_itself = false;
 		// If we have computed local scan on the vertex, skip the vertex.
-		if (part_local > 0)
+		if (part_local >= 0)
 			return;
 		// If we have estimated the local scan, we should use the estimated one.
 		else if (est_local > 0)
