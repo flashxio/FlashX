@@ -534,11 +534,7 @@ void worker_thread::run()
 						io->num_pending_ios()));
 			num_visited += num;
 			msg_processor->process_msgs();
-			if (index_reader->get_num_pending_tasks()
-					< (size_t) graph->get_max_processing_vertices())
-				index_reader->wait4complete(0);
-			else
-				index_reader->wait4complete(1);
+			index_reader->wait4complete(0);
 			io->access(adj_reqs.data(), adj_reqs.size());
 			adj_reqs.clear();
 			if (io->num_pending_ios() == 0 && index_reader->get_num_pending_tasks() > 0)
