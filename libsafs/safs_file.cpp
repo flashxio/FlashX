@@ -76,6 +76,7 @@ bool safs_file::create_file(size_t file_size)
 	size_t size_per_disk = file_size / native_dirs.size();
 	if (file_size % native_dirs.size() > 0)
 		size_per_disk++;
+	size_per_disk = ROUNDUP(size_per_disk, 512);
 
 	for (unsigned i = 0; i < native_dirs.size(); i++) {
 		native_dir dir(native_dirs[i].name);
