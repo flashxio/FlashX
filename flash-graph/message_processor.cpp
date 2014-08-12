@@ -28,7 +28,8 @@ message_processor::message_processor(graph_engine &_graph,
 	owner(_owner), msg_q(_owner.get_node_id(), "graph_msg_queue", 16, INT_MAX),
 	stolenv_msgs(_owner.get_node_id(), PAGE_SIZE, true)
 {
-	steal_state = std::unique_ptr<steal_state_t>(new steal_state_t(graph, owner));
+	if (graph_conf.use_serial_run())
+		steal_state = std::unique_ptr<steal_state_t>(new steal_state_t(graph, owner));
 	this->msg_alloc = msg_alloc;
 }
 
@@ -115,7 +116,7 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 
 	for (int i = 0; i < num_dests; i++) {
 		local_vid_t id = dest_list.get_dest(i);
-		if (check_steal && steal_state->is_stolen(id)) {
+		if (check_steal && steal_state && steal_state->is_stolen(id)) {
 			buf_mmsg(id, mmsg);
 		}
 		else {
@@ -163,7 +164,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 		assert(check_steal);
 		for (int i = 0; i < num; i++) {
 			local_vid_t id = v_msgs[i]->get_dest();
-			if (steal_state->is_stolen(id)) {
+			if (steal_state && steal_state->is_stolen(id)) {
 				buf_msg(*v_msgs[i]);
 			}
 			else {
@@ -178,7 +179,7 @@ void message_processor::process_msg(message &msg, bool check_steal)
 
 void message_processor::process_msgs()
 {
-	if (steal_state->get_num_returned() > 0 && !stolenv_msgs.is_empty()) {
+	if (steal_state && steal_state->get_num_returned() > 0 && !stolenv_msgs.is_empty()) {
 		// TODO we might have to make sure that a lot of messages can be
 		// processed. Otherwise, we are wasting time.
 		// The vertices have been processed so no other threads will steal
@@ -194,31 +195,38 @@ void message_processor::process_msgs()
 
 	const int MSG_BUF_SIZE = 16;
 	message msgs[MSG_BUF_SIZE];
-	steal_state->guard_msg_processing();
-	bool check_steal = steal_state->steal_mode_enabled();
+	bool check_steal = false;
+	if (steal_state) {
+		steal_state->guard_msg_processing();
+		check_steal = steal_state->steal_mode_enabled();
+	}
 	while (!msg_q.is_empty()) {
 		int num_fetched = msg_q.fetch(msgs, MSG_BUF_SIZE);
 		for (int i = 0; i < num_fetched; i++)
 			process_msg(msgs[i], check_steal);
 	}
-	steal_state->unguard_msg_processing();
+	if (steal_state)
+		steal_state->unguard_msg_processing();
 }
 
 void message_processor::steal_vertices(compute_vertex_pointer vertices[], int num)
 {
-	steal_state->steal_vertices(vertices, num);
+	if (steal_state)
+		steal_state->steal_vertices(vertices, num);
 }
 
 void message_processor::reset()
 {
-	steal_state->reset();
+	if (steal_state)
+		steal_state->reset();
 	assert(msg_q.is_empty());
 	assert(stolenv_msgs.is_empty());
 }
 
 void message_processor::return_vertices(vertex_id_t ids[], int num)
 {
-	steal_state->return_vertices(ids, num);
+	if (steal_state)
+		steal_state->return_vertices(ids, num);
 }
 
 void steal_state_t::steal_vertices(compute_vertex_pointer vertices[], int num)

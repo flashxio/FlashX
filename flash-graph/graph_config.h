@@ -39,6 +39,7 @@ class graph_config
 	bool _in_mem_graph;
 	int num_vparts;
 	int min_vpart_degree;
+	bool serial_run;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -55,6 +56,7 @@ public:
 		_in_mem_graph = false;
 		num_vparts = 1;
 		min_vpart_degree = std::numeric_limits<int>::max();
+		serial_run = false;
 	}
 
 	/**
@@ -159,6 +161,14 @@ public:
 	}
 
 	/**
+	 * \brief Determine whether to run the user code on a vertex in serial.
+	 * \return true if the graph engine runs the user code on a vertex in serial.
+	 */
+	bool use_serial_run() const {
+		return serial_run;
+	}
+
+	/**
 	 * \brief Get the number of vertical partitions.
 	 * \return The number of vertical partitions.
 	 */
@@ -189,7 +199,8 @@ inline void graph_config::print_help()
 	printf("\tin_mem_index: indicate whether to use in-mem vertex index\n");
 	printf("\tin_mem_graph: indicate whether to load the entire graph to memory in advance\n");
 	printf("\tnum_vparts: the number of vertical partitions\n");
-	printf("\tmin_vpart_degree: the min degree of a vertex to perform vertical partitioning");
+	printf("\tmin_vpart_degree: the min degree of a vertex to perform vertical partitioning\n");
+	printf("\tserial_run: run the user code on a vertex in serial\n");
 }
 
 inline void graph_config::print()
@@ -207,6 +218,7 @@ inline void graph_config::print()
 	printf("\tin_mem_graph: %d\n", _in_mem_graph);
 	printf("\tnum_vparts: %d\n", num_vparts);
 	printf("\tmin_vpart_degree: %d\n", min_vpart_degree);
+	printf("\tserial_run: %d\n", serial_run);
 }
 
 inline void graph_config::init(const config_map &map)
@@ -223,6 +235,7 @@ inline void graph_config::init(const config_map &map)
 	map.read_option_bool("in_mem_graph", _in_mem_graph);
 	map.read_option_int("num_vparts", num_vparts);
 	map.read_option_int("min_vpart_degree", min_vpart_degree);
+	map.read_option_bool("serial_run", serial_run);
 }
 
 extern graph_config graph_conf;
