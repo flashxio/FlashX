@@ -773,7 +773,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		graph->start(filter);
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
-		printf("It takes %f seconds\n", time_diff(start, end));
+		printf("It takes %f seconds, there are %ld computed vertices\n",
+				time_diff(start, end), known_scans.get_size());
 		printf("global max scan: %ld\n", max_scan.get());
 		max_scan = global_max(0);
 	}
@@ -793,11 +794,15 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		}
 	};
 
-	printf("Compute local scan on %ld vertices\n", known_scans.get_size());
-	printf("Looking for top %ld local scan\n", topK);
-	size_t prev_topK_scan;
+	size_t prev_topK_scan, curr_topK_scan;
+	off_t prev_start_loc, curr_start_loc;
 	do {
 		prev_topK_scan = known_scans.get(topK - 1).second;
+		for (prev_start_loc = topK - 1; prev_start_loc > 0
+				&& known_scans.get(prev_start_loc).second == prev_topK_scan;
+				prev_start_loc--);
+		printf("prev topK scan: %ld, prev loc: %ld\n", prev_topK_scan,
+				prev_start_loc);
 		// Let's use the topK as the max scan for unknown vertices
 		// and see if we can find a new vertex that has larger local scan.
 		max_scan = global_max(prev_topK_scan);
@@ -807,13 +812,19 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 					new remove_small_scan_filter(prev_topK_scan)));
 		graph->wait4complete();
 		gettimeofday(&end, NULL);
-		printf("It takes %f seconds\n", time_diff(start, end));
-		printf("global max scan: %ld\n", max_scan.get());
+		printf("It takes %f seconds, there are %ld computed vertices\n",
+				time_diff(start, end), known_scans.get_size());
 		// If the previous topK is different from the current one,
 		// it means we have found new local scans that are larger
 		// than the previous topK. We should use the new topK and
 		// try again.
-	} while (prev_topK_scan != known_scans.get(topK - 1).second);
+		curr_topK_scan = known_scans.get(topK - 1).second;
+		for (curr_start_loc = topK - 1; curr_start_loc > 0
+				&& known_scans.get(curr_start_loc).second == curr_topK_scan;
+				curr_start_loc--);
+		printf("global max scan: %ld, start loc: %ld\n", max_scan.get(),
+				curr_start_loc);
+	} while (prev_topK_scan != curr_topK_scan || prev_start_loc != curr_start_loc);
 	assert(known_scans.get_size() >= topK);
 
 #ifdef PROFILER
