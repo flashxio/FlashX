@@ -189,15 +189,19 @@ public:
 			assert(ret);
 		}
 		else {
-			array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
-					index->get_data() + range.second);
-			compute->run(compute->get_first_vertex(), it);
+			assert(range.second > range.first);
+			if (range.second - range.first > 1) {
+				array_index_iterator_impl<ValueType> it(
+						index->get_data() + range.first,
+						index->get_data() + range.second);
+				compute->run(compute->get_first_vertex(), it);
+			}
 
 			// For the last vertex,
 			ValueType vs[2];
 			vs[0] = index->get_data()[index->get_num_vertices() - 1];
 			vs[1] = ValueType(index->get_graph_size());
-			it = array_index_iterator_impl<ValueType>(vs, &vs[2]);
+			array_index_iterator_impl<ValueType> it(vs, &vs[2]);
 			bool ret = compute->run(index->get_num_vertices() - 1, it);
 			assert(ret);
 		}
