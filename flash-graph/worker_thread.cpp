@@ -638,20 +638,6 @@ void worker_thread::complete_vertex(const compute_vertex_pointer v)
 	}
 }
 
-void worker_thread::activate_vertex(local_vid_t id)
-{
-	next_activated_vertices->set(id.id);
-}
-
-void worker_thread::activate_vertex(vertex_id_t id)
-{
-	int part_id;
-	off_t off;
-	graph->get_partitioner()->map2loc(id, part_id, off);
-	assert(part_id == worker_id);
-	next_activated_vertices->set(off);
-}
-
 vertex_compute *worker_thread::get_vertex_compute(compute_vertex_pointer v)
 {
 	std::unordered_map<compute_vertex *, vertex_compute *>::const_iterator it

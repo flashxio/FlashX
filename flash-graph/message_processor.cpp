@@ -97,20 +97,13 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 
 	if (!check_steal) {
 		curr_vprog.run_on_multicast_message(mmsg);
-		for (int i = 0; i < num_dests; i++) {
-			local_vid_t id = dest_list.get_dest(i);
-			if (mmsg.is_activate())
-				owner.activate_vertex(id);
-		}
+		if (mmsg.is_activate())
+			owner.activate_vertices(dest_list.get_dests(), num_dests);
 		return;
 	}
 
 	if (mmsg.is_activation_msg()) {
-		for (int i = 0; i < num_dests; i++) {
-			local_vid_t id = dest_list.get_dest(i);
-			if (mmsg.is_activate())
-				owner.activate_vertex(id);
-		}
+		owner.activate_vertices(dest_list.get_dests(), num_dests);
 		return;
 	}
 

@@ -204,12 +204,16 @@ void vertex_program::activate_vertices(edge_seq_iterator &it)
 		assert(ret == num_dests);
 		for (size_t i = 0; i < ret; i++) {
 			int part_id = vertex_locs[i].first;
-			// We are going to use the offset of a vertex in a partition as
-			// the ID of the vertex.
-			local_vid_t local_id = vertex_locs[i].second;
-			multicast_msg_sender &sender = get_activate_sender(part_id);
-			bool ret = sender.add_dest(local_id);
-			assert(ret);
+			if (t->get_worker_id() == part_id)
+				t->activate_vertex(vertex_locs[i].second);
+			else {
+				// We are going to use the offset of a vertex in a partition as
+				// the ID of the vertex.
+				local_vid_t local_id = vertex_locs[i].second;
+				multicast_msg_sender &sender = get_activate_sender(part_id);
+				bool ret = sender.add_dest(local_id);
+				assert(ret);
+			}
 		}
 		return;
 	}
@@ -220,9 +224,15 @@ void vertex_program::activate_vertices(edge_seq_iterator &it)
 		multicast_msg_sender &sender = get_activate_sender(i);
 		if (vid_bufs[i].empty())
 			continue;
-		int ret = sender.add_dests(vid_bufs[i].data(), vid_bufs[i].size());
-		assert((size_t) ret == vid_bufs[i].size());
-		vid_bufs[i].clear();
+		if (i == t->get_worker_id()) {
+			curr->activate_vertices(vid_bufs[i].data(), vid_bufs[i].size());
+			vid_bufs[i].clear();
+		}
+		else {
+			int ret = sender.add_dests(vid_bufs[i].data(), vid_bufs[i].size());
+			assert((size_t) ret == vid_bufs[i].size());
+			vid_bufs[i].clear();
+		}
 	}
 }
 

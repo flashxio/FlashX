@@ -383,6 +383,9 @@ public:
 	void add_dests(local_vid_t ids[], int num);
 	int get_num_dests() const;
 	local_vid_t get_dest(int idx) const;
+	const local_vid_t *get_dests() const {
+		return (local_vid_t *) dest_list;
+	}
 };
 
 class multicast_message: public vertex_message

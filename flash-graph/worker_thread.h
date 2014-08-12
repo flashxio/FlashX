@@ -298,8 +298,15 @@ public:
 	/**
 	 * Activate the vertex in its own partition for the next iteration.
 	 */
-	void activate_vertex(vertex_id_t id);
-	void activate_vertex(local_vid_t id);
+	void activate_vertex(local_vid_t id) {
+		next_activated_vertices->set(id.id);
+	}
+
+	void activate_vertices(const local_vid_t ids[], int num) {
+		bitmap *p = next_activated_vertices.get();
+		for (int i = 0; i < num; i++)
+			p->set(ids[i].id);
+	}
 
 	void request_notify_iter_end(local_vid_t id) {
 		notify_vertices->set(id.id);
