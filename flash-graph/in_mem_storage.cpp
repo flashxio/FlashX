@@ -28,9 +28,17 @@ class in_mem_io: public io_interface
 {
 	const in_mem_graph &graph;
 	int file_id;
+	fifo_queue<io_request> req_buf;
+	fifo_queue<user_compute *> compute_buf;
+	fifo_queue<user_compute *> incomp_computes;
+
+	void process_req(const io_request &req);
+	void process_computes();
 public:
 	in_mem_io(const in_mem_graph &_graph, int file_id,
-			thread *t): io_interface(t), graph(_graph) {
+			thread *t): io_interface(t), graph(_graph), req_buf(
+				get_node_id(), 1024), compute_buf(get_node_id(), 1024,
+				true), incomp_computes(get_node_id(), 1024, true) {
 		this->file_id = file_id;
 	}
 
@@ -42,22 +50,30 @@ public:
 		return true;
 	}
 
-	virtual void access(io_request *requests, int num, io_status *status);
 	virtual void flush_requests() { }
-	virtual int wait4complete(int) {
+
+	virtual int num_pending_ios() const {
 		return 0;
 	}
-	virtual int num_pending_ios() const {
+
+	virtual void access(io_request *requests, int num, io_status *status);
+	virtual int wait4complete(int) {
+		assert(compute_buf.is_empty());
+		if (!incomp_computes.is_empty()) {
+			compute_buf.add(&incomp_computes);
+			assert(incomp_computes.is_empty());
+			process_computes();
+		}
 		return 0;
 	}
 };
 
 class in_mem_byte_array: public page_byte_array
 {
-	io_request &req;
+	const io_request &req;
 	thread_safe_page *pages;
 public:
-	in_mem_byte_array(io_request &_req, thread_safe_page *pages): req(_req) {
+	in_mem_byte_array(const io_request &_req, thread_safe_page *pages): req(_req) {
 		this->pages = pages;
 	}
 
@@ -82,14 +98,72 @@ public:
 	}
 };
 
+enum
+{
+	IN_QUEUE,
+};
+
+void in_mem_io::process_req(const io_request &req)
+{
+	assert(req.get_req_type() == io_request::USER_COMPUTE);
+	in_mem_byte_array byte_arr(req, &graph.graph_pages[req.get_offset() / PAGE_SIZE]);
+	user_compute *compute = req.get_compute();
+	compute->run(byte_arr);
+	// If the user compute hasn't completed and it's not in the queue,
+	// add it to the queue.
+	if (!compute->has_completed() && !compute->test_flag(IN_QUEUE)) {
+		compute->set_flag(IN_QUEUE, true);
+		compute_buf.push_back(compute);
+	}
+	else
+		compute->dec_ref();
+
+	if (compute->has_completed() && !compute->test_flag(IN_QUEUE)) {
+		assert(compute->get_ref() == 0);
+		// It might still be referenced by the graph engine.
+		if (compute->get_ref() == 0) {
+			compute_allocator *alloc = compute->get_allocator();
+			alloc->free(compute);
+		}
+	}
+}
+
+void in_mem_io::process_computes()
+{
+	while (!compute_buf.is_empty()) {
+		user_compute *compute = compute_buf.pop_front();
+		assert(compute->get_ref() > 0);
+		while (compute->has_requests()) {
+			compute->fetch_requests(this, req_buf, req_buf.get_size());
+			while (!req_buf.is_empty()) {
+				io_request new_req = req_buf.pop_front();
+				process_req(new_req);
+			}
+		}
+		if (compute->has_completed()) {
+			compute->dec_ref();
+			compute->set_flag(IN_QUEUE, false);
+			assert(compute->get_ref() == 0);
+			if (compute->get_ref() == 0) {
+				compute_allocator *alloc = compute->get_allocator();
+				alloc->free(compute);
+			}
+		}
+		else
+			incomp_computes.push_back(compute);
+	}
+}
+
 void in_mem_io::access(io_request *requests, int num, io_status *)
 {
 	for (int i = 0; i < num; i++) {
 		io_request &req = requests[i];
-		assert(req.get_req_type() == io_request::USER_COMPUTE);
-		in_mem_byte_array byte_arr(req, &graph.graph_pages[req.get_offset() / PAGE_SIZE]);
-		req.get_compute()->run(byte_arr);
+		// Let's possess a reference to the user compute first. process_req()
+		// will release the reference when the user compute is completed.
+		req.get_compute()->inc_ref();
+		process_req(req);
 	}
+	process_computes();
 }
 
 class in_mem_io_factory: public file_io_factory
