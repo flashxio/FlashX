@@ -341,12 +341,9 @@ worker_thread::worker_thread(graph_engine *graph,
 	switch(graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
 			alloc = new vertex_compute_allocator<directed_vertex_compute>(graph, this);
-			part_alloc = new vertex_compute_allocator<part_directed_vertex_compute>(
-					graph, this);
 			break;
 		case graph_type::UNDIRECTED:
 			alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
-			part_alloc = NULL;
 			break;
 #if 0
 		case graph_type::TS_DIRECTED:
@@ -364,7 +361,6 @@ worker_thread::worker_thread(graph_engine *graph,
 worker_thread::~worker_thread()
 {
 	delete alloc;
-	delete part_alloc;
 }
 
 void worker_thread::init()

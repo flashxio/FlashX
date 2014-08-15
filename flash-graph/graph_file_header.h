@@ -21,15 +21,30 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
+
+#include "parameters.h"
 
 const int64_t MAGIC_NUMBER = 0x123456789ABCDEFL;
-const int CURR_VERSION = 3;
+const int CURR_VERSION = 4;
 
 enum graph_type {
 	DIRECTED,
 	UNDIRECTED,
 	TS_DIRECTED,
 	TS_UNDIRECTED,
+};
+
+struct graph_header_struct
+{
+	int64_t magic_number;
+	int version_number;
+	graph_type type;
+	size_t num_vertices;
+	size_t num_edges;
+	bool has_data;
+	// This is only used for time-series graphs.
+	int max_num_timestamps;
 };
 
 /**
@@ -39,16 +54,7 @@ enum graph_type {
 class graph_header
 {
 	union {
-		struct {
-			int64_t magic_number;
-			int version_number;
-			graph_type type;
-			size_t num_vertices;
-			size_t num_edges;
-			bool has_data;
-			// This is only used for time-series graphs.
-			int max_num_timestamps;
-		} data;
+		struct graph_header_struct data;
 		char page[PAGE_SIZE];
 	} h;
 public:
@@ -56,16 +62,20 @@ public:
 		return sizeof(graph_header);
 	}
 
+	static void init(struct graph_header_struct &data) {
+		data.magic_number = MAGIC_NUMBER;
+		data.version_number = CURR_VERSION;
+		data.type = DIRECTED;
+		data.num_vertices = 0;
+		data.num_edges = 0;
+		data.has_data = false;
+		data.max_num_timestamps = 0;
+	}
+
 	graph_header() {
 		assert(sizeof(*this) == PAGE_SIZE);
 		memset(this, 0, sizeof(*this));
-		h.data.magic_number = MAGIC_NUMBER;
-		h.data.version_number = CURR_VERSION;
-		h.data.type = DIRECTED;
-		h.data.num_vertices = 0;
-		h.data.num_edges = 0;
-		h.data.has_data = false;
-		h.data.max_num_timestamps = 0;
+		init(h.data);
 	}
 
 	graph_header(graph_type type, size_t num_vertices, size_t num_edges,

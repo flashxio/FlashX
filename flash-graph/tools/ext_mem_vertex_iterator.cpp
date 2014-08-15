@@ -19,6 +19,7 @@
 
 #include "ext_mem_vertex_iterator.h"
 
+#if 0
 void ext_mem_vertex_iterator::read_vertices()
 {
 	std::vector<in_mem_vertex_info> vinfos = overflow_vinfos;
@@ -81,3 +82,4 @@ void ext_mem_vertex_iterator::read_vertices()
 	}
 	vit = vertices.begin();
 }
+#endif

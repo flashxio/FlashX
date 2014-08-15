@@ -72,18 +72,19 @@ class ext_mem_vindex_reader_impl: public vertex_index_reader
 	typedef simple_KV_store<ValueType, req_vertex_task<ValueType> > vertex_KV_store;
 	typename vertex_KV_store::ptr req_vertex_store;
 
+#if 0
 	// The starting offset of the entries in the cached index.
 	size_t cached_index_start;
 	// The values in the last one or two pages in the index.
 	std::vector<ValueType> cached_index;
+#endif
 
 protected:
-	embedded_array<ValueType> value_buf;
-
 	ext_mem_vindex_reader_impl(io_interface::ptr io) {
 		this->io = io;
 		req_vertex_store = vertex_KV_store::create(io);
 
+#if 0
 		// Get the vertex index header.
 		char *hdr_buf = new char[vertex_index::get_header_size()];
 		io->access(hdr_buf, 0, vertex_index::get_header_size(), READ);
@@ -111,8 +112,10 @@ protected:
 		io->access((char *) cached_index.data(), read_start,
 				(index_size - read_start), READ);
 		cached_index.back() = ValueType(graph_size);
+#endif
 	}
 
+#if 0
 	size_t get_cached_index_start() const {
 		return cached_index_start;
 	}
@@ -120,12 +123,14 @@ protected:
 	const ValueType &get_cached_entry(int idx) const {
 		return cached_index[idx];
 	}
+#endif
 public:
 	static ptr create(io_interface::ptr io) {
 		return ptr(new ext_mem_vindex_reader_impl(io));
 	}
 
 	virtual void request_index(index_compute *compute) {
+#if 0
 		index_compute::id_range_t range = compute->get_range();
 		if (range.first >= cached_index_start) {
 			off_t start_off = range.first - cached_index_start;
@@ -146,11 +151,12 @@ public:
 			req_vertex_store->async_request(task);
 		}
 		else {
+#endif
 			req_vertex_task<ValueType> task(compute->get_first_vertex(),
 					compute->get_last_vertex() - compute->get_first_vertex() + 1,
 					compute);
 			req_vertex_store->async_request(task);
-		}
+//		}
 	}
 
 	void wait4complete(int num) {
@@ -181,12 +187,15 @@ public:
 
 	virtual void request_index(index_compute *compute) {
 		index_compute::id_range_t range = compute->get_range();
+#if 0
 		if (range.second < index->get_num_vertices()) {
+#endif
 			array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
 					// We need an additional entry.
 					index->get_data() + range.second + 1);
 			bool ret = compute->run(compute->get_first_vertex(), it);
 			assert(ret);
+#if 0
 		}
 		else {
 			assert(range.second > range.first);
@@ -205,6 +214,7 @@ public:
 			bool ret = compute->run(index->get_num_vertices() - 1, it);
 			assert(ret);
 		}
+#endif
 		compute->get_allocator().free(compute);
 	}
 
@@ -300,17 +310,17 @@ void simple_index_reader::flush_computes()
 				std::sort(part_vertex_comps[type].begin(),
 						part_vertex_comps[type].end(), directed_compute_less());
 			if (is_dense(part_vertex_comps[type]))
-				process_requests<directed_compute_t, req_part_vertex_compute,
-					index_comp_allocator_impl<req_part_vertex_compute>,
-					single_part_vertex_compute>(part_vertex_comps[type],
-							*req_part_vertex_comp_alloc, *index_reader,
-							*single_part_vertex_comp_alloc);
+				process_requests<directed_compute_t, req_vertex_compute,
+					index_comp_allocator_impl<req_vertex_compute>,
+					single_vertex_compute>(part_vertex_comps[type],
+							*req_vertex_comp_alloc, *index_reader,
+							*single_vertex_comp_alloc);
 			else
-				process_requests<directed_compute_t, genrq_part_vertex_compute,
-					general_index_comp_allocator_impl<genrq_part_vertex_compute>,
-					single_part_vertex_compute>(part_vertex_comps[type],
-							*genrq_part_vertex_comp_alloc, *index_reader,
-							*single_part_vertex_comp_alloc);
+				process_requests<directed_compute_t, genrq_vertex_compute,
+					general_index_comp_allocator_impl<genrq_vertex_compute>,
+					single_vertex_compute>(part_vertex_comps[type],
+							*genrq_vertex_comp_alloc, *index_reader,
+							*single_vertex_comp_alloc);
 		}
 	}
 
@@ -318,9 +328,9 @@ void simple_index_reader::flush_computes()
 		if (!std::is_sorted(edge_comps.begin(), edge_comps.end(),
 					id_compute_less()))
 			std::sort(edge_comps.begin(), edge_comps.end(), id_compute_less());
-		process_requests<id_compute_t, req_edge_compute,
-			index_comp_allocator_impl<req_edge_compute>, single_edge_compute>(
-				edge_comps, *req_edge_comp_alloc, *index_reader,
+		process_requests<id_compute_t, req_undirected_edge_compute,
+			index_comp_allocator_impl<req_undirected_edge_compute>, single_edge_compute>(
+				edge_comps, *req_undirected_edge_comp_alloc, *index_reader,
 				*single_edge_comp_alloc);
 	}
 

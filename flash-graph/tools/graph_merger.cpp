@@ -23,6 +23,8 @@
 #include "edge_type.h"
 #include "ext_mem_vertex_iterator.h"
 
+#if 0
+
 bool print_graph = false;
 bool check_graph = false;
 
@@ -287,3 +289,4 @@ int main(int argc, char *argv[])
 #endif
 	}
 }
+#endif

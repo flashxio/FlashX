@@ -31,7 +31,6 @@
 #include "native_file.h"
 
 #include "edge_type.h"
-#include "ext_mem_vertex_iterator.h"
 
 template<class edge_data_type>
 class stxxl_edge_vector: public stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result
@@ -59,6 +58,7 @@ bool compress = false;
 bool simplify = false;
 bool print_graph = false;
 bool check_graph = false;
+std::string work_dir = ".";
 
 template<class edge_data_type>
 struct comp_edge {
@@ -179,6 +179,9 @@ public:
 	virtual graph *create_disk_graph() const = 0;
 	virtual void add_edges(stxxl_edge_vector<edge_data_type> &edges) = 0;
 	virtual size_t get_num_edges() const = 0;
+	virtual void check_vertices(
+			const std::vector<ext_mem_undirected_vertex *> &vertices,
+			bool in_part) const = 0;
 
 	bool has_edge_data() const {
 		return has_data;
@@ -194,17 +197,14 @@ class disk_graph: public graph
 	size_t num_edges;
 	size_t num_vertices;
 	size_t num_non_empty;
-	FILE *f;
 	const edge_graph<edge_data_type> *g;
 	in_mem_vertex_index *index;
-	embedded_array<char> buf;
 public:
 	disk_graph(const edge_graph<edge_data_type> *g, in_mem_vertex_index *index) {
 		num_edges = 0;
 		num_vertices = 0;
 		num_non_empty = 0;
 		this->g = g;
-		f = NULL;
 		this->index = index;
 	}
 
@@ -213,19 +213,14 @@ public:
 		delete index;
 	}
 
-	void add_vertex(const in_mem_vertex &v) {
-		assert(f);
+	virtual void add_vertex(const in_mem_vertex &v) {
 		num_vertices++;
 		// To get the total number of edges, I only accumulate on in-edges
 		// or out-edges.
 		num_edges += v.get_num_edges(edge_type::IN_EDGE);
 		if (v.get_num_edges(edge_type::BOTH_EDGES) > 0)
 			num_non_empty++;
-
-		int size = serialize_vertex(v, buf);
-		index->add_vertex(buf.data());
-		ssize_t ret = fwrite(buf.data(), size, 1, f);
-		assert(ret == 1);
+		index->add_vertex(v);
 	}
 
 	const edge_graph<edge_data_type> *get_edge_graph() const {
@@ -265,30 +260,100 @@ public:
 
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const = 0;
-	virtual int serialize_vertex(const in_mem_vertex &v,
-			embedded_array<char> &buf) = 0;
 	virtual graph_type get_graph_type() const = 0;
+	virtual void finalize_graph_file(const std::string &adj_file) = 0;
 };
 
 template<class edge_data_type>
 class disk_directed_graph: public disk_graph<edge_data_type>
 {
+	FILE *in_f;
+	FILE *out_f;
+	embedded_array<char> buf;
+	std::string tmp_in_graph_file;
+	std::string tmp_out_graph_file;
 public:
 	disk_directed_graph(const edge_graph<edge_data_type> *g): disk_graph<edge_data_type>(
 			g, new directed_in_mem_vertex_index()) {
+		tmp_in_graph_file = tempnam(work_dir.c_str(), "in-directed");
+		in_f = fopen(tmp_in_graph_file.c_str(), "w");
+		int ret = fseek(in_f, sizeof(graph_header), SEEK_SET);
+		assert(ret == 0);
+		tmp_out_graph_file = tempnam(work_dir.c_str(), "out-directed");
+		out_f = fopen(tmp_out_graph_file.c_str(), "w");
+	}
+
+	~disk_directed_graph() {
+		if (in_f) {
+			fclose(in_f);
+			in_f = NULL;
+			unlink(tmp_in_graph_file.c_str());
+		}
+		if (out_f) {
+			fclose(out_f);
+			out_f = NULL;
+			unlink(tmp_out_graph_file.c_str());
+		}
 	}
 
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const;
 
-	virtual int serialize_vertex(const in_mem_vertex &v,
-			embedded_array<char> &buf) {
-		int mem_size = v.get_serialize_size();
-		buf.resize(mem_size);
-		ext_mem_directed_vertex::serialize<edge_data_type>(
-				(const in_mem_directed_vertex<edge_data_type> &) v,
-				buf.data(), mem_size);
-		return mem_size;
+	virtual void add_vertex(const in_mem_vertex &v) {
+		disk_graph<edge_data_type>::add_vertex(v);
+
+		assert(in_f);
+		assert(out_f);
+		int size = v.get_serialize_size(IN_EDGE);
+		buf.resize(size);
+		ext_mem_undirected_vertex::serialize(v, buf.data(), size, IN_EDGE);
+		ssize_t ret = fwrite(buf.data(), size, 1, in_f);
+		assert(ret == 1);
+
+		size = v.get_serialize_size(OUT_EDGE);
+		buf.resize(size);
+		ext_mem_undirected_vertex::serialize(v, buf.data(), size, OUT_EDGE);
+		ret = fwrite(buf.data(), size, 1, out_f);
+		assert(ret == 1);
+	}
+
+	void copy_file(FILE *from, size_t from_size, FILE *to) {
+		const size_t BUF_SIZE = 128 * 1024 * 1024;
+		std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[BUF_SIZE]);
+		size_t remain_size = from_size;
+		size_t read_size = std::min(remain_size, BUF_SIZE);
+		while (read_size > 0) {
+			size_t ret = fread(buf.get(), read_size, 1, from);
+			assert(ret == 1);
+			ret = fwrite(buf.get(), read_size, 1, to);
+			assert(ret == 1);
+			remain_size -= read_size;
+			read_size = std::min(remain_size, BUF_SIZE);
+		}
+	}
+
+	virtual void finalize_graph_file(const std::string &adj_file) {
+		long out_size = ftell(out_f);
+		assert(out_size > 0);
+		fclose(out_f);
+
+		out_f = fopen(tmp_out_graph_file.c_str(), "r");
+		assert(out_f);
+		copy_file(out_f, out_size, in_f);
+		fclose(out_f);
+		out_f = NULL;
+		unlink(tmp_out_graph_file.c_str());
+
+		// Write the real graph header.
+		graph_header header(get_graph_type(), this->get_num_vertices(),
+				this->get_num_edges(), this->get_edge_graph()->has_edge_data());
+		int seek_ret = fseek(in_f, 0, SEEK_SET);
+		assert(seek_ret == 0);
+		ssize_t ret = fwrite(&header, sizeof(header), 1, in_f);
+		assert(ret == 1);
+		fclose(in_f);
+		in_f = NULL;
+		assert(rename(tmp_in_graph_file.c_str(), adj_file.c_str()) == 0);
 	}
 
 	virtual graph_type get_graph_type() const {
@@ -299,9 +364,24 @@ public:
 template<class edge_data_type>
 class disk_undirected_graph: public disk_graph<edge_data_type>
 {
+	FILE *f;
+	embedded_array<char> buf;
+	std::string tmp_graph_file;
 public:
 	disk_undirected_graph(const edge_graph<edge_data_type> *g): disk_graph<edge_data_type>(
 			g, new undirected_in_mem_vertex_index()) {
+		tmp_graph_file = tempnam(work_dir.c_str(), "undirected");
+		f = fopen(tmp_graph_file.c_str(), "w");
+		int ret = fseek(f, sizeof(graph_header), SEEK_SET);
+		assert(ret == 0);
+	}
+
+	~disk_undirected_graph() {
+		if (f) {
+			fclose(f);
+			f = NULL;
+			unlink(tmp_graph_file.c_str());
+		}
 	}
 
 	virtual void check_ext_graph(const std::string &index_file,
@@ -311,14 +391,27 @@ public:
 		return disk_graph<edge_data_type>::get_num_edges() / 2;
 	}
 
-	virtual int serialize_vertex(const in_mem_vertex &v,
-			embedded_array<char> &buf) {
-		int mem_size = v.get_serialize_size();
-		buf.resize(mem_size);
-		ext_mem_undirected_vertex::serialize<edge_data_type>(
-				(const in_mem_undirected_vertex<edge_data_type> &) v,
-				buf.data(), mem_size);
-		return mem_size;
+	virtual void add_vertex(const in_mem_vertex &v) {
+		disk_graph<edge_data_type>::add_vertex(v);
+		assert(f);
+		int size = v.get_serialize_size(IN_EDGE);
+		buf.resize(size);
+		ext_mem_undirected_vertex::serialize(v, buf.data(), size, IN_EDGE);
+		ssize_t ret = fwrite(buf.data(), size, 1, f);
+		assert(ret == 1);
+	}
+
+	virtual void finalize_graph_file(const std::string &adj_file) {
+		// Write the real graph header.
+		graph_header header(get_graph_type(), this->get_num_vertices(),
+				this->get_num_edges(), this->get_edge_graph()->has_edge_data());
+		int seek_ret = fseek(f, 0, SEEK_SET);
+		assert(seek_ret == 0);
+		ssize_t ret = fwrite(&header, sizeof(header), 1, f);
+		assert(ret == 1);
+		fclose(f);
+		f = NULL;
+		assert(rename(tmp_graph_file.c_str(), adj_file.c_str()) == 0);
 	}
 
 	virtual graph_type get_graph_type() const {
@@ -388,7 +481,8 @@ public:
 	edge_graph<edge_data_type> *simplify_edges() const;
 	void construct_graph(graph *g) const;
 	void check_vertices(
-			const std::vector<ext_mem_undirected_vertex *> &vertices) const;
+			const std::vector<ext_mem_undirected_vertex *> &vertices,
+			bool in_part) const;
 };
 
 /**
@@ -451,7 +545,8 @@ public:
 	}
 
 	void check_vertices(
-			const std::vector<ext_mem_directed_vertex *> &vertices) const;
+			const std::vector<ext_mem_undirected_vertex *> &vertices,
+			bool in_part) const;
 };
 
 template<class edge_data_type>
@@ -544,7 +639,7 @@ void undirected_edge_graph<edge_data_type>::construct_graph(graph *g) const
 
 template<class edge_data_type>
 void undirected_edge_graph<edge_data_type>::check_vertices(
-		const std::vector<ext_mem_undirected_vertex *> &vertices) const
+		const std::vector<ext_mem_undirected_vertex *> &vertices, bool) const
 {
 	printf("There are %ld edges in the graph\n", get_num_edges());
 	assert(!vertices.empty());
@@ -554,64 +649,114 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 				comp_edge<edge_data_type>());
 
 	for (size_t i = 0; i < vertices.size(); i++) {
-		edge_const_iterator<edge_data_type> v_it
-			= vertices[i]->get_edge_begin<edge_data_type>();
-		edge_const_iterator<edge_data_type> v_end
-			= vertices[i]->get_edge_end<edge_data_type>();
-		for (; v_it != v_end; ++v_it, it++) {
+		ext_mem_undirected_vertex *v = vertices[i];
+		for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 			assert(it != edges.end());
-			edge<edge_data_type> ve = *v_it;
 			edge<edge_data_type> e = *it;
-			assert(ve.get_from() == e.get_from());
-			assert(ve.get_to() == e.get_to());
-			assert(ve.get_data() == e.get_data());
+			assert(v->get_neighbor(j) == e.get_to());
+			assert(v->get_id() == e.get_from());
+			if (v->has_edge_data())
+				assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 		}
 	}
 }
 
 template<class edge_data_type>
 void directed_edge_graph<edge_data_type>::check_vertices(
-		const std::vector<ext_mem_directed_vertex *> &vertices) const
+		const std::vector<ext_mem_undirected_vertex *> &vertices, bool in_part) const
 {
 	assert(!vertices.empty());
-	typename stxxl_edge_vector<edge_data_type>::const_iterator in_it
-		= std::lower_bound(in_edges.begin(), in_edges.end(),
+	typename stxxl_edge_vector<edge_data_type>::const_iterator in_it;
+	typename stxxl_edge_vector<edge_data_type>::const_iterator out_it;
+
+	if (in_part)
+		in_it = std::lower_bound(in_edges.begin(), in_edges.end(),
 				edge<edge_data_type>(0, vertices[0]->get_id()),
 				comp_in_edge<edge_data_type>());
-	typename stxxl_edge_vector<edge_data_type>::const_iterator out_it
-		= std::lower_bound(out_edges.begin(), out_edges.end(),
+	else
+		out_it = std::lower_bound(out_edges.begin(), out_edges.end(),
 				edge<edge_data_type>(vertices[0]->get_id(), 0),
 				comp_edge<edge_data_type>());
 
 	for (size_t i = 0; i < vertices.size(); i++) {
 		// Check in-edges
-		edge_const_iterator<edge_data_type> v_in_it
-			= vertices[i]->get_in_edge_begin<edge_data_type>();
-		edge_const_iterator<edge_data_type> v_in_end
-			= vertices[i]->get_in_edge_end<edge_data_type>();
-		for (; v_in_it != v_in_end; ++v_in_it, in_it++) {
-			assert(in_it != in_edges.end());
-			edge<edge_data_type> ve = *v_in_it;
-			edge<edge_data_type> e = *in_it;
-			assert(ve.get_from() == e.get_from());
-			assert(ve.get_to() == e.get_to());
-			assert(ve.get_data() == e.get_data());
+		if (in_part) {
+			ext_mem_undirected_vertex *v = vertices[i];
+			for (size_t j = 0; j < v->get_num_edges(); j++, in_it++) {
+				assert(in_it != in_edges.end());
+				edge<edge_data_type> e = *in_it;
+				assert(v->get_neighbor(j) == e.get_from());
+				assert(v->get_id() == e.get_to());
+				if (v->has_edge_data())
+					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
+			}
 		}
-
-		// Check out-edges
-		edge_const_iterator<edge_data_type> v_out_it
-			= vertices[i]->get_out_edge_begin<edge_data_type>();
-		edge_const_iterator<edge_data_type> v_out_end
-			= vertices[i]->get_out_edge_end<edge_data_type>();
-		for (; v_out_it != v_out_end; ++v_out_it, out_it++) {
-			assert(out_it != out_edges.end());
-			edge<edge_data_type> ve = *v_out_it;
-			edge<edge_data_type> e = *out_it;
-			assert(ve.get_from() == e.get_from());
-			assert(ve.get_to() == e.get_to());
-			assert(ve.get_data() == e.get_data());
+		else {
+			// Check out-edges
+			ext_mem_undirected_vertex *v = vertices[i];
+			for (size_t j = 0; j < v->get_num_edges(); j++, out_it++) {
+				assert(out_it != out_edges.end());
+				edge<edge_data_type> e = *out_it;
+				assert(v->get_id() == e.get_from());
+				assert(v->get_neighbor(j) == e.get_to());
+				if (v->has_edge_data())
+					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
+			}
 		}
 	}
+}
+
+vsize_t BUF_SIZE = 1024 * 1024 * 1024;
+
+size_t cal_vertex_size(const std::vector<ext_mem_vertex_info> &infos)
+{
+	assert(!infos.empty());
+	return infos.back().get_off() + infos.back().get_size()
+		- infos.front().get_off();
+}
+
+std::unique_ptr<char[]> read_vertices(FILE *f,
+		const std::vector<ext_mem_vertex_info> &infos,
+		std::vector<ext_mem_undirected_vertex *> &vertices)
+{
+	size_t size = cal_vertex_size(infos);
+	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[size]);
+	off_t off_begin = infos.front().get_off();
+	int ret = fseek(f, off_begin, SEEK_SET);
+	assert(ret == 0);
+	ret = fread(buf.get(), size, 1, f);
+	assert(ret == 1);
+	BOOST_FOREACH(ext_mem_vertex_info info, infos) {
+		off_t rel_off = info.get_off() - off_begin;
+		vertices.push_back((ext_mem_undirected_vertex *) (buf.get() + rel_off));
+	}
+	return buf;
+}
+
+template<class VertexIndexType, class GetInfoFunc, class edge_data_type>
+size_t check_all_vertices(FILE *f, const VertexIndexType &idx, GetInfoFunc func,
+		const edge_graph<edge_data_type> &edge_g, bool in_part)
+{
+	size_t num_vertices = 0;
+	std::vector<ext_mem_vertex_info> infos;
+	infos.push_back(func(idx, 0));
+	while (num_vertices < idx.get_num_vertices()) {
+		while (cal_vertex_size(infos) < BUF_SIZE
+				&& infos.back().get_id() < idx.get_num_vertices() - 1) {
+			infos.push_back(func(idx, infos.back().get_id() + 1));
+		}
+		std::vector<ext_mem_undirected_vertex *> vertices;
+		std::unique_ptr<char[]> buf = read_vertices(f, infos, vertices);
+		num_vertices += vertices.size();
+		edge_g.check_vertices(vertices, in_part);
+		vertex_id_t last_id = infos.back().get_id();
+		infos.clear();
+		if (last_id < idx.get_num_vertices() - 1) {
+			infos.push_back(func(idx, last_id + 1));
+			assert(num_vertices < idx.get_num_vertices());
+		}
+	}
+	return num_vertices;
 }
 
 template<class edge_data_type>
@@ -619,17 +764,20 @@ void disk_undirected_graph<edge_data_type>::check_ext_graph(
 		const std::string &index_file, const std::string &adj_file) const
 {
 	printf("check the graph in the external memory\n");
-	ext_mem_vertex_iterator vit(index_file, adj_file);
-	size_t num_vertices = 0;
-	while (vit.has_next()) {
-		std::vector<ext_mem_undirected_vertex *> vertices;
-		vit.next_vertices(vertices);
-		num_vertices += vertices.size();
-		((const undirected_edge_graph<edge_data_type> *) disk_graph<edge_data_type>::get_edge_graph(
-			))->check_vertices(vertices);
-	}
+	default_vertex_index::ptr idx = default_vertex_index::cast(
+			vertex_index::load(index_file));
+	FILE *f = fopen(adj_file.c_str(), "r");
+	assert(f);
+	struct get_undirected_info_func {
+		ext_mem_vertex_info operator()(const default_vertex_index &idx,
+				vertex_id_t id) {
+			return idx.get_vertex_info(id);
+		}
+	};
+	size_t num_vertices = check_all_vertices(f, *idx, get_undirected_info_func(),
+			*disk_graph<edge_data_type>::get_edge_graph(), true);
+	fclose(f);
 	printf("%ld vertices are checked\n", num_vertices);
-	assert(vit.get_graph_header().get_num_vertices() == num_vertices);
 }
 
 template<class edge_data_type>
@@ -637,53 +785,54 @@ void disk_directed_graph<edge_data_type>::check_ext_graph(
 		const std::string &index_file, const std::string &adj_file) const
 {
 	printf("check the graph in the external memory\n");
-	ext_mem_vertex_iterator vit(index_file, adj_file);
-	size_t num_vertices = 0;
-	while (vit.has_next()) {
-		std::vector<ext_mem_directed_vertex *> vertices;
-		vit.next_vertices(vertices);
-		num_vertices += vertices.size();
-		((const directed_edge_graph<edge_data_type> *) disk_graph<edge_data_type>::get_edge_graph(
-			))->check_vertices(vertices);
-	}
+	directed_vertex_index::ptr idx = directed_vertex_index::cast(
+			vertex_index::load(index_file));
+	FILE *f = fopen(adj_file.c_str(), "r");
+	assert(f);
+
+	struct get_in_part_info_func {
+		ext_mem_vertex_info operator()(const directed_vertex_index &idx,
+				vertex_id_t id) {
+			return idx.get_vertex_info_in(id);
+		}
+	};
+	struct get_out_part_info_func {
+		ext_mem_vertex_info operator()(const directed_vertex_index &idx,
+				vertex_id_t id) {
+			return idx.get_vertex_info_out(id);
+		}
+	};
+	size_t num_vertices = check_all_vertices(f, *idx, get_in_part_info_func(),
+			*disk_graph<edge_data_type>::get_edge_graph(), true);
+	size_t num_vertices1 = check_all_vertices(f, *idx, get_out_part_info_func(),
+			*disk_graph<edge_data_type>::get_edge_graph(), false);
+	assert(num_vertices == num_vertices1);
+
+	fclose(f);
 	printf("%ld vertices are checked\n", num_vertices);
-	assert(vit.get_graph_header().get_num_vertices() == num_vertices);
 }
 
 template<class edge_data_type>
-void disk_graph<edge_data_type>::dump(
-		const std::string &index_file, const std::string &graph_file)
+void disk_graph<edge_data_type>::dump(const std::string &index_file,
+			const std::string &graph_file)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	assert(g);
-	assert(!file_exist(index_file));
 	assert(!file_exist(graph_file));
-	f = fopen(graph_file.c_str(), "w");
-	graph_header header;
-	// Write a dumb header to the file to occupy the space.
-	ssize_t ret = fwrite(&header, sizeof(header), 1, f);
-	assert(ret);
 
 	// Write the adjacency lists to the graph file.
 	g->construct_graph(this);
 	assert(g->get_num_edges() == get_num_edges());
-
-	// Write the real graph header.
-	header = graph_header(get_graph_type(), num_vertices,
-			num_edges, g->has_edge_data());
-	int seek_ret = fseek(f, 0, SEEK_SET);
-	assert(seek_ret == 0);
-	ret = fwrite(&header, sizeof(header), 1, f);
-	assert(ret == 1);
-	fclose(f);
-	f = NULL;
+	finalize_graph_file(graph_file);
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to dump the graph\n",
 			time_diff(start, end));
 
 	start = end;
 	assert(this->get_num_edges() == g->get_num_edges());
+	graph_header header(get_graph_type(), this->get_num_vertices(),
+			this->get_num_edges(), this->get_edge_graph()->has_edge_data());
 	index->dump(index_file, header);
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to dump the index\n",

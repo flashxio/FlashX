@@ -35,8 +35,12 @@ vertex_index::ptr vertex_index::load(const std::string &index_file)
 	fclose(fd);
 
 	vertex_index::ptr idx((vertex_index *) buf, destroy_index());
-	assert((size_t) size >= idx->index_size);
-	idx->header.verify();
+	assert((size_t) size >= idx->get_index_size());
+	idx->get_graph_header().verify();
+	if (idx->get_graph_header().is_directed_graph())
+		directed_vertex_index::cast(idx)->verify();
+	else
+		default_vertex_index::cast(idx)->verify();
 
 	return idx;
 }

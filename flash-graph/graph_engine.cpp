@@ -255,15 +255,14 @@ namespace {
 class vpart_index_compute: public index_compute
 {
 	std::vector<vertex_id_t> *large_degree_ids;
-	int header_size;
 	vsize_t num_gets;
+	graph_engine &graph;
 public:
 	vpart_index_compute(index_comp_allocator &_alloc,
 			std::vector<vertex_id_t> *_ids,
-			int header_size): index_compute(_alloc) {
+			graph_engine &_graph): index_compute(_alloc), graph(_graph) {
 		this->large_degree_ids = _ids;
 		this->num_gets = 0;
-		this->header_size = header_size;
 	}
 
 	void init(vertex_id_t start, vertex_id_t end) {
@@ -282,10 +281,17 @@ bool vpart_index_compute::run(vertex_id_t start_vid, index_iterator &it)
 {
 	vertex_id_t vid = start_vid;
 	while (it.has_next()) {
-		vsize_t size = it.get_curr_vertex_size();
-		vsize_t num_edges = (size - header_size) / sizeof(vertex_id_t);
-		if (num_edges >= graph_conf.get_min_vpart_degree())
-			large_degree_ids->push_back(vid);
+		if (graph.is_directed()) {
+			vsize_t num_edges = graph.cal_num_edges(it.get_curr_size())
+				+ graph.cal_num_edges(it.get_curr_out_size());
+			if (num_edges >= (vsize_t) graph_conf.get_min_vpart_degree())
+				large_degree_ids->push_back(vid);
+		}
+		else {
+			vsize_t num_edges = graph.cal_num_edges(it.get_curr_size());
+			if (num_edges >= (vsize_t) graph_conf.get_min_vpart_degree())
+				large_degree_ids->push_back(vid);
+		}
 
 		num_gets++;
 		vid++;
@@ -306,7 +312,7 @@ class index_comp_allocator_impl: public index_comp_allocator
 
 		virtual void init(vpart_index_compute *obj) {
 			new (obj) vpart_index_compute(alloc, alloc.large_degree_ids,
-					alloc.header_size);
+					alloc.graph);
 		}
 	};
 
@@ -320,15 +326,15 @@ class index_comp_allocator_impl: public index_comp_allocator
 
 	obj_allocator<vpart_index_compute> allocator;
 	std::vector<vertex_id_t> *large_degree_ids;
-	int header_size;
+	graph_engine &graph;
 public:
 	index_comp_allocator_impl(thread *t, std::vector<vertex_id_t> &ids,
-			int header_size): allocator("index-compute-allocator",
+			graph_engine &_graph): allocator("index-compute-allocator",
 				t->get_node_id(), false, 1024 * 1024, params.get_max_obj_alloc_size(),
 			obj_initiator<vpart_index_compute>::ptr(new compute_initiator(*this)),
-			obj_destructor<vpart_index_compute>::ptr(new compute_destructor())) {
+			obj_destructor<vpart_index_compute>::ptr(new compute_destructor())),
+			graph(_graph) {
 		this->large_degree_ids = &ids;
-		this->header_size = header_size;
 	}
 
 	virtual index_compute *alloc() {
@@ -403,8 +409,7 @@ void init_vpart_thread::run()
 	std::vector<vertex_id_t> large_degree_ids;
 	std::unique_ptr<index_comp_allocator_impl> alloc
 		= std::unique_ptr<index_comp_allocator_impl>(
-				new index_comp_allocator_impl(this, large_degree_ids,
-					graph.get_vertex_header_size()));
+				new index_comp_allocator_impl(this, large_degree_ids, graph));
 	const graph_partitioner *partitioner = graph.get_partitioner();
 	for (vertex_id_t id = 0; id < index->get_num_vertices(); ) {
 		id_range_t range;
@@ -471,30 +476,6 @@ graph_engine::graph_engine(const std::string &graph_file,
 	io_interface::ptr io = graph_factory->create_io(thread::get_curr_thread());
 	io->access((char *) &header, 0, sizeof(header), READ);
 	header.verify();
-
-	switch (header.get_graph_type()) {
-		case graph_type::DIRECTED:
-			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
-					new ext_mem_directed_vertex_interpreter());
-			vertex_header_size = ext_mem_directed_vertex::get_header_size();
-			break;
-		case graph_type::UNDIRECTED:
-			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
-					new ext_mem_undirected_vertex_interpreter());
-			vertex_header_size = ext_mem_undirected_vertex::get_header_size();
-			break;
-		case graph_type::TS_DIRECTED:
-			interpreter = std::unique_ptr<ext_mem_vertex_interpreter>(
-					new ts_ext_mem_vertex_interpreter(
-					header.get_max_num_timestamps()));
-			vertex_header_size = -1;
-			break;
-		case graph_type::TS_UNDIRECTED:
-			assert(0);
-			break;
-		default:
-			assert(0);
-	}
 
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);

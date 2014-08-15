@@ -312,23 +312,6 @@ public:
 	friend class NUMA_graph_index<vertex_type, part_vertex_type>;
 };
 
-static inline size_t get_min_ext_mem_vertex_size(graph_type type)
-{
-	switch(type) {
-		case graph_type::DIRECTED:
-			return sizeof(ext_mem_directed_vertex);
-		case graph_type::UNDIRECTED:
-			return sizeof(ext_mem_undirected_vertex);
-		case graph_type::TS_DIRECTED:
-			return sizeof(ts_ext_mem_directed_vertex);
-		case graph_type::TS_UNDIRECTED:
-			assert(0);
-			break;
-		default:
-			assert(0);
-	}
-}
-
 template<class vertex_type, class part_vertex_type>
 class NUMA_graph_index: public graph_index
 {

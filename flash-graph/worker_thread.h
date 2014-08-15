@@ -171,7 +171,6 @@ class worker_thread: public thread
 	io_interface::ptr io;
 	graph_engine *graph;
 	compute_allocator *alloc;
-	compute_allocator *part_alloc;
 	vertex_program::ptr vprogram;
 	// Vertex program on the vertically partitioned vertices.
 	vertex_program::ptr vpart_vprogram;
@@ -250,11 +249,6 @@ public:
 
 	void run();
 	void init();
-
-	compute_allocator *get_part_compute_allocator() const {
-		assert(part_alloc);
-		return part_alloc;
-	}
 
 	/**
 	 * When a vertex has been completed for the current iteration, this

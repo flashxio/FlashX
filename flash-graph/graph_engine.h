@@ -32,7 +32,6 @@
 #include "vertex_index.h"
 #include "trace_logger.h"
 #include "messaging.h"
-#include "vertex_interpreter.h"
 #include "partitioner.h"
 #include "graph_index.h"
 #include "graph_config.h"
@@ -330,12 +329,10 @@ class graph_engine
 {
 	static std::atomic<size_t> init_count;
 
-	int vertex_header_size;
 	graph_header header;
 	graph_index::ptr vertices;
 	vertex_index::ptr vindex;
 	std::shared_ptr<in_mem_graph> graph_data;
-	std::unique_ptr<ext_mem_vertex_interpreter> interpreter;
 	vertex_scheduler::ptr scheduler;
 
 	// The number of activated vertices that haven't been processed
@@ -587,11 +584,6 @@ public:
 	}
     
     /**\internal */
-	ext_mem_vertex_interpreter &get_vertex_interpreter() const {
-		return *interpreter;
-	}
-    
-    /**\internal */
 	const graph_partitioner *get_partitioner() const {
 		return &vertices->get_partitioner();
 	}
@@ -628,10 +620,6 @@ public:
 		return num_remaining_vertices_in_level.get();
 	}
 
-	int get_vertex_header_size() const {
-		return vertex_header_size;
-	}
-
 	/*
 	 * \internal Get the in-memory vertex index.
 	 */
@@ -650,6 +638,14 @@ public:
 
 	graph_index::ptr get_graph_index() const {
 		return vertices;
+	}
+
+	size_t get_in_part_size() const {
+		assert(0);
+	}
+
+	vsize_t cal_num_edges(vsize_t vertex_size) const {
+		assert(0);
 	}
 };
 

@@ -23,6 +23,8 @@
 #include "vertex_index.h"
 #include "vertex.h"
 
+#if 0
+
 class ext_mem_vertex_iterator
 {
 	static const size_t MEM_SIZE = 1024 * 1024 * 1024;
@@ -127,5 +129,6 @@ public:
 		return ret.size();
 	}
 };
+#endif
 
 #endif

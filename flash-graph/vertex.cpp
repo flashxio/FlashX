@@ -22,47 +22,30 @@
 
 empty_data edge<empty_data>::data;
 
-ext_mem_directed_vertex::unique_ptr ext_mem_directed_vertex::merge(
-		const std::vector<const ext_mem_directed_vertex *> &vertices)
+size_t ext_mem_undirected_vertex::serialize(const in_mem_vertex &v, char *buf,
+		size_t size, edge_type type)
 {
-	std::vector<vertex_id_t> in_edges;
-	std::vector<vertex_id_t> out_edges;
-	assert(vertices.size() > 0);
-	vertex_id_t id = INVALID_VERTEX_ID;
-	for (size_t i = 0; i < vertices.size(); i++) {
-		if (vertices[i] == NULL)
-			continue;
-
-		assert(!vertices[i]->has_edge_data());
-		if (id == INVALID_VERTEX_ID)
-			id = vertices[i]->get_id();
-		assert(id == vertices[i]->get_id());
-		in_edges.insert(in_edges.end(), vertices[i]->neighbors,
-				vertices[i]->neighbors + vertices[i]->num_in_edges);
-		out_edges.insert(out_edges.end(),
-				&vertices[i]->neighbors[vertices[i]->num_in_edges],
-				&vertices[i]->neighbors[vertices[i]->num_in_edges
-				+ vertices[i]->num_out_edges]);
+	assert(ext_mem_undirected_vertex::get_header_size() <= size);
+	ext_mem_undirected_vertex *ext_v = (ext_mem_undirected_vertex *) buf;
+	ext_v->set_id(v.get_id());
+	ext_v->num_edges = v.get_num_edges(type);
+	if (v.has_edge_data())
+		ext_v->edge_data_size = v.get_edge_data_size();
+	else
+		ext_v->edge_data_size = 0;
+	size_t mem_size = ext_v->get_size();
+	assert(mem_size <= MAX_VERTEX_SIZE);
+	assert(size >= mem_size);
+	v.serialize_edges(ext_v->neighbors, type);
+	// serialize edge data
+	if (v.has_edge_data()) {
+		v.serialize_edge_data(ext_v->get_edge_data_addr(), type);
 	}
-	assert(id != INVALID_VERTEX_ID);
-	std::sort(in_edges.begin(), in_edges.end());
-	std::sort(out_edges.begin(), out_edges.end());
 
-	size_t buf_size = get_header_size() + (in_edges.size()
-				+ out_edges.size()) * sizeof(vertex_id_t);
-	char *vertex_buf = new char[buf_size];
-	ext_mem_directed_vertex *out_v = (ext_mem_directed_vertex *) vertex_buf;
-	out_v->id = id;
-	out_v->edge_data_size = 0;
-	out_v->num_in_edges = in_edges.size();
-	out_v->num_out_edges = out_edges.size();
-	memcpy(out_v->neighbors, in_edges.data(),
-			sizeof(vertex_id_t) * in_edges.size());
-	memcpy(&out_v->neighbors[out_v->num_in_edges], out_edges.data(),
-			sizeof(vertex_id_t) * out_edges.size());
-	return unique_ptr(out_v);
+	return mem_size;
 }
 
+#if 0
 ts_ext_mem_directed_vertex::unique_ptr ts_ext_mem_directed_vertex::merge(
 		const std::vector<const ext_mem_directed_vertex *> &vertices)
 {
@@ -178,6 +161,7 @@ void ts_ext_mem_directed_vertex::construct_header(
 			== edge_list_size);
 	assert(this->get_edge_off_begin()[0].in_off == 0);
 }
+#endif
 
 offset_pair TS_page_directed_vertex::get_edge_list_offset(
 		const timestamp_pair &range) const
