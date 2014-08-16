@@ -113,6 +113,8 @@ void in_mem_io::process_req(const io_request &req)
 	// add it to the queue.
 	if (!compute->has_completed() && !compute->test_flag(IN_QUEUE)) {
 		compute->set_flag(IN_QUEUE, true);
+		if (compute_buf.is_full())
+			compute_buf.expand_queue(compute_buf.get_size() * 2);
 		compute_buf.push_back(compute);
 	}
 	else
