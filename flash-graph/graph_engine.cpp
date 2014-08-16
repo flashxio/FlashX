@@ -473,9 +473,15 @@ graph_engine::graph_engine(const std::string &graph_file,
 	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
 	index_factory = create_io_factory(index->get_index_file(), GLOBAL_CACHE_ACCESS);
 
-	io_interface::ptr io = graph_factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
 	io->access((char *) &header, 0, sizeof(header), READ);
 	header.verify();
+	out_part_off = 0;
+	if (header.is_directed_graph()) {
+		assert(sizeof(vertex_index) == sizeof(header));
+		vertex_index *idx = (vertex_index *) &header;
+		out_part_off = idx->get_out_part_loc();
+	}
 
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);

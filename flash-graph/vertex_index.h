@@ -37,6 +37,7 @@ protected:
 			struct graph_header_struct header;
 			size_t entry_size;
 			size_t num_entries;
+			off_t out_part_loc;
 		} data;
 		char page[PAGE_SIZE];
 	} h;
@@ -47,6 +48,7 @@ protected:
 		graph_header::init(h.data.header);
 		h.data.entry_size = entry_size;
 		h.data.num_entries = 0;
+		h.data.out_part_loc = 0;
 	}
 
 	class destroy_index
@@ -87,6 +89,10 @@ public:
 
 	size_t get_index_size() const {
 		return sizeof(vertex_index) + h.data.num_entries * h.data.entry_size;
+	}
+
+	off_t get_out_part_loc() const {
+		return h.data.out_part_loc;
 	}
 };
 
@@ -195,6 +201,7 @@ public:
 		// Right now all other types of graphs use the default vertex index.
 		assert(get_graph_header().get_graph_type() != graph_type::DIRECTED);
 		assert(get_vertex(0).get_off() == sizeof(graph_header));
+		assert(h.data.out_part_loc == 0);
 	}
 
 	size_t get_graph_size() const {
@@ -248,6 +255,8 @@ public:
 
 class directed_vertex_index: public vertex_index_temp<directed_vertex_entry>
 {
+	directed_vertex_index(const graph_header &header): vertex_index_temp<directed_vertex_entry>(header) {
+	}
 public:
 	typedef std::shared_ptr<directed_vertex_index> ptr;
 
@@ -263,6 +272,26 @@ public:
 		return ret;
 	}
 
+	static void dump(const std::string &file, const graph_header &header,
+			const std::vector<directed_vertex_entry> &vertices) {
+		directed_vertex_index index(header);
+		index.h.data.num_entries = vertices.size();
+		index.h.data.out_part_loc = vertices.front().get_out_off();
+		assert(header.get_num_vertices() + 1 == vertices.size());
+		FILE *f = fopen(file.c_str(), "w");
+		if (f == NULL) {
+			perror("fopen");
+			assert(0);
+		}
+
+		ssize_t ret = fwrite(&index, vertex_index::get_header_size(), 1, f);
+		assert(ret);
+		ret = fwrite(vertices.data(), vertices.size() * sizeof(vertices[0]), 1, f);
+		assert(ret);
+
+		fclose(f);
+	}
+
 	void verify() const {
 		vertex_index_temp<directed_vertex_entry>::verify();
 		assert(get_graph_header().get_graph_type() == graph_type::DIRECTED);
@@ -270,6 +299,7 @@ public:
 		// All out-part of vertices are stored behind the in-part of vertices.
 		assert(get_vertex(0).get_out_off()
 				== get_vertex(get_num_vertices()).get_in_off());
+		assert(h.data.out_part_loc == get_vertex(0).get_out_off());
 	}
 
 	size_t get_graph_size() const {

@@ -330,6 +330,10 @@ class graph_engine
 	static std::atomic<size_t> init_count;
 
 	graph_header header;
+	// The location of the out-part of the graph. It's valid only
+	// in a directed graph.
+	off_t out_part_off;
+
 	graph_index::ptr vertices;
 	vertex_index::ptr vindex;
 	std::shared_ptr<in_mem_graph> graph_data;
@@ -641,7 +645,7 @@ public:
 	}
 
 	size_t get_in_part_size() const {
-		assert(0);
+		return out_part_off;
 	}
 
 	vsize_t cal_num_edges(vsize_t vertex_size) const {
