@@ -568,7 +568,7 @@ public:
 	 *            iterator.
      */
 	virtual page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type, size_t start, size_t end) const = 0;
+			edge_type type, size_t start = 0, size_t end = -1) const = 0;
     
     /**
      * \brief Get the vertex unique ID.
@@ -776,7 +776,8 @@ public:
 	 *            iterator.
      */
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type, size_t start, size_t end) const {
+			edge_type type, size_t start = 0, size_t end = -1) const {
+		end = std::min(end, get_num_edges(type));
 		assert(this->type == type);
 		assert(start <= end);
 		return array.get_seq_iterator<vertex_id_t>(
@@ -955,7 +956,8 @@ public:
      * in a vertex's neighbor list.
      */
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type, size_t start, size_t end) const {
+			edge_type type, size_t start = 0, size_t end = -1) const {
+		end = std::min(end, get_num_edges(type));
 		assert(start <= end);
 		assert(end <= get_num_edges(type));
 		return array.get_seq_iterator<vertex_id_t>(

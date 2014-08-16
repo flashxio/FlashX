@@ -108,16 +108,14 @@ void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	component_message msg(component_id);
 	if (vertex.is_in_part()) {
 		empty &= (vertex.get_num_edges(IN_EDGE) == 0);
-		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE, 0,
-				vertex.get_num_edges(IN_EDGE));
+		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE);
 		// We need to add the neighbors of the vertex to the queue of
 		// the next level.
 		prog.multicast_msg(it, msg);
 	}
 	else {
 		empty &= (vertex.get_num_edges(OUT_EDGE) == 0);
-		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0,
-				vertex.get_num_edges(OUT_EDGE));
+		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE);
 		// We need to add the neighbors of the vertex to the queue of
 		// the next level.
 		prog.multicast_msg(it, msg);
