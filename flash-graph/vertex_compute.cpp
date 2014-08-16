@@ -148,6 +148,17 @@ void directed_vertex_compute::complete_empty_part(
 }
 #endif
 
+void directed_vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
+{
+	stack_array<directed_vertex_request> reqs(num);
+	for (size_t i = 0; i < num; i++)
+		reqs[i] = directed_vertex_request(ids[i], edge_type::IN_EDGE);
+	request_partial_vertices(reqs.data(), num);
+	for (size_t i = 0; i < num; i++)
+		reqs[i] = directed_vertex_request(ids[i], edge_type::OUT_EDGE);
+	request_partial_vertices(reqs.data(), num);
+}
+
 void directed_vertex_compute::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {

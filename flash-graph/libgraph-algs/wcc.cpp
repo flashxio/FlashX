@@ -62,7 +62,7 @@ public:
 	wcc_vertex(vertex_id_t id): compute_vertex(id) {
 		component_id = id;
 		updated = true;
-		empty = false;
+		empty = true;
 	}
 
 	bool is_empty(graph_engine &graph) const {
@@ -105,13 +105,23 @@ public:
 
 void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
-	empty = (vertex.get_num_edges(BOTH_EDGES) == 0);
-	// We need to add the neighbors of the vertex to the queue of
-	// the next level.
-	int num_dests = vertex.get_num_edges(BOTH_EDGES);
-	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
 	component_message msg(component_id);
-	prog.multicast_msg(it, msg);
+	if (vertex.is_in_part()) {
+		empty &= (vertex.get_num_edges(IN_EDGE) == 0);
+		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE, 0,
+				vertex.get_num_edges(IN_EDGE));
+		// We need to add the neighbors of the vertex to the queue of
+		// the next level.
+		prog.multicast_msg(it, msg);
+	}
+	else {
+		empty &= (vertex.get_num_edges(OUT_EDGE) == 0);
+		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE, 0,
+				vertex.get_num_edges(OUT_EDGE));
+		// We need to add the neighbors of the vertex to the queue of
+		// the next level.
+		prog.multicast_msg(it, msg);
+	}
 }
 
 class ts_wcc_vertex: public wcc_vertex

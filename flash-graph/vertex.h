@@ -602,6 +602,13 @@ public:
      */
 	virtual void print() const {
 	}
+
+    /** \brief Determine whether it contains in-edges or out-edges.
+     * \return True if it contains in-edges.
+     */
+	virtual bool is_in_part() const {
+		return true;
+	}
 };
 
 /*

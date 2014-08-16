@@ -303,6 +303,7 @@ void simple_index_reader::flush_computes()
 						*index_reader, *single_vertex_comp_alloc);
 	}
 
+	assert(part_vertex_comps[edge_type::BOTH_EDGES].empty());
 	for (int type = edge_type::IN_EDGE; type < edge_type::NUM_TYPES; type++) {
 		if (!part_vertex_comps[type].empty()) {
 			if (!std::is_sorted(part_vertex_comps[type].begin(),

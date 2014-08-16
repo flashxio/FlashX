@@ -214,6 +214,15 @@ public:
 
 	virtual void run(page_byte_array &);
 
+	/*
+	 * These two methods accept the requests from graph applications and issue
+	 * the request for the adjacency lists of vertices. It has to get
+	 * the location and the size of the vertices from the vertex index
+	 * before issuing the real requests to SAFS.
+	 * `request_vertices' requests both edge lists of vertices.
+	 * `request_partial_vertices' requests one type of edge lists of vertices.
+	 */
+	virtual void request_vertices(vertex_id_t ids[], size_t num);
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 
 	/*
