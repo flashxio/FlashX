@@ -346,7 +346,8 @@ public:
 
 		// Write the real graph header.
 		graph_header header(get_graph_type(), this->get_num_vertices(),
-				this->get_num_edges(), this->get_edge_graph()->has_edge_data());
+				this->get_num_edges(),
+				this->get_edge_graph()->has_edge_data() ? sizeof(edge_data_type) : 0);
 		int seek_ret = fseek(in_f, 0, SEEK_SET);
 		assert(seek_ret == 0);
 		ssize_t ret = fwrite(&header, sizeof(header), 1, in_f);
@@ -404,7 +405,8 @@ public:
 	virtual void finalize_graph_file(const std::string &adj_file) {
 		// Write the real graph header.
 		graph_header header(get_graph_type(), this->get_num_vertices(),
-				this->get_num_edges(), this->get_edge_graph()->has_edge_data());
+				this->get_num_edges(),
+				this->get_edge_graph()->has_edge_data() ? sizeof(edge_data_type) : 0);
 		int seek_ret = fseek(f, 0, SEEK_SET);
 		assert(seek_ret == 0);
 		ssize_t ret = fwrite(&header, sizeof(header), 1, f);
@@ -832,7 +834,8 @@ void disk_graph<edge_data_type>::dump(const std::string &index_file,
 	start = end;
 	assert(this->get_num_edges() == g->get_num_edges());
 	graph_header header(get_graph_type(), this->get_num_vertices(),
-			this->get_num_edges(), this->get_edge_graph()->has_edge_data());
+			this->get_num_edges(),
+			this->get_edge_graph()->has_edge_data() ? sizeof(edge_data_type) : 0);
 	index->dump(index_file, header);
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to dump the index\n",

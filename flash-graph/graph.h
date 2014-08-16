@@ -280,7 +280,7 @@ public:
 		}
 
 		graph_header header(graph_type::DIRECTED, vertices.size(),
-				get_num_edges() / 2, has_data);
+				get_num_edges() / 2, has_data ? sizeof(edge_data_type) : 0);
 		ssize_t ret = fwrite(&header, sizeof(header), 1, in_f);
 		assert(ret == 1);
 

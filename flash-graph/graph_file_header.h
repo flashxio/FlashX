@@ -42,7 +42,7 @@ struct graph_header_struct
 	graph_type type;
 	size_t num_vertices;
 	size_t num_edges;
-	bool has_data;
+	int edge_data_size;
 	// This is only used for time-series graphs.
 	int max_num_timestamps;
 };
@@ -68,7 +68,7 @@ public:
 		data.type = DIRECTED;
 		data.num_vertices = 0;
 		data.num_edges = 0;
-		data.has_data = false;
+		data.edge_data_size = 0;
 		data.max_num_timestamps = 0;
 	}
 
@@ -79,7 +79,7 @@ public:
 	}
 
 	graph_header(graph_type type, size_t num_vertices, size_t num_edges,
-			bool has_edge_data, int max_num_timestamps = 0) {
+			int edge_data_size, int max_num_timestamps = 0) {
 		assert(sizeof(*this) == PAGE_SIZE);
 		memset(this, 0, sizeof(*this));
 		h.data.magic_number = MAGIC_NUMBER;
@@ -87,7 +87,7 @@ public:
 		h.data.type = type;
 		h.data.num_vertices = num_vertices;
 		h.data.num_edges = num_edges;
-		h.data.has_data = has_edge_data;
+		h.data.edge_data_size = edge_data_size;
 		h.data.max_num_timestamps = max_num_timestamps;
 	}
 
@@ -117,7 +117,11 @@ public:
 	}
 
 	bool has_edge_data() const {
-		return h.data.has_data;
+		return h.data.edge_data_size > 0;
+	}
+
+	int get_edge_data_size() const {
+		return h.data.edge_data_size;
 	}
 
 	int get_max_num_timestamps() const {
