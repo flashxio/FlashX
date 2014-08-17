@@ -574,10 +574,36 @@ class embedded_array
 	T buf[size];
 	T *real_buf;
 	int capacity;
+
+	void assign(embedded_array<T, size> &arr) {
+		if (arr.real_buf == arr.buf) {
+			for (int i = 0; i < capacity; i++) {
+				this->buf[i] = arr.buf[i];
+				arr.buf[i] = T();
+			}
+			this->real_buf = this->buf;
+			this->capacity = size;
+		}
+		else {
+			this->real_buf = arr.real_buf;
+			this->capacity = arr.capacity;
+			arr.real_buf = arr.buf;
+			arr.capacity = size;
+		}
+	}
 public:
 	embedded_array() {
 		real_buf = buf;
 		capacity = size;
+	}
+
+	embedded_array(embedded_array<T, size> &arr) {
+		assign(arr);
+	}
+
+	embedded_array &operator=(embedded_array<T, size> &arr) {
+		assign(arr);
+		return *this;
 	}
 
 	~embedded_array() {

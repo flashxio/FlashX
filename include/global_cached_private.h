@@ -156,7 +156,8 @@ public:
 class original_req_byte_array: public page_byte_array
 {
 	off_t off;
-	size_t size;
+	size_t valid: 1;
+	size_t size: 63;
 	embedded_array<thread_safe_page *> pages;
 
 	int get_num_covered_pages() const {
@@ -164,10 +165,19 @@ class original_req_byte_array: public page_byte_array
 		off_t end_pg = ROUNDUP_PAGE(off + size);
 		return (end_pg - begin_pg) / PAGE_SIZE;
 	}
+
+	original_req_byte_array(original_req_byte_array &arr) {
+		this->off = arr.off;
+		this->size = arr.size;
+		this->pages = arr.pages;
+		arr.valid = 0;
+		this->valid = 1;
+	}
 public:
 	original_req_byte_array(original_io_request &req) {
 		off = req.get_offset();
 		size = req.get_size();
+		valid = 1;
 		int num_pages = req.get_num_covered_pages();
 		pages.resize(num_pages);
 		for (int i = 0; i < num_pages; i++) {
@@ -177,10 +187,12 @@ public:
 	}
 
 	~original_req_byte_array() {
-		int num_pages = get_num_covered_pages();
-		for (int i = 0; i < num_pages; i++) {
-			assert(pages[i]);
-			pages[i]->dec_ref();
+		if (valid) {
+			int num_pages = get_num_covered_pages();
+			for (int i = 0; i < num_pages; i++) {
+				if (pages[i])
+					pages[i]->dec_ref();
+			}
 		}
 	}
 
@@ -204,6 +216,10 @@ public:
 	void unlock() {
 		// TODO
 		assert(0);
+	}
+
+	page_byte_array *clone() {
+		return new original_req_byte_array(*this);
 	}
 };
 

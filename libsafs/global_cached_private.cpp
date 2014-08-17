@@ -1002,6 +1002,13 @@ class simple_page_byte_array: public page_byte_array
 	off_t off;
 	size_t size;
 	thread_safe_page *p;
+
+	simple_page_byte_array(simple_page_byte_array &arr) {
+		this->off = arr.off;
+		this->size = arr.size;
+		this->p = arr.p;
+		arr.p = NULL;
+	}
 public:
 	simple_page_byte_array(const io_request &req, thread_safe_page *p) {
 		off = req.get_offset();
@@ -1010,7 +1017,8 @@ public:
 	}
 
 	~simple_page_byte_array() {
-		p->dec_ref();
+		if (p)
+			p->dec_ref();
 	}
 
 	virtual void lock() {
@@ -1034,6 +1042,10 @@ public:
 
 	virtual size_t get_size() const {
 		return size;
+	}
+
+	page_byte_array *clone() {
+		return new simple_page_byte_array(*this);
 	}
 };
 

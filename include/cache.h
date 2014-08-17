@@ -530,6 +530,13 @@ public:
 class page_byte_array
 {
 public:
+	static void destroy(page_byte_array *arr) {
+		delete arr;
+	}
+
+	virtual ~page_byte_array() {
+	}
+
 	/**
 	 * This method locks the byte array.
 	 * It's currently not implemented yet.
@@ -545,6 +552,10 @@ public:
 	 * \return the size of the byte array.
 	 */
 	virtual size_t get_size() const = 0;
+	/**
+	 * This clones the byte array.
+	 */
+	virtual page_byte_array *clone() = 0;
 
 	/**
 	 * This method gets the location of the byte array in the SAFS file.
