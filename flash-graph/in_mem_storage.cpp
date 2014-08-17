@@ -70,15 +70,24 @@ public:
 
 class in_mem_byte_array: public page_byte_array
 {
-	const io_request &req;
+	off_t off;
+	size_t size;
 	thread_safe_page *pages;
+
+	in_mem_byte_array(in_mem_byte_array &arr) {
+		this->off = arr.off;
+		this->size = arr.size;
+		this->pages = arr.pages;
+	}
 public:
-	in_mem_byte_array(const io_request &_req, thread_safe_page *pages): req(_req) {
+	in_mem_byte_array(const io_request &req, thread_safe_page *pages) {
+		this->off = req.get_offset();
+		this->size = req.get_size();
 		this->pages = pages;
 	}
 
 	virtual off_t get_offset_in_first_page() const {
-		return req.get_offset() % PAGE_SIZE;
+		return off % PAGE_SIZE;
 	}
 
 	virtual thread_safe_page *get_page(int pg_idx) const {
@@ -86,7 +95,7 @@ public:
 	}
 
 	virtual size_t get_size() const {
-		return req.get_size();
+		return size;
 	}
 
 	void lock() {
@@ -95,6 +104,10 @@ public:
 
 	void unlock() {
 		assert(0);
+	}
+
+	page_byte_array *clone() {
+		return new in_mem_byte_array(*this);
 	}
 };
 

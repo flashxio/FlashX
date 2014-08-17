@@ -257,23 +257,32 @@ public:
  */
 class req_vertex_func
 {
-	bool in_part;
+	edge_type type;
 public:
-	req_vertex_func(bool in_part = true) {
-		this->in_part = in_part;
+	req_vertex_func(edge_type type = edge_type::IN_EDGE) {
+		this->type = type;
 	}
 
 	void operator()(vertex_id_t vid, vertex_compute &compute,
 			const index_iterator &it) const {
-		if (in_part) {
+		assert(type != edge_type::NONE);
+		if (type == edge_type::IN_EDGE) {
 			ext_mem_vertex_info info(vid, it.get_curr_off(),
 					it.get_curr_size());
 			compute.issue_io_request(info);
 		}
-		else {
+		else if (type == edge_type::OUT_EDGE) {
 			ext_mem_vertex_info info(vid, it.get_curr_out_off(),
 					it.get_curr_out_size());
 			compute.issue_io_request(info);
+		}
+		else {
+			ext_mem_vertex_info in_info(vid, it.get_curr_off(),
+					it.get_curr_size());
+			ext_mem_vertex_info out_info(vid, it.get_curr_out_off(),
+					it.get_curr_out_size());
+			((directed_vertex_compute &) compute).issue_io_request(in_info,
+				out_info);
 		}
 	}
 };
@@ -387,7 +396,7 @@ public:
 	using dense_vertex_compute::init;
 	void init(const directed_vertex_request &req, vertex_compute *compute) {
 		type = req.get_type();
-		func = req_vertex_func(req.get_type() == edge_type::IN_EDGE);
+		func = req_vertex_func(req.get_type());
 		dense_vertex_compute::init(req.get_id(), compute);
 	}
 
@@ -568,7 +577,7 @@ public:
 	using general_vertex_compute::init;
 	void init(const directed_vertex_request &req, vertex_compute *compute) {
 		type = req.get_type();
-		func = req_vertex_func(req.get_type() == edge_type::IN_EDGE);
+		func = req_vertex_func(req.get_type());
 		general_vertex_compute::init(req.get_id(), compute);
 	}
 

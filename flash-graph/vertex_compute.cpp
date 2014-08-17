@@ -118,16 +118,60 @@ void vertex_compute::complete_request()
 		issue_thread->complete_vertex(v);
 }
 
-void directed_vertex_compute::run(page_byte_array &array)
+void directed_vertex_compute::run_on_page_vertex(page_directed_vertex &pg_v)
 {
-	page_directed_vertex pg_v(array,
-			(size_t) array.get_offset() < graph->get_in_part_size());
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
 	issue_thread->start_run_vertex(v);
 	curr_vprog.run(*v, pg_v);
 	issue_thread->finish_run_vertex(v);
 	complete_request();
+}
+
+void directed_vertex_compute::run(page_byte_array &array)
+{
+	// If the combine map is empty, we don't need to merge
+	// byte arrays.
+	if (combine_map.empty()) {
+		page_directed_vertex pg_v(array,
+				(size_t) array.get_offset() < graph->get_in_part_size());
+		run_on_page_vertex(pg_v);
+		return;
+	}
+
+	vertex_id_t id = page_directed_vertex::get_id(array);
+	combine_map_t::iterator it = combine_map.find(id);
+	// If the vertex isn't in the combine map, we don't need to
+	// merge byte arrays.
+	if (it == combine_map.end()) {
+		page_directed_vertex pg_v(array,
+				(size_t) array.get_offset() < graph->get_in_part_size());
+		run_on_page_vertex(pg_v);
+		return;
+	}
+	else if (it->second == NULL) {
+		page_byte_array *arr_copy = array.clone();
+		assert(arr_copy);
+		it->second = arr_copy;
+	}
+	else {
+		page_byte_array *in_arr;
+		page_byte_array *out_arr;
+		if (it->second->get_offset() < get_graph().get_in_part_size()) {
+			in_arr = it->second;
+			out_arr = &array;
+			assert(array.get_offset() >= get_graph().get_in_part_size());
+		}
+		else {
+			out_arr = it->second;
+			in_arr = &array;
+			assert(array.get_offset() < get_graph().get_in_part_size());
+		}
+		page_directed_vertex pg_v(*in_arr, *out_arr);
+		run_on_page_vertex(pg_v);
+		page_byte_array::destroy(it->second);
+		combine_map.erase(it);
+	}
 }
 
 #if 0
@@ -152,10 +196,7 @@ void directed_vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 {
 	stack_array<directed_vertex_request> reqs(num);
 	for (size_t i = 0; i < num; i++)
-		reqs[i] = directed_vertex_request(ids[i], edge_type::IN_EDGE);
-	request_partial_vertices(reqs.data(), num);
-	for (size_t i = 0; i < num; i++)
-		reqs[i] = directed_vertex_request(ids[i], edge_type::OUT_EDGE);
+		reqs[i] = directed_vertex_request(ids[i], edge_type::BOTH_EDGES);
 	request_partial_vertices(reqs.data(), num);
 }
 
@@ -179,6 +220,23 @@ void directed_vertex_compute::run_on_vertex_size(vertex_id_t id,
 	num_edge_completed++;
 	if (get_num_pending() == 0)
 		issue_thread->complete_vertex(v);
+}
+
+void directed_vertex_compute::issue_io_request(const ext_mem_vertex_info &in_info,
+		const ext_mem_vertex_info &out_info)
+{
+	assert(in_info.get_id() == out_info.get_id());
+	// Otherwise, we need to issue the I/O request to SAFS explicitly.
+	data_loc_t loc1(graph->get_file_id(), in_info.get_off());
+	io_request req1(this, loc1, in_info.get_size(), READ);
+	issue_thread->issue_io_request(req1);
+
+	data_loc_t loc2(graph->get_file_id(), out_info.get_off());
+	io_request req2(this, loc2, out_info.get_size(), READ);
+	issue_thread->issue_io_request(req2);
+
+	combine_map.insert(combine_map_t::value_type(in_info.get_id(), NULL));
+	num_issued++;
 }
 
 void directed_vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)

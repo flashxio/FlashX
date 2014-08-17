@@ -106,18 +106,20 @@ public:
 void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	component_message msg(component_id);
-	if (vertex.is_in_part()) {
-		empty &= (vertex.get_num_edges(IN_EDGE) == 0);
-		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE);
+	empty = (vertex.get_num_edges(BOTH_EDGES) == 0);
+	if (vertex.is_directed()) {
+		const page_directed_vertex &dvertex = (const page_directed_vertex &) vertex;
+		assert(dvertex.has_in_part());
+		assert(dvertex.has_out_part());
 		// We need to add the neighbors of the vertex to the queue of
 		// the next level.
+		edge_seq_iterator it = dvertex.get_neigh_seq_it(IN_EDGE);
+		prog.multicast_msg(it, msg);
+		it = dvertex.get_neigh_seq_it(OUT_EDGE);
 		prog.multicast_msg(it, msg);
 	}
 	else {
-		empty &= (vertex.get_num_edges(OUT_EDGE) == 0);
-		edge_seq_iterator it = vertex.get_neigh_seq_it(OUT_EDGE);
-		// We need to add the neighbors of the vertex to the queue of
-		// the next level.
+		edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES);
 		prog.multicast_msg(it, msg);
 	}
 }

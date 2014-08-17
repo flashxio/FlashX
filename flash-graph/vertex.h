@@ -602,13 +602,6 @@ public:
      */
 	virtual void print() const {
 	}
-
-    /** \brief Determine whether it contains in-edges or out-edges.
-     * \return True if it contains in-edges.
-     */
-	virtual bool is_in_part() const {
-		return true;
-	}
 };
 
 /*
@@ -693,10 +686,17 @@ typedef page_byte_array::seq_const_iterator<vertex_id_t>  edge_seq_iterator;
 class page_directed_vertex: public page_vertex
 {
 	vertex_id_t id;
-	vsize_t num_edges;
-	const page_byte_array &array;
-	edge_type type;
+	vsize_t num_in_edges;
+	vsize_t num_out_edges;
+	const page_byte_array *in_array;
+	const page_byte_array *out_array;
 public:
+	static vertex_id_t get_id(const page_byte_array &arr) {
+		size_t size = arr.get_size();
+		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
+		return v.get_id();
+	}
     
     /**
 	 * \internal
@@ -705,24 +705,45 @@ public:
 	 *             in the page cache.
      */
 	page_directed_vertex(const page_byte_array &arr,
-			bool in_part): page_vertex(true), array(arr) {
+			bool in_part): page_vertex(true) {
 		size_t size = arr.get_size();
-		// We only want to know the header of the vertex, so we don't need to
-		// know what data type an edge has.
 		assert(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 		assert(size >= v.get_size());
 
+		if (in_part) {
+			this->in_array = &arr;
+			this->out_array = NULL;
+			num_in_edges = v.get_num_edges();
+			num_out_edges = 0;
+		}
+		else {
+			this->out_array = &arr;
+			this->in_array = NULL;
+			num_out_edges = v.get_num_edges();
+			num_in_edges = 0;
+		}
 		id = v.get_id();
-		num_edges = v.get_num_edges();
-		type = in_part ? edge_type::IN_EDGE : edge_type::OUT_EDGE;
 	}
 
-	page_directed_vertex(vertex_id_t id, vsize_t num_edges,
-			const page_byte_array &arr, bool in_part): page_vertex(true), array(arr) {
-		this->id = id;
-		this->num_edges = num_edges;
-		this->type = in_part ? edge_type::IN_EDGE : edge_type::OUT_EDGE;
+	page_directed_vertex(const page_byte_array &in_arr,
+			const page_byte_array &out_arr): page_vertex(true) {
+		this->in_array = &in_arr;
+		this->out_array = &out_arr;
+
+		size_t size = in_arr.get_size();
+		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		ext_mem_undirected_vertex v = in_arr.get<ext_mem_undirected_vertex>(0);
+		assert(size >= v.get_size());
+		id = v.get_id();
+		num_in_edges = v.get_num_edges();
+
+		size = out_arr.get_size();
+		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		v = out_arr.get<ext_mem_undirected_vertex>(0);
+		assert(size >= v.get_size());
+		assert(id == v.get_id());
+		num_out_edges = v.get_num_edges();
 	}
     
     /**
@@ -731,8 +752,16 @@ public:
      * \return The number of edges associated with a vertex.
      */
 	size_t get_num_edges(edge_type type) const {
-		assert(this->type == type);
-		return num_edges;
+		switch(type) {
+			case IN_EDGE:
+				return num_in_edges;
+			case OUT_EDGE:
+				return num_out_edges;
+			case BOTH_EDGES:
+				return num_in_edges + num_out_edges;
+			default:
+				assert(0);
+		}
 	}
     
     /**
@@ -744,9 +773,18 @@ public:
      */
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
 			edge_type type) const {
-		assert(this->type == type);
-		return array.begin<vertex_id_t>(
-				ext_mem_undirected_vertex::get_header_size());
+		switch(type) {
+			case IN_EDGE:
+				assert(in_array);
+				return in_array->begin<vertex_id_t>(
+						ext_mem_undirected_vertex::get_header_size());
+			case OUT_EDGE:
+				assert(out_array);
+				return out_array->begin<vertex_id_t>(
+						ext_mem_undirected_vertex::get_header_size());
+			default:
+				assert(0);
+		}
 	}
     
     /*
@@ -758,7 +796,6 @@ public:
      */
 	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
 			edge_type type) const {
-		assert(this->type == type);
 		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
 		it += get_num_edges(type);
 		return it;
@@ -778,13 +815,25 @@ public:
 	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
 			edge_type type, size_t start = 0, size_t end = -1) const {
 		end = std::min(end, get_num_edges(type));
-		assert(this->type == type);
 		assert(start <= end);
-		return array.get_seq_iterator<vertex_id_t>(
-				ext_mem_undirected_vertex::get_header_size()
-				+ start * sizeof(vertex_id_t),
-				ext_mem_undirected_vertex::get_header_size()
-				+ end * sizeof(vertex_id_t));
+		switch(type) {
+			case IN_EDGE:
+				assert(in_array);
+				return in_array->get_seq_iterator<vertex_id_t>(
+						ext_mem_undirected_vertex::get_header_size()
+						+ start * sizeof(vertex_id_t),
+						ext_mem_undirected_vertex::get_header_size()
+						+ end * sizeof(vertex_id_t));
+			case OUT_EDGE:
+				assert(out_array);
+				return out_array->get_seq_iterator<vertex_id_t>(
+						ext_mem_undirected_vertex::get_header_size()
+						+ start * sizeof(vertex_id_t),
+						ext_mem_undirected_vertex::get_header_size()
+						+ end * sizeof(vertex_id_t));
+			default:
+				assert(0);
+		}
 	}
     
     /**
@@ -797,10 +846,20 @@ public:
 	template<class edge_data_type>
 	page_byte_array::const_iterator<edge_data_type> get_data_begin(
 			edge_type type) const {
-		assert(this->type == type);
-		return array.begin<edge_data_type>(
-				ext_mem_undirected_vertex::get_edge_data_offset(
-					num_edges, sizeof(edge_data_type)));
+		switch(type) {
+			case IN_EDGE:
+				assert(in_array);
+				return in_array->begin<edge_data_type>(
+						ext_mem_undirected_vertex::get_edge_data_offset(
+							num_in_edges, sizeof(edge_data_type)));
+			case OUT_EDGE:
+				assert(out_array);
+				return out_array->begin<edge_data_type>(
+						ext_mem_undirected_vertex::get_edge_data_offset(
+							num_out_edges, sizeof(edge_data_type)));
+			default:
+				assert(0);
+		}
 	}
 
     /**
@@ -813,7 +872,6 @@ public:
 	template<class edge_data_type>
 	page_byte_array::const_iterator<edge_data_type> get_data_end(
 			edge_type type) const {
-		assert(this->type == type);
 		page_byte_array::const_iterator<edge_data_type> it
 			= get_data_begin<edge_data_type>(type);
 		it += get_num_edges(type);
@@ -832,13 +890,25 @@ public:
 	template<class edge_data_type>
 	page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
 			edge_type type, size_t start, size_t end) const {
-		assert(this->type == type);
-		off_t edge_end
-			= ext_mem_undirected_vertex::get_edge_data_offset(
-					num_edges, sizeof(edge_data_type));
-		return array.get_seq_iterator<edge_data_type>(
-				edge_end + start * sizeof(edge_data_type),
-				edge_end + end * sizeof(edge_data_type));
+		off_t edge_end;
+		switch(type) {
+			case IN_EDGE:
+				assert(in_array);
+				edge_end = ext_mem_undirected_vertex::get_edge_data_offset(
+						num_in_edges, sizeof(edge_data_type));
+				return in_array->get_seq_iterator<edge_data_type>(
+						edge_end + start * sizeof(edge_data_type),
+						edge_end + end * sizeof(edge_data_type));
+			case OUT_EDGE:
+				assert(out_array);
+				edge_end = ext_mem_undirected_vertex::get_edge_data_offset(
+						num_out_edges, sizeof(edge_data_type));
+				return out_array->get_seq_iterator<edge_data_type>(
+						edge_end + start * sizeof(edge_data_type),
+						edge_end + end * sizeof(edge_data_type));
+			default:
+				assert(0);
+		}
 	}
 
     /**
@@ -851,7 +921,6 @@ public:
 	template<class edge_data_type>
 	page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
 			edge_type type) const {
-		assert(this->type == type);
 		size_t start = 0;
 		size_t end = get_num_edges(type);
 		return get_data_seq_it<edge_data_type>(type, start, end);
@@ -859,11 +928,23 @@ public:
     
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
 			size_t num) const {
-		assert(this->type == type);
-		vsize_t num_edges = get_num_edges(type);
-		assert(num_edges <= num);
-		array.memcpy(ext_mem_undirected_vertex::get_header_size(),
-				(char *) edges, sizeof(vertex_id_t) * num_edges);
+		size_t num_edges;
+		switch(type) {
+			case IN_EDGE:
+				assert(num_in_edges <= num);
+				assert(in_array);
+				num_edges = num_in_edges;
+				in_array->memcpy(ext_mem_undirected_vertex::get_header_size(),
+						(char *) edges, sizeof(vertex_id_t) * num_edges);
+			case OUT_EDGE:
+				assert(num_out_edges <= num);
+				assert(out_array);
+				num_edges = num_out_edges;
+				out_array->memcpy(ext_mem_undirected_vertex::get_header_size(),
+						(char *) edges, sizeof(vertex_id_t) * num_edges);
+			default:
+				assert(0);
+		}
 		return num_edges;
 	}
     
@@ -874,11 +955,18 @@ public:
 		return id;
 	}
 
-    /** \brief Determine whether it contains in-edges or out-edges.
+    /** \brief Determine whether the page vertex contains in-edges.
      * \return True if it contains in-edges.
      */
-	bool is_in_part() const {
-		return type == edge_type::IN_EDGE;
+	bool has_in_part() const {
+		return in_array;
+	}
+
+    /** \brief Determine whether the page vertex contains out-edges.
+     * \return True if it contains out-edges.
+     */
+	bool has_out_part() const {
+		return out_array;
 	}
 };
 

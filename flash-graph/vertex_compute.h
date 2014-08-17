@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <unordered_map>
 
 #include "io_interface.h"
 #include "slab_allocator.h"
@@ -157,7 +158,7 @@ public:
 	 * a vertex is ready, the vertex index notifies the vertex compute
 	 * of the information.
 	 */
-	virtual void issue_io_request(const ext_mem_vertex_info &info);
+	void issue_io_request(const ext_mem_vertex_info &info);
 
 	/*
 	 * Complete a request for the adjacency list.
@@ -203,6 +204,10 @@ public:
 
 class directed_vertex_compute: public vertex_compute
 {
+	typedef std::unordered_map<vertex_id_t, page_byte_array *> combine_map_t;
+	combine_map_t combine_map;
+
+	void run_on_page_vertex(page_directed_vertex &);
 public:
 	directed_vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): vertex_compute(graph, alloc) {
@@ -230,6 +235,10 @@ public:
 	 * it notifies the vertex_compute of this information.
 	 */
 	void run_on_vertex_size(vertex_id_t id, size_t in_size, size_t out_size);
+
+	using vertex_compute::issue_io_request;
+	void issue_io_request(const ext_mem_vertex_info &in_info,
+			const ext_mem_vertex_info &out_info);
 
 	/*
 	 * This methods accepts the requests from graph applications and issues
