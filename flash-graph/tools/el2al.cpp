@@ -1396,6 +1396,7 @@ void print_usage()
 	fprintf(stderr, "-w: write the graph to a file\n");
 	fprintf(stderr, "-s: simplify a graph (remove duplicated edges)\n");
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
+	fprintf(stderr, "-W dir: the working directory\n");
 }
 
 graph *construct_graph(const std::vector<std::string> &edge_list_files,
@@ -1438,7 +1439,7 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "ud:cpvt:mwsT:")) != -1) {
+	while ((opt = getopt(argc, argv, "ud:cpvt:mwsT:W:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -1474,6 +1475,10 @@ int main(int argc, char *argv[])
 				num_threads = atoi(optarg);
 				num_opts++;
 				break;
+			case 'W':
+				work_dir = optarg;
+				num_opts++;
+				break;
 			default:
 				print_usage();
 		}
@@ -1489,6 +1494,7 @@ int main(int argc, char *argv[])
 	if (type_str) {
 		edge_attr_type = conv_edge_type_str2int(type_str);
 	}
+	printf("work dir: %s\n", work_dir.c_str());
 
 	std::string adjacency_list_file = argv[0];
 	adjacency_list_file += std::string("-v") + itoa(CURR_VERSION);
