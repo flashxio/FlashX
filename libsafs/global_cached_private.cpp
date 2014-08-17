@@ -268,13 +268,8 @@ thread_safe_page *original_io_request::complete_req(thread_safe_page *p,
 void original_io_request::compute()
 {
 	assert(this->get_req_type() == io_request::USER_COMPUTE);
-	original_req_byte_array byte_arr(this);
+	original_req_byte_array byte_arr(*this);
 	get_compute()->run(byte_arr);
-	int num_pages = get_num_covered_pages();
-	for (int i = 0; i < num_pages; i++) {
-		assert(status_arr[i].pg);
-		status_arr[i].pg->dec_ref();
-	}
 }
 
 /**
@@ -553,7 +548,6 @@ int global_cached_io::process_completed_requests()
 	while (!complete_queue.is_empty()) {
 		original_io_request *reqp = complete_queue.pop_front();
 		assert(!reqp->is_sync());
-		reqp_buf[num_reqs++] = reqp;
 		num_completed++;
 		if (reqp->get_req_type() == io_request::USER_COMPUTE) {
 			// This is a user-compute request.
@@ -561,7 +555,10 @@ int global_cached_io::process_completed_requests()
 			reqp->compute();
 			user_compute *compute = reqp->get_compute();
 			complete_user_compute(compute);
+			req_allocator->free(reqp);
 		}
+		else
+			reqp_buf[num_reqs++] = reqp;
 
 		if (num_reqs == REQ_BUF_SIZE) {
 			::notify_completion(this, reqp_buf, num_reqs);
@@ -1002,12 +999,18 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 
 class simple_page_byte_array: public page_byte_array
 {
-	io_request *req;
+	off_t off;
+	size_t size;
 	thread_safe_page *p;
 public:
-	simple_page_byte_array(io_request *req, thread_safe_page *p) {
-		this->req = req;
+	simple_page_byte_array(const io_request &req, thread_safe_page *p) {
+		off = req.get_offset();
+		size = req.get_size();
 		this->p = p;
+	}
+
+	~simple_page_byte_array() {
+		p->dec_ref();
 	}
 
 	virtual void lock() {
@@ -1021,7 +1024,7 @@ public:
 	}
 
 	virtual off_t get_offset_in_first_page() const {
-		return req->get_offset() % PAGE_SIZE;
+		return off % PAGE_SIZE;
 	}
 
 	virtual thread_safe_page *get_page(int idx) const {
@@ -1030,37 +1033,40 @@ public:
 	}
 
 	virtual size_t get_size() const {
-		return req->get_size();
+		return size;
 	}
 };
 
-thread_safe_page *complete_cached_req(io_request *req, thread_safe_page *p)
+thread_safe_page *complete_cached_req(const io_request &req, thread_safe_page *p)
 {
-	if (req->get_req_type() == io_request::BASIC_REQ) {
+	if (req.get_req_type() == io_request::BASIC_REQ) {
 		int page_off;
 		thread_safe_page *ret = NULL;
 		char *req_buf;
 		int req_size;
 
-		page_off = req->get_offset() - ROUND_PAGE(req->get_offset());
-		req_buf = req->get_buf();
-		req_size = req->get_size();
+		page_off = req.get_offset() - ROUND_PAGE(req.get_offset());
+		req_buf = req.get_buf();
+		req_size = req.get_size();
 
 		p->lock();
-		if (req->get_access_method() == WRITE) {
+		if (req.get_access_method() == WRITE) {
 			memcpy((char *) p->get_data() + page_off, req_buf, req_size);
-			if (!p->set_dirty(true))
+			if (!p->set_dirty(true)) {
 				ret = p;
+				ret->inc_ref();
+			}
 		}
 		else 
 			/* I assume the data I read never crosses the page boundary */
 			memcpy(req_buf, (char *) p->get_data() + page_off, req_size);
 		p->unlock();
+		p->dec_ref();
 		return ret;
 	}
 	else {
 		simple_page_byte_array arr(req, p);
-		user_compute *compute = req->get_compute();
+		user_compute *compute = req.get_compute();
 		compute->run(arr);
 		return NULL;
 	}
@@ -1079,12 +1085,13 @@ void global_cached_io::process_cached_reqs()
 		num_fast_process++;
 		std::pair<io_request, thread_safe_page *> pair
 			= cached_requests.pop_front();
-		thread_safe_page *dirty = complete_cached_req(&pair.first,
+		thread_safe_page *dirty = complete_cached_req(pair.first,
 				pair.second);
 		page_cache *cache = get_global_cache();
-		if (dirty)
+		if (dirty) {
 			cache->mark_dirty_pages(&dirty, 1, underlying);
-		pair.second->dec_ref();
+			dirty->dec_ref();
+		}
 		if (!pair.first.is_sync()) {
 			req_buf[num_reqs_in_buf] = pair.first;
 			reqp_buf[num_reqs_in_buf] = &req_buf[num_reqs_in_buf];

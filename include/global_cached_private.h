@@ -155,22 +155,45 @@ public:
  */
 class original_req_byte_array: public page_byte_array
 {
-	original_io_request *req;
+	off_t off;
+	size_t size;
+	embedded_array<thread_safe_page *> pages;
+
+	int get_num_covered_pages() const {
+		off_t begin_pg = ROUND_PAGE(off);
+		off_t end_pg = ROUNDUP_PAGE(off + size);
+		return (end_pg - begin_pg) / PAGE_SIZE;
+	}
 public:
-	original_req_byte_array(original_io_request *req) {
-		this->req = req;
+	original_req_byte_array(original_io_request &req) {
+		off = req.get_offset();
+		size = req.get_size();
+		int num_pages = req.get_num_covered_pages();
+		pages.resize(num_pages);
+		for (int i = 0; i < num_pages; i++) {
+			pages[i] = req.status_arr[i].pg;
+			req.status_arr[i].pg = NULL;
+		}
+	}
+
+	~original_req_byte_array() {
+		int num_pages = get_num_covered_pages();
+		for (int i = 0; i < num_pages; i++) {
+			assert(pages[i]);
+			pages[i]->dec_ref();
+		}
 	}
 
 	virtual off_t get_offset_in_first_page() const {
-		return req->get_offset() % PAGE_SIZE;
+		return off % PAGE_SIZE;
 	}
 
 	virtual thread_safe_page *get_page(int pg_idx) const {
-		return req->status_arr[pg_idx].pg;
+		return pages[pg_idx];
 	}
 
 	virtual size_t get_size() const {
-		return req->get_size();
+		return size;
 	}
 
 	void lock() {
