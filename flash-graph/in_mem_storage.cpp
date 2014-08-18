@@ -56,6 +56,13 @@ public:
 		return 0;
 	}
 
+	virtual io_status access(char *buf, off_t off, ssize_t size,
+			int access_method) {
+		assert(access_method == READ);
+		memcpy(buf, graph.graph_data + off, size);
+		return IO_OK;
+	}
+
 	virtual void access(io_request *requests, int num, io_status *status);
 	virtual int wait4complete(int) {
 		assert(compute_buf.is_empty());
@@ -173,6 +180,7 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 {
 	for (int i = 0; i < num; i++) {
 		io_request &req = requests[i];
+		assert(req.get_req_type() == io_request::USER_COMPUTE);
 		// Let's possess a reference to the user compute first. process_req()
 		// will release the reference when the user compute is completed.
 		req.get_compute()->inc_ref();
