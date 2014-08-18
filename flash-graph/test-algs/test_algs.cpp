@@ -228,11 +228,13 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	std::string output_file;
 	int num_time_intervals = 1;
 	long time_interval = 1;
+	bool compute_all = false;
+	time_t start_time = -1;
 
 	int opt;
 	int num_opts = 0;
 
-	while ((opt = getopt(argc, argv, "n:u:o:t:l:")) != -1) {
+	while ((opt = getopt(argc, argv, "n:u:o:t:l:a")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'n':
@@ -249,11 +251,18 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			case 't':
 				start_time_str = optarg;
+				if (is_time_str(start_time_str))
+					start_time = conv_str_to_time(start_time_str);
+				else
+					start_time = atol(start_time_str.c_str());
 				num_opts++;
 				break;
 			case 'l':
 				time_interval = atol(optarg);
 				num_opts++;
+				break;
+			case 'a':
+				compute_all = true;
 				break;
 			default:
 				print_usage();
@@ -276,26 +285,42 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	bt::ptime pt = bt::time_from_string(start_time_str);
 	struct tm tm = bt::to_tm(pt);
 #endif
-	time_t start_time;
-	if (is_time_str(start_time_str))
-		start_time = conv_str_to_time(start_time_str);
-	else
-		start_time = atol(start_time_str.c_str());
-	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
-	FG_vector<float>::ptr res = compute_sstsg(graph, start_time,
-			time_interval, num_time_intervals);
-
-	std::pair<float, off_t> p = res->max_val_loc();
-	printf("v%ld has max scan %f\n", p.second, p.first);
-	if (!output_file.empty()) {
-		FILE *f = fopen(output_file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			return;
+	if (compute_all) {
+		std::pair<time_t, time_t> range = get_time_range(graph);
+		std::string start_time_str = ctime(&range.first);
+		start_time_str[start_time_str.length() - 1] = 0;
+		std::string end_time_str = ctime(&range.second);
+		end_time_str[end_time_str.length() - 1] = 0;
+		printf("the time-series graph starts at %s, ends at %s\n",
+				start_time_str.c_str(), end_time_str.c_str());
+		time_t start_time = range.first;
+		time_t end_time = range.second;
+		for (time_t interval_start
+				= start_time + num_time_intervals * time_interval;
+				interval_start < end_time; interval_start += time_interval) {
+			FG_vector<float>::ptr res = compute_sstsg(graph, interval_start,
+					time_interval, num_time_intervals);
+			std::pair<float, off_t> p = res->max_val_loc();
+			printf("v%ld has max scan %f\n", p.second, p.first);
 		}
-		for (size_t i = 0; i < res->get_size(); i++)
-			fprintf(f, "\"%ld\" %f\n", i, res->get(i));
-		fclose(f);
+	}
+	else {
+		printf("start time: %ld, interval: %ld\n", start_time, time_interval);
+		FG_vector<float>::ptr res = compute_sstsg(graph, start_time,
+				time_interval, num_time_intervals);
+
+		std::pair<float, off_t> p = res->max_val_loc();
+		printf("v%ld has max scan %f\n", p.second, p.first);
+		if (!output_file.empty()) {
+			FILE *f = fopen(output_file.c_str(), "w");
+			if (f == NULL) {
+				perror("fopen");
+				return;
+			}
+			for (size_t i = 0; i < res->get_size(); i++)
+				fprintf(f, "\"%ld\" %f\n", i, res->get(i));
+			fclose(f);
+		}
 	}
 }
 
