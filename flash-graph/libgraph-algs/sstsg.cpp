@@ -228,13 +228,16 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 			neighbors->begin());
 	neighbors->resize(num_neighbors);
 
-	local_scans->at(0) = in_neighbors.size() + out_neighbors.size();
-	// If there is a self-loop in the in-edge list
-	if (std::binary_search(in_neighbors.begin(), in_neighbors.end(), get_id()))
-		local_scans->at(0)--;
-	// If there is a self-loop in the out-edge list
-	if (std::binary_search(out_neighbors.begin(), out_neighbors.end(), get_id()))
-		local_scans->at(0)--;
+	size_t lscan = 0;
+	BOOST_FOREACH(vertex_id_t id, in_neighbors) {
+		if (id != get_id())
+			lscan++;
+	}
+	BOOST_FOREACH(vertex_id_t id, out_neighbors) {
+		if (id != get_id())
+			lscan++;
+	}
+	local_scans->at(0) = lscan;
 
 	if (neighbors->size() == 0) {
 		delete local_scans;
