@@ -649,7 +649,8 @@ public:
 	}
 
 	vsize_t cal_num_edges(vsize_t vertex_size) const {
-		assert(0);
+		return (vertex_size - ext_mem_undirected_vertex::get_header_size(
+					)) / (sizeof(vertex_id_t) + header.get_edge_data_size());
 	}
 };
 
