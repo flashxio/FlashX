@@ -276,7 +276,11 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 	bt::ptime pt = bt::time_from_string(start_time_str);
 	struct tm tm = bt::to_tm(pt);
 #endif
-	time_t start_time = conv_str_to_time(start_time_str);
+	time_t start_time;
+	if (is_time_str(start_time_str))
+		start_time = conv_str_to_time(start_time_str);
+	else
+		start_time = atol(start_time_str.c_str());
 	printf("start time: %ld, interval: %ld\n", start_time, time_interval);
 	FG_vector<float>::ptr res = compute_sstsg(graph, start_time,
 			time_interval, num_time_intervals);
