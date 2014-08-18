@@ -72,7 +72,8 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	assert((ssize_t) index_size <= factory->get_file_size());
 	char *buf = NULL;
 	printf("allocate %ld bytes\n", index_size);
-	ret = posix_memalign((void **) &buf, PAGE_SIZE, index_size);
+	ret = posix_memalign((void **) &buf, PAGE_SIZE,
+			std::max(index_size, (size_t) INDEX_HEADER_SIZE));
 	assert(ret == 0);
 	off_t off = 0;
 	memcpy(buf, tmp, INDEX_HEADER_SIZE);
