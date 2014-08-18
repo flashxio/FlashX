@@ -204,34 +204,6 @@ public:
 };
 
 /**
- *  \brief Time series compute vertex used for time series graph analytics.
- */
-class compute_ts_vertex: public compute_vertex
-{
-public:
-    /**
-     * \brief The constructor. Nothing initialized here.
-     */
-	compute_ts_vertex(vertex_id_t id): compute_vertex(id) {
-	}
-
-#if 0
-	/**
-     * \brief This allows a vertex to request partial vertices in the graph. <br>
-     *  **Defn: ""partial vertices""** -- Part of a vertex's data. Specifically
-     *          a vertex's edges in the specified time range. This eliminates the overhead
-     *          of bringing both all edges into the page cache when an algorithm
-     *          only requires edges in a certain time range.
-	 * \param reqs This is an array corresponding to the vertices you are requesting and defines
-     *              which time range you want.
-     * \param num the number of elements in `reqs`.
-	 * This allows a vertex to request partial vertices in the graph.
-	 */
-	void request_partial_vertices(ts_vertex_request reqs[], size_t num);
-#endif
-};
-
-/**
  * \breif Order the position of vertex processing via this scheduler.
  */
 class vertex_scheduler
