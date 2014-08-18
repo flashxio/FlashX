@@ -162,7 +162,7 @@ int get_file_weight(file_id_t file_id)
 		return 1;
 }
 
-void init_io_system(const config_map &configs)
+void init_io_system(const config_map &configs, bool with_cache)
 {
 #ifdef ENABLE_MEM_TRACE
 	init_mem_tracker();
@@ -213,7 +213,11 @@ void init_io_system(const config_map &configs)
 		debug.register_task(new debug_global_data());
 	}
 
-	if (global_data.global_cache == NULL) {
+	// Assign a thread object to the current thread.
+	if (thread::get_curr_thread() == NULL)
+		thread::represent_thread(0);
+
+	if (global_data.global_cache == NULL && with_cache) {
 		std::vector<int> node_id_array;
 		for (int i = 0; i < params.get_num_nodes(); i++)
 			node_id_array.push_back(i);
@@ -233,14 +237,13 @@ void init_io_system(const config_map &configs)
 		// more remote IOs for flushing dirty pages, so it doesn't matter
 		// what thread is used here.
 		thread *curr = thread::get_curr_thread();
-		if (curr == NULL)
-			curr = thread::represent_thread(0);
+		assert(curr);
 		io_interface *underlying = new remote_io(global_data.read_threads,
 				mapper, curr);
 		global_data.global_cache->init(underlying);
 	}
 #ifdef PART_IO
-	if (global_data.table == NULL) {
+	if (global_data.table == NULL && with_cache) {
 		if (params.get_num_nodes() > 1)
 			global_data.table = part_global_cached_io::init_subsystem(
 					global_data.read_threads, mapper,
@@ -252,7 +255,8 @@ void init_io_system(const config_map &configs)
 
 void destroy_io_system()
 {
-	global_data.global_cache->sanity_check();
+	if (global_data.global_cache)
+		global_data.global_cache->sanity_check();
 #ifdef PART_IO
 	// TODO destroy part global cached io table.
 	if (global_data.table) {
@@ -534,7 +538,7 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 	}
 
 	file_mapper &mapper = file_mappers.get(file_name);
-	file_io_factory *factory;
+	file_io_factory *factory = NULL;
 	switch (access_option) {
 		case READ_ACCESS:
 		case DIRECT_ACCESS:
@@ -547,20 +551,24 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 			factory = new remote_io_factory(mapper);
 			break;
 		case GLOBAL_CACHE_ACCESS:
-			factory = new global_cached_io_factory(mapper,
-					global_data.global_cache);
+			if (global_data.global_cache)
+				factory = new global_cached_io_factory(mapper,
+						global_data.global_cache);
 			break;
 #ifdef PART_IO
 		case PART_GLOBAL_ACCESS:
-			factory = new part_global_cached_io_factory(file_name);
+			if (global_data.global_cache)
+				factory = new part_global_cached_io_factory(file_name);
 			break;
 #endif
 		default:
 			fprintf(stderr, "a wrong access option\n");
 			assert(0);
 	}
-	printf("io factory for %s (%d)\n", file_name.c_str(), factory->get_file_id());
-	return file_io_factory::shared_ptr(factory, destroy_io_factory());
+	if (factory)
+		return file_io_factory::shared_ptr(factory, destroy_io_factory());
+	else
+		return file_io_factory::shared_ptr();
 }
 
 void print_io_thread_stat()

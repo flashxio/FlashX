@@ -432,8 +432,10 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
  * This function initializes SAFS. It should be called at the beginning
  * of a program.
  * \param map the SAFS configuration.
+ * \param with_cache determine whether the I/O system is initialized with
+ * page cache.
  */
-void init_io_system(const config_map &map);
+void init_io_system(const config_map &map, bool with_cache = true);
 
 /**
  * This function destroys SAFS. It should be called at the end of a program.
