@@ -647,3 +647,117 @@ graph_header get_graph_header(FG_graph::ptr fg)
 	io->access((char *) &header, 0, sizeof(header), READ);
 	return header;
 }
+
+/************** Get the time range of the time-series graph *******************/
+
+namespace {
+
+class time_range_vertex: public compute_vertex
+{
+public:
+	time_range_vertex(vertex_id_t id): compute_vertex(id) {
+	}
+
+	virtual void run(vertex_program &prog) {
+		vertex_id_t id = get_id();
+		request_vertices(&id, 1);
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex);
+
+	void run_on_message(vertex_program &, const vertex_message &msg) {
+	}
+};
+
+class time_range_vertex_program: public vertex_program_impl<time_range_vertex>
+{
+	time_t start_time;
+	time_t end_time;
+public:
+	time_range_vertex_program() {
+		start_time = std::numeric_limits<time_t>::max();
+		end_time = std::numeric_limits<time_t>::min();
+	}
+
+	time_t get_start_time() const {
+		return start_time;
+	}
+
+	time_t get_end_time() const {
+		return end_time;
+	}
+
+	void set_start_time(time_t start_time) {
+		this->start_time = std::min(start_time, this->start_time);
+	}
+
+	void set_end_time(time_t end_time) {
+		this->end_time = std::max(end_time, this->end_time);
+	}
+};
+
+class time_range_vertex_program_creater: public vertex_program_creater
+{
+public:
+	time_range_vertex_program_creater() {
+	}
+
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new time_range_vertex_program());
+	}
+};
+
+void time_range_vertex::run(vertex_program &prog, const page_vertex &vertex)
+{
+	time_range_vertex_program &range_vprog = (time_range_vertex_program &) prog;
+	if (prog.get_graph().is_directed()) {
+		const page_directed_vertex &dv = (const page_directed_vertex &) vertex;
+
+		if (dv.get_num_edges(IN_EDGE) > 0) {
+			page_byte_array::const_iterator<ts_edge_data> it
+				= dv.get_data_begin<ts_edge_data>(IN_EDGE);
+			range_vprog.set_start_time((*it).get_timestamp());
+			it = it + (dv.get_num_edges(IN_EDGE) - 1);
+			range_vprog.set_end_time((*it).get_timestamp());
+		}
+
+		if (dv.get_num_edges(OUT_EDGE) > 0) {
+			page_byte_array::const_iterator<ts_edge_data> it
+				= dv.get_data_begin<ts_edge_data>(OUT_EDGE);
+			range_vprog.set_start_time((*it).get_timestamp());
+			it = it + (dv.get_num_edges(OUT_EDGE) - 1);
+			range_vprog.set_end_time((*it).get_timestamp());
+		}
+	}
+	else {
+		assert(0);
+	}
+}
+
+}
+
+std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg)
+{
+	graph_index::ptr index = NUMA_graph_index<time_range_vertex>::create(
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
+			index, fg->get_configs());
+	assert(graph->get_graph_header().has_edge_data());
+
+	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
+				new time_range_vertex_program_creater()));
+	graph->wait4complete();
+
+	std::vector<vertex_program::ptr> vprogs;
+	graph->get_vertex_programs(vprogs);
+	time_t start_time = std::numeric_limits<time_t>::max();
+	time_t end_time = std::numeric_limits<time_t>::min();
+	BOOST_FOREACH(vertex_program::ptr prog, vprogs) {
+		start_time = std::min(start_time,
+				((time_range_vertex_program &)(*prog)).get_start_time());
+		end_time = std::max(end_time,
+				((time_range_vertex_program &)(*prog)).get_end_time());
+	}
+	assert(start_time <= end_time);
+	return std::pair<time_t, time_t>(start_time, end_time);
+}

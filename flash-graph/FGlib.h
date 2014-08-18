@@ -305,6 +305,14 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval);
 
 /**
+ * \brief Get the time range in which the time-series graph is.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \return A pair of timestamp that defines the time range of the time-series
+ * graph.
+ */
+std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg);
+
+/**
  * \brief Get the header of the graph that contains basic information of the graph.
  * \return The graph header.
  */
