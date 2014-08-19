@@ -53,6 +53,197 @@ const int COMPLETE_QUEUE_SIZE = 10240;
 const int REQ_BUF_SIZE = 64;
 const int OBJ_ALLOC_INC_SIZE = 1024 * 1024;
 
+class original_io_request: public io_request
+{
+	struct page_status
+	{
+		thread_safe_page *pg;
+		// Point to the next request that queues to the same page.
+		original_io_request *next;
+		bool completed;
+
+		page_status() {
+			pg = NULL;
+			next = NULL;
+			completed = false;
+		}
+	};
+
+	atomic_number<ssize_t> completed_size;
+
+	embedded_array<page_status> status_arr;
+
+	io_interface *orig_io;
+
+	off_t get_first_page_offset() const {
+		off_t mask = PAGE_SIZE - 1;
+		mask = ~mask;
+		return get_offset() & mask;
+	}
+
+	page_status &get_page_status(thread_safe_page *pg) {
+		off_t first_pg_off = get_first_page_offset();
+		off_t idx = (pg->get_offset() - first_pg_off) / PAGE_SIZE;
+		return status_arr[idx];
+	}
+
+	page_status &get_page_status(off_t off) {
+		off_t first_pg_off = get_first_page_offset();
+		off_t idx = (off - first_pg_off) / PAGE_SIZE;
+		return status_arr[idx];
+	}
+public:
+	original_io_request() {
+		orig_io = NULL;
+	}
+
+	bool is_initialized() const {
+		return status_arr.get_capacity() > 0;
+	}
+
+	void init() {
+		io_request::init();
+		completed_size = atomic_number<ssize_t>(0);
+		orig_io = NULL;
+	}
+
+	void init(const io_request &req) {
+		// Once an IO request is created, I can't change its type. I have to
+		// use this ugly way to change it.
+		data_loc_t loc(req.get_file_id(), req.get_offset());
+		if (req.get_req_type() == io_request::BASIC_REQ
+				|| req.get_req_type() == io_request::USER_COMPUTE) {
+			*(io_request *) this = req;
+		}
+		else
+			assert(0);
+
+		completed_size = atomic_number<ssize_t>(0);
+		orig_io = NULL;
+		status_arr.resize(get_num_covered_pages());
+		memset(status_arr.data(), 0,
+				sizeof(page_status) * get_num_covered_pages());
+	}
+
+	thread_safe_page *complete_req(thread_safe_page *p, bool lock);
+
+	bool complete_page(thread_safe_page *pg) {
+		get_page_status(pg).completed = true;
+		int size = get_overlap_size(pg);
+		ssize_t ret = completed_size.inc(size);
+		return ret == get_size();
+	}
+
+	bool complete_range(off_t off, size_t size) {
+		ssize_t ret = completed_size.inc(size);
+		off_t pg_begin = ROUND_PAGE(off);
+		off_t pg_end = ROUNDUP_PAGE(off + size);
+		while (pg_begin < pg_end) {
+			assert(!get_page_status(pg_begin).completed);
+			get_page_status(pg_begin).completed = true;
+			pg_begin += PAGE_SIZE;
+		}
+		return ret == get_size();
+	}
+
+	bool is_complete() const {
+		return completed_size.get() == get_size();
+	}
+
+	original_io_request *get_next_req_on_page(thread_safe_page *pg) {
+		return get_page_status(pg).next;
+	}
+
+	void set_next_req_on_page(thread_safe_page *pg, original_io_request *req) {
+		get_page_status(pg).next = req;
+	}
+
+	io_interface *get_orig_io() const {
+		return orig_io;
+	}
+
+	void set_orig_io(io_interface *io) {
+		orig_io = io;
+	}
+
+	void compute();
+
+	friend class original_req_byte_array;
+};
+
+/**
+ * This is a page byte array based on the original I/O request.
+ */
+class original_req_byte_array: public page_byte_array
+{
+	off_t off;
+	size_t valid: 1;
+	size_t size: 63;
+	embedded_array<thread_safe_page *> pages;
+
+	int get_num_covered_pages() const {
+		off_t begin_pg = ROUND_PAGE(off);
+		off_t end_pg = ROUNDUP_PAGE(off + size);
+		return (end_pg - begin_pg) / PAGE_SIZE;
+	}
+
+	original_req_byte_array(original_req_byte_array &arr) {
+		this->off = arr.off;
+		this->size = arr.size;
+		this->pages = arr.pages;
+		arr.valid = 0;
+		this->valid = 1;
+	}
+public:
+	original_req_byte_array(original_io_request &req) {
+		off = req.get_offset();
+		size = req.get_size();
+		valid = 1;
+		int num_pages = req.get_num_covered_pages();
+		pages.resize(num_pages);
+		for (int i = 0; i < num_pages; i++) {
+			pages[i] = req.status_arr[i].pg;
+			req.status_arr[i].pg = NULL;
+		}
+	}
+
+	~original_req_byte_array() {
+		if (valid) {
+			int num_pages = get_num_covered_pages();
+			for (int i = 0; i < num_pages; i++) {
+				if (pages[i])
+					pages[i]->dec_ref();
+			}
+		}
+	}
+
+	virtual off_t get_offset_in_first_page() const {
+		return off % PAGE_SIZE;
+	}
+
+	virtual thread_safe_page *get_page(int pg_idx) const {
+		return pages[pg_idx];
+	}
+
+	virtual size_t get_size() const {
+		return size;
+	}
+
+	void lock() {
+		// TODO
+		assert(0);
+	}
+
+	void unlock() {
+		// TODO
+		assert(0);
+	}
+
+	page_byte_array *clone() {
+		return new original_req_byte_array(*this);
+	}
+};
+
 comp_io_scheduler::comp_io_scheduler(int node_id): incomplete_computes(node_id,
 		COMPLETE_QUEUE_SIZE, true)
 {
@@ -340,6 +531,16 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 		return;
 
 	process_reqs_on_io(remote_reqs, num_remote, notify_completion_func);
+}
+
+void global_cached_io::partial_request::init_orig(original_io_request *orig,
+		io_interface *io)
+{
+	this->orig = orig;
+	orig->init(req);
+	io_interface *orig_io = orig->get_io();
+	orig->set_io(io);
+	orig->set_orig_io(orig_io);
 }
 
 void global_cached_io::finalize_partial_request(io_request &partial,
@@ -1662,4 +1863,11 @@ void global_cached_io::flush_requests()
 		::access(underlying, req);
 	}
 	underlying->flush_requests();
+}
+
+void global_cached_io::wakeup_on_req(original_io_request *req, int status)
+{
+	assert(req->is_sync());
+	assert(req->is_complete());
+	get_thread()->activate();
 }
