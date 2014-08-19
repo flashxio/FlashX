@@ -485,7 +485,7 @@ class FG_vector
 	log_histogram log_hist(int power) const {
 		T max_v = max();
 		int num_buckets = ceil(log(max_v) / log(power));
-		log_histogram hist(num_buckets);
+		log_histogram hist(std::max(num_buckets, 1));
 		for (size_t i = 0; i < get_size(); i++) {
 			hist.add_value(eles[i]);
 		}

@@ -72,6 +72,7 @@ class log_histogram
 	std::vector<log_hist_bucket> buckets;
 public:
 	log_histogram(int num_buckets): buckets(num_buckets) {
+		assert(num_buckets > 0);
 		for (int i = 0; i < num_buckets; i++)
 			buckets[i] = log_hist_bucket(i);
 	}
