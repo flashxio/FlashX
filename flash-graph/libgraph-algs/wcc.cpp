@@ -51,7 +51,7 @@ public:
 	}
 };
 
-class wcc_vertex: public compute_vertex
+class wcc_vertex: public compute_directed_vertex
 {
 protected:
 	bool empty;
@@ -59,7 +59,7 @@ private:
 	bool updated;
 	vertex_id_t component_id;
 public:
-	wcc_vertex(vertex_id_t id): compute_vertex(id) {
+	wcc_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		component_id = id;
 		updated = true;
 		empty = true;
@@ -80,7 +80,10 @@ public:
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		if (updated) {
-			request_vertices(&id, 1);
+			directed_vertex_request reqs[2];
+			reqs[0] = directed_vertex_request(id, IN_EDGE);
+			reqs[1] = directed_vertex_request(id, OUT_EDGE);
+			request_partial_vertices(reqs, 2);
 			updated = false;
 		}
 	}
@@ -106,20 +109,17 @@ public:
 void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	component_message msg(component_id);
-	empty = (vertex.get_num_edges(BOTH_EDGES) == 0);
-	if (vertex.is_directed()) {
-		const page_directed_vertex &dvertex = (const page_directed_vertex &) vertex;
-		assert(dvertex.has_in_part());
-		assert(dvertex.has_out_part());
-		// We need to add the neighbors of the vertex to the queue of
-		// the next level.
+	const page_directed_vertex &dvertex = (const page_directed_vertex &) vertex;
+	// We need to add the neighbors of the vertex to the queue of
+	// the next level.
+	if (dvertex.has_in_part()) {
+		empty &= (vertex.get_num_edges(IN_EDGE) == 0);
 		edge_seq_iterator it = dvertex.get_neigh_seq_it(IN_EDGE);
 		prog.multicast_msg(it, msg);
-		it = dvertex.get_neigh_seq_it(OUT_EDGE);
-		prog.multicast_msg(it, msg);
 	}
-	else {
-		edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES);
+	if (dvertex.has_out_part()) {
+		empty &= (vertex.get_num_edges(OUT_EDGE) == 0);
+		edge_seq_iterator it = dvertex.get_neigh_seq_it(OUT_EDGE);
 		prog.multicast_msg(it, msg);
 	}
 }
