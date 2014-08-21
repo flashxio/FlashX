@@ -21,8 +21,112 @@
 #include <malloc.h>
 
 #include "safs_file.h"
-#include "in_mem_storage.h"
 #include "cache.h"
+#include "slab_allocator.h"
+
+#include "in_mem_storage.h"
+
+class in_mem_byte_array: public page_byte_array
+{
+	off_t off;
+	size_t size;
+	thread_safe_page *pages;
+
+	void assign(in_mem_byte_array &arr) {
+		this->off = arr.off;
+		this->size = arr.size;
+		this->pages = arr.pages;
+	}
+
+	in_mem_byte_array(in_mem_byte_array &arr) {
+		assign(arr);
+	}
+
+	in_mem_byte_array &operator=(in_mem_byte_array &arr) {
+		assign(arr);
+		return *this;
+	}
+public:
+	in_mem_byte_array(byte_array_allocator &alloc): page_byte_array(alloc) {
+		off = 0;
+		size = 0;
+		pages = NULL;
+	}
+
+	in_mem_byte_array(const io_request &req, thread_safe_page *pages,
+			byte_array_allocator &alloc): page_byte_array(alloc) {
+		this->off = req.get_offset();
+		this->size = req.get_size();
+		this->pages = pages;
+	}
+
+	virtual off_t get_offset_in_first_page() const {
+		return off % PAGE_SIZE;
+	}
+
+	virtual thread_safe_page *get_page(int pg_idx) const {
+		return &pages[pg_idx];
+	}
+
+	virtual size_t get_size() const {
+		return size;
+	}
+
+	void lock() {
+		assert(0);
+	}
+
+	void unlock() {
+		assert(0);
+	}
+
+	page_byte_array *clone() {
+		in_mem_byte_array *arr = (in_mem_byte_array *) get_allocator().alloc();
+		*arr = *this;
+		return arr;
+	}
+};
+
+class in_mem_byte_array_allocator: public byte_array_allocator
+{
+	class array_initiator: public obj_initiator<in_mem_byte_array>
+	{
+		in_mem_byte_array_allocator *alloc;
+	public:
+		array_initiator(in_mem_byte_array_allocator *alloc) {
+			this->alloc = alloc;
+		}
+
+		virtual void init(in_mem_byte_array *obj) {
+			new (obj) in_mem_byte_array(*alloc);
+		}
+	};
+
+	class array_destructor: public obj_destructor<in_mem_byte_array>
+	{
+	public:
+		void destroy(in_mem_byte_array *obj) {
+			obj->~in_mem_byte_array();
+		}
+	};
+
+	obj_allocator<in_mem_byte_array> allocator;
+public:
+	in_mem_byte_array_allocator(thread *t): allocator(
+			"byte-array-allocator", t->get_node_id(), false, 1024 * 1024,
+			params.get_max_obj_alloc_size(),
+			obj_initiator<in_mem_byte_array>::ptr(new array_initiator(this)),
+			obj_destructor<in_mem_byte_array>::ptr(new array_destructor())) {
+	}
+
+	virtual page_byte_array *alloc() {
+		return allocator.alloc_obj();
+	}
+
+	virtual void free(page_byte_array *arr) {
+		allocator.free((in_mem_byte_array *) arr);
+	}
+};
 
 class in_mem_io: public io_interface
 {
@@ -31,6 +135,7 @@ class in_mem_io: public io_interface
 	fifo_queue<io_request> req_buf;
 	fifo_queue<user_compute *> compute_buf;
 	fifo_queue<user_compute *> incomp_computes;
+	std::unique_ptr<byte_array_allocator> array_allocator;
 
 	void process_req(const io_request &req);
 	void process_computes();
@@ -40,6 +145,8 @@ public:
 				get_node_id(), 1024), compute_buf(get_node_id(), 1024,
 				true), incomp_computes(get_node_id(), 1024, true) {
 		this->file_id = file_id;
+		array_allocator = std::unique_ptr<byte_array_allocator>(
+				new in_mem_byte_array_allocator(t));
 	}
 
 	virtual int get_file_id() const {
@@ -75,49 +182,6 @@ public:
 	}
 };
 
-class in_mem_byte_array: public page_byte_array
-{
-	off_t off;
-	size_t size;
-	thread_safe_page *pages;
-
-	in_mem_byte_array(in_mem_byte_array &arr) {
-		this->off = arr.off;
-		this->size = arr.size;
-		this->pages = arr.pages;
-	}
-public:
-	in_mem_byte_array(const io_request &req, thread_safe_page *pages) {
-		this->off = req.get_offset();
-		this->size = req.get_size();
-		this->pages = pages;
-	}
-
-	virtual off_t get_offset_in_first_page() const {
-		return off % PAGE_SIZE;
-	}
-
-	virtual thread_safe_page *get_page(int pg_idx) const {
-		return &pages[pg_idx];
-	}
-
-	virtual size_t get_size() const {
-		return size;
-	}
-
-	void lock() {
-		assert(0);
-	}
-
-	void unlock() {
-		assert(0);
-	}
-
-	page_byte_array *clone() {
-		return new in_mem_byte_array(*this);
-	}
-};
-
 enum
 {
 	IN_QUEUE,
@@ -126,7 +190,8 @@ enum
 void in_mem_io::process_req(const io_request &req)
 {
 	assert(req.get_req_type() == io_request::USER_COMPUTE);
-	in_mem_byte_array byte_arr(req, &graph.graph_pages[req.get_offset() / PAGE_SIZE]);
+	in_mem_byte_array byte_arr(req,
+			&graph.graph_pages[req.get_offset() / PAGE_SIZE], *array_allocator);
 	user_compute *compute = req.get_compute();
 	compute->run(byte_arr);
 	// If the user compute hasn't completed and it's not in the queue,
