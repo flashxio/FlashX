@@ -30,6 +30,7 @@
 class request_allocator;
 class req_ext_allocator;
 class original_io_request;
+class global_cached_io;
 
 typedef std::pair<thread_safe_page *, original_io_request *> page_req_pair;
 
@@ -98,8 +99,10 @@ class global_cached_io: public io_interface
 	io_interface *underlying;
 	callback *cb;
 
-	request_allocator *req_allocator;
-	req_ext_allocator *ext_allocator;
+	std::unique_ptr<request_allocator> req_allocator;
+	std::unique_ptr<req_ext_allocator> ext_allocator;
+	std::unique_ptr<byte_array_allocator> orig_array_allocator;
+	std::unique_ptr<byte_array_allocator> simp_array_allocator;
 
 	// This contains the original requests issued by the application.
 	// An original request is placed in this queue when the I/O on a page
@@ -189,10 +192,6 @@ public:
 
 	page_cache *get_global_cache() {
 		return global_cache;
-	}
-
-	request_allocator *get_req_allocator() {
-		return req_allocator;
 	}
 
 	int preload(off_t start, long size);

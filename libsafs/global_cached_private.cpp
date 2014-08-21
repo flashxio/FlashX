@@ -166,7 +166,7 @@ public:
 		orig_io = io;
 	}
 
-	void compute();
+	void compute(byte_array_allocator &alloc);
 
 	friend class original_req_byte_array;
 };
@@ -187,24 +187,32 @@ class original_req_byte_array: public page_byte_array
 		return (end_pg - begin_pg) / PAGE_SIZE;
 	}
 
-	original_req_byte_array(original_req_byte_array &arr) {
+	void assign(original_req_byte_array &arr) {
 		this->off = arr.off;
 		this->size = arr.size;
 		this->pages = arr.pages;
 		arr.valid = 0;
 		this->valid = 1;
 	}
+
+	original_req_byte_array(original_req_byte_array &arr) {
+		assign(arr);
+	}
+
+	original_req_byte_array &operator=(original_req_byte_array &arr) {
+		assign(arr);
+		return *this;
+	}
 public:
-	original_req_byte_array(original_io_request &req) {
-		off = req.get_offset();
-		size = req.get_size();
-		valid = 1;
-		int num_pages = req.get_num_covered_pages();
-		pages.resize(num_pages);
-		for (int i = 0; i < num_pages; i++) {
-			pages[i] = req.status_arr[i].pg;
-			req.status_arr[i].pg = NULL;
-		}
+	original_req_byte_array(byte_array_allocator &alloc): page_byte_array(alloc) {
+		off = 0;
+		valid = 0;
+		size = 0;
+	}
+
+	original_req_byte_array(original_io_request &req,
+			byte_array_allocator &alloc): page_byte_array(alloc) {
+		init(req);
 	}
 
 	~original_req_byte_array() {
@@ -214,6 +222,18 @@ public:
 				if (pages[i])
 					pages[i]->dec_ref();
 			}
+		}
+	}
+
+	void init(original_io_request &req) {
+		off = req.get_offset();
+		size = req.get_size();
+		valid = 1;
+		int num_pages = req.get_num_covered_pages();
+		pages.resize(num_pages);
+		for (int i = 0; i < num_pages; i++) {
+			pages[i] = req.status_arr[i].pg;
+			req.status_arr[i].pg = NULL;
 		}
 	}
 
@@ -240,7 +260,127 @@ public:
 	}
 
 	page_byte_array *clone() {
-		return new original_req_byte_array(*this);
+		original_req_byte_array *arr
+			= (original_req_byte_array *) get_allocator().alloc();
+		*arr = *this;
+		return arr;
+	}
+};
+
+class simple_page_byte_array: public page_byte_array
+{
+	off_t off;
+	size_t size;
+	thread_safe_page *p;
+
+	void assign(simple_page_byte_array &arr) {
+		this->off = arr.off;
+		this->size = arr.size;
+		this->p = arr.p;
+		arr.p = NULL;
+	}
+
+	simple_page_byte_array(simple_page_byte_array &arr) {
+		assign(arr);
+	}
+
+	simple_page_byte_array &operator=(simple_page_byte_array &arr) {
+		assign(arr);
+		return *this;
+	}
+public:
+	simple_page_byte_array(byte_array_allocator &alloc): page_byte_array(alloc) {
+		off = 0;
+		size = 0;
+		p = NULL;
+	}
+
+	simple_page_byte_array(const io_request &req, thread_safe_page *p,
+			byte_array_allocator &alloc): page_byte_array(alloc) {
+		init(req, p);
+	}
+
+	~simple_page_byte_array() {
+		if (p)
+			p->dec_ref();
+	}
+
+	void init(const io_request &req, thread_safe_page *p) {
+		off = req.get_offset();
+		size = req.get_size();
+		this->p = p;
+	}
+
+	virtual void lock() {
+		// TODO
+		assert(0);
+	}
+
+	virtual void unlock() {
+		// TODO
+		assert(0);
+	}
+
+	virtual off_t get_offset_in_first_page() const {
+		return off % PAGE_SIZE;
+	}
+
+	virtual thread_safe_page *get_page(int idx) const {
+		assert(idx == 0);
+		return p;
+	}
+
+	virtual size_t get_size() const {
+		return size;
+	}
+
+	page_byte_array *clone() {
+		simple_page_byte_array *arr
+			= (simple_page_byte_array *) get_allocator().alloc();
+		*arr = *this;
+		return arr;
+	}
+};
+
+template<class array_type>
+class byte_array_allocator_impl: public byte_array_allocator
+{
+	class array_initiator: public obj_initiator<array_type>
+	{
+		byte_array_allocator_impl<array_type> *alloc;
+	public:
+		array_initiator(byte_array_allocator_impl<array_type> *alloc) {
+			this->alloc = alloc;
+		}
+
+		virtual void init(array_type *obj) {
+			new (obj) array_type(*alloc);
+		}
+	};
+
+	class array_destructor: public obj_destructor<array_type>
+	{
+	public:
+		void destroy(array_type *obj) {
+			obj->~array_type();
+		}
+	};
+
+	obj_allocator<array_type> allocator;
+public:
+	byte_array_allocator_impl(thread *t): allocator(
+			"byte-array-allocator", t->get_node_id(), false, 1024 * 1024,
+			params.get_max_obj_alloc_size(),
+			typename obj_initiator<array_type>::ptr(new array_initiator(this)),
+			typename obj_destructor<array_type>::ptr(new array_destructor())) {
+	}
+
+	virtual page_byte_array *alloc() {
+		return allocator.alloc_obj();
+	}
+
+	virtual void free(page_byte_array *arr) {
+		allocator.free((array_type *) arr);
 	}
 };
 
@@ -456,10 +596,10 @@ thread_safe_page *original_io_request::complete_req(thread_safe_page *p,
 	}
 }
 
-void original_io_request::compute()
+void original_io_request::compute(byte_array_allocator &alloc)
 {
 	assert(this->get_req_type() == io_request::USER_COMPUTE);
-	original_req_byte_array byte_arr(*this);
+	original_req_byte_array byte_arr(*this, alloc);
 	get_compute()->run(byte_arr);
 }
 
@@ -753,7 +893,7 @@ int global_cached_io::process_completed_requests()
 		if (reqp->get_req_type() == io_request::USER_COMPUTE) {
 			// This is a user-compute request.
 			assert(reqp->get_req_type() == io_request::USER_COMPUTE);
-			reqp->compute();
+			reqp->compute(*orig_array_allocator);
 			user_compute *compute = reqp->get_compute();
 			complete_user_compute(compute);
 			req_allocator->free(reqp);
@@ -797,8 +937,16 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 	user_comp_requests(underlying->get_node_id(), 512)
 {
 	assert(t == underlying->get_thread());
-	ext_allocator = new req_ext_allocator(underlying->get_node_id());
-	req_allocator = new request_allocator(underlying->get_node_id());
+	ext_allocator = std::unique_ptr<req_ext_allocator>(
+			new req_ext_allocator(underlying->get_node_id()));
+	req_allocator = std::unique_ptr<request_allocator>(
+			new request_allocator(underlying->get_node_id()));
+	orig_array_allocator
+		= std::unique_ptr<byte_array_allocator_impl<original_req_byte_array> >(
+				new byte_array_allocator_impl<original_req_byte_array>(t));
+	simp_array_allocator
+		= std::unique_ptr<byte_array_allocator_impl<simple_page_byte_array> >(
+				new byte_array_allocator_impl<simple_page_byte_array>(t));
 	cb = NULL;
 
 	// Initialize the stat values.
@@ -823,8 +971,6 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 global_cached_io::~global_cached_io()
 {
 	delete underlying;
-	delete req_allocator;
-	delete ext_allocator;
 	delete comp_io_sched;
 }
 
@@ -1198,59 +1344,8 @@ void global_cached_io::write_dirty_page(thread_safe_page *p,
 	}
 }
 
-class simple_page_byte_array: public page_byte_array
-{
-	off_t off;
-	size_t size;
-	thread_safe_page *p;
-
-	simple_page_byte_array(simple_page_byte_array &arr) {
-		this->off = arr.off;
-		this->size = arr.size;
-		this->p = arr.p;
-		arr.p = NULL;
-	}
-public:
-	simple_page_byte_array(const io_request &req, thread_safe_page *p) {
-		off = req.get_offset();
-		size = req.get_size();
-		this->p = p;
-	}
-
-	~simple_page_byte_array() {
-		if (p)
-			p->dec_ref();
-	}
-
-	virtual void lock() {
-		// TODO
-		assert(0);
-	}
-
-	virtual void unlock() {
-		// TODO
-		assert(0);
-	}
-
-	virtual off_t get_offset_in_first_page() const {
-		return off % PAGE_SIZE;
-	}
-
-	virtual thread_safe_page *get_page(int idx) const {
-		assert(idx == 0);
-		return p;
-	}
-
-	virtual size_t get_size() const {
-		return size;
-	}
-
-	page_byte_array *clone() {
-		return new simple_page_byte_array(*this);
-	}
-};
-
-thread_safe_page *complete_cached_req(const io_request &req, thread_safe_page *p)
+thread_safe_page *complete_cached_req(const io_request &req, thread_safe_page *p,
+		byte_array_allocator &alloc)
 {
 	if (req.get_req_type() == io_request::BASIC_REQ) {
 		int page_off;
@@ -1278,7 +1373,7 @@ thread_safe_page *complete_cached_req(const io_request &req, thread_safe_page *p
 		return ret;
 	}
 	else {
-		simple_page_byte_array arr(req, p);
+		simple_page_byte_array arr(req, p, alloc);
 		user_compute *compute = req.get_compute();
 		compute->run(arr);
 		return NULL;
@@ -1299,7 +1394,7 @@ void global_cached_io::process_cached_reqs()
 		std::pair<io_request, thread_safe_page *> pair
 			= cached_requests.pop_front();
 		thread_safe_page *dirty = complete_cached_req(pair.first,
-				pair.second);
+				pair.second, *simp_array_allocator);
 		page_cache *cache = get_global_cache();
 		if (dirty) {
 			cache->mark_dirty_pages(&dirty, 1, underlying);

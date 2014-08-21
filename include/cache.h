@@ -522,6 +522,19 @@ public:
 	}
 };
 
+/*
+ * The interface of allocating a page_byte_array.
+ */
+class byte_array_allocator
+{
+public:
+	virtual ~byte_array_allocator() {
+	}
+
+	virtual page_byte_array *alloc() = 0;
+	virtual void free(page_byte_array *) = 0;
+};
+
 /**
  * This byte array helps users access data in non-contiguous pages
  * in the page cache. It provides a STL-style iterator and a Java-style
@@ -529,9 +542,23 @@ public:
  */
 class page_byte_array
 {
+	byte_array_allocator *alloc;
 public:
 	static void destroy(page_byte_array *arr) {
-		delete arr;
+		assert(arr->alloc);
+		arr->alloc->free(arr);
+	}
+
+	page_byte_array() {
+		alloc = NULL;
+	}
+
+	page_byte_array(byte_array_allocator &alloc) {
+		this->alloc = &alloc;
+	}
+
+	byte_array_allocator &get_allocator() {
+		return *alloc;
 	}
 
 	virtual ~page_byte_array() {
