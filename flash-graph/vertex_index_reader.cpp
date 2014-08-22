@@ -458,7 +458,7 @@ bool self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	// For undirected vertices, the edge type is always IN_EDGE.
 	// For directed vertices, if the edge type is BOTH_EDGES, we issue
 	// two requests with one vertex compute.
-	if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES) {
+	if (type == edge_type::IN_EDGE) {
 		off_t first_off = it.get_curr_off();
 		assert(it.move_to(get_num_vertices() - 1));
 		off_t last_off = it.get_curr_off() + it.get_curr_size();
@@ -466,14 +466,29 @@ bool self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 		io_request req(compute, loc, last_off - first_off, READ);
 		this->thread->issue_io_request(req);
 	}
-
-	if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
+	else if (type == edge_type::OUT_EDGE) {
 		off_t first_off = it.get_curr_out_off();
 		assert(it.move_to(get_num_vertices() - 1));
 		off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
 		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
 		io_request req(compute, loc, last_off - first_off, READ);
 		this->thread->issue_io_request(req);
+	}
+	else {
+		assert(type == edge_type::BOTH_EDGES);
+		off_t first_in_off = it.get_curr_off();
+		off_t first_out_off = it.get_curr_out_off();
+		assert(it.move_to(get_num_vertices() - 1));
+		off_t last_in_off = it.get_curr_off() + it.get_curr_size();
+		off_t last_out_off = it.get_curr_out_off() + it.get_curr_out_size();
+
+		data_loc_t in_loc(this->thread->get_graph().get_file_id(), first_in_off);
+		io_request in_req(compute, in_loc, last_in_off - first_in_off, READ);
+		this->thread->issue_io_request(in_req);
+
+		data_loc_t out_loc(this->thread->get_graph().get_file_id(), first_out_off);
+		io_request out_req(compute, out_loc, last_out_off - first_out_off, READ);
+		this->thread->issue_io_request(out_req);
 	}
 
 	return true;
