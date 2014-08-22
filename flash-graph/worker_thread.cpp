@@ -315,7 +315,7 @@ worker_thread::worker_thread(graph_engine *graph,
 		vertex_scheduler::ptr scheduler): thread("worker_thread", node_id)
 {
 	this->scheduler = scheduler;
-	curr_compute = NULL;
+	req_on_vertex = false;
 	this->vprogram = std::move(prog);
 	vprogram->init(graph, this);
 	this->vpart_vprogram = std::move(vpart_prog);
@@ -478,17 +478,16 @@ int worker_thread::process_activated_vertices(int max)
 
 	for (int i = 0; i < num; i++) {
 		compute_vertex_pointer info = process_vertex_buf[i];
-		curr_vertex = info;
 		// We execute the pre-run to determine if the vertex has completed
 		// in the current iteration.
 		vertex_program &curr_vprog = get_vertex_program(info.is_part());
-		curr_compute = NULL;
+		start_run_vertex(info);
 		curr_vprog.run(*info);
-		// If the user code doesn't generate a vertex_compute, we are done
-		// with the vertex in this iteration.
-		if (curr_compute == NULL)
+		bool issued_reqs = finish_run_vertex(info);
+		// If this run doesn't issue any requests, we can be sure that
+		// the vertex has completed in this iteration.
+		if (!issued_reqs)
 			complete_vertex(info);
-		curr_vertex = compute_vertex_pointer();
 	}
 	return num;
 }
@@ -652,9 +651,8 @@ vertex_compute *worker_thread::get_vertex_compute(compute_vertex_pointer v)
 		active_computes.insert(std::pair<compute_vertex *, vertex_compute *>(
 					v.get(), compute));
 		compute->inc_ref();
-		curr_compute = compute;
+		return compute;
 	}
 	else
-		curr_compute = it->second;
-	return curr_compute;
+		return it->second;
 }

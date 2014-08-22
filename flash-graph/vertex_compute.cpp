@@ -50,6 +50,26 @@ request_range vertex_compute::get_next_request()
 	return request_range(loc, info.get_size(), READ, this);
 }
 
+void vertex_compute::start_run()
+{
+	issue_thread->start_run_vertex(v);
+}
+
+void vertex_compute::finish_run()
+{
+	bool issued_reqs = issue_thread->finish_run_vertex(v);
+	// If we have completed all pending requests and this run didn't
+	// issue more requests, we can be sure that the vertex has completed.
+	// We need to notify the thread that initiate processing the vertex
+	// of the completion of the vertex.
+	if (get_num_pending() == 0) {
+		// this is to double check. If there are pending requests,
+		// the vertex shouldn't have issued requests in this run.
+		assert(!issued_reqs);
+		issue_thread->complete_vertex(v);
+	}
+}
+
 void vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 {
 	num_requested += num;
@@ -64,15 +84,12 @@ void vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)
 
 void vertex_compute::run_on_vertex_size(vertex_id_t id, vsize_t size)
 {
+	start_run();
 	vsize_t num_edges = issue_thread->get_graph().cal_num_edges(size);
-	assert(!graph->get_graph_header().has_edge_data());
 	vertex_header header(id, num_edges);
-	issue_thread->start_run_vertex(v);
 	issue_thread->get_vertex_program(v.is_part()).run_on_num_edges(*v, header);
-	issue_thread->finish_run_vertex(v);
 	num_edge_completed++;
-	if (get_num_pending() == 0)
-		issue_thread->complete_vertex(v);
+	finish_run();
 }
 
 vertex_id_t vertex_compute::get_id() const
@@ -99,33 +116,19 @@ void vertex_compute::issue_io_request(const ext_mem_vertex_info &info)
 
 void vertex_compute::run(page_byte_array &array)
 {
+	start_run();
 	page_undirected_vertex pg_v(array);
-	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
-	issue_thread->start_run_vertex(v);
-	curr_vprog.run(*v, pg_v);
-	issue_thread->finish_run_vertex(v);
-	complete_request();
-}
-
-void vertex_compute::complete_request()
-{
+	issue_thread->get_vertex_program(v.is_part()).run(*v, pg_v);
 	num_complete_fetched++;
-	// We need to notify the thread that initiate processing the vertex
-	// of the completion of the vertex.
-	// TODO is this a right way to complete a vertex?
-	if (get_num_pending() == 0)
-		issue_thread->complete_vertex(v);
+	finish_run();
 }
 
 void directed_vertex_compute::run_on_page_vertex(page_directed_vertex &pg_v)
 {
-	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
-	issue_thread->start_run_vertex(v);
-	curr_vprog.run(*v, pg_v);
-	issue_thread->finish_run_vertex(v);
-	complete_request();
+	start_run();
+	issue_thread->get_vertex_program(v.is_part()).run(*v, pg_v);
+	num_complete_fetched++;
+	finish_run();
 }
 
 void directed_vertex_compute::run(page_byte_array &array)
@@ -174,24 +177,6 @@ void directed_vertex_compute::run(page_byte_array &array)
 	}
 }
 
-#if 0
-void directed_vertex_compute::complete_empty_part(
-		const ext_mem_vertex_info &info)
-{
-	worker_thread *t = (worker_thread *) thread::get_curr_thread();
-	assert(t == issue_thread);
-	vertex_program &curr_vprog = t->get_vertex_program(v.is_part());
-
-	empty_page_byte_array array;
-	page_directed_vertex pg_v(info.get_id(), 0, array,
-			(size_t) info.get_off() < graph->get_in_part_size());
-	issue_thread->start_run_vertex(v);
-	curr_vprog.run(*v, pg_v);
-	issue_thread->finish_run_vertex(v);
-	complete_request();
-}
-#endif
-
 void directed_vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 {
 	stack_array<directed_vertex_request> reqs(num);
@@ -210,16 +195,13 @@ void directed_vertex_compute::request_partial_vertices(
 void directed_vertex_compute::run_on_vertex_size(vertex_id_t id,
 		size_t in_size, size_t out_size)
 {
+	start_run();
 	vsize_t num_in_edges = issue_thread->get_graph().cal_num_edges(in_size);
 	vsize_t num_out_edges = issue_thread->get_graph().cal_num_edges(out_size);
-	assert(!graph->get_graph_header().has_edge_data());
 	directed_vertex_header header(id, num_in_edges, num_out_edges);
-	issue_thread->start_run_vertex(v);
 	issue_thread->get_vertex_program(v.is_part()).run_on_num_edges(*v, header);
-	issue_thread->finish_run_vertex(v);
 	num_edge_completed++;
-	if (get_num_pending() == 0)
-		issue_thread->complete_vertex(v);
+	finish_run();
 }
 
 void directed_vertex_compute::issue_io_request(const ext_mem_vertex_info &in_info,
@@ -246,6 +228,25 @@ void directed_vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)
 			num, *this);
 }
 
+void merged_vertex_compute::start_run(compute_vertex_pointer v)
+{
+	issue_thread->start_run_vertex(v);
+}
+
+void merged_vertex_compute::finish_run(compute_vertex_pointer v)
+{
+	bool issued_reqs = issue_thread->finish_run_vertex(v);
+	// TODO we have to make sure that this vertex didn't issue another vertex
+	// request.
+	// The vertex only issued one request, which is just processed.
+	// If this run didn't issue more requests, we can be sure that
+	// the vertex has completed in this iteration.
+	// We need to notify the thread that initiate processing the vertex
+	// of the completion of the vertex.
+	if (!issued_reqs)
+		issue_thread->complete_vertex(v);
+}
+
 void merged_directed_vertex_compute::run_on_array(page_byte_array &array)
 {
 	off_t off = 0;
@@ -259,9 +260,9 @@ void merged_directed_vertex_compute::run_on_array(page_byte_array &array)
 		page_directed_vertex pg_v(sub_arr, in_part);
 		assert(pg_v.get_id() == id);
 		compute_vertex_pointer v(&get_graph().get_vertex(pg_v.get_id()));
-		t->start_run_vertex(v);
+		start_run(v);
 		curr_vprog.run(*v, pg_v);
-		t->finish_run_vertex(v);
+		finish_run(v);
 		if (in_part)
 			off += pg_v.get_in_size();
 		else
@@ -284,9 +285,9 @@ void merged_directed_vertex_compute::run_on_arrays(page_byte_array &in_arr,
 		page_directed_vertex pg_v(sub_in_arr, sub_out_arr);
 		assert(pg_v.get_id() == id);
 		compute_vertex_pointer v(&get_graph().get_vertex(pg_v.get_id()));
-		t->start_run_vertex(v);
+		start_run(v);
 		curr_vprog.run(*v, pg_v);
-		t->finish_run_vertex(v);
+		finish_run(v);
 		in_off += pg_v.get_in_size();
 		out_off += pg_v.get_out_size();
 	}

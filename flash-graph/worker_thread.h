@@ -184,9 +184,8 @@ class worker_thread: public thread
 	// a vertex compute for the vertex. This is useful when a user-defined
 	// compute vertex needs to reference its vertex compute.
 	std::unordered_map<compute_vertex *, vertex_compute *> active_computes;
-	// This references the vertex compute used/created by the current vertex
-	// being processed.
-	vertex_compute *curr_compute;
+	// Determine whether the current vertex issues requests.
+	bool req_on_vertex;
 	// This points to the vertex that is currently being processed.
 	compute_vertex_pointer curr_vertex;
 
@@ -281,13 +280,18 @@ public:
 	void start_run_vertex(compute_vertex_pointer v) {
 		assert(!curr_vertex.is_valid());
 		curr_vertex = v;
+		req_on_vertex = false;
 	}
-	void finish_run_vertex(compute_vertex_pointer v) {
+	bool finish_run_vertex(compute_vertex_pointer v) {
 		assert(curr_vertex.is_valid());
 		assert(curr_vertex.get() == v.get());
 		curr_vertex = compute_vertex_pointer();
+		return req_on_vertex;
 	}
 
+	void request_on_vertex(vertex_id_t id) {
+		req_on_vertex = true;
+	}
 	vertex_compute *get_vertex_compute(compute_vertex_pointer v);
 
 	/**

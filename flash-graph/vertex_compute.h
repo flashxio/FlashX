@@ -92,6 +92,9 @@ protected:
 		// should be larger than 1.
 		return get_ref() > 1 || get_num_pending_ios() > 0;
 	}
+
+	void start_run();
+	void finish_run();
 public:
 	vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
@@ -159,11 +162,6 @@ public:
 	 * of the information.
 	 */
 	void issue_io_request(const ext_mem_vertex_info &info);
-
-	/*
-	 * Complete a request for the adjacency list.
-	 */
-	void complete_request();
 
 	/*
 	 * The methods below deal with requesting # edges of vertices.
@@ -257,6 +255,11 @@ class merged_vertex_compute: public user_compute
 	int num_vertices;
 	bool complete;
 	graph_engine *graph;
+protected:
+	worker_thread *issue_thread;
+
+	void start_run(compute_vertex_pointer v);
+	void finish_run(compute_vertex_pointer v);
 public:
 	merged_vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
@@ -264,6 +267,7 @@ public:
 		start_id = INVALID_VERTEX_ID;
 		num_vertices = 0;
 		complete = false;
+		issue_thread = (worker_thread *) thread::get_curr_thread();
 	}
 
 	graph_engine &get_graph() {
