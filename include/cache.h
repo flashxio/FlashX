@@ -1042,4 +1042,52 @@ public:
 	}
 };
 
+/*
+ * This class represents a region of an original array.
+ */
+class sub_page_byte_array: public page_byte_array
+{
+	page_byte_array &orig;
+	off_t off;
+public:
+	sub_page_byte_array(page_byte_array &arr, off_t off): orig(arr) {
+		this->off = off;
+		assert(arr.get_size() >= off);
+	}
+
+	virtual void lock() {
+	}
+
+	/**
+	 * This method unlocks the byte array.
+	 * It's currently not implemented yet.
+	 */
+	virtual void unlock() {
+	}
+
+	/**
+	 * This method gets the size of the byte array.
+	 * \return the size of the byte array.
+	 */
+	virtual size_t get_size() const {
+		return orig.get_size() - off;
+	}
+
+	/**
+	 * This clones the byte array.
+	 */
+	virtual page_byte_array *clone() {
+		return NULL;
+	}
+
+	virtual off_t get_offset_in_first_page() const {
+		return (off + orig.get_offset_in_first_page()) % PAGE_SIZE;
+	}
+
+	virtual thread_safe_page *get_page(int idx) const {
+		return orig.get_page((off
+					+ orig.get_offset_in_first_page()) / PAGE_SIZE + idx);
+	}
+};
+
 #endif
