@@ -930,8 +930,8 @@ class simple_index_reader
 	static void request_vertex(std::vector<id_range_t> &reqs, vertex_id_t id) {
 		if (reqs.empty())
 			reqs.push_back(id_range_t(id, id + 1));
-		else if (reqs.back().second + 1 == id)
-			reqs.back().second = id;
+		else if (reqs.back().second == id)
+			reqs.back().second = id + 1;
 		else
 			reqs.push_back(id_range_t(id, id + 1));
 	}
