@@ -80,10 +80,7 @@ public:
 	void run(vertex_program &prog) {
 		vertex_id_t id = get_id();
 		if (updated) {
-			directed_vertex_request reqs[2];
-			reqs[0] = directed_vertex_request(id, IN_EDGE);
-			reqs[1] = directed_vertex_request(id, OUT_EDGE);
-			request_partial_vertices(reqs, 2);
+			request_vertices(&id, 1);
 			updated = false;
 		}
 	}
