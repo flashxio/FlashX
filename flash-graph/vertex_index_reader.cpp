@@ -21,6 +21,7 @@
 #include "simple_KV_store.h"
 #include "vertex_compute.h"
 #include "vertex_index_reader.h"
+#include "worker_thread.h"
 
 template<class ValueType>
 class req_vertex_task
@@ -186,7 +187,7 @@ public:
 
 
 	virtual void request_index(index_compute *compute) {
-		index_compute::id_range_t range = compute->get_range();
+		id_range_t range = compute->get_range();
 #if 0
 		if (range.second < index->get_num_vertices()) {
 #endif
@@ -285,6 +286,84 @@ void process_requests(std::vector<RequestType> &reqs,
 	reqs.clear();
 }
 
+struct id_range_less
+{
+	bool operator()(const id_range_t &id1, const id_range_t &id2) {
+		return id1.first < id2.first;
+	}
+};
+
+void merge_vertex_requests(std::vector<id_range_t> &reqs)
+{
+	if (reqs.empty())
+		return;
+
+	// TODO I should test this.
+	if (!std::is_sorted(reqs.begin(), reqs.end(), id_range_less()))
+		std::sort(reqs.begin(), reqs.end(), id_range_less());
+	id_range_t range = reqs.front();
+	size_t write_back_idx = 0;
+	for (size_t i = 1; i < reqs.size(); i++) {
+		// Merge two ranges.
+		if (range.second == reqs[i].first)
+			range.second = reqs[i].second;
+		else {
+			// write the previous range to the vector.
+			// and start a new range.
+			assert(write_back_idx < i);
+			reqs[write_back_idx++] = range;
+			range = reqs[i];
+		}
+	}
+	reqs[write_back_idx] = range;
+	reqs.resize(write_back_idx + 1);
+}
+
+void simple_index_reader::process_self_requests(std::vector<id_range_t> &reqs,
+		edge_type type)
+{
+	merge_vertex_requests(reqs);
+	BOOST_FOREACH(id_range_t range, reqs) {
+		self_vertex_compute *compute
+			= (self_vertex_compute *) self_req_alloc->alloc();
+		compute->init(range, t, type);
+		index_reader->request_index(compute);
+	}
+	reqs.clear();
+}
+
+void simple_index_reader::init(worker_thread *t, bool directed)
+{
+	this->t = t;
+
+	req_vertex_comp_alloc
+		= new index_comp_allocator_impl<req_vertex_compute>(t);
+	req_undirected_edge_comp_alloc
+		= new index_comp_allocator_impl<req_undirected_edge_compute>(t);
+	req_directed_edge_comp_alloc
+		= new index_comp_allocator_impl<req_directed_edge_compute>(t);
+
+	genrq_vertex_comp_alloc
+		= new general_index_comp_allocator_impl<genrq_vertex_compute>(
+				t, get_index_entry_size_log(directed));
+	genrq_edge_comp_alloc
+		= new general_index_comp_allocator_impl<genrq_edge_compute>(
+				t, get_index_entry_size_log(directed));
+	genrq_directed_edge_comp_alloc
+		= new general_index_comp_allocator_impl<genrq_directed_edge_compute>(
+				t, get_index_entry_size_log(directed));
+
+	single_vertex_comp_alloc
+		= new index_comp_allocator_impl<single_vertex_compute>(t);
+	single_edge_comp_alloc
+		= new index_comp_allocator_impl<single_edge_compute>(t);
+	single_directed_edge_comp_alloc
+		= new index_comp_allocator_impl<single_directed_edge_compute>(t);
+
+	self_req_alloc
+		= new index_comp_allocator_impl<self_vertex_compute>(t);
+}
+
 void simple_index_reader::flush_computes()
 {
 	if (!vertex_comps.empty()) {
@@ -355,4 +434,47 @@ void simple_index_reader::flush_computes()
 						*genrq_directed_edge_comp_alloc, *index_reader,
 						*single_directed_edge_comp_alloc);
 	}
+
+	// This is to request undirected vertices.
+	if (!self_undirected_reqs.empty())
+		process_self_requests(self_undirected_reqs, IN_EDGE);
+
+	// This is to request directed vertices.
+	for (int i = 0; i < edge_type::NUM_TYPES; i++) {
+		if (!self_part_reqs[i].empty()) {
+			process_self_requests(self_part_reqs[i], (edge_type) i);
+		}
+	}
+}
+
+bool self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
+{
+	assert(start_vid == get_first_vertex());
+	assert(get_num_vertices() == it.get_num_entries() - 1);
+
+	merged_vertex_compute *compute
+		= (merged_vertex_compute *) thread->get_merged_compute_allocator().alloc();
+	compute->init(start_vid, get_num_vertices(), type);
+	// For undirected vertices, the edge type is always IN_EDGE.
+	// For directed vertices, if the edge type is BOTH_EDGES, we issue
+	// two requests with one vertex compute.
+	if (type == edge_type::IN_EDGE || type == edge_type::BOTH_EDGES) {
+		off_t first_off = it.get_curr_off();
+		assert(it.move_to(get_num_vertices() - 1));
+		off_t last_off = it.get_curr_off() + it.get_curr_size();
+		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
+		io_request req(compute, loc, last_off - first_off, READ);
+		this->thread->issue_io_request(req);
+	}
+
+	if (type == edge_type::OUT_EDGE || type == edge_type::BOTH_EDGES) {
+		off_t first_off = it.get_curr_out_off();
+		assert(it.move_to(get_num_vertices() - 1));
+		off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
+		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
+		io_request req(compute, loc, last_off - first_off, READ);
+		this->thread->issue_io_request(req);
+	}
+
+	return true;
 }

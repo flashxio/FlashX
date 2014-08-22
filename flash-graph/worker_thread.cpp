@@ -340,10 +340,19 @@ worker_thread::worker_thread(graph_engine *graph,
 	balancer = std::unique_ptr<load_balancer>(new load_balancer(*graph, *this));
 	switch(graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
-			alloc = new vertex_compute_allocator<directed_vertex_compute>(graph, this);
+			alloc = std::unique_ptr<compute_allocator>(
+					new vertex_compute_allocator<directed_vertex_compute>(
+						graph, this));
+			merged_alloc = std::unique_ptr<compute_allocator>(
+					new vertex_compute_allocator<merged_directed_vertex_compute>(
+						graph, this));
 			break;
 		case graph_type::UNDIRECTED:
-			alloc = new vertex_compute_allocator<vertex_compute>(graph, this);
+			alloc = std::unique_ptr<compute_allocator>(
+					new vertex_compute_allocator<vertex_compute>(graph, this));
+			merged_alloc = std::unique_ptr<compute_allocator>(
+					new vertex_compute_allocator<merged_vertex_compute>(
+						graph, this));
 			break;
 #if 0
 		case graph_type::TS_DIRECTED:
@@ -360,7 +369,6 @@ worker_thread::worker_thread(graph_engine *graph,
 
 worker_thread::~worker_thread()
 {
-	delete alloc;
 }
 
 void worker_thread::init()

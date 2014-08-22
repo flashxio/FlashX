@@ -70,9 +70,11 @@ template<class EntryType>
 class page_index_iterator_impl: public index_iterator
 {
 	page_byte_array::seq_const_iterator<EntryType> it;
+	int num_entries;
 public:
 	page_index_iterator_impl(page_byte_array::seq_const_iterator<EntryType> &_it): it(_it) {
-		assert(it.get_num_tot_entries() >= 2);
+		num_entries = it.get_num_tot_entries();
+		assert(num_entries >= 2);
 		assert(it.has_next());
 		*(EntryType *) curr_buf = it.next();
 		assert(it.has_next());
@@ -105,7 +107,7 @@ public:
 	}
 
 	virtual int get_num_entries() const {
-		return it.get_num_tot_entries();
+		return num_entries;
 	}
 };
 
@@ -148,9 +150,11 @@ public:
 	}
 
 	virtual int get_num_entries() const {
-		return end - p;
+		return end - start;
 	}
 };
+
+typedef std::pair<vertex_id_t, vertex_id_t> id_range_t;
 
 /**
  * This interface defines the method invoked in vertex_index_reader.
@@ -160,9 +164,6 @@ public:
  */
 class index_compute
 {
-public:
-	typedef std::pair<vertex_id_t, vertex_id_t> id_range_t;
-private:
 	index_comp_allocator &alloc;
 	id_range_t id_range;
 public:
@@ -177,6 +178,10 @@ public:
 	void clear() {
 		this->id_range.first = INVALID_VERTEX_ID;
 		this->id_range.second = INVALID_VERTEX_ID;
+	}
+
+	void init(id_range_t &range) {
+		this->id_range = range;
 	}
 
 	void init(vertex_id_t id) {
@@ -312,6 +317,35 @@ struct req_directed_edge_func
 	}
 };
 
+class worker_thread;
+/*
+ * This class is optimized for vertices to request their own adjacency lists.
+ * In this case, we don't need to create a vertex_compute for each vertex
+ * when their adjacency lists are ready in the page cache for processing.
+ */
+class self_vertex_compute: public index_compute
+{
+	edge_type type;
+	worker_thread *thread;
+public:
+	self_vertex_compute(index_comp_allocator &alloc): index_compute(alloc) {
+		this->thread = NULL;
+		type = IN_EDGE;
+	}
+
+	void init(id_range_t &range, worker_thread *t, edge_type type) {
+		index_compute::init(range);
+		this->thread = t;
+		this->type = type;
+	}
+
+	int get_num_vertices() const {
+		return get_last_vertex() - get_first_vertex() + 1;
+	}
+
+	virtual bool run(vertex_id_t start_vid, index_iterator &it);
+};
+
 /*
  * These are the implementation for dense index computes.
  * The dense index computes are adjacent to each other. The next index compute
@@ -382,7 +416,8 @@ public:
 };
 
 /*
- * This requests an entire vertex.
+ * This requests a vertex. It works for both directed and undirected vertices.
+ * If it's an undirected vertex, the edge type is always IN_EDGE.
  */
 class req_vertex_compute: public dense_vertex_compute
 {
@@ -758,6 +793,8 @@ public:
  */
 class simple_index_reader
 {
+	worker_thread *t;
+
 	index_comp_allocator_impl<req_vertex_compute> *req_vertex_comp_alloc;
 	index_comp_allocator_impl<req_undirected_edge_compute> *req_undirected_edge_comp_alloc;
 	index_comp_allocator_impl<req_directed_edge_compute> *req_directed_edge_comp_alloc;
@@ -770,12 +807,18 @@ class simple_index_reader
 	index_comp_allocator_impl<single_edge_compute> *single_edge_comp_alloc;
 	index_comp_allocator_impl<single_directed_edge_compute> *single_directed_edge_comp_alloc;
 
+	index_comp_allocator_impl<self_vertex_compute> *self_req_alloc;
+
 	typedef std::pair<vertex_id_t, vertex_compute *> id_compute_t;
 	typedef std::pair<directed_vertex_request, directed_vertex_compute *> directed_compute_t;
 	std::vector<id_compute_t> vertex_comps;
 	std::vector<directed_compute_t> part_vertex_comps[edge_type::NUM_TYPES];
 	std::vector<id_compute_t> edge_comps;
 	std::vector<id_compute_t> directed_edge_comps;
+
+	// These two optimize the case of requesting the adjacency lists of themselves.
+	std::vector<id_range_t> self_undirected_reqs;
+	std::vector<id_range_t> self_part_reqs[edge_type::NUM_TYPES];
 
 	struct id_compute_lesseq
 	{
@@ -814,41 +857,19 @@ class simple_index_reader
 					directed ? graph_type::DIRECTED : graph_type::UNDIRECTED));
 	}
 
-	void init(thread *t, bool directed) {
-		req_vertex_comp_alloc
-			= new index_comp_allocator_impl<req_vertex_compute>(t);
-		req_undirected_edge_comp_alloc
-			= new index_comp_allocator_impl<req_undirected_edge_compute>(t);
-		req_directed_edge_comp_alloc
-			= new index_comp_allocator_impl<req_directed_edge_compute>(t);
+	void init(worker_thread *t, bool directed);
 
-		genrq_vertex_comp_alloc
-			= new general_index_comp_allocator_impl<genrq_vertex_compute>(
-					t, get_index_entry_size_log(directed));
-		genrq_edge_comp_alloc
-			= new general_index_comp_allocator_impl<genrq_edge_compute>(
-					t, get_index_entry_size_log(directed));
-		genrq_directed_edge_comp_alloc
-			= new general_index_comp_allocator_impl<genrq_directed_edge_compute>(
-					t, get_index_entry_size_log(directed));
-
-		single_vertex_comp_alloc
-			= new index_comp_allocator_impl<single_vertex_compute>(t);
-		single_edge_comp_alloc
-			= new index_comp_allocator_impl<single_edge_compute>(t);
-		single_directed_edge_comp_alloc
-			= new index_comp_allocator_impl<single_directed_edge_compute>(t);
-	}
-
-	simple_index_reader(vertex_index::ptr index, bool directed, thread *t) {
+	simple_index_reader(vertex_index::ptr index, bool directed, worker_thread *t) {
 		init(t, directed);
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
-	simple_index_reader(io_interface::ptr io, bool directed, thread *t) {
+	simple_index_reader(io_interface::ptr io, bool directed, worker_thread *t) {
 		init(t, directed);
 		index_reader = vertex_index_reader::create(io, directed);
 	}
+
+	void process_self_requests(std::vector<id_range_t> &reqs, edge_type type);
 
 	/*
 	 * This gets the number of partitions in the vector. Each partition
@@ -906,14 +927,23 @@ class simple_index_reader
 		return vec.size() / num_parts >= 16;
 	}
 
+	static void request_vertex(std::vector<id_range_t> &reqs, vertex_id_t id) {
+		if (reqs.empty())
+			reqs.push_back(id_range_t(id, id + 1));
+		else if (reqs.back().second + 1 == id)
+			reqs.back().second = id;
+		else
+			reqs.push_back(id_range_t(id, id + 1));
+	}
+
 public:
 	typedef std::shared_ptr<simple_index_reader> ptr;
 
-	static ptr create(io_interface::ptr io, bool directed, thread *t) {
+	static ptr create(io_interface::ptr io, bool directed, worker_thread *t) {
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 
-	static ptr create(vertex_index::ptr index, bool directed, thread *t) {
+	static ptr create(vertex_index::ptr index, bool directed, worker_thread *t) {
 		return ptr(new simple_index_reader(index, directed, t));
 	}
 
@@ -930,18 +960,48 @@ public:
 		delete single_vertex_comp_alloc;
 		delete single_edge_comp_alloc;
 		delete single_directed_edge_comp_alloc;
+
+		delete self_req_alloc;
 	}
 
+	/*
+	 * These two methods issue general vertex requests.
+	 */
+
+	/*
+	 * A general way of requesting undirected vertices for a vertex.
+	 */
 	void request_vertices(vertex_id_t ids[], int num, vertex_compute &compute) {
 		for (int i = 0; i < num; i++)
 			vertex_comps.push_back(id_compute_t(ids[i], &compute));
 	}
 
+	/*
+	 * A general way of requesting directed vertices for a vertex.
+	 */
 	void request_vertices(const directed_vertex_request reqs[], int num,
 			directed_vertex_compute &compute) {
 		for (int i = 0; i < num; i++)
 			part_vertex_comps[reqs[i].get_type()].push_back(
 					directed_compute_t(reqs[i], &compute));
+	}
+
+	/*
+	 * These two methods request the adjacency list for the vertex itself.
+	 */
+
+	/*
+	 * Request an undirected vertex for the vertex of `id'.
+	 */
+	void request_vertex(vertex_id_t id) {
+		request_vertex(self_undirected_reqs, id);
+	}
+
+	/*
+	 * Request a directed vertex for the vertex of `id'.
+	 */
+	void request_vertex(const directed_vertex_request req) {
+		request_vertex(self_part_reqs[req.get_type()], req.get_id());
 	}
 
 	void request_num_edges(vertex_id_t ids[], int num, vertex_compute &compute) {

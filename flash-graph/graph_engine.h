@@ -119,6 +119,8 @@ public:
 		return part_id;
 	}
 
+	void request_vertices(vertex_id_t ids[], size_t num);
+
 	void broadcast_vpart(const vertex_message &msg);
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
@@ -197,6 +199,8 @@ public:
 	int get_part_id() const {
 		return part_id;
 	}
+
+	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
 		assert(0);

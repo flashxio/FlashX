@@ -195,14 +195,42 @@ size_t throughput_comp_io_scheduler::get_requests(fifo_queue<io_request> &reqs,
 	return ret;
 }
 
+bool request_self(vertex_id_t ids[], size_t num, vertex_id_t self)
+{
+	return num == 1 && ids[0] == self;
+}
+
+bool request_self(directed_vertex_request reqs[], size_t num, vertex_id_t self)
+{
+	if (num == 1)
+		return reqs[0].get_id() == self;
+	// If there are two requests, we should make sure that they request
+	// different parts.
+	else if (num == 2)
+		return reqs[0].get_id() == self && reqs[1].get_id() == self
+			&& reqs[0].get_type() != reqs[1].get_type();
+	else
+		return false;
+}
+
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
-	assert(curr_vertex.is_valid());
-	assert(curr_vertex->get_id() == this->get_id());
-	vertex_compute *compute = curr->get_vertex_compute(curr_vertex);
-	compute->request_vertices(ids, num);
+	if (request_self(ids, num, get_id())) {
+		if (curr->get_graph().is_directed()) {
+			directed_vertex_request req(ids[0], BOTH_EDGES);
+			curr->get_index_reader().request_vertex(req);
+		}
+		else
+			curr->get_index_reader().request_vertex(ids[0]);
+	}
+	else {
+		compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+		assert(curr_vertex.is_valid());
+		assert(curr_vertex->get_id() == this->get_id());
+		vertex_compute *compute = curr->get_vertex_compute(curr_vertex);
+		compute->request_vertices(ids, num);
+	}
 }
 
 void compute_vertex::request_vertex_headers(vertex_id_t ids[], size_t num)
@@ -219,12 +247,18 @@ void compute_directed_vertex::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
-	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
-	assert(curr_vertex.is_valid());
-	assert(curr_vertex->get_id() == this->get_id());
-	directed_vertex_compute *compute
-		= (directed_vertex_compute *) curr->get_vertex_compute(curr_vertex);
-	compute->request_partial_vertices(reqs, num);
+	if (request_self(reqs, num, get_id())) {
+		for (size_t i = 0; i < num; i++)
+			curr->get_index_reader().request_vertex(reqs[i]);
+	}
+	else {
+		compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+		assert(curr_vertex.is_valid());
+		assert(curr_vertex->get_id() == this->get_id());
+		directed_vertex_compute *compute
+			= (directed_vertex_compute *) curr->get_vertex_compute(curr_vertex);
+		compute->request_partial_vertices(reqs, num);
+	}
 }
 
 void part_compute_vertex::broadcast_vpart(const vertex_message &msg)
@@ -237,6 +271,30 @@ void part_compute_vertex::broadcast_vpart(const vertex_message &msg)
 		compute_vertex_pointer v = ps[i];
 		curr->get_vertex_program(true).run_on_message(*v, msg);
 	}
+}
+
+void part_compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
+{
+	// The trick for self request doesn't work for part compute vertex.
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
+	vertex_compute *compute = curr->get_vertex_compute(curr_vertex);
+	compute->request_vertices(ids, num);
+}
+
+void part_compute_directed_vertex::request_partial_vertices(
+		directed_vertex_request reqs[], size_t num)
+{
+	// The trick for self request doesn't work for part compute vertex.
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
+	directed_vertex_compute *compute
+		= (directed_vertex_compute *) curr->get_vertex_compute(curr_vertex);
+	compute->request_partial_vertices(reqs, num);
 }
 
 #if 0

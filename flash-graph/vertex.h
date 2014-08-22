@@ -686,6 +686,8 @@ class page_directed_vertex: public page_vertex
 	vertex_id_t id;
 	vsize_t num_in_edges;
 	vsize_t num_out_edges;
+	size_t in_size;
+	size_t out_size;
 	const page_byte_array *in_array;
 	const page_byte_array *out_array;
 public:
@@ -707,15 +709,20 @@ public:
 		size_t size = arr.get_size();
 		assert(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
-		assert(size >= v.get_size());
 
 		if (in_part) {
+			in_size = v.get_size();
+			assert(size >= in_size);
+			out_size = 0;
 			this->in_array = &arr;
 			this->out_array = NULL;
 			num_in_edges = v.get_num_edges();
 			num_out_edges = 0;
 		}
 		else {
+			out_size = v.get_size();
+			in_size = 0;
+			assert(size >= out_size);
 			this->out_array = &arr;
 			this->in_array = NULL;
 			num_out_edges = v.get_num_edges();
@@ -732,16 +739,26 @@ public:
 		size_t size = in_arr.get_size();
 		assert(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = in_arr.get<ext_mem_undirected_vertex>(0);
-		assert(size >= v.get_size());
+		in_size = v.get_size();
+		assert(size >= in_size);
 		id = v.get_id();
 		num_in_edges = v.get_num_edges();
 
 		size = out_arr.get_size();
 		assert(size >= ext_mem_undirected_vertex::get_header_size());
 		v = out_arr.get<ext_mem_undirected_vertex>(0);
-		assert(size >= v.get_size());
+		out_size = v.get_size();
+		assert(size >= out_size);
 		assert(id == v.get_id());
 		num_out_edges = v.get_num_edges();
+	}
+
+	size_t get_in_size() const {
+		return in_size;
+	}
+
+	size_t get_out_size() const {
+		return out_size;
 	}
     
     /**

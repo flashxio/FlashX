@@ -247,6 +247,118 @@ public:
 	void request_num_edges(vertex_id_t ids[], size_t num);
 };
 
+/*
+ * This class is to compute on the undirected vertices requested
+ * by a single I/O request.
+ */
+class merged_vertex_compute: public user_compute
+{
+	vertex_id_t start_id;
+	int num_vertices;
+	bool complete;
+	graph_engine *graph;
+public:
+	merged_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): user_compute(alloc) {
+		this->graph = graph;
+		start_id = INVALID_VERTEX_ID;
+		num_vertices = 0;
+		complete = false;
+	}
+
+	graph_engine &get_graph() {
+		return *graph;
+	}
+
+	vertex_id_t get_start_id() const {
+		return start_id;
+	}
+
+	int get_num_vertices() const {
+		return num_vertices;
+	}
+
+	virtual void init(vertex_id_t start_id, int num_vertices, edge_type type) {
+		this->start_id = start_id;
+		this->num_vertices = num_vertices;
+	}
+
+	virtual int serialize(char *buf, int size) const {
+		return 0;
+	}
+
+	virtual int get_serialized_size() const {
+		return 0;
+	}
+
+	virtual void set_scan_dir(bool forward) {
+	}
+
+	virtual int has_requests() {
+		return false;
+	}
+
+	virtual request_range get_next_request() {
+		assert(0);
+	}
+
+	virtual void run(page_byte_array &arr) {
+		// TODO
+		assert(0);
+		complete = true;
+	}
+
+	virtual bool has_completed() {
+		return complete;
+	}
+};
+
+/*
+ * This class is to compute on the directed vertices requested
+ * by a single I/O request.
+ */
+class merged_directed_vertex_compute: public merged_vertex_compute
+{
+	edge_type type;
+	int num_fetched_arrs;
+	int num_required_arrs;
+	page_byte_array *buffered_arr;
+
+	void run_on_array(page_byte_array &arr);
+	void run_on_arrays(page_byte_array &in_arr, page_byte_array &out_arr);
+public:
+	merged_directed_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): merged_vertex_compute(graph, alloc) {
+		type = edge_type::NONE;
+		num_fetched_arrs = 0;
+		num_required_arrs = 0;
+		buffered_arr = NULL;
+	}
+
+	void init(vertex_id_t start_id, int num_vertices, edge_type type) {
+		merged_vertex_compute::init(start_id, num_vertices, type);
+		this->type = type;
+		this->num_fetched_arrs = 0;
+		switch(type) {
+			case IN_EDGE:
+			case OUT_EDGE:
+				this->num_required_arrs = 1;
+				break;
+			case BOTH_EDGES:
+				this->num_required_arrs = 2;
+				break;
+			default:
+				assert(0);
+		}
+	}
+
+	virtual void run(page_byte_array &arr);
+
+	virtual bool has_completed() {
+		return num_fetched_arrs == num_required_arrs;
+	}
+};
+
 template<class compute_type>
 class vertex_compute_allocator: public compute_allocator
 {

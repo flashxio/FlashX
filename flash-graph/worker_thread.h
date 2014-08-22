@@ -170,7 +170,8 @@ class worker_thread: public thread
 	file_io_factory::shared_ptr index_factory;
 	io_interface::ptr io;
 	graph_engine *graph;
-	compute_allocator *alloc;
+	std::unique_ptr<compute_allocator> alloc;
+	std::unique_ptr<compute_allocator> merged_alloc;
 	vertex_program::ptr vprogram;
 	// Vertex program on the vertically partitioned vertices.
 	vertex_program::ptr vpart_vprogram;
@@ -340,6 +341,10 @@ public:
 
 	size_t get_activates() const {
 		return curr_activated_vertices->get_num_vertices();
+	}
+
+	compute_allocator &get_merged_compute_allocator() {
+		return *merged_alloc;
 	}
 
 	friend class load_balancer;
