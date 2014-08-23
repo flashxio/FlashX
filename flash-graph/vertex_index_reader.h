@@ -627,7 +627,7 @@ public:
 		}
 
 		if (get_last_page() == get_page(id)
-				|| get_last_page() + 1 == get_page(id)) {
+				|| get_last_page() + PAGE_SIZE == get_page(id)) {
 			index_compute::add_vertex(id);
 			computes[get_num_vertices()] = compute;
 			ids[get_num_vertices()] = id;
