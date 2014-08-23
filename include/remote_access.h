@@ -95,6 +95,10 @@ public:
 	void flush_requests(int max_cached);
 	virtual void flush_requests();
 	virtual void print_state();
+
+	size_t get_num_reqs() const {
+		return num_issued_reqs.get();
+	}
 };
 
 #endif

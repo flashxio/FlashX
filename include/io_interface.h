@@ -405,6 +405,12 @@ public:
 	virtual void print_state() {
 	}
 
+	virtual void collect_stat(io_interface &) {
+	}
+
+	virtual void print_statistics() const {
+	}
+
 	/**
 	 * This method gets the size of the file accessed by the I/O factory.
 	 * \return the file size.

@@ -333,6 +333,7 @@ public:
 
 class remote_io_factory: public file_io_factory
 {
+	std::atomic_ulong tot_accesses;
 protected:
 	// The number of existing IO instances.
 	std::atomic<size_t> num_ios;
@@ -349,20 +350,55 @@ public:
 	virtual int get_file_id() const {
 		return mapper.get_file_id();
 	}
+
+	virtual void collect_stat(io_interface &io) {
+		remote_io &rio = (remote_io &) io;
+		tot_accesses += rio.get_num_reqs();
+	}
+
+	virtual void print_statistics() const {
+		printf("%s gets %ld I/O accesses\n", mapper.get_name().c_str(),
+				tot_accesses.load());
+	}
 };
 
 class global_cached_io_factory: public remote_io_factory
 {
+	std::atomic_ulong tot_bytes;
+	std::atomic_ulong tot_accesses;
+	std::atomic_ulong tot_hits;
+	std::atomic_ulong tot_fast_process;
+
 	page_cache *global_cache;
 public:
 	global_cached_io_factory(file_mapper &_mapper,
 			page_cache *cache): remote_io_factory(_mapper) {
 		this->global_cache = cache;
+		tot_bytes = 0;
+		tot_accesses = 0;
+		tot_hits = 0;
+		tot_fast_process = 0;
 	}
 
 	virtual io_interface::ptr create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io);
+
+	virtual void collect_stat(io_interface &io) {
+		global_cached_io &gio = (global_cached_io &) io;
+
+		tot_bytes += gio.get_num_bytes();
+		tot_accesses += gio.get_num_pg_accesses();
+		tot_hits += gio.get_cache_hits();
+		tot_fast_process += gio.get_num_fast_process();
+	}
+
+	virtual void print_statistics() const {
+		printf("%s gets %ld I/O accesses, %ld in bytes\n", mapper.get_name().c_str(),
+				tot_accesses.load(), tot_bytes.load());
+		printf("There are %ld cache hits, %ld of them are in the fast process\n",
+				tot_hits.load(), tot_fast_process.load());
+	}
 };
 
 #ifdef PART_IO
@@ -387,6 +423,7 @@ public:
 	}
 
 	void operator()(io_interface *io) {
+		factory.collect_stat(*io);
 		factory.destroy_io(io);
 	}
 };
@@ -447,6 +484,7 @@ void aio_factory::destroy_io(io_interface *io)
 remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 			_mapper.get_name()), mapper(_mapper)
 {
+	tot_accesses = 0;
 	num_ios = 0;
 	int num_files = mapper.get_num_files();
 	assert((int) global_data.read_threads.size() == num_files);

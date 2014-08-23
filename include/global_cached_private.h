@@ -135,7 +135,7 @@ class global_cached_io: public io_interface
 	partial_request processing_req;
 	comp_io_scheduler *comp_io_sched;
 
-	long num_pg_accesses;
+	size_t num_pg_accesses;
 	size_t num_bytes;		// The number of accessed bytes
 	size_t cache_hits;
 	size_t num_fast_process;
@@ -272,14 +272,6 @@ public:
 		assert(processing_req.is_empty());
 	}
 
-	size_t get_cache_hits() const {
-		return cache_hits;
-	}
-
-	size_t get_num_fast_process() const {
-		return num_fast_process;
-	}
-
 	virtual int wait4complete(int num);
 	virtual void notify_completion(io_request *reqs[], int num);
 
@@ -313,6 +305,19 @@ public:
 			original_io_request *orig);
 
 	void wakeup_on_req(original_io_request *req, int status);
+
+	size_t get_num_pg_accesses() const {
+		return num_pg_accesses;
+	}
+	size_t get_num_bytes() const {
+		return num_bytes;
+	}
+	size_t get_cache_hits() const {
+		return cache_hits;
+	}
+	size_t get_num_fast_process() const {
+		return num_fast_process;
+	}
 
 	virtual void print_state() {
 #ifdef STATISTICS
