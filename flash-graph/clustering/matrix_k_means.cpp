@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <math.h>
 #ifdef PROFILER
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #endif
 #include <vector>
 #include <limits> 

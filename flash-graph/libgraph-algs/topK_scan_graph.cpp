@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 #ifdef PROFILER
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #endif
 
 #include <set>

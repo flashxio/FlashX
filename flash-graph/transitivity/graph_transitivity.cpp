@@ -18,7 +18,7 @@
  */
 
 #include <signal.h>
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 
 #include "stat.h"
 #include "FGlib.h"

@@ -19,7 +19,7 @@
 
 #include <signal.h>
 #ifdef PROFILER
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #endif
 
 #include <vector>

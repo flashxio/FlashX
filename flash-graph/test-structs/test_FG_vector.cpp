@@ -19,7 +19,7 @@
 
 #include <stdio.h>
 #ifdef PROFILER
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #endif
 
 #define VERBOSE 1

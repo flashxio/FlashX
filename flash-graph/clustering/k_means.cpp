@@ -18,7 +18,7 @@
  */
 
 #include <signal.h>
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #include <stdlib.h>
 #include <math.h>
 
