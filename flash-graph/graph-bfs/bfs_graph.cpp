@@ -75,14 +75,18 @@ void bfs_vertex::run(vertex_program &prog, const page_vertex &vertex)
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-#ifdef USE_ARRAY
-	stack_array<vertex_id_t, 1024> neighs(num_dests);
-	vertex.read_edges(traverse_edge, neighs.data(), num_dests);
-	prog.activate_vertices(neighs.data(), num_dests);
-#else
-	edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge, 0, num_dests);
-	prog.activate_vertices(it);
-#endif
+	if (traverse_edge == BOTH_EDGES) {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE, 0,
+				num_dests);
+		prog.activate_vertices(it);
+		it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
+		prog.activate_vertices(it);
+	}
+	else {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge, 0,
+				num_dests);
+		prog.activate_vertices(it);
+	}
 }
 
 class count_vertex_query: public vertex_query
