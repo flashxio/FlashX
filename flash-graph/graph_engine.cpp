@@ -574,6 +574,8 @@ graph_engine::graph_engine(const std::string &graph_file,
 
 graph_engine::~graph_engine()
 {
+	graph_factory->print_statistics();
+	index_factory->print_statistics();
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
 	graph_factory = file_io_factory::shared_ptr();
