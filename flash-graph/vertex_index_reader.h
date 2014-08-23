@@ -180,7 +180,7 @@ public:
 		this->id_range.second = INVALID_VERTEX_ID;
 	}
 
-	void init(id_range_t &range) {
+	void init(const id_range_t &range) {
 		this->id_range = range;
 	}
 
@@ -323,24 +323,80 @@ class worker_thread;
  * In this case, we don't need to create a vertex_compute for each vertex
  * when their adjacency lists are ready in the page cache for processing.
  */
-class self_vertex_compute: public index_compute
+class dense_self_vertex_compute: public index_compute
 {
 	edge_type type;
 	worker_thread *thread;
+
+	int get_num_vertices() const {
+		return get_last_vertex() - get_first_vertex() + 1;
+	}
 public:
-	self_vertex_compute(index_comp_allocator &alloc): index_compute(alloc) {
+	dense_self_vertex_compute(index_comp_allocator &alloc): index_compute(alloc) {
 		this->thread = NULL;
 		type = IN_EDGE;
 	}
 
-	void init(id_range_t &range, worker_thread *t, edge_type type) {
+	void init(const id_range_t &range, worker_thread *t, edge_type type) {
 		index_compute::init(range);
 		this->thread = t;
 		this->type = type;
 	}
 
-	int get_num_vertices() const {
-		return get_last_vertex() - get_first_vertex() + 1;
+	virtual bool run(vertex_id_t start_vid, index_iterator &it);
+};
+
+class sparse_self_vertex_compute: public index_compute
+{
+	size_t num_ranges;
+	embedded_array<id_range_t> ranges;
+	int entry_size_log;
+	edge_type type;
+	worker_thread *thread;
+
+	off_t get_page(vertex_id_t id) const {
+		return ROUND_PAGE(id << entry_size_log);
+	}
+
+	off_t get_last_page() const {
+		return get_page(get_last_vertex());
+	}
+public:
+	sparse_self_vertex_compute(index_comp_allocator &alloc,
+			int entry_size_log): index_compute(alloc) {
+		this->thread = NULL;
+		type = IN_EDGE;
+		num_ranges = 0;
+		this->entry_size_log = entry_size_log;
+	}
+
+	void init(const id_range_t &range, worker_thread *t, edge_type type) {
+		index_compute::init(range);
+		this->thread = t;
+		this->type = type;
+		ranges[0] = range;
+		num_ranges = 1;
+	}
+
+	bool add_range(id_range_t &range) {
+		if (get_last_page() == get_page(range.first)
+				|| get_last_page() + PAGE_SIZE == get_page(range.first)) {
+			index_compute::add_vertex(range.second - 1);
+			if (ranges.get_capacity() <= num_ranges)
+				ranges.resize(ranges.get_capacity() * 2);
+			ranges[num_ranges++] = range;
+			return true;
+		}
+		else
+			return false;
+	}
+
+	size_t get_num_ranges() const {
+		return num_ranges;
+	}
+
+	const id_range_t &get_range(off_t idx) const {
+		return ranges[idx];
 	}
 
 	virtual bool run(vertex_id_t start_vid, index_iterator &it);
@@ -807,7 +863,8 @@ class simple_index_reader
 	index_comp_allocator_impl<single_edge_compute> *single_edge_comp_alloc;
 	index_comp_allocator_impl<single_directed_edge_compute> *single_directed_edge_comp_alloc;
 
-	index_comp_allocator_impl<self_vertex_compute> *self_req_alloc;
+	index_comp_allocator_impl<dense_self_vertex_compute> *dense_self_req_alloc;
+	general_index_comp_allocator_impl<sparse_self_vertex_compute> *sparse_self_req_alloc;
 
 	typedef std::pair<vertex_id_t, vertex_compute *> id_compute_t;
 	typedef std::pair<directed_vertex_request, directed_vertex_compute *> directed_compute_t;
@@ -961,7 +1018,8 @@ public:
 		delete single_edge_comp_alloc;
 		delete single_directed_edge_comp_alloc;
 
-		delete self_req_alloc;
+		delete dense_self_req_alloc;
+		delete sparse_self_req_alloc;
 	}
 
 	/*
