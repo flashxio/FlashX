@@ -361,6 +361,10 @@ class sparse_self_vertex_compute: public index_compute
 	off_t get_last_page() const {
 		return get_page(get_last_vertex());
 	}
+
+	void run_in_vertices(vertex_id_t start_vid, index_iterator &it);
+	void run_out_vertices(vertex_id_t start_vid, index_iterator &it);
+	void run_both_vertices(vertex_id_t start_vid, index_iterator &it);
 public:
 	sparse_self_vertex_compute(index_comp_allocator &alloc,
 			int entry_size_log): index_compute(alloc) {

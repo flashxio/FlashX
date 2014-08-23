@@ -363,6 +363,117 @@ public:
 	}
 };
 
+/*
+ * This class is to compute on the undirected vertices that are stored closely
+ * on the disks and are read by a single I/O request.
+ */
+class sparse_vertex_compute: public user_compute
+{
+protected:
+	struct vertex_range_t {
+		std::pair<vertex_id_t, vertex_id_t> id_range;
+		off_t start_off;
+	};
+	embedded_array<vertex_range_t> ranges;
+	int num_vertices;
+	int num_ranges;
+	bool complete;
+	edge_type type;
+	graph_engine *graph;
+	worker_thread *issue_thread;
+
+	void start_run(compute_vertex_pointer v);
+	void finish_run(compute_vertex_pointer v);
+public:
+	sparse_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): user_compute(alloc) {
+		type = edge_type::NONE;
+		this->graph = graph;
+		num_ranges = 0;
+		num_vertices = 0;
+		complete = false;
+		issue_thread = (worker_thread *) thread::get_curr_thread();
+	}
+
+	graph_engine &get_graph() {
+		return *graph;
+	}
+
+	int get_num_ranges() const {
+		return num_ranges;
+	}
+
+	int get_num_vertices() const {
+		return num_vertices;
+	}
+
+	vertex_id_t get_first_vertex() const {
+		return ranges[0].id_range.first;
+	}
+
+	virtual void init(const std::pair<vertex_id_t, vertex_id_t> &range,
+			const std::pair<off_t, off_t> off_ranges[],
+			edge_type type) {
+		ranges[0].id_range = range;
+		ranges[0].start_off = off_ranges[0].first;
+		num_ranges = 1;
+		num_vertices = range.second - range.first;
+		complete = false;
+		this->type = type;
+		assert(type != edge_type::BOTH_EDGES);
+	}
+
+	virtual bool add_range(const std::pair<vertex_id_t, vertex_id_t> &range,
+			const std::pair<off_t, off_t> off_ranges[]) {
+		if (num_ranges >= ranges.get_capacity())
+			return false;
+		else {
+			ranges[num_ranges].id_range = range;
+			ranges[num_ranges].start_off = off_ranges[0].first;
+			num_ranges++;
+			num_vertices += (range.second - range.first);
+			return true;
+		}
+	}
+
+	virtual int serialize(char *buf, int size) const {
+		return 0;
+	}
+
+	virtual int get_serialized_size() const {
+		return 0;
+	}
+
+	virtual void set_scan_dir(bool forward) {
+	}
+
+	virtual int has_requests() {
+		return false;
+	}
+
+	virtual request_range get_next_request() {
+		assert(0);
+	}
+
+	virtual void run(page_byte_array &arr) {
+		assert(0);
+	}
+
+	virtual bool has_completed() {
+		return complete;
+	}
+};
+
+class sparse_directed_vertex_compute: public sparse_vertex_compute
+{
+public:
+	sparse_directed_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): sparse_vertex_compute(graph, alloc) {
+	}
+
+	virtual void run(page_byte_array &arr);
+};
+
 template<class compute_type>
 class vertex_compute_allocator: public compute_allocator
 {

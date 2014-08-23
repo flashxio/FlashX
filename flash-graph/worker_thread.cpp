@@ -346,12 +346,18 @@ worker_thread::worker_thread(graph_engine *graph,
 			merged_alloc = std::unique_ptr<compute_allocator>(
 					new vertex_compute_allocator<merged_directed_vertex_compute>(
 						graph, this));
+			sparse_alloc = std::unique_ptr<compute_allocator>(
+					new vertex_compute_allocator<sparse_directed_vertex_compute>(
+						graph, this));
 			break;
 		case graph_type::UNDIRECTED:
 			alloc = std::unique_ptr<compute_allocator>(
 					new vertex_compute_allocator<vertex_compute>(graph, this));
 			merged_alloc = std::unique_ptr<compute_allocator>(
 					new vertex_compute_allocator<merged_vertex_compute>(
+						graph, this));
+			sparse_alloc = std::unique_ptr<compute_allocator>(
+					new vertex_compute_allocator<sparse_vertex_compute>(
 						graph, this));
 			break;
 #if 0

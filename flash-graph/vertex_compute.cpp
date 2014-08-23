@@ -329,3 +329,50 @@ void merged_directed_vertex_compute::run(page_byte_array &arr)
 	else
 		assert(0);
 }
+
+void sparse_vertex_compute::start_run(compute_vertex_pointer v)
+{
+	issue_thread->start_run_vertex(v);
+}
+
+void sparse_vertex_compute::finish_run(compute_vertex_pointer v)
+{
+	bool issued_reqs = issue_thread->finish_run_vertex(v);
+	// TODO we have to make sure that this vertex didn't issue another vertex
+	// request.
+	// The vertex only issued one request, which is just processed.
+	// If this run didn't issue more requests, we can be sure that
+	// the vertex has completed in this iteration.
+	// We need to notify the thread that initiate processing the vertex
+	// of the completion of the vertex.
+	if (!issued_reqs)
+		issue_thread->complete_vertex(v);
+}
+
+void sparse_directed_vertex_compute::run(page_byte_array &arr)
+{
+	assert(arr.get_offset() + arr.get_size() > ranges[num_ranges - 1].start_off);
+	vertex_program &curr_vprog = issue_thread->get_vertex_program(false);
+	for (int i = 0; i < num_ranges; i++) {
+		vertex_id_t id = this->ranges[i].id_range.first;
+		int num_vertices
+			= this->ranges[i].id_range.second - this->ranges[i].id_range.first;
+		off_t off = this->ranges[i].start_off - arr.get_offset();
+		// We don't support part vertex compute here.
+		bool in_part = (size_t) arr.get_offset() < get_graph().get_in_part_size();
+		for (int j = 0; j < num_vertices; j++, id++) {
+			sub_page_byte_array sub_arr(arr, off);
+			page_directed_vertex pg_v(sub_arr, in_part);
+			assert(pg_v.get_id() == id);
+			compute_vertex_pointer v(&get_graph().get_vertex(pg_v.get_id()));
+			start_run(v);
+			curr_vprog.run(*v, pg_v);
+			finish_run(v);
+			if (in_part)
+				off += pg_v.get_in_size();
+			else
+				off += pg_v.get_out_size();
+		}
+	}
+	complete = true;
+}

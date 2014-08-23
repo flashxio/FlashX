@@ -172,6 +172,7 @@ class worker_thread: public thread
 	graph_engine *graph;
 	std::unique_ptr<compute_allocator> alloc;
 	std::unique_ptr<compute_allocator> merged_alloc;
+	std::unique_ptr<compute_allocator> sparse_alloc;
 	vertex_program::ptr vprogram;
 	// Vertex program on the vertically partitioned vertices.
 	vertex_program::ptr vpart_vprogram;
@@ -349,6 +350,10 @@ public:
 
 	compute_allocator &get_merged_compute_allocator() {
 		return *merged_alloc;
+	}
+
+	compute_allocator &get_sparse_compute_allocator() {
+		return *sparse_alloc;
 	}
 
 	friend class load_balancer;

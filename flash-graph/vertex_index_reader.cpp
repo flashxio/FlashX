@@ -521,12 +521,201 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 		io_request in_req(compute, in_loc, last_in_off - first_in_off, READ);
 		this->thread->issue_io_request(in_req);
 
+		// issue_io_request doesn't really issue the I/O request to
+		// the underlying I/O yet, so we don't need to worry that user
+		// compute is free'd by the I/O.
 		data_loc_t out_loc(this->thread->get_graph().get_file_id(), first_out_off);
 		io_request out_req(compute, out_loc, last_out_off - first_out_off, READ);
 		this->thread->issue_io_request(out_req);
 	}
 
 	return true;
+}
+
+typedef std::pair<off_t, off_t> off_range_t;
+
+static sparse_vertex_compute *issue_request(worker_thread *thread,
+		const off_range_t &off_range, sparse_vertex_compute *compute,
+		edge_type type, bool return_compute)
+{
+	if (compute->get_num_ranges() == 1) {
+		merged_vertex_compute *dense_compute
+			= (merged_vertex_compute *) thread->get_merged_compute_allocator().alloc();
+		dense_compute->init(compute->get_first_vertex(),
+				compute->get_num_vertices(), type);
+		data_loc_t loc(thread->get_graph().get_file_id(), off_range.first);
+		io_request req(dense_compute, loc, off_range.second - off_range.first,
+				READ);
+		thread->issue_io_request(req);
+		if (return_compute)
+			return compute;
+		else {
+			thread->get_sparse_compute_allocator().free(compute);
+			return NULL;
+		}
+	}
+	else {
+		data_loc_t loc(thread->get_graph().get_file_id(), off_range.first);
+		io_request req(compute, loc, off_range.second - off_range.first, READ);
+		thread->issue_io_request(req);
+		if (return_compute)
+			return (sparse_vertex_compute *) thread->get_sparse_compute_allocator().alloc();
+		else
+			return NULL;
+	}
+}
+
+static sparse_vertex_compute *issue_request(worker_thread *thread,
+		const off_range_t off_ranges[], sparse_vertex_compute *compute,
+		bool return_compute)
+{
+	if (compute->get_num_ranges() == 1) {
+		merged_vertex_compute *dense_compute
+			= (merged_vertex_compute *) thread->get_merged_compute_allocator().alloc();
+		dense_compute->init(compute->get_first_vertex(),
+				compute->get_num_vertices(), BOTH_EDGES);
+		data_loc_t loc(thread->get_graph().get_file_id(), off_ranges[0].first);
+		io_request req(dense_compute, loc, off_ranges[0].second - off_ranges[0].first,
+				READ);
+		thread->issue_io_request(req);
+
+		loc = data_loc_t(thread->get_graph().get_file_id(), off_ranges[1].first);
+		req = io_request(dense_compute, loc, off_ranges[1].second - off_ranges[1].first,
+				READ);
+		thread->issue_io_request(req);
+		if (return_compute)
+			return compute;
+		else {
+			thread->get_sparse_compute_allocator().free(compute);
+			return NULL;
+		}
+	}
+	else {
+		data_loc_t loc(thread->get_graph().get_file_id(), off_ranges[0].first);
+		io_request req(compute, loc, off_ranges[0].second - off_ranges[0].first, READ);
+		thread->issue_io_request(req);
+
+		loc = data_loc_t(thread->get_graph().get_file_id(), off_ranges[1].first);
+		req = io_request(compute, loc, off_ranges[1].second - off_ranges[1].first, READ);
+		thread->issue_io_request(req);
+		if (return_compute)
+			return (sparse_vertex_compute *) thread->get_sparse_compute_allocator().alloc();
+		else
+			return NULL;
+	}
+}
+
+static off_range_t get_in_off_range(index_iterator &it, vertex_id_t start_vid,
+		const id_range_t &range)
+{
+	vsize_t num_vertices = range.second - range.first;
+	off_t idx_entry_loc = range.first - start_vid;
+	assert(it.move_to(idx_entry_loc));
+
+	off_t first_off = it.get_curr_off();
+	assert(it.move_to(idx_entry_loc + num_vertices - 1));
+	off_t last_off = it.get_curr_off() + it.get_curr_size();
+	return off_range_t(first_off, last_off);
+}
+
+static off_range_t get_out_off_range(index_iterator &it, vertex_id_t start_vid,
+		const id_range_t &range)
+{
+	vsize_t num_vertices = range.second - range.first;
+	off_t idx_entry_loc = range.first - start_vid;
+	assert(it.move_to(idx_entry_loc));
+
+	off_t first_off = it.get_curr_out_off();
+	assert(it.move_to(idx_entry_loc + num_vertices - 1));
+	off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
+	return off_range_t(first_off, last_off);
+}
+
+static bool can_merge_reqs(const off_range_t &range1, const off_range_t &range2)
+{
+	return ROUND_PAGE(range1.second) == ROUND_PAGE(range2.first)
+		|| ROUND_PAGE(range1.second) + PAGE_SIZE == ROUND_PAGE(range2.first);
+}
+
+static void merge_reqs(off_range_t &range1, const off_range_t &range2)
+{
+	range1.second = range2.second;
+}
+
+void sparse_self_vertex_compute::run_in_vertices(vertex_id_t start_vid,
+		index_iterator &it)
+{
+	sparse_vertex_compute *compute
+		= (sparse_vertex_compute *) thread->get_sparse_compute_allocator().alloc();
+	off_range_t off_range = get_in_off_range(it, start_vid, ranges[0]);
+	compute->init(ranges[0], &off_range, IN_EDGE);
+	off_range_t req_range = off_range;
+	for (int i = 1; i < num_ranges; i++) {
+		off_range = get_in_off_range(it, start_vid, ranges[i]);
+		if (can_merge_reqs(req_range, off_range)
+				&& compute->add_range(ranges[i], &off_range)) {
+			merge_reqs(req_range, off_range);
+		}
+		else {
+			compute = issue_request(thread, req_range, compute, IN_EDGE, true);
+			compute->init(ranges[i], &off_range, IN_EDGE);
+			req_range = off_range;
+		}
+	}
+	issue_request(thread, req_range, compute, IN_EDGE, false);
+}
+
+void sparse_self_vertex_compute::run_out_vertices(vertex_id_t start_vid,
+		index_iterator &it)
+{
+	sparse_vertex_compute *compute
+		= (sparse_vertex_compute *) thread->get_sparse_compute_allocator().alloc();
+	off_range_t off_range = get_out_off_range(it, start_vid, ranges[0]);
+	compute->init(ranges[0], &off_range, OUT_EDGE);
+	off_range_t req_range = off_range;
+	for (int i = 1; i < num_ranges; i++) {
+		off_range = get_out_off_range(it, start_vid, ranges[i]);
+		if (can_merge_reqs(req_range, off_range)
+				&& compute->add_range(ranges[i], &off_range))
+			merge_reqs(req_range, off_range);
+		else {
+			compute = issue_request(thread, req_range, compute, OUT_EDGE, true);
+			compute->init(ranges[i], &off_range, OUT_EDGE);
+			req_range = off_range;
+		}
+	}
+	issue_request(thread, req_range, compute, OUT_EDGE, false);
+}
+
+void sparse_self_vertex_compute::run_both_vertices(vertex_id_t start_vid,
+		index_iterator &it)
+{
+	sparse_vertex_compute *compute
+		= (sparse_vertex_compute *) thread->get_sparse_compute_allocator().alloc();
+	off_range_t off_ranges[2];
+	off_ranges[0] = get_in_off_range(it, start_vid, ranges[0]);
+	off_ranges[1] = get_out_off_range(it, start_vid, ranges[0]);
+	compute->init(ranges[0], off_ranges, BOTH_EDGES);
+	off_range_t req_ranges[2];
+	req_ranges[0] = off_ranges[0];
+	req_ranges[1] = off_ranges[1];
+	for (int i = 1; i < num_ranges; i++) {
+		off_ranges[0] = get_in_off_range(it, start_vid, ranges[i]);
+		off_ranges[1] = get_out_off_range(it, start_vid, ranges[i]);
+		if (can_merge_reqs(req_ranges[0], off_ranges[0])
+				&& can_merge_reqs(req_ranges[1], off_ranges[1])
+				&& compute->add_range(ranges[i], off_ranges)) {
+			merge_reqs(req_ranges[0], off_ranges[0]);
+			merge_reqs(req_ranges[1], off_ranges[1]);
+		}
+		else {
+			compute = issue_request(thread, req_ranges, compute, true);
+			compute->init(ranges[i], off_ranges, BOTH_EDGES);
+			req_ranges[0] = off_ranges[0];
+			req_ranges[1] = off_ranges[1];
+		}
+	}
+	issue_request(thread, req_ranges, compute, false);
 }
 
 bool sparse_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
@@ -537,49 +726,18 @@ bool sparse_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	// If #ragnes is 1, we'll do it in the dense_self_vertex_compute.
 	assert(num_ranges > 1);
 
-	for (int i = 0; i < num_ranges; i++) {
-		merged_vertex_compute *compute
-			= (merged_vertex_compute *) thread->get_merged_compute_allocator().alloc();
-		id_range_t range = ranges[i];
-		vsize_t num_vertices = range.second - range.first;
-		compute->init(range.first, num_vertices, type);
-		off_t idx_entry_loc = range.first - start_vid;
-		assert(it.move_to(idx_entry_loc));
-		// For undirected vertices, the edge type is always IN_EDGE.
-		// For directed vertices, if the edge type is BOTH_EDGES, we issue
-		// two requests with one vertex compute.
-		if (type == edge_type::IN_EDGE) {
-			off_t first_off = it.get_curr_off();
-			assert(it.move_to(idx_entry_loc + num_vertices - 1));
-			off_t last_off = it.get_curr_off() + it.get_curr_size();
-			data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
-			io_request req(compute, loc, last_off - first_off, READ);
-			this->thread->issue_io_request(req);
-		}
-		else if (type == edge_type::OUT_EDGE) {
-			off_t first_off = it.get_curr_out_off();
-			assert(it.move_to(idx_entry_loc + num_vertices - 1));
-			off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
-			data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
-			io_request req(compute, loc, last_off - first_off, READ);
-			this->thread->issue_io_request(req);
-		}
-		else {
-			assert(type == edge_type::BOTH_EDGES);
-			off_t first_in_off = it.get_curr_off();
-			off_t first_out_off = it.get_curr_out_off();
-			assert(it.move_to(idx_entry_loc + num_vertices - 1));
-			off_t last_in_off = it.get_curr_off() + it.get_curr_size();
-			off_t last_out_off = it.get_curr_out_off() + it.get_curr_out_size();
-
-			data_loc_t in_loc(this->thread->get_graph().get_file_id(), first_in_off);
-			io_request in_req(compute, in_loc, last_in_off - first_in_off, READ);
-			this->thread->issue_io_request(in_req);
-
-			data_loc_t out_loc(this->thread->get_graph().get_file_id(), first_out_off);
-			io_request out_req(compute, out_loc, last_out_off - first_out_off, READ);
-			this->thread->issue_io_request(out_req);
-		}
+	switch(type) {
+		case IN_EDGE:
+			run_in_vertices(start_vid, it);
+			break;
+		case OUT_EDGE:
+			run_out_vertices(start_vid, it);
+			break;
+		case BOTH_EDGES:
+			run_both_vertices(start_vid, it);
+			break;
+		default:
+			assert(0);
 	}
 
 	return true;
