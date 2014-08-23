@@ -1446,20 +1446,8 @@ void global_cached_io::process_user_req(
 				goto end;
 		} while (p == NULL);
 		processing_req.move_next();
-
 		num_pg_accesses++;
-		if (num_pg_accesses % 100 < params.get_test_hit_rate()) {
-			if (!p->data_ready()) {
-				p->set_io_pending(false);
-				p->set_data_ready(true);
-				old_id = page_id_t();
-				if (p->is_old_dirty()) {
-					p->set_dirty(false);
-					p->set_old_dirty(false);
-					p->set_io_pending(false);
-				}
-			}
-		}
+
 		/* 
 		 * If old_off is -1, it means search() didn't evict a page, i.e.,
 		 * it's a cache hit.

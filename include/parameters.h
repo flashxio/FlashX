@@ -97,7 +97,6 @@ class sys_parameters
 {
 	int RAID_block_size;
 	int SA_min_cell_size;
-	int test_hit_rate;
 	int io_depth_per_file;
 	int cache_type;
 	long cache_size;
@@ -129,10 +128,6 @@ public:
 
 	int get_SA_min_cell_size() const {
 		return SA_min_cell_size;
-	}
-
-	int get_test_hit_rate() const {
-		return test_hit_rate;
 	}
 
 	int get_aio_depth_per_file() const {

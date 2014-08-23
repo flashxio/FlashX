@@ -46,7 +46,6 @@ sys_parameters::sys_parameters()
 {
 	RAID_block_size = 64;
 	SA_min_cell_size = 12;
-	test_hit_rate = -1;		// this disables generating the artificial hit rate.
 	io_depth_per_file = 32;
 	cache_type = ASSOCIATIVE_CACHE;
 	cache_size = 512 * 1024 * 1024;
@@ -87,11 +86,6 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 	it = configs.find("io_depth");
 	if(it != configs.end()) {
 		io_depth_per_file = atoi(it->second.c_str());
-	}
-
-	it = configs.find("hit_percent");
-	if(it != configs.end()) {
-		test_hit_rate = atoi(it->second.c_str());
 	}
 
 	it = configs.find("cache_type");
@@ -183,7 +177,6 @@ void sys_parameters::print()
 	std::cout << "\tRAID_block_size: " << RAID_block_size << std::endl;
 	std::cout << "\tSA_cell_size: " << SA_min_cell_size << std::endl;
 	std::cout << "\tio_depth:" << io_depth_per_file << std::endl;
-	std::cout << "\thit_percent: " << test_hit_rate << std::endl;
 	std::cout << "\tcache_type: " << cache_type << std::endl;
 	std::cout << "\tcache_size: " << cache_size << std::endl;
 	std::cout << "\tRAID_mapping: " << RAID_mapping_option << std::endl;
