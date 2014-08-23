@@ -259,7 +259,6 @@ public:
 					min_flush_delay);
 		printf("\tremain %d high-prio requests, %d low-prio requests, %ld messages in total\n",
 				get_num_high_prio_reqs(), get_num_low_prio_reqs(), num_msgs);
-		aio->print_stat(1);
 #endif
 	}
 

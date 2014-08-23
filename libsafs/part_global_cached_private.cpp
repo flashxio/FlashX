@@ -174,11 +174,13 @@ public:
 		return node_ids;
 	}
 
+#if 0
 	/**
 	 * Print the statistics info of request processing threads.
 	 * `nthreads': the number of user threads.
 	 */
 	void print_stat(int num_user_threads);
+#endif
 
 	void print_state() {
 		for (std::map<int, struct thread_group>::iterator it
@@ -836,6 +838,7 @@ void part_io_process_table::destroy_req_senders(
 	}
 }
 
+#if 0
 void part_io_process_table::print_stat(int num_user_threads)
 {
 	int tot_gcached_ios = num_user_threads + get_num_threads();
@@ -876,6 +879,7 @@ void part_io_process_table::print_stat(int num_user_threads)
 		printf("group %d gets %d hits\n", group->id, tot_group_hits);
 	}
 }
+#endif
 
 int part_global_cached_io::destroy_subsystem(part_io_process_table *table)
 {
@@ -1070,24 +1074,6 @@ void part_global_cached_io::cleanup()
 			get_io_id(), processed_requests, sent_requests, processed_replies.get());
 #endif
 }
-
-#ifdef STATISTICS
-void part_global_cached_io::print_stat(int nthreads)
-{
-	static long tot_remote_reads = 0;
-	static int seen_threads = 0;
-	tot_remote_reads += remote_reads;
-	seen_threads++;
-	int tot_gcached_ios = nthreads + global_table->get_num_threads();
-	underlying->print_stat(tot_gcached_ios);
-
-	if (seen_threads == nthreads) {
-		printf("part_global_cached_io: in total, there are %ld requests sent to the remote nodes\n",
-				tot_remote_reads);
-		global_table->print_stat(nthreads);
-	}
-}
-#endif
 
 int part_global_cached_io::preload(off_t start, long size)
 {

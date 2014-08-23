@@ -94,10 +94,6 @@ public:
 	virtual io_interface *clone(thread *t) const;
 	void flush_requests(int max_cached);
 	virtual void flush_requests();
-	virtual void print_stat(int nthreads) {
-		printf("remote_io: %d reqs, %d completed reqs\n",
-				num_issued_reqs.get(), num_completed_reqs.get());
-	}
 	virtual void print_state();
 };
 

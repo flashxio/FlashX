@@ -678,7 +678,6 @@ void thread_private::print_stat()
 		}
 	}
 #endif
-	io->print_stat(config.get_nthreads());
 	int avg_num_pending = 0;
 	if (num_sampling > 0)
 		avg_num_pending = tot_num_pending / num_sampling;

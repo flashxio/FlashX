@@ -36,11 +36,6 @@ class buffered_io: public io_interface
 	std::vector<int> fds;
 
 	int flags;
-	long remote_reads;
-#ifdef STATISTICS
-	long read_time; // in us
-	long num_reads;
-#endif
 public:
 	buffered_io(const logical_file_partition &partition_,
 			thread *t, int flags = O_RDWR);
@@ -83,22 +78,6 @@ public:
 	}
 
 	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
-
-#ifdef STATISTICS
-	virtual void print_stat(int nthreads) {
-		static int seen_threads = 0;
-		static long tot_nreads;
-		static long tot_read_time;
-		static long tot_remote_reads;
-		tot_remote_reads += remote_reads;
-		tot_nreads += num_reads;
-		tot_read_time += read_time;
-		seen_threads++;
-		if (seen_threads == nthreads) {
-			printf("there are %ld reads and takes %ldus\n", tot_nreads, tot_read_time);
-		}
-	}
-#endif
 };
 
 #endif

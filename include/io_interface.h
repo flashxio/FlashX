@@ -204,9 +204,6 @@ public:
 	virtual void cleanup() {
 	}
 
-	virtual void print_stat(int nthreads) {
-	}
-
 	/*
 	 * This method prints the current state of the IO instance.
 	 * For the sake of performance, the method may not be thread-safe.

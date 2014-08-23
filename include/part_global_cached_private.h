@@ -156,9 +156,6 @@ public:
 
 	friend class node_cached_io;
 
-#ifdef STATISTICS
-	virtual void print_stat(int nthreads);
-#endif
 	virtual void print_state();
 };
 

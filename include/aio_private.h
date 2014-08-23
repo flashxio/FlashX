@@ -129,10 +129,6 @@ public:
 	int open_file(const logical_file_partition &partition);
 	int close_file(int file_id);
 
-	virtual void print_stat(int nthreads) {
-		ctx->print_stat();
-	}
-
 	virtual void print_state() {
 		printf("aio %d has %ld open files, %d pending reqs\n",
 				get_io_id(), open_files.size(), num_pending_ios());

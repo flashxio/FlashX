@@ -314,31 +314,6 @@ public:
 
 	void wakeup_on_req(original_io_request *req, int status);
 
-#ifdef STATISTICS
-	void print_stat(int nthreads) {
-		underlying->print_stat(nthreads);
-		static std::atomic_ulong tot_bytes;
-		static std::atomic_ulong tot_accesses;
-		static std::atomic_ulong tot_hits;
-		static std::atomic_ulong tot_fast_process;
-		static std::atomic_int seen_threads;
-		tot_bytes += num_bytes;
-		tot_accesses += num_pg_accesses;
-		tot_hits += cache_hits;
-		tot_fast_process += num_fast_process;
-		printf("global_cached_io: %ld reqs, %ld bytes, %ld reqs to the underlying io\n",
-				num_processed_areqs.get(), num_bytes, num_from_underlying.get());
-		printf("global_cached_io: There are %ld evicted dirty pages\n", num_evicted_dirty_pages);
-		if (seen_threads.fetch_add(1) == nthreads - 1) {
-			printf("global_cached_io: in total, there are %ld accessed bytes, %ld pages\n",
-					tot_bytes.load(), tot_accesses.load());
-			printf("and there are %ld cache hits and %ld processed in the fast path\n",
-					tot_hits.load(), tot_fast_process.load());
-			global_cache->print_stat();
-		}
-	}
-#endif
-
 	virtual void print_state() {
 #ifdef STATISTICS
 		printf("global cached io %d has %d pending reqs and %ld reqs from underlying\n",
