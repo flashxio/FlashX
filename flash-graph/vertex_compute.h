@@ -378,7 +378,6 @@ protected:
 	int num_vertices;
 	int num_ranges;
 	bool complete;
-	edge_type type;
 	graph_engine *graph;
 	worker_thread *issue_thread;
 
@@ -387,7 +386,6 @@ protected:
 public:
 	sparse_vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): user_compute(alloc) {
-		type = edge_type::NONE;
 		this->graph = graph;
 		num_ranges = 0;
 		num_vertices = 0;
@@ -419,8 +417,6 @@ public:
 		num_ranges = 1;
 		num_vertices = range.second - range.first;
 		complete = false;
-		this->type = type;
-		assert(type != edge_type::BOTH_EDGES);
 	}
 
 	virtual bool add_range(const std::pair<vertex_id_t, vertex_id_t> &range,
@@ -466,9 +462,36 @@ public:
 
 class sparse_directed_vertex_compute: public sparse_vertex_compute
 {
+	edge_type type;
+	std::vector<off_t> out_start_offs;
+	page_byte_array *buffered_arr;
+
+	void run_on_array(page_byte_array &arr);
+	void run_on_arrays(page_byte_array &in_arr, page_byte_array &out_arr);
 public:
 	sparse_directed_vertex_compute(graph_engine *graph,
 			compute_allocator *alloc): sparse_vertex_compute(graph, alloc) {
+		type = edge_type::NONE;
+		buffered_arr = NULL;
+	}
+
+	virtual void init(const std::pair<vertex_id_t, vertex_id_t> &range,
+			const std::pair<off_t, off_t> off_ranges[],
+			edge_type type) {
+		this->type = type;
+		sparse_vertex_compute::init(range, off_ranges, type);
+		if (type == BOTH_EDGES) {
+			out_start_offs.clear();
+			out_start_offs.push_back(off_ranges[1].first);
+		}
+	}
+
+	virtual bool add_range(const std::pair<vertex_id_t, vertex_id_t> &range,
+			const std::pair<off_t, off_t> off_ranges[]) {
+		bool ret = sparse_vertex_compute::add_range(range, off_ranges);
+		if (ret && type == BOTH_EDGES)
+			out_start_offs.push_back(off_ranges[1].first);
+		return ret;
 	}
 
 	virtual void run(page_byte_array &arr);

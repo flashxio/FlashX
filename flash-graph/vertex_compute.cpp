@@ -349,7 +349,7 @@ void sparse_vertex_compute::finish_run(compute_vertex_pointer v)
 		issue_thread->complete_vertex(v);
 }
 
-void sparse_directed_vertex_compute::run(page_byte_array &arr)
+void sparse_directed_vertex_compute::run_on_array(page_byte_array &arr)
 {
 	assert(arr.get_offset() + arr.get_size() > ranges[num_ranges - 1].start_off);
 	vertex_program &curr_vprog = issue_thread->get_vertex_program(false);
@@ -375,4 +375,72 @@ void sparse_directed_vertex_compute::run(page_byte_array &arr)
 		}
 	}
 	complete = true;
+}
+
+void sparse_directed_vertex_compute::run_on_arrays(page_byte_array &in_arr,
+		page_byte_array &out_arr)
+{
+	assert(in_arr.get_offset()
+			+ in_arr.get_size() > ranges[num_ranges - 1].start_off);
+	assert(out_arr.get_offset()
+			+ out_arr.get_size() > out_start_offs[num_ranges - 1]);
+	assert(num_ranges == out_start_offs.size());
+	// We don't support part vertex compute here.
+	vertex_program &curr_vprog = issue_thread->get_vertex_program(false);
+
+	for (int i = 0; i < num_ranges; i++) {
+		vertex_id_t id = this->ranges[i].id_range.first;
+		int num_vertices
+			= this->ranges[i].id_range.second - this->ranges[i].id_range.first;
+		off_t in_off = this->ranges[i].start_off - in_arr.get_offset();
+		off_t out_off = this->out_start_offs[i] - out_arr.get_offset();
+		for (int i = 0; i < num_vertices; i++, id++) {
+			sub_page_byte_array sub_in_arr(in_arr, in_off);
+			sub_page_byte_array sub_out_arr(out_arr, out_off);
+			page_directed_vertex pg_v(sub_in_arr, sub_out_arr);
+			assert(pg_v.get_id() == id);
+			compute_vertex_pointer v(&get_graph().get_vertex(pg_v.get_id()));
+			start_run(v);
+			curr_vprog.run(*v, pg_v);
+			finish_run(v);
+			in_off += pg_v.get_in_size();
+			out_off += pg_v.get_out_size();
+		}
+	}
+	complete = true;
+}
+
+void sparse_directed_vertex_compute::run(page_byte_array &arr)
+{
+	if (type == BOTH_EDGES && buffered_arr) {
+		page_byte_array *in_arr;
+		page_byte_array *out_arr;
+
+		if (buffered_arr->get_offset() < get_graph().get_in_part_size()) {
+			in_arr = buffered_arr;
+			assert(arr.get_offset() >= get_graph().get_in_part_size());
+			out_arr = &arr;
+		}
+		else {
+			out_arr = buffered_arr;
+			assert(arr.get_offset() < get_graph().get_in_part_size());
+			in_arr = &arr;
+		}
+
+		run_on_arrays(*in_arr, *out_arr);
+		page_byte_array::destroy(buffered_arr);
+	}
+	else if (type == BOTH_EDGES) {
+		buffered_arr = arr.clone();
+	}
+	else if (type == IN_EDGE) {
+		assert(arr.get_offset() < get_graph().get_in_part_size());
+		run_on_array(arr);
+	}
+	else if (type == OUT_EDGE) {
+		assert(arr.get_offset() >= get_graph().get_in_part_size());
+		run_on_array(arr);
+	}
+	else
+		assert(0);
 }
