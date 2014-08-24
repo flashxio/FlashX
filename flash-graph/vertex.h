@@ -951,12 +951,14 @@ public:
 				num_edges = num_in_edges;
 				in_array->memcpy(ext_mem_undirected_vertex::get_header_size(),
 						(char *) edges, sizeof(vertex_id_t) * num_edges);
+				break;
 			case OUT_EDGE:
 				assert(num_out_edges <= num);
 				assert(out_array);
 				num_edges = num_out_edges;
 				out_array->memcpy(ext_mem_undirected_vertex::get_header_size(),
 						(char *) edges, sizeof(vertex_id_t) * num_edges);
+				break;
 			default:
 				assert(0);
 		}
