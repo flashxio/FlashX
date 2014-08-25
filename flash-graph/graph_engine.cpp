@@ -119,9 +119,7 @@ size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
 		}
 
 		// Add requests to the queue in a sorted order.
-		int num = 0;
 		while (!reqs.is_full() && !user_computes.empty() && num < max) {
-			num++;
 			prio_compute prio_comp = user_computes.top();
 			user_computes.pop();
 			reqs.push_back(prio_comp.req);
