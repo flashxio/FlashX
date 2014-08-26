@@ -492,13 +492,14 @@ public:
 				+ pg_id.get_file_id(), num_cells);
 	}
 
-	int hash1_locked(off_t offset) {
+	int hash1_locked(const page_id_t &pg_id) {
 		unsigned long count;
 		int ret;
 		do {
 			table_lock.read_lock(count);
 			int num_cells = (init_ncells * (long) (1 << (level + 1)));
-			ret = universal_hash(offset / PAGE_SIZE / offset_factor, num_cells);
+			ret = universal_hash(pg_id.get_offset() / PAGE_SIZE / offset_factor
+					+ pg_id.get_file_id(), num_cells);
 		} while (!table_lock.read_unlock(count));
 		return ret;
 	}

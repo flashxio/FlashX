@@ -203,7 +203,8 @@ void hash_cell::rehash(hash_cell *expanded)
 	int num_exchanges = 0;
 	for (unsigned int i = 0; i < buf.get_num_pages(); i++) {
 		thread_safe_page *pg = buf.get_page(i);
-		int hash1 = table->hash1_locked(pg->get_offset());
+		page_id_t pg_id(pg->get_file_id(), pg->get_offset());
+		int hash1 = table->hash1_locked(pg_id);
 		/*
 		 * It's possible that a page is in a wrong cell.
 		 * It's likely because the page is added to the cell 
