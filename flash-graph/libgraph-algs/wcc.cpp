@@ -103,22 +103,80 @@ public:
 	}
 };
 
+class wcc_vertex_program: public vertex_program_impl<wcc_vertex>
+{
+	std::vector<vertex_id_t> buf;
+public:
+	typedef std::shared_ptr<wcc_vertex_program> ptr;
+
+	static ptr cast2(vertex_program::ptr prog) {
+		return std::static_pointer_cast<wcc_vertex_program, vertex_program>(prog);
+	}
+
+	std::vector<vertex_id_t> &get_buf() {
+		return buf;
+	}
+};
+
+class wcc_vertex_program_creater: public vertex_program_creater
+{
+public:
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new wcc_vertex_program());
+	}
+};
+
+/*
+ * This function get all unique neighbors on two edge lists.
+ */
+size_t get_unique_neighbors(edge_seq_iterator it1, edge_seq_iterator it2,
+		std::vector<vertex_id_t> &buf)
+{
+	vertex_id_t v1 = INVALID_VERTEX_ID;
+	vertex_id_t v2 = INVALID_VERTEX_ID;
+	if (it1.has_next())
+		v1 = it1.next();
+	if (it2.has_next())
+		v2 = it2.next();
+	while (it1.has_next() && it2.has_next()) {
+		if (v1 == v2) {
+			buf.push_back(v1);
+			v1 = it1.next();
+			v2 = it2.next();
+		}
+		else if (v1 > v2) {
+			buf.push_back(v2);
+			v2 = it2.next();
+		}
+		else {
+			buf.push_back(v1);
+			v1 = it1.next();
+		}
+	}
+	if (v1 != INVALID_VERTEX_ID)
+		buf.push_back(v1);
+	if (v2 != INVALID_VERTEX_ID)
+		buf.push_back(v2);
+	while (it1.has_next())
+		buf.push_back(it1.next());
+	while (it2.has_next())
+		buf.push_back(it2.next());
+	return buf.size();
+}
+
 void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	component_message msg(component_id);
 	const page_directed_vertex &dvertex = (const page_directed_vertex &) vertex;
-	// We need to add the neighbors of the vertex to the queue of
-	// the next level.
-	if (dvertex.has_in_part()) {
-		empty &= (vertex.get_num_edges(IN_EDGE) == 0);
-		edge_seq_iterator it = dvertex.get_neigh_seq_it(IN_EDGE);
-		prog.multicast_msg(it, msg);
-	}
-	if (dvertex.has_out_part()) {
-		empty &= (vertex.get_num_edges(OUT_EDGE) == 0);
-		edge_seq_iterator it = dvertex.get_neigh_seq_it(OUT_EDGE);
-		prog.multicast_msg(it, msg);
-	}
+	assert(dvertex.has_in_part());
+	assert(dvertex.has_out_part());
+	empty = (vertex.get_num_edges(BOTH_EDGES) == 0);
+	wcc_vertex_program &wcc_vprog = (wcc_vertex_program &) prog;
+	std::vector<vertex_id_t> &buf = wcc_vprog.get_buf();
+	buf.clear();
+	get_unique_neighbors(dvertex.get_neigh_seq_it(IN_EDGE),
+			dvertex.get_neigh_seq_it(OUT_EDGE), buf);
+	prog.multicast_msg(buf.data(), buf.size(), msg);
 }
 
 class ts_wcc_vertex: public wcc_vertex
@@ -201,7 +259,8 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph->start_all();
+	graph->start_all(vertex_initializer::ptr(),
+			vertex_program_creater::ptr(new wcc_vertex_program_creater()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
 	printf("WCC takes %f seconds\n", time_diff(start, end));
