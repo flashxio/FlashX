@@ -286,6 +286,18 @@ void part_compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 	compute->request_vertices(ids, num);
 }
 
+void part_compute_directed_vertex::request_vertices(vertex_id_t ids[], size_t num)
+{
+	// The trick for self request doesn't work for part compute vertex.
+	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
+	curr->request_on_vertex(get_id());
+	compute_vertex_pointer curr_vertex = curr->get_curr_vertex();
+	assert(curr_vertex.is_valid());
+	assert(curr_vertex->get_id() == this->get_id());
+	vertex_compute *compute = curr->get_vertex_compute(curr_vertex);
+	compute->request_vertices(ids, num);
+}
+
 void part_compute_directed_vertex::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
