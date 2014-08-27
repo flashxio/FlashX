@@ -198,9 +198,17 @@ void diameter_vertex::run(vertex_program &prog, const page_vertex &vertex)
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge, 0, num_dests);
 	diameter_message msg(bfs_ids);
-	prog.multicast_msg(it, msg);
+	if (traverse_edge == BOTH_EDGES) {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE);
+		prog.multicast_msg(it, msg);
+		it = vertex.get_neigh_seq_it(OUT_EDGE);
+		prog.multicast_msg(it, msg);
+	}
+	else {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge);
+		prog.multicast_msg(it, msg);
+	}
 }
 
 void diameter_vertex::notify_iteration_end(vertex_program &vprog)
@@ -264,6 +272,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 	printf("diameter estimation starts\n");
+	printf("#para BFS: %d, #sweeps: %d, directed: %d\n", num_para_bfs,
+			num_sweeps, directed);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
