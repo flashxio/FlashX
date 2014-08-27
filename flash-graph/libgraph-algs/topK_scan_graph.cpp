@@ -435,17 +435,20 @@ void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &ve
 	scan_runtime_data_t *local_data = create_runtime(prog.get_graph(), vertex);
 	local_value.set_runtime_data(local_data);
 
-	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
-			edge_type::BOTH_EDGES);
-	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
-			edge_type::BOTH_EDGES);
 	size_t tmp = 0;
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
+	page_byte_array::seq_const_iterator<vertex_id_t> it = vertex.get_neigh_seq_it(
+			edge_type::IN_EDGE);
+	PAGE_FOREACH(vertex_id_t, id, it) {
 		// Ignore loops
 		if (id != vertex.get_id())
 			tmp++;
-	}
+	} PAGE_FOREACH_END
+	it = vertex.get_neigh_seq_it(edge_type::OUT_EDGE);
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		// Ignore loops
+		if (id != vertex.get_id())
+			tmp++;
+	} PAGE_FOREACH_END
 	local_data->local_scan += tmp;
 
 	if (local_data->neighbors->empty()) {
@@ -594,17 +597,21 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 	// There is no guarantee that the message will be delivered.
 	broadcast_vpart(part_scan_msg(part_scan_type::NEIGH, (size_t) local_data));
 
-	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
-			edge_type::BOTH_EDGES);
-	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
-			edge_type::BOTH_EDGES);
 	size_t tmp = 0;
-	for (; it != end; ++it) {
-		vertex_id_t id = *it;
+	page_byte_array::seq_const_iterator<vertex_id_t> it = vertex.get_neigh_seq_it(
+			edge_type::IN_EDGE);
+	PAGE_FOREACH(vertex_id_t, id, it) {
 		// Ignore loops
 		if (id != vertex.get_id())
 			tmp++;
-	}
+	} PAGE_FOREACH_END
+	it = vertex.get_neigh_seq_it(edge_type::OUT_EDGE);
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		// Ignore loops
+		if (id != vertex.get_id())
+			tmp++;
+	} PAGE_FOREACH_END
+
 	if (get_part_id() == 0) {
 		scan_msg msg(PART_LOCAL_MSG, tmp);
 		msg.set_flush(true);
