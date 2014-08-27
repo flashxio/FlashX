@@ -34,6 +34,7 @@
 #include "graph_config.h"
 
 atomic_number<long> num_visits;
+edge_type traverse_edge = edge_type::OUT_EDGE;
 
 class dist_message: public vertex_message
 {
@@ -79,7 +80,7 @@ public:
 			distance = parent_dist + 1;
 			parent = tmp_parent;
 
-			directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+			directed_vertex_request req(get_id(), traverse_edge);
 			request_partial_vertices(&req, 1);
 		}
 	}
@@ -100,19 +101,25 @@ void sssp_vertex::run(vertex_program &prog, const page_vertex &vertex)
 #ifdef DEBUG
 	num_visits.inc(1);
 #endif
+	int num_dests = vertex.get_num_edges(traverse_edge);
+	if (num_dests == 0)
+		return;
+
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex.get_neigh_end(OUT_EDGE);
-	stack_array<vertex_id_t, 1024> dest_buf(vertex.get_num_edges(OUT_EDGE));
-	int num_dests = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
-		vertex_id_t id = *it;
-		dest_buf[num_dests++] = id;
-	}
 	dist_message msg(get_id(), distance);
-	prog.multicast_msg(dest_buf.data(), num_dests, msg);
+	if (traverse_edge == BOTH_EDGES) {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE, 0,
+				num_dests);
+		prog.multicast_msg(it, msg);
+		it = vertex.get_neigh_seq_it(OUT_EDGE, 0, num_dests);
+		prog.multicast_msg(it, msg);
+	}
+	else {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge, 0,
+				num_dests);
+		prog.multicast_msg(it, msg);
+	}
 }
 
 class sssp_initializer: public vertex_initializer
@@ -138,6 +145,7 @@ void print_usage()
 	fprintf(stderr,
 			"sssp [options] conf_file graph_file index_file start_vertex\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
+	fprintf(stderr, "-b: traverse with both in-edges and out-edges\n");
 	graph_conf.print_help();
 	params.print_help();
 }
@@ -147,12 +155,15 @@ int main(int argc, char *argv[])
 	int opt;
 	std::string confs;
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:b")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
 				confs = optarg;
 				num_opts++;
+				break;
+			case 'b':
+				traverse_edge = edge_type::BOTH_EDGES;
 				break;
 			default:
 				print_usage();
