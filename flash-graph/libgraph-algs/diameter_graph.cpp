@@ -58,8 +58,10 @@ public:
 		map = 0;
 	}
 
-	void merge(const embedded_bitmap<T> &map) {
+	bool merge(const embedded_bitmap<T> &map) {
+		bool old = this->map;
 		this->map |= map.map;
+		return old != map.map;
 	}
 
 	bool operator!=(const embedded_bitmap<T> &map) {
@@ -130,8 +132,8 @@ public:
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
 		const diameter_message &dmsg = (const diameter_message &) msg;
-		new_bfs_ids.merge(dmsg.get_bfs_ids());
-		vprog.request_notify_iter_end(*this);
+		if (new_bfs_ids.merge(dmsg.get_bfs_ids()))
+			vprog.request_notify_iter_end(*this);
 	}
 
 	void notify_iteration_end(vertex_program &vprog);
