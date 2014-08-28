@@ -47,7 +47,14 @@ class vertex_compute: public user_compute
 	{
 		bool operator()(const ext_mem_vertex_info &info1,
 				const ext_mem_vertex_info &info2) {
-			return info1.get_off() > info2.get_off();
+			// We should order the vertex requests by their IDs.
+			// When a directed vertex wants to request both edges list,
+			// it results in two I/O requests and we want them to be served
+			// around the same time, so we don't need to consume a lot
+			// of resources for one of the requests.
+			// Ordering requests by vertex IDs has the same effect as vertex
+			// location on SSDs.
+			return info1.get_id() > info2.get_id();
 		}
 	};
 
