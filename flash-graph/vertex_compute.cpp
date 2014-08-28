@@ -116,10 +116,10 @@ void vertex_compute::issue_io_request(const ext_mem_vertex_info &info)
 
 void vertex_compute::run(page_byte_array &array)
 {
+	num_complete_fetched++;
 	start_run();
 	page_undirected_vertex pg_v(array);
 	issue_thread->get_vertex_program(v.is_part()).run(*v, pg_v);
-	num_complete_fetched++;
 	finish_run();
 }
 
@@ -127,12 +127,12 @@ void directed_vertex_compute::run_on_page_vertex(page_directed_vertex &pg_v)
 {
 	start_run();
 	issue_thread->get_vertex_program(v.is_part()).run(*v, pg_v);
-	num_complete_fetched++;
 	finish_run();
 }
 
 void directed_vertex_compute::run(page_byte_array &array)
 {
+	num_complete_fetched++;
 	// If the combine map is empty, we don't need to merge
 	// byte arrays.
 	if (combine_map.empty()) {
@@ -188,7 +188,12 @@ void directed_vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 void directed_vertex_compute::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
-	num_requested += num;
+	for (int i = 0; i < num; i++) {
+		if (reqs[i].get_type() == edge_type::BOTH_EDGES)
+			num_requested += 2;
+		else
+			num_requested++;
+	}
 	issue_thread->get_index_reader().request_vertices(reqs, num, *this);
 }
 
@@ -208,17 +213,23 @@ void directed_vertex_compute::issue_io_request(const ext_mem_vertex_info &in_inf
 		const ext_mem_vertex_info &out_info)
 {
 	assert(in_info.get_id() == out_info.get_id());
-	// Otherwise, we need to issue the I/O request to SAFS explicitly.
-	data_loc_t loc1(graph->get_file_id(), in_info.get_off());
-	io_request req1(this, loc1, in_info.get_size(), READ);
-	issue_thread->issue_io_request(req1);
+	if (issued_to_io()) {
+		requested_vertices.push(in_info);
+		requested_vertices.push(out_info);
+	}
+	else {
+		// Otherwise, we need to issue the I/O request to SAFS explicitly.
+		data_loc_t loc1(graph->get_file_id(), in_info.get_off());
+		io_request req1(this, loc1, in_info.get_size(), READ);
+		issue_thread->issue_io_request(req1);
 
-	data_loc_t loc2(graph->get_file_id(), out_info.get_off());
-	io_request req2(this, loc2, out_info.get_size(), READ);
-	issue_thread->issue_io_request(req2);
+		data_loc_t loc2(graph->get_file_id(), out_info.get_off());
+		io_request req2(this, loc2, out_info.get_size(), READ);
+		issue_thread->issue_io_request(req2);
+		num_issued += 2;
+	}
 
 	combine_map.insert(combine_map_t::value_type(in_info.get_id(), NULL));
-	num_issued++;
 }
 
 void directed_vertex_compute::request_num_edges(vertex_id_t ids[], size_t num)

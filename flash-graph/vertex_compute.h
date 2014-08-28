@@ -51,10 +51,10 @@ class vertex_compute: public user_compute
 		}
 	};
 
+protected:
 	// TODO use the embedded array as the container.
 	std::priority_queue<ext_mem_vertex_info, std::vector<ext_mem_vertex_info>,
 		vertex_info_comp> requested_vertices;
-protected:
 	graph_engine *graph;
 
 	// The thread that creates the vertex compute.
