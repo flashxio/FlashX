@@ -1603,7 +1603,7 @@ void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
 			&& num_processed_areqs.get() - num_completed_areqs.get(
 				) < (size_t) get_max_num_pending_ios()
 			// TODO the maximal number should be configurable.
-			&& num_underlying_pages.get() < 100) {
+			&& num_underlying_pages.get() < 1000) {
 		io_request req = queue.pop_front();
 		num_processed_areqs.inc(1);
 		// We don't allow the user's requests to be extended requests.
@@ -1835,7 +1835,7 @@ int global_cached_io::wait4complete(int num_to_complete)
 	// of completed requests because completed requests may still have
 	// incomplete user tasks and we need to take into account the number
 	// of incomplete tasks.
-	while (prev_pending - num_pending_ios() < num_to_complete) {
+	while (num_completed_areqs.get() - prev_completed_areqs < num_to_complete) {
 		// We only wait when there are pending requests in the underlying IO.
 		if (num_to_underlying.get() - num_from_underlying.get() > 0) {
 			get_thread()->wait();
