@@ -443,7 +443,7 @@ class associative_cache: public page_cache
 
 	~associative_cache();
 
-	void create_flusher(io_interface *io, page_cache *global_cache);
+	void create_flusher(std::shared_ptr<io_interface> io, page_cache *global_cache);
 
 	memory_manager *get_manager() {
 		return manager;
@@ -584,7 +584,7 @@ public:
 
 	int get_num_dirty_pages() const;
 
-	virtual void init(io_interface *underlying);
+	virtual void init(std::shared_ptr<io_interface> underlying);
 
 	friend class hash_cell;
 #ifdef STATISTICS

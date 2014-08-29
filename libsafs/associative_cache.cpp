@@ -1075,7 +1075,7 @@ class associative_flusher;
 
 class flush_io: public io_interface
 {
-	io_interface *underlying;
+	io_interface::ptr underlying;
 	pthread_key_t underlying_key;
 	associative_cache *cache;
 	associative_flusher *flusher;
@@ -1091,7 +1091,7 @@ class flush_io: public io_interface
 		return io;
 	}
 public:
-	flush_io(io_interface *underlying, associative_cache *cache,
+	flush_io(io_interface::ptr underlying, associative_cache *cache,
 			associative_flusher *flusher): io_interface(NULL) {
 		this->underlying = underlying;
 		this->cache = cache;
@@ -1132,7 +1132,7 @@ class associative_flusher: public dirty_page_flusher
 public:
 	thread_safe_FIFO_queue<hash_cell *> dirty_cells;
 	associative_flusher(page_cache *cache, associative_cache *local_cache,
-			io_interface *io, int node_id): dirty_cells(
+			io_interface::ptr io, int node_id): dirty_cells(
 				std::string("dirty_cells-") + itoa(io->get_node_id()),
 				io->get_node_id(), local_cache->get_num_cells()) {
 		this->node_id = node_id;
@@ -1365,7 +1365,8 @@ void associative_flusher::run()
 	io->flush_requests();
 }
 
-void associative_cache::create_flusher(io_interface *io, page_cache *global_cache)
+void associative_cache::create_flusher(io_interface::ptr io,
+		page_cache *global_cache)
 {
 	pthread_mutex_lock(&init_mutex);
 	if (_flusher == NULL && io
@@ -1388,7 +1389,7 @@ void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num,
 		_flusher->flush_dirty_pages(pages, num, io);
 }
 
-void associative_cache::init(io_interface *underlying)
+void associative_cache::init(io_interface::ptr underlying)
 {
 	create_flusher(underlying, this);
 }

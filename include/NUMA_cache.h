@@ -73,7 +73,7 @@ public:
 
 	// TODO shouldn't I use a different underlying IO for cache
 	// on the different nodes.
-	virtual void init(io_interface *underlying) {
+	virtual void init(std::shared_ptr<io_interface> underlying) {
 		for (size_t i = 0; i < caches.size(); i++) {
 			// TODO this is a ugly hack. It makes sure that each flush
 			// thread of a SA-cache has a reference to this NUMA cache.

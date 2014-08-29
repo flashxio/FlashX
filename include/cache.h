@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <numa.h>
 
+#include <memory>
 #include <map>
 
 #include "common.h"
@@ -417,12 +418,13 @@ public:
 	 */
 	virtual long size() = 0;
 	/* This method should be called within each thread. */
-	virtual void init(io_interface *underlying) {
+	virtual void init(std::shared_ptr<io_interface> underlying) {
 	}
 	virtual bool shrink(int npages, char *pages[]) {
 		return false;
 	}
-	virtual void create_flusher(io_interface *io, page_cache *global_cache) {
+	virtual void create_flusher(std::shared_ptr<io_interface> io,
+			page_cache *global_cache) {
 	}
 	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
 			io_interface *io) {

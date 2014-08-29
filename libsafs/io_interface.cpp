@@ -238,8 +238,8 @@ void init_io_system(const config_map &configs, bool with_cache)
 		// what thread is used here.
 		thread *curr = thread::get_curr_thread();
 		assert(curr);
-		io_interface *underlying = new remote_io(global_data.read_threads,
-				mapper, curr);
+		io_interface::ptr underlying = io_interface::ptr(new remote_io(
+					global_data.read_threads, mapper, curr));
 		global_data.global_cache->init(underlying);
 	}
 #ifdef PART_IO
