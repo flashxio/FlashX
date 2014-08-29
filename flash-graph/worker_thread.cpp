@@ -539,8 +539,7 @@ void worker_thread::run()
 			balancer->process_completed_stolen_vertices();
 			num = process_activated_vertices(
 					graph->get_max_processing_vertices()
-					- max(get_num_vertices_processing(),
-						io->num_pending_ios()));
+					- get_num_vertices_processing());
 			num_visited += num;
 			msg_processor->process_msgs();
 			index_reader->wait4complete(0);
