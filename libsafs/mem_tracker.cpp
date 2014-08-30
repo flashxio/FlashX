@@ -23,8 +23,44 @@
 #include "concurrency.h"
 #include "debugger.h"
 
-atomic_number<size_t> alloc_objs;
-atomic_number<size_t> alloc_bytes;
+static atomic_number<size_t> alloc_objs;
+static atomic_number<size_t> alloc_bytes;
+
+namespace {
+class global_max
+{
+	volatile size_t value;
+public:
+	global_max() {
+		value = 0;
+	}
+
+	bool update(size_t new_v) {
+		if (new_v <= value)
+			return false;
+
+		bool ret = false;
+		// There is a race condition, but we don't care.
+		// We don't need to get the exact max value, but roughly the max
+		// value. We can't use lock here, because the init function of
+		// a program may allocate memory before invoking the constructor
+		// of this class.
+		if (new_v > value) {
+			value = new_v;
+			ret = true;
+		}
+		return ret;
+	}
+
+	size_t get() const {
+		return value;
+	}
+};
+}
+
+static global_max max_objs;
+static global_max max_bytes;
+static global_max max_alloc;
 
 #ifdef ENABLE_MEM_TRACE
 
@@ -45,8 +81,11 @@ void init_mem_tracker()
 
 void *operator new(size_t n) throw (std::bad_alloc)
 {
-	alloc_objs.inc(1);
-	alloc_bytes.inc(n);
+	size_t ret = alloc_objs.inc(1);
+	max_objs.update(ret);
+	ret = alloc_bytes.inc(n);
+	max_bytes.update(ret);
+	max_alloc.update(n);
 	void *p = malloc(n + sizeof(size_t));
 	size_t *size = (size_t *) p;
 	*size = n;
@@ -67,8 +106,11 @@ void operator delete(void *p) throw ()
 
 void *operator new[](size_t n) throw (std::bad_alloc)
 {
-	alloc_objs.inc(1);
-	alloc_bytes.inc(n);
+	size_t ret = alloc_objs.inc(1);
+	max_objs.update(ret);
+	ret = alloc_bytes.inc(n);
+	max_bytes.update(ret);
+	max_alloc.update(n);
 	void *p = malloc(n + sizeof(size_t));
 	size_t *size = (size_t *) p;
 	*size = n;
@@ -97,4 +139,19 @@ size_t get_alloc_objs()
 size_t get_alloc_bytes()
 {
 	return alloc_bytes.get();
+}
+
+size_t get_max_alloc_objs()
+{
+	return max_objs.get();
+}
+
+size_t get_max_alloc_bytes()
+{
+	return max_bytes.get();
+}
+
+size_t get_max_alloc()
+{
+	return max_alloc.get();
 }

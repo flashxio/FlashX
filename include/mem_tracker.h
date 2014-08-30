@@ -37,5 +37,8 @@ void operator delete[](void *p) throw ();
 
 size_t get_alloc_objs();
 size_t get_alloc_bytes();
+size_t get_max_alloc_objs();
+size_t get_max_alloc_bytes();
+size_t get_max_alloc();
 
 #endif

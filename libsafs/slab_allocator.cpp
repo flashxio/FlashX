@@ -216,6 +216,9 @@ slab_allocator::~slab_allocator()
 #endif
 		numa_free(alloc_bufs[i], increase_size);
 	}
+#ifdef ENABLE_MEM_TRACE
+	printf("%s allocate %ld bytes\n", name.c_str(), alloc_bufs.size() * increase_size);
+#endif
 	if (local_buf_size > 0) {
 		pthread_key_delete(local_buf_key);
 	}

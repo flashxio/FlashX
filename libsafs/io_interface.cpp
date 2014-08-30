@@ -277,6 +277,13 @@ void destroy_io_system()
 	}
 	global_data.read_threads.resize(0);
 	destroy_aio();
+
+#ifdef ENABLE_MEM_TRACE
+	printf("memleak: %ld objects and %ld bytes\n", get_alloc_objs(),
+			get_alloc_bytes());
+	printf("max: %ld objs and %ld bytes, max alloc %ld bytes\n",
+			get_max_alloc_objs(), get_max_alloc_bytes(), get_max_alloc());
+#endif
 }
 
 class posix_io_factory: public file_io_factory
