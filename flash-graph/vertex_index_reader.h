@@ -386,7 +386,7 @@ public:
 		if (get_last_page() == get_page(range.first)
 				|| get_last_page() + PAGE_SIZE == get_page(range.first)) {
 			index_compute::add_vertex(range.second - 1);
-			if (ranges.get_capacity() <= num_ranges)
+			if ((size_t) ranges.get_capacity() <= num_ranges)
 				ranges.resize(ranges.get_capacity() * 2);
 			ranges[num_ranges++] = range;
 			return true;

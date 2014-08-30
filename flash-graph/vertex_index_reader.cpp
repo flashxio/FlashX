@@ -650,7 +650,7 @@ void sparse_self_vertex_compute::run_in_vertices(vertex_id_t start_vid,
 	off_range_t off_range = get_in_off_range(it, start_vid, ranges[0]);
 	compute->init(ranges[0], &off_range, IN_EDGE);
 	off_range_t req_range = off_range;
-	for (int i = 1; i < num_ranges; i++) {
+	for (size_t i = 1; i < num_ranges; i++) {
 		off_range = get_in_off_range(it, start_vid, ranges[i]);
 		if (can_merge_reqs(req_range, off_range)
 				&& compute->add_range(ranges[i], &off_range)) {
@@ -673,7 +673,7 @@ void sparse_self_vertex_compute::run_out_vertices(vertex_id_t start_vid,
 	off_range_t off_range = get_out_off_range(it, start_vid, ranges[0]);
 	compute->init(ranges[0], &off_range, OUT_EDGE);
 	off_range_t req_range = off_range;
-	for (int i = 1; i < num_ranges; i++) {
+	for (size_t i = 1; i < num_ranges; i++) {
 		off_range = get_out_off_range(it, start_vid, ranges[i]);
 		if (can_merge_reqs(req_range, off_range)
 				&& compute->add_range(ranges[i], &off_range))
@@ -699,7 +699,7 @@ void sparse_self_vertex_compute::run_both_vertices(vertex_id_t start_vid,
 	off_range_t req_ranges[2];
 	req_ranges[0] = off_ranges[0];
 	req_ranges[1] = off_ranges[1];
-	for (int i = 1; i < num_ranges; i++) {
+	for (size_t i = 1; i < num_ranges; i++) {
 		off_ranges[0] = get_in_off_range(it, start_vid, ranges[i]);
 		off_ranges[1] = get_out_off_range(it, start_vid, ranges[i]);
 		if (can_merge_reqs(req_ranges[0], off_ranges[0])

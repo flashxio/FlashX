@@ -206,7 +206,7 @@ public:
 
 	size_t get_graph_size() const {
 		off_t last_idx = h.data.num_entries - 1;
-		assert(last_idx == h.data.header.num_vertices);
+		assert((size_t) last_idx == h.data.header.num_vertices);
 		return get_vertex(last_idx).get_off();
 	}
 
@@ -304,7 +304,7 @@ public:
 
 	size_t get_graph_size() const {
 		off_t last_idx = h.data.num_entries - 1;
-		assert(last_idx == h.data.header.num_vertices);
+		assert((size_t) last_idx == h.data.header.num_vertices);
 		return get_vertex(last_idx).get_out_off();
 	}
 

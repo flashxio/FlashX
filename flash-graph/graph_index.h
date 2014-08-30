@@ -276,7 +276,7 @@ public:
 
 	size_t get_vpart_vertices(int vpart_id, vpart_vertex_pointer ps[], int num,
 			compute_vertex_pointer vertices[]) const {
-		assert(vpart_id < part_vertex_arrs.size());
+		assert((size_t) vpart_id < part_vertex_arrs.size());
 		int act_num = min(num, get_num_vpart_vertices());
 		for (int i = 0; i < act_num; i++)
 			vertices[i] = compute_vertex_pointer(

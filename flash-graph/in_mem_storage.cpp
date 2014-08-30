@@ -294,7 +294,7 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 	graph->graph_file_id = io_factory->get_file_id();
 	io_interface::ptr io = io_factory->create_io(thread::get_curr_thread());
 	const size_t MAX_IO_SIZE = 256 * 1024 * 1024;
-	for (off_t off = 0; off < graph->graph_size; off += MAX_IO_SIZE) {
+	for (off_t off = 0; (size_t) off < graph->graph_size; off += MAX_IO_SIZE) {
 		data_loc_t loc(io_factory->get_file_id(), off);
 		size_t req_size = min(MAX_IO_SIZE, graph->graph_size - off);
 		io_request req(graph->graph_data + off, loc, req_size, READ);

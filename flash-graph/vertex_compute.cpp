@@ -160,15 +160,15 @@ void directed_vertex_compute::run(page_byte_array &array)
 	else {
 		page_byte_array *in_arr;
 		page_byte_array *out_arr;
-		if (it->second->get_offset() < get_graph().get_in_part_size()) {
+		if ((size_t) it->second->get_offset() < get_graph().get_in_part_size()) {
 			in_arr = it->second;
 			out_arr = &array;
-			assert(array.get_offset() >= get_graph().get_in_part_size());
+			assert((size_t) array.get_offset() >= get_graph().get_in_part_size());
 		}
 		else {
 			out_arr = it->second;
 			in_arr = &array;
-			assert(array.get_offset() < get_graph().get_in_part_size());
+			assert((size_t) array.get_offset() < get_graph().get_in_part_size());
 		}
 		page_directed_vertex pg_v(*in_arr, *out_arr);
 		run_on_page_vertex(pg_v);
@@ -188,7 +188,7 @@ void directed_vertex_compute::request_vertices(vertex_id_t ids[], size_t num)
 void directed_vertex_compute::request_partial_vertices(
 		directed_vertex_request reqs[], size_t num)
 {
-	for (int i = 0; i < num; i++) {
+	for (size_t i = 0; i < num; i++) {
 		if (reqs[i].get_type() == edge_type::BOTH_EDGES)
 			num_requested += 2;
 		else
@@ -312,14 +312,14 @@ void merged_directed_vertex_compute::run(page_byte_array &arr)
 		page_byte_array *in_arr;
 		page_byte_array *out_arr;
 
-		if (buffered_arr->get_offset() < get_graph().get_in_part_size()) {
+		if ((size_t) buffered_arr->get_offset() < get_graph().get_in_part_size()) {
 			in_arr = buffered_arr;
-			assert(arr.get_offset() >= get_graph().get_in_part_size());
+			assert((size_t) arr.get_offset() >= get_graph().get_in_part_size());
 			out_arr = &arr;
 		}
 		else {
 			out_arr = buffered_arr;
-			assert(arr.get_offset() < get_graph().get_in_part_size());
+			assert((size_t) arr.get_offset() < get_graph().get_in_part_size());
 			in_arr = &arr;
 		}
 
@@ -330,11 +330,11 @@ void merged_directed_vertex_compute::run(page_byte_array &arr)
 		buffered_arr = arr.clone();
 	}
 	else if (type == IN_EDGE) {
-		assert(arr.get_offset() < get_graph().get_in_part_size());
+		assert((size_t) arr.get_offset() < get_graph().get_in_part_size());
 		run_on_array(arr);
 	}
 	else if (type == OUT_EDGE) {
-		assert(arr.get_offset() >= get_graph().get_in_part_size());
+		assert((size_t) arr.get_offset() >= get_graph().get_in_part_size());
 		run_on_array(arr);
 	}
 	else
@@ -362,7 +362,7 @@ void sparse_vertex_compute::finish_run(compute_vertex_pointer v)
 
 void sparse_directed_vertex_compute::run_on_array(page_byte_array &arr)
 {
-	assert(arr.get_offset() + arr.get_size() > ranges[num_ranges - 1].start_off);
+	assert(arr.get_offset() + arr.get_size() > (size_t) ranges[num_ranges - 1].start_off);
 	vertex_program &curr_vprog = issue_thread->get_vertex_program(false);
 	for (int i = 0; i < num_ranges; i++) {
 		vertex_id_t id = this->ranges[i].id_range.first;
@@ -392,10 +392,10 @@ void sparse_directed_vertex_compute::run_on_arrays(page_byte_array &in_arr,
 		page_byte_array &out_arr)
 {
 	assert(in_arr.get_offset()
-			+ in_arr.get_size() > ranges[num_ranges - 1].start_off);
+			+ in_arr.get_size() > (size_t) ranges[num_ranges - 1].start_off);
 	assert(out_arr.get_offset()
-			+ out_arr.get_size() > out_start_offs[num_ranges - 1]);
-	assert(num_ranges == out_start_offs.size());
+			+ out_arr.get_size() > (size_t) out_start_offs[num_ranges - 1]);
+	assert((size_t) num_ranges == out_start_offs.size());
 	// We don't support part vertex compute here.
 	vertex_program &curr_vprog = issue_thread->get_vertex_program(false);
 
@@ -427,14 +427,14 @@ void sparse_directed_vertex_compute::run(page_byte_array &arr)
 		page_byte_array *in_arr;
 		page_byte_array *out_arr;
 
-		if (buffered_arr->get_offset() < get_graph().get_in_part_size()) {
+		if ((size_t) buffered_arr->get_offset() < get_graph().get_in_part_size()) {
 			in_arr = buffered_arr;
-			assert(arr.get_offset() >= get_graph().get_in_part_size());
+			assert((size_t) arr.get_offset() >= get_graph().get_in_part_size());
 			out_arr = &arr;
 		}
 		else {
 			out_arr = buffered_arr;
-			assert(arr.get_offset() < get_graph().get_in_part_size());
+			assert((size_t) arr.get_offset() < get_graph().get_in_part_size());
 			in_arr = &arr;
 		}
 
@@ -445,11 +445,11 @@ void sparse_directed_vertex_compute::run(page_byte_array &arr)
 		buffered_arr = arr.clone();
 	}
 	else if (type == IN_EDGE) {
-		assert(arr.get_offset() < get_graph().get_in_part_size());
+		assert((size_t) arr.get_offset() < get_graph().get_in_part_size());
 		run_on_array(arr);
 	}
 	else if (type == OUT_EDGE) {
-		assert(arr.get_offset() >= get_graph().get_in_part_size());
+		assert((size_t) arr.get_offset() >= get_graph().get_in_part_size());
 		run_on_array(arr);
 	}
 	else

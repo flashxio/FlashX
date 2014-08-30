@@ -589,7 +589,7 @@ public:
 	* We have processed the specified number of vertices.
     */
 	void process_vertices(int num) {
-		assert(num_remaining_vertices_in_level.get() >= num);
+		assert(num_remaining_vertices_in_level.get() >= (size_t) num);
 		num_remaining_vertices_in_level.dec(num);
 	}
 

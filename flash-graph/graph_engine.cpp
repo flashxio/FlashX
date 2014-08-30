@@ -92,7 +92,7 @@ template<class prio_queue_type>
 size_t comp_io_schedule_queue<prio_queue_type>::get_requests(
 		fifo_queue<io_request> &reqs, int max)
 {
-	size_t num = 0;
+	int num = 0;
 
 	if (!reqs.is_full()) {
 		// we don't have user computes, we can get some from the queue of
@@ -268,7 +268,7 @@ void part_compute_vertex::broadcast_vpart(const vertex_message &msg)
 	std::vector<compute_vertex_pointer> ps(graph_conf.get_num_vparts());
 	int ret = curr->get_graph().get_graph_index()->get_vpart_vertices(get_id(),
 			ps.data(), ps.size());
-	for (size_t i = 0; i < ret; i++) {
+	for (int i = 0; i < ret; i++) {
 		compute_vertex_pointer v = ps[i];
 		curr->get_vertex_program(true).run_on_message(*v, msg);
 	}
