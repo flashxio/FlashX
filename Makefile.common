@@ -18,14 +18,14 @@
 CC = clang
 CXX = clang++
 #MEMCHECK=1
-PROF=1
+#PROF=1
 #MEMTRACE=1
 CFLAGS = -g -O3 -DSTATISTICS -DPROFILER
 ifdef MEMCHECK
 TRACE_FLAGS = -fsanitize=address
-endif
 TRACE_FLAGS += -fno-omit-frame-pointer # for better stack traces in error messages
 TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
+endif
 CLANG_FLAGS = -Wno-attributes
 LDFLAGS = -lpthread $(TRACE_FLAGS) -rdynamic -laio -lnuma -lrt
 CXXFLAGS = -g -O3 -I. -Wall -Wno-deprecated-register -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS
