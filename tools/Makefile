@@ -36,6 +36,7 @@ print_file: print_file.o $(LIBFILE)
 
 clean:
 	rm -f *.o
+	rm -f *.d
 	rm -f *~
 	rm -f $(TARGETS)
 	rm -f *.class
