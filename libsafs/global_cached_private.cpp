@@ -1835,7 +1835,8 @@ int global_cached_io::wait4complete(int num_to_complete)
 	// of completed requests because completed requests may still have
 	// incomplete user tasks and we need to take into account the number
 	// of incomplete tasks.
-	while (num_completed_areqs.get() - prev_completed_areqs < num_to_complete) {
+	while (num_completed_areqs.get()
+			- prev_completed_areqs < (size_t) num_to_complete) {
 		// We only wait when there are pending requests in the underlying IO.
 		if (num_to_underlying.get() - num_from_underlying.get() > 0) {
 			get_thread()->wait();

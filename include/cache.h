@@ -1054,7 +1054,7 @@ class sub_page_byte_array: public page_byte_array
 public:
 	sub_page_byte_array(page_byte_array &arr, off_t off): orig(arr) {
 		this->off = off;
-		assert(arr.get_size() >= off);
+		assert(arr.get_size() >= (size_t) off);
 	}
 
 	virtual void lock() {
