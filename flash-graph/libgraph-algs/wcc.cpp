@@ -129,8 +129,8 @@ public:
 /*
  * This function get all unique neighbors on two edge lists.
  */
-size_t get_unique_neighbors(edge_seq_iterator it1, edge_seq_iterator it2,
-		std::vector<vertex_id_t> &buf)
+size_t get_unique_neighbors(edge_seq_iterator &it1, edge_seq_iterator &it2,
+		std::vector<vertex_id_t> &buf, size_t max_size)
 {
 	vertex_id_t v1 = INVALID_VERTEX_ID;
 	vertex_id_t v2 = INVALID_VERTEX_ID;
@@ -138,7 +138,7 @@ size_t get_unique_neighbors(edge_seq_iterator it1, edge_seq_iterator it2,
 		v1 = it1.next();
 	if (it2.has_next())
 		v2 = it2.next();
-	while (it1.has_next() && it2.has_next()) {
+	while (it1.has_next() && it2.has_next() && buf.size() < max_size) {
 		if (v1 == v2) {
 			buf.push_back(v1);
 			v1 = it1.next();
@@ -157,15 +157,16 @@ size_t get_unique_neighbors(edge_seq_iterator it1, edge_seq_iterator it2,
 		buf.push_back(v1);
 	if (v2 != INVALID_VERTEX_ID)
 		buf.push_back(v2);
-	while (it1.has_next())
+	while (it1.has_next() && buf.size() < max_size)
 		buf.push_back(it1.next());
-	while (it2.has_next())
+	while (it2.has_next() && buf.size() < max_size)
 		buf.push_back(it2.next());
 	return buf.size();
 }
 
 void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
+	const size_t BUF_SIZE = 512 * 1024 / sizeof(vertex_id_t) - 1;
 	component_message msg(component_id);
 	const page_directed_vertex &dvertex = (const page_directed_vertex &) vertex;
 	assert(dvertex.has_in_part());
@@ -173,10 +174,13 @@ void wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	empty = (vertex.get_num_edges(BOTH_EDGES) == 0);
 	wcc_vertex_program &wcc_vprog = (wcc_vertex_program &) prog;
 	std::vector<vertex_id_t> &buf = wcc_vprog.get_buf();
-	buf.clear();
-	get_unique_neighbors(dvertex.get_neigh_seq_it(IN_EDGE),
-			dvertex.get_neigh_seq_it(OUT_EDGE), buf);
-	prog.multicast_msg(buf.data(), buf.size(), msg);
+	edge_seq_iterator in_it = dvertex.get_neigh_seq_it(IN_EDGE);
+	edge_seq_iterator out_it = dvertex.get_neigh_seq_it(OUT_EDGE);
+	do {
+		buf.clear();
+		get_unique_neighbors(in_it, out_it, buf, BUF_SIZE);
+		prog.multicast_msg(buf.data(), buf.size(), msg);
+	} while (in_it.has_next() || out_it.has_next());
 }
 
 class ts_wcc_vertex: public wcc_vertex
