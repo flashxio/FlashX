@@ -49,13 +49,13 @@ class remote_io: public io_interface
 	callback *cb;
 	file_mapper *block_mapper;
 	thread_safe_FIFO_queue<io_request> complete_queue;
-	slab_allocator *msg_allocator;
+	slab_allocator &msg_allocator;
 
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
 public:
 	remote_io(const std::vector<disk_io_thread *> &remotes,
-			file_mapper *mapper, thread *t,
+			slab_allocator &msg_allocator, file_mapper *mapper, thread *t,
 			int max_reqs = MAX_DISK_CACHED_REQS);
 
 	~remote_io();

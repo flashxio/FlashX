@@ -236,11 +236,13 @@ void init_io_system(const config_map &configs, bool with_cache)
 		// The remote IO will never be used. It's only used for creating
 		// more remote IOs for flushing dirty pages, so it doesn't matter
 		// what thread is used here.
+#if 0
 		thread *curr = thread::get_curr_thread();
 		assert(curr);
 		io_interface::ptr underlying = io_interface::ptr(new remote_io(
 					global_data.read_threads, mapper, curr));
 		global_data.global_cache->init(underlying);
+#endif
 	}
 #ifdef PART_IO
 	if (global_data.table == NULL && with_cache) {
@@ -340,11 +342,15 @@ public:
 
 class remote_io_factory: public file_io_factory
 {
+	std::vector<std::shared_ptr<slab_allocator> > msg_allocators;
 	std::atomic_ulong tot_accesses;
 protected:
 	// The number of existing IO instances.
 	std::atomic<size_t> num_ios;
 	file_mapper &mapper;
+	slab_allocator &get_msg_allocator(int node_id) {
+		return *msg_allocators[node_id];
+	}
 public:
 	remote_io_factory(file_mapper &_mapper);
 
@@ -491,6 +497,13 @@ void aio_factory::destroy_io(io_interface *io)
 remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 			_mapper.get_name()), mapper(_mapper)
 {
+	msg_allocators.resize(params.get_num_nodes());
+	for (int i = 0; i < params.get_num_nodes(); i++) {
+		msg_allocators[i] = std::shared_ptr<slab_allocator>(new slab_allocator(
+					std::string("disk_msg_allocator-") + itoa(i),
+					IO_MSG_SIZE * sizeof(io_request),
+					IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, i));
+	}
 	tot_accesses = 0;
 	num_ios = 0;
 	int num_files = mapper.get_num_files();
@@ -512,7 +525,8 @@ remote_io_factory::~remote_io_factory()
 io_interface::ptr remote_io_factory::create_io(thread *t)
 {
 	num_ios++;
-	io_interface *io = new remote_io(global_data.read_threads, &mapper, t);
+	io_interface *io = new remote_io(global_data.read_threads,
+			get_msg_allocator(t->get_node_id()), &mapper, t);
 	return io_interface::ptr(io, io_deleter(*this));
 }
 
@@ -524,8 +538,8 @@ void remote_io_factory::destroy_io(io_interface *io)
 
 io_interface::ptr global_cached_io_factory::create_io(thread *t)
 {
-	io_interface *underlying = new remote_io(
-			global_data.read_threads, &mapper, t);
+	io_interface *underlying = new remote_io(global_data.read_threads,
+			get_msg_allocator(t->get_node_id()), &mapper, t);
 	comp_io_scheduler *scheduler = NULL;
 	if (get_sched_creater())
 		scheduler = get_sched_creater()->create(underlying->get_node_id());
@@ -547,7 +561,8 @@ void global_cached_io_factory::destroy_io(io_interface *io)
 io_interface::ptr part_global_cached_io_factory::create_io(thread *t)
 {
 	part_global_cached_io *io = part_global_cached_io::create(
-			new remote_io(global_data.read_threads, &mapper, t),
+			new remote_io(global_data.read_threads,
+				get_msg_allocator(t->get_node_id()), &mapper, t),
 			global_data.table);
 	num_ios++;
 	return io_interface::ptr(io, io_deleter(*this));

@@ -65,26 +65,23 @@ void remote_io::notify_completion(io_request *reqs[], int num)
 }
 
 remote_io::remote_io(const std::vector<disk_io_thread *> &remotes,
-		file_mapper *mapper, thread *t, int max_reqs): io_interface(
+		slab_allocator &_msg_allocator, file_mapper *mapper, thread *t,
+		int max_reqs): io_interface(
 			// TODO I hope the queue size is large enough.
 			t), max_disk_cached_reqs(max_reqs), complete_queue(std::string(
 					"disk_complete_queue-") + itoa(t->get_node_id()), t->get_node_id(),
-				COMPLETE_QUEUE_SIZE)
+				COMPLETE_QUEUE_SIZE), msg_allocator(_msg_allocator)
 {
 	int node_id = t->get_node_id();
 	num_ios.inc(1);
 	this->io_threads = remotes;
-	// TODO I need to deallocate it later.
-	msg_allocator = new slab_allocator(std::string("disk_msg_allocator-")
-			+ itoa(node_id), IO_MSG_SIZE * sizeof(io_request),
-			IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, node_id);
 	senders.resize(remotes.size());
 	low_prio_senders.resize(remotes.size());
 	// create a msg sender for each disk read thread.
 	for (unsigned i = 0; i < remotes.size(); i++) {
-		senders[i] = request_sender::create(node_id, msg_allocator,
+		senders[i] = request_sender::create(node_id, &msg_allocator,
 				remotes[i]->get_queue());
-		low_prio_senders[i] = request_sender::create(node_id, msg_allocator,
+		low_prio_senders[i] = request_sender::create(node_id, &msg_allocator,
 				remotes[i]->get_low_prio_queue());
 	}
 	cb = NULL;
@@ -99,7 +96,6 @@ remote_io::~remote_io()
 		request_sender::destroy(senders[i]);
 		request_sender::destroy(low_prio_senders[i]);
 	}
-	delete msg_allocator;
 }
 
 io_interface *remote_io::clone(thread *t) const
@@ -107,7 +103,7 @@ io_interface *remote_io::clone(thread *t) const
 	// An IO may not be associated to any threads.
 	ASSERT_TRUE(t);
 	num_ios.inc(1);
-	remote_io *copy = new remote_io(io_threads,
+	remote_io *copy = new remote_io(io_threads, msg_allocator,
 			block_mapper, t, this->max_disk_cached_reqs);
 	copy->cb = this->cb;
 	return copy;
