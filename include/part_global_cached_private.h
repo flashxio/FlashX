@@ -24,6 +24,8 @@
 
 #include <tr1/unordered_map>
 
+#ifdef PART_IO
+
 #include "parameters.h"
 #include "messaging.h"
 #include "global_cached_private.h"
@@ -158,5 +160,6 @@ public:
 
 	virtual void print_state();
 };
+#endif
 
 #endif

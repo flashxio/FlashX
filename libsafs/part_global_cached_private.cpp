@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#ifdef PART_IO
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -1145,3 +1146,4 @@ void part_global_cached_io::print_state()
 	printf("\treply sender has %d buffered reqs\n", reply_sender->get_num_remaining());
 	underlying->print_state();
 }
+#endif
