@@ -31,6 +31,12 @@
 #include "vertex_index_reader.h"
 #include "in_mem_storage.h"
 
+/**
+ * The size of a message buffer used to pass vertex messages to other threads.
+ */
+const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
+const int MAX_FLUSH_MSG_SIZE = 256;
+
 graph_config graph_conf;
 
 struct prio_compute
@@ -593,8 +599,30 @@ graph_engine::~graph_engine()
 	destroy_flash_graph();
 }
 
+static inline int get_node_id(int thread_idx, int num_nodes)
+{
+	return thread_idx % num_nodes;
+}
+
 void graph_engine::init_threads(vertex_program_creater::ptr creater)
 {
+	std::vector<std::shared_ptr<slab_allocator> > msg_allocs(num_nodes);
+	std::vector<std::shared_ptr<slab_allocator> > flush_msg_allocs(num_nodes);
+	// It turns out that it's important to respect the NUMA effect here.
+	// When a worker thread uses the message allocator from the same NUMA node,
+	// we can get noticeably better performance.
+	for (int node_id = 0; node_id < num_nodes; node_id++) {
+		// We increase the allocator by 1M each time.
+		// It shouldn't need to allocate much memory.
+		msg_allocs[node_id] = std::shared_ptr<slab_allocator>(
+				new slab_allocator("graph-message-allocator",
+					GRAPH_MSG_BUF_SIZE, 1024 * 1024, INT_MAX, node_id,
+					false /* init */, false /* pinned */, 5 /* local_buf_size*/));
+		flush_msg_allocs[node_id] = std::shared_ptr<slab_allocator>(
+				new slab_allocator("graph-message-allocator",
+					MAX_FLUSH_MSG_SIZE, 1024 * 1024, INT_MAX, node_id,
+					false /* init */, false /* pinned */, 20 /* local_buf_size*/));
+	}
 	// Prepare the worker threads.
 	int num_threads = get_num_threads();
 	for (int i = 0; i < num_threads; i++) {
@@ -605,13 +633,16 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 			new_prog = vertices->create_def_vertex_program();
 		worker_thread *t = new worker_thread(this, graph_factory, index_factory,
 				new_prog, vertices->create_def_part_vertex_program(),
-				i % num_nodes, i, num_threads, scheduler);
+				get_node_id(i, num_nodes), i, num_threads, scheduler,
+				msg_allocs[get_node_id(i, num_nodes)]);
 		assert(worker_threads[i] == NULL);
 		worker_threads[i] = t;
 		vprograms[i] = new_prog;
 	}
 	for (int i = 0; i < num_threads; i++) {
-		worker_threads[i]->init_messaging(worker_threads);
+		worker_threads[i]->init_messaging(worker_threads,
+				msg_allocs[get_node_id(i, num_nodes)],
+				flush_msg_allocs[get_node_id(i, num_nodes)]);
 	}
 }
 

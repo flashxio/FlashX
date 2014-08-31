@@ -28,12 +28,6 @@
 #include "steal_state.h"
 #include "vertex_index_reader.h"
 
-/**
- * The size of a message buffer used to pass vertex messages to other threads.
- */
-const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
-const int MAX_FLUSH_MSG_SIZE = 256;
-
 static void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 {
 	size_t curr = 0;
@@ -312,7 +306,8 @@ worker_thread::worker_thread(graph_engine *graph,
 		file_io_factory::shared_ptr index_factory,
 		vertex_program::ptr prog, vertex_program::ptr vpart_prog,
 		int node_id, int worker_id, int num_threads,
-		vertex_scheduler::ptr scheduler): thread("worker_thread", node_id)
+		vertex_scheduler::ptr scheduler,
+		std::shared_ptr<slab_allocator> msg_alloc): thread("worker_thread", node_id)
 {
 	this->scheduler = scheduler;
 	req_on_vertex = false;
@@ -326,18 +321,9 @@ worker_thread::worker_thread(graph_engine *graph,
 	this->io = NULL;
 	this->graph_factory = graph_factory;
 	this->index_factory = index_factory;
-	// We increase the allocator by 1M each time.
-	// It shouldn't need to allocate much memory.
-	msg_alloc = std::shared_ptr<slab_allocator>(new slab_allocator("graph-message-allocator",
-			GRAPH_MSG_BUF_SIZE, 1024 * 1024, INT_MAX, get_node_id(),
-			false /* init */, false /* pinned */, 5 /* local_buf_size*/));
-	flush_msg_alloc = std::shared_ptr<slab_allocator>(new slab_allocator(
-				"graph-message-allocator", MAX_FLUSH_MSG_SIZE, 1024 * 1024,
-				INT_MAX, get_node_id(), false /* init */, false /* pinned */,
-				20 /* local_buf_size*/));
+	balancer = std::unique_ptr<load_balancer>(new load_balancer(*graph, *this));
 	msg_processor = std::unique_ptr<message_processor>(new message_processor(
 				*graph, *this, msg_alloc));
-	balancer = std::unique_ptr<load_balancer>(new load_balancer(*graph, *this));
 	switch(graph->get_graph_header().get_graph_type()) {
 		case graph_type::DIRECTED:
 			alloc = std::unique_ptr<compute_allocator>(
@@ -456,7 +442,9 @@ void worker_thread::init()
 	assert(!ret);
 }
 
-void worker_thread::init_messaging(const std::vector<worker_thread *> &threads)
+void worker_thread::init_messaging(const std::vector<worker_thread *> &threads,
+			std::shared_ptr<slab_allocator> msg_alloc,
+			std::shared_ptr<slab_allocator> flush_msg_alloc)
 {
 	vprogram->init_messaging(threads, msg_alloc, flush_msg_alloc);
 	vpart_vprogram->init_messaging(threads, msg_alloc, flush_msg_alloc);

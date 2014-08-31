@@ -202,8 +202,6 @@ class worker_thread: public thread
 	 * the right message holder.
 	 */
 
-	std::shared_ptr<slab_allocator> msg_alloc;
-	std::shared_ptr<slab_allocator> flush_msg_alloc;
 	std::unique_ptr<message_processor> msg_processor;
 	std::unique_ptr<load_balancer> balancer;
 
@@ -242,11 +240,14 @@ public:
 	worker_thread(graph_engine *graph, file_io_factory::shared_ptr graph_factory,
 			file_io_factory::shared_ptr index_factory, vertex_program::ptr prog,
 			vertex_program::ptr part_prog, int node_id, int worker_id,
-			int num_threads, vertex_scheduler::ptr scheduler);
+			int num_threads, vertex_scheduler::ptr scheduler,
+			std::shared_ptr<slab_allocator> msg_alloc);
 
 	~worker_thread();
 
-	void init_messaging(const std::vector<worker_thread *> &threads);
+	void init_messaging(const std::vector<worker_thread *> &threads,
+			std::shared_ptr<slab_allocator> msg_alloc,
+			std::shared_ptr<slab_allocator> flush_msg_alloc);
 
 	void run();
 	void init();
