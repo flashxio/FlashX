@@ -65,23 +65,12 @@ class fifo_queue: public queue_interface<T>
 	}
 
 	T *alloc_buf(int size) {
-		void *addr;
-		if (node_id < 0)
-			addr = numa_alloc_local(sizeof(T) * size);
-		else
-			addr = numa_alloc_onnode(sizeof(T) * size, node_id);
-		T *buf = (T *) addr;
-		for (int i = 0; i < size; i++)
-			new(&buf[i]) T();
-		return buf;
+		return new T[size];
 	}
 
 	void free_buf(T *buf) {
 		assert(allocated);
-		int size = size_mask + 1;
-		for (int i = 0; i < size; i++)
-			buf[i].~T();
-		numa_free(buf, sizeof(T) * size);
+		delete [] buf;
 	}
 
 public:
