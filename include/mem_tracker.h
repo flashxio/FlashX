@@ -35,6 +35,9 @@ void operator delete[](void *p) throw ();
 
 #endif
 
+void mem_trace_start();
+void mem_trace_stop();
+
 size_t get_alloc_objs();
 size_t get_alloc_bytes();
 size_t get_max_alloc_objs();

@@ -25,6 +25,7 @@
 
 static atomic_number<size_t> alloc_objs;
 static atomic_number<size_t> alloc_bytes;
+static bool mem_trace;
 
 namespace {
 class global_max
@@ -81,11 +82,15 @@ void init_mem_tracker()
 
 void *operator new(size_t n) throw (std::bad_alloc)
 {
-	size_t ret = alloc_objs.inc(1);
-	max_objs.update(ret);
-	ret = alloc_bytes.inc(n);
-	max_bytes.update(ret);
-	max_alloc.update(n);
+	if (mem_trace) {
+		size_t ret = alloc_objs.inc(1);
+		max_objs.update(ret);
+		ret = alloc_bytes.inc(n);
+		max_bytes.update(ret);
+		max_alloc.update(n);
+		if (n >= 10 * 1024 * 1024)
+			printf("allocate %ld\n", n);
+	}
 	void *p = malloc(n + sizeof(size_t));
 	size_t *size = (size_t *) p;
 	*size = n;
@@ -98,19 +103,23 @@ void operator delete(void *p) throw ()
 	if (p == NULL)
 		return;
 
-	alloc_objs.dec(1);
 	size_t *size = (size_t *) (((char *) p) - sizeof(size_t));
-	alloc_bytes.dec(*size);
+	if (mem_trace) {
+		alloc_objs.dec(1);
+		alloc_bytes.dec(*size);
+	}
 	free(size);
 }
 
 void *operator new[](size_t n) throw (std::bad_alloc)
 {
-	size_t ret = alloc_objs.inc(1);
-	max_objs.update(ret);
-	ret = alloc_bytes.inc(n);
-	max_bytes.update(ret);
-	max_alloc.update(n);
+	if (mem_trace) {
+		size_t ret = alloc_objs.inc(1);
+		max_objs.update(ret);
+		ret = alloc_bytes.inc(n);
+		max_bytes.update(ret);
+		max_alloc.update(n);
+	}
 	void *p = malloc(n + sizeof(size_t));
 	size_t *size = (size_t *) p;
 	*size = n;
@@ -123,9 +132,11 @@ void operator delete[](void *p) throw ()
 	if (p == NULL)
 		return;
 
-	alloc_objs.dec(1);
 	size_t *size = (size_t *) (((char *) p) - sizeof(size_t));
-	alloc_bytes.dec(*size);
+	if (mem_trace) {
+		alloc_objs.dec(1);
+		alloc_bytes.dec(*size);
+	}
 	free(size);
 }
 
@@ -154,4 +165,14 @@ size_t get_max_alloc_bytes()
 size_t get_max_alloc()
 {
 	return max_alloc.get();
+}
+
+void mem_trace_start()
+{
+	mem_trace = true;
+}
+
+void mem_trace_stop()
+{
+	mem_trace = false;
 }
