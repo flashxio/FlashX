@@ -57,7 +57,7 @@ public:
  */
 class default_vertex_queue: public active_vertex_queue
 {
-	static const size_t VERTEX_BUF_SIZE = 1024 * 1024;
+	static const size_t VERTEX_BUF_SIZE = 64 * 1024;
 	pthread_spinlock_t lock;
 	// It contains the offset of the vertex in the local partition
 	// instead of the real vertex Ids.
