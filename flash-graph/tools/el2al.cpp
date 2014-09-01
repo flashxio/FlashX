@@ -173,15 +173,16 @@ public:
 	}
 
 	virtual void sort_edges() = 0;
+#if 0
 	virtual edge_graph<edge_count> *compress_edges() const = 0;
 	virtual edge_graph<edge_data_type> *simplify_edges() const = 0;
-	virtual void construct_graph(graph *g) const = 0;
-	virtual graph *create_disk_graph() const = 0;
-	virtual void add_edges(stxxl_edge_vector<edge_data_type> &edges) = 0;
-	virtual size_t get_num_edges() const = 0;
 	virtual void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part) const = 0;
+#endif
+	virtual void construct_graph(graph *g) const = 0;
+	virtual graph *create_disk_graph() const = 0;
+	virtual size_t get_num_edges() const = 0;
 
 	bool has_edge_data() const {
 		return has_data;
@@ -258,8 +259,10 @@ public:
 		assert(0);
 	}
 
+#if 0
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const = 0;
+#endif
 	virtual graph_type get_graph_type() const = 0;
 	virtual void finalize_graph_file(const std::string &adj_file) = 0;
 };
@@ -297,7 +300,8 @@ public:
 	}
 
 	virtual void check_ext_graph(const std::string &index_file,
-			const std::string &adj_file) const;
+			const std::string &adj_file) const {
+	}
 
 	virtual void add_vertex(const in_mem_vertex &v) {
 		disk_graph<edge_data_type>::add_vertex(v);
@@ -386,7 +390,8 @@ public:
 	}
 
 	virtual void check_ext_graph(const std::string &index_file,
-			const std::string &adj_file) const;
+			const std::string &adj_file) const {
+	}
 
 	virtual size_t get_num_edges() const {
 		return disk_graph<edge_data_type>::get_num_edges() / 2;
@@ -424,67 +429,54 @@ public:
 template<class edge_data_type = empty_data>
 class undirected_edge_graph: public edge_graph<edge_data_type>
 {
-	stxxl_edge_vector<edge_data_type> edges;
-public:
-	undirected_edge_graph(bool has_data): edge_graph<edge_data_type>(has_data) {
-	}
+	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > edge_lists;
 
+	off_t add_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+			vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const;
+
+	vertex_id_t get_max_vertex_id() const {
+		vertex_id_t max_id = 0;
+		for (size_t i = 0; i < edge_lists.size(); i++)
+			max_id = std::max(edge_lists[i]->back().get_from(), max_id);
+		return max_id;
+	}
+public:
 	/**
 	 * num_edges tells the edge graph that there will be num_edges
 	 * edges added to the graph.
 	 */
-	undirected_edge_graph(size_t num_edges,
+	undirected_edge_graph(
+			std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > &edge_lists,
 			bool has_data): edge_graph<edge_data_type>(has_data) {
-		edges.reserve(num_edges);
+		this->edge_lists = edge_lists;
 	}
 
 	void sort_edges() {
 		comp_edge<edge_data_type> edge_comparator;
-//#ifdef MEMCHECK
-		stxxl::sort(edges.begin(), edges.end(), edge_comparator, 1024 * 1024 * 10);
-//#else
-//		__gnu_parallel::sort(edges.begin(), edges.end(), edge_comparator);
-//#endif
+		for (size_t i = 0; i < edge_lists.size(); i++)
+			stxxl::sort(edge_lists[i]->begin(), edge_lists[i]->end(),
+					edge_comparator, 1024 * 1024 * 10);
 	}
 
 	graph *create_disk_graph() const {
 		return new disk_undirected_graph<edge_data_type>(this);
 	}
 
-	/**
-	 * This is used by compress_edges, so the edge graph has all the edges.
-	 */
-	void add_edge(const edge<edge_data_type> &e) {
-		edges.push_back(e);
-	}
-
-	/**
-	 * The input edges are read from the edge list file.
-	 * Each edge may appear only once, so we need to reverse them for
-	 * the other end of the edges.
-	 */
-	void add_edges(stxxl_edge_vector<edge_data_type> &edges) {
-		this->edges.append(edges.begin(), edges.end());
-		BOOST_FOREACH(edge<edge_data_type> &e, edges) {
-			if (e.has_edge_data())
-				this->edges.push_back(edge<edge_data_type>(e.get_to(),
-							e.get_from(), e.get_data()));
-			else
-				this->edges.push_back(edge<edge_data_type>(e.get_to(),
-							e.get_from()));
-		}
-	}
-
 	size_t get_num_edges() const {
-		return edges.size() / 2;
+		size_t num_edges = 0;
+		for (size_t i = 0; i < edge_lists.size(); i++)
+			num_edges += edge_lists[i]->size();
+		return num_edges / 2;
 	}
 
+#if 0
 	edge_graph<edge_count> *compress_edges() const;
 	edge_graph<edge_data_type> *simplify_edges() const;
-	void construct_graph(graph *g) const;
 	void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part) const;
+#endif
+	void construct_graph(graph *g) const;
 };
 
 /**
@@ -495,62 +487,73 @@ public:
 template<class edge_data_type = empty_data>
 class directed_edge_graph: public edge_graph<edge_data_type>
 {
-	stxxl_edge_vector<edge_data_type> in_edges;
-	stxxl_edge_vector<edge_data_type> out_edges;
-public:
-	directed_edge_graph(bool has_data): edge_graph<edge_data_type>(has_data) {
-	}
+	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > in_edge_lists;
+	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > out_edge_lists;
 
+	off_t add_out_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+			vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const;
+	off_t add_in_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+			vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const;
+
+	vertex_id_t get_max_vertex_id() const {
+		vertex_id_t max_id = 0;
+		for (size_t i = 0; i < out_edge_lists.size(); i++) {
+			max_id = std::max(out_edge_lists[i]->back().get_from(), max_id);
+			max_id = std::max(in_edge_lists[i]->back().get_to(), max_id);
+		}
+		return max_id;
+	}
+public:
 	/**
 	 * num_edges tells the edge graph that there will be num_edges
 	 * edges added to the graph.
 	 */
-	directed_edge_graph(size_t num_edges,
+	directed_edge_graph(
+			std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > &edge_lists,
 			bool has_data): edge_graph<edge_data_type>(has_data) {
-		in_edges.reserve(num_edges);
-		out_edges.reserve(num_edges);
+		this->in_edge_lists = edge_lists;
+		this->out_edge_lists.resize(edge_lists.size());
+		for (size_t i = 0; i < edge_lists.size(); i++)
+			this->out_edge_lists[i]
+				= std::shared_ptr<stxxl_edge_vector<edge_data_type> >(
+						new stxxl_edge_vector<edge_data_type>(*edge_lists[i]));
 	}
 
 	void sort_edges() {
 		comp_edge<edge_data_type> edge_comparator;
 		comp_in_edge<edge_data_type> in_edge_comparator;
-//#ifdef MEMCHECK
-		stxxl::sort(out_edges.begin(), out_edges.end(), edge_comparator, 1024 * 1024 * 10);
-		stxxl::sort(in_edges.begin(), in_edges.end(), in_edge_comparator, 1024 * 1024 * 10);
-//#else
-//		__gnu_parallel::sort(out_edges.begin(), out_edges.end(), edge_comparator);
-//		__gnu_parallel::sort(in_edges.begin(), in_edges.end(), in_edge_comparator);
-//#endif
+		for (size_t i = 0; i < in_edge_lists.size(); i++) {
+			stxxl::sort(out_edge_lists[i]->begin(), out_edge_lists[i]->end(),
+					edge_comparator, 1024 * 1024 * 10);
+			stxxl::sort(in_edge_lists[i]->begin(), in_edge_lists[i]->end(),
+					in_edge_comparator, 1024 * 1024 * 10);
+			printf("sort edge list %ld\n", i);
+		}
 	}
 
+#if 0
 	edge_graph<edge_count> *compress_edges() const;
 	edge_graph<edge_data_type> *simplify_edges() const;
+
+	void check_vertices(
+			const std::vector<ext_mem_undirected_vertex *> &vertices,
+			bool in_part) const;
+#endif
 	void construct_graph(graph *g) const;
 
 	graph *create_disk_graph() const {
 		return new disk_directed_graph<edge_data_type>(this);
 	}
 
-	void add_edge(const edge<edge_data_type> &e) {
-		in_edges.push_back(e);
-		out_edges.push_back(e);
-	}
-
-	void add_edges(stxxl_edge_vector<edge_data_type> &edges) {
-		in_edges.append(edges.begin(), edges.end());
-		out_edges.append(edges.begin(), edges.end());
-	}
-
 	size_t get_num_edges() const {
-		assert(in_edges.size() == out_edges.size());
-		return in_edges.size();
+		size_t num_edges = 0;
+		for (size_t i = 0; i < in_edge_lists.size(); i++)
+			num_edges += in_edge_lists[i]->size();
+		return num_edges;
 	}
-
-	void check_vertices(
-			const std::vector<ext_mem_undirected_vertex *> &vertices,
-			bool in_part) const;
 };
 
+#if 0
 template<class edge_data_type>
 edge_graph<edge_count> *
 undirected_edge_graph<edge_data_type>::compress_edges() const
@@ -603,42 +606,46 @@ undirected_edge_graph<edge_data_type>::simplify_edges() const
 	std::cout << "after: " << new_graph->edges.size() << " edges\n";
 	return new_graph;
 }
+#endif
+
+template<class edge_data_type>
+off_t undirected_edge_graph<edge_data_type>::add_edges(
+		const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+		vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const
+{
+	if ((size_t) idx >= edges.size())
+		return idx;
+
+	assert(edges[idx].get_from() >= id);
+	off_t num_edges = edges.size();
+	while (idx < num_edges && edges[idx].get_from() == id) {
+		v_edges.push_back(edges[idx++]);
+	}
+	return idx;
+}
 
 template<class edge_data_type>
 void undirected_edge_graph<edge_data_type>::construct_graph(graph *g) const
 {
-	vertex_id_t curr = 0;
-	in_mem_undirected_vertex<edge_data_type> v(curr,
-			edge_graph<edge_data_type>::has_edge_data());
-	size_t idx = 0;
-	size_t num_edges = edges.size();
-
-	// Add remaining out-edges.
-	while (idx < num_edges) {
-		while (idx < num_edges
-				&& edges[idx].get_from() == curr) {
-			v.add_edge(edges[idx++]);
+	std::vector<off_t> idxs(edge_lists.size());
+	vertex_id_t max_id = get_max_vertex_id();
+	std::vector<edge<edge_data_type> > v_edges;
+	comp_edge<edge_data_type> edge_comparator;
+	for (vertex_id_t id = 0; id <= max_id; id++) {
+		v_edges.clear();
+		for (size_t i = 0; i < edge_lists.size(); i++) {
+			idxs[i] = add_edges(*edge_lists[i], idxs[i], id, v_edges);
 		}
-		g->add_vertex(v);
-		vertex_id_t prev = curr + 1;
-		if (idx < num_edges)
-			curr = edges[idx].get_from();
-		else
-			break;
-		// The vertices without edges won't show up in the edge list,
-		// but we need to fill the gap in the vertex Id space with empty
-		// vertices.
-		while (prev < curr) {
-			v = in_mem_undirected_vertex<edge_data_type>(prev,
-					edge_graph<edge_data_type>::has_edge_data());
-			prev++;
-			g->add_vertex(v);
-		}
-		v = in_mem_undirected_vertex<edge_data_type>(curr,
+		std::sort(v_edges.begin(), v_edges.end(), edge_comparator);
+		in_mem_undirected_vertex<edge_data_type> v(id,
 				edge_graph<edge_data_type>::has_edge_data());
+		BOOST_FOREACH(edge<edge_data_type> e, v_edges)
+			v.add_edge(e);
+		g->add_vertex(v);
 	}
 }
 
+#if 0
 template<class edge_data_type>
 void undirected_edge_graph<edge_data_type>::check_vertices(
 		const std::vector<ext_mem_undirected_vertex *> &vertices, bool) const
@@ -707,6 +714,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 		}
 	}
 }
+#endif
 
 vsize_t BUF_SIZE = 1024 * 1024 * 1024;
 
@@ -735,6 +743,7 @@ std::unique_ptr<char[]> read_vertices(FILE *f,
 	return buf;
 }
 
+#if 0
 template<class VertexIndexType, class GetInfoFunc, class edge_data_type>
 size_t check_all_vertices(FILE *f, const VertexIndexType &idx, GetInfoFunc func,
 		const edge_graph<edge_data_type> &edge_g, bool in_part)
@@ -813,6 +822,7 @@ void disk_directed_graph<edge_data_type>::check_ext_graph(
 	fclose(f);
 	printf("%ld vertices are checked\n", num_vertices);
 }
+#endif
 
 template<class edge_data_type>
 void disk_graph<edge_data_type>::dump(const std::string &index_file,
@@ -1077,6 +1087,10 @@ public:
 		this->size = size;
 	}
 
+	size_t get_size() const {
+		return size;
+	}
+
 	void run() {
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(line_buf.get(), size, edges);
@@ -1086,6 +1100,7 @@ public:
 	}
 };
 
+#if 0
 template<class edge_data_type>
 edge_graph<edge_count> *
 directed_edge_graph<edge_data_type>::compress_edges() const
@@ -1150,98 +1165,76 @@ directed_edge_graph<edge_data_type>::simplify_edges() const
 		<< new_graph->out_edges.size() << " out-edges\n";
 	return new_graph;
 }
+#endif
+
+template<class edge_data_type>
+off_t directed_edge_graph<edge_data_type>::add_out_edges(
+		const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+		vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const
+{
+	if ((size_t) idx >= edges.size())
+		return idx;
+
+	assert(edges[idx].get_from() >= id);
+	off_t num_edges = edges.size();
+	while (idx < num_edges && edges[idx].get_from() == id) {
+		v_edges.push_back(edges[idx++]);
+	}
+	return idx;
+}
+
+template<class edge_data_type>
+off_t directed_edge_graph<edge_data_type>::add_in_edges(
+		const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+		vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const
+{
+	if ((size_t) idx >= edges.size())
+		return idx;
+
+	assert(edges[idx].get_to() >= id);
+	off_t num_edges = edges.size();
+	while (idx < num_edges && edges[idx].get_to() == id) {
+		v_edges.push_back(edges[idx++]);
+	}
+	return idx;
+}
 
 template<class edge_data_type>
 void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 {
-	vertex_id_t curr = 0;
-	in_mem_directed_vertex<edge_data_type> v(curr,
-			edge_graph<edge_data_type>::has_edge_data());
-	size_t out_idx = 0;
-	size_t in_idx = 0;
-	size_t num_edges = in_edges.size();
-	assert(in_edges.size() == out_edges.size());
-	while (out_idx < num_edges && in_idx < num_edges) {
-		while (out_idx < num_edges
-				&& out_edges[out_idx].get_from() == curr) {
-			v.add_out_edge(out_edges[out_idx++]);
-		}
-		while (in_idx < num_edges
-				&& in_edges[in_idx].get_to() == curr) {
-			v.add_in_edge(in_edges[in_idx++]);
-		}
-		g->add_vertex(v);
-		vertex_id_t prev = curr + 1;
-		if (out_idx < num_edges && in_idx < num_edges)
-			curr = min(out_edges[out_idx].get_from(),
-					in_edges[in_idx].get_to());
-		else if (out_idx < num_edges)
-			curr = out_edges[out_idx].get_from();
-		else if (in_idx < num_edges)
-			curr = in_edges[in_idx].get_to();
-		else
-			break;
-		// The vertices without edges won't show up in the edge list,
-		// but we need to fill the gap in the vertex Id space with empty
-		// vertices.
-		while (prev < curr) {
-			v = in_mem_directed_vertex<edge_data_type>(prev,
-					edge_graph<edge_data_type>::has_edge_data());
-			prev++;
-			g->add_vertex(v);
-		}
-		v = in_mem_directed_vertex<edge_data_type>(curr,
-				edge_graph<edge_data_type>::has_edge_data());
-	}
+	assert(in_edge_lists.size() == out_edge_lists.size());
+	for (size_t i = 0; i < in_edge_lists.size(); i++)
+		assert(in_edge_lists[i]->size() == out_edge_lists[i]->size());
 
-	// Add remaining out-edges.
-	while (out_idx < num_edges) {
-		while (out_idx < num_edges
-				&& out_edges[out_idx].get_from() == curr) {
-			v.add_out_edge(out_edges[out_idx++]);
-		}
-		g->add_vertex(v);
-		vertex_id_t prev = curr + 1;
-		if (out_idx < num_edges)
-			curr = out_edges[out_idx].get_from();
-		else
-			break;
-		// The vertices without edges won't show up in the edge list,
-		// but we need to fill the gap in the vertex Id space with empty
-		// vertices.
-		while (prev < curr) {
-			v = in_mem_directed_vertex<edge_data_type>(prev,
-					edge_graph<edge_data_type>::has_edge_data());
-			prev++;
-			g->add_vertex(v);
-		}
-		v = in_mem_directed_vertex<edge_data_type>(curr,
-				edge_graph<edge_data_type>::has_edge_data());
-	}
+	std::vector<off_t> out_idxs(in_edge_lists.size());
+	std::vector<off_t> in_idxs(in_edge_lists.size());
 
-	// Add remaining in-edges
-	while (in_idx < num_edges) {
-		while (in_idx < num_edges
-				&& in_edges[in_idx].get_to() == curr) {
-			v.add_in_edge(in_edges[in_idx++]);
+	vertex_id_t max_id = get_max_vertex_id();
+	std::vector<edge<edge_data_type> > v_in_edges;
+	std::vector<edge<edge_data_type> > v_out_edges;
+	comp_edge<edge_data_type> edge_comparator;
+	comp_in_edge<edge_data_type> in_edge_comparator;
+	printf("start to construct the graph. max id: %d\n", max_id);
+	for (vertex_id_t id = 0; id <= max_id; id++) {
+		v_in_edges.clear();
+		v_out_edges.clear();
+		for (size_t i = 0; i < in_edge_lists.size(); i++) {
+			in_idxs[i] = add_in_edges(*in_edge_lists[i], in_idxs[i], id,
+					v_in_edges);
+			out_idxs[i] = add_out_edges(*out_edge_lists[i], out_idxs[i], id,
+					v_out_edges);
+		}
+		std::sort(v_in_edges.begin(), v_in_edges.end(), in_edge_comparator);
+		std::sort(v_out_edges.begin(), v_out_edges.end(), edge_comparator);
+		in_mem_directed_vertex<edge_data_type> v(id,
+				edge_graph<edge_data_type>::has_edge_data());
+		BOOST_FOREACH(edge<edge_data_type> e, v_in_edges) {
+			v.add_in_edge(e);
+		}
+		BOOST_FOREACH(edge<edge_data_type> e, v_out_edges) {
+			v.add_out_edge(e);
 		}
 		g->add_vertex(v);
-		vertex_id_t prev = curr + 1;
-		if (in_idx < num_edges)
-			curr = in_edges[in_idx].get_to();
-		else
-			break;
-		// The vertices without edges won't show up in the edge list,
-		// but we need to fill the gap in the vertex Id space with empty
-		// vertices.
-		while (prev < curr) {
-			v = in_mem_directed_vertex<edge_data_type>(prev,
-					edge_graph<edge_data_type>::has_edge_data());
-			prev++;
-			g->add_vertex(v);
-		}
-		v = in_mem_directed_vertex<edge_data_type>(curr,
-				edge_graph<edge_data_type>::has_edge_data());
 	}
 }
 
@@ -1285,31 +1278,28 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 
 	size_t mem_size = 0;
 	size_t num_edges = 0;
+	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > edge_lists(
+			num_threads);
 	for (int i = 0; i < num_threads; i++) {
 		stxxl_edge_vector<edge_data_type> *local_edges
 			= (stxxl_edge_vector<edge_data_type> *) threads[i]->get_user_data();
 		num_edges += local_edges->size();
 		mem_size += local_edges->capacity() * sizeof(edge<edge_data_type>);
+		edge_lists[i] = std::shared_ptr<stxxl_edge_vector<edge_data_type> >(
+				local_edges);
 	}
 	printf("There are %ld edges and use %ld bytes\n", num_edges, mem_size);
 
 	edge_graph<edge_data_type> *edge_g;
 	if (directed)
-		edge_g = new directed_edge_graph<edge_data_type>(num_edges,
+		edge_g = new directed_edge_graph<edge_data_type>(edge_lists,
 				has_edge_data);
 	else
-		edge_g = new undirected_edge_graph<edge_data_type>(num_edges,
+		edge_g = new undirected_edge_graph<edge_data_type>(edge_lists,
 				has_edge_data);
+
 	start = end;
-	for (int i = 0; i < num_threads; i++) {
-		stxxl_edge_vector<edge_data_type> *local_edges
-			= (stxxl_edge_vector<edge_data_type> *) threads[i]->get_user_data();
-		edge_g->add_edges(*local_edges);
-		delete local_edges;
-	}
-	gettimeofday(&end, NULL);
 	printf("There are %ld edges in the edge graph\n", edge_g->get_num_edges());
-	printf("It takes %f seconds to combine edge list\n", time_diff(start, end));
 
 	for (int i = 0; i < num_threads; i++) {
 		threads[i]->stop();
@@ -1320,6 +1310,7 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 	return edge_g;
 }
 
+#if 0
 template<class edge_data_type = empty_data>
 graph *construct_graph_compressed(
 		const std::vector<std::string> &edge_list_files, bool directed)
@@ -1345,6 +1336,7 @@ graph *construct_graph_compressed(
 
 	return new_edge_g->create_disk_graph();
 }
+#endif
 
 template<class edge_data_type = empty_data>
 graph *construct_graph(
@@ -1363,6 +1355,7 @@ graph *construct_graph(
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
 
+#if 0
 	if (simplify) {
 		start = end;
 		size_t orig_num_edges = edge_g->get_num_edges();
@@ -1373,6 +1366,7 @@ graph *construct_graph(
 		printf("It takes %f seconds to remove duplicated edges from %ld to %ld\n",
 				time_diff(start, end), orig_num_edges, edge_g->get_num_edges());
 	}
+#endif
 
 	return edge_g->create_disk_graph();
 }
@@ -1405,26 +1399,32 @@ graph *construct_graph(const std::vector<std::string> &edge_list_files,
 	graph *g = NULL;
 	switch(edge_attr_type) {
 		case EDGE_COUNT:
+#if 0
 			if (compress)
 				g = construct_graph_compressed<edge_count>(
 						edge_list_files, directed);
 			else
+#endif
 				g = construct_graph<edge_count>(
 						edge_list_files, true, directed);
 			break;
 		case EDGE_TIMESTAMP:
+#if 0
 			if (compress)
 				g = construct_graph_compressed<ts_edge_data>(
 						edge_list_files, directed);
 			else
+#endif
 				g = construct_graph<ts_edge_data>(
 						edge_list_files, true, directed);
 			break;
 		default:
+#if 0
 			if (compress)
 				g = construct_graph_compressed<>(edge_list_files,
 						directed);
 			else
+#endif
 				g = construct_graph<>(edge_list_files, false,
 						directed);
 	}
@@ -1527,8 +1527,10 @@ int main(int argc, char *argv[])
 				g->get_num_edges());
 		if (print_graph)
 			g->print();
+#if 0
 		if (check_graph)
 			g->check_ext_graph(index_file, adjacency_list_file);
+#endif
 		delete g;
 	}
 	else {
@@ -1558,8 +1560,10 @@ int main(int argc, char *argv[])
 					g->get_num_edges());
 			if (print_graph)
 				g->print();
+#if 0
 			if (check_graph)
 				g->check_ext_graph(index_files[i], graph_files[i]);
+#endif
 			delete g;
 		}
 	}
