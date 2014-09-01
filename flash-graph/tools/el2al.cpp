@@ -52,6 +52,7 @@ public:
 
 int num_threads = 1;
 const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
+static const size_t VERTEX_TASK_SIZE = 1024 * 1024;
 const char *delimiter = "\t";
 
 bool compress = false;
@@ -487,19 +488,23 @@ public:
 template<class edge_data_type = empty_data>
 class directed_edge_graph: public edge_graph<edge_data_type>
 {
+	typedef std::vector<edge<edge_data_type> > edge_list_t;
+
 	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > in_edge_lists;
 	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > out_edge_lists;
 
 	off_t add_out_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
-			vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const;
+			vertex_id_t id, edge_list_t &v_edges) const;
 	off_t add_in_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
-			vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const;
+			vertex_id_t id, edge_list_t &v_edges) const;
 
 	vertex_id_t get_max_vertex_id() const {
 		vertex_id_t max_id = 0;
 		for (size_t i = 0; i < out_edge_lists.size(); i++) {
-			max_id = std::max(out_edge_lists[i]->back().get_from(), max_id);
-			max_id = std::max(in_edge_lists[i]->back().get_to(), max_id);
+			if (!out_edge_lists[i]->empty())
+				max_id = std::max(out_edge_lists[i]->back().get_from(), max_id);
+			if (!in_edge_lists[i]->empty())
+				max_id = std::max(in_edge_lists[i]->back().get_to(), max_id);
 		}
 		return max_id;
 	}
@@ -1200,6 +1205,135 @@ off_t directed_edge_graph<edge_data_type>::add_in_edges(
 }
 
 template<class edge_data_type>
+class write_directed_graph_thread: public thread
+{
+	typedef std::shared_ptr<in_mem_directed_vertex<edge_data_type> > vertex_ptr;
+	struct vertex_comp {
+		bool operator()(const vertex_ptr &v1, const vertex_ptr &v2) {
+			return v1->get_id() > v2->get_id();
+		}
+	};
+
+	std::vector<std::shared_ptr<std::vector<vertex_ptr> > > added_vertices;
+	std::priority_queue<vertex_ptr, std::vector<vertex_ptr>, vertex_comp> vertices;
+	pthread_spinlock_t lock;
+	graph &g;
+	vertex_id_t curr_id;
+	vertex_id_t max_id;
+public:
+	write_directed_graph_thread(graph &_g, vertex_id_t max_id): thread(
+			"write-thread", -1), g(_g) {
+		curr_id = 0;
+		this->max_id = max_id;
+		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	}
+
+	void add_vertices(std::shared_ptr<std::vector<vertex_ptr> > vertices) {
+		pthread_spin_lock(&lock);
+		added_vertices.push_back(vertices);
+		pthread_spin_unlock(&lock);
+		activate();
+	}
+
+	void run();
+};
+
+template<class edge_data_type>
+void write_directed_graph_thread<edge_data_type>::run()
+{
+	do {
+		std::vector<std::shared_ptr<std::vector<vertex_ptr> > > copy;
+		pthread_spin_lock(&lock);
+		copy = added_vertices;
+		added_vertices.clear();
+		pthread_spin_unlock(&lock);
+		if (copy.empty() && (vertices.empty() || vertices.top()->get_id() > curr_id)) {
+			usleep(10000);
+		}
+
+		BOOST_FOREACH(std::shared_ptr<std::vector<vertex_ptr> > vs, copy) {
+			BOOST_FOREACH(vertex_ptr v, *vs)
+				vertices.push(v);
+		}
+
+		while (!vertices.empty() && vertices.top()->get_id() == curr_id) {
+			vertex_ptr v = vertices.top();
+			g.add_vertex(*v);
+			vertices.pop();
+			curr_id++;
+		}
+	} while (curr_id <= max_id);
+	printf("write %d vertices\n", curr_id);
+	stop();
+}
+
+template<class edge_data_type>
+class construct_directed_vertex_task: public thread_task
+{
+	typedef std::vector<edge<edge_data_type> > edge_list_t;
+	struct vertex_data {
+		vertex_id_t id;
+		std::shared_ptr<edge_list_t> in_edges;
+		std::shared_ptr<edge_list_t> out_edges;
+
+		vertex_data(vertex_id_t id, std::shared_ptr<edge_list_t> in_edges,
+				std::shared_ptr<edge_list_t> out_edges) {
+			this->id = id;
+			this->in_edges = in_edges;
+			this->out_edges = out_edges;
+		}
+	};
+	std::vector<vertex_data> vertices;
+	write_directed_graph_thread<edge_data_type> &write_thread;
+	bool has_edge_data;
+public:
+	construct_directed_vertex_task(
+			write_directed_graph_thread<edge_data_type> &_write_thread,
+			bool has_edge_data): write_thread(_write_thread) {
+		this->has_edge_data = has_edge_data;
+	}
+
+	void add_vertex(vertex_id_t id, std::shared_ptr<edge_list_t> in_edges,
+			std::shared_ptr<edge_list_t> out_edges) {
+		vertices.push_back(vertex_data(id, in_edges, out_edges));
+	}
+
+	bool is_empty() const {
+		return vertices.empty();
+	}
+
+	bool is_full() const {
+		return vertices.size() >= VERTEX_TASK_SIZE;
+	}
+
+	void run() {
+		typedef std::shared_ptr<in_mem_directed_vertex<edge_data_type> > vertex_ptr;
+		comp_edge<edge_data_type> edge_comparator;
+		comp_in_edge<edge_data_type> in_edge_comparator;
+		std::shared_ptr<std::vector<vertex_ptr> > in_vs
+			= std::shared_ptr<std::vector<vertex_ptr> >(
+					new std::vector<vertex_ptr>());
+		BOOST_FOREACH(vertex_data &data, vertices) {
+			vertex_id_t id = data.id;
+			std::shared_ptr<edge_list_t> in_edges = data.in_edges;
+			std::shared_ptr<edge_list_t> out_edges = data.out_edges;
+			std::sort(in_edges->begin(), in_edges->end(), in_edge_comparator);
+			std::sort(out_edges->begin(), out_edges->end(), edge_comparator);
+			vertex_ptr v = vertex_ptr(new in_mem_directed_vertex<edge_data_type>(
+						id, has_edge_data));
+			BOOST_FOREACH(edge<edge_data_type> e, *in_edges) {
+				v->add_in_edge(e);
+			}
+			BOOST_FOREACH(edge<edge_data_type> e, *out_edges) {
+				v->add_out_edge(e);
+			}
+			in_vs->push_back(v);
+		}
+		write_thread.add_vertices(in_vs);
+	}
+};
+
+template<class edge_data_type>
 void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 {
 	assert(in_edge_lists.size() == out_edge_lists.size());
@@ -1208,34 +1342,56 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 
 	std::vector<off_t> out_idxs(in_edge_lists.size());
 	std::vector<off_t> in_idxs(in_edge_lists.size());
-
 	vertex_id_t max_id = get_max_vertex_id();
-	std::vector<edge<edge_data_type> > v_in_edges;
-	std::vector<edge<edge_data_type> > v_out_edges;
-	comp_edge<edge_data_type> edge_comparator;
-	comp_in_edge<edge_data_type> in_edge_comparator;
+
+	std::vector<task_thread *> threads(num_threads);
+	for (int i = 0; i < num_threads; i++) {
+		task_thread *t = new task_thread(std::string(
+					"graph-task-thread") + itoa(i), -1);
+		t->start();
+		threads[i] = t;
+	}
+	write_directed_graph_thread<edge_data_type> *write_thread
+		= new write_directed_graph_thread<edge_data_type>(*g, max_id);
+	write_thread->start();
+
 	printf("start to construct the graph. max id: %d\n", max_id);
+
+	construct_directed_vertex_task<edge_data_type> *task
+		= new construct_directed_vertex_task<edge_data_type>(*write_thread,
+				edge_graph<edge_data_type>::has_edge_data());
+	int thread_no = 0;
 	for (vertex_id_t id = 0; id <= max_id; id++) {
-		v_in_edges.clear();
-		v_out_edges.clear();
+		std::shared_ptr<edge_list_t> v_in_edges
+			= std::shared_ptr<edge_list_t>(new edge_list_t());
+		std::shared_ptr<edge_list_t> v_out_edges
+			= std::shared_ptr<edge_list_t>(new edge_list_t());
 		for (size_t i = 0; i < in_edge_lists.size(); i++) {
 			in_idxs[i] = add_in_edges(*in_edge_lists[i], in_idxs[i], id,
-					v_in_edges);
+					*v_in_edges);
 			out_idxs[i] = add_out_edges(*out_edge_lists[i], out_idxs[i], id,
-					v_out_edges);
+					*v_out_edges);
 		}
-		std::sort(v_in_edges.begin(), v_in_edges.end(), in_edge_comparator);
-		std::sort(v_out_edges.begin(), v_out_edges.end(), edge_comparator);
-		in_mem_directed_vertex<edge_data_type> v(id,
-				edge_graph<edge_data_type>::has_edge_data());
-		BOOST_FOREACH(edge<edge_data_type> e, v_in_edges) {
-			v.add_in_edge(e);
+
+		task->add_vertex(id, v_in_edges, v_out_edges);
+		if (task->is_full()) {
+			threads[thread_no % num_threads]->add_task(task);
+			thread_no++;
+			task = new construct_directed_vertex_task<edge_data_type>(*write_thread,
+					edge_graph<edge_data_type>::has_edge_data());
 		}
-		BOOST_FOREACH(edge<edge_data_type> e, v_out_edges) {
-			v.add_out_edge(e);
-		}
-		g->add_vertex(v);
 	}
+	if (!task->is_empty())
+		threads[thread_no % num_threads]->add_task(task);
+
+	for (int i = 0; i < num_threads; i++) {
+		threads[i]->wait4complete();
+		threads[i]->stop();
+		threads[i]->join();
+		delete threads[i];
+	}
+	write_thread->join();
+	delete write_thread;
 }
 
 /**
