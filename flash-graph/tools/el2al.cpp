@@ -51,7 +51,8 @@ public:
 };
 
 int num_threads = 1;
-const int EDGE_LIST_BLOCK_SIZE = 1 * 1024 * 1024;
+const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
+const size_t SORT_BUF_SIZE = 1024 * 1024 * 1024;
 static const size_t VERTEX_TASK_SIZE = 1024 * 1024;
 const char *delimiter = "\t";
 
@@ -456,7 +457,7 @@ public:
 		comp_edge<edge_data_type> edge_comparator;
 		for (size_t i = 0; i < edge_lists.size(); i++)
 			stxxl::sort(edge_lists[i]->begin(), edge_lists[i]->end(),
-					edge_comparator, 1024 * 1024 * 10);
+					edge_comparator, SORT_BUF_SIZE);
 	}
 
 	graph *create_disk_graph() const {
@@ -529,9 +530,9 @@ public:
 		comp_in_edge<edge_data_type> in_edge_comparator;
 		for (size_t i = 0; i < in_edge_lists.size(); i++) {
 			stxxl::sort(out_edge_lists[i]->begin(), out_edge_lists[i]->end(),
-					edge_comparator, 1024 * 1024 * 10);
+					edge_comparator, SORT_BUF_SIZE);
 			stxxl::sort(in_edge_lists[i]->begin(), in_edge_lists[i]->end(),
-					in_edge_comparator, 1024 * 1024 * 10);
+					in_edge_comparator, SORT_BUF_SIZE);
 			printf("sort edge list %ld\n", i);
 		}
 	}
