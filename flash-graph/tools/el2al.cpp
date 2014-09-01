@@ -494,9 +494,13 @@ class directed_edge_graph: public edge_graph<edge_data_type>
 	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > in_edge_lists;
 	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > out_edge_lists;
 
-	off_t add_out_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+	typename stxxl_edge_vector<edge_data_type>::const_iterator add_out_edges(
+			typename stxxl_edge_vector<edge_data_type>::const_iterator it,
+			typename stxxl_edge_vector<edge_data_type>::const_iterator end,
 			vertex_id_t id, edge_list_t &v_edges) const;
-	off_t add_in_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+	typename stxxl_edge_vector<edge_data_type>::const_iterator add_in_edges(
+			typename stxxl_edge_vector<edge_data_type>::const_iterator it,
+			typename stxxl_edge_vector<edge_data_type>::const_iterator end,
 			vertex_id_t id, edge_list_t &v_edges) const;
 
 	vertex_id_t get_max_vertex_id() const {
@@ -1174,35 +1178,37 @@ directed_edge_graph<edge_data_type>::simplify_edges() const
 #endif
 
 template<class edge_data_type>
-off_t directed_edge_graph<edge_data_type>::add_out_edges(
-		const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+typename stxxl_edge_vector<edge_data_type>::const_iterator directed_edge_graph<edge_data_type>::add_out_edges(
+		typename stxxl_edge_vector<edge_data_type>::const_iterator it,
+		typename stxxl_edge_vector<edge_data_type>::const_iterator end,
 		vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const
 {
-	if ((size_t) idx >= edges.size())
-		return idx;
+	if (it == end)
+		return it;
 
-	assert(edges[idx].get_from() >= id);
-	off_t num_edges = edges.size();
-	while (idx < num_edges && edges[idx].get_from() == id) {
-		v_edges.push_back(edges[idx++]);
+	assert(it->get_from() >= id);
+	while (it != end && it->get_from() == id) {
+		v_edges.push_back(*it);
+		it++;
 	}
-	return idx;
+	return it;
 }
 
 template<class edge_data_type>
-off_t directed_edge_graph<edge_data_type>::add_in_edges(
-		const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+typename stxxl_edge_vector<edge_data_type>::const_iterator directed_edge_graph<edge_data_type>::add_in_edges(
+		typename stxxl_edge_vector<edge_data_type>::const_iterator it,
+		typename stxxl_edge_vector<edge_data_type>::const_iterator end,
 		vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const
 {
-	if ((size_t) idx >= edges.size())
-		return idx;
+	if (it == end)
+		return it;
 
-	assert(edges[idx].get_to() >= id);
-	off_t num_edges = edges.size();
-	while (idx < num_edges && edges[idx].get_to() == id) {
-		v_edges.push_back(edges[idx++]);
+	assert(it->get_to() >= id);
+	while (it != end && it->get_to() == id) {
+		v_edges.push_back(*it);
+		it++;
 	}
-	return idx;
+	return it;
 }
 
 template<class edge_data_type>
@@ -1292,6 +1298,11 @@ public:
 			write_directed_graph_thread<edge_data_type> &_write_thread,
 			bool has_edge_data): write_thread(_write_thread) {
 		this->has_edge_data = has_edge_data;
+		printf("create a task\n");
+	}
+
+	~construct_directed_vertex_task() {
+		printf("task completes\n");
 	}
 
 	void add_vertex(vertex_id_t id, std::shared_ptr<edge_list_t> in_edges,
@@ -1341,8 +1352,12 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 	for (size_t i = 0; i < in_edge_lists.size(); i++)
 		assert(in_edge_lists[i]->size() == out_edge_lists[i]->size());
 
-	std::vector<off_t> out_idxs(in_edge_lists.size());
-	std::vector<off_t> in_idxs(in_edge_lists.size());
+	std::vector<typename stxxl_edge_vector<edge_data_type>::const_iterator> out_its(out_edge_lists.size());
+	std::vector<typename stxxl_edge_vector<edge_data_type>::const_iterator> in_its(in_edge_lists.size());
+	for (size_t i = 0; i < out_edge_lists.size(); i++) {
+		out_its[i] = out_edge_lists[i]->cbegin();
+		in_its[i] = in_edge_lists[i]->cbegin();
+	}
 	vertex_id_t max_id = get_max_vertex_id();
 
 	std::vector<task_thread *> threads(num_threads);
@@ -1368,9 +1383,9 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 		std::shared_ptr<edge_list_t> v_out_edges
 			= std::shared_ptr<edge_list_t>(new edge_list_t());
 		for (size_t i = 0; i < in_edge_lists.size(); i++) {
-			in_idxs[i] = add_in_edges(*in_edge_lists[i], in_idxs[i], id,
+			in_its[i] = add_in_edges(in_its[i], in_edge_lists[i]->cend(), id,
 					*v_in_edges);
-			out_idxs[i] = add_out_edges(*out_edge_lists[i], out_idxs[i], id,
+			out_its[i] = add_out_edges(out_its[i], out_edge_lists[i]->cend(), id,
 					*v_out_edges);
 		}
 
