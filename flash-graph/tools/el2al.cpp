@@ -269,6 +269,168 @@ public:
 	virtual void finalize_graph_file(const std::string &adj_file) = 0;
 };
 
+class directed_vertex_info: public in_mem_vertex
+{
+	vertex_id_t id;
+	int edge_data_size;
+	size_t in_size;
+	size_t out_size;
+	size_t num_in_edges;
+	size_t num_out_edges;
+public:
+	directed_vertex_info(const in_mem_vertex &v) {
+		id = v.get_id();
+		if (v.has_edge_data())
+			edge_data_size = v.get_edge_data_size();
+		else
+			edge_data_size = 0;
+		in_size = v.get_serialize_size(IN_EDGE);
+		out_size = v.get_serialize_size(OUT_EDGE);
+		num_in_edges = v.get_num_edges(IN_EDGE);
+		num_out_edges = v.get_num_edges(OUT_EDGE);
+	}
+
+	virtual vertex_id_t get_id() const {
+		return id;
+	}
+	virtual bool has_edge_data() const {
+		return edge_data_size > 0;
+	}
+	virtual size_t get_edge_data_size() const {
+		return edge_data_size;
+	}
+	virtual void serialize_edges(vertex_id_t ids[], edge_type type) const {
+		assert(0);
+	}
+	virtual void serialize_edge_data(char *data, edge_type type) const {
+		assert(0);
+	}
+	virtual size_t get_serialize_size(edge_type type) const {
+		switch(type) {
+			case IN_EDGE:
+				return in_size;
+			case OUT_EDGE:
+				return out_size;
+			case BOTH_EDGES:
+				return in_size + out_size;
+			default:
+				assert(0);
+		}
+	}
+	virtual size_t get_num_edges(edge_type type) const {
+		switch(type) {
+			case IN_EDGE:
+				return num_in_edges;
+			case OUT_EDGE:
+				return num_out_edges;
+			case BOTH_EDGES:
+				return num_in_edges + num_out_edges;
+			default:
+				assert(0);
+		}
+	}
+};
+
+class directed_subgraph
+{
+	size_t in_buf_cap;
+	size_t out_buf_cap;
+	size_t in_buf_bytes;
+	size_t out_buf_bytes;
+	char *in_buf;
+	char *out_buf;
+	std::vector<directed_vertex_info> vertices;
+
+	void expand_in_buf(size_t least_size) {
+		while (in_buf_cap < least_size)
+			in_buf_cap *= 2;
+		char *tmp = new char[in_buf_cap];
+		memcpy(tmp, in_buf, in_buf_bytes);
+		delete [] in_buf;
+		in_buf = tmp;
+	}
+
+	void expand_out_buf(size_t least_size) {
+		while (out_buf_cap < least_size)
+			out_buf_cap *= 2;
+		char *tmp = new char[out_buf_cap];
+		memcpy(tmp, out_buf, out_buf_bytes);
+		delete [] out_buf;
+		out_buf = tmp;
+	}
+public:
+	directed_subgraph() {
+		this->in_buf_cap = 1024 * 1024;
+		this->out_buf_cap = 1024 * 1024;
+		in_buf_bytes = 0;
+		out_buf_bytes = 0;
+		in_buf = new char[in_buf_cap];
+		out_buf = new char[out_buf_cap];
+	}
+
+	~directed_subgraph() {
+		delete [] in_buf;
+		delete [] out_buf;
+	}
+
+	template<class edge_data_type>
+	void add_vertex(const in_mem_directed_vertex<edge_data_type> &v) {
+		if (!vertices.empty())
+			assert(vertices.back().get_id() + 1 == v.get_id());
+		vertices.push_back(directed_vertex_info(v));
+
+		int size = v.get_serialize_size(IN_EDGE);
+		if (in_buf_bytes + size > in_buf_cap)
+			expand_in_buf(in_buf_bytes + size);
+		assert(in_buf_bytes + size <= in_buf_cap);
+		ext_mem_undirected_vertex::serialize(v, in_buf + in_buf_bytes,
+				size, IN_EDGE);
+		in_buf_bytes += size;
+
+		size = v.get_serialize_size(OUT_EDGE);
+		if (out_buf_bytes + size > out_buf_cap)
+			expand_out_buf(out_buf_bytes + size);
+		assert(out_buf_bytes + size <= out_buf_cap);
+		ext_mem_undirected_vertex::serialize(v, out_buf + out_buf_bytes,
+				size, OUT_EDGE);
+		out_buf_bytes += size;
+	}
+
+	const directed_vertex_info &get_vertex_info(off_t idx) const {
+		return vertices[idx];
+	}
+
+	size_t get_num_vertices() const {
+		return vertices.size();
+	}
+
+	char *get_in_buf() const {
+		return in_buf;
+	}
+
+	size_t get_in_size() const {
+		return in_buf_bytes;
+	}
+
+	char *get_out_buf() const {
+		return out_buf;
+	}
+
+	size_t get_out_size() const {
+		return out_buf_bytes;
+	}
+
+	vertex_id_t get_start_id() const {
+		assert(!vertices.empty());
+		return vertices.front().get_id();
+	}
+
+	vertex_id_t get_end_id() const {
+		assert(!vertices.empty());
+		return vertices.back().get_id() + 1;
+	}
+};
+
 template<class edge_data_type>
 class disk_directed_graph: public disk_graph<edge_data_type>
 {
@@ -320,6 +482,15 @@ public:
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, OUT_EDGE);
 		ret = fwrite(buf.data(), size, 1, out_f);
+		assert(ret == 1);
+	}
+
+	void add_vertices(const directed_subgraph &subg) {
+		for (size_t i = 0; i < subg.get_num_vertices(); i++)
+			disk_graph<edge_data_type>::add_vertex(subg.get_vertex_info(i));
+		ssize_t ret = fwrite(subg.get_in_buf(), subg.get_in_size(), 1, in_f);
+		assert(ret == 1);
+		ret = fwrite(subg.get_out_buf(), subg.get_out_size(), 1, out_f);
 		assert(ret == 1);
 	}
 
@@ -1202,30 +1373,30 @@ void directed_edge_graph<edge_data_type>::read_in_edges(edge_stream_t &stream,
 template<class edge_data_type>
 class write_directed_graph_thread: public thread
 {
-	typedef std::shared_ptr<in_mem_directed_vertex<edge_data_type> > vertex_ptr;
-	struct vertex_comp {
-		bool operator()(const vertex_ptr &v1, const vertex_ptr &v2) {
-			return v1->get_id() > v2->get_id();
+	typedef std::shared_ptr<directed_subgraph> subgraph_ptr;
+	struct subgraph_comp {
+		bool operator()(const subgraph_ptr &g1, const subgraph_ptr &g2) {
+			return g1->get_start_id() > g2->get_start_id();
 		}
 	};
 
-	std::vector<std::shared_ptr<std::vector<vertex_ptr> > > added_vertices;
-	std::priority_queue<vertex_ptr, std::vector<vertex_ptr>, vertex_comp> vertices;
+	std::vector<subgraph_ptr> added_subgraphs;
+	std::priority_queue<subgraph_ptr, std::vector<subgraph_ptr>, subgraph_comp> subgraphs;
 	pthread_spinlock_t lock;
-	graph &g;
+	disk_directed_graph<edge_data_type> &g;
 	vertex_id_t curr_id;
 	vertex_id_t max_id;
 public:
-	write_directed_graph_thread(graph &_g, vertex_id_t max_id): thread(
-			"write-thread", -1), g(_g) {
+	write_directed_graph_thread(disk_directed_graph<edge_data_type> &_g,
+			vertex_id_t max_id): thread("write-thread", -1), g(_g) {
 		curr_id = 0;
 		this->max_id = max_id;
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
-	void add_vertices(std::shared_ptr<std::vector<vertex_ptr> > vertices) {
+	void add_vertices(subgraph_ptr subg) {
 		pthread_spin_lock(&lock);
-		added_vertices.push_back(vertices);
+		added_subgraphs.push_back(subg);
 		pthread_spin_unlock(&lock);
 		activate();
 	}
@@ -1237,27 +1408,26 @@ template<class edge_data_type>
 void write_directed_graph_thread<edge_data_type>::run()
 {
 	do {
-		std::vector<std::shared_ptr<std::vector<vertex_ptr> > > copy;
+		std::vector<subgraph_ptr> copy;
 		pthread_spin_lock(&lock);
-		copy = added_vertices;
-		added_vertices.clear();
+		copy = added_subgraphs;
+		added_subgraphs.clear();
 		pthread_spin_unlock(&lock);
-		if (copy.empty() && (vertices.empty() || vertices.top()->get_id() > curr_id)) {
+		if (copy.empty() && (subgraphs.empty() || subgraphs.top()->get_start_id() > curr_id)) {
 			usleep(10000);
 		}
 
-		BOOST_FOREACH(std::shared_ptr<std::vector<vertex_ptr> > vs, copy) {
-			BOOST_FOREACH(vertex_ptr v, *vs)
-				vertices.push(v);
+		BOOST_FOREACH(subgraph_ptr subg, copy) {
+			subgraphs.push(subg);
 		}
 
-		if (!vertices.empty())
-			assert(vertices.top()->get_id() >= curr_id);
-		while (!vertices.empty() && vertices.top()->get_id() == curr_id) {
-			vertex_ptr v = vertices.top();
-			g.add_vertex(*v);
-			vertices.pop();
-			curr_id++;
+		if (!subgraphs.empty())
+			assert(subgraphs.top()->get_start_id() >= curr_id);
+		while (!subgraphs.empty() && subgraphs.top()->get_start_id() == curr_id) {
+			subgraph_ptr subg = subgraphs.top();
+			g.add_vertices(*subg);
+			subgraphs.pop();
+			curr_id = subg->get_end_id();
 		}
 	} while (curr_id <= max_id);
 	printf("write %d vertices\n", curr_id);
@@ -1336,19 +1506,17 @@ public:
 		std::sort(out_edges->begin(), out_edges->end(), edge_comparator);
 
 		typedef std::shared_ptr<in_mem_directed_vertex<edge_data_type> > vertex_ptr;
-		std::shared_ptr<std::vector<vertex_ptr> > in_vs
-			= std::shared_ptr<std::vector<vertex_ptr> >(
-					new std::vector<vertex_ptr>());
+		std::shared_ptr<directed_subgraph> subg
+			= std::shared_ptr<directed_subgraph>(new directed_subgraph());
 		typename edge_list_t::const_iterator in_it = in_edges->begin();
 		typename edge_list_t::const_iterator out_it = out_edges->begin();
 		for (vertex_id_t id = start_id; id < end_id; id++) {
-			vertex_ptr v = vertex_ptr(new in_mem_directed_vertex<edge_data_type>(
-						id, has_edge_data));
-			in_it = add_in_edges(in_it, in_edges->end(), id, *v);
-			out_it = add_out_edges(out_it, out_edges->end(), id, *v);
-			in_vs->push_back(v);
+			in_mem_directed_vertex<edge_data_type> v(id, has_edge_data);
+			in_it = add_in_edges(in_it, in_edges->end(), id, v);
+			out_it = add_out_edges(out_it, out_edges->end(), id, v);
+			subg->add_vertex(v);
 		}
-		write_thread.add_vertices(in_vs);
+		write_thread.add_vertices(subg);
 	}
 };
 
@@ -1378,7 +1546,8 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 		threads[i] = t;
 	}
 	write_directed_graph_thread<edge_data_type> *write_thread
-		= new write_directed_graph_thread<edge_data_type>(*g, max_id);
+		= new write_directed_graph_thread<edge_data_type>(
+				(disk_directed_graph<edge_data_type> &) *g, max_id);
 	write_thread->start();
 
 	printf("start to construct the graph. max id: %d\n", max_id);
