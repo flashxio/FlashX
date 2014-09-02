@@ -62,6 +62,8 @@ bool print_graph = false;
 bool check_graph = false;
 std::string work_dir = ".";
 
+struct timeval start_time;
+
 template<class edge_data_type>
 struct comp_edge {
 	bool operator() (const edge<edge_data_type> &e1, const edge<edge_data_type> &e2) const {
@@ -492,6 +494,12 @@ public:
 		assert(ret == 1);
 		ret = fwrite(subg.get_out_buf(), subg.get_out_size(), 1, out_f);
 		assert(ret == 1);
+
+		struct timeval curr;
+		gettimeofday(&curr, NULL);
+		printf("%f: write %ld and %ld bytes for v[%d, %d)\n",
+				time_diff(start_time, curr), subg.get_in_size(),
+				subg.get_out_size(), subg.get_start_id(), subg.get_end_id());
 	}
 
 	void copy_file(FILE *from, size_t from_size, FILE *to) {
@@ -1433,8 +1441,6 @@ void write_directed_graph_thread<edge_data_type>::run()
 	printf("write %d vertices\n", curr_id);
 	stop();
 }
-
-struct timeval start_time;
 
 template<class edge_data_type>
 class construct_directed_vertex_task: public thread_task
