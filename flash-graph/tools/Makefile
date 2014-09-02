@@ -20,7 +20,7 @@ include ../../Makefile.common
 CC = gcc
 CXX = g++
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS) -lz
 CXXFLAGS += -I../../include -I.. -I. -DSTXXL_PARALLEL_MODE_EXPLICIT $(OMP_FLAG)
 
 all: el2al rmat-gen graph-stat

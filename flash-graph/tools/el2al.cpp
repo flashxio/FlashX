@@ -18,6 +18,7 @@
  */
 
 #include <unistd.h>
+#include <zlib.h>
 
 #include "graph.h"
 
@@ -56,7 +57,10 @@ const size_t SORT_BUF_SIZE = 1024 * 1024 * 1024;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 const char *delimiter = "\t";
 
+bool decompress = false;
+#if 0
 bool compress = false;
+#endif
 bool simplify = false;
 bool print_graph = false;
 bool check_graph = false;
@@ -1228,6 +1232,51 @@ int parse_edge_list_line(char *line, edge<> &e)
 	return 1;
 }
 
+static std::unique_ptr<char[]> read_file(const std::string &file_name,
+		size_t &size)
+{
+	native_file local_f(file_name);
+	size = local_f.get_size();
+	FILE *f = fopen(file_name.c_str(), "r");
+	assert(f);
+	char *buf = new char[size];
+	ssize_t ret = fread(buf, size, 1, f);
+	assert(ret == 1);
+	return std::unique_ptr<char[]>(buf);
+}
+
+static std::unique_ptr<char[]> read_gz_file(const std::string &file_name,
+		size_t &size)
+{
+	const size_t BUF_SIZE = 1024 * 1024 * 16;
+	std::vector<std::shared_ptr<char> > bufs;
+	gzFile f = gzopen(file_name.c_str(), "rb");
+	size_t out_size = 0;
+	while (!gzeof(f)) {
+		char *buf = new char[BUF_SIZE];
+		bufs.push_back(std::shared_ptr<char>(buf));
+		int ret = gzread(f, buf, BUF_SIZE);
+		assert(ret > 0);
+		out_size += ret;
+		printf("get %ld bytes from %s\n", out_size, file_name.c_str());
+	}
+
+	size = out_size;
+	char *out_buf = new char[out_size];
+	std::unique_ptr<char[]> ret_buf(out_buf);
+	for (size_t i = 0; i < bufs.size(); i++) {
+		char *buf = bufs[i].get();
+		assert(out_size > 0);
+		size_t buf_size = std::min(BUF_SIZE, out_size);
+		memcpy(out_buf, buf, buf_size);
+		out_buf += buf_size;
+		out_size -= buf_size;
+	}
+	assert(out_size == 0);
+	gzclose(f);
+	return ret_buf;
+}
+
 /**
  * Parse the edge list in the character buffer.
  * `size' doesn't include '\0'.
@@ -1272,13 +1321,34 @@ public:
 		this->size = size;
 	}
 
-	size_t get_size() const {
-		return size;
-	}
-
 	void run() {
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(line_buf.get(), size, edges);
+		stxxl_edge_vector<edge_data_type> *local_edge_buf
+			= (stxxl_edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+		local_edge_buf->append(edges.cbegin(), edges.cend());
+	}
+};
+
+template<class edge_data_type>
+class text_edge_file_task: public thread_task
+{
+	std::string file_name;
+public:
+	text_edge_file_task(const std::string file_name) {
+		this->file_name = file_name;
+	}
+
+	void run() {
+		size_t size =  0;
+		std::unique_ptr<char[]> data;
+		if (decompress)
+			data = read_gz_file(file_name, size);
+		else
+			data = read_file(file_name, size);
+
+		std::vector<edge<edge_data_type> > edges;
+		parse_edge_list_text(data.get(), size, edges);
 		stxxl_edge_vector<edge_data_type> *local_edge_buf
 			= (stxxl_edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 		local_edge_buf->append(edges.cbegin(), edges.cend());
@@ -1608,15 +1678,23 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 		threads[i] = t;
 	}
 	int thread_no = 0;
-	printf("start to read the edge list\n");
-	for (size_t i = 0; i < files.size(); i++) {
-		printf("read file %s\n", files[i].c_str());
-		graph_file_io io(files[i]);
+	if (files.size() == 1) {
+		const std::string file = files[0];
+		printf("start to read the edge list from %s\n", file.c_str());
+		graph_file_io io(file);
 		while (io.get_num_remaining_bytes() > 0) {
 			size_t size = 0;
 			thread_task *task = new text_edge_task<edge_data_type>(
 					io.read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size),
 					size);
+			threads[thread_no % num_threads]->add_task(task);
+			thread_no++;
+		}
+	}
+	else {
+		for (size_t i = 0; i < files.size(); i++) {
+			printf("read file %s\n", files[i].c_str());
+			thread_task *task = new text_edge_file_task<edge_data_type>(files[i]);
 			threads[thread_no % num_threads]->add_task(task);
 			thread_no++;
 		}
@@ -1742,6 +1820,7 @@ void print_usage()
 	fprintf(stderr, "-s: simplify a graph (remove duplicated edges)\n");
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
 	fprintf(stderr, "-W dir: the working directory\n");
+	fprintf(stderr, "-D: decompress data\n");
 }
 
 graph *construct_graph(const std::vector<std::string> &edge_list_files,
@@ -1790,7 +1869,7 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "ud:cpvt:mwsT:W:")) != -1) {
+	while ((opt = getopt(argc, argv, "ud:cpvt:mwsT:W:D")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -1801,7 +1880,9 @@ int main(int argc, char *argv[])
 				num_opts++;
 				break;
 			case 'c':
+#if 0
 				compress = true;
+#endif
 				break;
 			case 'p':
 				print_graph = true;
@@ -1829,6 +1910,9 @@ int main(int argc, char *argv[])
 			case 'W':
 				work_dir = optarg;
 				num_opts++;
+				break;
+			case 'D':
+				decompress = true;
 				break;
 			default:
 				print_usage();
