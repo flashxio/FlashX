@@ -53,7 +53,7 @@ public:
 int num_threads = 1;
 const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
 const size_t SORT_BUF_SIZE = 1024 * 1024 * 1024;
-static const vsize_t VERTEX_TASK_SIZE = 1024 * 1024;
+static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 const char *delimiter = "\t";
 
 bool compress = false;
