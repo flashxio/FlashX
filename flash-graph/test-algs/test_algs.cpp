@@ -122,21 +122,38 @@ void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 	int opt;
 	int num_opts = 0;
 	bool sync = false;
-	while ((opt = getopt(argc, argv, "s")) != -1) {
+	std::string output_file;
+	while ((opt = getopt(argc, argv, "so:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 's':
 				sync = true;
+				break;
+			case 'o':
+				output_file = optarg;
+				num_opts++;
 				break;
 			default:
 				print_usage();
 				assert(0);
 		}
 	}
+	FG_vector<vertex_id_t>::ptr comp_ids;
 	if (sync)
-		print_cc(compute_sync_wcc(graph));
+		comp_ids = compute_sync_wcc(graph);
 	else
-		print_cc(compute_wcc(graph));
+		comp_ids = compute_wcc(graph);
+	if (!output_file.empty()) {
+		FILE *f = fopen(output_file.c_str(), "w");
+		if (f == NULL) {
+			perror("fopen");
+			return;
+		}
+		for (size_t i = 0; i < comp_ids->get_size(); i++)
+			fprintf(f, "%ld %d\n", i, comp_ids->get(i));
+		fclose(f);
+	}
+	print_cc(comp_ids);
 }
 
 void run_scc(FG_graph::ptr graph, int argc, char *argv[])
