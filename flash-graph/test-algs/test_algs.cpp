@@ -119,7 +119,24 @@ void print_cc(FG_vector<vertex_id_t>::ptr comp_ids)
 
 void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 {
-	print_cc(compute_wcc(graph));
+	int opt;
+	int num_opts = 0;
+	bool sync = false;
+	while ((opt = getopt(argc, argv, "s")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 's':
+				sync = true;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+	if (sync)
+		print_cc(compute_sync_wcc(graph));
+	else
+		print_cc(compute_wcc(graph));
 }
 
 void run_scc(FG_graph::ptr graph, int argc, char *argv[])
@@ -465,6 +482,8 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
+	fprintf(stderr, "wcc\n");
+	fprintf(stderr, "-s: run wcc synchronously\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)

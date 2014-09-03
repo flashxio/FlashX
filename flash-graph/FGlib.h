@@ -131,6 +131,16 @@ enum directed_triangle_type
 FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg);
 
 /**
+  * \brief Compute all weakly connectected components of a graph synchronously.
+  * The reason of having this implementation is to understand the performance
+  * of synchronous wcc and asynchronous wcc.
+  *
+  * \param fg The FlashGraph graph object for which you want to compute.
+  * \return A vector with a component ID for each vertex in the graph.
+ */
+FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg);
+
+/**
  * \brief Compute all weakly connectected components of a time-series graph
  *        in a specified time interval.
  *
