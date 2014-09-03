@@ -474,7 +474,7 @@ public:
 	 *                By default, a graph engine creates its own default
 	 *                vertex program.
      */
-	void start(vertex_id_t ids[], int num,
+	void start(const vertex_id_t ids[], int num,
 			vertex_initializer::ptr init = vertex_initializer::ptr(),
 			vertex_program_creater::ptr creater = vertex_program_creater::ptr());
     

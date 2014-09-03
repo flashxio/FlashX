@@ -646,7 +646,7 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 	}
 }
 
-void graph_engine::start(vertex_id_t ids[], int num,
+void graph_engine::start(const vertex_id_t ids[], int num,
 		vertex_initializer::ptr init, vertex_program_creater::ptr creater)
 {
 	init_threads(std::move(creater));
