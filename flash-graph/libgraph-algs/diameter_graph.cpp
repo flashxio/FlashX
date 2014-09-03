@@ -140,23 +140,26 @@ public:
 };
 
 typedef std::pair<vertex_id_t, int> vertex_dist_t;
-class diameter_vertex_program: public vertex_program_impl<diameter_vertex>
+
+template<class vertex_type>
+class diameter_vertex_program: public vertex_program_impl<vertex_type>
 {
 	int curr_iter;
 	std::vector<vertex_dist_t> curr_vertices;
 	std::deque<vertex_dist_t> prev_vertices;
 public:
-	typedef std::shared_ptr<diameter_vertex_program> ptr;
+	typedef std::shared_ptr<diameter_vertex_program<vertex_type> > ptr;
 
 	static ptr cast2(vertex_program::ptr prog) {
-		return std::static_pointer_cast<diameter_vertex_program, vertex_program>(prog);
+		return std::static_pointer_cast<diameter_vertex_program<vertex_type>,
+			   vertex_program>(prog);
 	}
 
 	diameter_vertex_program() {
 		curr_iter = 0;
 	}
 
-	void set_max_dist(diameter_vertex &v, int iter_no) {
+	void set_max_dist(vertex_type &v, int iter_no) {
 		if (curr_iter == iter_no) {
 			if (curr_vertices.size() < num_bfs)
 				curr_vertices.push_back(vertex_dist_t(v.get_id(), curr_iter));
@@ -181,14 +184,6 @@ public:
 		for (std::deque<vertex_dist_t>::const_reverse_iterator it
 				= prev_vertices.crbegin(); it != prev_vertices.crend(); it++)
 			vertices.push_back(*it);
-	}
-};
-
-class diameter_vertex_program_creater: public vertex_program_creater
-{
-public:
-	vertex_program::ptr create() const {
-		return vertex_program::ptr(new diameter_vertex_program());
 	}
 };
 
@@ -219,38 +214,11 @@ void diameter_vertex::notify_iteration_end(vertex_program &vprog)
 		updated = true;
 		int iter_no = vprog.get_graph().get_curr_level() + 1 - start_level;
 		max_dist = max(iter_no, max_dist);
-		((diameter_vertex_program &) vprog).set_max_dist(*this, iter_no);
+		((diameter_vertex_program<diameter_vertex> &) vprog).set_max_dist(
+			*this, iter_no);
 	}
 	bfs_ids = new_bfs_ids;
 }
-
-class diameter_initializer: public vertex_initializer
-{
-	std::unordered_map<vertex_id_t, int> start_vertices;
-public:
-	diameter_initializer(std::vector<vertex_id_t> &vertices) {
-		for (size_t i = 0; i < vertices.size(); i++) {
-			start_vertices.insert(std::pair<vertex_id_t, int>(vertices[i], i));
-		}
-	}
-
-	void init(compute_vertex &v) {
-		diameter_vertex &dv = (diameter_vertex &) v;
-		std::unordered_map<vertex_id_t, int>::const_iterator it
-			= start_vertices.find(v.get_id());
-		assert(it != start_vertices.end());
-		dv.init(it->second);
-	}
-};
-
-class diameter_reset: public vertex_initializer
-{
-public:
-	void init(compute_vertex &v) {
-		diameter_vertex &dv = (diameter_vertex &) v;
-		dv.reset();
-	}
-};
 
 class dist_compare
 {
@@ -259,6 +227,129 @@ public:
 		return v1.second > v2.second;
 	}
 };
+
+/*
+ * This diameter estimation uses a single BFS for each sweep.
+ * It assumes an unweighted graph.
+ */
+class simple_diameter_vertex: public compute_directed_vertex
+{
+	short max_dist;
+public:
+	simple_diameter_vertex(vertex_id_t id): compute_directed_vertex(id) {
+		max_dist = -1;
+	}
+
+	short get_max_dist() const {
+		return max_dist;
+	}
+
+	void init(int bfs_id) {
+	}
+
+	void reset() {
+		max_dist = -1;
+	}
+
+	void run(vertex_program &prog) {
+		diameter_vertex_program<simple_diameter_vertex> & diam_prog
+			= (diameter_vertex_program<simple_diameter_vertex> &) prog;
+		if (max_dist < 0) {
+			int iter_no = prog.get_graph().get_curr_level() - start_level;
+			diam_prog.set_max_dist(*this, iter_no);
+			max_dist = prog.get_graph().get_curr_level();
+			directed_vertex_request req(get_id(), traverse_edge);
+			request_partial_vertices(&req, 1);
+		}
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex) {
+		int num_dests = vertex.get_num_edges(traverse_edge);
+		if (num_dests == 0)
+			return;
+
+		// We need to add the neighbors of the vertex to the queue of
+		// the next level.
+		if (traverse_edge == BOTH_EDGES) {
+			edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE);
+			prog.activate_vertices(it);
+			it = vertex.get_neigh_seq_it(OUT_EDGE);
+			prog.activate_vertices(it);
+		}
+		else {
+			edge_seq_iterator it = vertex.get_neigh_seq_it(traverse_edge);
+			prog.activate_vertices(it);
+		}
+	}
+
+	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
+		assert(0);
+	}
+};
+
+template<class vertex_type>
+class diameter_vertex_program_creater: public vertex_program_creater
+{
+public:
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new diameter_vertex_program<vertex_type>());
+	}
+};
+
+template<class vertex_type>
+class diameter_reset: public vertex_initializer
+{
+public:
+	void init(compute_vertex &v) {
+		vertex_type &dv = (vertex_type &) v;
+		dv.reset();
+	}
+};
+
+template<class vertex_type>
+class diameter_initializer: public vertex_initializer
+{
+	std::unordered_map<vertex_id_t, int> start_vertices;
+public:
+	diameter_initializer(const std::vector<vertex_id_t> &vertices) {
+		for (size_t i = 0; i < vertices.size(); i++) {
+			start_vertices.insert(std::pair<vertex_id_t, int>(vertices[i], i));
+		}
+	}
+
+	void init(compute_vertex &v) {
+		vertex_type &dv = (vertex_type &) v;
+		std::unordered_map<vertex_id_t, int>::const_iterator it
+			= start_vertices.find(v.get_id());
+		assert(it != start_vertices.end());
+		dv.init(it->second);
+	}
+};
+
+template<class vertex_type>
+std::vector<vertex_dist_t> estimate_diameter_1sweep(graph_engine::ptr graph,
+		const std::vector<vertex_id_t> &start_vertices)
+{
+	start_level = graph->get_curr_level();
+	graph->init_all_vertices(vertex_initializer::ptr(
+				new diameter_reset<vertex_type>()));
+	graph->start(start_vertices.data(), start_vertices.size(),
+			vertex_initializer::ptr(
+				new diameter_initializer<vertex_type>(start_vertices)),
+			vertex_program_creater::ptr(
+				new diameter_vertex_program_creater<vertex_type>()));
+	graph->wait4complete();
+
+	std::vector<vertex_program::ptr> vprogs;
+	graph->get_vertex_programs(vprogs);
+	std::vector<vertex_dist_t> max_dist_vertices;
+	BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
+		typename diameter_vertex_program<vertex_type>::ptr diameter_vprog
+			= diameter_vertex_program<vertex_type>::cast2(vprog);
+		diameter_vprog->get_max_dist_vertices(max_dist_vertices);
+	}
+	return max_dist_vertices;
+}
 
 }
 
@@ -290,27 +381,25 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 
 	short global_max = 0;
 	for (int i = 0; i < num_sweeps; i++) {
+		printf("Sweep %d starts on %ld vertices, traverse edge: %d\n",
+			i, start_vertices.size(), traverse_edge);
+		BOOST_FOREACH(vertex_id_t v, start_vertices) {
+			printf("v%d\n", v);
+		}
+
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
-		start_level = graph->get_curr_level();
-		graph->init_all_vertices(vertex_initializer::ptr(new diameter_reset()));
-		printf("Sweep %d starts on %ld vertices, traverse edge: %d\n",
-				i, start_vertices.size(), traverse_edge);
-		graph->start(start_vertices.data(), start_vertices.size(),
-				vertex_initializer::ptr(new diameter_initializer(start_vertices)),
-				vertex_program_creater::ptr(new diameter_vertex_program_creater()));
-		graph->wait4complete();
+		std::vector<vertex_dist_t> max_dist_vertices;
+		if (start_vertices.size() == 1)
+			max_dist_vertices = estimate_diameter_1sweep<simple_diameter_vertex>(
+					graph, start_vertices);
+		else
+			max_dist_vertices = estimate_diameter_1sweep<diameter_vertex>(
+					graph, start_vertices);
 		gettimeofday(&end, NULL);
 
-		std::vector<vertex_program::ptr> vprogs;
-		graph->get_vertex_programs(vprogs);
-		std::vector<vertex_dist_t> max_dist_vertices;
-		BOOST_FOREACH(vertex_program::ptr vprog, vprogs) {
-			diameter_vertex_program::ptr diameter_vprog
-				= diameter_vertex_program::cast2(vprog);
-			diameter_vprog->get_max_dist_vertices(max_dist_vertices);
-		}
 		if (max_dist_vertices.empty()) {
+			size_t num_bfs = start_vertices.size();
 			start_vertices.clear();
 			while (start_vertices.size() < num_bfs) {
 				vertex_id_t id = random() % graph->get_max_vertex_id();
