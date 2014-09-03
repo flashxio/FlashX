@@ -95,15 +95,15 @@ void message_processor::process_multicast_msg(multicast_message &mmsg,
 	int num_dests = mmsg.get_num_dests();
 	multicast_dest_list dest_list = mmsg.get_dest_list();
 
+	if (mmsg.is_activation_msg()) {
+		owner.activate_vertices(dest_list.get_dests(), num_dests);
+		return;
+	}
+
 	if (!check_steal) {
 		curr_vprog.run_on_multicast_message(mmsg);
 		if (mmsg.is_activate())
 			owner.activate_vertices(dest_list.get_dests(), num_dests);
-		return;
-	}
-
-	if (mmsg.is_activation_msg()) {
-		owner.activate_vertices(dest_list.get_dests(), num_dests);
 		return;
 	}
 
