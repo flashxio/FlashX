@@ -72,92 +72,21 @@ class ext_mem_vindex_reader_impl: public vertex_index_reader
 	io_interface::ptr io;
 	typedef simple_KV_store<ValueType, req_vertex_task<ValueType> > vertex_KV_store;
 	typename vertex_KV_store::ptr req_vertex_store;
-
-#if 0
-	// The starting offset of the entries in the cached index.
-	size_t cached_index_start;
-	// The values in the last one or two pages in the index.
-	std::vector<ValueType> cached_index;
-#endif
-
 protected:
 	ext_mem_vindex_reader_impl(io_interface::ptr io) {
 		this->io = io;
 		req_vertex_store = vertex_KV_store::create(io);
-
-#if 0
-		// Get the vertex index header.
-		char *hdr_buf = new char[vertex_index::get_header_size()];
-		io->access(hdr_buf, 0, vertex_index::get_header_size(), READ);
-		vertex_index *index = (vertex_index *) hdr_buf;
-		vsize_t num_vertices = index->get_num_vertices();
-		size_t graph_size = index->get_graph_size();
-		delete [] hdr_buf;
-
-		// Keep the last one or two pages in memory.
-		off_t read_start;
-		size_t index_size = num_vertices * sizeof(ValueType)
-			+ vertex_index::get_header_size();
-		if (num_vertices * sizeof(ValueType) >= PAGE_SIZE)
-			read_start = index_size - PAGE_SIZE;
-		else
-			read_start = vertex_index::get_header_size();
-		assert(PAGE_SIZE % sizeof(ValueType) == 0);
-		// The index contains a header.
-		cached_index_start = (read_start
-				- vertex_index::get_header_size()) / sizeof(ValueType);
-		// We keep all entries in the index after `cached_index_start`
-		// in the vector. We also add another entry to tell the size of
-		// the graph image.
-		cached_index.resize((index_size - read_start) / sizeof(ValueType) + 1);
-		io->access((char *) cached_index.data(), read_start,
-				(index_size - read_start), READ);
-		cached_index.back() = ValueType(graph_size);
-#endif
 	}
-
-#if 0
-	size_t get_cached_index_start() const {
-		return cached_index_start;
-	}
-
-	const ValueType &get_cached_entry(int idx) const {
-		return cached_index[idx];
-	}
-#endif
 public:
 	static ptr create(io_interface::ptr io) {
 		return ptr(new ext_mem_vindex_reader_impl(io));
 	}
 
 	virtual void request_index(index_compute *compute) {
-#if 0
-		index_compute::id_range_t range = compute->get_range();
-		if (range.first >= cached_index_start) {
-			off_t start_off = range.first - cached_index_start;
-			off_t end_off = range.second - cached_index_start;
-			array_index_iterator_impl<ValueType> it(cached_index.data() + start_off,
-					cached_index.data() + end_off + 1);
-			bool ret = compute->run(compute->get_first_vertex(), it);
-			assert(ret);
-			compute->get_allocator().free(compute);
-		}
-		else if (range.second > cached_index_start) {
-			off_t end_off = range.second - cached_index_start;
-			array_index_iterator_impl<ValueType> it(cached_index.data(),
-					cached_index.data() + end_off + 1);
-			compute->run(cached_index_start, it);
-			req_vertex_task<ValueType> task(compute->get_first_vertex(),
-					cached_index_start - compute->get_first_vertex(), compute);
-			req_vertex_store->async_request(task);
-		}
-		else {
-#endif
-			req_vertex_task<ValueType> task(compute->get_first_vertex(),
-					compute->get_last_vertex() - compute->get_first_vertex() + 1,
-					compute);
-			req_vertex_store->async_request(task);
-//		}
+		req_vertex_task<ValueType> task(compute->get_first_vertex(),
+				compute->get_last_vertex() - compute->get_first_vertex() + 1,
+				compute);
+		req_vertex_store->async_request(task);
 	}
 
 	void wait4complete(int num) {
@@ -188,34 +117,11 @@ public:
 
 	virtual void request_index(index_compute *compute) {
 		id_range_t range = compute->get_range();
-#if 0
-		if (range.second < index->get_num_vertices()) {
-#endif
-			array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
-					// We need an additional entry.
-					index->get_data() + range.second + 1);
-			bool ret = compute->run(compute->get_first_vertex(), it);
-			assert(ret);
-#if 0
-		}
-		else {
-			assert(range.second > range.first);
-			if (range.second - range.first > 1) {
-				array_index_iterator_impl<ValueType> it(
-						index->get_data() + range.first,
-						index->get_data() + range.second);
-				compute->run(compute->get_first_vertex(), it);
-			}
-
-			// For the last vertex,
-			ValueType vs[2];
-			vs[0] = index->get_data()[index->get_num_vertices() - 1];
-			vs[1] = ValueType(index->get_graph_size());
-			array_index_iterator_impl<ValueType> it(vs, &vs[2]);
-			bool ret = compute->run(index->get_num_vertices() - 1, it);
-			assert(ret);
-		}
-#endif
+		array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
+				// We need an additional entry.
+				index->get_data() + range.second + 1);
+		bool ret = compute->run(compute->get_first_vertex(), it);
+		assert(ret);
 		compute->get_allocator().free(compute);
 	}
 
