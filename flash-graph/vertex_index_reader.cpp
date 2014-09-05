@@ -242,6 +242,15 @@ void simple_index_reader::process_self_requests(std::vector<id_range_t> &reqs,
 		if (compute->add_range(range))
 			continue;
 
+		// If there is a shrinked vertex index and the request
+		// can be solved in the shrinked vertex index, we can avoid
+		// issuing the request to the underlying filesystem.
+		if (shrinked_index && shrinked_index->request_index(*compute)) {
+			// The shrinked index doesn't consume the vertex compute.
+			compute->init(range, t, type);
+			continue;
+		}
+
 		// If there are multiple ranges in the sparse index request.
 		if (compute->get_num_ranges() > 1) {
 			index_reader->request_index(compute);
@@ -258,7 +267,9 @@ void simple_index_reader::process_self_requests(std::vector<id_range_t> &reqs,
 			compute->init(range, t, type);
 		}
 	}
-	if (compute->get_num_ranges() > 1)
+	if (shrinked_index && shrinked_index->request_index(*compute))
+		sparse_self_req_alloc->free(compute);
+	else if (compute->get_num_ranges() > 1)
 		index_reader->request_index(compute);
 	else {
 		dense_self_vertex_compute *dense_compute
@@ -548,66 +559,82 @@ static void merge_reqs(off_range_t &range1, const off_range_t &range2)
 	range1.second = range2.second;
 }
 
-void sparse_self_vertex_compute::run_in_vertices(vertex_id_t start_vid,
-		index_iterator &it)
+class get_in_off_range_func
 {
+	vertex_id_t start_vid;
+	index_iterator &it;
+public:
+	get_in_off_range_func(vertex_id_t start_vid, index_iterator &_it): it(_it) {
+		this->start_vid = start_vid;
+	}
+
+	off_range_t operator()(const id_range_t &range) const {
+		return get_in_off_range(it, start_vid, range);
+	}
+
+	edge_type get_type() const {
+		return IN_EDGE;
+	}
+};
+
+class get_out_off_range_func
+{
+	vertex_id_t start_vid;
+	index_iterator &it;
+public:
+	get_out_off_range_func(vertex_id_t start_vid, index_iterator &_it): it(_it) {
+		this->start_vid = start_vid;
+	}
+
+	off_range_t operator()(const id_range_t &range) const {
+		return get_out_off_range(it, start_vid, range);
+	}
+
+	edge_type get_type() const {
+		return OUT_EDGE;
+	}
+};
+
+template<class GetOffFunc>
+void sparse_self_vertex_compute::run_vertices(GetOffFunc &get_off_range)
+{
+	edge_type type = get_off_range.get_type();
 	sparse_vertex_compute *compute
 		= (sparse_vertex_compute *) thread->get_sparse_compute_allocator().alloc();
-	off_range_t off_range = get_in_off_range(it, start_vid, ranges[0]);
-	compute->init(ranges[0], &off_range, IN_EDGE);
+	off_range_t off_range = get_off_range(ranges[0]);
+	compute->init(ranges[0], &off_range, type);
 	off_range_t req_range = off_range;
 	for (size_t i = 1; i < num_ranges; i++) {
-		off_range = get_in_off_range(it, start_vid, ranges[i]);
+		off_range = get_off_range(ranges[i]);
 		if (can_merge_reqs(req_range, off_range)
 				&& compute->add_range(ranges[i], &off_range)) {
 			merge_reqs(req_range, off_range);
 		}
 		else {
-			compute = issue_request(thread, req_range, compute, IN_EDGE, true);
-			compute->init(ranges[i], &off_range, IN_EDGE);
+			compute = issue_request(thread, req_range, compute, type, true);
+			compute->init(ranges[i], &off_range, type);
 			req_range = off_range;
 		}
 	}
-	issue_request(thread, req_range, compute, IN_EDGE, false);
+	issue_request(thread, req_range, compute, type, false);
 }
 
-void sparse_self_vertex_compute::run_out_vertices(vertex_id_t start_vid,
-		index_iterator &it)
-{
-	sparse_vertex_compute *compute
-		= (sparse_vertex_compute *) thread->get_sparse_compute_allocator().alloc();
-	off_range_t off_range = get_out_off_range(it, start_vid, ranges[0]);
-	compute->init(ranges[0], &off_range, OUT_EDGE);
-	off_range_t req_range = off_range;
-	for (size_t i = 1; i < num_ranges; i++) {
-		off_range = get_out_off_range(it, start_vid, ranges[i]);
-		if (can_merge_reqs(req_range, off_range)
-				&& compute->add_range(ranges[i], &off_range))
-			merge_reqs(req_range, off_range);
-		else {
-			compute = issue_request(thread, req_range, compute, OUT_EDGE, true);
-			compute->init(ranges[i], &off_range, OUT_EDGE);
-			req_range = off_range;
-		}
-	}
-	issue_request(thread, req_range, compute, OUT_EDGE, false);
-}
-
-void sparse_self_vertex_compute::run_both_vertices(vertex_id_t start_vid,
-		index_iterator &it)
+template<class GetInOffFunc, class GetOutOffFunc>
+void sparse_self_vertex_compute::run_both_vertices(GetInOffFunc &get_in_off,
+		GetOutOffFunc &get_out_off)
 {
 	sparse_vertex_compute *compute
 		= (sparse_vertex_compute *) thread->get_sparse_compute_allocator().alloc();
 	off_range_t off_ranges[2];
-	off_ranges[0] = get_in_off_range(it, start_vid, ranges[0]);
-	off_ranges[1] = get_out_off_range(it, start_vid, ranges[0]);
+	off_ranges[0] = get_in_off(ranges[0]);
+	off_ranges[1] = get_out_off(ranges[0]);
 	compute->init(ranges[0], off_ranges, BOTH_EDGES);
 	off_range_t req_ranges[2];
 	req_ranges[0] = off_ranges[0];
 	req_ranges[1] = off_ranges[1];
 	for (size_t i = 1; i < num_ranges; i++) {
-		off_ranges[0] = get_in_off_range(it, start_vid, ranges[i]);
-		off_ranges[1] = get_out_off_range(it, start_vid, ranges[i]);
+		off_ranges[0] = get_in_off(ranges[i]);
+		off_ranges[1] = get_out_off(ranges[i]);
 		if (can_merge_reqs(req_ranges[0], off_ranges[0])
 				&& can_merge_reqs(req_ranges[1], off_ranges[1])
 				&& compute->add_range(ranges[i], off_ranges)) {
@@ -632,19 +659,190 @@ bool sparse_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	// If #ragnes is 1, we'll do it in the dense_self_vertex_compute.
 	assert(num_ranges > 1);
 
+	get_in_off_range_func in_func(start_vid, it);
+	get_out_off_range_func out_func(start_vid, it);
 	switch(type) {
 		case IN_EDGE:
-			run_in_vertices(start_vid, it);
+			run_vertices(in_func);
 			break;
 		case OUT_EDGE:
-			run_out_vertices(start_vid, it);
+			run_vertices(out_func);
 			break;
 		case BOTH_EDGES:
-			run_both_vertices(start_vid, it);
+			run_both_vertices(in_func, out_func);
 			break;
 		default:
 			assert(0);
 	}
 
 	return true;
+}
+
+bool shrinked_vertex_index::request_index(sparse_self_vertex_compute &compute)
+{
+	num_reqs++;
+	size_t wasted = 0;
+	for (size_t i = 0; i < compute.get_num_ranges(); i++) {
+		id_range_t range = compute.get_range(i);
+		wasted += est_waste(range, compute.get_type());
+	}
+	size_t read_index_size = get_index_entry_size(
+			compute.get_first_vertex(), compute.get_last_vertex() + 1);
+	assert(read_index_size <= (compute.get_last_vertex() + 1
+				- compute.get_first_vertex()) * entry_size + 2 * PAGE_SIZE);
+	bool worth = (wasted <= read_index_size);
+	num_worth += worth;
+	if (worth)
+		issue_vertex_requests(compute);
+	return worth;
+}
+
+class directed_shrinked_vertex_index: public shrinked_vertex_index
+{
+	vertex_index_temp<directed_vertex_entry>::ptr index;
+
+	directed_shrinked_vertex_index(vertex_index::ptr index,
+			int shrink_factor): shrinked_vertex_index(shrink_factor,
+				sizeof(directed_vertex_entry)) {
+		this->index = vertex_index_temp<directed_vertex_entry>::cast(index);
+	}
+
+	off_t get_in_off(vertex_id_t id) const {
+		return index->get_vertex(id).get_in_off();
+	}
+
+	off_t get_out_off(vertex_id_t id) const {
+		return index->get_vertex(id).get_out_off();
+	}
+
+	class get_in_off_func {
+		const directed_shrinked_vertex_index &idx;
+	public:
+		get_in_off_func(const directed_shrinked_vertex_index &_idx): idx(_idx) {
+		}
+
+		off_t operator()(vertex_id_t id) const {
+			return idx.get_in_off(id);
+		}
+
+		edge_type get_type() const {
+			return IN_EDGE;
+		}
+
+		const directed_shrinked_vertex_index &get_index() const {
+			return idx;
+		}
+	};
+
+	class get_out_off_func {
+		const directed_shrinked_vertex_index &idx;
+	public:
+		get_out_off_func(const directed_shrinked_vertex_index &_idx): idx(_idx) {
+		}
+
+		off_t operator()(vertex_id_t id) const {
+			return idx.get_out_off(id);
+		}
+
+		edge_type get_type() const {
+			return OUT_EDGE;
+		}
+
+		const directed_shrinked_vertex_index &get_index() const {
+			return idx;
+		}
+	};
+
+	template<class GetOffFunc>
+	size_t est_waste(const id_range_t &range, GetOffFunc &get_off) const {
+		off_t min_vsize = sizeof(ext_mem_undirected_vertex);
+		vertex_id_t front_start = ROUND(range.first, get_shrink_factor());
+		vertex_id_t back_end = ROUNDUP(range.second, get_shrink_factor());
+		back_end = std::min(back_end, get_tot_num_vertices());
+		vertex_id_t back_start = ROUND(range.second, get_shrink_factor());
+		size_t size;
+		if (back_end - front_start <= get_shrink_factor())
+			size = get_off(back_end) - get_off(front_start);
+		else
+			size = get_off(front_start + get_shrink_factor())
+				- get_off(front_start) + get_off(back_end)
+				- get_off(back_start);
+		if (size < min_vsize * (range.second - range.first))
+			return 0;
+		else 
+//		assert(size >= min_vsize * (range.second - range.first));
+		return size - min_vsize * (range.second - range.first);
+	}
+
+	template<class GetOffFunc>
+	class get_est_off_range_func {
+		GetOffFunc get_off;
+		int shrink_factor;
+	public:
+		get_est_off_range_func(
+				const directed_shrinked_vertex_index &_index): get_off(_index) {
+			shrink_factor = _index.get_shrink_factor();
+		}
+
+		off_range_t operator()(const id_range_t &range) {
+			vertex_id_t front_start = ROUND(range.first, shrink_factor);
+			vertex_id_t back_end = ROUNDUP(range.second, shrink_factor);
+			back_end = std::min(back_end,
+					get_off.get_index().get_tot_num_vertices());
+			return off_range_t(get_off(front_start), get_off(back_end));
+		}
+
+		edge_type get_type() const {
+			return get_off.get_type();
+		}
+	};
+public:
+	static ptr create(vertex_index::ptr index, int shrink_factor) {
+		return ptr(new directed_shrinked_vertex_index(index, shrink_factor));
+	}
+
+	vsize_t get_tot_num_vertices() const {
+		return index->get_num_vertices();
+	}
+
+	size_t est_waste(id_range_t range, edge_type type) const {
+		get_in_off_func get_in_off(*this);
+		get_out_off_func get_out_off(*this);
+		switch (type) {
+			case IN_EDGE:
+				return est_waste<get_in_off_func>(range, get_in_off);
+			case OUT_EDGE:
+				return est_waste<get_out_off_func>(range, get_out_off);
+			case BOTH_EDGES:
+				return est_waste<get_in_off_func>(range, get_in_off)
+					+ est_waste<get_out_off_func>(range, get_out_off);
+			default:
+				assert(0);
+		}
+	}
+
+	virtual void issue_vertex_requests(sparse_self_vertex_compute &compute) {
+		get_est_off_range_func<get_in_off_func> in_func(*this);
+		get_est_off_range_func<get_out_off_func> out_func(*this);
+		switch(compute.get_type()) {
+			case IN_EDGE:
+				compute.run_vertices(in_func);
+				break;
+			case OUT_EDGE:
+				compute.run_vertices(out_func);
+				break;
+			case BOTH_EDGES:
+				compute.run_both_vertices(in_func, out_func);
+				break;
+			default:
+				assert(0);
+		}
+	}
+};
+
+simple_index_reader::simple_index_reader(io_interface::ptr io, bool directed,
+		worker_thread *t)
+{
+	init(t, directed);
+	index_reader = vertex_index_reader::create(io, directed);
 }

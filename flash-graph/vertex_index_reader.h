@@ -154,9 +154,10 @@ public:
 	}
 };
 
+// Represent the vertices in [first, last).
 typedef std::pair<vertex_id_t, vertex_id_t> id_range_t;
 
-/**
+/*
  * This interface defines the method invoked in vertex_index_reader.
  * It is designed to compute on multiple index entries. If we require
  * vertices that are adjacent in vertex ids, we should merge all of
@@ -361,10 +362,6 @@ class sparse_self_vertex_compute: public index_compute
 	off_t get_last_page() const {
 		return get_page(get_last_vertex());
 	}
-
-	void run_in_vertices(vertex_id_t start_vid, index_iterator &it);
-	void run_out_vertices(vertex_id_t start_vid, index_iterator &it);
-	void run_both_vertices(vertex_id_t start_vid, index_iterator &it);
 public:
 	sparse_self_vertex_compute(index_comp_allocator &alloc,
 			int entry_size_log): index_compute(alloc) {
@@ -395,6 +392,10 @@ public:
 			return false;
 	}
 
+	edge_type get_type() const {
+		return type;
+	}
+
 	size_t get_num_ranges() const {
 		return num_ranges;
 	}
@@ -402,6 +403,11 @@ public:
 	const id_range_t &get_range(off_t idx) const {
 		return ranges[idx];
 	}
+
+	template<class GetOffFunc>
+	void run_vertices(GetOffFunc &func);
+	template<class GetInOffFunc, class GetOutOffFunc>
+	void run_both_vertices(GetInOffFunc &in_func, GetOutOffFunc &out_func);
 
 	virtual bool run(vertex_id_t start_vid, index_iterator &it);
 };
@@ -845,6 +851,49 @@ public:
 };
 
 /*
+ * This is an in-memory data structure that keeps some index entries
+ * in memory to reduce the number of I/O accesses to the entire index
+ * on disks.
+ */
+class shrinked_vertex_index
+{
+	int shrink_factor;
+	size_t num_reqs;
+	size_t num_worth;
+	size_t num_entries_page;
+	size_t entry_size;
+
+	size_t get_index_entry_size(vertex_id_t first, vertex_id_t last) const {
+		return (ROUNDUP(last, num_entries_page)
+				- ROUND(first, num_entries_page)) * entry_size;
+	}
+
+protected:
+	shrinked_vertex_index(int shrink_factor, int entry_size) {
+		this->shrink_factor = shrink_factor;
+		num_worth = 0;
+		num_reqs = 0;
+		num_entries_page = PAGE_SIZE / entry_size;
+		this->entry_size = entry_size;
+	}
+public:
+	typedef std::shared_ptr<shrinked_vertex_index> ptr;
+
+	~shrinked_vertex_index() {
+		printf("out of %ld reqs, %ld reqs are worth it\n", num_reqs, num_worth);
+	}
+
+	int get_shrink_factor() const {
+		return shrink_factor;
+	}
+
+	bool request_index(sparse_self_vertex_compute &compute);
+
+	virtual size_t est_waste(id_range_t range, edge_type type) const = 0;
+	virtual void issue_vertex_requests(sparse_self_vertex_compute &compute) = 0;
+};
+
+/*
  * This is a helper class that requests
  *	vertex,
  *	part of vertex,
@@ -854,6 +903,7 @@ public:
 class simple_index_reader
 {
 	worker_thread *t;
+	shrinked_vertex_index::ptr shrinked_index;
 
 	index_comp_allocator_impl<req_vertex_compute> *req_vertex_comp_alloc;
 	index_comp_allocator_impl<req_undirected_edge_compute> *req_undirected_edge_comp_alloc;
@@ -925,10 +975,7 @@ class simple_index_reader
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
-	simple_index_reader(io_interface::ptr io, bool directed, worker_thread *t) {
-		init(t, directed);
-		index_reader = vertex_index_reader::create(io, directed);
-	}
+	simple_index_reader(io_interface::ptr io, bool directed, worker_thread *t);
 
 	void process_self_requests(std::vector<id_range_t> &reqs, edge_type type);
 

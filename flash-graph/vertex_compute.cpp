@@ -258,14 +258,33 @@ void merged_vertex_compute::finish_run(compute_vertex_pointer v)
 		issue_thread->complete_vertex(v);
 }
 
+/*
+ * We might just estimate the offset range and read extra vertices
+ * from SSDs. This function help us skip the extra vertices.
+ */
+off_t skip_vertices_until(page_byte_array &arr, off_t off, vertex_id_t id)
+{
+	ext_mem_undirected_vertex v = arr.get_off_in_bytes<ext_mem_undirected_vertex>(off);
+	assert(v.get_id() <= id);
+	while (v.get_id() < id) {
+		vertex_id_t prev_id = v.get_id();
+		assert(off + v.get_size() < arr.get_size());
+		off += v.get_size();
+		v = arr.get_off_in_bytes<ext_mem_undirected_vertex>(off);
+		assert(v.get_id() == prev_id + 1);
+	}
+	assert(v.get_id() == id);
+	return off;
+}
+
 void merged_directed_vertex_compute::run_on_array(page_byte_array &array)
 {
-	off_t off = 0;
 	vertex_id_t id = this->get_start_id();
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	// We don't support part vertex compute here.
 	vertex_program &curr_vprog = t->get_vertex_program(false);
 	bool in_part = (size_t) array.get_offset() < get_graph().get_in_part_size();
+	off_t off = skip_vertices_until(array, 0, id);
 	for (int i = 0; i < get_num_vertices(); i++, id++) {
 		sub_page_byte_array sub_arr(array, off);
 		page_directed_vertex pg_v(sub_arr, in_part);
@@ -284,12 +303,12 @@ void merged_directed_vertex_compute::run_on_array(page_byte_array &array)
 void merged_directed_vertex_compute::run_on_arrays(page_byte_array &in_arr,
 		page_byte_array &out_arr)
 {
-	off_t in_off = 0;
-	off_t out_off = 0;
 	vertex_id_t id = this->get_start_id();
 	worker_thread *t = (worker_thread *) thread::get_curr_thread();
 	// We don't support part vertex compute here.
 	vertex_program &curr_vprog = t->get_vertex_program(false);
+	off_t in_off = skip_vertices_until(in_arr, 0, id);
+	off_t out_off = skip_vertices_until(out_arr, 0, id);
 	for (int i = 0; i < get_num_vertices(); i++, id++) {
 		sub_page_byte_array sub_in_arr(in_arr, in_off);
 		sub_page_byte_array sub_out_arr(out_arr, out_off);
@@ -371,6 +390,7 @@ void sparse_directed_vertex_compute::run_on_array(page_byte_array &arr)
 		off_t off = this->ranges[i].start_off - arr.get_offset();
 		// We don't support part vertex compute here.
 		bool in_part = (size_t) arr.get_offset() < get_graph().get_in_part_size();
+		off = skip_vertices_until(arr, off, id);
 		for (int j = 0; j < num_vertices; j++, id++) {
 			sub_page_byte_array sub_arr(arr, off);
 			page_directed_vertex pg_v(sub_arr, in_part);
@@ -405,6 +425,8 @@ void sparse_directed_vertex_compute::run_on_arrays(page_byte_array &in_arr,
 			= this->ranges[i].id_range.second - this->ranges[i].id_range.first;
 		off_t in_off = this->ranges[i].start_off - in_arr.get_offset();
 		off_t out_off = this->out_start_offs[i] - out_arr.get_offset();
+		in_off = skip_vertices_until(in_arr, in_off, id);
+		out_off = skip_vertices_until(out_arr, out_off, id);
 		for (int i = 0; i < num_vertices; i++, id++) {
 			sub_page_byte_array sub_in_arr(in_arr, in_off);
 			sub_page_byte_array sub_out_arr(out_arr, out_off);
