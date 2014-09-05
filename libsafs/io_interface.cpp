@@ -379,6 +379,7 @@ class global_cached_io_factory: public remote_io_factory
 {
 	std::atomic_ulong tot_bytes;
 	std::atomic_ulong tot_accesses;
+	std::atomic_ulong tot_pg_accesses;
 	std::atomic_ulong tot_hits;
 	std::atomic_ulong tot_fast_process;
 
@@ -389,6 +390,7 @@ public:
 		this->global_cache = cache;
 		tot_bytes = 0;
 		tot_accesses = 0;
+		tot_pg_accesses = 0;
 		tot_hits = 0;
 		tot_fast_process = 0;
 	}
@@ -401,16 +403,17 @@ public:
 		global_cached_io &gio = (global_cached_io &) io;
 
 		tot_bytes += gio.get_num_bytes();
-		tot_accesses += gio.get_num_pg_accesses();
+		tot_accesses += gio.get_num_areqs();
+		tot_pg_accesses += gio.get_num_pg_accesses();
 		tot_hits += gio.get_cache_hits();
 		tot_fast_process += gio.get_num_fast_process();
 	}
 
 	virtual void print_statistics() const {
-		printf("%s gets %ld I/O accesses, %ld in bytes\n", mapper.get_name().c_str(),
+		printf("%s gets %ld async I/O accesses, %ld in bytes\n", mapper.get_name().c_str(),
 				tot_accesses.load(), tot_bytes.load());
-		printf("There are %ld cache hits, %ld of them are in the fast process\n",
-				tot_hits.load(), tot_fast_process.load());
+		printf("There are %ld pages accessed, %ld cache hits, %ld of them are in the fast process\n",
+				tot_pg_accesses.load(), tot_hits.load(), tot_fast_process.load());
 	}
 };
 

@@ -306,6 +306,10 @@ public:
 
 	void wakeup_on_req(original_io_request *req, int status);
 
+	size_t get_num_areqs() const {
+		return num_issued_areqs.get();
+	}
+
 	size_t get_num_pg_accesses() const {
 		return num_pg_accesses;
 	}
