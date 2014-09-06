@@ -1031,6 +1031,13 @@ public:
 		return ele;
 	}
 
+	template<class T>
+	T get_off_in_bytes(off_t idx) const {
+		T ele;
+		memcpy(idx, (char *) &ele, sizeof(T));
+		return ele;
+	}
+
 	/**
 	 * This method copies data to a buffer.
 	 * \param rel_off the offset relative to the beginning of the array.
