@@ -741,6 +741,8 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 
+	struct timeval start, end;
+	gettimeofday(&graph_start, NULL);
 	scan_stage = scan_stage_t::INIT;
 	graph->start_all();
 	graph->wait4complete();
@@ -771,9 +773,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	size_t min_edges = 1000;
 	std::shared_ptr<vertex_filter> filter
 		= std::shared_ptr<vertex_filter>(new remove_small_filter(min_edges));
-	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph_start = start;
 	printf("Computing local scan on at least %ld vertices\n", topK);
 	while (known_scans.get_size() < topK) {
 		gettimeofday(&start, NULL);
