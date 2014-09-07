@@ -40,6 +40,39 @@ static void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 	vec.resize(curr);
 }
 
+void active_vertex_set::fetch_reset_active_vertices(size_t max_num,
+		std::vector<local_vid_t> &local_ids)
+{
+	if (!active_v.empty()) {
+		// In this case, we don't care about the scan direction.
+		size_t num = std::min(max_num, active_v.size());
+		local_ids.insert(local_ids.end(), active_v.begin(),
+				active_v.begin() + num);
+		active_v.erase(active_v.begin(), active_v.begin() + num);
+	}
+	else {
+		std::vector<vertex_id_t> ids;
+		while (ids.size() < max_num
+				&& bitmap_fetch_idx.get_num_remaining() > 0) {
+			size_t curr_loc = bitmap_fetch_idx.get_curr_loc();
+			size_t new_loc = bitmap_fetch_idx.move(max_num / NUM_BITS_LONG);
+			// bitmap_fetch_idx points to the locations of longs.
+			active_map.get_reset_set_bits(min(curr_loc, new_loc) * NUM_BITS_LONG,
+					max(curr_loc, new_loc) * NUM_BITS_LONG, ids);
+		}
+		local_ids.resize(ids.size());
+		for (size_t i = 0; i < ids.size(); i++)
+			local_ids[i] = local_vid_t(ids[i]);
+	}
+}
+
+void active_vertex_set::fetch_reset_active_vertices(
+		std::vector<local_vid_t> &local_ids)
+{
+	active_vertex_set::fetch_reset_active_vertices(get_num_active_vertices(),
+			local_ids);
+}
+
 /*
  * This method split a list of vertices into a list of vertically
  * partitioned vertices and a list of unpartitioned vertices.
@@ -80,7 +113,7 @@ void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorte
 	pthread_spin_lock(&lock);
 	vertex_buf.clear();
 	vpart_ps.clear();
-	active_bitmap->clear();
+	active_vertices->clear();
 
 	// The unpartitioned vertices
 	std::vector<vertex_id_t> vertices;
@@ -98,7 +131,6 @@ void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorte
 	buf_fetch_idx = scan_pointer(vertex_buf.size(), true);
 	num_active = vertex_buf.size() + vpart_ps.size() * graph_conf.get_num_vparts();
 
-	this->bitmap_fetch_idx = scan_pointer(0, true);
 	pthread_spin_unlock(&lock);
 	curr_vpart = 0;
 }
@@ -108,38 +140,41 @@ void default_vertex_queue::init(worker_thread &t)
 	pthread_spin_lock(&lock);
 	vertex_buf.clear();
 	vpart_ps.clear();
-	assert(active_bitmap->get_num_set_bits() == 0);
+	assert(active_vertices->get_num_active_vertices() == 0);
 	// This process only happens in a single thread, so we can swap
 	// the two bitmap safely.
-	std::unique_ptr<bitmap> tmp;
-	tmp = std::move(active_bitmap);
-	active_bitmap = std::move(t.next_activated_vertices);
+	std::unique_ptr<active_vertex_set> tmp;
+	tmp = std::move(active_vertices);
+	active_vertices = std::move(t.next_activated_vertices);
 	t.next_activated_vertices = std::move(tmp);
-	num_active = active_bitmap->get_num_set_bits();
+	active_vertices->finalize();
+	num_active = active_vertices->get_num_active_vertices();
 
 	// Get the vertically partitioned vertices that are activated.
 	std::vector<vpart_vertex_pointer> vpart_ps_tmp(
 			index->get_num_vpart_vertices(part_id));
 	if (!vpart_ps_tmp.empty()) {
+		active_vertices->force_bitmap();
 		index->get_vpart_vertex_pointers(part_id, vpart_ps_tmp.data(),
 				vpart_ps_tmp.size());
 		BOOST_FOREACH(vpart_vertex_pointer p, vpart_ps_tmp) {
 			int part_id;
 			off_t off;
 			graph.get_partitioner()->map2loc(p.get_vertex_id(), part_id, off);
-			if (active_bitmap->get(off)) {
+			if (active_vertices->is_active(local_vid_t(off))) {
 				vpart_ps.push_back(p);
-				active_bitmap->reset(off);
+				active_vertices->reset_active_vertex(local_vid_t(off));
 				num_active--;
 			}
 		}
+		printf("there are %ld vparts\n", vpart_ps.size());
 		num_active += vpart_ps.size() * graph_conf.get_num_vparts();
 	}
 
 	bool forward = true;
 	if (graph_conf.get_elevator_enabled())
 		forward = graph.get_curr_level() % 2;
-	bitmap_fetch_idx = scan_pointer(active_bitmap->get_num_longs(), forward);
+	active_vertices->set_dir(forward);
 	buf_fetch_idx = scan_pointer(0, true);
 	pthread_spin_unlock(&lock);
 	curr_vpart = 0;
@@ -149,18 +184,8 @@ void default_vertex_queue::fetch_from_map()
 {
 	assert(buf_fetch_idx.get_num_remaining() == 0);
 	vertex_buf.clear();
-	std::vector<vertex_id_t> ids;
-	while (ids.size() < VERTEX_BUF_SIZE
-			&& bitmap_fetch_idx.get_num_remaining() > 0) {
-		size_t curr_loc = bitmap_fetch_idx.get_curr_loc();
-		size_t new_loc = bitmap_fetch_idx.move(VERTEX_BUF_SIZE / NUM_BITS_LONG);
-		// bitmap_fetch_idx points to the locations of longs.
-		active_bitmap->get_reset_set_bits(min(curr_loc, new_loc) * NUM_BITS_LONG,
-				max(curr_loc, new_loc) * NUM_BITS_LONG, ids);
-	}
-	std::vector<local_vid_t> local_ids(ids.size());
-	for (size_t i = 0; i < ids.size(); i++)
-		local_ids[i] = local_vid_t(ids[i]);
+	std::vector<local_vid_t> local_ids;
+	active_vertices->fetch_reset_active_vertices(VERTEX_BUF_SIZE, local_ids);
 	vertex_buf.resize(local_ids.size());
 	index->get_vertices(part_id, local_ids.data(), local_ids.size(),
 			compute_vertex_pointer::conv(vertex_buf.data()));
@@ -276,18 +301,18 @@ void customized_vertex_queue::init(worker_thread &t)
 {
 	pthread_spin_lock(&lock);
 	sorted_vertices.clear();
-	std::vector<vertex_id_t> local_ids;
-	t.next_activated_vertices->get_reset_set_bits(local_ids);
+	std::vector<local_vid_t> local_ids;
+	t.next_activated_vertices->fetch_reset_active_vertices(local_ids);
 
 	// the bitmap only contains the locations of vertices in the bitmap.
 	// We have to translate them back to vertex ids.
 	std::vector<vertex_id_t> vertices(local_ids.size());
 	for (size_t i = 0; i < local_ids.size(); i++) {
 		vertex_id_t id;
-		graph.get_partitioner()->loc2map(part_id, local_ids[i], id);
+		graph.get_partitioner()->loc2map(part_id, local_ids[i].id, id);
 		vertices[i] = id;
 	}
-	std::vector<vertex_id_t>().swap(local_ids);
+	std::vector<local_vid_t>().swap(local_ids);
 	std::vector<vpart_vertex_pointer> vpart_ps;
 	if (graph_conf.get_num_vparts() > 1)
 		split_vertices(index, part_id, vertices, vpart_ps);
@@ -365,15 +390,15 @@ worker_thread::~worker_thread()
 
 void worker_thread::init()
 {
+	size_t num_local_vertices = graph->get_partitioner()->get_part_size(
+			worker_id, graph->get_num_vertices());
 	// We should create these objects in the context of the worker thread,
 	// so we can allocate memory for the objects on the same node as
 	// the worker thread.
-	next_activated_vertices = std::unique_ptr<bitmap>(
-			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
-					graph->get_num_vertices()), get_node_id()));
-	notify_vertices = std::unique_ptr<bitmap>(
-			new bitmap(graph->get_partitioner()->get_part_size(worker_id,
-					graph->get_num_vertices()), get_node_id()));
+	next_activated_vertices = std::unique_ptr<active_vertex_set>(
+			new active_vertex_set(num_local_vertices, get_node_id()));
+	notify_vertices = std::unique_ptr<bitmap>(new bitmap(num_local_vertices,
+				get_node_id()));
 	if (scheduler)
 		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
 				new customized_vertex_queue(*graph, scheduler, worker_id));
@@ -423,10 +448,10 @@ void worker_thread::init()
 	}
 	// If a user wants to start all vertices.
 	else if (start_all) {
-		next_activated_vertices->set_all();
+		next_activated_vertices->activate_all();
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(*this);
-		assert(next_activated_vertices->get_num_set_bits() == 0);
+		assert(next_activated_vertices->get_num_active_vertices() == 0);
 		if (vinitializer) {
 			std::vector<vertex_id_t> local_ids;
 			graph->get_partitioner()->get_all_vertices_in_part(worker_id,
@@ -509,7 +534,7 @@ size_t worker_thread::enter_next_level()
 	}
 
 	curr_activated_vertices->init(*this);
-	assert(next_activated_vertices->get_num_set_bits() == 0);
+	assert(next_activated_vertices->get_num_active_vertices() == 0);
 	balancer->reset();
 	msg_processor->reset();
 	return curr_activated_vertices->get_num_vertices();

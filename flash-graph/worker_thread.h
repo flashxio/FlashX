@@ -29,7 +29,121 @@
 #include "bitmap.h"
 #include "scan_pointer.h"
 
+static const size_t MAX_ACTIVE_V = 1024;
+
 class worker_thread;
+
+/*
+ * This data structure contains two data structures to represent active
+ * vertices in an iteration. The bitmap is used when there are many active
+ * vertices in an iteration; the vector is used when there are only a few
+ * vertices in an iteration.
+ */
+class active_vertex_set
+{
+	// The fetech index in the active bitmap. It indicates the index of longs.
+	bitmap active_map;
+	scan_pointer bitmap_fetch_idx;
+
+	std::vector<local_vid_t> active_v;
+
+	struct local_vid_less {
+		bool operator()(local_vid_t id1, local_vid_t id2) {
+			return id1.id < id2.id;
+		}
+	};
+
+	struct local_vid_eq {
+		bool operator()(local_vid_t id1, local_vid_t id2) {
+			return id1.id == id2.id;
+		}
+	};
+
+	void set_bitmap(const local_vid_t ids[], int num) {
+		for (int i = 0; i < num; i++)
+			active_map.set(ids[i].id);
+	}
+public:
+	active_vertex_set(size_t num_vertices, int node_id): active_map(
+			num_vertices, node_id), bitmap_fetch_idx(0, true) {
+	}
+
+	void activate_all() {
+		active_map.set_all();
+	}
+
+	void activate_vertex(local_vid_t id) {
+		if (active_map.get_num_set_bits() > 0)
+			active_map.set(id.id);
+		else if (active_v.size() < MAX_ACTIVE_V)
+			active_v.push_back(id);
+		else {
+			active_map.set(id.id);
+			set_bitmap(active_v.data(), active_v.size());
+			active_v.clear();
+		}
+	}
+
+	void activate_vertices(const local_vid_t ids[], int num) {
+		if (active_map.get_num_set_bits() > 0) {
+			set_bitmap(ids, num);
+		}
+		else if (active_v.size() + num < MAX_ACTIVE_V)
+			active_v.insert(active_v.end(), ids, ids + num);
+		else {
+			set_bitmap(ids, num);
+			set_bitmap(active_v.data(), active_v.size());
+			active_v.clear();
+		}
+	}
+
+	vsize_t get_num_active_vertices() const {
+		if (active_v.empty())
+			return active_map.get_num_set_bits();
+		else
+			return active_v.size();
+	}
+
+	void finalize() {
+		if (!active_v.empty()) {
+			std::sort(active_v.begin(), active_v.end(), local_vid_less());
+			std::vector<local_vid_t>::iterator new_end
+				= std::unique(active_v.begin(), active_v.end(), local_vid_eq());
+			size_t num_eles = new_end - active_v.begin();
+			assert(num_eles <= active_v.size());
+			active_v.resize(num_eles);
+		}
+	}
+
+	void force_bitmap() {
+		set_bitmap(active_v.data(), active_v.size());
+		active_v.clear();
+	}
+
+	void reset_active_vertex(local_vid_t id) {
+		assert(active_v.empty());
+		active_map.reset(id.id);
+	}
+
+	bool is_active(local_vid_t id) const {
+		assert(active_v.empty());
+		return active_map.get(id.id);
+	}
+
+	void clear() {
+		active_v.clear();
+		active_map.clear();
+		bitmap_fetch_idx = scan_pointer(0, true);
+	}
+
+	void set_dir(bool forward) {
+		bitmap_fetch_idx = scan_pointer(active_map.get_num_longs(), forward);
+	}
+
+	void fetch_reset_active_vertices(size_t max_num,
+			std::vector<local_vid_t> &local_ids);
+	void fetch_reset_active_vertices(std::vector<local_vid_t> &local_ids);
+};
 
 /**
  * The queue for active vertices.
@@ -66,11 +180,9 @@ class default_vertex_queue: public active_vertex_queue
 	// in this iteration.
 	std::vector<vpart_vertex_pointer> vpart_ps;
 	int curr_vpart;
-	std::unique_ptr<bitmap> active_bitmap;
+	std::unique_ptr<active_vertex_set> active_vertices;
 	// The fetch index in the vertex buffer.
 	scan_pointer buf_fetch_idx;
-	// The fetech index in the active bitmap. It indicates the index of longs.
-	scan_pointer bitmap_fetch_idx;
 	graph_engine &graph;
 	graph_index::ptr index;
 	size_t num_active;
@@ -80,14 +192,14 @@ class default_vertex_queue: public active_vertex_queue
 	void fetch_vparts();
 public:
 	default_vertex_queue(graph_engine &_graph, int part_id,
-			int node_id): buf_fetch_idx(0, true), bitmap_fetch_idx(0,
-				true), graph(_graph) {
+			int node_id): buf_fetch_idx(0, true), graph(_graph) {
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		num_active = 0;
 		this->part_id = part_id;
-		this->active_bitmap = std::unique_ptr<bitmap>(new bitmap(
-					_graph.get_partitioner()->get_part_size(
-					part_id, _graph.get_num_vertices()), node_id));
+		size_t num_local_vertices = _graph.get_partitioner()->get_part_size(
+				part_id, _graph.get_num_vertices());
+		this->active_vertices = std::unique_ptr<active_vertex_set>(
+				new active_vertex_set(num_local_vertices, node_id));
 		this->index = graph.get_graph_index();
 		curr_vpart = 0;
 	}
@@ -209,7 +321,7 @@ class worker_thread: public thread
 	// of an iteration.
 	std::unique_ptr<bitmap> notify_vertices;
 	// This is to collect vertices activated in the next level.
-	std::unique_ptr<bitmap> next_activated_vertices;
+	std::unique_ptr<active_vertex_set> next_activated_vertices;
 	// This contains the vertices activated in the current level.
 	std::unique_ptr<active_vertex_queue> curr_activated_vertices;
 	vertex_scheduler::ptr scheduler;
@@ -300,13 +412,11 @@ public:
 	 * Activate the vertex in its own partition for the next iteration.
 	 */
 	void activate_vertex(local_vid_t id) {
-		next_activated_vertices->set(id.id);
+		next_activated_vertices->activate_vertex(id);
 	}
 
 	void activate_vertices(const local_vid_t ids[], int num) {
-		bitmap *p = next_activated_vertices.get();
-		for (int i = 0; i < num; i++)
-			p->set(ids[i].id);
+		next_activated_vertices->activate_vertices(ids, num);
 	}
 
 	void request_notify_iter_end(local_vid_t id) {
