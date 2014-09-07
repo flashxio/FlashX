@@ -36,7 +36,7 @@ namespace {
 
 float DAMPING_FACTOR = 0.85;
 float TOLERANCE = 1.0E-2; 
-int num_iters = INT_MAX;
+int max_num_iters = INT_MAX;
 
 /*
  * pgrank_vertex needs to be initialized first.
@@ -94,8 +94,8 @@ void pgrank_vertex::run(vertex_program &prog)
 		request_vertex_headers(&id, 1);
 	}
 	else if (pr_stage == pr_stage_t::RUN) {
-		// We perform pagerank for at most `num_iters' iterations.
-		if (prog.get_graph().get_curr_level() >= num_iters)
+		// We perform pagerank for at most `max_num_iters' iterations.
+		if (prog.get_graph().get_curr_level() >= max_num_iters)
 			return;
 		request_vertices(&id, 1); // put my edgelist in page cache
 	}
@@ -162,8 +162,8 @@ public:
 	}
 
 	void run(vertex_program &prog) { 
-		// We perform pagerank for at most `num_iters' iterations.
-		if (prog.get_graph().get_curr_level() >= num_iters)
+		// We perform pagerank for at most `max_num_iters' iterations.
+		if (prog.get_graph().get_curr_level() >= max_num_iters)
 			return;
 		directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
 		request_partial_vertices(&req, 1);
@@ -210,7 +210,8 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
-	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
+	max_num_iters = num_iters;
+	printf("Pagerank (at maximal %d iterations) starting\n", max_num_iters);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -254,6 +255,7 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
+	max_num_iters = num_iters;
 	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
