@@ -360,6 +360,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	if (!directed)
 		traverse_edge = edge_type::BOTH_EDGES;
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<diameter_vertex>::create(
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
@@ -387,8 +389,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 			printf("v%d\n", v);
 		}
 
-		struct timeval start, end;
-		gettimeofday(&start, NULL);
 		std::vector<vertex_dist_t> max_dist_vertices;
 		if (start_vertices.size() == 1)
 			max_dist_vertices = estimate_diameter_1sweep<simple_diameter_vertex>(
@@ -396,7 +396,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 		else
 			max_dist_vertices = estimate_diameter_1sweep<diameter_vertex>(
 					graph, start_vertices);
-		gettimeofday(&end, NULL);
 
 		if (max_dist_vertices.empty()) {
 			size_t num_bfs = start_vertices.size();
@@ -420,8 +419,7 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 			start_vertices.insert(start_vertices.begin(), start_set.begin(),
 					start_set.end());
 			short max_dist = max_dist_vertices.front().second;
-			printf("It takes %f seconds. The current max dist: %d\n",
-					time_diff(start, end), max_dist);
+			printf("The current max dist: %d\n", max_dist);
 			global_max = max(global_max, max_dist);
 			// We should switch the direction if we search for the longest
 			// directed path
@@ -431,6 +429,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 				traverse_edge = edge_type::IN_EDGE;
 		}
 	}
+	gettimeofday(&end, NULL);
+	printf("It takes %f seconds in total\n", time_diff(start, end));
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

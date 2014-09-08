@@ -516,6 +516,8 @@ void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex,
 		part_directed_triangle_vertex>::create(fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
@@ -528,15 +530,9 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
-
 	triangle_stage = triangle_stage_t::INIT;
 	graph->start_all();
 	graph->wait4complete();
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to initialize vertices\n",
-			time_diff(start, end));
 
 	triangle_stage = triangle_stage_t::RUN;
 	start = end;

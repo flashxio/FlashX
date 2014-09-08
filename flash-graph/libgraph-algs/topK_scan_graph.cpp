@@ -729,6 +729,8 @@ void vertex_size_scheduler::schedule(std::vector<compute_vertex_pointer> &vertic
 FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		FG_graph::ptr fg, size_t topK)
 {
+	struct timeval end;
+	gettimeofday(&graph_start, NULL);
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex,
 		part_topK_scan_vertex>::create(fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
@@ -741,8 +743,6 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 
-	struct timeval start, end;
-	gettimeofday(&graph_start, NULL);
 	scan_stage = scan_stage_t::INIT;
 	graph->start_all();
 	graph->wait4complete();
@@ -773,15 +773,11 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	size_t min_edges = 1000;
 	std::shared_ptr<vertex_filter> filter
 		= std::shared_ptr<vertex_filter>(new remove_small_filter(min_edges));
-	gettimeofday(&start, NULL);
 	printf("Computing local scan on at least %ld vertices\n", topK);
 	while (known_scans.get_size() < topK) {
-		gettimeofday(&start, NULL);
 		graph->start(filter);
 		graph->wait4complete();
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds, there are %ld computed vertices\n",
-				time_diff(start, end), known_scans.get_size());
+		printf("There are %ld computed vertices\n", known_scans.get_size());
 		printf("global max scan: %ld\n", max_scan.get());
 		max_scan = global_max(0);
 	}
@@ -814,13 +810,10 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		// and see if we can find a new vertex that has larger local scan.
 		max_scan = global_max(prev_topK_scan);
 
-		gettimeofday(&start, NULL);
 		graph->start(std::shared_ptr<vertex_filter>(
 					new remove_small_scan_filter(prev_topK_scan)));
 		graph->wait4complete();
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds, there are %ld computed vertices\n",
-				time_diff(start, end), known_scans.get_size());
+		printf("There are %ld computed vertices\n", known_scans.get_size());
 		// If the previous topK is different from the current one,
 		// it means we have found new local scans that are larger
 		// than the previous topK. We should use the new topK and
@@ -838,6 +831,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
+	gettimeofday(&end, NULL);
 	printf("It takes %f seconds for top %ld\n", time_diff(graph_start, end),
 			topK);
 

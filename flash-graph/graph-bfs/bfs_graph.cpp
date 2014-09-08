@@ -173,6 +173,8 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, int_handler);
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<bfs_vertex>::create(index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
 	printf("BFS starts\n");
@@ -182,8 +184,6 @@ int main(int argc, char *argv[])
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
 
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
 	graph->start(&start_vertex, 1);
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
