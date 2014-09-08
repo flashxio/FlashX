@@ -337,7 +337,7 @@ class graph_engine
 	int max_processing_vertices;
 
 	// The time when the current iteration starts.
-	struct timeval start_time;
+	struct timeval start_time, iter_start;
 
 	void init_threads(vertex_program_creater::ptr creater);
 protected:

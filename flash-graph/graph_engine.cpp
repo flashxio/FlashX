@@ -525,6 +525,9 @@ void init_vpart_thread::run()
 graph_engine::graph_engine(const std::string &graph_file,
 		graph_index::ptr index, const config_map &configs)
 {
+	struct timeval init_start, init_end;
+	gettimeofday(&init_start, NULL);
+
 	init_flash_graph(configs);
 	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
 	int num_threads = graph_conf.get_num_threads();
@@ -586,6 +589,10 @@ graph_engine::graph_engine(const std::string &graph_file,
 			delete threads[i];
 		}
 	}
+
+	gettimeofday(&init_end, NULL);
+	printf("It takes %f seconds to initialize the graph engine\n",
+			time_diff(init_start, init_end));
 }
 
 graph_engine::~graph_engine()
@@ -649,6 +656,7 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 void graph_engine::start(const vertex_id_t ids[], int num,
 		vertex_initializer::ptr init, vertex_program_creater::ptr creater)
 {
+	gettimeofday(&start_time, NULL);
 	init_threads(std::move(creater));
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
@@ -661,30 +669,32 @@ void graph_engine::start(const vertex_id_t ids[], int num,
 		worker_threads[i]->start_vertices(start_vertices[i], init);
 		worker_threads[i]->start();
 	}
-	gettimeofday(&start_time, NULL);
+	iter_start = start_time;
 }
 
 void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 		vertex_program_creater::ptr creater)
 {
+	gettimeofday(&start_time, NULL);
 	init_threads(std::move(creater));
 	// Let's assume all vertices will be activated first.
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_vertices(filter);
 		t->start();
 	}
-	gettimeofday(&start_time, NULL);
+	iter_start = start_time;
 }
 
 void graph_engine::start_all(vertex_initializer::ptr init,
 		vertex_program_creater::ptr creater)
 {
+	gettimeofday(&start_time, NULL);
 	init_threads(std::move(creater));
 	BOOST_FOREACH(worker_thread *t, worker_threads) {
 		t->start_all_vertices(init);
 		t->start();
 	}
-	gettimeofday(&start_time, NULL);
+	iter_start = start_time;
 }
 
 bool graph_engine::progress_first_level()
@@ -739,9 +749,9 @@ bool graph_engine::progress_next_level()
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
 		printf("Iter %d takes %.2f seconds, and %ld vertices are in iter %d\n",
-				level.get() - 1, time_diff(start_time, curr),
+				level.get() - 1, time_diff(iter_start, curr),
 				tot_num_activates.get(), level.get());
-		start_time = curr;
+		iter_start = curr;
 		assert(num_remaining_vertices_in_level.get() == 0);
 		num_remaining_vertices_in_level = atomic_number<size_t>(
 				tot_num_activates.get());
@@ -769,6 +779,10 @@ void graph_engine::wait4complete()
 		delete worker_threads[i];
 		worker_threads[i] = NULL;
 	}
+	struct timeval curr;
+	gettimeofday(&curr, NULL);
+	printf("The graph engine takes %f seconds to complete\n",
+			time_diff(start_time, curr));
 }
 
 void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
