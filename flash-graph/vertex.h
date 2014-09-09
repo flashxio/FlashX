@@ -463,6 +463,16 @@ public:
 	static size_t serialize(const in_mem_vertex &v, char *buf,
 			size_t size, edge_type type);
 
+	static vsize_t vsize2num_edges(size_t vertex_size, size_t edge_data_size) {
+		return (vertex_size - get_header_size()) / (sizeof(vertex_id_t)
+				+ edge_data_size);
+	}
+
+	static size_t num_edges2vsize(vsize_t num_edges, size_t edge_data_size) {
+		ext_mem_undirected_vertex v(0, num_edges, edge_data_size);
+		return v.get_size();
+	}
+
 	ext_mem_undirected_vertex() {
 		this->id = 0;
 		this->num_edges = 0;

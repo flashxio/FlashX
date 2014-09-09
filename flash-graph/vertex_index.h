@@ -83,6 +83,10 @@ public:
 		return h.data.header.num_vertices;
 	}
 
+	size_t get_num_entries() const {
+		return h.data.num_entries;
+	}
+
 	vertex_id_t get_max_id() const {
 		return get_num_vertices() - 1;
 	}
@@ -319,6 +323,144 @@ public:
 		off_t off = get_vertex(id).get_out_off();
 		return ext_mem_vertex_info(id, off, next_off - off);
 	}
+};
+
+class compressed_directed_vertex_entry
+{
+	typedef std::pair<unsigned char, unsigned char> edge_pair_t;
+public:
+	static const size_t ENTRY_SIZE = 32;
+	static const size_t LARGE_VERTEX_SIZE
+		= std::numeric_limits<edge_pair_t::first_type>::max();
+
+private:
+	directed_vertex_entry start_offs;
+	edge_pair_t edges[ENTRY_SIZE];
+public:
+	compressed_directed_vertex_entry() {
+		memset(this, 0, sizeof(*this));
+	}
+
+	compressed_directed_vertex_entry(directed_vertex_entry offs[],
+			size_t edge_data_size, size_t num);
+
+	vsize_t get_num_in_edges(int idx) const {
+		return edges[idx].first;
+	}
+
+	vsize_t get_num_out_edges(int idx) const {
+		return edges[idx].second;
+	}
+
+	bool is_large_in_vertex(int idx) const {
+		return edges[idx].first == LARGE_VERTEX_SIZE;
+	}
+
+	bool is_large_out_vertex(int idx) const {
+		return edges[idx].second == LARGE_VERTEX_SIZE;
+	}
+
+	off_t get_start_in_off() const {
+		return start_offs.get_in_off();
+	}
+
+	off_t get_start_out_off() const {
+		return start_offs.get_out_off();
+	}
+
+	const directed_vertex_entry &get_start_offs() const {
+		return start_offs;
+	}
+};
+
+class compressed_directed_vertex_index
+{
+	static const size_t ENTRY_SIZE = compressed_directed_vertex_entry::ENTRY_SIZE;
+	static const size_t ENTRY_MASK = ENTRY_SIZE - 1;
+
+	class large_vertex_entry {
+		vertex_id_t id;
+		vsize_t num_edges;
+	public:
+		large_vertex_entry(vertex_id_t id, vsize_t num_edges) {
+			this->id = id;
+			this->num_edges = num_edges;
+		}
+
+		vertex_id_t get_id() const {
+			return id;
+		}
+
+		vsize_t get_num_edges() const {
+			return num_edges;
+		}
+
+		bool operator<(const large_vertex_entry &e) const {
+			return this->id < e.id;
+		}
+	};
+
+	size_t num_vertices;
+	size_t edge_data_size;
+	std::vector<large_vertex_entry> large_in_vertices;
+	std::vector<large_vertex_entry> large_out_vertices;
+	std::vector<compressed_directed_vertex_entry> entries;
+
+	compressed_directed_vertex_index(directed_vertex_index &index);
+public:
+	typedef std::shared_ptr<compressed_directed_vertex_index> ptr;
+
+	static ptr create(directed_vertex_index &index) {
+		return ptr(new compressed_directed_vertex_index(index));
+	}
+
+	size_t get_num_vertices() const {
+		return num_vertices;
+	}
+
+	vsize_t get_num_in_edges(vertex_id_t id) const {
+		size_t entry_idx = id / ENTRY_SIZE;
+		vsize_t num_edges = entries[entry_idx].get_num_in_edges(id % ENTRY_SIZE);
+		if (num_edges >= compressed_directed_vertex_entry::LARGE_VERTEX_SIZE) {
+			large_vertex_entry v(id, 0);
+			std::vector<large_vertex_entry>::const_iterator it
+				= std::lower_bound(large_in_vertices.begin(),
+						large_in_vertices.end(), v);
+			assert(it != large_in_vertices.end());
+			num_edges = it->get_num_edges();
+		}
+		return num_edges;
+	}
+
+	vsize_t get_num_out_edges(vertex_id_t id) const {
+		size_t entry_idx = id / ENTRY_SIZE;
+		vsize_t num_edges = entries[entry_idx].get_num_out_edges(id % ENTRY_SIZE);
+		if (num_edges >= compressed_directed_vertex_entry::LARGE_VERTEX_SIZE) {
+			large_vertex_entry v(id, 0);
+			std::vector<large_vertex_entry>::const_iterator it
+				= std::lower_bound(large_out_vertices.begin(),
+						large_out_vertices.end(), v);
+			assert(it != large_out_vertices.end());
+			num_edges = it->get_num_edges();
+		}
+		return num_edges;
+	}
+
+	size_t get_in_size(vertex_id_t id) const {
+		vsize_t num_edges = get_num_in_edges(id);
+		return ext_mem_undirected_vertex::num_edges2vsize(num_edges,
+				edge_data_size);
+	}
+
+	size_t get_out_size(vertex_id_t id) const {
+		vsize_t num_edges = get_num_out_edges(id);
+		return ext_mem_undirected_vertex::num_edges2vsize(num_edges,
+				edge_data_size);
+	}
+
+	directed_vertex_entry get_vertex(vertex_id_t id) const;
+
+	void verify_against(directed_vertex_index &index);
 };
 
 /**

@@ -27,6 +27,9 @@
 class directed_vertex_request;
 class index_comp_allocator;
 
+// Represent the vertices in [first, last).
+typedef std::pair<vertex_id_t, vertex_id_t> id_range_t;
+
 /*
  * This iterates on the entries of the vertex index.
  * This can iterate on both undirected and directed vertex index.
@@ -45,7 +48,7 @@ public:
 
 	virtual void move_next() = 0;
 	virtual bool move_to(int idx) = 0;
-	virtual int get_num_entries() const = 0;
+	virtual int get_num_vertices() const = 0;
 
 	off_t get_curr_off() const {
 		return ((vertex_offset *) curr_buf)->get_off();
@@ -106,8 +109,8 @@ public:
 		return _has_next;
 	}
 
-	virtual int get_num_entries() const {
-		return num_entries;
+	virtual int get_num_vertices() const {
+		return num_entries - 1;
 	}
 };
 
@@ -149,13 +152,64 @@ public:
 		return _has_next;
 	}
 
-	virtual int get_num_entries() const {
-		return end - start;
+	virtual int get_num_vertices() const {
+		return end - start - 1;
 	}
 };
 
-// Represent the vertices in [first, last).
-typedef std::pair<vertex_id_t, vertex_id_t> id_range_t;
+class compressed_directed_index_iterator: public index_iterator
+{
+	size_t begin;
+	size_t idx;
+	size_t end;
+	compressed_directed_vertex_index &index;
+public:
+	compressed_directed_index_iterator(compressed_directed_vertex_index &_index,
+			const id_range_t &range): index(_index) {
+		directed_vertex_entry first_entry = index.get_vertex(range.first);
+		new (curr_buf) directed_vertex_entry(first_entry);
+		size_t in_size = index.get_in_size(range.first);
+		size_t out_size = index.get_out_size(range.first);
+		new (next_buf) directed_vertex_entry(first_entry.get_in_off() + in_size,
+				first_entry.get_out_off() + out_size);
+		begin = idx = range.first;
+		end = range.second;
+		_has_next = true;
+	}
+
+	virtual void move_next() {
+		directed_vertex_entry e = *(directed_vertex_entry *) next_buf;
+		new (curr_buf) directed_vertex_entry(e);
+		idx++;
+		_has_next = (idx < end);
+		if (_has_next) {
+			size_t in_size = index.get_in_size(idx);
+			size_t out_size = index.get_out_size(idx);
+			new (next_buf) directed_vertex_entry(e.get_in_off() + in_size,
+					e.get_out_off() + out_size);
+		}
+	}
+
+	virtual bool move_to(int rel_idx) {
+		this->idx = begin + rel_idx;
+		if ((size_t) idx < end) {
+			directed_vertex_entry e = index.get_vertex(idx);
+			new (curr_buf) directed_vertex_entry(e);
+			size_t in_size = index.get_in_size(idx);
+			size_t out_size = index.get_out_size(idx);
+			new (next_buf) directed_vertex_entry(e.get_in_off() + in_size,
+					e.get_out_off() + out_size);
+			_has_next = true;
+		}
+		else
+			_has_next = false;
+		return _has_next;
+	}
+
+	virtual int get_num_vertices() const {
+		return end - idx;
+	}
+};
 
 /*
  * This interface defines the method invoked in vertex_index_reader.
@@ -239,7 +293,8 @@ class vertex_index_reader
 public:
 	typedef std::shared_ptr<vertex_index_reader> ptr;
 
-	static ptr create(vertex_index::ptr index, bool directed);
+	static ptr create(compressed_directed_vertex_index::ptr index,
+			bool directed);
 	static ptr create(io_interface::ptr io, bool directed);
 
 	virtual ~vertex_index_reader() {
@@ -970,7 +1025,8 @@ class simple_index_reader
 
 	void init(worker_thread *t, bool directed);
 
-	simple_index_reader(vertex_index::ptr index, bool directed, worker_thread *t) {
+	simple_index_reader(compressed_directed_vertex_index::ptr index,
+			bool directed, worker_thread *t) {
 		init(t, directed);
 		index_reader = vertex_index_reader::create(index, directed);
 	}
@@ -1051,7 +1107,8 @@ public:
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 
-	static ptr create(vertex_index::ptr index, bool directed, worker_thread *t) {
+	static ptr create(compressed_directed_vertex_index::ptr index,
+			bool directed, worker_thread *t) {
 		return ptr(new simple_index_reader(index, directed, t));
 	}
 

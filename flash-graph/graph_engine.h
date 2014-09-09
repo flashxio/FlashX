@@ -312,7 +312,7 @@ class graph_engine
 	off_t out_part_off;
 
 	graph_index::ptr vertices;
-	vertex_index::ptr vindex;
+	compressed_directed_vertex_index::ptr vindex;
 	std::shared_ptr<in_mem_graph> graph_data;
 	vertex_scheduler::ptr scheduler;
 
@@ -604,7 +604,7 @@ public:
 	/*
 	 * \internal Get the in-memory vertex index.
 	 */
-	vertex_index::ptr get_in_mem_index() const {
+	compressed_directed_vertex_index::ptr get_in_mem_index() const {
 		assert(vindex);
 		return vindex;
 	}
@@ -626,8 +626,8 @@ public:
 	}
 
 	vsize_t cal_num_edges(vsize_t vertex_size) const {
-		return (vertex_size - ext_mem_undirected_vertex::get_header_size(
-					)) / (sizeof(vertex_id_t) + header.get_edge_data_size());
+		return ext_mem_undirected_vertex::vsize2num_edges(vertex_size,
+				header.get_edge_data_size());
 	}
 };
 

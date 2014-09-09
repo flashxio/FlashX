@@ -100,26 +100,23 @@ public:
 	}
 };
 
-template<class ValueType>
-class in_mem_vindex_reader_impl: public vertex_index_reader
+class in_mem_directed_vindex_reader: public vertex_index_reader
 {
-	typename vertex_index_temp<ValueType>::ptr index;
+	compressed_directed_vertex_index::ptr index;
 
 protected:
-	in_mem_vindex_reader_impl(vertex_index::ptr index) {
-		this->index = vertex_index_temp<ValueType>::cast(index);
+	in_mem_directed_vindex_reader(compressed_directed_vertex_index::ptr index) {
+		this->index = index;
 	}
 public:
-	static ptr create(vertex_index::ptr index) {
-		return ptr(new in_mem_vindex_reader_impl<ValueType>(index));
+	static ptr create(compressed_directed_vertex_index::ptr index) {
+		return ptr(new in_mem_directed_vindex_reader(index));
 	}
 
 
 	virtual void request_index(index_compute *compute) {
 		id_range_t range = compute->get_range();
-		array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
-				// We need an additional entry.
-				index->get_data() + range.second + 1);
+		compressed_directed_index_iterator it(*index, range);
 		bool ret = compute->run(compute->get_first_vertex(), it);
 		assert(ret);
 		compute->get_allocator().free(compute);
@@ -133,13 +130,12 @@ public:
 	}
 };
 
-vertex_index_reader::ptr vertex_index_reader::create(vertex_index::ptr index,
+vertex_index_reader::ptr vertex_index_reader::create(
+		compressed_directed_vertex_index::ptr index,
 		bool directed)
 {
-	if (directed)
-		return in_mem_vindex_reader_impl<directed_vertex_entry>::create(index);
-	else
-		return in_mem_vindex_reader_impl<vertex_offset>::create(index);
+	assert(directed);
+	return in_mem_directed_vindex_reader::create(index);
 }
 
 vertex_index_reader::ptr vertex_index_reader::create(io_interface::ptr io,
@@ -402,7 +398,7 @@ void simple_index_reader::flush_computes()
 bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 {
 	assert(start_vid == get_first_vertex());
-	assert(get_num_vertices() == it.get_num_entries() - 1);
+	assert(get_num_vertices() == it.get_num_vertices());
 
 	merged_vertex_compute *compute
 		= (merged_vertex_compute *) thread->get_merged_compute_allocator().alloc();
@@ -655,7 +651,7 @@ bool sparse_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 {
 	assert(start_vid == get_first_vertex());
 	assert(get_last_vertex() - get_first_vertex() + 1
-			== it.get_num_entries() - 1);
+			== it.get_num_vertices());
 	// If #ragnes is 1, we'll do it in the dense_self_vertex_compute.
 	assert(num_ranges > 1);
 

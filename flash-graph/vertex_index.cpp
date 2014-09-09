@@ -19,6 +19,7 @@
 
 #include "io_interface.h"
 
+#include "vertex_compute.h"
 #include "vertex_index.h"
 
 vertex_index::ptr vertex_index::load(const std::string &index_file)
@@ -114,4 +115,101 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	else
 		default_vertex_index::cast(index_ptr)->verify();
 	return index_ptr;
+}
+
+const size_t compressed_directed_vertex_entry::ENTRY_SIZE;
+compressed_directed_vertex_entry::compressed_directed_vertex_entry(
+		directed_vertex_entry offs[], size_t edge_data_size, size_t num)
+{
+	start_offs = offs[0];
+	size_t num_vertices = std::min(num - 1, ENTRY_SIZE);
+	for (size_t i = 0; i < num_vertices; i++) {
+		vsize_t num_in_edges = ext_mem_undirected_vertex::vsize2num_edges(
+					offs[i + 1].get_in_off() - offs[i].get_in_off(),
+					edge_data_size);
+		if (num_in_edges < LARGE_VERTEX_SIZE)
+			edges[i].first = num_in_edges;
+		else
+			edges[i].first = LARGE_VERTEX_SIZE;
+
+		vsize_t num_out_edges = ext_mem_undirected_vertex::vsize2num_edges(
+				offs[i + 1].get_out_off() - offs[i].get_out_off(),
+				edge_data_size);
+		if (num_out_edges < LARGE_VERTEX_SIZE)
+			edges[i].second = num_out_edges;
+		else
+			edges[i].second = LARGE_VERTEX_SIZE;
+	}
+	for (size_t i = num_vertices; i < ENTRY_SIZE; i++) {
+		edges[i].first = edges[i].second = 0;
+	}
+}
+
+compressed_directed_vertex_index::compressed_directed_vertex_index(
+		directed_vertex_index &index)
+{
+	edge_data_size = index.get_graph_header().get_edge_data_size();
+	size_t num_entries = index.get_num_entries();
+	num_vertices = num_entries - 1;
+	entries.resize(ROUNDUP(num_vertices, ENTRY_SIZE) / ENTRY_SIZE);
+	for (size_t off = 0; off < num_vertices;
+			off += ENTRY_SIZE) {
+		off_t entry_idx = off / ENTRY_SIZE;
+		entries[entry_idx] = compressed_directed_vertex_entry(
+					index.get_data() + off, edge_data_size,
+					std::min(ENTRY_SIZE + 1, num_entries - off));
+
+		vertex_id_t id = off;
+		for (size_t i = 0; i < ENTRY_SIZE; i++) {
+			if (entries[entry_idx].is_large_in_vertex(i)) {
+				ext_mem_vertex_info info = index.get_vertex_info_in(id + i);
+				large_in_vertices.push_back(large_vertex_entry(id + i,
+							ext_mem_undirected_vertex::vsize2num_edges(
+								info.get_size(), edge_data_size)));
+			}
+			if (entries[entry_idx].is_large_out_vertex(i)) {
+				ext_mem_vertex_info info = index.get_vertex_info_out(id + i);
+				large_out_vertices.push_back(large_vertex_entry(id + i,
+							ext_mem_undirected_vertex::vsize2num_edges(
+								info.get_size(), edge_data_size)));
+			}
+		}
+	}
+	printf("There are %ld large in-vertices and %ld large out-vertices\n",
+			large_in_vertices.size(), large_out_vertices.size());
+	verify_against(index);
+}
+
+const size_t compressed_directed_vertex_index::ENTRY_SIZE;
+directed_vertex_entry compressed_directed_vertex_index::get_vertex(
+		vertex_id_t id) const
+{
+	directed_vertex_entry e = entries[id / ENTRY_SIZE].get_start_offs();
+	int off = id % ENTRY_SIZE;
+	off_t in_off = e.get_in_off();
+	off_t out_off = e.get_out_off();
+	vertex_id_t start_id = id & (~ENTRY_MASK);
+	for (int i = 0; i < off; i++) {
+		in_off += get_in_size(start_id + i);
+		out_off += get_out_size(start_id + i);
+	}
+	return directed_vertex_entry(in_off, out_off);
+}
+
+#include "vertex_index_reader.h"
+
+void compressed_directed_vertex_index::verify_against(
+		directed_vertex_index &index)
+{
+	id_range_t range(10, std::min(100UL, index.get_num_vertices()));
+	compressed_directed_index_iterator it(*this, range);
+	vertex_id_t id = range.first;
+	while (it.has_next()) {
+		ext_mem_vertex_info in_info = index.get_vertex_info_in(id);
+		ext_mem_vertex_info out_info = index.get_vertex_info_out(id);
+		assert(in_info.get_off() == it.get_curr_off());
+		assert(out_info.get_off() == it.get_curr_out_off());
+		id++;
+		it.move_next();
+	}
 }
