@@ -30,7 +30,7 @@ my %host_ids;
 
 sub get_main_devname {
 	my $dev = $_;
-	if ($dev =~ /(sd[b-z])[0-9]+/) {
+	if ($dev =~ /(sd[a-z]+)[0-9]+/) {
 		return $1;
 	}
 	else {
@@ -42,7 +42,11 @@ foreach (@dev_names) {
 	my $dev_name = $_;
 	my $main_name = get_main_devname($_);
 	my $item = `ls -l /sys/block/ | grep $main_name`;
-	if ($item =~ /host([0-9]+).*sd([b-z])$/) {
+	if ($item =~ /host([0-9]+).*sd([a-z]+)$/) {
+		# sda is the root disk.
+		if ($2 eq "a") {
+			next;
+		}
 		my $host = $1;
 		my $dev = $dev_name;
 
