@@ -258,3 +258,19 @@ void vertex_program::request_notify_iter_end(const compute_vertex &v)
 	local_vid_t local_id(off);
 	t->request_notify_iter_end(local_id);
 }
+
+vertex_id_t vertex_program::get_vertex_id(const compute_vertex &v) const
+{
+	// The current thread is usually the owner thread of the compute vertex.
+	// It is possible that the current thread is the execution thread but
+	// not the owner thread. It happens when the vertex is moved to another
+	// thread due to load balancing.
+	vertex_id_t id = graph->get_graph_index().get_vertex_id(t->get_worker_id(), v);
+	if (id == INVALID_VERTEX_ID) {
+		int part_id = t->get_stolen_vertex_part(v);
+		assert(part_id >= 0);
+		id = graph->get_graph_index().get_vertex_id(part_id, v);
+		assert(id != INVALID_VERTEX_ID);
+	}
+	return id;
+}

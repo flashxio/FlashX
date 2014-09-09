@@ -66,6 +66,11 @@ int load_balancer::steal_activated_vertices(compute_vertex_pointer vertex_buf[],
 		// If we have tried to steal vertices from all threads.
 	} while (num == 0 && num_tries < graph.get_num_threads());
 
+	// Record the owner thread of the stolen vertices.
+	for (int i = 0; i < num; i++)
+		stolen_vertex_map.insert(vertex_map_t::value_type(
+					vertex_buf[i].get(), steal_thread_id));
+
 	return num;
 }
 
@@ -91,17 +96,30 @@ void load_balancer::process_completed_stolen_vertices()
 	num_completed_stolen_vertices = 0;
 }
 
-void load_balancer::return_vertices(vertex_id_t ids[], int num)
+void load_balancer::return_vertices(const compute_vertex_pointer vs[], int num)
 {
 	for (int i = 0; i < num; i++) {
-		int part_id = graph.get_partitioner()->map(ids[i]);
-		if (completed_stolen_vertices[part_id].is_full()) {
-			completed_stolen_vertices[part_id].expand_queue(
-					completed_stolen_vertices[part_id].get_size() * 2);
+		compute_vertex_pointer v = vs[i];
+		vertex_map_t::iterator it = stolen_vertex_map.find(v.get());
+		assert(it != stolen_vertex_map.end());
+		int part_id = it->second;
+		// We don't need to return verticalled partitioned vertices to their
+		// owner because messages are processed in the main vertices and the
+		// main vertices cannot be stolen by other threads.
+		if (!v.is_part()) {
+			if (completed_stolen_vertices[part_id].is_full()) {
+				completed_stolen_vertices[part_id].expand_queue(
+						completed_stolen_vertices[part_id].get_size() * 2);
+			}
+			// TODO we can return compute_vertex_pointer and so we don't
+			// map it back to local_vid_t.
+			vertex_id_t id = graph.get_graph_index().get_vertex_id(part_id,
+					*v.get());
+			completed_stolen_vertices[part_id].push_back(id);
+			num_completed_stolen_vertices++;
 		}
-		completed_stolen_vertices[part_id].push_back(ids[i]);
+		stolen_vertex_map.erase(it);
 	}
-	num_completed_stolen_vertices += num;
 }
 
 void load_balancer::reset()
@@ -109,4 +127,13 @@ void load_balancer::reset()
 	for (int i = 0; i < graph.get_num_threads(); i++)
 		assert(completed_stolen_vertices[i].is_empty());
 	assert(num_completed_stolen_vertices == 0);
+}
+
+int load_balancer::get_stolen_vertex_part(const compute_vertex &v) const
+{
+	vertex_map_t::const_iterator it = stolen_vertex_map.find(&v);
+	if (it != stolen_vertex_map.end())
+		return it->second;
+	else
+		return -1;
 }

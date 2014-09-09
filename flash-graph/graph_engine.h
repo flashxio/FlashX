@@ -79,11 +79,11 @@ public:
 	 */
 	void request_vertex_headers(vertex_id_t ids[], size_t num);
 
-    /**
-     * \brief Get its own vertex ID.
-     *
-     * \return The current vertex's ID in the graph.
-    */
+	/**
+	 * \brief Get its own vertex ID.
+	 *
+	 * \return The current vertex's ID in the graph.
+	 */
 	vertex_id_t get_id() const {
 		return id;
 	}
@@ -617,8 +617,8 @@ public:
 		return max_processing_vertices;
 	}
 
-	graph_index::ptr get_graph_index() const {
-		return vertices;
+	const graph_index &get_graph_index() const {
+		return *vertices;
 	}
 
 	size_t get_in_part_size() const {

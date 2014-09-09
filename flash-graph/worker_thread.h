@@ -184,7 +184,7 @@ class default_vertex_queue: public active_vertex_queue
 	// The fetch index in the vertex buffer.
 	scan_pointer buf_fetch_idx;
 	graph_engine &graph;
-	graph_index::ptr index;
+	const graph_index &index;
 	size_t num_active;
 	int part_id;
 
@@ -192,7 +192,8 @@ class default_vertex_queue: public active_vertex_queue
 	void fetch_vparts();
 public:
 	default_vertex_queue(graph_engine &_graph, int part_id,
-			int node_id): buf_fetch_idx(0, true), graph(_graph) {
+			int node_id): buf_fetch_idx(0, true), graph(_graph), index(
+				_graph.get_graph_index()) {
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		num_active = 0;
 		this->part_id = part_id;
@@ -200,7 +201,6 @@ public:
 				part_id, _graph.get_num_vertices());
 		this->active_vertices = std::unique_ptr<active_vertex_set>(
 				new active_vertex_set(num_local_vertices, node_id));
-		this->index = graph.get_graph_index();
 		curr_vpart = 0;
 	}
 
@@ -224,7 +224,7 @@ class customized_vertex_queue: public active_vertex_queue
 	scan_pointer fetch_idx;
 	vertex_scheduler::ptr scheduler;
 	graph_engine &graph;
-	graph_index &index;
+	const graph_index &index;
 	int part_id;
 
 	void get_compute_vertex_pointers(const std::vector<vertex_id_t> &vertices,
@@ -232,7 +232,7 @@ class customized_vertex_queue: public active_vertex_queue
 public:
 	customized_vertex_queue(graph_engine &_graph, vertex_scheduler::ptr scheduler,
 			int part_id): fetch_idx(0, true), graph(_graph), index(
-				*_graph.get_graph_index()) {
+				_graph.get_graph_index()) {
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->scheduler = scheduler;
 		this->part_id = part_id;
@@ -282,6 +282,8 @@ class worker_thread: public thread
 	file_io_factory::shared_ptr index_factory;
 	io_interface::ptr io;
 	graph_engine *graph;
+	const graph_index &index;
+
 	std::unique_ptr<compute_allocator> alloc;
 	std::unique_ptr<compute_allocator> merged_alloc;
 	std::unique_ptr<compute_allocator> sparse_alloc;
@@ -466,6 +468,8 @@ public:
 	compute_allocator &get_sparse_compute_allocator() {
 		return *sparse_alloc;
 	}
+
+	int get_stolen_vertex_part(const compute_vertex &v) const;
 
 	friend class load_balancer;
 	friend class default_vertex_queue;

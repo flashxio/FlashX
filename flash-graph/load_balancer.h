@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <unordered_map>
+
 #include "container.h"
 #include "vertex.h"
 
@@ -35,8 +37,14 @@ class compute_vertex_pointer;
  */
 class load_balancer
 {
+	typedef std::unordered_map<const compute_vertex *, int> vertex_map_t;
+
 	worker_thread &owner;
 	graph_engine &graph;
+
+	// This map records the owner threads of vertices stolen from another
+	// partition.
+	vertex_map_t stolen_vertex_map;
 
 	// This is a local buffer that contains the completed stolen vertices.
 	// All vertices here need to be returned to their owner threads.
@@ -49,12 +57,14 @@ public:
 
 	~load_balancer();
 
+	int get_stolen_vertex_part(const compute_vertex &v) const;
+
 	int steal_activated_vertices(compute_vertex_pointer vertices[], int num);
 	/**
 	 * After the thread finishes processing the stolen vertices, it needs to
 	 * return all the vertices to their owner threads.
 	 */
-	void return_vertices(vertex_id_t ids[], int num);
+	void return_vertices(const compute_vertex_pointer vs[], int num);
 
 	// This method is to return all completed stolen vertices to their owner
 	// threads.

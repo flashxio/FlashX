@@ -213,6 +213,8 @@ public:
      *  \param v The vertex that is requesting the notification.
 	 */
 	void request_notify_iter_end(const compute_vertex &v);
+
+	vertex_id_t get_vertex_id(const compute_vertex &v) const;
 };
 
 /**

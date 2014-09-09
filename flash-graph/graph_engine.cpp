@@ -272,7 +272,7 @@ void part_compute_vertex::broadcast_vpart(const vertex_message &msg)
 {
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	std::vector<compute_vertex_pointer> ps(graph_conf.get_num_vparts());
-	int ret = curr->get_graph().get_graph_index()->get_vpart_vertices(get_id(),
+	int ret = curr->get_graph().get_graph_index().get_vpart_vertices(get_id(),
 			ps.data(), ps.size());
 	for (int i = 0; i < ret; i++) {
 		compute_vertex_pointer v = ps[i];
