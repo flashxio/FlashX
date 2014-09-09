@@ -752,7 +752,7 @@ bool graph_engine::progress_next_level()
 		level.inc(1);
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
-		printf("Iter %d takes %.2f seconds, and %ld vertices are in iter %d\n",
+		printf("Iter %d takes %f seconds, and %ld vertices are in iter %d\n",
 				level.get() - 1, time_diff(iter_start, curr),
 				tot_num_activates.get(), level.get());
 		iter_start = curr;
