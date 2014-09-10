@@ -1248,6 +1248,7 @@ static std::unique_ptr<char[]> read_file(const std::string &file_name,
 static std::unique_ptr<char[]> read_gz_file(const std::string &file_name,
 		size_t &size)
 {
+	printf("read gz file: %s\n", file_name.c_str());
 	const size_t BUF_SIZE = 1024 * 1024 * 16;
 	std::vector<std::shared_ptr<char> > bufs;
 	gzFile f = gzopen(file_name.c_str(), "rb");
@@ -1258,8 +1259,8 @@ static std::unique_ptr<char[]> read_gz_file(const std::string &file_name,
 		int ret = gzread(f, buf, BUF_SIZE);
 		assert(ret > 0);
 		out_size += ret;
-		printf("get %ld bytes from %s\n", out_size, file_name.c_str());
 	}
+	printf("get %ld bytes from %s\n", out_size, file_name.c_str());
 
 	size = out_size;
 	char *out_buf = new char[out_size];
@@ -1352,6 +1353,8 @@ public:
 		stxxl_edge_vector<edge_data_type> *local_edge_buf
 			= (stxxl_edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 		local_edge_buf->append(edges.cbegin(), edges.cend());
+		printf("There are %lld edges in thread %d\n", local_edge_buf->size(),
+				thread::get_curr_thread()->get_id());
 	}
 };
 
