@@ -36,41 +36,13 @@
 
 namespace {
 
-enum triangle_stage_t
-{
-	INIT,
-	RUN,
-};
-
 // The type of edges we will keep in memory.
 edge_type in_mem_edge_type = OUT_EDGE;
 // The type of edges from which we read neighbors.
 edge_type neigh_edge_type = IN_EDGE;
 
-/*
- * When a vertex is vertically partitioned, its main compute vertex isn't
- * executed. However, we use the main compute vertex to store the number
- * of edges for a vertex. We need to use this message to notify the main
- * compute vertex of the number of edges.
- */
-class edge_msg: public vertex_message
-{
-	vsize_t num_edges;
-public:
-	edge_msg(vsize_t num): vertex_message(sizeof(edge_msg), false) {
-		this->num_edges = num;
-	}
-
-	int get_num_edges() const {
-		return num_edges;
-	}
-};
-
-triangle_stage_t triangle_stage;
-
 class directed_triangle_vertex: public compute_directed_vertex
 {
-	vsize_t num_edges;
 	multi_func_value local_value;
 
 	void inc_num_triangles(size_t num) {
@@ -81,11 +53,6 @@ class directed_triangle_vertex: public compute_directed_vertex
 	}
 public:
 	directed_triangle_vertex(vertex_id_t id): compute_directed_vertex(id) {
-		num_edges = 0;
-	}
-
-	vsize_t get_num_edges() const {
-		return num_edges;
 	}
 
 	size_t get_result() const {
@@ -94,14 +61,7 @@ public:
 
 	void run(vertex_program &prog) {
 		vertex_id_t id = prog.get_vertex_id(*this);
-		switch (triangle_stage) {
-			case triangle_stage_t::INIT:
-				request_vertex_headers(&id, 1);
-				break;
-			case triangle_stage_t::RUN:
-				request_vertices(&id, 1);
-				break;
-		}
+		request_vertices(&id, 1);
 	}
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
@@ -115,21 +75,7 @@ public:
 	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
 	void run_on_message(vertex_program &prog, const vertex_message &msg) {
-		switch (triangle_stage) {
-			case triangle_stage_t::INIT:
-				this->num_edges = ((const edge_msg &) msg).get_num_edges();
-				break;
-			case triangle_stage_t::RUN:
-				inc_num_triangles(((count_msg &) msg).get_num());
-				break;
-			default:
-				assert(0);
-		}
-	}
-
-	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
-		assert(prog.get_vertex_id(*this) == header.get_id());
-		num_edges = header.get_num_edges();
+		inc_num_triangles(((count_msg &) msg).get_num());
 	}
 };
 
@@ -145,9 +91,7 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		if (id < id_start || id >= id_end)
 			continue;
-		directed_triangle_vertex &neigh
-			= (directed_triangle_vertex &) prog.get_graph().get_vertex(id);
-		size_t num_local_edges1 = neigh.get_num_edges();
+		size_t num_local_edges1 = prog.get_num_edges(id);
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
@@ -166,9 +110,7 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 	it = vertex.get_neigh_seq_it(in_mem_edge_type, 0,
 			vertex.get_num_edges(in_mem_edge_type));
 	PAGE_FOREACH(vertex_id_t, id, it) {
-		directed_triangle_vertex &neigh
-			= (directed_triangle_vertex &) prog.get_graph().get_vertex(id);
-		size_t num_local_edges1 = neigh.get_num_edges();
+		size_t num_local_edges1 = prog.get_num_edges(id);
 		if ((num_local_edges1 < num_local_edges && id != vertex.get_id())
 				|| (num_local_edges1 == num_local_edges
 					&& id < vertex.get_id())) {
@@ -313,7 +255,7 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 
 	std::vector<vertex_id_t> selected_neighbors;
 	runtime_data_t *data = construct_runtime(prog, vertex,
-			this->get_num_edges(), selected_neighbors, 0,
+			prog.get_num_edges(vertex.get_id()), selected_neighbors, 0,
 			prog.get_graph().get_max_vertex_id() + 1);
 	if (data == NULL)
 		return;
@@ -388,14 +330,7 @@ public:
 
 	void run(vertex_program &prog) {
 		vertex_id_t id = prog.get_vertex_id(*this);
-		switch (triangle_stage) {
-			case triangle_stage_t::INIT:
-				request_vertex_headers(&id, 1);
-				break;
-			case triangle_stage_t::RUN:
-				request_vertices(&id, 1);
-				break;
-		}
+		request_vertices(&id, 1);
 	}
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
@@ -407,13 +342,6 @@ public:
 
 	void run_on_itself(vertex_program &prog, const page_vertex &vertex);
 	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
-
-	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
-		vertex_id_t id = prog.get_vertex_id(*this);
-		assert(id == header.get_id());
-		edge_msg msg(header.get_num_edges());
-		prog.send_msg(id, msg);
-	}
 };
 
 void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
@@ -445,11 +373,9 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 	vertex_id_t id_start = part_range * this->get_part_id();
 	vertex_id_t id_end = id_start + part_range;
 
-	directed_triangle_vertex &self_v
-		= (directed_triangle_vertex &) prog.get_graph().get_vertex(get_id());
 	std::vector<vertex_id_t> selected_neighbors;
 	runtime_data_t *data = construct_runtime(prog, vertex,
-			self_v.get_num_edges(), selected_neighbors, id_start, id_end);
+			prog.get_num_edges(get_id()), selected_neighbors, id_start, id_end);
 	if (data == NULL)
 		return;
 
@@ -530,13 +456,6 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
-
-	triangle_stage = triangle_stage_t::INIT;
-	graph->start_all();
-	graph->wait4complete();
-
-	triangle_stage = triangle_stage_t::RUN;
-	start = end;
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
