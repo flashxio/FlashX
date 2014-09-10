@@ -102,21 +102,21 @@ public:
 
 class in_mem_directed_vindex_reader: public vertex_index_reader
 {
-	compressed_directed_vertex_index::ptr index;
+	const compressed_directed_vertex_index &index;
 
 protected:
-	in_mem_directed_vindex_reader(compressed_directed_vertex_index::ptr index) {
-		this->index = index;
+	in_mem_directed_vindex_reader(
+			const compressed_directed_vertex_index &_index): index(_index) {
 	}
 public:
-	static ptr create(compressed_directed_vertex_index::ptr index) {
+	static ptr create(const compressed_directed_vertex_index &index) {
 		return ptr(new in_mem_directed_vindex_reader(index));
 	}
 
 
 	virtual void request_index(index_compute *compute) {
 		id_range_t range = compute->get_range();
-		compressed_directed_index_iterator it(*index, range);
+		compressed_directed_index_iterator it(index, range);
 		bool ret = compute->run(compute->get_first_vertex(), it);
 		assert(ret);
 		compute->get_allocator().free(compute);
@@ -131,8 +131,7 @@ public:
 };
 
 vertex_index_reader::ptr vertex_index_reader::create(
-		compressed_directed_vertex_index::ptr index,
-		bool directed)
+		const compressed_directed_vertex_index &index, bool directed)
 {
 	assert(directed);
 	return in_mem_directed_vindex_reader::create(index);

@@ -615,9 +615,9 @@ public:
 	/*
 	 * \internal Get the in-memory vertex index.
 	 */
-	compressed_directed_vertex_index::ptr get_in_mem_index() const {
+	const compressed_directed_vertex_index &get_in_mem_index() const {
 		assert(vindex);
-		return vindex;
+		return *vindex;
 	}
 
 	void set_max_processing_vertices(int max) {
