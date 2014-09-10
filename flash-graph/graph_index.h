@@ -165,7 +165,9 @@ public:
 	virtual vertex_program::ptr create_def_part_vertex_program() const = 0;
 
 	virtual std::string get_index_file() const = 0;
+	virtual local_vid_t get_local_id(int part_id, const compute_vertex &v) const = 0;
 	virtual vertex_id_t get_vertex_id(int part_id, const compute_vertex &v) const = 0;
+	virtual vertex_id_t get_vertex_id(const compute_vertex &v) const = 0;
 	virtual bool belong2part(const compute_vertex &v, int part_id) const = 0;
 };
 
@@ -255,6 +257,15 @@ public:
 			for (int vpart_id = 0; vpart_id < num_parts; vpart_id++)
 				new (part_vertex_arrs[vpart_id].second + i) part_vertex_type(id, vpart_id);
 		}
+	}
+
+	local_vid_t get_local_id(const compute_vertex &v) const {
+		vertex_type *addr1 = (vertex_type *) &v;
+		// If the compute vertex is a main vertex in this partition.
+		if (vertex_arr <= addr1 && addr1 < vertex_arr + num_vertices)
+			return local_vid_t(addr1 - vertex_arr);
+		else
+			return local_vid_t(INVALID_VERTEX_ID);
 	}
 
 	vertex_id_t get_vertex_id(const compute_vertex &v) const {
@@ -496,8 +507,21 @@ public:
 		return index_file;
 	}
 
+	virtual vertex_id_t get_vertex_id(const compute_vertex &v) const {
+		for (size_t i = 0; i < index_arr.size(); i++) {
+			vertex_id_t id = index_arr[i]->get_vertex_id(v);
+			if (id != INVALID_VERTEX_ID)
+				return id;
+		}
+		assert(0);
+	}
+
 	virtual vertex_id_t get_vertex_id(int part_id, const compute_vertex &v) const {
 		return index_arr[part_id]->get_vertex_id(v);
+	}
+
+	virtual local_vid_t get_local_id(int part_id, const compute_vertex &v) const {
+		return index_arr[part_id]->get_local_id(v);
 	}
 
 	virtual bool belong2part(const compute_vertex &v, int part_id) const {

@@ -92,11 +92,6 @@ void vertex_compute::run_on_vertex_size(vertex_id_t id, vsize_t size)
 	finish_run();
 }
 
-vertex_id_t vertex_compute::get_id() const
-{
-	return v->get_id();
-}
-
 void vertex_compute::issue_io_request(const ext_mem_vertex_info &info)
 {
 	// If the vertex compute has been issued to SAFS, SAFS will get the IO

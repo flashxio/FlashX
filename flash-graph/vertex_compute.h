@@ -200,8 +200,6 @@ public:
 			+ (num_requested - num_complete_fetched);
 	}
 
-	vertex_id_t get_id() const;
-
 	graph_engine &get_graph() {
 		return *graph;
 	}

@@ -80,8 +80,8 @@ public:
 /* Only serves to activate on the next iteration */
 			const vertex_message &msg) { }; 
 
-	void run_on_vertex_header(vertex_program &, const vertex_header &header) {
-		assert(get_id() == header.get_id());
+	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		assert(prog.get_vertex_id(*this) == header.get_id());
 		directed_vertex_header &dheader = (directed_vertex_header &) header;
 		this->num_out_edges = dheader.get_num_out_edges();
 	}
@@ -89,7 +89,7 @@ public:
 
 void pgrank_vertex::run(vertex_program &prog)
 {
-	vertex_id_t id = get_id();
+	vertex_id_t id = prog.get_vertex_id(*this);
 	if (pr_stage == pr_stage_t::INIT) {
 		request_vertex_headers(&id, 1);
 	}
@@ -165,7 +165,8 @@ public:
 		// We perform pagerank for at most `max_num_iters' iterations.
 		if (prog.get_graph().get_curr_level() >= max_num_iters)
 			return;
-		directed_vertex_request req(get_id(), edge_type::OUT_EDGE);
+		directed_vertex_request req(prog.get_vertex_id(*this),
+				edge_type::OUT_EDGE);
 		request_partial_vertices(&req, 1);
 	};
 

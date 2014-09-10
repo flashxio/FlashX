@@ -162,7 +162,7 @@ public:
 	}
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		if (scan_stage == scan_stage_t::INIT)
 			request_vertex_headers(&id, 1);
 		else if (scan_stage == scan_stage_t::RUN)
@@ -170,7 +170,7 @@ public:
 	}
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
+		if (vertex.get_id() == prog.get_vertex_id(*this))
 			run_on_itself(prog, vertex);
 		else
 			run_on_neighbor(prog, vertex);
@@ -188,7 +188,7 @@ public:
 	}
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
-		assert(get_id() == header.get_id());
+		assert(prog.get_vertex_id(*this) == header.get_id());
 		degree = header.get_num_edges();
 	}
 

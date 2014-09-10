@@ -233,15 +233,17 @@ void steal_state_t::steal_vertices(compute_vertex_pointer vertices[], int num)
 		if (vertices[i].is_part())
 			continue;
 
+		// TODO we can avoid redudant computation here.
+		vertex_id_t id = graph.get_graph_index().get_vertex_id(worker_id,
+				*vertices[i].get());
+		// If the stolen vertex doesn't belong to the worker thread, we'll get
+		// INVALID_VERTEX_ID. This shouldn't happen.
+		assert(id != INVALID_VERTEX_ID);
 		int part_id;
 		off_t off;
-		graph.get_partitioner()->map2loc(vertices[i]->get_id(), part_id, off);
-		// It's possible that a vertex that the current thread tries to
-		// steal doesn't belong to the owner thread.
-		if (part_id == worker_id) {
-			stolen_bitmap.set(off);
-			num_locals++;
-		}
+		graph.get_partitioner()->map2loc(id, part_id, off);
+		stolen_bitmap.set(off);
+		num_locals++;
 	}
 	// TODO I need a memory barrier here.
 	// If the guard is odd, it means the owner thread is processing

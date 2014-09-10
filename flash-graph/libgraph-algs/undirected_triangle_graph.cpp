@@ -49,19 +49,19 @@ class undirected_triangle_vertex: public compute_vertex
 public:
 	undirected_triangle_vertex(vertex_id_t id): compute_vertex(id) {}
 
-	int count_triangles(const page_vertex *v) const;
+	int count_triangles(vertex_program &prog, const page_vertex *v) const;
 
 	int get_result() const {
 		return local_value.get_num_triangles();
 	}
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
+		if (vertex.get_id() == prog.get_vertex_id(*this))
 			run_on_itself(prog, vertex);
 		else
 			run_on_neighbor(prog, vertex);
@@ -92,9 +92,10 @@ void undirected_triangle_vertex::run_on_vertex_header(vertex_program &prog,
 		= (undirected_runtime_data_t *) local_value.get_runtime_data();
 	data->num_edge_reqs++;
 
-	if ((header.get_num_edges() < data->degree && header.get_id() != get_id())
+	vertex_id_t id = prog.get_vertex_id(*this);
+	if ((header.get_num_edges() < data->degree && header.get_id() != id)
 			|| (header.get_num_edges() == data->degree
-				&& header.get_id() < get_id())) {
+				&& header.get_id() < id)) {
 		data->edges.push_back(header.get_id());
 		data->num_required++;
 	}
@@ -147,7 +148,7 @@ void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	assert(local_value.has_runtime_data());
 	runtime_data_t *data = local_value.get_runtime_data();
 	data->num_joined++;
-	int ret = count_triangles(&vertex);
+	int ret = count_triangles(prog, &vertex);
 	// If we find triangles with the neighbor, notify the neighbor
 	// as well.
 	if (ret > 0) {
@@ -175,10 +176,12 @@ void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	}
 }
 
-int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
+int undirected_triangle_vertex::count_triangles(vertex_program &prog,
+		const page_vertex *v) const
 {
+	vertex_id_t this_id = prog.get_vertex_id(*this);
 	int num_local_triangles = 0;
-	assert(v->get_id() != this->get_id());
+	assert(v->get_id() != this_id);
 
 	if (v->get_num_edges(edge_type::OUT_EDGE) == 0)
 		return 0;
@@ -213,7 +216,7 @@ int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
 				= data->edge_set.find(neigh_neighbor);
 			if (it != data->edge_set.end()) {
 				if (neigh_neighbor != v->get_id()
-						&& neigh_neighbor != this->get_id()) {
+						&& neigh_neighbor != this_id) {
 					num_local_triangles++;
 					int idx = (*it).get_idx();
 					data->triangles[idx]++;
@@ -227,7 +230,7 @@ int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
 			vertex_id_t this_neighbor = data->edges.at(i);
 			// We need to skip loops.
 			if (this_neighbor != v->get_id()
-					&& this_neighbor != this->get_id()) {
+					&& this_neighbor != this_id) {
 				page_byte_array::const_iterator<vertex_id_t> first
 					= std::lower_bound(other_it, other_end, this_neighbor);
 				if (first != other_end && this_neighbor == *first) {
@@ -253,7 +256,7 @@ int undirected_triangle_vertex::count_triangles(const page_vertex *v) const
 			if (this_neighbor == neigh_neighbor) {
 				// skip loop
 				if (neigh_neighbor != v->get_id()
-						&& neigh_neighbor != this->get_id()) {
+						&& neigh_neighbor != this_id) {
 					num_local_triangles++;
 					(*count_it)++;
 				}

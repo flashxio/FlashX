@@ -51,10 +51,12 @@ struct directed_runtime_data_t: public runtime_data_t
 		return std::binary_search(out_edges.begin(), out_edges.end(), id);
 	}
 
-	void run_on_vertex_header(compute_directed_vertex &v, const vertex_header &header);
+	void run_on_vertex_header(vertex_program &prog, compute_directed_vertex &v,
+			const vertex_header &header);
 	void run_on_itself(compute_directed_vertex &v, const page_vertex &vertex);
 
-	size_t count_triangles(compute_directed_vertex &directed_v, const page_vertex &v);
+	size_t count_triangles(vertex_program &prog,
+			compute_directed_vertex &directed_v, const page_vertex &v);
 
 	bool collect_all_headers() const {
 		return this->num_edge_reqs == this->num_tot_edge_reqs;
@@ -82,22 +84,21 @@ void directed_runtime_data_t::run_on_itself(compute_directed_vertex &v,
 	v.request_vertex_headers(edges.data(), edges.size());
 }
 
-void directed_runtime_data_t::run_on_vertex_header(compute_directed_vertex &v,
-		const vertex_header &header)
+void directed_runtime_data_t::run_on_vertex_header(vertex_program &prog,
+		compute_directed_vertex &v, const vertex_header &header)
 {
+	vertex_id_t id = prog.get_vertex_id(v);
 	vsize_t num_edges = header.get_num_edges();
 	this->num_edge_reqs++;
 	if (this->is_in_edge(header.get_id())) {
-		if ((num_edges < this->degree && header.get_id() != v.get_id())
-				|| (num_edges == this->degree
-					&& header.get_id() < v.get_id())) {
+		if ((num_edges < this->degree && header.get_id() != id)
+				|| (num_edges == this->degree && header.get_id() < id)) {
 			this->selected_in_edges.push_back(header.get_id());
 		}
 	}
 	if (this->is_out_edge(header.get_id())) {
-		if ((num_edges < this->degree && header.get_id() != v.get_id())
-				|| (num_edges == this->degree
-					&& header.get_id() < v.get_id())) {
+		if ((num_edges < this->degree && header.get_id() != id)
+				|| (num_edges == this->degree && header.get_id() < id)) {
 			this->selected_out_edges.push_back(header.get_id());
 		}
 	}
@@ -134,11 +135,12 @@ void directed_runtime_data_t::run_on_vertex_header(compute_directed_vertex &v,
 	}
 }
 
-size_t directed_runtime_data_t::count_triangles(compute_directed_vertex &directed_v,
-		const page_vertex &v)
+size_t directed_runtime_data_t::count_triangles(vertex_program &prog,
+		compute_directed_vertex &directed_v, const page_vertex &v)
 {
+	vertex_id_t id = prog.get_vertex_id(directed_v);
 	size_t num_local_triangles = 0;
-	assert(v.get_id() != directed_v.get_id());
+	assert(v.get_id() != id);
 
 	if (v.get_num_edges(edge_type::OUT_EDGE) == 0)
 		return 0;
@@ -168,8 +170,7 @@ size_t directed_runtime_data_t::count_triangles(compute_directed_vertex &directe
 			runtime_data_t::edge_set_t::const_iterator it
 				= this->edge_set.find(neigh_neighbor);
 			if (it != this->edge_set.end()) {
-				if (neigh_neighbor != v.get_id()
-						&& neigh_neighbor != directed_v.get_id()) {
+				if (neigh_neighbor != v.get_id() && neigh_neighbor != id) {
 					num_local_triangles++;
 					int idx = (*it).get_idx();
 					this->triangles[idx]++;
@@ -187,8 +188,7 @@ size_t directed_runtime_data_t::count_triangles(compute_directed_vertex &directe
 		for (int i = this->edges.size() - 1; i >= 0; i--) {
 			vertex_id_t this_neighbor = this->edges.at(i);
 			// We need to skip loops.
-			if (this_neighbor != v.get_id()
-					&& this_neighbor != directed_v.get_id()) {
+			if (this_neighbor != v.get_id() && this_neighbor != id) {
 				page_byte_array::const_iterator<vertex_id_t> first
 					= std::lower_bound(other_it, other_end, this_neighbor);
 				if (first != other_end && this_neighbor == *first) {
@@ -211,8 +211,7 @@ size_t directed_runtime_data_t::count_triangles(compute_directed_vertex &directe
 			vertex_id_t neigh_neighbor = other_it.curr();
 			if (this_neighbor == neigh_neighbor) {
 				// skip loop
-				if (neigh_neighbor != v.get_id()
-						&& neigh_neighbor != directed_v.get_id()) {
+				if (neigh_neighbor != v.get_id() && neigh_neighbor != id) {
 					num_local_triangles++;
 					(*count_it)++;
 				}
@@ -249,12 +248,12 @@ public:
 	}
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
+		if (vertex.get_id() == prog.get_vertex_id(*this))
 			run_on_itself(prog, vertex);
 		else
 			run_on_neighbor(prog, vertex);
@@ -278,12 +277,12 @@ public:
 	}
 };
 
-void directed_triangle_vertex::run_on_vertex_header(vertex_program &,
+void directed_triangle_vertex::run_on_vertex_header(vertex_program &prog,
 		const vertex_header &header)
 {
 	directed_runtime_data_t *data
 		= (directed_runtime_data_t *) local_value.get_runtime_data();
-	data->run_on_vertex_header(*this, header);
+	data->run_on_vertex_header(prog, *this, header);
 
 	if (data->collect_all_headers() && data->is_complete()) {
 		long ret = num_completed_vertices.inc(1);
@@ -327,7 +326,7 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	directed_runtime_data_t *data
 		= (directed_runtime_data_t *) local_value.get_runtime_data();
 	data->num_joined++;
-	int ret = data->count_triangles(*this, vertex);
+	int ret = data->count_triangles(prog, *this, vertex);
 	// If we find triangles with the neighbor, notify the neighbor
 	// as well.
 	if (ret > 0) {

@@ -308,6 +308,7 @@ struct wcc_state
 
 class scc_vertex: public compute_directed_vertex
 {
+	vertex_id_t id;
 	vsize_t comp_id;
 	union scc_state {
 		trim1_state trim1;
@@ -323,9 +324,14 @@ class scc_vertex: public compute_directed_vertex
 
 public:
 	scc_vertex(vertex_id_t id): compute_directed_vertex(id) {
+		this->id = id;
 		comp_id = INVALID_VERTEX_ID;
 		num_in_edges = 0;
 		num_out_edges = 0;
+	}
+
+	vertex_id_t get_id() const {
+		return id;
 	}
 
 	vsize_t get_degree() const {
@@ -1017,7 +1023,7 @@ public:
 		vsize_t degree = scc_v.get_degree();
 		if (degree > max_degree && !scc_v.is_assigned()) {
 			max_degree = degree;
-			max_id = v.get_id();
+			max_id = scc_v.get_id();
 		}
 	}
 
@@ -1056,13 +1062,13 @@ public:
 		// The color doesn't exist;
 		if (it == max_ids.end()) {
 			max_ids.insert(color_map_t::value_type(scc_v.get_color(),
-						v.get_id()));
+						scc_v.get_id()));
 		}
 		else {
 			vertex_id_t curr_max_id = it->second;
 			if (scc_v.get_degree()
 					> ((scc_vertex &) graph.get_vertex(curr_max_id)).get_degree())
-				it->second = v.get_id();
+				it->second = scc_v.get_id();
 		}
 	}
 

@@ -48,7 +48,6 @@ class vertex_request;
 */
 class compute_vertex
 {
-	vertex_id_t id;
 public:
 	/**
 	 * \brief The constructor called by graph_engine to create vertex
@@ -58,7 +57,6 @@ public:
 	 *         
 	 */
 	compute_vertex(vertex_id_t id) {
-		this->id = id;
 	}
 
 	/**
@@ -78,15 +76,6 @@ public:
      * \param num The number of vertex IDs you are requesting.
 	 */
 	void request_vertex_headers(vertex_id_t ids[], size_t num);
-
-	/**
-	 * \brief Get its own vertex ID.
-	 *
-	 * \return The current vertex's ID in the graph.
-	 */
-	vertex_id_t get_id() const {
-		return id;
-	}
     
     /**
      * \brief Allows a vertex to perform a task at the end of every iteration. 
@@ -109,14 +98,25 @@ public:
 
 class part_compute_vertex: public compute_vertex
 {
+	vertex_id_t id;
 	int part_id;
 public:
 	part_compute_vertex(vertex_id_t id, int part_id): compute_vertex(id) {
+		this->id = id;
 		this->part_id = part_id;
 	}
 
 	int get_part_id() const {
 		return part_id;
+	}
+
+	/**
+	 * \brief Get its own vertex ID.
+	 *
+	 * \return The current vertex's ID in the graph.
+	 */
+	vertex_id_t get_id() const {
+		return id;
 	}
 
 	void request_vertices(vertex_id_t ids[], size_t num);
@@ -186,6 +186,7 @@ public:
 
 class part_compute_directed_vertex: public compute_directed_vertex
 {
+	vertex_id_t id;
 	int part_id;
 public:
     /**
@@ -193,11 +194,21 @@ public:
      */
 	part_compute_directed_vertex(vertex_id_t id,
 			int part_id): compute_directed_vertex(id) {
+		this->id = id;
 		this->part_id = part_id;
 	}
 
 	int get_part_id() const {
 		return part_id;
+	}
+
+	/**
+	 * \brief Get its own vertex ID.
+	 *
+	 * \return The current vertex's ID in the graph.
+	 */
+	vertex_id_t get_id() const {
+		return id;
 	}
 
 	void request_vertices(vertex_id_t ids[], size_t num);

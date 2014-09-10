@@ -74,8 +74,8 @@ public:
 	}
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
 		if (updated) {
+			vertex_id_t id = prog.get_vertex_id(*this);
 			request_vertices(&id, 1);
 			updated = false;
 		}
@@ -205,8 +205,8 @@ public:
 	}
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
 		if (updated) {
+			vertex_id_t id = prog.get_vertex_id(*this);
 			request_vertices(&id, 1);
 			updated = false;
 		}

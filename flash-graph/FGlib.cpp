@@ -113,8 +113,8 @@ public:
 
 void cluster_subgraph_vertex::run(vertex_program &prog)
 {
-	if (((cluster_subgraph_vertex_program &) prog).is_wanted_vertex(get_id())) {
-		vertex_id_t id = get_id();
+	vertex_id_t id = prog.get_vertex_id(*this);
+	if (((cluster_subgraph_vertex_program &) prog).is_wanted_vertex(id)) {
 		request_vertices(&id, 1);
 	}
 }
@@ -246,8 +246,8 @@ public:
 
 void subgraph_size_vertex::run(vertex_program &prog)
 {
-	if (((subgraph_size_vertex_program &) prog).is_wanted_vertex(get_id())) {
-		vertex_id_t id = get_id();
+	vertex_id_t id = prog.get_vertex_id(*this);
+	if (((subgraph_size_vertex_program &) prog).is_wanted_vertex(id)) {
 		request_vertices(&id, 1);
 	}
 }
@@ -312,7 +312,8 @@ public:
 	}
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
-		vertex_id_t cluster_id = cluster_ids->get(v.get_id());
+		vertex_id_t id = graph.get_graph_index().get_vertex_id(v);
+		vertex_id_t cluster_id = cluster_ids->get(id);
 		v_set_t::const_iterator v_it = wanted_cluster_ids.find(cluster_id);
 		// If the vertex isn't in the cluster we want.
 		if (v_it == wanted_cluster_ids.end())
@@ -321,11 +322,11 @@ public:
 		cluster_map_t::iterator it = clusters.find(cluster_id);
 		if (it == clusters.end()) {
 			v_set_t v_set;
-			v_set.insert(v.get_id());
+			v_set.insert(id);
 			clusters.insert(cluster_map_t::value_type(cluster_id, v_set));
 		}
 		else {
-			it->second.insert(v.get_id());
+			it->second.insert(id);
 		}
 	}
 
@@ -430,7 +431,7 @@ public:
 	}
 
 	virtual void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertex_headers(&id, 1);
 	}
 
@@ -484,19 +485,20 @@ public:
 void degree_vertex::run_on_vertex_header(vertex_program &prog,
 		const vertex_header &header)
 {
+	vertex_id_t id = prog.get_vertex_id(*this);
 	degree_vertex_program &degree_vprog = (degree_vertex_program &) prog;
 	if (prog.get_graph().is_directed()) {
 		const directed_vertex_header &dheader
 			= (const directed_vertex_header &) header;
 		if (degree_vprog.get_edge_type() == IN_EDGE)
-			degree_vprog.set_degree(get_id(), dheader.get_num_in_edges());
+			degree_vprog.set_degree(id, dheader.get_num_in_edges());
 		else if (degree_vprog.get_edge_type() == OUT_EDGE)
-			degree_vprog.set_degree(get_id(), dheader.get_num_out_edges());
+			degree_vprog.set_degree(id, dheader.get_num_out_edges());
 		else
-			degree_vprog.set_degree(get_id(), dheader.get_num_edges());
+			degree_vprog.set_degree(id, dheader.get_num_edges());
 	}
 	else
-		degree_vprog.set_degree(get_id(), header.get_num_edges());
+		degree_vprog.set_degree(id, header.get_num_edges());
 }
 
 }
@@ -530,7 +532,7 @@ public:
 	}
 
 	virtual void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}
 
@@ -659,7 +661,7 @@ public:
 	}
 
 	virtual void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}
 

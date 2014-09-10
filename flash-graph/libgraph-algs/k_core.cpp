@@ -119,8 +119,8 @@ void multicast_delete_msg(vertex_program &prog,
 }
 
 void kcore_vertex::run(vertex_program &prog) {
+	vertex_id_t id = prog.get_vertex_id(*this);
 	if (stage == INIT_DEGREE) {
-		vertex_id_t id = get_id();
 		request_vertex_headers(&id, 1);
 		return;
 	}
@@ -130,7 +130,6 @@ void kcore_vertex::run(vertex_program &prog) {
 	}
 
 	if (!is_deleted()) {
-		vertex_id_t id = get_id();
 		request_vertices(&id, 1); // put my edgelist in page cache
 
 		if (all_greater_than_core) {

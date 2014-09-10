@@ -53,7 +53,8 @@ public:
 
 	void run(vertex_program &prog) {
 		if (!has_visited()) {
-			directed_vertex_request req(get_id(), traverse_edge);
+			directed_vertex_request req(prog.get_vertex_id(*this),
+					traverse_edge);
 			request_partial_vertices(&req, 1);
 		}
 	}

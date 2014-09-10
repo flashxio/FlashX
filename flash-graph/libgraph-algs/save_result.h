@@ -36,7 +36,7 @@ public:
 
 	virtual void run(graph_engine &graph, compute_vertex &v1) {
 		VertexType &v = (VertexType &) v1;
-		vec->set(v.get_id(), v.get_result());
+		vec->set(graph.get_graph_index().get_vertex_id(v), v.get_result());
 	}
 
 	virtual void merge(graph_engine &graph, vertex_query::ptr q) {

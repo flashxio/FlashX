@@ -43,7 +43,7 @@ public:
 	}
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}
 

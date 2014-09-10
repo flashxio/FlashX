@@ -251,7 +251,7 @@ public:
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
 		assert(scan_stage == scan_stage_t::RUN);
-		if (vertex.get_id() == get_id())
+		if (vertex.get_id() == prog.get_vertex_id(*this))
 			run_on_itself(prog, vertex);
 		else
 			run_on_neighbor(prog, vertex);
@@ -262,19 +262,19 @@ public:
 	void run_on_message(vertex_program &prog, const vertex_message &msg1);
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
-		assert(get_id() == header.get_id());
+		assert(prog.get_vertex_id(*this) == header.get_id());
 		degree = header.get_num_edges();
 	}
 
 	void finding_triangles_end(vertex_program &prog, size_t local_scan) {
+		vertex_id_t id = prog.get_vertex_id(*this);
 		if (max_scan.update(local_scan)) {
 			struct timeval curr;
 			gettimeofday(&curr, NULL);
 			printf("%d: new max scan: %ld at v%u\n",
-					(int) time_diff(graph_start, curr),
-					local_scan, get_id());
+					(int) time_diff(graph_start, curr), local_scan, id);
 		}
-		known_scans.add(get_id(), local_scan);
+		known_scans.add(id, local_scan);
 	}
 };
 
@@ -485,7 +485,7 @@ void topK_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex &
 
 void topK_scan_vertex::run(vertex_program &prog)
 {
-	vertex_id_t id = get_id();
+	vertex_id_t id = prog.get_vertex_id(*this);
 	if (scan_stage == scan_stage_t::INIT) {
 		request_vertex_headers(&id, 1);
 	}
@@ -660,7 +660,7 @@ void part_topK_scan_vertex::run_on_neighbor(vertex_program &prog,
 
 void part_topK_scan_vertex::run(vertex_program &prog)
 {
-	vertex_id_t id = get_id();
+	vertex_id_t id = prog.get_vertex_id(*this);
 	if (scan_stage == scan_stage_t::INIT) {
 		request_vertex_headers(&id, 1);
 	}

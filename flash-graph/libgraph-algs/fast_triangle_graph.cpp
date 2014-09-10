@@ -93,7 +93,7 @@ public:
 	}
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		switch (triangle_stage) {
 			case triangle_stage_t::INIT:
 				request_vertex_headers(&id, 1);
@@ -105,7 +105,7 @@ public:
 	}
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
+		if (vertex.get_id() == prog.get_vertex_id(*this))
 			run_on_itself(prog, vertex);
 		else
 			run_on_neighbor(prog, vertex);
@@ -128,7 +128,7 @@ public:
 	}
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
-		assert(get_id() == header.get_id());
+		assert(prog.get_vertex_id(*this) == header.get_id());
 		num_edges = header.get_num_edges();
 	}
 };
@@ -339,7 +339,7 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	runtime_data_t *data = local_value.get_runtime_data();
 	data->num_joined++;
 	size_t ret = count_triangles(local_value.get_runtime_data(), vertex,
-			this->get_id());
+			prog.get_vertex_id(*this));
 	// If we find triangles with the neighbor, notify the neighbor
 	// as well.
 	if (ret > 0) {
@@ -387,7 +387,7 @@ public:
 	}
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		switch (triangle_stage) {
 			case triangle_stage_t::INIT:
 				request_vertex_headers(&id, 1);
@@ -399,7 +399,7 @@ public:
 	}
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
+		if (vertex.get_id() == prog.get_vertex_id(*this))
 			run_on_itself(prog, vertex);
 		else
 			run_on_neighbor(prog, vertex);
@@ -409,9 +409,10 @@ public:
 	void run_on_neighbor(vertex_program &prog, const page_vertex &vertex);
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
-		assert(get_id() == header.get_id());
+		vertex_id_t id = prog.get_vertex_id(*this);
+		assert(id == header.get_id());
 		edge_msg msg(header.get_num_edges());
-		prog.send_msg(get_id(), msg);
+		prog.send_msg(id, msg);
 	}
 };
 

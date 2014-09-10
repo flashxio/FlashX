@@ -251,11 +251,11 @@ void vertex_program::flush_msgs()
 
 void vertex_program::request_notify_iter_end(const compute_vertex &v)
 {
-	int part_id;
-	off_t off;
-	graph->get_partitioner()->map2loc(v.get_id(), part_id, off);
-	assert(t->get_worker_id() == part_id);
-	local_vid_t local_id(off);
+	local_vid_t local_id = graph->get_graph_index().get_local_id(
+			t->get_worker_id(), v);
+	// TODO this shouldn't be right. We should allow a vertex to request
+	// the notification of iteration end at any thread.
+	assert(local_id.id != INVALID_VERTEX_ID);
 	t->request_notify_iter_end(local_id);
 }
 

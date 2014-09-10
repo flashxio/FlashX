@@ -80,7 +80,8 @@ public:
 			distance = parent_dist + 1;
 			parent = tmp_parent;
 
-			directed_vertex_request req(get_id(), traverse_edge);
+			directed_vertex_request req(prog.get_vertex_id(*this),
+					traverse_edge);
 			request_partial_vertices(&req, 1);
 		}
 	}
@@ -107,7 +108,7 @@ void sssp_vertex::run(vertex_program &prog, const page_vertex &vertex)
 
 	// We need to add the neighbors of the vertex to the queue of
 	// the next level.
-	dist_message msg(get_id(), distance);
+	dist_message msg(prog.get_vertex_id(*this), distance);
 	if (traverse_edge == BOTH_EDGES) {
 		edge_seq_iterator it = vertex.get_neigh_seq_it(IN_EDGE, 0,
 				num_dests);

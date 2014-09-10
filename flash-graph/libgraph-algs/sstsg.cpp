@@ -63,20 +63,20 @@ public:
 		return result;
 	}
 
-	size_t count_edges(const page_directed_vertex &v,
+	size_t count_edges(vertex_program &prog, const page_directed_vertex &v,
 			const std::vector<vertex_id_t> *neighbors, time_t timestamp,
 			time_t time_interval);
-	size_t count_edges(const page_directed_vertex &v,
+	size_t count_edges(vertex_program &prog, const page_directed_vertex &v,
 			const std::vector<vertex_id_t> *neighbors, time_t timestamp,
 			time_t time_interval, edge_type type);
 
 	void run(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
-		if (vertex.get_id() == get_id())
+		if (vertex.get_id() == prog.get_vertex_id(*this))
 			run_on_itself(prog, (const page_directed_vertex &) vertex);
 		else
 			run_on_neighbor(prog, (const page_directed_vertex &) vertex);
@@ -89,7 +89,7 @@ public:
 	}
 };
 
-size_t scan_vertex::count_edges(const page_directed_vertex &v,
+size_t scan_vertex::count_edges(vertex_program &prog, const page_directed_vertex &v,
 		const std::vector<vertex_id_t> *neighbors, time_t timestamp,
 		time_t time_interval, edge_type type)
 {
@@ -108,7 +108,7 @@ size_t scan_vertex::count_edges(const page_directed_vertex &v,
 
 	PAGE_FOREACH(vertex_id_t, neigh_neighbor, it) {
 		if (neigh_neighbor != v.get_id()
-				&& neigh_neighbor != this->get_id()) {
+				&& neigh_neighbor != prog.get_vertex_id(*this)) {
 			if (std::binary_search(this_it, this_end, neigh_neighbor))
 				num_local_edges++;
 		}
@@ -116,13 +116,15 @@ size_t scan_vertex::count_edges(const page_directed_vertex &v,
 	return num_local_edges;
 }
 
-size_t scan_vertex::count_edges(const page_directed_vertex &v,
+size_t scan_vertex::count_edges(vertex_program &prog, const page_directed_vertex &v,
 		const std::vector<vertex_id_t> *neighbors, time_t timestamp,
 		time_t time_interval)
 {
 	assert(!neighbors->empty());
-	return count_edges(v, neighbors, timestamp, time_interval, edge_type::IN_EDGE)
-		+ count_edges(v, neighbors, timestamp, time_interval, edge_type::OUT_EDGE);
+	return count_edges(prog, v, neighbors, timestamp, time_interval,
+			edge_type::IN_EDGE)
+		+ count_edges(prog, v, neighbors, timestamp, time_interval,
+				edge_type::OUT_EDGE);
 }
 
 template<class InputIterator1, class InputIterator2, class Skipper,
@@ -221,6 +223,7 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 		}
 	};
 
+	vertex_id_t curr_id = prog.get_vertex_id(*this);
 	int num_neighbors = unique_merge(
 			in_neighbors.begin(), in_neighbors.end(),
 			out_neighbors.begin(), out_neighbors.end(),
@@ -230,11 +233,11 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 
 	size_t lscan = 0;
 	BOOST_FOREACH(vertex_id_t id, in_neighbors) {
-		if (id != get_id())
+		if (id != curr_id)
 			lscan++;
 	}
 	BOOST_FOREACH(vertex_id_t id, out_neighbors) {
-		if (id != get_id())
+		if (id != curr_id)
 			lscan++;
 	}
 	local_scans->at(0) = lscan;
@@ -290,7 +293,7 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 	assert(neighbors);
 	for (int j = 0; j < num_time_intervals
 			&& timestamp >= j * time_interval; j++) {
-		size_t ret = count_edges(vertex, neighbors,
+		size_t ret = count_edges(prog, vertex, neighbors,
 				timestamp - j * time_interval, time_interval);
 		if (ret > 0)
 			local_scans->at(j) += ret;
