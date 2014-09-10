@@ -274,3 +274,9 @@ vertex_id_t vertex_program::get_vertex_id(const compute_vertex &v) const
 	}
 	return id;
 }
+
+vsize_t vertex_program::get_num_edges(vertex_id_t id) const
+{
+	compressed_directed_vertex_index::ptr index = graph->get_in_mem_index();
+	return index->get_num_in_edges(id) + index->get_num_out_edges(id);
+}

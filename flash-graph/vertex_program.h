@@ -215,6 +215,7 @@ public:
 	void request_notify_iter_end(const compute_vertex &v);
 
 	vertex_id_t get_vertex_id(const compute_vertex &v) const;
+	vsize_t get_num_edges(vertex_id_t id) const;
 };
 
 /**
