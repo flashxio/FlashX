@@ -165,6 +165,8 @@ public:
 	virtual vertex_program::ptr create_def_part_vertex_program() const = 0;
 
 	virtual std::string get_index_file() const = 0;
+	virtual vertex_id_t get_vertex_id(int part_id, const compute_vertex &v) const = 0;
+	virtual bool belong2part(const compute_vertex &v, int part_id) const = 0;
 };
 
 template<class vertex_type, class part_vertex_type>
@@ -252,6 +254,30 @@ public:
 			// vertical parts.
 			for (int vpart_id = 0; vpart_id < num_parts; vpart_id++)
 				new (part_vertex_arrs[vpart_id].second + i) part_vertex_type(id, vpart_id);
+		}
+	}
+
+	vertex_id_t get_vertex_id(const compute_vertex &v) const {
+		vertex_type *addr1 = (vertex_type *) &v;
+		// If the compute vertex is a main vertex in this partition.
+		if (vertex_arr <= addr1 && addr1 < vertex_arr + num_vertices) {
+			vertex_id_t local_id = addr1 - vertex_arr;
+			vertex_id_t id;
+			partitioner.loc2map(part_id, local_id, id);
+			return id;
+		}
+		else {
+			// If not, is it one of the vertically partitioned vertices?
+			part_vertex_type *addr2 = (part_vertex_type *) &v;
+			for (size_t i = 0; i < part_vertex_arrs.size(); i++) {
+				part_vertex_type *arr_start = part_vertex_arrs[i].second;
+				part_vertex_type *arr_end
+					= part_vertex_arrs[i].second + part_vertex_arrs[i].first;
+				if (arr_start <= addr2 && addr2 < arr_end)
+					return addr2->get_id();
+			}
+			// If not, the vertex doesn't belong to this partition.
+			return INVALID_VERTEX_ID;
 		}
 	}
 
@@ -468,6 +494,15 @@ public:
 
 	virtual std::string get_index_file() const {
 		return index_file;
+	}
+
+	virtual vertex_id_t get_vertex_id(int part_id, const compute_vertex &v) const {
+		return index_arr[part_id]->get_vertex_id(v);
+	}
+
+	virtual bool belong2part(const compute_vertex &v, int part_id) const {
+		// TODO there might be a more light-weight implementation.
+		return get_vertex_id(part_id, v) != INVALID_VERTEX_ID;
 	}
 };
 

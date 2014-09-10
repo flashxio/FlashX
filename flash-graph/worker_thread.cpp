@@ -79,7 +79,7 @@ void active_vertex_set::fetch_reset_active_vertices(
  * The input vertex list is sorted on vertex ID and will have
  * the unpartitioned vertices.
  */
-static void split_vertices(graph_index &index, int part_id,
+static void split_vertices(const graph_index &index, int part_id,
 		std::vector<vertex_id_t> &vertices,
 		std::vector<vpart_vertex_pointer> &vpart_ps)
 {
@@ -120,12 +120,12 @@ void default_vertex_queue::init(const vertex_id_t buf[], size_t size, bool sorte
 	vertices.insert(vertices.end(), buf, buf + size);
 	if (!sorted)
 		std::sort(vertices.begin(), vertices.end());
-	split_vertices(*index, part_id, vertices, vpart_ps);
+	split_vertices(index, part_id, vertices, vpart_ps);
 
 	// The buffer contains the vertex Ids and we only store the location of
 	// vertices in the local partition.
 	vertex_buf.resize(vertices.size());
-	index->get_vertices(vertices.data(), vertices.size(),
+	index.get_vertices(vertices.data(), vertices.size(),
 			compute_vertex_pointer::conv(vertex_buf.data()));
 
 	buf_fetch_idx = scan_pointer(vertex_buf.size(), true);
@@ -152,10 +152,10 @@ void default_vertex_queue::init(worker_thread &t)
 
 	// Get the vertically partitioned vertices that are activated.
 	std::vector<vpart_vertex_pointer> vpart_ps_tmp(
-			index->get_num_vpart_vertices(part_id));
+			index.get_num_vpart_vertices(part_id));
 	if (!vpart_ps_tmp.empty()) {
 		active_vertices->force_bitmap();
-		index->get_vpart_vertex_pointers(part_id, vpart_ps_tmp.data(),
+		index.get_vpart_vertex_pointers(part_id, vpart_ps_tmp.data(),
 				vpart_ps_tmp.size());
 		BOOST_FOREACH(vpart_vertex_pointer p, vpart_ps_tmp) {
 			int part_id;
@@ -187,7 +187,7 @@ void default_vertex_queue::fetch_from_map()
 	std::vector<local_vid_t> local_ids;
 	active_vertices->fetch_reset_active_vertices(VERTEX_BUF_SIZE, local_ids);
 	vertex_buf.resize(local_ids.size());
-	index->get_vertices(part_id, local_ids.data(), local_ids.size(),
+	index.get_vertices(part_id, local_ids.data(), local_ids.size(),
 			compute_vertex_pointer::conv(vertex_buf.data()));
 
 	bool forward = true;
@@ -204,7 +204,7 @@ void default_vertex_queue::fetch_vparts()
 	assert(buf_fetch_idx.get_num_remaining() == 0);
 	vertex_buf.clear();
 	vertex_buf.resize(vpart_ps.size());
-	index->get_vpart_vertices(part_id, curr_vpart, vpart_ps.data(),
+	index.get_vpart_vertices(part_id, curr_vpart, vpart_ps.data(),
 			vpart_ps.size(), vertex_buf.data());
 	curr_vpart++;
 
@@ -332,7 +332,8 @@ worker_thread::worker_thread(graph_engine *graph,
 		vertex_program::ptr prog, vertex_program::ptr vpart_prog,
 		int node_id, int worker_id, int num_threads,
 		vertex_scheduler::ptr scheduler,
-		std::shared_ptr<slab_allocator> msg_alloc): thread("worker_thread", node_id)
+		std::shared_ptr<slab_allocator> msg_alloc): thread("worker_thread",
+			node_id), index(graph->get_graph_index())
 {
 	this->scheduler = scheduler;
 	req_on_vertex = false;
@@ -649,14 +650,8 @@ void worker_thread::complete_vertex(const compute_vertex_pointer v)
 	num_completed_vertices_in_level.inc(1);
 	// The vertex might be stolen from another thread. Now we have
 	// finished processing it, we should return it to its owner thread.
-	int part_id = graph->get_partitioner()->map(v->get_id());
-	// We don't need to return verticalled partitioned vertices to their
-	// owner because messages are processed in the main vertices and the
-	// main vertices cannot be stolen by other threads.
-	if (part_id != worker_id && !v.is_part()) {
-		vertex_id_t id = v->get_id();
-		balancer->return_vertices(&id, 1);
-	}
+	if (!index.belong2part(*v.get(), worker_id))
+		balancer->return_vertices(&v, 1);
 }
 
 vertex_compute *worker_thread::get_vertex_compute(compute_vertex_pointer v)
@@ -673,4 +668,9 @@ vertex_compute *worker_thread::get_vertex_compute(compute_vertex_pointer v)
 	}
 	else
 		return it->second;
+}
+
+int worker_thread::get_stolen_vertex_part(const compute_vertex &v) const
+{
+	return balancer->get_stolen_vertex_part(v);
 }
