@@ -119,9 +119,9 @@ class compressed_directed_index_iterator: public index_iterator
 	size_t begin;
 	size_t idx;
 	size_t end;
-	const compressed_directed_vertex_index &index;
+	const in_mem_cdirected_vertex_index &index;
 public:
-	compressed_directed_index_iterator(const compressed_directed_vertex_index &_index,
+	compressed_directed_index_iterator(const in_mem_cdirected_vertex_index &_index,
 			const id_range_t &range): index(_index) {
 		directed_vertex_entry first_entry = index.get_vertex(range.first);
 		new (curr_buf) directed_vertex_entry(first_entry);
@@ -250,7 +250,7 @@ class vertex_index_reader
 public:
 	typedef std::shared_ptr<vertex_index_reader> ptr;
 
-	static ptr create(const compressed_directed_vertex_index &index, bool directed);
+	static ptr create(const in_mem_cdirected_vertex_index &index, bool directed);
 	static ptr create(io_interface::ptr io, bool directed);
 
 	virtual ~vertex_index_reader() {
@@ -926,13 +926,15 @@ class simple_index_reader
 	void flush_computes();
 
 	static int get_index_entry_size_log(bool directed) {
-		return log2(get_index_entry_size(
+		double size_log = log2(get_index_entry_size(
 					directed ? graph_type::DIRECTED : graph_type::UNDIRECTED));
+		assert(size_log == floor(size_log));
+		return size_log;
 	}
 
 	void init(worker_thread *t, bool directed);
 
-	simple_index_reader(const compressed_directed_vertex_index &index,
+	simple_index_reader(const in_mem_cdirected_vertex_index &index,
 			bool directed, worker_thread *t) {
 		init(t, directed);
 		index_reader = vertex_index_reader::create(index, directed);
@@ -1017,7 +1019,7 @@ public:
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 
-	static ptr create(const compressed_directed_vertex_index &index,
+	static ptr create(const in_mem_cdirected_vertex_index &index,
 			bool directed, worker_thread *t) {
 		return ptr(new simple_index_reader(index, directed, t));
 	}

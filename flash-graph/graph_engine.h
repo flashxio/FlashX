@@ -323,7 +323,7 @@ class graph_engine
 	off_t out_part_off;
 
 	graph_index::ptr vertices;
-	compressed_directed_vertex_index::ptr vindex;
+	in_mem_cdirected_vertex_index::ptr vindex;
 	std::shared_ptr<in_mem_graph> graph_data;
 	vertex_scheduler::ptr scheduler;
 
@@ -615,7 +615,7 @@ public:
 	/*
 	 * \internal Get the in-memory vertex index.
 	 */
-	const compressed_directed_vertex_index &get_in_mem_index() const {
+	const in_mem_cdirected_vertex_index &get_in_mem_index() const {
 		assert(vindex);
 		return *vindex;
 	}

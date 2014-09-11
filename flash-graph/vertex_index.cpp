@@ -22,6 +22,36 @@
 #include "vertex_compute.h"
 #include "vertex_index.h"
 
+static void verify_index(vertex_index::ptr idx)
+{
+	idx->get_graph_header().verify();
+	if (idx->get_graph_header().is_directed_graph()) {
+		if (idx->is_compressed())
+			cdirected_vertex_index::cast(idx)->verify();
+		else
+			directed_vertex_index::cast(idx)->verify();
+	}
+	else {
+		assert(!idx->is_compressed());
+		default_vertex_index::cast(idx)->verify();
+	}
+}
+
+size_t vertex_index::get_index_size() const
+{
+	if (is_compressed() && get_graph_header().is_directed_graph()) {
+		return ((cdirected_vertex_index *) this)->cal_index_size();
+	}
+	else if (!is_compressed() && get_graph_header().is_directed_graph()) {
+		return ((directed_vertex_index *) this)->cal_index_size();
+	}
+	else if (!is_compressed() && !get_graph_header().is_directed_graph()) {
+		return ((default_vertex_index *) this)->cal_index_size();
+	}
+	else
+		assert(0);
+}
+
 vertex_index::ptr vertex_index::load(const std::string &index_file)
 {
 	native_file local_f(index_file);
@@ -37,11 +67,9 @@ vertex_index::ptr vertex_index::load(const std::string &index_file)
 
 	vertex_index::ptr idx((vertex_index *) buf, destroy_index());
 	assert((size_t) size >= idx->get_index_size());
-	idx->get_graph_header().verify();
-	if (idx->get_graph_header().is_directed_graph())
-		directed_vertex_index::cast(idx)->verify();
-	else
-		default_vertex_index::cast(idx)->verify();
+	verify_index(idx);
+	printf("load vertex index: file size: %ld, index size: %ld\n", size,
+			idx->get_index_size());
 
 	return idx;
 }
@@ -72,7 +100,7 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	size_t index_size = index->get_index_size();
 	assert((ssize_t) index_size <= factory->get_file_size());
 	char *buf = NULL;
-	printf("allocate %ld bytes\n", index_size);
+	printf("allocate %ld bytes for vertex index\n", index_size);
 	ret = posix_memalign((void **) &buf, PAGE_SIZE,
 			std::max(index_size, (size_t) INDEX_HEADER_SIZE));
 	assert(ret == 0);
@@ -110,16 +138,13 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	}
 
 	vertex_index::ptr index_ptr((vertex_index *) buf, destroy_index());
-	if (index_ptr->get_graph_header().get_graph_type() == graph_type::DIRECTED)
-		directed_vertex_index::cast(index_ptr)->verify();
-	else
-		default_vertex_index::cast(index_ptr)->verify();
+	verify_index(index_ptr);
 	return index_ptr;
 }
 
 const size_t compressed_directed_vertex_entry::ENTRY_SIZE;
 compressed_directed_vertex_entry::compressed_directed_vertex_entry(
-		directed_vertex_entry offs[], size_t edge_data_size, size_t num)
+		const directed_vertex_entry offs[], size_t edge_data_size, size_t num)
 {
 	start_offs = offs[0];
 	size_t num_vertices = std::min(num - 1, ENTRY_SIZE);
@@ -145,9 +170,9 @@ compressed_directed_vertex_entry::compressed_directed_vertex_entry(
 	}
 }
 
-compressed_directed_vertex_index::compressed_directed_vertex_index(
-		directed_vertex_index &index)
+void in_mem_cdirected_vertex_index::init(const directed_vertex_index &index)
 {
+	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	size_t num_entries = index.get_num_entries();
 	num_vertices = num_entries - 1;
@@ -175,13 +200,40 @@ compressed_directed_vertex_index::compressed_directed_vertex_index(
 			}
 		}
 	}
-	printf("There are %ld large in-vertices and %ld large out-vertices\n",
-			large_in_vertices.size(), large_out_vertices.size());
-	verify_against(index);
 }
 
-const size_t compressed_directed_vertex_index::ENTRY_SIZE;
-directed_vertex_entry compressed_directed_vertex_index::get_vertex(
+void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
+{
+	index.verify();
+	edge_data_size = index.get_graph_header().get_edge_data_size();
+	num_vertices = index.get_graph_header().get_num_vertices();
+	entries.insert(entries.end(), index.get_entries(),
+			index.get_entries() + index.get_num_entries());
+
+	const large_vertex_t *l_in_vertex_array = index.get_large_in_vertices();
+	size_t num_large_in_vertices = index.get_num_large_in_vertices();
+	for (size_t i = 0; i < num_large_in_vertices; i++)
+		large_in_vertices.insert(l_in_vertex_array[i]);
+
+	const large_vertex_t *l_out_vertex_array = index.get_large_out_vertices();
+	size_t num_large_out_vertices = index.get_num_large_out_vertices();
+	for (size_t i = 0; i < num_large_out_vertices; i++)
+		large_out_vertices.insert(l_out_vertex_array[i]);
+}
+
+in_mem_cdirected_vertex_index::in_mem_cdirected_vertex_index(
+		vertex_index &index)
+{
+	if (index.is_compressed())
+		init((const cdirected_vertex_index &) index);
+	else
+		init((const directed_vertex_index &) index);
+	printf("There are %ld large in-vertices and %ld large out-vertices\n",
+			large_in_vertices.size(), large_out_vertices.size());
+}
+
+const size_t in_mem_cdirected_vertex_index::ENTRY_SIZE;
+directed_vertex_entry in_mem_cdirected_vertex_index::get_vertex(
 		vertex_id_t id) const
 {
 	directed_vertex_entry e = entries[id / ENTRY_SIZE].get_start_offs();
@@ -198,9 +250,10 @@ directed_vertex_entry compressed_directed_vertex_index::get_vertex(
 
 #include "vertex_index_reader.h"
 
-void compressed_directed_vertex_index::verify_against(
+void in_mem_cdirected_vertex_index::verify_against(
 		directed_vertex_index &index)
 {
+	index.verify();
 	id_range_t range(10, std::min(100UL, index.get_num_vertices()));
 	compressed_directed_index_iterator it(*this, range);
 	vertex_id_t id = range.first;
@@ -212,4 +265,58 @@ void compressed_directed_vertex_index::verify_against(
 		id++;
 		it.move_next();
 	}
+}
+
+cdirected_vertex_index::ptr cdirected_vertex_index::construct(
+		directed_vertex_index &index)
+{
+	size_t edge_data_size = index.get_graph_header().get_edge_data_size();
+	size_t num_entries = index.get_num_entries();
+	size_t num_vertices = num_entries - 1;
+	std::vector<large_vertex_t> large_in_vertices;
+	std::vector<large_vertex_t> large_out_vertices;
+	std::vector<compressed_directed_vertex_entry> entries(
+			ROUNDUP(num_vertices, ENTRY_SIZE) / ENTRY_SIZE);
+	for (size_t off = 0; off < num_vertices; off += ENTRY_SIZE) {
+		off_t entry_idx = off / ENTRY_SIZE;
+		entries[entry_idx] = compressed_directed_vertex_entry(
+					index.get_data() + off, edge_data_size,
+					std::min(ENTRY_SIZE + 1, num_entries - off));
+
+		vertex_id_t id = off;
+		for (size_t i = 0; i < ENTRY_SIZE; i++) {
+			if (entries[entry_idx].is_large_in_vertex(i)) {
+				ext_mem_vertex_info info = index.get_vertex_info_in(id + i);
+				large_in_vertices.push_back(large_vertex_t(id + i,
+							ext_mem_undirected_vertex::vsize2num_edges(
+								info.get_size(), edge_data_size)));
+			}
+			if (entries[entry_idx].is_large_out_vertex(i)) {
+				ext_mem_vertex_info info = index.get_vertex_info_out(id + i);
+				large_out_vertices.push_back(large_vertex_t(id + i,
+							ext_mem_undirected_vertex::vsize2num_edges(
+								info.get_size(), edge_data_size)));
+			}
+		}
+	}
+
+	size_t tot_size = sizeof(cdirected_vertex_index)
+		+ sizeof(entries[0]) * entries.size()
+		+ sizeof(large_in_vertices[0]) * large_in_vertices.size()
+		+ sizeof(large_out_vertices[0]) * large_out_vertices.size();
+	char *buf = (char *) malloc(tot_size);
+	memcpy(buf, &index, vertex_index::get_header_size());
+	cdirected_vertex_index *cindex = (cdirected_vertex_index *) buf;
+	cindex->h.data.entry_size = sizeof(entries[0]);
+	cindex->h.data.num_entries = entries.size();
+	cindex->h.data.compressed = true;
+	cindex->h.data.num_large_in_vertices = large_in_vertices.size();
+	cindex->h.data.num_large_out_vertices = large_out_vertices.size();
+
+	memcpy(cindex->entries, entries.data(), entries.size() * sizeof(entries[0]));
+	memcpy(cindex->get_large_in_vertices(), large_in_vertices.data(),
+			sizeof(large_in_vertices[0]) * large_in_vertices.size());
+	memcpy(cindex->get_large_out_vertices(), large_out_vertices.data(),
+			sizeof(large_out_vertices[0]) * large_out_vertices.size());
+	return ptr((cdirected_vertex_index *) buf, destroy_index());
 }

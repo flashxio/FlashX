@@ -102,14 +102,14 @@ public:
 
 class in_mem_directed_vindex_reader: public vertex_index_reader
 {
-	const compressed_directed_vertex_index &index;
+	const in_mem_cdirected_vertex_index &index;
 
 protected:
 	in_mem_directed_vindex_reader(
-			const compressed_directed_vertex_index &_index): index(_index) {
+			const in_mem_cdirected_vertex_index &_index): index(_index) {
 	}
 public:
-	static ptr create(const compressed_directed_vertex_index &index) {
+	static ptr create(const in_mem_cdirected_vertex_index &index) {
 		return ptr(new in_mem_directed_vindex_reader(index));
 	}
 
@@ -131,7 +131,7 @@ public:
 };
 
 vertex_index_reader::ptr vertex_index_reader::create(
-		const compressed_directed_vertex_index &index, bool directed)
+		const in_mem_cdirected_vertex_index &index, bool directed)
 {
 	assert(directed);
 	return in_mem_directed_vindex_reader::create(index);

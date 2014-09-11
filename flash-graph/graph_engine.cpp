@@ -543,8 +543,7 @@ graph_engine::graph_engine(const std::string &graph_file,
 	// Construct the in-memory compressed vertex index.
 	vertex_index::ptr raw_vindex = vertex_index::safs_load(index->get_index_file());
 	assert(raw_vindex->get_graph_header().is_directed_graph());
-	vindex = compressed_directed_vertex_index::create(
-			(directed_vertex_index &) *raw_vindex);
+	vindex = in_mem_cdirected_vertex_index::create(*raw_vindex);
 	raw_vindex.reset();
 
 	// Construct the vertex states.

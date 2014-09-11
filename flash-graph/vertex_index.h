@@ -39,6 +39,11 @@ protected:
 			size_t entry_size;
 			size_t num_entries;
 			off_t out_part_loc;
+
+			// These are used for compressed vertx index.
+			bool compressed;
+			size_t num_large_in_vertices;
+			size_t num_large_out_vertices;
 		} data;
 		char page[PAGE_SIZE];
 	} h;
@@ -50,6 +55,10 @@ protected:
 		h.data.entry_size = entry_size;
 		h.data.num_entries = 0;
 		h.data.out_part_loc = 0;
+
+		h.data.compressed = false;
+		h.data.num_large_in_vertices = 0;
+		h.data.num_large_out_vertices = 0;
 	}
 
 	class destroy_index
@@ -92,12 +101,27 @@ public:
 		return get_num_vertices() - 1;
 	}
 
-	size_t get_index_size() const {
-		return sizeof(vertex_index) + h.data.num_entries * h.data.entry_size;
-	}
+	size_t get_index_size() const;
 
 	off_t get_out_part_loc() const {
 		return h.data.out_part_loc;
+	}
+
+	bool is_compressed() const {
+		return h.data.compressed;
+	}
+
+	void dump(const std::string &file) const {
+		FILE *f = fopen(file.c_str(), "w");
+		if (f == NULL) {
+			perror("fopen");
+			assert(0);
+		}
+
+		ssize_t ret = fwrite(this, vertex_index::get_index_size(), 1, f);
+		assert(ret);
+
+		fclose(f);
 	}
 };
 
@@ -151,6 +175,15 @@ public:
 
 	vertex_entry_type *get_data() {
 		return vertices;
+	}
+
+	const vertex_entry_type *get_data() const {
+		return vertices;
+	}
+
+	size_t cal_index_size() const {
+		return sizeof(vertex_index)
+			+ h.data.num_entries * h.data.entry_size;
 	}
 
 	void verify() const {
@@ -342,7 +375,7 @@ public:
 		memset(this, 0, sizeof(*this));
 	}
 
-	compressed_directed_vertex_entry(directed_vertex_entry offs[],
+	compressed_directed_vertex_entry(const directed_vertex_entry offs[],
 			size_t edge_data_size, size_t num);
 
 	vsize_t get_num_in_edges(int idx) const {
@@ -374,7 +407,67 @@ public:
 	}
 };
 
-class compressed_directed_vertex_index
+typedef std::pair<vertex_id_t, vsize_t> large_vertex_t;
+class cdirected_vertex_index: public vertex_index
+{
+	static const size_t ENTRY_SIZE = compressed_directed_vertex_entry::ENTRY_SIZE;
+	compressed_directed_vertex_entry entries[0];
+
+	large_vertex_t *get_large_in_vertices() {
+		return (large_vertex_t *) &entries[h.data.num_entries];
+	}
+
+	large_vertex_t *get_large_out_vertices() {
+		return get_large_in_vertices() + h.data.num_large_in_vertices;
+	}
+public:
+	typedef std::shared_ptr<cdirected_vertex_index> ptr;
+
+	static typename cdirected_vertex_index::ptr cast(vertex_index::ptr index) {
+		return std::static_pointer_cast<cdirected_vertex_index, vertex_index>(
+				index);
+	}
+
+	static ptr construct(directed_vertex_index &index);
+
+	const compressed_directed_vertex_entry *get_entries() const {
+		return entries;
+	}
+
+	const large_vertex_t *get_large_in_vertices() const {
+		return (const large_vertex_t *) &entries[h.data.num_entries];
+	}
+
+	const large_vertex_t *get_large_out_vertices() const {
+		return get_large_in_vertices() + h.data.num_large_in_vertices;
+	}
+
+	size_t cal_index_size() const {
+		return sizeof(cdirected_vertex_index)
+		+ sizeof(entries[0]) * h.data.num_entries
+		+ sizeof(large_vertex_t) * h.data.num_large_in_vertices
+		+ sizeof(large_vertex_t) * h.data.num_large_out_vertices;
+	}
+
+	size_t get_num_large_in_vertices() const {
+		return h.data.num_large_in_vertices;
+	}
+
+	size_t get_num_large_out_vertices() const {
+		return h.data.num_large_out_vertices;
+	}
+
+	void verify() const {
+		assert(h.data.entry_size == sizeof(compressed_directed_vertex_entry));
+		assert(ROUNDUP(h.data.header.num_vertices, ENTRY_SIZE) / ENTRY_SIZE
+				== h.data.num_entries);
+	}
+};
+
+/**
+ * In-memory compressed directed vertex index
+ */
+class in_mem_cdirected_vertex_index
 {
 	static const size_t ENTRY_SIZE = compressed_directed_vertex_entry::ENTRY_SIZE;
 	static const size_t ENTRY_MASK = ENTRY_SIZE - 1;
@@ -387,12 +480,15 @@ class compressed_directed_vertex_index
 	vertex_map_t large_out_vertices;
 	std::vector<compressed_directed_vertex_entry> entries;
 
-	compressed_directed_vertex_index(directed_vertex_index &index);
-public:
-	typedef std::shared_ptr<compressed_directed_vertex_index> ptr;
+	in_mem_cdirected_vertex_index(vertex_index &index);
 
-	static ptr create(directed_vertex_index &index) {
-		return ptr(new compressed_directed_vertex_index(index));
+	void init(const directed_vertex_index &index);
+	void init(const cdirected_vertex_index &index);
+public:
+	typedef std::shared_ptr<in_mem_cdirected_vertex_index> ptr;
+
+	static ptr create(vertex_index &index) {
+		return ptr(new in_mem_cdirected_vertex_index(index));
 	}
 
 	size_t get_num_vertices() const {
