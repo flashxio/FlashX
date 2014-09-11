@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include <string>
+#include <unordered_map>
 
 #include "native_file.h"
 
@@ -378,32 +379,12 @@ class compressed_directed_vertex_index
 	static const size_t ENTRY_SIZE = compressed_directed_vertex_entry::ENTRY_SIZE;
 	static const size_t ENTRY_MASK = ENTRY_SIZE - 1;
 
-	class large_vertex_entry {
-		vertex_id_t id;
-		vsize_t num_edges;
-	public:
-		large_vertex_entry(vertex_id_t id, vsize_t num_edges) {
-			this->id = id;
-			this->num_edges = num_edges;
-		}
-
-		vertex_id_t get_id() const {
-			return id;
-		}
-
-		vsize_t get_num_edges() const {
-			return num_edges;
-		}
-
-		bool operator<(const large_vertex_entry &e) const {
-			return this->id < e.id;
-		}
-	};
+	typedef std::unordered_map<vertex_id_t, vsize_t> vertex_map_t;
 
 	size_t num_vertices;
 	size_t edge_data_size;
-	std::vector<large_vertex_entry> large_in_vertices;
-	std::vector<large_vertex_entry> large_out_vertices;
+	vertex_map_t large_in_vertices;
+	vertex_map_t large_out_vertices;
 	std::vector<compressed_directed_vertex_entry> entries;
 
 	compressed_directed_vertex_index(directed_vertex_index &index);
@@ -422,12 +403,9 @@ public:
 		size_t entry_idx = id / ENTRY_SIZE;
 		vsize_t num_edges = entries[entry_idx].get_num_in_edges(id % ENTRY_SIZE);
 		if (num_edges >= compressed_directed_vertex_entry::LARGE_VERTEX_SIZE) {
-			large_vertex_entry v(id, 0);
-			std::vector<large_vertex_entry>::const_iterator it
-				= std::lower_bound(large_in_vertices.begin(),
-						large_in_vertices.end(), v);
+			vertex_map_t::const_iterator it = large_in_vertices.find(id);
 			assert(it != large_in_vertices.end());
-			num_edges = it->get_num_edges();
+			num_edges = it->second;
 		}
 		return num_edges;
 	}
@@ -436,12 +414,9 @@ public:
 		size_t entry_idx = id / ENTRY_SIZE;
 		vsize_t num_edges = entries[entry_idx].get_num_out_edges(id % ENTRY_SIZE);
 		if (num_edges >= compressed_directed_vertex_entry::LARGE_VERTEX_SIZE) {
-			large_vertex_entry v(id, 0);
-			std::vector<large_vertex_entry>::const_iterator it
-				= std::lower_bound(large_out_vertices.begin(),
-						large_out_vertices.end(), v);
+			vertex_map_t::const_iterator it = large_out_vertices.find(id);
 			assert(it != large_out_vertices.end());
-			num_edges = it->get_num_edges();
+			num_edges = it->second;
 		}
 		return num_edges;
 	}

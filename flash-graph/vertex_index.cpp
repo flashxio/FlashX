@@ -163,13 +163,13 @@ compressed_directed_vertex_index::compressed_directed_vertex_index(
 		for (size_t i = 0; i < ENTRY_SIZE; i++) {
 			if (entries[entry_idx].is_large_in_vertex(i)) {
 				ext_mem_vertex_info info = index.get_vertex_info_in(id + i);
-				large_in_vertices.push_back(large_vertex_entry(id + i,
+				large_in_vertices.insert(vertex_map_t::value_type(id + i,
 							ext_mem_undirected_vertex::vsize2num_edges(
 								info.get_size(), edge_data_size)));
 			}
 			if (entries[entry_idx].is_large_out_vertex(i)) {
 				ext_mem_vertex_info info = index.get_vertex_info_out(id + i);
-				large_out_vertices.push_back(large_vertex_entry(id + i,
+				large_out_vertices.insert(vertex_map_t::value_type(id + i,
 							ext_mem_undirected_vertex::vsize2num_edges(
 								info.get_size(), edge_data_size)));
 			}
