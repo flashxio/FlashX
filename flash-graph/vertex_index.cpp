@@ -172,6 +172,7 @@ compressed_directed_vertex_entry::compressed_directed_vertex_entry(
 
 void in_mem_cdirected_vertex_index::init(const directed_vertex_index &index)
 {
+	printf("init from a regular vertex index\n");
 	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	size_t num_entries = index.get_num_entries();
@@ -188,13 +189,15 @@ void in_mem_cdirected_vertex_index::init(const directed_vertex_index &index)
 		for (size_t i = 0; i < ENTRY_SIZE; i++) {
 			if (entries[entry_idx].is_large_in_vertex(i)) {
 				ext_mem_vertex_info info = index.get_vertex_info_in(id + i);
-				large_in_vertices.insert(vertex_map_t::value_type(id + i,
+				size_t map_id = (id + i) % NUM_VMAPS;
+				large_in_vmaps[map_id].insert(vertex_map_t::value_type(id + i,
 							ext_mem_undirected_vertex::vsize2num_edges(
 								info.get_size(), edge_data_size)));
 			}
 			if (entries[entry_idx].is_large_out_vertex(i)) {
 				ext_mem_vertex_info info = index.get_vertex_info_out(id + i);
-				large_out_vertices.insert(vertex_map_t::value_type(id + i,
+				size_t map_id = (id + i) % NUM_VMAPS;
+				large_out_vmaps[map_id].insert(vertex_map_t::value_type(id + i,
 							ext_mem_undirected_vertex::vsize2num_edges(
 								info.get_size(), edge_data_size)));
 			}
@@ -204,6 +207,9 @@ void in_mem_cdirected_vertex_index::init(const directed_vertex_index &index)
 
 void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
 {
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	printf("init from a compressed vertex index\n");
 	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	num_vertices = index.get_graph_header().get_num_vertices();
@@ -212,24 +218,39 @@ void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
 
 	const large_vertex_t *l_in_vertex_array = index.get_large_in_vertices();
 	size_t num_large_in_vertices = index.get_num_large_in_vertices();
-	for (size_t i = 0; i < num_large_in_vertices; i++)
-		large_in_vertices.insert(l_in_vertex_array[i]);
-
 	const large_vertex_t *l_out_vertex_array = index.get_large_out_vertices();
 	size_t num_large_out_vertices = index.get_num_large_out_vertices();
-	for (size_t i = 0; i < num_large_out_vertices; i++)
-		large_out_vertices.insert(l_out_vertex_array[i]);
+
+#pragma omp parallel for
+	for (size_t k = 0; k < NUM_VMAPS; k++) {
+		for (size_t i = 0; i < num_large_in_vertices; i++) {
+			vertex_id_t id = l_in_vertex_array[i].first;
+			size_t map_id = id % NUM_VMAPS;
+			if (map_id == k)
+				large_in_vmaps[map_id].insert(l_in_vertex_array[i]);
+		}
+
+		for (size_t i = 0; i < num_large_out_vertices; i++) {
+			vertex_id_t id = l_out_vertex_array[i].first;
+			size_t map_id = id % NUM_VMAPS;
+			if (map_id == k)
+				large_out_vmaps[map_id].insert(l_out_vertex_array[i]);
+		}
+	}
+	printf("There are %ld large in-vertices and %ld large out-vertices\n",
+			num_large_in_vertices, num_large_out_vertices);
+	gettimeofday(&end, NULL);
+	printf("init in-mem compressed index takes %f seconds\n", time_diff(start, end));
 }
 
 in_mem_cdirected_vertex_index::in_mem_cdirected_vertex_index(
-		vertex_index &index)
+		vertex_index &index): large_in_vmaps(NUM_VMAPS), large_out_vmaps(
+			NUM_VMAPS)
 {
 	if (index.is_compressed())
 		init((const cdirected_vertex_index &) index);
 	else
 		init((const directed_vertex_index &) index);
-	printf("There are %ld large in-vertices and %ld large out-vertices\n",
-			large_in_vertices.size(), large_out_vertices.size());
 }
 
 const size_t in_mem_cdirected_vertex_index::ENTRY_SIZE;
