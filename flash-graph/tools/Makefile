@@ -23,7 +23,7 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS) -lz
 CXXFLAGS += -I../../include -I.. -I. -DSTXXL_PARALLEL_MODE_EXPLICIT $(OMP_FLAG)
 
-all: el2al rmat-gen graph-stat
+all: el2al rmat-gen graph-stat compress_vertex_index
 
 el2al: el2al.o ext_mem_vertex_iterator.o ../libgraph.a
 	$(CXX) -o el2al el2al.o ext_mem_vertex_iterator.o $(LDFLAGS)
@@ -40,6 +40,9 @@ rmat-gen: rmat-gen.o
 graph-stat: graph-stat.o ../libgraph.a
 	$(CXX) -o graph-stat graph-stat.o $(LDFLAGS)
 
+compress_vertex_index: compress_vertex_index.o ../libgraph.a
+	$(CXX) -o compress_vertex_index compress_vertex_index.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -49,5 +52,6 @@ clean:
 	rm -f print_ts_graph
 	rm -f rmat-gen
 	rm -f graph-stat
+	rm -f compress_vertex_index
 
 -include $(DEPS) 
