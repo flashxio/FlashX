@@ -365,6 +365,7 @@ class sparse_self_vertex_compute: public index_compute
 	int entry_size_log;
 	edge_type type;
 	worker_thread *thread;
+	bool in_mem;
 
 	off_t get_page(vertex_id_t id) const {
 		return ROUND_PAGE(id << entry_size_log);
@@ -379,7 +380,8 @@ class sparse_self_vertex_compute: public index_compute
 	void run_both_vertices(vertex_id_t start_vid, index_iterator &it);
 public:
 	sparse_self_vertex_compute(index_comp_allocator &alloc,
-			int entry_size_log): index_compute(alloc) {
+			int entry_size_log, bool in_mem): index_compute(alloc) {
+		this->in_mem = in_mem;
 		this->thread = NULL;
 		type = IN_EDGE;
 		num_ranges = 0;
@@ -395,7 +397,7 @@ public:
 	}
 
 	bool add_range(id_range_t &range) {
-		if (get_last_page() == get_page(range.first)
+		if (in_mem || get_last_page() == get_page(range.first)
 				|| get_last_page() + PAGE_SIZE == get_page(range.first)) {
 			index_compute::add_vertex(range.second - 1);
 			if ((size_t) ranges.get_capacity() <= num_ranges)
@@ -572,6 +574,7 @@ class general_vertex_compute: public index_compute
 	embedded_array<vertex_id_t> ids;
 	embedded_array<vertex_compute *> computes;
 	int entry_size_log;
+	bool in_mem;
 
 	off_t get_page(vertex_id_t id) const {
 		return ROUND_PAGE(id << entry_size_log);
@@ -595,7 +598,8 @@ protected:
 	}
 public:
 	general_vertex_compute(index_comp_allocator &_alloc,
-			int entry_size_log): index_compute(_alloc) {
+			int entry_size_log, bool in_mem): index_compute(_alloc) {
+		this->in_mem = in_mem;
 		num_vertices = 0;
 		num_gets = 0;
 		this->entry_size_log = entry_size_log;
@@ -642,7 +646,7 @@ public:
 			}
 		}
 
-		if (get_last_page() == get_page(id)
+		if (in_mem || get_last_page() == get_page(id)
 				|| get_last_page() + PAGE_SIZE == get_page(id)) {
 			index_compute::add_vertex(id);
 			computes[get_num_vertices()] = compute;
@@ -676,8 +680,8 @@ class genrq_vertex_compute: public general_vertex_compute
 	edge_type type;
 	req_vertex_func func;
 public:
-	genrq_vertex_compute(index_comp_allocator &_alloc,
-			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
+	genrq_vertex_compute(index_comp_allocator &_alloc, int entry_size_log,
+			bool in_mem): general_vertex_compute(_alloc, entry_size_log, in_mem) {
 		type = edge_type::IN_EDGE;
 	}
 
@@ -706,8 +710,8 @@ public:
 class genrq_edge_compute: public general_vertex_compute
 {
 public:
-	genrq_edge_compute(index_comp_allocator &_alloc,
-			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
+	genrq_edge_compute(index_comp_allocator &_alloc, int entry_size_log,
+			bool in_mem): general_vertex_compute(_alloc, entry_size_log, in_mem) {
 	}
 
 	virtual bool run(vertex_id_t vid, index_iterator &it) {
@@ -723,8 +727,8 @@ public:
 class genrq_directed_edge_compute: public general_vertex_compute
 {
 public:
-	genrq_directed_edge_compute(index_comp_allocator &_alloc,
-			int entry_size_log): general_vertex_compute(_alloc, entry_size_log) {
+	genrq_directed_edge_compute(index_comp_allocator &_alloc, int entry_size_log,
+			bool in_mem): general_vertex_compute(_alloc, entry_size_log, in_mem) {
 	}
 
 	virtual bool run(vertex_id_t vid, index_iterator &it) {
@@ -818,14 +822,16 @@ class general_index_comp_allocator_impl: public index_comp_allocator
 	{
 		general_index_comp_allocator_impl<compute_type> &alloc;
 		int entry_size_log;
+		bool in_mem;
 	public:
 		compute_initiator(general_index_comp_allocator_impl<compute_type> &_alloc,
-				int entry_size_log): alloc(_alloc) {
+				int entry_size_log, bool in_mem): alloc(_alloc) {
 			this->entry_size_log = entry_size_log;
+			this->in_mem = in_mem;
 		}
 
 		virtual void init(compute_type *obj) {
-			new (obj) compute_type(alloc, entry_size_log);
+			new (obj) compute_type(alloc, entry_size_log, in_mem);
 		}
 	};
 
@@ -839,11 +845,11 @@ class general_index_comp_allocator_impl: public index_comp_allocator
 
 	obj_allocator<compute_type> allocator;
 public:
-	general_index_comp_allocator_impl(thread *t, int entry_size_log): allocator(
-			"sparse-index-compute-allocator", t->get_node_id(), false, 1024 * 1024,
-			params.get_max_obj_alloc_size(),
+	general_index_comp_allocator_impl(thread *t, int entry_size_log,
+			bool in_mem): allocator("sparse-index-compute-allocator",
+				t->get_node_id(), false, 1024 * 1024, params.get_max_obj_alloc_size(),
 			typename obj_initiator<compute_type>::ptr(new compute_initiator(*this,
-					entry_size_log)),
+					entry_size_log, in_mem)),
 			typename obj_destructor<compute_type>::ptr(new compute_destructor())) {
 	}
 
@@ -921,6 +927,7 @@ class simple_index_reader
 		}
 	};
 
+	bool in_mem;
 	vertex_index_reader::ptr index_reader;
 
 	void flush_computes();
@@ -936,11 +943,13 @@ class simple_index_reader
 
 	simple_index_reader(const in_mem_cdirected_vertex_index &index,
 			bool directed, worker_thread *t) {
+		in_mem = true;
 		init(t, directed);
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
 	simple_index_reader(io_interface::ptr io, bool directed, worker_thread *t) {
+		in_mem = false;
 		init(t, directed);
 		index_reader = vertex_index_reader::create(io, directed);
 	}

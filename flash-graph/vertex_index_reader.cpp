@@ -276,15 +276,16 @@ void simple_index_reader::init(worker_thread *t, bool directed)
 	req_directed_edge_comp_alloc
 		= new index_comp_allocator_impl<req_directed_edge_compute>(t);
 
+	int entry_size_log = get_index_entry_size_log(directed);
 	genrq_vertex_comp_alloc
-		= new general_index_comp_allocator_impl<genrq_vertex_compute>(
-				t, get_index_entry_size_log(directed));
+		= new general_index_comp_allocator_impl<genrq_vertex_compute>(t,
+				entry_size_log, in_mem);
 	genrq_edge_comp_alloc
-		= new general_index_comp_allocator_impl<genrq_edge_compute>(
-				t, get_index_entry_size_log(directed));
+		= new general_index_comp_allocator_impl<genrq_edge_compute>(t,
+				entry_size_log, in_mem);
 	genrq_directed_edge_comp_alloc
-		= new general_index_comp_allocator_impl<genrq_directed_edge_compute>(
-				t, get_index_entry_size_log(directed));
+		= new general_index_comp_allocator_impl<genrq_directed_edge_compute>(t,
+				entry_size_log, in_mem);
 
 	single_vertex_comp_alloc
 		= new index_comp_allocator_impl<single_vertex_compute>(t);
@@ -296,8 +297,8 @@ void simple_index_reader::init(worker_thread *t, bool directed)
 	dense_self_req_alloc
 		= new index_comp_allocator_impl<dense_self_vertex_compute>(t);
 	sparse_self_req_alloc
-		= new general_index_comp_allocator_impl<sparse_self_vertex_compute>(
-				t, get_index_entry_size_log(directed));
+		= new general_index_comp_allocator_impl<sparse_self_vertex_compute>(t,
+				entry_size_log, in_mem);
 }
 
 void simple_index_reader::flush_computes()
