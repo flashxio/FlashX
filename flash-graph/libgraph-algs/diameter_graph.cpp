@@ -363,10 +363,15 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph_index::ptr index = NUMA_graph_index<diameter_vertex>::create(
-			fg->get_index_file());
+	graph_index::ptr index;
+	if (num_bfs == 1)
+		index = NUMA_graph_index<simple_diameter_vertex>::create(
+				fg->get_index_file());
+	else
+		index = NUMA_graph_index<diameter_vertex>::create(fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
+
 	printf("diameter estimation starts\n");
 	printf("#para BFS: %d, #sweeps: %d, directed: %d\n", num_para_bfs,
 			num_sweeps, directed);
