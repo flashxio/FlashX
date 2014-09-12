@@ -590,13 +590,10 @@ public:
 	 * This method gets the location of the byte array in the SAFS file.
 	 * \return the location of the byte array in the SAFS file.
 	 */
-	off_t get_offset() const {
-		const thread_safe_page *p = get_page(0);
-		return p->get_offset() + get_offset_in_first_page();
-	}
+	virtual off_t get_offset() const = 0;
 
 	virtual off_t get_offset_in_first_page() const = 0;
-	virtual thread_safe_page *get_page(int idx) const = 0;
+	virtual const char *get_page(int idx) const = 0;
 
 	/**
 	 * This is a STL-compatile iterator. Users can redefine the type of
@@ -637,7 +634,7 @@ public:
 		T operator*() const {
 			off_t pg_idx = off / PAGE_SIZE;
 			off_t off_in_pg = off % PAGE_SIZE;
-			char *data = (char *) arr->get_page(pg_idx)->get_data();
+			const char *data = arr->get_page(pg_idx);
 			return *(T *) (data + off_in_pg);
 		}
 
@@ -716,21 +713,18 @@ public:
 	template<class T>
 	class seq_const_page_iterator
 	{
-		thread_safe_page *pg;
-		T *data;
-		T *data_end;
+		const T *data;
+		const T *data_end;
 	public:
 		seq_const_page_iterator() {
-			pg = NULL;
 			data = NULL;
 			data_end = NULL;
 		}
 
-		seq_const_page_iterator(thread_safe_page *pg, off_t byte_off,
+		seq_const_page_iterator(const char *page, off_t byte_off,
 				off_t byte_end) {
-			this->pg = pg;
-			data = (T *) (((char *) pg->get_data()) + byte_off);
-			data_end = (T *) (((char *) pg->get_data()) + byte_end);
+			data = (const T *) (page + byte_off);
+			data_end = (const T *) (page + byte_end);
 		}
 
 		int get_num_entries() const {
@@ -742,7 +736,7 @@ public:
 		}
 
 		T next() {
-			T *old_data = data;
+			const T *old_data = data;
 			data++;
 			return *old_data;
 		}
@@ -915,15 +909,18 @@ public:
 
 			// This iterator can change data, so I set all pages that can be
 			// accessed by the iterator dirty.
+			assert(0);
+#if 0
 			off_t num_pages = ROUNDUP_PAGE(end) / PAGE_SIZE;
 			for (off_t i = off / PAGE_SIZE; i < num_pages; i++)
 				arr->get_page(i)->set_dirty(true);
+#endif
 		}
 
 		T &operator*() {
 			off_t pg_idx = off / PAGE_SIZE;
 			off_t off_in_pg = off % PAGE_SIZE;
-			char *data = (char *) arr->get_page(pg_idx)->get_data();
+			const char *data = arr->get_page(pg_idx);
 			return *(T *) (data + off_in_pg);
 		}
 
@@ -1074,6 +1071,10 @@ public:
 	virtual void unlock() {
 	}
 
+	virtual off_t get_offset() const {
+		return off + orig.get_offset();
+	}
+
 	/**
 	 * This method gets the size of the byte array.
 	 * \return the size of the byte array.
@@ -1093,7 +1094,7 @@ public:
 		return (off + orig.get_offset_in_first_page()) % PAGE_SIZE;
 	}
 
-	virtual thread_safe_page *get_page(int idx) const {
+	virtual const char *get_page(int idx) const {
 		return orig.get_page((off
 					+ orig.get_offset_in_first_page()) / PAGE_SIZE + idx);
 	}

@@ -237,12 +237,16 @@ public:
 		}
 	}
 
+	virtual off_t get_offset() const {
+		return off;
+	}
+
 	virtual off_t get_offset_in_first_page() const {
 		return off % PAGE_SIZE;
 	}
 
-	virtual thread_safe_page *get_page(int pg_idx) const {
-		return pages[pg_idx];
+	virtual const char *get_page(int pg_idx) const {
+		return (const char *) pages[pg_idx]->get_data();
 	}
 
 	virtual size_t get_size() const {
@@ -321,13 +325,17 @@ public:
 		assert(0);
 	}
 
+	virtual off_t get_offset() const {
+		return off;
+	}
+
 	virtual off_t get_offset_in_first_page() const {
 		return off % PAGE_SIZE;
 	}
 
-	virtual thread_safe_page *get_page(int idx) const {
+	virtual const char *get_page(int idx) const {
 		assert(idx == 0);
-		return p;
+		return (const char *) p->get_data();
 	}
 
 	virtual size_t get_size() const {
