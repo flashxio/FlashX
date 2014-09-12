@@ -31,11 +31,9 @@ class in_mem_graph
 	char *graph_data;
 	int graph_file_id;
 	std::string graph_file_name;
-	thread_safe_page *graph_pages;
 
 	in_mem_graph() {
 		graph_data = NULL;
-		graph_pages = NULL;
 		graph_size = 0;
 		graph_file_id = -1;
 	}

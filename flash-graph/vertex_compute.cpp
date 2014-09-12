@@ -21,25 +21,6 @@
 #include "worker_thread.h"
 #include "vertex_index_reader.h"
 
-class empty_page_byte_array: public page_byte_array
-{
-public:
-	virtual void lock() {
-	}
-	virtual void unlock() {
-	}
-
-	virtual off_t get_offset_in_first_page() const {
-		return 0;
-	}
-	virtual thread_safe_page *get_page(int idx) const {
-		return NULL;
-	}
-	virtual size_t get_size() const {
-		return 0;
-	}
-};
-
 request_range vertex_compute::get_next_request()
 {
 	// Get the next vertex.

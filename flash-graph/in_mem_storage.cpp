@@ -30,7 +30,7 @@ class in_mem_byte_array: public page_byte_array
 {
 	off_t off;
 	size_t size;
-	thread_safe_page *pages;
+	const char *pages;
 
 	void assign(in_mem_byte_array &arr) {
 		this->off = arr.off;
@@ -53,19 +53,23 @@ public:
 		pages = NULL;
 	}
 
-	in_mem_byte_array(const io_request &req, thread_safe_page *pages,
+	in_mem_byte_array(const io_request &req, char *pages,
 			byte_array_allocator &alloc): page_byte_array(alloc) {
 		this->off = req.get_offset();
 		this->size = req.get_size();
 		this->pages = pages;
 	}
 
+	virtual off_t get_offset() const {
+		return off;
+	}
+
 	virtual off_t get_offset_in_first_page() const {
 		return off % PAGE_SIZE;
 	}
 
-	virtual thread_safe_page *get_page(int pg_idx) const {
-		return &pages[pg_idx];
+	virtual const char *get_page(int pg_idx) const {
+		return pages + pg_idx * PAGE_SIZE;
 	}
 
 	virtual size_t get_size() const {
@@ -191,7 +195,7 @@ void in_mem_io::process_req(const io_request &req)
 {
 	assert(req.get_req_type() == io_request::USER_COMPUTE);
 	in_mem_byte_array byte_arr(req,
-			&graph.graph_pages[req.get_offset() / PAGE_SIZE], *array_allocator);
+			graph.graph_data + ROUND_PAGE(req.get_offset()), *array_allocator);
 	user_compute *compute = req.get_compute();
 	compute->run(byte_arr);
 	// If the user compute hasn't completed and it's not in the queue,
@@ -287,8 +291,6 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 	graph->graph_data = (char *) memalign(PAGE_SIZE, num_pages * PAGE_SIZE);
 	assert(graph->graph_data);
 	graph->graph_file_name = file_name;
-	graph->graph_pages = new thread_safe_page[num_pages];
-	assert(graph->graph_pages);
 
 	printf("load a graph of %ld bytes\n", graph->graph_size);
 	graph->graph_file_id = io_factory->get_file_id();
@@ -300,12 +302,6 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 		io_request req(graph->graph_data + off, loc, req_size, READ);
 		io->access(&req, 1);
 		io->wait4complete(1);
-	}
-
-	for (size_t i = 0; i < num_pages; i++) {
-		page_id_t pg_id(graph->graph_file_id, i * PAGE_SIZE);
-		graph->graph_pages[i] = thread_safe_page(pg_id,
-				graph->graph_data + i * PAGE_SIZE, 0);
 	}
 
 	return graph;
