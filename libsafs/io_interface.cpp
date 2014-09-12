@@ -272,13 +272,23 @@ void destroy_io_system()
 		delete global_data.cache_conf;
 		global_data.cache_conf = NULL;
 	}
+	size_t num_reads = 0;
+	size_t num_writes = 0;
+	size_t num_read_bytes = 0;
+	size_t num_write_bytes = 0;
 	BOOST_FOREACH(disk_io_thread *t, global_data.read_threads) {
 		t->stop();
 		t->join();
+		num_reads += t->get_num_reads();
+		num_writes += t->get_num_writes();
+		num_read_bytes += t->get_num_read_bytes();
+		num_write_bytes += t->get_num_write_bytes();
 		delete t;
 	}
 	global_data.read_threads.resize(0);
 	destroy_aio();
+	printf("I/O threads get %ld reads (%ld bytes) and %ld writes (%ld bytes)\n",
+			num_reads, num_read_bytes, num_writes, num_write_bytes);
 
 #ifdef ENABLE_MEM_TRACE
 	printf("memleak: %ld objects and %ld bytes\n", get_alloc_objs(),

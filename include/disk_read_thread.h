@@ -137,8 +137,6 @@ class disk_io_thread: public thread
 	logical_file_partition partition;
 
 	async_io *aio;
-#ifdef STATISTICS
-	long num_empty;
 	long num_reads;
 	long num_writes;
 	long num_read_bytes;
@@ -152,7 +150,6 @@ class disk_io_thread: public thread
 	long max_flush_delay;
 	long min_flush_delay;
 	long num_msgs;
-#endif
 
 	atomic_integer flush_counter;
 
@@ -243,10 +240,24 @@ public:
 		aio->cleanup();
 	}
 
+	size_t get_num_reads() const {
+		return num_reads;
+	}
+
+	size_t get_num_writes() const {
+		return num_writes;
+	}
+
+	size_t get_num_read_bytes() const {
+		return num_read_bytes;
+	}
+
+	size_t get_num_write_bytes() const {
+		return num_write_bytes;
+	}
+
 	void print_stat() {
 #ifdef STATISTICS
-		printf("queue on disk %d wait for requests for %ld times,\n",
-				disk_id, num_empty);
 		printf("\t%ld reads (%ld bytes), %ld writes (%ld bytes) and %d io waits, complete %d reqs and %ld low-prio reqs,\n",
 				num_reads, num_read_bytes, num_writes, num_write_bytes, aio->get_num_iowait(), aio->get_num_completed_reqs(),
 				num_low_prio_accesses);

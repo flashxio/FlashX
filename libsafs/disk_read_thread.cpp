@@ -48,8 +48,7 @@ disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 	// definition without a file mapper.
 	logical_file_partition part(_partition.get_phy_file_indices());
 	aio = new async_io(part, AIO_DEPTH_PER_FILE, this, flags);
-#ifdef STATISTICS
-	num_empty = 0;
+
 	num_reads = 0;
 	num_writes = 0;
 	num_read_bytes = 0;
@@ -63,7 +62,7 @@ disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
 	max_flush_delay = 0;
 	min_flush_delay = LONG_MAX;
 	num_msgs = 0;
-#endif
+
 	thread::start();
 }
 
@@ -85,10 +84,9 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 {
 	int num_accesses = 0;
 
-#ifdef STATISTICS
 	struct timeval curr_time;
 	gettimeofday(&curr_time, NULL);
-#endif
+
 	io_request req;
 	stack_array<io_request> ignored_flushes(low_prio_msg.get_num_objs());
 	int num_ignored = 0;
@@ -99,9 +97,7 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 			&& queue.is_empty()) {
 		// We copy the request to the local stack.
 		low_prio_msg.get_next(req);
-#ifdef STATISTICS
 		num_low_prio_accesses++;
-#endif
 		assert(req.get_num_bufs() == 1);
 		// The request doesn't own the page, so the reference count
 		// isn't increased while in the queue. Now we try to write
@@ -116,9 +112,7 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 			// The original page has been evicted, we should clear
 			// the prepare-writeback flag on it.
 			req.get_page(0)->set_prepare_writeback(false);
-#ifdef STATISTICS
 			num_ignored_flushes_evicted++;
-#endif
 			ignored_flushes[num_ignored++] = req;
 			continue;
 		}
@@ -129,9 +123,7 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 			// The original page has been evicted, we should clear
 			// the prepare-writeback flag on it.
 			req.get_page(0)->set_prepare_writeback(false);
-#ifdef STATISTICS
 			num_ignored_flushes_evicted++;
-#endif
 			ignored_flushes[num_ignored++] = req;
 			continue;
 		}
@@ -152,17 +144,14 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 				|| p->get_flush_score() > DISCARD_FLUSH_THRESHOLD) {
 			p->unlock();
 			p->dec_ref();
-#ifdef STATISTICS
 			if (p->get_flush_score() > DISCARD_FLUSH_THRESHOLD)
 				num_ignored_flushes_old++;
 			else
 				num_ignored_flushes_cleaned++;
-#endif
 			ignored_flushes[num_ignored++] = req;
 			continue;
 		}
 
-#ifdef STATISTICS
 		long delay = time_diff_us(req.get_timestamp(), curr_time);
 		tot_flush_delay += delay;
 		if (delay < min_flush_delay)
@@ -177,7 +166,6 @@ int disk_io_thread::process_low_prio_msg(message<io_request> &low_prio_msg)
 			num_writes++;
 			num_write_bytes += req.get_size();
 		}
-#endif
 
 		assert(p == req.get_page(0));
 		p->set_io_pending(true);
@@ -233,9 +221,7 @@ void disk_io_thread::run() {
 		if (!comm_queue.is_empty())
 			run_commands(comm_queue);
 		int num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
-#ifdef STATISTICS
 		num_msgs += num;
-#endif
 		if (is_debug_enabled())
 			printf("I/O thread %d: queue size: %d, low-prio queue size: %d\n",
 					get_node_id(), queue.get_num_entries(),
@@ -248,9 +234,7 @@ void disk_io_thread::run() {
 					&& aio->num_available_IO_slots() > AIO_HIGH_PRIO_SLOTS) {
 				if (low_prio_msg.is_empty()) {
 					int num = low_prio_queue.fetch(&low_prio_msg, 1);
-#ifdef STATISTICS
 					num_msgs += num;
-#endif
 					assert(num == 1);
 				}
 				process_low_prio_msg(low_prio_msg);
@@ -267,18 +251,14 @@ void disk_io_thread::run() {
 				int ret = cache->flush_dirty_pages(&filter, NUM_DIRTY_PAGES_TO_FETCH);
 				if (ret == 0)
 					break;
-#ifdef STATISTICS
 				num_requested_flushes += ret;
-#endif
 			}
 			else
 				break;
 
 			// Let's try to fetch requests again.
 			num = queue.fetch(msg_buffer, LOCAL_BUF_SIZE);
-#ifdef STATISTICS
 			num_msgs += num;
-#endif
 		}
 
 		stack_array<io_request> local_reqs(LOCAL_REQ_BUF_SIZE);
@@ -286,7 +266,6 @@ void disk_io_thread::run() {
 			int num_reqs = msg_buffer[i].get_num_objs();
 			assert(num_reqs <= LOCAL_REQ_BUF_SIZE);
 			msg_buffer[i].get_next_objs(local_reqs.data(), num_reqs);
-#ifdef STATISTICS
 			for (int j = 0; j < num_reqs; j++) {
 				if (local_reqs[j].get_access_method() == READ) {
 					num_reads++;
@@ -297,7 +276,6 @@ void disk_io_thread::run() {
 					num_write_bytes += local_reqs[j].get_size();
 				}
 			}
-#endif
 			aio->access(local_reqs.data(), num_reqs);
 			msg_buffer[i].clear();
 		}
