@@ -293,7 +293,9 @@ class vertex_index_reader
 public:
 	typedef std::shared_ptr<vertex_index_reader> ptr;
 
-	static ptr create(const in_mem_cdirected_vertex_index &index, bool directed);
+	static ptr create(const vertex_index::ptr index, bool directed);
+	static ptr create(const in_mem_cdirected_vertex_index::ptr index,
+			bool directed);
 	static ptr create(io_interface::ptr io, bool directed);
 
 	virtual ~vertex_index_reader() {
@@ -984,7 +986,14 @@ class simple_index_reader
 
 	void init(worker_thread *t, bool directed);
 
-	simple_index_reader(const in_mem_cdirected_vertex_index &index,
+	simple_index_reader(const vertex_index::ptr index,
+			bool directed, worker_thread *t) {
+		in_mem = true;
+		init(t, directed);
+		index_reader = vertex_index_reader::create(index, directed);
+	}
+
+	simple_index_reader(const in_mem_cdirected_vertex_index::ptr index,
 			bool directed, worker_thread *t) {
 		in_mem = true;
 		init(t, directed);
@@ -1071,8 +1080,13 @@ public:
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 
-	static ptr create(const in_mem_cdirected_vertex_index &index,
+	static ptr create(const in_mem_cdirected_vertex_index::ptr index,
 			bool directed, worker_thread *t) {
+		return ptr(new simple_index_reader(index, directed, t));
+	}
+
+	static ptr create(const vertex_index::ptr index, bool directed,
+			worker_thread *t) {
 		return ptr(new simple_index_reader(index, directed, t));
 	}
 

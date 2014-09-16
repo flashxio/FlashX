@@ -277,6 +277,5 @@ vertex_id_t vertex_program::get_vertex_id(const compute_vertex &v) const
 
 vsize_t vertex_program::get_num_edges(vertex_id_t id) const
 {
-	const in_mem_cdirected_vertex_index &index = graph->get_in_mem_index();
-	return index.get_num_in_edges(id) + index.get_num_out_edges(id);
+	return graph->get_num_edges(id);
 }

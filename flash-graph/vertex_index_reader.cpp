@@ -100,23 +100,24 @@ public:
 	}
 };
 
-class in_mem_directed_vindex_reader: public vertex_index_reader
+template<class ValueType>
+class in_mem_vindex_reader_impl: public vertex_index_reader
 {
-	const in_mem_cdirected_vertex_index &index;
+	typename vertex_index_temp<ValueType>::ptr index;
 
-protected:
-	in_mem_directed_vindex_reader(
-			const in_mem_cdirected_vertex_index &_index): index(_index) {
+	in_mem_vindex_reader_impl(vertex_index::ptr index) {
+		this->index = vertex_index_temp<ValueType>::cast(index);
 	}
 public:
-	static ptr create(const in_mem_cdirected_vertex_index &index) {
-		return ptr(new in_mem_directed_vindex_reader(index));
+	static ptr create(vertex_index::ptr index) {
+		return ptr(new in_mem_vindex_reader_impl<ValueType>(index));
 	}
-
 
 	virtual void request_index(index_compute *compute) {
 		id_range_t range = compute->get_range();
-		compressed_directed_index_iterator it(index, range);
+		array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
+				// We need an additional entry.
+				index->get_data() + range.second + 1);
 		bool ret = compute->run(compute->get_first_vertex(), it);
 		assert(ret);
 		compute->get_allocator().free(compute);
@@ -130,11 +131,51 @@ public:
 	}
 };
 
+class in_mem_directed_cindex_reader: public vertex_index_reader
+{
+	in_mem_cdirected_vertex_index::ptr index;
+
+protected:
+	in_mem_directed_cindex_reader(
+			const in_mem_cdirected_vertex_index::ptr index) {
+		this->index = index;
+	}
+public:
+	static ptr create(const in_mem_cdirected_vertex_index::ptr index) {
+		return ptr(new in_mem_directed_cindex_reader(index));
+	}
+
+
+	virtual void request_index(index_compute *compute) {
+		id_range_t range = compute->get_range();
+		compressed_directed_index_iterator it(*index, range);
+		bool ret = compute->run(compute->get_first_vertex(), it);
+		assert(ret);
+		compute->get_allocator().free(compute);
+	}
+
+	virtual void wait4complete(int num) {
+	}
+
+	virtual size_t get_num_pending_tasks() const {
+		return 0;
+	}
+};
+
+vertex_index_reader::ptr vertex_index_reader::create(const vertex_index::ptr index,
+		bool directed)
+{
+	if (directed)
+		return in_mem_vindex_reader_impl<directed_vertex_entry>::create(index);
+	else
+		return in_mem_vindex_reader_impl<vertex_offset>::create(index);
+}
+
 vertex_index_reader::ptr vertex_index_reader::create(
-		const in_mem_cdirected_vertex_index &index, bool directed)
+		const in_mem_cdirected_vertex_index::ptr index, bool directed)
 {
 	assert(directed);
-	return in_mem_directed_vindex_reader::create(index);
+	return in_mem_directed_cindex_reader::create(index);
 }
 
 vertex_index_reader::ptr vertex_index_reader::create(io_interface::ptr io,
