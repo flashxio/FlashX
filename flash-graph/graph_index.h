@@ -117,6 +117,7 @@ public:
 	virtual std::string get_index_file() const = 0;
 	virtual local_vid_t get_local_id(int part_id, const compute_vertex &v) const = 0;
 	virtual vertex_id_t get_vertex_id(int part_id, const compute_vertex &v) const = 0;
+	virtual vertex_id_t get_vertex_id(int part_id, compute_vertex_pointer v) const = 0;
 	virtual vertex_id_t get_vertex_id(const compute_vertex &v) const = 0;
 	virtual bool belong2part(const compute_vertex &v, int part_id) const = 0;
 };
@@ -464,6 +465,17 @@ public:
 				return id;
 		}
 		assert(0);
+	}
+
+	virtual vertex_id_t get_vertex_id(int part_id, compute_vertex_pointer v) const {
+		if (v.is_part())
+			return ((part_vertex_type &) *v).get_id();
+		else {
+			local_vid_t local_id = index_arr[part_id]->get_local_id(*v);
+			vertex_id_t id;
+			partitioner->loc2map(part_id, local_id.id, id);
+			return id;
+		}
 	}
 
 	virtual vertex_id_t get_vertex_id(int part_id, const compute_vertex &v) const {

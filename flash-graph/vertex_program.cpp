@@ -275,6 +275,22 @@ vertex_id_t vertex_program::get_vertex_id(const compute_vertex &v) const
 	return id;
 }
 
+vertex_id_t vertex_program::get_vertex_id(compute_vertex_pointer v) const
+{
+	// The current thread is usually the owner thread of the compute vertex.
+	// It is possible that the current thread is the execution thread but
+	// not the owner thread. It happens when the vertex is moved to another
+	// thread due to load balancing.
+	vertex_id_t id = graph->get_graph_index().get_vertex_id(t->get_worker_id(), v);
+	if (id == INVALID_VERTEX_ID) {
+		int part_id = t->get_stolen_vertex_part(*v);
+		assert(part_id >= 0);
+		id = graph->get_graph_index().get_vertex_id(part_id, v);
+		assert(id != INVALID_VERTEX_ID);
+	}
+	return id;
+}
+
 vsize_t vertex_program::get_num_edges(vertex_id_t id) const
 {
 	return graph->get_num_edges(id);
