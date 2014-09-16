@@ -27,6 +27,7 @@
 #include "partitioner.h"
 #include "vertex_program.h"
 #include "graph_file_header.h"
+#include "vertex_pointer.h"
 
 class compute_vertex;
 class part_compute_vertex;
@@ -55,57 +56,6 @@ public:
 
 	vsize_t get_off() const {
 		return off;
-	}
-};
-
-class compute_vertex_pointer
-{
-	static const int PART_BIT_LOC = 48;
-	// TODO This is Linux specific.
-	static const uint64_t PART_MASK = 0xFFFF000000000000UL;
-	static const uint64_t ADDR_MASK = 0x0000FFFFFFFFFFFFUL;
-	uint64_t addr;
-public:
-	static compute_vertex **conv(compute_vertex_pointer *arr) {
-		assert(sizeof(compute_vertex_pointer) == sizeof(arr[0]));
-		return (compute_vertex **) arr;
-	}
-
-	compute_vertex_pointer() {
-		addr = 0;
-	}
-
-	explicit compute_vertex_pointer(compute_vertex *v) {
-		assert(v);
-		addr = (uint64_t) v;
-		assert(addr > 100000);
-	}
-
-	compute_vertex_pointer(compute_vertex *v, bool part) {
-		assert(v);
-		assert(((uint64_t) v) > 100000);
-		addr = ((uint64_t) v) + (((uint64_t) part) << PART_BIT_LOC);
-	}
-
-	bool is_part() const {
-		return addr & PART_MASK;
-	}
-
-	bool is_valid() const {
-		return (addr & ADDR_MASK) != 0;
-	}
-
-	compute_vertex *get() const {
-		assert((addr & ADDR_MASK) != 0);
-		return (compute_vertex *) (uintptr_t) (addr & ADDR_MASK);
-	}
-
-	compute_vertex *operator->() const {
-		return get();
-	}
-
-	compute_vertex &operator*() const {
-		return *get();
 	}
 };
 
