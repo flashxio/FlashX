@@ -114,6 +114,49 @@ public:
 	}
 };
 
+template<class EntryType>
+class array_index_iterator_impl: public index_iterator
+{
+	EntryType *start;
+	EntryType *p;
+	EntryType *end;
+public:
+	array_index_iterator_impl(EntryType *start, EntryType *end) {
+		this->start = start;
+		this->p = start;
+		this->end = end;
+		assert(end - p >= 2);
+		*(EntryType *) curr_buf = *p;
+		p++;
+		*(EntryType *) next_buf = *p;
+		_has_next = true;
+	}
+
+	virtual void move_next() {
+		*(EntryType *) curr_buf = *(EntryType *) next_buf;
+		p++;
+		_has_next = p < end;
+		if (_has_next)
+			*(EntryType *) next_buf = *p;
+	}
+
+	virtual bool move_to(int idx) {
+		p = start + idx;
+		if (p + 1 < end) {
+			*(EntryType *) curr_buf = *p;
+			*(EntryType *) next_buf = *(p + 1);
+			_has_next = true;
+		}
+		else
+			_has_next = false;
+		return _has_next;
+	}
+
+	virtual int get_num_vertices() const {
+		return end - start - 1;
+	}
+};
+
 class compressed_directed_index_iterator: public index_iterator
 {
 	size_t begin;
