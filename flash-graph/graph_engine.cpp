@@ -486,7 +486,10 @@ public:
 void init_vpart_thread::run()
 {
 	vertex_index_reader::ptr index_reader;
-	if (graph_conf.use_in_mem_index())
+	if (graph.get_in_mem_cindex())
+		index_reader = vertex_index_reader::create(graph.get_in_mem_cindex(),
+				graph.is_directed());
+	else if (graph.get_in_mem_index())
 		index_reader = vertex_index_reader::create(graph.get_in_mem_index(),
 				graph.is_directed());
 	else
