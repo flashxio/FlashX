@@ -230,10 +230,12 @@ public:
     /**
      * \brief Implement this method in order to customize the vertex schedule.
      *
+	 *  \param prog the vertex program of the worker thread where we reschedule vertices.
      *  \param vertices An `std::vector` of vertex IDs defining the order in which
      *          vertices in the graph should be processed.
      */
-	virtual void schedule(std::vector<compute_vertex_pointer> &vertices) = 0;
+	virtual void schedule(vertex_program &prog,
+			std::vector<compute_vertex_pointer> &vertices) = 0;
 };
 
 /**
@@ -251,7 +253,7 @@ public:
      * \param v A single `compute_vertex`. **Note:** This parameter is provided by the graph
      *          engine. A user need not ever provide it.
      */
-	virtual bool keep(compute_vertex &v) = 0;
+	virtual bool keep(vertex_program &, compute_vertex &v) = 0;
 };
 
 /**

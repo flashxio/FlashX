@@ -692,10 +692,12 @@ public:
 	vertex_size_scheduler(graph_engine::ptr graph) {
 		this->graph = graph;
 	}
-	void schedule(std::vector<compute_vertex_pointer> &vertices);
+	void schedule(vertex_program &prog,
+			std::vector<compute_vertex_pointer> &vertices);
 };
 
-void vertex_size_scheduler::schedule(std::vector<compute_vertex_pointer> &vertices)
+void vertex_size_scheduler::schedule(vertex_program &prog,
+		std::vector<compute_vertex_pointer> &vertices)
 {
 	class comp_size
 	{
@@ -764,7 +766,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 			this->min = min;
 		}
 
-		bool keep(compute_vertex &v) {
+		bool keep(vertex_program &prog, compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
 			return scan_v.get_degree() >= min;
 		}
@@ -790,7 +792,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 			this->min = min;
 		}
 
-		bool keep(compute_vertex &v) {
+		bool keep(vertex_program &prog, compute_vertex &v) {
 			topK_scan_vertex &scan_v = (topK_scan_vertex &) v;
 			size_t num_local_edges = scan_v.get_degree();
 			return num_local_edges * num_local_edges >= min;

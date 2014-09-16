@@ -223,6 +223,7 @@ class customized_vertex_queue: public active_vertex_queue
 	std::vector<compute_vertex_pointer> sorted_vertices;
 	scan_pointer fetch_idx;
 	vertex_scheduler::ptr scheduler;
+	vertex_program::ptr vprog;
 	graph_engine &graph;
 	const graph_index &index;
 	int part_id;
@@ -230,12 +231,14 @@ class customized_vertex_queue: public active_vertex_queue
 	void get_compute_vertex_pointers(const std::vector<vertex_id_t> &vertices,
 		std::vector<vpart_vertex_pointer> &vpart_ps);
 public:
-	customized_vertex_queue(graph_engine &_graph, vertex_scheduler::ptr scheduler,
-			int part_id): fetch_idx(0, true), graph(_graph), index(
-				_graph.get_graph_index()) {
+	customized_vertex_queue(vertex_program::ptr vprog,
+			vertex_scheduler::ptr scheduler, int part_id): fetch_idx(0,
+				true), graph(vprog->get_graph()), index(
+				graph.get_graph_index()) {
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 		this->scheduler = scheduler;
 		this->part_id = part_id;
+		this->vprog = vprog;
 	}
 
 	void init(const vertex_id_t buf[], size_t size, bool sorted);

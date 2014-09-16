@@ -280,7 +280,7 @@ class activate_k_filter: public vertex_filter {
 	activate_k_filter (vsize_t min) {
 		this->min = min;
 	}
-	bool keep(compute_vertex &v) {
+	bool keep(vertex_program &prog, compute_vertex &v) {
 		kcore_vertex &kcore_v = (kcore_vertex &) v;
 		return kcore_v.get_degree() < min;
 	}

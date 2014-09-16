@@ -289,7 +289,7 @@ void customized_vertex_queue::init(const vertex_id_t buf[],
 		split_vertices(index, part_id, vertices, vpart_ps);
 	get_compute_vertex_pointers(vertices, vpart_ps);
 
-	scheduler->schedule(sorted_vertices);
+	scheduler->schedule(*vprog, sorted_vertices);
 	bool forward = true;
 	if (graph_conf.get_elevator_enabled())
 		forward = graph.get_curr_level() % 2;
@@ -318,7 +318,7 @@ void customized_vertex_queue::init(worker_thread &t)
 		split_vertices(index, part_id, vertices, vpart_ps);
 	get_compute_vertex_pointers(vertices, vpart_ps);
 
-	scheduler->schedule(sorted_vertices);
+	scheduler->schedule(*vprog, sorted_vertices);
 	bool forward = true;
 	if (graph_conf.get_elevator_enabled())
 		forward = graph.get_curr_level() % 2;
@@ -402,7 +402,9 @@ void worker_thread::init()
 				get_node_id()));
 	if (scheduler)
 		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
-				new customized_vertex_queue(*graph, scheduler, worker_id));
+				// TODO can we only use the default vertex program?
+				// what about the vertex program for vertex partitions.
+				new customized_vertex_queue(vprogram, scheduler, worker_id));
 	else
 		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
 				new default_vertex_queue(*graph, worker_id, get_node_id()));
@@ -444,7 +446,7 @@ void worker_thread::init()
 		std::vector<vertex_id_t> kept_ids;
 		BOOST_FOREACH(vertex_id_t id, local_ids) {
 			compute_vertex &v = graph->get_vertex(id);
-			if (filter && filter->keep(v))
+			if (filter && filter->keep(*vprogram, v))
 				kept_ids.push_back(id);
 		}
 		assert(curr_activated_vertices->is_empty());
