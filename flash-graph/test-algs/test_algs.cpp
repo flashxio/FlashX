@@ -415,7 +415,7 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 	int opt;
 	int num_opts = 0;
 	size_t kmax = 0;
-	size_t k = 0;
+	size_t k = 2;
 	std::string write_out = "";
 
 	while ((opt = getopt(argc, argv, "k:m:w:")) != -1) {
@@ -448,6 +448,33 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 		kcorev->to_file(write_out);
 }
 
+void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
+{
+	int opt;
+	int num_opts = 0;
+	std::string write_out = "";
+	vertex_id_t id = 0;
+
+	while ((opt = getopt(argc, argv, "w:s:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'w':
+				write_out = optarg;
+				break;
+			case 's':
+				id = atol(optarg);
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	FG_vector<float>::ptr btwn_v = compute_betweenness_centrality(graph, id);
+	if (!write_out.empty())
+		btwn_v->to_file(write_out);
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -461,6 +488,7 @@ std::string supported_algs[] = {
 	"sstsg",
 	"ts_wcc",
 	"kcore",
+	"betweenness",
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -495,7 +523,10 @@ void print_usage()
 	fprintf(stderr, "k-core:\n");
 	fprintf(stderr, "-k k: the minimum k value to compute\n");
 	fprintf(stderr, "-m kmax: the maximum k value to compute\n");
-	fprintf(stderr, "-w output: the file name for a vector written to filen");
+	fprintf(stderr, "-w output: the file name for a vector written to file\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "betweenness:\n");
+	fprintf(stderr, "-w output: the file name for a vector written to file\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
@@ -567,5 +598,11 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "kcore") {
 		run_kcore(graph, argc, argv);
+	}
+	else if (alg == "betweenness") {
+		run_betweenness_centrality(graph, argc, argv);
+	}
+	else {
+		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());
 	}
 }
