@@ -338,15 +338,15 @@ worker_thread::worker_thread(graph_engine *graph,
 	this->scheduler = scheduler;
 	req_on_vertex = false;
 	this->vprogram = prog;
-	vprogram->init(graph, this);
 	this->vpart_vprogram = vpart_prog;
-	vpart_vprogram->init(graph, this);
 	start_all = false;
 	this->worker_id = worker_id;
 	this->graph = graph;
 	this->io = NULL;
 	this->graph_factory = graph_factory;
 	this->index_factory = index_factory;
+	vprogram->init(graph, this);
+	vpart_vprogram->init(graph, this);
 	balancer = std::unique_ptr<load_balancer>(new load_balancer(*graph, *this));
 	msg_processor = std::unique_ptr<message_processor>(new message_processor(
 				*graph, *this, msg_alloc));
