@@ -337,9 +337,9 @@ worker_thread::worker_thread(graph_engine *graph,
 {
 	this->scheduler = scheduler;
 	req_on_vertex = false;
-	this->vprogram = std::move(prog);
+	this->vprogram = prog;
 	vprogram->init(graph, this);
-	this->vpart_vprogram = std::move(vpart_prog);
+	this->vpart_vprogram = vpart_prog;
 	vpart_vprogram->init(graph, this);
 	start_all = false;
 	this->worker_id = worker_id;
@@ -391,6 +391,9 @@ worker_thread::~worker_thread()
 
 void worker_thread::init()
 {
+	vprogram->run_on_engine_start();
+	vpart_vprogram->run_on_engine_start();
+
 	size_t num_local_vertices = graph->get_partitioner()->get_part_size(
 			worker_id, graph->get_num_vertices());
 	// We should create these objects in the context of the worker thread,
@@ -594,12 +597,17 @@ void worker_thread::run()
 		num_activated_vertices_in_level = atomic_number<long>(0);
 		num_completed_vertices_in_level = atomic_number<long>(0);
 
+		// TODO is this the right place to activate vertices?
+		vprogram->run_on_iteration_end();
+		vpart_vprogram->run_on_iteration_end();
+
 		vprogram->flush_msgs();
 		vpart_vprogram->flush_msgs();
 		// We have to make sure all stolen vertices are returned to their owner
 		// threads.
 		balancer->process_completed_stolen_vertices();
 		balancer->reset();
+
 		bool completed = graph->progress_next_level();
 //		printf("thread %d finish in a level, completed? %d\n", get_id(), completed);
 		if (completed)

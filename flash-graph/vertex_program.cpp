@@ -36,6 +36,13 @@ vertex_program::~vertex_program()
 		multicast_msg_sender::destroy(activate_senders[i]);
 }
 
+void vertex_program::init(graph_engine *graph, worker_thread *t)
+{
+	this->t = t;
+	this->graph = graph;
+	part_id = t->get_worker_id();
+}
+
 void vertex_program::init_messaging(const std::vector<worker_thread *> &threads,
 		std::shared_ptr<slab_allocator> msg_alloc,
 		std::shared_ptr<slab_allocator> flush_msg_alloc)
