@@ -115,7 +115,11 @@ typedef std::map<int, std::vector<vertex_set_ptr> > vertex_map_t;
 class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 {
 	std::vector<vertex_set_ptr> bfs_visited_vertices;
+	int max_dist;
 public:
+	bfs_vertex_program() {
+		max_dist = 0;
+	}
 
 	typedef std::shared_ptr<bfs_vertex_program> ptr;
 
@@ -125,7 +129,9 @@ public:
 
 	/* ### BEGIN TESTING ### */
 	void add_visited_bfs(vertex_id_t vid) {
-		assert(get_graph().get_curr_level() == bfs_visited_vertices.size() - 1);
+		int level = get_graph().get_curr_level();
+		max_dist = level;
+		assert(level == bfs_visited_vertices.size() - 1);
 		bfs_visited_vertices.back()->push_back(vid);
 	}
 
@@ -147,6 +153,10 @@ public:
 		vertices.insert(vertex_map_t::value_type(get_partition_id(),
 					bfs_visited_vertices));
 	}
+
+	int get_max_dist() const {
+		return max_dist;
+	}
 };
 
 class bp_vertex_program: public vertex_program_impl<betweenness_vertex>
@@ -167,7 +177,10 @@ public:
 		assert(bfs_visited_vertices.back()->empty());
 		bfs_visited_vertices.pop_back();
 		// Drop the last set of visited vertices because we have already activated them.
-		bfs_visited_vertices.pop_back();
+		while (bfs_visited_vertices.size() > bfs_max_dist) {
+			bfs_visited_vertices.pop_back();
+		}
+		printf("# sets: %ld, max dist: %d\n", bfs_visited_vertices.size(), bfs_max_dist);
 		assert(bfs_visited_vertices.size() == bfs_max_dist);
 	}
 
@@ -428,7 +441,6 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id
 	graph->start(&g_source_vertex, 1, vertex_initializer::ptr(),
 			vertex_program_creater::ptr(new bfs_vertex_program_creater()));
 	graph->wait4complete();
-	bfs_max_dist = graph->get_curr_level() - 1;
 
 	std::vector<vertex_program::ptr> programs;
 	graph->get_vertex_programs(programs);
@@ -438,6 +450,8 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id
 	BOOST_FOREACH(vertex_program::ptr prog, programs) {
 		bfs_vertex_program::cast2(prog)->collect_vertices(
 				bp_prog_creater_ptr->get_vertex_map());
+		bfs_max_dist = std::max(bfs_max_dist,
+				bfs_vertex_program::cast2(prog)->get_max_dist());
 	}
 
 	printf("Max dist for bfs is %d...\n", bfs_max_dist);
