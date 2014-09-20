@@ -185,7 +185,7 @@ class default_vertex_queue: public active_vertex_queue
 	scan_pointer buf_fetch_idx;
 	graph_engine &graph;
 	const graph_index &index;
-	size_t num_active;
+	std::atomic<size_t> num_active;
 	int part_id;
 
 	void fetch_from_map();

@@ -148,7 +148,7 @@ void default_vertex_queue::init(worker_thread &t)
 	active_vertices = std::move(t.next_activated_vertices);
 	t.next_activated_vertices = std::move(tmp);
 	active_vertices->finalize();
-	num_active = active_vertices->get_num_active_vertices();
+	size_t num_active_vertices = active_vertices->get_num_active_vertices();
 
 	// Get the vertically partitioned vertices that are activated.
 	std::vector<vpart_vertex_pointer> vpart_ps_tmp(
@@ -164,12 +164,13 @@ void default_vertex_queue::init(worker_thread &t)
 			if (active_vertices->is_active(local_vid_t(off))) {
 				vpart_ps.push_back(p);
 				active_vertices->reset_active_vertex(local_vid_t(off));
-				num_active--;
+				num_active_vertices--;
 			}
 		}
 		printf("there are %ld vparts\n", vpart_ps.size());
-		num_active += vpart_ps.size() * graph_conf.get_num_vparts();
+		num_active_vertices += vpart_ps.size() * graph_conf.get_num_vparts();
 	}
+	this->num_active = num_active_vertices;
 
 	bool forward = true;
 	if (graph_conf.get_elevator_enabled())
@@ -214,6 +215,9 @@ void default_vertex_queue::fetch_vparts()
 
 int default_vertex_queue::fetch(compute_vertex_pointer vertices[], int num)
 {
+	if (num_active == 0)
+		return 0;
+
 	int num_fetched = 0;
 	pthread_spin_lock(&lock);
 	if (buf_fetch_idx.get_num_remaining() > 0) {
