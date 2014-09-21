@@ -313,6 +313,27 @@ class FG_vector
 		return std::pair<T, off_t>(ret, idx);
 	}
 
+	void max_val_locs(size_t num, std::vector<std::pair<T, off_t> > &pairs) const {
+		typedef std::pair<T, off_t> val_loc_t;
+		struct comp_val {
+			bool operator()(const val_loc_t &v1, const val_loc_t &v2) {
+				return v1.first > v2.first;
+			}
+		};
+		std::priority_queue<val_loc_t, std::vector<val_loc_t>, comp_val> queue;
+		for (size_t i = 0; i < get_size(); i++) {
+			T val = get(i);
+			queue.push(val_loc_t(val, i));
+			if (queue.size() > num)
+				queue.pop();
+		}
+		while (!queue.empty()) {
+			val_loc_t pair = queue.top();
+			queue.pop();
+			pairs.push_back(pair);
+		}
+	}
+
 	/**
 	 * \brief Find the index with the minmimal value in the vector and
 	 *     return its value.

@@ -195,7 +195,7 @@ void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
 	printf("The estimated diameter is %ld\n", diameter);
 }
 
-void run_pagerank(FG_graph::ptr graph, int argc, char *argv[])
+void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 {
 	int opt;
 	int num_opts = 0;
@@ -220,39 +220,22 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[])
 		}
 	}
 
-	FG_vector<float>::ptr pr = compute_pagerank(graph, num_iters,
-			damping_factor);
-	printf("The sum of pagerank of all vertices: %f\n", pr->sum());
-}
-
-void run_pagerank2(FG_graph::ptr graph, int argc, char *argv[])
-{
-	int opt;
-	int num_opts = 0;
-
-	int num_iters = 30;
-	float damping_factor = 0.85;
-
-	while ((opt = getopt(argc, argv, "i:D:")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'i':
-				num_iters = atoi(optarg);
-				num_opts++;
-				break;
-			case 'D':
-				damping_factor = atof(optarg);
-				num_opts++;
-				break;
-			default:
-				print_usage();
-				assert(0);
-		}
+	FG_vector<float>::ptr pr;
+	switch (version) {
+		case 1:
+			pr = compute_pagerank(graph, num_iters, damping_factor);
+			break;
+		case 2:
+			pr = compute_pagerank2(graph, num_iters, damping_factor);
+			break;
+		default:
+			assert(0);
 	}
-
-	FG_vector<float>::ptr pr = compute_pagerank2(graph, num_iters,
-			damping_factor);
+	std::vector<std::pair<float, off_t> > val_locs;
+	pr->max_val_locs(10, val_locs);
 	printf("The sum of pagerank of all vertices: %f\n", pr->sum());
+	for (size_t i = 0; i < val_locs.size(); i++)
+		printf("v%ld: %f\n", val_locs[i].second, val_locs[i].first);
 }
 
 void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
@@ -548,10 +531,10 @@ int main(int argc, char *argv[])
 		run_diameter(graph, argc, argv);
 	}
 	else if (alg == "pagerank") {
-		run_pagerank(graph, argc, argv);
+		run_pagerank(graph, argc, argv, 1);
 	}
 	else if (alg == "pagerank2") {
-		run_pagerank2(graph, argc, argv);
+		run_pagerank(graph, argc, argv, 2);
 	}
 	else if (alg == "wcc") {
 		run_wcc(graph, argc, argv);
