@@ -26,8 +26,10 @@
 
 #include <tr1/unordered_set>
 
+#include "FGlib.h"
 #include "graph_engine.h"
 
+namespace {
 enum overlap_stage_t
 {
 	CONSTRUCT_NEIGHBORS,
@@ -211,80 +213,6 @@ size_t get_union_vertices(const std::vector<vertex_id_t> &vertices1,
 	return num_eles;
 }
 
-class union_set
-{
-	std::tr1::unordered_set<vertex_id_t> set;
-	pthread_mutex_t lock;
-public:
-	union_set() {
-		pthread_mutex_init(&lock, NULL);
-	}
-
-	void add(const std::vector<vertex_id_t> &vec) {
-		pthread_mutex_lock(&lock);
-		set.insert(vec.begin(), vec.end());
-		pthread_mutex_unlock(&lock);
-	}
-
-	size_t get_size() const {
-		return set.size();
-	}
-} vertex_union;
-
-class intersection_set
-{
-	int num_added;
-	std::vector<vertex_id_t> set;
-	pthread_mutex_t lock;
-public:
-	intersection_set() {
-		num_added = 0;
-		pthread_mutex_init(&lock, NULL);
-	}
-
-	void add(const std::vector<vertex_id_t> &vec);
-
-	size_t get_size() const {
-		return set.size();
-	}
-
-	vertex_id_t get(int idx) const {
-		return set[idx];
-	}
-} vertex_intersection;
-
-void intersection_set::add(const std::vector<vertex_id_t> &vec)
-{
-	std::vector<vertex_id_t> copy(vec);
-	std::sort(copy.begin(), copy.end());
-
-	std::vector<vertex_id_t> new_set;
-	pthread_mutex_lock(&lock);
-	num_added++;
-	if (num_added == 1) {
-		set = copy;
-	}
-	else {
-		size_t i, j;
-		// We assume both vectors are sorted in the ascending order.
-		// We only need to scan them together to extract the common elements.
-		for (i = 0, j = 0; i < set.size() && j < copy.size();) {
-			if (set[i] == copy[j]) {
-				new_set.push_back(set[i]);
-				i++;
-				j++;
-			}
-			else if (set[i] > copy[j])
-				j++;
-			else
-				i++;
-
-		}
-		set = new_set;
-	}
-	pthread_mutex_unlock(&lock);
-}
-
 class overlap_vertex: public compute_vertex
 {
 	std::vector<vertex_id_t> *neighborhood;
@@ -307,24 +235,13 @@ public:
 	}
 
 	void run_stage1(vertex_program &prog) {
-		vertex_id_t id = get_id();
+		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}
-
-	void run_stage2(vertex_program &prog) {
-		BOOST_FOREACH(vertex_id_t id, overlap_vertices) {
-			if (id == get_id())
-				continue;
-			overlap_vertex &neigh = (overlap_vertex &) prog.get_graph().get_vertex(id);
-			size_t common = get_common_vertices(*neighborhood, *neigh.neighborhood);
-			size_t vunion = get_union_vertices(*neighborhood, *neigh.neighborhood);
-			if (common > 0)
-				printf("%u:%u, overlap: %f\n", get_id(), id, ((double) common) / vunion);
-		}
-	}
+	void run_stage2(vertex_program &prog);
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
-		assert(vertex.get_id() == get_id());
+		assert(vertex.get_id() == prog.get_vertex_id(*this));
 		run_on_itself(prog, vertex);
 	}
 
@@ -333,11 +250,12 @@ public:
 		get_unique_neighbors(vertex, *neighborhood);
 		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
 
+		vertex_id_t this_id = prog.get_vertex_id(*this);
 		std::vector<vertex_id_t>::iterator it = std::lower_bound(
-				neighborhood->begin(), neighborhood->end(), get_id());
+				neighborhood->begin(), neighborhood->end(), this_id);
 		if (it != neighborhood->end())
-			assert(*it != get_id());
-		neighborhood->insert(it, get_id());
+			assert(*it != this_id);
+		neighborhood->insert(it, this_id);
 		assert(std::is_sorted(neighborhood->begin(), neighborhood->end()));
 	}
 
@@ -345,79 +263,84 @@ public:
 	}
 };
 
-void int_handler(int sig_num)
+class overlap_vertex_program: public vertex_program_impl<overlap_vertex>
 {
-#ifdef PROFILER
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-#endif
-	exit(0);
-}
-
-int read_vertices(const std::string &file, std::vector<vertex_id_t> &vertices)
-{
-	FILE *f = fopen(file.c_str(), "r");
-	assert(f);
-	ssize_t ret;
-	char *line = NULL;
-	size_t line_size = 0;
-	while ((ret = getline(&line, &line_size, f)) > 0) {
-		if (line[ret - 1] == '\n')
-			line[ret - 1] = 0;
-		vertex_id_t id = atol(line);
-		printf("%u\n", id);
-		vertices.push_back(id);
-	}
-	fclose(f);
-	return vertices.size();
-}
-
-int main(int argc, char *argv[])
-{
-	std::string output_file;
-	std::string confs;
-
-	if (argc < 5) {
-		fprintf(stderr,
-				"overlap conf_file graph_file index_file vertex_file\n");
-		exit(-1);
+	std::vector<std::vector<double> > &overlap_matrix;
+public:
+	overlap_vertex_program(
+			std::vector<std::vector<double> > &_overlaps): overlap_matrix(_overlaps) {
 	}
 
-	std::string conf_file = argv[1];
-	std::string graph_file = argv[2];
-	std::string index_file = argv[3];
-	std::string vertex_file = argv[4];
+	void set_overlap(vertex_id_t id, const std::vector<double> &overlaps) {
+		std::vector<vertex_id_t>::const_iterator it = std::lower_bound(
+				overlap_vertices.begin(), overlap_vertices.end(), id);
+		assert(it != overlap_vertices.end());
+		assert(*it == id);
+		off_t idx = it - overlap_vertices.begin();
+		overlap_matrix[idx] = overlaps;
+	}
+};
 
-	read_vertices(vertex_file, overlap_vertices);
+class overlap_vertex_program_creater: public vertex_program_creater
+{
+	std::vector<std::vector<double> > &overlaps;
+public:
+	overlap_vertex_program_creater(
+			std::vector<std::vector<double> > &_overlaps): overlaps(_overlaps) {
+	}
 
-	config_map configs(conf_file);
-	configs.add_options(confs);
+	vertex_program::ptr create() const {
+		return vertex_program::ptr(new overlap_vertex_program(overlaps));
+	}
+};
 
-	signal(SIGINT, int_handler);
+void overlap_vertex::run_stage2(vertex_program &prog)
+{
+	std::vector<double> overlaps(overlap_vertices.size());
 
+	vertex_id_t this_id = prog.get_vertex_id(*this);
+	for (size_t i = 0; i < overlap_vertices.size(); i++) {
+		vertex_id_t id = overlap_vertices[i];
+		if (id == this_id)
+			continue;
+
+		overlap_vertex &neigh = (overlap_vertex &) prog.get_graph().get_vertex(id);
+		size_t common = get_common_vertices(*neighborhood, *neigh.neighborhood);
+		size_t vunion = get_union_vertices(*neighborhood, *neigh.neighborhood);
+		overlaps[i] = ((double) common) / vunion;
+	}
+	overlap_vertex_program &overlap_prog = (overlap_vertex_program &) prog;
+	overlap_prog.set_overlap(this_id, overlaps);
+}
+
+}
+
+void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
+		std::vector<std::vector<double> > &overlap_matrix)
+{
+	assert(std::is_sorted(vids.begin(), vids.end()));
 	graph_index::ptr index = NUMA_graph_index<overlap_vertex>::create(
-			index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+			fg->get_index_file());
+	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(), index,
+			fg->get_configs());
+	overlap_vertices = vids;
+	overlap_matrix.resize(vids.size());
+	for (size_t i = 0; i < overlap_matrix.size(); i++)
+		overlap_matrix[i].resize(vids.size());
 
 	struct timeval start, end;
-
 	gettimeofday(&start, NULL);
+
 	overlap_stage = overlap_stage_t::CONSTRUCT_NEIGHBORS;
 	graph->start(overlap_vertices.data(), overlap_vertices.size());
 	graph->wait4complete();
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to construct neighborhoods\n",
-			time_diff(start, end));
 
-	gettimeofday(&start, NULL);
 	overlap_stage = overlap_stage_t::COMP_OVERLAP;
-	graph->start(overlap_vertices.data(), overlap_vertices.size());
+	graph->start(overlap_vertices.data(), overlap_vertices.size(),
+			vertex_initializer::ptr(), vertex_program_creater::ptr(
+				new overlap_vertex_program_creater(overlap_matrix)));
 	graph->wait4complete();
+
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to compute overlaps\n", time_diff(start, end));
-
-	printf("All vertices have %ld common neighbors and cover %ld vertices\n",
-			vertex_intersection.get_size(), vertex_union.get_size());
-	for (size_t i = 0; i < vertex_intersection.get_size(); i++)
-		printf("%u\n", vertex_intersection.get(i));
 }

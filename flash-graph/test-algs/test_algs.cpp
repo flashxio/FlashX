@@ -431,6 +431,80 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 		kcorev->to_file(write_out);
 }
 
+int read_vertices(const std::string &file, std::vector<vertex_id_t> &vertices)
+{
+	FILE *f = fopen(file.c_str(), "r");
+	assert(f);
+	ssize_t ret;
+	char *line = NULL;
+	size_t line_size = 0;
+	while ((ret = getline(&line, &line_size, f)) > 0) {
+		if (line[ret - 1] == '\n')
+			line[ret - 1] = 0;
+		vertex_id_t id = atol(line);
+		printf("%u\n", id);
+		vertices.push_back(id);
+	}
+	fclose(f);
+	return vertices.size();
+}
+
+void run_overlap(FG_graph::ptr graph, int argc, char* argv[])
+{
+	std::string output_file;
+	std::string confs;
+
+	if (argc < 2) {
+		fprintf(stderr, "overlap requires vertex_file\n");
+		exit(-1);
+	}
+	std::string vertex_file = argv[1];
+
+	int opt;
+	int num_opts = 0;
+	std::string write_out;
+	double threshold = 0;
+	while ((opt = getopt(argc, argv, "o:t:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'o':
+				write_out = optarg;
+				num_opts++;
+				break;
+			case 't':
+				threshold = atof(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				assert(0);
+		}
+	}
+
+	std::vector<vertex_id_t> overlap_vertices;
+	read_vertices(vertex_file, overlap_vertices);
+	std::vector<std::vector<double> > overlaps;
+	std::sort(overlap_vertices.begin(), overlap_vertices.end());
+	compute_overlap(graph, overlap_vertices, overlaps);
+
+	if (!write_out.empty()) {
+		FILE *fout = fopen(write_out.c_str(), "w");
+		assert(fout);
+		size_t num_vertices = overlap_vertices.size();
+		assert(num_vertices == overlaps.size());
+		for (size_t i = 0; i < num_vertices; i++) {
+			assert(num_vertices == overlaps[i].size());
+			for (size_t j = 0; j < num_vertices; j++) {
+				double overlap = overlaps[i][j];
+				if (overlap >= threshold)
+					fprintf(fout, "%u %u %f\n", overlap_vertices[i],
+							overlap_vertices[j], overlap);
+			}
+		}
+		fclose(fout);
+	}
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -444,6 +518,7 @@ std::string supported_algs[] = {
 	"sstsg",
 	"ts_wcc",
 	"kcore",
+	"overlap",
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -484,6 +559,9 @@ void print_usage()
 	fprintf(stderr, "-f: run the fast implementation\n");
 	fprintf(stderr, "wcc\n");
 	fprintf(stderr, "-s: run wcc synchronously\n");
+	fprintf(stderr, "overlap vertex_file\n");
+	fprintf(stderr, "-o output: the output file\n");
+	fprintf(stderr, "-t threshold: the threshold for printing the overlaps\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
@@ -550,5 +628,8 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "kcore") {
 		run_kcore(graph, argc, argv);
+	}
+	else if (alg == "overlap") {
+		run_overlap(graph, argc, argv);
 	}
 }

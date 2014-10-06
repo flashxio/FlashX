@@ -323,6 +323,15 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg);
 
 /**
+ * \brief Get the neighborhood overlap of each pair of vertices in `vids'.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param vids The vertices whose neighborhood overlap is computed.
+ * \param overlap_matrix A dense matrix that stores the overlap of each pair of vertices.
+ */
+void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
+		std::vector<std::vector<double> > &overlap_matrix);
+
+/**
  * \brief Get the header of the graph that contains basic information of the graph.
  * \return The graph header.
  */
