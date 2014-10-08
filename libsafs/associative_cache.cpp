@@ -976,7 +976,6 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 {
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
-	printf("max num flushes: %d\n", max_num_pending_flush);
 #ifdef DEBUG
 	printf("associative cache is created on node %d, cache size: %ld, min cell size: %d\n",
 			node_id, cache_size, params.get_SA_min_cell_size());

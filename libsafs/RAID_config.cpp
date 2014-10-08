@@ -46,7 +46,6 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 		}
 		std::vector<std::string> part_ids;
 		dir.read_all_files(part_ids);
-		printf("there are %ld files in %s\n", part_ids.size(), dir_name.c_str());
 		if (part_ids.size() != 1) {
 			fprintf(stderr,
 					"wrong format of the SAFS file %s, check the directory %s\n",

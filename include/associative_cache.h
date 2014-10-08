@@ -169,12 +169,6 @@ class LRU_eviction_policy: public eviction_policy
 {
 	std::vector<int> pos_vec;
 public:
-	LRU_eviction_policy() {
-		static bool has_print = false;
-		if (!has_print)
-			printf("use LRU eviction policy\n");
-		has_print = true;
-	}
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 	void access_page(thread_safe_page *pg,
 			page_cell<thread_safe_page> &buf);
@@ -186,10 +180,6 @@ class clock_eviction_policy: public eviction_policy
 public:
 	clock_eviction_policy() {
 		clock_head = 0;
-		static bool has_print = false;
-		if (!has_print)
-			printf("use clock eviction policy\n");
-		has_print = true;
 	}
 
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
@@ -201,10 +191,6 @@ class gclock_eviction_policy: public eviction_policy
 public:
 	gclock_eviction_policy() {
 		clock_head = 0;
-		static bool has_print = false;
-		if (!has_print)
-			printf("use gclock eviction policy\n");
-		has_print = true;
 	}
 
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
@@ -217,24 +203,12 @@ public:
 class LFU_eviction_policy: public eviction_policy
 {
 public:
-	LFU_eviction_policy() {
-		static bool has_print = false;
-		if (!has_print)
-			printf("use LFU eviction policy\n");
-		has_print = true;
-	}
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 };
 
 class FIFO_eviction_policy: public eviction_policy
 {
 public:
-	FIFO_eviction_policy() {
-		static bool has_print = false;
-		if (!has_print)
-			printf("use FIFO eviction policy\n");
-		has_print = true;
-	}
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 };
 
