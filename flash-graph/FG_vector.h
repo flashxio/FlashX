@@ -121,6 +121,13 @@ class FG_vector
 		}
 	}
 
+	template<class T1>
+	void copy_to(T1 *arr, size_t size) {
+		size_t num = std::min(size, eles.size());
+		for (size_t i = 0; i < num; i++)
+			arr[i] = eles[i];
+	}
+
 	/**
 	 * \brief Check for equality between two `FG_vector`s element by
 	 *   element.

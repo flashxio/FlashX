@@ -19,18 +19,20 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
+CXXFLAGS += -I../../include -I.. -I. -I/usr/share/R/include/ $(OMP_FLAG)
 
 all: libgraph-algs
 
-libgraph-algs: $(OBJS)
+libgraph-algs: $(OBJS) ../../libsafs/libsafs.a
 	rm -f libgraph-algs.a
 	ar -cvq libgraph-algs.a $(OBJS)
+	$(CXX) -shared -Wl,-soname,libgraph-algs.so.1 -o libgraph-algs.so.1.0.1 $(OBJS) ../libgraph.a ../../libsafs/libsafs.a -laio -lnuma -lrt
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f libgraph-algs.a
+	rm -f libgraph-algs.so.*
 
 -include $(DEPS) 
