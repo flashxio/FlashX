@@ -472,7 +472,8 @@ void worker_thread::init()
 	}
 
 	bool ret = graph->progress_first_level();
-	assert(!ret);
+	if (ret)
+		fprintf(stderr, "WARNING! worker %d has no active vertices\n", get_worker_id());
 }
 
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads,
