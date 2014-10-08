@@ -332,6 +332,13 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
 		std::vector<std::vector<double> > &overlap_matrix);
 
 /**
+ * \brief Compute transitivity of all vertices in the graph.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \return A vector with an transitivity value for each vertex.
+ */
+FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
+
+/**
  * \brief Get the header of the graph that contains basic information of the graph.
  * \return The graph header.
  */
