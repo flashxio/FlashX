@@ -137,10 +137,11 @@ int main(int argc, char *argv[])
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
 
-	config_map configs(conf_file);
+	config_map::ptr configs = config_map::create(conf_file);
+	assert(configs);
 	graph_conf.init(configs);
 
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, conf_file);
+	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
 	graph_header header = get_graph_header(fg);
 	header = get_graph_header(fg);
 

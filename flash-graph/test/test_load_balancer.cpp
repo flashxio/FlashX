@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 	std::string graph_file = argv[2];
 	std::string index_file = argv[3];
 
-	config_map configs(conf_file);
+	config_map::ptr configs = config_map::create(conf_file);
 
 	graph_index::ptr index = NUMA_graph_index<test_vertex>::create(index_file);
 	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);

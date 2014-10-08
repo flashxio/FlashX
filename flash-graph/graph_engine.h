@@ -362,11 +362,11 @@ protected:
      * \param configs The path to the configuration file on disk.
      */
 	graph_engine(const std::string &graph_file, graph_index::ptr index,
-			const config_map &configs);
+			config_map::ptr configs);
 public:
 	typedef std::shared_ptr<graph_engine> ptr; /** Smart pointer for object access.*/
 
-	static void init_flash_graph(const config_map &configs);
+	static void init_flash_graph(config_map::ptr configs);
 	static void destroy_flash_graph();
     
     /**
@@ -376,7 +376,7 @@ public:
      * \param configs The path to the configuration file on
      */
 	static graph_engine::ptr create(const std::string &graph_file,
-			graph_index::ptr index, const config_map &configs) {
+			graph_index::ptr index, config_map::ptr configs) {
 		return graph_engine::ptr(new graph_engine(graph_file, index, configs));
 	}
 

@@ -76,8 +76,9 @@ int main(int argc, char *argv[])
 	std::string index_file = argv[2];
 	std::string alg = argv[3];
 
-	config_map configs(conf_file);
-	configs.add_options(confs);
+	config_map::ptr configs = config_map::create(conf_file);
+	assert(configs);
+	configs->add_options(confs);
 
 	signal(SIGINT, int_handler);
 

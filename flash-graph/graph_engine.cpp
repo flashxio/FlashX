@@ -533,7 +533,7 @@ void init_vpart_thread::run()
 }
 
 graph_engine::graph_engine(const std::string &graph_file,
-		graph_index::ptr index, const config_map &configs)
+		graph_index::ptr index, config_map::ptr configs)
 {
 	struct timeval init_start, init_end;
 	gettimeofday(&init_start, NULL);
@@ -904,7 +904,7 @@ size_t graph_get_vertices(graph_engine &graph, const worker_thread &t,
 
 std::atomic<size_t> graph_engine::init_count;
 
-void graph_engine::init_flash_graph(const config_map &configs)
+void graph_engine::init_flash_graph(config_map::ptr configs)
 {
 	size_t count = init_count.fetch_add(1);
 	if (count == 0) {

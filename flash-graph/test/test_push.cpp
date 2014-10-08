@@ -117,8 +117,8 @@ int main(int argc, char *argv[])
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
 
-	config_map configs(conf_file);
-	configs.add_options(confs);
+	config_map::ptr configs = config_map::create(conf_file);
+	configs->add_options(confs);
 	printf("The size of vertex state: %ld\n", sizeof(test_vertex));
 
 	signal(SIGINT, int_handler);

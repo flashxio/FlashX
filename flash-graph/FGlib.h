@@ -35,10 +35,10 @@ class FG_graph
 {
 	std::string graph_file;
 	std::string index_file;
-	config_map configs;
+	config_map::ptr configs;
 
 	FG_graph(const std::string &graph_file,
-			const std::string &index_file, const config_map &configs) {
+			const std::string &index_file, config_map::ptr configs) {
 		this->graph_file = graph_file;
 		this->index_file = index_file;
 		this->configs = configs;
@@ -61,7 +61,7 @@ public:
   * \param configs Configuration in configuration file.
 */
 	static ptr create(const std::string &graph_file,
-			const std::string &index_file, const config_map &configs) {
+			const std::string &index_file, config_map::ptr configs) {
 		return ptr(new FG_graph(graph_file, index_file, configs));
 	}
 
@@ -91,7 +91,7 @@ public:
   * \return The config_map that contains all FlashGraph configurations.
   *
 */
-	const config_map &get_configs() const {
+	config_map::ptr get_configs() const {
 		return configs;
 	}
 };
