@@ -25,6 +25,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <memory>
 
 #define USE_GCLOCK
 
@@ -39,11 +40,18 @@
 class config_map
 {
 	std::map<std::string, std::string> configs;
-public:
+
 	config_map() {
 	}
 
-	config_map(const std::string &conf_file);
+public:
+	typedef std::shared_ptr<config_map> ptr;
+
+	static ptr create() {
+		return ptr(new config_map());
+	}
+
+	static ptr create(const std::string &conf_file);
 
 	void add_options(const char *opts[], int num);
 	// Multiple options may exist in the input string and

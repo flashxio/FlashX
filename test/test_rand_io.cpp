@@ -293,9 +293,9 @@ int main(int argc, char *argv[])
 	signal(SIGINT, int_handler);
 	// The file that contains all data files.
 
-	config_map configs(conf_file);
-	configs.add_options((const char **) argv + 3, argc - 3);
-	config.init(configs.get_options());
+	config_map::ptr configs = config_map::create(conf_file);
+	configs->add_options((const char **) argv + 3, argc - 3);
+	config.init(configs->get_options());
 	config.print();
 
 	printf("use a different random sequence\n");

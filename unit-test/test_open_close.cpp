@@ -24,11 +24,11 @@ int main()
 	const int NUM_FILES = 1000;
 	const int NUM_THREADS = 10;
 
-	config_map configs;
 	const char *opts[1];
 	std::string opt = "root_conf=conf/TEST_ROOTS.txt";
 	opts[0] = opt.c_str();
-	configs.add_options(opts, 1);
+	config_map::ptr configs = config_map::create();
+	configs->add_options(opts, 1);
 
 	init_io_system(configs);
 	const RAID_config &raid = get_sys_RAID_conf();

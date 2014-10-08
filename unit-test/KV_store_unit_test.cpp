@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	std::string file_name = argv[2];
 
-	config_map configs(conf_file);
+	config_map::ptr configs = config_map::create(conf_file);
 	init_io_system(configs);
 	file_io_factory::shared_ptr factory = create_io_factory(file_name,
 			GLOBAL_CACHE_ACCESS);

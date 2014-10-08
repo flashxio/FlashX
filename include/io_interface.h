@@ -438,7 +438,7 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
  * \param with_cache determine whether the I/O system is initialized with
  * page cache.
  */
-void init_io_system(const config_map &map, bool with_cache = true);
+void init_io_system(config_map::ptr map, bool with_cache = true);
 
 /**
  * This function destroys SAFS. It should be called at the end of a program.

@@ -233,13 +233,13 @@ void sys_parameters::print_help()
 		<< std::endl;
 }
 
-static void read_config_file(const std::string &conf_file,
+static bool read_config_file(const std::string &conf_file,
 		std::map<std::string, std::string> &configs)
 {
 	FILE *f = fopen(conf_file.c_str(), "r");
 	if (f == NULL) {
 		perror("fopen");
-		assert(0);
+		return false;
 	}
 
 	char *line = NULL;
@@ -271,11 +271,17 @@ static void read_config_file(const std::string &conf_file,
 			configs[key] = value;
 	}
 	fclose(f);
+	return true;
 }
 
-config_map::config_map(const std::string &conf_file)
+config_map::ptr config_map::create(const std::string &conf_file)
 {
-	read_config_file(conf_file, configs);
+	config_map::ptr map = config_map::create();
+	// If we can't read the config file, return an empty pointer.
+	if (!read_config_file(conf_file, map->configs))
+		return config_map::ptr(NULL);
+	else
+		return map;
 }
 
 /**

@@ -162,19 +162,19 @@ int get_file_weight(file_id_t file_id)
 		return 1;
 }
 
-void init_io_system(const config_map &configs, bool with_cache)
+void init_io_system(config_map::ptr configs, bool with_cache)
 {
 #ifdef ENABLE_MEM_TRACE
 	init_mem_tracker();
 #endif
 	
-	params.init(configs.get_options());
+	params.init(configs->get_options());
 	params.print();
 
 	numa_set_bind_policy(1);
 	thread::thread_class_init();
 
-	std::string root_conf_file = configs.get_option("root_conf");
+	std::string root_conf_file = configs->get_option("root_conf");
 	printf("The root conf file: %s\n", root_conf_file.c_str());
 	RAID_config raid_conf(root_conf_file, params.get_RAID_mapping_option(),
 			params.get_RAID_block_size());
@@ -187,8 +187,8 @@ void init_io_system(const config_map &configs, bool with_cache)
 	init_aio(disk_node_ids);
 
 	file_mapper *mapper = raid_conf.create_file_mapper();
-	if (configs.has_option("file_weights"))
-		parse_file_weights(configs.get_option("file_weights"));
+	if (configs->has_option("file_weights"))
+		parse_file_weights(configs->get_option("file_weights"));
 	/* 
 	 * The mutex is enough to guarantee that all threads will see initialized
 	 * global data. The first thread that enters the critical area will

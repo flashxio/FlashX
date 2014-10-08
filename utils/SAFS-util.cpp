@@ -31,7 +31,7 @@
 
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
 
-config_map configs;
+config_map::ptr configs;
 
 ssize_t complete_read(int fd, char *buf, size_t count)
 {
@@ -211,7 +211,7 @@ void comm_load_file2fs(int argc, char *argv[])
 	std::string int_file_name = argv[0];
 	std::string ext_file = argv[1];
 
-	configs.add_options("writable=1");
+	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	data_source *source = new file_data_source(ext_file);
 
@@ -267,7 +267,7 @@ void comm_load_part_file2fs(int argc, char *argv[])
 	std::string ext_file = argv[1];
 	int part_id = atoi(argv[2]);
 
-	configs.add_options("writable=1");
+	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	const RAID_config &conf = get_sys_RAID_conf();
 	file_mapper *fmapper = conf.create_file_mapper();
@@ -325,7 +325,7 @@ void comm_create_file(int argc, char *argv[])
 		exit(-1);
 	}
 
-	configs.add_options("writable=1");
+	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	std::string file_name = argv[0];
 	size_t file_size = str2size(argv[1]);
@@ -406,7 +406,7 @@ void comm_delete_file(int argc, char *argv[])
 		return;
 	}
 
-	configs.add_options("writable=1");
+	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	std::string file_name = argv[0];
 	safs_file file(get_sys_RAID_conf(), file_name);
@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	std::string command = argv[2];
 
-	configs = config_map(conf_file);
+	configs = config_map::create(conf_file);
 	const struct command *comm = get_command(command);
 	if (comm == NULL) {
 		fprintf(stderr, "wrong command %s\n", command.c_str());
