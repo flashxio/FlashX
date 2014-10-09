@@ -20,6 +20,7 @@ include Makefile.common
 all: build_lib unit_test tools flash-graph test utils
 
 build_lib:
+	$(MAKE) -C libcommon
 	$(MAKE) -C libsafs
 
 unit_test: build_lib
@@ -48,6 +49,7 @@ clean:
 	make --ignore-errors -C unit-test clean
 	make --ignore-errors -C test clean
 	make --ignore-errors -C libsafs clean
+	make --ignore-errors -C libcommon clean
 	make --ignore-errors -C tools clean
 	make --ignore-errors -C utils clean
 	make --ignore-errors -C flash-graph clean
