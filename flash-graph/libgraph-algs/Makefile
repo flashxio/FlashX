@@ -18,8 +18,8 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../include -I.. -I. -I/usr/share/R/include/ $(OMP_FLAG)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) $(LDFLAGS)
+CXXFLAGS += -I../../include -I../../libcommon -I.. -I. -I/usr/share/R/include/ $(OMP_FLAG)
 
 all: libgraph-algs
 

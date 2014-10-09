@@ -20,7 +20,7 @@
  * limitations under the License.
  */
 
-#include "parameters.h"
+#include "config_map.h"
 
 /**
  * The data structure contains the configurations for the graph engine.
