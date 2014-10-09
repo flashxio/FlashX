@@ -17,7 +17,7 @@
 
 include ../Makefile.common
 
-CXXFLAGS += -I../include
+CXXFLAGS += -I../include -I../libcommon
 
 all: libsafs
 

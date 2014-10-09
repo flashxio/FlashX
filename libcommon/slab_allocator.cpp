@@ -20,36 +20,9 @@
 #include <numa.h>
 #include <sys/mman.h>
 
-#include "debugger.h"
 #include "slab_allocator.h"
 
 static atomic_number<size_t> tot_slab_size;
-static atomic_flags<int> register_flag;
-
-class debug_all_slab_task: public debug_task
-{
-public:
-	void run() {
-		printf("The size of all slab allocators: %ldMB\n",
-				tot_slab_size.get() / 1024 / 1024);
-	}
-};
-
-class debug_slab_alloc_task: public debug_task
-{
-	slab_allocator *alloc;
-public:
-	debug_slab_alloc_task(slab_allocator *alloc) {
-		this->alloc = alloc;
-	}
-
-	void run() {
-		printf("%s: obj size: %d, max size: %ldMB, curr size: %ldMB\n",
-				alloc->get_name().c_str(), alloc->get_obj_size(),
-				alloc->get_max_size() / 1024 / 1024,
-				alloc->get_curr_size() / 1024 / 1024);
-	}
-};
 
 slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 		long _increase_size, long _max_size, int _node_id,
@@ -66,9 +39,6 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 		   , allocator(obj_size)
 #endif
 {
-	if (!register_flag.set_flag(0))
-		debug.register_task(new debug_all_slab_task());
-	debug.register_task(new debug_slab_alloc_task(this));
 	// To make each name unique.
 	this->name = name + "-" + itoa(alloc_counter.inc(1));
 	this->init = init;

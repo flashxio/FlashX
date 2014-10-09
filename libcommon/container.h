@@ -30,7 +30,6 @@
 #include <string>
 
 #include "common.h"
-#include "debugger.h"
 
 template<class T>
 class queue_interface
@@ -252,18 +251,6 @@ public:
 template<class T>
 class thread_safe_FIFO_queue;
 
-template<class T>
-class print_queue_task: public debug_task
-{
-	thread_safe_FIFO_queue<T> *q;
-public:
-	print_queue_task(thread_safe_FIFO_queue<T> *q) {
-		this->q = q;
-	}
-
-	void run();
-};
-
 /**
  * this is a thread-safe FIFO queue.
  * It supports bulk operations.
@@ -285,7 +272,6 @@ public:
 		this->name = name;
 		this->max_size = size;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
-		debug.register_task(new print_queue_task<T>(this));
 	}
 
 	thread_safe_FIFO_queue(const std::string &name, int node_id, int init_size,
@@ -294,7 +280,6 @@ public:
 		this->name = name;
 		this->max_size = max_size;
 		pthread_spin_init(&_lock, PTHREAD_PROCESS_PRIVATE);
-		debug.register_task(new print_queue_task<T>(this));
 	}
 
 	virtual ~thread_safe_FIFO_queue() {
@@ -404,14 +389,6 @@ public:
 		return name;
 	}
 };
-
-template<class T>
-void print_queue_task<T>::run()
-{
-	printf("%s has %d entries with the size of %ld\n",
-			q->get_name().c_str(), q->get_num_entries(),
-			q->get_size() * sizeof(T));
-}
 
 /**
  * This FIFO queue can block the thread if

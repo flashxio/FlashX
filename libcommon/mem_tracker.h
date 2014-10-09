@@ -26,8 +26,6 @@
 
 #include <new>
 
-void init_mem_tracker();
-
 void *operator new(size_t n) throw (std::bad_alloc);
 void operator delete(void *p) throw ();
 void *operator new[](size_t n) throw (std::bad_alloc);

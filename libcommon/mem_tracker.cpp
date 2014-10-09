@@ -65,21 +65,6 @@ static global_max max_alloc;
 
 #ifdef ENABLE_MEM_TRACE
 
-class print_mem_tracker_task: public debug_task
-{
-public:
-	void run() {
-		printf("alloc %ld objs and %ld bytes\n", alloc_objs.get(),
-				alloc_bytes.get());
-	}
-};
-
-void init_mem_tracker()
-{
-	printf("register mem_tracker to debug\n");
-	debug.register_task(new print_mem_tracker_task());
-}
-
 void *operator new(size_t n) throw (std::bad_alloc)
 {
 	if (mem_trace) {

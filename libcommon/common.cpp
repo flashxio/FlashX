@@ -48,6 +48,14 @@ int isnumeric(char *str)
 }
 
 static const int huge_page_size = 2 * 1024 * 1024;
+static bool use_huge_page = false;
+
+void set_use_huge_page(bool v)
+{
+	printf("use huge page: %d\n", v);
+	use_huge_page = v;
+}
+
 void *malloc_large(size_t size)
 {
 #define PROTECTION (PROT_READ | PROT_WRITE)
@@ -59,7 +67,7 @@ void *malloc_large(size_t size)
 #define ADDR (void *)(0x0UL)
 #define FLAGS (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB)
 #endif
-	if (params.is_huge_page_enabled()) {
+	if (use_huge_page) {
 		size = ROUNDUP(size, huge_page_size);
 		void *addr = mmap(ADDR, size, PROTECTION, FLAGS, 0, 0);
 		if (addr == MAP_FAILED) {
@@ -75,7 +83,7 @@ void *malloc_large(size_t size)
 
 void free_large(void *addr, size_t size)
 {
-	if (params.is_huge_page_enabled()) {
+	if (use_huge_page) {
 		size = ROUNDUP(size, huge_page_size);
 		munmap(addr, size);
 	}
