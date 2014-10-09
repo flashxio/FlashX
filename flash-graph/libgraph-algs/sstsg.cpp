@@ -25,9 +25,6 @@
 #include <set>
 #include <vector>
 
-#include "thread.h"
-#include "io_interface.h"
-
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"

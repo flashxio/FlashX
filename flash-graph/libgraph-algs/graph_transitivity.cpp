@@ -18,7 +18,6 @@
  */
 
 #include "FGlib.h"
-#include "graph.h"
 
 FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg) {
 	printf("Transitivity starts ...\n");

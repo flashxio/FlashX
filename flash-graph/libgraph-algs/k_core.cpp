@@ -25,12 +25,6 @@
 #include <vector>
 #include <algorithm>
 
-#include "thread.h"
-#include "io_interface.h"
-#include "container.h"
-#include "concurrency.h"
-
-#include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"

@@ -22,10 +22,6 @@
 
 #include <atomic>
 
-#include "thread.h"
-#include "container.h"
-#include "concurrency.h"
-#include "slab_allocator.h"
 #include "io_interface.h"
 
 #include "vertex.h"
