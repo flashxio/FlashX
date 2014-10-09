@@ -1,12 +1,12 @@
 include ../Makefile.common
 
-CXXFLAGS += -I.. -I../include
-CFLAGS = -g -O3 -I.. -I../include $(TRACE_FLAGS)
+CXXFLAGS += -I.. -I../include -I../libcommon
+CFLAGS = -g -O3 -I.. -I../include -I../libcommon $(TRACE_FLAGS)
 
-LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
+LDFLAGS := -L../libsafs -lsafs -L../libcommon -lcommon $(LDFLAGS)
 
 TARGETS = create_file memory-fill print_file
-LIBFILE = ../libsafs/libsafs.a
+LIBFILE = ../libsafs/libsafs.a ../libcommon/libcommon.a
 
 all: $(TARGETS)
 

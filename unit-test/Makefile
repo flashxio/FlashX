@@ -17,18 +17,18 @@
 
 include ../Makefile.common
 
-CFLAGS = -g -I../include $(TRACE_FLAGS)
-LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
+CFLAGS = -g -I../include -I../libcommon $(TRACE_FLAGS)
+LDFLAGS := -L../libsafs -lsafs -L../libcommon -lcommon $(LDFLAGS)
 
 UNITTEST = file_mapper_unit_test slab_allocator_test test_mem_tracker native_file_unit_test	\
 		   safs_file_unit_test unique_ptr_unit_test timer_unit_test test_open_close			\
 		   KV_store_unit_test
 CPPFLAGS := -MD
-CXXFLAGS = -I.. -I../include -g -std=c++0x
+CXXFLAGS = -I.. -I../include -I../libcommon -g -std=c++0x
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
-LIBFILE = ../libsafs/libsafs.a
+LIBFILE = ../libsafs/libsafs.a ../libcommon/libcommon.a
 
 all: $(UNITTEST)
 

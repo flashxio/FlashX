@@ -25,6 +25,7 @@
 #include <vector>
 #include <memory>
 
+#include "config_map.h"
 #include "exception.h"
 #include "common.h"
 #include "concurrency.h"

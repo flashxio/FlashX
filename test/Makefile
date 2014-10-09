@@ -19,8 +19,8 @@ include ../Makefile.common
 
 CFLAGS = -g -I../include $(TRACE_FLAGS)
 
-LDFLAGS := -L../libsafs -lsafs $(LDFLAGS)
-CXXFLAGS += -I.. -I../include
+LDFLAGS := -L../libsafs -lsafs -L../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS += -I.. -I../include -I../libcommon
 
 all: test_rand_io workload-gen workload-stat
 
