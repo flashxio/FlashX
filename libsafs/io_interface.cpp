@@ -26,6 +26,8 @@
 #include <unordered_map>
 #include <vector>
 #include <boost/foreach.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/format.hpp>
 
 #include "RAID_config.h"
 #include "io_interface.h"
@@ -120,8 +122,8 @@ void set_file_weight(const std::string &file_name, int weight)
 	if ((size_t) mapper.get_file_id() >= file_weights.size())
 		file_weights.resize(mapper.get_file_id() + 1);
 	file_weights[mapper.get_file_id()] = weight;
-	printf("%s: id: %d, weight: %d\n", file_name.c_str(),
-			mapper.get_file_id(), weight);
+	BOOST_LOG_TRIVIAL(info) << boost::format("%1%: id: %2%, weight: %3%")
+		% file_name % mapper.get_file_id() % weight;
 }
 
 void parse_file_weights(const std::string &str)
@@ -134,7 +136,7 @@ void parse_file_weights(const std::string &str)
 		std::vector<std::string> ss;
 		split_string(s, ':', ss);
 		if (ss.size() != 2) {
-			printf("file weight in wrong format: %s\n", s.c_str());
+			BOOST_LOG_TRIVIAL(error) << "file weight in wrong format: " << s;
 			continue;
 		}
 
@@ -175,7 +177,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	thread::thread_class_init();
 
 	std::string root_conf_file = configs->get_option("root_conf");
-	printf("The root conf file: %s\n", root_conf_file.c_str());
+	BOOST_LOG_TRIVIAL(info) << "The root conf file: " << root_conf_file;
 	RAID_config raid_conf(root_conf_file, params.get_RAID_mapping_option(),
 			params.get_RAID_block_size());
 	int num_files = raid_conf.get_num_disks();
@@ -183,7 +185,8 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	std::set<int> disk_node_set = raid_conf.get_node_ids();
 	std::vector<int> disk_node_ids(disk_node_set.begin(), disk_node_set.end());
-	printf("There are %ld nodes with disks\n", disk_node_ids.size());
+	BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% nodes with disks")
+		% disk_node_ids.size();
 	init_aio(disk_node_ids);
 
 	file_mapper *mapper = raid_conf.create_file_mapper();
@@ -287,14 +290,16 @@ void destroy_io_system()
 	}
 	global_data.read_threads.resize(0);
 	destroy_aio();
-	printf("I/O threads get %ld reads (%ld bytes) and %ld writes (%ld bytes)\n",
-			num_reads, num_read_bytes, num_writes, num_write_bytes);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("I/O threads get %1% reads (%2% bytes) and %3% writes (%4% bytes)")
+		% num_reads % num_read_bytes % num_writes % num_write_bytes;
 
 #ifdef ENABLE_MEM_TRACE
-	printf("memleak: %ld objects and %ld bytes\n", get_alloc_objs(),
-			get_alloc_bytes());
-	printf("max: %ld objs and %ld bytes, max alloc %ld bytes\n",
-			get_max_alloc_objs(), get_max_alloc_bytes(), get_max_alloc());
+	BOOST_LOG_TRIVIAL(info) << boost::format("memleak: %1% objects and %2% bytes")
+		% get_alloc_objs() % get_alloc_bytes();
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("max: %1% objs and %2% bytes, max alloc %3% bytes")
+		% get_max_alloc_objs() % get_max_alloc_bytes() % get_max_alloc();
 #endif
 }
 
@@ -380,8 +385,8 @@ public:
 	}
 
 	virtual void print_statistics() const {
-		printf("%s gets %ld I/O accesses\n", mapper.get_name().c_str(),
-				tot_accesses.load());
+		BOOST_LOG_TRIVIAL(info) << boost::format("%1% gets %2% I/O accesses")
+			% mapper.get_name() % tot_accesses.load();
 	}
 };
 
@@ -420,10 +425,12 @@ public:
 	}
 
 	virtual void print_statistics() const {
-		printf("%s gets %ld async I/O accesses, %ld in bytes\n", mapper.get_name().c_str(),
-				tot_accesses.load(), tot_bytes.load());
-		printf("There are %ld pages accessed, %ld cache hits, %ld of them are in the fast process\n",
-				tot_pg_accesses.load(), tot_hits.load(), tot_fast_process.load());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("%1% gets %2% async I/O accesses, %3% in bytes")
+			% mapper.get_name() % tot_accesses.load() % tot_bytes.load();
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("There are %1% pages accessed, %2% cache hits, %3% of them are in the fast process")
+			% tot_pg_accesses.load() % tot_hits.load() % tot_fast_process.load();
 	}
 };
 

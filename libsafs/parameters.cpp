@@ -19,6 +19,7 @@
 
 #include<algorithm>
 #include <sstream>
+#include <boost/log/trivial.hpp>
 
 #include "parameters.h"
 #include "common.h"
@@ -173,25 +174,25 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 
 void sys_parameters::print()
 {
-	std::cout << "system parameters: " << std::endl;
-	std::cout << "\tRAID_block_size: " << RAID_block_size << std::endl;
-	std::cout << "\tSA_cell_size: " << SA_min_cell_size << std::endl;
-	std::cout << "\tio_depth:" << io_depth_per_file << std::endl;
-	std::cout << "\tcache_type: " << cache_type << std::endl;
-	std::cout << "\tcache_size: " << cache_size << std::endl;
-	std::cout << "\tRAID_mapping: " << RAID_mapping_option << std::endl;
-	std::cout << "\tvirt_aio: " << use_virt_aio << std::endl;
-	std::cout << "\tverify_content: " << verify_content << std::endl;
-	std::cout << "\tuse_flusher: " << use_flusher << std::endl;
-	std::cout << "\tcache_large_write: " << cache_large_write << std::endl;
-	std::cout << "\tvaio_print_freq: " << vaio_print_freq << std::endl;
-	std::cout << "\tnuma_num_process_threads: " << numa_num_process_threads << std::endl;
-	std::cout << "\tnum_nodes: " << num_nodes << std::endl;
-	std::cout << "\tmerge_reqs: " << merge_reqs << std::endl;
-	std::cout << "\tmax_obj_alloc_size: " << max_obj_alloc_size << std::endl;
-	std::cout << "\twritable: " << writable << std::endl;
-	std::cout << "\tmax_num_pending_ios: " << max_num_pending_ios << std::endl;
-	std::cout << "\thuge_page_enabled: " << huge_page_enabled << std::endl;
+	BOOST_LOG_TRIVIAL(info) << "system parameters: ";
+	BOOST_LOG_TRIVIAL(info) << "\tRAID_block_size: " << RAID_block_size;
+	BOOST_LOG_TRIVIAL(info) << "\tSA_cell_size: " << SA_min_cell_size;
+	BOOST_LOG_TRIVIAL(info) << "\tio_depth:" << io_depth_per_file;
+	BOOST_LOG_TRIVIAL(info) << "\tcache_type: " << cache_type;
+	BOOST_LOG_TRIVIAL(info) << "\tcache_size: " << cache_size;
+	BOOST_LOG_TRIVIAL(info) << "\tRAID_mapping: " << RAID_mapping_option;
+	BOOST_LOG_TRIVIAL(info) << "\tvirt_aio: " << use_virt_aio;
+	BOOST_LOG_TRIVIAL(info) << "\tverify_content: " << verify_content;
+	BOOST_LOG_TRIVIAL(info) << "\tuse_flusher: " << use_flusher;
+	BOOST_LOG_TRIVIAL(info) << "\tcache_large_write: " << cache_large_write;
+	BOOST_LOG_TRIVIAL(info) << "\tvaio_print_freq: " << vaio_print_freq;
+	BOOST_LOG_TRIVIAL(info) << "\tnuma_num_process_threads: " << numa_num_process_threads;
+	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes: " << num_nodes;
+	BOOST_LOG_TRIVIAL(info) << "\tmerge_reqs: " << merge_reqs;
+	BOOST_LOG_TRIVIAL(info) << "\tmax_obj_alloc_size: " << max_obj_alloc_size;
+	BOOST_LOG_TRIVIAL(info) << "\twritable: " << writable;
+	BOOST_LOG_TRIVIAL(info) << "\tmax_num_pending_ios: " << max_num_pending_ios;
+	BOOST_LOG_TRIVIAL(info) << "\thuge_page_enabled: " << huge_page_enabled;
 }
 
 void sys_parameters::print_help()

@@ -49,7 +49,6 @@ public:
 	RAID_config(const std::string &conf_file, int mapping_option, int block_size) {
 		this->conf_file = conf_file;
 		retrieve_data_files(conf_file, root_paths);
-		printf("there are %ld disks\n", root_paths.size());
 
 		RAID_mapping_option = mapping_option;
 		RAID_block_size = block_size;
