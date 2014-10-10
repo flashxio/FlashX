@@ -17,6 +17,11 @@
  * limitations under the License.
  */
 
+#include <boost/log/core.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
+#include <Rcpp.h>
+
 #include "FGlib.h"
 
 #if 0
@@ -42,12 +47,11 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
 		std::vector<std::vector<double> > &overlap_matrix);
 #endif
 
-extern "C" {
-
-#include <R.h>
-#include <Rinternals.h>
-#include <Rdefines.h>
-#include <R_ext/Rdynload.h>
+void set_log_level()
+{
+	boost::log::core::get()->set_filter(
+			boost::log::trivial::severity >= boost::log::trivial::info);
+}
 
 #if 0
 void R_init_libgraph(DllInfo *info)
@@ -61,7 +65,7 @@ void R_unload_libgraph(DllInfo *info)
 }
 #endif
 
-SEXP R_FG_compute_wcc(SEXP graph)
+FG_graph::ptr R_FG_get_graph(SEXP graph)
 {
 	std::string graph_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 0), 0));
 	std::string index_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 1), 0));
@@ -71,64 +75,39 @@ SEXP R_FG_compute_wcc(SEXP graph)
 		fprintf(stderr, "can't read conf file\n");
 		abort();
 	}
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	return FG_graph::create(graph_file, index_file, configs);
+}
+
+RcppExport SEXP R_FG_compute_wcc(SEXP graph)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<vertex_id_t>::ptr fg_vec = compute_wcc(fg);
-	SEXP res;
-	PROTECT(res = NEW_INTEGER(fg_vec->get_size()));
-	fg_vec->copy_to(INTEGER(res), fg_vec->get_size());
-	UNPROTECT(1);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
 }
 
-SEXP R_FG_compute_scc(SEXP graph)
+RcppExport SEXP R_FG_compute_scc(SEXP graph)
 {
-	std::string graph_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 0), 0));
-	std::string index_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 1), 0));
-	std::string conf_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 2), 0));
-	config_map::ptr configs = config_map::create(conf_file);
-	if (!configs) {
-		fprintf(stderr, "can't read conf file\n");
-		abort();
-	}
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<vertex_id_t>::ptr fg_vec = compute_scc(fg);
-	SEXP res;
-	PROTECT(res = NEW_INTEGER(fg_vec->get_size()));
-	fg_vec->copy_to(INTEGER(res), fg_vec->get_size());
-	UNPROTECT(1);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
 }
 
-SEXP R_FG_compute_transitivity(SEXP graph)
+RcppExport SEXP R_FG_compute_transitivity(SEXP graph)
 {
-	std::string graph_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 0), 0));
-	std::string index_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 1), 0));
-	std::string conf_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 2), 0));
-	config_map::ptr configs = config_map::create(conf_file);
-	if (!configs) {
-		fprintf(stderr, "can't read conf file\n");
-		abort();
-	}
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<float>::ptr fg_vec = compute_transitivity(fg);
-	SEXP res;
-	PROTECT(res = NEW_NUMERIC(fg_vec->get_size()));
-	fg_vec->copy_to(REAL(res), fg_vec->get_size());
-	UNPROTECT(1);
+	Rcpp::NumericVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
 }
 
-SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
+RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
 {
-	std::string graph_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 0), 0));
-	std::string index_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 1), 0));
-	std::string conf_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 2), 0));
-	config_map::ptr configs = config_map::create(conf_file);
-	if (!configs) {
-		fprintf(stderr, "can't read conf file\n");
-		abort();
-	}
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	FG_graph::ptr fg = R_FG_get_graph(graph);
 
 	std::string type_str = CHAR(STRING_ELT(ptype, 0));
 	edge_type type = edge_type::NONE;
@@ -140,47 +119,27 @@ SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
 		type = edge_type::BOTH_EDGES;
 
 	FG_vector<vsize_t>::ptr fg_vec = get_degree(fg, type);
-	SEXP res;
-	PROTECT(res = NEW_INTEGER(fg_vec->get_size()));
-	fg_vec->copy_to(INTEGER(res), fg_vec->get_size());
-	UNPROTECT(1);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
 }
 
-SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
+RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
 {
-	std::string graph_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 0), 0));
-	std::string index_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 1), 0));
-	std::string conf_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 2), 0));
-	config_map::ptr configs = config_map::create(conf_file);
-	if (!configs) {
-		fprintf(stderr, "can't read conf file\n");
-		abort();
-	}
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	FG_graph::ptr fg = R_FG_get_graph(graph);
 
 	int num_iters = INTEGER(piters)[0];
 	float damping_factor = REAL(pdamping)[0];
 
 	FG_vector<float>::ptr fg_vec = compute_pagerank2(fg, num_iters, damping_factor);
-	SEXP res;
-	PROTECT(res = NEW_NUMERIC(fg_vec->get_size()));
-	fg_vec->copy_to(REAL(res), fg_vec->get_size());
-	UNPROTECT(1);
+	Rcpp::NumericVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
 }
 
-SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
+RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 {
-	std::string graph_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 0), 0));
-	std::string index_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 1), 0));
-	std::string conf_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 2), 0));
-	config_map::ptr configs = config_map::create(conf_file);
-	if (!configs) {
-		fprintf(stderr, "can't read conf file\n");
-		abort();
-	}
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	FG_graph::ptr fg = R_FG_get_graph(graph);
 
 	std::string type_str = CHAR(STRING_ELT(ptype, 0));
 	directed_triangle_type type = directed_triangle_type::CYCLE;
@@ -190,30 +149,16 @@ SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 		type = directed_triangle_type::ALL;
 
 	FG_vector<size_t>::ptr fg_vec = compute_directed_triangles_fast(fg, type);
-	SEXP res;
-	PROTECT(res = NEW_INTEGER(fg_vec->get_size()));
-	fg_vec->copy_to(INTEGER(res), fg_vec->get_size());
-	UNPROTECT(1);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
 }
 
-SEXP R_FG_compute_local_scan(SEXP graph, SEXP k)
+RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP k)
 {
-	std::string graph_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 0), 0));
-	std::string index_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 1), 0));
-	std::string conf_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 2), 0));
-	config_map::ptr configs = config_map::create(conf_file);
-	if (!configs) {
-		fprintf(stderr, "can't read conf file\n");
-		abort();
-	}
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<size_t>::ptr fg_vec = compute_local_scan(fg);
-	SEXP res;
-	PROTECT(res = NEW_INTEGER(fg_vec->get_size()));
-	fg_vec->copy_to(INTEGER(res), fg_vec->get_size());
-	UNPROTECT(1);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
 	return res;
-}
-
 }
