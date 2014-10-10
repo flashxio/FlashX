@@ -287,17 +287,26 @@ void local_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &v
 	runtime_data_t *local_data = create_runtime(prog.get_graph(), *this, vertex);
 	local_value.set_runtime_data(local_data);
 
-	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
-			edge_type::BOTH_EDGES);
-	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
-			edge_type::BOTH_EDGES);
 	size_t tmp = 0;
+	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
+			edge_type::IN_EDGE);
+	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
+			edge_type::IN_EDGE);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		// Ignore loops
 		if (id != vertex.get_id())
 			tmp++;
 	}
+	it = vertex.get_neigh_begin(edge_type::OUT_EDGE);
+	end = vertex.get_neigh_end(edge_type::OUT_EDGE);
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		// Ignore loops
+		if (id != vertex.get_id())
+			tmp++;
+	}
+
 	local_data->local_scan += tmp;
 
 	if (local_data->neighbors->empty()) {
