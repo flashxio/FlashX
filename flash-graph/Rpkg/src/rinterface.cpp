@@ -47,12 +47,6 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
 		std::vector<std::vector<double> > &overlap_matrix);
 #endif
 
-void set_log_level()
-{
-	boost::log::core::get()->set_filter(
-			boost::log::trivial::severity >= boost::log::trivial::info);
-}
-
 #if 0
 void R_init_libgraph(DllInfo *info)
 {
@@ -76,6 +70,14 @@ FG_graph::ptr R_FG_get_graph(SEXP graph)
 		abort();
 	}
 	return FG_graph::create(graph_file, index_file, configs);
+}
+
+RcppExport SEXP R_FG_init()
+{
+	printf("init FlashGraph\n");
+	boost::log::core::get()->set_filter(
+			boost::log::trivial::severity > boost::log::trivial::info);
+	return R_NilValue;
 }
 
 RcppExport SEXP R_FG_compute_wcc(SEXP graph)
@@ -128,7 +130,7 @@ RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 
-	int num_iters = INTEGER(piters)[0];
+	int num_iters = REAL(piters)[0];
 	float damping_factor = REAL(pdamping)[0];
 
 	FG_vector<float>::ptr fg_vec = compute_pagerank2(fg, num_iters, damping_factor);

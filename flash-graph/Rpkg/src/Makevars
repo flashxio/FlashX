@@ -1,0 +1,9 @@
+FG_DIR = /home/zhengda/research/graph-engine
+OMP_FLAG = -fopenmp
+PKG_LIBS = -L$(FG_DIR)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_DIR)/flash-graph -lgraph
+PKG_LIBS += -L$(FG_DIR)/libsafs -lsafs -L$(FG_DIR)/libcommon -lcommon
+PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lboost_log
+PKG_CXXFLAGS = -g -O3 -I. -Wall -fPIC -std=c++0x -DBOOST_LOG_DYN_LINK
+PKG_CXXFLAGS += -I$(FG_DIR)/include -I$(FG_DIR)/libcommon -I$(FG_DIR)/flash-graph
+PKG_CXXFLAGS += -I. -I/usr/lib/R/site-library/Rcpp/include $(OMP_FLAG)
+PKG_CPPFLAGS = $(CXXFLAGS)

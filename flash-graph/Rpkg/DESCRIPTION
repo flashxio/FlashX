@@ -1,0 +1,16 @@
+Package: FlashGraph
+Version: 0.1-0
+Date: 2014-10-10
+Title:  Massive Graph Analysis
+Author: See AUTHORS file.
+Maintainer: Da Zheng <dzheng5@jhu.edu>
+Description: Routines for massive graph analysis. FlashGraph can process
+	graphs of billions of vertices and hundreds of billions edges very efficiently
+	in a single machine.
+Depends: 
+Imports: 
+Suggests: 
+License: Apache (>= 2)
+URL: https://github.com/icoming/FlashGraph
+SystemRequirements: 
+BugReports: https://github.com/icoming/FlashGraph/issues
