@@ -1117,8 +1117,8 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
-	printf("SCC starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "SCC starts";
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -1135,7 +1135,8 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 	graph->start_all();
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("init takes %f seconds.\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("init takes %1% seconds.") % time_diff(start, end);
 
 	scc_stage = scc_stage_t::TRIM1;
 	gettimeofday(&start, NULL);
@@ -1149,8 +1150,9 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 		num_comp1 += trim_vprog->get_num_trimmed();
 	}
 	gettimeofday(&end, NULL);
-	printf("trim1 takes %f seconds. It trims %ld vertices\n",
-			time_diff(start, end), num_comp1);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("trim1 takes %1% seconds. It trims %2% vertices")
+		% time_diff(start, end) % num_comp1;
 
 #if 0
 	scc_stage = scc_stage_t::TRIM2;
@@ -1179,7 +1181,8 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 	graph->start(&max_v, 1);
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("FWBW takes %f seconds\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("FWBW takes %1% seconds") % time_diff(start, end);
 
 	scc_stage = scc_stage_t::PARTITION;
 	gettimeofday(&start, NULL);
@@ -1198,53 +1201,44 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 				part_vprog->get_remain_vertices().end());
 	}
 	gettimeofday(&end, NULL);
-	printf("partition takes %f seconds. Assign %ld vertices to components.\n",
-			time_diff(start, end), largest_comp_size);
-	printf("after partition, finding %ld active vertices takes %f seconds.\n",
-			active_vertices.size(), time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("partition takes %1% seconds. Assign %2% vertices to components.")
+		% time_diff(start, end) % largest_comp_size;
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("after partition, finding %1% active vertices takes %2% seconds.")
+		% active_vertices.size() % time_diff(start, end);
 
 	do {
 		scc_stage = scc_stage_t::TRIM3;
 		trim3_vertices = 0;
-		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size());
 		graph->wait4complete();
-		gettimeofday(&end, NULL);
-		printf("trim3 takes %f seconds, and trime %ld vertices\n",
-				time_diff(start, end), trim3_vertices.load());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("trim3 %1% vertices") % trim3_vertices.load();
 		num_comp1 += trim3_vertices.load();
 
 		scc_stage = scc_stage_t::IN_WCC;
-		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
 				std::shared_ptr<vertex_initializer>(new in_wcc_initializer()));
 		graph->wait4complete();
-		gettimeofday(&end, NULL);
-		printf("IN_WCC takes %f seconds\n", time_diff(start, end));
 
 		scc_stage = scc_stage_t::OUT_WCC;
-		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
 				std::shared_ptr<vertex_initializer>(new out_wcc_initializer()));
 		graph->wait4complete();
 		vertex_query::ptr mdq1(new post_wcc_query());
 		graph->query_on_all(mdq1);
-		gettimeofday(&end, NULL);
-		printf("IN_WCC takes %f seconds\n", time_diff(start, end));
 
-		gettimeofday(&start, NULL);
 		std::vector<vertex_id_t> fwbw_starts;
 		((post_wcc_query *) mdq1.get())->get_max_ids(fwbw_starts);
-		printf("FWBW starts on %ld vertices\n", fwbw_starts.size());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("FWBW starts on %1% vertices") % fwbw_starts.size();
 		scc_stage = scc_stage_t::FWBW;
 		graph->start(fwbw_starts.data(), fwbw_starts.size(),
 				vertex_initializer::ptr(new fwbw_initializer()));
 		graph->wait4complete();
-		gettimeofday(&end, NULL);
-		printf("FWBW takes %f seconds\n", time_diff(start, end));
 
 		scc_stage = scc_stage_t::PARTITION;
-		gettimeofday(&start, NULL);
 		graph->start(active_vertices.data(), active_vertices.size(),
 				vertex_initializer::ptr(),
 				vertex_program_creater::ptr(new part_vertex_program_creater()));
@@ -1264,12 +1258,15 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 					part_vprog->get_remain_vertices().begin(),
 					part_vprog->get_remain_vertices().end());
 		}
-		gettimeofday(&end, NULL);
-		printf("partition takes %f seconds. Assign %ld vertices to components.\n",
-				time_diff(start, end), fwbw_vertices);
-		printf("There are %ld vertices left unassigned\n", active_vertices.size());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("partitioning assigns %1% vertices to components.")
+			% fwbw_vertices;
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("There are %1% vertices left unassigned")
+			% active_vertices.size();
 	} while (!active_vertices.empty());
-	printf("scc takes %f seconds\n", time_diff(scc_start, end));
+	BOOST_LOG_TRIVIAL(info)
+			<< boost::format("scc takes %1% seconds") % time_diff(scc_start, end);
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

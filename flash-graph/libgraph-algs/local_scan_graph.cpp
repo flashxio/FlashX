@@ -342,8 +342,8 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 
-	printf("local scan starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "local scan starts";
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -364,8 +364,9 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	printf("It takes %f seconds to compute all local scan\n",
-			time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds to compute all local scan")
+		% time_diff(start, end);
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
 	graph->query_on_all(vertex_query::ptr(

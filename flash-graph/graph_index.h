@@ -22,6 +22,8 @@
 
 #include <algorithm>
 #include <boost/foreach.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/format.hpp>
 
 #include "vertex.h"
 #include "partitioner.h"
@@ -368,7 +370,8 @@ public:
 		min_vertex_id = 0;
 		max_vertex_id = header.get_num_vertices() - 1;
 
-		printf("There are %ld vertices\n", header.get_num_vertices());
+		BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% vertices")
+			% header.get_num_vertices();
 	}
 
 	virtual void init_vparts(int hpart_id, int num_vparts,

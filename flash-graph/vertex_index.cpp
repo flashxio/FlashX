@@ -17,6 +17,9 @@
  * limitations under the License.
  */
 
+#include <boost/log/trivial.hpp>
+#include <boost/format.hpp>
+
 #include "io_interface.h"
 
 #include "vertex_compute.h"
@@ -68,8 +71,9 @@ vertex_index::ptr vertex_index::load(const std::string &index_file)
 	vertex_index::ptr idx((vertex_index *) buf, destroy_index());
 	assert((size_t) size >= idx->get_index_size());
 	verify_index(idx);
-	printf("load vertex index: file size: %ld, index size: %ld\n", size,
-			idx->get_index_size());
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("load vertex index: file size: %1%, index size: %2%")
+		% size % idx->get_index_size();
 
 	return idx;
 }
@@ -100,7 +104,8 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	size_t index_size = index->get_index_size();
 	assert((ssize_t) index_size <= factory->get_file_size());
 	char *buf = NULL;
-	printf("allocate %ld bytes for vertex index\n", index_size);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("allocate %1% bytes for vertex index") % index_size;
 	ret = posix_memalign((void **) &buf, PAGE_SIZE,
 			std::max(index_size, (size_t) INDEX_HEADER_SIZE));
 	assert(ret == 0);
@@ -172,7 +177,7 @@ compressed_directed_vertex_entry::compressed_directed_vertex_entry(
 
 void in_mem_cdirected_vertex_index::init(const directed_vertex_index &index)
 {
-	printf("init from a regular vertex index\n");
+	BOOST_LOG_TRIVIAL(info) << "init from a regular vertex index";
 	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	size_t num_entries = index.get_num_entries();
@@ -209,7 +214,7 @@ void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	printf("init from a compressed vertex index\n");
+	BOOST_LOG_TRIVIAL(info) << "init from a compressed vertex index";
 	index.verify();
 	edge_data_size = index.get_graph_header().get_edge_data_size();
 	num_vertices = index.get_graph_header().get_num_vertices();
@@ -237,10 +242,13 @@ void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
 				large_out_vmaps[map_id].insert(l_out_vertex_array[i]);
 		}
 	}
-	printf("There are %ld large in-vertices and %ld large out-vertices\n",
-			num_large_in_vertices, num_large_out_vertices);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("There are %1% large in-vertices and %2% large out-vertices")
+		% num_large_in_vertices % num_large_out_vertices;
 	gettimeofday(&end, NULL);
-	printf("init in-mem compressed index takes %f seconds\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("init in-mem compressed index takes %1% seconds")
+		% time_diff(start, end);
 }
 
 in_mem_cdirected_vertex_index::in_mem_cdirected_vertex_index(

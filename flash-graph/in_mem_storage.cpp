@@ -20,6 +20,9 @@
 #include <stdlib.h>
 #include <malloc.h>
 
+#include <boost/log/trivial.hpp>
+#include <boost/format.hpp>
+
 #include "safs_file.h"
 #include "cache.h"
 #include "slab_allocator.h"
@@ -292,7 +295,8 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 	assert(graph->graph_data);
 	graph->graph_file_name = file_name;
 
-	printf("load a graph of %ld bytes\n", graph->graph_size);
+	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
+		% graph->graph_size;
 	graph->graph_file_id = io_factory->get_file_id();
 	io_interface::ptr io = io_factory->create_io(thread::get_curr_thread());
 	const size_t MAX_IO_SIZE = 256 * 1024 * 1024;

@@ -610,8 +610,9 @@ graph_engine::graph_engine(const std::string &graph_file,
 	}
 
 	gettimeofday(&init_end, NULL);
-	printf("It takes %f seconds to initialize the graph engine\n",
-			time_diff(init_start, init_end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds to initialize the graph engine")
+		% time_diff(init_start, init_end);
 }
 
 graph_engine::~graph_engine()
@@ -740,7 +741,7 @@ bool graph_engine::progress_first_level()
 	int rc = pthread_barrier_wait(&barrier2);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
 	{
-		printf("Could not wait on barrier\n");
+		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
 		exit(-1);
 	}
 	return is_complete;
@@ -756,7 +757,7 @@ bool graph_engine::progress_next_level()
 	int rc = pthread_barrier_wait(&barrier1);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
 	{
-		printf("Could not wait on barrier\n");
+		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
 		exit(-1);
 	}
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
@@ -767,9 +768,10 @@ bool graph_engine::progress_next_level()
 		level.inc(1);
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
-		printf("Iter %d takes %f seconds, and %ld vertices are in iter %d\n",
-				level.get() - 1, time_diff(iter_start, curr),
-				tot_num_activates.get(), level.get());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("Iter %1% takes %2% seconds, and %3% vertices are in iter %4%")
+				% (level.get() - 1) % time_diff(iter_start, curr)
+				% tot_num_activates.get() % level.get();
 		iter_start = curr;
 		assert(num_remaining_vertices_in_level.get() == 0);
 		num_remaining_vertices_in_level = atomic_number<size_t>(
@@ -785,7 +787,7 @@ bool graph_engine::progress_next_level()
 	rc = pthread_barrier_wait(&barrier2);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
 	{
-		printf("Could not wait on barrier\n");
+		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
 		exit(-1);
 	}
 	return is_complete;
@@ -800,8 +802,9 @@ void graph_engine::wait4complete()
 	}
 	struct timeval curr;
 	gettimeofday(&curr, NULL);
-	printf("The graph engine takes %f seconds to complete\n",
-			time_diff(start_time, curr));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("The graph engine takes %1% seconds to complete")
+		% time_diff(start_time, curr);
 }
 
 void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
@@ -819,16 +822,20 @@ void graph_engine::preload_graph()
 	size_t preload_size = min(cache_size,
 			index_factory->get_file_size());
 	cache_size -= preload_size;
-	printf("preload %ld bytes of the index file\n", preload_size);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("preload %1% bytes of the index file")
+		% preload_size;
 	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
 		io->access(buf.get(), i, BLOCK_SIZE, READ);
 
 	io = graph_factory->create_io(thread::get_curr_thread());
 	preload_size = min(cache_size, graph_factory->get_file_size());
-	printf("preload %ld bytes of the graph file\n", preload_size);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("preload %1% bytes of the graph file")
+		% preload_size;
 	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
 		io->access(buf.get(), i, BLOCK_SIZE, READ);
-	printf("successfully preload\n");
+	BOOST_LOG_TRIVIAL(info) << "successfully preload";
 }
 
 void graph_engine::init_vertices(vertex_id_t ids[], int num,

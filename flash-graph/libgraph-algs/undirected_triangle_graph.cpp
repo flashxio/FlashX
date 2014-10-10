@@ -103,7 +103,8 @@ void undirected_triangle_vertex::run_on_vertex_header(vertex_program &prog,
 		if (data->edges.empty()) {
 			long ret = num_completed_vertices.inc(1);
 			if (ret % 100000 == 0)
-				printf("%ld completed vertices\n", ret);
+				BOOST_LOG_TRIVIAL(debug)
+					<< boost::format("%1% completed vertices") % ret;
 			destroy_runtime();
 			return;
 		}
@@ -121,7 +122,8 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
-		printf("%ld working vertices\n", ret);
+		BOOST_LOG_TRIVIAL(debug)
+			<< boost::format("%1% working vertices") % ret;
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
 	// either of them.
@@ -129,7 +131,8 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 			|| vertex.get_num_edges(edge_type::IN_EDGE) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 		return;
 	}
 
@@ -162,7 +165,8 @@ void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	if (data->num_joined == data->num_required) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 
 		// Inform all neighbors in the in-edges.
 		for (size_t i = 0; i < data->triangles.size(); i++) {
@@ -280,13 +284,13 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 #include "save_result.h"
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
-	printf("undirected triangle counting starts\n");
+	BOOST_LOG_TRIVIAL(info) << "undirected triangle counting starts";
 	graph_index::ptr index = NUMA_graph_index<undirected_triangle_vertex>::create(
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -302,8 +306,9 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	printf("It takes %f seconds to count all triangles\n",
-			time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds to count all triangles")
+		% time_diff(start, end);
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
 	graph->query_on_all(vertex_query::ptr(

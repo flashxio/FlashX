@@ -588,7 +588,6 @@ int main(int argc, char *argv[])
 	argv += 3;
 	argc -= 3;
 
-	printf("conf file: %s\n", conf_file.c_str());
 	config_map::ptr configs = config_map::create(conf_file);
 	assert(configs);
 	signal(SIGINT, int_handler);

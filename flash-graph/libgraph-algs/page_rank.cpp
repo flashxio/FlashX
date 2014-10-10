@@ -197,7 +197,8 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 {
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
+		BOOST_LOG_TRIVIAL(fatal)
+			<< "Damping factor must be between 0 and 1 inclusive";
 		exit(-1);
 	}
 
@@ -208,8 +209,10 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 	max_num_iters = num_iters;
-	printf("Pagerank (at maximal %d iterations) starting\n", max_num_iters);
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("Pagerank (at maximal %1% iterations) starting")
+		% max_num_iters;
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -233,7 +236,9 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		ProfilerStop();
 #endif
 
-	printf("It takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds in total")
+		% time_diff(start, end);
 	return ret;
 }
 
@@ -242,7 +247,8 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 {
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
+		BOOST_LOG_TRIVIAL(fatal)
+			<< "Damping factor must be between 0 and 1 inclusive";
 		exit(-1);
 	}
 
@@ -253,8 +259,10 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 	max_num_iters = num_iters;
-	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("Pagerank (at maximal %1% iterations) starting")
+		% max_num_iters;
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -274,6 +282,8 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		ProfilerStop();
 #endif
 
-	printf("It takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds in total")
+		% time_diff(start, end);
 	return ret;
 }

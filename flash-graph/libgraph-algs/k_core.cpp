@@ -262,7 +262,7 @@ void print_active(std::vector<vertex_id_t> v) {
 
 void set_kmax(graph_engine::ptr graph, size_t& kmax)
 {
-	printf("Computing kmax as max_degree ...\n");
+	BOOST_LOG_TRIVIAL(info) << "Computing kmax as max_degree ...";
 	vertex_query::ptr mdq(new max_degree_query());
 	graph->query_on_all(mdq); 
 	kmax = ((max_degree_query *) mdq.get())->get_max_degree();
@@ -289,7 +289,8 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 			index, fg->get_configs());
 
 	if (k > graph->get_max_vertex_id()) {
-		fprintf(stderr, "'k' must be between 2 and the number of nodes in the graph\n");
+		BOOST_LOG_TRIVIAL(fatal)
+			<< "'k' must be between 2 and the number of nodes in the graph";
 		exit(-1);
 	}
 
@@ -297,7 +298,7 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 	gettimeofday(&start, NULL);
 
 	CURRENT_K = k;
-	printf("Running the init degree stage ...\n");
+	BOOST_LOG_TRIVIAL(info) << "Running the init degree stage ...";
 	stage = INIT_DEGREE;
 	graph->start_all(); 
 	graph->wait4complete();
@@ -306,7 +307,7 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 	if (kmax == 0 && k != 0) {
 		set_kmax(graph, kmax);
 	}
-	printf("Setting kmax as %lu\n", kmax);
+	BOOST_LOG_TRIVIAL(info) << "Setting kmax as " << kmax;
 
 
 	for (; CURRENT_K <= kmax; CURRENT_K++) {
@@ -323,16 +324,17 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 			vsize_t min_degree_remaining = ((min_degree_query *) mdq.get())->get_min_degree();
 
 			if (min_degree_remaining == std::numeric_limits<vsize_t>::max()) {
-				printf("No more active vertices left!\n");
+				BOOST_LOG_TRIVIAL(info) << "No more active vertices left!";
 				break;
 			}
 
-			printf("\n\nThe graphs minimum degree remaining is %u\n\n", min_degree_remaining);
+			BOOST_LOG_TRIVIAL(info)
+				<< "The graphs minimum degree remaining is " << min_degree_remaining;
 			// Effectively jumps us to the CURRENT_K + 1th core
 			CURRENT_K = min_degree_remaining; // NOTE: Careful - messing with the loop variable :/
 
 			if (CURRENT_K > kmax) {
-				printf("\nTerminating computation at kmax\n");
+				BOOST_LOG_TRIVIAL(info) << "Terminating computation at kmax";
 				break;
 			}
 		}
@@ -342,16 +344,16 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 		vertex_query::ptr cvq(new count_vertex_query());
 		graph->query_on_all(cvq);
 		size_t in_k_core = ((count_vertex_query *) cvq.get())->get_num();
-		printf("\n******************************************\n"
-				"%d-core shows %ld vertices > %d degree\n"
-				"\n******************************************\n",
-				CURRENT_K, in_k_core, CURRENT_K);
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("%1%-core shows %2% vertices > %3% degree")
+			% CURRENT_K % in_k_core % CURRENT_K;
 #endif
 		PREVIOUS_K = CURRENT_K;
 	}
 
 	gettimeofday(&end, NULL);
-	printf("\nK-core took %f sec to complete\n", time_diff(start, end)); 
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("K-core took %1% sec to complete") % time_diff(start, end);
 
 	FG_vector<size_t>::ptr ret = FG_vector<size_t>::create(
 			graph->get_num_vertices());

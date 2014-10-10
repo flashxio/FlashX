@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <boost/log/trivial.hpp>
+
 #include "config_map.h"
 
 /**
@@ -205,20 +207,20 @@ inline void graph_config::print_help()
 
 inline void graph_config::print()
 {
-	printf("Configuration parameters in graph algorithm.\n");
-	printf("\tthreads: %d\n", num_threads);
-	printf("\tprof_file: %s\n", prof_file.c_str());
-	printf("\ttrace_file: %s\n", trace_file.c_str());
-	printf("\tmax_processing_vertices: %d\n", max_processing_vertices);
-	printf("\tenable_elevator: %d\n", enable_elevator);
-	printf("\tpart_range_size_log: %d\n", part_range_size_log);
-	printf("\tpreload: %d\n", _preload);
-	printf("\tindex_file_weight: %d\n", index_file_weight);
-	printf("\tin_mem_index: %d\n", _in_mem_index);
-	printf("\tin_mem_graph: %d\n", _in_mem_graph);
-	printf("\tnum_vparts: %d\n", num_vparts);
-	printf("\tmin_vpart_degree: %d\n", min_vpart_degree);
-	printf("\tserial_run: %d\n", serial_run);
+	BOOST_LOG_TRIVIAL(info) << "Configuration parameters in graph algorithm.";
+	BOOST_LOG_TRIVIAL(info) << "\tthreads: " << num_threads;
+	BOOST_LOG_TRIVIAL(info) << "\tprof_file: " << prof_file;
+	BOOST_LOG_TRIVIAL(info) << "\ttrace_file: " << trace_file;
+	BOOST_LOG_TRIVIAL(info) << "\tmax_processing_vertices: " << max_processing_vertices;
+	BOOST_LOG_TRIVIAL(info) << "\tenable_elevator: " << enable_elevator;
+	BOOST_LOG_TRIVIAL(info) << "\tpart_range_size_log: " << part_range_size_log;
+	BOOST_LOG_TRIVIAL(info) << "\tpreload: " << _preload;
+	BOOST_LOG_TRIVIAL(info) << "\tindex_file_weight: " << index_file_weight;
+	BOOST_LOG_TRIVIAL(info) << "\tin_mem_index: " << _in_mem_index;
+	BOOST_LOG_TRIVIAL(info) << "\tin_mem_graph: " << _in_mem_graph;
+	BOOST_LOG_TRIVIAL(info) << "\tnum_vparts: " << num_vparts;
+	BOOST_LOG_TRIVIAL(info) << "\tmin_vpart_degree: " << min_vpart_degree;
+	BOOST_LOG_TRIVIAL(info) << "\tserial_run: " << serial_run;
 }
 
 inline void graph_config::init(config_map::ptr map)

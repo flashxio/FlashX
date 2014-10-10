@@ -326,7 +326,7 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
-	printf("weakly connected components starts\n");
+	BOOST_LOG_TRIVIAL(info) << "weakly connected components starts";
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -336,7 +336,9 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 			vertex_program_creater::ptr(new wcc_vertex_program_creater<wcc_vertex>()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("WCC takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("WCC takes %1% seconds in total")
+		% time_diff(start, end);
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -357,7 +359,7 @@ FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
 			fg->get_index_file());
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
-	printf("synchronous weakly connected components starts\n");
+	BOOST_LOG_TRIVIAL(info) << "synchronous weakly connected components starts";
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -367,7 +369,9 @@ FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
 			vertex_program_creater::ptr(new wcc_vertex_program_creater<sync_wcc_vertex>()));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("WCC takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("WCC takes %1% seconds in total")
+		% time_diff(start, end);
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -390,7 +394,7 @@ FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 	assert(graph->get_graph_header().has_edge_data());
-	printf("TS weakly connected components starts\n");
+	BOOST_LOG_TRIVIAL(info) << "TS weakly connected components starts";
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -400,7 +404,9 @@ FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
 				new ts_wcc_vertex_program_creater(start_time, time_interval)));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("WCC takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("WCC takes %1% seconds in total")
+		% time_diff(start, end);
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

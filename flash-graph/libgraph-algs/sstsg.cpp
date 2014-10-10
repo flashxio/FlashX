@@ -346,8 +346,9 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 			index, fg->get_configs());
 	assert(graph->get_graph_header().get_graph_type() == graph_type::DIRECTED);
 	assert(graph->get_graph_header().has_edge_data());
-	printf("scan statistics starts, start: %ld, interval: %ld, #interval: %d\n",
-			timestamp, time_interval, num_time_intervals);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("scan statistics starts, start: %1%, interval: %2%, #interval: %3%")
+		% timestamp % time_interval % num_time_intervals;
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -363,7 +364,8 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	printf("It takes %f seconds\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+			<< boost::format("It takes %1% seconds") % time_diff(start, end);
 
 	FG_vector<float>::ptr vec = FG_vector<float>::create(graph);
 	graph->query_on_all(vertex_query::ptr(new save_query<float, scan_vertex>(vec)));

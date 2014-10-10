@@ -451,8 +451,9 @@ void worker_thread::init()
 		}
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(kept_ids, false);
-		printf("worker %d has %ld vertices and activates %ld of them\n",
-				worker_id, local_ids.size(), kept_ids.size());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("worker %1% has %2% vertices and activates %3% of them")
+			% worker_id % local_ids.size() % kept_ids.size();
 	}
 	// If a user wants to start all vertices.
 	else if (start_all) {
@@ -473,7 +474,9 @@ void worker_thread::init()
 
 	bool ret = graph->progress_first_level();
 	if (ret)
-		fprintf(stderr, "WARNING! worker %d has no active vertices\n", get_worker_id());
+		BOOST_LOG_TRIVIAL(warning)
+			<< boost::format("worker %1% has no active vertices")
+			% get_worker_id();
 }
 
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads,
@@ -583,11 +586,11 @@ void worker_thread::run()
 		assert(io->num_pending_ios() == 0);
 		assert(active_computes.size() == 0);
 		assert(curr_activated_vertices->is_empty());
-//		printf("worker %d visited %d vertices\n", worker_id, num_visited);
 		assert(num_visited == num_activated_vertices_in_level.get());
 		if (num_visited != num_completed_vertices_in_level.get()) {
-			printf("worker %d: visits %d vertices and completes %ld\n",
-					worker_id, num_visited, num_completed_vertices_in_level.get());
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("worker %1%: visits %2% vertices and completes %3%")
+				% worker_id % num_visited % num_completed_vertices_in_level.get();
 		}
 		assert(num_visited == num_completed_vertices_in_level.get());
 
@@ -602,7 +605,6 @@ void worker_thread::run()
 		balancer->process_completed_stolen_vertices();
 		balancer->reset();
 		bool completed = graph->progress_next_level();
-//		printf("thread %d finish in a level, completed? %d\n", get_id(), completed);
 		if (completed)
 			break;
 	}

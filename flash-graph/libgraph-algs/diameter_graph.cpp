@@ -366,10 +366,11 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
 			index, fg->get_configs());
 
-	printf("diameter estimation starts\n");
-	printf("#para BFS: %d, #sweeps: %d, directed: %d\n", num_para_bfs,
-			num_sweeps, directed);
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "diameter estimation starts";
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("#para BFS: %1%, #sweeps: %2%, directed: %3%")
+		% num_para_bfs % num_sweeps % directed;
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -383,10 +384,11 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 
 	short global_max = 0;
 	for (int i = 0; i < num_sweeps; i++) {
-		printf("Sweep %d starts on %ld vertices, traverse edge: %d\n",
-			i, start_vertices.size(), traverse_edge);
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("Sweep %1% starts on %2% vertices, traverse edge: %3%")
+			% i % start_vertices.size() % traverse_edge;
 		BOOST_FOREACH(vertex_id_t v, start_vertices) {
-			printf("v%d\n", v);
+			BOOST_LOG_TRIVIAL(info) << "v" << v;
 		}
 
 		std::vector<vertex_dist_t> max_dist_vertices;
@@ -419,7 +421,7 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 			start_vertices.insert(start_vertices.begin(), start_set.begin(),
 					start_set.end());
 			short max_dist = max_dist_vertices.front().second;
-			printf("The current max dist: %d\n", max_dist);
+			BOOST_LOG_TRIVIAL(info) << "The current max dist: " << max_dist;
 			global_max = max(global_max, max_dist);
 			// We should switch the direction if we search for the longest
 			// directed path
@@ -430,7 +432,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 		}
 	}
 	gettimeofday(&end, NULL);
-	printf("It takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds in total")
+		% time_diff(start, end);
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())

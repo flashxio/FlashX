@@ -342,5 +342,7 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
 	graph->wait4complete();
 
 	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to compute overlaps\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds to compute overlaps")
+		% time_diff(start, end);
 }
