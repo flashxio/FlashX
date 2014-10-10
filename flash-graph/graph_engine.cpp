@@ -928,3 +928,20 @@ void graph_engine::destroy_flash_graph()
 		destroy_io_system();
 	}
 }
+
+vsize_t graph_engine::get_num_edges(vertex_id_t id) const
+{
+	if (vindex) {
+		if (is_directed()) {
+			directed_vertex_index &dindex = (directed_vertex_index &) *vindex;
+			return cal_num_edges(dindex.get_vertex_info_in(id).get_size())
+				+ cal_num_edges(dindex.get_vertex_info_out(id).get_size());
+		}
+		else {
+			default_vertex_index &dindex = (default_vertex_index &) *vindex;
+			return cal_num_edges(dindex.get_vertex_info(id).get_size());
+		}
+	}
+	else
+		return cindex->get_num_in_edges(id) + cindex->get_num_out_edges(id);
+}

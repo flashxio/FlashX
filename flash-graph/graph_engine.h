@@ -549,13 +549,7 @@ public:
 		return level.get();
 	}
 
-	vsize_t get_num_edges(vertex_id_t id) const {
-		if (vindex) {
-			assert(0);
-		}
-		else
-			return cindex->get_num_in_edges(id) + cindex->get_num_out_edges(id);
-	}
+	vsize_t get_num_edges(vertex_id_t id) const;
 
 	/**
 	 * The methods below should be used internally.
