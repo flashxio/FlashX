@@ -404,7 +404,6 @@ void compute_subgraph_sizes(FG_graph::ptr fg,
 					wanted_clusters)));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("computing subgraph size takes %f seconds\n", time_diff(start, end));
 
 	std::vector<vertex_program::ptr> vprogs;
 	graph->get_vertex_programs(vprogs);
@@ -517,7 +516,6 @@ FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type)
 				new degree_vertex_program_creater(degree_vec, type)));
 	graph->wait4complete();
 	gettimeofday(&end, NULL);
-	printf("computing subgraph size takes %f seconds\n", time_diff(start, end));
 	return degree_vec;
 }
 
