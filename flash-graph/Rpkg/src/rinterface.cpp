@@ -25,9 +25,6 @@
 #include "FGlib.h"
 
 #if 0
-FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
-FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
-		FG_graph::ptr, size_t topK);
 size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed,
 		int num_sweeps);
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
@@ -38,25 +35,9 @@ void fetch_subgraphs(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_id
 void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
 		const std::set<vertex_id_t> &wanted_clusters,
 		std::map<vertex_id_t, std::pair<size_t, size_t> > &sizes);
-FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
-		                size_t k, size_t kmax=0);
 FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id_t id);
 FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval);
-void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
-		std::vector<std::vector<double> > &overlap_matrix);
-#endif
-
-#if 0
-void R_init_libgraph(DllInfo *info)
-{
-	printf("flashgraph is initialized\n");
-}
-
-void R_unload_libgraph(DllInfo *info)
-{
-	printf("flashgraph is destroyed\n");
-}
 #endif
 
 FG_graph::ptr R_FG_get_graph(SEXP graph)
@@ -139,6 +120,15 @@ RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
 	return res;
 }
 
+RcppExport SEXP R_FG_compute_undirected_triangles(SEXP graph)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	FG_vector<size_t>::ptr fg_vec = compute_undirected_triangles(fg);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	return res;
+}
+
 RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
@@ -156,11 +146,60 @@ RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 	return res;
 }
 
-RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP k)
+RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP order)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<size_t>::ptr fg_vec = compute_local_scan(fg);
 	Rcpp::IntegerVector res(fg_vec->get_size());
 	fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	return res;
+}
+
+RcppExport SEXP R_FG_compute_topK_scan(SEXP graph, SEXP order, SEXP K)
+{
+	size_t topK = REAL(K)[0];
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	FG_vector<std::pair<vertex_id_t, size_t> >::ptr fg_vec
+		= compute_topK_scan(fg, topK);
+	assert(fg_vec->get_size() == topK);
+	Rcpp::IntegerVector vertices(fg_vec->get_size());
+	Rcpp::IntegerVector scans(fg_vec->get_size());
+	for (size_t i = 0; i < topK; i++) {
+		std::pair<vertex_id_t, size_t> pair = fg_vec->get(i);
+		vertices[i] = pair.first;
+		scans[i] = pair.second;
+	}
+	return Rcpp::DataFrame::create(Named("vid", vertices), Named("scan", scans));
+}
+
+RcppExport SEXP R_FG_compute_kcore(SEXP graph, SEXP _k, SEXP _kmax)
+{
+	int k = REAL(_k)[0];
+	int kmax = REAL(_kmax)[0];
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	FG_vector<size_t>::ptr fg_vec = compute_kcore(fg, k, kmax);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	return res;
+}
+
+RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
+{
+	Rcpp::IntegerVector Rvids(_vids);
+	std::vector<vertex_id_t> vids(Rvids.begin(), Rvids.end());
+	std::vector<std::vector<double> > overlap_matrix;
+	size_t num_vertices = vids.size();
+
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	compute_overlap(fg, vids, overlap_matrix);
+	assert(overlap_matrix.size() == num_vertices);
+
+	Rcpp::NumericMatrix res(num_vertices, num_vertices);
+	for (size_t i = 0; i < num_vertices; i++) {
+		assert(overlap_matrix[i].size() == num_vertices);
+		for (size_t j = 0; j < num_vertices; j++) {
+			res(i, j) = overlap_matrix[i][j];
+		}
+	}
 	return res;
 }

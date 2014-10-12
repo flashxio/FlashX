@@ -41,6 +41,27 @@ fg.undirected.triangles <- function(graph)
 	.Call("R_FG_compute_undirected_triangles", graph, PACKAGE="FlashGraph")
 }
 
+fg.topK.scan <- function(graph, order=1, K=1)
+{
+	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraph")
+}
+
+fg.local.scan <- function(graph, order=1)
+{
+	.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraph")
+}
+
+fg.coreness <- function(graph)
+{
+	# FIXME set the right parameter.
+	.Call("R_FG_compute_kcore", 0, 0, PACKAGE="FlashGraph")
+}
+
+fg.overlap <- function(graph, vids)
+{
+	.Call("R_FG_compute_overlap", graph, vids, PACKAGE="FlashGraph")
+}
+
 .onLoad <- function(libname, pkgname) {
 	library.dynam("FlashGraph", pkgname, libname, local=FALSE);
 	.Call("R_FG_init", PACKAGE="FlashGraph")
