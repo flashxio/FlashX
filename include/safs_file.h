@@ -24,6 +24,7 @@
 
 #include <string>
 #include <vector>
+#include <set>
 
 #include "common.h"
 
@@ -58,5 +59,7 @@ public:
 	bool create_file(size_t file_size);
 	bool delete_file();
 };
+
+size_t get_all_safs_files(std::set<std::string> &files);
 
 #endif
