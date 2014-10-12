@@ -3,8 +3,8 @@
 
 int main()
 {
-	RAID_config raid("conf/TEST_ROOTS.txt", 0, 16);
-	safs_file f(raid, "test1");
+	RAID_config::ptr raid = RAID_config::create("conf/TEST_ROOTS.txt", 0, 16);
+	safs_file f(*raid, "test1");
 
 	printf("Check the existence of %s\n", f.get_name().c_str());
 	assert(!f.exist());

@@ -53,7 +53,7 @@
  */
 struct global_data_collection
 {
-	RAID_config raid_conf;
+	RAID_config::ptr raid_conf;
 	std::vector<disk_io_thread *> read_threads;
 	pthread_mutex_t mutex;
 	cache_config *cache_conf;
@@ -86,7 +86,7 @@ public:
 			= map.find(name);
 		file_mapper *mapper;
 		if (it == map.end()) {
-			mapper = global_data.raid_conf.create_file_mapper(name);
+			mapper = global_data.raid_conf->create_file_mapper(name);
 			map.insert(std::pair<std::string, file_mapper *>(name, mapper));
 		}
 		else
@@ -111,7 +111,7 @@ void debug_global_data::run()
 
 const RAID_config &get_sys_RAID_conf()
 {
-	return global_data.raid_conf;
+	return *global_data.raid_conf;
 }
 
 static std::vector<int> file_weights;
@@ -176,20 +176,30 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	numa_set_bind_policy(1);
 	thread::thread_class_init();
 
+	// The I/O system has been initialized.
+	if (global_data.raid_conf) {
+		assert(!global_data.read_threads.empty());
+		return;
+	}
+
 	std::string root_conf_file = configs->get_option("root_conf");
 	BOOST_LOG_TRIVIAL(info) << "The root conf file: " << root_conf_file;
-	RAID_config raid_conf(root_conf_file, params.get_RAID_mapping_option(),
-			params.get_RAID_block_size());
-	int num_files = raid_conf.get_num_disks();
+	RAID_config::ptr raid_conf = RAID_config::create(root_conf_file,
+			params.get_RAID_mapping_option(), params.get_RAID_block_size());
+	// If we can't initialize RAID, there is nothing we can do.
+	if (raid_conf == NULL)
+		return;
+
+	int num_files = raid_conf->get_num_disks();
 	global_data.raid_conf = raid_conf;
 
-	std::set<int> disk_node_set = raid_conf.get_node_ids();
+	std::set<int> disk_node_set = raid_conf->get_node_ids();
 	std::vector<int> disk_node_ids(disk_node_set.begin(), disk_node_set.end());
 	BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% nodes with disks")
 		% disk_node_ids.size();
 	init_aio(disk_node_ids);
 
-	file_mapper *mapper = raid_conf.create_file_mapper();
+	file_mapper *mapper = raid_conf->create_file_mapper();
 	if (configs->has_option("file_weights"))
 		parse_file_weights(configs->get_option("file_weights"));
 	/* 
@@ -211,7 +221,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
 			global_data.read_threads[k] = new disk_io_thread(partition,
-					global_data.raid_conf.get_disk(k).node_id, NULL, k, flags);
+					global_data.raid_conf->get_disk(k).node_id, NULL, k, flags);
 		}
 		debug.register_task(new debug_global_data());
 	}
@@ -229,7 +239,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 				params.get_cache_type(), node_id_array);
 		global_data.global_cache = global_data.cache_conf->create_cache(
 				MAX_NUM_FLUSHES_PER_FILE *
-				global_data.raid_conf.get_num_disks());
+				global_data.raid_conf->get_num_disks());
 		int num_files = global_data.read_threads.size();
 		for (int k = 0; k < num_files; k++) {
 			global_data.read_threads[k]->register_cache(
@@ -260,6 +270,8 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 void destroy_io_system()
 {
+	BOOST_LOG_TRIVIAL(info) << "I/O system is destroyed";
+	global_data.raid_conf.reset();
 	if (global_data.global_cache)
 		global_data.global_cache->sanity_check();
 #ifdef PART_IO
@@ -606,8 +618,8 @@ public:
 file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		const int access_option)
 {
-	for (int i = 0; i < global_data.raid_conf.get_num_disks(); i++) {
-		std::string abs_path = global_data.raid_conf.get_disk(i).name
+	for (int i = 0; i < global_data.raid_conf->get_num_disks(); i++) {
+		std::string abs_path = global_data.raid_conf->get_disk(i).name
 			+ "/" + file_name;
 		native_file f(abs_path);
 		if (!f.exist()) {
@@ -663,7 +675,7 @@ void print_io_thread_stat()
 
 ssize_t file_io_factory::get_file_size() const
 {
-	safs_file f(global_data.raid_conf, name);
+	safs_file f(*global_data.raid_conf, name);
 	return f.get_file_size();
 }
 

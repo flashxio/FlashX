@@ -39,20 +39,11 @@ class RAID_config
 	int RAID_mapping_option;
 	int RAID_block_size;
 	std::vector<part_file_info> root_paths;
-
-	static int retrieve_data_files(std::string file_file,
-			std::vector<part_file_info> &data_files);
 public:
-	RAID_config() {
-	}
+	typedef std::shared_ptr<RAID_config> ptr;
 
-	RAID_config(const std::string &conf_file, int mapping_option, int block_size) {
-		this->conf_file = conf_file;
-		retrieve_data_files(conf_file, root_paths);
-
-		RAID_mapping_option = mapping_option;
-		RAID_block_size = block_size;
-	}
+	static ptr create(const std::string &conf_file, int mapping_option,
+			int block_size);
 
 	/**
 	 * Create a file mapper for the RAID directories.
