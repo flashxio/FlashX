@@ -1,6 +1,5 @@
-library(Rcpp)
 require(igraph)
-library("FlashGraph", lib.loc="/tmp")
+library("FlashGraph")
 
 graph.name <- "wiki-Vote"
 fg.conf.file <- "run_test.txt"

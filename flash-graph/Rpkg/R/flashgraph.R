@@ -75,6 +75,7 @@ fg.overlap <- function(graph, vids)
 }
 
 .onLoad <- function(libname, pkgname) {
+	library(Rcpp)
 	library.dynam("FlashGraph", pkgname, libname, local=FALSE);
 	.Call("R_FG_init", paste(libname, "/", pkgname, "/", pkgname, ".conf",
 							 sep=""), PACKAGE="FlashGraph")
