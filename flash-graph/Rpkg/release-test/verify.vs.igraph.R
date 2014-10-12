@@ -2,10 +2,9 @@ library(Rcpp)
 require(igraph)
 library("FlashGraph", lib.loc="/tmp")
 
-fg.graph.file <- "wiki-Vote-v4"
-fg.index.file <- "wiki-Vote-index-v4"
+graph.name <- "wiki-Vote"
 fg.conf.file <- "run_test.txt"
-fg <- get_fg_graph(fg.graph.file, fg.index.file, fg.conf.file)
+fg <- fg.get.graph(graph.name)
 
 graph.file <- "wiki-Vote.txt"
 ig <- read.graph(graph.file)

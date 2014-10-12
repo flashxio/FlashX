@@ -20,7 +20,10 @@
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/log/expressions.hpp>
+#include <boost/filesystem.hpp>
 #include <Rcpp.h>
+
+#include "safs_file.h"
 
 #include "FGlib.h"
 
@@ -40,25 +43,138 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval);
 #endif
 
-FG_graph::ptr R_FG_get_graph(SEXP graph)
+/*
+ * A global configuration of FlashGraph.
+ */
+static config_map::ptr configs;
+
+/**
+ * Create a FG_graph for the specified graph.
+ */
+static FG_graph::ptr R_FG_get_graph(SEXP pgraph)
 {
-	std::string graph_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 0), 0));
-	std::string index_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 1), 0));
-	std::string conf_file = CHAR(STRING_ELT(VECTOR_ELT(graph, 2), 0));
-	config_map::ptr configs = config_map::create(conf_file);
-	if (!configs) {
-		fprintf(stderr, "can't read conf file\n");
-		abort();
-	}
+	std::string version = itoa(CURR_VERSION);
+	std::string graph_name = CHAR(STRING_ELT(VECTOR_ELT(pgraph, 0), 0));
+	bool has_cindex = INTEGER(VECTOR_ELT(pgraph, 1))[0];
+	std::string graph_file = graph_name + "-v" + version;
+	std::string index_file;
+	if (has_cindex)
+		index_file = graph_name + "-cindex-v" + version;
+	else
+		index_file = graph_name + "-index-v" + version;
 	return FG_graph::create(graph_file, index_file, configs);
+
 }
 
-RcppExport SEXP R_FG_init()
+/**
+ * Initialize FlashGraph.
+ */
+RcppExport SEXP R_FG_init(SEXP pconf)
 {
-	printf("init FlashGraph\n");
 	boost::log::core::get()->set_filter(
 			boost::log::trivial::severity > boost::log::trivial::info);
+	std::string conf_file = CHAR(STRING_ELT(pconf, 0));
+	printf("init FlashGraph\n");
+	boost::filesystem::path p(conf_file);
+	if (boost::filesystem::exists(p)) {
+		configs = config_map::create(conf_file);
+	}
+	else {
+		fprintf(stderr, "WARNING! conf file %s doesn't exist\n", conf_file.c_str());
+		configs = config_map::create();
+		configs->add_options("root_conf=data_files.txt");
+	}
+	init_io_system(configs);
 	return R_NilValue;
+}
+
+static bool exist_graph(std::string &graph_name)
+{
+	std::string version = itoa(CURR_VERSION);
+	std::string graph_file_name = graph_name + "-v" + version;
+	safs_file graph_file(get_sys_RAID_conf(), graph_file_name);
+	if (!graph_file.exist()) {
+		fprintf(stderr, "The graph file of %s doesn't exist\n",
+				graph_name.c_str());
+		return false;
+	}
+
+	std::string graph_index_name = graph_name + "-index-v" + version;
+	std::string graph_cindex_name = graph_name + "-cindex-v" + version;
+	safs_file graph_index_file(get_sys_RAID_conf(), graph_index_name);
+	safs_file graph_cindex_file(get_sys_RAID_conf(), graph_cindex_name);
+	if (!graph_index_file.exist() && !graph_cindex_file.exist()) {
+		fprintf(stderr, "The index file of %s doesn't exist\n",
+				graph_name.c_str());
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * This returns all parameters of SAFS or FlashGraph.
+ */
+RcppExport SEXP R_FG_get_params(SEXP sys_name)
+{
+}
+
+/**
+ * This test whether a graph has been loaded to FlashGraph.
+ */
+RcppExport SEXP R_FG_exist_graph(SEXP pgraph)
+{
+	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
+	Rcpp::LogicalVector res(1);
+	res[0] = exist_graph(graph_name);
+	return res;
+}
+
+RcppExport SEXP R_FG_exist_cindex(SEXP pgraph)
+{
+	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
+	Rcpp::LogicalVector res(1);
+	std::string cindex_name = graph_name + "-cindex-v" + itoa(CURR_VERSION);
+	safs_file cindex_file(get_sys_RAID_conf(), cindex_name);
+	res[0] = cindex_file.exist();
+	return res;
+}
+
+static std::string extract_graph_name(std::string &file_name)
+{
+	std::string version = itoa(CURR_VERSION);
+	size_t pos = file_name.rfind("-cindex-v" + version);
+	if (pos == std::string::npos)
+		pos = file_name.rfind("-index-v" + version);
+	if (pos == std::string::npos)
+		pos = file_name.rfind("-v" + version);
+	if (pos == std::string::npos)
+		return "";
+	else
+		return file_name.substr(0, pos);
+}
+
+/**
+ * This lists all graphs that have been loaded to FlashGraph.
+ */
+RcppExport SEXP R_FG_list_graphs()
+{
+	std::set<std::string> files;
+	get_all_safs_files(files);
+
+	std::set<std::string> graphs;
+	BOOST_FOREACH(std::string file, files) {
+		std::string graph_name = extract_graph_name(file);
+		if (!graph_name.empty())
+			graphs.insert(graph_name);
+	}
+
+	Rcpp::CharacterVector res;
+	BOOST_FOREACH(std::string graph, graphs) {
+		if (exist_graph(graph))
+			res.push_back(graph);
+	}
+	return res;
 }
 
 RcppExport SEXP R_FG_compute_wcc(SEXP graph)

@@ -1,8 +1,20 @@
 #package.skeleton('flashgraph', code_files = 'flashgraph.R')
 
-get_fg_graph <- function(graph.file, index.file, conf.file)
+fg.list.graphs <- function()
 {
-	list(graph.file, index.file, conf.file)
+	.Call("R_FG_list_graphs", PACKAGE="FlashGraph")
+}
+
+fg.exist.graph <- function(graph)
+{
+	.Call("R_FG_exist_graph", graph, PACKAGE="FlashGraph")
+}
+
+fg.get.graph <- function(graph)
+{
+	stopifnot(fg.exist.graph(graph))
+	exist.cindex <- .Call("R_FG_exist_cindex", graph, PACKAGE="FlashGraph")
+	list(graph, exist.cindex)
 }
 
 fg.clusters <- function(graph, mode=c("weak", "strong"))
@@ -64,5 +76,6 @@ fg.overlap <- function(graph, vids)
 
 .onLoad <- function(libname, pkgname) {
 	library.dynam("FlashGraph", pkgname, libname, local=FALSE);
-	.Call("R_FG_init", PACKAGE="FlashGraph")
+	.Call("R_FG_init", paste(libname, "/", pkgname, "/", pkgname, ".conf",
+							 sep=""), PACKAGE="FlashGraph")
 }
