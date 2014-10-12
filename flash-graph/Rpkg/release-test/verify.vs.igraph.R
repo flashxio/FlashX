@@ -1,7 +1,6 @@
 library(Rcpp)
 require(igraph)
 library("FlashGraph", lib.loc="/tmp")
-source("../R/flashgraph.R")
 
 fg.graph.file <- "wiki-Vote-v4"
 fg.index.file <- "wiki-Vote-index-v4"
@@ -49,32 +48,39 @@ check.vectors <- function(v1, v2)
 }
 
 # test WCC
+print("test WCC")
 fg.res <- fg.clusters(fg, mode="weak")
 ig.res <- clusters(ig, mode="weak")$membership
 verify.cc(fg.res, ig.res)
 
 # test SCC
+print("test SCC")
 fg.res <- fg.clusters(fg, mode="strong")
 ig.res <- clusters(ig, mode="strong")$membership
 verify.cc(fg.res, ig.res)
 
 # test degree
+print("test degree")
 fg.res <- fg.degree(fg)
 ig.res <- degree(ig)
 check.vectors(fg.res, ig.res)
 
 # test PageRank
+print("test PageRank")
 fg.res <- fg.page.rank(fg)
 ig.res <- page.rank.old(ig, eps=0.01, old=TRUE)
 sum((abs(fg.res - ig.res) / abs(fg.res)) < 0.02)
 
 # test locality scan
-#fg.res <- fg.local.scan(fg)
+print("test locality statistics")
+fg.res <- fg.local.scan(fg)
+ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
+check.vectors(fg.res, ig.res)
 
-# the tests below are only valid on wiki-Vote.
-# test transivity
-#fg.res <- fg.transitivity(fg)
-#avg.trans <- 0.1409
+print("test topK locality statistics")
+fg.res <- fg.topK.scan(fg, K=10)
+ig.res <- sort(ig.res, decreasing=TRUE)[1:10]
+check.vectors(fg.res$scan, ig.res)
 
 # test triangles
 #fg.res <- fg.directed.triangles(fg, "cycle")
