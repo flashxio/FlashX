@@ -471,15 +471,13 @@ class in_mem_cdirected_vertex_index
 {
 	static const size_t ENTRY_SIZE = compressed_directed_vertex_entry::ENTRY_SIZE;
 	static const size_t ENTRY_MASK = ENTRY_SIZE - 1;
-	// This increases the parallelism when initializing the large vertex maps.
-	static const size_t NUM_VMAPS = 64;
 
 	typedef std::unordered_map<vertex_id_t, vsize_t> vertex_map_t;
 
 	size_t num_vertices;
 	size_t edge_data_size;
-	std::vector<vertex_map_t> large_in_vmaps;
-	std::vector<vertex_map_t> large_out_vmaps;
+	vertex_map_t large_in_vmap;
+	vertex_map_t large_out_vmap;
 	std::vector<compressed_directed_vertex_entry> entries;
 
 	in_mem_cdirected_vertex_index(vertex_index &index);
@@ -501,9 +499,8 @@ public:
 		size_t entry_idx = id / ENTRY_SIZE;
 		vsize_t num_edges = entries[entry_idx].get_num_in_edges(id % ENTRY_SIZE);
 		if (num_edges >= compressed_directed_vertex_entry::LARGE_VERTEX_SIZE) {
-			size_t map_id = id % NUM_VMAPS;
-			vertex_map_t::const_iterator it = large_in_vmaps[map_id].find(id);
-			assert(it != large_in_vmaps[map_id].end());
+			vertex_map_t::const_iterator it = large_in_vmap.find(id);
+			assert(it != large_in_vmap.end());
 			num_edges = it->second;
 		}
 		return num_edges;
@@ -513,9 +510,8 @@ public:
 		size_t entry_idx = id / ENTRY_SIZE;
 		vsize_t num_edges = entries[entry_idx].get_num_out_edges(id % ENTRY_SIZE);
 		if (num_edges >= compressed_directed_vertex_entry::LARGE_VERTEX_SIZE) {
-			size_t map_id = id % NUM_VMAPS;
-			vertex_map_t::const_iterator it = large_out_vmaps[map_id].find(id);
-			assert(it != large_out_vmaps[map_id].end());
+			vertex_map_t::const_iterator it = large_out_vmap.find(id);
+			assert(it != large_out_vmap.end());
 			num_edges = it->second;
 		}
 		return num_edges;

@@ -194,15 +194,13 @@ void in_mem_cdirected_vertex_index::init(const directed_vertex_index &index)
 		for (size_t i = 0; i < ENTRY_SIZE; i++) {
 			if (entries[entry_idx].is_large_in_vertex(i)) {
 				ext_mem_vertex_info info = index.get_vertex_info_in(id + i);
-				size_t map_id = (id + i) % NUM_VMAPS;
-				large_in_vmaps[map_id].insert(vertex_map_t::value_type(id + i,
+				large_in_vmap.insert(vertex_map_t::value_type(id + i,
 							ext_mem_undirected_vertex::vsize2num_edges(
 								info.get_size(), edge_data_size)));
 			}
 			if (entries[entry_idx].is_large_out_vertex(i)) {
 				ext_mem_vertex_info info = index.get_vertex_info_out(id + i);
-				size_t map_id = (id + i) % NUM_VMAPS;
-				large_out_vmaps[map_id].insert(vertex_map_t::value_type(id + i,
+				large_out_vmap.insert(vertex_map_t::value_type(id + i,
 							ext_mem_undirected_vertex::vsize2num_edges(
 								info.get_size(), edge_data_size)));
 			}
@@ -226,21 +224,12 @@ void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
 	const large_vertex_t *l_out_vertex_array = index.get_large_out_vertices();
 	size_t num_large_out_vertices = index.get_num_large_out_vertices();
 
-#pragma omp parallel for
-	for (size_t k = 0; k < NUM_VMAPS; k++) {
-		for (size_t i = 0; i < num_large_in_vertices; i++) {
-			vertex_id_t id = l_in_vertex_array[i].first;
-			size_t map_id = id % NUM_VMAPS;
-			if (map_id == k)
-				large_in_vmaps[map_id].insert(l_in_vertex_array[i]);
-		}
+	for (size_t i = 0; i < num_large_in_vertices; i++) {
+		large_in_vmap.insert(l_in_vertex_array[i]);
+	}
 
-		for (size_t i = 0; i < num_large_out_vertices; i++) {
-			vertex_id_t id = l_out_vertex_array[i].first;
-			size_t map_id = id % NUM_VMAPS;
-			if (map_id == k)
-				large_out_vmaps[map_id].insert(l_out_vertex_array[i]);
-		}
+	for (size_t i = 0; i < num_large_out_vertices; i++) {
+		large_out_vmap.insert(l_out_vertex_array[i]);
 	}
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("There are %1% large in-vertices and %2% large out-vertices")
@@ -252,8 +241,7 @@ void in_mem_cdirected_vertex_index::init(const cdirected_vertex_index &index)
 }
 
 in_mem_cdirected_vertex_index::in_mem_cdirected_vertex_index(
-		vertex_index &index): large_in_vmaps(NUM_VMAPS), large_out_vmaps(
-			NUM_VMAPS)
+		vertex_index &index)
 {
 	if (index.is_compressed())
 		init((const cdirected_vertex_index &) index);
