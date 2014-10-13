@@ -157,6 +157,54 @@ public:
 	}
 };
 
+class compressed_undirected_index_iterator: public index_iterator
+{
+	size_t begin;
+	size_t idx;
+	size_t end;
+	const in_mem_cundirected_vertex_index &index;
+public:
+	compressed_undirected_index_iterator(const in_mem_cundirected_vertex_index &_index,
+			const id_range_t &range): index(_index) {
+		vertex_offset first_entry = index.get_vertex(range.first);
+		new (curr_buf) vertex_offset(first_entry);
+		size_t size = index.get_size(range.first);
+		new (next_buf) vertex_offset(first_entry.get_off() + size);
+		begin = idx = range.first;
+		end = range.second;
+		_has_next = true;
+	}
+
+	virtual void move_next() {
+		vertex_offset e = *(vertex_offset *) next_buf;
+		new (curr_buf) vertex_offset(e);
+		idx++;
+		_has_next = (idx < end);
+		if (_has_next) {
+			size_t size = index.get_size(idx);
+			new (next_buf) vertex_offset(e.get_off() + size);
+		}
+	}
+
+	virtual bool move_to(int rel_idx) {
+		this->idx = begin + rel_idx;
+		if ((size_t) idx < end) {
+			vertex_offset e = index.get_vertex(idx);
+			new (curr_buf) vertex_offset(e);
+			size_t size = index.get_size(idx);
+			new (next_buf) vertex_offset(e.get_off() + size);
+			_has_next = true;
+		}
+		else
+			_has_next = false;
+		return _has_next;
+	}
+
+	virtual int get_num_vertices() const {
+		return end - idx;
+	}
+};
+
 class compressed_directed_index_iterator: public index_iterator
 {
 	size_t begin;
@@ -293,9 +341,7 @@ class vertex_index_reader
 public:
 	typedef std::shared_ptr<vertex_index_reader> ptr;
 
-	static ptr create(const vertex_index::ptr index, bool directed);
-	static ptr create(const in_mem_cdirected_vertex_index::ptr index,
-			bool directed);
+	static ptr create(const in_mem_query_vertex_index::ptr index, bool directed);
 	static ptr create(io_interface::ptr io, bool directed);
 
 	virtual ~vertex_index_reader() {
@@ -986,14 +1032,7 @@ class simple_index_reader
 
 	void init(worker_thread *t, bool directed);
 
-	simple_index_reader(const vertex_index::ptr index,
-			bool directed, worker_thread *t) {
-		in_mem = true;
-		init(t, directed);
-		index_reader = vertex_index_reader::create(index, directed);
-	}
-
-	simple_index_reader(const in_mem_cdirected_vertex_index::ptr index,
+	simple_index_reader(const in_mem_query_vertex_index::ptr index,
 			bool directed, worker_thread *t) {
 		in_mem = true;
 		init(t, directed);
@@ -1080,12 +1119,7 @@ public:
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 
-	static ptr create(const in_mem_cdirected_vertex_index::ptr index,
-			bool directed, worker_thread *t) {
-		return ptr(new simple_index_reader(index, directed, t));
-	}
-
-	static ptr create(const vertex_index::ptr index, bool directed,
+	static ptr create(const in_mem_query_vertex_index::ptr index, bool directed,
 			worker_thread *t) {
 		return ptr(new simple_index_reader(index, directed, t));
 	}

@@ -321,8 +321,7 @@ class graph_engine
 	off_t out_part_off;
 
 	graph_index::ptr vertices;
-	vertex_index::ptr vindex;
-	in_mem_cdirected_vertex_index::ptr cindex;
+	in_mem_query_vertex_index::ptr vindex;
 	std::shared_ptr<in_mem_graph> graph_data;
 	vertex_scheduler::ptr scheduler;
 
@@ -549,7 +548,9 @@ public:
 		return level.get();
 	}
 
-	vsize_t get_num_edges(vertex_id_t id) const;
+	vsize_t get_num_edges(vertex_id_t id) const {
+		return vindex->get_num_edges(id);
+	}
 
 	/**
 	 * The methods below should be used internally.
@@ -613,15 +614,8 @@ public:
 		return num_remaining_vertices_in_level.get();
 	}
 
-	const vertex_index::ptr get_in_mem_index() const {
+	const in_mem_query_vertex_index::ptr get_in_mem_index() const {
 		return vindex;
-	}
-
-	/*
-	 * \internal Get the in-memory vertex index.
-	 */
-	const in_mem_cdirected_vertex_index::ptr get_in_mem_cindex() const {
-		return cindex;
 	}
 
 	void set_max_processing_vertices(int max) {

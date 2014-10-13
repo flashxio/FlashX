@@ -486,10 +486,7 @@ public:
 void init_vpart_thread::run()
 {
 	vertex_index_reader::ptr index_reader;
-	if (graph.get_in_mem_cindex())
-		index_reader = vertex_index_reader::create(graph.get_in_mem_cindex(),
-				graph.is_directed());
-	else if (graph.get_in_mem_index())
+	if (graph.get_in_mem_index())
 		index_reader = vertex_index_reader::create(graph.get_in_mem_index(),
 				graph.is_directed());
 	else
@@ -544,13 +541,10 @@ graph_engine::graph_engine(const std::string &graph_file,
 	this->num_nodes = params.get_num_nodes();
 
 	// Construct the in-memory compressed vertex index.
-	vertex_index::ptr raw_vindex = vertex_index::safs_load(index->get_index_file());
-	if (raw_vindex->is_compressed() || !graph_conf.use_in_mem_index()) {
-		assert(raw_vindex->get_graph_header().is_directed_graph());
-		cindex = in_mem_cdirected_vertex_index::create(*raw_vindex);
-	}
-	else
-		vindex = raw_vindex;
+	vertex_index::ptr raw_vindex = vertex_index::safs_load(
+			index->get_index_file());
+	vindex = in_mem_query_vertex_index::create(raw_vindex,
+			!graph_conf.use_in_mem_index());
 	raw_vindex.reset();
 
 	// Construct the vertex states.
@@ -927,21 +921,4 @@ void graph_engine::destroy_flash_graph()
 	if (count == 1) {
 		destroy_io_system();
 	}
-}
-
-vsize_t graph_engine::get_num_edges(vertex_id_t id) const
-{
-	if (vindex) {
-		if (is_directed()) {
-			directed_vertex_index &dindex = (directed_vertex_index &) *vindex;
-			return cal_num_edges(dindex.get_vertex_info_in(id).get_size())
-				+ cal_num_edges(dindex.get_vertex_info_out(id).get_size());
-		}
-		else {
-			default_vertex_index &dindex = (default_vertex_index &) *vindex;
-			return cal_num_edges(dindex.get_vertex_info(id).get_size());
-		}
-	}
-	else
-		return cindex->get_num_in_edges(id) + cindex->get_num_out_edges(id);
 }

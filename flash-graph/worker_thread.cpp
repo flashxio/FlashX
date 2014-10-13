@@ -410,12 +410,7 @@ void worker_thread::init()
 				new default_vertex_queue(*graph, worker_id, get_node_id()));
 
 	io = graph_factory->create_io(this);
-	if (graph->get_in_mem_cindex())
-		index_reader = simple_index_reader::create(
-				graph->get_in_mem_cindex(),
-				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
-				this);
-	else if (graph_conf.use_in_mem_index())
+	if (graph->get_in_mem_index())
 		index_reader = simple_index_reader::create(
 				graph->get_in_mem_index(),
 				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,

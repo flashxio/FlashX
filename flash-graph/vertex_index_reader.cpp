@@ -131,24 +131,25 @@ public:
 	}
 };
 
-class in_mem_directed_cindex_reader: public vertex_index_reader
+template<class vertex_index_type, class iterator_type>
+class in_mem_cindex_reader: public vertex_index_reader
 {
-	in_mem_cdirected_vertex_index::ptr index;
+	typename vertex_index_type::ptr index;
 
 protected:
-	in_mem_directed_cindex_reader(
-			const in_mem_cdirected_vertex_index::ptr index) {
+	in_mem_cindex_reader(typename vertex_index_type::ptr index) {
 		this->index = index;
 	}
 public:
-	static ptr create(const in_mem_cdirected_vertex_index::ptr index) {
-		return ptr(new in_mem_directed_cindex_reader(index));
+	static ptr create(typename vertex_index_type::ptr index) {
+		return ptr(new in_mem_cindex_reader<vertex_index_type,
+				iterator_type>(index));
 	}
 
 
 	virtual void request_index(index_compute *compute) {
 		id_range_t range = compute->get_range();
-		compressed_directed_index_iterator it(*index, range);
+		iterator_type it(*index, range);
 		bool ret = compute->run(compute->get_first_vertex(), it);
 		assert(ret);
 		compute->get_allocator().free(compute);
@@ -162,20 +163,24 @@ public:
 	}
 };
 
-vertex_index_reader::ptr vertex_index_reader::create(const vertex_index::ptr index,
-		bool directed)
-{
-	if (directed)
-		return in_mem_vindex_reader_impl<directed_vertex_entry>::create(index);
-	else
-		return in_mem_vindex_reader_impl<vertex_offset>::create(index);
-}
-
 vertex_index_reader::ptr vertex_index_reader::create(
-		const in_mem_cdirected_vertex_index::ptr index, bool directed)
+		const in_mem_query_vertex_index::ptr index, bool directed)
 {
-	assert(directed);
-	return in_mem_directed_cindex_reader::create(index);
+	bool compressed = index->is_compressed();
+	if (!compressed && directed)
+		return in_mem_vindex_reader_impl<directed_vertex_entry>::create(
+				index->get_raw_index());
+	else if (!compressed && !directed)
+		return in_mem_vindex_reader_impl<vertex_offset>::create(
+				index->get_raw_index());
+	else if (compressed && directed)
+		return in_mem_cindex_reader<in_mem_cdirected_vertex_index,
+			   compressed_directed_index_iterator>::create(
+					   in_mem_cdirected_vertex_index::cast(index));
+	else
+		return in_mem_cindex_reader<in_mem_cundirected_vertex_index,
+			   compressed_undirected_index_iterator>::create(
+					   in_mem_cundirected_vertex_index::cast(index));
 }
 
 vertex_index_reader::ptr vertex_index_reader::create(io_interface::ptr io,
