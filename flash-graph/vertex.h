@@ -187,6 +187,12 @@ public:
 		assert(has_data);
 		return data;
 	}
+
+	void reverse_dir() {
+		vertex_id_t tmp = from;
+		from = to;
+		to = tmp;
+	}
 };
 
 template<>
@@ -225,6 +231,12 @@ public:
 
 	const empty_data &get_data() const {
 		return data;
+	}
+
+	void reverse_dir() {
+		vertex_id_t tmp = from;
+		from = to;
+		to = tmp;
 	}
 };
 
@@ -299,6 +311,12 @@ public:
 
 	const ts_edge_data &get_data() const {
 		return data;
+	}
+
+	void reverse_dir() {
+		vertex_id_t tmp = from;
+		from = to;
+		to = tmp;
 	}
 };
 

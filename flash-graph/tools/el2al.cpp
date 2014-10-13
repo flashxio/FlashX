@@ -32,6 +32,7 @@
 #include "native_file.h"
 
 #include "edge_type.h"
+#include "vertex.h"
 
 template<class edge_data_type>
 class stxxl_edge_vector: public stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result
@@ -64,6 +65,8 @@ bool compress = false;
 bool simplify = false;
 bool print_graph = false;
 bool check_graph = false;
+// This flag indicates to add the reversed edges to the graph.
+bool reverse_edge = false;
 std::string work_dir = ".";
 
 struct timeval start_time;
@@ -1328,6 +1331,13 @@ public:
 		stxxl_edge_vector<edge_data_type> *local_edge_buf
 			= (stxxl_edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 		local_edge_buf->append(edges.cbegin(), edges.cend());
+
+		if (reverse_edge) {
+			BOOST_FOREACH(edge<edge_data_type> e, edges) {
+				e.reverse_dir();
+				local_edge_buf->push_back(e);
+			}
+		}
 	}
 };
 
@@ -1584,7 +1594,6 @@ public:
 		std::sort(in_edges->begin(), in_edges->end(), in_edge_comparator);
 		std::sort(out_edges->begin(), out_edges->end(), edge_comparator);
 
-		typedef std::shared_ptr<in_mem_directed_vertex<edge_data_type> > vertex_ptr;
 		std::shared_ptr<directed_subgraph> subg
 			= std::shared_ptr<directed_subgraph>(new directed_subgraph());
 		typename edge_list_t::const_iterator in_it = in_edges->begin();
@@ -1824,6 +1833,7 @@ void print_usage()
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
 	fprintf(stderr, "-W dir: the working directory\n");
 	fprintf(stderr, "-D: decompress data\n");
+	fprintf(stderr, "-r: add the reversed edges to the graph\n");
 }
 
 graph *construct_graph(const std::vector<std::string> &edge_list_files,
@@ -1872,7 +1882,7 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "ud:cpvt:mwsT:W:D")) != -1) {
+	while ((opt = getopt(argc, argv, "ud:cpvt:mwsT:W:Dr")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -1916,6 +1926,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'D':
 				decompress = true;
+				break;
+			case 'r':
+				reverse_edge = true;
 				break;
 			default:
 				print_usage();
