@@ -84,7 +84,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 		configs = config_map::create();
 		configs->add_options("root_conf=data_files.txt");
 	}
-	init_io_system(configs);
+	graph_engine::init_flash_graph(configs);
 	return R_NilValue;
 }
 
