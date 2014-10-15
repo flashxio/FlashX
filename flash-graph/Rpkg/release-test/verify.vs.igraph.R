@@ -1,13 +1,6 @@
 require(igraph)
 library("FlashGraph")
 
-graph.name <- "wiki-Vote"
-fg.conf.file <- "run_test.txt"
-fg <- fg.get.graph(graph.name)
-
-graph.file <- "wiki-Vote.txt"
-ig <- read.graph(graph.file)
-
 verify.cc <- function(fg.res, ig.res)
 {
 	# get unique components IDs
@@ -39,47 +32,79 @@ verify.cc <- function(fg.res, ig.res)
 	stopifnot(sum(cmp.res) == length(cmp.res))
 }
 
-check.vectors <- function(v1, v2)
+check.vectors <- function(name, v1, v2)
 {
 	cmp.res <- v1 == v2
-	stopifnot(sum(cmp.res) == length(cmp.res))
+	if (sum(cmp.res) != length(cmp.res)) {
+		cat(name, " fails the test\n");
+	}
 }
 
-# test WCC
-print("test WCC")
-fg.res <- fg.clusters(fg, mode="weak")
-ig.res <- clusters(ig, mode="weak")$membership
-verify.cc(fg.res, ig.res)
+test.directed <- function(fg, ig)
+{
+	# test ccoreness
+	print("test coreness")
+	fg.res <- fg.coreness(fg)
+	ig.res <- graph.coreness(ig, mode="all")
+	check.vectors("coreness_test", fg.res, ig.res)
 
-# test SCC
-print("test SCC")
-fg.res <- fg.clusters(fg, mode="strong")
-ig.res <- clusters(ig, mode="strong")$membership
-verify.cc(fg.res, ig.res)
+	# test WCC
+	print("test WCC")
+	fg.res <- fg.clusters(fg, mode="weak")
+	ig.res <- clusters(ig, mode="weak")$membership
+	verify.cc(fg.res, ig.res)
 
-# test degree
-print("test degree")
-fg.res <- fg.degree(fg)
-ig.res <- degree(ig)
-check.vectors(fg.res, ig.res)
+	# test SCC
+	print("test SCC")
+	fg.res <- fg.clusters(fg, mode="strong")
+	ig.res <- clusters(ig, mode="strong")$membership
+	verify.cc(fg.res, ig.res)
 
-# test PageRank
-print("test PageRank")
-fg.res <- fg.page.rank(fg)
-ig.res <- page.rank.old(ig, eps=0.01, old=TRUE)
-sum((abs(fg.res - ig.res) / abs(fg.res)) < 0.02)
+	# test degree
+	print("test directed degree")
+	fg.res <- fg.degree(fg)
+	ig.res <- degree(ig)
+	check.vectors("degree_test", fg.res, ig.res)
 
-# test locality scan
-print("test locality statistics")
-fg.res <- fg.local.scan(fg)
-ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
-check.vectors(fg.res, ig.res)
+	# test PageRank
+	print("test PageRank")
+	fg.res <- fg.page.rank(fg)
+	ig.res <- page.rank.old(ig, eps=0.01, old=TRUE)
+	sum((abs(fg.res - ig.res) / abs(fg.res)) < 0.02)
 
-print("test topK locality statistics")
-fg.res <- fg.topK.scan(fg, K=10)
-ig.res <- sort(ig.res, decreasing=TRUE)[1:10]
-check.vectors(fg.res$scan, ig.res)
+	# test locality scan
+	print("test locality statistics")
+	fg.res <- fg.local.scan(fg)
+	ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
+	check.vectors("local-scan_test", fg.res, ig.res)
 
-# test triangles
-#fg.res <- fg.directed.triangles(fg, "cycle")
-#no.triangles <- 608389
+	print("test topK locality statistics")
+	fg.res <- fg.topK.scan(fg, K=10)
+	ig.res <- sort(ig.res, decreasing=TRUE)[1:10]
+	check.vectors("topK-scan_test", fg.res$scan, ig.res)
+}
+
+test.undirected <- function(fg, ig)
+{
+	# test triangles
+	print("test triangle counting on an undirected graph")
+	fg.res <- fg.undirected.triangles(fg)
+	ig.res <- adjacent.triangles(ig)
+	check.vectors("undirected-triangle_test", fg.res, ig.res)
+
+	# test degree
+	print("test undirected degree")
+	fg.res <- fg.degree(fg)
+	ig.res <- degree(ig)
+	check.vectors("degree_test", fg.res, ig.res)
+}
+
+fg.conf.file <- "run_test.txt"
+fg <- fg.get.graph("wiki-Vote")
+ig <- read.graph("wiki-Vote.txt")
+test.directed(fg, ig)
+
+# Now test on an undirected graph
+fg <- fg.get.graph("facebook")
+ig <- read.graph("facebook_combined.txt", directed=FALSE)
+test.undirected(fg, ig)
