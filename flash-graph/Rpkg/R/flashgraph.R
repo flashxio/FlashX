@@ -66,7 +66,9 @@ fg.local.scan <- function(graph, order=1)
 fg.coreness <- function(graph)
 {
 	# FIXME set the right parameter.
-	.Call("R_FG_compute_kcore", 0, 0, PACKAGE="FlashGraph")
+	k.start <- 1
+	k.end <- 0
+	.Call("R_FG_compute_kcore", graph, k.start, k.end, PACKAGE="FlashGraph")
 }
 
 fg.overlap <- function(graph, vids)
