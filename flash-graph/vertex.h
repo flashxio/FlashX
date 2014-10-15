@@ -1021,6 +1021,7 @@ public:
 class page_undirected_vertex: public page_vertex
 {
 	vertex_id_t id;
+	vsize_t vertex_size;
 	vsize_t num_edges;
 	const page_byte_array &array;
 public:
@@ -1032,9 +1033,14 @@ public:
 		// know what data type an edge has.
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 		assert((unsigned) size >= v.get_size());
+		vertex_size = v.get_size();
 
 		id = v.get_id();
 		num_edges = v.get_num_edges();
+	}
+
+	size_t get_size() const {
+		return vertex_size;
 	}
     
     /**

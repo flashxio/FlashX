@@ -366,10 +366,10 @@ worker_thread::worker_thread(graph_engine *graph,
 			alloc = std::unique_ptr<compute_allocator>(
 					new vertex_compute_allocator<vertex_compute>(graph, this));
 			merged_alloc = std::unique_ptr<compute_allocator>(
-					new vertex_compute_allocator<merged_vertex_compute>(
+					new vertex_compute_allocator<merged_undirected_vertex_compute>(
 						graph, this));
 			sparse_alloc = std::unique_ptr<compute_allocator>(
-					new vertex_compute_allocator<sparse_vertex_compute>(
+					new vertex_compute_allocator<sparse_undirected_vertex_compute>(
 						graph, this));
 			break;
 #if 0

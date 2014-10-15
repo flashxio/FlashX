@@ -258,7 +258,6 @@ class merged_vertex_compute: public user_compute
 {
 	vertex_id_t start_id;
 	int num_vertices;
-	bool complete;
 	graph_engine *graph;
 protected:
 	worker_thread *issue_thread;
@@ -271,7 +270,6 @@ public:
 		this->graph = graph;
 		start_id = INVALID_VERTEX_ID;
 		num_vertices = 0;
-		complete = false;
 		issue_thread = (worker_thread *) thread::get_curr_thread();
 	}
 
@@ -311,11 +309,20 @@ public:
 		assert(0);
 	}
 
-	virtual void run(page_byte_array &arr) {
-		// TODO
-		assert(0);
-		complete = true;
+	virtual void run(page_byte_array &arr) = 0;
+	virtual bool has_completed() = 0;
+};
+
+class merged_undirected_vertex_compute: public merged_vertex_compute
+{
+	bool complete;
+public:
+	merged_undirected_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): merged_vertex_compute(graph, alloc) {
+		complete = false;
 	}
+
+	virtual void run(page_byte_array &arr);
 
 	virtual bool has_completed() {
 		return complete;
@@ -456,13 +463,21 @@ public:
 		assert(0);
 	}
 
-	virtual void run(page_byte_array &arr) {
-		assert(0);
-	}
+	virtual void run(page_byte_array &arr) = 0;
 
 	virtual bool has_completed() {
 		return complete;
 	}
+};
+
+class sparse_undirected_vertex_compute: public sparse_vertex_compute
+{
+public:
+	sparse_undirected_vertex_compute(graph_engine *graph,
+			compute_allocator *alloc): sparse_vertex_compute(graph, alloc) {
+	}
+
+	virtual void run(page_byte_array &arr);
 };
 
 class sparse_directed_vertex_compute: public sparse_vertex_compute
