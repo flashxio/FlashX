@@ -549,7 +549,7 @@ public:
 	}
 
 	vsize_t get_num_edges(vertex_id_t id,
-			edge_type type = edge_type::IN_EDGE) const {
+			edge_type type = edge_type::BOTH_EDGES) const {
 		return vindex->get_num_edges(id, type);
 	}
 
