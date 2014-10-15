@@ -429,19 +429,13 @@ public:
 	degree_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
-	virtual void run(vertex_program &prog) {
-		vertex_id_t id = prog.get_vertex_id(*this);
-		request_vertex_headers(&id, 1);
-	}
+	void run(vertex_program &prog);
 
 	void run(vertex_program &prog, const page_vertex &vertex) {
 	}
 
 	void run_on_message(vertex_program &, const vertex_message &msg) {
 	}
-
-	void run_on_vertex_header(vertex_program &prog,
-			const vertex_header &header);
 };
 
 class degree_vertex_program: public vertex_program_impl<degree_vertex>
@@ -481,23 +475,12 @@ public:
 	}
 };
 
-void degree_vertex::run_on_vertex_header(vertex_program &prog,
-		const vertex_header &header)
+void degree_vertex::run(vertex_program &prog)
 {
 	vertex_id_t id = prog.get_vertex_id(*this);
 	degree_vertex_program &degree_vprog = (degree_vertex_program &) prog;
-	if (prog.get_graph().is_directed()) {
-		const directed_vertex_header &dheader
-			= (const directed_vertex_header &) header;
-		if (degree_vprog.get_edge_type() == IN_EDGE)
-			degree_vprog.set_degree(id, dheader.get_num_in_edges());
-		else if (degree_vprog.get_edge_type() == OUT_EDGE)
-			degree_vprog.set_degree(id, dheader.get_num_out_edges());
-		else
-			degree_vprog.set_degree(id, dheader.get_num_edges());
-	}
-	else
-		degree_vprog.set_degree(id, header.get_num_edges());
+	degree_vprog.set_degree(id, prog.get_graph().get_num_edges(id,
+				degree_vprog.get_edge_type()));
 }
 
 }
@@ -529,7 +512,7 @@ public:
 	ts_degree_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
-	virtual void run(vertex_program &prog) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}
@@ -658,7 +641,7 @@ public:
 	time_range_vertex(vertex_id_t id): compute_vertex(id) {
 	}
 
-	virtual void run(vertex_program &prog) {
+	void run(vertex_program &prog) {
 		vertex_id_t id = prog.get_vertex_id(*this);
 		request_vertices(&id, 1);
 	}

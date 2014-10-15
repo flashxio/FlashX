@@ -527,8 +527,17 @@ public:
 				index->get_graph_header().get_edge_data_size());
 	}
 
-	virtual vsize_t get_num_edges(vertex_id_t id) const {
-		return get_num_in_edges(id) + get_num_out_edges(id);
+	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
+		switch (type) {
+			case edge_type::IN_EDGE:
+				return get_num_in_edges(id);
+			case edge_type::OUT_EDGE:
+				return get_num_out_edges(id);
+			case edge_type::BOTH_EDGES:
+				return get_num_in_edges(id) + get_num_out_edges(id);
+			default:
+				assert(0);
+		}
 	}
 
 	virtual vertex_index::ptr get_raw_index() const {
@@ -548,7 +557,7 @@ public:
 		this->index = default_vertex_index::cast(index);
 	}
 
-	virtual vsize_t get_num_edges(vertex_id_t id) const {
+	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
 		ext_mem_vertex_info info = index->get_vertex_info(id);
 		return ext_mem_undirected_vertex::vsize2num_edges(info.get_size(),
 				index->get_graph_header().get_edge_data_size());

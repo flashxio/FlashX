@@ -607,7 +607,7 @@ public:
 		return compressed;
 	}
 
-	virtual vsize_t get_num_edges(vertex_id_t id) const {
+	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
 		assert(0);
 	}
 
@@ -654,7 +654,7 @@ public:
 		return num_vertices;
 	}
 
-	vsize_t get_num_edges(vertex_id_t id) const {
+	vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
 		size_t entry_idx = id / ENTRY_SIZE;
 		vsize_t num_edges = entries[entry_idx].get_num_edges(id % ENTRY_SIZE);
 		if (num_edges >= compressed_undirected_vertex_entry::LARGE_VERTEX_SIZE) {
@@ -666,7 +666,7 @@ public:
 	}
 
 	size_t get_size(vertex_id_t id) const {
-		vsize_t num_edges = get_num_edges(id);
+		vsize_t num_edges = get_num_edges(id, edge_type::IN_EDGE);
 		return ext_mem_undirected_vertex::num_edges2vsize(num_edges,
 				edge_data_size);
 	}
@@ -737,8 +737,17 @@ public:
 		return num_edges;
 	}
 
-	virtual vsize_t get_num_edges(vertex_id_t id) const {
-		return get_num_in_edges(id) + get_num_out_edges(id);
+	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
+		switch (type) {
+			case edge_type::IN_EDGE:
+				return get_num_in_edges(id);
+			case edge_type::OUT_EDGE:
+				return get_num_out_edges(id);
+			case edge_type::BOTH_EDGES:
+				return get_num_in_edges(id) + get_num_out_edges(id);
+			default:
+				assert(0);
+		}
 	}
 
 	size_t get_in_size(vertex_id_t id) const {
