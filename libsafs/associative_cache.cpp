@@ -1204,7 +1204,7 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 			assert(p->is_dirty());
 			p->set_dirty(false);
 			p->set_io_pending(false);
-			assert(p->reset_reqs() == NULL);
+			BOOST_VERIFY(p->reset_reqs() == NULL);
 			p->unlock();
 			p->dec_ref();
 		}
@@ -1217,7 +1217,7 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 				assert(p->is_dirty());
 				p->set_dirty(false);
 				p->set_io_pending(false);
-				assert(p->reset_reqs() == NULL);
+				BOOST_VERIFY(p->reset_reqs() == NULL);
 				p->unlock();
 				p->dec_ref();
 				assert(p->get_ref() >= 0);
