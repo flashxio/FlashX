@@ -41,7 +41,7 @@ void message_processor::buf_msg(vertex_message &vmsg)
 			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
 		// We have to make sure this is successful.
-		assert(stolenv_msgs.back().add(vmsg));
+		BOOST_VERIFY(stolenv_msgs.back().add(vmsg));
 	}
 }
 
@@ -81,7 +81,7 @@ void message_processor::buf_mmsg(local_vid_t id, multicast_message &mmsg)
 			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
 		// We have to make sure this is successful.
-		assert(stolenv_msgs.back().add(converter));
+		BOOST_VERIFY(stolenv_msgs.back().add(converter));
 	}
 }
 

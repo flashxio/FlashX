@@ -441,7 +441,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	// two requests with one vertex compute.
 	if (type == edge_type::IN_EDGE) {
 		off_t first_off = it.get_curr_off();
-		assert(it.move_to(get_num_vertices() - 1));
+		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
 		off_t last_off = it.get_curr_off() + it.get_curr_size();
 		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
 		io_request req(compute, loc, last_off - first_off, READ);
@@ -449,7 +449,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	}
 	else if (type == edge_type::OUT_EDGE) {
 		off_t first_off = it.get_curr_out_off();
-		assert(it.move_to(get_num_vertices() - 1));
+		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
 		off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
 		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
 		io_request req(compute, loc, last_off - first_off, READ);
@@ -459,7 +459,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 		assert(type == edge_type::BOTH_EDGES);
 		off_t first_in_off = it.get_curr_off();
 		off_t first_out_off = it.get_curr_out_off();
-		assert(it.move_to(get_num_vertices() - 1));
+		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
 		off_t last_in_off = it.get_curr_off() + it.get_curr_size();
 		off_t last_out_off = it.get_curr_out_off() + it.get_curr_out_size();
 
