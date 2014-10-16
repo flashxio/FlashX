@@ -248,8 +248,6 @@ void int_handler(int sig_num)
 	exit(0);
 }
 
-const long TEST_DATA_SIZE = 15L * 1024 * 1024 * 4096;
-
 class debug_workload_gens: public debug_task
 {
 	std::vector<workload_gen *> workloads;

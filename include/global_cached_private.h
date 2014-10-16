@@ -228,8 +228,7 @@ public:
 	void complete_user_compute(user_compute *compute);
 
 	void queue_requests(page_req_pair reqs[], int num) {
-		int num_added = pending_requests.add(reqs, num);
-		assert(num_added == num);
+		BOOST_VERIFY(pending_requests.add(reqs, num) == num);
 		get_thread()->activate();
 	}
 

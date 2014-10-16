@@ -1129,7 +1129,7 @@ ssize_t global_cached_io::read(io_request &req, thread_safe_page *pages[],
 	 */
 	for (int i = 0; i < npages; i++) {
 		thread_safe_page *p = pages[i];
-		assert(file_id == p->get_file_id());
+		BOOST_VERIFY(file_id == p->get_file_id());
 		p->lock();
 		if (!p->data_ready() && !p->is_io_pending()) {
 			assert(p->get_io_req() == NULL);
@@ -1896,7 +1896,7 @@ static bool merge_req(io_request &merged, const io_request &req)
 		// overlap. The check in flush_requests() has confirmed it.
 		if (merged.contain_offset(p->get_offset())) {
 			int idx = (p->get_offset() - merged.get_offset()) / PAGE_SIZE;
-			assert(p == merged.get_page(idx));
+			BOOST_VERIFY(p == merged.get_page(idx));
 		}
 		else
 			merged.add_io_buf(buf);

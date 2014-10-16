@@ -97,12 +97,6 @@ class RAID0_mapper: public file_mapper
 public:
 	RAID0_mapper(const std::string &name, const std::vector<part_file_info> &files,
 			int block_size): file_mapper(name, files, block_size) {
-#ifdef TEST
-		if (rand_start == 0) {
-			rand_start = gen_RAID_rand_start(files.size());
-			printf("rand start shift in RAID0: %d\n", rand_start);
-		}
-#endif
 	}
 
 	virtual void map(off_t off, struct block_identifier &bid) const {
@@ -136,12 +130,6 @@ class RAID5_mapper: public file_mapper
 public:
 	RAID5_mapper(const std::string &name, const std::vector<part_file_info> &files,
 			int block_size): file_mapper(name, files, block_size) {
-#ifdef TEST
-		if (rand_start == 0) {
-			rand_start = gen_RAID_rand_start(files.size());
-			printf("rand start shift RAID5: %d\n", rand_start);
-		}
-#endif
 	}
 
 	virtual void map(off_t off, struct block_identifier &bid) const {

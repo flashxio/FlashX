@@ -492,7 +492,7 @@ io_interface::ptr posix_io_factory::create_io(thread *t)
 			break;
 		default:
 			fprintf(stderr, "a wrong posix access option\n");
-			assert(0);
+			abort();
 	}
 	num_ios++;
 	return io_interface::ptr(io, io_deleter(*this));

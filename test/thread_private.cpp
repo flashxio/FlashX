@@ -92,7 +92,7 @@ int cleanup_callback::invoke(io_request *rqs[], int num)
 #ifdef STATISTICS
 	thread->num_completes.inc(num);
 	int res = thread->num_pending.dec(num);
-	assert(res >= 0);
+	BOOST_VERIFY(res >= 0);
 #endif
 	return 0;
 }
@@ -457,7 +457,7 @@ int work2req_converter::to_reqs(workload_gen *gen, int buf_type, int num,
 			data_loc_t loc = range.get_loc();
 			char *p = NULL;
 			int ret = posix_memalign((void **) &p, PAGE_SIZE, range.get_size());
-			assert(ret == 0);
+			BOOST_VERIFY(ret == 0);
 			if (range.get_access_method() == WRITE && params.is_verify_content())
 				create_write_data(p, range.get_size(), loc.get_offset(),
 						io->get_file_id());

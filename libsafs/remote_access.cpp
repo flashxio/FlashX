@@ -59,8 +59,7 @@ void remote_io::notify_completion(io_request *reqs[], int num)
 		assert(req_copies[i].get_io());
 	}
 
-	int ret = complete_queue.add(req_copies.data(), num);
-	assert(ret == num);
+	BOOST_VERIFY(complete_queue.add(req_copies.data(), num) == num);
 	get_thread()->activate();
 }
 

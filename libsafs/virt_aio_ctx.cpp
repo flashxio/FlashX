@@ -127,8 +127,7 @@ void virt_aio_ctx::submit_io_request(struct iocb* ioq[], int num)
 
 	int num_existing = pending_reqs.get_num_entries();
 	struct req_entry origs[num_existing];
-	int ret = pending_reqs.fetch(origs, num_existing);
-	assert(ret == num_existing);
+	BOOST_VERIFY(pending_reqs.fetch(origs, num_existing) == num_existing);
 
 	int tot = num_existing + num;
 	struct req_entry merge_buf[tot];
@@ -217,7 +216,7 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 			int fd = iocbs[i]->aio_fildes;
 			for (int j = 0; j < num_vecs; j++) {
 				if (params.is_verify_content()) {
-					assert(data->verify_data(fd, (char *) iov[j].iov_base,
+					BOOST_VERIFY(data->verify_data(fd, (char *) iov[j].iov_base,
 								iov[j].iov_len, offset));
 					offset += iov[j].iov_len;
 				}

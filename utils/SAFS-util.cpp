@@ -73,7 +73,7 @@ public:
 
 	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
 		long new_off = lseek(fd, off, SEEK_SET);
-		assert(new_off == off);
+		BOOST_VERIFY(new_off == off);
 		ssize_t ret = complete_read(fd, buf, size);
 		if (ret < 0) {
 			perror("complete_read");
@@ -134,7 +134,7 @@ public:
 		assert(read_bytes > 0);
 		size_t ret = source->get_data(rqs[0]->get_offset(), read_bytes, orig_buf);
 		fprintf(stderr, "verify block %lx of %ld bytes\n", rqs[0]->get_offset(), read_bytes);
-		assert(ret == read_bytes);
+		BOOST_VERIFY(ret == read_bytes);
 		verified_bytes += read_bytes;
 		for (size_t i = 0; i < read_bytes; i++) {
 			if (rqs[0]->get_buf()[i] != orig_buf[i]) {
@@ -279,7 +279,7 @@ void comm_load_part_file2fs(int argc, char *argv[])
 	native_dir dir(part_path);
 	assert(!dir.exist());
 	bool ret = dir.create_dir(false);
-	assert(ret);
+	BOOST_VERIFY(ret);
 
 	std::string file_path = part_path + "/" + std::string(argv[2]);
 	FILE *out_f = fopen(file_path.c_str(), "w");

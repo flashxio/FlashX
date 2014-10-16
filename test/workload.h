@@ -173,7 +173,7 @@ public:
 			permuted_offsets = thread_safe_FIFO_queue<off_t>::create(
 					std::string("permuted_offsets"), -1, tot_length);
 			int ret = permuted_offsets->add(offsets, tot_length);
-			assert(ret == tot_length);
+			BOOST_VERIFY(ret == tot_length);
 			delete offsets;
 		}
 		this->num_reads_in_100 = (int) (read_ratio * 100);
@@ -383,8 +383,7 @@ public:
 				workload_pack pack(workloads + curr, min(pack_size,
 							length - curr));
 				curr += pack.get_num_remaining();
-				int ret = workload_queue->add(&pack, 1);
-				assert(ret == 1);
+				BOOST_VERIFY(workload_queue->add(&pack, 1) == 1);
 			}
 			delete [] workloads;
 		}

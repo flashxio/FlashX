@@ -1410,8 +1410,8 @@ hash_cell *associative_cache::get_prev_cell(hash_cell *cell) {
 				return (cells_table[i - 1] + init_ncells - 1);
 			}
 		}
-		// we should reach here if the cell exists in the table.
-		assert(0);
+		// we shouldn't reach here if the cell exists in the table.
+		abort();
 	}
 }
 
@@ -1432,8 +1432,8 @@ hash_cell *associative_cache::get_next_cell(hash_cell *cell)
 					return cells_table[i + 1];
 			}
 		}
-		// We should reach here.
-		assert(0);
+		// We shouldn't reach here.
+		abort();
 	}
 }
 

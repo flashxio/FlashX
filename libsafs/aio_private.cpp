@@ -19,6 +19,8 @@
 
 #include <limits.h>
 
+#include <boost/assert.hpp>
+
 #include "aio_private.h"
 #include "messaging.h"
 #include "read_private.h"
@@ -234,8 +236,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 			assert(tcb->req.get_buf_size(i) % MIN_BLOCK_SIZE == 0);
 		}
 		assert(num_bufs <= MAX_MULTI_BUFS);
-		int ret = tcb->req.get_vec(tcb->vec, num_bufs);
-		assert(ret == num_bufs);
+		BOOST_VERIFY(tcb->req.get_vec(tcb->vec, num_bufs) == num_bufs);
 		struct iocb *req = ctx->make_iovec_request(io->get_fd(tcb->req.get_offset()),
 				/* 
 				 * iocb only contains a pointer to the io vector.
