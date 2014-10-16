@@ -53,7 +53,7 @@
 			char syscom[256];						\
 			printf("[bt] #%d %s\n", i, strings[i]);	\
 			sprintf(syscom,"addr2line %p -e %s", buf[i], program_invocation_name);\
-			assert(system(syscom) == 0);			\
+			int ret __attribute__((unused)) = system(syscom);	\
 		}											\
 		free(strings);								\
 	} while (0)
