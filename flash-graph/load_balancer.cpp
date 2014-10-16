@@ -87,8 +87,8 @@ void load_balancer::process_completed_stolen_vertices()
 			int num_completed = q.get_num_entries();
 			num_tot += num_completed;
 			stack_array<vertex_id_t> buf(num_completed);
-			int ret = q.fetch(buf.data(), num_completed);
-			assert(ret == num_completed);
+			BOOST_VERIFY(q.fetch(buf.data(), num_completed)
+					== num_completed);
 			t->return_vertices(buf.data(), num_completed);
 		}
 	}

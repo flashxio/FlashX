@@ -43,7 +43,7 @@ void print_directed(FG_vector<vsize_t>::ptr in_degrees,
 {
 	size_t tot_in_edges = in_degrees->sum<size_t>();
 	size_t tot_out_edges = out_degrees->sum<size_t>();
-	assert(tot_in_edges == tot_out_edges);
+	BOOST_VERIFY(tot_in_edges == tot_out_edges);
 	vsize_t max_num_in_edges = in_degrees->max();
 	vsize_t max_num_out_edges = out_degrees->max();
 	log_histogram hist_in_edges = in_degrees->log_hist(POWER_CONST);

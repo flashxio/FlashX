@@ -204,8 +204,7 @@ public:
 		for (size_t i = 0; i < ids.size(); i++) {
 			vertex_id_t id = ids[i];
 			// horizontal part id.
-			int hpart_id = partitioner.map(id);
-			assert(this->part_id == hpart_id);
+			BOOST_VERIFY(this->part_id == partitioner.map(id));
 			// vertical parts.
 			for (int vpart_id = 0; vpart_id < num_parts; vpart_id++)
 				new (part_vertex_arrs[vpart_id].second + i) part_vertex_type(id, vpart_id);
@@ -467,7 +466,7 @@ public:
 			if (id != INVALID_VERTEX_ID)
 				return id;
 		}
-		assert(0);
+		ABORT_MSG("can't find vertex ID");
 	}
 
 	virtual vertex_id_t get_vertex_id(int part_id, compute_vertex_pointer v) const {

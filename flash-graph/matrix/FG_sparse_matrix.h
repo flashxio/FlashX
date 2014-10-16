@@ -94,7 +94,7 @@ public:
 		bool has_next() {
 			bool ret1 = n_it.has_next();
 			bool ret2 = d_it.has_next();
-			assert(ret1 == ret2);
+			BOOST_VERIFY(ret1 == ret2);
 			return ret1;
 		}
 
@@ -125,7 +125,7 @@ inline static edge_type reverse_dir(edge_type type)
 		case OUT_EDGE:
 			return IN_EDGE;
 		default:
-			assert(0);
+			ABORT_MSG("wrong edge type");
 	}
 }
 

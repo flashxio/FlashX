@@ -140,33 +140,33 @@ template<class edge_data_type>
 void check_vertex(const in_mem_directed_vertex<edge_data_type> &in_v,
 		ext_mem_undirected_vertex *ext_in_v, ext_mem_undirected_vertex *ext_out_v)
 {
-	assert(ext_in_v->get_id() == ext_out_v->get_id());
-	assert(ext_in_v->get_id() == in_v.get_id());
-	assert(ext_in_v->get_num_edges() == in_v.get_num_in_edges());
-	assert(ext_out_v->get_num_edges() == in_v.get_num_out_edges());
+	TEST(ext_in_v->get_id() == ext_out_v->get_id());
+	TEST(ext_in_v->get_id() == in_v.get_id());
+	TEST(ext_in_v->get_num_edges() == in_v.get_num_in_edges());
+	TEST(ext_out_v->get_num_edges() == in_v.get_num_out_edges());
 	edge_const_iterator<edge_data_type> in_it2
 		= in_v.get_in_edge_begin();
 	edge_const_iterator<edge_data_type> in_end2
 		= in_v.get_in_edge_end();
 	for (size_t i = 0; i < ext_in_v->get_num_edges(); i++, ++in_it2) {
 		edge<edge_data_type> e2 = *in_it2;
-		assert(ext_in_v->get_neighbor(i) == e2.get_from());
-		assert(ext_in_v->get_id() == e2.get_to());
+		TEST(ext_in_v->get_neighbor(i) == e2.get_from());
+		TEST(ext_in_v->get_id() == e2.get_to());
 		if (ext_in_v->has_edge_data())
-			assert(ext_in_v->get_edge_data(i) == e2.get_data());
+			TEST(ext_in_v->get_edge_data(i) == e2.get_data());
 	}
-	assert(in_it2 == in_end2);
+	TEST(in_it2 == in_end2);
 
 	edge_const_iterator<edge_data_type> out_it2 = in_v.get_out_edge_begin();
 	edge_const_iterator<edge_data_type> out_end2 = in_v.get_out_edge_end();
 	for (size_t i = 0; i < ext_out_v->get_num_edges(); i++, ++out_it2) {
 		edge<edge_data_type> e2 = *out_it2;
-		assert(ext_out_v->get_id() == e2.get_from());
-		assert(ext_out_v->get_neighbor(i) == e2.get_to());
+		TEST(ext_out_v->get_id() == e2.get_from());
+		TEST(ext_out_v->get_neighbor(i) == e2.get_to());
 		if (ext_out_v->has_edge_data())
-			assert(ext_out_v->get_edge_data(i) == e2.get_data());
+			TEST(ext_out_v->get_edge_data(i) == e2.get_data());
 	}
-	assert(out_it2 == out_end2);
+	TEST(out_it2 == out_end2);
 }
 
 template<class edge_data_type = empty_data>
@@ -251,7 +251,7 @@ public:
 			= (const in_mem_directed_vertex<edge_data_type> &) v1;
 		assert(v.has_edge_data() == has_data);
 		std::pair<typename v_map_t::iterator, bool> ret = vertices.insert(v_pair_t(v.get_id(), v));
-		assert(ret.second);
+		BOOST_VERIFY(ret.second);
 		num_in_edges += v.get_num_in_edges();
 		num_out_edges += v.get_num_out_edges();
 		if (v.get_num_edges(edge_type::IN_EDGE)
@@ -281,8 +281,7 @@ public:
 
 		graph_header header(graph_type::DIRECTED, vertices.size(),
 				get_num_edges() / 2, has_data ? sizeof(edge_data_type) : 0);
-		ssize_t ret = fwrite(&header, sizeof(header), 1, in_f);
-		assert(ret == 1);
+		BOOST_VERIFY(fwrite(&header, sizeof(header), 1, in_f) == 1);
 
 		std::vector<char> buf;
 		size_t in_size = 0;
@@ -359,8 +358,7 @@ public:
 		FILE *adj_f = fopen(adj_file.c_str(), "r");
 		assert(adj_f);
 		char *adj_buf = new char[adj_file_size];
-		size_t ret = fread(adj_buf, adj_file_size, 1, adj_f);
-		assert(ret == 1);
+		BOOST_VERIFY(fread(adj_buf, adj_file_size, 1, adj_f) == 1);
 		fclose(adj_f);
 
 		graph_header *header = (graph_header *) adj_buf;
@@ -369,15 +367,15 @@ public:
 			ext_mem_vertex_info info = index->get_vertex_info_in(id);
 			ext_mem_undirected_vertex *in_v
 				= (ext_mem_undirected_vertex *) (adj_buf + info.get_off());
-			assert(in_v->get_size() == info.get_size());
+			TEST(in_v->get_size() == info.get_size());
 
 			info = index->get_vertex_info_out(id);
 			ext_mem_undirected_vertex *out_v
 				= (ext_mem_undirected_vertex *) (adj_buf + info.get_off());
-			assert(out_v->get_size() == info.get_size());
+			TEST(out_v->get_size() == info.get_size());
 
 			typename v_map_t::const_iterator it = vertices.find(id);
-			assert(it != vertices.end());
+			TEST(it != vertices.end());
 			check_vertex(it->second, in_v, out_v);
 		}
 		delete [] adj_buf;
@@ -390,7 +388,7 @@ public:
 		for (typename v_map_t::const_iterator it = other.vertices.begin();
 				it != other.vertices.end(); it++) {
 			std::pair<typename v_map_t::iterator, bool> ret = this->vertices.insert(*it);
-			assert(ret.second);
+			BOOST_VERIFY(ret.second);
 		}
 		this->num_in_edges += other.num_in_edges;
 		this->num_out_edges += other.num_out_edges;

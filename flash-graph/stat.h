@@ -82,10 +82,11 @@ public:
 			if (buckets[i].get_lower_bound() <= v
 					&& v < buckets[i].get_upper_bound())
 				return buckets[i];
-		printf("can't find a bucket for %ld. All buckets cover [%ld, %ld).\n",
+		fprintf(stderr,
+				"can't find a bucket for %ld. All buckets cover [%ld, %ld).\n",
 				v, buckets.front().get_lower_bound(),
 				buckets.back().get_upper_bound());
-		assert(0);
+		abort();
 	}
 
 	void add_value(size_t v) {

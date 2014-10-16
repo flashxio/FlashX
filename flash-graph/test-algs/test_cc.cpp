@@ -149,9 +149,9 @@ int main(int argc, char *argv[])
 		BOOST_FOREACH(size_map_t::value_type v, cluster_sizes) {
 			std::map<vertex_id_t, graph::ptr>::const_iterator it
 				= clusters.find(v.first);
-			assert(it != clusters.end());
-			assert(v.second.first == it->second->get_num_vertices());
-			assert(v.second.second == it->second->get_num_edges());
+			BOOST_VERIFY(it != clusters.end());
+			BOOST_VERIFY(v.second.first == it->second->get_num_vertices());
+			BOOST_VERIFY(v.second.second == it->second->get_num_edges());
 			fprintf(f, "comp %u: %ld, %ld\n", v.first, v.second.first,
 					v.second.second);
 		}

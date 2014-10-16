@@ -116,6 +116,6 @@ int main(int argc, char *argv[])
 		}
 	};
 	map.apply(print());
-	assert(tot_num == lcc_size);
+	BOOST_VERIFY(tot_num == lcc_size);
 	printf("There are %ld vertices in the lcc\n", tot_num);
 }

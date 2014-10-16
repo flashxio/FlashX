@@ -54,7 +54,7 @@ size_t vertex_index::get_index_size() const
 		return ((default_vertex_index *) this)->cal_index_size();
 	}
 	else
-		assert(0);
+		ABORT_MSG("can't get index size");
 }
 
 vertex_index::ptr vertex_index::load(const std::string &index_file)
@@ -66,8 +66,7 @@ vertex_index::ptr vertex_index::load(const std::string &index_file)
 	char *buf = (char *) malloc(size);
 	assert(buf);
 	FILE *fd = fopen(index_file.c_str(), "r");
-	size_t ret = fread(buf, size, 1, fd);
-	assert(ret == 1);
+	BOOST_VERIFY(fread(buf, size, 1, fd) == 1);
 	fclose(fd);
 
 	vertex_index::ptr idx((vertex_index *) buf, destroy_index());
@@ -134,8 +133,7 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	// The data may only occupy part of the page.
 	if (aligned_index_size < index_size) {
 		char *tmp = NULL;
-		int ret = posix_memalign((void **) &tmp, PAGE_SIZE, PAGE_SIZE);
-		assert(ret == 0);
+		BOOST_VERIFY(posix_memalign((void **) &tmp, PAGE_SIZE, PAGE_SIZE) == 0);
 		data_loc_t loc(factory->get_file_id(), aligned_index_size);
 		io_request req(tmp, loc, PAGE_SIZE, READ);
 		io->access(&req, 1);
@@ -393,8 +391,8 @@ void in_mem_cdirected_vertex_index::verify_against(
 	while (it.has_next()) {
 		ext_mem_vertex_info in_info = index.get_vertex_info_in(id);
 		ext_mem_vertex_info out_info = index.get_vertex_info_out(id);
-		assert(in_info.get_off() == it.get_curr_off());
-		assert(out_info.get_off() == it.get_curr_out_off());
+		TEST(in_info.get_off() == it.get_curr_off());
+		TEST(out_info.get_off() == it.get_curr_out_off());
 		id++;
 		it.move_next();
 	}
@@ -536,7 +534,7 @@ public:
 			case edge_type::BOTH_EDGES:
 				return get_num_in_edges(id) + get_num_out_edges(id);
 			default:
-				assert(0);
+				ABORT_MSG("wrong edge type");
 		}
 	}
 

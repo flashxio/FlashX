@@ -720,8 +720,8 @@ class page_directed_vertex: public page_vertex
 	const page_byte_array *out_array;
 public:
 	static vertex_id_t get_id(const page_byte_array &arr) {
-		size_t size = arr.get_size();
-		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		BOOST_VERIFY(arr.get_size()
+				>= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 		return v.get_id();
 	}
@@ -735,7 +735,7 @@ public:
 	page_directed_vertex(const page_byte_array &arr,
 			bool in_part): page_vertex(true) {
 		size_t size = arr.get_size();
-		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 
 		if (in_part) {
@@ -765,7 +765,7 @@ public:
 		this->out_array = &out_arr;
 
 		size_t size = in_arr.get_size();
-		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = in_arr.get<ext_mem_undirected_vertex>(0);
 		in_size = v.get_size();
 		assert(size >= in_size);
@@ -803,7 +803,7 @@ public:
 			case BOTH_EDGES:
 				return num_in_edges + num_out_edges;
 			default:
-				assert(0);
+				abort();
 		}
 	}
     
@@ -826,7 +826,7 @@ public:
 				return out_array->begin<vertex_id_t>(
 						ext_mem_undirected_vertex::get_header_size());
 			default:
-				assert(0);
+				abort();
 		}
 	}
     
@@ -875,7 +875,7 @@ public:
 						ext_mem_undirected_vertex::get_header_size()
 						+ end * sizeof(vertex_id_t));
 			default:
-				assert(0);
+				abort();
 		}
 	}
     
@@ -901,7 +901,7 @@ public:
 						ext_mem_undirected_vertex::get_edge_data_offset(
 							num_out_edges, sizeof(edge_data_type)));
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -950,7 +950,7 @@ public:
 						edge_end + start * sizeof(edge_data_type),
 						edge_end + end * sizeof(edge_data_type));
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -988,7 +988,7 @@ public:
 						(char *) edges, sizeof(vertex_id_t) * num_edges);
 				break;
 			default:
-				assert(0);
+				abort();
 		}
 		return num_edges;
 	}
@@ -1028,11 +1028,11 @@ public:
 	page_undirected_vertex(const page_byte_array &arr): page_vertex(
 			false), array(arr) {
 		size_t size = arr.get_size();
-		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
 		// We only want to know the header of the vertex, so we don't need to
 		// know what data type an edge has.
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
-		assert((unsigned) size >= v.get_size());
+		BOOST_VERIFY((unsigned) size >= v.get_size());
 		vertex_size = v.get_size();
 
 		id = v.get_id();
@@ -1209,7 +1209,7 @@ public:
 				memcpy(ids, out_edges.data(), out_edges.size() * sizeof(ids[0]));
 				break;
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -1225,7 +1225,7 @@ public:
 						out_data.size() * sizeof(edge_data_type));
 				break;
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -1262,7 +1262,7 @@ public:
 			case edge_type::BOTH_EDGES:
 				return get_num_in_edges() + get_num_out_edges();
 			default:
-				assert(0);
+				abort();
 		}
 	}
 

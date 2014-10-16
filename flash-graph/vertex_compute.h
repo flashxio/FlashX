@@ -306,7 +306,7 @@ public:
 	}
 
 	virtual request_range get_next_request() {
-		assert(0);
+		ABORT_MSG("get_next_request isn't supported");
 	}
 
 	virtual void run(page_byte_array &arr) = 0;
@@ -460,7 +460,7 @@ public:
 	}
 
 	virtual request_range get_next_request() {
-		assert(0);
+		ABORT_MSG("get_next_request isn't supported");
 	}
 
 	virtual void run(page_byte_array &arr) = 0;

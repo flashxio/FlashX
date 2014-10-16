@@ -46,8 +46,7 @@ struct prio_compute
 
 	prio_compute(io_interface *io, user_compute *compute) {
 		this->compute = compute;
-		bool ret = compute->fetch_request(io, req);
-		assert(ret);
+		BOOST_VERIFY(compute->fetch_request(io, req));
 	}
 };
 

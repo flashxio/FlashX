@@ -118,8 +118,7 @@ public:
 		array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
 				// We need an additional entry.
 				index->get_data() + range.second + 1);
-		bool ret = compute->run(compute->get_first_vertex(), it);
-		assert(ret);
+		BOOST_VERIFY(compute->run(compute->get_first_vertex(), it));
 		compute->get_allocator().free(compute);
 	}
 
@@ -150,8 +149,7 @@ public:
 	virtual void request_index(index_compute *compute) {
 		id_range_t range = compute->get_range();
 		iterator_type it(*index, range);
-		bool ret = compute->run(compute->get_first_vertex(), it);
-		assert(ret);
+		BOOST_VERIFY(compute->run(compute->get_first_vertex(), it));
 		compute->get_allocator().free(compute);
 	}
 
@@ -558,10 +556,10 @@ static off_range_t get_in_off_range(index_iterator &it, vertex_id_t start_vid,
 {
 	vsize_t num_vertices = range.second - range.first;
 	off_t idx_entry_loc = range.first - start_vid;
-	assert(it.move_to(idx_entry_loc));
+	BOOST_VERIFY(it.move_to(idx_entry_loc));
 
 	off_t first_off = it.get_curr_off();
-	assert(it.move_to(idx_entry_loc + num_vertices - 1));
+	BOOST_VERIFY(it.move_to(idx_entry_loc + num_vertices - 1));
 	off_t last_off = it.get_curr_off() + it.get_curr_size();
 	return off_range_t(first_off, last_off);
 }
@@ -571,10 +569,10 @@ static off_range_t get_out_off_range(index_iterator &it, vertex_id_t start_vid,
 {
 	vsize_t num_vertices = range.second - range.first;
 	off_t idx_entry_loc = range.first - start_vid;
-	assert(it.move_to(idx_entry_loc));
+	BOOST_VERIFY(it.move_to(idx_entry_loc));
 
 	off_t first_off = it.get_curr_out_off();
-	assert(it.move_to(idx_entry_loc + num_vertices - 1));
+	BOOST_VERIFY(it.move_to(idx_entry_loc + num_vertices - 1));
 	off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
 	return off_range_t(first_off, last_off);
 }

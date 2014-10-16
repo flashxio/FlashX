@@ -259,15 +259,15 @@ public:
 			const std::string &graph_file);
 
 	virtual vertex_index::ptr create_vertex_index() const {
-		assert(0);
+		ABORT_MSG("don't support creating vertex index");
 	}
 
 	void get_all_vertices(std::vector<vertex_id_t> &ids) const {
-		assert(0);
+		ABORT_MSG("don't support getting all vertices");
 	}
 
 	virtual void print() const {
-		assert(0);
+		ABORT_MSG("don't support printing");
 	}
 
 #if 0
@@ -323,7 +323,7 @@ public:
 			case BOTH_EDGES:
 				return in_size + out_size;
 			default:
-				assert(0);
+				ABORT_MSG("wrong edge type");
 		}
 	}
 	virtual size_t get_num_edges(edge_type type) const {
@@ -335,7 +335,7 @@ public:
 			case BOTH_EDGES:
 				return num_in_edges + num_out_edges;
 			default:
-				assert(0);
+				ABORT_MSG("wrong edge type");
 		}
 	}
 };
@@ -453,8 +453,7 @@ public:
 			g, new directed_in_mem_vertex_index()) {
 		tmp_in_graph_file = tempnam(work_dir.c_str(), "in-directed");
 		in_f = fopen(tmp_in_graph_file.c_str(), "w");
-		int ret = fseek(in_f, sizeof(graph_header), SEEK_SET);
-		assert(ret == 0);
+		BOOST_VERIFY(fseek(in_f, sizeof(graph_header), SEEK_SET) == 0);
 		tmp_out_graph_file = tempnam(work_dir.c_str(), "out-directed");
 		out_f = fopen(tmp_out_graph_file.c_str(), "w");
 	}
@@ -484,23 +483,21 @@ public:
 		int size = v.get_serialize_size(IN_EDGE);
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, IN_EDGE);
-		ssize_t ret = fwrite(buf.data(), size, 1, in_f);
-		assert(ret == 1);
+		BOOST_VERIFY(fwrite(buf.data(), size, 1, in_f) == 1);
 
 		size = v.get_serialize_size(OUT_EDGE);
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, OUT_EDGE);
-		ret = fwrite(buf.data(), size, 1, out_f);
-		assert(ret == 1);
+		BOOST_VERIFY(fwrite(buf.data(), size, 1, out_f) == 1);
 	}
 
 	void add_vertices(const directed_subgraph &subg) {
 		for (size_t i = 0; i < subg.get_num_vertices(); i++)
 			disk_graph<edge_data_type>::add_vertex(subg.get_vertex_info(i));
-		ssize_t ret = fwrite(subg.get_in_buf(), subg.get_in_size(), 1, in_f);
-		assert(ret == 1);
-		ret = fwrite(subg.get_out_buf(), subg.get_out_size(), 1, out_f);
-		assert(ret == 1);
+		BOOST_VERIFY(fwrite(subg.get_in_buf(), subg.get_in_size(), 1,
+					in_f) == 1);
+		BOOST_VERIFY(fwrite(subg.get_out_buf(), subg.get_out_size(), 1,
+					out_f) == 1);
 
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
@@ -516,9 +513,9 @@ public:
 		size_t read_size = std::min(remain_size, BUF_SIZE);
 		while (read_size > 0) {
 			size_t ret = fread(buf.get(), read_size, 1, from);
-			assert(ret == 1);
+			BOOST_VERIFY(ret == 1);
 			ret = fwrite(buf.get(), read_size, 1, to);
-			assert(ret == 1);
+			BOOST_VERIFY(ret == 1);
 			remain_size -= read_size;
 			read_size = std::min(remain_size, BUF_SIZE);
 		}
@@ -540,13 +537,11 @@ public:
 		graph_header header(get_graph_type(), this->get_num_vertices(),
 				this->get_num_edges(),
 				this->get_edge_graph()->has_edge_data() ? sizeof(edge_data_type) : 0);
-		int seek_ret = fseek(in_f, 0, SEEK_SET);
-		assert(seek_ret == 0);
-		ssize_t ret = fwrite(&header, sizeof(header), 1, in_f);
-		assert(ret == 1);
+		BOOST_VERIFY(fseek(in_f, 0, SEEK_SET) == 0);
+		BOOST_VERIFY(fwrite(&header, sizeof(header), 1, in_f) == 1);
 		fclose(in_f);
 		in_f = NULL;
-		assert(rename(tmp_in_graph_file.c_str(), adj_file.c_str()) == 0);
+		BOOST_VERIFY(rename(tmp_in_graph_file.c_str(), adj_file.c_str()) == 0);
 	}
 
 	virtual graph_type get_graph_type() const {
@@ -565,8 +560,7 @@ public:
 			g, new undirected_in_mem_vertex_index()) {
 		tmp_graph_file = tempnam(work_dir.c_str(), "undirected");
 		f = fopen(tmp_graph_file.c_str(), "w");
-		int ret = fseek(f, sizeof(graph_header), SEEK_SET);
-		assert(ret == 0);
+		BOOST_VERIFY(fseek(f, sizeof(graph_header), SEEK_SET) == 0);
 	}
 
 	~disk_undirected_graph() {
@@ -591,8 +585,7 @@ public:
 		int size = v.get_serialize_size(IN_EDGE);
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, IN_EDGE);
-		ssize_t ret = fwrite(buf.data(), size, 1, f);
-		assert(ret == 1);
+		BOOST_VERIFY(fwrite(buf.data(), size, 1, f) == 1);
 	}
 
 	virtual void finalize_graph_file(const std::string &adj_file) {
@@ -600,13 +593,11 @@ public:
 		graph_header header(get_graph_type(), this->get_num_vertices(),
 				this->get_num_edges(),
 				this->get_edge_graph()->has_edge_data() ? sizeof(edge_data_type) : 0);
-		int seek_ret = fseek(f, 0, SEEK_SET);
-		assert(seek_ret == 0);
-		ssize_t ret = fwrite(&header, sizeof(header), 1, f);
-		assert(ret == 1);
+		BOOST_VERIFY(fseek(f, 0, SEEK_SET) == 0);
+		BOOST_VERIFY(fwrite(&header, sizeof(header), 1, f) == 1);
 		fclose(f);
 		f = NULL;
-		assert(rename(tmp_graph_file.c_str(), adj_file.c_str()) == 0);
+		BOOST_VERIFY(rename(tmp_graph_file.c_str(), adj_file.c_str()) == 0);
 	}
 
 	virtual graph_type get_graph_type() const {
@@ -924,10 +915,8 @@ std::unique_ptr<char[]> read_vertices(FILE *f,
 	size_t size = cal_vertex_size(infos);
 	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[size]);
 	off_t off_begin = infos.front().get_off();
-	int ret = fseek(f, off_begin, SEEK_SET);
-	assert(ret == 0);
-	ret = fread(buf.get(), size, 1, f);
-	assert(ret == 1);
+	BOOST_VERIFY(fseek(f, off_begin, SEEK_SET) == 0);
+	BOOST_VERIFY(fread(buf.get(), size, 1, f) == 1);
 	BOOST_FOREACH(ext_mem_vertex_info info, infos) {
 		off_t rel_off = info.get_off() - off_begin;
 		vertices.push_back((ext_mem_undirected_vertex *) (buf.get() + rel_off));
@@ -1126,8 +1115,7 @@ std::unique_ptr<char[]> graph_file_io::read_edge_list_text(
 
 	// The line buffer must end with '\0'.
 	char *line_buf = new char[read_bytes + 1];
-	int ret = fread(line_buf, read_bytes, 1, f);
-	assert(ret == 1);
+	BOOST_VERIFY(fread(line_buf, read_bytes, 1, f) == 1);
 	line_buf[read_bytes] = 0;
 
 	return std::unique_ptr<char[]>(line_buf);
@@ -1243,8 +1231,7 @@ static std::unique_ptr<char[]> read_file(const std::string &file_name,
 	FILE *f = fopen(file_name.c_str(), "r");
 	assert(f);
 	char *buf = new char[size];
-	ssize_t ret = fread(buf, size, 1, f);
-	assert(ret == 1);
+	BOOST_VERIFY(fread(buf, size, 1, f) == 1);
 	return std::unique_ptr<char[]>(buf);
 }
 

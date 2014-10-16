@@ -115,11 +115,9 @@ public:
 		FILE *f = fopen(file.c_str(), "w");
 		if (f == NULL) {
 			perror("fopen");
-			assert(0);
+			abort();
 		}
-
-		ssize_t ret = fwrite(this, vertex_index::get_index_size(), 1, f);
-		assert(ret);
+		BOOST_VERIFY(fwrite(this, vertex_index::get_index_size(), 1, f));
 
 		fclose(f);
 	}
@@ -160,10 +158,9 @@ public:
 			assert(0);
 		}
 
-		ssize_t ret = fwrite(&index, vertex_index::get_header_size(), 1, f);
-		assert(ret);
-		ret = fwrite(vertices.data(), vertices.size() * sizeof(vertices[0]), 1, f);
-		assert(ret);
+		BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
+		BOOST_VERIFY(fwrite(vertices.data(),
+					vertices.size() * sizeof(vertices[0]), 1, f));
 
 		fclose(f);
 	}
@@ -326,22 +323,21 @@ public:
 			assert(0);
 		}
 
-		ssize_t ret = fwrite(&index, vertex_index::get_header_size(), 1, f);
-		assert(ret);
-		ret = fwrite(vertices.data(), vertices.size() * sizeof(vertices[0]), 1, f);
-		assert(ret);
+		BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
+		BOOST_VERIFY(fwrite(vertices.data(),
+					vertices.size() * sizeof(vertices[0]), 1, f));
 
 		fclose(f);
 	}
 
 	void verify() const {
 		vertex_index_temp<directed_vertex_entry>::verify();
-		assert(get_graph_header().get_graph_type() == graph_type::DIRECTED);
-		assert(get_vertex(0).get_in_off() == sizeof(graph_header));
+		TEST(get_graph_header().get_graph_type() == graph_type::DIRECTED);
+		TEST(get_vertex(0).get_in_off() == sizeof(graph_header));
 		// All out-part of vertices are stored behind the in-part of vertices.
-		assert(get_vertex(0).get_out_off()
+		TEST(get_vertex(0).get_out_off()
 				== get_vertex(get_num_vertices()).get_in_off());
-		assert(h.data.out_part_loc == get_vertex(0).get_out_off());
+		TEST(h.data.out_part_loc == get_vertex(0).get_out_off());
 	}
 
 	size_t get_graph_size() const {
@@ -607,13 +603,8 @@ public:
 		return compressed;
 	}
 
-	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
-		assert(0);
-	}
-
-	virtual vertex_index::ptr get_raw_index() const {
-		assert(0);
-	}
+	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const = 0;
+	virtual vertex_index::ptr get_raw_index() const = 0;
 };
 
 /*
@@ -663,6 +654,10 @@ public:
 			num_edges = it->second;
 		}
 		return num_edges;
+	}
+
+	vertex_index::ptr get_raw_index() const {
+		return vertex_index::ptr();
 	}
 
 	size_t get_size(vertex_id_t id) const {
@@ -746,8 +741,12 @@ public:
 			case edge_type::BOTH_EDGES:
 				return get_num_in_edges(id) + get_num_out_edges(id);
 			default:
-				assert(0);
+				ABORT_MSG("wrong edge type");
 		}
+	}
+
+	vertex_index::ptr get_raw_index() const {
+		return vertex_index::ptr();
 	}
 
 	size_t get_in_size(vertex_id_t id) const {
@@ -837,7 +836,7 @@ static inline int get_index_entry_size(graph_type type)
 		case graph_type::DIRECTED:
 			return sizeof(directed_vertex_entry);
 		default:
-			assert(0);
+			ABORT_MSG("wrong graph type");
 	}
 }
 
