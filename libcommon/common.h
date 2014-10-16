@@ -24,6 +24,8 @@
 #include <vector>
 #include <iostream>
 
+#include <boost/log/trivial.hpp>
+
 #include "common_c.h"
 #include "parameters.h"
 
@@ -61,6 +63,21 @@
 		PRINT_BACKTRACE();							\
 		assert(x <= y);								\
 	}
+
+#define ABORT_MSG(msg)								\
+	do {											\
+		BOOST_LOG_TRIVIAL(fatal) << (msg);			\
+		PRINT_BACKTRACE();							\
+		abort();									\
+	} while (0)
+
+#define TEST(x)										\
+	do {											\
+		if (!(x)) {									\
+			PRINT_BACKTRACE();						\
+			abort();								\
+		}											\
+	} while (0)
 
 enum {
 	READ,

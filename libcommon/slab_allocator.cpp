@@ -47,8 +47,7 @@ slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	// we only need to initialize them when we want to buffer objects locally.
 	if (local_buf_size > 0) {
-		int ret = pthread_key_create(&local_buf_key, NULL);
-		assert(ret == 0);
+		BOOST_VERIFY(pthread_key_create(&local_buf_key, NULL) == 0);
 	}
 }
 
@@ -85,8 +84,7 @@ char *slab_allocator::alloc()
 			int num = alloc(objs, local_buf_size);
 			if (num == 0)
 				return NULL;
-			int num_added = local_buf_refs->add(objs, num);
-			assert(num_added == num);
+			BOOST_VERIFY(local_buf_refs->add(objs, num) == num);
 		}
 		return local_buf_refs->pop_front();
 	}

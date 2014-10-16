@@ -28,6 +28,7 @@
 #include <limits.h>
 
 #include <string>
+#include <boost/assert.hpp>
 
 #include "common.h"
 
@@ -343,15 +344,13 @@ public:
 	 * of the queue.
 	 */
 	virtual void addByForce(T *entries, int num) {
-		int added = add(entries, num);
-		assert(added == num);
+		BOOST_VERIFY(add(entries, num) == num);
 	}
 
 	// TODO I should return reference.
 	T pop_front() {
 		T entry;
-		int num = fetch(&entry, 1);
-		assert(num == 1);
+		BOOST_VERIFY(fetch(&entry, 1) == 1);
 		return entry;
 	}
 
@@ -661,8 +660,7 @@ int blocking_FIFO_queue<T>::add_partial(fifo_queue<T> *queue, int min_added)
 #ifdef DEBUG
 			printf("try to expand queue %s to %d\n", name.c_str(), new_size);
 #endif
-			bool ret = fifo_queue<T>::expand_queue(new_size);
-			assert(ret);
+			BOOST_VERIFY(fifo_queue<T>::expand_queue(new_size));
 		}
 		int ret = fifo_queue<T>::add(queue);
 		num_added += ret;
