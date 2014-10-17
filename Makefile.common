@@ -21,6 +21,7 @@ CXX = clang++
 #PROF=1
 #MEMTRACE=1
 #BOOST_LOG=1
+RELEASE=1
 CFLAGS = -g -O3 -DSTATISTICS -DPROFILER
 ifdef MEMCHECK
 TRACE_FLAGS = -fsanitize=address
@@ -40,6 +41,9 @@ ifdef BOOST_LOG
 endif
 ifdef MEMTRACE
 	CXXFLAGS += -DENABLE_MEM_TRACE
+endif
+ifdef RELEASE
+	CXXFLAGS += -DNDEBUG
 endif
 CPPFLAGS := -MD
 
