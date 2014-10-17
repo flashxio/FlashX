@@ -24,8 +24,7 @@
 #include <vector>
 #include <iostream>
 
-#include <boost/log/trivial.hpp>
-
+#include "log.h"
 #include "common_c.h"
 #include "parameters.h"
 
