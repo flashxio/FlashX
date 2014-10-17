@@ -17,9 +17,9 @@
  * limitations under the License.
  */
 
-#include <boost/log/trivial.hpp>
 #include <boost/format.hpp>
 
+#include "log.h"
 #include "io_interface.h"
 
 #include "vertex_compute.h"

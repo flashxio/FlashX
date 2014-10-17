@@ -17,12 +17,10 @@
  * limitations under the License.
  */
 
-#include <boost/log/core.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/log/expressions.hpp>
 #include <boost/filesystem.hpp>
 #include <Rcpp.h>
 
+#include "log.h"
 #include "safs_file.h"
 
 #include "FGlib.h"
@@ -71,8 +69,7 @@ static FG_graph::ptr R_FG_get_graph(SEXP pgraph)
  */
 RcppExport SEXP R_FG_init(SEXP pconf)
 {
-	boost::log::core::get()->set_filter(
-			boost::log::trivial::severity > boost::log::trivial::info);
+	set_log_level(c_log_level::warning);
 	std::string conf_file = CHAR(STRING_ELT(pconf, 0));
 	printf("init FlashGraph\n");
 	boost::filesystem::path p(conf_file);

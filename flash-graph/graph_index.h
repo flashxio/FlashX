@@ -22,9 +22,9 @@
 
 #include <algorithm>
 #include <boost/foreach.hpp>
-#include <boost/log/trivial.hpp>
 #include <boost/format.hpp>
 
+#include "log.h"
 #include "vertex.h"
 #include "partitioner.h"
 #include "vertex_program.h"

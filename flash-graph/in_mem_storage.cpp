@@ -20,9 +20,9 @@
 #include <stdlib.h>
 #include <malloc.h>
 
-#include <boost/log/trivial.hpp>
 #include <boost/format.hpp>
 
+#include "log.h"
 #include "safs_file.h"
 #include "cache.h"
 #include "slab_allocator.h"

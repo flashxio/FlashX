@@ -20,8 +20,7 @@
  * limitations under the License.
  */
 
-#include <boost/log/trivial.hpp>
-
+#include "log.h"
 #include "config_map.h"
 
 /**
