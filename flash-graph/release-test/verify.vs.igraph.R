@@ -22,10 +22,16 @@ verify.cc <- function(fg.res, ig.res)
 
 	# counts the size of each components from FlashGraph
 	fg.res.counts <- table(fg.res)
-	# exclude the isolates from FlashGraph
-	fg.uniq.no <- length(fg.res.counts) - 1
-	# get the size of each components from FlashGraph, excluding isolates
-	fg.sorted <- sort(fg.res.counts[(1:fg.uniq.no) + 1])
+	if (fg.no.iso == 0) {
+		fg.uniq.no <- length(fg.res.counts)
+		fg.sorted <- sort(fg.res.counts[1:fg.uniq.no])
+	}
+	else {
+		# exclude the isolates from FlashGraph
+		fg.uniq.no <- length(fg.res.counts) - 1
+		# get the size of each components from FlashGraph, excluding isolates
+		fg.sorted <- sort(fg.res.counts[(1:fg.uniq.no) + 1])
+	}
 	# get the size of each components from iGraph, excluding isolates
 	ig.sorted <- sort(table(ig.res))[(ig.uniq.no - fg.uniq.no + 1):ig.uniq.no]
 	cmp.res <- fg.sorted == ig.sorted
