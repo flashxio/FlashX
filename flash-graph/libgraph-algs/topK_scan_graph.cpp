@@ -688,7 +688,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		}
 	};
 
-	size_t min_edges = 1000;
+	size_t min_edges = 1;
 	std::shared_ptr<vertex_filter> filter
 		= std::shared_ptr<vertex_filter>(new remove_small_filter(min_edges));
 	BOOST_LOG_TRIVIAL(info)
@@ -726,19 +726,22 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		for (prev_start_loc = topK - 1; prev_start_loc > 0
 				&& known_scans.get(prev_start_loc).second == prev_topK_scan;
 				prev_start_loc--);
+		prev_start_loc++;
+		assert(known_scans.get(prev_start_loc).second == prev_topK_scan);
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("prev topK scan: %1%, prev loc: %2%")
 			% prev_topK_scan % prev_start_loc;
+
 		// Let's use the topK as the max scan for unknown vertices
 		// and see if we can find a new vertex that has larger local scan.
 		max_scan = global_max(prev_topK_scan);
-
 		graph->start(std::shared_ptr<vertex_filter>(
 					new remove_small_scan_filter(prev_topK_scan)));
 		graph->wait4complete();
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("There are %1% computed vertices")
 			% known_scans.get_size();
+
 		// If the previous topK is different from the current one,
 		// it means we have found new local scans that are larger
 		// than the previous topK. We should use the new topK and
@@ -747,9 +750,11 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		for (curr_start_loc = topK - 1; curr_start_loc > 0
 				&& known_scans.get(curr_start_loc).second == curr_topK_scan;
 				curr_start_loc--);
+		curr_start_loc++;
+		assert(known_scans.get(curr_start_loc).second == curr_topK_scan);
 		BOOST_LOG_TRIVIAL(info)
-			<< boost::format("global max scan: %1%, start loc: %2%")
-			% max_scan.get() % curr_start_loc;
+			<< boost::format("global max scan: %1%, topK scan: %2%, start loc: %3%")
+			% max_scan.get() % curr_topK_scan % curr_start_loc;
 	} while (prev_topK_scan != curr_topK_scan || prev_start_loc != curr_start_loc);
 	assert(known_scans.get_size() >= topK);
 
