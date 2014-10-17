@@ -118,11 +118,59 @@ static bool exist_graph(std::string &graph_name)
 	return true;
 }
 
+static SEXP get_safs_params()
+{
+	Rcpp::List ret;
+	ret["RAID_block_size"] = params.get_RAID_block_size();
+	ret["SA_min_cell_size"] = params.get_SA_min_cell_size();
+	ret["IO_dpeth"] = params.get_aio_depth_per_file();
+	ret["cache_type"] = params.get_cache_type();
+	ret["cache_size"] = params.get_cache_size();
+	ret["RAID_mapping"] = params.get_RAID_mapping_option();
+	ret["virtual_AIO"] = params.is_use_virt_aio();
+	ret["use_flusher"] = params.is_use_flusher();
+	ret["NUMA_num_process_threads"] = params.get_numa_num_process_threads();
+	ret["num_nodes"] = params.get_num_nodes();
+	ret["merge_requests"] = params.is_merge_reqs();
+	ret["max_obj_alloc_size"] = params.get_max_obj_alloc_size();
+	ret["writable"] = params.is_writable();
+	ret["max_num_pending_IOs"] = params.get_max_num_pending_ios();
+	ret["huge_page"] = params.is_huge_page_enabled();
+	return ret;
+}
+
+static SEXP get_fg_params()
+{
+	Rcpp::List ret;
+	ret["prof_file"] = graph_conf.get_prof_file();
+	ret["num_threads"] = graph_conf.get_num_threads();
+	ret["elevator"] = graph_conf.get_elevator_enabled();
+	ret["max_processing_vertices"] = graph_conf.get_max_processing_vertices();
+	ret["part_range_size_log"] = graph_conf.get_part_range_size_log();
+	ret["preload"] = graph_conf.preload();
+	ret["index_file_weight"] = graph_conf.get_index_file_weight();
+	ret["in_mem_index"] = graph_conf.use_in_mem_index();
+	ret["in_mem_graph"] = graph_conf.use_in_mem_graph();
+	ret["serial_run"] = graph_conf.use_serial_run();
+	ret["num_vertical_parts"] = graph_conf.get_num_vparts();
+	ret["min_vpart_degree"] = graph_conf.get_min_vpart_degree();
+	return ret;
+}
+
 /**
  * This returns all parameters of SAFS or FlashGraph.
  */
-RcppExport SEXP R_FG_get_params(SEXP sys_name)
+RcppExport SEXP R_FG_get_params(SEXP psys)
 {
+	std::string sys_name = CHAR(STRING_ELT(psys, 0));
+	if (sys_name == "SAFS")
+		return get_safs_params();
+	else if (sys_name == "FlashGraph")
+		return get_fg_params();
+	else {
+		fprintf(stderr, "wrong system name\n");
+		return R_NilValue;
+	}
 }
 
 /**

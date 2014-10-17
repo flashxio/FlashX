@@ -16,6 +16,11 @@ fg.exist.graph <- function(graph)
 	.Call("R_FG_exist_graph", graph, PACKAGE="FlashGraph")
 }
 
+fg.get.params <- function(name)
+{
+	.Call("R_FG_get_params", name, PACKAGE="FlashGraph")
+}
+
 fg.get.graph <- function(graph)
 {
 	stopifnot(fg.exist.graph(graph))
