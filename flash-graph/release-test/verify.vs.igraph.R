@@ -99,7 +99,7 @@ test.undirected <- function(fg, ig)
 	check.vectors("degree_test", fg.res, ig.res)
 }
 
-fg.conf.file <- "run_test.txt"
+fg.set.conf("run_test.txt")
 fg <- fg.get.graph("wiki-Vote")
 ig <- read.graph("wiki-Vote.txt")
 test.directed(fg, ig)

@@ -85,6 +85,15 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 	return R_NilValue;
 }
 
+/**
+ * Destroy FlashGraph
+ */
+RcppExport SEXP R_FG_destroy()
+{
+	graph_engine::destroy_flash_graph();
+	return R_NilValue;
+}
+
 static bool exist_graph(std::string &graph_name)
 {
 	std::string version = itoa(CURR_VERSION);
