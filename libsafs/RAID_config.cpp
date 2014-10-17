@@ -17,9 +17,9 @@
  * limitations under the License.
  */
 
-#include <boost/log/trivial.hpp>
 #include <boost/format.hpp>
 
+#include "log.h"
 #include "RAID_config.h"
 #include "file_mapper.h"
 #include "native_file.h"

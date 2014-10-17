@@ -26,9 +26,9 @@
 #include <unordered_map>
 #include <vector>
 #include <boost/foreach.hpp>
-#include <boost/log/trivial.hpp>
 #include <boost/format.hpp>
 
+#include "log.h"
 #include "RAID_config.h"
 #include "io_interface.h"
 #include "read_private.h"
@@ -223,7 +223,9 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			global_data.read_threads[k] = new disk_io_thread(partition,
 					global_data.raid_conf->get_disk(k).node_id, NULL, k, flags);
 		}
+#if 0
 		debug.register_task(new debug_global_data());
+#endif
 	}
 
 	// Assign a thread object to the current thread.

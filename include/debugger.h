@@ -64,8 +64,6 @@ public:
 	void run();
 };
 
-extern debugger debug;
-
 bool is_debug_enabled();
 
 #endif

@@ -33,8 +33,10 @@ bool is_debug_enabled()
 
 static void enable_debug_handler(int sig, siginfo_t *si, void *uc)
 {
+#if 0
 	printf("debug mode is enabled\n");
 	debug.run();
+#endif
 }
 
 static void set_enable_debug_signal()
@@ -76,5 +78,3 @@ void debugger::run()
 		it->second->run();
 	}
 }
-
-debugger debug;

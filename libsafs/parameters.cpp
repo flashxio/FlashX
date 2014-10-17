@@ -19,8 +19,8 @@
 
 #include<algorithm>
 #include <sstream>
-#include <boost/log/trivial.hpp>
 
+#include "log.h"
 #include "parameters.h"
 #include "common.h"
 #include "RAID_config.h"

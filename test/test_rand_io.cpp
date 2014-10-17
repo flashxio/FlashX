@@ -382,7 +382,9 @@ int main(int argc, char *argv[])
 
 		threads[i] = new thread_private(node_id, i, config.get_entry_size(), factory, gen);
 	}
+#if 0
 	debug.register_task(new debug_workload_gens(workload_gens));
+#endif
 
 	if (config.is_high_prio()) {
 		ret = setpriority(PRIO_PROCESS, getpid(), -20);

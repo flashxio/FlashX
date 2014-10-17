@@ -17,11 +17,11 @@
  * limitations under the License.
  */
 
-#include <boost/log/trivial.hpp>
 #include <boost/format.hpp>
 
 #include <limits.h>
 
+#include "log.h"
 #include "native_file.h"
 #include "safs_file.h"
 #include "RAID_config.h"
