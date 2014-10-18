@@ -49,7 +49,7 @@ void create_clusters(const std::set<vertex_id_t> &ids, graph_type type,
 				g = undirected_graph<>::create(false);
 				break;
 			default:
-				assert(0);
+				ABORT_MSG("create clusters on wrong graph type");
 		}
 		clusters.insert(std::pair<vertex_id_t, graph::ptr>(
 					id, g));
@@ -143,7 +143,7 @@ void cluster_subgraph_vertex_program::add_vertex(const page_vertex &vertex)
 		g->add_vertex(in_v);
 	}
 	else
-		assert(0);
+		ABORT_MSG("add a vertex on a wrong type");
 }
 
 }
@@ -598,7 +598,7 @@ void ts_degree_vertex::run(vertex_program &prog, const page_vertex &vertex)
 		degree_vprog.set_degree(vertex.get_id(), ts_end_it - ts_it);
 	}
 	else {
-		assert(0);
+		ABORT_MSG("undirected graph isn't supported");
 	}
 }
 
@@ -713,7 +713,7 @@ void time_range_vertex::run(vertex_program &prog, const page_vertex &vertex)
 		}
 	}
 	else {
-		assert(0);
+		ABORT_MSG("undirected graph isn't supported");
 	}
 }
 

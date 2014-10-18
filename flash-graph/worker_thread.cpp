@@ -380,8 +380,8 @@ worker_thread::worker_thread(graph_engine *graph,
 			break;
 #endif
 		default:
-			assert(0);
-
+			fprintf(stderr, "wrong graph type");
+			abort();
 	}
 }
 

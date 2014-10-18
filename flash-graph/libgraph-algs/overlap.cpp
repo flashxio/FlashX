@@ -230,7 +230,7 @@ public:
 				run_stage2(prog);
 				break;
 			default:
-				assert(0);
+				ABORT_MSG("wrong overlap stage");
 		}
 	}
 

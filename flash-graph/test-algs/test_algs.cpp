@@ -50,7 +50,7 @@ void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -92,7 +92,7 @@ void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -135,7 +135,7 @@ void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 	FG_vector<vertex_id_t>::ptr comp_ids;
@@ -186,7 +186,7 @@ void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -216,7 +216,7 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -229,7 +229,7 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 			pr = compute_pagerank2(graph, num_iters, damping_factor);
 			break;
 		default:
-			assert(0);
+			abort();
 	}
 	std::vector<std::pair<float, off_t> > val_locs;
 	pr->max_val_locs(10, val_locs);
@@ -283,7 +283,7 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -367,7 +367,7 @@ void run_ts_wcc(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -417,7 +417,7 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -477,7 +477,7 @@ void run_overlap(FG_graph::ptr graph, int argc, char* argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 

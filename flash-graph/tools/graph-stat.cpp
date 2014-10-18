@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
 			graph_type_str = "undirected";
 			break;
 		default:
-			assert(0);
+			ABORT_MSG("wrong graph type");
 	}
 	printf("The graph type: %s\n", graph_type_str.c_str());
 	printf("There are %ld vertices and %ld edges\n",

@@ -457,7 +457,7 @@ class FG_vector
 				norm = norm1();
 				break;
 			default:
-				assert(0);
+				ABORT_MSG("normalize on wrong type");
 		}
 		div_by_in_place(norm);
 	}

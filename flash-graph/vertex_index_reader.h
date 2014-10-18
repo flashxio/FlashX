@@ -1184,7 +1184,7 @@ public:
 
 	void request_num_edges(vertex_id_t ids[], int num, vertex_compute &compute) {
 		// TODO it should only work for undirected vertices.
-		assert(0);
+		ABORT_MSG("request_num_edges isn't supported currently");
 		for (int i = 0; i < num; i++)
 			edge_comps.push_back(id_compute_t(ids[i], &compute));
 	}

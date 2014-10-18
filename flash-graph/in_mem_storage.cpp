@@ -80,11 +80,11 @@ public:
 	}
 
 	void lock() {
-		assert(0);
+		ABORT_MSG("lock isn't implemented");
 	}
 
 	void unlock() {
-		assert(0);
+		ABORT_MSG("unlock isn't implemented");
 	}
 
 	page_byte_array *clone() {

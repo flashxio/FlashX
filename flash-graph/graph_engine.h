@@ -88,7 +88,16 @@ public:
 	  */
 	void run_on_vertex_header(vertex_program &prog,
 			const vertex_header &header) {
-		assert(0);
+		ABORT_MSG("run_on_vertex_header isn't implemented");
+	}
+
+	/**
+	 * \brief This method is invoked when the vertex receives a message.
+	 * \param vprog The vertex program.
+	 * \param msg The message sent to the vertex.
+	 */
+	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
+		ABORT_MSG("run_on_message isn't implemented");
 	}
 };
 
@@ -120,7 +129,7 @@ public:
 	void broadcast_vpart(const vertex_message &msg);
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		assert(0);
+		ABORT_MSG("run_on_message isn't implemented");
 	}
 };
 
@@ -135,18 +144,19 @@ public:
 	}
 
 	void run(vertex_program &) {
-		assert(0);
+		ABORT_MSG("run isn't implemented");
 	}
 
 	void run(vertex_program &, const page_vertex &vertex) {
-		assert(0);
+		ABORT_MSG("run isn't implemented");
 	}
 
 	void run_on_message(vertex_program &, const vertex_message &msg) {
-		assert(0);
+		ABORT_MSG("run_on_message isn't implemented");
 	}
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		ABORT_MSG("run_on_vertex_header isn't implemented");
 	}
 };
 
@@ -211,7 +221,7 @@ public:
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		assert(0);
+		ABORT_MSG("run_on_message isn't implemented");
 	}
 };
 

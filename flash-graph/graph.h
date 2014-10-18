@@ -42,7 +42,7 @@ public:
 			const std::string &graph_file) = 0;
 	virtual void dump_as_edge_list(const std::string &file) const {
 		// TODO
-		assert(0);
+		ABORT_MSG("dump_as_edge_list isn't implemented");
 	}
 	virtual size_t get_num_edges() const = 0;
 	virtual size_t get_num_vertices() const = 0;
@@ -54,7 +54,7 @@ public:
 	// Merge the graph to this graph.
 	virtual void merge(graph::ptr g) {
 		// TODO
-		assert(0);
+		ABORT_MSG("merge isn't implemented");
 	}
 };
 
@@ -104,7 +104,7 @@ public:
 
 	void dump(const std::string &index_file,
 			const std::string &graph_file) {
-		assert(0);
+		ABORT_MSG("dump isn't implemented");
 	}
 
 	size_t get_num_edges() const {
@@ -127,12 +127,12 @@ public:
 	}
 
 	virtual void print() const {
-		assert(0);
+		ABORT_MSG("print isn't implemented");
 	}
 
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const {
-		assert(0);
+		ABORT_MSG("check_ext_graph isn't implemented");
 	}
 };
 
@@ -275,8 +275,7 @@ public:
 		FILE *in_f = fopen(in_graph_file.c_str(), "w");
 		FILE *out_f = fopen(out_graph_file.c_str(), "w");
 		if (in_f == NULL || out_f == NULL) {
-			perror("fopen");
-			assert(0);
+			ABORT_MSG(std::string("fail to open: ") + strerror(errno));
 		}
 
 		graph_header header(graph_type::DIRECTED, vertices.size(),
@@ -398,10 +397,9 @@ public:
 	virtual void dump_as_edge_list(const std::string &file) const {
 		assert(!file_exist(file));
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			assert(0);
-		}
+		if (f == NULL)
+			ABORT_MSG(boost::format("fail to open %1%: %2%")
+					% file % strerror(errno));
 
 		for (typename v_map_t::const_iterator vit = vertices.begin();
 				vit != vertices.end(); vit++) {

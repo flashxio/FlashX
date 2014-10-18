@@ -611,7 +611,7 @@ public:
      */
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
 			size_t num) const {
-		assert(0);
+		ABORT_MSG("read_edges isn't implemented");
 		return 0;
 	}
 

@@ -26,10 +26,8 @@
 size_t read_edge_list_text(const std::string &file, std::vector<edge<> > &edges)
 {
 	FILE *f = fopen(file.c_str(), "r");
-	if (f == NULL) {
-		perror("fopen");
-		assert(0);
-	}
+	if (f == NULL)
+		ABORT_MSG(boost::format("fail to open %1%: %2%") % file % strerror(errno));
 
 	ssize_t read;
 	size_t len = 0;
@@ -126,8 +124,8 @@ void undirected_graph<edge_data_type>::dump(const std::string &index_file,
 	assert(!file_exist(graph_file));
 	FILE *f = fopen(graph_file.c_str(), "w");
 	if (f == NULL) {
-		perror("fopen");
-		assert(0);
+		ABORT(boost::format("fail to open %1%: %2%")
+				% graph_file % strerror(errno));
 	}
 
 	graph_header header(graph_type::UNDIRECTED, vertices.size(),

@@ -500,7 +500,7 @@ void part_topK_scan_vertex::run_on_message(vertex_program &prog,
 			}
 			break;
 		default:
-			assert(0);
+			ABORT_MSG("wrong message type");
 	}
 	pthread_spin_unlock(&lock);
 }

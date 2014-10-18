@@ -24,6 +24,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <boost/format.hpp>
 
 #include "native_file.h"
 
@@ -153,10 +154,9 @@ public:
 		index.h.data.num_entries = vertices.size();
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			assert(0);
-		}
+		if (f == NULL)
+			ABORT_MSG(boost::format("fail to open %1%: %2%")
+					% file % strerror(errno));
 
 		BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
 		BOOST_VERIFY(fwrite(vertices.data(),
@@ -318,10 +318,9 @@ public:
 		index.h.data.out_part_loc = vertices.front().get_out_off();
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			assert(0);
-		}
+		if (f == NULL)
+			ABORT_MSG(boost::format("fail to open %1%: %2%")
+					% file % strerror(errno));
 
 		BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
 		BOOST_VERIFY(fwrite(vertices.data(),

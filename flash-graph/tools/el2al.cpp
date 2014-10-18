@@ -309,10 +309,10 @@ public:
 		return edge_data_size;
 	}
 	virtual void serialize_edges(vertex_id_t ids[], edge_type type) const {
-		assert(0);
+		ABORT_MSG("serialize_edges isn't implemented");
 	}
 	virtual void serialize_edge_data(char *data, edge_type type) const {
-		assert(0);
+		ABORT_MSG("serialize_edge_data isn't implemented");
 	}
 	virtual size_t get_serialize_size(edge_type type) const {
 		switch(type) {
@@ -1045,10 +1045,9 @@ class graph_file_io
 public:
 	graph_file_io(const std::string file) {
 		f = fopen(file.c_str(), "r");
-		if (f == NULL) {
-			perror("fopen");
-			assert(0);
-		}
+		if (f == NULL)
+			ABORT_MSG(boost::format("fail to open %1%: %2%")
+					% file % strerror(errno));
 		native_file local_f(file);
 		file_size = local_f.get_size();
 	}

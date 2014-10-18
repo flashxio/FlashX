@@ -274,10 +274,6 @@ public:
 			prog.activate_vertices(it);
 		}
 	}
-
-	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		assert(0);
-	}
 };
 
 template<class vertex_type>
