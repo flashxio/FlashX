@@ -23,6 +23,7 @@
 #include <iostream>
 #include <sstream>
 
+#include "common.h"
 #include "config_map.h"
 
 static bool read_config_file(const std::string &conf_file,
@@ -47,8 +48,7 @@ static bool read_config_file(const std::string &conf_file,
 		size_t found = str.find("=");
 		/* if there isn't `=', I assume it's a file name*/
 		if (found == std::string::npos) {
-			fprintf(stderr, "wrong format: %s\n", line);
-			assert(0);
+			ABORT_MSG(std::string("wrong format: ") + line);
 		}
 
 		std::string value = str.substr(found + 1);
