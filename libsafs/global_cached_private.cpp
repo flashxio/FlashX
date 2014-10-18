@@ -116,7 +116,7 @@ public:
 			*(io_request *) this = req;
 		}
 		else
-			assert(0);
+			ABORT_MSG("wrong request type");
 
 		completed_size = atomic_number<ssize_t>(0);
 		orig_io = NULL;
@@ -255,12 +255,12 @@ public:
 
 	void lock() {
 		// TODO
-		assert(0);
+		ABORT_MSG("lock isn't implemented");
 	}
 
 	void unlock() {
 		// TODO
-		assert(0);
+		ABORT_MSG("unlock isn't implemented");
 	}
 
 	page_byte_array *clone() {
@@ -317,12 +317,12 @@ public:
 
 	virtual void lock() {
 		// TODO
-		assert(0);
+		ABORT_MSG("lock isn't implemented");
 	}
 
 	virtual void unlock() {
 		// TODO
-		assert(0);
+		ABORT_MSG("unlock isn't implemented");
 	}
 
 	virtual off_t get_offset() const {

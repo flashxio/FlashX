@@ -1099,7 +1099,7 @@ public:
 	}
 
 	virtual int get_file_id() const {
-		assert(0);
+		ABORT_MSG("get_file_id isn't implemented");
 		return -1;
 	}
 

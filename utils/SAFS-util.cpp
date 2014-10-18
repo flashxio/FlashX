@@ -22,6 +22,7 @@
 #include <fcntl.h>
 
 #include <string>
+#include <boost/format.hpp>
 
 #include "io_interface.h"
 #include "native_file.h"
@@ -140,9 +141,9 @@ public:
 			if (rqs[0]->get_buf()[i] != orig_buf[i]) {
 				struct block_identifier bid;
 				fmapper->map((rqs[0]->get_offset() + i) / PAGE_SIZE, bid);
-				fprintf(stderr, "bytes at %ld (in partition %d) doesn't match\n",
-						rqs[0]->get_offset() + i, bid.idx);
-				assert(0);
+				ABORT_MSG(boost::format(
+							"bytes at %1% (in partition %2%) doesn't match")
+						% (rqs[0]->get_offset() + i) % bid.idx);
 			}
 		}
 		return 0;

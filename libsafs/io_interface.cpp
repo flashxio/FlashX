@@ -339,7 +339,7 @@ public:
 	virtual void destroy_io(io_interface *io);
 
 	virtual int get_file_id() const {
-		assert(0);
+		ABORT_MSG("get_file_id isn't implemented");
 		return -1;
 	}
 };
@@ -364,7 +364,7 @@ public:
 	virtual void destroy_io(io_interface *io);
 
 	virtual int get_file_id() const {
-		assert(0);
+		ABORT_MSG("get_file_id isn't implemented");
 		return -1;
 	}
 };
@@ -656,8 +656,7 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 			break;
 #endif
 		default:
-			fprintf(stderr, "a wrong access option\n");
-			assert(0);
+			ABORT_MSG("a wrong access option");
 	}
 	if (factory)
 		return file_io_factory::shared_ptr(factory, destroy_io_factory());
