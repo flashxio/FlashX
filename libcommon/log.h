@@ -49,9 +49,16 @@ class simple_log_stream
 {
 	static c_log_level curr_log_level;
 	c_log_level level;
+	bool log_data;
 public:
 	simple_log_stream(c_log_level level) {
 		this->level = level;
+		log_data = false;
+	}
+
+	~simple_log_stream() {
+		if (!log_data && level >= curr_log_level)
+			std::cout << "\n";
 	}
 
 	static void set_global_log_level(c_log_level level) {
@@ -59,10 +66,11 @@ public:
 	}
 
 	template<class T>
-	const simple_log_stream &operator<<(const T &v) const {
+	simple_log_stream operator<<(const T &v) {
+		log_data = true;
 		if (level >= curr_log_level)
 			std::cout << v;
-		return *this;
+		return simple_log_stream(level);
 	}
 };
 
@@ -73,7 +81,7 @@ extern simple_log_stream log_error;
 extern simple_log_stream log_fatal;
 
 #define BOOST_LOG_TRIVIAL(x)		\
-	log_##x << "\n"
+	log_##x
 
 static inline void set_log_level(enum c_log_level level)
 {
