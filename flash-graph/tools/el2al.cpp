@@ -225,6 +225,10 @@ public:
 		delete index;
 	}
 
+	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const {
+		ABORT_MSG("get_vertex isn't supported");
+	}
+
 	virtual void add_vertex(const in_mem_vertex &v) {
 		num_vertices++;
 		// To get the total number of edges, I only accumulate on in-edges
@@ -471,6 +475,10 @@ public:
 		}
 	}
 
+	virtual bool is_directed() const {
+		return true;
+	}
+
 	virtual void check_ext_graph(const std::string &index_file,
 			const std::string &adj_file) const {
 	}
@@ -569,6 +577,10 @@ public:
 			f = NULL;
 			unlink(tmp_graph_file.c_str());
 		}
+	}
+
+	virtual bool is_directed() const {
+		return false;
 	}
 
 	virtual void check_ext_graph(const std::string &index_file,

@@ -21,11 +21,15 @@ fg.get.params <- function(name)
 	.Call("R_FG_get_params", name, PACKAGE="FlashGraph")
 }
 
+# The graph object has three members:
+#	name: the graph name.
+#	cindex: whether there exists a compressed index for the graph.
+#	directed: whether the graph is directed.
+# In the future, it may have more information kept in the object.
 fg.get.graph <- function(graph)
 {
 	stopifnot(fg.exist.graph(graph))
-	exist.cindex <- .Call("R_FG_exist_cindex", graph, PACKAGE="FlashGraph")
-	list(graph, exist.cindex)
+	.Call("R_FG_get_graph_obj", graph, PACKAGE="FlashGraph")
 }
 
 fg.clusters <- function(graph, mode=c("weak", "strong"))
@@ -85,6 +89,14 @@ fg.coreness <- function(graph)
 fg.overlap <- function(graph, vids)
 {
 	.Call("R_FG_compute_overlap", graph, vids, PACKAGE="FlashGraph")
+}
+
+fg.fetch.subgraph <- function(graph, vertices)
+{
+	edge.list = .Call("R_FG_fetch_subgraph", graph, vertices,
+					  PACKAGE="FlashGraph")
+	dframe = data.frame(edge.list$src, edge.list$dst)
+	graph.data.frame(dframe, graph$directed)
 }
 
 .onLoad <- function(libname, pkgname) {

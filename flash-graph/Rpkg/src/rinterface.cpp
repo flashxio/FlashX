@@ -30,12 +30,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed,
 		int num_sweeps);
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals);
-void fetch_subgraphs(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
-		const std::set<vertex_id_t> &wanted_clusters, std::map<vertex_id_t,
-		graph::ptr> &clusters);
-void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
-		const std::set<vertex_id_t> &wanted_clusters,
-		std::map<vertex_id_t, std::pair<size_t, size_t> > &sizes);
 FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id_t id);
 FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval);
@@ -46,14 +40,9 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
  */
 static config_map::ptr configs;
 
-/**
- * Create a FG_graph for the specified graph.
- */
-static FG_graph::ptr R_FG_get_graph(SEXP pgraph)
+static FG_graph::ptr get_graph(const std::string &graph_name, bool has_cindex)
 {
 	std::string version = itoa(CURR_VERSION);
-	std::string graph_name = CHAR(STRING_ELT(VECTOR_ELT(pgraph, 0), 0));
-	bool has_cindex = INTEGER(VECTOR_ELT(pgraph, 1))[0];
 	std::string graph_file = graph_name + "-v" + version;
 	std::string index_file;
 	if (has_cindex)
@@ -61,7 +50,16 @@ static FG_graph::ptr R_FG_get_graph(SEXP pgraph)
 	else
 		index_file = graph_name + "-index-v" + version;
 	return FG_graph::create(graph_file, index_file, configs);
+}
 
+/**
+ * Create a FG_graph for the specified graph.
+ */
+static FG_graph::ptr R_FG_get_graph(SEXP pgraph)
+{
+	std::string graph_name = CHAR(STRING_ELT(VECTOR_ELT(pgraph, 0), 0));
+	bool has_cindex = INTEGER(VECTOR_ELT(pgraph, 1))[0];
+	return get_graph(graph_name, has_cindex);
 }
 
 /**
@@ -184,13 +182,18 @@ RcppExport SEXP R_FG_exist_graph(SEXP pgraph)
 	return res;
 }
 
+static bool exist_cindex(const std::string &graph_name)
+{
+	std::string cindex_name = graph_name + "-cindex-v" + itoa(CURR_VERSION);
+	safs_file cindex_file(get_sys_RAID_conf(), cindex_name);
+	return cindex_file.exist();
+}
+
 RcppExport SEXP R_FG_exist_cindex(SEXP pgraph)
 {
 	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
 	Rcpp::LogicalVector res(1);
-	std::string cindex_name = graph_name + "-cindex-v" + itoa(CURR_VERSION);
-	safs_file cindex_file(get_sys_RAID_conf(), cindex_name);
-	res[0] = cindex_file.exist();
+	res[0] = exist_cindex(graph_name);
 	return res;
 }
 
@@ -372,4 +375,71 @@ RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
 		}
 	}
 	return res;
+}
+
+RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
+{
+	Rcpp::IntegerVector vertices(pvertices);
+	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
+	assert(subg->get_num_vertices() == vids.size());
+	Rcpp::IntegerVector s_vs;
+	Rcpp::IntegerVector d_vs;
+	BOOST_FOREACH(vertex_id_t id, vids) {
+		const in_mem_vertex &v = subg->get_vertex(id);
+		if (v.has_edge_data())
+			ABORT_MSG("we can't fetch a subgraph from a graph with attributes");
+		if (subg->is_directed()) {
+			const in_mem_directed_vertex<> &dv
+				= (const in_mem_directed_vertex<> &) v;
+			size_t num_edges = dv.get_num_out_edges();
+			for (size_t i = 0; i < num_edges; i++) {
+				edge<> e = dv.get_out_edge(i);
+				s_vs.push_back(e.get_from());
+				d_vs.push_back(e.get_to());
+			}
+		}
+		else {
+			const in_mem_undirected_vertex<> &un_v
+				= (const in_mem_undirected_vertex<> &) v;
+			size_t num_edges = un_v.get_num_edges();
+			for (size_t i = 0; i < num_edges; i++) {
+				edge<> e = un_v.get_edge(i);
+				// each edge appears twice in an undirected graph.
+				// we only need to store one.
+				if (e.get_from() <= e.get_to()) {
+					s_vs.push_back(e.get_from());
+					d_vs.push_back(e.get_to());
+				}
+			}
+		}
+	}
+	Rcpp::List ret;
+	ret["src"] = s_vs;
+	ret["dst"] = d_vs;
+	return ret;
+}
+
+RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
+{
+	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
+	if (!exist_graph(graph_name)) {
+		fprintf(stderr, "%s doesn't exist\n", graph_name.c_str());
+		return R_NilValue;
+	}
+
+	Rcpp::List ret;
+	ret["name"] = pgraph;
+
+	Rcpp::LogicalVector cindex(1);
+	cindex[0] = exist_cindex(graph_name);
+	ret["cindex"] = cindex;
+
+	FG_graph::ptr graph = get_graph(graph_name, cindex[0]);
+	graph_header header = get_graph_header(graph);
+	Rcpp::LogicalVector directed(1);
+	directed[0] = header.is_directed_graph();
+	ret["directed"] = directed;
+	return ret;
 }

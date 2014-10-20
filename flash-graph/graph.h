@@ -36,6 +36,8 @@ public:
 	virtual ~graph() {
 	}
 
+	virtual bool is_directed() const = 0;
+	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const = 0;
 	virtual void add_vertex(const in_mem_vertex &v) = 0;
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const = 0;
 	virtual void dump(const std::string &index_file,
@@ -125,6 +127,10 @@ public:
 					has_data));
 	}
 
+	virtual bool is_directed() const {
+		return false;
+	}
+
 	virtual void add_vertex(const in_mem_vertex &v) {
 		const in_mem_undirected_vertex<edge_data_type> &un_v
 			= (const in_mem_undirected_vertex<edge_data_type> &) v;
@@ -132,6 +138,12 @@ public:
 		num_edges += un_v.get_num_edges();
 		if (un_v.get_num_edges() > 0)
 			num_non_empty++;
+	}
+
+	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const {
+		typename vmap_t::const_iterator it = vertices.find(id);
+		assert(it != vertices.end());
+		return it->second;
 	}
 
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const {
@@ -157,6 +169,10 @@ public:
 		return graph::ptr(new in_mem_directed_subgraph<edge_data_type>(has_data));
 	}
 
+	virtual bool is_directed() const {
+		return true;
+	}
+
 	virtual void add_vertex(const in_mem_vertex &v) {
 		const in_mem_directed_vertex<edge_data_type> &dv
 			= (const in_mem_directed_vertex<edge_data_type> &) v;
@@ -164,6 +180,12 @@ public:
 		num_edges += dv.get_num_edges(edge_type::IN_EDGE);
 		if (dv.get_num_edges(edge_type::BOTH_EDGES) > 0)
 			num_non_empty++;
+	}
+
+	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const {
+		typename vmap_t::const_iterator it = vertices.find(id);
+		assert(it != vertices.end());
+		return it->second;
 	}
 
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const {
@@ -214,6 +236,10 @@ public:
 		return ptr(new undirected_graph<edge_data_type>());
 	}
 
+	virtual bool is_directed() const {
+		return false;
+	}
+
 	bool has_edge_data() const {
 		return false;
 	}
@@ -223,6 +249,10 @@ public:
 			= (const in_mem_undirected_vertex<edge_data_type> &) v1;
 		vertices.push_back(v);
 		index.add_vertex(v);
+	}
+
+	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const {
+		return vertices[id];
 	}
 
 	void get_all_vertices(std::vector<vertex_id_t> &ids) const {
@@ -370,6 +400,10 @@ public:
 		return ptr(new directed_graph<edge_data_type>(has_data));
 	}
 
+	virtual bool is_directed() const {
+		return true;
+	}
+
 	bool has_edge_data() const {
 		return has_data;
 	}
@@ -386,6 +420,10 @@ public:
 				+ v.get_num_edges(edge_type::OUT_EDGE) > 0)
 			num_non_empty_vertices++;
 		index.add_vertex(v);
+	}
+
+	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const {
+		return vertices[id];
 	}
 
 	void get_all_vertices(std::vector<vertex_id_t> &ids) const {
