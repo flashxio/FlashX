@@ -55,7 +55,6 @@ public:
 			const std::string &adj_file) const = 0;
 	// Merge the graph to this graph.
 	virtual void merge(graph::ptr g) {
-		// TODO
 		ABORT_MSG("merge isn't implemented");
 	}
 };
@@ -82,11 +81,6 @@ public:
 			const std::string &adj_file) const {
 		ABORT_MSG("check_ext_graph isn't implemented");
 	}
-	// Merge the graph to this graph.
-	virtual void merge(graph::ptr g) {
-		// TODO
-		ABORT_MSG("merge isn't implemented");
-	}
 	virtual void dump(const std::string &index_file,
 			const std::string &graph_file) {
 		ABORT_MSG("dump isn't implemented");
@@ -110,6 +104,16 @@ public:
 	 */
 	virtual graph::ptr compress() const {
 		return graph::ptr();
+	}
+
+	// Merge the graph to this graph.
+	virtual void merge(graph::ptr g) {
+		std::vector<vertex_id_t> vertices;
+		g->get_all_vertices(vertices);
+		for (size_t i = 0; i < vertices.size(); i++) {
+			vertex_id_t id = vertices[i];
+			add_vertex(g->get_vertex(id));
+		}
 	}
 };
 
