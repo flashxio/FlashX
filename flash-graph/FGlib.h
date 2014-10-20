@@ -255,29 +255,11 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
  * \brief Fetch the clusters with the wanted cluster IDs.
  *  
  * \param fg The FlashGraph graph object for which you want to compute.
- * \param cluster_ids A vector of the cluster IDs that the vertices
- *        in the graph belong to.
- * \param wanted_clusters A set of component IDs that we want to fetch.
- * \param clusters A set of subgraphs returned by the function. Each subgraph
- *        contains vertices and edges in the cluster.
+ * \param vertices The vertices that the induced subgraph has.
+ * \return A subgraph.
  */
-void fetch_subgraphs(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
-		const std::set<vertex_id_t> &wanted_clusters, std::map<vertex_id_t,
-		graph::ptr> &clusters);
-
-/**
- * \brief Compute the size of each subgraph identified by cluster IDs.
- *  
- * \param fg The FlashGraph graph object for which you want to compute.
- * \param cluster_ids A vector of the cluster IDs that the vertices
- *        in the graph belong to.
- * \param wanted_clusters A set of component IDs that we want to fetch.
- * \param sizes the sizes of the wanted clusters returned by the function.
- *        Each pair contains the number of vertices and edges in the cluster.
- */
-void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
-		const std::set<vertex_id_t> &wanted_clusters,
-		std::map<vertex_id_t, std::pair<size_t, size_t> > &sizes);
+in_mem_subgraph::ptr fetch_subgraph(FG_graph::ptr graph,
+		const std::vector<vertex_id_t> &vertices);
 
 /**
  * \brief Compute the k-core/coreness of a graph. The algorithm will 

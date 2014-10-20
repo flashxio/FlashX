@@ -58,6 +58,134 @@ public:
 	}
 };
 
+class in_mem_subgraph: public graph
+{
+protected:
+	size_t num_non_empty;
+	bool has_data;
+	size_t num_edges;
+
+	in_mem_subgraph(bool has_data) {
+		num_edges = 0;
+		num_non_empty = 0;
+		this->has_data = has_data;
+	}
+public:
+	static graph::ptr create(graph_type type, bool has_data);
+
+	virtual void print() const {
+		ABORT_MSG("print isn't implemented");
+	}
+	virtual void check_ext_graph(const std::string &index_file,
+			const std::string &adj_file) const {
+		ABORT_MSG("check_ext_graph isn't implemented");
+	}
+	// Merge the graph to this graph.
+	virtual void merge(graph::ptr g) {
+		// TODO
+		ABORT_MSG("merge isn't implemented");
+	}
+	virtual void dump(const std::string &index_file,
+			const std::string &graph_file) {
+		ABORT_MSG("dump isn't implemented");
+	}
+	virtual void dump_as_edge_list(const std::string &file) const {
+		// TODO
+		ABORT_MSG("dump_as_edge_list isn't implemented");
+	}
+	virtual size_t get_num_edges() const {
+		return num_edges;
+	}
+	virtual bool has_edge_data() const {
+		return has_data;
+	}
+	virtual size_t get_num_non_empty_vertices() const {
+		return num_non_empty;
+	}
+	/**
+	 * This compresses the subgraph and generates a graph whose vertex IDs
+	 * are adjacent to each other.
+	 */
+	virtual graph::ptr compress() const {
+		return graph::ptr();
+	}
+};
+
+template<class edge_data_type = empty_data>
+class in_mem_undirected_subgraph: public in_mem_subgraph
+{
+	typedef std::map<vertex_id_t, in_mem_undirected_vertex<edge_data_type> > vmap_t;
+	vmap_t vertices;
+
+	in_mem_undirected_subgraph(bool has_data): in_mem_subgraph(has_data) {
+	}
+public:
+	static graph::ptr create(bool has_data) {
+		return graph::ptr(new in_mem_undirected_subgraph<edge_data_type>(
+					has_data));
+	}
+
+	virtual void add_vertex(const in_mem_vertex &v) {
+		const in_mem_undirected_vertex<edge_data_type> &un_v
+			= (const in_mem_undirected_vertex<edge_data_type> &) v;
+		vertices.insert(typename vmap_t::value_type(v.get_id(), un_v));
+		num_edges += un_v.get_num_edges();
+		if (un_v.get_num_edges() > 0)
+			num_non_empty++;
+	}
+
+	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const {
+		for (typename vmap_t::const_iterator it = vertices.begin();
+				it != vertices.end(); it++)
+			ids.push_back(it->first);
+	}
+	virtual size_t get_num_vertices() const {
+		return vertices.size();
+	}
+};
+
+template<class edge_data_type = empty_data>
+class in_mem_directed_subgraph: public in_mem_subgraph
+{
+	typedef std::map<vertex_id_t, in_mem_directed_vertex<edge_data_type> > vmap_t;
+	vmap_t vertices;
+
+	in_mem_directed_subgraph(bool has_data): in_mem_subgraph(has_data) {
+	}
+public:
+	static graph::ptr create(bool has_data) {
+		return graph::ptr(new in_mem_directed_subgraph<edge_data_type>(has_data));
+	}
+
+	virtual void add_vertex(const in_mem_vertex &v) {
+		const in_mem_directed_vertex<edge_data_type> &dv
+			= (const in_mem_directed_vertex<edge_data_type> &) v;
+		vertices.insert(typename vmap_t::value_type(v.get_id(), dv));
+		num_edges += dv.get_num_edges(edge_type::IN_EDGE);
+		if (dv.get_num_edges(edge_type::BOTH_EDGES) > 0)
+			num_non_empty++;
+	}
+
+	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const {
+		for (typename vmap_t::const_iterator it = vertices.begin();
+				it != vertices.end(); it++)
+			ids.push_back(it->first);
+	}
+	virtual size_t get_num_vertices() const {
+		return vertices.size();
+	}
+};
+
+inline graph::ptr in_mem_subgraph::create(graph_type type, bool has_data)
+{
+	if (type == graph_type::DIRECTED)
+		return in_mem_directed_subgraph<>::create(has_data);
+	else if (type == graph_type::UNDIRECTED)
+		return in_mem_undirected_subgraph<>::create(has_data);
+	else
+		ABORT_MSG("wrong graph type");
+}
+
 size_t read_edge_list_text(const std::string &file,
 		std::vector<edge<> > &edges);
 
