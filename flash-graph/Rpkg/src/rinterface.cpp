@@ -441,5 +441,13 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 	Rcpp::LogicalVector directed(1);
 	directed[0] = header.is_directed_graph();
 	ret["directed"] = directed;
+
+	Rcpp::NumericVector vcount(1);
+	vcount[0] = header.get_num_vertices();
+	ret["vcount"] = vcount;
+
+	Rcpp::NumericVector ecount(1);
+	ecount[0] = header.get_num_edges();
+	ret["ecount"] = ecount;
 	return ret;
 }
