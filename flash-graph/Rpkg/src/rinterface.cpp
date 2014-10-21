@@ -384,8 +384,9 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
 	assert(subg->get_num_vertices() == vids.size());
-	Rcpp::IntegerVector s_vs;
-	Rcpp::IntegerVector d_vs;
+	Rcpp::IntegerVector s_vs(subg->get_num_edges());
+	Rcpp::IntegerVector d_vs(subg->get_num_edges());
+	size_t num_tot_edges = 0;
 	BOOST_FOREACH(vertex_id_t id, vids) {
 		const in_mem_vertex &v = subg->get_vertex(id);
 		if (v.has_edge_data())
@@ -396,8 +397,9 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
 			size_t num_edges = dv.get_num_out_edges();
 			for (size_t i = 0; i < num_edges; i++) {
 				edge<> e = dv.get_out_edge(i);
-				s_vs.push_back(e.get_from());
-				d_vs.push_back(e.get_to());
+				s_vs[num_tot_edges] = e.get_from();
+				d_vs[num_tot_edges] = e.get_to();
+				num_tot_edges++;
 			}
 		}
 		else {
@@ -409,12 +411,14 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
 				// each edge appears twice in an undirected graph.
 				// we only need to store one.
 				if (e.get_from() <= e.get_to()) {
-					s_vs.push_back(e.get_from());
-					d_vs.push_back(e.get_to());
+					s_vs[num_tot_edges] = e.get_from();
+					d_vs[num_tot_edges] = e.get_to();
+					num_tot_edges++;
 				}
 			}
 		}
 	}
+	assert(s_vs.size() == num_tot_edges);
 	Rcpp::List ret;
 	ret["src"] = s_vs;
 	ret["dst"] = d_vs;
