@@ -213,8 +213,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
   * \return The diameter estimate value.
   *
 */
-size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed,
-		int num_sweeps);
+size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed);
 
 /**
   * \brief Compute the PageRank of a graph using the pull method

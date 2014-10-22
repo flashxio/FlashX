@@ -26,8 +26,6 @@
 #include "FGlib.h"
 
 #if 0
-size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed,
-		int num_sweeps);
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals);
 FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id_t id);
@@ -453,5 +451,15 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 	Rcpp::NumericVector ecount(1);
 	ecount[0] = header.get_num_edges();
 	ret["ecount"] = ecount;
+	return ret;
+}
+
+RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	bool directed = INTEGER(pdirected)[0];
+	int diameter = estimate_diameter(fg, 1, directed);
+	Rcpp::IntegerVector ret(1);
+	ret[0] = diameter;
 	return ret;
 }

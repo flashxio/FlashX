@@ -168,7 +168,6 @@ void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
 
 	int num_para_bfs = 1;
 	bool directed = false;
-	int num_sweeps = 5;
 
 	while ((opt = getopt(argc, argv, "p:ds:")) != -1) {
 		num_opts++;
@@ -180,18 +179,13 @@ void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
 			case 'd':
 				directed = true;
 				break;
-			case 's':
-				num_sweeps = atoi(optarg);
-				num_opts++;
-				break;
 			default:
 				print_usage();
 				abort();
 		}
 	}
 
-	size_t diameter = estimate_diameter(graph, num_para_bfs, directed,
-			num_sweeps);
+	size_t diameter = estimate_diameter(graph, num_para_bfs, directed);
 	printf("The estimated diameter is %ld\n", diameter);
 }
 

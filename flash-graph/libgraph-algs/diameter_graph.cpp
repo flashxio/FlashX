@@ -344,8 +344,7 @@ std::vector<vertex_dist_t> estimate_diameter_1sweep(graph_engine::ptr graph,
 
 }
 
-size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
-		bool directed, int num_sweeps)
+size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 {
 	num_bfs = num_para_bfs;
 	if (!directed)
@@ -364,8 +363,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 
 	BOOST_LOG_TRIVIAL(info) << "diameter estimation starts";
 	BOOST_LOG_TRIVIAL(info)
-		<< boost::format("#para BFS: %1%, #sweeps: %2%, directed: %3%")
-		% num_para_bfs % num_sweeps % directed;
+		<< boost::format("#para BFS: %1%, directed: %2%")
+		% num_para_bfs % directed;
 	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -379,7 +378,7 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	}
 
 	short global_max = 0;
-	for (int i = 0; i < num_sweeps; i++) {
+	for (int i = 0; ; i++) {
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("Sweep %1% starts on %2% vertices, traverse edge: %3%")
 			% i % start_vertices.size() % traverse_edge;
@@ -418,7 +417,10 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 					start_set.end());
 			short max_dist = max_dist_vertices.front().second;
 			BOOST_LOG_TRIVIAL(info) << "The current max dist: " << max_dist;
-			global_max = max(global_max, max_dist);
+			if (global_max == max_dist)
+				break;
+			else
+				global_max = max(global_max, max_dist);
 			// We should switch the direction if we search for the longest
 			// directed path
 			if (traverse_edge == edge_type::IN_EDGE)

@@ -99,6 +99,11 @@ fg.fetch.subgraph <- function(graph, vertices)
 	graph.data.frame(dframe, graph$directed)
 }
 
+fg.diameter <- function(graph, directed=FALSE)
+{
+	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashGraph")
+}
+
 .onLoad <- function(libname, pkgname) {
 	library(Rcpp)
 	library.dynam("FlashGraph", pkgname, libname, local=FALSE);
