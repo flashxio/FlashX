@@ -37,6 +37,21 @@ fg.get.graph <- function(graph)
 	.Call("R_FG_get_graph_obj", graph, PACKAGE="FlashGraph")
 }
 
+fg.vcount <- function(graph)
+{
+	graph$vcount
+}
+
+fg.ecount <- function(graph)
+{
+	graph$ecount
+}
+
+fg.is.directed <- function(graph)
+{
+	graph$directed
+}
+
 fg.clusters <- function(graph, mode=c("weak", "strong"))
 {
 	stopifnot(graph$directed)
