@@ -463,3 +463,27 @@ RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
 	ret[0] = diameter;
 	return ret;
 }
+
+RcppExport SEXP R_FG_set_log_level(SEXP plevel)
+{
+	std::string level = CHAR(STRING_ELT(plevel, 0));
+	if (level == "debug") {
+		set_log_level(c_log_level::debug);
+	}
+	else if (level == "info") {
+		set_log_level(c_log_level::info);
+	}
+	else if (level == "warning") {
+		set_log_level(c_log_level::warning);
+	}
+	else if (level == "error") {
+		set_log_level(c_log_level::error);
+	}
+	else if (level == "fatal") {
+		set_log_level(c_log_level::fatal);
+	}
+	else {
+		fprintf(stderr, "unknown level %s\n", level.c_str());
+	}
+	return R_NilValue;
+}

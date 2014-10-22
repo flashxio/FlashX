@@ -6,6 +6,11 @@ fg.set.conf <- function(conf.file)
 	.Call("R_FG_init", conf.file, PACKAGE="FlashGraph")
 }
 
+fg.set.log.level <- function(level)
+{
+	.Call("R_FG_set_log_level", level, PACKAGE="FlashGraph")
+}
+
 fg.list.graphs <- function()
 {
 	.Call("R_FG_list_graphs", PACKAGE="FlashGraph")
