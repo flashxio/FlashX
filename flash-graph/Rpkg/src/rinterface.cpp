@@ -22,6 +22,7 @@
 
 #include "log.h"
 #include "safs_file.h"
+#include "matrix/FG_sparse_matrix.h"
 
 #include "FGlib.h"
 
@@ -486,4 +487,26 @@ RcppExport SEXP R_FG_set_log_level(SEXP plevel)
 		fprintf(stderr, "unknown level %s\n", level.c_str());
 	}
 	return R_NilValue;
+}
+
+RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
+{
+	bool transpose = INTEGER(ptranspose)[0];
+	Rcpp::NumericVector vec(pvec);
+	size_t length = vec.size();
+	FG_vector<double>::ptr in_vec = FG_vector<double>::create(length);
+	for (size_t i = 0; i < length; i++) {
+		in_vec->get_data()[i] = vec[i];
+	}
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
+	if (transpose)
+		matrix = matrix->transpose();
+	assert(matrix->get_num_rows() == length);
+	assert(matrix->get_num_cols() == length);
+
+	FG_vector<double>::ptr out_vec = FG_vector<double>::create(length);
+	matrix->multiply<double>(*in_vec, *out_vec);
+	Rcpp::NumericVector ret(out_vec->get_data(), out_vec->get_data() + length);
+	return ret;
 }

@@ -133,6 +133,12 @@ fg.diameter <- function(graph, directed=FALSE)
 	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashGraph")
 }
 
+fg.multiply <- function(graph, vec, transpose=FALSE)
+{
+	stopifnot(graph$directed)
+	.Call("R_FG_multiply_v", graph, vec, transpose, PACKAGE="FlashGraph")
+}
+
 .onLoad <- function(libname, pkgname) {
 	library(Rcpp)
 	library.dynam("FlashGraph", pkgname, libname, local=FALSE);
