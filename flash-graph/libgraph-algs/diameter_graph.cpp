@@ -349,6 +349,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 	num_bfs = num_para_bfs;
 	if (!directed)
 		traverse_edge = edge_type::BOTH_EDGES;
+	else
+		traverse_edge = edge_type::OUT_EDGE;
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
