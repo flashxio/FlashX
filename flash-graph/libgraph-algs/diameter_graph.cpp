@@ -416,8 +416,19 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 			start_vertices.insert(start_vertices.begin(), start_set.begin(),
 					start_set.end());
 			short max_dist = max_dist_vertices.front().second;
-			BOOST_LOG_TRIVIAL(info) << "The current max dist: " << max_dist;
-			if (global_max == max_dist)
+			BOOST_LOG_TRIVIAL(info)
+				<< boost::format("The current max dist: %1%, global max: %2%")
+				% max_dist % global_max;
+
+			if (max_dist == 0) {
+				size_t num_bfs = start_vertices.size();
+				start_vertices.clear();
+				while (start_vertices.size() < num_bfs) {
+					vertex_id_t id = random() % graph->get_max_vertex_id();
+					start_vertices.push_back(id);
+				}
+			}
+			else if (global_max >= max_dist)
 				break;
 			else
 				global_max = max(global_max, max_dist);
