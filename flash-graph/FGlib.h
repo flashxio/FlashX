@@ -35,16 +35,12 @@ class FG_graph
 {
 	std::string graph_file;
 	std::string index_file;
+	std::shared_ptr<in_mem_graph> graph_data;
+	std::shared_ptr<vertex_index> index_data;
 	config_map::ptr configs;
 
 	FG_graph(const std::string &graph_file,
-			const std::string &index_file, config_map::ptr configs) {
-		this->graph_file = graph_file;
-		this->index_file = index_file;
-		this->configs = configs;
-
-		graph_engine::init_flash_graph(configs);
-	}
+			const std::string &index_file, config_map::ptr configs);
 public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
 
@@ -94,6 +90,16 @@ public:
 	config_map::ptr get_configs() const {
 		return configs;
 	}
+
+	std::shared_ptr<in_mem_graph> get_graph_data() const {
+		return graph_data;
+	}
+
+	std::shared_ptr<vertex_index> get_index_data() const {
+		return index_data;
+	}
+
+	graph_engine::ptr create_engine(graph_index::ptr index);
 };
 
 /**

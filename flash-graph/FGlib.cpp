@@ -21,6 +21,49 @@
 
 #include "FGlib.h"
 #include "vertex.h"
+#include "in_mem_storage.h"
+#include "vertex_index.h"
+
+static std::unordered_map<std::string, in_mem_graph::ptr> in_mem_graphs;
+static std::unordered_map<std::string, vertex_index::ptr> in_mem_indices;
+
+FG_graph::FG_graph(const std::string &graph_file,
+		const std::string &index_file, config_map::ptr configs)
+{
+	this->graph_file = graph_file;
+	this->index_file = index_file;
+	this->configs = configs;
+
+	graph_engine::init_flash_graph(configs);
+	std::unordered_map<std::string, in_mem_graph::ptr>::const_iterator git
+		= in_mem_graphs.find(graph_file);
+	if (git != in_mem_graphs.end()) {
+		assert(git->second);
+		graph_data = git->second;
+	}
+	else if (graph_conf.use_in_mem_graph()) {
+		graph_data = in_mem_graph::load_graph(graph_file);
+		in_mem_graphs.insert(std::pair<std::string, in_mem_graph::ptr>(
+					graph_file, graph_data));
+	}
+
+	std::unordered_map<std::string, vertex_index::ptr>::const_iterator iit
+		= in_mem_indices.find(index_file);
+	if (iit != in_mem_indices.end()) {
+		assert(iit->second);
+		index_data = iit->second;
+	}
+	else if (graph_conf.use_in_mem_index()) {
+		index_data = vertex_index::safs_load(index_file);
+		in_mem_indices.insert(std::pair<std::string, vertex_index::ptr>(
+					index_file, index_data));
+	}
+}
+
+graph_engine::ptr FG_graph::create_engine(graph_index::ptr index)
+{
+	return graph_engine::create(*this, index);
+}
 
 /******************* Implementation of fetching a subgraph *********************/
 
@@ -139,8 +182,7 @@ in_mem_subgraph::ptr fetch_subgraph(FG_graph::ptr fg,
 {
 	graph_index::ptr index = NUMA_graph_index<subgraph_vertex>::create(
 			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 
 	graph_type type = graph->get_graph_header().get_graph_type();
 	struct timeval start, end;
@@ -234,8 +276,7 @@ FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type)
 {
 	graph_index::ptr index = NUMA_graph_index<degree_vertex>::create(
 			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 
 	FG_vector<vsize_t>::ptr degree_vec = FG_vector<vsize_t>::create(graph);
 	struct timeval start, end;
@@ -354,8 +395,7 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 {
 	graph_index::ptr index = NUMA_graph_index<ts_degree_vertex>::create(
 			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().has_edge_data());
 
 	FG_vector<vsize_t>::ptr degree_vec = FG_vector<vsize_t>::create(graph);
@@ -468,8 +508,7 @@ std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<time_range_vertex>::create(
 			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().has_edge_data());
 
 	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(

@@ -316,6 +316,7 @@ public:
 
 class worker_thread;
 class in_mem_graph;
+class FG_graph;
 
 /**
  * \brief This is the class that coordinates how & where algorithms are run.
@@ -364,10 +365,12 @@ protected:
      * \brief Constructor usable by inheriting classes.
      * \param graph_file The path to the graph file on disk.
      * \param index The path to the graph index file on disk.
-     * \param configs The path to the configuration file on disk.
+     * \param configs The path to the configuration file on
      */
 	graph_engine(const std::string &graph_file, graph_index::ptr index,
 			config_map::ptr configs);
+	graph_engine(FG_graph &graph, graph_index::ptr index);
+	void init(graph_index::ptr index);
 public:
 	typedef std::shared_ptr<graph_engine> ptr; /** Smart pointer for object access.*/
 
@@ -383,6 +386,9 @@ public:
 	static graph_engine::ptr create(const std::string &graph_file,
 			graph_index::ptr index, config_map::ptr configs) {
 		return graph_engine::ptr(new graph_engine(graph_file, index, configs));
+	}
+	static graph_engine::ptr create(FG_graph &graph, graph_index::ptr index) {
+		return graph_engine::ptr(new graph_engine(graph, index));
 	}
 
     /**

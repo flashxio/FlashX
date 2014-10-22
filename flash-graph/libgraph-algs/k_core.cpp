@@ -285,8 +285,7 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 {
 	graph_index::ptr index = NUMA_graph_index<kcore_vertex>::create(
 			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 
 	if (k > graph->get_max_vertex_id()) {
 		BOOST_LOG_TRIVIAL(fatal)

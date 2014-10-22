@@ -350,8 +350,7 @@ protected:
 	FG_sparse_matrix(FG_graph::ptr fg) {
 		graph_index::ptr index = NUMA_graph_index<matrix_vertex>::create(
 				fg->get_index_file());
-		graph = graph_engine::create(fg->get_graph_file(),
-				index, fg->get_configs());
+		graph = fg->create_engine(index);
 		etype = edge_type::OUT_EDGE;
 		this->nrow = graph->get_num_vertices();
 		this->ncol = graph->get_num_vertices();

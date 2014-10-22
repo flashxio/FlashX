@@ -30,6 +30,7 @@
 #include "vertex_request.h"
 #include "vertex_index_reader.h"
 #include "in_mem_storage.h"
+#include "FGlib.h"
 
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
@@ -528,23 +529,10 @@ void init_vpart_thread::run()
 
 }
 
-graph_engine::graph_engine(const std::string &graph_file,
-		graph_index::ptr index, config_map::ptr configs)
+void graph_engine::init(graph_index::ptr index)
 {
-	struct timeval init_start, init_end;
-	gettimeofday(&init_start, NULL);
-
-	init_flash_graph(configs);
-	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
 	int num_threads = graph_conf.get_num_threads();
 	this->num_nodes = params.get_num_nodes();
-
-	// Construct the in-memory compressed vertex index.
-	vertex_index::ptr raw_vindex = vertex_index::safs_load(
-			index->get_index_file());
-	vindex = in_mem_query_vertex_index::create(raw_vindex,
-			!graph_conf.use_in_mem_index());
-	raw_vindex.reset();
 
 	// Construct the vertex states.
 	index->init(num_threads, num_nodes);
@@ -557,14 +545,8 @@ graph_engine::graph_engine(const std::string &graph_file,
 	pthread_barrier_init(&barrier1, NULL, num_threads);
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
-	// Right now only the cached I/O can support async I/O
-	if (graph_conf.use_in_mem_graph()) {
-		graph_data = in_mem_graph::load_graph(graph_file);
-		graph_factory = graph_data->create_io_factory();
-	}
-	else
-		graph_factory = create_io_factory(graph_file, GLOBAL_CACHE_ACCESS);
 	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
+	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
 	index_factory = create_io_factory(index->get_index_file(), GLOBAL_CACHE_ACCESS);
 
 	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
@@ -601,6 +583,61 @@ graph_engine::graph_engine(const std::string &graph_file,
 			delete threads[i];
 		}
 	}
+}
+
+graph_engine::graph_engine(const std::string &graph_file,
+		graph_index::ptr index, config_map::ptr configs)
+{
+	init_flash_graph(configs);
+
+	// Init graph data.
+	if (graph_conf.use_in_mem_graph()) {
+		graph_data = in_mem_graph::load_graph(graph_file);
+		graph_factory = graph_data->create_io_factory();
+	}
+	else
+		// Right now only the cached I/O can support async I/O
+		graph_factory = create_io_factory(graph_file, GLOBAL_CACHE_ACCESS);
+
+	// Construct the in-memory compressed vertex index.
+	vertex_index::ptr raw_vindex = vertex_index::safs_load(
+			index->get_index_file());
+	vindex = in_mem_query_vertex_index::create(raw_vindex,
+			!graph_conf.use_in_mem_index());
+	raw_vindex.reset();
+
+	init(index);
+}
+
+graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
+{
+	struct timeval init_start, init_end;
+	gettimeofday(&init_start, NULL);
+
+	init_flash_graph(graph.get_configs());
+
+	// Init graph data.
+	if (graph.get_graph_data()) {
+		graph_data = graph.get_graph_data();
+		graph_factory = graph_data->create_io_factory();
+	}
+	else
+		// Right now only the cached I/O can support async I/O
+		graph_factory = create_io_factory(graph.get_graph_file(),
+				GLOBAL_CACHE_ACCESS);
+
+	// Construct the in-memory compressed vertex index.
+	if (graph.get_index_data())
+		vindex = in_mem_query_vertex_index::create(graph.get_index_data(),
+				!graph_conf.use_in_mem_index());
+	else {
+		vertex_index::ptr raw_vindex = vertex_index::safs_load(
+				index->get_index_file());
+		vindex = in_mem_query_vertex_index::create(raw_vindex,
+				!graph_conf.use_in_mem_index());
+	}
+
+	init(index);
 
 	gettimeofday(&init_end, NULL);
 	BOOST_LOG_TRIVIAL(info)

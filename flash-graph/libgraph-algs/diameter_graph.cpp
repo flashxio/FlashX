@@ -360,8 +360,7 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 				fg->get_index_file());
 	else
 		index = NUMA_graph_index<diameter_vertex>::create(fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 
 	BOOST_LOG_TRIVIAL(info) << "diameter estimation starts";
 	BOOST_LOG_TRIVIAL(info)

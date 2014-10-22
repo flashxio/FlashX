@@ -342,8 +342,7 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 
 	graph_index::ptr index = NUMA_graph_index<scan_vertex>::create(
 			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().get_graph_type() == graph_type::DIRECTED);
 	assert(graph->get_graph_header().has_edge_data());
 	BOOST_LOG_TRIVIAL(info)

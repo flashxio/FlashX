@@ -348,8 +348,7 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
 			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 
 	BOOST_LOG_TRIVIAL(info) << "local scan starts";
 	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();

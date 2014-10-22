@@ -656,8 +656,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	gettimeofday(&graph_start, NULL);
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex,
 		part_topK_scan_vertex>::create(fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+	graph_engine::ptr graph = fg->create_engine(index);
 
 	BOOST_LOG_TRIVIAL(info) << "scan statistics starts";
 	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
