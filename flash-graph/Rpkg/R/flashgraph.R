@@ -34,6 +34,7 @@ fg.get.graph <- function(graph)
 
 fg.clusters <- function(graph, mode=c("weak", "strong"))
 {
+	stopifnot(graph$directed)
 	if (mode == "weak")
 		.Call("R_FG_compute_wcc", graph, PACKAGE="FlashGraph")
 	else if (mode == "strong")
@@ -44,6 +45,7 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 
 fg.transitivity <- function(graph)
 {
+	stopifnot(graph$directed)
 	.Call("R_FG_compute_transitivity", graph, PACKAGE="FlashGraph")
 }
 
@@ -54,12 +56,14 @@ fg.degree <- function(graph, type="both")
 
 fg.page.rank <- function(graph, no.iters=1000, damping.factor=0.85)
 {
+	stopifnot(graph$directed)
 	.Call("R_FG_compute_pagerank", graph, no.iters, damping.factor,
 		  PACKAGE="FlashGraph")
 }
 
 fg.directed.triangles <- function(graph, type="cycle")
 {
+	stopifnot(graph$directed)
 	.Call("R_FG_compute_directed_triangles", graph, type, PACKAGE="FlashGraph")
 }
 
@@ -70,16 +74,19 @@ fg.undirected.triangles <- function(graph)
 
 fg.topK.scan <- function(graph, order=1, K=1)
 {
+	stopifnot(graph$directed)
 	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraph")
 }
 
 fg.local.scan <- function(graph, order=1)
 {
+	stopifnot(graph$directed)
 	.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraph")
 }
 
 fg.coreness <- function(graph)
 {
+	stopifnot(graph$directed)
 	# FIXME set the right parameter.
 	k.start <- 1
 	k.end <- 0
@@ -88,6 +95,7 @@ fg.coreness <- function(graph)
 
 fg.overlap <- function(graph, vids)
 {
+	stopifnot(graph$directed)
 	.Call("R_FG_compute_overlap", graph, vids, PACKAGE="FlashGraph")
 }
 
@@ -101,6 +109,7 @@ fg.fetch.subgraph <- function(graph, vertices)
 
 fg.diameter <- function(graph, directed=FALSE)
 {
+	stopifnot(graph$directed)
 	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashGraph")
 }
 
