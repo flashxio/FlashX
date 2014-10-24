@@ -145,6 +145,16 @@ test.undirected <- function(fg, ig)
 	print("t(A) * x");
 	fg.res <- fg.multiply(fg, x, TRUE)
 	check.vectors("t(A) * x", fg.res, ig.res)
+
+	# test eigen
+	print("test eigen")
+	fg.res <- fg.eigen(fg, which="LM", nev=5, ncv=10)
+	multiply <- function(x, extra) {
+		(ig.matrix %*% x)[,1]
+	}
+	ig.res <- arpack(multiply, sym=TRUE, options=list(n=vcount(ig), nev=5, ncv=10, which="LM"))
+	cat("diff on eigen values:", sum(abs(fg.res$values) - abs(ig.res$values)), "\n")
+	cat("diff on eigen vectors:", sum(abs(fg.res$vectors) - abs(ig.res$vectors)), "\n")
 }
 
 fg.set.conf("run_test.txt")

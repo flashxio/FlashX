@@ -23,6 +23,7 @@
 #include "log.h"
 #include "safs_file.h"
 #include "matrix/FG_sparse_matrix.h"
+#include "matrix/matrix_eigensolver.h"
 
 #include "FGlib.h"
 
@@ -573,5 +574,37 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 	FG_vector<double>::ptr out_vec = FG_vector<double>::create(length);
 	matrix->multiply<double>(*in_vec, *out_vec);
 	Rcpp::NumericVector ret(out_vec->get_data(), out_vec->get_data() + length);
+	return ret;
+}
+
+/*
+ * Compute eigen value/vector on an unweighted adjacency matrix.
+ */
+RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
+{
+	if (!initialized)
+		return R_NilValue;
+
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
+	std::string which = CHAR(STRING_ELT(pwhich, 0));
+	int nev = INTEGER(pnev)[0];
+	int ncv = INTEGER(pncv)[0];
+	std::vector<eigen_pair_t> eigen_pairs;
+	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, eigen_pairs);
+	if (eigen_pairs.empty())
+		return R_NilValue;
+
+	size_t length = eigen_pairs[0].second->get_size();
+	Rcpp::NumericVector eigen_values(nev);
+	Rcpp::NumericMatrix eigen_matrix(length, nev);
+	for (int i = 0; i < nev; i++) {
+		eigen_values[i] = eigen_pairs[i].first;
+		for (size_t j = 0; j < length; j++)
+			eigen_matrix(j, i) = eigen_pairs[i].second->get(j);
+	}
+	Rcpp::List ret;
+	ret["values"] = eigen_values;
+	ret["vectors"] = eigen_matrix;
 	return ret;
 }

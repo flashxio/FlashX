@@ -155,6 +155,13 @@ fg.multiply <- function(graph, vec, transpose=FALSE)
 	.Call("R_FG_multiply_v", graph, vec, transpose, PACKAGE="FlashGraph")
 }
 
+fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
+{
+	stopifnot(!graph$directed)
+	.Call("R_FG_eigen_uw", graph, which, as.integer(nev), as.integer(ncv),
+		  PACKAGE="FlashGraph")
+}
+
 .onLoad <- function(libname, pkgname)
 {
 	library(Rcpp)
