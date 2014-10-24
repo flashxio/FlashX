@@ -151,7 +151,7 @@ fg.diameter <- function(graph, directed=FALSE)
 fg.multiply <- function(graph, vec, transpose=FALSE)
 {
 	stopifnot(graph != NULL)
-	stopifnot(graph$directed)
+#	stopifnot(graph$directed)
 	.Call("R_FG_multiply_v", graph, vec, transpose, PACKAGE="FlashGraph")
 }
 

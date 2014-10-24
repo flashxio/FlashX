@@ -133,6 +133,18 @@ test.undirected <- function(fg, ig)
 	fg.res <- fg.degree(fg)
 	ig.res <- degree(ig)
 	check.vectors("degree_test", fg.res, ig.res)
+
+	# test matrix multiplication.
+	print("A * x");
+	x <- runif(vcount(ig), 0, 1)
+	ig.matrix <- get.adjacency(ig)
+	fg.res <- fg.multiply(fg, x)
+	ig.res <- ig.matrix %*% x
+	check.vectors("A * x", fg.res, ig.res)
+
+	print("t(A) * x");
+	fg.res <- fg.multiply(fg, x, TRUE)
+	check.vectors("t(A) * x", fg.res, ig.res)
 }
 
 fg.set.conf("run_test.txt")
