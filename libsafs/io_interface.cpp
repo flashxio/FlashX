@@ -43,6 +43,7 @@
 #include "mem_tracker.h"
 #include "native_file.h"
 #include "safs_file.h"
+#include "exception.h"
 
 /**
  * This global data collection is very static.
@@ -187,8 +188,9 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	RAID_config::ptr raid_conf = RAID_config::create(root_conf_file,
 			params.get_RAID_mapping_option(), params.get_RAID_block_size());
 	// If we can't initialize RAID, there is nothing we can do.
-	if (raid_conf == NULL)
-		return;
+	if (raid_conf == NULL) {
+		throw init_error("can't create RAID config");
+	}
 
 	int num_files = raid_conf->get_num_disks();
 	global_data.raid_conf = raid_conf;
