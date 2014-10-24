@@ -38,6 +38,7 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
  * A global configuration of FlashGraph.
  */
 static config_map::ptr configs;
+static bool initialized;
 
 static FG_graph::ptr get_graph(const std::string &graph_name, bool has_cindex)
 {
@@ -78,8 +79,18 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 		configs = config_map::create();
 		configs->add_options("root_conf=data_files.txt");
 	}
-	graph_engine::init_flash_graph(configs);
-	return R_NilValue;
+	try {
+		graph_engine::init_flash_graph(configs);
+		initialized = true;
+		Rcpp::LogicalVector res(1);
+		res[0] = true;
+		return res;
+	} catch (std::exception &e) {
+		fprintf(stderr, "exception in init: %s\n", e.what());
+		Rcpp::LogicalVector res(1);
+		res[0] = false;
+		return res;
+	}
 }
 
 /**
@@ -87,6 +98,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
  */
 RcppExport SEXP R_FG_destroy()
 {
+	initialized = false;
 	graph_engine::destroy_flash_graph();
 	return R_NilValue;
 }
@@ -159,6 +171,8 @@ static SEXP get_fg_params()
  */
 RcppExport SEXP R_FG_get_params(SEXP psys)
 {
+	if (!initialized)
+		return R_NilValue;
 	std::string sys_name = CHAR(STRING_ELT(psys, 0));
 	if (sys_name == "SAFS")
 		return get_safs_params();
@@ -177,7 +191,7 @@ RcppExport SEXP R_FG_exist_graph(SEXP pgraph)
 {
 	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
 	Rcpp::LogicalVector res(1);
-	res[0] = exist_graph(graph_name);
+	res[0] = initialized ? exist_graph(graph_name) : false;
 	return res;
 }
 
@@ -192,7 +206,7 @@ RcppExport SEXP R_FG_exist_cindex(SEXP pgraph)
 {
 	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
 	Rcpp::LogicalVector res(1);
-	res[0] = exist_cindex(graph_name);
+	res[0] = initialized ? exist_cindex(graph_name) : false;
 	return res;
 }
 
@@ -215,6 +229,9 @@ static std::string extract_graph_name(std::string &file_name)
  */
 RcppExport SEXP R_FG_list_graphs()
 {
+	if (!initialized)
+		return R_NilValue;
+
 	std::set<std::string> files;
 	get_all_safs_files(files);
 
@@ -235,6 +252,9 @@ RcppExport SEXP R_FG_list_graphs()
 
 RcppExport SEXP R_FG_compute_wcc(SEXP graph)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<vertex_id_t>::ptr fg_vec = compute_wcc(fg);
 	Rcpp::IntegerVector res(fg_vec->get_size());
@@ -244,6 +264,9 @@ RcppExport SEXP R_FG_compute_wcc(SEXP graph)
 
 RcppExport SEXP R_FG_compute_scc(SEXP graph)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<vertex_id_t>::ptr fg_vec = compute_scc(fg);
 	Rcpp::IntegerVector res(fg_vec->get_size());
@@ -253,6 +276,9 @@ RcppExport SEXP R_FG_compute_scc(SEXP graph)
 
 RcppExport SEXP R_FG_compute_transitivity(SEXP graph)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<float>::ptr fg_vec = compute_transitivity(fg);
 	Rcpp::NumericVector res(fg_vec->get_size());
@@ -262,6 +288,9 @@ RcppExport SEXP R_FG_compute_transitivity(SEXP graph)
 
 RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 
 	std::string type_str = CHAR(STRING_ELT(ptype, 0));
@@ -281,6 +310,9 @@ RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
 
 RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 
 	int num_iters = REAL(piters)[0];
@@ -294,6 +326,9 @@ RcppExport SEXP R_FG_compute_pagerank(SEXP graph, SEXP piters, SEXP pdamping)
 
 RcppExport SEXP R_FG_compute_undirected_triangles(SEXP graph)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<size_t>::ptr fg_vec = compute_undirected_triangles(fg);
 	Rcpp::IntegerVector res(fg_vec->get_size());
@@ -303,6 +338,9 @@ RcppExport SEXP R_FG_compute_undirected_triangles(SEXP graph)
 
 RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 
 	std::string type_str = CHAR(STRING_ELT(ptype, 0));
@@ -320,6 +358,9 @@ RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 
 RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP order)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<size_t>::ptr fg_vec = compute_local_scan(fg);
 	Rcpp::IntegerVector res(fg_vec->get_size());
@@ -329,6 +370,9 @@ RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP order)
 
 RcppExport SEXP R_FG_compute_topK_scan(SEXP graph, SEXP order, SEXP K)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	size_t topK = REAL(K)[0];
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_vector<std::pair<vertex_id_t, size_t> >::ptr fg_vec
@@ -346,6 +390,9 @@ RcppExport SEXP R_FG_compute_topK_scan(SEXP graph, SEXP order, SEXP K)
 
 RcppExport SEXP R_FG_compute_kcore(SEXP graph, SEXP _k, SEXP _kmax)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	int k = REAL(_k)[0];
 	int kmax = REAL(_kmax)[0];
 	FG_graph::ptr fg = R_FG_get_graph(graph);
@@ -357,6 +404,9 @@ RcppExport SEXP R_FG_compute_kcore(SEXP graph, SEXP _k, SEXP _kmax)
 
 RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	Rcpp::IntegerVector Rvids(_vids);
 	std::vector<vertex_id_t> vids(Rvids.begin(), Rvids.end());
 	std::vector<std::vector<double> > overlap_matrix;
@@ -378,6 +428,9 @@ RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
 
 RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	Rcpp::IntegerVector vertices(pvertices);
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
@@ -426,6 +479,9 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
 
 RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
 	if (!exist_graph(graph_name)) {
 		fprintf(stderr, "%s doesn't exist\n", graph_name.c_str());
@@ -457,6 +513,9 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 
 RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	bool directed = INTEGER(pdirected)[0];
 	int diameter = estimate_diameter(fg, 1, directed);
@@ -467,6 +526,9 @@ RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
 
 RcppExport SEXP R_FG_set_log_level(SEXP plevel)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	std::string level = CHAR(STRING_ELT(plevel, 0));
 	if (level == "debug") {
 		set_log_level(c_log_level::debug);
@@ -491,6 +553,9 @@ RcppExport SEXP R_FG_set_log_level(SEXP plevel)
 
 RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 {
+	if (!initialized)
+		return R_NilValue;
+
 	bool transpose = INTEGER(ptranspose)[0];
 	Rcpp::NumericVector vec(pvec);
 	size_t length = vec.size();
