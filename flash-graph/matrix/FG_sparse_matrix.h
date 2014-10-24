@@ -130,56 +130,34 @@ inline static edge_type reverse_dir(edge_type type)
 }
 
 /**
- * The vertex program for sparse matrix vector multiplication.
+ * The vertex program for sparse matrix vector multiplication
+ * on the adjacency matrix.
  */
-template<class ResType, class GetEdgeIterator>
+template<class ResType>
 class SPMV_vertex_program: public vertex_program_impl<matrix_vertex>
 {
 	edge_type type;
 	const FG_vector<ResType> &input;
 	FG_vector<ResType> &output;
-	GetEdgeIterator get_edge_iterator;
 public:
 	SPMV_vertex_program(edge_type type, const FG_vector<ResType> &_input,
 			FG_vector<ResType> &_output): input(_input), output(_output) {
 		this->type = type;
 	}
 
-	const ResType &get_input(off_t idx) const {
-		assert((size_t) idx < input.get_size());
-		return input.get(idx);
-	}
-
-	void set_output(off_t idx, const ResType &v) {
-		output.set(idx, v);
-	}
-
-	edge_type get_edge_type() const {
-		return type;
-	}
-
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
-		// TODO we should only start vertices that represent the rows or columns.
-		if (vertex.get_id() >= output.get_size())
-			return;
-
-		typename GetEdgeIterator::iterator it
-			= get_edge_iterator(vertex, get_edge_type());
+		page_byte_array::seq_const_iterator<vertex_id_t> it
+			= vertex.get_neigh_seq_it(type, 0, vertex.get_num_edges(type));
 		ResType w = 0;
 		while (it.has_next()) {
-			vertex_id_t id = it.get_curr_id();
-			// TODO it might be an expensive way to resize #columns.
-			if (id >= input.get_size())
-				break;
-			typename GetEdgeIterator::value_type v = it.get_curr_value();
-			w += get_input(id) * v;
-			it.next();
+			vertex_id_t id = it.next();
+			w += input.get(id);
 		}
-		set_output(vertex.get_id(), w);
+		output.set(vertex.get_id(), w);
 	}
 };
 
-template<class ResType, class GetEdgeIterator>
+template<class ResType>
 class SPMV_vertex_program_creater: public vertex_program_creater
 {
 	const FG_vector<ResType> &input;
@@ -193,8 +171,7 @@ public:
 
 	vertex_program::ptr create() const {
 		return vertex_program::ptr(
-				new SPMV_vertex_program<ResType, GetEdgeIterator>(
-					etype, input, output));
+				new SPMV_vertex_program<ResType>(etype, input, output));
 	}
 };
 
@@ -376,8 +353,7 @@ public:
 		assert(output.get_size() == get_num_rows());
 		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(
-					new SPMV_vertex_program_creater<T, GetEdgeIterator>(
-						etype, input, output)));
+					new SPMV_vertex_program_creater<T>(etype, input, output)));
 		graph->wait4complete();
 	}
 
