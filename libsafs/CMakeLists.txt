@@ -5,7 +5,6 @@ add_library(safs STATIC
 	debugger.cpp
 	messaging.cpp
 	read_private.cpp
-	thread.cpp
 	associative_cache.cpp
 	direct_private.cpp
 	io_interface.cpp
@@ -23,10 +22,7 @@ add_library(safs STATIC
 	memory_manager.cpp
 	part_global_cached_private.cpp
 	shadow_cell.cpp
-	common.cpp
 	global_cached_private.cpp
-	mem_tracker.cpp
 	RAID_config.cpp
-	slab_allocator.cpp
 	wpaio.cpp
 )

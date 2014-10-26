@@ -14,6 +14,8 @@ find_package(LibNuma REQUIRED)
 find_package(LibAio REQUIRED)
 find_package(LibRt REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(stxxl)
+find_package(zlib)
 
 # configure a header file to pass some of the CMake settings
 # to the source code
@@ -27,6 +29,6 @@ SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3" )
 
 # add the binary tree to the search path for include files
 # so that we will find TutorialConfig.h
-include_directories("${PROJECT_BINARY_DIR}" include)
+include_directories("${PROJECT_BINARY_DIR}" include libcommon)
 
-subdirs(libsafs utils flash-graph)
+subdirs(libcommon libsafs utils flash-graph)
