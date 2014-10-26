@@ -162,6 +162,49 @@ fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
 		  PACKAGE="FlashGraph")
 }
 
+fg.spectral.clusters <- function(fg, num.clusters, which="adj", num.eigen=5, which.eigen="LM")
+{
+	# multiply function for eigen on the adjacency matrix
+	# this is the default setting.
+	multiply <- function(x, extra)
+	{
+		print("multiply on the adjacency matrix")
+		fg.multiply(fg, x)
+	}
+
+	if (which == "L") {
+		d <- fg.degree(fg)
+		# multiply function for eigen on the laplacian matrix.
+		multiply <- function(x, extra)
+		{
+			print("multiply on the Laplacian matrix")
+			d * x - fg.multiply(fg, x)
+		}
+	}
+	else if (which == "nL") {
+		d <- fg.degree(fg)
+		d_.5 <- 1/sqrt(d)
+		# multiply function for eigen on the normalized laplacian matrix.
+		multiply <- function(x, extra)
+		{
+			print("multiply on the normalized Laplacian matrix")
+			# D^(-1/2) * L * D^(-1/2) * x
+			x - d_.5 * fg.multiply(fg, d_.5 * x)
+		}
+	}
+
+	time1 <- system.time(eigen <- arpack(multiply, sym=TRUE,
+										 options=list(n=fg.vcount(fg), which=which.eigen,
+													  nev=num.eigen, ncv=2 * num.eigen)))
+	cat("computing eigen on", which, ", time:", time1, "\n")
+
+	vectors <- eigen$vectors
+	vectors[abs(vectors) < 1e-15] <- 0
+	time1 <- system.time(km.res <- kmeans(vectors, num.clusters))
+	cat("KMeans:", time1, "\n")
+	km.res
+}
+
 .onLoad <- function(libname, pkgname)
 {
 	library(Rcpp)
