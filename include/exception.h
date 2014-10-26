@@ -51,4 +51,20 @@ public:
 	}
 };
 
+class io_exception: public std::exception
+{
+	std::string msg;
+public:
+	io_exception(const std::string &msg) {
+		this->msg = msg;
+	}
+
+	~io_exception() throw() {
+	}
+
+	const char* what() const throw() {
+		return msg.c_str();
+	}
+};
+
 #endif

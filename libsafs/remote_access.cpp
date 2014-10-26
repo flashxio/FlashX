@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include "remote_access.h"
 #include "parameters.h"
 #include "slab_allocator.h"
@@ -157,9 +159,16 @@ void remote_io::access(io_request *requests, int num,
 			requests[i].set_io(this);
 			requests[i].set_node_id(this->get_node_id());
 		}
-		assert(requests[i].get_offset() % MIN_BLOCK_SIZE == 0);
-		assert(requests[i].get_size() % MIN_BLOCK_SIZE == 0);
-		assert(requests[i].get_req_type() != io_request::USER_COMPUTE);
+		if (requests[i].get_offset() % MIN_BLOCK_SIZE > 0)
+			throw io_exception((boost::format(
+						"The IO request offset isn't aligned. offset: %ld, size: %ld")
+					% requests[i].get_offset() % requests[i].get_size()).str());
+		if (requests[i].get_size() % MIN_BLOCK_SIZE > 0)
+			throw io_exception((boost::format(
+							"The IO request size isn't aligned. offset: %ld, size: %ld")
+						% requests[i].get_offset() % requests[i].get_size()).str());
+		if (requests[i].get_req_type() == io_request::USER_COMPUTE)
+			throw io_exception("user compute isn't supported");
 
 		if (requests[i].is_flush()) {
 			syncd = true;
