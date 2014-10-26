@@ -10,27 +10,26 @@ endif()
 
 add_library(graph STATIC
 	FGlib.cpp
-	graph_engine.cpp
-	message_processor.cpp
-	partitioner.cpp
-	vertex.cpp
-	worker_thread.cpp
 	graph.cpp
+	graph_engine.cpp
+	in_mem_storage.cpp
 	load_balancer.cpp
+	message_processor.cpp
 	messaging.cpp
+	partitioner.cpp
+	ts_graph.cpp
 	vertex_compute.cpp
+	vertex.cpp
+	vertex_index.cpp
+	vertex_index_reader.cpp
+	worker_thread.cpp
 	vertex_program.cpp
 )
 
 subdirs(graph-bfs
-	graph-stat
-	k-core
 	libgraph-algs
-	LOL
 	matrix
-	overlap
 	sssp
-	sstsg
 	test-algs
 	tools
 )
