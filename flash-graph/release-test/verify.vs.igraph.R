@@ -1,5 +1,6 @@
 require(igraph)
 library("FlashGraph")
+library("irlba")
 
 verify.cc <- function(fg.res, ig.res)
 {
@@ -116,6 +117,13 @@ test.directed <- function(fg, ig)
 	fg.res <- fg.multiply(fg, x, TRUE)
 	ig.res <- t(as.matrix(ig.matrix)) %*% x
 	check.vectors("t(A) * x", fg.res, ig.res)
+
+	# test SVD
+	print("test SVD")
+	fg.res <- fg.SVD(fg, which="LM", nev=5, ncv=10)
+	ig.res <- irlba(ig.matrix, nu=5, nv=0)
+	cat("diff on singular values:", sum(abs(fg.res$values) - abs(ig.res$d)), "\n")
+	cat("diff on left-singular vectors:", sum(abs(fg.res$vectors) - abs(ig.res$u)), "\n")
 }
 
 test.undirected <- function(fg, ig)

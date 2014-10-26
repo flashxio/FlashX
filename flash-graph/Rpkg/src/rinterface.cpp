@@ -608,3 +608,34 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
 	ret["vectors"] = eigen_matrix;
 	return ret;
 }
+
+RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
+		SEXP ptype)
+{
+	if (!initialized)
+		return R_NilValue;
+
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
+	std::string which = CHAR(STRING_ELT(pwhich, 0));
+	std::string type = CHAR(STRING_ELT(ptype, 0));
+	int nev = INTEGER(pnev)[0];
+	int ncv = INTEGER(pncv)[0];
+	std::vector<eigen_pair_t> eigen_pairs;
+	compute_SVD<FG_adj_matrix>(matrix, ncv, nev, which, type, eigen_pairs);
+	if (eigen_pairs.empty())
+		return R_NilValue;
+
+	size_t length = eigen_pairs[0].second->get_size();
+	Rcpp::NumericVector eigen_values(nev);
+	Rcpp::NumericMatrix eigen_matrix(length, nev);
+	for (int i = 0; i < nev; i++) {
+		eigen_values[i] = eigen_pairs[i].first;
+		for (size_t j = 0; j < length; j++)
+			eigen_matrix(j, i) = eigen_pairs[i].second->get(j);
+	}
+	Rcpp::List ret;
+	ret["values"] = eigen_values;
+	ret["vectors"] = eigen_matrix;
+	return ret;
+}

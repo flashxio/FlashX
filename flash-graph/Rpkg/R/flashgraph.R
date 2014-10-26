@@ -162,6 +162,12 @@ fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
 		  PACKAGE="FlashGraph")
 }
 
+fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
+{
+	.Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
+		  type, PACKAGE="FlashGraph")
+}
+
 fg.spectral.clusters <- function(fg, num.clusters, which="adj", num.eigen=5, which.eigen="LM")
 {
 	# multiply function for eigen on the adjacency matrix
