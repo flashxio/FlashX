@@ -1,9 +1,5 @@
 There are two main components in the repository: FlashGraph and SAFS. NOTE: FlashGraph is still under heavy development.
 
-Release
-===========
-The current release: [FlashGraph-v0.1.0](http://www.cs.jhu.edu/~zhengda/FlashGraph/graph-engine-v0.1.0.tar.gz)
-
 FlashGraph
 ===========
 
