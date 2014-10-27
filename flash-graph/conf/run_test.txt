@@ -33,10 +33,10 @@ threads=1
 # part_range_size_log=10
 
 # Keep index in memory.
-in_mem_index=
+# in_mem_index=
 
 # Keep adjacency lists of vertices in memory
-in_mem_graph=
+# in_mem_graph=
 
 # Run the vertex program on a vertx serially regardless of load balancing.
 serial_run=
