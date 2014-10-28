@@ -172,8 +172,6 @@ static SEXP get_fg_params()
  */
 RcppExport SEXP R_FG_get_params(SEXP psys)
 {
-	if (!initialized)
-		return R_NilValue;
 	std::string sys_name = CHAR(STRING_ELT(psys, 0));
 	if (sys_name == "SAFS")
 		return get_safs_params();
