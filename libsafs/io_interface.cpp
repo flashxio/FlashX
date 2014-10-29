@@ -626,11 +626,10 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		std::string abs_path = global_data.raid_conf->get_disk(i).name
 			+ "/" + file_name;
 		native_file f(abs_path);
-		if (!f.exist()) {
-			fprintf(stderr, "the underlying file %s doesn't exist\n",
-					abs_path.c_str());
-			return file_io_factory::shared_ptr();
-		}
+		if (!f.exist())
+			throw io_exception((boost::format(
+							"the underlying file %1% doesn't exist")
+						% abs_path).str());
 	}
 
 	file_mapper &mapper = file_mappers.get(file_name);
