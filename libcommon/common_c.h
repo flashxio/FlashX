@@ -95,7 +95,7 @@ inline static int power2(int num)
 	if (num < 0)
 		num = -num;
 	if (num == 1)
-		return 0;
+		return 1;
 	while (num > 1) {
 		if (num % 2)
 			return 0;
