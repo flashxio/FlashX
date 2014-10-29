@@ -24,7 +24,7 @@ configure_file (
 	"${PROJECT_BINARY_DIR}/config.h"
 )
 
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3" )
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++0x -O3 -fPIC" )
 #set(CMAKE_BUILD_TYPE Release)
 
 # add the binary tree to the search path for include files
