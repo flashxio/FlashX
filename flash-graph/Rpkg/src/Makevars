@@ -1,10 +1,14 @@
+# The absolute path of the directory where Rcpp header files are stored.
 RCPP_INCLUDE = 
-FG_DIR = ..
+# The absolute path of the directory where FlashGraph source code is.
+FG_DIR = 
+# The absolute path of the directory where FlashGraph is built.
+FG_LIB = 
 #BOOST_LOG=1
 OMP_FLAG = -fopenmp
-PKG_LIBS = -L$(FG_DIR)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_DIR)/flash-graph -lgraph
-PKG_LIBS += -L$(FG_DIR)/flash-graph/matrix -lmatrix
-PKG_LIBS += -L$(FG_DIR)/libsafs -lsafs -L$(FG_DIR)/libcommon -lcommon
+PKG_LIBS = -L$(FG_LIB)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_LIB)/flash-graph -lgraph
+PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
+PKG_LIBS += -L$(FG_LIB)/libsafs -lsafs -L$(FG_LIB)/libcommon -lcommon
 PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lboost_filesystem
 ifdef BOOST_LOG
 	PKG_LIBS += -lboost_log
