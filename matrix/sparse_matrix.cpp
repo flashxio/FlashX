@@ -24,11 +24,14 @@
 static const int NUM_WORKERS = 32;
 static const int NUM_NODES = 4;
 
-void row_compute_task::run()
+void row_compute_task::run(char *buf, size_t size)
 {
+	assert(this->buf == buf);
+	assert(this->buf_size == size);
+
 	char *buf_p = buf;
 	ext_mem_undirected_vertex *v = (ext_mem_undirected_vertex *) buf_p;
-	for (size_t i = 0; i < num_rows; i++) {
+	for (size_t i = 0; i < io.get_num_rows(); i++) {
 		size_t vsize = v->get_size();
 		assert(buf_size >= vsize);
 		buf_size -= vsize;
@@ -88,8 +91,8 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
 		matrix_worker_thread::ptr t = matrix_worker_thread::ptr(
-				matrix_worker_thread::create(node_id, get_io_factory(),
-					row_io_generator::create(blocks, get_num_rows(),
+				matrix_worker_thread::create(i, node_id, get_io_factory(),
+					matrix_io_generator::create(blocks, get_num_rows(),
 						get_num_cols(), get_file_id(), i, num_workers),
 					creator));
 		t->start();
@@ -101,5 +104,15 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 
 sparse_matrix::ptr sparse_matrix::create(FG_graph::ptr fg)
 {
-	return sparse_matrix::ptr();
+	return sparse_sym_matrix::create(fg);
+}
+
+void init_flash_matrix(config_map::ptr configs)
+{
+	init_io_system(configs);
+}
+
+void destroy_flash_matrix()
+{
+	destroy_io_system();
 }

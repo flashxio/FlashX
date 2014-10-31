@@ -23,7 +23,7 @@ void run_test()
 	int num_gens = 32;
 	std::vector<matrix_io> ios;
 	for (int i = 0; i < num_gens; i++) {
-		row_io_generator::ptr gen = row_io_generator::create(blocks,
+		matrix_io_generator::ptr gen = matrix_io_generator::create(blocks,
 				num_rows, 1000, 0, i, num_gens);
 		while (gen->has_next_io())
 			ios.push_back(gen->get_next_io());

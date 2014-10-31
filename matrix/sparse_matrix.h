@@ -23,6 +23,7 @@
 #include <memory>
 
 #include "FGlib.h"
+#include "matrix_io.h"
 
 class compute_task
 {
@@ -32,7 +33,7 @@ public:
 	virtual ~compute_task() {
 	}
 
-	virtual void run() = 0;
+	virtual void run(char *buf, size_t size) = 0;
 	virtual io_request get_request() const = 0;
 };
 
@@ -41,37 +42,39 @@ class task_creator
 public:
 	typedef std::shared_ptr<task_creator> ptr;
 
-	virtual compute_task::ptr create() const = 0;
+	virtual compute_task::ptr create(const matrix_io &) const = 0;
 };
 
 class row_compute_task: public compute_task
 {
-	size_t start_row_id;
-	size_t num_rows;
-
+	matrix_io io;
 	char *buf;
 	size_t buf_size;
-
-	data_loc_t loc;
-	size_t io_size;
 public:
-	row_compute_task() {
+	row_compute_task(const matrix_io &_io): io(_io) {
+		buf_size = ROUNDUP_PAGE(io.get_size());
+		buf = (char *) valloc(buf_size);
 	}
 
 	~row_compute_task() {
 		free(buf);
 	}
-	virtual void run();
+	virtual void run(char *buf, size_t size);
 	virtual void run_on_row(const ext_mem_undirected_vertex &v) = 0;
+	virtual io_request get_request() const {
+		return io_request(buf, io.get_loc(), buf_size, READ);
+	}
 };
 
 template<class T>
 class row_multiply_task: public row_compute_task
 {
-	FG_vector<T> &input;
+	const FG_vector<T> &input;
 	FG_vector<T> &output;
 public:
-	row_multiply_task() {
+	row_multiply_task(const FG_vector<T> &_input, FG_vector<T> &_output,
+			const matrix_io &_io): row_compute_task(_io), input(
+				_input), output(_output) {
 	}
 
 	void run_on_row(const ext_mem_undirected_vertex &v);
@@ -83,10 +86,30 @@ void row_multiply_task<T>::run_on_row(const ext_mem_undirected_vertex &v)
 	T res = 0;
 	for (size_t i = 0; i < v.get_num_edges(); i++) {
 		vertex_id_t id = v.get_neighbor(i);
-		res += input[id];
+		res += input.get(id);
 	}
-	output[v.get_id()] = res;
+	output.set(v.get_id(), res);
 }
+
+template<class T>
+class row_multiply_creator: public task_creator
+{
+	const FG_vector<T> &input;
+	FG_vector<T> &output;
+
+	row_multiply_creator(const FG_vector<T> &_input,
+			FG_vector<T> &_output): input(_input), output(_output) {
+	}
+public:
+	static task_creator::ptr create(const FG_vector<T> &_input,
+			FG_vector<T> &_output) {
+		return task_creator::ptr(new row_multiply_creator<T>(_input, _output));
+	}
+
+	virtual compute_task::ptr create(const matrix_io &io) const {
+		return compute_task::ptr(new row_multiply_task<T>(input, output, io));
+	}
+};
 
 enum part_dim_t
 {
@@ -122,7 +145,7 @@ public:
 	virtual ~sparse_matrix() {
 	}
 
-	ptr create(FG_graph::ptr);
+	static ptr create(FG_graph::ptr);
 
 	virtual void compute(task_creator::ptr creator) const = 0;
 
@@ -145,22 +168,24 @@ public:
 	part_dim_t get_part_dim() const {
 		return part_dim;
 	}
+
+	template<class T>
+	typename FG_vector<T>::ptr multiply(typename FG_vector<T>::ptr in) const {
+		if (in->get_size() != ncols) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"the input vector has wrong length %1%. matrix ncols: %2%")
+				% in->get_size() % ncols;
+			return typename FG_vector<T>::ptr();
+		}
+		else {
+			typename FG_vector<T>::ptr ret = FG_vector<T>::create(nrows);
+			compute(row_multiply_creator<T>::create(*in, *ret));
+			return ret;
+		}
+	}
 };
 
-class row_block
-{
-	off_t off;
-public:
-	row_block(off_t off) {
-		this->off = off;
-	}
-
-	off_t get_offset() const {
-		return off;
-	}
-};
-
-// The number of rows in a row block.
-static const int ROW_BLOCK_SIZE = 1024;
+void init_flash_matrix(config_map::ptr configs);
+void destroy_flash_matrix();
 
 #endif

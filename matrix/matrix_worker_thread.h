@@ -22,16 +22,50 @@
 
 #include "thread.h"
 #include "matrix_io.h"
+#include "io_interface.h"
+
+class task_creator;
 
 class matrix_worker_thread: public thread
 {
+	matrix_io_generator::ptr io_gen;
+	std::shared_ptr<task_creator> tcreator;
+	file_io_factory::shared_ptr factory;
+	io_interface::ptr io;
+	int worker_id;
+
+	matrix_worker_thread(int worker_id, int node_id,
+			file_io_factory::shared_ptr factory, matrix_io_generator::ptr gen,
+			std::shared_ptr<task_creator> creator): thread("matrix-thread",
+				node_id) {
+		this->worker_id = worker_id;
+		this->io_gen = gen;
+		this->tcreator = creator;
+		this->factory = factory;
+	}
 public:
 	typedef std::shared_ptr<matrix_worker_thread> ptr;
 
 	/*
+	 * Create a worker thread.
+	 * \param node_id It indicates which NUMA node this worker thread should run.
+	 * \param factory The I/O factory for the file that stores the matrix.
+	 * \param gen It defines how a matrix is accessed.
+	 * \param creator It defines what computation is performed on the part of
+	 * a matrix read from disks.
 	 */
-	static ptr create(int node_id, file_io_factory::shared_ptr factory,
-			matrix_io_generator::ptr gen, task_creator::ptr creator);
+	static ptr create(int worker_id, int node_id,
+			file_io_factory::shared_ptr factory, matrix_io_generator::ptr gen,
+			std::shared_ptr<task_creator> creator) {
+		return ptr(new matrix_worker_thread(worker_id, node_id, factory, gen,
+					creator));
+	}
+
+	void init() {
+		io = factory->create_io(this);
+	}
+
+	void run();
 };
 
 #endif
