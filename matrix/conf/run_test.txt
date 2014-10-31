@@ -1,0 +1,30 @@
+# Parameters for SAFS
+
+# How data blocks of a SAFS file are mapped to Linux filesystem.
+RAID_mapping=RAID0
+
+# The number of parallel I/Os is allowed in a single thread.
+io_depth=64
+
+# The page cache size in SAFS
+cache_size=512M
+
+# The number of NUMA nodes
+num_nodes=1
+
+# change FG_TOP to the path of the top directory of FlashGraph.
+root_conf=./flash-graph/conf/data_files.txt
+
+# whether or not to use Linux huge pages
+# huge_page=
+
+
+
+
+# Parameters for FlashGraph
+
+# The number of worker threads to process a graph.
+threads=4
+
+# Keep adjacency lists of vertices in memory
+# in_mem_graph=

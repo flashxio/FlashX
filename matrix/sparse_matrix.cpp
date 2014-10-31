@@ -20,9 +20,9 @@
 #include "sparse_matrix.h"
 #include "matrix_worker_thread.h"
 #include "matrix_io.h"
+#include "matrix_config.h"
 
-static const int NUM_WORKERS = 32;
-static const int NUM_NODES = 4;
+matrix_config matrix_conf;
 
 void row_compute_task::run(char *buf, size_t size)
 {
@@ -85,8 +85,8 @@ sparse_matrix::ptr sparse_sym_matrix::create(FG_graph::ptr fg)
 
 void sparse_sym_matrix::compute(task_creator::ptr creator) const
 {
-	int num_workers = NUM_WORKERS;
-	int num_nodes = NUM_NODES;
+	int num_workers = matrix_conf.get_num_threads();
+	int num_nodes = params.get_num_nodes();
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
