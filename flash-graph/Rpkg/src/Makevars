@@ -1,9 +1,15 @@
 # The absolute path of the directory where Rcpp header files are stored.
-RCPP_INCLUDE = 
+ifndef RCPP_INCLUDE
+	RCPP_INCLUDE = .
+endif
 # The absolute path of the directory where FlashGraph source code is.
-FG_DIR = 
+ifndef FG_DIR
+	FG_DIR = .
+endif
 # The absolute path of the directory where FlashGraph is built.
-FG_LIB = 
+ifndef FG_LIB
+	FG_LIB = $(FG_DIR)/build
+endif
 #BOOST_LOG=1
 OMP_FLAG = -fopenmp
 PKG_LIBS = -L$(FG_LIB)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_LIB)/flash-graph -lgraph
