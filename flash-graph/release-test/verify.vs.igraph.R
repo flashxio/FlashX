@@ -167,10 +167,10 @@ test.undirected <- function(fg, ig)
 
 fg.set.conf("run_test.txt")
 fg <- fg.get.graph("wiki-Vote")
-ig <- read.graph("wiki-Vote.txt")
+ig <- read.graph("wiki-Vote1.txt")
 test.directed(fg, ig)
 
 # Now test on an undirected graph
 fg <- fg.get.graph("facebook")
-ig <- read.graph("facebook_combined.txt", directed=FALSE)
+ig <- read.graph("facebook_combined1.txt", directed=FALSE)
 test.undirected(fg, ig)
