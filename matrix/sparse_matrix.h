@@ -48,11 +48,14 @@ public:
 class row_compute_task: public compute_task
 {
 	matrix_io io;
+	off_t off;
 	char *buf;
 	size_t buf_size;
 public:
 	row_compute_task(const matrix_io &_io): io(_io) {
-		buf_size = ROUNDUP_PAGE(io.get_size());
+		off_t orig_off = io.get_loc().get_offset();
+		off = ROUND_PAGE(orig_off);
+		buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
 		buf = (char *) valloc(buf_size);
 	}
 
@@ -62,7 +65,8 @@ public:
 	virtual void run(char *buf, size_t size);
 	virtual void run_on_row(const ext_mem_undirected_vertex &v) = 0;
 	virtual io_request get_request() const {
-		return io_request(buf, io.get_loc(), buf_size, READ);
+		return io_request(buf, data_loc_t(io.get_loc().get_file_id(),
+					off), buf_size, READ);
 	}
 };
 
@@ -168,6 +172,8 @@ public:
 	part_dim_t get_part_dim() const {
 		return part_dim;
 	}
+
+	virtual void transpose() = 0;
 
 	template<class T>
 	typename FG_vector<T>::ptr multiply(typename FG_vector<T>::ptr in) const {
