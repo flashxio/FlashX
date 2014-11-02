@@ -25,6 +25,7 @@
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "worker_thread.h"
+#include "FGlib.h"
 
 std::vector<int> thread_delays;
 
@@ -130,8 +131,10 @@ int main(int argc, char *argv[])
 
 	config_map::ptr configs = config_map::create(conf_file);
 
-	graph_index::ptr index = NUMA_graph_index<test_vertex>::create(index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	graph_index::ptr index = NUMA_graph_index<test_vertex>::create(
+			fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
