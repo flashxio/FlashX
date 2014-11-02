@@ -454,7 +454,7 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex,
-		part_directed_triangle_vertex>::create(fg->get_index_file());
+		part_directed_triangle_vertex>::create(fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	BOOST_LOG_TRIVIAL(info) << "triangle counting starts";

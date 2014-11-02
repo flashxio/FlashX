@@ -415,11 +415,13 @@ void worker_thread::init()
 				graph->get_in_mem_index(),
 				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
 				this);
-	else
+	else {
+		assert(index_factory);
 		index_reader = simple_index_reader::create(
 				index_factory->create_io(this),
 				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
 				this);
+	}
 
 	if (!started_vertices.empty()) {
 		assert(curr_activated_vertices->is_empty());

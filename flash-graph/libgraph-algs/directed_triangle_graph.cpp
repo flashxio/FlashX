@@ -365,7 +365,7 @@ FG_vector<size_t>::ptr compute_directed_triangles(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	BOOST_LOG_TRIVIAL(info) << "triangle counting starts";

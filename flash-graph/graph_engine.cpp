@@ -546,18 +546,9 @@ void graph_engine::init(graph_index::ptr index)
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
 	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
+#if 0
 	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
-	index_factory = create_io_factory(index->get_index_file(), GLOBAL_CACHE_ACCESS);
-
-	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
-	io->access((char *) &header, 0, sizeof(header), READ);
-	header.verify();
-	out_part_off = 0;
-	if (header.is_directed_graph()) {
-		assert(sizeof(vertex_index) == sizeof(header));
-		vertex_index *idx = (vertex_index *) &header;
-		out_part_off = idx->get_out_part_loc();
-	}
+#endif
 
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);
@@ -567,9 +558,13 @@ void graph_engine::init(graph_index::ptr index)
 	if (!graph_conf.get_trace_file().empty())
 		logger = trace_logger::ptr(new trace_logger(graph_conf.get_trace_file()));
 
+#if 0
 	if (graph_conf.preload())
 		preload_graph();
+#endif
 
+	assert(graph_conf.get_num_vparts() == 1);
+#if 0
 	// If we need to perform vertical partitioning on the graph.
 	if (graph_conf.get_num_vparts() > 1) {
 		std::vector<init_vpart_thread *> threads(num_threads);
@@ -583,30 +578,7 @@ void graph_engine::init(graph_index::ptr index)
 			delete threads[i];
 		}
 	}
-}
-
-graph_engine::graph_engine(const std::string &graph_file,
-		graph_index::ptr index, config_map::ptr configs)
-{
-	init_flash_graph(configs);
-
-	// Init graph data.
-	if (graph_conf.use_in_mem_graph()) {
-		graph_data = in_mem_graph::load_graph(graph_file);
-		graph_factory = graph_data->create_io_factory();
-	}
-	else
-		// Right now only the cached I/O can support async I/O
-		graph_factory = create_io_factory(graph_file, GLOBAL_CACHE_ACCESS);
-
-	// Construct the in-memory compressed vertex index.
-	vertex_index::ptr raw_vindex = vertex_index::safs_load(
-			index->get_index_file());
-	vindex = in_mem_query_vertex_index::create(raw_vindex,
-			!graph_conf.use_in_mem_index());
-	raw_vindex.reset();
-
-	init(index);
+#endif
 }
 
 graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
@@ -614,27 +586,25 @@ graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
 	struct timeval init_start, init_end;
 	gettimeofday(&init_start, NULL);
 
-	init_flash_graph(graph.get_configs());
+	try {
+		init_flash_graph(graph.get_configs());
+	} catch(init_error &e) {
+		// We ignore the error.
+	}
 
 	// Init graph data.
-	if (graph.get_graph_data()) {
-		graph_data = graph.get_graph_data();
-		graph_factory = graph_data->create_io_factory();
-	}
-	else
-		// Right now only the cached I/O can support async I/O
-		graph_factory = create_io_factory(graph.get_graph_file(),
-				GLOBAL_CACHE_ACCESS);
-
+	graph_factory = graph.get_graph_io_factory(GLOBAL_CACHE_ACCESS);
 	// Construct the in-memory compressed vertex index.
-	if (graph.get_index_data())
-		vindex = in_mem_query_vertex_index::create(graph.get_index_data(),
-				!graph_conf.use_in_mem_index());
-	else {
-		vertex_index::ptr raw_vindex = vertex_index::safs_load(
-				index->get_index_file());
-		vindex = in_mem_query_vertex_index::create(raw_vindex,
-				!graph_conf.use_in_mem_index());
+	vindex = in_mem_query_vertex_index::create(graph.get_index_data(),
+			!graph_conf.use_in_mem_index());
+
+	header = graph.get_graph_header();
+	header.verify();
+	out_part_off = 0;
+	if (header.is_directed_graph()) {
+		assert(sizeof(vertex_index) == sizeof(header));
+		vertex_index *idx = (vertex_index *) &header;
+		out_part_off = idx->get_out_part_loc();
 	}
 
 	init(index);
@@ -648,11 +618,9 @@ graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
 graph_engine::~graph_engine()
 {
 	graph_factory->print_statistics();
-	index_factory->print_statistics();
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
 	graph_factory = file_io_factory::shared_ptr();
-	index_factory = file_io_factory::shared_ptr();
 	destroy_flash_graph();
 }
 
@@ -688,7 +656,9 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 			new_prog = creater->create();
 		else
 			new_prog = vertices->create_def_vertex_program();
-		worker_thread *t = new worker_thread(this, graph_factory, index_factory,
+		// TODO provide file_io_factory for index file.
+		worker_thread *t = new worker_thread(this, graph_factory,
+				file_io_factory::shared_ptr(),
 				new_prog, vertices->create_def_part_vertex_program(),
 				get_node_id(i, num_nodes), i, num_threads, scheduler,
 				msg_allocs[get_node_id(i, num_nodes)]);
@@ -843,6 +813,7 @@ void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 	this->scheduler = scheduler;
 }
 
+#if 0
 void graph_engine::preload_graph()
 {
 	const int BLOCK_SIZE = 1024 * 1024 * 32;
@@ -868,6 +839,7 @@ void graph_engine::preload_graph()
 		io->access(buf.get(), i, BLOCK_SIZE, READ);
 	BOOST_LOG_TRIVIAL(info) << "successfully preload";
 }
+#endif
 
 void graph_engine::init_vertices(vertex_id_t ids[], int num,
 		vertex_initializer::ptr init)

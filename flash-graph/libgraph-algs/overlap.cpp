@@ -320,7 +320,7 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
 {
 	assert(std::is_sorted(vids.begin(), vids.end()));
 	graph_index::ptr index = NUMA_graph_index<overlap_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	overlap_vertices = vids;
 	overlap_matrix.resize(vids.size());

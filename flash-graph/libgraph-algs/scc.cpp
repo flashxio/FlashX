@@ -1114,7 +1114,7 @@ public:
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	BOOST_LOG_TRIVIAL(info) << "SCC starts";
 	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();

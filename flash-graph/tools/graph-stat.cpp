@@ -142,8 +142,7 @@ int main(int argc, char *argv[])
 	graph_conf.init(configs);
 
 	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
-	graph_header header = get_graph_header(fg);
-	header = get_graph_header(fg);
+	graph_header header = fg->get_graph_header();
 
 	std::string graph_type_str;
 	switch(header.get_graph_type()) {

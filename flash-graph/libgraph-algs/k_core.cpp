@@ -284,7 +284,7 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 		size_t k, size_t kmax)
 {
 	graph_index::ptr index = NUMA_graph_index<kcore_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	if (k > graph->get_max_vertex_id()) {

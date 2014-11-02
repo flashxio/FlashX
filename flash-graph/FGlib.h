@@ -33,6 +33,7 @@
 */
 class FG_graph
 {
+	graph_header header;
 	std::string graph_file;
 	std::string index_file;
 	std::shared_ptr<in_mem_graph> graph_data;
@@ -61,24 +62,7 @@ public:
 		return ptr(new FG_graph(graph_file, index_file, configs));
 	}
 
-/**
-  * \brief Get the path to the graph file.
-  *
-  * \return The path to the graph file on disk.
-  *
-*/
-	const std::string &get_graph_file() const {
-		return graph_file;
-	}
-
-/**
-  * \brief Get the graph index file path.
-  *
-  * \return The path to the graph index file on disk.
-*/
-	const std::string &get_index_file() const {
-		return index_file;
-	}
+	file_io_factory::shared_ptr get_graph_io_factory(int access_option);
 
 /**
   * \brief Get the map that contains the runtime configurations 
@@ -95,11 +79,17 @@ public:
 		return graph_data;
 	}
 
-	std::shared_ptr<vertex_index> get_index_data() const {
-		return index_data;
-	}
+	std::shared_ptr<vertex_index> get_index_data() const;
 
 	graph_engine::ptr create_engine(graph_index::ptr index);
+
+	/**
+	 * \brief Get the header of the graph that contains basic information of the graph.
+	 * \return The graph header.
+	 */
+	const graph_header &get_graph_header() {
+		return header;
+	}
 };
 
 /**
@@ -324,11 +314,5 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
  * \return A vector with an transitivity value for each vertex.
  */
 FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
-
-/**
- * \brief Get the header of the graph that contains basic information of the graph.
- * \return The graph header.
- */
-graph_header get_graph_header(FG_graph::ptr fg);
 
 #endif
