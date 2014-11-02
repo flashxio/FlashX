@@ -241,6 +241,5 @@ fg.spectral.clusters <- function(fg, num.clusters, which="adj", num.eigen=5, whi
 {
 	library(Rcpp)
 	library.dynam("FlashGraph", pkgname, libname, local=FALSE);
-	.Call("R_FG_init", paste(libname, "/", pkgname, "/", pkgname, ".conf",
-							 sep=""), PACKAGE="FlashGraph")
+	.Call("R_FG_init", paste(pkgname, ".conf", sep=""), PACKAGE="FlashGraph")
 }
