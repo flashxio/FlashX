@@ -447,6 +447,11 @@ void init_io_system(config_map::ptr map, bool with_cache = true);
 void destroy_io_system();
 
 /**
+ * This function tells whether SAFS is initialized successfully.
+ */
+bool is_safs_init();
+
+/**
  * This function gets the RAID configuration of SAFS.
  */
 const RAID_config &get_sys_RAID_conf();
