@@ -26,6 +26,12 @@ fg.get.params <- function(name)
 	.Call("R_FG_get_params", name, PACKAGE="FlashGraph")
 }
 
+fg.load.graph <- function(graph.name, graph.file, index.file)
+{
+	.Call("R_FG_load_graph", graph.name, graph.file, index.file,
+		  PACKAGE="FlashGraph")
+}
+
 # The graph object has three members:
 #	name: the graph name.
 #	cindex: whether there exists a compressed index for the graph.
