@@ -66,7 +66,10 @@ vertex_index::ptr vertex_index::load(const std::string &index_file)
 	char *buf = (char *) malloc(size);
 	assert(buf);
 	FILE *fd = fopen(index_file.c_str(), "r");
-	BOOST_VERIFY(fread(buf, size, 1, fd) == 1);
+	if (fd == NULL)
+		throw io_exception(std::string("can't open ") + index_file);
+	if (fread(buf, size, 1, fd) != 1)
+		throw io_exception(std::string("can't read from ") + index_file);
 	fclose(fd);
 
 	vertex_index::ptr idx((vertex_index *) buf, destroy_index());
