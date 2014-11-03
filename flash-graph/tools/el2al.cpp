@@ -19,6 +19,7 @@
 
 #include <unistd.h>
 #include <zlib.h>
+#include <libgen.h>
 
 #include "graph.h"
 
@@ -837,7 +838,11 @@ public:
 		BOOST_VERIFY(fwrite(&header, sizeof(header), 1, f) == 1);
 		fclose(f);
 		f = NULL;
-		BOOST_VERIFY(rename(tmp_graph_file.c_str(), adj_file.c_str()) == 0);
+		if (rename(tmp_graph_file.c_str(), adj_file.c_str()) != 0) {
+			fprintf(stderr, "can't rename %s to %s: %s\n",
+					tmp_graph_file.c_str(), adj_file.c_str(), strerror(errno));
+			exit(1);
+		}
 	}
 
 	void add_vertices(const subgraph &subg) {
@@ -2032,7 +2037,6 @@ void print_usage()
 	fprintf(stderr, "-m: merge multiple edge lists into a single graph. \n");
 	fprintf(stderr, "-w: write the graph to a file\n");
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
-	fprintf(stderr, "-W dir: the working directory\n");
 	fprintf(stderr, "-D: decompress data\n");
 }
 
@@ -2064,7 +2068,7 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "uvt:mwT:W:D")) != -1) {
+	while ((opt = getopt(argc, argv, "uvt:mwT:D")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -2087,10 +2091,6 @@ int main(int argc, char *argv[])
 				num_threads = atoi(optarg);
 				num_opts++;
 				break;
-			case 'W':
-				work_dir = optarg;
-				num_opts++;
-				break;
 			case 'D':
 				decompress = true;
 				break;
@@ -2109,10 +2109,12 @@ int main(int argc, char *argv[])
 	if (type_str) {
 		edge_attr_type = conv_edge_type_str2int(type_str);
 	}
-	printf("work dir: %s\n", work_dir.c_str());
 
 	std::string adjacency_list_file = argv[0];
 	adjacency_list_file += std::string("-v") + itoa(CURR_VERSION);
+	work_dir = dirname(argv[0]);
+	printf("work dir: %s\n", work_dir.c_str());
+
 	std::string index_file = argv[1];
 	index_file += std::string("-v") + itoa(CURR_VERSION);
 	std::vector<std::string> edge_list_files;
