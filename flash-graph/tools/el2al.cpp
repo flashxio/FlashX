@@ -59,8 +59,6 @@ static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 
 bool decompress = false;
 bool check_graph = false;
-// This flag indicates to add the reversed edges to the graph.
-bool reverse_edge = false;
 std::string work_dir = ".";
 
 struct timeval start_time;
@@ -779,11 +777,24 @@ void undirected_edge_graph<edge_data_type>::construct_graph(graph *g) const
 		for (size_t i = 0; i < edge_lists.size(); i++) {
 			idxs[i] = add_edges(*edge_lists[i], idxs[i], id, v_edges);
 		}
+		assert(std::is_sorted(v_edges.begin(), v_edges.end(), edge_comparator));
+#if 0
 		std::sort(v_edges.begin(), v_edges.end(), edge_comparator);
+#endif
 		in_mem_undirected_vertex<edge_data_type> v(id,
 				edge_graph<edge_data_type>::has_edge_data());
-		BOOST_FOREACH(edge<edge_data_type> e, v_edges)
+		edge<edge_data_type> prev_e;
+		BOOST_FOREACH(edge<edge_data_type> e, v_edges) {
+			if (prev_e.get_from() == e.get_from()
+					&& prev_e.get_to() == e.get_to()) {
+				fprintf(stderr, "duplicate edge %u-%u\n", e.get_from(),
+						e.get_to());
+				continue;
+			}
+
 			v.add_edge(e);
+			prev_e = e;
+		}
 		g->add_vertex(v);
 	}
 }
@@ -1253,10 +1264,12 @@ class text_edge_task: public thread_task
 {
 	std::unique_ptr<char[]> line_buf;
 	size_t size;
+	bool directed;
 public:
-	text_edge_task(std::unique_ptr<char[]> line_buf, size_t size) {
+	text_edge_task(std::unique_ptr<char[]> line_buf, size_t size, bool directed) {
 		this->line_buf = std::move(line_buf);
 		this->size = size;
+		this->directed = directed;
 	}
 
 	void run() {
@@ -1266,7 +1279,9 @@ public:
 			= (stxxl_edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 		local_edge_buf->append(edges.cbegin(), edges.cend());
 
-		if (reverse_edge) {
+		// For an undirected graph, we need to store each edge twice
+		// and each copy is the reverse of the original edge.
+		if (!directed) {
 			BOOST_FOREACH(edge<edge_data_type> e, edges) {
 				e.reverse_dir();
 				local_edge_buf->push_back(e);
@@ -1565,7 +1580,7 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 			size_t size = 0;
 			thread_task *task = new text_edge_task<edge_data_type>(
 					io.read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size),
-					size);
+					size, directed);
 			threads[thread_no % num_threads]->add_task(task);
 			thread_no++;
 		}
@@ -1655,7 +1670,6 @@ void print_usage()
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
 	fprintf(stderr, "-W dir: the working directory\n");
 	fprintf(stderr, "-D: decompress data\n");
-	fprintf(stderr, "-r: add the reversed edges to the graph\n");
 }
 
 graph *construct_graph(const std::vector<std::string> &edge_list_files,
@@ -1686,7 +1700,7 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "uvt:mwT:W:Dr")) != -1) {
+	while ((opt = getopt(argc, argv, "uvt:mwT:W:D")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -1715,9 +1729,6 @@ int main(int argc, char *argv[])
 				break;
 			case 'D':
 				decompress = true;
-				break;
-			case 'r':
-				reverse_edge = true;
 				break;
 			default:
 				print_usage();
