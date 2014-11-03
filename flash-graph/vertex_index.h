@@ -148,6 +148,19 @@ public:
 			   vertex_index>(index);
 	}
 
+	static vertex_index::ptr create(const graph_header &header,
+			const std::vector<vertex_entry_type> &vertices) {
+		char *buf = (char *) malloc(vertex_index::get_header_size()
+				+ vertices.size() * sizeof(vertices[0]));
+		vertex_index_temp<vertex_entry_type> *index
+			= new (buf) vertex_index_temp<vertex_entry_type>(header);
+		index->h.data.num_entries = vertices.size();
+		assert(header.get_num_vertices() + 1 == vertices.size());
+		memcpy(buf + vertex_index::get_header_size(), vertices.data(),
+				vertices.size() * sizeof(vertices[0]));
+		return vertex_index::ptr(index);
+	}
+
 	static void dump(const std::string &file, const graph_header &header,
 			const std::vector<vertex_entry_type> &vertices) {
 		vertex_index_temp<vertex_entry_type> index(header);
@@ -309,6 +322,19 @@ public:
 			= cast(vertex_index_temp<directed_vertex_entry>::load(index_file));
 		ret->verify();
 		return ret;
+	}
+
+	static vertex_index::ptr create(const graph_header &header,
+			const std::vector<directed_vertex_entry> &vertices) {
+		char *buf = (char *) malloc(vertex_index::get_header_size()
+				+ vertices.size() * sizeof(vertices[0]));
+		directed_vertex_index *index = new (buf) directed_vertex_index(header);
+		index->h.data.num_entries = vertices.size();
+		index->h.data.out_part_loc = vertices.front().get_out_off();
+		assert(header.get_num_vertices() + 1 == vertices.size());
+		memcpy(buf + vertex_index::get_header_size(), vertices.data(),
+				vertices.size() * sizeof(vertices[0]));
+		return vertex_index::ptr(index);
 	}
 
 	static void dump(const std::string &file, const graph_header &header,
@@ -778,6 +804,7 @@ public:
 
 	virtual void add_vertex(const in_mem_vertex &) = 0;
 	virtual void dump(const std::string &file, const graph_header &header) = 0;
+	virtual vertex_index::ptr dump(const graph_header &header) = 0;
 };
 
 class default_in_mem_vertex_index: public in_mem_vertex_index
@@ -797,6 +824,10 @@ public:
 
 	virtual void dump(const std::string &file, const graph_header &header) {
 		default_vertex_index::dump(file, header, vertices);
+	}
+
+	virtual vertex_index::ptr dump(const graph_header &header) {
+		return default_vertex_index::create(header, vertices);
 	}
 };
 
@@ -824,6 +855,14 @@ public:
 			vertices[i] = directed_vertex_entry(vertices[i].get_in_off(),
 					vertices[i].get_out_off() + in_part_size);
 		directed_vertex_index::dump(file, header, vertices);
+	}
+
+	virtual vertex_index::ptr dump(const graph_header &header) {
+		size_t in_part_size = vertices.back().get_in_off();
+		for (size_t i = 0; i < vertices.size(); i++)
+			vertices[i] = directed_vertex_entry(vertices[i].get_in_off(),
+					vertices[i].get_out_off() + in_part_size);
+		return directed_vertex_index::create(header, vertices);
 	}
 };
 
