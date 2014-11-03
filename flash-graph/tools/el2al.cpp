@@ -206,6 +206,8 @@ public:
 	}
 };
 
+class subgraph;
+
 /**
  * This is a disk-backed directed graph.
  */
@@ -286,6 +288,7 @@ public:
 #endif
 	virtual graph_type get_graph_type() const = 0;
 	virtual void finalize_graph_file(const std::string &adj_file) = 0;
+	virtual void add_vertices(const subgraph &subg) = 0;
 };
 
 class directed_vertex_info: public in_mem_vertex
@@ -350,7 +353,55 @@ public:
 	}
 };
 
-class directed_subgraph
+class undirected_vertex_info: public in_mem_vertex
+{
+	vertex_id_t id;
+	int edge_data_size;
+	size_t size;
+	size_t num_edges;
+public:
+	undirected_vertex_info(const in_mem_vertex &v) {
+		id = v.get_id();
+		if (v.has_edge_data())
+			edge_data_size = v.get_edge_data_size();
+		else
+			edge_data_size = 0;
+		size = v.get_serialize_size(OUT_EDGE);
+		num_edges = v.get_num_edges(OUT_EDGE);
+	}
+
+	virtual vertex_id_t get_id() const {
+		return id;
+	}
+	virtual bool has_edge_data() const {
+		return edge_data_size > 0;
+	}
+	virtual size_t get_edge_data_size() const {
+		return edge_data_size;
+	}
+	virtual void serialize_edges(vertex_id_t ids[], edge_type type) const {
+		ABORT_MSG("serialize_edges isn't implemented");
+	}
+	virtual void serialize_edge_data(char *data, edge_type type) const {
+		ABORT_MSG("serialize_edge_data isn't implemented");
+	}
+	virtual size_t get_serialize_size(edge_type type) const {
+		return size;
+	}
+	virtual size_t get_num_edges(edge_type type) const {
+		return num_edges;
+	}
+};
+
+class subgraph
+{
+public:
+	virtual size_t get_num_vertices() const = 0;
+	virtual vertex_id_t get_start_id() const = 0;
+	virtual vertex_id_t get_end_id() const = 0;
+};
+
+class directed_subgraph: public subgraph
 {
 	size_t in_buf_cap;
 	size_t out_buf_cap;
@@ -450,6 +501,74 @@ public:
 	}
 };
 
+class undirected_subgraph: public subgraph
+{
+	size_t buf_cap;
+	size_t buf_bytes;
+	char *buf;
+	std::vector<undirected_vertex_info> vertices;
+
+	void expand_buf(size_t least_size) {
+		while (buf_cap < least_size)
+			buf_cap *= 2;
+		char *tmp = new char[buf_cap];
+		memcpy(tmp, buf, buf_bytes);
+		delete [] buf;
+		buf = tmp;
+	}
+public:
+	undirected_subgraph() {
+		this->buf_cap = 1024 * 1024;
+		buf_bytes = 0;
+		buf = new char[buf_cap];
+	}
+
+	~undirected_subgraph() {
+		delete [] buf;
+	}
+
+	template<class edge_data_type>
+	void add_vertex(const in_mem_undirected_vertex<edge_data_type> &v) {
+		if (!vertices.empty())
+			assert(vertices.back().get_id() + 1 == v.get_id());
+		vertices.push_back(undirected_vertex_info(v));
+
+		int size = v.get_serialize_size(OUT_EDGE);
+		if (buf_bytes + size > buf_cap)
+			expand_buf(buf_bytes + size);
+		assert(buf_bytes + size <= buf_cap);
+		ext_mem_undirected_vertex::serialize(v, buf + buf_bytes,
+				size, OUT_EDGE);
+		buf_bytes += size;
+	}
+
+	const undirected_vertex_info &get_vertex_info(off_t idx) const {
+		return vertices[idx];
+	}
+
+	size_t get_num_vertices() const {
+		return vertices.size();
+	}
+
+	char *get_buf() const {
+		return buf;
+	}
+
+	size_t get_size() const {
+		return buf_bytes;
+	}
+
+	vertex_id_t get_start_id() const {
+		assert(!vertices.empty());
+		return vertices.front().get_id();
+	}
+
+	vertex_id_t get_end_id() const {
+		assert(!vertices.empty());
+		return vertices.back().get_id() + 1;
+	}
+};
+
 template<class edge_data_type>
 class disk_directed_graph: public disk_graph<edge_data_type>
 {
@@ -505,19 +624,20 @@ public:
 		BOOST_VERIFY(fwrite(buf.data(), size, 1, out_f) == 1);
 	}
 
-	void add_vertices(const directed_subgraph &subg) {
-		for (size_t i = 0; i < subg.get_num_vertices(); i++)
-			disk_graph<edge_data_type>::add_vertex(subg.get_vertex_info(i));
-		BOOST_VERIFY(fwrite(subg.get_in_buf(), subg.get_in_size(), 1,
+	void add_vertices(const subgraph &subg) {
+		const directed_subgraph &d_subg = (const directed_subgraph &) subg;
+		for (size_t i = 0; i < d_subg.get_num_vertices(); i++)
+			disk_graph<edge_data_type>::add_vertex(d_subg.get_vertex_info(i));
+		BOOST_VERIFY(fwrite(d_subg.get_in_buf(), d_subg.get_in_size(), 1,
 					in_f) == 1);
-		BOOST_VERIFY(fwrite(subg.get_out_buf(), subg.get_out_size(), 1,
+		BOOST_VERIFY(fwrite(d_subg.get_out_buf(), d_subg.get_out_size(), 1,
 					out_f) == 1);
 
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
 		printf("%f: write %ld and %ld bytes for v[%d, %d)\n",
-				time_diff(start_time, curr), subg.get_in_size(),
-				subg.get_out_size(), subg.get_start_id(), subg.get_end_id());
+				time_diff(start_time, curr), d_subg.get_in_size(),
+				d_subg.get_out_size(), d_subg.get_start_id(), d_subg.get_end_id());
 	}
 
 	void copy_file(FILE *from, size_t from_size, FILE *to) {
@@ -618,6 +738,19 @@ public:
 		BOOST_VERIFY(rename(tmp_graph_file.c_str(), adj_file.c_str()) == 0);
 	}
 
+	void add_vertices(const subgraph &subg) {
+		const undirected_subgraph &u_subg = (const undirected_subgraph &) subg;
+		for (size_t i = 0; i < u_subg.get_num_vertices(); i++)
+			disk_graph<edge_data_type>::add_vertex(u_subg.get_vertex_info(i));
+		BOOST_VERIFY(fwrite(u_subg.get_buf(), u_subg.get_size(), 1, f) == 1);
+
+		struct timeval curr;
+		gettimeofday(&curr, NULL);
+		printf("%f: write %ld bytes for v[%d, %d)\n",
+				time_diff(start_time, curr), u_subg.get_size(),
+				u_subg.get_start_id(), u_subg.get_end_id());
+	}
+
 	virtual graph_type get_graph_type() const {
 		return graph_type::UNDIRECTED;
 	}
@@ -626,10 +759,16 @@ public:
 template<class edge_data_type = empty_data>
 class undirected_edge_graph: public edge_graph<edge_data_type>
 {
+	typedef std::vector<edge<edge_data_type> > edge_list_t;
+	typedef typename stxxl_edge_vector<edge_data_type>::const_iterator edge_const_iterator;
+	typedef stxxl::stream::vector_iterator2stream<edge_const_iterator> edge_stream_t;
+
 	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > edge_lists;
 
 	off_t add_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
 			vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const;
+
+	void read_edges(edge_stream_t &, vertex_id_t until_id, edge_list_t &v_edges) const;
 
 	vertex_id_t get_max_vertex_id() const {
 		vertex_id_t max_id = 0;
@@ -765,6 +904,7 @@ off_t undirected_edge_graph<edge_data_type>::add_edges(
 	return idx;
 }
 
+#if 0
 template<class edge_data_type>
 void undirected_edge_graph<edge_data_type>::construct_graph(graph *g) const
 {
@@ -798,6 +938,7 @@ void undirected_edge_graph<edge_data_type>::construct_graph(graph *g) const
 		g->add_vertex(v);
 	}
 }
+#endif
 
 #if 0
 template<class edge_data_type>
@@ -1344,9 +1485,22 @@ void directed_edge_graph<edge_data_type>::read_in_edges(edge_stream_t &stream,
 }
 
 template<class edge_data_type>
-class write_directed_graph_thread: public thread
+void undirected_edge_graph<edge_data_type>::read_edges(edge_stream_t &stream,
+		vertex_id_t until_id, std::vector<edge<edge_data_type> > &v_edges) const
 {
-	typedef std::shared_ptr<directed_subgraph> subgraph_ptr;
+	if (stream.empty())
+		return;
+
+	while (!stream.empty() && stream->get_from() < until_id) {
+		v_edges.push_back(*stream);
+		++stream;
+	}
+}
+
+template<class edge_data_type>
+class write_graph_thread: public thread
+{
+	typedef std::shared_ptr<subgraph> subgraph_ptr;
 	struct subgraph_comp {
 		bool operator()(const subgraph_ptr &g1, const subgraph_ptr &g2) {
 			return g1->get_start_id() > g2->get_start_id();
@@ -1356,11 +1510,11 @@ class write_directed_graph_thread: public thread
 	std::vector<subgraph_ptr> added_subgraphs;
 	std::priority_queue<subgraph_ptr, std::vector<subgraph_ptr>, subgraph_comp> subgraphs;
 	pthread_spinlock_t lock;
-	disk_directed_graph<edge_data_type> &g;
+	disk_graph<edge_data_type> &g;
 	vertex_id_t curr_id;
 	vertex_id_t max_id;
 public:
-	write_directed_graph_thread(disk_directed_graph<edge_data_type> &_g,
+	write_graph_thread(disk_graph<edge_data_type> &_g,
 			vertex_id_t max_id): thread("write-thread", -1), g(_g) {
 		curr_id = 0;
 		this->max_id = max_id;
@@ -1378,7 +1532,7 @@ public:
 };
 
 template<class edge_data_type>
-void write_directed_graph_thread<edge_data_type>::run()
+void write_graph_thread<edge_data_type>::run()
 {
 	do {
 		std::vector<subgraph_ptr> copy;
@@ -1415,7 +1569,7 @@ class construct_directed_vertex_task: public thread_task
 	std::shared_ptr<edge_list_t> out_edges;
 	vertex_id_t start_id;
 	vertex_id_t end_id;
-	write_directed_graph_thread<edge_data_type> &write_thread;
+	write_graph_thread<edge_data_type> &write_thread;
 	bool has_edge_data;
 
 	typename edge_list_t::const_iterator add_in_edges(
@@ -1447,7 +1601,7 @@ class construct_directed_vertex_task: public thread_task
 	}
 public:
 	construct_directed_vertex_task(
-			write_directed_graph_thread<edge_data_type> &_write_thread,
+			write_graph_thread<edge_data_type> &_write_thread,
 			bool has_edge_data, vertex_id_t start_id, vertex_id_t end_id,
 			std::shared_ptr<edge_list_t> in_edges,
 			std::shared_ptr<edge_list_t> out_edges): write_thread(_write_thread) {
@@ -1491,6 +1645,118 @@ public:
 };
 
 template<class edge_data_type>
+class construct_undirected_vertex_task: public thread_task
+{
+	typedef std::vector<edge<edge_data_type> > edge_list_t;
+	std::shared_ptr<edge_list_t> edges;
+	vertex_id_t start_id;
+	vertex_id_t end_id;
+	write_graph_thread<edge_data_type> &write_thread;
+	bool has_edge_data;
+
+	typename edge_list_t::const_iterator add_edges(
+			typename edge_list_t::const_iterator it,
+			typename edge_list_t::const_iterator end, vertex_id_t id,
+			in_mem_undirected_vertex<edge_data_type> &v) {
+		if (it == end)
+			return it;
+		assert(it->get_from() >= id);
+		while (it != end && it->get_from() == id) {
+			v.add_edge(*it);
+			it++;
+		}
+		return it;
+	}
+public:
+	construct_undirected_vertex_task(
+			write_graph_thread<edge_data_type> &_write_thread,
+			bool has_edge_data, vertex_id_t start_id, vertex_id_t end_id,
+			std::shared_ptr<edge_list_t> edges): write_thread(_write_thread) {
+		this->edges = edges;
+		this->start_id = start_id;
+		this->end_id = end_id;
+		this->has_edge_data = has_edge_data;
+		struct timeval curr;
+		gettimeofday(&curr, NULL);
+		printf("%f: create a task for [%d, %d), %ld edges\n",
+				time_diff(start_time, curr), start_id, end_id, edges->size());
+	}
+
+	~construct_undirected_vertex_task() {
+		struct timeval curr;
+		gettimeofday(&curr, NULL);
+		printf("%f: task completes for [%d, %d)\n", time_diff(start_time, curr),
+				start_id, end_id);
+	}
+
+	void run() {
+		comp_edge<edge_data_type> edge_comparator;
+		std::sort(edges->begin(), edges->end(), edge_comparator);
+
+		std::shared_ptr<undirected_subgraph> subg
+			= std::shared_ptr<undirected_subgraph>(new undirected_subgraph());
+		typename edge_list_t::const_iterator it = edges->begin();
+		for (vertex_id_t id = start_id; id < end_id; id++) {
+			in_mem_undirected_vertex<edge_data_type> v(id, has_edge_data);
+			it = add_edges(it, edges->end(), id, v);
+			subg->add_vertex(v);
+		}
+		write_thread.add_vertices(subg);
+	}
+};
+
+template<class edge_data_type>
+void undirected_edge_graph<edge_data_type>::construct_graph(graph *g) const
+{
+	std::vector<edge_stream_t> its;
+	for (size_t i = 0; i < edge_lists.size(); i++)
+		its.push_back(edge_stream_t(edge_lists[i]->cbegin(),
+				edge_lists[i]->cend()));
+	vertex_id_t max_id = get_max_vertex_id();
+
+	gettimeofday(&start_time, NULL);
+	std::vector<task_thread *> threads(num_threads);
+	for (int i = 0; i < num_threads; i++) {
+		task_thread *t = new task_thread(std::string(
+					"graph-task-thread") + itoa(i), -1);
+		t->start();
+		threads[i] = t;
+	}
+	write_graph_thread<edge_data_type> *write_thread
+		= new write_graph_thread<edge_data_type>(
+				(disk_undirected_graph<edge_data_type> &) *g, max_id);
+	write_thread->start();
+
+	printf("start to construct the graph. max id: %d\n", max_id);
+
+	int thread_no = 0;
+	for (vertex_id_t id = 0; id <= max_id; ) {
+		std::shared_ptr<edge_list_t> v_edges
+			= std::shared_ptr<edge_list_t>(new edge_list_t());
+		vertex_id_t end_id = std::min(id + VERTEX_TASK_SIZE, max_id + 1);
+		for (size_t i = 0; i < edge_lists.size(); i++)
+			read_edges(its[i], end_id, *v_edges);
+
+		construct_undirected_vertex_task<edge_data_type> *task
+			= new construct_undirected_vertex_task<edge_data_type>(*write_thread,
+					edge_graph<edge_data_type>::has_edge_data(),
+					id, end_id, v_edges);
+		threads[thread_no % num_threads]->add_task(task);
+		thread_no++;
+		id = end_id;
+	}
+
+	for (int i = 0; i < num_threads; i++) {
+		threads[i]->wait4complete();
+		threads[i]->stop();
+		threads[i]->join();
+		delete threads[i];
+	}
+	write_thread->join();
+	delete write_thread;
+}
+
+template<class edge_data_type>
 void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 {
 	assert(in_edge_lists.size() == out_edge_lists.size());
@@ -1515,8 +1781,8 @@ void directed_edge_graph<edge_data_type>::construct_graph(graph *g) const
 		t->start();
 		threads[i] = t;
 	}
-	write_directed_graph_thread<edge_data_type> *write_thread
-		= new write_directed_graph_thread<edge_data_type>(
+	write_graph_thread<edge_data_type> *write_thread
+		= new write_graph_thread<edge_data_type>(
 				(disk_directed_graph<edge_data_type> &) *g, max_id);
 	write_thread->start();
 
