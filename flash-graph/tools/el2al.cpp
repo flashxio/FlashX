@@ -26,31 +26,17 @@
 #include <algorithm>
 
 #include <boost/foreach.hpp>
+//#define USE_STXXL
+#ifdef USE_STXXL
 #include <stxxl.h>
+#endif
+#include <parallel/algorithm>
 
 #include "thread.h"
 #include "native_file.h"
 
 #include "edge_type.h"
 #include "vertex.h"
-
-template<class edge_data_type>
-class stxxl_edge_vector: public stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result
-{
-public:
-	typedef typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result::const_iterator const_iterator;
-	void append(stxxl_edge_vector<edge_data_type>::const_iterator it,
-			stxxl_edge_vector<edge_data_type>::const_iterator end) {
-		for (; it != end; it++)
-			this->push_back(*it);
-	}
-
-	void append(typename std::vector<edge<edge_data_type> >::const_iterator it,
-			typename std::vector<edge<edge_data_type> >::const_iterator end) {
-		for (; it != end; it++)
-			this->push_back(*it);
-	}
-};
 
 int num_threads = 1;
 const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
@@ -178,6 +164,122 @@ struct comp_in_edge<ts_edge_data> {
 		return edge<ts_edge_data>(max_id, max_id, ts_edge_data(max_time));
 	}
 };
+
+#ifdef USE_STXXL
+
+template<class edge_data_type>
+class edge_vector: public stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result
+{
+public:
+	typedef typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result::const_iterator const_iterator;
+	void append(edge_vector<edge_data_type>::const_iterator it,
+			edge_vector<edge_data_type>::const_iterator end) {
+		for (; it != end; it++)
+			this->push_back(*it);
+	}
+
+	void append(typename std::vector<edge<edge_data_type> >::const_iterator it,
+			typename std::vector<edge<edge_data_type> >::const_iterator end) {
+		for (; it != end; it++)
+			this->push_back(*it);
+	}
+
+	void sort(bool out_edge) {
+		if (out_edge) {
+			comp_edge<edge_data_type> edge_comparator;
+			stxxl::sort(this->begin(), this->end(), edge_comparator, SORT_BUF_SIZE);
+		}
+		else {
+			comp_in_edge<edge_data_type> in_edge_comparator;
+			stxxl::sort(this->begin(), this->end(), in_edge_comparator, SORT_BUF_SIZE);
+		}
+	}
+};
+
+template<class edge_data_type>
+class edge_stream
+{
+	stxxl::stream::vector_iterator2stream<typename edge_vector<edge_data_type>::const_iterator> strm;
+public:
+	edge_stream(typename edge_vector<edge_data_type>::const_iterator begin,
+			typename edge_vector<edge_data_type>::const_iterator end): strm(
+				begin, end) {
+	}
+
+	bool empty() const {
+		return strm.empty();
+	}
+
+	edge<edge_data_type> operator*() const {
+		return *strm;
+	}
+
+	edge_stream<edge_data_type> &operator++() {
+		++strm;
+		return *this;
+	}
+
+	const edge<edge_data_type> *operator->() const {
+		return strm.operator->();
+	}
+};
+
+#else
+
+template<class edge_data_type>
+class edge_vector: public std::vector<edge<edge_data_type> >
+{
+public:
+	typedef typename std::vector<edge<edge_data_type> >::const_iterator const_iterator;
+	void append(edge_vector<edge_data_type>::const_iterator it,
+			edge_vector<edge_data_type>::const_iterator end) {
+		for (; it != end; it++)
+			this->push_back(*it);
+	}
+
+	void sort(bool out_edge) {
+		if (out_edge) {
+			comp_edge<edge_data_type> edge_comparator;
+			__gnu_parallel::sort(this->begin(), this->end(), edge_comparator);
+		}
+		else {
+			comp_in_edge<edge_data_type> in_edge_comparator;
+			__gnu_parallel::sort(this->begin(), this->end(), in_edge_comparator);
+		}
+	}
+};
+
+template<class edge_data_type>
+class edge_stream
+{
+	typename edge_vector<edge_data_type>::const_iterator it;
+	typename edge_vector<edge_data_type>::const_iterator end;
+public:
+	edge_stream(typename edge_vector<edge_data_type>::const_iterator begin,
+			typename edge_vector<edge_data_type>::const_iterator end) {
+		this->it = begin;
+		this->end = end;
+	}
+
+	bool empty() const {
+		return it == end;
+	}
+
+	edge<edge_data_type> operator*() const {
+		return *it;
+	}
+
+	edge_stream<edge_data_type> &operator++() {
+		it++;
+		return *this;
+	}
+
+	const edge<edge_data_type> *operator->() const {
+		return it.operator->();
+	}
+};
+
+#endif
 
 template<class edge_data_type = empty_data>
 class edge_graph
@@ -742,7 +844,11 @@ public:
 		const undirected_subgraph &u_subg = (const undirected_subgraph &) subg;
 		for (size_t i = 0; i < u_subg.get_num_vertices(); i++)
 			disk_graph<edge_data_type>::add_vertex(u_subg.get_vertex_info(i));
-		BOOST_VERIFY(fwrite(u_subg.get_buf(), u_subg.get_size(), 1, f) == 1);
+		if (fwrite(u_subg.get_buf(), u_subg.get_size(), 1, f) != 1) {
+			fprintf(stderr, "fail to write %ld bytes for %ld vertices: %s\n",
+					u_subg.get_size(), u_subg.get_num_vertices(), strerror(errno));
+			exit(1);
+		}
 
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
@@ -760,12 +866,11 @@ template<class edge_data_type = empty_data>
 class undirected_edge_graph: public edge_graph<edge_data_type>
 {
 	typedef std::vector<edge<edge_data_type> > edge_list_t;
-	typedef typename stxxl_edge_vector<edge_data_type>::const_iterator edge_const_iterator;
-	typedef stxxl::stream::vector_iterator2stream<edge_const_iterator> edge_stream_t;
+	typedef edge_stream<edge_data_type> edge_stream_t;
 
-	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > edge_lists;
+	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > edge_lists;
 
-	off_t add_edges(const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+	off_t add_edges(const edge_vector<edge_data_type> &edges, off_t idx,
 			vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const;
 
 	void read_edges(edge_stream_t &, vertex_id_t until_id, edge_list_t &v_edges) const;
@@ -782,16 +887,14 @@ public:
 	 * edges added to the graph.
 	 */
 	undirected_edge_graph(
-			std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > &edge_lists,
+			std::vector<std::shared_ptr<edge_vector<edge_data_type> > > &edge_lists,
 			bool has_data): edge_graph<edge_data_type>(has_data) {
 		this->edge_lists = edge_lists;
 	}
 
 	void sort_edges() {
-		comp_edge<edge_data_type> edge_comparator;
 		for (size_t i = 0; i < edge_lists.size(); i++)
-			stxxl::sort(edge_lists[i]->begin(), edge_lists[i]->end(),
-					edge_comparator, SORT_BUF_SIZE);
+			edge_lists[i]->sort(true);
 	}
 
 	graph *create_disk_graph() const {
@@ -822,11 +925,10 @@ template<class edge_data_type = empty_data>
 class directed_edge_graph: public edge_graph<edge_data_type>
 {
 	typedef std::vector<edge<edge_data_type> > edge_list_t;
-	typedef typename stxxl_edge_vector<edge_data_type>::const_iterator edge_const_iterator;
-	typedef stxxl::stream::vector_iterator2stream<edge_const_iterator> edge_stream_t;
+	typedef edge_stream<edge_data_type> edge_stream_t;
 
-	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > in_edge_lists;
-	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > out_edge_lists;
+	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > in_edge_lists;
+	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > out_edge_lists;
 
 	void read_out_edges(edge_stream_t &, vertex_id_t until_id, edge_list_t &v_edges) const;
 	void read_in_edges(edge_stream_t &, vertex_id_t until_id, edge_list_t &v_edges) const;
@@ -847,24 +949,20 @@ public:
 	 * edges added to the graph.
 	 */
 	directed_edge_graph(
-			std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > &edge_lists,
+			std::vector<std::shared_ptr<edge_vector<edge_data_type> > > &edge_lists,
 			bool has_data): edge_graph<edge_data_type>(has_data) {
 		this->in_edge_lists = edge_lists;
 		this->out_edge_lists.resize(edge_lists.size());
 		for (size_t i = 0; i < edge_lists.size(); i++)
 			this->out_edge_lists[i]
-				= std::shared_ptr<stxxl_edge_vector<edge_data_type> >(
-						new stxxl_edge_vector<edge_data_type>(*edge_lists[i]));
+				= std::shared_ptr<edge_vector<edge_data_type> >(
+						new edge_vector<edge_data_type>(*edge_lists[i]));
 	}
 
 	void sort_edges() {
-		comp_edge<edge_data_type> edge_comparator;
-		comp_in_edge<edge_data_type> in_edge_comparator;
 		for (size_t i = 0; i < in_edge_lists.size(); i++) {
-			stxxl::sort(out_edge_lists[i]->begin(), out_edge_lists[i]->end(),
-					edge_comparator, SORT_BUF_SIZE);
-			stxxl::sort(in_edge_lists[i]->begin(), in_edge_lists[i]->end(),
-					in_edge_comparator, SORT_BUF_SIZE);
+			out_edge_lists[i]->sort(true);
+			in_edge_lists[i]->sort(false);
 			printf("sort edge list %ld\n", i);
 		}
 	}
@@ -890,7 +988,7 @@ public:
 
 template<class edge_data_type>
 off_t undirected_edge_graph<edge_data_type>::add_edges(
-		const stxxl_edge_vector<edge_data_type> &edges, off_t idx,
+		const edge_vector<edge_data_type> &edges, off_t idx,
 		vertex_id_t id, std::vector<edge<edge_data_type> > &v_edges) const
 {
 	if ((size_t) idx >= edges.size())
@@ -947,7 +1045,7 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 {
 	printf("There are %ld edges in the graph\n", get_num_edges());
 	assert(!vertices.empty());
-	typename stxxl_edge_vector<edge_data_type>::const_iterator it
+	typename edge_vector<edge_data_type>::const_iterator it
 		= std::lower_bound(edges.begin(), edges.end(),
 				edge<edge_data_type>(0, vertices[0]->get_id()),
 				comp_edge<edge_data_type>());
@@ -970,8 +1068,8 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 		const std::vector<ext_mem_undirected_vertex *> &vertices, bool in_part) const
 {
 	assert(!vertices.empty());
-	typename stxxl_edge_vector<edge_data_type>::const_iterator in_it;
-	typename stxxl_edge_vector<edge_data_type>::const_iterator out_it;
+	typename edge_vector<edge_data_type>::const_iterator in_it;
+	typename edge_vector<edge_data_type>::const_iterator out_it;
 
 	if (in_part)
 		in_it = std::lower_bound(in_edges.begin(), in_edges.end(),
@@ -1416,8 +1514,8 @@ public:
 	void run() {
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(line_buf.get(), size, edges);
-		stxxl_edge_vector<edge_data_type> *local_edge_buf
-			= (stxxl_edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+		edge_vector<edge_data_type> *local_edge_buf
+			= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 		local_edge_buf->append(edges.cbegin(), edges.cend());
 
 		// For an undirected graph, we need to store each edge twice
@@ -1450,11 +1548,11 @@ public:
 
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(data.get(), size, edges);
-		stxxl_edge_vector<edge_data_type> *local_edge_buf
-			= (stxxl_edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+		edge_vector<edge_data_type> *local_edge_buf
+			= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 		local_edge_buf->append(edges.cbegin(), edges.cend());
-		printf("There are %lld edges in thread %d\n", local_edge_buf->size(),
-				thread::get_curr_thread()->get_id());
+		std::cout << boost::format("There are %1% edges in thread %2%\n")
+			% local_edge_buf->size() % thread::get_curr_thread()->get_id();
 	}
 };
 
@@ -1833,7 +1931,7 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
 					"graph-task-thread") + itoa(i), -1);
-		t->set_user_data(new stxxl_edge_vector<edge_data_type>());
+		t->set_user_data(new edge_vector<edge_data_type>());
 		t->start();
 		threads[i] = t;
 	}
@@ -1867,14 +1965,14 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 
 	size_t mem_size = 0;
 	size_t num_edges = 0;
-	std::vector<std::shared_ptr<stxxl_edge_vector<edge_data_type> > > edge_lists(
+	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > edge_lists(
 			num_threads);
 	for (int i = 0; i < num_threads; i++) {
-		stxxl_edge_vector<edge_data_type> *local_edges
-			= (stxxl_edge_vector<edge_data_type> *) threads[i]->get_user_data();
+		edge_vector<edge_data_type> *local_edges
+			= (edge_vector<edge_data_type> *) threads[i]->get_user_data();
 		num_edges += local_edges->size();
 		mem_size += local_edges->capacity() * sizeof(edge<edge_data_type>);
-		edge_lists[i] = std::shared_ptr<stxxl_edge_vector<edge_data_type> >(
+		edge_lists[i] = std::shared_ptr<edge_vector<edge_data_type> >(
 				local_edges);
 	}
 	printf("There are %ld edges and use %ld bytes\n", num_edges, mem_size);
