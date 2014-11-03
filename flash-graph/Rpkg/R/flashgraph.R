@@ -58,6 +58,13 @@ fg.ecount <- function(graph)
 	graph$ecount
 }
 
+fg.in.mem <- function(graph)
+{
+	stopifnot(graph != NULL)
+	stopifnot(class(graph) == "fg")
+	graph$in.mem
+}
+
 fg.is.directed <- function(graph)
 {
 	stopifnot(graph != NULL)

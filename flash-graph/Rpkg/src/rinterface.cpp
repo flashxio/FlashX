@@ -273,36 +273,41 @@ static std::string extract_graph_name(const std::string &file_name)
  */
 RcppExport SEXP R_FG_list_graphs()
 {
-	printf("list graphs\n");
 	// Get all graphs in memory.
-	std::set<std::string> graph_names;
+	std::map<std::string, bool> graph_names;
 	for (graph_map_t::const_iterator it = graphs.begin();
 			it != graphs.end(); it++) {
-		graph_names.insert(it->first);
+		graph_names.insert(std::pair<std::string, bool>(it->first, true));
 	}
-	printf("get %ld in-memory graphs\n", graph_names.size());
 
 	// Get all graphs in SAFS.
 	if (!standalone) {
 		std::set<std::string> files;
-		printf("safs is initialized: %d\n", is_safs_init());
 		get_all_safs_files(files);
-		printf("get %ld safs files\n", files.size());
 
 		BOOST_FOREACH(std::string file, files) {
 			std::string graph_name = extract_graph_name(file);
 			if (!graph_name.empty())
-				graph_names.insert(graph_name);
+				graph_names.insert(std::pair<std::string, bool>(
+							graph_name, false));
 		}
-		printf("get %ld graphs\n", graph_names.size());
 	}
 
-	Rcpp::CharacterVector res;
-	BOOST_FOREACH(std::string graph, graph_names) {
-		if (exist_graph(graph))
-			res.push_back(graph);
+	Rcpp::CharacterVector names;
+	Rcpp::LogicalVector in_mem;
+	typedef std::pair<std::string, bool> graph_value_t;
+	BOOST_FOREACH(graph_value_t graph, graph_names) {
+		if (graph.second) {
+			names.push_back(graph.first);
+			in_mem.push_back(graph.second);
+		}
+		else if (exist_graph(graph.first)) {
+			names.push_back(graph.first);
+			in_mem.push_back(graph.second);
+		}
 	}
-	return res;
+	return Rcpp::DataFrame::create(Rcpp::Named("name") = names,
+			Rcpp::Named("in-mem") = in_mem);
 }
 
 RcppExport SEXP R_FG_set_log_level(SEXP plevel)
@@ -334,12 +339,10 @@ static SEXP create_FGR_obj(const std::string &graph_name)
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(graph_name);
 
-	printf("exist cindex\n");
 	Rcpp::LogicalVector cindex(1);
 	cindex[0] = exist_cindex(graph_name);
 	ret["cindex"] = cindex;
 
-	printf("get graph\n");
 	FG_graph::ptr graph = get_graph(graph_name, cindex[0]);
 	if (graph == NULL) {
 		fprintf(stderr, "can't create FGR object\n");
@@ -357,6 +360,10 @@ static SEXP create_FGR_obj(const std::string &graph_name)
 	Rcpp::NumericVector ecount(1);
 	ecount[0] = header.get_num_edges();
 	ret["ecount"] = ecount;
+
+	Rcpp::LogicalVector in_mem(1);
+	in_mem[0] = graph->get_graph_data() != NULL;
+	ret["in.mem"] = in_mem;
 	return ret;
 }
 
@@ -368,7 +375,6 @@ RcppExport SEXP R_FG_load_graph(SEXP pgraph_name, SEXP pgraph_file,
 	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
 	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
-	printf("get FG_graph\n");
 	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
