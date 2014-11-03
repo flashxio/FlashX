@@ -4,6 +4,9 @@ R CMD build flash-graph/Rpkg
 if [ -d ~/R ]; then
 	path=`find ~/R -name Rcpp.h`
 fi
+if [ -z "$path" ]; then
+	path=`find /usr/local -name Rcpp.h`
+fi
 if [ -n "$path" ]; then
 	path=`dirname $path`
 	echo $path
