@@ -56,7 +56,6 @@ int num_threads = 1;
 const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
 const size_t SORT_BUF_SIZE = 1024 * 1024 * 1024;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
-const char *delimiter = "\t";
 
 bool decompress = false;
 bool check_graph = false;
@@ -65,6 +64,22 @@ bool reverse_edge = false;
 std::string work_dir = ".";
 
 struct timeval start_time;
+
+class format_error: public std::exception
+{
+	std::string msg;
+public:
+	format_error(const std::string &msg) {
+		this->msg = msg;
+	}
+
+	~format_error() throw() {
+	}
+
+	const char* what() const throw() {
+		return msg.c_str();
+	}
+};
 
 template<class edge_data_type>
 struct comp_edge {
@@ -1065,45 +1080,71 @@ std::unique_ptr<char[]> graph_file_io::read_edge_list_text(
 	return std::unique_ptr<char[]>(line_buf);
 }
 
-size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
+struct edge_line
+{
+	vertex_id_t from;
+	vertex_id_t to;
+	std::string data;
+
+	edge_line(vertex_id_t from, vertex_id_t to, std::string data) {
+		this->from = from;
+		this->to = to;
+		this->data = data;
+	}
+
+	edge_line(vertex_id_t from, vertex_id_t to) {
+		this->from = from;
+		this->to = to;
+	}
+};
+
+struct edge_line parse_line(char *line)
 {
 	int len = strlen(line);
-	/*
-	 * The format of a line should be
-	 * from_vertex to_vertex "time" weight
-	 * Fields are separated by tabs.
-	 */
-	if (line[len - 1] == '\n')
-		line[len - 1] = 0;
-	if (line[len - 2] == '\r')
-		line[len - 2] = 0;
-	if (line[0] == '#')
-		return -1;
-	char *second = strstr(line, delimiter);
-	assert(second);
+
+	char *first = line;
+	for (; isspace(*first); first++);
+	if (!isdigit(*first))
+		throw format_error(
+				std::string("the first entry isn't a number: ") + first);
+
+	char *second = first;
+	for (; isdigit(*second); second++);
 	*second = 0;
-	second += strlen(delimiter);
+	long from = atol(first);
+	assert(from >= 0 && from < MAX_VERTEX_ID);
 
-	char *third = strstr(second, delimiter);
-	assert(third);
+	if (second - line == len)
+		throw format_error(std::string("there isn't second entry: ") + line);
+	second++;
+	if (!isdigit(*second))
+		throw format_error(
+				std::string("the second entry isn't a number: ") + second);
+	char *third = second;
+	for (; isdigit(*third); third++);
 	*third = 0;
-	third += strlen(delimiter);
-	if (*third == '"')
-		third++;
+	long to = atol(second);
+	assert(to >= 0 && to < MAX_VERTEX_ID);
 
-	if (!isnumeric(line) || !isnumeric(second)) {
-		printf("%s\t%s\t%s\n", line, second, third);
-		return -1;
+	if (third - line == len)
+		return edge_line(from, to);
+	else {
+		third++;
+		return edge_line(from, to, third);
 	}
-	long lfrom = atol(line);
-	long lto = atol(second);
-	assert(lfrom >= 0 && lfrom < MAX_VERTEX_ID);
-	assert(lto >= 0 && lto < MAX_VERTEX_ID);
-	vertex_id_t from = lfrom;
-	vertex_id_t to = lto;
-	time_t timestamp = atol(third);
+}
+
+size_t parse_edge_list_line(char *line, edge<ts_edge_data> &e)
+{
+	if (line[0] == '#')
+		return 0;
+	struct edge_line res = parse_line(line);
+	if (!isdigit(res.data[0]))
+		throw format_error(std::string("the third entry isn't a number: ")
+				+ res.data);
+	time_t timestamp = atol(res.data.c_str());
 	ts_edge_data data(timestamp);
-	e = edge<ts_edge_data>(from, to, data);
+	e = edge<ts_edge_data>(res.from, res.to, data);
 	return 1;
 }
 
@@ -1111,33 +1152,12 @@ int parse_edge_list_line(char *line, edge<edge_count> &e)
 {
 	if (line[0] == '#')
 		return 0;
-	char *second = strstr(line, delimiter);
-	if (second == NULL) {
-		fprintf(stderr, "wrong format 1: %s\n", line);
-		return -1;
-	}
-	*second = 0;
-	second += strlen(delimiter);
-	char *third = strstr(second, delimiter);
-	if (third == NULL) {
-		fprintf(stderr, "wrong format 2: %s\n", second);
-		return -1;
-	}
-	*third = 0;
-	third += strlen(delimiter);
-	if (!isnumeric(line) || !isnumeric(second) || !isnumeric(third)) {
-		fprintf(stderr, "wrong format 3: %s\t%s\t%s\n", line, second, third);
-		return -1;
-	}
-	long lfrom = atol(line);
-	long lto = atol(second);
-	assert(lfrom >= 0 && lfrom < MAX_VERTEX_ID);
-	assert(lto >= 0 && lto < MAX_VERTEX_ID);
-	vertex_id_t from = lfrom;
-	vertex_id_t to = lto;
-	edge_count c(atol(third));
-	e = edge<edge_count>(from, to, c);
-
+	struct edge_line res = parse_line(line);
+	if (!isdigit(res.data[0]))
+		throw format_error(std::string("the third entry isn't a number: ")
+				+ res.data);
+	edge_count c(atol(res.data.c_str()));
+	e = edge<edge_count>(res.from, res.to, c);
 	return 1;
 }
 
@@ -1145,25 +1165,8 @@ int parse_edge_list_line(char *line, edge<> &e)
 {
 	if (line[0] == '#')
 		return 0;
-	char *second = strstr(line, delimiter);
-	if (second == NULL) {
-		fprintf(stderr, "wrong format 1: %s\n", line);
-		return -1;
-	}
-	*second = 0;
-	second += strlen(delimiter);
-	if (!isnumeric(line) || !isnumeric(second)) {
-		fprintf(stderr, "wrong format 2: %s\t%s\n", line, second);
-		return -1;
-	}
-	long lfrom = atol(line);
-	long lto = atol(second);
-	assert(lfrom >= 0 && lfrom < MAX_VERTEX_ID);
-	assert(lto >= 0 && lto < MAX_VERTEX_ID);
-	vertex_id_t from = lfrom;
-	vertex_id_t to = lto;
-	e = edge<>(from, to);
-
+	struct edge_line res = parse_line(line);
+	e = edge<>(res.from, res.to);
 	return 1;
 }
 
@@ -1641,7 +1644,6 @@ void print_usage()
 	fprintf(stderr,
 			"el2al [options] adj_list_file index_file edge_list_files (or directories)\n");
 	fprintf(stderr, "-u: undirected graph\n");
-	fprintf(stderr, "-d delimiter: the delimiter to seperate the input edge list\n");
 	fprintf(stderr, "-v: verify the created adjacency list\n");
 	fprintf(stderr, "-t type: the type of edge data. Supported type: ");
 	for (int i = 0; i < type_map_size; i++) {
@@ -1684,15 +1686,11 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "ud:vt:mwT:W:Dr")) != -1) {
+	while ((opt = getopt(argc, argv, "uvt:mwT:W:Dr")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
 				directed = false;
-				break;
-			case 'd':
-				delimiter = optarg;
-				num_opts++;
 				break;
 			case 'v':
 				check_graph = true;
