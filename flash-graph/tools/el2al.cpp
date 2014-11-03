@@ -59,11 +59,6 @@ static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 const char *delimiter = "\t";
 
 bool decompress = false;
-#if 0
-bool compress = false;
-#endif
-bool simplify = false;
-bool print_graph = false;
 bool check_graph = false;
 // This flag indicates to add the reversed edges to the graph.
 bool reverse_edge = false;
@@ -185,8 +180,6 @@ public:
 
 	virtual void sort_edges() = 0;
 #if 0
-	virtual edge_graph<edge_count> *compress_edges() const = 0;
-	virtual edge_graph<edge_data_type> *simplify_edges() const = 0;
 	virtual void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part) const = 0;
@@ -661,8 +654,6 @@ public:
 	}
 
 #if 0
-	edge_graph<edge_count> *compress_edges() const;
-	edge_graph<edge_data_type> *simplify_edges() const;
 	void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part) const;
@@ -727,9 +718,6 @@ public:
 	}
 
 #if 0
-	edge_graph<edge_count> *compress_edges() const;
-	edge_graph<edge_data_type> *simplify_edges() const;
-
 	void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part) const;
@@ -747,61 +735,6 @@ public:
 		return num_edges;
 	}
 };
-
-#if 0
-template<class edge_data_type>
-edge_graph<edge_count> *
-undirected_edge_graph<edge_data_type>::compress_edges() const
-{
-	undirected_edge_graph<edge_count> *new_graph
-		= new undirected_edge_graph<edge_count>(true);
-	printf("before: %ld edges\n", get_num_edges());
-	if (!edges.empty()) {
-		vertex_id_t from = edges[0].get_from();
-		vertex_id_t to = edges[0].get_to();
-		int num_duplicates = 1;
-		for (size_t i = 1; i < edges.size(); i++) {
-			if (edges[i].get_from() == from && edges[i].get_to() == to) {
-				num_duplicates++;
-			}
-			else {
-				edge_count c(num_duplicates);
-				edge<edge_count> e(from, to, num_duplicates);
-				new_graph->add_edge(e);
-
-				num_duplicates = 1;
-				from = edges[i].get_from();
-				to = edges[i].get_to();
-			}
-		}
-		edge_count c(num_duplicates);
-		edge<edge_count> e(from, to, num_duplicates);
-		new_graph->add_edge(e);
-	}
-
-	printf("after: %ld edges\n", new_graph->get_num_edges());
-	return new_graph;
-}
-
-template<class edge_data_type>
-edge_graph<edge_data_type> *
-undirected_edge_graph<edge_data_type>::simplify_edges() const
-{
-	undirected_edge_graph<edge_data_type> *new_graph
-		= new undirected_edge_graph<edge_data_type>(false);
-	std::cout << "before: " << edges.size() << " edges\n";
-	if (!edges.empty()) {
-		new_graph->edges.push_back(edges[0]);
-		for (size_t i = 1; i < edges.size(); i++) {
-			if (edges[i].get_from() != new_graph->edges.back().get_from()
-					|| edges[i].get_to() != new_graph->edges.back().get_to())
-				new_graph->edges.push_back(edges[i]);
-		}
-	}
-	std::cout << "after: " << new_graph->edges.size() << " edges\n";
-	return new_graph;
-}
-#endif
 
 template<class edge_data_type>
 off_t undirected_edge_graph<edge_data_type>::add_edges(
@@ -1366,73 +1299,6 @@ public:
 	}
 };
 
-#if 0
-template<class edge_data_type>
-edge_graph<edge_count> *
-directed_edge_graph<edge_data_type>::compress_edges() const
-{
-	directed_edge_graph<edge_count> *new_graph
-		= new directed_edge_graph<edge_count>(true);
-	printf("before: %ld edges\n", get_num_edges());
-	if (!in_edges.empty()) {
-		vertex_id_t from = in_edges[0].get_from();
-		vertex_id_t to = in_edges[0].get_to();
-		int num_duplicates = 1;
-		for (size_t i = 1; i < in_edges.size(); i++) {
-			if (in_edges[i].get_from() == from && in_edges[i].get_to() == to) {
-				num_duplicates++;
-			}
-			else {
-				edge_count c(num_duplicates);
-				edge<edge_count> e(from, to, num_duplicates);
-				new_graph->add_edge(e);
-
-				num_duplicates = 1;
-				from = in_edges[i].get_from();
-				to = in_edges[i].get_to();
-			}
-		}
-		edge_count c(num_duplicates);
-		edge<edge_count> e(from, to, num_duplicates);
-		new_graph->add_edge(e);
-	}
-	new_graph->sort_edges();
-
-	printf("after: %ld edges\n", new_graph->get_num_edges());
-	return new_graph;
-}
-
-template<class edge_data_type>
-edge_graph<edge_data_type> *
-directed_edge_graph<edge_data_type>::simplify_edges() const
-{
-	directed_edge_graph<edge_data_type> *new_graph
-		= new directed_edge_graph<edge_data_type>(false);
-	std::cout << "before: " << in_edges.size() << " in-edges and "
-		<< out_edges.size() << " out-edges\n";
-	if (!in_edges.empty()) {
-		new_graph->in_edges.push_back(in_edges[0]);
-		for (size_t i = 1; i < in_edges.size(); i++) {
-			if (in_edges[i].get_from() != new_graph->in_edges.back().get_from()
-					|| in_edges[i].get_to() != new_graph->in_edges.back().get_to())
-				new_graph->in_edges.push_back(in_edges[i]);
-		}
-	}
-
-	if (!out_edges.empty()) {
-		new_graph->out_edges.push_back(out_edges[0]);
-		for (size_t i = 1; i < out_edges.size(); i++) {
-			if (out_edges[i].get_from() != new_graph->out_edges.back().get_from()
-					|| out_edges[i].get_to() != new_graph->out_edges.back().get_to())
-				new_graph->out_edges.push_back(out_edges[i]);
-		}
-	}
-	std::cout << "after: " << new_graph->in_edges.size() << " in-edges and "
-		<< new_graph->out_edges.size() << " out-edges\n";
-	return new_graph;
-}
-#endif
-
 template<class edge_data_type>
 void directed_edge_graph<edge_data_type>::read_out_edges(edge_stream_t &stream,
 		vertex_id_t until_id, std::vector<edge<edge_data_type> > &v_edges) const
@@ -1749,34 +1615,6 @@ edge_graph<edge_data_type> *par_load_edge_list_text(
 	return edge_g;
 }
 
-#if 0
-template<class edge_data_type = empty_data>
-graph *construct_graph_compressed(
-		const std::vector<std::string> &edge_list_files, bool directed)
-{
-	struct timeval start, end;
-	edge_graph<edge_data_type> *edge_g
-		= par_load_edge_list_text<edge_data_type>(edge_list_files,
-				true, directed);
-
-	gettimeofday(&start, NULL);
-	edge_g->sort_edges();
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
-
-	start = end;
-	size_t orig_num_edges = edge_g->get_num_edges();
-	edge_graph<edge_count> *new_edge_g = edge_g->compress_edges();
-	delete edge_g;
-	gettimeofday(&end, NULL);
-	printf("It takes %f seconds to compress edge list from %ld to %ld\n",
-			time_diff(start, end), orig_num_edges,
-			new_edge_g->get_num_edges());
-
-	return new_edge_g->create_disk_graph();
-}
-#endif
-
 template<class edge_data_type = empty_data>
 graph *construct_graph(
 		const std::vector<std::string> &edge_list_files,
@@ -1794,19 +1632,6 @@ graph *construct_graph(
 	gettimeofday(&end, NULL);
 	printf("It takes %f seconds to sort edge list\n", time_diff(start, end));
 
-#if 0
-	if (simplify) {
-		start = end;
-		size_t orig_num_edges = edge_g->get_num_edges();
-		edge_graph<edge_data_type> *new_edge_g = edge_g->simplify_edges();
-		delete edge_g;
-		edge_g = new_edge_g;
-		gettimeofday(&end, NULL);
-		printf("It takes %f seconds to remove duplicated edges from %ld to %ld\n",
-				time_diff(start, end), orig_num_edges, edge_g->get_num_edges());
-	}
-#endif
-
 	return edge_g->create_disk_graph();
 }
 
@@ -1817,8 +1642,6 @@ void print_usage()
 			"el2al [options] adj_list_file index_file edge_list_files (or directories)\n");
 	fprintf(stderr, "-u: undirected graph\n");
 	fprintf(stderr, "-d delimiter: the delimiter to seperate the input edge list\n");
-	fprintf(stderr, "-c: compress the graph (remove duplicated edges)\n");
-	fprintf(stderr, "-p: print adjacency list\n");
 	fprintf(stderr, "-v: verify the created adjacency list\n");
 	fprintf(stderr, "-t type: the type of edge data. Supported type: ");
 	for (int i = 0; i < type_map_size; i++) {
@@ -1827,7 +1650,6 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "-m: merge multiple edge lists into a single graph. \n");
 	fprintf(stderr, "-w: write the graph to a file\n");
-	fprintf(stderr, "-s: simplify a graph (remove duplicated edges)\n");
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
 	fprintf(stderr, "-W dir: the working directory\n");
 	fprintf(stderr, "-D: decompress data\n");
@@ -1840,34 +1662,16 @@ graph *construct_graph(const std::vector<std::string> &edge_list_files,
 	graph *g = NULL;
 	switch(edge_attr_type) {
 		case EDGE_COUNT:
-#if 0
-			if (compress)
-				g = construct_graph_compressed<edge_count>(
-						edge_list_files, directed);
-			else
-#endif
-				g = construct_graph<edge_count>(
-						edge_list_files, true, directed);
+			g = construct_graph<edge_count>(
+					edge_list_files, true, directed);
 			break;
 		case EDGE_TIMESTAMP:
-#if 0
-			if (compress)
-				g = construct_graph_compressed<ts_edge_data>(
-						edge_list_files, directed);
-			else
-#endif
-				g = construct_graph<ts_edge_data>(
-						edge_list_files, true, directed);
+			g = construct_graph<ts_edge_data>(
+					edge_list_files, true, directed);
 			break;
 		default:
-#if 0
-			if (compress)
-				g = construct_graph_compressed<>(edge_list_files,
-						directed);
-			else
-#endif
-				g = construct_graph<>(edge_list_files, false,
-						directed);
+			g = construct_graph<>(edge_list_files, false,
+					directed);
 	}
 	return g;
 }
@@ -1880,7 +1684,7 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "ud:cpvt:mwsT:W:Dr")) != -1) {
+	while ((opt = getopt(argc, argv, "ud:vt:mwT:W:Dr")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -1889,14 +1693,6 @@ int main(int argc, char *argv[])
 			case 'd':
 				delimiter = optarg;
 				num_opts++;
-				break;
-			case 'c':
-#if 0
-				compress = true;
-#endif
-				break;
-			case 'p':
-				print_graph = true;
 				break;
 			case 'v':
 				check_graph = true;
@@ -1910,9 +1706,6 @@ int main(int argc, char *argv[])
 				break;
 			case 'w':
 				write_graph = true;
-				break;
-			case 's':
-				simplify = true;
 				break;
 			case 'T':
 				num_threads = atoi(optarg);
@@ -1974,8 +1767,6 @@ int main(int argc, char *argv[])
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
-		if (print_graph)
-			g->print();
 #if 0
 		if (check_graph)
 			g->check_ext_graph(index_file, adjacency_list_file);
@@ -2007,8 +1798,6 @@ int main(int argc, char *argv[])
 			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 					g->get_num_vertices(), g->get_num_non_empty_vertices(),
 					g->get_num_edges());
-			if (print_graph)
-				g->print();
 #if 0
 			if (check_graph)
 				g->check_ext_graph(index_files[i], graph_files[i]);
