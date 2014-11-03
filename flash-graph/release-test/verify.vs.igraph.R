@@ -1,5 +1,5 @@
 require(igraph)
-library("FlashGraph")
+library("FlashGraphR")
 library("irlba")
 
 verify.cc <- function(fg.res, ig.res)

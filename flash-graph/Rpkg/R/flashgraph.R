@@ -2,34 +2,34 @@
 
 fg.set.conf <- function(conf.file)
 {
-	.Call("R_FG_destroy", PACKAGE="FlashGraph")
-	ret <- .Call("R_FG_init", conf.file, PACKAGE="FlashGraph")
+	.Call("R_FG_destroy", PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_init", conf.file, PACKAGE="FlashGraphR")
 }
 
 fg.set.log.level <- function(level)
 {
-	.Call("R_FG_set_log_level", level, PACKAGE="FlashGraph")
+	.Call("R_FG_set_log_level", level, PACKAGE="FlashGraphR")
 }
 
 fg.list.graphs <- function()
 {
-	.Call("R_FG_list_graphs", PACKAGE="FlashGraph")
+	.Call("R_FG_list_graphs", PACKAGE="FlashGraphR")
 }
 
 fg.exist.graph <- function(graph)
 {
-	.Call("R_FG_exist_graph", graph, PACKAGE="FlashGraph")
+	.Call("R_FG_exist_graph", graph, PACKAGE="FlashGraphR")
 }
 
 fg.get.params <- function(name)
 {
-	.Call("R_FG_get_params", name, PACKAGE="FlashGraph")
+	.Call("R_FG_get_params", name, PACKAGE="FlashGraphR")
 }
 
 fg.load.graph <- function(graph.name, graph.file, index.file)
 {
 	.Call("R_FG_load_graph", graph.name, graph.file, index.file,
-		  PACKAGE="FlashGraph")
+		  PACKAGE="FlashGraphR")
 }
 
 # The graph object has three members:
@@ -40,7 +40,7 @@ fg.load.graph <- function(graph.name, graph.file, index.file)
 fg.get.graph <- function(graph)
 {
 	stopifnot(fg.exist.graph(graph))
-	ret <- .Call("R_FG_get_graph_obj", graph, PACKAGE="FlashGraph")
+	ret <- .Call("R_FG_get_graph_obj", graph, PACKAGE="FlashGraphR")
 	structure(ret, class="fg")
 }
 
@@ -78,9 +78,9 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
 	if (mode == "weak")
-		.Call("R_FG_compute_wcc", graph, PACKAGE="FlashGraph")
+		.Call("R_FG_compute_wcc", graph, PACKAGE="FlashGraphR")
 	else if (mode == "strong")
-		.Call("R_FG_compute_scc", graph, PACKAGE="FlashGraph")
+		.Call("R_FG_compute_scc", graph, PACKAGE="FlashGraphR")
 	else
 		stop("a wrong mode")
 }
@@ -90,14 +90,14 @@ fg.transitivity <- function(graph)
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_transitivity", graph, PACKAGE="FlashGraph")
+	.Call("R_FG_compute_transitivity", graph, PACKAGE="FlashGraphR")
 }
 
 fg.degree <- function(graph, type="both")
 {
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_get_degree", graph, type, PACKAGE="FlashGraph")
+	.Call("R_FG_get_degree", graph, type, PACKAGE="FlashGraphR")
 }
 
 fg.page.rank <- function(graph, no.iters=1000, damping.factor=0.85)
@@ -106,7 +106,7 @@ fg.page.rank <- function(graph, no.iters=1000, damping.factor=0.85)
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
 	.Call("R_FG_compute_pagerank", graph, no.iters, damping.factor,
-		  PACKAGE="FlashGraph")
+		  PACKAGE="FlashGraphR")
 }
 
 fg.directed.triangles <- function(graph, type="cycle")
@@ -114,14 +114,14 @@ fg.directed.triangles <- function(graph, type="cycle")
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_directed_triangles", graph, type, PACKAGE="FlashGraph")
+	.Call("R_FG_compute_directed_triangles", graph, type, PACKAGE="FlashGraphR")
 }
 
 fg.undirected.triangles <- function(graph)
 {
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_compute_undirected_triangles", graph, PACKAGE="FlashGraph")
+	.Call("R_FG_compute_undirected_triangles", graph, PACKAGE="FlashGraphR")
 }
 
 fg.topK.scan <- function(graph, order=1, K=1)
@@ -129,7 +129,7 @@ fg.topK.scan <- function(graph, order=1, K=1)
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraph")
+	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraphR")
 }
 
 fg.local.scan <- function(graph, order=1)
@@ -137,7 +137,7 @@ fg.local.scan <- function(graph, order=1)
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraph")
+	.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraphR")
 }
 
 fg.coreness <- function(graph)
@@ -148,7 +148,7 @@ fg.coreness <- function(graph)
 	# FIXME set the right parameter.
 	k.start <- 1
 	k.end <- 0
-	.Call("R_FG_compute_kcore", graph, k.start, k.end, PACKAGE="FlashGraph")
+	.Call("R_FG_compute_kcore", graph, k.start, k.end, PACKAGE="FlashGraphR")
 }
 
 fg.overlap <- function(graph, vids)
@@ -156,7 +156,7 @@ fg.overlap <- function(graph, vids)
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_compute_overlap", graph, vids, PACKAGE="FlashGraph")
+	.Call("R_FG_compute_overlap", graph, vids, PACKAGE="FlashGraphR")
 }
 
 fg.fetch.subgraph <- function(graph, vertices)
@@ -164,7 +164,7 @@ fg.fetch.subgraph <- function(graph, vertices)
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 	edge.list = .Call("R_FG_fetch_subgraph", graph, vertices,
-					  PACKAGE="FlashGraph")
+					  PACKAGE="FlashGraphR")
 	dframe = data.frame(edge.list$src, edge.list$dst)
 	graph.data.frame(dframe, graph$directed)
 }
@@ -174,7 +174,7 @@ fg.diameter <- function(graph, directed=FALSE)
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
-	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashGraph")
+	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashGraphR")
 }
 
 fg.multiply <- function(graph, vec, transpose=FALSE)
@@ -182,7 +182,7 @@ fg.multiply <- function(graph, vec, transpose=FALSE)
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 #	stopifnot(graph$directed)
-	.Call("R_FG_multiply_v", graph, vec, transpose, PACKAGE="FlashGraph")
+	.Call("R_FG_multiply_v", graph, vec, transpose, PACKAGE="FlashGraphR")
 }
 
 fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
@@ -190,14 +190,14 @@ fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
 	stopifnot(!graph$directed)
 	stopifnot(class(graph) == "fg")
 	.Call("R_FG_eigen_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  PACKAGE="FlashGraph")
+		  PACKAGE="FlashGraphR")
 }
 
 fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
 {
 	stopifnot(class(graph) == "fg")
 	.Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  type, PACKAGE="FlashGraph")
+		  type, PACKAGE="FlashGraphR")
 }
 
 fg.spectral.clusters <- function(fg, num.clusters, which="adj", num.eigen=5, which.eigen="LM")
@@ -247,6 +247,6 @@ fg.spectral.clusters <- function(fg, num.clusters, which="adj", num.eigen=5, whi
 .onLoad <- function(libname, pkgname)
 {
 	library(Rcpp)
-	library.dynam("FlashGraph", pkgname, libname, local=FALSE);
-	.Call("R_FG_init", paste(pkgname, ".conf", sep=""), PACKAGE="FlashGraph")
+	library.dynam("FlashGraphR", pkgname, libname, local=FALSE);
+	.Call("R_FG_init", paste(pkgname, ".conf", sep=""), PACKAGE="FlashGraphR")
 }

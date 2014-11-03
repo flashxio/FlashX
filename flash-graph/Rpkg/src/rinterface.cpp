@@ -37,14 +37,14 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 #endif
 
 /*
- * A global configuration of FlashGraph.
+ * A global configuration of FlashGraphR.
  */
 static config_map::ptr configs;
 
 typedef std::unordered_map<std::string, FG_graph::ptr> graph_map_t;
 /*
- * This contains all graphs loaded to FlashGraph. When a graph is loaded
- * to FlashGraph, it may be in memory and may also be on SAFS.
+ * This contains all graphs loaded to FlashGraphR. When a graph is loaded
+ * to FlashGraphR, it may be in memory and may also be on SAFS.
  */
 static graph_map_t graphs;
 
@@ -81,7 +81,7 @@ static FG_graph::ptr R_FG_get_graph(SEXP pgraph)
 }
 
 /**
- * Initialize FlashGraph.
+ * Initialize FlashGraphR.
  */
 RcppExport SEXP R_FG_init(SEXP pconf)
 {
@@ -118,7 +118,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 }
 
 /**
- * Destroy FlashGraph
+ * Destroy FlashGraphR
  */
 RcppExport SEXP R_FG_destroy()
 {
@@ -226,7 +226,7 @@ RcppExport SEXP R_FG_get_params(SEXP psys)
 }
 
 /**
- * This test whether a graph has been loaded to FlashGraph.
+ * This test whether a graph has been loaded to FlashGraphR.
  */
 RcppExport SEXP R_FG_exist_graph(SEXP pgraph)
 {
@@ -269,7 +269,7 @@ static std::string extract_graph_name(const std::string &file_name)
 }
 
 /**
- * This lists all graphs that have been loaded to FlashGraph.
+ * This lists all graphs that have been loaded to FlashGraphR.
  */
 RcppExport SEXP R_FG_list_graphs()
 {
