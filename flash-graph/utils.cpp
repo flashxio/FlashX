@@ -812,6 +812,8 @@ public:
 
 	void add_vertices(const serial_subgraph &subg) {
 		const directed_serial_subgraph &d_subg = (const directed_serial_subgraph &) subg;
+		for (size_t i = 0; i < d_subg.get_num_vertices(); i++)
+			serial_graph::add_vertex(d_subg.get_vertex_info(i));
 		in_store.merge(d_subg.get_in_store());
 		out_store.merge(d_subg.get_out_store());
 	}
@@ -858,6 +860,8 @@ public:
 	void add_vertices(const serial_subgraph &subg) {
 		const undirected_serial_subgraph &u_subg
 			= (const undirected_serial_subgraph &) subg;
+		for (size_t i = 0; i < u_subg.get_num_vertices(); i++)
+			serial_graph::add_vertex(u_subg.get_vertex_info(i));
 		store.merge(u_subg.get_store());
 	}
 
