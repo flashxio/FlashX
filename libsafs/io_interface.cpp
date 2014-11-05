@@ -170,6 +170,8 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 #ifdef ENABLE_MEM_TRACE
 	init_mem_tracker();
 #endif
+	if (configs == NULL)
+		throw init_error("config map doesn't contain any options");
 	
 	params.init(configs->get_options());
 	params.print();
