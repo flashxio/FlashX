@@ -116,6 +116,11 @@ FG_graph::FG_graph(std::shared_ptr<in_mem_graph> graph_data,
 		std::shared_ptr<vertex_index> index_data,
 		const std::string &graph_name, config_map::ptr configs)
 {
+	try {
+		graph_engine::init_flash_graph(configs);
+	} catch (init_error &e) {
+		BOOST_LOG_TRIVIAL(error) << std::string("init FlashGraph ") + e.what();
+	}
 	this->graph_data = graph_data;
 	this->index_data = index_data;
 	this->configs = configs;
