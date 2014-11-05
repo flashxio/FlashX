@@ -91,6 +91,10 @@ public:
 	size_t get() const {
 		return value;
 	}
+
+	void reset() {
+		value = 0;
+	}
 } max_scan;
 
 typedef std::pair<vertex_id_t, size_t> vertex_scan;
@@ -143,6 +147,11 @@ public:
 		size_t ret = scans.size();
 		pthread_spin_unlock(&lock);
 		return ret;
+	}
+
+	void clear() {
+		sorted = false;
+		scans.clear();
 	}
 } known_scans;
 
@@ -657,6 +666,9 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex,
 		part_topK_scan_vertex>::create(fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
+
+	max_scan.reset();
+	known_scans.clear();
 
 	BOOST_LOG_TRIVIAL(info) << "scan statistics starts";
 	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
