@@ -26,12 +26,26 @@ fg.get.params <- function(name)
 	.Call("R_FG_get_params", name, PACKAGE="FlashGraphR")
 }
 
-fg.load.graph <- function(graph.name, graph.file, index.file)
+# This function loads a FlashGraphR object from the following sources:
+#	an edge list file in text,
+#	a FlashGraph adjacency list file (it requires a FlashGraph index file),
+#	an iGraph object
+fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
+						  directed=TRUE, nthreads=1)
 {
-	.Call("R_FG_load_graph", graph.name, graph.file, index.file,
-		  PACKAGE="FlashGraphR")
+	if (is.null(index.file)) {
+		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
+			  as.logical(directed), as.integer(nthreads), PACKAGE="FlashGraphR")
+		structure(ret, class="fg")
+	}
+	else {
+		ret <- .Call("R_FG_load_graph_adj", graph.name, graph, index.file,
+			  PACKAGE="FlashGraphR")
+		structure(ret, class="fg")
+	}
 }
 
+# This function returns a FlashGraphR object.
 # The graph object has three members:
 #	name: the graph name.
 #	cindex: whether there exists a compressed index for the graph.

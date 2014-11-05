@@ -27,6 +27,8 @@
 #include "matrix/matrix_eigensolver.h"
 
 #include "FGlib.h"
+#include "utils.h"
+#include "in_mem_storage.h"
 
 #if 0
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
@@ -367,7 +369,7 @@ static SEXP create_FGR_obj(const std::string &graph_name)
 	return ret;
 }
 
-RcppExport SEXP R_FG_load_graph(SEXP pgraph_name, SEXP pgraph_file,
+RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 		SEXP pindex_file)
 {
 	Rcpp::LogicalVector res(1);
@@ -375,6 +377,26 @@ RcppExport SEXP R_FG_load_graph(SEXP pgraph_name, SEXP pgraph_file,
 	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
 	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
+	// Return the FLashGraphR object.
+	return create_FGR_obj(graph_name);
+}
+
+RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
+		SEXP pdirected, SEXP pnthreads)
+{
+	Rcpp::LogicalVector res(1);
+	std::string graph_name = CHAR(STRING_ELT(pgraph_name, 0));
+	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
+	bool directed = INTEGER(pdirected)[0];
+	int num_threads = INTEGER(pnthreads)[0];
+
+	std::vector<std::string> edge_list_files(1);
+	edge_list_files[0] = graph_file;
+	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair = construct_mem_graph(
+		edge_list_files, graph_name, DEFAULT_TYPE, directed, num_threads);
+	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
+			configs);
 	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
