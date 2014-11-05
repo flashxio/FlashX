@@ -167,12 +167,12 @@ struct comp_in_edge<ts_edge_data> {
 #ifdef USE_STXXL
 
 template<class edge_data_type>
-class edge_vector: public stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result
+class stxxl_edge_vector: public stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result
 {
 public:
 	typedef typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result::const_iterator const_iterator;
-	void append(edge_vector<edge_data_type>::const_iterator it,
-			edge_vector<edge_data_type>::const_iterator end) {
+	void append(stxxl_edge_vector<edge_data_type>::const_iterator it,
+			stxxl_edge_vector<edge_data_type>::const_iterator end) {
 		for (; it != end; it++)
 			this->push_back(*it);
 	}
@@ -193,37 +193,36 @@ public:
 			stxxl::sort(this->begin(), this->end(), in_edge_comparator, SORT_BUF_SIZE);
 		}
 	}
+
+	class edge_stream
+	{
+		stxxl::stream::vector_iterator2stream<typename stxxl_edge_vector<edge_data_type>::const_iterator> strm;
+	public:
+		edge_stream(typename stxxl_edge_vector<edge_data_type>::const_iterator begin,
+				typename stxxl_edge_vector<edge_data_type>::const_iterator end): strm(
+					begin, end) {
+				}
+
+		bool empty() const {
+			return strm.empty();
+		}
+
+		edge<edge_data_type> operator*() const {
+			return *strm;
+		}
+
+		edge_stream &operator++() {
+			++strm;
+			return *this;
+		}
+
+		const edge<edge_data_type> *operator->() const {
+			return strm.operator->();
+		}
+	};
 };
 
-template<class edge_data_type>
-class edge_stream
-{
-	stxxl::stream::vector_iterator2stream<typename edge_vector<edge_data_type>::const_iterator> strm;
-public:
-	edge_stream(typename edge_vector<edge_data_type>::const_iterator begin,
-			typename edge_vector<edge_data_type>::const_iterator end): strm(
-				begin, end) {
-	}
-
-	bool empty() const {
-		return strm.empty();
-	}
-
-	edge<edge_data_type> operator*() const {
-		return *strm;
-	}
-
-	edge_stream<edge_data_type> &operator++() {
-		++strm;
-		return *this;
-	}
-
-	const edge<edge_data_type> *operator->() const {
-		return strm.operator->();
-	}
-};
-
-#else
+#endif
 
 template<class edge_data_type>
 class edge_vector: public std::vector<edge<edge_data_type> >
@@ -246,39 +245,36 @@ public:
 			__gnu_parallel::sort(this->begin(), this->end(), in_edge_comparator);
 		}
 	}
+
+	class edge_stream
+	{
+		typename edge_vector<edge_data_type>::const_iterator it;
+		typename edge_vector<edge_data_type>::const_iterator end;
+	public:
+		edge_stream(typename edge_vector<edge_data_type>::const_iterator begin,
+				typename edge_vector<edge_data_type>::const_iterator end) {
+			this->it = begin;
+			this->end = end;
+		}
+
+		bool empty() const {
+			return it == end;
+		}
+
+		edge<edge_data_type> operator*() const {
+			return *it;
+		}
+
+		edge_stream &operator++() {
+			it++;
+			return *this;
+		}
+
+		const edge<edge_data_type> *operator->() const {
+			return it.operator->();
+		}
+	};
 };
-
-template<class edge_data_type>
-class edge_stream
-{
-	typename edge_vector<edge_data_type>::const_iterator it;
-	typename edge_vector<edge_data_type>::const_iterator end;
-public:
-	edge_stream(typename edge_vector<edge_data_type>::const_iterator begin,
-			typename edge_vector<edge_data_type>::const_iterator end) {
-		this->it = begin;
-		this->end = end;
-	}
-
-	bool empty() const {
-		return it == end;
-	}
-
-	edge<edge_data_type> operator*() const {
-		return *it;
-	}
-
-	edge_stream<edge_data_type> &operator++() {
-		it++;
-		return *this;
-	}
-
-	const edge<edge_data_type> *operator->() const {
-		return it.operator->();
-	}
-};
-
-#endif
 
 void serial_graph::add_vertex(const in_mem_vertex &v)
 {
@@ -871,7 +867,7 @@ template<class edge_data_type = empty_data>
 class undirected_edge_graph: public edge_graph
 {
 	typedef std::vector<edge<edge_data_type> > edge_list_t;
-	typedef edge_stream<edge_data_type> edge_stream_t;
+	typedef typename edge_vector<edge_data_type>::edge_stream edge_stream_t;
 
 	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > edge_lists;
 
@@ -932,7 +928,7 @@ template<class edge_data_type = empty_data>
 class directed_edge_graph: public edge_graph
 {
 	typedef std::vector<edge<edge_data_type> > edge_list_t;
-	typedef edge_stream<edge_data_type> edge_stream_t;
+	typedef typename edge_vector<edge_data_type>::edge_stream edge_stream_t;
 
 	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > in_edge_lists;
 	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > out_edge_lists;
