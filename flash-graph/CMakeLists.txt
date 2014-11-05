@@ -24,6 +24,7 @@ add_library(graph STATIC
 	vertex_index_reader.cpp
 	worker_thread.cpp
 	vertex_program.cpp
+	utils.cpp
 )
 
 subdirs(graph-bfs
