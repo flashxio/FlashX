@@ -391,6 +391,12 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 	bool directed = INTEGER(pdirected)[0];
 	int num_threads = INTEGER(pnthreads)[0];
 
+	native_file f(graph_file);
+	if (!f.exist()) {
+		fprintf(stderr, "%s doesn't exist\n", graph_file.c_str());
+		return R_NilValue;
+	}
+
 	std::vector<std::string> edge_list_files(1);
 	edge_list_files[0] = graph_file;
 	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair = construct_mem_graph(
