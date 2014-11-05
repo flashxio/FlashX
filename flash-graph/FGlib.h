@@ -42,6 +42,9 @@ class FG_graph
 
 	FG_graph(const std::string &graph_file,
 			const std::string &index_file, config_map::ptr configs);
+	FG_graph(std::shared_ptr<in_mem_graph> graph_data,
+			std::shared_ptr<vertex_index> index_data,
+			const std::string &graph_name, config_map::ptr configs);
 public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
 
@@ -49,17 +52,33 @@ public:
 		graph_engine::destroy_flash_graph();
 	}
 
-/**
-  * \brief  Method to instantiate a graph object.
-  *         This method is used in lieu of explicitly calling a ctor.
-  *    
-  * \param graph_file Path to the graph file on disk.
-  * \param index_file Path to the graph index file on disk.
-  * \param configs Configuration in configuration file.
-*/
+	/**
+	 * \brief  Method to instantiate a graph object.
+	 *         This method is used in lieu of explicitly calling a ctor.
+	 *    
+	 * \param graph_file Path to the graph file in SAFS or in Linux filesystem.
+	 * \param index_file Path to the graph index file in SAFS or
+	 *        in Linux filesystem.
+	 * \param configs Configuration in configuration file.
+	 */
 	static ptr create(const std::string &graph_file,
 			const std::string &index_file, config_map::ptr configs) {
 		return ptr(new FG_graph(graph_file, index_file, configs));
+	}
+
+	/**
+	 * \brief  Method to instantiate a graph object.
+	 *         This method is used in lieu of explicitly calling a ctor.
+	 *    
+	 * \param graph_data The adjacency lists of the graph stored in memory.
+	 * \param index_data The index of the graph stored in memory.
+	 * \param graph_name The name of the graph.
+	 * \param configs Configuration in configuration file.
+	 */
+	static ptr create(std::shared_ptr<in_mem_graph> graph_data,
+			std::shared_ptr<vertex_index> index_data,
+			const std::string &graph_name, config_map::ptr configs) {
+		return ptr(new FG_graph(graph_data, index_data, graph_name, configs));
 	}
 
 	file_io_factory::shared_ptr get_graph_io_factory(int access_option);

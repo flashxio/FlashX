@@ -24,6 +24,7 @@
 #include "in_mem_storage.h"
 #include "vertex_index.h"
 #include "safs_file.h"
+#include "utils.h"
 
 static std::unordered_map<std::string, in_mem_graph::ptr> in_mem_graphs;
 static std::unordered_map<std::string, vertex_index::ptr> in_mem_indices;
@@ -109,6 +110,17 @@ FG_graph::FG_graph(const std::string &graph_file,
 		io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
 		io->access((char *) &header, 0, sizeof(header), READ);
 	}
+}
+
+FG_graph::FG_graph(std::shared_ptr<in_mem_graph> graph_data,
+		std::shared_ptr<vertex_index> index_data,
+		const std::string &graph_name, config_map::ptr configs)
+{
+	this->graph_data = graph_data;
+	this->index_data = index_data;
+	this->configs = configs;
+	graph_file = graph_name;
+	header = index_data->get_graph_header();
 }
 
 graph_engine::ptr FG_graph::create_engine(graph_index::ptr index)
