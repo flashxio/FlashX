@@ -382,6 +382,35 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 	return create_FGR_obj(graph_name);
 }
 
+/*
+ * Load a graph from edge lists in a data frame.
+ */
+RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
+		SEXP pdirected, SEXP pnthreads)
+{
+	Rcpp::LogicalVector res(1);
+	std::string graph_name = CHAR(STRING_ELT(pgraph_name, 0));
+	Rcpp::DataFrame edge_lists = Rcpp::DataFrame(pedge_lists);
+	bool directed = INTEGER(pdirected)[0];
+	int num_threads = INTEGER(pnthreads)[0];
+
+	Rcpp::IntegerVector from = edge_lists["from"];
+	Rcpp::IntegerVector to = edge_lists["to"];
+	std::vector<vertex_id_t> from_vec(from.begin(), from.end());
+	std::vector<vertex_id_t> to_vec(to.begin(), to.end());
+
+	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair = construct_mem_graph(
+		from_vec, to_vec, graph_name, DEFAULT_TYPE, directed, num_threads);
+	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
+			configs);
+	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
+	// Return the FLashGraphR object.
+	return create_FGR_obj(graph_name);
+}
+
+/*
+ * Load a graph from edge lists in a file.
+ */
 RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 		SEXP pdirected, SEXP pnthreads)
 {

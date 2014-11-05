@@ -2014,3 +2014,42 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
 			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index());
 }
+
+std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
+		const std::vector<vertex_id_t> from, const std::vector<vertex_id_t> to,
+		const std::string &graph_name, int edge_attr_type, bool directed,
+		int num_threads)
+{
+	if (from.size() != to.size()) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"from vector (%1%) and to vector (%2%) have different length")
+			% from.size() % to.size();
+		return std::pair<in_mem_graph::ptr, vertex_index::ptr>();
+	}
+
+	size_t num_edges = from.size();
+	std::vector<std::shared_ptr<edge_vector<empty_data> > > edge_lists(1);
+	edge_lists[0] = std::shared_ptr<edge_vector<empty_data> >(
+			new edge_vector<empty_data>());
+
+	edge_graph::ptr edge_g;
+	if (directed) {
+		for (size_t i = 0; i < num_edges; i++)
+			edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
+		edge_g = edge_graph::ptr(new directed_edge_graph<empty_data>(
+					edge_lists, false));
+	}
+	else {
+		for (size_t i = 0; i < num_edges; i++) {
+			// Undirected edge graph assumes each edge has been added twice,
+			// for both directions.
+			edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
+			edge_lists[0]->push_back(edge<empty_data>(to[i], from[i]));
+		}
+		edge_g = edge_graph::ptr(new undirected_edge_graph<empty_data>(
+					edge_lists, false));
+	}
+	serial_graph::ptr g = construct_graph(edge_g, std::string(), num_threads);;
+	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
+			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index());
+}

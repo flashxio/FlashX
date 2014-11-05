@@ -26,6 +26,7 @@
 #include <memory>
 
 #include "graph_file_header.h"
+#include "FG_basic_types.h"
 
 /**
  * The type of edge data.
@@ -155,6 +156,10 @@ serial_graph::ptr construct_graph(const std::vector<std::string> &edge_list_file
 		int num_threads);
 std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > construct_mem_graph(
 		const std::vector<std::string> &edge_list_files,
+		const std::string &graph_name, int edge_attr_type, bool directed,
+		int num_threads);
+std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > construct_mem_graph(
+		const std::vector<vertex_id_t> from, const std::vector<vertex_id_t> to,
 		const std::string &graph_name, int edge_attr_type, bool directed,
 		int num_threads);
 

@@ -39,12 +39,10 @@ verify.cc <- function(fg.res, ig.res)
 	stopifnot(sum(cmp.res) == length(cmp.res))
 }
 
-check.vectors <- function(name, v1, v2)
+check.vectors <- function(name, fg.res, ig.res)
 {
-	cmp.res <- v1 == v2
-	if (sum(cmp.res) != length(cmp.res)) {
-		cat(name, " fails the test\n");
-	}
+	cmp.res <- fg.res == ig.res
+	stopifnot(sum(cmp.res) == length(cmp.res))
 }
 
 test.directed <- function(fg, ig)
@@ -129,6 +127,12 @@ test.directed <- function(fg, ig)
 
 test.undirected <- function(fg, ig)
 {
+	# test degree
+	print("test undirected degree")
+	fg.res <- fg.degree(fg)
+	ig.res <- degree(ig)
+	check.vectors("degree_test", fg.res, ig.res)
+
 	# test triangles
 	print("test triangle counting on an undirected graph")
 	time1 <- system.time(fg.res <- fg.undirected.triangles(fg))
@@ -136,12 +140,6 @@ test.undirected <- function(fg, ig)
 	time2 <- system.time(ig.res <- adjacent.triangles(ig))
 	cat("IG:", time2, "\n")
 	check.vectors("undirected-triangle_test", fg.res, ig.res)
-
-	# test degree
-	print("test undirected degree")
-	fg.res <- fg.degree(fg)
-	ig.res <- degree(ig)
-	check.vectors("degree_test", fg.res, ig.res)
 
 	# test matrix multiplication.
 	print("A * x");
@@ -181,6 +179,12 @@ test.directed(fg, ig)
 fg.list.graphs()
 
 cat("\n\n\n")
+print("load a graph from igraph")
+fg <- fg.load.graph(ig)
+test.directed(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
 print("run in the SAFS mode")
 fg.set.conf("run_test.txt")
 fg <- fg.get.graph("wiki-Vote")
@@ -197,6 +201,12 @@ test.undirected(fg, ig)
 cat("\n\n\n")
 print("load a graph in edge lists")
 fg <- fg.load.graph("facebook_combined1.txt", directed=FALSE)
+test.undirected(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+print("load a graph from igraph")
+fg <- fg.load.graph(ig)
 test.undirected(fg, ig)
 fg.list.graphs()
 
