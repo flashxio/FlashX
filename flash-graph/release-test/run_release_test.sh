@@ -22,7 +22,7 @@ rm facebook.index*
 sed '/^#/d' facebook_combined.txt > facebook_combined1.txt
 rm facebook_combined.txt
 
-R --no-save < verify.vs.igraph.R
+OMP_NUM_THREADS=1 R --no-save < verify.vs.igraph.R
 
 rm wiki-Vote.adj*
 rm wiki-Vote.index*
