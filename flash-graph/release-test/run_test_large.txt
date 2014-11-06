@@ -1,0 +1,20 @@
+RAID_mapping=RAID0
+io_depth=64
+cache_size=1G
+num_nodes=4
+# change FG_TOP to the path of the top directory of FlashGraph.
+root_conf=/home/zhengda/parallel-cache/user-space-cache/flash-graph/release-test/large_data_files.txt
+max_num_pending_ios=5000
+#preload=
+num_vparts=1
+min_vpart_degree=100
+part_range_size_log=15
+max_processing_vertices=8000
+
+threads=32
+#print_io_stat=
+prof_file=graph.prof
+merge_reqs=
+in_mem_index=
+#in_mem_graph=
+serial_run=

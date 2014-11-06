@@ -1,0 +1,5 @@
+# change FG_TOP to the location of the top directory of FlashGraph.
+0:/mnt/ram0/safs_store/
+1:/mnt/ram1/safs_store/
+2:/mnt/ram2/safs_store/
+3:/mnt/ram3/safs_store/

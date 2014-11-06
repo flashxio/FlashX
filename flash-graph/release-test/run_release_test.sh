@@ -30,3 +30,5 @@ rm facebook.adj*
 rm facebook.index*
 rm wiki-Vote1.txt
 rm facebook_combined1.txt
+
+R --no-save < verify.large.R
