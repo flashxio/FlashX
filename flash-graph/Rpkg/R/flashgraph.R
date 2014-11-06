@@ -166,8 +166,12 @@ fg.local.scan <- function(graph, order=1)
 {
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
-	stopifnot(graph$directed)
-	.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraphR")
+	if (graph$directed) {
+		.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraphR")
+	}
+	else {
+		fg.undirected.triangles(graph) + fg.degree(graph)
+	}
 }
 
 fg.coreness <- function(graph)

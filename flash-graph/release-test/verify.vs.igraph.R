@@ -141,6 +141,14 @@ test.undirected <- function(fg, ig)
 	cat("IG:", time2, "\n")
 	check.vectors("undirected-triangle_test", fg.res, ig.res)
 
+	# test locality scan
+	print("test locality statistics")
+	time1 <- system.time(fg.res <- fg.local.scan(fg))
+	cat("FG:", time1, "\n")
+	time2 <- system.time(ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount))
+	cat("IG:", time2, "\n")
+	check.vectors("local-scan_test", fg.res, ig.res)
+
 	# test matrix multiplication.
 	print("A * x");
 	x <- runif(vcount(ig), 0, 1)
