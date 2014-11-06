@@ -734,10 +734,13 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	off_t prev_start_loc, curr_start_loc;
 	do {
 		prev_topK_scan = known_scans.get(topK - 1).second;
-		for (prev_start_loc = topK - 1; prev_start_loc > 0
-				&& known_scans.get(prev_start_loc).second == prev_topK_scan;
-				prev_start_loc--);
-		prev_start_loc++;
+		prev_start_loc = topK - 1;
+		if (topK > 1) {
+			for (; prev_start_loc > 0 && known_scans.get(
+						prev_start_loc).second == prev_topK_scan;
+					prev_start_loc--);
+			prev_start_loc++;
+		}
 		assert(known_scans.get(prev_start_loc).second == prev_topK_scan);
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("prev topK scan: %1%, prev loc: %2%")
@@ -758,10 +761,19 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		// than the previous topK. We should use the new topK and
 		// try again.
 		curr_topK_scan = known_scans.get(topK - 1).second;
-		for (curr_start_loc = topK - 1; curr_start_loc > 0
-				&& known_scans.get(curr_start_loc).second == curr_topK_scan;
-				curr_start_loc--);
-		curr_start_loc++;
+		curr_start_loc = topK - 1;
+		// It's possible that there are multiple locality stat which has
+		// the same value as the Kth largest one. This test is to see whether
+		// we found more locality stat larger than the previous Kth largest
+		// value.
+		// However, if K is 1, then we don't need to look into the locality
+		// stat before K because there are no previous locality stat before K.
+		if (topK > 1) {
+			for (; curr_start_loc > 0 && known_scans.get(
+						curr_start_loc).second == curr_topK_scan;
+					curr_start_loc--);
+			curr_start_loc++;
+		}
 		assert(known_scans.get(curr_start_loc).second == curr_topK_scan);
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("global max scan: %1%, topK scan: %2%, start loc: %3%")
