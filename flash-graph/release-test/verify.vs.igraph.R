@@ -180,7 +180,7 @@ fg.list.graphs()
 
 cat("\n\n\n")
 print("load a graph from igraph")
-fg <- fg.load.graph(ig)
+fg <- fg.load.igraph(ig)
 test.directed(fg, ig)
 fg.list.graphs()
 
@@ -206,7 +206,7 @@ fg.list.graphs()
 
 cat("\n\n\n")
 print("load a graph from igraph")
-fg <- fg.load.graph(ig)
+fg <- fg.load.igraph(ig)
 test.undirected(fg, ig)
 fg.list.graphs()
 

@@ -29,26 +29,10 @@ fg.get.params <- function(name)
 # This function loads a FlashGraphR object from the following sources:
 #	an edge list file in text,
 #	a FlashGraph adjacency list file (it requires a FlashGraph index file),
-#	an iGraph object
 fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 						  directed=TRUE, nthreads=1)
 {
-	if (is.igraph(graph)) {
-		if (!is.character(graph.name)) {
-			graph.name = paste("igraph-v", vcount(graph), "-e", ecount(graph),
-							 sep = "")
-		}
-		df <- get.data.frame(graph)
-		# iGraph is 1-based but FlashGraph is 0-based, so we need to subtract
-		# vertex IDs by 1.
-		df["from"] <- df["from"] - 1
-		df["to"] <- df["to"] - 1
-		ret <- .Call("R_FG_load_graph_el_df", graph.name, df,
-			  as.logical(is.directed(graph)), as.integer(nthreads),
-			  PACKAGE="FlashGraphR")
-		structure(ret, class="fg")
-	}
-	else if (is.null(index.file)) {
+	if (is.null(index.file)) {
 		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
 			  as.logical(directed), as.integer(nthreads), PACKAGE="FlashGraphR")
 		structure(ret, class="fg")
@@ -58,6 +42,23 @@ fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 			  PACKAGE="FlashGraphR")
 		structure(ret, class="fg")
 	}
+}
+
+# This function loads a FlashGraphR object from an iGraph object.
+fg.load.igraph <- function(graph, graph.name=paste("igraph-v", vcount(graph),
+												  "-e", ecount(graph), sep = ""),
+						  nthreads=1)
+{
+	stopifnot(is.igraph(graph))
+	df <- get.data.frame(graph)
+	# iGraph is 1-based but FlashGraph is 0-based, so we need to subtract
+	# vertex IDs by 1.
+	df["from"] <- df["from"] - 1
+	df["to"] <- df["to"] - 1
+	ret <- .Call("R_FG_load_graph_el_df", graph.name, df,
+				 as.logical(is.directed(graph)), as.integer(nthreads),
+				 PACKAGE="FlashGraphR")
+	structure(ret, class="fg")
 }
 
 # This function returns a FlashGraphR object.
