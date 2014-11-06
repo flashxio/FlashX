@@ -28,7 +28,9 @@
 #ifdef USE_STXXL
 #include <stxxl.h>
 #endif
+#if defined(_OPENMP)
 #include <parallel/algorithm>
+#endif
 
 #include "thread.h"
 #include "native_file.h"
@@ -238,11 +240,19 @@ public:
 	void sort(bool out_edge) {
 		if (out_edge) {
 			comp_edge<edge_data_type> edge_comparator;
+#if defined(_OPENMP)
 			__gnu_parallel::sort(this->begin(), this->end(), edge_comparator);
+#else
+			std::sort(this->begin(), this->end(), edge_comparator);
+#endif
 		}
 		else {
 			comp_in_edge<edge_data_type> in_edge_comparator;
+#if defined(_OPENMP)
 			__gnu_parallel::sort(this->begin(), this->end(), in_edge_comparator);
+#else
+			std::sort(this->begin(), this->end(), in_edge_comparator);
+#endif
 		}
 	}
 
