@@ -304,11 +304,11 @@ void serial_graph::add_vertex(const in_mem_vertex &v)
 	index->add_vertex(v);
 }
 
-vertex_index::ptr serial_graph::dump_index() const
+vertex_index::ptr serial_graph::dump_index(bool compressed) const
 {
 	graph_header header(get_graph_type(), this->get_num_vertices(),
 			this->get_num_edges(), this->get_edge_data_size());
-	return index->dump(header);
+	return index->dump(header, compressed);
 }
 
 serial_graph::~serial_graph()
@@ -1217,7 +1217,7 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 }
 
 void disk_serial_graph::dump(const std::string &index_file,
-		const std::string &graph_file)
+		const std::string &graph_file, bool compressed_index)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -1231,7 +1231,7 @@ void disk_serial_graph::dump(const std::string &index_file,
 	start = end;
 	graph_header header(get_graph_type(), this->get_num_vertices(),
 			this->get_num_edges(), this->get_edge_data_size());
-	get_index().dump(index_file, header);
+	get_index().dump(index_file, header, compressed_index);
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"It takes %1% seconds to dump the index") % time_diff(start, end);
@@ -1318,8 +1318,8 @@ std::unique_ptr<char[]> gz_graph_file_io::read_edge_list_text(
 {
 	off_t begin = curr;
 	off_t end = begin + std::min(wanted_bytes, get_num_remaining_bytes());
-	for (; end < size && data[end] != '\n'; end++);
-	if (end == size)
+	for (; (size_t) end < size && data[end] != '\n'; end++);
+	if ((size_t) end == size)
 		curr = end;
 	else
 		curr = end + 1;
@@ -2090,7 +2090,7 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 	serial_graph::ptr g = construct_graph(edge_list_files, edge_attr_type,
 			directed, std::string(), nthreads);
 	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
-			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index());
+			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index(true));
 }
 
 std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
@@ -2129,5 +2129,5 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 	}
 	serial_graph::ptr g = construct_graph(edge_g, std::string(), num_threads);;
 	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
-			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index());
+			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index(true));
 }

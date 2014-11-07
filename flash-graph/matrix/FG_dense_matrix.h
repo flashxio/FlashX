@@ -483,6 +483,7 @@ public:
 					this->get_num_cols(), this->get_num_rows()));
 	}
 
+#if 0
 	graph::ptr conv2graph_wideM() const {
 		// TODO we can generate an undirected graph for a symmetric matrix.
 		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
@@ -545,6 +546,7 @@ public:
 		else
 			return conv2graph_wideM();
 	}
+#endif
 };
 
 #endif

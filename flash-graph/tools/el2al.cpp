@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
 		if (write_graph) {
 			assert(!file_exist(adjacency_list_file));
 			assert(!file_exist(index_file));
-			g->dump(index_file, adjacency_list_file);
+			g->dump(index_file, adjacency_list_file, true);
 		}
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
 			if (write_graph) {
 				assert(!file_exist(graph_files[i]));
 				assert(!file_exist(index_files[i]));
-				g->dump(index_files[i], graph_files[i]);
+				g->dump(index_files[i], graph_files[i], true);
 			}
 			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 					g->get_num_vertices(), g->get_num_non_empty_vertices(),

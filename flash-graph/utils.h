@@ -96,7 +96,7 @@ public:
 		return *index;
 	}
 
-	std::shared_ptr<vertex_index> dump_index() const;
+	std::shared_ptr<vertex_index> dump_index(bool compressed) const;
 
 	virtual graph_type get_graph_type() const = 0;
 	virtual void add_vertices(const serial_subgraph &subg) = 0;
@@ -143,7 +143,8 @@ public:
 
 	virtual void check_ext_graph(const edge_graph &edge_g,
 			const std::string &index_file, const std::string &adj_file) const = 0;
-	void dump(const std::string &index_file, const std::string &graph_file);
+	void dump(const std::string &index_file, const std::string &graph_file,
+			bool compressed_index);
 	virtual void finalize_graph_file(const std::string &adj_file) = 0;
 };
 

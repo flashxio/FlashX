@@ -215,6 +215,7 @@ inline graph::ptr in_mem_subgraph::create(graph_type type, bool has_data)
 size_t read_edge_list_text(const std::string &file,
 		std::vector<edge<> > &edges);
 
+#if 0
 template<class edge_data_type = empty_data>
 class undirected_graph: public graph
 {
@@ -297,6 +298,7 @@ public:
 		ABORT_MSG("check_ext_graph isn't implemented");
 	}
 };
+#endif
 
 template<class edge_data_type>
 void check_vertex(const in_mem_directed_vertex<edge_data_type> &in_v,
@@ -331,6 +333,7 @@ void check_vertex(const in_mem_directed_vertex<edge_data_type> &in_v,
 	TEST(out_it2 == out_end2);
 }
 
+#if 0
 template<class edge_data_type = empty_data>
 class directed_graph: public graph
 {
@@ -589,6 +592,7 @@ public:
 		fclose(f);
 	}
 };
+#endif
 
 static inline void unique_merge(const std::vector<vertex_id_t> &v1,
 		const std::vector<vertex_id_t> &v2, std::vector<vertex_id_t> &v)
