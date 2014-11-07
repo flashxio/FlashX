@@ -26,9 +26,6 @@
 #include "safs_file.h"
 #include "utils.h"
 
-static std::unordered_map<std::string, in_mem_graph::ptr> in_mem_graphs;
-static std::unordered_map<std::string, vertex_index::ptr> in_mem_indices;
-
 FG_graph::FG_graph(const std::string &graph_file,
 		const std::string &index_file, config_map::ptr configs)
 {
@@ -64,44 +61,22 @@ FG_graph::FG_graph(const std::string &graph_file,
 		exist_in_safs = safs_graph.exist() && safs_index.exist();
 	}
 
-	std::unordered_map<std::string, in_mem_graph::ptr>::const_iterator git
-		= in_mem_graphs.find(graph_file);
-	if (git != in_mem_graphs.end()) {
-		assert(git->second);
-		graph_data = git->second;
-	}
-	else if (graph_conf.use_in_mem_graph() && exist_in_safs) {
+	if (graph_conf.use_in_mem_graph() && exist_in_safs)
 		graph_data = in_mem_graph::load_safs_graph(graph_file);
-		in_mem_graphs.insert(std::pair<std::string, in_mem_graph::ptr>(
-					graph_file, graph_data));
-	}
 	else if (!exist_in_safs) {
 		// If we can't initialize SAFS, we assume the graph file is
 		// in the local filesystem.
 		graph_data = in_mem_graph::load_graph(graph_file);
-		in_mem_graphs.insert(std::pair<std::string, in_mem_graph::ptr>(
-					graph_file, graph_data));
 	}
 
-	std::unordered_map<std::string, vertex_index::ptr>::const_iterator iit
-		= in_mem_indices.find(index_file);
-	if (iit != in_mem_indices.end()) {
-		assert(iit->second);
-		index_data = iit->second;
-		header = index_data->get_graph_header();
-	}
-	else if (graph_conf.use_in_mem_index() && exist_in_safs) {
+	if (graph_conf.use_in_mem_index() && exist_in_safs) {
 		index_data = vertex_index::safs_load(index_file);
-		in_mem_indices.insert(std::pair<std::string, vertex_index::ptr>(
-					index_file, index_data));
 		header = index_data->get_graph_header();
 	}
 	else if (!exist_in_safs) {
 		// If we can't initialize SAFS, we assume the index file is
 		// in the local filesystem.
 		index_data = vertex_index::load(index_file);
-		in_mem_indices.insert(std::pair<std::string, vertex_index::ptr>(
-					index_file, index_data));
 		header = index_data->get_graph_header();
 	}
 	else {
