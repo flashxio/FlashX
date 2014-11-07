@@ -8,6 +8,14 @@ set (FlashGraph_VERSION_MINOR 1)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.6.3")
+		message(FATAL_ERROR "Insufficient gcc version")
+	endif()
+else()
+	message(FATAL_ERROR "We require GCC")
+endif()
+
 find_package(Boost COMPONENTS system filesystem	REQUIRED)
 find_package(Threads REQUIRED)
 find_package(LibNuma REQUIRED)
