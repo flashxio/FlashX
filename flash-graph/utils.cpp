@@ -46,7 +46,6 @@ static const size_t SORT_BUF_SIZE = 1024 * 1024 * 1024;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 
 static int num_threads = 1;
-static bool decompress = false;
 
 static struct timeval start_time;
 
@@ -65,6 +64,14 @@ public:
 		return msg.c_str();
 	}
 };
+
+static bool is_compressed(const std::string &file_name)
+{
+	size_t pos = file_name.rfind(".gz");
+	if (pos == std::string::npos)
+		return false;
+	return pos + 3 == file_name.length();
+}
 
 template<class edge_data_type>
 struct comp_edge {
@@ -1237,10 +1244,30 @@ edge_graph::ptr par_load_edge_list_text(
 
 class graph_file_io
 {
+public:
+	typedef std::shared_ptr<graph_file_io> ptr;
+
+	virtual ~graph_file_io() {
+	}
+
+	/**
+	 * It read a text of an edge list roughly the size of the wanted bytes.
+	 * The returned text may be a little more than the wanted bytes, but
+	 * it's guaranteed that all lines are complete.
+	 * The returned string ends with '\0'.
+	 */
+	virtual std::unique_ptr<char[]> read_edge_list_text(const size_t wanted_bytes,
+			size_t &read_bytes) = 0;
+
+	virtual size_t get_num_remaining_bytes() const = 0;
+};
+
+class text_graph_file_io: public graph_file_io
+{
 	FILE *f;
 	ssize_t file_size;
 public:
-	graph_file_io(const std::string file) {
+	text_graph_file_io(const std::string file) {
 		f = fopen(file.c_str(), "r");
 		if (f == NULL)
 			ABORT_MSG(boost::format("fail to open %1%: %2%")
@@ -1249,7 +1276,7 @@ public:
 		file_size = local_f.get_size();
 	}
 
-	~graph_file_io() {
+	~text_graph_file_io() {
 		if (f)
 			fclose(f);
 	}
@@ -1263,13 +1290,50 @@ public:
 	}
 };
 
-/**
- * It read a text of an edge list roughly the size of the wanted bytes.
- * The returned text may be a little more than the wanted bytes, but
- * it's guaranteed that all lines are complete.
- * The returned string ends with '\0'.
- */
-std::unique_ptr<char[]> graph_file_io::read_edge_list_text(
+static std::unique_ptr<char[]> read_gz_file(const std::string &file_name,
+		size_t &size);
+
+class gz_graph_file_io: public graph_file_io
+{
+	std::unique_ptr<char[]> data;
+	size_t size;
+	off_t curr;
+public:
+	gz_graph_file_io(const std::string file) {
+		data = read_gz_file(file, size);
+		printf("the edge list file has %ld bytes\n", size);
+		curr = 0;
+	}
+
+	std::unique_ptr<char[]> read_edge_list_text(const size_t wanted_bytes,
+			size_t &read_bytes);
+
+	size_t get_num_remaining_bytes() const {
+		return size - curr;
+	}
+};
+
+std::unique_ptr<char[]> gz_graph_file_io::read_edge_list_text(
+		const size_t wanted_bytes, size_t &read_bytes)
+{
+	off_t begin = curr;
+	off_t end = begin + std::min(wanted_bytes, get_num_remaining_bytes());
+	for (; end < size && data[end] != '\n'; end++);
+	if (end == size)
+		curr = end;
+	else
+		curr = end + 1;
+	read_bytes = curr - begin;
+
+	// The line buffer must end with '\0'.
+	char *line_buf = new char[read_bytes + 1];
+	memcpy(line_buf, data.get() + begin, read_bytes);
+	line_buf[read_bytes] = 0;
+
+	return std::unique_ptr<char[]>(line_buf);
+}
+
+std::unique_ptr<char[]> text_graph_file_io::read_edge_list_text(
 		const size_t wanted_bytes, size_t &read_bytes)
 {
 	off_t curr_off = ftell(f);
@@ -1529,7 +1593,7 @@ public:
 	void run() {
 		size_t size =  0;
 		std::unique_ptr<char[]> data;
-		if (decompress)
+		if (is_compressed(file_name))
 			data = read_gz_file(file_name, size);
 		else
 			data = read_file(file_name, size);
@@ -1909,11 +1973,15 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 		const std::string file = files[0];
 		BOOST_LOG_TRIVIAL(info) << (std::string(
 					"start to read the edge list from ") + file.c_str());
-		graph_file_io io(file);
-		while (io.get_num_remaining_bytes() > 0) {
+		graph_file_io::ptr io;
+		if (is_compressed(file))
+			io = graph_file_io::ptr(new gz_graph_file_io(file));
+		else
+			io = graph_file_io::ptr(new text_graph_file_io(file));
+		while (io->get_num_remaining_bytes() > 0) {
 			size_t size = 0;
 			thread_task *task = new text_edge_task<edge_data_type>(
-					io.read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size),
+					io->read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size),
 					size, directed);
 			threads[thread_no % num_threads]->add_task(task);
 			thread_no++;
