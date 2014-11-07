@@ -149,6 +149,19 @@ test.undirected <- function(fg, ig)
 	cat("IG:", time2, "\n")
 	check.vectors("local-scan_test", fg.res, ig.res)
 
+	# test transitivity
+	print("test local transitivity")
+	fg.res <- fg.transitivity(fg, type="local")
+	ig.res <- transitivity(ig, type="local")
+	fg.res[is.nan(fg.res)] <- 0
+	ig.res[is.nan(ig.res)] <- 0
+	check.vectors("local transitivity", fg.res, ig.res)
+
+	print("test global transitivity")
+	fg.res <- fg.transitivity(fg, type="global")
+	ig.res <- transitivity(ig, type="global")
+	stopifnot(fg.res == ig.res)
+
 	# test matrix multiplication.
 	print("A * x");
 	x <- runif(vcount(ig), 0, 1)

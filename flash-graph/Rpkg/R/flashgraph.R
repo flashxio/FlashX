@@ -174,6 +174,29 @@ fg.local.scan <- function(graph, order=1)
 	}
 }
 
+fg.transitivity <- function(graph, type=c("global", "local"))
+{
+	stopifnot(graph != NULL)
+	stopifnot(class(graph) == "fg")
+	deg <- fg.degree(graph)
+	if (type == "local") {
+		if (graph$directed) {
+			(fg.local.scan(graph) - deg) / (deg * (deg - 1))
+		}
+		else {
+			2 * fg.undirected.triangles(graph) / (deg * (deg - 1))
+		}
+	}
+	else {
+		if (graph$directed) {
+			sum(fg.local.scan(graph) - deg) / sum(deg * (deg - 1))
+		}
+		else {
+			2 * sum(fg.undirected.triangles(graph)) / sum(deg * (deg - 1))
+		}
+	}
+}
+
 fg.coreness <- function(graph)
 {
 	stopifnot(graph != NULL)
