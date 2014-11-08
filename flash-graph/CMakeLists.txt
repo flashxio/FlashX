@@ -10,7 +10,6 @@ endif()
 
 add_library(graph STATIC
 	FGlib.cpp
-	graph.cpp
 	graph_engine.cpp
 	in_mem_storage.cpp
 	load_balancer.cpp

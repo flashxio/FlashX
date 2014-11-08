@@ -335,37 +335,6 @@ public:
 		assert(row < this->get_num_rows());
 		return this->matrix_store.get(row);
 	}
-
-	graph::ptr conv2graph() const {
-    assert(0);
-#if 0
-		// TODO we can generate an undirected graph for a symmetric matrix.
-		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
-		for (size_t i = 0; i < this->get_num_rows(); i++) {
-			in_mem_directed_vertex<T> v(i, true);
-			for (size_t j = 0; j < this->get_num_cols(); j++) {
-				edge<T> e(i, j, this->get(i, j));
-				v.add_out_edge(e);
-			}
-			for (size_t j = 0; j < this->get_num_rows(); j++) {
-				edge<T> e(j, i, this->get(j, i));
-				v.add_in_edge(e);
-			}
-			g->add_vertex(v);
-		}
-		// There are more columns than rows in the matrix.
-		for (size_t i = this->get_num_rows(); i < this->get_num_cols(); i++) {
-			in_mem_directed_vertex<T> v(i, true);
-			for (size_t j = 0; j < this->get_num_rows(); j++) {
-				edge<T> e(j, i, this->get(j, i));
-				v.add_in_edge(e);
-			}
-			g->add_vertex(v);
-		}
-
-		return g;
-#endif
-	}
   
   /**
     * \brief Assign all values in the matrix a single value
@@ -482,71 +451,6 @@ public:
 					this->matrix_store.get_matrix().transpose(),
 					this->get_num_cols(), this->get_num_rows()));
 	}
-
-#if 0
-	graph::ptr conv2graph_wideM() const {
-		// TODO we can generate an undirected graph for a symmetric matrix.
-		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
-		for (size_t i = 0; i < this->get_num_rows(); i++) {
-			in_mem_directed_vertex<T> v(i, true);
-			for (size_t j = 0; j < this->get_num_cols(); j++) {
-				edge<T> e(i, j, this->get(i, j));
-				v.add_out_edge(e);
-			}
-			for (size_t j = 0; j < this->get_num_rows(); j++) {
-				edge<T> e(j, i, this->get(j, i));
-				v.add_in_edge(e);
-			}
-			g->add_vertex(v);
-		}
-		// There are more columns than rows in the matrix.
-		for (size_t i = this->get_num_rows(); i < this->get_num_cols(); i++) {
-			in_mem_directed_vertex<T> v(i, true);
-			for (size_t j = 0; j < this->get_num_rows(); j++) {
-				edge<T> e(j, i, this->get(j, i));
-				v.add_in_edge(e);
-			}
-			g->add_vertex(v);
-		}
-
-		return g;
-	}
-
-	graph::ptr conv2graph_tallM() const {
-		// TODO we can generate an undirected graph for a symmetric matrix.
-		typename directed_graph<T>::ptr g = directed_graph<T>::create(true);
-		for (size_t i = 0; i < this->get_num_cols(); i++) {
-			in_mem_directed_vertex<T> v(i, true);
-			for (size_t j = 0; j < this->get_num_cols(); j++) {
-				edge<T> e(i, j, this->get(i, j));
-				v.add_out_edge(e);
-			}
-			for (size_t j = 0; j < this->get_num_rows(); j++) {
-				edge<T> e(j, i, this->get(j, i));
-				v.add_in_edge(e);
-			}
-			g->add_vertex(v);
-		}
-		// There are more rows than cols in the matrix.
-		for (size_t i = this->get_num_cols(); i < this->get_num_rows(); i++) {
-			in_mem_directed_vertex<T> v(i, true);
-			for (size_t j = 0; j < this->get_num_cols(); j++) {
-				edge<T> e(i, j, this->get(i, j));
-				v.add_out_edge(e);
-			}
-			g->add_vertex(v);
-		}
-
-		return g;
-	}
-
-	graph::ptr conv2graph() const {
-		if (this->get_num_rows() > this->get_num_cols())
-			return conv2graph_tallM();
-		else
-			return conv2graph_wideM();
-	}
-#endif
 };
 
 #endif

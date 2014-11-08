@@ -1,6 +1,6 @@
 project (FlashGraph)
 
-add_executable(el2al el2al.cpp ext_mem_vertex_iterator.cpp)
+add_executable(el2al el2al.cpp)
 add_executable(rmat-gen rmat-gen.cpp)
 # ext_mem_vertex_iterator.cpp
 
