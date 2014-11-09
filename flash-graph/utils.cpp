@@ -26,6 +26,7 @@
 #include <boost/foreach.hpp>
 #define USE_STXXL
 #ifdef USE_STXXL
+#define STXXL_PARALLEL_MODE_EXPLICIT
 #include <stxxl.h>
 #endif
 #if defined(_OPENMP)

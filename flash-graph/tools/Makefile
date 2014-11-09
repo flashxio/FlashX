@@ -21,7 +21,7 @@ CC = gcc
 CXX = g++
 OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS) -lz
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. -DSTXXL_PARALLEL_MODE_EXPLICIT $(OMP_FLAG)
+CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
 all: el2al rmat-gen graph-stat
 
