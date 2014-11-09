@@ -1548,7 +1548,7 @@ public:
 	virtual std::unique_ptr<char[]> read_edge_list_text(const size_t wanted_bytes,
 			size_t &read_bytes) = 0;
 
-	virtual size_t get_num_remaining_bytes() const = 0;
+	virtual bool eof() const = 0;
 };
 
 class text_graph_file_io: public graph_file_io
@@ -1573,53 +1573,87 @@ public:
 	std::unique_ptr<char[]> read_edge_list_text(const size_t wanted_bytes,
 			size_t &read_bytes);
 
-	size_t get_num_remaining_bytes() const {
+	bool eof() const {
 		off_t curr_off = ftell(f);
-		return file_size - curr_off;
+		return file_size - curr_off == 0;
 	}
 };
 
-static std::unique_ptr<char[]> read_gz_file(const std::string &file_name,
-		size_t &size);
-
 class gz_graph_file_io: public graph_file_io
 {
-	std::unique_ptr<char[]> data;
-	size_t size;
-	off_t curr;
+	std::vector<char> prev_buf;
+	size_t prev_buf_bytes;
+
+	gzFile f;
 public:
 	gz_graph_file_io(const std::string file) {
-		data = read_gz_file(file, size);
-		printf("the edge list file has %ld bytes\n", size);
-		curr = 0;
+		BOOST_LOG_TRIVIAL(info) << (std::string("read gz file: ") + file);
+		f = gzopen(file.c_str(), "rb");
+		prev_buf_bytes = 0;
+		prev_buf.resize(PAGE_SIZE);
+	}
+
+	~gz_graph_file_io() {
+		gzclose(f);
 	}
 
 	std::unique_ptr<char[]> read_edge_list_text(const size_t wanted_bytes,
 			size_t &read_bytes);
 
-	size_t get_num_remaining_bytes() const {
-		return size - curr;
+	bool eof() const {
+		return gzeof(f) && prev_buf_bytes == 0;
 	}
 };
 
 std::unique_ptr<char[]> gz_graph_file_io::read_edge_list_text(
-		const size_t wanted_bytes, size_t &read_bytes)
+		const size_t wanted_bytes1, size_t &read_bytes)
 {
-	off_t begin = curr;
-	off_t end = begin + std::min(wanted_bytes, get_num_remaining_bytes());
-	for (; (size_t) end < size && data[end] != '\n'; end++);
-	if ((size_t) end == size)
-		curr = end;
-	else
-		curr = end + 1;
-	read_bytes = curr - begin;
+	read_bytes = 0;
+	size_t wanted_bytes = wanted_bytes1;
+	size_t buf_size = wanted_bytes + PAGE_SIZE;
+	char *buf = new char[buf_size];
+	std::unique_ptr<char[]> ret_buf(buf);
+	if (prev_buf_bytes > 0) {
+		memcpy(buf, prev_buf.data(), prev_buf_bytes);
+		buf += prev_buf_bytes;
+		read_bytes += prev_buf_bytes;
+		wanted_bytes -= prev_buf_bytes;
+		prev_buf_bytes = 0;
+	}
 
+	if (!gzeof(f)) {
+		int ret = gzread(f, buf, wanted_bytes + PAGE_SIZE);
+		printf("want %ld bytes, get %d bytes\n", wanted_bytes + PAGE_SIZE, ret);
+		if (ret <= 0) {
+			if (ret < 0 || !gzeof(f)) {
+				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
+				exit(1);
+			}
+		}
+
+		if ((size_t) ret > wanted_bytes) {
+			int i = 0;
+			int over_read = ret - wanted_bytes;
+			for (; i < over_read; i++) {
+				if (buf[wanted_bytes + i] == '\n') {
+					i++;
+					break;
+				}
+			}
+			read_bytes += wanted_bytes + i;
+			buf += wanted_bytes + i;
+
+			prev_buf_bytes = over_read - i;
+			assert(prev_buf_bytes <= PAGE_SIZE);
+			memcpy(prev_buf.data(), buf, prev_buf_bytes);
+		}
+		else
+			read_bytes += ret;
+	}
 	// The line buffer must end with '\0'.
-	char *line_buf = new char[read_bytes + 1];
-	memcpy(line_buf, data.get() + begin, read_bytes);
-	line_buf[read_bytes] = 0;
-
-	return std::unique_ptr<char[]>(line_buf);
+	assert(read_bytes < buf_size);
+	ret_buf[read_bytes] = 0;
+	return ret_buf;
 }
 
 std::unique_ptr<char[]> text_graph_file_io::read_edge_list_text(
@@ -1818,6 +1852,7 @@ size_t parse_edge_list_text(char *line_buf, size_t size,
 	char *line = line_buf;
 	size_t num_edges = 0;
 	while ((line_end = strchr(line, '\n'))) {
+		assert(line_end - line_buf <= (ssize_t) size);
 		*line_end = 0;
 		if (*(line_end - 1) == '\r')
 			*(line_end - 1) = 0;
@@ -1827,7 +1862,6 @@ size_t parse_edge_list_text(char *line_buf, size_t size,
 			edges.push_back(e);
 		num_edges += num;
 		line = line_end + 1;
-		assert(line - line_end <= (ssize_t) size);
 	}
 	if (line - line_buf < (ssize_t) size) {
 		edge<edge_data_type> e;
@@ -2267,7 +2301,7 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 			io = graph_file_io::ptr(new gz_graph_file_io(file));
 		else
 			io = graph_file_io::ptr(new text_graph_file_io(file));
-		while (io->get_num_remaining_bytes() > 0) {
+		while (!io->eof()) {
 			size_t size = 0;
 			thread_task *task = new text_edge_task<edge_data_type>(
 					io->read_edge_list_text(EDGE_LIST_BLOCK_SIZE, size),
