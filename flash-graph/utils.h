@@ -149,7 +149,7 @@ public:
 };
 
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
-		int edge_attr_type, bool directed, int num_threads);
+		int edge_attr_type, bool directed, int num_threads, bool in_mem);
 serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
 		const std::string &work_dir, int num_threads);
 serial_graph::ptr construct_graph(const std::vector<std::string> &edge_list_files,

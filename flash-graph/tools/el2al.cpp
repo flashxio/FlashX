@@ -45,7 +45,6 @@ static inline int conv_edge_type_str2int(const std::string &type_str)
 }
 
 static bool check_graph = false;
-static std::string work_dir = ".";
 
 void print_usage()
 {
@@ -62,6 +61,7 @@ void print_usage()
 	fprintf(stderr, "-m: merge multiple edge lists into a single graph. \n");
 	fprintf(stderr, "-w: write the graph to a file\n");
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
+	fprintf(stderr, "-d: store intermediate data on disks\n");
 }
 
 int main(int argc, char *argv[])
@@ -73,7 +73,8 @@ int main(int argc, char *argv[])
 	char *type_str = NULL;
 	bool merge_graph = false;
 	bool write_graph = false;
-	while ((opt = getopt(argc, argv, "uvt:mwT:")) != -1) {
+	bool on_disk = false;
+	while ((opt = getopt(argc, argv, "uvt:mwT:d")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -96,6 +97,9 @@ int main(int argc, char *argv[])
 				num_threads = atoi(optarg);
 				num_opts++;
 				break;
+			case 'd':
+				on_disk = true;
+				break;
 			default:
 				print_usage();
 		}
@@ -114,8 +118,11 @@ int main(int argc, char *argv[])
 
 	std::string adjacency_list_file = argv[0];
 	adjacency_list_file += std::string("-v") + itoa(CURR_VERSION);
-	work_dir = dirname(argv[0]);
-	printf("work dir: %s\n", work_dir.c_str());
+	std::string work_dir;
+	if (on_disk) {
+		work_dir = dirname(argv[0]);
+		printf("work dir: %s\n", work_dir.c_str());
+	}
 
 	std::string index_file = argv[1];
 	index_file += std::string("-v") + itoa(CURR_VERSION);
@@ -138,7 +145,7 @@ int main(int argc, char *argv[])
 
 	if (merge_graph) {
 		edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
-				directed, num_threads);
+				directed, num_threads, work_dir.empty());
 		disk_serial_graph::ptr g
 			= std::static_pointer_cast<disk_serial_graph, serial_graph>(
 					construct_graph(edge_g, work_dir, num_threads));
@@ -174,7 +181,7 @@ int main(int argc, char *argv[])
 			files[0] = edge_list_files[i];
 
 			edge_graph::ptr edge_g = parse_edge_lists(files, edge_attr_type,
-					directed, num_threads);
+					directed, num_threads, work_dir.empty());
 			disk_serial_graph::ptr g
 				= std::static_pointer_cast<disk_serial_graph, serial_graph>(
 						construct_graph(edge_g, work_dir, num_threads));

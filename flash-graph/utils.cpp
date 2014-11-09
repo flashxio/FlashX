@@ -24,7 +24,7 @@
 #include <algorithm>
 
 #include <boost/foreach.hpp>
-//#define USE_STXXL
+#define USE_STXXL
 #ifdef USE_STXXL
 #include <stxxl.h>
 #endif
@@ -173,109 +173,45 @@ struct comp_in_edge<ts_edge_data> {
 	}
 };
 
-#ifdef USE_STXXL
-
 template<class edge_data_type>
-class stxxl_edge_vector: public stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result
+class edge_vector
 {
-public:
-	typedef typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result::const_iterator const_iterator;
-	void append(stxxl_edge_vector<edge_data_type>::const_iterator it,
-			stxxl_edge_vector<edge_data_type>::const_iterator end) {
-		for (; it != end; it++)
-			this->push_back(*it);
-	}
-
-	void append(typename std::vector<edge<edge_data_type> >::const_iterator it,
-			typename std::vector<edge<edge_data_type> >::const_iterator end) {
-		for (; it != end; it++)
-			this->push_back(*it);
-	}
-
-	void sort(bool out_edge) {
-		if (out_edge) {
-			comp_edge<edge_data_type> edge_comparator;
-			stxxl::sort(this->begin(), this->end(), edge_comparator, SORT_BUF_SIZE);
-		}
-		else {
-			comp_in_edge<edge_data_type> in_edge_comparator;
-			stxxl::sort(this->begin(), this->end(), in_edge_comparator, SORT_BUF_SIZE);
-		}
-	}
-
-	class edge_stream
-	{
-		stxxl::stream::vector_iterator2stream<typename stxxl_edge_vector<edge_data_type>::const_iterator> strm;
+protected:
+	class bulk_iterator {
 	public:
-		edge_stream(typename stxxl_edge_vector<edge_data_type>::const_iterator begin,
-				typename stxxl_edge_vector<edge_data_type>::const_iterator end): strm(
-					begin, end) {
-				}
+		typedef std::shared_ptr<bulk_iterator> ptr;
 
-		bool empty() const {
-			return strm.empty();
-		}
-
-		edge<edge_data_type> operator*() const {
-			return *strm;
-		}
-
-		edge_stream &operator++() {
-			++strm;
-			return *this;
-		}
-
-		const edge<edge_data_type> *operator->() const {
-			return strm.operator->();
-		}
+		virtual bool has_next() const = 0;
+		virtual int fetch(std::vector<edge<edge_data_type> > &edges) = 0;
 	};
-};
-
-#endif
-
-template<class edge_data_type>
-class edge_vector: public std::vector<edge<edge_data_type> >
-{
 public:
-	typedef typename std::vector<edge<edge_data_type> >::const_iterator const_iterator;
-	void append(edge_vector<edge_data_type>::const_iterator it,
-			edge_vector<edge_data_type>::const_iterator end) {
-		for (; it != end; it++)
-			this->push_back(*it);
-	}
-
-	void sort(bool out_edge) {
-		if (out_edge) {
-			comp_edge<edge_data_type> edge_comparator;
-#if defined(_OPENMP)
-			__gnu_parallel::sort(this->begin(), this->end(), edge_comparator);
-#else
-			std::sort(this->begin(), this->end(), edge_comparator);
-#endif
-		}
-		else {
-			comp_in_edge<edge_data_type> in_edge_comparator;
-#if defined(_OPENMP)
-			__gnu_parallel::sort(this->begin(), this->end(), in_edge_comparator);
-#else
-			std::sort(this->begin(), this->end(), in_edge_comparator);
-#endif
-		}
-	}
-
-	class edge_stream
-	{
-		typename edge_vector<edge_data_type>::const_iterator it;
-		typename edge_vector<edge_data_type>::const_iterator end;
+	class edge_stream {
+		typedef std::vector<edge<edge_data_type> > edge_buf_t;
+		edge_buf_t buf;
+		typename edge_buf_t::iterator it;
+		typename bulk_iterator::ptr bulk_it;
 	public:
-		edge_stream(typename edge_vector<edge_data_type>::const_iterator begin,
-				typename edge_vector<edge_data_type>::const_iterator end) {
-			this->it = begin;
-			this->end = end;
+		edge_stream(typename bulk_iterator::ptr bulk_it) {
+			this->bulk_it = bulk_it;
+			it = buf.end();
 		}
 
-		bool empty() const {
-			return it == end;
+		bool empty() {
+			// If we have edges in the buffer, it's not empty.
+			if (it != buf.end())
+				return false;
+			// If the buffer is empty and the bulk iterator is empty,
+			// the edge stream is empty.
+			else if (!bulk_it->has_next())
+				return true;
+			// Otherwise, the edge stream isn't empty, and we should fetch
+			// some edges from the bulk iterator and keep them in the buffer.
+			else {
+				buf.clear();
+				bulk_it->fetch(buf);
+				it = buf.begin();
+				return false;
+			}
 		}
 
 		edge<edge_data_type> operator*() const {
@@ -283,7 +219,7 @@ public:
 		}
 
 		edge_stream &operator++() {
-			it++;
+			++it;
 			return *this;
 		}
 
@@ -291,6 +227,211 @@ public:
 			return it.operator->();
 		}
 	};
+
+	typedef std::shared_ptr<edge_vector<edge_data_type> > ptr;
+
+	virtual void push_back(const edge<edge_data_type> &e) = 0;
+	virtual void append(const edge_vector<edge_data_type> &vec) = 0;
+	virtual void append(const std::vector<edge<edge_data_type> > &vec) = 0;
+	virtual void sort(bool out_edge) = 0;
+	virtual edge_stream get_stream() const = 0;
+	virtual ptr clone() const = 0;
+	virtual size_t size() const = 0;
+	virtual bool empty() const = 0;
+	virtual const edge<edge_data_type> &back() const = 0;
+};
+
+#ifdef USE_STXXL
+
+template<class edge_data_type>
+class stxxl_edge_vector: public edge_vector<edge_data_type>
+{
+	typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result data;
+	typedef typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result::const_iterator const_iterator;
+
+	class stxxl_iterator: public edge_vector<edge_data_type>::bulk_iterator
+	{
+		stxxl::stream::vector_iterator2stream<typename stxxl_edge_vector<edge_data_type>::const_iterator> strm;
+	public:
+		stxxl_iterator(typename stxxl_edge_vector<edge_data_type>::const_iterator begin,
+				typename stxxl_edge_vector<edge_data_type>::const_iterator end): strm(
+					begin, end) {
+		}
+
+		virtual bool has_next() const {
+			return !strm.empty();
+		}
+
+		virtual int fetch(std::vector<edge<edge_data_type> > &edges) {
+			int i = 0;
+			for (; i < 1024 && !strm.empty(); i++, ++strm)
+				edges.push_back(*strm);
+			return i;
+		}
+	};
+public:
+	stxxl_edge_vector() {
+	}
+
+	stxxl_edge_vector(const stxxl_edge_vector<edge_data_type> &vec): data(vec.data) {
+	}
+
+	virtual void push_back(const edge<edge_data_type> &e) {
+		data.push_back(e);
+	}
+
+	void append(const edge_vector<edge_data_type> &vec) {
+		const stxxl_edge_vector<edge_data_type> &stxxl_vec
+			= (const stxxl_edge_vector<edge_data_type> &) vec;
+		const_iterator it = stxxl_vec.data.begin();
+		const_iterator end = stxxl_vec.data.end();
+		for (; it != end; it++)
+			data.push_back(*it);
+	}
+
+	void append(const std::vector<edge<edge_data_type> > &vec) {
+		typename std::vector<edge<edge_data_type> >::const_iterator it = vec.begin();
+		typename std::vector<edge<edge_data_type> >::const_iterator end = vec.end();
+		for (; it != end; it++)
+			this->push_back(*it);
+	}
+
+	void sort(bool out_edge) {
+		if (out_edge) {
+			comp_edge<edge_data_type> edge_comparator;
+			stxxl::sort(data.begin(), data.end(), edge_comparator, SORT_BUF_SIZE);
+		}
+		else {
+			comp_in_edge<edge_data_type> in_edge_comparator;
+			stxxl::sort(data.begin(), data.end(), in_edge_comparator, SORT_BUF_SIZE);
+		}
+	}
+
+	virtual typename edge_vector<edge_data_type>::edge_stream get_stream() const {
+		typename edge_vector<edge_data_type>::bulk_iterator::ptr it(
+				new stxxl_iterator(data.begin(), data.end()));
+		return typename edge_vector<edge_data_type>::edge_stream(it);
+	}
+
+	virtual typename edge_vector<edge_data_type>::ptr clone() const {
+		return typename edge_vector<edge_data_type>::ptr(
+				new stxxl_edge_vector<edge_data_type>(*this));
+	}
+
+	virtual size_t size() const {
+		return data.size();
+	}
+
+	virtual bool empty() const {
+		return data.empty();
+	}
+
+	virtual const edge<edge_data_type> &back() const {
+		return data.back();
+	}
+};
+
+#endif
+
+template<class edge_data_type>
+class std_edge_vector: public edge_vector<edge_data_type>
+{
+	std::vector<edge<edge_data_type> > data;
+
+	class std_iterator: public edge_vector<edge_data_type>::bulk_iterator
+	{
+		typedef typename std::vector<edge<edge_data_type> >::const_iterator std_edge_iterator;
+		std_edge_iterator it;
+		std_edge_iterator end;
+	public:
+		std_iterator(std_edge_iterator begin, std_edge_iterator end) {
+			this->it = it;
+			this->end = end;
+		}
+
+		virtual bool has_next() const {
+			return it != end;
+		}
+
+		virtual int fetch(std::vector<edge<edge_data_type> > &edges) {
+			int i = 0;
+			for (; i < 1024 && it != end; i++, it++)
+				edges.push_back(*it);
+			return i;
+		}
+	};
+public:
+	typedef typename std::vector<edge<edge_data_type> >::const_iterator const_iterator;
+
+	std_edge_vector() {
+	}
+
+	std_edge_vector(const std_edge_vector<edge_data_type> &vec): data(vec.data) {
+	}
+
+	virtual void push_back(const edge<edge_data_type> &e) {
+		data.push_back(e);
+	}
+
+	void append(const edge_vector<edge_data_type> &vec) {
+		const std_edge_vector<edge_data_type> &std_vec
+			= (const std_edge_vector<edge_data_type> &) vec;
+		data.insert(data.end(), std_vec.data.begin(), std_vec.data.end());
+	}
+
+	void append(const std::vector<edge<edge_data_type> > &vec) {
+		data.insert(data.end(), vec.begin(), vec.end());
+	}
+
+	void sort(bool out_edge) {
+		if (out_edge) {
+			comp_edge<edge_data_type> edge_comparator;
+#if defined(_OPENMP)
+			__gnu_parallel::sort(data.begin(), data.end(), edge_comparator);
+#else
+			std::sort(data.begin(), data.end(), edge_comparator);
+#endif
+		}
+		else {
+			comp_in_edge<edge_data_type> in_edge_comparator;
+#if defined(_OPENMP)
+			__gnu_parallel::sort(data.begin(), data.end(), in_edge_comparator);
+#else
+			std::sort(data.begin(), data.end(), in_edge_comparator);
+#endif
+		}
+	}
+
+	virtual typename edge_vector<edge_data_type>::edge_stream get_stream() const {
+		typename edge_vector<edge_data_type>::bulk_iterator::ptr it(
+				new std_iterator(data.begin(), data.end()));
+		return typename edge_vector<edge_data_type>::edge_stream(it);
+	}
+
+	virtual typename edge_vector<edge_data_type>::ptr clone() const {
+		return typename edge_vector<edge_data_type>::ptr(
+				new std_edge_vector<edge_data_type>(*this));
+	}
+
+	virtual size_t size() const {
+		return data.size();
+	}
+
+	virtual bool empty() const {
+		return data.empty();
+	}
+
+	virtual const edge<edge_data_type> &back() const {
+		return data.back();
+	}
+
+	const_iterator cbegin() const {
+		return data.cbegin();
+	}
+
+	const_iterator cend() const {
+		return data.cend();
+	}
 };
 
 void serial_graph::add_vertex(const in_mem_vertex &v)
@@ -993,9 +1134,7 @@ public:
 		this->in_edge_lists = edge_lists;
 		this->out_edge_lists.resize(edge_lists.size());
 		for (size_t i = 0; i < edge_lists.size(); i++)
-			this->out_edge_lists[i]
-				= std::shared_ptr<edge_vector<edge_data_type> >(
-						new edge_vector<edge_data_type>(*edge_lists[i]));
+			this->out_edge_lists[i] = edge_lists[i]->clone();
 	}
 
 	void sort_edges() {
@@ -1041,7 +1180,7 @@ void get_all_edges(
 		edge_vector<edge_data_type> &edges)
 {
 	BOOST_FOREACH(std::shared_ptr<edge_vector<edge_data_type> > vec, edge_lists) {
-		edges.append(vec->begin(), vec->end());
+		edges.append(*vec);
 	}
 }
 
@@ -1050,18 +1189,18 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 		const std::vector<ext_mem_undirected_vertex *> &vertices, bool) const
 {
 	assert(!vertices.empty());
-	edge_vector<edge_data_type> edges;
+	std_edge_vector<edge_data_type> edges;
 	get_all_edges(edge_lists, edges);
 	edges.sort(true);
-	typename edge_vector<edge_data_type>::const_iterator it
-		= std::lower_bound(edges.begin(), edges.end(),
+	typename std_edge_vector<edge_data_type>::const_iterator it
+		= std::lower_bound(edges.cbegin(), edges.cend(),
 				edge<edge_data_type>(0, vertices[0]->get_id()),
 				comp_edge<edge_data_type>());
 
 	for (size_t i = 0; i < vertices.size(); i++) {
 		ext_mem_undirected_vertex *v = vertices[i];
 		for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
-			assert(it != edges.end());
+			assert(it != edges.cend());
 			edge<edge_data_type> e = *it;
 			assert(v->get_neighbor(j) == e.get_to());
 			assert(v->get_id() == e.get_from());
@@ -1076,8 +1215,8 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 		const std::vector<ext_mem_undirected_vertex *> &vertices, bool in_part) const
 {
 	assert(!vertices.empty());
-	typename edge_vector<edge_data_type>::const_iterator it;
-	edge_vector<edge_data_type> edges;
+	typename std_edge_vector<edge_data_type>::const_iterator it;
+	std_edge_vector<edge_data_type> edges;
 	if (in_part) {
 		get_all_edges(in_edge_lists, edges);
 		edges.sort(false);
@@ -1088,11 +1227,11 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 	}
 
 	if (in_part)
-		it = std::lower_bound(edges.begin(), edges.end(),
+		it = std::lower_bound(edges.cbegin(), edges.cend(),
 				edge<edge_data_type>(0, vertices[0]->get_id()),
 				comp_in_edge<edge_data_type>());
 	else
-		it = std::lower_bound(edges.begin(), edges.end(),
+		it = std::lower_bound(edges.cbegin(), edges.cend(),
 				edge<edge_data_type>(vertices[0]->get_id(), 0),
 				comp_edge<edge_data_type>());
 
@@ -1101,7 +1240,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 		if (in_part) {
 			ext_mem_undirected_vertex *v = vertices[i];
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
-				assert(it != edges.end());
+				assert(it != edges.cend());
 				edge<edge_data_type> e = *it;
 				assert(v->get_neighbor(j) == e.get_from());
 				assert(v->get_id() == e.get_to());
@@ -1113,7 +1252,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			// Check out-edges
 			ext_mem_undirected_vertex *v = vertices[i];
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
-				assert(it != edges.end());
+				assert(it != edges.cend());
 				edge<edge_data_type> e = *it;
 				assert(v->get_id() == e.get_from());
 				assert(v->get_neighbor(j) == e.get_to());
@@ -1718,7 +1857,7 @@ public:
 		parse_edge_list_text(line_buf.get(), size, edges);
 		edge_vector<edge_data_type> *local_edge_buf
 			= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
-		local_edge_buf->append(edges.cbegin(), edges.cend());
+		local_edge_buf->append(edges);
 
 		// For an undirected graph, we need to store each edge twice
 		// and each copy is the reverse of the original edge.
@@ -1752,7 +1891,7 @@ public:
 		parse_edge_list_text(data.get(), size, edges);
 		edge_vector<edge_data_type> *local_edge_buf
 			= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
-		local_edge_buf->append(edges.cbegin(), edges.cend());
+		local_edge_buf->append(edges);
 		std::cout << boost::format("There are %1% edges in thread %2%\n")
 			% local_edge_buf->size() % thread::get_curr_thread()->get_id();
 	}
@@ -1985,8 +2124,7 @@ serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
 	serial_graph::ptr g = create_serial_graph(work_dir);
 	std::vector<edge_stream_t> its;
 	for (size_t i = 0; i < edge_lists.size(); i++)
-		its.push_back(edge_stream_t(edge_lists[i]->cbegin(),
-				edge_lists[i]->cend()));
+		its.push_back(edge_lists[i]->get_stream());
 	vertex_id_t max_id = get_max_vertex_id();
 
 	gettimeofday(&start_time, NULL);
@@ -2046,10 +2184,8 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 	std::vector<edge_stream_t> out_its;
 	std::vector<edge_stream_t> in_its;
 	for (size_t i = 0; i < out_edge_lists.size(); i++) {
-		out_its.push_back(edge_stream_t(out_edge_lists[i]->cbegin(),
-				out_edge_lists[i]->cend()));
-		in_its.push_back(edge_stream_t(in_edge_lists[i]->cbegin(),
-				in_edge_lists[i]->cend()));
+		out_its.push_back(out_edge_lists[i]->get_stream());
+		in_its.push_back(in_edge_lists[i]->get_stream());
 	}
 	vertex_id_t max_id = get_max_vertex_id();
 
@@ -2106,7 +2242,7 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
  */
 template<class edge_data_type>
 edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
-		bool has_edge_data, bool directed)
+		bool has_edge_data, bool directed, bool in_mem)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -2114,7 +2250,10 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
 					"graph-task-thread") + itoa(i), -1);
-		t->set_user_data(new edge_vector<edge_data_type>());
+		if (in_mem)
+			t->set_user_data(new std_edge_vector<edge_data_type>());
+		else
+			t->set_user_data(new stxxl_edge_vector<edge_data_type>());
 		t->start();
 		threads[i] = t;
 	}
@@ -2151,7 +2290,6 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"It takes %1% seconds to construct edge list") % time_diff(start, end);
 
-	size_t mem_size = 0;
 	size_t num_edges = 0;
 	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > edge_lists(
 			num_threads);
@@ -2159,12 +2297,10 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 		edge_vector<edge_data_type> *local_edges
 			= (edge_vector<edge_data_type> *) threads[i]->get_user_data();
 		num_edges += local_edges->size();
-		mem_size += local_edges->capacity() * sizeof(edge<edge_data_type>);
 		edge_lists[i] = std::shared_ptr<edge_vector<edge_data_type> >(
 				local_edges);
 	}
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"There are %1% edges and use %2% bytes") % num_edges % mem_size;
+	BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% edges") % num_edges;
 
 	edge_graph::ptr edge_g;
 	if (directed)
@@ -2188,7 +2324,7 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 }
 
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
-		int edge_attr_type, bool directed, int nthreads)
+		int edge_attr_type, bool directed, int nthreads, bool in_mem)
 {
 	BOOST_LOG_TRIVIAL(info) << "beofre load edge list";
 	num_threads = nthreads;
@@ -2196,14 +2332,15 @@ edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files
 	switch(edge_attr_type) {
 		case EDGE_COUNT:
 			g = par_load_edge_list_text<edge_count>(edge_list_files, true,
-					directed);
+					directed, in_mem);
 			break;
 		case EDGE_TIMESTAMP:
 			g = par_load_edge_list_text<ts_edge_data>(edge_list_files, true,
-					directed);
+					directed, in_mem);
 			break;
 		default:
-			g = par_load_edge_list_text<>(edge_list_files, false, directed);
+			g = par_load_edge_list_text<empty_data>(edge_list_files, false,
+					directed, in_mem);
 	}
 	return g;
 }
@@ -2228,7 +2365,7 @@ serial_graph::ptr construct_graph(const std::vector<std::string> &edge_list_file
 		int nthreads)
 {
 	edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
-			directed, nthreads);
+			directed, nthreads, work_dir.empty());
 	return construct_graph(edge_g, work_dir, nthreads);
 }
 
@@ -2258,7 +2395,7 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 	size_t num_edges = from.size();
 	std::vector<std::shared_ptr<edge_vector<empty_data> > > edge_lists(1);
 	edge_lists[0] = std::shared_ptr<edge_vector<empty_data> >(
-			new edge_vector<empty_data>());
+			new std_edge_vector<empty_data>());
 
 	edge_graph::ptr edge_g;
 	if (directed) {
