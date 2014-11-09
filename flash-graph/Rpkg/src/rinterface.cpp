@@ -672,6 +672,7 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 	return ret;
 }
 
+#ifdef USE_EIGEN
 /*
  * Compute eigen value/vector on an unweighted adjacency matrix.
  */
@@ -728,3 +729,4 @@ RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
 	ret["vectors"] = eigen_matrix;
 	return ret;
 }
+#endif

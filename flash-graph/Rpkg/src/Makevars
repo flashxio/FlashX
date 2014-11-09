@@ -13,13 +13,18 @@ endif
 #BOOST_LOG=1
 OMP_FLAG = -fopenmp
 PKG_LIBS = -L$(FG_LIB)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_LIB)/flash-graph -lgraph
-PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
 PKG_LIBS += -L$(FG_LIB)/libsafs -lsafs -L$(FG_LIB)/libcommon -lcommon
-PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lboost_filesystem -lz
+PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lboost_filesystem -lz -lstxxl
+ifdef FG_EIGEN
+PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
+endif
 ifdef BOOST_LOG
 	PKG_LIBS += -lboost_log
 endif
 PKG_CXXFLAGS = -g -O3 -I. -Wall -fPIC -std=c++0x -DBOOST_LOG_DYN_LINK
 PKG_CXXFLAGS += -I$(FG_DIR)/include -I$(FG_DIR)/libcommon -I$(FG_DIR)/flash-graph
 PKG_CXXFLAGS += -I. -I$(RCPP_INCLUDE) $(OMP_FLAG)
+ifdef FG_EIGEN
+PKG_CXXFLAGS += -DUSE_EIGEN
+endif
 PKG_CPPFLAGS = $(CXXFLAGS)

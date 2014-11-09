@@ -18,13 +18,14 @@
  */
 
 #include <unistd.h>
+#ifdef USE_GZIP
 #include <zlib.h>
+#endif
 
 #include <memory>
 #include <algorithm>
 
 #include <boost/foreach.hpp>
-#define USE_STXXL
 #ifdef USE_STXXL
 #define STXXL_PARALLEL_MODE_EXPLICIT
 #include <stxxl.h>
@@ -1580,6 +1581,7 @@ public:
 	}
 };
 
+#ifdef USE_GZIP
 class gz_graph_file_io: public graph_file_io
 {
 	std::vector<char> prev_buf;
@@ -1656,6 +1658,7 @@ std::unique_ptr<char[]> gz_graph_file_io::read_edge_list_text(
 	ret_buf[read_bytes] = 0;
 	return ret_buf;
 }
+#endif
 
 std::unique_ptr<char[]> text_graph_file_io::read_edge_list_text(
 		const size_t wanted_bytes, size_t &read_bytes)
@@ -1807,6 +1810,7 @@ static std::unique_ptr<char[]> read_file(const std::string &file_name,
 	return std::unique_ptr<char[]>(buf);
 }
 
+#ifdef USE_GZIP
 static std::unique_ptr<char[]> read_gz_file(const std::string &file_name,
 		size_t &size)
 {
@@ -1840,6 +1844,7 @@ static std::unique_ptr<char[]> read_gz_file(const std::string &file_name,
 	gzclose(f);
 	return ret_buf;
 }
+#endif
 
 /**
  * Parse the edge list in the character buffer.
@@ -1917,8 +1922,16 @@ public:
 	void run() {
 		size_t size =  0;
 		std::unique_ptr<char[]> data;
-		if (is_compressed(file_name))
+		if (is_compressed(file_name)) {
+#ifdef USE_GZIP
 			data = read_gz_file(file_name, size);
+#else
+			BOOST_LOG_TRIVIAL(error) << "Doesn't support reading gz file";
+			BOOST_LOG_TRIVIAL(error)
+				<< "zlib is required to support reading gz file";
+			exit(1);
+#endif
+		}
 		else
 			data = read_file(file_name, size);
 
@@ -2287,8 +2300,17 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 					"graph-task-thread") + itoa(i), -1);
 		if (in_mem)
 			t->set_user_data(new std_edge_vector<edge_data_type>());
-		else
+		else {
+#ifdef USE_STXXL
 			t->set_user_data(new stxxl_edge_vector<edge_data_type>());
+#else
+			BOOST_LOG_TRIVIAL(error)
+				<< "It doesn't support using disks to store intermediate results";
+			BOOST_LOG_TRIVIAL(error)
+				<< "stxxl is required to store intermediate results on disks";
+			exit(1);
+#endif
+		}
 		t->start();
 		threads[i] = t;
 	}
@@ -2298,8 +2320,16 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 		BOOST_LOG_TRIVIAL(info) << (std::string(
 					"start to read the edge list from ") + file.c_str());
 		graph_file_io::ptr io;
-		if (is_compressed(file))
+		if (is_compressed(file)) {
+#ifdef USE_GZIP
 			io = graph_file_io::ptr(new gz_graph_file_io(file));
+#else
+			BOOST_LOG_TRIVIAL(error) << "Doesn't support reading gz file";
+			BOOST_LOG_TRIVIAL(error)
+				<< "zlib is required to support reading gz file";
+			exit(1);
+#endif
+		}
 		else
 			io = graph_file_io::ptr(new text_graph_file_io(file));
 		while (!io->eof()) {

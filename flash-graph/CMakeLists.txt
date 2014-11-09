@@ -8,6 +8,17 @@ if (OPENMP_FOUND)
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
+find_package(stxxl)
+if (STXXL_FOUND)
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_STXXL")
+endif()
+
+find_package(ZLIB)
+if (ZLIB_FOUND)
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_GZIP")
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_GZIP")
+endif()
+
 add_library(graph STATIC
 	FGlib.cpp
 	graph_engine.cpp

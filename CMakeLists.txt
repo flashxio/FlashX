@@ -21,9 +21,6 @@ find_package(Threads REQUIRED)
 find_package(LibNuma REQUIRED)
 find_package(LibAio REQUIRED)
 find_package(LibRt REQUIRED)
-find_package(Eigen3 REQUIRED)
-find_package(stxxl)
-find_package(zlib)
 
 # configure a header file to pass some of the CMake settings
 # to the source code

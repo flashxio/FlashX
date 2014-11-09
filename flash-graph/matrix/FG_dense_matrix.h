@@ -23,7 +23,9 @@
 #include <vector>
 #include <memory>
 
-#include <Eigen/Dense>
+#ifdef USE_EIGEN
+#include <eigen3/Eigen/Dense>
+#endif
 
 #include "FG_vector.h"
 #include "graph.h"
@@ -108,6 +110,7 @@ public:
 	}
 };
 
+#ifdef USE_EIGEN
 template<class T>
 class Eigen_matrix_store
 {
@@ -150,6 +153,7 @@ public:
 		return mat;
 	}
 };
+#endif
 
 template<class T, class MatrixStore>
 class FG_dense_matrix
@@ -380,6 +384,7 @@ public:
 	friend class FG_row_wise_matrix;
 };
 
+#ifdef USE_EIGEN
 template<class T>
 class FG_eigen_matrix: public FG_dense_matrix<T, Eigen_matrix_store<T> >
 {
@@ -452,5 +457,6 @@ public:
 					this->get_num_cols(), this->get_num_rows()));
 	}
 };
+#endif
 
 #endif

@@ -7,6 +7,12 @@ fi
 if [ -z "$path" ]; then
 	path=`find /usr/local -name Rcpp.h`
 fi
+
+matrix_path=`find build -name libmatrix.a`
+if [ -n "$matrix_path" ]; then
+	echo "find libmatrix.a"
+	export FG_EIGEN=1
+fi
 if [ -n "$path" ]; then
 	path=`dirname $path`
 	echo $path
