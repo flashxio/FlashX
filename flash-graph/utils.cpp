@@ -347,7 +347,7 @@ class std_edge_vector: public edge_vector<edge_data_type>
 		std_edge_iterator end;
 	public:
 		std_iterator(std_edge_iterator begin, std_edge_iterator end) {
-			this->it = it;
+			this->it = begin;
 			this->end = end;
 		}
 
