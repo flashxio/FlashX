@@ -155,8 +155,14 @@ int main(int argc, char *argv[])
 		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 				g->get_num_vertices(), g->get_num_non_empty_vertices(),
 				g->get_num_edges());
-		if (check_graph)
+		if (check_graph) {
+			struct timeval start, end;
+			gettimeofday(&start, NULL);
 			g->check_ext_graph(*edge_g, index_file, adjacency_list_file);
+			gettimeofday(&end, NULL);
+			printf("verifying a graph takes %.2f seconds\n",
+					time_diff(start, end));
+		}
 	}
 	else {
 		std::vector<std::string> graph_files;
@@ -191,8 +197,14 @@ int main(int argc, char *argv[])
 			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
 					g->get_num_vertices(), g->get_num_non_empty_vertices(),
 					g->get_num_edges());
-			if (check_graph)
+			if (check_graph) {
+				struct timeval start, end;
+				gettimeofday(&start, NULL);
 				g->check_ext_graph(*edge_g, index_files[i], graph_files[i]);
+				gettimeofday(&end, NULL);
+				printf("verifying a graph takes %.2f seconds\n",
+						time_diff(start, end));
+			}
 		}
 	}
 }
