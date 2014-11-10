@@ -40,7 +40,21 @@ class in_mem_graph
 public:
 	typedef std::shared_ptr<in_mem_graph> ptr;
 
+	/*
+	 * in_mem_graph takes the memory buffer and is responsible to free it
+	 * afterwards.
+	 */
+	static ptr create(const std::string &graph_name, char *buf, size_t size) {
+		in_mem_graph *g = new in_mem_graph();
+		g->graph_size = size;
+		g->graph_data = buf;
+		// TODO we don't init graph_file_id here.
+		g->graph_file_name = graph_name;
+		return ptr(g);
+	}
+
 	static ptr load_graph(const std::string &graph_file);
+	static ptr load_safs_graph(const std::string &graph_file);
 
 	~in_mem_graph() {
 		free(graph_data);

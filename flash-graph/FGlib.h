@@ -33,6 +33,7 @@
 */
 class FG_graph
 {
+	graph_header header;
 	std::string graph_file;
 	std::string index_file;
 	std::shared_ptr<in_mem_graph> graph_data;
@@ -41,6 +42,9 @@ class FG_graph
 
 	FG_graph(const std::string &graph_file,
 			const std::string &index_file, config_map::ptr configs);
+	FG_graph(std::shared_ptr<in_mem_graph> graph_data,
+			std::shared_ptr<vertex_index> index_data,
+			const std::string &graph_name, config_map::ptr configs);
 public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
 
@@ -48,37 +52,36 @@ public:
 		graph_engine::destroy_flash_graph();
 	}
 
-/**
-  * \brief  Method to instantiate a graph object.
-  *         This method is used in lieu of explicitly calling a ctor.
-  *    
-  * \param graph_file Path to the graph file on disk.
-  * \param index_file Path to the graph index file on disk.
-  * \param configs Configuration in configuration file.
-*/
+	/**
+	 * \brief  Method to instantiate a graph object.
+	 *         This method is used in lieu of explicitly calling a ctor.
+	 *    
+	 * \param graph_file Path to the graph file in SAFS or in Linux filesystem.
+	 * \param index_file Path to the graph index file in SAFS or
+	 *        in Linux filesystem.
+	 * \param configs Configuration in configuration file.
+	 */
 	static ptr create(const std::string &graph_file,
 			const std::string &index_file, config_map::ptr configs) {
 		return ptr(new FG_graph(graph_file, index_file, configs));
 	}
 
-/**
-  * \brief Get the path to the graph file.
-  *
-  * \return The path to the graph file on disk.
-  *
-*/
-	const std::string &get_graph_file() const {
-		return graph_file;
+	/**
+	 * \brief  Method to instantiate a graph object.
+	 *         This method is used in lieu of explicitly calling a ctor.
+	 *    
+	 * \param graph_data The adjacency lists of the graph stored in memory.
+	 * \param index_data The index of the graph stored in memory.
+	 * \param graph_name The name of the graph.
+	 * \param configs Configuration in configuration file.
+	 */
+	static ptr create(std::shared_ptr<in_mem_graph> graph_data,
+			std::shared_ptr<vertex_index> index_data,
+			const std::string &graph_name, config_map::ptr configs) {
+		return ptr(new FG_graph(graph_data, index_data, graph_name, configs));
 	}
 
-/**
-  * \brief Get the graph index file path.
-  *
-  * \return The path to the graph index file on disk.
-*/
-	const std::string &get_index_file() const {
-		return index_file;
-	}
+	file_io_factory::shared_ptr get_graph_io_factory(int access_option);
 
 /**
   * \brief Get the map that contains the runtime configurations 
@@ -95,11 +98,17 @@ public:
 		return graph_data;
 	}
 
-	std::shared_ptr<vertex_index> get_index_data() const {
-		return index_data;
-	}
+	std::shared_ptr<vertex_index> get_index_data() const;
 
 	graph_engine::ptr create_engine(graph_index::ptr index);
+
+	/**
+	 * \brief Get the header of the graph that contains basic information of the graph.
+	 * \return The graph header.
+	 */
+	const graph_header &get_graph_header() {
+		return header;
+	}
 };
 
 /**
@@ -324,11 +333,5 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
  * \return A vector with an transitivity value for each vertex.
  */
 FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
-
-/**
- * \brief Get the header of the graph that contains basic information of the graph.
- * \return The graph header.
- */
-graph_header get_graph_header(FG_graph::ptr fg);
 
 #endif

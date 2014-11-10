@@ -26,8 +26,10 @@
 #include "safs_file.h"
 #include "cache.h"
 #include "slab_allocator.h"
+#include "native_file.h"
 
 #include "in_mem_storage.h"
+#include "graph_file_header.h"
 
 class in_mem_byte_array: public page_byte_array
 {
@@ -285,6 +287,33 @@ public:
 
 in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 {
+	native_file local_f(file_name);
+	ssize_t size = local_f.get_size();
+	assert(size > 0);
+
+	in_mem_graph::ptr graph = in_mem_graph::ptr(new in_mem_graph());
+	graph->graph_size = size;
+	graph->graph_data = (char *) malloc(size);
+	assert(graph->graph_data);
+	graph->graph_file_name = file_name;
+	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
+		% graph->graph_size;
+
+	FILE *fd = fopen(file_name.c_str(), "r");
+	if (fd == NULL)
+		throw io_exception(std::string("can't open ") + file_name);
+	if (fread(graph->graph_data, size, 1, fd) != 1)
+		throw io_exception(std::string("can't read from ") + file_name);
+	fclose(fd);
+
+	graph_header *header = (graph_header *) graph->graph_data;
+	header->verify();
+
+	return graph;
+}
+
+in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
+{
 	file_io_factory::shared_ptr io_factory = ::create_io_factory(file_name,
 			REMOTE_ACCESS);
 
@@ -297,7 +326,9 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 
 	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
 		% graph->graph_size;
+#if 0
 	graph->graph_file_id = io_factory->get_file_id();
+#endif
 	io_interface::ptr io = io_factory->create_io(thread::get_curr_thread());
 	const size_t MAX_IO_SIZE = 256 * 1024 * 1024;
 	for (off_t off = 0; (size_t) off < graph->graph_size; off += MAX_IO_SIZE) {
@@ -307,6 +338,9 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 		io->access(&req, 1);
 		io->wait4complete(1);
 	}
+
+	graph_header *header = (graph_header *) graph->graph_data;
+	header->verify();
 
 	return graph;
 }

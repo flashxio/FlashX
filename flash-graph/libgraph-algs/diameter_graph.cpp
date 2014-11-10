@@ -357,9 +357,10 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 	graph_index::ptr index;
 	if (num_bfs == 1)
 		index = NUMA_graph_index<simple_diameter_vertex>::create(
-				fg->get_index_file());
+				fg->get_graph_header());
 	else
-		index = NUMA_graph_index<diameter_vertex>::create(fg->get_index_file());
+		index = NUMA_graph_index<diameter_vertex>::create(
+				fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	BOOST_LOG_TRIVIAL(info) << "diameter estimation starts";

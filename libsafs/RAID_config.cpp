@@ -134,11 +134,16 @@ static int retrieve_data_files(std::string file_file,
 		char *name = line;
 		if (colon) {
 			*colon = 0;
-			info.node_id = atoi(line);
+			std::string node_id_str = line;
+			node_id_str.erase(std::remove_if(node_id_str.begin(),
+						node_id_str.end(), isspace), node_id_str.end());
+			info.node_id = atoi(node_id_str.c_str());
 			colon++;
 			name = colon;
 		}
 		info.name = name;
+		info.name.erase(std::remove_if(info.name.begin(), info.name.end(),
+					isspace), info.name.end());
 		data_files.push_back(info);
 		free(line);
 		line = NULL;

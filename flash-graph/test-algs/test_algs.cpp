@@ -583,7 +583,8 @@ int main(int argc, char *argv[])
 	argc -= 3;
 
 	config_map::ptr configs = config_map::create(conf_file);
-	assert(configs);
+	if (configs == NULL)
+		configs = config_map::ptr();
 	signal(SIGINT, int_handler);
 
 	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);

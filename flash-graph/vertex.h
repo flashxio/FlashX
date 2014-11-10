@@ -56,7 +56,7 @@ class ext_mem_vertex_info
 	off_t off;
 public:
 	ext_mem_vertex_info() {
-		id = 0;
+		id = INVALID_VERTEX_ID;
 		off = 0;
 		size = 0;
 	}
@@ -80,6 +80,10 @@ public:
 	}
 
 	bool has_edges() const;
+
+	bool is_valid() const {
+		return id != INVALID_VERTEX_ID;
+	}
 };
 
 /**

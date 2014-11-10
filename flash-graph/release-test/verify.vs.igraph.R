@@ -1,5 +1,5 @@
 require(igraph)
-library("FlashGraph")
+library("FlashGraphR")
 library("irlba")
 
 verify.cc <- function(fg.res, ig.res)
@@ -39,16 +39,23 @@ verify.cc <- function(fg.res, ig.res)
 	stopifnot(sum(cmp.res) == length(cmp.res))
 }
 
-check.vectors <- function(name, v1, v2)
+check.vectors <- function(name, fg.res, ig.res)
 {
-	cmp.res <- v1 == v2
-	if (sum(cmp.res) != length(cmp.res)) {
-		cat(name, " fails the test\n");
-	}
+	cmp.res <- fg.res == ig.res
+	stopifnot(sum(cmp.res) == length(cmp.res))
 }
 
 test.directed <- function(fg, ig)
 {
+	# test degree
+	# this can be used to test the correctness of the generated graph.
+	print("test directed degree")
+	time1 <- system.time(fg.res <- fg.degree(fg))
+	cat("FG:", time1, "\n")
+	time2 <- system.time(ig.res <- degree(ig))
+	cat("IG:", time2, "\n")
+	check.vectors("degree_test", fg.res, ig.res)
+
 	# test ccoreness
 	print("test coreness")
 	time1 <- system.time(fg.res <- fg.coreness(fg))
@@ -72,14 +79,6 @@ test.directed <- function(fg, ig)
 	time2 <- system.time(ig.res <- clusters(ig, mode="strong")$membership)
 	cat("IG:", time2, "\n")
 	verify.cc(fg.res, ig.res)
-
-	# test degree
-	print("test directed degree")
-	time1 <- system.time(fg.res <- fg.degree(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- degree(ig))
-	cat("IG:", time2, "\n")
-	check.vectors("degree_test", fg.res, ig.res)
 
 	# test PageRank
 	print("test PageRank")
@@ -128,6 +127,12 @@ test.directed <- function(fg, ig)
 
 test.undirected <- function(fg, ig)
 {
+	# test degree
+	print("test undirected degree")
+	fg.res <- fg.degree(fg)
+	ig.res <- degree(ig)
+	check.vectors("degree_test", fg.res, ig.res)
+
 	# test triangles
 	print("test triangle counting on an undirected graph")
 	time1 <- system.time(fg.res <- fg.undirected.triangles(fg))
@@ -136,11 +141,26 @@ test.undirected <- function(fg, ig)
 	cat("IG:", time2, "\n")
 	check.vectors("undirected-triangle_test", fg.res, ig.res)
 
-	# test degree
-	print("test undirected degree")
-	fg.res <- fg.degree(fg)
-	ig.res <- degree(ig)
-	check.vectors("degree_test", fg.res, ig.res)
+	# test locality scan
+	print("test locality statistics")
+	time1 <- system.time(fg.res <- fg.local.scan(fg))
+	cat("FG:", time1, "\n")
+	time2 <- system.time(ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount))
+	cat("IG:", time2, "\n")
+	check.vectors("local-scan_test", fg.res, ig.res)
+
+	# test transitivity
+	print("test local transitivity")
+	fg.res <- fg.transitivity(fg, type="local")
+	ig.res <- transitivity(ig, type="local")
+	fg.res[is.nan(fg.res)] <- 0
+	ig.res[is.nan(ig.res)] <- 0
+	check.vectors("local transitivity", fg.res, ig.res)
+
+	print("test global transitivity")
+	fg.res <- fg.transitivity(fg, type="global")
+	ig.res <- transitivity(ig, type="global")
+	stopifnot(fg.res == ig.res)
 
 	# test matrix multiplication.
 	print("A * x");
@@ -165,12 +185,53 @@ test.undirected <- function(fg, ig)
 	cat("diff on eigen vectors:", sum(abs(fg.res$vectors) - abs(ig.res$vectors)), "\n")
 }
 
-fg.set.conf("run_test.txt")
-fg <- fg.get.graph("wiki-Vote")
-ig <- read.graph("wiki-Vote.txt")
+# Test on a directed graph.
+ig <- read.graph("wiki-Vote1.txt")
+
+print("run in the standalone mode")
+print("load a graph in adjacency list")
+fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4")
 test.directed(fg, ig)
 
+cat("\n\n\n")
+print("load a graph in edge lists")
+fg <- fg.load.graph("wiki-Vote1.txt")
+test.directed(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+print("load a graph from igraph")
+fg <- fg.load.igraph(ig)
+test.directed(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+print("run in the SAFS mode")
+fg.set.conf("run_test.txt")
+fg <- fg.get.graph("wiki-Vote")
+test.directed(fg, ig)
+fg.list.graphs()
+
 # Now test on an undirected graph
-fg <- fg.get.graph("facebook")
-ig <- read.graph("facebook_combined.txt", directed=FALSE)
+ig <- read.graph("facebook_combined1.txt", directed=FALSE)
+
+print("load a graph in adjacency list")
+fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4")
 test.undirected(fg, ig)
+
+cat("\n\n\n")
+print("load a graph in edge lists")
+fg <- fg.load.graph("facebook_combined1.txt", directed=FALSE)
+test.undirected(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+print("load a graph from igraph")
+fg <- fg.load.igraph(ig)
+test.undirected(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+fg <- fg.get.graph("facebook")
+test.undirected(fg, ig)
+fg.list.graphs()

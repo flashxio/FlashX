@@ -17,9 +17,11 @@
  * limitations under the License.
  */
 
+#ifdef USE_EIGEN
+
 #include <vector>
 
-#include <Eigen/Eigenvalues>
+#include <eigen3/Eigen/Eigenvalues>
 
 #include "graph_engine.h"
 #include "graph_config.h"
@@ -385,3 +387,5 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 					orig_eigen_vectors[i]));
 	}
 }
+
+#endif

@@ -323,7 +323,7 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<wcc_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	BOOST_LOG_TRIVIAL(info) << "weakly connected components starts";
 #ifdef PROFILER
@@ -355,7 +355,7 @@ FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<sync_wcc_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	BOOST_LOG_TRIVIAL(info) << "synchronous weakly connected components starts";
 #ifdef PROFILER
@@ -388,7 +388,7 @@ FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<ts_wcc_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().has_edge_data());
 	BOOST_LOG_TRIVIAL(info) << "TS weakly connected components starts";
