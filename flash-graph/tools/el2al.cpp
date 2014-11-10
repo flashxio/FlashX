@@ -118,11 +118,8 @@ int main(int argc, char *argv[])
 
 	std::string adjacency_list_file = argv[0];
 	adjacency_list_file += std::string("-v") + itoa(CURR_VERSION);
-	std::string work_dir;
-	if (on_disk) {
-		work_dir = dirname(argv[0]);
-		printf("work dir: %s\n", work_dir.c_str());
-	}
+	std::string work_dir = dirname(argv[0]);
+	printf("work dir: %s\n", work_dir.c_str());
 
 	std::string index_file = argv[1];
 	index_file += std::string("-v") + itoa(CURR_VERSION);
@@ -145,7 +142,7 @@ int main(int argc, char *argv[])
 
 	if (merge_graph) {
 		edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
-				directed, num_threads, work_dir.empty());
+				directed, num_threads, !on_disk);
 		disk_serial_graph::ptr g
 			= std::static_pointer_cast<disk_serial_graph, serial_graph>(
 					construct_graph(edge_g, work_dir, num_threads));
