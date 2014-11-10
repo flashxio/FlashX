@@ -36,6 +36,8 @@ Documentation
 
 [FlashGraph programming tutorial](https://github.com/icoming/FlashGraph/wiki/FlashGraph-programming-tutorial).
 
+[FlashGraphR Quick Start](https://github.com/icoming/FlashGraph/wiki/FlashGraphR-Quick-Start-Guide)
+
 [FlashGraph performance](https://github.com/icoming/FlashGraph/wiki/Performance-of-FlashGraph)
 
 [SAFS user manual](https://github.com/icoming/FlashGraph/wiki/SAFS-user-manual).
