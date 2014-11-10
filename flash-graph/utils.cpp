@@ -233,7 +233,6 @@ public:
 	typedef std::shared_ptr<edge_vector<edge_data_type> > ptr;
 
 	virtual void push_back(const edge<edge_data_type> &e) = 0;
-	virtual void append(const edge_vector<edge_data_type> &vec) = 0;
 	virtual void append(const std::vector<edge<edge_data_type> > &vec) = 0;
 	virtual void sort(bool out_edge) = 0;
 	virtual edge_stream get_stream() const = 0;
@@ -280,15 +279,6 @@ public:
 
 	virtual void push_back(const edge<edge_data_type> &e) {
 		data.push_back(e);
-	}
-
-	void append(const edge_vector<edge_data_type> &vec) {
-		const stxxl_edge_vector<edge_data_type> &stxxl_vec
-			= (const stxxl_edge_vector<edge_data_type> &) vec;
-		const_iterator it = stxxl_vec.data.begin();
-		const_iterator end = stxxl_vec.data.end();
-		for (; it != end; it++)
-			data.push_back(*it);
 	}
 
 	void append(const std::vector<edge<edge_data_type> > &vec) {
@@ -376,9 +366,12 @@ public:
 	}
 
 	void append(const edge_vector<edge_data_type> &vec) {
-		const std_edge_vector<edge_data_type> &std_vec
-			= (const std_edge_vector<edge_data_type> &) vec;
-		data.insert(data.end(), std_vec.data.begin(), std_vec.data.end());
+		typename edge_vector<edge_data_type>::edge_stream strm
+			= vec.get_stream();
+		while (!strm.empty()) {
+			data.push_back(*strm);
+			++strm;
+		}
 	}
 
 	void append(const std::vector<edge<edge_data_type> > &vec) {
@@ -1179,7 +1172,7 @@ off_t undirected_edge_graph<edge_data_type>::add_edges(
 template<class edge_data_type>
 void get_all_edges(
 		const std::vector<std::shared_ptr<edge_vector<edge_data_type> > > &edge_lists,
-		edge_vector<edge_data_type> &edges)
+		std_edge_vector<edge_data_type> &edges)
 {
 	BOOST_FOREACH(std::shared_ptr<edge_vector<edge_data_type> > vec, edge_lists) {
 		edges.append(*vec);
@@ -1626,7 +1619,6 @@ std::unique_ptr<char[]> gz_graph_file_io::read_edge_list_text(
 
 	if (!gzeof(f)) {
 		int ret = gzread(f, buf, wanted_bytes + PAGE_SIZE);
-		printf("want %ld bytes, get %d bytes\n", wanted_bytes + PAGE_SIZE, ret);
 		if (ret <= 0) {
 			if (ret < 0 || !gzeof(f)) {
 				BOOST_LOG_TRIVIAL(fatal) << gzerror(f, &ret);
