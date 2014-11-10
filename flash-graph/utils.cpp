@@ -1258,7 +1258,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 	}
 }
 
-vsize_t BUF_SIZE = 1024 * 1024 * 1024;
+static const size_t BUF_SIZE = 1024L * 1024 * 1024 * 32;
 
 size_t cal_vertex_size(const std::vector<ext_mem_vertex_info> &infos)
 {
