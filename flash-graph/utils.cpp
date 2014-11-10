@@ -1189,7 +1189,7 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 	edges.sort(true);
 	typename std_edge_vector<edge_data_type>::const_iterator it
 		= std::lower_bound(edges.cbegin(), edges.cend(),
-				edge<edge_data_type>(0, vertices[0]->get_id()),
+				edge<edge_data_type>(vertices[0]->get_id(), 0),
 				comp_edge<edge_data_type>());
 
 	for (size_t i = 0; i < vertices.size(); i++) {
