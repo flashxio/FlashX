@@ -34,7 +34,7 @@ Documentation
 
 [FlashGraph Quick start guide](https://github.com/icoming/FlashGraph/wiki/FlashGraph-Quick-Start-Guide)
 
-[FlashGraph User manual](https://github.com/icoming/FlashGraph/wiki/FlashGraph-User-Manual).
+[FlashGraph programming tutorial](https://github.com/icoming/FlashGraph/wiki/FlashGraph-programming-tutorial).
 
 [FlashGraph performance](https://github.com/icoming/FlashGraph/wiki/Performance-of-FlashGraph)
 
