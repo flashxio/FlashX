@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
 			files[0] = edge_list_files[i];
 
 			edge_graph::ptr edge_g = parse_edge_lists(files, edge_attr_type,
-					directed, num_threads, work_dir.empty());
+					directed, num_threads, !on_disk);
 			disk_serial_graph::ptr g
 				= std::static_pointer_cast<disk_serial_graph, serial_graph>(
 						construct_graph(edge_g, work_dir, num_threads));
