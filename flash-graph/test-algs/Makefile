@@ -21,19 +21,15 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lboost_date_time $(OMP_FLAG) $(LDFLAGS)
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
-all: test_algs test_lcc
+all: test_algs
 
 test_algs: test_algs.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
 	$(CXX) -o test_algs test_algs.o $(LDFLAGS)
-
-test_lcc: test_lcc.o ../libgraph.a ../libgraph-algs/libgraph-algs.a
-	$(CXX) -o test_lcc test_lcc.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f test_algs
-	rm -f test_lcc
 
 -include $(DEPS) 
