@@ -4,7 +4,7 @@ project (FlashGraph)
 
 # The version number.
 set (FlashGraph_VERSION_MAJOR 0)
-set (FlashGraph_VERSION_MINOR 2)
+set (FlashGraph_VERSION_MINOR 3)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 

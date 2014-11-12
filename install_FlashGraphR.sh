@@ -16,8 +16,8 @@ fi
 if [ -n "$path" ]; then
 	path=`dirname $path`
 	echo $path
-	RCPP_INCLUDE=$path FG_DIR=`pwd` FG_LIB=`pwd`/build R CMD INSTALL FlashGraphR_0.2-0.tar.gz
+	RCPP_INCLUDE=$path FG_DIR=`pwd` FG_LIB=`pwd`/build R CMD INSTALL FlashGraphR_0.3-0.tar.gz
 else
-	FG_DIR=`pwd` FG_LIB=`pwd`/build R CMD INSTALL FlashGraphR_0.2-0.tar.gz
+	FG_DIR=`pwd` FG_LIB=`pwd`/build R CMD INSTALL FlashGraphR_0.3-0.tar.gz
 fi
-rm FlashGraphR_0.2-0.tar.gz
+rm FlashGraphR_0.3-0.tar.gz
