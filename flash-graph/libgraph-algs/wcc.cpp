@@ -446,6 +446,10 @@ FG_vector<vertex_id_t>::ptr compute_wcc(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
+	if (!graph->is_directed()) {
+		fprintf(stderr, "wcc has to run on a directed graph\n");
+		return FG_vector<vertex_id_t>::ptr();
+	}
 
 	graph->start_all(vertex_initializer::ptr(),
 			vertex_program_creater::ptr(new wcc_vertex_program_creater<wcc_vertex>()));
@@ -478,6 +482,10 @@ FG_vector<vertex_id_t>::ptr compute_sync_wcc(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
+	if (!graph->is_directed()) {
+		fprintf(stderr, "wcc has to run on a directed graph\n");
+		return FG_vector<vertex_id_t>::ptr();
+	}
 
 	graph->start_all(vertex_initializer::ptr(),
 			vertex_program_creater::ptr(new wcc_vertex_program_creater<sync_wcc_vertex>()));
@@ -512,6 +520,10 @@ FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
 #endif
+	if (!graph->is_directed()) {
+		fprintf(stderr, "wcc has to run on a directed graph\n");
+		return FG_vector<vertex_id_t>::ptr();
+	}
 
 	graph->start_all(vertex_initializer::ptr(), vertex_program_creater::ptr(
 				new ts_wcc_vertex_program_creater(start_time, time_interval)));
