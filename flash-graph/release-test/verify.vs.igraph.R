@@ -135,7 +135,7 @@ test.undirected <- function(fg, ig)
 
 	# test triangles
 	print("test triangle counting on an undirected graph")
-	time1 <- system.time(fg.res <- fg.undirected.triangles(fg))
+	time1 <- system.time(fg.res <- fg.triangles(fg))
 	cat("FG:", time1, "\n")
 	time2 <- system.time(ig.res <- adjacent.triangles(ig))
 	cat("IG:", time2, "\n")

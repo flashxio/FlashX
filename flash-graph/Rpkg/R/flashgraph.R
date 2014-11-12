@@ -140,19 +140,17 @@ fg.page.rank <- function(graph, no.iters=1000, damping.factor=0.85)
 		  PACKAGE="FlashGraphR")
 }
 
-fg.directed.triangles <- function(graph, type="cycle")
+fg.triangles <- function(graph, type="cycle")
 {
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
-	stopifnot(graph$directed)
-	.Call("R_FG_compute_directed_triangles", graph, type, PACKAGE="FlashGraphR")
-}
-
-fg.undirected.triangles <- function(graph)
-{
-	stopifnot(graph != NULL)
-	stopifnot(class(graph) == "fg")
-	.Call("R_FG_compute_undirected_triangles", graph, PACKAGE="FlashGraphR")
+	if (graph$directed) {
+		.Call("R_FG_compute_directed_triangles", graph, type,
+			  PACKAGE="FlashGraphR")
+	}
+	else {
+		.Call("R_FG_compute_undirected_triangles", graph, PACKAGE="FlashGraphR")
+	}
 }
 
 fg.topK.scan <- function(graph, order=1, K=1)
@@ -171,7 +169,7 @@ fg.local.scan <- function(graph, order=1)
 		.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraphR")
 	}
 	else {
-		fg.undirected.triangles(graph) + fg.degree(graph)
+		fg.triangles(graph) + fg.degree(graph)
 	}
 }
 
@@ -185,7 +183,7 @@ fg.transitivity <- function(graph, type=c("global", "local"))
 			(fg.local.scan(graph) - deg) / (deg * (deg - 1))
 		}
 		else {
-			2 * fg.undirected.triangles(graph) / (deg * (deg - 1))
+			2 * fg.triangles(graph) / (deg * (deg - 1))
 		}
 	}
 	else {
@@ -193,7 +191,7 @@ fg.transitivity <- function(graph, type=c("global", "local"))
 			sum(fg.local.scan(graph) - deg) / sum(deg * (deg - 1))
 		}
 		else {
-			2 * sum(fg.undirected.triangles(graph)) / sum(deg * (deg - 1))
+			2 * sum(fg.triangles(graph)) / sum(deg * (deg - 1))
 		}
 	}
 }
