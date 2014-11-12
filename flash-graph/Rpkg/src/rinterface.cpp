@@ -449,6 +449,15 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 
 ///////////////////////////// graph algorithms ///////////////////////////
 
+RcppExport SEXP R_FG_compute_cc(SEXP graph)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	FG_vector<vertex_id_t>::ptr fg_vec = compute_cc(fg);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	return res;
+}
+
 RcppExport SEXP R_FG_compute_wcc(SEXP graph)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
