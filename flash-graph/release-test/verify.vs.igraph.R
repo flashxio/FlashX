@@ -55,57 +55,44 @@ test.directed <- function(fg, ig)
 	# test degree
 	# this can be used to test the correctness of the generated graph.
 	print("test directed degree")
-	time1 <- system.time(fg.res <- fg.degree(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- degree(ig))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.degree(fg)
+	ig.res <- degree(ig)
 	check.vectors("degree_test", fg.res, ig.res)
 
 	# test ccoreness
 	print("test coreness")
-	time1 <- system.time(fg.res <- fg.coreness(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- graph.coreness(ig, mode="all"))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.coreness(fg)
+	ig.res <- graph.coreness(ig, mode="all")
 	check.vectors("coreness_test", fg.res, ig.res)
 
 	# test WCC
 	print("test WCC")
-	time1 <- system.time(fg.res <- fg.clusters(fg, mode="weak"))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- clusters(ig, mode="weak")$membership)
-	cat("IG:", time2, "\n")
+	fg.res <- fg.clusters(fg, mode="weak")
+	ig.res <- clusters(ig, mode="weak")$membership
 	verify.cc(fg.res, ig.res)
 
 	# test SCC
 	print("test SCC")
-	time1 <- system.time(fg.res <- fg.clusters(fg, mode="strong"))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- clusters(ig, mode="strong")$membership)
-	cat("IG:", time2, "\n")
+	fg.res <- fg.clusters(fg, mode="strong")
+	ig.res <- clusters(ig, mode="strong")$membership
 	verify.cc(fg.res, ig.res)
 
 	# test PageRank
 	print("test PageRank")
-	time1 <- system.time(fg.res <- fg.page.rank(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- page.rank.old(ig, eps=0.01, old=TRUE))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.page.rank(fg)
+	ig.res <- page.rank.old(ig, eps=0.01, old=TRUE)
 	num <- sum((abs(fg.res - ig.res) / abs(fg.res)) < 0.02)
 	cat("# vertices whose PR diff <= 2% is", num, ", # vertices:", vcount(ig))
 
 	# test locality scan
 	print("test locality statistics")
-	time1 <- system.time(fg.res <- fg.local.scan(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.local.scan(fg)
+	ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
 	check.vectors("local-scan_test", fg.res, ig.res)
 
 	# test topK scan
 	print("test topK locality statistics")
-	time1 <- system.time(fg.res <- fg.topK.scan(fg, K=10))
-	cat("FG:", time1, "\n")
+	fg.res <- fg.topK.scan(fg, K=10)
 	ig.res <- sort(ig.res, decreasing=TRUE)[1:10]
 	check.vectors("topK-scan_test", fg.res$scan, ig.res)
 
@@ -151,18 +138,14 @@ test.undirected <- function(fg, ig)
 
 	# test triangles
 	print("test triangle counting on an undirected graph")
-	time1 <- system.time(fg.res <- fg.triangles(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- adjacent.triangles(ig))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.triangles(fg)
+	ig.res <- adjacent.triangles(ig)
 	check.vectors("undirected-triangle_test", fg.res, ig.res)
 
 	# test locality scan
 	print("test locality statistics")
-	time1 <- system.time(fg.res <- fg.local.scan(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.local.scan(fg)
+	ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
 	check.vectors("local-scan_test", fg.res, ig.res)
 
 	# test transitivity
