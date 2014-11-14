@@ -45,6 +45,11 @@ check.vectors <- function(name, fg.res, ig.res)
 	stopifnot(sum(cmp.res) == length(cmp.res))
 }
 
+check.matrices <- function(name, fg.res, ig.res)
+{
+	check.vectors(name, fg.res, ig.res)
+}
+
 test.directed <- function(fg, ig)
 {
 	# test degree
@@ -117,6 +122,17 @@ test.directed <- function(fg, ig)
 	ig.res <- t(as.matrix(ig.matrix)) %*% x
 	check.vectors("t(A) * x", fg.res, ig.res)
 
+	print("A * m");
+	x <- matrix(runif(vcount(ig) * 5, 0, 1), nrow=vcount(ig), ncol=5)
+	fg.res <- fg.multiply.matrix(fg, x)
+	ig.res <- ig.matrix %*% x
+	check.matrices("A * m", fg.res, ig.res)
+
+	print("t(A) * m")
+	fg.res <- fg.multiply.matrix(fg, x, TRUE)
+	ig.res <- t(as.matrix(ig.matrix)) %*% x
+	check.matrices("t(A) * m", fg.res, ig.res)
+
 	# test SVD
 	print("test SVD")
 	fg.res <- fg.SVD(fg, which="LM", nev=5, ncv=10)
@@ -173,6 +189,16 @@ test.undirected <- function(fg, ig)
 	print("t(A) * x");
 	fg.res <- fg.multiply(fg, x, TRUE)
 	check.vectors("t(A) * x", fg.res, ig.res)
+
+	print("A * m");
+	x <- matrix(runif(vcount(ig) * 5, 0, 1), nrow=vcount(ig), ncol=5)
+	fg.res <- fg.multiply.matrix(fg, x)
+	ig.res <- ig.matrix %*% x
+	check.matrices("A * m", fg.res, ig.res)
+
+	print("t(A) * m")
+	fg.res <- fg.multiply.matrix(fg, x, TRUE)
+	check.matrices("t(A) * m", fg.res, ig.res)
 
 	# test eigen
 	print("test eigen")

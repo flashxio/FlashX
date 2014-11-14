@@ -497,9 +497,13 @@ fg.diameter <- function(graph, directed=FALSE)
 	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashGraphR")
 }
 
-#' Sparse matrix vector multiplication
+#' Sparse matrix multiplication
 #'
-#' Multiply a sparse matrix and dense vector.
+#' Multiply a sparse matrix with a dense vector or a dense matrix.
+#'
+#' `fg.multiply' multiplies a sparse matrix with a dense vector.
+#'
+#' `fg.multiply.matrix' multiplies a sparse matrix with a dense matrix.
 #'
 #' Note that the sparse matrix is represented by a graph. A symmetric matrix
 #' is represented by an undirected graph and an asymmetric matrix is
@@ -510,17 +514,30 @@ fg.diameter <- function(graph, directed=FALSE)
 #'
 #' @param graph The FlashGraphR object
 #' @param vec A numueric vector
+#' @param m A numeric dense matrix.
 #' @param transpose Indicate whether or not to multiply with the transpose of
 #'                  the matrix. It is ignored by an undirected graph.
-#' @return A numeric vector
+#' @return `fg.multiply' returns a numeric vector and `fg.multiply.matrix'
+#' returns a numeric dense matrix.
 #' @name fg.multiply
 #' @author Da Zheng <dzheng5@@jhu.edu>
+
+#' @rdname fg.multiply
 fg.multiply <- function(graph, vec, transpose=FALSE)
 {
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
 #	stopifnot(graph$directed)
 	.Call("R_FG_multiply_v", graph, vec, transpose, PACKAGE="FlashGraphR")
+}
+
+#' @rdname fg.multiply
+fg.multiply.matrix <- function(graph, m, transpose=FALSE)
+{
+	col.multiply <- function(x) {
+		fg.multiply(graph, x, transpose)
+	}
+	apply(m, 2, col.multiply)
 }
 
 #' Eigensolver
