@@ -527,6 +527,7 @@ fg.multiply <- function(graph, vec, transpose=FALSE)
 {
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
+	stopifnot(fg.vcount(graph) == length(vec))
 #	stopifnot(graph$directed)
 	.Call("R_FG_multiply_v", graph, vec, transpose, PACKAGE="FlashGraphR")
 }
