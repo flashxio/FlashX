@@ -117,6 +117,11 @@ void print_cc(FG_vector<vertex_id_t>::ptr comp_ids)
 			map.get_size(), max_comp.second);
 }
 
+void run_cc(FG_graph::ptr graph, int argc, char *argv[])
+{
+	print_cc(compute_cc(graph));
+}
+
 void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 {
 	int opt;
@@ -583,7 +588,8 @@ int main(int argc, char *argv[])
 	argc -= 3;
 
 	config_map::ptr configs = config_map::create(conf_file);
-	assert(configs);
+	if (configs == NULL)
+		configs = config_map::ptr();
 	signal(SIGINT, int_handler);
 
 	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
@@ -610,6 +616,9 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "wcc") {
 		run_wcc(graph, argc, argv);
+	}
+	else if (alg == "cc") {
+		run_cc(graph, argc, argv);
 	}
 	else if (alg == "scc") {
 		run_scc(graph, argc, argv);

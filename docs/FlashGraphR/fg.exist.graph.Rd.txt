@@ -1,0 +1,23 @@
+Indicate whether a graph has been loaded to FlashGraphR
+
+Description:
+
+     This function indicates whether a graph has been loaded to
+     FlashGraphR.
+
+Usage:
+
+     fg.exist.graph(graph)
+     
+Arguments:
+
+   graph: A graph name.
+
+Value:
+
+     A boolean value: true if the graph has been loaded to FlashGraphR.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

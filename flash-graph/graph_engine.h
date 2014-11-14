@@ -353,7 +353,6 @@ class graph_engine
 
 	trace_logger::ptr logger;
 	file_io_factory::shared_ptr graph_factory;
-	file_io_factory::shared_ptr index_factory;
 	int max_processing_vertices;
 
 	// The time when the current iteration starts.
@@ -361,14 +360,6 @@ class graph_engine
 
 	void init_threads(vertex_program_creater::ptr creater);
 protected:
-    /**
-     * \brief Constructor usable by inheriting classes.
-     * \param graph_file The path to the graph file on disk.
-     * \param index The path to the graph index file on disk.
-     * \param configs The path to the configuration file on
-     */
-	graph_engine(const std::string &graph_file, graph_index::ptr index,
-			config_map::ptr configs);
 	graph_engine(FG_graph &graph, graph_index::ptr index);
 	void init(graph_index::ptr index);
 public:
@@ -378,15 +369,10 @@ public:
 	static void destroy_flash_graph();
     
     /**
-     * \brief Use this method to in lieu of a constructor to create a graph object.
-     * \param graph_file The path to the graph file on disk.
+     * \brief Constructor usable by inheriting classes.
+     * \param graph 
      * \param index The path to the graph index file on disk.
-     * \param configs The path to the configuration file on
      */
-	static graph_engine::ptr create(const std::string &graph_file,
-			graph_index::ptr index, config_map::ptr configs) {
-		return graph_engine::ptr(new graph_engine(graph_file, index, configs));
-	}
 	static graph_engine::ptr create(FG_graph &graph, graph_index::ptr index) {
 		return graph_engine::ptr(new graph_engine(graph, index));
 	}
@@ -520,6 +506,7 @@ public:
      */
 	void wait4complete();
 
+#if 0
 	/**
 	 * \brief This method preloads the entire graph to the page cache.
 	 *        If the page cache is smaller than the graph, only the first part
@@ -527,6 +514,7 @@ public:
 	 *        to the page cache.
 	 */
 	void preload_graph();
+#endif
 
 	/**
 	 * \brief Allows users to initialize vertices to certain state.

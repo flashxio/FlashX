@@ -26,6 +26,7 @@
 
 #include "graph_engine.h"
 #include "graph_config.h"
+#include "FGlib.h"
 
 edge_type traverse_edge = edge_type::OUT_EDGE;
 
@@ -171,8 +172,10 @@ int main(int argc, char *argv[])
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	graph_index::ptr index = NUMA_graph_index<bfs_vertex>::create(index_file);
-	graph_engine::ptr graph = graph_engine::create(graph_file, index, configs);
+	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	graph_index::ptr index = NUMA_graph_index<bfs_vertex>::create(
+			fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 	printf("BFS starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER

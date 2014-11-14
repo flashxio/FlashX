@@ -27,6 +27,7 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
 
 #include "container.h"
 #include "cache.h"
@@ -56,7 +57,7 @@ class ext_mem_vertex_info
 	off_t off;
 public:
 	ext_mem_vertex_info() {
-		id = 0;
+		id = INVALID_VERTEX_ID;
 		off = 0;
 		size = 0;
 	}
@@ -80,6 +81,10 @@ public:
 	}
 
 	bool has_edges() const;
+
+	bool is_valid() const {
+		return id != INVALID_VERTEX_ID;
+	}
 };
 
 /**
@@ -1145,6 +1150,8 @@ struct edge_off
 class in_mem_vertex
 {
 public:
+	typedef std::shared_ptr<in_mem_vertex> ptr;
+
 	virtual vertex_id_t get_id() const = 0;
 	virtual bool has_edge_data() const = 0;
 	virtual size_t get_edge_data_size() const = 0;
@@ -1152,6 +1159,10 @@ public:
 	virtual void serialize_edge_data(char *data, edge_type type) const = 0;
 	virtual size_t get_serialize_size(edge_type type) const = 0;
 	virtual size_t get_num_edges(edge_type type) const = 0;
+	virtual ptr create_remapped_vertex(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const = 0;
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) = 0;
 };
 
 /*
@@ -1324,6 +1335,45 @@ public:
 		}
 	}
 
+	in_mem_vertex::ptr create_remapped_vertex(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
+		in_mem_directed_vertex<edge_data_type> *new_v
+			= new in_mem_directed_vertex<edge_data_type>(*this);
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(new_v->id);
+		assert(it != map.end());
+		new_v->id = it->second;
+		for (size_t i = 0; i < new_v->out_edges.size(); i++) {
+			it = map.find(new_v->out_edges[i]);
+			assert(it != map.end());
+			new_v->out_edges[i] = it->second;
+		}
+		for (size_t i = 0; i < new_v->in_edges.size(); i++) {
+			it = map.find(new_v->in_edges[i]);
+			assert(it != map.end());
+			new_v->in_edges[i] = it->second;
+		}
+		return in_mem_vertex::ptr(new_v);
+	}
+
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(this->id);
+		assert(it != map.end());
+		this->id = it->second;
+		for (size_t i = 0; i < this->out_edges.size(); i++) {
+			it = map.find(this->out_edges[i]);
+			assert(it != map.end());
+			this->out_edges[i] = it->second;
+		}
+		for (size_t i = 0; i < this->in_edges.size(); i++) {
+			it = map.find(this->in_edges[i]);
+			assert(it != map.end());
+			this->in_edges[i] = it->second;
+		}
+	}
+
 	void print() const {
 		printf("v%ld has edge data: %d\n", (unsigned long) get_id(), has_edge_data());
 		printf("There are %ld in-edges: ", in_edges.size());
@@ -1416,6 +1466,35 @@ public:
 		ext_mem_undirected_vertex v(0, edges.size(),
 				has_data ? sizeof(edge_data_type) : 0);
 		return v.get_size();
+	}
+
+	in_mem_vertex::ptr create_remapped_vertex(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
+		in_mem_undirected_vertex<edge_data_type> *new_v
+			= new in_mem_undirected_vertex<edge_data_type>(*this);
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(new_v->id);
+		assert(it != map.end());
+		new_v->id = it->second;
+		for (size_t i = 0; i < new_v->edges.size(); i++) {
+			it = map.find(new_v->edges[i]);
+			assert(it != map.end());
+			new_v->edges[i] = it->second;
+		}
+		return in_mem_vertex::ptr(new_v);
+	}
+
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(this->id);
+		assert(it != map.end());
+		this->id = it->second;
+		for (size_t i = 0; i < this->edges.size(); i++) {
+			it = map.find(this->edges[i]);
+			assert(it != map.end());
+			this->edges[i] = it->second;
+		}
 	}
 };
 

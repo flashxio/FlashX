@@ -1,5 +1,5 @@
 require(igraph)
-library("FlashGraph")
+library("FlashGraphR")
 library("irlba")
 
 verify.cc <- function(fg.res, ig.res)
@@ -39,69 +39,66 @@ verify.cc <- function(fg.res, ig.res)
 	stopifnot(sum(cmp.res) == length(cmp.res))
 }
 
-check.vectors <- function(name, v1, v2)
+check.vectors <- function(name, fg.res, ig.res)
 {
-	cmp.res <- v1 == v2
-	if (sum(cmp.res) != length(cmp.res)) {
-		cat(name, " fails the test\n");
-	}
+	cmp.res <- fg.res == ig.res
+	stopifnot(sum(cmp.res) == length(cmp.res))
+}
+
+check.matrices <- function(name, fg.res, ig.res)
+{
+	check.vectors(name, fg.res, ig.res)
 }
 
 test.directed <- function(fg, ig)
 {
+	# test degree
+	# this can be used to test the correctness of the generated graph.
+	print("test directed degree")
+	fg.res <- fg.degree(fg)
+	ig.res <- degree(ig)
+	check.vectors("degree_test", fg.res, ig.res)
+	fg.res <- fg.degree(fg, mode="out")
+	ig.res <- degree(ig, mode="out")
+	check.vectors("degree_test", fg.res, ig.res)
+	fg.res <- fg.degree(fg, mode="in")
+	ig.res <- degree(ig, mode="in")
+	check.vectors("degree_test", fg.res, ig.res)
+
 	# test ccoreness
 	print("test coreness")
-	time1 <- system.time(fg.res <- fg.coreness(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- graph.coreness(ig, mode="all"))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.coreness(fg)
+	ig.res <- graph.coreness(ig, mode="all")
 	check.vectors("coreness_test", fg.res, ig.res)
 
 	# test WCC
 	print("test WCC")
-	time1 <- system.time(fg.res <- fg.clusters(fg, mode="weak"))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- clusters(ig, mode="weak")$membership)
-	cat("IG:", time2, "\n")
+	fg.res <- fg.clusters(fg, mode="weak")
+	ig.res <- clusters(ig, mode="weak")$membership
 	verify.cc(fg.res, ig.res)
 
 	# test SCC
 	print("test SCC")
-	time1 <- system.time(fg.res <- fg.clusters(fg, mode="strong"))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- clusters(ig, mode="strong")$membership)
-	cat("IG:", time2, "\n")
+	fg.res <- fg.clusters(fg, mode="strong")
+	ig.res <- clusters(ig, mode="strong")$membership
 	verify.cc(fg.res, ig.res)
-
-	# test degree
-	print("test directed degree")
-	time1 <- system.time(fg.res <- fg.degree(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- degree(ig))
-	cat("IG:", time2, "\n")
-	check.vectors("degree_test", fg.res, ig.res)
 
 	# test PageRank
 	print("test PageRank")
-	time1 <- system.time(fg.res <- fg.page.rank(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- page.rank.old(ig, eps=0.01, old=TRUE))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.page.rank(fg)
+	ig.res <- page.rank.old(ig, eps=0.01, old=TRUE)
 	num <- sum((abs(fg.res - ig.res) / abs(fg.res)) < 0.02)
 	cat("# vertices whose PR diff <= 2% is", num, ", # vertices:", vcount(ig))
 
 	# test locality scan
 	print("test locality statistics")
-	time1 <- system.time(fg.res <- fg.local.scan(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount))
-	cat("IG:", time2, "\n")
+	fg.res <- fg.local.scan(fg)
+	ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
 	check.vectors("local-scan_test", fg.res, ig.res)
 
 	# test topK scan
 	print("test topK locality statistics")
-	time1 <- system.time(fg.res <- fg.topK.scan(fg, K=10))
-	cat("FG:", time1, "\n")
+	fg.res <- fg.topK.scan(fg, K=10)
 	ig.res <- sort(ig.res, decreasing=TRUE)[1:10]
 	check.vectors("topK-scan_test", fg.res$scan, ig.res)
 
@@ -118,6 +115,17 @@ test.directed <- function(fg, ig)
 	ig.res <- t(as.matrix(ig.matrix)) %*% x
 	check.vectors("t(A) * x", fg.res, ig.res)
 
+	print("A * m");
+	x <- matrix(runif(vcount(ig) * 5, 0, 1), nrow=vcount(ig), ncol=5)
+	fg.res <- fg.multiply.matrix(fg, x)
+	ig.res <- ig.matrix %*% x
+	check.matrices("A * m", fg.res, ig.res)
+
+	print("t(A) * m")
+	fg.res <- fg.multiply.matrix(fg, x, TRUE)
+	ig.res <- t(as.matrix(ig.matrix)) %*% x
+	check.matrices("t(A) * m", fg.res, ig.res)
+
 	# test SVD
 	print("test SVD")
 	fg.res <- fg.SVD(fg, which="LM", nev=5, ncv=10)
@@ -128,19 +136,36 @@ test.directed <- function(fg, ig)
 
 test.undirected <- function(fg, ig)
 {
-	# test triangles
-	print("test triangle counting on an undirected graph")
-	time1 <- system.time(fg.res <- fg.undirected.triangles(fg))
-	cat("FG:", time1, "\n")
-	time2 <- system.time(ig.res <- adjacent.triangles(ig))
-	cat("IG:", time2, "\n")
-	check.vectors("undirected-triangle_test", fg.res, ig.res)
-
 	# test degree
 	print("test undirected degree")
 	fg.res <- fg.degree(fg)
 	ig.res <- degree(ig)
 	check.vectors("degree_test", fg.res, ig.res)
+
+	# test triangles
+	print("test triangle counting on an undirected graph")
+	fg.res <- fg.triangles(fg)
+	ig.res <- adjacent.triangles(ig)
+	check.vectors("undirected-triangle_test", fg.res, ig.res)
+
+	# test locality scan
+	print("test locality statistics")
+	fg.res <- fg.local.scan(fg)
+	ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
+	check.vectors("local-scan_test", fg.res, ig.res)
+
+	# test transitivity
+	print("test local transitivity")
+	fg.res <- fg.transitivity(fg, type="local")
+	ig.res <- transitivity(ig, type="local")
+	fg.res[is.nan(fg.res)] <- 0
+	ig.res[is.nan(ig.res)] <- 0
+	check.vectors("local transitivity", fg.res, ig.res)
+
+	print("test global transitivity")
+	fg.res <- fg.transitivity(fg, type="global")
+	ig.res <- transitivity(ig, type="global")
+	stopifnot(fg.res == ig.res)
 
 	# test matrix multiplication.
 	print("A * x");
@@ -154,6 +179,16 @@ test.undirected <- function(fg, ig)
 	fg.res <- fg.multiply(fg, x, TRUE)
 	check.vectors("t(A) * x", fg.res, ig.res)
 
+	print("A * m");
+	x <- matrix(runif(vcount(ig) * 5, 0, 1), nrow=vcount(ig), ncol=5)
+	fg.res <- fg.multiply.matrix(fg, x)
+	ig.res <- ig.matrix %*% x
+	check.matrices("A * m", fg.res, ig.res)
+
+	print("t(A) * m")
+	fg.res <- fg.multiply.matrix(fg, x, TRUE)
+	check.matrices("t(A) * m", fg.res, ig.res)
+
 	# test eigen
 	print("test eigen")
 	fg.res <- fg.eigen(fg, which="LM", nev=5, ncv=10)
@@ -165,12 +200,53 @@ test.undirected <- function(fg, ig)
 	cat("diff on eigen vectors:", sum(abs(fg.res$vectors) - abs(ig.res$vectors)), "\n")
 }
 
-fg.set.conf("run_test.txt")
-fg <- fg.get.graph("wiki-Vote")
-ig <- read.graph("wiki-Vote.txt")
+# Test on a directed graph.
+ig <- read.graph("wiki-Vote1.txt")
+
+print("run in the standalone mode")
+print("load a graph in adjacency list")
+fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4")
 test.directed(fg, ig)
 
+cat("\n\n\n")
+print("load a graph in edge lists")
+fg <- fg.load.graph("wiki-Vote1.txt")
+test.directed(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+print("load a graph from igraph")
+fg <- fg.load.igraph(ig)
+test.directed(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+print("run in the SAFS mode")
+fg.set.conf("run_test.txt")
+fg <- fg.get.graph("wiki-Vote")
+test.directed(fg, ig)
+fg.list.graphs()
+
 # Now test on an undirected graph
-fg <- fg.get.graph("facebook")
-ig <- read.graph("facebook_combined.txt", directed=FALSE)
+ig <- read.graph("facebook_combined1.txt", directed=FALSE)
+
+print("load a graph in adjacency list")
+fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4")
 test.undirected(fg, ig)
+
+cat("\n\n\n")
+print("load a graph in edge lists")
+fg <- fg.load.graph("facebook_combined1.txt", directed=FALSE)
+test.undirected(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+print("load a graph from igraph")
+fg <- fg.load.igraph(ig)
+test.undirected(fg, ig)
+fg.list.graphs()
+
+cat("\n\n\n")
+fg <- fg.get.graph("facebook")
+test.undirected(fg, ig)
+fg.list.graphs()

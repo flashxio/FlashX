@@ -23,9 +23,8 @@
 #include "vertex.h"
 #include "in_mem_storage.h"
 #include "vertex_index.h"
-
-static std::unordered_map<std::string, in_mem_graph::ptr> in_mem_graphs;
-static std::unordered_map<std::string, vertex_index::ptr> in_mem_indices;
+#include "safs_file.h"
+#include "utils.h"
 
 FG_graph::FG_graph(const std::string &graph_file,
 		const std::string &index_file, config_map::ptr configs)
@@ -34,35 +33,96 @@ FG_graph::FG_graph(const std::string &graph_file,
 	this->index_file = index_file;
 	this->configs = configs;
 
-	graph_engine::init_flash_graph(configs);
-	std::unordered_map<std::string, in_mem_graph::ptr>::const_iterator git
-		= in_mem_graphs.find(graph_file);
-	if (git != in_mem_graphs.end()) {
-		assert(git->second);
-		graph_data = git->second;
+	try {
+		graph_engine::init_flash_graph(configs);
+	} catch (init_error &e) {
+		BOOST_LOG_TRIVIAL(error) << std::string("init FlashGraph ") + e.what();
 	}
-	else if (graph_conf.use_in_mem_graph()) {
-		graph_data = in_mem_graph::load_graph(graph_file);
-		in_mem_graphs.insert(std::pair<std::string, in_mem_graph::ptr>(
-					graph_file, graph_data));
+	bool init_io = is_safs_init();
+
+	/*
+	 * The order of searching for the graph file and index file is memory,
+	 * SAFS and then local Linux filesystem.
+	 *
+	 * If the graph file and index file have been loaded to memory, use
+	 * the in-memory copy.
+	 * If the graph file and index file are in SAFS and users want to run
+	 * in-memory mode, read graph data and index from SAFS.
+	 * If the graph file and index file are in the local Linux filesystem,
+	 * read graph data and index from the local filesystem and maintain
+	 * a in-memory copy.
+	 */
+
+	bool exist_in_safs = false;
+	if (init_io) {
+		const RAID_config &raid_conf = get_sys_RAID_conf();
+		safs_file safs_graph(raid_conf, graph_file);
+		safs_file safs_index(raid_conf, index_file);
+		exist_in_safs = safs_graph.exist() && safs_index.exist();
 	}
 
-	std::unordered_map<std::string, vertex_index::ptr>::const_iterator iit
-		= in_mem_indices.find(index_file);
-	if (iit != in_mem_indices.end()) {
-		assert(iit->second);
-		index_data = iit->second;
+	if (graph_conf.use_in_mem_graph() && exist_in_safs)
+		graph_data = in_mem_graph::load_safs_graph(graph_file);
+	else if (!exist_in_safs) {
+		// If we can't initialize SAFS, we assume the graph file is
+		// in the local filesystem.
+		graph_data = in_mem_graph::load_graph(graph_file);
 	}
-	else if (graph_conf.use_in_mem_index()) {
+
+	if (graph_conf.use_in_mem_index() && exist_in_safs) {
 		index_data = vertex_index::safs_load(index_file);
-		in_mem_indices.insert(std::pair<std::string, vertex_index::ptr>(
-					index_file, index_data));
+		header = index_data->get_graph_header();
 	}
+	else if (!exist_in_safs) {
+		// If we can't initialize SAFS, we assume the index file is
+		// in the local filesystem.
+		index_data = vertex_index::load(index_file);
+		header = index_data->get_graph_header();
+	}
+	else {
+		file_io_factory::shared_ptr index_factory = create_io_factory(
+				index_file, GLOBAL_CACHE_ACCESS);
+		io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
+		io->access((char *) &header, 0, sizeof(header), READ);
+	}
+}
+
+FG_graph::FG_graph(std::shared_ptr<in_mem_graph> graph_data,
+		std::shared_ptr<vertex_index> index_data,
+		const std::string &graph_name, config_map::ptr configs)
+{
+	try {
+		graph_engine::init_flash_graph(configs);
+	} catch (init_error &e) {
+		BOOST_LOG_TRIVIAL(error) << std::string("init FlashGraph ") + e.what();
+	}
+	this->graph_data = graph_data;
+	this->index_data = index_data;
+	this->configs = configs;
+	graph_file = graph_name;
+	header = index_data->get_graph_header();
 }
 
 graph_engine::ptr FG_graph::create_engine(graph_index::ptr index)
 {
 	return graph_engine::create(*this, index);
+}
+
+file_io_factory::shared_ptr FG_graph::get_graph_io_factory(int access_option)
+{
+	if (graph_data)
+		return graph_data->create_io_factory();
+	else
+		// Right now only the cached I/O can support async I/O
+		return create_io_factory(graph_file, access_option);
+}
+
+vertex_index::ptr FG_graph::get_index_data() const
+{
+	if (index_data)
+		return index_data;
+	else
+		return vertex_index::safs_load(index_file);
 }
 
 /******************* Implementation of fetching a subgraph *********************/
@@ -181,7 +241,7 @@ in_mem_subgraph::ptr fetch_subgraph(FG_graph::ptr fg,
 		const std::vector<vertex_id_t> &vertices)
 {
 	graph_index::ptr index = NUMA_graph_index<subgraph_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	graph_type type = graph->get_graph_header().get_graph_type();
@@ -275,7 +335,7 @@ void degree_vertex::run(vertex_program &prog)
 FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type)
 {
 	graph_index::ptr index = NUMA_graph_index<degree_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	FG_vector<vsize_t>::ptr degree_vec = FG_vector<vsize_t>::create(graph);
@@ -394,7 +454,7 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 		time_t start_time, time_t time_interval)
 {
 	graph_index::ptr index = NUMA_graph_index<ts_degree_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().has_edge_data());
 
@@ -404,16 +464,6 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 					start_time, time_interval)));
 	graph->wait4complete();
 	return degree_vec;
-}
-
-graph_header get_graph_header(FG_graph::ptr fg)
-{
-	graph_header header;
-	file_io_factory::shared_ptr index_factory = create_io_factory(
-			fg->get_index_file(), GLOBAL_CACHE_ACCESS);
-	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
-	io->access((char *) &header, 0, sizeof(header), READ);
-	return header;
 }
 
 /************** Get the time range of the time-series graph *******************/
@@ -507,7 +557,7 @@ void time_range_vertex::run(vertex_program &prog, const page_vertex &vertex)
 std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<time_range_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	assert(graph->get_graph_header().has_edge_data());
 

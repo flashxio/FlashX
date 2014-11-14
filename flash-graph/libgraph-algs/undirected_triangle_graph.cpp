@@ -279,7 +279,7 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
 	BOOST_LOG_TRIVIAL(info) << "undirected triangle counting starts";
 	graph_index::ptr index = NUMA_graph_index<undirected_triangle_vertex>::create(
-			fg->get_index_file());
+			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
 	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();

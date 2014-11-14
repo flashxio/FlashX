@@ -22,6 +22,8 @@
 
 #include "FG_vector.h"
 
+#ifdef USE_EIGEN
+
 typedef double ev_float_t;
 typedef std::pair<ev_float_t, FG_vector<ev_float_t>::ptr> eigen_pair_t;
 
@@ -131,5 +133,6 @@ void compute_SVD(typename SparseMatrixType::ptr matrix, int m, int nv,
 		eigen_pairs[i].first = sqrt(v);
 	}
 }
+#endif
 
 #endif

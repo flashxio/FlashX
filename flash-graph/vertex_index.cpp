@@ -37,24 +37,31 @@ static void verify_index(vertex_index::ptr idx)
 			directed_vertex_index::cast(idx)->verify();
 	}
 	else {
-		assert(!idx->is_compressed());
-		default_vertex_index::cast(idx)->verify();
+		if (idx->is_compressed())
+			cundirected_vertex_index::cast(idx)->verify();
+		else
+			default_vertex_index::cast(idx)->verify();
 	}
 }
 
 size_t vertex_index::get_index_size() const
 {
+	// compressed index for a directed graph
 	if (is_compressed() && get_graph_header().is_directed_graph()) {
 		return ((cdirected_vertex_index *) this)->cal_index_size();
 	}
+	// compressed index for an undirected graph
+	else if (is_compressed() && !get_graph_header().is_directed_graph()) {
+		return ((cundirected_vertex_index *) this)->cal_index_size();
+	}
+	// original index for a directed graph
 	else if (!is_compressed() && get_graph_header().is_directed_graph()) {
 		return ((directed_vertex_index *) this)->cal_index_size();
 	}
-	else if (!is_compressed() && !get_graph_header().is_directed_graph()) {
+	// original index for an undirected graph
+	else {
 		return ((default_vertex_index *) this)->cal_index_size();
 	}
-	else
-		ABORT_MSG("can't get index size");
 }
 
 vertex_index::ptr vertex_index::load(const std::string &index_file)
@@ -66,7 +73,10 @@ vertex_index::ptr vertex_index::load(const std::string &index_file)
 	char *buf = (char *) malloc(size);
 	assert(buf);
 	FILE *fd = fopen(index_file.c_str(), "r");
-	BOOST_VERIFY(fread(buf, size, 1, fd) == 1);
+	if (fd == NULL)
+		throw io_exception(std::string("can't open ") + index_file);
+	if (fread(buf, size, 1, fd) != 1)
+		throw io_exception(std::string("can't read from ") + index_file);
 	fclose(fd);
 
 	vertex_index::ptr idx((vertex_index *) buf, destroy_index());

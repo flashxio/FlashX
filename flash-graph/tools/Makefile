@@ -21,15 +21,12 @@ CC = gcc
 CXX = g++
 OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lstxxl $(OMP_FLAG) $(LDFLAGS) -lz
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. -DSTXXL_PARALLEL_MODE_EXPLICIT $(OMP_FLAG)
+CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
-all: el2al rmat-gen graph-stat compress_vertex_index
+all: el2al rmat-gen graph-stat
 
-el2al: el2al.o ext_mem_vertex_iterator.o ../libgraph.a
-	$(CXX) -o el2al el2al.o ext_mem_vertex_iterator.o $(LDFLAGS)
-
-graph_merger: graph_merger.o ext_mem_vertex_iterator.o ../libgraph.a
-	$(CXX) -o graph_merger graph_merger.o ext_mem_vertex_iterator.o $(LDFLAGS)
+el2al: el2al.o ../libgraph.a
+	$(CXX) -o el2al el2al.o $(LDFLAGS)
 
 print_ts_graph: print_ts_graph.o ../libgraph.a
 	$(CXX) -o print_ts_graph print_ts_graph.o $(LDFLAGS)
@@ -40,18 +37,13 @@ rmat-gen: rmat-gen.o
 graph-stat: graph-stat.o ../libgraph.a
 	$(CXX) -o graph-stat graph-stat.o $(LDFLAGS)
 
-compress_vertex_index: compress_vertex_index.o ../libgraph.a
-	$(CXX) -o compress_vertex_index compress_vertex_index.o $(LDFLAGS)
-
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f el2al
-	rm -f graph_merger
 	rm -f print_ts_graph
 	rm -f rmat-gen
 	rm -f graph-stat
-	rm -f compress_vertex_index
 
 -include $(DEPS) 

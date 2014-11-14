@@ -148,6 +148,19 @@ public:
 			   vertex_index>(index);
 	}
 
+	static vertex_index::ptr create(const graph_header &header,
+			const std::vector<vertex_entry_type> &vertices) {
+		char *buf = (char *) malloc(vertex_index::get_header_size()
+				+ vertices.size() * sizeof(vertices[0]));
+		vertex_index_temp<vertex_entry_type> *index
+			= new (buf) vertex_index_temp<vertex_entry_type>(header);
+		index->h.data.num_entries = vertices.size();
+		assert(header.get_num_vertices() + 1 == vertices.size());
+		memcpy(buf + vertex_index::get_header_size(), vertices.data(),
+				vertices.size() * sizeof(vertices[0]));
+		return vertex_index::ptr(index);
+	}
+
 	static void dump(const std::string &file, const graph_header &header,
 			const std::vector<vertex_entry_type> &vertices) {
 		vertex_index_temp<vertex_entry_type> index(header);
@@ -311,6 +324,19 @@ public:
 		return ret;
 	}
 
+	static vertex_index::ptr create(const graph_header &header,
+			const std::vector<directed_vertex_entry> &vertices) {
+		char *buf = (char *) malloc(vertex_index::get_header_size()
+				+ vertices.size() * sizeof(vertices[0]));
+		directed_vertex_index *index = new (buf) directed_vertex_index(header);
+		index->h.data.num_entries = vertices.size();
+		index->h.data.out_part_loc = vertices.front().get_out_off();
+		assert(header.get_num_vertices() + 1 == vertices.size());
+		memcpy(buf + vertex_index::get_header_size(), vertices.data(),
+				vertices.size() * sizeof(vertices[0]));
+		return vertex_index::ptr(index);
+	}
+
 	static void dump(const std::string &file, const graph_header &header,
 			const std::vector<directed_vertex_entry> &vertices) {
 		directed_vertex_index index(header);
@@ -451,6 +477,8 @@ public:
 	}
 };
 
+class default_in_mem_vertex_index;
+
 /*
  * This class defines the data layout of a compressed vertex index for
  * an undirected graph in the external memory. It's not used to answer
@@ -509,6 +537,8 @@ public:
 				== h.data.num_entries);
 	}
 };
+
+class directed_in_mem_vertex_index;
 
 /*
  * This class defines the data layout of a compressed vertex index for
@@ -777,7 +807,9 @@ public:
 	}
 
 	virtual void add_vertex(const in_mem_vertex &) = 0;
-	virtual void dump(const std::string &file, const graph_header &header) = 0;
+	virtual void dump(const std::string &file, const graph_header &header,
+			bool compressed) = 0;
+	virtual vertex_index::ptr dump(const graph_header &header, bool compressed) = 0;
 };
 
 class default_in_mem_vertex_index: public in_mem_vertex_index
@@ -795,8 +827,28 @@ public:
 		vertices.push_back(off);
 	}
 
-	virtual void dump(const std::string &file, const graph_header &header) {
-		default_vertex_index::dump(file, header, vertices);
+	virtual void dump(const std::string &file, const graph_header &header,
+			bool compressed) {
+		if (compressed)
+			dump(header, compressed)->dump(file);
+		else
+			default_vertex_index::dump(file, header, vertices);
+	}
+
+	virtual vertex_index::ptr dump(const graph_header &header, bool compressed) {
+		if (compressed) {
+			vertex_index::ptr index = default_vertex_index::create(header,
+					vertices);
+			default_vertex_index::ptr def_index
+				= std::static_pointer_cast<default_vertex_index, vertex_index>(
+						index);
+			cundirected_vertex_index::ptr cindex
+				= cundirected_vertex_index::construct(*def_index);
+			return std::static_pointer_cast<vertex_index,
+				   cundirected_vertex_index>(cindex);
+		}
+		else
+			return default_vertex_index::create(header, vertices);
 	}
 };
 
@@ -806,6 +858,17 @@ typedef default_in_mem_vertex_index ts_directed_in_mem_vertex_index;
 class directed_in_mem_vertex_index: public in_mem_vertex_index
 {
 	std::vector<directed_vertex_entry> vertices;
+
+	void finalize() {
+		size_t in_part_size = vertices.back().get_in_off();
+		// If all out-edge lists have been moved to behind in-edge lists,
+		// ignore it.
+		if ((size_t) vertices.front().get_out_off() >= in_part_size)
+			return;
+		for (size_t i = 0; i < vertices.size(); i++)
+			vertices[i] = directed_vertex_entry(vertices[i].get_in_off(),
+					vertices[i].get_out_off() + in_part_size);
+	}
 public:
 	directed_in_mem_vertex_index() {
 		vertices.push_back(directed_vertex_entry(sizeof(graph_header), 0));
@@ -818,12 +881,30 @@ public:
 		vertices.push_back(entry);
 	}
 
-	virtual void dump(const std::string &file, const graph_header &header) {
-		size_t in_part_size = vertices.back().get_in_off();
-		for (size_t i = 0; i < vertices.size(); i++)
-			vertices[i] = directed_vertex_entry(vertices[i].get_in_off(),
-					vertices[i].get_out_off() + in_part_size);
-		directed_vertex_index::dump(file, header, vertices);
+	virtual void dump(const std::string &file, const graph_header &header,
+			bool compressed) {
+		finalize();
+		if (compressed)
+			dump(header, compressed)->dump(file);
+		else
+			directed_vertex_index::dump(file, header, vertices);
+	}
+
+	virtual vertex_index::ptr dump(const graph_header &header, bool compressed) {
+		finalize();
+		if (compressed) {
+			vertex_index::ptr index = directed_vertex_index::create(header,
+					vertices);
+			directed_vertex_index::ptr dir_index
+				= std::static_pointer_cast<directed_vertex_index, vertex_index>(
+						index);
+			cdirected_vertex_index::ptr cindex
+				= cdirected_vertex_index::construct(*dir_index);
+			return std::static_pointer_cast<vertex_index,
+				   cdirected_vertex_index>(cindex);
+		}
+		else
+			return directed_vertex_index::create(header, vertices);
 	}
 };
 

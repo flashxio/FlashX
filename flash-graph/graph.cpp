@@ -17,137 +17,80 @@
  * limitations under the License.
  */
 
-#include <algorithm>
+#include <boost/foreach.hpp>
 
 #include "graph.h"
-#include "common.h"
-#include "native_file.h"
+#include "in_mem_storage.h"
+#include "utils.h"
 
-size_t read_edge_list_text(const std::string &file, std::vector<edge<> > &edges)
+/*
+ * This class is to compress the vertex ID space in a graph.
+ */
+class graph_compressor
 {
-	FILE *f = fopen(file.c_str(), "r");
-	if (f == NULL)
-		ABORT_MSG(boost::format("fail to open %1%: %2%") % file % strerror(errno));
-
-	ssize_t read;
-	size_t len = 0;
-	char *line = NULL;
-	while ((read = getline(&line, &len, f)) != -1) {
-		if (line[read - 1] == '\n')
-			line[read - 1] = 0;
-		if (line[read - 2] == '\r')
-			line[read - 2] = 0;
-		if (line[0] == '#')
-			continue;
-		char *second = strchr(line, '\t');
-		assert(second);
-		*second = 0;
-		second++;
-		if (!isnumeric(line) || !isnumeric(second)) {
-			printf("%s\t%s\n", line, second);
-			continue;
-		}
-		vertex_id_t from = atol(line);
-		vertex_id_t to = atol(second);
-		edges.push_back(edge<>(from, to));
+	// Old vertex Id <-> new vertex Id
+	std::unordered_map<vertex_id_t, vertex_id_t> map;
+public:
+	graph_compressor(const std::vector<vertex_id_t> &vids) {
+		assert(std::is_sorted(vids.begin(), vids.end()));
+		for (vertex_id_t new_id = 0; new_id < vids.size(); new_id++)
+			map.insert(std::pair<vertex_id_t, vertex_id_t>(
+						vids[new_id], new_id));
 	}
-	fclose(f);
-	return edges.size();
-}
 
-template<class edge_data_type = empty_data>
-struct comp_edge {
-	bool operator() (const edge<edge_data_type> &e1,
-			const edge<edge_data_type> &e2) {
-		if (e1.get_from() == e2.get_from())
-			return e1.get_to() < e2.get_to();
-		else
-			return e1.get_from() < e2.get_from();
+	std::shared_ptr<in_mem_vertex> compress(const in_mem_vertex &v) const {
+		return v.create_remapped_vertex(map);
+	}
+
+	void in_place_compress(in_mem_vertex &v) {
+		v.remap(map);
 	}
 };
 
-#if 0
-template<class edge_data_type>
-undirected_graph<edge_data_type> *undirected_graph<edge_data_type>::create(
-		edge<edge_data_type> edges[], size_t num_edges)
+std::pair<in_mem_graph::ptr, vertex_index::ptr> in_mem_subgraph::compress(
+		const std::string &name) const
 {
-	undirected_graph<edge_data_type> *g = new undirected_graph<edge_data_type>();
-	// Each edge appears twice and in different directions.
-	// When we sort the edges with the first vertex id, we only need
-	// a single scan to construct the graph in the form of
-	// the adjacency list.
-	edge<edge_data_type> *tmp = new edge<edge_data_type>[num_edges * 2];
-	for (size_t i = 0; i < num_edges; i++) {
-		tmp[2 * i] = edges[i];
-		tmp[2 * i + 1] = edge<edge_data_type>(edges[i].get_to(),
-				edges[i].get_from());
-	}
-	edges = tmp;
-	num_edges *= 2;
-	comp_edge<edge_data_type> edge_comparator;
-	std::sort(edges, edges + num_edges, edge_comparator);
+	std::vector<vertex_id_t> vertex_ids;
+	get_all_vertices(vertex_ids);
+	std::sort(vertex_ids.begin(), vertex_ids.end());
+	if (vertex_ids.empty())
+		return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
+				in_mem_graph::ptr(), vertex_index::ptr());
 
-	vertex_id_t curr = edges[0].get_from();
-	in_mem_undirected_vertex<edge_data_type> v(curr);
-	for (size_t i = 0; i < num_edges; i++) {
-		vertex_id_t id = edges[i].get_from();
-		if (curr == id) {
-			// We have to make sure the edge doesn't exist.
-			v.add_edge(edges[i]);
-		}
-		else {
-			g->add_vertex(v);
-			vertex_id_t prev = curr + 1;
-			curr = id;
-			// The vertices without edges won't show up in the edge list,
-			// but we need to fill the gap in the vertex Id space with empty
-			// vertices.
-			while (prev < curr) {
-				v = in_mem_undirected_vertex<edge_data_type>(prev);
-				prev++;
-				g->add_vertex(v);
-			}
-			v = in_mem_undirected_vertex<edge_data_type>(curr);
-			v.add_edge(edges[i]);
-		}
+	graph_compressor compressor(vertex_ids);
+	size_t edge_data_size = get_vertex(vertex_ids.front()).get_edge_data_size();
+	mem_serial_graph::ptr serial_g = mem_serial_graph::create(is_directed(),
+			edge_data_size);
+	BOOST_FOREACH(vertex_id_t id, vertex_ids) {
+		const in_mem_vertex &v = get_vertex(id);
+		assert(v.get_edge_data_size() == edge_data_size);
+		serial_g->add_vertex(*compressor.compress(v));
 	}
-	g->add_vertex(v);
-	delete [] edges;
-	return g;
+	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
+			serial_g->dump_graph(name), serial_g->dump_index(true));
 }
 
-template<class edge_data_type>
-void undirected_graph<edge_data_type>::dump(const std::string &index_file,
-		const std::string &graph_file)
+void in_mem_subgraph::compress()
 {
-	assert(!file_exist(index_file));
-	assert(!file_exist(graph_file));
-	FILE *f = fopen(graph_file.c_str(), "w");
-	if (f == NULL) {
-		ABORT(boost::format("fail to open %1%: %2%")
-				% graph_file % strerror(errno));
+	std::vector<vertex_id_t> vertex_ids;
+	get_all_vertices(vertex_ids);
+	std::sort(vertex_ids.begin(), vertex_ids.end());
+	if (vertex_ids.empty())
+		return;
+
+	graph_compressor compressor(vertex_ids);
+	BOOST_FOREACH(vertex_id_t id, vertex_ids) {
+		in_mem_vertex &v = get_vertex(id);
+		compressor.in_place_compress(v);
 	}
-
-	graph_header header(graph_type::UNDIRECTED, vertices.size(),
-			get_num_edges(), false);
-	ssize_t ret = fwrite(&header, sizeof(header), 1, f);
-	assert(ret == 1);
-	for (size_t i = 0; i < vertices.size(); i++) {
-		int mem_size = vertices[i].get_serialize_size();
-		char *buf = new char[mem_size];
-		ext_mem_undirected_vertex::serialize<edge_data_type>(vertices[i],
-				buf, mem_size);
-		ssize_t ret = fwrite(buf, mem_size, 1, f);
-		delete [] buf;
-		assert(ret == 1);
-	}
-
-	fclose(f);
-
-	vertex_index *index = create_vertex_index();
-	index->dump(index_file);
-	vertex_index::destroy(index);
 }
 
-template class undirected_graph<>;
-#endif
+in_mem_subgraph::ptr in_mem_subgraph::create(graph_type type, bool has_data)
+{
+	if (type == graph_type::DIRECTED)
+		return in_mem_directed_subgraph<>::create(has_data);
+	else if (type == graph_type::UNDIRECTED)
+		return in_mem_undirected_subgraph<>::create(has_data);
+	else
+		ABORT_MSG("wrong graph type");
+}

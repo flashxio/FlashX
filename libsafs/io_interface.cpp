@@ -170,6 +170,8 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 #ifdef ENABLE_MEM_TRACE
 	init_mem_tracker();
 #endif
+	if (configs == NULL)
+		throw init_error("config map doesn't contain any options");
 	
 	params.init(configs->get_options());
 	params.print();
@@ -178,11 +180,13 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	thread::thread_class_init();
 
 	// The I/O system has been initialized.
-	if (global_data.raid_conf) {
+	if (is_safs_init()) {
 		assert(!global_data.read_threads.empty());
 		return;
 	}
 
+	if (!configs->has_option("root_conf"))
+		throw init_error("RAID config file doesn't exist");
 	std::string root_conf_file = configs->get_option("root_conf");
 	BOOST_LOG_TRIVIAL(info) << "The root conf file: " << root_conf_file;
 	RAID_config::ptr raid_conf = RAID_config::create(root_conf_file,
@@ -679,6 +683,11 @@ ssize_t file_io_factory::get_file_size() const
 {
 	safs_file f(*global_data.raid_conf, name);
 	return f.get_file_size();
+}
+
+bool is_safs_init()
+{
+	return global_data.raid_conf != NULL;
 }
 
 atomic_integer io_interface::io_counter;

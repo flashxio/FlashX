@@ -91,6 +91,10 @@ public:
 	size_t get() const {
 		return value;
 	}
+
+	void reset() {
+		value = 0;
+	}
 } max_scan;
 
 typedef std::pair<vertex_id_t, size_t> vertex_scan;
@@ -143,6 +147,11 @@ public:
 		size_t ret = scans.size();
 		pthread_spin_unlock(&lock);
 		return ret;
+	}
+
+	void clear() {
+		sorted = false;
+		scans.clear();
 	}
 } known_scans;
 
@@ -655,8 +664,11 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	struct timeval end;
 	gettimeofday(&graph_start, NULL);
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex,
-		part_topK_scan_vertex>::create(fg->get_index_file());
+		part_topK_scan_vertex>::create(fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
+
+	max_scan.reset();
+	known_scans.clear();
 
 	BOOST_LOG_TRIVIAL(info) << "scan statistics starts";
 	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
@@ -722,10 +734,13 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	off_t prev_start_loc, curr_start_loc;
 	do {
 		prev_topK_scan = known_scans.get(topK - 1).second;
-		for (prev_start_loc = topK - 1; prev_start_loc > 0
-				&& known_scans.get(prev_start_loc).second == prev_topK_scan;
-				prev_start_loc--);
-		prev_start_loc++;
+		prev_start_loc = topK - 1;
+		if (topK > 1) {
+			for (; prev_start_loc > 0 && known_scans.get(
+						prev_start_loc).second == prev_topK_scan;
+					prev_start_loc--);
+			prev_start_loc++;
+		}
 		assert(known_scans.get(prev_start_loc).second == prev_topK_scan);
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("prev topK scan: %1%, prev loc: %2%")
@@ -746,10 +761,19 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		// than the previous topK. We should use the new topK and
 		// try again.
 		curr_topK_scan = known_scans.get(topK - 1).second;
-		for (curr_start_loc = topK - 1; curr_start_loc > 0
-				&& known_scans.get(curr_start_loc).second == curr_topK_scan;
-				curr_start_loc--);
-		curr_start_loc++;
+		curr_start_loc = topK - 1;
+		// It's possible that there are multiple locality stat which has
+		// the same value as the Kth largest one. This test is to see whether
+		// we found more locality stat larger than the previous Kth largest
+		// value.
+		// However, if K is 1, then we don't need to look into the locality
+		// stat before K because there are no previous locality stat before K.
+		if (topK > 1) {
+			for (; curr_start_loc > 0 && known_scans.get(
+						curr_start_loc).second == curr_topK_scan;
+					curr_start_loc--);
+			curr_start_loc++;
+		}
 		assert(known_scans.get(curr_start_loc).second == curr_topK_scan);
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("global max scan: %1%, topK scan: %2%, start loc: %3%")

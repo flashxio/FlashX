@@ -1,0 +1,44 @@
+Locality statistic
+
+Description:
+
+     Compute locality statistic of vertices in a graph.
+
+Usage:
+
+     fg.topK.scan(graph, order = 1, K = 1)
+     
+     fg.local.scan(graph, order = 1)
+     
+Arguments:
+
+   graph: The FlashGraphR object
+
+   order: An integer scalar, the size of the local neighborhood for
+          each vertex. Should be non-negative.
+
+Details:
+
+     `fg.topK.scan' finds the top K vertices with the largest locality
+     statistics in a graph and computes their locality statistic.
+
+     `fg.local.scan' computes locality statistic of each vertex in a
+     graph.
+
+     Locality statistic is defined as the number of edges in the
+     neighborhood of a vertex.
+
+Value:
+
+     A numeric vector that contains locality statistic of each vertex.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+
+References:
+
+     C.E. Priebe, J.M. Conroy, D.J. Marchette, and Y. Park, Scan
+     Statistics on Enron Graphs," Computational and Mathematical
+     Organization Theory, 2005.
+
