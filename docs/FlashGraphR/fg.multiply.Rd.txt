@@ -1,0 +1,36 @@
+Sparse matrix vector multiplication
+
+Description:
+
+     Multiply a sparse matrix and dense vector.
+
+Usage:
+
+     fg.multiply(graph, vec, transpose = FALSE)
+     
+Arguments:
+
+   graph: The FlashGraphR object
+
+     vec: A numueric vector
+
+transpose: Indicate whether or not to multiply with the transpose of
+          the matrix. It is ignored by an undirected graph.
+
+Details:
+
+     Note that the sparse matrix is represented by a graph. A symmetric
+     matrix is represented by an undirected graph and an asymmetric
+     matrix is represented by a directed graph. For an asymmetric
+     matrix, we can multiply the vector with the transpose of the
+     matrix without really transposing the matrix. Right now it only
+     supports multiplication on the adjacency matrix of the graph.
+
+Value:
+
+     A numeric vector
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+
