@@ -452,16 +452,6 @@ serial_graph::~serial_graph()
 	delete index;
 }
 
-class mem_serial_graph: public serial_graph
-{
-public:
-	mem_serial_graph(in_mem_vertex_index *index,
-			size_t edge_data_size): serial_graph(index, edge_data_size) {
-	}
-
-	virtual in_mem_graph::ptr dump_graph(const std::string &graph_name) = 0;
-};
-
 class directed_vertex_info: public in_mem_vertex
 {
 	vertex_id_t id;
@@ -522,6 +512,11 @@ public:
 				ABORT_MSG("wrong edge type");
 		}
 	}
+
+	in_mem_vertex::ptr create_remapped_vertex(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
+		ABORT_MSG("create_remapped_vertex isn't implemented");
+	}
 };
 
 class undirected_vertex_info: public in_mem_vertex
@@ -561,6 +556,11 @@ public:
 	}
 	virtual size_t get_num_edges(edge_type type) const {
 		return num_edges;
+	}
+
+	in_mem_vertex::ptr create_remapped_vertex(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
+		ABORT_MSG("create_remapped_vertex isn't implemented");
 	}
 };
 
@@ -943,8 +943,8 @@ class mem_directed_graph: public mem_serial_graph
 	mem_graph_store in_store;
 	mem_graph_store out_store;
 public:
-	mem_directed_graph(const edge_graph &g): mem_serial_graph(
-			new directed_in_mem_vertex_index(), g.get_edge_data_size()), in_store(
+	mem_directed_graph(size_t edge_data_size): mem_serial_graph(
+			new directed_in_mem_vertex_index(), edge_data_size), in_store(
 			graph_header::get_header_size()) {
 	}
 
@@ -987,8 +987,8 @@ class mem_undirected_graph: public mem_serial_graph
 {
 	mem_graph_store store;
 public:
-	mem_undirected_graph(const edge_graph &g): mem_serial_graph(
-			new undirected_in_mem_vertex_index(), g.get_edge_data_size()), store(
+	mem_undirected_graph(size_t edge_data_size): mem_serial_graph(
+			new undirected_in_mem_vertex_index(), edge_data_size), store(
 			graph_header::get_header_size()) {
 	}
 
@@ -1028,6 +1028,15 @@ public:
 	}
 };
 
+mem_serial_graph::ptr mem_serial_graph::create(bool directed,
+		size_t edge_data_size)
+{
+	if (directed)
+		return mem_serial_graph::ptr(new mem_directed_graph(edge_data_size));
+	else
+		return mem_serial_graph::ptr(new mem_undirected_graph(edge_data_size));
+}
+
 template<class edge_data_type = empty_data>
 class undirected_edge_graph: public edge_graph
 {
@@ -1050,7 +1059,8 @@ class undirected_edge_graph: public edge_graph
 
 	serial_graph::ptr create_serial_graph(const std::string &work_dir) const {
 		if (work_dir.empty())
-			return serial_graph::ptr(new mem_undirected_graph(*this));
+			return serial_graph::ptr(new mem_undirected_graph(
+						this->get_edge_data_size()));
 		else
 			return serial_graph::ptr(new disk_undirected_graph(*this, work_dir));
 	}
@@ -1114,7 +1124,8 @@ class directed_edge_graph: public edge_graph
 
 	serial_graph::ptr create_serial_graph(const std::string &work_dir) const {
 		if (work_dir.empty())
-			return serial_graph::ptr(new mem_directed_graph(*this));
+			return serial_graph::ptr(new mem_directed_graph(
+						this->get_edge_data_size()));
 		else
 			return serial_graph::ptr(new disk_directed_graph(*this, work_dir));
 	}

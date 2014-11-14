@@ -102,6 +102,9 @@ public:
 	virtual void add_vertices(const serial_subgraph &subg) = 0;
 };
 
+/*
+ * The interface defines a graph represented by edges.
+ */
 class edge_graph
 {
 	size_t edge_data_size;
@@ -132,6 +135,9 @@ public:
 	}
 };
 
+/*
+ * This interface serializes a graph onto disks.
+ */
 class disk_serial_graph: public serial_graph
 {
 public:
@@ -146,6 +152,23 @@ public:
 	void dump(const std::string &index_file, const std::string &graph_file,
 			bool compressed_index);
 	virtual void finalize_graph_file(const std::string &adj_file) = 0;
+};
+
+/*
+ * This interface serializes a graph into a single piece of memory.
+ */
+class mem_serial_graph: public serial_graph
+{
+protected:
+	mem_serial_graph(in_mem_vertex_index *index,
+			size_t edge_data_size): serial_graph(index, edge_data_size) {
+	}
+public:
+	typedef std::shared_ptr<mem_serial_graph> ptr;
+	static ptr create(bool directed, size_t edge_data_size);
+
+	virtual std::shared_ptr<in_mem_graph> dump_graph(
+			const std::string &graph_name) = 0;
 };
 
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,

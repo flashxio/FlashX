@@ -601,7 +601,11 @@ RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
 	return res;
 }
 
-RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
+/*
+ * Generate an induced subgraph from a graph, given a list of vertices,
+ * and convert it into an edge list.
+ */
+RcppExport SEXP R_FG_fetch_subgraph_el(SEXP graph, SEXP pvertices)
 {
 	Rcpp::IntegerVector vertices(pvertices);
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
@@ -647,6 +651,23 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
 	ret["src"] = s_vs;
 	ret["dst"] = d_vs;
 	return ret;
+}
+
+RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname)
+{
+	std::string graph_name = CHAR(STRING_ELT(pname, 0));
+	Rcpp::IntegerVector vertices(pvertices);
+	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
+	assert(subg->get_num_vertices() == vids.size());
+	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair
+		= subg->compress(graph_name);
+	FG_graph::ptr sub_fg = FG_graph::create(gpair.first, gpair.second,
+			graph_name, configs);
+	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, sub_fg));
+	// Return the FLashGraphR object.
+	return create_FGR_obj(graph_name);
 }
 
 RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
