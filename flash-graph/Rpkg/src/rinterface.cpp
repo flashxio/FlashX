@@ -377,7 +377,10 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
 	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
-	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
+	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
+				fg));
+	if (!ret.second)
+		ret.first->second = fg;
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
 }
@@ -403,7 +406,10 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
 		from_vec, to_vec, graph_name, DEFAULT_TYPE, directed, num_threads);
 	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
 			configs);
-	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
+	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
+				fg));
+	if (!ret.second)
+		ret.first->second = fg;
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
 }
@@ -432,7 +438,10 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 		edge_list_files, graph_name, DEFAULT_TYPE, directed, num_threads);
 	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
 			configs);
-	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
+	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
+				fg));
+	if (!ret.second)
+		ret.first->second = fg;
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
 }
@@ -666,7 +675,10 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname)
 		= subg->compress(graph_name);
 	FG_graph::ptr sub_fg = FG_graph::create(gpair.first, gpair.second,
 			graph_name, configs);
-	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, sub_fg));
+	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
+				sub_fg));
+	if (!ret.second)
+		ret.first->second = fg;
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
 }
