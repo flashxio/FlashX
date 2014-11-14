@@ -611,6 +611,7 @@ RcppExport SEXP R_FG_fetch_subgraph_el(SEXP graph, SEXP pvertices)
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
+	subg->compress();
 	assert(subg->get_num_vertices() == vids.size());
 	Rcpp::IntegerVector s_vs(subg->get_num_edges());
 	Rcpp::IntegerVector d_vs(subg->get_num_edges());

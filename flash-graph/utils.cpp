@@ -517,6 +517,10 @@ public:
 			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
 		ABORT_MSG("create_remapped_vertex isn't implemented");
 	}
+
+	void remap(const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
+		ABORT_MSG("remapped isn't implemented");
+	}
 };
 
 class undirected_vertex_info: public in_mem_vertex
@@ -561,6 +565,10 @@ public:
 	in_mem_vertex::ptr create_remapped_vertex(
 			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
 		ABORT_MSG("create_remapped_vertex isn't implemented");
+	}
+
+	void remap(const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
+		ABORT_MSG("remapped isn't implemented");
 	}
 };
 

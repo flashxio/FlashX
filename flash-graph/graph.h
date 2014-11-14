@@ -38,6 +38,7 @@ public:
 
 	virtual bool is_directed() const = 0;
 	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const = 0;
+	virtual in_mem_vertex &get_vertex(vertex_id_t id) = 0;
 	virtual void add_vertex(const in_mem_vertex &v) = 0;
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const = 0;
 	virtual void dump(const std::string &index_file,
@@ -106,8 +107,9 @@ public:
 	 * This compresses the subgraph and generates a graph whose vertex IDs
 	 * are adjacent to each other.
 	 */
-	virtual std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > compress(
+	std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > compress(
 			const std::string &name) const;
+	void compress();
 
 	// Merge the graph to this graph.
 	virtual void merge(graph::ptr g) {
@@ -153,6 +155,12 @@ public:
 		return it->second;
 	}
 
+	virtual in_mem_vertex &get_vertex(vertex_id_t id) {
+		typename vmap_t::iterator it = vertices.find(id);
+		assert(it != vertices.end());
+		return it->second;
+	}
+
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const {
 		for (typename vmap_t::const_iterator it = vertices.begin();
 				it != vertices.end(); it++)
@@ -192,6 +200,12 @@ public:
 
 	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const {
 		typename vmap_t::const_iterator it = vertices.find(id);
+		assert(it != vertices.end());
+		return it->second;
+	}
+
+	virtual in_mem_vertex &get_vertex(vertex_id_t id) {
+		typename vmap_t::iterator it = vertices.find(id);
 		assert(it != vertices.end());
 		return it->second;
 	}

@@ -1161,6 +1161,8 @@ public:
 	virtual size_t get_num_edges(edge_type type) const = 0;
 	virtual ptr create_remapped_vertex(
 			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const = 0;
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) = 0;
 };
 
 /*
@@ -1354,6 +1356,24 @@ public:
 		return in_mem_vertex::ptr(new_v);
 	}
 
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(this->id);
+		assert(it != map.end());
+		this->id = it->second;
+		for (size_t i = 0; i < this->out_edges.size(); i++) {
+			it = map.find(this->out_edges[i]);
+			assert(it != map.end());
+			this->out_edges[i] = it->second;
+		}
+		for (size_t i = 0; i < this->in_edges.size(); i++) {
+			it = map.find(this->in_edges[i]);
+			assert(it != map.end());
+			this->in_edges[i] = it->second;
+		}
+	}
+
 	void print() const {
 		printf("v%ld has edge data: %d\n", (unsigned long) get_id(), has_edge_data());
 		printf("There are %ld in-edges: ", in_edges.size());
@@ -1462,6 +1482,19 @@ public:
 			new_v->edges[i] = it->second;
 		}
 		return in_mem_vertex::ptr(new_v);
+	}
+
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(this->id);
+		assert(it != map.end());
+		this->id = it->second;
+		for (size_t i = 0; i < this->edges.size(); i++) {
+			it = map.find(this->edges[i]);
+			assert(it != map.end());
+			this->edges[i] = it->second;
+		}
 	}
 };
 

@@ -41,6 +41,10 @@ public:
 	std::shared_ptr<in_mem_vertex> compress(const in_mem_vertex &v) const {
 		return v.create_remapped_vertex(map);
 	}
+
+	void in_place_compress(in_mem_vertex &v) {
+		v.remap(map);
+	}
 };
 
 std::pair<in_mem_graph::ptr, vertex_index::ptr> in_mem_subgraph::compress(
@@ -64,6 +68,21 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> in_mem_subgraph::compress(
 	}
 	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
 			serial_g->dump_graph(name), serial_g->dump_index(true));
+}
+
+void in_mem_subgraph::compress()
+{
+	std::vector<vertex_id_t> vertex_ids;
+	get_all_vertices(vertex_ids);
+	std::sort(vertex_ids.begin(), vertex_ids.end());
+	if (vertex_ids.empty())
+		return;
+
+	graph_compressor compressor(vertex_ids);
+	BOOST_FOREACH(vertex_id_t id, vertex_ids) {
+		in_mem_vertex &v = get_vertex(id);
+		compressor.in_place_compress(v);
+	}
 }
 
 in_mem_subgraph::ptr in_mem_subgraph::create(graph_type type, bool has_data)
