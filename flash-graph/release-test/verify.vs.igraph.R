@@ -58,6 +58,12 @@ test.directed <- function(fg, ig)
 	fg.res <- fg.degree(fg)
 	ig.res <- degree(ig)
 	check.vectors("degree_test", fg.res, ig.res)
+	fg.res <- fg.degree(fg, mode="out")
+	ig.res <- degree(ig, mode="out")
+	check.vectors("degree_test", fg.res, ig.res)
+	fg.res <- fg.degree(fg, mode="in")
+	ig.res <- degree(ig, mode="in")
+	check.vectors("degree_test", fg.res, ig.res)
 
 	# test ccoreness
 	print("test coreness")

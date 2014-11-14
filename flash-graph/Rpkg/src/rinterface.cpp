@@ -506,6 +506,10 @@ RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
 		type = edge_type::OUT_EDGE;
 	else if (type_str == "both")
 		type = edge_type::BOTH_EDGES;
+	else {
+		fprintf(stderr, "wrong edge type\n");
+		return R_NilValue;
+	}
 
 	FG_vector<vsize_t>::ptr fg_vec = get_degree(fg, type);
 	Rcpp::IntegerVector res(fg_vec->get_size());

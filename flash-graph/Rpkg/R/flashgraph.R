@@ -245,17 +245,17 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 #' Get the degree of vertices in a graph.
 #'
 #' @param graph The FlashGraphR object
-#' @param type Character string. "out" for out-degree, "in" for in-degree,
+#' @param mode Character string. "out" for out-degree, "in" for in-degree,
 #'        "both" for the sum of the two. This argument is ignored for
 #'        undirected graphs.
 #' @return A numeric vector with the degree of each vertex in the graph.
 #' @name fg.degree
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fg.degree <- function(graph, type="both")
+fg.degree <- function(graph, mode=c("both", "in", "out"))
 {
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_get_degree", graph, type, PACKAGE="FlashGraphR")
+	.Call("R_FG_get_degree", graph, mode, PACKAGE="FlashGraphR")
 }
 
 #' PageRank
