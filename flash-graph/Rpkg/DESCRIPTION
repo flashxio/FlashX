@@ -1,15 +1,16 @@
 Package: FlashGraphR
-Version: 0.1-0
-Date: 2014-10-10
-Title:  Massive Graph Analysis
+Version: 0.3-0
+Date: 2014-11-12
+Title: Massive Graph Analysis
 Author: See AUTHORS file.
 Maintainer: Da Zheng <dzheng5@jhu.edu>
 Description: Routines for massive graph analysis. FlashGraphR can process
-	graphs of billions of vertices and hundreds of billions edges very efficiently
-	in a single machine.
-Depends: 
-Imports: 
-Suggests: 
+    graphs of billions of vertices and hundreds of billions edges very
+    efficiently in a single machine.
+Depends:
+    R (>= 3.0),
+    igraph,
+    Rcpp
 License: Apache (>= 2)
 URL: https://github.com/icoming/FlashGraph
 SystemRequirements: 

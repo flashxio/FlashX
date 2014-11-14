@@ -377,7 +377,10 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
 	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
-	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
+	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
+				fg));
+	if (!ret.second)
+		ret.first->second = fg;
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
 }
@@ -403,7 +406,10 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
 		from_vec, to_vec, graph_name, DEFAULT_TYPE, directed, num_threads);
 	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
 			configs);
-	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
+	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
+				fg));
+	if (!ret.second)
+		ret.first->second = fg;
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
 }
@@ -432,7 +438,10 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 		edge_list_files, graph_name, DEFAULT_TYPE, directed, num_threads);
 	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
 			configs);
-	graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name, fg));
+	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
+				fg));
+	if (!ret.second)
+		ret.first->second = fg;
 	// Return the FLashGraphR object.
 	return create_FGR_obj(graph_name);
 }
@@ -448,6 +457,15 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 }
 
 ///////////////////////////// graph algorithms ///////////////////////////
+
+RcppExport SEXP R_FG_compute_cc(SEXP graph)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	FG_vector<vertex_id_t>::ptr fg_vec = compute_cc(fg);
+	Rcpp::IntegerVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	return res;
+}
 
 RcppExport SEXP R_FG_compute_wcc(SEXP graph)
 {
@@ -488,6 +506,10 @@ RcppExport SEXP R_FG_get_degree(SEXP graph, SEXP ptype)
 		type = edge_type::OUT_EDGE;
 	else if (type_str == "both")
 		type = edge_type::BOTH_EDGES;
+	else {
+		fprintf(stderr, "wrong edge type\n");
+		return R_NilValue;
+	}
 
 	FG_vector<vsize_t>::ptr fg_vec = get_degree(fg, type);
 	Rcpp::IntegerVector res(fg_vec->get_size());
@@ -592,12 +614,17 @@ RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
 	return res;
 }
 
-RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
+/*
+ * Generate an induced subgraph from a graph, given a list of vertices,
+ * and convert it into an edge list.
+ */
+RcppExport SEXP R_FG_fetch_subgraph_el(SEXP graph, SEXP pvertices)
 {
 	Rcpp::IntegerVector vertices(pvertices);
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
+	subg->compress();
 	assert(subg->get_num_vertices() == vids.size());
 	Rcpp::IntegerVector s_vs(subg->get_num_edges());
 	Rcpp::IntegerVector d_vs(subg->get_num_edges());
@@ -638,6 +665,26 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices)
 	ret["src"] = s_vs;
 	ret["dst"] = d_vs;
 	return ret;
+}
+
+RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname)
+{
+	std::string graph_name = CHAR(STRING_ELT(pname, 0));
+	Rcpp::IntegerVector vertices(pvertices);
+	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
+	assert(subg->get_num_vertices() == vids.size());
+	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair
+		= subg->compress(graph_name);
+	FG_graph::ptr sub_fg = FG_graph::create(gpair.first, gpair.second,
+			graph_name, configs);
+	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
+				sub_fg));
+	if (!ret.second)
+		ret.first->second = fg;
+	// Return the FLashGraphR object.
+	return create_FGR_obj(graph_name);
 }
 
 RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)

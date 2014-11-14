@@ -38,6 +38,7 @@ public:
 
 	virtual bool is_directed() const = 0;
 	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const = 0;
+	virtual in_mem_vertex &get_vertex(vertex_id_t id) = 0;
 	virtual void add_vertex(const in_mem_vertex &v) = 0;
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const = 0;
 	virtual void dump(const std::string &index_file,
@@ -59,6 +60,8 @@ public:
 	}
 };
 
+class in_mem_graph;
+
 class in_mem_subgraph: public graph
 {
 protected:
@@ -72,7 +75,9 @@ protected:
 		this->has_data = has_data;
 	}
 public:
-	static graph::ptr create(graph_type type, bool has_data);
+	typedef std::shared_ptr<in_mem_subgraph> ptr;
+
+	static ptr create(graph_type type, bool has_data);
 
 	virtual void print() const {
 		ABORT_MSG("print isn't implemented");
@@ -98,13 +103,13 @@ public:
 	virtual size_t get_num_non_empty_vertices() const {
 		return num_non_empty;
 	}
-	/**
+	/*
 	 * This compresses the subgraph and generates a graph whose vertex IDs
 	 * are adjacent to each other.
 	 */
-	virtual graph::ptr compress() const {
-		return graph::ptr();
-	}
+	std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > compress(
+			const std::string &name) const;
+	void compress();
 
 	// Merge the graph to this graph.
 	virtual void merge(graph::ptr g) {
@@ -126,8 +131,8 @@ class in_mem_undirected_subgraph: public in_mem_subgraph
 	in_mem_undirected_subgraph(bool has_data): in_mem_subgraph(has_data) {
 	}
 public:
-	static graph::ptr create(bool has_data) {
-		return graph::ptr(new in_mem_undirected_subgraph<edge_data_type>(
+	static in_mem_subgraph::ptr create(bool has_data) {
+		return in_mem_subgraph::ptr(new in_mem_undirected_subgraph<edge_data_type>(
 					has_data));
 	}
 
@@ -146,6 +151,12 @@ public:
 
 	virtual const in_mem_vertex &get_vertex(vertex_id_t id) const {
 		typename vmap_t::const_iterator it = vertices.find(id);
+		assert(it != vertices.end());
+		return it->second;
+	}
+
+	virtual in_mem_vertex &get_vertex(vertex_id_t id) {
+		typename vmap_t::iterator it = vertices.find(id);
 		assert(it != vertices.end());
 		return it->second;
 	}
@@ -169,8 +180,9 @@ class in_mem_directed_subgraph: public in_mem_subgraph
 	in_mem_directed_subgraph(bool has_data): in_mem_subgraph(has_data) {
 	}
 public:
-	static graph::ptr create(bool has_data) {
-		return graph::ptr(new in_mem_directed_subgraph<edge_data_type>(has_data));
+	static in_mem_subgraph::ptr create(bool has_data) {
+		return in_mem_subgraph::ptr(
+				new in_mem_directed_subgraph<edge_data_type>(has_data));
 	}
 
 	virtual bool is_directed() const {
@@ -192,6 +204,12 @@ public:
 		return it->second;
 	}
 
+	virtual in_mem_vertex &get_vertex(vertex_id_t id) {
+		typename vmap_t::iterator it = vertices.find(id);
+		assert(it != vertices.end());
+		return it->second;
+	}
+
 	virtual void get_all_vertices(std::vector<vertex_id_t> &ids) const {
 		for (typename vmap_t::const_iterator it = vertices.begin();
 				it != vertices.end(); it++)
@@ -201,16 +219,6 @@ public:
 		return vertices.size();
 	}
 };
-
-inline graph::ptr in_mem_subgraph::create(graph_type type, bool has_data)
-{
-	if (type == graph_type::DIRECTED)
-		return in_mem_directed_subgraph<>::create(has_data);
-	else if (type == graph_type::UNDIRECTED)
-		return in_mem_undirected_subgraph<>::create(has_data);
-	else
-		ABORT_MSG("wrong graph type");
-}
 
 static inline void unique_merge(const std::vector<vertex_id_t> &v1,
 		const std::vector<vertex_id_t> &v2, std::vector<vertex_id_t> &v)

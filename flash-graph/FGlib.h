@@ -136,6 +136,8 @@ enum directed_triangle_type
 	ALL,
 };
 
+FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg);
+
 /**
   * \brief Compute all weakly connectected components of a graph.
   *

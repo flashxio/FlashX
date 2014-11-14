@@ -1,0 +1,21 @@
+List graphs loaded to FlashGraphR
+
+Description:
+
+     This function lists all graphs that have been loaded to
+     FlashGraphR.
+
+Usage:
+
+     fg.list.graphs()
+     
+Value:
+
+     A list of graphs in a data frame. The first column of the data
+     frame is the graph name. The second column indicates whether a
+     graph is stored in memory or on disks.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+

@@ -1,0 +1,31 @@
+Triangle counting
+
+Description:
+
+     Count the number of triangles on each vertex in a graph.
+
+Usage:
+
+     fg.triangles(graph, type = "cycle")
+     
+Arguments:
+
+   graph: The FlashGraphR object
+
+    type: The type of triangles. It is ignored for undirected graphs.
+
+Details:
+
+     Triangle counting works for both directed and undirected graphs.
+     For directed graphs, this counts the number of cycle triangles,
+     shown below. A -> B ^ / | v C
+
+Value:
+
+     A numeric vector that contains the number of triangles associated
+     with each vertex.
+
+Author(s):
+
+     Da Zheng <dzheng5@jhu.edu>
+
