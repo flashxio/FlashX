@@ -654,6 +654,17 @@ fg.spectral.clusters <- function(fg, k, which="adj", num.eigen=5, which.eigen="L
 	km.res
 }
 
+print.fg <- function(fg)
+{
+	stopifnot(fg != NULL)
+	stopifnot(class(fg) == "fg")
+	directed = "U"
+	if (fg.is.directed(fg))
+		directed = "D"
+	cat("FlashGraphR ", fg$name, " (", directed, "): ", fg.vcount(fg), " ", fg.ecount(fg),
+		"\n", sep="")
+}
+
 .onLoad <- function(libname, pkgname)
 {
 	library(Rcpp)
