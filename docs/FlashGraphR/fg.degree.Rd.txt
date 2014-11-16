@@ -6,13 +6,13 @@ Description:
 
 Usage:
 
-     fg.degree(graph, type = "both")
+     fg.degree(graph, mode = c("both", "in", "out"))
      
 Arguments:
 
    graph: The FlashGraphR object
 
-    type: Character string. "out" for out-degree, "in" for in-degree,
+    mode: Character string. "out" for out-degree, "in" for in-degree,
           "both" for the sum of the two. This argument is ignored for
           undirected graphs.
 
