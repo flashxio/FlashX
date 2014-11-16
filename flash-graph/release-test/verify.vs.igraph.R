@@ -42,7 +42,10 @@ verify.cc <- function(fg.res, ig.res)
 check.vectors <- function(name, fg.res, ig.res)
 {
 	cmp.res <- fg.res == ig.res
-	stopifnot(sum(cmp.res) == length(cmp.res))
+	if (sum(cmp.res) != length(cmp.res)) {
+		cat(name, "doesn't pass the test\n")
+		stopifnot(FALSE)
+	}
 }
 
 check.matrices <- function(name, fg.res, ig.res)
@@ -205,18 +208,18 @@ ig <- read.graph("wiki-Vote1.txt")
 
 print("run in the standalone mode")
 print("load a graph in adjacency list")
-fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4")
+fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4", graph.name="wiki")
 test.directed(fg, ig)
 
 cat("\n\n\n")
 print("load a graph in edge lists")
-fg <- fg.load.graph("wiki-Vote1.txt")
+fg <- fg.load.graph("wiki-Vote1.txt", graph.name="wiki")
 test.directed(fg, ig)
 fg.list.graphs()
 
 cat("\n\n\n")
 print("load a graph from igraph")
-fg <- fg.load.igraph(ig)
+fg <- fg.load.igraph(ig, graph.name="wiki")
 test.directed(fg, ig)
 fg.list.graphs()
 
@@ -231,18 +234,18 @@ fg.list.graphs()
 ig <- read.graph("facebook_combined1.txt", directed=FALSE)
 
 print("load a graph in adjacency list")
-fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4")
+fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4", graph.name="facebook")
 test.undirected(fg, ig)
 
 cat("\n\n\n")
 print("load a graph in edge lists")
-fg <- fg.load.graph("facebook_combined1.txt", directed=FALSE)
+fg <- fg.load.graph("facebook_combined1.txt", directed=FALSE, graph.name="facebook")
 test.undirected(fg, ig)
 fg.list.graphs()
 
 cat("\n\n\n")
 print("load a graph from igraph")
-fg <- fg.load.igraph(ig)
+fg <- fg.load.igraph(ig, graph.name="facebook")
 test.undirected(fg, ig)
 fg.list.graphs()
 
