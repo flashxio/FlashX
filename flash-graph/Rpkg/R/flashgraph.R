@@ -587,20 +587,110 @@ fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
 		  type, PACKAGE="FlashGraphR")
 }
 
+#' Spectral embedding
+#'
+#' This computes spectral embedding of a given graph.
+#'
+#' It supports five variants.
+#'
+#' Adjacency matrix (A),
+#'
+#' A - c * D (AcD), where c is a constant provided by a user.
+#'
+#' Laplacian matrix (L), L = D - A,
+#'
+#' Normalized Laplacian matrix (nL), nL = I - D^(-1/2) * A * D^(-1/2)
+#'
+#' Regularized Laplacian matrix (nL_tau), nL_tau = D_tau^(-1/2) A D_tau^(-1/2)
+#'
+#' @param fg The FlashGraphR object
+#' @param num.eigen The number of eigenvalues/vectors required.
+#' @param which The type of the embedding.
+#' @param which.eigen Specify which eigenvalues/vectors to compute,
+#'                    character constant with exactly two characters.
+#' @param c The constant used in the AcD variant of embedding.
+#' @param tau The value used in the regularized Laplacian embedding.
+#' @param tol Numeric scalar. Stopping criterion: the relative accuracy
+#' of the Ritz value is considered acceptable if its error is less than
+#' tol times its estimated value. If this is set to zero then machine
+#' precision is used.
+#' @return A named list with the following members:
+#'
+#' values
+#'
+#'    Numeric vector, the desired eigenvalues.
+#'
+#' vectors
+#'
+#'    Numeric matrix, the desired eigenvectors as columns. If complex=TRUE
+#'   (the default for non-symmetric problems), then the matrix is complex.
+#'
+#' options
+#'
+#'   A named list with the supplied options and some information about
+#'   the performed calculation, including an ARPACK exit code.
+#' @name fg.ase
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
+				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
+{
+	stopifnot(fg != NULL)
+	stopifnot(class(fg) == "fg")
+	# multiply function for eigen on the adjacency matrix
+	# this is the default setting.
+	multiply <- function(x, extra)
+	{
+		fg.multiply(fg, x)
+	}
+
+	if (which == "AcD") {
+		cd <- fg.degree(fg) * c
+		multiply <- function(x, extra)
+		{
+				fg.multiply(fg, x) + cd * x
+		}
+	}
+	else if (which == "L") {
+		d <- fg.degree(fg)
+		# multiply function for eigen on the laplacian matrix.
+		multiply <- function(x, extra)
+		{
+			d * x - fg.multiply(fg, x)
+		}
+	}
+	else if (which == "nL" || which == "nL_tau") {
+		d <- fg.degree(fg)
+		if (which == "nL_tau")
+			d <- d + tau
+		d <- 1/sqrt(d)
+		# multiply function for eigen on the normalized laplacian matrix.
+		multiply <- function(x, extra)
+		{
+			# D^(-1/2) * L * D^(-1/2) * x
+			x - d * fg.multiply(fg, d * x)
+		}
+	}
+	else {
+		print("wrong option")
+		stopifnot(FALSE)
+	}
+
+	arpack.opts <- list(n=fg.vcount(fg), which=which.eigen,
+						nev=num.eigen, ncv=2 * num.eigen, tol=tol)
+	arpack(multiply, sym=TRUE, options=arpack.opts)
+}
+
 #' Perform spectral clustering
 #'
 #' Spectral clustering partitions an undirected graph into k groups based on
-#' eigenvectors of the matrix that represents the undirected graph.
-#' Users can use the adjacency matrix (A), Laplacian matrix (L = D - A)
-#' or normalized Laplacian matrix (nL = I - D^(-1/2) * A * D^(-1/2)) for
-#' spectral clustering. It first computes the user-specified number of
-#' eigenvectors on one of the matrices and run KMeans clustering on
-#' eigenvectors.
+#' an embedding of the graph, which computes eigenvectors from a variant
+#' of the adjacency matrix of the graph. Spectral clustering runs
+#' KMeans clustering on eigenvectors.
 #'
 #' @param fg The FlashGraphR object of the undirected graph.
 #' @param k The number of clusters.
-#' @param num.eigen The number of eigenvectors used by KMeans for clustering.
-#' @param which.eigen Specify which eigenvalues/vectors to use for clustering.
+#' @param ase The function computes spectral embedding and generates
+#'            eigenvectors.
 #' @return A vector of integers (from '1:k') indicating the cluster to which
 #'         each vertex belongs to.
 #' @examples
@@ -608,50 +698,14 @@ fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
 #' res <- fg.spectral.clusters(fg, 10)
 #' @name fg.spectral
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fg.spectral.clusters <- function(fg, k, which="adj", num.eigen=5, which.eigen="LM")
+fg.spectral.clusters <- function(fg, k, ase)
 {
-	stopifnot(graph != NULL)
+	stopifnot(fg != NULL)
 	stopifnot(class(fg) == "fg")
-	stopifnot(!graph$directed)
-	# multiply function for eigen on the adjacency matrix
-	# this is the default setting.
-	multiply <- function(x, extra)
-	{
-		print("multiply on the adjacency matrix")
-		fg.multiply(fg, x)
-	}
+	stopifnot(!fg$directed)
 
-	if (which == "L") {
-		d <- fg.degree(fg)
-		# multiply function for eigen on the laplacian matrix.
-		multiply <- function(x, extra)
-		{
-			print("multiply on the Laplacian matrix")
-			d * x - fg.multiply(fg, x)
-		}
-	}
-	else if (which == "nL") {
-		d <- fg.degree(fg)
-		d_.5 <- 1/sqrt(d)
-		# multiply function for eigen on the normalized laplacian matrix.
-		multiply <- function(x, extra)
-		{
-			print("multiply on the normalized Laplacian matrix")
-			# D^(-1/2) * L * D^(-1/2) * x
-			x - d_.5 * fg.multiply(fg, d_.5 * x)
-		}
-	}
-
-	time1 <- system.time(eigen <- arpack(multiply, sym=TRUE,
-										 options=list(n=fg.vcount(fg), which=which.eigen,
-													  nev=num.eigen, ncv=2 * num.eigen)))
-	cat("computing eigen on", which, ", time:", time1, "\n")
-
-	vectors <- eigen$vectors
-	vectors[abs(vectors) < 1e-15] <- 0
-	time1 <- system.time(km.res <- kmeans(vectors, k))
-	cat("KMeans:", time1, "\n")
-	km.res
+	eigen <- ase(fg, k)
+	kmeans(eigen$vectors, k, MacQueen)
 }
 
 print.fg <- function(fg)
