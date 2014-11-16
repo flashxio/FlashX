@@ -4,17 +4,15 @@
 \alias{fg.spectral.clusters}
 \title{Perform spectral clustering}
 \usage{
-fg.spectral.clusters(fg, k, which = "adj", num.eigen = 5,
-  which.eigen = "LM")
+fg.spectral.clusters(fg, k, ase)
 }
 \arguments{
 \item{fg}{The FlashGraphR object of the undirected graph.}
 
 \item{k}{The number of clusters.}
 
-\item{num.eigen}{The number of eigenvectors used by KMeans for clustering.}
-
-\item{which.eigen}{Specify which eigenvalues/vectors to use for clustering.}
+\item{ase}{The function computes spectral embedding and generates
+eigenvectors.}
 }
 \value{
 A vector of integers (from '1:k') indicating the cluster to which
@@ -22,12 +20,9 @@ A vector of integers (from '1:k') indicating the cluster to which
 }
 \description{
 Spectral clustering partitions an undirected graph into k groups based on
-eigenvectors of the matrix that represents the undirected graph.
-Users can use the adjacency matrix (A), Laplacian matrix (L = D - A)
-or normalized Laplacian matrix (nL = I - D^(-1/2) * A * D^(-1/2)) for
-spectral clustering. It first computes the user-specified number of
-eigenvectors on one of the matrices and run KMeans clustering on
-eigenvectors.
+an embedding of the graph, which computes eigenvectors from a variant
+of the adjacency matrix of the graph. Spectral clustering runs
+KMeans clustering on eigenvectors.
 }
 \examples{
 fg <- fg.load.graph("edge_list.txt")

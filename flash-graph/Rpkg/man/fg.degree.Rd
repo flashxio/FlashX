@@ -3,12 +3,12 @@
 \alias{fg.degree}
 \title{Degree of the vertices in a graph}
 \usage{
-fg.degree(graph, type = "both")
+fg.degree(graph, mode = c("both", "in", "out"))
 }
 \arguments{
 \item{graph}{The FlashGraphR object}
 
-\item{type}{Character string. "out" for out-degree, "in" for in-degree,
+\item{mode}{Character string. "out" for out-degree, "in" for in-degree,
 "both" for the sum of the two. This argument is ignored for
 undirected graphs.}
 }

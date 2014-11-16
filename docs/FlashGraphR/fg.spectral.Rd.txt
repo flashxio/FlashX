@@ -3,17 +3,13 @@ Perform spectral clustering
 Description:
 
      Spectral clustering partitions an undirected graph into k groups
-     based on eigenvectors of the matrix that represents the undirected
-     graph. Users can use the adjacency matrix (A), Laplacian matrix (L
-     = D - A) or normalized Laplacian matrix (nL = I - D^(-1/2) * A *
-     D^(-1/2)) for spectral clustering. It first computes the
-     user-specified number of eigenvectors on one of the matrices and
-     run KMeans clustering on eigenvectors.
+     based on an embedding of the graph, which computes eigenvectors
+     from a variant of the adjacency matrix of the graph. Spectral
+     clustering runs KMeans clustering on eigenvectors.
 
 Usage:
 
-     fg.spectral.clusters(fg, k, which = "adj", num.eigen = 5,
-       which.eigen = "LM")
+     fg.spectral.clusters(fg, k, ase)
      
 Arguments:
 
@@ -21,9 +17,8 @@ Arguments:
 
        k: The number of clusters.
 
-num.eigen: The number of eigenvectors used by KMeans for clustering.
-
-which.eigen: Specify which eigenvalues/vectors to use for clustering.
+     ase: The function computes spectral embedding and generates
+          eigenvectors.
 
 Value:
 
