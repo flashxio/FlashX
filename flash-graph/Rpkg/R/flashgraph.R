@@ -10,8 +10,7 @@
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.set.conf <- function(conf.file)
 {
-	.Call("R_FG_destroy", PACKAGE="FlashGraphR")
-	ret <- .Call("R_FG_init", conf.file, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_set_conf", conf.file, PACKAGE="FlashGraphR")
 	stopifnot(ret);
 }
 

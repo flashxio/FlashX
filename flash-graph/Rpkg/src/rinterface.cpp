@@ -195,6 +195,12 @@ RcppExport SEXP R_FG_destroy()
 	return R_NilValue;
 }
 
+RcppExport SEXP R_FG_set_conf(SEXP pconf)
+{
+	graph_engine::destroy_flash_graph();
+	return R_FG_init(pconf);
+}
+
 /*
  * This search in memory first, and then searches in SAFS.
  */
