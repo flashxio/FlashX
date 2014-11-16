@@ -22,6 +22,7 @@ endif()
 add_library(graph STATIC
 	FGlib.cpp
 	graph_engine.cpp
+	graph.cpp
 	in_mem_storage.cpp
 	load_balancer.cpp
 	message_processor.cpp
@@ -37,10 +38,8 @@ add_library(graph STATIC
 	utils.cpp
 )
 
-subdirs(graph-bfs
-	libgraph-algs
+subdirs(libgraph-algs
 	matrix
-	sssp
 	test-algs
 	tools
 )
