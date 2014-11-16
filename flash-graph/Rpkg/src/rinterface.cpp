@@ -75,12 +75,10 @@ public:
 
 	void ref() {
 		count++;
-		printf("inc_ref: graph %s has %d refs\n", name.c_str(), count);
 	}
 
 	void deref() {
 		count--;
-		printf("dec_ref: graph %s has %d refs\n", name.c_str(), count);
 	}
 };
 
@@ -394,6 +392,22 @@ static void fg_clean_graph(SEXP p)
 {
 	graph_ref *ref = (graph_ref *) R_ExternalPtrAddr(p);
 	ref->deref();
+	if (ref->get_counts() > 1)
+		return;
+
+	auto it = graphs.find(ref->get_name());
+	if (it == graphs.end()) {
+		fprintf(stderr, "%s doesn't exist\n", ref->get_name().c_str());
+	}
+	else {
+		// If the graph is still registered in the graph table.
+		if (it->second == ref)
+			graphs.erase(it);
+	}
+
+	// There are no R objects referencing this graph now.
+	printf("delete graph %s\n", ref->get_name().c_str());
+	delete ref;
 }
 
 static SEXP create_FGR_obj(graph_ref *ref)
@@ -466,8 +480,15 @@ graph_ref *register_in_mem_graph(FG_graph::ptr fg,
 			graph_name);
 	auto ret = graphs.insert(std::pair<std::string, graph_ref *>(graph_name,
 				ref));
-	if (!ret.second)
+	if (!ret.second) {
+		// If the in-memory graph isn't referenced by any R objects, we should
+		// delete it.
+		if (ret.first->second->get_counts() == 1) {
+			printf("delete the old graph registered with %s\n", graph_name.c_str());
+			delete ret.first->second;
+		}
 		ret.first->second = ref;
+	}
 	return ref;
 }
 
