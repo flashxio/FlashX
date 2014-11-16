@@ -94,6 +94,10 @@ public:
 		return configs;
 	}
 
+	bool is_in_mem() const {
+		return graph_data != NULL;
+	}
+
 	std::shared_ptr<in_mem_graph> get_graph_data() const {
 		return graph_data;
 	}

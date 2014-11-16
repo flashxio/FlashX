@@ -43,43 +43,92 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
  */
 static config_map::ptr configs;
 
-typedef std::unordered_map<std::string, FG_graph::ptr> graph_map_t;
 /*
- * This contains all graphs loaded to FlashGraphR. When a graph is loaded
- * to FlashGraphR, it may be in memory and may also be on SAFS.
+ * This class maintains a reference to an in-memory graph.
+ */
+class graph_ref
+{
+	in_mem_graph::ptr g;
+	vertex_index::ptr index;
+	std::string name;
+	int count;
+public:
+	graph_ref(in_mem_graph::ptr g, vertex_index::ptr index,
+			const std::string &name) {
+		this->g = g;
+		this->index = index;
+		this->name = name;
+		count = 1;
+	}
+
+	int get_counts() {
+		return count;
+	}
+
+	FG_graph::ptr get_graph() {
+		return FG_graph::create(g, index, name, configs);
+	}
+
+	const std::string &get_name() const {
+		return name;
+	}
+
+	void ref() {
+		count++;
+		printf("inc_ref: graph %s has %d refs\n", name.c_str(), count);
+	}
+
+	void deref() {
+		count--;
+		printf("dec_ref: graph %s has %d refs\n", name.c_str(), count);
+	}
+};
+
+typedef std::unordered_map<std::string, graph_ref *> graph_map_t;
+/*
+ * This contains all in-memory graphs loaded to FlashGraphR.
  */
 static graph_map_t graphs;
 
 bool standalone = true;
 
-static FG_graph::ptr get_graph(const std::string &graph_name, bool has_cindex)
+static bool exist_cindex(const std::string &graph_name)
 {
-	// search for the graph in memory.
-	graph_map_t::const_iterator it = graphs.find(graph_name);
-	if (it != graphs.end())
-		return it->second;
-
 	if (standalone)
-		return FG_graph::ptr();
+		return false;
 
-	std::string version = itoa(CURR_VERSION);
-	std::string graph_file = graph_name + "-v" + version;
-	std::string index_file;
-	if (has_cindex)
-		index_file = graph_name + "-cindex-v" + version;
-	else
-		index_file = graph_name + "-index-v" + version;
-	return FG_graph::create(graph_file, index_file, configs);
+	std::string cindex_name = graph_name + "-cindex-v" + itoa(CURR_VERSION);
+	safs_file cindex_file(get_sys_RAID_conf(), cindex_name);
+	return cindex_file.exist();
 }
 
-/**
- * Create a FG_graph for the specified graph.
+/*
+ * Get a FG_graph for the specified graph.
  */
 static FG_graph::ptr R_FG_get_graph(SEXP pgraph)
 {
-	std::string graph_name = CHAR(STRING_ELT(VECTOR_ELT(pgraph, 0), 0));
-	bool has_cindex = INTEGER(VECTOR_ELT(pgraph, 1))[0];
-	return get_graph(graph_name, has_cindex);
+	Rcpp::List graph(pgraph);
+	// If the pointer field is defined, we can get the FG_graph object
+	// directly.
+	if (graph.containsElementNamed("pointer")) {
+		graph_ref *ref = (graph_ref *) R_ExternalPtrAddr(graph["pointer"]);
+		return ref->get_graph();
+	}
+	else if (standalone) {
+		fprintf(stderr, "Wrong state! Can't get a graph\n");
+		return FG_graph::ptr();
+	}
+	else {
+		std::string graph_name = graph["name"];
+		std::string version = itoa(CURR_VERSION);
+		std::string graph_file = graph_name + "-v" + version;
+		std::string index_file;
+		if (exist_cindex(graph_name))
+			index_file = graph_name + "-cindex-v" + version;
+		else
+			index_file = graph_name + "-index-v" + version;
+		return FG_graph::create(graph_file, index_file, configs);
+	}
 }
 
 /**
@@ -114,8 +163,12 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 
 	if (standalone)
 		printf("Run FlashGraphR in standalone mode\n");
-	else
+	else if (is_safs_init())
 		printf("Run FlashGraphR\n");
+	else {
+		fprintf(stderr, "Can't enable the SAFS mode of FlashGraphR\n");
+		res[0] = false;
+	}
 	return res;
 }
 
@@ -124,7 +177,20 @@ RcppExport SEXP R_FG_init(SEXP pconf)
  */
 RcppExport SEXP R_FG_destroy()
 {
-	graphs.clear();
+	int num_refs = 0;
+	for (auto it = graphs.begin(); it != graphs.end(); it++) {
+		if (it->second->get_counts() == 1) {
+			delete it->second;
+			it->second = NULL;
+		}
+		else {
+			num_refs++;
+			fprintf(stderr, "%s is still referenced\n",
+					it->second->get_name().c_str());
+		}
+	}
+	if (num_refs == 0)
+		graphs.clear();
 	graph_engine::destroy_flash_graph();
 	return R_NilValue;
 }
@@ -238,24 +304,6 @@ RcppExport SEXP R_FG_exist_graph(SEXP pgraph)
 	return res;
 }
 
-static bool exist_cindex(const std::string &graph_name)
-{
-	if (standalone)
-		return false;
-
-	std::string cindex_name = graph_name + "-cindex-v" + itoa(CURR_VERSION);
-	safs_file cindex_file(get_sys_RAID_conf(), cindex_name);
-	return cindex_file.exist();
-}
-
-RcppExport SEXP R_FG_exist_cindex(SEXP pgraph)
-{
-	std::string graph_name = CHAR(STRING_ELT(pgraph, 0));
-	Rcpp::LogicalVector res(1);
-	res[0] = exist_cindex(graph_name);
-	return res;
-}
-
 static std::string extract_graph_name(const std::string &file_name)
 {
 	std::string version = itoa(CURR_VERSION);
@@ -336,20 +384,29 @@ RcppExport SEXP R_FG_set_log_level(SEXP plevel)
 	return R_NilValue;
 }
 
-static SEXP create_FGR_obj(const std::string &graph_name)
+static void fg_clean_graph(SEXP p)
 {
+	graph_ref *ref = (graph_ref *) R_ExternalPtrAddr(p);
+	ref->deref();
+}
+
+static SEXP create_FGR_obj(graph_ref *ref)
+{
+	std::string graph_name = ref->get_name();
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(graph_name);
 
-	Rcpp::LogicalVector cindex(1);
-	cindex[0] = exist_cindex(graph_name);
-	ret["cindex"] = cindex;
-
-	FG_graph::ptr graph = get_graph(graph_name, cindex[0]);
+	FG_graph::ptr graph = ref->get_graph();
 	if (graph == NULL) {
-		fprintf(stderr, "can't create FGR object\n");
+		fprintf(stderr, "the graph table has inconsistent data.\n");
 		return R_NilValue;
 	}
+
+	ref->ref();
+	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
+	R_RegisterCFinalizerEx(pointer, fg_clean_graph, FALSE);
+	ret["pointer"] = pointer;
+
 	graph_header header = graph->get_graph_header();
 	Rcpp::LogicalVector directed(1);
 	directed[0] = header.is_directed_graph();
@@ -369,6 +426,45 @@ static SEXP create_FGR_obj(const std::string &graph_name)
 	return ret;
 }
 
+static SEXP create_FGR_obj(FG_graph::ptr graph, const std::string &graph_name)
+{
+	Rcpp::List ret;
+	ret["name"] = Rcpp::String(graph_name);
+
+	graph_header header = graph->get_graph_header();
+	Rcpp::LogicalVector directed(1);
+	directed[0] = header.is_directed_graph();
+	ret["directed"] = directed;
+
+	Rcpp::NumericVector vcount(1);
+	vcount[0] = header.get_num_vertices();
+	ret["vcount"] = vcount;
+
+	Rcpp::NumericVector ecount(1);
+	ecount[0] = header.get_num_edges();
+	ret["ecount"] = ecount;
+
+	Rcpp::LogicalVector in_mem(1);
+	in_mem[0] = graph->get_graph_data() != NULL;
+	ret["in.mem"] = in_mem;
+	return ret;
+}
+
+graph_ref *register_in_mem_graph(FG_graph::ptr fg,
+		const std::string &graph_name)
+{
+	if (!fg->is_in_mem())
+		return NULL;
+
+	graph_ref *ref = new graph_ref(fg->get_graph_data(), fg->get_index_data(),
+			graph_name);
+	auto ret = graphs.insert(std::pair<std::string, graph_ref *>(graph_name,
+				ref));
+	if (!ret.second)
+		ret.first->second = ref;
+	return ref;
+}
+
 RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 		SEXP pindex_file)
 {
@@ -377,12 +473,11 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
 	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
-	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
-				fg));
-	if (!ret.second)
-		ret.first->second = fg;
-	// Return the FLashGraphR object.
-	return create_FGR_obj(graph_name);
+	graph_ref *ref = register_in_mem_graph(fg, graph_name);
+	if (ref)
+		return create_FGR_obj(ref);
+	else
+		return create_FGR_obj(fg, graph_name);
 }
 
 /*
@@ -406,12 +501,11 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
 		from_vec, to_vec, graph_name, DEFAULT_TYPE, directed, num_threads);
 	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
 			configs);
-	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
-				fg));
-	if (!ret.second)
-		ret.first->second = fg;
-	// Return the FLashGraphR object.
-	return create_FGR_obj(graph_name);
+	graph_ref *ref = register_in_mem_graph(fg, graph_name);
+	if (ref)
+		return create_FGR_obj(ref);
+	else
+		return create_FGR_obj(fg, graph_name);
 }
 
 /*
@@ -438,12 +532,11 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 		edge_list_files, graph_name, DEFAULT_TYPE, directed, num_threads);
 	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
 			configs);
-	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
-				fg));
-	if (!ret.second)
-		ret.first->second = fg;
-	// Return the FLashGraphR object.
-	return create_FGR_obj(graph_name);
+	graph_ref *ref = register_in_mem_graph(fg, graph_name);
+	if (ref)
+		return create_FGR_obj(ref);
+	else
+		return create_FGR_obj(fg, graph_name);
 }
 
 RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
@@ -453,7 +546,30 @@ RcppExport SEXP R_FG_get_graph_obj(SEXP pgraph)
 		fprintf(stderr, "%s doesn't exist\n", graph_name.c_str());
 		return R_NilValue;
 	}
-	return create_FGR_obj(graph_name);
+
+	auto it = graphs.find(graph_name);
+	// If the graph exist, but it's not in the graph table. It's in SAFS.
+	if (it == graphs.end()) {
+		std::string version = itoa(CURR_VERSION);
+		std::string graph_file = graph_name + "-v" + version;
+		std::string index_file;
+
+		std::string cindex_name = graph_name + "-cindex-v" + itoa(CURR_VERSION);
+		safs_file cindex_file(get_sys_RAID_conf(), cindex_name);
+		if (cindex_file.exist())
+			index_file = graph_name + "-cindex-v" + version;
+		else
+			index_file = graph_name + "-index-v" + version;
+		FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+		graph_ref *ref = register_in_mem_graph(fg, graph_name);
+		if (ref)
+			return create_FGR_obj(ref);
+		else
+			return create_FGR_obj(fg, graph_name);
+	}
+	else
+		return create_FGR_obj(it->second);
+
 }
 
 ///////////////////////////// graph algorithms ///////////////////////////
@@ -679,12 +795,11 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname)
 		= subg->compress(graph_name);
 	FG_graph::ptr sub_fg = FG_graph::create(gpair.first, gpair.second,
 			graph_name, configs);
-	auto ret = graphs.insert(std::pair<std::string, FG_graph::ptr>(graph_name,
-				sub_fg));
-	if (!ret.second)
-		ret.first->second = fg;
-	// Return the FLashGraphR object.
-	return create_FGR_obj(graph_name);
+	graph_ref *ref = register_in_mem_graph(sub_fg, graph_name);
+	if (ref)
+		return create_FGR_obj(ref);
+	else
+		return create_FGR_obj(sub_fg, graph_name);
 }
 
 RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
