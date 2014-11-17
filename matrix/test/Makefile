@@ -19,7 +19,8 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
-LDFLAGS += $(OMP_FLAG) -L.. -lmatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon
+LDFLAGS += $(OMP_FLAG) -L.. -lmatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs
+LDFLAGS += -L../../libcommon -lcommon -lstxxl -lz -lnuma -laio
 
 all: test
 

@@ -67,15 +67,14 @@ sparse_matrix::ptr sparse_sym_matrix::create(FG_graph::ptr fg)
 {
 	// Initialize vertex index.
 	vertex_index::ptr index = fg->get_index_data();
-	if (index == NULL)
-		index = vertex_index::safs_load(fg->get_index_file());
+	assert(index != NULL);
 	assert(!index->get_graph_header().is_directed_graph()
 			&& !index->is_compressed());
 	default_vertex_index::ptr uindex = default_vertex_index::cast(index);
 
 	vsize_t num_vertices = uindex->get_num_vertices();
-	sparse_sym_matrix *m = new sparse_sym_matrix(create_io_factory(
-				fg->get_graph_file(), REMOTE_ACCESS), num_vertices);
+	sparse_sym_matrix *m = new sparse_sym_matrix(fg->get_graph_io_factory(
+				REMOTE_ACCESS), num_vertices);
 
 	// Generate the matrix index from the vertex index.
 	for (size_t i = 0; i < num_vertices; i += ROW_BLOCK_SIZE) {
@@ -137,15 +136,14 @@ sparse_matrix::ptr sparse_asym_matrix::create(FG_graph::ptr fg)
 {
 	// Initialize vertex index.
 	vertex_index::ptr index = fg->get_index_data();
-	if (index == NULL)
-		index = vertex_index::safs_load(fg->get_index_file());
+	assert(index != NULL);
 	assert(index->get_graph_header().is_directed_graph()
 			&& !index->is_compressed());
 	directed_vertex_index::ptr dindex = directed_vertex_index::cast(index);
 
 	vsize_t num_vertices = dindex->get_num_vertices();
-	sparse_asym_matrix *m = new sparse_asym_matrix(create_io_factory(
-				fg->get_graph_file(), REMOTE_ACCESS), num_vertices);
+	sparse_asym_matrix *m = new sparse_asym_matrix(fg->get_graph_io_factory(
+				REMOTE_ACCESS), num_vertices);
 
 	// Generate the matrix index from the vertex index.
 	for (size_t i = 0; i < num_vertices; i += ROW_BLOCK_SIZE) {
@@ -185,7 +183,7 @@ void sparse_asym_matrix::compute(task_creator::ptr creator) const
 
 sparse_matrix::ptr sparse_matrix::create(FG_graph::ptr fg)
 {
-	graph_header header = get_graph_header(fg);
+	graph_header header = fg->get_graph_header();
 	if (header.is_directed_graph())
 		return sparse_asym_matrix::create(fg);
 	else
