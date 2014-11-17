@@ -10,8 +10,8 @@
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.set.conf <- function(conf.file)
 {
-	.Call("R_FG_destroy", PACKAGE="FlashGraphR")
-	ret <- .Call("R_FG_init", conf.file, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_set_conf", conf.file, PACKAGE="FlashGraphR")
+	stopifnot(ret);
 }
 
 fg.set.log.level <- function(level)
@@ -723,5 +723,6 @@ print.fg <- function(fg)
 {
 	library(Rcpp)
 	library.dynam("FlashGraphR", pkgname, libname, local=FALSE);
-	.Call("R_FG_init", paste(pkgname, ".conf", sep=""), PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_init", paste(pkgname, ".conf", sep=""), PACKAGE="FlashGraphR")
+	stopifnot(ret)
 }
