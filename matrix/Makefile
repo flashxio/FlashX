@@ -24,8 +24,8 @@ LDFLAGS += $(OMP_FLAG)
 all: libmatrix test
 
 libmatrix: $(OBJS)
-	rm -f libmatrix.a
-	ar -cvq libmatrix.a $(OBJS)
+	rm -f libFMatrix.a
+	ar -cvq libFMatrix.a $(OBJS)
 
 test: libmatrix
 	$(MAKE) -C test
@@ -34,7 +34,7 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm -f libmatrix.a
+	rm -f libFMatrix.a
 	find -name core -delete
 
 -include $(DEPS) 

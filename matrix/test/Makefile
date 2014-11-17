@@ -19,12 +19,12 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
-LDFLAGS += $(OMP_FLAG) -L.. -lmatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs
+LDFLAGS += $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs
 LDFLAGS += -L../../libcommon -lcommon -lstxxl -lz -lnuma -laio
 
 all: test
 
-test: test.o ../libmatrix.a
+test: test.o ../libFMatrix.a
 	$(CXX) -o test test.o $(LDFLAGS)
 
 clean:
