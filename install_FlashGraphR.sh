@@ -1,6 +1,6 @@
 #!/bin/sh
 
-R CMD build flash-graph/Rpkg
+R CMD build Rpkg
 if [ -d ~/R ]; then
 	path=`find ~/R -name Rcpp.h`
 fi
