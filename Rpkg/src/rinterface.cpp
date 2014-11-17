@@ -103,7 +103,7 @@ static bool exist_cindex(const std::string &graph_name)
 /*
  * Get a FG_graph for the specified graph.
  */
-static FG_graph::ptr R_FG_get_graph(SEXP pgraph)
+FG_graph::ptr R_FG_get_graph(SEXP pgraph)
 {
 	Rcpp::List graph(pgraph);
 	// If the pointer field is defined, we can get the FG_graph object
