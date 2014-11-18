@@ -50,11 +50,46 @@ class async_io: public io_interface
 	int num_iowait;
 	int num_completed_reqs;
 
-	// file id <-> buffered io
-	std::tr1::unordered_map<int, buffered_io *> open_files;
-	buffered_io *default_io;
+	class io_ref
+	{
+		std::shared_ptr<buffered_io> io;
+		int count;
+	public:
+		io_ref() {
+			this->count = 0;
+		}
 
+		io_ref(buffered_io *io);
+
+		void inc_ref() {
+			count++;
+		}
+
+		void dec_ref();
+
+		int get_count() const {
+			return count;
+		}
+
+		const buffered_io &get_io() const {
+			return *io;
+		}
+
+		buffered_io &get_io() {
+			return *io;
+		}
+
+		bool is_valid() const {
+			return io != NULL;
+		}
+	};
+	// file id <-> buffered io
+	std::tr1::unordered_map<int, io_ref> open_files;
+	io_ref default_io;
+
+#if 0
 	virt_data_impl *data;
+#endif
 
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:
