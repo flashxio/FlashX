@@ -36,5 +36,6 @@ clean:
 	rm -f *~
 	rm -f libFMatrix.a
 	find -name core -delete
+	$(MAKE) -C test clean
 
 -include $(DEPS) 
