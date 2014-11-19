@@ -151,6 +151,8 @@ class in_mem_io: public io_interface
 	fifo_queue<user_compute *> incomp_computes;
 	std::unique_ptr<byte_array_allocator> array_allocator;
 
+	callback *cb;
+
 	void process_req(const io_request &req);
 	void process_computes();
 public:
@@ -161,6 +163,7 @@ public:
 		this->file_id = file_id;
 		array_allocator = std::unique_ptr<byte_array_allocator>(
 				new in_mem_byte_array_allocator(t));
+		cb = NULL;
 	}
 
 	virtual int get_file_id() const {
@@ -169,6 +172,14 @@ public:
 
 	virtual bool support_aio() {
 		return true;
+	}
+
+	virtual bool set_callback(callback *cb) {
+		this->cb = cb;
+	}
+
+	virtual callback *get_callback() {
+		return cb;
 	}
 
 	virtual void flush_requests() { }
@@ -259,11 +270,19 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 {
 	for (int i = 0; i < num; i++) {
 		io_request &req = requests[i];
-		assert(req.get_req_type() == io_request::USER_COMPUTE);
-		// Let's possess a reference to the user compute first. process_req()
-		// will release the reference when the user compute is completed.
-		req.get_compute()->inc_ref();
-		process_req(req);
+		if (req.get_req_type() == io_request::USER_COMPUTE) {
+			// Let's possess a reference to the user compute first. process_req()
+			// will release the reference when the user compute is completed.
+			req.get_compute()->inc_ref();
+			process_req(req);
+		}
+		else {
+			assert(req.get_req_type() == io_request::BASIC_REQ);
+			memcpy(req.get_buf(), graph.graph_data + req.get_offset(), req.get_size());
+			io_request *reqs[1];
+			reqs[0] = &req;
+			this->get_callback()->invoke(reqs, 1);
+		}
 	}
 	process_computes();
 }
