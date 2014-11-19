@@ -17,7 +17,7 @@
 
 include Makefile.common
 
-all: build_lib unit_test tools flash-graph test utils
+all: build_lib unit_test tools flash-graph test utils matrix
 
 build_lib:
 	$(MAKE) -C libcommon
@@ -40,6 +40,9 @@ utils: build_lib
 flash-graph: build_lib
 	$(MAKE) -C flash-graph
 
+matrix: build_lib
+	$(MAKE) -C matrix
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -53,5 +56,6 @@ clean:
 	make --ignore-errors -C tools clean
 	make --ignore-errors -C utils clean
 	make --ignore-errors -C flash-graph clean
+	make --ignore-errors -C matrix clean
 
 -include $(DEPS) 
