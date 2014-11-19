@@ -193,6 +193,7 @@ sparse_matrix::ptr sparse_matrix::create(FG_graph::ptr fg)
 void init_flash_matrix(config_map::ptr configs)
 {
 	init_io_system(configs);
+	matrix_conf.init(configs);
 }
 
 void destroy_flash_matrix()
