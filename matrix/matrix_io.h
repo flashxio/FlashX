@@ -95,9 +95,6 @@ public:
 	}
 };
 
-// The number of rows in a row block.
-static const int ROW_BLOCK_SIZE = 1024;
-
 class matrix_io_generator
 {
 public:

@@ -77,7 +77,7 @@ sparse_matrix::ptr sparse_sym_matrix::create(FG_graph::ptr fg)
 				REMOTE_ACCESS), num_vertices);
 
 	// Generate the matrix index from the vertex index.
-	for (size_t i = 0; i < num_vertices; i += ROW_BLOCK_SIZE) {
+	for (size_t i = 0; i < num_vertices; i += matrix_conf.get_row_block_size()) {
 		ext_mem_vertex_info info = uindex->get_vertex_info(i);
 		m->blocks.emplace_back(info.get_off());
 	}
@@ -146,7 +146,7 @@ sparse_matrix::ptr sparse_asym_matrix::create(FG_graph::ptr fg)
 				REMOTE_ACCESS), num_vertices);
 
 	// Generate the matrix index from the vertex index.
-	for (size_t i = 0; i < num_vertices; i += ROW_BLOCK_SIZE) {
+	for (size_t i = 0; i < num_vertices; i += matrix_conf.get_row_block_size()) {
 		ext_mem_vertex_info info = dindex->get_vertex_info_out(i);
 		m->out_blocks.emplace_back(info.get_off());
 

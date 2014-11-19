@@ -19,9 +19,7 @@
 
 #include "sparse_matrix.h"
 #include "matrix_io.h"
-
-// In the number of row blocks.
-static const size_t MIN_ROW_IO_SIZE = 1024;
+#include "matrix_config.h"
 
 class row_io_generator: public matrix_io_generator
 {
@@ -36,7 +34,7 @@ class row_io_generator: public matrix_io_generator
 
 	// Get the current row in the matrix.
 	off_t get_curr_row() const {
-		return curr_block_off * ROW_BLOCK_SIZE;
+		return curr_block_off * matrix_conf.get_row_block_size();
 	}
 
 	// Get the offset of the current row I/O in the matrix file.
@@ -47,7 +45,7 @@ class row_io_generator: public matrix_io_generator
 	// Get the number of rows in the current row I/O.
 	size_t get_curr_num_rows() const {
 		// `next_off' identifies the row block behind the I/O request.
-		off_t next_off = curr_block_off + MIN_ROW_IO_SIZE;
+		off_t next_off = curr_block_off + matrix_conf.get_rb_io_size();
 		// blocks[blocks.size() - 1] is an empty block. It only indicates
 		// the end of the matrix file.
 		// blocks[blocks.size() - 2] is the last row block. It's possible that
@@ -56,14 +54,14 @@ class row_io_generator: public matrix_io_generator
 		// If the row block behind the I/O request is the last row block,
 		// we get the maximal number of rows in an I/O request.
 		if (next_off < blocks.size() - 1)
-			return MIN_ROW_IO_SIZE * ROW_BLOCK_SIZE;
+			return matrix_conf.get_rb_io_size() * matrix_conf.get_row_block_size();
 		else
-			return tot_num_rows - curr_block_off * ROW_BLOCK_SIZE;
+			return tot_num_rows - curr_block_off * matrix_conf.get_row_block_size();
 	}
 
 	// Get the current row I/O size.
 	size_t get_curr_size() const {
-		off_t next_off = curr_block_off + MIN_ROW_IO_SIZE;
+		off_t next_off = curr_block_off + matrix_conf.get_rb_io_size();
 		next_off = next_off < blocks.size() ? next_off : blocks.size() - 1;
 		return blocks[next_off].get_offset()
 			- blocks[curr_block_off].get_offset();
@@ -72,7 +70,7 @@ public:
 	row_io_generator(const std::vector<row_block> &_blocks, size_t tot_num_rows,
 			size_t tot_num_cols, int file_id, int gen_id,
 			int num_gens): blocks(_blocks) {
-		curr_block_off = gen_id * MIN_ROW_IO_SIZE;
+		curr_block_off = gen_id * matrix_conf.get_rb_io_size();
 		this->tot_num_rows = tot_num_rows;
 		this->tot_num_cols = tot_num_cols;
 		this->num_gens = num_gens;
@@ -85,7 +83,7 @@ public:
 					data_loc_t(file_id, get_curr_offset()), get_curr_size());
 		// We now need to jump to the next row block that belongs to
 		// the current I/O generator.
-		curr_block_off += MIN_ROW_IO_SIZE * num_gens;
+		curr_block_off += matrix_conf.get_rb_io_size() * num_gens;
 		return ret;
 	}
 

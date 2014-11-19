@@ -11,7 +11,7 @@ struct comp_io
 void run_test()
 {
 	size_t num_rows = random() + 1000000000L;
-	size_t num_blocks = ceil(((double) num_rows) / ROW_BLOCK_SIZE);
+	size_t num_blocks = ceil(((double) num_rows) / matrix_conf.get_row_block_size());
 	std::vector<row_block> blocks;
 	off_t off = 0;
 	for (size_t i = 0; i < num_blocks; i++) {
@@ -38,7 +38,7 @@ void run_test()
 	for (size_t i = 1; i < ios.size() - 1; i++) {
 		assert(ios[i].get_loc().get_offset() == prev_off + prev_size);
 		assert(ios[i].get_top_left().get_row_idx()
-				== prev_row + ROW_BLOCK_SIZE * MIN_ROW_IO_SIZE);
+				== prev_row + matrix_conf.get_row_block_size() * matrix_conf.get_rb_io_size());
 		prev_off = ios[i].get_loc().get_offset();
 		prev_size = ios[i].get_size();
 		prev_row = ios[i].get_top_left().get_row_idx();
