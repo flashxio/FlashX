@@ -51,6 +51,12 @@ class matrix_io
 	data_loc_t loc;
 	size_t size;
 public:
+	matrix_io(): top_left(-1, -1) {
+		num_rows = 0;
+		num_cols = 0;
+		size = 0;
+	}
+
 	matrix_io(const matrix_loc &_top_left, size_t num_rows,
 			size_t num_cols, data_loc_t loc, size_t size): top_left(_top_left) {
 		this->num_rows = num_rows;
@@ -77,6 +83,10 @@ public:
 
 	size_t get_num_cols() const {
 		return num_cols;
+	}
+
+	bool is_valid() const {
+		return loc.get_offset() >= 0;
 	}
 };
 

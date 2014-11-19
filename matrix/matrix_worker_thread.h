@@ -28,21 +28,27 @@ class task_creator;
 
 class matrix_worker_thread: public thread
 {
-	matrix_io_generator::ptr io_gen;
+	matrix_io_generator::ptr this_io_gen;
+	std::vector<matrix_io_generator::ptr> io_gens;
 	std::shared_ptr<task_creator> tcreator;
 	file_io_factory::shared_ptr factory;
 	io_interface::ptr io;
 	int worker_id;
 
 	matrix_worker_thread(int worker_id, int node_id,
-			file_io_factory::shared_ptr factory, matrix_io_generator::ptr gen,
+			file_io_factory::shared_ptr factory,
+			const std::vector<matrix_io_generator::ptr> &gens,
 			std::shared_ptr<task_creator> creator): thread("matrix-thread",
 				node_id) {
 		this->worker_id = worker_id;
-		this->io_gen = gen;
+		assert(worker_id < gens.size());
+		this->this_io_gen = gens[worker_id];
+		this->io_gens = gens;
 		this->tcreator = creator;
 		this->factory = factory;
 	}
+
+	bool get_next_io(matrix_io &io);
 public:
 	typedef std::shared_ptr<matrix_worker_thread> ptr;
 
@@ -50,14 +56,16 @@ public:
 	 * Create a worker thread.
 	 * \param node_id It indicates which NUMA node this worker thread should run.
 	 * \param factory The I/O factory for the file that stores the matrix.
-	 * \param gen It defines how a matrix is accessed.
+	 * \param gens A collection of I/O generators. They defines how a matrix
+	 *             is accessed.
 	 * \param creator It defines what computation is performed on the part of
 	 * a matrix read from disks.
 	 */
 	static ptr create(int worker_id, int node_id,
-			file_io_factory::shared_ptr factory, matrix_io_generator::ptr gen,
+			file_io_factory::shared_ptr factory,
+			const std::vector<matrix_io_generator::ptr> &gens,
 			std::shared_ptr<task_creator> creator) {
-		return ptr(new matrix_worker_thread(worker_id, node_id, factory, gen,
+		return ptr(new matrix_worker_thread(worker_id, node_id, factory, gens,
 					creator));
 	}
 

@@ -45,12 +45,22 @@ int matrix_io_callback::invoke(io_request *reqs[], int num)
 	return 0;
 }
 
+bool matrix_worker_thread::get_next_io(matrix_io &io)
+{
+	if (this_io_gen->has_next_io()) {
+		io = this_io_gen->get_next_io();
+		return true;
+	}
+	else
+		return false;
+}
+
 void matrix_worker_thread::run()
 {
 	matrix_io_callback *cb = new matrix_io_callback();
 	io->set_callback(cb);
-	while (io_gen->has_next_io()) {
-		matrix_io mio = io_gen->get_next_io();
+	matrix_io mio;
+	while (get_next_io(mio)) {
 		compute_task::ptr task = tcreator->create(mio);
 		io_request req = task->get_request();
 		cb->add_task(req, task);

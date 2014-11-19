@@ -91,13 +91,15 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 	int num_workers = matrix_conf.get_num_threads();
 	int num_nodes = params.get_num_nodes();
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
+	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
+	for (int i = 0; i < num_workers; i++) {
+		io_gens[i] = matrix_io_generator::create(blocks, get_num_rows(),
+				get_num_cols(), get_file_id(), i, num_workers);
+	}
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
-		matrix_worker_thread::ptr t = matrix_worker_thread::ptr(
-				matrix_worker_thread::create(i, node_id, get_io_factory(),
-					matrix_io_generator::create(blocks, get_num_rows(),
-						get_num_cols(), get_file_id(), i, num_workers),
-					creator));
+		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
+				get_io_factory(), io_gens, creator);
 		t->start();
 		workers[i] = t;
 	}
@@ -166,14 +168,16 @@ void sparse_asym_matrix::compute(task_creator::ptr creator) const
 	int num_workers = matrix_conf.get_num_threads();
 	int num_nodes = params.get_num_nodes();
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
+	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
+	for (int i = 0; i < num_workers; i++) {
+		io_gens[i] = matrix_io_generator::create(
+				transposed ? in_blocks : out_blocks, get_num_rows(),
+				get_num_cols(), get_file_id(), i, num_workers);
+	}
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
-		matrix_worker_thread::ptr t = matrix_worker_thread::ptr(
-				matrix_worker_thread::create(i, node_id, get_io_factory(),
-					matrix_io_generator::create(
-						transposed ? in_blocks : out_blocks, get_num_rows(),
-						get_num_cols(), get_file_id(), i, num_workers),
-					creator));
+		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
+				get_io_factory(), io_gens, creator);
 		t->start();
 		workers[i] = t;
 	}
