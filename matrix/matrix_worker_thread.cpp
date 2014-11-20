@@ -40,6 +40,8 @@ int matrix_io_callback::invoke(io_request *reqs[], int num)
 	for (int i = 0; i < num; i++) {
 		task_map_t::const_iterator it = tasks.find(reqs[i]->get_buf());
 		it->second->run(reqs[i]->get_buf(), reqs[i]->get_size());
+		// Once a task is complete, we can remove it from the hashtable.
+		tasks.erase(it);
 	}
 	return 0;
 }
