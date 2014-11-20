@@ -1,5 +1,19 @@
+#include <signal.h>
+#ifdef PROFILER
+#include <gperftools/profiler.h>
+#endif
 #include "sparse_matrix.h"
 #include "matrix/FG_sparse_matrix.h"
+
+void int_handler(int sig_num)
+{
+#ifdef PROFILER
+	printf("stop profiling\n");
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
+	exit(0);
+}
 
 int main(int argc, char *argv[])
 {
@@ -11,6 +25,7 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	std::string graph_file = argv[2];
 	std::string index_file = argv[3];
+	signal(SIGINT, int_handler);
 
 	struct timeval start, end;
 	config_map::ptr configs = config_map::create(conf_file);

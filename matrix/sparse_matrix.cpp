@@ -16,6 +16,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifdef PROFILER
+#include <gperftools/profiler.h>
+#endif
 
 #include "sparse_matrix.h"
 #include "matrix_worker_thread.h"
@@ -96,6 +99,11 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 		io_gens[i] = matrix_io_generator::create(blocks, get_num_rows(),
 				get_num_cols(), get_file_id(), i, num_workers);
 	}
+
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
 		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
@@ -105,6 +113,10 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 	}
 	for (int i = 0; i < num_workers; i++)
 		workers[i]->join();
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
 }
 
 /*
@@ -174,6 +186,10 @@ void sparse_asym_matrix::compute(task_creator::ptr creator) const
 				transposed ? in_blocks : out_blocks, get_num_rows(),
 				get_num_cols(), get_file_id(), i, num_workers);
 	}
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStart(graph_conf.get_prof_file().c_str());
+#endif
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
 		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
@@ -183,6 +199,10 @@ void sparse_asym_matrix::compute(task_creator::ptr creator) const
 	}
 	for (int i = 0; i < num_workers; i++)
 		workers[i]->join();
+#ifdef PROFILER
+	if (!graph_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
 }
 
 sparse_matrix::ptr sparse_matrix::create(FG_graph::ptr fg)
