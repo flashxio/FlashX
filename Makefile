@@ -17,11 +17,13 @@
 
 include Makefile.common
 
-all: build_lib unit_test tools flash-graph test utils matrix
+all: build_lib unit_test tools test utils
 
 build_lib:
 	$(MAKE) -C libcommon
 	$(MAKE) -C libsafs
+	$(MAKE) -C flash-graph
+	$(MAKE) -C matrix
 
 unit_test: build_lib
 ifndef MEMCHECK
@@ -36,12 +38,6 @@ tools: build_lib
 
 utils: build_lib
 	$(MAKE) -C utils
-
-flash-graph: build_lib
-	$(MAKE) -C flash-graph
-
-matrix: build_lib
-	$(MAKE) -C matrix
 
 clean:
 	rm -f *.d
