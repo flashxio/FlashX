@@ -29,6 +29,7 @@ class task_creator;
 class matrix_worker_thread: public thread
 {
 	matrix_io_generator::ptr this_io_gen;
+	int steal_io_id;
 	std::vector<matrix_io_generator::ptr> io_gens;
 	std::shared_ptr<task_creator> tcreator;
 	file_io_factory::shared_ptr factory;
@@ -41,11 +42,12 @@ class matrix_worker_thread: public thread
 			std::shared_ptr<task_creator> creator): thread("matrix-thread",
 				node_id) {
 		this->worker_id = worker_id;
-		assert(worker_id < gens.size());
+		assert((size_t) worker_id < gens.size());
 		this->this_io_gen = gens[worker_id];
 		this->io_gens = gens;
 		this->tcreator = creator;
 		this->factory = factory;
+		this->steal_io_id = (worker_id + 1) % io_gens.size();
 	}
 
 	bool get_next_io(matrix_io &io);

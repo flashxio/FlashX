@@ -26,20 +26,19 @@ static const int MAX_PENDING_IOS = 32;
 
 class matrix_io_callback: public callback
 {
-	typedef std::unordered_map<off_t, compute_task::ptr> task_map_t;
+	typedef std::unordered_map<char *, compute_task::ptr> task_map_t;
 	task_map_t tasks;
 public:
 	int invoke(io_request *reqs[], int num);
 	void add_task(const io_request &req, compute_task::ptr task) {
-		tasks.insert(task_map_t::value_type(req.get_offset(), task));
+		tasks.insert(task_map_t::value_type(req.get_buf(), task));
 	}
 };
 
 int matrix_io_callback::invoke(io_request *reqs[], int num)
 {
 	for (int i = 0; i < num; i++) {
-		off_t off = reqs[i]->get_offset();
-		task_map_t::const_iterator it = tasks.find(off);
+		task_map_t::const_iterator it = tasks.find(reqs[i]->get_buf());
 		it->second->run(reqs[i]->get_buf(), reqs[i]->get_size());
 	}
 	return 0;
@@ -49,10 +48,19 @@ bool matrix_worker_thread::get_next_io(matrix_io &io)
 {
 	if (this_io_gen->has_next_io()) {
 		io = this_io_gen->get_next_io();
-		return true;
+		return io.is_valid();
 	}
-	else
+	else {
+		for (size_t i = 0; i < io_gens.size(); i++) {
+			if (io_gens[steal_io_id]->has_next_io()) {
+				io = io_gens[steal_io_id]->steal_io();
+				if (io.is_valid())
+					return true;
+			}
+			steal_io_id = (steal_io_id + 1) % io_gens.size();
+		}
 		return false;
+	}
 }
 
 void matrix_worker_thread::run()

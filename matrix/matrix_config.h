@@ -20,8 +20,11 @@
  * limitations under the License.
  */
 
+#include "common.h"
 #include "log.h"
 #include "config_map.h"
+
+#include "graph_exception.h"
 
 /**
  * The data structure contains the configurations for matrix operations.
@@ -36,6 +39,8 @@ class matrix_config
 	// For 1D partition, each matrix I/O contains multiple row blocks.
 	// The matrix I/O size in row blocks.
 	int rb_io_size;
+	// For 1D partition, the size of a matrix I/O stolen from another thread.
+	int rb_steal_io_size;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -46,6 +51,7 @@ public:
 		_in_mem_matrix = false;
 		row_block_size = 1024;
 		rb_io_size = 1024;
+		rb_steal_io_size = 1;
 	}
 
 	/**
@@ -101,6 +107,14 @@ public:
 	int get_rb_io_size() const {
 		return rb_io_size;
 	}
+
+	/**
+	 * \brief The size of a matrix I/O stolen from another thread
+	 * (the number of row blocks).
+	 */
+	int get_rb_steal_io_size() const {
+		return rb_steal_io_size;
+	}
 };
 
 inline void matrix_config::print_help()
@@ -111,6 +125,7 @@ inline void matrix_config::print_help()
 	printf("\tin_mem_matrix: indicate whether to load the entire matrix to memory in advance\n");
 	printf("\trow_block_size: the size of a row block (the number of rows)\n");
 	printf("\trb_io_size: the size of a matrix I/O in 1D (the number of row blocks)\n");
+	printf("\trb_steal_io_size: the size of a stolen matrix I/O(the number of row blocks)\n");
 }
 
 inline void matrix_config::print()
@@ -121,6 +136,7 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tin_mem_matrix: " << _in_mem_matrix;
 	BOOST_LOG_TRIVIAL(info) << "\trow_block_size: " << row_block_size;
 	BOOST_LOG_TRIVIAL(info) << "\trb_io_size" << rb_io_size;
+	BOOST_LOG_TRIVIAL(info) << "\trb_steal_io_size" << rb_steal_io_size;
 }
 
 inline void matrix_config::init(config_map::ptr map)
@@ -132,6 +148,7 @@ inline void matrix_config::init(config_map::ptr map)
 	map->read_option_bool("in_mem_matrix", _in_mem_matrix);
 	map->read_option_int("row_block_size", row_block_size);
 	map->read_option_int("rb_io_size", rb_io_size);
+	map->read_option_int("rb_steal_io_size", rb_steal_io_size);
 }
 
 extern matrix_config matrix_conf;

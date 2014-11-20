@@ -105,6 +105,12 @@ public:
 	}
 };
 
+/*
+ * This class generates I/O accesses for a worker thread.
+ * It defines which matrix blocks are accessed by the current worker thread.
+ * An I/O generator is referenced by multiple threads, so all of its methods
+ * need to be thread-safe.
+ */
 class matrix_io_generator
 {
 public:
@@ -114,7 +120,12 @@ public:
 			const std::vector<row_block> &_blocks, size_t tot_num_rows,
 			size_t tot_num_cols, int file_id, int gen_id, int num_gens);
 
+	// Get the next I/O access in the current worker thread.
 	virtual matrix_io get_next_io() = 0;
+	// Get an I/O access from a worker thread that doesn't own the I/O generator.
+	// The I/O size returned from this method is typically much smaller than
+	// the one returned by get_next_io().
+	virtual matrix_io steal_io() = 0;
 	virtual bool has_next_io() = 0;
 };
 
