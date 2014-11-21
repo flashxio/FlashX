@@ -98,11 +98,9 @@ void pgrank_vertex::run(vertex_program &prog)
 void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   // Gather
   float accum = 0;
-  page_byte_array::const_iterator<vertex_id_t> end_it
-    = vertex.get_neigh_end(IN_EDGE);
+  edge_iterator end_it = vertex.get_neigh_end(IN_EDGE);
   
-  for (page_byte_array::const_iterator<vertex_id_t> it
-      = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
+  for (edge_iterator it = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
     vertex_id_t id = *it;
     pgrank_vertex& v = (pgrank_vertex&) prog.get_graph().get_vertex(id);
     // Notice I want this iteration's pagerank

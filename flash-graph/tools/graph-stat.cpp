@@ -29,6 +29,8 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 
+using namespace safs;
+
 const int POWER_CONST = 10;
 
 struct non_empty_func

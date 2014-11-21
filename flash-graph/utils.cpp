@@ -43,6 +43,8 @@
 #include "in_mem_storage.h"
 #include "utils.h"
 
+using namespace safs;
+
 static const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
 static const size_t SORT_BUF_SIZE = 1024 * 1024 * 1024;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;

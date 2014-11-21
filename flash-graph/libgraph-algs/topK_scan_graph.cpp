@@ -394,8 +394,7 @@ void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &ve
 	local_value.set_runtime_data(local_data);
 
 	size_t tmp = 0;
-	page_byte_array::seq_const_iterator<vertex_id_t> it = vertex.get_neigh_seq_it(
-			edge_type::IN_EDGE);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(edge_type::IN_EDGE);
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		// Ignore loops
 		if (id != vertex.get_id())
@@ -544,8 +543,7 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 	broadcast_vpart(part_scan_msg(part_scan_type::NEIGH, (size_t) local_data));
 
 	size_t tmp = 0;
-	page_byte_array::seq_const_iterator<vertex_id_t> it = vertex.get_neigh_seq_it(
-			edge_type::IN_EDGE);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(edge_type::IN_EDGE);
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		// Ignore loops
 		if (id != vertex.get_id())

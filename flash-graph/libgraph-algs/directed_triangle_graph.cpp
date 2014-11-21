@@ -161,10 +161,8 @@ size_t directed_runtime_data_t::count_triangles(vertex_program &prog,
 	if (this->edge_set.size() > 0
 			&& this->edges.size() > HASH_SEARCH_RATIO * v.get_num_edges(
 				edge_type::OUT_EDGE)) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v.get_neigh_begin(edge_type::OUT_EDGE);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v.get_neigh_end(edge_type::OUT_EDGE);
+		edge_iterator other_it = v.get_neigh_begin(edge_type::OUT_EDGE);
+		edge_iterator other_end = v.get_neigh_end(edge_type::OUT_EDGE);
 		for (; other_it != other_end; ++other_it) {
 			vertex_id_t neigh_neighbor = *other_it;
 			runtime_data_t::edge_set_t::const_iterator it
@@ -181,16 +179,14 @@ size_t directed_runtime_data_t::count_triangles(vertex_program &prog,
 	// If the neighbor vertex has way more edges than this vertex.
 	else if (v.get_num_edges(edge_type::OUT_EDGE) / this->edges.size(
 				) > BIN_SEARCH_RATIO) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v.get_neigh_begin(edge_type::OUT_EDGE);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v.get_neigh_end(edge_type::OUT_EDGE);
+		edge_iterator other_it = v.get_neigh_begin(edge_type::OUT_EDGE);
+		edge_iterator other_end = v.get_neigh_end(edge_type::OUT_EDGE);
 		for (int i = this->edges.size() - 1; i >= 0; i--) {
 			vertex_id_t this_neighbor = this->edges.at(i);
 			// We need to skip loops.
 			if (this_neighbor != v.get_id() && this_neighbor != id) {
-				page_byte_array::const_iterator<vertex_id_t> first
-					= std::lower_bound(other_it, other_end, this_neighbor);
+				edge_iterator first = std::lower_bound(other_it, other_end,
+						this_neighbor);
 				if (first != other_end && this_neighbor == *first) {
 					num_local_triangles++;
 					this->triangles[i]++;
@@ -203,8 +199,7 @@ size_t directed_runtime_data_t::count_triangles(vertex_program &prog,
 		std::vector<vertex_id_t>::const_iterator this_it = this->edges.begin();
 		std::vector<int>::iterator count_it = this->triangles.begin();
 		std::vector<vertex_id_t>::const_iterator this_end = this->edges.end();
-		page_byte_array::seq_const_iterator<vertex_id_t> other_it
-			= v.get_neigh_seq_it(edge_type::OUT_EDGE, 0,
+		edge_seq_iterator other_it = v.get_neigh_seq_it(edge_type::OUT_EDGE, 0,
 					v.get_num_edges(edge_type::OUT_EDGE));
 		while (this_it != this_end && other_it.has_next()) {
 			vertex_id_t this_neighbor = *this_it;

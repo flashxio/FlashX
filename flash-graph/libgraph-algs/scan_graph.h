@@ -310,26 +310,22 @@ public:
 	virtual size_t count_edges(const page_vertex *v, edge_type type,
 			std::vector<vertex_id_t> *common_neighs) const;
 	virtual size_t count_edges_hash(const page_vertex *v,
-			page_byte_array::const_iterator<vertex_id_t> other_it,
-			page_byte_array::const_iterator<vertex_id_t> other_end,
+			edge_iterator other_it, edge_iterator other_end,
 			std::vector<vertex_id_t> *common_neighs) const;
 #if 0
 	virtual size_t count_edges_bin_search_this(const page_vertex *v,
 			neighbor_list::id_iterator this_it,
 			neighbor_list::id_iterator this_end,
-			page_byte_array::const_iterator<vertex_id_t> other_it,
-			page_byte_array::const_iterator<vertex_id_t> other_end) const;
+			edge_iterator other_it, edge_iterator other_end) const;
 #endif
 	virtual size_t count_edges_bin_search_other(const page_vertex *v,
 			neighbor_list::id_iterator this_it,
 			neighbor_list::id_iterator this_end,
-			page_byte_array::const_iterator<vertex_id_t> other_it,
-			page_byte_array::const_iterator<vertex_id_t> other_end,
+			edge_iterator other_it, edge_iterator other_end,
 			std::vector<vertex_id_t> *common_neighs) const;
 	virtual size_t count_edges_scan(const page_vertex *v,
 			neighbor_list::id_iterator this_it,
-			neighbor_list::id_iterator this_end,
-			page_byte_array::seq_const_iterator<vertex_id_t> other_it,
+			neighbor_list::id_iterator this_end, edge_seq_iterator other_it,
 			std::vector<vertex_id_t> *common_neighs) const;
 };
 

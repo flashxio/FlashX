@@ -566,7 +566,7 @@ void print_usage()
 	for (int i = 0; i < num_supported; i++)
 		fprintf(stderr, "\t%s\n", supported_algs[i].c_str());
 	graph_conf.print_help();
-	params.print_help();
+	safs::params.print_help();
 }
 
 int main(int argc, char *argv[])

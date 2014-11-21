@@ -81,7 +81,7 @@ public:
 		return ptr(new FG_graph(graph_data, index_data, graph_name, configs));
 	}
 
-	file_io_factory::shared_ptr get_graph_io_factory(int access_option);
+	safs::file_io_factory::shared_ptr get_graph_io_factory(int access_option);
 
 /**
   * \brief Get the map that contains the runtime configurations 

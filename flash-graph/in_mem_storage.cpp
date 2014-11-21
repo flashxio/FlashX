@@ -31,6 +31,8 @@
 #include "in_mem_storage.h"
 #include "graph_file_header.h"
 
+using namespace safs;
+
 class in_mem_byte_array: public page_byte_array
 {
 	off_t off;

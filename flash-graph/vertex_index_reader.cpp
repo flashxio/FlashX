@@ -23,6 +23,8 @@
 #include "vertex_index_reader.h"
 #include "worker_thread.h"
 
+using namespace safs;
+
 template<class ValueType>
 class req_vertex_task
 {

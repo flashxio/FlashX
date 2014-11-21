@@ -288,10 +288,8 @@ void local_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &v
 	local_value.set_runtime_data(local_data);
 
 	size_t tmp = 0;
-	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
-			edge_type::IN_EDGE);
-	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
-			edge_type::IN_EDGE);
+	edge_iterator it = vertex.get_neigh_begin(edge_type::IN_EDGE);
+	edge_iterator end = vertex.get_neigh_end(edge_type::IN_EDGE);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		// Ignore loops

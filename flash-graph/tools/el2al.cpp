@@ -24,6 +24,8 @@
 
 #include "utils.h"
 
+using namespace safs;
+
 struct str2int_pair {
 	std::string str;
 	int number;

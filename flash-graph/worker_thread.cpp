@@ -28,6 +28,8 @@
 #include "steal_state.h"
 #include "vertex_index_reader.h"
 
+using namespace safs;
+
 static void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 {
 	size_t curr = 0;

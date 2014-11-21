@@ -25,6 +25,8 @@
 #include "vertex_compute.h"
 #include "vertex_index.h"
 
+using namespace safs;
+
 const size_t compressed_vertex_entry::ENTRY_SIZE;
 
 static void verify_index(vertex_index::ptr idx)

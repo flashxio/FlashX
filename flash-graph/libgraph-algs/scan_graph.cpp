@@ -29,8 +29,7 @@
 const double BIN_SEARCH_RATIO = 100;
 
 size_t neighbor_list::count_edges_hash(const page_vertex *v,
-		page_byte_array::const_iterator<vertex_id_t> other_it,
-		page_byte_array::const_iterator<vertex_id_t> other_end,
+		edge_iterator other_it, edge_iterator other_end,
 		std::vector<vertex_id_t> *common_neighs) const
 {
 	size_t num_local_edges = 0;
@@ -57,8 +56,7 @@ size_t neighbor_list::count_edges_hash(const page_vertex *v,
 int neighbor_list::count_edges_bin_search_this(const page_vertex *v,
 		std::vector<attributed_neighbor>::const_iterator this_it,
 		std::vector<attributed_neighbor>::const_iterator this_end,
-		page_byte_array::const_iterator<vertex_id_t> other_it,
-		page_byte_array::const_iterator<vertex_id_t> other_end,
+		edge_iterator other_it, edge_iterator other_end,
 		std::vector<vertex_id_t> &common_neighs) const
 {
 	int num_local_edges = 0;
@@ -93,8 +91,7 @@ int neighbor_list::count_edges_bin_search_this(const page_vertex *v,
 size_t neighbor_list::count_edges_bin_search_other(const page_vertex *v,
 		neighbor_list::id_iterator this_it,
 		neighbor_list::id_iterator this_end,
-		page_byte_array::const_iterator<vertex_id_t> other_it,
-		page_byte_array::const_iterator<vertex_id_t> other_end,
+		edge_iterator other_it, edge_iterator other_end,
 		std::vector<vertex_id_t> *common_neighs) const
 {
 	size_t num_local_edges = 0;
@@ -107,14 +104,14 @@ size_t neighbor_list::count_edges_bin_search_other(const page_vertex *v,
 			continue;
 		}
 
-		page_byte_array::const_iterator<vertex_id_t> first
-			= std::lower_bound(other_it, other_end, this_neighbor);
+		edge_iterator first = std::lower_bound(other_it, other_end,
+				this_neighbor);
 		// found it.
 		if (first != other_end && !(this_neighbor < *first)) {
 			int num_dups = 0;
 			do {
 #if 0
-				page_byte_array::const_iterator<edge_count> data_it
+				safs::page_byte_array::const_iterator<edge_count> data_it
 					= other_data_it;
 				data_it += first - other_it;
 				// Edges in the v's neighbor lists may duplicated.
@@ -137,7 +134,7 @@ size_t neighbor_list::count_edges_bin_search_other(const page_vertex *v,
 size_t neighbor_list::count_edges_scan(const page_vertex *v,
 		neighbor_list::id_iterator this_it,
 		neighbor_list::id_iterator this_end,
-		page_byte_array::seq_const_iterator<vertex_id_t> other_it,
+		edge_seq_iterator other_it,
 		std::vector<vertex_id_t> *common_neighs) const
 {
 	size_t num_local_edges = 0;
@@ -191,14 +188,12 @@ size_t neighbor_list::count_edges(const page_vertex *v, edge_type type,
 #ifdef PV_STAT
 	min_comps += min(num_v_edges, this->size());
 #endif
-	page_byte_array::const_iterator<vertex_id_t> other_it
-		= v->get_neigh_begin(type);
+	edge_iterator other_it = v->get_neigh_begin(type);
 #if 0
-	page_byte_array::const_iterator<edge_count> other_data_it
+	safs::page_byte_array::const_iterator<edge_count> other_data_it
 		= v->get_edge_data_begin<edge_count>(type);
 #endif
-	page_byte_array::const_iterator<vertex_id_t> other_end
-		= std::lower_bound(other_it, v->get_neigh_end(type),
+	edge_iterator other_end = std::lower_bound(other_it, v->get_neigh_end(type),
 				v->get_id());
 	num_v_edges = other_end - other_it;
 	if (num_v_edges == 0)

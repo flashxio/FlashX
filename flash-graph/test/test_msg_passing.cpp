@@ -35,6 +35,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+using namespace safs;
+
 /**
  * Measure the performance of message passing.
  * It can remove remote random memory access, but still generates

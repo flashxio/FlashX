@@ -26,6 +26,8 @@
 #include "safs_file.h"
 #include "utils.h"
 
+using namespace safs;
+
 FG_graph::FG_graph(const std::string &graph_file,
 		const std::string &index_file, config_map::ptr configs)
 {

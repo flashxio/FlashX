@@ -32,6 +32,8 @@
 #include "in_mem_storage.h"
 #include "FGlib.h"
 
+using namespace safs;
+
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
  */

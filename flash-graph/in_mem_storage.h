@@ -60,7 +60,7 @@ public:
 		free(graph_data);
 	}
 
-	file_io_factory::shared_ptr create_io_factory() const;
+	safs::file_io_factory::shared_ptr create_io_factory() const;
 
 	friend class in_mem_io;
 };

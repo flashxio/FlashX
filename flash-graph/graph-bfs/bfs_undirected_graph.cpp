@@ -28,6 +28,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+using namespace safs;
+
 class bfs_vertex: public compute_vertex
 {
 	bool visited;

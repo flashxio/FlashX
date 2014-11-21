@@ -47,7 +47,7 @@ public:
 	typedef int value_type;
 
 	class iterator {
-		page_byte_array::seq_const_iterator<vertex_id_t> it;
+		edge_seq_iterator it;
 	public:
 		iterator(const page_vertex &v, edge_type type): it(
 				v.get_neigh_seq_it(type, 0, v.get_num_edges(type))) {
@@ -82,8 +82,8 @@ public:
 	typedef T value_type;
 
 	class iterator {
-		page_byte_array::seq_const_iterator<vertex_id_t> n_it;
-		page_byte_array::seq_const_iterator<T> d_it;
+		edge_seq_iterator n_it;
+		safs::page_byte_array::seq_const_iterator<T> d_it;
 	public:
 		iterator(const page_vertex &v, edge_type type): n_it(
 				v.get_neigh_seq_it(type, 0, v.get_num_edges(type))), d_it(
@@ -146,8 +146,8 @@ public:
 	}
 
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
-		page_byte_array::seq_const_iterator<vertex_id_t> it
-			= vertex.get_neigh_seq_it(type, 0, vertex.get_num_edges(type));
+		edge_seq_iterator it = vertex.get_neigh_seq_it(type, 0,
+				vertex.get_num_edges(type));
 		ResType w = 0;
 		while (it.has_next()) {
 			vertex_id_t id = it.next();

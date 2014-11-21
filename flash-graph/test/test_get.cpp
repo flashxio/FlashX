@@ -35,6 +35,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+using namespace safs;
+
 /**
  * Measure the performance of gather data from neighbors.
  * It generates a lot of remote random memory access.

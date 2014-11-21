@@ -352,7 +352,7 @@ class graph_engine
 	std::vector<vertex_program::ptr> vprograms;
 
 	trace_logger::ptr logger;
-	file_io_factory::shared_ptr graph_factory;
+	safs::file_io_factory::shared_ptr graph_factory;
 	int max_processing_vertices;
 
 	// The time when the current iteration starts.

@@ -21,6 +21,8 @@
 #include "worker_thread.h"
 #include "vertex_index_reader.h"
 
+using namespace safs;
+
 request_range vertex_compute::get_next_request()
 {
 	// Get the next vertex.
