@@ -89,7 +89,6 @@ class FG_vector
 	 * \brief Equivalent to += operator. Element by element
 	 *     addition of one `FG_vector` to another.
 	 * \param other An `FG_vector` smart pointer object.
-	 * **parallel**
 	 *
 	 */
 	void plus_eq(FG_vector<T>::ptr other) {
