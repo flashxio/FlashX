@@ -31,6 +31,9 @@
 #include "concurrency.h"
 #include "container.h"
 
+namespace safs
+{
+
 class thread_safe_page;
 class io_interface;
 
@@ -1131,6 +1134,8 @@ static inline void process_reqs_on_io(io_request *reqs[],
 	} proc_func(func);
 
 	process_reqs_on_io(reqs, num, io_func, proc_func);
+}
+
 }
 
 #endif

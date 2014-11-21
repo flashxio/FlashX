@@ -3,6 +3,8 @@
 
 #include "native_file.h"
 
+using namespace safs;
+
 int main()
 {
 	std::string dir_name = "/tmp/1/1/1";

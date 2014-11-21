@@ -22,6 +22,9 @@
 
 #include "read_private.h"
 
+namespace safs
+{
+
 class direct_io: public buffered_io
 {
 public:
@@ -31,5 +34,7 @@ public:
 
 	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
 };
+
+}
 
 #endif

@@ -28,6 +28,9 @@
 #include "exception.h"
 #include "memory_manager.h"
 
+namespace safs
+{
+
 const long default_init_cache_size = 128 * 1024 * 1024;
 
 template<class T>
@@ -1614,4 +1617,6 @@ int associative_cache::flush_dirty_pages(page_filter *filter, int max_num)
 		return _flusher->flush_dirty_pages(filter, max_num);
 	else
 		return 0;
+}
+
 }

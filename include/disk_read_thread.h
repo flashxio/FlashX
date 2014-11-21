@@ -33,6 +33,9 @@
 #include "cache.h"
 #include "thread.h"
 
+namespace safs
+{
+
 void *process_requests(void *arg);
 
 class async_io;
@@ -275,5 +278,7 @@ public:
 
 	void print_state();
 };
+
+}
 
 #endif

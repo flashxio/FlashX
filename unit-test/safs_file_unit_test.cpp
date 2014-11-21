@@ -1,6 +1,8 @@
 #include "safs_file.h"
 #include "RAID_config.h"
 
+using namespace safs;
+
 int main()
 {
 	RAID_config::ptr raid = RAID_config::create("conf/TEST_ROOTS.txt", 0, 16);

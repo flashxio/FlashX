@@ -25,6 +25,9 @@
 #include "cache.h"
 #include "slab_allocator.h"
 
+namespace safs
+{
+
 template<class ValueType, class TaskType>
 class simple_KV_store;
 
@@ -297,5 +300,7 @@ public:
 		return num_pending_tasks;
 	}
 };
+
+}
 
 #endif

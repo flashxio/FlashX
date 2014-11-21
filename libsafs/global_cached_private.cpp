@@ -49,6 +49,9 @@
 #include "global_cached_private.h"
 #include "slab_allocator.h"
 
+namespace safs
+{
+
 const int COMPLETE_QUEUE_SIZE = 10240;
 const int REQ_BUF_SIZE = 64;
 const int OBJ_ALLOC_INC_SIZE = 1024 * 1024;
@@ -801,7 +804,7 @@ int global_cached_io::multibuf_completion(io_request *request)
 		}
 		off += PAGE_SIZE;
 	}
-	::queue_requests(pending_reqs);
+	safs::queue_requests(pending_reqs);
 	ext_allocator->free(request->get_extension());
 
 	return -1;
@@ -856,7 +859,7 @@ void global_cached_io::process_disk_completed_requests(io_request requests[],
 		ext_allocator->free(request->get_extension());
 	}
 	if (!pending_reqs.empty()) {
-		::queue_requests(pending_reqs);
+		safs::queue_requests(pending_reqs);
 	}
 }
 
@@ -910,7 +913,7 @@ int global_cached_io::process_completed_requests()
 			reqp_buf[num_reqs++] = reqp;
 
 		if (num_reqs == REQ_BUF_SIZE) {
-			::notify_completion(this, reqp_buf, num_reqs);
+			safs::notify_completion(this, reqp_buf, num_reqs);
 			for (int i = 0; i < num_reqs; i++) {
 				req_allocator->free((original_io_request *) reqp_buf[i]);
 			}
@@ -919,7 +922,7 @@ int global_cached_io::process_completed_requests()
 	}
 	num_completed_areqs.inc(num_completed);
 	if (num_reqs > 0) {
-		::notify_completion(this, reqp_buf, num_reqs);
+		safs::notify_completion(this, reqp_buf, num_reqs);
 		for (int i = 0; i < num_reqs; i++) {
 			req_allocator->free((original_io_request *) reqp_buf[i]);
 		}
@@ -1421,7 +1424,7 @@ void global_cached_io::process_cached_reqs()
 		}
 
 		if (num_reqs_in_buf == REQ_BUF_SIZE) {
-			::notify_completion(this, reqp_buf, num_reqs_in_buf);
+			safs::notify_completion(this, reqp_buf, num_reqs_in_buf);
 			num_reqs_in_buf = 0;
 		}
 	}
@@ -1429,7 +1432,7 @@ void global_cached_io::process_cached_reqs()
 	// Actually, we don't even need to do anything for sync requests.
 	num_completed_areqs.inc(num_async_reqs);
 	if (num_reqs_in_buf > 0)
-		::notify_completion(this, reqp_buf, num_reqs_in_buf);
+		safs::notify_completion(this, reqp_buf, num_reqs_in_buf);
 }
 
 void global_cached_io::process_user_req(
@@ -1937,7 +1940,7 @@ void global_cached_io::flush_requests()
 					|| !merge_req(req, *under_req)) {
 				num_sent++;
 				num_pages += req.get_num_bufs();
-				::access(underlying, req);
+				safs::access(underlying, req);
 
 				req = *under_req;
 			}
@@ -1952,7 +1955,7 @@ void global_cached_io::flush_requests()
 		num_pages += req.get_num_bufs();
 		num_to_underlying.inc(num_sent);
 		num_underlying_pages.inc(num_pages);
-		::access(underlying, req);
+		safs::access(underlying, req);
 	}
 	underlying->flush_requests();
 }
@@ -1962,4 +1965,6 @@ void global_cached_io::wakeup_on_req(original_io_request *req, int status)
 	assert(req->is_sync());
 	assert(req->is_complete());
 	get_thread()->activate();
+}
+
 }

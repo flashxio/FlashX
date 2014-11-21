@@ -36,6 +36,9 @@
 #include "io_request.h"
 #include "parameters.h"
 
+namespace safs
+{
+
 const off_t PAGE_INVALID_OFFSET = ((off_t) -1) << LOG_PAGE_SIZE;
 
 enum {
@@ -1099,5 +1102,7 @@ public:
 					+ orig.get_offset_in_first_page()) / PAGE_SIZE + idx);
 	}
 };
+
+}
 
 #endif

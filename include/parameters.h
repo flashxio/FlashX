@@ -34,6 +34,9 @@
 
 #define MIN_BLOCK_SIZE 512
 
+namespace safs
+{
+
 class sys_parameters
 {
 	int RAID_block_size;
@@ -189,6 +192,8 @@ const int NUMA_MSG_SIZE = 4096;
 const int NUMA_REPLY_CACHE_SIZE = 50;
 
 const int LOCAL_BUF_SIZE = 100;
+
+}
 
 struct str2int {
 	std::string name;

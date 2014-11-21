@@ -22,6 +22,9 @@
 
 #include "common.h"
 
+namespace safs
+{
+
 class thread_safe_page;
 class io_interface;
 
@@ -41,5 +44,7 @@ public:
 
 	virtual int flush_dirty_pages(page_filter *filter, int max_num) = 0;
 };
+
+}
 
 #endif

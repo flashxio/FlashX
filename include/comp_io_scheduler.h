@@ -20,6 +20,9 @@
  * limitations under the License.
  */
 
+namespace safs
+{
+
 /**
  * This class defines an interface of a I/O scheduler for requests generated
  * by user tasks. It is only used in the page cache.
@@ -199,5 +202,7 @@ public:
 	 */
 	void gc_computes();
 };
+
+}
 
 #endif

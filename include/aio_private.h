@@ -29,6 +29,9 @@
 #include "container.h"
 #include "io_request.h"
 
+namespace safs
+{
+
 void aio_callback(io_context_t, struct iocb*, void *, long, long);
 
 struct thread_callback_s;
@@ -172,5 +175,7 @@ public:
 
 void init_aio(std::vector<int> node_ids);
 void destroy_aio();
+
+}
 
 #endif

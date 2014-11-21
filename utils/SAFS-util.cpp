@@ -30,6 +30,8 @@
 #include "file_mapper.h"
 #include "RAID_config.h"
 
+using namespace safs;
+
 const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
 
 config_map::ptr configs;

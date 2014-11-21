@@ -45,6 +45,9 @@
 #include "safs_file.h"
 #include "exception.h"
 
+namespace safs
+{
+
 /**
  * This global data collection is very static.
  * Once the data is initialized, no data needs to be changed.
@@ -691,3 +694,5 @@ bool is_safs_init()
 }
 
 atomic_integer io_interface::io_counter;
+
+}

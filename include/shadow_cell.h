@@ -25,6 +25,9 @@
 /* 36 shadow pages makes exactly 4 cache lines. */
 #define NUM_SHADOW_PAGES 36
 
+namespace safs
+{
+
 class shadow_page
 {
 	int offset;
@@ -193,5 +196,7 @@ public:
 };
 
 #endif
+
+}
 
 #endif

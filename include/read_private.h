@@ -29,6 +29,9 @@
 #include "file_partition.h"
 #include "parameters.h"
 
+namespace safs
+{
+
 class buffered_io: public io_interface
 {
 	logical_file_partition partition;
@@ -77,5 +80,7 @@ public:
 
 	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
 };
+
+}
 
 #endif

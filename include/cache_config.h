@@ -27,6 +27,9 @@
 #include "cache.h"
 #include "thread.h"
 
+namespace safs
+{
+
 class page_cache;
 
 enum {
@@ -202,5 +205,7 @@ public:
 
 	virtual int page2cache(const page_id_t &pg_id) const;
 };
+
+}
 
 #endif

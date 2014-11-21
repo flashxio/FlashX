@@ -28,6 +28,9 @@
 
 #include "common.h"
 
+namespace safs
+{
+
 /*
  * This stores the local filesystem file information that stores
  * each partition of SAFS files.
@@ -61,5 +64,7 @@ public:
 };
 
 size_t get_all_safs_files(std::set<std::string> &files);
+
+}
 
 #endif

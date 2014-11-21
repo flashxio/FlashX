@@ -31,6 +31,11 @@
 #include "concurrency.h"
 #include "io_request.h"
 
+class slab_allocator;
+
+namespace safs
+{
+
 class io_reply
 {
 	io_request req;
@@ -97,8 +102,6 @@ public:
 		return (io_reply *) io_request::deserialize(buf, size);
 	}
 };
-
-class slab_allocator;
 
 /**
  * It is an object container used for message passing.
@@ -523,5 +526,7 @@ public:
 		delete s;
 	}
 };
+
+}
 
 #endif

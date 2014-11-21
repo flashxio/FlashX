@@ -30,6 +30,9 @@
 #include "messaging.h"
 #include "global_cached_private.h"
 
+namespace safs
+{
+
 const int REPLY_BUF_SIZE = 1000;
 const int REQ_BUF_SIZE = 1000;
 const int MSG_BUF_SIZE = 128;
@@ -160,6 +163,8 @@ public:
 
 	virtual void print_state();
 };
+
+}
 #endif
 
 #endif

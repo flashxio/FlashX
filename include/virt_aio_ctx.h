@@ -23,6 +23,9 @@
 #include "container.h"
 #include "wpaio.h"
 
+namespace safs
+{
+
 struct req_entry {
 	struct iocb *req;
 	struct timeval issue_time;
@@ -77,5 +80,7 @@ public:
 				read_bytes, write_bytes);
 	}
 };
+
+}
 
 #endif
