@@ -22,6 +22,9 @@
 #include "matrix_worker_thread.h"
 #include "sparse_matrix.h"
 
+namespace fm
+{
+
 static const int MAX_PENDING_IOS = 32;
 
 class matrix_io_callback: public safs::callback
@@ -83,4 +86,6 @@ void matrix_worker_thread::run()
 	}
 	io->wait4complete(io->num_pending_ios());
 	stop();
+}
+
 }

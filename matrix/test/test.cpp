@@ -5,6 +5,8 @@
 #include "sparse_matrix.h"
 #include "matrix/FG_sparse_matrix.h"
 
+using namespace fm;
+
 void int_handler(int sig_num)
 {
 #ifdef PROFILER

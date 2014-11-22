@@ -25,6 +25,9 @@
 #include "FGlib.h"
 #include "matrix_io.h"
 
+namespace fm
+{
+
 class compute_task
 {
 public:
@@ -193,5 +196,7 @@ public:
 
 void init_flash_matrix(config_map::ptr configs);
 void destroy_flash_matrix();
+
+}
 
 #endif

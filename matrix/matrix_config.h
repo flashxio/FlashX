@@ -26,6 +26,9 @@
 
 #include "graph_exception.h"
 
+namespace fm
+{
+
 /**
  * The data structure contains the configurations for matrix operations.
  */
@@ -152,5 +155,7 @@ inline void matrix_config::init(config_map::ptr map)
 }
 
 extern matrix_config matrix_conf;
+
+}
 
 #endif

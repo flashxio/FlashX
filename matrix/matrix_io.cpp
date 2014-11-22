@@ -23,6 +23,9 @@
 #include "matrix_io.h"
 #include "matrix_config.h"
 
+namespace fm
+{
+
 class large_row_io
 {
 	const std::vector<row_block> *blocks;
@@ -155,4 +158,6 @@ matrix_io_generator::ptr matrix_io_generator::create(
 {
 	return matrix_io_generator::ptr(new row_io_generator(_blocks,
 				tot_num_rows, tot_num_cols, file_id, gen_id, num_gens));
+}
+
 }

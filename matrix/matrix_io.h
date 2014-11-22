@@ -26,6 +26,9 @@
 
 #include "vertex.h"
 
+namespace fm
+{
+
 class matrix_loc
 {
 	std::pair<off_t, off_t> pair;
@@ -128,5 +131,7 @@ public:
 	virtual matrix_io steal_io() = 0;
 	virtual bool has_next_io() = 0;
 };
+
+}
 
 #endif

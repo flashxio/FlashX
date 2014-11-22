@@ -25,6 +25,9 @@
 #include "matrix_io.h"
 #include "matrix_config.h"
 
+namespace fm
+{
+
 matrix_config matrix_conf;
 
 void row_compute_task::run(char *buf, size_t size)
@@ -223,4 +226,6 @@ void init_flash_matrix(config_map::ptr configs)
 void destroy_flash_matrix()
 {
 	safs::destroy_io_system();
+}
+
 }

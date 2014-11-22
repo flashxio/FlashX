@@ -1,5 +1,7 @@
 #include "matrix_io.h"
 
+using namespace fm;
+
 struct comp_io
 {
 	bool operator()(const matrix_io &io1, const matrix_io &io2) const {

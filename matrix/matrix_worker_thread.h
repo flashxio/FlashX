@@ -24,6 +24,9 @@
 #include "matrix_io.h"
 #include "io_interface.h"
 
+namespace fm
+{
+
 class task_creator;
 
 class matrix_worker_thread: public thread
@@ -77,5 +80,7 @@ public:
 
 	void run();
 };
+
+}
 
 #endif
