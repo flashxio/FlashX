@@ -217,15 +217,28 @@ sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg)
 		return sparse_sym_matrix::create(fg);
 }
 
+static std::atomic<size_t> init_count;
+
 void init_flash_matrix(config_map::ptr configs)
 {
-	safs::init_io_system(configs);
-	matrix_conf.init(configs);
+	size_t count = init_count.fetch_add(1);
+	if (count == 0) {
+		matrix_conf.init(configs);
+		try {
+			safs::init_io_system(configs);
+		} catch (std::exception &e) {
+			// If SAFS fails to initialize, we should remove the count
+			// increase at the beginning of the function.
+			init_count--;
+			throw e;
+		}
+	}
 }
 
 void destroy_flash_matrix()
 {
-	safs::destroy_io_system();
+	if (init_count.fetch_sub(1) == 1)
+		safs::destroy_io_system();
 }
 
 }
