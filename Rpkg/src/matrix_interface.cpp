@@ -27,6 +27,8 @@
 #include "FGlib.h"
 #include "sparse_matrix.h"
 
+using namespace fm;
+
 class matrix_ref
 {
 	sparse_matrix::ptr m;
@@ -78,13 +80,13 @@ static sparse_matrix::ptr get_matrix(SEXP pmatrix)
 	return ref->get_matrix();
 }
 
-FG_graph::ptr R_FG_get_graph(SEXP pgraph);
+fg::FG_graph::ptr R_FG_get_graph(SEXP pgraph);
 
 RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
 {
 	Rcpp::List graph = Rcpp::List(pgraph);
 	Rcpp::LogicalVector res(1);
-	FG_graph::ptr fg = R_FG_get_graph(pgraph);
+	fg::FG_graph::ptr fg = R_FG_get_graph(pgraph);
 	sparse_matrix::ptr m = sparse_matrix::create(fg);
 	std::string name = graph["name"];
 	return create_FMR_object(m, name);
@@ -94,7 +96,7 @@ RcppExport SEXP R_FM_multiply_v(SEXP pmatrix, SEXP pvec)
 {
 	Rcpp::NumericVector vec(pvec);
 	size_t length = vec.size();
-	FG_vector<double>::ptr in_vec = FG_vector<double>::create(length);
+	fg::FG_vector<double>::ptr in_vec = fg::FG_vector<double>::create(length);
 	for (size_t i = 0; i < length; i++) {
 		in_vec->get_data()[i] = vec[i];
 	}
@@ -102,7 +104,7 @@ RcppExport SEXP R_FM_multiply_v(SEXP pmatrix, SEXP pvec)
 	assert(matrix->get_num_rows() == length);
 	assert(matrix->get_num_cols() == length);
 
-	FG_vector<double>::ptr out_vec = matrix->multiply<double>(in_vec);
+	fg::FG_vector<double>::ptr out_vec = matrix->multiply<double>(in_vec);
 	Rcpp::NumericVector ret(out_vec->get_data(), out_vec->get_data() + length);
 	return ret;
 }
