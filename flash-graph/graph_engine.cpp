@@ -925,7 +925,14 @@ void graph_engine::init_flash_graph(config_map::ptr configs)
 	if (count == 0) {
 		graph_conf.init(configs);
 		graph_conf.print();
-		init_io_system(configs);
+		try {
+			init_io_system(configs);
+		} catch (std::exception &e) {
+			// If SAFS fails to initialize, we should remove the count
+			// increase at the beginning of the function.
+			init_count--;
+			throw e;
+		}
 	}
 }
 
