@@ -36,7 +36,8 @@ int main(int argc, char *argv[])
 	fg::FG_graph::ptr fg = fg::FG_graph::create(graph_file, index_file, configs);
 	fg::FG_adj_matrix::ptr fg_m = fg::FG_adj_matrix::create(fg);
 	fg::FG_vector<double>::ptr in = fg::FG_vector<double>::create(fg_m->get_num_cols());
-	in->init_rand(1000 * 1000);
+	for (size_t i = 0; i < in->get_size(); i++)
+		in->set(i, i);
 	printf("sum of input: %lf\n", in->sum());
 
 	fg::FG_vector<double>::ptr fg_out = fg::FG_vector<double>::create(
