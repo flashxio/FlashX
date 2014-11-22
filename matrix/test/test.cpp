@@ -11,7 +11,7 @@ void int_handler(int sig_num)
 {
 #ifdef PROFILER
 	printf("stop profiling\n");
-	if (!graph_conf.get_prof_file().empty())
+	if (!fg::graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
 	exit(0);

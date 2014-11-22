@@ -104,8 +104,8 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 	}
 
 #ifdef PROFILER
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStart(graph_conf.get_prof_file().c_str());
+	if (!fg::graph_conf.get_prof_file().empty())
+		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
 #endif
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
@@ -117,7 +117,7 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 	for (int i = 0; i < num_workers; i++)
 		workers[i]->join();
 #ifdef PROFILER
-	if (!graph_conf.get_prof_file().empty())
+	if (!fg::graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
 }
@@ -190,8 +190,8 @@ void sparse_asym_matrix::compute(task_creator::ptr creator) const
 				get_num_cols(), get_file_id(), i, num_workers);
 	}
 #ifdef PROFILER
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStart(graph_conf.get_prof_file().c_str());
+	if (!fg::graph_conf.get_prof_file().empty())
+		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
 #endif
 	for (int i = 0; i < num_workers; i++) {
 		int node_id = i % num_nodes;
@@ -203,7 +203,7 @@ void sparse_asym_matrix::compute(task_creator::ptr creator) const
 	for (int i = 0; i < num_workers; i++)
 		workers[i]->join();
 #ifdef PROFILER
-	if (!graph_conf.get_prof_file().empty())
+	if (!fg::graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
 }
