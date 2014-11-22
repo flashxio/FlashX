@@ -34,7 +34,7 @@ public:
 	}
 
 	virtual void run(char *buf, size_t size) = 0;
-	virtual io_request get_request() const = 0;
+	virtual safs::io_request get_request() const = 0;
 };
 
 class task_creator
@@ -63,9 +63,9 @@ public:
 		free(buf);
 	}
 	virtual void run(char *buf, size_t size);
-	virtual void run_on_row(const ext_mem_undirected_vertex &v) = 0;
-	virtual io_request get_request() const {
-		return io_request(buf, data_loc_t(io.get_loc().get_file_id(),
+	virtual void run_on_row(const fg::ext_mem_undirected_vertex &v) = 0;
+	virtual safs::io_request get_request() const {
+		return safs::io_request(buf, safs::data_loc_t(io.get_loc().get_file_id(),
 					off), buf_size, READ);
 	}
 };
@@ -73,23 +73,23 @@ public:
 template<class T>
 class row_multiply_task: public row_compute_task
 {
-	const FG_vector<T> &input;
-	FG_vector<T> &output;
+	const fg::FG_vector<T> &input;
+	fg::FG_vector<T> &output;
 public:
-	row_multiply_task(const FG_vector<T> &_input, FG_vector<T> &_output,
+	row_multiply_task(const fg::FG_vector<T> &_input, fg::FG_vector<T> &_output,
 			const matrix_io &_io): row_compute_task(_io), input(
 				_input), output(_output) {
 	}
 
-	void run_on_row(const ext_mem_undirected_vertex &v);
+	void run_on_row(const fg::ext_mem_undirected_vertex &v);
 };
 
 template<class T>
-void row_multiply_task<T>::run_on_row(const ext_mem_undirected_vertex &v)
+void row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 {
 	T res = 0;
 	for (size_t i = 0; i < v.get_num_edges(); i++) {
-		vertex_id_t id = v.get_neighbor(i);
+		fg::vertex_id_t id = v.get_neighbor(i);
 		res += input.get(id);
 	}
 	output.set(v.get_id(), res);
@@ -98,15 +98,15 @@ void row_multiply_task<T>::run_on_row(const ext_mem_undirected_vertex &v)
 template<class T>
 class row_multiply_creator: public task_creator
 {
-	const FG_vector<T> &input;
-	FG_vector<T> &output;
+	const fg::FG_vector<T> &input;
+	fg::FG_vector<T> &output;
 
-	row_multiply_creator(const FG_vector<T> &_input,
-			FG_vector<T> &_output): input(_input), output(_output) {
+	row_multiply_creator(const fg::FG_vector<T> &_input,
+			fg::FG_vector<T> &_output): input(_input), output(_output) {
 	}
 public:
-	static task_creator::ptr create(const FG_vector<T> &_input,
-			FG_vector<T> &_output) {
+	static task_creator::ptr create(const fg::FG_vector<T> &_input,
+			fg::FG_vector<T> &_output) {
 		return task_creator::ptr(new row_multiply_creator<T>(_input, _output));
 	}
 
@@ -127,11 +127,11 @@ class sparse_matrix
 	size_t nrows;
 	size_t ncols;
 	bool symmetric;
-	file_io_factory::shared_ptr factory;
+	safs::file_io_factory::shared_ptr factory;
 	// On which dimension(s) the matrix is partitioned.
 	part_dim_t part_dim;
 protected:
-	sparse_matrix(file_io_factory::shared_ptr factory, size_t nrows,
+	sparse_matrix(safs::file_io_factory::shared_ptr factory, size_t nrows,
 			size_t ncols, bool symmetric, part_dim_t part_dim) {
 		this->factory = factory;
 		this->nrows = nrows;
@@ -140,7 +140,7 @@ protected:
 		this->part_dim = part_dim;
 	}
 
-	file_io_factory::shared_ptr get_io_factory() const {
+	safs::file_io_factory::shared_ptr get_io_factory() const {
 		return factory;
 	}
 public:
@@ -149,7 +149,7 @@ public:
 	virtual ~sparse_matrix() {
 	}
 
-	static ptr create(FG_graph::ptr);
+	static ptr create(fg::FG_graph::ptr);
 
 	virtual void compute(task_creator::ptr creator) const = 0;
 
@@ -176,15 +176,15 @@ public:
 	virtual void transpose() = 0;
 
 	template<class T>
-	typename FG_vector<T>::ptr multiply(typename FG_vector<T>::ptr in) const {
+	typename fg::FG_vector<T>::ptr multiply(typename fg::FG_vector<T>::ptr in) const {
 		if (in->get_size() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
 					"the input vector has wrong length %1%. matrix ncols: %2%")
 				% in->get_size() % ncols;
-			return typename FG_vector<T>::ptr();
+			return typename fg::FG_vector<T>::ptr();
 		}
 		else {
-			typename FG_vector<T>::ptr ret = FG_vector<T>::create(nrows);
+			typename fg::FG_vector<T>::ptr ret = fg::FG_vector<T>::create(nrows);
 			compute(row_multiply_creator<T>::create(*in, *ret));
 			return ret;
 		}

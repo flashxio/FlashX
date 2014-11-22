@@ -24,18 +24,18 @@
 
 static const int MAX_PENDING_IOS = 32;
 
-class matrix_io_callback: public callback
+class matrix_io_callback: public safs::callback
 {
 	typedef std::unordered_map<char *, compute_task::ptr> task_map_t;
 	task_map_t tasks;
 public:
-	int invoke(io_request *reqs[], int num);
-	void add_task(const io_request &req, compute_task::ptr task) {
+	int invoke(safs::io_request *reqs[], int num);
+	void add_task(const safs::io_request &req, compute_task::ptr task) {
 		tasks.insert(task_map_t::value_type(req.get_buf(), task));
 	}
 };
 
-int matrix_io_callback::invoke(io_request *reqs[], int num)
+int matrix_io_callback::invoke(safs::io_request *reqs[], int num)
 {
 	for (int i = 0; i < num; i++) {
 		task_map_t::const_iterator it = tasks.find(reqs[i]->get_buf());
@@ -72,7 +72,7 @@ void matrix_worker_thread::run()
 	matrix_io mio;
 	while (get_next_io(mio)) {
 		compute_task::ptr task = tcreator->create(mio);
-		io_request req = task->get_request();
+		safs::io_request req = task->get_request();
 		cb->add_task(req, task);
 		io->access(&req, 1);
 

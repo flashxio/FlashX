@@ -31,13 +31,13 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
-	FG_adj_matrix::ptr fg_m = FG_adj_matrix::create(fg);
-	FG_vector<double>::ptr in = FG_vector<double>::create(fg_m->get_num_cols());
+	fg::FG_graph::ptr fg = fg::FG_graph::create(graph_file, index_file, configs);
+	fg::FG_adj_matrix::ptr fg_m = fg::FG_adj_matrix::create(fg);
+	fg::FG_vector<double>::ptr in = fg::FG_vector<double>::create(fg_m->get_num_cols());
 	in->init_rand(1000 * 1000);
 	printf("sum of input: %lf\n", in->sum());
 
-	FG_vector<double>::ptr fg_out = FG_vector<double>::create(
+	fg::FG_vector<double>::ptr fg_out = fg::FG_vector<double>::create(
 			fg_m->get_num_rows());
 	gettimeofday(&start, NULL);
 	fg_m->multiply<double>(*in, *fg_out);
@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 
 	sparse_matrix::ptr m = sparse_matrix::create(fg);
 	gettimeofday(&start, NULL);
-	FG_vector<double>::ptr out = m->multiply<double>(in);
+	fg::FG_vector<double>::ptr out = m->multiply<double>(in);
 	gettimeofday(&end, NULL);
 	printf("sum of input: %lf, sum of product: %lf, it takes %.3f seconds\n",
 			in->sum(), out->sum(), time_diff(start, end));

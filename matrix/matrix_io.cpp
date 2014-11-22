@@ -46,7 +46,7 @@ public:
 		size_t size = blocks->at(first_row_block + num_row_blocks).get_offset()
 			- first_row_offset;
 		matrix_io ret(top_left, num_rows, tot_num_cols,
-					data_loc_t(file_id, first_row_offset), size);
+					safs::data_loc_t(file_id, first_row_offset), size);
 		first_row_block += num_row_blocks;
 		num_row_blocks = 0;
 		tot_num_rows = 0;
@@ -64,7 +64,7 @@ public:
 		size_t size = blocks->at(first_row_block + num_curr_row_blocks).get_offset()
 			- first_row_offset;
 		matrix_io ret(top_left, num_rows,
-				tot_num_cols, data_loc_t(file_id, first_row_offset), size);
+				tot_num_cols, safs::data_loc_t(file_id, first_row_offset), size);
 		first_row_block += num_curr_row_blocks;
 		num_row_blocks -= num_curr_row_blocks;
 		tot_num_rows -= num_rows;

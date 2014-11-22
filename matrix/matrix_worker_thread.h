@@ -32,12 +32,12 @@ class matrix_worker_thread: public thread
 	int steal_io_id;
 	std::vector<matrix_io_generator::ptr> io_gens;
 	std::shared_ptr<task_creator> tcreator;
-	file_io_factory::shared_ptr factory;
-	io_interface::ptr io;
+	safs::file_io_factory::shared_ptr factory;
+	safs::io_interface::ptr io;
 	int worker_id;
 
 	matrix_worker_thread(int worker_id, int node_id,
-			file_io_factory::shared_ptr factory,
+			safs::file_io_factory::shared_ptr factory,
 			const std::vector<matrix_io_generator::ptr> &gens,
 			std::shared_ptr<task_creator> creator): thread("matrix-thread",
 				node_id) {
@@ -64,7 +64,7 @@ public:
 	 * a matrix read from disks.
 	 */
 	static ptr create(int worker_id, int node_id,
-			file_io_factory::shared_ptr factory,
+			safs::file_io_factory::shared_ptr factory,
 			const std::vector<matrix_io_generator::ptr> &gens,
 			std::shared_ptr<task_creator> creator) {
 		return ptr(new matrix_worker_thread(worker_id, node_id, factory, gens,

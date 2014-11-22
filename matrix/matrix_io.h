@@ -48,7 +48,7 @@ class matrix_io
 	size_t num_rows;
 	size_t num_cols;
 
-	data_loc_t loc;
+	safs::data_loc_t loc;
 	size_t size;
 public:
 	matrix_io(): top_left(-1, -1) {
@@ -58,14 +58,14 @@ public:
 	}
 
 	matrix_io(const matrix_loc &_top_left, size_t num_rows,
-			size_t num_cols, data_loc_t loc, size_t size): top_left(_top_left) {
+			size_t num_cols, safs::data_loc_t loc, size_t size): top_left(_top_left) {
 		this->num_rows = num_rows;
 		this->num_cols = num_cols;
 		this->loc = loc;
 		this->size = size;
 	}
 
-	const data_loc_t &get_loc() const {
+	const safs::data_loc_t &get_loc() const {
 		return loc;
 	}
 

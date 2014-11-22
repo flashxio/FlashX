@@ -33,14 +33,14 @@ void row_compute_task::run(char *buf, size_t size)
 	assert(this->buf_size == size);
 
 	char *buf_p = buf + (io.get_loc().get_offset() - off);
-	ext_mem_undirected_vertex *v = (ext_mem_undirected_vertex *) buf_p;
+	fg::ext_mem_undirected_vertex *v = (fg::ext_mem_undirected_vertex *) buf_p;
 	for (size_t i = 0; i < io.get_num_rows(); i++) {
 		size_t vsize = v->get_size();
 		assert(buf_size >= vsize);
 		buf_size -= vsize;
 		buf_p += vsize;
 		run_on_row(*v);
-		v = (ext_mem_undirected_vertex *) buf_p;
+		v = (fg::ext_mem_undirected_vertex *) buf_p;
 	}
 }
 
@@ -52,12 +52,12 @@ class sparse_sym_matrix: public sparse_matrix
 	// This works like the index of the sparse matrix.
 	std::vector<row_block> blocks;
 
-	sparse_sym_matrix(file_io_factory::shared_ptr factory,
+	sparse_sym_matrix(safs::file_io_factory::shared_ptr factory,
 			size_t nrows): sparse_matrix(factory, nrows, nrows, true,
 				part_dim_t::ROW) {
 	}
 public:
-	static ptr create(FG_graph::ptr);
+	static ptr create(fg::FG_graph::ptr);
 
 	// Nothing should happen for a symmetric matrix.
 	virtual void transpose() {
@@ -66,22 +66,22 @@ public:
 	virtual void compute(task_creator::ptr creator) const;
 };
 
-sparse_matrix::ptr sparse_sym_matrix::create(FG_graph::ptr fg)
+sparse_matrix::ptr sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 {
 	// Initialize vertex index.
-	vertex_index::ptr index = fg->get_index_data();
+	fg::vertex_index::ptr index = fg->get_index_data();
 	assert(index != NULL);
 	assert(!index->get_graph_header().is_directed_graph()
 			&& !index->is_compressed());
-	default_vertex_index::ptr uindex = default_vertex_index::cast(index);
+	fg::default_vertex_index::ptr uindex = fg::default_vertex_index::cast(index);
 
-	vsize_t num_vertices = uindex->get_num_vertices();
+	fg::vsize_t num_vertices = uindex->get_num_vertices();
 	sparse_sym_matrix *m = new sparse_sym_matrix(fg->get_graph_io_factory(
-				REMOTE_ACCESS), num_vertices);
+				safs::REMOTE_ACCESS), num_vertices);
 
 	// Generate the matrix index from the vertex index.
 	for (size_t i = 0; i < num_vertices; i += matrix_conf.get_row_block_size()) {
-		ext_mem_vertex_info info = uindex->get_vertex_info(i);
+		fg::ext_mem_vertex_info info = uindex->get_vertex_info(i);
 		m->blocks.emplace_back(info.get_off());
 	}
 	m->blocks.emplace_back(uindex->get_graph_size());
@@ -92,7 +92,7 @@ sparse_matrix::ptr sparse_sym_matrix::create(FG_graph::ptr fg)
 void sparse_sym_matrix::compute(task_creator::ptr creator) const
 {
 	int num_workers = matrix_conf.get_num_threads();
-	int num_nodes = params.get_num_nodes();
+	int num_nodes = safs::params.get_num_nodes();
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
 	for (int i = 0; i < num_workers; i++) {
@@ -131,13 +131,13 @@ class sparse_asym_matrix: public sparse_matrix
 	std::vector<row_block> in_blocks;
 	bool transposed;
 
-	sparse_asym_matrix(file_io_factory::shared_ptr factory,
+	sparse_asym_matrix(safs::file_io_factory::shared_ptr factory,
 			size_t nrows): sparse_matrix(factory, nrows, nrows, false,
 				part_dim_t::ROW) {
 		transposed = false;
 	}
 public:
-	static ptr create(FG_graph::ptr);
+	static ptr create(fg::FG_graph::ptr);
 
 	virtual void transpose() {
 		transposed = !transposed;
@@ -146,28 +146,28 @@ public:
 	virtual void compute(task_creator::ptr creator) const;
 };
 
-sparse_matrix::ptr sparse_asym_matrix::create(FG_graph::ptr fg)
+sparse_matrix::ptr sparse_asym_matrix::create(fg::FG_graph::ptr fg)
 {
 	// Initialize vertex index.
-	vertex_index::ptr index = fg->get_index_data();
+	fg::vertex_index::ptr index = fg->get_index_data();
 	assert(index != NULL);
 	assert(index->get_graph_header().is_directed_graph()
 			&& !index->is_compressed());
-	directed_vertex_index::ptr dindex = directed_vertex_index::cast(index);
+	fg::directed_vertex_index::ptr dindex = fg::directed_vertex_index::cast(index);
 
-	vsize_t num_vertices = dindex->get_num_vertices();
+	fg::vsize_t num_vertices = dindex->get_num_vertices();
 	sparse_asym_matrix *m = new sparse_asym_matrix(fg->get_graph_io_factory(
-				REMOTE_ACCESS), num_vertices);
+				safs::REMOTE_ACCESS), num_vertices);
 
 	// Generate the matrix index from the vertex index.
 	for (size_t i = 0; i < num_vertices; i += matrix_conf.get_row_block_size()) {
-		ext_mem_vertex_info info = dindex->get_vertex_info_out(i);
+		fg::ext_mem_vertex_info info = dindex->get_vertex_info_out(i);
 		m->out_blocks.emplace_back(info.get_off());
 
 		info = dindex->get_vertex_info_in(i);
 		m->in_blocks.emplace_back(info.get_off());
 	}
-	ext_mem_vertex_info info = dindex->get_vertex_info_out(num_vertices - 1);
+	fg::ext_mem_vertex_info info = dindex->get_vertex_info_out(num_vertices - 1);
 	m->out_blocks.emplace_back(info.get_off() + info.get_size());
 	info = dindex->get_vertex_info_in(num_vertices - 1);
 	m->in_blocks.emplace_back(info.get_off() + info.get_size());
@@ -178,7 +178,7 @@ sparse_matrix::ptr sparse_asym_matrix::create(FG_graph::ptr fg)
 void sparse_asym_matrix::compute(task_creator::ptr creator) const
 {
 	int num_workers = matrix_conf.get_num_threads();
-	int num_nodes = params.get_num_nodes();
+	int num_nodes = safs::params.get_num_nodes();
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
 	for (int i = 0; i < num_workers; i++) {
@@ -205,9 +205,9 @@ void sparse_asym_matrix::compute(task_creator::ptr creator) const
 #endif
 }
 
-sparse_matrix::ptr sparse_matrix::create(FG_graph::ptr fg)
+sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg)
 {
-	graph_header header = fg->get_graph_header();
+	const fg::graph_header &header = fg->get_graph_header();
 	if (header.is_directed_graph())
 		return sparse_asym_matrix::create(fg);
 	else
@@ -216,11 +216,11 @@ sparse_matrix::ptr sparse_matrix::create(FG_graph::ptr fg)
 
 void init_flash_matrix(config_map::ptr configs)
 {
-	init_io_system(configs);
+	safs::init_io_system(configs);
 	matrix_conf.init(configs);
 }
 
 void destroy_flash_matrix()
 {
-	destroy_io_system();
+	safs::destroy_io_system();
 }

@@ -143,7 +143,7 @@ inline void matrix_config::init(config_map::ptr map)
 {
 	map->read_option_int("threads", num_threads);
 	if (!power2(num_threads))
-		throw conf_exception("The number of worker threads has to be 2^n");
+		throw fg::conf_exception("The number of worker threads has to be 2^n");
 	map->read_option("prof_file", prof_file);
 	map->read_option_bool("in_mem_matrix", _in_mem_matrix);
 	map->read_option_int("row_block_size", row_block_size);
