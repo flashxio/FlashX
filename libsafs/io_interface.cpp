@@ -57,6 +57,8 @@ namespace safs
  */
 struct global_data_collection
 {
+	// Count the number of times init_io_system is executed successfully.
+	std::atomic<long> init_count;
 	RAID_config::ptr raid_conf;
 	std::vector<disk_io_thread *> read_threads;
 	pthread_mutex_t mutex;
@@ -184,6 +186,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	// The I/O system has been initialized.
 	if (is_safs_init()) {
+		global_data.init_count++;
 		assert(!global_data.read_threads.empty());
 		return;
 	}
@@ -199,6 +202,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		throw init_error("can't create RAID config");
 	}
 
+	global_data.init_count++;
 	int num_files = raid_conf->get_num_disks();
 	global_data.raid_conf = raid_conf;
 
@@ -281,6 +285,14 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 void destroy_io_system()
 {
+	long count = global_data.init_count.fetch_sub(1);
+	assert(count > 0);
+	// We only destroy the I/O system when destroy_io_system is invoked
+	// the same number of times that init_io_system is invoked.
+	if (count > 1) {
+		return;
+	}
+
 	BOOST_LOG_TRIVIAL(info) << "I/O system is destroyed";
 	global_data.raid_conf.reset();
 	if (global_data.global_cache)
@@ -561,6 +573,7 @@ remote_io_factory::~remote_io_factory()
 {
 	assert(num_ios == 0);
 	int num_files = mapper.get_num_files();
+	assert(!global_data.read_threads.empty());
 	for (int i = 0; i < num_files; i++)
 		global_data.read_threads[i]->close_file(&mapper);
 }
