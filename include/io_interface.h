@@ -437,7 +437,9 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 
 /**
  * This function initializes SAFS. It should be called at the beginning
- * of a program.
+ * of a program. It can be invoked multiple times. If it is executed multiple
+ * time successfully, destroy_io_system() needs to be invoked the same number
+ * of times to complete clean up the I/O system.
  * \param map the SAFS configuration.
  * \param with_cache determine whether the I/O system is initialized with
  * page cache.
