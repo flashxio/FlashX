@@ -23,6 +23,10 @@
 #include "FG_basic_types.h"
 #include "vertex.h"
 #include "vertex_index.h"
+#include "vertex_request.h"
+
+namespace fg
+{
 
 class directed_vertex_request;
 class index_comp_allocator;
@@ -72,10 +76,10 @@ public:
 template<class EntryType>
 class page_index_iterator_impl: public index_iterator
 {
-	page_byte_array::seq_const_iterator<EntryType> it;
+	safs::page_byte_array::seq_const_iterator<EntryType> it;
 	int num_entries;
 public:
-	page_index_iterator_impl(page_byte_array::seq_const_iterator<EntryType> &_it): it(_it) {
+	page_index_iterator_impl(safs::page_byte_array::seq_const_iterator<EntryType> &_it): it(_it) {
 		num_entries = it.get_num_tot_entries();
 		assert(num_entries >= 2);
 		assert(it.has_next());
@@ -342,7 +346,7 @@ public:
 	typedef std::shared_ptr<vertex_index_reader> ptr;
 
 	static ptr create(const in_mem_query_vertex_index::ptr index, bool directed);
-	static ptr create(io_interface::ptr io, bool directed);
+	static ptr create(safs::io_interface::ptr io, bool directed);
 
 	virtual ~vertex_index_reader() {
 	}
@@ -892,7 +896,7 @@ class index_comp_allocator_impl: public index_comp_allocator
 public:
 	index_comp_allocator_impl(thread *t): allocator(
 			"index-compute-allocator", t->get_node_id(), false, 1024 * 1024,
-			params.get_max_obj_alloc_size(),
+			safs::params.get_max_obj_alloc_size(),
 			typename obj_initiator<compute_type>::ptr(new compute_initiator(*this)),
 			typename obj_destructor<compute_type>::ptr(new compute_destructor())) {
 	}
@@ -938,7 +942,7 @@ class general_index_comp_allocator_impl: public index_comp_allocator
 public:
 	general_index_comp_allocator_impl(thread *t, int entry_size_log,
 			bool in_mem): allocator("sparse-index-compute-allocator",
-				t->get_node_id(), false, 1024 * 1024, params.get_max_obj_alloc_size(),
+				t->get_node_id(), false, 1024 * 1024, safs::params.get_max_obj_alloc_size(),
 			typename obj_initiator<compute_type>::ptr(new compute_initiator(*this,
 					entry_size_log, in_mem)),
 			typename obj_destructor<compute_type>::ptr(new compute_destructor())) {
@@ -1039,7 +1043,7 @@ class simple_index_reader
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
-	simple_index_reader(io_interface::ptr io, bool directed, worker_thread *t) {
+	simple_index_reader(safs::io_interface::ptr io, bool directed, worker_thread *t) {
 		in_mem = false;
 		init(t, directed);
 		index_reader = vertex_index_reader::create(io, directed);
@@ -1115,7 +1119,7 @@ class simple_index_reader
 public:
 	typedef std::shared_ptr<simple_index_reader> ptr;
 
-	static ptr create(io_interface::ptr io, bool directed, worker_thread *t) {
+	static ptr create(safs::io_interface::ptr io, bool directed, worker_thread *t) {
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 
@@ -1204,5 +1208,7 @@ public:
 		return index_reader->get_num_pending_tasks();
 	}
 };
+
+}
 
 #endif

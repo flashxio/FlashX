@@ -23,6 +23,9 @@
 #include "aio_private.h"
 #include "debugger.h"
 
+namespace safs
+{
+
 const int AIO_HIGH_PRIO_SLOTS = 7;
 const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 
@@ -306,4 +309,6 @@ void disk_io_thread::print_state()
 	printf("io thread %d has %d reqs and %d low-prio reqs in the queue\n",
 			disk_id, queue.get_num_objs(), low_prio_queue.get_num_objs());
 	aio->print_state();
+}
+
 }

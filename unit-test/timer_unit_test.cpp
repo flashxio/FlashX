@@ -3,6 +3,8 @@
 
 #include "timer.h"
 
+using namespace safs;
+
 class test_task: public timer_task
 {
 	long prev;

@@ -2,6 +2,8 @@
 #include "thread.h"
 #include "safs_file.h"
 
+using namespace safs;
+
 class test_thread: public thread
 {
 	std::vector<std::string> data_files;

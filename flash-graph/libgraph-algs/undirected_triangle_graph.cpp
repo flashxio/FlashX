@@ -22,6 +22,8 @@
 
 #include "triangle_shared.h"
 
+using namespace fg;
+
 namespace {
 
 struct undirected_runtime_data_t: public runtime_data_t
@@ -195,11 +197,9 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 	 * that a neighbor is in the beginning of the adjacency list, and
 	 * the search range will be narrowed faster.
 	 */
-	page_byte_array::const_iterator<vertex_id_t> other_it
-		= v->get_neigh_begin(edge_type::OUT_EDGE);
-	page_byte_array::const_iterator<vertex_id_t> other_end
-		= std::lower_bound(other_it, v->get_neigh_end(edge_type::OUT_EDGE),
-				v->get_id());
+	edge_iterator other_it = v->get_neigh_begin(edge_type::OUT_EDGE);
+	edge_iterator other_end = std::lower_bound(other_it,
+			v->get_neigh_end(edge_type::OUT_EDGE), v->get_id());
 	size_t num_v_edges = other_end - other_it;
 	if (num_v_edges == 0)
 		return 0;
@@ -228,8 +228,8 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 			// We need to skip loops.
 			if (this_neighbor != v->get_id()
 					&& this_neighbor != this_id) {
-				page_byte_array::const_iterator<vertex_id_t> first
-					= std::lower_bound(other_it, other_end, this_neighbor);
+				edge_iterator first = std::lower_bound(other_it, other_end,
+						this_neighbor);
 				if (first != other_end && this_neighbor == *first) {
 					num_local_triangles++;
 					data->triangles[i]++;
@@ -244,8 +244,7 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 			= std::lower_bound(this_it, data->edges.cend(), v->get_id());
 		std::vector<int>::iterator count_it = data->triangles.begin();
 
-		page_byte_array::seq_const_iterator<vertex_id_t> other_it
-			= v->get_neigh_seq_it(edge_type::OUT_EDGE, 0,
+		edge_seq_iterator other_it = v->get_neigh_seq_it(edge_type::OUT_EDGE, 0,
 					v->get_num_edges(edge_type::OUT_EDGE));
 		while (this_it != this_end && other_it.has_next()) {
 			vertex_id_t this_neighbor = *this_it;
@@ -275,6 +274,10 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
 	BOOST_LOG_TRIVIAL(info) << "undirected triangle counting starts";
@@ -306,4 +309,6 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, undirected_triangle_vertex>(vec)));
 	return vec;
+}
+
 }

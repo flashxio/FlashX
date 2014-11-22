@@ -23,6 +23,9 @@
 #include "in_mem_storage.h"
 #include "utils.h"
 
+namespace fg
+{
+
 /*
  * This class is to compress the vertex ID space in a graph.
  */
@@ -93,4 +96,6 @@ in_mem_subgraph::ptr in_mem_subgraph::create(graph_type type, bool has_data)
 		return in_mem_undirected_subgraph<>::create(has_data);
 	else
 		ABORT_MSG("wrong graph type");
+}
+
 }

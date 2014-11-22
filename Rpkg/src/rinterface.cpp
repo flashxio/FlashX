@@ -30,6 +30,9 @@
 #include "utils.h"
 #include "in_mem_storage.h"
 
+using namespace safs;
+using namespace fg;
+
 #if 0
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals);

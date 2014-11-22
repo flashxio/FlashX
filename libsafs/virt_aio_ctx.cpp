@@ -21,6 +21,9 @@
 
 #include "virt_aio_ctx.h"
 
+namespace safs
+{
+
 const int MIN_READ_DELAY = 100;
 const int MAX_RAND_READ_DELAY = 100;		// in microseconds
 const int MIN_WRITE_DELAY = 200;
@@ -245,4 +248,6 @@ int virt_aio_ctx::io_wait(struct timespec* to, int num)
 int virt_aio_ctx::max_io_slot()
 {
 	return max_aio - pending_reqs.get_num_entries();
+}
+
 }

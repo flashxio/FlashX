@@ -20,6 +20,9 @@
 #include "vertex.h"
 #include "vertex_index.h"
 
+namespace fg
+{
+
 empty_data edge<empty_data>::data;
 
 size_t ext_mem_undirected_vertex::serialize(const in_mem_vertex &v, char *buf,
@@ -43,4 +46,6 @@ size_t ext_mem_undirected_vertex::serialize(const in_mem_vertex &v, char *buf,
 	}
 
 	return mem_size;
+}
+
 }

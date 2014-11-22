@@ -27,8 +27,9 @@
 
 #include "concurrency.h"
 #include "aligned_allocator.h"
-#include "parameters.h"
 #include "container.h"
+
+static const int SLAB_LOCAL_BUF_SIZE = 100;
 
 class slab_allocator
 {
@@ -169,7 +170,7 @@ public:
 	slab_allocator(const std::string &name, int _obj_size, long _increase_size,
 			// We allow pages to be pinned when allocated.
 			long _max_size, int _node_id, bool init = false, bool pinned = false,
-			int _local_buf_size = LOCAL_BUF_SIZE, bool thread_safe = true);
+			int _local_buf_size = SLAB_LOCAL_BUF_SIZE, bool thread_safe = true);
 
 	virtual ~slab_allocator();
 
@@ -257,7 +258,7 @@ public:
 				// leave some space for linked_obj, so the values in an object
 				// won't be modified.
 				): slab_allocator(name, sizeof(T) + sizeof(slab_allocator::linked_obj),
-				increase_size, max_size, node_id, true, false, LOCAL_BUF_SIZE,
+				increase_size, max_size, node_id, true, false, SLAB_LOCAL_BUF_SIZE,
 				thread_safe) {
 		assert(increase_size <= max_size);
 		this->initiator = std::move(initiator);

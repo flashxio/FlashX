@@ -47,6 +47,9 @@
 #include "timer.h"
 #include "NUMA_cache.h"
 
+namespace safs
+{
+
 const int NUMA_REQ_QUEUE_SIZE = 2000;
 const int NUMA_REQ_MSG_QUEUE_SIZE = NUMA_REQ_QUEUE_SIZE / (
 		NUMA_MSG_SIZE / sizeof(io_request));
@@ -1145,5 +1148,7 @@ void part_global_cached_io::print_state()
 	}
 	printf("\treply sender has %d buffered reqs\n", reply_sender->get_num_remaining());
 	underlying->print_state();
+}
+
 }
 #endif

@@ -25,6 +25,9 @@
 
 #include "parameters.h"
 
+namespace fg
+{
+
 const int64_t MAGIC_NUMBER = 0x123456789ABCDEFL;
 const int CURR_VERSION = 4;
 
@@ -139,5 +142,7 @@ public:
 		assert(is_right_version());
 	}
 };
+
+}
 
 #endif

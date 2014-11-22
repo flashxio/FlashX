@@ -30,6 +30,9 @@
 #include "NUMA_cache.h"
 #include "file_mapper.h"
 
+namespace safs
+{
+
 page_cache *cache_config::create_cache_on_node(int node_id,
 		int max_num_pending_flush) const
 {
@@ -176,4 +179,6 @@ int file_map_cache_config::page2cache(const page_id_t &pg_id) const
 {
 	int idx = mapper->map2file(pg_id.get_offset() / PAGE_SIZE);
 	return mapper->get_file_node_id(idx) + shift;
+}
+
 }

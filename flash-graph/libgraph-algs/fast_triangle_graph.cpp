@@ -22,6 +22,8 @@
 
 #include "triangle_shared.h"
 
+using namespace fg;
+
 /*
  * This graph algorithm counts the number of triangles in a directed graph.
  * It only counts cycle triangles, in which all directed edges go to
@@ -85,8 +87,7 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 {
 	std::vector<vertex_id_t> in_mem_edges;
 
-	page_byte_array::seq_const_iterator<vertex_id_t> it
-		= vertex.get_neigh_seq_it(neigh_edge_type, 0,
+	edge_seq_iterator it = vertex.get_neigh_seq_it(neigh_edge_type, 0,
 				vertex.get_num_edges(neigh_edge_type));
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		if (id < id_start || id >= id_end)
@@ -160,10 +161,8 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 	if (data->edge_set.size() > 0
 			&& data->edges.size() > HASH_SEARCH_RATIO * v.get_num_edges(
 				neigh_edge_type)) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v.get_neigh_begin(neigh_edge_type);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v.get_neigh_end(neigh_edge_type);
+		edge_iterator other_it = v.get_neigh_begin(neigh_edge_type);
+		edge_iterator other_end = v.get_neigh_end(neigh_edge_type);
 		for (; other_it != other_end; ++other_it) {
 			vertex_id_t neigh_neighbor = *other_it;
 			runtime_data_t::edge_set_t::const_iterator it
@@ -181,17 +180,15 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 	// If the neighbor vertex has way more edges than this vertex.
 	else if (v.get_num_edges(neigh_edge_type) / data->edges.size(
 				) > BIN_SEARCH_RATIO) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v.get_neigh_begin(neigh_edge_type);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v.get_neigh_end(neigh_edge_type);
+		edge_iterator other_it = v.get_neigh_begin(neigh_edge_type);
+		edge_iterator other_end = v.get_neigh_end(neigh_edge_type);
 		for (int i = data->edges.size() - 1; i >= 0; i--) {
 			vertex_id_t this_neighbor = data->edges.at(i);
 			// We need to skip loops.
 			if (this_neighbor != v.get_id()
 					&& this_neighbor != this_id) {
-				page_byte_array::const_iterator<vertex_id_t> first
-					= std::lower_bound(other_it, other_end, this_neighbor);
+				edge_iterator first = std::lower_bound(other_it, other_end,
+						this_neighbor);
 				if (first != other_end && this_neighbor == *first) {
 					num_local_triangles++;
 					data->triangles[i]++;
@@ -204,8 +201,7 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 		std::vector<vertex_id_t>::const_iterator this_it = data->edges.begin();
 		std::vector<int>::iterator count_it = data->triangles.begin();
 		std::vector<vertex_id_t>::const_iterator this_end = data->edges.end();
-		page_byte_array::seq_const_iterator<vertex_id_t> other_it
-			= v.get_neigh_seq_it(neigh_edge_type, 0,
+		edge_seq_iterator other_it = v.get_neigh_seq_it(neigh_edge_type, 0,
 					v.get_num_edges(neigh_edge_type));
 		while (this_it != this_end && other_it.has_next()) {
 			vertex_id_t this_neighbor = *this_it;
@@ -448,6 +444,10 @@ void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
@@ -479,4 +479,6 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, directed_triangle_vertex>(vec)));
 	return vec;
+}
+
 }

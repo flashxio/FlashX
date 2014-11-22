@@ -27,6 +27,9 @@
 #include "worker_thread.h"
 #include "FGlib.h"
 
+using namespace safs;
+using namespace fg;
+
 std::vector<int> thread_delays;
 
 class count_message: public vertex_message

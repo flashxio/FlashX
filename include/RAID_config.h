@@ -25,6 +25,9 @@
 
 #include "safs_file.h"
 
+namespace safs
+{
+
 class file_mapper;
 
 enum {
@@ -72,5 +75,7 @@ public:
 		return root_paths.size();
 	}
 };
+
+}
 
 #endif

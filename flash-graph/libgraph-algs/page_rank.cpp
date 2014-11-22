@@ -26,6 +26,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+using namespace fg;
+
 namespace {
 
 float DAMPING_FACTOR = 0.85;
@@ -98,11 +100,9 @@ void pgrank_vertex::run(vertex_program &prog)
 void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   // Gather
   float accum = 0;
-  page_byte_array::const_iterator<vertex_id_t> end_it
-    = vertex.get_neigh_end(IN_EDGE);
+  edge_iterator end_it = vertex.get_neigh_end(IN_EDGE);
   
-  for (page_byte_array::const_iterator<vertex_id_t> it
-      = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
+  for (edge_iterator it = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
     vertex_id_t id = *it;
     pgrank_vertex& v = (pgrank_vertex&) prog.get_graph().get_vertex(id);
     // Notice I want this iteration's pagerank
@@ -192,6 +192,10 @@ void pgrank_vertex2::run(vertex_program &prog, const page_vertex &vertex)
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
@@ -284,4 +288,6 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		<< boost::format("It takes %1% seconds in total")
 		% time_diff(start, end);
 	return ret;
+}
+
 }

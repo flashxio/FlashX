@@ -7,6 +7,8 @@
 
 #include "file_mapper.h"
 
+using namespace safs;
+
 struct extended_block_identifier
 {
 	struct block_identifier bid;

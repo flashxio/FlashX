@@ -21,6 +21,11 @@
 #include "worker_thread.h"
 #include "vertex_index_reader.h"
 
+using namespace safs;
+
+namespace fg
+{
+
 request_range vertex_compute::get_next_request()
 {
 	// Get the next vertex.
@@ -474,4 +479,6 @@ void sparse_directed_vertex_compute::run(page_byte_array &arr)
 	}
 	else
 		ABORT_MSG("wrong type");
+}
+
 }

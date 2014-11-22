@@ -20,6 +20,9 @@
 #include "partitioner.h"
 #include "graph_config.h"
 
+namespace fg
+{
+
 range_graph_partitioner::range_graph_partitioner(int num_parts): RANGE_SIZE_LOG(
 		graph_conf.get_part_range_size_log()), RANGE_SIZE(1 << RANGE_SIZE_LOG),
 	RANGE_MASK((1UL << RANGE_SIZE_LOG) - 1), num_parts_log(log2(num_parts)),
@@ -149,4 +152,6 @@ size_t range_graph_partitioner::map2loc(edge_seq_iterator &it,
 		ret++;
 	} PAGE_FOREACH_END
 	return ret;
+}
+
 }

@@ -37,6 +37,9 @@
 #define AIO_MAXIO	32
 #define FREE_LIST_SIZE 128
 
+namespace safs
+{
+
 struct iocb *aio_ctx::make_iovec_request(int fd, const struct iovec iov[],
 		int count, long long offset, int io_type, io_callback_s *cb)
 {
@@ -133,4 +136,6 @@ void aio_ctx_impl::submit_io_request(struct iocb* ioq[], int num)
 int aio_ctx_impl::max_io_slot()
 {
 	return max_aio - busy_aio;
+}
+
 }

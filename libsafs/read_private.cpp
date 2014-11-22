@@ -20,6 +20,9 @@
 #include "read_private.h"
 #include "file_mapper.h"
 
+namespace safs
+{
+
 buffered_io::buffered_io(const logical_file_partition &partition_,
 		thread *t, int flags): io_interface(t), partition(
 			partition_), fds(partition.get_num_files())
@@ -68,4 +71,6 @@ io_status buffered_io::access(char *buf, off_t offset, ssize_t size, int access_
 		status = IO_OK;
 	status.set_priv_data(ret);
 	return status;
+}
+
 }

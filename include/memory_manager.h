@@ -25,6 +25,9 @@
 #include "cache.h"
 #include "slab_allocator.h"
 
+namespace safs
+{
+
 /**
  * manage free pages in the cache.
  * It also allocates pages from the operating system.
@@ -63,5 +66,7 @@ public:
 		return get_max_size() / caches.size();
 	}
 };
+
+}
 
 #endif

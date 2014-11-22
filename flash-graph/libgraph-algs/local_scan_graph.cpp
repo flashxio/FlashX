@@ -25,6 +25,8 @@
 
 #include "scan_graph.h"
 
+using namespace fg;
+
 namespace {
 
 scan_stage_t scan_stage;
@@ -288,10 +290,8 @@ void local_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &v
 	local_value.set_runtime_data(local_data);
 
 	size_t tmp = 0;
-	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
-			edge_type::IN_EDGE);
-	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
-			edge_type::IN_EDGE);
+	edge_iterator it = vertex.get_neigh_begin(edge_type::IN_EDGE);
+	edge_iterator end = vertex.get_neigh_end(edge_type::IN_EDGE);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		// Ignore loops
@@ -344,6 +344,10 @@ void local_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex 
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
@@ -380,4 +384,6 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, local_scan_vertex>(vec)));
 	return vec;
+}
+
 }

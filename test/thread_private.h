@@ -25,6 +25,8 @@
 #include "thread.h"
 #include "config.h"
 
+using namespace safs;
+
 class cleanup_callback;
 class sum_compute_allocator;
 class write_compute_allocator;

@@ -20,12 +20,15 @@
  * limitations under the License.
  */
 
+#include "slab_allocator.h"
 #include "io_interface.h"
 #include "container.h"
 
+namespace safs
+{
+
 class request_sender;
 class disk_io_thread;
-class slab_allocator;
 class file_mapper;
 
 const int COMPLETE_QUEUE_SIZE = 10240;
@@ -100,5 +103,7 @@ public:
 		return num_issued_reqs.get();
 	}
 };
+
+}
 
 #endif

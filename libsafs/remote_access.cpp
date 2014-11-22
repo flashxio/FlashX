@@ -25,6 +25,9 @@
 #include "disk_read_thread.h"
 #include "file_mapper.h"
 
+namespace safs
+{
+
 /**
  * An IO request may be split into multiple requests.
  * This helper class represents the original I/O request issued by users.
@@ -394,3 +397,5 @@ void remote_io::print_state()
 }
 
 atomic_integer remote_io::num_ios;
+
+}

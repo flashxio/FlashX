@@ -24,6 +24,9 @@
 
 #include "debugger.h"
 
+namespace safs
+{
+
 static bool enable_debug = false;
 
 bool is_debug_enabled()
@@ -77,4 +80,6 @@ void debugger::run()
 			= task_copies.begin(); it != task_copies.end(); it++) {
 		it->second->run();
 	}
+}
+
 }

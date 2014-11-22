@@ -24,13 +24,15 @@
 
 #include "vertex.h"
 
+namespace fg
+{
+
 const int HOUR_SECS = 3600;
 const int DAY_SECS = HOUR_SECS * 24;
 const int MONTH_SECS = DAY_SECS * 30;
 
-page_byte_array::seq_const_iterator<vertex_id_t> get_ts_iterator(
-		const page_directed_vertex &v, edge_type type, time_t time_start,
-		time_t time_interval);
+edge_seq_iterator get_ts_iterator(const page_directed_vertex &v,
+		edge_type type, time_t time_start, time_t time_interval);
 
 static inline bool is_time_str(const std::string &str)
 {
@@ -47,6 +49,8 @@ static inline time_t conv_str_to_time(const std::string &str)
 	BOOST_VERIFY(strptime(str.c_str(), "%Y-%m-%d", &tm));
 	tm.tm_isdst = 1;
 	return mktime(&tm);
+}
+
 }
 
 #endif

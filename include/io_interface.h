@@ -33,6 +33,9 @@
 #include "io_request.h"
 #include "comp_io_scheduler.h"
 
+namespace safs
+{
+
 class io_request;
 
 /**
@@ -472,5 +475,7 @@ void print_io_thread_stat();
  * \param weight The new weight of the file.
  */
 void set_file_weight(const std::string &file_name, int weight);
+
+}
 
 #endif
