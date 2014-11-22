@@ -25,6 +25,9 @@
 
 using namespace safs;
 
+namespace fg
+{
+
 template<class ValueType>
 class req_vertex_task
 {
@@ -689,4 +692,6 @@ bool sparse_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	}
 
 	return true;
+}
+
 }

@@ -36,6 +36,7 @@
 #include "FGlib.h"
 
 using namespace safs;
+using namespace fg;
 
 /**
  * Measure the performance of gather data from neighbors.

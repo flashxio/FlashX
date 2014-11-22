@@ -30,6 +30,8 @@
 #include "FG_vector.h"
 #include "FGlib.h"
 
+using namespace fg;
+
 namespace {
 
 typedef std::unordered_map<vertex_id_t, vsize_t> comp_map_t;
@@ -1106,6 +1108,10 @@ public:
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
@@ -1271,4 +1277,6 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<vertex_id_t, scc_vertex>(vec)));
 	return vec;
+}
+
 }

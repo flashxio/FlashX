@@ -33,6 +33,9 @@
 
 using namespace safs;
 
+namespace fg
+{
+
 class in_mem_byte_array: public page_byte_array
 {
 	off_t off;
@@ -351,4 +354,6 @@ file_io_factory::shared_ptr in_mem_graph::create_io_factory() const
 {
 	return file_io_factory::shared_ptr(new in_mem_io_factory(*this,
 				graph_file_id, graph_file_name));
+}
+
 }

@@ -29,6 +29,8 @@
 #include "FGlib.h"
 #include "graph_engine.h"
 
+using namespace fg;
+
 namespace {
 enum overlap_stage_t
 {
@@ -315,6 +317,9 @@ void overlap_vertex::run_stage2(vertex_program &prog)
 
 }
 
+namespace fg
+{
+
 void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
 		std::vector<std::vector<double> > &overlap_matrix)
 {
@@ -344,4 +349,6 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("It takes %1% seconds to compute overlaps")
 		% time_diff(start, end);
+}
+
 }

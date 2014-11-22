@@ -28,6 +28,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+using namespace fg;
+
 namespace {
 
 size_t num_bfs = 1;
@@ -344,6 +346,9 @@ std::vector<vertex_dist_t> estimate_diameter_1sweep(graph_engine::ptr graph,
 
 }
 
+namespace fg
+{
+
 size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 {
 	num_bfs = num_para_bfs;
@@ -452,4 +457,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 #endif
 
 	return global_max;
+}
+
 }

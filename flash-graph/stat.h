@@ -30,6 +30,9 @@
 
 #include "FG_basic_types.h"
 
+namespace fg
+{
+
 class log_hist_bucket
 {
 	size_t lower_bound;
@@ -177,5 +180,7 @@ public:
 		map.erase(key);
 	}
 };
+
+}
 
 #endif

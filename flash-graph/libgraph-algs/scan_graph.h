@@ -32,7 +32,7 @@
  */
 class attributed_neighbor
 {
-	vertex_id_t id;
+	fg::vertex_id_t id;
 	int num_dups;
 public:
 	attributed_neighbor() {
@@ -40,17 +40,17 @@ public:
 		num_dups = 0;
 	}
 
-	attributed_neighbor(vertex_id_t id) {
+	attributed_neighbor(fg::vertex_id_t id) {
 		this->id = id;
 		num_dups = 1;
 	}
 
-	attributed_neighbor(vertex_id_t id, int num_dups) {
+	attributed_neighbor(fg::vertex_id_t id, int num_dups) {
 		this->id = id;
 		this->num_dups = num_dups;
 	}
 
-	vertex_id_t get_id() const {
+	fg::vertex_id_t get_id() const {
 		return id;
 	}
 
@@ -62,7 +62,7 @@ public:
 		return this->id < e.id;
 	}
 
-	bool operator==(vertex_id_t id) const {
+	bool operator==(fg::vertex_id_t id) const {
 		return this->id == id;
 	}
 
@@ -146,7 +146,7 @@ class neighbor_list
 public:
 	class index_entry
 	{
-		vertex_id_t id;
+		fg::vertex_id_t id;
 		uint32_t idx;
 	public:
 		index_entry() {
@@ -154,17 +154,17 @@ public:
 			idx = -1;
 		}
 
-		index_entry(vertex_id_t id) {
+		index_entry(fg::vertex_id_t id) {
 			this->id = id;
 			this->idx = -1;
 		}
 
-		index_entry(vertex_id_t id, uint32_t idx) {
+		index_entry(fg::vertex_id_t id, uint32_t idx) {
 			this->id = id;
 			this->idx = idx;
 		}
 
-		vertex_id_t get_id() const {
+		fg::vertex_id_t get_id() const {
 			return id;
 		}
 
@@ -179,7 +179,7 @@ public:
 
 	class index_hash
 	{
-		boost::hash<vertex_id_t> id_hash;
+		boost::hash<fg::vertex_id_t> id_hash;
 	public:
 		size_t operator()(const index_entry &e) const {
 			return id_hash(e.get_id());
@@ -191,22 +191,22 @@ public:
 
 protected:
 	// The vertex Id that the neighbor list belongs to.
-	vertex_id_t id;
-	std::vector<vertex_id_t> id_list;
+	fg::vertex_id_t id;
+	std::vector<fg::vertex_id_t> id_list;
 	std::vector<int> num_dup_list;
 	edge_set_t *neighbor_set;
 public:
-	class id_iterator: public std::iterator<std::random_access_iterator_tag, vertex_id_t>
+	class id_iterator: public std::iterator<std::random_access_iterator_tag, fg::vertex_id_t>
 	{
-		std::vector<vertex_id_t>::const_iterator it;
+		std::vector<fg::vertex_id_t>::const_iterator it;
 	public:
 		typedef typename std::iterator<std::random_access_iterator_tag,
-				vertex_id_t>::difference_type difference_type;
+				fg::vertex_id_t>::difference_type difference_type;
 
 		id_iterator() {
 		}
 
-		id_iterator(const std::vector<vertex_id_t> &v) {
+		id_iterator(const std::vector<fg::vertex_id_t> &v) {
 			it = v.begin();
 		}
 
@@ -214,7 +214,7 @@ public:
 			return this->it - it.it;
 		}
 
-		vertex_id_t operator*() const {
+		fg::vertex_id_t operator*() const {
 			return *it;
 		}
 
@@ -243,7 +243,7 @@ public:
 		}
 	};
 
-	neighbor_list(const page_vertex &vertex,
+	neighbor_list(const fg::page_vertex &vertex,
 			const std::vector<attributed_neighbor> &neighbors) {
 		this->id = vertex.get_id();
 		size_t num_neighbors = neighbors.size();
@@ -267,11 +267,11 @@ public:
 			delete neighbor_set;
 	}
 
-	vertex_id_t get_neighbor_id(size_t idx) const {
+	fg::vertex_id_t get_neighbor_id(size_t idx) const {
 		return id_list[idx];
 	}
 
-	bool contains(vertex_id_t id) const {
+	bool contains(fg::vertex_id_t id) const {
 		edge_set_t::const_iterator it = neighbor_set->find(id);
 		return it != neighbor_set->end();
 	}
@@ -294,7 +294,7 @@ public:
 		return id_list.empty();
 	}
 
-	size_t get_neighbors(std::vector<vertex_id_t> &neighbors) const {
+	size_t get_neighbors(std::vector<fg::vertex_id_t> &neighbors) const {
 		neighbors = id_list;
 		return neighbors.size();
 	}
@@ -302,31 +302,31 @@ public:
 	/**
 	 * This return the vertex Id that the neighbor list belongs to.
 	 */
-	vertex_id_t get_id() const {
+	fg::vertex_id_t get_id() const {
 		return id;
 	}
 
-	virtual size_t count_edges(const page_vertex *v);
-	virtual size_t count_edges(const page_vertex *v, edge_type type,
-			std::vector<vertex_id_t> *common_neighs) const;
-	virtual size_t count_edges_hash(const page_vertex *v,
-			edge_iterator other_it, edge_iterator other_end,
-			std::vector<vertex_id_t> *common_neighs) const;
+	virtual size_t count_edges(const fg::page_vertex *v);
+	virtual size_t count_edges(const fg::page_vertex *v, fg::edge_type type,
+			std::vector<fg::vertex_id_t> *common_neighs) const;
+	virtual size_t count_edges_hash(const fg::page_vertex *v,
+			fg::edge_iterator other_it, fg::edge_iterator other_end,
+			std::vector<fg::vertex_id_t> *common_neighs) const;
 #if 0
-	virtual size_t count_edges_bin_search_this(const page_vertex *v,
+	virtual size_t count_edges_bin_search_this(const fg::page_vertex *v,
 			neighbor_list::id_iterator this_it,
 			neighbor_list::id_iterator this_end,
-			edge_iterator other_it, edge_iterator other_end) const;
+			fg::edge_iterator other_it, fg::edge_iterator other_end) const;
 #endif
-	virtual size_t count_edges_bin_search_other(const page_vertex *v,
+	virtual size_t count_edges_bin_search_other(const fg::page_vertex *v,
 			neighbor_list::id_iterator this_it,
 			neighbor_list::id_iterator this_end,
-			edge_iterator other_it, edge_iterator other_end,
-			std::vector<vertex_id_t> *common_neighs) const;
-	virtual size_t count_edges_scan(const page_vertex *v,
+			fg::edge_iterator other_it, fg::edge_iterator other_end,
+			std::vector<fg::vertex_id_t> *common_neighs) const;
+	virtual size_t count_edges_scan(const fg::page_vertex *v,
 			neighbor_list::id_iterator this_it,
-			neighbor_list::id_iterator this_end, edge_seq_iterator other_it,
-			std::vector<vertex_id_t> *common_neighs) const;
+			neighbor_list::id_iterator this_end, fg::edge_seq_iterator other_it,
+			std::vector<fg::vertex_id_t> *common_neighs) const;
 };
 
 /**

@@ -45,6 +45,9 @@
 
 using namespace safs;
 
+namespace fg
+{
+
 static const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
 static const size_t SORT_BUF_SIZE = 1024 * 1024 * 1024;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
@@ -2495,4 +2498,6 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 	serial_graph::ptr g = construct_graph(edge_g, std::string(), num_threads);;
 	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
 			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index(true));
+}
+
 }

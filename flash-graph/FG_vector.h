@@ -27,6 +27,9 @@
 #include "graph_engine.h"
 #include "stat.h"
 
+namespace fg
+{
+
 /**
  * \brief FlashGraph vector that provides several parallelized methods
  *        when compared to an STL-vector. <br>
@@ -537,6 +540,8 @@ void multi_vec_apply(const std::vector<typename FG_vector<T>::ptr> &inputs,
 #pragma omp parallel for
 	for (size_t i = 0; i < output->get_size(); i++)
 		output->set(i, apply(i, inputs));
+}
+
 }
 
 #endif

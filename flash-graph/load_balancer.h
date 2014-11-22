@@ -25,6 +25,9 @@
 #include "container.h"
 #include "vertex.h"
 
+namespace fg
+{
+
 class worker_thread;
 class graph_engine;
 class compute_vertex;
@@ -72,5 +75,7 @@ public:
 
 	void reset();
 };
+
+}
 
 #endif

@@ -31,6 +31,8 @@
 #include "FG_vector.h"
 #include "ts_graph.h"
 
+using namespace fg;
+
 namespace {
 
 time_t timestamp;
@@ -330,6 +332,10 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals)
 {
@@ -366,4 +372,6 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	FG_vector<float>::ptr vec = FG_vector<float>::create(graph);
 	graph->query_on_all(vertex_query::ptr(new save_query<float, scan_vertex>(vec)));
 	return vec;
+}
+
 }

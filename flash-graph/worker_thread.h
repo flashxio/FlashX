@@ -29,6 +29,9 @@
 #include "bitmap.h"
 #include "scan_pointer.h"
 
+namespace fg
+{
+
 static const size_t MAX_ACTIVE_V = 1024;
 
 class worker_thread;
@@ -478,5 +481,7 @@ public:
 	friend class default_vertex_queue;
 	friend class customized_vertex_queue;
 };
+
+}
 
 #endif

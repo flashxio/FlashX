@@ -31,6 +31,8 @@
 
 #include "scan_graph.h"
 
+using namespace fg;
+
 class part_local_t
 {
 	int num_parts;
@@ -656,6 +658,9 @@ void vertex_size_scheduler::schedule(vertex_program &prog,
 
 }
 
+namespace fg
+{
+
 FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		FG_graph::ptr fg, size_t topK)
 {
@@ -793,4 +798,6 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	for (size_t i = 0; i < topK; i++)
 		vec->set(i, known_scans.get(i));
 	return vec;
+}
+
 }

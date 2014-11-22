@@ -24,6 +24,9 @@
 #include "config_map.h"
 #include "graph_exception.h"
 
+namespace fg
+{
+
 /**
  * The data structure contains the configurations for the graph engine.
  */
@@ -243,5 +246,7 @@ inline void graph_config::init(config_map::ptr map)
 }
 
 extern graph_config graph_conf;
+
+}
 
 #endif

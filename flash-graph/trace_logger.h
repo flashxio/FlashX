@@ -29,6 +29,9 @@
 #include "thread.h"
 #include "container.h"
 
+namespace fg
+{
+
 class log_thread: public thread
 {
 	FILE *f;
@@ -115,5 +118,7 @@ public:
 		thread->close();
 	}
 };
+
+}
 
 #endif

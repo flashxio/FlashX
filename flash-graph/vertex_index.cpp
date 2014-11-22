@@ -24,8 +24,12 @@
 
 #include "vertex_compute.h"
 #include "vertex_index.h"
+#include "vertex_index_reader.h"
 
 using namespace safs;
+
+namespace fg
+{
 
 const size_t compressed_vertex_entry::ENTRY_SIZE;
 
@@ -279,8 +283,6 @@ vertex_offset in_mem_cundirected_vertex_index::get_vertex(vertex_id_t id) const
 	}
 	return vertex_offset(voff);
 }
-
-#include "vertex_index_reader.h"
 
 void in_mem_cundirected_vertex_index::verify_against(
 		default_vertex_index &index)
@@ -593,4 +595,6 @@ in_mem_query_vertex_index::ptr in_mem_query_vertex_index::create(
 		else
 			return ptr(new in_mem_query_undirected_vertex_index(index));
 	}
+}
+
 }

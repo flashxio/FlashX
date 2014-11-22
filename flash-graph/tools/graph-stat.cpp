@@ -30,6 +30,7 @@
 #include "ts_graph.h"
 
 using namespace safs;
+using namespace fg;
 
 const int POWER_CONST = 10;
 

@@ -29,6 +29,7 @@
 #include "FGlib.h"
 
 using namespace safs;
+using namespace fg;
 
 class bfs_vertex: public compute_vertex
 {

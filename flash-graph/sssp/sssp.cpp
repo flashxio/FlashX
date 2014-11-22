@@ -29,6 +29,7 @@
 #include "FGlib.h"
 
 using namespace safs;
+using namespace fg;
 
 atomic_number<long> num_visits;
 edge_type traverse_edge = edge_type::OUT_EDGE;

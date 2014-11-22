@@ -28,6 +28,7 @@
 #include "FGlib.h"
 
 using namespace safs;
+using namespace fg;
 
 std::vector<int> thread_delays;
 

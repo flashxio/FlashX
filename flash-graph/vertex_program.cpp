@@ -26,6 +26,9 @@
 #include "worker_thread.h"
 #include "message_processor.h"
 
+namespace fg
+{
+
 vertex_program::~vertex_program()
 {
 	for (unsigned i = 0; i < msg_senders.size(); i++)
@@ -291,4 +294,6 @@ vertex_id_t vertex_program::get_vertex_id(compute_vertex_pointer v) const
 vsize_t vertex_program::get_num_edges(vertex_id_t id) const
 {
 	return graph->get_num_edges(id);
+}
+
 }

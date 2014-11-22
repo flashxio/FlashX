@@ -26,6 +26,8 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+using namespace fg;
+
 namespace {
 
 float DAMPING_FACTOR = 0.85;
@@ -190,6 +192,10 @@ void pgrank_vertex2::run(vertex_program &prog, const page_vertex &vertex)
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
@@ -282,4 +288,6 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		<< boost::format("It takes %1% seconds in total")
 		% time_diff(start, end);
 	return ret;
+}
+
 }

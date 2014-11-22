@@ -25,6 +25,8 @@
 
 #include "scan_graph.h"
 
+using namespace fg;
+
 namespace {
 
 scan_stage_t scan_stage;
@@ -342,6 +344,10 @@ void local_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex 
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
@@ -378,4 +384,6 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, local_scan_vertex>(vec)));
 	return vec;
+}
+
 }

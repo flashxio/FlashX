@@ -31,6 +31,9 @@
 #include "graph_file_header.h"
 #include "vertex_pointer.h"
 
+namespace fg
+{
+
 class compute_vertex;
 class part_compute_vertex;
 
@@ -537,5 +540,7 @@ public:
 	}
 };
 #endif
+
+}
 
 #endif

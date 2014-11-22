@@ -22,6 +22,8 @@
 
 #include "triangle_shared.h"
 
+using namespace fg;
+
 namespace {
 
 struct undirected_runtime_data_t: public runtime_data_t
@@ -272,6 +274,10 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
 	BOOST_LOG_TRIVIAL(info) << "undirected triangle counting starts";
@@ -303,4 +309,6 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, undirected_triangle_vertex>(vec)));
 	return vec;
+}
+
 }

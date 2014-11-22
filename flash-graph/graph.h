@@ -28,6 +28,9 @@
 #include "vertex_index.h"
 #include "vertex.h"
 
+namespace fg
+{
+
 class graph
 {
 public:
@@ -250,6 +253,8 @@ static inline void unique_merge(const std::vector<vertex_id_t> &v1,
 		v.push_back(*it2);
 		it2++;
 	}
+}
+
 }
 
 #endif

@@ -31,6 +31,9 @@
 #include "scan_pointer.h"
 #include "graph_index.h"
 
+namespace fg
+{
+
 class worker_thread;
 class graph_engine;
 class compute_vertex;
@@ -561,5 +564,7 @@ public:
 		allocator.free((compute_type *) obj);
 	}
 };
+
+}
 
 #endif

@@ -23,6 +23,9 @@
 #include <string>
 #include <exception>
 
+namespace fg
+{
+
 class conf_exception: public std::exception
 {
 	std::string msg;
@@ -38,5 +41,7 @@ public:
 		return msg.c_str();
 	}
 };
+
+}
 
 #endif

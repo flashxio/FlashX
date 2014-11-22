@@ -26,6 +26,8 @@
 #include "graphlab/cuckoo_set_pow2.hpp"
 #include "scan_graph.h"
 
+using namespace fg;
+
 const double BIN_SEARCH_RATIO = 100;
 
 size_t neighbor_list::count_edges_hash(const page_vertex *v,

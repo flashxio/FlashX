@@ -33,6 +33,9 @@
 #include "cache.h"
 #include "FG_basic_types.h"
 
+namespace fg
+{
+
 /**
  \brief Edge type of an edge in the graph.
  */
@@ -1489,5 +1492,7 @@ public:
 		}
 	}
 };
+
+}
 
 #endif

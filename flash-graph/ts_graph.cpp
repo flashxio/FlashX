@@ -19,6 +19,9 @@
 
 #include "ts_graph.h"
 
+namespace fg
+{
+
 edge_seq_iterator get_ts_iterator(const page_directed_vertex &v,
 		edge_type type, time_t time_start, time_t time_interval)
 {
@@ -38,4 +41,6 @@ edge_seq_iterator get_ts_iterator(const page_directed_vertex &v,
 	size_t end = ts_end_it - begin_it;
 
 	return v.get_neigh_seq_it(type, start, end);
+}
+
 }

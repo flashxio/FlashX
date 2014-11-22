@@ -25,6 +25,9 @@
 #include "vertex.h"
 #include "partitioner.h"
 
+namespace fg
+{
+
 class message
 {
 	// The allocator of the message buffer.
@@ -557,5 +560,7 @@ public:
 		dest_list.clear();
 	}
 };
+
+}
 
 #endif

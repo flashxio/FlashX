@@ -36,6 +36,7 @@
 #include "FGlib.h"
 
 using namespace safs;
+using namespace fg;
 
 class test_vertex: public compute_directed_vertex
 {

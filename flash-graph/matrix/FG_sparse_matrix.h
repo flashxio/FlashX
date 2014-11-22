@@ -23,6 +23,9 @@
 #include "graph_engine.h"
 #include "FGlib.h"
 
+namespace fg
+{
+
 class matrix_vertex: public compute_vertex
 {
 public:
@@ -452,5 +455,7 @@ public:
 };
 
 typedef FG_sparse_matrix<adj_get_edge_iter> FG_adj_matrix;
+
+}
 
 #endif

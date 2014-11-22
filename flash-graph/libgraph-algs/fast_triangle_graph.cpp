@@ -22,6 +22,8 @@
 
 #include "triangle_shared.h"
 
+using namespace fg;
+
 /*
  * This graph algorithm counts the number of triangles in a directed graph.
  * It only counts cycle triangles, in which all directed edges go to
@@ -442,6 +444,10 @@ void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
@@ -473,4 +479,6 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, directed_triangle_vertex>(vec)));
 	return vec;
+}
+
 }

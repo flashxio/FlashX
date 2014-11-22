@@ -25,6 +25,9 @@
 class in_mem_io;
 class thread_safe_page;
 
+namespace fg
+{
+
 class in_mem_graph
 {
 	size_t graph_size;
@@ -64,5 +67,7 @@ public:
 
 	friend class in_mem_io;
 };
+
+}
 
 #endif

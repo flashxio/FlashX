@@ -23,6 +23,9 @@
 #include "worker_thread.h"
 #include "steal_state.h"
 
+namespace fg
+{
+
 message_processor::message_processor(graph_engine &_graph,
 		worker_thread &_owner, std::shared_ptr<slab_allocator> msg_alloc): graph(_graph),
 	owner(_owner), msg_q(_owner.get_node_id(), "graph_msg_queue", 16, INT_MAX),
@@ -265,4 +268,6 @@ void steal_state_t::return_vertices(vertex_id_t ids[], int num)
 		assert(worker_id == part_id);
 		stolen_bitmap.clear(off);
 	}
+}
+
 }

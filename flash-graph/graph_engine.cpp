@@ -34,6 +34,9 @@
 
 using namespace safs;
 
+namespace fg
+{
+
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
  */
@@ -932,4 +935,6 @@ void graph_engine::destroy_flash_graph()
 	if (count == 1) {
 		destroy_io_system();
 	}
+}
+
 }

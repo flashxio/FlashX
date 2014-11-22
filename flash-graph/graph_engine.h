@@ -34,6 +34,9 @@
 #include "vertex_request.h"
 #include "vertex_program.h"
 
+namespace fg
+{
+
 class graph_engine;
 class vertex_request;
 
@@ -644,5 +647,7 @@ public:
 				header.get_edge_data_size());
 	}
 };
+
+}
 
 #endif

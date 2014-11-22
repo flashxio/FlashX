@@ -31,6 +31,9 @@
 #include "vertex.h"
 #include "graph_file_header.h"
 
+namespace fg
+{
+
 class vertex_index
 {
 protected:
@@ -918,6 +921,8 @@ static inline int get_index_entry_size(graph_type type)
 		default:
 			ABORT_MSG("wrong graph type");
 	}
+}
+
 }
 
 #endif

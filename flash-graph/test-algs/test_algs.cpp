@@ -25,6 +25,8 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 
+using namespace fg;
+
 void print_usage();
 
 void int_handler(int sig_num)

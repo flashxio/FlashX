@@ -29,6 +29,8 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 
+using namespace fg;
+
 namespace {
 
 class component_message: public vertex_message
@@ -398,6 +400,9 @@ void ts_wcc_vertex::run(vertex_program &prog, const page_vertex &vertex)
 
 #include "save_result.h"
 
+namespace fg
+{
+
 FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg)
 {
 	struct timeval start, end;
@@ -542,4 +547,6 @@ FG_vector<vertex_id_t>::ptr compute_ts_wcc(FG_graph::ptr fg,
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<vertex_id_t, wcc_vertex>(vec)));
 	return vec;
+}
+
 }

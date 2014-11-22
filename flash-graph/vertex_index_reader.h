@@ -23,6 +23,10 @@
 #include "FG_basic_types.h"
 #include "vertex.h"
 #include "vertex_index.h"
+#include "vertex_request.h"
+
+namespace fg
+{
 
 class directed_vertex_request;
 class index_comp_allocator;
@@ -1204,5 +1208,7 @@ public:
 		return index_reader->get_num_pending_tasks();
 	}
 };
+
+}
 
 #endif
