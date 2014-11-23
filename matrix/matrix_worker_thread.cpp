@@ -104,7 +104,9 @@ void matrix_worker_thread::run()
 			io->wait4complete(1);
 	}
 	io->wait4complete(io->num_pending_ios());
+	assert(io->num_pending_ios() == 0);
 	stop();
+	delete cb;
 }
 
 }
