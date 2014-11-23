@@ -31,16 +31,35 @@ class matrix_io_callback: public safs::callback
 {
 	typedef std::unordered_map<char *, compute_task::ptr> task_map_t;
 	task_map_t tasks;
+	size_t pending_size;
 public:
+	matrix_io_callback() {
+		pending_size = 0;
+	}
+
+	~matrix_io_callback() {
+		assert(pending_size == 0);
+	}
+
+	size_t get_pending_size() const {
+		return pending_size;
+	}
+
+	size_t get_pending_ios() const {
+		return tasks.size();
+	}
+
 	int invoke(safs::io_request *reqs[], int num);
 	void add_task(const safs::io_request &req, compute_task::ptr task) {
 		tasks.insert(task_map_t::value_type(req.get_buf(), task));
+		pending_size += req.get_size();
 	}
 };
 
 int matrix_io_callback::invoke(safs::io_request *reqs[], int num)
 {
 	for (int i = 0; i < num; i++) {
+		pending_size -= reqs[i]->get_size();
 		task_map_t::const_iterator it = tasks.find(reqs[i]->get_buf());
 		it->second->run(reqs[i]->get_buf(), reqs[i]->get_size());
 		// Once a task is complete, we can remove it from the hashtable.
