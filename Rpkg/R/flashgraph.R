@@ -719,6 +719,36 @@ print.fg <- function(fg)
 		"\n", sep="")
 }
 
+#' Perform k-means clustering on a data matrix.
+#'
+#' @param mat A numeric matrix of data.
+#' @param k The number of clusters.
+#' @param max.iters The maximum number of iterations allowed.
+#' @param init The form of initialization to use when the algorithm begins.
+#'              The default is "random". For a desciption of each see:
+#'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+#'
+#' @return A named list with the following members:
+#'         iters: The number of (outer) iterations performed.
+#'         centers: A matrix of cluster centers.
+#'         cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+#'         sizes: The number of points in each cluster.
+#'
+#' @examples
+#' num.clusts <- 3
+#' mat <- replicate(5, rnorm(10))
+#' kms <- fg.kmeans(mat, num.clusts)
+#
+#' @name fg.kmeans
+#' @author Disa Mhembere <disa@@jhu.edu>
+fg.kmeans <- function(mat, k, max.iters=.Machine$integer.max, init=c("random", "forgy","kmeanspp"))
+{
+    stopifnot(mat != NULL)
+    stopifnot(class(mat) == "matrix")
+    .Call("R_FG_kmeans", as.matrix(mat), as.integer(k),
+          as.integer(max.iters), init, PACKAGE="FlashGraph")
+}
+
 .onLoad <- function(libname, pkgname)
 {
 	library(Rcpp)
