@@ -132,7 +132,7 @@ test.directed <- function(fg, ig)
 	# test SVD
 	print("test SVD")
 	fg.res <- fg.SVD(fg, which="LM", nev=5, ncv=10)
-	ig.res <- irlba(ig.matrix, nu=5, nv=0)
+	ig.res <- irlba(ig.matrix, nu=5, nv=5, tol = 1e-12)
 	cat("diff on singular values:", sum(abs(fg.res$values) - abs(ig.res$d)), "\n")
 	cat("diff on left-singular vectors:", sum(abs(fg.res$vectors) - abs(ig.res$u)), "\n")
 }
@@ -203,6 +203,81 @@ test.undirected <- function(fg, ig)
 	cat("diff on eigen vectors:", sum(abs(fg.res$vectors) - abs(ig.res$vectors)), "\n")
 }
 
+test.ase.directed <- function(fg, ig)
+{
+	check.svd <- function(m, fg.res)
+	{
+		mt <- t(as.matrix(m))
+		R <- m %*% (mt %*% fg.res$left) - fg.res$left %*% diag(fg.res$values * fg.res$values)
+		cat("left-singular vectors:", max(abs(R)), "\n")
+		R <- mt %*% (m %*% fg.res$right) - fg.res$right %*% diag(fg.res$values * fg.res$values)
+		cat("right-singular vectors:", max(abs(R)), "\n")
+		ig.res <- irlba(m, nu=5, nv=5, tol = 1e-12)
+		cat("diff on singular values:", sum(abs(fg.res$values) - abs(ig.res$d)), "\n")
+	}
+
+	# Get the largest connected component.
+	fg.cc <- fg.clusters(fg, mode="weak")
+	res <- as.data.frame(table(fg.cc))
+	lcc.id <- as.integer(levels(res$fg.cc)[which.max(res$Freq)])
+	fg <- fg.fetch.subgraph(fg, which(fg.cc == lcc.id) - 1)
+	stopifnot(sum(fg.degree(fg) == 0) == 0)
+	ig.matrix <- get.adjacency(ig)[fg.cc == lcc.id, fg.cc == lcc.id]
+
+	# run ASE on the largest connected component
+
+	print("test ASE (adjacency matrix)")
+	fg.res <- fg.ASE(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
+	ig.matrix.tmp <- ig.matrix
+	check.svd(ig.matrix, fg.res)
+
+	print("test ASE (AcD)")
+	fg.res <- fg.ASE(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
+	ig.matrix.tmp <- ig.matrix + diag(fg.degree(fg)) / fg.vcount(fg)
+	check.svd(ig.matrix.tmp, fg.res)
+
+	print("test ASE (Laplacian)")
+	fg.res <- fg.ASE(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
+	ig.matrix.tmp <- diag(fg.degree(fg)) - ig.matrix
+	check.svd(ig.matrix.tmp, fg.res)
+
+	print("test ASE (normalized Laplacian)")
+	fg.res <- fg.ASE(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
+	d.matrix <- diag(1 / sqrt(fg.degree(fg)))
+	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
+	check.svd(ig.matrix.tmp, fg.res)
+}
+
+test.ase.undirected <- function(fg, ig)
+{
+	check.eigen <- function(m, fg.res)
+	{
+		R <- m %*% fg.res$vectors - fg.res$vectors %*% diag(fg.res$values)
+		cat("left-singular vectors:", max(abs(R)), "\n")
+	}
+	ig.matrix <- get.adjacency(ig)
+	#test ASE
+	print("test ASE (adjacency matrix)")
+	fg.res <- fg.ASE(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
+	check.eigen(ig.matrix, fg.res)
+
+	print("test ASE (AcD)")
+	fg.res <- fg.ASE(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
+	ig.matrix.tmp <- ig.matrix + diag(fg.degree(fg)) / fg.vcount(fg)
+	check.eigen(ig.matrix.tmp, fg.res)
+
+	print("test ASE (Laplacian)")
+	fg.res <- fg.ASE(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
+	ig.matrix.tmp <- diag(fg.degree(fg)) - ig.matrix
+	check.eigen(ig.matrix.tmp, fg.res)
+
+	print("test ASE (normalized Laplacian)")
+	fg.res <- fg.ASE(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
+	d.matrix <- diag(1 / sqrt(fg.degree(fg)))
+	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
+	check.eigen(ig.matrix.tmp, fg.res)
+}
+
 # Test on a directed graph.
 ig <- read.graph("wiki-Vote1.txt")
 
@@ -210,6 +285,8 @@ print("run in the standalone mode")
 print("load a graph in adjacency list")
 fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4", graph.name="wiki")
 test.directed(fg, ig)
+
+test.ase.directed(fg, ig)
 
 cat("\n\n\n")
 print("load a graph in edge lists")
@@ -236,6 +313,8 @@ ig <- read.graph("facebook_combined1.txt", directed=FALSE)
 print("load a graph in adjacency list")
 fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4", graph.name="facebook")
 test.undirected(fg, ig)
+
+test.ase.undirected(fg, ig)
 
 cat("\n\n\n")
 print("load a graph in edge lists")
