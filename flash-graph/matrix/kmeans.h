@@ -60,7 +60,7 @@ void print_vector(typename std::vector<T>& v);
  *	\param arg2 the second value.
  *  \return the squared distance.
  */
-ev_float_t dist_sq(ev_float_t arg1, ev_float_t arg2);
+double dist_sq(double arg1, double arg2);
 
 /* See: http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods */
 
@@ -77,7 +77,7 @@ void random_partition_init(vsize_t* cluster_assignments);
   * \param matrix the flattened matrix who's rows are being clustered.
   * \param clusters The cluster centers (means) flattened matrix.
   */
-void forgy_init(const ev_float_t* matrix, ev_float_t* clusters);
+void forgy_init(const double* matrix, double* clusters);
 
 /**
  * \brief A parallel version of the kmeans++ initialization alg.
@@ -86,7 +86,7 @@ void kmeanspp_init();
 
 
 /*\Internal
-* \brief print a col wise matrix of type ev_float_t / double.
+* \brief print a col wise matrix of type double / double.
 * Used for testing only.
 * \param matrix The col wise matrix.
 * \param rows The number of rows in the mat
@@ -101,7 +101,7 @@ void print_mat(const T* matrix, const vsize_t rows, const vsize_t cols);
   * \param clusters The cluster centers (means) flattened matrix.
   *	\param cluster_assignments Which cluster each sample falls into.
   */
-void E_step(const ev_float_t* matrix, ev_float_t* clusters, vsize_t* cluster_assignments);
+void E_step(const double* matrix, double* clusters, vsize_t* cluster_assignments);
 
 /**
  * \brief Update the cluster means
@@ -110,7 +110,7 @@ void E_step(const ev_float_t* matrix, ev_float_t* clusters, vsize_t* cluster_ass
  * \param cluster_assignment_counts How many members each cluster has.
  * \param cluster_assignments Which cluster each sample falls into.
  */
-void M_step(const ev_float_t* matrix, ev_float_t* clusters, 
+void M_step(const double* matrix, double* clusters, 
 		vsize_t* cluster_assignment_counts, const vsize_t* cluster_assignments);
 
 /**
@@ -125,7 +125,7 @@ void M_step(const ev_float_t* matrix, ev_float_t* clusters,
  * \param max_iters The maximum number of iterations of K-means to perform.
  * \param init The type of initilization ["random", "forgy", "kmeanspp"]
  **/
-vsize_t compute_kmeans(const ev_float_t* matrix, ev_float_t* clusters, 
+vsize_t compute_kmeans(const double* matrix, double* clusters, 
 		vsize_t* cluster_assignments, vsize_t* cluster_assignment_counts,
 		const vsize_t num_rows, const vsize_t nev, const size_t k, const vsize_t MAX_ITERS, 
 		const std::string init="random");
@@ -139,12 +139,12 @@ class FG_kmeans_ret {
 		}
 	public:
 		FG_vector<vsize_t>::ptr assignments;
-		FG_col_wise_matrix<ev_float_t>::ptr clusters;
+		FG_col_wise_matrix<double>::ptr clusters;
 		std::vector<vsize_t> sizes;
 		vsize_t iters;
 
 		FG_kmeans_ret(FG_vector<vsize_t>::ptr asgn, 
-				FG_col_wise_matrix<ev_float_t>::ptr clusts, std::vector<vsize_t>& sizes, vsize_t iters)
+				FG_col_wise_matrix<double>::ptr clusts, std::vector<vsize_t>& sizes, vsize_t iters)
 		{
 			this->assignments = asgn;
 			this->clusters = clusts;

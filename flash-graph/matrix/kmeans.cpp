@@ -47,9 +47,9 @@ void print_vector(typename std::vector<T>& v)
 	std::cout <<  " ]\n";
 }
 
-ev_float_t dist_sq(ev_float_t arg1, ev_float_t arg2) 
+double dist_sq(double arg1, double arg2) 
 {
-	ev_float_t diff = arg1 - arg2;
+	double diff = arg1 - arg2;
 	return diff*diff;
 }
 
@@ -70,7 +70,7 @@ void random_partition_init(vsize_t* cluster_assignments)
 	BOOST_LOG_TRIVIAL(info) << "Random init end\n";
 }
 
-void forgy_init(const ev_float_t* matrix, ev_float_t* clusters) {
+void forgy_init(const double* matrix, double* clusters) {
 
 	BOOST_LOG_TRIVIAL(info) << "Forgy init start";
 
@@ -99,14 +99,14 @@ void print_mat(T* matrix, const vsize_t rows, const vsize_t cols) {
 	}	
 }
 
-void E_step(const ev_float_t* matrix, ev_float_t* clusters, vsize_t* cluster_assignments)
+void E_step(const double* matrix, double* clusters, vsize_t* cluster_assignments)
 {
 #pragma omp parallel for firstprivate(matrix, clusters) shared(cluster_assignments)
     for (vsize_t row=0; row < NUM_ROWS; row++) {
         size_t asgnd_clust = std::numeric_limits<size_t>::max();
-        ev_float_t best = std::numeric_limits<ev_float_t>::max();
+        double best = std::numeric_limits<double>::max();
         for (size_t clust_idx = 0; clust_idx < K; clust_idx++) {
-            ev_float_t sum = 0;
+            double sum = 0;
             for (vsize_t col = 0; col < NEV; col++) {
                 sum += dist_sq(matrix[(row*NEV) + col], clusters[clust_idx*NEV + col]);
             }
@@ -127,7 +127,7 @@ void E_step(const ev_float_t* matrix, ev_float_t* clusters, vsize_t* cluster_ass
 #endif
 }
 
-void M_step(const ev_float_t* matrix, ev_float_t* clusters, 
+void M_step(const double* matrix, double* clusters, 
 		vsize_t* cluster_assignment_counts, const vsize_t* cluster_assignments)
 {
 	BOOST_LOG_TRIVIAL(info) << "M_step start";
@@ -176,7 +176,7 @@ void M_step(const ev_float_t* matrix, ev_float_t* clusters,
 #endif
 }
 
-vsize_t compute_kmeans(const ev_float_t* matrix, ev_float_t* clusters, 
+vsize_t compute_kmeans(const double* matrix, double* clusters, 
 		vsize_t* cluster_assignments, vsize_t* cluster_assignment_counts,
 		const vsize_t num_rows, const vsize_t nev, const size_t k, const vsize_t MAX_ITERS, 
 		const std::string init)

@@ -49,39 +49,18 @@ void pairs_to_p_mat(T* eig_matrix, std::vector<eigen_pair_t>& eigen_pairs)
 	}
 }
 
-void pairs_to_rwm(FG_row_wise_matrix<ev_float_t>::ptr eig_matrix,
-		std::vector<eigen_pair_t>& eigen_pairs)
-{
-	vsize_t col = 0;
-	BOOST_FOREACH(eigen_pair_t &v, eigen_pairs) {
-		for (vsize_t row = 0; row < v.second->get_size(); row++) {
-			eig_matrix->set(row, col, v.second->get(row));
-		}
-		col++;
-	}
-}
-
-void pairs_to_cwm(FG_col_wise_matrix<ev_float_t>::ptr eig_matrix,
-		std::vector<eigen_pair_t>& eigen_pairs)
-{
-	vsize_t col = 0;
-	BOOST_FOREACH(eigen_pair_t &v, eigen_pairs) {
-		eig_matrix->set_col(col, v.second);
-		col++;
-	}
-}
 
 /* For testing only */
 void dummy_eigs(vsize_t nev, size_t g_size, std::vector<eigen_pair_t>& eigen_pairs) {
 	// Fake eigen computation for WIKI
 	std::cout << "Creating " << nev << " Fake eigs & vecs of len: " << g_size << std::endl;
 	for (vsize_t i = 0; i < nev; i++) {
-		ev_float_t eigval = (ev_float_t) random() / (ev_float_t)RAND_MAX;
-		FG_vector<ev_float_t>::ptr eigvect = 
-			FG_vector<ev_float_t>::create(g_size);
+		double eigval = (double) random() / (double)RAND_MAX;
+		FG_vector<double>::ptr eigvect = 
+			FG_vector<double>::create(g_size);
 
 		for (vertex_id_t ii = 0; ii < g_size; ii++) {
-			eigvect->set(ii, (ev_float_t) random() / (ev_float_t)RAND_MAX); 
+			eigvect->set(ii, (double) random() / (double)RAND_MAX); 
 		} 
 
 		eigen_pair_t ep(eigval, eigvect);
@@ -164,36 +143,32 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 #else
 		dummy_eigs(nev, matrix->get_num_rows(), eigen_pairs);
 #endif
-		// Convert the eigen_pairs to a row_wise_matrix
-#if 1
-		ev_float_t* p_eig_matrix = new ev_float_t[matrix->get_num_rows()*nev];
+		// Convert the eigen_pairs to a flattened matrix
+		double* p_eig_matrix = new double[matrix->get_num_rows()*nev];
 		pairs_to_p_mat(p_eig_matrix, eigen_pairs);
 
 		/* Malloc */
-		ev_float_t* p_clusters = new ev_float_t [k*nev];
+		double* p_clusters = new double [k*nev];
 		vsize_t* p_clust_asgns = new vsize_t [matrix->get_num_rows()];
 		vsize_t* p_clust_asgn_cnt = new vsize_t [k];
 		/* End Malloc */
-#endif
 
 		gettimeofday(&start, NULL);
-#if 1
 		vsize_t iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
 				p_clust_asgn_cnt, matrix->get_num_rows(), nev, k, max_iters, init);
 
-#endif
 
 		gettimeofday(&end, NULL);
 
-		printf("Kmeans time: %.3f sec\n", time_diff(start, end));
+		printf("Kmeans took %u iters and %.3f sec\n", iters, time_diff(start, end));
 
-		if (outfile.empty()) {
-			// ret.assignments->print();
-		} else {
-			// ret.assignments->to_file(outfile);
+		printf("Printing cluster assignment counts:\n");
+		printf("[ ");
+		for (vsize_t i = 0; i < k; i++) {
+			std::cout << p_clust_asgn_cnt[i] << " ";
 		}
+		printf("]\n");
 		
-#if 0
 		/* Reclamation */
 		printf("Freeing p_eig_matrix\n");
 		delete [] p_eig_matrix;
@@ -206,7 +181,6 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 
 		printf("Freeing p_clusters\n");
 		delete [] p_clusters;
-#endif
 	} else {
 		assert (0);
 	}
@@ -228,7 +202,6 @@ void print_usage()
     fprintf(stderr, "-w which: which side of eigenvalues\n");
     fprintf(stderr, "-t type: type of initialization for kmeans ['random', 'forgy', 'kmeanspp']\n");
     fprintf(stderr, "-i iters: maximum number of iterations\n");
-    fprintf(stderr, "-o filename: output the clusters to a file\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)

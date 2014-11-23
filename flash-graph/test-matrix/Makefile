@@ -19,7 +19,7 @@ include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
 LDFLAGS := -L../matrix -lmatrix -L../libgraph-algs -lgraph-algs -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt -lboost_date_time $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG) -I/usr/include/eigen3/
+CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG) -I/usr/include/eigen3/ -DUSE_EIGEN
 
 all: test_matrix
 
