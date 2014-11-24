@@ -173,7 +173,6 @@ async_io::async_io(const logical_file_partition &partition,
 #endif
 		ctx = new aio_ctx_impl(node_id, AIO_DEPTH);
 
-	cb = NULL;
 	num_iowait = 0;
 	num_completed_reqs = 0;
 	open_flags = flags;

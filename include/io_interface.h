@@ -44,6 +44,8 @@ class io_request;
 class callback
 {
 public:
+	typedef std::shared_ptr<callback> ptr;
+
 	virtual ~callback() {
 	}
 
@@ -291,8 +293,8 @@ public:
 	 * The requests should be issued by this IO.
 	 */
 	virtual void notify_completion(io_request *reqs[], int num) {
-		if (get_callback())
-			get_callback()->invoke(reqs, num);
+		if (have_callback())
+			get_callback().invoke(reqs, num);
 	}
 
 	/**
@@ -301,7 +303,11 @@ public:
 	 * \param cb the user-defined callback.
 	 * \return false if the class doesn't support async I/O.
 	 */
-	virtual bool set_callback(callback *cb) {
+	virtual bool set_callback(callback::ptr cb) {
+		throw unsupported_exception();
+	}
+
+	virtual bool have_callback() const {
 		return false;
 	}
 
@@ -309,8 +315,8 @@ public:
 	 * This method gets the user-defined callback.
 	 * \return the user-defined callback.
 	 */
-	virtual callback *get_callback() {
-		return NULL;
+	virtual callback &get_callback() {
+		throw unsupported_exception();
 	}
 
 	/**

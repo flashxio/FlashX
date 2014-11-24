@@ -45,7 +45,7 @@ class async_io: public io_interface
 {
 	int buf_idx;
 	aio_ctx *ctx;
-	callback *cb;
+	callback::ptr cb;
 	const int AIO_DEPTH;
 	callback_allocator *cb_allocator;
 	int open_flags;
@@ -110,13 +110,17 @@ public:
 	}
 	virtual void access(io_request *requests, int num, io_status *status = NULL);
 
-	bool set_callback(callback *cb) {
+	bool set_callback(callback::ptr cb) {
 		this->cb = cb;
 		return true;
 	}
 
-	callback *get_callback() {
-		return cb;
+	bool have_callback() const {
+		return this->cb != NULL;
+	}
+
+	callback &get_callback() {
+		return *cb;
 	}
 
 	bool support_aio() {
