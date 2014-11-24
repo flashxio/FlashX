@@ -90,7 +90,7 @@ bool matrix_worker_thread::get_next_io(matrix_io &io)
 void matrix_worker_thread::run()
 {
 	matrix_io_callback *cb = new matrix_io_callback();
-	io->set_callback(cb);
+	io->set_callback(safs::callback::ptr(cb));
 	matrix_io mio;
 	while (get_next_io(mio)) {
 		compute_task::ptr task = tcreator->create(mio);
@@ -106,7 +106,6 @@ void matrix_worker_thread::run()
 	io->wait4complete(io->num_pending_ios());
 	assert(io->num_pending_ios() == 0);
 	stop();
-	delete cb;
 }
 
 }
