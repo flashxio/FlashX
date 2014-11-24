@@ -99,7 +99,7 @@ FG_graph::FG_graph(std::shared_ptr<in_mem_graph> graph_data,
 	try {
 		graph_engine::init_flash_graph(configs);
 	} catch (init_error &e) {
-		BOOST_LOG_TRIVIAL(error) << std::string("init FlashGraph ") + e.what();
+		BOOST_LOG_TRIVIAL(info) << std::string("init FlashGraph ") + e.what();
 	}
 	this->graph_data = graph_data;
 	this->index_data = index_data;
