@@ -54,8 +54,6 @@ static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 
 static int num_threads = 1;
 
-static struct timeval start_time;
-
 class format_error: public std::exception
 {
 	std::string msg;
@@ -2185,13 +2183,15 @@ template<class edge_data_type>
 serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
 		const std::string &work_dir) const
 {
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	BOOST_LOG_TRIVIAL(info) << "start to serialize an undirected graph";
 	serial_graph::ptr g = create_serial_graph(work_dir);
 	std::vector<edge_stream_t> its;
 	for (size_t i = 0; i < edge_lists.size(); i++)
 		its.push_back(edge_lists[i]->get_stream());
 	vertex_id_t max_id = get_max_vertex_id();
 
-	gettimeofday(&start_time, NULL);
 	std::vector<task_thread *> threads(num_threads);
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
@@ -2233,6 +2233,9 @@ serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
 			"serial graph has %1% edges, edge graph has %2% edges")
 			% g->get_num_edges() % get_num_edges();
 	assert(g->get_num_edges() == get_num_edges());
+	gettimeofday(&end, NULL);
+	BOOST_LOG_TRIVIAL(info) << boost::format(
+			"It takes %1% to serialize an undirected graph") % time_diff(start, end);
 	return g;
 }
 
@@ -2240,6 +2243,9 @@ template<class edge_data_type>
 serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 		const std::string &work_dir) const
 {
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	BOOST_LOG_TRIVIAL(info) << "start to serialize a directed graph";
 	serial_graph::ptr g = create_serial_graph(work_dir);
 	assert(in_edge_lists.size() == out_edge_lists.size());
 	for (size_t i = 0; i < in_edge_lists.size(); i++)
@@ -2253,7 +2259,6 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 	}
 	vertex_id_t max_id = get_max_vertex_id();
 
-	gettimeofday(&start_time, NULL);
 	std::vector<task_thread *> threads(num_threads);
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
@@ -2297,6 +2302,9 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 	write_thread->join();
 	delete write_thread;
 	assert(g->get_num_edges() == get_num_edges());
+	gettimeofday(&end, NULL);
+	BOOST_LOG_TRIVIAL(info) << boost::format(
+			"It takes %1% to serialize a directed graph") % time_diff(start, end);
 	return g;
 }
 
@@ -2310,6 +2318,7 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
+	BOOST_LOG_TRIVIAL(info) << "start to construct edge list";
 	std::vector<task_thread *> threads(num_threads);
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
@@ -2370,6 +2379,8 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"It takes %1% seconds to construct edge list") % time_diff(start, end);
+	start = end;
+	BOOST_LOG_TRIVIAL(info) << "start to construct an edge graph";
 
 	size_t num_edges = 0;
 	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > edge_lists(
@@ -2390,8 +2401,10 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	else
 		edge_g = edge_graph::ptr(new undirected_edge_graph<edge_data_type>(
 					edge_lists, has_edge_data));
+	gettimeofday(&end, NULL);
 
-	start = end;
+	BOOST_LOG_TRIVIAL(info) << boost::format(
+			"It takes %1% seconds to construct an edge graph") % time_diff(start, end);
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"There are %1% edges in the edge graph") % edge_g->get_num_edges();
 
