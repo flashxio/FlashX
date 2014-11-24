@@ -502,6 +502,19 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 	std::string graph_name = CHAR(STRING_ELT(pgraph_name, 0));
 	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
 	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
+
+	native_file f(graph_file);
+	if (!f.exist()) {
+		fprintf(stderr, "%s doesn't exist\n", graph_file.c_str());
+		return R_NilValue;
+	}
+
+	f = native_file(index_file);
+	if (!f.exist()) {
+		fprintf(stderr, "%s doesn't exist\n", index_file.c_str());
+		return R_NilValue;
+	}
+
 	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
