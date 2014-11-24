@@ -151,7 +151,7 @@ class in_mem_io: public io_interface
 	fifo_queue<user_compute *> incomp_computes;
 	std::unique_ptr<byte_array_allocator> array_allocator;
 
-	callback *cb;
+	callback::ptr cb;
 
 	void process_req(const io_request &req);
 	void process_computes();
@@ -163,7 +163,6 @@ public:
 		this->file_id = file_id;
 		array_allocator = std::unique_ptr<byte_array_allocator>(
 				new in_mem_byte_array_allocator(t));
-		cb = NULL;
 	}
 
 	virtual int get_file_id() const {
@@ -174,12 +173,17 @@ public:
 		return true;
 	}
 
-	virtual bool set_callback(callback *cb) {
+	virtual bool set_callback(callback::ptr cb) {
 		this->cb = cb;
+		return true;
 	}
 
-	virtual callback *get_callback() {
-		return cb;
+	virtual bool have_callback() const {
+		return cb != NULL;
+	}
+
+	virtual callback &get_callback() {
+		return *cb;
 	}
 
 	virtual void flush_requests() { }
@@ -281,7 +285,8 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 			memcpy(req.get_buf(), graph.graph_data + req.get_offset(), req.get_size());
 			io_request *reqs[1];
 			reqs[0] = &req;
-			this->get_callback()->invoke(reqs, 1);
+			if (this->have_callback())
+				this->get_callback().invoke(reqs, 1);
 		}
 	}
 	process_computes();
