@@ -246,6 +246,12 @@ test.ase.directed <- function(fg, ig)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg)))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.svd(ig.matrix.tmp, fg.res)
+
+	print("test ASE (regularized Laplacian)")
+	fg.res <- fg.ASE(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
+	d.matrix <- diag(1 / sqrt(fg.degree(fg) + 1))
+	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
+	check.svd(ig.matrix.tmp, fg.res)
 }
 
 test.ase.undirected <- function(fg, ig)
@@ -253,7 +259,7 @@ test.ase.undirected <- function(fg, ig)
 	check.eigen <- function(m, fg.res)
 	{
 		R <- m %*% fg.res$vectors - fg.res$vectors %*% diag(fg.res$values)
-		cat("left-singular vectors:", max(abs(R)), "\n")
+		cat("eigenvectors:", max(abs(R)), "\n")
 	}
 	ig.matrix <- get.adjacency(ig)
 	#test ASE
@@ -274,6 +280,12 @@ test.ase.undirected <- function(fg, ig)
 	print("test ASE (normalized Laplacian)")
 	fg.res <- fg.ASE(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg)))
+	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
+	check.eigen(ig.matrix.tmp, fg.res)
+
+	print("test ASE (regularized Laplacian)")
+	fg.res <- fg.ASE(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
+	d.matrix <- diag(1 / sqrt(fg.degree(fg) + 1))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.eigen(ig.matrix.tmp, fg.res)
 }
