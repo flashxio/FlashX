@@ -49,7 +49,7 @@ namespace fg
 {
 
 static const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
-static const size_t SORT_BUF_SIZE = 1024 * 1024 * 1024;
+static const size_t SORT_BUF_SIZE = 1024L * 1024 * 1024 * 2;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 
 static int num_threads = 1;
@@ -250,8 +250,9 @@ public:
 template<class edge_data_type>
 class stxxl_edge_vector: public edge_vector<edge_data_type>
 {
-	typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result data;
-	typedef typename stxxl::VECTOR_GENERATOR<edge<edge_data_type> >::result::const_iterator const_iterator;
+	typename stxxl::VECTOR_GENERATOR<edge<edge_data_type>, 4, 2, 32 * 1024 * 1024>::result data;
+	typedef typename stxxl::VECTOR_GENERATOR<edge<edge_data_type>, 4, 2,
+			32 * 1024 * 1024>::result::const_iterator const_iterator;
 
 	class stxxl_iterator: public edge_vector<edge_data_type>::bulk_iterator
 	{
