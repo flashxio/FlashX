@@ -642,20 +642,72 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 	{
 		fg.multiply(fg, x)
 	}
+	multiply.right <- function(m)
+	{
+		fg.multiply.matrix(fg, m, TRUE)
+	}
+	multiply.left.diag <- function(v, m)
+	{
+		apply(m, 2, function(x) x * v)
+	}
 
-	if (which == "AcD") {
+	directed = fg.is.directed(fg)
+	if (which == "A") {
+		if (directed) {
+			multiply <- function(x, extra)
+			{
+				t <- fg.multiply(fg, x, TRUE)
+				fg.multiply(fg, t)
+			}
+		}
+		else {
+			multiply <- function(x, extra)
+			{
+				fg.multiply(fg, x)
+			}
+		}
+	}
+	else if (which == "AcD") {
 		cd <- fg.degree(fg) * c
-		multiply <- function(x, extra)
-		{
+		if (directed) {
+			multiply <- function(x, extra)
+			{
+				t <- fg.multiply(fg, x, TRUE) + cd * x
+				fg.multiply(fg, t) + cd * t
+			}
+
+			multiply.right <- function(m)
+			{
+				fg.multiply.matrix(fg, m, TRUE) + multiply.left.diag(cd, m)
+			}
+		}
+		else {
+			multiply <- function(x, extra)
+			{
 				fg.multiply(fg, x) + cd * x
+			}
 		}
 	}
 	else if (which == "L") {
 		d <- fg.degree(fg)
 		# multiply function for eigen on the laplacian matrix.
-		multiply <- function(x, extra)
-		{
-			d * x - fg.multiply(fg, x)
+		if (directed) {
+			multiply <- function(x, extra)
+			{
+				t <- d * x - fg.multiply(fg, x, TRUE)
+				d * t - fg.multiply(fg, t)
+			}
+
+			multiply.right <- function(m)
+			{
+				multiply.left.diag(d, m) - fg.multiply.matrix(fg, m, TRUE)
+			}
+		}
+		else {
+			multiply <- function(x, extra)
+			{
+				d * x - fg.multiply(fg, x)
+			}
 		}
 	}
 	else if (which == "nL" || which == "nL_tau") {
@@ -664,10 +716,26 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 			d <- d + tau
 		d <- 1/sqrt(d)
 		# multiply function for eigen on the normalized laplacian matrix.
-		multiply <- function(x, extra)
-		{
-			# D^(-1/2) * L * D^(-1/2) * x
-			x - d * fg.multiply(fg, d * x)
+		if (directed) {
+			multiply <- function(x, extra)
+			{
+				# D^(-1/2) * L * D^(-1/2) * x
+				t <- x - d * fg.multiply(fg, d * x, TRUE)
+				t - d * fg.multiply(fg, d * t)
+			}
+
+			multiply.right <- function(m)
+			{
+				multiply.left.diag(d * fg.degree(fg) * d, m) - multiply.left.diag(
+						d, fg.multiply.matrix(fg, multiply.left.diag(d, m), TRUE))
+			}
+		}
+		else {
+			multiply <- function(x, extra)
+			{
+				# D^(-1/2) * L * D^(-1/2) * x
+				x - d * fg.multiply(fg, d * x)
+			}
 		}
 	}
 	else {
@@ -675,9 +743,20 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 		stopifnot(FALSE)
 	}
 
+	norm.col <- function(x)
+	{
+		x / sqrt(sum(x * x))
+	}
 	arpack.opts <- list(n=fg.vcount(fg), which=which.eigen,
 						nev=num.eigen, ncv=2 * num.eigen, tol=tol)
-	arpack(multiply, sym=TRUE, options=arpack.opts)
+	ret <- arpack(multiply, sym=TRUE, options=arpack.opts)
+	if (directed) {
+		list(values=sqrt(ret$values), left=ret$vectors,
+			 right=apply(multiply.right(ret$vectors), 2, norm.col), options=ret$options)
+	}
+	else {
+		ret
+	}
 }
 
 #' Perform spectral clustering

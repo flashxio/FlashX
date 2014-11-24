@@ -41,7 +41,7 @@ FG_graph::FG_graph(const std::string &graph_file,
 	try {
 		graph_engine::init_flash_graph(configs);
 	} catch (init_error &e) {
-		BOOST_LOG_TRIVIAL(error) << std::string("init FlashGraph ") + e.what();
+		BOOST_LOG_TRIVIAL(info) << std::string("init FlashGraph ") + e.what();
 	}
 	bool init_io = is_safs_init();
 
