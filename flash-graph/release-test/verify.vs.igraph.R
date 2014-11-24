@@ -91,7 +91,7 @@ test.directed <- function(fg, ig)
 	fg.res <- fg.page.rank(fg)
 	ig.res <- page.rank.old(ig, eps=0.01, old=TRUE)
 	num <- sum((abs(fg.res - ig.res) / abs(fg.res)) < 0.02)
-	cat("# vertices whose PR diff <= 2% is", num, ", # vertices:", vcount(ig))
+	cat("# vertices whose PR diff <= 2% is", num, ", # vertices:", vcount(ig), "\n")
 
 	# test locality scan
 	print("test locality statistics")
@@ -300,7 +300,7 @@ fg <- fg.load.igraph(ig, graph.name="wiki")
 test.directed(fg, ig)
 fg.list.graphs()
 
-cat("\n\n\n")
+#cat("\n\n\n")
 print("run in the SAFS mode")
 fg.set.conf("run_test.txt")
 fg <- fg.get.graph("wiki-Vote")
