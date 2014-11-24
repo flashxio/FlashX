@@ -1813,54 +1813,6 @@ int parse_edge_list_line(char *line, edge<> &e)
 	return 1;
 }
 
-static std::unique_ptr<char[]> read_file(const std::string &file_name,
-		size_t &size)
-{
-	native_file local_f(file_name);
-	size = local_f.get_size();
-	FILE *f = fopen(file_name.c_str(), "r");
-	assert(f);
-	char *buf = new char[size];
-	BOOST_VERIFY(fread(buf, size, 1, f) == 1);
-	return std::unique_ptr<char[]>(buf);
-}
-
-#ifdef USE_GZIP
-static std::unique_ptr<char[]> read_gz_file(const std::string &file_name,
-		size_t &size)
-{
-	BOOST_LOG_TRIVIAL(info) << (std::string("read gz file: ") + file_name);
-	const size_t BUF_SIZE = 1024 * 1024 * 16;
-	std::vector<std::shared_ptr<char> > bufs;
-	gzFile f = gzopen(file_name.c_str(), "rb");
-	size_t out_size = 0;
-	while (!gzeof(f)) {
-		char *buf = new char[BUF_SIZE];
-		bufs.push_back(std::shared_ptr<char>(buf));
-		int ret = gzread(f, buf, BUF_SIZE);
-		assert(ret > 0);
-		out_size += ret;
-	}
-	BOOST_LOG_TRIVIAL(info) << boost::format(
-			"get %1% bytes from %2%") % out_size % file_name;
-
-	size = out_size;
-	char *out_buf = new char[out_size];
-	std::unique_ptr<char[]> ret_buf(out_buf);
-	for (size_t i = 0; i < bufs.size(); i++) {
-		char *buf = bufs[i].get();
-		assert(out_size > 0);
-		size_t buf_size = std::min(BUF_SIZE, out_size);
-		memcpy(out_buf, buf, buf_size);
-		out_buf += buf_size;
-		out_size -= buf_size;
-	}
-	assert(out_size == 0);
-	gzclose(f);
-	return ret_buf;
-}
-#endif
-
 /**
  * Parse the edge list in the character buffer.
  * `size' doesn't include '\0'.
@@ -1934,31 +1886,41 @@ public:
 		this->file_name = file_name;
 	}
 
-	void run() {
-		size_t size =  0;
-		std::unique_ptr<char[]> data;
-		if (is_compressed(file_name)) {
+	void run();
+};
+
+template<class edge_data_type>
+void text_edge_file_task<edge_data_type>::run()
+{
+	graph_file_io::ptr io;
+	if (is_compressed(file_name)) {
 #ifdef USE_GZIP
-			data = read_gz_file(file_name, size);
+		io = graph_file_io::ptr(new gz_graph_file_io(file_name));
 #else
-			BOOST_LOG_TRIVIAL(error) << "Doesn't support reading gz file";
-			BOOST_LOG_TRIVIAL(error)
-				<< "zlib is required to support reading gz file";
-			exit(1);
+		BOOST_LOG_TRIVIAL(error) << "Doesn't support reading gz file";
+		BOOST_LOG_TRIVIAL(error)
+			<< "zlib is required to support reading gz file";
+		exit(1);
 #endif
-		}
-		else
-			data = read_file(file_name, size);
+	}
+	else
+		io = graph_file_io::ptr(new text_graph_file_io(file_name));
+
+	edge_vector<edge_data_type> *local_edge_buf
+		= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+	while (!io->eof()) {
+		size_t size = 0;
+		std::unique_ptr<char[]> data = io->read_edge_list_text(
+				EDGE_LIST_BLOCK_SIZE, size);
 
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(data.get(), size, edges);
-		edge_vector<edge_data_type> *local_edge_buf
-			= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 		local_edge_buf->append(edges);
-		std::cout << boost::format("There are %1% edges in thread %2%\n")
-			% local_edge_buf->size() % thread::get_curr_thread()->get_id();
 	}
-};
+
+	std::cout << boost::format("There are %1% edges in thread %2%\n")
+		% local_edge_buf->size() % thread::get_curr_thread()->get_id();
+}
 
 template<class edge_data_type>
 void directed_edge_graph<edge_data_type>::read_out_edges(edge_stream_t &stream,
