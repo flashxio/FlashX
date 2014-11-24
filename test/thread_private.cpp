@@ -45,6 +45,7 @@ class cleanup_callback: public callback
 	int file_id;
 	size_t sum;
 public:
+	typedef std::shared_ptr<cleanup_callback> ptr;
 #ifdef DEBUG
 	std::tr1::unordered_map<char *, issued_workload_t> pending_reqs;
 #endif
@@ -361,7 +362,6 @@ thread_private::thread_private(int node_id, int idx, int entry_size,
 		file_io_factory::shared_ptr factory, workload_gen *gen): thread(
 			std::string("test_thread") + itoa(idx), node_id)
 {
-	this->cb = NULL;
 	this->node_id = node_id;
 	this->idx = idx;
 	this->gen = gen;
@@ -380,8 +380,9 @@ void thread_private::init() {
 	io->set_max_num_pending_ios(params.get_aio_depth_per_file());
 
 	if (io->support_aio()) {
-		cb = new cleanup_callback(idx, this, io->get_file_id());
-		io->set_callback(cb);
+		cb = cleanup_callback::ptr(new cleanup_callback(idx, this,
+					io->get_file_id()));
+		io->set_callback(std::static_pointer_cast<callback>(cb));
 	}
 }
 

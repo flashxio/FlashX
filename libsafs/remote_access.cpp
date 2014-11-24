@@ -317,8 +317,8 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 		assert(upper_io);
 		upper_io->notify_completion(from_upper, num_from_upper);
 	}
-	if (num_from_app > 0 && this->get_callback())
-		this->get_callback()->invoke(from_app, num_from_app);
+	if (num_from_app > 0 && this->have_callback())
+		this->get_callback().invoke(from_app, num_from_app);
 
 	for (unsigned i = 0; i < completes.size(); i++) {
 		remote_orig_io_request *orig = completes[i];
@@ -326,8 +326,8 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 		io_interface *io = orig->get_io();
 		// It's from an application.
 		if (io == this) {
-			if (io->get_callback())
-				io->get_callback()->invoke(&req, 1);
+			if (io->have_callback())
+				io->get_callback().invoke(&req, 1);
 		}
 		else
 			io->notify_completion(&req, 1);

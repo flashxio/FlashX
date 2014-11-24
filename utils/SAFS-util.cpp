@@ -183,7 +183,7 @@ void comm_verify_file(int argc, char *argv[])
 		source = new file_data_source(ext_file);
 	const RAID_config &conf = get_sys_RAID_conf();
 	verify_callback *cb = new verify_callback(source, conf.create_file_mapper());
-	io->set_callback(cb);
+	io->set_callback(callback::ptr(cb));
 
 	ssize_t file_size = source->get_size();
 	printf("verify %ld bytes\n", file_size);
@@ -199,7 +199,6 @@ void comm_verify_file(int argc, char *argv[])
 	printf("verify %ld bytes\n", cb->get_verified_bytes());
 	
 	io->cleanup();
-	delete io->get_callback();
 }
 
 void comm_load_file2fs(int argc, char *argv[])

@@ -312,6 +312,9 @@ public:
 in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 {
 	native_file local_f(file_name);
+	if (!local_f.exist())
+		throw io_exception(file_name + std::string(" doesn't exist"));
+
 	ssize_t size = local_f.get_size();
 	assert(size > 0);
 

@@ -49,7 +49,7 @@ class remote_io: public io_interface
 	// They are used to send low-priority requests.
 	std::vector<request_sender *> low_prio_senders;
 	std::vector<disk_io_thread *> io_threads;
-	callback *cb;
+	callback::ptr cb;
 	file_mapper *block_mapper;
 	thread_safe_FIFO_queue<io_request> complete_queue;
 	slab_allocator &msg_allocator;
@@ -76,13 +76,17 @@ public:
 
 	virtual void cleanup();
 
-	virtual bool set_callback(callback *cb) {
+	virtual bool set_callback(callback::ptr cb) {
 		this->cb = cb;
 		return true;
 	}
 
-	virtual callback *get_callback() {
-		return cb;
+	virtual bool have_callback() const {
+		return cb != NULL;
+	}
+
+	virtual callback &get_callback() {
+		return *cb;
 	}
 
 	virtual int get_file_id() const;

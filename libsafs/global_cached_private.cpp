@@ -640,9 +640,9 @@ bool is_local_req(io_request *req, io_interface *this_io)
 void notify_completion(io_interface *this_io, io_request *req)
 {
 	if (is_local_req(req, this_io)) {
-		if (this_io->get_callback()
+		if (this_io->have_callback()
 				&& req->get_req_type() == io_request::BASIC_REQ)
-			this_io->get_callback()->invoke(&req, 1);
+			this_io->get_callback().invoke(&req, 1);
 	}
 	else {
 		io_interface *io = req->get_io();
@@ -675,8 +675,8 @@ void notify_completion(io_interface *this_io, io_request *reqs[], int num)
 		}
 	}
 
-	if (this_io->get_callback() && num_local > 0)
-		this_io->get_callback()->invoke(local_reqs, num_local);
+	if (this_io->have_callback() && num_local > 0)
+		this_io->get_callback().invoke(local_reqs, num_local);
 
 	if (num_remote == 0)
 		return;
@@ -958,7 +958,6 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 	simp_array_allocator
 		= std::unique_ptr<byte_array_allocator_impl<simple_page_byte_array> >(
 				new byte_array_allocator_impl<simple_page_byte_array>(t));
-	cb = NULL;
 
 	// Initialize the stat values.
 	cache_hits = 0;

@@ -710,11 +710,8 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 			}
 		}
 	}
-	else if (which == "nL" || which == "nL_tau") {
-		d <- fg.degree(fg)
-		if (which == "nL_tau")
-			d <- d + tau
-		d <- 1/sqrt(d)
+	else if (which == "nL") {
+		d <- 1/sqrt(fg.degree(fg))
 		# multiply function for eigen on the normalized laplacian matrix.
 		if (directed) {
 			multiply <- function(x, extra)
@@ -726,8 +723,8 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 
 			multiply.right <- function(m)
 			{
-				multiply.left.diag(d * fg.degree(fg) * d, m) - multiply.left.diag(
-						d, fg.multiply.matrix(fg, multiply.left.diag(d, m), TRUE))
+				m - multiply.left.diag(d,
+					fg.multiply.matrix(fg, multiply.left.diag(d, m), TRUE))
 			}
 		}
 		else {
@@ -735,6 +732,32 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 			{
 				# D^(-1/2) * L * D^(-1/2) * x
 				x - d * fg.multiply(fg, d * x)
+			}
+		}
+	}
+	else if (which == "nL_tau") {
+		d <- fg.degree(fg)
+		d_tau <- 1/sqrt(fg.degree(fg) + tau)
+		# multiply function for eigen on the normalized laplacian matrix.
+		if (directed) {
+			multiply <- function(x, extra)
+			{
+				# D^(-1/2) * L * D^(-1/2) * x
+				t <- d_tau * d * d_tau * x - d_tau * fg.multiply(fg, d_tau * x, TRUE)
+				d_tau * d * d_tau * t - d_tau * fg.multiply(fg, d_tau * t)
+			}
+
+			multiply.right <- function(m)
+			{
+				multiply.left.diag(d_tau * d * d_tau, m) - multiply.left.diag(
+						d_tau, fg.multiply.matrix(fg, multiply.left.diag(d_tau, m), TRUE))
+			}
+		}
+		else {
+			multiply <- function(x, extra)
+			{
+				# D^(-1/2) * L * D^(-1/2) * x
+				d_tau * d * d_tau * x - d_tau * fg.multiply(fg, d_tau * x)
 			}
 		}
 	}
