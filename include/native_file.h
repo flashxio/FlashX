@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <libgen.h>
 
 #include <string>
 #include <vector>
@@ -34,7 +35,20 @@
 namespace safs
 {
 
-class native_file
+class file_interface
+{
+public:
+	virtual ~file_interface() {
+	}
+	virtual const std::string &get_name() const = 0;
+	virtual bool exist() const = 0;
+	virtual ssize_t get_size() const = 0;
+	virtual bool create_file(size_t file_size) = 0;
+	virtual bool delete_file() = 0;
+	virtual bool rename(const std::string &new_name) = 0;
+};
+
+class native_file: public file_interface
 {
 	std::string file_name;
 public:
@@ -68,8 +82,28 @@ public:
 		return S_ISDIR(stats.st_mode);
 	}
 
+	const std::string get_file_name() const {
+		return basename((char *) file_name.c_str());
+	}
+
+	const std::string get_dir_name() const {
+		return dirname((char *) file_name.c_str());
+	}
+
+	/*
+	 * This returns the path to the file
+	 */
 	const std::string &get_name() const {
 		return file_name;
+	}
+
+	virtual bool rename(const std::string &new_name) {
+		if (::rename(file_name.c_str(), new_name.c_str()) == 0) {
+			file_name = new_name;
+			return true;
+		}
+		else
+			return false;
 	}
 
 	/**

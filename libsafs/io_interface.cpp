@@ -698,7 +698,7 @@ void print_io_thread_stat()
 ssize_t file_io_factory::get_file_size() const
 {
 	safs_file f(*global_data.raid_conf, name);
-	return f.get_file_size();
+	return f.get_size();
 }
 
 bool is_safs_init()
