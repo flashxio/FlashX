@@ -1,14 +1,14 @@
 #!/bin/sh
 
 mkdir -p data
+rm -fR data/*
 
 wget http://snap.stanford.edu/data/wiki-Vote.txt.gz
 gunzip wiki-Vote.txt.gz
 rm wiki-Vote.adj*
 rm wiki-Vote.index*
 ../tools/el2al -v -w wiki-Vote.adj wiki-Vote.index wiki-Vote.txt
-../../utils/SAFS-util run_test.txt load wiki-Vote-v4 wiki-Vote.adj-v4
-../../utils/SAFS-util run_test.txt load wiki-Vote-index-v4 wiki-Vote.index-v4
+../tools/el2al -v -w -d -c run_test.txt wiki-Vote wiki-Vote-index wiki-Vote.txt
 sed '/^#/d' wiki-Vote.txt > wiki-Vote1.txt
 rm wiki-Vote.txt
 
@@ -17,8 +17,7 @@ gunzip facebook_combined.txt.gz
 rm facebook.adj*
 rm facebook.index*
 ../tools/el2al -v -u -w facebook.adj facebook.index facebook_combined.txt
-../../utils/SAFS-util run_test.txt load facebook-v4 facebook.adj-v4
-../../utils/SAFS-util run_test.txt load facebook-index-v4 facebook.index-v4
+../tools/el2al -v -u -w -d -c run_test.txt facebook facebook-index facebook_combined.txt
 sed '/^#/d' facebook_combined.txt > facebook_combined1.txt
 rm facebook_combined.txt
 

@@ -20,7 +20,9 @@
 #include <libgen.h>
 
 #include "common.h"
+#include "config_map.h"
 #include "native_file.h"
+#include "io_interface.h"
 
 #include "utils.h"
 
@@ -65,6 +67,8 @@ void print_usage()
 	fprintf(stderr, "-w: write the graph to a file\n");
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
 	fprintf(stderr, "-d: store intermediate data on disks\n");
+	fprintf(stderr, "-c: the SAFS configuration file\n");
+	fprintf(stderr, "-W: the working directory\n");
 }
 
 int main(int argc, char *argv[])
@@ -77,7 +81,9 @@ int main(int argc, char *argv[])
 	bool merge_graph = false;
 	bool write_graph = false;
 	bool on_disk = false;
-	while ((opt = getopt(argc, argv, "uvt:mwT:d")) != -1) {
+	std::string conf_file;
+	std::string work_dir = ".";
+	while ((opt = getopt(argc, argv, "uvt:mwT:dc:W:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -103,6 +109,14 @@ int main(int argc, char *argv[])
 			case 'd':
 				on_disk = true;
 				break;
+			case 'c':
+				conf_file = optarg;
+				num_opts++;
+				break;
+			case 'W':
+				work_dir = optarg;
+				num_opts++;
+				break;
 			default:
 				print_usage();
 		}
@@ -121,8 +135,6 @@ int main(int argc, char *argv[])
 
 	std::string adjacency_list_file = argv[0];
 	adjacency_list_file += std::string("-v") + itoa(CURR_VERSION);
-	std::string work_dir = dirname(argv[0]);
-	printf("work dir: %s\n", work_dir.c_str());
 
 	std::string index_file = argv[1];
 	index_file += std::string("-v") + itoa(CURR_VERSION);
@@ -143,12 +155,21 @@ int main(int argc, char *argv[])
 	for (size_t i = 0; i < edge_list_files.size(); i++)
 		printf("edge list file: %s\n", edge_list_files[i].c_str());
 
+	large_io_creator::ptr creator;
+	if (conf_file.empty())
+		creator = large_io_creator::create(false, work_dir);
+	else {
+		config_map::ptr configs = config_map::create(conf_file);
+		configs->add_options("writable=1");
+		safs::init_io_system(configs);
+		creator = large_io_creator::create(true, ".");
+	}
 	if (merge_graph) {
 		edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
 				directed, num_threads, !on_disk);
 		disk_serial_graph::ptr g
 			= std::static_pointer_cast<disk_serial_graph, serial_graph>(
-					construct_graph(edge_g, work_dir, num_threads));
+					construct_graph(edge_g, creator, num_threads));
 		// Write the constructed individual graph to a file.
 		if (write_graph) {
 			assert(!file_exist(adjacency_list_file));
@@ -190,7 +211,7 @@ int main(int argc, char *argv[])
 					directed, num_threads, !on_disk);
 			disk_serial_graph::ptr g
 				= std::static_pointer_cast<disk_serial_graph, serial_graph>(
-						construct_graph(edge_g, work_dir, num_threads));
+						construct_graph(edge_g, creator, num_threads));
 			// Write the constructed individual graph to a file.
 			if (write_graph) {
 				assert(!file_exist(graph_files[i]));

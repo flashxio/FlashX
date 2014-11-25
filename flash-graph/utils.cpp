@@ -763,8 +763,8 @@ public:
 
 class disk_directed_graph: public disk_serial_graph
 {
-	FILE *in_f;
-	FILE *out_f;
+	large_writer::ptr in_f;
+	large_writer::ptr out_f;
 	embedded_array<char> buf;
 	std::string tmp_in_graph_file;
 	std::string tmp_out_graph_file;
@@ -775,25 +775,24 @@ class disk_directed_graph: public disk_serial_graph
 	void check_ext_graph(const edge_graph &edge_g,
 			const directed_vertex_index &idx, const std::string &adj_file) const;
 public:
-	disk_directed_graph(const edge_graph &g, const std::string &work_dir): disk_serial_graph(
-			new directed_in_mem_vertex_index(), g.get_edge_data_size()) {
-		tmp_in_graph_file = tempnam(work_dir.c_str(), "in-directed");
-		in_f = fopen(tmp_in_graph_file.c_str(), "w");
-		BOOST_VERIFY(fseek(in_f, sizeof(graph_header), SEEK_SET) == 0);
-		tmp_out_graph_file = tempnam(work_dir.c_str(), "out-directed");
-		out_f = fopen(tmp_out_graph_file.c_str(), "w");
+	disk_directed_graph(const edge_graph &g,
+			large_io_creator::ptr creator): disk_serial_graph(
+			new directed_in_mem_vertex_index(), g.get_edge_data_size(), creator) {
+		tmp_in_graph_file = basename(tempnam(".", "in-directed"));
+		in_f = creator->create_writer(tmp_in_graph_file);
+		BOOST_VERIFY(in_f->seek(sizeof(graph_header), SEEK_SET) == sizeof(graph_header));
+		tmp_out_graph_file = basename(tempnam(".", "out-directed"));
+		out_f = creator->create_writer(tmp_out_graph_file);
 	}
 
 	~disk_directed_graph() {
 		if (in_f) {
-			fclose(in_f);
+			in_f->delete_file();
 			in_f = NULL;
-			unlink(tmp_in_graph_file.c_str());
 		}
 		if (out_f) {
-			fclose(out_f);
+			out_f->delete_file();
 			out_f = NULL;
-			unlink(tmp_out_graph_file.c_str());
 		}
 	}
 
@@ -805,6 +804,8 @@ public:
 			const std::string &index_file, const std::string &adj_file) const;
 
 	virtual void add_vertex(const in_mem_vertex &v) {
+		throw unsupported_exception();
+#if 0
 		serial_graph::add_vertex(v);
 
 		assert(in_f);
@@ -818,53 +819,55 @@ public:
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, OUT_EDGE);
 		BOOST_VERIFY(fwrite(buf.data(), size, 1, out_f) == 1);
+#endif
 	}
 
 	void add_vertices(const serial_subgraph &subg) {
 		const directed_serial_subgraph &d_subg = (const directed_serial_subgraph &) subg;
 		for (size_t i = 0; i < d_subg.get_num_vertices(); i++)
 			serial_graph::add_vertex(d_subg.get_vertex_info(i));
-		BOOST_VERIFY(fwrite(d_subg.get_in_buf(), d_subg.get_in_size(), 1,
-					in_f) == 1);
-		BOOST_VERIFY(fwrite(d_subg.get_out_buf(), d_subg.get_out_size(), 1,
-					out_f) == 1);
+		printf("write %ld vertices (%ld, %ld)\n", d_subg.get_num_vertices(),
+				d_subg.get_in_size(), d_subg.get_out_size());
+		BOOST_VERIFY(in_f->write(d_subg.get_in_buf(), d_subg.get_in_size())
+				== (ssize_t) d_subg.get_in_size());
+		BOOST_VERIFY(out_f->write(d_subg.get_out_buf(), d_subg.get_out_size())
+				== (ssize_t) d_subg.get_out_size());
 	}
 
-	void copy_file(FILE *from, size_t from_size, FILE *to) {
+	void copy_file(large_reader::ptr reader, size_t from_size, large_writer::ptr to) {
 		const size_t BUF_SIZE = 128 * 1024 * 1024;
 		std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[BUF_SIZE]);
 		size_t remain_size = from_size;
 		size_t read_size = std::min(remain_size, BUF_SIZE);
 		while (read_size > 0) {
-			size_t ret = fread(buf.get(), read_size, 1, from);
-			BOOST_VERIFY(ret == 1);
-			ret = fwrite(buf.get(), read_size, 1, to);
-			BOOST_VERIFY(ret == 1);
+			size_t ret = reader->read(buf.get(), read_size);
+			BOOST_VERIFY(ret == read_size);
+			ret = to->write(buf.get(), read_size);
+			BOOST_VERIFY(ret == read_size);
 			remain_size -= read_size;
 			read_size = std::min(remain_size, BUF_SIZE);
 		}
 	}
 
 	virtual void finalize_graph_file(const std::string &adj_file) {
-		long out_size = ftell(out_f);
-		assert(out_size > 0);
-		fclose(out_f);
-
-		out_f = fopen(tmp_out_graph_file.c_str(), "r");
-		assert(out_f);
-		copy_file(out_f, out_size, in_f);
-		fclose(out_f);
+		size_t out_size = out_f->get_write_bytes();
 		out_f = NULL;
-		unlink(tmp_out_graph_file.c_str());
+
+		large_reader::ptr reader = get_creator()->create_reader(tmp_out_graph_file);
+		assert(reader);
+		copy_file(reader, out_size, in_f);
+		reader = NULL;
+		large_writer::ptr writer = get_creator()->create_writer(tmp_out_graph_file);
+		writer->delete_file();
+		writer = NULL;
 
 		// Write the real graph header.
 		graph_header header(get_graph_type(), this->get_num_vertices(),
 				this->get_num_edges(), this->get_edge_data_size());
-		BOOST_VERIFY(fseek(in_f, 0, SEEK_SET) == 0);
-		BOOST_VERIFY(fwrite(&header, sizeof(header), 1, in_f) == 1);
-		fclose(in_f);
+		BOOST_VERIFY(in_f->seek(0, SEEK_SET) == 0);
+		BOOST_VERIFY(in_f->write((char *) &header, sizeof(header)) == sizeof(header));
+		BOOST_VERIFY(in_f->rename2(adj_file) == 0);
 		in_f = NULL;
-		BOOST_VERIFY(rename(tmp_in_graph_file.c_str(), adj_file.c_str()) == 0);
 	}
 
 	virtual graph_type get_graph_type() const {
@@ -874,7 +877,7 @@ public:
 
 class disk_undirected_graph: public disk_serial_graph
 {
-	FILE *f;
+	large_writer::ptr f;
 	embedded_array<char> buf;
 	std::string tmp_graph_file;
 
@@ -884,18 +887,18 @@ class disk_undirected_graph: public disk_serial_graph
 	void check_ext_graph(const edge_graph &edge_g,
 			const default_vertex_index &idx, const std::string &adj_file) const;
 public:
-	disk_undirected_graph(const edge_graph &g, const std::string &work_dir): disk_serial_graph(
-			new undirected_in_mem_vertex_index(), g.get_edge_data_size()) {
-		tmp_graph_file = tempnam(work_dir.c_str(), "undirected");
-		f = fopen(tmp_graph_file.c_str(), "w");
-		BOOST_VERIFY(fseek(f, sizeof(graph_header), SEEK_SET) == 0);
+	disk_undirected_graph(const edge_graph &g,
+			large_io_creator::ptr creator): disk_serial_graph(
+			new undirected_in_mem_vertex_index(), g.get_edge_data_size(), creator) {
+		tmp_graph_file = basename(tempnam(".", "undirected"));
+		f = creator->create_writer(tmp_graph_file);
+		BOOST_VERIFY(f->seek(sizeof(graph_header), SEEK_SET) == sizeof(graph_header));
 	}
 
 	~disk_undirected_graph() {
 		if (f) {
-			fclose(f);
+			f->delete_file();
 			f = NULL;
-			unlink(tmp_graph_file.c_str());
 		}
 	}
 
@@ -911,34 +914,36 @@ public:
 	}
 
 	virtual void add_vertex(const in_mem_vertex &v) {
+		throw unsupported_exception();
+#if 0
 		serial_graph::add_vertex(v);
 		assert(f);
 		int size = v.get_serialize_size(IN_EDGE);
 		buf.resize(size);
 		ext_mem_undirected_vertex::serialize(v, buf.data(), size, IN_EDGE);
 		BOOST_VERIFY(fwrite(buf.data(), size, 1, f) == 1);
+#endif
 	}
 
 	virtual void finalize_graph_file(const std::string &adj_file) {
 		// Write the real graph header.
 		graph_header header(get_graph_type(), this->get_num_vertices(),
 				this->get_num_edges(), this->get_edge_data_size());
-		BOOST_VERIFY(fseek(f, 0, SEEK_SET) == 0);
-		BOOST_VERIFY(fwrite(&header, sizeof(header), 1, f) == 1);
-		fclose(f);
-		f = NULL;
-		if (rename(tmp_graph_file.c_str(), adj_file.c_str()) != 0) {
+		BOOST_VERIFY(f->seek(0, SEEK_SET) == 0);
+		BOOST_VERIFY(f->write((char *) &header, sizeof(header)) == sizeof(header));
+		if (f->rename2(adj_file) != 0) {
 			fprintf(stderr, "can't rename %s to %s: %s\n",
 					tmp_graph_file.c_str(), adj_file.c_str(), strerror(errno));
 			exit(1);
 		}
+		f = NULL;
 	}
 
 	void add_vertices(const serial_subgraph &subg) {
 		const undirected_serial_subgraph &u_subg = (const undirected_serial_subgraph &) subg;
 		for (size_t i = 0; i < u_subg.get_num_vertices(); i++)
 			serial_graph::add_vertex(u_subg.get_vertex_info(i));
-		if (fwrite(u_subg.get_buf(), u_subg.get_size(), 1, f) != 1) {
+		if (f->write(u_subg.get_buf(), u_subg.get_size()) != (ssize_t) u_subg.get_size()) {
 			fprintf(stderr, "fail to write %ld bytes for %ld vertices: %s\n",
 					u_subg.get_size(), u_subg.get_num_vertices(), strerror(errno));
 			exit(1);
@@ -1069,12 +1074,12 @@ class undirected_edge_graph: public edge_graph
 		return max_id;
 	}
 
-	serial_graph::ptr create_serial_graph(const std::string &work_dir) const {
-		if (work_dir.empty())
+	serial_graph::ptr create_serial_graph(large_io_creator::ptr creator) const {
+		if (creator == NULL)
 			return serial_graph::ptr(new mem_undirected_graph(
 						this->get_edge_data_size()));
 		else
-			return serial_graph::ptr(new disk_undirected_graph(*this, work_dir));
+			return serial_graph::ptr(new disk_undirected_graph(*this, creator));
 	}
 public:
 	/**
@@ -1103,7 +1108,7 @@ public:
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part) const;
 	virtual std::shared_ptr<serial_graph> serialize_graph(
-			const std::string &work_dir) const;
+			large_io_creator::ptr creator) const;
 };
 
 /**
@@ -1134,12 +1139,12 @@ class directed_edge_graph: public edge_graph
 		return max_id;
 	}
 
-	serial_graph::ptr create_serial_graph(const std::string &work_dir) const {
-		if (work_dir.empty())
+	serial_graph::ptr create_serial_graph(large_io_creator::ptr creator) const {
+		if (creator == NULL)
 			return serial_graph::ptr(new mem_directed_graph(
 						this->get_edge_data_size()));
 		else
-			return serial_graph::ptr(new disk_directed_graph(*this, work_dir));
+			return serial_graph::ptr(new disk_directed_graph(*this, creator));
 	}
 public:
 	/**
@@ -1166,7 +1171,7 @@ public:
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part) const;
 	virtual std::shared_ptr<serial_graph> serialize_graph(
-			const std::string &work_dir) const;
+			large_io_creator::ptr creator) const;
 
 	size_t get_num_edges() const {
 		size_t num_edges = 0;
@@ -1538,7 +1543,9 @@ void disk_serial_graph::dump(const std::string &index_file,
 	start = end;
 	graph_header header(get_graph_type(), this->get_num_vertices(),
 			this->get_num_edges(), this->get_edge_data_size());
-	get_index().dump(index_file, header, compressed_index);
+	vertex_index::ptr index = get_index().dump(header, compressed_index);
+	creator->create_writer(index_file)->write((const char *) index.get(),
+			index->get_index_size());
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"It takes %1% seconds to dump the index") % time_diff(start, end);
@@ -2144,12 +2151,12 @@ public:
 
 template<class edge_data_type>
 serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
-		const std::string &work_dir) const
+		large_io_creator::ptr creator) const
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	BOOST_LOG_TRIVIAL(info) << "start to serialize an undirected graph";
-	serial_graph::ptr g = create_serial_graph(work_dir);
+	serial_graph::ptr g = create_serial_graph(creator);
 	std::vector<edge_stream_t> its;
 	for (size_t i = 0; i < edge_lists.size(); i++)
 		its.push_back(edge_lists[i]->get_stream());
@@ -2165,8 +2172,8 @@ serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
 	write_graph_thread *write_thread = new write_graph_thread(*g, max_id);
 	write_thread->start();
 
-	BOOST_LOG_TRIVIAL(info) << (std::string("start to construct the graph. max id: ")
-		+ itoa(max_id));
+	BOOST_LOG_TRIVIAL(info) << boost::format(
+			"start to construct the graph. max id: %1%") % max_id;
 
 	int thread_no = 0;
 	for (vertex_id_t id = 0; id <= max_id; ) {
@@ -2204,12 +2211,12 @@ serial_graph::ptr undirected_edge_graph<edge_data_type>::serialize_graph(
 
 template<class edge_data_type>
 serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
-		const std::string &work_dir) const
+		large_io_creator::ptr creator) const
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	BOOST_LOG_TRIVIAL(info) << "start to serialize a directed graph";
-	serial_graph::ptr g = create_serial_graph(work_dir);
+	serial_graph::ptr g = create_serial_graph(creator);
 	assert(in_edge_lists.size() == out_edge_lists.size());
 	for (size_t i = 0; i < in_edge_lists.size(); i++)
 		assert(in_edge_lists[i]->size() == out_edge_lists[i]->size());
@@ -2232,8 +2239,8 @@ serial_graph::ptr directed_edge_graph<edge_data_type>::serialize_graph(
 	write_graph_thread *write_thread = new write_graph_thread(*g, max_id);
 	write_thread->start();
 
-	BOOST_LOG_TRIVIAL(info) << (std::string(
-				"start to construct the graph. max id: ") + itoa(max_id));
+	BOOST_LOG_TRIVIAL(info) << boost::format(
+				"start to construct the graph. max id: %1%") % max_id;
 
 	int thread_no = 0;
 	for (vertex_id_t id = 0; id <= max_id; ) {
@@ -2403,7 +2410,7 @@ edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files
 }
 
 serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
-		const std::string &work_dir, int nthreads)
+		large_io_creator::ptr creator, int nthreads)
 {
 	BOOST_LOG_TRIVIAL(info) << "before sorting edges";
 	num_threads = nthreads;
@@ -2414,16 +2421,7 @@ serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"It takes %1% seconds to sort edge list") % time_diff(start, end);
 
-	return edge_g->serialize_graph(work_dir);
-}
-
-serial_graph::ptr construct_graph(const std::vector<std::string> &edge_list_files,
-		int edge_attr_type, bool directed, const std::string &work_dir,
-		int nthreads)
-{
-	edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
-			directed, nthreads, work_dir.empty());
-	return construct_graph(edge_g, work_dir, nthreads);
+	return edge_g->serialize_graph(creator);
 }
 
 std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
@@ -2431,8 +2429,9 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 		const std::string &graph_name, int edge_attr_type, bool directed,
 		int nthreads)
 {
-	serial_graph::ptr g = construct_graph(edge_list_files, edge_attr_type,
-			directed, std::string(), nthreads);
+	edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
+			directed, nthreads, true);
+	serial_graph::ptr g = construct_graph(edge_g, large_io_creator::ptr(), nthreads);
 	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
 			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index(true));
 }
@@ -2471,7 +2470,7 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 		edge_g = edge_graph::ptr(new undirected_edge_graph<empty_data>(
 					edge_lists, false));
 	}
-	serial_graph::ptr g = construct_graph(edge_g, std::string(), num_threads);;
+	serial_graph::ptr g = construct_graph(edge_g, large_io_creator::ptr(), num_threads);;
 	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
 			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index(true));
 }

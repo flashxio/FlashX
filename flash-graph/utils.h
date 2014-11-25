@@ -49,6 +49,44 @@ class vertex_index;
 class in_mem_vertex;
 class ext_mem_undirected_vertex;
 
+class large_writer
+{
+public:
+	typedef std::shared_ptr<large_writer> ptr;
+
+	virtual ~large_writer() {
+	}
+	virtual int delete_file() = 0;
+	virtual int rename2(const std::string &new_name) = 0;
+	virtual off_t seek(off_t off, int whence) = 0;
+	virtual ssize_t flush() = 0;
+	virtual ssize_t write(const char *buf, size_t bytes) = 0;
+	virtual size_t get_write_bytes() const = 0;
+};
+
+class large_reader
+{
+public:
+	typedef std::shared_ptr<large_reader> ptr;
+
+	virtual ~large_reader() {
+	}
+	virtual ssize_t read(char *buf, size_t bytes) = 0;
+	virtual off_t seek(off_t off, int whence) = 0;
+};
+
+class large_io_creator
+{
+public:
+	typedef std::shared_ptr<large_io_creator> ptr;
+	static ptr create(bool safs, const std::string &curr_dir);
+
+	~large_io_creator() {
+	}
+	virtual large_writer::ptr create_writer(const std::string &file) = 0;
+	virtual large_reader::ptr create_reader(const std::string &file) = 0;
+};
+
 /**
  * This class serializes a graph and stores it in contiguous memory.
  */
@@ -126,7 +164,7 @@ public:
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
 			bool in_part) const = 0;
 	virtual std::shared_ptr<serial_graph> serialize_graph(
-			const std::string &work_dir) const = 0;
+			large_io_creator::ptr creator) const = 0;
 	virtual size_t get_num_edges() const = 0;
 
 	bool has_edge_data() const {
@@ -143,11 +181,17 @@ public:
  */
 class disk_serial_graph: public serial_graph
 {
+	large_io_creator::ptr creator;
 public:
 	typedef std::shared_ptr<disk_serial_graph> ptr;
 
-	disk_serial_graph(in_mem_vertex_index *index,
-			size_t edge_data_size): serial_graph(index, edge_data_size) {
+	disk_serial_graph(in_mem_vertex_index *index, size_t edge_data_size,
+			large_io_creator::ptr creator): serial_graph(index, edge_data_size) {
+		this->creator = creator;
+	}
+
+	large_io_creator::ptr get_creator() {
+		return creator;
 	}
 
 	virtual void check_ext_graph(const edge_graph &edge_g,
@@ -177,10 +221,7 @@ public:
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
 		int edge_attr_type, bool directed, int num_threads, bool in_mem);
 serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
-		const std::string &work_dir, int num_threads);
-serial_graph::ptr construct_graph(const std::vector<std::string> &edge_list_files,
-		int edge_attr_type, bool directed, const std::string &work_dir,
-		int num_threads);
+		large_io_creator::ptr creator, int num_threads);
 std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > construct_mem_graph(
 		const std::vector<std::string> &edge_list_files,
 		const std::string &graph_name, int edge_attr_type, bool directed,

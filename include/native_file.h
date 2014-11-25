@@ -83,11 +83,17 @@ public:
 	}
 
 	const std::string get_file_name() const {
-		return basename((char *) file_name.c_str());
+		char *basec = strdup(file_name.c_str());
+		std::string ret = basename(basec);
+		free(basec);
+		return ret;
 	}
 
 	const std::string get_dir_name() const {
-		return dirname((char *) file_name.c_str());
+		char *dirc = strdup(file_name.c_str());
+		std::string ret = dirname(dirc);
+		free(dirc);
+		return ret;
 	}
 
 	/*
