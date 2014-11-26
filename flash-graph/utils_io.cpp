@@ -382,6 +382,7 @@ ssize_t safs_large_writer::flush()
 	safs::data_loc_t loc(io->get_file_id(), curr_off);
 	safs::io_request req(write_buf.get(), loc, bytes, WRITE);
 	io->access(&req, 1);
+	io->flush_requests();
 	cb->add_buf(std::move(write_buf));
 	write_bytes = 0;
 	curr_off += bytes;
