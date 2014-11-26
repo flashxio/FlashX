@@ -200,9 +200,9 @@ public:
 
 	virtual void check_ext_graph(const edge_graph &edge_g,
 			const std::string &index_file, large_reader::ptr reader) const = 0;
-	void dump(const std::string &index_file, const std::string &graph_file,
+	bool dump(const std::string &index_file, const std::string &graph_file,
 			bool compressed_index);
-	virtual void name_graph_file(const std::string &adj_file) = 0;
+	virtual bool name_graph_file(const std::string &adj_file) = 0;
 };
 
 /*

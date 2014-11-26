@@ -867,9 +867,9 @@ public:
 		in_f = NULL;
 	}
 
-	virtual void name_graph_file(const std::string &adj_file) {
+	virtual bool name_graph_file(const std::string &adj_file) {
 		large_writer::ptr f = get_creator()->create_writer(tmp_in_graph_file);
-		BOOST_VERIFY(f->rename2(adj_file) == 0);
+		return f->rename2(adj_file) == 0;
 	}
 
 	virtual graph_type get_graph_type() const {
@@ -936,13 +936,9 @@ public:
 		f = NULL;
 	}
 
-	virtual void name_graph_file(const std::string &adj_file) {
+	virtual bool name_graph_file(const std::string &adj_file) {
 		large_writer::ptr f = get_creator()->create_writer(tmp_graph_file);
-		if (f->rename2(adj_file) != 0) {
-			fprintf(stderr, "can't rename %s to %s: %s\n",
-					tmp_graph_file.c_str(), adj_file.c_str(), strerror(errno));
-			exit(1);
-		}
+		return f->rename2(adj_file) == 0;
 	}
 
 	void add_vertices(const serial_subgraph &subg) {
@@ -1527,14 +1523,18 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 		% num_vertices;
 }
 
-void disk_serial_graph::dump(const std::string &index_file,
+bool disk_serial_graph::dump(const std::string &index_file,
 		const std::string &graph_file, bool compressed_index)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 
 	// Write the adjacency lists to the graph file.
-	name_graph_file(graph_file);
+	if (!name_graph_file(graph_file)) {
+		BOOST_LOG_TRIVIAL(error) << std::string(
+				"can't name the graph file to ") + graph_file;
+		return false;
+	}
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"It takes %1% seconds to dump the graph") % time_diff(start, end);
@@ -1548,6 +1548,7 @@ void disk_serial_graph::dump(const std::string &index_file,
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"It takes %1% seconds to dump the index") % time_diff(start, end);
+	return true;
 }
 
 template<class edge_data_type = empty_data>
