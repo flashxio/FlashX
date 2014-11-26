@@ -420,8 +420,10 @@ class safs_large_reader: public large_reader
 	off_t curr_off;
 	safs::file_io_factory::shared_ptr factory;
 	safs::io_interface::ptr io;
+	const size_t max_req_size;
 
-	safs_large_reader(const std::string &file) {
+	safs_large_reader(const std::string &file): max_req_size(std::min(
+				128UL * 1024 * 1024, safs::io_request::get_max_req_size())) {
 		factory = safs::create_io_factory(file, safs::GLOBAL_CACHE_ACCESS);
 		curr_off = 0;
 	}
@@ -444,9 +446,15 @@ public:
 		if (io == NULL)
 			open_file();
 
-		io->access(buf, curr_off, bytes, READ);
-		curr_off += bytes;
-		return bytes;
+		ssize_t ret = bytes;
+		while (bytes > 0) {
+			size_t req_size = std::min(bytes, max_req_size);
+			io->access(buf, curr_off, req_size, READ);
+			bytes -= req_size;
+			buf += req_size;
+			curr_off += req_size;
+		}
+		return ret;
 	}
 
 	virtual off_t seek(off_t off, int whence) {
