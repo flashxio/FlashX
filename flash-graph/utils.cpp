@@ -771,9 +771,9 @@ class disk_directed_graph: public disk_serial_graph
 
 	void check_ext_graph(const edge_graph &edge_g,
 			const in_mem_cdirected_vertex_index &idx,
-			const std::string &adj_file) const;
+			large_reader::ptr reader) const;
 	void check_ext_graph(const edge_graph &edge_g,
-			const directed_vertex_index &idx, const std::string &adj_file) const;
+			const directed_vertex_index &idx, large_reader::ptr reader) const;
 public:
 	disk_directed_graph(const edge_graph &g,
 			large_io_creator::ptr creator): disk_serial_graph(
@@ -801,7 +801,7 @@ public:
 	}
 
 	virtual void check_ext_graph(const edge_graph &edge_g,
-			const std::string &index_file, const std::string &adj_file) const;
+			const std::string &index_file, large_reader::ptr reader) const;
 
 	virtual void add_vertex(const in_mem_vertex &v) {
 		throw unsupported_exception();
@@ -883,9 +883,9 @@ class disk_undirected_graph: public disk_serial_graph
 
 	void check_ext_graph(const edge_graph &edge_g,
 			const in_mem_cundirected_vertex_index &idx,
-			const std::string &adj_file) const;
+			large_reader::ptr reader) const;
 	void check_ext_graph(const edge_graph &edge_g,
-			const default_vertex_index &idx, const std::string &adj_file) const;
+			const default_vertex_index &idx, large_reader::ptr reader) const;
 public:
 	disk_undirected_graph(const edge_graph &g,
 			large_io_creator::ptr creator): disk_serial_graph(
@@ -907,7 +907,7 @@ public:
 	}
 
 	virtual void check_ext_graph(const edge_graph &edge_g,
-			const std::string &index_file, const std::string &adj_file) const;
+			const std::string &index_file, large_reader::ptr reader) const;
 
 	virtual size_t get_num_edges() const {
 		return serial_graph::get_num_edges() / 2;
@@ -1295,15 +1295,15 @@ size_t cal_vertex_size(const std::vector<ext_mem_vertex_info> &infos)
 		- infos.front().get_off();
 }
 
-std::unique_ptr<char[]> read_vertices(FILE *f,
+std::unique_ptr<char[]> read_vertices(large_reader::ptr reader,
 		const std::vector<ext_mem_vertex_info> &infos,
 		std::vector<ext_mem_undirected_vertex *> &vertices)
 {
 	size_t size = cal_vertex_size(infos);
 	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[size]);
 	off_t off_begin = infos.front().get_off();
-	BOOST_VERIFY(fseek(f, off_begin, SEEK_SET) == 0);
-	BOOST_VERIFY(fread(buf.get(), size, 1, f) == 1);
+	BOOST_VERIFY(reader->seek(off_begin, SEEK_SET) == off_begin);
+	BOOST_VERIFY(reader->read(buf.get(), size) == (ssize_t) size);
 	BOOST_FOREACH(ext_mem_vertex_info info, infos) {
 		off_t rel_off = info.get_off() - off_begin;
 		vertices.push_back((ext_mem_undirected_vertex *) (buf.get() + rel_off));
@@ -1312,8 +1312,8 @@ std::unique_ptr<char[]> read_vertices(FILE *f,
 }
 
 template<class VertexIndexType, class GetInfoFunc>
-size_t check_all_vertices(FILE *f, const VertexIndexType &idx, GetInfoFunc func,
-		const edge_graph &edge_g, bool in_part)
+size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
+		GetInfoFunc func, const edge_graph &edge_g, bool in_part)
 {
 	size_t num_vertices = 0;
 	std::vector<ext_mem_vertex_info> infos;
@@ -1324,7 +1324,7 @@ size_t check_all_vertices(FILE *f, const VertexIndexType &idx, GetInfoFunc func,
 			infos.push_back(func(idx, infos.back().get_id() + 1));
 		}
 		std::vector<ext_mem_undirected_vertex *> vertices;
-		std::unique_ptr<char[]> buf = read_vertices(f, infos, vertices);
+		std::unique_ptr<char[]> buf = read_vertices(reader, infos, vertices);
 		num_vertices += vertices.size();
 		edge_g.check_vertices(vertices, in_part);
 		vertex_id_t last_id = infos.back().get_id();
@@ -1338,25 +1338,28 @@ size_t check_all_vertices(FILE *f, const VertexIndexType &idx, GetInfoFunc func,
 }
 
 void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
-		const std::string &index_file, const std::string &adj_file) const
+		const std::string &index_file, large_reader::ptr adj_reader) const
 {
 	BOOST_LOG_TRIVIAL(info) << "check the graph in the external memory";
-	vertex_index::ptr idx = vertex_index::load(index_file);
+	vertex_index::ptr idx;
+	// TODO is there a better option?
+	if (adj_reader->is_safs())
+		idx = vertex_index::safs_load(index_file);
+	else
+		idx = vertex_index::load(index_file);
 	if (idx->is_compressed()) {
 		in_mem_cundirected_vertex_index::ptr cidx
 			= in_mem_cundirected_vertex_index::create(*idx);
-		check_ext_graph(edge_g, *cidx, adj_file);
+		check_ext_graph(edge_g, *cidx, adj_reader);
 	}
 	else
-		check_ext_graph(edge_g, *default_vertex_index::cast(idx), adj_file);
+		check_ext_graph(edge_g, *default_vertex_index::cast(idx), adj_reader);
 }
 
 void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
 		const in_mem_cundirected_vertex_index &idx,
-		const std::string &adj_file) const
+		large_reader::ptr reader) const
 {
-	FILE *f = fopen(adj_file.c_str(), "r");
-	assert(f);
 	class get_undirected_info_func {
 		ext_mem_vertex_info buf_info;
 	public:
@@ -1385,53 +1388,50 @@ void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
 		}
 	};
 
-	size_t num_vertices = check_all_vertices(f, idx,
+	size_t num_vertices = check_all_vertices(reader, idx,
 			get_undirected_info_func(), edge_g, true);
 	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
 		% num_vertices;
-
-	fclose(f);
 }
 
 void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
-		const default_vertex_index &idx, const std::string &adj_file) const
+		const default_vertex_index &idx, large_reader::ptr reader) const
 {
-	FILE *f = fopen(adj_file.c_str(), "r");
-	assert(f);
 	struct get_undirected_info_func {
 		ext_mem_vertex_info operator()(const default_vertex_index &idx,
 				vertex_id_t id) {
 			return idx.get_vertex_info(id);
 		}
 	};
-	size_t num_vertices = check_all_vertices(f, idx,
+	size_t num_vertices = check_all_vertices(reader, idx,
 			get_undirected_info_func(), edge_g, true);
 	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
 		% num_vertices;
-
-	fclose(f);
 }
 
 void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
-		const std::string &index_file, const std::string &adj_file) const
+		const std::string &index_file, large_reader::ptr adj_reader) const
 {
 	BOOST_LOG_TRIVIAL(info) << "check the graph in the external memory";
-	vertex_index::ptr idx = vertex_index::load(index_file);
+	vertex_index::ptr idx;
+	// TODO is there a better option?
+	if (adj_reader->is_safs())
+		idx = vertex_index::safs_load(index_file);
+	else
+		idx = vertex_index::load(index_file);
 	if (idx->is_compressed()) {
 		in_mem_cdirected_vertex_index::ptr cidx
 			= in_mem_cdirected_vertex_index::create(*idx);
-		check_ext_graph(edge_g, *cidx, adj_file);
+		check_ext_graph(edge_g, *cidx, adj_reader);
 	}
 	else
-		check_ext_graph(edge_g, *directed_vertex_index::cast(idx), adj_file);
+		check_ext_graph(edge_g, *directed_vertex_index::cast(idx), adj_reader);
 }
 
 void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 		const in_mem_cdirected_vertex_index &idx,
-		const std::string &adj_file) const
+		large_reader::ptr reader) const
 {
-	FILE *f = fopen(adj_file.c_str(), "r");
-	assert(f);
 	class get_in_part_info_func {
 		ext_mem_vertex_info buf_info;
 	public:
@@ -1488,23 +1488,18 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 		}
 	};
 
-	size_t num_vertices = check_all_vertices(f, idx, get_in_part_info_func(),
+	size_t num_vertices = check_all_vertices(reader, idx, get_in_part_info_func(),
 			edge_g, true);
-	size_t num_vertices1 = check_all_vertices(f, idx, get_out_part_info_func(),
+	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
 			edge_g, false);
 	assert(num_vertices == num_vertices1);
-
-	fclose(f);
 	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
 		% num_vertices;
 }
 
 void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
-		const directed_vertex_index &idx, const std::string &adj_file) const
+		const directed_vertex_index &idx, large_reader::ptr reader) const
 {
-	FILE *f = fopen(adj_file.c_str(), "r");
-	assert(f);
-
 	struct get_in_part_info_func {
 		ext_mem_vertex_info operator()(const directed_vertex_index &idx,
 				vertex_id_t id) {
@@ -1517,13 +1512,11 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 			return idx.get_vertex_info_out(id);
 		}
 	};
-	size_t num_vertices = check_all_vertices(f, idx, get_in_part_info_func(),
+	size_t num_vertices = check_all_vertices(reader, idx, get_in_part_info_func(),
 			edge_g, true);
-	size_t num_vertices1 = check_all_vertices(f, idx, get_out_part_info_func(),
+	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
 			edge_g, false);
 	assert(num_vertices == num_vertices1);
-
-	fclose(f);
 	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
 		% num_vertices;
 }

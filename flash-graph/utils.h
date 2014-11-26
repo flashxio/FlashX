@@ -71,6 +71,7 @@ public:
 
 	virtual ~large_reader() {
 	}
+	virtual bool is_safs() = 0;
 	virtual ssize_t read(char *buf, size_t bytes) = 0;
 	virtual off_t seek(off_t off, int whence) = 0;
 };
@@ -195,7 +196,7 @@ public:
 	}
 
 	virtual void check_ext_graph(const edge_graph &edge_g,
-			const std::string &index_file, const std::string &adj_file) const = 0;
+			const std::string &index_file, large_reader::ptr reader) const = 0;
 	void dump(const std::string &index_file, const std::string &graph_file,
 			bool compressed_index);
 	virtual void finalize_graph_file(const std::string &adj_file) = 0;

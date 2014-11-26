@@ -182,7 +182,8 @@ int main(int argc, char *argv[])
 		if (check_graph) {
 			struct timeval start, end;
 			gettimeofday(&start, NULL);
-			g->check_ext_graph(*edge_g, index_file, adjacency_list_file);
+			g->check_ext_graph(*edge_g, index_file,
+					creator->create_reader(adjacency_list_file));
 			gettimeofday(&end, NULL);
 			printf("verifying a graph takes %.2f seconds\n",
 					time_diff(start, end));
@@ -224,7 +225,8 @@ int main(int argc, char *argv[])
 			if (check_graph) {
 				struct timeval start, end;
 				gettimeofday(&start, NULL);
-				g->check_ext_graph(*edge_g, index_files[i], graph_files[i]);
+				g->check_ext_graph(*edge_g, index_files[i],
+						creator->create_reader(graph_files[i]));
 				gettimeofday(&end, NULL);
 				printf("verifying a graph takes %.2f seconds\n",
 						time_diff(start, end));

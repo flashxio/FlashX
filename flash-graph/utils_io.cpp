@@ -197,6 +197,10 @@ public:
 	virtual off_t seek(off_t off, int whence) {
 		return fseek(f, off, whence);
 	}
+
+	virtual bool is_safs() {
+		return false;
+	}
 };
 
 class native_large_io_creator: public large_io_creator
@@ -438,6 +442,10 @@ public:
 		else
 			return -1;
 		return curr_off;
+	}
+
+	virtual bool is_safs() {
+		return true;
 	}
 };
 
