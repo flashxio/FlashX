@@ -758,7 +758,7 @@ fg.kmeans <- function(mat, k, max.iters=.Machine$integer.max, init=c("random", "
     stopifnot(mat != NULL)
     stopifnot(class(mat) == "matrix")
     .Call("R_FG_kmeans", as.matrix(mat), as.integer(k),
-          as.integer(max.iters), init, PACKAGE="FlashGraph")
+          as.integer(max.iters), init, PACKAGE="FlashGraphR")
 }
 
 .onLoad <- function(libname, pkgname)
