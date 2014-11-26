@@ -26,6 +26,9 @@
 #include "RAID_config.h"
 #include "cache_config.h"
 
+namespace safs
+{
+
 sys_parameters params;
 
 str2int RAID_options[] = {
@@ -232,4 +235,6 @@ void sys_parameters::print_help()
 		<< std::endl;
 	std::cout << "\thuge_page_enabled: determine whether we use huge page for large chunk of memory"
 		<< std::endl;
+}
+
 }

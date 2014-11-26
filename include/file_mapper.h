@@ -29,6 +29,9 @@
 #include "exception.h"
 #include "safs_file.h"
 
+namespace safs
+{
+
 const int FILE_CONST_A = 31;
 const int FILE_CONST_P = 191;
 
@@ -207,5 +210,7 @@ public:
 		return new hash_mapper(get_name(), get_files(), STRIPE_BLOCK_SIZE);
 	}
 };
+
+}
 
 #endif

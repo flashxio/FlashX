@@ -19,6 +19,9 @@
 
 #include "FGlib.h"
 
+namespace fg
+{
+
 FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg) {
 	BOOST_LOG_TRIVIAL(info) << "Transitivity starts";
 	struct timeval start, end;
@@ -39,4 +42,6 @@ FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg) {
 	BOOST_LOG_TRIVIAL(info)
 		<< boost::format("Transitivity takes %1% seconds") % time_diff(start, end);
 	return trans_v; 
+}
+
 }

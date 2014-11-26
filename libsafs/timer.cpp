@@ -23,6 +23,9 @@
 #include "timer.h"
 #include "thread.h"
 
+namespace safs
+{
+
 static void handler(int sig, siginfo_t *si, void *uc)
 {
 	timer *t = (timer *) si->si_value.sival_ptr;
@@ -345,3 +348,5 @@ void periodic_timer::run_task()
 atomic_number<long> timer_task::task_count;
 atomic_integer timer::timer_count;
 atomic_integer periodic_timer::timer_count;
+
+}

@@ -26,24 +26,24 @@
 namespace {
 
 template<class T, class VertexType>
-class save_query: public vertex_query
+class save_query: public fg::vertex_query
 {
-	typename FG_vector<T>::ptr vec;
+	typename fg::FG_vector<T>::ptr vec;
 public:
-	save_query(typename FG_vector<T>::ptr vec) {
+	save_query(typename fg::FG_vector<T>::ptr vec) {
 		this->vec = vec;
 	}
 
-	virtual void run(graph_engine &graph, compute_vertex &v1) {
+	virtual void run(fg::graph_engine &graph, fg::compute_vertex &v1) {
 		VertexType &v = (VertexType &) v1;
 		vec->set(graph.get_graph_index().get_vertex_id(v), v.get_result());
 	}
 
-	virtual void merge(graph_engine &graph, vertex_query::ptr q) {
+	virtual void merge(fg::graph_engine &graph, fg::vertex_query::ptr q) {
 	}
 
 	virtual ptr clone() {
-		return vertex_query::ptr(new save_query(vec));
+		return fg::vertex_query::ptr(new save_query(vec));
 	}
 };
 

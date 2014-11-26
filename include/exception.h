@@ -22,6 +22,9 @@
 #include <string>
 #include <exception>
 
+namespace safs
+{
+
 class no_space_exception
 {
 };
@@ -66,5 +69,7 @@ public:
 		return msg.c_str();
 	}
 };
+
+}
 
 #endif

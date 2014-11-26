@@ -22,6 +22,9 @@
 
 #include "FG_vector.h"
 
+namespace fg
+{
+
 #ifdef USE_EIGEN
 
 typedef double ev_float_t;
@@ -143,5 +146,7 @@ void compute_SVD(typename SparseMatrixType::ptr matrix, int m, int nv,
 	}
 }
 #endif
+
+}
 
 #endif

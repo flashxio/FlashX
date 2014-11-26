@@ -37,6 +37,9 @@
 #define A_READ 0
 #define A_WRITE 1
 
+namespace safs
+{
+
 class aio_ctx
 {
 	obj_allocator<struct iocb> iocb_allocator;
@@ -94,5 +97,7 @@ struct io_callback_s
 {
 	callback_t func;
 };
+
+}
 
 #endif

@@ -31,6 +31,9 @@
 #include <string>
 #include <vector>
 
+namespace safs
+{
+
 class native_file
 {
 	std::string file_name;
@@ -136,6 +139,8 @@ static inline bool file_exist(const std::string &file)
 {
 	native_file f(file);
 	return f.exist();
+}
+
 }
 
 #endif

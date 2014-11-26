@@ -38,11 +38,11 @@ const int hash_threshold = 1000;
 static atomic_number<long> num_working_vertices;
 static atomic_number<long> num_completed_vertices;
 
-class count_msg: public vertex_message
+class count_msg: public fg::vertex_message
 {
 	int num;
 public:
-	count_msg(int num): vertex_message(sizeof(count_msg), false) {
+	count_msg(int num): fg::vertex_message(sizeof(count_msg), false) {
 		this->num = num;
 	}
 
@@ -55,7 +55,7 @@ struct runtime_data_t
 {
 	class index_entry
 	{
-		vertex_id_t id;
+		fg::vertex_id_t id;
 		uint32_t idx;
 	public:
 		index_entry() {
@@ -63,17 +63,17 @@ struct runtime_data_t
 			idx = -1;
 		}
 
-		index_entry(vertex_id_t id) {
+		index_entry(fg::vertex_id_t id) {
 			this->id = id;
 			this->idx = -1;
 		}
 
-		index_entry(vertex_id_t id, uint32_t idx) {
+		index_entry(fg::vertex_id_t id, uint32_t idx) {
 			this->id = id;
 			this->idx = idx;
 		}
 
-		vertex_id_t get_id() const {
+		fg::vertex_id_t get_id() const {
 			return id;
 		}
 
@@ -88,7 +88,7 @@ struct runtime_data_t
 
 	class index_hash
 	{
-		boost::hash<vertex_id_t> id_hash;
+		boost::hash<fg::vertex_id_t> id_hash;
 	public:
 		size_t operator()(const index_entry &e) const {
 			return id_hash(e.get_id());
@@ -98,7 +98,7 @@ struct runtime_data_t
 			index_hash> edge_set_t;
 	// It contains part of the edge list.
 	// We only use the neighbors whose ID is smaller than this vertex.
-	std::vector<vertex_id_t> edges;
+	std::vector<fg::vertex_id_t> edges;
 	// The vector contains the number of the neighbors' triangles shared
 	// with this vertex. It only keeps the triangles of neighbors in the
 	// in-edges.

@@ -27,6 +27,9 @@
 #include "messaging.h"
 #include "vertex.h"
 
+namespace fg
+{
+
 class graph_engine;
 class worker_thread;
 class steal_state_t;
@@ -77,5 +80,7 @@ public:
 
 	void reset();
 };
+
+}
 
 #endif

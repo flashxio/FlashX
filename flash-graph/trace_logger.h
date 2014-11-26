@@ -29,18 +29,21 @@
 #include "thread.h"
 #include "container.h"
 
+namespace fg
+{
+
 class log_thread: public thread
 {
 	FILE *f;
 	std::string trace_file;
-	thread_safe_FIFO_queue<std::vector<request_range> *> queue;
+	thread_safe_FIFO_queue<std::vector<safs::request_range> *> queue;
 public:
 	log_thread(const std::string &trace_file): thread(
 			"trace_log_thread", 0), queue("log_queue", 0, 1024, INT_MAX) {
 		f = fopen(trace_file.c_str(), "w");
 	}
 
-	void add(std::vector<request_range> *reqs) {
+	void add(std::vector<safs::request_range> *reqs) {
 		int ret = queue.add(&reqs, 1);
 		if (ret < 1)
 			fprintf(stderr, "can't add traced requests to the queue\n");
@@ -49,9 +52,9 @@ public:
 
 	void run() {
 		while (!queue.is_empty()) {
-			std::vector<request_range> *reqs = queue.pop_front();
+			std::vector<safs::request_range> *reqs = queue.pop_front();
 			for (size_t i = 0; i < reqs->size(); i++) {
-				request_range req = reqs->at(i);
+				safs::request_range req = reqs->at(i);
 				fprintf(f, ",%ld,%ld,R,%ld\n",
 						req.get_loc().get_offset(), req.get_size(), req.get_size());
 			}
@@ -70,7 +73,7 @@ const size_t MAX_LOG_BUF = 1024 * 32;
 
 static void destroy_queue(void *p)
 {
-	std::vector<request_range> *q = (std::vector<request_range> *) p;
+	std::vector<safs::request_range> *q = (std::vector<safs::request_range> *) p;
 	delete q;
 }
 
@@ -79,11 +82,11 @@ class trace_logger
 	log_thread *thread;
 	pthread_key_t queue_key;
 
-	std::vector<request_range> *get_per_thread_queue() {
-		std::vector<request_range> *p
-			= (std::vector<request_range> *) pthread_getspecific(queue_key);
+	std::vector<safs::request_range> *get_per_thread_queue() {
+		std::vector<safs::request_range> *p
+			= (std::vector<safs::request_range> *) pthread_getspecific(queue_key);
 		if (p == NULL) {
-			p = new std::vector<request_range>();
+			p = new std::vector<safs::request_range>();
 			pthread_setspecific(queue_key, p);
 		}
 		return p;
@@ -101,12 +104,12 @@ public:
 		close();
 	}
 
-	void log(request_range reqs[], int num) {
-		std::vector<request_range> *q = get_per_thread_queue();
+	void log(safs::request_range reqs[], int num) {
+		std::vector<safs::request_range> *q = get_per_thread_queue();
 		q->insert(q->end(), reqs, reqs + num);
 		if (q->size() >= MAX_LOG_BUF) {
 			thread->add(q);
-			pthread_setspecific(queue_key, new std::vector<request_range>());
+			pthread_setspecific(queue_key, new std::vector<safs::request_range>());
 		}
 	}
 
@@ -115,5 +118,7 @@ public:
 		thread->close();
 	}
 };
+
+}
 
 #endif

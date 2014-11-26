@@ -28,6 +28,11 @@
 #include "steal_state.h"
 #include "vertex_index_reader.h"
 
+using namespace safs;
+
+namespace fg
+{
+
 static void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 {
 	size_t curr = 0;
@@ -680,4 +685,6 @@ vertex_compute *worker_thread::get_vertex_compute(compute_vertex_pointer v)
 int worker_thread::get_stolen_vertex_part(const compute_vertex &v) const
 {
 	return balancer->get_stolen_vertex_part(v);
+}
+
 }

@@ -21,6 +21,9 @@
  */
 #include <stdlib.h>
 
+namespace fg
+{
+
 class compute_vertex;
 
 class compute_vertex_pointer
@@ -73,5 +76,7 @@ public:
 		return *get();
 	}
 };
+
+}
 
 #endif

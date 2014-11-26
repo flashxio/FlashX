@@ -27,6 +27,9 @@
 #include "RAID_config.h"
 #include "io_interface.h"
 
+namespace safs
+{
+
 safs_file::safs_file(const RAID_config &conf, const std::string &file_name)
 {
 	conf.get_disks(native_dirs);
@@ -132,4 +135,6 @@ size_t get_all_safs_files(std::set<std::string> &files)
 		}
 	}
 	return 0;
+}
+
 }

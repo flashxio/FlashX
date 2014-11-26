@@ -31,6 +31,9 @@
 #include "FGlib.h"
 #include "matrix_eigensolver.h"
 
+namespace fg
+{
+
 const ev_float_t TOL = 1e-6;
 const int RHO = 1;
 
@@ -386,6 +389,8 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		eigen_pairs.push_back(eigen_pair_t(wanted_eigen_values[i],
 					orig_eigen_vectors[i]));
 	}
+}
+
 }
 
 #endif

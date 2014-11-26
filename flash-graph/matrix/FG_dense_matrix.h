@@ -30,6 +30,9 @@
 #include "FG_vector.h"
 #include "graph.h"
 
+namespace fg
+{
+
 template<class T>
 class col_wise_matrix_store
 {
@@ -459,5 +462,7 @@ public:
 	}
 };
 #endif
+
+}
 
 #endif

@@ -25,6 +25,9 @@
 #include "FG_vector.h"
 #include "graph_file_header.h"
 
+namespace fg
+{
+
 /**
   * \brief A user-friendly wrapper for FlashGraph's raw graph type.
   *         Very usefule when when utilizing FlashGraph 
@@ -81,7 +84,7 @@ public:
 		return ptr(new FG_graph(graph_data, index_data, graph_name, configs));
 	}
 
-	file_io_factory::shared_ptr get_graph_io_factory(int access_option);
+	safs::file_io_factory::shared_ptr get_graph_io_factory(int access_option);
 
 /**
   * \brief Get the map that contains the runtime configurations 
@@ -339,5 +342,7 @@ void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
  * \return A vector with an transitivity value for each vertex.
  */
 FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
+
+}
 
 #endif

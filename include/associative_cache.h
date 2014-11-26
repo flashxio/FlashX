@@ -34,6 +34,9 @@
 #include "exception.h"
 #include "compute_stat.h"
 
+namespace safs
+{
+
 const int CACHE_LINE = 128;
 
 /**
@@ -577,5 +580,7 @@ public:
 	}
 #endif
 };
+
+}
 
 #endif

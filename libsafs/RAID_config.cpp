@@ -24,6 +24,9 @@
 #include "file_mapper.h"
 #include "native_file.h"
 
+namespace safs
+{
+
 file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 {
 	/*
@@ -165,4 +168,6 @@ RAID_config::ptr RAID_config::create(const std::string &conf_file,
 	conf->RAID_mapping_option = mapping_option;
 	conf->RAID_block_size = block_size;
 	return conf;
+}
+
 }

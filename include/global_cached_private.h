@@ -27,6 +27,9 @@
 #include "container.h"
 #include "comp_io_scheduler.h"
 
+namespace safs
+{
+
 class request_allocator;
 class req_ext_allocator;
 class original_io_request;
@@ -332,5 +335,7 @@ public:
 		underlying->print_state();
 	}
 };
+
+}
 
 #endif

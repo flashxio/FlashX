@@ -35,6 +35,9 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+using namespace safs;
+using namespace fg;
+
 class test_vertex: public compute_directed_vertex
 {
 	vertex_id_t *adj_list;

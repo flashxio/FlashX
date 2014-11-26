@@ -26,6 +26,9 @@
 #include "slab_allocator.h"
 #include "cache.h"
 
+namespace safs
+{
+
 template<class T>
 message<T>::message(slab_allocator *alloc, bool accept_inline)
 {
@@ -102,14 +105,17 @@ int thread_safe_msg_sender<T>::send(T *msg, int num)
 	return num_sent;
 }
 
+template class thread_safe_msg_sender<safs::io_reply>;
+
+}
+
 /**
  * these are to force to instantiate the templates
  * for io_request and io_reply.
  */
-template class thread_safe_FIFO_queue<message<io_request> >;
-template class thread_safe_FIFO_queue<message<io_reply> >;
-template class blocking_FIFO_queue<message<io_request> >;
-template class blocking_FIFO_queue<message<io_reply> >;
-template class thread_safe_msg_sender<io_reply>;
-template class message<io_request>;
-template class message<io_reply>;
+template class thread_safe_FIFO_queue<safs::message<safs::io_request> >;
+template class thread_safe_FIFO_queue<safs::message<safs::io_reply> >;
+template class blocking_FIFO_queue<safs::message<safs::io_request> >;
+template class blocking_FIFO_queue<safs::message<safs::io_reply> >;
+template class safs::message<safs::io_request>;
+template class safs::message<safs::io_reply>;

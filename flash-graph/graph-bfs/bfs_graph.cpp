@@ -28,6 +28,9 @@
 #include "graph_config.h"
 #include "FGlib.h"
 
+using namespace safs;
+using namespace fg;
+
 edge_type traverse_edge = edge_type::OUT_EDGE;
 
 class bfs_vertex: public compute_directed_vertex

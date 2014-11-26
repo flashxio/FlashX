@@ -31,6 +31,9 @@
 #include "graph_file_header.h"
 #include "vertex_pointer.h"
 
+namespace fg
+{
+
 class compute_vertex;
 class part_compute_vertex;
 
@@ -335,9 +338,9 @@ public:
 	static graph_index::ptr create(const std::string &index_file) {
 		NUMA_graph_index<vertex_type, part_vertex_type> *index
 			= new NUMA_graph_index<vertex_type, part_vertex_type>();
-		file_io_factory::shared_ptr factory = create_io_factory(index_file,
-				GLOBAL_CACHE_ACCESS);
-		io_interface::ptr io = factory->create_io(thread::get_curr_thread());
+		safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
+				index_file, safs::GLOBAL_CACHE_ACCESS);
+		safs::io_interface::ptr io = factory->create_io(thread::get_curr_thread());
 		io->access((char *) &index->header, 0, sizeof(header), READ);
 		return graph_index::ptr(index);
 	}
@@ -537,5 +540,7 @@ public:
 	}
 };
 #endif
+
+}
 
 #endif

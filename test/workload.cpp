@@ -21,6 +21,8 @@
 #include "common.h"
 #include "native_file.h"
 
+using namespace safs;
+
 int workload_gen::default_entry_size = PAGE_SIZE;
 int workload_gen::default_access_method = -1;
 

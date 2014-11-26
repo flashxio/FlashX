@@ -26,6 +26,9 @@
 #include "cache.h"
 #include "cache_config.h"
 
+namespace safs
+{
+
 /**
  * This cache divides a global cache to pieces of the same size,
  * and place them on the specified NUMA nodes.
@@ -118,5 +121,7 @@ public:
 		}
 	}
 };
+
+}
 
 #endif

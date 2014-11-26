@@ -31,6 +31,8 @@
 #include "FG_vector.h"
 #include "ts_graph.h"
 
+using namespace fg;
+
 namespace {
 
 time_t timestamp;
@@ -91,8 +93,7 @@ size_t scan_vertex::count_edges(vertex_program &prog, const page_directed_vertex
 		time_t time_interval, edge_type type)
 {
 	size_t num_local_edges = 0;
-	page_byte_array::seq_const_iterator<vertex_id_t> it = get_ts_iterator(
-			v, type, timestamp, time_interval);
+	edge_seq_iterator it = get_ts_iterator(v, type, timestamp, time_interval);
 	// If there are no edges in the time interval.
 	if (it.get_num_tot_entries() == 0)
 		return 0;
@@ -178,8 +179,7 @@ int unique_merge(InputIterator1 it1, InputIterator1 last1,
 size_t get_neighbors(const page_directed_vertex &v, edge_type type, time_t time_start,
 		time_t time_interval, std::vector<vertex_id_t> &neighbors)
 {
-	page_byte_array::seq_const_iterator<vertex_id_t> it = get_ts_iterator(
-			v, type, time_start, time_interval);
+	edge_seq_iterator it = get_ts_iterator(v, type, time_start, time_interval);
 	size_t ret = it.get_num_tot_entries();
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		neighbors.push_back(id);
@@ -253,9 +253,8 @@ void scan_vertex::run_on_itself(vertex_program &prog,
 		time_t timestamp2 = timestamp - ts_idx * time_interval;
 
 		// For in-edges.
-		page_byte_array::seq_const_iterator<vertex_id_t> it
-			= get_ts_iterator(vertex, edge_type::IN_EDGE, timestamp2,
-					time_interval);
+		edge_seq_iterator it = get_ts_iterator(vertex, edge_type::IN_EDGE,
+				timestamp2, time_interval);
 		PAGE_FOREACH(vertex_id_t, id, it) {
 			// Ignore loop
 			if (id != vertex.get_id()
@@ -333,6 +332,10 @@ void scan_vertex::run_on_neighbor(vertex_program &prog,
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 		time_t interval, int num_intervals)
 {
@@ -369,4 +372,6 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
 	FG_vector<float>::ptr vec = FG_vector<float>::create(graph);
 	graph->query_on_all(vertex_query::ptr(new save_query<float, scan_vertex>(vec)));
 	return vec;
+}
+
 }

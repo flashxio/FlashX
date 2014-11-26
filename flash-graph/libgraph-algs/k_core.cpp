@@ -30,6 +30,8 @@
 #include "FGlib.h"
 #include "save_result.h"
 
+using namespace fg;
+
 vsize_t CURRENT_K; // Min degree necessary to be part of the k-core graph
 vsize_t PREVIOUS_K; 
 bool all_greater_than_core = true;
@@ -280,6 +282,9 @@ class activate_k_filter: public vertex_filter {
 	}
 };
 
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 		size_t k, size_t kmax)
 {
@@ -363,3 +368,4 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 	return ret;
 }
 
+}

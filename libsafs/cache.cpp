@@ -20,6 +20,9 @@
 #include "cache.h"
 #include "io_interface.h"
 
+namespace safs
+{
+
 void page_byte_array::memcpy(off_t rel_off, char buf[], size_t size) const
 {
 	if (size == 0)
@@ -63,4 +66,6 @@ void page::hit()
 	// Not all files are treated equally. We make the pages of the files with
 	// higher weight stay in the page cache longer.
 	hits += get_file_weight(file_id);
+}
+
 }

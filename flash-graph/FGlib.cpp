@@ -26,6 +26,11 @@
 #include "safs_file.h"
 #include "utils.h"
 
+using namespace safs;
+
+namespace fg
+{
+
 FG_graph::FG_graph(const std::string &graph_file,
 		const std::string &index_file, config_map::ptr configs)
 {
@@ -577,4 +582,6 @@ std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg)
 	}
 	assert(start_time <= end_time);
 	return std::pair<time_t, time_t>(start_time, end_time);
+}
+
 }

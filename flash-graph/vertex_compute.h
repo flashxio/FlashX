@@ -31,6 +31,9 @@
 #include "scan_pointer.h"
 #include "graph_index.h"
 
+namespace fg
+{
+
 class worker_thread;
 class graph_engine;
 class compute_vertex;
@@ -41,7 +44,7 @@ class compute_directed_vertex;
  * in a worker thread. It is used to handle two types of asynchronous
  * requests: for the adjacency list and the number of edges.
  */
-class vertex_compute: public user_compute
+class vertex_compute: public safs::user_compute
 {
 	struct vertex_info_comp
 	{
@@ -104,7 +107,7 @@ protected:
 	void finish_run();
 public:
 	vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): user_compute(alloc) {
+			safs::compute_allocator *alloc): safs::user_compute(alloc) {
 		this->graph = graph;
 		issue_thread = (worker_thread *) thread::get_curr_thread();
 		num_requested = 0;
@@ -137,9 +140,9 @@ public:
 		return requested_vertices.size() > 0;
 	}
 
-	virtual request_range get_next_request();
+	virtual safs::request_range get_next_request();
 
-	virtual void run(page_byte_array &);
+	virtual void run(safs::page_byte_array &);
 
 	virtual bool has_completed() {
 		// If the user compute has got all requested data and it has
@@ -207,20 +210,20 @@ public:
 
 class directed_vertex_compute: public vertex_compute
 {
-	typedef std::unordered_map<vertex_id_t, page_byte_array *> combine_map_t;
+	typedef std::unordered_map<vertex_id_t, safs::page_byte_array *> combine_map_t;
 	combine_map_t combine_map;
 
 	void run_on_page_vertex(page_directed_vertex &);
 public:
 	directed_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): vertex_compute(graph, alloc) {
+			safs::compute_allocator *alloc): vertex_compute(graph, alloc) {
 	}
 
 	virtual void set_scan_dir(bool forward) {
 		vertex_compute::set_scan_dir(forward);
 	}
 
-	virtual void run(page_byte_array &);
+	virtual void run(safs::page_byte_array &);
 
 	/*
 	 * These two methods accept the requests from graph applications and issue
@@ -254,7 +257,7 @@ public:
  * This class is to compute on the undirected vertices requested
  * by a single I/O request.
  */
-class merged_vertex_compute: public user_compute
+class merged_vertex_compute: public safs::user_compute
 {
 	vertex_id_t start_id;
 	int num_vertices;
@@ -266,7 +269,7 @@ protected:
 	void finish_run(compute_vertex_pointer v);
 public:
 	merged_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): user_compute(alloc) {
+			safs::compute_allocator *alloc): safs::user_compute(alloc) {
 		this->graph = graph;
 		start_id = INVALID_VERTEX_ID;
 		num_vertices = 0;
@@ -305,11 +308,11 @@ public:
 		return false;
 	}
 
-	virtual request_range get_next_request() {
+	virtual safs::request_range get_next_request() {
 		ABORT_MSG("get_next_request isn't supported");
 	}
 
-	virtual void run(page_byte_array &arr) = 0;
+	virtual void run(safs::page_byte_array &arr) = 0;
 	virtual bool has_completed() = 0;
 };
 
@@ -318,11 +321,11 @@ class merged_undirected_vertex_compute: public merged_vertex_compute
 	bool complete;
 public:
 	merged_undirected_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): merged_vertex_compute(graph, alloc) {
+			safs::compute_allocator *alloc): merged_vertex_compute(graph, alloc) {
 		complete = false;
 	}
 
-	virtual void run(page_byte_array &arr);
+	virtual void run(safs::page_byte_array &arr);
 
 	virtual bool has_completed() {
 		return complete;
@@ -338,13 +341,13 @@ class merged_directed_vertex_compute: public merged_vertex_compute
 	edge_type type;
 	int num_fetched_arrs;
 	int num_required_arrs;
-	page_byte_array *buffered_arr;
+	safs::page_byte_array *buffered_arr;
 
-	void run_on_array(page_byte_array &arr);
-	void run_on_arrays(page_byte_array &in_arr, page_byte_array &out_arr);
+	void run_on_array(safs::page_byte_array &arr);
+	void run_on_arrays(safs::page_byte_array &in_arr, safs::page_byte_array &out_arr);
 public:
 	merged_directed_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): merged_vertex_compute(graph, alloc) {
+			safs::compute_allocator *alloc): merged_vertex_compute(graph, alloc) {
 		type = edge_type::NONE;
 		num_fetched_arrs = 0;
 		num_required_arrs = 0;
@@ -368,7 +371,7 @@ public:
 		}
 	}
 
-	virtual void run(page_byte_array &arr);
+	virtual void run(safs::page_byte_array &arr);
 
 	virtual bool has_completed() {
 		return num_fetched_arrs == num_required_arrs;
@@ -379,7 +382,7 @@ public:
  * This class is to compute on the undirected vertices that are stored closely
  * on the disks and are read by a single I/O request.
  */
-class sparse_vertex_compute: public user_compute
+class sparse_vertex_compute: public safs::user_compute
 {
 protected:
 	struct vertex_range_t {
@@ -397,7 +400,7 @@ protected:
 	void finish_run(compute_vertex_pointer v);
 public:
 	sparse_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): user_compute(alloc) {
+			safs::compute_allocator *alloc): safs::user_compute(alloc) {
 		this->graph = graph;
 		num_ranges = 0;
 		num_vertices = 0;
@@ -459,11 +462,11 @@ public:
 		return false;
 	}
 
-	virtual request_range get_next_request() {
+	virtual safs::request_range get_next_request() {
 		ABORT_MSG("get_next_request isn't supported");
 	}
 
-	virtual void run(page_byte_array &arr) = 0;
+	virtual void run(safs::page_byte_array &arr) = 0;
 
 	virtual bool has_completed() {
 		return complete;
@@ -474,23 +477,23 @@ class sparse_undirected_vertex_compute: public sparse_vertex_compute
 {
 public:
 	sparse_undirected_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): sparse_vertex_compute(graph, alloc) {
+			safs::compute_allocator *alloc): sparse_vertex_compute(graph, alloc) {
 	}
 
-	virtual void run(page_byte_array &arr);
+	virtual void run(safs::page_byte_array &arr);
 };
 
 class sparse_directed_vertex_compute: public sparse_vertex_compute
 {
 	edge_type type;
 	std::vector<off_t> out_start_offs;
-	page_byte_array *buffered_arr;
+	safs::page_byte_array *buffered_arr;
 
-	void run_on_array(page_byte_array &arr);
-	void run_on_arrays(page_byte_array &in_arr, page_byte_array &out_arr);
+	void run_on_array(safs::page_byte_array &arr);
+	void run_on_arrays(safs::page_byte_array &in_arr, safs::page_byte_array &out_arr);
 public:
 	sparse_directed_vertex_compute(graph_engine *graph,
-			compute_allocator *alloc): sparse_vertex_compute(graph, alloc) {
+			safs::compute_allocator *alloc): sparse_vertex_compute(graph, alloc) {
 		type = edge_type::NONE;
 		buffered_arr = NULL;
 	}
@@ -514,11 +517,11 @@ public:
 		return ret;
 	}
 
-	virtual void run(page_byte_array &arr);
+	virtual void run(safs::page_byte_array &arr);
 };
 
 template<class compute_type>
-class vertex_compute_allocator: public compute_allocator
+class vertex_compute_allocator: public safs::compute_allocator
 {
 	class compute_initiator: public obj_initiator<compute_type>
 	{
@@ -548,18 +551,20 @@ class vertex_compute_allocator: public compute_allocator
 public:
 	vertex_compute_allocator(graph_engine *graph, thread *t): allocator(
 			"vertex-compute-allocator", t->get_node_id(), false, 1024 * 1024,
-			params.get_max_obj_alloc_size(),
+			safs::params.get_max_obj_alloc_size(),
 			typename obj_initiator<compute_type>::ptr(new compute_initiator(graph, this)),
 			typename obj_destructor<compute_type>::ptr(new compute_destructor())) {
 	}
 
-	virtual user_compute *alloc() {
+	virtual safs::user_compute *alloc() {
 		return allocator.alloc_obj();
 	}
 
-	virtual void free(user_compute *obj) {
+	virtual void free(safs::user_compute *obj) {
 		allocator.free((compute_type *) obj);
 	}
 };
+
+}
 
 #endif

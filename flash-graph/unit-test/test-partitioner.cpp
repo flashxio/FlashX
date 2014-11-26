@@ -2,6 +2,8 @@
 
 #include "partitioner.h"
 
+using namespace fg;
+
 const int num_parts = 16;
 const int M = 1024 * 1024;
 

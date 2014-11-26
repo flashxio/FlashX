@@ -28,7 +28,10 @@
 #include "slab_allocator.h"
 #include "virt_aio_ctx.h"
 
-template class blocking_FIFO_queue<thread_callback_s *>;
+template class blocking_FIFO_queue<safs::thread_callback_s *>;
+
+namespace safs
+{
 
 #define EVEN_DISTRIBUTE
 
@@ -471,3 +474,5 @@ void async_io::flush_requests()
 }
 
 const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;
+
+}

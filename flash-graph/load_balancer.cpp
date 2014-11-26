@@ -21,6 +21,9 @@
 #include "worker_thread.h"
 #include "graph_engine.h"
 
+namespace fg
+{
+
 load_balancer::load_balancer(graph_engine &_graph,
 		worker_thread &_owner): owner(_owner), graph(_graph)
 {
@@ -136,4 +139,6 @@ int load_balancer::get_stolen_vertex_part(const compute_vertex &v) const
 		return it->second;
 	else
 		return -1;
+}
+
 }

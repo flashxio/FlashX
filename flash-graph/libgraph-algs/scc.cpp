@@ -30,6 +30,8 @@
 #include "FG_vector.h"
 #include "FGlib.h"
 
+using namespace fg;
+
 namespace {
 
 typedef std::unordered_map<vertex_id_t, vsize_t> comp_map_t;
@@ -677,8 +679,7 @@ void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex
 	// but we don't know which edges have been removed, so we just
 	// use the original number of edges.
 	if (get_num_in_edges() == 1) {
-		page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(edge_type::IN_EDGE);
+		edge_iterator it = vertex.get_neigh_begin(edge_type::IN_EDGE);
 		vertex_id_t neighbor = *it;
 		// If the only in-edge is to itself, it's a SCC itself.
 		if (neighbor == get_id()) {
@@ -700,8 +701,7 @@ void scc_vertex::run_stage_trim2(vertex_program &prog, const page_vertex &vertex
 		}
 	}
 	else if (get_num_out_edges() == 1) {
-		page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(edge_type::OUT_EDGE);
+		edge_iterator it = vertex.get_neigh_begin(edge_type::OUT_EDGE);
 		vertex_id_t neighbor = *it;
 		// If the only in-edge is to itself, it's a SCC itself.
 		if (neighbor == get_id()) {
@@ -742,12 +742,10 @@ std::atomic_long trim3_vertices;
 
 void scc_vertex::run_stage_trim3(vertex_program &prog, const page_vertex &vertex)
 {
-	page_byte_array::const_iterator<vertex_id_t> end_it
-		= vertex.get_neigh_end(IN_EDGE);
+	edge_iterator end_it = vertex.get_neigh_end(IN_EDGE);
 	stack_array<vertex_id_t, 1024> in_neighs(vertex.get_num_edges(IN_EDGE));
 	int num_in_neighs = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
+	for (edge_iterator it = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
 		scc_vertex &neigh = (scc_vertex &) prog.get_graph().get_vertex(id);
 		// We should ignore the neighbors that has been assigned to a component.
@@ -762,8 +760,7 @@ void scc_vertex::run_stage_trim3(vertex_program &prog, const page_vertex &vertex
 	end_it = vertex.get_neigh_end(OUT_EDGE);
 	stack_array<vertex_id_t, 1024> out_neighs(vertex.get_num_edges(OUT_EDGE));
 	int num_out_neighs = 0;
-	for (page_byte_array::const_iterator<vertex_id_t> it
-			= vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
+	for (edge_iterator it = vertex.get_neigh_begin(OUT_EDGE); it != end_it; ++it) {
 		vertex_id_t id = *it;
 		scc_vertex &neigh = (scc_vertex &) prog.get_graph().get_vertex(id);
 		// We should ignore the neighbors that has been assigned to a component.
@@ -1111,6 +1108,10 @@ public:
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<scc_vertex>::create(
@@ -1276,4 +1277,6 @@ FG_vector<vertex_id_t>::ptr compute_scc(FG_graph::ptr fg)
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<vertex_id_t, scc_vertex>(vec)));
 	return vec;
+}
+
 }
