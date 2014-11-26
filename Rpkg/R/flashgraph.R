@@ -423,7 +423,7 @@ fg.transitivity <- function(graph, type=c("global", "local"))
 #' @name fg.kcore
 #' @author Disa Mhembere <disa@@jhu.edu>
 #' @rdname fg.kcore
-fg.kore <- function(graph, k.start=1, k.end=10)
+fg.kcore <- function(graph, k.start=2, k.end=10)
 {
 	stopifnot(graph != NULL)
 	stopifnot(class(graph) == "fg")
