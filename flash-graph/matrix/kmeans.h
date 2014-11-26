@@ -39,6 +39,8 @@
 #include "matrix/FG_dense_matrix.h"
 #include "matrix/matrix_eigensolver.h"
 
+using namespace fg;
+
 static const char * PROF_FILE_LOC = 
 "/home/disa/graph-engine/flash-graph/clustering/profile_out.log";
 
