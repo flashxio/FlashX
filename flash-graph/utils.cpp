@@ -2425,28 +2425,14 @@ serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
 	return edge_g->serialize_graph(creator);
 }
 
-std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
-		const std::vector<std::string> &edge_list_files,
-		const std::string &graph_name, int edge_attr_type, bool directed,
-		int nthreads)
-{
-	edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
-			directed, nthreads, true);
-	serial_graph::ptr g = construct_graph(edge_g, large_io_creator::ptr(), nthreads);
-	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
-			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index(true));
-}
-
-std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
-		const std::vector<vertex_id_t> from, const std::vector<vertex_id_t> to,
-		const std::string &graph_name, int edge_attr_type, bool directed,
-		int num_threads)
+edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
+		const std::vector<vertex_id_t> to, int edge_attr_type, bool directed)
 {
 	if (from.size() != to.size()) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
 				"from vector (%1%) and to vector (%2%) have different length")
 			% from.size() % to.size();
-		return std::pair<in_mem_graph::ptr, vertex_index::ptr>();
+		return edge_graph::ptr();
 	}
 
 	size_t num_edges = from.size();
@@ -2454,11 +2440,10 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 	edge_lists[0] = std::shared_ptr<edge_vector<empty_data> >(
 			new std_edge_vector<empty_data>());
 
-	edge_graph::ptr edge_g;
 	if (directed) {
 		for (size_t i = 0; i < num_edges; i++)
 			edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
-		edge_g = edge_graph::ptr(new directed_edge_graph<empty_data>(
+		return edge_graph::ptr(new directed_edge_graph<empty_data>(
 					edge_lists, false));
 	}
 	else {
@@ -2468,12 +2453,9 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> construct_mem_graph(
 			edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
 			edge_lists[0]->push_back(edge<empty_data>(to[i], from[i]));
 		}
-		edge_g = edge_graph::ptr(new undirected_edge_graph<empty_data>(
+		return edge_graph::ptr(new undirected_edge_graph<empty_data>(
 					edge_lists, false));
 	}
-	serial_graph::ptr g = construct_graph(edge_g, large_io_creator::ptr(), num_threads);;
-	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
-			((mem_serial_graph &) *g).dump_graph(graph_name), g->dump_index(true));
 }
 
 }

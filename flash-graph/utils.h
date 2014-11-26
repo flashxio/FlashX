@@ -145,6 +145,9 @@ public:
 
 	virtual graph_type get_graph_type() const = 0;
 	virtual void add_vertices(const serial_subgraph &subg) = 0;
+
+	virtual std::shared_ptr<in_mem_graph> dump_graph(
+			const std::string &graph_name) = 0;
 };
 
 /*
@@ -203,6 +206,11 @@ public:
 	bool dump(const std::string &index_file, const std::string &graph_file,
 			bool compressed_index);
 	virtual bool name_graph_file(const std::string &adj_file) = 0;
+
+	std::shared_ptr<in_mem_graph> dump_graph(
+			const std::string &graph_name) {
+		return std::shared_ptr<in_mem_graph>();
+	}
 };
 
 /*
@@ -217,23 +225,14 @@ protected:
 public:
 	typedef std::shared_ptr<mem_serial_graph> ptr;
 	static ptr create(bool directed, size_t edge_data_size);
-
-	virtual std::shared_ptr<in_mem_graph> dump_graph(
-			const std::string &graph_name) = 0;
 };
 
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
 		int edge_attr_type, bool directed, int num_threads, bool in_mem);
+edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
+		const std::vector<vertex_id_t> to, int edge_attr_type, bool directed);
 serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
 		large_io_creator::ptr creator, int num_threads);
-std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > construct_mem_graph(
-		const std::vector<std::string> &edge_list_files,
-		const std::string &graph_name, int edge_attr_type, bool directed,
-		int num_threads);
-std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > construct_mem_graph(
-		const std::vector<vertex_id_t> from, const std::vector<vertex_id_t> to,
-		const std::string &graph_name, int edge_attr_type, bool directed,
-		int num_threads);
 
 }
 

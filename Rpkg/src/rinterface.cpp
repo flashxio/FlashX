@@ -143,6 +143,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 	boost::filesystem::path p(conf_file);
 	if (boost::filesystem::exists(p)) {
 		configs = config_map::create(conf_file);
+		configs->add_options("writable=1");
 	}
 	else {
 		fprintf(stderr, "conf file %s doesn't exist.\n", conf_file.c_str());
@@ -523,6 +524,34 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 		return create_FGR_obj(fg, graph_name);
 }
 
+static FG_graph::ptr construct_fg_graph(edge_graph::ptr edge_g,
+		const std::string &graph_name, int num_threads)
+{
+	if (safs::is_safs_init()) {
+		// Create SAFS I/O creator.
+		large_io_creator::ptr creator = large_io_creator::create(true, ".");
+		if (creator == NULL) {
+			fprintf(stderr, "can't create a SAFS I/O creator\n");
+			return FG_graph::ptr();
+		}
+		serial_graph::ptr g = construct_graph(edge_g, creator, num_threads);
+		std::string index_file = graph_name + "-index" + std::string("-v")
+			+ itoa(CURR_VERSION);
+		std::string graph_file = graph_name + std::string("-v")
+			+ itoa(CURR_VERSION);
+		bool ret = ((disk_serial_graph &) *g).dump(index_file, graph_file, true);
+		if (!ret)
+			return FG_graph::ptr();
+		return FG_graph::create(graph_file, index_file, configs);
+	}
+	else {
+		serial_graph::ptr g = construct_graph(edge_g, large_io_creator::ptr(),
+				num_threads);;
+		return FG_graph::create(g->dump_graph(graph_name), g->dump_index(true),
+				graph_name, configs);
+	}
+}
+
 /*
  * Load a graph from edge lists in a data frame.
  */
@@ -540,10 +569,12 @@ RcppExport SEXP R_FG_load_graph_el_df(SEXP pgraph_name, SEXP pedge_lists,
 	std::vector<vertex_id_t> from_vec(from.begin(), from.end());
 	std::vector<vertex_id_t> to_vec(to.begin(), to.end());
 
-	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair = construct_mem_graph(
-		from_vec, to_vec, graph_name, DEFAULT_TYPE, directed, num_threads);
-	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
-			configs);
+	edge_graph::ptr edge_g = construct_edge_list(from_vec, to_vec,
+			DEFAULT_TYPE, directed);
+	FG_graph::ptr fg = construct_fg_graph(edge_g, graph_name, num_threads);
+	if (fg == NULL)
+		return R_NilValue;
+
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
 		return create_FGR_obj(ref);
@@ -571,10 +602,16 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 
 	std::vector<std::string> edge_list_files(1);
 	edge_list_files[0] = graph_file;
-	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair = construct_mem_graph(
-		edge_list_files, graph_name, DEFAULT_TYPE, directed, num_threads);
-	FG_graph::ptr fg = FG_graph::create(gpair.first, gpair.second, graph_name,
-			configs);
+
+
+	// If SAFS is initilized, we want to have everything processed on disks.
+	bool in_mem = !safs::is_safs_init();
+	edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, DEFAULT_TYPE,
+			directed, num_threads, in_mem);
+	FG_graph::ptr fg = construct_fg_graph(edge_g, graph_name, num_threads);
+	if (fg == NULL)
+		return R_NilValue;
+
 	graph_ref *ref = register_in_mem_graph(fg, graph_name);
 	if (ref)
 		return create_FGR_obj(ref);
