@@ -486,7 +486,8 @@ class io_request
 	int file_id;
 	static const off_t MAX_FILE_SIZE = LONG_MAX;
 	off_t offset: 48;
-	static const size_t MAX_BUF_SIZE = (1L << 32) - 1;
+	// The max size should be aligned with the page size.
+	static const size_t MAX_BUF_SIZE = (1L << 32) - PAGE_SIZE;
 	unsigned long buf_size_low: 16;
 	long user_data_addr: 48;
 	unsigned long buf_size_high: 16;
@@ -564,6 +565,10 @@ public:
 		EXT_REQ,
 		USER_COMPUTE,
 	};
+
+	static size_t get_max_req_size() {
+		return MAX_BUF_SIZE;
+	}
 
 	// By default, a request is initialized as a flush request.
 	io_request(bool sync = false) {
