@@ -1984,7 +1984,7 @@ class write_graph_thread: public thread
 	vertex_id_t max_id;
 public:
 	write_graph_thread(serial_graph &_g,
-			vertex_id_t max_id): thread("write-thread", -1), g(_g) {
+			vertex_id_t max_id): thread("write-thread", 0), g(_g) {
 		curr_id = 0;
 		this->max_id = max_id;
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
