@@ -195,7 +195,10 @@ public:
 			return ret;
 	}
 	virtual off_t seek(off_t off, int whence) {
-		return fseek(f, off, whence);
+		if (fseek(f, off, whence) == 0)
+			return ftell(f);
+		else
+			return -1;
 	}
 
 	virtual bool is_safs() {
