@@ -140,6 +140,9 @@ public:
 
 	std::shared_ptr<vertex_index> dump_index(bool compressed) const;
 
+	virtual void finalize_graph_file() {
+	}
+
 	virtual graph_type get_graph_type() const = 0;
 	virtual void add_vertices(const serial_subgraph &subg) = 0;
 };
@@ -199,7 +202,7 @@ public:
 			const std::string &index_file, large_reader::ptr reader) const = 0;
 	void dump(const std::string &index_file, const std::string &graph_file,
 			bool compressed_index);
-	virtual void finalize_graph_file(const std::string &adj_file) = 0;
+	virtual void name_graph_file(const std::string &adj_file) = 0;
 };
 
 /*

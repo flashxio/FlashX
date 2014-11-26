@@ -241,6 +241,10 @@ class large_writer_callback: public safs::callback
 public:
 	typedef std::shared_ptr<large_writer_callback> ptr;
 
+	~large_writer_callback() {
+		assert(buf_map.empty());
+	}
+
 	void add_buf(align_buf_ptr buf) {
 		buf_map.insert(std::pair<char *, align_buf_ptr>(buf.get(),
 					std::move(buf)));
@@ -269,11 +273,14 @@ class safs_large_writer: public large_writer
 
 	safs_large_writer(const std::string &file) {
 		factory = safs::create_io_factory(file, safs::REMOTE_ACCESS);
-		io = factory->create_io(thread::get_curr_thread());
 		write_bytes = 0;
 		write_buf = align_buf_ptr((char *) valloc(buf_cap));
 		tot_write_bytes = 0;
 		curr_off = 0;
+	}
+
+	void open_file() {
+		io = factory->create_io(thread::get_curr_thread());
 		cb = large_writer_callback::ptr(new large_writer_callback());
 		io->set_callback(std::static_pointer_cast<safs::callback>(cb));
 	}
@@ -307,7 +314,7 @@ public:
 	}
 
 	virtual off_t seek(off_t off, int whence) {
-		if (io == NULL)
+		if (factory == NULL)
 			return -1;
 
 		// If there are data buffered, let's not move to another location.
@@ -331,7 +338,7 @@ public:
 	}
 
 	virtual int delete_file() {
-		if (io == NULL)
+		if (factory == NULL)
 			return -1;
 		std::string file_name = factory->get_name();
 		close_file();
@@ -344,7 +351,7 @@ public:
 	}
 
 	virtual int rename2(const std::string &new_name) {
-		if (io == NULL)
+		if (factory == NULL)
 			return -1;
 		std::string file_name = factory->get_name();
 		close_file();
@@ -360,11 +367,13 @@ public:
 
 ssize_t safs_large_writer::flush()
 {
-	if (io == NULL)
+	if (factory == NULL)
 		return -1;
 
 	if (write_bytes == 0)
 		return 0;
+	if (io == NULL)
+		open_file();
 	// TODO
 	// We might write some blank data to disks. If the file contains data
 	// in the location where the blank data is written to, we should read
@@ -384,7 +393,7 @@ ssize_t safs_large_writer::flush()
 
 ssize_t safs_large_writer::write(const char *buf, size_t bytes)
 {
-	if (io == NULL)
+	if (factory == NULL)
 		return -1;
 
 	ssize_t ret = 0;
@@ -414,8 +423,11 @@ class safs_large_reader: public large_reader
 
 	safs_large_reader(const std::string &file) {
 		factory = safs::create_io_factory(file, safs::GLOBAL_CACHE_ACCESS);
-		io = factory->create_io(thread::get_curr_thread());
 		curr_off = 0;
+	}
+
+	void open_file() {
+		io = factory->create_io(thread::get_curr_thread());
 	}
 public:
 	static large_reader::ptr create(const std::string &file) {
@@ -429,6 +441,9 @@ public:
 		io = NULL;
 	}
 	virtual ssize_t read(char *buf, size_t bytes) {
+		if (io == NULL)
+			open_file();
+
 		io->access(buf, curr_off, bytes, READ);
 		curr_off += bytes;
 		return bytes;

@@ -826,8 +826,6 @@ public:
 		const directed_serial_subgraph &d_subg = (const directed_serial_subgraph &) subg;
 		for (size_t i = 0; i < d_subg.get_num_vertices(); i++)
 			serial_graph::add_vertex(d_subg.get_vertex_info(i));
-		printf("write %ld vertices (%ld, %ld)\n", d_subg.get_num_vertices(),
-				d_subg.get_in_size(), d_subg.get_out_size());
 		BOOST_VERIFY(in_f->write(d_subg.get_in_buf(), d_subg.get_in_size())
 				== (ssize_t) d_subg.get_in_size());
 		BOOST_VERIFY(out_f->write(d_subg.get_out_buf(), d_subg.get_out_size())
@@ -849,7 +847,7 @@ public:
 		}
 	}
 
-	virtual void finalize_graph_file(const std::string &adj_file) {
+	virtual void finalize_graph_file() {
 		size_t out_size = out_f->get_write_bytes();
 		out_f = NULL;
 
@@ -866,8 +864,12 @@ public:
 				this->get_num_edges(), this->get_edge_data_size());
 		BOOST_VERIFY(in_f->seek(0, SEEK_SET) == 0);
 		BOOST_VERIFY(in_f->write((char *) &header, sizeof(header)) == sizeof(header));
-		BOOST_VERIFY(in_f->rename2(adj_file) == 0);
 		in_f = NULL;
+	}
+
+	virtual void name_graph_file(const std::string &adj_file) {
+		large_writer::ptr f = get_creator()->create_writer(tmp_in_graph_file);
+		BOOST_VERIFY(f->rename2(adj_file) == 0);
 	}
 
 	virtual graph_type get_graph_type() const {
@@ -925,18 +927,22 @@ public:
 #endif
 	}
 
-	virtual void finalize_graph_file(const std::string &adj_file) {
+	virtual void finalize_graph_file() {
 		// Write the real graph header.
 		graph_header header(get_graph_type(), this->get_num_vertices(),
 				this->get_num_edges(), this->get_edge_data_size());
 		BOOST_VERIFY(f->seek(0, SEEK_SET) == 0);
 		BOOST_VERIFY(f->write((char *) &header, sizeof(header)) == sizeof(header));
+		f = NULL;
+	}
+
+	virtual void name_graph_file(const std::string &adj_file) {
+		large_writer::ptr f = get_creator()->create_writer(tmp_graph_file);
 		if (f->rename2(adj_file) != 0) {
 			fprintf(stderr, "can't rename %s to %s: %s\n",
 					tmp_graph_file.c_str(), adj_file.c_str(), strerror(errno));
 			exit(1);
 		}
-		f = NULL;
 	}
 
 	void add_vertices(const serial_subgraph &subg) {
@@ -1528,7 +1534,7 @@ void disk_serial_graph::dump(const std::string &index_file,
 	gettimeofday(&start, NULL);
 
 	// Write the adjacency lists to the graph file.
-	finalize_graph_file(graph_file);
+	name_graph_file(graph_file);
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info) << boost::format(
 			"It takes %1% seconds to dump the graph") % time_diff(start, end);
@@ -2019,6 +2025,7 @@ void write_graph_thread::run()
 			curr_id = subg->get_end_id();
 		}
 	} while (curr_id <= max_id);
+	g.finalize_graph_file();
 	BOOST_LOG_TRIVIAL(info) << boost::format("write %1% vertices") % curr_id;
 	stop();
 }
