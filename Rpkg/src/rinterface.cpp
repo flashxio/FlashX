@@ -539,6 +539,12 @@ static FG_graph::ptr construct_fg_graph(edge_graph::ptr edge_g,
 			+ itoa(CURR_VERSION);
 		std::string graph_file = graph_name + std::string("-v")
 			+ itoa(CURR_VERSION);
+		safs_file graph_f(get_sys_RAID_conf(), graph_file);
+		if (graph_f.exist())
+			graph_f.delete_file();
+		safs_file index_f(get_sys_RAID_conf(), index_file);
+		if (index_f.exist())
+			index_f.delete_file();
 		bool ret = ((disk_serial_graph &) *g).dump(index_file, graph_file, true);
 		if (!ret)
 			return FG_graph::ptr();
