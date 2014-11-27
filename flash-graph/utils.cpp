@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <algorithm>
+#include <atomic>
 
 #include <boost/foreach.hpp>
 #ifdef USE_STXXL
@@ -585,6 +586,7 @@ public:
 	virtual size_t get_num_vertices() const = 0;
 	virtual vertex_id_t get_start_id() const = 0;
 	virtual vertex_id_t get_end_id() const = 0;
+	virtual size_t get_size() const = 0;
 };
 
 class mem_graph_store
@@ -701,6 +703,10 @@ public:
 
 	size_t get_out_size() const {
 		return out_store.get_size();
+	}
+
+	size_t get_size() const {
+		return get_in_size() + get_out_size();
 	}
 
 	const mem_graph_store &get_out_store() const {
@@ -1970,6 +1976,7 @@ void undirected_edge_graph<edge_data_type>::read_edges(edge_stream_t &stream,
 
 class write_graph_thread: public thread
 {
+	static const size_t ACCU_GRAPH_SIZE = 4L * 1024 * 1024 * 1024;
 	typedef std::shared_ptr<serial_subgraph> subgraph_ptr;
 	struct subgraph_comp {
 		bool operator()(const subgraph_ptr &g1, const subgraph_ptr &g2) {
@@ -1978,22 +1985,38 @@ class write_graph_thread: public thread
 	};
 
 	std::vector<subgraph_ptr> added_subgraphs;
+
+	// The total size of subgraphs in the priority queue.
+	std::atomic<size_t> tot_subgraph_size;
+	// The last vertex Id that have been observed.
+	volatile vertex_id_t last_vertex_id;
+	volatile vertex_id_t top_vertex_id;
 	std::priority_queue<subgraph_ptr, std::vector<subgraph_ptr>, subgraph_comp> subgraphs;
 	pthread_spinlock_t lock;
 	serial_graph &g;
-	vertex_id_t curr_id;
+	volatile vertex_id_t curr_id;
 	vertex_id_t max_id;
 public:
 	write_graph_thread(serial_graph &_g,
 			vertex_id_t max_id): thread("write-thread", 0), g(_g) {
+		tot_subgraph_size = 0;
+		top_vertex_id = 0;
+		last_vertex_id = 0;
 		curr_id = 0;
 		this->max_id = max_id;
 		pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	}
 
 	void add_vertices(subgraph_ptr subg) {
+		while (tot_subgraph_size > ACCU_GRAPH_SIZE
+				&& subg->get_start_id() > curr_id)
+			usleep(10000);
+
 		pthread_spin_lock(&lock);
 		added_subgraphs.push_back(subg);
+		tot_subgraph_size += subg->get_size();
+		if (last_vertex_id < subg->get_end_id())
+			last_vertex_id = subg->get_end_id();
 		pthread_spin_unlock(&lock);
 		activate();
 	}
@@ -2017,10 +2040,14 @@ void write_graph_thread::run()
 			subgraphs.push(subg);
 		}
 
-		if (!subgraphs.empty())
+		if (!subgraphs.empty()) {
 			assert(subgraphs.top()->get_start_id() >= curr_id);
+			top_vertex_id = subgraphs.top()->get_start_id();
+		}
 		while (!subgraphs.empty() && subgraphs.top()->get_start_id() == curr_id) {
+			top_vertex_id = subgraphs.top()->get_start_id();
 			subgraph_ptr subg = subgraphs.top();
+			tot_subgraph_size -= subg->get_size();
 			g.add_vertices(*subg);
 			subgraphs.pop();
 			curr_id = subg->get_end_id();
