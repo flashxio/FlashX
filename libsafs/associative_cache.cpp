@@ -1153,7 +1153,7 @@ public:
 
 	void run();
 	void flush_dirty_pages(thread_safe_page *pages[], int num,
-			io_interface *io);
+			io_interface &io);
 	int flush_dirty_pages(page_filter *filter, int max_num);
 	int flush_cell(hash_cell *cell, io_request *req_array, int req_array_size);
 };
@@ -1382,7 +1382,7 @@ void associative_cache::create_flusher(io_interface::ptr io,
 }
 
 void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num,
-		io_interface *io)
+		io_interface &io)
 {
 #ifdef DEBUG
 	num_dirty_pages.inc(num);
@@ -1493,7 +1493,7 @@ void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
 }
 
 void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],
-		int num, io_interface *io)
+		int num, io_interface &io)
 {
 	if (!params.is_use_flusher()) {
 		return;
@@ -1527,7 +1527,7 @@ void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],
 				io_request req_array[NUM_WRITEBACK_DIRTY_PAGES];
 				int ret = flush_cell(cell, req_array,
 						NUM_WRITEBACK_DIRTY_PAGES);
-				io->access(req_array, ret);
+				io.access(req_array, ret);
 				num_flushes += ret;
 				// If it has the required number of dirty pages to flush,
 				// it may have more to be flushed.

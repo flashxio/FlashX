@@ -930,7 +930,7 @@ int global_cached_io::process_completed_requests()
 	return num_completed;
 }
 
-global_cached_io::global_cached_io(thread *t, io_interface *underlying,
+global_cached_io::global_cached_io(thread *t, io_interface::ptr underlying,
 		page_cache *cache, comp_io_scheduler *sched): io_interface(t),
 	pending_requests(
 			std::string("pending_req_queue-") + itoa(underlying->get_node_id()),
@@ -980,7 +980,6 @@ global_cached_io::global_cached_io(thread *t, io_interface *underlying,
 
 global_cached_io::~global_cached_io()
 {
-	delete underlying;
 	delete comp_io_sched;
 }
 
@@ -1230,7 +1229,7 @@ int global_cached_io::handle_pending_requests()
 	// The only possible reason is that we happen to overwrite the entire
 	// page.
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
-			dirty_pages.size(), underlying);
+			dirty_pages.size(), *underlying);
 	return tot;
 }
 
@@ -1407,7 +1406,7 @@ void global_cached_io::process_cached_reqs()
 				pair.second, *simp_array_allocator);
 		page_cache *cache = get_global_cache();
 		if (dirty) {
-			cache->mark_dirty_pages(&dirty, 1, underlying);
+			cache->mark_dirty_pages(&dirty, 1, *underlying);
 			dirty->dec_ref();
 		}
 		if (!pair.first.is_sync()) {
@@ -1632,7 +1631,7 @@ void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
 	}
 
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
-				dirty_pages.size(), underlying);
+				dirty_pages.size(), *underlying);
 
 	flush_requests();
 }
@@ -1705,7 +1704,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 
 end:
 	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
-				dirty_pages.size(), underlying);
+				dirty_pages.size(), *underlying);
 
 	if (syncd)
 		flush_requests();
@@ -1908,10 +1907,10 @@ static bool merge_req(io_request &merged, const io_request &req)
 	return true;
 }
 
-static inline void access(io_interface *underlying, io_request &req)
+static inline void access(io_interface &underlying, io_request &req)
 {
 	io_status status;
-	underlying->access(&req, 1, &status);
+	underlying.access(&req, 1, &status);
 	if (status == IO_FAIL) {
 		abort();
 	}
@@ -1939,7 +1938,7 @@ void global_cached_io::flush_requests()
 					|| !merge_req(req, *under_req)) {
 				num_sent++;
 				num_pages += req.get_num_bufs();
-				safs::access(underlying, req);
+				safs::access(*underlying, req);
 
 				req = *under_req;
 			}
@@ -1954,7 +1953,7 @@ void global_cached_io::flush_requests()
 		num_pages += req.get_num_bufs();
 		num_to_underlying.inc(num_sent);
 		num_underlying_pages.inc(num_pages);
-		safs::access(underlying, req);
+		safs::access(*underlying, req);
 	}
 	underlying->flush_requests();
 }

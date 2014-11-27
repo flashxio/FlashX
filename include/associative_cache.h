@@ -545,7 +545,7 @@ public:
 
 	/* Methods for flushing dirty pages. */
 
-	void mark_dirty_pages(thread_safe_page *pages[], int num, io_interface *);
+	void mark_dirty_pages(thread_safe_page *pages[], int num, io_interface &);
 	virtual int flush_dirty_pages(page_filter *filter, int max_num);
 
 	hash_cell *get_prev_cell(hash_cell *cell);
