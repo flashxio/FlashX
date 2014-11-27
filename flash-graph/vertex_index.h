@@ -161,7 +161,7 @@ public:
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		memcpy(buf + vertex_index::get_header_size(), vertices.data(),
 				vertices.size() * sizeof(vertices[0]));
-		return vertex_index::ptr(index);
+		return vertex_index::ptr(index, destroy_index());
 	}
 
 	static void dump(const std::string &file, const graph_header &header,
@@ -337,7 +337,7 @@ public:
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		memcpy(buf + vertex_index::get_header_size(), vertices.data(),
 				vertices.size() * sizeof(vertices[0]));
-		return vertex_index::ptr(index);
+		return vertex_index::ptr(index, destroy_index());
 	}
 
 	static void dump(const std::string &file, const graph_header &header,
