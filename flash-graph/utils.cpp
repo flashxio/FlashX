@@ -234,6 +234,9 @@ public:
 		}
 	};
 
+	virtual ~edge_vector() {
+	}
+
 	typedef std::shared_ptr<edge_vector<edge_data_type> > ptr;
 
 	virtual void push_back(const edge<edge_data_type> &e) = 0;
