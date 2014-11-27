@@ -100,16 +100,18 @@ void test_directed_vertex_index()
 	graph_header header(graph_type::DIRECTED, vertices.size(), num_edges, 0);
 	printf("There are %ld edges\n", num_edges);
 
-	cdirected_in_mem_vertex_index cindex(0);
-	directed_in_mem_vertex_index index;
+	in_mem_vertex_index::ptr cindex
+		= in_mem_vertex_index::create_compressed(true, 0);
+	in_mem_vertex_index::ptr index
+		= in_mem_vertex_index::create(true);
 	for (size_t i = 0; i < vertices.size(); i++) {
-		cindex.add_vertex(vertices[i]);
-		index.add_vertex(vertices[i]);
+		cindex->add_vertex(vertices[i]);
+		index->add_vertex(vertices[i]);
 	}
 	cdirected_vertex_index::ptr raw_index1
-		= std::static_pointer_cast<cdirected_vertex_index>(cindex.dump(header, true));
+		= std::static_pointer_cast<cdirected_vertex_index>(cindex->dump(header, true));
 	cdirected_vertex_index::ptr raw_index2
-		= std::static_pointer_cast<cdirected_vertex_index>(index.dump(header, true));
+		= std::static_pointer_cast<cdirected_vertex_index>(index->dump(header, true));
 	verify_vertex_index<cdirected_vertex_index>(raw_index1, raw_index2);
 
 	assert(raw_index1->get_num_large_in_vertices() == raw_index2->get_num_large_in_vertices());
@@ -142,16 +144,18 @@ void test_undirected_vertex_index()
 	graph_header header(graph_type::DIRECTED, vertices.size(), num_edges, 0);
 	printf("There are %ld edges\n", num_edges);
 
-	cdefault_in_mem_vertex_index cindex(0);
-	default_in_mem_vertex_index index;
+	in_mem_vertex_index::ptr cindex
+		= in_mem_vertex_index::create_compressed(false, 0);
+	in_mem_vertex_index::ptr index
+		= in_mem_vertex_index::create(false);
 	for (size_t i = 0; i < vertices.size(); i++) {
-		cindex.add_vertex(vertices[i]);
-		index.add_vertex(vertices[i]);
+		cindex->add_vertex(vertices[i]);
+		index->add_vertex(vertices[i]);
 	}
 	cundirected_vertex_index::ptr raw_index1
-		= std::static_pointer_cast<cundirected_vertex_index>(cindex.dump(header, true));
+		= std::static_pointer_cast<cundirected_vertex_index>(cindex->dump(header, true));
 	cundirected_vertex_index::ptr raw_index2
-		= std::static_pointer_cast<cundirected_vertex_index>(index.dump(header, true));
+		= std::static_pointer_cast<cundirected_vertex_index>(index->dump(header, true));
 	verify_vertex_index<cundirected_vertex_index>(raw_index1, raw_index2);
 
 	assert(raw_index1->get_num_large_vertices() == raw_index2->get_num_large_vertices());

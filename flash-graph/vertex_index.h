@@ -125,8 +125,6 @@ public:
 
 		fclose(f);
 	}
-
-	friend class cdirected_in_mem_vertex_index;
 };
 
 /**
@@ -486,9 +484,6 @@ public:
 	}
 };
 
-class default_in_mem_vertex_index;
-class cdefault_in_mem_vertex_index;
-
 /*
  * This class defines the data layout of a compressed vertex index for
  * an undirected graph in the external memory. It's not used to answer
@@ -520,7 +515,8 @@ public:
 	}
 
 	static ptr construct(default_vertex_index &index);
-	static ptr construct(const cdefault_in_mem_vertex_index &index,
+	static ptr construct(const std::vector<entry_type> &entries,
+			const std::vector<large_vertex_t> &large_vertices,
 			const graph_header &header);
 
 	const entry_type *get_entries() const {
@@ -552,9 +548,6 @@ public:
 				== h.data.num_entries);
 	}
 };
-
-class directed_in_mem_vertex_index;
-class cdirected_in_mem_vertex_index;
 
 /*
  * This class defines the data layout of a compressed vertex index for
@@ -591,7 +584,9 @@ public:
 	}
 
 	static ptr construct(directed_vertex_index &index);
-	static ptr construct(const cdirected_in_mem_vertex_index &index,
+	static ptr construct(const std::vector<entry_type> &entries,
+			const std::vector<large_vertex_t> &large_in_vertices,
+			const std::vector<large_vertex_t> &large_out_vertices,
 			const graph_header &header);
 
 	const entry_type *get_entries() const {
@@ -626,8 +621,6 @@ public:
 		assert(ROUNDUP(h.data.header.num_vertices, ENTRY_SIZE) / ENTRY_SIZE
 				== h.data.num_entries);
 	}
-
-	friend class cdirected_in_mem_vertex_index;
 };
 
 /*
