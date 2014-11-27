@@ -233,4 +233,7 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
+
+	if (is_safs_init())
+		destroy_io_system();
 }
