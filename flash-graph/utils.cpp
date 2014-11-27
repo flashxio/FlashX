@@ -896,7 +896,7 @@ class disk_undirected_graph: public disk_serial_graph
 			const in_mem_cundirected_vertex_index &idx,
 			large_reader::ptr reader) const;
 	void check_ext_graph(const edge_graph &edge_g,
-			const default_vertex_index &idx, large_reader::ptr reader) const;
+			const undirected_vertex_index &idx, large_reader::ptr reader) const;
 public:
 	disk_undirected_graph(const edge_graph &g,
 			large_io_creator::ptr creator): disk_serial_graph(
@@ -1364,7 +1364,7 @@ void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
 		check_ext_graph(edge_g, *cidx, adj_reader);
 	}
 	else
-		check_ext_graph(edge_g, *default_vertex_index::cast(idx), adj_reader);
+		check_ext_graph(edge_g, *undirected_vertex_index::cast(idx), adj_reader);
 }
 
 void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
@@ -1406,10 +1406,10 @@ void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
 }
 
 void disk_undirected_graph::check_ext_graph(const edge_graph &edge_g,
-		const default_vertex_index &idx, large_reader::ptr reader) const
+		const undirected_vertex_index &idx, large_reader::ptr reader) const
 {
 	struct get_undirected_info_func {
-		ext_mem_vertex_info operator()(const default_vertex_index &idx,
+		ext_mem_vertex_info operator()(const undirected_vertex_index &idx,
 				vertex_id_t id) {
 			return idx.get_vertex_info(id);
 		}

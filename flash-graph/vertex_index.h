@@ -230,20 +230,20 @@ public:
 	}
 };
 
-class default_vertex_index: public vertex_index_temp<vertex_offset>
+class undirected_vertex_index: public vertex_index_temp<vertex_offset>
 {
 public:
-	typedef std::shared_ptr<default_vertex_index> ptr;
+	typedef std::shared_ptr<undirected_vertex_index> ptr;
 
-	static default_vertex_index::ptr cast(vertex_index::ptr index) {
+	static undirected_vertex_index::ptr cast(vertex_index::ptr index) {
 		assert(!index->is_compressed());
 		assert(!index->get_graph_header().is_directed_graph());
-		return std::static_pointer_cast<default_vertex_index, vertex_index>(
+		return std::static_pointer_cast<undirected_vertex_index, vertex_index>(
 				index);
 	}
 
-	static default_vertex_index::ptr load(const std::string &index_file) {
-		default_vertex_index::ptr ret
+	static undirected_vertex_index::ptr load(const std::string &index_file) {
+		undirected_vertex_index::ptr ret
 			= cast(vertex_index_temp<vertex_offset>::load(index_file));
 		ret->verify();
 		return ret;
@@ -514,7 +514,7 @@ public:
 				index);
 	}
 
-	static ptr construct(default_vertex_index &index);
+	static ptr construct(undirected_vertex_index &index);
 	static ptr construct(const std::vector<entry_type> &entries,
 			const std::vector<large_vertex_t> &large_vertices,
 			const graph_header &header);
@@ -670,7 +670,7 @@ class in_mem_cundirected_vertex_index: public in_mem_query_vertex_index
 
 	in_mem_cundirected_vertex_index(vertex_index &index);
 
-	void init(const default_vertex_index &index);
+	void init(const undirected_vertex_index &index);
 	void init(const cundirected_vertex_index &index);
 public:
 	typedef std::shared_ptr<in_mem_cundirected_vertex_index> ptr;
@@ -713,7 +713,7 @@ public:
 
 	vertex_offset get_vertex(vertex_id_t id) const;
 
-	void verify_against(default_vertex_index &index);
+	void verify_against(undirected_vertex_index &index);
 };
 
 /*

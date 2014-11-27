@@ -47,7 +47,7 @@ static void verify_index(vertex_index::ptr idx)
 		if (idx->is_compressed())
 			cundirected_vertex_index::cast(idx)->verify();
 		else
-			default_vertex_index::cast(idx)->verify();
+			undirected_vertex_index::cast(idx)->verify();
 	}
 }
 
@@ -67,7 +67,7 @@ size_t vertex_index::get_index_size() const
 	}
 	// original index for an undirected graph
 	else {
-		return ((default_vertex_index *) this)->cal_index_size();
+		return ((undirected_vertex_index *) this)->cal_index_size();
 	}
 }
 
@@ -210,7 +210,7 @@ compressed_undirected_vertex_entry::compressed_undirected_vertex_entry(
 	}
 }
 
-void in_mem_cundirected_vertex_index::init(const default_vertex_index &index)
+void in_mem_cundirected_vertex_index::init(const undirected_vertex_index &index)
 {
 	BOOST_LOG_TRIVIAL(info) << "init from a regular vertex index";
 	index.verify();
@@ -269,7 +269,7 @@ in_mem_cundirected_vertex_index::in_mem_cundirected_vertex_index(
 	if (index.is_compressed())
 		init((const cundirected_vertex_index &) index);
 	else
-		init((const default_vertex_index &) index);
+		init((const undirected_vertex_index &) index);
 }
 
 const size_t in_mem_cundirected_vertex_index::ENTRY_SIZE;
@@ -286,7 +286,7 @@ vertex_offset in_mem_cundirected_vertex_index::get_vertex(vertex_id_t id) const
 }
 
 void in_mem_cundirected_vertex_index::verify_against(
-		default_vertex_index &index)
+		undirected_vertex_index &index)
 {
 #if 0
 	index.verify();
@@ -480,7 +480,7 @@ cdirected_vertex_index::ptr cdirected_vertex_index::construct(
 }
 
 cundirected_vertex_index::ptr cundirected_vertex_index::construct(
-		default_vertex_index &index)
+		undirected_vertex_index &index)
 {
 	size_t edge_data_size = index.get_graph_header().get_edge_data_size();
 	size_t num_entries = index.get_num_entries();
@@ -580,14 +580,14 @@ public:
 
 class in_mem_query_undirected_vertex_index: public in_mem_query_vertex_index
 {
-	default_vertex_index::ptr index;
+	undirected_vertex_index::ptr index;
 public:
 	in_mem_query_undirected_vertex_index(
 			vertex_index::ptr index): in_mem_query_vertex_index(
 				false, false) {
 		assert(!index->get_graph_header().is_directed_graph());
 		assert(!index->is_compressed());
-		this->index = default_vertex_index::cast(index);
+		this->index = undirected_vertex_index::cast(index);
 	}
 
 	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
