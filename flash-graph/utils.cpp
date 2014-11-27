@@ -43,6 +43,7 @@
 #include "vertex.h"
 #include "in_mem_storage.h"
 #include "utils.h"
+#include "vertex_index_constructor.h"
 
 using namespace safs;
 

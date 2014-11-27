@@ -25,7 +25,7 @@ SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
 
-UNITTEST = test-bitmap test-partitioner test-large_io
+UNITTEST = test-bitmap test-partitioner test-large_io test-vertex_index
 
 all: $(UNITTEST)
 
@@ -37,6 +37,9 @@ test-partitioner: test-partitioner.o ../libgraph.a
 
 test-large_io: test-large_io.o ../libgraph.a
 	$(CXX) -o test-large_io test-large_io.o $(LDFLAGS)
+
+test-vertex_index: test-vertex_index.o ../libgraph.a
+	$(CXX) -o test-vertex_index test-vertex_index.o $(LDFLAGS)
 
 clean:
 	rm -f *.o
