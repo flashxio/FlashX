@@ -329,19 +329,19 @@ vertex_index::ptr cdirected_vertex_index_construct::dump(const graph_header &hea
 vertex_index_construct::ptr vertex_index_construct::create(bool directed)
 {
 	if (directed)
-		return vertex_index_construct::ptr(new undirected_vertex_index_construct());
-	else
 		return vertex_index_construct::ptr(new directed_vertex_index_construct());
+	else
+		return vertex_index_construct::ptr(new undirected_vertex_index_construct());
 }
 
 vertex_index_construct::ptr vertex_index_construct::create_compressed(bool directed,
 		size_t edge_data_size)
 {
 	if (directed)
-		return vertex_index_construct::ptr(new cundirected_vertex_index_construct(
+		return vertex_index_construct::ptr(new cdirected_vertex_index_construct(
 					edge_data_size));
 	else
-		return vertex_index_construct::ptr(new cdirected_vertex_index_construct(
+		return vertex_index_construct::ptr(new cundirected_vertex_index_construct(
 					edge_data_size));
 }
 
