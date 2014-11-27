@@ -44,7 +44,7 @@ class in_mem_graph;
 class vertex_index;
 
 class serial_subgraph;
-class in_mem_vertex_index;
+class vertex_index_construct;
 class vertex_index;
 class in_mem_vertex;
 class ext_mem_undirected_vertex;
@@ -96,12 +96,12 @@ class serial_graph
 	size_t num_edges;
 	size_t num_vertices;
 	size_t num_non_empty;
-	std::shared_ptr<in_mem_vertex_index> index;
+	std::shared_ptr<vertex_index_construct> index;
 	size_t edge_data_size;
 public:
 	typedef std::shared_ptr<serial_graph> ptr;
 
-	serial_graph(std::shared_ptr<in_mem_vertex_index> index,
+	serial_graph(std::shared_ptr<vertex_index_construct> index,
 			size_t edge_data_size) {
 		num_edges = 0;
 		num_vertices = 0;
@@ -135,7 +135,7 @@ public:
 		return num_non_empty;
 	}
 
-	in_mem_vertex_index &get_index() {
+	vertex_index_construct &get_index() {
 		return *index;
 	}
 
@@ -193,7 +193,7 @@ class disk_serial_graph: public serial_graph
 public:
 	typedef std::shared_ptr<disk_serial_graph> ptr;
 
-	disk_serial_graph(std::shared_ptr<in_mem_vertex_index> index,
+	disk_serial_graph(std::shared_ptr<vertex_index_construct> index,
 			size_t edge_data_size, large_io_creator::ptr creator): serial_graph(
 				index, edge_data_size) {
 		this->creator = creator;
@@ -221,7 +221,7 @@ public:
 class mem_serial_graph: public serial_graph
 {
 protected:
-	mem_serial_graph(std::shared_ptr<in_mem_vertex_index> index,
+	mem_serial_graph(std::shared_ptr<vertex_index_construct> index,
 			size_t edge_data_size): serial_graph(index, edge_data_size) {
 	}
 public:

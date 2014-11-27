@@ -29,15 +29,15 @@ namespace fg
  * These in-memory data structures are used to construct vertex indices.
  */
 
-class in_mem_vertex_index
+class vertex_index_construct
 {
 public:
-	typedef std::shared_ptr<in_mem_vertex_index> ptr;
+	typedef std::shared_ptr<vertex_index_construct> ptr;
 
 	static ptr create(bool directed);
 	static ptr create_compressed(bool directed, size_t edge_data_size);
 
-	virtual ~in_mem_vertex_index() {
+	virtual ~vertex_index_construct() {
 	}
 
 	virtual void add_vertex(const in_mem_vertex &) = 0;

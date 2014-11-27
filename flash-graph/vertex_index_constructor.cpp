@@ -27,7 +27,7 @@ namespace fg
 /*
  * Compressed in-memory vertex index for an undirected graph.
  */
-class cdefault_in_mem_vertex_index: public in_mem_vertex_index
+class cdefault_vertex_index_construct: public vertex_index_construct
 {
 	static const size_t ENTRY_SIZE = compressed_vertex_entry::ENTRY_SIZE;
 	size_t edge_data_size;
@@ -47,7 +47,7 @@ class cdefault_in_mem_vertex_index: public in_mem_vertex_index
 		return centries.size() * ENTRY_SIZE + last_entries.size() - 1;
 	}
 public:
-	cdefault_in_mem_vertex_index(size_t edge_data_size) {
+	cdefault_vertex_index_construct(size_t edge_data_size) {
 		this->edge_data_size = edge_data_size;
 		last_entries.push_back(vertex_offset(sizeof(graph_header)));
 	}
@@ -59,11 +59,11 @@ public:
 	virtual vertex_index::ptr dump(const graph_header &header, bool compressed);
 };
 
-class default_in_mem_vertex_index: public in_mem_vertex_index
+class default_vertex_index_construct: public vertex_index_construct
 {
 	std::vector<vertex_offset> vertices;
 public:
-	default_in_mem_vertex_index() {
+	default_vertex_index_construct() {
 		vertices.push_back(vertex_offset(sizeof(graph_header)));
 	}
 
@@ -102,7 +102,7 @@ public:
 /*
  * Compressed in-memory vertex index for a directed graph.
  */
-class cdirected_in_mem_vertex_index: public in_mem_vertex_index
+class cdirected_vertex_index_construct: public vertex_index_construct
 {
 	static const size_t ENTRY_SIZE = compressed_vertex_entry::ENTRY_SIZE;
 	size_t edge_data_size;
@@ -123,7 +123,7 @@ class cdirected_in_mem_vertex_index: public in_mem_vertex_index
 		return centries.size() * ENTRY_SIZE + last_entries.size() - 1;
 	}
 public:
-	cdirected_in_mem_vertex_index(size_t edge_data_size) {
+	cdirected_vertex_index_construct(size_t edge_data_size) {
 		this->edge_data_size = edge_data_size;
 		last_entries.push_back(directed_vertex_entry(sizeof(graph_header), 0));
 	}
@@ -135,7 +135,7 @@ public:
 	virtual vertex_index::ptr dump(const graph_header &header, bool compressed);
 };
 
-class directed_in_mem_vertex_index: public in_mem_vertex_index
+class directed_vertex_index_construct: public vertex_index_construct
 {
 	std::vector<directed_vertex_entry> vertices;
 
@@ -150,7 +150,7 @@ class directed_in_mem_vertex_index: public in_mem_vertex_index
 					vertices[i].get_out_off() + in_part_size);
 	}
 public:
-	directed_in_mem_vertex_index() {
+	directed_vertex_index_construct() {
 		vertices.push_back(directed_vertex_entry(sizeof(graph_header), 0));
 	}
 
@@ -188,7 +188,7 @@ public:
 	}
 };
 
-void cdefault_in_mem_vertex_index::finalize()
+void cdefault_vertex_index_construct::finalize()
 {
 	if (last_entries.empty())
 		return;
@@ -200,7 +200,7 @@ void cdefault_in_mem_vertex_index::finalize()
 	last_entries.clear();
 }
 
-void cdefault_in_mem_vertex_index::add_large_vertices(vertex_id_t start_vertex_id,
+void cdefault_vertex_index_construct::add_large_vertices(vertex_id_t start_vertex_id,
 		const compressed_undirected_vertex_entry entry,
 		const std::vector<vertex_offset> &entries)
 {
@@ -215,7 +215,7 @@ void cdefault_in_mem_vertex_index::add_large_vertices(vertex_id_t start_vertex_i
 	}
 }
 
-void cdefault_in_mem_vertex_index::add_vertex(const in_mem_vertex &v)
+void cdefault_vertex_index_construct::add_vertex(const in_mem_vertex &v)
 {
 	assert(get_num_vertices() == v.get_id());
 	assert(last_entries.size() <= ENTRY_SIZE + 1);
@@ -234,13 +234,13 @@ void cdefault_in_mem_vertex_index::add_vertex(const in_mem_vertex &v)
 	last_entries.push_back(entry);
 }
 
-void cdefault_in_mem_vertex_index::dump(const std::string &file,
+void cdefault_vertex_index_construct::dump(const std::string &file,
 		const graph_header &header, bool compressed)
 {
 	throw safs::unsupported_exception();
 }
 
-vertex_index::ptr cdefault_in_mem_vertex_index::dump(const graph_header &header,
+vertex_index::ptr cdefault_vertex_index_construct::dump(const graph_header &header,
 		bool compressed)
 {
 	finalize();
@@ -248,7 +248,7 @@ vertex_index::ptr cdefault_in_mem_vertex_index::dump(const graph_header &header,
 			cundirected_vertex_index::construct(centries, large_vertices, header));
 }
 
-void cdirected_in_mem_vertex_index::add_large_vertices(
+void cdirected_vertex_index_construct::add_large_vertices(
 		vertex_id_t start_vertex_id, const compressed_directed_vertex_entry entry,
 		const std::vector<directed_vertex_entry> &entries)
 {
@@ -269,7 +269,7 @@ void cdirected_in_mem_vertex_index::add_large_vertices(
 	}
 }
 
-void cdirected_in_mem_vertex_index::add_vertex(const in_mem_vertex &v)
+void cdirected_vertex_index_construct::add_vertex(const in_mem_vertex &v)
 {
 	assert(get_num_vertices() == v.get_id());
 	assert(last_entries.size() <= ENTRY_SIZE + 1);
@@ -288,7 +288,7 @@ void cdirected_in_mem_vertex_index::add_vertex(const in_mem_vertex &v)
 	last_entries.push_back(entry);
 }
 
-void cdirected_in_mem_vertex_index::finalize()
+void cdirected_vertex_index_construct::finalize()
 {
 	if (last_entries.empty())
 		return;
@@ -311,13 +311,13 @@ void cdirected_in_mem_vertex_index::finalize()
 	}
 }
 
-void cdirected_in_mem_vertex_index::dump(const std::string &file,
+void cdirected_vertex_index_construct::dump(const std::string &file,
 		const graph_header &header, bool compressed)
 {
 	throw safs::unsupported_exception();
 }
 
-vertex_index::ptr cdirected_in_mem_vertex_index::dump(const graph_header &header,
+vertex_index::ptr cdirected_vertex_index_construct::dump(const graph_header &header,
 		bool compressed)
 {
 	finalize();
@@ -326,22 +326,22 @@ vertex_index::ptr cdirected_in_mem_vertex_index::dump(const graph_header &header
 				large_out_vertices, header));
 }
 
-in_mem_vertex_index::ptr in_mem_vertex_index::create(bool directed)
+vertex_index_construct::ptr vertex_index_construct::create(bool directed)
 {
 	if (directed)
-		return in_mem_vertex_index::ptr(new default_in_mem_vertex_index());
+		return vertex_index_construct::ptr(new default_vertex_index_construct());
 	else
-		return in_mem_vertex_index::ptr(new directed_in_mem_vertex_index());
+		return vertex_index_construct::ptr(new directed_vertex_index_construct());
 }
 
-in_mem_vertex_index::ptr in_mem_vertex_index::create_compressed(bool directed,
+vertex_index_construct::ptr vertex_index_construct::create_compressed(bool directed,
 		size_t edge_data_size)
 {
 	if (directed)
-		return in_mem_vertex_index::ptr(new cdefault_in_mem_vertex_index(
+		return vertex_index_construct::ptr(new cdefault_vertex_index_construct(
 					edge_data_size));
 	else
-		return in_mem_vertex_index::ptr(new cdirected_in_mem_vertex_index(
+		return vertex_index_construct::ptr(new cdirected_vertex_index_construct(
 					edge_data_size));
 }
 

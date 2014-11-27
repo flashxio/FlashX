@@ -100,10 +100,10 @@ void test_directed_vertex_index()
 	graph_header header(graph_type::DIRECTED, vertices.size(), num_edges, 0);
 	printf("There are %ld edges\n", num_edges);
 
-	in_mem_vertex_index::ptr cindex
-		= in_mem_vertex_index::create_compressed(true, 0);
-	in_mem_vertex_index::ptr index
-		= in_mem_vertex_index::create(true);
+	vertex_index_construct::ptr cindex
+		= vertex_index_construct::create_compressed(true, 0);
+	vertex_index_construct::ptr index
+		= vertex_index_construct::create(true);
 	for (size_t i = 0; i < vertices.size(); i++) {
 		cindex->add_vertex(vertices[i]);
 		index->add_vertex(vertices[i]);
@@ -144,10 +144,10 @@ void test_undirected_vertex_index()
 	graph_header header(graph_type::DIRECTED, vertices.size(), num_edges, 0);
 	printf("There are %ld edges\n", num_edges);
 
-	in_mem_vertex_index::ptr cindex
-		= in_mem_vertex_index::create_compressed(false, 0);
-	in_mem_vertex_index::ptr index
-		= in_mem_vertex_index::create(false);
+	vertex_index_construct::ptr cindex
+		= vertex_index_construct::create_compressed(false, 0);
+	vertex_index_construct::ptr index
+		= vertex_index_construct::create(false);
 	for (size_t i = 0; i < vertices.size(); i++) {
 		cindex->add_vertex(vertices[i]);
 		index->add_vertex(vertices[i]);
