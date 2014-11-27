@@ -786,7 +786,8 @@ class disk_directed_graph: public disk_serial_graph
 public:
 	disk_directed_graph(const edge_graph &g,
 			large_io_creator::ptr creator): disk_serial_graph(
-			vertex_index_construct::create(true), g.get_edge_data_size(), creator) {
+			vertex_index_construct::create_compressed(true, g.get_edge_data_size()),
+			g.get_edge_data_size(), creator) {
 		tmp_in_graph_file = basename(tempnam(".", "in-directed"));
 		in_f = creator->create_writer(tmp_in_graph_file);
 		BOOST_VERIFY(in_f->seek(sizeof(graph_header), SEEK_SET) == sizeof(graph_header));
@@ -900,7 +901,8 @@ class disk_undirected_graph: public disk_serial_graph
 public:
 	disk_undirected_graph(const edge_graph &g,
 			large_io_creator::ptr creator): disk_serial_graph(
-			vertex_index_construct::create(false), g.get_edge_data_size(), creator) {
+			vertex_index_construct::create_compressed(false, g.get_edge_data_size()),
+			g.get_edge_data_size(), creator) {
 		tmp_graph_file = basename(tempnam(".", "undirected"));
 		f = creator->create_writer(tmp_graph_file);
 		BOOST_VERIFY(f->seek(sizeof(graph_header), SEEK_SET) == sizeof(graph_header));
@@ -972,8 +974,8 @@ class mem_directed_graph: public mem_serial_graph
 	mem_graph_store out_store;
 public:
 	mem_directed_graph(size_t edge_data_size): mem_serial_graph(
-			vertex_index_construct::create(true), edge_data_size), in_store(
-			graph_header::get_header_size()) {
+			vertex_index_construct::create_compressed(true, edge_data_size),
+			edge_data_size), in_store(graph_header::get_header_size()) {
 	}
 
 	virtual bool is_directed() const {
@@ -1016,8 +1018,8 @@ class mem_undirected_graph: public mem_serial_graph
 	mem_graph_store store;
 public:
 	mem_undirected_graph(size_t edge_data_size): mem_serial_graph(
-			vertex_index_construct::create(false), edge_data_size), store(
-			graph_header::get_header_size()) {
+			vertex_index_construct::create_compressed(false, edge_data_size),
+			edge_data_size), store(graph_header::get_header_size()) {
 	}
 
 	virtual bool is_directed() const {
