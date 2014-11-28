@@ -170,7 +170,7 @@ public:
 	virtual void sort_edges() = 0;
 	virtual void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
-			bool in_part) const = 0;
+			bool in_part, std::vector<off_t> &edge_offs) const = 0;
 	virtual std::shared_ptr<serial_graph> serialize_graph(
 			large_io_creator::ptr creator) const = 0;
 	virtual size_t get_num_edges() const = 0;

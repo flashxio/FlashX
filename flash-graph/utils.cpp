@@ -243,11 +243,12 @@ public:
 	virtual void push_back(const edge<edge_data_type> &e) = 0;
 	virtual void append(const std::vector<edge<edge_data_type> > &vec) = 0;
 	virtual void sort(bool out_edge) = 0;
-	virtual edge_stream get_stream() const = 0;
+	virtual edge_stream get_stream(off_t off = 0) const = 0;
 	virtual ptr clone() const = 0;
 	virtual size_t size() const = 0;
 	virtual bool empty() const = 0;
 	virtual const edge<edge_data_type> &back() const = 0;
+	virtual const edge<edge_data_type> &front() const = 0;
 };
 
 #ifdef USE_STXXL
@@ -308,9 +309,10 @@ public:
 		}
 	}
 
-	virtual typename edge_vector<edge_data_type>::edge_stream get_stream() const {
+	virtual typename edge_vector<edge_data_type>::edge_stream get_stream(
+			off_t off) const {
 		typename edge_vector<edge_data_type>::bulk_iterator::ptr it(
-				new stxxl_iterator(data.begin(), data.end()));
+				new stxxl_iterator(data.begin() + off, data.end()));
 		return typename edge_vector<edge_data_type>::edge_stream(it);
 	}
 
@@ -325,6 +327,10 @@ public:
 
 	virtual bool empty() const {
 		return data.empty();
+	}
+
+	virtual const edge<edge_data_type> &front() const {
+		return data.front();
 	}
 
 	virtual const edge<edge_data_type> &back() const {
@@ -406,9 +412,10 @@ public:
 		}
 	}
 
-	virtual typename edge_vector<edge_data_type>::edge_stream get_stream() const {
+	virtual typename edge_vector<edge_data_type>::edge_stream get_stream(
+			off_t off) const {
 		typename edge_vector<edge_data_type>::bulk_iterator::ptr it(
-				new std_iterator(data.begin(), data.end()));
+				new std_iterator(data.begin() + off, data.end()));
 		return typename edge_vector<edge_data_type>::edge_stream(it);
 	}
 
@@ -423,6 +430,10 @@ public:
 
 	virtual bool empty() const {
 		return data.empty();
+	}
+
+	virtual const edge<edge_data_type> &front() const {
+		return data.front();
 	}
 
 	virtual const edge<edge_data_type> &back() const {
@@ -1119,7 +1130,7 @@ public:
 
 	void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
-			bool in_part) const;
+			bool in_part, std::vector<off_t> &edge_offs) const;
 	virtual std::shared_ptr<serial_graph> serialize_graph(
 			large_io_creator::ptr creator) const;
 };
@@ -1182,7 +1193,7 @@ public:
 
 	void check_vertices(
 			const std::vector<ext_mem_undirected_vertex *> &vertices,
-			bool in_part) const;
+			bool in_part, std::vector<off_t> &edge_offs) const;
 	virtual std::shared_ptr<serial_graph> serialize_graph(
 			large_io_creator::ptr creator) const;
 
@@ -1210,28 +1221,49 @@ off_t undirected_edge_graph<edge_data_type>::add_edges(
 	return idx;
 }
 
+/*
+ * We fetch edges starting at the locations specified by `edge_offs'
+ * until we reach `end_vid' (`end_vid' is excluded). All fetched edges
+ * are returned in `edges', and `edge_offs' is updated with the locations
+ * where we stopped fetching edges.
+ */
 template<class edge_data_type>
-void get_all_edges(
+void get_edges(
 		const std::vector<std::shared_ptr<edge_vector<edge_data_type> > > &edge_lists,
+		vertex_id_t end_vid, bool in_part, std::vector<off_t> &edge_offs,
 		std_edge_vector<edge_data_type> &edges)
 {
-	BOOST_FOREACH(std::shared_ptr<edge_vector<edge_data_type> > vec, edge_lists) {
-		edges.append(*vec);
+	assert(edge_offs.size() == edge_lists.size());
+	for (size_t i = 0; i < edge_lists.size(); i++) {
+		typename edge_vector<edge_data_type>::edge_stream strm
+			= edge_lists[i]->get_stream(edge_offs[i]);
+		while (!strm.empty()) {
+			edge<edge_data_type> e = *strm;
+			++strm;
+			if ((in_part && e.get_to() >= end_vid)
+					|| (!in_part && e.get_from() >= end_vid))
+				break;
+			edges.push_back(e);
+		}
+		edge_offs[i] += edge_lists[i]->size();
 	}
 }
 
 template<class edge_data_type>
 void undirected_edge_graph<edge_data_type>::check_vertices(
-		const std::vector<ext_mem_undirected_vertex *> &vertices, bool) const
+		const std::vector<ext_mem_undirected_vertex *> &vertices,
+		bool, std::vector<off_t> &edge_offs) const
 {
+	if (edge_offs.empty())
+		edge_offs.resize(edge_lists.size());
 	assert(!vertices.empty());
 	std_edge_vector<edge_data_type> edges;
-	get_all_edges(edge_lists, edges);
+	vertex_id_t end_vid = vertices.back()->get_id() + 1;
+	get_edges(edge_lists, end_vid, false, edge_offs, edges);
 	edges.sort(true);
-	typename std_edge_vector<edge_data_type>::const_iterator it
-		= std::lower_bound(edges.cbegin(), edges.cend(),
-				edge<edge_data_type>(vertices[0]->get_id(), 0),
-				comp_edge<edge_data_type>());
+	assert(edges.front().get_from() >= vertices.front()->get_id());
+	assert(edges.back().get_from() == vertices.back()->get_id());
+	auto it = edges.cbegin();
 
 	for (size_t i = 0; i < vertices.size(); i++) {
 		ext_mem_undirected_vertex *v = vertices[i];
@@ -1248,29 +1280,28 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 
 template<class edge_data_type>
 void directed_edge_graph<edge_data_type>::check_vertices(
-		const std::vector<ext_mem_undirected_vertex *> &vertices, bool in_part) const
+		const std::vector<ext_mem_undirected_vertex *> &vertices,
+		bool in_part, std::vector<off_t> &edge_offs) const
 {
+	if (edge_offs.empty())
+		edge_offs.resize(in_edge_lists.size());
 	assert(!vertices.empty());
-	typename std_edge_vector<edge_data_type>::const_iterator it;
 	std_edge_vector<edge_data_type> edges;
+	vertex_id_t end_vid = vertices.back()->get_id() + 1;
 	if (in_part) {
-		get_all_edges(in_edge_lists, edges);
+		get_edges(in_edge_lists, end_vid, in_part, edge_offs, edges);
 		edges.sort(false);
+		assert(edges.front().get_to() >= vertices.front()->get_id());
+		assert(edges.back().get_to() <= vertices.back()->get_id());
 	}
 	else {
-		get_all_edges(out_edge_lists, edges);
+		get_edges(out_edge_lists, end_vid, in_part, edge_offs, edges);
 		edges.sort(true);
+		assert(edges.front().get_from() >= vertices.front()->get_id());
+		assert(edges.back().get_from() <= vertices.back()->get_id());
 	}
 
-	if (in_part)
-		it = std::lower_bound(edges.cbegin(), edges.cend(),
-				edge<edge_data_type>(0, vertices[0]->get_id()),
-				comp_in_edge<edge_data_type>());
-	else
-		it = std::lower_bound(edges.cbegin(), edges.cend(),
-				edge<edge_data_type>(vertices[0]->get_id(), 0),
-				comp_edge<edge_data_type>());
-
+	auto it = edges.cbegin();
 	for (size_t i = 0; i < vertices.size(); i++) {
 		// Check in-edges
 		if (in_part) {
@@ -1299,7 +1330,7 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 	}
 }
 
-static const size_t BUF_SIZE = 1024L * 1024 * 1024 * 32;
+static const size_t BUF_SIZE = 1024L * 1024 * 1024 * 8;
 
 size_t cal_vertex_size(const std::vector<ext_mem_vertex_info> &infos)
 {
@@ -1331,6 +1362,8 @@ size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
 	size_t num_vertices = 0;
 	std::vector<ext_mem_vertex_info> infos;
 	infos.push_back(func(idx, 0));
+	std::vector<off_t> edge_offs;
+	size_t num_edges = 0;
 	while (num_vertices < idx.get_num_vertices()) {
 		while (cal_vertex_size(infos) < BUF_SIZE
 				&& infos.back().get_id() < idx.get_num_vertices() - 1) {
@@ -1338,8 +1371,10 @@ size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
 		}
 		std::vector<ext_mem_undirected_vertex *> vertices;
 		std::unique_ptr<char[]> buf = read_vertices(reader, infos, vertices);
+		for (size_t i = 0; i < vertices.size(); i++)
+			num_edges += vertices[i]->get_num_edges();
 		num_vertices += vertices.size();
-		edge_g.check_vertices(vertices, in_part);
+		edge_g.check_vertices(vertices, in_part, edge_offs);
 		vertex_id_t last_id = infos.back().get_id();
 		infos.clear();
 		if (last_id < idx.get_num_vertices() - 1) {
@@ -1347,6 +1382,7 @@ size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
 			assert(num_vertices < idx.get_num_vertices());
 		}
 	}
+	assert(num_edges == edge_g.get_num_edges());
 	return num_vertices;
 }
 
