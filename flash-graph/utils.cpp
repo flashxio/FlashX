@@ -2419,7 +2419,6 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	}
 	else {
 		for (size_t i = 0; i < files.size(); i++) {
-			BOOST_LOG_TRIVIAL(info) << (std::string("read file " ) + files[i]);
 			thread_task *task = new text_edge_file_task<edge_data_type>(files[i]);
 			threads[thread_no % num_threads]->add_task(task);
 			thread_no++;

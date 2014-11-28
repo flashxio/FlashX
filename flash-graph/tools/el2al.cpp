@@ -152,9 +152,6 @@ int main(int argc, char *argv[])
 			edge_list_files.push_back(argv[i]);
 	}
 
-	for (size_t i = 0; i < edge_list_files.size(); i++)
-		printf("edge list file: %s\n", edge_list_files[i].c_str());
-
 	large_io_creator::ptr creator;
 	if (conf_file.empty())
 		creator = large_io_creator::create(false, work_dir);
