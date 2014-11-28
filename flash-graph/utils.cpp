@@ -1094,7 +1094,8 @@ class undirected_edge_graph: public edge_graph
 	vertex_id_t get_max_vertex_id() const {
 		vertex_id_t max_id = 0;
 		for (size_t i = 0; i < edge_lists.size(); i++)
-			max_id = std::max(edge_lists[i]->back().get_from(), max_id);
+			if (!edge_lists[i]->empty())
+				max_id = std::max(edge_lists[i]->back().get_from(), max_id);
 		return max_id;
 	}
 
@@ -1382,7 +1383,6 @@ size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
 			assert(num_vertices < idx.get_num_vertices());
 		}
 	}
-	assert(num_edges == edge_g.get_num_edges());
 	return num_vertices;
 }
 
