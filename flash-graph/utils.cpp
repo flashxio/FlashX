@@ -1391,6 +1391,10 @@ size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
 			assert(num_vertices < idx.get_num_vertices());
 		}
 	}
+	size_t num_read_edges = 0;
+	for (size_t i = 0; i < edge_offs.size(); i++)
+		num_read_edges += edge_offs[i];
+	assert(num_edges == num_read_edges);
 	return num_vertices;
 }
 
