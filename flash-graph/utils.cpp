@@ -1238,6 +1238,7 @@ void get_edges(
 	for (size_t i = 0; i < edge_lists.size(); i++) {
 		typename edge_vector<edge_data_type>::edge_stream strm
 			= edge_lists[i]->get_stream(edge_offs[i]);
+		size_t num_edges = 0;
 		while (!strm.empty()) {
 			edge<edge_data_type> e = *strm;
 			++strm;
@@ -1245,8 +1246,9 @@ void get_edges(
 					|| (!in_part && e.get_from() >= end_vid))
 				break;
 			edges.push_back(e);
+			num_edges++;
 		}
-		edge_offs[i] += edge_lists[i]->size();
+		edge_offs[i] += num_edges;
 	}
 }
 
@@ -1261,11 +1263,13 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 	std_edge_vector<edge_data_type> edges;
 	vertex_id_t end_vid = vertices.back()->get_id() + 1;
 	get_edges(edge_lists, end_vid, false, edge_offs, edges);
-	edges.sort(true);
-	assert(edges.front().get_from() >= vertices.front()->get_id());
-	assert(edges.back().get_from() == vertices.back()->get_id());
-	auto it = edges.cbegin();
+	if (!edges.empty()) {
+		edges.sort(true);
+		assert(edges.front().get_from() >= vertices.front()->get_id());
+		assert(edges.back().get_from() == vertices.back()->get_id());
+	}
 
+	auto it = edges.cbegin();
 	for (size_t i = 0; i < vertices.size(); i++) {
 		ext_mem_undirected_vertex *v = vertices[i];
 		for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
@@ -1291,15 +1295,19 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 	vertex_id_t end_vid = vertices.back()->get_id() + 1;
 	if (in_part) {
 		get_edges(in_edge_lists, end_vid, in_part, edge_offs, edges);
-		edges.sort(false);
-		assert(edges.front().get_to() >= vertices.front()->get_id());
-		assert(edges.back().get_to() <= vertices.back()->get_id());
+		if (!edges.empty()) {
+			edges.sort(false);
+			assert(edges.front().get_to() >= vertices.front()->get_id());
+			assert(edges.back().get_to() <= vertices.back()->get_id());
+		}
 	}
 	else {
 		get_edges(out_edge_lists, end_vid, in_part, edge_offs, edges);
-		edges.sort(true);
-		assert(edges.front().get_from() >= vertices.front()->get_id());
-		assert(edges.back().get_from() <= vertices.back()->get_id());
+		if (!edges.empty()) {
+			edges.sort(true);
+			assert(edges.front().get_from() >= vertices.front()->get_id());
+			assert(edges.back().get_from() <= vertices.back()->get_id());
+		}
 	}
 
 	auto it = edges.cbegin();
