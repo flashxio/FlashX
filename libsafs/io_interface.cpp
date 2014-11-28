@@ -586,6 +586,12 @@ remote_io_factory::~remote_io_factory()
 
 io_interface::ptr remote_io_factory::create_io(thread *t)
 {
+	if (t->get_node_id() < 0 || t->get_node_id() >= (int) msg_allocators.size()) {
+		fprintf(stderr, "thread %d are not in a right node (%d)\n",
+				t->get_id(), t->get_node_id());
+		return io_interface::ptr();
+	}
+
 	num_ios++;
 	io_interface *io = new remote_io(global_data.read_threads,
 			get_msg_allocator(t->get_node_id()), &mapper, t);
