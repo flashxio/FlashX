@@ -30,6 +30,7 @@
 
 #include "wpaio.h"
 #include "virt_aio_ctx.h"
+#include "parameters.h"
 
 #define INIT_CAPACITY 8
 
@@ -39,6 +40,12 @@
 
 namespace safs
 {
+
+aio_ctx::aio_ctx(int node_id, int max_aio): iocb_allocator(std::string(
+			"iocb_allocator-") + itoa(node_id), node_id, true,
+		sizeof(struct iocb) * max_aio, params.get_max_obj_alloc_size())
+{
+}
 
 struct iocb *aio_ctx::make_iovec_request(int fd, const struct iovec iov[],
 		int count, long long offset, int io_type, io_callback_s *cb)

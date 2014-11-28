@@ -30,6 +30,7 @@
 #include "common.h"
 #include "concurrency.h"
 #include "container.h"
+#include "parameters.h"
 
 namespace safs
 {

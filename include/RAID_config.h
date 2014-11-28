@@ -22,6 +22,7 @@
 
 #include <vector>
 #include <set>
+#include <memory>
 
 #include "safs_file.h"
 
