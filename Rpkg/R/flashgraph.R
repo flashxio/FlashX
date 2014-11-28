@@ -106,12 +106,18 @@ fg.load.graph <- function(graph, index.file = NULL, graph.name=graph,
 	if (is.null(index.file)) {
 		ret <- .Call("R_FG_load_graph_el", graph.name, graph,
 			  as.logical(directed), as.integer(nthreads), PACKAGE="FlashGraphR")
-		structure(ret, class="fg")
+		if (is.null(ret))
+			ret
+		else
+			structure(ret, class="fg")
 	}
 	else {
 		ret <- .Call("R_FG_load_graph_adj", graph.name, graph, index.file,
 			  PACKAGE="FlashGraphR")
-		structure(ret, class="fg")
+		if (is.null(ret))
+			ret
+		else
+			structure(ret, class="fg")
 	}
 }
 
@@ -129,7 +135,10 @@ fg.load.igraph <- function(graph, graph.name=paste("igraph-v", vcount(graph),
 	ret <- .Call("R_FG_load_graph_el_df", graph.name, df,
 				 as.logical(is.directed(graph)), as.integer(nthreads),
 				 PACKAGE="FlashGraphR")
-	structure(ret, class="fg")
+	if (is.null(ret))
+		ret
+	else
+		structure(ret, class="fg")
 }
 
 #' @rdname fg.load.graph 
@@ -137,7 +146,10 @@ fg.get.graph <- function(graph.name)
 {
 	stopifnot(fg.exist.graph(graph.name))
 	ret <- .Call("R_FG_get_graph_obj", graph.name, PACKAGE="FlashGraphR")
-	structure(ret, class="fg")
+	if (is.null(ret))
+		ret
+	else
+		structure(ret, class="fg")
 }
 
 #' Graph information
@@ -161,7 +173,7 @@ fg.get.graph <- function(graph.name)
 #' @rdname fg.graph.info
 fg.vcount <- function(graph)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	graph$vcount
 }
@@ -169,7 +181,7 @@ fg.vcount <- function(graph)
 #' @rdname fg.graph.info
 fg.ecount <- function(graph)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	graph$ecount
 }
@@ -177,7 +189,7 @@ fg.ecount <- function(graph)
 #' @rdname fg.graph.info
 fg.in.mem <- function(graph)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	graph$in.mem
 }
@@ -185,7 +197,7 @@ fg.in.mem <- function(graph)
 #' @rdname fg.graph.info
 fg.is.directed <- function(graph)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	graph$directed
 }
@@ -220,7 +232,7 @@ fg.is.directed <- function(graph)
 #' Storage and Analysis, 2013
 fg.clusters <- function(graph, mode=c("weak", "strong"))
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (!graph$directed)
 		.Call("R_FG_compute_cc", graph, PACKAGE="FlashGraphR")
@@ -234,7 +246,7 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 
 #fg.transitivity <- function(graph)
 #{
-#	stopifnot(graph != NULL)
+#	stopifnot(!is.null(graph))
 #	stopifnot(class(graph) == "fg")
 #	stopifnot(graph$directed)
 #	.Call("R_FG_compute_transitivity", graph, PACKAGE="FlashGraphR")
@@ -253,7 +265,7 @@ fg.clusters <- function(graph, mode=c("weak", "strong"))
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.degree <- function(graph, mode=c("both", "in", "out"))
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	.Call("R_FG_get_degree", graph, mode, PACKAGE="FlashGraphR")
 }
@@ -287,7 +299,7 @@ fg.degree <- function(graph, mode=c("both", "in", "out"))
 #' Web Conference, Brisbane, Australia, April 1998.
 fg.page.rank <- function(graph, no.iters=1000, damping=0.85)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
 	.Call("R_FG_compute_pagerank", graph, no.iters, damping,
@@ -313,7 +325,7 @@ fg.page.rank <- function(graph, no.iters=1000, damping=0.85)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.triangles <- function(graph, type="cycle")
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (graph$directed) {
 		.Call("R_FG_compute_directed_triangles", graph, type,
@@ -349,7 +361,7 @@ fg.triangles <- function(graph, type="cycle")
 #' @rdname fg.local.scan
 fg.topK.scan <- function(graph, order=1, K=1)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
 	.Call("R_FG_compute_topK_scan", graph, order, K, PACKAGE="FlashGraphR")
@@ -358,7 +370,7 @@ fg.topK.scan <- function(graph, order=1, K=1)
 #' @rdname fg.local.scan
 fg.local.scan <- function(graph, order=1)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (graph$directed) {
 		.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraphR")
@@ -386,7 +398,7 @@ fg.local.scan <- function(graph, order=1)
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.transitivity <- function(graph, type=c("global", "local"))
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	deg <- fg.degree(graph)
 	if (type == "local") {
@@ -409,7 +421,7 @@ fg.transitivity <- function(graph, type=c("global", "local"))
 
 fg.coreness <- function(graph)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
 	# FIXME set the right parameter.
@@ -420,7 +432,7 @@ fg.coreness <- function(graph)
 
 fg.overlap <- function(graph, vids)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
 	.Call("R_FG_compute_overlap", graph, vids, PACKAGE="FlashGraphR")
@@ -449,7 +461,7 @@ fg.overlap <- function(graph, vids)
 #' @rdname fg.subgraph
 fg.fetch.subgraph.igraph <- function(graph, vertices)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	edge.list = .Call("R_FG_fetch_subgraph_el", graph, vertices,
 					  PACKAGE="FlashGraphR")
@@ -460,10 +472,13 @@ fg.fetch.subgraph.igraph <- function(graph, vertices)
 #' @rdname fg.subgraph
 fg.fetch.subgraph <- function(graph, vertices, name = paste(graph$name, "-sub", sep=""))
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	ret <- .Call("R_FG_fetch_subgraph", graph, vertices, name, PACKAGE="FlashGraphR")
-	structure(ret, class="fg")
+	if (is.null(ret))
+		ret
+	else
+		structure(ret, class="fg")
 }
 
 #' Diameter estimation
@@ -491,7 +506,7 @@ fg.fetch.subgraph <- function(graph, vertices, name = paste(graph$name, "-sub", 
 #' Experimental Algorithmics (JEA), 2009
 fg.diameter <- function(graph, directed=FALSE)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(graph$directed)
 	.Call("R_FG_estimate_diameter", graph, directed, PACKAGE="FlashGraphR")
@@ -525,7 +540,7 @@ fg.diameter <- function(graph, directed=FALSE)
 #' @rdname fg.multiply
 fg.multiply <- function(graph, vec, transpose=FALSE)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(fg.vcount(graph) == length(vec))
 #	stopifnot(graph$directed)
@@ -572,7 +587,7 @@ fg.multiply.matrix <- function(graph, m, transpose=FALSE)
 #' 1994.
 fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(!graph$directed)
 	.Call("R_FG_eigen_uw", graph, which, as.integer(nev), as.integer(ncv),
@@ -581,7 +596,7 @@ fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
 
 fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
 {
-	stopifnot(graph != NULL)
+	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	.Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
 		  type, PACKAGE="FlashGraphR")
@@ -634,7 +649,7 @@ fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
 fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
 {
-	stopifnot(fg != NULL)
+	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
 	# multiply function for eigen on the adjacency matrix
 	# this is the default setting.
@@ -802,7 +817,7 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.spectral.clusters <- function(fg, k, ase)
 {
-	stopifnot(fg != NULL)
+	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
 	stopifnot(!fg$directed)
 
@@ -812,7 +827,7 @@ fg.spectral.clusters <- function(fg, k, ase)
 
 print.fg <- function(fg)
 {
-	stopifnot(fg != NULL)
+	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
 	directed = "U"
 	if (fg.is.directed(fg))
