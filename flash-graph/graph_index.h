@@ -169,6 +169,9 @@ public:
 	}
 
 	void init() {
+		if (num_vertices == 0)
+			return;
+
 		vertex_arr = (vertex_type *) malloc_large(
 				sizeof(vertex_arr[0]) * num_vertices);
 		assert(vertex_arr);
@@ -195,6 +198,9 @@ public:
 	 * the horizontal partition.
 	 */
 	void init_vparts(int num_parts, std::vector<vertex_id_t> &ids) {
+		if (ids.empty())
+			return;
+
 		assert(std::is_sorted(ids.begin(), ids.end()));
 		assert(num_parts > 1);
 		part_vertex_arrs.resize(num_parts);
@@ -247,6 +253,7 @@ public:
 	}
 
 	compute_vertex &get_vertex(vertex_id_t id) {
+		assert(vertex_arr);
 		return vertex_arr[id];
 	}
 
@@ -259,6 +266,7 @@ public:
 
 	size_t get_vpart_vertex_pointers(vpart_vertex_pointer ps[],
 			int num) const {
+		assert(!part_vertex_arrs.empty());
 		int act_num = min(num, get_num_vpart_vertices());
 		for (int i = 0; i < act_num; i++)
 			ps[i] = vpart_vertex_pointer(part_vertex_arrs[0].second[i].get_id(), i);
@@ -267,6 +275,7 @@ public:
 
 	size_t get_vpart_vertices(int vpart_id, vpart_vertex_pointer ps[], int num,
 			compute_vertex_pointer vertices[]) const {
+		assert(!part_vertex_arrs.empty());
 		assert((size_t) vpart_id < part_vertex_arrs.size());
 		int act_num = min(num, get_num_vpart_vertices());
 		for (int i = 0; i < act_num; i++)
