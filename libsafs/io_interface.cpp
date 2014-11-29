@@ -243,7 +243,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	// Assign a thread object to the current thread.
 	if (thread::get_curr_thread() == NULL)
-		thread::represent_thread(0);
+		thread::represent_thread(-1);
 
 	if (global_data.global_cache == NULL && with_cache) {
 		std::vector<int> node_id_array;
