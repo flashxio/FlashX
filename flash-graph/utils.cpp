@@ -50,6 +50,9 @@ using namespace safs;
 namespace fg
 {
 
+namespace utils
+{
+
 static const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
 static const size_t SORT_BUF_SIZE = 1024L * 1024 * 1024 * 2;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
@@ -2535,6 +2538,8 @@ edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
 		return edge_graph::ptr(new undirected_edge_graph<empty_data>(
 					edge_lists, false));
 	}
+}
+
 }
 
 }

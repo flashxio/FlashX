@@ -34,8 +34,8 @@ struct str2int_pair {
 	int number;
 };
 static struct str2int_pair edge_type_map[] = {
-	{"count", EDGE_COUNT},
-	{"timestamp", EDGE_TIMESTAMP},
+	{"count", utils::EDGE_COUNT},
+	{"timestamp", utils::EDGE_TIMESTAMP},
 };
 static int type_map_size = sizeof(edge_type_map) / sizeof(edge_type_map[0]);
 
@@ -46,7 +46,7 @@ static inline int conv_edge_type_str2int(const std::string &type_str)
 			return edge_type_map[i].number;
 		}
 	}
-	return DEFAULT_TYPE;
+	return utils::DEFAULT_TYPE;
 }
 
 static bool check_graph = false;
@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
-	int edge_attr_type = DEFAULT_TYPE;
+	int edge_attr_type = utils::DEFAULT_TYPE;
 	if (type_str) {
 		edge_attr_type = conv_edge_type_str2int(type_str);
 	}
@@ -152,21 +152,21 @@ int main(int argc, char *argv[])
 			edge_list_files.push_back(argv[i]);
 	}
 
-	large_io_creator::ptr creator;
+	utils::large_io_creator::ptr creator;
 	if (conf_file.empty())
-		creator = large_io_creator::create(false, work_dir);
+		creator = utils::large_io_creator::create(false, work_dir);
 	else {
 		config_map::ptr configs = config_map::create(conf_file);
 		configs->add_options("writable=1");
 		safs::init_io_system(configs);
-		creator = large_io_creator::create(true, ".");
+		creator = utils::large_io_creator::create(true, ".");
 	}
 	if (merge_graph) {
-		edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
-				directed, num_threads, !on_disk);
-		disk_serial_graph::ptr g
-			= std::static_pointer_cast<disk_serial_graph, serial_graph>(
-					construct_graph(edge_g, creator, num_threads));
+		utils::edge_graph::ptr edge_g = utils::parse_edge_lists(edge_list_files,
+				edge_attr_type, directed, num_threads, !on_disk);
+		utils::disk_serial_graph::ptr g
+			= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
+					utils::construct_graph(edge_g, creator, num_threads));
 		// Write the constructed individual graph to a file.
 		if (write_graph) {
 			assert(!file_exist(adjacency_list_file));
@@ -205,11 +205,11 @@ int main(int argc, char *argv[])
 			std::vector<std::string> files(1);
 			files[0] = edge_list_files[i];
 
-			edge_graph::ptr edge_g = parse_edge_lists(files, edge_attr_type,
-					directed, num_threads, !on_disk);
-			disk_serial_graph::ptr g
-				= std::static_pointer_cast<disk_serial_graph, serial_graph>(
-						construct_graph(edge_g, creator, num_threads));
+			utils::edge_graph::ptr edge_g = utils::parse_edge_lists(files,
+					edge_attr_type, directed, num_threads, !on_disk);
+			utils::disk_serial_graph::ptr g
+				= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
+						utils::construct_graph(edge_g, creator, num_threads));
 			// Write the constructed individual graph to a file.
 			if (write_graph) {
 				assert(!file_exist(graph_files[i]));

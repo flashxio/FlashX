@@ -16,10 +16,13 @@ using namespace fg;
 
 namespace fg
 {
+namespace utils
+{
 	void set_buf_cap(size_t new_cap);
 }
+}
 
-size_t test_write(large_writer::ptr writer)
+size_t test_write(utils::large_writer::ptr writer)
 {
 	size_t tot_size = 0;
 	int initializer = 0;
@@ -40,7 +43,7 @@ size_t test_write(large_writer::ptr writer)
 	return tot_size;
 }
 
-void test_read(large_reader::ptr reader, size_t tot_size)
+void test_read(utils::large_reader::ptr reader, size_t tot_size)
 {
 	int *buf = (int *) malloc(tot_size);
 	ssize_t ret = reader->read((char *) buf, tot_size);
@@ -55,17 +58,18 @@ void test_read(large_reader::ptr reader, size_t tot_size)
 
 int main(int argc, char *argv[])
 {
-	set_buf_cap(1024 * 128);
-	large_io_creator::ptr creator = large_io_creator::create(false, ".");
+	utils::set_buf_cap(1024 * 128);
+	utils::large_io_creator::ptr creator
+		= utils::large_io_creator::create(false, ".");
 
 	char *tmp_file = tempnam(".", "large_writer");
-	large_writer::ptr writer = creator->create_writer(tmp_file);
+	utils::large_writer::ptr writer = creator->create_writer(tmp_file);
 	size_t tot_size = test_write(writer);
 	writer.reset();
 	native_file f(tmp_file);
 	printf("%s has %ld bytes\n", tmp_file, f.get_size());
 	assert(f.get_size() == ROUNDUP(tot_size, 512));
-	large_reader::ptr reader = creator->create_reader(tmp_file);
+	utils::large_reader::ptr reader = creator->create_reader(tmp_file);
 	test_read(reader, tot_size);
 	unlink(tmp_file);
 
@@ -79,7 +83,7 @@ int main(int argc, char *argv[])
 	init_io_system(configs);
 	assert(is_safs_init());
 
-	creator = large_io_creator::create(true, ".");
+	creator = utils::large_io_creator::create(true, ".");
 	writer = creator->create_writer(tmp_file);
 	assert(writer != NULL);
 	tot_size = test_write(writer);
