@@ -472,6 +472,124 @@ public:
 	}
 };
 
+/*
+ * This is an interface of containing edge list.
+ */
+template<class edge_data_type>
+class el_container
+{
+public:
+	typedef std::shared_ptr<el_container<edge_data_type> > ptr;
+
+	virtual ~el_container() {
+	}
+	virtual void add(const std::vector<edge<edge_data_type> > &vec) = 0;
+	virtual void push_back(const edge<edge_data_type> &e) = 0;
+	virtual size_t size() = 0;
+};
+
+template<class edge_data_type>
+class directed_el_container: public el_container<edge_data_type>
+{
+	typename edge_vector<edge_data_type>::ptr in_edge_list;
+	typename edge_vector<edge_data_type>::ptr out_edge_list;
+public:
+	directed_el_container(bool in_mem) {
+		if (in_mem) {
+			in_edge_list = typename edge_vector<edge_data_type>::ptr(
+					new std_edge_vector<edge_data_type>());
+			out_edge_list = typename edge_vector<edge_data_type>::ptr(
+					new std_edge_vector<edge_data_type>());
+		}
+		else {
+#ifdef USE_STXXL
+			in_edge_list = typename edge_vector<edge_data_type>::ptr(
+					new stxxl_edge_vector<edge_data_type>());
+			out_edge_list = typename edge_vector<edge_data_type>::ptr(
+					new stxxl_edge_vector<edge_data_type>());
+#else
+			BOOST_LOG_TRIVIAL(error)
+				<< "It doesn't support using disks to store intermediate results";
+			BOOST_LOG_TRIVIAL(error)
+				<< "stxxl is required to store intermediate results on disks";
+			exit(1);
+#endif
+		}
+	}
+
+	virtual void add(const std::vector<edge<edge_data_type> > &vec) {
+		in_edge_list->append(vec);
+		out_edge_list->append(vec);
+	}
+
+	virtual void push_back(const edge<edge_data_type> &e) {
+		in_edge_list->push_back(e);
+		out_edge_list->push_back(e);
+	}
+
+	virtual size_t size() {
+		return in_edge_list->size();
+	}
+
+	typename edge_vector<edge_data_type>::ptr get_in_edges() {
+		return in_edge_list;
+	}
+
+	typename edge_vector<edge_data_type>::ptr get_out_edges() {
+		return out_edge_list;
+	}
+};
+
+template<class edge_data_type>
+class undirected_el_container: public el_container<edge_data_type>
+{
+	typename edge_vector<edge_data_type>::ptr edge_list;
+public:
+	undirected_el_container(bool in_mem) {
+		if (in_mem)
+			edge_list = typename edge_vector<edge_data_type>::ptr(
+					new std_edge_vector<edge_data_type>());
+		else {
+#ifdef USE_STXXL
+			edge_list = typename edge_vector<edge_data_type>::ptr(
+					new stxxl_edge_vector<edge_data_type>());
+#else
+			BOOST_LOG_TRIVIAL(error)
+				<< "It doesn't support using disks to store intermediate results";
+			BOOST_LOG_TRIVIAL(error)
+				<< "stxxl is required to store intermediate results on disks";
+			exit(1);
+#endif
+		}
+	}
+
+	virtual void add(const std::vector<edge<edge_data_type> > &vec) {
+		edge_list->append(vec);
+
+		// For an undirected graph, we need to store each edge twice
+		// and each copy is the reverse of the original edge.
+		BOOST_FOREACH(edge<edge_data_type> e, vec) {
+			e.reverse_dir();
+			edge_list->push_back(e);
+		}
+	}
+
+	virtual void push_back(const edge<edge_data_type> &e) {
+		edge_list->push_back(e);
+		edge<edge_data_type> reversed = e;
+		reversed.reverse_dir();
+		edge_list->push_back(reversed);
+	}
+
+	virtual size_t size() {
+		return edge_list->size() / 2;
+	}
+
+	typename edge_vector<edge_data_type>::ptr get_edges() {
+		return edge_list;
+	}
+};
+
 void serial_graph::add_vertex(const in_mem_vertex &v)
 {
 	num_vertices++;
@@ -1135,9 +1253,12 @@ public:
 	 * edges added to the graph.
 	 */
 	undirected_edge_graph(
-			std::vector<std::shared_ptr<edge_vector<edge_data_type> > > &edge_lists,
+			std::vector<typename el_container<edge_data_type>::ptr> &edge_lists,
 			bool has_data): edge_graph(has_data) {
-		this->edge_lists = edge_lists;
+		BOOST_FOREACH(auto el, edge_lists) {
+			this->edge_lists.push_back(
+					((undirected_el_container<edge_data_type> &) *el).get_edges());
+		}
 	}
 
 	void sort_edges() {
@@ -1200,12 +1321,14 @@ public:
 	 * edges added to the graph.
 	 */
 	directed_edge_graph(
-			std::vector<std::shared_ptr<edge_vector<edge_data_type> > > &edge_lists,
+			std::vector<typename el_container<edge_data_type>::ptr> &edge_lists,
 			bool has_data): edge_graph(has_data) {
-		this->in_edge_lists = edge_lists;
-		this->out_edge_lists.resize(edge_lists.size());
-		for (size_t i = 0; i < edge_lists.size(); i++)
-			this->out_edge_lists[i] = edge_lists[i]->clone();
+		BOOST_FOREACH(auto el, edge_lists) {
+			this->in_edge_lists.push_back(
+					((directed_el_container<edge_data_type> &) *el).get_in_edges());
+			this->out_edge_lists.push_back(
+					((directed_el_container<edge_data_type> &) *el).get_out_edges());
+		}
 	}
 
 	void sort_edges() {
@@ -1633,11 +1756,6 @@ bool disk_serial_graph::dump(const std::string &index_file,
 	return true;
 }
 
-template<class edge_data_type = empty_data>
-edge_graph::ptr par_load_edge_list_text(
-		const std::vector<std::string> &files, bool has_edge_data,
-		bool directed);
-
 class graph_file_io
 {
 public:
@@ -1951,18 +2069,9 @@ public:
 	void run() {
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(line_buf.get(), size, edges);
-		edge_vector<edge_data_type> *local_edge_buf
-			= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
-		local_edge_buf->append(edges);
-
-		// For an undirected graph, we need to store each edge twice
-		// and each copy is the reverse of the original edge.
-		if (!directed) {
-			BOOST_FOREACH(edge<edge_data_type> e, edges) {
-				e.reverse_dir();
-				local_edge_buf->push_back(e);
-			}
-		}
+		el_container<edge_data_type> *local_edge_buf
+			= (el_container<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+		local_edge_buf->add(edges);
 	}
 };
 
@@ -1995,8 +2104,8 @@ void text_edge_file_task<edge_data_type>::run()
 	else
 		io = graph_file_io::ptr(new text_graph_file_io(file_name));
 
-	edge_vector<edge_data_type> *local_edge_buf
-		= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+	el_container<edge_data_type> *local_edge_buf
+		= (el_container<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 	while (!io->eof()) {
 		size_t size = 0;
 		std::unique_ptr<char[]> data = io->read_edge_list_text(
@@ -2004,7 +2113,7 @@ void text_edge_file_task<edge_data_type>::run()
 
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(data.get(), size, edges);
-		local_edge_buf->append(edges);
+		local_edge_buf->add(edges);
 	}
 
 	std::cout << boost::format("There are %1% edges in thread %2%\n")
@@ -2396,19 +2505,10 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
 					"graph-task-thread") + itoa(i), -1);
-		if (in_mem)
-			t->set_user_data(new std_edge_vector<edge_data_type>());
-		else {
-#ifdef USE_STXXL
-			t->set_user_data(new stxxl_edge_vector<edge_data_type>());
-#else
-			BOOST_LOG_TRIVIAL(error)
-				<< "It doesn't support using disks to store intermediate results";
-			BOOST_LOG_TRIVIAL(error)
-				<< "stxxl is required to store intermediate results on disks";
-			exit(1);
-#endif
-		}
+		if (directed)
+			t->set_user_data(new directed_el_container<edge_data_type>(in_mem));
+		else
+			t->set_user_data(new undirected_el_container<edge_data_type>(in_mem));
 		t->start();
 		threads[i] = t;
 	}
@@ -2455,14 +2555,12 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	BOOST_LOG_TRIVIAL(info) << "start to construct an edge graph";
 
 	size_t num_edges = 0;
-	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > edge_lists(
-			num_threads);
+	std::vector<typename el_container<edge_data_type>::ptr> edge_lists(num_threads);
 	for (int i = 0; i < num_threads; i++) {
-		edge_vector<edge_data_type> *local_edges
-			= (edge_vector<edge_data_type> *) threads[i]->get_user_data();
+		el_container<edge_data_type> *local_edges
+			= (el_container<edge_data_type> *) threads[i]->get_user_data();
 		num_edges += local_edges->size();
-		edge_lists[i] = std::shared_ptr<edge_vector<edge_data_type> >(
-				local_edges);
+		edge_lists[i] = typename el_container<edge_data_type>::ptr(local_edges);
 	}
 	BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% edges") % num_edges;
 
@@ -2535,26 +2633,23 @@ edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
 	}
 
 	size_t num_edges = from.size();
-	std::vector<std::shared_ptr<edge_vector<empty_data> > > edge_lists(1);
-	edge_lists[0] = std::shared_ptr<edge_vector<empty_data> >(
-			new std_edge_vector<empty_data>());
+	std::vector<el_container<empty_data>::ptr> edge_lists(1);
+	if (directed)
+		edge_lists[0] = el_container<empty_data>::ptr(
+				new directed_el_container<empty_data>(true));
+	else
+		edge_lists[0] = el_container<empty_data>::ptr(
+				new undirected_el_container<empty_data>(true));
 
-	if (directed) {
-		for (size_t i = 0; i < num_edges; i++)
-			edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
+	for (size_t i = 0; i < num_edges; i++)
+		edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
+
+	if (directed)
 		return edge_graph::ptr(new directed_edge_graph<empty_data>(
 					edge_lists, false));
-	}
-	else {
-		for (size_t i = 0; i < num_edges; i++) {
-			// Undirected edge graph assumes each edge has been added twice,
-			// for both directions.
-			edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
-			edge_lists[0]->push_back(edge<empty_data>(to[i], from[i]));
-		}
+	else
 		return edge_graph::ptr(new undirected_edge_graph<empty_data>(
 					edge_lists, false));
-	}
 }
 
 }
