@@ -392,6 +392,7 @@ public:
 
 class remote_io_factory: public file_io_factory
 {
+	std::shared_ptr<slab_allocator> unbind_msg_allocator;
 	std::vector<std::shared_ptr<slab_allocator> > msg_allocators;
 	std::atomic_ulong tot_accesses;
 	// The number of existing IO instances.
@@ -399,7 +400,10 @@ class remote_io_factory: public file_io_factory
 	file_mapper &mapper;
 
 	slab_allocator &get_msg_allocator(int node_id) {
-		return *msg_allocators[node_id];
+		if (node_id < 0)
+			return *unbind_msg_allocator;
+		else
+			return *msg_allocators[node_id];
 	}
 public:
 	remote_io_factory(file_mapper &_mapper);
@@ -565,6 +569,10 @@ remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 					IO_MSG_SIZE * sizeof(io_request),
 					IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, i));
 	}
+	unbind_msg_allocator = std::shared_ptr<slab_allocator>(new slab_allocator(
+				std::string("disk_msg_allocator-unbind"),
+				IO_MSG_SIZE * sizeof(io_request),
+				IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, -1));
 	tot_accesses = 0;
 	num_ios = 0;
 	int num_files = mapper.get_num_files();
@@ -586,7 +594,7 @@ remote_io_factory::~remote_io_factory()
 
 io_interface::ptr remote_io_factory::create_io(thread *t)
 {
-	if (t->get_node_id() < 0 || t->get_node_id() >= (int) msg_allocators.size()) {
+	if (t->get_node_id() >= (int) msg_allocators.size()) {
 		fprintf(stderr, "thread %d are not in a right node (%d)\n",
 				t->get_id(), t->get_node_id());
 		return io_interface::ptr();
