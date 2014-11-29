@@ -527,6 +527,7 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 static FG_graph::ptr construct_fg_graph(utils::edge_graph::ptr edge_g,
 		const std::string &graph_name, int num_threads)
 {
+	utils::set_num_threads(num_threads);
 	if (safs::is_safs_init()) {
 		// Create SAFS I/O creator.
 		utils::large_io_creator::ptr creator = utils::large_io_creator::create(
@@ -535,8 +536,7 @@ static FG_graph::ptr construct_fg_graph(utils::edge_graph::ptr edge_g,
 			fprintf(stderr, "can't create a SAFS I/O creator\n");
 			return FG_graph::ptr();
 		}
-		utils::serial_graph::ptr g = utils::construct_graph(edge_g, creator,
-				num_threads);
+		utils::serial_graph::ptr g = utils::construct_graph(edge_g, creator);
 		std::string index_file = graph_name + "-index" + std::string("-v")
 			+ itoa(CURR_VERSION);
 		std::string graph_file = graph_name + std::string("-v")
@@ -555,7 +555,7 @@ static FG_graph::ptr construct_fg_graph(utils::edge_graph::ptr edge_g,
 	}
 	else {
 		utils::serial_graph::ptr g = construct_graph(edge_g,
-				utils::large_io_creator::ptr(), num_threads);;
+				utils::large_io_creator::ptr());;
 		return FG_graph::create(g->dump_graph(graph_name), g->dump_index(true),
 				graph_name, configs);
 	}
@@ -615,8 +615,9 @@ RcppExport SEXP R_FG_load_graph_el(SEXP pgraph_name, SEXP pgraph_file,
 
 	// If SAFS is initilized, we want to have everything processed on disks.
 	bool in_mem = !safs::is_safs_init();
+	utils::set_num_threads(num_threads);
 	utils::edge_graph::ptr edge_g = utils::parse_edge_lists(edge_list_files,
-			utils::DEFAULT_TYPE, directed, num_threads, in_mem);
+			utils::DEFAULT_TYPE, directed, in_mem);
 	FG_graph::ptr fg = construct_fg_graph(edge_g, graph_name, num_threads);
 	if (fg == NULL)
 		return R_NilValue;
