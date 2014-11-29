@@ -54,10 +54,30 @@ namespace utils
 {
 
 static const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
-static const size_t SORT_BUF_SIZE = 1024L * 1024 * 1024 * 2;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 
+static size_t sort_buf_size = 1024L * 1024 * 1024 * 2;
+static size_t write_subgraphs_size = 4L * 1024 * 1024 * 1024;
 static int num_threads = 1;
+
+void set_num_threads(size_t num)
+{
+	num_threads = num;
+	BOOST_LOG_TRIVIAL(info) << boost::format("# threads: %1%") % num_threads;
+}
+
+void set_sort_buf_size(size_t size)
+{
+	sort_buf_size = size;
+	BOOST_LOG_TRIVIAL(info) << boost::format("sort buf size: %1%") % sort_buf_size;
+}
+
+void set_write_buf_size(size_t size)
+{
+	write_subgraphs_size = size;
+	BOOST_LOG_TRIVIAL(info) << boost::format(
+			"write buf size: %1%") % write_subgraphs_size;
+}
 
 class format_error: public std::exception
 {
@@ -304,11 +324,11 @@ public:
 	void sort(bool out_edge) {
 		if (out_edge) {
 			comp_edge<edge_data_type> edge_comparator;
-			stxxl::sort(data.begin(), data.end(), edge_comparator, SORT_BUF_SIZE);
+			stxxl::sort(data.begin(), data.end(), edge_comparator, sort_buf_size);
 		}
 		else {
 			comp_in_edge<edge_data_type> in_edge_comparator;
-			stxxl::sort(data.begin(), data.end(), in_edge_comparator, SORT_BUF_SIZE);
+			stxxl::sort(data.begin(), data.end(), in_edge_comparator, sort_buf_size);
 		}
 	}
 
@@ -2032,7 +2052,6 @@ void undirected_edge_graph<edge_data_type>::read_edges(edge_stream_t &stream,
 
 class write_graph_thread: public thread
 {
-	static const size_t ACCU_GRAPH_SIZE = 4L * 1024 * 1024 * 1024;
 	typedef std::shared_ptr<serial_subgraph> subgraph_ptr;
 	struct subgraph_comp {
 		bool operator()(const subgraph_ptr &g1, const subgraph_ptr &g2) {
@@ -2064,7 +2083,7 @@ public:
 	}
 
 	void add_vertices(subgraph_ptr subg) {
-		while (tot_subgraph_size > ACCU_GRAPH_SIZE
+		while (tot_subgraph_size > write_subgraphs_size
 				&& subg->get_start_id() > curr_id)
 			usleep(10000);
 
@@ -2471,10 +2490,9 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 }
 
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
-		int edge_attr_type, bool directed, int nthreads, bool in_mem)
+		int edge_attr_type, bool directed, bool in_mem)
 {
 	BOOST_LOG_TRIVIAL(info) << "beofre load edge list";
-	num_threads = nthreads;
 	edge_graph::ptr g;
 	switch(edge_attr_type) {
 		case EDGE_COUNT:
@@ -2493,10 +2511,9 @@ edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files
 }
 
 serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
-		large_io_creator::ptr creator, int nthreads)
+		large_io_creator::ptr creator)
 {
 	BOOST_LOG_TRIVIAL(info) << "before sorting edges";
-	num_threads = nthreads;
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	edge_g->sort_edges();
