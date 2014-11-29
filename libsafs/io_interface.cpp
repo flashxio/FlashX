@@ -180,8 +180,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	
 	params.init(configs->get_options());
 	params.print();
-
-	numa_set_bind_policy(1);
 	thread::thread_class_init();
 
 	// The I/O system has been initialized.
