@@ -169,6 +169,9 @@ public:
 	}
 
 	void init() {
+		if (num_vertices == 0)
+			return;
+
 		vertex_arr = (vertex_type *) malloc_large(
 				sizeof(vertex_arr[0]) * num_vertices);
 		assert(vertex_arr);
@@ -195,6 +198,9 @@ public:
 	 * the horizontal partition.
 	 */
 	void init_vparts(int num_parts, std::vector<vertex_id_t> &ids) {
+		if (ids.empty())
+			return;
+
 		assert(std::is_sorted(ids.begin(), ids.end()));
 		assert(num_parts > 1);
 		part_vertex_arrs.resize(num_parts);
@@ -247,6 +253,7 @@ public:
 	}
 
 	compute_vertex &get_vertex(vertex_id_t id) {
+		assert(vertex_arr);
 		return vertex_arr[id];
 	}
 

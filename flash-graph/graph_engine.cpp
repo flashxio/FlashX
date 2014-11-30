@@ -917,24 +917,33 @@ size_t graph_get_vertices(graph_engine &graph, const worker_thread &t,
 	return graph.get_vertices(t.get_worker_id(), ids, num_ids, v_buf);
 }
 
-std::atomic<size_t> graph_engine::init_count;
+std::atomic<long> graph_engine::init_count;
 
 void graph_engine::init_flash_graph(config_map::ptr configs)
 {
-	size_t count = init_count.fetch_add(1);
+	long count = init_count.fetch_add(1);
 	if (count == 0) {
 		graph_conf.init(configs);
 		graph_conf.print();
-		init_io_system(configs);
+		try {
+			init_io_system(configs);
+		} catch (safs::init_error &e) {
+			// If SAFS fails to initialize, we should remove the count
+			// increase at the beginning of the function.
+			init_count--;
+			throw e;
+		}
 	}
 }
 
 void graph_engine::destroy_flash_graph()
 {
-	size_t count = init_count.fetch_sub(1);
-	if (count == 1) {
+	long count = init_count.fetch_sub(1);
+	// SAFS wasn't initialized
+	if (count == 0)
+		init_count++;
+	else if (count == 1)
 		destroy_io_system();
-	}
 }
 
 }

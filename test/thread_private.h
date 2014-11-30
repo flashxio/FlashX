@@ -49,7 +49,7 @@ class thread_private: public thread
 	long num_sampling;
 	int max_num_pending;
 
-	cleanup_callback *cb;
+	std::shared_ptr<cleanup_callback> cb;
 	
 	struct timeval start_time, end_time;
 

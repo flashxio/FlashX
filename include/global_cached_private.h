@@ -99,8 +99,8 @@ class global_cached_io: public io_interface
 	long cache_size;
 	page_cache *global_cache;
 	/* the underlying IO. */
-	io_interface *underlying;
-	callback *cb;
+	io_interface::ptr underlying;
+	callback::ptr cb;
 
 	std::unique_ptr<request_allocator> req_allocator;
 	std::unique_ptr<req_ext_allocator> ext_allocator;
@@ -188,7 +188,7 @@ class global_cached_io: public io_interface
 		}
 	}
 public:
-	global_cached_io(thread *t, io_interface *, page_cache *cache,
+	global_cached_io(thread *t, io_interface::ptr, page_cache *cache,
 			comp_io_scheduler *sched = NULL);
 
 	~global_cached_io();
@@ -237,14 +237,18 @@ public:
 
 	int handle_pending_requests();
 
-	virtual bool set_callback(callback *cb) {
+	virtual bool set_callback(callback::ptr cb) {
 		if (underlying->support_aio())
 			this->cb = cb;
 		return underlying->support_aio();
 	}
+
+	virtual bool have_callback() const {
+		return cb != NULL;
+	}
 	
-	virtual callback *get_callback() {
-		return cb;
+	virtual callback &get_callback() {
+		return *cb;
 	}
 
 	virtual bool support_aio() {

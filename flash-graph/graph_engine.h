@@ -327,7 +327,7 @@ class FG_graph;
 */
 class graph_engine
 {
-	static std::atomic<size_t> init_count;
+	static std::atomic<long> init_count;
 
 	graph_header header;
 	// The location of the out-part of the graph. It's valid only

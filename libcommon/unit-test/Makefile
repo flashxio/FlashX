@@ -1,7 +1,7 @@
 # Copyright 2014 Open Connectome Project (http;//openconnecto.me)
 # Written by Da Zheng (zhengda1936@gmail.com)
 #
-# This file is part of FlashGraph.
+# This file is part of SAFSlib.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,29 +17,21 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lstxxl -lz $(LDFLAGS)
-CXXFLAGS = -I.. -I../../include -I../../libcommon -g -std=c++0x
+CFLAGS = -g -I.. $(TRACE_FLAGS)
+LDFLAGS := -L.. -lcommon $(LDFLAGS)
 
+UNITTEST = test-embedded_array
+CPPFLAGS := -MD
+CXXFLAGS = -I.. -g -std=c++0x
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
-
-UNITTEST = test-bitmap test-partitioner test-large_io test-vertex_index
+LIBFILE = ../libcommon.a
 
 all: $(UNITTEST)
 
-test-bitmap: test-bitmap.o ../libgraph.a
-	$(CXX) -o test-bitmap test-bitmap.o $(LDFLAGS)
-
-test-partitioner: test-partitioner.o ../libgraph.a
-	$(CXX) -o test-partitioner test-partitioner.o $(LDFLAGS)
-
-test-large_io: test-large_io.o ../libgraph.a
-	$(CXX) -o test-large_io test-large_io.o $(LDFLAGS)
-
-test-vertex_index: test-vertex_index.o ../libgraph.a
-	$(CXX) -o test-vertex_index test-vertex_index.o $(LDFLAGS)
+test-embedded_array: test-embedded_array.o $(LIBFILE)
+	$(CXX) -o test-embedded_array test-embedded_array.o $(LDFLAGS)
 
 clean:
 	rm -f *.o

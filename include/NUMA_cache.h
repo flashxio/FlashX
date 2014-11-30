@@ -91,7 +91,7 @@ public:
 	}
 
 	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
-			io_interface *io) {
+			io_interface &io) {
 		for (int i = 0; i < num; i++) {
 			page_id_t pg_id(pages[i]->get_file_id(), pages[i]->get_offset());
 			int idx = cache_conf->page2cache(pg_id);

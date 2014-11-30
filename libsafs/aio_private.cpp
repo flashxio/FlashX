@@ -35,7 +35,7 @@ namespace safs
 
 #define EVEN_DISTRIBUTE
 
-const int MAX_MULTI_BUFS = 64;
+const int MAX_EMBED_BUFS = 64;
 
 /* 
  * each file gets the same number of outstanding requests.
@@ -51,7 +51,7 @@ struct thread_callback_s
 	async_io *aio;
 	callback_allocator *cb_allocator;
 	io_request req;
-	struct iovec vec[MAX_MULTI_BUFS];
+	embedded_array<struct iovec, MAX_EMBED_BUFS> vec;
 };
 
 #if 0
@@ -173,7 +173,6 @@ async_io::async_io(const logical_file_partition &partition,
 #endif
 		ctx = new aio_ctx_impl(node_id, AIO_DEPTH);
 
-	cb = NULL;
 	num_iowait = 0;
 	num_completed_reqs = 0;
 	open_flags = flags;
@@ -253,15 +252,15 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 			assert((long) tcb->req.get_buf(i) % MIN_BLOCK_SIZE == 0);
 			assert(tcb->req.get_buf_size(i) % MIN_BLOCK_SIZE == 0);
 		}
-		assert(num_bufs <= MAX_MULTI_BUFS);
-		BOOST_VERIFY(tcb->req.get_vec(tcb->vec, num_bufs) == num_bufs);
+		tcb->vec.resize(num_bufs);
+		BOOST_VERIFY(tcb->req.get_vec(tcb->vec.data(), num_bufs) == num_bufs);
 		struct iocb *req = ctx->make_iovec_request(io.get_fd(tcb->req.get_offset()),
 				/* 
 				 * iocb only contains a pointer to the io vector.
 				 * the space for the IO vector is stored
 				 * in the callback structure.
 				 */
-				tcb->vec, num_bufs, bid.off * PAGE_SIZE,
+				tcb->vec.data(), num_bufs, bid.off * PAGE_SIZE,
 				io_type, cb);
 		// I need to submit the request immediately. The iovec array is
 		// allocated in the stack.

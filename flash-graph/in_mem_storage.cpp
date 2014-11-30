@@ -151,6 +151,8 @@ class in_mem_io: public io_interface
 	fifo_queue<user_compute *> incomp_computes;
 	std::unique_ptr<byte_array_allocator> array_allocator;
 
+	callback::ptr cb;
+
 	void process_req(const io_request &req);
 	void process_computes();
 public:
@@ -169,6 +171,19 @@ public:
 
 	virtual bool support_aio() {
 		return true;
+	}
+
+	virtual bool set_callback(callback::ptr cb) {
+		this->cb = cb;
+		return true;
+	}
+
+	virtual bool have_callback() const {
+		return cb != NULL;
+	}
+
+	virtual callback &get_callback() {
+		return *cb;
 	}
 
 	virtual void flush_requests() { }
@@ -259,11 +274,20 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 {
 	for (int i = 0; i < num; i++) {
 		io_request &req = requests[i];
-		assert(req.get_req_type() == io_request::USER_COMPUTE);
-		// Let's possess a reference to the user compute first. process_req()
-		// will release the reference when the user compute is completed.
-		req.get_compute()->inc_ref();
-		process_req(req);
+		if (req.get_req_type() == io_request::USER_COMPUTE) {
+			// Let's possess a reference to the user compute first. process_req()
+			// will release the reference when the user compute is completed.
+			req.get_compute()->inc_ref();
+			process_req(req);
+		}
+		else {
+			assert(req.get_req_type() == io_request::BASIC_REQ);
+			memcpy(req.get_buf(), graph.graph_data + req.get_offset(), req.get_size());
+			io_request *reqs[1];
+			reqs[0] = &req;
+			if (this->have_callback())
+				this->get_callback().invoke(reqs, 1);
+		}
 	}
 	process_computes();
 }
@@ -293,6 +317,9 @@ public:
 in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 {
 	native_file local_f(file_name);
+	if (!local_f.exist())
+		throw io_exception(file_name + std::string(" doesn't exist"));
+
 	ssize_t size = local_f.get_size();
 	assert(size > 0);
 

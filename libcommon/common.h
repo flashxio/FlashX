@@ -26,7 +26,9 @@
 
 #include "log.h"
 #include "common_c.h"
-#include "parameters.h"
+
+#define PAGE_SIZE 4096
+#define LOG_PAGE_SIZE 12
 
 #define ASSERT_EQ(x, y)								\
 	if ((x) != (y))	{								\

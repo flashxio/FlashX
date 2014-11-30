@@ -183,7 +183,7 @@ void comm_verify_file(int argc, char *argv[])
 		source = new file_data_source(ext_file);
 	const RAID_config &conf = get_sys_RAID_conf();
 	verify_callback *cb = new verify_callback(source, conf.create_file_mapper());
-	io->set_callback(cb);
+	io->set_callback(callback::ptr(cb));
 
 	ssize_t file_size = source->get_size();
 	printf("verify %ld bytes\n", file_size);
@@ -199,7 +199,6 @@ void comm_verify_file(int argc, char *argv[])
 	printf("verify %ld bytes\n", cb->get_verified_bytes());
 	
 	io->cleanup();
-	delete io->get_callback();
 }
 
 void comm_load_file2fs(int argc, char *argv[])
@@ -224,7 +223,7 @@ void comm_load_file2fs(int argc, char *argv[])
 		safs_file file(get_sys_RAID_conf(), int_file_name);
 		file.create_file(source->get_size());
 		printf("create file %s of %ld bytes\n", int_file_name.c_str(),
-				file.get_file_size());
+				file.get_size());
 	}
 
 	file_io_factory::shared_ptr factory = create_io_factory(int_file_name,
@@ -335,7 +334,7 @@ void comm_create_file(int argc, char *argv[])
 	safs_file file(get_sys_RAID_conf(), file_name);
 	file.create_file(file_size);
 	printf("create file %s of %ld bytes\n", file_name.c_str(),
-			file.get_file_size());
+			file.get_size());
 
 	file_io_factory::shared_ptr factory = create_io_factory(file_name,
 			REMOTE_ACCESS);
@@ -394,7 +393,7 @@ void comm_list(int argc, char *argv[])
 		safs_file file(conf, *it);
 		if (file.exist()) {
 			printf("%s: %ld bytes\n", file.get_name().c_str(),
-					file.get_file_size());
+					file.get_size());
 		}
 		else {
 			printf("%s is corrupted\n", file.get_name().c_str());

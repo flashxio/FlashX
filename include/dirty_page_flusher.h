@@ -40,7 +40,7 @@ public:
 	 * thread contexts. It also shouldn't block threads.
 	 */
 	virtual void flush_dirty_pages(thread_safe_page *pages[], int num,
-			io_interface *io) = 0;
+			io_interface &io) = 0;
 
 	virtual int flush_dirty_pages(page_filter *filter, int max_num) = 0;
 };
