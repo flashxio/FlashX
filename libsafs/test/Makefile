@@ -15,22 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include ../Makefile.common
+include ../../Makefile.common
 
-CFLAGS = -g -I../include $(TRACE_FLAGS)
+CFLAGS = -g -I../../include $(TRACE_FLAGS)
 
-LDFLAGS := -L../libsafs -lsafs -L../libcommon -lcommon $(LDFLAGS)
-CXXFLAGS += -I.. -I../include -I../libcommon
+LDFLAGS := -L.. -lsafs -L../../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS += -I.. -I../../include -I../../libcommon
 
 all: test_rand_io workload-gen workload-stat
 
-test_rand_io: test_rand_io.o thread_private.o workload.o ../libsafs/libsafs.a
+test_rand_io: test_rand_io.o thread_private.o workload.o ../libsafs.a
 	$(CXX) -o test_rand_io test_rand_io.o thread_private.o workload.o $(LDFLAGS)
 
-workload-gen: workload-gen.o workload.o ../libsafs/libsafs.a
+workload-gen: workload-gen.o workload.o ../libsafs.a
 	$(CXX) -o workload-gen workload-gen.o workload.o $(LDFLAGS)
 
-workload-stat: workload-stat.o workload.o ../libsafs/libsafs.a
+workload-stat: workload-stat.o workload.o ../libsafs.a
 	$(CXX) -o workload-stat workload-stat.o workload.o $(LDFLAGS)
 
 clean:

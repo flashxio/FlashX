@@ -17,19 +17,11 @@
 
 include Makefile.common
 
-all: build_lib unit_test tools flash-graph test utils
+all: build_lib tools flash-graph utils
 
 build_lib:
 	$(MAKE) -C libcommon
 	$(MAKE) -C libsafs
-
-unit_test: build_lib
-ifndef MEMCHECK
-	$(MAKE) -C unit-test
-endif
-
-test: build_lib
-	$(MAKE) -C test
 
 tools: build_lib
 	$(MAKE) -C tools
@@ -46,8 +38,6 @@ clean:
 	rm -f *~
 	rm -f include/*~
 	find -name core -delete
-	make --ignore-errors -C unit-test clean
-	make --ignore-errors -C test clean
 	make --ignore-errors -C libsafs clean
 	make --ignore-errors -C libcommon clean
 	make --ignore-errors -C tools clean

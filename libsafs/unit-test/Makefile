@@ -15,19 +15,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include ../Makefile.common
+include ../../Makefile.common
 
-CFLAGS = -g -I../include -I../libcommon $(TRACE_FLAGS)
-LDFLAGS := -L../libsafs -lsafs -L../libcommon -lcommon $(LDFLAGS)
+CFLAGS = -g -I../../include -I../../libcommon $(TRACE_FLAGS)
+LDFLAGS := -L.. -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 
 UNITTEST = file_mapper_unit_test slab_allocator_test test_mem_tracker native_file_unit_test	\
 		   safs_file_unit_test unique_ptr_unit_test timer_unit_test test_open_close
 CPPFLAGS := -MD
-CXXFLAGS = -I.. -I../include -I../libcommon -g -std=c++0x
+CXXFLAGS = -I.. -I../../include -I../../libcommon -g -std=c++0x
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
 OBJS := $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(SOURCE)))
 DEPS := $(patsubst %.o,%.d,$(OBJS))
-LIBFILE = ../libsafs/libsafs.a ../libcommon/libcommon.a
+LIBFILE = ../libsafs.a ../../libcommon/libcommon.a
 
 all: $(UNITTEST)
 

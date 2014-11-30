@@ -19,16 +19,26 @@ include ../Makefile.common
 
 CXXFLAGS += -I../include -I../libcommon
 
-all: libsafs
+all: libsafs unit_test test
 
 libsafs: $(OBJS)
 	rm -f libsafs.a
 	ar -cvq libsafs.a $(OBJS)
 
+unit_test: libsafs
+ifndef MEMCHECK
+	$(MAKE) -C unit-test
+endif
+
+test: libsafs
+	$(MAKE) -C test
+
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm libsafs.a
+	rm -f libsafs.a
+	make --ignore-errors -C unit-test clean
+	make --ignore-errors -C test clean
 
 -include $(DEPS) 
