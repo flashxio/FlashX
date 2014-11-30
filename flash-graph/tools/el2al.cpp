@@ -20,7 +20,9 @@
 #include <libgen.h>
 
 #include "common.h"
+#include "config_map.h"
 #include "native_file.h"
+#include "io_interface.h"
 
 #include "utils.h"
 
@@ -32,8 +34,8 @@ struct str2int_pair {
 	int number;
 };
 static struct str2int_pair edge_type_map[] = {
-	{"count", EDGE_COUNT},
-	{"timestamp", EDGE_TIMESTAMP},
+	{"count", utils::EDGE_COUNT},
+	{"timestamp", utils::EDGE_TIMESTAMP},
 };
 static int type_map_size = sizeof(edge_type_map) / sizeof(edge_type_map[0]);
 
@@ -44,7 +46,7 @@ static inline int conv_edge_type_str2int(const std::string &type_str)
 			return edge_type_map[i].number;
 		}
 	}
-	return DEFAULT_TYPE;
+	return utils::DEFAULT_TYPE;
 }
 
 static bool check_graph = false;
@@ -65,6 +67,10 @@ void print_usage()
 	fprintf(stderr, "-w: write the graph to a file\n");
 	fprintf(stderr, "-T: the number of threads to process in parallel\n");
 	fprintf(stderr, "-d: store intermediate data on disks\n");
+	fprintf(stderr, "-c: the SAFS configuration file\n");
+	fprintf(stderr, "-W: the working directory\n");
+	fprintf(stderr, "-b: the size of the buffer for sorting edge lists\n");
+	fprintf(stderr, "-B: the size of the buffer for writing the graph\n");
 }
 
 int main(int argc, char *argv[])
@@ -77,7 +83,11 @@ int main(int argc, char *argv[])
 	bool merge_graph = false;
 	bool write_graph = false;
 	bool on_disk = false;
-	while ((opt = getopt(argc, argv, "uvt:mwT:d")) != -1) {
+	size_t sort_buf_size = 0;
+	size_t write_buf_size = 0;
+	std::string conf_file;
+	std::string work_dir = ".";
+	while ((opt = getopt(argc, argv, "uvt:mwT:dc:W:b:B:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'u':
@@ -103,6 +113,22 @@ int main(int argc, char *argv[])
 			case 'd':
 				on_disk = true;
 				break;
+			case 'c':
+				conf_file = optarg;
+				num_opts++;
+				break;
+			case 'W':
+				work_dir = optarg;
+				num_opts++;
+				break;
+			case 'b':
+				sort_buf_size = str2size(optarg);
+				num_opts++;
+				break;
+			case 'B':
+				write_buf_size = str2size(optarg);
+				num_opts++;
+				break;
 			default:
 				print_usage();
 		}
@@ -114,15 +140,19 @@ int main(int argc, char *argv[])
 		exit(-1);
 	}
 
-	int edge_attr_type = DEFAULT_TYPE;
+	utils::set_num_threads(num_threads);
+	if (sort_buf_size > 0)
+		utils::set_sort_buf_size(sort_buf_size);
+	if (write_buf_size > 0)
+		utils::set_write_buf_size(write_buf_size);
+
+	int edge_attr_type = utils::DEFAULT_TYPE;
 	if (type_str) {
 		edge_attr_type = conv_edge_type_str2int(type_str);
 	}
 
 	std::string adjacency_list_file = argv[0];
 	adjacency_list_file += std::string("-v") + itoa(CURR_VERSION);
-	std::string work_dir = dirname(argv[0]);
-	printf("work dir: %s\n", work_dir.c_str());
 
 	std::string index_file = argv[1];
 	index_file += std::string("-v") + itoa(CURR_VERSION);
@@ -140,15 +170,21 @@ int main(int argc, char *argv[])
 			edge_list_files.push_back(argv[i]);
 	}
 
-	for (size_t i = 0; i < edge_list_files.size(); i++)
-		printf("edge list file: %s\n", edge_list_files[i].c_str());
-
+	utils::large_io_creator::ptr creator;
+	if (conf_file.empty())
+		creator = utils::large_io_creator::create(false, work_dir);
+	else {
+		config_map::ptr configs = config_map::create(conf_file);
+		configs->add_options("writable=1");
+		safs::init_io_system(configs);
+		creator = utils::large_io_creator::create(true, ".");
+	}
 	if (merge_graph) {
-		edge_graph::ptr edge_g = parse_edge_lists(edge_list_files, edge_attr_type,
-				directed, num_threads, !on_disk);
-		disk_serial_graph::ptr g
-			= std::static_pointer_cast<disk_serial_graph, serial_graph>(
-					construct_graph(edge_g, work_dir, num_threads));
+		utils::edge_graph::ptr edge_g = utils::parse_edge_lists(edge_list_files,
+				edge_attr_type, directed, !on_disk);
+		utils::disk_serial_graph::ptr g
+			= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
+					utils::construct_graph(edge_g, creator));
 		// Write the constructed individual graph to a file.
 		if (write_graph) {
 			assert(!file_exist(adjacency_list_file));
@@ -161,7 +197,8 @@ int main(int argc, char *argv[])
 		if (check_graph) {
 			struct timeval start, end;
 			gettimeofday(&start, NULL);
-			g->check_ext_graph(*edge_g, index_file, adjacency_list_file);
+			g->check_ext_graph(*edge_g, index_file,
+					creator->create_reader(adjacency_list_file));
 			gettimeofday(&end, NULL);
 			printf("verifying a graph takes %.2f seconds\n",
 					time_diff(start, end));
@@ -186,11 +223,11 @@ int main(int argc, char *argv[])
 			std::vector<std::string> files(1);
 			files[0] = edge_list_files[i];
 
-			edge_graph::ptr edge_g = parse_edge_lists(files, edge_attr_type,
-					directed, num_threads, !on_disk);
-			disk_serial_graph::ptr g
-				= std::static_pointer_cast<disk_serial_graph, serial_graph>(
-						construct_graph(edge_g, work_dir, num_threads));
+			utils::edge_graph::ptr edge_g = utils::parse_edge_lists(files,
+					edge_attr_type, directed, !on_disk);
+			utils::disk_serial_graph::ptr g
+				= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
+						utils::construct_graph(edge_g, creator));
 			// Write the constructed individual graph to a file.
 			if (write_graph) {
 				assert(!file_exist(graph_files[i]));
@@ -203,11 +240,15 @@ int main(int argc, char *argv[])
 			if (check_graph) {
 				struct timeval start, end;
 				gettimeofday(&start, NULL);
-				g->check_ext_graph(*edge_g, index_files[i], graph_files[i]);
+				g->check_ext_graph(*edge_g, index_files[i],
+						creator->create_reader(graph_files[i]));
 				gettimeofday(&end, NULL);
 				printf("verifying a graph takes %.2f seconds\n",
 						time_diff(start, end));
 			}
 		}
 	}
+
+	if (is_safs_init())
+		destroy_io_system();
 }

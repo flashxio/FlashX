@@ -180,8 +180,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	
 	params.init(configs->get_options());
 	params.print();
-
-	numa_set_bind_policy(1);
 	thread::thread_class_init();
 
 	// The I/O system has been initialized.
@@ -243,7 +241,7 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	// Assign a thread object to the current thread.
 	if (thread::get_curr_thread() == NULL)
-		thread::represent_thread(0);
+		thread::represent_thread(-1);
 
 	if (global_data.global_cache == NULL && with_cache) {
 		std::vector<int> node_id_array;
@@ -392,14 +390,18 @@ public:
 
 class remote_io_factory: public file_io_factory
 {
+	std::shared_ptr<slab_allocator> unbind_msg_allocator;
 	std::vector<std::shared_ptr<slab_allocator> > msg_allocators;
 	std::atomic_ulong tot_accesses;
-protected:
 	// The number of existing IO instances.
 	std::atomic<size_t> num_ios;
 	file_mapper &mapper;
+
 	slab_allocator &get_msg_allocator(int node_id) {
-		return *msg_allocators[node_id];
+		if (node_id < 0)
+			return *unbind_msg_allocator;
+		else
+			return *msg_allocators[node_id];
 	}
 public:
 	remote_io_factory(file_mapper &_mapper);
@@ -425,7 +427,7 @@ public:
 	}
 };
 
-class global_cached_io_factory: public remote_io_factory
+class global_cached_io_factory: public file_io_factory
 {
 	std::atomic_ulong tot_bytes;
 	std::atomic_ulong tot_accesses;
@@ -434,9 +436,11 @@ class global_cached_io_factory: public remote_io_factory
 	std::atomic_ulong tot_fast_process;
 
 	page_cache *global_cache;
+	remote_io_factory remote_factory;
 public:
 	global_cached_io_factory(file_mapper &_mapper,
-			page_cache *cache): remote_io_factory(_mapper) {
+			page_cache *cache): file_io_factory(
+				_mapper.get_name()), remote_factory(_mapper) {
 		this->global_cache = cache;
 		tot_bytes = 0;
 		tot_accesses = 0;
@@ -448,6 +452,10 @@ public:
 	virtual io_interface::ptr create_io(thread *t);
 
 	virtual void destroy_io(io_interface *io);
+
+	virtual int get_file_id() const {
+		return remote_factory.get_file_id();
+	}
 
 	virtual void collect_stat(io_interface &io) {
 		global_cached_io &gio = (global_cached_io &) io;
@@ -462,7 +470,7 @@ public:
 	virtual void print_statistics() const {
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("%1% gets %2% async I/O accesses, %3% in bytes")
-			% mapper.get_name() % tot_accesses.load() % tot_bytes.load();
+			% get_name() % tot_accesses.load() % tot_bytes.load();
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("There are %1% pages accessed, %2% cache hits, %3% of them are in the fast process")
 			% tot_pg_accesses.load() % tot_hits.load() % tot_fast_process.load();
@@ -559,6 +567,10 @@ remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 					IO_MSG_SIZE * sizeof(io_request),
 					IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, i));
 	}
+	unbind_msg_allocator = std::shared_ptr<slab_allocator>(new slab_allocator(
+				std::string("disk_msg_allocator-unbind"),
+				IO_MSG_SIZE * sizeof(io_request),
+				IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, -1));
 	tot_accesses = 0;
 	num_ios = 0;
 	int num_files = mapper.get_num_files();
@@ -580,6 +592,12 @@ remote_io_factory::~remote_io_factory()
 
 io_interface::ptr remote_io_factory::create_io(thread *t)
 {
+	if (t->get_node_id() >= (int) msg_allocators.size()) {
+		fprintf(stderr, "thread %d are not in a right node (%d)\n",
+				t->get_id(), t->get_node_id());
+		return io_interface::ptr();
+	}
+
 	num_ios++;
 	io_interface *io = new remote_io(global_data.read_threads,
 			get_msg_allocator(t->get_node_id()), &mapper, t);
@@ -594,20 +612,19 @@ void remote_io_factory::destroy_io(io_interface *io)
 
 io_interface::ptr global_cached_io_factory::create_io(thread *t)
 {
-	io_interface *underlying = new remote_io(global_data.read_threads,
-			get_msg_allocator(t->get_node_id()), &mapper, t);
+	io_interface::ptr underlying = remote_factory.create_io(t);
 	comp_io_scheduler *scheduler = NULL;
 	if (get_sched_creater())
 		scheduler = get_sched_creater()->create(underlying->get_node_id());
 	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache, scheduler);
-	num_ios++;
 	return io_interface::ptr(io, io_deleter(*this));
 }
 
 void global_cached_io_factory::destroy_io(io_interface *io)
 {
-	num_ios--;
+	// num_ios is decreased by the underlying remote I/O instance.
+
 	// The underlying IO is deleted in global_cached_io's destructor.
 	delete io;
 }
@@ -698,7 +715,7 @@ void print_io_thread_stat()
 ssize_t file_io_factory::get_file_size() const
 {
 	safs_file f(*global_data.raid_conf, name);
-	return f.get_file_size();
+	return f.get_size();
 }
 
 bool is_safs_init()

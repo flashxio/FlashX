@@ -62,7 +62,7 @@ bool safs_file::exist() const
 	return true;
 }
 
-size_t safs_file::get_file_size() const
+ssize_t safs_file::get_size() const
 {
 	if (!exist())
 		return -1;
@@ -76,6 +76,24 @@ size_t safs_file::get_file_size() const
 		ret += f.get_size();
 	}
 	return ret;
+}
+
+bool safs_file::rename(const std::string &new_name)
+{
+	if (!exist())
+		return false;
+
+	for (unsigned i = 0; i < native_dirs.size(); i++) {
+		native_file f(native_dirs[i].name);
+		if (!f.rename(f.get_dir_name() + "/" + new_name))
+			return false;
+	}
+	name = new_name;
+	for (unsigned i = 0; i < native_dirs.size(); i++) {
+		native_file f(native_dirs[i].name);
+		native_dirs[i].name = f.get_dir_name() + "/" + new_name;
+	}
+	return true;
 }
 
 bool safs_file::create_file(size_t file_size)

@@ -48,7 +48,7 @@ stopifnot(fg.exist.graph("friendster"))
 fg <- fg.get.graph("friendster")
 
 print("test triangle counting on an undirected graph")
-system.time(fg.res <- fg.undirected.triangles(fg))
+system.time(fg.res <- fg.triangles(fg))
 stopifnot(sum(as.numeric(fg.res))/3 == 4173724142)
 
 print("A * x");

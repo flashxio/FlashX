@@ -99,7 +99,7 @@ class global_cached_io: public io_interface
 	long cache_size;
 	page_cache *global_cache;
 	/* the underlying IO. */
-	io_interface *underlying;
+	io_interface::ptr underlying;
 	callback::ptr cb;
 
 	std::unique_ptr<request_allocator> req_allocator;
@@ -188,7 +188,7 @@ class global_cached_io: public io_interface
 		}
 	}
 public:
-	global_cached_io(thread *t, io_interface *, page_cache *cache,
+	global_cached_io(thread *t, io_interface::ptr, page_cache *cache,
 			comp_io_scheduler *sched = NULL);
 
 	~global_cached_io();

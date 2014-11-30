@@ -20,6 +20,7 @@
 #include <algorithm>
 
 #include "virt_aio_ctx.h"
+#include "parameters.h"
 
 namespace safs
 {

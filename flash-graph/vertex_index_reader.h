@@ -55,21 +55,31 @@ public:
 	virtual int get_num_vertices() const = 0;
 
 	off_t get_curr_off() const {
-		return ((vertex_offset *) curr_buf)->get_off();
+		const vertex_offset *v_off
+			= reinterpret_cast<const vertex_offset *>(curr_buf);
+		return v_off->get_off();
 	}
 
 	vsize_t get_curr_size() const {
-		return ((vertex_offset *) next_buf)->get_off()
-			- ((vertex_offset *) curr_buf)->get_off();
+		const vertex_offset *v_next_off
+			= reinterpret_cast<const vertex_offset *>(next_buf);
+		const vertex_offset *v_curr_off
+			= reinterpret_cast<const vertex_offset *>(curr_buf);
+		return v_next_off->get_off() - v_curr_off->get_off();
 	}
 
 	off_t get_curr_out_off() const {
-		return ((directed_vertex_entry *) curr_buf)->get_out_off();
+		const directed_vertex_entry *v_entry
+			= reinterpret_cast<const directed_vertex_entry *>(curr_buf);
+		return v_entry->get_out_off();
 	}
 
 	vsize_t get_curr_out_size() const {
-		return ((directed_vertex_entry *) next_buf)->get_out_off()
-			- ((directed_vertex_entry *) curr_buf)->get_out_off();
+		const directed_vertex_entry *v_next_entry
+			= reinterpret_cast<const directed_vertex_entry *>(next_buf);
+		const directed_vertex_entry *v_curr_entry
+			= reinterpret_cast<const directed_vertex_entry *>(curr_buf);
+		return v_next_entry->get_out_off() - v_curr_entry->get_out_off();
 	}
 };
 
@@ -83,17 +93,21 @@ public:
 		num_entries = it.get_num_tot_entries();
 		assert(num_entries >= 2);
 		assert(it.has_next());
-		*(EntryType *) curr_buf = it.next();
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
+		*v_curr_entry = it.next();
 		assert(it.has_next());
-		*(EntryType *) next_buf = it.next();
+		*v_next_entry = it.next();
 		_has_next = true;
 	}
 
 	virtual void move_next() {
 		_has_next = it.has_next();
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
 		if (_has_next) {
-			*(EntryType *) curr_buf = *(EntryType *) next_buf;
-			*(EntryType *) next_buf = it.next();
+			*v_curr_entry = *v_next_entry;
+			*v_next_entry = it.next();
 		}
 	}
 
@@ -103,10 +117,12 @@ public:
 			_has_next = false;
 			return false;
 		}
-		*(EntryType *) curr_buf = it.next();
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
+		*v_curr_entry = it.next();
 		if (it.has_next()) {
 			_has_next = true;
-			*(EntryType *) next_buf = it.next();
+			*v_next_entry = it.next();
 		}
 		else
 			_has_next = false;
@@ -130,25 +146,31 @@ public:
 		this->p = start;
 		this->end = end;
 		assert(end - p >= 2);
-		*(EntryType *) curr_buf = *p;
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
+		*v_curr_entry = *p;
 		p++;
-		*(EntryType *) next_buf = *p;
+		*v_next_entry = *p;
 		_has_next = true;
 	}
 
 	virtual void move_next() {
-		*(EntryType *) curr_buf = *(EntryType *) next_buf;
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
+		*v_curr_entry = *v_next_entry;
 		p++;
 		_has_next = p < end;
 		if (_has_next)
-			*(EntryType *) next_buf = *p;
+			*v_next_entry = *p;
 	}
 
 	virtual bool move_to(int idx) {
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
 		p = start + idx;
 		if (p + 1 < end) {
-			*(EntryType *) curr_buf = *p;
-			*(EntryType *) next_buf = *(p + 1);
+			*v_curr_entry = *p;
+			*v_next_entry = *(p + 1);
 			_has_next = true;
 		}
 		else
@@ -180,7 +202,9 @@ public:
 	}
 
 	virtual void move_next() {
-		vertex_offset e = *(vertex_offset *) next_buf;
+		const vertex_offset *v_next_off
+			= reinterpret_cast<const vertex_offset *>(next_buf);
+		vertex_offset e = *v_next_off;
 		new (curr_buf) vertex_offset(e);
 		idx++;
 		_has_next = (idx < end);
@@ -230,7 +254,9 @@ public:
 	}
 
 	virtual void move_next() {
-		directed_vertex_entry e = *(directed_vertex_entry *) next_buf;
+		const directed_vertex_entry *v_next_entry
+			= reinterpret_cast<const directed_vertex_entry *>(next_buf);
+		directed_vertex_entry e = *v_next_entry;
 		new (curr_buf) directed_vertex_entry(e);
 		idx++;
 		_has_next = (idx < end);

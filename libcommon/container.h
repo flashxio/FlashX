@@ -541,6 +541,8 @@ class embedded_array
 	int capacity;
 
 	void assign(embedded_array<T, size> &arr) {
+		this->clear();
+
 		if (arr.real_buf == arr.buf) {
 			for (int i = 0; i < capacity; i++) {
 				this->buf[i] = arr.buf[i];
@@ -602,6 +604,14 @@ public:
 			real_buf = tmp;
 		}
 		capacity = new_size;
+	}
+
+	void clear() {
+		if (this->real_buf != this->buf) {
+			delete [] this->real_buf;
+			this->real_buf = this->buf;
+			this->capacity = size;
+		}
 	}
 
 	int get_capacity() const {

@@ -3,7 +3,7 @@ io_depth=64
 cache_size=1G
 num_nodes=4
 # change FG_TOP to the path of the top directory of FlashGraph.
-root_conf=/home/zhengda/parallel-cache/user-space-cache/flash-graph/release-test/large_data_files.txt
+root_conf=/home/zhengda/parallel-cache/user-space-cache/conf/data_files.txt
 max_num_pending_ios=5000
 #preload=
 num_vparts=1
