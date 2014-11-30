@@ -21,7 +21,7 @@ OMP_FLAG = -fopenmp
 CXXFLAGS += -I../include -I../libcommon $(OMP_FLAG) -DUSE_GZIP -DUSE_STXXL
 LDFLAGS += $(OMP_FLAG)
 
-all: libgraph graph-bfs unit-test tools test matrix libgraph-algs test-algs
+all: libgraph unit-test tools test matrix libgraph-algs test-algs
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -29,9 +29,6 @@ libgraph-algs: libgraph
 libgraph: $(OBJS)
 	rm -f libgraph.a
 	ar -cvq libgraph.a $(OBJS)
-
-graph-bfs: libgraph
-	$(MAKE) -C graph-bfs
 
 tools: libgraph
 	$(MAKE) -C tools
@@ -58,7 +55,6 @@ clean:
 	rm -f libgraph.a
 	find -name core -delete
 	$(MAKE) clean -C tools
-	$(MAKE) clean -C graph-bfs
 	$(MAKE) clean -C unit-test
 	$(MAKE) clean -C test
 	$(MAKE) clean -C matrix
