@@ -36,6 +36,8 @@ add_library(graph STATIC
 	worker_thread.cpp
 	vertex_program.cpp
 	utils.cpp
+	vertex_index_constructor.cpp
+	utils_io.cpp
 )
 
 subdirs(libgraph-algs
