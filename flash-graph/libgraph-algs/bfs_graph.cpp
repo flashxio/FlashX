@@ -31,13 +31,19 @@
 using namespace safs;
 using namespace fg;
 
+namespace
+{
+
 edge_type traverse_edge = edge_type::OUT_EDGE;
 
-class bfs_vertex: public compute_directed_vertex
+/*
+ * Vertex program for BFS on a directed graph.
+ */
+class bfs_dvertex: public compute_directed_vertex
 {
 	bool visited;
 public:
-	bfs_vertex(vertex_id_t id): compute_directed_vertex(id) {
+	bfs_dvertex(vertex_id_t id): compute_directed_vertex(id) {
 		visited = false;
 	}
 
@@ -63,7 +69,7 @@ public:
 	}
 };
 
-void bfs_vertex::run(vertex_program &prog, const page_vertex &vertex)
+void bfs_dvertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	assert(!has_visited());
 	set_visited(true);
@@ -88,6 +94,56 @@ void bfs_vertex::run(vertex_program &prog, const page_vertex &vertex)
 	}
 }
 
+/*
+ * Vertex program for BFS on an undirected graph.
+ */
+class bfs_uvertex: public compute_vertex
+{
+	bool visited;
+public:
+	bfs_uvertex(vertex_id_t id): compute_vertex(id) {
+		visited = false;
+	}
+
+	bool has_visited() const {
+		return visited;
+	}
+
+	void run(vertex_program &prog) {
+		if (!has_visited()) {
+			vertex_id_t id = prog.get_vertex_id(*this);
+			request_vertices(&id, 1);
+		}
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex);
+
+	void run_on_message(vertex_program &prog, const vertex_message &msg) {
+	}
+};
+
+void bfs_uvertex::run(vertex_program &prog, const page_vertex &vertex)
+{
+	assert(!has_visited());
+	visited = true;
+
+	int num_dests = vertex.get_num_edges(edge_type::BOTH_EDGES);
+	if (num_dests == 0)
+		return;
+
+	// We need to add the neighbors of the vertex to the queue of
+	// the next level.
+#ifdef USE_ARRAY
+	stack_array<vertex_id_t, 1024> neighs(num_dests);
+	vertex.read_edges(edge_type::BOTH_EDGES, neighs.data(), num_dests);
+	prog.activate_vertices(neighs.data(), num_dests);
+#else
+	edge_seq_iterator it = vertex.get_neigh_seq_it(edge_type::BOTH_EDGES, 0, num_dests);
+	prog.activate_vertices(it);
+#endif
+}
+
+template<class vertex_type>
 class count_vertex_query: public vertex_query
 {
 	size_t num_visited;
@@ -97,7 +153,7 @@ public:
 	}
 
 	virtual void run(graph_engine &graph, compute_vertex &v) {
-		bfs_vertex &bfs_v = (bfs_vertex &) v;
+		vertex_type &bfs_v = (vertex_type &) v;
 		if (bfs_v.has_visited())
 			num_visited++;
 	}
@@ -116,71 +172,20 @@ public:
 	}
 };
 
-void int_handler(int sig_num)
-{
-#ifdef PROFILER
-	if (!graph_conf.get_prof_file().empty())
-		ProfilerStop();
-#endif
-	exit(0);
 }
 
-void print_usage()
+size_t bfs(FG_graph::ptr fg, vertex_id_t start_vertex, edge_type traverse_e)
 {
-	fprintf(stderr,
-			"bfs [options] conf_file graph_file index_file start_vertex\n");
-	fprintf(stderr, "-c confs: add more configurations to the system\n");
-	fprintf(stderr, "-b: traverse with both in-edges and out-edges\n");
-	graph_conf.print_help();
-	params.print_help();
-}
-
-int main(int argc, char *argv[])
-{
-	int opt;
-	std::string confs;
-	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:b")) != -1) {
-		num_opts++;
-		switch (opt) {
-			case 'c':
-				confs = optarg;
-				num_opts++;
-				break;
-			case 'b':
-				traverse_edge = edge_type::BOTH_EDGES;
-				break;
-			default:
-				print_usage();
-		}
-	}
-	argv += 1 + num_opts;
-	argc -= 1 + num_opts;
-
-	if (argc < 4) {
-		print_usage();
-		exit(-1);
-	}
-
-	std::string conf_file = argv[0];
-	std::string graph_file = argv[1];
-	std::string index_file = argv[2];
-	vertex_id_t start_vertex = atoi(argv[3]);
-
-	config_map::ptr configs = config_map::create(conf_file);
-	assert(configs);
-	configs->add_options(confs);
-
-	signal(SIGINT, int_handler);
-
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
-	graph_index::ptr index = NUMA_graph_index<bfs_vertex>::create(
-			fg->get_graph_header());
+	bool directed = fg->get_graph_header().is_directed_graph();
+	graph_index::ptr index;
+	if (directed)
+		index = NUMA_graph_index<bfs_dvertex>::create(fg->get_graph_header());
+	else
+		index = NUMA_graph_index<bfs_uvertex>::create(fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
+
+	traverse_edge = traverse_e;
 	printf("BFS starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -188,16 +193,23 @@ int main(int argc, char *argv[])
 
 	graph->start(&start_vertex, 1);
 	graph->wait4complete();
-	gettimeofday(&end, NULL);
 
-	vertex_query::ptr cvq(new count_vertex_query());
-	graph->query_on_all(cvq);
-	size_t num_visited = ((count_vertex_query *) cvq.get())->get_num_visited();
+	size_t num_visited;
+	vertex_query::ptr cvq;
+	if (directed) {
+		cvq = vertex_query::ptr(new count_vertex_query<bfs_dvertex>());
+		graph->query_on_all(cvq);
+		num_visited = ((count_vertex_query<bfs_dvertex> *) cvq.get())->get_num_visited();
+	}
+	else {
+		cvq = vertex_query::ptr(new count_vertex_query<bfs_uvertex>());
+		graph->query_on_all(cvq);
+		num_visited = ((count_vertex_query<bfs_uvertex> *) cvq.get())->get_num_visited();
+	}
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	printf("BFS from vertex %ld visits %ld vertices. It takes %f seconds\n",
-			(unsigned long) start_vertex, num_visited, time_diff(start, end));
+	return num_visited;
 }
