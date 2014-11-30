@@ -518,7 +518,6 @@ class request_sender: public simple_msg_sender<io_request>
 public:
 	static request_sender *create(int node_id, slab_allocator *alloc,
 			msg_queue<io_request> *queue) {
-		assert(node_id >= 0);
 		return new request_sender(node_id, alloc, queue);
 	}
 
