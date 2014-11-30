@@ -19,6 +19,8 @@
 
 #include "kmeans.h"
 
+using namespace fg;
+
 bool updated = false;
 static vsize_t NEV;
 static size_t K;
@@ -26,8 +28,12 @@ static vsize_t NUM_ROWS;
 
 static struct timeval start, end;
 
+/**
+  * \brief Print an arry of some length `len`.
+  *	 \param len The length of the array.
+  */
 template <typename T>
-void print_arr(T* arr, vsize_t len) {
+static void print_arr(T* arr, vsize_t len) {
     printf("[ ");
     for (vsize_t i = 0; i < len; i++) {
         std::cout << arr[i] << " ";
@@ -35,8 +41,13 @@ void print_arr(T* arr, vsize_t len) {
     printf("]\n");
 }
 
+/* 
+ * \Internal
+ * \brief Simple helper used to print a vector.
+ * \param v The vector to print.
+ */
 template <typename T>
-void print_vector(typename std::vector<T>& v) 
+static void print_vector(typename std::vector<T>& v) 
 {
 	std::cout << "[";
 
@@ -47,13 +58,25 @@ void print_vector(typename std::vector<T>& v)
 	std::cout <<  " ]\n";
 }
 
-double dist_sq(double arg1, double arg2) 
+/**
+ * \brief Get the squared distance given two values.
+ *	\param arg1 the first value.
+ *	\param arg2 the second value.
+ *  \return the squared distance.
+ */
+static double dist_sq(double arg1, double arg2) 
 {
 	double diff = arg1 - arg2;
 	return diff*diff;
 }
 
-void random_partition_init(vsize_t* cluster_assignments) 
+/**
+  * \brief This initializes clusters by randomly choosing sample 
+  *		membership in a cluster.
+  * See: http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+  *	\param cluster_assignments Which cluster each sample falls into.
+  */
+static void random_partition_init(vsize_t* cluster_assignments) 
 {
 	BOOST_LOG_TRIVIAL(info) << "Random init start";
 
@@ -70,7 +93,14 @@ void random_partition_init(vsize_t* cluster_assignments)
 	BOOST_LOG_TRIVIAL(info) << "Random init end\n";
 }
 
-void forgy_init(const double* matrix, double* clusters) {
+
+/**
+  * \brief Forgy init takes `K` random samples from the matrix
+  *		and uses them as cluster centers.
+  * \param matrix the flattened matrix who's rows are being clustered.
+  * \param clusters The cluster centers (means) flattened matrix.
+  */
+static void forgy_init(const double* matrix, double* clusters) {
 
 	BOOST_LOG_TRIVIAL(info) << "Forgy init start";
 
@@ -82,14 +112,24 @@ void forgy_init(const double* matrix, double* clusters) {
 	BOOST_LOG_TRIVIAL(info) << "Forgy init end";
 }
 
-void kmeanspp_init()
+/**
+ * \brief A parallel version of the kmeans++ initialization alg.
+ */
+static void kmeanspp_init()
 {
 	BOOST_LOG_TRIVIAL(fatal) << "kmeanspp not yet implemented";
 	exit(-1);
 }
 
+/*\Internal
+* \brief print a col wise matrix of type double / double.
+* Used for testing only.
+* \param matrix The col wise matrix.
+* \param rows The number of rows in the mat
+* \param cols The number of cols in the mat
+*/
 template <typename T>
-void print_mat(T* matrix, const vsize_t rows, const vsize_t cols) {
+static void print_mat(T* matrix, const vsize_t rows, const vsize_t cols) {
 	for (vsize_t row = 0; row < rows; row++) {
 		std::cout << "[";
 		for (vsize_t col = 0; col < cols; col++) {
@@ -99,7 +139,13 @@ void print_mat(T* matrix, const vsize_t rows, const vsize_t cols) {
 	}	
 }
 
-void E_step(const double* matrix, double* clusters, vsize_t* cluster_assignments)
+/**
+  * \brief Update the cluster assignments while recomputing distance matrix.
+  * \param matrix The flattened matrix who's rows are being clustered.
+  * \param clusters The cluster centers (means) flattened matrix.
+  *	\param cluster_assignments Which cluster each sample falls into.
+  */
+static void E_step(const double* matrix, double* clusters, vsize_t* cluster_assignments)
 {
 #pragma omp parallel for firstprivate(matrix, clusters) shared(cluster_assignments)
     for (vsize_t row=0; row < NUM_ROWS; row++) {
@@ -127,7 +173,14 @@ void E_step(const double* matrix, double* clusters, vsize_t* cluster_assignments
 #endif
 }
 
-void M_step(const double* matrix, double* clusters, 
+/**
+ * \brief Update the cluster means
+ * \param matrix The matrix who's rows are being clustered.
+ * \param clusters The cluster centers (means).
+ * \param cluster_assignment_counts How many members each cluster has.
+ * \param cluster_assignments Which cluster each sample falls into.
+ */
+static void M_step(const double* matrix, double* clusters, 
 		vsize_t* cluster_assignment_counts, const vsize_t* cluster_assignments)
 {
 	BOOST_LOG_TRIVIAL(info) << "M_step start";

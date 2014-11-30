@@ -28,8 +28,6 @@
 #include <vector>
 #include <limits> 
 
-// #include "omp.h"
-
 #include "FGlib.h"
 #include "graph.h"
 #include "graph_engine.h"
@@ -38,82 +36,6 @@
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/FG_dense_matrix.h"
 #include "matrix/matrix_eigensolver.h"
-
-using namespace fg;
-
-static const char * PROF_FILE_LOC = 
-"/home/disa/graph-engine/flash-graph/clustering/profile_out.log";
-
-// TODO: Doc
-template <typename T>
-void print_arr(T* arr, vsize_t len);
-
-/* 
- * \Internal
- * \brief Simple helper used to print a vector.
- * \param v The vector to print.
- */
-template <typename T>
-void print_vector(typename std::vector<T>& v);
-
-/**
- * \brief Get the squared distance given two values.
- *	\param arg1 the first value.
- *	\param arg2 the second value.
- *  \return the squared distance.
- */
-double dist_sq(double arg1, double arg2);
-
-/* See: http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods */
-
-/**
-  * \brief This initializes clusters by randomly choosing sample 
-  *		membership in a cluster.
-  *	\param cluster_assignments Which cluster each sample falls into.
-  */
-void random_partition_init(vsize_t* cluster_assignments);
-
-/**
-  * \brief Forgy init takes `K` random samples from the matrix
-  *		and uses them as cluster centers.
-  * \param matrix the flattened matrix who's rows are being clustered.
-  * \param clusters The cluster centers (means) flattened matrix.
-  */
-void forgy_init(const double* matrix, double* clusters);
-
-/**
- * \brief A parallel version of the kmeans++ initialization alg.
- */
-void kmeanspp_init();
-
-
-/*\Internal
-* \brief print a col wise matrix of type double / double.
-* Used for testing only.
-* \param matrix The col wise matrix.
-* \param rows The number of rows in the mat
-* \param cols The number of cols in the mat
-*/
-template <typename T>
-void print_mat(const T* matrix, const vsize_t rows, const vsize_t cols); 
-
-/**
-  * \brief Update the cluster assignments while recomputing distance matrix.
-  * \param matrix The flattened matrix who's rows are being clustered.
-  * \param clusters The cluster centers (means) flattened matrix.
-  *	\param cluster_assignments Which cluster each sample falls into.
-  */
-void E_step(const double* matrix, double* clusters, vsize_t* cluster_assignments);
-
-/**
- * \brief Update the cluster means
- * \param matrix The matrix who's rows are being clustered.
- * \param clusters The cluster centers (means).
- * \param cluster_assignment_counts How many members each cluster has.
- * \param cluster_assignments Which cluster each sample falls into.
- */
-void M_step(const double* matrix, double* clusters, 
-		vsize_t* cluster_assignment_counts, const vsize_t* cluster_assignments);
 
 /**
  * \brief Compute kmeans on matrix of features
@@ -127,31 +49,9 @@ void M_step(const double* matrix, double* clusters,
  * \param max_iters The maximum number of iterations of K-means to perform.
  * \param init The type of initilization ["random", "forgy", "kmeanspp"]
  **/
-vsize_t compute_kmeans(const double* matrix, double* clusters, 
-		vsize_t* cluster_assignments, vsize_t* cluster_assignment_counts,
-		const vsize_t num_rows, const vsize_t nev, const size_t k, const vsize_t MAX_ITERS, 
-		const std::string init="random");
+fg::vsize_t compute_kmeans(const double* matrix, double* clusters, 
+		fg::vsize_t* cluster_assignments, fg::vsize_t* cluster_assignment_counts,
+		const fg::vsize_t num_rows, const fg::vsize_t nev, const size_t k, 
+		const fg::vsize_t MAX_ITERS, const std::string init="random");
 
-/**
-  * \brief Solely used to return the result of k means to R binding
-  */
-class FG_kmeans_ret {
-	private:
-		FG_kmeans_ret() {
-		}
-	public:
-		FG_vector<vsize_t>::ptr assignments;
-		FG_col_wise_matrix<double>::ptr clusters;
-		std::vector<vsize_t> sizes;
-		vsize_t iters;
-
-		FG_kmeans_ret(FG_vector<vsize_t>::ptr asgn, 
-				FG_col_wise_matrix<double>::ptr clusts, std::vector<vsize_t>& sizes, vsize_t iters)
-		{
-			this->assignments = asgn;
-			this->clusters = clusts;
-			this->sizes = sizes;
-			this->iters = iters;
-		}
-};
 #endif
