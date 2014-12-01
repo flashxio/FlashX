@@ -83,7 +83,7 @@ public:
 class mem_row_dense_matrix: public mem_dense_matrix
 {
 	char *data;
-protected:
+
 	mem_row_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {
@@ -128,8 +128,41 @@ public:
 
 class mem_col_dense_matrix: public mem_dense_matrix
 {
+	// The number of rows.
+	static const size_t SUB_CHUNK_SIZE = 1024;
+
+	class sub_matrix {
+		size_t start_row;
+		size_t start_col;
+		size_t nrow;
+		size_t ncol;
+		const mem_col_dense_matrix &m;
+	public:
+		sub_matrix(size_t start_row, size_t nrow, size_t start_col,
+				size_t ncol, const mem_col_dense_matrix &_m): m(_m) {
+			this->start_row = start_row;
+			this->start_col = start_col;
+			this->nrow = nrow;
+			this->ncol = ncol;
+			assert(start_row + nrow <= m.get_num_rows());
+			assert(start_col + ncol <= m.get_num_cols());
+		}
+
+		size_t get_num_rows() const {
+			return nrow;
+		}
+
+		size_t get_num_cols() const {
+			return ncol;
+		}
+
+		const char *get_col(size_t col) const {
+			return m.get_col(start_col + col) + start_row * m.get_entry_size();
+		}
+	};
+
 	char *data;
-protected:
+
 	mem_col_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {

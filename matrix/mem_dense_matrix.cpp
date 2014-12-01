@@ -44,11 +44,17 @@ mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m
 	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow,
 			m.get_num_cols(), right_op.output_entry_size());
 
-	char *tmp_res = (char *) malloc(nrow * res->get_entry_size());
-	for (size_t i = 0; i < ncol; i++) {
-		for (size_t j = 0; j < m.get_num_cols(); j++) {
-			left_op.runAE(nrow, get_col(i), m.get(i, j), tmp_res);
-			right_op.runAA(nrow, tmp_res, res->get_col(j), res->get_col(j));
+	char *tmp_res = (char *) malloc(SUB_CHUNK_SIZE * res->get_entry_size());
+	for (size_t k = 0; k < nrow; k += SUB_CHUNK_SIZE) {
+		sub_matrix subm(k, std::min(SUB_CHUNK_SIZE, nrow - k), 0, ncol, *this);
+		for (size_t i = 0; i < ncol; i++) {
+			for (size_t j = 0; j < m.get_num_cols(); j++) {
+				left_op.runAE(subm.get_num_rows(), subm.get_col(i),
+						m.get(i, j), tmp_res);
+				char *store_col = res->get_col(j) + k * res->get_entry_size();
+				right_op.runAA(subm.get_num_rows(), tmp_res, store_col,
+						store_col);
+			}
 		}
 	}
 	free(tmp_res);
