@@ -189,7 +189,7 @@ public:
 		return ptr(new FG_dense_matrix<T, MatrixStore>(nrow, ncol));
 	}
 
-  /** TODO: DM Test
+  /** 
   * \brief Set an element value of the matrix given row and column.
   * \param row The row index a user desires to set.
   * \param col The col index a user desires to set.
@@ -199,18 +199,19 @@ public:
     matrix_store.set(row, col, value);
   }
   
-  /** TODO: DM Test
+  /** 
   * \brief Set an entire column of a matrix to specific values.
   * \param idx The column index a user desires to set.
   * \param vec An `FG_vector` containing the values the column will assume.
   */
-	void set_col(size_t idx, const FG_vector<T> &vec) {
-		assert(vec.get_size() == this->get_num_rows());
-		for (size_t i = 0; i < vec.get_size(); i++)
-			this->matrix_store.set(i, idx, vec.get(i));
-	}
+  void set_col(size_t idx, const typename FG_vector<T>::ptr vec) {
+	  assert(vec->get_size() == this->get_num_rows());
+	  for (size_t i = 0; i < vec->get_size(); i++)
+		  this->matrix_store.set(i, idx, vec->get(i));
+  }
+
   
-  /** TODO: DM Test
+  /**
   * \brief Set an entire row of a matrix to specific values.
   * \param idx The row index a user desires to set.
   * \param vec An `FG_vector` containing the values the column will assume.

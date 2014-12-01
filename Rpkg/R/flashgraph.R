@@ -419,14 +419,26 @@ fg.transitivity <- function(graph, type=c("global", "local"))
 	}
 }
 
-fg.coreness <- function(graph)
+#' K-core decomposition of a graph.
+#'
+#'  The k-core of graph is a maximal subgraph in which each vertex has
+#'  at least degree k. A vertex belongs to the k-th core if has degree >= k
+#'	when all connected vertices with degree < k are recursively deleted.
+#'
+#' @param graph The FlashGraphR object
+#' @param k.start The lowest core that should be computed. Must be >= 2.
+#' @param k.end The highest core that should be computed. Must be >= 2. 
+#'		default is 10.
+#' @return A numeric vector that contains the core of each
+#		vertex up to `k.end`. Vertices in cores higher than
+#		`k.end` will have entries with `-1` as their core.
+#' @name fg.kcore
+#' @author Disa Mhembere <disa@@jhu.edu>
+#' @rdname fg.kcore
+fg.kcore <- function(graph, k.start=2, k.end=10)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	stopifnot(graph$directed)
-	# FIXME set the right parameter.
-	k.start <- 1
-	k.end <- 0
 	.Call("R_FG_compute_kcore", graph, k.start, k.end, PACKAGE="FlashGraphR")
 }
 
@@ -834,6 +846,36 @@ print.fg <- function(fg)
 		directed = "D"
 	cat("FlashGraphR ", fg$name, " (", directed, "): ", fg.vcount(fg), " ", fg.ecount(fg),
 		"\n", sep="")
+}
+
+#' Perform k-means clustering on a data matrix.
+#'
+#' @param mat A numeric matrix of data.
+#' @param k The number of clusters.
+#' @param max.iters The maximum number of iterations allowed.
+#' @param init The form of initialization to use when the algorithm begins.
+#'              The default is "random". For a desciption of each see:
+#'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+#'
+#' @return A named list with the following members:
+#'         iters: The number of (outer) iterations performed.
+#'         centers: A matrix of cluster centers.
+#'         cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+#'         sizes: The number of points in each cluster.
+#'
+#' @examples
+#' num.clusts <- 3
+#' mat <- replicate(5, rnorm(10))
+#' kms <- fg.kmeans(mat, num.clusts)
+#
+#' @name fg.kmeans
+#' @author Disa Mhembere <disa@@jhu.edu>
+fg.kmeans <- function(mat, k, max.iters=.Machine$integer.max, init=c("random", "forgy","kmeanspp"))
+{
+    stopifnot(mat != NULL)
+    stopifnot(class(mat) == "matrix")
+    .Call("R_FG_kmeans", as.matrix(mat), as.integer(k),
+          as.integer(max.iters), init, PACKAGE="FlashGraphR")
 }
 
 .onLoad <- function(libname, pkgname)

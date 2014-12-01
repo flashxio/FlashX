@@ -105,6 +105,15 @@ public:
 void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		std::vector<eigen_pair_t> &eigen_pairs);
 
+/**
+ * \brief Compute eigenvalues and vectors given a sparse matrix.
+ *     \param matrix The sparse matrix.
+ * \param m The number of Lanczos basis vectors to use (more = fater convergence
+ but greater memory use. m - nv <= 2 and m <= rows(matrix)).
+ * \param nv The number of eigenvalues to compute.
+ * \param which eigenvalues to compute . We support ["LM", "LA", "SM", "SA"].
+ * \param eigen_pairs To place the result of the eigen-computation.
+ */
 template<class SparseMatrixType>
 void compute_eigen(typename SparseMatrixType::ptr matrix, int m, int nv,
 		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs)
