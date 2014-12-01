@@ -2,7 +2,7 @@
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Disa Mhembere (disa@jhu.edu)
  *
- * This file is part of FlashGraph.
+ * This file is part of FlashMatrix.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #endif
 
 #include "FGlib.h"
+#include "matrix/matrix_eigensolver.h"
+#include "matrix/FG_sparse_matrix.h"
 #include "matrix/kmeans.h"
 #include "ts_graph.h"
 
@@ -42,9 +44,9 @@ void int_handler(int sig_num)
 template <typename T>
 void pairs_to_p_mat(T* eig_matrix, std::vector<eigen_pair_t>& eigen_pairs) 
 {
-	vsize_t vec_cnt = 0;
+	unsigned vec_cnt = 0;
 	BOOST_FOREACH(eigen_pair_t &v, eigen_pairs) {
-		for (vsize_t row = 0; row < v.second->get_size(); row++) { // 0...NUM_ROWS
+		for (unsigned row = 0; row < v.second->get_size(); row++) { // 0...NUM_ROWS
 			eig_matrix[vec_cnt*v.second->get_size() + row] = v.second->get(row);
 		}
 		vec_cnt++;
@@ -53,10 +55,10 @@ void pairs_to_p_mat(T* eig_matrix, std::vector<eigen_pair_t>& eigen_pairs)
 
 
 /* For testing only */
-void dummy_eigs(vsize_t nev, size_t g_size, std::vector<eigen_pair_t>& eigen_pairs) {
+void dummy_eigs(unsigned nev, size_t g_size, std::vector<eigen_pair_t>& eigen_pairs) {
 	// Fake eigen computation for WIKI
 	std::cout << "Creating " << nev << " Fake eigs & vecs of len: " << g_size << std::endl;
-	for (vsize_t i = 0; i < nev; i++) {
+	for (unsigned i = 0; i < nev; i++) {
 		double eigval = (double) random() / (double)RAND_MAX;
 		FG_vector<double>::ptr eigvect = 
 			FG_vector<double>::create(g_size);
@@ -77,10 +79,10 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 	std::string matrix_type = "adj";
 	int nev = 1;
 	int ncv = 2;
-	vsize_t k = 1;
+	unsigned k = 1;
 	std::string outfile = "";
 
-	vsize_t max_iters=std::numeric_limits<vsize_t>::max();
+	unsigned max_iters=std::numeric_limits<unsigned>::max();
 	std::string which = "LA";
 	std::string init = "forgy";
 
@@ -151,12 +153,12 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 
 		/* Malloc */
 		double* p_clusters = new double [k*nev];
-		vsize_t* p_clust_asgns = new vsize_t [matrix->get_num_rows()];
-		vsize_t* p_clust_asgn_cnt = new vsize_t [k];
+		unsigned* p_clust_asgns = new unsigned [matrix->get_num_rows()];
+		unsigned* p_clust_asgn_cnt = new unsigned [k];
 		/* End Malloc */
 
 		gettimeofday(&start, NULL);
-		vsize_t iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
+		unsigned iters = compute_kmeans(p_eig_matrix, p_clusters, p_clust_asgns, 
 				p_clust_asgn_cnt, matrix->get_num_rows(), nev, k, max_iters, init);
 
 
@@ -166,7 +168,7 @@ void run_kmeans(FG_graph::ptr graph, int argc, char* argv[])
 
 		printf("Printing cluster assignment counts:\n");
 		printf("[ ");
-		for (vsize_t i = 0; i < k; i++) {
+		for (unsigned i = 0; i < k; i++) {
 			std::cout << p_clust_asgn_cnt[i] << " ";
 		}
 		printf("]\n");
