@@ -18,6 +18,7 @@
  */
 
 #include "kmeans.h"
+#define OMP_MAX_THREADS 32
 
 using namespace fg;
 
@@ -145,10 +146,27 @@ static void print_mat(T* matrix, const vsize_t rows, const vsize_t cols) {
   * \param clusters The cluster centers (means) flattened matrix.
   *	\param cluster_assignments Which cluster each sample falls into.
   */
-static void E_step(const double* matrix, double* clusters, vsize_t* cluster_assignments)
+static void E_step(const double* matrix, double* clusters, 
+		vsize_t* cluster_assignments, vsize_t* cluster_assignment_counts)
 {
-#pragma omp parallel for firstprivate(matrix, clusters) shared(cluster_assignments)
-    for (vsize_t row=0; row < NUM_ROWS; row++) {
+
+    gettimeofday(&start, NULL);
+#if 1
+	// Create per thread vectors
+	std::vector<std::vector<vsize_t>> pt_cl_as_cnt; // K * OMP_MAX_THREADS
+	std::vector<std::vector<double>> pt_cl; // K * nev * OMP_MAX_THREADS
+
+	pt_cl_as_cnt.resize(OMP_MAX_THREADS);
+	pt_cl.resize(OMP_MAX_THREADS);
+
+	for (int i = 0; i < OMP_MAX_THREADS; i++) {
+		pt_cl_as_cnt[i].resize(K); // C++ default is 0 value in all
+		pt_cl[i].resize(K*NEV);
+	}
+#endif
+
+#pragma omp parallel for firstprivate(matrix, clusters) shared(pt_cl_as_cnt, cluster_assignments)
+    for (vsize_t row = 0; row < NUM_ROWS; row++) {
         size_t asgnd_clust = std::numeric_limits<size_t>::max();
         double best = std::numeric_limits<double>::max();
         for (size_t clust_idx = 0; clust_idx < K; clust_idx++) {
@@ -166,10 +184,42 @@ static void E_step(const double* matrix, double* clusters, vsize_t* cluster_assi
 			if (!updated) updated = true;
 		}
         cluster_assignments[row] = asgnd_clust;
+#if 1
+		pt_cl_as_cnt[omp_get_thread_num()][asgnd_clust]++; // Add to local copy
+		// Accumulate for local copies
+		for (vsize_t col = 0; col < NEV; col++) {
+			pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] = 
+				pt_cl[omp_get_thread_num()][asgnd_clust*NEV + col] + matrix[row*NEV + col];
+		}
+#endif
     }
+	
+#if 1
+	BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
+	memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
 
-#if 0
-    printf("Cluster assignments:\n"); print_arr(cluster_assignments, NUM_ROWS);
+	// Serial aggreate of OMP_MAX_THREADS vectors
+	for (int i = 0; i < OMP_MAX_THREADS; i++) {
+		// Counts
+		for (vsize_t j = 0; j < K; j++) {
+			cluster_assignment_counts[j] += pt_cl_as_cnt[i][j];
+		}
+		
+		// Summation for cluster centers
+#pragma omp parallel for firstprivate(pt_cl) shared(clusters)
+		for (vsize_t row = 0; row < K; row++) { /* ClusterID */
+			for (vsize_t col = 0; col < NEV; col++) { /* Features */
+				clusters[row*NEV+col] = pt_cl[i][row*NEV + col] + clusters[row*NEV + col];
+			}
+		}
+	}
+#endif
+
+    gettimeofday(&end, NULL);
+    BOOST_LOG_TRIVIAL(info) << "E-step time taken = " << time_diff(start, end) << "sec";
+#if 1
+	printf("Cluster assignment counts: "); print_arr(cluster_assignment_counts, K);
+    //printf("Cluster assignments:\n"); print_arr(cluster_assignments, NUM_ROWS);
 #endif
 }
 
@@ -181,26 +231,27 @@ static void E_step(const double* matrix, double* clusters, vsize_t* cluster_assi
  * \param cluster_assignments Which cluster each sample falls into.
  */
 static void M_step(const double* matrix, double* clusters, 
-		vsize_t* cluster_assignment_counts, const vsize_t* cluster_assignments)
+		vsize_t* cluster_assignment_counts, const vsize_t* cluster_assignments, bool init=false)
 {
 	BOOST_LOG_TRIVIAL(info) << "M_step start";
 
     gettimeofday(&start, NULL);
-	BOOST_LOG_TRIVIAL(info) << "Clearing cluster centers ...";
-	memset(clusters, 0, sizeof(clusters[0])*K*NEV);
+	
+	if (init) {
+		BOOST_LOG_TRIVIAL(info) << "Clearing cluster centers ...";
+		memset(clusters, 0, sizeof(clusters[0])*K*NEV);
 
-	BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignments";
-	memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
+		BOOST_LOG_TRIVIAL(info) << "Clearing cluster assignment counts";
+		memset(cluster_assignment_counts, 0, sizeof(cluster_assignment_counts[0])*K);
 
-	// TODO: Parallelize me somehow
-	for (vsize_t vid = 0; vid < NUM_ROWS; vid++) {
+		for (vsize_t vid = 0; vid < NUM_ROWS; vid++) {
 
-		// Update cluster counts
-		vsize_t asgnd_clust = cluster_assignments[vid];
-		cluster_assignment_counts[asgnd_clust]++;	
+			vsize_t asgnd_clust = cluster_assignments[vid];
+			cluster_assignment_counts[asgnd_clust]++;	
 
-		for (vsize_t col = 0; col < NEV; col++) {
-			clusters[asgnd_clust*NEV + col] = clusters[asgnd_clust*NEV + col] + matrix[vid*NEV + col];	
+			for (vsize_t col = 0; col < NEV; col++) {
+				clusters[asgnd_clust*NEV + col] = clusters[asgnd_clust*NEV + col] + matrix[vid*NEV + col];	
+			}
 		}
 	}
 
@@ -211,7 +262,6 @@ static void M_step(const double* matrix, double* clusters,
 
 	// Take the mean of all added means
 	BOOST_LOG_TRIVIAL(info) << " Div by in place ...";
-//#pragma omp parallel for firstprivate(cluster_assignment_counts, K, NEV) shared(clusters)
 	for (vsize_t clust_idx = 0; clust_idx < K; clust_idx++) {
 		if (cluster_assignment_counts[clust_idx] > 0) { // Avoid div by 0
 #pragma omp parallel for firstprivate(cluster_assignment_counts, NEV) shared(clusters)
@@ -222,7 +272,7 @@ static void M_step(const double* matrix, double* clusters,
 		}
 	}
     gettimeofday(&end, NULL);
-    BOOST_LOG_TRIVIAL(info) << "M-step time taken = %.3f\n", time_diff(start, end);
+    BOOST_LOG_TRIVIAL(info) << "M-step time taken = " << time_diff(start, end) << "sec";
 
 # if 0
 	printf("Cluster centers: \n"); print_mat(clusters, K, NEV);
@@ -267,7 +317,7 @@ vsize_t compute_kmeans(const double* matrix, double* clusters,
 		BOOST_LOG_TRIVIAL(info) << "Init is random_partition \n";
 		random_partition_init(cluster_assignments);
 		// We must now update cluster centers before we begin
-		M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments);
+		M_step(matrix, clusters, cluster_assignment_counts, cluster_assignments, true);
 	}
 	if (init == "forgy") {
 		BOOST_LOG_TRIVIAL(info) << "Init is forgy";
@@ -290,7 +340,7 @@ vsize_t compute_kmeans(const double* matrix, double* clusters,
 		// Hold cluster assignment counter
 
 		BOOST_LOG_TRIVIAL(info) << "E-step Iteration " << iter << " . Computing cluster assignments ...";
-		E_step(matrix, clusters, cluster_assignments);
+		E_step(matrix, clusters, cluster_assignments, cluster_assignment_counts);
 
 		if (!updated) {
 			converged = true;
