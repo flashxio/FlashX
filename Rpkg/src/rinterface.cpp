@@ -922,6 +922,61 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 	return ret;
 }
 
+RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pinit)
+{
+	Rcpp::NumericMatrix rcpp_mat = Rcpp::NumericMatrix(pmat);
+	vsize_t k = INTEGER(pk)[0];
+	vsize_t max_iters = INTEGER(pmax_iters)[0];
+	std::string init = CHAR(STRING_ELT(pinit,0));
+
+	double* p_fg_mat = new double[rcpp_mat.nrow()*rcpp_mat.ncol()];
+	const vsize_t NUM_ROWS = rcpp_mat.nrow();
+	const vsize_t NUM_COLS = rcpp_mat.ncol();
+
+#pragma omp parallel for firstprivate(rcpp_mat) shared (p_fg_mat)
+	for (vsize_t row = 0; row < NUM_ROWS; row++) {
+		for (vsize_t col = 0; col < NUM_COLS; col++) {
+			p_fg_mat[row*NUM_COLS + col] = rcpp_mat(row, col);
+		}
+	}
+
+	double* p_clusters = new double [k*NUM_COLS];
+	vsize_t* p_clust_asgns = new vsize_t [NUM_ROWS];
+	vsize_t* p_clust_asgn_cnt = new vsize_t [k];
+
+	Rcpp::List ret;
+
+	ret["iter"] = compute_kmeans(p_fg_mat, p_clusters, p_clust_asgns,
+			p_clust_asgn_cnt, NUM_ROWS, NUM_COLS, k, max_iters, init);
+	delete [] p_fg_mat;
+
+	Rcpp::NumericMatrix centers = Rcpp::NumericMatrix(k, NUM_COLS);
+#pragma omp parallel for firstprivate(p_clusters) shared(centers)
+	for (vsize_t row = 0; row < k; row++) {
+		for (vsize_t col = 0; col < NUM_COLS; col++) {
+			centers(row, col) =  p_clusters[row*NUM_COLS + col];
+		}
+	}
+	delete [] p_clusters;
+	ret["centers"] = centers;
+
+	Rcpp::IntegerVector clusts(NUM_ROWS);
+	for (vsize_t vid = 0; vid < NUM_ROWS; vid++) {
+		clusts[vid] = p_clust_asgns[vid]+1;
+	}
+	delete [] p_clust_asgns;
+	ret["cluster"] = clusts;
+
+	Rcpp::IntegerVector size(k);
+	for (vsize_t i = 0; i < k; i++) {
+		size[i] = p_clust_asgn_cnt[i];
+	}
+	delete [] p_clust_asgn_cnt;
+	ret["size"] = size;
+
+	return ret;
+}
+
 #ifdef USE_EIGEN
 /*
  * Compute eigen value/vector on an unweighted adjacency matrix.
@@ -977,65 +1032,6 @@ RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
 	Rcpp::List ret;
 	ret["values"] = eigen_values;
 	ret["vectors"] = eigen_matrix;
-	return ret;
-}
-
-RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pinit)
-{
-	Rcpp::NumericMatrix rcpp_mat = Rcpp::NumericMatrix(pmat);
-	vsize_t k = INTEGER(pk)[0];
-	vsize_t max_iters = INTEGER(pmax_iters)[0];
-	std::string init = CHAR(STRING_ELT(pinit,0));
-
-	FG_col_wise_matrix<ev_float_t>::ptr fg_mat =
-		FG_col_wise_matrix<ev_float_t>::create(rcpp_mat.nrow(), rcpp_mat.ncol());
-	fg_mat->resize(rcpp_mat.nrow(), rcpp_mat.ncol());
-
-	ev_float_t* p_fg_mat = new ev_float_t[rcpp_mat.nrow()*rcpp_mat.ncol()];
-	const vsize_t NUM_ROWS = rcpp_mat.nrow();
-	const vsize_t NUM_COLS = rcpp_mat.ncol();
-
-#pragma omp parallel for firstprivate(rcpp_mat) shared (p_fg_mat)
-	for (vsize_t row = 0; row < NUM_ROWS; row++) {
-		for (vsize_t col = 0; col < NUM_COLS; col++) {
-			p_fg_mat[row*NUM_COLS + col] = rcpp_mat(row, col);
-		}
-	}
-
-	ev_float_t* p_clusters = new ev_float_t [k*NUM_COLS];
-	vsize_t* p_clust_asgns = new vsize_t [NUM_ROWS];
-	vsize_t* p_clust_asgn_cnt = new vsize_t [k];
-
-	Rcpp::List ret;
-
-	ret["iter"] = compute_kmeans(p_fg_mat, p_clusters, p_clust_asgns,
-			p_clust_asgn_cnt, NUM_ROWS, NUM_COLS, k, max_iters, init);
-	delete [] p_fg_mat;
-
-	Rcpp::NumericMatrix centers = Rcpp::NumericMatrix(k, NUM_COLS);
-#pragma omp parallel for firstprivate(p_clusters) shared(centers)
-	for (vsize_t row = 0; row < k; row++) {
-		for (vsize_t col = 0; col < NUM_COLS; col++) {
-			centers(row, col) =  p_clusters[row*NUM_COLS + col];
-		}
-	}
-	delete [] p_clusters;
-	ret["centers"] = centers;
-
-	Rcpp::IntegerVector clusts(NUM_ROWS);
-	for (vsize_t vid = 0; vid < NUM_ROWS; vid++) {
-		clusts[vid] = p_clust_asgns[vid]+1;
-	}
-	delete [] p_clust_asgns;
-	ret["cluster"] = clusts;
-
-	Rcpp::IntegerVector size(k);
-	for (vsize_t i = 0; i < k; i++) {
-		size[i] = p_clust_asgn_cnt[i];
-	}
-	delete [] p_clust_asgn_cnt;
-	ret["size"] = size;
-
 	return ret;
 }
 #endif
