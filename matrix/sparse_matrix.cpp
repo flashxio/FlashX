@@ -76,7 +76,8 @@ sparse_matrix::ptr sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 	assert(index != NULL);
 	assert(!index->get_graph_header().is_directed_graph()
 			&& !index->is_compressed());
-	fg::default_vertex_index::ptr uindex = fg::default_vertex_index::cast(index);
+	fg::undirected_vertex_index::ptr uindex
+		= fg::undirected_vertex_index::cast(index);
 
 	fg::vsize_t num_vertices = uindex->get_num_vertices();
 	sparse_sym_matrix *m = new sparse_sym_matrix(fg->get_graph_io_factory(
