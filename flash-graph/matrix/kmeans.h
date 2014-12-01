@@ -5,7 +5,7 @@
  * Copyright 2014 Open Connectome Project (http://openconnecto.me)
  * Written by Disa Mhembere (disa@jhu.edu)
  *
- * This file is part of FlashGraph.
+ * This file is part of FlashMatrix.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,21 +21,20 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
+#include <omp.h>
+#include <string.h>
+#include <sys/time.h>
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
 #include <vector>
 #include <limits> 
+#include <iostream>
 
-#include "FGlib.h"
-#include "graph.h"
-#include "graph_engine.h"
-#include "graph_config.h"
-
-#include "matrix/FG_sparse_matrix.h"
-#include "matrix/FG_dense_matrix.h"
-#include "matrix/matrix_eigensolver.h"
+#include "log.h"
+#include "common.h"
 
 /**
  * \brief Compute kmeans on matrix of features
@@ -49,9 +48,9 @@
  * \param max_iters The maximum number of iterations of K-means to perform.
  * \param init The type of initilization ["random", "forgy", "kmeanspp"]
  **/
-fg::vsize_t compute_kmeans(const double* matrix, double* clusters, 
-		fg::vsize_t* cluster_assignments, fg::vsize_t* cluster_assignment_counts,
-		const fg::vsize_t num_rows, const fg::vsize_t nev, const size_t k, 
-		const fg::vsize_t MAX_ITERS, const std::string init="random");
+unsigned compute_kmeans(const double* matrix, double* clusters, 
+		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
+		const unsigned num_rows, const unsigned nev, const size_t k, 
+		const unsigned MAX_ITERS, const std::string init="random");
 
 #endif
