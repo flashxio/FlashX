@@ -173,6 +173,13 @@ public:
 	virtual void wait4all();
 };
 
+template<class LeftType, class RightType, class ResType>
+EM_dense_matrix::ptr  multiply(EM_dense_matrix &m1, mem_dense_matrix &m2)
+{
+	basic_ops_impl<LeftType, RightType, ResType> ops;
+	return m1.inner_prod(m2, ops.get_multiply(), ops.get_add());
+}
+
 }
 
 #endif
