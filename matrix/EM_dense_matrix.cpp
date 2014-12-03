@@ -60,9 +60,11 @@ class fetch_subcol_compute: public subvec_compute
 	subcol_struct::ptr subcol;
 	size_t col_idx;
 	submatrix_compute::ptr compute;
+	EM_col_matrix_accessor &accessor;
 public:
-	fetch_subcol_compute(subcol_struct::ptr subcol, size_t col_idx,
-			submatrix_compute::ptr compute) {
+	fetch_subcol_compute(EM_col_matrix_accessor &_accessor,
+			subcol_struct::ptr subcol, size_t col_idx,
+			submatrix_compute::ptr compute): accessor(_accessor) {
 		this->subcol = subcol;
 		this->col_idx = col_idx;
 		this->compute = compute;
@@ -71,13 +73,15 @@ public:
 	virtual void run(char *buf, size_t size) {
 		subcol->subm->set_col(buf, size, col_idx);
 		subcol->count++;
-		if (subcol->count == subcol->subm->get_num_cols())
+		if (subcol->count == subcol->subm->get_num_cols()) {
 			compute->run(*subcol->subm);
+			accessor.complete_req();
+		}
 	}
 };
 
 bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
-		size_t start_col, size_t sub_ncol, submatrix_compute::ptr compute) const
+		size_t start_col, size_t sub_ncol, submatrix_compute::ptr compute)
 {
 	if (start_row + sub_nrow > m.get_num_rows()
 			|| start_col + sub_ncol > m.get_num_cols()) {
@@ -89,9 +93,11 @@ bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
 	subcol->subm = mem_col_dense_matrix::create(sub_nrow, sub_ncol,
 			m.get_entry_size());
 	for (size_t i = 0; i < sub_ncol; i++) {
-		accessors[start_col + i]->fetch_subvec(start_row, sub_nrow, subvec_compute::ptr(
-					new fetch_subcol_compute(subcol, i, compute)));
+		accessors[start_col + i]->fetch_subvec(start_row, sub_nrow,
+				subvec_compute::ptr(new fetch_subcol_compute(*this,
+						subcol, i, compute)));
 	}
+	pending_reqs++;
 	return true;
 }
 
@@ -102,13 +108,19 @@ bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
  */
 class store_subcol_compute: public subvec_compute
 {
-	mem_col_dense_matrix::ptr subm;
+	subcol_struct::ptr subcol;
+	EM_col_matrix_accessor &accessor;
 public:
-	store_subcol_compute(mem_col_dense_matrix::ptr subm) {
-		this->subm = subm;
+	store_subcol_compute(EM_col_matrix_accessor &_accessor,
+			subcol_struct::ptr subcol): accessor(_accessor) {
+		this->subcol = subcol;
 	}
 
 	virtual void run(char *buf, size_t size) {
+		subcol->count++;
+		if (subcol->count == subcol->subm->get_num_cols()) {
+			accessor.complete_req();
+		}
 	}
 };
 
@@ -126,17 +138,24 @@ bool EM_col_matrix_accessor::set_submatrix(size_t start_row, size_t start_col,
 		= std::static_pointer_cast<mem_col_dense_matrix>(subm);
 	size_t sub_nrow = subm->get_num_rows();
 	size_t sub_ncol = subm->get_num_cols();
+	subcol_struct::ptr subcol = subcol_struct::ptr(new subcol_struct());
+	subcol->subm = sub_colm;
 	for (size_t i = 0; i < sub_ncol; i++) {
-		accessors[start_col + i]->set_subvec(sub_colm->get_col(i), start_row, sub_nrow,
-				subvec_compute::ptr(new store_subcol_compute(sub_colm)));
+		accessors[start_col + i]->set_subvec(sub_colm->get_col(i), start_row,
+				sub_nrow, subvec_compute::ptr(new store_subcol_compute(*this,
+						subcol)));
 	}
+	pending_reqs++;
 	return true;
 }
 
 void EM_col_matrix_accessor::wait4complete(int num)
 {
-	// TODO
-	assert(0);
+	int num2wait = std::min(num, pending_reqs);
+	if (num2wait == 0)
+		return;
+	BOOST_FOREACH(EM_vector_accessor::ptr accessor, accessors)
+		accessor->wait4complete(num2wait);
 }
 
 void EM_col_matrix_accessor::wait4all()
@@ -192,7 +211,10 @@ EM_dense_matrix::ptr EM_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
 		accessor->fetch_submatrix(i, sub_nrow, 0, ncol, submatrix_compute::ptr(
 					new submatrix_inner_prod_compute(i, 0, i, 0, left_op,
 						right_op, m, *res_accessor)));
-		// TODO wait for some computation complete.
+		while (accessor->num_pending_reqs() > 8)
+			accessor->wait4complete(1);
+		while (res_accessor->num_pending_reqs() > 8)
+			res_accessor->wait4complete(1);
 	}
 	accessor->wait4all();
 	res_accessor->wait4all();

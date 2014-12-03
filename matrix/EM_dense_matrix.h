@@ -25,6 +25,7 @@
 
 #include "log.h"
 
+#include "bulk_operate.h"
 #include "EM_vector.h"
 
 namespace fm
@@ -58,9 +59,10 @@ public:
 
 	virtual bool fetch_submatrix(size_t start_row, size_t nrow,
 			size_t start_col, size_t ncol,
-			submatrix_compute::ptr compute) const = 0;
+			submatrix_compute::ptr compute) = 0;
 	virtual bool set_submatrix(size_t start_row, size_t start_col,
 			std::shared_ptr<mem_dense_matrix> subm) = 0;
+	virtual int num_pending_reqs() const = 0;
 	virtual void wait4complete(int num) = 0;
 	virtual void wait4all() = 0;
 };
@@ -140,20 +142,33 @@ class EM_col_matrix_accessor: public EM_dense_matrix_accessor
 {
 	EM_col_dense_matrix &m;
 	std::vector<EM_vector_accessor::ptr> accessors;
+	int pending_reqs;
 public:
 	typedef std::shared_ptr<EM_col_matrix_accessor> ptr;
 
 	EM_col_matrix_accessor(EM_col_dense_matrix &_m,
 			const std::vector<EM_vector::ptr> &cols): m(_m) {
+		pending_reqs = 0;
 		accessors.resize(cols.size());
 		for (size_t i = 0; i < cols.size(); i++)
 			accessors[i] = cols[i]->create_accessor();
 	}
 
+	~EM_col_matrix_accessor() {
+		wait4all();
+		assert(pending_reqs == 0);
+	}
+
 	bool fetch_submatrix(size_t start_row, size_t nrow,
-			size_t start_col, size_t ncol, submatrix_compute::ptr compute) const;
+			size_t start_col, size_t ncol, submatrix_compute::ptr compute);
 	bool set_submatrix(size_t start_row, size_t start_col,
 			std::shared_ptr<mem_dense_matrix> subm);
+	int num_pending_reqs() const {
+		return pending_reqs;
+	}
+	void complete_req() {
+		pending_reqs--;
+	}
 	virtual void wait4complete(int num);
 	virtual void wait4all();
 };
