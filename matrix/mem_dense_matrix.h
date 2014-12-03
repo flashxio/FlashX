@@ -23,7 +23,9 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <malloc.h>
 
+#include "common.h"
 #include "bulk_operate.h"
 
 namespace fm
@@ -87,7 +89,7 @@ class mem_row_dense_matrix: public mem_dense_matrix
 	mem_row_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {
-			data = (char *) malloc(nrow * ncol * entry_size);
+			data = (char *) memalign(PAGE_SIZE, nrow * ncol * entry_size);
 			assert(data);
 		}
 	}
@@ -166,7 +168,7 @@ class mem_col_dense_matrix: public mem_dense_matrix
 	mem_col_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {
-			data = (char *) malloc(nrow * ncol * entry_size);
+			data = (char *) memalign(PAGE_SIZE, nrow * ncol * entry_size);
 			assert(data);
 		}
 	}
