@@ -98,7 +98,7 @@ public:
 		pthread_spin_lock(&lock);
 		// It's possible that all IOs have been stolen.
 		// We have to check it.
-		if (curr_io_off < ios.size()) {
+		if ((size_t) curr_io_off < ios.size()) {
 			assert(ios[curr_io_off].has_data());
 			ret = ios[curr_io_off++].get_io(tot_num_cols, file_id);
 			assert(ret.is_valid());
@@ -110,7 +110,7 @@ public:
 	virtual matrix_io steal_io() {
 		matrix_io ret;
 		pthread_spin_lock(&lock);
-		if (curr_io_off < ios.size()) {
+		if ((size_t) curr_io_off < ios.size()) {
 			assert(ios[curr_io_off].has_data());
 			ret = ios[curr_io_off].get_sub_io(tot_num_cols, file_id);
 			if (!ios[curr_io_off].has_data())
