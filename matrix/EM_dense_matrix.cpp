@@ -121,7 +121,7 @@ bool EM_col_matrix_accessor::set_submatrix(size_t start_row, size_t start_col,
 		return false;
 	}
 
-	assert(subm->store_layout() == matrix_layout_t::COL);
+	assert(subm->store_layout() == matrix_layout_t::L_COL);
 	mem_col_dense_matrix::ptr sub_colm
 		= std::static_pointer_cast<mem_col_dense_matrix>(subm);
 	size_t sub_nrow = subm->get_num_rows();

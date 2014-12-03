@@ -19,7 +19,7 @@ void test1(size_t nrow, size_t ncol, size_t right_ncol)
 
 	gettimeofday(&start, NULL);
 	typename type_mem_dense_matrix<Type>::ptr m1
-		= type_mem_dense_matrix<Type>::create(nrow, ncol, matrix_layout_t::COL);
+		= type_mem_dense_matrix<Type>::create(nrow, ncol, matrix_layout_t::L_COL);
 	for (size_t j = 0; j < m1->get_num_cols(); j++) {
 		for (size_t i = 0; i < m1->get_num_rows(); i++) {
 			m1->set(i, j, i * m1->get_num_cols() + j);
@@ -31,7 +31,7 @@ void test1(size_t nrow, size_t ncol, size_t right_ncol)
 
 	typename type_mem_dense_matrix<Type>::ptr m2
 		= type_mem_dense_matrix<Type>::create(ncol, right_ncol,
-				matrix_layout_t::COL);
+				matrix_layout_t::L_COL);
 	for (size_t i = 0; i < m2->get_num_rows(); i++) {
 		for (size_t j = 0; j < m2->get_num_cols(); j++)
 			m2->set(i, j, i * m2->get_num_cols() + j);

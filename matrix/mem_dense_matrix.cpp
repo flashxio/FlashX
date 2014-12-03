@@ -64,7 +64,7 @@ mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m
 mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
-	if (m.store_layout() != matrix_layout_t::COL) {
+	if (m.store_layout() != matrix_layout_t::L_COL) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The layout of the right matrix has to be column matrix";
 		return mem_dense_matrix::ptr();

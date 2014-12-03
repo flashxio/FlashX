@@ -33,8 +33,8 @@ class bulk_operate;
 
 enum matrix_layout_t
 {
-	COL,
-	ROW,
+	L_COL,
+	L_ROW,
 };
 
 class dense_matrix
@@ -122,7 +122,7 @@ public:
 	}
 
 	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::ROW;
+		return matrix_layout_t::L_ROW;
 	}
 };
 
@@ -206,7 +206,7 @@ public:
 	}
 
 	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::COL;
+		return matrix_layout_t::L_COL;
 	}
 };
 
@@ -216,9 +216,9 @@ class type_mem_dense_matrix
 	mem_dense_matrix::ptr m;
 
 	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout) {
-		if (layout == matrix_layout_t::COL)
+		if (layout == matrix_layout_t::L_COL)
 			m = mem_col_dense_matrix::create(nrow, ncol, sizeof(EntryType));
-		else if (layout == matrix_layout_t::ROW)
+		else if (layout == matrix_layout_t::L_ROW)
 			m = mem_row_dense_matrix::create(nrow, ncol, sizeof(EntryType));
 		else
 			assert(0);
