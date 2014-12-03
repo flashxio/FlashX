@@ -39,11 +39,14 @@ public:
 
 class EM_vector;
 
+/*
+ * This is a per-thread data structure that helps access the vector in
+ * the external memory.
+ */
 class EM_vector_accessor
 {
 	EM_vector &vec;
 	safs::io_interface::ptr io;
-	safs::file_io_factory::shared_ptr factory;
 public:
 	typedef std::shared_ptr<EM_vector_accessor> ptr;
 

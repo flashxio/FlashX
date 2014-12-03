@@ -88,11 +88,6 @@ public:
 void EM_vector_accessor::fetch_subvec(size_t start, size_t length,
 		subvec_compute::ptr compute)
 {
-	if (io == NULL) {
-		io = factory->create_io(thread::get_curr_thread());
-		io->set_callback(safs::callback::ptr(new vec_callback()));
-	}
-
 	off_t off = vec.get_byte_off(start);
 	size_t size = length * vec.get_entry_size();
 	assert(start % PAGE_SIZE == 0);
@@ -107,11 +102,6 @@ void EM_vector_accessor::fetch_subvec(size_t start, size_t length,
 void EM_vector_accessor::set_subvec(const char *buf, size_t start, size_t length,
 		subvec_compute::ptr compute)
 {
-	if (io == NULL) {
-		io = factory->create_io(thread::get_curr_thread());
-		io->set_callback(safs::callback::ptr(new vec_callback()));
-	}
-
 	off_t off = vec.get_byte_off(start);
 	size_t size = length * vec.get_entry_size();
 	assert(start % PAGE_SIZE == 0);
@@ -126,22 +116,19 @@ void EM_vector_accessor::set_subvec(const char *buf, size_t start, size_t length
 
 void EM_vector_accessor::wait4complete(int num)
 {
-	if (io == NULL)
-		return;
 	io->wait4complete(num);
 }
 
 void EM_vector_accessor::wait4all()
 {
-	if (io == NULL)
-		return;
 	io->wait4complete(io->num_pending_ios());
 }
 
 EM_vector_accessor::EM_vector_accessor(EM_vector &_vec,
 		safs::file_io_factory::shared_ptr factory): vec(_vec)
 {
-	this->factory = factory;
+	io = factory->create_io(thread::get_curr_thread());
+	io->set_callback(safs::callback::ptr(new vec_callback()));
 }
 
 EM_vector_accessor::~EM_vector_accessor()
