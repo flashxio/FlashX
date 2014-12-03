@@ -32,7 +32,7 @@ const int NUM_DIRTY_PAGES_TO_FETCH = 16 * 18;
 // The partition contains a file mapper but the file mapper doesn't point
 // to a file in the SAFS filesystem.
 disk_io_thread::disk_io_thread(const logical_file_partition &_partition,
-		int node_id, page_cache *cache, int _disk_id, int flags): thread(
+		int node_id, page_cache::ptr cache, int _disk_id, int flags): thread(
 			std::string("io-thread-") + itoa(node_id), node_id),
 		disk_id(_disk_id),
 		queue(node_id, std::string("io-queue-") + itoa(node_id),

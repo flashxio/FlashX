@@ -931,7 +931,7 @@ int global_cached_io::process_completed_requests()
 }
 
 global_cached_io::global_cached_io(thread *t, io_interface::ptr underlying,
-		page_cache *cache, comp_io_scheduler *sched): io_interface(t),
+		page_cache::ptr cache, comp_io_scheduler *sched): io_interface(t),
 	pending_requests(
 			std::string("pending_req_queue-") + itoa(underlying->get_node_id()),
 			underlying->get_node_id(), INIT_GCACHE_PENDING_SIZE, INT_MAX),
@@ -1228,12 +1228,12 @@ int global_cached_io::handle_pending_requests()
 	// the place where we just finish writing old dirty pages to the disk.
 	// The only possible reason is that we happen to overwrite the entire
 	// page.
-	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
+	get_global_cache().mark_dirty_pages(dirty_pages.data(),
 			dirty_pages.size(), *underlying);
 	return tot;
 }
 
-void merge_pages2req(io_request &req, page_cache *cache)
+void merge_pages2req(io_request &req, page_cache &cache)
 {
 	if (!params.is_cache_large_write())
 		return;
@@ -1245,7 +1245,7 @@ void merge_pages2req(io_request &req, page_cache *cache)
 	off_t block_end_off = block_off + params.get_RAID_block_size() * PAGE_SIZE;
 	page_id_t pg_id(req.get_file_id(), forward_off);
 	while (forward_off < block_end_off
-			&& (p = (thread_safe_page *) cache->search(pg_id))) {
+			&& (p = (thread_safe_page *) cache.search(pg_id))) {
 		p->lock();
 		if (!p->is_dirty()) {
 			p->unlock();
@@ -1269,7 +1269,7 @@ void merge_pages2req(io_request &req, page_cache *cache)
 		off_t backward_off = off - PAGE_SIZE;
 		pg_id = page_id_t(req.get_file_id(), backward_off);
 		while (backward_off >= block_off
-				&& (p = (thread_safe_page *) cache->search(pg_id))) {
+				&& (p = (thread_safe_page *) cache.search(pg_id))) {
 			p->lock();
 			if (!p->is_dirty()) {
 				p->unlock();
@@ -1404,9 +1404,9 @@ void global_cached_io::process_cached_reqs()
 			= cached_requests.pop_front();
 		thread_safe_page *dirty = complete_cached_req(pair.first,
 				pair.second, *simp_array_allocator);
-		page_cache *cache = get_global_cache();
+		page_cache &cache = get_global_cache();
 		if (dirty) {
-			cache->mark_dirty_pages(&dirty, 1, *underlying);
+			cache.mark_dirty_pages(&dirty, 1, *underlying);
 			dirty->dec_ref();
 		}
 		if (!pair.first.is_sync()) {
@@ -1446,8 +1446,7 @@ void global_cached_io::process_user_req(
 		page_id_t pg_id = processing_req.get_curr_page_id();
 		page_id_t old_id;
 		do {
-			p = (thread_safe_page *) (get_global_cache()
-					->search(pg_id, old_id));
+			p = (thread_safe_page *) (get_global_cache().search(pg_id, old_id));
 			// If the cache can't evict a page, it's probably because
 			// all pages have been referenced. It's likely that we issued
 			// too many requests. Let's stop issuing more requests for now.
@@ -1630,7 +1629,7 @@ void global_cached_io::process_user_reqs(queue_interface<io_request> &queue)
 		process_user_req(dirty_pages, NULL);
 	}
 
-	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
+	get_global_cache().mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), *underlying);
 
 	flush_requests();
@@ -1703,7 +1702,7 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 	}
 
 end:
-	get_global_cache()->mark_dirty_pages(dirty_pages.data(),
+	get_global_cache().mark_dirty_pages(dirty_pages.data(),
 				dirty_pages.size(), *underlying);
 
 	if (syncd)
@@ -1746,7 +1745,7 @@ int global_cached_io::preload(off_t start, long size) {
 	for (long offset = start; offset < start + size; offset += PAGE_SIZE) {
 		page_id_t pg_id(get_file_id(), ROUND_PAGE(offset));
 		page_id_t old_id;
-		thread_safe_page *p = (thread_safe_page *) (get_global_cache()->search(
+		thread_safe_page *p = (thread_safe_page *) (get_global_cache().search(
 					pg_id, old_id));
 		// This is mainly for testing. I don't need to really read data from disks.
 		if (!p->data_ready()) {

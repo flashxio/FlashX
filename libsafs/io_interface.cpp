@@ -62,8 +62,9 @@ struct global_data_collection
 	RAID_config::ptr raid_conf;
 	std::vector<disk_io_thread::ptr> read_threads;
 	pthread_mutex_t mutex;
-	cache_config *cache_conf;
-	page_cache *global_cache;
+	// TODO there is memory leak here.
+	cache_config::ptr cache_conf;
+	page_cache::ptr global_cache;
 #ifdef PART_IO
 	// For part_global_cached_io
 	part_io_process_table *table;
@@ -73,8 +74,6 @@ struct global_data_collection
 #ifdef PART_IO
 		table = NULL;
 #endif
-		cache_conf = NULL;
-		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
 	}
 };
@@ -249,8 +248,9 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 		for (int i = 0; i < params.get_num_nodes(); i++)
 			node_id_array.push_back(i);
 
-		global_data.cache_conf = new even_cache_config(params.get_cache_size(),
-				params.get_cache_type(), node_id_array);
+		global_data.cache_conf = cache_config::ptr(new even_cache_config(
+					params.get_cache_size(), params.get_cache_type(),
+					node_id_array));
 		global_data.global_cache = global_data.cache_conf->create_cache(
 				MAX_NUM_FLUSHES_PER_FILE *
 				global_data.raid_conf->get_num_disks());
@@ -303,12 +303,6 @@ void destroy_io_system()
 		global_data.table = NULL;
 	}
 #endif
-	if (global_data.cache_conf) {
-		global_data.cache_conf->destroy_cache(global_data.global_cache);
-		global_data.global_cache = NULL;
-		delete global_data.cache_conf;
-		global_data.cache_conf = NULL;
-	}
 	size_t num_reads = 0;
 	size_t num_writes = 0;
 	size_t num_read_bytes = 0;
@@ -433,11 +427,11 @@ class global_cached_io_factory: public file_io_factory
 	std::atomic_ulong tot_hits;
 	std::atomic_ulong tot_fast_process;
 
-	page_cache *global_cache;
+	page_cache::ptr global_cache;
 	remote_io_factory remote_factory;
 public:
 	global_cached_io_factory(file_mapper &_mapper,
-			page_cache *cache): file_io_factory(
+			page_cache::ptr cache): file_io_factory(
 				_mapper.get_name()), remote_factory(_mapper) {
 		this->global_cache = cache;
 		tot_bytes = 0;

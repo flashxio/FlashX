@@ -97,7 +97,7 @@ class global_cached_io: public io_interface
 	};
 
 	long cache_size;
-	page_cache *global_cache;
+	page_cache::ptr global_cache;
 	/* the underlying IO. */
 	io_interface::ptr underlying;
 	callback::ptr cb;
@@ -187,15 +187,15 @@ class global_cached_io: public io_interface
 			}
 		}
 	}
+
+	page_cache &get_global_cache() {
+		return *global_cache;
+	}
 public:
-	global_cached_io(thread *t, io_interface::ptr, page_cache *cache,
+	global_cached_io(thread *t, io_interface::ptr, page_cache::ptr cache,
 			comp_io_scheduler *sched = NULL);
 
 	~global_cached_io();
-
-	page_cache *get_global_cache() {
-		return global_cache;
-	}
 
 	int preload(off_t start, long size);
 	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
