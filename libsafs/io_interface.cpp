@@ -60,7 +60,7 @@ struct global_data_collection
 	// Count the number of times init_io_system is executed successfully.
 	std::atomic<long> init_count;
 	RAID_config::ptr raid_conf;
-	std::vector<disk_io_thread *> read_threads;
+	std::vector<disk_io_thread::ptr> read_threads;
 	pthread_mutex_t mutex;
 	cache_config *cache_conf;
 	page_cache *global_cache;
@@ -231,8 +231,9 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			std::vector<int> indices(1, k);
 			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
-			global_data.read_threads[k] = new disk_io_thread(partition,
-					global_data.raid_conf->get_disk(k).node_id, NULL, k, flags);
+			global_data.read_threads[k] = disk_io_thread::ptr(new disk_io_thread(
+						partition, global_data.raid_conf->get_disk(k).node_id,
+						NULL, k, flags));
 		}
 #if 0
 		debug.register_task(new debug_global_data());
@@ -312,14 +313,11 @@ void destroy_io_system()
 	size_t num_writes = 0;
 	size_t num_read_bytes = 0;
 	size_t num_write_bytes = 0;
-	BOOST_FOREACH(disk_io_thread *t, global_data.read_threads) {
-		t->stop();
-		t->join();
+	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_threads) {
 		num_reads += t->get_num_reads();
 		num_writes += t->get_num_writes();
 		num_read_bytes += t->get_num_read_bytes();
 		num_write_bytes += t->get_num_write_bytes();
-		delete t;
 	}
 	global_data.read_threads.resize(0);
 	destroy_aio();
@@ -584,9 +582,8 @@ remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 remote_io_factory::~remote_io_factory()
 {
 	assert(num_ios == 0);
-	int num_files = mapper.get_num_files();
-	assert(!global_data.read_threads.empty());
-	for (int i = 0; i < num_files; i++)
+	// If the I/O threads haven't been destroyed.
+	for (size_t i = 0; i < global_data.read_threads.size(); i++)
 		global_data.read_threads[i]->close_file(&mapper);
 }
 
@@ -706,7 +703,7 @@ void print_io_thread_stat()
 {
 	sleep(1);
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
-		disk_io_thread *t = global_data.read_threads[i];
+		disk_io_thread::ptr t = global_data.read_threads[i];
 		if (t)
 			t->print_stat();
 	}
