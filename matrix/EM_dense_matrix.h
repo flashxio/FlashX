@@ -32,6 +32,7 @@ namespace fm
 
 class mem_dense_matrix;
 class mem_col_dense_matrix;
+class bulk_operate;
 
 class submatrix_compute
 {
@@ -47,6 +48,23 @@ public:
 	virtual void run(const mem_dense_matrix &subm) = 0;
 };
 
+class EM_dense_matrix_accessor
+{
+public:
+	typedef std::shared_ptr<EM_dense_matrix_accessor> ptr;
+
+	virtual ~EM_dense_matrix_accessor() {
+	}
+
+	virtual bool fetch_submatrix(size_t start_row, size_t nrow,
+			size_t start_col, size_t ncol,
+			submatrix_compute::ptr compute) const = 0;
+	virtual bool set_submatrix(size_t start_row, size_t start_col,
+			std::shared_ptr<mem_dense_matrix> subm) = 0;
+	virtual void wait4complete(int num) = 0;
+	virtual void wait4all() = 0;
+};
+
 class EM_dense_matrix
 {
 public:
@@ -57,17 +75,12 @@ public:
 
 	virtual EM_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) = 0;
-	virtual bool fetch_submatrix(size_t start_row, size_t nrow,
-			size_t start_col, size_t ncol,
-			submatrix_compute::ptr compute) const = 0;
-	virtual bool set_submatrix(size_t start_row, size_t start_col,
-			std::shared_ptr<mem_dense_matrix> subm) = 0;
 
 	virtual void resize(size_t nrow, size_t ncol) = 0;
 	virtual size_t get_num_rows() const = 0;
 	virtual size_t get_num_cols() const = 0;
 	virtual size_t get_entry_size() const = 0;
-	virtual void wait4complete(int num) = 0;
+	virtual EM_dense_matrix_accessor::ptr create_accessor() = 0;
 };
 
 /*
@@ -100,15 +113,6 @@ public:
 		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size));
 	}
 
-	bool fetch_submatrix(size_t start_row, size_t nrow,
-			size_t start_col, size_t ncol, submatrix_compute::ptr compute) const;
-	bool set_submatrix(size_t start_row, size_t start_col,
-			std::shared_ptr<mem_dense_matrix> subm);
-	virtual void wait4complete(int num) {
-	}
-	virtual void wait4all() {
-	}
-
 	virtual void resize(size_t nrow, size_t ncol);
 
 	virtual EM_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
@@ -128,6 +132,30 @@ public:
 	virtual size_t get_entry_size() const {
 		return entry_size;
 	}
+
+	EM_dense_matrix_accessor::ptr create_accessor();
+};
+
+class EM_col_matrix_accessor: public EM_dense_matrix_accessor
+{
+	EM_col_dense_matrix &m;
+	std::vector<EM_vector_accessor::ptr> accessors;
+public:
+	typedef std::shared_ptr<EM_col_matrix_accessor> ptr;
+
+	EM_col_matrix_accessor(EM_col_dense_matrix &_m,
+			const std::vector<EM_vector::ptr> &cols): m(_m) {
+		accessors.resize(cols.size());
+		for (size_t i = 0; i < cols.size(); i++)
+			accessors[i] = cols[i]->create_accessor();
+	}
+
+	bool fetch_submatrix(size_t start_row, size_t nrow,
+			size_t start_col, size_t ncol, submatrix_compute::ptr compute) const;
+	bool set_submatrix(size_t start_row, size_t start_col,
+			std::shared_ptr<mem_dense_matrix> subm);
+	virtual void wait4complete(int num);
+	virtual void wait4all();
 };
 
 }

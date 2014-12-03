@@ -21,6 +21,9 @@
  */
 
 #include <memory>
+#include <atomic>
+
+#include "io_interface.h"
 
 namespace fm
 {
@@ -34,26 +37,78 @@ public:
 	virtual void run(char *buf, size_t size) = 0;
 };
 
+class EM_vector;
+
+class EM_vector_accessor
+{
+	EM_vector &vec;
+	safs::io_interface::ptr io;
+	safs::file_io_factory::shared_ptr factory;
+public:
+	typedef std::shared_ptr<EM_vector_accessor> ptr;
+
+	EM_vector_accessor(EM_vector &_vec, safs::file_io_factory::shared_ptr factory);
+	~EM_vector_accessor();
+
+	/*
+	 * Fetch a subvector from the original vector in [start, start + lenth).
+	 * It performs computation on the fetched subvector asynchronously.
+	 */
+	void fetch_subvec(size_t start, size_t length, subvec_compute::ptr compute);
+	/*
+	 * Store a subvector to the original vector in [start, start + lenth).
+	 * It performs computation asynchronously when the data is stored on
+	 * the original vector.
+	 */
+	void set_subvec(const char *buf, size_t start, size_t length,
+			subvec_compute::ptr compute);
+
+	void wait4complete(int num);
+	void wait4all();
+};
+
 class EM_vector
 {
+	std::atomic<size_t> accessor_count;
+	safs::file_io_factory::shared_ptr factory;
 	size_t length;
+	size_t entry_size;
+
+	EM_vector(size_t length, size_t entry_size);
 public:
 	typedef std::shared_ptr<EM_vector> ptr;
 
-	EM_vector(size_t length) {
-		this->length = length;
+	static ptr create(size_t length, size_t entry_size) {
+		return ptr(new EM_vector(length, entry_size));
 	}
 
-	void resize(size_t length) {
-		this->length = length;
+	~EM_vector();
+
+	size_t get_size() const {
+		return length;
 	}
 
-	size_t get_size() const;
-	void fetch_subvec(size_t start, size_t length,
-			subvec_compute::ptr compute) const;
-	void set_subvec(const char *buf, size_t start, size_t length,
-			subvec_compute::ptr compute);
-	void wait4complete(int num);
+	size_t get_entry_size() const {
+		return entry_size;
+	}
+
+	size_t get_byte_off(size_t entry_off) const {
+		return entry_off * get_entry_size();
+	}
+
+	void resize(size_t length);
+
+	EM_vector_accessor::ptr create_accessor() {
+		accessor_count++;
+		return EM_vector_accessor::ptr(new EM_vector_accessor(*this, factory));
+	}
+
+	/*
+	 * Notify that a vector accessor is destroyed.
+	 */
+	void notify_destroy_accessor() {
+		accessor_count--;
+	}
 };
 
 }

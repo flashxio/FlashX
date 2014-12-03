@@ -22,7 +22,7 @@ CXXFLAGS := -g -std=c++0x -I../../include -I../../libcommon -I../../flash-graph 
 LDFLAGS := $(OMP_FLAG) -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lnuma -lz -laio
 
-all: test_io_gen test-mem_matrix
+all: test_io_gen test-mem_matrix test-EM_vector
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -30,11 +30,15 @@ test_io_gen: test_io_gen.o ../libFMatrix.a
 test-mem_matrix: test-mem_matrix.o ../libFMatrix.a
 	$(CXX) -o test-mem_matrix test-mem_matrix.o $(LDFLAGS)
 
+test-EM_vector: test-EM_vector.o ../libFMatrix.a
+	$(CXX) -o test-EM_vector test-EM_vector.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm test_io_gen
-	rm test-mem_matrix
+	rm -f test_io_gen
+	rm -f test-mem_matrix
+	rm -f test-EM_vector
 
 -include $(DEPS) 
