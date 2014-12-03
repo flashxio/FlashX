@@ -400,6 +400,8 @@ class page_filter;
 class page_cache
 {
 public:
+	typedef std::shared_ptr<page_cache> ptr;
+
 	virtual ~page_cache() {
 	}
 	/**
