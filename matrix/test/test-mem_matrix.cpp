@@ -45,6 +45,7 @@ void test1(size_t nrow, size_t ncol, size_t right_ncol)
 
 	gettimeofday(&start, NULL);
 	Eigen::Matrix<Type, Eigen::Dynamic, Eigen::Dynamic> eigen_m1(nrow, ncol);
+#pragma omp parallel for
 	for (size_t i = 0; i < nrow; i++) {
 		for (size_t j = 0; j < ncol; j++)
 			eigen_m1(i, j) = i * ncol + j;
