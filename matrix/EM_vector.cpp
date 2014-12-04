@@ -91,30 +91,63 @@ public:
 void EM_vector_accessor::fetch_subvec(size_t start, size_t length,
 		subvec_compute::ptr compute)
 {
-	off_t off = vec.get_byte_off(start);
-	size_t size = length * vec.get_entry_size();
-	assert(start % PAGE_SIZE == 0);
-	assert(size % PAGE_SIZE == 0);
-	char *buf = (char *) memalign(PAGE_SIZE, size);
-	safs::data_loc_t loc(io->get_file_id(), off);
-	safs::io_request req(buf, loc, size, READ);
-	((vec_callback &) io->get_callback()).add(off, compute);
-	io->access(&req, 1);
+	fetch_vec_request req;
+	req.start = start;
+	req.length = length;
+	req.compute = compute;
+	fetch_subvecs(&req, 1);
+}
+
+void EM_vector_accessor::fetch_subvecs(const fetch_vec_request reqs[], size_t num)
+{
+	safs::io_request io_reqs[num];
+	for (size_t i = 0; i < num; i++) {
+		size_t start = reqs[i].start;
+		size_t length = reqs[i].length;
+		off_t off = vec.get_byte_off(start);
+		size_t size = length * vec.get_entry_size();
+		assert(start % PAGE_SIZE == 0);
+		assert(size % PAGE_SIZE == 0);
+		char *buf = (char *) memalign(PAGE_SIZE, size);
+		safs::data_loc_t loc(io->get_file_id(), off);
+		io_reqs[i] = safs::io_request(buf, loc, size, READ);
+		((vec_callback &) io->get_callback()).add(off, reqs[i].compute);
+	}
+	io->access(io_reqs, num);
+	io->flush_requests();
 }
 
 void EM_vector_accessor::set_subvec(const char *buf, size_t start, size_t length,
 		subvec_compute::ptr compute)
 {
-	off_t off = vec.get_byte_off(start);
-	size_t size = length * vec.get_entry_size();
-	assert(start % PAGE_SIZE == 0);
-	assert(size % PAGE_SIZE == 0);
-	assert((long) buf % PAGE_SIZE == 0);
+	set_vec_request req;
+	req.buf = buf;
+	req.start = start;
+	req.length = length;
+	req.compute = compute;
+	set_subvecs(&req, 1);
+}
 
-	safs::data_loc_t loc(io->get_file_id(), off);
-	safs::io_request req((char *) buf, loc, size, WRITE);
-	((vec_callback &) io->get_callback()).add(off, compute);
-	io->access(&req, 1);
+void EM_vector_accessor::set_subvecs(const set_vec_request reqs[], size_t num)
+{
+	safs::io_request io_reqs[num];
+	for (size_t i = 0; i < num; i++) {
+		const char *buf = reqs[i].buf;
+		size_t start = reqs[i].start;
+		size_t length = reqs[i].length;
+
+		off_t off = vec.get_byte_off(start);
+		size_t size = length * vec.get_entry_size();
+		assert(start % PAGE_SIZE == 0);
+		assert(size % PAGE_SIZE == 0);
+		assert((long) buf % PAGE_SIZE == 0);
+
+		safs::data_loc_t loc(io->get_file_id(), off);
+		io_reqs[i] = safs::io_request((char *) buf, loc, size, WRITE);
+		((vec_callback &) io->get_callback()).add(off, reqs[i].compute);
+	}
+	io->access(io_reqs, num);
+	io->flush_requests();
 }
 
 void EM_vector_accessor::wait4complete(int num)

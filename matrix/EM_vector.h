@@ -39,6 +39,21 @@ public:
 
 class EM_vector;
 
+struct fetch_vec_request
+{
+	size_t start;
+	size_t length;
+	subvec_compute::ptr compute;
+};
+
+struct set_vec_request
+{
+	const char *buf;
+	size_t start;
+	size_t length;
+	subvec_compute::ptr compute;
+};
+
 /*
  * This is a per-thread data structure that helps access the vector in
  * the external memory.
@@ -58,6 +73,7 @@ public:
 	 * It performs computation on the fetched subvector asynchronously.
 	 */
 	void fetch_subvec(size_t start, size_t length, subvec_compute::ptr compute);
+	void fetch_subvecs(const fetch_vec_request reqs[], size_t num);
 	/*
 	 * Store a subvector to the original vector in [start, start + lenth).
 	 * It performs computation asynchronously when the data is stored on
@@ -65,6 +81,7 @@ public:
 	 */
 	void set_subvec(const char *buf, size_t start, size_t length,
 			subvec_compute::ptr compute);
+	void set_subvecs(const set_vec_request reqs[], size_t num);
 
 	void wait4complete(int num);
 	void wait4all();

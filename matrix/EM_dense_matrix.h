@@ -146,8 +146,15 @@ class EM_col_matrix_accessor: public EM_dense_matrix_accessor
 {
 	EM_col_dense_matrix &m;
 	EM_vector_accessor::ptr accessor;
+
+	// The buffers for requests issued by sub accessors.
+	std::vector<fetch_vec_request> fetch_reqs;
+	std::vector<set_vec_request> set_reqs;
 	std::vector<std::shared_ptr<EM_subvec_accessor> > sub_accessors;
+
 	int pending_reqs;
+
+	void flush();
 public:
 	typedef std::shared_ptr<EM_col_matrix_accessor> ptr;
 

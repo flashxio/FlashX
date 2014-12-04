@@ -26,30 +26,52 @@
 namespace fm
 {
 
+void EM_col_matrix_accessor::flush()
+{
+	if (!fetch_reqs.empty()) {
+		accessor->fetch_subvecs(fetch_reqs.data(), fetch_reqs.size());
+		fetch_reqs.clear();
+	}
+	if (!set_reqs.empty()) {
+		accessor->set_subvecs(set_reqs.data(), set_reqs.size());
+		set_reqs.clear();
+	}
+}
+
 class EM_subvec_accessor
 {
-	EM_vector_accessor::ptr accessor;
+	std::vector<fetch_vec_request> &fetch_reqs;
+	std::vector<set_vec_request> &set_reqs;
 	size_t start;
 	size_t end;
 public:
 	typedef std::shared_ptr<EM_subvec_accessor> ptr;
 
-	EM_subvec_accessor(EM_vector_accessor::ptr accessor, size_t start,
-			size_t end) {
-		this->accessor = accessor;
+	EM_subvec_accessor(std::vector<fetch_vec_request> &_fetch_reqs,
+			std::vector<set_vec_request> &_set_reqs, size_t start,
+			size_t end): fetch_reqs(_fetch_reqs), set_reqs(_set_reqs) {
 		this->start = start;
 		this->end = end;
 	}
 
 	void fetch_subvec(size_t start, size_t length, subvec_compute::ptr compute) {
 		assert(this->start + start + length <= end);
-		accessor->fetch_subvec(this->start + start, length, compute);
+		fetch_vec_request req;
+		req.start = this->start + start;
+		req.length = length;
+		req.compute = compute;
+		fetch_reqs.push_back(req);
 	}
 
 	void set_subvec(const char *buf, size_t start, size_t length,
 			subvec_compute::ptr compute) {
 		assert(this->start + start + length <= end);
-		accessor->set_subvec(buf, this->start + start, length, compute);
+		set_vec_request req;
+		req.buf = buf;
+		req.start = this->start + start;
+		req.length = length;
+		req.compute = compute;
+		set_reqs.push_back(req);
 	}
 };
 
@@ -113,6 +135,7 @@ bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
 				subvec_compute::ptr(new fetch_subcol_compute(*this,
 						subcol, i, compute)));
 	}
+	flush();
 	pending_reqs++;
 	return true;
 }
@@ -161,6 +184,7 @@ bool EM_col_matrix_accessor::set_submatrix(size_t start_row, size_t start_col,
 				sub_nrow, subvec_compute::ptr(new store_subcol_compute(*this,
 						subcol)));
 	}
+	flush();
 	pending_reqs++;
 	return true;
 }
@@ -187,7 +211,8 @@ EM_col_matrix_accessor::EM_col_matrix_accessor(EM_col_dense_matrix &_m,
 	sub_accessors.resize(m.get_num_cols());
 	for (size_t i = 0; i < m.get_num_cols(); i++)
 		sub_accessors[i] = EM_subvec_accessor::ptr(new EM_subvec_accessor(
-					accessor, i * m.get_num_rows(), (i + 1) * m.get_num_rows()));
+					fetch_reqs, set_reqs, i * m.get_num_rows(),
+					(i + 1) * m.get_num_rows()));
 }
 
 EM_col_matrix_accessor::~EM_col_matrix_accessor()
