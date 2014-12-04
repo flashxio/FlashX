@@ -26,16 +26,32 @@
 namespace fm
 {
 
-void EM_col_dense_matrix::resize(size_t nrow, size_t ncol)
+class EM_subvec_accessor
 {
-	cols.resize(ncol);
-	for (size_t i = 0; i < cols.size(); i++) {
-		if (cols[i] == NULL)
-			cols[i] = EM_vector::create(nrow, get_entry_size());
-		else
-			cols[i]->resize(nrow);
+	EM_vector_accessor::ptr accessor;
+	size_t start;
+	size_t end;
+public:
+	typedef std::shared_ptr<EM_subvec_accessor> ptr;
+
+	EM_subvec_accessor(EM_vector_accessor::ptr accessor, size_t start,
+			size_t end) {
+		this->accessor = accessor;
+		this->start = start;
+		this->end = end;
 	}
-}
+
+	void fetch_subvec(size_t start, size_t length, subvec_compute::ptr compute) {
+		assert(this->start + start + length <= end);
+		accessor->fetch_subvec(this->start + start, length, compute);
+	}
+
+	void set_subvec(const char *buf, size_t start, size_t length,
+			subvec_compute::ptr compute) {
+		assert(this->start + start + length <= end);
+		accessor->set_subvec(buf, this->start + start, length, compute);
+	}
+};
 
 struct subcol_struct
 {
@@ -93,7 +109,7 @@ bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
 	subcol->subm = mem_col_dense_matrix::create(sub_nrow, sub_ncol,
 			m.get_entry_size());
 	for (size_t i = 0; i < sub_ncol; i++) {
-		accessors[start_col + i]->fetch_subvec(start_row, sub_nrow,
+		sub_accessors[start_col + i]->fetch_subvec(start_row, sub_nrow,
 				subvec_compute::ptr(new fetch_subcol_compute(*this,
 						subcol, i, compute)));
 	}
@@ -141,7 +157,7 @@ bool EM_col_matrix_accessor::set_submatrix(size_t start_row, size_t start_col,
 	subcol_struct::ptr subcol = subcol_struct::ptr(new subcol_struct());
 	subcol->subm = sub_colm;
 	for (size_t i = 0; i < sub_ncol; i++) {
-		accessors[start_col + i]->set_subvec(sub_colm->get_col(i), start_row,
+		sub_accessors[start_col + i]->set_subvec(sub_colm->get_col(i), start_row,
 				sub_nrow, subvec_compute::ptr(new store_subcol_compute(*this,
 						subcol)));
 	}
@@ -154,14 +170,30 @@ void EM_col_matrix_accessor::wait4complete(int num)
 	int num2wait = std::min(num, pending_reqs);
 	if (num2wait == 0)
 		return;
-	BOOST_FOREACH(EM_vector_accessor::ptr accessor, accessors)
-		accessor->wait4complete(num2wait);
+	// TODO not all requests access all columns.
+	accessor->wait4complete(num2wait * m.get_num_cols());
 }
 
 void EM_col_matrix_accessor::wait4all()
 {
-	BOOST_FOREACH(EM_vector_accessor::ptr accessor, accessors)
-		accessor->wait4all();
+	accessor->wait4all();
+}
+
+EM_col_matrix_accessor::EM_col_matrix_accessor(EM_col_dense_matrix &_m,
+		EM_vector::ptr data): m(_m)
+{
+	pending_reqs = 0;
+	accessor = data->create_accessor();
+	sub_accessors.resize(m.get_num_cols());
+	for (size_t i = 0; i < m.get_num_cols(); i++)
+		sub_accessors[i] = EM_subvec_accessor::ptr(new EM_subvec_accessor(
+					accessor, i * m.get_num_rows(), (i + 1) * m.get_num_rows()));
+}
+
+EM_col_matrix_accessor::~EM_col_matrix_accessor()
+{
+	wait4all();
+	assert(pending_reqs == 0);
 }
 
 class submatrix_inner_prod_compute: public submatrix_compute
@@ -224,7 +256,7 @@ EM_dense_matrix::ptr EM_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
 EM_dense_matrix_accessor::ptr EM_col_dense_matrix::create_accessor()
 {
 	return EM_dense_matrix_accessor::ptr(new EM_col_matrix_accessor(*this,
-				cols));
+				data));
 }
 
 void EM_col_dense_matrix::set_data(const set_operate &op)

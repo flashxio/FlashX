@@ -79,7 +79,6 @@ public:
 	virtual EM_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) = 0;
 
-	virtual void resize(size_t nrow, size_t ncol) = 0;
 	virtual size_t get_num_rows() const = 0;
 	virtual size_t get_num_cols() const = 0;
 	virtual size_t get_entry_size() const = 0;
@@ -98,7 +97,9 @@ class EM_col_dense_matrix: public EM_dense_matrix
 	static const size_t COL_CHUNK_SIZE = 1024 * 1024;
 
 	size_t entry_size;
-	std::vector<EM_vector::ptr> cols;
+	size_t nrow;
+	size_t ncol;
+	EM_vector::ptr data;
 
 	EM_col_dense_matrix(size_t entry_size) {
 		this->entry_size = entry_size;
@@ -106,7 +107,9 @@ class EM_col_dense_matrix: public EM_dense_matrix
 
 	EM_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size) {
 		this->entry_size = entry_size;
-		this->resize(nrow, ncol);
+		this->nrow = nrow;
+		this->ncol = ncol;
+		data = EM_vector::create(nrow * ncol, entry_size);
 	}
 public:
 	static ptr create(size_t entry_size) {
@@ -117,22 +120,17 @@ public:
 		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size));
 	}
 
-	virtual void resize(size_t nrow, size_t ncol);
-
 	virtual EM_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op);
 
 	virtual void set_data(const set_operate &op);
 
 	virtual size_t get_num_rows() const {
-		if (cols.empty())
-			return 0;
-		else
-			return cols[0]->get_size();
+		return nrow;
 	}
 
 	virtual size_t get_num_cols() const {
-		return cols.size();
+		return ncol;
 	}
 
 	virtual size_t get_entry_size() const {
@@ -142,26 +140,19 @@ public:
 	EM_dense_matrix_accessor::ptr create_accessor();
 };
 
+class EM_subvec_accessor;
+
 class EM_col_matrix_accessor: public EM_dense_matrix_accessor
 {
 	EM_col_dense_matrix &m;
-	std::vector<EM_vector_accessor::ptr> accessors;
+	EM_vector_accessor::ptr accessor;
+	std::vector<std::shared_ptr<EM_subvec_accessor> > sub_accessors;
 	int pending_reqs;
 public:
 	typedef std::shared_ptr<EM_col_matrix_accessor> ptr;
 
-	EM_col_matrix_accessor(EM_col_dense_matrix &_m,
-			const std::vector<EM_vector::ptr> &cols): m(_m) {
-		pending_reqs = 0;
-		accessors.resize(cols.size());
-		for (size_t i = 0; i < cols.size(); i++)
-			accessors[i] = cols[i]->create_accessor();
-	}
-
-	~EM_col_matrix_accessor() {
-		wait4all();
-		assert(pending_reqs == 0);
-	}
+	EM_col_matrix_accessor(EM_col_dense_matrix &_m, EM_vector::ptr cols);
+	~EM_col_matrix_accessor();
 
 	bool fetch_submatrix(size_t start_row, size_t nrow,
 			size_t start_col, size_t ncol, submatrix_compute::ptr compute);
