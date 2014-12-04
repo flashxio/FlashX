@@ -7,7 +7,7 @@
 
 using namespace fm;
 
-class set_col_operate: public set_operate<double>
+class set_col_operate: public type_set_operate<double>
 {
 	size_t num_cols;
 public:

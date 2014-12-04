@@ -163,12 +163,27 @@ public:
 /*
  * This operate is used to set values on a matrix.
  */
-template<class T>
 class set_operate
 {
 public:
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const = 0;
+	virtual size_t entry_size() const = 0;
+};
+
+template<class T>
+class type_set_operate: public set_operate
+{
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		set((T *) arr, num_eles, row_idx, col_idx);
+	}
+public:
 	virtual void set(T *arr, size_t num_eles, off_t row_idx,
 			off_t col_idx) const = 0;
+	virtual size_t entry_size() const {
+		return sizeof(T);
+	}
 };
 
 }

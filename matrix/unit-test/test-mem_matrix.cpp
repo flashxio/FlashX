@@ -4,7 +4,7 @@
 
 using namespace fm;
 
-class set_col_operate: public set_operate<int>
+class set_col_operate: public type_set_operate<int>
 {
 	size_t num_cols;
 public:
@@ -19,7 +19,7 @@ public:
 	}
 };
 
-class set_row_operate: public set_operate<int>
+class set_row_operate: public type_set_operate<int>
 {
 	size_t num_cols;
 public:

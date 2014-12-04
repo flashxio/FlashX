@@ -24,6 +24,23 @@
 namespace fm
 {
 
+void mem_col_dense_matrix::reset_data()
+{
+	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+#pragma omp parallel for
+	for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
+		memset(data + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
+}
+
+void mem_col_dense_matrix::set_data(const set_operate &op)
+{
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+#pragma omp parallel for
+	for (size_t i = 0; i < ncol; i++)
+		op.set(get_col(i), nrow, 0, i);
+}
+
 mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
@@ -64,6 +81,23 @@ mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m
 		free(tmp_res);
 	}
 	return res;
+}
+
+void mem_row_dense_matrix::reset_data()
+{
+	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+#pragma omp parallel for
+	for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
+		memset(data + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
+}
+
+void mem_row_dense_matrix::set_data(const set_operate &op)
+{
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+#pragma omp parallel for
+	for (size_t i = 0; i < nrow; i++)
+		op.set(get_row(i), ncol, i, 0);
 }
 
 mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m,
