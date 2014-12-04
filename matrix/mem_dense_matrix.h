@@ -236,6 +236,17 @@ class type_mem_dense_matrix
 			assert(0);
 	}
 
+	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const set_operate<EntryType> &op) {
+		if (layout == matrix_layout_t::L_COL)
+			m = mem_col_dense_matrix::create(nrow, ncol, sizeof(EntryType));
+		else if (layout == matrix_layout_t::L_ROW)
+			m = mem_row_dense_matrix::create(nrow, ncol, sizeof(EntryType));
+		else
+			assert(0);
+		set_data(op);
+	}
+
 	type_mem_dense_matrix(mem_dense_matrix::ptr m) {
 		this->m = m;
 	}
@@ -246,9 +257,29 @@ public:
 		return ptr(new type_mem_dense_matrix<EntryType>(nrow, ncol, layout));
 	}
 
+	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const set_operate<EntryType> &op) {
+		return ptr(new type_mem_dense_matrix<EntryType>(nrow, ncol, layout, op));
+	}
+
 	static ptr create(mem_dense_matrix::ptr m) {
 		assert(m->get_entry_size() == sizeof(EntryType));
 		return ptr(new type_mem_dense_matrix<EntryType>(m));
+	}
+
+	void set_data(const set_operate<EntryType> &op) {
+		size_t ncol = m->get_num_cols();
+		size_t nrow = m->get_num_rows();
+		if (m->store_layout() == matrix_layout_t::L_COL) {
+			mem_col_dense_matrix &colm = (mem_col_dense_matrix &) *m;
+			for (size_t i = 0; i < ncol; i++)
+				op.set((EntryType *) colm.get_col(i), nrow, 0, i);
+		}
+		else if (m->store_layout() == matrix_layout_t::L_ROW) {
+			mem_row_dense_matrix &rowm = (mem_row_dense_matrix &) *m;
+			for (size_t i = 0; i < nrow; i++)
+				op.set((EntryType *) rowm.get_row(i), ncol, i, 0);
+		}
 	}
 
 	size_t get_num_rows() const {

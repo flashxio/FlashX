@@ -160,6 +160,17 @@ public:
 	}
 };
 
+/*
+ * This operate is used to set values on a matrix.
+ */
+template<class T>
+class set_operate
+{
+public:
+	virtual void set(T *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const = 0;
+};
+
 }
 
 #endif

@@ -7,6 +7,21 @@
 
 using namespace fm;
 
+class set_col_operate: public set_operate<double>
+{
+	size_t num_cols;
+public:
+	set_col_operate(size_t num_cols) {
+		this->num_cols = num_cols;
+	}
+
+	void set(double *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = (row_idx + i) * num_cols + col_idx;
+		}
+	}
+};
+
 /*
  * This function is to compare the performance of inner product between
  * in-memory column-wise dense matrix and Eigen matrix.
@@ -19,23 +34,14 @@ void test1(size_t nrow, size_t ncol, size_t right_ncol)
 
 	gettimeofday(&start, NULL);
 	typename type_mem_dense_matrix<Type>::ptr m1
-		= type_mem_dense_matrix<Type>::create(nrow, ncol, matrix_layout_t::L_COL);
-	for (size_t j = 0; j < m1->get_num_cols(); j++) {
-		for (size_t i = 0; i < m1->get_num_rows(); i++) {
-			m1->set(i, j, i * m1->get_num_cols() + j);
-		}
-	}
+		= type_mem_dense_matrix<Type>::create(nrow, ncol,
+				matrix_layout_t::L_COL, set_col_operate(ncol));
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to construct input column matrix\n",
 			time_diff(start, end));
-
 	typename type_mem_dense_matrix<Type>::ptr m2
 		= type_mem_dense_matrix<Type>::create(ncol, right_ncol,
-				matrix_layout_t::L_COL);
-	for (size_t i = 0; i < m2->get_num_rows(); i++) {
-		for (size_t j = 0; j < m2->get_num_cols(); j++)
-			m2->set(i, j, i * m2->get_num_cols() + j);
-	}
+				matrix_layout_t::L_COL, set_col_operate(ncol));
 
 	gettimeofday(&start, NULL);
 	Eigen::Matrix<Type, Eigen::Dynamic, Eigen::Dynamic> eigen_m1(nrow, ncol);
