@@ -48,6 +48,9 @@ EM_vector::EM_vector(size_t length, size_t entry_size)
 
 EM_vector::~EM_vector()
 {
+	safs::safs_file f(safs::get_sys_RAID_conf(), factory->get_name());
+	assert(f.exist());
+	f.delete_file();
 	assert(accessor_count == 0);
 }
 
