@@ -44,7 +44,7 @@ void test1(size_t nrow, size_t ncol, size_t right_ncol)
 			eigen_m1(i, j) = i * ncol + j;
 	}
 	gettimeofday(&end, NULL);
-	printf("It takes %.3f seconds to construct input row matrix\n",
+	printf("It takes %.3f seconds to construct input Eigen matrix\n",
 			time_diff(start, end));
 
 	Eigen::Matrix<Type, Eigen::Dynamic, Eigen::Dynamic> eigen_m2(ncol, right_ncol);
@@ -69,9 +69,10 @@ void test1(size_t nrow, size_t ncol, size_t right_ncol)
 	gettimeofday(&end, NULL);
 	assert((size_t) eigen_res.rows() == res1->get_num_rows());
 	assert((size_t) eigen_res.cols() == res1->get_num_cols());
-	printf("It takes %.3f seconds to multiply row matrix\n",
+	printf("It takes %.3f seconds to multiply Eigen matrix\n",
 			time_diff(start, end));
 
+#pragma omp parallel for
 	for (size_t i = 0; i < res1->get_num_rows(); i++) {
 		for (size_t j = 0; j < res1->get_num_cols(); j++) {
 			assert(res1->get(i, j) == eigen_res(i, j));
