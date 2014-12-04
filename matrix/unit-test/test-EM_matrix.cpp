@@ -29,31 +29,29 @@ public:
 	}
 };
 
-void init_matrix(mem_dense_matrix &m, size_t start_val)
+class set_col_operate: public type_set_operate<double>
 {
-	for (size_t i = 0; i < m.get_num_rows(); i++) {
-		for (size_t j = 0; j < m.get_num_cols(); j++) {
-			double *v = (double *) m.get(i, j);
-			*v = start_val;
-			start_val++;
+	size_t num_cols;
+public:
+	set_col_operate(size_t num_cols) {
+		this->num_cols = num_cols;
+	}
+
+	void set(double *arr, size_t num_eles, off_t row_idx, off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = (row_idx + i) * num_cols + col_idx;
 		}
 	}
-}
+};
 
 void test_fetch_set()
 {
 	EM_col_dense_matrix::ptr m = EM_col_dense_matrix::create(1024 * 1024, 5,
 			sizeof(double));
-	EM_dense_matrix_accessor::ptr accessor = m->create_accessor();
-	size_t num_rows = 1024 * 8;
-	for (size_t i = 0; i < m->get_num_rows(); i += num_rows) {
-		mem_dense_matrix::ptr mem_m = mem_col_dense_matrix::create(num_rows,
-				m->get_num_cols(), m->get_entry_size());
-		init_matrix(*mem_m, i * m->get_num_cols());
-		accessor->set_submatrix(i, 0, mem_m);
-	}
-	accessor->wait4all();
+	m->set_data(set_col_operate(5));
 
+	size_t num_rows = 1024 * 8;
+	EM_dense_matrix_accessor::ptr accessor = m->create_accessor();
 	for (size_t i = 0; i < m->get_num_rows(); i += num_rows) {
 		accessor->fetch_submatrix(i, num_rows, 0, m->get_num_cols(),
 				submatrix_compute::ptr(new read_double_compute(i)));
@@ -96,26 +94,19 @@ void test_inner_prod()
 			em->get_num_cols(), em->get_num_cols(), sizeof(double));
 
 	// Init the big external-memory matrix
-	size_t num_rows = 1024 * 8;
-	EM_dense_matrix_accessor::ptr accessor = em->create_accessor();
-	for (size_t i = 0; i < em->get_num_rows(); i += num_rows) {
-		mem_dense_matrix::ptr mem_m = mem_col_dense_matrix::create(num_rows,
-				em->get_num_cols(), em->get_entry_size());
-		init_matrix(*mem_m, i * em->get_num_cols());
-		accessor->set_submatrix(i, 0, mem_m);
-	}
-	accessor->wait4all();
+	em->set_data(set_col_operate(em->get_num_cols()));
 
 	// Init the big in-memory matrix
-	init_matrix(*big_im, 0);
-	init_matrix(*small_im, 0);
+	big_im->set_data(set_col_operate(big_im->get_num_cols()));
+	small_im->set_data(set_col_operate(small_im->get_num_cols()));
 
 	EM_dense_matrix::ptr em_res = multiply<double, double, double>(*em,
 			*small_im);
 	mem_dense_matrix::ptr im_res = multiply<double, double, double>(*big_im,
 			*small_im);
 
-	accessor = em_res->create_accessor();
+	size_t num_rows = 1024 * 8;
+	EM_dense_matrix_accessor::ptr accessor = em_res->create_accessor();
 	for (size_t i = 0; i < em_res->get_num_rows(); i += num_rows) {
 		accessor->fetch_submatrix(i, num_rows, 0, em_res->get_num_cols(),
 				submatrix_compute::ptr(new verify_prod_compute(i, *im_res)));

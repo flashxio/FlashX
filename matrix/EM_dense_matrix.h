@@ -27,6 +27,7 @@
 
 #include "bulk_operate.h"
 #include "EM_vector.h"
+#include "mem_dense_matrix.h"
 
 namespace fm
 {
@@ -83,6 +84,7 @@ public:
 	virtual size_t get_num_cols() const = 0;
 	virtual size_t get_entry_size() const = 0;
 	virtual EM_dense_matrix_accessor::ptr create_accessor() = 0;
+	virtual void set_data(const set_operate &op) = 0;
 };
 
 /*
@@ -119,6 +121,8 @@ public:
 
 	virtual EM_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op);
+
+	virtual void set_data(const set_operate &op);
 
 	virtual size_t get_num_rows() const {
 		if (cols.empty())

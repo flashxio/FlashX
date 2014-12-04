@@ -227,4 +227,21 @@ EM_dense_matrix_accessor::ptr EM_col_dense_matrix::create_accessor()
 				cols));
 }
 
+void EM_col_dense_matrix::set_data(const set_operate &op)
+{
+	EM_dense_matrix_accessor::ptr accessor = create_accessor();
+	size_t nrow = get_num_rows();
+	size_t ncol = get_num_cols();
+	for (size_t i = 0; i < nrow; i += COL_CHUNK_SIZE) {
+		size_t chunk_size = std::min(COL_CHUNK_SIZE, nrow);
+		mem_dense_matrix::ptr mem_m = mem_col_dense_matrix::create(
+				chunk_size, ncol, get_entry_size());
+		mem_m->set_data(op);
+		accessor->set_submatrix(i, 0, mem_m);
+		while (accessor->num_pending_reqs() > 8)
+			accessor->wait4complete(1);
+	}
+	accessor->wait4all();
+}
+
 }
