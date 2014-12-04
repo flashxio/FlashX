@@ -107,7 +107,10 @@ public:
 	}
 
 	virtual void reset_data() {
-		memset(data, 0, get_num_rows() * get_num_cols() * get_entry_size());
+		size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+#pragma omp parallel for
+		for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
+			memset(data + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 	}
 
 	mem_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
@@ -190,7 +193,10 @@ public:
 	}
 
 	virtual void reset_data() {
-		memset(data, 0, get_num_rows() * get_num_cols() * get_entry_size());
+		size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+#pragma omp parallel for
+		for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
+			memset(data + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 	}
 
 	mem_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
@@ -272,11 +278,13 @@ public:
 		size_t nrow = m->get_num_rows();
 		if (m->store_layout() == matrix_layout_t::L_COL) {
 			mem_col_dense_matrix &colm = (mem_col_dense_matrix &) *m;
+#pragma omp parallel for
 			for (size_t i = 0; i < ncol; i++)
 				op.set((EntryType *) colm.get_col(i), nrow, 0, i);
 		}
 		else if (m->store_layout() == matrix_layout_t::L_ROW) {
 			mem_row_dense_matrix &rowm = (mem_row_dense_matrix &) *m;
+#pragma omp parallel for
 			for (size_t i = 0; i < nrow; i++)
 				op.set((EntryType *) rowm.get_row(i), ncol, i, 0);
 		}
