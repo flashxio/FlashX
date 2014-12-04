@@ -63,6 +63,8 @@ protected:
 public:
 	typedef std::shared_ptr<mem_dense_matrix> ptr;
 
+	virtual void reset_data() = 0;
+
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual matrix_layout_t store_layout() const = 0;
 
@@ -102,6 +104,10 @@ public:
 
 	~mem_row_dense_matrix() {
 		free(data);
+	}
+
+	virtual void reset_data() {
+		memset(data, 0, get_num_rows() * get_num_cols() * get_entry_size());
 	}
 
 	mem_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
@@ -181,6 +187,10 @@ public:
 
 	~mem_col_dense_matrix() {
 		free(data);
+	}
+
+	virtual void reset_data() {
+		memset(data, 0, get_num_rows() * get_num_cols() * get_entry_size());
 	}
 
 	mem_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,

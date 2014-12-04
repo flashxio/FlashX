@@ -43,6 +43,7 @@ mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m
 
 	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow,
 			m.get_num_cols(), right_op.output_entry_size());
+	res->reset_data();
 
 	char *tmp_res = (char *) malloc(SUB_CHUNK_SIZE * res->get_entry_size());
 	for (size_t k = 0; k < nrow; k += SUB_CHUNK_SIZE) {
@@ -87,6 +88,7 @@ mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m
 
 	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow,
 			m.get_num_cols(), right_op.output_entry_size());
+	res->reset_data();
 
 	char *tmp_res = (char *) malloc(ncol * res->get_entry_size());
 	for (size_t i = 0; i < nrow; i++) {
