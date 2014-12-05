@@ -226,7 +226,7 @@ void init_flash_matrix(config_map::ptr configs)
 	if (count == 0) {
 		matrix_conf.init(configs);
 		try {
-			safs::init_io_system(configs);
+			safs::init_io_system(configs, false);
 		} catch (std::exception &e) {
 			// If SAFS fails to initialize, we should remove the count
 			// increase at the beginning of the function.
