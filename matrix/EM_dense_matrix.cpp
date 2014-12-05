@@ -256,6 +256,77 @@ public:
 	}
 };
 
+/*
+ * A worker thread to compute inner product on a matrix.
+ */
+class col_inner_prod_thread: public thread
+{
+	int worker_id;
+	EM_dense_matrix &in_m;
+	EM_dense_matrix &out_m;
+	const mem_dense_matrix &m;
+	const bulk_operate &left_op;
+	const bulk_operate &right_op;
+	std::vector<submatrix_loc> in_locs;
+public:
+	col_inner_prod_thread(EM_dense_matrix &in_m, EM_dense_matrix &out_m,
+			const mem_dense_matrix &m, const bulk_operate &left_op,
+			const bulk_operate &right_op, const std::vector<submatrix_loc> &in_locs,
+			int work_id, int node_id);
+
+	void run();
+};
+
+col_inner_prod_thread::col_inner_prod_thread(EM_dense_matrix &in_m,
+		EM_dense_matrix &out_m, const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op,
+		const std::vector<submatrix_loc> &in_locs, int worker_id,
+		int node_id): thread("inner-prod-thread", node_id), in_m(in_m), out_m(
+			out_m), m(m), left_op(left_op), right_op(right_op)
+{
+	this->in_locs = in_locs;
+	this->worker_id = worker_id;
+}
+
+void col_inner_prod_thread::run()
+{
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	EM_dense_matrix_accessor::ptr in_accessor = in_m.create_accessor();
+	EM_dense_matrix_accessor::ptr out_accessor = out_m.create_accessor();
+	size_t ncol = in_m.get_num_cols();
+	for (size_t i = 0; i < in_locs.size(); i++) {
+		in_accessor->fetch_submatrix(in_locs[i].start_row, in_locs[i].nrow,
+				in_locs[i].start_col, in_locs[i].ncol, submatrix_compute::ptr(
+					new submatrix_inner_prod_compute(in_locs[i].start_row,
+						in_locs[i].start_col, in_locs[i].start_row,
+						in_locs[i].start_col, left_op, right_op, m, *out_accessor)));
+		while ((size_t) in_accessor->num_pending_reqs() > 2 * ncol)
+			in_accessor->wait4complete(ncol);
+		while ((size_t) out_accessor->num_pending_reqs() > 2 * ncol)
+			out_accessor->wait4complete(1);
+	}
+	in_accessor->wait4all();
+	out_accessor->wait4all();
+	stop();
+	gettimeofday(&end, NULL);
+	printf("t%d(%d) takes %.3fs\n", worker_id, get_node_id(), time_diff(start, end));
+}
+
+void EM_col_dense_matrix::split_matrix(std::vector<submatrix_loc> &locs) const
+{
+	for (size_t i = 0; i < get_num_rows(); i += COL_CHUNK_SIZE) {
+		struct submatrix_loc loc;
+		loc.start_row = i;
+		loc.start_col = 0;
+		loc.ncol = get_num_cols();
+		loc.nrow = std::min(COL_CHUNK_SIZE, get_num_rows() - loc.start_row);
+		locs.push_back(loc);
+	}
+	printf("matrix has %ld rows and breaks into %ld submatrices\n",
+			get_num_rows(), locs.size());
+}
+
 EM_dense_matrix::ptr EM_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op)
 {
@@ -270,20 +341,29 @@ EM_dense_matrix::ptr EM_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
 
 	EM_col_dense_matrix::ptr res = EM_col_dense_matrix::create(
 			nrow, m.get_num_cols(), right_op.output_entry_size());
-	EM_dense_matrix_accessor::ptr accessor = create_accessor();
-	EM_dense_matrix_accessor::ptr res_accessor = res->create_accessor();
-	for (size_t i = 0; i < nrow; i += COL_CHUNK_SIZE) {
-		size_t sub_nrow = std::min(COL_CHUNK_SIZE, nrow - i);
-		accessor->fetch_submatrix(i, sub_nrow, 0, ncol, submatrix_compute::ptr(
-					new submatrix_inner_prod_compute(i, 0, i, 0, left_op,
-						right_op, m, *res_accessor)));
-		while (accessor->num_pending_reqs() > 8 * ncol)
-			accessor->wait4complete(ncol);
-		while (res_accessor->num_pending_reqs() > 2 * ncol)
-			res_accessor->wait4complete(1);
+	std::vector<submatrix_loc> all_locs;
+	split_matrix(all_locs);
+	size_t num_threads = matrix_conf.get_num_threads();
+	size_t num_nodes = safs::params.get_num_nodes();
+	std::vector<col_inner_prod_thread *> threads(num_threads);
+	size_t avg_work_size = ceil(((float) all_locs.size()) / num_threads);
+	for (size_t i = 0; i < num_threads; i++) {
+		if (all_locs.size() <= avg_work_size * i)
+			break;
+		size_t work_size = std::min(avg_work_size,
+				all_locs.size() - avg_work_size * i);
+		std::vector<submatrix_loc> locs(all_locs.begin() + avg_work_size * i,
+				all_locs.begin() + avg_work_size * i + work_size);
+		threads[i] = new col_inner_prod_thread(*this, *res, m, left_op, right_op,
+				locs, i, i % num_nodes);
+		threads[i]->start();
 	}
-	accessor->wait4all();
-	res_accessor->wait4all();
+	for (size_t i = 0; i < num_threads; i++) {
+		if (threads[i]) {
+			threads[i]->join();
+			delete threads[i];
+		}
+	}
 	return res;
 }
 

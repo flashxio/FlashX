@@ -36,6 +36,14 @@ class mem_dense_matrix;
 class mem_col_dense_matrix;
 class bulk_operate;
 
+struct submatrix_loc
+{
+	size_t start_row;
+	size_t start_col;
+	size_t nrow;
+	size_t ncol;
+};
+
 class submatrix_compute
 {
 	size_t start_row;
@@ -121,6 +129,8 @@ class EM_col_dense_matrix: public EM_dense_matrix
 		this->ncol = ncol;
 		data = EM_vector::create(nrow * ncol, entry_size, name);
 	}
+
+	void split_matrix(std::vector<submatrix_loc> &locs) const;
 public:
 	static ptr create(size_t entry_size) {
 		return ptr(new EM_col_dense_matrix(entry_size));
