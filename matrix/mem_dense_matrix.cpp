@@ -27,12 +27,26 @@ namespace fm
 void mem_col_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+	memset(data, 0, tot_bytes);
+}
+
+void mem_col_dense_matrix::set_data(const set_operate &op)
+{
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	for (size_t i = 0; i < ncol; i++)
+		op.set(get_col(i), nrow, 0, i);
+}
+
+void mem_col_dense_matrix::par_reset_data()
+{
+	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 #pragma omp parallel for
 	for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
 		memset(data + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 }
 
-void mem_col_dense_matrix::set_data(const set_operate &op)
+void mem_col_dense_matrix::par_set_data(const set_operate &op)
 {
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
@@ -41,26 +55,63 @@ void mem_col_dense_matrix::set_data(const set_operate &op)
 		op.set(get_col(i), nrow, 0, i);
 }
 
-mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
+bool mem_col_dense_matrix::verify_inner_prod(const mem_dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
 	if (this->get_entry_size() != left_op.left_entry_size()
 			|| m.get_entry_size() != left_op.right_entry_size()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The left operator isn't compatible with input matrices";
-		return mem_dense_matrix::ptr();
+		return false;
 	}
+
+	if (get_num_cols() != m.get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error) << "The matrix size doesn't match";
+		return false;
+	}
+	return true;
+}
+
+mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
+{
+	if (!verify_inner_prod(m, left_op, right_op))
+		return mem_dense_matrix::ptr();
 
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
-	if (ncol != m.get_num_rows()) {
-		BOOST_LOG_TRIVIAL(error) << "The matrix size doesn't match";
-		return mem_dense_matrix::ptr();
-	}
-
 	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow,
 			m.get_num_cols(), right_op.output_entry_size());
 	res->reset_data();
+
+	char *tmp_res = (char *) malloc(SUB_CHUNK_SIZE * res->get_entry_size());
+	for (size_t k = 0; k < nrow; k += SUB_CHUNK_SIZE) {
+		sub_matrix subm(k, std::min(SUB_CHUNK_SIZE, nrow - k), 0, ncol, *this);
+		for (size_t i = 0; i < ncol; i++) {
+			for (size_t j = 0; j < m.get_num_cols(); j++) {
+				left_op.runAE(subm.get_num_rows(), subm.get_col(i),
+						m.get(i, j), tmp_res);
+				char *store_col = res->get_col(j) + k * res->get_entry_size();
+				right_op.runAA(subm.get_num_rows(), tmp_res, store_col,
+						store_col);
+			}
+		}
+	}
+	free(tmp_res);
+	return res;
+}
+
+mem_dense_matrix::ptr mem_col_dense_matrix::par_inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
+{
+	if (!verify_inner_prod(m, left_op, right_op))
+		return mem_dense_matrix::ptr();
+
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow,
+			m.get_num_cols(), right_op.output_entry_size());
+	res->par_reset_data();
 
 #pragma omp parallel
 	{
@@ -86,12 +137,26 @@ mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m
 void mem_row_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+	memset(data, 0, tot_bytes);
+}
+
+void mem_row_dense_matrix::set_data(const set_operate &op)
+{
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	for (size_t i = 0; i < nrow; i++)
+		op.set(get_row(i), ncol, i, 0);
+}
+
+void mem_row_dense_matrix::par_reset_data()
+{
+	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 #pragma omp parallel for
 	for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
 		memset(data + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 }
 
-void mem_row_dense_matrix::set_data(const set_operate &op)
+void mem_row_dense_matrix::par_set_data(const set_operate &op)
 {
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
@@ -100,33 +165,65 @@ void mem_row_dense_matrix::set_data(const set_operate &op)
 		op.set(get_row(i), ncol, i, 0);
 }
 
-mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m,
+bool mem_row_dense_matrix::verify_inner_prod(const mem_dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
 	if (m.store_layout() != matrix_layout_t::L_COL) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The layout of the right matrix has to be column matrix";
-		return mem_dense_matrix::ptr();
+		return false;
 	}
-	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
 
 	if (this->get_entry_size() != left_op.left_entry_size()
 			|| m.get_entry_size() != left_op.right_entry_size()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The left operator isn't compatible with input matrices";
-		return mem_dense_matrix::ptr();
+		return false;
 	}
+
+	if (get_num_cols() != m.get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error) << "The matrix size doesn't match";
+		return false;
+	}
+	return true;
+}
+
+mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
+{
+	if (!verify_inner_prod(m, left_op, right_op))
+		return mem_dense_matrix::ptr();
 
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
-	if (ncol != m.get_num_rows()) {
-		BOOST_LOG_TRIVIAL(error) << "The matrix size doesn't match";
-		return mem_dense_matrix::ptr();
-	}
-
 	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow,
 			m.get_num_cols(), right_op.output_entry_size());
 	res->reset_data();
+
+	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
+	char *tmp_res = (char *) malloc(ncol * res->get_entry_size());
+	for (size_t i = 0; i < nrow; i++) {
+		for (size_t j = 0; j < m.get_num_cols(); j++) {
+			left_op.runAA(ncol, get_row(i), col_m.get_col(j), tmp_res);
+			right_op.runA(ncol, tmp_res, res->get(i, j));
+		}
+	}
+	free(tmp_res);
+	return res;
+}
+
+mem_dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
+{
+	if (!verify_inner_prod(m, left_op, right_op))
+		return mem_dense_matrix::ptr();
+
+	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow,
+			m.get_num_cols(), right_op.output_entry_size());
+	res->par_reset_data();
 
 #pragma omp parallel
 	{

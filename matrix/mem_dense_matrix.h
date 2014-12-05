@@ -64,8 +64,9 @@ public:
 	typedef std::shared_ptr<mem_dense_matrix> ptr;
 
 	virtual void reset_data() = 0;
-
 	virtual void set_data(const set_operate &op) = 0;
+	virtual void par_reset_data() = 0;
+	virtual void par_set_data(const set_operate &op) = 0;
 
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual matrix_layout_t store_layout() const = 0;
@@ -84,6 +85,8 @@ public:
 
 	virtual mem_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
+	virtual mem_dense_matrix::ptr par_inner_prod(const mem_dense_matrix &m,
+			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
 };
 
 class mem_row_dense_matrix: public mem_dense_matrix
@@ -97,6 +100,9 @@ class mem_row_dense_matrix: public mem_dense_matrix
 			assert(data);
 		}
 	}
+
+	bool verify_inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
 	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
 
@@ -110,8 +116,12 @@ public:
 
 	virtual void reset_data();
 	void set_data(const set_operate &op);
+	virtual void par_reset_data();
+	void par_set_data(const set_operate &op);
 
 	mem_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
+			const bulk_operate &left_op, const bulk_operate &right_op) const;
+	mem_dense_matrix::ptr par_inner_prod(const mem_dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 
 	char *get_row(size_t row) {
@@ -179,6 +189,9 @@ class mem_col_dense_matrix: public mem_dense_matrix
 			assert(data);
 		}
 	}
+
+	bool verify_inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
 	typedef std::shared_ptr<mem_col_dense_matrix> ptr;
 
@@ -191,10 +204,13 @@ public:
 	}
 
 	virtual void reset_data();
-
 	void set_data(const set_operate &op);
+	virtual void par_reset_data();
+	void par_set_data(const set_operate &op);
 
 	mem_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
+			const bulk_operate &left_op, const bulk_operate &right_op) const;
+	mem_dense_matrix::ptr par_inner_prod(const mem_dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 
 	void set_col(char *buf, size_t size, size_t col) {
