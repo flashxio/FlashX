@@ -32,6 +32,7 @@ namespace fm
 
 EM_vector::EM_vector(size_t length, size_t entry_size)
 {
+	named = false;
 	accessor_count = 0;
 	this->length = length;
 	this->entry_size = entry_size;
@@ -46,11 +47,32 @@ EM_vector::EM_vector(size_t length, size_t entry_size)
 	free(tmp);
 }
 
+EM_vector::EM_vector(size_t length, size_t entry_size, const std::string &name)
+{
+	named = true;
+	accessor_count = 0;
+	this->length = length;
+	this->entry_size = entry_size;
+
+	safs::safs_file f(safs::get_sys_RAID_conf(), name);
+	if (!f.exist()) {
+		bool ret = f.create_file(length * entry_size);
+		assert(ret);
+	}
+	else {
+		size_t size = length * entry_size;
+		assert(size == (size_t) f.get_size());
+	}
+	factory = safs::create_io_factory(name, safs::REMOTE_ACCESS);
+}
+
 EM_vector::~EM_vector()
 {
-	safs::safs_file f(safs::get_sys_RAID_conf(), factory->get_name());
-	assert(f.exist());
-	f.delete_file();
+	if (!named) {
+		safs::safs_file f(safs::get_sys_RAID_conf(), factory->get_name());
+		assert(f.exist());
+		f.delete_file();
+	}
 	assert(accessor_count == 0);
 }
 

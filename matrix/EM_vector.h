@@ -89,17 +89,24 @@ public:
 
 class EM_vector
 {
+	bool named;
 	std::atomic<size_t> accessor_count;
 	safs::file_io_factory::shared_ptr factory;
 	size_t length;
 	size_t entry_size;
 
 	EM_vector(size_t length, size_t entry_size);
+	EM_vector(size_t length, size_t entry_size, const std::string &name);
 public:
 	typedef std::shared_ptr<EM_vector> ptr;
 
 	static ptr create(size_t length, size_t entry_size) {
 		return ptr(new EM_vector(length, entry_size));
+	}
+
+	static ptr create(size_t length, size_t entry_size,
+			const std::string &name) {
+		return ptr(new EM_vector(length, entry_size, name));
 	}
 
 	~EM_vector();

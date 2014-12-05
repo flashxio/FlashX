@@ -47,13 +47,18 @@ public:
 
 EM_dense_matrix::ptr test_EM_inner_prod(size_t nrow, size_t ncol)
 {
+	std::string matrix_name
+		= boost::str(boost::format("test-%1%-%2%-D") % nrow % ncol);
+	bool exist = EM_dense_matrix::exist(matrix_name);
+
 	EM_col_dense_matrix::ptr em = EM_col_dense_matrix::create(nrow, ncol,
-			sizeof(double));
+			sizeof(double), matrix_name);
 	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
 			ncol, ncol, sizeof(double));
 
 	// Init the big external-memory matrix
-	em->set_data(set_col_operate(em->get_num_cols()));
+	if (!exist)
+		em->set_data(set_col_operate(em->get_num_cols()));
 	small_im->set_data(set_col_operate(small_im->get_num_cols()));
 
 	struct timeval start, end;

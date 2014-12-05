@@ -73,6 +73,8 @@ class EM_dense_matrix
 public:
 	typedef std::shared_ptr<EM_dense_matrix> ptr;
 
+	static bool exist(const std::string &name);
+
 	virtual ~EM_dense_matrix() {
 	}
 
@@ -111,6 +113,14 @@ class EM_col_dense_matrix: public EM_dense_matrix
 		this->ncol = ncol;
 		data = EM_vector::create(nrow * ncol, entry_size);
 	}
+
+	EM_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
+			const std::string &name) {
+		this->entry_size = entry_size;
+		this->nrow = nrow;
+		this->ncol = ncol;
+		data = EM_vector::create(nrow * ncol, entry_size, name);
+	}
 public:
 	static ptr create(size_t entry_size) {
 		return ptr(new EM_col_dense_matrix(entry_size));
@@ -118,6 +128,11 @@ public:
 
 	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
 		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size));
+	}
+
+	static ptr create(size_t nrow, size_t ncol, size_t entry_size,
+			const std::string &name) {
+		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size, name));
 	}
 
 	virtual EM_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,

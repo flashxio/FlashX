@@ -19,12 +19,21 @@
 
 #include <boost/foreach.hpp>
 
+#include "io_interface.h"
+#include "safs_file.h"
+
 #include "mem_dense_matrix.h"
 #include "EM_dense_matrix.h"
 #include "bulk_operate.h"
 
 namespace fm
 {
+
+bool EM_dense_matrix::exist(const std::string &name)
+{
+	safs::safs_file f(safs::get_sys_RAID_conf(), name);
+	return f.exist();
+}
 
 void EM_col_matrix_accessor::flush()
 {
