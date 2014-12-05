@@ -45,26 +45,43 @@ public:
 	}
 };
 
-void test_inner_prod(size_t nrow, size_t ncol)
+EM_dense_matrix::ptr test_EM_inner_prod(size_t nrow, size_t ncol)
 {
 	EM_col_dense_matrix::ptr em = EM_col_dense_matrix::create(nrow, ncol,
 			sizeof(double));
-	mem_col_dense_matrix::ptr big_im = mem_col_dense_matrix::create(
-			em->get_num_rows(), em->get_num_cols(), sizeof(double));
 	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
-			em->get_num_cols(), em->get_num_cols(), sizeof(double));
+			ncol, ncol, sizeof(double));
 
 	// Init the big external-memory matrix
 	em->set_data(set_col_operate(em->get_num_cols()));
+	small_im->set_data(set_col_operate(small_im->get_num_cols()));
 
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	EM_dense_matrix::ptr em_res = multiply<double, double, double>(*em,
+			*small_im);
+	gettimeofday(&end, NULL);
+	printf("multiply on EM matrix: %.3fs\n", time_diff(start, end));
+	return em_res;
+}
+
+mem_dense_matrix::ptr test_IM_inner_prod(size_t nrow, size_t ncol)
+{
+	mem_col_dense_matrix::ptr big_im = mem_col_dense_matrix::create(
+			nrow, ncol, sizeof(double));
+	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
+			ncol, ncol, sizeof(double));
 	// Init the big in-memory matrix
 	big_im->set_data(set_col_operate(big_im->get_num_cols()));
 	small_im->set_data(set_col_operate(small_im->get_num_cols()));
 
-	EM_dense_matrix::ptr em_res = multiply<double, double, double>(*em,
-			*small_im);
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
 	mem_dense_matrix::ptr im_res = multiply<double, double, double>(*big_im,
 			*small_im);
+	gettimeofday(&end, NULL);
+	printf("multiply on IM matrix: %.3fs\n", time_diff(start, end));
+	return im_res;
 }
 
 int main(int argc, char *argv[])
@@ -78,7 +95,8 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	test_inner_prod(1024 * 1024 * 120, 5);
+	test_EM_inner_prod(1024 * 1024 * 120, 5);
+	test_IM_inner_prod(1024 * 1024 * 120, 5);
 
 	destroy_flash_matrix();
 }
