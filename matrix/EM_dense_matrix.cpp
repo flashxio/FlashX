@@ -22,6 +22,7 @@
 #include "io_interface.h"
 #include "safs_file.h"
 
+#include "matrix_config.h"
 #include "mem_dense_matrix.h"
 #include "EM_dense_matrix.h"
 #include "bulk_operate.h"
@@ -119,10 +120,9 @@ public:
 
 	virtual void run(char *buf, size_t size) {
 		subcol->count++;
-		if (subcol->count == subcol->subm->get_num_cols()) {
+		accessor.complete_req();
+		if (subcol->count == subcol->subm->get_num_cols())
 			compute->run(*subcol->subm);
-			accessor.complete_req();
-		}
 	}
 };
 
@@ -145,7 +145,7 @@ bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
 						subcol, compute)));
 	}
 	flush();
-	pending_reqs++;
+	pending_reqs += sub_ncol;
 	return true;
 }
 
@@ -166,9 +166,7 @@ public:
 
 	virtual void run(char *buf, size_t size) {
 		subcol->count++;
-		if (subcol->count == subcol->subm->get_num_cols()) {
-			accessor.complete_req();
-		}
+		accessor.complete_req();
 	}
 };
 
@@ -194,7 +192,7 @@ bool EM_col_matrix_accessor::set_submatrix(size_t start_row, size_t start_col,
 						subcol)));
 	}
 	flush();
-	pending_reqs++;
+	pending_reqs += sub_ncol;
 	return true;
 }
 
@@ -203,8 +201,7 @@ void EM_col_matrix_accessor::wait4complete(int num)
 	int num2wait = std::min(num, pending_reqs);
 	if (num2wait == 0)
 		return;
-	// TODO not all requests access all columns.
-	accessor->wait4complete(num2wait * m.get_num_cols());
+	accessor->wait4complete(num2wait);
 }
 
 void EM_col_matrix_accessor::wait4all()
@@ -230,6 +227,9 @@ EM_col_matrix_accessor::~EM_col_matrix_accessor()
 	assert(pending_reqs == 0);
 }
 
+/*
+ * The task to perform inner product once the submatrix is read from disks.
+ */
 class submatrix_inner_prod_compute: public submatrix_compute
 {
 	const mem_dense_matrix &m;
@@ -277,9 +277,9 @@ EM_dense_matrix::ptr EM_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
 		accessor->fetch_submatrix(i, sub_nrow, 0, ncol, submatrix_compute::ptr(
 					new submatrix_inner_prod_compute(i, 0, i, 0, left_op,
 						right_op, m, *res_accessor)));
-		while (accessor->num_pending_reqs() > 8)
-			accessor->wait4complete(1);
-		while (res_accessor->num_pending_reqs() > 8)
+		while (accessor->num_pending_reqs() > 8 * ncol)
+			accessor->wait4complete(ncol);
+		while (res_accessor->num_pending_reqs() > 2 * ncol)
 			res_accessor->wait4complete(1);
 	}
 	accessor->wait4all();
@@ -304,7 +304,7 @@ void EM_col_dense_matrix::set_data(const set_operate &op)
 				chunk_size, ncol, get_entry_size());
 		mem_m->set_data(op);
 		accessor->set_submatrix(i, 0, mem_m);
-		while (accessor->num_pending_reqs() > 8)
+		while ((size_t) accessor->num_pending_reqs() > 2 * ncol)
 			accessor->wait4complete(1);
 	}
 	accessor->wait4all();

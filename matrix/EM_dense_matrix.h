@@ -180,12 +180,21 @@ public:
 			size_t start_col, size_t ncol, submatrix_compute::ptr compute);
 	bool set_submatrix(size_t start_row, size_t start_col,
 			std::shared_ptr<mem_dense_matrix> subm);
+	/*
+	 * The number of pending I/O requests.
+	 */
 	int num_pending_reqs() const {
 		return pending_reqs;
 	}
+	/*
+	 * Notify the completion of an I/O request.
+	 */
 	void complete_req() {
 		pending_reqs--;
 	}
+	/*
+	 * Wait for the specified number of I/O requests to be completed.
+	 */
 	virtual void wait4complete(int num);
 	virtual void wait4all();
 };
