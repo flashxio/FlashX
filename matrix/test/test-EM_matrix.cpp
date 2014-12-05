@@ -1,5 +1,10 @@
 #include <malloc.h>
 
+#ifdef PROFILER
+#include <gperftools/profiler.h>
+#endif
+
+#include "matrix_config.h"
 #include "EM_dense_matrix.h"
 #include "mem_dense_matrix.h"
 #include "sparse_matrix.h"
@@ -61,12 +66,20 @@ EM_dense_matrix::ptr test_EM_inner_prod(size_t nrow, size_t ncol)
 		em->set_data(set_col_operate(em->get_num_cols()));
 	small_im->set_data(set_col_operate(small_im->get_num_cols()));
 
+#ifdef PROFILER
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStart(matrix_conf.get_prof_file().c_str());
+#endif
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	EM_dense_matrix::ptr em_res = multiply<double, double, double>(*em,
 			*small_im);
 	gettimeofday(&end, NULL);
 	printf("multiply on EM matrix: %.3fs\n", time_diff(start, end));
+#ifdef PROFILER
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
 	return em_res;
 }
 
