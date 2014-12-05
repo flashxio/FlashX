@@ -23,10 +23,12 @@ public:
 
 class read_double_compute: public subvec_compute
 {
+	double *buf;
 	off_t idx;
 	size_t num;
 public:
-	read_double_compute(off_t idx, size_t num) {
+	read_double_compute(double *buf, off_t idx, size_t num) {
+		this->buf = buf;
 		this->idx = idx;
 		this->num = num;
 	}
@@ -36,6 +38,7 @@ public:
 		assert(sizeof(double) * num == size);
 		for (size_t i = 0; i < num; i++)
 			assert(dbuf[i] == idx + i);
+		free(this->buf);
 	}
 };
 
@@ -68,8 +71,9 @@ int main(int argc, char *argv[])
 	accessor->wait4all();
 
 	for (size_t i = 0; i < vec->get_size(); i += num_eles) {
-		accessor->fetch_subvec(i, num_eles, subvec_compute::ptr(
-				new read_double_compute(i, num_eles)));
+		double *buf = (double *) memalign(PAGE_SIZE, num_eles * sizeof(double));
+		accessor->fetch_subvec((char *) buf, i, num_eles, subvec_compute::ptr(
+				new read_double_compute(buf, i, num_eles)));
 	}
 	accessor->wait4all();
 

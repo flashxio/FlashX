@@ -63,9 +63,11 @@ public:
 		this->end = end;
 	}
 
-	void fetch_subvec(size_t start, size_t length, subvec_compute::ptr compute) {
+	void fetch_subvec(char *buf, size_t start, size_t length,
+			subvec_compute::ptr compute) {
 		assert(this->start + start + length <= end);
 		fetch_vec_request req;
+		req.buf = buf;
 		req.start = this->start + start;
 		req.length = length;
 		req.compute = compute;
@@ -105,20 +107,17 @@ struct subcol_struct
 class fetch_subcol_compute: public subvec_compute
 {
 	subcol_struct::ptr subcol;
-	size_t col_idx;
 	submatrix_compute::ptr compute;
 	EM_col_matrix_accessor &accessor;
 public:
 	fetch_subcol_compute(EM_col_matrix_accessor &_accessor,
-			subcol_struct::ptr subcol, size_t col_idx,
+			subcol_struct::ptr subcol,
 			submatrix_compute::ptr compute): accessor(_accessor) {
 		this->subcol = subcol;
-		this->col_idx = col_idx;
 		this->compute = compute;
 	}
 
 	virtual void run(char *buf, size_t size) {
-		subcol->subm->set_col(buf, size, col_idx);
 		subcol->count++;
 		if (subcol->count == subcol->subm->get_num_cols()) {
 			compute->run(*subcol->subm);
@@ -140,9 +139,10 @@ bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
 	subcol->subm = mem_col_dense_matrix::create(sub_nrow, sub_ncol,
 			m.get_entry_size());
 	for (size_t i = 0; i < sub_ncol; i++) {
-		sub_accessors[start_col + i]->fetch_subvec(start_row, sub_nrow,
+		sub_accessors[start_col + i]->fetch_subvec(subcol->subm->get_col(i),
+				start_row, sub_nrow,
 				subvec_compute::ptr(new fetch_subcol_compute(*this,
-						subcol, i, compute)));
+						subcol, compute)));
 	}
 	flush();
 	pending_reqs++;

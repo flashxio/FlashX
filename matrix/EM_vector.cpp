@@ -103,17 +103,16 @@ public:
 			it->second->run(reqs[i]->get_buf(), reqs[i]->get_size());
 			assert(it != computes.end());
 			computes.erase(it);
-			if (reqs[i]->get_access_method() == READ)
-				free(reqs[i]->get_buf());
 		}
 		return 0;
 	}
 };
 
-void EM_vector_accessor::fetch_subvec(size_t start, size_t length,
+void EM_vector_accessor::fetch_subvec(char *buf, size_t start, size_t length,
 		subvec_compute::ptr compute)
 {
 	fetch_vec_request req;
+	req.buf = buf;
 	req.start = start;
 	req.length = length;
 	req.compute = compute;
@@ -130,9 +129,8 @@ void EM_vector_accessor::fetch_subvecs(const fetch_vec_request reqs[], size_t nu
 		size_t size = length * vec.get_entry_size();
 		assert(start % PAGE_SIZE == 0);
 		assert(size % PAGE_SIZE == 0);
-		char *buf = (char *) memalign(PAGE_SIZE, size);
 		safs::data_loc_t loc(io->get_file_id(), off);
-		io_reqs[i] = safs::io_request(buf, loc, size, READ);
+		io_reqs[i] = safs::io_request(reqs[i].buf, loc, size, READ);
 		((vec_callback &) io->get_callback()).add(off, reqs[i].compute);
 	}
 	io->access(io_reqs, num);

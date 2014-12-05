@@ -41,6 +41,7 @@ class EM_vector;
 
 struct fetch_vec_request
 {
+	char *buf;
 	size_t start;
 	size_t length;
 	subvec_compute::ptr compute;
@@ -72,7 +73,8 @@ public:
 	 * Fetch a subvector from the original vector in [start, start + lenth).
 	 * It performs computation on the fetched subvector asynchronously.
 	 */
-	void fetch_subvec(size_t start, size_t length, subvec_compute::ptr compute);
+	void fetch_subvec(char *buf, size_t start, size_t length,
+			subvec_compute::ptr compute);
 	void fetch_subvecs(const fetch_vec_request reqs[], size_t num);
 	/*
 	 * Store a subvector to the original vector in [start, start + lenth).
