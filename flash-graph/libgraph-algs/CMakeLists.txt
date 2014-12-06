@@ -15,4 +15,5 @@ add_library(graph-algs STATIC
 	topK_scan_graph.cpp
 	undirected_triangle_graph.cpp
 	wcc.cpp
+	bfs_graph.cpp
 )
