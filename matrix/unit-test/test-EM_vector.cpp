@@ -76,6 +76,9 @@ int main(int argc, char *argv[])
 				new read_double_compute(buf, i, num_eles)));
 	}
 	accessor->wait4all();
+	// TODO I have destroy them before I can destroy FlashMatrix.
+	accessor = NULL;
+	vec = NULL;
 
 	destroy_flash_matrix();
 }
