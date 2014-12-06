@@ -90,12 +90,12 @@ mem_dense_matrix::ptr test_IM_inner_prod(size_t nrow, size_t ncol)
 	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
 			ncol, ncol, sizeof(double));
 	// Init the big in-memory matrix
-	big_im->set_data(set_col_operate(big_im->get_num_cols()));
+	big_im->par_set_data(set_col_operate(big_im->get_num_cols()));
 	small_im->set_data(set_col_operate(small_im->get_num_cols()));
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	mem_dense_matrix::ptr im_res = multiply<double, double, double>(*big_im,
+	mem_dense_matrix::ptr im_res = par_multiply<double, double, double>(*big_im,
 			*small_im);
 	gettimeofday(&end, NULL);
 	printf("multiply on IM matrix: %.3fs\n", time_diff(start, end));

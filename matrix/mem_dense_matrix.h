@@ -316,6 +316,13 @@ mem_dense_matrix::ptr  multiply(mem_col_dense_matrix &m1, mem_dense_matrix &m2)
 }
 
 template<class LeftType, class RightType, class ResType>
+mem_dense_matrix::ptr par_multiply(mem_col_dense_matrix &m1, mem_dense_matrix &m2)
+{
+	basic_ops_impl<LeftType, RightType, ResType> ops;
+	return m1.par_inner_prod(m2, ops.get_multiply(), ops.get_add());
+}
+
+template<class LeftType, class RightType, class ResType>
 typename type_mem_dense_matrix<ResType>::ptr  multiply(
 		type_mem_dense_matrix<LeftType> &m1,
 		type_mem_dense_matrix<RightType> &m2)
@@ -323,6 +330,17 @@ typename type_mem_dense_matrix<ResType>::ptr  multiply(
 	basic_ops_impl<LeftType, RightType, ResType> ops;
 	return type_mem_dense_matrix<ResType>::create(
 			m1.get_matrix().inner_prod(m2.get_matrix(), ops.get_multiply(),
+			ops.get_add()));
+}
+
+template<class LeftType, class RightType, class ResType>
+typename type_mem_dense_matrix<ResType>::ptr par_multiply(
+		type_mem_dense_matrix<LeftType> &m1,
+		type_mem_dense_matrix<RightType> &m2)
+{
+	basic_ops_impl<LeftType, RightType, ResType> ops;
+	return type_mem_dense_matrix<ResType>::create(
+			m1.get_matrix().par_inner_prod(m2.get_matrix(), ops.get_multiply(),
 			ops.get_add()));
 }
 
