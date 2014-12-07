@@ -352,8 +352,9 @@ in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 	in_mem_graph::ptr graph = in_mem_graph::ptr(new in_mem_graph());
 	graph->graph_size = io_factory->get_file_size();
 	size_t num_pages = ROUNDUP_PAGE(graph->graph_size) / PAGE_SIZE;
-	graph->graph_data = (char *) memalign(PAGE_SIZE, num_pages * PAGE_SIZE);
-	assert(graph->graph_data);
+	int ret = posix_memalign((void **) &graph->graph_data, PAGE_SIZE,
+			num_pages * PAGE_SIZE);
+	assert(ret == 0);
 	graph->graph_file_name = file_name;
 
 	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
