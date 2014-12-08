@@ -28,6 +28,10 @@ using namespace safs;
 namespace fg
 {
 
+/*
+ * This task is issued to the key-value store that runs on top of the vertex
+ * index to access entries in the index.
+ */
 template<class ValueType>
 class req_vertex_task
 {
@@ -71,6 +75,12 @@ public:
 	}
 };
 
+/*
+ * This template accesses vertex index on disks. When the requested entries
+ * in the index is available, it issues requests to read adjacency lists
+ * on disks. This implementation uses the key-value store to access
+ * the vertex index.
+ */
 template<class ValueType>
 class ext_mem_vindex_reader_impl: public vertex_index_reader
 {
@@ -105,6 +115,9 @@ public:
 	}
 };
 
+/*
+ * This template access vertex index in memory.
+ */
 template<class ValueType>
 class in_mem_vindex_reader_impl: public vertex_index_reader
 {
@@ -135,6 +148,9 @@ public:
 	}
 };
 
+/*
+ * This template accesses the compressed vertex index in memory.
+ */
 template<class vertex_index_type, class iterator_type>
 class in_mem_cindex_reader: public vertex_index_reader
 {
@@ -582,6 +598,14 @@ static off_range_t get_out_off_range(index_iterator &it, vertex_id_t start_vid,
 	return off_range_t(first_off, last_off);
 }
 
+/*
+ * For the sparse self requests, we need to define the condition of merging
+ * I/O requests for adjacency lists. This condition trades off the number
+ * of I/O requests and the amount of data accessed from disks.
+ * The current implementation minimizes the number of I/O requests to reduce
+ * the amount of data accessed from disks at the cost of more CPU overhead
+ * for I/O access and lower I/O throughput (bytes/second).
+ */
 static bool can_merge_reqs(const off_range_t &range1, const off_range_t &range2)
 {
 	return ROUND_PAGE(range1.second) == ROUND_PAGE(range2.first)
