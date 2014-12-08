@@ -1423,8 +1423,8 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 		for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 			assert(it != edges.cend());
 			edge<edge_data_type> e = *it;
-			assert(v->get_neighbor(j) == e.get_to());
-			assert(v->get_id() == e.get_from());
+			BOOST_VERIFY(v->get_neighbor(j) == e.get_to());
+			BOOST_VERIFY(v->get_id() == e.get_from());
 			if (v->has_edge_data())
 				assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 		}
@@ -1466,8 +1466,8 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 				assert(it != edges.cend());
 				edge<edge_data_type> e = *it;
-				assert(v->get_neighbor(j) == e.get_from());
-				assert(v->get_id() == e.get_to());
+				BOOST_VERIFY(v->get_neighbor(j) == e.get_from());
+				BOOST_VERIFY(v->get_id() == e.get_to());
 				if (v->has_edge_data())
 					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 			}
@@ -1478,8 +1478,8 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 				assert(it != edges.cend());
 				edge<edge_data_type> e = *it;
-				assert(v->get_id() == e.get_from());
-				assert(v->get_neighbor(j) == e.get_to());
+				BOOST_VERIFY(v->get_id() == e.get_from());
+				BOOST_VERIFY(v->get_neighbor(j) == e.get_to());
 				if (v->has_edge_data())
 					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 			}
@@ -1701,7 +1701,7 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 			edge_g, true);
 	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
 			edge_g, false);
-	assert(num_vertices == num_vertices1);
+	BOOST_VERIFY(num_vertices == num_vertices1);
 	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
 		% num_vertices;
 }
@@ -1725,7 +1725,7 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 			edge_g, true);
 	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
 			edge_g, false);
-	assert(num_vertices == num_vertices1);
+	BOOST_VERIFY(num_vertices == num_vertices1);
 	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
 		% num_vertices;
 }
