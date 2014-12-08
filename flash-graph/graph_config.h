@@ -45,6 +45,8 @@ class graph_config
 	int num_vparts;
 	int min_vpart_degree;
 	bool serial_run;
+	// in pages.
+	int vertex_merge_gap;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -62,6 +64,9 @@ public:
 		num_vparts = 1;
 		min_vpart_degree = std::numeric_limits<int>::max();
 		serial_run = false;
+		// When the gap is 0, it means two vertices either in the same page
+		// or two adjacent pages.
+		vertex_merge_gap = 0;
 	}
 
 	/**
@@ -188,6 +193,17 @@ public:
 	int get_min_vpart_degree() const {
 		return min_vpart_degree;
 	}
+
+	/**
+	 * \brief Get the size of a gap that is allowed when merging two vertex
+	 * requests.
+	 * When the gap is 0, it means only two vertices that are either on the
+	 * same page or two adjacent pages can be merged.
+	 * \return the gap size (in pages).
+	 */
+	int get_vertex_merge_gap() const {
+		return vertex_merge_gap;
+	}
 };
 
 inline void graph_config::print_help()
@@ -206,6 +222,7 @@ inline void graph_config::print_help()
 	printf("\tnum_vparts: the number of vertical partitions\n");
 	printf("\tmin_vpart_degree: the min degree of a vertex to perform vertical partitioning\n");
 	printf("\tserial_run: run the user code on a vertex in serial\n");
+	printf("\nvertex_merge_gap: the gap size allowed when merging two vertex requests\n");
 }
 
 inline void graph_config::print()
@@ -224,6 +241,7 @@ inline void graph_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\tnum_vparts: " << num_vparts;
 	BOOST_LOG_TRIVIAL(info) << "\tmin_vpart_degree: " << min_vpart_degree;
 	BOOST_LOG_TRIVIAL(info) << "\tserial_run: " << serial_run;
+	BOOST_LOG_TRIVIAL(info) << "\tvertex_merge_gap: " << vertex_merge_gap;
 }
 
 inline void graph_config::init(config_map::ptr map)
@@ -243,6 +261,7 @@ inline void graph_config::init(config_map::ptr map)
 	map->read_option_int("num_vparts", num_vparts);
 	map->read_option_int("min_vpart_degree", min_vpart_degree);
 	map->read_option_bool("serial_run", serial_run);
+	map->read_option_int("vertex_merge_gap", vertex_merge_gap);
 }
 
 extern graph_config graph_conf;
