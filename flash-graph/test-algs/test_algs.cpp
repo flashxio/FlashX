@@ -75,7 +75,32 @@ void run_triangle(FG_graph::ptr graph, int argc, char *argv[])
 
 void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
 {
-	FG_vector<size_t>::ptr scan = compute_local_scan(graph);
+	int opt;
+	int num_opts = 0;
+	int num_hops = 1;
+
+	while ((opt = getopt(argc, argv, "H:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'H':
+				num_hops = atoi(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	FG_vector<size_t>::ptr scan;
+	if (num_hops == 1)
+		scan = compute_local_scan(graph);
+	else if (num_hops == 2)
+		scan = compute_local_scan2(graph);
+	else {
+		fprintf(stderr, "we don't support local scan of more than 2 hops\n");
+		exit(1);
+	}
 	printf("Max local scan is %ld\n", scan->max());
 }
 
@@ -573,6 +598,9 @@ void print_usage()
 			"test_algs conf_file graph_file index_file algorithm [alg-options]\n");
 	fprintf(stderr, "scan-statistics:\n");
 	fprintf(stderr, "-K topK: topK vertices in topK scan\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "local scan\n");
+	fprintf(stderr, "-H hops: local scan within the specified number of hops\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "diameter estimation:\n");
 	fprintf(stderr, "-p num_para_bfs: the number of parallel bfs to estimate diameter\n");

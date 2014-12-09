@@ -218,6 +218,7 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
   *
 */
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr);
+FG_vector<size_t>::ptr compute_local_scan2(FG_graph::ptr fg);
 
 /**
   * \brief Obtain the top K vertices with the largest local Scan 
