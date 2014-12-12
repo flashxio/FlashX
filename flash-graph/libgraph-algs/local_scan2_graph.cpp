@@ -100,8 +100,16 @@ void local_scan2_vertex::run_on_itself(vertex_program &prog,
 	num_fetched = 0;
 
 	// Here we request all direct neighbors.
-	std::vector<vertex_id_t> neigh_vec(neighbors->begin(), neighbors->end());
-	request_vertices(neigh_vec.data(), neigh_vec.size());
+	if (neighbors->empty()) {
+		delete neighbors;
+		delete neighbors2;
+		neighbors = NULL;
+		neighbors2 = NULL;
+	}
+	else {
+		std::vector<vertex_id_t> neigh_vec(neighbors->begin(), neighbors->end());
+		request_vertices(neigh_vec.data(), neigh_vec.size());
+	}
 }
 
 /*
@@ -157,9 +165,15 @@ void local_scan2_vertex::run_on_neighbor(vertex_program &prog,
 		vertex_id_t curr_id = prog.get_vertex_id(*this);
 		neighbors2->erase(curr_id);
 
-		std::vector<vertex_id_t> neigh_vec(neighbors2->begin(),
-				neighbors2->end());
-		request_vertices(neigh_vec.data(), neigh_vec.size());
+		if (neighbors2->empty()) {
+			delete neighbors2;
+			neighbors2 = NULL;
+		}
+		else {
+			std::vector<vertex_id_t> neigh_vec(neighbors2->begin(),
+					neighbors2->end());
+			request_vertices(neigh_vec.data(), neigh_vec.size());
+		}
 		delete neighbors;
 		neighbors = NULL;
 	}
