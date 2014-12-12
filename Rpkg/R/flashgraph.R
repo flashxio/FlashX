@@ -373,10 +373,18 @@ fg.local.scan <- function(graph, order=1)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (graph$directed) {
-		.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraphR")
+		.Call("R_FG_compute_local_scan", graph, as.integer(order),
+			  PACKAGE="FlashGraphR")
 	}
-	else {
+	else if (order == 0) {
+		fg.degree(graph)
+	}
+	else if (order == 1) {
 		fg.triangles(graph) + fg.degree(graph)
+	}
+	else if (order == 2) {
+		print("We don't support local scan in the order of 2 on an undirected graph");
+		NULL
 	}
 }
 

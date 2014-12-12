@@ -762,12 +762,26 @@ RcppExport SEXP R_FG_compute_directed_triangles(SEXP graph, SEXP ptype)
 	return res;
 }
 
-RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP order)
+RcppExport SEXP R_FG_compute_local_scan(SEXP graph, SEXP porder)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_vector<size_t>::ptr fg_vec = compute_local_scan(fg);
-	Rcpp::IntegerVector res(fg_vec->get_size());
-	fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	int order = INTEGER(porder)[0];
+	Rcpp::IntegerVector res(fg->get_graph_header().get_num_vertices());
+	if (order == 0) {
+		FG_vector<vsize_t>::ptr fg_vec = get_degree(fg, edge_type::BOTH_EDGES);
+		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	}
+	else if (order == 1) {
+		FG_vector<size_t>::ptr fg_vec = compute_local_scan(fg);
+		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	}
+	else if (order == 2) {
+		FG_vector<size_t>::ptr fg_vec = compute_local_scan2(fg);
+		fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	}
+	else
+		return R_NilValue;
+
 	return res;
 }
 
