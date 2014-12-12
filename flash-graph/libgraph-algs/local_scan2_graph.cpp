@@ -127,7 +127,7 @@ void local_scan2_vertex::run_on_neighs_neigh_list(vertex_program &prog,
 		// If the neighbor's neighbor is a direct neighbor, we need to count
 		// each edge only once.
 		if (it1 != neighbors->end()) {
-			if (*it1 > vertex.get_id())
+			if (id > vertex.get_id())
 				local_scan2++;
 		}
 		// If the neighbor's neighbor isn't a direct neighbor, it's either
@@ -137,8 +137,8 @@ void local_scan2_vertex::run_on_neighs_neigh_list(vertex_program &prog,
 			local_scan2++;
 			// However, if the vertex isn't the current vertex, it must be
 			// two hops away from the current vertex.
-			if (*it1 != curr_id)
-				neighbors2->insert(*it1);
+			if (id != curr_id)
+				neighbors2->insert(id);
 		}
 	} PAGE_FOREACH_END
 }
