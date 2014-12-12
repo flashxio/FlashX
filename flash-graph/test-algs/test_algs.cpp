@@ -101,7 +101,8 @@ void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
 		fprintf(stderr, "we don't support local scan of more than 2 hops\n");
 		exit(1);
 	}
-	printf("Max local scan is %ld\n", scan->max());
+	std::pair<size_t, off_t> ret = scan->max_val_loc();
+	printf("Max local scan is %ld on v%ld\n", ret.first, ret.second);
 }
 
 void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
