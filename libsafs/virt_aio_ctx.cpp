@@ -21,6 +21,7 @@
 
 #include "virt_aio_ctx.h"
 #include "parameters.h"
+#include "io_request.h"
 
 namespace safs
 {

@@ -532,7 +532,7 @@ public:
 
 	bool add_range(id_range_t &range) {
 		if (in_mem || get_last_page() == get_page(range.first)
-				|| get_last_page() + PAGE_SIZE == get_page(range.first)) {
+				|| get_last_page() + safs::PAGE_SIZE == get_page(range.first)) {
 			index_compute::add_vertex(range.second - 1);
 			if ((size_t) ranges.get_capacity() <= num_ranges)
 				ranges.resize(ranges.get_capacity() * 2);
@@ -781,7 +781,7 @@ public:
 		}
 
 		if (in_mem || get_last_page() == get_page(id)
-				|| get_last_page() + PAGE_SIZE == get_page(id)) {
+				|| get_last_page() + safs::PAGE_SIZE == get_page(id)) {
 			index_compute::add_vertex(id);
 			computes[get_num_vertices()] = compute;
 			ids[get_num_vertices()] = id;

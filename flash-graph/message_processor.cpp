@@ -29,7 +29,7 @@ namespace fg
 message_processor::message_processor(graph_engine &_graph,
 		worker_thread &_owner, std::shared_ptr<slab_allocator> msg_alloc): graph(_graph),
 	owner(_owner), msg_q(_owner.get_node_id(), "graph_msg_queue", 16, INT_MAX),
-	stolenv_msgs(_owner.get_node_id(), PAGE_SIZE, true)
+	stolenv_msgs(_owner.get_node_id(), 4096, true)
 {
 	if (graph_conf.use_serial_run())
 		steal_state = std::unique_ptr<steal_state_t>(new steal_state_t(graph, owner));

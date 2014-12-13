@@ -60,7 +60,7 @@ public:
 	test_config() {
 		access_option = -1;
 		num_reqs = -1;
-		entry_size = PAGE_SIZE;
+		entry_size = safs::PAGE_SIZE;
 		nthreads = 1;
 		buf_type = SINGLE_LARGE_BUF;
 		high_prio = false;
