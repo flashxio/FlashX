@@ -7,6 +7,7 @@ add_library(graph-algs STATIC
 	graph_transitivity.cpp
 	k_core.cpp
 	local_scan_graph.cpp
+	local_scan2_graph.cpp
 	overlap.cpp
 	page_rank.cpp
 	scan_graph.cpp
