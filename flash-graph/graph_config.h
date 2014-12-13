@@ -222,7 +222,7 @@ inline void graph_config::print_help()
 	printf("\tnum_vparts: the number of vertical partitions\n");
 	printf("\tmin_vpart_degree: the min degree of a vertex to perform vertical partitioning\n");
 	printf("\tserial_run: run the user code on a vertex in serial\n");
-	printf("\nvertex_merge_gap: the gap size allowed when merging two vertex requests\n");
+	printf("\tvertex_merge_gap: the gap size allowed when merging two vertex requests\n");
 }
 
 inline void graph_config::print()
