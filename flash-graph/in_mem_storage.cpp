@@ -265,8 +265,11 @@ void in_mem_io::process_computes()
 				alloc->free(compute);
 			}
 		}
-		else
+		else {
+			if (incomp_computes.is_full())
+				incomp_computes.expand_queue(incomp_computes.get_size() * 2);
 			incomp_computes.push_back(compute);
+		}
 	}
 }
 
