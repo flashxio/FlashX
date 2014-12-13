@@ -24,11 +24,13 @@
 
 static atomic_number<size_t> tot_slab_size;
 
+static const int PAGE_SIZE = 4096;
+
 slab_allocator::slab_allocator(const std::string &name, int _obj_size,
 		long _increase_size, long _max_size, int _node_id,
 		// We allow pages to be pinned when allocated.
 		bool init, bool pinned, int _local_buf_size, bool _thread_safe): obj_size(
-			_obj_size), increase_size(ROUNDUP_PAGE(_increase_size)),
+			_obj_size), increase_size(ROUNDUP(_increase_size, PAGE_SIZE)),
 		max_size(_max_size), node_id(_node_id),
 		// If we don't want it to be thread safe, there is no reason to keep
 		// a local buffer.
