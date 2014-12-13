@@ -109,11 +109,11 @@ test.directed <- function(fg, ig)
 
 	# test locality scan
 	print("test locality statistics")
-	fg.res <- fg.local.scan(fg)
-	ig.res <- ig.local.scan(ig, 1)
-	check.vectors("local-scan_test", fg.res, ig.res)
 	fg.res <- fg.local.scan(fg, 2)
 	ig.res <- ig.local.scan(ig, 2)
+	check.vectors("local-scan2_test", fg.res, ig.res)
+	fg.res <- fg.local.scan(fg)
+	ig.res <- ig.local.scan(ig, 1)
 	check.vectors("local-scan_test", fg.res, ig.res)
 
 	# test topK scan
