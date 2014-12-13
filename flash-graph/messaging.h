@@ -496,7 +496,7 @@ inline local_vid_t multicast_dest_list::get_dest(int idx) const
 
 class multicast_msg_sender
 {
-	const static int MMSG_BUF_SIZE = PAGE_SIZE;
+	const static int MMSG_BUF_SIZE = 4096;
 	std::shared_ptr<slab_allocator> alloc;
 	// The local buffer of vertex messages.
 	message buf;

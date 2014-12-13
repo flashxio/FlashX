@@ -610,7 +610,7 @@ static bool can_merge_reqs(const off_range_t &range1, const off_range_t &range2)
 {
 	return ROUND_PAGE(range1.second) == ROUND_PAGE(range2.first)
 		|| ROUND_PAGE(range1.second) + (1 + graph_conf.get_vertex_merge_gap()) *
-		PAGE_SIZE == ROUND_PAGE(range2.first);
+		safs::PAGE_SIZE == ROUND_PAGE(range2.first);
 }
 
 static void merge_reqs(off_range_t &range1, const off_range_t &range2)
