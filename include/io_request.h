@@ -35,6 +35,12 @@
 namespace safs
 {
 
+static const int PAGE_SIZE = 4096;
+static const int LOG_PAGE_SIZE = 12;
+
+#define ROUND_PAGE(off) (((long) off) & (~((long) safs::PAGE_SIZE - 1)))
+#define ROUNDUP_PAGE(off) (((long) off + safs::PAGE_SIZE - 1) & (~((long) safs::PAGE_SIZE - 1)))
+
 class thread_safe_page;
 class io_interface;
 

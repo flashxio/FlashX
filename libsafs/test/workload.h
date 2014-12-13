@@ -236,7 +236,7 @@ public:
 			double hit_ratio, double read_ratio): global_rand_permute_workload(
 				stride, length, 1, read_ratio) {
 		// only to access the most recent pages.
-		this->num_pages = cache_size / PAGE_SIZE / 100;
+		this->num_pages = cache_size / safs::PAGE_SIZE / 100;
 		cache_hit_ratio = hit_ratio;
 		seq = 0;
 		cache_hit_seq = 0;
