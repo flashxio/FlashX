@@ -24,6 +24,8 @@
 namespace fm
 {
 
+const size_t mem_col_dense_matrix::SUB_CHUNK_SIZE = 1024;
+
 void mem_col_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();

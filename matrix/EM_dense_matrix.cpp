@@ -413,4 +413,6 @@ void EM_col_dense_matrix::set_data(const set_operate &op)
 	accessor->wait4all();
 }
 
+const size_t EM_col_dense_matrix::COL_CHUNK_SIZE = 1024 * 1024;
+
 }

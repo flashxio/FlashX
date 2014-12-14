@@ -149,7 +149,7 @@ public:
 class mem_col_dense_matrix: public mem_dense_matrix
 {
 	// The number of rows.
-	static const size_t SUB_CHUNK_SIZE = 1024;
+	static const size_t SUB_CHUNK_SIZE;
 
 	class sub_matrix {
 		size_t start_row;

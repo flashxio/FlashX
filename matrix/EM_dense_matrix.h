@@ -104,7 +104,7 @@ public:
 class EM_col_dense_matrix: public EM_dense_matrix
 {
 	// The number of elements.
-	static const size_t COL_CHUNK_SIZE = 1024 * 1024;
+	static const size_t COL_CHUNK_SIZE;
 
 	size_t entry_size;
 	size_t nrow;
