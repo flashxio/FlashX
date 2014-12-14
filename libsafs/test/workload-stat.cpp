@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <tr1/unordered_map>
 
-#define PAGE_SIZE 4096
 #define SCALE_FACTOR 100
 
 #include "workload.h"
@@ -66,8 +65,8 @@ int main(int argc, char *argv[])
 			min_size = workloads[i].size;
 		tot_size += workloads[i].size;
 		off_t last_page = ROUNDUP_PAGE(workloads[i].off + workloads[i].size);
-		int num_pages = (last_page - page_off) / PAGE_SIZE;
-		for (; page_off < last_page; page_off += PAGE_SIZE) {
+		int num_pages = (last_page - page_off) / safs::PAGE_SIZE;
+		for (; page_off < last_page; page_off += safs::PAGE_SIZE) {
 			std::tr1::unordered_map<off_t, int>::iterator it = page_map.find(page_off);
 			if (it == page_map.end()) {
 				page_map.insert(std::pair<off_t, int>(page_off, 1));

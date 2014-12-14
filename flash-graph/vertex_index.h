@@ -49,11 +49,11 @@ protected:
 			size_t num_large_in_vertices;
 			size_t num_large_out_vertices;
 		} data;
-		char page[PAGE_SIZE];
+		char page[graph_header::HEADER_SIZE];
 	} h;
 
 	vertex_index(size_t entry_size) {
-		assert(sizeof(*this) == PAGE_SIZE);
+		assert(sizeof(*this) == graph_header::HEADER_SIZE);
 		memset(this, 0, sizeof(*this));
 		graph_header::init(h.data.header);
 		h.data.entry_size = entry_size;

@@ -48,7 +48,9 @@ str2int cache_types[] = {
 
 sys_parameters::sys_parameters()
 {
-	RAID_block_size = 64;
+	// By default, the block size is 256KB, i.e., 64 pages.
+	// RAID_block_size keeps the block size in the number of pages.
+	RAID_block_size = (256 * 1024) / PAGE_SIZE;
 	SA_min_cell_size = 12;
 	io_depth_per_file = 32;
 	cache_type = ASSOCIATIVE_CACHE;

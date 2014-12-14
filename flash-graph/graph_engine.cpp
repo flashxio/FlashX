@@ -224,6 +224,9 @@ bool request_self(directed_vertex_request reqs[], size_t num, vertex_id_t self)
 
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
+	if (num == 0)
+		return;
+
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_id_t id = curr->get_vertex_program(false).get_vertex_id(*this);
 	curr->request_on_vertex(id);
@@ -291,6 +294,9 @@ void part_compute_vertex::broadcast_vpart(const vertex_message &msg)
 
 void part_compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
+	if (num == 0)
+		return;
+
 	// The trick for self request doesn't work for part compute vertex.
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_id_t id = curr->get_vertex_program(true).get_vertex_id(*this);
@@ -304,6 +310,9 @@ void part_compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 
 void part_compute_directed_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
+	if (num == 0)
+		return;
+
 	// The trick for self request doesn't work for part compute vertex.
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_id_t id = curr->get_vertex_program(true).get_vertex_id(*this);

@@ -27,9 +27,6 @@
 #include "log.h"
 #include "common_c.h"
 
-#define PAGE_SIZE 4096
-#define LOG_PAGE_SIZE 12
-
 #define ASSERT_EQ(x, y)								\
 	if ((x) != (y))	{								\
 		std::cerr << "x: " << x << ", y: " << y << std::endl;\

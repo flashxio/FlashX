@@ -33,7 +33,7 @@ load_balancer::load_balancer(graph_engine &_graph,
 			graph.get_num_threads() * sizeof(fifo_queue<vertex_id_t>));
 	for (int i = 0; i < graph.get_num_threads(); i++) {
 		new (completed_stolen_vertices + i) fifo_queue<vertex_id_t>(
-				_owner.get_node_id(), PAGE_SIZE, true);
+				_owner.get_node_id(), 4096, true);
 	}
 	num_completed_stolen_vertices = 0;
 }

@@ -42,13 +42,12 @@ using namespace fg;
  * Measure the performance of gather data from neighbors.
  * It generates a lot of remote random memory access.
  */
-
-class test_vertex: public compute_directed_vertex
+class test_get_vertex: public compute_directed_vertex
 {
 	long sum;
 	char stuffing[64 - sizeof(compute_directed_vertex) - sizeof(long)];
 public:
-	test_vertex(vertex_id_t id): compute_directed_vertex(id) {
+	test_get_vertex(vertex_id_t id): compute_directed_vertex(id) {
 		sum = 0;
 	}
 
@@ -63,7 +62,7 @@ public:
 	}
 };
 
-void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
+void test_get_vertex::run(vertex_program &prog, const page_vertex &vertex)
 {
 	long local_sum = 0;
 	int num_dests = vertex.get_num_edges(BOTH_EDGES);
@@ -72,10 +71,97 @@ void test_vertex::run(vertex_program &prog, const page_vertex &vertex)
 
 	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
 	PAGE_FOREACH(vertex_id_t, id, it) {
-		test_vertex &v = (test_vertex &) prog.get_graph().get_vertex(id);
+		test_get_vertex &v = (test_get_vertex &) prog.get_graph().get_vertex(id);
 		local_sum += v.sum;
 	} PAGE_FOREACH_END
 	this->sum = local_sum;
+}
+
+class test_message: public vertex_message
+{
+	int v;
+public:
+	test_message(int v): vertex_message(sizeof(test_message), false) {
+		this->v = v;
+	}
+
+	int get_value() const {
+		return v;
+	}
+};
+
+/**
+ * Measure the performance of message passing.
+ * It can remove remote random memory access, but still generates
+ * a lot of random access in the local memory.
+ */
+class test_msg_vertex: public compute_directed_vertex
+{
+	long sum;
+	char stuffing[64 - sizeof(compute_directed_vertex) - sizeof(long)];
+public:
+	test_msg_vertex(vertex_id_t id): compute_directed_vertex(id) {
+		sum = 0;
+	}
+
+	void run(vertex_program &prog) {
+		vertex_id_t id = prog.get_vertex_id(*this);
+		request_vertices(&id, 1);
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex);
+
+	virtual void run_on_message(vertex_program &, const vertex_message &msg1) {
+		const test_message &msg = (const test_message &) msg1;
+		sum += msg.get_value();
+	}
+};
+
+void test_msg_vertex::run(vertex_program &prog, const page_vertex &vertex)
+{
+	int num_dests = vertex.get_num_edges(BOTH_EDGES);
+	if (num_dests == 0)
+		return;
+
+	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
+	test_message msg(1);
+	prog.multicast_msg(it, msg);
+}
+
+/**
+ * Measure the performance of gather data from neighbors.
+ * It generates a lot of remote random memory access.
+ */
+class test_push_vertex: public compute_directed_vertex
+{
+	std::atomic<long> sum;
+public:
+	test_push_vertex(vertex_id_t id): compute_directed_vertex(id) {
+		sum = 0;
+	}
+
+	void run(vertex_program &prog) {
+		vertex_id_t id = prog.get_vertex_id(*this);
+		request_vertices(&id, 1);
+	}
+
+	void run(vertex_program &prog, const page_vertex &vertex);
+
+	virtual void run_on_message(vertex_program &, const vertex_message &msg) {
+	}
+};
+
+void test_push_vertex::run(vertex_program &prog, const page_vertex &vertex)
+{
+	int num_dests = vertex.get_num_edges(BOTH_EDGES);
+	if (num_dests == 0)
+		return;
+
+	edge_seq_iterator it = vertex.get_neigh_seq_it(BOTH_EDGES, 0, num_dests);
+	PAGE_FOREACH(vertex_id_t, id, it) {
+		test_push_vertex &v = (test_push_vertex &) prog.get_graph().get_vertex(id);
+		v.sum.fetch_add(1, std::memory_order_seq_cst);
+	} PAGE_FOREACH_END
 }
 
 void int_handler(int sig_num)
@@ -90,7 +176,7 @@ void int_handler(int sig_num)
 void print_usage()
 {
 	fprintf(stderr,
-			"test [options] conf_file graph_file index_file\n");
+			"test [options] conf_file graph_file index_file test\n");
 	fprintf(stderr, "-c confs: add more configurations to the system\n");
 	graph_conf.print_help();
 	params.print_help();
@@ -115,7 +201,7 @@ int main(int argc, char *argv[])
 	argv += 1 + num_opts;
 	argc -= 1 + num_opts;
 
-	if (argc < 3) {
+	if (argc < 4) {
 		print_usage();
 		exit(-1);
 	}
@@ -123,16 +209,34 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[0];
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
+	std::string test = argv[3];
 
 	config_map::ptr configs = config_map::create(conf_file);
 	configs->add_options(confs);
-	printf("The size of vertex state: %ld\n", sizeof(test_vertex));
+	if (test == "push")
+		printf("The size of vertex state: %ld\n", sizeof(test_push_vertex));
+	else if (test == "msg")
+		printf("The size of vertex state: %ld\n", sizeof(test_msg_vertex));
+	else if (test == "get")
+		printf("The size of vertex state: %ld\n", sizeof(test_get_vertex));
+	else {
+		fprintf(stderr, "wrong test\n");
+		exit(1);
+	}
 
 	signal(SIGINT, int_handler);
 
 	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
-	graph_index::ptr index = NUMA_graph_index<test_vertex>::create(
-			fg->get_graph_header());
+	graph_index::ptr index;
+	if (test == "push")
+		index = NUMA_graph_index<test_push_vertex>::create(
+				fg->get_graph_header());
+	else if (test == "msg")
+		index = NUMA_graph_index<test_msg_vertex>::create(
+				fg->get_graph_header());
+	else if (test == "get")
+		index = NUMA_graph_index<test_get_vertex>::create(
+				fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 	printf("test starts\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
