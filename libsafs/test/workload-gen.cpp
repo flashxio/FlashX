@@ -9,6 +9,8 @@
 
 #include "workload.h"
 
+using namespace safs;
+
 bool histogram = true;
 
 /**

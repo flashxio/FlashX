@@ -44,7 +44,12 @@ public:
 
 	void *alloc(size_t size) {
 		if (alignment) {
-			return memalign(alignment, size);
+			void *buf = NULL;
+			int ret = posix_memalign(&buf, alignment, size);
+			if (ret == 0)
+				return buf;
+			else
+				return NULL;
 		}
 		else
 			return malloc(size);

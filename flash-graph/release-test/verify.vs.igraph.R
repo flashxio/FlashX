@@ -2,6 +2,20 @@ require(igraph)
 library("FlashGraphR")
 library("irlba")
 
+ig.local.scan <- function(g, order)
+{
+	interval = 50
+	ret <- rep(0, vcount(g))
+	start <- 1
+	while (start <= vcount(g)) {
+		end <- min(start + interval - 1, vcount(g))
+		ret[start:end] <- sapply(graph.neighborhood(g, order, nodes=start:end,
+													mode="all"), ecount)
+		start <- start + interval
+	}
+	ret
+}
+
 verify.cc <- function(fg.res, ig.res)
 {
 	# get unique components IDs
@@ -95,8 +109,11 @@ test.directed <- function(fg, ig)
 
 	# test locality scan
 	print("test locality statistics")
+	fg.res <- fg.local.scan(fg, 2)
+	ig.res <- ig.local.scan(ig, 2)
+	check.vectors("local-scan2_test", fg.res, ig.res)
 	fg.res <- fg.local.scan(fg)
-	ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
+	ig.res <- ig.local.scan(ig, 1)
 	check.vectors("local-scan_test", fg.res, ig.res)
 
 	# test topK scan
