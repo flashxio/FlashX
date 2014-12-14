@@ -122,7 +122,7 @@ void EM_vector_accessor::fetch_subvec(char *buf, size_t start, size_t length,
 
 void EM_vector_accessor::fetch_subvecs(const fetch_vec_request reqs[], size_t num)
 {
-	safs::io_request io_reqs[num];
+	stack_array<safs::io_request, 8> io_reqs(num);
 	for (size_t i = 0; i < num; i++) {
 		size_t start = reqs[i].start;
 		size_t length = reqs[i].length;
@@ -134,7 +134,7 @@ void EM_vector_accessor::fetch_subvecs(const fetch_vec_request reqs[], size_t nu
 		io_reqs[i] = safs::io_request(reqs[i].buf, loc, size, READ);
 		((vec_callback &) io->get_callback()).add(off, reqs[i].compute);
 	}
-	io->access(io_reqs, num);
+	io->access(io_reqs.data(), num);
 	io->flush_requests();
 }
 
@@ -151,7 +151,7 @@ void EM_vector_accessor::set_subvec(const char *buf, size_t start, size_t length
 
 void EM_vector_accessor::set_subvecs(const set_vec_request reqs[], size_t num)
 {
-	safs::io_request io_reqs[num];
+	stack_array<safs::io_request, 8> io_reqs(num);
 	for (size_t i = 0; i < num; i++) {
 		const char *buf = reqs[i].buf;
 		size_t start = reqs[i].start;
@@ -167,7 +167,7 @@ void EM_vector_accessor::set_subvecs(const set_vec_request reqs[], size_t num)
 		io_reqs[i] = safs::io_request((char *) buf, loc, size, WRITE);
 		((vec_callback &) io->get_callback()).add(off, reqs[i].compute);
 	}
-	io->access(io_reqs, num);
+	io->access(io_reqs.data(), num);
 	io->flush_requests();
 }
 
