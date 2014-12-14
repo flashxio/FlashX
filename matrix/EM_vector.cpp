@@ -26,6 +26,7 @@
 #include "io_request.h"
 
 #include "EM_vector.h"
+#include "matrix_config.h"
 
 namespace fm
 {

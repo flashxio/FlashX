@@ -27,6 +27,7 @@
 
 #include "common.h"
 #include "bulk_operate.h"
+#include "matrix_config.h"
 
 namespace fm
 {

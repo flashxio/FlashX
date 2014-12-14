@@ -2,6 +2,7 @@
 
 #include "EM_vector.h"
 #include "sparse_matrix.h"
+#include "matrix_config.h"
 
 using namespace fm;
 

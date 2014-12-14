@@ -156,6 +156,8 @@ inline void matrix_config::init(config_map::ptr map)
 
 extern matrix_config matrix_conf;
 
+static const int PAGE_SIZE = 4096;
+
 }
 
 #endif
