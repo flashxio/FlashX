@@ -212,11 +212,10 @@ public:
  */
 class default_comp_io_scheduler: public comp_io_scheduler
 {
-	const int MAX_REQS_FETCH;
+	compute_iterator curr_it;
 public:
-	default_comp_io_scheduler(int node_id,
-			int max_fetch = INT_MAX): comp_io_scheduler(
-			node_id), MAX_REQS_FETCH(max_fetch) {
+	default_comp_io_scheduler(int node_id): comp_io_scheduler(node_id), curr_it(
+			get_end()) {
 	}
 
 	virtual size_t get_requests(fifo_queue<io_request> &reqs, size_t max);
