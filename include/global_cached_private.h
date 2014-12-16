@@ -136,7 +136,7 @@ class global_cached_io: public io_interface
 	// This contains a request from the application. It contains a request
 	// in progress.
 	partial_request processing_req;
-	comp_io_scheduler *comp_io_sched;
+	comp_io_scheduler::ptr comp_io_sched;
 
 	size_t num_pg_accesses;
 	size_t num_bytes;		// The number of accessed bytes
@@ -193,7 +193,7 @@ class global_cached_io: public io_interface
 	}
 public:
 	global_cached_io(thread *t, io_interface::ptr, page_cache::ptr cache,
-			comp_io_scheduler *sched = NULL);
+			comp_io_scheduler::ptr sched = NULL);
 
 	~global_cached_io();
 
@@ -225,10 +225,6 @@ public:
 			io_status *status);
 	// Process the remaining requests issued by the application.
 	void process_user_reqs(queue_interface<io_request> &queue);
-
-	// This function performs post-computation steps, after we perform the user
-	// computation.
-	void complete_user_compute(user_compute *compute);
 
 	void queue_requests(page_req_pair reqs[], int num) {
 		BOOST_VERIFY(pending_requests.add(reqs, num) == num);

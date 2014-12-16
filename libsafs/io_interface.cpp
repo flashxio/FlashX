@@ -604,9 +604,9 @@ void remote_io_factory::destroy_io(io_interface *io)
 io_interface::ptr global_cached_io_factory::create_io(thread *t)
 {
 	io_interface::ptr underlying = remote_factory.create_io(t);
-	comp_io_scheduler *scheduler = NULL;
-	if (get_sched_creater())
-		scheduler = get_sched_creater()->create(underlying->get_node_id());
+	comp_io_scheduler::ptr scheduler;
+	if (get_sched_creator())
+		scheduler = get_sched_creator()->create(underlying->get_node_id());
 	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache, scheduler);
 	return io_interface::ptr(io, io_deleter(*this));
