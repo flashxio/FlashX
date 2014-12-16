@@ -174,11 +174,11 @@ public:
 	size_t get_requests(fifo_queue<io_request> &reqs, size_t max);
 };
 
-class throughput_comp_io_sched_creater: public comp_io_sched_creater
+class throughput_comp_io_sched_creator: public comp_io_sched_creator
 {
 public:
-	comp_io_scheduler *create(int node_id) const {
-		return new throughput_comp_io_scheduler(node_id);
+	comp_io_scheduler::ptr create(int node_id) const {
+		return comp_io_scheduler::ptr(new throughput_comp_io_scheduler(node_id));
 	}
 };
 
@@ -559,7 +559,8 @@ void graph_engine::init(graph_index::ptr index)
 	pthread_barrier_init(&barrier1, NULL, num_threads);
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
-	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
+	graph_factory->set_sched_creater(comp_io_sched_creator::ptr(
+				new throughput_comp_io_sched_creator()));
 #if 0
 	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
 #endif
