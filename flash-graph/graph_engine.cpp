@@ -559,7 +559,7 @@ void graph_engine::init(graph_index::ptr index)
 	pthread_barrier_init(&barrier1, NULL, num_threads);
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
-	graph_factory->set_sched_creater(comp_io_sched_creator::ptr(
+	graph_factory->set_sched_creator(comp_io_sched_creator::ptr(
 				new throughput_comp_io_sched_creator()));
 #if 0
 	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
