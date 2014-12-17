@@ -115,4 +115,12 @@ size_t default_comp_io_scheduler::get_requests(
 	return num;
 }
 
+void default_comp_io_scheduler::gc_computes()
+{
+	comp_io_scheduler::gc_computes();
+	// The garbage collection reorders the elements in the user compute queue.
+	// The original iterator should be reset.
+	curr_it = this->get_end();
+}
+
 }

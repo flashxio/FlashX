@@ -197,7 +197,7 @@ public:
 	 * This method garbage collect user compute tasks that have been
 	 * completed.
 	 */
-	void gc_computes();
+	virtual void gc_computes();
 };
 
 /*
@@ -219,6 +219,7 @@ public:
 	}
 
 	virtual size_t get_requests(fifo_queue<io_request> &reqs, size_t max);
+	virtual void gc_computes();
 };
 
 }
