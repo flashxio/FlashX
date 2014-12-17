@@ -212,10 +212,13 @@ public:
  */
 class default_comp_io_scheduler: public comp_io_scheduler
 {
+	// Indicate whether there are completed user computes.
+	bool has_completed;
 	compute_iterator curr_it;
 public:
 	default_comp_io_scheduler(int node_id): comp_io_scheduler(node_id), curr_it(
 			get_end()) {
+		has_completed = false;
 	}
 
 	virtual size_t get_requests(fifo_queue<io_request> &reqs, size_t max);
