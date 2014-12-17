@@ -31,7 +31,6 @@
 #include "concurrency.h"
 #include "thread.h"
 #include "io_request.h"
-#include "comp_io_scheduler.h"
 
 namespace safs
 {
@@ -334,6 +333,8 @@ public:
 	}
 };
 
+class comp_io_scheduler;
+
 /**
  * This class creates an I/O scheduler used in the page cache.
  */
@@ -346,7 +347,7 @@ public:
 	 * \param node_id the NUMA node ID.
 	 * \return the I/O scheduler.
 	 */
-	virtual comp_io_scheduler::ptr create(int node_id) const = 0;
+	virtual std::shared_ptr<comp_io_scheduler> create(int node_id) const = 0;
 };
 
 /**
