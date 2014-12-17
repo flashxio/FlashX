@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "thread.h"
-#include "io_interface.h"
 #include "container.h"
 #include "concurrency.h"
 
@@ -29,7 +28,6 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 
-using namespace safs;
 using namespace fg;
 
 const int POWER_CONST = 10;
@@ -77,8 +75,6 @@ void print_usage()
 	fprintf(stderr, "-t time: the start time\n");
 	fprintf(stderr, "-l interval: the time interval\n");
 	fprintf(stderr, "-u unit: the unit of the time interval\n");
-	graph_conf.print_help();
-	params.print_help();
 }
 
 int main(int argc, char *argv[])

@@ -20,6 +20,7 @@
 #include <algorithm>
 
 #include "io_interface.h"
+#include "comp_io_scheduler.h"
 
 #include "bitmap.h"
 #include "graph_config.h"
@@ -954,6 +955,11 @@ void graph_engine::destroy_flash_graph()
 		init_count++;
 	else if (count == 1)
 		destroy_io_system();
+}
+
+int graph_engine::get_file_id() const
+{
+	return graph_factory->get_file_id();
 }
 
 }

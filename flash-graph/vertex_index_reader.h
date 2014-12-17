@@ -25,6 +25,11 @@
 #include "vertex_index.h"
 #include "vertex_request.h"
 
+namespace safs
+{
+	class io_interface;
+}
+
 namespace fg
 {
 
@@ -372,7 +377,7 @@ public:
 	typedef std::shared_ptr<vertex_index_reader> ptr;
 
 	static ptr create(const in_mem_query_vertex_index::ptr index, bool directed);
-	static ptr create(safs::io_interface::ptr io, bool directed);
+	static ptr create(std::shared_ptr<safs::io_interface> io, bool directed);
 
 	virtual ~vertex_index_reader() {
 	}
@@ -1082,7 +1087,8 @@ class simple_index_reader
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
-	simple_index_reader(safs::io_interface::ptr io, bool directed, worker_thread *t) {
+	simple_index_reader(std::shared_ptr<safs::io_interface> io, bool directed,
+			worker_thread *t) {
 		in_mem = false;
 		init(t, directed);
 		index_reader = vertex_index_reader::create(io, directed);
@@ -1164,7 +1170,8 @@ class simple_index_reader
 public:
 	typedef std::shared_ptr<simple_index_reader> ptr;
 
-	static ptr create(safs::io_interface::ptr io, bool directed, worker_thread *t) {
+	static ptr create(std::shared_ptr<safs::io_interface> io, bool directed,
+			worker_thread *t) {
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 

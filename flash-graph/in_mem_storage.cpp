@@ -28,6 +28,7 @@
 #include "slab_allocator.h"
 #include "native_file.h"
 #include "comp_io_scheduler.h"
+#include "io_interface.h"
 
 #include "in_mem_storage.h"
 #include "graph_file_header.h"

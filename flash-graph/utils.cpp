@@ -39,6 +39,7 @@
 
 #include "thread.h"
 #include "native_file.h"
+#include "exception.h"
 
 #include "graph.h"
 //#include "edge_type.h"

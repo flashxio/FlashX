@@ -19,6 +19,8 @@
 
 #include <unordered_set>
 
+#include "io_interface.h"
+
 #include "FGlib.h"
 #include "vertex.h"
 #include "in_mem_storage.h"
