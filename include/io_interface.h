@@ -373,7 +373,7 @@ public:
 	 * if the I/O instance doesn't have a page cache.
 	 * \param creater the I/O scheduler creator.
 	 */
-	void set_sched_creater(comp_io_sched_creator::ptr creater) {
+	void set_sched_creator(comp_io_sched_creator::ptr creator) {
 		this->creator = creator;
 	}
 
