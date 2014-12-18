@@ -131,6 +131,12 @@ enum {
 	 * is incomplete right now, so it shouldn't be used.
 	 */
 	PART_GLOBAL_ACCESS,
+
+	/**
+	 * This method accesses a SAFS file with asynchronous user-task interface,
+	 * but without page cache.
+	 */
+	DIRECT_COMP_ACCESS,
 };
 
 /**

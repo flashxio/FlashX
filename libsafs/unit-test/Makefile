@@ -21,7 +21,7 @@ CFLAGS = -g -I../../include -I../../libcommon $(TRACE_FLAGS)
 LDFLAGS := -L.. -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 
 UNITTEST = file_mapper_unit_test slab_allocator_test test_mem_tracker native_file_unit_test	\
-		   safs_file_unit_test unique_ptr_unit_test timer_unit_test test_open_close
+		   safs_file_unit_test unique_ptr_unit_test timer_unit_test test_open_close test-io
 CPPFLAGS := -MD
 CXXFLAGS = -I.. -I../../include -I../../libcommon -g -std=c++0x
 SOURCE := $(wildcard *.c) $(wildcard *.cpp)
@@ -66,6 +66,9 @@ KV_store_unit_test: KV_store_unit_test.o $(LIBFILE)
 
 test_open_close: test_open_close.o $(LIBFILE)
 	$(CXX) -o test_open_close test_open_close.o $(LDFLAGS)
+
+test-io: test-io.o $(LIBFILE)
+	$(CXX) -o test-io test-io.o $(LDFLAGS)
 
 clean:
 	rm -f *.o

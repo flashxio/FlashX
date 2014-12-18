@@ -44,6 +44,7 @@
 #include "native_file.h"
 #include "safs_file.h"
 #include "exception.h"
+#include "direct_comp_access.h"
 
 namespace safs
 {
@@ -469,6 +470,47 @@ public:
 	}
 };
 
+class direct_comp_io_factory: public file_io_factory
+{
+	// The number of bytes accessed from the disks.
+	std::atomic_ulong tot_disk_bytes;
+	// The number of bytes requested by applications.
+	std::atomic_ulong tot_req_bytes;
+	std::atomic_ulong tot_accesses;
+
+	remote_io_factory remote_factory;
+public:
+	direct_comp_io_factory(file_mapper &_mapper): file_io_factory(
+				_mapper.get_name()), remote_factory(_mapper) {
+		tot_disk_bytes = 0;
+		tot_req_bytes = 0;
+		tot_accesses = 0;
+	}
+
+	virtual io_interface::ptr create_io(thread *t);
+
+	virtual void destroy_io(io_interface *io);
+
+	virtual int get_file_id() const {
+		return remote_factory.get_file_id();
+	}
+
+	virtual void collect_stat(io_interface &io) {
+		direct_comp_io &dio = (direct_comp_io &) io;
+
+		tot_disk_bytes += dio.get_num_disk_bytes();
+		tot_req_bytes += dio.get_num_req_bytes();
+		tot_accesses += dio.get_num_reqs();
+	}
+
+	virtual void print_statistics() const {
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("%1% gets %2% async I/O accesses, %3% req bytes, %4% disk bytes")
+			% get_name() % tot_accesses.load() % tot_req_bytes.load()
+			% tot_disk_bytes.load();
+	}
+};
+
 #ifdef PART_IO
 class part_global_cached_io_factory: public remote_io_factory
 {
@@ -620,6 +662,21 @@ void global_cached_io_factory::destroy_io(io_interface *io)
 	delete io;
 }
 
+io_interface::ptr direct_comp_io_factory::create_io(thread *t)
+{
+	io_interface::ptr underlying = remote_factory.create_io(t);
+	direct_comp_io *io = new direct_comp_io(
+			std::static_pointer_cast<remote_io>(underlying));
+	return io_interface::ptr(io, io_deleter(*this));
+}
+
+void direct_comp_io_factory::destroy_io(io_interface *io)
+{
+	// num_ios is decreased by the underlying remote I/O instance.
+
+	// The underlying IO is deleted in global_cached_io's destructor.
+	delete io;
+}
 
 #ifdef PART_IO
 io_interface::ptr part_global_cached_io_factory::create_io(thread *t)
@@ -677,6 +734,9 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 			if (global_data.global_cache)
 				factory = new global_cached_io_factory(mapper,
 						global_data.global_cache);
+			break;
+		case DIRECT_COMP_ACCESS:
+			factory = new direct_comp_io_factory(mapper);
 			break;
 #ifdef PART_IO
 		case PART_GLOBAL_ACCESS:
