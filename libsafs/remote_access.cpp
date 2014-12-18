@@ -170,13 +170,17 @@ void remote_io::access(io_request *requests, int num,
 			requests[i].set_node_id(this->get_node_id());
 		}
 
+		if (requests[i].get_access_method() == WRITE && !params.is_writable())
+			throw io_exception((boost::format(
+							"The I/O object can't write data. offset: %1%, size: %2%")
+						% requests[i].get_offset() % requests[i].get_size()).str());
 		if (requests[i].get_offset() % MIN_BLOCK_SIZE > 0)
 			throw io_exception((boost::format(
-						"The IO request offset isn't aligned. offset: %ld, size: %ld")
+						"The IO request offset isn't aligned. offset: %1%, size: %2%")
 					% requests[i].get_offset() % requests[i].get_size()).str());
 		if (requests[i].get_size() % MIN_BLOCK_SIZE > 0)
 			throw io_exception((boost::format(
-							"The IO request size isn't aligned. offset: %ld, size: %ld")
+							"The IO request size isn't aligned. offset: %1%, size: %2%")
 						% requests[i].get_offset() % requests[i].get_size()).str());
 		if (requests[i].get_req_type() == io_request::USER_COMPUTE)
 			throw io_exception("user compute isn't supported");
