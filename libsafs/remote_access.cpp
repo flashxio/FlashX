@@ -28,6 +28,8 @@
 namespace safs
 {
 
+static const int COMPLETE_QUEUE_SIZE = 10240;
+
 /**
  * An IO request may be split into multiple requests.
  * This helper class represents the original I/O request issued by users.

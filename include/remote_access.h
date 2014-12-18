@@ -31,8 +31,6 @@ class request_sender;
 class disk_io_thread;
 class file_mapper;
 
-const int COMPLETE_QUEUE_SIZE = 10240;
-
 /**
  * This class is to help the local thread send IO requests to remote threads
  * dedicated to accessing SSDs. Each SSD has such a thread.
