@@ -174,6 +174,55 @@ void test_direct_comp(const std::string &data_file)
 	printf("direct compute I/O passed the test.\n");
 }
 
+//////////////////////////////// Test remote IO ///////////////////////////////
+
+class test_callback: public callback
+{
+	void verify(const io_request &req);
+public:
+	virtual int invoke(io_request *reqs[], int num) {
+		for (int i = 0; i < num; i++)
+			verify(*reqs[i]);
+		return 0;
+	}
+};
+
+void test_callback::verify(const io_request &req)
+{
+	assert(req.get_offset() % sizeof(long) == 0);
+	assert(req.get_size() % sizeof(long) == 0);
+	long expected = req.get_offset() / sizeof(long);
+	long *vs = (long *) req.get_buf();
+	int num_longs = req.get_size() / sizeof(long);
+	for (int i = 0; i < num_longs; i++) {
+		assert(vs[i] == expected);
+		expected++;
+	}
+	free(req.get_buf());
+}
+
+void test_remote_io(const std::string &data_file)
+{
+	file_io_factory::shared_ptr factory = create_io_factory(data_file,
+			REMOTE_ACCESS);
+	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
+	io->set_callback(callback::ptr(new test_callback()));
+	for (int i = 0; i < 1000; i++) {
+		std::pair<off_t, size_t> p = get_rand_align_req();
+		data_loc_t loc(io->get_file_id(), p.first);
+		char *buf = NULL;
+		int ret = posix_memalign((void **) &buf, 512, p.second);
+		assert(ret == 0);
+		io_request req(buf, loc, p.second, READ);
+		io->access(&req, 1);
+		while (io->num_pending_ios() > 32)
+			io->wait4complete(1);
+	}
+	while (io->num_pending_ios() > 0)
+		io->wait4complete(io->num_pending_ios());
+	printf("remote I/O passed the test.\n");
+}
+
 std::string prepare_file()
 {
 	std::string data_file_name = basename(tempnam(".", "test"));;
@@ -209,6 +258,7 @@ int main(int argc, char *argv[])
 	init_io_system(configs);
 
 	std::string data_file = prepare_file();
+	test_remote_io(data_file);
 	test_direct_comp(data_file);
 
 	safs_file f(get_sys_RAID_conf(), data_file);
