@@ -45,7 +45,7 @@ edge_type neigh_edge_type = IN_EDGE;
 
 class directed_triangle_vertex: public compute_directed_vertex
 {
-	multi_func_value local_value;
+	triangle_multi_func_value local_value;
 
 	void inc_num_triangles(size_t num) {
 		if (local_value.has_num_triangles())
@@ -316,7 +316,7 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 
 class part_directed_triangle_vertex: public part_compute_directed_vertex
 {
-	multi_func_value local_value;
+	triangle_multi_func_value local_value;
 
 	void inc_num_triangles(size_t num) {
 		if (local_value.has_num_triangles())
