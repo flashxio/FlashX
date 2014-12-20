@@ -341,11 +341,6 @@ void direct_comp_io::process_buf_reqs()
 
 void direct_comp_io::process_incomplete_computes()
 {
-	/*
-	 * This method should be called only when we have processed all buffered
-	 * I/O requests.
-	 */
-	assert(req_buf.is_empty());
 	if (alloc_mem_size >= MAX_PEND_COMP_SIZE)
 		return;
 	size_t num_new = comp_sched->get_requests(req_buf, req_buf.get_size());
@@ -358,16 +353,19 @@ void direct_comp_io::process_incomplete_computes()
 void direct_comp_io::flush_requests()
 {
 	process_buf_reqs();
-	if (req_buf.is_empty())
+	if (!req_buf.is_full())
 		process_incomplete_computes();
 	underlying->flush_requests();
 }
 
 int direct_comp_io::wait4complete(int num_to_complete)
 {
+	// Issue buffered requests to the underlying IO.
 	flush_requests();
 	size_t prev_completed_areqs = num_completed_areqs;
 	underlying->wait4complete(num_to_complete);
+	// We can now issue more buffered requests.
+	flush_requests();
 	return num_completed_areqs - prev_completed_areqs;
 }
 
