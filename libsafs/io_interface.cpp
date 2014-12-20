@@ -244,7 +244,8 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	if (thread::get_curr_thread() == NULL)
 		thread::represent_thread(-1);
 
-	if (global_data.global_cache == NULL && with_cache) {
+	if (global_data.global_cache == NULL && with_cache
+			&& params.get_cache_size() > 0) {
 		std::vector<int> node_id_array;
 		for (int i = 0; i < params.get_num_nodes(); i++)
 			node_id_array.push_back(i);
@@ -734,6 +735,8 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 			if (global_data.global_cache)
 				factory = new global_cached_io_factory(mapper,
 						global_data.global_cache);
+			else
+				throw io_exception("There is no page cache for global cache IO");
 			break;
 		case DIRECT_COMP_ACCESS:
 			factory = new direct_comp_io_factory(mapper);
@@ -742,15 +745,15 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 		case PART_GLOBAL_ACCESS:
 			if (global_data.global_cache)
 				factory = new part_global_cached_io_factory(file_name);
+			else
+				throw io_exception(
+						"There is no page cache for part'ed global cache IO");
 			break;
 #endif
 		default:
-			ABORT_MSG("a wrong access option");
+			throw io_exception("a wrong access option");
 	}
-	if (factory)
-		return file_io_factory::shared_ptr(factory, destroy_io_factory());
-	else
-		return file_io_factory::shared_ptr();
+	return file_io_factory::shared_ptr(factory, destroy_io_factory());
 }
 
 void print_io_thread_stat()
