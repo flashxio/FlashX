@@ -41,7 +41,7 @@ namespace fg
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
  */
-const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
+const int GRAPH_MSG_BUF_SIZE = 4096 * 4;
 const int MAX_FLUSH_MSG_SIZE = 256;
 
 graph_config graph_conf;
