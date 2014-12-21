@@ -83,7 +83,7 @@ size_t default_comp_io_scheduler::get_requests(
 		fifo_queue<io_request> &requests, size_t max)
 {
 	// If the request queue is already full, don't do anything.
-	if (requests.is_full())
+	if (requests.is_full() || max == 0)
 		return 0;
 
 	size_t num = 0;
