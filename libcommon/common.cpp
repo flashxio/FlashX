@@ -33,7 +33,6 @@
 #include <sstream>
 
 #include "common.h"
-#include "messaging.h"
 
 extern "C" {
 
