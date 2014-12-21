@@ -24,6 +24,8 @@
 #include <boost/foreach.hpp>
 #include <boost/format.hpp>
 
+#include "thread.h"
+
 #include "log.h"
 #include "vertex.h"
 #include "partitioner.h"
@@ -339,16 +341,6 @@ public:
 		NUMA_graph_index<vertex_type, part_vertex_type> *index
 			= new NUMA_graph_index<vertex_type, part_vertex_type>();
 		index->header = header;
-		return graph_index::ptr(index);
-	}
-
-	static graph_index::ptr create(const std::string &index_file) {
-		NUMA_graph_index<vertex_type, part_vertex_type> *index
-			= new NUMA_graph_index<vertex_type, part_vertex_type>();
-		safs::file_io_factory::shared_ptr factory = safs::create_io_factory(
-				index_file, safs::GLOBAL_CACHE_ACCESS);
-		safs::io_interface::ptr io = factory->create_io(thread::get_curr_thread());
-		io->access((char *) &index->header, 0, sizeof(header), READ);
 		return graph_index::ptr(index);
 	}
 

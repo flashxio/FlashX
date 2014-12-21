@@ -19,6 +19,8 @@
 
 #include <atomic>
 
+#include "io_interface.h"
+
 #include "worker_thread.h"
 #include "graph_engine.h"
 #include "bitmap.h"

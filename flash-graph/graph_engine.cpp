@@ -20,6 +20,7 @@
 #include <algorithm>
 
 #include "io_interface.h"
+#include "comp_io_scheduler.h"
 
 #include "bitmap.h"
 #include "graph_config.h"
@@ -559,7 +560,7 @@ void graph_engine::init(graph_index::ptr index)
 	pthread_barrier_init(&barrier1, NULL, num_threads);
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
-	graph_factory->set_sched_creater(comp_io_sched_creator::ptr(
+	graph_factory->set_sched_creator(comp_io_sched_creator::ptr(
 				new throughput_comp_io_sched_creator()));
 #if 0
 	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
@@ -954,6 +955,11 @@ void graph_engine::destroy_flash_graph()
 		init_count++;
 	else if (count == 1)
 		destroy_io_system();
+}
+
+int graph_engine::get_file_id() const
+{
+	return graph_factory->get_file_id();
 }
 
 }

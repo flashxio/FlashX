@@ -371,7 +371,7 @@ class part_local_t;
  * A data structure of containing vertex state for computing local scan.
  * This is Linux-specific.
  */
-class multi_func_value
+class scan_multi_func_value
 {
 	static const int VALUE_BITS = sizeof(size_t) * 8 - NUM_FLAGS;
 	static const size_t FLAGS_MASK = ((1UL << VALUE_BITS) - 1);
@@ -385,7 +385,7 @@ class multi_func_value
 		return value & (1UL << (VALUE_BITS + flag));
 	}
 public:
-	multi_func_value() {
+	scan_multi_func_value() {
 		value = 0;
 	}
 

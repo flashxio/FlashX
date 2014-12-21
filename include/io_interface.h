@@ -31,7 +31,6 @@
 #include "concurrency.h"
 #include "thread.h"
 #include "io_request.h"
-#include "comp_io_scheduler.h"
 
 namespace safs
 {
@@ -132,6 +131,12 @@ enum {
 	 * is incomplete right now, so it shouldn't be used.
 	 */
 	PART_GLOBAL_ACCESS,
+
+	/**
+	 * This method accesses a SAFS file with asynchronous user-task interface,
+	 * but without page cache.
+	 */
+	DIRECT_COMP_ACCESS,
 };
 
 /**
@@ -334,6 +339,8 @@ public:
 	}
 };
 
+class comp_io_scheduler;
+
 /**
  * This class creates an I/O scheduler used in the page cache.
  */
@@ -346,7 +353,7 @@ public:
 	 * \param node_id the NUMA node ID.
 	 * \return the I/O scheduler.
 	 */
-	virtual comp_io_scheduler::ptr create(int node_id) const = 0;
+	virtual std::shared_ptr<comp_io_scheduler> create(int node_id) const = 0;
 };
 
 /**
@@ -373,7 +380,7 @@ public:
 	 * if the I/O instance doesn't have a page cache.
 	 * \param creater the I/O scheduler creator.
 	 */
-	void set_sched_creater(comp_io_sched_creator::ptr creater) {
+	void set_sched_creator(comp_io_sched_creator::ptr creator) {
 		this->creator = creator;
 	}
 

@@ -22,8 +22,6 @@
 
 #include <atomic>
 
-#include "io_interface.h"
-
 #include "vertex.h"
 #include "vertex_index.h"
 #include "trace_logger.h"
@@ -33,6 +31,11 @@
 #include "graph_config.h"
 #include "vertex_request.h"
 #include "vertex_program.h"
+
+namespace safs
+{
+	class file_io_factory;
+}
 
 namespace fg
 {
@@ -355,7 +358,7 @@ class graph_engine
 	std::vector<vertex_program::ptr> vprograms;
 
 	trace_logger::ptr logger;
-	safs::file_io_factory::shared_ptr graph_factory;
+	std::shared_ptr<safs::file_io_factory> graph_factory;
 	int max_processing_vertices;
 
 	// The time when the current iteration starts.
@@ -581,9 +584,7 @@ public:
      * \internal
 	 * Get the file id where the graph data is stored.
 	 */
-	int get_file_id() const {
-		return graph_factory->get_file_id();
-	}
+	int get_file_id() const;
     
     /**\internal */
 	const graph_partitioner *get_partitioner() const {

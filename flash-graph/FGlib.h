@@ -25,6 +25,11 @@
 #include "FG_vector.h"
 #include "graph_file_header.h"
 
+namespace safs
+{
+	class file_io_factory;
+};
+
 namespace fg
 {
 
@@ -84,7 +89,7 @@ public:
 		return ptr(new FG_graph(graph_data, index_data, graph_name, configs));
 	}
 
-	safs::file_io_factory::shared_ptr get_graph_io_factory(int access_option);
+	std::shared_ptr<safs::file_io_factory> get_graph_io_factory(int access_option);
 
 /**
   * \brief Get the map that contains the runtime configurations 

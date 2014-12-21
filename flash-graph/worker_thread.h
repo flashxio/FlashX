@@ -29,6 +29,12 @@
 #include "bitmap.h"
 #include "scan_pointer.h"
 
+namespace safs
+{
+	class file_io_factory;
+	class io_interface;
+}
+
 namespace fg
 {
 
@@ -284,9 +290,9 @@ class simple_index_reader;
 class worker_thread: public thread
 {
 	int worker_id;
-	safs::file_io_factory::shared_ptr graph_factory;
-	safs::file_io_factory::shared_ptr index_factory;
-	safs::io_interface::ptr io;
+	std::shared_ptr<safs::file_io_factory> graph_factory;
+	std::shared_ptr<safs::file_io_factory> index_factory;
+	std::shared_ptr<safs::io_interface> io;
 	graph_engine *graph;
 	const graph_index &index;
 
@@ -357,8 +363,8 @@ class worker_thread: public thread
 	}
 	int process_activated_vertices(int max);
 public:
-	worker_thread(graph_engine *graph, safs::file_io_factory::shared_ptr graph_factory,
-			safs::file_io_factory::shared_ptr index_factory, vertex_program::ptr prog,
+	worker_thread(graph_engine *graph, std::shared_ptr<safs::file_io_factory> graph_factory,
+			std::shared_ptr<safs::file_io_factory> index_factory, vertex_program::ptr prog,
 			vertex_program::ptr part_prog, int node_id, int worker_id,
 			int num_threads, vertex_scheduler::ptr scheduler,
 			std::shared_ptr<slab_allocator> msg_alloc);
