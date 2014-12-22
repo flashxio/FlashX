@@ -32,7 +32,7 @@
 
 using namespace safs;
 
-const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
+const int BUF_SIZE = 1024 * 64 * 4096;
 
 config_map::ptr configs;
 
