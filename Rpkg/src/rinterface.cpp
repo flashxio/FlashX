@@ -23,6 +23,8 @@
 
 #include "log.h"
 #include "safs_file.h"
+#include "io_interface.h"
+
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/matrix_eigensolver.h"
 
