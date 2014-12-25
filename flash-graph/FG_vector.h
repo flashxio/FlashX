@@ -419,13 +419,14 @@ class FG_vector
 	 * \param vec The vector by which you want to add to this vector.
 	 * **parallel**
 	 */
-	void add_in_place(FG_vector<T>::ptr vec) {
+	template<class T2>
+	void add_in_place(typename FG_vector<T2>::ptr vec) {
 		struct add_func {
-			T operator()(const T &v1, const T &v2) {
+			T operator()(const T &v1, const T2 &v2) {
 				return v1 + v2;
 			}
 		};
-		merge_in_place<add_func, T>(vec, add_func());
+		merge_in_place<add_func, T2>(vec, add_func());
 	}
 
 	/**
@@ -433,13 +434,20 @@ class FG_vector
 	 * \param vec The vector by which you want the array to be subtracted.
 	 * **parallel** 
 	 */
-	void subtract_in_place(const FG_vector<T>::ptr &vec) {
+	template<class T2>
+	void subtract_in_place(typename FG_vector<T2>::ptr &vec) {
 		struct sub_func {
-			T operator()(const T &v1, const T &v2) {
+			T operator()(const T &v1, const T2 &v2) {
 				return v1 - v2;
 			}
 		};
-		merge_in_place<sub_func, T>(vec, sub_func());
+		merge_in_place<sub_func, T2>(vec, sub_func());
+	}
+
+	template<class T2>
+	void multiply_in_place(T2 v) {
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] *= v;
 	}
 
 	/**

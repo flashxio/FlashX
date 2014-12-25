@@ -659,6 +659,15 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 {
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
+	.Call("R_FG_compute_AcD_uw", fg, which.eigen, as.integer(num.eigen),
+		  as.integer(num.eigen * 2), as.double(c), PACKAGE="FlashGraphR")
+}
+
+fg.ASE.igraph <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
+				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
+{
+	stopifnot(!is.null(fg))
+	stopifnot(class(fg) == "fg")
 	# multiply function for eigen on the adjacency matrix
 	# this is the default setting.
 	multiply <- function(x, extra)
