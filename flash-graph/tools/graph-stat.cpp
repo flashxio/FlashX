@@ -50,7 +50,7 @@ void print_directed(FG_vector<vsize_t>::ptr in_degrees,
 	log_histogram hist_in_edges = in_degrees->log_hist(POWER_CONST);
 	log_histogram hist_out_edges = out_degrees->log_hist(POWER_CONST);
 
-	in_degrees->add_in_place(out_degrees);
+	in_degrees->add_in_place<vsize_t>(out_degrees);
 	vsize_t max_num_edges = in_degrees->max();
 	log_histogram hist_edges = in_degrees->log_hist(POWER_CONST);
 	printf("There are %ld edges\n", tot_in_edges);

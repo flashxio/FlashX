@@ -941,21 +941,10 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 }
 
 #ifdef USE_EIGEN
-/*
- * Compute eigen value/vector on an unweighted adjacency matrix.
- */
-RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
-{
-	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
-	std::string which = CHAR(STRING_ELT(pwhich, 0));
-	int nev = INTEGER(pnev)[0];
-	int ncv = INTEGER(pncv)[0];
-	std::vector<eigen_pair_t> eigen_pairs;
-	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, eigen_pairs);
-	if (eigen_pairs.empty())
-		return R_NilValue;
 
+SEXP output_eigen_pairs(const std::vector<eigen_pair_t> &eigen_pairs)
+{
+	int nev = eigen_pairs.size();
 	size_t length = eigen_pairs[0].second->get_size();
 	Rcpp::NumericVector eigen_values(nev);
 	Rcpp::NumericMatrix eigen_matrix(length, nev);
@@ -968,6 +957,74 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
 	ret["values"] = eigen_values;
 	ret["vectors"] = eigen_matrix;
 	return ret;
+}
+
+/*
+ * Compute eigen value/vector on an unweighted adjacency matrix.
+ */
+RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	if (fg->get_graph_header().is_directed_graph())
+		return R_NilValue;
+
+	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
+	std::string which = CHAR(STRING_ELT(pwhich, 0));
+	int nev = INTEGER(pnev)[0];
+	int ncv = INTEGER(pncv)[0];
+
+	std::vector<eigen_pair_t> eigen_pairs;
+	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, eigen_pairs);
+	if (eigen_pairs.empty())
+		return R_NilValue;
+	return output_eigen_pairs(eigen_pairs);
+}
+
+class AcD_SPMV: public SPMV
+{
+	FG_adj_matrix::ptr A;
+	FG_vector<vsize_t>::ptr cd;
+public:
+	AcD_SPMV(FG_adj_matrix::ptr A, double c, FG_vector<vsize_t>::ptr d) {
+		this->A = A;
+		cd = d;
+		cd->multiply_in_place(c);
+	}
+
+	virtual void compute(const FG_vector<ev_float_t> &input,
+			FG_vector<ev_float_t> &output) {
+		A->multiply(input, output);
+		output.add_in_place<vsize_t>(cd);
+	}
+
+	virtual size_t get_vector_size() {
+		return A->get_num_rows();
+	}
+};
+
+/**
+ * Compute the eigenvalues and eigenvectors of A + c * D.
+ */
+RcppExport SEXP R_FG_compute_AcD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
+		SEXP pc)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	if (fg->get_graph_header().is_directed_graph())
+		return R_NilValue;
+
+	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
+	std::string which = CHAR(STRING_ELT(pwhich, 0));
+	int nev = INTEGER(pnev)[0];
+	int ncv = INTEGER(pncv)[0];
+	double c = REAL(pc)[0];
+
+	std::vector<eigen_pair_t> eigen_pairs;
+	AcD_SPMV spmv(matrix, c, get_degree(fg, edge_type::BOTH_EDGES));
+	eigen_solver(spmv, ncv, nev, which, eigen_pairs);
+	if (eigen_pairs.empty())
+		return R_NilValue;
+
+	return output_eigen_pairs(eigen_pairs);
 }
 
 RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
