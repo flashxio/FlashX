@@ -983,18 +983,18 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
 class AcD_SPMV: public SPMV
 {
 	FG_adj_matrix::ptr A;
-	FG_vector<vsize_t>::ptr cd;
+	FG_vector<double>::ptr cd;
 public:
 	AcD_SPMV(FG_adj_matrix::ptr A, double c, FG_vector<vsize_t>::ptr d) {
 		this->A = A;
-		cd = d;
-		cd->multiply_in_place(c);
+		cd = d->multiply<double, double>(c);
 	}
 
 	virtual void compute(const FG_vector<ev_float_t> &input,
 			FG_vector<ev_float_t> &output) {
 		A->multiply(input, output);
-		output.add_in_place<vsize_t>(cd);
+		FG_vector<ev_float_t>::ptr cdx = input.multiply<double, ev_float_t>(cd);
+		output.add_in_place<ev_float_t>(cdx);
 	}
 
 	virtual size_t get_vector_size() {
