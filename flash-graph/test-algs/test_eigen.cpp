@@ -77,6 +77,7 @@ int main(int argc, char *argv[])
 				break;
 			case 'k':
 				nv = atoi(optarg);
+				m = 2 * nv;
 				num_opts++;
 				break;
 			case 'p':
