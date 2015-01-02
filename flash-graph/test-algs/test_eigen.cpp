@@ -22,8 +22,13 @@
 #include <gperftools/profiler.h>
 #endif
 
+#define USE_EIGEN
+
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/matrix_eigensolver.h"
+#include "matrix/ASE.h"
+
+using namespace fg;
 
 typedef FG_sparse_matrix<general_get_edge_iter<char> > FG_general_sparse_char_matrix;
 
@@ -46,8 +51,6 @@ void print_usage()
 	fprintf(stderr, "-k num: the number of real eigenvalues\n");
 	fprintf(stderr, "-w which: which side of eigenvalues\n");
 	fprintf(stderr, "-t type: the type of eigenvlaues\n");
-	graph_conf.print_help();
-	params.print_help();
 }
 
 int main(int argc, char *argv[])
@@ -130,6 +133,10 @@ int main(int argc, char *argv[])
 			compute_eigen<FG_general_sparse_char_matrix>(matrix, m, nv, which, eigen_pairs);
 		else if (type == "LS" || type == "RS")
 			compute_SVD<FG_general_sparse_char_matrix>(matrix, m, nv, which, type, eigen_pairs);
+	}
+	else if (matrix_type == "AcD") {
+		size_t nvertices = graph->get_graph_header().get_num_vertices();
+		compute_AcD_uw(graph, 1.0/nvertices, m, nv, which, eigen_pairs);
 	}
 	else
 		assert(0);
