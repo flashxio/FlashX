@@ -450,6 +450,25 @@ class FG_vector
 			eles[i] *= v;
 	}
 
+	template<class IN_TYPE, class OUT_TYPE>
+	typename FG_vector<OUT_TYPE>::ptr multiply(IN_TYPE v) const {
+		typename FG_vector<OUT_TYPE>::ptr ret = FG_vector<OUT_TYPE>::create(get_size());
+		for (size_t i = 0; i < get_size(); i++)
+			ret->set(i, this->eles[i] * v);
+		return ret;
+	}
+
+	template<class IN_TYPE, class OUT_TYPE>
+	typename FG_vector<OUT_TYPE>::ptr multiply(typename FG_vector<IN_TYPE>::ptr vec) const {
+		if (vec->get_size() != this->get_size())
+			return typename FG_vector<OUT_TYPE>::ptr();
+
+		typename FG_vector<OUT_TYPE>::ptr ret = FG_vector<OUT_TYPE>::create(get_size());
+		for (size_t i = 0; i < get_size(); i++)
+			ret->eles[i] = this->eles[i] * vec->get(i);
+		return ret;
+	}
+
 	/**
 	 * \brief Normalize vector using an Lx form.
 	 * **parallel**

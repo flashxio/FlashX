@@ -27,6 +27,7 @@
 
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/matrix_eigensolver.h"
+#include "matrix/ASE.h"
 
 #include "FGlib.h"
 #include "utils.h"
@@ -980,28 +981,6 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
 	return output_eigen_pairs(eigen_pairs);
 }
 
-class AcD_SPMV: public SPMV
-{
-	FG_adj_matrix::ptr A;
-	FG_vector<vsize_t>::ptr cd;
-public:
-	AcD_SPMV(FG_adj_matrix::ptr A, double c, FG_vector<vsize_t>::ptr d) {
-		this->A = A;
-		cd = d;
-		cd->multiply_in_place(c);
-	}
-
-	virtual void compute(const FG_vector<ev_float_t> &input,
-			FG_vector<ev_float_t> &output) {
-		A->multiply(input, output);
-		output.add_in_place<vsize_t>(cd);
-	}
-
-	virtual size_t get_vector_size() {
-		return A->get_num_rows();
-	}
-};
-
 /**
  * Compute the eigenvalues and eigenvectors of A + c * D.
  */
@@ -1009,18 +988,13 @@ RcppExport SEXP R_FG_compute_AcD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pnc
 		SEXP pc)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	if (fg->get_graph_header().is_directed_graph())
-		return R_NilValue;
-
-	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
 	std::string which = CHAR(STRING_ELT(pwhich, 0));
 	int nev = INTEGER(pnev)[0];
 	int ncv = INTEGER(pncv)[0];
 	double c = REAL(pc)[0];
 
 	std::vector<eigen_pair_t> eigen_pairs;
-	AcD_SPMV spmv(matrix, c, get_degree(fg, edge_type::BOTH_EDGES));
-	eigen_solver(spmv, ncv, nev, which, eigen_pairs);
+	compute_AcD_uw(fg, c, ncv, nev, which, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
 
