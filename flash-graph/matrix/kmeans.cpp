@@ -141,6 +141,18 @@ static void print_mat(T* matrix, const unsigned rows, const unsigned cols) {
 }
 
 /**
+  * \Internal
+  * \brief For testing accuracy of clusters. The adjusted rand index
+  * See: http://en.wikipedia.org/wiki/Rand_index#Adjusted_Rand_index
+  *
+  */
+static double compute_rand_index() {
+	// TODO	
+	return 0;
+}
+
+
+/**
   * \brief Update the cluster assignments while recomputing distance matrix.
   * \param matrix The flattened matrix who's rows are being clustered.
   * \param clusters The cluster centers (means) flattened matrix.
