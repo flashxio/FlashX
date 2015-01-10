@@ -244,28 +244,28 @@ test.ase.directed <- function(fg, ig)
 	# run ASE on the largest connected component
 
 	print("test ASE (adjacency matrix)")
-	fg.res <- fg.ASE(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
 	ig.matrix.tmp <- ig.matrix
 	check.svd(ig.matrix, fg.res)
 
 	print("test ASE (AcD)")
-	fg.res <- fg.ASE(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
 	ig.matrix.tmp <- ig.matrix + diag(fg.degree(fg)) / fg.vcount(fg)
 	check.svd(ig.matrix.tmp, fg.res)
 
 	print("test ASE (Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
 	ig.matrix.tmp <- diag(fg.degree(fg)) - ig.matrix
 	check.svd(ig.matrix.tmp, fg.res)
 
 	print("test ASE (normalized Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg)))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.svd(ig.matrix.tmp, fg.res)
 
 	print("test ASE (regularized Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
+	fg.res <- fg.ASE.igraph(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg) + 1))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.svd(ig.matrix.tmp, fg.res)
@@ -281,27 +281,27 @@ test.ase.undirected <- function(fg, ig)
 	ig.matrix <- get.adjacency(ig)
 	#test ASE
 	print("test ASE (adjacency matrix)")
-	fg.res <- fg.ASE(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
 	check.eigen(ig.matrix, fg.res)
 
 	print("test ASE (AcD)")
-	fg.res <- fg.ASE(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
 	ig.matrix.tmp <- ig.matrix + diag(fg.degree(fg)) / fg.vcount(fg)
 	check.eigen(ig.matrix.tmp, fg.res)
 
 	print("test ASE (Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
 	ig.matrix.tmp <- diag(fg.degree(fg)) - ig.matrix
 	check.eigen(ig.matrix.tmp, fg.res)
 
 	print("test ASE (normalized Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg)))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.eigen(ig.matrix.tmp, fg.res)
 
 	print("test ASE (regularized Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
+	fg.res <- fg.ASE.igraph(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg) + 1))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.eigen(ig.matrix.tmp, fg.res)
