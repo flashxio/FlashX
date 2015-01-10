@@ -307,6 +307,14 @@ test.ase.undirected <- function(fg, ig)
 	check.eigen(ig.matrix.tmp, fg.res)
 }
 
+test.weighted <- function(fg, ig)
+{
+	fg.out <- fg.multiply(fg, rep.int(1, fg.vcount(fg)))
+	adj <- get.adjacency(ig, attr='V3', type="both")
+	ig.out <- adj %*% rep.int(1, vcount(ig))
+	stopifnot(sum(fg.out) == sum(ig.out))
+}
+
 # Test on a directed graph.
 ig <- read.graph("wiki-Vote1.txt")
 
@@ -361,3 +369,10 @@ cat("\n\n\n")
 fg <- fg.get.graph("facebook")
 test.undirected(fg, ig)
 fg.list.graphs()
+
+# Now test on a weighted undirected graph
+print("load a weighted graph")
+fg <- fg.load.graph("fb-weighted.adj-v4", index="fb-weighted.index-v4", graph.name="fb-weighted")
+edges <- read.table("fb-weighted.txt")
+ig <- graph.data.frame(edges, directed=FALSE)
+test.weighted(fg, ig)

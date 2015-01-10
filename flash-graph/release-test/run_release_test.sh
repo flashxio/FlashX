@@ -19,6 +19,10 @@ rm facebook.index*
 ../tools/el2al -v -u -w facebook.adj facebook.index facebook_combined.txt
 ../tools/el2al -v -u -w -d -c run_test.txt facebook facebook-index facebook_combined.txt
 sed '/^#/d' facebook_combined.txt > facebook_combined1.txt
+
+perl add_rand_weight.pl < facebook_combined.txt > fb-weighted.txt
+../tools/el2al -v -u -w -t count fb-weighted.adj fb-weighted.index fb-weighted.txt
+
 rm facebook_combined.txt
 
 OMP_NUM_THREADS=1 R --no-save < verify.vs.igraph.R
@@ -29,5 +33,6 @@ rm facebook.adj*
 rm facebook.index*
 rm wiki-Vote1.txt
 rm facebook_combined1.txt
+rm fb-weighted*
 
 R --no-save < verify.large.R
