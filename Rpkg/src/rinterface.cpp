@@ -919,6 +919,22 @@ RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
 	return ret;
 }
 
+template<class MatrixType>
+FG_vector<double>::ptr multiply_v(FG_graph::ptr fg, bool transpose,
+		FG_vector<double>::ptr in_vec)
+{
+	size_t length = in_vec->get_size();
+	typename MatrixType::ptr matrix = MatrixType::create(fg);
+	if (transpose)
+		matrix = matrix->transpose();
+	assert(matrix->get_num_rows() == length);
+	assert(matrix->get_num_cols() == length);
+
+	FG_vector<double>::ptr out_vec = FG_vector<double>::create(length);
+	matrix->multiply(*in_vec, *out_vec);
+	return out_vec;
+}
+
 RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 {
 	bool transpose = INTEGER(ptranspose)[0];
@@ -929,14 +945,22 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 		in_vec->get_data()[i] = vec[i];
 	}
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
-	if (transpose)
-		matrix = matrix->transpose();
-	assert(matrix->get_num_rows() == length);
-	assert(matrix->get_num_cols() == length);
-
-	FG_vector<double>::ptr out_vec = FG_vector<double>::create(length);
-	matrix->multiply<double>(*in_vec, *out_vec);
+	FG_vector<double>::ptr out_vec;
+	if (!fg->get_graph_header().has_edge_data())
+		out_vec = multiply_v<FG_adj_matrix>(fg, transpose, in_vec);
+	// I assume the edge weight is integer.
+	else if (fg->get_graph_header().get_edge_data_size() == 4)
+		out_vec = multiply_v<FG_sparse_matrix<general_get_edge_iter<int32_t> > >(
+				fg, transpose, in_vec);
+	// I assume the edge weight is double
+	else if (fg->get_graph_header().get_edge_data_size() == 8)
+		out_vec = multiply_v<FG_sparse_matrix<general_get_edge_iter<double> > >(
+				fg, transpose, in_vec);
+	else {
+		fprintf(stderr, "wrong edge weight size: %d\n",
+				fg->get_graph_header().get_edge_data_size());
+		return R_NilValue;
+	}
 	Rcpp::NumericVector ret(out_vec->get_data(), out_vec->get_data() + length);
 	return ret;
 }
