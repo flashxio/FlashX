@@ -602,12 +602,21 @@ fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
 		  PACKAGE="FlashGraphR")
 }
 
-fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
+fg.SVD <- function(graph, which="LM", nev=1, ncv=2)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  type, PACKAGE="FlashGraphR")
+
+	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
+		  "LS", PACKAGE="FlashGraphR")
+
+	norm.col <- function(x)
+	{
+		x / sqrt(sum(x * x))
+	}
+	list(values=ret$values, left=ret$vectors,
+		 right=apply(fg.multiply.matrix(graph, ret$vectors, TRUE), 2, norm.col),
+		 options=ret$options)
 }
 
 #' Spectral embedding
