@@ -987,7 +987,8 @@ SEXP output_eigen_pairs(const std::vector<eigen_pair_t> &eigen_pairs)
 /*
  * Compute eigen value/vector on an unweighted adjacency matrix.
  */
-RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
+RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
+		SEXP ptol)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	if (fg->get_graph_header().is_directed_graph())
@@ -997,9 +998,10 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
 	std::string which = CHAR(STRING_ELT(pwhich, 0));
 	int nev = INTEGER(pnev)[0];
 	int ncv = INTEGER(pncv)[0];
+	double tol = REAL(ptol)[0];
 
 	std::vector<eigen_pair_t> eigen_pairs;
-	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, eigen_pairs);
+	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, tol, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
 	return output_eigen_pairs(eigen_pairs);
@@ -1009,16 +1011,17 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
  * Compute the eigenvalues and eigenvectors of A + c * D.
  */
 RcppExport SEXP R_FG_compute_AcD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
-		SEXP pc)
+		SEXP pc, SEXP ptol)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	std::string which = CHAR(STRING_ELT(pwhich, 0));
 	int nev = INTEGER(pnev)[0];
 	int ncv = INTEGER(pncv)[0];
 	double c = REAL(pc)[0];
+	double tol = REAL(ptol)[0];
 
 	std::vector<eigen_pair_t> eigen_pairs;
-	compute_AcD_uw(fg, c, ncv, nev, which, eigen_pairs);
+	compute_AcD_uw(fg, c, ncv, nev, which, tol, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
 
@@ -1026,7 +1029,7 @@ RcppExport SEXP R_FG_compute_AcD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pnc
 }
 
 RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
-		SEXP ptype)
+		SEXP ptype, SEXP ptol)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
@@ -1034,8 +1037,9 @@ RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
 	std::string type = CHAR(STRING_ELT(ptype, 0));
 	int nev = INTEGER(pnev)[0];
 	int ncv = INTEGER(pncv)[0];
+	double tol = REAL(ptol)[0];
 	std::vector<eigen_pair_t> eigen_pairs;
-	compute_SVD<FG_adj_matrix>(matrix, ncv, nev, which, type, eigen_pairs);
+	compute_SVD<FG_adj_matrix>(matrix, ncv, nev, which, type, tol, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
 

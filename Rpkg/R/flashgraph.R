@@ -593,22 +593,22 @@ fg.multiply.matrix <- function(graph, m, transpose=FALSE)
 #' D. Calvetti and L. Reichel and D. C. Sorensen: An Implicitly Restarted
 #' Lanczos method for Large Symmetric Eigenvalue problems, Jounral of ETNA,
 #' 1994.
-fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
+fg.eigen <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(!graph$directed)
 	.Call("R_FG_eigen_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  PACKAGE="FlashGraphR")
+		  as.double(tol), PACKAGE="FlashGraphR")
 }
 
-fg.SVD <- function(graph, which="LM", nev=1, ncv=2)
+fg.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 
 	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  "LS", PACKAGE="FlashGraphR")
+		  "LS", as.double(tol), PACKAGE="FlashGraphR")
 
 	norm.col <- function(x)
 	{
@@ -669,7 +669,7 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
 	.Call("R_FG_compute_AcD_uw", fg, which.eigen, as.integer(num.eigen),
-		  as.integer(num.eigen * 2), as.double(c), PACKAGE="FlashGraphR")
+		  as.integer(num.eigen * 2), as.double(c), as.double(tol), PACKAGE="FlashGraphR")
 }
 
 fg.ASE.igraph <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
