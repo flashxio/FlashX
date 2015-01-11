@@ -373,10 +373,18 @@ fg.local.scan <- function(graph, order=1)
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	if (graph$directed) {
-		.Call("R_FG_compute_local_scan", graph, order, PACKAGE="FlashGraphR")
+		.Call("R_FG_compute_local_scan", graph, as.integer(order),
+			  PACKAGE="FlashGraphR")
 	}
-	else {
+	else if (order == 0) {
+		fg.degree(graph)
+	}
+	else if (order == 1) {
 		fg.triangles(graph) + fg.degree(graph)
+	}
+	else if (order == 2) {
+		print("We don't support local scan in the order of 2 on an undirected graph");
+		NULL
 	}
 }
 
@@ -606,12 +614,21 @@ fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
 		  PACKAGE="FlashGraphR")
 }
 
-fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
+fg.SVD <- function(graph, which="LM", nev=1, ncv=2)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  type, PACKAGE="FlashGraphR")
+
+	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
+		  "LS", PACKAGE="FlashGraphR")
+
+	norm.col <- function(x)
+	{
+		x / sqrt(sum(x * x))
+	}
+	list(values=ret$values, left=ret$vectors,
+		 right=apply(fg.multiply.matrix(graph, ret$vectors, TRUE), 2, norm.col),
+		 options=ret$options)
 }
 
 #' Spectral embedding
@@ -659,6 +676,15 @@ fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
 #' @name fg.ase
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
+				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
+{
+	stopifnot(!is.null(fg))
+	stopifnot(class(fg) == "fg")
+	.Call("R_FG_compute_AcD_uw", fg, which.eigen, as.integer(num.eigen),
+		  as.integer(num.eigen * 2), as.double(c), PACKAGE="FlashGraphR")
+}
+
+fg.ASE.igraph <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
 {
 	stopifnot(!is.null(fg))

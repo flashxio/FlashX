@@ -25,6 +25,11 @@
 #include "vertex_index.h"
 #include "vertex_request.h"
 
+namespace safs
+{
+	class io_interface;
+}
+
 namespace fg
 {
 
@@ -372,7 +377,7 @@ public:
 	typedef std::shared_ptr<vertex_index_reader> ptr;
 
 	static ptr create(const in_mem_query_vertex_index::ptr index, bool directed);
-	static ptr create(safs::io_interface::ptr io, bool directed);
+	static ptr create(std::shared_ptr<safs::io_interface> io, bool directed);
 
 	virtual ~vertex_index_reader() {
 	}
@@ -452,9 +457,17 @@ struct req_directed_edge_func
 
 class worker_thread;
 /*
- * This class is optimized for vertices to request their own adjacency lists.
- * In this case, we don't need to create a vertex_compute for each vertex
- * when their adjacency lists are ready in the page cache for processing.
+ * The two classes below are optimized for vertices to request their own
+ * adjacency lists. In this case, we don't need to create a vertex_compute
+ * for each vertex and all adjacency lists are accessed in one or two I/O
+ * requests (two I/O requests are required if both in-edge and out-edge lists
+ * are accessed).
+ */
+
+/*
+ * This class is optimized for a list of vertices whose Ids are contiguous.
+ * In this case, we can identify the list of vertices with the first and
+ * the last Id in the range.
  */
 class dense_self_vertex_compute: public index_compute
 {
@@ -479,6 +492,11 @@ public:
 	virtual bool run(vertex_id_t start_vid, index_iterator &it);
 };
 
+/*
+ * This class handles the case that the vertex Ids aren't contiguous, but
+ * they are close enough so that a single I/O request can fetch all of
+ * these index entries. Therefore, we need to store all vertex Ids individually.
+ */
 class sparse_self_vertex_compute: public index_compute
 {
 	size_t num_ranges;
@@ -519,7 +537,7 @@ public:
 
 	bool add_range(id_range_t &range) {
 		if (in_mem || get_last_page() == get_page(range.first)
-				|| get_last_page() + PAGE_SIZE == get_page(range.first)) {
+				|| get_last_page() + safs::PAGE_SIZE == get_page(range.first)) {
 			index_compute::add_vertex(range.second - 1);
 			if ((size_t) ranges.get_capacity() <= num_ranges)
 				ranges.resize(ranges.get_capacity() * 2);
@@ -768,7 +786,7 @@ public:
 		}
 
 		if (in_mem || get_last_page() == get_page(id)
-				|| get_last_page() + PAGE_SIZE == get_page(id)) {
+				|| get_last_page() + safs::PAGE_SIZE == get_page(id)) {
 			index_compute::add_vertex(id);
 			computes[get_num_vertices()] = compute;
 			ids[get_num_vertices()] = id;
@@ -1069,12 +1087,19 @@ class simple_index_reader
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
-	simple_index_reader(safs::io_interface::ptr io, bool directed, worker_thread *t) {
+	simple_index_reader(std::shared_ptr<safs::io_interface> io, bool directed,
+			worker_thread *t) {
 		in_mem = false;
 		init(t, directed);
 		index_reader = vertex_index_reader::create(io, directed);
 	}
 
+	/*
+	 * Process the self requests (vertices request their own adjacency lists).
+	 * The adjacency list requests in most applications are of this type and
+	 * we can optimize this type of requests differently, because we can easily
+	 * merge them without paying extra overhead.
+	 */
 	void process_self_requests(std::vector<id_range_t> &reqs, edge_type type);
 
 	/*
@@ -1145,7 +1170,8 @@ class simple_index_reader
 public:
 	typedef std::shared_ptr<simple_index_reader> ptr;
 
-	static ptr create(safs::io_interface::ptr io, bool directed, worker_thread *t) {
+	static ptr create(std::shared_ptr<safs::io_interface> io, bool directed,
+			worker_thread *t) {
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 

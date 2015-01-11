@@ -74,10 +74,9 @@ void *thread_run(void *arg)
 	t->tid = gettid();
 
 	int node_id = t->get_node_id();
-	if (node_id >= 0) {
+	if (node_id >= 0)
 		bind2node_id(node_id);
-		numa_set_bind_policy(1);
-	}
+
 	t->init();
 	while (t->is_running()) {
 		t->run();

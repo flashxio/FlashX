@@ -1,7 +1,7 @@
 # Copyright 2014 Open Connectome Project (http://openconnecto.me)
 # Written by Da Zheng (zhengda1936@gmail.com)
 #
-# This file is part of FlashGraph.
+# This file is part of SAFSlib.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,19 +17,28 @@
 
 include ../../Makefile.common
 
-OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lstxxl -lz $(LDFLAGS)
-CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
+CFLAGS = -g -I../../include $(TRACE_FLAGS)
 
-all: sssp
+LDFLAGS := -L.. -lsafs -L../../libcommon -lcommon $(LDFLAGS)
+CXXFLAGS += -I.. -I../../include -I../../libcommon
 
-sssp: $(OBJS) ../libgraph.a
-	$(CXX) -o sssp $(OBJS) $(LDFLAGS)
+all: test_rand_io workload-gen workload-stat
+
+test_rand_io: test_rand_io.o thread_private.o workload.o ../libsafs.a
+	$(CXX) -o test_rand_io test_rand_io.o thread_private.o workload.o $(LDFLAGS)
+
+workload-gen: workload-gen.o workload.o ../libsafs.a
+	$(CXX) -o workload-gen workload-gen.o workload.o $(LDFLAGS)
+
+workload-stat: workload-stat.o workload.o ../libsafs.a
+	$(CXX) -o workload-stat workload-stat.o workload.o $(LDFLAGS)
 
 clean:
-	rm -f *.d
 	rm -f *.o
+	rm -f *.d
 	rm -f *~
-	rm -f sssp
+	rm -f test_rand_io
+	rm -f workload-gen
+	rm -f workload-stat
 
 -include $(DEPS) 

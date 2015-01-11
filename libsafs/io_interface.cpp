@@ -44,6 +44,7 @@
 #include "native_file.h"
 #include "safs_file.h"
 #include "exception.h"
+#include "direct_comp_access.h"
 
 namespace safs
 {
@@ -60,10 +61,11 @@ struct global_data_collection
 	// Count the number of times init_io_system is executed successfully.
 	std::atomic<long> init_count;
 	RAID_config::ptr raid_conf;
-	std::vector<disk_io_thread *> read_threads;
+	std::vector<disk_io_thread::ptr> read_threads;
 	pthread_mutex_t mutex;
-	cache_config *cache_conf;
-	page_cache *global_cache;
+	// TODO there is memory leak here.
+	cache_config::ptr cache_conf;
+	page_cache::ptr global_cache;
 #ifdef PART_IO
 	// For part_global_cached_io
 	part_io_process_table *table;
@@ -73,8 +75,6 @@ struct global_data_collection
 #ifdef PART_IO
 		table = NULL;
 #endif
-		cache_conf = NULL;
-		global_cache = NULL;
 		pthread_mutex_init(&mutex, NULL);
 	}
 };
@@ -180,8 +180,6 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 	
 	params.init(configs->get_options());
 	params.print();
-
-	numa_set_bind_policy(1);
 	thread::thread_class_init();
 
 	// The I/O system has been initialized.
@@ -233,8 +231,9 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 			std::vector<int> indices(1, k);
 			logical_file_partition partition(indices, mapper);
 			// Create disk accessing threads.
-			global_data.read_threads[k] = new disk_io_thread(partition,
-					global_data.raid_conf->get_disk(k).node_id, NULL, k, flags);
+			global_data.read_threads[k] = disk_io_thread::ptr(new disk_io_thread(
+						partition, global_data.raid_conf->get_disk(k).node_id,
+						NULL, k, flags));
 		}
 #if 0
 		debug.register_task(new debug_global_data());
@@ -243,15 +242,17 @@ void init_io_system(config_map::ptr configs, bool with_cache)
 
 	// Assign a thread object to the current thread.
 	if (thread::get_curr_thread() == NULL)
-		thread::represent_thread(0);
+		thread::represent_thread(-1);
 
-	if (global_data.global_cache == NULL && with_cache) {
+	if (global_data.global_cache == NULL && with_cache
+			&& params.get_cache_size() > 0) {
 		std::vector<int> node_id_array;
 		for (int i = 0; i < params.get_num_nodes(); i++)
 			node_id_array.push_back(i);
 
-		global_data.cache_conf = new even_cache_config(params.get_cache_size(),
-				params.get_cache_type(), node_id_array);
+		global_data.cache_conf = cache_config::ptr(new even_cache_config(
+					params.get_cache_size(), params.get_cache_type(),
+					node_id_array));
 		global_data.global_cache = global_data.cache_conf->create_cache(
 				MAX_NUM_FLUSHES_PER_FILE *
 				global_data.raid_conf->get_num_disks());
@@ -304,24 +305,15 @@ void destroy_io_system()
 		global_data.table = NULL;
 	}
 #endif
-	if (global_data.cache_conf) {
-		global_data.cache_conf->destroy_cache(global_data.global_cache);
-		global_data.global_cache = NULL;
-		delete global_data.cache_conf;
-		global_data.cache_conf = NULL;
-	}
 	size_t num_reads = 0;
 	size_t num_writes = 0;
 	size_t num_read_bytes = 0;
 	size_t num_write_bytes = 0;
-	BOOST_FOREACH(disk_io_thread *t, global_data.read_threads) {
-		t->stop();
-		t->join();
+	BOOST_FOREACH(disk_io_thread::ptr t, global_data.read_threads) {
 		num_reads += t->get_num_reads();
 		num_writes += t->get_num_writes();
 		num_read_bytes += t->get_num_read_bytes();
 		num_write_bytes += t->get_num_write_bytes();
-		delete t;
 	}
 	global_data.read_threads.resize(0);
 	destroy_aio();
@@ -392,6 +384,7 @@ public:
 
 class remote_io_factory: public file_io_factory
 {
+	std::shared_ptr<slab_allocator> unbind_msg_allocator;
 	std::vector<std::shared_ptr<slab_allocator> > msg_allocators;
 	std::atomic_ulong tot_accesses;
 	// The number of existing IO instances.
@@ -399,7 +392,10 @@ class remote_io_factory: public file_io_factory
 	file_mapper &mapper;
 
 	slab_allocator &get_msg_allocator(int node_id) {
-		return *msg_allocators[node_id];
+		if (node_id < 0)
+			return *unbind_msg_allocator;
+		else
+			return *msg_allocators[node_id];
 	}
 public:
 	remote_io_factory(file_mapper &_mapper);
@@ -433,11 +429,11 @@ class global_cached_io_factory: public file_io_factory
 	std::atomic_ulong tot_hits;
 	std::atomic_ulong tot_fast_process;
 
-	page_cache *global_cache;
+	page_cache::ptr global_cache;
 	remote_io_factory remote_factory;
 public:
 	global_cached_io_factory(file_mapper &_mapper,
-			page_cache *cache): file_io_factory(
+			page_cache::ptr cache): file_io_factory(
 				_mapper.get_name()), remote_factory(_mapper) {
 		this->global_cache = cache;
 		tot_bytes = 0;
@@ -472,6 +468,47 @@ public:
 		BOOST_LOG_TRIVIAL(info)
 			<< boost::format("There are %1% pages accessed, %2% cache hits, %3% of them are in the fast process")
 			% tot_pg_accesses.load() % tot_hits.load() % tot_fast_process.load();
+	}
+};
+
+class direct_comp_io_factory: public file_io_factory
+{
+	// The number of bytes accessed from the disks.
+	std::atomic_ulong tot_disk_bytes;
+	// The number of bytes requested by applications.
+	std::atomic_ulong tot_req_bytes;
+	std::atomic_ulong tot_accesses;
+
+	remote_io_factory remote_factory;
+public:
+	direct_comp_io_factory(file_mapper &_mapper): file_io_factory(
+				_mapper.get_name()), remote_factory(_mapper) {
+		tot_disk_bytes = 0;
+		tot_req_bytes = 0;
+		tot_accesses = 0;
+	}
+
+	virtual io_interface::ptr create_io(thread *t);
+
+	virtual void destroy_io(io_interface *io);
+
+	virtual int get_file_id() const {
+		return remote_factory.get_file_id();
+	}
+
+	virtual void collect_stat(io_interface &io) {
+		direct_comp_io &dio = (direct_comp_io &) io;
+
+		tot_disk_bytes += dio.get_num_disk_bytes();
+		tot_req_bytes += dio.get_num_req_bytes();
+		tot_accesses += dio.get_num_reqs();
+	}
+
+	virtual void print_statistics() const {
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("%1% gets %2% async I/O accesses, %3% req bytes, %4% disk bytes")
+			% get_name() % tot_accesses.load() % tot_req_bytes.load()
+			% tot_disk_bytes.load();
 	}
 };
 
@@ -565,6 +602,10 @@ remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 					IO_MSG_SIZE * sizeof(io_request),
 					IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, i));
 	}
+	unbind_msg_allocator = std::shared_ptr<slab_allocator>(new slab_allocator(
+				std::string("disk_msg_allocator-unbind"),
+				IO_MSG_SIZE * sizeof(io_request),
+				IO_MSG_SIZE * sizeof(io_request) * 1024, INT_MAX, -1));
 	tot_accesses = 0;
 	num_ios = 0;
 	int num_files = mapper.get_num_files();
@@ -578,15 +619,14 @@ remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
 remote_io_factory::~remote_io_factory()
 {
 	assert(num_ios == 0);
-	int num_files = mapper.get_num_files();
-	assert(!global_data.read_threads.empty());
-	for (int i = 0; i < num_files; i++)
+	// If the I/O threads haven't been destroyed.
+	for (size_t i = 0; i < global_data.read_threads.size(); i++)
 		global_data.read_threads[i]->close_file(&mapper);
 }
 
 io_interface::ptr remote_io_factory::create_io(thread *t)
 {
-	if (t->get_node_id() < 0 || t->get_node_id() >= (int) msg_allocators.size()) {
+	if (t->get_node_id() >= (int) msg_allocators.size()) {
 		fprintf(stderr, "thread %d are not in a right node (%d)\n",
 				t->get_id(), t->get_node_id());
 		return io_interface::ptr();
@@ -607,9 +647,9 @@ void remote_io_factory::destroy_io(io_interface *io)
 io_interface::ptr global_cached_io_factory::create_io(thread *t)
 {
 	io_interface::ptr underlying = remote_factory.create_io(t);
-	comp_io_scheduler *scheduler = NULL;
-	if (get_sched_creater())
-		scheduler = get_sched_creater()->create(underlying->get_node_id());
+	comp_io_scheduler::ptr scheduler;
+	if (get_sched_creator())
+		scheduler = get_sched_creator()->create(underlying->get_node_id());
 	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache, scheduler);
 	return io_interface::ptr(io, io_deleter(*this));
@@ -623,6 +663,21 @@ void global_cached_io_factory::destroy_io(io_interface *io)
 	delete io;
 }
 
+io_interface::ptr direct_comp_io_factory::create_io(thread *t)
+{
+	io_interface::ptr underlying = remote_factory.create_io(t);
+	direct_comp_io *io = new direct_comp_io(
+			std::static_pointer_cast<remote_io>(underlying));
+	return io_interface::ptr(io, io_deleter(*this));
+}
+
+void direct_comp_io_factory::destroy_io(io_interface *io)
+{
+	// num_ios is decreased by the underlying remote I/O instance.
+
+	// The underlying IO is deleted in global_cached_io's destructor.
+	delete io;
+}
 
 #ifdef PART_IO
 io_interface::ptr part_global_cached_io_factory::create_io(thread *t)
@@ -680,27 +735,32 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 			if (global_data.global_cache)
 				factory = new global_cached_io_factory(mapper,
 						global_data.global_cache);
+			else
+				throw io_exception("There is no page cache for global cache IO");
+			break;
+		case DIRECT_COMP_ACCESS:
+			factory = new direct_comp_io_factory(mapper);
 			break;
 #ifdef PART_IO
 		case PART_GLOBAL_ACCESS:
 			if (global_data.global_cache)
 				factory = new part_global_cached_io_factory(file_name);
+			else
+				throw io_exception(
+						"There is no page cache for part'ed global cache IO");
 			break;
 #endif
 		default:
-			ABORT_MSG("a wrong access option");
+			throw io_exception("a wrong access option");
 	}
-	if (factory)
-		return file_io_factory::shared_ptr(factory, destroy_io_factory());
-	else
-		return file_io_factory::shared_ptr();
+	return file_io_factory::shared_ptr(factory, destroy_io_factory());
 }
 
 void print_io_thread_stat()
 {
 	sleep(1);
 	for (unsigned i = 0; i < global_data.read_threads.size(); i++) {
-		disk_io_thread *t = global_data.read_threads[i];
+		disk_io_thread::ptr t = global_data.read_threads[i];
 		if (t)
 			t->print_stat();
 	}

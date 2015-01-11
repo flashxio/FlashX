@@ -418,8 +418,6 @@ class associative_cache: public page_cache
 			int offset_factor, int _max_num_pending_flush,
 			bool expandable = false);
 
-	~associative_cache();
-
 	void create_flusher(std::shared_ptr<io_interface> io, page_cache *global_cache);
 
 	memory_manager *get_manager() {
@@ -436,17 +434,15 @@ public:
 	atomic_integer num_dirty_pages;
 #endif
 
-	static associative_cache *create(long cache_size, long max_cache_size,
+	static page_cache::ptr create(long cache_size, long max_cache_size,
 			int node_id, int offset_factor, int _max_num_pending_flush,
 			bool expandable = false) {
 		assert(node_id >= 0);
-		return new associative_cache(cache_size, max_cache_size,
-				node_id, offset_factor, _max_num_pending_flush, expandable);
+		return page_cache::ptr(new associative_cache(cache_size, max_cache_size,
+				node_id, offset_factor, _max_num_pending_flush, expandable));
 	}
 
-	static void destroy(associative_cache *cache) {
-		delete cache;
-	}
+	~associative_cache();
 
 	int get_node_id() const {
 		return node_id;

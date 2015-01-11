@@ -144,7 +144,7 @@ size_t extended_neighbor_list::count_edges(const page_vertex *v)
 class local_scan_vertex: public compute_vertex
 {
 	vsize_t degree;
-	multi_func_value local_value;
+	scan_multi_func_value local_value;
 public:
 	local_scan_vertex(vertex_id_t id): compute_vertex(id) {
 		degree = 0;

@@ -198,7 +198,7 @@ public:
 
 class topK_scan_vertex: public compute_vertex
 {
-	multi_func_value local_value;
+	scan_multi_func_value local_value;
 public:
 	topK_scan_vertex(vertex_id_t id): compute_vertex(id) {
 	}

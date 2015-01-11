@@ -1,0 +1,4 @@
+RAID_mapping=RAID0
+io_depth=64
+root_conf=conf/data_files.txt
+writable=

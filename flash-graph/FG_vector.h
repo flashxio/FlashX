@@ -222,7 +222,6 @@ class FG_vector
 	T dot_product(const FG_vector<T> &other) const {
 		assert(this->get_size() == other.get_size());
 		T ret = 0;
-#pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
 			ret += get(i) * other.get(i);
 		return ret;
@@ -238,7 +237,6 @@ class FG_vector
 	 */
 	T norm2() const {
 		T ret = 0;
-#pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
 			ret += get(i) * get(i);
 		return sqrt(ret);
@@ -254,7 +252,6 @@ class FG_vector
 	 */
 	T norm1() const {
 		T ret = 0;
-#pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
 			ret += fabs(get(i));
 		return ret;
@@ -278,23 +275,22 @@ class FG_vector
 	 * \return The sum of all items in the vector.
 	 */
 	template<class ResType>
-		ResType sum() const {
-			struct identity_func {
-				ResType operator()(T v) {
-					return v;
-				}
-			};
-			return aggregate<identity_func, ResType>(identity_func());
-		}
+	ResType sum() const {
+		struct identity_func {
+			ResType operator()(T v) {
+				return v;
+			}
+		};
+		return aggregate<identity_func, ResType>(identity_func());
+	}
 
 	template<class Func, class ResType>
-		ResType aggregate(Func func) const {
-			ResType ret = 0;
-#pragma omp parallel for reduction(+:ret)
-			for (size_t i = 0; i < get_size(); i++)
-				ret += func(eles[i]);
-			return ret;
-		}
+	ResType aggregate(Func func) const {
+		ResType ret = 0;
+		for (size_t i = 0; i < get_size(); i++)
+			ret += func(eles[i]);
+		return ret;
+	}
 
 	/**
 	 * \brief Find the maximal value in the vector and return its value.
@@ -422,13 +418,14 @@ class FG_vector
 	 * \param vec The vector by which you want to add to this vector.
 	 * **parallel**
 	 */
-	void add_in_place(FG_vector<T>::ptr vec) {
+	template<class T2>
+	void add_in_place(typename FG_vector<T2>::ptr vec) {
 		struct add_func {
-			T operator()(const T &v1, const T &v2) {
+			T operator()(const T &v1, const T2 &v2) {
 				return v1 + v2;
 			}
 		};
-		merge_in_place<add_func, T>(vec, add_func());
+		merge_in_place<add_func, T2>(vec, add_func());
 	}
 
 	/**
@@ -436,13 +433,39 @@ class FG_vector
 	 * \param vec The vector by which you want the array to be subtracted.
 	 * **parallel** 
 	 */
-	void subtract_in_place(const FG_vector<T>::ptr &vec) {
+	template<class T2>
+	void subtract_in_place(typename FG_vector<T2>::ptr &vec) {
 		struct sub_func {
-			T operator()(const T &v1, const T &v2) {
+			T operator()(const T &v1, const T2 &v2) {
 				return v1 - v2;
 			}
 		};
-		merge_in_place<sub_func, T>(vec, sub_func());
+		merge_in_place<sub_func, T2>(vec, sub_func());
+	}
+
+	template<class T2>
+	void multiply_in_place(T2 v) {
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] *= v;
+	}
+
+	template<class IN_TYPE, class OUT_TYPE>
+	typename FG_vector<OUT_TYPE>::ptr multiply(IN_TYPE v) const {
+		typename FG_vector<OUT_TYPE>::ptr ret = FG_vector<OUT_TYPE>::create(get_size());
+		for (size_t i = 0; i < get_size(); i++)
+			ret->set(i, this->eles[i] * v);
+		return ret;
+	}
+
+	template<class IN_TYPE, class OUT_TYPE>
+	typename FG_vector<OUT_TYPE>::ptr multiply(typename FG_vector<IN_TYPE>::ptr vec) const {
+		if (vec->get_size() != this->get_size())
+			return typename FG_vector<OUT_TYPE>::ptr();
+
+		typename FG_vector<OUT_TYPE>::ptr ret = FG_vector<OUT_TYPE>::create(get_size());
+		for (size_t i = 0; i < get_size(); i++)
+			ret->eles[i] = this->eles[i] * vec->get(i);
+		return ret;
 	}
 
 	/**

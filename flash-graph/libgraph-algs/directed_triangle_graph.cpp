@@ -229,7 +229,7 @@ size_t directed_runtime_data_t::count_triangles(vertex_program &prog,
 
 class directed_triangle_vertex: public compute_directed_vertex
 {
-	multi_func_value local_value;
+	triangle_multi_func_value local_value;
 
 	void inc_num_triangles(size_t num) {
 		if (local_value.has_num_triangles())

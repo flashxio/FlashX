@@ -33,7 +33,7 @@
 namespace safs
 {
 
-page_cache *cache_config::create_cache_on_node(int node_id,
+page_cache::ptr cache_config::create_cache_on_node(int node_id,
 		int max_num_pending_flush) const
 {
 	create_cache_thread t(*this, max_num_pending_flush,
@@ -43,10 +43,10 @@ page_cache *cache_config::create_cache_on_node(int node_id,
 	return t.get_cache();
 }
 
-page_cache *cache_config::__create_cache_on_node(int node_id,
+page_cache::ptr cache_config::__create_cache_on_node(int node_id,
 		int max_num_pending_flush) const
 {
-	page_cache *cache;
+	page_cache::ptr cache;
 	switch (get_type()) {
 #if 0
 		case LRU2Q_CACHE:
@@ -68,7 +68,7 @@ page_cache *cache_config::__create_cache_on_node(int node_id,
 }
 
 int cache_config::create_cache_on_nodes(const std::vector<int> &node_ids,
-		int max_num_pending_flush, std::vector<page_cache *> &caches) const
+		int max_num_pending_flush, std::vector<page_cache::ptr> &caches) const
 {
 	std::vector<create_cache_thread *> threads(node_ids.size());
 	for (size_t i = 0; i < node_ids.size(); i++) {
@@ -87,42 +87,14 @@ int cache_config::create_cache_on_nodes(const std::vector<int> &node_ids,
 	return node_ids.size();
 }
 
-void cache_config::destroy_cache_on_node(page_cache *cache) const
-{
-	switch (get_type()) {
-#if 0
-		case LRU2Q_CACHE:
-		case HASH_INDEX_CACHE:
-			delete cache;
-			break;
-#endif
-		case ASSOCIATIVE_CACHE:
-			associative_cache::destroy((associative_cache *) cache);
-			break;
-		default:
-			fprintf(stderr, "wrong cache type\n");
-			exit(1);
-	}
-}
-
-page_cache *cache_config::create_cache(int max_num_pending_flush) const
+page_cache::ptr cache_config::create_cache(int max_num_pending_flush) const
 {
 	std::vector<int> node_ids;
 	get_node_ids(node_ids);
 	if (node_ids.size() == 1)
 		return create_cache_on_node(node_ids[0], max_num_pending_flush);
 	else
-		return new NUMA_cache(this, max_num_pending_flush);
-}
-
-void cache_config::destroy_cache(page_cache *cache) const
-{
-	std::vector<int> node_ids;
-	get_node_ids(node_ids);
-	if (node_ids.size() == 1)
-		destroy_cache_on_node(cache);
-	else
-		delete cache;
+		return NUMA_cache::create(this, max_num_pending_flush);
 }
 
 static bool node_exist(const std::vector<int> &node_ids, int node_id)

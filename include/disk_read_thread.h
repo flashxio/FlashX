@@ -169,7 +169,7 @@ class disk_io_thread: public thread
 				const thread_safe_page *returned_pages[]);
 	};
 
-	page_cache *cache;
+	page_cache::ptr cache;
 	dirty_page_filter filter;
 
 	int process_low_prio_msg(message<io_request> &low_prio_msg);
@@ -195,8 +195,10 @@ class disk_io_thread: public thread
 		return ret;
 	}
 public:
+	typedef std::shared_ptr<disk_io_thread> ptr;
+
 	disk_io_thread(const logical_file_partition &partition, int node_id,
-			page_cache *cache, int disk_id, int flags);
+			page_cache::ptr cache, int disk_id, int flags);
 
 	msg_queue<io_request> *get_queue() {
 		return &queue;
@@ -228,7 +230,7 @@ public:
 		return execute_remote_comm(comm);
 	}
 
-	void register_cache(page_cache *cache) {
+	void register_cache(page_cache::ptr cache) {
 		this->cache = cache;
 	}
 

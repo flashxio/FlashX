@@ -25,4 +25,6 @@ add_library(safs STATIC
 	global_cached_private.cpp
 	RAID_config.cpp
 	wpaio.cpp
+	direct_comp_access.cpp
+	comp_io_scheduler.cpp
 )
