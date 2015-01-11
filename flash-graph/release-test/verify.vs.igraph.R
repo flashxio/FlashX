@@ -82,9 +82,9 @@ test.directed <- function(fg, ig)
 	ig.res <- degree(ig, mode="in")
 	check.vectors("degree_test", fg.res, ig.res)
 
-	# test ccoreness
+	# test coreness
 	print("test coreness")
-	fg.res <- fg.coreness(fg)
+	fg.res <- fg.kcore(fg, 1, 0)
 	ig.res <- graph.coreness(ig, mode="all")
 	check.vectors("coreness_test", fg.res, ig.res)
 
