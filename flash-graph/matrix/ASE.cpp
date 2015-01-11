@@ -46,7 +46,8 @@ public:
 };
 
 void compute_AcD_uw(FG_graph::ptr fg, double c, int ncv, int nev,
-		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs)
+		const std::string &which, double tol,
+		std::vector<eigen_pair_t> &eigen_pairs)
 {
 	if (fg->get_graph_header().is_directed_graph()) {
 		fprintf(stderr, "AcD doesn't support a directed graph\n");
@@ -54,7 +55,7 @@ void compute_AcD_uw(FG_graph::ptr fg, double c, int ncv, int nev,
 	}
 	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
 	AcD_SPMV spmv(matrix, c, get_degree(fg, edge_type::BOTH_EDGES));
-	eigen_solver(spmv, ncv, nev, which, eigen_pairs);
+	eigen_solver(spmv, ncv, nev, which, tol, eigen_pairs);
 }
 
 }

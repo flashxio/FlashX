@@ -26,7 +26,8 @@ namespace fg
 {
 
 void compute_AcD_uw(FG_graph::ptr fg, double c, int ncv, int nev,
-		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs);
+		const std::string &which, double tol,
+		std::vector<eigen_pair_t> &eigen_pairs);
 }
 
 #endif

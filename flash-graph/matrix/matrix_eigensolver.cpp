@@ -34,7 +34,6 @@
 namespace fg
 {
 
-const ev_float_t TOL = 1e-6;
 const int RHO = 1;
 
 class substract_store
@@ -227,7 +226,7 @@ public:
 };
 
 int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
-		ev_float_t last_beta, int k, int m,
+		ev_float_t last_beta, int k, int m, double tol,
 		std::vector<ev_float_t> &wanted, std::vector<ev_float_t> &unwanted,
 		std::vector<FG_vector<ev_float_t>::ptr> &wanted_eigen_vectors)
 {
@@ -260,7 +259,7 @@ int get_converged_eigen(Eigen::MatrixXd &T, const std::string &which,
 	for (int i = 0; i < k; i++) {
 		int idx = eigen_val_vec[i].second;
 		ev_float_t bound = std::abs(last_beta * eigen_vectors(m - 1, idx).real());
-		if (bound < TOL * std::abs(eigen_val_vec[i].first)) {
+		if (bound < tol * std::abs(eigen_val_vec[i].first)) {
 			wanted.push_back(eigen_val_vec[i].first);
 			num_converged++;
 
@@ -297,7 +296,7 @@ public:
 };
 
 void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
-		std::vector<eigen_pair_t> &eigen_pairs)
+		double tol, std::vector<eigen_pair_t> &eigen_pairs)
 {
 	FG_col_wise_matrix<ev_float_t>::ptr V
 		= FG_col_wise_matrix<ev_float_t>::create(spmv.get_vector_size(), m);
@@ -333,7 +332,7 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		wanted_eigen_vectors.clear();
 		wanted_eigen_values.clear();
 		int num_converged = get_converged_eigen(T, which, betas(m - 1),
-				nv, m, wanted_eigen_values, unwanted, wanted_eigen_vectors);
+				nv, m, tol, wanted_eigen_values, unwanted, wanted_eigen_vectors);
 		if (num_converged >= nv)
 			break;
 

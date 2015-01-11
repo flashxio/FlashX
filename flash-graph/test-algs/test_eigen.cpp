@@ -51,6 +51,7 @@ void print_usage()
 	fprintf(stderr, "-k num: the number of real eigenvalues\n");
 	fprintf(stderr, "-w which: which side of eigenvalues\n");
 	fprintf(stderr, "-t type: the type of eigenvlaues\n");
+	fprintf(stderr, "-T tol: the relative accuracy of the Ritz value is considered acceptable\n");
 }
 
 int main(int argc, char *argv[])
@@ -62,9 +63,10 @@ int main(int argc, char *argv[])
 	int m = 2;
 	std::string which = "LA";
 	std::string type = "EV";
+	double tol = 1e-12;
 	
 	int num_opts = 0;
-	while ((opt = getopt(argc, argv, "c:m:k:p:w:t:")) != -1) {
+	while ((opt = getopt(argc, argv, "c:m:k:p:w:t:T:")) != -1) {
 		num_opts++;
 		switch (opt) {
 			case 'c':
@@ -90,6 +92,10 @@ int main(int argc, char *argv[])
 				break;
 			case 't':
 				type = optarg;
+				num_opts++;
+				break;
+			case 'T':
+				tol = std::stod(optarg);
 				num_opts++;
 				break;
 			default:
@@ -122,22 +128,24 @@ int main(int argc, char *argv[])
 	if (matrix_type == "adj") {
 		FG_adj_matrix::ptr matrix = FG_adj_matrix::create(graph);
 		if (type == "EV")
-			compute_eigen<FG_adj_matrix>(matrix, m, nv, which, eigen_pairs);
+			compute_eigen<FG_adj_matrix>(matrix, m, nv, which, tol, eigen_pairs);
 		else if (type == "LS" || type == "RS")
-			compute_SVD<FG_adj_matrix>(matrix, m, nv, which, type, eigen_pairs);
+			compute_SVD<FG_adj_matrix>(matrix, m, nv, which, type, tol, eigen_pairs);
 	}
 	// general sparse matrix of characters
 	else if (matrix_type == "gc") {
 		FG_general_sparse_char_matrix::ptr matrix
 			= FG_general_sparse_char_matrix::create(graph);
 		if (type == "EV")
-			compute_eigen<FG_general_sparse_char_matrix>(matrix, m, nv, which, eigen_pairs);
+			compute_eigen<FG_general_sparse_char_matrix>(matrix, m, nv, which,
+					tol, eigen_pairs);
 		else if (type == "LS" || type == "RS")
-			compute_SVD<FG_general_sparse_char_matrix>(matrix, m, nv, which, type, eigen_pairs);
+			compute_SVD<FG_general_sparse_char_matrix>(matrix, m, nv, which,
+					type, tol, eigen_pairs);
 	}
 	else if (matrix_type == "AcD") {
 		size_t nvertices = graph->get_graph_header().get_num_vertices();
-		compute_AcD_uw(graph, 1.0/nvertices, m, nv, which, eigen_pairs);
+		compute_AcD_uw(graph, 1.0/nvertices, m, nv, which, tol, eigen_pairs);
 	}
 	else
 		assert(0);
