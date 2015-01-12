@@ -94,6 +94,7 @@ IRLM <- function(A.multiply, n, k, m, which, tol)
 	T <- matrix(rep.int(0, m*m), nrow=m, ncol=m)
 	r <- rep.int(1, n)
 #	r <- runif(n)
+	r <- r / norm(r, type="2")
 	res <- lanczos(A.multiply, 0, m, r, V, T)
 	T <- res[[1]]
 	V <- res[[2]]
