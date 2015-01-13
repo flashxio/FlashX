@@ -17,35 +17,79 @@
 
 # This implements Implicit Restart Lanczos Method.
 
+initr <- function(n)
+{
+	x <- rep.int(1, n)
+#	x <- runif(n)
+	x <- x / norm(x, type="2")
+}
+
 lanczos <- function(A.multiply, k, m, r, V, T)
 {
+	n <- length(r)
 	b <- norm(r, type="2")
-	if (k > 0) {
-		T[k, k+1] <- b
-		T[k+1, k] <- b
-	}
 	for (j in (k+1):m) {
+		restart <- FALSE
+		# Step 1: we need to reinitialize r if necessary.
+		if (b == 0) {
+			r <- initr(n)
+			restart <- TRUE
+		}
+
+		# Step 2
+#		stopifnot(b >= safmin)
 		vj <- r / b
 		V[,j] <- vj
+
+		# Step 3
 		r <- (A.multiply(vj))[,1]
-		vj_1 <- V[, j - 1]
-		a <- (t(r) %*% vj)[1,1]
-		r <- r - vj * a
+
+		# Step 4
+		wnorm <- norm(r, type="2")
+		w <- t(V[,1:j]) %*% r
+		r <- r - V[,1:j] %*% w
+		a <- w[j]
+		T[j,j] <- a
 		if (j > 1) {
-			r <- r - V[, j - 1] * b
+			if (restart) {
+				T[j, j-1] <- 0
+				T[j-1, j] <- 0
+			}
+			else {
+				T[j, j-1] <- b
+				T[j-1, j] <- b
+			}
 		}
-		new.b <- norm(r, type="2")
-		if (new.b < sqrt(a * a + b * b)) {
+		b <- norm(r, type="2")
+
+		# Step 5
+		orth.iter <- 0
+		while (b <= 0.717 * wnorm && orth.iter < 2) {
+			orth.iter <- orth.iter + 1
 			s <- (t(V[,1:j]) %*% r)
 			r <- r - (V[,1:j] %*% s)[,1]
 			a <- a + s[j,1]
+			T[j,j] <- a
 			new.b <- norm(r, type="2")
+			if (new.b > 0.717 * b) {
+				b <- new.b
+				break
+			}
+			else {
+				b <- new.b
+				next
+			}
+			r <- 0
+			b <- 0
 		}
-		b <- new.b
-		T[j,j] <- a
-		if (j < m) {
-			T[j, j+1] <- b
-			T[j+1, j] <- b
+
+		if (j > 1 && T[j, j-1] < 0) {
+			T[j, j-1] <- -T[j, j-1]
+			T[j-1, j] <- -T[j-1, j]
+			if (j < m)
+				V[,j] <- -V[,j]
+			else
+				r <- -r
 		}
 	}
 	list(T, V, r, b)
@@ -92,9 +136,7 @@ IRLM <- function(A.multiply, n, k, m, which, tol)
 #	n <- dim(A)[1]
 	V <- matrix(rep.int(0, n*m), nrow=n, ncol=m)
 	T <- matrix(rep.int(0, m*m), nrow=m, ncol=m)
-	r <- rep.int(1, n)
-#	r <- runif(n)
-	r <- r / norm(r, type="2")
+	r <- initr(n)
 	res <- lanczos(A.multiply, 0, m, r, V, T)
 	T <- res[[1]]
 	V <- res[[2]]
