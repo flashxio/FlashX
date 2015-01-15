@@ -30,7 +30,7 @@
 
 using namespace fg;
 
-typedef FG_sparse_matrix<general_get_edge_iter<char> > FG_general_sparse_char_matrix;
+typedef FG_sparse_matrix<char> FG_general_sparse_char_matrix;
 
 void int_handler(int sig_num)
 {
