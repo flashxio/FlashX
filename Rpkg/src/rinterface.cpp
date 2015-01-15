@@ -950,11 +950,11 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 		out_vec = multiply_v<FG_adj_matrix>(fg, transpose, in_vec);
 	// I assume the edge weight is integer.
 	else if (fg->get_graph_header().get_edge_data_size() == 4)
-		out_vec = multiply_v<FG_sparse_matrix<general_get_edge_iter<int32_t> > >(
+		out_vec = multiply_v<FG_sparse_matrix<int32_t> >(
 				fg, transpose, in_vec);
 	// I assume the edge weight is double
 	else if (fg->get_graph_header().get_edge_data_size() == 8)
-		out_vec = multiply_v<FG_sparse_matrix<general_get_edge_iter<double> > >(
+		out_vec = multiply_v<FG_sparse_matrix<double> >(
 				fg, transpose, in_vec);
 	else {
 		fprintf(stderr, "wrong edge weight size: %d\n",
