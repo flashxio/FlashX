@@ -389,6 +389,11 @@ class FG_vector
 		f.close();
 	}
 
+	void neg_in_place() {
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] = -eles[i];
+	}
+
 	/**
 	 * \brief In place division of vector by a single value.
 	 * \param v The value by which you want the array divided.

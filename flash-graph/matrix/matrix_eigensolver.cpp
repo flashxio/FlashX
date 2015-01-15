@@ -34,8 +34,6 @@
 namespace fg
 {
 
-const int RHO = 1;
-
 class substract_store
 {
 	FG_vector<ev_float_t>::ptr r;
@@ -94,82 +92,115 @@ public:
 	}
 };
 
-void lanczos_factorization(SPMV &spmv,
+ev_float_t lanczos_factorization(SPMV &spmv, int k, int m,
+		// Input/output
 		FG_col_wise_matrix<ev_float_t>::ptr V, FG_vector<ev_float_t>::ptr r,
-		int k, int m, Eigen::VectorXd &alphas, Eigen::VectorXd &betas,
+		// output
 		Eigen::MatrixXd &T)
 {
 	ev_float_t beta = r->norm2();
-	if (k > 0) {
-		T(k, k - 1) = beta;
-		T(k - 1, k) = beta;
-	}
 	size_t num_rows = spmv.get_vector_size();
 	BOOST_LOG_TRIVIAL(info) << "first beta: " << beta;
 	for (int i = k; i < m; i++) {
 		struct timeval start, end;
 		struct timeval iter_start;
+		bool restart = false;
 
+		gettimeofday(&iter_start, NULL);
+		// Step 1: we need to reinitialize r if necessary
+		if (beta == 0) {
+			// TODO
+			assert(0);
+		}
+
+		// Step 2
 		// v_i = r / beta
-		// r = A * v_i
 		gettimeofday(&start, NULL);
-		iter_start = start;
 		V->resize(num_rows, i + 1);
 		FG_vector<ev_float_t>::ptr vi = V->get_col_ref(i);
 		r->apply(divide_apply(beta), *vi);
+
+		// Step 3
+		// r = A * v_i
 		spmv.compute(*vi, *r);
 		gettimeofday(&end, NULL);
 		BOOST_LOG_TRIVIAL(info) << boost::format("SPMV takes %1% seconds")
 			% time_diff(start, end);
 
-		// Compute alpha_i = r . v_i
+		// Step 4
+		ev_float_t wnorm = r->norm2();
 		start = end;
-		ev_float_t alpha = vi->dot_product(*r);
-		ev_float_t orth_threshold = sqrt(alpha * alpha + beta * beta) * RHO;
+		FG_vector<ev_float_t>::ptr w = V->transpose_ref()->multiply(*r);
 		gettimeofday(&end, NULL);
-		BOOST_LOG_TRIVIAL(info) << boost::format("dot product takes %1% seconds")
-			% time_diff(start, end);
-
-		// Compute r = r - alpha_i * v_i - beta_i * v_i-1
-		// beta_i+1 = || r ||
+		BOOST_LOG_TRIVIAL(info) << boost::format("t(V)*r takes %1% seconds, V has %2% cols")
+			% time_diff(start, end) % V->get_num_cols();
+		// r = r - V * h
 		start = end;
-		r_apply apply(alpha, beta);
-		std::vector<FG_vector<ev_float_t>::ptr> inputs;
-		inputs.push_back(r);
-		inputs.push_back(vi);
-		if (i > 0)
-			inputs.push_back(V->get_col_ref(i - 1));
-		multi_vec_apply<ev_float_t, r_apply>(inputs, r, apply);
+		V->multiply(*w, substract_store(r));
 		gettimeofday(&end, NULL);
-		BOOST_LOG_TRIVIAL(info) << boost::format("adjusting w takes %1% seconds")
+		BOOST_LOG_TRIVIAL(info) << boost::format("V*w takes %1% seconds")
 			% time_diff(start, end);
-
+		assert((size_t) i == w->get_size() - 1);
+		ev_float_t alpha = w->get(i);
+		T(i, i) = alpha;
+		if (i > 0) {
+			if (restart) {
+				T(i, i - 1) = 0;
+				T(i - 1, i) = 0;
+			}
+			else {
+				T(i, i - 1) = beta;
+				T(i - 1, i) = beta;
+			}
+		}
+		start = end;
 		beta = r->norm2();
-		if (beta < orth_threshold && i > 0) {
-			start = end;
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << boost::format("norm2 takes %1% seconds")
+			% time_diff(start, end);
+
+		// Step 5
+		int orth_iter = 0;
+		start = end;
+		while (beta <= 0.717 * wnorm && orth_iter < 2) {
+			orth_iter++;
 			assert(V->get_num_cols() == (size_t) i + 1);
 			orthogonalization(V, r, alpha);
-			beta = r->norm2();
-			gettimeofday(&end, NULL);
-			BOOST_LOG_TRIVIAL(info)
-				<< boost::format("orthogonalization takes %1% seconds")
-				% time_diff(start, end);
-		}
-
-		alphas(i) = alpha;
-		betas(i) = beta;
-		T(i, i) = alpha;
-		if (i < m - 1) {
-			T(i, i + 1) = beta;
-			T(i + 1, i) = beta;
+			ev_float_t new_beta = r->norm2();
+			if (new_beta > 0.717 * beta) {
+				beta = new_beta;
+				break;
+			}
+			else if (orth_iter < 2) {
+				beta = new_beta;
+				continue;
+			}
+			else {
+				r->init(0);
+				beta = 0;
+				break;
+			}
 		}
 		BOOST_LOG_TRIVIAL(info) << boost::format("a%1%: %2%, b%3%: %4%")
 			% i % alpha % (i + 1) % beta;
+		gettimeofday(&end, NULL);
+		BOOST_LOG_TRIVIAL(info) << boost::format("reorthogonalization takes %1% seconds")
+			% time_diff(start, end);
+
+		if (i > 0 && T(i, i - 1) < 0) {
+			T(i, i - 1) = -T(i, i - 1);
+			T(i - 1, i) = -T(i - 1, i);
+			if (i < m - 1)
+				V->get_col_ref(i)->neg_in_place();
+			else
+				r->neg_in_place();
+		}
 
 		gettimeofday(&end, NULL);
 		BOOST_LOG_TRIVIAL(info) << boost::format("Iteration %1% takes %2% seconds")
 			% i % time_diff(iter_start, end);
 	}
+	return beta;
 }
 
 void reset_matrix(Eigen::MatrixXd &T, std::pair<int, int> &size)
@@ -302,18 +333,14 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		= FG_col_wise_matrix<ev_float_t>::create(spmv.get_vector_size(), m);
 	FG_vector<ev_float_t>::ptr r = FG_vector<ev_float_t>::create(
 			spmv.get_vector_size());
-	r->init_rand(1000000, time(NULL));
+	r->init_rand();
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	Eigen::MatrixXd T;
-	Eigen::VectorXd betas;
-	Eigen::VectorXd alphas;
 	T.conservativeResize(m, m);
 	std::pair<int, int> matrix_size(m, m);
 	reset_matrix(T, matrix_size);
-	betas.conservativeResize(m);
-	alphas.conservativeResize(m);
 
 	Eigen::VectorXd I_vec;
 	I_vec.conservativeResize(m);
@@ -323,7 +350,7 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 
 	std::vector<FG_vector<ev_float_t>::ptr> wanted_eigen_vectors;
 	std::vector<ev_float_t> wanted_eigen_values;
-	lanczos_factorization(spmv, V, r, 0, m, alphas, betas, T);
+	ev_float_t beta = lanczos_factorization(spmv, 0, m, V, r, T);
 	while (true) {
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
@@ -331,7 +358,7 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		std::vector<ev_float_t> unwanted;
 		wanted_eigen_vectors.clear();
 		wanted_eigen_values.clear();
-		int num_converged = get_converged_eigen(T, which, betas(m - 1),
+		int num_converged = get_converged_eigen(T, which, beta,
 				nv, m, tol, wanted_eigen_values, unwanted, wanted_eigen_vectors);
 		if (num_converged >= nv)
 			break;
@@ -353,11 +380,15 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		ev_float_t beta_k = T(nv, nv - 1);
 		BOOST_LOG_TRIVIAL(info) << boost::format("beta: %1%, sigma: %2%")
 			% beta_k % Q(m - 1, nv - 1);
+#if 0
+		// TODO we should fix this.
 		std::vector<FG_vector<ev_float_t>::ptr> inputs(2);
 		inputs[0] = V->get_col_ref(nv);
 		inputs[1] = r;
 		post_QR_apply apply(beta_k, Q(m - 1, nv - 1));
 		multi_vec_apply<ev_float_t, post_QR_apply>(inputs, r, apply);
+#endif
+		r->multiply_in_place(Q(m - 1, nv - 1));
 		// V_k = V_m * Q[:, 1:k]
 		FG_eigen_matrix<ev_float_t> subQ(Q, m, nv);
 		BOOST_LOG_TRIVIAL(info) << boost::format("subQ: %1%, %2%")
@@ -372,7 +403,7 @@ void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		BOOST_LOG_TRIVIAL(info) << boost::format("Eigen lib takes %1% seconds")
 			% time_diff(start, end);
 
-		lanczos_factorization(spmv, V, r, nv, m, alphas, betas, T);
+		lanczos_factorization(spmv, nv, m, V, r, T);
 	}
 	gettimeofday(&end, NULL);
 	BOOST_LOG_TRIVIAL(info) << boost::format("The total running time is %1% seconds")
