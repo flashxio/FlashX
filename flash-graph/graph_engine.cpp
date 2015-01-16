@@ -20,6 +20,7 @@
 #include <algorithm>
 
 #include "io_interface.h"
+#include "comp_io_scheduler.h"
 
 #include "bitmap.h"
 #include "graph_config.h"
@@ -40,7 +41,7 @@ namespace fg
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
  */
-const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
+const int GRAPH_MSG_BUF_SIZE = 4096 * 4;
 const int MAX_FLUSH_MSG_SIZE = 256;
 
 graph_config graph_conf;
@@ -174,11 +175,11 @@ public:
 	size_t get_requests(fifo_queue<io_request> &reqs, size_t max);
 };
 
-class throughput_comp_io_sched_creater: public comp_io_sched_creater
+class throughput_comp_io_sched_creator: public comp_io_sched_creator
 {
 public:
-	comp_io_scheduler *create(int node_id) const {
-		return new throughput_comp_io_scheduler(node_id);
+	comp_io_scheduler::ptr create(int node_id) const {
+		return comp_io_scheduler::ptr(new throughput_comp_io_scheduler(node_id));
 	}
 };
 
@@ -451,12 +452,10 @@ class init_vpart_thread: public thread
 	graph_index::ptr index;
 	graph_engine &graph;
 	int hpart_id;
-	file_io_factory::shared_ptr io_factory;
 public:
-	init_vpart_thread(graph_index::ptr index, file_io_factory::shared_ptr io_factory,
-			graph_engine &_graph, int hpart_id, int node_id): thread(
-				"index-init-thread", node_id), graph(_graph) {
-		this->io_factory = io_factory;
+	init_vpart_thread(graph_index::ptr index, graph_engine &_graph,
+			int hpart_id, int node_id): thread("index-init-thread",
+				node_id), graph(_graph) {
 		this->index = index;
 		this->hpart_id = hpart_id;
 	}
@@ -500,12 +499,9 @@ public:
 void init_vpart_thread::run()
 {
 	vertex_index_reader::ptr index_reader;
-	if (graph.get_in_mem_index())
-		index_reader = vertex_index_reader::create(graph.get_in_mem_index(),
-				graph.is_directed());
-	else
-		index_reader = vertex_index_reader::create(
-				io_factory->create_io(this), graph.is_directed());
+	assert(graph.get_in_mem_index());
+	index_reader = vertex_index_reader::create(graph.get_in_mem_index(),
+			graph.is_directed());
 	std::vector<vertex_id_t> large_degree_ids;
 	std::unique_ptr<index_comp_allocator_impl> alloc
 		= std::unique_ptr<index_comp_allocator_impl>(
@@ -559,7 +555,8 @@ void graph_engine::init(graph_index::ptr index)
 	pthread_barrier_init(&barrier1, NULL, num_threads);
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
-	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
+	graph_factory->set_sched_creator(comp_io_sched_creator::ptr(
+				new throughput_comp_io_sched_creator()));
 #if 0
 	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
 #endif
@@ -577,14 +574,11 @@ void graph_engine::init(graph_index::ptr index)
 		preload_graph();
 #endif
 
-	assert(graph_conf.get_num_vparts() == 1);
-#if 0
 	// If we need to perform vertical partitioning on the graph.
 	if (graph_conf.get_num_vparts() > 1) {
 		std::vector<init_vpart_thread *> threads(num_threads);
 		for (int i = 0; i < num_threads; i++) {
-			threads[i] = new init_vpart_thread(index, index_factory, *this,
-					i, i % num_nodes);
+			threads[i] = new init_vpart_thread(index, *this, i, i % num_nodes);
 			threads[i]->start();
 		}
 		for (int i = 0; i < num_threads; i++) {
@@ -592,7 +586,6 @@ void graph_engine::init(graph_index::ptr index)
 			delete threads[i];
 		}
 	}
-#endif
 }
 
 graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
@@ -953,6 +946,11 @@ void graph_engine::destroy_flash_graph()
 		init_count++;
 	else if (count == 1)
 		destroy_io_system();
+}
+
+int graph_engine::get_file_id() const
+{
+	return graph_factory->get_file_id();
 }
 
 }

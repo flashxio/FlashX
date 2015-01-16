@@ -23,8 +23,11 @@
 
 #include "log.h"
 #include "safs_file.h"
+#include "io_interface.h"
+
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/matrix_eigensolver.h"
+#include "matrix/ASE.h"
 
 #include "FGlib.h"
 #include "utils.h"
@@ -916,6 +919,22 @@ RcppExport SEXP R_FG_estimate_diameter(SEXP graph, SEXP pdirected)
 	return ret;
 }
 
+template<class MatrixType>
+FG_vector<double>::ptr multiply_v(FG_graph::ptr fg, bool transpose,
+		FG_vector<double>::ptr in_vec)
+{
+	size_t length = in_vec->get_size();
+	typename MatrixType::ptr matrix = MatrixType::create(fg);
+	if (transpose)
+		matrix = matrix->transpose();
+	assert(matrix->get_num_rows() == length);
+	assert(matrix->get_num_cols() == length);
+
+	FG_vector<double>::ptr out_vec = FG_vector<double>::create(length);
+	matrix->multiply(*in_vec, *out_vec);
+	return out_vec;
+}
+
 RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 {
 	bool transpose = INTEGER(ptranspose)[0];
@@ -926,34 +945,31 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 		in_vec->get_data()[i] = vec[i];
 	}
 	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
-	if (transpose)
-		matrix = matrix->transpose();
-	assert(matrix->get_num_rows() == length);
-	assert(matrix->get_num_cols() == length);
-
-	FG_vector<double>::ptr out_vec = FG_vector<double>::create(length);
-	matrix->multiply<double>(*in_vec, *out_vec);
+	FG_vector<double>::ptr out_vec;
+	if (!fg->get_graph_header().has_edge_data())
+		out_vec = multiply_v<FG_adj_matrix>(fg, transpose, in_vec);
+	// I assume the edge weight is integer.
+	else if (fg->get_graph_header().get_edge_data_size() == 4)
+		out_vec = multiply_v<FG_sparse_matrix<int32_t> >(
+				fg, transpose, in_vec);
+	// I assume the edge weight is double
+	else if (fg->get_graph_header().get_edge_data_size() == 8)
+		out_vec = multiply_v<FG_sparse_matrix<double> >(
+				fg, transpose, in_vec);
+	else {
+		fprintf(stderr, "wrong edge weight size: %d\n",
+				fg->get_graph_header().get_edge_data_size());
+		return R_NilValue;
+	}
 	Rcpp::NumericVector ret(out_vec->get_data(), out_vec->get_data() + length);
 	return ret;
 }
 
 #ifdef USE_EIGEN
-/*
- * Compute eigen value/vector on an unweighted adjacency matrix.
- */
-RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
-{
-	FG_graph::ptr fg = R_FG_get_graph(graph);
-	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
-	std::string which = CHAR(STRING_ELT(pwhich, 0));
-	int nev = INTEGER(pnev)[0];
-	int ncv = INTEGER(pncv)[0];
-	std::vector<eigen_pair_t> eigen_pairs;
-	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, eigen_pairs);
-	if (eigen_pairs.empty())
-		return R_NilValue;
 
+SEXP output_eigen_pairs(const std::vector<eigen_pair_t> &eigen_pairs)
+{
+	int nev = eigen_pairs.size();
 	size_t length = eigen_pairs[0].second->get_size();
 	Rcpp::NumericVector eigen_values(nev);
 	Rcpp::NumericMatrix eigen_matrix(length, nev);
@@ -968,8 +984,52 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
 	return ret;
 }
 
+/*
+ * Compute eigen value/vector on an unweighted adjacency matrix.
+ */
+RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
+		SEXP ptol)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	if (fg->get_graph_header().is_directed_graph())
+		return R_NilValue;
+
+	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
+	std::string which = CHAR(STRING_ELT(pwhich, 0));
+	int nev = INTEGER(pnev)[0];
+	int ncv = INTEGER(pncv)[0];
+	double tol = REAL(ptol)[0];
+
+	std::vector<eigen_pair_t> eigen_pairs;
+	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, tol, eigen_pairs);
+	if (eigen_pairs.empty())
+		return R_NilValue;
+	return output_eigen_pairs(eigen_pairs);
+}
+
+/**
+ * Compute the eigenvalues and eigenvectors of A + c * D.
+ */
+RcppExport SEXP R_FG_compute_AcD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
+		SEXP pc, SEXP ptol)
+{
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+	std::string which = CHAR(STRING_ELT(pwhich, 0));
+	int nev = INTEGER(pnev)[0];
+	int ncv = INTEGER(pncv)[0];
+	double c = REAL(pc)[0];
+	double tol = REAL(ptol)[0];
+
+	std::vector<eigen_pair_t> eigen_pairs;
+	compute_AcD_uw(fg, c, ncv, nev, which, tol, eigen_pairs);
+	if (eigen_pairs.empty())
+		return R_NilValue;
+
+	return output_eigen_pairs(eigen_pairs);
+}
+
 RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
-		SEXP ptype)
+		SEXP ptype, SEXP ptol)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
@@ -977,8 +1037,9 @@ RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
 	std::string type = CHAR(STRING_ELT(ptype, 0));
 	int nev = INTEGER(pnev)[0];
 	int ncv = INTEGER(pncv)[0];
+	double tol = REAL(ptol)[0];
 	std::vector<eigen_pair_t> eigen_pairs;
-	compute_SVD<FG_adj_matrix>(matrix, ncv, nev, which, type, eigen_pairs);
+	compute_SVD<FG_adj_matrix>(matrix, ncv, nev, which, type, tol, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
 

@@ -593,21 +593,30 @@ fg.multiply.matrix <- function(graph, m, transpose=FALSE)
 #' D. Calvetti and L. Reichel and D. C. Sorensen: An Implicitly Restarted
 #' Lanczos method for Large Symmetric Eigenvalue problems, Jounral of ETNA,
 #' 1994.
-fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
+fg.eigen <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(!graph$directed)
 	.Call("R_FG_eigen_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  PACKAGE="FlashGraphR")
+		  as.double(tol), PACKAGE="FlashGraphR")
 }
 
-fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
+fg.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	.Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  type, PACKAGE="FlashGraphR")
+
+	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
+		  "LS", as.double(tol), PACKAGE="FlashGraphR")
+
+	norm.col <- function(x)
+	{
+		x / sqrt(sum(x * x))
+	}
+	list(values=ret$values, left=ret$vectors,
+		 right=apply(fg.multiply.matrix(graph, ret$vectors, TRUE), 2, norm.col),
+		 options=ret$options)
 }
 
 #' Spectral embedding
@@ -655,6 +664,15 @@ fg.SVD <- function(graph, which="LM", nev=1, ncv=2, type="LS")
 #' @name fg.ase
 #' @author Da Zheng <dzheng5@@jhu.edu>
 fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
+				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
+{
+	stopifnot(!is.null(fg))
+	stopifnot(class(fg) == "fg")
+	.Call("R_FG_compute_AcD_uw", fg, which.eigen, as.integer(num.eigen),
+		  as.integer(num.eigen * 2), as.double(c), as.double(tol), PACKAGE="FlashGraphR")
+}
+
+fg.ASE.igraph <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
 {
 	stopifnot(!is.null(fg))

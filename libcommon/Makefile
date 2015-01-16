@@ -17,8 +17,6 @@
 
 include ../Makefile.common
 
-CXXFLAGS += -I../include
-
 all: libcommon
 
 libcommon: $(OBJS)

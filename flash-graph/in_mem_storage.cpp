@@ -27,6 +27,8 @@
 #include "cache.h"
 #include "slab_allocator.h"
 #include "native_file.h"
+#include "comp_io_scheduler.h"
+#include "io_interface.h"
 
 #include "in_mem_storage.h"
 #include "graph_file_header.h"
@@ -147,8 +149,7 @@ class in_mem_io: public io_interface
 	const in_mem_graph &graph;
 	int file_id;
 	fifo_queue<io_request> req_buf;
-	fifo_queue<user_compute *> compute_buf;
-	fifo_queue<user_compute *> incomp_computes;
+	comp_io_scheduler::ptr comp_io_sched;
 	std::unique_ptr<byte_array_allocator> array_allocator;
 
 	callback::ptr cb;
@@ -158,11 +159,13 @@ class in_mem_io: public io_interface
 public:
 	in_mem_io(const in_mem_graph &_graph, int file_id,
 			thread *t): io_interface(t), graph(_graph), req_buf(
-				get_node_id(), 1024), compute_buf(get_node_id(), 1024,
-				true), incomp_computes(get_node_id(), 1024, true) {
+				get_node_id(), 1024) {
 		this->file_id = file_id;
 		array_allocator = std::unique_ptr<byte_array_allocator>(
 				new in_mem_byte_array_allocator(t));
+		comp_io_sched = comp_io_scheduler::ptr(
+				new default_comp_io_scheduler(get_node_id()));
+		comp_io_sched->set_io(this);
 	}
 
 	virtual int get_file_id() const {
@@ -201,12 +204,6 @@ public:
 
 	virtual void access(io_request *requests, int num, io_status *status);
 	virtual int wait4complete(int) {
-		assert(compute_buf.is_empty());
-		if (!incomp_computes.is_empty()) {
-			compute_buf.add(&incomp_computes);
-			assert(incomp_computes.is_empty());
-			process_computes();
-		}
 		return 0;
 	}
 };
@@ -223,52 +220,19 @@ void in_mem_io::process_req(const io_request &req)
 			graph.graph_data + ROUND_PAGE(req.get_offset()), *array_allocator);
 	user_compute *compute = req.get_compute();
 	compute->run(byte_arr);
-	// If the user compute hasn't completed and it's not in the queue,
-	// add it to the queue.
-	if (!compute->has_completed() && !compute->test_flag(IN_QUEUE)) {
-		compute->set_flag(IN_QUEUE, true);
-		if (compute_buf.is_full())
-			compute_buf.expand_queue(compute_buf.get_size() * 2);
-		compute_buf.push_back(compute);
-	}
-	else
-		compute->dec_ref();
-
-	if (compute->has_completed() && !compute->test_flag(IN_QUEUE)) {
-		assert(compute->get_ref() == 0);
-		// It might still be referenced by the graph engine.
-		if (compute->get_ref() == 0) {
-			compute_allocator *alloc = compute->get_allocator();
-			alloc->free(compute);
-		}
-	}
+	comp_io_sched->post_comp_process(compute);
 }
 
 void in_mem_io::process_computes()
 {
-	while (!compute_buf.is_empty()) {
-		user_compute *compute = compute_buf.pop_front();
-		assert(compute->get_ref() > 0);
-		while (compute->has_requests()) {
-			compute->fetch_requests(this, req_buf, req_buf.get_size());
-			while (!req_buf.is_empty()) {
-				io_request new_req = req_buf.pop_front();
-				process_req(new_req);
-			}
-		}
-		if (compute->has_completed()) {
-			compute->dec_ref();
-			compute->set_flag(IN_QUEUE, false);
-			assert(compute->get_ref() == 0);
-			if (compute->get_ref() == 0) {
-				compute_allocator *alloc = compute->get_allocator();
-				alloc->free(compute);
-			}
-		}
-		else {
-			if (incomp_computes.is_full())
-				incomp_computes.expand_queue(incomp_computes.get_size() * 2);
-			incomp_computes.push_back(compute);
+	while (true) {
+		comp_io_sched->get_requests(req_buf, req_buf.get_size());
+		if (req_buf.is_empty())
+			break;
+
+		while (!req_buf.is_empty()) {
+			io_request new_req = req_buf.pop_front();
+			process_req(new_req);
 		}
 	}
 }
@@ -293,6 +257,7 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 		}
 	}
 	process_computes();
+	comp_io_sched->gc_computes();
 }
 
 class in_mem_io_factory: public file_io_factory

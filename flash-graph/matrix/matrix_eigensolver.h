@@ -103,30 +103,30 @@ public:
 };
 
 void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
-		std::vector<eigen_pair_t> &eigen_pairs);
+		double tol, std::vector<eigen_pair_t> &eigen_pairs);
 
 template<class SparseMatrixType>
 void compute_eigen(typename SparseMatrixType::ptr matrix, int m, int nv,
-		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs)
+		const std::string &which, double tol, std::vector<eigen_pair_t> &eigen_pairs)
 {
 	eigen_SPMV<SparseMatrixType> spmv(matrix);
-	eigen_solver(spmv, m, nv, which, eigen_pairs);
+	eigen_solver(spmv, m, nv, which, tol, eigen_pairs);
 }
 
 template<class SparseMatrixType>
 void compute_SVD(typename SparseMatrixType::ptr matrix, int m, int nv,
 		const std::string &which, const std::string &type,
-		std::vector<eigen_pair_t> &eigen_pairs)
+		double tol, std::vector<eigen_pair_t> &eigen_pairs)
 {
 	// left-singular vectors of SVD
 	if (type == "LS") {
 		LS_SPMV<SparseMatrixType> spmv(matrix);
-		eigen_solver(spmv, m, nv, which, eigen_pairs);
+		eigen_solver(spmv, m, nv, which, tol, eigen_pairs);
 	}
 	// right-singular vectors of SVD
 	else if (type == "RS") {
 		RS_SPMV<SparseMatrixType> spmv(matrix);
-		eigen_solver(spmv, m, nv, which, eigen_pairs);
+		eigen_solver(spmv, m, nv, which, tol, eigen_pairs);
 	}
 	else
 		assert(0);

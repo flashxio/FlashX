@@ -141,14 +141,15 @@ class FG_vector
 		return std::equal(this->eles.begin(), this->eles.end(), other->eles.begin());
 	}
 
-	void init_rand(long max, unsigned int seed = 0) {
+	void init_rand(long max = std::numeric_limits<T>::max(),
+			unsigned int seed = 0) {
 		if (seed > 0)
 			srandom(seed);
 		if (max >= std::numeric_limits<T>::max())
 			max = std::numeric_limits<T>::max();
 #pragma omp parallel for
 		for (size_t i = 0; i < eles.size(); i++)
-			eles[i] = random();
+			eles[i] = random() % max;
 	}
 
 	/**
@@ -388,6 +389,11 @@ class FG_vector
 		f.close();
 	}
 
+	void neg_in_place() {
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] = -eles[i];
+	}
+
 	/**
 	 * \brief In place division of vector by a single value.
 	 * \param v The value by which you want the array divided.
@@ -419,13 +425,14 @@ class FG_vector
 	 * \param vec The vector by which you want to add to this vector.
 	 * **parallel**
 	 */
-	void add_in_place(FG_vector<T>::ptr vec) {
+	template<class T2>
+	void add_in_place(typename FG_vector<T2>::ptr vec) {
 		struct add_func {
-			T operator()(const T &v1, const T &v2) {
+			T operator()(const T &v1, const T2 &v2) {
 				return v1 + v2;
 			}
 		};
-		merge_in_place<add_func, T>(vec, add_func());
+		merge_in_place<add_func, T2>(vec, add_func());
 	}
 
 	/**
@@ -433,13 +440,39 @@ class FG_vector
 	 * \param vec The vector by which you want the array to be subtracted.
 	 * **parallel** 
 	 */
-	void subtract_in_place(const FG_vector<T>::ptr &vec) {
+	template<class T2>
+	void subtract_in_place(typename FG_vector<T2>::ptr &vec) {
 		struct sub_func {
-			T operator()(const T &v1, const T &v2) {
+			T operator()(const T &v1, const T2 &v2) {
 				return v1 - v2;
 			}
 		};
-		merge_in_place<sub_func, T>(vec, sub_func());
+		merge_in_place<sub_func, T2>(vec, sub_func());
+	}
+
+	template<class T2>
+	void multiply_in_place(T2 v) {
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] *= v;
+	}
+
+	template<class IN_TYPE, class OUT_TYPE>
+	typename FG_vector<OUT_TYPE>::ptr multiply(IN_TYPE v) const {
+		typename FG_vector<OUT_TYPE>::ptr ret = FG_vector<OUT_TYPE>::create(get_size());
+		for (size_t i = 0; i < get_size(); i++)
+			ret->set(i, this->eles[i] * v);
+		return ret;
+	}
+
+	template<class IN_TYPE, class OUT_TYPE>
+	typename FG_vector<OUT_TYPE>::ptr multiply(typename FG_vector<IN_TYPE>::ptr vec) const {
+		if (vec->get_size() != this->get_size())
+			return typename FG_vector<OUT_TYPE>::ptr();
+
+		typename FG_vector<OUT_TYPE>::ptr ret = FG_vector<OUT_TYPE>::create(get_size());
+		for (size_t i = 0; i < get_size(); i++)
+			ret->eles[i] = this->eles[i] * vec->get(i);
+		return ret;
 	}
 
 	/**

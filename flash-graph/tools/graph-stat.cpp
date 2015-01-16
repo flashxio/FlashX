@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "thread.h"
-#include "io_interface.h"
 #include "container.h"
 #include "concurrency.h"
 
@@ -29,7 +28,6 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 
-using namespace safs;
 using namespace fg;
 
 const int POWER_CONST = 10;
@@ -52,7 +50,7 @@ void print_directed(FG_vector<vsize_t>::ptr in_degrees,
 	log_histogram hist_in_edges = in_degrees->log_hist(POWER_CONST);
 	log_histogram hist_out_edges = out_degrees->log_hist(POWER_CONST);
 
-	in_degrees->add_in_place(out_degrees);
+	in_degrees->add_in_place<vsize_t>(out_degrees);
 	vsize_t max_num_edges = in_degrees->max();
 	log_histogram hist_edges = in_degrees->log_hist(POWER_CONST);
 	printf("There are %ld edges\n", tot_in_edges);
@@ -77,8 +75,6 @@ void print_usage()
 	fprintf(stderr, "-t time: the start time\n");
 	fprintf(stderr, "-l interval: the time interval\n");
 	fprintf(stderr, "-u unit: the unit of the time interval\n");
-	graph_conf.print_help();
-	params.print_help();
 }
 
 int main(int argc, char *argv[])

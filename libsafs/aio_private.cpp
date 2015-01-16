@@ -242,10 +242,12 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	assert(it->second.is_valid());
 	buffered_io &io = it->second.get_io();
 	io.get_partition().map(tcb->req.get_offset() / PAGE_SIZE, bid);
+	// Here we translate the global request offset to the offset in the local
+	// disk.
+	off_t local_off = bid.off * PAGE_SIZE + (tcb->req.get_offset() % PAGE_SIZE);
 	if (tcb->req.get_num_bufs() == 1)
 		return ctx->make_io_request(io.get_fd(tcb->req.get_offset()),
-				tcb->req.get_size(), bid.off * PAGE_SIZE, tcb->req.get_buf(),
-				io_type, cb);
+				tcb->req.get_size(), local_off, tcb->req.get_buf(), io_type, cb);
 	else {
 		int num_bufs = tcb->req.get_num_bufs();
 		for (int i = 0; i < num_bufs; i++) {
@@ -260,8 +262,7 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 				 * the space for the IO vector is stored
 				 * in the callback structure.
 				 */
-				tcb->vec.data(), num_bufs, bid.off * PAGE_SIZE,
-				io_type, cb);
+				tcb->vec.data(), num_bufs, local_off, io_type, cb);
 		// I need to submit the request immediately. The iovec array is
 		// allocated in the stack.
 		ctx->submit_io_request(&req, 1);

@@ -39,6 +39,7 @@
 
 #include "thread.h"
 #include "native_file.h"
+#include "exception.h"
 
 #include "graph.h"
 //#include "edge_type.h"
@@ -1256,7 +1257,7 @@ public:
 	 */
 	undirected_edge_graph(
 			std::vector<typename el_container<edge_data_type>::ptr> &edge_lists,
-			bool has_data): edge_graph(has_data) {
+			size_t edge_data_size): edge_graph(edge_data_size) {
 		BOOST_FOREACH(auto el, edge_lists) {
 			this->edge_lists.push_back(
 					((undirected_el_container<edge_data_type> &) *el).get_edges());
@@ -1324,7 +1325,7 @@ public:
 	 */
 	directed_edge_graph(
 			std::vector<typename el_container<edge_data_type>::ptr> &edge_lists,
-			bool has_data): edge_graph(has_data) {
+			size_t edge_data_size): edge_graph(edge_data_size) {
 		BOOST_FOREACH(auto el, edge_lists) {
 			this->in_edge_lists.push_back(
 					((directed_el_container<edge_data_type> &) *el).get_in_edges());
@@ -1528,8 +1529,11 @@ size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
 		}
 		std::vector<ext_mem_undirected_vertex *> vertices;
 		std::unique_ptr<char[]> buf = read_vertices(reader, infos, vertices);
-		for (size_t i = 0; i < vertices.size(); i++)
+		assert(infos.size() == vertices.size());
+		for (size_t i = 0; i < vertices.size(); i++) {
+			assert(infos[i].get_id() == vertices[i]->get_id());
 			num_edges += vertices[i]->get_num_edges();
+		}
 		num_vertices += vertices.size();
 		edge_g.check_vertices(vertices, in_part, edge_offs);
 		vertex_id_t last_id = infos.back().get_id();
@@ -2566,13 +2570,14 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	}
 	BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% edges") % num_edges;
 
+	size_t edge_data_size = has_edge_data ? sizeof(edge_data_type) : 0;
 	edge_graph::ptr edge_g;
 	if (directed)
 		edge_g = edge_graph::ptr(new directed_edge_graph<edge_data_type>(
-					edge_lists, has_edge_data));
+					edge_lists, edge_data_size));
 	else
 		edge_g = edge_graph::ptr(new undirected_edge_graph<edge_data_type>(
-					edge_lists, has_edge_data));
+					edge_lists, edge_data_size));
 	gettimeofday(&end, NULL);
 
 	BOOST_LOG_TRIVIAL(info) << boost::format(
@@ -2648,10 +2653,10 @@ edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
 
 	if (directed)
 		return edge_graph::ptr(new directed_edge_graph<empty_data>(
-					edge_lists, false));
+					edge_lists, 0));
 	else
 		return edge_graph::ptr(new undirected_edge_graph<empty_data>(
-					edge_lists, false));
+					edge_lists, 0));
 }
 
 }
