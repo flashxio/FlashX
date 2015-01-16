@@ -24,6 +24,7 @@
 
 #include "FGlib.h"
 #include "matrix_io.h"
+#include "io_interface.h"
 
 namespace fm
 {
