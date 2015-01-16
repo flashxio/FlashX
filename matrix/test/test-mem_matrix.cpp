@@ -209,6 +209,68 @@ typename type_mem_dense_matrix<Type>::ptr test_MM3(size_t nrow, size_t ncol,
 }
 
 template<class Type>
+typename type_mem_dense_matrix<Type>::ptr test_MV1(size_t nrow, size_t ncol)
+{
+	printf("test a tall col-wise matrix: M(%ld x %ld) * v(%ld)\n",
+			nrow, ncol, ncol);
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	typename type_mem_dense_matrix<Type>::ptr m1
+		= type_mem_dense_matrix<Type>::create(nrow, ncol,
+				matrix_layout_t::L_COL, set_col_operate(ncol), true);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct input column matrix\n",
+			time_diff(start, end));
+	typename type_mem_dense_matrix<Type>::ptr m2
+		= type_mem_dense_matrix<Type>::create(ncol, 1,
+				matrix_layout_t::L_COL, set_col_operate(ncol));
+
+	gettimeofday(&start, NULL);
+	typename type_mem_dense_matrix<Type>::ptr res1
+		= par_multiply<Type, Type, Type>(*m1, *m2);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to multiply column matrix in parallel\n",
+			time_diff(start, end));
+	assert(res1->get_num_rows() == m1->get_num_rows());
+	assert(res1->get_num_cols() == m2->get_num_cols());
+	printf("The result matrix has %ld rows and %ld columns\n",
+			res1->get_num_rows(), res1->get_num_cols());
+	return res1;
+}
+
+template<class Type>
+typename type_mem_dense_matrix<Type>::ptr test_MV2(size_t nrow, size_t ncol)
+{
+	printf("test a wide row-wise matrix: M(%ld x %ld) * v(%ld)\n",
+			nrow, ncol, ncol);
+
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+	typename type_mem_dense_matrix<Type>::ptr m1
+		= type_mem_dense_matrix<Type>::create(nrow, ncol,
+				matrix_layout_t::L_ROW, set_row_operate(ncol), true);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct input row matrix\n",
+			time_diff(start, end));
+	typename type_mem_dense_matrix<Type>::ptr m2
+		= type_mem_dense_matrix<Type>::create(ncol, 1,
+				matrix_layout_t::L_COL, set_col_operate(ncol));
+
+	gettimeofday(&start, NULL);
+	typename type_mem_dense_matrix<Type>::ptr res1
+		= par_multiply<Type, Type, Type>(*m1, *m2);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to multiply row matrix in parallel\n",
+			time_diff(start, end));
+	assert(res1->get_num_rows() == m1->get_num_rows());
+	assert(res1->get_num_cols() == m2->get_num_cols());
+	printf("The result matrix has %ld rows and %ld columns\n",
+			res1->get_num_rows(), res1->get_num_cols());
+	return res1;
+}
+
+template<class Type>
 void check_result(typename type_mem_dense_matrix<Type>::ptr m1,
 		typename type_mem_dense_matrix<Type>::ptr m2)
 {
@@ -235,7 +297,18 @@ void matrix_mul_tests()
 	check_result<double>(res1, res2);
 }
 
+void matrix_vec_mul_tests()
+{
+	size_t nrow = 1024 * 1024 * 124;
+	size_t ncol = 120;
+	printf("Multiplication of a large (tall/wide) matrix and a vector\n");
+	test_MV1<double>(nrow, ncol);
+	test_MV2<double>(ncol, nrow);
+}
+
 int main()
 {
+	matrix_vec_mul_tests();
+	printf("\n\n");
 	matrix_mul_tests();
 }
