@@ -222,14 +222,17 @@ class type_mem_dense_matrix
 	}
 
 	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const type_set_operate<EntryType> &op) {
+			const type_set_operate<EntryType> &op, bool parallel) {
 		if (layout == matrix_layout_t::L_COL)
 			m = mem_col_dense_matrix::create(nrow, ncol, sizeof(EntryType));
 		else if (layout == matrix_layout_t::L_ROW)
 			m = mem_row_dense_matrix::create(nrow, ncol, sizeof(EntryType));
 		else
 			assert(0);
-		m->set_data(op);
+		if (parallel)
+			m->par_set_data(op);
+		else
+			m->set_data(op);
 	}
 
 	type_mem_dense_matrix(mem_dense_matrix::ptr m) {
@@ -243,8 +246,9 @@ public:
 	}
 
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const type_set_operate<EntryType> &op) {
-		return ptr(new type_mem_dense_matrix<EntryType>(nrow, ncol, layout, op));
+			const type_set_operate<EntryType> &op, bool parallel = false) {
+		return ptr(new type_mem_dense_matrix<EntryType>(nrow, ncol, layout,
+					op, parallel));
 	}
 
 	static ptr create(mem_dense_matrix::ptr m) {
