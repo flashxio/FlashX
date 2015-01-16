@@ -34,28 +34,73 @@ public:
 	}
 };
 
-int main()
+/*
+ * This is a naive implementation of matrix multiplication.
+ * It should be correct
+ */
+I_mem_dense_matrix::ptr naive_multiply(const I_mem_dense_matrix &m1,
+		const I_mem_dense_matrix &m2)
+{
+	I_mem_dense_matrix::ptr res = I_mem_dense_matrix::create(
+			m1.get_num_rows(), m2.get_num_cols(), matrix_layout_t::L_ROW);
+	for (size_t i = 0; i < m1.get_num_rows(); i++) {
+		for (size_t j = 0; j < m2.get_num_cols(); j++) {
+			int sum = 0;
+			for (size_t k = 0; k < m1.get_num_cols(); k++) {
+				sum += m1.get(i, k) * m2.get(k, j);
+			}
+			res->set(i, j, sum);
+		}
+	}
+	return res;
+}
+
+void verify_result(const I_mem_dense_matrix &m1, const I_mem_dense_matrix &m2)
+{
+	assert(m1.get_num_rows() == m2.get_num_rows());
+	assert(m1.get_num_cols() == m2.get_num_cols());
+
+	for (size_t i = 0; i < m1.get_num_rows(); i++)
+		for (size_t j = 0; j < m1.get_num_cols(); j++)
+			assert(m1.get(i, j) == m2.get(i, j));
+}
+
+void test1()
 {
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
 			matrix_layout_t::L_COL, set_col_operate(10));
 	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(10, 9,
 			matrix_layout_t::L_COL, set_col_operate(9));
-	I_mem_dense_matrix::ptr m3 = I_mem_dense_matrix::create(100, 10,
-			matrix_layout_t::L_ROW, set_row_operate(10));
+	I_mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
+	printf("Test multiply on col_matrix in on thread\n");
 	I_mem_dense_matrix::ptr res1 = multiply<int, int, int>(*m1, *m2);
-	assert(res1->get_num_rows() == m1->get_num_rows());
-	assert(res1->get_num_cols() == m2->get_num_cols());
-	printf("The result matrix has %ld rows and %ld columns\n",
-			res1->get_num_rows(), res1->get_num_cols());
+	verify_result(*res1, *correct);
 
-	I_mem_dense_matrix::ptr res2 = multiply<int, int, int>(*m3, *m2);
-	assert(res2->get_num_rows() == m3->get_num_rows());
-	assert(res2->get_num_cols() == m2->get_num_cols());
+	printf("Test multiply on col_matrix in parallel\n");
+	res1 = par_multiply<int, int, int>(*m1, *m2);
+	verify_result(*res1, *correct);
+}
 
-	for (size_t i = 0; i < res1->get_num_rows(); i++) {
-		for (size_t j = 0; j < res1->get_num_cols(); j++) {
-			assert(res1->get(i, j) == res2->get(i, j));
-		}
-	}
+void test2()
+{
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(10, 100,
+			matrix_layout_t::L_ROW, set_row_operate(100));
+	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(100, 9,
+			matrix_layout_t::L_COL, set_col_operate(9));
+	I_mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
+
+	printf("Test multiply on row_matrix X col_matrix in on thread\n");
+	I_mem_dense_matrix::ptr res1 = multiply<int, int, int>(*m1, *m2);
+	verify_result(*res1, *correct);
+
+	printf("Test multiply on row_matrix X col_matrix in parallel\n");
+	res1 = par_multiply<int, int, int>(*m1, *m2);
+	verify_result(*res1, *correct);
+}
+
+int main()
+{
+	test1();
+	test2();
 }
