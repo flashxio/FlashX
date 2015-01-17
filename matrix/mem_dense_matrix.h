@@ -64,6 +64,8 @@ protected:
 public:
 	typedef std::shared_ptr<mem_dense_matrix> ptr;
 
+	virtual bool verify_inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual void reset_data() = 0;
 	virtual void set_data(const set_operate &op) = 0;
 	virtual void par_reset_data() = 0;
@@ -101,9 +103,6 @@ class mem_row_dense_matrix: public mem_dense_matrix
 			assert(data);
 		}
 	}
-
-	bool verify_inner_prod(const mem_dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
 	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
 
@@ -115,6 +114,8 @@ public:
 		free(data);
 	}
 
+	virtual bool verify_inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual void reset_data();
 	void set_data(const set_operate &op);
 	virtual void par_reset_data();
@@ -157,9 +158,6 @@ class mem_col_dense_matrix: public mem_dense_matrix
 			assert(data);
 		}
 	}
-
-	bool verify_inner_prod(const mem_dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
 	typedef std::shared_ptr<mem_col_dense_matrix> ptr;
 

@@ -95,6 +95,36 @@ public:
 	}
 };
 
+bool mem_dense_matrix::verify_inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
+{
+	if (this->get_entry_size() != left_op.left_entry_size()
+			|| m.get_entry_size() != left_op.right_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The left operator isn't compatible with input matrices";
+		return false;
+	}
+
+	if (left_op.output_entry_size() != right_op.left_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The type of the left operator doesn't match the right operator";
+		return false;
+	}
+
+	if (right_op.left_entry_size() != right_op.right_entry_size()
+			|| right_op.left_entry_size() != right_op.output_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The input and output of the right operator has different types";
+		return false;
+	}
+
+	if (get_num_cols() != m.get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error) << "The matrix size doesn't match";
+		return false;
+	}
+	return true;
+}
+
 void mem_col_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
@@ -124,23 +154,6 @@ void mem_col_dense_matrix::par_set_data(const set_operate &op)
 #pragma omp parallel for
 	for (size_t i = 0; i < ncol; i++)
 		op.set(get_col(i), nrow, 0, i);
-}
-
-bool mem_col_dense_matrix::verify_inner_prod(const mem_dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const
-{
-	if (this->get_entry_size() != left_op.left_entry_size()
-			|| m.get_entry_size() != left_op.right_entry_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The left operator isn't compatible with input matrices";
-		return false;
-	}
-
-	if (get_num_cols() != m.get_num_rows()) {
-		BOOST_LOG_TRIVIAL(error) << "The matrix size doesn't match";
-		return false;
-	}
-	return true;
 }
 
 mem_dense_matrix::ptr mem_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
@@ -246,26 +259,7 @@ bool mem_row_dense_matrix::verify_inner_prod(const mem_dense_matrix &m,
 			<< "The layout of the right matrix has to be column matrix";
 		return false;
 	}
-
-	if (this->get_entry_size() != left_op.left_entry_size()
-			|| m.get_entry_size() != left_op.right_entry_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The left operator isn't compatible with input matrices";
-		return false;
-	}
-
-	if (right_op.left_entry_size() != right_op.right_entry_size()
-			&& right_op.left_entry_size() != right_op.output_entry_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The input and output of the right operator has different types";
-		return false;
-	}
-
-	if (get_num_cols() != m.get_num_rows()) {
-		BOOST_LOG_TRIVIAL(error) << "The matrix size doesn't match";
-		return false;
-	}
-	return true;
+	return mem_dense_matrix::verify_inner_prod(m, left_op, right_op);
 }
 
 mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m,
