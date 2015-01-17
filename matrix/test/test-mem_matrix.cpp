@@ -68,9 +68,7 @@ void test_eigen(size_t nrow, size_t ncol, size_t right_ncol)
 }
 
 /*
- * This function is to compare the performance of inner product between
- * in-memory column-wise dense matrix and Eigen matrix.
- * I assume Eigen matrix should give us the best performance.
+ * This multiplies a tall column-wise matrix with a small column-wise matrix.
  */
 template<class Type>
 typename type_mem_dense_matrix<Type>::ptr test_MM1(size_t nrow, size_t ncol,
@@ -78,7 +76,7 @@ typename type_mem_dense_matrix<Type>::ptr test_MM1(size_t nrow, size_t ncol,
 {
 	struct timeval start, end;
 
-	printf("test tall col-wise matrix: M(%ld x %ld) * M(%ld %ld)\n",
+	printf("inner product of tall col-wise matrix: M(%ld x %ld) * M(%ld %ld)\n",
 			nrow, ncol, ncol, right_ncol);
 	gettimeofday(&start, NULL);
 	typename type_mem_dense_matrix<Type>::ptr m1
@@ -96,6 +94,42 @@ typename type_mem_dense_matrix<Type>::ptr test_MM1(size_t nrow, size_t ncol,
 		= par_multiply<Type, Type, Type>(*m1, *m2);
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply column matrix in parallel\n",
+			time_diff(start, end));
+	assert(res1->get_num_rows() == m1->get_num_rows());
+	assert(res1->get_num_cols() == m2->get_num_cols());
+	printf("The result matrix has %ld rows and %ld columns\n",
+			res1->get_num_rows(), res1->get_num_cols());
+
+	return res1;
+}
+
+/*
+ * This multiplies a tall row-wise matrix with a small column-wise matrix.
+ */
+template<class Type>
+typename type_mem_dense_matrix<Type>::ptr test_MM1_5(size_t nrow, size_t ncol,
+		size_t right_ncol)
+{
+	struct timeval start, end;
+
+	printf("inner product of tall row-wise matrix: M(%ld x %ld) * M(%ld %ld)\n",
+			nrow, ncol, ncol, right_ncol);
+	gettimeofday(&start, NULL);
+	typename type_mem_dense_matrix<Type>::ptr m1
+		= type_mem_dense_matrix<Type>::create(nrow, ncol,
+				matrix_layout_t::L_ROW, set_row_operate(ncol), true);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to construct input row matrix\n",
+			time_diff(start, end));
+	typename type_mem_dense_matrix<Type>::ptr m2
+		= type_mem_dense_matrix<Type>::create(ncol, right_ncol,
+				matrix_layout_t::L_COL, set_col_operate(ncol));
+
+	gettimeofday(&start, NULL);
+	typename type_mem_dense_matrix<Type>::ptr res1
+		= par_multiply<Type, Type, Type>(*m1, *m2);
+	gettimeofday(&end, NULL);
+	printf("It takes %.3f seconds to multiply row matrix in parallel\n",
 			time_diff(start, end));
 	assert(res1->get_num_rows() == m1->get_num_rows());
 	assert(res1->get_num_cols() == m2->get_num_cols());
@@ -290,8 +324,12 @@ void matrix_mul_tests()
 	size_t ncol = 20;
 	printf("Multiplication of a large and tall matrix and a small square matrix\n");
 	test_eigen<double>(nrow, ncol, ncol);
-	D_mem_dense_matrix::ptr res1 = test_MM1<double>(nrow, ncol, ncol);
-	D_mem_dense_matrix::ptr res2 = test_MM2<double>(nrow, ncol, ncol);
+	D_mem_dense_matrix::ptr res1;
+	D_mem_dense_matrix::ptr res2;
+	res1 = test_MM1<double>(nrow, ncol, ncol);
+	res2 = test_MM1_5<double>(nrow, ncol, ncol);
+	check_result<double>(res1, res2);
+	res2 = test_MM2<double>(nrow, ncol, ncol);
 	check_result<double>(res1, res2);
 	res2 = test_MM3<double>(nrow, ncol, ncol);
 	check_result<double>(res1, res2);
