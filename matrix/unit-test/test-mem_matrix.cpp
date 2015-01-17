@@ -67,13 +67,14 @@ void verify_result(const I_mem_dense_matrix &m1, const I_mem_dense_matrix &m2)
 
 void test1()
 {
+	printf("Test tall matrix stored column wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
 			matrix_layout_t::L_COL, set_col_operate(10));
 	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(10, 9,
 			matrix_layout_t::L_COL, set_col_operate(9));
 	I_mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
-	printf("Test multiply on col_matrix in on thread\n");
+	printf("Test multiply on col_matrix in one thread\n");
 	I_mem_dense_matrix::ptr res1 = multiply<int, int, int>(*m1, *m2);
 	verify_result(*res1, *correct);
 
@@ -84,13 +85,14 @@ void test1()
 
 void test2()
 {
+	printf("Test wide matrix stored row wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(10, 100,
 			matrix_layout_t::L_ROW, set_row_operate(100));
 	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(100, 9,
 			matrix_layout_t::L_COL, set_col_operate(9));
 	I_mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
-	printf("Test multiply on row_matrix X col_matrix in on thread\n");
+	printf("Test multiply on row_matrix X col_matrix in one thread\n");
 	I_mem_dense_matrix::ptr res1 = multiply<int, int, int>(*m1, *m2);
 	verify_result(*res1, *correct);
 
@@ -99,8 +101,27 @@ void test2()
 	verify_result(*res1, *correct);
 }
 
+void test3()
+{
+	printf("Test tall matrix stored row wise\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_ROW, set_col_operate(10));
+	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(10, 9,
+			matrix_layout_t::L_COL, set_col_operate(9));
+	I_mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
+
+	printf("Test multiply on row_matrix in one thread\n");
+	I_mem_dense_matrix::ptr res1 = multiply<int, int, int>(*m1, *m2);
+	verify_result(*res1, *correct);
+
+	printf("Test multiply on row_matrix in parallel\n");
+	res1 = par_multiply<int, int, int>(*m1, *m2);
+	verify_result(*res1, *correct);
+}
+
 int main()
 {
 	test1();
 	test2();
+	test3();
 }

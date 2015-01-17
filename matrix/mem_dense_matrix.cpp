@@ -262,23 +262,19 @@ bool mem_row_dense_matrix::verify_inner_prod(const mem_dense_matrix &m,
 	return mem_dense_matrix::verify_inner_prod(m, left_op, right_op);
 }
 
-mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const
+/*
+ * In this case, this matrix is wide. The right matrix is tall and its data
+ * is stored column-wise.
+ */
+void mem_row_dense_matrix::inner_prod_wide(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op,
+		mem_row_dense_matrix &res) const
 {
-	if (!verify_inner_prod(m, left_op, right_op))
-		return mem_dense_matrix::ptr();
-	assert(m.store_layout() == matrix_layout_t::L_COL);
-
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
-	assert(ncol > nrow);
-	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow,
-			m.get_num_cols(), right_op.output_entry_size());
-	res->reset_data();
-
 	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
 	char *tmp_res = (char *) malloc(SUB_CHUNK_SIZE * left_op.output_entry_size());
-	char *tmp_res2 = (char *) malloc(res->get_num_cols() * res->get_entry_size());
+	char *tmp_res2 = (char *) malloc(res.get_num_cols() * res.get_entry_size());
 	for (size_t k = 0; k < ncol; k += SUB_CHUNK_SIZE) {
 		size_t sub_ncol = std::min(SUB_CHUNK_SIZE, ncol - k);
 		sub_row_matrix sub_left(0, nrow, k, sub_ncol, *this);
@@ -288,14 +284,55 @@ mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m
 				left_op.runAA(sub_ncol, sub_left.get_row(i),
 						sub_right.get_col(j), tmp_res);
 				right_op.runA(sub_ncol, tmp_res,
-						tmp_res2 + res->get_entry_size() * j);
+						tmp_res2 + res.get_entry_size() * j);
 			}
 			// This is fine because we assume the input type of the right operator
 			// should be the same as the type of the output matrix.
-			right_op.runAA(sub_right.get_num_cols(), tmp_res2, res->get_row(i),
-					res->get_row(i));
+			right_op.runAA(sub_right.get_num_cols(), tmp_res2, res.get_row(i),
+					res.get_row(i));
 		}
 	}
+}
+
+/*
+ * In this case, this matrix is tall, and we assume the right matrix is
+ * small and its shape is close to a square. We don't need to consider
+ * the case that the right matrix is wide because the product would
+ * be too large to be stored in any storage media.
+ */
+void mem_row_dense_matrix::inner_prod_tall(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op,
+		mem_row_dense_matrix &res) const
+{
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
+	char *tmp_res = (char *) malloc(ncol * res.get_entry_size());
+	for (size_t i = 0; i < nrow; i++) {
+		for (size_t j = 0; j < m.get_num_cols(); j++) {
+			left_op.runAA(ncol, get_row(i), col_m.get_col(j), tmp_res);
+			right_op.runA(ncol, tmp_res, res.get(i, j));
+		}
+	}
+	free(tmp_res);
+}
+
+mem_dense_matrix::ptr mem_row_dense_matrix::inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
+{
+	if (!verify_inner_prod(m, left_op, right_op))
+		return mem_dense_matrix::ptr();
+	assert(m.store_layout() == matrix_layout_t::L_COL);
+
+	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(
+			get_num_rows(), m.get_num_cols(), right_op.output_entry_size());
+	res->reset_data();
+
+	if (is_wide())
+		inner_prod_wide(m, left_op, right_op, *res);
+	else
+		inner_prod_tall(m, left_op, right_op, *res);
+
 	return res;
 }
 
@@ -309,21 +346,13 @@ static int get_num_omp_threads()
 	return num_threads.load();
 }
 
-mem_dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const mem_dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const
+void mem_row_dense_matrix::par_inner_prod_wide(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op,
+		mem_row_dense_matrix &res) const
 {
-	if (!verify_inner_prod(m, left_op, right_op))
-		return mem_dense_matrix::ptr();
-	assert(m.store_layout() == matrix_layout_t::L_COL);
-
 	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
-	assert(ncol > nrow);
-	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow,
-			m.get_num_cols(), right_op.output_entry_size());
-	res->par_reset_data();
-
 	int nthreads = get_num_omp_threads();
 	std::vector<mem_row_dense_matrix::ptr> local_ms(nthreads);
 
@@ -332,7 +361,7 @@ mem_dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const mem_dense_matri
 		char *tmp_res = (char *) malloc(
 				SUB_CHUNK_SIZE * left_op.output_entry_size());
 		char *tmp_res2 = (char *) malloc(
-				res->get_num_cols() * res->get_entry_size());
+				res.get_num_cols() * res.get_entry_size());
 		mem_row_dense_matrix::ptr local_m = mem_row_dense_matrix::create(nrow,
 				m.get_num_cols(), right_op.output_entry_size());
 #pragma omp for
@@ -345,7 +374,7 @@ mem_dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const mem_dense_matri
 					left_op.runAA(sub_ncol, sub_left.get_row(i),
 							sub_right.get_col(j), tmp_res);
 					right_op.runA(sub_ncol, tmp_res,
-							tmp_res2 + res->get_entry_size() * j);
+							tmp_res2 + res.get_entry_size() * j);
 				}
 				// This is fine because we assume the input type and output type of
 				// the right operator should be the same as the type of the output
@@ -359,12 +388,51 @@ mem_dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const mem_dense_matri
 	}
 
 	// Aggregate the results from omp threads.
-	for (size_t i = 0; i < res->get_num_rows(); i++) {
+	for (size_t i = 0; i < res.get_num_rows(); i++) {
 		for (int j = 0; j < nthreads; j++) {
-			right_op.runAA(res->get_num_cols(), local_ms[j]->get_row(i),
-					res->get_row(i), res->get_row(i));
+			right_op.runAA(res.get_num_cols(), local_ms[j]->get_row(i),
+					res.get_row(i), res.get_row(i));
 		}
 	}
+}
+
+void mem_row_dense_matrix::par_inner_prod_tall(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op,
+		mem_row_dense_matrix &res) const
+{
+	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+
+#pragma omp parallel
+	{
+		char *tmp_res = (char *) malloc(ncol * res.get_entry_size());
+#pragma omp for
+		for (size_t i = 0; i < nrow; i++) {
+			for (size_t j = 0; j < m.get_num_cols(); j++) {
+				left_op.runAA(ncol, get_row(i), col_m.get_col(j), tmp_res);
+				right_op.runA(ncol, tmp_res, res.get(i, j));
+			}
+		}
+		free(tmp_res);
+	}
+}
+
+mem_dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const mem_dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
+{
+	if (!verify_inner_prod(m, left_op, right_op))
+		return mem_dense_matrix::ptr();
+	assert(m.store_layout() == matrix_layout_t::L_COL);
+
+	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(get_num_rows(),
+			m.get_num_cols(), right_op.output_entry_size());
+	res->par_reset_data();
+
+	if (is_wide())
+		par_inner_prod_wide(m, left_op, right_op, *res);
+	else
+		par_inner_prod_tall(m, left_op, right_op, *res);
 
 	return res;
 }

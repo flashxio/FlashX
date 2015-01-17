@@ -74,6 +74,10 @@ public:
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual matrix_layout_t store_layout() const = 0;
 
+	bool is_wide() const {
+		return ncol > nrow;
+	}
+
 	size_t get_entry_size() const {
 		return entry_size;
 	}
@@ -103,6 +107,17 @@ class mem_row_dense_matrix: public mem_dense_matrix
 			assert(data);
 		}
 	}
+
+	void inner_prod_wide(const mem_dense_matrix &m, const bulk_operate &left_op,
+			const bulk_operate &right_op, mem_row_dense_matrix &res) const;
+	void inner_prod_tall(const mem_dense_matrix &m, const bulk_operate &left_op,
+			const bulk_operate &right_op, mem_row_dense_matrix &res) const;
+	void par_inner_prod_wide(const mem_dense_matrix &m,
+			const bulk_operate &left_op, const bulk_operate &right_op,
+			mem_row_dense_matrix &res) const;
+	void par_inner_prod_tall(const mem_dense_matrix &m,
+			const bulk_operate &left_op, const bulk_operate &right_op,
+			mem_row_dense_matrix &res) const;
 public:
 	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
 
