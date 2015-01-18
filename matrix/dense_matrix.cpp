@@ -21,6 +21,8 @@
 
 #include "dense_matrix.h"
 #include "bulk_operate.h"
+#include "mem_dense_matrix.h"
+#include "EM_dense_matrix.h"
 
 namespace fm
 {
@@ -53,6 +55,25 @@ bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 		return false;
 	}
 	return true;
+}
+
+dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
+		size_t entry_size, matrix_layout_t layout, bool in_mem)
+{
+	if (in_mem) {
+		if (layout == matrix_layout_t::L_ROW)
+			return mem_row_dense_matrix::create(nrow, ncol, entry_size);
+		else
+			return mem_col_dense_matrix::create(nrow, ncol, entry_size);
+	}
+	else {
+		if (layout == matrix_layout_t::L_ROW) {
+			fprintf(stderr, "EM row dense matrix isn't supported\n");
+			return dense_matrix::ptr();
+		}
+		else
+			return EM_col_dense_matrix::create(nrow, ncol, entry_size);
+	}
 }
 
 }

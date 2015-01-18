@@ -52,6 +52,9 @@ protected:
 public:
 	typedef std::shared_ptr<dense_matrix> ptr;
 
+	static ptr create(size_t nrow, size_t ncol, size_t entry_size,
+			matrix_layout_t layout, bool in_mem);
+
 	virtual ~dense_matrix() {
 	}
 
