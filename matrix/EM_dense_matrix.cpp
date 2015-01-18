@@ -30,6 +30,16 @@
 namespace fm
 {
 
+EM_dense_matrix::ptr EM_dense_matrix::cast(dense_matrix::ptr m)
+{
+	if (m->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't cast an in-mem matrix to EM_dense_matrix";
+		return EM_dense_matrix::ptr();
+	}
+	return std::static_pointer_cast<EM_dense_matrix>(m);
+}
+
 bool EM_dense_matrix::exist(const std::string &name)
 {
 	safs::safs_file f(safs::get_sys_RAID_conf(), name);
@@ -250,8 +260,8 @@ public:
 	}
 
 	void run(const mem_dense_matrix &subm) {
-		mem_dense_matrix::ptr sub_res = subm.inner_prod(m, left_op,
-				right_op);
+		mem_dense_matrix::ptr sub_res = mem_dense_matrix::cast(
+				subm.inner_prod(m, left_op, right_op));
 		res_m.set_submatrix(start_out_row, start_out_col, sub_res);
 	}
 };
@@ -355,20 +365,19 @@ void EM_col_dense_matrix::split_matrix(std::vector<submatrix_loc> &locs) const
 			get_num_rows(), locs.size());
 }
 
-EM_dense_matrix::ptr EM_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op)
+dense_matrix::ptr EM_col_dense_matrix::inner_prod(const dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
-	size_t nrow = get_num_rows();
-	size_t ncol = get_num_cols();
-	if (ncol != m.get_num_rows()) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"#row (%1%) of right matrix doesn't match #columns (%1%) of left matrix")
-			% m.get_num_rows() % ncol;
-		return EM_dense_matrix::ptr();
+	if (!m.is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "EM inner product only supports in-mem right matrix";
+		return dense_matrix::ptr();
 	}
+	if (!verify_inner_prod(m, left_op, right_op))
+		return dense_matrix::ptr();
 
 	EM_col_dense_matrix::ptr res = EM_col_dense_matrix::create(
-			nrow, m.get_num_cols(), right_op.output_entry_size());
+			get_num_rows(), m.get_num_cols(), right_op.output_entry_size());
 	std::vector<submatrix_loc> all_locs;
 	split_matrix(all_locs);
 	submatrix_gen::ptr gen = submatrix_gen::ptr(new submatrix_gen(all_locs));
@@ -377,7 +386,9 @@ EM_dense_matrix::ptr EM_col_dense_matrix::inner_prod(const mem_dense_matrix &m,
 	size_t num_nodes = safs::params.get_num_nodes();
 	std::vector<col_inner_prod_thread *> threads(num_threads);
 	for (size_t i = 0; i < num_threads; i++) {
-		threads[i] = new col_inner_prod_thread(*this, *res, m, left_op, right_op,
+		// TODO let's discard the const qualifer for now.
+		threads[i] = new col_inner_prod_thread((EM_dense_matrix &) *this,
+				*res, (const mem_dense_matrix &) m, left_op, right_op,
 				gen, i, i % num_nodes);
 		threads[i]->start();
 	}
@@ -394,6 +405,12 @@ EM_dense_matrix_accessor::ptr EM_col_dense_matrix::create_accessor()
 {
 	return EM_dense_matrix_accessor::ptr(new EM_col_matrix_accessor(*this,
 				data));
+}
+
+void EM_col_dense_matrix::reset_data()
+{
+	// TODO
+	assert(0);
 }
 
 void EM_col_dense_matrix::set_data(const set_operate &op)

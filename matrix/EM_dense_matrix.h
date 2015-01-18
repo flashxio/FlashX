@@ -27,7 +27,7 @@
 
 #include "bulk_operate.h"
 #include "EM_vector.h"
-#include "mem_dense_matrix.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
@@ -76,24 +76,22 @@ public:
 	virtual void wait4all() = 0;
 };
 
-class EM_dense_matrix
+class EM_dense_matrix: public dense_matrix
 {
+protected:
+	EM_dense_matrix(size_t nrow, size_t ncol,
+			size_t entry_size): dense_matrix(nrow, ncol, entry_size, false) {
+	}
 public:
 	typedef std::shared_ptr<EM_dense_matrix> ptr;
 
+	static ptr cast(dense_matrix::ptr m);
 	static bool exist(const std::string &name);
 
 	virtual ~EM_dense_matrix() {
 	}
 
-	virtual EM_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op) = 0;
-
-	virtual size_t get_num_rows() const = 0;
-	virtual size_t get_num_cols() const = 0;
-	virtual size_t get_entry_size() const = 0;
 	virtual EM_dense_matrix_accessor::ptr create_accessor() = 0;
-	virtual void set_data(const set_operate &op) = 0;
 };
 
 /*
@@ -106,36 +104,20 @@ class EM_col_dense_matrix: public EM_dense_matrix
 	// The number of elements.
 	static const size_t COL_CHUNK_SIZE;
 
-	size_t entry_size;
-	size_t nrow;
-	size_t ncol;
 	EM_vector::ptr data;
 
-	EM_col_dense_matrix(size_t entry_size) {
-		this->entry_size = entry_size;
-	}
-
-	EM_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size) {
-		this->entry_size = entry_size;
-		this->nrow = nrow;
-		this->ncol = ncol;
+	EM_col_dense_matrix(size_t nrow, size_t ncol,
+			size_t entry_size): EM_dense_matrix(nrow, ncol, entry_size) {
 		data = EM_vector::create(nrow * ncol, entry_size);
 	}
 
 	EM_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
-			const std::string &name) {
-		this->entry_size = entry_size;
-		this->nrow = nrow;
-		this->ncol = ncol;
+			const std::string &name): EM_dense_matrix(nrow, ncol, entry_size) {
 		data = EM_vector::create(nrow * ncol, entry_size, name);
 	}
 
 	void split_matrix(std::vector<submatrix_loc> &locs) const;
 public:
-	static ptr create(size_t entry_size) {
-		return ptr(new EM_col_dense_matrix(entry_size));
-	}
-
 	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
 		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size));
 	}
@@ -145,22 +127,11 @@ public:
 		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size, name));
 	}
 
-	virtual EM_dense_matrix::ptr inner_prod(const mem_dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op);
+	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
+			const bulk_operate &left_op, const bulk_operate &right_op) const;
 
 	virtual void set_data(const set_operate &op);
-
-	virtual size_t get_num_rows() const {
-		return nrow;
-	}
-
-	virtual size_t get_num_cols() const {
-		return ncol;
-	}
-
-	virtual size_t get_entry_size() const {
-		return entry_size;
-	}
+	virtual void reset_data();
 
 	EM_dense_matrix_accessor::ptr create_accessor();
 };
@@ -210,10 +181,10 @@ public:
 };
 
 template<class LeftType, class RightType, class ResType>
-EM_dense_matrix::ptr  multiply(EM_dense_matrix &m1, mem_dense_matrix &m2)
+EM_dense_matrix::ptr multiply(EM_dense_matrix &m1, dense_matrix &m2)
 {
 	basic_ops_impl<LeftType, RightType, ResType> ops;
-	return m1.inner_prod(m2, ops.get_multiply(), ops.get_add());
+	return EM_dense_matrix::cast(m1.inner_prod(m2, ops.get_multiply(), ops.get_add()));
 }
 
 }
