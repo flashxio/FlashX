@@ -20,13 +20,13 @@ fm.set.log.level <- function(level)
 #' Indicate whether a matrix has been loaded to FlashMatrixR
 #'
 #' This function indicates whether a matrix has been loaded to FlashMatrixR.
-#' @param matrix A matrix name.
+#' @param name A matrix name.
 #' @return A boolean value: true if the matrix has been loaded to FlashMatrixR.
 #' @name fm.exist.matrix
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.exist.matrix <- function(fm)
+fm.exist.matrix <- function(name)
 {
-	.Call("R_FM_exist_matrix", fm, PACKAGE="FlashGraphR")
+	.Call("R_FM_exist_matrix", name, PACKAGE="FlashGraphR")
 }
 
 fm.get.params <- function(name)
@@ -34,16 +34,16 @@ fm.get.params <- function(name)
 	.Call("R_FM_get_params", name, PACKAGE="FlashGraphR")
 }
 
-#' Load a matrix to FlashMatrixR.
+#' Load a sparse matrix to FlashMatrixR.
 #'
-#' Load a matrix to FlashMatrixR from difference sources.
+#' Load a sparse matrix to FlashMatrixR from difference sources.
 #' 
-#' `fm.get.matrix' gets a FlashMatrix object that references a matrix
+#' `fm.get.matrix' gets a FlashMatrixR matrix that references a matrix
 #' represented by a FlashGraphR object.
 #'
 #' @param fg A FlashGraphR object.
-#' @return a FlashMatrixR object.
-#' @name fm.load.matrix
+#' @return a FlashMatrixR matrix.
+#' @name fm.get.matrix
 #' @author Da Zheng <dzheng5@@jhu.edu>
 #' @examples
 #' fg <- fg.load.graph("graph.adj", "graph.index")
@@ -57,7 +57,35 @@ fm.get.matrix <- function(fg)
 	structure(ret, class="fm")
 }
 
-#' Graph information
+#' Create a FlashMatrixR vector
+#'
+#' `fm.create.vector' creates and initializes a FlashMatrixR vector.
+#' It can initialize the vector with a constant `init.v' when `init.rand'
+#' is FALSE. Otherwise, it initializes the vector randomly with specified
+#' min and max.
+#'
+#' @param len The length of the vector
+#' @param init.v The constat initial value of the vector
+#' @param init.rand The boolean indicator whether to initialize the vector
+#' randomly.
+#' @param init.min The min value of the random generator.
+#' @param init.max The max value of the random generator.
+#' @return A FlashMatrixR vector
+#' @name fm.create.vector
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.create.vector <- function(len, init.v=0, init.rand=FALSE,
+							 rand.min=0, rand.max=1)
+{
+	if (!init.rand)
+		ret <- .Call("R_FM_create_vector", as.numeric(len), init.v,
+					 PACKAGE="FlashGraphR")
+	else {
+		# TODO
+	}
+	structure(ret, class="fmV")
+}
+
+#' The information of a FlashMatrixR object
 #'
 #' Functions for providing the basic information of a matrix.
 #'
@@ -66,14 +94,19 @@ fm.get.matrix <- function(fg)
 #' `fm.ncol' gets the number of columns in a matrix.
 #'
 #' `fm.is.sym' indicates whether a matrix is symmetric.
+#
+#' `fm.is.sparse' indicates whether a matrix is sparse.
+#'
+#' `fm.length' gets the length of a FlashMatrixR vector
 #'
 #' @param fm The FlashMatrixR object
-#' @return `fm.nrow' and `fm.ncol' returns integer constants.
-#' `fm.is.sym' returns boolean constants.
-#' @name fm.matrix.info
+#' @return `fm.nrow' and `fm.ncol' returns numeric constants.
+#' `fm.is.sym' and `fm.is.sparse' returns boolean constants.
+#' `fm.length' returns a numeric constant.
+#' @name fm.info
 #' @author Da Zheng <dzheng5@@jhu.edu>
 
-#' @rdname fm.matrix.info
+#' @rdname fm.info
 fm.nrow <- function(fm)
 {
 	stopifnot(fm != NULL)
@@ -81,7 +114,7 @@ fm.nrow <- function(fm)
 	fm$nrow
 }
 
-#' @rdname fm.graph.info
+#' @rdname fm.info
 fm.ncol <- function(fm)
 {
 	stopifnot(fm != NULL)
@@ -89,7 +122,7 @@ fm.ncol <- function(fm)
 	fm$ncol
 }
 
-#' @rdname fm.graph.info
+#' @rdname fm.info
 fm.is.sym <- function(fm)
 {
 	stopifnot(fm != NULL)
@@ -97,45 +130,63 @@ fm.is.sym <- function(fm)
 	fm$sym
 }
 
-#' Sparse matrix multiplication
+#' @rdname fm.info
+fm.is.sparse <- function(fm)
+{
+	stopifnot(fm != NULL)
+	stopifnot(class(fm) == "fm")
+	fm$sparse
+}
+
+#' @rdname fm.info
+fm.length <- function(fm)
+{
+	stopifnot(fm != NULL)
+	stopifnot(class(fm) == "fmV")
+	fm$len
+}
+
+#' Matrix multiplication
 #'
-#' Multiply a sparse matrix with a dense vector or a dense matrix.
+#' Multiply a sparse/dense matrix with a dense vector/matrix.
 #'
-#' `fm.multiply' multiplies a sparse matrix with a dense vector.
-#'
-#' `fm.multiply.matrix' multiplies a sparse matrix with a dense matrix.
-#'
-#' @param fm The FlashMatrixR object
-#' @param vec A numueric vector
-#' @param m A numeric dense matrix.
-#' @return `fm.multiply' returns a numeric vector and `fm.multiply.matrix'
-#' returns a numeric dense matrix.
+#' @param fm A FlashMatrixR matrix
+#' @param vec A FlashMatrixR dense vector.
+#' @param m A FlashMatrixR matrix
+#' @return `fm.multiplyMV' returns a FlashMatrixR vector and
+#' `fm.multiplyMM' returns a FlashMatrixR matrix.
 #' @name fm.multiply
 #' @author Da Zheng <dzheng5@@jhu.edu>
 
 #' @rdname fm.multiply
-fm.multiply <- function(fm, vec)
+fm.multiplyMV <- function(fm, vec)
 {
-	stopifnot(fm != NULL)
-	stopifnot(class(fm) == "fm")
-	stopifnot(fm.ncol(fm) == length(vec))
+	stopifnot(fm != NULL && vec != NULL)
+	stopifnot(class(fm) == "fm" && class(vec) == "fmV")
+	stopifnot(fm.ncol(fm) == fm.length(vec))
 	.Call("R_FM_multiply_v", fm, vec, PACKAGE="FlashGraphR")
 }
 
 #' @rdname fm.multiply
-fm.multiply.matrix <- function(fm, m, transpose=FALSE)
+fm.multiplyMM <- function(fm, m)
 {
-	col.multiply <- function(x) {
-		fm.multiply(fm, x, transpose)
-	}
-	apply(m, 2, col.multiply)
+	stopifnot(fm != NULL && m != NULL)
+	stopifnot(class(fm) == "fm" && class(m) == "fm")
+	stopifnot(fm.ncol(fm) == fm.nrow(m))
+	.Call("R_FM_multiply_m", fm, m, PACKAGE="FlashGraphR")
 }
 
 print.fm <- function(fm)
 {
 	stopifnot(fm != NULL)
 	stopifnot(class(fm) == "fm")
-	directed = "U"
-	cat("FlashMatrixR ", fm$name, ": ", fm.nrow(fm), " rows, ", fm.ncol(fm),
-		" columns\n", sep="")
+	cat("FlashRMatrix ", fm$name, ": ", fm.nrow(fm), " rows, ", fm.ncol(fm),
+		" columns, is sparse: ", fm.is.sparse(fm), "\n", sep="")
+}
+
+print.fmV <- function(vec)
+{
+	stopifnot(vec != NULL)
+	stopifnot(class(vec) == "fmV")
+	cat("FlashRVector ", vec$name, ": length: ", fm.length(vec), "\n", sep="")
 }
