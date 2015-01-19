@@ -74,6 +74,15 @@ public:
 		return in_mem;
 	}
 
+	/*
+	 * Right now we can only verify the type by looking at the entry size.
+	 * TODO we might need to verify it more thoroughly.
+	 */
+	template<class T>
+	bool is_type() const {
+		return sizeof(T) == get_entry_size();
+	}
+
 	/**
 	 * The shape of a matrix: a tall matrix or a wide matrix.
 	 * We care about the shape of a large matrix. We deal with a tall matrix
