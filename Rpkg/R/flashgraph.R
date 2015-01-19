@@ -870,7 +870,7 @@ print.fg <- function(fg)
 #
 #' @name fg.kmeans
 #' @author Disa Mhembere <disa@@jhu.edu>
-fg.kmeans <- function(mat, k, max.iters=.Machine$integer.max, init=c("random", "forgy","kmeanspp"))
+fg.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeanspp"))
 {
     stopifnot(mat != NULL)
     stopifnot(class(mat) == "matrix")
