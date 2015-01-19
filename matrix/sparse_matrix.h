@@ -25,6 +25,7 @@
 #include "FGlib.h"
 #include "matrix_io.h"
 #include "io_interface.h"
+#include "mem_vector.h"
 
 namespace fm
 {
@@ -77,10 +78,10 @@ public:
 template<class T>
 class row_multiply_task: public row_compute_task
 {
-	const fg::FG_vector<T> &input;
-	fg::FG_vector<T> &output;
+	const mem_vector<T> &input;
+	mem_vector<T> &output;
 public:
-	row_multiply_task(const fg::FG_vector<T> &_input, fg::FG_vector<T> &_output,
+	row_multiply_task(const mem_vector<T> &_input, mem_vector<T> &_output,
 			const matrix_io &_io): row_compute_task(_io), input(
 				_input), output(_output) {
 	}
@@ -102,15 +103,15 @@ void row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 template<class T>
 class row_multiply_creator: public task_creator
 {
-	const fg::FG_vector<T> &input;
-	fg::FG_vector<T> &output;
+	const mem_vector<T> &input;
+	mem_vector<T> &output;
 
-	row_multiply_creator(const fg::FG_vector<T> &_input,
-			fg::FG_vector<T> &_output): input(_input), output(_output) {
+	row_multiply_creator(const mem_vector<T> &_input,
+			mem_vector<T> &_output): input(_input), output(_output) {
 	}
 public:
-	static task_creator::ptr create(const fg::FG_vector<T> &_input,
-			fg::FG_vector<T> &_output) {
+	static task_creator::ptr create(const mem_vector<T> &_input,
+			mem_vector<T> &_output) {
 		return task_creator::ptr(new row_multiply_creator<T>(_input, _output));
 	}
 
@@ -180,15 +181,15 @@ public:
 	virtual void transpose() = 0;
 
 	template<class T>
-	typename fg::FG_vector<T>::ptr multiply(typename fg::FG_vector<T>::ptr in) const {
-		if (in->get_size() != ncols) {
+	typename mem_vector<T>::ptr multiply(typename mem_vector<T>::ptr in) const {
+		if (in->get_length() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
 					"the input vector has wrong length %1%. matrix ncols: %2%")
-				% in->get_size() % ncols;
-			return typename fg::FG_vector<T>::ptr();
+				% in->get_length() % ncols;
+			return typename mem_vector<T>::ptr();
 		}
 		else {
-			typename fg::FG_vector<T>::ptr ret = fg::FG_vector<T>::create(nrows);
+			typename mem_vector<T>::ptr ret = mem_vector<T>::create(nrows);
 			compute(row_multiply_creator<T>::create(*in, *ret));
 			return ret;
 		}
