@@ -27,7 +27,6 @@ static size_t K;
 static unsigned NUM_ROWS;
 static omp_lock_t writelock;
 
-
 static struct timeval start, end;
 
 /**
@@ -274,6 +273,8 @@ static void M_step(const double* matrix, double* clusters, unsigned*
 #endif
 }
 
+namespace fg
+{
 unsigned compute_kmeans(const double* matrix, double* clusters, 
 		unsigned* cluster_assignments, unsigned* cluster_assignment_counts,
 		const unsigned num_rows, const unsigned nev, const size_t k, const unsigned MAX_ITERS, 
@@ -369,4 +370,5 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 	BOOST_LOG_TRIVIAL(info) << "\n******************************************\n";
 
 	return iter;
+}
 }
