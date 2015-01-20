@@ -21,6 +21,7 @@
 #define OMP_MAX_THREADS 32
 #define KM_TEST 0
 
+namespace {
 bool updated = false;
 static unsigned NEV;
 static size_t K;
@@ -271,6 +272,7 @@ static void M_step(const double* matrix, double* clusters, unsigned*
 # if KM_TEST
 	printf("Cluster centers: \n"); print_mat(clusters, K, NEV);
 #endif
+}
 }
 
 namespace fg
