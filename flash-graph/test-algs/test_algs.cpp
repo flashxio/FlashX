@@ -659,6 +659,7 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "betweenness:\n");
 	fprintf(stderr, "-w output: the file name for a vector written to file\n");
+	fprintf(stderr, "-s vertex id: the vertex where BC starts\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
