@@ -17,7 +17,9 @@
  * limitations under the License.
  */
 
+#if defined(_OPENMP)
 #include <omp.h>
+#endif
 
 #include <atomic>
 
@@ -332,16 +334,6 @@ dense_matrix::ptr mem_row_dense_matrix::inner_prod(const dense_matrix &m,
 	return std::static_pointer_cast<dense_matrix>(res);
 }
 
-static int get_num_omp_threads()
-{
-	std::atomic<int> num_threads;
-#pragma omp parallel
-	{
-		num_threads = omp_get_num_threads();
-	}
-	return num_threads.load();
-}
-
 void mem_row_dense_matrix::par_inner_prod_wide(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		mem_row_dense_matrix &res) const
@@ -380,7 +372,7 @@ void mem_row_dense_matrix::par_inner_prod_wide(const dense_matrix &m,
 						local_m->get_row(i));
 			}
 		}
-		local_ms[omp_get_thread_num()] = local_m;
+		local_ms[get_omp_thread_num()] = local_m;
 	}
 
 	// Aggregate the results from omp threads.
