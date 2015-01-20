@@ -290,6 +290,12 @@ test.ase.undirected <- function(fg, ig)
 	check.eigen(ig.matrix.tmp, fg.res)
 }
 
+
+# Kmeans
+source("verify.kmeans.R")
+test.kmeans(2, 500, 20)
+test.with.iris()
+
 # Test on a directed graph.
 ig <- read.graph("wiki-Vote1.txt")
 
