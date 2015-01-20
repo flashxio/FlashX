@@ -86,6 +86,7 @@ for (sort keys %devices) {
 	system("echo noop > /sys/block/${main_name}/queue/scheduler");
 	system("cat /sys/block/${main_name}/queue/scheduler");
 	system("echo 2 > /sys/block/${main_name}/queue/rq_affinity");
+	system("echo 0 > /sys/block/${main_name}/queue/add_random");
 	$dev_idx++;
 }
 

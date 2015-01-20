@@ -31,6 +31,16 @@
 namespace fg
 {
 
+class in_mem_graph;
+class vertex_index;
+class vertex_index;
+class in_mem_vertex;
+class ext_mem_undirected_vertex;
+class vertex_index_construct;
+
+namespace utils
+{
+
 /**
  * The type of edge data.
  */
@@ -40,14 +50,7 @@ enum {
 	EDGE_TIMESTAMP,
 };
 
-class in_mem_graph;
-class vertex_index;
-
 class serial_subgraph;
-class vertex_index_construct;
-class vertex_index;
-class in_mem_vertex;
-class ext_mem_undirected_vertex;
 
 class large_writer
 {
@@ -230,11 +233,20 @@ public:
 };
 
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
-		int edge_attr_type, bool directed, int num_threads, bool in_mem);
+		int edge_attr_type, bool directed, bool in_mem);
 edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
 		const std::vector<vertex_id_t> to, int edge_attr_type, bool directed);
 serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
-		large_io_creator::ptr creator, int num_threads);
+		large_io_creator::ptr creator);
+
+/*
+ * Set parameters of constructing a graph.
+ */
+
+void set_num_threads(size_t num_threads);
+void set_sort_buf_size(size_t size);
+void set_write_buf_size(size_t size);
+}
 
 }
 

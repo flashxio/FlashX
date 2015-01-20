@@ -19,6 +19,8 @@
 
 #include <unordered_set>
 
+#include "io_interface.h"
+
 #include "FGlib.h"
 #include "vertex.h"
 #include "in_mem_storage.h"
@@ -86,9 +88,16 @@ FG_graph::FG_graph(const std::string &graph_file,
 	}
 	else {
 		file_io_factory::shared_ptr index_factory = create_io_factory(
-				index_file, GLOBAL_CACHE_ACCESS);
+				index_file, REMOTE_ACCESS);
 		io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
-		io->access((char *) &header, 0, sizeof(header), READ);
+		char *buf = NULL;
+		int ret = posix_memalign((void **) &buf, 512, sizeof(header));
+		assert(ret == 0);
+		data_loc_t loc(io->get_file_id(), 0);
+		io_request req(buf, loc, sizeof(header), READ);
+		io->access(&req, 1);
+		io->wait4complete(1);
+		memcpy(&header, buf, sizeof(header));
 	}
 }
 

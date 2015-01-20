@@ -9,6 +9,7 @@ num_vparts=1
 min_vpart_degree=100
 part_range_size_log=10
 max_processing_vertices=1000
+serial_run=
 
 threads=4
 print_io_stat=

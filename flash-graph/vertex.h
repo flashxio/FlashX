@@ -1121,6 +1121,36 @@ public:
 				(char *) edges, sizeof(vertex_id_t) * num_edges);
 		return num_edges;
 	}
+
+	/**
+     * \brief Get a java-style sequential const iterator for edge data
+	 *        with additional parameters to define the range to iterate.
+     * \return A sequential const iterator.
+	 * \param start The starting offset in the edge list.
+	 * \param end The end offset in the edge list.
+	 */
+	template<class edge_data_type>
+	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+			size_t start, size_t end) const {
+		off_t edge_end = ext_mem_undirected_vertex::get_edge_data_offset(
+				num_edges, sizeof(edge_data_type));
+		return array.get_seq_iterator<edge_data_type>(
+				edge_end + start * sizeof(edge_data_type),
+				edge_end + end * sizeof(edge_data_type));
+	}
+
+    /**
+     * \brief Get a java-style sequential const iterator that iterates
+	 *        the edge data list.
+     * \return A sequential const iterator.
+     */
+	template<class edge_data_type>
+	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+			) const {
+		size_t start = 0;
+		size_t end = get_num_edges();
+		return get_data_seq_it<edge_data_type>(start, end);
+	}
     
     /**
      * \brief Get the vertex ID.

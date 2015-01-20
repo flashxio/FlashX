@@ -28,7 +28,9 @@
 
 #include <boost/foreach.hpp>
 #ifdef USE_STXXL
+#if defined(_OPENMP)
 #define STXXL_PARALLEL_MODE_EXPLICIT
+#endif
 #include <stxxl.h>
 #endif
 #if defined(_OPENMP)
@@ -37,6 +39,7 @@
 
 #include "thread.h"
 #include "native_file.h"
+#include "exception.h"
 
 #include "graph.h"
 //#include "edge_type.h"
@@ -50,11 +53,34 @@ using namespace safs;
 namespace fg
 {
 
+namespace utils
+{
+
 static const int EDGE_LIST_BLOCK_SIZE = 16 * 1024 * 1024;
-static const size_t SORT_BUF_SIZE = 1024L * 1024 * 1024 * 2;
 static const vsize_t VERTEX_TASK_SIZE = 1024 * 128;
 
+static size_t sort_buf_size = 1024L * 1024 * 1024 * 2;
+static size_t write_subgraphs_size = 4L * 1024 * 1024 * 1024;
 static int num_threads = 1;
+
+void set_num_threads(size_t num)
+{
+	num_threads = num;
+	BOOST_LOG_TRIVIAL(info) << boost::format("# threads: %1%") % num_threads;
+}
+
+void set_sort_buf_size(size_t size)
+{
+	sort_buf_size = size;
+	BOOST_LOG_TRIVIAL(info) << boost::format("sort buf size: %1%") % sort_buf_size;
+}
+
+void set_write_buf_size(size_t size)
+{
+	write_subgraphs_size = size;
+	BOOST_LOG_TRIVIAL(info) << boost::format(
+			"write buf size: %1%") % write_subgraphs_size;
+}
 
 class format_error: public std::exception
 {
@@ -301,11 +327,11 @@ public:
 	void sort(bool out_edge) {
 		if (out_edge) {
 			comp_edge<edge_data_type> edge_comparator;
-			stxxl::sort(data.begin(), data.end(), edge_comparator, SORT_BUF_SIZE);
+			stxxl::sort(data.begin(), data.end(), edge_comparator, sort_buf_size);
 		}
 		else {
 			comp_in_edge<edge_data_type> in_edge_comparator;
-			stxxl::sort(data.begin(), data.end(), in_edge_comparator, SORT_BUF_SIZE);
+			stxxl::sort(data.begin(), data.end(), in_edge_comparator, sort_buf_size);
 		}
 	}
 
@@ -446,6 +472,124 @@ public:
 
 	const_iterator cend() const {
 		return data.cend();
+	}
+};
+
+/*
+ * This is an interface of containing edge list.
+ */
+template<class edge_data_type>
+class el_container
+{
+public:
+	typedef std::shared_ptr<el_container<edge_data_type> > ptr;
+
+	virtual ~el_container() {
+	}
+	virtual void add(const std::vector<edge<edge_data_type> > &vec) = 0;
+	virtual void push_back(const edge<edge_data_type> &e) = 0;
+	virtual size_t size() = 0;
+};
+
+template<class edge_data_type>
+class directed_el_container: public el_container<edge_data_type>
+{
+	typename edge_vector<edge_data_type>::ptr in_edge_list;
+	typename edge_vector<edge_data_type>::ptr out_edge_list;
+public:
+	directed_el_container(bool in_mem) {
+		if (in_mem) {
+			in_edge_list = typename edge_vector<edge_data_type>::ptr(
+					new std_edge_vector<edge_data_type>());
+			out_edge_list = typename edge_vector<edge_data_type>::ptr(
+					new std_edge_vector<edge_data_type>());
+		}
+		else {
+#ifdef USE_STXXL
+			in_edge_list = typename edge_vector<edge_data_type>::ptr(
+					new stxxl_edge_vector<edge_data_type>());
+			out_edge_list = typename edge_vector<edge_data_type>::ptr(
+					new stxxl_edge_vector<edge_data_type>());
+#else
+			BOOST_LOG_TRIVIAL(error)
+				<< "It doesn't support using disks to store intermediate results";
+			BOOST_LOG_TRIVIAL(error)
+				<< "stxxl is required to store intermediate results on disks";
+			exit(1);
+#endif
+		}
+	}
+
+	virtual void add(const std::vector<edge<edge_data_type> > &vec) {
+		in_edge_list->append(vec);
+		out_edge_list->append(vec);
+	}
+
+	virtual void push_back(const edge<edge_data_type> &e) {
+		in_edge_list->push_back(e);
+		out_edge_list->push_back(e);
+	}
+
+	virtual size_t size() {
+		return in_edge_list->size();
+	}
+
+	typename edge_vector<edge_data_type>::ptr get_in_edges() {
+		return in_edge_list;
+	}
+
+	typename edge_vector<edge_data_type>::ptr get_out_edges() {
+		return out_edge_list;
+	}
+};
+
+template<class edge_data_type>
+class undirected_el_container: public el_container<edge_data_type>
+{
+	typename edge_vector<edge_data_type>::ptr edge_list;
+public:
+	undirected_el_container(bool in_mem) {
+		if (in_mem)
+			edge_list = typename edge_vector<edge_data_type>::ptr(
+					new std_edge_vector<edge_data_type>());
+		else {
+#ifdef USE_STXXL
+			edge_list = typename edge_vector<edge_data_type>::ptr(
+					new stxxl_edge_vector<edge_data_type>());
+#else
+			BOOST_LOG_TRIVIAL(error)
+				<< "It doesn't support using disks to store intermediate results";
+			BOOST_LOG_TRIVIAL(error)
+				<< "stxxl is required to store intermediate results on disks";
+			exit(1);
+#endif
+		}
+	}
+
+	virtual void add(const std::vector<edge<edge_data_type> > &vec) {
+		edge_list->append(vec);
+
+		// For an undirected graph, we need to store each edge twice
+		// and each copy is the reverse of the original edge.
+		BOOST_FOREACH(edge<edge_data_type> e, vec) {
+			e.reverse_dir();
+			edge_list->push_back(e);
+		}
+	}
+
+	virtual void push_back(const edge<edge_data_type> &e) {
+		edge_list->push_back(e);
+		edge<edge_data_type> reversed = e;
+		reversed.reverse_dir();
+		edge_list->push_back(reversed);
+	}
+
+	virtual size_t size() {
+		return edge_list->size() / 2;
+	}
+
+	typename edge_vector<edge_data_type>::ptr get_edges() {
+		return edge_list;
 	}
 };
 
@@ -1112,9 +1256,12 @@ public:
 	 * edges added to the graph.
 	 */
 	undirected_edge_graph(
-			std::vector<std::shared_ptr<edge_vector<edge_data_type> > > &edge_lists,
-			bool has_data): edge_graph(has_data) {
-		this->edge_lists = edge_lists;
+			std::vector<typename el_container<edge_data_type>::ptr> &edge_lists,
+			size_t edge_data_size): edge_graph(edge_data_size) {
+		BOOST_FOREACH(auto el, edge_lists) {
+			this->edge_lists.push_back(
+					((undirected_el_container<edge_data_type> &) *el).get_edges());
+		}
 	}
 
 	void sort_edges() {
@@ -1177,12 +1324,14 @@ public:
 	 * edges added to the graph.
 	 */
 	directed_edge_graph(
-			std::vector<std::shared_ptr<edge_vector<edge_data_type> > > &edge_lists,
-			bool has_data): edge_graph(has_data) {
-		this->in_edge_lists = edge_lists;
-		this->out_edge_lists.resize(edge_lists.size());
-		for (size_t i = 0; i < edge_lists.size(); i++)
-			this->out_edge_lists[i] = edge_lists[i]->clone();
+			std::vector<typename el_container<edge_data_type>::ptr> &edge_lists,
+			size_t edge_data_size): edge_graph(edge_data_size) {
+		BOOST_FOREACH(auto el, edge_lists) {
+			this->in_edge_lists.push_back(
+					((directed_el_container<edge_data_type> &) *el).get_in_edges());
+			this->out_edge_lists.push_back(
+					((directed_el_container<edge_data_type> &) *el).get_out_edges());
+		}
 	}
 
 	void sort_edges() {
@@ -1275,8 +1424,8 @@ void undirected_edge_graph<edge_data_type>::check_vertices(
 		for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 			assert(it != edges.cend());
 			edge<edge_data_type> e = *it;
-			assert(v->get_neighbor(j) == e.get_to());
-			assert(v->get_id() == e.get_from());
+			BOOST_VERIFY(v->get_neighbor(j) == e.get_to());
+			BOOST_VERIFY(v->get_id() == e.get_from());
 			if (v->has_edge_data())
 				assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 		}
@@ -1318,8 +1467,8 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 				assert(it != edges.cend());
 				edge<edge_data_type> e = *it;
-				assert(v->get_neighbor(j) == e.get_from());
-				assert(v->get_id() == e.get_to());
+				BOOST_VERIFY(v->get_neighbor(j) == e.get_from());
+				BOOST_VERIFY(v->get_id() == e.get_to());
 				if (v->has_edge_data())
 					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 			}
@@ -1330,8 +1479,8 @@ void directed_edge_graph<edge_data_type>::check_vertices(
 			for (size_t j = 0; j < v->get_num_edges(); j++, it++) {
 				assert(it != edges.cend());
 				edge<edge_data_type> e = *it;
-				assert(v->get_id() == e.get_from());
-				assert(v->get_neighbor(j) == e.get_to());
+				BOOST_VERIFY(v->get_id() == e.get_from());
+				BOOST_VERIFY(v->get_neighbor(j) == e.get_to());
 				if (v->has_edge_data())
 					assert(v->get_edge_data<edge_data_type>(j) == e.get_data());
 			}
@@ -1380,8 +1529,11 @@ size_t check_all_vertices(large_reader::ptr reader, const VertexIndexType &idx,
 		}
 		std::vector<ext_mem_undirected_vertex *> vertices;
 		std::unique_ptr<char[]> buf = read_vertices(reader, infos, vertices);
-		for (size_t i = 0; i < vertices.size(); i++)
+		assert(infos.size() == vertices.size());
+		for (size_t i = 0; i < vertices.size(); i++) {
+			assert(infos[i].get_id() == vertices[i]->get_id());
 			num_edges += vertices[i]->get_num_edges();
+		}
 		num_vertices += vertices.size();
 		edge_g.check_vertices(vertices, in_part, edge_offs);
 		vertex_id_t last_id = infos.back().get_id();
@@ -1553,7 +1705,7 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 			edge_g, true);
 	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
 			edge_g, false);
-	assert(num_vertices == num_vertices1);
+	BOOST_VERIFY(num_vertices == num_vertices1);
 	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
 		% num_vertices;
 }
@@ -1577,7 +1729,7 @@ void disk_directed_graph::check_ext_graph(const edge_graph &edge_g,
 			edge_g, true);
 	size_t num_vertices1 = check_all_vertices(reader, idx, get_out_part_info_func(),
 			edge_g, false);
-	assert(num_vertices == num_vertices1);
+	BOOST_VERIFY(num_vertices == num_vertices1);
 	BOOST_LOG_TRIVIAL(info) << boost::format("%1% vertices are checked")
 		% num_vertices;
 }
@@ -1609,11 +1761,6 @@ bool disk_serial_graph::dump(const std::string &index_file,
 			"It takes %1% seconds to dump the index") % time_diff(start, end);
 	return true;
 }
-
-template<class edge_data_type = empty_data>
-edge_graph::ptr par_load_edge_list_text(
-		const std::vector<std::string> &files, bool has_edge_data,
-		bool directed);
 
 class graph_file_io
 {
@@ -1928,18 +2075,9 @@ public:
 	void run() {
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(line_buf.get(), size, edges);
-		edge_vector<edge_data_type> *local_edge_buf
-			= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
-		local_edge_buf->append(edges);
-
-		// For an undirected graph, we need to store each edge twice
-		// and each copy is the reverse of the original edge.
-		if (!directed) {
-			BOOST_FOREACH(edge<edge_data_type> e, edges) {
-				e.reverse_dir();
-				local_edge_buf->push_back(e);
-			}
-		}
+		el_container<edge_data_type> *local_edge_buf
+			= (el_container<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+		local_edge_buf->add(edges);
 	}
 };
 
@@ -1972,8 +2110,8 @@ void text_edge_file_task<edge_data_type>::run()
 	else
 		io = graph_file_io::ptr(new text_graph_file_io(file_name));
 
-	edge_vector<edge_data_type> *local_edge_buf
-		= (edge_vector<edge_data_type> *) thread::get_curr_thread()->get_user_data();
+	el_container<edge_data_type> *local_edge_buf
+		= (el_container<edge_data_type> *) thread::get_curr_thread()->get_user_data();
 	while (!io->eof()) {
 		size_t size = 0;
 		std::unique_ptr<char[]> data = io->read_edge_list_text(
@@ -1981,7 +2119,7 @@ void text_edge_file_task<edge_data_type>::run()
 
 		std::vector<edge<edge_data_type> > edges;
 		parse_edge_list_text(data.get(), size, edges);
-		local_edge_buf->append(edges);
+		local_edge_buf->add(edges);
 	}
 
 	std::cout << boost::format("There are %1% edges in thread %2%\n")
@@ -2029,7 +2167,6 @@ void undirected_edge_graph<edge_data_type>::read_edges(edge_stream_t &stream,
 
 class write_graph_thread: public thread
 {
-	static const size_t ACCU_GRAPH_SIZE = 4L * 1024 * 1024 * 1024;
 	typedef std::shared_ptr<serial_subgraph> subgraph_ptr;
 	struct subgraph_comp {
 		bool operator()(const subgraph_ptr &g1, const subgraph_ptr &g2) {
@@ -2061,7 +2198,7 @@ public:
 	}
 
 	void add_vertices(subgraph_ptr subg) {
-		while (tot_subgraph_size > ACCU_GRAPH_SIZE
+		while (tot_subgraph_size > write_subgraphs_size
 				&& subg->get_start_id() > curr_id)
 			usleep(10000);
 
@@ -2374,19 +2511,10 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	for (int i = 0; i < num_threads; i++) {
 		task_thread *t = new task_thread(std::string(
 					"graph-task-thread") + itoa(i), -1);
-		if (in_mem)
-			t->set_user_data(new std_edge_vector<edge_data_type>());
-		else {
-#ifdef USE_STXXL
-			t->set_user_data(new stxxl_edge_vector<edge_data_type>());
-#else
-			BOOST_LOG_TRIVIAL(error)
-				<< "It doesn't support using disks to store intermediate results";
-			BOOST_LOG_TRIVIAL(error)
-				<< "stxxl is required to store intermediate results on disks";
-			exit(1);
-#endif
-		}
+		if (directed)
+			t->set_user_data(new directed_el_container<edge_data_type>(in_mem));
+		else
+			t->set_user_data(new undirected_el_container<edge_data_type>(in_mem));
 		t->start();
 		threads[i] = t;
 	}
@@ -2433,24 +2561,23 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	BOOST_LOG_TRIVIAL(info) << "start to construct an edge graph";
 
 	size_t num_edges = 0;
-	std::vector<std::shared_ptr<edge_vector<edge_data_type> > > edge_lists(
-			num_threads);
+	std::vector<typename el_container<edge_data_type>::ptr> edge_lists(num_threads);
 	for (int i = 0; i < num_threads; i++) {
-		edge_vector<edge_data_type> *local_edges
-			= (edge_vector<edge_data_type> *) threads[i]->get_user_data();
+		el_container<edge_data_type> *local_edges
+			= (el_container<edge_data_type> *) threads[i]->get_user_data();
 		num_edges += local_edges->size();
-		edge_lists[i] = std::shared_ptr<edge_vector<edge_data_type> >(
-				local_edges);
+		edge_lists[i] = typename el_container<edge_data_type>::ptr(local_edges);
 	}
 	BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% edges") % num_edges;
 
+	size_t edge_data_size = has_edge_data ? sizeof(edge_data_type) : 0;
 	edge_graph::ptr edge_g;
 	if (directed)
 		edge_g = edge_graph::ptr(new directed_edge_graph<edge_data_type>(
-					edge_lists, has_edge_data));
+					edge_lists, edge_data_size));
 	else
 		edge_g = edge_graph::ptr(new undirected_edge_graph<edge_data_type>(
-					edge_lists, has_edge_data));
+					edge_lists, edge_data_size));
 	gettimeofday(&end, NULL);
 
 	BOOST_LOG_TRIVIAL(info) << boost::format(
@@ -2468,10 +2595,9 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 }
 
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,
-		int edge_attr_type, bool directed, int nthreads, bool in_mem)
+		int edge_attr_type, bool directed, bool in_mem)
 {
 	BOOST_LOG_TRIVIAL(info) << "beofre load edge list";
-	num_threads = nthreads;
 	edge_graph::ptr g;
 	switch(edge_attr_type) {
 		case EDGE_COUNT:
@@ -2490,10 +2616,9 @@ edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files
 }
 
 serial_graph::ptr construct_graph(edge_graph::ptr edge_g,
-		large_io_creator::ptr creator, int nthreads)
+		large_io_creator::ptr creator)
 {
 	BOOST_LOG_TRIVIAL(info) << "before sorting edges";
-	num_threads = nthreads;
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	edge_g->sort_edges();
@@ -2515,26 +2640,25 @@ edge_graph::ptr construct_edge_list(const std::vector<vertex_id_t> from,
 	}
 
 	size_t num_edges = from.size();
-	std::vector<std::shared_ptr<edge_vector<empty_data> > > edge_lists(1);
-	edge_lists[0] = std::shared_ptr<edge_vector<empty_data> >(
-			new std_edge_vector<empty_data>());
+	std::vector<el_container<empty_data>::ptr> edge_lists(1);
+	if (directed)
+		edge_lists[0] = el_container<empty_data>::ptr(
+				new directed_el_container<empty_data>(true));
+	else
+		edge_lists[0] = el_container<empty_data>::ptr(
+				new undirected_el_container<empty_data>(true));
 
-	if (directed) {
-		for (size_t i = 0; i < num_edges; i++)
-			edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
+	for (size_t i = 0; i < num_edges; i++)
+		edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
+
+	if (directed)
 		return edge_graph::ptr(new directed_edge_graph<empty_data>(
-					edge_lists, false));
-	}
-	else {
-		for (size_t i = 0; i < num_edges; i++) {
-			// Undirected edge graph assumes each edge has been added twice,
-			// for both directions.
-			edge_lists[0]->push_back(edge<empty_data>(from[i], to[i]));
-			edge_lists[0]->push_back(edge<empty_data>(to[i], from[i]));
-		}
+					edge_lists, 0));
+	else
 		return edge_graph::ptr(new undirected_edge_graph<empty_data>(
-					edge_lists, false));
-	}
+					edge_lists, 0));
+}
+
 }
 
 }

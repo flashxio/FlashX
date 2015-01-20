@@ -65,7 +65,6 @@ enum {
 };
 
 struct timeval global_start;
-char static_buf[PAGE_SIZE * 8] __attribute__((aligned(PAGE_SIZE)));
 
 thread_private *threads[NUM_THREADS];
 

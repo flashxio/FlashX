@@ -21,31 +21,19 @@ OMP_FLAG = -fopenmp
 LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) -lstxxl -lz $(LDFLAGS)
 CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
-all: test_load_balancer test_mem_alloc test_msg_passing test_get test_push
+all: test_load_balancer test_comm
 
 test_load_balancer: test_load_balancer.o ../libgraph.a
 	$(CXX) -o test_load_balancer test_load_balancer.o $(LDFLAGS)
 
-test_mem_alloc: test_mem_alloc.o ../libgraph.a
-	$(CXX) -o test_mem_alloc test_mem_alloc.o $(LDFLAGS)
-
-test_msg_passing: test_msg_passing.o ../libgraph.a
-	$(CXX) -o test_msg_passing test_msg_passing.o $(LDFLAGS)
-
-test_get: test_get.o ../libgraph.a
-	$(CXX) -o test_get test_get.o $(LDFLAGS)
-
-test_push: test_push.o ../libgraph.a
-	$(CXX) -o test_push test_push.o $(LDFLAGS)
+test_comm: test_comm.o ../libgraph.a
+	$(CXX) -o test_comm test_comm.o $(LDFLAGS)
 
 clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
 	rm -f test_load_balancer
-	rm -f test_mem_alloc
-	rm -f test_msg_passing
-	rm -f test_get
-	rm -f test_push
+	rm -f test_comm
 
 -include $(DEPS) 

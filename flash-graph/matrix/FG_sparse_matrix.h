@@ -60,16 +60,8 @@ public:
 			return it.has_next();
 		}
 
-		vertex_id_t get_curr_id() const {
-			return it.curr();
-		}
-
-		int get_curr_value() const {
-			return 1;
-		}
-
-		void next() {
-			it.next();
+		std::pair<vertex_id_t, int> next() {
+			return std::pair<vertex_id_t, int>(it.next(), 1);
 		}
 	};
 
@@ -81,6 +73,13 @@ public:
 template<class T>
 class general_get_edge_iter
 {
+	static safs::page_byte_array::seq_const_iterator<T> get_data_iterator(
+			const page_vertex &v, edge_type type) {
+		if (v.is_directed())
+			return ((const page_directed_vertex &) v).get_data_seq_it<T>(type);
+		else
+			return ((const page_undirected_vertex &) v).get_data_seq_it<T>();
+	}
 public:
 	typedef T value_type;
 
@@ -90,28 +89,15 @@ public:
 	public:
 		iterator(const page_vertex &v, edge_type type): n_it(
 				v.get_neigh_seq_it(type, 0, v.get_num_edges(type))), d_it(
-				// TODO it should also work for an undirected vertex.
-				((const page_directed_vertex &) v).get_data_seq_it<T>(type)) {
+				get_data_iterator(v, type)) {
 		}
 
 		bool has_next() {
-			bool ret1 = n_it.has_next();
-			bool ret2 = d_it.has_next();
-			BOOST_VERIFY(ret1 == ret2);
-			return ret1;
+			return n_it.has_next();
 		}
 
-		vertex_id_t get_curr_id() const {
-			return n_it.curr();
-		}
-
-		T get_curr_value() const {
-			return d_it.curr();
-		}
-
-		void next() {
-			n_it.next();
-			d_it.next();
+		std::pair<vertex_id_t, T> next() {
+			return std::pair<vertex_id_t, T>(n_it.next(), d_it.next());
 		}
 	};
 
@@ -136,12 +122,13 @@ inline static edge_type reverse_dir(edge_type type)
  * The vertex program for sparse matrix vector multiplication
  * on the adjacency matrix.
  */
-template<class ResType>
+template<class ResType, class GetEdgeIterator>
 class SPMV_vertex_program: public vertex_program_impl<matrix_vertex>
 {
 	edge_type type;
 	const FG_vector<ResType> &input;
 	FG_vector<ResType> &output;
+	GetEdgeIterator get_edge_iterator;
 public:
 	SPMV_vertex_program(edge_type type, const FG_vector<ResType> &_input,
 			FG_vector<ResType> &_output): input(_input), output(_output) {
@@ -149,18 +136,19 @@ public:
 	}
 
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
-		edge_seq_iterator it = vertex.get_neigh_seq_it(type, 0,
-				vertex.get_num_edges(type));
+		typename GetEdgeIterator::iterator it = get_edge_iterator(vertex,
+				type);
 		ResType w = 0;
 		while (it.has_next()) {
-			vertex_id_t id = it.next();
-			w += input.get(id);
+			std::pair<vertex_id_t,typename GetEdgeIterator::value_type> p
+				= it.next();
+			w += input.get(p.first) * p.second;
 		}
 		output.set(vertex.get_id(), w);
 	}
 };
 
-template<class ResType>
+template<class ResType, class GetEdgeIterator>
 class SPMV_vertex_program_creater: public vertex_program_creater
 {
 	const FG_vector<ResType> &input;
@@ -174,7 +162,8 @@ public:
 
 	vertex_program::ptr create() const {
 		return vertex_program::ptr(
-				new SPMV_vertex_program<ResType>(etype, input, output));
+				new SPMV_vertex_program<ResType, GetEdgeIterator>(etype,
+					input, output));
 	}
 };
 
@@ -229,11 +218,12 @@ public:
 		assert(labels.get_size() > vertex.get_id());
 		int label = labels.get(vertex.get_id());
 		while (it.has_next()) {
-			vertex_id_t id = it.get_curr_id();
+			std::pair<vertex_id_t, typename GetEdgeIterator::value_type> p
+				= it.next();
+			vertex_id_t id = p.first;
 			if (id >= res_length)
 				break;
-			typename GetEdgeIterator::value_type v = it.get_curr_value();
-			aggregate(label, id, v);
+			aggregate(label, id, p.second);
 			it.next();
 		}
 	}
@@ -356,7 +346,8 @@ public:
 		assert(output.get_size() == get_num_rows());
 		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(
-					new SPMV_vertex_program_creater<T>(etype, input, output)));
+					new SPMV_vertex_program_creater<T, GetEdgeIterator>(
+						etype, input, output)));
 		graph->wait4complete();
 	}
 

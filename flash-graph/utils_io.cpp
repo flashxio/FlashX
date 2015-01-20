@@ -34,6 +34,9 @@
 namespace fg
 {
 
+namespace utils
+{
+
 static size_t buf_cap = 128 * 1024 * 1024;
 
 ///////////////////////////large I/O for native filesystem//////////////////////
@@ -262,7 +265,7 @@ public:
 
 class safs_large_writer: public large_writer
 {
-	static const int MAX_PENDING_IOS = 8;
+	static const int MAX_PENDING_IOS = 16;
 	align_buf_ptr write_buf;
 	size_t write_bytes;
 	size_t tot_write_bytes;
@@ -505,6 +508,8 @@ large_io_creator::ptr large_io_creator::create(bool safs, const std::string &cur
 void set_buf_cap(size_t new_cap)
 {
 	buf_cap = new_cap;
+}
+
 }
 
 }

@@ -62,8 +62,8 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> in_mem_subgraph::compress(
 
 	graph_compressor compressor(vertex_ids);
 	size_t edge_data_size = get_vertex(vertex_ids.front()).get_edge_data_size();
-	mem_serial_graph::ptr serial_g = mem_serial_graph::create(is_directed(),
-			edge_data_size);
+	utils::mem_serial_graph::ptr serial_g = utils::mem_serial_graph::create(
+			is_directed(), edge_data_size);
 	BOOST_FOREACH(vertex_id_t id, vertex_ids) {
 		const in_mem_vertex &v = get_vertex(id);
 		assert(v.get_edge_data_size() == edge_data_size);

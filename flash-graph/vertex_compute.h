@@ -24,7 +24,7 @@
 #include <deque>
 #include <unordered_map>
 
-#include "io_interface.h"
+#include "thread.h"
 #include "slab_allocator.h"
 
 #include "vertex_request.h"

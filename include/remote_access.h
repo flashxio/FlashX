@@ -31,8 +31,6 @@ class request_sender;
 class disk_io_thread;
 class file_mapper;
 
-const int COMPLETE_QUEUE_SIZE = 10240;
-
 /**
  * This class is to help the local thread send IO requests to remote threads
  * dedicated to accessing SSDs. Each SSD has such a thread.
@@ -48,7 +46,7 @@ class remote_io: public io_interface
 	std::vector<request_sender *> senders;
 	// They are used to send low-priority requests.
 	std::vector<request_sender *> low_prio_senders;
-	std::vector<disk_io_thread *> io_threads;
+	std::vector<std::shared_ptr<disk_io_thread> > io_threads;
 	callback::ptr cb;
 	file_mapper *block_mapper;
 	thread_safe_FIFO_queue<io_request> complete_queue;
@@ -57,7 +55,7 @@ class remote_io: public io_interface
 	atomic_integer num_completed_reqs;
 	atomic_integer num_issued_reqs;
 public:
-	remote_io(const std::vector<disk_io_thread *> &remotes,
+	remote_io(const std::vector<std::shared_ptr<disk_io_thread> > &remotes,
 			slab_allocator &msg_allocator, file_mapper *mapper, thread *t,
 			int max_reqs = MAX_DISK_CACHED_REQS);
 

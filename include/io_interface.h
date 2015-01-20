@@ -31,7 +31,6 @@
 #include "concurrency.h"
 #include "thread.h"
 #include "io_request.h"
-#include "comp_io_scheduler.h"
 
 namespace safs
 {
@@ -132,6 +131,12 @@ enum {
 	 * is incomplete right now, so it shouldn't be used.
 	 */
 	PART_GLOBAL_ACCESS,
+
+	/**
+	 * This method accesses a SAFS file with asynchronous user-task interface,
+	 * but without page cache.
+	 */
+	DIRECT_COMP_ACCESS,
 };
 
 /**
@@ -334,18 +339,21 @@ public:
 	}
 };
 
+class comp_io_scheduler;
+
 /**
  * This class creates an I/O scheduler used in the page cache.
  */
-class comp_io_sched_creater
+class comp_io_sched_creator
 {
 public:
+	typedef std::shared_ptr<comp_io_sched_creator> ptr;
 	/**
 	 * This method creates a I/O scheduler on the specifies NUMA node.
 	 * \param node_id the NUMA node ID.
 	 * \return the I/O scheduler.
 	 */
-	virtual comp_io_scheduler *create(int node_id) const = 0;
+	virtual std::shared_ptr<comp_io_scheduler> create(int node_id) const = 0;
 };
 
 /**
@@ -354,14 +362,13 @@ public:
  */
 class file_io_factory
 {
-	comp_io_sched_creater *creater;
+	comp_io_sched_creator::ptr creator;
 	// The name of the file.
 	const std::string name;
 public:
 	typedef std::shared_ptr<file_io_factory> shared_ptr;
 
 	file_io_factory(const std::string _name): name(_name) {
-		creater = NULL;
 	}
 
 	virtual ~file_io_factory() {
@@ -373,16 +380,16 @@ public:
 	 * if the I/O instance doesn't have a page cache.
 	 * \param creater the I/O scheduler creator.
 	 */
-	void set_sched_creater(comp_io_sched_creater *creater) {
-		this->creater = creater;
+	void set_sched_creator(comp_io_sched_creator::ptr creator) {
+		this->creator = creator;
 	}
 
 	/**
 	 * This method gets an I/O scheduler creator in the I/O factory.
 	 * \return the I/O scheduler creator.
 	 */
-	comp_io_sched_creater *get_sched_creater() const {
-		return creater;
+	comp_io_sched_creator::ptr get_sched_creator() const {
+		return creator;
 	}
 
 	/**

@@ -19,11 +19,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <stdlib.h>
 
-#include "io_interface.h"
+#include <string>
+#include <memory>
 
 class in_mem_io;
 class thread_safe_page;
+
+namespace safs
+{
+	class file_io_factory;
+}
 
 namespace fg
 {
@@ -63,7 +70,7 @@ public:
 		free(graph_data);
 	}
 
-	safs::file_io_factory::shared_ptr create_io_factory() const;
+	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 
 	friend class in_mem_io;
 };

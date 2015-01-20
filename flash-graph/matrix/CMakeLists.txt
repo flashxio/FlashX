@@ -6,5 +6,7 @@ if (EIGEN3_FOUND)
 
 	add_library(matrix STATIC
 		matrix_eigensolver.cpp
+		ASE.cpp
+		kmeans.cpp
 	)
 endif()

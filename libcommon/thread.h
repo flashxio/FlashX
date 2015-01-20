@@ -83,6 +83,9 @@ public:
 	}
 
 	virtual ~thread() {
+		stop();
+		if (thread_idx >= 0)
+			join();
 	}
 
 	void activate() {
@@ -143,6 +146,7 @@ public:
 #ifdef DEBUG
 		printf("stop thread %s\n", name.c_str());
 #endif
+		thread_idx = -1;
 	}
 
 	int get_id() const {

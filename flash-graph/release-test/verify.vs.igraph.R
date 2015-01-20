@@ -2,6 +2,20 @@ require(igraph)
 library("FlashGraphR")
 library("irlba")
 
+ig.local.scan <- function(g, order)
+{
+	interval = 50
+	ret <- rep(0, vcount(g))
+	start <- 1
+	while (start <= vcount(g)) {
+		end <- min(start + interval - 1, vcount(g))
+		ret[start:end] <- sapply(graph.neighborhood(g, order, nodes=start:end,
+													mode="all"), ecount)
+		start <- start + interval
+	}
+	ret
+}
+
 verify.cc <- function(fg.res, ig.res)
 {
 	# get unique components IDs
@@ -68,9 +82,9 @@ test.directed <- function(fg, ig)
 	ig.res <- degree(ig, mode="in")
 	check.vectors("degree_test", fg.res, ig.res)
 
-	# test ccoreness
+	# test coreness
 	print("test coreness")
-	fg.res <- fg.coreness(fg)
+	fg.res <- fg.kcore(fg, 1, 0)
 	ig.res <- graph.coreness(ig, mode="all")
 	check.vectors("coreness_test", fg.res, ig.res)
 
@@ -95,8 +109,11 @@ test.directed <- function(fg, ig)
 
 	# test locality scan
 	print("test locality statistics")
+	fg.res <- fg.local.scan(fg, 2)
+	ig.res <- ig.local.scan(ig, 2)
+	check.vectors("local-scan2_test", fg.res, ig.res)
 	fg.res <- fg.local.scan(fg)
-	ig.res <- sapply(graph.neighborhood(ig, 1, mode="all"), ecount)
+	ig.res <- ig.local.scan(ig, 1)
 	check.vectors("local-scan_test", fg.res, ig.res)
 
 	# test topK scan
@@ -128,13 +145,6 @@ test.directed <- function(fg, ig)
 	fg.res <- fg.multiply.matrix(fg, x, TRUE)
 	ig.res <- t(as.matrix(ig.matrix)) %*% x
 	check.matrices("t(A) * m", fg.res, ig.res)
-
-	# test SVD
-	print("test SVD")
-	fg.res <- fg.SVD(fg, which="LM", nev=5, ncv=10)
-	ig.res <- irlba(ig.matrix, nu=5, nv=5, tol = 1e-12)
-	cat("diff on singular values:", sum(abs(fg.res$values) - abs(ig.res$d)), "\n")
-	cat("diff on left-singular vectors:", sum(abs(fg.res$vectors) - abs(ig.res$u)), "\n")
 }
 
 test.undirected <- function(fg, ig)
@@ -191,19 +201,9 @@ test.undirected <- function(fg, ig)
 	print("t(A) * m")
 	fg.res <- fg.multiply.matrix(fg, x, TRUE)
 	check.matrices("t(A) * m", fg.res, ig.res)
-
-	# test eigen
-	print("test eigen")
-	fg.res <- fg.eigen(fg, which="LM", nev=5, ncv=10)
-	multiply <- function(x, extra) {
-		(ig.matrix %*% x)[,1]
-	}
-	ig.res <- arpack(multiply, sym=TRUE, options=list(n=vcount(ig), nev=5, ncv=10, which="LM"))
-	cat("diff on eigen values:", sum(abs(fg.res$values) - abs(ig.res$values)), "\n")
-	cat("diff on eigen vectors:", sum(abs(fg.res$vectors) - abs(ig.res$vectors)), "\n")
 }
 
-test.ase.directed <- function(fg, ig)
+test.eigen.directed <- function(fg, ig)
 {
 	check.svd <- function(m, fg.res)
 	{
@@ -224,87 +224,112 @@ test.ase.directed <- function(fg, ig)
 	stopifnot(sum(fg.degree(fg) == 0) == 0)
 	ig.matrix <- get.adjacency(ig)[fg.cc == lcc.id, fg.cc == lcc.id]
 
+	# test SVD
+	print("test SVD")
+	fg.res <- fg.SVD(fg, which="LM", nev=5, ncv=10)
+	check.svd(ig.matrix, fg.res)
+
 	# run ASE on the largest connected component
 
 	print("test ASE (adjacency matrix)")
-	fg.res <- fg.ASE(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
 	ig.matrix.tmp <- ig.matrix
 	check.svd(ig.matrix, fg.res)
 
 	print("test ASE (AcD)")
-	fg.res <- fg.ASE(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
 	ig.matrix.tmp <- ig.matrix + diag(fg.degree(fg)) / fg.vcount(fg)
 	check.svd(ig.matrix.tmp, fg.res)
 
 	print("test ASE (Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
 	ig.matrix.tmp <- diag(fg.degree(fg)) - ig.matrix
 	check.svd(ig.matrix.tmp, fg.res)
 
 	print("test ASE (normalized Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg)))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.svd(ig.matrix.tmp, fg.res)
 
 	print("test ASE (regularized Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
+	fg.res <- fg.ASE.igraph(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg) + 1))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.svd(ig.matrix.tmp, fg.res)
 }
 
-test.ase.undirected <- function(fg, ig)
+test.eigen.undirected <- function(fg, ig)
 {
 	check.eigen <- function(m, fg.res)
 	{
 		R <- m %*% fg.res$vectors - fg.res$vectors %*% diag(fg.res$values)
 		cat("eigenvectors:", max(abs(R)), "\n")
+
+		multiply <- function(x, extra) {
+			(m %*% x)[,1]
+		}
+		ig.res <- arpack(multiply, sym=TRUE, options=list(n=vcount(ig), nev=5, ncv=10, which="LM"))
+		cat("diff on eigen values:", sum(abs(fg.res$values) - abs(ig.res$values)), "\n")
 	}
 	ig.matrix <- get.adjacency(ig)
+
+	# test eigen
+	print("test eigen")
+	fg.res <- fg.eigen(fg, which="LM", nev=5, ncv=10)
+	check.eigen(ig.matrix, fg.res)
+
 	#test ASE
 	print("test ASE (adjacency matrix)")
-	fg.res <- fg.ASE(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="A", which.eigen="LM", tol=1.0e-12)
 	check.eigen(ig.matrix, fg.res)
 
 	print("test ASE (AcD)")
-	fg.res <- fg.ASE(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="AcD", which.eigen="LM", c=1/fg.vcount(fg), tol=1.0e-12)
 	ig.matrix.tmp <- ig.matrix + diag(fg.degree(fg)) / fg.vcount(fg)
 	check.eigen(ig.matrix.tmp, fg.res)
 
 	print("test ASE (Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="L", which.eigen="LM", tol=1.0e-12)
 	ig.matrix.tmp <- diag(fg.degree(fg)) - ig.matrix
 	check.eigen(ig.matrix.tmp, fg.res)
 
 	print("test ASE (normalized Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
+	fg.res <- fg.ASE.igraph(fg, 5, which="nL", which.eigen="LM", tol=1.0e-12)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg)))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.eigen(ig.matrix.tmp, fg.res)
 
 	print("test ASE (regularized Laplacian)")
-	fg.res <- fg.ASE(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
+	fg.res <- fg.ASE.igraph(fg, 5, which="nL_tau", which.eigen="LM", tol=1.0e-12, tau=1)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg) + 1))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.eigen(ig.matrix.tmp, fg.res)
 }
-
 
 # Kmeans
 source("verify.kmeans.R")
 test.kmeans(2, 500, 20)
 test.with.iris()
 
+test.weighted <- function(fg, ig)
+{
+	fg.out <- fg.multiply(fg, rep.int(1, fg.vcount(fg)))
+	adj <- get.adjacency(ig, attr='V3', type="both")
+	ig.out <- adj %*% rep.int(1, vcount(ig))
+	stopifnot(sum(fg.out) == sum(ig.out))
+}
+
 # Test on a directed graph.
 ig <- read.graph("wiki-Vote1.txt")
+
+fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4", graph.name="wiki")
+test.eigen.directed(fg, ig)
 
 print("run in the standalone mode")
 print("load a graph in adjacency list")
 fg <- fg.load.graph("wiki-Vote.adj-v4", index="wiki-Vote.index-v4", graph.name="wiki")
 test.directed(fg, ig)
-
-test.ase.directed(fg, ig)
 
 cat("\n\n\n")
 print("load a graph in edge lists")
@@ -328,11 +353,12 @@ fg.list.graphs()
 # Now test on an undirected graph
 ig <- read.graph("facebook_combined1.txt", directed=FALSE)
 
+fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4", graph.name="facebook")
+test.eigen.undirected(fg, ig)
+
 print("load a graph in adjacency list")
 fg <- fg.load.graph("facebook.adj-v4", index="facebook.index-v4", graph.name="facebook")
 test.undirected(fg, ig)
-
-test.ase.undirected(fg, ig)
 
 cat("\n\n\n")
 print("load a graph in edge lists")
@@ -350,3 +376,10 @@ cat("\n\n\n")
 fg <- fg.get.graph("facebook")
 test.undirected(fg, ig)
 fg.list.graphs()
+
+# Now test on a weighted undirected graph
+print("load a weighted graph")
+fg <- fg.load.graph("fb-weighted.adj-v4", index="fb-weighted.index-v4", graph.name="fb-weighted")
+edges <- read.table("fb-weighted.txt")
+ig <- graph.data.frame(edges, directed=FALSE)
+test.weighted(fg, ig)
