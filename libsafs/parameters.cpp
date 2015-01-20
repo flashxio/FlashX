@@ -20,10 +20,14 @@
 #include<algorithm>
 #include <sstream>
 
+#include "log.h"
 #include "parameters.h"
 #include "common.h"
 #include "RAID_config.h"
 #include "cache_config.h"
+
+namespace safs
+{
 
 sys_parameters params;
 
@@ -44,7 +48,9 @@ str2int cache_types[] = {
 
 sys_parameters::sys_parameters()
 {
-	RAID_block_size = 64;
+	// By default, the block size is 256KB, i.e., 64 pages.
+	// RAID_block_size keeps the block size in the number of pages.
+	RAID_block_size = (256 * 1024) / PAGE_SIZE;
 	SA_min_cell_size = 12;
 	io_depth_per_file = 32;
 	cache_type = ASSOCIATIVE_CACHE;
@@ -173,25 +179,25 @@ void sys_parameters::init(const std::map<std::string, std::string> &configs)
 
 void sys_parameters::print()
 {
-	std::cout << "system parameters: " << std::endl;
-	std::cout << "\tRAID_block_size: " << RAID_block_size << std::endl;
-	std::cout << "\tSA_cell_size: " << SA_min_cell_size << std::endl;
-	std::cout << "\tio_depth:" << io_depth_per_file << std::endl;
-	std::cout << "\tcache_type: " << cache_type << std::endl;
-	std::cout << "\tcache_size: " << cache_size << std::endl;
-	std::cout << "\tRAID_mapping: " << RAID_mapping_option << std::endl;
-	std::cout << "\tvirt_aio: " << use_virt_aio << std::endl;
-	std::cout << "\tverify_content: " << verify_content << std::endl;
-	std::cout << "\tuse_flusher: " << use_flusher << std::endl;
-	std::cout << "\tcache_large_write: " << cache_large_write << std::endl;
-	std::cout << "\tvaio_print_freq: " << vaio_print_freq << std::endl;
-	std::cout << "\tnuma_num_process_threads: " << numa_num_process_threads << std::endl;
-	std::cout << "\tnum_nodes: " << num_nodes << std::endl;
-	std::cout << "\tmerge_reqs: " << merge_reqs << std::endl;
-	std::cout << "\tmax_obj_alloc_size: " << max_obj_alloc_size << std::endl;
-	std::cout << "\twritable: " << writable << std::endl;
-	std::cout << "\tmax_num_pending_ios: " << max_num_pending_ios << std::endl;
-	std::cout << "\thuge_page_enabled: " << huge_page_enabled << std::endl;
+	BOOST_LOG_TRIVIAL(info) << "system parameters: ";
+	BOOST_LOG_TRIVIAL(info) << "\tRAID_block_size: " << RAID_block_size;
+	BOOST_LOG_TRIVIAL(info) << "\tSA_cell_size: " << SA_min_cell_size;
+	BOOST_LOG_TRIVIAL(info) << "\tio_depth:" << io_depth_per_file;
+	BOOST_LOG_TRIVIAL(info) << "\tcache_type: " << cache_type;
+	BOOST_LOG_TRIVIAL(info) << "\tcache_size: " << cache_size;
+	BOOST_LOG_TRIVIAL(info) << "\tRAID_mapping: " << RAID_mapping_option;
+	BOOST_LOG_TRIVIAL(info) << "\tvirt_aio: " << use_virt_aio;
+	BOOST_LOG_TRIVIAL(info) << "\tverify_content: " << verify_content;
+	BOOST_LOG_TRIVIAL(info) << "\tuse_flusher: " << use_flusher;
+	BOOST_LOG_TRIVIAL(info) << "\tcache_large_write: " << cache_large_write;
+	BOOST_LOG_TRIVIAL(info) << "\tvaio_print_freq: " << vaio_print_freq;
+	BOOST_LOG_TRIVIAL(info) << "\tnuma_num_process_threads: " << numa_num_process_threads;
+	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes: " << num_nodes;
+	BOOST_LOG_TRIVIAL(info) << "\tmerge_reqs: " << merge_reqs;
+	BOOST_LOG_TRIVIAL(info) << "\tmax_obj_alloc_size: " << max_obj_alloc_size;
+	BOOST_LOG_TRIVIAL(info) << "\twritable: " << writable;
+	BOOST_LOG_TRIVIAL(info) << "\tmax_num_pending_ios: " << max_num_pending_ios;
+	BOOST_LOG_TRIVIAL(info) << "\thuge_page_enabled: " << huge_page_enabled;
 }
 
 void sys_parameters::print_help()
@@ -233,100 +239,4 @@ void sys_parameters::print_help()
 		<< std::endl;
 }
 
-static void read_config_file(const std::string &conf_file,
-		std::map<std::string, std::string> &configs)
-{
-	FILE *f = fopen(conf_file.c_str(), "r");
-	if (f == NULL) {
-		perror("fopen");
-		assert(0);
-	}
-
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
-	while ((read = getline(&line, &len, f)) > 0) {
-		std::string str = line;
-		if (str.length() == 1)
-			continue;
-		if (line[0] == '#')
-			continue;
-
-		size_t found = str.find("=");
-		/* if there isn't `=', I assume it's a file name*/
-		if (found == std::string::npos) {
-			fprintf(stderr, "wrong format: %s\n", line);
-			assert(0);
-		}
-
-		std::string value = str.substr(found + 1);
-		value.erase(std::remove_if(value.begin(), value.end(), isspace),
-				value.end());
-		std::string key = str.substr(0, found);
-		key.erase(std::remove_if(key.begin(), key.end(), isspace),
-				key.end());
-		bool res = configs.insert(std::pair<std::string, std::string>(key,
-					value)).second;
-		if (!res)
-			configs[key] = value;
-	}
-	fclose(f);
-}
-
-config_map::config_map(const std::string &conf_file)
-{
-	read_config_file(conf_file, configs);
-}
-
-/**
- * All options should have the following format:
- *		key=value.
- * All options that don't have the format are ignored.
- */
-void config_map::add_options(const char *argv[], int argc)
-{
-	for (int i = 0; i < argc; i++) {
-		std::string str = argv[i];
-
-		size_t found = str.find("=");
-		if (found == std::string::npos) {
-			continue;
-		}
-
-		std::string value = str.substr(found + 1);
-		value.erase(std::remove_if(value.begin(), value.end(), isspace),
-				value.end());
-		std::string key = str.substr(0, found);
-		key.erase(std::remove_if(key.begin(), key.end(), isspace),
-				key.end());
-		bool res = configs.insert(std::pair<std::string, std::string>(key,
-					value)).second;
-		if (!res)
-			configs[key] = value;
-	}
-}
-
-size_t split_string(const std::string &str, const std::string &delimiter,
-		std::vector<std::string> &splits)
-{
-	std::stringstream ss(str);
-	size_t num = 0;
-	while (ss.good()) {
-		std::string s;
-		ss >> s;
-		splits.push_back(s);
-		num++;
-	}
-	return num;
-}
-
-void config_map::add_options(const std::string &opts)
-{
-	std::vector<std::string> parts;
-	split_string(opts, " ", parts);
-	std::vector<const char *> part_chars;
-	for (size_t i = 0; i < parts.size(); i++) {
-		part_chars.push_back(parts[i].c_str());
-	}
-	config_map::add_options(part_chars.data(), part_chars.size());
 }

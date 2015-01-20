@@ -22,6 +22,9 @@
 
 #include "vertex.h"
 
+namespace fg
+{
+
 class graph_engine;
 
 class vertex_request
@@ -105,5 +108,7 @@ public:
 		return range.first == INT_MAX && range.second == INT_MIN;
 	}
 };
+
+}
 
 #endif

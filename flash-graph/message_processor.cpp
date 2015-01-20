@@ -23,10 +23,13 @@
 #include "worker_thread.h"
 #include "steal_state.h"
 
+namespace fg
+{
+
 message_processor::message_processor(graph_engine &_graph,
 		worker_thread &_owner, std::shared_ptr<slab_allocator> msg_alloc): graph(_graph),
 	owner(_owner), msg_q(_owner.get_node_id(), "graph_msg_queue", 16, INT_MAX),
-	stolenv_msgs(_owner.get_node_id(), PAGE_SIZE, true)
+	stolenv_msgs(_owner.get_node_id(), 4096, true)
 {
 	if (graph_conf.use_serial_run())
 		steal_state = std::unique_ptr<steal_state_t>(new steal_state_t(graph, owner));
@@ -41,7 +44,7 @@ void message_processor::buf_msg(vertex_message &vmsg)
 			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
 		// We have to make sure this is successful.
-		assert(stolenv_msgs.back().add(vmsg));
+		BOOST_VERIFY(stolenv_msgs.back().add(vmsg));
 	}
 }
 
@@ -81,7 +84,7 @@ void message_processor::buf_mmsg(local_vid_t id, multicast_message &mmsg)
 			stolenv_msgs.expand_queue(stolenv_msgs.get_size() * 2);
 		stolenv_msgs.push_back(msg);
 		// We have to make sure this is successful.
-		assert(stolenv_msgs.back().add(converter));
+		BOOST_VERIFY(stolenv_msgs.back().add(converter));
 	}
 }
 
@@ -265,4 +268,6 @@ void steal_state_t::return_vertices(vertex_id_t ids[], int num)
 		assert(worker_id == part_id);
 		stolen_bitmap.clear(off);
 	}
+}
+
 }

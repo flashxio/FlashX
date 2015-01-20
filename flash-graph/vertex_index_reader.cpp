@@ -23,6 +23,15 @@
 #include "vertex_index_reader.h"
 #include "worker_thread.h"
 
+using namespace safs;
+
+namespace fg
+{
+
+/*
+ * This task is issued to the key-value store that runs on top of the vertex
+ * index to access entries in the index.
+ */
 template<class ValueType>
 class req_vertex_task
 {
@@ -66,6 +75,12 @@ public:
 	}
 };
 
+/*
+ * This template accesses vertex index on disks. When the requested entries
+ * in the index is available, it issues requests to read adjacency lists
+ * on disks. This implementation uses the key-value store to access
+ * the vertex index.
+ */
 template<class ValueType>
 class ext_mem_vindex_reader_impl: public vertex_index_reader
 {
@@ -100,6 +115,9 @@ public:
 	}
 };
 
+/*
+ * This template access vertex index in memory.
+ */
 template<class ValueType>
 class in_mem_vindex_reader_impl: public vertex_index_reader
 {
@@ -118,8 +136,7 @@ public:
 		array_index_iterator_impl<ValueType> it(index->get_data() + range.first,
 				// We need an additional entry.
 				index->get_data() + range.second + 1);
-		bool ret = compute->run(compute->get_first_vertex(), it);
-		assert(ret);
+		BOOST_VERIFY(compute->run(compute->get_first_vertex(), it));
 		compute->get_allocator().free(compute);
 	}
 
@@ -131,26 +148,29 @@ public:
 	}
 };
 
-class in_mem_directed_cindex_reader: public vertex_index_reader
+/*
+ * This template accesses the compressed vertex index in memory.
+ */
+template<class vertex_index_type, class iterator_type>
+class in_mem_cindex_reader: public vertex_index_reader
 {
-	in_mem_cdirected_vertex_index::ptr index;
+	typename vertex_index_type::ptr index;
 
 protected:
-	in_mem_directed_cindex_reader(
-			const in_mem_cdirected_vertex_index::ptr index) {
+	in_mem_cindex_reader(typename vertex_index_type::ptr index) {
 		this->index = index;
 	}
 public:
-	static ptr create(const in_mem_cdirected_vertex_index::ptr index) {
-		return ptr(new in_mem_directed_cindex_reader(index));
+	static ptr create(typename vertex_index_type::ptr index) {
+		return ptr(new in_mem_cindex_reader<vertex_index_type,
+				iterator_type>(index));
 	}
 
 
 	virtual void request_index(index_compute *compute) {
 		id_range_t range = compute->get_range();
-		compressed_directed_index_iterator it(*index, range);
-		bool ret = compute->run(compute->get_first_vertex(), it);
-		assert(ret);
+		iterator_type it(*index, range);
+		BOOST_VERIFY(compute->run(compute->get_first_vertex(), it));
 		compute->get_allocator().free(compute);
 	}
 
@@ -162,20 +182,24 @@ public:
 	}
 };
 
-vertex_index_reader::ptr vertex_index_reader::create(const vertex_index::ptr index,
-		bool directed)
-{
-	if (directed)
-		return in_mem_vindex_reader_impl<directed_vertex_entry>::create(index);
-	else
-		return in_mem_vindex_reader_impl<vertex_offset>::create(index);
-}
-
 vertex_index_reader::ptr vertex_index_reader::create(
-		const in_mem_cdirected_vertex_index::ptr index, bool directed)
+		const in_mem_query_vertex_index::ptr index, bool directed)
 {
-	assert(directed);
-	return in_mem_directed_cindex_reader::create(index);
+	bool compressed = index->is_compressed();
+	if (!compressed && directed)
+		return in_mem_vindex_reader_impl<directed_vertex_entry>::create(
+				index->get_raw_index());
+	else if (!compressed && !directed)
+		return in_mem_vindex_reader_impl<vertex_offset>::create(
+				index->get_raw_index());
+	else if (compressed && directed)
+		return in_mem_cindex_reader<in_mem_cdirected_vertex_index,
+			   compressed_directed_index_iterator>::create(
+					   in_mem_cdirected_vertex_index::cast(index));
+	else
+		return in_mem_cindex_reader<in_mem_cundirected_vertex_index,
+			   compressed_undirected_index_iterator>::create(
+					   in_mem_cundirected_vertex_index::cast(index));
 }
 
 vertex_index_reader::ptr vertex_index_reader::create(io_interface::ptr io,
@@ -438,7 +462,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	// two requests with one vertex compute.
 	if (type == edge_type::IN_EDGE) {
 		off_t first_off = it.get_curr_off();
-		assert(it.move_to(get_num_vertices() - 1));
+		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
 		off_t last_off = it.get_curr_off() + it.get_curr_size();
 		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
 		io_request req(compute, loc, last_off - first_off, READ);
@@ -446,7 +470,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 	}
 	else if (type == edge_type::OUT_EDGE) {
 		off_t first_off = it.get_curr_out_off();
-		assert(it.move_to(get_num_vertices() - 1));
+		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
 		off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
 		data_loc_t loc(this->thread->get_graph().get_file_id(), first_off);
 		io_request req(compute, loc, last_off - first_off, READ);
@@ -456,7 +480,7 @@ bool dense_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 		assert(type == edge_type::BOTH_EDGES);
 		off_t first_in_off = it.get_curr_off();
 		off_t first_out_off = it.get_curr_out_off();
-		assert(it.move_to(get_num_vertices() - 1));
+		BOOST_VERIFY(it.move_to(get_num_vertices() - 1));
 		off_t last_in_off = it.get_curr_off() + it.get_curr_size();
 		off_t last_out_off = it.get_curr_out_off() + it.get_curr_out_size();
 
@@ -553,10 +577,10 @@ static off_range_t get_in_off_range(index_iterator &it, vertex_id_t start_vid,
 {
 	vsize_t num_vertices = range.second - range.first;
 	off_t idx_entry_loc = range.first - start_vid;
-	assert(it.move_to(idx_entry_loc));
+	BOOST_VERIFY(it.move_to(idx_entry_loc));
 
 	off_t first_off = it.get_curr_off();
-	assert(it.move_to(idx_entry_loc + num_vertices - 1));
+	BOOST_VERIFY(it.move_to(idx_entry_loc + num_vertices - 1));
 	off_t last_off = it.get_curr_off() + it.get_curr_size();
 	return off_range_t(first_off, last_off);
 }
@@ -566,18 +590,27 @@ static off_range_t get_out_off_range(index_iterator &it, vertex_id_t start_vid,
 {
 	vsize_t num_vertices = range.second - range.first;
 	off_t idx_entry_loc = range.first - start_vid;
-	assert(it.move_to(idx_entry_loc));
+	BOOST_VERIFY(it.move_to(idx_entry_loc));
 
 	off_t first_off = it.get_curr_out_off();
-	assert(it.move_to(idx_entry_loc + num_vertices - 1));
+	BOOST_VERIFY(it.move_to(idx_entry_loc + num_vertices - 1));
 	off_t last_off = it.get_curr_out_off() + it.get_curr_out_size();
 	return off_range_t(first_off, last_off);
 }
 
+/*
+ * For the sparse self requests, we need to define the condition of merging
+ * I/O requests for adjacency lists. This condition trades off the number
+ * of I/O requests and the amount of data accessed from disks.
+ * The current implementation minimizes the number of I/O requests to reduce
+ * the amount of data accessed from disks at the cost of more CPU overhead
+ * for I/O access and lower I/O throughput (bytes/second).
+ */
 static bool can_merge_reqs(const off_range_t &range1, const off_range_t &range2)
 {
 	return ROUND_PAGE(range1.second) == ROUND_PAGE(range2.first)
-		|| ROUND_PAGE(range1.second) + PAGE_SIZE == ROUND_PAGE(range2.first);
+		|| ROUND_PAGE(range1.second) + ((1 + graph_conf.get_vertex_merge_gap()) *
+				safs::PAGE_SIZE) >= ROUND_PAGE(range2.first);
 }
 
 static void merge_reqs(off_range_t &range1, const off_range_t &range2)
@@ -680,8 +713,10 @@ bool sparse_self_vertex_compute::run(vertex_id_t start_vid, index_iterator &it)
 			run_both_vertices(start_vid, it);
 			break;
 		default:
-			assert(0);
+			ABORT_MSG("wrong edge type");
 	}
 
 	return true;
+}
+
 }

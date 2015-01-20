@@ -19,6 +19,9 @@
 
 #include "messaging.h"
 
+namespace fg
+{
+
 int multicast_msg_sender::flush()
 {
 	if (buf.is_empty()) {
@@ -87,4 +90,6 @@ int multicast_msg_sender::add_dests(local_vid_t ids[], int num)
 		assert(num >= 0);
 	}
 	return orig_num;
+}
+
 }

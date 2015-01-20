@@ -21,6 +21,9 @@
 #include "worker_thread.h"
 #include "graph_engine.h"
 
+namespace fg
+{
+
 load_balancer::load_balancer(graph_engine &_graph,
 		worker_thread &_owner): owner(_owner), graph(_graph)
 {
@@ -30,7 +33,7 @@ load_balancer::load_balancer(graph_engine &_graph,
 			graph.get_num_threads() * sizeof(fifo_queue<vertex_id_t>));
 	for (int i = 0; i < graph.get_num_threads(); i++) {
 		new (completed_stolen_vertices + i) fifo_queue<vertex_id_t>(
-				_owner.get_node_id(), PAGE_SIZE, true);
+				_owner.get_node_id(), 4096, true);
 	}
 	num_completed_stolen_vertices = 0;
 }
@@ -87,8 +90,8 @@ void load_balancer::process_completed_stolen_vertices()
 			int num_completed = q.get_num_entries();
 			num_tot += num_completed;
 			stack_array<vertex_id_t> buf(num_completed);
-			int ret = q.fetch(buf.data(), num_completed);
-			assert(ret == num_completed);
+			BOOST_VERIFY(q.fetch(buf.data(), num_completed)
+					== num_completed);
 			t->return_vertices(buf.data(), num_completed);
 		}
 	}
@@ -136,4 +139,6 @@ int load_balancer::get_stolen_vertex_part(const compute_vertex &v) const
 		return it->second;
 	else
 		return -1;
+}
+
 }

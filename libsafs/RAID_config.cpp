@@ -17,9 +17,15 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
+#include "log.h"
 #include "RAID_config.h"
 #include "file_mapper.h"
 #include "native_file.h"
+
+namespace safs
+{
 
 file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 {
@@ -46,7 +52,6 @@ file_mapper *RAID_config::create_file_mapper(const std::string &file_name) const
 		}
 		std::vector<std::string> part_ids;
 		dir.read_all_files(part_ids);
-		printf("there are %ld files in %s\n", part_ids.size(), dir_name.c_str());
 		if (part_ids.size() != 1) {
 			fprintf(stderr,
 					"wrong format of the SAFS file %s, check the directory %s\n",
@@ -108,7 +113,7 @@ std::set<int> RAID_config::get_node_ids() const
 	return node_ids;
 }
 
-int RAID_config::retrieve_data_files(std::string file_file,
+static int retrieve_data_files(std::string file_file,
 		std::vector<part_file_info> &data_files)
 {
 	char *line = NULL;
@@ -116,9 +121,11 @@ int RAID_config::retrieve_data_files(std::string file_file,
 	int line_length;
 	FILE *fd = fopen(file_file.c_str(), "r");
 	if (fd == NULL) {
-		perror("fopen");
-		assert(0);
+		BOOST_LOG_TRIVIAL(error) << boost::format("open RAID conf file %1%: %2%")
+			% file_file % strerror(errno);
+		return 0;
 	}
+
 	while ((line_length = getline(&line, &size, fd)) > 0) {
 		line[line_length - 1] = 0;
 		// skip comment lines.
@@ -130,11 +137,16 @@ int RAID_config::retrieve_data_files(std::string file_file,
 		char *name = line;
 		if (colon) {
 			*colon = 0;
-			info.node_id = atoi(line);
+			std::string node_id_str = line;
+			node_id_str.erase(std::remove_if(node_id_str.begin(),
+						node_id_str.end(), isspace), node_id_str.end());
+			info.node_id = atoi(node_id_str.c_str());
 			colon++;
 			name = colon;
 		}
 		info.name = name;
+		info.name.erase(std::remove_if(info.name.begin(), info.name.end(),
+					isspace), info.name.end());
 		data_files.push_back(info);
 		free(line);
 		line = NULL;
@@ -142,4 +154,20 @@ int RAID_config::retrieve_data_files(std::string file_file,
 	}
 	fclose(fd);
 	return data_files.size();
+}
+
+RAID_config::ptr RAID_config::create(const std::string &conf_file,
+		int mapping_option, int block_size)
+{
+	RAID_config::ptr conf = RAID_config::ptr(new RAID_config());
+	conf->conf_file = conf_file;
+	int ret = retrieve_data_files(conf->conf_file, conf->root_paths);
+	if (ret == 0)
+		return RAID_config::ptr();
+
+	conf->RAID_mapping_option = mapping_option;
+	conf->RAID_block_size = block_size;
+	return conf;
+}
+
 }

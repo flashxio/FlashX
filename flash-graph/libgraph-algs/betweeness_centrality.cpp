@@ -39,7 +39,11 @@
 #include "graph_config.h"
 #include "FGlib.h"
 #include "FG_vector.h"
+#include "save_result.h"
 
+using namespace fg;
+
+namespace {
 int bfs_max_dist;
 
 /* `update` phase is where BC is updated */ 
@@ -413,14 +417,15 @@ class activate_by_dist_filter: public vertex_filter {
 		return is_max_v;
 	}
 };
+}
 
-#include "save_result.h"
+namespace fg 
+{
 FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id_t id)
 {
 	graph_index::ptr index = NUMA_graph_index<betweenness_vertex>::create(
-			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+			fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 
 	printf("Starting Betweenness Centrality ...\n");
 	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
@@ -491,4 +496,5 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id
 
 	printf("It takes %f seconds\n", time_diff(start, end));
 	return ret;
+}
 }

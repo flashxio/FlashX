@@ -25,12 +25,15 @@
 #include <vector>
 #include <memory>
 
+#include "config_map.h"
 #include "exception.h"
 #include "common.h"
 #include "concurrency.h"
 #include "thread.h"
 #include "io_request.h"
-#include "comp_io_scheduler.h"
+
+namespace safs
+{
 
 class io_request;
 
@@ -40,6 +43,8 @@ class io_request;
 class callback
 {
 public:
+	typedef std::shared_ptr<callback> ptr;
+
 	virtual ~callback() {
 	}
 
@@ -126,6 +131,12 @@ enum {
 	 * is incomplete right now, so it shouldn't be used.
 	 */
 	PART_GLOBAL_ACCESS,
+
+	/**
+	 * This method accesses a SAFS file with asynchronous user-task interface,
+	 * but without page cache.
+	 */
+	DIRECT_COMP_ACCESS,
 };
 
 /**
@@ -287,8 +298,8 @@ public:
 	 * The requests should be issued by this IO.
 	 */
 	virtual void notify_completion(io_request *reqs[], int num) {
-		if (get_callback())
-			get_callback()->invoke(reqs, num);
+		if (have_callback())
+			get_callback().invoke(reqs, num);
 	}
 
 	/**
@@ -297,7 +308,11 @@ public:
 	 * \param cb the user-defined callback.
 	 * \return false if the class doesn't support async I/O.
 	 */
-	virtual bool set_callback(callback *cb) {
+	virtual bool set_callback(callback::ptr cb) {
+		throw unsupported_exception();
+	}
+
+	virtual bool have_callback() const {
 		return false;
 	}
 
@@ -305,8 +320,8 @@ public:
 	 * This method gets the user-defined callback.
 	 * \return the user-defined callback.
 	 */
-	virtual callback *get_callback() {
-		return NULL;
+	virtual callback &get_callback() {
+		throw unsupported_exception();
 	}
 
 	/**
@@ -324,18 +339,21 @@ public:
 	}
 };
 
+class comp_io_scheduler;
+
 /**
  * This class creates an I/O scheduler used in the page cache.
  */
-class comp_io_sched_creater
+class comp_io_sched_creator
 {
 public:
+	typedef std::shared_ptr<comp_io_sched_creator> ptr;
 	/**
 	 * This method creates a I/O scheduler on the specifies NUMA node.
 	 * \param node_id the NUMA node ID.
 	 * \return the I/O scheduler.
 	 */
-	virtual comp_io_scheduler *create(int node_id) const = 0;
+	virtual std::shared_ptr<comp_io_scheduler> create(int node_id) const = 0;
 };
 
 /**
@@ -344,14 +362,13 @@ public:
  */
 class file_io_factory
 {
-	comp_io_sched_creater *creater;
+	comp_io_sched_creator::ptr creator;
 	// The name of the file.
 	const std::string name;
 public:
 	typedef std::shared_ptr<file_io_factory> shared_ptr;
 
 	file_io_factory(const std::string _name): name(_name) {
-		creater = NULL;
 	}
 
 	virtual ~file_io_factory() {
@@ -363,16 +380,16 @@ public:
 	 * if the I/O instance doesn't have a page cache.
 	 * \param creater the I/O scheduler creator.
 	 */
-	void set_sched_creater(comp_io_sched_creater *creater) {
-		this->creater = creater;
+	void set_sched_creator(comp_io_sched_creator::ptr creator) {
+		this->creator = creator;
 	}
 
 	/**
 	 * This method gets an I/O scheduler creator in the I/O factory.
 	 * \return the I/O scheduler creator.
 	 */
-	comp_io_sched_creater *get_sched_creater() const {
-		return creater;
+	comp_io_sched_creator::ptr get_sched_creator() const {
+		return creator;
 	}
 
 	/**
@@ -433,17 +450,24 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 
 /**
  * This function initializes SAFS. It should be called at the beginning
- * of a program.
+ * of a program. It can be invoked multiple times. If it is executed multiple
+ * time successfully, destroy_io_system() needs to be invoked the same number
+ * of times to complete clean up the I/O system.
  * \param map the SAFS configuration.
  * \param with_cache determine whether the I/O system is initialized with
  * page cache.
  */
-void init_io_system(const config_map &map, bool with_cache = true);
+void init_io_system(config_map::ptr map, bool with_cache = true);
 
 /**
  * This function destroys SAFS. It should be called at the end of a program.
  */
 void destroy_io_system();
+
+/**
+ * This function tells whether SAFS is initialized successfully.
+ */
+bool is_safs_init();
 
 /**
  * This function gets the RAID configuration of SAFS.
@@ -466,5 +490,7 @@ void print_io_thread_stat();
  * \param weight The new weight of the file.
  */
 void set_file_weight(const std::string &file_name, int weight);
+
+}
 
 #endif

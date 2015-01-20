@@ -31,6 +31,11 @@
 #include "concurrency.h"
 #include "io_request.h"
 
+class slab_allocator;
+
+namespace safs
+{
+
 class io_reply
 {
 	io_request req;
@@ -97,8 +102,6 @@ public:
 		return (io_reply *) io_request::deserialize(buf, size);
 	}
 };
-
-class slab_allocator;
 
 /**
  * It is an object container used for message passing.
@@ -300,8 +303,7 @@ class msg_buffer: public fifo_queue<message<T> >
 			fifo_queue<message<T> >::expand_queue(
 					fifo_queue<message<T> >::get_size() * 2);
 		}
-		int ret = fifo_queue<message<T> >::add(&msg, 1);
-		assert(ret == 1);
+		BOOST_VERIFY(fifo_queue<message<T> >::add(&msg, 1) == 1);
 	}
 
 public:
@@ -377,8 +379,8 @@ public:
 		for (int i = 0; i < ret; i++) {
 			num_objs += msgs[i].get_num_objs();
 		}
-		int tmp = thread_safe_FIFO_queue<message<T> >::add(msgs.data(), ret);
-		assert(ret == tmp);
+		BOOST_VERIFY(ret == thread_safe_FIFO_queue<message<T> >::add(
+					msgs.data(), ret));
 		return num_objs;
 	}
 };
@@ -516,7 +518,6 @@ class request_sender: public simple_msg_sender<io_request>
 public:
 	static request_sender *create(int node_id, slab_allocator *alloc,
 			msg_queue<io_request> *queue) {
-		assert(node_id >= 0);
 		return new request_sender(node_id, alloc, queue);
 	}
 
@@ -524,5 +525,7 @@ public:
 		delete s;
 	}
 };
+
+}
 
 #endif

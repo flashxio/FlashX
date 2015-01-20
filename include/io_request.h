@@ -30,6 +30,16 @@
 #include "common.h"
 #include "concurrency.h"
 #include "container.h"
+#include "parameters.h"
+
+namespace safs
+{
+
+static const int PAGE_SIZE = 4096;
+static const int LOG_PAGE_SIZE = 12;
+
+#define ROUND_PAGE(off) (((long) off) & (~((long) safs::PAGE_SIZE - 1)))
+#define ROUNDUP_PAGE(off) (((long) off + safs::PAGE_SIZE - 1) & (~((long) safs::PAGE_SIZE - 1)))
 
 class thread_safe_page;
 class io_interface;
@@ -483,7 +493,8 @@ class io_request
 	int file_id;
 	static const off_t MAX_FILE_SIZE = LONG_MAX;
 	off_t offset: 48;
-	static const size_t MAX_BUF_SIZE = (1L << 32) - 1;
+	// The max size should be aligned with the page size.
+	static const size_t MAX_BUF_SIZE = (1L << 32) - PAGE_SIZE;
 	unsigned long buf_size_low: 16;
 	long user_data_addr: 48;
 	unsigned long buf_size_high: 16;
@@ -561,6 +572,10 @@ public:
 		EXT_REQ,
 		USER_COMPUTE,
 	};
+
+	static size_t get_max_req_size() {
+		return MAX_BUF_SIZE;
+	}
 
 	// By default, a request is initialized as a flush request.
 	io_request(bool sync = false) {
@@ -1131,6 +1146,8 @@ static inline void process_reqs_on_io(io_request *reqs[],
 	} proc_func(func);
 
 	process_reqs_on_io(reqs, num, io_func, proc_func);
+}
+
 }
 
 #endif

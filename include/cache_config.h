@@ -27,6 +27,9 @@
 #include "cache.h"
 #include "thread.h"
 
+namespace safs
+{
+
 class page_cache;
 
 enum {
@@ -57,7 +60,7 @@ class cache_config
 	{
 		const cache_config &config;
 		int max_num_pending_flush;
-		page_cache *cache;
+		std::shared_ptr<page_cache> cache;
 	public:
 		create_cache_thread(const cache_config &_config, int max_num_pending_flush,
 				std::string name, int node_id): thread(name,
@@ -71,23 +74,24 @@ class cache_config
 			stop();
 		}
 
-		page_cache *get_cache() {
+		std::shared_ptr<page_cache> get_cache() {
 			return cache;
 		}
 	};
 
-	page_cache *__create_cache_on_node(int node_id,
+	std::shared_ptr<page_cache> __create_cache_on_node(int node_id,
 			int max_num_pending_flush) const;
 protected:
 	void init(const std::tr1::unordered_map<int, long> &part_sizes) {
 		this->part_sizes = part_sizes;
 	}
 
-public:
 	cache_config(long size, int type) {
 		this->size = size;
 		this->type = type;
 	}
+public:
+	typedef std::shared_ptr<cache_config> ptr;
 
 	virtual ~cache_config() {
 	}
@@ -119,12 +123,12 @@ public:
 			node_ids.push_back(it->first);
 	}
 
-	page_cache *create_cache_on_node(int node_id, int max_num_pending_flush) const;
+	std::shared_ptr<page_cache> create_cache_on_node(int node_id,
+			int max_num_pending_flush) const;
 	int create_cache_on_nodes(const std::vector<int> &node_ids,
-			int max_num_pending_flush, std::vector<page_cache *> &caches) const;
-	void destroy_cache_on_node(page_cache *cache) const;
-	page_cache *create_cache(int max_num_pending_flush) const;
-	void destroy_cache(page_cache *cache) const;
+			int max_num_pending_flush,
+			std::vector<std::shared_ptr<page_cache> > &caches) const;
+	std::shared_ptr<page_cache> create_cache(int max_num_pending_flush) const;
 
 };
 
@@ -202,5 +206,7 @@ public:
 
 	virtual int page2cache(const page_id_t &pg_id) const;
 };
+
+}
 
 #endif

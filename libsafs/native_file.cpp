@@ -23,6 +23,9 @@
 #include "common.h"
 #include "native_file.h"
 
+namespace safs
+{
+
 ssize_t native_dir::read_all_files(std::vector<std::string> &files) const
 {
 	DIR *d = opendir(name.c_str());
@@ -116,4 +119,6 @@ bool native_dir::delete_dir(bool recursive)
 			fprintf(stderr, "rm %s: %s\n", name.c_str(), strerror(errno));
 		return ret == 0;
 	}
+}
+
 }

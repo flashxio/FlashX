@@ -26,6 +26,9 @@
 
 #include "concurrency.h"
 
+namespace safs
+{
+
 class debug_task
 {
 public:
@@ -64,8 +67,8 @@ public:
 	void run();
 };
 
-extern debugger debug;
-
 bool is_debug_enabled();
+
+}
 
 #endif

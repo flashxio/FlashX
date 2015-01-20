@@ -28,6 +28,9 @@
 #include "exception.h"
 #include "memory_manager.h"
 
+namespace safs
+{
+
 const long default_init_cache_size = 128 * 1024 * 1024;
 
 template<class T>
@@ -976,7 +979,6 @@ associative_cache::associative_cache(long cache_size, long max_cache_size,
 {
 	this->offset_factor = offset_factor;
 	pthread_mutex_init(&init_mutex, NULL);
-	printf("max num flushes: %d\n", max_num_pending_flush);
 #ifdef DEBUG
 	printf("associative cache is created on node %d, cache size: %ld, min cell size: %d\n",
 			node_id, cache_size, params.get_SA_min_cell_size());
@@ -1100,7 +1102,7 @@ public:
 	}
 
 	virtual int get_file_id() const {
-		assert(0);
+		ABORT_MSG("get_file_id isn't implemented");
 		return -1;
 	}
 
@@ -1151,7 +1153,7 @@ public:
 
 	void run();
 	void flush_dirty_pages(thread_safe_page *pages[], int num,
-			io_interface *io);
+			io_interface &io);
 	int flush_dirty_pages(page_filter *filter, int max_num);
 	int flush_cell(hash_cell *cell, io_request *req_array, int req_array_size);
 };
@@ -1205,7 +1207,7 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 			assert(p->is_dirty());
 			p->set_dirty(false);
 			p->set_io_pending(false);
-			assert(p->reset_reqs() == NULL);
+			BOOST_VERIFY(p->reset_reqs() == NULL);
 			p->unlock();
 			p->dec_ref();
 		}
@@ -1218,7 +1220,7 @@ void flush_io::notify_completion(io_request *reqs[], int num)
 				assert(p->is_dirty());
 				p->set_dirty(false);
 				p->set_io_pending(false);
-				assert(p->reset_reqs() == NULL);
+				BOOST_VERIFY(p->reset_reqs() == NULL);
 				p->unlock();
 				p->dec_ref();
 				assert(p->get_ref() >= 0);
@@ -1380,7 +1382,7 @@ void associative_cache::create_flusher(io_interface::ptr io,
 }
 
 void associative_cache::mark_dirty_pages(thread_safe_page *pages[], int num,
-		io_interface *io)
+		io_interface &io)
 {
 #ifdef DEBUG
 	num_dirty_pages.inc(num);
@@ -1411,8 +1413,8 @@ hash_cell *associative_cache::get_prev_cell(hash_cell *cell) {
 				return (cells_table[i - 1] + init_ncells - 1);
 			}
 		}
-		// we should reach here if the cell exists in the table.
-		assert(0);
+		// we shouldn't reach here if the cell exists in the table.
+		abort();
 	}
 }
 
@@ -1433,8 +1435,8 @@ hash_cell *associative_cache::get_next_cell(hash_cell *cell)
 					return cells_table[i + 1];
 			}
 		}
-		// We should reach here.
-		assert(0);
+		// We shouldn't reach here.
+		abort();
 	}
 }
 
@@ -1491,7 +1493,7 @@ void hash_cell::get_pages(int num_pages, char set_flags, char clear_flags,
 }
 
 void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],
-		int num, io_interface *io)
+		int num, io_interface &io)
 {
 	if (!params.is_use_flusher()) {
 		return;
@@ -1525,7 +1527,7 @@ void associative_flusher::flush_dirty_pages(thread_safe_page *pages[],
 				io_request req_array[NUM_WRITEBACK_DIRTY_PAGES];
 				int ret = flush_cell(cell, req_array,
 						NUM_WRITEBACK_DIRTY_PAGES);
-				io->access(req_array, ret);
+				io.access(req_array, ret);
 				num_flushes += ret;
 				// If it has the required number of dirty pages to flush,
 				// it may have more to be flushed.
@@ -1615,4 +1617,6 @@ int associative_cache::flush_dirty_pages(page_filter *filter, int max_num)
 		return _flusher->flush_dirty_pages(filter, max_num);
 	else
 		return 0;
+}
+
 }

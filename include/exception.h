@@ -19,6 +19,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <string>
+#include <exception>
+
+namespace safs
+{
 
 class no_space_exception
 {
@@ -32,5 +37,39 @@ class oom_exception
 class unsupported_exception
 {
 };
+
+class init_error: public std::exception
+{
+	std::string msg;
+public:
+	init_error(const std::string &msg) {
+		this->msg = msg;
+	}
+
+	~init_error() throw() {
+	}
+
+	const char* what() const throw() {
+		return msg.c_str();
+	}
+};
+
+class io_exception: public std::exception
+{
+	std::string msg;
+public:
+	io_exception(const std::string &msg) {
+		this->msg = msg;
+	}
+
+	~io_exception() throw() {
+	}
+
+	const char* what() const throw() {
+		return msg.c_str();
+	}
+};
+
+}
 
 #endif

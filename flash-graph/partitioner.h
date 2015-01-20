@@ -26,6 +26,9 @@
 
 #include "vertex.h"
 
+namespace fg
+{
+
 /**
  * This data structure represents the local Id of a vertex used
  * in its own partition.
@@ -172,5 +175,7 @@ public:
 		return (num_local_ranges << RANGE_SIZE_LOG) + num_vertices_last_range;
 	}
 };
+
+}
 
 #endif

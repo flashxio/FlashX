@@ -22,6 +22,8 @@
 
 #include "triangle_shared.h"
 
+using namespace fg;
+
 namespace {
 
 struct undirected_runtime_data_t: public runtime_data_t
@@ -38,7 +40,7 @@ struct undirected_runtime_data_t: public runtime_data_t
 
 class undirected_triangle_vertex: public compute_vertex
 {
-	multi_func_value local_value;
+	triangle_multi_func_value local_value;
 
 	void inc_num_triangles(size_t num) {
 		if (local_value.has_num_triangles())
@@ -74,8 +76,6 @@ public:
 		inc_num_triangles(((count_msg &) msg).get_num());
 	}
 
-	void run_on_vertex_header(vertex_program &prog, const vertex_header &header);
-
 	void destroy_runtime() {
 		undirected_runtime_data_t *data
 			= (undirected_runtime_data_t *) local_value.get_runtime_data();
@@ -85,35 +85,6 @@ public:
 	}
 };
 
-void undirected_triangle_vertex::run_on_vertex_header(vertex_program &prog,
-		const vertex_header &header)
-{
-	undirected_runtime_data_t *data
-		= (undirected_runtime_data_t *) local_value.get_runtime_data();
-	data->num_edge_reqs++;
-
-	vertex_id_t id = prog.get_vertex_id(*this);
-	if ((header.get_num_edges() < data->degree && header.get_id() != id)
-			|| (header.get_num_edges() == data->degree
-				&& header.get_id() < id)) {
-		data->edges.push_back(header.get_id());
-		data->num_required++;
-	}
-	if (data->num_edge_reqs == data->degree) {
-		if (data->edges.empty()) {
-			long ret = num_completed_vertices.inc(1);
-			if (ret % 100000 == 0)
-				printf("%ld completed vertices\n", ret);
-			destroy_runtime();
-			return;
-		}
-		std::sort(data->edges.begin(), data->edges.end());
-		data->finalize_init();
-		// We now can request the neighbors.
-		request_vertices(data->edges.data(), data->edges.size());
-	}
-}
-
 void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 		const page_vertex &vertex)
 {
@@ -121,7 +92,8 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
-		printf("%ld working vertices\n", ret);
+		BOOST_LOG_TRIVIAL(debug)
+			<< boost::format("%1% working vertices") % ret;
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
 	// either of them.
@@ -129,17 +101,43 @@ void undirected_triangle_vertex::run_on_itself(vertex_program &prog,
 			|| vertex.get_num_edges(edge_type::IN_EDGE) == 0) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 		return;
 	}
 
+	// Construct runtime data structure.
+	undirected_runtime_data_t *data = new undirected_runtime_data_t(
+				local_value.get_num_triangles(),
+				vertex.get_num_edges(edge_type::IN_EDGE));
+	local_value.set_runtime_data(data);
+
+	// Gets all neighbors whose degree is smaller than itself.
 	std::vector<vertex_id_t> edges(vertex.get_num_edges(edge_type::IN_EDGE));
 	vertex.read_edges(edge_type::IN_EDGE, edges.data(), edges.size());
+	vertex_id_t id = prog.get_vertex_id(*this);
+	BOOST_FOREACH(vertex_id_t neigh_id, edges) {
+		vsize_t num_edges_neigh = prog.get_num_edges(neigh_id);
+		if ((num_edges_neigh < data->degree && neigh_id != id)
+				|| (num_edges_neigh == data->degree
+					&& neigh_id < id)) {
+			data->edges.push_back(neigh_id);
+			data->num_required++;
+		}
+	}
 
-	local_value.set_runtime_data(new undirected_runtime_data_t(
-				local_value.get_num_triangles(),
-				vertex.get_num_edges(edge_type::IN_EDGE)));
-	request_vertex_headers(edges.data(), edges.size());
+	if (data->edges.empty()) {
+		long ret = num_completed_vertices.inc(1);
+		if (ret % 100000 == 0)
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
+		destroy_runtime();
+		return;
+	}
+	std::sort(data->edges.begin(), data->edges.end());
+	data->finalize_init();
+	// We now can request the neighbors.
+	request_vertices(data->edges.data(), data->edges.size());
 }
 
 void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
@@ -162,7 +160,8 @@ void undirected_triangle_vertex::run_on_neighbor(vertex_program &prog,
 	if (data->num_joined == data->num_required) {
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 
 		// Inform all neighbors in the in-edges.
 		for (size_t i = 0; i < data->triangles.size(); i++) {
@@ -198,11 +197,9 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 	 * that a neighbor is in the beginning of the adjacency list, and
 	 * the search range will be narrowed faster.
 	 */
-	page_byte_array::const_iterator<vertex_id_t> other_it
-		= v->get_neigh_begin(edge_type::OUT_EDGE);
-	page_byte_array::const_iterator<vertex_id_t> other_end
-		= std::lower_bound(other_it, v->get_neigh_end(edge_type::OUT_EDGE),
-				v->get_id());
+	edge_iterator other_it = v->get_neigh_begin(edge_type::OUT_EDGE);
+	edge_iterator other_end = std::lower_bound(other_it,
+			v->get_neigh_end(edge_type::OUT_EDGE), v->get_id());
 	size_t num_v_edges = other_end - other_it;
 	if (num_v_edges == 0)
 		return 0;
@@ -231,8 +228,8 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 			// We need to skip loops.
 			if (this_neighbor != v->get_id()
 					&& this_neighbor != this_id) {
-				page_byte_array::const_iterator<vertex_id_t> first
-					= std::lower_bound(other_it, other_end, this_neighbor);
+				edge_iterator first = std::lower_bound(other_it, other_end,
+						this_neighbor);
 				if (first != other_end && this_neighbor == *first) {
 					num_local_triangles++;
 					data->triangles[i]++;
@@ -247,8 +244,7 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 			= std::lower_bound(this_it, data->edges.cend(), v->get_id());
 		std::vector<int>::iterator count_it = data->triangles.begin();
 
-		page_byte_array::seq_const_iterator<vertex_id_t> other_it
-			= v->get_neigh_seq_it(edge_type::OUT_EDGE, 0,
+		edge_seq_iterator other_it = v->get_neigh_seq_it(edge_type::OUT_EDGE, 0,
 					v->get_num_edges(edge_type::OUT_EDGE));
 		while (this_it != this_end && other_it.has_next()) {
 			vertex_id_t this_neighbor = *this_it;
@@ -278,15 +274,18 @@ int undirected_triangle_vertex::count_triangles(vertex_program &prog,
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 {
-	printf("undirected triangle counting starts\n");
+	BOOST_LOG_TRIVIAL(info) << "undirected triangle counting starts";
 	graph_index::ptr index = NUMA_graph_index<undirected_triangle_vertex>::create(
-			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+			fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -302,11 +301,14 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	printf("It takes %f seconds to count all triangles\n",
-			time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds to count all triangles")
+		% time_diff(start, end);
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, undirected_triangle_vertex>(vec)));
 	return vec;
+}
+
 }

@@ -27,6 +27,9 @@
 #include "graph_engine.h"
 #include "stat.h"
 
+namespace fg
+{
+
 /**
  * \brief FlashGraph vector that provides several parallelized methods
  *        when compared to an STL-vector. <br>
@@ -89,7 +92,6 @@ class FG_vector
 	 * \brief Equivalent to += operator. Element by element
 	 *     addition of one `FG_vector` to another.
 	 * \param other An `FG_vector` smart pointer object.
-	 * **parallel**
 	 *
 	 */
 	void plus_eq(FG_vector<T>::ptr other) {
@@ -119,6 +121,13 @@ class FG_vector
 		for (size_t i = 0; i < get_size(); i++) {
 			this->eles[i] = other->eles[i];
 		}
+	}
+
+	template<class T1>
+	void copy_to(T1 *arr, size_t size) {
+		size_t num = std::min(size, eles.size());
+		for (size_t i = 0; i < num; i++)
+			arr[i] = eles[i];
 	}
 
 	/**
@@ -213,7 +222,6 @@ class FG_vector
 	T dot_product(const FG_vector<T> &other) const {
 		assert(this->get_size() == other.get_size());
 		T ret = 0;
-#pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
 			ret += get(i) * other.get(i);
 		return ret;
@@ -229,7 +237,6 @@ class FG_vector
 	 */
 	T norm2() const {
 		T ret = 0;
-#pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
 			ret += get(i) * get(i);
 		return sqrt(ret);
@@ -245,7 +252,6 @@ class FG_vector
 	 */
 	T norm1() const {
 		T ret = 0;
-#pragma omp parallel for reduction(+:ret)
 		for (size_t i = 0; i < get_size(); i++)
 			ret += fabs(get(i));
 		return ret;
@@ -269,23 +275,22 @@ class FG_vector
 	 * \return The sum of all items in the vector.
 	 */
 	template<class ResType>
-		ResType sum() const {
-			struct identity_func {
-				ResType operator()(T v) {
-					return v;
-				}
-			};
-			return aggregate<identity_func, ResType>(identity_func());
-		}
+	ResType sum() const {
+		struct identity_func {
+			ResType operator()(T v) {
+				return v;
+			}
+		};
+		return aggregate<identity_func, ResType>(identity_func());
+	}
 
 	template<class Func, class ResType>
-		ResType aggregate(Func func) const {
-			ResType ret = 0;
-#pragma omp parallel for reduction(+:ret)
-			for (size_t i = 0; i < get_size(); i++)
-				ret += func(eles[i]);
-			return ret;
-		}
+	ResType aggregate(Func func) const {
+		ResType ret = 0;
+		for (size_t i = 0; i < get_size(); i++)
+			ret += func(eles[i]);
+		return ret;
+	}
 
 	/**
 	 * \brief Find the maximal value in the vector and return its value.
@@ -413,13 +418,14 @@ class FG_vector
 	 * \param vec The vector by which you want to add to this vector.
 	 * **parallel**
 	 */
-	void add_in_place(FG_vector<T>::ptr vec) {
+	template<class T2>
+	void add_in_place(typename FG_vector<T2>::ptr vec) {
 		struct add_func {
-			T operator()(const T &v1, const T &v2) {
+			T operator()(const T &v1, const T2 &v2) {
 				return v1 + v2;
 			}
 		};
-		merge_in_place<add_func, T>(vec, add_func());
+		merge_in_place<add_func, T2>(vec, add_func());
 	}
 
 	/**
@@ -427,13 +433,39 @@ class FG_vector
 	 * \param vec The vector by which you want the array to be subtracted.
 	 * **parallel** 
 	 */
-	void subtract_in_place(const FG_vector<T>::ptr &vec) {
+	template<class T2>
+	void subtract_in_place(typename FG_vector<T2>::ptr &vec) {
 		struct sub_func {
-			T operator()(const T &v1, const T &v2) {
+			T operator()(const T &v1, const T2 &v2) {
 				return v1 - v2;
 			}
 		};
-		merge_in_place<sub_func, T>(vec, sub_func());
+		merge_in_place<sub_func, T2>(vec, sub_func());
+	}
+
+	template<class T2>
+	void multiply_in_place(T2 v) {
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] *= v;
+	}
+
+	template<class IN_TYPE, class OUT_TYPE>
+	typename FG_vector<OUT_TYPE>::ptr multiply(IN_TYPE v) const {
+		typename FG_vector<OUT_TYPE>::ptr ret = FG_vector<OUT_TYPE>::create(get_size());
+		for (size_t i = 0; i < get_size(); i++)
+			ret->set(i, this->eles[i] * v);
+		return ret;
+	}
+
+	template<class IN_TYPE, class OUT_TYPE>
+	typename FG_vector<OUT_TYPE>::ptr multiply(typename FG_vector<IN_TYPE>::ptr vec) const {
+		if (vec->get_size() != this->get_size())
+			return typename FG_vector<OUT_TYPE>::ptr();
+
+		typename FG_vector<OUT_TYPE>::ptr ret = FG_vector<OUT_TYPE>::create(get_size());
+		for (size_t i = 0; i < get_size(); i++)
+			ret->eles[i] = this->eles[i] * vec->get(i);
+		return ret;
 	}
 
 	/**
@@ -450,7 +482,7 @@ class FG_vector
 				norm = norm1();
 				break;
 			default:
-				assert(0);
+				ABORT_MSG("normalize on wrong type");
 		}
 		div_by_in_place(norm);
 	}
@@ -530,6 +562,8 @@ void multi_vec_apply(const std::vector<typename FG_vector<T>::ptr> &inputs,
 #pragma omp parallel for
 	for (size_t i = 0; i < output->get_size(); i++)
 		output->set(i, apply(i, inputs));
+}
+
 }
 
 #endif

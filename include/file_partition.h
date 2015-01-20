@@ -22,6 +22,9 @@
 
 #include "file_mapper.h"
 
+namespace safs
+{
+
 /**
  * This class represents a partition in a logical file.
  * A logical file is a data collection viewed by applications. It is
@@ -104,5 +107,7 @@ public:
 		return indices[0];
 	}
 };
+
+}
 
 #endif

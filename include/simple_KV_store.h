@@ -25,6 +25,9 @@
 #include "cache.h"
 #include "slab_allocator.h"
 
+namespace safs
+{
+
 template<class ValueType, class TaskType>
 class simple_KV_store;
 
@@ -71,7 +74,7 @@ public:
 		off_t end_off = (arr.get_offset() + arr.get_size()) / sizeof(ValueType);
 		for (int i = 0; i < num_tasks; i++) {
 			off_t idx = tasks[i].get_idx();
-			assert(idx >= start_off && idx < end_off);
+			BOOST_VERIFY(idx >= start_off && idx < end_off);
 			int num_entries = tasks[i].get_num_entries();
 			off_t it_start = (idx - start_off) * sizeof(ValueType);
 			off_t it_end = it_start + sizeof(ValueType) * num_entries;
@@ -92,7 +95,7 @@ public:
 	}
 
 	virtual request_range get_next_request() {
-		assert(0);
+		ABORT_MSG("get_next_request isn't supported");
 	}
 };
 
@@ -297,5 +300,7 @@ public:
 		return num_pending_tasks;
 	}
 };
+
+}
 
 #endif

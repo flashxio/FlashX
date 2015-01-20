@@ -26,6 +26,9 @@
 
 #define RECLAIM_NPAGES 32
 
+namespace safs
+{
+
 class LRU2Q_cache: public page_cache {
 	class linked_page: public frame {
 	public:
@@ -185,5 +188,7 @@ public:
 		return ((long) npages) * PAGE_SIZE;
 	}
 };
+
+}
 
 #endif

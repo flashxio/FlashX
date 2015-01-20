@@ -37,14 +37,14 @@
 #define A_READ 0
 #define A_WRITE 1
 
+namespace safs
+{
+
 class aio_ctx
 {
 	obj_allocator<struct iocb> iocb_allocator;
 public:
-	aio_ctx(int node_id, int max_aio): iocb_allocator(std::string(
-				"iocb_allocator-") + itoa(node_id), node_id, true,
-			sizeof(struct iocb) * max_aio, params.get_max_obj_alloc_size()) {
-	}
+	aio_ctx(int node_id, int max_aio);
 	virtual ~aio_ctx() {
 	}
 
@@ -94,5 +94,7 @@ struct io_callback_s
 {
 	callback_t func;
 };
+
+}
 
 #endif

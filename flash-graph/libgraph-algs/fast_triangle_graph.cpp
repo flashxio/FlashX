@@ -22,6 +22,8 @@
 
 #include "triangle_shared.h"
 
+using namespace fg;
+
 /*
  * This graph algorithm counts the number of triangles in a directed graph.
  * It only counts cycle triangles, in which all directed edges go to
@@ -43,7 +45,7 @@ edge_type neigh_edge_type = IN_EDGE;
 
 class directed_triangle_vertex: public compute_directed_vertex
 {
-	multi_func_value local_value;
+	triangle_multi_func_value local_value;
 
 	void inc_num_triangles(size_t num) {
 		if (local_value.has_num_triangles())
@@ -85,8 +87,7 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 {
 	std::vector<vertex_id_t> in_mem_edges;
 
-	page_byte_array::seq_const_iterator<vertex_id_t> it
-		= vertex.get_neigh_seq_it(neigh_edge_type, 0,
+	edge_seq_iterator it = vertex.get_neigh_seq_it(neigh_edge_type, 0,
 				vertex.get_num_edges(neigh_edge_type));
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		if (id < id_start || id >= id_end)
@@ -102,7 +103,8 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 #ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 #endif
 		return NULL;
 	}
@@ -122,7 +124,8 @@ runtime_data_t *construct_runtime(vertex_program &prog, const page_vertex &verte
 #ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 #endif
 		return NULL;
 	}
@@ -158,10 +161,8 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 	if (data->edge_set.size() > 0
 			&& data->edges.size() > HASH_SEARCH_RATIO * v.get_num_edges(
 				neigh_edge_type)) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v.get_neigh_begin(neigh_edge_type);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v.get_neigh_end(neigh_edge_type);
+		edge_iterator other_it = v.get_neigh_begin(neigh_edge_type);
+		edge_iterator other_end = v.get_neigh_end(neigh_edge_type);
 		for (; other_it != other_end; ++other_it) {
 			vertex_id_t neigh_neighbor = *other_it;
 			runtime_data_t::edge_set_t::const_iterator it
@@ -179,17 +180,15 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 	// If the neighbor vertex has way more edges than this vertex.
 	else if (v.get_num_edges(neigh_edge_type) / data->edges.size(
 				) > BIN_SEARCH_RATIO) {
-		page_byte_array::const_iterator<vertex_id_t> other_it
-			= v.get_neigh_begin(neigh_edge_type);
-		page_byte_array::const_iterator<vertex_id_t> other_end
-			= v.get_neigh_end(neigh_edge_type);
+		edge_iterator other_it = v.get_neigh_begin(neigh_edge_type);
+		edge_iterator other_end = v.get_neigh_end(neigh_edge_type);
 		for (int i = data->edges.size() - 1; i >= 0; i--) {
 			vertex_id_t this_neighbor = data->edges.at(i);
 			// We need to skip loops.
 			if (this_neighbor != v.get_id()
 					&& this_neighbor != this_id) {
-				page_byte_array::const_iterator<vertex_id_t> first
-					= std::lower_bound(other_it, other_end, this_neighbor);
+				edge_iterator first = std::lower_bound(other_it, other_end,
+						this_neighbor);
 				if (first != other_end && this_neighbor == *first) {
 					num_local_triangles++;
 					data->triangles[i]++;
@@ -202,8 +201,7 @@ size_t count_triangles(runtime_data_t *data, const page_vertex &v,
 		std::vector<vertex_id_t>::const_iterator this_it = data->edges.begin();
 		std::vector<int>::iterator count_it = data->triangles.begin();
 		std::vector<vertex_id_t>::const_iterator this_end = data->edges.end();
-		page_byte_array::seq_const_iterator<vertex_id_t> other_it
-			= v.get_neigh_seq_it(neigh_edge_type, 0,
+		edge_seq_iterator other_it = v.get_neigh_seq_it(neigh_edge_type, 0,
 					v.get_num_edges(neigh_edge_type));
 		while (this_it != this_end && other_it.has_next()) {
 			vertex_id_t this_neighbor = *this_it;
@@ -238,7 +236,8 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 #ifdef DEBUG
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
-		printf("%ld working vertices\n", ret);
+		BOOST_LOG_TRIVIAL(debug)
+			<< boost::format("%1% working vertices") % ret;
 #endif
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
@@ -248,7 +247,8 @@ void directed_triangle_vertex::run_on_itself(vertex_program &prog,
 #ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 #endif
 		return;
 	}
@@ -296,7 +296,8 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 #ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 #endif
 
 		// Inform all neighbors in the in-edges.
@@ -315,7 +316,7 @@ void directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 
 class part_directed_triangle_vertex: public part_compute_directed_vertex
 {
-	multi_func_value local_value;
+	triangle_multi_func_value local_value;
 
 	void inc_num_triangles(size_t num) {
 		if (local_value.has_num_triangles())
@@ -352,7 +353,8 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 #ifdef DEBUG
 	long ret = num_working_vertices.inc(1);
 	if (ret % 100000 == 0)
-		printf("%ld working vertices\n", ret);
+		BOOST_LOG_TRIVIAL(debug)
+			<< boost::format("%1% working vertices") % ret;
 #endif
 	// A vertex has to have in-edges and out-edges in order to form
 	// a triangle. so we can simply skip the vertices that don't have
@@ -362,7 +364,8 @@ void part_directed_triangle_vertex::run_on_itself(vertex_program &prog,
 #ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 #endif
 		return;
 	}
@@ -418,7 +421,8 @@ void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 #ifdef DEBUG
 		long ret = num_completed_vertices.inc(1);
 		if (ret % 100000 == 0)
-			printf("%ld completed vertices\n", ret);
+			BOOST_LOG_TRIVIAL(debug)
+				<< boost::format("%1% completed vertices") % ret;
 #endif
 
 		// Inform all neighbors in the in-edges.
@@ -440,18 +444,21 @@ void part_directed_triangle_vertex::run_on_neighbor(vertex_program &prog,
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 		directed_triangle_type type)
 {
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<directed_triangle_vertex,
-		part_directed_triangle_vertex>::create(fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+		part_directed_triangle_vertex>::create(fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 
-	printf("triangle counting starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "triangle counting starts";
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -464,11 +471,14 @@ FG_vector<size_t>::ptr compute_directed_triangles_fast(FG_graph::ptr fg,
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	printf("It takes %f seconds to count all triangles\n",
-			time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds to count all triangles")
+		% time_diff(start, end);
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, directed_triangle_vertex>(vec)));
 	return vec;
+}
+
 }

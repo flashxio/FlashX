@@ -26,6 +26,9 @@
 #include "cache.h"
 #include "cache_config.h"
 
+namespace safs
+{
+
 /**
  * This cache divides a global cache to pieces of the same size,
  * and place them on the specified NUMA nodes.
@@ -33,8 +36,8 @@
 class NUMA_cache: public page_cache
 {
 	const cache_config *cache_conf;
-	std::vector<page_cache *> caches;
-public:
+	std::vector<page_cache::ptr> caches;
+
 	NUMA_cache(const cache_config *config, int max_num_pending_flush): caches(
 			config->get_num_cache_parts()) {
 		cache_conf = config;
@@ -43,18 +46,14 @@ public:
 		cache_conf->create_cache_on_nodes(node_ids,
 				max_num_pending_flush / node_ids.size(), caches);
 	}
-
-	~NUMA_cache() {
-		for (unsigned i = 0; i < caches.size(); i++)
-			cache_conf->destroy_cache_on_node(caches[i]);
+public:
+	static page_cache::ptr create(const cache_config *config,
+			int max_num_pending_flush) {
+		return page_cache::ptr(new NUMA_cache(config, max_num_pending_flush));
 	}
 
-	const cache_config *get_cache_config() const {
-		return cache_conf;
-	}
-
-	page_cache *get_cache_on_node(int node_id) const {
-		return caches[node_id];
+	page_cache &get_cache_on_node(int node_id) const {
+		return *caches[node_id];
 	}
 
 	virtual page *search(const page_id_t &pg_id, page_id_t &old_id) {
@@ -88,7 +87,7 @@ public:
 	}
 
 	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
-			io_interface *io) {
+			io_interface &io) {
 		for (int i = 0; i < num; i++) {
 			page_id_t pg_id(pages[i]->get_file_id(), pages[i]->get_offset());
 			int idx = cache_conf->page2cache(pg_id);
@@ -118,5 +117,7 @@ public:
 		}
 	}
 };
+
+}
 
 #endif

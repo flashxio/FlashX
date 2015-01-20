@@ -22,12 +22,19 @@
 
 #include <algorithm>
 #include <boost/foreach.hpp>
+#include <boost/format.hpp>
 
+#include "thread.h"
+
+#include "log.h"
 #include "vertex.h"
 #include "partitioner.h"
 #include "vertex_program.h"
 #include "graph_file_header.h"
 #include "vertex_pointer.h"
+
+namespace fg
+{
 
 class compute_vertex;
 class part_compute_vertex;
@@ -114,7 +121,6 @@ public:
 	virtual vertex_program::ptr create_def_vertex_program() const = 0;
 	virtual vertex_program::ptr create_def_part_vertex_program() const = 0;
 
-	virtual std::string get_index_file() const = 0;
 	virtual local_vid_t get_local_id(int part_id, const compute_vertex &v) const = 0;
 	virtual vertex_id_t get_vertex_id(int part_id, const compute_vertex &v) const = 0;
 	virtual vertex_id_t get_vertex_id(int part_id, compute_vertex_pointer v) const = 0;
@@ -165,6 +171,9 @@ public:
 	}
 
 	void init() {
+		if (num_vertices == 0)
+			return;
+
 		vertex_arr = (vertex_type *) malloc_large(
 				sizeof(vertex_arr[0]) * num_vertices);
 		assert(vertex_arr);
@@ -191,6 +200,9 @@ public:
 	 * the horizontal partition.
 	 */
 	void init_vparts(int num_parts, std::vector<vertex_id_t> &ids) {
+		if (ids.empty())
+			return;
+
 		assert(std::is_sorted(ids.begin(), ids.end()));
 		assert(num_parts > 1);
 		part_vertex_arrs.resize(num_parts);
@@ -202,8 +214,7 @@ public:
 		for (size_t i = 0; i < ids.size(); i++) {
 			vertex_id_t id = ids[i];
 			// horizontal part id.
-			int hpart_id = partitioner.map(id);
-			assert(this->part_id == hpart_id);
+			BOOST_VERIFY(this->part_id == partitioner.map(id));
 			// vertical parts.
 			for (int vpart_id = 0; vpart_id < num_parts; vpart_id++)
 				new (part_vertex_arrs[vpart_id].second + i) part_vertex_type(id, vpart_id);
@@ -244,6 +255,7 @@ public:
 	}
 
 	compute_vertex &get_vertex(vertex_id_t id) {
+		assert(vertex_arr);
 		return vertex_arr[id];
 	}
 
@@ -303,9 +315,7 @@ public:
 template<class vertex_type, class part_vertex_type>
 class NUMA_graph_index: public graph_index
 {
-	std::string index_file;
 	graph_header header;
-
 	vertex_id_t max_vertex_id;
 	vertex_id_t min_vertex_id;
 	std::unique_ptr<range_graph_partitioner> partitioner;
@@ -326,24 +336,17 @@ class NUMA_graph_index: public graph_index
 			this->stop();
 		}
 	};
-
-	NUMA_graph_index(const std::string &index_file) {
-		this->index_file = index_file;
-	}
 public:
-	static graph_index::ptr create(const std::string &index_file) {
-		return graph_index::ptr(
-				new NUMA_graph_index<vertex_type, part_vertex_type>(index_file));
+	static graph_index::ptr create(const graph_header &header) {
+		NUMA_graph_index<vertex_type, part_vertex_type> *index
+			= new NUMA_graph_index<vertex_type, part_vertex_type>();
+		index->header = header;
+		return graph_index::ptr(index);
 	}
 
 	void init(int num_threads, int num_nodes) {
 		partitioner = std::unique_ptr<range_graph_partitioner>(
 				new range_graph_partitioner(num_threads));
-
-		file_io_factory::shared_ptr index_factory = create_io_factory(
-				index_file, GLOBAL_CACHE_ACCESS);
-		io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
-		io->access((char *) &header, 0, sizeof(header), READ);
 
 		// Construct the indices.
 		for (int i = 0; i < num_threads; i++) {
@@ -368,7 +371,8 @@ public:
 		min_vertex_id = 0;
 		max_vertex_id = header.get_num_vertices() - 1;
 
-		printf("There are %ld vertices\n", header.get_num_vertices());
+		BOOST_LOG_TRIVIAL(info) << boost::format("There are %1% vertices")
+			% header.get_num_vertices();
 	}
 
 	virtual void init_vparts(int hpart_id, int num_vparts,
@@ -454,17 +458,13 @@ public:
 		return vertex_program::ptr(new vertex_program_impl<part_vertex_type>());
 	}
 
-	virtual std::string get_index_file() const {
-		return index_file;
-	}
-
 	virtual vertex_id_t get_vertex_id(const compute_vertex &v) const {
 		for (size_t i = 0; i < index_arr.size(); i++) {
 			vertex_id_t id = index_arr[i]->get_vertex_id(v);
 			if (id != INVALID_VERTEX_ID)
 				return id;
 		}
-		assert(0);
+		ABORT_MSG("can't find vertex ID");
 	}
 
 	virtual vertex_id_t get_vertex_id(int part_id, compute_vertex_pointer v) const {
@@ -539,5 +539,7 @@ public:
 	}
 };
 #endif
+
+}
 
 #endif

@@ -20,7 +20,14 @@
  * limitations under the License.
  */
 
-#include "parameters.h"
+#include <limits>
+
+#include "log.h"
+#include "config_map.h"
+#include "graph_exception.h"
+
+namespace fg
+{
 
 /**
  * The data structure contains the configurations for the graph engine.
@@ -40,6 +47,8 @@ class graph_config
 	int num_vparts;
 	int min_vpart_degree;
 	bool serial_run;
+	// in pages.
+	int vertex_merge_gap;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -57,6 +66,9 @@ public:
 		num_vparts = 1;
 		min_vpart_degree = std::numeric_limits<int>::max();
 		serial_run = false;
+		// When the gap is 0, it means two vertices either in the same page
+		// or two adjacent pages.
+		vertex_merge_gap = 0;
 	}
 
 	/**
@@ -71,7 +83,7 @@ public:
 	/**
 	 * \brief Set the configurations to the user-defined values.
 	 */
-	void init(const config_map &map);
+	void init(config_map::ptr map);
 
 	/**
 	 * \brief Get the output file containing CPU profiling.
@@ -183,6 +195,17 @@ public:
 	int get_min_vpart_degree() const {
 		return min_vpart_degree;
 	}
+
+	/**
+	 * \brief Get the size of a gap that is allowed when merging two vertex
+	 * requests.
+	 * When the gap is 0, it means only two vertices that are either on the
+	 * same page or two adjacent pages can be merged.
+	 * \return the gap size (in pages).
+	 */
+	int get_vertex_merge_gap() const {
+		return vertex_merge_gap;
+	}
 };
 
 inline void graph_config::print_help()
@@ -201,43 +224,50 @@ inline void graph_config::print_help()
 	printf("\tnum_vparts: the number of vertical partitions\n");
 	printf("\tmin_vpart_degree: the min degree of a vertex to perform vertical partitioning\n");
 	printf("\tserial_run: run the user code on a vertex in serial\n");
+	printf("\tvertex_merge_gap: the gap size allowed when merging two vertex requests\n");
 }
 
 inline void graph_config::print()
 {
-	printf("Configuration parameters in graph algorithm.\n");
-	printf("\tthreads: %d\n", num_threads);
-	printf("\tprof_file: %s\n", prof_file.c_str());
-	printf("\ttrace_file: %s\n", trace_file.c_str());
-	printf("\tmax_processing_vertices: %d\n", max_processing_vertices);
-	printf("\tenable_elevator: %d\n", enable_elevator);
-	printf("\tpart_range_size_log: %d\n", part_range_size_log);
-	printf("\tpreload: %d\n", _preload);
-	printf("\tindex_file_weight: %d\n", index_file_weight);
-	printf("\tin_mem_index: %d\n", _in_mem_index);
-	printf("\tin_mem_graph: %d\n", _in_mem_graph);
-	printf("\tnum_vparts: %d\n", num_vparts);
-	printf("\tmin_vpart_degree: %d\n", min_vpart_degree);
-	printf("\tserial_run: %d\n", serial_run);
+	BOOST_LOG_TRIVIAL(info) << "Configuration parameters in graph algorithm.";
+	BOOST_LOG_TRIVIAL(info) << "\tthreads: " << num_threads;
+	BOOST_LOG_TRIVIAL(info) << "\tprof_file: " << prof_file;
+	BOOST_LOG_TRIVIAL(info) << "\ttrace_file: " << trace_file;
+	BOOST_LOG_TRIVIAL(info) << "\tmax_processing_vertices: " << max_processing_vertices;
+	BOOST_LOG_TRIVIAL(info) << "\tenable_elevator: " << enable_elevator;
+	BOOST_LOG_TRIVIAL(info) << "\tpart_range_size_log: " << part_range_size_log;
+	BOOST_LOG_TRIVIAL(info) << "\tpreload: " << _preload;
+	BOOST_LOG_TRIVIAL(info) << "\tindex_file_weight: " << index_file_weight;
+	BOOST_LOG_TRIVIAL(info) << "\tin_mem_index: " << _in_mem_index;
+	BOOST_LOG_TRIVIAL(info) << "\tin_mem_graph: " << _in_mem_graph;
+	BOOST_LOG_TRIVIAL(info) << "\tnum_vparts: " << num_vparts;
+	BOOST_LOG_TRIVIAL(info) << "\tmin_vpart_degree: " << min_vpart_degree;
+	BOOST_LOG_TRIVIAL(info) << "\tserial_run: " << serial_run;
+	BOOST_LOG_TRIVIAL(info) << "\tvertex_merge_gap: " << vertex_merge_gap;
 }
 
-inline void graph_config::init(const config_map &map)
+inline void graph_config::init(config_map::ptr map)
 {
-	map.read_option_int("threads", num_threads);
-	map.read_option("prof_file", prof_file);
-	map.read_option("trace_file", trace_file);
-	map.read_option_int("max_processing_vertices", max_processing_vertices);
-	map.read_option_bool("enable_elevator", enable_elevator);
-	map.read_option_int("part_range_size_log", part_range_size_log);
-	map.read_option_bool("preload", _preload);
-	map.read_option_int("index_file_weight", index_file_weight);
-	map.read_option_bool("in_mem_index", _in_mem_index);
-	map.read_option_bool("in_mem_graph", _in_mem_graph);
-	map.read_option_int("num_vparts", num_vparts);
-	map.read_option_int("min_vpart_degree", min_vpart_degree);
-	map.read_option_bool("serial_run", serial_run);
+	map->read_option_int("threads", num_threads);
+	if (!power2(num_threads))
+		throw conf_exception("The number of worker threads has to be 2^n");
+	map->read_option("prof_file", prof_file);
+	map->read_option("trace_file", trace_file);
+	map->read_option_int("max_processing_vertices", max_processing_vertices);
+	map->read_option_bool("enable_elevator", enable_elevator);
+	map->read_option_int("part_range_size_log", part_range_size_log);
+	map->read_option_bool("preload", _preload);
+	map->read_option_int("index_file_weight", index_file_weight);
+	map->read_option_bool("in_mem_index", _in_mem_index);
+	map->read_option_bool("in_mem_graph", _in_mem_graph);
+	map->read_option_int("num_vparts", num_vparts);
+	map->read_option_int("min_vpart_degree", min_vpart_degree);
+	map->read_option_bool("serial_run", serial_run);
+	map->read_option_int("vertex_merge_gap", vertex_merge_gap);
 }
 
 extern graph_config graph_conf;
+
+}
 
 #endif

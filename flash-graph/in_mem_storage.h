@@ -19,11 +19,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <stdlib.h>
 
-#include "io_interface.h"
+#include <string>
+#include <memory>
 
 class in_mem_io;
 class thread_safe_page;
+
+namespace safs
+{
+	class file_io_factory;
+}
+
+namespace fg
+{
 
 class in_mem_graph
 {
@@ -40,15 +50,31 @@ class in_mem_graph
 public:
 	typedef std::shared_ptr<in_mem_graph> ptr;
 
+	/*
+	 * in_mem_graph takes the memory buffer and is responsible to free it
+	 * afterwards.
+	 */
+	static ptr create(const std::string &graph_name, char *buf, size_t size) {
+		in_mem_graph *g = new in_mem_graph();
+		g->graph_size = size;
+		g->graph_data = buf;
+		// TODO we don't init graph_file_id here.
+		g->graph_file_name = graph_name;
+		return ptr(g);
+	}
+
 	static ptr load_graph(const std::string &graph_file);
+	static ptr load_safs_graph(const std::string &graph_file);
 
 	~in_mem_graph() {
 		free(graph_data);
 	}
 
-	file_io_factory::shared_ptr create_io_factory() const;
+	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 
 	friend class in_mem_io;
 };
+
+}
 
 #endif

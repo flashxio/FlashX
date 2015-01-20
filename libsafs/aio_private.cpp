@@ -19,6 +19,8 @@
 
 #include <limits.h>
 
+#include <boost/assert.hpp>
+
 #include "aio_private.h"
 #include "messaging.h"
 #include "read_private.h"
@@ -26,11 +28,14 @@
 #include "slab_allocator.h"
 #include "virt_aio_ctx.h"
 
-template class blocking_FIFO_queue<thread_callback_s *>;
+template class blocking_FIFO_queue<safs::thread_callback_s *>;
+
+namespace safs
+{
 
 #define EVEN_DISTRIBUTE
 
-const int MAX_MULTI_BUFS = 64;
+const int MAX_EMBED_BUFS = 64;
 
 /* 
  * each file gets the same number of outstanding requests.
@@ -46,9 +51,10 @@ struct thread_callback_s
 	async_io *aio;
 	callback_allocator *cb_allocator;
 	io_request req;
-	struct iovec vec[MAX_MULTI_BUFS];
+	embedded_array<struct iovec, MAX_EMBED_BUFS> vec;
 };
 
+#if 0
 class virt_data_impl: public virt_data
 {
 	// fd <-> buffered_io
@@ -93,6 +99,7 @@ off_t virt_data_impl::find_global_off(int fd, off_t off)
 			pg_idx);
 	return global_pg_idx * PAGE_SIZE + idx_in_page;
 }
+#endif
 
 /**
  * This slab allocator makes sure all requests in the callback structure
@@ -132,6 +139,21 @@ void aio_callback(io_context_t ctx, struct iocb* iocb[],
 	aio->return_cb(tcbs, num);
 }
 
+async_io::io_ref::io_ref(buffered_io *io)
+{
+	this->io = std::shared_ptr<buffered_io>(io);
+	this->count = 1;
+}
+
+void async_io::io_ref::dec_ref()
+{
+	count--;
+	if (count == 0) {
+		io->cleanup();
+		io.reset();
+	}
+}
+
 async_io::async_io(const logical_file_partition &partition,
 		int aio_depth_per_file, thread *t, int flags): io_interface(t), AIO_DEPTH(
 			aio_depth_per_file)
@@ -141,25 +163,28 @@ async_io::async_io(const logical_file_partition &partition,
 			AIO_DEPTH * sizeof(thread_callback_s));;
 	buf_idx = 0;
 
+#if 0
 	data = NULL;
 	if (params.is_use_virt_aio()) {
 		data = new virt_data_impl();
 		ctx = new virt_aio_ctx(data, node_id, AIO_DEPTH);
 	}
 	else
+#endif
 		ctx = new aio_ctx_impl(node_id, AIO_DEPTH);
 
-	cb = NULL;
 	num_iowait = 0;
 	num_completed_reqs = 0;
 	open_flags = flags;
 	if (partition.is_active()) {
 		int file_id = partition.get_file_id();
-		buffered_io *io = new buffered_io(partition, t, O_DIRECT | flags);
+		io_ref io(new buffered_io(partition, t, O_DIRECT | flags));
 		default_io = io;
-		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
+		open_files.insert(std::pair<int, io_ref>(file_id, io));
+#if 0
 		if (data)
 			data->add_new_file(io);
+#endif
 	}
 }
 
@@ -171,12 +196,10 @@ void async_io::cleanup()
 		ctx->io_wait(NULL, 1);
 		slot = ctx->max_io_slot();
 	}
-	for (std::tr1::unordered_map<int, buffered_io *>::iterator it
-			= open_files.begin(); it != open_files.end(); it++) {
-		buffered_io *io = it->second;
+	for (auto it = open_files.begin(); it != open_files.end(); it++) {
 		// Files may have been closed.
-		if (io)
-			io->cleanup();
+		if (it->second.is_valid())
+			it->second.get_io().cleanup();
 	}
 }
 
@@ -184,16 +207,14 @@ async_io::~async_io()
 {
 	cleanup();
 	delete ctx;
-	for (std::tr1::unordered_map<int, buffered_io *>::const_iterator it
-			= open_files.begin(); it != open_files.end(); it++)
-		delete it->second;
+	open_files.clear();
 	delete cb_allocator;
 }
 
 int async_io::get_file_id() const
 {
-	if (default_io)
-		return default_io->get_file_id();
+	if (default_io.is_valid())
+		return default_io.get_io().get_file_id();
 	else
 		return -1;
 }
@@ -216,34 +237,32 @@ struct iocb *async_io::construct_req(io_request &io_req, callback_t cb_func)
 	assert((long) tcb->req.get_buf() % MIN_BLOCK_SIZE == 0);
 	int io_type = tcb->req.get_access_method() == READ ? A_READ : A_WRITE;
 	block_identifier bid;
-	buffered_io *io;
-	std::tr1::unordered_map<int, buffered_io *>::iterator it
-		= open_files.find(io_req.get_file_id());
+	auto it = open_files.find(io_req.get_file_id());
 	assert(it != open_files.end());
-	io = it->second;
-	assert(io);
-	io->get_partition().map(tcb->req.get_offset() / PAGE_SIZE, bid);
+	assert(it->second.is_valid());
+	buffered_io &io = it->second.get_io();
+	io.get_partition().map(tcb->req.get_offset() / PAGE_SIZE, bid);
+	// Here we translate the global request offset to the offset in the local
+	// disk.
+	off_t local_off = bid.off * PAGE_SIZE + (tcb->req.get_offset() % PAGE_SIZE);
 	if (tcb->req.get_num_bufs() == 1)
-		return ctx->make_io_request(io->get_fd(tcb->req.get_offset()),
-				tcb->req.get_size(), bid.off * PAGE_SIZE, tcb->req.get_buf(),
-				io_type, cb);
+		return ctx->make_io_request(io.get_fd(tcb->req.get_offset()),
+				tcb->req.get_size(), local_off, tcb->req.get_buf(), io_type, cb);
 	else {
 		int num_bufs = tcb->req.get_num_bufs();
 		for (int i = 0; i < num_bufs; i++) {
 			assert((long) tcb->req.get_buf(i) % MIN_BLOCK_SIZE == 0);
 			assert(tcb->req.get_buf_size(i) % MIN_BLOCK_SIZE == 0);
 		}
-		assert(num_bufs <= MAX_MULTI_BUFS);
-		int ret = tcb->req.get_vec(tcb->vec, num_bufs);
-		assert(ret == num_bufs);
-		struct iocb *req = ctx->make_iovec_request(io->get_fd(tcb->req.get_offset()),
+		tcb->vec.resize(num_bufs);
+		BOOST_VERIFY(tcb->req.get_vec(tcb->vec.data(), num_bufs) == num_bufs);
+		struct iocb *req = ctx->make_iovec_request(io.get_fd(tcb->req.get_offset()),
 				/* 
 				 * iocb only contains a pointer to the io vector.
 				 * the space for the IO vector is stored
 				 * in the callback structure.
 				 */
-				tcb->vec, num_bufs, bid.off * PAGE_SIZE,
-				io_type, cb);
+				tcb->vec.data(), num_bufs, local_off, io_type, cb);
 		// I need to submit the request immediately. The iovec array is
 		// allocated in the stack.
 		ctx->submit_io_request(&req, 1);
@@ -418,22 +437,35 @@ void async_io::notify_completion(io_request *reqs[], int num)
 int async_io::open_file(const logical_file_partition &partition)
 {
 	int file_id = partition.get_file_id();
-	if (open_files.find(file_id) == open_files.end()) {
+	auto it = open_files.find(file_id);
+	if (it == open_files.end()) {
 		buffered_io *io = new buffered_io(partition, get_thread(),
 				O_DIRECT | open_flags);
-		open_files.insert(std::pair<int, buffered_io *>(file_id, io));
+		open_files.insert(std::pair<int, io_ref>(file_id, io_ref(io)));
+#if 0
 		if (data)
 			data->add_new_file(io);
+#endif
+	}
+	// The file has been opened.
+	else if (it->second.is_valid()) {
+		it->second.inc_ref();
+	}
+	// The file has been opened but was closed.
+	else {
+		it->second = io_ref(new buffered_io(partition, get_thread(),
+					O_DIRECT | open_flags));
 	}
 	return 0;
 }
 
 int async_io::close_file(int file_id)
 {
-	buffered_io *io = open_files[file_id];
-	open_files.erase(file_id);
-	io->cleanup();
-	delete io;
+	auto it = open_files.find(file_id);
+	// Users shouldn't close a file that hasn't been opened before.
+	assert(it != open_files.end());
+	it->second.dec_ref();
+//	open_files.erase(it);
 	return 0;
 }
 
@@ -442,3 +474,5 @@ void async_io::flush_requests()
 }
 
 const int AIO_NUM_PROCESS_REQS = AIO_DEPTH_PER_FILE * 16;
+
+}

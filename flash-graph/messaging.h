@@ -25,6 +25,9 @@
 #include "vertex.h"
 #include "partitioner.h"
 
+namespace fg
+{
+
 class message
 {
 	// The allocator of the message buffer.
@@ -155,7 +158,7 @@ public:
 		assert(num_objs > 0);
 		assert(curr_add_off >= obj.get_serialized_size());
 		T *obj_p = (T *) &buf[curr_add_off - obj.get_serialized_size()];
-		assert(obj_p->get_serialized_size() == obj.get_serialized_size());
+		BOOST_VERIFY(obj_p->get_serialized_size() == obj.get_serialized_size());
 		num_objs--;
 		curr_add_off -= obj.get_serialized_size();
 	}
@@ -209,8 +212,8 @@ public:
 		for (int i = 0; i < ret; i++) {
 			num_objs += msgs[i].get_num_objs();
 		}
-		int tmp = thread_safe_FIFO_queue<message>::add(msgs.data(), ret);
-		assert(ret == tmp);
+		BOOST_VERIFY(ret == thread_safe_FIFO_queue<message>::add(
+					msgs.data(), ret));
 		return num_objs;
 	}
 };
@@ -493,7 +496,7 @@ inline local_vid_t multicast_dest_list::get_dest(int idx) const
 
 class multicast_msg_sender
 {
-	const static int MMSG_BUF_SIZE = PAGE_SIZE;
+	const static int MMSG_BUF_SIZE = 4096;
 	std::shared_ptr<slab_allocator> alloc;
 	// The local buffer of vertex messages.
 	message buf;
@@ -557,5 +560,7 @@ public:
 		dest_list.clear();
 	}
 };
+
+}
 
 #endif

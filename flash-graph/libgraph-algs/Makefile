@@ -18,12 +18,12 @@
 include ../../Makefile.common
 
 OMP_FLAG = -fopenmp
-LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -lrt $(OMP_FLAG) $(LDFLAGS)
-CXXFLAGS += -I../../include -I.. -I. $(OMP_FLAG)
+LDFLAGS := -L.. -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon -lrt $(OMP_FLAG) $(LDFLAGS)
+CXXFLAGS += -I../../include -I../../libcommon -I.. -I. $(OMP_FLAG)
 
 all: libgraph-algs
 
-libgraph-algs: $(OBJS)
+libgraph-algs: $(OBJS) ../../libsafs/libsafs.a
 	rm -f libgraph-algs.a
 	ar -cvq libgraph-algs.a $(OBJS)
 
@@ -32,5 +32,6 @@ clean:
 	rm -f *.o
 	rm -f *~
 	rm -f libgraph-algs.a
+	rm -f libgraph-algs.so.*
 
 -include $(DEPS) 

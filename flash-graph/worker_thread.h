@@ -29,6 +29,15 @@
 #include "bitmap.h"
 #include "scan_pointer.h"
 
+namespace safs
+{
+	class file_io_factory;
+	class io_interface;
+}
+
+namespace fg
+{
+
 static const size_t MAX_ACTIVE_V = 1024;
 
 class worker_thread;
@@ -281,22 +290,22 @@ class simple_index_reader;
 class worker_thread: public thread
 {
 	int worker_id;
-	file_io_factory::shared_ptr graph_factory;
-	file_io_factory::shared_ptr index_factory;
-	io_interface::ptr io;
+	std::shared_ptr<safs::file_io_factory> graph_factory;
+	std::shared_ptr<safs::file_io_factory> index_factory;
+	std::shared_ptr<safs::io_interface> io;
 	graph_engine *graph;
 	const graph_index &index;
 
-	std::unique_ptr<compute_allocator> alloc;
-	std::unique_ptr<compute_allocator> merged_alloc;
-	std::unique_ptr<compute_allocator> sparse_alloc;
+	std::unique_ptr<safs::compute_allocator> alloc;
+	std::unique_ptr<safs::compute_allocator> merged_alloc;
+	std::unique_ptr<safs::compute_allocator> sparse_alloc;
 	vertex_program::ptr vprogram;
 	// Vertex program on the vertically partitioned vertices.
 	vertex_program::ptr vpart_vprogram;
 	std::shared_ptr<simple_index_reader> index_reader;
 
 	// This buffers the I/O requests for adjacency lists.
-	std::vector<io_request> adj_reqs;
+	std::vector<safs::io_request> adj_reqs;
 
 	// When a thread process a vertex, the worker thread should keep
 	// a vertex compute for the vertex. This is useful when a user-defined
@@ -354,8 +363,8 @@ class worker_thread: public thread
 	}
 	int process_activated_vertices(int max);
 public:
-	worker_thread(graph_engine *graph, file_io_factory::shared_ptr graph_factory,
-			file_io_factory::shared_ptr index_factory, vertex_program::ptr prog,
+	worker_thread(graph_engine *graph, std::shared_ptr<safs::file_io_factory> graph_factory,
+			std::shared_ptr<safs::file_io_factory> index_factory, vertex_program::ptr prog,
 			vertex_program::ptr part_prog, int node_id, int worker_id,
 			int num_threads, vertex_scheduler::ptr scheduler,
 			std::shared_ptr<slab_allocator> msg_alloc);
@@ -456,7 +465,7 @@ public:
 		return *index_reader;
 	}
 
-	void issue_io_request(io_request &req) {
+	void issue_io_request(safs::io_request &req) {
 		adj_reqs.push_back(req);
 	}
 
@@ -464,11 +473,11 @@ public:
 		return curr_activated_vertices->get_num_vertices();
 	}
 
-	compute_allocator &get_merged_compute_allocator() {
+	safs::compute_allocator &get_merged_compute_allocator() {
 		return *merged_alloc;
 	}
 
-	compute_allocator &get_sparse_compute_allocator() {
+	safs::compute_allocator &get_sparse_compute_allocator() {
 		return *sparse_alloc;
 	}
 
@@ -478,5 +487,7 @@ public:
 	friend class default_vertex_queue;
 	friend class customized_vertex_queue;
 };
+
+}
 
 #endif

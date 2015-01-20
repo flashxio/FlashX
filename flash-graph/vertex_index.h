@@ -24,11 +24,15 @@
 
 #include <string>
 #include <unordered_map>
+#include <boost/format.hpp>
 
 #include "native_file.h"
 
 #include "vertex.h"
 #include "graph_file_header.h"
+
+namespace fg
+{
 
 class vertex_index
 {
@@ -45,11 +49,11 @@ protected:
 			size_t num_large_in_vertices;
 			size_t num_large_out_vertices;
 		} data;
-		char page[PAGE_SIZE];
+		char page[graph_header::HEADER_SIZE];
 	} h;
 
 	vertex_index(size_t entry_size) {
-		assert(sizeof(*this) == PAGE_SIZE);
+		assert(sizeof(*this) == graph_header::HEADER_SIZE);
 		memset(this, 0, sizeof(*this));
 		graph_header::init(h.data.header);
 		h.data.entry_size = entry_size;
@@ -115,11 +119,9 @@ public:
 		FILE *f = fopen(file.c_str(), "w");
 		if (f == NULL) {
 			perror("fopen");
-			assert(0);
+			abort();
 		}
-
-		ssize_t ret = fwrite(this, vertex_index::get_index_size(), 1, f);
-		assert(ret);
+		BOOST_VERIFY(fwrite(this, vertex_index::get_index_size(), 1, f));
 
 		fclose(f);
 	}
@@ -149,21 +151,32 @@ public:
 			   vertex_index>(index);
 	}
 
+	static vertex_index::ptr create(const graph_header &header,
+			const std::vector<vertex_entry_type> &vertices) {
+		char *buf = (char *) malloc(vertex_index::get_header_size()
+				+ vertices.size() * sizeof(vertices[0]));
+		vertex_index_temp<vertex_entry_type> *index
+			= new (buf) vertex_index_temp<vertex_entry_type>(header);
+		index->h.data.num_entries = vertices.size();
+		assert(header.get_num_vertices() + 1 == vertices.size());
+		memcpy(buf + vertex_index::get_header_size(), vertices.data(),
+				vertices.size() * sizeof(vertices[0]));
+		return vertex_index::ptr(index, destroy_index());
+	}
+
 	static void dump(const std::string &file, const graph_header &header,
 			const std::vector<vertex_entry_type> &vertices) {
 		vertex_index_temp<vertex_entry_type> index(header);
 		index.h.data.num_entries = vertices.size();
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			assert(0);
-		}
+		if (f == NULL)
+			ABORT_MSG(boost::format("fail to open %1%: %2%")
+					% file % strerror(errno));
 
-		ssize_t ret = fwrite(&index, vertex_index::get_header_size(), 1, f);
-		assert(ret);
-		ret = fwrite(vertices.data(), vertices.size() * sizeof(vertices[0]), 1, f);
-		assert(ret);
+		BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
+		BOOST_VERIFY(fwrite(vertices.data(),
+					vertices.size() * sizeof(vertices[0]), 1, f));
 
 		fclose(f);
 	}
@@ -217,18 +230,20 @@ public:
 	}
 };
 
-class default_vertex_index: public vertex_index_temp<vertex_offset>
+class undirected_vertex_index: public vertex_index_temp<vertex_offset>
 {
 public:
-	typedef std::shared_ptr<default_vertex_index> ptr;
+	typedef std::shared_ptr<undirected_vertex_index> ptr;
 
-	static default_vertex_index::ptr cast(vertex_index::ptr index) {
-		return std::static_pointer_cast<default_vertex_index, vertex_index>(
+	static undirected_vertex_index::ptr cast(vertex_index::ptr index) {
+		assert(!index->is_compressed());
+		assert(!index->get_graph_header().is_directed_graph());
+		return std::static_pointer_cast<undirected_vertex_index, vertex_index>(
 				index);
 	}
 
-	static default_vertex_index::ptr load(const std::string &index_file) {
-		default_vertex_index::ptr ret
+	static undirected_vertex_index::ptr load(const std::string &index_file) {
+		undirected_vertex_index::ptr ret
 			= cast(vertex_index_temp<vertex_offset>::load(index_file));
 		ret->verify();
 		return ret;
@@ -299,6 +314,8 @@ public:
 	typedef std::shared_ptr<directed_vertex_index> ptr;
 
 	static directed_vertex_index::ptr cast(vertex_index::ptr index) {
+		assert(!index->is_compressed());
+		assert(index->get_graph_header().is_directed_graph());
 		return std::static_pointer_cast<directed_vertex_index, vertex_index>(
 				index);
 	}
@@ -310,6 +327,19 @@ public:
 		return ret;
 	}
 
+	static vertex_index::ptr create(const graph_header &header,
+			const std::vector<directed_vertex_entry> &vertices) {
+		char *buf = (char *) malloc(vertex_index::get_header_size()
+				+ vertices.size() * sizeof(vertices[0]));
+		directed_vertex_index *index = new (buf) directed_vertex_index(header);
+		index->h.data.num_entries = vertices.size();
+		index->h.data.out_part_loc = vertices.front().get_out_off();
+		assert(header.get_num_vertices() + 1 == vertices.size());
+		memcpy(buf + vertex_index::get_header_size(), vertices.data(),
+				vertices.size() * sizeof(vertices[0]));
+		return vertex_index::ptr(index, destroy_index());
+	}
+
 	static void dump(const std::string &file, const graph_header &header,
 			const std::vector<directed_vertex_entry> &vertices) {
 		directed_vertex_index index(header);
@@ -317,27 +347,25 @@ public:
 		index.h.data.out_part_loc = vertices.front().get_out_off();
 		assert(header.get_num_vertices() + 1 == vertices.size());
 		FILE *f = fopen(file.c_str(), "w");
-		if (f == NULL) {
-			perror("fopen");
-			assert(0);
-		}
+		if (f == NULL)
+			ABORT_MSG(boost::format("fail to open %1%: %2%")
+					% file % strerror(errno));
 
-		ssize_t ret = fwrite(&index, vertex_index::get_header_size(), 1, f);
-		assert(ret);
-		ret = fwrite(vertices.data(), vertices.size() * sizeof(vertices[0]), 1, f);
-		assert(ret);
+		BOOST_VERIFY(fwrite(&index, vertex_index::get_header_size(), 1, f));
+		BOOST_VERIFY(fwrite(vertices.data(),
+					vertices.size() * sizeof(vertices[0]), 1, f));
 
 		fclose(f);
 	}
 
 	void verify() const {
 		vertex_index_temp<directed_vertex_entry>::verify();
-		assert(get_graph_header().get_graph_type() == graph_type::DIRECTED);
-		assert(get_vertex(0).get_in_off() == sizeof(graph_header));
+		TEST(get_graph_header().get_graph_type() == graph_type::DIRECTED);
+		TEST(get_vertex(0).get_in_off() == sizeof(graph_header));
 		// All out-part of vertices are stored behind the in-part of vertices.
-		assert(get_vertex(0).get_out_off()
+		TEST(get_vertex(0).get_out_off()
 				== get_vertex(get_num_vertices()).get_in_off());
-		assert(h.data.out_part_loc == get_vertex(0).get_out_off());
+		TEST(h.data.out_part_loc == get_vertex(0).get_out_off());
 	}
 
 	size_t get_graph_size() const {
@@ -359,15 +387,28 @@ public:
 	}
 };
 
-class compressed_directed_vertex_entry
+/*
+ * A compressed vertex index groups multiple vertices into a single data
+ * structure, called compressed vertex entry. Each entry contains the location
+ * of the first vertex in the entry and the number of edges of each vertex
+ * in the entry.
+ */
+
+class compressed_vertex_entry
 {
-	typedef std::pair<unsigned char, unsigned char> edge_pair_t;
 public:
+	typedef unsigned char edge_size_t;
 	static const size_t ENTRY_SIZE = 32;
 	static const size_t LARGE_VERTEX_SIZE
-		= std::numeric_limits<edge_pair_t::first_type>::max();
+		= std::numeric_limits<edge_size_t>::max();
+};
 
-private:
+/*
+ * This defines the compressed vertex entry for a directed graph.
+ */
+class compressed_directed_vertex_entry: public compressed_vertex_entry
+{
+	typedef std::pair<edge_size_t, edge_size_t> edge_pair_t;
 	directed_vertex_entry start_offs;
 	edge_pair_t edges[ENTRY_SIZE];
 public:
@@ -377,6 +418,10 @@ public:
 
 	compressed_directed_vertex_entry(const directed_vertex_entry offs[],
 			size_t edge_data_size, size_t num);
+
+	void reset_start_offs(off_t in_off, off_t out_off) {
+		start_offs = directed_vertex_entry(in_off, out_off);
+	}
 
 	vsize_t get_num_in_edges(int idx) const {
 		return edges[idx].first;
@@ -407,11 +452,119 @@ public:
 	}
 };
 
+/*
+ * This defines the compressed vertex entry for an undirected graph.
+ */
+class compressed_undirected_vertex_entry: public compressed_vertex_entry
+{
+	vertex_offset start_offs;
+	edge_size_t edges[ENTRY_SIZE];
+public:
+	compressed_undirected_vertex_entry() {
+		memset(this, 0, sizeof(*this));
+	}
+
+	compressed_undirected_vertex_entry(const vertex_offset offs[],
+			size_t edge_data_size, size_t num);
+
+	vsize_t get_num_edges(int idx) const {
+		return edges[idx];
+	}
+
+	bool is_large_vertex(int idx) const {
+		return edges[idx] == LARGE_VERTEX_SIZE;
+	}
+
+	off_t get_start_off() const {
+		return start_offs.get_off();
+	}
+
+	const vertex_offset &get_start_offs() const {
+		return start_offs;
+	}
+};
+
+/*
+ * This class defines the data layout of a compressed vertex index for
+ * an undirected graph in the external memory. It's not used to answer
+ * queries in memory. The data layout of the index is
+ *	header,
+ *	vertex entries,
+ *	large vertices.
+ */
 typedef std::pair<vertex_id_t, vsize_t> large_vertex_t;
+class cundirected_vertex_index: public vertex_index
+{
+public:
+	typedef compressed_undirected_vertex_entry entry_type;
+private:
+	static const size_t ENTRY_SIZE = entry_type::ENTRY_SIZE;
+	entry_type entries[0];
+
+	large_vertex_t *get_large_vertices() {
+		return (large_vertex_t *) &entries[h.data.num_entries];
+	}
+public:
+	typedef std::shared_ptr<cundirected_vertex_index> ptr;
+
+	static typename cundirected_vertex_index::ptr cast(vertex_index::ptr index) {
+		assert(index->is_compressed());
+		assert(!index->get_graph_header().is_directed_graph());
+		return std::static_pointer_cast<cundirected_vertex_index, vertex_index>(
+				index);
+	}
+
+	static ptr construct(undirected_vertex_index &index);
+	static ptr construct(const std::vector<entry_type> &entries,
+			const std::vector<large_vertex_t> &large_vertices,
+			const graph_header &header);
+
+	const entry_type *get_entries() const {
+		return entries;
+	}
+
+	const large_vertex_t *get_large_vertices() const {
+		return (const large_vertex_t *) &entries[h.data.num_entries];
+	}
+
+	size_t cal_index_size() const {
+		return sizeof(cundirected_vertex_index)
+		+ sizeof(entries[0]) * h.data.num_entries
+		// We use num_large_in_vertices to store the number of large
+		// undirected vertices.
+		+ sizeof(large_vertex_t) * h.data.num_large_in_vertices;
+	}
+
+	size_t get_num_large_vertices() const {
+		return h.data.num_large_in_vertices;
+	}
+
+	void verify() const {
+		// We use num_large_in_vertices to store the number of large
+		// undirected vertices and set num_large_out_vertices to 0.
+		assert(h.data.num_large_out_vertices == 0);
+		assert(h.data.entry_size == sizeof(entry_type));
+		assert(ROUNDUP(h.data.header.num_vertices, ENTRY_SIZE) / ENTRY_SIZE
+				== h.data.num_entries);
+	}
+};
+
+/*
+ * This class defines the data layout of a compressed vertex index for
+ * a directed graph in the external memory. It's not used to answer
+ * queries in memory. The data layout of the index is
+ *	header,
+ *	vertex entries,
+ *	large in-vertices,
+ *	large out-vertices.
+ */
 class cdirected_vertex_index: public vertex_index
 {
-	static const size_t ENTRY_SIZE = compressed_directed_vertex_entry::ENTRY_SIZE;
-	compressed_directed_vertex_entry entries[0];
+public:
+	typedef compressed_directed_vertex_entry entry_type;
+private:
+	static const size_t ENTRY_SIZE = entry_type::ENTRY_SIZE;
+	entry_type entries[0];
 
 	large_vertex_t *get_large_in_vertices() {
 		return (large_vertex_t *) &entries[h.data.num_entries];
@@ -424,13 +577,19 @@ public:
 	typedef std::shared_ptr<cdirected_vertex_index> ptr;
 
 	static typename cdirected_vertex_index::ptr cast(vertex_index::ptr index) {
+		assert(index->is_compressed());
+		assert(index->get_graph_header().is_directed_graph());
 		return std::static_pointer_cast<cdirected_vertex_index, vertex_index>(
 				index);
 	}
 
 	static ptr construct(directed_vertex_index &index);
+	static ptr construct(const std::vector<entry_type> &entries,
+			const std::vector<large_vertex_t> &large_in_vertices,
+			const std::vector<large_vertex_t> &large_out_vertices,
+			const graph_header &header);
 
-	const compressed_directed_vertex_entry *get_entries() const {
+	const entry_type *get_entries() const {
 		return entries;
 	}
 
@@ -458,28 +617,120 @@ public:
 	}
 
 	void verify() const {
-		assert(h.data.entry_size == sizeof(compressed_directed_vertex_entry));
+		assert(h.data.entry_size == sizeof(entry_type));
 		assert(ROUNDUP(h.data.header.num_vertices, ENTRY_SIZE) / ENTRY_SIZE
 				== h.data.num_entries);
 	}
 };
 
-/**
- * In-memory compressed directed vertex index
+/*
+ * This defines the interface that other parts of FlashGraph can query
+ * the in-memory vertex index.
  */
-class in_mem_cdirected_vertex_index
+class in_mem_query_vertex_index
 {
-	static const size_t ENTRY_SIZE = compressed_directed_vertex_entry::ENTRY_SIZE;
+	bool directed;
+	bool compressed;
+protected:
+	in_mem_query_vertex_index(bool directed, bool compressed) {
+		this->directed = directed;
+		this->compressed = compressed;
+	}
+public:
+	typedef std::shared_ptr<in_mem_query_vertex_index> ptr;
+	static ptr create(vertex_index::ptr index, bool compress);
+
+	bool is_directed() const {
+		return directed;
+	}
+
+	bool is_compressed() const {
+		return compressed;
+	}
+
+	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const = 0;
+	virtual vertex_index::ptr get_raw_index() const = 0;
+};
+
+/*
+ * This is the in-memory compressed vertex index for an undirected graph.
+ * This is used to answer queries from other parts of FlashGraph.
+ */
+class in_mem_cundirected_vertex_index: public in_mem_query_vertex_index
+{
+	static const size_t ENTRY_SIZE = compressed_undirected_vertex_entry::ENTRY_SIZE;
 	static const size_t ENTRY_MASK = ENTRY_SIZE - 1;
-	// This increases the parallelism when initializing the large vertex maps.
-	static const size_t NUM_VMAPS = 64;
 
 	typedef std::unordered_map<vertex_id_t, vsize_t> vertex_map_t;
 
 	size_t num_vertices;
 	size_t edge_data_size;
-	std::vector<vertex_map_t> large_in_vmaps;
-	std::vector<vertex_map_t> large_out_vmaps;
+	vertex_map_t large_vmap;
+	std::vector<compressed_undirected_vertex_entry> entries;
+
+	in_mem_cundirected_vertex_index(vertex_index &index);
+
+	void init(const undirected_vertex_index &index);
+	void init(const cundirected_vertex_index &index);
+public:
+	typedef std::shared_ptr<in_mem_cundirected_vertex_index> ptr;
+
+	static ptr cast(in_mem_query_vertex_index::ptr index) {
+		assert(index->is_compressed());
+		assert(!index->is_directed());
+		return std::static_pointer_cast<in_mem_cundirected_vertex_index,
+			   in_mem_query_vertex_index>(index);
+	}
+
+	static ptr create(vertex_index &index) {
+		return ptr(new in_mem_cundirected_vertex_index(index));
+	}
+
+	size_t get_num_vertices() const {
+		return num_vertices;
+	}
+
+	vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
+		size_t entry_idx = id / ENTRY_SIZE;
+		vsize_t num_edges = entries[entry_idx].get_num_edges(id % ENTRY_SIZE);
+		if (num_edges >= compressed_undirected_vertex_entry::LARGE_VERTEX_SIZE) {
+			vertex_map_t::const_iterator it = large_vmap.find(id);
+			assert(it != large_vmap.end());
+			num_edges = it->second;
+		}
+		return num_edges;
+	}
+
+	vertex_index::ptr get_raw_index() const {
+		return vertex_index::ptr();
+	}
+
+	size_t get_size(vertex_id_t id) const {
+		vsize_t num_edges = get_num_edges(id, edge_type::IN_EDGE);
+		return ext_mem_undirected_vertex::num_edges2vsize(num_edges,
+				edge_data_size);
+	}
+
+	vertex_offset get_vertex(vertex_id_t id) const;
+
+	void verify_against(undirected_vertex_index &index);
+};
+
+/*
+ * This is the in-memory compressed vertex index for a directed graph.
+ * This is used to answer queries from other parts of FlashGraph.
+ */
+class in_mem_cdirected_vertex_index: public in_mem_query_vertex_index
+{
+	static const size_t ENTRY_SIZE = compressed_directed_vertex_entry::ENTRY_SIZE;
+	static const size_t ENTRY_MASK = ENTRY_SIZE - 1;
+
+	typedef std::unordered_map<vertex_id_t, vsize_t> vertex_map_t;
+
+	size_t num_vertices;
+	size_t edge_data_size;
+	vertex_map_t large_in_vmap;
+	vertex_map_t large_out_vmap;
 	std::vector<compressed_directed_vertex_entry> entries;
 
 	in_mem_cdirected_vertex_index(vertex_index &index);
@@ -488,6 +739,13 @@ class in_mem_cdirected_vertex_index
 	void init(const cdirected_vertex_index &index);
 public:
 	typedef std::shared_ptr<in_mem_cdirected_vertex_index> ptr;
+
+	static ptr cast(in_mem_query_vertex_index::ptr index) {
+		assert(index->is_compressed());
+		assert(index->is_directed());
+		return std::static_pointer_cast<in_mem_cdirected_vertex_index,
+			   in_mem_query_vertex_index>(index);
+	}
 
 	static ptr create(vertex_index &index) {
 		return ptr(new in_mem_cdirected_vertex_index(index));
@@ -501,9 +759,8 @@ public:
 		size_t entry_idx = id / ENTRY_SIZE;
 		vsize_t num_edges = entries[entry_idx].get_num_in_edges(id % ENTRY_SIZE);
 		if (num_edges >= compressed_directed_vertex_entry::LARGE_VERTEX_SIZE) {
-			size_t map_id = id % NUM_VMAPS;
-			vertex_map_t::const_iterator it = large_in_vmaps[map_id].find(id);
-			assert(it != large_in_vmaps[map_id].end());
+			vertex_map_t::const_iterator it = large_in_vmap.find(id);
+			assert(it != large_in_vmap.end());
 			num_edges = it->second;
 		}
 		return num_edges;
@@ -513,12 +770,28 @@ public:
 		size_t entry_idx = id / ENTRY_SIZE;
 		vsize_t num_edges = entries[entry_idx].get_num_out_edges(id % ENTRY_SIZE);
 		if (num_edges >= compressed_directed_vertex_entry::LARGE_VERTEX_SIZE) {
-			size_t map_id = id % NUM_VMAPS;
-			vertex_map_t::const_iterator it = large_out_vmaps[map_id].find(id);
-			assert(it != large_out_vmaps[map_id].end());
+			vertex_map_t::const_iterator it = large_out_vmap.find(id);
+			assert(it != large_out_vmap.end());
 			num_edges = it->second;
 		}
 		return num_edges;
+	}
+
+	virtual vsize_t get_num_edges(vertex_id_t id, edge_type type) const {
+		switch (type) {
+			case edge_type::IN_EDGE:
+				return get_num_in_edges(id);
+			case edge_type::OUT_EDGE:
+				return get_num_out_edges(id);
+			case edge_type::BOTH_EDGES:
+				return get_num_in_edges(id) + get_num_out_edges(id);
+			default:
+				ABORT_MSG("wrong edge type");
+		}
+	}
+
+	vertex_index::ptr get_raw_index() const {
+		return vertex_index::ptr();
 	}
 
 	size_t get_in_size(vertex_id_t id) const {
@@ -538,67 +811,6 @@ public:
 	void verify_against(directed_vertex_index &index);
 };
 
-/**
- * These are the in-mem counterparts of vertex index above.
- */
-
-class in_mem_vertex_index
-{
-public:
-	virtual ~in_mem_vertex_index() {
-	}
-
-	virtual void add_vertex(const in_mem_vertex &) = 0;
-	virtual void dump(const std::string &file, const graph_header &header) = 0;
-};
-
-class default_in_mem_vertex_index: public in_mem_vertex_index
-{
-	std::vector<vertex_offset> vertices;
-public:
-	default_in_mem_vertex_index() {
-		vertices.push_back(vertex_offset(sizeof(graph_header)));
-	}
-
-	virtual void add_vertex(const in_mem_vertex &v) {
-		assert(v.get_id() + 1 == vertices.size());
-		vertex_offset off;
-		off.init(vertices.back(), v);
-		vertices.push_back(off);
-	}
-
-	virtual void dump(const std::string &file, const graph_header &header) {
-		default_vertex_index::dump(file, header, vertices);
-	}
-};
-
-typedef default_in_mem_vertex_index undirected_in_mem_vertex_index;
-typedef default_in_mem_vertex_index ts_directed_in_mem_vertex_index;
-
-class directed_in_mem_vertex_index: public in_mem_vertex_index
-{
-	std::vector<directed_vertex_entry> vertices;
-public:
-	directed_in_mem_vertex_index() {
-		vertices.push_back(directed_vertex_entry(sizeof(graph_header), 0));
-	}
-
-	virtual void add_vertex(const in_mem_vertex &v) {
-		assert(v.get_id() + 1 == vertices.size());
-		directed_vertex_entry entry;
-		entry.init(vertices.back(), v);
-		vertices.push_back(entry);
-	}
-
-	virtual void dump(const std::string &file, const graph_header &header) {
-		size_t in_part_size = vertices.back().get_in_off();
-		for (size_t i = 0; i < vertices.size(); i++)
-			vertices[i] = directed_vertex_entry(vertices[i].get_in_off(),
-					vertices[i].get_out_off() + in_part_size);
-		directed_vertex_index::dump(file, header, vertices);
-	}
-};
-
 static inline int get_index_entry_size(graph_type type)
 {
 	switch (type) {
@@ -607,8 +819,10 @@ static inline int get_index_entry_size(graph_type type)
 		case graph_type::DIRECTED:
 			return sizeof(directed_vertex_entry);
 		default:
-			assert(0);
+			ABORT_MSG("wrong graph type");
 	}
+}
+
 }
 
 #endif

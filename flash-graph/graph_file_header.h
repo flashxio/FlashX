@@ -23,7 +23,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "common.h"
 #include "parameters.h"
+
+namespace fg
+{
 
 const int64_t MAGIC_NUMBER = 0x123456789ABCDEFL;
 const int CURR_VERSION = 4;
@@ -53,9 +57,12 @@ struct graph_header_struct
  */
 class graph_header
 {
+public:
+	static const int HEADER_SIZE = 4096;
+private:
 	union {
 		struct graph_header_struct data;
-		char page[PAGE_SIZE];
+		char page[HEADER_SIZE];
 	} h;
 public:
 	static int get_header_size() {
@@ -73,14 +80,14 @@ public:
 	}
 
 	graph_header() {
-		assert(sizeof(*this) == PAGE_SIZE);
+		assert(sizeof(*this) == HEADER_SIZE);
 		memset(this, 0, sizeof(*this));
 		init(h.data);
 	}
 
 	graph_header(graph_type type, size_t num_vertices, size_t num_edges,
 			int edge_data_size, int max_num_timestamps = 0) {
-		assert(sizeof(*this) == PAGE_SIZE);
+		assert(sizeof(*this) == HEADER_SIZE);
 		memset(this, 0, sizeof(*this));
 		h.data.magic_number = MAGIC_NUMBER;
 		h.data.version_number = CURR_VERSION;
@@ -139,5 +146,7 @@ public:
 		assert(is_right_version());
 	}
 };
+
+}
 
 #endif

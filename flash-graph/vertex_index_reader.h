@@ -23,6 +23,15 @@
 #include "FG_basic_types.h"
 #include "vertex.h"
 #include "vertex_index.h"
+#include "vertex_request.h"
+
+namespace safs
+{
+	class io_interface;
+}
+
+namespace fg
+{
 
 class directed_vertex_request;
 class index_comp_allocator;
@@ -51,45 +60,59 @@ public:
 	virtual int get_num_vertices() const = 0;
 
 	off_t get_curr_off() const {
-		return ((vertex_offset *) curr_buf)->get_off();
+		const vertex_offset *v_off
+			= reinterpret_cast<const vertex_offset *>(curr_buf);
+		return v_off->get_off();
 	}
 
 	vsize_t get_curr_size() const {
-		return ((vertex_offset *) next_buf)->get_off()
-			- ((vertex_offset *) curr_buf)->get_off();
+		const vertex_offset *v_next_off
+			= reinterpret_cast<const vertex_offset *>(next_buf);
+		const vertex_offset *v_curr_off
+			= reinterpret_cast<const vertex_offset *>(curr_buf);
+		return v_next_off->get_off() - v_curr_off->get_off();
 	}
 
 	off_t get_curr_out_off() const {
-		return ((directed_vertex_entry *) curr_buf)->get_out_off();
+		const directed_vertex_entry *v_entry
+			= reinterpret_cast<const directed_vertex_entry *>(curr_buf);
+		return v_entry->get_out_off();
 	}
 
 	vsize_t get_curr_out_size() const {
-		return ((directed_vertex_entry *) next_buf)->get_out_off()
-			- ((directed_vertex_entry *) curr_buf)->get_out_off();
+		const directed_vertex_entry *v_next_entry
+			= reinterpret_cast<const directed_vertex_entry *>(next_buf);
+		const directed_vertex_entry *v_curr_entry
+			= reinterpret_cast<const directed_vertex_entry *>(curr_buf);
+		return v_next_entry->get_out_off() - v_curr_entry->get_out_off();
 	}
 };
 
 template<class EntryType>
 class page_index_iterator_impl: public index_iterator
 {
-	page_byte_array::seq_const_iterator<EntryType> it;
+	safs::page_byte_array::seq_const_iterator<EntryType> it;
 	int num_entries;
 public:
-	page_index_iterator_impl(page_byte_array::seq_const_iterator<EntryType> &_it): it(_it) {
+	page_index_iterator_impl(safs::page_byte_array::seq_const_iterator<EntryType> &_it): it(_it) {
 		num_entries = it.get_num_tot_entries();
 		assert(num_entries >= 2);
 		assert(it.has_next());
-		*(EntryType *) curr_buf = it.next();
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
+		*v_curr_entry = it.next();
 		assert(it.has_next());
-		*(EntryType *) next_buf = it.next();
+		*v_next_entry = it.next();
 		_has_next = true;
 	}
 
 	virtual void move_next() {
 		_has_next = it.has_next();
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
 		if (_has_next) {
-			*(EntryType *) curr_buf = *(EntryType *) next_buf;
-			*(EntryType *) next_buf = it.next();
+			*v_curr_entry = *v_next_entry;
+			*v_next_entry = it.next();
 		}
 	}
 
@@ -99,10 +122,12 @@ public:
 			_has_next = false;
 			return false;
 		}
-		*(EntryType *) curr_buf = it.next();
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
+		*v_curr_entry = it.next();
 		if (it.has_next()) {
 			_has_next = true;
-			*(EntryType *) next_buf = it.next();
+			*v_next_entry = it.next();
 		}
 		else
 			_has_next = false;
@@ -126,25 +151,31 @@ public:
 		this->p = start;
 		this->end = end;
 		assert(end - p >= 2);
-		*(EntryType *) curr_buf = *p;
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
+		*v_curr_entry = *p;
 		p++;
-		*(EntryType *) next_buf = *p;
+		*v_next_entry = *p;
 		_has_next = true;
 	}
 
 	virtual void move_next() {
-		*(EntryType *) curr_buf = *(EntryType *) next_buf;
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
+		*v_curr_entry = *v_next_entry;
 		p++;
 		_has_next = p < end;
 		if (_has_next)
-			*(EntryType *) next_buf = *p;
+			*v_next_entry = *p;
 	}
 
 	virtual bool move_to(int idx) {
+		EntryType *v_next_entry = reinterpret_cast<EntryType *>(next_buf);
+		EntryType *v_curr_entry = reinterpret_cast<EntryType *>(curr_buf);
 		p = start + idx;
 		if (p + 1 < end) {
-			*(EntryType *) curr_buf = *p;
-			*(EntryType *) next_buf = *(p + 1);
+			*v_curr_entry = *p;
+			*v_next_entry = *(p + 1);
 			_has_next = true;
 		}
 		else
@@ -154,6 +185,56 @@ public:
 
 	virtual int get_num_vertices() const {
 		return end - start - 1;
+	}
+};
+
+class compressed_undirected_index_iterator: public index_iterator
+{
+	size_t begin;
+	size_t idx;
+	size_t end;
+	const in_mem_cundirected_vertex_index &index;
+public:
+	compressed_undirected_index_iterator(const in_mem_cundirected_vertex_index &_index,
+			const id_range_t &range): index(_index) {
+		vertex_offset first_entry = index.get_vertex(range.first);
+		new (curr_buf) vertex_offset(first_entry);
+		size_t size = index.get_size(range.first);
+		new (next_buf) vertex_offset(first_entry.get_off() + size);
+		begin = idx = range.first;
+		end = range.second;
+		_has_next = true;
+	}
+
+	virtual void move_next() {
+		const vertex_offset *v_next_off
+			= reinterpret_cast<const vertex_offset *>(next_buf);
+		vertex_offset e = *v_next_off;
+		new (curr_buf) vertex_offset(e);
+		idx++;
+		_has_next = (idx < end);
+		if (_has_next) {
+			size_t size = index.get_size(idx);
+			new (next_buf) vertex_offset(e.get_off() + size);
+		}
+	}
+
+	virtual bool move_to(int rel_idx) {
+		this->idx = begin + rel_idx;
+		if ((size_t) idx < end) {
+			vertex_offset e = index.get_vertex(idx);
+			new (curr_buf) vertex_offset(e);
+			size_t size = index.get_size(idx);
+			new (next_buf) vertex_offset(e.get_off() + size);
+			_has_next = true;
+		}
+		else
+			_has_next = false;
+		return _has_next;
+	}
+
+	virtual int get_num_vertices() const {
+		return end - idx;
 	}
 };
 
@@ -178,7 +259,9 @@ public:
 	}
 
 	virtual void move_next() {
-		directed_vertex_entry e = *(directed_vertex_entry *) next_buf;
+		const directed_vertex_entry *v_next_entry
+			= reinterpret_cast<const directed_vertex_entry *>(next_buf);
+		directed_vertex_entry e = *v_next_entry;
 		new (curr_buf) directed_vertex_entry(e);
 		idx++;
 		_has_next = (idx < end);
@@ -293,10 +376,8 @@ class vertex_index_reader
 public:
 	typedef std::shared_ptr<vertex_index_reader> ptr;
 
-	static ptr create(const vertex_index::ptr index, bool directed);
-	static ptr create(const in_mem_cdirected_vertex_index::ptr index,
-			bool directed);
-	static ptr create(io_interface::ptr io, bool directed);
+	static ptr create(const in_mem_query_vertex_index::ptr index, bool directed);
+	static ptr create(std::shared_ptr<safs::io_interface> io, bool directed);
 
 	virtual ~vertex_index_reader() {
 	}
@@ -376,9 +457,17 @@ struct req_directed_edge_func
 
 class worker_thread;
 /*
- * This class is optimized for vertices to request their own adjacency lists.
- * In this case, we don't need to create a vertex_compute for each vertex
- * when their adjacency lists are ready in the page cache for processing.
+ * The two classes below are optimized for vertices to request their own
+ * adjacency lists. In this case, we don't need to create a vertex_compute
+ * for each vertex and all adjacency lists are accessed in one or two I/O
+ * requests (two I/O requests are required if both in-edge and out-edge lists
+ * are accessed).
+ */
+
+/*
+ * This class is optimized for a list of vertices whose Ids are contiguous.
+ * In this case, we can identify the list of vertices with the first and
+ * the last Id in the range.
  */
 class dense_self_vertex_compute: public index_compute
 {
@@ -403,6 +492,11 @@ public:
 	virtual bool run(vertex_id_t start_vid, index_iterator &it);
 };
 
+/*
+ * This class handles the case that the vertex Ids aren't contiguous, but
+ * they are close enough so that a single I/O request can fetch all of
+ * these index entries. Therefore, we need to store all vertex Ids individually.
+ */
 class sparse_self_vertex_compute: public index_compute
 {
 	size_t num_ranges;
@@ -443,7 +537,7 @@ public:
 
 	bool add_range(id_range_t &range) {
 		if (in_mem || get_last_page() == get_page(range.first)
-				|| get_last_page() + PAGE_SIZE == get_page(range.first)) {
+				|| get_last_page() + safs::PAGE_SIZE == get_page(range.first)) {
 			index_compute::add_vertex(range.second - 1);
 			if ((size_t) ranges.get_capacity() <= num_ranges)
 				ranges.resize(ranges.get_capacity() * 2);
@@ -692,7 +786,7 @@ public:
 		}
 
 		if (in_mem || get_last_page() == get_page(id)
-				|| get_last_page() + PAGE_SIZE == get_page(id)) {
+				|| get_last_page() + safs::PAGE_SIZE == get_page(id)) {
 			index_compute::add_vertex(id);
 			computes[get_num_vertices()] = compute;
 			ids[get_num_vertices()] = id;
@@ -846,7 +940,7 @@ class index_comp_allocator_impl: public index_comp_allocator
 public:
 	index_comp_allocator_impl(thread *t): allocator(
 			"index-compute-allocator", t->get_node_id(), false, 1024 * 1024,
-			params.get_max_obj_alloc_size(),
+			safs::params.get_max_obj_alloc_size(),
 			typename obj_initiator<compute_type>::ptr(new compute_initiator(*this)),
 			typename obj_destructor<compute_type>::ptr(new compute_destructor())) {
 	}
@@ -892,7 +986,7 @@ class general_index_comp_allocator_impl: public index_comp_allocator
 public:
 	general_index_comp_allocator_impl(thread *t, int entry_size_log,
 			bool in_mem): allocator("sparse-index-compute-allocator",
-				t->get_node_id(), false, 1024 * 1024, params.get_max_obj_alloc_size(),
+				t->get_node_id(), false, 1024 * 1024, safs::params.get_max_obj_alloc_size(),
 			typename obj_initiator<compute_type>::ptr(new compute_initiator(*this,
 					entry_size_log, in_mem)),
 			typename obj_destructor<compute_type>::ptr(new compute_destructor())) {
@@ -986,26 +1080,26 @@ class simple_index_reader
 
 	void init(worker_thread *t, bool directed);
 
-	simple_index_reader(const vertex_index::ptr index,
+	simple_index_reader(const in_mem_query_vertex_index::ptr index,
 			bool directed, worker_thread *t) {
 		in_mem = true;
 		init(t, directed);
 		index_reader = vertex_index_reader::create(index, directed);
 	}
 
-	simple_index_reader(const in_mem_cdirected_vertex_index::ptr index,
-			bool directed, worker_thread *t) {
-		in_mem = true;
-		init(t, directed);
-		index_reader = vertex_index_reader::create(index, directed);
-	}
-
-	simple_index_reader(io_interface::ptr io, bool directed, worker_thread *t) {
+	simple_index_reader(std::shared_ptr<safs::io_interface> io, bool directed,
+			worker_thread *t) {
 		in_mem = false;
 		init(t, directed);
 		index_reader = vertex_index_reader::create(io, directed);
 	}
 
+	/*
+	 * Process the self requests (vertices request their own adjacency lists).
+	 * The adjacency list requests in most applications are of this type and
+	 * we can optimize this type of requests differently, because we can easily
+	 * merge them without paying extra overhead.
+	 */
 	void process_self_requests(std::vector<id_range_t> &reqs, edge_type type);
 
 	/*
@@ -1076,16 +1170,12 @@ class simple_index_reader
 public:
 	typedef std::shared_ptr<simple_index_reader> ptr;
 
-	static ptr create(io_interface::ptr io, bool directed, worker_thread *t) {
+	static ptr create(std::shared_ptr<safs::io_interface> io, bool directed,
+			worker_thread *t) {
 		return ptr(new simple_index_reader(io, directed, t));
 	}
 
-	static ptr create(const in_mem_cdirected_vertex_index::ptr index,
-			bool directed, worker_thread *t) {
-		return ptr(new simple_index_reader(index, directed, t));
-	}
-
-	static ptr create(const vertex_index::ptr index, bool directed,
+	static ptr create(const in_mem_query_vertex_index::ptr index, bool directed,
 			worker_thread *t) {
 		return ptr(new simple_index_reader(index, directed, t));
 	}
@@ -1150,7 +1240,7 @@ public:
 
 	void request_num_edges(vertex_id_t ids[], int num, vertex_compute &compute) {
 		// TODO it should only work for undirected vertices.
-		assert(0);
+		ABORT_MSG("request_num_edges isn't supported currently");
 		for (int i = 0; i < num; i++)
 			edge_comps.push_back(id_compute_t(ids[i], &compute));
 	}
@@ -1170,5 +1260,7 @@ public:
 		return index_reader->get_num_pending_tasks();
 	}
 };
+
+}
 
 #endif

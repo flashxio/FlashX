@@ -20,6 +20,7 @@
 #include <algorithm>
 
 #include "io_interface.h"
+#include "comp_io_scheduler.h"
 
 #include "bitmap.h"
 #include "graph_config.h"
@@ -30,11 +31,17 @@
 #include "vertex_request.h"
 #include "vertex_index_reader.h"
 #include "in_mem_storage.h"
+#include "FGlib.h"
+
+using namespace safs;
+
+namespace fg
+{
 
 /**
  * The size of a message buffer used to pass vertex messages to other threads.
  */
-const int GRAPH_MSG_BUF_SIZE = PAGE_SIZE * 4;
+const int GRAPH_MSG_BUF_SIZE = 4096 * 4;
 const int MAX_FLUSH_MSG_SIZE = 256;
 
 graph_config graph_conf;
@@ -46,8 +53,7 @@ struct prio_compute
 
 	prio_compute(io_interface *io, user_compute *compute) {
 		this->compute = compute;
-		bool ret = compute->fetch_request(io, req);
-		assert(ret);
+		BOOST_VERIFY(compute->fetch_request(io, req));
 	}
 };
 
@@ -169,11 +175,11 @@ public:
 	size_t get_requests(fifo_queue<io_request> &reqs, size_t max);
 };
 
-class throughput_comp_io_sched_creater: public comp_io_sched_creater
+class throughput_comp_io_sched_creator: public comp_io_sched_creator
 {
 public:
-	comp_io_scheduler *create(int node_id) const {
-		return new throughput_comp_io_scheduler(node_id);
+	comp_io_scheduler::ptr create(int node_id) const {
+		return comp_io_scheduler::ptr(new throughput_comp_io_scheduler(node_id));
 	}
 };
 
@@ -219,6 +225,9 @@ bool request_self(directed_vertex_request reqs[], size_t num, vertex_id_t self)
 
 void compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
+	if (num == 0)
+		return;
+
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_id_t id = curr->get_vertex_program(false).get_vertex_id(*this);
 	curr->request_on_vertex(id);
@@ -286,6 +295,9 @@ void part_compute_vertex::broadcast_vpart(const vertex_message &msg)
 
 void part_compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
+	if (num == 0)
+		return;
+
 	// The trick for self request doesn't work for part compute vertex.
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_id_t id = curr->get_vertex_program(true).get_vertex_id(*this);
@@ -299,6 +311,9 @@ void part_compute_vertex::request_vertices(vertex_id_t ids[], size_t num)
 
 void part_compute_directed_vertex::request_vertices(vertex_id_t ids[], size_t num)
 {
+	if (num == 0)
+		return;
+
 	// The trick for self request doesn't work for part compute vertex.
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
 	vertex_id_t id = curr->get_vertex_program(true).get_vertex_id(*this);
@@ -437,12 +452,10 @@ class init_vpart_thread: public thread
 	graph_index::ptr index;
 	graph_engine &graph;
 	int hpart_id;
-	file_io_factory::shared_ptr io_factory;
 public:
-	init_vpart_thread(graph_index::ptr index, file_io_factory::shared_ptr io_factory,
-			graph_engine &_graph, int hpart_id, int node_id): thread(
-				"index-init-thread", node_id), graph(_graph) {
-		this->io_factory = io_factory;
+	init_vpart_thread(graph_index::ptr index, graph_engine &_graph,
+			int hpart_id, int node_id): thread("index-init-thread",
+				node_id), graph(_graph) {
 		this->index = index;
 		this->hpart_id = hpart_id;
 	}
@@ -486,15 +499,9 @@ public:
 void init_vpart_thread::run()
 {
 	vertex_index_reader::ptr index_reader;
-	if (graph.get_in_mem_cindex())
-		index_reader = vertex_index_reader::create(graph.get_in_mem_cindex(),
-				graph.is_directed());
-	else if (graph.get_in_mem_index())
-		index_reader = vertex_index_reader::create(graph.get_in_mem_index(),
-				graph.is_directed());
-	else
-		index_reader = vertex_index_reader::create(
-				io_factory->create_io(this), graph.is_directed());
+	assert(graph.get_in_mem_index());
+	index_reader = vertex_index_reader::create(graph.get_in_mem_index(),
+			graph.is_directed());
 	std::vector<vertex_id_t> large_degree_ids;
 	std::unique_ptr<index_comp_allocator_impl> alloc
 		= std::unique_ptr<index_comp_allocator_impl>(
@@ -532,26 +539,10 @@ void init_vpart_thread::run()
 
 }
 
-graph_engine::graph_engine(const std::string &graph_file,
-		graph_index::ptr index, const config_map &configs)
+void graph_engine::init(graph_index::ptr index)
 {
-	struct timeval init_start, init_end;
-	gettimeofday(&init_start, NULL);
-
-	init_flash_graph(configs);
-	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
 	int num_threads = graph_conf.get_num_threads();
 	this->num_nodes = params.get_num_nodes();
-
-	// Construct the in-memory compressed vertex index.
-	vertex_index::ptr raw_vindex = vertex_index::safs_load(index->get_index_file());
-	if (raw_vindex->is_compressed() || !graph_conf.use_in_mem_index()) {
-		assert(raw_vindex->get_graph_header().is_directed_graph());
-		cindex = in_mem_cdirected_vertex_index::create(*raw_vindex);
-	}
-	else
-		vindex = raw_vindex;
-	raw_vindex.reset();
 
 	// Construct the vertex states.
 	index->init(num_threads, num_nodes);
@@ -564,25 +555,11 @@ graph_engine::graph_engine(const std::string &graph_file,
 	pthread_barrier_init(&barrier1, NULL, num_threads);
 	pthread_barrier_init(&barrier2, NULL, num_threads);
 
-	// Right now only the cached I/O can support async I/O
-	if (graph_conf.use_in_mem_graph()) {
-		graph_data = in_mem_graph::load_graph(graph_file);
-		graph_factory = graph_data->create_io_factory();
-	}
-	else
-		graph_factory = create_io_factory(graph_file, GLOBAL_CACHE_ACCESS);
-	graph_factory->set_sched_creater(new throughput_comp_io_sched_creater());
-	index_factory = create_io_factory(index->get_index_file(), GLOBAL_CACHE_ACCESS);
-
-	io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
-	io->access((char *) &header, 0, sizeof(header), READ);
-	header.verify();
-	out_part_off = 0;
-	if (header.is_directed_graph()) {
-		assert(sizeof(vertex_index) == sizeof(header));
-		vertex_index *idx = (vertex_index *) &header;
-		out_part_off = idx->get_out_part_loc();
-	}
+	graph_factory->set_sched_creator(comp_io_sched_creator::ptr(
+				new throughput_comp_io_sched_creator()));
+#if 0
+	set_file_weight(index->get_index_file(), graph_conf.get_index_file_weight());
+#endif
 
 	assert(num_threads > 0 && num_nodes > 0);
 	assert(num_threads % num_nodes == 0);
@@ -592,15 +569,16 @@ graph_engine::graph_engine(const std::string &graph_file,
 	if (!graph_conf.get_trace_file().empty())
 		logger = trace_logger::ptr(new trace_logger(graph_conf.get_trace_file()));
 
+#if 0
 	if (graph_conf.preload())
 		preload_graph();
+#endif
 
 	// If we need to perform vertical partitioning on the graph.
 	if (graph_conf.get_num_vparts() > 1) {
 		std::vector<init_vpart_thread *> threads(num_threads);
 		for (int i = 0; i < num_threads; i++) {
-			threads[i] = new init_vpart_thread(index, index_factory, *this,
-					i, i % num_nodes);
+			threads[i] = new init_vpart_thread(index, *this, i, i % num_nodes);
 			threads[i]->start();
 		}
 		for (int i = 0; i < num_threads; i++) {
@@ -608,20 +586,48 @@ graph_engine::graph_engine(const std::string &graph_file,
 			delete threads[i];
 		}
 	}
+}
+
+graph_engine::graph_engine(FG_graph &graph, graph_index::ptr index)
+{
+	struct timeval init_start, init_end;
+	gettimeofday(&init_start, NULL);
+
+	try {
+		init_flash_graph(graph.get_configs());
+	} catch(init_error &e) {
+		// We ignore the error.
+	}
+
+	// Init graph data.
+	graph_factory = graph.get_graph_io_factory(GLOBAL_CACHE_ACCESS);
+	// Construct the in-memory compressed vertex index.
+	vindex = in_mem_query_vertex_index::create(graph.get_index_data(),
+			!graph_conf.use_in_mem_index());
+
+	header = graph.get_graph_header();
+	header.verify();
+	out_part_off = 0;
+	if (header.is_directed_graph()) {
+		assert(sizeof(vertex_index) == sizeof(header));
+		vertex_index *idx = (vertex_index *) &header;
+		out_part_off = idx->get_out_part_loc();
+	}
+
+	init(index);
 
 	gettimeofday(&init_end, NULL);
-	printf("It takes %f seconds to initialize the graph engine\n",
-			time_diff(init_start, init_end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds to initialize the graph engine")
+		% time_diff(init_start, init_end);
 }
 
 graph_engine::~graph_engine()
 {
 	graph_factory->print_statistics();
-	index_factory->print_statistics();
 	for (unsigned i = 0; i < worker_threads.size(); i++)
 		delete worker_threads[i];
 	graph_factory = file_io_factory::shared_ptr();
-	index_factory = file_io_factory::shared_ptr();
 	destroy_flash_graph();
 }
 
@@ -657,7 +663,9 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 			new_prog = creater->create();
 		else
 			new_prog = vertices->create_def_vertex_program();
-		worker_thread *t = new worker_thread(this, graph_factory, index_factory,
+		// TODO provide file_io_factory for index file.
+		worker_thread *t = new worker_thread(this, graph_factory,
+				file_io_factory::shared_ptr(),
 				new_prog, vertices->create_def_part_vertex_program(),
 				get_node_id(i, num_nodes), i, num_threads, scheduler,
 				msg_allocs[get_node_id(i, num_nodes)]);
@@ -680,6 +688,7 @@ void graph_engine::start(const vertex_id_t ids[], int num,
 	int num_threads = get_num_threads();
 	std::vector<std::vector<vertex_id_t> > start_vertices(num_threads);
 	for (int i = 0; i < num; i++) {
+		TEST(ids[i] <= this->get_max_vertex_id());
 		int idx = get_partitioner()->map(ids[i]);
 		start_vertices[idx].push_back(ids[i]);
 	}
@@ -740,7 +749,7 @@ bool graph_engine::progress_first_level()
 	int rc = pthread_barrier_wait(&barrier2);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
 	{
-		printf("Could not wait on barrier\n");
+		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
 		exit(-1);
 	}
 	return is_complete;
@@ -756,7 +765,7 @@ bool graph_engine::progress_next_level()
 	int rc = pthread_barrier_wait(&barrier1);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
 	{
-		printf("Could not wait on barrier\n");
+		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
 		exit(-1);
 	}
 	worker_thread *curr = (worker_thread *) thread::get_curr_thread();
@@ -767,9 +776,10 @@ bool graph_engine::progress_next_level()
 		level.inc(1);
 		struct timeval curr;
 		gettimeofday(&curr, NULL);
-		printf("Iter %d takes %f seconds, and %ld vertices are in iter %d\n",
-				level.get() - 1, time_diff(iter_start, curr),
-				tot_num_activates.get(), level.get());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("Iter %1% takes %2% seconds, and %3% vertices are in iter %4%")
+				% (level.get() - 1) % time_diff(iter_start, curr)
+				% tot_num_activates.get() % level.get();
 		iter_start = curr;
 		assert(num_remaining_vertices_in_level.get() == 0);
 		num_remaining_vertices_in_level = atomic_number<size_t>(
@@ -785,7 +795,7 @@ bool graph_engine::progress_next_level()
 	rc = pthread_barrier_wait(&barrier2);
 	if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
 	{
-		printf("Could not wait on barrier\n");
+		BOOST_LOG_TRIVIAL(fatal) << "Could not wait on barrier";
 		exit(-1);
 	}
 	return is_complete;
@@ -800,8 +810,9 @@ void graph_engine::wait4complete()
 	}
 	struct timeval curr;
 	gettimeofday(&curr, NULL);
-	printf("The graph engine takes %f seconds to complete\n",
-			time_diff(start_time, curr));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("The graph engine takes %1% seconds to complete")
+		% time_diff(start_time, curr);
 }
 
 void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
@@ -809,6 +820,7 @@ void graph_engine::set_vertex_scheduler(vertex_scheduler::ptr scheduler)
 	this->scheduler = scheduler;
 }
 
+#if 0
 void graph_engine::preload_graph()
 {
 	const int BLOCK_SIZE = 1024 * 1024 * 32;
@@ -819,17 +831,22 @@ void graph_engine::preload_graph()
 	size_t preload_size = min(cache_size,
 			index_factory->get_file_size());
 	cache_size -= preload_size;
-	printf("preload %ld bytes of the index file\n", preload_size);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("preload %1% bytes of the index file")
+		% preload_size;
 	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
 		io->access(buf.get(), i, BLOCK_SIZE, READ);
 
 	io = graph_factory->create_io(thread::get_curr_thread());
 	preload_size = min(cache_size, graph_factory->get_file_size());
-	printf("preload %ld bytes of the graph file\n", preload_size);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("preload %1% bytes of the graph file")
+		% preload_size;
 	for (size_t i = 0; i < preload_size; i += BLOCK_SIZE)
 		io->access(buf.get(), i, BLOCK_SIZE, READ);
-	printf("successfully preload\n");
+	BOOST_LOG_TRIVIAL(info) << "successfully preload";
 }
+#endif
 
 void graph_engine::init_vertices(vertex_id_t ids[], int num,
 		vertex_initializer::ptr init)
@@ -902,22 +919,38 @@ size_t graph_get_vertices(graph_engine &graph, const worker_thread &t,
 	return graph.get_vertices(t.get_worker_id(), ids, num_ids, v_buf);
 }
 
-std::atomic<size_t> graph_engine::init_count;
+std::atomic<long> graph_engine::init_count;
 
-void graph_engine::init_flash_graph(const config_map &configs)
+void graph_engine::init_flash_graph(config_map::ptr configs)
 {
-	size_t count = init_count.fetch_add(1);
+	long count = init_count.fetch_add(1);
 	if (count == 0) {
 		graph_conf.init(configs);
 		graph_conf.print();
-		init_io_system(configs);
+		try {
+			init_io_system(configs);
+		} catch (safs::init_error &e) {
+			// If SAFS fails to initialize, we should remove the count
+			// increase at the beginning of the function.
+			init_count--;
+			throw e;
+		}
 	}
 }
 
 void graph_engine::destroy_flash_graph()
 {
-	size_t count = init_count.fetch_sub(1);
-	if (count == 1) {
+	long count = init_count.fetch_sub(1);
+	// SAFS wasn't initialized
+	if (count == 0)
+		init_count++;
+	else if (count == 1)
 		destroy_io_system();
-	}
+}
+
+int graph_engine::get_file_id() const
+{
+	return graph_factory->get_file_id();
+}
+
 }

@@ -17,11 +17,18 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include <limits.h>
 
+#include "log.h"
 #include "native_file.h"
 #include "safs_file.h"
 #include "RAID_config.h"
+#include "io_interface.h"
+
+namespace safs
+{
 
 safs_file::safs_file(const RAID_config &conf, const std::string &file_name)
 {
@@ -55,7 +62,7 @@ bool safs_file::exist() const
 	return true;
 }
 
-size_t safs_file::get_file_size() const
+ssize_t safs_file::get_size() const
 {
 	if (!exist())
 		return -1;
@@ -69,6 +76,24 @@ size_t safs_file::get_file_size() const
 		ret += f.get_size();
 	}
 	return ret;
+}
+
+bool safs_file::rename(const std::string &new_name)
+{
+	if (!exist())
+		return false;
+
+	for (unsigned i = 0; i < native_dirs.size(); i++) {
+		native_file f(native_dirs[i].name);
+		if (!f.rename(f.get_dir_name() + "/" + new_name))
+			return false;
+	}
+	name = new_name;
+	for (unsigned i = 0; i < native_dirs.size(); i++) {
+		native_file f(native_dirs[i].name);
+		native_dirs[i].name = f.get_dir_name() + "/" + new_name;
+	}
+	return true;
 }
 
 bool safs_file::create_file(size_t file_size)
@@ -100,4 +125,34 @@ bool safs_file::delete_file()
 			return false;
 	}
 	return true;
+}
+
+size_t get_all_safs_files(std::set<std::string> &files)
+{
+	std::set<std::string> all_files;
+	const RAID_config &conf = get_sys_RAID_conf();
+
+	// First find all individual file names in the root directories.
+	for (int i = 0; i < conf.get_num_disks(); i++) {
+		std::string dir_name = conf.get_disk(i).name;
+		native_dir dir(dir_name);
+		std::vector<std::string> file_names;
+		dir.read_all_files(file_names);
+		all_files.insert(file_names.begin(), file_names.end());
+	}
+
+	for (std::set<std::string>::const_iterator it = all_files.begin();
+			it != all_files.end(); it++) {
+		safs_file file(conf, *it);
+		if (file.exist()) {
+			files.insert(*it);
+		}
+		else {
+			BOOST_LOG_TRIVIAL(error) << boost::format("%1% is corrupted")
+				% file.get_name();
+		}
+	}
+	return 0;
+}
+
 }

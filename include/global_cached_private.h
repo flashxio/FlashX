@@ -27,6 +27,9 @@
 #include "container.h"
 #include "comp_io_scheduler.h"
 
+namespace safs
+{
+
 class request_allocator;
 class req_ext_allocator;
 class original_io_request;
@@ -94,10 +97,10 @@ class global_cached_io: public io_interface
 	};
 
 	long cache_size;
-	page_cache *global_cache;
+	page_cache::ptr global_cache;
 	/* the underlying IO. */
-	io_interface *underlying;
-	callback *cb;
+	io_interface::ptr underlying;
+	callback::ptr cb;
 
 	std::unique_ptr<request_allocator> req_allocator;
 	std::unique_ptr<req_ext_allocator> ext_allocator;
@@ -133,7 +136,7 @@ class global_cached_io: public io_interface
 	// This contains a request from the application. It contains a request
 	// in progress.
 	partial_request processing_req;
-	comp_io_scheduler *comp_io_sched;
+	comp_io_scheduler::ptr comp_io_sched;
 
 	size_t num_pg_accesses;
 	size_t num_bytes;		// The number of accessed bytes
@@ -184,15 +187,15 @@ class global_cached_io: public io_interface
 			}
 		}
 	}
+
+	page_cache &get_global_cache() {
+		return *global_cache;
+	}
 public:
-	global_cached_io(thread *t, io_interface *, page_cache *cache,
-			comp_io_scheduler *sched = NULL);
+	global_cached_io(thread *t, io_interface::ptr, page_cache::ptr cache,
+			comp_io_scheduler::ptr sched = NULL);
 
 	~global_cached_io();
-
-	page_cache *get_global_cache() {
-		return global_cache;
-	}
 
 	int preload(off_t start, long size);
 	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
@@ -223,26 +226,25 @@ public:
 	// Process the remaining requests issued by the application.
 	void process_user_reqs(queue_interface<io_request> &queue);
 
-	// This function performs post-computation steps, after we perform the user
-	// computation.
-	void complete_user_compute(user_compute *compute);
-
 	void queue_requests(page_req_pair reqs[], int num) {
-		int num_added = pending_requests.add(reqs, num);
-		assert(num_added == num);
+		BOOST_VERIFY(pending_requests.add(reqs, num) == num);
 		get_thread()->activate();
 	}
 
 	int handle_pending_requests();
 
-	virtual bool set_callback(callback *cb) {
+	virtual bool set_callback(callback::ptr cb) {
 		if (underlying->support_aio())
 			this->cb = cb;
 		return underlying->support_aio();
 	}
+
+	virtual bool have_callback() const {
+		return cb != NULL;
+	}
 	
-	virtual callback *get_callback() {
-		return cb;
+	virtual callback &get_callback() {
+		return *cb;
 	}
 
 	virtual bool support_aio() {
@@ -333,5 +335,7 @@ public:
 		underlying->print_state();
 	}
 };
+
+}
 
 #endif

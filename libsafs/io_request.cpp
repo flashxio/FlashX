@@ -21,6 +21,9 @@
 #include "cache.h"
 #include "io_interface.h"
 
+namespace safs
+{
+
 void *io_buf::get_buf() const
 {
 	if (is_page)
@@ -159,4 +162,6 @@ bool user_compute::fetch_request(io_interface *io, io_request &req)
 	req = io_request(compute, range.get_loc(), range.get_size(),
 			range.get_access_method(), io, io->get_node_id());
 	return true;
+}
+
 }

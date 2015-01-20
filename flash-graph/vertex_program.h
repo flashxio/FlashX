@@ -27,6 +27,9 @@
 #include "messaging.h"
 #include "vertex_pointer.h"
 
+namespace fg
+{
+
 class graph_engine;
 class compute_vertex;
 class page_vertex;
@@ -353,5 +356,7 @@ public:
 		((vertex_type &) comp_v).notify_iteration_end(*this);
 	}
 };
+
+}
 
 #endif

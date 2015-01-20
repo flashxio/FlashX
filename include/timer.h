@@ -26,6 +26,11 @@
 
 #include "concurrency.h"
 
+class thread;
+
+namespace safs
+{
+
 static inline int64_t get_curr_time_us()
 {
 	struct timeval curr;
@@ -72,8 +77,6 @@ public:
 
 	virtual void run() = 0;
 };
-
-class thread;
 
 class timer
 {
@@ -127,6 +130,8 @@ public:
 	bool is_enabled() const;
 	bool start();
 };
+
+}
 
 #endif
 

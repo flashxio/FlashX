@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "thread.h"
-#include "io_interface.h"
 #include "container.h"
 #include "concurrency.h"
 
@@ -28,6 +27,8 @@
 #include "stat.h"
 #include "FGlib.h"
 #include "ts_graph.h"
+
+using namespace fg;
 
 const int POWER_CONST = 10;
 
@@ -43,13 +44,13 @@ void print_directed(FG_vector<vsize_t>::ptr in_degrees,
 {
 	size_t tot_in_edges = in_degrees->sum<size_t>();
 	size_t tot_out_edges = out_degrees->sum<size_t>();
-	assert(tot_in_edges == tot_out_edges);
+	BOOST_VERIFY(tot_in_edges == tot_out_edges);
 	vsize_t max_num_in_edges = in_degrees->max();
 	vsize_t max_num_out_edges = out_degrees->max();
 	log_histogram hist_in_edges = in_degrees->log_hist(POWER_CONST);
 	log_histogram hist_out_edges = out_degrees->log_hist(POWER_CONST);
 
-	in_degrees->add_in_place(out_degrees);
+	in_degrees->add_in_place<vsize_t>(out_degrees);
 	vsize_t max_num_edges = in_degrees->max();
 	log_histogram hist_edges = in_degrees->log_hist(POWER_CONST);
 	printf("There are %ld edges\n", tot_in_edges);
@@ -74,8 +75,6 @@ void print_usage()
 	fprintf(stderr, "-t time: the start time\n");
 	fprintf(stderr, "-l interval: the time interval\n");
 	fprintf(stderr, "-u unit: the unit of the time interval\n");
-	graph_conf.print_help();
-	params.print_help();
 }
 
 int main(int argc, char *argv[])
@@ -137,12 +136,12 @@ int main(int argc, char *argv[])
 	std::string graph_file = argv[1];
 	std::string index_file = argv[2];
 
-	config_map configs(conf_file);
+	config_map::ptr configs = config_map::create(conf_file);
+	assert(configs);
 	graph_conf.init(configs);
 
-	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, conf_file);
-	graph_header header = get_graph_header(fg);
-	header = get_graph_header(fg);
+	FG_graph::ptr fg = FG_graph::create(graph_file, index_file, configs);
+	graph_header header = fg->get_graph_header();
 
 	std::string graph_type_str;
 	switch(header.get_graph_type()) {
@@ -153,7 +152,7 @@ int main(int argc, char *argv[])
 			graph_type_str = "undirected";
 			break;
 		default:
-			assert(0);
+			ABORT_MSG("wrong graph type");
 	}
 	printf("The graph type: %s\n", graph_type_str.c_str());
 	printf("There are %ld vertices and %ld edges\n",

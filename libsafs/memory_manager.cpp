@@ -19,6 +19,9 @@
 
 #include "memory_manager.h"
 
+namespace safs
+{
+
 const long SHRINK_NPAGES = 1024;
 const long INCREASE_SIZE = 1024 * 1024 * 128;
 
@@ -77,4 +80,6 @@ bool memory_manager::get_free_pages(int npages,
 
 void memory_manager::free_pages(int npages, char **pages) {
 	slab_allocator::free(pages, npages);
+}
+
 }

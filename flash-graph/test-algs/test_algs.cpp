@@ -25,6 +25,8 @@
 #include "FGlib.h"
 #include "ts_graph.h"
 
+using namespace fg;
+
 void print_usage();
 
 void int_handler(int sig_num)
@@ -50,7 +52,7 @@ void run_cycle_triangle(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -73,8 +75,34 @@ void run_triangle(FG_graph::ptr graph, int argc, char *argv[])
 
 void run_local_scan(FG_graph::ptr graph, int argc, char *argv[])
 {
-	FG_vector<size_t>::ptr scan = compute_local_scan(graph);
-	printf("Max local scan is %ld\n", scan->max());
+	int opt;
+	int num_opts = 0;
+	int num_hops = 1;
+
+	while ((opt = getopt(argc, argv, "H:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'H':
+				num_hops = atoi(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	FG_vector<size_t>::ptr scan;
+	if (num_hops == 1)
+		scan = compute_local_scan(graph);
+	else if (num_hops == 2)
+		scan = compute_local_scan2(graph);
+	else {
+		fprintf(stderr, "we don't support local scan of more than 2 hops\n");
+		exit(1);
+	}
+	std::pair<size_t, off_t> ret = scan->max_val_loc();
+	printf("Max local scan is %ld on v%ld\n", ret.first, ret.second);
 }
 
 void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
@@ -92,7 +120,7 @@ void run_topK_scan(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -117,6 +145,11 @@ void print_cc(FG_vector<vertex_id_t>::ptr comp_ids)
 			map.get_size(), max_comp.second);
 }
 
+void run_cc(FG_graph::ptr graph, int argc, char *argv[])
+{
+	print_cc(compute_cc(graph));
+}
+
 void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 {
 	int opt;
@@ -135,7 +168,7 @@ void run_wcc(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 	FG_vector<vertex_id_t>::ptr comp_ids;
@@ -168,7 +201,6 @@ void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
 
 	int num_para_bfs = 1;
 	bool directed = false;
-	int num_sweeps = 5;
 
 	while ((opt = getopt(argc, argv, "p:ds:")) != -1) {
 		num_opts++;
@@ -180,18 +212,13 @@ void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
 			case 'd':
 				directed = true;
 				break;
-			case 's':
-				num_sweeps = atoi(optarg);
-				num_opts++;
-				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
-	size_t diameter = estimate_diameter(graph, num_para_bfs, directed,
-			num_sweeps);
+	size_t diameter = estimate_diameter(graph, num_para_bfs, directed);
 	printf("The estimated diameter is %ld\n", diameter);
 }
 
@@ -216,7 +243,7 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -229,7 +256,7 @@ void run_pagerank(FG_graph::ptr graph, int argc, char *argv[], int version)
 			pr = compute_pagerank2(graph, num_iters, damping_factor);
 			break;
 		default:
-			assert(0);
+			abort();
 	}
 	std::vector<std::pair<float, off_t> > val_locs;
 	pr->max_val_locs(10, val_locs);
@@ -283,7 +310,7 @@ void run_sstsg(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -367,7 +394,7 @@ void run_ts_wcc(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -417,7 +444,7 @@ void run_kcore(FG_graph::ptr graph, int argc, char* argv[])
 				break;
 			default:
 				print_usage();
-				assert(0);
+				abort();
 		}
 	}
 
@@ -458,6 +485,123 @@ void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 		btwn_v->to_file(write_out);
 }
 
+int read_vertices(const std::string &file, std::vector<vertex_id_t> &vertices)
+{
+	FILE *f = fopen(file.c_str(), "r");
+	assert(f);
+	ssize_t ret;
+	char *line = NULL;
+	size_t line_size = 0;
+	while ((ret = getline(&line, &line_size, f)) > 0) {
+		if (line[ret - 1] == '\n')
+			line[ret - 1] = 0;
+		vertex_id_t id = atol(line);
+		printf("%u\n", id);
+		vertices.push_back(id);
+	}
+	fclose(f);
+	return vertices.size();
+}
+
+void run_overlap(FG_graph::ptr graph, int argc, char* argv[])
+{
+	std::string output_file;
+	std::string confs;
+
+	if (argc < 2) {
+		fprintf(stderr, "overlap requires vertex_file\n");
+		exit(-1);
+	}
+	std::string vertex_file = argv[1];
+
+	int opt;
+	int num_opts = 0;
+	std::string write_out;
+	double threshold = 0;
+	while ((opt = getopt(argc, argv, "o:t:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'o':
+				write_out = optarg;
+				num_opts++;
+				break;
+			case 't':
+				threshold = atof(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	std::vector<vertex_id_t> overlap_vertices;
+	read_vertices(vertex_file, overlap_vertices);
+	std::vector<std::vector<double> > overlaps;
+	std::sort(overlap_vertices.begin(), overlap_vertices.end());
+	compute_overlap(graph, overlap_vertices, overlaps);
+
+	if (!write_out.empty()) {
+		FILE *fout = fopen(write_out.c_str(), "w");
+		assert(fout);
+		size_t num_vertices = overlap_vertices.size();
+		assert(num_vertices == overlaps.size());
+		for (size_t i = 0; i < num_vertices; i++) {
+			assert(num_vertices == overlaps[i].size());
+			for (size_t j = 0; j < num_vertices; j++) {
+				double overlap = overlaps[i][j];
+				if (overlap >= threshold)
+					fprintf(fout, "%u %u %f\n", overlap_vertices[i],
+							overlap_vertices[j], overlap);
+			}
+		}
+		fclose(fout);
+	}
+}
+
+void run_bfs(FG_graph::ptr graph, int argc, char* argv[])
+{
+	int opt;
+	int num_opts = 0;
+	edge_type edge = edge_type::OUT_EDGE;
+	vertex_id_t start_vertex = 0;
+
+	std::string edge_type_str;
+	while ((opt = getopt(argc, argv, "e:s:")) != -1) {
+		num_opts++;
+		switch (opt) {
+			case 'e':
+				edge_type_str = optarg;
+				num_opts++;
+				break;
+			case 's':
+				start_vertex = atol(optarg);
+				num_opts++;
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+	if (!edge_type_str.empty()) {
+		if (edge_type_str == "IN")
+			edge = edge_type::IN_EDGE;
+		else if (edge_type_str == "OUT")
+			edge = edge_type::OUT_EDGE;
+		else if (edge_type_str == "BOTH")
+			edge = edge_type::BOTH_EDGES;
+		else {
+			fprintf(stderr, "wrong edge type");
+			exit(1);
+		}
+	}
+
+	size_t bfs(FG_graph::ptr fg, vertex_id_t start_vertex, edge_type);
+	size_t num_vertices = bfs(graph, start_vertex, edge);
+	printf("BFS from v%u traverses %ld vertices on edge type %d\n",
+			start_vertex, num_vertices, edge);
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -472,6 +616,8 @@ std::string supported_algs[] = {
 	"ts_wcc",
 	"kcore",
 	"betweenness",
+	"overlap",
+	"bfs",
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -481,6 +627,9 @@ void print_usage()
 			"test_algs conf_file graph_file index_file algorithm [alg-options]\n");
 	fprintf(stderr, "scan-statistics:\n");
 	fprintf(stderr, "-K topK: topK vertices in topK scan\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "local scan\n");
+	fprintf(stderr, "-H hops: local scan within the specified number of hops\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "diameter estimation:\n");
 	fprintf(stderr, "-p num_para_bfs: the number of parallel bfs to estimate diameter\n");
@@ -515,12 +664,18 @@ void print_usage()
 	fprintf(stderr, "-f: run the fast implementation\n");
 	fprintf(stderr, "wcc\n");
 	fprintf(stderr, "-s: run wcc synchronously\n");
+	fprintf(stderr, "overlap vertex_file\n");
+	fprintf(stderr, "-o output: the output file\n");
+	fprintf(stderr, "-t threshold: the threshold for printing the overlaps\n");
+	fprintf(stderr, "bfs\n");
+	fprintf(stderr, "-e edge type: the type of edge to traverse (IN, OUT, BOTH)\n");
+	fprintf(stderr, "-s vertex id: the vertex where the BFS starts\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
 		fprintf(stderr, "\t%s\n", supported_algs[i].c_str());
 	graph_conf.print_help();
-	params.print_help();
+	safs::params.print_help();
 }
 
 int main(int argc, char *argv[])
@@ -541,8 +696,9 @@ int main(int argc, char *argv[])
 	argv += 3;
 	argc -= 3;
 
-	printf("conf file: %s\n", conf_file.c_str());
-	config_map configs(conf_file);
+	config_map::ptr configs = config_map::create(conf_file);
+	if (configs == NULL)
+		configs = config_map::ptr();
 	signal(SIGINT, int_handler);
 
 	FG_graph::ptr graph = FG_graph::create(graph_file, index_file, configs);
@@ -570,6 +726,9 @@ int main(int argc, char *argv[])
 	else if (alg == "wcc") {
 		run_wcc(graph, argc, argv);
 	}
+	else if (alg == "cc") {
+		run_cc(graph, argc, argv);
+	}
 	else if (alg == "scc") {
 		run_scc(graph, argc, argv);
 	}
@@ -584,6 +743,12 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "betweenness") {
 		run_betweenness_centrality(graph, argc, argv);
+	}
+	else if (alg == "overlap") {
+		run_overlap(graph, argc, argv);
+	}
+	else if (alg == "bfs") {
+		run_bfs(graph, argc, argv);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());

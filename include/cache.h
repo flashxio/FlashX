@@ -36,6 +36,9 @@
 #include "io_request.h"
 #include "parameters.h"
 
+namespace safs
+{
+
 const off_t PAGE_INVALID_OFFSET = ((off_t) -1) << LOG_PAGE_SIZE;
 
 enum {
@@ -397,6 +400,8 @@ class page_filter;
 class page_cache
 {
 public:
+	typedef std::shared_ptr<page_cache> ptr;
+
 	virtual ~page_cache() {
 	}
 	/**
@@ -427,7 +432,7 @@ public:
 			page_cache *global_cache) {
 	}
 	virtual void mark_dirty_pages(thread_safe_page *pages[], int num,
-			io_interface *io) {
+			io_interface &io) {
 	}
 	virtual int flush_dirty_pages(page_filter *filter, int max_num) {
 		return 0;
@@ -861,7 +866,7 @@ public:
 		T curr() const {
 			seq_const_iterator<T> *it = (seq_const_iterator<T> *) this;
 			// TODO I need to fix this.
-			assert(it->has_next());
+			BOOST_VERIFY(it->has_next());
 			return curr_page_it.curr();
 		}
 	};
@@ -1099,5 +1104,7 @@ public:
 					+ orig.get_offset_in_first_page()) / PAGE_SIZE + idx);
 	}
 };
+
+}
 
 #endif

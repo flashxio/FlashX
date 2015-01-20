@@ -25,6 +25,14 @@
 #include "FG_vector.h"
 #include "graph_file_header.h"
 
+namespace safs
+{
+	class file_io_factory;
+};
+
+namespace fg
+{
+
 /**
   * \brief A user-friendly wrapper for FlashGraph's raw graph type.
   *         Very usefule when when utilizing FlashGraph 
@@ -33,18 +41,18 @@
 */
 class FG_graph
 {
+	graph_header header;
 	std::string graph_file;
 	std::string index_file;
-	config_map configs;
+	std::shared_ptr<in_mem_graph> graph_data;
+	std::shared_ptr<vertex_index> index_data;
+	config_map::ptr configs;
 
 	FG_graph(const std::string &graph_file,
-			const std::string &index_file, const config_map &configs) {
-		this->graph_file = graph_file;
-		this->index_file = index_file;
-		this->configs = configs;
-
-		graph_engine::init_flash_graph(configs);
-	}
+			const std::string &index_file, config_map::ptr configs);
+	FG_graph(std::shared_ptr<in_mem_graph> graph_data,
+			std::shared_ptr<vertex_index> index_data,
+			const std::string &graph_name, config_map::ptr configs);
 public:
 	typedef std::shared_ptr<FG_graph> ptr; /**Smart pointer through which object is accessed*/
 
@@ -52,37 +60,36 @@ public:
 		graph_engine::destroy_flash_graph();
 	}
 
-/**
-  * \brief  Method to instantiate a graph object.
-  *         This method is used in lieu of explicitly calling a ctor.
-  *    
-  * \param graph_file Path to the graph file on disk.
-  * \param index_file Path to the graph index file on disk.
-  * \param configs Configuration in configuration file.
-*/
+	/**
+	 * \brief  Method to instantiate a graph object.
+	 *         This method is used in lieu of explicitly calling a ctor.
+	 *    
+	 * \param graph_file Path to the graph file in SAFS or in Linux filesystem.
+	 * \param index_file Path to the graph index file in SAFS or
+	 *        in Linux filesystem.
+	 * \param configs Configuration in configuration file.
+	 */
 	static ptr create(const std::string &graph_file,
-			const std::string &index_file, const config_map &configs) {
+			const std::string &index_file, config_map::ptr configs) {
 		return ptr(new FG_graph(graph_file, index_file, configs));
 	}
 
-/**
-  * \brief Get the path to the graph file.
-  *
-  * \return The path to the graph file on disk.
-  *
-*/
-	const std::string &get_graph_file() const {
-		return graph_file;
+	/**
+	 * \brief  Method to instantiate a graph object.
+	 *         This method is used in lieu of explicitly calling a ctor.
+	 *    
+	 * \param graph_data The adjacency lists of the graph stored in memory.
+	 * \param index_data The index of the graph stored in memory.
+	 * \param graph_name The name of the graph.
+	 * \param configs Configuration in configuration file.
+	 */
+	static ptr create(std::shared_ptr<in_mem_graph> graph_data,
+			std::shared_ptr<vertex_index> index_data,
+			const std::string &graph_name, config_map::ptr configs) {
+		return ptr(new FG_graph(graph_data, index_data, graph_name, configs));
 	}
 
-/**
-  * \brief Get the graph index file path.
-  *
-  * \return The path to the graph index file on disk.
-*/
-	const std::string &get_index_file() const {
-		return index_file;
-	}
+	std::shared_ptr<safs::file_io_factory> get_graph_io_factory(int access_option);
 
 /**
   * \brief Get the map that contains the runtime configurations 
@@ -91,8 +98,28 @@ public:
   * \return The config_map that contains all FlashGraph configurations.
   *
 */
-	const config_map &get_configs() const {
+	config_map::ptr get_configs() const {
 		return configs;
+	}
+
+	bool is_in_mem() const {
+		return graph_data != NULL;
+	}
+
+	std::shared_ptr<in_mem_graph> get_graph_data() const {
+		return graph_data;
+	}
+
+	std::shared_ptr<vertex_index> get_index_data() const;
+
+	graph_engine::ptr create_engine(graph_index::ptr index);
+
+	/**
+	 * \brief Get the header of the graph that contains basic information of the graph.
+	 * \return The graph header.
+	 */
+	const graph_header &get_graph_header() {
+		return header;
 	}
 };
 
@@ -120,6 +147,8 @@ enum directed_triangle_type
 	CYCLE,
 	ALL,
 };
+
+FG_vector<vertex_id_t>::ptr compute_cc(FG_graph::ptr fg);
 
 /**
   * \brief Compute all weakly connectected components of a graph.
@@ -194,6 +223,7 @@ FG_vector<size_t>::ptr compute_undirected_triangles(FG_graph::ptr fg);
   *
 */
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr);
+FG_vector<size_t>::ptr compute_local_scan2(FG_graph::ptr fg);
 
 /**
   * \brief Obtain the top K vertices with the largest local Scan 
@@ -213,8 +243,7 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
   * \return The diameter estimate value.
   *
 */
-size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed,
-		int num_sweeps);
+size_t estimate_diameter(FG_graph::ptr fg, int num_bfs, bool directed);
 
 /**
   * \brief Compute the PageRank of a graph using the pull method
@@ -255,29 +284,11 @@ FG_vector<float>::ptr compute_sstsg(FG_graph::ptr fg, time_t start_time,
  * \brief Fetch the clusters with the wanted cluster IDs.
  *  
  * \param fg The FlashGraph graph object for which you want to compute.
- * \param cluster_ids A vector of the cluster IDs that the vertices
- *        in the graph belong to.
- * \param wanted_clusters A set of component IDs that we want to fetch.
- * \param clusters A set of subgraphs returned by the function. Each subgraph
- *        contains vertices and edges in the cluster.
+ * \param vertices The vertices that the induced subgraph has.
+ * \return A subgraph.
  */
-void fetch_subgraphs(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
-		const std::set<vertex_id_t> &wanted_clusters, std::map<vertex_id_t,
-		graph::ptr> &clusters);
-
-/**
- * \brief Compute the size of each subgraph identified by cluster IDs.
- *  
- * \param fg The FlashGraph graph object for which you want to compute.
- * \param cluster_ids A vector of the cluster IDs that the vertices
- *        in the graph belong to.
- * \param wanted_clusters A set of component IDs that we want to fetch.
- * \param sizes the sizes of the wanted clusters returned by the function.
- *        Each pair contains the number of vertices and edges in the cluster.
- */
-void compute_subgraph_sizes(FG_graph::ptr graph, FG_vector<vertex_id_t>::ptr cluster_ids,
-		const std::set<vertex_id_t> &wanted_clusters,
-		std::map<vertex_id_t, std::pair<size_t, size_t> > &sizes);
+in_mem_subgraph::ptr fetch_subgraph(FG_graph::ptr graph,
+		const std::vector<vertex_id_t> &vertices);
 
 /**
  * \brief Compute the k-core/coreness of a graph. The algorithm will 
@@ -342,9 +353,21 @@ FG_vector<vsize_t>::ptr get_ts_degree(FG_graph::ptr fg, edge_type type,
 std::pair<time_t, time_t> get_time_range(FG_graph::ptr fg);
 
 /**
- * \brief Get the header of the graph that contains basic information of the graph.
- * \return The graph header.
+ * \brief Get the neighborhood overlap of each pair of vertices in `vids'.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \param vids The vertices whose neighborhood overlap is computed.
+ * \param overlap_matrix A dense matrix that stores the overlap of each pair of vertices.
  */
-graph_header get_graph_header(FG_graph::ptr fg);
+void compute_overlap(FG_graph::ptr fg, const std::vector<vertex_id_t> &vids,
+		std::vector<std::vector<double> > &overlap_matrix);
+
+/**
+ * \brief Compute transitivity of all vertices in the graph.
+ * \param fg The FlashGraph graph object for which you want to compute.
+ * \return A vector with an transitivity value for each vertex.
+ */
+FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
+
+}
 
 #endif

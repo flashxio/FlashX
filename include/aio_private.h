@@ -29,6 +29,9 @@
 #include "container.h"
 #include "io_request.h"
 
+namespace safs
+{
+
 void aio_callback(io_context_t, struct iocb*, void *, long, long);
 
 struct thread_callback_s;
@@ -42,7 +45,7 @@ class async_io: public io_interface
 {
 	int buf_idx;
 	aio_ctx *ctx;
-	callback *cb;
+	callback::ptr cb;
 	const int AIO_DEPTH;
 	callback_allocator *cb_allocator;
 	int open_flags;
@@ -50,11 +53,46 @@ class async_io: public io_interface
 	int num_iowait;
 	int num_completed_reqs;
 
-	// file id <-> buffered io
-	std::tr1::unordered_map<int, buffered_io *> open_files;
-	buffered_io *default_io;
+	class io_ref
+	{
+		std::shared_ptr<buffered_io> io;
+		int count;
+	public:
+		io_ref() {
+			this->count = 0;
+		}
 
+		io_ref(buffered_io *io);
+
+		void inc_ref() {
+			count++;
+		}
+
+		void dec_ref();
+
+		int get_count() const {
+			return count;
+		}
+
+		const buffered_io &get_io() const {
+			return *io;
+		}
+
+		buffered_io &get_io() {
+			return *io;
+		}
+
+		bool is_valid() const {
+			return io != NULL;
+		}
+	};
+	// file id <-> buffered io
+	std::tr1::unordered_map<int, io_ref> open_files;
+	io_ref default_io;
+
+#if 0
 	virt_data_impl *data;
+#endif
 
 	struct iocb *construct_req(io_request &io_req, callback_t cb_func);
 public:
@@ -72,13 +110,17 @@ public:
 	}
 	virtual void access(io_request *requests, int num, io_status *status = NULL);
 
-	bool set_callback(callback *cb) {
+	bool set_callback(callback::ptr cb) {
 		this->cb = cb;
 		return true;
 	}
 
-	callback *get_callback() {
-		return cb;
+	bool have_callback() const {
+		return this->cb != NULL;
+	}
+
+	callback &get_callback() {
+		return *cb;
 	}
 
 	bool support_aio() {
@@ -137,5 +179,7 @@ public:
 
 void init_aio(std::vector<int> node_ids);
 void destroy_aio();
+
+}
 
 #endif

@@ -19,6 +19,8 @@
 
 #include <atomic>
 
+#include "io_interface.h"
+
 #include "worker_thread.h"
 #include "graph_engine.h"
 #include "bitmap.h"
@@ -27,6 +29,11 @@
 #include "load_balancer.h"
 #include "steal_state.h"
 #include "vertex_index_reader.h"
+
+using namespace safs;
+
+namespace fg
+{
 
 static void delete_val(std::vector<vertex_id_t> &vec, vertex_id_t val)
 {
@@ -270,7 +277,7 @@ void customized_vertex_queue::get_compute_vertex_pointers(
 	for (int i = 0; i < graph_conf.get_num_vparts(); i++) {
 		off_t start = vertices.size() + i * vpart_ps.size();
 		off_t end = start + vpart_ps.size();
-		assert((size_t) end <= sorted_vertices.size());
+		BOOST_VERIFY((size_t) end <= sorted_vertices.size());
 		index.get_vpart_vertices(part_id, i, vpart_ps.data(), vpart_ps.size(),
 				sorted_vertices.data() + start);
 	}
@@ -370,10 +377,10 @@ worker_thread::worker_thread(graph_engine *graph,
 			alloc = std::unique_ptr<compute_allocator>(
 					new vertex_compute_allocator<vertex_compute>(graph, this));
 			merged_alloc = std::unique_ptr<compute_allocator>(
-					new vertex_compute_allocator<merged_vertex_compute>(
+					new vertex_compute_allocator<merged_undirected_vertex_compute>(
 						graph, this));
 			sparse_alloc = std::unique_ptr<compute_allocator>(
-					new vertex_compute_allocator<sparse_vertex_compute>(
+					new vertex_compute_allocator<sparse_undirected_vertex_compute>(
 						graph, this));
 			break;
 #if 0
@@ -384,8 +391,8 @@ worker_thread::worker_thread(graph_engine *graph,
 			break;
 #endif
 		default:
-			assert(0);
-
+			fprintf(stderr, "wrong graph type");
+			abort();
 	}
 }
 
@@ -417,21 +424,18 @@ void worker_thread::init()
 				new default_vertex_queue(*graph, worker_id, get_node_id()));
 
 	io = graph_factory->create_io(this);
-	if (graph->get_in_mem_cindex())
-		index_reader = simple_index_reader::create(
-				graph->get_in_mem_cindex(),
-				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
-				this);
-	else if (graph_conf.use_in_mem_index())
+	if (graph->get_in_mem_index())
 		index_reader = simple_index_reader::create(
 				graph->get_in_mem_index(),
 				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
 				this);
-	else
+	else {
+		assert(index_factory);
 		index_reader = simple_index_reader::create(
 				index_factory->create_io(this),
 				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
 				this);
+	}
 
 	if (!started_vertices.empty()) {
 		assert(curr_activated_vertices->is_empty());
@@ -458,8 +462,9 @@ void worker_thread::init()
 		}
 		assert(curr_activated_vertices->is_empty());
 		curr_activated_vertices->init(kept_ids, false);
-		printf("worker %d has %ld vertices and activates %ld of them\n",
-				worker_id, local_ids.size(), kept_ids.size());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("worker %1% has %2% vertices and activates %3% of them")
+			% worker_id % local_ids.size() % kept_ids.size();
 	}
 	// If a user wants to start all vertices.
 	else if (start_all) {
@@ -479,7 +484,10 @@ void worker_thread::init()
 	}
 
 	bool ret = graph->progress_first_level();
-	assert(!ret);
+	if (ret)
+		BOOST_LOG_TRIVIAL(warning)
+			<< boost::format("worker %1% has no active vertices")
+			% get_worker_id();
 }
 
 void worker_thread::init_messaging(const std::vector<worker_thread *> &threads,
@@ -589,11 +597,11 @@ void worker_thread::run()
 		assert(io->num_pending_ios() == 0);
 		assert(active_computes.size() == 0);
 		assert(curr_activated_vertices->is_empty());
-//		printf("worker %d visited %d vertices\n", worker_id, num_visited);
 		assert(num_visited == num_activated_vertices_in_level.get());
 		if (num_visited != num_completed_vertices_in_level.get()) {
-			printf("worker %d: visits %d vertices and completes %ld\n",
-					worker_id, num_visited, num_completed_vertices_in_level.get());
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("worker %1%: visits %2% vertices and completes %3%")
+				% worker_id % num_visited % num_completed_vertices_in_level.get();
 		}
 		assert(num_visited == num_completed_vertices_in_level.get());
 
@@ -613,7 +621,6 @@ void worker_thread::run()
 		balancer->reset();
 
 		bool completed = graph->progress_next_level();
-//		printf("thread %d finish in a level, completed? %d\n", get_id(), completed);
 		if (completed)
 			break;
 	}
@@ -692,4 +699,6 @@ vertex_compute *worker_thread::get_vertex_compute(compute_vertex_pointer v)
 int worker_thread::get_stolen_vertex_part(const compute_vertex &v) const
 {
 	return balancer->get_stolen_vertex_part(v);
+}
+
 }

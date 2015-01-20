@@ -22,6 +22,11 @@
 
 #include "FG_vector.h"
 
+namespace fg
+{
+
+#ifdef USE_EIGEN
+
 typedef double ev_float_t;
 typedef std::pair<ev_float_t, FG_vector<ev_float_t>::ptr> eigen_pair_t;
 
@@ -100,6 +105,15 @@ public:
 void eigen_solver(SPMV &spmv, int m, int nv, const std::string &which,
 		std::vector<eigen_pair_t> &eigen_pairs);
 
+/**
+ * \brief Compute eigenvalues and vectors given a sparse matrix.
+ *     \param matrix The sparse matrix.
+ * \param m The number of Lanczos basis vectors to use (more = fater convergence
+ but greater memory use. m - nv <= 2 and m <= rows(matrix)).
+ * \param nv The number of eigenvalues to compute.
+ * \param which eigenvalues to compute . We support ["LM", "LA", "SM", "SA"].
+ * \param eigen_pairs To place the result of the eigen-computation.
+ */
 template<class SparseMatrixType>
 void compute_eigen(typename SparseMatrixType::ptr matrix, int m, int nv,
 		const std::string &which, std::vector<eigen_pair_t> &eigen_pairs)
@@ -130,6 +144,9 @@ void compute_SVD(typename SparseMatrixType::ptr matrix, int m, int nv,
 		ev_float_t v = eigen_pairs[i].first;
 		eigen_pairs[i].first = sqrt(v);
 	}
+}
+#endif
+
 }
 
 #endif

@@ -34,6 +34,9 @@
 #include "exception.h"
 #include "compute_stat.h"
 
+namespace safs
+{
+
 const int CACHE_LINE = 128;
 
 /**
@@ -169,12 +172,6 @@ class LRU_eviction_policy: public eviction_policy
 {
 	std::vector<int> pos_vec;
 public:
-	LRU_eviction_policy() {
-		static bool has_print = false;
-		if (!has_print)
-			printf("use LRU eviction policy\n");
-		has_print = true;
-	}
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 	void access_page(thread_safe_page *pg,
 			page_cell<thread_safe_page> &buf);
@@ -186,10 +183,6 @@ class clock_eviction_policy: public eviction_policy
 public:
 	clock_eviction_policy() {
 		clock_head = 0;
-		static bool has_print = false;
-		if (!has_print)
-			printf("use clock eviction policy\n");
-		has_print = true;
 	}
 
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
@@ -201,10 +194,6 @@ class gclock_eviction_policy: public eviction_policy
 public:
 	gclock_eviction_policy() {
 		clock_head = 0;
-		static bool has_print = false;
-		if (!has_print)
-			printf("use gclock eviction policy\n");
-		has_print = true;
 	}
 
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
@@ -217,24 +206,12 @@ public:
 class LFU_eviction_policy: public eviction_policy
 {
 public:
-	LFU_eviction_policy() {
-		static bool has_print = false;
-		if (!has_print)
-			printf("use LFU eviction policy\n");
-		has_print = true;
-	}
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 };
 
 class FIFO_eviction_policy: public eviction_policy
 {
 public:
-	FIFO_eviction_policy() {
-		static bool has_print = false;
-		if (!has_print)
-			printf("use FIFO eviction policy\n");
-		has_print = true;
-	}
 	thread_safe_page *evict_page(page_cell<thread_safe_page> &buf);
 };
 
@@ -441,8 +418,6 @@ class associative_cache: public page_cache
 			int offset_factor, int _max_num_pending_flush,
 			bool expandable = false);
 
-	~associative_cache();
-
 	void create_flusher(std::shared_ptr<io_interface> io, page_cache *global_cache);
 
 	memory_manager *get_manager() {
@@ -459,17 +434,15 @@ public:
 	atomic_integer num_dirty_pages;
 #endif
 
-	static associative_cache *create(long cache_size, long max_cache_size,
+	static page_cache::ptr create(long cache_size, long max_cache_size,
 			int node_id, int offset_factor, int _max_num_pending_flush,
 			bool expandable = false) {
 		assert(node_id >= 0);
-		return new associative_cache(cache_size, max_cache_size,
-				node_id, offset_factor, _max_num_pending_flush, expandable);
+		return page_cache::ptr(new associative_cache(cache_size, max_cache_size,
+				node_id, offset_factor, _max_num_pending_flush, expandable));
 	}
 
-	static void destroy(associative_cache *cache) {
-		delete cache;
-	}
+	~associative_cache();
 
 	int get_node_id() const {
 		return node_id;
@@ -568,7 +541,7 @@ public:
 
 	/* Methods for flushing dirty pages. */
 
-	void mark_dirty_pages(thread_safe_page *pages[], int num, io_interface *);
+	void mark_dirty_pages(thread_safe_page *pages[], int num, io_interface &);
 	virtual int flush_dirty_pages(page_filter *filter, int max_num);
 
 	hash_cell *get_prev_cell(hash_cell *cell);
@@ -603,5 +576,7 @@ public:
 	}
 #endif
 };
+
+}
 
 #endif

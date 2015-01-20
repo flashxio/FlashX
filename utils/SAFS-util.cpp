@@ -22,6 +22,7 @@
 #include <fcntl.h>
 
 #include <string>
+#include <boost/format.hpp>
 
 #include "io_interface.h"
 #include "native_file.h"
@@ -29,9 +30,11 @@
 #include "file_mapper.h"
 #include "RAID_config.h"
 
-const int BUF_SIZE = 1024 * 64 * PAGE_SIZE;
+using namespace safs;
 
-config_map configs;
+const int BUF_SIZE = 1024 * 64 * 4096;
+
+config_map::ptr configs;
 
 ssize_t complete_read(int fd, char *buf, size_t count)
 {
@@ -73,7 +76,7 @@ public:
 
 	virtual ssize_t get_data(off_t off, size_t size, char *buf) const {
 		long new_off = lseek(fd, off, SEEK_SET);
-		assert(new_off == off);
+		BOOST_VERIFY(new_off == off);
 		ssize_t ret = complete_read(fd, buf, size);
 		if (ret < 0) {
 			perror("complete_read");
@@ -134,15 +137,15 @@ public:
 		assert(read_bytes > 0);
 		size_t ret = source->get_data(rqs[0]->get_offset(), read_bytes, orig_buf);
 		fprintf(stderr, "verify block %lx of %ld bytes\n", rqs[0]->get_offset(), read_bytes);
-		assert(ret == read_bytes);
+		BOOST_VERIFY(ret == read_bytes);
 		verified_bytes += read_bytes;
 		for (size_t i = 0; i < read_bytes; i++) {
 			if (rqs[0]->get_buf()[i] != orig_buf[i]) {
 				struct block_identifier bid;
 				fmapper->map((rqs[0]->get_offset() + i) / PAGE_SIZE, bid);
-				fprintf(stderr, "bytes at %ld (in partition %d) doesn't match\n",
-						rqs[0]->get_offset() + i, bid.idx);
-				assert(0);
+				ABORT_MSG(boost::format(
+							"bytes at %1% (in partition %2%) doesn't match")
+						% (rqs[0]->get_offset() + i) % bid.idx);
 			}
 		}
 		return 0;
@@ -180,7 +183,7 @@ void comm_verify_file(int argc, char *argv[])
 		source = new file_data_source(ext_file);
 	const RAID_config &conf = get_sys_RAID_conf();
 	verify_callback *cb = new verify_callback(source, conf.create_file_mapper());
-	io->set_callback(cb);
+	io->set_callback(callback::ptr(cb));
 
 	ssize_t file_size = source->get_size();
 	printf("verify %ld bytes\n", file_size);
@@ -196,7 +199,6 @@ void comm_verify_file(int argc, char *argv[])
 	printf("verify %ld bytes\n", cb->get_verified_bytes());
 	
 	io->cleanup();
-	delete io->get_callback();
 }
 
 void comm_load_file2fs(int argc, char *argv[])
@@ -211,7 +213,7 @@ void comm_load_file2fs(int argc, char *argv[])
 	std::string int_file_name = argv[0];
 	std::string ext_file = argv[1];
 
-	configs.add_options("writable=1");
+	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	data_source *source = new file_data_source(ext_file);
 
@@ -221,7 +223,7 @@ void comm_load_file2fs(int argc, char *argv[])
 		safs_file file(get_sys_RAID_conf(), int_file_name);
 		file.create_file(source->get_size());
 		printf("create file %s of %ld bytes\n", int_file_name.c_str(),
-				file.get_file_size());
+				file.get_size());
 	}
 
 	file_io_factory::shared_ptr factory = create_io_factory(int_file_name,
@@ -267,7 +269,7 @@ void comm_load_part_file2fs(int argc, char *argv[])
 	std::string ext_file = argv[1];
 	int part_id = atoi(argv[2]);
 
-	configs.add_options("writable=1");
+	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	const RAID_config &conf = get_sys_RAID_conf();
 	file_mapper *fmapper = conf.create_file_mapper();
@@ -279,7 +281,7 @@ void comm_load_part_file2fs(int argc, char *argv[])
 	native_dir dir(part_path);
 	assert(!dir.exist());
 	bool ret = dir.create_dir(false);
-	assert(ret);
+	BOOST_VERIFY(ret);
 
 	std::string file_path = part_path + "/" + std::string(argv[2]);
 	FILE *out_f = fopen(file_path.c_str(), "w");
@@ -325,14 +327,14 @@ void comm_create_file(int argc, char *argv[])
 		exit(-1);
 	}
 
-	configs.add_options("writable=1");
+	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	std::string file_name = argv[0];
 	size_t file_size = str2size(argv[1]);
 	safs_file file(get_sys_RAID_conf(), file_name);
 	file.create_file(file_size);
 	printf("create file %s of %ld bytes\n", file_name.c_str(),
-			file.get_file_size());
+			file.get_size());
 
 	file_io_factory::shared_ptr factory = create_io_factory(file_name,
 			REMOTE_ACCESS);
@@ -391,7 +393,7 @@ void comm_list(int argc, char *argv[])
 		safs_file file(conf, *it);
 		if (file.exist()) {
 			printf("%s: %ld bytes\n", file.get_name().c_str(),
-					file.get_file_size());
+					file.get_size());
 		}
 		else {
 			printf("%s is corrupted\n", file.get_name().c_str());
@@ -406,7 +408,7 @@ void comm_delete_file(int argc, char *argv[])
 		return;
 	}
 
-	configs.add_options("writable=1");
+	configs->add_options("writable=1");
 	init_io_system(configs, false);
 	std::string file_name = argv[0];
 	safs_file file(get_sys_RAID_conf(), file_name);
@@ -481,7 +483,7 @@ int main(int argc, char *argv[])
 	std::string conf_file = argv[1];
 	std::string command = argv[2];
 
-	configs = config_map(conf_file);
+	configs = config_map::create(conf_file);
 	const struct command *comm = get_command(command);
 	if (comm == NULL) {
 		fprintf(stderr, "wrong command %s\n", command.c_str());

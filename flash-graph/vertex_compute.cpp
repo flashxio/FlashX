@@ -21,6 +21,11 @@
 #include "worker_thread.h"
 #include "vertex_index_reader.h"
 
+using namespace safs;
+
+namespace fg
+{
+
 request_range vertex_compute::get_next_request()
 {
 	// Get the next vertex.
@@ -46,7 +51,7 @@ void vertex_compute::finish_run()
 	if (get_num_pending() == 0) {
 		// this is to double check. If there are pending requests,
 		// the vertex shouldn't have issued requests in this run.
-		assert(!issued_reqs);
+		BOOST_VERIFY(!issued_reqs);
 		issue_thread->complete_vertex(v);
 	}
 }
@@ -234,6 +239,27 @@ void merged_vertex_compute::finish_run(compute_vertex_pointer v)
 		issue_thread->complete_vertex(v);
 }
 
+void merged_undirected_vertex_compute::run(page_byte_array &array)
+{
+	off_t off = 0;
+	vertex_id_t id = this->get_start_id();
+	worker_thread *t = (worker_thread *) thread::get_curr_thread();
+	// We don't support part vertex compute here.
+	vertex_program &curr_vprog = t->get_vertex_program(false);
+	for (int i = 0; i < get_num_vertices(); i++, id++) {
+		sub_page_byte_array sub_arr(array, off);
+		page_undirected_vertex pg_v(sub_arr);
+		assert(pg_v.get_id() == id);
+		compute_vertex_pointer v(&get_graph().get_vertex(pg_v.get_id()));
+		start_run(v);
+		curr_vprog.run(*v, pg_v);
+		finish_run(v);
+		off += pg_v.get_size();
+	}
+
+	complete = true;
+}
+
 void merged_directed_vertex_compute::run_on_array(page_byte_array &array)
 {
 	off_t off = 0;
@@ -314,7 +340,7 @@ void merged_directed_vertex_compute::run(page_byte_array &arr)
 		run_on_array(arr);
 	}
 	else
-		assert(0);
+		ABORT_MSG("wrong type");
 }
 
 void sparse_vertex_compute::start_run(compute_vertex_pointer v)
@@ -334,6 +360,29 @@ void sparse_vertex_compute::finish_run(compute_vertex_pointer v)
 	// of the completion of the vertex.
 	if (!issued_reqs)
 		issue_thread->complete_vertex(v);
+}
+
+void sparse_undirected_vertex_compute::run(page_byte_array &arr)
+{
+	assert(arr.get_offset() + arr.get_size() > (size_t) ranges[num_ranges - 1].start_off);
+	vertex_program &curr_vprog = issue_thread->get_vertex_program(false);
+	for (int i = 0; i < num_ranges; i++) {
+		vertex_id_t id = this->ranges[i].id_range.first;
+		int num_vertices
+			= this->ranges[i].id_range.second - this->ranges[i].id_range.first;
+		off_t off = this->ranges[i].start_off - arr.get_offset();
+		for (int j = 0; j < num_vertices; j++, id++) {
+			sub_page_byte_array sub_arr(arr, off);
+			page_undirected_vertex pg_v(sub_arr);
+			assert(pg_v.get_id() == id);
+			compute_vertex_pointer v(&get_graph().get_vertex(pg_v.get_id()));
+			start_run(v);
+			curr_vprog.run(*v, pg_v);
+			finish_run(v);
+			off += pg_v.get_size();
+		}
+	}
+	complete = true;
 }
 
 void sparse_directed_vertex_compute::run_on_array(page_byte_array &arr)
@@ -429,5 +478,7 @@ void sparse_directed_vertex_compute::run(page_byte_array &arr)
 		run_on_array(arr);
 	}
 	else
-		assert(0);
+		ABORT_MSG("wrong type");
+}
+
 }

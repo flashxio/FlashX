@@ -27,10 +27,14 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
 
 #include "container.h"
 #include "cache.h"
 #include "FG_basic_types.h"
+
+namespace fg
+{
 
 /**
  \brief Edge type of an edge in the graph.
@@ -56,7 +60,7 @@ class ext_mem_vertex_info
 	off_t off;
 public:
 	ext_mem_vertex_info() {
-		id = 0;
+		id = INVALID_VERTEX_ID;
 		off = 0;
 		size = 0;
 	}
@@ -80,6 +84,10 @@ public:
 	}
 
 	bool has_edges() const;
+
+	bool is_valid() const {
+		return id != INVALID_VERTEX_ID;
+	}
 };
 
 /**
@@ -187,6 +195,12 @@ public:
 		assert(has_data);
 		return data;
 	}
+
+	void reverse_dir() {
+		vertex_id_t tmp = from;
+		from = to;
+		to = tmp;
+	}
 };
 
 template<>
@@ -225,6 +239,12 @@ public:
 
 	const empty_data &get_data() const {
 		return data;
+	}
+
+	void reverse_dir() {
+		vertex_id_t tmp = from;
+		from = to;
+		to = tmp;
 	}
 };
 
@@ -299,6 +319,12 @@ public:
 
 	const ts_edge_data &get_data() const {
 		return data;
+	}
+
+	void reverse_dir() {
+		vertex_id_t tmp = from;
+		from = to;
+		to = tmp;
 	}
 };
 
@@ -526,6 +552,9 @@ inline bool ext_mem_vertex_info::has_edges() const
 	return size > ext_mem_undirected_vertex::get_header_size();
 }
 
+typedef safs::page_byte_array::const_iterator<vertex_id_t> edge_iterator;
+typedef safs::page_byte_array::seq_const_iterator<vertex_id_t>  edge_seq_iterator;
+
 /**
  * \brief Vertex representation when in the page cache.
  */
@@ -552,8 +581,7 @@ public:
      * \param type The type of edges a user wishes to iterate over
             e.g `IN_EDGE`, `OUT_EDGE`.
      */
-	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
-			edge_type type) const = 0;
+	virtual edge_iterator get_neigh_begin(edge_type type) const = 0;
     
     /**
      * \brief Get an STL-style const iterator pointing to the *end* of
@@ -562,8 +590,7 @@ public:
      * \param type The type of edges a user wishes to iterate over
                 e.g `IN_EDGE`, `OUT_EDGE`.
      */
-	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
-			edge_type type) const = 0;
+	virtual edge_iterator get_neigh_end(edge_type type) const = 0;
     /**
      * \brief Get a java-style sequential const iterator that iterates
 	 *        the neighbors in the specified range.
@@ -575,8 +602,8 @@ public:
 	 * \param end The end offset in the neighbor list iterated by the sequential
 	 *            iterator.
      */
-	virtual page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type, size_t start = 0, size_t end = -1) const = 0;
+	virtual edge_seq_iterator get_neigh_seq_it(edge_type type,
+			size_t start = 0, size_t end = -1) const = 0;
     
     /**
      * \brief Get the vertex unique ID.
@@ -593,7 +620,7 @@ public:
      */
 	virtual size_t read_edges(edge_type type, vertex_id_t edges[],
 			size_t num) const {
-		assert(0);
+		ABORT_MSG("read_edges isn't implemented");
 		return 0;
 	}
 
@@ -661,8 +688,8 @@ public:
      *  \return A const iterator pointing to the *first* element in the
      *         neighbor list of a vertex.
      */
-	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
-			int timestamp, edge_type type) const = 0;
+	virtual edge_iterator get_neigh_begin(int timestamp,
+			edge_type type) const = 0;
     
     /**
      * \brief Get an STL-style const iterator pointing to the *end* of the
@@ -672,8 +699,7 @@ public:
      *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
-	virtual page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
-			int timestamp, edge_type type) const = 0;
+	virtual edge_iterator get_neigh_end(int timestamp, edge_type type) const = 0;
 
 	/** \brief This method should translate the timestamp range to the absolute
      * location of the adjacency list in the timestamp range.
@@ -685,9 +711,6 @@ public:
 			const timestamp_pair &range) const = 0;
 };
 
-typedef page_byte_array::const_iterator<vertex_id_t> edge_iterator;
-typedef page_byte_array::seq_const_iterator<vertex_id_t>  edge_seq_iterator;
-
 /**
  * This vertex represents a directed vertex stored in the page cache.
  */
@@ -698,12 +721,12 @@ class page_directed_vertex: public page_vertex
 	vsize_t num_out_edges;
 	size_t in_size;
 	size_t out_size;
-	const page_byte_array *in_array;
-	const page_byte_array *out_array;
+	const safs::page_byte_array *in_array;
+	const safs::page_byte_array *out_array;
 public:
-	static vertex_id_t get_id(const page_byte_array &arr) {
-		size_t size = arr.get_size();
-		assert(size >= ext_mem_undirected_vertex::get_header_size());
+	static vertex_id_t get_id(const safs::page_byte_array &arr) {
+		BOOST_VERIFY(arr.get_size()
+				>= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 		return v.get_id();
 	}
@@ -714,10 +737,10 @@ public:
      *  \param arr The byte array containing the directed vertex
 	 *             in the page cache.
      */
-	page_directed_vertex(const page_byte_array &arr,
+	page_directed_vertex(const safs::page_byte_array &arr,
 			bool in_part): page_vertex(true) {
 		size_t size = arr.get_size();
-		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
 
 		if (in_part) {
@@ -741,13 +764,13 @@ public:
 		id = v.get_id();
 	}
 
-	page_directed_vertex(const page_byte_array &in_arr,
-			const page_byte_array &out_arr): page_vertex(true) {
+	page_directed_vertex(const safs::page_byte_array &in_arr,
+			const safs::page_byte_array &out_arr): page_vertex(true) {
 		this->in_array = &in_arr;
 		this->out_array = &out_arr;
 
 		size_t size = in_arr.get_size();
-		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
 		ext_mem_undirected_vertex v = in_arr.get<ext_mem_undirected_vertex>(0);
 		in_size = v.get_size();
 		assert(size >= in_size);
@@ -785,7 +808,7 @@ public:
 			case BOTH_EDGES:
 				return num_in_edges + num_out_edges;
 			default:
-				assert(0);
+				abort();
 		}
 	}
     
@@ -796,8 +819,7 @@ public:
      *  \return A const iterator pointing to the *first* element in the
      *         neighbor list of a vertex.
      */
-	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
-			edge_type type) const {
+	edge_iterator get_neigh_begin(edge_type type) const {
 		switch(type) {
 			case IN_EDGE:
 				assert(in_array);
@@ -808,7 +830,7 @@ public:
 				return out_array->begin<vertex_id_t>(
 						ext_mem_undirected_vertex::get_header_size());
 			default:
-				assert(0);
+				abort();
 		}
 	}
     
@@ -819,9 +841,8 @@ public:
      *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
-	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
-			edge_type type) const {
-		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
+	edge_iterator get_neigh_end(edge_type type) const {
+		edge_iterator it = get_neigh_begin(type);
 		it += get_num_edges(type);
 		return it;
 	}
@@ -837,8 +858,8 @@ public:
 	 * \param end The end offset in the neighbor list iterated by the sequential
 	 *            iterator.
      */
-	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type, size_t start = 0, size_t end = -1) const {
+	edge_seq_iterator get_neigh_seq_it(edge_type type, size_t start = 0,
+			size_t end = -1) const {
 		end = std::min(end, get_num_edges(type));
 		assert(start <= end);
 		switch(type) {
@@ -857,7 +878,7 @@ public:
 						ext_mem_undirected_vertex::get_header_size()
 						+ end * sizeof(vertex_id_t));
 			default:
-				assert(0);
+				abort();
 		}
 	}
     
@@ -869,7 +890,7 @@ public:
      *         edge data list of a vertex.
      */
 	template<class edge_data_type>
-	page_byte_array::const_iterator<edge_data_type> get_data_begin(
+	safs::page_byte_array::const_iterator<edge_data_type> get_data_begin(
 			edge_type type) const {
 		switch(type) {
 			case IN_EDGE:
@@ -883,7 +904,7 @@ public:
 						ext_mem_undirected_vertex::get_edge_data_offset(
 							num_out_edges, sizeof(edge_data_type)));
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -895,10 +916,9 @@ public:
      *         edge data list of a vertex.
      */
 	template<class edge_data_type>
-	page_byte_array::const_iterator<edge_data_type> get_data_end(
+	safs::page_byte_array::const_iterator<edge_data_type> get_data_end(
 			edge_type type) const {
-		page_byte_array::const_iterator<edge_data_type> it
-			= get_data_begin<edge_data_type>(type);
+		auto it = get_data_begin<edge_data_type>(type);
 		it += get_num_edges(type);
 		return it;
 	}
@@ -913,7 +933,7 @@ public:
 	 * \param end The end offset in the edge list.
 	 */
 	template<class edge_data_type>
-	page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
 			edge_type type, size_t start, size_t end) const {
 		off_t edge_end;
 		switch(type) {
@@ -932,7 +952,7 @@ public:
 						edge_end + start * sizeof(edge_data_type),
 						edge_end + end * sizeof(edge_data_type));
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -944,7 +964,7 @@ public:
      *          `OUT_EDGE`, `OUT_EDGE`.
      */
 	template<class edge_data_type>
-	page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
 			edge_type type) const {
 		size_t start = 0;
 		size_t end = get_num_edges(type);
@@ -970,7 +990,7 @@ public:
 						(char *) edges, sizeof(vertex_id_t) * num_edges);
 				break;
 			default:
-				assert(0);
+				abort();
 		}
 		return num_edges;
 	}
@@ -1003,20 +1023,26 @@ public:
 class page_undirected_vertex: public page_vertex
 {
 	vertex_id_t id;
+	vsize_t vertex_size;
 	vsize_t num_edges;
-	const page_byte_array &array;
+	const safs::page_byte_array &array;
 public:
-	page_undirected_vertex(const page_byte_array &arr): page_vertex(
+	page_undirected_vertex(const safs::page_byte_array &arr): page_vertex(
 			false), array(arr) {
 		size_t size = arr.get_size();
-		assert(size >= ext_mem_undirected_vertex::get_header_size());
+		BOOST_VERIFY(size >= ext_mem_undirected_vertex::get_header_size());
 		// We only want to know the header of the vertex, so we don't need to
 		// know what data type an edge has.
 		ext_mem_undirected_vertex v = arr.get<ext_mem_undirected_vertex>(0);
-		assert((unsigned) size >= v.get_size());
+		BOOST_VERIFY((unsigned) size >= v.get_size());
+		vertex_size = v.get_size();
 
 		id = v.get_id();
 		num_edges = v.get_num_edges();
+	}
+
+	size_t get_size() const {
+		return vertex_size;
 	}
     
     /**
@@ -1037,8 +1063,7 @@ public:
 	 * \return A const iterator pointing to the *first* element in the
 	 *         neighbor list of a vertex.
 	 */
-	page_byte_array::const_iterator<vertex_id_t> get_neigh_begin(
-			edge_type type) const {
+	edge_iterator get_neigh_begin(edge_type type) const {
 		return array.begin<vertex_id_t>(
 				ext_mem_undirected_vertex::get_header_size());
 	}
@@ -1051,9 +1076,8 @@ public:
      *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
-	page_byte_array::const_iterator<vertex_id_t> get_neigh_end(
-			edge_type type) const {
-		page_byte_array::const_iterator<vertex_id_t> it = get_neigh_begin(type);
+	edge_iterator get_neigh_end(edge_type type) const {
+		auto it = get_neigh_begin(type);
 		it += num_edges;
 		return it;
 	}
@@ -1070,8 +1094,8 @@ public:
      * \return A sequential const iterator for the specified range
      * in a vertex's neighbor list.
      */
-	page_byte_array::seq_const_iterator<vertex_id_t> get_neigh_seq_it(
-			edge_type type, size_t start = 0, size_t end = -1) const {
+	edge_seq_iterator get_neigh_seq_it(edge_type type, size_t start = 0,
+			size_t end = -1) const {
 		end = std::min(end, get_num_edges(type));
 		assert(start <= end);
 		assert(end <= get_num_edges(type));
@@ -1097,6 +1121,36 @@ public:
 				(char *) edges, sizeof(vertex_id_t) * num_edges);
 		return num_edges;
 	}
+
+	/**
+     * \brief Get a java-style sequential const iterator for edge data
+	 *        with additional parameters to define the range to iterate.
+     * \return A sequential const iterator.
+	 * \param start The starting offset in the edge list.
+	 * \param end The end offset in the edge list.
+	 */
+	template<class edge_data_type>
+	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+			size_t start, size_t end) const {
+		off_t edge_end = ext_mem_undirected_vertex::get_edge_data_offset(
+				num_edges, sizeof(edge_data_type));
+		return array.get_seq_iterator<edge_data_type>(
+				edge_end + start * sizeof(edge_data_type),
+				edge_end + end * sizeof(edge_data_type));
+	}
+
+    /**
+     * \brief Get a java-style sequential const iterator that iterates
+	 *        the edge data list.
+     * \return A sequential const iterator.
+     */
+	template<class edge_data_type>
+	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
+			) const {
+		size_t start = 0;
+		size_t end = get_num_edges();
+		return get_data_seq_it<edge_data_type>(start, end);
+	}
     
     /**
      * \brief Get the vertex ID.
@@ -1121,6 +1175,8 @@ struct edge_off
 class in_mem_vertex
 {
 public:
+	typedef std::shared_ptr<in_mem_vertex> ptr;
+
 	virtual vertex_id_t get_id() const = 0;
 	virtual bool has_edge_data() const = 0;
 	virtual size_t get_edge_data_size() const = 0;
@@ -1128,6 +1184,10 @@ public:
 	virtual void serialize_edge_data(char *data, edge_type type) const = 0;
 	virtual size_t get_serialize_size(edge_type type) const = 0;
 	virtual size_t get_num_edges(edge_type type) const = 0;
+	virtual ptr create_remapped_vertex(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const = 0;
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) = 0;
 };
 
 /*
@@ -1185,7 +1245,7 @@ public:
 				memcpy(ids, out_edges.data(), out_edges.size() * sizeof(ids[0]));
 				break;
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -1201,7 +1261,7 @@ public:
 						out_data.size() * sizeof(edge_data_type));
 				break;
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -1238,7 +1298,7 @@ public:
 			case edge_type::BOTH_EDGES:
 				return get_num_in_edges() + get_num_out_edges();
 			default:
-				assert(0);
+				abort();
 		}
 	}
 
@@ -1297,6 +1357,45 @@ public:
 			ext_mem_undirected_vertex v(0, out_edges.size(),
 					has_data ? sizeof(edge_data_type) : 0);
 			return v.get_size();
+		}
+	}
+
+	in_mem_vertex::ptr create_remapped_vertex(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
+		in_mem_directed_vertex<edge_data_type> *new_v
+			= new in_mem_directed_vertex<edge_data_type>(*this);
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(new_v->id);
+		assert(it != map.end());
+		new_v->id = it->second;
+		for (size_t i = 0; i < new_v->out_edges.size(); i++) {
+			it = map.find(new_v->out_edges[i]);
+			assert(it != map.end());
+			new_v->out_edges[i] = it->second;
+		}
+		for (size_t i = 0; i < new_v->in_edges.size(); i++) {
+			it = map.find(new_v->in_edges[i]);
+			assert(it != map.end());
+			new_v->in_edges[i] = it->second;
+		}
+		return in_mem_vertex::ptr(new_v);
+	}
+
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(this->id);
+		assert(it != map.end());
+		this->id = it->second;
+		for (size_t i = 0; i < this->out_edges.size(); i++) {
+			it = map.find(this->out_edges[i]);
+			assert(it != map.end());
+			this->out_edges[i] = it->second;
+		}
+		for (size_t i = 0; i < this->in_edges.size(); i++) {
+			it = map.find(this->in_edges[i]);
+			assert(it != map.end());
+			this->in_edges[i] = it->second;
 		}
 	}
 
@@ -1393,6 +1492,37 @@ public:
 				has_data ? sizeof(edge_data_type) : 0);
 		return v.get_size();
 	}
+
+	in_mem_vertex::ptr create_remapped_vertex(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) const {
+		in_mem_undirected_vertex<edge_data_type> *new_v
+			= new in_mem_undirected_vertex<edge_data_type>(*this);
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(new_v->id);
+		assert(it != map.end());
+		new_v->id = it->second;
+		for (size_t i = 0; i < new_v->edges.size(); i++) {
+			it = map.find(new_v->edges[i]);
+			assert(it != map.end());
+			new_v->edges[i] = it->second;
+		}
+		return in_mem_vertex::ptr(new_v);
+	}
+
+	virtual void remap(
+			const std::unordered_map<vertex_id_t, vertex_id_t> &map) {
+		std::unordered_map<vertex_id_t, vertex_id_t>::const_iterator it
+			= map.find(this->id);
+		assert(it != map.end());
+		this->id = it->second;
+		for (size_t i = 0; i < this->edges.size(); i++) {
+			it = map.find(this->edges[i]);
+			assert(it != map.end());
+			this->edges[i] = it->second;
+		}
+	}
 };
+
+}
 
 #endif

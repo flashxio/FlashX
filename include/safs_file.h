@@ -24,8 +24,13 @@
 
 #include <string>
 #include <vector>
+#include <set>
 
 #include "common.h"
+#include "native_file.h"
+
+namespace safs
+{
 
 /*
  * This stores the local filesystem file information that stores
@@ -41,7 +46,7 @@ struct part_file_info
 
 class RAID_config;
 
-class safs_file
+class safs_file: public file_interface
 {
 	// The collection of native files.
 	std::vector<part_file_info> native_dirs;
@@ -54,9 +59,14 @@ public:
 	}
 
 	bool exist() const;
-	size_t get_file_size() const;
+	ssize_t get_size() const;
 	bool create_file(size_t file_size);
 	bool delete_file();
+	bool rename(const std::string &new_name);
 };
+
+size_t get_all_safs_files(std::set<std::string> &files);
+
+}
 
 #endif

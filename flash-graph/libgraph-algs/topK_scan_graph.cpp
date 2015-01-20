@@ -23,9 +23,6 @@
 #include <set>
 #include <vector>
 
-#include "thread.h"
-#include "io_interface.h"
-
 #include "graph_engine.h"
 #include "graph_config.h"
 
@@ -33,6 +30,8 @@
 #include "FGlib.h"
 
 #include "scan_graph.h"
+
+using namespace fg;
 
 class part_local_t
 {
@@ -94,6 +93,10 @@ public:
 	size_t get() const {
 		return value;
 	}
+
+	void reset() {
+		value = 0;
+	}
 } max_scan;
 
 typedef std::pair<vertex_id_t, size_t> vertex_scan;
@@ -147,6 +150,11 @@ public:
 		pthread_spin_unlock(&lock);
 		return ret;
 	}
+
+	void clear() {
+		sorted = false;
+		scans.clear();
+	}
 } known_scans;
 
 class scan_msg: public vertex_message
@@ -190,7 +198,7 @@ public:
 
 class topK_scan_vertex: public compute_vertex
 {
-	multi_func_value local_value;
+	scan_multi_func_value local_value;
 public:
 	topK_scan_vertex(vertex_id_t id): compute_vertex(id) {
 	}
@@ -231,10 +239,9 @@ public:
 	void finding_triangles_end(vertex_program &prog, size_t local_scan) {
 		vertex_id_t id = prog.get_vertex_id(*this);
 		if (max_scan.update(local_scan)) {
-			struct timeval curr;
-			gettimeofday(&curr, NULL);
-			printf("%d: new max scan: %ld at v%u\n",
-					(int) time_diff(graph_start, curr), local_scan, id);
+			BOOST_LOG_TRIVIAL(info)
+				<< boost::format("new max scan: %1% at v%2%")
+				% local_scan % id;
 		}
 		known_scans.add(id, local_scan);
 	}
@@ -389,8 +396,7 @@ void topK_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &ve
 	local_value.set_runtime_data(local_data);
 
 	size_t tmp = 0;
-	page_byte_array::seq_const_iterator<vertex_id_t> it = vertex.get_neigh_seq_it(
-			edge_type::IN_EDGE);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(edge_type::IN_EDGE);
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		// Ignore loops
 		if (id != vertex.get_id())
@@ -504,7 +510,7 @@ void part_topK_scan_vertex::run_on_message(vertex_program &prog,
 			}
 			break;
 		default:
-			assert(0);
+			ABORT_MSG("wrong message type");
 	}
 	pthread_spin_unlock(&lock);
 }
@@ -539,8 +545,7 @@ void part_topK_scan_vertex::run_on_itself(vertex_program &prog, const page_verte
 	broadcast_vpart(part_scan_msg(part_scan_type::NEIGH, (size_t) local_data));
 
 	size_t tmp = 0;
-	page_byte_array::seq_const_iterator<vertex_id_t> it = vertex.get_neigh_seq_it(
-			edge_type::IN_EDGE);
+	edge_seq_iterator it = vertex.get_neigh_seq_it(edge_type::IN_EDGE);
 	PAGE_FOREACH(vertex_id_t, id, it) {
 		// Ignore loops
 		if (id != vertex.get_id())
@@ -653,18 +658,23 @@ void vertex_size_scheduler::schedule(vertex_program &prog,
 
 }
 
+namespace fg
+{
+
 FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		FG_graph::ptr fg, size_t topK)
 {
 	struct timeval end;
 	gettimeofday(&graph_start, NULL);
 	graph_index::ptr index = NUMA_graph_index<topK_scan_vertex,
-		part_topK_scan_vertex>::create(fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+		part_topK_scan_vertex>::create(fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 
-	printf("scan statistics starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	max_scan.reset();
+	known_scans.clear();
+
+	BOOST_LOG_TRIVIAL(info) << "scan statistics starts";
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -692,15 +702,19 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		}
 	};
 
-	size_t min_edges = 1000;
+	size_t min_edges = 1;
 	std::shared_ptr<vertex_filter> filter
 		= std::shared_ptr<vertex_filter>(new remove_small_filter(min_edges));
-	printf("Computing local scan on at least %ld vertices\n", topK);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("Computing local scan on at least %1% vertices")
+		% topK;
 	while (known_scans.get_size() < topK) {
 		graph->start(filter);
 		graph->wait4complete();
-		printf("There are %ld computed vertices\n", known_scans.get_size());
-		printf("global max scan: %ld\n", max_scan.get());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("There are %1% computed vertices")
+			% known_scans.get_size();
+		BOOST_LOG_TRIVIAL(info) << "global max scan: " << max_scan.get();
 		max_scan = global_max(0);
 	}
 
@@ -723,29 +737,50 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 	off_t prev_start_loc, curr_start_loc;
 	do {
 		prev_topK_scan = known_scans.get(topK - 1).second;
-		for (prev_start_loc = topK - 1; prev_start_loc > 0
-				&& known_scans.get(prev_start_loc).second == prev_topK_scan;
-				prev_start_loc--);
-		printf("prev topK scan: %ld, prev loc: %ld\n", prev_topK_scan,
-				prev_start_loc);
+		prev_start_loc = topK - 1;
+		if (topK > 1) {
+			for (; prev_start_loc > 0 && known_scans.get(
+						prev_start_loc).second == prev_topK_scan;
+					prev_start_loc--);
+			prev_start_loc++;
+		}
+		assert(known_scans.get(prev_start_loc).second == prev_topK_scan);
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("prev topK scan: %1%, prev loc: %2%")
+			% prev_topK_scan % prev_start_loc;
+
 		// Let's use the topK as the max scan for unknown vertices
 		// and see if we can find a new vertex that has larger local scan.
 		max_scan = global_max(prev_topK_scan);
-
 		graph->start(std::shared_ptr<vertex_filter>(
 					new remove_small_scan_filter(prev_topK_scan)));
 		graph->wait4complete();
-		printf("There are %ld computed vertices\n", known_scans.get_size());
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("There are %1% computed vertices")
+			% known_scans.get_size();
+
 		// If the previous topK is different from the current one,
 		// it means we have found new local scans that are larger
 		// than the previous topK. We should use the new topK and
 		// try again.
 		curr_topK_scan = known_scans.get(topK - 1).second;
-		for (curr_start_loc = topK - 1; curr_start_loc > 0
-				&& known_scans.get(curr_start_loc).second == curr_topK_scan;
-				curr_start_loc--);
-		printf("global max scan: %ld, start loc: %ld\n", max_scan.get(),
-				curr_start_loc);
+		curr_start_loc = topK - 1;
+		// It's possible that there are multiple locality stat which has
+		// the same value as the Kth largest one. This test is to see whether
+		// we found more locality stat larger than the previous Kth largest
+		// value.
+		// However, if K is 1, then we don't need to look into the locality
+		// stat before K because there are no previous locality stat before K.
+		if (topK > 1) {
+			for (; curr_start_loc > 0 && known_scans.get(
+						curr_start_loc).second == curr_topK_scan;
+					curr_start_loc--);
+			curr_start_loc++;
+		}
+		assert(known_scans.get(curr_start_loc).second == curr_topK_scan);
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("global max scan: %1%, topK scan: %2%, start loc: %3%")
+			% max_scan.get() % curr_topK_scan % curr_start_loc;
 	} while (prev_topK_scan != curr_topK_scan || prev_start_loc != curr_start_loc);
 	assert(known_scans.get_size() >= topK);
 
@@ -754,12 +789,15 @@ FG_vector<std::pair<vertex_id_t, size_t> >::ptr compute_topK_scan(
 		ProfilerStop();
 #endif
 	gettimeofday(&end, NULL);
-	printf("It takes %f seconds for top %ld\n", time_diff(graph_start, end),
-			topK);
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds for top %2%")
+		% time_diff(graph_start, end) % topK;
 
 	FG_vector<std::pair<vertex_id_t, size_t> >::ptr vec
 		= FG_vector<std::pair<vertex_id_t, size_t> >::create(topK);
 	for (size_t i = 0; i < topK; i++)
 		vec->set(i, known_scans.get(i));
 	return vec;
+}
+
 }

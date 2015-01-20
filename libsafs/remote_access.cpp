@@ -17,11 +17,18 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include "remote_access.h"
 #include "parameters.h"
 #include "slab_allocator.h"
 #include "disk_read_thread.h"
 #include "file_mapper.h"
+
+namespace safs
+{
+
+static const int COMPLETE_QUEUE_SIZE = 10240;
 
 /**
  * An IO request may be split into multiple requests.
@@ -51,6 +58,11 @@ public:
 	}
 };
 
+/*
+ * This method is invoked in the I/O thread.
+ * It queues the completed I/O requests in the queue and these I/O requests
+ * will be processed in the application threads later.
+ */
 void remote_io::notify_completion(io_request *reqs[], int num)
 {
 	stack_array<io_request> req_copies(num);
@@ -59,12 +71,11 @@ void remote_io::notify_completion(io_request *reqs[], int num)
 		assert(req_copies[i].get_io());
 	}
 
-	int ret = complete_queue.add(req_copies.data(), num);
-	assert(ret == num);
+	BOOST_VERIFY(complete_queue.add(req_copies.data(), num) == num);
 	get_thread()->activate();
 }
 
-remote_io::remote_io(const std::vector<disk_io_thread *> &remotes,
+remote_io::remote_io(const std::vector<disk_io_thread::ptr> &remotes,
 		slab_allocator &_msg_allocator, file_mapper *mapper, thread *t,
 		int max_reqs): io_interface(
 			// TODO I hope the queue size is large enough.
@@ -158,9 +169,21 @@ void remote_io::access(io_request *requests, int num,
 			requests[i].set_io(this);
 			requests[i].set_node_id(this->get_node_id());
 		}
-		assert(requests[i].get_offset() % MIN_BLOCK_SIZE == 0);
-		assert(requests[i].get_size() % MIN_BLOCK_SIZE == 0);
-		assert(requests[i].get_req_type() != io_request::USER_COMPUTE);
+
+		if (requests[i].get_access_method() == WRITE && !params.is_writable())
+			throw io_exception((boost::format(
+							"The I/O object can't write data. offset: %1%, size: %2%")
+						% requests[i].get_offset() % requests[i].get_size()).str());
+		if (requests[i].get_offset() % MIN_BLOCK_SIZE > 0)
+			throw io_exception((boost::format(
+						"The IO request offset isn't aligned. offset: %1%, size: %2%")
+					% requests[i].get_offset() % requests[i].get_size()).str());
+		if (requests[i].get_size() % MIN_BLOCK_SIZE > 0)
+			throw io_exception((boost::format(
+							"The IO request size isn't aligned. offset: %1%, size: %2%")
+						% requests[i].get_offset() % requests[i].get_size()).str());
+		if (requests[i].get_req_type() == io_request::USER_COMPUTE)
+			throw io_exception("user compute isn't supported");
 
 		if (requests[i].is_flush()) {
 			syncd = true;
@@ -250,6 +273,10 @@ void remote_io::flush_requests()
 	flush_requests(0);
 }
 
+/*
+ * This method is invoked in the application threads.
+ * It processes the completed I/O requests returned by the I/O threads.
+ */
 int remote_io::process_completed_requests(int num)
 {
 	if (num > 0) {
@@ -292,6 +319,7 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 			continue;
 		}
 
+		// Handle large I/O requests that were split in remote I/O.
 		remote_orig_io_request *orig = remote_orig_io_request::cast2original(
 				(io_request *) reqs[i].get_priv());
 		io_request *req = &reqs[i];
@@ -306,8 +334,8 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 		assert(upper_io);
 		upper_io->notify_completion(from_upper, num_from_upper);
 	}
-	if (num_from_app > 0 && this->get_callback())
-		this->get_callback()->invoke(from_app, num_from_app);
+	if (num_from_app > 0 && this->have_callback())
+		this->get_callback().invoke(from_app, num_from_app);
 
 	for (unsigned i = 0; i < completes.size(); i++) {
 		remote_orig_io_request *orig = completes[i];
@@ -315,8 +343,8 @@ int remote_io::process_completed_requests(io_request reqs[], int num)
 		io_interface *io = orig->get_io();
 		// It's from an application.
 		if (io == this) {
-			if (io->get_callback())
-				io->get_callback()->invoke(&req, 1);
+			if (io->have_callback())
+				io->get_callback().invoke(&req, 1);
 		}
 		else
 			io->notify_completion(&req, 1);
@@ -386,3 +414,5 @@ void remote_io::print_state()
 }
 
 atomic_integer remote_io::num_ios;
+
+}

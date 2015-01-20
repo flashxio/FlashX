@@ -24,15 +24,11 @@
 #include <set>
 #include <unordered_map>
 
-#include "thread.h"
-#include "io_interface.h"
-#include "container.h"
-#include "concurrency.h"
-
-#include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"
+
+using namespace fg;
 
 namespace {
 
@@ -280,10 +276,6 @@ public:
 			prog.activate_vertices(it);
 		}
 	}
-
-	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		assert(0);
-	}
 };
 
 template<class vertex_type>
@@ -354,28 +346,33 @@ std::vector<vertex_dist_t> estimate_diameter_1sweep(graph_engine::ptr graph,
 
 }
 
-size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
-		bool directed, int num_sweeps)
+namespace fg
+{
+
+size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs, bool directed)
 {
 	num_bfs = num_para_bfs;
 	if (!directed)
 		traverse_edge = edge_type::BOTH_EDGES;
+	else
+		traverse_edge = edge_type::OUT_EDGE;
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index;
 	if (num_bfs == 1)
 		index = NUMA_graph_index<simple_diameter_vertex>::create(
-				fg->get_index_file());
+				fg->get_graph_header());
 	else
-		index = NUMA_graph_index<diameter_vertex>::create(fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+		index = NUMA_graph_index<diameter_vertex>::create(
+				fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 
-	printf("diameter estimation starts\n");
-	printf("#para BFS: %d, #sweeps: %d, directed: %d\n", num_para_bfs,
-			num_sweeps, directed);
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "diameter estimation starts";
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("#para BFS: %1%, directed: %2%")
+		% num_para_bfs % directed;
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -388,11 +385,12 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 	}
 
 	short global_max = 0;
-	for (int i = 0; i < num_sweeps; i++) {
-		printf("Sweep %d starts on %ld vertices, traverse edge: %d\n",
-			i, start_vertices.size(), traverse_edge);
+	for (int i = 0; ; i++) {
+		BOOST_LOG_TRIVIAL(info)
+			<< boost::format("Sweep %1% starts on %2% vertices, traverse edge: %3%")
+			% i % start_vertices.size() % traverse_edge;
 		BOOST_FOREACH(vertex_id_t v, start_vertices) {
-			printf("v%d\n", v);
+			BOOST_LOG_TRIVIAL(info) << "v" << v;
 		}
 
 		std::vector<vertex_dist_t> max_dist_vertices;
@@ -425,8 +423,22 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 			start_vertices.insert(start_vertices.begin(), start_set.begin(),
 					start_set.end());
 			short max_dist = max_dist_vertices.front().second;
-			printf("The current max dist: %d\n", max_dist);
-			global_max = max(global_max, max_dist);
+			BOOST_LOG_TRIVIAL(info)
+				<< boost::format("The current max dist: %1%, global max: %2%")
+				% max_dist % global_max;
+
+			if (max_dist == 0) {
+				size_t num_bfs = start_vertices.size();
+				start_vertices.clear();
+				while (start_vertices.size() < num_bfs) {
+					vertex_id_t id = random() % graph->get_max_vertex_id();
+					start_vertices.push_back(id);
+				}
+			}
+			else if (global_max >= max_dist)
+				break;
+			else
+				global_max = max(global_max, max_dist);
 			// We should switch the direction if we search for the longest
 			// directed path
 			if (traverse_edge == edge_type::IN_EDGE)
@@ -436,7 +448,8 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 		}
 	}
 	gettimeofday(&end, NULL);
-	printf("It takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds in total")
+		% time_diff(start, end);
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -444,4 +457,6 @@ size_t estimate_diameter(FG_graph::ptr fg, int num_para_bfs,
 #endif
 
 	return global_max;
+}
+
 }

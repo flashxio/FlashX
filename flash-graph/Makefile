@@ -18,10 +18,10 @@
 include ../Makefile.common
 
 OMP_FLAG = -fopenmp
-CXXFLAGS += -I../include $(OMP_FLAG)
+CXXFLAGS += -I../include -I../libcommon $(OMP_FLAG) -DUSE_GZIP -DUSE_STXXL
 LDFLAGS += $(OMP_FLAG)
 
-all: libgraph graph-bfs sssp unit-test tools test matrix libgraph-algs test-algs
+all: libgraph unit-test tools test matrix libgraph-algs test-algs test-matrix
 
 libgraph-algs: libgraph
 	$(MAKE) -C libgraph-algs
@@ -29,12 +29,6 @@ libgraph-algs: libgraph
 libgraph: $(OBJS)
 	rm -f libgraph.a
 	ar -cvq libgraph.a $(OBJS)
-
-graph-bfs: libgraph
-	$(MAKE) -C graph-bfs
-
-sssp: libgraph
-	$(MAKE) -C sssp
 
 tools: libgraph
 	$(MAKE) -C tools
@@ -54,6 +48,9 @@ test-algs: libgraph libgraph-algs matrix
 LOL: libgraph matrix
 	$(MAKE) -C LOL
 
+test-matrix: libgraph matrix
+	$(MAKE) -C test-matrix
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -61,13 +58,12 @@ clean:
 	rm -f libgraph.a
 	find -name core -delete
 	$(MAKE) clean -C tools
-	$(MAKE) clean -C graph-bfs
 	$(MAKE) clean -C unit-test
-	$(MAKE) clean -C sssp
 	$(MAKE) clean -C test
 	$(MAKE) clean -C matrix
 	$(MAKE) clean -C libgraph-algs
 	$(MAKE) clean -C test-algs
 	$(MAKE) clean -C LOL
+	$(MAKE) clean -C test-matrix
 
 -include $(DEPS) 

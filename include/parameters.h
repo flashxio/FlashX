@@ -25,73 +25,14 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <memory>
 
 #define USE_GCLOCK
 
-#define PAGE_SIZE 4096
-#define LOG_PAGE_SIZE 12
-
 #define MIN_BLOCK_SIZE 512
 
-/**
- * This maintains key-value pairs for options.
- */
-class config_map
+namespace safs
 {
-	std::map<std::string, std::string> configs;
-public:
-	config_map() {
-	}
-
-	config_map(const std::string &conf_file);
-
-	void add_options(const char *opts[], int num);
-	// Multiple options may exist in the input string and
-	// the options are separated by space.
-	void add_options(const std::string &opts);
-
-	const std::string &get_option(const std::string &name) const {
-		std::map<std::string, std::string>::const_iterator it
-			= configs.find(name);
-		assert(it != configs.end());
-		return it->second;
-	}
-
-	bool has_option(const std::string &name) const {
-		return configs.find(name) != configs.end();
-	}
-
-	bool read_option(const std::string &name, std::string &value) const {
-		if (has_option(name)) {
-			value = get_option(name);
-			return true;
-		}
-		else
-			return false;
-	}
-
-	bool read_option_int(const std::string &name, int &value) const {
-		if (has_option(name)) {
-			value = atoi(get_option(name).c_str());
-			return true;
-		}
-		else
-			return false;
-	}
-
-	bool read_option_bool(const std::string &name, bool &value) const {
-		if (has_option(name)) {
-			value = true;
-			return true;
-		}
-		else
-			return false;
-	}
-
-	const std::map<std::string, std::string> &get_options() const {
-		return configs;
-	}
-};
 
 class sys_parameters
 {
@@ -248,6 +189,8 @@ const int NUMA_MSG_SIZE = 4096;
 const int NUMA_REPLY_CACHE_SIZE = 50;
 
 const int LOCAL_BUF_SIZE = 100;
+
+}
 
 struct str2int {
 	std::string name;

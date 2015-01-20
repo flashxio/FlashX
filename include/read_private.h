@@ -29,6 +29,9 @@
 #include "file_partition.h"
 #include "parameters.h"
 
+namespace safs
+{
+
 class buffered_io: public io_interface
 {
 	logical_file_partition partition;
@@ -41,10 +44,8 @@ public:
 			thread *t, int flags = O_RDWR);
 
 	virtual ~buffered_io() {
-		for (unsigned i = 0; i < fds.size(); i++) {
-			int ret = close(fds[i]);
-			assert(ret == 0);
-		}
+		for (unsigned i = 0; i < fds.size(); i++)
+			BOOST_VERIFY(close(fds[i]) == 0);
 	}
 
 	/* get the file descriptor corresponding to the offset. */
@@ -79,5 +80,7 @@ public:
 
 	io_status access(char *buf, off_t offset, ssize_t size, int access_method);
 };
+
+}
 
 #endif

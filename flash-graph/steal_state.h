@@ -24,6 +24,9 @@
 
 #include "bitmap.h"
 
+namespace fg
+{
+
 class compute_vertex;
 
 /**
@@ -126,5 +129,6 @@ public:
 	}
 };
 
+}
 
 #endif

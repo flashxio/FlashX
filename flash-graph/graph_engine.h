@@ -22,12 +22,6 @@
 
 #include <atomic>
 
-#include "thread.h"
-#include "container.h"
-#include "concurrency.h"
-#include "slab_allocator.h"
-#include "io_interface.h"
-
 #include "vertex.h"
 #include "vertex_index.h"
 #include "trace_logger.h"
@@ -37,6 +31,14 @@
 #include "graph_config.h"
 #include "vertex_request.h"
 #include "vertex_program.h"
+
+namespace safs
+{
+	class file_io_factory;
+}
+
+namespace fg
+{
 
 class graph_engine;
 class vertex_request;
@@ -92,7 +94,16 @@ public:
 	  */
 	void run_on_vertex_header(vertex_program &prog,
 			const vertex_header &header) {
-		assert(0);
+		ABORT_MSG("run_on_vertex_header isn't implemented");
+	}
+
+	/**
+	 * \brief This method is invoked when the vertex receives a message.
+	 * \param vprog The vertex program.
+	 * \param msg The message sent to the vertex.
+	 */
+	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
+		ABORT_MSG("run_on_message isn't implemented");
 	}
 };
 
@@ -124,7 +135,7 @@ public:
 	void broadcast_vpart(const vertex_message &msg);
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		assert(0);
+		ABORT_MSG("run_on_message isn't implemented");
 	}
 };
 
@@ -139,18 +150,19 @@ public:
 	}
 
 	void run(vertex_program &) {
-		assert(0);
+		ABORT_MSG("run isn't implemented");
 	}
 
 	void run(vertex_program &, const page_vertex &vertex) {
-		assert(0);
+		ABORT_MSG("run isn't implemented");
 	}
 
 	void run_on_message(vertex_program &, const vertex_message &msg) {
-		assert(0);
+		ABORT_MSG("run_on_message isn't implemented");
 	}
 
 	void run_on_vertex_header(vertex_program &prog, const vertex_header &header) {
+		ABORT_MSG("run_on_vertex_header isn't implemented");
 	}
 };
 
@@ -215,7 +227,7 @@ public:
 	void request_partial_vertices(directed_vertex_request reqs[], size_t num);
 
 	void run_on_message(vertex_program &vprog, const vertex_message &msg) {
-		assert(0);
+		ABORT_MSG("run_on_message isn't implemented");
 	}
 };
 
@@ -310,6 +322,7 @@ public:
 
 class worker_thread;
 class in_mem_graph;
+class FG_graph;
 
 /**
  * \brief This is the class that coordinates how & where algorithms are run.
@@ -317,7 +330,7 @@ class in_mem_graph;
 */
 class graph_engine
 {
-	static std::atomic<size_t> init_count;
+	static std::atomic<long> init_count;
 
 	graph_header header;
 	// The location of the out-part of the graph. It's valid only
@@ -325,8 +338,7 @@ class graph_engine
 	off_t out_part_off;
 
 	graph_index::ptr vertices;
-	vertex_index::ptr vindex;
-	in_mem_cdirected_vertex_index::ptr cindex;
+	in_mem_query_vertex_index::ptr vindex;
 	std::shared_ptr<in_mem_graph> graph_data;
 	vertex_scheduler::ptr scheduler;
 
@@ -346,8 +358,7 @@ class graph_engine
 	std::vector<vertex_program::ptr> vprograms;
 
 	trace_logger::ptr logger;
-	file_io_factory::shared_ptr graph_factory;
-	file_io_factory::shared_ptr index_factory;
+	std::shared_ptr<safs::file_io_factory> graph_factory;
 	int max_processing_vertices;
 
 	// The time when the current iteration starts.
@@ -355,29 +366,21 @@ class graph_engine
 
 	void init_threads(vertex_program_creater::ptr creater);
 protected:
-    /**
-     * \brief Constructor usable by inheriting classes.
-     * \param graph_file The path to the graph file on disk.
-     * \param index The path to the graph index file on disk.
-     * \param configs The path to the configuration file on disk.
-     */
-	graph_engine(const std::string &graph_file, graph_index::ptr index,
-			const config_map &configs);
+	graph_engine(FG_graph &graph, graph_index::ptr index);
+	void init(graph_index::ptr index);
 public:
 	typedef std::shared_ptr<graph_engine> ptr; /** Smart pointer for object access.*/
 
-	static void init_flash_graph(const config_map &configs);
+	static void init_flash_graph(config_map::ptr configs);
 	static void destroy_flash_graph();
     
     /**
-     * \brief Use this method to in lieu of a constructor to create a graph object.
-     * \param graph_file The path to the graph file on disk.
+     * \brief Constructor usable by inheriting classes.
+     * \param graph 
      * \param index The path to the graph index file on disk.
-     * \param configs The path to the configuration file on
      */
-	static graph_engine::ptr create(const std::string &graph_file,
-			graph_index::ptr index, const config_map &configs) {
-		return graph_engine::ptr(new graph_engine(graph_file, index, configs));
+	static graph_engine::ptr create(FG_graph &graph, graph_index::ptr index) {
+		return graph_engine::ptr(new graph_engine(graph, index));
 	}
 
     /**
@@ -509,6 +512,7 @@ public:
      */
 	void wait4complete();
 
+#if 0
 	/**
 	 * \brief This method preloads the entire graph to the page cache.
 	 *        If the page cache is smaller than the graph, only the first part
@@ -516,6 +520,7 @@ public:
 	 *        to the page cache.
 	 */
 	void preload_graph();
+#endif
 
 	/**
 	 * \brief Allows users to initialize vertices to certain state.
@@ -553,12 +558,9 @@ public:
 		return level.get();
 	}
 
-	vsize_t get_num_edges(vertex_id_t id) const {
-		if (vindex) {
-			assert(0);
-		}
-		else
-			return cindex->get_num_in_edges(id) + cindex->get_num_out_edges(id);
+	vsize_t get_num_edges(vertex_id_t id,
+			edge_type type = edge_type::BOTH_EDGES) const {
+		return vindex->get_num_edges(id, type);
 	}
 
 	/**
@@ -582,9 +584,7 @@ public:
      * \internal
 	 * Get the file id where the graph data is stored.
 	 */
-	int get_file_id() const {
-		return graph_factory->get_file_id();
-	}
+	int get_file_id() const;
     
     /**\internal */
 	const graph_partitioner *get_partitioner() const {
@@ -623,15 +623,8 @@ public:
 		return num_remaining_vertices_in_level.get();
 	}
 
-	const vertex_index::ptr get_in_mem_index() const {
+	const in_mem_query_vertex_index::ptr get_in_mem_index() const {
 		return vindex;
-	}
-
-	/*
-	 * \internal Get the in-memory vertex index.
-	 */
-	const in_mem_cdirected_vertex_index::ptr get_in_mem_cindex() const {
-		return cindex;
 	}
 
 	void set_max_processing_vertices(int max) {
@@ -655,5 +648,7 @@ public:
 				header.get_edge_data_size());
 	}
 };
+
+}
 
 #endif

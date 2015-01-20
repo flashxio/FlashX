@@ -20,6 +20,8 @@ CXX = clang++
 #MEMCHECK=1
 #PROF=1
 #MEMTRACE=1
+#BOOST_LOG=1
+#RELEASE=1
 CFLAGS = -g -O3 -DSTATISTICS -DPROFILER
 ifdef MEMCHECK
 TRACE_FLAGS = -fsanitize=address
@@ -28,13 +30,20 @@ TRACE_FLAGS += -fno-optimize-sibling-calls # disable tail call elimination
 endif
 CLANG_FLAGS = -Wno-attributes
 LDFLAGS = -lpthread $(TRACE_FLAGS) -rdynamic -laio -lnuma -lrt
-CXXFLAGS = -g -O3 -I. -Wall -Wno-deprecated-register -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS
+CXXFLAGS = -g -O3 -I. -Wall -fPIC -std=c++0x $(TRACE_FLAGS) $(CLANG_FLAGS) -DSTATISTICS -DBOOST_LOG_DYN_LINK
 ifdef PROF
 	LDFLAGS +=-lprofiler
 	CXXFLAGS += -DPROFILER
 endif
+ifdef BOOST_LOG
+	LDFLAGS += -lboost_log
+	CXXFLAGS += USE_BOOST_LOG
+endif
 ifdef MEMTRACE
 	CXXFLAGS += -DENABLE_MEM_TRACE
+endif
+ifdef RELEASE
+	CXXFLAGS += -DNDEBUG
 endif
 CPPFLAGS := -MD
 

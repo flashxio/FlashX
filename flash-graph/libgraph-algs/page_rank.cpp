@@ -22,15 +22,11 @@
 
 #include <limits>
 
-#include "thread.h"
-#include "io_interface.h"
-#include "container.h"
-#include "concurrency.h"
-
-#include "vertex_index.h"
 #include "graph_engine.h"
 #include "graph_config.h"
 #include "FGlib.h"
+
+using namespace fg;
 
 namespace {
 
@@ -104,11 +100,9 @@ void pgrank_vertex::run(vertex_program &prog)
 void pgrank_vertex::run(vertex_program &prog, const page_vertex &vertex) {
   // Gather
   float accum = 0;
-  page_byte_array::const_iterator<vertex_id_t> end_it
-    = vertex.get_neigh_end(IN_EDGE);
+  edge_iterator end_it = vertex.get_neigh_end(IN_EDGE);
   
-  for (page_byte_array::const_iterator<vertex_id_t> it
-      = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
+  for (edge_iterator it = vertex.get_neigh_begin(IN_EDGE); it != end_it; ++it) {
     vertex_id_t id = *it;
     pgrank_vertex& v = (pgrank_vertex&) prog.get_graph().get_vertex(id);
     // Notice I want this iteration's pagerank
@@ -198,24 +192,30 @@ void pgrank_vertex2::run(vertex_program &prog, const page_vertex &vertex)
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		float damping_factor)
 {
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
+		BOOST_LOG_TRIVIAL(fatal)
+			<< "Damping factor must be between 0 and 1 inclusive";
 		exit(-1);
 	}
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex>::create(
-			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+			fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 	max_num_iters = num_iters;
-	printf("Pagerank (at maximal %d iterations) starting\n", max_num_iters);
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("Pagerank (at maximal %1% iterations) starting")
+		% max_num_iters;
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -239,7 +239,9 @@ FG_vector<float>::ptr compute_pagerank(FG_graph::ptr fg, int num_iters,
 		ProfilerStop();
 #endif
 
-	printf("It takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds in total")
+		% time_diff(start, end);
 	return ret;
 }
 
@@ -248,19 +250,21 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 {
 	DAMPING_FACTOR = damping_factor;
 	if (DAMPING_FACTOR < 0 || DAMPING_FACTOR > 1) {
-		fprintf(stderr, "Damping factor must be between 0 and 1 inclusive\n");
+		BOOST_LOG_TRIVIAL(fatal)
+			<< "Damping factor must be between 0 and 1 inclusive";
 		exit(-1);
 	}
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 	graph_index::ptr index = NUMA_graph_index<pgrank_vertex2>::create(
-			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+			fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 	max_num_iters = num_iters;
-	printf("Pagerank (at maximal %d iterations) starting\n", num_iters);
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("Pagerank (at maximal %1% iterations) starting")
+		% max_num_iters;
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -280,6 +284,10 @@ FG_vector<float>::ptr compute_pagerank2(FG_graph::ptr fg, int num_iters,
 		ProfilerStop();
 #endif
 
-	printf("It takes %f seconds in total\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds in total")
+		% time_diff(start, end);
 	return ret;
+}
+
 }

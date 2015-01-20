@@ -25,6 +25,8 @@
 
 #include "scan_graph.h"
 
+using namespace fg;
+
 namespace {
 
 scan_stage_t scan_stage;
@@ -142,7 +144,7 @@ size_t extended_neighbor_list::count_edges(const page_vertex *v)
 class local_scan_vertex: public compute_vertex
 {
 	vsize_t degree;
-	multi_func_value local_value;
+	scan_multi_func_value local_value;
 public:
 	local_scan_vertex(vertex_id_t id): compute_vertex(id) {
 		degree = 0;
@@ -287,17 +289,24 @@ void local_scan_vertex::run_on_itself(vertex_program &prog, const page_vertex &v
 	runtime_data_t *local_data = create_runtime(prog.get_graph(), *this, vertex);
 	local_value.set_runtime_data(local_data);
 
-	page_byte_array::const_iterator<vertex_id_t> it = vertex.get_neigh_begin(
-			edge_type::BOTH_EDGES);
-	page_byte_array::const_iterator<vertex_id_t> end = vertex.get_neigh_end(
-			edge_type::BOTH_EDGES);
 	size_t tmp = 0;
+	edge_iterator it = vertex.get_neigh_begin(edge_type::IN_EDGE);
+	edge_iterator end = vertex.get_neigh_end(edge_type::IN_EDGE);
 	for (; it != end; ++it) {
 		vertex_id_t id = *it;
 		// Ignore loops
 		if (id != vertex.get_id())
 			tmp++;
 	}
+	it = vertex.get_neigh_begin(edge_type::OUT_EDGE);
+	end = vertex.get_neigh_end(edge_type::OUT_EDGE);
+	for (; it != end; ++it) {
+		vertex_id_t id = *it;
+		// Ignore loops
+		if (id != vertex.get_id())
+			tmp++;
+	}
+
 	local_data->local_scan += tmp;
 
 	if (local_data->neighbors->empty()) {
@@ -335,15 +344,18 @@ void local_scan_vertex::run_on_neighbor(vertex_program &prog, const page_vertex 
 }
 
 #include "save_result.h"
+
+namespace fg
+{
+
 FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 {
 	graph_index::ptr index = NUMA_graph_index<local_scan_vertex>::create(
-			fg->get_index_file());
-	graph_engine::ptr graph = graph_engine::create(fg->get_graph_file(),
-			index, fg->get_configs());
+			fg->get_graph_header());
+	graph_engine::ptr graph = fg->create_engine(index);
 
-	printf("local scan starts\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "local scan starts";
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -364,11 +376,14 @@ FG_vector<size_t>::ptr compute_local_scan(FG_graph::ptr fg)
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
-	printf("It takes %f seconds to compute all local scan\n",
-			time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info)
+		<< boost::format("It takes %1% seconds to compute all local scan")
+		% time_diff(start, end);
 
 	FG_vector<size_t>::ptr vec = FG_vector<size_t>::create(graph);
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<size_t, local_scan_vertex>(vec)));
 	return vec;
+}
+
 }
