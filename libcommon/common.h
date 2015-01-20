@@ -120,5 +120,7 @@ int split_string(const std::string &str, char delim,
 
 bool check_read_content(char *buf, int size, off_t off, int file_id);
 void create_write_data(char *buf, int size, off_t off, int file_id);
+int get_num_omp_threads();
+int get_omp_thread_num();
 
 #endif
