@@ -1,5 +1,5 @@
 FG <- TRUE
-verbose <- FALSE
+verbose <- TRUE
 fgcheck <- function() {
 	if ("FlashGraphR" %in% rownames(installed.packages()) == FALSE) {
 		assign("FG", FALSE, envir = .GlobalEnv)
@@ -36,7 +36,8 @@ plot.by.cluster <- function (data, clusters, title, xlims, ylims, colors, k) {
 plot.by.truth <- function (){
 }
 
-test.kmeans <- function(k, n=50, std.dev=10, min.ari.thresh=.5)
+# Allow no more than 10% degredation compared to R.kmeans
+test.kmeans <- function(k, n=50, std.dev=10, min.ari.thresh=.1)
 {
 	### Make data ####
 	mu.vec <- mvrnorm(k, c(0,0), std.dev*diag(2)); # Cluster means
@@ -96,11 +97,8 @@ test.kmeans <- function(k, n=50, std.dev=10, min.ari.thresh=.5)
 		fg.kms <- fg.kmeans(data, k, max.iters=100)
 		fg.ari <- adjustedRandIndex(fg.kms$cluster, truth)
 		print(paste("The ARI of fg is", fg.ari))
-		if (verbose) {
-			plot.by.cluster(data, fg.kms$cluster, "FG-clusters colored by cluster", 
-							xlims, ylims, colors, k)
-		}
-		stopifnot(fg.ari >= min.ari.thresh)
+		stopifnot((fg.ari > R.ari) || 
+				  (abs(fg.ari - R.ari)/mean(c(fg.ari,R.ari))) < min.ari.thresh) # 5% difference only
 	}
 
 
