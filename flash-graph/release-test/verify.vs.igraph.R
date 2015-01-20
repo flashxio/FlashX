@@ -307,6 +307,11 @@ test.eigen.undirected <- function(fg, ig)
 	check.eigen(ig.matrix.tmp, fg.res)
 }
 
+# Kmeans
+source("verify.kmeans.R")
+test.kmeans(2, 500, 20)
+test.with.iris()
+
 test.weighted <- function(fg, ig)
 {
 	fg.out <- fg.multiply(fg, rep.int(1, fg.vcount(fg)))
