@@ -116,7 +116,7 @@ class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 {
 	std::vector<vertex_set_ptr> bfs_visited_vertices;
 	int max_dist;
-public:
+	public:
 	bfs_vertex_program() {
 		max_dist = 0;
 	}
@@ -163,7 +163,7 @@ class bp_vertex_program: public vertex_program_impl<betweenness_vertex>
 {
 	std::shared_ptr<vertex_map_t> all_vertices;
 	std::vector<vertex_set_ptr> bfs_visited_vertices;
-public:
+	public:
 	bp_vertex_program(std::shared_ptr<vertex_map_t> vertices) {
 		this->all_vertices = vertices;
 	}
@@ -195,16 +195,16 @@ public:
 
 class bfs_vertex_program_creater: public vertex_program_creater
 {
-public:
-    vertex_program::ptr create() const {
-        return vertex_program::ptr(new bfs_vertex_program());
-    }
+	public:
+		vertex_program::ptr create() const {
+			return vertex_program::ptr(new bfs_vertex_program());
+		}
 };
 
 class bp_vertex_program_creater: public vertex_program_creater
 {
 	std::shared_ptr<vertex_map_t> all_vertices;
-public:
+	public:
 	bp_vertex_program_creater() {
 		all_vertices = std::shared_ptr<vertex_map_t>(new vertex_map_t());
 	}
@@ -431,7 +431,7 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	
+
 	g_source_vertex = id;
 	// BFS phase. Inintialize start vert(ex)(ices)
 	g_alg_phase = btwn_phase_t::bfs;
@@ -482,7 +482,7 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id
 				new save_query<float, betweenness_vertex>(ret)));
 
 	printf("Printing betweenness vector:\n");
-//	ret->print();
+	//	ret->print();
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
@@ -491,4 +491,4 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id
 
 	printf("It takes %f seconds\n", time_diff(start, end));
 	return ret;
-	}
+}
