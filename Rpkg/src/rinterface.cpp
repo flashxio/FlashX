@@ -1108,4 +1108,16 @@ RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
 	ret["vectors"] = eigen_matrix;
 	return ret;
 }
+
+RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
+{
+	Rcpp::IntegerVector Rvids(_vids);
+	std::vector<vertex_id_t> vids(Rvids.begin(), Rvids.end());
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+
+	FG_vector<float>::ptr fg_vec = compute_betweenness_centrality(fg, vids);
+	Rcpp::NumericVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	return res;
+}
 #endif
