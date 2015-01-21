@@ -42,6 +42,8 @@ protected:
 			size_t entry_size): dense_matrix(nrow, ncol, entry_size, true) {
 	}
 
+	virtual bool verify_inner_prod(const dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
 	typedef std::shared_ptr<mem_dense_matrix> ptr;
 
@@ -53,8 +55,6 @@ public:
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual matrix_layout_t store_layout() const = 0;
 
-	virtual bool verify_inner_prod(const dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual dense_matrix::ptr par_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
 };
@@ -81,6 +81,8 @@ class mem_row_dense_matrix: public mem_dense_matrix
 	void par_inner_prod_tall(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op,
 			mem_row_dense_matrix &res) const;
+	virtual bool verify_inner_prod(const dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
 	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
 
@@ -92,8 +94,6 @@ public:
 		free(data);
 	}
 
-	virtual bool verify_inner_prod(const dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual void reset_data();
 	void set_data(const set_operate &op);
 	virtual void par_reset_data();

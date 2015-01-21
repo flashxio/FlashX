@@ -51,6 +51,8 @@ protected:
 		this->in_mem = in_mem;
 	}
 	virtual bool verify_aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual bool verify_inner_prod(const dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
 	typedef std::shared_ptr<dense_matrix> ptr;
 
@@ -97,8 +99,6 @@ public:
 	virtual void reset_data() = 0;
 	virtual void set_data(const set_operate &op) = 0;
 
-	virtual bool verify_inner_prod(const dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const = 0;
