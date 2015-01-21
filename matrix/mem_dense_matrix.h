@@ -61,12 +61,20 @@ public:
 
 class mem_row_dense_matrix: public mem_dense_matrix
 {
-	char *data;
+	struct deleter {
+		void operator()(char *p) const{
+			free(p);
+		}
+	};
+
+	std::shared_ptr<char> data;
 
 	mem_row_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {
-			data = (char *) memalign(PAGE_SIZE, nrow * ncol * entry_size);
+			data = std::shared_ptr<char>(
+					(char *) memalign(PAGE_SIZE, nrow * ncol * entry_size),
+					deleter());
 			assert(data);
 		}
 	}
@@ -91,7 +99,6 @@ public:
 	}
 
 	~mem_row_dense_matrix() {
-		free(data);
 	}
 
 	virtual void reset_data();
@@ -106,11 +113,11 @@ public:
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 
 	char *get_row(size_t row) {
-		return data + row * get_num_cols() * get_entry_size();
+		return data.get() + row * get_num_cols() * get_entry_size();
 	}
 
 	const char *get_row(size_t row) const {
-		return data + row * get_num_cols() * get_entry_size();
+		return data.get() + row * get_num_cols() * get_entry_size();
 	}
 
 	char *get(size_t row, size_t col) {
@@ -128,12 +135,20 @@ public:
 
 class mem_col_dense_matrix: public mem_dense_matrix
 {
-	char *data;
+	struct deleter {
+		void operator()(char *p) const{
+			free(p);
+		}
+	};
+
+	std::shared_ptr<char> data;
 
 	mem_col_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {
-			data = (char *) memalign(PAGE_SIZE, nrow * ncol * entry_size);
+			data = std::shared_ptr<char>(
+					(char *) memalign(PAGE_SIZE, nrow * ncol * entry_size),
+					deleter());
 			assert(data);
 		}
 	}
@@ -145,7 +160,6 @@ public:
 	}
 
 	~mem_col_dense_matrix() {
-		free(data);
 	}
 
 	virtual void reset_data();
@@ -165,11 +179,11 @@ public:
 	}
 
 	char *get_col(size_t col) {
-		return data + col * get_num_rows() * get_entry_size();
+		return data.get() + col * get_num_rows() * get_entry_size();
 	}
 
 	const char *get_col(size_t col) const {
-		return data + col * get_num_rows() * get_entry_size();
+		return data.get() + col * get_num_rows() * get_entry_size();
 	}
 
 	char *get(size_t row, size_t col) {

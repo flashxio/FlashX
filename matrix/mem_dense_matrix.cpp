@@ -121,7 +121,7 @@ mem_dense_matrix::ptr mem_dense_matrix::cast(dense_matrix::ptr m)
 void mem_col_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
-	memset(data, 0, tot_bytes);
+	memset(data.get(), 0, tot_bytes);
 }
 
 void mem_col_dense_matrix::set_data(const set_operate &op)
@@ -137,7 +137,7 @@ void mem_col_dense_matrix::par_reset_data()
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 #pragma omp parallel for
 	for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
-		memset(data + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
+		memset(data.get() + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 }
 
 void mem_col_dense_matrix::par_set_data(const set_operate &op)
@@ -224,7 +224,7 @@ bool mem_col_dense_matrix::aggregate(const bulk_operate &op,
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
 	char raw_arr[res.get_size()];
-	op.runA(nrow * ncol, data, raw_arr);
+	op.runA(nrow * ncol, data.get(), raw_arr);
 	res.set_raw(raw_arr, res.get_size());
 	return true;
 }
@@ -232,7 +232,7 @@ bool mem_col_dense_matrix::aggregate(const bulk_operate &op,
 void mem_row_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
-	memset(data, 0, tot_bytes);
+	memset(data.get(), 0, tot_bytes);
 }
 
 void mem_row_dense_matrix::set_data(const set_operate &op)
@@ -248,7 +248,7 @@ void mem_row_dense_matrix::par_reset_data()
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 #pragma omp parallel for
 	for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
-		memset(data + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
+		memset(data.get() + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 }
 
 void mem_row_dense_matrix::par_set_data(const set_operate &op)
@@ -448,7 +448,7 @@ bool mem_row_dense_matrix::aggregate(const bulk_operate &op,
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
 	char raw_arr[res.get_size()];
-	op.runA(nrow * ncol, data, raw_arr);
+	op.runA(nrow * ncol, data.get(), raw_arr);
 	res.set_raw(raw_arr, res.get_size());
 	return true;
 }
