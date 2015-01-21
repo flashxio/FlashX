@@ -28,6 +28,7 @@
 #include "sparse_matrix.h"
 #include "dense_matrix.h"
 #include "bulk_operate.h"
+#include "generic_type.h"
 
 #include "rutils.h"
 
@@ -268,5 +269,33 @@ RcppExport SEXP R_FM_multiply_v(SEXP pmatrix, SEXP pvec)
 		const bulk_operate &right_op = get_inner_prod_right_ops(left_op).get_add();
 		dense_matrix::ptr prod_vec = matrix->inner_prod(*vec, left_op, right_op);
 		return create_FMR_vector(prod_vec, "");
+	}
+}
+
+template<class T>
+T matrix_sum(const dense_matrix &mat)
+{
+	scalar_type_impl<T> res;
+	basic_ops_impl<T, T, T> ops;
+	mat.aggregate(ops.get_add(), res);
+	return res.get();
+}
+
+RcppExport SEXP R_FM_matrix_sum(SEXP pmat)
+{
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	if (mat->is_type<double>()) {
+		Rcpp::NumericVector ret(1);
+		ret[0] = matrix_sum<double>(*mat);
+		return ret;
+	}
+	else if (mat->is_type<int>()) {
+		Rcpp::NumericVector ret(1);
+		ret[0] = matrix_sum<int>(*mat);
+		return ret;
+	}
+	else {
+		fprintf(stderr, "The matrix has an unsupported type for sum\n");
+		return R_NilValue;
 	}
 }

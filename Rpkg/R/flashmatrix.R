@@ -178,6 +178,21 @@ fm.multiplyMM <- function(fm, m)
 	structure(ret, class="fm")
 }
 
+#' Sum of a vector/matrix.
+#'
+#' `sum' returns the sum of all the values in the input vector/matrix.
+#'
+#' @param m The input vector/matrix
+#' @return an integer if the input is an integer vector/matrix; a numeric
+#' value if the input is a numeric vector/matrix.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.sum <- function(m)
+{
+	stopifnot(!is.null(m))
+	stopifnot(class(m) == "fmV" || class(m) == "fm")
+	.Call("R_FM_matrix_sum", m, PACKAGE="FlashGraphR")
+}
+
 print.fm <- function(fm)
 {
 	stopifnot(!is.null(fm))
