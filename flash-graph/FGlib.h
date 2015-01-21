@@ -326,11 +326,12 @@ FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
   * \brief Compute the betweeenness centrality of a graph.
   *
   * \param fg The FlashGraph graph object for which you want to compute.
+  * \param vids The vertex IDs for which BC should be computed
   * \return A vector with an entry for each vertex in the graph's
   *         betweennesss centrality value.
 */
 FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg,
-		vertex_id_t id);
+		const std::vector<vertex_id_t>& vids);
 
 /**
  * \brief Get the degree of all vertices in a specified time interval in
