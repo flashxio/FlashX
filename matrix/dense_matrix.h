@@ -29,6 +29,7 @@ namespace fm
 
 class bulk_operate;
 class set_operate;
+class scalar_type;
 
 enum matrix_layout_t
 {
@@ -49,6 +50,7 @@ protected:
 		this->entry_size = entry_size;
 		this->in_mem = in_mem;
 	}
+	virtual bool verify_aggregate(const bulk_operate &op, scalar_type &res) const;
 public:
 	typedef std::shared_ptr<dense_matrix> ptr;
 
@@ -99,6 +101,7 @@ public:
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
+	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const = 0;
 };
 
 }

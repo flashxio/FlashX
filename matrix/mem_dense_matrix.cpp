@@ -26,6 +26,7 @@
 #include "log.h"
 
 #include "mem_dense_matrix.h"
+#include "generic_type.h"
 
 namespace fm
 {
@@ -212,6 +213,20 @@ dense_matrix::ptr mem_col_dense_matrix::par_inner_prod(const dense_matrix &m,
 		free(tmp_res);
 	}
 	return std::static_pointer_cast<dense_matrix>(res);
+}
+
+bool mem_col_dense_matrix::aggregate(const bulk_operate &op,
+		scalar_type &res) const
+{
+	if (!verify_aggregate(op, res))
+		return false;
+
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	char raw_arr[res.get_size()];
+	op.runA(nrow * ncol, data, raw_arr);
+	res.set_raw(raw_arr, res.get_size());
+	return true;
 }
 
 void mem_row_dense_matrix::reset_data()
@@ -422,6 +437,20 @@ dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const dense_matrix &m,
 		par_inner_prod_tall(m, left_op, right_op, *res);
 
 	return std::static_pointer_cast<dense_matrix>(res);
+}
+
+bool mem_row_dense_matrix::aggregate(const bulk_operate &op,
+		scalar_type &res) const
+{
+	if (!verify_aggregate(op, res))
+		return false;
+
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	char raw_arr[res.get_size()];
+	op.runA(nrow * ncol, data, raw_arr);
+	res.set_raw(raw_arr, res.get_size());
+	return true;
 }
 
 }

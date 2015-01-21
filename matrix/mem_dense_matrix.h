@@ -33,12 +33,15 @@
 namespace fm
 {
 
+class scalar_type;
+
 class mem_dense_matrix: public dense_matrix
 {
 protected:
 	mem_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): dense_matrix(nrow, ncol, entry_size, true) {
 	}
+
 public:
 	typedef std::shared_ptr<mem_dense_matrix> ptr;
 
@@ -100,6 +103,7 @@ public:
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	dense_matrix::ptr par_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
+	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 
 	char *get_row(size_t row) {
 		return data + row * get_num_cols() * get_entry_size();
@@ -153,6 +157,7 @@ public:
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	dense_matrix::ptr par_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
+	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 
 	void set_col(char *buf, size_t size, size_t col) {
 		assert(size == get_entry_size() * get_num_rows());

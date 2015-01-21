@@ -129,6 +129,7 @@ public:
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
+	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 
 	virtual void set_data(const set_operate &op);
 	virtual void reset_data();

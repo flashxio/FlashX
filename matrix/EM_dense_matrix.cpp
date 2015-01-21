@@ -413,6 +413,13 @@ void EM_col_dense_matrix::reset_data()
 	assert(0);
 }
 
+bool EM_col_dense_matrix::aggregate(const bulk_operate &op,
+		scalar_type &res) const
+{
+	// TODO
+	assert(0);
+}
+
 void EM_col_dense_matrix::set_data(const set_operate &op)
 {
 	EM_dense_matrix_accessor::ptr accessor = create_accessor();

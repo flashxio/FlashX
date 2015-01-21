@@ -23,6 +23,7 @@
 #include "bulk_operate.h"
 #include "mem_dense_matrix.h"
 #include "EM_dense_matrix.h"
+#include "generic_type.h"
 
 namespace fm
 {
@@ -52,6 +53,30 @@ bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 
 	if (get_num_cols() != m.get_num_rows()) {
 		BOOST_LOG_TRIVIAL(error) << "The matrix size doesn't match";
+		return false;
+	}
+	return true;
+}
+
+bool dense_matrix::verify_aggregate(const bulk_operate &op,
+		scalar_type &res) const
+{
+	if (op.left_entry_size() != op.right_entry_size()
+			|| op.left_entry_size() != op.output_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The input and output type of the operator is different";
+		return false;
+	}
+
+	if (this->get_entry_size() != op.left_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrix entry size is different from the operator";
+		return false;
+	}
+
+	if (res.get_size() != op.left_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The result entry size is different from the operator";
 		return false;
 	}
 	return true;
