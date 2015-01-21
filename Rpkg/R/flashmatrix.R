@@ -164,7 +164,8 @@ fm.multiplyMV <- function(fm, vec)
 	stopifnot(!is.null(fm) && !is.null(vec))
 	stopifnot(class(fm) == "fm" && class(vec) == "fmV")
 	stopifnot(fm.ncol(fm) == fm.length(vec))
-	.Call("R_FM_multiply_v", fm, vec, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FM_multiply_v", fm, vec, PACKAGE="FlashGraphR")
+	structure(ret, class="fmV")
 }
 
 #' @rdname fm.multiply
@@ -173,7 +174,8 @@ fm.multiplyMM <- function(fm, m)
 	stopifnot(!is.null(fm) && !is.null(m))
 	stopifnot(class(fm) == "fm" && class(m) == "fm")
 	stopifnot(fm.ncol(fm) == fm.nrow(m))
-	.Call("R_FM_multiply_m", fm, m, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FM_multiply_m", fm, m, PACKAGE="FlashGraphR")
+	structure(ret, class="fm")
 }
 
 print.fm <- function(fm)
