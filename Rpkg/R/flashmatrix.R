@@ -50,7 +50,7 @@ fm.get.params <- function(name)
 #' fm <- fm.get.matrix(fg)
 fm.get.matrix <- function(fg)
 {
-	stopifnot(fg != NULL)
+	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
 	stopifnot(fg.exist.graph(fg$name))
 	ret <- .Call("R_FM_get_matrix_fg", fg, PACKAGE="FlashGraphR")
@@ -109,7 +109,7 @@ fm.create.vector <- function(len, init.v=0, init.rand=FALSE,
 #' @rdname fm.info
 fm.nrow <- function(fm)
 {
-	stopifnot(fm != NULL)
+	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
 	fm$nrow
 }
@@ -117,7 +117,7 @@ fm.nrow <- function(fm)
 #' @rdname fm.info
 fm.ncol <- function(fm)
 {
-	stopifnot(fm != NULL)
+	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
 	fm$ncol
 }
@@ -125,7 +125,7 @@ fm.ncol <- function(fm)
 #' @rdname fm.info
 fm.is.sym <- function(fm)
 {
-	stopifnot(fm != NULL)
+	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
 	fm$sym
 }
@@ -133,7 +133,7 @@ fm.is.sym <- function(fm)
 #' @rdname fm.info
 fm.is.sparse <- function(fm)
 {
-	stopifnot(fm != NULL)
+	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
 	fm$sparse
 }
@@ -141,7 +141,7 @@ fm.is.sparse <- function(fm)
 #' @rdname fm.info
 fm.length <- function(fm)
 {
-	stopifnot(fm != NULL)
+	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fmV")
 	fm$len
 }
@@ -161,7 +161,7 @@ fm.length <- function(fm)
 #' @rdname fm.multiply
 fm.multiplyMV <- function(fm, vec)
 {
-	stopifnot(fm != NULL && vec != NULL)
+	stopifnot(!is.null(fm) && !is.null(vec))
 	stopifnot(class(fm) == "fm" && class(vec) == "fmV")
 	stopifnot(fm.ncol(fm) == fm.length(vec))
 	.Call("R_FM_multiply_v", fm, vec, PACKAGE="FlashGraphR")
@@ -170,7 +170,7 @@ fm.multiplyMV <- function(fm, vec)
 #' @rdname fm.multiply
 fm.multiplyMM <- function(fm, m)
 {
-	stopifnot(fm != NULL && m != NULL)
+	stopifnot(!is.null(fm) && !is.null(m))
 	stopifnot(class(fm) == "fm" && class(m) == "fm")
 	stopifnot(fm.ncol(fm) == fm.nrow(m))
 	.Call("R_FM_multiply_m", fm, m, PACKAGE="FlashGraphR")
@@ -178,7 +178,7 @@ fm.multiplyMM <- function(fm, m)
 
 print.fm <- function(fm)
 {
-	stopifnot(fm != NULL)
+	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
 	cat("FlashRMatrix ", fm$name, ": ", fm.nrow(fm), " rows, ", fm.ncol(fm),
 		" columns, is sparse: ", fm.is.sparse(fm), "\n", sep="")
@@ -186,7 +186,7 @@ print.fm <- function(fm)
 
 print.fmV <- function(vec)
 {
-	stopifnot(vec != NULL)
+	stopifnot(!is.null(vec))
 	stopifnot(class(vec) == "fmV")
 	cat("FlashRVector ", vec$name, ": length: ", fm.length(vec), "\n", sep="")
 }
