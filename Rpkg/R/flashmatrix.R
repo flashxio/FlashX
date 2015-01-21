@@ -151,31 +151,26 @@ fm.length <- function(fm)
 #' Multiply a sparse/dense matrix with a dense vector/matrix.
 #'
 #' @param fm A FlashMatrixR matrix
-#' @param vec A FlashMatrixR dense vector.
-#' @param m A FlashMatrixR matrix
-#' @return `fm.multiplyMV' returns a FlashMatrixR vector and
-#' `fm.multiplyMM' returns a FlashMatrixR matrix.
+#' @param mat A FlashMatrixR dense matrix.
+#' @return a FlashMatrixR vector if the second argument is a vector;
+#' a FlashMatrixR matrix if the second argument is a matrix.
 #' @name fm.multiply
 #' @author Da Zheng <dzheng5@@jhu.edu>
-
-#' @rdname fm.multiply
-fm.multiplyMV <- function(fm, vec)
+fm.multiply <- function(fm, mat)
 {
-	stopifnot(!is.null(fm) && !is.null(vec))
-	stopifnot(class(fm) == "fm" && class(vec) == "fmV")
-	stopifnot(fm.ncol(fm) == fm.length(vec))
-	ret <- .Call("R_FM_multiply_v", fm, vec, PACKAGE="FlashGraphR")
-	structure(ret, class="fmV")
-}
+	stopifnot(!is.null(fm) && !is.null(mat))
+	stopifnot(class(fm) == "fm")
+	if (class(mat) == "fmV") {
+		stopifnot(fm.ncol(fm) == fm.length(mat))
+		ret <- .Call("R_FM_multiply", fm, mat, PACKAGE="FlashGraphR")
+		structure(ret, class="fmV")
+	}
+	else {
+		stopifnot(fm.ncol(fm) == fm.nrow(mat))
+		ret <- .Call("R_FM_multiply", fm, mat, PACKAGE="FlashGraphR")
+		structure(ret, class="fm")
+	}
 
-#' @rdname fm.multiply
-fm.multiplyMM <- function(fm, m)
-{
-	stopifnot(!is.null(fm) && !is.null(m))
-	stopifnot(class(fm) == "fm" && class(m) == "fm")
-	stopifnot(fm.ncol(fm) == fm.nrow(m))
-	ret <- .Call("R_FM_multiply_m", fm, m, PACKAGE="FlashGraphR")
-	structure(ret, class="fm")
 }
 
 #' Sum of a vector/matrix.

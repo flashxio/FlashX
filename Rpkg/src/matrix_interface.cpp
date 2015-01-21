@@ -236,38 +236,62 @@ static basic_ops &get_inner_prod_right_ops(const bulk_operate &left_ops)
 	}
 }
 
-RcppExport SEXP R_FM_multiply_v(SEXP pmatrix, SEXP pvec)
+static SEXP SpMV(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 {
-	dense_matrix::ptr vec = get_matrix<dense_matrix>(pvec);
+	if (right_mat->is_type<double>()) {
+		mem_vector<double>::ptr in_vec = mem_vector<double>::create(
+				mem_dense_matrix::cast(right_mat));
+		mem_vector<double>::ptr out_vec = matrix->multiply<double>(in_vec);
+		return create_FMR_vector(out_vec->get_data(), "");
+	}
+	else if (right_mat->is_type<int>()) {
+		mem_vector<int>::ptr in_vec = mem_vector<int>::create(
+				mem_dense_matrix::cast(right_mat));
+		mem_vector<int>::ptr out_vec = matrix->multiply<int>(in_vec);
+		return create_FMR_vector(out_vec->get_data(), "");
+	}
+	else {
+		fprintf(stderr, "the input vector has an unsupported type in SpMV\n");
+		return R_NilValue;
+	}
+}
+
+static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
+{
+	fprintf(stderr,
+			"Sparse matrix dense matrix multiplication isn't supported\n");
+	return R_NilValue;
+}
+
+static bool is_vector(const dense_matrix &mat)
+{
+	// If the matrix has one row or one column, we consider it as a vector.
+	return mat.get_num_rows() == 1 || mat.get_num_cols() == 1;
+}
+
+RcppExport SEXP R_FM_multiply(SEXP pmatrix, SEXP pmat)
+{
+	// TODO check if the right matrix is sparse matrix.
+	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
 	Rcpp::List matrix_obj(pmatrix);
 	if (is_sparse(matrix_obj)) {
-		if (!vec->is_in_mem()) {
+		if (!right_mat->is_in_mem()) {
 			fprintf(stderr, "we now only supports in-mem vector for SpMV\n");
 			return R_NilValue;
 		}
 		sparse_matrix::ptr matrix = get_matrix<sparse_matrix>(pmatrix);
-		if (vec->is_type<double>()) {
-			mem_vector<double>::ptr in_vec = mem_vector<double>::create(
-					mem_dense_matrix::cast(vec));
-			mem_vector<double>::ptr out_vec = matrix->multiply<double>(in_vec);
-			return create_FMR_vector(out_vec->get_data(), "");
-		}
-		else if (vec->is_type<int>()) {
-			mem_vector<int>::ptr in_vec = mem_vector<int>::create(
-					mem_dense_matrix::cast(vec));
-			mem_vector<int>::ptr out_vec = matrix->multiply<int>(in_vec);
-			return create_FMR_vector(out_vec->get_data(), "");
-		}
-		else {
-			fprintf(stderr, "the input vector has an unsupported type in SpMV\n");
-			return R_NilValue;
-		}
+		if (is_vector(*right_mat))
+			return SpMV(matrix, right_mat);
+		else
+			return SpMM(matrix, right_mat);
 	}
 	else {
 		dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
-		const bulk_operate &left_op = get_inner_prod_left_ops(*matrix, *vec).get_multiply();
+		const bulk_operate &left_op = get_inner_prod_left_ops(*matrix,
+				*right_mat).get_multiply();
 		const bulk_operate &right_op = get_inner_prod_right_ops(left_op).get_add();
-		dense_matrix::ptr prod_vec = matrix->inner_prod(*vec, left_op, right_op);
+		dense_matrix::ptr prod_vec = matrix->inner_prod(*right_mat, left_op,
+				right_op);
 		return create_FMR_vector(prod_vec, "");
 	}
 }
