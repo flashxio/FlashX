@@ -44,7 +44,7 @@
 using namespace fg;
 
 namespace {
-int bfs_max_dist;
+size_t bfs_max_dist;
 
 /* `update` phase is where BC is updated */ 
 vertex_id_t g_source_vertex;
@@ -114,12 +114,13 @@ class betweenness_vertex: public compute_directed_vertex
 };
 
 typedef std::shared_ptr<std::vector<vertex_id_t> > vertex_set_ptr;
+// Store activated vertex IDs per iteration in the bfs phase
 typedef std::map<int, std::vector<vertex_set_ptr> > vertex_map_t;
 
 class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 {
-	std::vector<vertex_set_ptr> bfs_visited_vertices;
-	int max_dist;
+	std::vector<vertex_set_ptr> bfs_visited_vertices; // Vertex set visited from this thread
+	size_t max_dist; // Keep track of max dist so we can activate greatest when bp-ing
 	public:
 	bfs_vertex_program() {
 		max_dist = 0;
@@ -133,11 +134,12 @@ class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 
 	/* ### BEGIN TESTING ### */
 	void add_visited_bfs(vertex_id_t vid) {
-		int level = get_graph().get_curr_level();
+		size_t level = get_graph().get_curr_level();
 		max_dist = level;
 		assert(level == bfs_visited_vertices.size() - 1);
 		bfs_visited_vertices.back()->push_back(vid);
 	}
+	/* ### END TESTING ### */
 
 	virtual void run_on_engine_start() {
 		bfs_visited_vertices.push_back(vertex_set_ptr(
@@ -152,13 +154,13 @@ class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 	void collect_vertices(vertex_map_t &vertices) {
 		vertex_map_t::const_iterator it = vertices.find(get_partition_id());
 		if (it != vertices.end())
-			printf("part %d already exist\n", it->first);
+			BOOST_LOG_TRIVIAL(info) << "part" << it->first << "already exists";
 		assert(it == vertices.end());
 		vertices.insert(vertex_map_t::value_type(get_partition_id(),
 					bfs_visited_vertices));
 	}
 
-	int get_max_dist() const {
+	size_t get_max_dist() const {
 		return max_dist;
 	}
 };
@@ -184,7 +186,9 @@ class bp_vertex_program: public vertex_program_impl<betweenness_vertex>
 		while (bfs_visited_vertices.size() > bfs_max_dist) {
 			bfs_visited_vertices.pop_back();
 		}
-		printf("# sets: %ld, max dist: %d\n", bfs_visited_vertices.size(), bfs_max_dist);
+
+		BOOST_LOG_TRIVIAL(info) << "# sets: " << bfs_visited_vertices.size() 
+			<< ", max dist: " << bfs_max_dist;
 		assert(bfs_visited_vertices.size() == bfs_max_dist);
 	}
 
@@ -421,14 +425,14 @@ class activate_by_dist_filter: public vertex_filter {
 
 namespace fg 
 {
-FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id_t id)
+FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, const std::vector<vertex_id_t>& ids)
 {
 	graph_index::ptr index = NUMA_graph_index<betweenness_vertex>::create(
 			fg->get_graph_header());
 	graph_engine::ptr graph = fg->create_engine(index);
 
-	printf("Starting Betweenness Centrality ...\n");
-	printf("prof_file: %s\n", graph_conf.get_prof_file().c_str());
+	BOOST_LOG_TRIVIAL(info) << "Starting Betweenness Centrality ...";
+	BOOST_LOG_TRIVIAL(info) << "prof_file: " << graph_conf.get_prof_file().c_str();
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStart(graph_conf.get_prof_file().c_str());
@@ -437,47 +441,51 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
 
-	g_source_vertex = id;
-	// BFS phase. Inintialize start vert(ex)(ices)
-	g_alg_phase = btwn_phase_t::bfs;
-	printf("Starting vertex %u for bfs ...\n", g_source_vertex);
-	graph->init_all_vertices(vertex_initializer::ptr(
-				new btwn_initializer(&(graph->get_vertex(g_source_vertex)))));
-	graph->start(&g_source_vertex, 1, vertex_initializer::ptr(),
-			vertex_program_creater::ptr(new bfs_vertex_program_creater()));
-	graph->wait4complete();
-
-	std::vector<vertex_program::ptr> programs;
-	graph->get_vertex_programs(programs);
-	bp_vertex_program_creater *bp_prog_creater_ptr = new bp_vertex_program_creater();
-	vertex_program_creater::ptr bp_prog_creater
-		= vertex_program_creater::ptr(bp_prog_creater_ptr);
-	BOOST_FOREACH(vertex_program::ptr prog, programs) {
-		bfs_vertex_program::cast2(prog)->collect_vertices(
-				bp_prog_creater_ptr->get_vertex_map());
-		bfs_max_dist = std::max(bfs_max_dist,
-				bfs_vertex_program::cast2(prog)->get_max_dist());
-	}
-
-	printf("Max dist for bfs is %d...\n", bfs_max_dist);
-
-	if (bfs_max_dist > 0) {
-		// Back propagation phase
-		printf("Starting back_prop phase for vertex %u...\n", g_source_vertex);
-		g_alg_phase = btwn_phase_t::back_prop;
-		printf("Setting g_alg_phase to %d... \n", g_alg_phase);
-
-		std::shared_ptr<vertex_filter> filter =
-			std::shared_ptr<vertex_filter>(new activate_by_dist_filter(bfs_max_dist));
-
-		graph->start(filter, std::move(bp_prog_creater));
+	BOOST_FOREACH (vertex_id_t id , ids) {
+		g_source_vertex = id;
+		// BFS phase. Inintialize start vert(ex)(ices)
+		g_alg_phase = btwn_phase_t::bfs;
+		BOOST_LOG_TRIVIAL(info) << "Starting BFS for vertex: " << g_source_vertex;
+		graph->init_all_vertices(vertex_initializer::ptr(
+					new btwn_initializer(&(graph->get_vertex(g_source_vertex)))));
+		graph->start(&g_source_vertex, 1, vertex_initializer::ptr(),
+				vertex_program_creater::ptr(new bfs_vertex_program_creater()));
 		graph->wait4complete();
 
-		// BC summation step
-		g_alg_phase = bc_summation;
-		printf("Setting g_alg_phase to %d ... \n", g_alg_phase);
-		graph->start_all();
-		graph->wait4complete();
+		std::vector<vertex_program::ptr> programs;
+		graph->get_vertex_programs(programs);
+		bp_vertex_program_creater *bp_prog_creater_ptr = new bp_vertex_program_creater();
+		vertex_program_creater::ptr bp_prog_creater
+			= vertex_program_creater::ptr(bp_prog_creater_ptr);
+
+		BOOST_FOREACH(vertex_program::ptr prog, programs) {
+			bfs_vertex_program::cast2(prog)->collect_vertices(
+					bp_prog_creater_ptr->get_vertex_map());
+			bfs_max_dist = std::max(bfs_max_dist,
+					bfs_vertex_program::cast2(prog)->get_max_dist());
+		}
+
+		BOOST_LOG_TRIVIAL(info) << "Max dist for bfs is: " << bfs_max_dist << "...";
+
+		if (bfs_max_dist > 0) {
+			// Back propagation phase
+			BOOST_LOG_TRIVIAL(info) << "Starting back_prop phase for vertex: " 
+					<< g_source_vertex << "...";
+			g_alg_phase = btwn_phase_t::back_prop;
+			BOOST_LOG_TRIVIAL(info) << "Setting g_alg_phase to " << g_alg_phase << "...";
+
+			std::shared_ptr<vertex_filter> filter =
+				std::shared_ptr<vertex_filter>(new activate_by_dist_filter(bfs_max_dist));
+
+			graph->start(filter, std::move(bp_prog_creater));
+			graph->wait4complete();
+
+			// BC summation step
+			g_alg_phase = bc_summation;
+			BOOST_LOG_TRIVIAL(info) << "BC summation step";
+			graph->start_all();
+			graph->wait4complete();
+		}
 	}
 
 	gettimeofday(&end, NULL);
@@ -486,15 +494,17 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, vertex_id
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<float, betweenness_vertex>(ret)));
 
-	printf("Printing betweenness vector:\n");
-	//	ret->print();
+	BOOST_LOG_TRIVIAL(info) << "Printing betweenness vector:";
+	/* ret->print(); */
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
 
-	printf("It takes %f seconds\n", time_diff(start, end));
+	BOOST_LOG_TRIVIAL(info) << boost::format("It takes %1% seconds")
+		% time_diff(start, end);
+
 	return ret;
 }
 }

@@ -480,7 +480,10 @@ void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 		}
 	}
 
-	FG_vector<float>::ptr btwn_v = compute_betweenness_centrality(graph, id);
+	std::vector<vertex_id_t> ids;
+	ids.push_back(id);
+
+	FG_vector<float>::ptr btwn_v = compute_betweenness_centrality(graph, ids);
 	if (!write_out.empty())
 		btwn_v->to_file(write_out);
 }
