@@ -135,7 +135,7 @@ fm.is.sparse <- function(fm)
 {
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
-	fm$sparse
+	fm$type == "sparse"
 }
 
 #' @rdname fm.info

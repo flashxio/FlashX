@@ -72,6 +72,7 @@ static SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 {
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
+	ret["type"] = Rcpp::String("sparse");
 
 	object_ref<sparse_matrix> *ref = new object_ref<sparse_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -90,10 +91,6 @@ static SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 	ncol[0] = m->get_num_cols();
 	ret["ncol"] = ncol;
 
-	Rcpp::LogicalVector sparse(1);
-	sparse[0] = true;
-	ret["sparse"] = sparse;
-
 	return ret;
 }
 
@@ -101,6 +98,7 @@ static SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 {
 	Rcpp::List ret;
 	ret["name"] = Rcpp::String(name);
+	ret["type"] = Rcpp::String("vector");
 
 	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
 	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
@@ -114,10 +112,12 @@ static SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	return ret;
 }
 
+/*
+ * Test if this is a sparse matrix.
+ */
 static bool is_sparse(const Rcpp::List &matrix)
 {
-	Rcpp::LogicalVector sparse = matrix["sparse"];
-	return sparse[0];
+	return matrix["type"] == "sparse";
 }
 
 template<class MatrixType>
