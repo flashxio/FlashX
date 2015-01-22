@@ -200,6 +200,7 @@ void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
 	int num_opts = 0;
 
 	int num_para_bfs = 1;
+	int num_sweeps = std::numeric_limits<int>::max();
 	bool directed = false;
 
 	while ((opt = getopt(argc, argv, "p:ds:")) != -1) {
@@ -211,6 +212,11 @@ void run_diameter(FG_graph::ptr graph, int argc, char *argv[])
 				break;
 			case 'd':
 				directed = true;
+				break;
+			case 's':
+				num_sweeps = atoi(optarg);
+				num_sweeps = num_sweeps; // STUB
+				fprintf(stderr, "[Warning]: num_sweeps argument currently unused\n");
 				break;
 			default:
 				print_usage();
@@ -463,7 +469,7 @@ void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 	int opt;
 	int num_opts = 0;
 	std::string write_out = "";
-	vertex_id_t id = 0;
+	vertex_id_t id = INVALID_VERTEX_ID;
 
 	while ((opt = getopt(argc, argv, "w:s:")) != -1) {
 		num_opts++;
@@ -481,7 +487,14 @@ void run_betweenness_centrality(FG_graph::ptr graph, int argc, char* argv[])
 	}
 
 	std::vector<vertex_id_t> ids;
-	ids.push_back(id);
+
+	if (id == INVALID_VERTEX_ID) {
+		for (vertex_id_t id = 0; id < graph->get_graph_header().get_num_vertices(); id++) {
+			ids.push_back(id);
+		}
+	} else {
+		ids.push_back(id);
+	}
 
 	FG_vector<float>::ptr btwn_v = compute_betweenness_centrality(graph, ids);
 	if (!write_out.empty())
@@ -662,7 +675,7 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "betweenness:\n");
 	fprintf(stderr, "-w output: the file name for a vector written to file\n");
-	fprintf(stderr, "-s vertex id: the vertex where BC starts\n");
+	fprintf(stderr, "-s vertex id: the vertex where BC starts. (Default runs all)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
