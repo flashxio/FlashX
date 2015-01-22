@@ -19,15 +19,9 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
-#define DEBUG true
 
 #include <limits>
-
-#if DEBUG
-#include <set>
 #include <vector>
-#include <algorithm>
-#endif
 
 #include "thread.h"
 #include "io_interface.h"
@@ -44,7 +38,7 @@
 using namespace fg;
 
 namespace {
-size_t bfs_max_dist;
+short bfs_max_dist;
 
 /* `update` phase is where BC is updated */ 
 vertex_id_t g_source_vertex;
@@ -59,7 +53,7 @@ btwn_phase_t g_alg_phase = bfs;
 
 class betweenness_vertex: public compute_directed_vertex
 {
-	float btwn_cent;
+	float btwn_cent; // per-vertex btwn_cent
 	float delta;
 	int sigma;
 	short dist;
@@ -77,16 +71,13 @@ class betweenness_vertex: public compute_directed_vertex
 	void init(int sigma, short dist) {
 		this->sigma = sigma;
 		this->dist = dist;	
-		bfs_visited = false;
-	}
-
-	float get_btwn_cent() const {
-		return btwn_cent;
+		this->delta = 0;
+		this->bfs_visited = false;
 	}
 
 	// Used for save_query join
 	float get_result() const {
-		return get_btwn_cent();
+		return btwn_cent;
 	}
 
 	short get_dist() const {
@@ -120,7 +111,7 @@ typedef std::map<int, std::vector<vertex_set_ptr> > vertex_map_t;
 class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 {
 	std::vector<vertex_set_ptr> bfs_visited_vertices; // Vertex set visited from this thread
-	size_t max_dist; // Keep track of max dist so we can activate greatest when bp-ing
+	short max_dist; // Keep track of max dist so we can activate greatest when bp-ing
 	public:
 	bfs_vertex_program() {
 		max_dist = 0;
@@ -132,14 +123,12 @@ class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 		return std::static_pointer_cast<bfs_vertex_program, vertex_program>(prog);
 	}
 
-	/* ### BEGIN TESTING ### */
 	void add_visited_bfs(vertex_id_t vid) {
-		size_t level = get_graph().get_curr_level();
-		max_dist = level;
-		assert(level == bfs_visited_vertices.size() - 1);
+		max_dist = get_graph().get_curr_level();
+		// BOOST_LOG_TRIVIAL(info) << "The current per thread max_dist is " << max_dist << "\n";
+		assert(max_dist == ((short)bfs_visited_vertices.size()) - 1);
 		bfs_visited_vertices.back()->push_back(vid);
 	}
-	/* ### END TESTING ### */
 
 	virtual void run_on_engine_start() {
 		bfs_visited_vertices.push_back(vertex_set_ptr(
@@ -160,7 +149,7 @@ class bfs_vertex_program: public vertex_program_impl<betweenness_vertex>
 					bfs_visited_vertices));
 	}
 
-	size_t get_max_dist() const {
+	short get_max_dist() const {
 		return max_dist;
 	}
 };
@@ -183,13 +172,11 @@ class bp_vertex_program: public vertex_program_impl<betweenness_vertex>
 		assert(bfs_visited_vertices.back()->empty());
 		bfs_visited_vertices.pop_back();
 		// Drop the last set of visited vertices because we have already activated them.
-		while (bfs_visited_vertices.size() > bfs_max_dist) {
+		while ((short)bfs_visited_vertices.size() > bfs_max_dist) {
 			bfs_visited_vertices.pop_back();
 		}
 
-		BOOST_LOG_TRIVIAL(info) << "# sets: " << bfs_visited_vertices.size() 
-			<< ", max dist: " << bfs_max_dist;
-		assert(bfs_visited_vertices.size() == bfs_max_dist);
+		assert((short)bfs_visited_vertices.size() == bfs_max_dist);
 	}
 
 	virtual void run_on_iteration_end() {
@@ -289,26 +276,14 @@ void betweenness_vertex::run(vertex_program &prog) {
 					return; 
 				directed_vertex_request req(prog.get_vertex_id(*this), edge_type::OUT_EDGE);
 				request_partial_vertices(&req, 1);
-
-#if DEBUG
-				/* ### BEGIN TESTING ### */
 				((bfs_vertex_program&)prog).
-					add_visited_bfs(prog.get_vertex_id(*this)); 
-				/* ### END TESTING ### */
-#endif
+					add_visited_bfs(prog.get_vertex_id(*this));
 				break;
 			}
 		case btwn_phase_t::back_prop: 
 			{
 				directed_vertex_request req(prog.get_vertex_id(*this), edge_type::IN_EDGE);
 				request_partial_vertices(&req, 1);
-
-#if 0
-				/* ### BEGIN TESTING ### */
-				((bp_vertex_program&)prog).
-					add_visited_bp(prog.get_vertex_id(*this)); 
-				/* ### END TESTING ### */
-#endif
 				break;
 			}
 		case btwn_phase_t::bc_summation:
@@ -360,12 +335,6 @@ void betweenness_vertex::run_on_message(vertex_program &prog, const vertex_messa
 				}
 				if (this->dist == msg.get_parent_dist() + 1) {
 					this->sigma = this->sigma + msg.get_parent_sigma();
-
-#if 0				// FIXME: Bug in FG -> self activation doesn't work
-					// this->parent = msg.get_sender_id();
-					vertex_id_t id = prog.get_vertex_id(*this); 
-					prog.activate_vertices(&id, 1); // NOTE: activate myself for next iteration else don't
-#endif
 				}
 				break;
 			}
@@ -442,7 +411,11 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, const std
 	gettimeofday(&start, NULL);
 
 	BOOST_FOREACH (vertex_id_t id , ids) {
+		if (!graph->get_num_edges(id))
+		   continue;	
+
 		g_source_vertex = id;
+		bfs_max_dist = 0; // Must reset bfs dist for each vertex
 		// BFS phase. Inintialize start vert(ex)(ices)
 		g_alg_phase = btwn_phase_t::bfs;
 		BOOST_LOG_TRIVIAL(info) << "Starting BFS for vertex: " << g_source_vertex;
@@ -472,17 +445,14 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, const std
 			BOOST_LOG_TRIVIAL(info) << "Starting back_prop phase for vertex: " 
 					<< g_source_vertex << "...";
 			g_alg_phase = btwn_phase_t::back_prop;
-			BOOST_LOG_TRIVIAL(info) << "Setting g_alg_phase to " << g_alg_phase << "...";
 
 			std::shared_ptr<vertex_filter> filter =
 				std::shared_ptr<vertex_filter>(new activate_by_dist_filter(bfs_max_dist));
 
 			graph->start(filter, std::move(bp_prog_creater));
 			graph->wait4complete();
-
-			// BC summation step
-			g_alg_phase = bc_summation;
 			BOOST_LOG_TRIVIAL(info) << "BC summation step";
+			g_alg_phase = bc_summation;
 			graph->start_all();
 			graph->wait4complete();
 		}
@@ -494,8 +464,10 @@ FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg, const std
 	graph->query_on_all(vertex_query::ptr(
 				new save_query<float, betweenness_vertex>(ret)));
 
+#if 0
 	BOOST_LOG_TRIVIAL(info) << "Printing betweenness vector:";
-	/* ret->print(); */
+	ret->print(); 
+#endif
 
 #ifdef PROFILER
 	if (!graph_conf.get_prof_file().empty())
