@@ -916,7 +916,8 @@ fg.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeanspp")
 #' number of geodesics (shortest paths) going through a vertex.
 #'
 #' @param fg The FlashGraphR object.
-#' @param vids A vector of vertex IDs.
+#' @param vids A vector of vertex IDs. Default runs it on the entire
+#'		graph.
 #'
 #' @return A vector with betweenness centrality values for all vertices
 #'			with respect to `vids`.
@@ -927,7 +928,7 @@ fg.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeanspp")
 #'
 #' @name fg.betweenness
 #' @author Disa Mhembere <disa@@jhu.edu>
-fg.betweenness <- function(fg, vids)
+fg.betweenness <- function(fg, vids=0:(fg$vcount-1))
 {
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
