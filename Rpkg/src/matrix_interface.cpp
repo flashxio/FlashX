@@ -142,6 +142,11 @@ static bool is_sparse(const Rcpp::List &matrix)
 	return matrix["type"] == "sparse";
 }
 
+static bool is_vector(const Rcpp::List &matrix)
+{
+	return matrix["type"] == "vector";
+}
+
 template<class MatrixType>
 static typename MatrixType::ptr get_matrix(const Rcpp::List &matrix)
 {
@@ -358,4 +363,135 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pmat, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 	bool byrow = LOGICAL(pbyrow)[0];
 	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
 	return create_FMR_matrix(mat->conv2(nrow, ncol, byrow), "");
+}
+
+template<class T, class RContainerType>
+void copy_FM2Rvector(const mem_vector<T> &vec, RContainerType &r_arr)
+{
+	printf("copy a FM vector to R vector\n");
+	size_t length = vec.get_length();
+	for (size_t i = 0; i < length; i++) {
+		r_arr[i] = vec.get(i);
+	}
+}
+
+template<class T, class RContainerType>
+void copy_FM2Rmatrix(const type_mem_dense_matrix<T> &mat,
+		RContainerType &r_mat)
+{
+	// TODO this is going to be slow. But I don't care about performance
+	// for now.
+	size_t nrow = mat.get_num_rows();
+	size_t ncol = mat.get_num_cols();
+	for (size_t i = 0; i < nrow; i++) {
+		for (size_t j = 0; j < ncol; j++) {
+			r_mat(i, j) = mat.get(i, j);
+		}
+	}
+}
+
+RcppExport SEXP R_FM_conv_FM2R(SEXP pobj)
+{
+	Rcpp::List matrix_obj(pobj);
+	if (is_sparse(matrix_obj)) {
+		fprintf(stderr, "We can't convert a sparse matrix to an R object\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pobj);
+	if (!mat->is_in_mem()) {
+		fprintf(stderr, "We only support in-memory matrix right now\n");
+		return R_NilValue;
+	}
+
+	mem_dense_matrix::ptr mem_mat = mem_dense_matrix::cast(mat);
+	if (mem_mat->is_type<double>()) {
+		if (is_vector(pobj)) {
+			mem_vector<double>::ptr mem_vec = mem_vector<double>::create(mem_mat);
+			Rcpp::NumericVector ret(mem_vec->get_length());
+			copy_FM2Rvector<double, Rcpp::NumericVector>(*mem_vec, ret);
+			return ret;
+		}
+		else {
+			Rcpp::NumericMatrix ret(mem_mat->get_num_rows(),
+					mem_mat->get_num_cols());
+			copy_FM2Rmatrix<double, Rcpp::NumericMatrix>(
+					*type_mem_dense_matrix<double>::create(mem_mat), ret);
+			return ret;
+		}
+	}
+	else if (mem_mat->is_type<int>()) {
+		if (is_vector(pobj)) {
+			mem_vector<int>::ptr mem_vec = mem_vector<int>::create(mem_mat);
+			Rcpp::IntegerVector ret(mem_vec->get_length());
+			copy_FM2Rvector<int, Rcpp::IntegerVector>(*mem_vec, ret);
+			return ret;
+		}
+		else {
+			Rcpp::IntegerMatrix ret(mem_mat->get_num_rows(),
+					mem_mat->get_num_cols());
+			copy_FM2Rmatrix<int, Rcpp::IntegerMatrix>(
+					*type_mem_dense_matrix<int>::create(mem_mat), ret);
+			return ret;
+		}
+	}
+	else {
+		fprintf(stderr, "the dense matrix doesn't have a right type\n");
+		return R_NilValue;
+	}
+}
+
+RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
+{
+	if (R_is_real(pobj)) {
+		Rcpp::NumericVector vec(pobj);
+		mem_vector<double>::ptr fm_vec = mem_vector<double>::create(vec.size());
+		for (size_t i = 0; i < fm_vec->get_length(); i++)
+			fm_vec->set(i, vec[i]);
+		return create_FMR_vector(fm_vec->get_data(), "");
+	}
+	else if (R_is_integer(pobj)) {
+		Rcpp::IntegerVector vec(pobj);
+		mem_vector<int>::ptr fm_vec = mem_vector<int>::create(vec.size());
+		for (size_t i = 0; i < fm_vec->get_length(); i++)
+			fm_vec->set(i, vec[i]);
+		return create_FMR_vector(fm_vec->get_data(), "");
+	}
+	else {
+		fprintf(stderr, "The R vector has an unsupported type\n");
+		return R_NilValue;
+	}
+}
+
+RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
+{
+	bool byrow = LOGICAL(pbyrow)[0];
+	if (R_is_real(pobj)) {
+		Rcpp::NumericMatrix mat(pobj);
+		size_t nrow = mat.nrow();
+		size_t ncol = mat.ncol();
+		type_mem_dense_matrix<double>::ptr fm_mat
+			= type_mem_dense_matrix<double>::create(nrow, ncol,
+					byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				fm_mat->set(i, j, mat(i, j));
+		return create_FMR_matrix(fm_mat->get_matrix(), "");
+	}
+	else if (R_is_integer(pobj)) {
+		Rcpp::IntegerMatrix mat(pobj);
+		size_t nrow = mat.nrow();
+		size_t ncol = mat.ncol();
+		type_mem_dense_matrix<int>::ptr fm_mat
+			= type_mem_dense_matrix<int>::create(nrow, ncol,
+					byrow ? matrix_layout_t::L_ROW : matrix_layout_t::L_COL);
+		for (size_t i = 0; i < nrow; i++)
+			for (size_t j = 0; j < ncol; j++)
+				fm_mat->set(i, j, mat(i, j));
+		return create_FMR_matrix(fm_mat->get_matrix(), "");
+	}
+	else {
+		fprintf(stderr, "The R vector has an unsupported type\n");
+		return R_NilValue;
+	}
 }

@@ -85,6 +85,37 @@ fm.create.vector <- function(len, init.v=0, init.rand=FALSE,
 	structure(ret, class="fmV")
 }
 
+fm.conv.R2FM <- function(obj, byrow=FALSE)
+{
+	stopifnot(!is.null(obj))
+	# This function only deals with vectors and matrices of primitive types.
+	stopifnot(is.atomic(obj))
+
+	if (is.vector(obj)) {
+		ret <- .Call("R_FM_conv_RVec2FM", obj, PACKAGE="FlashGraphR")
+		structure(ret, class="fmV")
+	}
+	else {
+		ret <- .Call("R_FM_conv_RMat2FM", obj, as.logical(byrow), PACKAGE="FlashGraphR")
+		structure(ret, class="fm")
+	}
+}
+
+fm.conv.FM2R <- function(obj)
+{
+	stopifnot(!is.null(obj))
+	if (class(obj) == "fm")
+		.Call("R_FM_conv_FM2R", obj, PACKAGE="FlashGraphR")
+	else if (class(obj) == "fmV") {
+		ret <- .Call("R_FM_conv_FM2R", obj, PACKAGE="FlashGraphR")
+		ret[, 1]
+	}
+	else {
+		print("It has to be a FlashMatrixR object")
+		NULL
+	}
+}
+
 #' Create a matrix from the given set of values.
 #'
 #' The given set has to be a FlashGraphR matrix or FlashGraphR vector.
