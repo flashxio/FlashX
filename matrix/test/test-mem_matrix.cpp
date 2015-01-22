@@ -168,11 +168,11 @@ typename type_mem_dense_matrix<Type>::ptr test_MM2(size_t nrow, size_t ncol,
 
 	gettimeofday(&start, NULL);
 	const mem_row_dense_matrix &row_m
-		= (const mem_row_dense_matrix &) m1->get_matrix();
+		= (const mem_row_dense_matrix &) *m1->get_matrix();
 	const mem_col_dense_matrix &col_m
-		= (const mem_col_dense_matrix &) m2->get_matrix();
+		= (const mem_col_dense_matrix &) *m2->get_matrix();
 	const mem_row_dense_matrix &res_row_m
-		= (const mem_row_dense_matrix &) res_m->get_matrix();
+		= (const mem_row_dense_matrix &) *res_m->get_matrix();
 #pragma omp parallel for
 	for (size_t i = 0; i < nrow; i++) {
 		const Type *in_row = (const Type *) row_m.get_row(i);
@@ -219,11 +219,11 @@ typename type_mem_dense_matrix<Type>::ptr test_MM3(size_t nrow, size_t ncol,
 
 	gettimeofday(&start, NULL);
 	const mem_col_dense_matrix &left_m
-		= (const mem_col_dense_matrix &) m1->get_matrix();
+		= (const mem_col_dense_matrix &) *m1->get_matrix();
 	const mem_col_dense_matrix &right_m
-		= (const mem_col_dense_matrix &) m2->get_matrix();
+		= (const mem_col_dense_matrix &) *m2->get_matrix();
 	const mem_col_dense_matrix &res_col_m
-		= (const mem_col_dense_matrix &) res_m->get_matrix();
+		= (const mem_col_dense_matrix &) *res_m->get_matrix();
 #pragma omp parallel for
 	for (size_t i = 0; i < nrow; i++) {
 		for (size_t j = 0; j < right_ncol; j++) {

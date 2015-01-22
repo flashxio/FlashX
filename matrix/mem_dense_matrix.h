@@ -289,8 +289,8 @@ public:
 		return *(EntryType *) m->get(row, col);
 	}
 
-	const mem_dense_matrix &get_matrix() const {
-		return *m;
+	const mem_dense_matrix::ptr get_matrix() const {
+		return m;
 	}
 };
 
@@ -320,7 +320,7 @@ typename type_mem_dense_matrix<ResType>::ptr  multiply(
 {
 	basic_ops_impl<LeftType, RightType, ResType> ops;
 	return type_mem_dense_matrix<ResType>::create(mem_dense_matrix::cast(
-				m1.get_matrix().inner_prod(m2.get_matrix(), ops.get_multiply(),
+				m1.get_matrix()->inner_prod(*m2.get_matrix(), ops.get_multiply(),
 					ops.get_add())));
 }
 
@@ -331,7 +331,7 @@ typename type_mem_dense_matrix<ResType>::ptr par_multiply(
 {
 	basic_ops_impl<LeftType, RightType, ResType> ops;
 	return type_mem_dense_matrix<ResType>::create(mem_dense_matrix::cast(
-				m1.get_matrix().par_inner_prod(m2.get_matrix(), ops.get_multiply(),
+				m1.get_matrix()->par_inner_prod(*m2.get_matrix(), ops.get_multiply(),
 					ops.get_add())));
 }
 
