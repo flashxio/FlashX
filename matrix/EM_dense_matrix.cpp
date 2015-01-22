@@ -420,6 +420,19 @@ bool EM_col_dense_matrix::aggregate(const bulk_operate &op,
 	assert(0);
 }
 
+dense_matrix::ptr EM_col_dense_matrix::clone() const
+{
+	// TODO
+	assert(0);
+}
+
+dense_matrix::ptr EM_col_dense_matrix::conv2(size_t nrow, size_t ncol,
+		bool byrow) const
+{
+	// TODO
+	assert(0);
+}
+
 void EM_col_dense_matrix::set_data(const set_operate &op)
 {
 	EM_dense_matrix_accessor::ptr accessor = create_accessor();

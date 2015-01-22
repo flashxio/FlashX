@@ -74,6 +74,21 @@ public:
 		return ncol;
 	}
 
+	/**
+	 * Resize the matrix to a new dimension.
+	 * The current matrix must have enough elements. Otherwise, resizing
+	 * fails.
+	 */
+	bool resize(size_t new_nrow, size_t new_ncol) {
+		if (nrow * ncol < new_nrow * new_ncol)
+			return false;
+		else {
+			nrow = new_nrow;
+			ncol = new_ncol;
+			return true;
+		}
+	}
+
 	bool is_in_mem() const {
 		return in_mem;
 	}
@@ -95,6 +110,14 @@ public:
 	bool is_wide() const {
 		return get_num_cols() > get_num_rows();
 	}
+
+	virtual dense_matrix::ptr clone() const = 0;
+	/**
+	 * This method will create a new matrix with different dimensions and
+	 * data layout. But the new matrix shares the same data as the original
+	 * matrix.
+	 */
+	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const = 0;
 
 	virtual void reset_data() = 0;
 	virtual void set_data(const set_operate &op) = 0;

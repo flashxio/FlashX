@@ -59,6 +59,9 @@ public:
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
 };
 
+class mem_row_dense_matrix;
+class mem_col_dense_matrix;
+
 class mem_row_dense_matrix: public mem_dense_matrix
 {
 	struct deleter {
@@ -68,6 +71,12 @@ class mem_row_dense_matrix: public mem_dense_matrix
 	};
 
 	std::shared_ptr<char> data;
+
+	mem_row_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
+			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
+				entry_size) {
+		this->data = data;
+	}
 
 	mem_row_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
@@ -101,6 +110,9 @@ public:
 	~mem_row_dense_matrix() {
 	}
 
+	virtual dense_matrix::ptr clone() const;
+	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
+
 	virtual void reset_data();
 	void set_data(const set_operate &op);
 	virtual void par_reset_data();
@@ -131,6 +143,8 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
 	}
+
+	friend class mem_col_dense_matrix;
 };
 
 class mem_col_dense_matrix: public mem_dense_matrix
@@ -152,6 +166,12 @@ class mem_col_dense_matrix: public mem_dense_matrix
 			assert(data);
 		}
 	}
+
+	mem_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
+			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
+				entry_size) {
+		this->data = data;
+	}
 public:
 	typedef std::shared_ptr<mem_col_dense_matrix> ptr;
 
@@ -161,6 +181,9 @@ public:
 
 	~mem_col_dense_matrix() {
 	}
+
+	virtual dense_matrix::ptr clone() const;
+	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
 
 	virtual void reset_data();
 	void set_data(const set_operate &op);
@@ -197,6 +220,8 @@ public:
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
 	}
+
+	friend class mem_row_dense_matrix;
 };
 
 template<class EntryType>

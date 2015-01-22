@@ -118,6 +118,35 @@ mem_dense_matrix::ptr mem_dense_matrix::cast(dense_matrix::ptr m)
 	return std::static_pointer_cast<mem_dense_matrix>(m);
 }
 
+dense_matrix::ptr mem_col_dense_matrix::clone() const
+{
+	// The data array is read-only. It's safe to have two matrices reference
+	// the same data array.
+	return dense_matrix::ptr(new mem_col_dense_matrix(get_num_rows(),
+				get_num_cols(), get_entry_size(), data));
+}
+
+dense_matrix::ptr mem_col_dense_matrix::conv2(size_t nrow, size_t ncol,
+		bool byrow) const
+{
+	if (nrow * ncol > get_num_rows() * get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't convert to a matrix larger than the original matrix";
+		return dense_matrix::ptr();
+	}
+
+	if (!byrow) {
+		// The new matrix has the same data layout as the original matrix.
+		// so we can simply clone the original matrix.
+		dense_matrix::ptr new_mat = clone();
+		new_mat->resize(nrow, ncol);
+		return new_mat;
+	}
+	else
+		return dense_matrix::ptr(new mem_row_dense_matrix(nrow, ncol,
+					get_entry_size(), data));
+}
+
 void mem_col_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
@@ -227,6 +256,35 @@ bool mem_col_dense_matrix::aggregate(const bulk_operate &op,
 	op.runA(nrow * ncol, data.get(), raw_arr);
 	res.set_raw(raw_arr, res.get_size());
 	return true;
+}
+
+dense_matrix::ptr mem_row_dense_matrix::clone() const
+{
+	// The data array is read-only. It's safe to have two matrices reference
+	// the same data array.
+	return dense_matrix::ptr(new mem_row_dense_matrix(get_num_rows(),
+				get_num_cols(), get_entry_size(), data));
+}
+
+dense_matrix::ptr mem_row_dense_matrix::conv2(size_t nrow, size_t ncol,
+		bool byrow) const
+{
+	if (nrow * ncol > get_num_rows() * get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't convert to a matrix larger than the original matrix";
+		return dense_matrix::ptr();
+	}
+
+	if (byrow) {
+		// The new matrix has the same data layout as the original matrix.
+		// so we can simply clone the original matrix.
+		dense_matrix::ptr new_mat = clone();
+		new_mat->resize(nrow, ncol);
+		return new_mat;
+	}
+	else
+		return dense_matrix::ptr(new mem_col_dense_matrix(nrow, ncol,
+					get_entry_size(), data));
 }
 
 void mem_row_dense_matrix::reset_data()
