@@ -315,7 +315,7 @@ test.with.iris()
 # Betweeness
 test.betweenness <- function(fg, ig)
 {
-	fg.btw <- fg.betweenness(g, 0:(g$vcount-1))
+	fg.btw <- fg.betweenness(fg)
 	ig.btw <- betweenness(ig)
 	stopifnot(all.equal(ig.btw, fg.btw, tolerance=.001)) # Need tolerance for floats
 }
