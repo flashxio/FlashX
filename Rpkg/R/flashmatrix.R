@@ -85,6 +85,25 @@ fm.create.vector <- function(len, init.v=0, init.rand=FALSE,
 	structure(ret, class="fmV")
 }
 
+#' Create a matrix from the given set of values.
+#'
+#' The given set has to be a FlashGraphR matrix or FlashGraphR vector.
+#'
+#' @param data the given set of values.
+#' @param nrow the number of rows in the output matrix.
+#' @param ncol the number of columns in the output matrix.
+#' @param byrow logical. If FALSE (the default) the matrix is filly
+#'				columns, otherwise the matrix is filled by rows.
+#' @return a FlashMatrixR matrix
+fm.matrix <- function(data, nrow, ncol, byrow=FALSE)
+{
+	stopifnot(!is.null(data))
+	stopifnot(class(data) == "fm" || class(data) == "fmV")
+	ret <- .Call("R_FM_conv_matrix", data, as.numeric(nrow), as.numeric(ncol),
+				 as.logical(byrow), PACKAGE="FlashGraphR")
+	structure(ret, class="fm")
+}
+
 #' The information of a FlashMatrixR object
 #'
 #' Functions for providing the basic information of a matrix.

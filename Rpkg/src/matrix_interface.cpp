@@ -94,6 +94,28 @@ static SEXP create_FMR_matrix(sparse_matrix::ptr m, const std::string &name)
 	return ret;
 }
 
+static SEXP create_FMR_matrix(dense_matrix::ptr m, const std::string &name)
+{
+	Rcpp::List ret;
+	ret["name"] = Rcpp::String(name);
+	ret["type"] = Rcpp::String("dense");
+
+	object_ref<dense_matrix> *ref = new object_ref<dense_matrix>(m);
+	SEXP pointer = R_MakeExternalPtr(ref, R_NilValue, R_NilValue);
+	R_RegisterCFinalizerEx(pointer, fm_clean_SpM, TRUE);
+	ret["pointer"] = pointer;
+
+	Rcpp::NumericVector nrow(1);
+	nrow[0] = m->get_num_rows();
+	ret["nrow"] = nrow;
+
+	Rcpp::NumericVector ncol(1);
+	ncol[0] = m->get_num_cols();
+	ret["ncol"] = ncol;
+
+	return ret;
+}
+
 static SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 {
 	Rcpp::List ret;
@@ -322,4 +344,19 @@ RcppExport SEXP R_FM_matrix_sum(SEXP pmat)
 		fprintf(stderr, "The matrix has an unsupported type for sum\n");
 		return R_NilValue;
 	}
+}
+
+RcppExport SEXP R_FM_conv_matrix(SEXP pmat, SEXP pnrow, SEXP pncol, SEXP pbyrow)
+{
+	Rcpp::List matrix_obj(pmat);
+	if (is_sparse(matrix_obj)) {
+		fprintf(stderr, "We can't change the dimension of a sparse matrix\n");
+		return R_NilValue;
+	}
+
+	size_t nrow = REAL(pnrow)[0];
+	size_t ncol = REAL(pncol)[0];
+	bool byrow = LOGICAL(pbyrow)[0];
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	return create_FMR_matrix(mat->conv2(nrow, ncol, byrow), "");
 }
