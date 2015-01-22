@@ -179,17 +179,22 @@ fm.multiply <- function(fm, mat)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
 	stopifnot(class(fm) == "fm")
-	if (class(mat) == "fmV") {
+	if (class(mat) == "fmV")
 		stopifnot(fm.ncol(fm) == fm.length(mat))
-		ret <- .Call("R_FM_multiply", fm, mat, PACKAGE="FlashGraphR")
-		structure(ret, class="fmV")
-	}
 	else {
+		stopifnot(!fm.is.sparse(mat))
 		stopifnot(fm.ncol(fm) == fm.nrow(mat))
-		ret <- .Call("R_FM_multiply", fm, mat, PACKAGE="FlashGraphR")
-		structure(ret, class="fm")
 	}
 
+	if (fm.is.sparse(fm))
+		ret <- .Call("R_FM_multiply_sparse", fm, mat, PACKAGE="FlashGraphR")
+	else
+		ret <- .Call("R_FM_multiply_dense", fm, mat, PACKAGE="FlashGraphR")
+
+	if (class(mat) == "fmV")
+		structure(ret, class="fmV")
+	else
+		structure(ret, class="fm")
 }
 
 #' Sum of a vector/matrix.

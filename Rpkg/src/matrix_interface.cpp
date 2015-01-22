@@ -291,31 +291,30 @@ static bool is_vector(const dense_matrix &mat)
 	return mat.get_num_rows() == 1 || mat.get_num_cols() == 1;
 }
 
-RcppExport SEXP R_FM_multiply(SEXP pmatrix, SEXP pmat)
+RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 {
-	// TODO check if the right matrix is sparse matrix.
 	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
-	Rcpp::List matrix_obj(pmatrix);
-	if (is_sparse(matrix_obj)) {
-		if (!right_mat->is_in_mem()) {
-			fprintf(stderr, "we now only supports in-mem vector for SpMV\n");
-			return R_NilValue;
-		}
-		sparse_matrix::ptr matrix = get_matrix<sparse_matrix>(pmatrix);
-		if (is_vector(*right_mat))
-			return SpMV(matrix, right_mat);
-		else
-			return SpMM(matrix, right_mat);
+	if (!right_mat->is_in_mem()) {
+		fprintf(stderr, "we now only supports in-mem vector for SpMV\n");
+		return R_NilValue;
 	}
-	else {
-		dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
-		const bulk_operate &left_op = get_inner_prod_left_ops(*matrix,
-				*right_mat).get_multiply();
-		const bulk_operate &right_op = get_inner_prod_right_ops(left_op).get_add();
-		dense_matrix::ptr prod_vec = matrix->inner_prod(*right_mat, left_op,
-				right_op);
-		return create_FMR_vector(prod_vec, "");
-	}
+	sparse_matrix::ptr matrix = get_matrix<sparse_matrix>(pmatrix);
+	if (is_vector(*right_mat))
+		return SpMV(matrix, right_mat);
+	else
+		return SpMM(matrix, right_mat);
+}
+
+RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
+{
+	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
+	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
+	const bulk_operate &left_op = get_inner_prod_left_ops(*matrix,
+			*right_mat).get_multiply();
+	const bulk_operate &right_op = get_inner_prod_right_ops(left_op).get_add();
+	dense_matrix::ptr prod_vec = matrix->inner_prod(*right_mat, left_op,
+			right_op);
+	return create_FMR_vector(prod_vec, "");
 }
 
 template<class T>
