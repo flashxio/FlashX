@@ -312,6 +312,14 @@ source("verify.kmeans.R")
 test.kmeans(2, 500, 20)
 test.with.iris()
 
+# Betweeness
+test.betweenness <- function(fg, ig)
+{
+	fg.btw <- fg.betweenness(g, 0:(g$vcount-1))
+	ig.btw <- betweenness(ig)
+	stopifnot(all.equal(ig.btw, fg.btw, tolerance=.001)) # Need tolerance for floats
+}
+
 test.weighted <- function(fg, ig)
 {
 	fg.out <- fg.multiply(fg, rep.int(1, fg.vcount(fg)))
