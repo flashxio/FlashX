@@ -18,7 +18,6 @@
  */
 
 #include "kmeans.h"
-#define OMP_MAX_THREADS 32
 #define KM_TEST 0
 
 namespace {
@@ -27,6 +26,7 @@ static unsigned NEV;
 static size_t K;
 static unsigned NUM_ROWS;
 static omp_lock_t writelock;
+short OMP_MAX_THREADS;
 
 static struct timeval start, end;
 
@@ -285,6 +285,7 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 	NEV = nev;
 	K = k;
 	NUM_ROWS = num_rows;
+	OMP_MAX_THREADS = get_num_omp_threads();
 
 	if (K > NUM_ROWS || K < 2 || K == (unsigned)-1) { 
 		BOOST_LOG_TRIVIAL(fatal)
