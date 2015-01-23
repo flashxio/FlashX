@@ -1,3 +1,2 @@
 # change FG_TOP to the location of the top directory of FlashGraph.
-#0:FG_TOP/flash-graph/data
-0:/home/disa/graph-engine/flash-graph/data
+0:FG_TOP/flash-graph/data

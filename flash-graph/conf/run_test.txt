@@ -13,7 +13,7 @@ cache_size=512M
 num_nodes=1
 
 # change FG_TOP to the path of the top directory of FlashGraph.
-root_conf=/home/disa/graph-engine/flash-graph/conf/data_files.txt
+root_conf=FG_TOP/flash-graph/conf/data_files.txt
 
 # whether or not to use Linux huge pages
 # huge_page=
@@ -38,7 +38,7 @@ threads=1
 # Keep adjacency lists of vertices in memory
 # in_mem_graph=
 
-# Run the vertex program on a vertex serially regardless of load balancing.
+# Run the vertex program on a vertx serially regardless of load balancing.
 serial_run=
 
 # The number of vertical partitions on the graph.
