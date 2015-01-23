@@ -1,23 +1,24 @@
 # The absolute path of the directory where Rcpp header files are stored.
 ifndef RCPP_INCLUDE
-	RCPP_INCLUDE = .
+	RCPP_INCLUDE = /usr/local/lib/R/site-library/Rcpp/include
 endif
 # The absolute path of the directory where FlashGraph source code is.
 ifndef FG_DIR
-	FG_DIR = .
+	FG_DIR = /home/disa/graph-engine
 endif
 # The absolute path of the directory where FlashGraph is built.
 ifndef FG_LIB
-	FG_LIB = $(FG_DIR)/build
+	FG_LIB = $(FG_DIR)
+	#FG_LIB = $(FG_DIR)/build
 endif
 #BOOST_LOG=1
 OMP_FLAG = -fopenmp
 PKG_LIBS = -L$(FG_LIB)/flash-graph/libgraph-algs -lgraph-algs -L$(FG_LIB)/flash-graph -lgraph
 PKG_LIBS += -L$(FG_LIB)/libsafs -lsafs -L$(FG_LIB)/libcommon -lcommon
 PKG_LIBS += $(OMP_FLAG) -lpthread -rdynamic -laio -lnuma -lrt -lboost_filesystem -lz -lstxxl
-ifdef FG_EIGEN
+#ifdef FG_EIGEN
 PKG_LIBS += -L$(FG_LIB)/flash-graph/matrix -lmatrix
-endif
+#endif
 ifdef BOOST_LOG
 	PKG_LIBS += -lboost_log
 endif
