@@ -527,6 +527,27 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 		return create_FGR_obj(fg, graph_name);
 }
 
+RcppExport SEXP R_FG_export_graph(SEXP pgraph, SEXP pgraph_file, SEXP pindex_file)
+{
+	FG_graph::ptr fg = R_FG_get_graph(pgraph);
+	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
+	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
+
+	Rcpp::LogicalVector ret(1);
+	if (!fg->is_in_mem()) {
+		fprintf(stderr, "currently we only support exporting in-mem graphs\n");
+		ret[0] = false;
+	}
+	else {
+		in_mem_graph::ptr graph_data = fg->get_graph_data();
+		vertex_index::ptr index_data = fg->get_index_data();
+		graph_data->dump(graph_file);
+		index_data->dump(index_file);
+		ret[0] = true;
+	}
+	return ret;
+}
+
 static FG_graph::ptr construct_fg_graph(utils::edge_graph::ptr edge_g,
 		const std::string &graph_name, int num_threads)
 {

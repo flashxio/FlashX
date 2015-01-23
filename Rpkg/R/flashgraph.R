@@ -152,6 +152,25 @@ fg.get.graph <- function(graph.name)
 		structure(ret, class="fg")
 }
 
+#' Export graph image.
+#'
+#' This function exports a graph image in FlashGraphR to the local filesystem.
+#'
+#' @param graph The FlashGraphR object
+#' @param graph.file The graph file in the local filesystem to which
+#' the adjacency lists of the graph is exported to.
+#' @param index.file The index file in the local filesystem to which
+#' the index of the graph is exported to.
+#' @return true if the graph is exported to the local filesystem correctly;
+#' false, otherwise.
+fg.export.graph <- function(graph, graph.file, index.file)
+{
+	stopifnot(!is.null(graph))
+	stopifnot(class(graph) == "fg")
+	.Call("R_FG_export_graph", graph, graph.file, index.file,
+		  PACKAGE="FlashGraphR")
+}
+
 #' Graph information
 #'
 #' Functions for providing the basic information of a graph.
