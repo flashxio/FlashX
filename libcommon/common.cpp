@@ -29,7 +29,11 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
+#include <atomic>
 #include <sstream>
 
 #include "common.h"
@@ -190,4 +194,27 @@ int split_string(const std::string &str, char delim,
 		strs.push_back(item);
 	}
 	return strs.size();
+}
+
+int get_num_omp_threads()
+{
+#if defined(_OPENMP)
+	std::atomic<int> num_threads;
+#pragma omp parallel
+	{
+		num_threads = omp_get_num_threads();
+	}
+	return num_threads.load();
+#else
+	return 1;
+#endif
+}
+
+int get_omp_thread_num()
+{
+#if defined(_OPENMP)
+	return omp_get_thread_num();
+#else
+	return 0;
+#endif
 }
