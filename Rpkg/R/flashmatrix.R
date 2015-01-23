@@ -85,6 +85,17 @@ fm.create.vector <- function(len, init.v=0, init.rand=FALSE,
 	structure(ret, class="fmV")
 }
 
+#' Convert a regular R object to a FlashMatrixR object.
+#'
+#' If the R object is a matrix, `byrow' determines how data in the generated
+#' FlashMatrixR object is organized in memory.
+#'
+#' @param obj a regular R object
+#' @param byrow a logical value to determine the data layout of a FlashMatrixR
+#' matrix.
+#' @return a FlashMatrixR object.
+#' @name fm.conv.R2FM
+#' @author Da Zheng <dzheng5@@jhu.edu>
 fm.conv.R2FM <- function(obj, byrow=FALSE)
 {
 	stopifnot(!is.null(obj))
@@ -101,6 +112,12 @@ fm.conv.R2FM <- function(obj, byrow=FALSE)
 	}
 }
 
+#' Convert a FlashMatrixR object to a regular R object
+#'
+#' @param obj a FlashMatrixR object
+#' @return a regular R object.
+#' @name fm.conv.FM2R
+#' @author Da Zheng <dzheng5@@jhu.edu>
 fm.conv.FM2R <- function(obj)
 {
 	stopifnot(!is.null(obj))
