@@ -208,6 +208,118 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 	return create_FMR_vector(m, "");
 }
 
+template<class T>
+class rand_set_operate: public set_operate
+{
+	const T min;
+	const T max;
+
+	T gen_rand() const {
+		// We need to rescale and shift the random number accordingly.
+		return unif_rand() * (max - min) + min;
+	}
+public:
+	rand_set_operate(T _min, T _max): min(_min), max(_max) {
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		T *darr = (T *) arr;
+		for (size_t i = 0; i < num_eles; i++) {
+			darr[i] = gen_rand();
+		}
+	}
+
+	virtual size_t entry_size() const {
+		return sizeof(T);
+	}
+};
+
+RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
+{
+	size_t n;
+	double min, max;
+	bool ret1, ret2, ret3;
+	ret1 = R_get_number<size_t>(pn, n);
+	ret2 = R_get_number<double>(pmin, min);
+	ret3 = R_get_number<double>(pmax, max);
+	if (!ret1 || !ret2 || !ret3) {
+		fprintf(stderr, "the arguments aren't of the supported type\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = dense_matrix::create(n, 1, sizeof(double),
+			// TODO let's just use in-memory dense matrix first.
+			matrix_layout_t::L_COL, true);
+	GetRNGstate();
+	m->set_data(rand_set_operate<double>(min, max));
+	PutRNGstate();
+	return create_FMR_vector(m, "");
+}
+
+template<class T>
+class seq_set_operate: public set_operate
+{
+	long n;
+	T from;
+	T by;
+public:
+	seq_set_operate(long n, T from, T by) {
+		this->n = n;
+		this->from = from;
+		this->by = by;
+	}
+
+	virtual void set(void *raw_arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		T *arr = (T *) raw_arr;
+		// We are initializing a single-column matrix.
+		T v = from + row_idx * by;
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = v;
+			v += by;
+		}
+	}
+
+	virtual size_t entry_size() const {
+		return sizeof(T);
+	}
+};
+
+RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
+{
+	// This function always generates a sequence of real numbers.
+	double from, to, by;
+	bool ret1, ret2, ret3;
+	ret1 = R_get_number<double>(pfrom, from);
+	ret2 = R_get_number<double>(pto, to);
+	ret3 = R_get_number<double>(pby, by);
+	if (!ret1 || !ret2 || !ret3) {
+		fprintf(stderr, "the arguments aren't of the supported type\n");
+		return R_NilValue;
+	}
+
+	// The result of division may generate a real number slightly smaller than
+	// what we want because of the representation precision in the machine.
+	// When we convert the real number to an integer, we may find the number
+	// is smaller than exepcted. We need to add a very small number to
+	// the real number to correct the problem.
+	// TODO is it the right way to correct the problem?
+	long n = (to - from) / by + 1e-9;
+	if (n < 0) {
+		fprintf(stderr, "wrong sign in 'by' argument");
+		return R_NilValue;
+	}
+
+	// We need to count the start element.
+	n++;
+	dense_matrix::ptr m = dense_matrix::create(n, 1, sizeof(double),
+			// TODO let's just use in-memory dense matrix first.
+			matrix_layout_t::L_COL, true);
+	m->set_data(seq_set_operate<double>(n, from, by));
+	return create_FMR_vector(m, "");
+}
+
 RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
 {
 	Rcpp::List graph = Rcpp::List(pgraph);

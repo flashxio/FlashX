@@ -57,31 +57,47 @@ fm.get.matrix <- function(fg)
 	structure(ret, class="fm")
 }
 
-#' Create a FlashMatrixR vector
+#' Create a FlashMatrixR vector with replicated elements.
 #'
-#' `fm.create.vector' creates and initializes a FlashMatrixR vector.
-#' It can initialize the vector with a constant `init.v' when `init.rand'
-#' is FALSE. Otherwise, it initializes the vector randomly with specified
-#' min and max.
-#'
-#' @param len The length of the vector
-#' @param init.v The constat initial value of the vector
-#' @param init.rand The boolean indicator whether to initialize the vector
-#' randomly.
-#' @param init.min The min value of the random generator.
-#' @param init.max The max value of the random generator.
+#' @param x A constant initial value
+#' @param times The length of the vector to be generated.
 #' @return A FlashMatrixR vector
-#' @name fm.create.vector
+#' @name fm.rep.int
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fm.create.vector <- function(len, init.v=0, init.rand=FALSE,
-							 rand.min=0, rand.max=1)
+fm.rep.int <- function(x, times)
 {
-	if (!init.rand)
-		ret <- .Call("R_FM_create_vector", as.numeric(len), init.v,
-					 PACKAGE="FlashGraphR")
-	else {
-		# TODO
-	}
+	stopifnot(is.vector(x) && is.atomic(x))
+	ret <- .Call("R_FM_create_vector", as.numeric(times), x,
+				 PACKAGE="FlashGraphR")
+	structure(ret, class="fmV")
+}
+
+#' Create a FlashMatrixR vector with a sequence of numbers.
+#'
+#' @param from the starting value of the sequence.
+#' @param to the end value of the sequence.
+#' @param by number: increment of the sequence.
+#' @return a sequence of numbers that belongs to [from, to]
+#' @name fm.seq.int
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.seq.int <- function(from, to, by)
+{
+	ret <- .Call("R_FM_create_seq", from, to, by,
+				 PACKAGE="FlashGraphR")
+	structure(ret, class="fmV")
+}
+
+#' Create a FlashMatrixR vector with uniformly random numbers.
+#'
+#' @param n the number of random numbers to be generated.
+#' @param min lower limits of the distribution.
+#' @param max upper limits of the distribution.
+#' @name fm.runif
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.runif <- function(n, min=0, max=1)
+{
+	ret <- .Call("R_FM_create_rand", n, min, max,
+				 PACKAGE="FlashGraphR")
 	structure(ret, class="fmV")
 }
 
