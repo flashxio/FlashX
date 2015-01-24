@@ -3,7 +3,7 @@ library(FlashGraphR)
 
 # Test a FlashMatrixR vector.
 print("convert a FlashMatrixR vector to R vector")
-fm.vec <- fm.create.vector(2000, 1)
+fm.vec <- fm.rep.int(1, 2000)
 vec <- fm.conv.FM2R(fm.vec)
 stopifnot(is.vector(vec))
 stopifnot(is.atomic(vec))
@@ -17,7 +17,7 @@ stopifnot(sum(vec == vec1) == length(vec))
 
 # Test a FlashMatrixR matrix
 print("create a column-wise FlashMatrixR matrix")
-fm.mat <- fm.matrix(fm.create.vector(2000, 1), 20, 100)
+fm.mat <- fm.matrix(fm.rep.int(1, 2000), 20, 100)
 stopifnot(fm.nrow(fm.mat) == 20)
 stopifnot(fm.ncol(fm.mat) == 100)
 mat <- fm.conv.FM2R(fm.mat)
@@ -35,7 +35,7 @@ stopifnot(sum(mat1 == mat) == fm.ncol(fm.mat) * fm.nrow(fm.mat))
 mat <- matrix(1:2000, 20, 100)
 
 # Test a dense matrix times a vector
-fm.vec <- fm.create.vector(fm.ncol(fm.mat), 1)
+fm.vec <- fm.rep.int(1, fm.ncol(fm.mat))
 vec <- fm.conv.FM2R(fm.vec)
 res <- mat %*% vec
 
@@ -116,7 +116,7 @@ stopifnot(!fm.is.sym(fm))
 stopifnot(fm.is.sparse(fm))
 
 print("SpMV")
-fm.vec <- fm.create.vector(fm.ncol(fm), 1)
+fm.vec <- fm.rep.int(1, fm.ncol(fm))
 fm.res <- fm.multiply(fm, fm.vec)
 stopifnot(fm.sum(fm.res) == fg.ecount(fg))
 
