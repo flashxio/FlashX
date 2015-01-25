@@ -147,6 +147,14 @@ dense_matrix::ptr mem_col_dense_matrix::conv2(size_t nrow, size_t ncol,
 					get_entry_size(), data));
 }
 
+dense_matrix::ptr mem_col_dense_matrix::transpose() const
+{
+	// When we transpose a column-wise matrix, the matrix becomes row-wise,
+	// and no data needs to be copied.
+	return dense_matrix::ptr(new mem_row_dense_matrix(get_num_cols(),
+				get_num_rows(), get_entry_size(), data));
+}
+
 void mem_col_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
@@ -285,6 +293,14 @@ dense_matrix::ptr mem_row_dense_matrix::conv2(size_t nrow, size_t ncol,
 	else
 		return dense_matrix::ptr(new mem_col_dense_matrix(nrow, ncol,
 					get_entry_size(), data));
+}
+
+dense_matrix::ptr mem_row_dense_matrix::transpose() const
+{
+	// When we transpose a row-wise matrix, the matrix becomes column-wise,
+	// and no data needs to be copied.
+	return dense_matrix::ptr(new mem_col_dense_matrix(get_num_cols(),
+				get_num_rows(), get_entry_size(), data));
 }
 
 void mem_row_dense_matrix::reset_data()

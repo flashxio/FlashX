@@ -112,6 +112,7 @@ public:
 
 	virtual dense_matrix::ptr clone() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
+	virtual dense_matrix::ptr transpose() const;
 
 	virtual void reset_data();
 	void set_data(const set_operate &op);
@@ -184,6 +185,7 @@ public:
 
 	virtual dense_matrix::ptr clone() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
+	virtual dense_matrix::ptr transpose() const;
 
 	virtual void reset_data();
 	void set_data(const set_operate &op);

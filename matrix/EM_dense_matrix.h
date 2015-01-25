@@ -135,6 +135,7 @@ public:
 	virtual void reset_data();
 	virtual dense_matrix::ptr clone() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
+	virtual dense_matrix::ptr transpose() const;
 
 	EM_dense_matrix_accessor::ptr create_accessor();
 };
