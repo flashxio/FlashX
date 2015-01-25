@@ -1,6 +1,17 @@
 library(FlashGraphR)
 #fg.set.conf("flash-graph/conf/run_test.txt")
 
+print("Test sequence generator")
+fm.vec <- fm.seq.int(1, 10000000, 1)
+vec <- seq.int(1, 10000000, 1)
+stopifnot(sum(fm.conv.FM2R(fm.vec) == vec) == fm.length(fm.vec))
+
+print("Test random generator")
+fm.vec <- fm.runif(10000000, -1, 1)
+vec <- fm.conv.FM2R(fm.vec)
+stopifnot(sum(vec >= -1) == fm.length(fm.vec))
+stopifnot(sum(vec <= 1) == fm.length(fm.vec))
+
 # Test a FlashMatrixR vector.
 print("convert a FlashMatrixR vector to R vector")
 fm.vec <- fm.rep.int(1, 2000)
