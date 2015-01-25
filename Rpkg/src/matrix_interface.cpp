@@ -607,3 +607,16 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 		return R_NilValue;
 	}
 }
+
+RcppExport SEXP R_FM_transpose(SEXP pmat)
+{
+	Rcpp::List matrix_obj(pmat);
+	if (is_sparse(matrix_obj)) {
+		fprintf(stderr, "We don't support transpose a sparse matrix yet\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = get_matrix<dense_matrix>(matrix_obj);
+	dense_matrix::ptr tm = m->transpose();
+	return create_FMR_matrix(tm, "");
+}

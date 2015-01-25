@@ -276,6 +276,19 @@ fm.sum <- function(m)
 	.Call("R_FM_matrix_sum", m, PACKAGE="FlashGraphR")
 }
 
+#' Transpose a FlashMatrixR matrix.
+#'
+#' @param m a FlashMatrixR matrix
+#' @return a FlashMatrixR matrix
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.t <- function(m)
+{
+	stopifnot(!is.null(m))
+	stopifnot(class(m) == "fm")
+	ret <- .Call("R_FM_transpose", m, PACKAGE="FlashGraphR")
+	structure(ret, class="fm")
+}
+
 print.fm <- function(fm)
 {
 	stopifnot(!is.null(fm))
