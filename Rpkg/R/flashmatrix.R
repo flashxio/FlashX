@@ -351,6 +351,73 @@ fm.mapply2 <- function(FUN, o1, o2)
 	structure(ret, class=class.name)
 }
 
+#' Maxima and Minima
+#'
+#' Returns the (parallel) maxima and minima of the input values.
+#'
+#' `fm.pmin2' and `fm.pmax2' works on two input vectors and returns
+#' return a single vector/matrix giving the 'parallel' maxima (or minima) of
+#' the vectors/matrices. The first element of the result is the maximum (minimum)
+#' of the first elements of all the arguments, the second element of
+#' the result is the maximum (minimum) of the second elements of all
+#' the arguments and so on.
+#'
+#' @param o1 the input vector/matrix.
+#' @param o2 the input vector/matrix.
+#' @return a vector/matrix.
+#' @name minmax
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.pmin2 <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.min, o1, o2)
+}
+
+#' @name minmax
+fm.pmax2 <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.max, o1, o2)
+}
+
+`+.fm` <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.add, o1, o2)
+}
+
+`+.fmV` <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.add, o1, o2)
+}
+
+`-.fm` <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.sub, o1, o2)
+}
+
+`-.fmV` <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.sub, o1, o2)
+}
+
+`*.fm` <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.mul, o1, o2)
+}
+
+`*.fmV` <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.mul, o1, o2)
+}
+
+`/.fm` <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.div, o1, o2)
+}
+
+`/.fmV` <- function(o1, o2)
+{
+	fm.mapply2(fm.bo.div, o1, o2)
+}
+
 #' Transpose a FlashMatrixR matrix.
 #'
 #' @param m a FlashMatrixR matrix
