@@ -276,6 +276,46 @@ fm.sum <- function(m)
 	.Call("R_FM_matrix_sum", m, PACKAGE="FlashGraphR")
 }
 
+#' The basic operators supported by FlashMatrixR.
+#'
+#'
+#' The basic operators are mainly used by the FlashMatrixR functions that
+#' accept operators as arguments. Such a function includes `fm.mapply',
+#' `fm.inner.prod', etc.
+#'
+#' `fm.get.basic.op' gets the predefined basic operator specified by a user.
+#' `fm.init.basic.op' defines the basic operators.
+#' `fm.bo.add' is the predifined basic operator for addition.
+#' `fm.bo.sub' is the predifined basic operator for subtraction.
+#' `fm.bo.mul' is the predifined basic operator for multiplication.
+#' `fm.bo.div' is the predifined basic operator for division.
+#' `fm.bo.min' is the predifined basic operator for computing minimum.
+#' `fm.bo.max' is the predifined basic operator for computing maximum.
+#' `fm.bo.pow' is the predifined basic operator for computing exponential.
+#'
+#' @param name the name of the basic operator.
+#' @return a reference to the specified basic operator.
+#' @name fm.basic.op
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.get.basic.op <- function(name)
+{
+	stopifnot(!is.null(name))
+	ret <- .Call("R_FM_get_basic_op", name, PACKAGE="FlashGraphR")
+	structure(ret, class="fm.bo")
+}
+
+#' @name fm.basic.op
+fm.init.basic.op <- function()
+{
+	fm.bo.add <<- fm.get.basic.op("add")
+	fm.bo.sub <<- fm.get.basic.op("sub")
+	fm.bo.mul <<- fm.get.basic.op("mul")
+	fm.bo.div <<- fm.get.basic.op("div")
+	fm.bo.min <<- fm.get.basic.op("min")
+	fm.bo.max <<- fm.get.basic.op("max")
+	fm.bo.pow <<- fm.get.basic.op("pow")
+}
+
 #' Transpose a FlashMatrixR matrix.
 #'
 #' @param m a FlashMatrixR matrix
@@ -292,14 +332,18 @@ fm.t <- function(m)
 print.fm <- function(fm)
 {
 	stopifnot(!is.null(fm))
-	stopifnot(class(fm) == "fm")
-	cat("FlashRMatrix ", fm$name, ": ", fm.nrow(fm), " rows, ", fm.ncol(fm),
+	cat("FlashMatrixR matrix ", fm$name, ": ", fm.nrow(fm), " rows, ", fm.ncol(fm),
 		" columns, is sparse: ", fm.is.sparse(fm), "\n", sep="")
 }
 
 print.fmV <- function(vec)
 {
 	stopifnot(!is.null(vec))
-	stopifnot(class(vec) == "fmV")
-	cat("FlashRVector ", vec$name, ": length: ", fm.length(vec), "\n", sep="")
+	cat("FlashVectorR vector ", vec$name, ": length: ", fm.length(vec), "\n", sep="")
+}
+
+print.fm.bo <- function(bo)
+{
+	stopifnot(!is.null(bo))
+	cat("FLashMatrixR basic operator:", bo$name, "\n")
 }

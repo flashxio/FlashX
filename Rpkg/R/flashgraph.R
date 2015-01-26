@@ -868,4 +868,5 @@ print.fg <- function(fg)
 	library.dynam("FlashGraphR", pkgname, libname, local=FALSE);
 	ret <- .Call("R_FG_init", paste(pkgname, ".conf", sep=""), PACKAGE="FlashGraphR")
 	stopifnot(ret)
+	fm.init.basic.op()
 }

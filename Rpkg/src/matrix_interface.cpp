@@ -620,3 +620,35 @@ RcppExport SEXP R_FM_transpose(SEXP pmat)
 	dense_matrix::ptr tm = m->transpose();
 	return create_FMR_matrix(tm, "");
 }
+
+RcppExport SEXP R_FM_get_basic_op(SEXP pname)
+{
+	std::string name = CHAR(STRING_ELT(pname, 0));
+
+	basic_ops::op_idx idx;
+	if (name == "add")
+		idx = basic_ops::op_idx::ADD;
+	else if (name == "sub")
+		idx = basic_ops::op_idx::SUB;
+	else if (name == "mul")
+		idx = basic_ops::op_idx::MUL;
+	else if (name == "div")
+		idx = basic_ops::op_idx::DIV;
+	else if (name == "min")
+		idx = basic_ops::op_idx::MIN;
+	else if (name == "max")
+		idx = basic_ops::op_idx::MAX;
+	else if (name == "pow")
+		idx = basic_ops::op_idx::POW;
+	else {
+		fprintf(stderr, "Unsupported basic operator: %s\n", name.c_str());
+		return R_NilValue;
+	}
+
+	Rcpp::List ret;
+	Rcpp::IntegerVector r_idx(1);
+	r_idx[0] = idx;
+	ret["idx"] = r_idx;
+	ret["name"] = pname;
+	return ret;
+}
