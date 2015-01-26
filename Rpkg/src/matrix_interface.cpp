@@ -139,12 +139,14 @@ static SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
  */
 static bool is_sparse(const Rcpp::List &matrix)
 {
-	return matrix["type"] == "sparse";
+	std::string type = matrix["type"];
+	return type == "sparse";
 }
 
 static bool is_vector(const Rcpp::List &matrix)
 {
-	return matrix["type"] == "vector";
+	std::string type = matrix["type"];
+	return type == "vector";
 }
 
 template<class MatrixType>
