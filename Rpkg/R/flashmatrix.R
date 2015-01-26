@@ -140,8 +140,7 @@ fm.conv.FM2R <- function(obj)
 	if (class(obj) == "fm")
 		.Call("R_FM_conv_FM2R", obj, PACKAGE="FlashGraphR")
 	else if (class(obj) == "fmV") {
-		ret <- .Call("R_FM_conv_FM2R", obj, PACKAGE="FlashGraphR")
-		ret[, 1]
+		.Call("R_FM_conv_FM2R", obj, PACKAGE="FlashGraphR")
 	}
 	else {
 		print("It has to be a FlashMatrixR object")
