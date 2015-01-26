@@ -652,3 +652,48 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 	ret["name"] = pname;
 	return ret;
 }
+
+RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
+{
+	Rcpp::List fun_obj(pfun);
+	Rcpp::IntegerVector r_idx = fun_obj["idx"];
+	basic_ops::op_idx bo_idx = (basic_ops::op_idx) r_idx[0];
+
+	Rcpp::List obj1(po1);
+	Rcpp::List obj2(po2);
+	if (is_sparse(po1) || is_sparse(po2)) {
+		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	// We only need to test on one vector.
+	bool is_vec = is_vector(po1);
+	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
+	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
+
+	basic_ops *ops;
+	if (m1->is_type<double>() && m2->is_type<double>())
+		ops = &R_basic_ops_DD;
+	else if (m1->is_type<double>() && m2->is_type<int>())
+		ops = &R_basic_ops_DI;
+	else if (m1->is_type<int>() && m2->is_type<double>())
+		ops = &R_basic_ops_ID;
+	else if (m1->is_type<int>() && m2->is_type<int>())
+		ops = &R_basic_ops_II;
+	else {
+		fprintf(stderr, "wrong type in mapply2\n");
+		return R_NilValue;
+	}
+
+	const bulk_operate *op = ops->get_op(bo_idx);
+	if (op == NULL) {
+		fprintf(stderr, "invalid basic operator in mapply2\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr out = m1->mapply2(*m2, *op);
+	if (is_vec)
+		return create_FMR_vector(out, "");
+	else
+		return create_FMR_matrix(out, "");
+}

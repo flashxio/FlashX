@@ -316,6 +316,42 @@ fm.init.basic.op <- function()
 	fm.bo.pow <<- fm.get.basic.op("pow")
 }
 
+#' Apply a Function to two FlashMatrixR vectors/matrices.
+#'
+#' `mapply' applies `FUN' to the first elements of each vector, the second
+#' elements, the third elements, and so on. Two vectors/matrices should have
+#' the same shape. Currently, `mapply' only accepts predefined basic operators
+#' returned by `fm.get.basic.op'.
+#'
+#' @param FUN the user-defined operators.
+#' @param o1, o2 a FlashMatrixR vector/matrix.
+#' @return a FlashMatrixR vector/matrix.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.mapply2 <- function(FUN, o1, o2)
+{
+	stopifnot(!is.null(FUN))
+	stopifnot(!is.null(o1) && !is.null(o2))
+	stopifnot(class(FUN) == "fm.bo")
+	class.name <- "";
+	if (class(o1) == "fmV") {
+		stopifnot(class(o2) == "fmV")
+		stopifnot(fm.length(o1) == fm.length(o2))
+		class.name <- "fmV"
+	}
+	else if (class(o2) == "fm") {
+		stopifnot(class(o2) == "fm")
+		stopifnot(fm.ncol(o1) == fm.ncol(o2) && fm.nrow(o1) == fm.nrow(o2))
+		class.name <- "fm"
+	}
+	else {
+		print("o1 has a wrong type")
+		NULL
+	}
+
+	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashGraphR")
+	structure(ret, class=class.name)
+}
+
 #' Transpose a FlashMatrixR matrix.
 #'
 #' @param m a FlashMatrixR matrix
