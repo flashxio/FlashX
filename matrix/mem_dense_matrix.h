@@ -53,7 +53,6 @@ public:
 	virtual void par_set_data(const set_operate &op) = 0;
 
 	virtual const char *get(size_t row, size_t col) const = 0;
-	virtual matrix_layout_t store_layout() const = 0;
 
 	virtual dense_matrix::ptr par_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
@@ -124,6 +123,8 @@ public:
 	dense_matrix::ptr par_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
+			const bulk_operate &op) const;
 
 	char *get_row(size_t row) {
 		return data.get() + row * get_num_cols() * get_entry_size();
@@ -197,6 +198,8 @@ public:
 	dense_matrix::ptr par_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
+			const bulk_operate &op) const;
 
 	void set_col(char *buf, size_t size, size_t col) {
 		assert(size == get_entry_size() * get_num_rows());

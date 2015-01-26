@@ -82,6 +82,32 @@ bool dense_matrix::verify_aggregate(const bulk_operate &op,
 	return true;
 }
 
+bool dense_matrix::verify_mapply2(const dense_matrix &m,
+			const bulk_operate &op) const
+{
+	if (this->get_num_rows() != m.get_num_rows()
+			|| this->get_num_cols() != m.get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "two matrices in mapply2 don't have the same shape";
+		return false;
+	}
+
+	if (this->store_layout() != m.store_layout()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "two matrices in mapply2 don't have the same data layout";
+		return false;
+	}
+
+	if (get_entry_size() != op.left_entry_size()
+			|| m.get_entry_size() != op.right_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "the element type in the matrices isn't compatible with the operator";
+		return false;
+	}
+
+	return true;
+}
+
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		size_t entry_size, matrix_layout_t layout, bool in_mem)
 {

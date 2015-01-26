@@ -261,9 +261,27 @@ bool mem_col_dense_matrix::aggregate(const bulk_operate &op,
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
 	char raw_arr[res.get_size()];
+	// TODO parallel
 	op.runA(nrow * ncol, data.get(), raw_arr);
 	res.set_raw(raw_arr, res.get_size());
 	return true;
+}
+
+dense_matrix::ptr mem_col_dense_matrix::mapply2(const dense_matrix &m,
+		const bulk_operate &op) const
+{
+	// The same shape and the same data layout.
+	if (!verify_mapply2(m, op))
+		return false;
+
+	// TODO parallel
+	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow, ncol,
+			op.output_entry_size());
+	op.runAA(ncol * nrow, data.get(), col_m.data.get(), res->data.get());
+	return res;
 }
 
 dense_matrix::ptr mem_row_dense_matrix::clone() const
@@ -522,9 +540,27 @@ bool mem_row_dense_matrix::aggregate(const bulk_operate &op,
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
 	char raw_arr[res.get_size()];
+	// TODO parallel
 	op.runA(nrow * ncol, data.get(), raw_arr);
 	res.set_raw(raw_arr, res.get_size());
 	return true;
+}
+
+dense_matrix::ptr mem_row_dense_matrix::mapply2(const dense_matrix &m,
+		const bulk_operate &op) const
+{
+	// The same shape and the same data layout.
+	if (!verify_mapply2(m, op))
+		return false;
+
+	// TODO parallel
+	const mem_row_dense_matrix &row_m = (const mem_row_dense_matrix &) m;
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow, ncol,
+			op.output_entry_size());
+	op.runAA(ncol * nrow, data.get(), row_m.data.get(), res->data.get());
+	return res;
 }
 
 }

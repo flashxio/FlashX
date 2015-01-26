@@ -53,6 +53,8 @@ protected:
 	virtual bool verify_aggregate(const bulk_operate &op, scalar_type &res) const;
 	virtual bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
+	virtual bool verify_mapply2(const dense_matrix &m,
+			const bulk_operate &op) const;
 public:
 	typedef std::shared_ptr<dense_matrix> ptr;
 
@@ -73,6 +75,8 @@ public:
 	size_t get_num_cols() const {
 		return ncol;
 	}
+
+	virtual matrix_layout_t store_layout() const = 0;
 
 	/**
 	 * Resize the matrix to a new dimension.
@@ -126,6 +130,11 @@ public:
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const = 0;
+	/*
+	 * A subclass should define this method for element-wise operations.
+	 */
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
+			const bulk_operate &op) const = 0;
 };
 
 }

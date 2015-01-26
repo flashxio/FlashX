@@ -127,9 +127,15 @@ public:
 		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size, name));
 	}
 
+	virtual matrix_layout_t store_layout() const {
+		return matrix_layout_t::L_COL;
+	}
+
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
+			const bulk_operate &op) const;
 
 	virtual void set_data(const set_operate &op);
 	virtual void reset_data();
