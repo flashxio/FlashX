@@ -21,6 +21,8 @@
  */
 
 #include <memory>
+#include <vector>
+#include <cmath>
 
 namespace fm
 {
@@ -105,6 +107,18 @@ class basic_ops
 public:
 	typedef std::shared_ptr<basic_ops> ptr;
 
+	enum op_idx {
+		ADD,
+		SUB,
+		MUL,
+		DIV,
+		MIN,
+		MAX,
+		POW,
+		NUM_OPS,
+	};
+
+	virtual const bulk_operate *get_op(op_idx idx) const = 0;
 	virtual const bulk_operate &get_add() const = 0;
 	virtual const bulk_operate &get_sub() const = 0;
 	virtual const bulk_operate &get_multiply() const = 0;
@@ -138,11 +152,55 @@ class basic_ops_impl: public basic_ops
 		}
 	};
 
+	struct min {
+		ResType operator()(const LeftType &e1, const RightType &e2) {
+			if (e1 < e2)
+				return e1;
+			else
+				return e2;
+		}
+	};
+
+	struct max {
+		ResType operator()(const LeftType &e1, const RightType &e2) {
+			if (e1 > e2)
+				return e1;
+			else
+				return e2;
+		}
+	};
+
+	struct pow {
+		ResType operator()(const LeftType &e1, const RightType &e2) {
+			return std::pow(e1, e2);
+		}
+	};
+
 	bulk_operate_impl<add, LeftType, RightType, ResType> add_op;
 	bulk_operate_impl<sub, LeftType, RightType, ResType> sub_op;
-	bulk_operate_impl<multiply, LeftType, RightType, ResType> multiply_op;
-	bulk_operate_impl<divide, LeftType, RightType, ResType> divide_op;
+	bulk_operate_impl<multiply, LeftType, RightType, ResType> mul_op;
+	bulk_operate_impl<divide, LeftType, RightType, ResType> div_op;
+	bulk_operate_impl<min, LeftType, RightType, ResType> min_op;
+	bulk_operate_impl<max, LeftType, RightType, ResType> max_op;
+	bulk_operate_impl<pow, LeftType, RightType, ResType> pow_op;
+
+	std::vector<bulk_operate *> ops;
 public:
+	basic_ops_impl() {
+		ops.resize(NUM_OPS);
+		ops[ADD] = &add_op;
+		ops[SUB] = &sub_op;
+		ops[MUL] = &mul_op;
+		ops[DIV] = &div_op;
+		ops[MIN] = &min_op;
+		ops[MAX] = &max_op;
+		ops[POW] = &pow_op;
+	}
+
+	virtual const bulk_operate *get_op(op_idx idx) const {
+		return ops[idx];
+	}
+
 	virtual const bulk_operate &get_add() const {
 		return add_op;
 	}
@@ -152,11 +210,11 @@ public:
 	}
 
 	virtual const bulk_operate &get_multiply() const {
-		return multiply_op;
+		return mul_op;
 	}
 
 	virtual const bulk_operate &get_divide() const {
-		return divide_op;
+		return div_op;
 	}
 };
 
