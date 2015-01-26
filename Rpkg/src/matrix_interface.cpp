@@ -663,13 +663,13 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 
 	Rcpp::List obj1(po1);
 	Rcpp::List obj2(po2);
-	if (is_sparse(po1) || is_sparse(po2)) {
+	if (is_sparse(obj1) || is_sparse(obj2)) {
 		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
 		return R_NilValue;
 	}
 
 	// We only need to test on one vector.
-	bool is_vec = is_vector(po1);
+	bool is_vec = is_vector(obj1);
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
 
