@@ -338,14 +338,14 @@ fm.mapply2 <- function(FUN, o1, o2)
 		stopifnot(fm.length(o1) == fm.length(o2))
 		class.name <- "fmV"
 	}
-	else if (class(o2) == "fm") {
+	else if (class(o1) == "fm") {
 		stopifnot(class(o2) == "fm")
 		stopifnot(fm.ncol(o1) == fm.ncol(o2) && fm.nrow(o1) == fm.nrow(o2))
 		class.name <- "fm"
 	}
 	else {
 		print("o1 has a wrong type")
-		NULL
+		return(NULL)
 	}
 
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashGraphR")
