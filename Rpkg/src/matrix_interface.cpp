@@ -434,14 +434,20 @@ RcppExport SEXP R_FM_multiply_sparse(SEXP pmatrix, SEXP pmat)
 
 RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 {
+	bool is_vec = is_vector(pmat);
 	dense_matrix::ptr right_mat = get_matrix<dense_matrix>(pmat);
 	dense_matrix::ptr matrix = get_matrix<dense_matrix>(pmatrix);
 	const bulk_operate &left_op = get_inner_prod_left_ops(*matrix,
 			*right_mat).get_multiply();
 	const bulk_operate &right_op = get_inner_prod_right_ops(left_op).get_add();
-	dense_matrix::ptr prod_vec = matrix->inner_prod(*right_mat, left_op,
+	dense_matrix::ptr prod = matrix->inner_prod(*right_mat, left_op,
 			right_op);
-	return create_FMR_vector(prod_vec, "");
+	if (prod && is_vec)
+		return create_FMR_vector(prod, "");
+	else if (prod && !is_vec)
+		return create_FMR_matrix(prod, "");
+	else
+		return R_NilValue;
 }
 
 template<class T>
