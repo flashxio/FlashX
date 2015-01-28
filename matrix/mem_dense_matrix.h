@@ -125,6 +125,7 @@ public:
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
+	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
 
 	char *get_row(size_t row) {
 		return data.get() + row * get_num_cols() * get_entry_size();
@@ -200,6 +201,7 @@ public:
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
+	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
 
 	void set_col(char *buf, size_t size, size_t col) {
 		assert(size == get_entry_size() * get_num_rows());

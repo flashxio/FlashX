@@ -27,6 +27,27 @@
 namespace fm
 {
 
+/**
+ * This is a bulk version of a unary operator that takes one input and
+ * generates an output. The bulk version is to amortize the overhead of
+ * invoking a virtual method.
+ */
+class bulk_uoperate
+{
+public:
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const = 0;
+	virtual size_t input_entry_size() const = 0;
+	virtual size_t output_entry_size() const = 0;
+};
+
+/**
+ * This is a bulk version of a binary operator that takes two inputs and
+ * generates an output. The bulk version is to amortize the overhead of
+ * invoking a virtual method.
+ * This class defines the interface of a binary operator. A subclass has to
+ * implement three forms of the operator.
+ */
 class bulk_operate
 {
 public:

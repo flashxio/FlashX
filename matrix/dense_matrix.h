@@ -28,6 +28,7 @@ namespace fm
 {
 
 class bulk_operate;
+class bulk_uoperate;
 class set_operate;
 class scalar_type;
 
@@ -135,6 +136,7 @@ public:
 	 */
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const = 0;
+	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const = 0;
 };
 
 }

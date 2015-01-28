@@ -284,6 +284,17 @@ dense_matrix::ptr mem_col_dense_matrix::mapply2(const dense_matrix &m,
 	return res;
 }
 
+dense_matrix::ptr mem_col_dense_matrix::sapply(const bulk_uoperate &op) const
+{
+	// TODO parallel
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow, ncol,
+			op.output_entry_size());
+	op.runA(ncol * nrow, data.get(), res->data.get());
+	return res;
+}
+
 dense_matrix::ptr mem_row_dense_matrix::clone() const
 {
 	// The data array is read-only. It's safe to have two matrices reference
@@ -560,6 +571,17 @@ dense_matrix::ptr mem_row_dense_matrix::mapply2(const dense_matrix &m,
 	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow, ncol,
 			op.output_entry_size());
 	op.runAA(ncol * nrow, data.get(), row_m.data.get(), res->data.get());
+	return res;
+}
+
+dense_matrix::ptr mem_row_dense_matrix::sapply(const bulk_uoperate &op) const
+{
+	// TODO parallel
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow, ncol,
+			op.output_entry_size());
+	op.runA(ncol * nrow, data.get(), res->data.get());
 	return res;
 }
 
