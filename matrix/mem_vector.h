@@ -51,9 +51,10 @@ class mem_vector
 	}
 
 	mem_vector(size_t length) {
-		mem_row_dense_matrix::ptr tmp = mem_row_dense_matrix::create(length,
+		// Maybe the column form may be more useful.
+		mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(length,
 				1, sizeof(T));
-		this->arr = (T *) tmp->get_row(0);
+		this->arr = (T *) tmp->get_col(0);
 		this->data = std::static_pointer_cast<mem_dense_matrix>(tmp);
 		this->length = length;
 	}
