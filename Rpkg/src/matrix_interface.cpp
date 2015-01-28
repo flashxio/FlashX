@@ -502,7 +502,6 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pmat, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 template<class T, class RContainerType>
 void copy_FM2Rvector(const mem_vector<T> &vec, RContainerType &r_arr)
 {
-	printf("copy a FM vector to R vector\n");
 	size_t length = vec.get_length();
 	for (size_t i = 0; i < length; i++) {
 		r_arr[i] = vec.get(i);
