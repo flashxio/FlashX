@@ -282,6 +282,7 @@ fm.multiply <- function(fm, mat)
 		ret <- .Call("R_FM_multiply_sparse", fm, mat, PACKAGE="FlashGraphR")
 	else
 		ret <- .Call("R_FM_multiply_dense", fm, mat, PACKAGE="FlashGraphR")
+	stopifnot(ret != NULL)
 
 	if (class(mat) == "fmV")
 		structure(ret, class="fmV")

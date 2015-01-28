@@ -390,12 +390,18 @@ static SEXP SpMV(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 	if (right_mat->is_type<double>()) {
 		mem_vector<double>::ptr in_vec = mem_vector<double>::create(
 				mem_dense_matrix::cast(right_mat));
+		if (in_vec == NULL)
+			return R_NilValue;
+
 		mem_vector<double>::ptr out_vec = matrix->multiply<double>(in_vec);
 		return create_FMR_vector(out_vec->get_data(), "");
 	}
 	else if (right_mat->is_type<int>()) {
 		mem_vector<int>::ptr in_vec = mem_vector<int>::create(
 				mem_dense_matrix::cast(right_mat));
+		if (in_vec == NULL)
+			return R_NilValue;
+
 		mem_vector<int>::ptr out_vec = matrix->multiply<int>(in_vec);
 		return create_FMR_vector(out_vec->get_data(), "");
 	}
