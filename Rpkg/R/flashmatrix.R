@@ -176,15 +176,22 @@ fm.matrix <- function(data, nrow, ncol, byrow=FALSE)
 #' `fm.ncol' gets the number of columns in a matrix.
 #'
 #' `fm.is.sym' indicates whether a matrix is symmetric.
+#'
+#' `fm.matrix.layout' indicates how data in a matrix is organized.
 #
 #' `fm.is.sparse' indicates whether a matrix is sparse.
 #'
+#' `fm.is.vector' indicates whether a FlashMatrixR object is a vector.
+#'
 #' `fm.length' gets the length of a FlashMatrixR vector
+#'
+#' `fm.typeof' gets the type of the element in a FlashMatrixR object.
 #'
 #' @param fm The FlashMatrixR object
 #' @return `fm.nrow' and `fm.ncol' returns numeric constants.
 #' `fm.is.sym' and `fm.is.sparse' returns boolean constants.
-#' `fm.length' returns a numeric constant.
+#' `fm.length' returns a numeric constant. `fm.typeof' returns
+#' a string.
 #' @name fm.info
 #' @author Da Zheng <dzheng5@@jhu.edu>
 
@@ -213,11 +220,25 @@ fm.is.sym <- function(fm)
 }
 
 #' @rdname fm.info
+fm.matrix.layout <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm")
+	.Call("R_FM_matrix_layout", fm, PACKAGE="FlashGraphR")
+}
+
+#' @rdname fm.info
 fm.is.sparse <- function(fm)
 {
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fm")
 	fm$type == "sparse"
+}
+
+fm.is.vector <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	class(fm) == "fmV"
 }
 
 #' @rdname fm.info
@@ -226,6 +247,14 @@ fm.length <- function(fm)
 	stopifnot(!is.null(fm))
 	stopifnot(class(fm) == "fmV")
 	fm$len
+}
+
+#' @rdname fm.info
+fm.typeof <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
+	.Call("R_FM_typeof", fm, PACKAGE="FlashGraphR")
 }
 
 #' Matrix multiplication

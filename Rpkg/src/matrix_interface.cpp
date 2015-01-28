@@ -713,3 +713,40 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 	else
 		return create_FMR_matrix(out, "");
 }
+
+RcppExport SEXP R_FM_matrix_layout(SEXP pmat)
+{
+	Rcpp::StringVector ret(1);
+	if (is_sparse(pmat)) {
+		ret[0] = Rcpp::String("adj");
+	}
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		if (mat->store_layout() == matrix_layout_t::L_COL)
+			ret[0] = Rcpp::String("col");
+		else if (mat->store_layout() == matrix_layout_t::L_ROW)
+			ret[0] = Rcpp::String("row");
+		else
+			ret[0] = Rcpp::String("unknown");
+	}
+	return ret;
+}
+
+RcppExport SEXP R_FM_typeof(SEXP pmat)
+{
+	Rcpp::StringVector ret(1);
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "Don't support sparse matrix\n");
+		return R_NilValue;
+	}
+	else {
+		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		if (mat->is_type<double>())
+			ret[0] = Rcpp::String("double");
+		else if (mat->is_type<int>())
+			ret[0] = Rcpp::String("integer");
+		else
+			ret[0] = Rcpp::String("unknown");
+	}
+	return ret;
+}
