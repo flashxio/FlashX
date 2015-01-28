@@ -674,12 +674,46 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 	return ret;
 }
 
-RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
+static const bulk_operate *get_op(SEXP pfun, prim_type type1, prim_type type2)
 {
 	Rcpp::List fun_obj(pfun);
 	Rcpp::IntegerVector r_idx = fun_obj["idx"];
 	basic_ops::op_idx bo_idx = (basic_ops::op_idx) r_idx[0];
 
+	basic_ops *ops = NULL;
+	if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_DOUBLE)
+		ops = &R_basic_ops_DD;
+	else if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_INTEGER)
+		ops = &R_basic_ops_DI;
+	else if (type1 == prim_type::P_INTEGER && type2 == prim_type::P_DOUBLE)
+		ops = &R_basic_ops_ID;
+	else if (type1 == prim_type::P_INTEGER && type2 == prim_type::P_INTEGER)
+		ops = &R_basic_ops_II;
+	else {
+		fprintf(stderr, "wrong type\n");
+		return NULL;
+	}
+
+	const bulk_operate *op = ops->get_op(bo_idx);
+	if (op == NULL) {
+		fprintf(stderr, "invalid basic operator\n");
+		return NULL;
+	}
+	return op;
+}
+
+static prim_type get_scalar_type(SEXP obj)
+{
+	if (R_is_integer(obj))
+		return prim_type::P_INTEGER;
+	else if (R_is_real(obj))
+		return prim_type::P_DOUBLE;
+	else
+		return prim_type::NUM_TYPES;
+}
+
+RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
+{
 	Rcpp::List obj1(po1);
 	Rcpp::List obj2(po2);
 	if (is_sparse(obj1) || is_sparse(obj2)) {
@@ -692,27 +726,143 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
 
-	basic_ops *ops;
-	if (m1->is_type<double>() && m2->is_type<double>())
-		ops = &R_basic_ops_DD;
-	else if (m1->is_type<double>() && m2->is_type<int>())
-		ops = &R_basic_ops_DI;
-	else if (m1->is_type<int>() && m2->is_type<double>())
-		ops = &R_basic_ops_ID;
-	else if (m1->is_type<int>() && m2->is_type<int>())
-		ops = &R_basic_ops_II;
-	else {
-		fprintf(stderr, "wrong type in mapply2\n");
+	const bulk_operate *op = get_op(pfun, m1->get_type(), m2->get_type());
+	if (op == NULL)
 		return R_NilValue;
-	}
-
-	const bulk_operate *op = ops->get_op(bo_idx);
-	if (op == NULL) {
-		fprintf(stderr, "invalid basic operator in mapply2\n");
-		return R_NilValue;
-	}
 
 	dense_matrix::ptr out = m1->mapply2(*m2, *op);
+	if (is_vec)
+		return create_FMR_vector(out, "");
+	else
+		return create_FMR_matrix(out, "");
+}
+
+/*
+ * A wrapper class that perform array-element operation.
+ * This class converts this binary operation into a unary operation.
+ */
+template<class T>
+class AE_operator: public bulk_uoperate
+{
+	const bulk_operate &op;
+	T v;
+public:
+	AE_operator(const bulk_operate &_op, T v): op(_op) {
+		this->v = v;
+		assert(sizeof(v) == op.right_entry_size());
+	}
+
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		op.runAE(num_eles, in_arr, &v, out_arr);
+	}
+
+	virtual size_t input_entry_size() const {
+		return op.left_entry_size();
+	}
+
+	virtual size_t output_entry_size() const {
+		return op.output_entry_size();
+	}
+};
+
+RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
+{
+	Rcpp::List obj1(po1);
+	if (is_sparse(obj1)) {
+		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	bool is_vec = is_vector(obj1);
+	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
+
+	const bulk_operate *op = get_op(pfun, m1->get_type(), get_scalar_type(po2));
+	if (op == NULL)
+		return R_NilValue;
+
+	dense_matrix::ptr out;
+	if (R_is_real(po2)) {
+		double res;
+		R_get_number<double>(po2, res);
+		out = m1->sapply(AE_operator<double>(*op, res));
+	}
+	else if (R_is_integer(po2)) {
+		int res;
+		R_get_number<int>(po2, res);
+		out = m1->sapply(AE_operator<int>(*op, res));
+	}
+	else {
+		fprintf(stderr, "wrong type of the right input\n");
+		return R_NilValue;
+	}
+
+	if (is_vec)
+		return create_FMR_vector(out, "");
+	else
+		return create_FMR_matrix(out, "");
+}
+
+/*
+ * A wrapper class that perform element-array operation.
+ * This class converts this binary operation into a unary operation.
+ */
+template<class T>
+class EA_operator: public bulk_uoperate
+{
+	const bulk_operate &op;
+	T v;
+public:
+	EA_operator(const bulk_operate &_op, T v): op(_op) {
+		this->v = v;
+		assert(sizeof(v) == op.left_entry_size());
+	}
+
+	virtual void runA(size_t num_eles, const void *in_arr,
+			void *out_arr) const {
+		op.runEA(num_eles, &v, in_arr, out_arr);
+	}
+
+	virtual size_t input_entry_size() const {
+		return op.right_entry_size();
+	}
+
+	virtual size_t output_entry_size() const {
+		return op.output_entry_size();
+	}
+};
+
+RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
+{
+	Rcpp::List obj2(po2);
+	if (is_sparse(obj2)) {
+		fprintf(stderr, "mapply2 doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	bool is_vec = is_vector(obj2);
+	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
+
+	const bulk_operate *op = get_op(pfun, get_scalar_type(po1), m2->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	dense_matrix::ptr out;
+	if (R_is_real(po1)) {
+		double res;
+		R_get_number<double>(po1, res);
+		out = m2->sapply(EA_operator<double>(*op, res));
+	}
+	else if (R_is_integer(po1)) {
+		int res;
+		R_get_number<int>(po1, res);
+		out = m2->sapply(EA_operator<int>(*op, res));
+	}
+	else {
+		fprintf(stderr, "wrong type of the left input\n");
+		return R_NilValue;
+	}
+
 	if (is_vec)
 		return create_FMR_vector(out, "");
 	else
@@ -746,6 +896,7 @@ RcppExport SEXP R_FM_typeof(SEXP pmat)
 	}
 	else {
 		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+		// TODO I think it's better to use get_type()
 		if (mat->is_type<double>())
 			ret[0] = Rcpp::String("double");
 		else if (mat->is_type<int>())

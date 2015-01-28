@@ -376,9 +376,50 @@ fm.mapply2 <- function(FUN, o1, o2)
 		print("o1 has a wrong type")
 		return(NULL)
 	}
-
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashGraphR")
+
 	structure(ret, class=class.name)
+}
+
+fm.ele.wise.op <- function(FUN, o1, o2)
+{
+	stopifnot(!is.null(FUN))
+	stopifnot(!is.null(o1) && !is.null(o2))
+	stopifnot(class(FUN) == "fm.bo")
+
+	# This might be the case that o2 is a scalar R variable.
+	if (class(o2) != "fmV" && class(o2) != "fm") {
+		class.name <- "";
+		if (class(o1) == "fmV")
+			class.name <- "fmV"
+		else if (class(o1) == "fm")
+			class.name <- "fm"
+		else {
+			print("o1 has a wrong type")
+			return(NULL)
+		}
+		# TODO this isn't a very general solution.
+		# Can we implement this with sapply?
+		ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashGraphR")
+		structure(ret, class=class.name)
+	}
+	else if (class(o1) != "fmV" && class(o1) != "fm") {
+		class.name <- "";
+		if (class(o2) == "fmV")
+			class.name <- "fmV"
+		else if (class(o2) == "fm")
+			class.name <- "fm"
+		else {
+			print("o2 has a wrong type")
+			return(NULL)
+		}
+		# TODO this isn't a very general solution.
+		# Can we implement this with sapply?
+		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashGraphR")
+		structure(ret, class=class.name)
+	}
+	else
+		fm.mapply2(FUN, o1, o2)
 }
 
 #' Maxima and Minima
@@ -410,42 +451,42 @@ fm.pmax2 <- function(o1, o2)
 
 `+.fm` <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.add, o1, o2)
+	fm.ele.wise.op(fm.bo.add, o1, o2)
 }
 
 `+.fmV` <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.add, o1, o2)
+	fm.ele.wise.op(fm.bo.add, o1, o2)
 }
 
 `-.fm` <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.sub, o1, o2)
+	fm.ele.wise.op(fm.bo.sub, o1, o2)
 }
 
 `-.fmV` <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.sub, o1, o2)
+	fm.ele.wise.op(fm.bo.sub, o1, o2)
 }
 
 `*.fm` <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.mul, o1, o2)
+	fm.ele.wise.op(fm.bo.mul, o1, o2)
 }
 
 `*.fmV` <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.mul, o1, o2)
+	fm.ele.wise.op(fm.bo.mul, o1, o2)
 }
 
 `/.fm` <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.div, o1, o2)
+	fm.ele.wise.op(fm.bo.div, o1, o2)
 }
 
 `/.fmV` <- function(o1, o2)
 {
-	fm.mapply2(fm.bo.div, o1, o2)
+	fm.ele.wise.op(fm.bo.div, o1, o2)
 }
 
 #' Transpose a FlashMatrixR matrix.
