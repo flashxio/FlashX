@@ -189,7 +189,7 @@ test.basic.op <- function(fm.o1, fm.o2, res.type)
 	fm.res <- fm.o1 / fm.o2
 	res <- ro1 / ro2
 	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
-	stopifnot(fm.typeof(fm.res) == res.type)
+	stopifnot(fm.typeof(fm.res) == "double")
 
 	fm.res <- fm.pmin2(fm.o1, fm.o2)
 	res <- pmin(ro1, ro2)
