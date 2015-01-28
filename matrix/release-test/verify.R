@@ -166,6 +166,82 @@ test.MM("integer", "double", "double")
 test.MM("double", "integer", "double")
 test.MM("double", "double", "double")
 
+test.basic.op <- function(fm.o1, fm.o2, res.type)
+{
+	ro1 <- fm.conv.FM2R(fm.o1)
+	ro2 <- fm.conv.FM2R(fm.o2)
+
+	fm.res <- fm.o1 + fm.o2
+	res <- ro1 + ro2
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+
+	fm.res <- fm.o1 - fm.o2
+	res <- ro1 - ro2
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+
+	fm.res <- fm.o1 * fm.o2
+	res <- ro1 * ro2
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+
+	fm.res <- fm.o1 / fm.o2
+	res <- ro1 / ro2
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+
+	fm.res <- fm.pmin2(fm.o1, fm.o2)
+	res <- pmin(ro1, ro2)
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+
+	fm.res <- fm.pmax2(fm.o1, fm.o2)
+	res <- pmax(ro1, ro2)
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+}
+
+print("pair-wise integer-integer vector")
+fm.vec1 <- fm.conv.R2FM(1:2000)
+fm.vec2 <- fm.conv.R2FM(1:2000)
+test.basic.op(fm.vec1, fm.vec2, "integer")
+
+print("pair-wise double-integer vector")
+fm.vec1 <- fm.seq.int(1, 2000, 1)
+fm.vec2 <- fm.conv.R2FM(1:2000)
+test.basic.op(fm.vec1, fm.vec2, "double")
+
+print("pair-wise integer-double vector")
+fm.vec1 <- fm.conv.R2FM(1:2000)
+fm.vec2 <- fm.seq.int(1, 2000, 1)
+test.basic.op(fm.vec1, fm.vec2, "double")
+
+print("pair-wise double-double vector")
+fm.vec1 <- fm.seq.int(1, 2000, 1)
+fm.vec2 <- fm.seq.int(1, 2000, 1)
+test.basic.op(fm.vec1, fm.vec2, "double")
+
+print("pair-wise integer-integer matrix")
+fm.mat1 <- fm.matrix(fm.conv.R2FM(1:2000), 20, 100)
+fm.mat2 <- fm.matrix(fm.conv.R2FM(1:2000), 20, 100)
+test.basic.op(fm.mat1, fm.mat2, "integer")
+
+print("pair-wise double-integer matrix")
+fm.mat1 <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
+fm.mat2 <- fm.matrix(fm.conv.R2FM(1:2000), 20, 100)
+test.basic.op(fm.mat1, fm.mat2, "double")
+
+print("pair-wise integer-double matrix")
+fm.mat1 <- fm.matrix(fm.conv.R2FM(1:2000), 20, 100)
+fm.mat2 <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
+test.basic.op(fm.mat1, fm.mat2, "double")
+
+print("pair-wise double-double matrix")
+fm.mat1 <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
+fm.mat2 <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
+test.basic.op(fm.mat1, fm.mat2, "double")
+
 print("Transpose a matrix")
 fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
 fm.t.mat <- fm.t(fm.mat)
@@ -189,8 +265,6 @@ stopifnot(fm.sum(fm.res) == fg.ecount(fg))
 
 # Test SpMM
 # TODO
-
-# Test on float-point vector/matrix
 
 # Test on a very large dense matrix.
 # convert a large dense matrix in R to FlashMatrixR.
