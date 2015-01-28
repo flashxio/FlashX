@@ -166,6 +166,29 @@ test.MM("integer", "double", "double")
 test.MM("double", "integer", "double")
 test.MM("double", "double", "double")
 
+test.basic.op1 <- function(fm.o1, fm.o2, ro1, ro2, res.type)
+{
+	fm.res <- fm.o1 + fm.o2
+	res <- ro1 + ro2
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+
+	fm.res <- fm.o1 - fm.o2
+	res <- ro1 - ro2
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+
+	fm.res <- fm.o1 * fm.o2
+	res <- ro1 * ro2
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == res.type)
+
+	fm.res <- fm.o1 / fm.o2
+	res <- ro1 / ro2
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == "double")
+}
+
 test.basic.op <- function(fm.o1, fm.o2, res.type)
 {
 	ro1 <- fm.conv.FM2R(fm.o1)
@@ -241,6 +264,36 @@ print("pair-wise double-double matrix")
 fm.mat1 <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
 fm.mat2 <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
 test.basic.op(fm.mat1, fm.mat2, "double")
+
+int.v <- (1:3)[1]
+
+fm.vec <- fm.conv.R2FM(1:2000)
+rvec <- fm.conv.FM2R(fm.vec)
+print("vector-element integer-integer")
+test.basic.op1(fm.vec, int.v, rvec, int.v, "integer")
+print("vector-element integer-double")
+test.basic.op1(fm.vec, 1.0, rvec, 1.0, "double")
+
+fm.vec <- fm.seq.int(1, 2000, 1)
+rvec <- fm.conv.FM2R(fm.vec)
+print("vector-element double-int")
+test.basic.op1(fm.vec, int.v, rvec, int.v, "double")
+print("vector-element double-double")
+test.basic.op1(fm.vec, 1.0, rvec, 1.0, "double")
+
+fm.vec <- fm.conv.R2FM(1:2000)
+rvec <- fm.conv.FM2R(fm.vec)
+print("element-vector integer-integer")
+test.basic.op1(int.v, fm.vec, int.v, rvec, "integer")
+print("element-vector integer-double")
+test.basic.op1(1.0, fm.vec, 1.0, rvec, "double")
+
+fm.vec <- fm.seq.int(1, 2000, 1)
+rvec <- fm.conv.FM2R(fm.vec)
+print("element-vector double-int")
+test.basic.op1(int.v, fm.vec, int.v, rvec, "double")
+print("element-vector double-double")
+test.basic.op1(1.0, fm.vec, 1.0, rvec, "double")
 
 print("Transpose a matrix")
 fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
