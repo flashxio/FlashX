@@ -24,6 +24,20 @@ namespace fm
 {
 
 /**
+ * Here defines the primitive types.
+ */
+enum prim_type
+{
+	P_CHAR,
+	P_SHORT,
+	P_INTEGER,
+	P_LONG,
+	P_FLOAT,
+	P_DOUBLE,
+	NUM_TYPES,
+};
+
+/**
  * This class defines a generic type for a scalar variable.
  * It shouldn't be used in an array because it has a lot of overhead.
  */

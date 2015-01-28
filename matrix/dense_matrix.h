@@ -24,6 +24,8 @@
 
 #include <memory>
 
+#include "generic_type.h"
+
 namespace fm
 {
 
@@ -105,6 +107,17 @@ public:
 	template<class T>
 	bool is_type() const {
 		return sizeof(T) == get_entry_size();
+	}
+
+	prim_type get_type() const {
+		// TODO this is a temporary solution.
+		switch(get_entry_size()) {
+			case 4: return prim_type::P_INTEGER;
+			case 8: return prim_type::P_DOUBLE;
+			default:
+					fprintf(stderr, "wrong type");
+					return prim_type::NUM_TYPES;
+		}
 	}
 
 	/**
