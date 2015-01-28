@@ -5,12 +5,14 @@ print("Test sequence generator")
 fm.vec <- fm.seq.int(1, 10000000, 1)
 vec <- seq.int(1, 10000000, 1)
 stopifnot(sum(fm.conv.FM2R(fm.vec) == vec) == fm.length(fm.vec))
+stopifnot(fm.typeof(fm.vec) == typeof(vec))
 
 print("Test random generator")
 fm.vec <- fm.runif(10000000, -1, 1)
 vec <- fm.conv.FM2R(fm.vec)
 stopifnot(sum(vec >= -1) == fm.length(fm.vec))
 stopifnot(sum(vec <= 1) == fm.length(fm.vec))
+stopifnot(fm.typeof(fm.vec) == typeof(vec))
 
 # Test a FlashMatrixR vector.
 print("convert a FlashMatrixR vector to R vector")
@@ -43,81 +45,135 @@ stopifnot(fm.ncol(fm.mat) == 100)
 mat1 <- fm.conv.FM2R(fm.mat)
 stopifnot(sum(mat1 == mat) == fm.ncol(fm.mat) * fm.nrow(fm.mat))
 
-mat <- matrix(1:2000, 20, 100)
-
 # Test a dense matrix times a vector
-fm.vec <- fm.rep.int(1, fm.ncol(fm.mat))
-vec <- fm.conv.FM2R(fm.vec)
-res <- mat %*% vec
+test.MV <- function(mat, vec, res.type)
+{
+	res <- mat %*% vec
 
-# TODO
-#print("column-wise matrix times a vector")
-#fm.mat <- fm.conv.R2FM(mat, byrow = FALSE)
-#fm.res <- fm.multiply(fm.mat, fm.vec)
-#stopifnot(sum(res[, 0] == fm.conv.FM2R(fm.res)) == fm.length(fm.res))
+	# TODO
+	#print("column-wise matrix times a vector")
+	#fm.mat <- fm.conv.R2FM(mat, byrow = FALSE)
+	#fm.vec <- fm.conv.R2FM(vec)
+	#stopifnot(fm.matrix.layout(fm.mat) == "col")
+	#fm.res <- fm.multiply(fm.mat, fm.vec)
+	#stopifnot(sum(res[, 0] == fm.conv.FM2R(fm.res)) == fm.length(fm.res))
+	#stopifnot(fm.is.vector(res))
+	#stopifnot(fm.length(res) == fm.nrow(fm.mat))
+	#stopifnot(fm.typeof(res) == res.type)
 
-print("Row-wise matrix times a vector")
-fm.mat <- fm.conv.R2FM(mat, byrow = TRUE)
-fm.res <- fm.multiply(fm.mat, fm.vec)
-stopifnot(sum(res[, 1] == fm.conv.FM2R(fm.res)) == fm.length(fm.res))
+	print("Row-wise matrix times a vector")
+	fm.mat <- fm.conv.R2FM(mat, byrow = TRUE)
+	fm.vec <- fm.conv.R2FM(vec)
+	stopifnot(fm.matrix.layout(fm.mat) == "row")
+	fm.res <- fm.multiply(fm.mat, fm.vec)
+	stopifnot(sum(res[, 1] == fm.conv.FM2R(fm.res)) == fm.length(fm.res))
+	stopifnot(fm.is.vector(fm.res))
+	stopifnot(fm.length(fm.res) == fm.nrow(fm.mat))
+	stopifnot(fm.typeof(fm.res) == res.type)
+}
 
-print("a wide dense matrix times a tall dense matrix")
-left.mat <- matrix(1:2000, 20, 100)
-right.mat <- matrix(1:2000, 100, 20)
-res <- left.mat %*% right.mat
+mat <- matrix(1:2000, 20, 100)
+vec <- 1:ncol(mat)
+test.MV(mat, vec, "integer")
 
-#print("Column-wise matrix times a column-wise matrix")
-#fm.left <- fm.conv.R2FM(left.mat, byrow = FALSE)
-#fm.right <- fm.conv.R2FM(right.mat, byrow = FALSE)
-#fm.res <- fm.multiply(fm.left, fm.right)
-#stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+mat <- matrix(1:2000, 20, 100)
+vec <- seq.int(1, ncol(mat), 1)
+test.MV(mat, vec, "double")
 
-#print("Column-wise matrix times a row-wise matrix")
-#fm.left <- fm.conv.R2FM(left.mat, byrow = FALSE)
-#fm.right <- fm.conv.R2FM(right.mat, byrow = TRUE)
-#fm.res <- fm.multiply(fm.left, fm.right)
-#stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+mat <- matrix(seq.int(1, 2000, 1), 20, 100)
+vec <- 1:ncol(mat)
+test.MV(mat, vec, "double")
 
-print("Row-wise matrix times a column-wise matrix")
-fm.left <- fm.conv.R2FM(left.mat, byrow = TRUE)
-fm.right <- fm.conv.R2FM(right.mat, byrow = FALSE)
-fm.res <- fm.multiply(fm.left, fm.right)
-stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+mat <- matrix(seq.int(1, 2000, 1), 20, 100)
+vec <- seq.int(1, ncol(mat), 1)
+test.MV(mat, vec, "double")
 
-#print("Row-wise matrix times a row-wise matrix")
-#fm.left <- fm.conv.R2FM(left.mat, byrow = TRUE)
-#fm.right <- fm.conv.R2FM(right.mat, byrow = TRUE)
-#fm.res <- fm.multiply(fm.left, fm.right)
-#stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+test.MM <- function(left.type, right.type, res.type)
+{
+	if (left.type == "integer")
+		left.mat <- matrix(1:2000, 20, 100)
+	else
+		left.mat <- matrix(seq.int(1, 2000, 1), 20, 100)
+	if (right.type == "integer")
+		right.mat <- matrix(1:2000, 100, 20)
+	else
+		right.mat <- matrix(seq.int(1, 2000, 1), 100, 20)
 
-print("a tall dense matrix times a wide dense matrix")
-left.mat <- matrix(1:2000, 100, 20)
-right.mat <- matrix(1:2000, 20, 10)
-res <- left.mat %*% right.mat
+	print("a wide dense matrix times a tall dense matrix")
+	res <- left.mat %*% right.mat
 
-print("Column-wise matrix times a column-wise matrix")
-fm.left <- fm.conv.R2FM(left.mat, byrow = FALSE)
-fm.right <- fm.conv.R2FM(right.mat, byrow = FALSE)
-fm.res <- fm.multiply(fm.left, fm.right)
-stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+	test.MM1 <- function(left.byrow, right.byrow)
+	{
+		cat("left:", nrow(left.mat), ncol(left.mat), ", right:",
+			nrow(right.mat), ncol(right.mat), "\n")
+		if (left.byrow)
+			left.layout = "row"
+		else
+			left.layout = "col"
+		if (right.byrow)
+			right.layout = "row"
+		else
+			right.layout = "col"
+		fm.left <- fm.conv.R2FM(left.mat, byrow = left.byrow)
+		stopifnot(fm.matrix.layout(fm.left) == left.layout)
+		fm.right <- fm.conv.R2FM(right.mat, byrow = right.byrow)
+		stopifnot(fm.matrix.layout(fm.right) == right.layout)
+		fm.res <- fm.multiply(fm.left, fm.right)
+		stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+		stopifnot(fm.nrow(fm.res) == fm.nrow(fm.left))
+		stopifnot(fm.ncol(fm.res) == fm.ncol(fm.right))
+		stopifnot(fm.typeof(fm.res) == res.type)
+	}
 
-print("Column-wise matrix times a row-wise matrix")
-fm.left <- fm.conv.R2FM(left.mat, byrow = FALSE)
-fm.right <- fm.conv.R2FM(right.mat, byrow = TRUE)
-fm.res <- fm.multiply(fm.left, fm.right)
-stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+	#print("Column-wise matrix times a column-wise matrix")
+	#test.MM1(FALSE, FALSE)
 
-print("Row-wise matrix times a column-wise matrix")
-fm.left <- fm.conv.R2FM(left.mat, byrow = TRUE)
-fm.right <- fm.conv.R2FM(right.mat, byrow = FALSE)
-fm.res <- fm.multiply(fm.left, fm.right)
-stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+	#print("Column-wise matrix times a row-wise matrix")
+	#test.MM1(FALSE, TRUE)
 
-#print("Row-wise matrix times a row-wise matrix")
-#fm.left <- fm.conv.R2FM(left.mat, byrow = TRUE)
-#fm.right <- fm.conv.R2FM(right.mat, byrow = TRUE)
-#fm.res <- fm.multiply(fm.left, fm.right)
-#stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
+	print("Row-wise matrix times a column-wise matrix")
+	test.MM1(TRUE, FALSE)
+
+	#print("Row-wise matrix times a row-wise matrix")
+	#test.MM1(TRUE, TRUE)
+
+	print("a tall dense matrix times a wide dense matrix")
+	if (left.type == "integer")
+		left.mat <- matrix(1:2000, 100, 20)
+	else
+		left.mat <- matrix(seq.int(1, 2000, 1), 100, 20)
+	if (right.type == "integer")
+		right.mat <- matrix(1:2000, 20, 10)
+	else
+		right.mat <- matrix(seq.int(1, 2000, 1), 20, 10)
+	res <- left.mat %*% right.mat
+
+	print("Column-wise matrix times a column-wise matrix")
+	test.MM1(FALSE, FALSE)
+
+	print("Column-wise matrix times a row-wise matrix")
+	test.MM1(FALSE, TRUE)
+
+	print("Row-wise matrix times a column-wise matrix")
+	test.MM1(TRUE, FALSE)
+
+	#print("Row-wise matrix times a row-wise matrix")
+	#test.MM1(TRUE, TRUE)
+}
+
+test.MM("integer", "integer", "integer")
+test.MM("integer", "double", "double")
+test.MM("double", "integer", "double")
+test.MM("double", "double", "double")
+
+print("Transpose a matrix")
+fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
+fm.t.mat <- fm.t(fm.mat)
+mat <- fm.conv.FM2R(fm.mat)
+t.mat <- t(mat)
+stopifnot(sum(t.mat == fm.conv.FM2R(fm.t.mat)) == fm.nrow(fm.mat) * fm.ncol(fm.mat))
+
+# TODO test transpose a sparse matrix.
 
 # Test on a sparse matrix
 print("load sparse matrix")
