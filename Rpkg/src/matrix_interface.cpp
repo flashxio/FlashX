@@ -191,17 +191,25 @@ dense_matrix::ptr create_dense_matrix(size_t nrow, size_t ncol,
 	return m;
 }
 
+template<class EntryType>
+dense_matrix::ptr create_vector(size_t length, EntryType initv)
+{
+	// TODO let's just use in-memory dense matrix first.
+	typename mem_vector<EntryType>::ptr v = mem_vector<EntryType>::create(length);
+	dense_matrix::ptr m = v->get_data();
+	m->set_data(set_const_operate<EntryType>(initv));
+	return m;
+}
+
 RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 {
 	size_t len = REAL(plen)[0];
 
 	dense_matrix::ptr m;
 	if (R_is_real(pinitv))
-		m = create_dense_matrix<double>(len, 1, matrix_layout_t::L_COL,
-				REAL(pinitv)[0]);
+		m = create_vector<double>(len, REAL(pinitv)[0]);
 	else if (R_is_integer(pinitv))
-		m = create_dense_matrix<int>(len, 1, matrix_layout_t::L_COL,
-				INTEGER(pinitv)[0]);
+		m = create_vector<int>(len, INTEGER(pinitv)[0]);
 	else {
 		fprintf(stderr, "The initial value has unsupported type\n");
 		return Rcpp::List();
@@ -250,9 +258,9 @@ RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
 		return R_NilValue;
 	}
 
-	dense_matrix::ptr m = dense_matrix::create(n, 1, sizeof(double),
-			// TODO let's just use in-memory dense matrix first.
-			matrix_layout_t::L_COL, true);
+	// TODO let's just use in-memory dense matrix first.
+	mem_vector<double>::ptr v = mem_vector<double>::create(n);
+	dense_matrix::ptr m = v->get_data();
 	GetRNGstate();
 	m->set_data(rand_set_operate<double>(min, max));
 	PutRNGstate();
@@ -315,9 +323,9 @@ RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 
 	// We need to count the start element.
 	n++;
-	dense_matrix::ptr m = dense_matrix::create(n, 1, sizeof(double),
-			// TODO let's just use in-memory dense matrix first.
-			matrix_layout_t::L_COL, true);
+	// TODO let's just use in-memory dense matrix first.
+	mem_vector<double>::ptr v = mem_vector<double>::create(n);
+	dense_matrix::ptr m = v->get_data();
 	m->set_data(seq_set_operate<double>(n, from, by));
 	return create_FMR_vector(m, "");
 }
