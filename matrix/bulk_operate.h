@@ -167,9 +167,13 @@ class basic_ops_impl: public basic_ops
 		}
 	};
 
+	// Division is special. Its output should be float point.
+	// Therefore, we convert both input values to float point.
 	struct divide {
-		ResType operator()(const LeftType &e1, const RightType &e2) {
-			return e1 / e2;
+		double operator()(const LeftType &e1, const RightType &e2) {
+			double d1 = e1;
+			double d2 = e2;
+			return d1 / d2;
 		}
 	};
 
@@ -200,7 +204,7 @@ class basic_ops_impl: public basic_ops
 	bulk_operate_impl<add, LeftType, RightType, ResType> add_op;
 	bulk_operate_impl<sub, LeftType, RightType, ResType> sub_op;
 	bulk_operate_impl<multiply, LeftType, RightType, ResType> mul_op;
-	bulk_operate_impl<divide, LeftType, RightType, ResType> div_op;
+	bulk_operate_impl<divide, LeftType, RightType, double> div_op;
 	bulk_operate_impl<min, LeftType, RightType, ResType> min_op;
 	bulk_operate_impl<max, LeftType, RightType, ResType> max_op;
 	bulk_operate_impl<pow, LeftType, RightType, ResType> pow_op;
