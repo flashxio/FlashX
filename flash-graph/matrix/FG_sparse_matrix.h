@@ -44,91 +44,24 @@ public:
 	}
 };
 
-class adj_get_edge_iter
-{
-public:
-	typedef int value_type;
-
-	class iterator {
-		edge_seq_iterator it;
-	public:
-		iterator(const page_vertex &v, edge_type type): it(
-				v.get_neigh_seq_it(type, 0, v.get_num_edges(type))) {
-		}
-
-		bool has_next() {
-			return it.has_next();
-		}
-
-		std::pair<vertex_id_t, int> next() {
-			return std::pair<vertex_id_t, int>(it.next(), 1);
-		}
-	};
-
-	iterator operator()(const page_vertex &v, edge_type type) const {
-		return iterator(v, type);
-	}
-};
-
-template<class T>
-class general_get_edge_iter
-{
-	static safs::page_byte_array::seq_const_iterator<T> get_data_iterator(
-			const page_vertex &v, edge_type type) {
-		if (v.is_directed())
-			return ((const page_directed_vertex &) v).get_data_seq_it<T>(type);
-		else
-			return ((const page_undirected_vertex &) v).get_data_seq_it<T>();
-	}
-public:
-	typedef T value_type;
-
-	class iterator {
-		edge_seq_iterator n_it;
-		safs::page_byte_array::seq_const_iterator<T> d_it;
-	public:
-		iterator(const page_vertex &v, edge_type type): n_it(
-				v.get_neigh_seq_it(type, 0, v.get_num_edges(type))), d_it(
-				get_data_iterator(v, type)) {
-		}
-
-		bool has_next() {
-			return n_it.has_next();
-		}
-
-		std::pair<vertex_id_t, T> next() {
-			return std::pair<vertex_id_t, T>(n_it.next(), d_it.next());
-		}
-	};
-
-	iterator operator()(const page_vertex &v, edge_type type) {
-		return iterator(v, type);
-	}
-};
-
-inline static edge_type reverse_dir(edge_type type)
-{
-	switch(type) {
-		case IN_EDGE:
-			return OUT_EDGE;
-		case OUT_EDGE:
-			return IN_EDGE;
-		default:
-			ABORT_MSG("wrong edge type");
-	}
-}
-
-/**
+/*
  * The vertex program for sparse matrix vector multiplication
- * on the adjacency matrix.
+ * on the general sparse matrix.
  */
-template<class ResType, class GetEdgeIterator>
+template<class ResType, class MatEntryType>
 class SPMV_vertex_program: public vertex_program_impl<matrix_vertex>
 {
 	edge_type type;
 	const FG_vector<ResType> &input;
 	FG_vector<ResType> &output;
-	GetEdgeIterator get_edge_iterator;
+
+	static safs::page_byte_array::seq_const_iterator<MatEntryType> get_data_iterator(
+			const page_vertex &v, edge_type type) {
+		if (v.is_directed())
+			return ((const page_directed_vertex &) v).get_data_seq_it<MatEntryType>(type);
+		else
+			return ((const page_undirected_vertex &) v).get_data_seq_it<MatEntryType>();
+	}
 public:
 	SPMV_vertex_program(edge_type type, const FG_vector<ResType> &_input,
 			FG_vector<ResType> &_output): input(_input), output(_output) {
@@ -136,19 +69,49 @@ public:
 	}
 
 	virtual void run(compute_vertex &, const page_vertex &vertex) {
-		typename GetEdgeIterator::iterator it = get_edge_iterator(vertex,
-				type);
+		edge_seq_iterator it = vertex.get_neigh_seq_it(type, 0,
+				vertex.get_num_edges(type));
+		safs::page_byte_array::seq_const_iterator<MatEntryType> d_it
+			= get_data_iterator(vertex, type);
 		ResType w = 0;
 		while (it.has_next()) {
-			std::pair<vertex_id_t,typename GetEdgeIterator::value_type> p
-				= it.next();
-			w += input.get(p.first) * p.second;
+			vertex_id_t neigh_id = it.next();
+			MatEntryType val = d_it.next();
+			w += input.get(neigh_id) * val;
 		}
 		output.set(vertex.get_id(), w);
 	}
 };
 
-template<class ResType, class GetEdgeIterator>
+/*
+ * The vertex program for sparse matrix vector multiplication
+ * on the adjacency matrix.
+ */
+template<class ResType>
+class SPMV_vertex_program<ResType, empty_data>: public vertex_program_impl<matrix_vertex>
+{
+	edge_type type;
+	const FG_vector<ResType> &input;
+	FG_vector<ResType> &output;
+public:
+	SPMV_vertex_program(edge_type type, const FG_vector<ResType> &_input,
+			FG_vector<ResType> &_output): input(_input), output(_output) {
+		this->type = type;
+	}
+
+	virtual void run(compute_vertex &, const page_vertex &vertex) {
+		edge_seq_iterator it = vertex.get_neigh_seq_it(type, 0,
+				vertex.get_num_edges(type));
+		ResType w = 0;
+		while (it.has_next()) {
+			vertex_id_t neigh_id = it.next();
+			w += input.get(neigh_id);
+		}
+		output.set(vertex.get_id(), w);
+	}
+};
+
+template<class ResType, class MatEntryType>
 class SPMV_vertex_program_creater: public vertex_program_creater
 {
 	const FG_vector<ResType> &input;
@@ -162,144 +125,12 @@ public:
 
 	vertex_program::ptr create() const {
 		return vertex_program::ptr(
-				new SPMV_vertex_program<ResType, GetEdgeIterator>(etype,
+				new SPMV_vertex_program<ResType, MatEntryType>(etype,
 					input, output));
 	}
 };
 
-/**
- * The vertex program that groups rows or columns of a sparse matrix
- * and aggregates rows or columns in each group.
- */
-template<class AggOp, class GetEdgeIterator>
-class groupby_vertex_program: public vertex_program_impl<matrix_vertex>
-{
-public:
-	typedef std::map<int, typename FG_vector<AggOp>::ptr> agg_map_t;
-
-private:
-	edge_type row_type;
-	bool row_wise;
-	const FG_vector<int> &labels;
-	agg_map_t &agg_results;
-	GetEdgeIterator get_edge_iterator;
-	int res_length;
-public:
-	groupby_vertex_program(edge_type row_type, bool row_wise,
-			const FG_vector<int> &_labels,
-			agg_map_t &_agg_results): labels(_labels), agg_results(_agg_results) {
-		this->row_type = row_type;
-		this->row_wise = row_wise;
-		assert(!agg_results.empty());
-		res_length = agg_results.begin()->second->get_size();
-	}
-
-	edge_type get_edge_type() const {
-		if (row_wise)
-			return row_type;
-		else
-			return reverse_dir(row_type);
-	}
-
-	template<class T>
-	void aggregate(int label, vertex_id_t id, T v) {
-		typename agg_map_t::const_iterator it = agg_results.find(label);
-		assert(it != agg_results.end());
-		it->second->get(id) += v;
-	}
-
-	virtual void run(compute_vertex &, const page_vertex &vertex) {
-		// TODO we should only start vertices that represent the rows or columns.
-		if (vertex.get_id() >= labels.get_size())
-			return;
-
-		typename GetEdgeIterator::iterator it
-			= get_edge_iterator(vertex, get_edge_type());
-		assert(labels.get_size() > vertex.get_id());
-		int label = labels.get(vertex.get_id());
-		while (it.has_next()) {
-			std::pair<vertex_id_t, typename GetEdgeIterator::value_type> p
-				= it.next();
-			vertex_id_t id = p.first;
-			if (id >= res_length)
-				break;
-			aggregate(label, id, p.second);
-			it.next();
-		}
-	}
-};
-
-template<class AggOp, class GetEdgeIterator>
-class groupby_vertex_program_creater: public vertex_program_creater
-{
-	typedef typename groupby_vertex_program<AggOp, GetEdgeIterator>::agg_map_t agg_map_t;
-	edge_type row_type;
-	bool row_wise;
-	const FG_vector<int> &labels;
-	agg_map_t &agg_results;
-public:
-	groupby_vertex_program_creater(edge_type row_type, bool row_wise,
-			const FG_vector<int> &_labels, agg_map_t &_agg_results): labels(
-				_labels), agg_results(_agg_results) {
-		this->row_type = row_type;
-		this->row_wise = row_wise;
-	}
-
-	vertex_program::ptr create() const {
-		return vertex_program::ptr(
-				new groupby_vertex_program<AggOp, GetEdgeIterator>(
-					row_type, row_wise, labels, agg_results));
-	}
-};
-
-template<class Func, class GetEdgeIterator>
-class apply_vertex_program: public vertex_program_impl<matrix_vertex>
-{
-	Func &func;
-	edge_type etype;
-	size_t nrow;
-	size_t ncol;
-	GetEdgeIterator get_edge_iterator;
-public:
-	apply_vertex_program(edge_type etype, size_t nrow, size_t ncol,
-			Func &_func): func(_func) {
-		this->etype = etype;
-		this->nrow = nrow;
-		this->ncol = ncol;
-	}
-
-	virtual void run(compute_vertex &, const page_vertex &vertex) {
-		if (vertex.get_id() >= nrow)
-			return;
-		typename GetEdgeIterator::iterator it
-			= get_edge_iterator(vertex, etype);
-		func(vertex.get_id(), it, ncol);
-	}
-};
-
-template<class Func, class GetEdgeIterator>
-class apply_vertex_program_creater: public vertex_program_creater
-{
-	Func &func;
-	edge_type etype;
-	size_t nrow;
-	size_t ncol;
-public:
-	apply_vertex_program_creater(edge_type etype, size_t nrow, size_t ncol,
-			Func &_func): func(_func) {
-		this->etype = etype;
-		this->nrow = nrow;
-		this->ncol = ncol;
-	}
-
-	vertex_program::ptr create() const {
-		return vertex_program::ptr(
-				new apply_vertex_program<Func, GetEdgeIterator>(etype,
-					nrow, ncol, func));
-	}
-};
-
-template<class GetEdgeIterator>
+template<class EntryType>
 class FG_sparse_matrix
 {
 	size_t nrow;
@@ -326,10 +157,10 @@ protected:
 		this->ncol = graph->get_num_vertices();
 	}
 public:
-	typedef std::shared_ptr<FG_sparse_matrix<GetEdgeIterator> > ptr;
+	typedef std::shared_ptr<FG_sparse_matrix<EntryType> > ptr;
 
 	static ptr create(FG_graph::ptr fg) {
-		return ptr(new FG_sparse_matrix<GetEdgeIterator>(fg));
+		return ptr(new FG_sparse_matrix<EntryType>(fg));
 	}
 
 	void resize(size_t nrow, size_t ncol) {
@@ -346,77 +177,8 @@ public:
 		assert(output.get_size() == get_num_rows());
 		graph->start_all(vertex_initializer::ptr(),
 				vertex_program_creater::ptr(
-					new SPMV_vertex_program_creater<T, GetEdgeIterator>(
+					new SPMV_vertex_program_creater<T, EntryType>(
 						etype, input, output)));
-		graph->wait4complete();
-	}
-
-	/**
-	 * Group rows or columns based on labels and compute aggregation info
-	 * of each group in each column or row. It returns a Kxn dense matrix
-	 * where K is the number of groups and n is the number of columns or
-	 * rows.
-	 */
-	template<class AggOp>
-	void group_by(const FG_vector<int> &labels, bool row_wise,
-			std::map<int, typename FG_vector<AggOp>::ptr> &agg_results) {
-		std::set<int> set;
-		labels.unique(set);
-		vsize_t vec_size;
-		if (row_wise) {
-			assert(labels.get_size() == get_num_rows());
-			vec_size = get_num_cols();
-		}
-		else {
-			assert(labels.get_size() == get_num_cols());
-			vec_size = get_num_rows();
-		}
-		BOOST_FOREACH(int label, set) {
-			agg_results.insert(std::pair<int, typename FG_vector<AggOp>::ptr>(
-						label, FG_vector<AggOp>::create(vec_size)));
-		}
-		graph->start_all(vertex_initializer::ptr(),
-				vertex_program_creater::ptr(
-					new groupby_vertex_program_creater<AggOp, GetEdgeIterator>(
-						etype, row_wise, labels, agg_results)));
-		graph->wait4complete();
-	}
-
-	void group_by_mean(const FG_vector<int> &labels, bool row_wise,
-			std::map<int, FG_vector<double>::ptr> &agg_results) {
-		group_by<double>(labels, row_wise, agg_results);
-
-		count_map<int> cmap;
-		labels.count_unique(cmap);
-
-		typedef std::map<int, typename FG_vector<double>::ptr> sum_map_t;
-		BOOST_FOREACH(typename sum_map_t::value_type v, agg_results) {
-			int label = v.first;
-			int count = cmap.get(label);
-			typename FG_vector<double>::ptr sum = v.second;
-			for (size_t i = 0; i < sum->get_size(); i++)
-				sum->set(i, sum->get(i) / count);
-		}
-	}
-
-	template<class Func>
-	void apply(bool row_wise, Func &func) const {
-		edge_type etype;
-		size_t nrow, ncol;
-		if (row_wise) {
-			etype = this->etype;
-			nrow = this->nrow;
-			ncol = this->ncol;
-		}
-		else {
-			etype = reverse_dir(this->etype);
-			nrow = this->ncol;
-			ncol = this->nrow;
-		}
-		graph->start_all(vertex_initializer::ptr(),
-				vertex_program_creater::ptr(
-					new apply_vertex_program_creater<Func, GetEdgeIterator>(
-						etype, nrow, ncol, func)));
 		graph->wait4complete();
 	}
 
@@ -428,10 +190,10 @@ public:
 		return ncol;
 	}
 
-	typename FG_sparse_matrix<GetEdgeIterator>::ptr transpose() const {
-		typename FG_sparse_matrix<GetEdgeIterator>::ptr t
-			= typename FG_sparse_matrix<GetEdgeIterator>::ptr(
-					new FG_sparse_matrix<GetEdgeIterator>());
+	typename FG_sparse_matrix<EntryType>::ptr transpose() const {
+		typename FG_sparse_matrix<EntryType>::ptr t
+			= typename FG_sparse_matrix<EntryType>::ptr(
+					new FG_sparse_matrix<EntryType>());
 		if (this->etype == IN_EDGE)
 			t->etype = OUT_EDGE;
 		else if (this->etype == OUT_EDGE)
@@ -445,7 +207,7 @@ public:
 	}
 };
 
-typedef FG_sparse_matrix<adj_get_edge_iter> FG_adj_matrix;
+typedef FG_sparse_matrix<empty_data> FG_adj_matrix;
 
 }
 

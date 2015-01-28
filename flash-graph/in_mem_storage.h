@@ -70,6 +70,8 @@ public:
 		free(graph_data);
 	}
 
+	void dump(const std::string &file) const;
+
 	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 
 	friend class in_mem_io;

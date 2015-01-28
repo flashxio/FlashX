@@ -24,6 +24,7 @@
 
 #include "FGlib.h"
 #include "ts_graph.h"
+#include "matrix/FG_sparse_matrix.h"
 
 using namespace fg;
 
@@ -618,6 +619,31 @@ void run_bfs(FG_graph::ptr graph, int argc, char* argv[])
 			start_vertex, num_vertices, edge);
 }
 
+void run_spmv(FG_graph::ptr graph, int argc, char* argv[])
+{
+	int opt;
+	FG_adj_matrix::ptr m = FG_adj_matrix::create(graph);
+	while ((opt = getopt(argc, argv, "t")) != -1) {
+		switch (opt) {
+			case 't':
+				m = m->transpose();
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	FG_vector<double>::ptr in = FG_vector<double>::create(m->get_num_cols());
+	in->init(1);
+	FG_vector<double>::ptr out = FG_vector<double>::create(m->get_num_rows());
+	m->multiply<double>(*in, *out);
+	printf("the graph has %ld vertices and %ld edges\n",
+			graph->get_graph_header().get_num_vertices(),
+			graph->get_graph_header().get_num_edges());
+	printf("SpMV returns %lf\n", out->sum());
+}
+
 std::string supported_algs[] = {
 	"cycle_triangle",
 	"triangle",
@@ -634,6 +660,7 @@ std::string supported_algs[] = {
 	"betweenness",
 	"overlap",
 	"bfs",
+	"spmv",
 };
 int num_supported = sizeof(supported_algs) / sizeof(supported_algs[0]);
 
@@ -679,14 +706,20 @@ void print_usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "cycle_triangle\n");
 	fprintf(stderr, "-f: run the fast implementation\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "wcc\n");
 	fprintf(stderr, "-s: run wcc synchronously\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "overlap vertex_file\n");
 	fprintf(stderr, "-o output: the output file\n");
 	fprintf(stderr, "-t threshold: the threshold for printing the overlaps\n");
+	fprintf(stderr, "\n");
 	fprintf(stderr, "bfs\n");
 	fprintf(stderr, "-e edge type: the type of edge to traverse (IN, OUT, BOTH)\n");
 	fprintf(stderr, "-s vertex id: the vertex where the BFS starts\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "spmv\n");
+	fprintf(stderr, "-t: transpose the sparse matrix.\n");
 
 	fprintf(stderr, "supported graph algorithms:\n");
 	for (int i = 0; i < num_supported; i++)
@@ -766,6 +799,9 @@ int main(int argc, char *argv[])
 	}
 	else if (alg == "bfs") {
 		run_bfs(graph, argc, argv);
+	}
+	else if (alg == "spmv") {
+		run_spmv(graph, argc, argv);
 	}
 	else {
 		fprintf(stderr, "\n[ERROR]: Unknown algorithm '%s'!\n", alg.c_str());

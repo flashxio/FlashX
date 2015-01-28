@@ -152,6 +152,25 @@ fg.get.graph <- function(graph.name)
 		structure(ret, class="fg")
 }
 
+#' Export graph image.
+#'
+#' This function exports a graph image in FlashGraphR to the local filesystem.
+#'
+#' @param graph The FlashGraphR object
+#' @param graph.file The graph file in the local filesystem to which
+#' the adjacency lists of the graph is exported to.
+#' @param index.file The index file in the local filesystem to which
+#' the index of the graph is exported to.
+#' @return true if the graph is exported to the local filesystem correctly;
+#' false, otherwise.
+fg.export.graph <- function(graph, graph.file, index.file)
+{
+	stopifnot(!is.null(graph))
+	stopifnot(class(graph) == "fg")
+	.Call("R_FG_export_graph", graph, graph.file, index.file,
+		  PACKAGE="FlashGraphR")
+}
+
 #' Graph information
 #'
 #' Functions for providing the basic information of a graph.
@@ -607,22 +626,22 @@ fg.multiply.matrix <- function(graph, m, transpose=FALSE)
 #' D. Calvetti and L. Reichel and D. C. Sorensen: An Implicitly Restarted
 #' Lanczos method for Large Symmetric Eigenvalue problems, Jounral of ETNA,
 #' 1994.
-fg.eigen <- function(graph, which="LM", nev=1, ncv=2)
+fg.eigen <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 	stopifnot(!graph$directed)
 	.Call("R_FG_eigen_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  PACKAGE="FlashGraphR")
+		  as.double(tol), PACKAGE="FlashGraphR")
 }
 
-fg.SVD <- function(graph, which="LM", nev=1, ncv=2)
+fg.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
 
 	ret <- .Call("R_FG_SVD_uw", graph, which, as.integer(nev), as.integer(ncv),
-		  "LS", PACKAGE="FlashGraphR")
+		  "LS", as.double(tol), PACKAGE="FlashGraphR")
 
 	norm.col <- function(x)
 	{
@@ -683,7 +702,7 @@ fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 	stopifnot(!is.null(fg))
 	stopifnot(class(fg) == "fg")
 	.Call("R_FG_compute_AcD_uw", fg, which.eigen, as.integer(num.eigen),
-		  as.integer(num.eigen * 2), as.double(c), PACKAGE="FlashGraphR")
+		  as.integer(num.eigen * 2), as.double(c), as.double(tol), PACKAGE="FlashGraphR")
 }
 
 fg.ASE.igraph <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),

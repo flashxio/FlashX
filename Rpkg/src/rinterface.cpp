@@ -528,6 +528,27 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 		return create_FGR_obj(fg, graph_name);
 }
 
+RcppExport SEXP R_FG_export_graph(SEXP pgraph, SEXP pgraph_file, SEXP pindex_file)
+{
+	FG_graph::ptr fg = R_FG_get_graph(pgraph);
+	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
+	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
+
+	Rcpp::LogicalVector ret(1);
+	if (!fg->is_in_mem()) {
+		fprintf(stderr, "currently we only support exporting in-mem graphs\n");
+		ret[0] = false;
+	}
+	else {
+		in_mem_graph::ptr graph_data = fg->get_graph_data();
+		vertex_index::ptr index_data = fg->get_index_data();
+		graph_data->dump(graph_file);
+		index_data->dump(index_file);
+		ret[0] = true;
+	}
+	return ret;
+}
+
 static FG_graph::ptr construct_fg_graph(utils::edge_graph::ptr edge_g,
 		const std::string &graph_name, int num_threads)
 {
@@ -951,11 +972,11 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 		out_vec = multiply_v<FG_adj_matrix>(fg, transpose, in_vec);
 	// I assume the edge weight is integer.
 	else if (fg->get_graph_header().get_edge_data_size() == 4)
-		out_vec = multiply_v<FG_sparse_matrix<general_get_edge_iter<int32_t> > >(
+		out_vec = multiply_v<FG_sparse_matrix<int32_t> >(
 				fg, transpose, in_vec);
 	// I assume the edge weight is double
 	else if (fg->get_graph_header().get_edge_data_size() == 8)
-		out_vec = multiply_v<FG_sparse_matrix<general_get_edge_iter<double> > >(
+		out_vec = multiply_v<FG_sparse_matrix<double> >(
 				fg, transpose, in_vec);
 	else {
 		fprintf(stderr, "wrong edge weight size: %d\n",
@@ -1043,7 +1064,8 @@ SEXP output_eigen_pairs(const std::vector<eigen_pair_t> &eigen_pairs)
 /*
  * Compute eigen value/vector on an unweighted adjacency matrix.
  */
-RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
+RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
+		SEXP ptol)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	if (fg->get_graph_header().is_directed_graph())
@@ -1053,9 +1075,10 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
 	std::string which = CHAR(STRING_ELT(pwhich, 0));
 	int nev = INTEGER(pnev)[0];
 	int ncv = INTEGER(pncv)[0];
+	double tol = REAL(ptol)[0];
 
 	std::vector<eigen_pair_t> eigen_pairs;
-	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, eigen_pairs);
+	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, tol, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
 	return output_eigen_pairs(eigen_pairs);
@@ -1065,16 +1088,17 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv)
  * Compute the eigenvalues and eigenvectors of A + c * D.
  */
 RcppExport SEXP R_FG_compute_AcD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
-		SEXP pc)
+		SEXP pc, SEXP ptol)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	std::string which = CHAR(STRING_ELT(pwhich, 0));
 	int nev = INTEGER(pnev)[0];
 	int ncv = INTEGER(pncv)[0];
 	double c = REAL(pc)[0];
+	double tol = REAL(ptol)[0];
 
 	std::vector<eigen_pair_t> eigen_pairs;
-	compute_AcD_uw(fg, c, ncv, nev, which, eigen_pairs);
+	compute_AcD_uw(fg, c, ncv, nev, which, tol, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
 
@@ -1082,7 +1106,7 @@ RcppExport SEXP R_FG_compute_AcD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pnc
 }
 
 RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
-		SEXP ptype)
+		SEXP ptype, SEXP ptol)
 {
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	FG_adj_matrix::ptr matrix = FG_adj_matrix::create(fg);
@@ -1090,8 +1114,9 @@ RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
 	std::string type = CHAR(STRING_ELT(ptype, 0));
 	int nev = INTEGER(pnev)[0];
 	int ncv = INTEGER(pncv)[0];
+	double tol = REAL(ptol)[0];
 	std::vector<eigen_pair_t> eigen_pairs;
-	compute_SVD<FG_adj_matrix>(matrix, ncv, nev, which, type, eigen_pairs);
+	compute_SVD<FG_adj_matrix>(matrix, ncv, nev, which, type, tol, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
 

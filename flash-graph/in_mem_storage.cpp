@@ -352,4 +352,16 @@ file_io_factory::shared_ptr in_mem_graph::create_io_factory() const
 				graph_file_id, graph_file_name));
 }
 
+void in_mem_graph::dump(const std::string &file) const
+{
+	FILE *f = fopen(file.c_str(), "w");
+	if (f == NULL) {
+		perror("fopen");
+		abort();
+	}
+	BOOST_VERIFY(fwrite(graph_data, graph_size, 1, f));
+
+	fclose(f);
+}
+
 }

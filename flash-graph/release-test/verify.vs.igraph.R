@@ -226,7 +226,7 @@ test.eigen.directed <- function(fg, ig)
 
 	# test SVD
 	print("test SVD")
-	fg.res <- fg.SVD(fg, which="LM", nev=5, ncv=10)
+	fg.res <- fg.SVD(fg, which="LM", nev=5, ncv=10, tol=1.0e-12)
 	check.svd(ig.matrix, fg.res)
 
 	# run ASE on the largest connected component
@@ -276,7 +276,7 @@ test.eigen.undirected <- function(fg, ig)
 
 	# test eigen
 	print("test eigen")
-	fg.res <- fg.eigen(fg, which="LM", nev=5, ncv=10)
+	fg.res <- fg.eigen(fg, which="LM", nev=5, ncv=10, tol=1.0e-12)
 	check.eigen(ig.matrix, fg.res)
 
 	#test ASE

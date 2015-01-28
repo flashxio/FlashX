@@ -140,14 +140,15 @@ class FG_vector
 		return std::equal(this->eles.begin(), this->eles.end(), other->eles.begin());
 	}
 
-	void init_rand(long max, unsigned int seed = 0) {
+	void init_rand(long max = std::numeric_limits<T>::max(),
+			unsigned int seed = 0) {
 		if (seed > 0)
 			srandom(seed);
 		if (max >= std::numeric_limits<T>::max())
 			max = std::numeric_limits<T>::max();
 #pragma omp parallel for
 		for (size_t i = 0; i < eles.size(); i++)
-			eles[i] = random();
+			eles[i] = random() % max;
 	}
 
 	/**
@@ -385,6 +386,11 @@ class FG_vector
 			f << get(i) << " ";
 		}
 		f.close();
+	}
+
+	void neg_in_place() {
+		for (size_t i = 0; i < get_size(); i++)
+			eles[i] = -eles[i];
 	}
 
 	/**
