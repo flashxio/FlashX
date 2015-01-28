@@ -63,6 +63,12 @@ public:
 	 */
 	virtual void runAE(size_t num_eles, const void *left_arr,
 			const void *right, void *output_arr) const = 0;
+	/*
+	 * This performs operations on the left element array and the right array,
+	 * and stores the result on the output array.
+	 */
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const = 0;
 
 	/*
 	 * This performs aggregation on the input array and stores the result
@@ -98,6 +104,16 @@ public:
 		OpType op;
 		for (size_t i = 0; i < num_eles; i++)
 			output_arr[i] = op(left_arr[i], entry);
+	}
+
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr1, void *output_arr1) const {
+		LeftType entry = *(const LeftType *) left;
+		const RightType *right_arr = (const RightType *) right_arr1;
+		ResType *output_arr = (ResType *) output_arr1;
+		OpType op;
+		for (size_t i = 0; i < num_eles; i++)
+			output_arr[i] = op(entry, right_arr[i]);
 	}
 
 	virtual void runA(size_t num_eles, const void *left_arr1,
