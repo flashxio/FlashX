@@ -54,7 +54,10 @@ fm.get.matrix <- function(fg)
 	stopifnot(class(fg) == "fg")
 	stopifnot(fg.exist.graph(fg$name))
 	ret <- .Call("R_FM_get_matrix_fg", fg, PACKAGE="FlashGraphR")
-	structure(ret, class="fm")
+	if (!is.null(ret))
+		structure(ret, class="fm")
+	else
+		NULL
 }
 
 #' Create a FlashMatrixR vector with replicated elements.
@@ -69,7 +72,10 @@ fm.rep.int <- function(x, times)
 	stopifnot(is.vector(x) && is.atomic(x))
 	ret <- .Call("R_FM_create_vector", as.numeric(times), x,
 				 PACKAGE="FlashGraphR")
-	structure(ret, class="fmV")
+	if (!is.null(ret))
+		structure(ret, class="fmV")
+	else
+		NULL
 }
 
 #' Create a FlashMatrixR vector with a sequence of numbers.
@@ -84,7 +90,10 @@ fm.seq.int <- function(from, to, by)
 {
 	ret <- .Call("R_FM_create_seq", from, to, by,
 				 PACKAGE="FlashGraphR")
-	structure(ret, class="fmV")
+	if (!is.null(ret))
+		structure(ret, class="fmV")
+	else
+		NULL
 }
 
 #' Create a FlashMatrixR vector with uniformly random numbers.
@@ -98,7 +107,10 @@ fm.runif <- function(n, min=0, max=1)
 {
 	ret <- .Call("R_FM_create_rand", n, min, max,
 				 PACKAGE="FlashGraphR")
-	structure(ret, class="fmV")
+	if (!is.null(ret))
+		structure(ret, class="fmV")
+	else
+		NULL
 }
 
 #' Convert a regular R object to a FlashMatrixR object.
@@ -120,12 +132,16 @@ fm.conv.R2FM <- function(obj, byrow=FALSE)
 
 	if (is.vector(obj)) {
 		ret <- .Call("R_FM_conv_RVec2FM", obj, PACKAGE="FlashGraphR")
-		structure(ret, class="fmV")
+		class.name <- "fmV"
 	}
 	else {
 		ret <- .Call("R_FM_conv_RMat2FM", obj, as.logical(byrow), PACKAGE="FlashGraphR")
-		structure(ret, class="fm")
+		class.name <- "fm"
 	}
+	if (!is.null(ret))
+		structure(ret, class=class.name)
+	else
+		NULL
 }
 
 #' Convert a FlashMatrixR object to a regular R object
@@ -164,7 +180,10 @@ fm.matrix <- function(data, nrow, ncol, byrow=FALSE)
 	stopifnot(class(data) == "fm" || class(data) == "fmV")
 	ret <- .Call("R_FM_conv_matrix", data, as.numeric(nrow), as.numeric(ncol),
 				 as.logical(byrow), PACKAGE="FlashGraphR")
-	structure(ret, class="fm")
+	if (!is.null(ret))
+		structure(ret, class="fm")
+	else
+		NULL
 }
 
 #' The information of a FlashMatrixR object
@@ -271,23 +290,24 @@ fm.multiply <- function(fm, mat)
 {
 	stopifnot(!is.null(fm) && !is.null(mat))
 	stopifnot(class(fm) == "fm")
-	if (class(mat) == "fmV")
+	if (class(mat) == "fmV") {
 		stopifnot(fm.ncol(fm) == fm.length(mat))
+		class.name <- "fmV"
+	}
 	else {
 		stopifnot(!fm.is.sparse(mat))
 		stopifnot(fm.ncol(fm) == fm.nrow(mat))
+		class.name <- "fm"
 	}
 
 	if (fm.is.sparse(fm))
 		ret <- .Call("R_FM_multiply_sparse", fm, mat, PACKAGE="FlashGraphR")
 	else
 		ret <- .Call("R_FM_multiply_dense", fm, mat, PACKAGE="FlashGraphR")
-	stopifnot(ret != NULL)
-
-	if (class(mat) == "fmV")
-		structure(ret, class="fmV")
+	if (!is.null(ret))
+		structure(ret, class=class.name)
 	else
-		structure(ret, class="fm")
+		NULL
 }
 
 #' Sum of a vector/matrix.
@@ -330,7 +350,10 @@ fm.get.basic.op <- function(name)
 {
 	stopifnot(!is.null(name))
 	ret <- .Call("R_FM_get_basic_op", name, PACKAGE="FlashGraphR")
-	structure(ret, class="fm.bo")
+	if (!is.null(ret))
+		structure(ret, class="fm.bo")
+	else
+		NULL
 }
 
 #' @name fm.basic.op
@@ -377,8 +400,10 @@ fm.mapply2 <- function(FUN, o1, o2)
 		return(NULL)
 	}
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashGraphR")
-
-	structure(ret, class=class.name)
+	if (!is.null(ret))
+		structure(ret, class=class.name)
+	else
+		NULL
 }
 
 fm.ele.wise.op <- function(FUN, o1, o2)
@@ -401,7 +426,10 @@ fm.ele.wise.op <- function(FUN, o1, o2)
 		# TODO this isn't a very general solution.
 		# Can we implement this with sapply?
 		ret <- .Call("R_FM_mapply2_AE", FUN, o1, o2, PACKAGE="FlashGraphR")
-		structure(ret, class=class.name)
+		if (!is.null(ret))
+			structure(ret, class=class.name)
+		else
+			NULL
 	}
 	else if (class(o1) != "fmV" && class(o1) != "fm") {
 		class.name <- "";
@@ -416,7 +444,10 @@ fm.ele.wise.op <- function(FUN, o1, o2)
 		# TODO this isn't a very general solution.
 		# Can we implement this with sapply?
 		ret <- .Call("R_FM_mapply2_EA", FUN, o1, o2, PACKAGE="FlashGraphR")
-		structure(ret, class=class.name)
+		if (!is.null(ret))
+			structure(ret, class=class.name)
+		else
+			NULL
 	}
 	else
 		fm.mapply2(FUN, o1, o2)
@@ -499,7 +530,10 @@ fm.t <- function(m)
 	stopifnot(!is.null(m))
 	stopifnot(class(m) == "fm")
 	ret <- .Call("R_FM_transpose", m, PACKAGE="FlashGraphR")
-	structure(ret, class="fm")
+	if (!is.null(ret))
+		structure(ret, class="fm")
+	else
+		NULL
 }
 
 print.fm <- function(fm)

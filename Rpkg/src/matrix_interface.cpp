@@ -731,7 +731,9 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 		return R_NilValue;
 
 	dense_matrix::ptr out = m1->mapply2(*m2, *op);
-	if (is_vec)
+	if (out == NULL)
+		return R_NilValue;
+	else if (is_vec)
 		return create_FMR_vector(out, "");
 	else
 		return create_FMR_matrix(out, "");
@@ -797,7 +799,9 @@ RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 		return R_NilValue;
 	}
 
-	if (is_vec)
+	if (out == NULL)
+		return R_NilValue;
+	else if (is_vec)
 		return create_FMR_vector(out, "");
 	else
 		return create_FMR_matrix(out, "");
@@ -863,7 +867,9 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 		return R_NilValue;
 	}
 
-	if (is_vec)
+	if (out == NULL)
+		return R_NilValue;
+	else if (is_vec)
 		return create_FMR_vector(out, "");
 	else
 		return create_FMR_matrix(out, "");
