@@ -23,6 +23,8 @@
 
 #include <atomic>
 
+#include <boost/format.hpp>
+
 #include "log.h"
 
 #include "mem_dense_matrix.h"
@@ -33,14 +35,18 @@ namespace fm
 
 const size_t SUB_CHUNK_SIZE = 1024;
 
-class sub_matrix
+/*
+ * This class contains the information of a submatrix in the original matrix.
+ * It is mainly used in inner product.
+ */
+class sub_matrix_info
 {
 	size_t start_row;
 	size_t start_col;
 	size_t nrow;
 	size_t ncol;
 public:
-	sub_matrix(size_t start_row, size_t nrow, size_t start_col,
+	sub_matrix_info(size_t start_row, size_t nrow, size_t start_col,
 			size_t ncol) {
 		this->start_row = start_row;
 		this->start_col = start_col;
@@ -65,12 +71,16 @@ public:
 	}
 };
 
-class sub_col_matrix: public sub_matrix
+/*
+ * This class contains the information of a submatrix in the a column-wise matrix.
+ * It is mainly used in inner product.
+ */
+class sub_col_matrix_info: public sub_matrix_info
 {
 	const mem_col_dense_matrix &m;
 public:
-	sub_col_matrix(size_t start_row, size_t nrow, size_t start_col,
-			size_t ncol, const mem_col_dense_matrix &_m): sub_matrix(
+	sub_col_matrix_info(size_t start_row, size_t nrow, size_t start_col,
+			size_t ncol, const mem_col_dense_matrix &_m): sub_matrix_info(
 				start_row, nrow, start_col, ncol), m(_m) {
 		assert(start_row + nrow <= m.get_num_rows());
 		assert(start_col + ncol <= m.get_num_cols());
@@ -82,12 +92,16 @@ public:
 	}
 };
 
-class sub_row_matrix: public sub_matrix
+/*
+ * This class contains the information of a submatrix in the a row-wise matrix.
+ * It is mainly used in inner product.
+ */
+class sub_row_matrix_info: public sub_matrix_info
 {
 	const mem_row_dense_matrix &m;
 public:
-	sub_row_matrix(size_t start_row, size_t nrow, size_t start_col,
-			size_t ncol, const mem_row_dense_matrix &_m): sub_matrix(
+	sub_row_matrix_info(size_t start_row, size_t nrow, size_t start_col,
+			size_t ncol, const mem_row_dense_matrix &_m): sub_matrix_info(
 				start_row, nrow, start_col, ncol), m(_m) {
 		assert(start_row + nrow <= m.get_num_rows());
 		assert(start_col + ncol <= m.get_num_cols());
@@ -97,6 +111,301 @@ public:
 		return m.get_row(get_start_row() + row) + get_start_col() * m.get_entry_size();
 	}
 };
+
+/*
+ * This class defines a submatrix from a column-wise matrix.
+ * Users can use the submatrix as if it is a normal matrix.
+ */
+class mem_sub_col_dense_matrix: public mem_col_dense_matrix
+{
+	// The data buffer is referenced in the parent class.
+	// but this class also needs to access the data buffer.
+	std::shared_ptr<char> data;
+	std::vector<off_t> orig_col_idxs;
+
+	mem_sub_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
+			std::shared_ptr<char> data,
+			const std::vector<off_t> &col_idxs): mem_col_dense_matrix(nrow, ncol,
+				entry_size, data) {
+		this->orig_col_idxs = col_idxs;
+		this->data = data;
+	}
+public:
+	typedef std::shared_ptr<mem_sub_col_dense_matrix> ptr;
+
+	static ptr create(size_t nrow, size_t ncol, size_t entry_size,
+			std::shared_ptr<char> data, const std::vector<off_t> &col_idxs) {
+		return ptr(new mem_sub_col_dense_matrix(nrow, ncol, entry_size, data,
+					col_idxs));
+	}
+
+	~mem_sub_col_dense_matrix() {
+	}
+
+	virtual dense_matrix::ptr clone() const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error) << "clone() isn't supported in a sub_col_matrix";
+		return dense_matrix::ptr();
+	}
+
+	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error) << "conv2() isn't supported in a sub_col_matrix";
+		return dense_matrix::ptr();
+	}
+
+	virtual void reset_data() {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "reset_data() isn't supported in a sub_col_matrix";
+	}
+	virtual void set_data(const set_operate &op) {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "set_data() isn't supported in a sub_col_matrix";
+	}
+	virtual void par_reset_data() {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "par_reset_data() isn't supported in a sub_col_matrix";
+	}
+	virtual void par_set_data(const set_operate &op) {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "par_set_data() isn't supported in a sub_col_matrix";
+	}
+
+	virtual bool set_cols(const mem_col_dense_matrix &m,
+			const std::vector<off_t> &idxs) {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "set_cols() isn't supported in a sub_col_matrix";
+		return false;
+	}
+	virtual bool set_col(const char *buf, size_t size, size_t col) {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "set_col() isn't supported in a sub_col_matrix";
+		return false;
+	}
+
+	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "get_cols() isn't supported in a sub_col_matrix";
+		return false;
+	}
+
+	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
+			const bulk_operate &op) const;
+	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
+
+	virtual dense_matrix::ptr transpose() const;
+
+	virtual char *get_col(size_t col) {
+		off_t orig_col = orig_col_idxs[col];
+		return data.get() + orig_col * get_num_rows() * get_entry_size();
+	}
+
+	virtual const char *get_col(size_t col) const {
+		off_t orig_col = orig_col_idxs[col];
+		return data.get() + orig_col * get_num_rows() * get_entry_size();
+	}
+};
+
+/*
+ * This class defines a submatrix from a row-wise matrix.
+ * Users can use the submatrix as if it is a normal matrix.
+ */
+class mem_sub_row_dense_matrix: public mem_row_dense_matrix
+{
+	// The data buffer is referenced in the parent class.
+	// but this class also needs to access the data buffer.
+	std::shared_ptr<char> data;
+	std::vector<off_t> orig_row_idxs;
+
+	mem_sub_row_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
+			std::shared_ptr<char> data,
+			const std::vector<off_t> &row_idxs): mem_row_dense_matrix(nrow, ncol,
+				entry_size, data) {
+		this->orig_row_idxs = row_idxs;
+		this->data = data;
+	}
+public:
+	typedef std::shared_ptr<mem_sub_row_dense_matrix> ptr;
+
+	static ptr create(size_t nrow, size_t ncol, size_t entry_size,
+			std::shared_ptr<char> data, const std::vector<off_t> &row_idxs) {
+		return ptr(new mem_sub_row_dense_matrix(nrow, ncol, entry_size, data,
+					row_idxs));
+	}
+
+	~mem_sub_row_dense_matrix() {
+	}
+
+	virtual dense_matrix::ptr clone() const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "clone() isn't supported in a sub_col_matrix";
+		return dense_matrix::ptr();
+	}
+	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "conv2() isn't supported in a sub_col_matrix";
+		return dense_matrix::ptr();
+	}
+
+	virtual void reset_data() {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "reset_data() isn't supported in a sub_col_matrix";
+	}
+	virtual void set_data(const set_operate &op) {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "set_data() isn't supported in a sub_col_matrix";
+	}
+	virtual void par_reset_data() {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "par_reset_data() isn't supported in a sub_col_matrix";
+	}
+	virtual void par_set_data(const set_operate &op) {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "par_set_data() isn't supported in a sub_col_matrix";
+	}
+
+	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
+			const bulk_operate &op) const;
+	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
+
+	virtual dense_matrix::ptr transpose() const;
+
+	char *get_row(size_t row) {
+		size_t orig_row = orig_row_idxs[row];
+		return data.get() + orig_row * get_num_cols() * get_entry_size();
+	}
+
+	const char *get_row(size_t row) const {
+		size_t orig_row = orig_row_idxs[row];
+		return data.get() + orig_row * get_num_cols() * get_entry_size();
+	}
+};
+
+bool mem_sub_col_dense_matrix::aggregate(const bulk_operate &op,
+		scalar_type &res) const
+{
+	if (!verify_aggregate(op, res))
+		return false;
+
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	char *raw_arr = (char *) malloc(res.get_size() * ncol);
+	// TODO parallel
+	for (size_t i = 0; i < ncol; i++)
+		op.runA(nrow, get_col(i), raw_arr + res.get_size() * i);
+	char raw_res[res.get_size()];
+	op.runA(ncol, raw_arr, raw_res);
+	free(raw_arr);
+	res.set_raw(raw_res, res.get_size());
+	return true;
+}
+
+dense_matrix::ptr mem_sub_col_dense_matrix::mapply2(const dense_matrix &m,
+		const bulk_operate &op) const
+{
+	// The same shape and the same data layout.
+	if (!verify_mapply2(m, op))
+		return dense_matrix::ptr();
+
+	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow, ncol,
+			op.output_entry_size());
+	// TODO parallel
+	for (size_t i = 0; i < ncol; i++)
+		op.runAA(nrow, get_col(i), col_m.get_col(i), res->get_col(i));
+	return res;
+}
+
+
+dense_matrix::ptr mem_sub_col_dense_matrix::sapply(const bulk_uoperate &op) const
+{
+	// TODO parallel
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow, ncol,
+			op.output_entry_size());
+	for (size_t i = 0; i < ncol; i++)
+		op.runA(nrow, get_col(i), res->get_col(i));
+	return res;
+}
+
+dense_matrix::ptr mem_sub_col_dense_matrix::transpose() const
+{
+	return mem_sub_row_dense_matrix::create(get_num_cols(), get_num_rows(),
+			get_entry_size(), data, orig_col_idxs);
+}
+
+bool mem_sub_row_dense_matrix::aggregate(const bulk_operate &op,
+		scalar_type &res) const
+{
+	if (!verify_aggregate(op, res))
+		return false;
+
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	char *raw_arr = (char *) malloc(res.get_size() * nrow);
+	// TODO parallel
+	for (size_t i = 0; i < nrow; i++)
+		op.runA(ncol, get_row(i), raw_arr + res.get_size() * i);
+	char raw_res[res.get_size()];
+	op.runA(nrow, raw_arr, raw_res);
+	free(raw_arr);
+	res.set_raw(raw_res, res.get_size());
+	return true;
+}
+
+dense_matrix::ptr mem_sub_row_dense_matrix::mapply2(const dense_matrix &m,
+		const bulk_operate &op) const
+{
+	// The same shape and the same data layout.
+	if (!verify_mapply2(m, op))
+		return false;
+
+	const mem_row_dense_matrix &row_m = (const mem_row_dense_matrix &) m;
+	size_t ncol = this->get_num_cols();
+	size_t nrow = this->get_num_rows();
+	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow, ncol,
+			op.output_entry_size());
+	// TODO parallel
+	for (size_t i = 0; i < nrow; i++)
+		op.runAA(ncol, get_row(i), row_m.get_row(i), res->get_row(i));
+	return res;
+}
+
+dense_matrix::ptr mem_sub_row_dense_matrix::sapply(const bulk_uoperate &op) const
+{
+	// TODO parallel
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(nrow, ncol,
+			op.output_entry_size());
+	for (size_t i = 0; i < nrow; i++)
+		op.runA(ncol, get_row(i), res->get_row(i));
+	return res;
+}
+
+dense_matrix::ptr mem_sub_row_dense_matrix::transpose() const
+{
+	return mem_sub_col_dense_matrix::create(get_num_cols(),
+			get_num_rows(), get_entry_size(), data, orig_row_idxs);
+}
 
 bool mem_dense_matrix::verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
@@ -202,7 +511,7 @@ dense_matrix::ptr mem_col_dense_matrix::inner_prod(const dense_matrix &m,
 
 	char *tmp_res = (char *) malloc(SUB_CHUNK_SIZE * res->get_entry_size());
 	for (size_t k = 0; k < nrow; k += SUB_CHUNK_SIZE) {
-		sub_col_matrix subm(k, std::min(SUB_CHUNK_SIZE, nrow - k), 0, ncol, *this);
+		sub_col_matrix_info subm(k, std::min(SUB_CHUNK_SIZE, nrow - k), 0, ncol, *this);
 		for (size_t i = 0; i < ncol; i++) {
 			for (size_t j = 0; j < m.get_num_cols(); j++) {
 				left_op.runAE(subm.get_num_rows(), subm.get_col(i),
@@ -236,7 +545,7 @@ dense_matrix::ptr mem_col_dense_matrix::par_inner_prod(const dense_matrix &m,
 		char *tmp_res = (char *) malloc(SUB_CHUNK_SIZE * res->get_entry_size());
 #pragma omp for
 		for (size_t k = 0; k < nrow; k += SUB_CHUNK_SIZE) {
-			sub_col_matrix subm(k, std::min(SUB_CHUNK_SIZE, nrow - k), 0, ncol, *this);
+			sub_col_matrix_info subm(k, std::min(SUB_CHUNK_SIZE, nrow - k), 0, ncol, *this);
 			for (size_t i = 0; i < ncol; i++) {
 				for (size_t j = 0; j < m.get_num_cols(); j++) {
 					left_op.runAE(subm.get_num_rows(), subm.get_col(i),
@@ -293,6 +602,20 @@ dense_matrix::ptr mem_col_dense_matrix::sapply(const bulk_uoperate &op) const
 			op.output_entry_size());
 	op.runA(ncol * nrow, data.get(), res->data.get());
 	return res;
+}
+
+dense_matrix::ptr mem_col_dense_matrix::get_cols(const std::vector<off_t> &idxs) const
+{
+	for (size_t i = 0; i < idxs.size(); i++) {
+		if ((size_t) idxs[i] >= get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "a column index is out of bounds\n";
+			return dense_matrix::ptr();
+		}
+	}
+
+	return mem_sub_col_dense_matrix::create(get_num_rows(),
+			idxs.size(), get_entry_size(), data, idxs);
 }
 
 dense_matrix::ptr mem_row_dense_matrix::clone() const
@@ -394,8 +717,8 @@ void mem_row_dense_matrix::inner_prod_wide(const dense_matrix &m,
 	char *tmp_res2 = (char *) malloc(res.get_num_cols() * res.get_entry_size());
 	for (size_t k = 0; k < ncol; k += SUB_CHUNK_SIZE) {
 		size_t sub_ncol = std::min(SUB_CHUNK_SIZE, ncol - k);
-		sub_row_matrix sub_left(0, nrow, k, sub_ncol, *this);
-		sub_col_matrix sub_right(k, sub_ncol, 0, m.get_num_cols(), col_m);
+		sub_row_matrix_info sub_left(0, nrow, k, sub_ncol, *this);
+		sub_col_matrix_info sub_right(k, sub_ncol, 0, m.get_num_cols(), col_m);
 		for (size_t i = 0; i < sub_left.get_num_rows(); i++) {
 			for (size_t j = 0; j < sub_right.get_num_cols(); j++) {
 				left_op.runAA(sub_ncol, sub_left.get_row(i),
@@ -473,8 +796,8 @@ void mem_row_dense_matrix::par_inner_prod_wide(const dense_matrix &m,
 #pragma omp for
 		for (size_t k = 0; k < ncol; k += SUB_CHUNK_SIZE) {
 			size_t sub_ncol = std::min(SUB_CHUNK_SIZE, ncol - k);
-			sub_row_matrix sub_left(0, nrow, k, sub_ncol, *this);
-			sub_col_matrix sub_right(k, sub_ncol, 0, m.get_num_cols(), col_m);
+			sub_row_matrix_info sub_left(0, nrow, k, sub_ncol, *this);
+			sub_col_matrix_info sub_right(k, sub_ncol, 0, m.get_num_cols(), col_m);
 			for (size_t i = 0; i < sub_left.get_num_rows(); i++) {
 				for (size_t j = 0; j < sub_right.get_num_cols(); j++) {
 					left_op.runAA(sub_ncol, sub_left.get_row(i),

@@ -61,6 +61,9 @@ public:
 class mem_row_dense_matrix;
 class mem_col_dense_matrix;
 
+/*
+ * This class defines an in-memory dense matrix with data organized in rows.
+ */
 class mem_row_dense_matrix: public mem_dense_matrix
 {
 	struct deleter {
@@ -70,22 +73,6 @@ class mem_row_dense_matrix: public mem_dense_matrix
 	};
 
 	std::shared_ptr<char> data;
-
-	mem_row_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
-			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
-				entry_size) {
-		this->data = data;
-	}
-
-	mem_row_dense_matrix(size_t nrow, size_t ncol,
-			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
-		if (nrow * ncol > 0) {
-			data = std::shared_ptr<char>(
-					(char *) memalign(PAGE_SIZE, nrow * ncol * entry_size),
-					deleter());
-			assert(data);
-		}
-	}
 
 	void inner_prod_wide(const dense_matrix &m, const bulk_operate &left_op,
 			const bulk_operate &right_op, mem_row_dense_matrix &res) const;
@@ -99,6 +86,23 @@ class mem_row_dense_matrix: public mem_dense_matrix
 			mem_row_dense_matrix &res) const;
 	virtual bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
+
+	mem_row_dense_matrix(size_t nrow, size_t ncol,
+			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
+		if (nrow * ncol > 0) {
+			data = std::shared_ptr<char>(
+					(char *) memalign(PAGE_SIZE, nrow * ncol * entry_size),
+					deleter());
+			assert(data);
+		}
+	}
+
+protected:
+	mem_row_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
+			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
+				entry_size) {
+		this->data = data;
+	}
 public:
 	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
 
@@ -114,32 +118,32 @@ public:
 	virtual dense_matrix::ptr transpose() const;
 
 	virtual void reset_data();
-	void set_data(const set_operate &op);
+	virtual void set_data(const set_operate &op);
 	virtual void par_reset_data();
-	void par_set_data(const set_operate &op);
+	virtual void par_set_data(const set_operate &op);
 
-	dense_matrix::ptr inner_prod(const dense_matrix &m,
+	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	dense_matrix::ptr par_inner_prod(const dense_matrix &m,
+	virtual dense_matrix::ptr par_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
 
-	char *get_row(size_t row) {
+	virtual char *get_row(size_t row) {
 		return data.get() + row * get_num_cols() * get_entry_size();
 	}
 
-	const char *get_row(size_t row) const {
+	virtual const char *get_row(size_t row) const {
 		return data.get() + row * get_num_cols() * get_entry_size();
 	}
 
-	char *get(size_t row, size_t col) {
+	virtual char *get(size_t row, size_t col) {
 		return get_row(row) + col * get_entry_size();
 	}
 
-	const char *get(size_t row, size_t col) const {
+	virtual const char *get(size_t row, size_t col) const {
 		return get_row(row) + col * get_entry_size();
 	}
 
@@ -150,6 +154,9 @@ public:
 	friend class mem_col_dense_matrix;
 };
 
+/*
+ * This class defines an in-memory dense matrix with data organized in columns.
+ */
 class mem_col_dense_matrix: public mem_dense_matrix
 {
 	struct deleter {
@@ -170,6 +177,7 @@ class mem_col_dense_matrix: public mem_dense_matrix
 		}
 	}
 
+protected:
 	mem_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
 			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
 				entry_size) {
@@ -190,37 +198,40 @@ public:
 	virtual dense_matrix::ptr transpose() const;
 
 	virtual void reset_data();
-	void set_data(const set_operate &op);
+	virtual void set_data(const set_operate &op);
 	virtual void par_reset_data();
-	void par_set_data(const set_operate &op);
+	virtual void par_set_data(const set_operate &op);
 
-	dense_matrix::ptr inner_prod(const dense_matrix &m,
+	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	dense_matrix::ptr par_inner_prod(const dense_matrix &m,
+	virtual dense_matrix::ptr par_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
 
-	void set_col(char *buf, size_t size, size_t col) {
+	virtual bool set_col(const char *buf, size_t size, size_t col) {
 		assert(size == get_entry_size() * get_num_rows());
 		memcpy(get_col(col), buf, size);
+		return true;
 	}
 
-	char *get_col(size_t col) {
+	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
+
+	virtual char *get_col(size_t col) {
 		return data.get() + col * get_num_rows() * get_entry_size();
 	}
 
-	const char *get_col(size_t col) const {
+	virtual const char *get_col(size_t col) const {
 		return data.get() + col * get_num_rows() * get_entry_size();
 	}
 
-	char *get(size_t row, size_t col) {
+	virtual char *get(size_t row, size_t col) {
 		return get_col(col) + row * get_entry_size();
 	}
 
-	const char *get(size_t row, size_t col) const {
+	virtual const char *get(size_t row, size_t col) const {
 		return get_col(col) + row * get_entry_size();
 	}
 
