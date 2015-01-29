@@ -912,3 +912,62 @@ RcppExport SEXP R_FM_typeof(SEXP pmat)
 	}
 	return ret;
 }
+
+RcppExport SEXP R_FM_set_cols(SEXP pmat, SEXP pidxs, SEXP pvs)
+{
+	Rcpp::LogicalVector ret(1);
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "can't write columns to a sparse matrix\n");
+		ret[0] = false;
+		return ret;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	mem_col_dense_matrix::ptr col_m = mem_col_dense_matrix::cast(mat);
+	if (col_m == NULL) {
+		ret[0] = false;
+		return ret;
+	}
+
+	dense_matrix::ptr vs = get_matrix<dense_matrix>(pvs);
+	mem_col_dense_matrix::ptr mem_vs = mem_col_dense_matrix::cast(vs);
+	if (mem_vs == NULL) {
+		ret[0] = false;
+		return ret;
+	}
+
+	Rcpp::IntegerVector r_idxs(pidxs);
+	std::vector<off_t> c_idxs(r_idxs.size());
+	for (size_t i = 0; i < c_idxs.size(); i++)
+		// R is 1-based indexing, and C/C++ is 0-based.
+		c_idxs[i] = r_idxs[i] - 1;
+
+	ret[0] = col_m->set_cols(*mem_vs, c_idxs);;
+	return ret;
+}
+
+RcppExport SEXP R_FM_get_cols(SEXP pmat, SEXP pidxs)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "can't get columns from a sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	mem_col_dense_matrix::ptr col_m = mem_col_dense_matrix::cast(mat);
+	if (col_m == NULL) {
+		return R_NilValue;
+	}
+
+	Rcpp::IntegerVector r_idxs(pidxs);
+	std::vector<off_t> c_idxs(r_idxs.size());
+	for (size_t i = 0; i < c_idxs.size(); i++)
+		// R is 1-based indexing, and C/C++ is 0-based.
+		c_idxs[i] = r_idxs[i] - 1;
+
+	dense_matrix::ptr sub_m = col_m->get_cols(c_idxs);
+	if (sub_m == NULL)
+		return R_NilValue;
+	else
+		return create_FMR_matrix(sub_m, "");
+}

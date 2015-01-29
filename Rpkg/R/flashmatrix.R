@@ -536,6 +536,42 @@ fm.t <- function(m)
 		NULL
 }
 
+#' Set the specified column of a FlashMatrixR matrix.
+#'
+#' @param fm A flashMatrixR matrix
+#' @param idxs an array of column indices in fm.
+#' @param m2 A flashMatrixR matrix or vector.
+#' @return a logical value that indicates whether the operation is successful.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.set.cols <- function(fm, idxs, m2)
+{
+	stopifnot(!is.null(fm) && !is.null(idxs) && !is.null(m2))
+	stopifnot(class(fm) == "fm")
+	stopifnot(class(m2) == "fmV" || class(m2) == "fm")
+	.Call("R_FM_set_cols", fm, as.integer(idxs), m2, PACKAGE="FlashGraphR")
+}
+
+#' Get a submatrix composed of some columns from a FlashMatrixR matrix
+#'
+#' This only works on a column-wise matrix. The submatrix is also organized
+#' column-wise. The submatrix shares the same data as the input matrix, so
+#' there is no memory copy.
+#'
+#' @param fm A FlashMatrixR matrix
+#' @param idxs an array of column indices in fm.
+#' @return a submatrix
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.get.cols <- function(fm, idxs)
+{
+	stopifnot(!is.null(fm) && !is.null(idxs))
+	stopifnot(class(fm) == "fm")
+	ret <- .Call("R_FM_get_cols", fm, as.integer(idxs), PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		structure(ret, class="fm")
+	else
+		NULL
+}
+
 print.fm <- function(fm)
 {
 	stopifnot(!is.null(fm))
