@@ -314,20 +314,66 @@ test.basic.op1(int.v, fm.vec, int.v, rvec)
 print("element-vector double-double")
 test.basic.op1(1.0, fm.vec, 1.0, rvec)
 
+test.matrix <- function(fm.mat)
+{
+	if (fm.matrix.layout(fm.mat) == "row")
+		byrow <- TRUE
+	else
+		byrow <- FALSE
+	m.nrow <- fm.nrow(fm.mat)
+	m.ncol <- fm.ncol(fm.mat)
+	len <- m.nrow * m.ncol
+	mat <- fm.conv.FM2R(fm.mat)
+	print("basic operations on a matrix")
+	test.basic.op(fm.mat, fm.matrix(fm.seq.int(1, len, 1), m.nrow, m.ncol, byrow))
+	print("multiplication on a matrix")
+	fm.vec <- fm.seq.int(1, m.ncol, 1)
+	test.MV1(fm.mat, fm.vec, fm.conv.FM2R(fm.mat) %*% fm.conv.FM2R(fm.vec))
+	fm.right.mat <- fm.matrix(fm.seq.int(1, m.ncol * 10, 1), m.ncol, 10)
+	test.MM1(fm.mat, fm.right.mat, fm.conv.FM2R(fm.mat) %*% fm.conv.FM2R(fm.right.mat))
+}
+
+test.t.matrix <- function(fm.col.mat)
+{
+	stopifnot(fm.matrix.layout(fm.col.mat) == "col")
+	len <- fm.nrow(fm.col.mat) * fm.ncol(fm.col.mat)
+	fm.t.mat <- fm.t(fm.col.mat)
+	t.nrow <- fm.nrow(fm.t.mat)
+	t.ncol <- fm.ncol(fm.t.mat)
+	stopifnot(fm.matrix.layout(fm.t.mat) == "row")
+	mat <- fm.conv.FM2R(fm.col.mat)
+	t.mat <- t(mat)
+	stopifnot(sum(t.mat == fm.conv.FM2R(fm.t.mat)) == len)
+	print("basic operations on a transposed matrix")
+	test.basic.op(fm.t.mat, fm.matrix(fm.seq.int(1, len, 1), t.nrow, t.ncol, TRUE))
+	print("multiplication on a transposed matrix")
+	fm.vec <- fm.seq.int(1, t.ncol, 1)
+	test.MV1(fm.t.mat, fm.vec, fm.conv.FM2R(fm.t.mat) %*% fm.conv.FM2R(fm.vec))
+	fm.right.mat <- fm.matrix(fm.seq.int(1, t.ncol * 10, 1), t.ncol, 10)
+	test.MM1(fm.t.mat, fm.right.mat, fm.conv.FM2R(fm.t.mat) %*% fm.conv.FM2R(fm.right.mat))
+}
+
 print("Transpose a matrix")
 fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
-fm.t.mat <- fm.t(fm.mat)
-stopifnot(fm.matrix.layout(fm.t.mat) == "row")
+test.t.matrix(fm.mat)
+
+print("Set columns of a column-wise matrix")
+fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 100, 20)
 mat <- fm.conv.FM2R(fm.mat)
-t.mat <- t(mat)
-stopifnot(sum(t.mat == fm.conv.FM2R(fm.t.mat)) == fm.nrow(fm.mat) * fm.ncol(fm.mat))
-print("basic operations on a transposed matrix")
-test.basic.op(fm.t.mat, fm.matrix(fm.seq.int(1, 2000, 1), 100, 20, TRUE))
-print("multiplication on a transposed matrix")
-fm.vec <- fm.seq.int(1, 20, 1)
-test.MV1(fm.t.mat, fm.vec, fm.conv.FM2R(fm.t.mat) %*% fm.conv.FM2R(fm.vec))
-fm.right.mat <- fm.matrix(fm.seq.int(1, 200, 1), 20, 10)
-test.MM1(fm.t.mat, fm.right.mat, fm.conv.FM2R(fm.t.mat) %*% fm.conv.FM2R(fm.right.mat))
+fm.mat2 <- fm.matrix(fm.seq.int(1001, 1200, 1), 100, 2)
+mat2 <- fm.conv.FM2R(fm.mat2)
+fm.set.cols(fm.mat, 1:2, fm.mat2)
+mat[,1:2] <- mat2
+stopifnot(sum(mat == fm.conv.FM2R(fm.mat)) == length(mat))
+
+print("Get a submatrix from a column-wise matrix")
+fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 100, 20)
+mat <- fm.conv.FM2R(fm.mat)
+fm.sub.mat <- fm.get.cols(fm.mat, 3:12)
+sub.mat <- mat[, 3:12]
+stopifnot(sum(sub.mat == fm.conv.FM2R(fm.sub.mat)) == length(sub.mat))
+test.matrix(fm.sub.mat)
+test.t.matrix(fm.sub.mat)
 
 # TODO test transpose a sparse matrix.
 
