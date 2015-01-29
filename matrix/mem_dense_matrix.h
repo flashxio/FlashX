@@ -216,11 +216,9 @@ public:
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
 
-	virtual bool set_col(const char *buf, size_t size, size_t col) {
-		assert(size == get_entry_size() * get_num_rows());
-		memcpy(get_col(col), buf, size);
-		return true;
-	}
+	virtual bool set_cols(const mem_col_dense_matrix &m,
+			const std::vector<off_t> &idxs);
+	virtual bool set_col(const char *buf, size_t size, size_t col);
 
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
 

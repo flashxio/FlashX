@@ -659,6 +659,54 @@ dense_matrix::ptr mem_col_dense_matrix::sapply(const bulk_uoperate &op) const
 	return res;
 }
 
+bool mem_col_dense_matrix::set_cols(const mem_col_dense_matrix &m,
+		const std::vector<off_t> &idxs)
+{
+	if (m.get_num_cols() != idxs.size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "# vectors is different from # column indices";
+		return false;
+	}
+
+	for (size_t i = 0; i < idxs.size(); i++) {
+		// If idxs[i] is negative, the unsigned value will be very large.
+		if ((size_t) idxs[i] >= get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "a column index is out of bounds\n";
+			return false;
+		}
+	}
+
+	if (get_num_rows() != m.get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The length of the vectors is different from #rows of the matrix";
+		return false;
+	}
+
+	if (get_type() != m.get_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrix and the vectors have different types";
+		return false;
+	}
+
+	size_t num_cols = idxs.size();
+	for (size_t i = 0; i < num_cols; i++)
+		set_col(m.get_col(i), m.get_num_rows() * m.get_entry_size(), idxs[i]);
+	return true;
+}
+
+bool mem_col_dense_matrix::set_col(const char *buf, size_t size, size_t col)
+{
+	if (size != get_entry_size() * get_num_rows()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "set_col: has a different column length";
+		return false;
+	}
+
+	memcpy(get_col(col), buf, size);
+	return true;
+}
+
 dense_matrix::ptr mem_col_dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
 	for (size_t i = 0; i < idxs.size(); i++) {
