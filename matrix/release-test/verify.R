@@ -317,9 +317,17 @@ test.basic.op1(1.0, fm.vec, 1.0, rvec)
 print("Transpose a matrix")
 fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
 fm.t.mat <- fm.t(fm.mat)
+stopifnot(fm.matrix.layout(fm.t.mat) == "row")
 mat <- fm.conv.FM2R(fm.mat)
 t.mat <- t(mat)
 stopifnot(sum(t.mat == fm.conv.FM2R(fm.t.mat)) == fm.nrow(fm.mat) * fm.ncol(fm.mat))
+print("basic operations on a transposed matrix")
+test.basic.op(fm.t.mat, fm.matrix(fm.seq.int(1, 2000, 1), 100, 20, TRUE))
+print("multiplication on a transposed matrix")
+fm.vec <- fm.seq.int(1, 20, 1)
+test.MV1(fm.t.mat, fm.vec, fm.conv.FM2R(fm.t.mat) %*% fm.conv.FM2R(fm.vec))
+fm.right.mat <- fm.matrix(fm.seq.int(1, 200, 1), 20, 10)
+test.MM1(fm.t.mat, fm.right.mat, fm.conv.FM2R(fm.t.mat) %*% fm.conv.FM2R(fm.right.mat))
 
 # TODO test transpose a sparse matrix.
 
