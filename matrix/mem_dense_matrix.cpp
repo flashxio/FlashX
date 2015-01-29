@@ -427,6 +427,60 @@ mem_dense_matrix::ptr mem_dense_matrix::cast(dense_matrix::ptr m)
 	return std::static_pointer_cast<mem_dense_matrix>(m);
 }
 
+mem_row_dense_matrix::ptr mem_row_dense_matrix::cast(dense_matrix::ptr m)
+{
+	if (!m->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't cast an EM matrix to mem_row_dense_matrix";
+		return mem_row_dense_matrix::ptr();
+	}
+	if (m->store_layout() != matrix_layout_t::L_ROW) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "the matrix to be cast isn't row-wise";
+		return mem_row_dense_matrix::ptr();
+	}
+
+	return std::static_pointer_cast<mem_row_dense_matrix>(m);
+}
+
+mem_row_dense_matrix::ptr mem_row_dense_matrix::cast(mem_dense_matrix::ptr m)
+{
+	if (m->store_layout() != matrix_layout_t::L_ROW) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "the matrix to be cast isn't row-wise";
+		return mem_row_dense_matrix::ptr();
+	}
+
+	return std::static_pointer_cast<mem_row_dense_matrix>(m);
+}
+
+mem_col_dense_matrix::ptr mem_col_dense_matrix::cast(dense_matrix::ptr m)
+{
+	if (!m->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't cast an EM matrix to mem_col_dense_matrix";
+		return mem_col_dense_matrix::ptr();
+	}
+	if (m->store_layout() != matrix_layout_t::L_COL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "the matrix to be cast isn't col-wise";
+		return mem_col_dense_matrix::ptr();
+	}
+
+	return std::static_pointer_cast<mem_col_dense_matrix>(m);
+}
+
+mem_col_dense_matrix::ptr mem_col_dense_matrix::cast(mem_dense_matrix::ptr m)
+{
+	if (m->store_layout() != matrix_layout_t::L_COL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "the matrix to be cast isn't col-wise";
+		return mem_col_dense_matrix::ptr();
+	}
+
+	return std::static_pointer_cast<mem_col_dense_matrix>(m);
+}
+
 dense_matrix::ptr mem_col_dense_matrix::clone() const
 {
 	// The data array is read-only. It's safe to have two matrices reference
@@ -504,6 +558,7 @@ dense_matrix::ptr mem_col_dense_matrix::inner_prod(const dense_matrix &m,
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
 	assert(nrow > ncol);
+	// TODO we need to determine the layout of the output matrix smartly.
 	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow,
 			m.get_num_cols(), right_op.output_entry_size());
 	res->reset_data();
@@ -763,6 +818,7 @@ dense_matrix::ptr mem_row_dense_matrix::inner_prod(const dense_matrix &m,
 	if (!verify_inner_prod(m, left_op, right_op))
 		return dense_matrix::ptr();
 
+	// TODO we need to determine the layout of the output matrix smartly.
 	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(
 			get_num_rows(), m.get_num_cols(), right_op.output_entry_size());
 	res->reset_data();
@@ -853,6 +909,7 @@ dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const dense_matrix &m,
 	if (!verify_inner_prod(m, left_op, right_op))
 		return dense_matrix::ptr();
 
+	// TODO we need to determine the layout of the output matrix smartly.
 	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(get_num_rows(),
 			m.get_num_cols(), right_op.output_entry_size());
 	res->par_reset_data();

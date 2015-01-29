@@ -109,6 +109,8 @@ public:
 	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
 		return ptr(new mem_row_dense_matrix(nrow, ncol, entry_size));
 	}
+	static ptr cast(dense_matrix::ptr);
+	static ptr cast(mem_dense_matrix::ptr);
 
 	~mem_row_dense_matrix() {
 	}
@@ -189,6 +191,9 @@ public:
 	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
 		return ptr(new mem_col_dense_matrix(nrow, ncol, entry_size));
 	}
+
+	static ptr cast(dense_matrix::ptr);
+	static ptr cast(mem_dense_matrix::ptr);
 
 	~mem_col_dense_matrix() {
 	}
