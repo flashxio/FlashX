@@ -40,14 +40,20 @@ class mem_vector
 
 	mem_vector(mem_dense_matrix::ptr data) {
 		this->data = data;
-		if (data->get_num_rows() == 1) {
+		// The length of the vector is the size of the dimension that isn't 1.
+		if (data->get_num_rows() == 1)
 			length = data->get_num_cols();
-			arr = (T *) ((mem_col_dense_matrix &) *data).get_col(0);
-		}
-		else {
+		else
 			length = data->get_num_rows();
-			arr = (T *) ((mem_row_dense_matrix &) *data).get_row(0);
-		}
+		// The data buffer is the first row or column of the matrix, so
+		// the shape of the matrix doesn't matter.
+		// TODO this may not work with submatrix.
+		if (data->store_layout() == matrix_layout_t::L_ROW)
+			arr = (T *) mem_row_dense_matrix::cast(data)->get_row(0);
+		else if (data->store_layout() == matrix_layout_t::L_COL)
+			arr = (T *) mem_col_dense_matrix::cast(data)->get_col(0);
+		else
+			BOOST_LOG_TRIVIAL(error) << "wrong matrix layout";
 	}
 
 	mem_vector(size_t length) {
