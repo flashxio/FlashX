@@ -67,7 +67,7 @@ void verify_result(const I_mem_dense_matrix &m1, const I_mem_dense_matrix &m2)
 
 void test1()
 {
-	printf("Test tall matrix stored column wise\n");
+	printf("Test multiplication on tall matrix stored column wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
 			matrix_layout_t::L_COL, set_col_operate(10));
 	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(10, 9,
@@ -85,7 +85,7 @@ void test1()
 
 void test2()
 {
-	printf("Test wide matrix stored row wise\n");
+	printf("Test multiplication on wide matrix stored row wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(10, 100,
 			matrix_layout_t::L_ROW, set_row_operate(100));
 	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(100, 9,
@@ -103,7 +103,7 @@ void test2()
 
 void test3()
 {
-	printf("Test tall matrix stored row wise\n");
+	printf("Test multiplication on tall matrix stored row wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
 			matrix_layout_t::L_ROW, set_col_operate(10));
 	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(10, 9,
@@ -119,9 +119,33 @@ void test3()
 	verify_result(*res1, *correct);
 }
 
+void test4()
+{
+	printf("test submatrix of a column-wise matrix\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	mem_col_dense_matrix::ptr col_m
+		= mem_col_dense_matrix::cast(m1->get_matrix());
+	std::vector<off_t> idxs(3);
+	idxs[0] = 1;
+	idxs[1] = 5;
+	idxs[2] = 3;
+	mem_col_dense_matrix::ptr sub_m = mem_col_dense_matrix::cast(col_m->get_cols(idxs));
+	assert(sub_m != NULL);
+	assert(sub_m->get_num_rows() == col_m->get_num_rows());
+	assert(sub_m->get_num_cols() == idxs.size());
+	assert(sub_m->store_layout() == col_m->store_layout());
+	assert(sub_m->get_entry_size() == col_m->get_entry_size());
+	assert(sub_m->get_type() == col_m->get_type());
+	for (size_t i = 0; i < idxs.size(); i++)
+		assert(memcmp(sub_m->get_col(i), col_m->get_col(idxs[i]),
+				sub_m->get_entry_size() * sub_m->get_num_rows()) == 0);
+}
+
 int main()
 {
 	test1();
 	test2();
 	test3();
+	test4();
 }
