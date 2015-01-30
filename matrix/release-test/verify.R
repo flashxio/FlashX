@@ -375,6 +375,32 @@ stopifnot(sum(sub.mat == fm.conv.FM2R(fm.sub.mat)) == length(sub.mat))
 test.matrix(fm.sub.mat)
 test.t.matrix(fm.sub.mat)
 
+print("read/write a dense matrix")
+fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 100, 20)
+mat <- fm.conv.FM2R(fm.mat)
+stopifnot(fm.write.obj(fm.mat, "test.mat"))
+fm.mat1 <- fm.read.obj("test.mat")
+stopifnot(fm.matrix.layout(fm.mat1) == "col")
+stopifnot(sum(mat == fm.conv.FM2R(fm.mat1)) == length(mat))
+
+print("read/write a transposed dense matrix")
+stopifnot(fm.write.obj(fm.t(fm.mat), "test.mat"))
+fm.mat1 <- fm.read.obj("test.mat")
+stopifnot(fm.matrix.layout(fm.mat1) == "row")
+stopifnot(sum(t(mat) == fm.conv.FM2R(fm.mat1)) == length(mat))
+
+print("read/write a dense submatrix")
+stopifnot(fm.write.obj(fm.get.cols(fm.mat, 3:12), "test.mat"))
+fm.mat1 <- fm.read.obj("test.mat")
+stopifnot(fm.matrix.layout(fm.mat1) == "col")
+stopifnot(sum(mat[,3:12] == fm.conv.FM2R(fm.mat1)) == length(mat[,3:12]))
+
+print("read/write a transposed dense submatrix")
+stopifnot(fm.write.obj(fm.t(fm.get.cols(fm.mat, 3:12)), "test.mat"))
+fm.mat1 <- fm.read.obj("test.mat")
+stopifnot(fm.matrix.layout(fm.mat1) == "row")
+stopifnot(sum(t(mat[,3:12]) == fm.conv.FM2R(fm.mat1)) == length(mat[,3:12]))
+
 # TODO test transpose a sparse matrix.
 
 # Test on a sparse matrix
