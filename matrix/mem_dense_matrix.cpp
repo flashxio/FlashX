@@ -945,6 +945,7 @@ void mem_row_dense_matrix::inner_prod_wide(const dense_matrix &m,
 				res.get_num_cols() * res.get_entry_size());
 		mem_row_dense_matrix::ptr local_m = mem_row_dense_matrix::create(nrow,
 				m.get_num_cols(), right_op.output_entry_size());
+		local_m->serial_reset_data();
 #pragma omp for
 		for (size_t k = 0; k < ncol; k += SUB_CHUNK_SIZE) {
 			size_t sub_ncol = std::min(SUB_CHUNK_SIZE, ncol - k);
