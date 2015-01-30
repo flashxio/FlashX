@@ -413,9 +413,18 @@ static SEXP SpMV(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 
 static SEXP SpMM(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 {
-	fprintf(stderr,
-			"Sparse matrix dense matrix multiplication isn't supported\n");
-	return R_NilValue;
+	if (right_mat->is_type<double>()) {
+		dense_matrix::ptr out_mat = matrix->multiply<double>(right_mat);
+		return create_FMR_matrix(out_mat, "");
+	}
+	else if (right_mat->is_type<int>()) {
+		dense_matrix::ptr out_mat = matrix->multiply<int>(right_mat);
+		return create_FMR_matrix(out_mat, "");
+	}
+	else {
+		fprintf(stderr, "the right matrix has an unsupported type in SpMM\n");
+		return R_NilValue;
+	}
 }
 
 static bool is_vector(const dense_matrix &mat)
