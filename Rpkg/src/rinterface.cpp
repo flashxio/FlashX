@@ -135,6 +135,12 @@ FG_graph::ptr R_FG_get_graph(SEXP pgraph)
 	}
 }
 
+namespace fm
+{
+void init_flash_matrix(config_map::ptr configs);
+void destroy_flash_matrix();
+}
+
 /**
  * Initialize FlashGraphR.
  */
@@ -156,6 +162,7 @@ RcppExport SEXP R_FG_init(SEXP pconf)
 	Rcpp::LogicalVector res(1);
 	try {
 		graph_engine::init_flash_graph(configs);
+		fm::init_flash_matrix(configs);
 		standalone = false;
 		res[0] = true;
 	} catch (init_error &e) {
@@ -196,6 +203,7 @@ RcppExport SEXP R_FG_destroy()
 	}
 	if (num_refs == 0)
 		graphs.clear();
+	fm::destroy_flash_matrix();
 	graph_engine::destroy_flash_graph();
 	return R_NilValue;
 }
