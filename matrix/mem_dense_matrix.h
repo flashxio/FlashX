@@ -109,11 +109,14 @@ public:
 	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
 		return ptr(new mem_row_dense_matrix(nrow, ncol, entry_size));
 	}
+	static ptr create(size_t nrow, size_t ncol, size_t entry_size, FILE *f);
 	static ptr cast(dense_matrix::ptr);
 	static ptr cast(mem_dense_matrix::ptr);
 
 	~mem_row_dense_matrix() {
 	}
+
+	virtual bool write2file(const std::string &file_name) const;
 
 	virtual dense_matrix::ptr clone() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
@@ -191,12 +194,15 @@ public:
 	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
 		return ptr(new mem_col_dense_matrix(nrow, ncol, entry_size));
 	}
+	static ptr create(size_t nrow, size_t ncol, size_t entry_size, FILE *f);
 
 	static ptr cast(dense_matrix::ptr);
 	static ptr cast(mem_dense_matrix::ptr);
 
 	~mem_col_dense_matrix() {
 	}
+
+	virtual bool write2file(const std::string &file_name) const;
 
 	virtual dense_matrix::ptr clone() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;

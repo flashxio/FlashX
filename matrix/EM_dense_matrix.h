@@ -127,6 +127,11 @@ public:
 		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size, name));
 	}
 
+	virtual bool write2file(const std::string&) const {
+		BOOST_LOG_TRIVIAL(error) << "can't write an EM matrix to a file";
+		return false;
+	}
+
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
 	}

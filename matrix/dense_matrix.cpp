@@ -127,4 +127,62 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 	}
 }
 
+bool dense_matrix::write_header(FILE *f) const
+{
+	matrix_header header;
+	header.u.d.type = DENSE;
+	header.u.d.entry_size = get_entry_size();
+	header.u.d.nrows = get_num_rows();
+	header.u.d.ncols = get_num_cols();
+	header.u.d.layout = store_layout();
+
+	size_t ret = fwrite(&header, sizeof(header), 1, f);
+	if (ret == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't write header: %2%") % strerror(errno);
+		return false;
+	}
+	return true;
+}
+
+dense_matrix::ptr dense_matrix::load(const std::string &file_name)
+{
+	matrix_header header;
+
+	FILE *f = fopen(file_name.c_str(), "r");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
+			% file_name % strerror(errno);
+		return dense_matrix::ptr();
+	}
+
+	size_t ret = fread(&header, sizeof(header), 1, f);
+	if (ret == 0) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("can't read header from %1%: %2%")
+			% file_name % strerror(errno);
+		return dense_matrix::ptr();
+	}
+
+	if (header.u.d.type == SPARSE) {
+		BOOST_LOG_TRIVIAL(error) << "The matrix to be loaded is sparse";
+		return dense_matrix::ptr();
+	}
+
+	size_t entry_size = header.u.d.entry_size;
+	size_t nrow = header.u.d.nrows;
+	size_t ncol = header.u.d.ncols;
+	dense_matrix::ptr m;
+	if (header.u.d.layout == matrix_layout_t::L_ROW)
+		m = std::static_pointer_cast<dense_matrix>(
+				mem_row_dense_matrix::create(nrow, ncol, entry_size, f));
+	else if (header.u.d.layout == matrix_layout_t::L_COL)
+		m = std::static_pointer_cast<dense_matrix>(
+				mem_col_dense_matrix::create(nrow, ncol, entry_size, f));
+	else
+		BOOST_LOG_TRIVIAL(error) << "wrong matrix data layout";
+
+	fclose(f);
+	return m;
+}
+
 }

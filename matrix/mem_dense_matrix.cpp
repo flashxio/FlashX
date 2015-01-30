@@ -721,6 +721,54 @@ dense_matrix::ptr mem_col_dense_matrix::get_cols(const std::vector<off_t> &idxs)
 			idxs.size(), get_entry_size(), data, idxs);
 }
 
+bool mem_col_dense_matrix::write2file(const std::string &file_name) const
+{
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
+		return false;
+	}
+	if (!write_header(f))
+		return false;
+
+	size_t ncol = get_num_cols();
+	size_t col_size = get_num_rows() * get_entry_size();
+	for (size_t i = 0; i < ncol; i++) {
+		const char *col = get_col(i);
+		size_t ret = fwrite(col, col_size, 1, f);
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("can't write to %1%: %2%")
+				% file_name % strerror(errno);
+			return false;
+		}
+	}
+	fclose(f);
+	return true;
+}
+
+mem_col_dense_matrix::ptr mem_col_dense_matrix::create(size_t nrow, size_t ncol,
+		size_t entry_size, FILE *f)
+{
+	size_t mat_size = nrow * ncol * entry_size;
+	std::shared_ptr<char> data = std::shared_ptr<char>((char *) memalign(
+				PAGE_SIZE, mat_size), deleter());
+	if (data == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "can't allocate memory for the matrix";
+		return mem_col_dense_matrix::ptr();
+	}
+	size_t ret = fread(data.get(), mat_size, 1, f);
+	if (ret == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't read %1% bytes from the file") % mat_size;
+		return mem_col_dense_matrix::ptr();
+	}
+
+	return mem_col_dense_matrix::ptr(new mem_col_dense_matrix(nrow, ncol,
+				entry_size, data));
+}
+
 dense_matrix::ptr mem_row_dense_matrix::clone() const
 {
 	// The data array is read-only. It's safe to have two matrices reference
@@ -1011,6 +1059,54 @@ dense_matrix::ptr mem_row_dense_matrix::sapply(const bulk_uoperate &op) const
 			op.output_entry_size());
 	op.runA(ncol * nrow, data.get(), res->data.get());
 	return res;
+}
+
+bool mem_row_dense_matrix::write2file(const std::string &file_name) const
+{
+	FILE *f = fopen(file_name.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't open %1%: %2%") % file_name % strerror(errno);
+		return false;
+	}
+	if (!write_header(f))
+		return false;
+
+	size_t nrow = get_num_rows();
+	size_t row_size = get_num_cols() * get_entry_size();
+	for (size_t i = 0; i < nrow; i++) {
+		const char *row = get_row(i);
+		size_t ret = fwrite(row, row_size, 1, f);
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("can't write to %1%: %2%")
+				% file_name % strerror(errno);
+			return false;
+		}
+	}
+	fclose(f);
+	return true;
+}
+
+mem_row_dense_matrix::ptr mem_row_dense_matrix::create(size_t nrow, size_t ncol,
+		size_t entry_size, FILE *f)
+{
+	size_t mat_size = nrow * ncol * entry_size;
+	std::shared_ptr<char> data = std::shared_ptr<char>((char *) memalign(
+				PAGE_SIZE, mat_size), deleter());
+	if (data == NULL) {
+		BOOST_LOG_TRIVIAL(error) << "can't allocate memory for the matrix";
+		return mem_row_dense_matrix::ptr();
+	}
+	size_t ret = fread(data.get(), mat_size, 1, f);
+	if (ret == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't read %1% bytes from the file") % mat_size;
+		return mem_row_dense_matrix::ptr();
+	}
+
+	return mem_row_dense_matrix::ptr(new mem_row_dense_matrix(nrow, ncol,
+				entry_size, data));
 }
 
 }

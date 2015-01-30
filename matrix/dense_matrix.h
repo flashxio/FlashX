@@ -34,10 +34,38 @@ class bulk_uoperate;
 class set_operate;
 class scalar_type;
 
+enum matrix_type
+{
+	VECTOR,
+	DENSE,
+	SPARSE,
+};
+
 enum matrix_layout_t
 {
 	L_COL,
 	L_ROW,
+};
+
+/*
+ * The matrix header contains the basic information about the matrix
+ * when the matrix is stored on disks.
+ */
+struct matrix_header
+{
+	union {
+		struct info {
+			matrix_type type;
+			size_t entry_size;
+			size_t nrows;
+			size_t ncols;
+			matrix_layout_t layout;
+			// It doesn't include the entry type, which should be determined by
+			// users at runtime.
+		} d;
+
+		char page[4096];
+	} u;
 };
 
 class dense_matrix
@@ -63,9 +91,13 @@ public:
 
 	static ptr create(size_t nrow, size_t ncol, size_t entry_size,
 			matrix_layout_t layout, bool in_mem);
+	static ptr load(const std::string &file_name);
 
 	virtual ~dense_matrix() {
 	}
+
+	bool write_header(FILE *f) const;
+	virtual bool write2file(const std::string &file_name) const = 0;
 
 	size_t get_entry_size() const {
 		return entry_size;
