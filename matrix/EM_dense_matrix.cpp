@@ -261,7 +261,7 @@ public:
 
 	void run(const mem_dense_matrix &subm) {
 		mem_dense_matrix::ptr sub_res = mem_dense_matrix::cast(
-				subm.inner_prod(m, left_op, right_op));
+				subm.serial_inner_prod(m, left_op, right_op));
 		res_m.set_submatrix(start_out_row, start_out_col, sub_res);
 	}
 };
@@ -461,7 +461,7 @@ void EM_col_dense_matrix::set_data(const set_operate &op)
 		size_t chunk_size = std::min(COL_CHUNK_SIZE, nrow);
 		mem_dense_matrix::ptr mem_m = mem_col_dense_matrix::create(
 				chunk_size, ncol, get_entry_size());
-		mem_m->set_data(op);
+		mem_m->serial_set_data(op);
 		accessor->set_submatrix(i, 0, mem_m);
 		while ((size_t) accessor->num_pending_reqs() > 2 * ncol)
 			accessor->wait4complete(1);

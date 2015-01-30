@@ -164,15 +164,15 @@ public:
 		BOOST_LOG_TRIVIAL(error)
 			<< "set_data() isn't supported in a sub_col_matrix";
 	}
-	virtual void par_reset_data() {
+	virtual void serial_reset_data() {
 		// TODO
 		BOOST_LOG_TRIVIAL(error)
-			<< "par_reset_data() isn't supported in a sub_col_matrix";
+			<< "serial_reset_data() isn't supported in a sub_col_matrix";
 	}
-	virtual void par_set_data(const set_operate &op) {
+	virtual void serial_set_data(const set_operate &op) {
 		// TODO
 		BOOST_LOG_TRIVIAL(error)
-			<< "par_set_data() isn't supported in a sub_col_matrix";
+			<< "serial_set_data() isn't supported in a sub_col_matrix";
 	}
 
 	virtual bool set_cols(const mem_col_dense_matrix &m,
@@ -267,15 +267,15 @@ public:
 		BOOST_LOG_TRIVIAL(error)
 			<< "set_data() isn't supported in a sub_col_matrix";
 	}
-	virtual void par_reset_data() {
+	virtual void serial_reset_data() {
 		// TODO
 		BOOST_LOG_TRIVIAL(error)
-			<< "par_reset_data() isn't supported in a sub_col_matrix";
+			<< "serial_reset_data() isn't supported in a sub_col_matrix";
 	}
-	virtual void par_set_data(const set_operate &op) {
+	virtual void serial_set_data(const set_operate &op) {
 		// TODO
 		BOOST_LOG_TRIVIAL(error)
-			<< "par_set_data() isn't supported in a sub_col_matrix";
+			<< "serial_set_data() isn't supported in a sub_col_matrix";
 	}
 
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
@@ -518,13 +518,13 @@ dense_matrix::ptr mem_col_dense_matrix::transpose() const
 				get_num_rows(), get_entry_size(), data));
 }
 
-void mem_col_dense_matrix::reset_data()
+void mem_col_dense_matrix::serial_reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 	memset(data.get(), 0, tot_bytes);
 }
 
-void mem_col_dense_matrix::set_data(const set_operate &op)
+void mem_col_dense_matrix::serial_set_data(const set_operate &op)
 {
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
@@ -532,7 +532,7 @@ void mem_col_dense_matrix::set_data(const set_operate &op)
 		op.set(get_col(i), nrow, 0, i);
 }
 
-void mem_col_dense_matrix::par_reset_data()
+void mem_col_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 #pragma omp parallel for
@@ -540,7 +540,7 @@ void mem_col_dense_matrix::par_reset_data()
 		memset(data.get() + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 }
 
-void mem_col_dense_matrix::par_set_data(const set_operate &op)
+void mem_col_dense_matrix::set_data(const set_operate &op)
 {
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
@@ -549,7 +549,7 @@ void mem_col_dense_matrix::par_set_data(const set_operate &op)
 		op.set(get_col(i), nrow, 0, i);
 }
 
-dense_matrix::ptr mem_col_dense_matrix::inner_prod(const dense_matrix &m,
+dense_matrix::ptr mem_col_dense_matrix::serial_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
 	if (!verify_inner_prod(m, left_op, right_op))
@@ -561,7 +561,7 @@ dense_matrix::ptr mem_col_dense_matrix::inner_prod(const dense_matrix &m,
 	// TODO we need to determine the layout of the output matrix smartly.
 	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow,
 			m.get_num_cols(), right_op.output_entry_size());
-	res->reset_data();
+	res->serial_reset_data();
 	const mem_dense_matrix &mem_m = (const mem_dense_matrix &) m;
 
 	char *tmp_res = (char *) malloc(SUB_CHUNK_SIZE * res->get_entry_size());
@@ -581,7 +581,7 @@ dense_matrix::ptr mem_col_dense_matrix::inner_prod(const dense_matrix &m,
 	return std::static_pointer_cast<dense_matrix>(res);
 }
 
-dense_matrix::ptr mem_col_dense_matrix::par_inner_prod(const dense_matrix &m,
+dense_matrix::ptr mem_col_dense_matrix::inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
 	if (!verify_inner_prod(m, left_op, right_op))
@@ -592,7 +592,7 @@ dense_matrix::ptr mem_col_dense_matrix::par_inner_prod(const dense_matrix &m,
 	assert(nrow > ncol);
 	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow,
 			m.get_num_cols(), right_op.output_entry_size());
-	res->par_reset_data();
+	res->reset_data();
 	const mem_dense_matrix &mem_m = (const mem_dense_matrix &) m;
 
 #pragma omp parallel
@@ -806,13 +806,13 @@ dense_matrix::ptr mem_row_dense_matrix::transpose() const
 				get_num_rows(), get_entry_size(), data));
 }
 
-void mem_row_dense_matrix::reset_data()
+void mem_row_dense_matrix::serial_reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 	memset(data.get(), 0, tot_bytes);
 }
 
-void mem_row_dense_matrix::set_data(const set_operate &op)
+void mem_row_dense_matrix::serial_set_data(const set_operate &op)
 {
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
@@ -820,7 +820,7 @@ void mem_row_dense_matrix::set_data(const set_operate &op)
 		op.set(get_row(i), ncol, i, 0);
 }
 
-void mem_row_dense_matrix::par_reset_data()
+void mem_row_dense_matrix::reset_data()
 {
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 #pragma omp parallel for
@@ -828,7 +828,7 @@ void mem_row_dense_matrix::par_reset_data()
 		memset(data.get() + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 }
 
-void mem_row_dense_matrix::par_set_data(const set_operate &op)
+void mem_row_dense_matrix::set_data(const set_operate &op)
 {
 	size_t ncol = get_num_cols();
 	size_t nrow = get_num_rows();
@@ -857,7 +857,7 @@ bool mem_row_dense_matrix::verify_inner_prod(const dense_matrix &m,
  * In this case, this matrix is wide. The right matrix is tall and its data
  * is stored column-wise.
  */
-void mem_row_dense_matrix::inner_prod_wide(const dense_matrix &m,
+void mem_row_dense_matrix::serial_inner_prod_wide(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		mem_row_dense_matrix &res) const
 {
@@ -891,7 +891,7 @@ void mem_row_dense_matrix::inner_prod_wide(const dense_matrix &m,
  * the case that the right matrix is wide because the product would
  * be too large to be stored in any storage media.
  */
-void mem_row_dense_matrix::inner_prod_tall(const dense_matrix &m,
+void mem_row_dense_matrix::serial_inner_prod_tall(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		mem_row_dense_matrix &res) const
 {
@@ -908,7 +908,7 @@ void mem_row_dense_matrix::inner_prod_tall(const dense_matrix &m,
 	free(tmp_res);
 }
 
-dense_matrix::ptr mem_row_dense_matrix::inner_prod(const dense_matrix &m,
+dense_matrix::ptr mem_row_dense_matrix::serial_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
 	if (!verify_inner_prod(m, left_op, right_op))
@@ -917,17 +917,17 @@ dense_matrix::ptr mem_row_dense_matrix::inner_prod(const dense_matrix &m,
 	// TODO we need to determine the layout of the output matrix smartly.
 	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(
 			get_num_rows(), m.get_num_cols(), right_op.output_entry_size());
-	res->reset_data();
+	res->serial_reset_data();
 
 	if (is_wide())
-		inner_prod_wide(m, left_op, right_op, *res);
+		serial_inner_prod_wide(m, left_op, right_op, *res);
 	else
-		inner_prod_tall(m, left_op, right_op, *res);
+		serial_inner_prod_tall(m, left_op, right_op, *res);
 
 	return std::static_pointer_cast<dense_matrix>(res);
 }
 
-void mem_row_dense_matrix::par_inner_prod_wide(const dense_matrix &m,
+void mem_row_dense_matrix::inner_prod_wide(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		mem_row_dense_matrix &res) const
 {
@@ -977,7 +977,7 @@ void mem_row_dense_matrix::par_inner_prod_wide(const dense_matrix &m,
 	}
 }
 
-void mem_row_dense_matrix::par_inner_prod_tall(const dense_matrix &m,
+void mem_row_dense_matrix::inner_prod_tall(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		mem_row_dense_matrix &res) const
 {
@@ -999,7 +999,7 @@ void mem_row_dense_matrix::par_inner_prod_tall(const dense_matrix &m,
 	}
 }
 
-dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const dense_matrix &m,
+dense_matrix::ptr mem_row_dense_matrix::inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const
 {
 	if (!verify_inner_prod(m, left_op, right_op))
@@ -1008,12 +1008,12 @@ dense_matrix::ptr mem_row_dense_matrix::par_inner_prod(const dense_matrix &m,
 	// TODO we need to determine the layout of the output matrix smartly.
 	mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(get_num_rows(),
 			m.get_num_cols(), right_op.output_entry_size());
-	res->par_reset_data();
+	res->reset_data();
 
 	if (is_wide())
-		par_inner_prod_wide(m, left_op, right_op, *res);
+		inner_prod_wide(m, left_op, right_op, *res);
 	else
-		par_inner_prod_tall(m, left_op, right_op, *res);
+		inner_prod_tall(m, left_op, right_op, *res);
 
 	return std::static_pointer_cast<dense_matrix>(res);
 }

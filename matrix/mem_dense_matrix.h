@@ -49,12 +49,20 @@ public:
 
 	static ptr cast(dense_matrix::ptr m);
 
-	virtual void par_reset_data() = 0;
-	virtual void par_set_data(const set_operate &op) = 0;
-
 	virtual const char *get(size_t row, size_t col) const = 0;
 
-	virtual dense_matrix::ptr par_inner_prod(const dense_matrix &m,
+	/*
+	 * We need to provide a set of serial versions of the methods below.
+	 * The EM matrix uses customized threads to parallelize the computation
+	 * and overlap computation and I/O, and uses the IM matrix to perform
+	 * computation. Therefore, the IM matrix need to expose the interface
+	 * for serial implementations of the methods.
+	 */
+
+	virtual void serial_reset_data() = 0;
+	virtual void serial_set_data(const set_operate &op) = 0;
+
+	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
 };
 
@@ -78,10 +86,10 @@ class mem_row_dense_matrix: public mem_dense_matrix
 			const bulk_operate &right_op, mem_row_dense_matrix &res) const;
 	void inner_prod_tall(const dense_matrix &m, const bulk_operate &left_op,
 			const bulk_operate &right_op, mem_row_dense_matrix &res) const;
-	void par_inner_prod_wide(const dense_matrix &m,
+	void serial_inner_prod_wide(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op,
 			mem_row_dense_matrix &res) const;
-	void par_inner_prod_tall(const dense_matrix &m,
+	void serial_inner_prod_tall(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op,
 			mem_row_dense_matrix &res) const;
 	virtual bool verify_inner_prod(const dense_matrix &m,
@@ -124,12 +132,12 @@ public:
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
-	virtual void par_reset_data();
-	virtual void par_set_data(const set_operate &op);
+	virtual void serial_reset_data();
+	virtual void serial_set_data(const set_operate &op);
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual dense_matrix::ptr par_inner_prod(const dense_matrix &m,
+	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
@@ -210,12 +218,12 @@ public:
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
-	virtual void par_reset_data();
-	virtual void par_set_data(const set_operate &op);
+	virtual void serial_reset_data();
+	virtual void serial_set_data(const set_operate &op);
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual dense_matrix::ptr par_inner_prod(const dense_matrix &m,
+	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
@@ -274,9 +282,9 @@ class type_mem_dense_matrix
 		else
 			assert(0);
 		if (parallel)
-			m->par_set_data(op);
-		else
 			m->set_data(op);
+		else
+			m->serial_set_data(op);
 	}
 
 	type_mem_dense_matrix(mem_dense_matrix::ptr m) {
@@ -329,14 +337,14 @@ mem_dense_matrix::ptr multiply(mem_col_dense_matrix &m1, mem_dense_matrix &m2)
 {
 	basic_ops_impl<LeftType, RightType, ResType> ops;
 	return mem_dense_matrix::cast(
-			m1.inner_prod(m2, ops.get_multiply(), ops.get_add()));
+			m1.serial_inner_prod(m2, ops.get_multiply(), ops.get_add()));
 }
 
 template<class LeftType, class RightType, class ResType>
 mem_dense_matrix::ptr par_multiply(mem_col_dense_matrix &m1, mem_dense_matrix &m2)
 {
 	basic_ops_impl<LeftType, RightType, ResType> ops;
-	return mem_dense_matrix::cast(m1.par_inner_prod(m2, ops.get_multiply(),
+	return mem_dense_matrix::cast(m1.inner_prod(m2, ops.get_multiply(),
 				ops.get_add()));
 }
 
@@ -347,7 +355,7 @@ typename type_mem_dense_matrix<ResType>::ptr  multiply(
 {
 	basic_ops_impl<LeftType, RightType, ResType> ops;
 	return type_mem_dense_matrix<ResType>::create(mem_dense_matrix::cast(
-				m1.get_matrix()->inner_prod(*m2.get_matrix(), ops.get_multiply(),
+				m1.get_matrix()->serial_inner_prod(*m2.get_matrix(), ops.get_multiply(),
 					ops.get_add())));
 }
 
@@ -358,7 +366,7 @@ typename type_mem_dense_matrix<ResType>::ptr par_multiply(
 {
 	basic_ops_impl<LeftType, RightType, ResType> ops;
 	return type_mem_dense_matrix<ResType>::create(mem_dense_matrix::cast(
-				m1.get_matrix()->par_inner_prod(*m2.get_matrix(), ops.get_multiply(),
+				m1.get_matrix()->inner_prod(*m2.get_matrix(), ops.get_multiply(),
 					ops.get_add())));
 }
 

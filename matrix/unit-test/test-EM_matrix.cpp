@@ -98,7 +98,7 @@ void test_inner_prod()
 
 	// Init the big in-memory matrix
 	big_im->set_data(set_col_operate(big_im->get_num_cols()));
-	small_im->set_data(set_col_operate(small_im->get_num_cols()));
+	small_im->serial_set_data(set_col_operate(small_im->get_num_cols()));
 
 	EM_dense_matrix::ptr em_res = multiply<double, double, double>(*em,
 			*small_im);

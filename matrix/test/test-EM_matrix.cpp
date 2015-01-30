@@ -64,7 +64,7 @@ EM_dense_matrix::ptr test_EM_inner_prod(size_t nrow, size_t ncol)
 	// Init the big external-memory matrix
 	if (!exist)
 		em->set_data(set_col_operate(em->get_num_cols()));
-	small_im->set_data(set_col_operate(small_im->get_num_cols()));
+	small_im->serial_set_data(set_col_operate(small_im->get_num_cols()));
 
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
@@ -90,8 +90,8 @@ mem_dense_matrix::ptr test_IM_inner_prod(size_t nrow, size_t ncol)
 	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
 			ncol, ncol, sizeof(double));
 	// Init the big in-memory matrix
-	big_im->par_set_data(set_col_operate(big_im->get_num_cols()));
-	small_im->set_data(set_col_operate(small_im->get_num_cols()));
+	big_im->set_data(set_col_operate(big_im->get_num_cols()));
+	small_im->serial_set_data(set_col_operate(small_im->get_num_cols()));
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
