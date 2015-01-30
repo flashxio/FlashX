@@ -347,6 +347,8 @@ RcppExport SEXP R_FM_get_matrix_fg(SEXP pgraph)
  */
 
 static basic_ops_impl<int, int, int> R_basic_ops_II;
+// This is a special version, used by multiplication in R.
+static basic_ops_impl<int, int, double> R_basic_ops_IID;
 static basic_ops_impl<double, int, double> R_basic_ops_DI;
 static basic_ops_impl<int, double, double> R_basic_ops_ID;
 static basic_ops_impl<double, double, double> R_basic_ops_DD;
@@ -356,7 +358,7 @@ static basic_ops &get_inner_prod_left_ops(const dense_matrix &left,
 {
 	if (left.get_entry_size() == sizeof(int)
 			&& right.get_entry_size() == sizeof(int))
-		return R_basic_ops_II;
+		return R_basic_ops_IID;
 	else if (left.get_entry_size() == sizeof(double)
 			&& right.get_entry_size() == sizeof(int))
 		return R_basic_ops_DI;
