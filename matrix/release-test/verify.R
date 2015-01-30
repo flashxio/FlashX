@@ -379,18 +379,27 @@ test.t.matrix(fm.sub.mat)
 
 # Test on a sparse matrix
 print("load sparse matrix")
+ig <- read.graph("data/wiki-Vote.txt", directed=TRUE)
 fg <- fg.load.graph("data/wiki.adj-v4", "data/wiki.index-v4")
 fm <- fm.get.matrix(fg)
+adj.m <- get.adjacency(ig)
 stopifnot(!fm.is.sym(fm))
 stopifnot(fm.is.sparse(fm))
 
 print("SpMV")
 fm.vec <- fm.rep.int(1, fm.ncol(fm))
 fm.res <- fm.multiply(fm, fm.vec)
-stopifnot(fm.sum(fm.res) == fg.ecount(fg))
+vec <- fm.conv.FM2R(fm.vec)
+res <- adj.m %*% vec
+stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
 
 # Test SpMM
-# TODO
+print("SpMM")
+fm.mat <- fm.matrix(fm.rep.int(1, fm.ncol(fm) * 20), fm.ncol(fm), 20)
+fm.res <- fm.multiply(fm, fm.mat)
+mat <- fm.conv.FM2R(fm.mat)
+res <- adj.m %*% mat
+stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
 
 # Test on a very large dense matrix.
 # convert a large dense matrix in R to FlashMatrixR.
