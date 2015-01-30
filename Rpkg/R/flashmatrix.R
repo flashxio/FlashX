@@ -276,6 +276,24 @@ fm.typeof <- function(fm)
 	.Call("R_FM_typeof", fm, PACKAGE="FlashGraphR")
 }
 
+#' Convert a FlashMatrixR matrix to a FlashMatrixR vector.
+#'
+#' The matrix must have only one row or one column. Otherwise, the function
+#' returns an error.
+#'
+#' @param fm a FlashMatrixR matrix
+#' @return a FlashMatrixR vector
+fm.as.vector <- function(fm)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm")
+	ret <- .Call("R_FM_as_vector", fm, PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		structure(ret, class="fmV")
+	else
+		NULL
+}
+
 #' Matrix multiplication
 #'
 #' Multiply a sparse/dense matrix with a dense vector/matrix.

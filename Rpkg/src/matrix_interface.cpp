@@ -980,3 +980,17 @@ RcppExport SEXP R_FM_get_cols(SEXP pmat, SEXP pidxs)
 	else
 		return create_FMR_matrix(sub_m, "");
 }
+
+RcppExport SEXP R_FM_as_vector(SEXP pmat)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "can't a sparse matrix to a vector\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	if (mat->get_num_rows() == 1 || mat->get_num_cols() == 1)
+		return create_FMR_vector(mat, "");
+	else
+		return R_NilValue;
+}
