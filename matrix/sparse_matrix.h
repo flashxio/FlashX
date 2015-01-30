@@ -194,6 +194,41 @@ public:
 			return ret;
 		}
 	}
+
+	template<class T>
+	dense_matrix::ptr multiply(dense_matrix::ptr in) const {
+		if (in->get_num_rows() != ncols) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"the input matrix has wrong #rows %1%. matrix ncols: %2%")
+				% in->get_num_rows() % ncols;
+			return dense_matrix::ptr();
+		}
+		else if (!in->is_in_mem()) {
+			BOOST_LOG_TRIVIAL(error) << "SpMM doesn't support EM dense matrix";
+			return dense_matrix::ptr();
+		}
+		else if (in->store_layout() == matrix_layout_t::L_ROW) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "SpMM doesn't support row-wise dense matrix";
+			return dense_matrix::ptr();
+		}
+		else {
+			size_t ncol = in->get_num_cols();
+			mem_col_dense_matrix::ptr col_m = mem_col_dense_matrix::cast(in);
+			mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
+					get_num_rows(), ncol, sizeof(T));
+			std::vector<off_t> col_idx(1);
+			for (size_t i = 0; i < ncol; i++) {
+				col_idx[0] = i;
+				typename mem_vector<T>::ptr in_col = mem_vector<T>::create(
+						mem_dense_matrix::cast(col_m->get_cols(col_idx)));
+				typename mem_vector<T>::ptr out_col = mem_vector<T>::create(
+						mem_dense_matrix::cast(ret->get_cols(col_idx)));
+				compute(row_multiply_creator<T>::create(*in_col, *out_col));
+			}
+			return ret;
+		}
+	}
 };
 
 void init_flash_matrix(config_map::ptr configs);
