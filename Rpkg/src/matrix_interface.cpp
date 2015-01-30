@@ -994,3 +994,27 @@ RcppExport SEXP R_FM_as_vector(SEXP pmat)
 	else
 		return R_NilValue;
 }
+
+RcppExport SEXP R_FM_write_obj(SEXP pmat, SEXP pfile)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "Doesn't support write a sparse matrix to a file\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	std::string file_name = CHAR(STRING_ELT(pfile, 0));
+	Rcpp::LogicalVector ret(1);
+	ret[0] = mat->write2file(file_name);
+	return ret;
+}
+
+RcppExport SEXP R_FM_read_obj(SEXP pfile)
+{
+	std::string file_name = CHAR(STRING_ELT(pfile, 0));
+	dense_matrix::ptr mat = dense_matrix::load(file_name);
+	if (mat == NULL)
+		return R_NilValue;
+	else
+		return create_FMR_matrix(mat, "");
+}

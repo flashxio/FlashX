@@ -607,6 +607,36 @@ fm.get.cols <- function(fm, idxs)
 		NULL
 }
 
+#' Write a FlashMatrixR object (vector/matrix) to a file
+#'
+#' @param fm a FlashMatrixR object.
+#' @param file a file in the local filesystem.
+#' @return a logical value. True if the object is written to a file
+#' successfully. Otherwise, FALSE.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.write.obj <- function(fm, file)
+{
+	stopifnot(!is.null(fm))
+	stopifnot(class(fm) == "fm" || class(fm) == "fmV")
+	.Call("R_FM_write_obj", fm, file, PACKAGE="FlashGraphR")
+}
+
+#' Read a FlashMatrixR object (vector/matrix) from a file.
+#'
+#' @param file a file in the local filesystem.
+#' @return a FlashMatrixR object (vector/matrix)
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.read.obj <- function(file)
+{
+	ret <- .Call("R_FM_read_obj", file, PACKAGE="FlashGraphR")
+	if (is.null(ret))
+		return(NULL)
+	else if (ret$type == "vector")
+		structure(ret, class="fmV")
+	else
+		structure(ret, class="fm")
+}
+
 print.fm <- function(fm)
 {
 	stopifnot(!is.null(fm))
