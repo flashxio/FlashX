@@ -51,8 +51,7 @@ test.MV1 <- function(fm.mat, fm.vec, res)
 	stopifnot(sum(res[, 1] == fm.conv.FM2R(fm.res)) == fm.length(fm.res))
 	stopifnot(fm.is.vector(fm.res))
 	stopifnot(fm.length(fm.res) == fm.nrow(fm.mat))
-	# TODO
-#	stopifnot(fm.typeof(fm.res) == typeof(res))
+	stopifnot(fm.typeof(fm.res) == typeof(res))
 }
 
 # Test a dense matrix times a vector
@@ -96,8 +95,7 @@ test.MM1 <- function(fm.left, fm.right, res)
 	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == fm.nrow(fm.res) * fm.ncol(fm.res))
 	stopifnot(fm.nrow(fm.res) == fm.nrow(fm.left))
 	stopifnot(fm.ncol(fm.res) == fm.ncol(fm.right))
-	# TODO
-#	stopifnot(fm.typeof(fm.res) == typeof(res))
+	stopifnot(fm.typeof(fm.res) == typeof(res))
 }
 
 test.MM <- function(left.type, right.type)
