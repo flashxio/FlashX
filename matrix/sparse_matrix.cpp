@@ -74,21 +74,35 @@ sparse_matrix::ptr sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 	// Initialize vertex index.
 	fg::vertex_index::ptr index = fg->get_index_data();
 	assert(index != NULL);
-	assert(!index->get_graph_header().is_directed_graph()
-			&& !index->is_compressed());
-	fg::undirected_vertex_index::ptr uindex
-		= fg::undirected_vertex_index::cast(index);
+	assert(!index->get_graph_header().is_directed_graph());
 
-	fg::vsize_t num_vertices = uindex->get_num_vertices();
+	fg::vsize_t num_vertices = index->get_num_vertices();
 	sparse_sym_matrix *m = new sparse_sym_matrix(fg->get_graph_io_factory(
 				safs::REMOTE_ACCESS), num_vertices);
 
 	// Generate the matrix index from the vertex index.
-	for (size_t i = 0; i < num_vertices; i += matrix_conf.get_row_block_size()) {
-		fg::ext_mem_vertex_info info = uindex->get_vertex_info(i);
-		m->blocks.emplace_back(info.get_off());
+	if (index->is_compressed()) {
+		fg::in_mem_cundirected_vertex_index::ptr uindex
+			= fg::in_mem_cundirected_vertex_index::create(*index);
+		for (size_t i = 0; i < num_vertices;
+				i += matrix_conf.get_row_block_size()) {
+			fg::vertex_offset off = uindex->get_vertex(i);
+			m->blocks.emplace_back(off.get_off());
+		}
+		size_t graph_size = uindex->get_vertex(num_vertices - 1).get_off()
+			+ uindex->get_size(num_vertices - 1);
+		m->blocks.emplace_back(graph_size);
 	}
-	m->blocks.emplace_back(uindex->get_graph_size());
+	else {
+		fg::undirected_vertex_index::ptr uindex
+			= fg::undirected_vertex_index::cast(index);
+		for (size_t i = 0; i < num_vertices;
+				i += matrix_conf.get_row_block_size()) {
+			fg::ext_mem_vertex_info info = uindex->get_vertex_info(i);
+			m->blocks.emplace_back(info.get_off());
+		}
+		m->blocks.emplace_back(uindex->get_graph_size());
+	}
 
 	return sparse_matrix::ptr(m);
 }
