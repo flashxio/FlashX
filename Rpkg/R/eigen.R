@@ -1,7 +1,7 @@
 # Copyright 2014 Open Connectome Project (http://openconnecto.me)
 # Written by Da Zheng (zhengda1936@gmail.com)
 #
-# This file is part of FlashGraph.
+# This file is part of FlashMatrixR.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -123,6 +123,7 @@ lanczos <- function(A.multiply, k, m, r, V, T)
 
 		if (j > 1 && T[j, j-1] < 0) {
 			print("negative T[j,j-1]")
+			# TODO
 #			T[j, j-1] <- -T[j, j-1]
 #			T[j-1, j] <- -T[j-1, j]
 #			if (j < m)
@@ -131,15 +132,6 @@ lanczos <- function(A.multiply, k, m, r, V, T)
 #				r <- -r
 		}
 	}
-
-#	for (i in 1:m) {
-#		if (T[i, i] < safe.min)
-#			cat("i =", i, ", T[i,i] =", T[i, i], "\n")
-#	}
-#	for (i in 1:(m - 1)) {
-#		if (T[i, i+1] < safe.min)
-#			cat("i =", i, ", T[i,i+1] =", T[i, i+1], "\n")
-#	}
 
 	list(T, V, r, b)
 }
@@ -199,7 +191,28 @@ test.conv <- function(ev, k, tol)
 		 uval=ev$values[(k+1):m])
 }
 
-IRLM <- function(A.multiply, n, k, m, which, tol)
+#' Compute eigenvalues/vectors on a symmetric matrix.
+#'
+#' This method reimplements implicitly restarted Lanczos method to compute
+#' eigenvalues and eigenvectors. The method is implemented completely in R
+#' and follows the implementation of ARPACK library.
+#'
+#' @param A.multiply the function to perform matrix vector multiplication.
+#' @param n Numeric scalar. The dimension of the eigenproblem.
+#' @param k Numeric scalar. The number of eigenvalues to be computed.
+#' @param m Number of Lanczos vectors to be generated.
+#' @param which Specify which eigenvalues/vectors to compute, character
+#' constant with exactly two characters.
+#' Possible values for symmetric input matrices:
+#' "LA" Compute "nev" largest (algebraic) eigenvalues.
+#' "SA" Compute "nev" smallest (algebraic) eigenvalues.
+#' "LM" Compute "nev" largest (in magnitude) eigenvalues.
+#' "SM" Compute "nev" smallest (in magnitude) eigenvalues.
+#' @param Numeric scalar. Stopping criterion: the relative accuracy of
+#' the Ritz value is considered acceptable if its error is less than 'tol'
+#' times its estimated value. If this is set to zero then machine precision is used.
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.arpack <- function(A.multiply, n, k, m, which, tol)
 {
 #	n <- dim(A)[1]
 	V <- fm.matrix(fm.rep.int(0, n*m), nrow=n, ncol=m)
@@ -273,15 +286,3 @@ IRLM <- function(A.multiply, n, k, m, which, tol)
 		last.beta <- res[[4]]
 	}
 }
-
-SVD <- function(A, k, m)
-{
-	A.multiply <- function(x) {
-		t(A) %*% (A %*% x)
-	}
-	ev <- IRLM(A.multiply, dim(A)[2], k, m)
-	sqrt(ev)
-}
-
-#IRLM(A.multiply, dim(A)[1], 5, 10)
-#SVD(A, 5, 10)
