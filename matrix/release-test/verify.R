@@ -198,6 +198,24 @@ test.basic.op1 <- function(fm.o1, fm.o2, ro1, ro2)
 	cat("div left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
 	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
 	stopifnot(fm.typeof(fm.res) == typeof(res))
+
+	fm.res <- fm.o1 == fm.o2
+	res <- ro1 == ro2
+	cat("eq left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == typeof(res))
+
+	fm.res <- fm.o1 > fm.o2
+	res <- ro1 > ro2
+	cat("gt left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == typeof(res))
+
+	fm.res <- fm.o1 >= fm.o2
+	res <- ro1 >= ro2
+	cat("ge left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == typeof(res))
 }
 
 test.basic.op <- function(fm.o1, fm.o2)
@@ -226,6 +244,24 @@ test.basic.op <- function(fm.o1, fm.o2)
 	fm.res <- fm.o1 / fm.o2
 	res <- ro1 / ro2
 	cat("div left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == typeof(res))
+
+	fm.res <- fm.o1 == fm.o2
+	res <- ro1 == ro2
+	cat("eq left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == typeof(res))
+
+	fm.res <- fm.o1 > fm.o2
+	res <- ro1 > ro2
+	cat("gt left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
+	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
+	stopifnot(fm.typeof(fm.res) == typeof(res))
+
+	fm.res <- fm.o1 >= fm.o2
+	res <- ro1 >= ro2
+	cat("ge left:", typeof(ro1), ", right:", typeof(ro2), ", res:", typeof(res), "\n")
 	stopifnot(sum(res == fm.conv.FM2R(fm.res)) == length(res))
 	stopifnot(fm.typeof(fm.res) == typeof(res))
 
@@ -260,6 +296,11 @@ test.basic.op(fm.vec1, fm.vec2)
 print("pair-wise double-double vector")
 fm.vec1 <- fm.seq.int(1, 2000, 1)
 fm.vec2 <- fm.seq.int(1, 2000, 1)
+test.basic.op(fm.vec1, fm.vec2)
+
+print("pair-wise double-double random vector")
+fm.vec1 <- fm.runif(2000)
+fm.vec2 <- fm.runif(2000)
 test.basic.op(fm.vec1, fm.vec2)
 
 print("pair-wise integer-integer matrix")
@@ -311,6 +352,19 @@ print("element-vector double-int")
 test.basic.op1(int.v, fm.vec, int.v, rvec)
 print("element-vector double-double")
 test.basic.op1(1.0, fm.vec, 1.0, rvec)
+
+fm.vec1 <- fm.runif(2000, -1, 1)
+rvec1 <- fm.conv.FM2R(fm.vec1)
+print("abs")
+fm.res <- fm.abs(fm.vec1)
+res <- abs(rvec1)
+stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
+fm.res <- fm.sqrt(fm.res + 1)
+res <- sqrt(res + 1)
+stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
+fm.vec2 <- fm.runif(2000, -1, 1)
+rvec2 <- fm.conv.FM2R(fm.vec2)
+stopifnot(sum(fm.conv.FM2R(!(fm.vec1 == fm.vec2)) == !(rvec1 == rvec2)) == length(rvec1))
 
 test.matrix <- function(fm.mat)
 {
