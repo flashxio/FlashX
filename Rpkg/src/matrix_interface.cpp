@@ -506,10 +506,27 @@ void copy_FM2Rmatrix(const type_mem_dense_matrix<T> &mat,
 	}
 }
 
+template<class T, int SEXPType>
+SEXP conv_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec)
+{
+	if (is_vec) {
+		typename mem_vector<T>::ptr mem_vec = mem_vector<T>::create(mem_mat);
+		Rcpp::Vector<SEXPType> ret(mem_vec->get_length());
+		copy_FM2Rvector<T, Rcpp::Vector<SEXPType> >(*mem_vec, ret);
+		return ret;
+	}
+	else {
+		Rcpp::Matrix<SEXPType> ret(mem_mat->get_num_rows(),
+				mem_mat->get_num_cols());
+		copy_FM2Rmatrix<T, Rcpp::Matrix<SEXPType>>(
+				*type_mem_dense_matrix<T>::create(mem_mat), ret);
+		return ret;
+	}
+}
+
 RcppExport SEXP R_FM_conv_FM2R(SEXP pobj)
 {
-	Rcpp::List matrix_obj(pobj);
-	if (is_sparse(matrix_obj)) {
+	if (is_sparse(pobj)) {
 		fprintf(stderr, "We can't convert a sparse matrix to an R object\n");
 		return R_NilValue;
 	}
@@ -521,36 +538,13 @@ RcppExport SEXP R_FM_conv_FM2R(SEXP pobj)
 	}
 
 	mem_dense_matrix::ptr mem_mat = mem_dense_matrix::cast(mat);
-	if (mem_mat->is_type<double>()) {
-		if (is_vector(pobj)) {
-			mem_vector<double>::ptr mem_vec = mem_vector<double>::create(mem_mat);
-			Rcpp::NumericVector ret(mem_vec->get_length());
-			copy_FM2Rvector<double, Rcpp::NumericVector>(*mem_vec, ret);
-			return ret;
-		}
-		else {
-			Rcpp::NumericMatrix ret(mem_mat->get_num_rows(),
-					mem_mat->get_num_cols());
-			copy_FM2Rmatrix<double, Rcpp::NumericMatrix>(
-					*type_mem_dense_matrix<double>::create(mem_mat), ret);
-			return ret;
-		}
-	}
-	else if (mem_mat->is_type<int>()) {
-		if (is_vector(pobj)) {
-			mem_vector<int>::ptr mem_vec = mem_vector<int>::create(mem_mat);
-			Rcpp::IntegerVector ret(mem_vec->get_length());
-			copy_FM2Rvector<int, Rcpp::IntegerVector>(*mem_vec, ret);
-			return ret;
-		}
-		else {
-			Rcpp::IntegerMatrix ret(mem_mat->get_num_rows(),
-					mem_mat->get_num_cols());
-			copy_FM2Rmatrix<int, Rcpp::IntegerMatrix>(
-					*type_mem_dense_matrix<int>::create(mem_mat), ret);
-			return ret;
-		}
-	}
+	bool is_vec = is_vector(pobj);
+	if (mem_mat->is_type<double>())
+		return conv_FM2R_mem<double, REALSXP>(mem_mat, is_vec);
+	else if (mem_mat->is_type<int>())
+		return conv_FM2R_mem<int, INTSXP>(mem_mat, is_vec);
+	else if (mem_mat->is_type<bool>())
+		return conv_FM2R_mem<bool, LGLSXP>(mem_mat, is_vec);
 	else {
 		fprintf(stderr, "the dense matrix doesn't have a right type\n");
 		return R_NilValue;
@@ -573,6 +567,7 @@ RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 			fm_vec->set(i, vec[i]);
 		return create_FMR_vector(fm_vec->get_data(), "");
 	}
+	// TODO handle more types.
 	else {
 		fprintf(stderr, "The R vector has an unsupported type\n");
 		return R_NilValue;
@@ -606,6 +601,7 @@ RcppExport SEXP R_FM_conv_RMat2FM(SEXP pobj, SEXP pbyrow)
 				fm_mat->set(i, j, mat(i, j));
 		return create_FMR_matrix(fm_mat->get_matrix(), "");
 	}
+	// TODO handle more types.
 	else {
 		fprintf(stderr, "The R vector has an unsupported type\n");
 		return R_NilValue;
@@ -644,6 +640,12 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 		idx = basic_ops::op_idx::MAX;
 	else if (name == "pow")
 		idx = basic_ops::op_idx::POW;
+	else if (name == "eq")
+		idx = basic_ops::op_idx::EQ;
+	else if (name == "gt")
+		idx = basic_ops::op_idx::GT;
+	else if (name == "ge")
+		idx = basic_ops::op_idx::GE;
 	else {
 		fprintf(stderr, "Unsupported basic operator: %s\n", name.c_str());
 		return R_NilValue;
@@ -657,6 +659,9 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 	return ret;
 }
 
+/*
+ * Get a binary operator.
+ */
 static const bulk_operate *get_op(SEXP pfun, prim_type type1, prim_type type2)
 {
 	Rcpp::List fun_obj(pfun);
@@ -924,13 +929,19 @@ RcppExport SEXP R_FM_typeof(SEXP pmat)
 	}
 	else {
 		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-		// TODO I think it's better to use get_type()
-		if (mat->is_type<double>())
-			ret[0] = Rcpp::String("double");
-		else if (mat->is_type<int>())
-			ret[0] = Rcpp::String("integer");
-		else
-			ret[0] = Rcpp::String("unknown");
+		switch(mat->get_type()) {
+			case prim_type::P_BOOL:
+				ret[0] = Rcpp::String("logical");
+				break;
+			case prim_type::P_INTEGER:
+				ret[0] = Rcpp::String("integer");
+				break;
+			case prim_type::P_DOUBLE:
+				ret[0] = Rcpp::String("double");
+				break;
+			default:
+				ret[0] = Rcpp::String("unknown");
+		}
 	}
 	return ret;
 }

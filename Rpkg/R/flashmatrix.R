@@ -361,6 +361,8 @@ fm.multiply <- function(fm, mat)
 #' `fm.bo.min' is the predifined basic operator for computing minimum.
 #' `fm.bo.max' is the predifined basic operator for computing maximum.
 #' `fm.bo.pow' is the predifined basic operator for computing exponential.
+#' `fm.bo.eq', `fm.bo.gt' and `fm.bo.ge' are the predefined basic
+#' logical operators to compare two elements: ==, >, >=.
 #'
 #' @param name the name of the basic operator.
 #' @return a reference to the specified basic operator.
@@ -386,6 +388,9 @@ fm.init.basic.op <- function()
 	fm.bo.min <<- fm.get.basic.op("min")
 	fm.bo.max <<- fm.get.basic.op("max")
 	fm.bo.pow <<- fm.get.basic.op("pow")
+	fm.bo.eq <<- fm.get.basic.op("eq")
+	fm.bo.gt <<- fm.get.basic.op("gt")
+	fm.bo.ge <<- fm.get.basic.op("ge")
 }
 
 #' Aggregation on a FlashMatrixR object.
