@@ -95,6 +95,16 @@ fm.pmax2 <- function(o1, o2)
 	fm.ele.wise.op(fm.bo.eq, o1, o2)
 }
 
+`!=.fm`  <- function(o1, o2)
+{
+	!fm.ele.wise.op(fm.bo.eq, o1, o2)
+}
+
+`!=.fmV`  <- function(o1, o2)
+{
+	!fm.ele.wise.op(fm.bo.eq, o1, o2)
+}
+
 `>.fm`  <- function(o1, o2)
 {
 	fm.ele.wise.op(fm.bo.gt, o1, o2)
@@ -113,6 +123,26 @@ fm.pmax2 <- function(o1, o2)
 `>=.fmV`  <- function(o1, o2)
 {
 	fm.ele.wise.op(fm.bo.ge, o1, o2)
+}
+
+`<=.fm`  <- function(o1, o2)
+{
+	!fm.ele.wise.op(fm.bo.gt, o1, o2)
+}
+
+`<=.fmV`  <- function(o1, o2)
+{
+	!fm.ele.wise.op(fm.bo.gt, o1, o2)
+}
+
+`<.fm`  <- function(o1, o2)
+{
+	!fm.ele.wise.op(fm.bo.ge, o1, o2)
+}
+
+`<.fmV`  <- function(o1, o2)
+{
+	!fm.ele.wise.op(fm.bo.ge, o1, o2)
 }
 
 `!.fm` <- function(o)
