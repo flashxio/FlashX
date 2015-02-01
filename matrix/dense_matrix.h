@@ -144,8 +144,9 @@ public:
 	prim_type get_type() const {
 		// TODO this is a temporary solution.
 		switch(get_entry_size()) {
-			case 4: return prim_type::P_INTEGER;
-			case 8: return prim_type::P_DOUBLE;
+			case sizeof(bool): return prim_type::P_BOOL;
+			case sizeof(int): return prim_type::P_INTEGER;
+			case sizeof(double): return prim_type::P_DOUBLE;
 			default:
 					fprintf(stderr, "wrong type");
 					return prim_type::NUM_TYPES;

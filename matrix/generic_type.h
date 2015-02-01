@@ -34,6 +34,7 @@ enum prim_type
 	P_LONG,
 	P_FLOAT,
 	P_DOUBLE,
+	P_BOOL,
 	NUM_TYPES,
 };
 
