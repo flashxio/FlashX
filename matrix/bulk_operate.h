@@ -119,9 +119,12 @@ public:
 	virtual void runA(size_t num_eles, const void *left_arr1,
 			void *output) const {
 		const LeftType *left_arr = (const LeftType *) left_arr1;
-		ResType res = 0;
+		if (num_eles == 0)
+			return;
+
+		ResType res = left_arr[0];
 		OpType op;
-		for (size_t i = 0; i < num_eles; i++)
+		for (size_t i = 1; i < num_eles; i++)
 			res = op(left_arr[i], res);
 		*(ResType *) output = res;
 	}
