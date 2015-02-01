@@ -345,21 +345,6 @@ fm.multiply <- function(fm, mat)
 		NULL
 }
 
-#' Sum of a vector/matrix.
-#'
-#' `sum' returns the sum of all the values in the input vector/matrix.
-#'
-#' @param m The input vector/matrix
-#' @return an integer if the input is an integer vector/matrix; a numeric
-#' value if the input is a numeric vector/matrix.
-#' @author Da Zheng <dzheng5@@jhu.edu>
-fm.sum <- function(m)
-{
-	stopifnot(!is.null(m))
-	stopifnot(class(m) == "fmV" || class(m) == "fm")
-	.Call("R_FM_matrix_sum", m, PACKAGE="FlashGraphR")
-}
-
 #' The basic operators supported by FlashMatrixR.
 #'
 #'
@@ -401,6 +386,22 @@ fm.init.basic.op <- function()
 	fm.bo.min <<- fm.get.basic.op("min")
 	fm.bo.max <<- fm.get.basic.op("max")
 	fm.bo.pow <<- fm.get.basic.op("pow")
+}
+
+#' Aggregation on a FlashMatrixR object.
+#'
+#' This function accepts a basic operator and perform aggregation on
+#' the FlashMatrixR object with the basic operator.
+#'
+#' @param bop a basic operator
+#' @param fm a FlashMatrixR object
+#' @return a scalar
+fm.agg <- function(bop, fm)
+{
+	stopifnot(!is.null(fm) && !is.null(bop))
+	stopifnot(class(fm) == "fmV" || class(fm) == "fm")
+	stopifnot(class(bop) == "fm.bo")
+	.Call("R_FM_agg", bop, fm, PACKAGE="FlashGraphR")
 }
 
 #' Apply a Function to two FlashMatrixR vectors/matrices.

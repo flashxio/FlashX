@@ -467,34 +467,6 @@ RcppExport SEXP R_FM_multiply_dense(SEXP pmatrix, SEXP pmat)
 		return R_NilValue;
 }
 
-template<class T>
-T matrix_sum(const dense_matrix &mat)
-{
-	scalar_type_impl<T> res;
-	basic_ops_impl<T, T, T> ops;
-	mat.aggregate(ops.get_add(), res);
-	return res.get();
-}
-
-RcppExport SEXP R_FM_matrix_sum(SEXP pmat)
-{
-	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-	if (mat->is_type<double>()) {
-		Rcpp::NumericVector ret(1);
-		ret[0] = matrix_sum<double>(*mat);
-		return ret;
-	}
-	else if (mat->is_type<int>()) {
-		Rcpp::NumericVector ret(1);
-		ret[0] = matrix_sum<int>(*mat);
-		return ret;
-	}
-	else {
-		fprintf(stderr, "The matrix has an unsupported type for sum\n");
-		return R_NilValue;
-	}
-}
-
 RcppExport SEXP R_FM_conv_matrix(SEXP pmat, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 {
 	Rcpp::List matrix_obj(pmat);
@@ -884,6 +856,45 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 		return create_FMR_vector(out, "");
 	else
 		return create_FMR_matrix(out, "");
+}
+
+template<class T, class ReturnType>
+ReturnType matrix_agg(const dense_matrix &mat, const bulk_operate &op)
+{
+	ReturnType ret(1);
+	scalar_type_impl<T> res;
+	if (mat.aggregate(op, res)) {
+		ret[0] = res.get();
+		return ret;
+	}
+	else {
+		fprintf(stderr, "fail to perform aggregation on the matrix\n");
+		return R_NilValue;
+	}
+}
+
+RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
+{
+	Rcpp::List obj1(pobj);
+	if (is_sparse(obj1)) {
+		fprintf(stderr, "agg doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
+	// For aggregation, the left and right operands have the same type.
+	const bulk_operate *op = get_op(pfun, m->get_type(), m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	if (m->is_type<double>())
+		return matrix_agg<double, Rcpp::NumericVector>(*m, *op);
+	else if (m->is_type<int>())
+		return matrix_agg<int, Rcpp::IntegerVector>(*m, *op);
+	else {
+		fprintf(stderr, "The matrix has an unsupported type for aggregation\n");
+		return R_NilValue;
+	}
 }
 
 RcppExport SEXP R_FM_matrix_layout(SEXP pmat)

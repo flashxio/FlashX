@@ -84,3 +84,33 @@ fm.pmax2 <- function(o1, o2)
 {
 	fm.ele.wise.op(fm.bo.div, o1, o2)
 }
+
+#' Aggregation on a FlashMatrixR vector/matrix.
+#'
+#' `fm.sum' returns the sum of all the values in the input vector/matrix.
+#'
+#' `fm.min' returns the minimum of all values in the input vector/matrix.
+#'
+#' `fm.max' returns the maximum of all values in the input vector/matrix.
+#'
+#' @param m The input vector/matrix
+#' @return an integer if the input is an integer vector/matrix; a numeric
+#' value if the input is a numeric vector/matrix.
+#' @name fm.agg.impl
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.sum <- function(m)
+{
+	fm.agg(fm.bo.add, m)
+}
+
+#' @name fm.agg.impl
+fm.min <- function(m)
+{
+	fm.agg(fm.bo.min, m)
+}
+
+#' @name fm.agg.impl
+fm.max <- function(m)
+{
+	fm.agg(fm.bo.max, m)
+}
