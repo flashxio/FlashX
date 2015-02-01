@@ -486,8 +486,8 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pmat, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 	return create_FMR_matrix(mat->conv2(nrow, ncol, byrow), "");
 }
 
-template<class T, class RContainerType>
-void copy_FM2Rvector(const mem_vector<T> &vec, RContainerType &r_arr)
+template<class T, class RType>
+void copy_FM2Rvector(const mem_vector<T> &vec, RType *r_arr)
 {
 	size_t length = vec.get_length();
 	for (size_t i = 0; i < length; i++) {
@@ -495,21 +495,68 @@ void copy_FM2Rvector(const mem_vector<T> &vec, RContainerType &r_arr)
 	}
 }
 
-template<class T, class RContainerType>
-void copy_FM2Rmatrix(const type_mem_dense_matrix<T> &mat,
-		RContainerType &r_mat)
+template<class T, class RType>
+void copy_FM2Rmatrix(const type_mem_dense_matrix<T> &mat, RType *r_vec)
 {
 	// TODO this is going to be slow. But I don't care about performance
 	// for now.
 	size_t nrow = mat.get_num_rows();
 	size_t ncol = mat.get_num_cols();
-	for (size_t i = 0; i < nrow; i++) {
-		for (size_t j = 0; j < ncol; j++) {
-			r_mat(i, j) = mat.get(i, j);
-		}
-	}
+	for (size_t i = 0; i < nrow; i++)
+		for (size_t j = 0; j < ncol; j++)
+			r_vec[i + j * nrow] = mat.get(i, j);
 }
 
+template<class T, class RType>
+void copy_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
+{
+	if (is_vec) {
+		typename mem_vector<T>::ptr mem_vec = mem_vector<T>::create(mem_mat);
+		copy_FM2Rvector<T>(*mem_vec, ret);
+	}
+	else
+		copy_FM2Rmatrix<T>(*type_mem_dense_matrix<T>::create(mem_mat), ret);
+}
+
+RcppExport SEXP R_FM_copy_FM2R(SEXP pobj, SEXP pRmat)
+{
+	Rcpp::LogicalVector ret(1);
+	if (is_sparse(pobj)) {
+		fprintf(stderr, "We can't copy a sparse matrix to an R object\n");
+		ret[0] = false;
+		return ret;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pobj);
+	if (!mat->is_in_mem()) {
+		fprintf(stderr, "We only support in-memory matrix right now\n");
+		ret[0] = false;
+		return ret;
+	}
+
+	mem_dense_matrix::ptr mem_mat = mem_dense_matrix::cast(mat);
+	bool is_vec = is_vector(pobj);
+	if (mem_mat->is_type<double>()) {
+		copy_FM2R_mem<double, double>(mem_mat, is_vec, REAL(pRmat));
+		ret[0] = true;
+	}
+	else if (mem_mat->is_type<int>()) {
+		copy_FM2R_mem<int, int>(mem_mat, is_vec, INTEGER(pRmat));
+		ret[0] = true;
+	}
+	else if (mem_mat->is_type<bool>()) {
+		copy_FM2R_mem<bool, int>(mem_mat, is_vec, LOGICAL(pRmat));
+		ret[0] = true;
+	}
+	else {
+		fprintf(stderr, "the dense matrix doesn't have a right type\n");
+		ret[0] = false;
+	}
+
+	return ret;
+}
+
+#if 0
 template<class T, int SEXPType>
 SEXP conv_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec)
 {
@@ -554,6 +601,7 @@ RcppExport SEXP R_FM_conv_FM2R(SEXP pobj)
 		return R_NilValue;
 	}
 }
+#endif
 
 RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 {

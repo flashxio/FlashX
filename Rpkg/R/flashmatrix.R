@@ -170,10 +170,28 @@ fm.conv.R2FM <- function(obj, byrow=FALSE)
 fm.conv.FM2R <- function(obj)
 {
 	stopifnot(!is.null(obj))
-	if (class(obj) == "fm")
-		.Call("R_FM_conv_FM2R", obj, PACKAGE="FlashGraphR")
+	if (class(obj) == "fm") {
+		nrow <- fm.nrow(obj)
+		ncol <- fm.ncol(obj)
+		if (fm.typeof(obj) == "integer")
+			ret <- matrix(vector(mode="integer", nrow * ncol), nrow, ncol)
+		else if (fm.typeof(obj) == "double")
+			ret <- matrix(vector(mode="double", nrow * ncol), nrow, ncol)
+		else if (fm.typeof(obj) == "logical")
+			ret <- matrix(vector(mode="logical", nrow * ncol), nrow, ncol)
+		.Call("R_FM_copy_FM2R", obj, ret, PACKAGE="FlashGraphR")
+		ret
+	}
 	else if (class(obj) == "fmV") {
-		.Call("R_FM_conv_FM2R", obj, PACKAGE="FlashGraphR")
+		len <- fm.length(obj)
+		if (fm.typeof(obj) == "integer")
+			ret <- vector(mode="integer", len)
+		else if (fm.typeof(obj) == "double")
+			ret <- vector(mode="double", len)
+		else if (fm.typeof(obj) == "logical")
+			ret <- vector(mode="logical", len)
+		.Call("R_FM_copy_FM2R", obj, ret, PACKAGE="FlashGraphR")
+		ret
 	}
 	else {
 		print("It has to be a FlashMatrixR object")
