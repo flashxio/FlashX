@@ -82,6 +82,9 @@ public:
 	virtual size_t output_entry_size() const = 0;
 };
 
+/*
+ * This template implements the interface of the bulk binary operator.
+ */
 template<class OpType, class LeftType, class RightType, class ResType>
 class bulk_operate_impl: public bulk_operate
 {
@@ -142,6 +145,9 @@ public:
 	}
 };
 
+/*
+ * This interface defines a collection of basic binary operators.
+ */
 class basic_ops
 {
 public:
@@ -155,6 +161,9 @@ public:
 		MIN,
 		MAX,
 		POW,
+		EQ,
+		GT,
+		GE,
 		NUM_OPS,
 	};
 
@@ -165,6 +174,9 @@ public:
 	virtual const bulk_operate &get_divide() const = 0;
 };
 
+/*
+ * This template implements all basic binary operators for different types.
+ */
 template<class LeftType, class RightType, class ResType>
 class basic_ops_impl: public basic_ops
 {
@@ -220,6 +232,24 @@ class basic_ops_impl: public basic_ops
 		}
 	};
 
+	struct eq {
+		bool operator()(const LeftType &e1, const RightType &e2) {
+			return e1 == e2;
+		}
+	};
+
+	struct gt {
+		bool operator()(const LeftType &e1, const RightType &e2) {
+			return e1 > e2;
+		}
+	};
+
+	struct ge {
+		bool operator()(const LeftType &e1, const RightType &e2) {
+			return e1 >= e2;
+		}
+	};
+
 	bulk_operate_impl<add, LeftType, RightType, ResType> add_op;
 	bulk_operate_impl<sub, LeftType, RightType, ResType> sub_op;
 	bulk_operate_impl<multiply, LeftType, RightType, ResType> mul_op;
@@ -227,6 +257,9 @@ class basic_ops_impl: public basic_ops
 	bulk_operate_impl<min, LeftType, RightType, ResType> min_op;
 	bulk_operate_impl<max, LeftType, RightType, ResType> max_op;
 	bulk_operate_impl<pow, LeftType, RightType, ResType> pow_op;
+	bulk_operate_impl<eq, LeftType, RightType, bool> eq_op;
+	bulk_operate_impl<gt, LeftType, RightType, bool> gt_op;
+	bulk_operate_impl<ge, LeftType, RightType, bool> ge_op;
 
 	std::vector<bulk_operate *> ops;
 public:
@@ -239,6 +272,9 @@ public:
 		ops[MIN] = &min_op;
 		ops[MAX] = &max_op;
 		ops[POW] = &pow_op;
+		ops[EQ] = &eq_op;
+		ops[GT] = &gt_op;
+		ops[GE] = &ge_op;
 	}
 
 	virtual const bulk_operate *get_op(op_idx idx) const {
