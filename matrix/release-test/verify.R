@@ -399,6 +399,30 @@ fm.mat1 <- fm.read.obj("test.mat")
 stopifnot(fm.matrix.layout(fm.mat1) == "row")
 stopifnot(sum(t(mat[,3:12]) == fm.conv.FM2R(fm.mat1)) == length(mat[,3:12]))
 
+print("sum on a vector")
+fm.vec <- fm.seq.int(1, 2000, 1)
+vec <- fm.conv.FM2R(fm.vec)
+stopifnot(fm.sum(fm.vec) == sum(vec))
+vec <- 1:2000
+fm.vec <- fm.conv.R2FM(vec)
+stopifnot(fm.sum(fm.vec) == sum(vec))
+
+print("min on a vector")
+fm.vec <- fm.seq.int(1, 2000, 1)
+vec <- fm.conv.FM2R(fm.vec)
+stopifnot(fm.min(fm.vec) == min(vec))
+vec <- 1:2000
+fm.vec <- fm.conv.R2FM(vec)
+stopifnot(fm.min(fm.vec) == min(vec))
+
+print("max on a vector")
+fm.vec <- fm.seq.int(1, 2000, 1)
+vec <- fm.conv.FM2R(fm.vec)
+stopifnot(fm.max(fm.vec) == max(vec))
+vec <- 1:2000
+fm.vec <- fm.conv.R2FM(vec)
+stopifnot(fm.max(fm.vec) == max(vec))
+
 # TODO test transpose a sparse matrix.
 
 # Test on a sparse matrix
