@@ -41,6 +41,31 @@ public:
 	virtual size_t output_entry_size() const = 0;
 };
 
+/*
+ * This template implements the interface of a bulk unary operator.
+ */
+template<class OpType, class InType, class OutType>
+class bulk_uoperate_impl: public bulk_uoperate
+{
+public:
+	virtual void runA(size_t num_eles, const void *in_arr1,
+			void *output_arr1) const {
+		const InType *in_arr = (const InType *) in_arr1;
+		OutType *output_arr = (OutType *) output_arr1;
+		OpType op;
+		for (size_t i = 0; i < num_eles; i++)
+			output_arr[i] = op(in_arr[i]);
+	}
+
+	virtual size_t input_entry_size() const {
+		return sizeof(InType);
+	}
+
+	virtual size_t output_entry_size() const {
+		return sizeof(OutType);
+	}
+};
+
 /**
  * This is a bulk version of a binary operator that takes two inputs and
  * generates an output. The bulk version is to amortize the overhead of
@@ -146,6 +171,76 @@ public:
 };
 
 /*
+ * This interface defines a collection of basic unary operators.
+ */
+class basic_uops
+{
+public:
+	typedef std::shared_ptr<basic_uops> ptr;
+
+	enum op_idx {
+		NEG,
+		SQRT,
+		ABS,
+		NOT,
+		NUM_OPS,
+	};
+
+	virtual const bulk_uoperate *get_op(op_idx idx) const = 0;
+};
+
+/*
+ * This template implements all basic binary operators for different types.
+ */
+template<class InType, class OutType>
+class basic_uops_impl: public basic_uops
+{
+	struct uop_neg {
+		OutType operator()(const InType &e) {
+			return -e;
+		}
+	};
+
+	struct uop_sqrt {
+		double operator()(const InType &e) {
+			return std::sqrt(e);
+		}
+	};
+
+	struct uop_abs {
+		OutType operator()(const InType &e) {
+			return std::abs(e);
+		}
+	};
+
+	struct uop_not {
+		bool operator()(const bool &e) {
+			return !e;
+		}
+	};
+
+	bulk_uoperate_impl<uop_neg, InType, OutType> neg_op;
+	bulk_uoperate_impl<uop_sqrt, InType, double> sqrt_op;
+	bulk_uoperate_impl<uop_abs, InType, OutType> abs_op;
+	bulk_uoperate_impl<uop_not, bool, bool> not_op;
+
+	std::vector<bulk_uoperate *> ops;
+public:
+	basic_uops_impl() {
+		ops.push_back(&neg_op);
+		ops.push_back(&sqrt_op);
+		ops.push_back(&abs_op);
+		ops.push_back(&not_op);
+	}
+
+	virtual const bulk_uoperate *get_op(op_idx idx) const {
+		if (idx >= op_idx::NUM_OPS)
+			return NULL;
+		return ops[idx];
+	}
+};
+
+/*
  * This interface defines a collection of basic binary operators.
  */
 class basic_ops
@@ -168,10 +263,21 @@ public:
 	};
 
 	virtual const bulk_operate *get_op(op_idx idx) const = 0;
-	virtual const bulk_operate &get_add() const = 0;
-	virtual const bulk_operate &get_sub() const = 0;
-	virtual const bulk_operate &get_multiply() const = 0;
-	virtual const bulk_operate &get_divide() const = 0;
+	virtual const bulk_operate &get_add() const {
+		return *get_op(ADD);
+	}
+
+	virtual const bulk_operate &get_sub() const {
+		return *get_op(SUB);
+	}
+
+	virtual const bulk_operate &get_multiply() const {
+		return *get_op(MUL);
+	}
+
+	virtual const bulk_operate &get_divide() const {
+		return *get_op(DIV);
+	}
 };
 
 /*
@@ -278,23 +384,9 @@ public:
 	}
 
 	virtual const bulk_operate *get_op(op_idx idx) const {
+		if (idx >= op_idx::NUM_OPS)
+			return NULL;
 		return ops[idx];
-	}
-
-	virtual const bulk_operate &get_add() const {
-		return add_op;
-	}
-
-	virtual const bulk_operate &get_sub() const {
-		return sub_op;
-	}
-
-	virtual const bulk_operate &get_multiply() const {
-		return mul_op;
-	}
-
-	virtual const bulk_operate &get_divide() const {
-		return div_op;
 	}
 };
 
