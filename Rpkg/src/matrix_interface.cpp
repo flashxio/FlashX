@@ -353,6 +353,10 @@ static basic_ops_impl<double, int, double> R_basic_ops_DI;
 static basic_ops_impl<int, double, double> R_basic_ops_ID;
 static basic_ops_impl<double, double, double> R_basic_ops_DD;
 
+static basic_uops_impl<int, int> R_basic_uops_I;
+static basic_uops_impl<double, double> R_basic_uops_D;
+static basic_uops_impl<bool, bool> R_basic_uops_B;
+
 static basic_ops &get_inner_prod_left_ops(const dense_matrix &left,
 		const dense_matrix &right)
 {
@@ -652,11 +656,55 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 	}
 
 	Rcpp::List ret;
-	Rcpp::IntegerVector r_idx(1);
-	r_idx[0] = idx;
-	ret["idx"] = r_idx;
+	Rcpp::IntegerVector r_info(1);
+	// The index
+	r_info[0] = idx;
+	// The number of operands
+	r_info[1] = 2;
+	ret["info"] = r_info;
 	ret["name"] = pname;
 	return ret;
+}
+
+RcppExport SEXP R_FM_get_basic_uop(SEXP pname)
+{
+	std::string name = CHAR(STRING_ELT(pname, 0));
+
+	basic_uops::op_idx idx;
+	if (name == "neg")
+		idx = basic_uops::op_idx::NEG;
+	else if (name == "sqrt")
+		idx = basic_uops::op_idx::SQRT;
+	else if (name == "abs")
+		idx = basic_uops::op_idx::ABS;
+	else if (name == "not")
+		idx = basic_uops::op_idx::NOT;
+	else {
+		fprintf(stderr, "Unsupported basic operator: %s\n", name.c_str());
+		return R_NilValue;
+	}
+
+	Rcpp::List ret;
+	Rcpp::IntegerVector r_info(1);
+	// The index
+	r_info[0] = idx;
+	// The number of operands
+	r_info[1] = 1;
+	ret["info"] = r_info;
+	ret["name"] = pname;
+	return ret;
+}
+
+static int get_op_idx(const Rcpp::List &fun_obj)
+{
+	Rcpp::IntegerVector info = fun_obj["info"];
+	return info[0];
+}
+
+static int get_op_nop(const Rcpp::List &fun_obj)
+{
+	Rcpp::IntegerVector info = fun_obj["info"];
+	return info[1];
 }
 
 /*
@@ -665,8 +713,12 @@ RcppExport SEXP R_FM_get_basic_op(SEXP pname)
 static const bulk_operate *get_op(SEXP pfun, prim_type type1, prim_type type2)
 {
 	Rcpp::List fun_obj(pfun);
-	Rcpp::IntegerVector r_idx = fun_obj["idx"];
-	basic_ops::op_idx bo_idx = (basic_ops::op_idx) r_idx[0];
+	basic_ops::op_idx bo_idx = (basic_ops::op_idx) get_op_idx(fun_obj);
+	int noperands = get_op_nop(fun_obj);
+	if (noperands != 2) {
+		fprintf(stderr, "This isn't a binary operator\n");
+		return NULL;
+	}
 
 	basic_ops *ops = NULL;
 	if (type1 == prim_type::P_DOUBLE && type2 == prim_type::P_DOUBLE)
@@ -684,7 +736,40 @@ static const bulk_operate *get_op(SEXP pfun, prim_type type1, prim_type type2)
 
 	const bulk_operate *op = ops->get_op(bo_idx);
 	if (op == NULL) {
-		fprintf(stderr, "invalid basic operator\n");
+		fprintf(stderr, "invalid basic binary operator\n");
+		return NULL;
+	}
+	return op;
+}
+
+/*
+ * Get a unary operator.
+ */
+static const bulk_uoperate *get_uop(SEXP pfun, prim_type type)
+{
+	Rcpp::List fun_obj(pfun);
+	basic_uops::op_idx bo_idx = (basic_uops::op_idx) get_op_idx(fun_obj);
+	int noperands = get_op_nop(fun_obj);
+	if (noperands != 1) {
+		fprintf(stderr, "This isn't a unary operator\n");
+		return NULL;
+	}
+
+	basic_uops *ops = NULL;
+	if (type == prim_type::P_DOUBLE)
+		ops = &R_basic_uops_D;
+	else if (type == prim_type::P_INTEGER)
+		ops = &R_basic_uops_I;
+	else if (type == prim_type::P_BOOL)
+		ops = &R_basic_uops_B;
+	else {
+		fprintf(stderr, "wrong type\n");
+		return NULL;
+	}
+
+	const bulk_uoperate *op = ops->get_op(bo_idx);
+	if (op == NULL) {
+		fprintf(stderr, "invalid basic unary operator\n");
 		return NULL;
 	}
 	return op;
@@ -855,6 +940,31 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 		return R_NilValue;
 	}
 
+	if (out == NULL)
+		return R_NilValue;
+	else if (is_vec)
+		return create_FMR_vector(out, "");
+	else
+		return create_FMR_matrix(out, "");
+}
+
+RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
+{
+	Rcpp::List obj(pobj);
+	if (is_sparse(obj)) {
+		fprintf(stderr, "sapply doesn't support sparse matrix\n");
+		return R_NilValue;
+	}
+
+	// We only need to test on one vector.
+	bool is_vec = is_vector(obj);
+	dense_matrix::ptr m = get_matrix<dense_matrix>(obj);
+
+	const bulk_uoperate *op = get_uop(pfun, m->get_type());
+	if (op == NULL)
+		return R_NilValue;
+
+	dense_matrix::ptr out = m->sapply(*op);
 	if (out == NULL)
 		return R_NilValue;
 	else if (is_vec)

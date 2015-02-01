@@ -115,6 +115,16 @@ fm.pmax2 <- function(o1, o2)
 	fm.ele.wise.op(fm.bo.ge, o1, o2)
 }
 
+`!.fm` <- function(o)
+{
+	fm.sapply(fm.buo.not, o)
+}
+
+`!.fmV` <- function(o)
+{
+	fm.sapply(fm.buo.not, o)
+}
+
 #' Aggregation on a FlashMatrixR vector/matrix.
 #'
 #' `fm.sum' returns the sum of all the values in the input vector/matrix.
@@ -143,4 +153,25 @@ fm.min <- function(m)
 fm.max <- function(m)
 {
 	fm.agg(fm.bo.max, m)
+}
+
+#' Miscellaneous Mathematical Functions
+#'
+#' `abs(x)' computes the absolute value of x, `sqrt(x)' computes the
+#' square root of x.
+#'
+#' @param m a numeric vector or matrix.
+#' @return `abs' returns a vector/matrix of the same type as the input
+#' vector/matrix; `sqrt' returns a numeric vector/matrix.
+#' @name misc.math
+#' @author Da Zheng <dzheng5@@jhu.edu>
+fm.abs <- function(m)
+{
+	fm.sapply(fm.buo.abs, m)
+}
+
+#' @name misc.math
+fm.sqrt <- function(m)
+{
+	fm.sapply(fm.buo.sqrt, m)
 }

@@ -352,17 +352,26 @@ fm.multiply <- function(fm, mat)
 #' accept operators as arguments. Such a function includes `fm.mapply',
 #' `fm.inner.prod', etc.
 #'
-#' `fm.get.basic.op' gets the predefined basic operator specified by a user.
+#' `fm.get.basic.op' gets the predefined basic binary operator specified by a user.
+#'
+#' `fm.get.basic.uop' gets the predefined basic unary operator specified by a user.
+#'
 #' `fm.init.basic.op' defines the basic operators.
-#' `fm.bo.add' is the predifined basic operator for addition.
-#' `fm.bo.sub' is the predifined basic operator for subtraction.
-#' `fm.bo.mul' is the predifined basic operator for multiplication.
-#' `fm.bo.div' is the predifined basic operator for division.
-#' `fm.bo.min' is the predifined basic operator for computing minimum.
-#' `fm.bo.max' is the predifined basic operator for computing maximum.
-#' `fm.bo.pow' is the predifined basic operator for computing exponential.
+#'
+#' `fm.bo.add' is the predifined basic binary operator for addition.
+#' `fm.bo.sub' is the predifined basic binary operator for subtraction.
+#' `fm.bo.mul' is the predifined basic binary operator for multiplication.
+#' `fm.bo.div' is the predifined basic binary operator for division.
+#' `fm.bo.min' is the predifined basic binary operator for computing minimum.
+#' `fm.bo.max' is the predifined basic binary operator for computing maximum.
+#' `fm.bo.pow' is the predifined basic binary operator for computing exponential.
 #' `fm.bo.eq', `fm.bo.gt' and `fm.bo.ge' are the predefined basic
 #' logical operators to compare two elements: ==, >, >=.
+#'
+#' `fm.buo.neg' is the predefined basic unary operator for negate.
+#' `fm.buo.sqrt' is the predefined basic unary operator for square root.
+#' `fm.buo.abs' is the predefined basic unary operator for absolute value.
+#' `fm.buo.not' is the predefined logical NOT Operator.
 #'
 #' @param name the name of the basic operator.
 #' @return a reference to the specified basic operator.
@@ -372,6 +381,17 @@ fm.get.basic.op <- function(name)
 {
 	stopifnot(!is.null(name))
 	ret <- .Call("R_FM_get_basic_op", name, PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		structure(ret, class="fm.bo")
+	else
+		NULL
+}
+
+#' @name fm.basic.op
+fm.get.basic.uop <- function(name)
+{
+	stopifnot(!is.null(name))
+	ret <- .Call("R_FM_get_basic_uop", name, PACKAGE="FlashGraphR")
 	if (!is.null(ret))
 		structure(ret, class="fm.bo")
 	else
@@ -391,6 +411,11 @@ fm.init.basic.op <- function()
 	fm.bo.eq <<- fm.get.basic.op("eq")
 	fm.bo.gt <<- fm.get.basic.op("gt")
 	fm.bo.ge <<- fm.get.basic.op("ge")
+
+	fm.buo.neg <<- fm.get.basic.uop("neg")
+	fm.buo.sqrt <<- fm.get.basic.uop("sqrt")
+	fm.buo.abs <<- fm.get.basic.uop("abs")
+	fm.buo.not <<- fm.get.basic.uop("not")
 }
 
 #' Aggregation on a FlashMatrixR object.
@@ -441,6 +466,26 @@ fm.mapply2 <- function(FUN, o1, o2)
 		return(NULL)
 	}
 	ret <- .Call("R_FM_mapply2", FUN, o1, o2, PACKAGE="FlashGraphR")
+	if (!is.null(ret))
+		structure(ret, class=class.name)
+	else
+		NULL
+}
+
+fm.sapply <- function(FUN, o)
+{
+	stopifnot(!is.null(FUN) && !is.null(o))
+	stopifnot(class(FUN) == "fm.bo")
+	class.name <- "";
+	if (class(o) == "fmV")
+		class.name <- "fmV"
+	else if (class(o) == "fm")
+		class.name <- "fm"
+	else {
+		print("o has a wrong type")
+		return(NULL)
+	}
+	ret <- .Call("R_FM_sapply", FUN, o, PACKAGE="FlashGraphR")
 	if (!is.null(ret))
 		structure(ret, class=class.name)
 	else
