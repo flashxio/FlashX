@@ -155,7 +155,7 @@ void default_vertex_queue::init(worker_thread &t)
 	active_vertices = std::move(t.next_activated_vertices);
 	t.next_activated_vertices = std::move(tmp);
 	active_vertices->finalize();
-	num_active = active_vertices->get_num_active_vertices();
+	size_t num_active_vertices = active_vertices->get_num_active_vertices();
 
 	// Get the vertically partitioned vertices that are activated.
 	std::vector<vpart_vertex_pointer> vpart_ps_tmp(
@@ -171,12 +171,13 @@ void default_vertex_queue::init(worker_thread &t)
 			if (active_vertices->is_active(local_vid_t(off))) {
 				vpart_ps.push_back(p);
 				active_vertices->reset_active_vertex(local_vid_t(off));
-				num_active--;
+				num_active_vertices--;
 			}
 		}
 		printf("there are %ld vparts\n", vpart_ps.size());
-		num_active += vpart_ps.size() * graph_conf.get_num_vparts();
+		num_active_vertices += vpart_ps.size() * graph_conf.get_num_vparts();
 	}
+	this->num_active = num_active_vertices;
 
 	bool forward = true;
 	if (graph_conf.get_elevator_enabled())
@@ -221,6 +222,9 @@ void default_vertex_queue::fetch_vparts()
 
 int default_vertex_queue::fetch(compute_vertex_pointer vertices[], int num)
 {
+	if (num_active == 0)
+		return 0;
+
 	int num_fetched = 0;
 	pthread_spin_lock(&lock);
 	if (buf_fetch_idx.get_num_remaining() > 0) {
@@ -344,16 +348,16 @@ worker_thread::worker_thread(graph_engine *graph,
 {
 	this->scheduler = scheduler;
 	req_on_vertex = false;
-	this->vprogram = std::move(prog);
-	vprogram->init(graph, this);
-	this->vpart_vprogram = std::move(vpart_prog);
-	vpart_vprogram->init(graph, this);
+	this->vprogram = prog;
+	this->vpart_vprogram = vpart_prog;
 	start_all = false;
 	this->worker_id = worker_id;
 	this->graph = graph;
 	this->io = NULL;
 	this->graph_factory = graph_factory;
 	this->index_factory = index_factory;
+	vprogram->init(graph, this);
+	vpart_vprogram->init(graph, this);
 	balancer = std::unique_ptr<load_balancer>(new load_balancer(*graph, *this));
 	msg_processor = std::unique_ptr<message_processor>(new message_processor(
 				*graph, *this, msg_alloc));
@@ -398,6 +402,9 @@ worker_thread::~worker_thread()
 
 void worker_thread::init()
 {
+	vprogram->run_on_engine_start();
+	vpart_vprogram->run_on_engine_start();
+
 	size_t num_local_vertices = graph->get_partitioner()->get_part_size(
 			worker_id, graph->get_num_vertices());
 	// We should create these objects in the context of the worker thread,
@@ -602,12 +609,17 @@ void worker_thread::run()
 		num_activated_vertices_in_level = atomic_number<long>(0);
 		num_completed_vertices_in_level = atomic_number<long>(0);
 
+		// TODO is this the right place to activate vertices?
+		vprogram->run_on_iteration_end();
+		vpart_vprogram->run_on_iteration_end();
+
 		vprogram->flush_msgs();
 		vpart_vprogram->flush_msgs();
 		// We have to make sure all stolen vertices are returned to their owner
 		// threads.
 		balancer->process_completed_stolen_vertices();
 		balancer->reset();
+
 		bool completed = graph->progress_next_level();
 		if (completed)
 			break;

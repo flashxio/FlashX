@@ -17,6 +17,11 @@
 
 # This implements Implicit Restart Lanczos Method.
 
+norm2 <- function(x)
+{
+	sqrt(sum(x^2))
+}
+
 initr <- function(n)
 {
 #	x <- rep.int(1, n)
@@ -28,14 +33,14 @@ initr <- function(n)
 reinitr <- function(n, V)
 {
 	r <- initr(n)
-	b0 <- norm(r, type="2")
+	b0 <- norm2(r)
 
 	iter <- 0
 	while (iter < 5) {
 		iter <- iter + 1
 		s <- t(V) %*% r
 		r <- r - V %*% s
-		b <- norm(r, type="2")
+		b <- norm2(r)
 		if (b <= 0.717 * b0)
 			break
 		b0 <- b
@@ -48,7 +53,7 @@ reinitr <- function(n, V)
 lanczos <- function(A.multiply, k, m, r, V, T)
 {
 	n <- length(r)
-	b <- norm(r, type="2")
+	b <- norm2(r)
 	for (j in (k+1):m) {
 		restart <- FALSE
 		# Step 1: we need to reinitialize r if necessary.
@@ -68,7 +73,7 @@ lanczos <- function(A.multiply, k, m, r, V, T)
 		r <- (A.multiply(vj))[,1]
 
 		# Step 4
-		wnorm <- norm(r, type="2")
+		wnorm <- norm2(r)
 		w <- t(V[,1:j]) %*% r
 		r <- r - V[,1:j] %*% w
 		a <- w[j]
@@ -83,7 +88,7 @@ lanczos <- function(A.multiply, k, m, r, V, T)
 				T[j-1, j] <- b
 			}
 		}
-		b <- norm(r, type="2")
+		b <- norm2(r)
 
 		# Step 5
 		orth.iter <- 0
@@ -93,7 +98,7 @@ lanczos <- function(A.multiply, k, m, r, V, T)
 			r <- r - (V[,1:j] %*% s)[,1]
 			a <- a + s[j,1]
 			T[j,j] <- a
-			new.b <- norm(r, type="2")
+			new.b <- norm2(r)
 			if (new.b > 0.717 * b) {
 				b <- new.b
 				break
@@ -124,6 +129,7 @@ lanczos <- function(A.multiply, k, m, r, V, T)
 				r <- -r
 		}
 	}
+
 	list(T, V, r, b)
 }
 

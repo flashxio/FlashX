@@ -82,9 +82,9 @@ test.directed <- function(fg, ig)
 	ig.res <- degree(ig, mode="in")
 	check.vectors("degree_test", fg.res, ig.res)
 
-	# test ccoreness
+	# test coreness
 	print("test coreness")
-	fg.res <- fg.coreness(fg)
+	fg.res <- fg.kcore(fg, 1, 0)
 	ig.res <- graph.coreness(ig, mode="all")
 	check.vectors("coreness_test", fg.res, ig.res)
 
@@ -305,6 +305,19 @@ test.eigen.undirected <- function(fg, ig)
 	d.matrix <- diag(1 / sqrt(fg.degree(fg) + 1))
 	ig.matrix.tmp <- d.matrix %*% (diag(fg.degree(fg)) - ig.matrix) %*% d.matrix
 	check.eigen(ig.matrix.tmp, fg.res)
+}
+
+# Kmeans
+source("verify.kmeans.R")
+test.kmeans(2, 500, 20)
+test.with.iris()
+
+# Betweeness
+test.betweenness <- function(fg, ig)
+{
+	fg.btw <- fg.betweenness(fg)
+	ig.btw <- betweenness(ig)
+	stopifnot(all.equal(ig.btw, fg.btw, tolerance=.001)) # Need tolerance for floats
 }
 
 test.weighted <- function(fg, ig)

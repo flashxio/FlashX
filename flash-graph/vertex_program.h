@@ -44,6 +44,7 @@ class worker_thread;
  */
 class vertex_program
 {
+	int part_id;
 	worker_thread *t;
 	graph_engine *graph;
 
@@ -76,6 +77,12 @@ class vertex_program
 	}
 public:
 	typedef std::shared_ptr<vertex_program> ptr; /**Smart pointer by which `vertex_program`s should be accessed.*/
+
+	vertex_program() {
+		part_id = 0;
+		t = NULL;
+		graph = NULL;
+	}
     
     /** \brief Destructor */
 	virtual ~vertex_program();
@@ -86,15 +93,14 @@ public:
      *  \param graph The graph engine pointer.
      *  \param t The array of worker threads running the program.
      */
-	void init(graph_engine *graph, worker_thread *t) {
-		this->t = t;
-		this->graph = graph;
-	}
+	void init(graph_engine *graph, worker_thread *t);
     
     /* Internal */
 	void init_messaging(const std::vector<worker_thread *> &threads,
 			std::shared_ptr<slab_allocator> msg_alloc,
 			std::shared_ptr<slab_allocator> flush_msg_alloc);
+
+	virtual void run_on_engine_start() = 0;
 
 	/**
 	 * \brief This is a pre-run before users get any information of adjacency list
@@ -140,6 +146,8 @@ public:
 	 */
 	virtual void run_on_num_edges(compute_vertex &c_vertex,
 			const vertex_header &header) = 0;
+
+	virtual void run_on_iteration_end() = 0;
     
     /**
      * \brief Perform some user defined action on a vertex when the current iteration comes to an end.
@@ -221,6 +229,9 @@ public:
 	vertex_id_t get_vertex_id(compute_vertex_pointer v) const;
 	vertex_id_t get_vertex_id(const compute_vertex &v) const;
 	vsize_t get_num_edges(vertex_id_t id) const;
+	int get_partition_id() const {
+		return part_id;
+	}
 };
 
 /**
@@ -252,6 +263,9 @@ class vertex_program_impl: public vertex_program
 	embedded_array<local_vid_t, 1024> id_buf;
 public:
 	
+	virtual void run_on_engine_start() {
+	}
+
     /**
 	 * \brief This is a pre-run before users get any information of adjacency list
 	 * of vertices. This is commonly where a user would issue a request for the vertex
@@ -327,6 +341,9 @@ public:
 	virtual void run_on_num_edges(compute_vertex &c_vertex,
 			const vertex_header &header) {
 		((vertex_type &) c_vertex).run_on_vertex_header(*this, header);
+	}
+
+	virtual void run_on_iteration_end() {
 	}
     
     /**

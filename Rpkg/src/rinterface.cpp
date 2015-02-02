@@ -27,6 +27,7 @@
 
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/matrix_eigensolver.h"
+#include "matrix/kmeans.h"
 #include "matrix/ASE.h"
 
 #include "FGlib.h"
@@ -535,6 +536,27 @@ RcppExport SEXP R_FG_load_graph_adj(SEXP pgraph_name, SEXP pgraph_file,
 		return create_FGR_obj(fg, graph_name);
 }
 
+RcppExport SEXP R_FG_export_graph(SEXP pgraph, SEXP pgraph_file, SEXP pindex_file)
+{
+	FG_graph::ptr fg = R_FG_get_graph(pgraph);
+	std::string graph_file = CHAR(STRING_ELT(pgraph_file, 0));
+	std::string index_file = CHAR(STRING_ELT(pindex_file, 0));
+
+	Rcpp::LogicalVector ret(1);
+	if (!fg->is_in_mem()) {
+		fprintf(stderr, "currently we only support exporting in-mem graphs\n");
+		ret[0] = false;
+	}
+	else {
+		in_mem_graph::ptr graph_data = fg->get_graph_data();
+		vertex_index::ptr index_data = fg->get_index_data();
+		graph_data->dump(graph_file);
+		index_data->dump(index_file);
+		ret[0] = true;
+	}
+	return ret;
+}
+
 static FG_graph::ptr construct_fg_graph(utils::edge_graph::ptr edge_g,
 		const std::string &graph_name, int num_threads)
 {
@@ -973,6 +995,61 @@ RcppExport SEXP R_FG_multiply_v(SEXP graph, SEXP pvec, SEXP ptranspose)
 	return ret;
 }
 
+RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pinit)
+{
+	Rcpp::NumericMatrix rcpp_mat = Rcpp::NumericMatrix(pmat);
+	vsize_t k = INTEGER(pk)[0];
+	vsize_t max_iters = INTEGER(pmax_iters)[0];
+	std::string init = CHAR(STRING_ELT(pinit,0));
+
+	double* p_fg_mat = new double[rcpp_mat.nrow()*rcpp_mat.ncol()];
+	const vsize_t NUM_ROWS = rcpp_mat.nrow();
+	const vsize_t NUM_COLS = rcpp_mat.ncol();
+
+#pragma omp parallel for firstprivate(rcpp_mat) shared (p_fg_mat)
+	for (vsize_t row = 0; row < NUM_ROWS; row++) {
+		for (vsize_t col = 0; col < NUM_COLS; col++) {
+			p_fg_mat[row*NUM_COLS + col] = rcpp_mat(row, col);
+		}
+	}
+
+	double* p_clusters = new double [k*NUM_COLS];
+	vsize_t* p_clust_asgns = new vsize_t [NUM_ROWS];
+	vsize_t* p_clust_asgn_cnt = new vsize_t [k];
+
+	Rcpp::List ret;
+
+	ret["iter"] = compute_kmeans(p_fg_mat, p_clusters, p_clust_asgns,
+			p_clust_asgn_cnt, NUM_ROWS, NUM_COLS, k, max_iters, init);
+	delete [] p_fg_mat;
+
+	Rcpp::NumericMatrix centers = Rcpp::NumericMatrix(k, NUM_COLS);
+#pragma omp parallel for firstprivate(p_clusters) shared(centers)
+	for (vsize_t row = 0; row < k; row++) {
+		for (vsize_t col = 0; col < NUM_COLS; col++) {
+			centers(row, col) =  p_clusters[row*NUM_COLS + col];
+		}
+	}
+	delete [] p_clusters;
+	ret["centers"] = centers;
+
+	Rcpp::IntegerVector clusts(NUM_ROWS);
+	for (vsize_t vid = 0; vid < NUM_ROWS; vid++) {
+		clusts[vid] = p_clust_asgns[vid]+1;
+	}
+	delete [] p_clust_asgns;
+	ret["cluster"] = clusts;
+
+	Rcpp::IntegerVector size(k);
+	for (vsize_t i = 0; i < k; i++) {
+		size[i] = p_clust_asgn_cnt[i];
+	}
+	delete [] p_clust_asgn_cnt;
+	ret["size"] = size;
+
+	return ret;
+}
+
 #ifdef USE_EIGEN
 
 SEXP output_eigen_pairs(const std::vector<eigen_pair_t> &eigen_pairs)
@@ -1063,5 +1140,17 @@ RcppExport SEXP R_FG_SVD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
 	ret["values"] = eigen_values;
 	ret["vectors"] = eigen_matrix;
 	return ret;
+}
+
+RcppExport SEXP R_FG_compute_betweenness(SEXP graph, SEXP _vids)
+{
+	Rcpp::IntegerVector Rvids(_vids);
+	std::vector<vertex_id_t> vids(Rvids.begin(), Rvids.end());
+	FG_graph::ptr fg = R_FG_get_graph(graph);
+
+	FG_vector<float>::ptr fg_vec = compute_betweenness_centrality(fg, vids);
+	Rcpp::NumericVector res(fg_vec->get_size());
+	fg_vec->copy_to(res.begin(), fg_vec->get_size());
+	return res;
 }
 #endif

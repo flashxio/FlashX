@@ -314,6 +314,26 @@ FG_vector<size_t>::ptr compute_kcore(FG_graph::ptr fg,
 FG_vector<vsize_t>::ptr get_degree(FG_graph::ptr fg, edge_type type);
 
 /**
+  * \brief Compute the transitivity/clustering coefficient of a graph.
+  *
+  * \param fg The FlashGraph graph object for which you want to compute.
+  * \return A vector with an entry for each vertex in the graph's
+  *         transitivity value.
+*/
+FG_vector<float>::ptr compute_transitivity(FG_graph::ptr fg);
+
+/**
+  * \brief Compute the betweeenness centrality of a graph.
+  *
+  * \param fg The FlashGraph graph object for which you want to compute.
+  * \param vids The vertex IDs for which BC should be computed
+  * \return A vector with an entry for each vertex in the graph's
+  *         betweennesss centrality value.
+*/
+FG_vector<float>::ptr compute_betweenness_centrality(FG_graph::ptr fg,
+		const std::vector<vertex_id_t>& vids);
+
+/**
  * \brief Get the degree of all vertices in a specified time interval in
  *        a time-series graph.
  * \param fg The FlashGraph graph object for which you want to compute.

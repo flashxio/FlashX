@@ -17,4 +17,5 @@ add_library(graph-algs STATIC
 	undirected_triangle_graph.cpp
 	wcc.cpp
 	bfs_graph.cpp
+	betweenness_centrality.cpp
 )

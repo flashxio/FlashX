@@ -683,6 +683,7 @@ void graph_engine::init_threads(vertex_program_creater::ptr creater)
 void graph_engine::start(const vertex_id_t ids[], int num,
 		vertex_initializer::ptr init, vertex_program_creater::ptr creater)
 {
+	level = 0; // We always reset the level
 	gettimeofday(&start_time, NULL);
 	init_threads(std::move(creater));
 	int num_threads = get_num_threads();
@@ -703,6 +704,7 @@ void graph_engine::start(const vertex_id_t ids[], int num,
 void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 		vertex_program_creater::ptr creater)
 {
+	level = 0; // We always reset the level
 	gettimeofday(&start_time, NULL);
 	init_threads(std::move(creater));
 	// Let's assume all vertices will be activated first.
@@ -716,6 +718,7 @@ void graph_engine::start(std::shared_ptr<vertex_filter> filter,
 void graph_engine::start_all(vertex_initializer::ptr init,
 		vertex_program_creater::ptr creater)
 {
+	level = 0; // We always reset the level
 	gettimeofday(&start_time, NULL);
 	init_threads(std::move(creater));
 	BOOST_FOREACH(worker_thread *t, worker_threads) {

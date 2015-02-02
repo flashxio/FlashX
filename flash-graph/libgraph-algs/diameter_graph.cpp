@@ -34,7 +34,6 @@ namespace {
 
 size_t num_bfs = 1;
 edge_type traverse_edge = edge_type::OUT_EDGE;
-int start_level;
 
 template<class T>
 class embedded_bitmap
@@ -207,7 +206,7 @@ void diameter_vertex::notify_iteration_end(vertex_program &vprog)
 {
 	if (bfs_ids != new_bfs_ids) {
 		updated = true;
-		int iter_no = vprog.get_graph().get_curr_level() + 1 - start_level;
+		int iter_no = vprog.get_graph().get_curr_level() + 1;
 		max_dist = max(iter_no, max_dist);
 		((diameter_vertex_program<diameter_vertex> &) vprog).set_max_dist(
 			vprog.get_vertex_id(*this), iter_no);
@@ -250,7 +249,7 @@ public:
 		diameter_vertex_program<simple_diameter_vertex> & diam_prog
 			= (diameter_vertex_program<simple_diameter_vertex> &) prog;
 		if (max_dist < 0) {
-			int iter_no = prog.get_graph().get_curr_level() - start_level;
+			int iter_no = prog.get_graph().get_curr_level() ;
 			diam_prog.set_max_dist(prog.get_vertex_id(*this), iter_no);
 			max_dist = prog.get_graph().get_curr_level();
 			directed_vertex_request req(prog.get_vertex_id(*this), traverse_edge);
@@ -323,7 +322,6 @@ template<class vertex_type>
 std::vector<vertex_dist_t> estimate_diameter_1sweep(graph_engine::ptr graph,
 		const std::vector<vertex_id_t> &start_vertices)
 {
-	start_level = graph->get_curr_level();
 	graph->init_all_vertices(vertex_initializer::ptr(
 				new diameter_reset<vertex_type>()));
 	graph->start(start_vertices.data(), start_vertices.size(),

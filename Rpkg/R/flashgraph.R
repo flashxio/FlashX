@@ -167,6 +167,25 @@ fg.get.graph <- function(graph.name)
 		structure(ret, class="fg")
 }
 
+#' Export graph image.
+#'
+#' This function exports a graph image in FlashGraphR to the local filesystem.
+#'
+#' @param graph The FlashGraphR object
+#' @param graph.file The graph file in the local filesystem to which
+#' the adjacency lists of the graph is exported to.
+#' @param index.file The index file in the local filesystem to which
+#' the index of the graph is exported to.
+#' @return true if the graph is exported to the local filesystem correctly;
+#' false, otherwise.
+fg.export.graph <- function(graph, graph.file, index.file)
+{
+	stopifnot(!is.null(graph))
+	stopifnot(class(graph) == "fg")
+	.Call("R_FG_export_graph", graph, graph.file, index.file,
+		  PACKAGE="FlashGraphR")
+}
+
 #' Graph information
 #'
 #' Functions for providing the basic information of a graph.
@@ -442,14 +461,28 @@ fg.transitivity <- function(graph, type=c("global", "local"))
 	}
 }
 
-fg.coreness <- function(graph)
+#' K-core decomposition of a graph.
+#'
+#'  The k-core of graph is a maximal subgraph in which each vertex has
+#'  at least degree k. A vertex belongs to the k-th core if has degree >= k
+#'	when all connected vertices with degree < k are recursively deleted.
+#'
+#' @param graph The FlashGraphR object
+#' @param k.start The lowest core that should be computed. Must be >= 2.
+#' @param k.end The highest core that should be computed. Must be >= 2. 
+#'		default is 10.
+#'
+#' @return A numeric vector that contains the core of each
+#'			vertex up to `k.end`. Vertices in cores higher than
+#'		   `k.end` will have entries with `-1` as their core.
+#'
+#' @name fg.kcore
+#' @author Disa Mhembere <disa@@jhu.edu>
+#' @rdname fg.kcore
+fg.kcore <- function(graph, k.start=2, k.end=10)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	stopifnot(graph$directed)
-	# FIXME set the right parameter.
-	k.start <- 1
-	k.end <- 0
 	.Call("R_FG_compute_kcore", graph, k.start, k.end, PACKAGE="FlashGraphR")
 }
 
@@ -875,6 +908,65 @@ print.fg <- function(fg)
 		directed = "D"
 	cat("FlashGraphR ", fg$name, " (", directed, "): ", fg.vcount(fg), " ", fg.ecount(fg),
 		"\n", sep="")
+}
+
+#' Perform k-means clustering on a data matrix.
+#'
+#' Assign each row of a matrix to a cluster denoted by a numeric. The clusters
+#' are based on the euclidean distance of each row to one another. The assigned
+#' cluster will have the smallest distance from the cluster center mean.
+#'
+#' @param mat A numeric matrix of data.
+#' @param k The number of clusters.
+#' @param max.iters The maximum number of iterations allowed.
+#' @param init The form of initialization to use when the algorithm begins.
+#'              The default is "random". For a desciption of each see:
+#'              http://en.wikipedia.org/wiki/K-means_clustering#Initialization_methods
+#'
+#' @return A named list with the following members:
+#'         iters: The number of (outer) iterations performed.
+#'         centers: A matrix of cluster centers.
+#'         cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+#'         sizes: The number of points in each cluster.
+#'
+#' @examples
+#' num.clusts <- 3
+#' mat <- replicate(5, rnorm(10))
+#' kms <- fg.kmeans(mat, num.clusts)
+#'
+#' @name fg.kmeans
+#' @author Disa Mhembere <disa@@jhu.edu>
+fg.kmeans <- function(mat, k, max.iters=10, init=c("random", "forgy","kmeanspp"))
+{
+    stopifnot(mat != NULL)
+    stopifnot(class(mat) == "matrix")
+    .Call("R_FG_kmeans", as.matrix(mat), as.integer(k),
+          as.integer(max.iters), init, PACKAGE="FlashGraphR")
+}
+
+#' Vertex betweenness centrality.
+#'
+#' The vertex betweenness centrality can be defined as the
+#' number of geodesics (shortest paths) going through a vertex.
+#'
+#' @param fg The FlashGraphR object.
+#' @param vids A vector of vertex IDs. Default runs it on the entire
+#'		graph.
+#'
+#' @return A vector with betweenness centrality values for all vertices
+#'			with respect to `vids`.
+#'
+#' @examples
+#' fg <- fg.load.graph("edge_list.txt")
+#' res <- fg.betweenness(fg, c(1,10))
+#'
+#' @name fg.betweenness
+#' @author Disa Mhembere <disa@@jhu.edu>
+fg.betweenness <- function(fg, vids=0:(fg$vcount-1))
+{
+	stopifnot(!is.null(fg))
+	stopifnot(class(fg) == "fg")
+    .Call("R_FG_compute_betweenness", fg, vids, PACKAGE="FlashGraphR")
 }
 
 .onLoad <- function(libname, pkgname)
