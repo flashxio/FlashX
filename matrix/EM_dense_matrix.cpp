@@ -452,6 +452,13 @@ dense_matrix::ptr EM_col_dense_matrix::sapply(const bulk_uoperate &op) const
 	assert(0);
 }
 
+dense_matrix::ptr EM_col_dense_matrix::apply(apply_margin margin,
+		const apply_operate &op) const
+{
+	// TODO
+	assert(0);
+}
+
 void EM_col_dense_matrix::set_data(const set_operate &op)
 {
 	EM_dense_matrix_accessor::ptr accessor = create_accessor();

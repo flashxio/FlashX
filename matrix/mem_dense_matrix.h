@@ -95,6 +95,11 @@ class mem_row_dense_matrix: public mem_dense_matrix
 	virtual bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
 
+	// This method constructs the specified column in a preallocated array.
+	// It is used internally, so the array should have the right length
+	// to keep a column.
+	void get_col(size_t idx, char *arr) const;
+
 	mem_row_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {
@@ -143,6 +148,7 @@ public:
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
+	virtual dense_matrix::ptr apply(apply_margin margin, const apply_operate &op) const;
 
 	virtual char *get_row(size_t row) {
 		return data.get() + row * get_num_cols() * get_entry_size();
@@ -190,6 +196,11 @@ class mem_col_dense_matrix: public mem_dense_matrix
 		}
 	}
 
+	// This method constructs the specified row in a preallocated array.
+	// It is used internally, so the array should have the right length
+	// to keep a row.
+	void get_row(size_t idx, char *arr) const;
+
 protected:
 	mem_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
 			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
@@ -229,6 +240,7 @@ public:
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
+	virtual dense_matrix::ptr apply(apply_margin margin, const apply_operate &op) const;
 
 	virtual bool set_cols(const mem_col_dense_matrix &m,
 			const std::vector<off_t> &idxs);

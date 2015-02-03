@@ -108,6 +108,17 @@ bool dense_matrix::verify_mapply2(const dense_matrix &m,
 	return true;
 }
 
+bool dense_matrix::verify_apply(apply_margin margin, const apply_operate &op) const
+{
+	if (get_entry_size() != op.input_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "the element type in the matrices isn't compatible with the operator";
+		return false;
+	}
+
+	return true;
+}
+
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		size_t entry_size, matrix_layout_t layout, bool in_mem)
 {

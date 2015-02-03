@@ -196,6 +196,13 @@ public:
 		return false;
 	}
 
+	virtual dense_matrix::ptr apply(apply_margin margin,
+			const apply_operate &op) const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error) << "apply() isn't supported in a sub_col_matrix";
+		return dense_matrix::ptr();
+	}
+
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
@@ -276,6 +283,13 @@ public:
 		// TODO
 		BOOST_LOG_TRIVIAL(error)
 			<< "serial_set_data() isn't supported in a sub_col_matrix";
+	}
+
+	virtual dense_matrix::ptr apply(apply_margin margin,
+			const apply_operate &op) const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error) << "apply() isn't supported in a sub_row_matrix";
+		return dense_matrix::ptr();
 	}
 
 	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
@@ -659,6 +673,42 @@ dense_matrix::ptr mem_col_dense_matrix::sapply(const bulk_uoperate &op) const
 	return res;
 }
 
+dense_matrix::ptr mem_col_dense_matrix::apply(apply_margin margin,
+		const apply_operate &op) const
+{
+	if (!verify_apply(margin, op))
+		return dense_matrix::ptr();
+
+	// TODO parallel
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	// Each operation runs on a row
+	if (margin == apply_margin::MAR_ROW) {
+		size_t out_nrow = nrow;
+		size_t out_ncol = op.get_num_out_eles();
+		mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(out_nrow,
+				out_ncol, op.output_entry_size());
+		// TODO this might be a very large array.
+		char *tmp_arr = (char *) malloc(ncol * get_entry_size());
+		for (size_t i = 0; i < nrow; i++) {
+			get_row(i, tmp_arr);
+			op.run(tmp_arr, ncol, res->get_row(i));
+		}
+		free(tmp_arr);
+		return res;
+	}
+	// Each operation runs on a column
+	else {
+		size_t out_nrow = op.get_num_out_eles();
+		size_t out_ncol = ncol;
+		mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(out_nrow,
+				out_ncol, op.output_entry_size());
+		for (size_t i = 0; i < ncol; i++)
+			op.run(get_col(i), nrow, res->get_col(i));
+		return res;
+	}
+}
+
 bool mem_col_dense_matrix::set_cols(const mem_col_dense_matrix &m,
 		const std::vector<off_t> &idxs)
 {
@@ -767,6 +817,15 @@ mem_col_dense_matrix::ptr mem_col_dense_matrix::create(size_t nrow, size_t ncol,
 
 	return mem_col_dense_matrix::ptr(new mem_col_dense_matrix(nrow, ncol,
 				entry_size, data));
+}
+
+void mem_col_dense_matrix::get_row(size_t row_idx, char *arr) const
+{
+	size_t ncol = get_num_cols();
+	size_t entry_size = get_entry_size();
+	for (size_t i = 0; i < ncol; i++)
+		memcpy(arr + i * entry_size, get_col(i) + row_idx * entry_size,
+				entry_size);
 }
 
 dense_matrix::ptr mem_row_dense_matrix::clone() const
@@ -1062,6 +1121,42 @@ dense_matrix::ptr mem_row_dense_matrix::sapply(const bulk_uoperate &op) const
 	return res;
 }
 
+dense_matrix::ptr mem_row_dense_matrix::apply(apply_margin margin,
+		const apply_operate &op) const
+{
+	if (!verify_apply(margin, op))
+		return dense_matrix::ptr();
+
+	// TODO parallel
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	// Each operation runs on a row
+	if (margin == apply_margin::MAR_ROW) {
+		size_t out_nrow = nrow;
+		size_t out_ncol = op.get_num_out_eles();
+		mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(out_nrow,
+				out_ncol, op.output_entry_size());
+		for (size_t i = 0; i < nrow; i++)
+			op.run(get_row(i), ncol, res->get_row(i));
+		return res;
+	}
+	// Each operation runs on a column
+	else {
+		size_t out_nrow = op.get_num_out_eles();
+		size_t out_ncol = ncol;
+		mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(out_nrow,
+				out_ncol, op.output_entry_size());
+		// TODO this might be a very large array.
+		char *tmp_arr = (char *) malloc(nrow * get_entry_size());
+		for (size_t i = 0; i < ncol; i++) {
+			get_col(i, tmp_arr);
+			op.run(tmp_arr, nrow, res->get_col(i));
+		}
+		free(tmp_arr);
+		return res;
+	}
+}
+
 bool mem_row_dense_matrix::write2file(const std::string &file_name) const
 {
 	FILE *f = fopen(file_name.c_str(), "w");
@@ -1108,6 +1203,15 @@ mem_row_dense_matrix::ptr mem_row_dense_matrix::create(size_t nrow, size_t ncol,
 
 	return mem_row_dense_matrix::ptr(new mem_row_dense_matrix(nrow, ncol,
 				entry_size, data));
+}
+
+void mem_row_dense_matrix::get_col(size_t col_idx, char *arr) const
+{
+	size_t nrow = get_num_rows();
+	size_t entry_size = get_entry_size();
+	for (size_t i = 0; i < nrow; i++)
+		memcpy(arr + i * entry_size, get_row(i) + col_idx * entry_size,
+				entry_size);
 }
 
 }
