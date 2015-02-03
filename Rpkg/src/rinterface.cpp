@@ -33,6 +33,7 @@
 #include "FGlib.h"
 #include "utils.h"
 #include "in_mem_storage.h"
+#include "rutils.h"
 
 using namespace safs;
 using namespace fg;
@@ -1001,15 +1002,20 @@ RcppExport SEXP R_FG_kmeans(SEXP pmat, SEXP pk, SEXP pmax_iters, SEXP pinit)
 	vsize_t k = INTEGER(pk)[0];
 	vsize_t max_iters = INTEGER(pmax_iters)[0];
 	std::string init = CHAR(STRING_ELT(pinit,0));
+	if (!R_is_real(pmat)) {
+		fprintf(stderr, "the input matrix for kmeans has to be float points\n");
+		return R_NilValue;
+	}
+	double *r_mat = REAL(pmat);
 
-	double* p_fg_mat = new double[rcpp_mat.nrow()*rcpp_mat.ncol()];
-	const vsize_t NUM_ROWS = rcpp_mat.nrow();
-	const vsize_t NUM_COLS = rcpp_mat.ncol();
+	const size_t NUM_ROWS = rcpp_mat.nrow();
+	const size_t NUM_COLS = rcpp_mat.ncol();
+	double* p_fg_mat = new double[NUM_ROWS * NUM_COLS];
 
 #pragma omp parallel for firstprivate(rcpp_mat) shared (p_fg_mat)
 	for (vsize_t row = 0; row < NUM_ROWS; row++) {
 		for (vsize_t col = 0; col < NUM_COLS; col++) {
-			p_fg_mat[row*NUM_COLS + col] = rcpp_mat(row, col);
+			p_fg_mat[row*NUM_COLS + col] = r_mat[row + col * NUM_ROWS];
 		}
 	}
 
