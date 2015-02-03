@@ -390,7 +390,7 @@ dense_matrix::ptr mem_sub_row_dense_matrix::mapply2(const dense_matrix &m,
 {
 	// The same shape and the same data layout.
 	if (!verify_mapply2(m, op))
-		return false;
+		return dense_matrix::ptr();
 
 	const mem_row_dense_matrix &row_m = (const mem_row_dense_matrix &) m;
 	size_t ncol = this->get_num_cols();
@@ -650,7 +650,7 @@ dense_matrix::ptr mem_col_dense_matrix::mapply2(const dense_matrix &m,
 {
 	// The same shape and the same data layout.
 	if (!verify_mapply2(m, op))
-		return false;
+		return dense_matrix::ptr();
 
 	// TODO parallel
 	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) m;
@@ -1098,7 +1098,7 @@ dense_matrix::ptr mem_row_dense_matrix::mapply2(const dense_matrix &m,
 {
 	// The same shape and the same data layout.
 	if (!verify_mapply2(m, op))
-		return false;
+		return dense_matrix::ptr();
 
 	// TODO parallel
 	const mem_row_dense_matrix &row_m = (const mem_row_dense_matrix &) m;
