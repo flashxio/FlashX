@@ -513,6 +513,29 @@ vec <- 1:2000
 fm.vec <- fm.conv.R2FM(vec)
 stopifnot(fm.max(fm.vec) == max(vec))
 
+norm2 <- function(x) sqrt(sum(x * x))
+print("norm2 on rows of a matrix")
+fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
+fm.res <- fm.norm.matrix(fm.mat, 1, type="2")
+res <- t(apply(fm.conv.FM2R(fm.mat), 1, function(x) x/norm2(x)))
+stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
+print("norm2 on columns of a matrix")
+fm.res <- fm.norm.matrix(fm.mat, 2, type="2")
+res <- apply(fm.conv.FM2R(fm.mat), 2, function(x) x/norm2(x))
+stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
+
+print("norm2 on rows of a tranposed matrix")
+fm.mat <- fm.t(fm.mat)
+fm.res <- fm.norm.matrix(fm.mat, 1, type="2")
+rmat <- fm.conv.FM2R(fm.mat)
+res <- t(apply(rmat, 1, function(x) x/norm2(x)))
+stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
+print("norm2 on columns of a tranposed matrix")
+fm.res <- fm.norm.matrix(fm.mat, 2, type="2")
+rmat <- fm.conv.FM2R(fm.mat)
+res <- apply(rmat, 2, function(x) x/norm2(x))
+stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
+
 # TODO test transpose a sparse matrix.
 
 # Test on a sparse matrix
