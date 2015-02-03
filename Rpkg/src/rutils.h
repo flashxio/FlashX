@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <memory>
+
 #include<Rcpp.h>
 
 bool R_is_real(SEXP v);
@@ -37,6 +39,21 @@ bool R_get_number(SEXP v, T &ret) {
 	}
 	else
 		return false;
+}
+
+/*
+ * Test if this is a sparse matrix.
+ */
+static inline bool is_sparse(const Rcpp::List &matrix)
+{
+	std::string type = matrix["type"];
+	return type == "sparse";
+}
+
+static inline bool is_vector(const Rcpp::List &matrix)
+{
+	std::string type = matrix["type"];
+	return type == "vector";
 }
 
 #endif
