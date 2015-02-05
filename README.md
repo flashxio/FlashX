@@ -53,5 +53,3 @@ Contact
 ========
 
 Mailing list: flashgraph-dev@googlegroups.com
-
-https://gitter.im/icoming/FlashGraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=body_badge
