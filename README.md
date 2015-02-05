@@ -3,6 +3,8 @@ There are two main components in the repository: FlashGraph and SAFS.
 FlashGraph
 ===========
 
+[![Join the chat at https://gitter.im/icoming/FlashGraph](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/icoming/FlashGraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 FlashGraph is a semi-external memory graph processing engine, optimized for a high-speed
 SSD array. FlashGraph provides flexible programming interface to help users implement
 graph algorithms. In FlashGraph, users write serial code that reads data in memory
