@@ -77,11 +77,11 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "The matrix has a wrong data type";
 			return ptr();
 		}
-		return ptr(new mem_vector(data));
+		return ptr(new mem_vector<T>(data));
 	}
 
 	static ptr create(size_t length) {
-		return ptr(new mem_vector(length));
+		return ptr(new mem_vector<T>(length));
 	}
 
 	T get(off_t idx) const {
