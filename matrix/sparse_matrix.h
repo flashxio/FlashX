@@ -78,10 +78,10 @@ public:
 template<class T>
 class row_multiply_task: public row_compute_task
 {
-	const mem_vector<T> &input;
-	mem_vector<T> &output;
+	const type_mem_vector<T> &input;
+	type_mem_vector<T> &output;
 public:
-	row_multiply_task(const mem_vector<T> &_input, mem_vector<T> &_output,
+	row_multiply_task(const type_mem_vector<T> &_input, type_mem_vector<T> &_output,
 			const matrix_io &_io): row_compute_task(_io), input(
 				_input), output(_output) {
 	}
@@ -103,15 +103,15 @@ void row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 template<class T>
 class row_multiply_creator: public task_creator
 {
-	const mem_vector<T> &input;
-	mem_vector<T> &output;
+	const type_mem_vector<T> &input;
+	type_mem_vector<T> &output;
 
-	row_multiply_creator(const mem_vector<T> &_input,
-			mem_vector<T> &_output): input(_input), output(_output) {
+	row_multiply_creator(const type_mem_vector<T> &_input,
+			type_mem_vector<T> &_output): input(_input), output(_output) {
 	}
 public:
-	static task_creator::ptr create(const mem_vector<T> &_input,
-			mem_vector<T> &_output) {
+	static task_creator::ptr create(const type_mem_vector<T> &_input,
+			type_mem_vector<T> &_output) {
 		return task_creator::ptr(new row_multiply_creator<T>(_input, _output));
 	}
 
@@ -181,15 +181,15 @@ public:
 	virtual void transpose() = 0;
 
 	template<class T>
-	typename mem_vector<T>::ptr multiply(typename mem_vector<T>::ptr in) const {
+	typename type_mem_vector<T>::ptr multiply(typename type_mem_vector<T>::ptr in) const {
 		if (in->get_length() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
 					"the input vector has wrong length %1%. matrix ncols: %2%")
 				% in->get_length() % ncols;
-			return typename mem_vector<T>::ptr();
+			return typename type_mem_vector<T>::ptr();
 		}
 		else {
-			typename mem_vector<T>::ptr ret = mem_vector<T>::create(nrows);
+			typename type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(nrows);
 			compute(row_multiply_creator<T>::create(*in, *ret));
 			return ret;
 		}
@@ -220,9 +220,9 @@ public:
 			std::vector<off_t> col_idx(1);
 			for (size_t i = 0; i < ncol; i++) {
 				col_idx[0] = i;
-				typename mem_vector<T>::ptr in_col = mem_vector<T>::create(
+				typename type_mem_vector<T>::ptr in_col = type_mem_vector<T>::create(
 						mem_dense_matrix::cast(col_m->get_cols(col_idx)));
-				typename mem_vector<T>::ptr out_col = mem_vector<T>::create(
+				typename type_mem_vector<T>::ptr out_col = type_mem_vector<T>::create(
 						mem_dense_matrix::cast(ret->get_cols(col_idx)));
 				compute(row_multiply_creator<T>::create(*in_col, *out_col));
 			}

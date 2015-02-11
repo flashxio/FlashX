@@ -48,12 +48,13 @@ int main(int argc, char *argv[])
 	printf("sum of input: %lf, sum of FG product: %lf, it takes %.3f seconds\n",
 			in->sum(), fg_out->sum(), time_diff(start, end));
 
-	mem_vector<double>::ptr in_vec = mem_vector<double>::create(fg_m->get_num_cols());
+	type_mem_vector<double>::ptr in_vec
+		= type_mem_vector<double>::create(fg_m->get_num_cols());
 	for (size_t i = 0; i < fg_m->get_num_cols(); i++)
 		in_vec->set(i, i);
 	sparse_matrix::ptr m = sparse_matrix::create(fg);
 	gettimeofday(&start, NULL);
-	mem_vector<double>::ptr out = m->multiply<double>(in_vec);
+	type_mem_vector<double>::ptr out = m->multiply<double>(in_vec);
 	double sum = 0;
 	for (size_t i = 0; i < fg_m->get_num_cols(); i++)
 		sum += out->get(i);

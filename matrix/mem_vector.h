@@ -32,13 +32,13 @@ namespace fm
  * or single-row dense matrix.
  */
 template<class T>
-class mem_vector
+class type_mem_vector
 {
 	T *arr;
 	size_t length;
 	mem_dense_matrix::ptr data;
 
-	mem_vector(mem_dense_matrix::ptr data) {
+	type_mem_vector(mem_dense_matrix::ptr data) {
 		this->data = data;
 		// The length of the vector is the size of the dimension that isn't 1.
 		if (data->get_num_rows() == 1)
@@ -56,7 +56,7 @@ class mem_vector
 			BOOST_LOG_TRIVIAL(error) << "wrong matrix layout";
 	}
 
-	mem_vector(size_t length) {
+	type_mem_vector(size_t length) {
 		// Maybe the column form may be more useful.
 		mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(length,
 				1, sizeof(T));
@@ -65,7 +65,7 @@ class mem_vector
 		this->length = length;
 	}
 public:
-	typedef std::shared_ptr<mem_vector<T> > ptr;
+	typedef std::shared_ptr<type_mem_vector<T> > ptr;
 
 	static ptr create(mem_dense_matrix::ptr data) {
 		if (data->get_num_rows() > 1 && data->get_num_cols() > 1) {
@@ -77,11 +77,11 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "The matrix has a wrong data type";
 			return ptr();
 		}
-		return ptr(new mem_vector<T>(data));
+		return ptr(new type_mem_vector<T>(data));
 	}
 
 	static ptr create(size_t length) {
-		return ptr(new mem_vector<T>(length));
+		return ptr(new type_mem_vector<T>(length));
 	}
 
 	T get(off_t idx) const {
