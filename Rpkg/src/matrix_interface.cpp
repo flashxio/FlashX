@@ -73,7 +73,8 @@ template<class EntryType>
 dense_matrix::ptr create_vector(size_t length, EntryType initv)
 {
 	// TODO let's just use in-memory dense matrix first.
-	typename mem_vector<EntryType>::ptr v = mem_vector<EntryType>::create(length);
+	typename type_mem_vector<EntryType>::ptr v
+		= type_mem_vector<EntryType>::create(length);
 	dense_matrix::ptr m = v->get_data();
 	m->set_data(set_const_operate<EntryType>(initv));
 	return m;
@@ -137,7 +138,7 @@ RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
 	}
 
 	// TODO let's just use in-memory dense matrix first.
-	mem_vector<double>::ptr v = mem_vector<double>::create(n);
+	type_mem_vector<double>::ptr v = type_mem_vector<double>::create(n);
 	dense_matrix::ptr m = v->get_data();
 	GetRNGstate();
 	m->set_data(rand_set_operate<double>(min, max));
@@ -202,7 +203,7 @@ RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 	// We need to count the start element.
 	n++;
 	// TODO let's just use in-memory dense matrix first.
-	mem_vector<double>::ptr v = mem_vector<double>::create(n);
+	type_mem_vector<double>::ptr v = type_mem_vector<double>::create(n);
 	dense_matrix::ptr m = v->get_data();
 	m->set_data(seq_set_operate<double>(n, from, by));
 	return create_FMR_vector(m, "");
@@ -272,21 +273,21 @@ static basic_ops &get_inner_prod_right_ops(const bulk_operate &left_ops)
 static SEXP SpMV(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 {
 	if (right_mat->is_type<double>()) {
-		mem_vector<double>::ptr in_vec = mem_vector<double>::create(
+		type_mem_vector<double>::ptr in_vec = type_mem_vector<double>::create(
 				mem_dense_matrix::cast(right_mat));
 		if (in_vec == NULL)
 			return R_NilValue;
 
-		mem_vector<double>::ptr out_vec = matrix->multiply<double>(in_vec);
+		type_mem_vector<double>::ptr out_vec = matrix->multiply<double>(in_vec);
 		return create_FMR_vector(out_vec->get_data(), "");
 	}
 	else if (right_mat->is_type<int>()) {
-		mem_vector<int>::ptr in_vec = mem_vector<int>::create(
+		type_mem_vector<int>::ptr in_vec = type_mem_vector<int>::create(
 				mem_dense_matrix::cast(right_mat));
 		if (in_vec == NULL)
 			return R_NilValue;
 
-		mem_vector<int>::ptr out_vec = matrix->multiply<int>(in_vec);
+		type_mem_vector<int>::ptr out_vec = matrix->multiply<int>(in_vec);
 		return create_FMR_vector(out_vec->get_data(), "");
 	}
 	else {
@@ -365,7 +366,7 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pmat, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 }
 
 template<class T, class RType>
-void copy_FM2Rvector(const mem_vector<T> &vec, RType *r_arr)
+void copy_FM2Rvector(const type_mem_vector<T> &vec, RType *r_arr)
 {
 	size_t length = vec.get_length();
 	for (size_t i = 0; i < length; i++) {
@@ -389,7 +390,7 @@ template<class T, class RType>
 void copy_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
 {
 	if (is_vec) {
-		typename mem_vector<T>::ptr mem_vec = mem_vector<T>::create(mem_mat);
+		typename type_mem_vector<T>::ptr mem_vec = type_mem_vector<T>::create(mem_mat);
 		copy_FM2Rvector<T>(*mem_vec, ret);
 	}
 	else
@@ -439,7 +440,7 @@ template<class T, int SEXPType>
 SEXP conv_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec)
 {
 	if (is_vec) {
-		typename mem_vector<T>::ptr mem_vec = mem_vector<T>::create(mem_mat);
+		typename type_mem_vector<T>::ptr mem_vec = type_mem_vector<T>::create(mem_mat);
 		Rcpp::Vector<SEXPType> ret(mem_vec->get_length());
 		copy_FM2Rvector<T, Rcpp::Vector<SEXPType> >(*mem_vec, ret);
 		return ret;
@@ -485,14 +486,14 @@ RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 {
 	if (R_is_real(pobj)) {
 		Rcpp::NumericVector vec(pobj);
-		mem_vector<double>::ptr fm_vec = mem_vector<double>::create(vec.size());
+		type_mem_vector<double>::ptr fm_vec = type_mem_vector<double>::create(vec.size());
 		for (size_t i = 0; i < fm_vec->get_length(); i++)
 			fm_vec->set(i, vec[i]);
 		return create_FMR_vector(fm_vec->get_data(), "");
 	}
 	else if (R_is_integer(pobj)) {
 		Rcpp::IntegerVector vec(pobj);
-		mem_vector<int>::ptr fm_vec = mem_vector<int>::create(vec.size());
+		type_mem_vector<int>::ptr fm_vec = type_mem_vector<int>::create(vec.size());
 		for (size_t i = 0; i < fm_vec->get_length(); i++)
 			fm_vec->set(i, vec[i]);
 		return create_FMR_vector(fm_vec->get_data(), "");
