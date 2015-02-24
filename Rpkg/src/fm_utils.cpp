@@ -106,8 +106,10 @@ SEXP create_FMR_vector(dense_matrix::ptr m, const std::string &name)
 	ret["pointer"] = pointer;
 
 	Rcpp::NumericVector len(1);
-	// TODO I assume the vector is stored as a nx1 matrix.
-	len[0] = m->get_num_rows();
+	if (m->get_num_cols() == 1)
+		len[0] = m->get_num_rows();
+	else
+		len[0] = m->get_num_cols();
 	ret["len"] = len;
 	return ret;
 }
