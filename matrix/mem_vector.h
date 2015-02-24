@@ -21,48 +21,85 @@
  */
 
 #include <memory>
+#if defined(_OPENMP)
+#include <parallel/algorithm>
+#else
+#include <algorithm>
+#endif
 
 #include "mem_dense_matrix.h"
+#include "vector.h"
 
 namespace fm
 {
+
+class mem_vector: public vector
+{
+	char *arr;
+	mem_dense_matrix::ptr data;
+
+protected:
+	mem_vector(mem_dense_matrix::ptr data);
+	mem_vector(size_t length, size_t entry_size);
+
+	const char *get_raw_arr() const {
+		return arr;
+	}
+
+	char *get_raw_arr() {
+		return arr;
+	}
+
+	mem_dense_matrix::ptr get_data() const {
+		return data;
+	}
+
+	virtual std::shared_ptr<mem_vector> create_int(size_t length) const = 0;
+public:
+	typedef std::shared_ptr<mem_vector> ptr;
+	typedef std::shared_ptr<const mem_vector> const_ptr;
+	static ptr cast(vector::ptr vec);
+	static const_ptr cast(vector::const_ptr vec);
+
+	mem_dense_matrix::ptr get_data() {
+		return data;
+	}
+
+	char *get(off_t idx) {
+		return arr + idx * get_entry_size();
+	}
+
+	const char *get(off_t idx) const {
+		return arr + idx * get_entry_size();
+	}
+
+	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
+			std::vector<vector::ptr>::const_iterator vec_end);
+	virtual bool resize(size_t new_length);
+	virtual bool set_sub_vec(off_t start, const vector &vec);
+	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
+	virtual vector::ptr clone() const;
+};
 
 /**
  * This vector implementation is a wrapper on a in-memory single-column
  * or single-row dense matrix.
  */
 template<class T>
-class type_mem_vector
+class type_mem_vector: public mem_vector
 {
-	T *arr;
-	size_t length;
-	mem_dense_matrix::ptr data;
+	bool sorted;
 
-	type_mem_vector(mem_dense_matrix::ptr data) {
-		this->data = data;
-		// The length of the vector is the size of the dimension that isn't 1.
-		if (data->get_num_rows() == 1)
-			length = data->get_num_cols();
-		else
-			length = data->get_num_rows();
-		// The data buffer is the first row or column of the matrix, so
-		// the shape of the matrix doesn't matter.
-		// TODO this may not work with submatrix.
-		if (data->store_layout() == matrix_layout_t::L_ROW)
-			arr = (T *) mem_row_dense_matrix::cast(data)->get_row(0);
-		else if (data->store_layout() == matrix_layout_t::L_COL)
-			arr = (T *) mem_col_dense_matrix::cast(data)->get_col(0);
-		else
-			BOOST_LOG_TRIVIAL(error) << "wrong matrix layout";
+	type_mem_vector(mem_dense_matrix::ptr data): mem_vector(data) {
+		sorted = false;
 	}
 
-	type_mem_vector(size_t length) {
-		// Maybe the column form may be more useful.
-		mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(length,
-				1, sizeof(T));
-		this->arr = (T *) tmp->get_col(0);
-		this->data = std::static_pointer_cast<mem_dense_matrix>(tmp);
-		this->length = length;
+	type_mem_vector(size_t length): mem_vector(length, sizeof(T)) {
+		sorted = false;
+	}
+
+	virtual mem_vector::ptr create_int(size_t length) const {
+		return mem_vector::ptr(new type_mem_vector<T>(length));
 	}
 public:
 	typedef std::shared_ptr<type_mem_vector<T> > ptr;
@@ -84,20 +121,55 @@ public:
 		return ptr(new type_mem_vector<T>(length));
 	}
 
+	static type_mem_vector<T>::ptr cast(vector::ptr vec) {
+		if (!vec->is_in_mem())
+			return type_mem_vector<T>::ptr();
+		else if (!vec->is_type<T>())
+			return type_mem_vector<T>::ptr();
+		else
+			return std::static_pointer_cast<type_mem_vector<T> >(vec);
+	}
+
 	T get(off_t idx) const {
-		return arr[idx];
+		return ((T *) get_raw_arr())[idx];
 	}
 
 	void set(off_t idx, T v) {
-		arr[idx] = v;
+		((T *) get_raw_arr())[idx] = v;
 	}
 
-	size_t get_length() const {
-		return length;
+	virtual bool is_sorted() const {
+		return sorted;
 	}
 
-	mem_dense_matrix::ptr get_data() {
-		return data;
+	virtual void sort() {
+		T *start = (T *) get_raw_arr();
+		T *end = start + get_length();
+#if defined(_OPENMP)
+		__gnu_parallel::sort(start, end);
+#else
+		std::sort(start, end);
+#endif
+		sorted = true;
+	}
+
+	virtual void serial_sort() {
+		T *start = (T *) get_raw_arr();
+		T *end = start + get_length();
+		std::sort(start, end);
+		sorted = true;
+	}
+
+	virtual vector::ptr shallow_copy() {
+		type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(get_data());
+		ret->sorted = this->sorted;
+		return std::static_pointer_cast<vector>(ret);
+	}
+
+	virtual vector::const_ptr shallow_copy() const {
+		type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(get_data());
+		ret->sorted = this->sorted;
+		return std::static_pointer_cast<const vector>(ret);
 	}
 };
 
