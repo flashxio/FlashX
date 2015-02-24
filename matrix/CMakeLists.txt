@@ -16,4 +16,5 @@ add_library(FMatrix STATIC
 	EM_dense_matrix.cpp
 	matrix_io.cpp
 	mem_dense_matrix.cpp
+	mem_vector.cpp
 )
