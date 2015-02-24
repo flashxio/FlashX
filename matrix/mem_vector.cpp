@@ -18,6 +18,7 @@
  */
 
 #include "mem_vector.h"
+#include "data_frame.h"
 
 namespace fm
 {
@@ -67,6 +68,127 @@ mem_vector::const_ptr mem_vector::cast(vector::const_ptr vec)
 		return mem_vector::const_ptr();
 	}
 	return std::static_pointer_cast<const mem_vector>(vec);
+}
+
+bool mem_vector::verify_groupby(const bulk_operate &find_next,
+		const bulk_operate &agg_op, const vec_creator &create) const
+{
+	if (find_next.output_entry_size() != sizeof(size_t)) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "the find next operator should return a index of size_t";
+		return false;
+	}
+	if (find_next.left_entry_size() != get_entry_size()
+			|| agg_op.left_entry_size() != get_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "the operator accepts input types incompatible with the entry type in the vector";
+		return false;
+	}
+	if (create.get_entry_size() != agg_op.output_entry_size()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The created vector has an incompatible type with the output type of aggregation operator";
+		return false;
+	}
+
+	return true;
+}
+
+data_frame::ptr mem_vector::serial_groupby(const bulk_operate &find_next,
+		const bulk_operate &agg_op, const vec_creator &create) const
+{
+	if (!verify_groupby(find_next, agg_op, create))
+		return data_frame::ptr();
+
+	// If the vector hasn't been sorted, we need to sort it.
+	vector::ptr vec;
+	const mem_vector *sorted_vec;
+	if (!is_sorted()) {
+		// We don't want groupby changes the original vector.
+		vec = this->clone();
+		vec->sort();
+		sorted_vec = (const mem_vector *) vec.get();
+	}
+	else
+		sorted_vec = this;
+
+	size_t loc = 0;
+	mem_vector::ptr agg = mem_vector::cast(create.create(16));
+	mem_vector::ptr val = this->create_int(16);
+	size_t idx = 0;
+	while (loc < sorted_vec->get_length()) {
+		size_t curr_length = sorted_vec->get_length() - loc;
+		const char *curr_ptr = sorted_vec->get_raw_arr() + get_entry_size() * loc;
+		size_t rel_end;
+		find_next.runA(curr_length, curr_ptr, &rel_end);
+		if (idx >= agg->get_length()) {
+			agg->resize(agg->get_length() * 2);
+			val->resize(val->get_length() * 2);
+		}
+		agg_op.runA(rel_end, curr_ptr, agg->get(idx));
+		memcpy(val->get(idx), curr_ptr, get_entry_size());
+		idx++;
+		loc += rel_end;
+	}
+	agg->resize(idx);
+	val->resize(idx);
+	data_frame::ptr ret = data_frame::create();
+	ret->add_vec("val", std::static_pointer_cast<vector>(val));
+	ret->add_vec("agg", std::static_pointer_cast<vector>(agg));
+	return ret;
+}
+
+data_frame::ptr mem_vector::groupby(const bulk_operate &find_next,
+		const bulk_operate &agg_op, const vec_creator &create) const
+{
+	if (!verify_groupby(find_next, agg_op, create))
+		return data_frame::ptr();
+
+	// If the vector hasn't been sorted, we need to sort it.
+	vector::ptr vec;
+	const mem_vector *sorted_vec;
+	if (!is_sorted()) {
+		// We don't want groupby changes the original vector.
+		vec = this->clone();
+		vec->sort();
+		sorted_vec = (const mem_vector *) vec.get();
+	}
+	else
+		sorted_vec = this;
+
+	// We need to find the start location for each thread.
+	// The start location is where the value in the sorted array
+	// first appears.
+	int num_omp = get_num_omp_threads();
+	off_t par_starts[num_omp + 1];
+	for (int i = 0; i < num_omp; i++) {
+		off_t start = sorted_vec->get_length() / num_omp * i;
+		// This returns the relative start location of the next value.
+		find_next.runA(sorted_vec->get_length() - start,
+				sorted_vec->get_raw_arr() + get_entry_size() * start,
+				par_starts + i);
+		// This is the absolute start location of this partition.
+		par_starts[i] += start;
+	}
+	par_starts[num_omp] = sorted_vec->get_length();
+
+	// It's possible that two partitions end up having the same start location
+	// because the vector is small or a partition has only one value.
+	assert(std::is_sorted(par_starts, par_starts + num_omp));
+	off_t *end_par_starts = std::unique(par_starts, par_starts + num_omp);
+	int num_parts = end_par_starts - par_starts;
+	std::vector<data_frame::ptr> sub_results(num_parts);
+	for (int i = 0; i < num_parts; i++) {
+		off_t start = par_starts[i];
+		off_t end = par_starts[i + 1];
+		vector::const_ptr sub_vec = sorted_vec->get_sub_vec(start, end - start);
+		sub_results[i] = mem_vector::cast(sub_vec)->serial_groupby(
+				find_next, agg_op, create);
+	}
+
+	data_frame::ptr ret = sub_results[0];
+	if (num_parts > 1)
+		ret->append(sub_results.begin() + 1, sub_results.end());
+	return ret;
 }
 
 bool mem_vector::append(std::vector<vector::ptr>::const_iterator vec_it,

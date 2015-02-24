@@ -33,6 +33,8 @@
 namespace fm
 {
 
+class data_frame;
+
 class mem_vector: public vector
 {
 	char *arr;
@@ -72,6 +74,13 @@ public:
 	const char *get(off_t idx) const {
 		return arr + idx * get_entry_size();
 	}
+
+	bool verify_groupby(const bulk_operate &find_next,
+		const bulk_operate &agg_op, const vec_creator &create) const;
+	std::shared_ptr<data_frame> serial_groupby(const bulk_operate &find_next,
+		const bulk_operate &agg_op, const vec_creator &create) const;
+	virtual std::shared_ptr<data_frame> groupby(const bulk_operate &find_next,
+		const bulk_operate &agg_op, const vec_creator &create) const;
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end);

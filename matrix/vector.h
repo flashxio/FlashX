@@ -25,6 +25,8 @@ namespace fm
 {
 
 class bulk_operate;
+class vec_creator;
+class data_frame;
 
 class vector
 {
@@ -80,6 +82,9 @@ public:
 
 	virtual void sort() = 0;
 	virtual bool is_sorted() const = 0;
+	// It should return data frame instead of vector.
+	virtual std::shared_ptr<data_frame> groupby(const bulk_operate &find_next,
+		const bulk_operate &agg_op, const vec_creator &create) const = 0;
 
 	/**
 	 * This is a deep copy. It copies all members of the vector object
@@ -91,6 +96,16 @@ public:
 	 */
 	virtual vector::ptr shallow_copy() = 0;
 	virtual vector::const_ptr shallow_copy() const = 0;
+};
+
+/*
+ * This interface allows us to create a vector with type.
+ */
+class vec_creator
+{
+public:
+	virtual size_t get_entry_size() const = 0;
+	virtual vector::ptr create(size_t length) const = 0;
 };
 
 }
