@@ -513,6 +513,12 @@ vec <- 1:2000
 fm.vec <- fm.conv.R2FM(vec)
 stopifnot(fm.max(fm.vec) == max(vec))
 
+print("sum on a matrix")
+fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
+rmat <- fm.conv.FM2R(fm.mat)
+stopifnot(fm.sum(fm.mat) == sum(rmat))
+stopifnot(fm.sum(fm.t(fm.mat)) == sum(rmat))
+
 norm2 <- function(x) sqrt(sum(x * x))
 print("norm2 on rows of a matrix")
 fm.mat <- fm.matrix(fm.seq.int(1, 2000, 1), 20, 100)
