@@ -119,7 +119,7 @@ public:
 				<< "Can't convert a matrix with more than one row/column into a vector";
 			return ptr();
 		}
-		else if (data->get_entry_size() != sizeof(T)) {
+		else if (!data->is_type<T>()) {
 			BOOST_LOG_TRIVIAL(error) << "The matrix has a wrong data type";
 			return ptr();
 		}
@@ -179,6 +179,10 @@ public:
 		type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(get_data());
 		ret->sorted = this->sorted;
 		return std::static_pointer_cast<const vector>(ret);
+	}
+
+	virtual prim_type get_type() const {
+		return fm::get_type<T>();
 	}
 };
 

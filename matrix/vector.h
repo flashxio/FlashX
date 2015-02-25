@@ -21,6 +21,8 @@
  */
 #include <memory>
 
+#include "generic_type.h"
+
 namespace fm
 {
 
@@ -55,15 +57,9 @@ public:
 		return length;
 	}
 
-	size_t get_type() const {
-		// TODO
-		return -1;
-	}
-
 	template<class T>
 	bool is_type() const {
-		// TODO
-		return sizeof(T) == entry_size;
+		return this->get_type() == fm::get_type<T>();
 	}
 
 	size_t get_entry_size() const {
@@ -75,6 +71,7 @@ public:
 		return true;
 	}
 
+	virtual prim_type get_type() const = 0;
 	virtual bool set_sub_vec(off_t start, const vector &vec) = 0;
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const = 0;
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,

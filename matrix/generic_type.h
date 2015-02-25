@@ -38,6 +38,54 @@ enum prim_type
 	NUM_TYPES,
 };
 
+template<class T>
+prim_type get_type()
+{
+	return prim_type::NUM_TYPES;
+}
+
+template<>
+inline prim_type get_type<char>()
+{
+	return prim_type::P_CHAR;
+}
+
+template<>
+inline prim_type get_type<short>()
+{
+	return prim_type::P_SHORT;
+}
+
+template<>
+inline prim_type get_type<int>()
+{
+	return prim_type::P_INTEGER;
+}
+
+template<>
+inline prim_type get_type<long>()
+{
+	return prim_type::P_LONG;
+}
+
+template<>
+inline prim_type get_type<float>()
+{
+	return prim_type::P_FLOAT;
+}
+
+template<>
+inline prim_type get_type<double>()
+{
+	return prim_type::P_DOUBLE;
+}
+
+template<>
+inline prim_type get_type<bool>()
+{
+	return prim_type::P_BOOL;
+}
+
 /**
  * This class defines a generic type for a scalar variable.
  * It shouldn't be used in an array because it has a lot of overhead.
