@@ -162,6 +162,7 @@ dense_matrix::ptr dense_matrix::load(const std::string &file_name)
 
 	FILE *f = fopen(file_name.c_str(), "r");
 	if (f == NULL) {
+		fclose(f);
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
 			% file_name % strerror(errno);
 		return dense_matrix::ptr();
@@ -169,12 +170,14 @@ dense_matrix::ptr dense_matrix::load(const std::string &file_name)
 
 	size_t ret = fread(&header, sizeof(header), 1, f);
 	if (ret == 0) {
+		fclose(f);
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't read header from %1%: %2%")
 			% file_name % strerror(errno);
 		return dense_matrix::ptr();
 	}
 
 	if (header.u.d.type == SPARSE) {
+		fclose(f);
 		BOOST_LOG_TRIVIAL(error) << "The matrix to be loaded is sparse";
 		return dense_matrix::ptr();
 	}
