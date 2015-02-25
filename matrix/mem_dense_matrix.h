@@ -95,11 +95,6 @@ class mem_row_dense_matrix: public mem_dense_matrix
 	virtual bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
 
-	// This method constructs the specified column in a preallocated array.
-	// It is used internally, so the array should have the right length
-	// to keep a column.
-	void get_col(size_t idx, char *arr) const;
-
 	mem_row_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {
@@ -109,6 +104,16 @@ class mem_row_dense_matrix: public mem_dense_matrix
 			assert(data);
 		}
 	}
+
+	std::shared_ptr<mem_col_dense_matrix> t_mat;
+	/*
+	 * This method returns a column-wise matrix on the same data, so we can
+	 * use the column-wise matrix to access the data and perform computation.
+	 * None of the methods in this class can change the metadata (nrow,
+	 * ncol, etc), so we can cache the column-wise matrix.
+	 */
+	mem_col_dense_matrix &get_t_mat();
+	const mem_col_dense_matrix &get_t_mat() const;
 
 protected:
 	mem_row_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
