@@ -105,7 +105,7 @@ vertex_index::ptr vertex_index::safs_load(const std::string &index_file)
 	file_io_factory::shared_ptr factory = create_io_factory(index_file,
 			REMOTE_ACCESS);
 	assert(factory->get_file_size() >= INDEX_HEADER_SIZE);
-	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = create_io(factory, thread::get_curr_thread());
 
 	// Get the header of the index.
 	char *tmp = NULL;

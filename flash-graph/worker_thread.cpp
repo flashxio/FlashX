@@ -423,7 +423,7 @@ void worker_thread::init()
 		curr_activated_vertices = std::unique_ptr<active_vertex_queue>(
 				new default_vertex_queue(*graph, worker_id, get_node_id()));
 
-	io = graph_factory->create_io(this);
+	io = create_io(graph_factory, this);
 	if (graph->get_in_mem_index())
 		index_reader = simple_index_reader::create(
 				graph->get_in_mem_index(),
@@ -432,7 +432,7 @@ void worker_thread::init()
 	else {
 		assert(index_factory);
 		index_reader = simple_index_reader::create(
-				index_factory->create_io(this),
+				create_io(index_factory, this),
 				graph->get_graph_header().get_graph_type() == graph_type::DIRECTED,
 				this);
 	}

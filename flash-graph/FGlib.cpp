@@ -89,7 +89,7 @@ FG_graph::FG_graph(const std::string &graph_file,
 	else {
 		file_io_factory::shared_ptr index_factory = create_io_factory(
 				index_file, REMOTE_ACCESS);
-		io_interface::ptr io = index_factory->create_io(thread::get_curr_thread());
+		io_interface::ptr io = create_io(index_factory, thread::get_curr_thread());
 		char *buf = NULL;
 		int ret = posix_memalign((void **) &buf, 512, sizeof(header));
 		assert(ret == 0);

@@ -278,7 +278,7 @@ public:
 		return io_interface::ptr(new in_mem_io(graph, file_id, t));
 	}
 
-	virtual void destroy_io(io_interface *) {
+	virtual void destroy_io(io_interface &) {
 	}
 };
 
@@ -330,7 +330,7 @@ in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 #if 0
 	graph->graph_file_id = io_factory->get_file_id();
 #endif
-	io_interface::ptr io = io_factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = create_io(io_factory, thread::get_curr_thread());
 	const size_t MAX_IO_SIZE = 256 * 1024 * 1024;
 	for (off_t off = 0; (size_t) off < graph->graph_size; off += MAX_IO_SIZE) {
 		data_loc_t loc(io_factory->get_file_id(), off);

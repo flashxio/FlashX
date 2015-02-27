@@ -286,7 +286,7 @@ class safs_large_writer: public large_writer
 	}
 
 	void open_file() {
-		io = factory->create_io(thread::get_curr_thread());
+		io = create_io(factory, thread::get_curr_thread());
 		cb = large_writer_callback::ptr(new large_writer_callback());
 		io->set_callback(std::static_pointer_cast<safs::callback>(cb));
 	}
@@ -436,7 +436,7 @@ class safs_large_reader: public large_reader
 	}
 
 	void open_file() {
-		io = factory->create_io(thread::get_curr_thread());
+		io = create_io(factory, thread::get_curr_thread());
 	}
 public:
 	static large_reader::ptr create(const std::string &file) {
