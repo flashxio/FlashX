@@ -349,7 +349,7 @@ public:
 
 	virtual io_interface::ptr create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io);
+	virtual void destroy_io(io_interface &io);
 
 	virtual int get_file_id() const {
 		ABORT_MSG("get_file_id isn't implemented");
@@ -374,7 +374,7 @@ public:
 
 	virtual io_interface::ptr create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io);
+	virtual void destroy_io(io_interface &io);
 
 	virtual int get_file_id() const {
 		ABORT_MSG("get_file_id isn't implemented");
@@ -404,7 +404,7 @@ public:
 
 	virtual io_interface::ptr create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io);
+	virtual void destroy_io(io_interface &io);
 
 	virtual int get_file_id() const {
 		return mapper.get_file_id();
@@ -430,25 +430,25 @@ class global_cached_io_factory: public file_io_factory
 	std::atomic_ulong tot_fast_process;
 
 	page_cache::ptr global_cache;
-	remote_io_factory remote_factory;
+	remote_io_factory::shared_ptr remote_factory;
 public:
 	global_cached_io_factory(file_mapper &_mapper,
-			page_cache::ptr cache): file_io_factory(
-				_mapper.get_name()), remote_factory(_mapper) {
+			page_cache::ptr cache): file_io_factory(_mapper.get_name()) {
 		this->global_cache = cache;
 		tot_bytes = 0;
 		tot_accesses = 0;
 		tot_pg_accesses = 0;
 		tot_hits = 0;
 		tot_fast_process = 0;
+		remote_factory = remote_io_factory::shared_ptr(new remote_io_factory(_mapper));
 	}
 
 	virtual io_interface::ptr create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io);
+	virtual void destroy_io(io_interface &io);
 
 	virtual int get_file_id() const {
-		return remote_factory.get_file_id();
+		return remote_factory->get_file_id();
 	}
 
 	virtual void collect_stat(io_interface &io) {
@@ -479,21 +479,22 @@ class direct_comp_io_factory: public file_io_factory
 	std::atomic_ulong tot_req_bytes;
 	std::atomic_ulong tot_accesses;
 
-	remote_io_factory remote_factory;
+	remote_io_factory::shared_ptr remote_factory;
 public:
 	direct_comp_io_factory(file_mapper &_mapper): file_io_factory(
-				_mapper.get_name()), remote_factory(_mapper) {
+				_mapper.get_name()) {
 		tot_disk_bytes = 0;
 		tot_req_bytes = 0;
 		tot_accesses = 0;
+		remote_factory = remote_io_factory::shared_ptr(new remote_io_factory(_mapper));
 	}
 
 	virtual io_interface::ptr create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io);
+	virtual void destroy_io(io_interface &io);
 
 	virtual int get_file_id() const {
-		return remote_factory.get_file_id();
+		return remote_factory->get_file_id();
 	}
 
 	virtual void collect_stat(io_interface &io) {
@@ -522,22 +523,9 @@ public:
 
 	virtual io_interface::ptr create_io(thread *t);
 
-	virtual void destroy_io(io_interface *io);
+	virtual void destroy_io(io_interface &io);
 };
 #endif
-
-class io_deleter
-{
-	file_io_factory &factory;
-public:
-	io_deleter(file_io_factory &_factory): factory(_factory) {
-	}
-
-	void operator()(io_interface *io) {
-		factory.collect_stat(*io);
-		factory.destroy_io(io);
-	}
-};
 
 io_interface::ptr posix_io_factory::create_io(thread *t)
 {
@@ -561,13 +549,12 @@ io_interface::ptr posix_io_factory::create_io(thread *t)
 			abort();
 	}
 	num_ios++;
-	return io_interface::ptr(io, io_deleter(*this));
+	return io_interface::ptr(io);
 }
 
-void posix_io_factory::destroy_io(io_interface *io)
+void posix_io_factory::destroy_io(io_interface &io)
 {
 	num_ios--;
-	delete io;
 }
 
 io_interface::ptr aio_factory::create_io(thread *t)
@@ -583,13 +570,12 @@ io_interface::ptr aio_factory::create_io(thread *t)
 	io = new async_io(global_partition, params.get_aio_depth_per_file(),
 			t, O_RDWR);
 	num_ios++;
-	return io_interface::ptr(io, io_deleter(*this));
+	return io_interface::ptr(io);
 }
 
-void aio_factory::destroy_io(io_interface *io)
+void aio_factory::destroy_io(io_interface &io)
 {
 	num_ios--;
-	delete io;
 }
 
 remote_io_factory::remote_io_factory(file_mapper &_mapper): file_io_factory(
@@ -635,48 +621,45 @@ io_interface::ptr remote_io_factory::create_io(thread *t)
 	num_ios++;
 	io_interface *io = new remote_io(global_data.read_threads,
 			get_msg_allocator(t->get_node_id()), &mapper, t);
-	return io_interface::ptr(io, io_deleter(*this));
+	return io_interface::ptr(io);
 }
 
-void remote_io_factory::destroy_io(io_interface *io)
+void remote_io_factory::destroy_io(io_interface &io)
 {
 	num_ios--;
-	delete io;
 }
 
 io_interface::ptr global_cached_io_factory::create_io(thread *t)
 {
-	io_interface::ptr underlying = remote_factory.create_io(t);
+	io_interface::ptr underlying = safs::create_io(remote_factory, t);
 	comp_io_scheduler::ptr scheduler;
 	if (get_sched_creator())
 		scheduler = get_sched_creator()->create(underlying->get_node_id());
 	global_cached_io *io = new global_cached_io(t, underlying,
 			global_cache, scheduler);
-	return io_interface::ptr(io, io_deleter(*this));
+	return io_interface::ptr(io);
 }
 
-void global_cached_io_factory::destroy_io(io_interface *io)
+void global_cached_io_factory::destroy_io(io_interface &io)
 {
 	// num_ios is decreased by the underlying remote I/O instance.
 
 	// The underlying IO is deleted in global_cached_io's destructor.
-	delete io;
 }
 
 io_interface::ptr direct_comp_io_factory::create_io(thread *t)
 {
-	io_interface::ptr underlying = remote_factory.create_io(t);
+	io_interface::ptr underlying = safs::create_io(remote_factory, t);
 	direct_comp_io *io = new direct_comp_io(
 			std::static_pointer_cast<remote_io>(underlying));
-	return io_interface::ptr(io, io_deleter(*this));
+	return io_interface::ptr(io);
 }
 
-void direct_comp_io_factory::destroy_io(io_interface *io)
+void direct_comp_io_factory::destroy_io(io_interface &io)
 {
 	// num_ios is decreased by the underlying remote I/O instance.
 
 	// The underlying IO is deleted in global_cached_io's destructor.
-	delete io;
 }
 
 #ifdef PART_IO
@@ -687,13 +670,12 @@ io_interface::ptr part_global_cached_io_factory::create_io(thread *t)
 				get_msg_allocator(t->get_node_id()), &mapper, t),
 			global_data.table);
 	num_ios++;
-	return io_interface::ptr(io, io_deleter(*this));
+	return io_interface::ptr(io);
 }
 
-void part_global_cached_io_factory::destroy_io(io_interface *io)
+void part_global_cached_io_factory::destroy_io(io_interface &io)
 {
 	num_ios--;
-	part_global_cached_io::destroy((part_global_cached_io *) io);
 }
 #endif
 
@@ -756,6 +738,13 @@ file_io_factory::shared_ptr create_io_factory(const std::string &file_name,
 	return file_io_factory::shared_ptr(factory, destroy_io_factory());
 }
 
+io_interface::ptr create_io(file_io_factory::shared_ptr factory, thread *t)
+{
+	io_interface::ptr io = factory->create_io(t);
+	io->set_owner(factory);
+	return io;
+}
+
 void print_io_thread_stat()
 {
 	sleep(1);
@@ -778,5 +767,13 @@ bool is_safs_init()
 }
 
 atomic_integer io_interface::io_counter;
+
+io_interface::~io_interface()
+{
+	if (io_factory) {
+		io_factory->collect_stat(*this);
+		io_factory->destroy_io(*this);
+	}
+}
 
 }

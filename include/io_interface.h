@@ -139,6 +139,8 @@ enum {
 	DIRECT_COMP_ACCESS,
 };
 
+class file_io_factory;
+
 /**
  * This class defines the interface of accessing a SAFS file.
  * An I/O instance is not thread-safe, so we need to create an instance
@@ -154,6 +156,8 @@ class io_interface
 	int io_idx;
 	int max_num_pending_ios;
 	static atomic_integer io_counter;
+	// Keep the I/O factory alive.
+	std::shared_ptr<file_io_factory> io_factory;
 
 protected:
 	io_interface(thread *t) {
@@ -165,7 +169,15 @@ protected:
 public:
 	typedef std::shared_ptr<io_interface> ptr;
 
-	virtual ~io_interface() { }
+	virtual ~io_interface();
+
+	/*
+	 * This stores the I/O factory that creates the I/O instance.
+	 * The main purpose is to keep the I/O factory alive.
+	 */
+	void set_owner(std::shared_ptr<file_io_factory> io_factory) {
+		this->io_factory = io_factory;
+	}
 
 	/**
 	 * This method get the thread that the I/O instance is associated with.
@@ -339,6 +351,13 @@ public:
 	}
 };
 
+/**
+ * This function creates an I/O instance from the I/O factory.
+ * \param factory the I/O factory for creating an I/O instance.
+ * \return an I/O instance.
+ */
+io_interface::ptr create_io(std::shared_ptr<file_io_factory> factory, thread *t);
+
 class comp_io_scheduler;
 
 /**
@@ -365,6 +384,19 @@ class file_io_factory
 	comp_io_sched_creator::ptr creator;
 	// The name of the file.
 	const std::string name;
+
+	/*
+	 * This method creates an I/O instance for the specified thread.
+	 * \param t the thread where the I/O instance can be used.
+	 * \return the I/O instance.
+	 */
+	virtual io_interface::ptr create_io(thread *t) = 0;
+
+	/*
+	 * This method is to notify the I/O factory that an I/O instance is destroyed.
+	 * \param io the I/O instance to be destroyed.
+	 */
+	virtual void destroy_io(io_interface &io) = 0;
 public:
 	typedef std::shared_ptr<file_io_factory> shared_ptr;
 
@@ -407,18 +439,6 @@ public:
 	 */
 	virtual int get_file_id() const = 0;
 
-	/**
-	 * This method creates an I/O instance for the specified thread.
-	 * \param t the thread where the I/O instance can be used.
-	 * \return the I/O instance.
-	 */
-	virtual io_interface::ptr create_io(thread *t) = 0;
-
-	/*
-	 * This method destroys an I/O instance created in the I/O factory.
-	 * \param io the I/O instance to be destroyed.
-	 */
-	virtual void destroy_io(io_interface *io) = 0;
 	virtual void print_state() {
 	}
 
@@ -433,6 +453,9 @@ public:
 	 * \return the file size.
 	 */
 	ssize_t get_file_size() const;
+
+	friend io_interface::ptr create_io(file_io_factory::shared_ptr factory, thread *t);
+	friend class io_interface;
 };
 
 class cache_config;

@@ -157,7 +157,7 @@ void test_direct_comp(const std::string &data_file)
 {
 	file_io_factory::shared_ptr factory = create_io_factory(data_file,
 			DIRECT_COMP_ACCESS);
-	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = create_io(factory, thread::get_curr_thread());
 	test_compute_allocator alloc;
 	for (int i = 0; i < 1000; i++) {
 		test_compute *compute = (test_compute *) alloc.alloc();
@@ -205,7 +205,7 @@ void test_remote_io(const std::string &data_file)
 {
 	file_io_factory::shared_ptr factory = create_io_factory(data_file,
 			REMOTE_ACCESS);
-	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = create_io(factory, thread::get_curr_thread());
 	io->set_callback(callback::ptr(new test_callback()));
 	for (int i = 0; i < 1000; i++) {
 		std::pair<off_t, size_t> p = get_rand_align_req();
@@ -231,7 +231,7 @@ std::string prepare_file()
 
 	file_io_factory::shared_ptr factory = create_io_factory(data_file_name,
 			REMOTE_ACCESS);
-	io_interface::ptr io = factory->create_io(thread::get_curr_thread());
+	io_interface::ptr io = create_io(factory, thread::get_curr_thread());
 	long *buf = NULL;
 	int ret = posix_memalign((void **) &buf, 4096, FILE_SIZE);
 	assert(ret == 0);

@@ -376,7 +376,7 @@ thread_private::thread_private(int node_id, int idx, int entry_size,
 }
 
 void thread_private::init() {
-	io = factory->create_io(this);
+	io = create_io(factory, this);
 	io->set_max_num_pending_ios(params.get_aio_depth_per_file());
 
 	if (io->support_aio()) {

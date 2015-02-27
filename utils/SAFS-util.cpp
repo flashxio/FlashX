@@ -175,7 +175,7 @@ void comm_verify_file(int argc, char *argv[])
 			REMOTE_ACCESS);
 	thread *curr_thread = thread::get_curr_thread();
 	assert(curr_thread);
-	io_interface::ptr io = factory->create_io(curr_thread);
+	io_interface::ptr io = create_io(factory, curr_thread);
 	data_source *source;
 	if (ext_file.empty())
 		source = new synthetic_data_source(factory->get_file_size());
@@ -234,7 +234,7 @@ void comm_load_file2fs(int argc, char *argv[])
 
 	thread *curr_thread = thread::get_curr_thread();
 	assert(curr_thread);
-	io_interface::ptr io = factory->create_io(curr_thread);
+	io_interface::ptr io = create_io(factory, curr_thread);
 
 	char *buf = (char *) valloc(BUF_SIZE);
 	off_t off = 0;
@@ -345,7 +345,7 @@ void comm_create_file(int argc, char *argv[])
 
 	thread *curr_thread = thread::get_curr_thread();
 	assert(curr_thread);
-	io_interface::ptr io = factory->create_io(curr_thread);
+	io_interface::ptr io = create_io(factory, curr_thread);
 
 	char *buf = (char *) valloc(BUF_SIZE);
 	off_t off = 0;
