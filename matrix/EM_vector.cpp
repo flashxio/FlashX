@@ -184,7 +184,7 @@ void EM_vector_accessor::wait4all()
 EM_vector_accessor::EM_vector_accessor(EM_vector &_vec,
 		safs::file_io_factory::shared_ptr factory): vec(_vec)
 {
-	io = factory->create_io(thread::get_curr_thread());
+	io = create_io(factory, thread::get_curr_thread());
 	io->set_callback(safs::callback::ptr(new vec_callback()));
 }
 

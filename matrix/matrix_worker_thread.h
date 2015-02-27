@@ -75,7 +75,7 @@ public:
 	}
 
 	void init() {
-		io = factory->create_io(this);
+		io = create_io(factory, this);
 	}
 
 	void run();
