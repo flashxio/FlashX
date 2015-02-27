@@ -877,6 +877,14 @@ RcppExport SEXP R_FG_fetch_subgraph_el(SEXP graph, SEXP pvertices)
 	Rcpp::IntegerVector vertices(pvertices);
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
+	vertex_id_t max_vid = fg->get_graph_header().get_num_vertices() - 1;
+	BOOST_FOREACH(vertex_id_t vid, vids) {
+		if (vid > max_vid) {
+			fprintf(stderr, "invalid vertex id: %d\n", vid);
+			return R_NilValue;
+		}
+	}
+
 	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
 	subg->compress();
 	assert(subg->get_num_vertices() == vids.size());
@@ -927,6 +935,14 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname)
 	Rcpp::IntegerVector vertices(pvertices);
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
+	vertex_id_t max_vid = fg->get_graph_header().get_num_vertices() - 1;
+	BOOST_FOREACH(vertex_id_t vid, vids) {
+		if (vid > max_vid) {
+			fprintf(stderr, "invalid vertex id: %d\n", vid);
+			return R_NilValue;
+		}
+	}
+
 	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
 	assert(subg->get_num_vertices() == vids.size());
 	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair
