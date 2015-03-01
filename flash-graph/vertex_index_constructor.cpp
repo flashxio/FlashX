@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include "comm_exception.h"
 #include "exception.h"
 
 #include "vertex_index_constructor.h"
@@ -237,7 +238,7 @@ void cundirected_vertex_index_construct::add_vertex(const in_mem_vertex &v)
 void cundirected_vertex_index_construct::dump(const std::string &file,
 		const graph_header &header, bool compressed)
 {
-	throw safs::unsupported_exception();
+	throw unsupported_exception();
 }
 
 vertex_index::ptr cundirected_vertex_index_construct::dump(const graph_header &header,
@@ -314,7 +315,7 @@ void cdirected_vertex_index_construct::finalize()
 void cdirected_vertex_index_construct::dump(const std::string &file,
 		const graph_header &header, bool compressed)
 {
-	throw safs::unsupported_exception();
+	throw unsupported_exception();
 }
 
 vertex_index::ptr cdirected_vertex_index_construct::dump(const graph_header &header,
