@@ -110,8 +110,8 @@ public:
 	 * This compresses the subgraph and generates a graph whose vertex IDs
 	 * are adjacent to each other.
 	 */
-	std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > compress(
-			const std::string &name) const;
+	std::pair<std::shared_ptr<in_mem_graph>, std::shared_ptr<vertex_index> > serialize(
+			const std::string &name, bool compress) const;
 	void compress();
 
 	// Merge the graph to this graph.

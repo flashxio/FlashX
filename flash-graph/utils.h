@@ -230,6 +230,7 @@ protected:
 public:
 	typedef std::shared_ptr<mem_serial_graph> ptr;
 	static ptr create(bool directed, size_t edge_data_size);
+	virtual void add_empty_vertex(vertex_id_t id) = 0;
 };
 
 edge_graph::ptr parse_edge_lists(const std::vector<std::string> &edge_list_files,

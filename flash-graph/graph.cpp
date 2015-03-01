@@ -50,8 +50,8 @@ public:
 	}
 };
 
-std::pair<in_mem_graph::ptr, vertex_index::ptr> in_mem_subgraph::compress(
-		const std::string &name) const
+std::pair<in_mem_graph::ptr, vertex_index::ptr> in_mem_subgraph::serialize(
+		const std::string &name, bool compress) const
 {
 	std::vector<vertex_id_t> vertex_ids;
 	get_all_vertices(vertex_ids);
@@ -64,10 +64,18 @@ std::pair<in_mem_graph::ptr, vertex_index::ptr> in_mem_subgraph::compress(
 	size_t edge_data_size = get_vertex(vertex_ids.front()).get_edge_data_size();
 	utils::mem_serial_graph::ptr serial_g = utils::mem_serial_graph::create(
 			is_directed(), edge_data_size);
+	vertex_id_t expect_vid = 0;
 	BOOST_FOREACH(vertex_id_t id, vertex_ids) {
 		const in_mem_vertex &v = get_vertex(id);
 		assert(v.get_edge_data_size() == edge_data_size);
-		serial_g->add_vertex(*compressor.compress(v));
+		if (compress)
+			serial_g->add_vertex(*compressor.compress(v));
+		else {
+			for (; expect_vid < v.get_id(); expect_vid++)
+				serial_g->add_empty_vertex(expect_vid);
+			serial_g->add_vertex(v);
+			expect_vid = v.get_id() + 1;
+		}
 	}
 	return std::pair<in_mem_graph::ptr, vertex_index::ptr>(
 			serial_g->dump_graph(name), serial_g->dump_index(true));

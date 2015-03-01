@@ -1143,6 +1143,13 @@ public:
 		out_store.add_vertex(v, OUT_EDGE);
 	}
 
+	virtual void add_empty_vertex(vertex_id_t id) {
+		in_mem_directed_vertex<> v(id, false);
+		serial_graph::add_vertex(v);
+		in_store.add_vertex(v, IN_EDGE);
+		out_store.add_vertex(v, OUT_EDGE);
+	}
+
 	void add_vertices(const serial_subgraph &subg) {
 		const directed_serial_subgraph &d_subg = (const directed_serial_subgraph &) subg;
 		for (size_t i = 0; i < d_subg.get_num_vertices(); i++)
@@ -1188,6 +1195,12 @@ public:
 	virtual void add_vertex(const in_mem_vertex &v) {
 		serial_graph::add_vertex(v);
 		store.add_vertex(v, OUT_EDGE);
+	}
+
+	virtual void add_empty_vertex(vertex_id_t id) {
+		in_mem_undirected_vertex<> v(id, false);
+		serial_graph::add_vertex(v);
+		store.add_vertex(v, IN_EDGE);
 	}
 
 	void add_vertices(const serial_subgraph &subg) {
