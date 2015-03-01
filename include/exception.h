@@ -25,19 +25,6 @@
 namespace safs
 {
 
-class no_space_exception
-{
-};
-
-/* out of memory exception */
-class oom_exception
-{
-};
-
-class unsupported_exception
-{
-};
-
 class init_error: public std::exception
 {
 	std::string msg;

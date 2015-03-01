@@ -31,6 +31,7 @@
 #include "concurrency.h"
 #include "thread.h"
 #include "io_request.h"
+#include "comm_exception.h"
 
 namespace safs
 {
