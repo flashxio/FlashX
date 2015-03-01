@@ -2521,6 +2521,11 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	int thread_no = 0;
 	if (files.size() == 1) {
 		const std::string file = files[0];
+		if (!safs::file_exist(file)) {
+			BOOST_LOG_TRIVIAL(error) << file << " doesn't exist";
+			return edge_graph::ptr();
+		}
+
 		BOOST_LOG_TRIVIAL(info) << (std::string(
 					"start to read the edge list from ") + file.c_str());
 		graph_file_io::ptr io;
@@ -2547,6 +2552,10 @@ edge_graph::ptr par_load_edge_list_text(const std::vector<std::string> &files,
 	}
 	else {
 		for (size_t i = 0; i < files.size(); i++) {
+			if (!safs::file_exist(files[i])) {
+				BOOST_LOG_TRIVIAL(error) << files[i] << " doesn't exist";
+				continue;
+			}
 			thread_task *task = new text_edge_file_task<edge_data_type>(files[i]);
 			threads[thread_no % num_threads]->add_task(task);
 			thread_no++;

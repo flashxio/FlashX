@@ -182,26 +182,28 @@ int main(int argc, char *argv[])
 	if (merge_graph) {
 		utils::edge_graph::ptr edge_g = utils::parse_edge_lists(edge_list_files,
 				edge_attr_type, directed, !on_disk);
-		utils::disk_serial_graph::ptr g
-			= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
-					utils::construct_graph(edge_g, creator));
-		// Write the constructed individual graph to a file.
-		if (write_graph) {
-			assert(!file_exist(adjacency_list_file));
-			assert(!file_exist(index_file));
-			g->dump(index_file, adjacency_list_file, true);
-		}
-		printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
-				g->get_num_vertices(), g->get_num_non_empty_vertices(),
-				g->get_num_edges());
-		if (check_graph) {
-			struct timeval start, end;
-			gettimeofday(&start, NULL);
-			g->check_ext_graph(*edge_g, index_file,
-					creator->create_reader(adjacency_list_file));
-			gettimeofday(&end, NULL);
-			printf("verifying a graph takes %.2f seconds\n",
-					time_diff(start, end));
+		if (edge_g) {
+			utils::disk_serial_graph::ptr g
+				= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
+						utils::construct_graph(edge_g, creator));
+			// Write the constructed individual graph to a file.
+			if (write_graph) {
+				assert(!file_exist(adjacency_list_file));
+				assert(!file_exist(index_file));
+				g->dump(index_file, adjacency_list_file, true);
+			}
+			printf("There are %ld vertices, %ld non-empty vertices and %ld edges\n",
+					g->get_num_vertices(), g->get_num_non_empty_vertices(),
+					g->get_num_edges());
+			if (check_graph) {
+				struct timeval start, end;
+				gettimeofday(&start, NULL);
+				g->check_ext_graph(*edge_g, index_file,
+						creator->create_reader(adjacency_list_file));
+				gettimeofday(&end, NULL);
+				printf("verifying a graph takes %.2f seconds\n",
+						time_diff(start, end));
+			}
 		}
 	}
 	else {
@@ -225,6 +227,8 @@ int main(int argc, char *argv[])
 
 			utils::edge_graph::ptr edge_g = utils::parse_edge_lists(files,
 					edge_attr_type, directed, !on_disk);
+			if (edge_g == NULL)
+				continue;
 			utils::disk_serial_graph::ptr g
 				= std::static_pointer_cast<utils::disk_serial_graph, utils::serial_graph>(
 						utils::construct_graph(edge_g, creator));
