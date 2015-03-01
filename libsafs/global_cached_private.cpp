@@ -1585,8 +1585,9 @@ void global_cached_io::access(io_request *requests, int num, io_status *status)
 		else if (requests[i].is_sync()) {
 			syncd = true;
 		}
+		else
+			num_processed_areqs.inc(1);
 		assert(processing_req.is_empty());
-		num_processed_areqs.inc(1);
 		processing_req.init(requests[i]);
 		num_bytes += requests[i].get_size();
 		io_status *stat_p = NULL;
