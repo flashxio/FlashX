@@ -526,11 +526,13 @@ fg.fetch.subgraph.igraph <- function(graph, vertices)
 }
 
 #' @rdname fg.subgraph
-fg.fetch.subgraph <- function(graph, vertices, name = paste(graph$name, "-sub", sep=""))
+fg.fetch.subgraph <- function(graph, vertices,
+							  name = paste(graph$name, "-sub", sep=""), compress=TRUE)
 {
 	stopifnot(!is.null(graph))
 	stopifnot(class(graph) == "fg")
-	ret <- .Call("R_FG_fetch_subgraph", graph, vertices, name, PACKAGE="FlashGraphR")
+	ret <- .Call("R_FG_fetch_subgraph", graph, vertices, name, compress,
+				 PACKAGE="FlashGraphR")
 	if (is.null(ret))
 		ret
 	else

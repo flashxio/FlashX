@@ -928,8 +928,10 @@ RcppExport SEXP R_FG_fetch_subgraph_el(SEXP graph, SEXP pvertices)
 	return ret;
 }
 
-RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname)
+RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname,
+		SEXP pcompress)
 {
+	bool compress = LOGICAL(pcompress)[0];
 	std::string graph_name = CHAR(STRING_ELT(pname, 0));
 	Rcpp::IntegerVector vertices(pvertices);
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
@@ -945,7 +947,7 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname)
 	in_mem_subgraph::ptr subg = fetch_subgraph(fg, vids);
 	assert(subg->get_num_vertices() == vids.size());
 	std::pair<in_mem_graph::ptr, vertex_index::ptr> gpair
-		= subg->compress(graph_name);
+		= subg->serialize(graph_name, compress);
 	FG_graph::ptr sub_fg = FG_graph::create(gpair.first, gpair.second,
 			graph_name, configs);
 	graph_ref *ref = register_in_mem_graph(sub_fg, graph_name);
