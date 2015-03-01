@@ -101,6 +101,7 @@ remote_io::remote_io(const std::vector<disk_io_thread::ptr> &remotes,
 
 remote_io::~remote_io()
 {
+	cleanup();
 	assert(senders.size() == low_prio_senders.size());
 	int num_senders = senders.size();
 	for (int i = 0; i < num_senders; i++) {

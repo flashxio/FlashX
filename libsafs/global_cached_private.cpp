@@ -879,6 +879,7 @@ global_cached_io::global_cached_io(thread *t, io_interface::ptr underlying,
 
 global_cached_io::~global_cached_io()
 {
+	cleanup();
 }
 
 /**
