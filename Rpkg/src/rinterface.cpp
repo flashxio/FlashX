@@ -28,7 +28,6 @@
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/matrix_eigensolver.h"
 #include "matrix/kmeans.h"
-#include "matrix/ASE.h"
 
 #include "FGlib.h"
 #include "utils.h"
@@ -1111,27 +1110,6 @@ RcppExport SEXP R_FG_eigen_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
 	compute_eigen<FG_adj_matrix>(matrix, ncv, nev, which, tol, eigen_pairs);
 	if (eigen_pairs.empty())
 		return R_NilValue;
-	return output_eigen_pairs(eigen_pairs);
-}
-
-/**
- * Compute the eigenvalues and eigenvectors of A + c * D.
- */
-RcppExport SEXP R_FG_compute_AcD_uw(SEXP graph, SEXP pwhich, SEXP pnev, SEXP pncv,
-		SEXP pc, SEXP ptol)
-{
-	FG_graph::ptr fg = R_FG_get_graph(graph);
-	std::string which = CHAR(STRING_ELT(pwhich, 0));
-	int nev = INTEGER(pnev)[0];
-	int ncv = INTEGER(pncv)[0];
-	double c = REAL(pc)[0];
-	double tol = REAL(ptol)[0];
-
-	std::vector<eigen_pair_t> eigen_pairs;
-	compute_AcD_uw(fg, c, ncv, nev, which, tol, eigen_pairs);
-	if (eigen_pairs.empty())
-		return R_NilValue;
-
 	return output_eigen_pairs(eigen_pairs);
 }
 

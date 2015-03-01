@@ -711,15 +711,6 @@ fg.SVD <- function(graph, which="LM", nev=1, ncv=2, tol=1.0e-12)
 #'   the performed calculation, including an ARPACK exit code.
 #' @name fg.ase
 #' @author Da Zheng <dzheng5@@jhu.edu>
-fg.ASE <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
-				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
-{
-	stopifnot(!is.null(fg))
-	stopifnot(class(fg) == "fg")
-	.Call("R_FG_compute_AcD_uw", fg, which.eigen, as.integer(num.eigen),
-		  as.integer(num.eigen * 2), as.double(c), as.double(tol), PACKAGE="FlashGraphR")
-}
-
 fg.ASE.igraph <- function(fg, num.eigen, which=c("A, AcD, L, nL, nL_tau"),
 				   which.eigen=c("LM, LA, SM, SA"), c=1, tau=1, tol=1.0e-12)
 {
