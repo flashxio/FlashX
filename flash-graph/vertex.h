@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "comm_exception.h"
 #include "container.h"
 #include "cache.h"
 #include "FG_basic_types.h"
@@ -808,14 +809,15 @@ public:
 			case BOTH_EDGES:
 				return num_in_edges + num_out_edges;
 			default:
-				abort();
+				throw invalid_arg_exception("invalid edge type");
 		}
 	}
     
     /**
      * \brief Get an STL-style const iterator pointing to the *first* element in the
      *         neighbor list of a vertex.
-     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `OUT_EDGE`.
+     * \param type The type of edges a user wishes to iterate over. A user
+	 *			can iterate over `IN_EDGE` or `OUT_EDGE`.
      *  \return A const iterator pointing to the *first* element in the
      *         neighbor list of a vertex.
      */
@@ -830,14 +832,15 @@ public:
 				return out_array->begin<vertex_id_t>(
 						ext_mem_undirected_vertex::get_header_size());
 			default:
-				abort();
+				throw invalid_arg_exception("invalid edge type");
 		}
 	}
     
     /*
      * \brief Get an STL-style const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
-     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `OUT_EDGE`.
+     * \param type The type of edges a user wishes to iterate over. A user
+	 *			can iterate over `IN_EDGE` or `OUT_EDGE`.
      *  \return A const iterator pointing to the *end* of the
      *         neighbor list of a vertex.
      */
@@ -851,8 +854,8 @@ public:
      * \brief Get a java-style sequential const iterator that iterates
 	 *        the neighbors in the specified range.
      * \return A sequential const iterator.
-     * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`, 
-     *          `OUT_EDGE`.
+     * \param type The type of edges a user wishes to iterate over. A user
+	 *			can iterate over `IN_EDGE` or `OUT_EDGE`.
 	 * \param start The starting offset in the neighbor list iterated by
 	 *              the sequential iterator.
 	 * \param end The end offset in the neighbor list iterated by the sequential
@@ -878,14 +881,15 @@ public:
 						ext_mem_undirected_vertex::get_header_size()
 						+ end * sizeof(vertex_id_t));
 			default:
-				abort();
+				throw invalid_arg_exception("invalid edge type");
 		}
 	}
     
     /**
      * \brief Get an STL-style const iterator pointing to the *first* element in the
      *         edge data list of a vertex.
-     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `OUT_EDGE`.
+     * \param type The type of edges a user wishes to iterate over. A user
+	 *			can iterate over `IN_EDGE` or `OUT_EDGE`.
      *  \return A const iterator pointing to the *first* element in the
      *         edge data list of a vertex.
      */
@@ -904,14 +908,15 @@ public:
 						ext_mem_undirected_vertex::get_edge_data_offset(
 							num_out_edges, sizeof(edge_data_type)));
 			default:
-				abort();
+				throw invalid_arg_exception("invalid edge type");
 		}
 	}
 
     /**
      * \brief Get an STL-style const iterator pointing to the *end* of the
      *         edge data list of a vertex.
-     *  \param type The type of edges a user wishes to evaluate e.g `IN_EDGE`, `OUT_EDGE`.
+     * \param type The type of edges a user wishes to iterate over. A user
+	 *			can iterate over `IN_EDGE` or `OUT_EDGE`.
      *  \return A const iterator pointing to the *first* element in the
      *         edge data list of a vertex.
      */
@@ -927,8 +932,8 @@ public:
      * \brief Get a java-style sequential const iterator for edge data
 	 *        with additional parameters to define the range to iterate.
      * \return A sequential const iterator.
-     * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`, 
-     *          `OUT_EDGE`, `OUT_EDGE`.
+     * \param type The type of edges a user wishes to iterate over. A user
+	 *			can iterate over `IN_EDGE` or `OUT_EDGE`.
 	 * \param start The starting offset in the edge list.
 	 * \param end The end offset in the edge list.
 	 */
@@ -952,16 +957,16 @@ public:
 						edge_end + start * sizeof(edge_data_type),
 						edge_end + end * sizeof(edge_data_type));
 			default:
-				abort();
+				throw invalid_arg_exception("invalid edge type");
 		}
 	}
 
     /**
      * \brief Get a java-style sequential const iterator that iterates
 	 *        the edge data list.
+     * \param type The type of edges a user wishes to iterate over. A user
+	 *			can iterate over `IN_EDGE` or `OUT_EDGE`.
      * \return A sequential const iterator.
-     * \param type The type of edges a user wishes to iterate over e.g `IN_EDGE`, 
-     *          `OUT_EDGE`, `OUT_EDGE`.
      */
 	template<class edge_data_type>
 	safs::page_byte_array::seq_const_iterator<edge_data_type> get_data_seq_it(
@@ -1298,7 +1303,7 @@ public:
 			case edge_type::BOTH_EDGES:
 				return get_num_in_edges() + get_num_out_edges();
 			default:
-				abort();
+				throw invalid_arg_exception("invalid edge type");
 		}
 	}
 
