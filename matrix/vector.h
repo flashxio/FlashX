@@ -29,6 +29,7 @@ namespace fm
 class bulk_operate;
 class vec_creator;
 class data_frame;
+class agg_operate;
 
 class vector
 {
@@ -80,8 +81,8 @@ public:
 	virtual void sort() = 0;
 	virtual bool is_sorted() const = 0;
 	// It should return data frame instead of vector.
-	virtual std::shared_ptr<data_frame> groupby(const bulk_operate &find_next,
-		const bulk_operate &agg_op, const vec_creator &create) const = 0;
+	virtual std::shared_ptr<data_frame> groupby(const agg_operate &find_next,
+		const agg_operate &agg_op, const vec_creator &create) const = 0;
 
 	/**
 	 * This is a deep copy. It copies all members of the vector object

@@ -5,20 +5,10 @@
 using namespace fm;
 
 template<class T>
-class find_next_impl: public bulk_operate
+class find_next_impl: public agg_operate
 {
 public:
-	virtual void runAA(size_t num_eles, const void *left_arr,
-			const void *right_arr, void *output_arr) const {
-	}
-	virtual void runAE(size_t num_eles, const void *left_arr,
-			const void *right, void *output_arr) const {
-	}
-	virtual void runEA(size_t num_eles, const void *left,
-			const void *right_arr, void *output_arr) const {
-	}
-
-	virtual void runA(size_t num_eles, const void *left_arr,
+	virtual void run(size_t num_eles, const void *left_arr,
 			void *output) const {
 		const T *curr = (const T *) left_arr;
 		T val = *curr;
@@ -27,11 +17,8 @@ public:
 		*(size_t *) output = loc;
 	}
 
-	virtual size_t left_entry_size() const {
+	virtual size_t input_entry_size() const {
 		return sizeof(T);
-	}
-	virtual size_t right_entry_size() const {
-		return -1;
 	}
 	virtual size_t output_entry_size() const {
 		return sizeof(size_t);
@@ -39,20 +26,10 @@ public:
 };
 
 template<class T>
-class count_impl: public bulk_operate
+class count_impl: public agg_operate
 {
 public:
-	virtual void runAA(size_t num_eles, const void *left_arr,
-			const void *right_arr, void *output_arr) const {
-	}
-	virtual void runAE(size_t num_eles, const void *left_arr,
-			const void *right, void *output_arr) const {
-	}
-	virtual void runEA(size_t num_eles, const void *left,
-			const void *right_arr, void *output_arr) const {
-	}
-
-	virtual void runA(size_t num_eles, const void *left_arr,
+	virtual void run(size_t num_eles, const void *left_arr,
 			void *output) const {
 		assert(num_eles > 0);
 		const T *arr = (const T *) left_arr;
@@ -63,11 +40,8 @@ public:
 		*(size_t *) output = num_eles;
 	}
 
-	virtual size_t left_entry_size() const {
+	virtual size_t input_entry_size() const {
 		return sizeof(T);
-	}
-	virtual size_t right_entry_size() const {
-		return -1;
 	}
 	virtual size_t output_entry_size() const {
 		return sizeof(size_t);

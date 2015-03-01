@@ -171,6 +171,17 @@ public:
 };
 
 /*
+ * This is the interface for aggregating elements into a single element.
+ */
+class agg_operate
+{
+public:
+	virtual void run(size_t num_eles, const void *in, void *output) const = 0;
+	virtual size_t input_entry_size() const = 0;
+	virtual size_t output_entry_size() const = 0;
+};
+
+/*
  * This interface defines a collection of basic unary operators.
  */
 class basic_uops

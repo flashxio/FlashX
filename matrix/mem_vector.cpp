@@ -70,16 +70,16 @@ mem_vector::const_ptr mem_vector::cast(vector::const_ptr vec)
 	return std::static_pointer_cast<const mem_vector>(vec);
 }
 
-bool mem_vector::verify_groupby(const bulk_operate &find_next,
-		const bulk_operate &agg_op, const vec_creator &create) const
+bool mem_vector::verify_groupby(const agg_operate &find_next,
+		const agg_operate &agg_op, const vec_creator &create) const
 {
 	if (find_next.output_entry_size() != sizeof(size_t)) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "the find next operator should return a index of size_t";
 		return false;
 	}
-	if (find_next.left_entry_size() != get_entry_size()
-			|| agg_op.left_entry_size() != get_entry_size()) {
+	if (find_next.input_entry_size() != get_entry_size()
+			|| agg_op.input_entry_size() != get_entry_size()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "the operator accepts input types incompatible with the entry type in the vector";
 		return false;
@@ -93,8 +93,8 @@ bool mem_vector::verify_groupby(const bulk_operate &find_next,
 	return true;
 }
 
-data_frame::ptr mem_vector::serial_groupby(const bulk_operate &find_next,
-		const bulk_operate &agg_op, const vec_creator &create) const
+data_frame::ptr mem_vector::serial_groupby(const agg_operate &find_next,
+		const agg_operate &agg_op, const vec_creator &create) const
 {
 	if (!verify_groupby(find_next, agg_op, create))
 		return data_frame::ptr();
@@ -119,12 +119,12 @@ data_frame::ptr mem_vector::serial_groupby(const bulk_operate &find_next,
 		size_t curr_length = sorted_vec->get_length() - loc;
 		const char *curr_ptr = sorted_vec->get_raw_arr() + get_entry_size() * loc;
 		size_t rel_end;
-		find_next.runA(curr_length, curr_ptr, &rel_end);
+		find_next.run(curr_length, curr_ptr, &rel_end);
 		if (idx >= agg->get_length()) {
 			agg->resize(agg->get_length() * 2);
 			val->resize(val->get_length() * 2);
 		}
-		agg_op.runA(rel_end, curr_ptr, agg->get(idx));
+		agg_op.run(rel_end, curr_ptr, agg->get(idx));
 		memcpy(val->get(idx), curr_ptr, get_entry_size());
 		idx++;
 		loc += rel_end;
@@ -137,8 +137,8 @@ data_frame::ptr mem_vector::serial_groupby(const bulk_operate &find_next,
 	return ret;
 }
 
-data_frame::ptr mem_vector::groupby(const bulk_operate &find_next,
-		const bulk_operate &agg_op, const vec_creator &create) const
+data_frame::ptr mem_vector::groupby(const agg_operate &find_next,
+		const agg_operate &agg_op, const vec_creator &create) const
 {
 	if (!verify_groupby(find_next, agg_op, create))
 		return data_frame::ptr();
@@ -163,7 +163,7 @@ data_frame::ptr mem_vector::groupby(const bulk_operate &find_next,
 	for (int i = 0; i < num_omp; i++) {
 		off_t start = sorted_vec->get_length() / num_omp * i;
 		// This returns the relative start location of the next value.
-		find_next.runA(sorted_vec->get_length() - start,
+		find_next.run(sorted_vec->get_length() - start,
 				sorted_vec->get_raw_arr() + get_entry_size() * start,
 				par_starts + i);
 		// This is the absolute start location of this partition.

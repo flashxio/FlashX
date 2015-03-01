@@ -75,12 +75,12 @@ public:
 		return arr + idx * get_entry_size();
 	}
 
-	bool verify_groupby(const bulk_operate &find_next,
-		const bulk_operate &agg_op, const vec_creator &create) const;
-	std::shared_ptr<data_frame> serial_groupby(const bulk_operate &find_next,
-		const bulk_operate &agg_op, const vec_creator &create) const;
-	virtual std::shared_ptr<data_frame> groupby(const bulk_operate &find_next,
-		const bulk_operate &agg_op, const vec_creator &create) const;
+	bool verify_groupby(const agg_operate &find_next,
+		const agg_operate &agg_op, const vec_creator &create) const;
+	std::shared_ptr<data_frame> serial_groupby(const agg_operate &find_next,
+		const agg_operate &agg_op, const vec_creator &create) const;
+	virtual std::shared_ptr<data_frame> groupby(const agg_operate &find_next,
+		const agg_operate &agg_op, const vec_creator &create) const;
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end);
