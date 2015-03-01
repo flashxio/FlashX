@@ -26,7 +26,6 @@
 
 #include "matrix/FG_sparse_matrix.h"
 #include "matrix/matrix_eigensolver.h"
-#include "matrix/ASE.h"
 
 using namespace fg;
 
@@ -142,10 +141,6 @@ int main(int argc, char *argv[])
 		else if (type == "LS" || type == "RS")
 			compute_SVD<FG_general_sparse_char_matrix>(matrix, m, nv, which,
 					type, tol, eigen_pairs);
-	}
-	else if (matrix_type == "AcD") {
-		size_t nvertices = graph->get_graph_header().get_num_vertices();
-		compute_AcD_uw(graph, 1.0/nvertices, m, nv, which, tol, eigen_pairs);
 	}
 	else
 		assert(0);
