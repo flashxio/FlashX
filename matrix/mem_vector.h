@@ -47,10 +47,7 @@ class mem_vector: public vector
 protected:
 	mem_vector(mem_dense_matrix::ptr data);
 	mem_vector(size_t length, size_t entry_size);
-
-	const char *get_raw_arr() const {
-		return arr;
-	}
+	mem_vector(std::shared_ptr<char> data, size_t len, size_t entry_size);
 
 	char *get_raw_arr() {
 		return arr;
@@ -69,6 +66,10 @@ public:
 
 	mem_dense_matrix::ptr get_data() {
 		return data;
+	}
+
+	const char *get_raw_arr() const {
+		return arr;
 	}
 
 	char *get(off_t idx) {
@@ -91,6 +92,7 @@ public:
 	virtual bool resize(size_t new_length);
 	virtual bool set_sub_vec(off_t start, const vector &vec);
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
+	virtual bool expose_sub_vec(off_t start, size_t length);
 	virtual vector::ptr deep_copy() const;
 };
 
@@ -102,6 +104,11 @@ template<class T>
 class type_mem_vector: public mem_vector
 {
 	bool sorted;
+
+	type_mem_vector(std::shared_ptr<char> data, size_t len): mem_vector(
+			data, len, sizeof(T)) {
+		sorted = false;
+	}
 
 	type_mem_vector(mem_dense_matrix::ptr data): mem_vector(data) {
 		sorted = false;
@@ -116,6 +123,16 @@ class type_mem_vector: public mem_vector
 	}
 public:
 	typedef std::shared_ptr<type_mem_vector<T> > ptr;
+
+	static ptr create(std::shared_ptr<char> data, size_t num_bytes) {
+		if (num_bytes % sizeof(T) != 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "The data array has a wrong number of bytes";
+			return type_mem_vector<T>::ptr();
+		}
+		size_t len = num_bytes / sizeof(T);
+		return ptr(new type_mem_vector(data, len));
+	}
 
 	static ptr create(mem_dense_matrix::ptr data) {
 		if (data->get_num_rows() > 1 && data->get_num_cols() > 1) {

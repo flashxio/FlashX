@@ -32,6 +32,7 @@ namespace fm
 class bulk_operate;
 class bulk_uoperate;
 class set_operate;
+class apply_operate;
 
 enum matrix_type
 {
@@ -71,41 +72,6 @@ enum apply_margin
 {
 	MAR_ROW = 1,
 	MAR_COL = 2,
-};
-
-/*
- * This operator is different from bulk_uoperate. It treats an array
- * as a single input and outputs an array of potentially different length.
- */
-class apply_operate
-{
-	size_t in_entry_size;
-	size_t out_entry_size;
-	size_t num_out_eles;
-public:
-	apply_operate(size_t in_entry_size, size_t out_entry_size, size_t num_out_eles) {
-		this->in_entry_size = in_entry_size;
-		this->out_entry_size = out_entry_size;
-		this->num_out_eles = num_out_eles;
-	}
-	/*
-	 * This virtual method accepts an input array of the predefined length
-	 * and stores the result in an output array of the predefined length.
-	 */
-	virtual void run(const void *input, size_t num_in_eles,
-			void *output) const = 0;
-
-	size_t input_entry_size() const {
-		return in_entry_size;
-	}
-
-	size_t output_entry_size() const {
-		return out_entry_size;
-	}
-
-	size_t get_num_out_eles() const {
-		return num_out_eles;
-	}
 };
 
 class dense_matrix

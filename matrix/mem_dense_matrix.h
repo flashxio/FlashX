@@ -190,6 +190,11 @@ class mem_col_dense_matrix: public mem_dense_matrix
 
 	std::shared_ptr<char> data;
 
+	mem_col_dense_matrix(std::shared_ptr<char> data, size_t nrow, size_t ncol,
+			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
+		this->data = data;
+	}
+
 	mem_col_dense_matrix(size_t nrow, size_t ncol,
 			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
 		if (nrow * ncol > 0) {
@@ -213,6 +218,11 @@ protected:
 	}
 public:
 	typedef std::shared_ptr<mem_col_dense_matrix> ptr;
+
+	static ptr create(std::shared_ptr<char> data, size_t nrow, size_t ncol,
+			size_t entry_size) {
+		return ptr(new mem_col_dense_matrix(data, nrow, ncol, entry_size));
+	}
 
 	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
 		return ptr(new mem_col_dense_matrix(nrow, ncol, entry_size));

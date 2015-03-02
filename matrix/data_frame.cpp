@@ -17,9 +17,12 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include "log.h"
 
 #include "data_frame.h"
+#include "bulk_operate.h"
 
 namespace fm
 {
@@ -60,6 +63,16 @@ bool data_frame::append(std::vector<data_frame::ptr>::const_iterator begin,
 
 	for (auto it = vecs.begin(); it != vecs.end(); it++)
 		it->second.front()->append(it->second.begin() + 1, it->second.end());
+	return true;
+}
+
+bool data_frame::expose_portion(off_t loc, size_t length)
+{
+	for (size_t i = 0; i < named_vecs.size(); i++) {
+		bool ret = named_vecs[i].second->expose_sub_vec(loc, length);
+		if (!ret)
+			return false;
+	}
 	return true;
 }
 

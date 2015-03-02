@@ -18,10 +18,23 @@
  */
 
 #include "mem_vector.h"
-#include "data_frame.h"
+#include "mem_data_frame.h"
 
 namespace fm
 {
+
+static char *get_matrix_raw_data(mem_dense_matrix &data)
+{
+	char *arr = NULL;
+	// TODO this may not work with submatrix.
+	if (data.store_layout() == matrix_layout_t::L_ROW)
+		arr = ((mem_row_dense_matrix &) data).get_row(0);
+	else if (data.store_layout() == matrix_layout_t::L_COL)
+		arr = ((mem_col_dense_matrix &) data).get_col(0);
+	else
+		BOOST_LOG_TRIVIAL(error) << "wrong matrix layout";
+	return arr;
+}
 
 mem_vector::mem_vector(mem_dense_matrix::ptr data): vector(
 		// The length of the vector is the size of the dimension that isn't 1.
@@ -31,13 +44,17 @@ mem_vector::mem_vector(mem_dense_matrix::ptr data): vector(
 	this->data = data;
 	// The data buffer is the first row or column of the matrix, so
 	// the shape of the matrix doesn't matter.
-	// TODO this may not work with submatrix.
-	if (data->store_layout() == matrix_layout_t::L_ROW)
-		arr = mem_row_dense_matrix::cast(data)->get_row(0);
-	else if (data->store_layout() == matrix_layout_t::L_COL)
-		arr = mem_col_dense_matrix::cast(data)->get_col(0);
-	else
-		BOOST_LOG_TRIVIAL(error) << "wrong matrix layout";
+	arr = get_matrix_raw_data(*data);
+}
+
+mem_vector::mem_vector(std::shared_ptr<char> data, size_t length,
+		size_t entry_size): vector(length, entry_size, true)
+{
+	// Maybe the column form may be more useful.
+	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(data, length,
+			1, entry_size);
+	this->arr = tmp->get_col(0);
+	this->data = std::static_pointer_cast<mem_dense_matrix>(tmp);
 }
 
 mem_vector::mem_vector(size_t length, size_t entry_size): vector(length,
@@ -120,10 +137,10 @@ data_frame::ptr mem_vector::serial_groupby(const agg_operate &agg_op) const
 	}
 	agg->resize(idx);
 	val->resize(idx);
-	data_frame::ptr ret = data_frame::create();
+	mem_data_frame::ptr ret = mem_data_frame::create();
 	ret->add_vec("val", std::static_pointer_cast<vector>(val));
 	ret->add_vec("agg", std::static_pointer_cast<vector>(agg));
-	return ret;
+	return std::static_pointer_cast<data_frame>(ret);
 }
 
 data_frame::ptr mem_vector::groupby(const agg_operate &agg_op) const
@@ -266,6 +283,20 @@ vector::const_ptr mem_vector::get_sub_vec(off_t start, size_t length) const
 	mem_vec->arr = mutable_this->get_raw_arr() + start * get_entry_size();
 	mem_vec->data = mutable_this->get_data();
 	return std::static_pointer_cast<const vector>(mem_vec);
+}
+
+bool mem_vector::expose_sub_vec(off_t start, size_t length)
+{
+	size_t tot_len = data->get_num_rows() * data->get_num_cols();
+	if (start + length > tot_len) {
+		exit(1);
+		BOOST_LOG_TRIVIAL(error) << "expose_sub_vec: out of range";
+		return false;
+	}
+
+	resize(length);
+	arr = get_matrix_raw_data(*data) + start * get_entry_size();
+	return true;
 }
 
 vector::ptr mem_vector::deep_copy() const

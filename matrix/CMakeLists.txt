@@ -18,4 +18,7 @@ add_library(FMatrix STATIC
 	mem_dense_matrix.cpp
 	mem_vector.cpp
 	data_frame.cpp
+	generic_type.cpp
+	mem_data_frame.cpp
+	mem_vector_vector.cpp
 )

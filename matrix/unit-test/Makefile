@@ -22,7 +22,8 @@ CXXFLAGS := -g -std=c++0x -I../../include -I../../libcommon -I../../flash-graph 
 LDFLAGS := $(OMP_FLAG) -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lnuma -lz -laio
 
-all: test_io_gen test-mem_matrix test-EM_vector test-EM_matrix test-mem_vector
+all: test_io_gen test-mem_matrix test-EM_vector test-EM_matrix	\
+	test-mem_vector test-data_frame
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -32,6 +33,9 @@ test-mem_matrix: test-mem_matrix.o ../libFMatrix.a
 
 test-mem_vector: test-mem_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector test-mem_vector.o $(LDFLAGS)
+
+test-data_frame: test-data_frame.o ../libFMatrix.a
+	$(CXX) -o test-data_frame test-data_frame.o $(LDFLAGS)
 
 test-EM_vector: test-EM_vector.o ../libFMatrix.a
 	$(CXX) -o test-EM_vector test-EM_vector.o $(LDFLAGS)
@@ -46,6 +50,7 @@ clean:
 	rm -f test_io_gen
 	rm -f test-mem_matrix
 	rm -f test-mem_vector
+	rm -f test-data_frame
 	rm -f test-EM_vector
 	rm -f test-EM_matrix
 

@@ -17,8 +17,11 @@
  * limitations under the License.
  */
 
+#include "log.h"
+
 #include "generic_type.h"
 #include "mem_vector.h"
+#include "mem_vector_vector.h"
 
 namespace fm
 {
@@ -28,6 +31,19 @@ mem_vector::ptr scalar_type_impl<T>::create_mem_vec(
 		size_t length) const
 {
 	return type_mem_vector<T>::create(length);
+}
+
+template<class T>
+mem_vector::ptr scalar_type_impl<T>::create_mem_vec(std::shared_ptr<char> data,
+			size_t num_bytes) const
+{
+	return type_mem_vector<T>::create(data, num_bytes);
+}
+
+template<class T>
+mem_vector_vector::ptr scalar_type_impl<T>::create_mem_vec_vec() const
+{
+	return type_mem_vector_vector<T>::create();
 }
 
 template class scalar_type_impl<bool>;
