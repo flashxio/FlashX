@@ -79,6 +79,7 @@ public:
 			std::vector<vector::ptr>::const_iterator vec_end) = 0;
 
 	virtual void sort() = 0;
+	virtual vector::ptr sort_with_index() = 0;
 	virtual bool is_sorted() const = 0;
 	// It should return data frame instead of vector.
 	virtual std::shared_ptr<data_frame> groupby(const agg_operate &find_next,

@@ -295,4 +295,33 @@ vector::ptr mem_vector::clone() const
 	return std::static_pointer_cast<vector>(mem_vec);
 }
 
+bool mem_vector::equals(const mem_vector &vec) const
+{
+	if (vec.get_length() != this->get_length())
+		return false;
+	else
+		return memcmp(this->arr, vec.arr,
+				get_length() * get_entry_size()) == 0;
+}
+
+mem_vector::ptr mem_vector::get(type_mem_vector<off_t> &idxs) const
+{
+	mem_vector::ptr ret = create_int(idxs.get_length());
+#pragma omp parallel for
+	for (size_t i = 0; i < idxs.get_length(); i++) {
+		off_t idx = idxs.get(i);
+		// Check if it's out of the range.
+		if (idx < 0 && idx >= this->get_length()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("%1% is out of range") % idx;
+			continue;
+		}
+
+		char *dst = ret->get(i);
+		const char *src = this->get(idx);
+		memcpy(dst, src, get_entry_size());
+	}
+	return ret;
+}
+
 }

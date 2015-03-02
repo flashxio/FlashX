@@ -27,6 +27,8 @@
 #include <algorithm>
 #endif
 
+#include <boost/format.hpp>
+
 #include "mem_dense_matrix.h"
 #include "vector.h"
 
@@ -34,6 +36,8 @@ namespace fm
 {
 
 class data_frame;
+
+template<class T> class type_mem_vector;
 
 class mem_vector: public vector
 {
@@ -74,6 +78,9 @@ public:
 	const char *get(off_t idx) const {
 		return arr + idx * get_entry_size();
 	}
+	virtual mem_vector::ptr get(type_mem_vector<off_t> &idxs) const;
+
+	virtual bool equals(const mem_vector &vec) const;
 
 	bool verify_groupby(const agg_operate &find_next,
 		const agg_operate &agg_op, const vec_creator &create) const;
@@ -130,17 +137,28 @@ public:
 		return ptr(new type_mem_vector<T>(length));
 	}
 
-	static type_mem_vector<T>::ptr cast(vector::ptr vec) {
-		if (!vec->is_in_mem())
-			return type_mem_vector<T>::ptr();
-		else if (!vec->is_type<T>())
-			return type_mem_vector<T>::ptr();
-		else
-			return std::static_pointer_cast<type_mem_vector<T> >(vec);
+	static ptr cast(vector::ptr vec) {
+		if (!vec->is_in_mem()) {
+			BOOST_LOG_TRIVIAL(error) << "the vector isn't in memory";
+			return ptr();
+		}
+		if (!vec->is_type<T>()) {
+			BOOST_LOG_TRIVIAL(error) << "the vector isn't of the right type";
+			return ptr();
+		}
+		return std::static_pointer_cast<type_mem_vector<T> >(vec);
 	}
 
 	T get(off_t idx) const {
 		return ((T *) get_raw_arr())[idx];
+	}
+
+	bool equals(const mem_vector &vec) const {
+		const type_mem_vector<T> &t_vec = (const type_mem_vector<T> &) vec;
+		for (size_t i = 0; i < t_vec.get_length(); i++)
+			if (t_vec.get(i) != this->get(i))
+				return false;
+		return true;
 	}
 
 	void set(off_t idx, T v) {
@@ -149,6 +167,38 @@ public:
 
 	virtual bool is_sorted() const {
 		return sorted;
+	}
+
+	virtual vector::ptr sort_with_index() {
+		struct indexed_entry {
+			T val;
+			off_t idx;
+			bool operator<(const indexed_entry &e) const {
+				return val < e.val;
+			}
+		};
+		std::unique_ptr<indexed_entry[]> entries
+			= std::unique_ptr<indexed_entry[]>(new indexed_entry[get_length()]);
+		for (size_t i = 0; i < get_length(); i++) {
+			entries[i].val = get(i);
+			entries[i].idx = i;
+		}
+
+		indexed_entry *start = entries.get();
+		indexed_entry *end = start + get_length();
+#if defined(_OPENMP)
+		__gnu_parallel::sort(start, end);
+#else
+		std::sort(start, end);
+#endif
+		type_mem_vector<off_t>::ptr indexes
+			= type_mem_vector<off_t>::create(get_length());
+		for (size_t i = 0; i < get_length(); i++) {
+			set(i, start[i].val);
+			indexes->set(i, start[i].idx);
+		}
+		sorted = true;
+		return indexes;
 	}
 
 	virtual void sort() {

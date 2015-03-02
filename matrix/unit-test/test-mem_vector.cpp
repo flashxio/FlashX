@@ -111,8 +111,25 @@ void test_append()
 	assert(tot_len == res->get_length());
 }
 
+void test_sort()
+{
+	printf("test sort\n");
+	type_mem_vector<int>::ptr vec = type_mem_vector<int>::create(1000000);
+	for (size_t i = 0; i < vec->get_length(); i++)
+		vec->set(i, random() % 1000);
+	type_mem_vector<int>::ptr clone = type_mem_vector<int>::create(1000000);
+	clone->set_sub_vec(0, *vec);
+	assert(clone->equals(*vec));
+
+	type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(
+			vec->sort_with_index());
+	mem_vector::ptr sorted = clone->mem_vector::get(*idxs);
+	assert(sorted->equals(*vec));
+}
+
 int main()
 {
+	test_sort();
 	test_append();
 	test_groupby();
 }
