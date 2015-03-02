@@ -94,7 +94,7 @@ public:
 	virtual bool resize(size_t new_length);
 	virtual bool set_sub_vec(off_t start, const vector &vec);
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
-	virtual vector::ptr clone() const;
+	virtual vector::ptr deep_copy() const;
 };
 
 /**

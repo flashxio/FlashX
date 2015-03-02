@@ -142,9 +142,17 @@ public:
 	~mem_sub_col_dense_matrix() {
 	}
 
-	virtual dense_matrix::ptr clone() const {
+	virtual dense_matrix::ptr shallow_copy() const {
 		// TODO
-		BOOST_LOG_TRIVIAL(error) << "clone() isn't supported in a sub_col_matrix";
+		BOOST_LOG_TRIVIAL(error)
+			<< "shallow_copy() isn't supported in a sub_col_matrix";
+		return dense_matrix::ptr();
+	}
+
+	virtual dense_matrix::ptr deep_copy() const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "deep_copy() isn't supported in a sub_col_matrix";
 		return dense_matrix::ptr();
 	}
 
@@ -251,12 +259,20 @@ public:
 	~mem_sub_row_dense_matrix() {
 	}
 
-	virtual dense_matrix::ptr clone() const {
+	virtual dense_matrix::ptr shallow_copy() const {
 		// TODO
 		BOOST_LOG_TRIVIAL(error)
-			<< "clone() isn't supported in a sub_col_matrix";
+			<< "shallow_copy() isn't supported in a sub_col_matrix";
 		return dense_matrix::ptr();
 	}
+
+	virtual dense_matrix::ptr deep_copy() const {
+		// TODO
+		BOOST_LOG_TRIVIAL(error)
+			<< "deep_copy() isn't supported in a sub_col_matrix";
+		return dense_matrix::ptr();
+	}
+
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const {
 		// TODO
 		BOOST_LOG_TRIVIAL(error)
@@ -495,12 +511,22 @@ mem_col_dense_matrix::ptr mem_col_dense_matrix::cast(mem_dense_matrix::ptr m)
 	return std::static_pointer_cast<mem_col_dense_matrix>(m);
 }
 
-dense_matrix::ptr mem_col_dense_matrix::clone() const
+dense_matrix::ptr mem_col_dense_matrix::shallow_copy() const
 {
 	// The data array is read-only. It's safe to have two matrices reference
 	// the same data array.
 	return dense_matrix::ptr(new mem_col_dense_matrix(get_num_rows(),
 				get_num_cols(), get_entry_size(), data));
+}
+
+dense_matrix::ptr mem_col_dense_matrix::deep_copy() const
+{
+	size_t num_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+	std::shared_ptr<char> new_data = std::shared_ptr<char>(
+			(char *) memalign(PAGE_SIZE, num_bytes), deleter());
+	memcpy(new_data.get(), data.get(), num_bytes);
+	return dense_matrix::ptr(new mem_col_dense_matrix(get_num_rows(),
+				get_num_cols(), get_entry_size(), new_data));
 }
 
 dense_matrix::ptr mem_col_dense_matrix::conv2(size_t nrow, size_t ncol,
@@ -515,7 +541,7 @@ dense_matrix::ptr mem_col_dense_matrix::conv2(size_t nrow, size_t ncol,
 	if (!byrow) {
 		// The new matrix has the same data layout as the original matrix.
 		// so we can simply clone the original matrix.
-		dense_matrix::ptr new_mat = clone();
+		dense_matrix::ptr new_mat = shallow_copy();
 		new_mat->resize(nrow, ncol);
 		return new_mat;
 	}
@@ -828,12 +854,22 @@ void mem_col_dense_matrix::get_row(size_t row_idx, char *arr) const
 				entry_size);
 }
 
-dense_matrix::ptr mem_row_dense_matrix::clone() const
+dense_matrix::ptr mem_row_dense_matrix::shallow_copy() const
 {
 	// The data array is read-only. It's safe to have two matrices reference
 	// the same data array.
 	return dense_matrix::ptr(new mem_row_dense_matrix(get_num_rows(),
 				get_num_cols(), get_entry_size(), data));
+}
+
+dense_matrix::ptr mem_row_dense_matrix::deep_copy() const
+{
+	size_t num_bytes = get_num_rows() * get_num_cols() * get_entry_size();
+	std::shared_ptr<char> new_data = std::shared_ptr<char>(
+			(char *) memalign(PAGE_SIZE, num_bytes), deleter());
+	memcpy(new_data.get(), data.get(), num_bytes);
+	return dense_matrix::ptr(new mem_row_dense_matrix(get_num_rows(),
+				get_num_cols(), get_entry_size(), new_data));
 }
 
 dense_matrix::ptr mem_row_dense_matrix::conv2(size_t nrow, size_t ncol,
@@ -848,7 +884,7 @@ dense_matrix::ptr mem_row_dense_matrix::conv2(size_t nrow, size_t ncol,
 	if (byrow) {
 		// The new matrix has the same data layout as the original matrix.
 		// so we can simply clone the original matrix.
-		dense_matrix::ptr new_mat = clone();
+		dense_matrix::ptr new_mat = shallow_copy();
 		new_mat->resize(nrow, ncol);
 		return new_mat;
 	}

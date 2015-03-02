@@ -204,7 +204,8 @@ public:
 		return get_num_cols() > get_num_rows();
 	}
 
-	virtual dense_matrix::ptr clone() const = 0;
+	virtual dense_matrix::ptr shallow_copy() const = 0;
+	virtual dense_matrix::ptr deep_copy() const = 0;
 	/**
 	 * This method will create a new matrix with different dimensions and
 	 * data layout. But the new matrix shares the same data as the original

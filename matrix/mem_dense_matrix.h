@@ -136,7 +136,8 @@ public:
 
 	virtual bool write2file(const std::string &file_name) const;
 
-	virtual dense_matrix::ptr clone() const;
+	virtual dense_matrix::ptr shallow_copy() const;
+	virtual dense_matrix::ptr deep_copy() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
 	virtual dense_matrix::ptr transpose() const;
 
@@ -228,7 +229,8 @@ public:
 
 	virtual bool write2file(const std::string &file_name) const;
 
-	virtual dense_matrix::ptr clone() const;
+	virtual dense_matrix::ptr shallow_copy() const;
+	virtual dense_matrix::ptr deep_copy() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
 	virtual dense_matrix::ptr transpose() const;
 

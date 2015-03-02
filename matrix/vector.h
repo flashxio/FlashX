@@ -86,10 +86,10 @@ public:
 		const agg_operate &agg_op, const vec_creator &create) const = 0;
 
 	/**
-	 * This is a deep copy. It copies all members of the vector object
-	 * as well as the data in the vector;
+	 * This method copies all members of the vector object as well as
+	 * the data in the vector;
 	 */
-	virtual vector::ptr clone() const = 0;
+	virtual vector::ptr deep_copy() const = 0;
 	/**
 	 * This only copies all members of the vector object.
 	 */

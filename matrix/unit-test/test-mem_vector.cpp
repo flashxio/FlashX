@@ -117,8 +117,7 @@ void test_sort()
 	type_mem_vector<int>::ptr vec = type_mem_vector<int>::create(1000000);
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random() % 1000);
-	type_mem_vector<int>::ptr clone = type_mem_vector<int>::create(1000000);
-	clone->set_sub_vec(0, *vec);
+	type_mem_vector<int>::ptr clone = type_mem_vector<int>::cast(vec->deep_copy());
 	assert(clone->equals(*vec));
 
 	type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(

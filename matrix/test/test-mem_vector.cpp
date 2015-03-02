@@ -31,8 +31,7 @@ void test_permute()
 	type_mem_vector<int>::ptr vec = type_mem_vector<int>::create(1000000000);
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random());
-	type_mem_vector<int>::ptr clone = type_mem_vector<int>::create(1000000000);
-	clone->set_sub_vec(0, *vec);
+	type_mem_vector<int>::ptr clone = type_mem_vector<int>::cast(vec->deep_copy());
 	assert(clone->equals(*vec));
 
 	struct timeval start, end;

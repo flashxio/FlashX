@@ -420,7 +420,13 @@ bool EM_col_dense_matrix::aggregate(const bulk_operate &op,
 	assert(0);
 }
 
-dense_matrix::ptr EM_col_dense_matrix::clone() const
+dense_matrix::ptr EM_col_dense_matrix::shallow_copy() const
+{
+	// TODO
+	assert(0);
+}
+
+dense_matrix::ptr EM_col_dense_matrix::deep_copy() const
 {
 	// TODO
 	assert(0);

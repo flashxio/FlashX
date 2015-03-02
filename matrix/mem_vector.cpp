@@ -104,7 +104,7 @@ data_frame::ptr mem_vector::serial_groupby(const agg_operate &find_next,
 	const mem_vector *sorted_vec;
 	if (!is_sorted()) {
 		// We don't want groupby changes the original vector.
-		vec = this->clone();
+		vec = this->deep_copy();
 		vec->sort();
 		sorted_vec = (const mem_vector *) vec.get();
 	}
@@ -148,7 +148,7 @@ data_frame::ptr mem_vector::groupby(const agg_operate &find_next,
 	const mem_vector *sorted_vec;
 	if (!is_sorted()) {
 		// We don't want groupby changes the original vector.
-		vec = this->clone();
+		vec = this->deep_copy();
 		vec->sort();
 		sorted_vec = (const mem_vector *) vec.get();
 	}
@@ -280,12 +280,12 @@ vector::const_ptr mem_vector::get_sub_vec(off_t start, size_t length) const
 	return std::static_pointer_cast<const vector>(mem_vec);
 }
 
-vector::ptr mem_vector::clone() const
+vector::ptr mem_vector::deep_copy() const
 {
 	// We need to discard the const from the "this" pointer.
 	mem_vector *mutable_this = (mem_vector *) this;
 	mem_vector::ptr mem_vec = mem_vector::cast(mutable_this->shallow_copy());
-	mem_vec->data = mem_dense_matrix::cast(data->clone());
+	mem_vec->data = mem_dense_matrix::cast(data->deep_copy());
 	if (mem_vec->data->store_layout() == matrix_layout_t::L_ROW)
 		mem_vec->arr = mem_row_dense_matrix::cast(mem_vec->data)->get_row(0);
 	else if (mem_vec->data->store_layout() == matrix_layout_t::L_COL)
