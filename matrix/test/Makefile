@@ -22,10 +22,13 @@ CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLA
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lz -lnuma -laio
 
-all: test test-mem_matrix test-EM_matrix
+all: test test-mem_matrix test-EM_matrix test-mem_vector
 
 test: test.o ../libFMatrix.a
 	$(CXX) -o test test.o $(LDFLAGS)
+
+test-mem_vector: test-mem_vector.o ../libFMatrix.a
+	$(CXX) -o test-mem_vector test-mem_vector.o $(LDFLAGS)
 
 test-mem_matrix: test-mem_matrix.o ../libFMatrix.a
 	$(CXX) -o test-mem_matrix test-mem_matrix.o $(LDFLAGS)
