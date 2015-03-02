@@ -20,6 +20,10 @@
  * limitations under the License.
  */
 
+#include <stdlib.h>
+
+#include <memory>
+
 namespace fm
 {
 
@@ -86,11 +90,65 @@ inline prim_type get_type<bool>()
 	return prim_type::P_BOOL;
 }
 
+class basic_uops;
+class basic_ops;
+class agg_ops;
+class mem_vector;
+
+/**
+ * This interface defines a scalar type and the operations related to the type.
+ */
+class scalar_type
+{
+public:
+	/**
+	 * The operators that work on this type.
+	 */
+	virtual const basic_uops &get_basic_uops() const = 0;
+	virtual const basic_ops &get_basic_ops() const = 0;
+	virtual const agg_ops &get_agg_ops() const = 0;
+	virtual std::shared_ptr<mem_vector> create_mem_vec(size_t length) const = 0;
+	virtual prim_type get_type() const = 0;
+	virtual size_t get_size() const = 0;
+
+	virtual bool operator==(const scalar_type &type) const {
+		return get_type() == type.get_type();
+	}
+
+	virtual bool operator!=(const scalar_type &type) const {
+		return get_type() != type.get_type();
+	}
+};
+
+/*
+ * Here we implement the scalar type.
+ */
+template<class T>
+class scalar_type_impl: public scalar_type
+{
+public:
+	virtual const basic_uops &get_basic_uops() const;
+	virtual const basic_ops &get_basic_ops() const;
+	virtual const agg_ops &get_agg_ops() const;
+
+	// This method will be implemented in the header file
+	// where type_mem_vector is defined.
+	virtual std::shared_ptr<mem_vector> create_mem_vec(size_t length) const;
+
+	virtual prim_type get_type() const {
+		return fm::get_type<T>();
+	}
+
+	virtual size_t get_size() const {
+		return sizeof(T);
+	}
+};
+
 /**
  * This class defines a generic type for a scalar variable.
  * It shouldn't be used in an array because it has a lot of overhead.
  */
-class scalar_type
+class scalar_variable
 {
 public:
 	/**
@@ -108,7 +166,7 @@ public:
 };
 
 template<class T>
-class scalar_type_impl: public scalar_type
+class scalar_variable_impl: public scalar_variable
 {
 	T v;
 public:

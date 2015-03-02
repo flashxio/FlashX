@@ -27,7 +27,6 @@ namespace fm
 {
 
 class bulk_operate;
-class vec_creator;
 class data_frame;
 class agg_operate;
 
@@ -60,9 +59,10 @@ public:
 
 	template<class T>
 	bool is_type() const {
-		return this->get_type() == fm::get_type<T>();
+		return this->get_type().get_type() == fm::get_type<T>();
 	}
 
+	// TODO this is no longer necessary.
 	size_t get_entry_size() const {
 		return entry_size;
 	}
@@ -72,7 +72,7 @@ public:
 		return true;
 	}
 
-	virtual prim_type get_type() const = 0;
+	virtual const scalar_type &get_type() const = 0;
 	virtual bool set_sub_vec(off_t start, const vector &vec) = 0;
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const = 0;
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
@@ -82,8 +82,7 @@ public:
 	virtual vector::ptr sort_with_index() = 0;
 	virtual bool is_sorted() const = 0;
 	// It should return data frame instead of vector.
-	virtual std::shared_ptr<data_frame> groupby(const agg_operate &find_next,
-		const agg_operate &agg_op, const vec_creator &create) const = 0;
+	virtual std::shared_ptr<data_frame> groupby(const agg_operate &agg_op) const = 0;
 
 	/**
 	 * This method copies all members of the vector object as well as
@@ -95,16 +94,6 @@ public:
 	 */
 	virtual vector::ptr shallow_copy() = 0;
 	virtual vector::const_ptr shallow_copy() const = 0;
-};
-
-/*
- * This interface allows us to create a vector with type.
- */
-class vec_creator
-{
-public:
-	virtual size_t get_entry_size() const = 0;
-	virtual vector::ptr create(size_t length) const = 0;
 };
 
 }

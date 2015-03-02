@@ -414,7 +414,7 @@ void EM_col_dense_matrix::reset_data()
 }
 
 bool EM_col_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_type &res) const
+		scalar_variable &res) const
 {
 	// TODO
 	assert(0);

@@ -33,8 +33,6 @@
 namespace fm
 {
 
-class scalar_type;
-
 class mem_dense_matrix: public dense_matrix
 {
 protected:
@@ -150,7 +148,7 @@ public:
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual bool aggregate(const bulk_operate &op, scalar_variable &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
@@ -243,7 +241,7 @@ public:
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual bool aggregate(const bulk_operate &op, scalar_variable &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;

@@ -5,27 +5,6 @@
 using namespace fm;
 
 template<class T>
-class find_next_impl: public agg_operate
-{
-public:
-	virtual void run(size_t num_eles, const void *left_arr,
-			void *output) const {
-		const T *curr = (const T *) left_arr;
-		T val = *curr;
-		size_t loc = 1;
-		for (; loc < num_eles && curr[loc] == val; loc++);
-		*(size_t *) output = loc;
-	}
-
-	virtual size_t input_entry_size() const {
-		return sizeof(T);
-	}
-	virtual size_t output_entry_size() const {
-		return sizeof(size_t);
-	}
-};
-
-template<class T>
 class count_impl: public agg_operate
 {
 public:
@@ -40,24 +19,13 @@ public:
 		*(size_t *) output = num_eles;
 	}
 
-	virtual size_t input_entry_size() const {
-		return sizeof(T);
+	virtual const scalar_type &get_input_type() const {
+		static scalar_type_impl<T> t;
+		return t;
 	}
-	virtual size_t output_entry_size() const {
-		return sizeof(size_t);
-	}
-};
-
-template<class T>
-class vec_creator_impl: public vec_creator
-{
-public:
-	virtual size_t get_entry_size() const {
-		return sizeof(T);
-	}
-
-	virtual vector::ptr create(size_t length) const {
-		return type_mem_vector<T>::create(length);
+	virtual const scalar_type &get_output_type() const {
+		static scalar_type_impl<size_t> t;
+		return t;
 	}
 };
 
@@ -67,10 +35,8 @@ void test_groupby()
 	type_mem_vector<int>::ptr vec = type_mem_vector<int>::create(1000000);
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random() % 1000);
-	find_next_impl<int> find_next;
 	count_impl<int> count;
-	vec_creator_impl<size_t> create;
-	data_frame::ptr res = vec->groupby(find_next, count, create);
+	data_frame::ptr res = vec->groupby(count);
 	printf("size: %ld\n", res->get_num_entries());
 
 	std::map<int, size_t> ele_counts;

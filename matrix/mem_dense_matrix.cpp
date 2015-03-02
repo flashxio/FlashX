@@ -211,7 +211,7 @@ public:
 		return dense_matrix::ptr();
 	}
 
-	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual bool aggregate(const bulk_operate &op, scalar_variable &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
@@ -308,7 +308,7 @@ public:
 		return dense_matrix::ptr();
 	}
 
-	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual bool aggregate(const bulk_operate &op, scalar_variable &res) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
@@ -327,7 +327,7 @@ public:
 };
 
 bool mem_sub_col_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_type &res) const
+		scalar_variable &res) const
 {
 	if (!verify_aggregate(op, res))
 		return false;
@@ -383,7 +383,7 @@ dense_matrix::ptr mem_sub_col_dense_matrix::transpose() const
 }
 
 bool mem_sub_row_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_type &res) const
+		scalar_variable &res) const
 {
 	if (!verify_aggregate(op, res))
 		return false;
@@ -657,7 +657,7 @@ dense_matrix::ptr mem_col_dense_matrix::inner_prod(const dense_matrix &m,
 }
 
 bool mem_col_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_type &res) const
+		scalar_variable &res) const
 {
 	if (!verify_aggregate(op, res))
 		return false;
@@ -1115,7 +1115,7 @@ dense_matrix::ptr mem_row_dense_matrix::inner_prod(const dense_matrix &m,
 }
 
 bool mem_row_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_type &res) const
+		scalar_variable &res) const
 {
 	return get_t_mat().aggregate(op, res);
 }

@@ -70,33 +70,22 @@ mem_vector::const_ptr mem_vector::cast(vector::const_ptr vec)
 	return std::static_pointer_cast<const mem_vector>(vec);
 }
 
-bool mem_vector::verify_groupby(const agg_operate &find_next,
-		const agg_operate &agg_op, const vec_creator &create) const
+bool mem_vector::verify_groupby(const agg_operate &agg_op) const
 {
-	if (find_next.output_entry_size() != sizeof(size_t)) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "the find next operator should return a index of size_t";
-		return false;
-	}
-	if (find_next.input_entry_size() != get_entry_size()
-			|| agg_op.input_entry_size() != get_entry_size()) {
+	if (agg_op.input_entry_size() != get_entry_size()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "the operator accepts input types incompatible with the entry type in the vector";
-		return false;
-	}
-	if (create.get_entry_size() != agg_op.output_entry_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The created vector has an incompatible type with the output type of aggregation operator";
 		return false;
 	}
 
 	return true;
 }
 
-data_frame::ptr mem_vector::serial_groupby(const agg_operate &find_next,
-		const agg_operate &agg_op, const vec_creator &create) const
+data_frame::ptr mem_vector::serial_groupby(const agg_operate &agg_op) const
 {
-	if (!verify_groupby(find_next, agg_op, create))
+	const scalar_type &output_type = agg_op.get_output_type();
+	const agg_operate &find_next = get_type().get_agg_ops().get_find_next();
+	if (!verify_groupby(agg_op))
 		return data_frame::ptr();
 
 	// If the vector hasn't been sorted, we need to sort it.
@@ -112,7 +101,7 @@ data_frame::ptr mem_vector::serial_groupby(const agg_operate &find_next,
 		sorted_vec = this;
 
 	size_t loc = 0;
-	mem_vector::ptr agg = mem_vector::cast(create.create(16));
+	mem_vector::ptr agg = output_type.create_mem_vec(16);
 	mem_vector::ptr val = this->create_int(16);
 	size_t idx = 0;
 	while (loc < sorted_vec->get_length()) {
@@ -137,10 +126,10 @@ data_frame::ptr mem_vector::serial_groupby(const agg_operate &find_next,
 	return ret;
 }
 
-data_frame::ptr mem_vector::groupby(const agg_operate &find_next,
-		const agg_operate &agg_op, const vec_creator &create) const
+data_frame::ptr mem_vector::groupby(const agg_operate &agg_op) const
 {
-	if (!verify_groupby(find_next, agg_op, create))
+	const agg_operate &find_next = get_type().get_agg_ops().get_find_next();
+	if (!verify_groupby(agg_op))
 		return data_frame::ptr();
 
 	// If the vector hasn't been sorted, we need to sort it.
@@ -181,8 +170,7 @@ data_frame::ptr mem_vector::groupby(const agg_operate &find_next,
 		off_t start = par_starts[i];
 		off_t end = par_starts[i + 1];
 		vector::const_ptr sub_vec = sorted_vec->get_sub_vec(start, end - start);
-		sub_results[i] = mem_vector::cast(sub_vec)->serial_groupby(
-				find_next, agg_op, create);
+		sub_results[i] = mem_vector::cast(sub_vec)->serial_groupby(agg_op);
 	}
 
 	data_frame::ptr ret = sub_results[0];

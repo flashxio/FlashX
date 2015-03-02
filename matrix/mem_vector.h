@@ -82,12 +82,9 @@ public:
 
 	virtual bool equals(const mem_vector &vec) const;
 
-	bool verify_groupby(const agg_operate &find_next,
-		const agg_operate &agg_op, const vec_creator &create) const;
-	std::shared_ptr<data_frame> serial_groupby(const agg_operate &find_next,
-		const agg_operate &agg_op, const vec_creator &create) const;
-	virtual std::shared_ptr<data_frame> groupby(const agg_operate &find_next,
-		const agg_operate &agg_op, const vec_creator &create) const;
+	bool verify_groupby(const agg_operate &agg_op) const;
+	std::shared_ptr<data_frame> serial_groupby(const agg_operate &agg_op) const;
+	virtual std::shared_ptr<data_frame> groupby(const agg_operate &agg_op) const;
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end);
@@ -231,8 +228,9 @@ public:
 		return std::static_pointer_cast<const vector>(ret);
 	}
 
-	virtual prim_type get_type() const {
-		return fm::get_type<T>();
+	virtual const scalar_type &get_type() const {
+		static scalar_type_impl<T> t;
+		return t;
 	}
 };
 

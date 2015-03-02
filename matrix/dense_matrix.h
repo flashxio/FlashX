@@ -32,7 +32,6 @@ namespace fm
 class bulk_operate;
 class bulk_uoperate;
 class set_operate;
-class scalar_type;
 
 enum matrix_type
 {
@@ -122,7 +121,7 @@ protected:
 		this->entry_size = entry_size;
 		this->in_mem = in_mem;
 	}
-	virtual bool verify_aggregate(const bulk_operate &op, scalar_type &res) const;
+	virtual bool verify_aggregate(const bulk_operate &op, scalar_variable &res) const;
 	virtual bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool verify_mapply2(const dense_matrix &m,
@@ -219,7 +218,7 @@ public:
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
-	virtual bool aggregate(const bulk_operate &op, scalar_type &res) const = 0;
+	virtual bool aggregate(const bulk_operate &op, scalar_variable &res) const = 0;
 	/*
 	 * A subclass should define this method for element-wise operations.
 	 */

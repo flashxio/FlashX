@@ -59,7 +59,7 @@ bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 }
 
 bool dense_matrix::verify_aggregate(const bulk_operate &op,
-		scalar_type &res) const
+		scalar_variable &res) const
 {
 	if (op.left_entry_size() != op.right_entry_size()
 			|| op.left_entry_size() != op.output_entry_size()) {

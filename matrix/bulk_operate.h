@@ -24,6 +24,8 @@
 #include <vector>
 #include <cmath>
 
+#include "generic_type.h"
+
 namespace fm
 {
 
@@ -37,8 +39,16 @@ class bulk_uoperate
 public:
 	virtual void runA(size_t num_eles, const void *in_arr,
 			void *out_arr) const = 0;
-	virtual size_t input_entry_size() const = 0;
-	virtual size_t output_entry_size() const = 0;
+	virtual const scalar_type &get_input_type() const = 0;
+	virtual const scalar_type &get_output_type() const = 0;
+
+	size_t input_entry_size() const {
+		return get_input_type().get_size();
+	}
+
+	size_t output_entry_size() const {
+		return get_output_type().get_size();
+	}
 };
 
 /*
@@ -57,13 +67,8 @@ public:
 			output_arr[i] = op(in_arr[i]);
 	}
 
-	virtual size_t input_entry_size() const {
-		return sizeof(InType);
-	}
-
-	virtual size_t output_entry_size() const {
-		return sizeof(OutType);
-	}
+	virtual const scalar_type &get_input_type() const;
+	virtual const scalar_type &get_output_type() const;
 };
 
 /**
@@ -102,9 +107,21 @@ public:
 	virtual void runA(size_t num_eles, const void *left_arr,
 			void *output) const = 0;
 
-	virtual size_t left_entry_size() const = 0;
-	virtual size_t right_entry_size() const = 0;
-	virtual size_t output_entry_size() const = 0;
+	virtual const scalar_type &get_left_type() const = 0;
+	virtual const scalar_type &get_right_type() const = 0;
+	virtual const scalar_type &get_output_type() const = 0;
+
+	size_t left_entry_size() const {
+		return get_left_type().get_size();
+	}
+
+	size_t right_entry_size() const {
+		return get_right_type().get_size();
+	}
+
+	size_t output_entry_size() const {
+		return get_output_type().get_size();
+	}
 };
 
 /*
@@ -157,17 +174,9 @@ public:
 		*(ResType *) output = res;
 	}
 
-	virtual size_t left_entry_size() const {
-		return sizeof(LeftType);
-	}
-
-	virtual size_t right_entry_size() const {
-		return sizeof(RightType);
-	}
-
-	virtual size_t output_entry_size() const {
-		return sizeof(ResType);
-	}
+	virtual const scalar_type &get_left_type() const;
+	virtual const scalar_type &get_right_type() const;
+	virtual const scalar_type &get_output_type() const;
 };
 
 /*
@@ -177,8 +186,16 @@ class agg_operate
 {
 public:
 	virtual void run(size_t num_eles, const void *in, void *output) const = 0;
-	virtual size_t input_entry_size() const = 0;
-	virtual size_t output_entry_size() const = 0;
+	virtual const scalar_type &get_input_type() const = 0;
+	virtual const scalar_type &get_output_type() const = 0;
+
+	size_t input_entry_size() const {
+		return get_input_type().get_size();
+	}
+
+	size_t output_entry_size() const {
+		return get_output_type().get_size();
+	}
 };
 
 /*
@@ -288,6 +305,41 @@ public:
 
 	virtual const bulk_operate &get_divide() const {
 		return *get_op(DIV);
+	}
+};
+
+template<class T>
+class find_next_impl: public agg_operate
+{
+public:
+	virtual void run(size_t num_eles, const void *left_arr,
+			void *output) const {
+		const T *curr = (const T *) left_arr;
+		T val = *curr;
+		size_t loc = 1;
+		for (; loc < num_eles && curr[loc] == val; loc++);
+		*(size_t *) output = loc;
+	}
+
+	virtual const scalar_type &get_input_type() const;
+	virtual const scalar_type &get_output_type() const;
+};
+
+class agg_ops
+{
+public:
+	typedef std::shared_ptr<agg_ops> ptr;
+
+	virtual const agg_operate &get_find_next() const = 0;
+};
+
+template<class InType, class OutType>
+class agg_ops_impl: public agg_ops
+{
+	find_next_impl<InType> find_next;
+public:
+	virtual const agg_operate &get_find_next() const {
+		return find_next;
 	}
 };
 
@@ -426,6 +478,76 @@ public:
 		return sizeof(T);
 	}
 };
+
+template<class OpType, class InType, class OutType>
+const scalar_type &bulk_uoperate_impl<OpType, InType, OutType>::get_input_type() const
+{
+	static scalar_type_impl<InType> t;
+	return t;
+}
+
+template<class OpType, class InType, class OutType>
+const scalar_type &bulk_uoperate_impl<OpType, InType, OutType>::get_output_type() const
+{
+	static scalar_type_impl<OutType> t;
+	return t;
+}
+
+template<class OpType, class LeftType, class RightType, class ResType>
+const scalar_type &bulk_operate_impl<OpType, LeftType, RightType, ResType>::get_left_type() const
+{
+	static scalar_type_impl<LeftType> t;
+	return t;
+}
+
+template<class OpType, class LeftType, class RightType, class ResType>
+const scalar_type &bulk_operate_impl<OpType, LeftType, RightType, ResType>::get_right_type() const
+{
+	static scalar_type_impl<RightType> t;
+	return t;
+}
+
+template<class OpType, class LeftType, class RightType, class ResType>
+const scalar_type &bulk_operate_impl<OpType, LeftType, RightType, ResType>::get_output_type() const
+{
+	static scalar_type_impl<ResType> t;
+	return t;
+}
+
+template<class T>
+const scalar_type &find_next_impl<T>::get_input_type() const
+{
+	static scalar_type_impl<T> t;
+	return t;
+}
+
+template<class T>
+const scalar_type &find_next_impl<T>::get_output_type() const
+{
+	static scalar_type_impl<size_t> t;
+	return t;
+}
+
+template<class T>
+const basic_uops &scalar_type_impl<T>::get_basic_uops() const
+{
+	static basic_uops_impl<T, T> uops;
+	return uops;
+}
+
+template<class T>
+const basic_ops &scalar_type_impl<T>::get_basic_ops() const
+{
+	static basic_ops_impl<T, T, T> ops;
+	return ops;
+}
+
+template<class T>
+const agg_ops &scalar_type_impl<T>::get_agg_ops() const
+{
+	static agg_ops_impl<T, T> aops;
+	return aops;
+}
 
 }
 
