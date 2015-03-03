@@ -759,12 +759,12 @@ public:
 		op.runAE(num_eles, in_arr, &v, out_arr);
 	}
 
-	virtual size_t input_entry_size() const {
-		return op.left_entry_size();
+	virtual const scalar_type &get_input_type() const {
+		return op.get_left_type();
 	}
 
-	virtual size_t output_entry_size() const {
-		return op.output_entry_size();
+	virtual const scalar_type &get_output_type() const {
+		return op.get_output_type();
 	}
 };
 
@@ -827,12 +827,12 @@ public:
 		op.runEA(num_eles, &v, in_arr, out_arr);
 	}
 
-	virtual size_t input_entry_size() const {
-		return op.right_entry_size();
+	virtual const scalar_type &get_input_type() const {
+		return op.get_right_type();
 	}
 
-	virtual size_t output_entry_size() const {
-		return op.output_entry_size();
+	virtual const scalar_type &get_output_type() const {
+		return op.get_output_type();
 	}
 };
 
@@ -904,7 +904,7 @@ template<class T, class ReturnType>
 ReturnType matrix_agg(const dense_matrix &mat, const bulk_operate &op)
 {
 	ReturnType ret(1);
-	scalar_type_impl<T> res;
+	scalar_variable_impl<T> res;
 	if (mat.aggregate(op, res)) {
 		ret[0] = res.get();
 		return ret;

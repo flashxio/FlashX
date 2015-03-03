@@ -25,6 +25,7 @@
 #include "rutils.h"
 #include "fm_utils.h"
 #include "dense_matrix.h"
+#include "bulk_operate.h"
 
 using namespace fm;
 
@@ -33,8 +34,7 @@ class norm2: public apply_operate
 {
 public:
 	// norm always outputs only one double float-point.
-	norm2(size_t num_in_eles): apply_operate(sizeof(T), sizeof(double),
-			num_in_eles) {
+	norm2(size_t num_in_eles): apply_operate(num_in_eles) {
 	}
 
 	virtual void run(const void *input, size_t num_in_eles, void *output) const {
@@ -55,6 +55,16 @@ public:
 			for (size_t i = 0; i < num_in_eles; i++)
 				d_out[i] = t_in[i] / norm;
 		}
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		static scalar_type_impl<T> t;
+		return t;
+	}
+
+	virtual const scalar_type &get_output_type() const {
+		static scalar_type_impl<double> t;
+		return t;
 	}
 };
 
