@@ -874,6 +874,10 @@ RcppExport SEXP R_FG_compute_overlap(SEXP graph, SEXP _vids)
 RcppExport SEXP R_FG_fetch_subgraph_el(SEXP graph, SEXP pvertices)
 {
 	Rcpp::IntegerVector vertices(pvertices);
+	if (vertices.length() == 0) {
+		fprintf(stderr, "There aren't vertices to fetch\n");
+		return R_NilValue;
+	}
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	vertex_id_t max_vid = fg->get_graph_header().get_num_vertices() - 1;
@@ -934,6 +938,10 @@ RcppExport SEXP R_FG_fetch_subgraph(SEXP graph, SEXP pvertices, SEXP pname,
 	bool compress = LOGICAL(pcompress)[0];
 	std::string graph_name = CHAR(STRING_ELT(pname, 0));
 	Rcpp::IntegerVector vertices(pvertices);
+	if (vertices.length() == 0) {
+		fprintf(stderr, "There aren't vertices to fetch\n");
+		return R_NilValue;
+	}
 	std::vector<vertex_id_t> vids(vertices.begin(), vertices.end());
 	FG_graph::ptr fg = R_FG_get_graph(graph);
 	vertex_id_t max_vid = fg->get_graph_header().get_num_vertices() - 1;
