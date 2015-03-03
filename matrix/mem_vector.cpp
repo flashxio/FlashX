@@ -223,6 +223,15 @@ bool mem_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 
 bool mem_vector::resize(size_t new_length)
 {
+	if (new_length == get_length())
+		return true;
+
+	size_t tot_len = data->get_num_rows() * data->get_num_cols();
+	// We don't want to reallocate memory when shrinking the vector.
+	if (new_length < tot_len) {
+		return vector::resize(new_length);
+	}
+
 	// Keep the old information of the vector.
 	mem_dense_matrix::ptr old_data = data;
 	char *old_arr = arr;
@@ -230,8 +239,6 @@ bool mem_vector::resize(size_t new_length)
 
 	// We realloate memory regardless of whether we increase or decrease
 	// the length of the vector.
-	// TODO we probably don't want to reallocate memory when shrinking
-	// the vector size.
 	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(new_length,
 			1, get_entry_size());
 	if (tmp == NULL) {
