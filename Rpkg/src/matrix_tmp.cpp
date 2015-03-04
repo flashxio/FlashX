@@ -108,3 +108,74 @@ RcppExport SEXP R_FM_norm_matrix(SEXP pmat, SEXP pmargin, SEXP ptype)
 	else
 		return create_FMR_matrix(ret, "");
 }
+
+template<class T>
+class sd: public apply_operate
+{
+public:
+	// It always outputs only one element.
+	sd(): apply_operate(1) {
+	}
+
+	virtual void run(const void *input, size_t num_in_eles, void *output) const {
+		const T *t_in = (const T *) input;
+		double *d_out = (double *) output;
+
+		T sum = 0;
+		for (size_t i = 0; i < num_in_eles; i++)
+			sum += t_in[i];
+		double mean = ((double) sum) / num_in_eles;
+
+		double diff2_sum = 0;
+		for (size_t i = 0; i < num_in_eles; i++)
+			diff2_sum += (t_in[i] - mean) * (t_in[i] - mean);
+		d_out[0] = std::sqrt(diff2_sum / (num_in_eles - 1));
+	}
+
+	virtual const scalar_type &get_input_type() const {
+		static scalar_type_impl<T> t;
+		return t;
+	}
+
+	virtual const scalar_type &get_output_type() const {
+		static scalar_type_impl<double> t;
+		return t;
+	}
+};
+
+RcppExport SEXP R_FM_sd_matrix(SEXP pmat, SEXP pmargin)
+{
+	if (is_sparse(pmat)) {
+		fprintf(stderr, "can't compute sd on a sparse matrix\n");
+		return R_NilValue;
+	}
+
+	apply_margin margin = (apply_margin) INTEGER(pmargin)[0];
+	if (margin != apply_margin::MAR_ROW && margin != apply_margin::MAR_COL) {
+		fprintf(stderr, "unsupported margin\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
+	if ((margin == apply_margin::MAR_ROW && mat->get_num_cols() == 1)
+			|| (margin == apply_margin::MAR_COL && mat->get_num_rows() == 1)) {
+		fprintf(stderr, "A row/column should have more than one element\n");
+		return R_NilValue;
+	}
+
+	dense_matrix::ptr ret;
+	if (mat->is_type<double>())
+		ret = mat->apply(margin, sd<double>());
+	else if (mat->is_type<int>())
+		ret = mat->apply(margin, sd<int>());
+	else {
+		fprintf(stderr, "unsupported data type\n");
+		return R_NilValue;
+	}
+	if (ret->get_num_rows() > 1 && ret->get_num_cols() > 1) {
+		fprintf(stderr, "the output should be a vector\n");
+		return R_NilValue;
+	}
+
+	return create_FMR_vector(ret, "");
+}

@@ -28,3 +28,15 @@ fm.norm.matrix <- function(fm, margin=c(1, 2), type=c("1", "2", "inf"))
 	else
 		structure(ret, class="fm")
 }
+
+fm.sd.matrix <- function(fm, margin=c(1, 2))
+{
+	ret <- .Call("R_FM_sd_matrix", fm, as.integer(margin),
+				 PACKAGE="FlashGraphR")
+	if (is.null(ret))
+		return(NULL)
+	else if (ret$type == "vector")
+		structure(ret, class="fmV")
+	else
+		structure(ret, class="fm")
+}
