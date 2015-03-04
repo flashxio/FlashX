@@ -482,50 +482,43 @@ public:
 template<class OpType, class InType, class OutType>
 const scalar_type &bulk_uoperate_impl<OpType, InType, OutType>::get_input_type() const
 {
-	static scalar_type_impl<InType> t;
-	return t;
+	return get_scalar_type<InType>();
 }
 
 template<class OpType, class InType, class OutType>
 const scalar_type &bulk_uoperate_impl<OpType, InType, OutType>::get_output_type() const
 {
-	static scalar_type_impl<OutType> t;
-	return t;
+	return get_scalar_type<OutType>();
 }
 
 template<class OpType, class LeftType, class RightType, class ResType>
 const scalar_type &bulk_operate_impl<OpType, LeftType, RightType, ResType>::get_left_type() const
 {
-	static scalar_type_impl<LeftType> t;
-	return t;
+	return get_scalar_type<LeftType>();
 }
 
 template<class OpType, class LeftType, class RightType, class ResType>
 const scalar_type &bulk_operate_impl<OpType, LeftType, RightType, ResType>::get_right_type() const
 {
-	static scalar_type_impl<RightType> t;
-	return t;
+	return get_scalar_type<RightType>();
 }
 
 template<class OpType, class LeftType, class RightType, class ResType>
 const scalar_type &bulk_operate_impl<OpType, LeftType, RightType, ResType>::get_output_type() const
 {
-	static scalar_type_impl<ResType> t;
-	return t;
+	return get_scalar_type<ResType>();
 }
 
 template<class T>
 const scalar_type &find_next_impl<T>::get_input_type() const
 {
-	static scalar_type_impl<T> t;
-	return t;
+	return get_scalar_type<T>();
 }
 
 template<class T>
 const scalar_type &find_next_impl<T>::get_output_type() const
 {
-	static scalar_type_impl<size_t> t;
-	return t;
+	return get_scalar_type<size_t>();
 }
 
 template<class T>

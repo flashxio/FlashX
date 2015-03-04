@@ -246,8 +246,7 @@ public:
 	}
 
 	virtual const scalar_type &get_type() const {
-		static scalar_type_impl<T> t;
-		return t;
+		return get_scalar_type<T>();
 	}
 };
 

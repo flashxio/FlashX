@@ -11,13 +11,11 @@ public:
 	void run(const void *key, const data_frame &val, mem_vector &out) const;
 
 	const scalar_type &get_key_type() const {
-		static scalar_type_impl<int> t;
-		return t;
+		return get_scalar_type<int>();
 	}
 
 	const scalar_type &get_output_type() const {
-		static scalar_type_impl<long> t;
-		return t;
+		return get_scalar_type<long>();
 	}
 
 	size_t get_num_out_eles() const {
@@ -45,13 +43,11 @@ public:
 	void run(const void *key, const data_frame &val, mem_vector &out) const;
 
 	const scalar_type &get_key_type() const {
-		static scalar_type_impl<int> t;
-		return t;
+		return get_scalar_type<int>();
 	}
 
 	const scalar_type &get_output_type() const {
-		static scalar_type_impl<int> t;
-		return t;
+		return get_scalar_type<int>();
 	}
 
 	size_t get_num_out_eles() const {

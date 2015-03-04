@@ -149,6 +149,13 @@ public:
 	}
 };
 
+template<class T>
+const scalar_type &get_scalar_type()
+{
+	static scalar_type_impl<T> t;
+	return t;
+}
+
 /**
  * This class defines a generic type for a scalar variable.
  * It shouldn't be used in an array because it has a lot of overhead.

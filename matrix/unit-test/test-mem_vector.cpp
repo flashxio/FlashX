@@ -20,12 +20,10 @@ public:
 	}
 
 	virtual const scalar_type &get_input_type() const {
-		static scalar_type_impl<T> t;
-		return t;
+		return get_scalar_type<T>();
 	}
 	virtual const scalar_type &get_output_type() const {
-		static scalar_type_impl<size_t> t;
-		return t;
+		return get_scalar_type<size_t>();
 	}
 };
 
