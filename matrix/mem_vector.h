@@ -49,10 +49,6 @@ protected:
 	mem_vector(size_t length, size_t entry_size);
 	mem_vector(std::shared_ptr<char> data, size_t len, size_t entry_size);
 
-	char *get_raw_arr() {
-		return arr;
-	}
-
 	mem_dense_matrix::ptr get_data() const {
 		return data;
 	}
@@ -66,6 +62,10 @@ public:
 
 	mem_dense_matrix::ptr get_data() {
 		return data;
+	}
+
+	char *get_raw_arr() {
+		return arr;
 	}
 
 	const char *get_raw_arr() const {
