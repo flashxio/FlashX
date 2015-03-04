@@ -53,5 +53,8 @@ template class scalar_type_impl<int>;
 template class scalar_type_impl<long>;
 template class scalar_type_impl<float>;
 template class scalar_type_impl<double>;
+template class scalar_type_impl<unsigned short>;
+template class scalar_type_impl<unsigned int>;
+template class scalar_type_impl<unsigned long>;
 
 }

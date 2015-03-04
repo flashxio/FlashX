@@ -39,6 +39,9 @@ enum prim_type
 	P_FLOAT,
 	P_DOUBLE,
 	P_BOOL,
+	P_USHORT,
+	P_UINT,
+	P_ULONG,
 	NUM_TYPES,
 };
 
@@ -88,6 +91,24 @@ template<>
 inline prim_type get_type<bool>()
 {
 	return prim_type::P_BOOL;
+}
+
+template<>
+inline prim_type get_type<unsigned short>()
+{
+	return prim_type::P_USHORT;
+}
+
+template<>
+inline prim_type get_type<unsigned int>()
+{
+	return prim_type::P_UINT;
+}
+
+template<>
+inline prim_type get_type<unsigned long>()
+{
+	return prim_type::P_ULONG;
 }
 
 class basic_uops;
