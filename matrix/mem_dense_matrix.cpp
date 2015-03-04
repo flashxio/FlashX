@@ -205,7 +205,7 @@ public:
 	}
 
 	virtual dense_matrix::ptr apply(apply_margin margin,
-			const apply_operate &op) const {
+			const arr_apply_operate &op) const {
 		// TODO
 		BOOST_LOG_TRIVIAL(error) << "apply() isn't supported in a sub_col_matrix";
 		return dense_matrix::ptr();
@@ -302,7 +302,7 @@ public:
 	}
 
 	virtual dense_matrix::ptr apply(apply_margin margin,
-			const apply_operate &op) const {
+			const arr_apply_operate &op) const {
 		// TODO
 		BOOST_LOG_TRIVIAL(error) << "apply() isn't supported in a sub_row_matrix";
 		return dense_matrix::ptr();
@@ -700,7 +700,7 @@ dense_matrix::ptr mem_col_dense_matrix::sapply(const bulk_uoperate &op) const
 }
 
 dense_matrix::ptr mem_col_dense_matrix::apply(apply_margin margin,
-		const apply_operate &op) const
+		const arr_apply_operate &op) const
 {
 	if (!verify_apply(margin, op))
 		return dense_matrix::ptr();
@@ -1137,7 +1137,7 @@ dense_matrix::ptr mem_row_dense_matrix::sapply(const bulk_uoperate &op) const
 }
 
 dense_matrix::ptr mem_row_dense_matrix::apply(apply_margin margin,
-		const apply_operate &op) const
+		const arr_apply_operate &op) const
 {
 	if (margin == apply_margin::MAR_ROW)
 		margin = apply_margin::MAR_COL;

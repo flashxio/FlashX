@@ -553,11 +553,11 @@ const agg_ops &scalar_type_impl<T>::get_agg_ops() const
  * This operator is different from bulk_uoperate. It treats an array
  * as a single input and outputs an array of potentially different length.
  */
-class apply_operate
+class arr_apply_operate
 {
 	size_t num_out_eles;
 public:
-	apply_operate(size_t num_out_eles) {
+	arr_apply_operate(size_t num_out_eles) {
 		this->num_out_eles = num_out_eles;
 	}
 	/*

@@ -152,7 +152,7 @@ public:
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
-	virtual dense_matrix::ptr apply(apply_margin margin, const apply_operate &op) const;
+	virtual dense_matrix::ptr apply(apply_margin margin, const arr_apply_operate &op) const;
 
 	virtual char *get_row(size_t row) {
 		return data.get() + row * get_num_cols() * get_entry_size();
@@ -255,7 +255,7 @@ public:
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
-	virtual dense_matrix::ptr apply(apply_margin margin, const apply_operate &op) const;
+	virtual dense_matrix::ptr apply(apply_margin margin, const arr_apply_operate &op) const;
 
 	virtual bool set_cols(const mem_col_dense_matrix &m,
 			const std::vector<off_t> &idxs);

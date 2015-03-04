@@ -108,7 +108,7 @@ bool dense_matrix::verify_mapply2(const dense_matrix &m,
 	return true;
 }
 
-bool dense_matrix::verify_apply(apply_margin margin, const apply_operate &op) const
+bool dense_matrix::verify_apply(apply_margin margin, const arr_apply_operate &op) const
 {
 	if (get_entry_size() != op.input_entry_size()) {
 		BOOST_LOG_TRIVIAL(error)

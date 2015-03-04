@@ -459,7 +459,7 @@ dense_matrix::ptr EM_col_dense_matrix::sapply(const bulk_uoperate &op) const
 }
 
 dense_matrix::ptr EM_col_dense_matrix::apply(apply_margin margin,
-		const apply_operate &op) const
+		const arr_apply_operate &op) const
 {
 	// TODO
 	assert(0);

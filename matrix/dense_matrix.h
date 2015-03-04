@@ -32,7 +32,7 @@ namespace fm
 class bulk_operate;
 class bulk_uoperate;
 class set_operate;
-class apply_operate;
+class arr_apply_operate;
 
 enum matrix_type
 {
@@ -92,7 +92,7 @@ protected:
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
 	virtual bool verify_mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
-	virtual bool verify_apply(apply_margin margin, const apply_operate &op) const;
+	virtual bool verify_apply(apply_margin margin, const arr_apply_operate &op) const;
 public:
 	typedef std::shared_ptr<dense_matrix> ptr;
 
@@ -192,7 +192,7 @@ public:
 			const bulk_operate &op) const = 0;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const = 0;
 	virtual dense_matrix::ptr apply(apply_margin margin,
-			const apply_operate &op) const = 0;
+			const arr_apply_operate &op) const = 0;
 };
 
 }
