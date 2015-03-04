@@ -221,6 +221,18 @@ bool mem_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 	return true;
 }
 
+bool mem_vector::append(vector::ptr vec)
+{
+	off_t loc = this->get_length();
+	// TODO We might want to over expand a little, so we don't need to copy
+	// the memory again and again.
+	// TODO if this is a sub_vector, what should we do?
+	this->resize(vec->get_length() + get_length());
+	assert(loc + vec->get_length() <= this->get_length());
+	this->set_sub_vec(loc, *vec);
+	return true;
+}
+
 bool mem_vector::resize(size_t new_length)
 {
 	if (new_length == get_length())
