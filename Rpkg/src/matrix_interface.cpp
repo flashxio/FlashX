@@ -38,27 +38,6 @@ using namespace fm;
 fg::FG_graph::ptr R_FG_get_graph(SEXP pgraph);
 
 template<class EntryType>
-class set_const_operate: public set_operate
-{
-	EntryType v;
-public:
-	set_const_operate(EntryType v) {
-		this->v = v;
-	}
-
-	virtual void set(void *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
-		EntryType *ele_p = (EntryType *) arr;
-		for (size_t i = 0; i < num_eles; i++)
-			ele_p[i] = v;
-	}
-
-	virtual size_t entry_size() const {
-		return sizeof(EntryType);
-	}
-};
-
-template<class EntryType>
 dense_matrix::ptr create_dense_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, EntryType initv)
 {
@@ -69,26 +48,17 @@ dense_matrix::ptr create_dense_matrix(size_t nrow, size_t ncol,
 	return m;
 }
 
-template<class EntryType>
-dense_matrix::ptr create_vector(size_t length, EntryType initv)
-{
-	// TODO let's just use in-memory dense matrix first.
-	typename type_mem_vector<EntryType>::ptr v
-		= type_mem_vector<EntryType>::create(length);
-	dense_matrix::ptr m = v->get_data();
-	m->set_data(set_const_operate<EntryType>(initv));
-	return m;
-}
-
 RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 {
 	size_t len = REAL(plen)[0];
 
 	dense_matrix::ptr m;
 	if (R_is_real(pinitv))
-		m = create_vector<double>(len, REAL(pinitv)[0]);
+		m = mem_vector::cast(create_vector<double>(
+					len, REAL(pinitv)[0]))->get_data();
 	else if (R_is_integer(pinitv))
-		m = create_vector<int>(len, INTEGER(pinitv)[0]);
+		m = mem_vector::cast(create_vector<int>(
+					len, INTEGER(pinitv)[0]))->get_data();
 	else {
 		fprintf(stderr, "The initial value has unsupported type\n");
 		return Rcpp::List();
@@ -146,35 +116,6 @@ RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
 	return create_FMR_vector(m, "");
 }
 
-template<class T>
-class seq_set_operate: public set_operate
-{
-	long n;
-	T from;
-	T by;
-public:
-	seq_set_operate(long n, T from, T by) {
-		this->n = n;
-		this->from = from;
-		this->by = by;
-	}
-
-	virtual void set(void *raw_arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
-		T *arr = (T *) raw_arr;
-		// We are initializing a single-column matrix.
-		T v = from + row_idx * by;
-		for (size_t i = 0; i < num_eles; i++) {
-			arr[i] = v;
-			v += by;
-		}
-	}
-
-	virtual size_t entry_size() const {
-		return sizeof(T);
-	}
-};
-
 RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 {
 	// This function always generates a sequence of real numbers.
@@ -188,24 +129,8 @@ RcppExport SEXP R_FM_create_seq(SEXP pfrom, SEXP pto, SEXP pby)
 		return R_NilValue;
 	}
 
-	// The result of division may generate a real number slightly smaller than
-	// what we want because of the representation precision in the machine.
-	// When we convert the real number to an integer, we may find the number
-	// is smaller than exepcted. We need to add a very small number to
-	// the real number to correct the problem.
-	// TODO is it the right way to correct the problem?
-	long n = (to - from) / by + 1e-9;
-	if (n < 0) {
-		fprintf(stderr, "wrong sign in 'by' argument");
-		return R_NilValue;
-	}
-
-	// We need to count the start element.
-	n++;
-	// TODO let's just use in-memory dense matrix first.
-	type_mem_vector<double>::ptr v = type_mem_vector<double>::create(n);
-	dense_matrix::ptr m = v->get_data();
-	m->set_data(seq_set_operate<double>(n, from, by));
+	dense_matrix::ptr m = mem_vector::cast(
+			create_vector<double>(from, to, by))->get_data();
 	return create_FMR_vector(m, "");
 }
 
