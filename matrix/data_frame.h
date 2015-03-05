@@ -48,6 +48,12 @@ class data_frame
 protected:
 	bool expose_portion(off_t loc, size_t length);
 
+	void set_vec(size_t off, vector::ptr vec) {
+		std::string name = named_vecs[off].first;
+		named_vecs[off].second = vec;
+		vec_map[name] = vec;
+	}
+
 	data_frame() {
 	}
 
@@ -105,6 +111,8 @@ public:
 	 */
 	virtual std::shared_ptr<vector_vector> groupby(const std::string &col_name,
 			gr_apply_operate<data_frame> &op) const = 0;
+	virtual bool sort(const std::string &col_name) = 0;
+	virtual bool is_sorted(const std::string &col_name) const = 0;
 };
 
 }

@@ -37,17 +37,38 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 				"The column %1% doesn't exist") % col_name;
 		return vector_vector::ptr();
 	}
-	mem_vector::ptr sorted_col = mem_vector::cast(col->deep_copy());
-	type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(
-			sorted_col->sort_with_index());
 
-	mem_data_frame::ptr sorted_df = mem_data_frame::create();
-	sorted_df->add_vec(col_name, sorted_col);
-	for (size_t i = 0; i < get_num_vecs(); i++) {
-		mem_vector::ptr mem_vec = mem_vector::cast(get_vec(i));
-		if (mem_vec == col)
-			continue;
-		sorted_df->add_vec(get_vec_name(i), mem_vec->get(*idxs));
+	mem_vector::ptr sorted_col;
+	mem_data_frame::ptr sorted_df;
+	if (!col->is_sorted()) {
+		// If the column where we group by isn't sorted, we'll create a copy
+		// of this data frame and sort on the replicated data frame.
+		sorted_col = mem_vector::cast(col->deep_copy());
+		type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(
+				sorted_col->sort_with_index());
+
+		sorted_df = mem_data_frame::create();
+		sorted_df->add_vec(col_name, sorted_col);
+		for (size_t i = 0; i < get_num_vecs(); i++) {
+			mem_vector::ptr mem_vec = mem_vector::cast(get_vec(i));
+			if (mem_vec == col)
+				continue;
+			sorted_df->add_vec(get_vec_name(i), mem_vec->get(*idxs));
+		}
+	}
+	else {
+		sorted_col = mem_vector::cast(col);
+		// If the column has been sorted, we still need to create
+		// a data frame, but it'll reference the vectors in the original
+		// data frame.
+		sorted_df = mem_data_frame::create();
+		sorted_df->add_vec(col_name, col);
+		for (size_t i = 0; i < get_num_vecs(); i++) {
+			mem_vector::ptr mem_vec = mem_vector::cast(get_vec(i));
+			if (mem_vec == col)
+				continue;
+			sorted_df->add_vec(get_vec_name(i), mem_vec);
+		}
 	}
 
 	vector_vector::ptr ret = std::static_pointer_cast<vector_vector>(
@@ -76,6 +97,41 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 	}
 
 	return ret;
+}
+
+bool mem_data_frame::sort(const std::string &col_name)
+{
+	vector::ptr sorted_col = get_vec(col_name);
+	if (sorted_col == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"The column %1% doesn't exist") % col_name;
+		return false;
+	}
+	if (sorted_col->is_sorted())
+		return true;
+
+	type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(
+			sorted_col->sort_with_index());
+	for (size_t i = 0; i < get_num_vecs(); i++) {
+		mem_vector::ptr mem_vec = mem_vector::cast(get_vec(i));
+		if (mem_vec == sorted_col)
+			continue;
+		mem_vector::ptr tmp = mem_vec->get(*idxs);
+		assert(!tmp->is_sorted());
+		set_vec(i, std::static_pointer_cast<vector>(tmp));
+	}
+	return true;
+}
+
+bool mem_data_frame::is_sorted(const std::string &col_name)
+{
+	vector::ptr col = get_vec(col_name);
+	if (col == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"The column %1% doesn't exist") % col_name;
+		return false;
+	}
+	return col->is_sorted();
 }
 
 }

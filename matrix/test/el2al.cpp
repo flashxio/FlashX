@@ -213,11 +213,13 @@ int main(int argc, char *argv[])
 	new_df->add_vec(parser.get_col_name(0), rep_vec);
 	df->append(new_df);
 
+	df->sort("source");
 	adj_apply_operate out_adj_op(fg::edge_type::OUT_EDGE);
 	vector_vector::ptr out_adjs = df->groupby("source", out_adj_op);
 	printf("There are %ld adjacency lists and they use %ld bytes in total\n",
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
 
+	df->sort("dest");
 	adj_apply_operate in_adj_op(fg::edge_type::IN_EDGE);
 	vector_vector::ptr in_adjs = df->groupby("dest", in_adj_op);
 	printf("There are %ld adjacency lists and they use %ld bytes in total\n",
