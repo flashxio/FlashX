@@ -70,7 +70,8 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 		// The first argument is the key and the second one is the value
 		// (a data frame)
 		op.run(curr_ptr, *sorted_df, *row);
-		ret->append(*row);
+		if (row->get_length() > 0)
+			ret->append(*row);
 		loc += rel_end;
 	}
 
