@@ -191,6 +191,27 @@ compressed_directed_vertex_entry::compressed_directed_vertex_entry(
 	}
 }
 
+compressed_directed_vertex_entry::compressed_directed_vertex_entry(
+		const directed_vertex_entry offs, const vsize_t num_in_edges[],
+		const vsize_t num_out_edges[], size_t num_vertices)
+{
+	start_offs = offs;
+	for (size_t i = 0; i < num_vertices; i++) {
+		if (num_in_edges[i] < LARGE_VERTEX_SIZE)
+			edges[i].first = num_in_edges[i];
+		else
+			edges[i].first = LARGE_VERTEX_SIZE;
+
+		if (num_out_edges[i] < LARGE_VERTEX_SIZE)
+			edges[i].second = num_out_edges[i];
+		else
+			edges[i].second = LARGE_VERTEX_SIZE;
+	}
+	for (size_t i = num_vertices; i < ENTRY_SIZE; i++) {
+		edges[i].first = edges[i].second = 0;
+	}
+}
+
 compressed_undirected_vertex_entry::compressed_undirected_vertex_entry(
 		const vertex_offset offs[], size_t edge_data_size, size_t num)
 {
@@ -472,6 +493,71 @@ cdirected_vertex_index::ptr cdirected_vertex_index::construct(
 
 	memcpy(cindex->entries, entries.data(),
 			entries.size() * sizeof(entries[0]));
+	memcpy(cindex->get_large_in_vertices(), large_in_vertices.data(),
+			sizeof(large_in_vertices[0]) * large_in_vertices.size());
+	memcpy(cindex->get_large_out_vertices(), large_out_vertices.data(),
+			sizeof(large_out_vertices[0]) * large_out_vertices.size());
+	return cdirected_vertex_index::ptr(cindex, destroy_index());
+}
+
+cdirected_vertex_index::ptr cdirected_vertex_index::construct(
+		size_t num_vertices, const vsize_t num_in_edges[],
+		const vsize_t num_out_edges[], const graph_header &header)
+{
+	// Get all the large vertices.
+	std::vector<large_vertex_t> large_in_vertices;
+	std::vector<large_vertex_t> large_out_vertices;
+	for (size_t i = 0; i < num_vertices; i++) {
+		if (num_in_edges[i] >= compressed_vertex_entry::LARGE_VERTEX_SIZE)
+			large_in_vertices.push_back(large_vertex_t(i, num_in_edges[i]));
+		if (num_out_edges[i] >= compressed_vertex_entry::LARGE_VERTEX_SIZE)
+			large_out_vertices.push_back(large_vertex_t(i, num_out_edges[i]));
+	}
+
+	size_t num_entries = ROUNDUP(num_vertices, ENTRY_SIZE) / ENTRY_SIZE;
+	size_t tot_size = sizeof(cdirected_vertex_index)
+		+ sizeof(entry_type) * num_entries
+		+ sizeof(large_in_vertices[0]) * large_in_vertices.size()
+		+ sizeof(large_out_vertices[0]) * large_out_vertices.size();
+	char *buf = (char *) malloc(tot_size);
+	memcpy(buf, &header, vertex_index::get_header_size());
+	cdirected_vertex_index *cindex = (cdirected_vertex_index *) buf;
+
+	// Initialize the entries.
+	int edge_data_size = header.get_edge_data_size();
+	size_t in_size = 0;
+	size_t out_size = 0;
+	for (size_t vid = 0; vid < num_vertices; vid += ENTRY_SIZE) {
+		off_t entry_idx = vid / ENTRY_SIZE;
+		directed_vertex_entry dentry(in_size, out_size);
+		size_t num_entry_vertices = std::min(ENTRY_SIZE, num_vertices - vid);
+		cindex->entries[entry_idx] = entry_type(dentry, num_in_edges + vid,
+				num_out_edges + vid, num_entry_vertices);
+		for (size_t j = 0; j < num_entry_vertices; j++) {
+			in_size += ext_mem_undirected_vertex::num_edges2vsize(
+					num_in_edges[vid + j], edge_data_size);
+			out_size += ext_mem_undirected_vertex::num_edges2vsize(
+					num_out_edges[vid + j], edge_data_size);
+		}
+	}
+	assert(in_size == out_size);
+	// Adjust the offset of each compressed entry.
+	for (size_t entry_idx = 0; entry_idx < num_entries; entry_idx++) {
+		directed_vertex_entry e = cindex->entries[entry_idx].get_start_offs();
+		cindex->entries[entry_idx].reset_start_offs(
+				e.get_in_off() + sizeof(vertex_index),
+				e.get_out_off() + sizeof(vertex_index) + in_size);
+	}
+
+	// Initialize the remaining part of the header.
+	cindex->h.data.entry_size = sizeof(entry_type);
+	cindex->h.data.num_entries = num_entries;
+	cindex->h.data.out_part_loc = sizeof(vertex_index) + in_size;
+	cindex->h.data.compressed = true;
+	cindex->h.data.num_large_in_vertices = large_in_vertices.size();
+	cindex->h.data.num_large_out_vertices = large_out_vertices.size();
+	assert(num_entries * ENTRY_SIZE >= header.get_num_vertices());
+
 	memcpy(cindex->get_large_in_vertices(), large_in_vertices.data(),
 			sizeof(large_in_vertices[0]) * large_in_vertices.size());
 	memcpy(cindex->get_large_out_vertices(), large_out_vertices.data(),

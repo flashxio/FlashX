@@ -418,6 +418,9 @@ public:
 
 	compressed_directed_vertex_entry(const directed_vertex_entry offs[],
 			size_t edge_data_size, size_t num);
+	compressed_directed_vertex_entry(const directed_vertex_entry offs,
+			const vsize_t num_in_edges[], const vsize_t num_out_edges[],
+			size_t num);
 
 	void reset_start_offs(off_t in_off, off_t out_off) {
 		start_offs = directed_vertex_entry(in_off, out_off);
@@ -588,6 +591,8 @@ public:
 			const std::vector<large_vertex_t> &large_in_vertices,
 			const std::vector<large_vertex_t> &large_out_vertices,
 			const graph_header &header);
+	static ptr construct(size_t num_vertices, const vsize_t num_in_edges[],
+		const vsize_t num_out_edges[], const graph_header &header);
 
 	const entry_type *get_entries() const {
 		return entries;
