@@ -251,6 +251,88 @@ public:
 	}
 };
 
+template<class T>
+class seq_set_operate: public set_operate
+{
+	long n;
+	T from;
+	T by;
+public:
+	seq_set_operate(long n, T from, T by) {
+		this->n = n;
+		this->from = from;
+		this->by = by;
+	}
+
+	virtual void set(void *raw_arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		T *arr = (T *) raw_arr;
+		// We are initializing a single-column matrix.
+		T v = from + row_idx * by;
+		for (size_t i = 0; i < num_eles; i++) {
+			arr[i] = v;
+			v += by;
+		}
+	}
+
+	virtual size_t entry_size() const {
+		return sizeof(T);
+	}
+};
+
+template<class EntryType>
+vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
+{
+	if ((end < start && stride > 0) || (end > stride && stride < 0)) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "There are a negative number of elements in the sequence";
+		return vector::ptr();
+	}
+	// TODO let's just use in-memory dense matrix first.
+	long n = (end - start) / stride;
+	// We need to count the start element.
+	n++;
+	typename type_mem_vector<EntryType>::ptr v
+		= type_mem_vector<EntryType>::create(n);
+	v->get_data()->set_data(seq_set_operate<EntryType>(n, start, stride));
+	return std::static_pointer_cast<vector>(v);
+}
+
+template<>
+vector::ptr create_vector<double>(double start, double end,
+		double stride);
+
+template<class EntryType>
+class set_const_operate: public set_operate
+{
+	EntryType v;
+public:
+	set_const_operate(EntryType v) {
+		this->v = v;
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		EntryType *ele_p = (EntryType *) arr;
+		for (size_t i = 0; i < num_eles; i++)
+			ele_p[i] = v;
+	}
+
+	virtual size_t entry_size() const {
+		return sizeof(EntryType);
+	}
+};
+
+template<class EntryType>
+vector::ptr create_vector(size_t length, EntryType initv)
+{
+	// TODO let's just use in-memory dense matrix first.
+	typename type_mem_vector<EntryType>::ptr v
+		= type_mem_vector<EntryType>::create(length);
+	v->get_data()->set_data(set_const_operate<EntryType>(initv));
+	return std::static_pointer_cast<vector>(v);
+}
+
 }
 
 #endif
