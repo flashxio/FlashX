@@ -175,6 +175,7 @@ data_frame::ptr mem_vector::groupby(const agg_operate &agg_op) const
 		// This is the absolute start location of this partition.
 		par_starts[i] += start;
 	}
+	par_starts[0] = 0;
 	par_starts[num_omp] = sorted_vec->get_length();
 
 	// It's possible that two partitions end up having the same start location
