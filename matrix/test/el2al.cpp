@@ -26,6 +26,7 @@
 #include "log.h"
 #include "FG_basic_types.h"
 #include "vertex.h"
+#include "graph_file_header.h"
 
 #include "generic_type.h"
 #include "data_io.h"
@@ -184,18 +185,20 @@ void adj_apply_operate::run(const void *key, const data_frame &val,
 
 int main(int argc, char *argv[])
 {
-	if (argc < 2) {
-		fprintf(stderr, "el2al edge_file\n");
+	if (argc < 3) {
+		fprintf(stderr, "el2al edge_file adj_file\n");
 		return -1;
 	}
 
 	std::string file_name = argv[1];
+	std::string adj_file = argv[2];
 	std::vector<std::string> files;
 	files.push_back(file_name);
 
 	edge_parser parser;
 	data_frame::ptr df = read_lines(files, parser);
-	printf("There are %ld edges\n", df->get_num_entries());
+	size_t num_edges = df->get_num_entries();
+	printf("There are %ld edges\n", num_edges);
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
 		type_mem_vector<fg::vertex_id_t>::ptr vec
@@ -226,10 +229,21 @@ int main(int argc, char *argv[])
 	vector_vector::ptr out_adjs = df->groupby("source", out_adj_op);
 	printf("There are %ld adjacency lists and they use %ld bytes in total\n",
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
+	size_t num_vertices = out_adjs->get_num_vecs();
 
 	df->sort("dest");
+	assert(df->is_sorted("dest"));
 	adj_apply_operate in_adj_op(fg::edge_type::IN_EDGE);
 	vector_vector::ptr in_adjs = df->groupby("dest", in_adj_op);
 	printf("There are %ld adjacency lists and they use %ld bytes in total\n",
 			in_adjs->get_num_vecs(), in_adjs->get_tot_num_entries());
+
+	type_mem_vector<char>::ptr graph = type_mem_vector<char>::create(
+			sizeof(fg::graph_header));
+	new (graph->get_raw_arr()) fg::graph_header(fg::graph_type::DIRECTED,
+			num_vertices, num_edges, 0);
+	graph->append(in_adjs->cat());
+	graph->append(out_adjs->cat());
+	graph->export2(adj_file);
+	return 0;
 }
