@@ -41,6 +41,9 @@ public:
 	virtual ~vector_vector() {
 	}
 
+	virtual size_t get_num_vecs() const = 0;
+	virtual size_t get_tot_num_entries() const = 0;
+
 	// We can assume each vector can be stored in memory.
 	virtual bool append(const mem_vector &vec) = 0;
 

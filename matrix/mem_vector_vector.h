@@ -71,6 +71,10 @@ public:
 		return vec_offs.size() - 1;
 	}
 
+	virtual size_t get_tot_num_entries() const {
+		return get_num_bytes() / get_type().get_size();
+	}
+
 	bool append(const mem_vector &vec);
 
 	virtual std::shared_ptr<vector> cat() const;
