@@ -249,6 +249,13 @@ public:
 	virtual const scalar_type &get_type() const {
 		return get_scalar_type<T>();
 	}
+
+	T max() const {
+		static basic_ops_impl<T, T, T> ops;
+		scalar_variable_impl<T> res;
+		get_data()->aggregate(*ops.get_op(basic_ops::op_idx::MAX), res);
+		return res.get();
+	}
 };
 
 template<class T>
