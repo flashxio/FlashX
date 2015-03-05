@@ -28,10 +28,11 @@ void sum_apply_operate::run(const void *key, const data_frame &val,
 {
 	assert(val.get_num_vecs() == 2);
 	assert(out.is_type<long>());
-	type_mem_vector<int>::ptr vec = type_mem_vector<int>::cast(val.get_vec(1));
+	const type_mem_vector<int> &vec
+		= (const type_mem_vector<int> &) val.get_vec_ref(1);
 	long sum = 0;
-	for (size_t i = 0; i < vec->get_length(); i++)
-		sum += vec->get(i);
+	for (size_t i = 0; i < vec.get_length(); i++)
+		sum += vec.get(i);
 	type_mem_vector<long> &t_out = (type_mem_vector<long> &) out;
 	out.resize(1);
 	t_out.set(0, sum);
@@ -60,11 +61,12 @@ void copy_apply_operate::run(const void *key, const data_frame &val,
 {
 	assert(val.get_num_vecs() == 2);
 	assert(out.is_type<int>());
-	type_mem_vector<int>::ptr vec = type_mem_vector<int>::cast(val.get_vec(1));
+	const type_mem_vector<int> &vec
+		= (const type_mem_vector<int> &) val.get_vec_ref(1);
 	type_mem_vector<int> &t_out = (type_mem_vector<int> &) out;
-	out.resize(vec->get_length());
-	for (size_t i = 0; i < vec->get_length(); i++)
-		t_out.set(i, vec->get(i));
+	out.resize(vec.get_length());
+	for (size_t i = 0; i < vec.get_length(); i++)
+		t_out.set(i, vec.get(i));
 }
 
 void test_groupby()

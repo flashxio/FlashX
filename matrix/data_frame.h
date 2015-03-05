@@ -20,6 +20,8 @@
 #ifndef __DATA_FRAME_H__
 #define __DATA_FRAME_H__
 
+#include <assert.h>
+
 #include <vector>
 #include <string>
 #include <memory>
@@ -82,7 +84,7 @@ public:
 			std::vector<data_frame::ptr>::const_iterator end);
 	bool append(data_frame::ptr df);
 
-	vector::ptr get_vec(size_t off) const {
+	vector::ptr get_vec(size_t off) {
 		return named_vecs[off].second;
 	}
 
@@ -90,12 +92,22 @@ public:
 		return named_vecs[off].first;
 	}
 
-	vector::ptr get_vec(const std::string &name) const {
+	vector::ptr get_vec(const std::string &name) {
 		auto it = vec_map.find(name);
 		if (it == vec_map.end())
 			return vector::ptr();
 		else
 			return it->second;
+	}
+
+	const vector &get_vec_ref(size_t off) const {
+		return *named_vecs[off].second;
+	}
+
+	const vector &get_vec_ref(const std::string &name) const {
+		auto it = vec_map.find(name);
+		assert(it != vec_map.end());
+		return *it->second;
 	}
 
 	size_t get_num_vecs() const {

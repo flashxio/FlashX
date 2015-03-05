@@ -150,18 +150,26 @@ void adj_apply_operate::run(const void *key, const data_frame &val,
 	assert(val.get_num_vecs() == 2);
 
 	assert(out.is_type<char>());
-	type_mem_vector<fg::vertex_id_t>::ptr vec;
+	const type_mem_vector<fg::vertex_id_t> *vec;
 	if (etype == fg::edge_type::OUT_EDGE)
-		vec = type_mem_vector<fg::vertex_id_t>::cast(val.get_vec("dest"));
+		vec = (const type_mem_vector<fg::vertex_id_t> *) &val.get_vec_ref("dest");
 	else
-		vec = type_mem_vector<fg::vertex_id_t>::cast(val.get_vec("source"));
-	assert(vec);
+		vec = (const type_mem_vector<fg::vertex_id_t> *) &val.get_vec_ref("source");
 
-	vec->sort();
 	// I added an invalid edge for each vertex.
-	// The invalid edge is the maximal integer. After sorting, it's at the end
-	// of the vector. So it's easy to remove it.
+	// The invalid edge is the maximal integer.
 	fg::vsize_t num_edges = vec->get_length() - 1;
+	// TODO we actually don't need to alloate memory multiple times.
+	std::unique_ptr<fg::vertex_id_t[]> edge_buf
+		= std::unique_ptr<fg::vertex_id_t[]>(new fg::vertex_id_t[num_edges]);
+	size_t edge_idx = 0;
+	for (size_t i = 0; i < vec->get_length(); i++) {
+		if (vec->get(i) == fg::INVALID_VERTEX_ID)
+			continue;
+		edge_buf[edge_idx++] = vec->get(i);
+	}
+	assert(edge_idx == num_edges);
+	std::sort(edge_buf.get(), edge_buf.get() + num_edges);
 	size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
 			edge_data_size);
 	out.resize(size);
@@ -170,7 +178,7 @@ void adj_apply_operate::run(const void *key, const data_frame &val,
 	// store one type of edges of a vertex.
 	fg::in_mem_undirected_vertex<> v(vid, edge_data_size > 0);
 	for (size_t i = 0; i < num_edges; i++)
-		v.add_edge(fg::edge<>(vid, vec->get(i)));
+		v.add_edge(fg::edge<>(vid, edge_buf[i]));
 	fg::ext_mem_undirected_vertex::serialize(v, out.get_raw_arr(), size, etype);
 }
 
