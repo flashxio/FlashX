@@ -196,9 +196,10 @@ int main(int argc, char *argv[])
 	}
 	printf("max id: %d\n", max_vid);
 
-	vector::ptr seq_vec = create_vector<fg::vertex_id_t>(0, max_vid + 1, 1);
+	vector::ptr seq_vec = create_vector<fg::vertex_id_t>(0, max_vid, 1);
 	vector::ptr rep_vec = create_vector<fg::vertex_id_t>(max_vid + 1,
 			fg::INVALID_VERTEX_ID);
+	assert(seq_vec->get_length() == rep_vec->get_length());
 	// I artificially add an invalid out-edge for each vertex, so it's
 	// guaranteed that each vertex exists in the adjacency lists.
 	mem_data_frame::ptr new_df = mem_data_frame::create();

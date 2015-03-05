@@ -287,6 +287,9 @@ public:
 	}
 };
 
+/*
+ * Create a sequence of values in [start, end]. `end' is inclusive.
+ */
 template<class EntryType>
 vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
 {
