@@ -30,11 +30,11 @@
 using namespace fm;
 
 template<class T>
-class norm2: public apply_operate
+class norm2: public arr_apply_operate
 {
 public:
 	// norm always outputs only one double float-point.
-	norm2(size_t num_in_eles): apply_operate(num_in_eles) {
+	norm2(size_t num_in_eles): arr_apply_operate(num_in_eles) {
 	}
 
 	virtual void run(const void *input, size_t num_in_eles, void *output) const {
@@ -110,11 +110,11 @@ RcppExport SEXP R_FM_norm_matrix(SEXP pmat, SEXP pmargin, SEXP ptype)
 }
 
 template<class T>
-class sd: public apply_operate
+class sd: public arr_apply_operate
 {
 public:
 	// It always outputs only one element.
-	sd(): apply_operate(1) {
+	sd(): arr_apply_operate(1) {
 	}
 
 	virtual void run(const void *input, size_t num_in_eles, void *output) const {
