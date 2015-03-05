@@ -66,6 +66,22 @@ bool data_frame::append(std::vector<data_frame::ptr>::const_iterator begin,
 	return true;
 }
 
+bool data_frame::append(data_frame::ptr df)
+{
+	for (auto it = named_vecs.begin(); it != named_vecs.end(); it++) {
+		if (df->get_vec(it->first) == NULL) {
+			BOOST_LOG_TRIVIAL(error)
+				<< boost::format("The new data frame doesn't have column %1%")
+				% it->first;
+			return false;
+		}
+	}
+
+	for (auto it = named_vecs.begin(); it != named_vecs.end(); it++)
+		it->second->append(df->get_vec(it->first));
+	return true;
+}
+
 bool data_frame::expose_portion(off_t loc, size_t length)
 {
 	for (size_t i = 0; i < named_vecs.size(); i++) {

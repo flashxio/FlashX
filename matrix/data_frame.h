@@ -74,6 +74,7 @@ public:
 	 */
 	bool append(std::vector<data_frame::ptr>::const_iterator begin,
 			std::vector<data_frame::ptr>::const_iterator end);
+	bool append(data_frame::ptr df);
 
 	vector::ptr get_vec(size_t off) const {
 		return named_vecs[off].second;
