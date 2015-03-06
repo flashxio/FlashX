@@ -83,9 +83,12 @@ public:
 
 	virtual bool equals(const mem_vector &vec) const;
 
-	bool verify_groupby(const agg_operate &agg_op) const;
-	std::shared_ptr<data_frame> serial_groupby(const agg_operate &agg_op) const;
-	virtual std::shared_ptr<data_frame> groupby(const agg_operate &agg_op) const;
+	bool verify_groupby(const gr_apply_operate<mem_vector> &op) const;
+	std::shared_ptr<data_frame> serial_groupby(
+			const gr_apply_operate<mem_vector> &op, bool with_val) const;
+	using vector::groupby;
+	virtual std::shared_ptr<data_frame> groupby(
+			const gr_apply_operate<mem_vector> &op, bool with_val) const;
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end);

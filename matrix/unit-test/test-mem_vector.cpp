@@ -34,7 +34,7 @@ void test_groupby()
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random() % 1000);
 	count_impl<int> count;
-	data_frame::ptr res = vec->groupby(count);
+	data_frame::ptr res = vec->groupby(count, true);
 	printf("size: %ld\n", res->get_num_entries());
 
 	std::map<int, size_t> ele_counts;

@@ -22,6 +22,7 @@
 #include <memory>
 
 #include "generic_type.h"
+#include "bulk_operate.h"
 
 namespace fm
 {
@@ -92,7 +93,10 @@ public:
 	virtual vector::ptr sort_with_index() = 0;
 	virtual bool is_sorted() const = 0;
 	// It should return data frame instead of vector.
-	virtual std::shared_ptr<data_frame> groupby(const agg_operate &agg_op) const = 0;
+	virtual std::shared_ptr<data_frame> groupby(
+			const gr_apply_operate<mem_vector> &op, bool with_val) const = 0;
+	virtual std::shared_ptr<data_frame> groupby(const agg_operate &op,
+			bool with_val) const;
 
 	/**
 	 * This method copies all members of the vector object as well as

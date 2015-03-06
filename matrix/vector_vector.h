@@ -104,7 +104,8 @@ public:
 		throw unsupported_exception("is_sorted");
 	}
 
-	virtual std::shared_ptr<data_frame> groupby(const agg_operate &agg_op) const {
+	virtual std::shared_ptr<data_frame> groupby(
+			const gr_apply_operate<mem_vector> &op, bool with_val) const {
 		throw unsupported_exception("groupby");
 	}
 

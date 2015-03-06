@@ -19,6 +19,7 @@
 
 #include "mem_vector.h"
 #include "mem_data_frame.h"
+#include "mem_vector_vector.h"
 
 namespace fm
 {
@@ -87,22 +88,23 @@ mem_vector::const_ptr mem_vector::cast(vector::const_ptr vec)
 	return std::static_pointer_cast<const mem_vector>(vec);
 }
 
-bool mem_vector::verify_groupby(const agg_operate &agg_op) const
+bool mem_vector::verify_groupby(const gr_apply_operate<mem_vector> &op) const
 {
-	if (agg_op.input_entry_size() != get_entry_size()) {
+	if (op.get_key_type() != get_type()) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "the operator accepts input types incompatible with the entry type in the vector";
+			<< "the operator's key type is incompatible with the vector";
 		return false;
 	}
 
 	return true;
 }
 
-data_frame::ptr mem_vector::serial_groupby(const agg_operate &agg_op) const
+data_frame::ptr mem_vector::serial_groupby(const gr_apply_operate<mem_vector> &op,
+		bool with_val) const
 {
-	const scalar_type &output_type = agg_op.get_output_type();
+	const scalar_type &output_type = op.get_output_type();
 	const agg_operate &find_next = get_type().get_agg_ops().get_find_next();
-	if (!verify_groupby(agg_op))
+	if (!verify_groupby(op))
 		return data_frame::ptr();
 
 	// If the vector hasn't been sorted, we need to sort it.
@@ -118,35 +120,55 @@ data_frame::ptr mem_vector::serial_groupby(const agg_operate &agg_op) const
 		sorted_vec = this;
 
 	size_t loc = 0;
-	mem_vector::ptr agg = output_type.create_mem_vec(16);
-	mem_vector::ptr val = this->create_int(16);
+	vector::ptr agg;
+	if (op.get_num_out_eles() == 1)
+		agg = output_type.create_mem_vec(0);
+	else
+		agg = output_type.create_mem_vec_vec();
+	mem_vector::ptr val;
+	if (with_val)
+		val = this->create_int(16);
 	size_t idx = 0;
+	// Discard the const qualifier.
+	mem_vector::ptr copy = mem_vector::cast(
+			const_cast<mem_vector *>(sorted_vec)->shallow_copy());
+	// This might be a sub vector.
+	off_t copy_sub_start = copy->get_sub_start();
+	assert(copy->get_raw_arr() == sorted_vec->get_raw_arr());
+	mem_vector::ptr one_agg = output_type.create_mem_vec(1);
 	while (loc < sorted_vec->get_length()) {
 		size_t curr_length = sorted_vec->get_length() - loc;
 		const char *curr_ptr = sorted_vec->get_raw_arr() + get_entry_size() * loc;
 		size_t rel_end;
 		find_next.run(curr_length, curr_ptr, &rel_end);
-		if (idx >= agg->get_length()) {
-			agg->resize(agg->get_length() * 2);
+		if (with_val && idx >= val->get_length()) {
 			val->resize(val->get_length() * 2);
 		}
-		agg_op.run(rel_end, curr_ptr, agg->get(idx));
-		memcpy(val->get(idx), curr_ptr, get_entry_size());
+		copy->expose_sub_vec(loc + copy_sub_start, rel_end);
+		assert(curr_ptr == copy->get_raw_arr());
+		op.run(curr_ptr, *copy, *one_agg);
+		// TODO there might be some overhead here.
+		// We should really enable bulk operation here.
+		agg->append(one_agg);
+		if (with_val)
+			memcpy(val->get(idx), curr_ptr, get_entry_size());
 		idx++;
 		loc += rel_end;
 	}
-	agg->resize(idx);
-	val->resize(idx);
+	if (with_val)
+		val->resize(idx);
 	mem_data_frame::ptr ret = mem_data_frame::create();
-	ret->add_vec("val", std::static_pointer_cast<vector>(val));
+	if (with_val)
+		ret->add_vec("val", std::static_pointer_cast<vector>(val));
 	ret->add_vec("agg", std::static_pointer_cast<vector>(agg));
 	return std::static_pointer_cast<data_frame>(ret);
 }
 
-data_frame::ptr mem_vector::groupby(const agg_operate &agg_op) const
+data_frame::ptr mem_vector::groupby(const gr_apply_operate<mem_vector> &op,
+		bool with_val) const
 {
 	const agg_operate &find_next = get_type().get_agg_ops().get_find_next();
-	if (!verify_groupby(agg_op))
+	if (!verify_groupby(op))
 		return data_frame::ptr();
 
 	// If the vector hasn't been sorted, we need to sort it.
@@ -188,7 +210,8 @@ data_frame::ptr mem_vector::groupby(const agg_operate &agg_op) const
 		off_t start = par_starts[i];
 		off_t end = par_starts[i + 1];
 		vector::const_ptr sub_vec = sorted_vec->get_sub_vec(start, end - start);
-		sub_results[i] = mem_vector::cast(sub_vec)->serial_groupby(agg_op);
+		sub_results[i] = mem_vector::cast(sub_vec)->serial_groupby(op,
+				with_val);
 	}
 
 	data_frame::ptr ret = sub_results[0];
@@ -272,9 +295,8 @@ bool mem_vector::set_sub_vec(off_t start, const vector &vec)
 			<< "Not support setting a subvector from ext-mem vector";
 		return false;
 	}
-	if (get_entry_size() != vec.get_entry_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The two vectors don't have the same entry size";
+	if (get_type() != vec.get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The two vectors don't have the same type";
 		return false;
 	}
 	if (start + vec.get_length() > get_length()) {

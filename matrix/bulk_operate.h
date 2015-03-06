@@ -589,6 +589,7 @@ public:
 
 	virtual const scalar_type &get_key_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
+	virtual size_t get_num_out_eles() const = 0;
 };
 
 }

@@ -247,7 +247,7 @@ int main(int argc, char *argv[])
 	assert(df->is_sorted("dest"));
 	type_mem_vector<fg::vsize_t>::ptr num_in_edges
 		= type_mem_vector<fg::vsize_t>::cast(df->get_vec("dest")->groupby(
-			count_agg_operate())->get_vec("agg"));
+			count_agg_operate(), false)->get_vec("agg"));
 	adj_apply_operate in_adj_op(fg::edge_type::IN_EDGE);
 	vector_vector::ptr in_adjs = df->groupby("dest", in_adj_op);
 	printf("There are %ld adjacency lists and they use %ld bytes in total\n",
@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
 	assert(df->is_sorted("source"));
 	type_mem_vector<fg::vsize_t>::ptr num_out_edges
 		= type_mem_vector<fg::vsize_t>::cast(df->get_vec("source")->groupby(
-			count_agg_operate())->get_vec("agg"));
+			count_agg_operate(), false)->get_vec("agg"));
 	adj_apply_operate out_adj_op(fg::edge_type::OUT_EDGE);
 	vector_vector::ptr out_adjs = df->groupby("source", out_adj_op);
 	printf("There are %ld adjacency lists and they use %ld bytes in total\n",
