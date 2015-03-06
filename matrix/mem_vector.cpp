@@ -288,6 +288,20 @@ bool mem_vector::set_sub_vec(off_t start, const vector &vec)
 	return true;
 }
 
+vector::ptr mem_vector::get_sub_vec(off_t start, size_t length)
+{
+	if (start + length > get_length()) {
+		BOOST_LOG_TRIVIAL(error) << "get_sub_vec: out of range";
+		return vector::ptr();
+	}
+
+	mem_vector::ptr mem_vec = mem_vector::cast(this->shallow_copy());
+	mem_vec->resize(length);
+	mem_vec->arr = this->get_raw_arr() + start * get_entry_size();
+	mem_vec->data = this->get_data();
+	return mem_vec;
+}
+
 vector::const_ptr mem_vector::get_sub_vec(off_t start, size_t length) const
 {
 	if (start + length > get_length()) {
@@ -303,6 +317,11 @@ vector::const_ptr mem_vector::get_sub_vec(off_t start, size_t length) const
 	mem_vec->arr = mutable_this->get_raw_arr() + start * get_entry_size();
 	mem_vec->data = mutable_this->get_data();
 	return std::static_pointer_cast<const vector>(mem_vec);
+}
+
+size_t mem_vector::get_sub_start() const
+{
+	return (arr - get_matrix_raw_data(*data)) / get_entry_size();
 }
 
 bool mem_vector::expose_sub_vec(off_t start, size_t length)
@@ -321,6 +340,7 @@ bool mem_vector::expose_sub_vec(off_t start, size_t length)
 
 vector::ptr mem_vector::deep_copy() const
 {
+	assert(get_raw_arr() == get_matrix_raw_data(*data));
 	// We need to discard the const from the "this" pointer.
 	mem_vector *mutable_this = (mem_vector *) this;
 	mem_vector::ptr mem_vec = mem_vector::cast(mutable_this->shallow_copy());

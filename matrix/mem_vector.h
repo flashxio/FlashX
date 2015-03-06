@@ -93,6 +93,8 @@ public:
 	virtual bool resize(size_t new_length);
 	virtual bool set_sub_vec(off_t start, const vector &vec);
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
+	virtual vector::ptr get_sub_vec(off_t start, size_t length);
+	size_t get_sub_start() const;
 	virtual bool expose_sub_vec(off_t start, size_t length);
 	virtual vector::ptr deep_copy() const;
 
@@ -239,13 +241,24 @@ public:
 	virtual vector::ptr shallow_copy() {
 		type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(get_data());
 		ret->sorted = this->sorted;
-		return std::static_pointer_cast<vector>(ret);
+		// The vector might be a sub vector.
+		off_t start = get_sub_start();
+		if (start == 0)
+			return std::static_pointer_cast<vector>(ret);
+		else
+			return ret->get_sub_vec(start, get_length());
 	}
 
 	virtual vector::const_ptr shallow_copy() const {
 		type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(get_data());
 		ret->sorted = this->sorted;
-		return std::static_pointer_cast<const vector>(ret);
+		// The vector might be a sub vector.
+		off_t start = get_sub_start();
+		if (start == 0)
+			return std::static_pointer_cast<const vector>(ret);
+		else
+			return std::static_pointer_cast<const vector>(
+					ret->get_sub_vec(start, get_length()));
 	}
 
 	virtual const scalar_type &get_type() const {
