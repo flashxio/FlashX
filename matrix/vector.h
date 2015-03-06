@@ -62,7 +62,9 @@ public:
 		return this->get_type().get_type() == fm::get_type<T>();
 	}
 
-	// TODO this is no longer necessary.
+	// Normally the entry size is the type size. But a vector may also
+	// contains vectors, and the entry size is 0, which is no longer
+	// the type size.
 	size_t get_entry_size() const {
 		return entry_size;
 	}

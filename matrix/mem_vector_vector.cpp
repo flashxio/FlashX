@@ -37,6 +37,7 @@ void mem_vector_vector::expand(size_t min)
 
 bool mem_vector_vector::append(const mem_vector &vec)
 {
+	vector::resize(get_num_vecs() + 1);
 	size_t vec_num_bytes = vec.get_length() * vec.get_entry_size();
 	if (get_num_bytes() + vec_num_bytes > capacity)
 		expand(get_num_bytes() + vec_num_bytes);

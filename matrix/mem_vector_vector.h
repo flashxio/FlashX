@@ -59,17 +59,13 @@ class mem_vector_vector: public vector_vector
 	}
 
 protected:
-	mem_vector_vector() {
+	mem_vector_vector(): vector_vector(0, true) {
 		vec_offs.push_back(0);
 		capacity = 1024;
 		data = std::shared_ptr<char>((char *) malloc(capacity), deleter());
 	}
 public:
 	typedef std::shared_ptr<mem_vector_vector> ptr;
-
-	size_t get_num_vecs() const {
-		return vec_offs.size() - 1;
-	}
 
 	virtual size_t get_tot_num_entries() const {
 		return get_num_bytes() / get_type().get_size();
