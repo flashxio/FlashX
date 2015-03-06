@@ -35,14 +35,25 @@ void mem_vector_vector::expand(size_t min)
 	data = new_data;
 }
 
-bool mem_vector_vector::append(const mem_vector &vec)
+bool mem_vector_vector::append(const vector &vec)
 {
+	if (!vec.is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Not support appending an ext-mem vector";
+		return false;
+	}
+	if (get_type() != vec.get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The two vectors don't have the same type";
+		return false;
+	}
+
 	vector::resize(get_num_vecs() + 1);
-	size_t vec_num_bytes = vec.get_length() * vec.get_entry_size();
+	const mem_vector &mem_vec = (const mem_vector &) vec;
+	size_t vec_num_bytes = mem_vec.get_length() * mem_vec.get_entry_size();
 	if (get_num_bytes() + vec_num_bytes > capacity)
 		expand(get_num_bytes() + vec_num_bytes);
 	assert(get_num_bytes() + vec_num_bytes <= capacity);
-	memcpy(get_end(), vec.get_raw_arr(), vec_num_bytes);
+	memcpy(get_end(), mem_vec.get_raw_arr(), vec_num_bytes);
 	off_t new_off = get_num_bytes() + vec_num_bytes;
 	vec_offs.push_back(new_off);
 	return true;

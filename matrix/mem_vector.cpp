@@ -149,7 +149,7 @@ data_frame::ptr mem_vector::serial_groupby(const gr_apply_operate<mem_vector> &o
 		op.run(curr_ptr, *copy, *one_agg);
 		// TODO there might be some overhead here.
 		// We should really enable bulk operation here.
-		agg->append(one_agg);
+		agg->append(*one_agg);
 		if (with_val)
 			memcpy(val->get(idx), curr_ptr, get_entry_size());
 		idx++;
@@ -245,15 +245,15 @@ bool mem_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 	return true;
 }
 
-bool mem_vector::append(vector::ptr vec)
+bool mem_vector::append(const vector &vec)
 {
 	off_t loc = this->get_length();
 	// TODO We might want to over expand a little, so we don't need to copy
 	// the memory again and again.
 	// TODO if this is a sub_vector, what should we do?
-	this->resize(vec->get_length() + get_length());
-	assert(loc + vec->get_length() <= this->get_length());
-	this->set_sub_vec(loc, *vec);
+	this->resize(vec.get_length() + get_length());
+	assert(loc + vec.get_length() <= this->get_length());
+	this->set_sub_vec(loc, vec);
 	return true;
 }
 

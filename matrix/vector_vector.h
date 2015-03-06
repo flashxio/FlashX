@@ -87,12 +87,8 @@ public:
 		// TODO
 		throw unsupported_exception("append multiple vec");
 	}
-	virtual bool append(vector::ptr vec) {
-		// TODO
-		throw unsupported_exception("append vector");
-	}
 	// We can assume each vector can be stored in memory.
-	virtual bool append(const mem_vector &vec) = 0;
+	virtual bool append(const vector &vec) = 0;
 
 	virtual void sort() {
 		throw unsupported_exception("sort");

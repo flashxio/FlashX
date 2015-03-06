@@ -87,7 +87,7 @@ public:
 	virtual bool expose_sub_vec(off_t start, size_t length) = 0;
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end) = 0;
-	virtual bool append(vector::ptr vec) = 0;
+	virtual bool append(const vector &vec) = 0;
 
 	virtual void sort() = 0;
 	virtual vector::ptr sort_with_index() = 0;

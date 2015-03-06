@@ -106,8 +106,8 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 		tos->set(i, to);
 	}
 
-	df.get_vec(0)->append(froms);
-	df.get_vec(1)->append(tos);
+	df.get_vec(0)->append(*froms);
+	df.get_vec(1)->append(*tos);
 	return froms->get_length();
 }
 
@@ -283,8 +283,8 @@ int main(int argc, char *argv[])
 	type_mem_vector<char>::ptr graph = type_mem_vector<char>::create(
 			sizeof(fg::graph_header));
 	new (graph->get_raw_arr()) fg::graph_header(header);
-	graph->append(in_adjs->cat());
-	graph->append(out_adjs->cat());
+	graph->append(*in_adjs->cat());
+	graph->append(*out_adjs->cat());
 	graph->export2(adj_file);
 	return 0;
 }

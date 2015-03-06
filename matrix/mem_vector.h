@@ -92,7 +92,7 @@ public:
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end);
-	virtual bool append(vector::ptr vec);
+	virtual bool append(const vector &vec);
 	virtual bool resize(size_t new_length);
 	virtual bool set_sub_vec(off_t start, const vector &vec);
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;

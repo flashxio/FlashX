@@ -75,7 +75,7 @@ public:
 		return vec_offs[idx + 1] - vec_offs[idx];
 	}
 
-	bool append(const mem_vector &vec);
+	bool append(const vector &vec);
 
 	virtual std::shared_ptr<vector> cat() const;
 };

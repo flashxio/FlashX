@@ -78,7 +78,7 @@ bool data_frame::append(data_frame::ptr df)
 	}
 
 	for (auto it = named_vecs.begin(); it != named_vecs.end(); it++)
-		it->second->append(df->get_vec(it->first));
+		it->second->append(*df->get_vec(it->first));
 	return true;
 }
 
