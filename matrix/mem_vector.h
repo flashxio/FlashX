@@ -113,6 +113,11 @@ class type_mem_vector: public mem_vector
 {
 	bool sorted;
 
+	virtual mem_vector::ptr create_int(size_t length) const {
+		return mem_vector::ptr(new type_mem_vector<T>(length));
+	}
+
+protected:
 	type_mem_vector(std::shared_ptr<char> data, size_t len): mem_vector(
 			data, len, sizeof(T)) {
 		sorted = false;
@@ -124,10 +129,6 @@ class type_mem_vector: public mem_vector
 
 	type_mem_vector(size_t length): mem_vector(length, sizeof(T)) {
 		sorted = false;
-	}
-
-	virtual mem_vector::ptr create_int(size_t length) const {
-		return mem_vector::ptr(new type_mem_vector<T>(length));
 	}
 public:
 	typedef std::shared_ptr<type_mem_vector<T> > ptr;

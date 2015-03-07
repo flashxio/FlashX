@@ -74,10 +74,17 @@ public:
 	virtual size_t get_length(off_t idx) const {
 		return vec_offs[idx + 1] - vec_offs[idx];
 	}
+	virtual const char*get_raw_arr(off_t idx) const {
+		return data.get() + vec_offs[idx];
+	}
 
 	bool append(const vector &vec);
+	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
+			std::vector<vector::ptr>::const_iterator vec_end);
 
 	virtual std::shared_ptr<vector> cat() const;
+	virtual vector_vector::ptr groupby(const factor_vector &labels,
+			const gr_apply_operate<sub_vector_vector> &op) const;
 };
 
 template<class T>

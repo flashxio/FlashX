@@ -32,6 +32,8 @@ namespace fm
 
 class mem_vector;
 class scalar_type;
+class sub_vector_vector;
+class factor_vector;
 
 /*
  * This stores a vector of vectors. It's similar to the row-wise matrix,
@@ -59,6 +61,7 @@ public:
 
 	virtual size_t get_tot_num_entries() const = 0;
 	virtual size_t get_length(off_t idx) const = 0;
+	virtual const char*get_raw_arr(off_t idx) const = 0;
 
 	/*
 	 * Catenate all vectors into a single vector.
@@ -83,10 +86,7 @@ public:
 	}
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
-			std::vector<vector::ptr>::const_iterator vec_end) {
-		// TODO
-		throw unsupported_exception("append multiple vec");
-	}
+			std::vector<vector::ptr>::const_iterator vec_end) = 0;
 	// We can assume each vector can be stored in memory.
 	virtual bool append(const vector &vec) = 0;
 
@@ -104,6 +104,8 @@ public:
 			const gr_apply_operate<mem_vector> &op, bool with_val) const {
 		throw unsupported_exception("groupby");
 	}
+	virtual vector_vector::ptr groupby(const factor_vector &labels,
+			const gr_apply_operate<sub_vector_vector> &op) const = 0;
 
 	virtual vector::ptr deep_copy() const {
 		// TODO
@@ -116,6 +118,37 @@ public:
 	virtual vector::const_ptr shallow_copy() const {
 		// TODO
 		throw unsupported_exception("shallow_copy");
+	}
+};
+
+/*
+ * This is used to access some vectors in vector_vector.
+ * It is always in memory.
+ */
+class sub_vector_vector
+{
+	const vector_vector &vv;
+	std::vector<off_t> vec_idxs;
+public:
+	sub_vector_vector(const vector_vector &_vv,
+			const std::vector<off_t> &vec_idxs): vv(_vv) {
+		this->vec_idxs = vec_idxs;
+	}
+
+	const scalar_type &get_type() const {
+		return vv.get_type();
+	}
+
+	size_t get_num_vecs() const {
+		return vec_idxs.size();
+	}
+
+	size_t get_length(off_t idx) const {
+		return vv.get_length(vec_idxs[idx]);
+	}
+
+	const char *get_raw_arr(off_t idx) const {
+		return vv.get_raw_arr(vec_idxs[idx]);
 	}
 };
 
