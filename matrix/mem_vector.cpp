@@ -202,9 +202,9 @@ data_frame::ptr mem_vector::groupby(const gr_apply_operate<mem_vector> &op,
 
 	// It's possible that two partitions end up having the same start location
 	// because the vector is small or a partition has only one value.
-	assert(std::is_sorted(par_starts, par_starts + num_omp));
-	off_t *end_par_starts = std::unique(par_starts, par_starts + num_omp);
-	int num_parts = end_par_starts - par_starts;
+	assert(std::is_sorted(par_starts, par_starts + num_omp + 1));
+	off_t *end_par_starts = std::unique(par_starts, par_starts + num_omp + 1);
+	int num_parts = end_par_starts - par_starts - 1;
 	std::vector<data_frame::ptr> sub_results(num_parts);
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = par_starts[i];
