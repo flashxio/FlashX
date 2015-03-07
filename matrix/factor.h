@@ -73,10 +73,6 @@ public:
 	const factor &get_factor() const {
 		return f;
 	}
-
-	virtual void set_data(const type_set_operate<factor_value_t> &op) {
-		get_data()->set_data(op);
-	}
 };
 
 }

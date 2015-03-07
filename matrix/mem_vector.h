@@ -188,6 +188,12 @@ public:
 		((T *) get_raw_arr())[idx] = v;
 	}
 
+	virtual void set_data(const type_set_operate<T> &op) {
+		get_data()->set_data(op);
+		T *start = (T *) get_raw_arr();
+		sorted = std::is_sorted(start, start + get_length());
+	}
+
 	virtual bool is_sorted() const {
 		return sorted;
 	}
