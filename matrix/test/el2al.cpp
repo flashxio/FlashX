@@ -316,16 +316,84 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 	out.resize(curr_size);
 }
 
+void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
+		size_t num_vertices, const std::string &mat_name)
+{
+	std::string mat_file = mat_name + ".mat";
+	std::string mat_idx_file = mat_name + ".mat_idx";
+	std::string t_mat_file = mat_name + "_t.mat";
+	std::string t_mat_idx_file = mat_name + "_t.mat_idx";
+
+	// Construct 2D partitioning of the adjacency matrix.
+	size_t block_height
+		= ((size_t) std::numeric_limits<unsigned short>::max()) + 1;
+	block_2d_size block_size(block_height, block_height);
+	factor f(ceil(((double) num_vertices) / block_size.get_num_rows()));
+	factor_vector::ptr labels = factor_vector::create(f, num_vertices);
+	labels->set_data(set_2d_label_operate(block_size));
+	vector_vector::ptr res = out_adjs->groupby(*labels,
+			part_2d_apply_operate(block_size, num_vertices));
+
+	matrix_header mheader(matrix_type::SPARSE, 0, num_vertices, num_vertices,
+			matrix_layout_t::L_ROW_2D, prim_type::P_BOOL, block_size);
+	FILE *f_2d = fopen(mat_file.c_str(), "w");
+	if (f_2d == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
+			% mat_file % strerror(errno);
+		return;
+	}
+	fwrite(&mheader, sizeof(mheader), 1, f_2d);
+	mem_vector::cast(res->cat())->export2(f_2d);
+	fclose(f_2d);
+
+	// Construct the index file of the adjacency matrix.
+	std::vector<off_t> offsets(res->get_num_vecs() + 1);
+	off_t off = 0;
+	for (size_t i = 0; i < res->get_num_vecs(); i++) {
+		offsets[i] = off;
+		off += res->get_length(i);
+	}
+	offsets[res->get_num_vecs()] = off;
+	sparse_matrix_index::ptr mindex = sparse_matrix_index::create(mheader,
+			offsets);
+	mindex->dump(mat_idx_file);
+
+	// Construct the transpose of the adjacency matrix.
+	f_2d = fopen(t_mat_file.c_str(), "w");
+	if (f_2d == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
+			% t_mat_file % strerror(errno);
+		return;
+	}
+	fwrite(&mheader, sizeof(mheader), 1, f_2d);
+	res = in_adjs->groupby(*labels, part_2d_apply_operate(block_size,
+				num_vertices));
+	mem_vector::cast(res->cat())->export2(f_2d);
+	fclose(f_2d);
+
+	// Construct the index file of the adjacency matrix.
+	assert(offsets.size() == res->get_num_vecs() + 1);
+	off = 0;
+	for (size_t i = 0; i < res->get_num_vecs(); i++) {
+		offsets[i] = off;
+		off += res->get_length(i);
+	}
+	offsets[res->get_num_vecs()] = off;
+	mindex = sparse_matrix_index::create(mheader, offsets);
+	mindex->dump(t_mat_idx_file);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 4) {
-		fprintf(stderr, "el2al edge_file adj_file index_file\n");
+		fprintf(stderr, "el2al edge_file graph_file matrix_file\n");
 		return -1;
 	}
 
 	std::string file_name = argv[1];
-	std::string adj_file = argv[2];
-	std::string index_file = argv[3];
+	std::string adj_file = std::string(argv[2]) + ".adj";
+	std::string index_file = std::string(argv[2]) + ".index";
+	std::string mat_name = std::string(argv[3]);
 	std::vector<std::string> files;
 	files.push_back(file_name);
 
@@ -402,14 +470,6 @@ int main(int argc, char *argv[])
 	graph->append(*out_adjs->cat());
 	graph->export2(adj_file);
 
-	// Construct 2D partitioning.
-	size_t block_height
-		= ((size_t) std::numeric_limits<unsigned short>::max()) + 1;
-	block_2d_size block_size(block_height, block_height);
-	factor f(ceil(((double) num_vertices) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_vertices);
-	labels->set_data(set_2d_label_operate(block_size));
-	vector_vector::ptr res = out_adjs->groupby(*labels,
-			part_2d_apply_operate(block_size, num_vertices));
+	create_2d_matrix(out_adjs, in_adjs, num_vertices, mat_name);
 	return 0;
 }

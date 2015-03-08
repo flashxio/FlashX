@@ -136,6 +136,34 @@ public:
 	void verify(const block_2d_size &block_size) const;
 };
 
+class sparse_matrix_index
+{
+	struct deleter {
+		void operator()(sparse_matrix_index *p) const{
+			free(p);
+		}
+	};
+
+	matrix_header header;
+	off_t offs[0];
+
+	sparse_matrix_index(const matrix_header &_header): header(_header) {
+	}
+public:
+	typedef std::shared_ptr<sparse_matrix_index> ptr;
+
+	static size_t get_size(size_t num_entries) {
+		return sizeof(sparse_matrix_index)
+			+ num_entries * sizeof(sparse_matrix_index::offs[0]);
+	}
+
+	static ptr create(const matrix_header &header,
+			const std::vector<off_t> &offs);
+
+	size_t get_num_entries() const;
+	void dump(const std::string &file) const;
+};
+
 }
 
 #endif

@@ -17,7 +17,12 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
+#include "log.h"
+
 #include "sparse_matrix_format.h"
+#include "matrix_config.h"
 
 namespace fm
 {
@@ -47,6 +52,50 @@ row_part_iterator sparse_block_2d::append(const row_part_iterator &it,
 	row_part_iterator end_it = it;
 	end_it.next();
 	return end_it;
+}
+
+sparse_matrix_index::ptr sparse_matrix_index::create(const matrix_header &header,
+		const std::vector<off_t> &offs)
+{
+	block_2d_size block_size = header.get_2d_block_size();
+	if (offs.size() != block_size.cal_num_row_blocks(header.get_num_rows()) + 1) {
+		BOOST_LOG_TRIVIAL(error) << "There are an incorrect number of offsets";
+		return sparse_matrix_index::ptr();
+	}
+	void *buf = NULL;
+	int ret = posix_memalign(&buf, PAGE_SIZE, get_size(offs.size()));
+	if (ret) {
+		BOOST_LOG_TRIVIAL(error) << "Can't allocate memory";
+		return sparse_matrix_index::ptr();
+	}
+	sparse_matrix_index *idx = new (buf) sparse_matrix_index(header);
+	for (size_t i = 0; i < offs.size(); i++) 
+		idx->offs[i] = offs[i];
+	return sparse_matrix_index::ptr(idx, deleter());
+}
+
+size_t sparse_matrix_index::get_num_entries() const
+{
+	block_2d_size block_size = header.get_2d_block_size();
+	return block_size.cal_num_row_blocks(header.get_num_rows()) + 1;
+}
+
+void sparse_matrix_index::dump(const std::string &file) const
+{
+	FILE *f = fopen(file.c_str(), "w");
+	if (f == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
+			% file % strerror(errno);
+		return;
+	}
+
+	size_t ret = fwrite(this, get_size(get_num_entries()), 1, f);
+	if (ret == 0) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("can't write to %1%: %2%")
+			% file % strerror(errno);
+		return;
+	}
+	fclose(f);
 }
 
 }
