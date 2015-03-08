@@ -405,23 +405,14 @@ mem_vector::ptr mem_vector::get(type_mem_vector<off_t> &idxs) const
 	return ret;
 }
 
-bool mem_vector::export2(const std::string &file) const
+bool mem_vector::export2(FILE *f) const
 {
-	FILE *f = fopen(file.c_str(), "w");
-	if (f == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't open %1%, error: %1%") % file % strerror(errno);
-		return false;
-	}
-
 	size_t ret = fwrite(arr, get_length(), 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
-				"can't write to %1%, error: %1%") % file % strerror(errno);
+				"can't write, error: %1%") % strerror(errno);
 		return false;
 	}
-
-	fclose(f);
 	return true;
 }
 

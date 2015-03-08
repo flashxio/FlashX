@@ -463,12 +463,16 @@ int main(int argc, char *argv[])
 	vindex->dump(index_file);
 
 	// Construct the file for the adjacency list file.
-	type_mem_vector<char>::ptr graph = type_mem_vector<char>::create(
-			sizeof(fg::graph_header));
-	new (graph->get_raw_arr()) fg::graph_header(header);
-	graph->append(*in_adjs->cat());
-	graph->append(*out_adjs->cat());
-	graph->export2(adj_file);
+	FILE *f_graph = fopen(adj_file.c_str(), "w");
+	if (f_graph == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
+			% adj_file % strerror(errno);
+		return -1;
+	}
+	fwrite(&header, sizeof(header), 1, f_graph);
+	mem_vector::cast(in_adjs->cat())->export2(f_graph);
+	mem_vector::cast(out_adjs->cat())->export2(f_graph);
+	fclose(f_graph);
 
 	create_2d_matrix(out_adjs, in_adjs, num_vertices, mat_name);
 	return 0;

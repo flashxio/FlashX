@@ -101,7 +101,7 @@ public:
 	virtual bool expose_sub_vec(off_t start, size_t length);
 	virtual vector::ptr deep_copy() const;
 
-	bool export2(const std::string &file) const;
+	bool export2(FILE *f) const;
 };
 
 /**
