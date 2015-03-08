@@ -29,6 +29,7 @@
 #include "dense_matrix.h"
 #include "bulk_operate.h"
 #include "matrix_config.h"
+#include "matrix_header.h"
 
 namespace fm
 {

@@ -25,6 +25,7 @@
 #include <memory>
 
 #include "generic_type.h"
+#include "matrix_header.h"
 
 namespace fm
 {
@@ -33,40 +34,6 @@ class bulk_operate;
 class bulk_uoperate;
 class set_operate;
 class arr_apply_operate;
-
-enum matrix_type
-{
-	VECTOR,
-	DENSE,
-	SPARSE,
-};
-
-enum matrix_layout_t
-{
-	L_COL,
-	L_ROW,
-};
-
-/*
- * The matrix header contains the basic information about the matrix
- * when the matrix is stored on disks.
- */
-struct matrix_header
-{
-	union {
-		struct info {
-			matrix_type type;
-			size_t entry_size;
-			size_t nrows;
-			size_t ncols;
-			matrix_layout_t layout;
-			// It doesn't include the entry type, which should be determined by
-			// users at runtime.
-		} d;
-
-		char page[4096];
-	} u;
-};
 
 enum apply_margin
 {

@@ -21,46 +21,10 @@
  */
 
 #include "vertex.h"
+#include "matrix_header.h"
 
 namespace fm
 {
-
-class block_2d_size
-{
-	uint16_t nrow_log;
-	uint16_t ncol_log;
-public:
-	block_2d_size(size_t num_rows, size_t num_cols) {
-		nrow_log = log2(num_rows);
-		ncol_log = log2(num_cols);
-		assert((1 << nrow_log) == num_rows);
-		assert((1 << ncol_log) == num_cols);
-	}
-
-	size_t get_nrow_log() const {
-		return nrow_log;
-	}
-
-	size_t get_ncol_log() const {
-		return ncol_log;
-	}
-
-	size_t get_nrow_mask() const {
-		return get_num_rows() - 1;
-	}
-
-	size_t get_ncol_mask() const {
-		return get_num_cols() - 1;
-	}
-
-	size_t get_num_rows() const {
-		return 1 << nrow_log;
-	}
-
-	size_t get_num_cols() const {
-		return 1 << ncol_log;
-	}
-};
 
 /*
  * This stores part of a row. It doesn't contain any attributes.

@@ -140,12 +140,8 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 
 bool dense_matrix::write_header(FILE *f) const
 {
-	matrix_header header;
-	header.u.d.type = DENSE;
-	header.u.d.entry_size = get_entry_size();
-	header.u.d.nrows = get_num_rows();
-	header.u.d.ncols = get_num_cols();
-	header.u.d.layout = store_layout();
+	matrix_header header(DENSE, get_entry_size(), get_num_rows(),
+			get_num_cols(), store_layout(), get_type());
 
 	size_t ret = fwrite(&header, sizeof(header), 1, f);
 	if (ret == 0) {
@@ -176,20 +172,21 @@ dense_matrix::ptr dense_matrix::load(const std::string &file_name)
 		return dense_matrix::ptr();
 	}
 
-	if (header.u.d.type == SPARSE) {
+	header.verify();
+	if (header.is_sparse()) {
 		fclose(f);
 		BOOST_LOG_TRIVIAL(error) << "The matrix to be loaded is sparse";
 		return dense_matrix::ptr();
 	}
 
-	size_t entry_size = header.u.d.entry_size;
-	size_t nrow = header.u.d.nrows;
-	size_t ncol = header.u.d.ncols;
+	size_t entry_size = header.get_entry_size();
+	size_t nrow = header.get_num_rows();
+	size_t ncol = header.get_num_cols();
 	dense_matrix::ptr m;
-	if (header.u.d.layout == matrix_layout_t::L_ROW)
+	if (header.get_layout() == matrix_layout_t::L_ROW)
 		m = std::static_pointer_cast<dense_matrix>(
 				mem_row_dense_matrix::create(nrow, ncol, entry_size, f));
-	else if (header.u.d.layout == matrix_layout_t::L_COL)
+	else if (header.get_layout() == matrix_layout_t::L_COL)
 		m = std::static_pointer_cast<dense_matrix>(
 				mem_col_dense_matrix::create(nrow, ncol, entry_size, f));
 	else
