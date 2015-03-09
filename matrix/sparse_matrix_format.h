@@ -118,6 +118,10 @@ public:
 		num_rows = 0;
 	}
 
+	size_t get_num_rows() const {
+		return num_rows;
+	}
+
 	row_part_iterator get_iterator() const {
 		return row_part_iterator(row_parts, num_rows);
 	}

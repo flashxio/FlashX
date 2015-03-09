@@ -309,9 +309,11 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 					<= max_block_size - curr_size);
 			it = block->append(it, *part);
 		}
-		// In this case, a block exists even if the block is empty.
-		curr_size += block->get_byte_off(it);
-		block->verify(block_size);
+		// Only the non-empty blocks exist in a block row.
+		if (block->get_num_rows() > 0) {
+			curr_size += block->get_byte_off(it);
+			block->verify(block_size);
+		}
 	}
 	out.resize(curr_size);
 }
