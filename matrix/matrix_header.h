@@ -82,7 +82,7 @@ public:
 		return 1 << ncol_log;
 	}
 
-	size_t cal_num_row_blocks(size_t tot_num_rows) {
+	size_t cal_num_block_rows(size_t tot_num_rows) const {
 		return ceil(((double) tot_num_rows) / get_num_rows());
 	}
 };

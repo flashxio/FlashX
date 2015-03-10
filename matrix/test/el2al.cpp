@@ -317,6 +317,13 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 	out.resize(curr_size);
 }
 
+void verify_2d_matrix(const std::string &mat_file, const std::string &mat_idx_file)
+{
+	sparse_matrix_index::ptr idx = sparse_matrix_index::load(mat_idx_file);
+	sparse_matrix_storage::ptr mat = sparse_matrix_storage::load(mat_file, idx);
+	mat->verify();
+}
+
 void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 		size_t num_vertices, const std::string &mat_name)
 {
@@ -349,7 +356,7 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 
 	// Construct the index file of the adjacency matrix.
 	std::vector<off_t> offsets(res->get_num_vecs() + 1);
-	off_t off = 0;
+	off_t off = sizeof(mheader);
 	for (size_t i = 0; i < res->get_num_vecs(); i++) {
 		offsets[i] = off;
 		off += res->get_length(i);
@@ -358,6 +365,7 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 	sparse_matrix_index::ptr mindex = sparse_matrix_index::create(mheader,
 			offsets);
 	mindex->dump(mat_idx_file);
+	verify_2d_matrix(mat_file, mat_idx_file);
 
 	// Construct the transpose of the adjacency matrix.
 	f_2d = fopen(t_mat_file.c_str(), "w");
@@ -374,7 +382,7 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 
 	// Construct the index file of the adjacency matrix.
 	assert(offsets.size() == res->get_num_vecs() + 1);
-	off = 0;
+	off = sizeof(mheader);
 	for (size_t i = 0; i < res->get_num_vecs(); i++) {
 		offsets[i] = off;
 		off += res->get_length(i);
@@ -382,6 +390,7 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 	offsets[res->get_num_vecs()] = off;
 	mindex = sparse_matrix_index::create(mheader, offsets);
 	mindex->dump(t_mat_idx_file);
+	verify_2d_matrix(t_mat_file, t_mat_idx_file);
 }
 
 int main(int argc, char *argv[])

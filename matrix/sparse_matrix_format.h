@@ -158,6 +158,42 @@ public:
 	void verify(const block_2d_size &block_size) const;
 };
 
+/*
+ * This allows users to iterate the blocks in a block row.
+ */
+class block_row_iterator
+{
+	const sparse_block_2d *block;
+	const sparse_block_2d *end;
+public:
+	/*
+	 * `first' is the first block in the block row.
+	 * `end' is the end of the last block in the block row.
+	 */
+	block_row_iterator(const sparse_block_2d *first, const sparse_block_2d *end) {
+		block = first;
+		this->end = end;
+	}
+
+	bool has_next() const {
+		return block < end;
+	}
+
+	const sparse_block_2d &get_curr() const {
+		return *block;
+	}
+
+	const sparse_block_2d &next() {
+		const sparse_block_2d *orig = block;
+		block = (const sparse_block_2d *) ((const char *) block)
+			+ block->get_size();
+		return *orig;
+	}
+};
+
+/*
+ * This indexes a sparse matrix for easy access to the 2D-partitioned blocks.
+ */
 class sparse_matrix_index
 {
 	struct deleter {
@@ -171,9 +207,19 @@ class sparse_matrix_index
 
 	sparse_matrix_index(const matrix_header &_header): header(_header) {
 	}
+
+	/*
+	 * The number of offset entries in the index.
+	 */
+	size_t get_num_entries() const {
+		return get_num_block_rows() + 1;
+	}
 public:
 	typedef std::shared_ptr<sparse_matrix_index> ptr;
 
+	/*
+	 * Calculate the storage size of the index.
+	 */
 	static size_t get_size(size_t num_entries) {
 		return sizeof(sparse_matrix_index)
 			+ num_entries * sizeof(sparse_matrix_index::offs[0]);
@@ -181,9 +227,44 @@ public:
 
 	static ptr create(const matrix_header &header,
 			const std::vector<off_t> &offs);
+	static ptr load(const std::string &idx_file);
 
-	size_t get_num_entries() const;
+	size_t get_num_block_rows() const;
 	void dump(const std::string &file) const;
+	off_t get_block_row_off(size_t idx) const;
+	const matrix_header &get_header() const {
+		return header;
+	}
+};
+
+class sparse_matrix_storage
+{
+	std::unique_ptr<char[]> data;
+	sparse_matrix_index::ptr index;
+
+	sparse_matrix_storage(std::unique_ptr<char[]> data,
+			sparse_matrix_index::ptr index) {
+		this->data = std::move(data);
+		this->index = index;
+	}
+public:
+	typedef std::shared_ptr<sparse_matrix_storage> ptr;
+
+	static ptr load(const std::string &mat_file,
+			sparse_matrix_index::ptr index);
+
+	block_row_iterator get_block_row_it(size_t idx) const {
+		char *start = data.get() + index->get_block_row_off(idx);
+		char *end = data.get() + index->get_block_row_off(idx + 1);
+		return block_row_iterator((const sparse_block_2d *) start,
+				(const sparse_block_2d *) end);
+	}
+
+	size_t get_num_block_rows() const {
+		return index->get_num_block_rows();
+	}
+
+	void verify() const;
 };
 
 }
