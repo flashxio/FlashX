@@ -319,8 +319,8 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 
 void verify_2d_matrix(const std::string &mat_file, const std::string &mat_idx_file)
 {
-	sparse_matrix_index::ptr idx = sparse_matrix_index::load(mat_idx_file);
-	sparse_matrix_storage::ptr mat = sparse_matrix_storage::load(mat_file, idx);
+	SpM_2d_index::ptr idx = SpM_2d_index::load(mat_idx_file);
+	SpM_2d_storage::ptr mat = SpM_2d_storage::load(mat_file, idx);
 	mat->verify();
 }
 
@@ -363,8 +363,7 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 		off += res->get_length(i);
 	}
 	offsets[res->get_num_vecs()] = off;
-	sparse_matrix_index::ptr mindex = sparse_matrix_index::create(mheader,
-			offsets);
+	SpM_2d_index::ptr mindex = SpM_2d_index::create(mheader, offsets);
 	mindex->dump(mat_idx_file);
 	verify_2d_matrix(mat_file, mat_idx_file);
 
@@ -390,7 +389,7 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 		off += res->get_length(i);
 	}
 	offsets[res->get_num_vecs()] = off;
-	mindex = sparse_matrix_index::create(mheader, offsets);
+	mindex = SpM_2d_index::create(mheader, offsets);
 	mindex->dump(t_mat_idx_file);
 	verify_2d_matrix(t_mat_file, t_mat_idx_file);
 }

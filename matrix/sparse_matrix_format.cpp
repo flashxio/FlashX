@@ -53,33 +53,33 @@ void sparse_block_2d::append(const sparse_row_part &part)
 	rparts_size += part.get_size();
 }
 
-sparse_matrix_index::ptr sparse_matrix_index::create(const matrix_header &header,
+SpM_2d_index::ptr SpM_2d_index::create(const matrix_header &header,
 		const std::vector<off_t> &offs)
 {
 	block_2d_size block_size = header.get_2d_block_size();
 	if (offs.size() != block_size.cal_num_block_rows(header.get_num_rows()) + 1) {
 		BOOST_LOG_TRIVIAL(error) << "There are an incorrect number of offsets";
-		return sparse_matrix_index::ptr();
+		return SpM_2d_index::ptr();
 	}
 	void *buf = NULL;
 	int ret = posix_memalign(&buf, PAGE_SIZE, get_size(offs.size()));
 	if (ret) {
 		BOOST_LOG_TRIVIAL(error) << "Can't allocate memory";
-		return sparse_matrix_index::ptr();
+		return SpM_2d_index::ptr();
 	}
-	sparse_matrix_index *idx = new (buf) sparse_matrix_index(header);
+	SpM_2d_index *idx = new (buf) SpM_2d_index(header);
 	for (size_t i = 0; i < offs.size(); i++) 
 		idx->offs[i] = offs[i];
-	return sparse_matrix_index::ptr(idx, deleter());
+	return SpM_2d_index::ptr(idx, deleter());
 }
 
-size_t sparse_matrix_index::get_num_block_rows() const
+size_t SpM_2d_index::get_num_block_rows() const
 {
 	block_2d_size block_size = header.get_2d_block_size();
 	return block_size.cal_num_block_rows(header.get_num_rows());
 }
 
-void sparse_matrix_index::dump(const std::string &file) const
+void SpM_2d_index::dump(const std::string &file) const
 {
 	FILE *f = fopen(file.c_str(), "w");
 	if (f == NULL) {
@@ -98,7 +98,7 @@ void sparse_matrix_index::dump(const std::string &file) const
 	fclose(f);
 }
 
-off_t sparse_matrix_index::get_block_row_off(size_t idx) const
+off_t SpM_2d_index::get_block_row_off(size_t idx) const
 {
 	if (idx >= get_num_entries()) {
 		BOOST_LOG_TRIVIAL(error) << "get_block_row_off: out of range.";
@@ -107,7 +107,7 @@ off_t sparse_matrix_index::get_block_row_off(size_t idx) const
 	return offs[idx];
 }
 
-sparse_matrix_index::ptr sparse_matrix_index::load(const std::string &idx_file)
+SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)
 {
 	size_t size = safs::native_file(idx_file).get_size();
 	char *data = (char *) malloc(size);
@@ -115,21 +115,21 @@ sparse_matrix_index::ptr sparse_matrix_index::load(const std::string &idx_file)
 	if (f == NULL) {
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
 			% idx_file % strerror(errno);
-		return sparse_matrix_index::ptr();
+		return SpM_2d_index::ptr();
 	}
 	size_t ret = fread(data, size, 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")
 			% idx_file % strerror(errno);
 		fclose(f);
-		return sparse_matrix_index::ptr();
+		return SpM_2d_index::ptr();
 	}
 
 	fclose(f);
-	return ptr((sparse_matrix_index *) data, deleter());
+	return ptr((SpM_2d_index *) data, deleter());
 }
 
-void sparse_matrix_storage::verify() const
+void SpM_2d_storage::verify() const
 {
 	block_2d_size block_size = index->get_header().get_2d_block_size();
 	for (size_t i = 0; i < get_num_block_rows(); i++) {
@@ -141,8 +141,8 @@ void sparse_matrix_storage::verify() const
 	}
 }
 
-sparse_matrix_storage::ptr sparse_matrix_storage::load(const std::string &mat_file,
-			sparse_matrix_index::ptr index)
+SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
+			SpM_2d_index::ptr index)
 {
 	size_t size = safs::native_file(mat_file).get_size();
 	char *data = new char[size];
@@ -150,17 +150,17 @@ sparse_matrix_storage::ptr sparse_matrix_storage::load(const std::string &mat_fi
 	if (f == NULL) {
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
 			% mat_file % strerror(errno);
-		return sparse_matrix_storage::ptr();
+		return SpM_2d_storage::ptr();
 	}
 	size_t ret = fread(data, size, 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")
 			% mat_file % strerror(errno);
 		fclose(f);
-		return sparse_matrix_storage::ptr();
+		return SpM_2d_storage::ptr();
 	}
 	fclose(f);
-	return ptr(new sparse_matrix_storage(std::unique_ptr<char[]>(data), index));
+	return ptr(new SpM_2d_storage(std::unique_ptr<char[]>(data), index));
 }
 
 }

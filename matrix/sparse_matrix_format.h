@@ -202,10 +202,10 @@ public:
 /*
  * This indexes a sparse matrix for easy access to the 2D-partitioned blocks.
  */
-class sparse_matrix_index
+class SpM_2d_index
 {
 	struct deleter {
-		void operator()(sparse_matrix_index *p) const{
+		void operator()(SpM_2d_index *p) const{
 			free(p);
 		}
 	};
@@ -213,7 +213,7 @@ class sparse_matrix_index
 	matrix_header header;
 	off_t offs[0];
 
-	sparse_matrix_index(const matrix_header &_header): header(_header) {
+	SpM_2d_index(const matrix_header &_header): header(_header) {
 	}
 
 	/*
@@ -223,14 +223,14 @@ class sparse_matrix_index
 		return get_num_block_rows() + 1;
 	}
 public:
-	typedef std::shared_ptr<sparse_matrix_index> ptr;
+	typedef std::shared_ptr<SpM_2d_index> ptr;
 
 	/*
 	 * Calculate the storage size of the index.
 	 */
 	static size_t get_size(size_t num_entries) {
-		return sizeof(sparse_matrix_index)
-			+ num_entries * sizeof(sparse_matrix_index::offs[0]);
+		return sizeof(SpM_2d_index)
+			+ num_entries * sizeof(SpM_2d_index::offs[0]);
 	}
 
 	static ptr create(const matrix_header &header,
@@ -245,21 +245,21 @@ public:
 	}
 };
 
-class sparse_matrix_storage
+class SpM_2d_storage
 {
 	std::unique_ptr<char[]> data;
-	sparse_matrix_index::ptr index;
+	SpM_2d_index::ptr index;
 
-	sparse_matrix_storage(std::unique_ptr<char[]> data,
-			sparse_matrix_index::ptr index) {
+	SpM_2d_storage(std::unique_ptr<char[]> data,
+			SpM_2d_index::ptr index) {
 		this->data = std::move(data);
 		this->index = index;
 	}
 public:
-	typedef std::shared_ptr<sparse_matrix_storage> ptr;
+	typedef std::shared_ptr<SpM_2d_storage> ptr;
 
 	static ptr load(const std::string &mat_file,
-			sparse_matrix_index::ptr index);
+			SpM_2d_index::ptr index);
 
 	block_row_iterator get_block_row_it(size_t idx) const {
 		char *start = data.get() + index->get_block_row_off(idx);
