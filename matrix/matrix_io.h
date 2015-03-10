@@ -45,6 +45,10 @@ public:
 	}
 };
 
+/*
+ * This represents a matrix block that we want to access. This data structure
+ * maintains the mapping of the matrix block to a data region on disks.
+ */
 class matrix_io
 {
 	matrix_loc top_left;
@@ -95,6 +99,9 @@ public:
 
 class sparse_matrix;
 
+/*
+ * This represents a minimal row block that we can access from disks.
+ */
 class row_block
 {
 	off_t off;
@@ -119,6 +126,9 @@ class matrix_io_generator
 public:
 	typedef std::shared_ptr<matrix_io_generator> ptr;
 
+	/*
+	 * This generates an I/O generator that accesses a matrix by rows.
+	 */
 	static matrix_io_generator::ptr create(
 			const std::vector<row_block> &_blocks, size_t tot_num_rows,
 			size_t tot_num_cols, int file_id, int gen_id, int num_gens);

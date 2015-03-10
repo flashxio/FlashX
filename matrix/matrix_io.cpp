@@ -26,9 +26,17 @@
 namespace fm
 {
 
+/*
+ * This represents a collection of row blocks that we usually access with
+ * a single I/O request. However, due to load balancing, we sometimes
+ * need to access the collection of row blocks with many smaller I/O
+ * requests. In this case, each row block is accessed by one I/O request.
+ */
 class large_row_io
 {
+	// A reference to the row block vector of the graph.
 	const std::vector<row_block> *blocks;
+	// The offset of the first row block in the row block vector.
 	off_t first_row_block;
 	size_t num_row_blocks;
 	size_t tot_num_rows;
@@ -41,6 +49,9 @@ public:
 		this->tot_num_rows = tot_num_rows;
 	}
 
+	/*
+	 * Create an I/O request that access all row blocks in the collection.
+	 */
 	matrix_io get_io(size_t tot_num_cols, int file_id) {
 		off_t first_row_id = first_row_block * matrix_conf.get_row_block_size();
 		matrix_loc top_left(first_row_id, 0);
@@ -56,6 +67,9 @@ public:
 		return ret;
 	}
 
+	/*
+	 * Create an I/O request that accesses a single row block.
+	 */
 	matrix_io get_sub_io(size_t tot_num_cols, int file_id) {
 		off_t first_row_id = first_row_block * matrix_conf.get_row_block_size();
 		matrix_loc top_left(first_row_id, 0);
@@ -79,6 +93,13 @@ public:
 	}
 };
 
+/*
+ * The I/O generator that access a matrix on disks by rows.
+ * An I/O generator are assigned a number of row blocks that it can accesses.
+ * Each thread has an I/O generator and gets I/O requests from its own I/O
+ * generator. When load balancing kicks in, a thread will try to steal I/O requests
+ * from other threads' I/O generators.
+ */
 class row_io_generator: public matrix_io_generator
 {
 	std::vector<large_row_io> ios;
@@ -93,6 +114,10 @@ public:
 			size_t tot_num_cols, int file_id, int gen_id,
 			int num_gens);
 
+	/*
+	 * This method is called by the worker thread that owns the I/O generator
+	 * to get I/O requests.
+	 */
 	virtual matrix_io get_next_io() {
 		matrix_io ret;
 		pthread_spin_lock(&lock);
@@ -107,6 +132,10 @@ public:
 		return ret;
 	}
 
+	/*
+	 * This method is called by other worker threads. It's used for load
+	 * balancing.
+	 */
 	virtual matrix_io steal_io() {
 		matrix_io ret;
 		pthread_spin_lock(&lock);
