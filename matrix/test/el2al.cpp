@@ -351,7 +351,8 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 		return;
 	}
 	fwrite(&mheader, sizeof(mheader), 1, f_2d);
-	mem_vector::cast(res->cat())->export2(f_2d);
+	bool ret = mem_vector::cast(res->cat())->export2(f_2d);
+	assert(ret);
 	fclose(f_2d);
 
 	// Construct the index file of the adjacency matrix.
@@ -377,7 +378,8 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 	fwrite(&mheader, sizeof(mheader), 1, f_2d);
 	res = in_adjs->groupby(*labels, part_2d_apply_operate(block_size,
 				num_vertices));
-	mem_vector::cast(res->cat())->export2(f_2d);
+	ret = mem_vector::cast(res->cat())->export2(f_2d);
+	assert(ret);
 	fclose(f_2d);
 
 	// Construct the index file of the adjacency matrix.
@@ -480,8 +482,10 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 	fwrite(&header, sizeof(header), 1, f_graph);
-	mem_vector::cast(in_adjs->cat())->export2(f_graph);
-	mem_vector::cast(out_adjs->cat())->export2(f_graph);
+	bool ret = mem_vector::cast(in_adjs->cat())->export2(f_graph);
+	assert(ret);
+	ret = mem_vector::cast(out_adjs->cat())->export2(f_graph);
+	assert(ret);
 	fclose(f_graph);
 
 	create_2d_matrix(out_adjs, in_adjs, num_vertices, mat_name);
