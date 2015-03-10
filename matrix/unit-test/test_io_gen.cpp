@@ -28,7 +28,7 @@ void run_test()
 	std::vector<matrix_io> ios;
 	std::vector<matrix_io_generator::ptr> io_gens(num_gens);
 	for (int i = 0; i < num_gens; i++) {
-		row_block_mapper mapper(blocks.size(), i, num_gens,
+		row_block_mapper mapper(blocks, i, num_gens,
 				matrix_conf.get_rb_io_size());
 		io_gens[i] = matrix_io_generator::create(blocks,
 				num_rows, 1000, 0, mapper);

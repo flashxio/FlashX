@@ -298,9 +298,12 @@ matrix_io_generator::ptr matrix_io_generator::create(SpM_2d_index::ptr idx,
 	return matrix_io_generator::ptr(new b2d_io_generator(idx, file_id, mapper));
 }
 
-row_block_mapper::row_block_mapper(size_t num_rbs, int gen_id, int num_gens,
-		size_t range_size)
+row_block_mapper::row_block_mapper(const std::vector<row_block> &rblocks,
+		int gen_id, int num_gens, size_t range_size)
 {
+	// The last row block in the vector indicates the end of the row block
+	// vector, so the true number of row blocks is one fewer.
+	size_t num_rbs = rblocks.size() - 1;
 	size_t i = gen_id * range_size;
 	// We now need to jump to the next row block that belongs to
 	// the current I/O generator.

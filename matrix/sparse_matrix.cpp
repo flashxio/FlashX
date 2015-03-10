@@ -114,7 +114,7 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
 	for (int i = 0; i < num_workers; i++) {
-		row_block_mapper mapper(blocks.size(), i, num_workers,
+		row_block_mapper mapper(blocks, i, num_workers,
 				matrix_conf.get_rb_io_size());
 		io_gens[i] = matrix_io_generator::create(blocks, get_num_rows(),
 				get_num_cols(), get_file_id(), mapper);
@@ -221,7 +221,7 @@ void sparse_asym_matrix::compute(task_creator::ptr creator) const
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
 	for (int i = 0; i < num_workers; i++) {
-		row_block_mapper mapper(transposed ? in_blocks.size() : out_blocks.size(),
+		row_block_mapper mapper(transposed ? in_blocks : out_blocks,
 				i, num_workers, matrix_conf.get_rb_io_size());
 		io_gens[i] = matrix_io_generator::create(
 				transposed ? in_blocks : out_blocks, get_num_rows(),

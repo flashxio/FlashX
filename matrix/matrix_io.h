@@ -137,7 +137,8 @@ public:
 private:
 	std::vector<rb_range> ranges;
 public:
-	row_block_mapper(size_t num_rbs, int gen_id, int num_gens, size_t range_size);
+	row_block_mapper(const std::vector<row_block> &rblocks, int gen_id,
+			int num_gens, size_t range_size);
 
 	size_t get_num_ranges() const {
 		return ranges.size();
