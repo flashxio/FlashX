@@ -34,6 +34,10 @@ class sparse_row_part
 	uint16_t rel_row_idx;
 	uint16_t num_non_zeros;
 	uint16_t rel_col_idxs[0];
+
+	// The row part can only be allocated in the heap. The copy constructor
+	// doesn't make any sense for this class.
+	sparse_row_part(const sparse_row_part &part) = delete;
 public:
 	static size_t get_size(size_t num_non_zeros) {
 		return sizeof(sparse_row_part) + sizeof(uint16_t) * num_non_zeros;
@@ -114,6 +118,10 @@ class sparse_block_2d
 	uint32_t rparts_size;
 	// This is where the row parts are serialized.
 	char row_parts[0];
+
+	// The 2D-partitioned block has to be allowed in the heap. The copy
+	// constructor doesn't make sense for it.
+	sparse_block_2d(const sparse_block_2d &block) = delete;
 public:
 	sparse_block_2d(uint32_t block_row_idx, uint32_t block_col_idx) {
 		this->block_row_idx = block_row_idx;
