@@ -285,7 +285,6 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 		sparse_block_2d *block
 			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
 					block_row_id, col_idx / block_width);
-		row_part_iterator it = block->get_iterator();
 		for (size_t row_idx = 0; row_idx < val.get_num_vecs(); row_idx++) {
 			const fg::ext_mem_undirected_vertex *v
 				= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(row_idx);
@@ -305,13 +304,13 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 			assert(part->get_size() <= max_row_size);
 			neigh_idxs[row_idx] = idx;
 			num_non_zeros += part->get_num_non_zeros();
-			assert(block->get_byte_off(it) + part->get_size()
+			assert(block->get_size() + part->get_size()
 					<= max_block_size - curr_size);
-			it = block->append(it, *part);
+			block->append(*part);
 		}
 		// Only the non-empty blocks exist in a block row.
-		if (block->get_num_rows() > 0) {
-			curr_size += block->get_byte_off(it);
+		if (!block->is_empty()) {
+			curr_size += block->get_size();
 			block->verify(block_size);
 		}
 	}

@@ -71,14 +71,14 @@ public:
  */
 class row_part_iterator
 {
-	size_t num_rows;
 	size_t curr_idx;
 	const char *curr_row_part;
+	const char *rpart_end;
 public:
-	row_part_iterator(const char *row_part_start, size_t num_rows) {
-		this->num_rows = num_rows;
+	row_part_iterator(const char *row_part_start, size_t rparts_size) {
 		curr_idx = 0;
 		curr_row_part = row_part_start;
+		rpart_end = row_part_start + rparts_size;
 	}
 
 	size_t get_row_idx() const {
@@ -86,7 +86,7 @@ public:
 	}
 
 	bool has_next() const {
-		return curr_idx < num_rows - 1;
+		return curr_row_part < rpart_end;
 	}
 
 	const sparse_row_part &get_curr() const {
@@ -94,9 +94,10 @@ public:
 	}
 
 	const sparse_row_part &next() {
+		const char *orig = curr_row_part;
 		curr_row_part += get_curr().get_size();
 		curr_idx++;
-		return *(sparse_row_part *) curr_row_part;
+		return *(sparse_row_part *) orig;
 	}
 };
 
@@ -108,26 +109,43 @@ class sparse_block_2d
 {
 	uint32_t block_row_idx;
 	uint32_t block_col_idx;
-	uint32_t num_rows;
+	// TODO I need to make sure 32-bits are enough. Normally, they should be.
+	// This is the total size of all row parts in the block.
+	uint32_t rparts_size;
 	// This is where the row parts are serialized.
 	char row_parts[0];
 public:
 	sparse_block_2d(uint32_t block_row_idx, uint32_t block_col_idx) {
 		this->block_row_idx = block_row_idx;
 		this->block_col_idx = block_col_idx;
-		num_rows = 0;
+		rparts_size = 0;
 	}
 
-	size_t get_num_rows() const {
-		return num_rows;
+	size_t get_block_row_idx() const {
+		return block_row_idx;
+	}
+
+	size_t get_block_col_idx() const {
+		return block_col_idx;
+	}
+
+	size_t get_rparts_size() const {
+		return rparts_size;
+	}
+
+	bool is_empty() const {
+		return get_rparts_size() == 0;
+	}
+
+	size_t get_size() const {
+		return sizeof(*this) + get_rparts_size();
 	}
 
 	row_part_iterator get_iterator() const {
-		return row_part_iterator(row_parts, num_rows);
+		return row_part_iterator(row_parts, get_rparts_size());
 	}
 
-	row_part_iterator append(const row_part_iterator &it,
-			const sparse_row_part &part);
+	void append(const sparse_row_part &part);
 
 	/*
 	 * Calculate the offset (in bytes) of the current row
