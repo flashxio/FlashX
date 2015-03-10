@@ -25,6 +25,7 @@
 #include <memory>
 
 #include "vertex.h"
+#include "sparse_matrix_format.h"
 
 namespace fm
 {
@@ -164,6 +165,12 @@ public:
 	static matrix_io_generator::ptr create(
 			const std::vector<row_block> &_blocks, size_t tot_num_rows,
 			size_t tot_num_cols, int file_id, const row_block_mapper &mapper);
+	/*
+	 * This generates an I/O generator that accesses a matrix partitioned
+	 * into blocks.
+	 */
+	static matrix_io_generator::ptr create(SpM_2d_index::ptr idx, int file_id,
+			const row_block_mapper &mapper);
 
 	// Get the next I/O access in the current worker thread.
 	virtual matrix_io get_next_io() = 0;

@@ -177,12 +177,125 @@ row_io_generator::row_io_generator(const std::vector<row_block> &blocks,
 	this->file_id = file_id;
 }
 
+/*
+ * The I/O generator for accessing 2D-partitioned blocks.
+ * A generated I/O request may access multiple 2D-partitioned blocks.
+ * Each I/O generator still accesses all blocks in a block row.
+ */
+class b2d_io_generator: public matrix_io_generator
+{
+	// This contains the information of a block row.
+	struct block_row {
+		// The Id of the block row.
+		uint32_t row_block_id;
+		// The offset of the block row on the disks.
+		off_t off;
+		// The size of the block row on the disks.
+		size_t size;
+
+		bool operator<(const block_row &row) const {
+			return this->size > row.size;
+		}
+	};
+
+	pthread_spinlock_t lock;
+	// The block rows should be sorted in the descending order of
+	// block row sizes.
+	std::vector<block_row> brows;
+	// The offset of the block row currently being accessed.
+	// For normal case, when a block row is accessed by the local worker
+	// thread, the offset increases by 1.
+	std::atomic<size_t> brow_off;
+	// The current number of block rows in the vector.
+	// When another worker thread steals block rows, it steals them from
+	// the end of the vector.
+	std::atomic<size_t> num_brows;
+
+	block_2d_size block_size;
+	int file_id;
+	size_t tot_num_cols;
+public:
+	b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
+			const row_block_mapper &mapper);
+
+	virtual matrix_io get_next_io();
+	virtual matrix_io steal_io();
+
+	virtual bool has_next_io() {
+		return brow_off < num_brows;
+	}
+};
+
+b2d_io_generator::b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
+		const row_block_mapper &mapper): block_size(
+			idx->get_header().get_2d_block_size())
+{
+	this->tot_num_cols = idx->get_header().get_num_cols();
+	this->file_id = file_id;
+	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
+	for (size_t i = 0; i < mapper.get_num_ranges(); i++) {
+		struct block_row brow;
+		row_block_mapper::rb_range range = mapper.get_range(i);
+		// block row is much larger now, so we only need to have one block row
+		// in a range.
+		assert(range.num == 1);
+		brow.row_block_id = range.idx;
+		brow.off = idx->get_block_row_off(range.idx);
+		brow.size = idx->get_block_row_off(
+				range.idx + 1) - idx->get_block_row_off(range.idx);
+		brows.push_back(brow);
+	}
+	// Sort the block rows based on the size of block rows.
+	std::sort(brows.begin(), brows.end());
+}
+
+matrix_io b2d_io_generator::get_next_io()
+{
+	matrix_io ret;
+	pthread_spin_lock(&lock);
+	// It's possible that all IOs have been stolen.
+	// We have to check it.
+	if (brow_off < num_brows) {
+		block_row brow = brows[brow_off++];
+		matrix_loc mat_loc(brow.row_block_id * block_size.get_num_rows(), 0);
+		safs::data_loc_t data_loc(file_id, brow.off);
+		ret = matrix_io(mat_loc, block_size.get_num_rows(), tot_num_cols,
+				data_loc, brow.size);
+	}
+	pthread_spin_unlock(&lock);
+	return ret;
+}
+
+matrix_io b2d_io_generator::steal_io()
+{
+	matrix_io ret;
+	pthread_spin_lock(&lock);
+	// It's possible that all IOs have been stolen.
+	// We have to check it.
+	if (brow_off < num_brows) {
+		block_row brow = brows[num_brows - 1];
+		num_brows--;
+		matrix_loc mat_loc(brow.row_block_id * block_size.get_num_rows(), 0);
+		safs::data_loc_t data_loc(file_id, brow.off);
+		ret = matrix_io(mat_loc, block_size.get_num_rows(), tot_num_cols,
+				data_loc, brow.size);
+	}
+	pthread_spin_unlock(&lock);
+	return ret;
+}
+
 matrix_io_generator::ptr matrix_io_generator::create(
 		const std::vector<row_block> &_blocks, size_t tot_num_rows,
 		size_t tot_num_cols, int file_id, const row_block_mapper &mapper)
 {
 	return matrix_io_generator::ptr(new row_io_generator(_blocks,
 				tot_num_rows, tot_num_cols, file_id, mapper));
+}
+
+matrix_io_generator::ptr matrix_io_generator::create(SpM_2d_index::ptr idx,
+		int file_id, const row_block_mapper &mapper)
+{
+	return matrix_io_generator::ptr(new b2d_io_generator(idx, file_id, mapper));
 }
 
 row_block_mapper::row_block_mapper(size_t num_rbs, int gen_id, int num_gens,
