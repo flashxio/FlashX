@@ -21,4 +21,7 @@ add_library(FMatrix STATIC
 	generic_type.cpp
 	mem_data_frame.cpp
 	mem_vector_vector.cpp
+	vector.cpp
+	matrix_header.cpp
+	sparse_matrix_format.cpp
 )
