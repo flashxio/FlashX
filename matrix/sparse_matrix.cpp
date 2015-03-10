@@ -169,26 +169,45 @@ sparse_matrix::ptr sparse_asym_matrix::create(fg::FG_graph::ptr fg)
 	// Initialize vertex index.
 	fg::vertex_index::ptr index = fg->get_index_data();
 	assert(index != NULL);
-	assert(index->get_graph_header().is_directed_graph()
-			&& !index->is_compressed());
-	fg::directed_vertex_index::ptr dindex = fg::directed_vertex_index::cast(index);
+	assert(index->get_graph_header().is_directed_graph());
 
-	fg::vsize_t num_vertices = dindex->get_num_vertices();
+	fg::vsize_t num_vertices = index->get_num_vertices();
 	sparse_asym_matrix *m = new sparse_asym_matrix(fg->get_graph_io_factory(
 				safs::REMOTE_ACCESS), num_vertices);
 
-	// Generate the matrix index from the vertex index.
-	for (size_t i = 0; i < num_vertices; i += matrix_conf.get_row_block_size()) {
-		fg::ext_mem_vertex_info info = dindex->get_vertex_info_out(i);
-		m->out_blocks.emplace_back(info.get_off());
-
-		info = dindex->get_vertex_info_in(i);
-		m->in_blocks.emplace_back(info.get_off());
+	if (index->is_compressed()) {
+		fg::in_mem_cdirected_vertex_index::ptr dindex
+			= fg::in_mem_cdirected_vertex_index::create(*index);
+		for (size_t i = 0; i < num_vertices;
+				i += matrix_conf.get_row_block_size()) {
+			fg::directed_vertex_entry ventry = dindex->get_vertex(i);
+			m->out_blocks.emplace_back(ventry.get_out_off());
+			m->in_blocks.emplace_back(ventry.get_in_off());
+		}
+		fg::directed_vertex_entry ventry = dindex->get_vertex(num_vertices - 1);
+		m->out_blocks.emplace_back(ventry.get_out_off()
+				+ dindex->get_out_size(num_vertices - 1));
+		m->in_blocks.emplace_back(ventry.get_in_off()
+				+ dindex->get_in_size(num_vertices - 1));
 	}
-	fg::ext_mem_vertex_info info = dindex->get_vertex_info_out(num_vertices - 1);
-	m->out_blocks.emplace_back(info.get_off() + info.get_size());
-	info = dindex->get_vertex_info_in(num_vertices - 1);
-	m->in_blocks.emplace_back(info.get_off() + info.get_size());
+	else {
+		fg::directed_vertex_index::ptr dindex
+			= fg::directed_vertex_index::cast(index);
+		// Generate the matrix index from the vertex index.
+		for (size_t i = 0; i < num_vertices;
+				i += matrix_conf.get_row_block_size()) {
+			fg::ext_mem_vertex_info info = dindex->get_vertex_info_out(i);
+			m->out_blocks.emplace_back(info.get_off());
+
+			info = dindex->get_vertex_info_in(i);
+			m->in_blocks.emplace_back(info.get_off());
+		}
+		fg::ext_mem_vertex_info info
+			= dindex->get_vertex_info_out(num_vertices - 1);
+		m->out_blocks.emplace_back(info.get_off() + info.get_size());
+		info = dindex->get_vertex_info_in(num_vertices - 1);
+		m->in_blocks.emplace_back(info.get_off() + info.get_size());
+	}
 
 	return sparse_matrix::ptr(m);
 }
