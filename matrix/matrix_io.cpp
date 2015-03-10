@@ -111,8 +111,7 @@ class row_io_generator: public matrix_io_generator
 	pthread_spinlock_t lock;
 public:
 	row_io_generator(const std::vector<row_block> &_blocks, size_t tot_num_rows,
-			size_t tot_num_cols, int file_id, int gen_id,
-			int num_gens);
+			size_t tot_num_cols, int file_id, const row_block_mapper &mapper);
 
 	/*
 	 * This method is called by the worker thread that owns the I/O generator
@@ -158,23 +157,20 @@ public:
 };
 
 row_io_generator::row_io_generator(const std::vector<row_block> &blocks,
-		size_t tot_num_rows, size_t tot_num_cols, int file_id, int gen_id,
-		int num_gens)
+		size_t tot_num_rows, size_t tot_num_cols, int file_id,
+		const row_block_mapper &mapper)
 {
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-	size_t i = gen_id * matrix_conf.get_rb_io_size();
-	// We now need to jump to the next row block that belongs to
-	// the current I/O generator.
 	// blocks[blocks.size() - 1] is an empty block. It only indicates
 	// the end of the matrix file.
 	// blocks[blocks.size() - 2] is the last row block. It's possible that
 	// it's smaller than the full-size row block.
-	for (; i < blocks.size() - 1; i += matrix_conf.get_rb_io_size() * num_gens) {
-		size_t num_row_blocks = std::min((size_t) matrix_conf.get_rb_io_size(),
-					blocks.size() - 1 - i);
+	for (size_t i = 0; i < mapper.get_num_ranges(); i++) {
+		size_t num_row_blocks = mapper.get_range(i).num;
+		off_t rb_off = mapper.get_range(i).idx;
 		size_t num_rows = std::min(num_row_blocks * matrix_conf.get_row_block_size(),
-				tot_num_rows - i * matrix_conf.get_row_block_size());
-		ios.emplace_back(blocks, i, num_row_blocks, num_rows);
+				tot_num_rows - rb_off * matrix_conf.get_row_block_size());
+		ios.emplace_back(blocks, rb_off, num_row_blocks, num_rows);
 	}
 	curr_io_off = 0;
 	this->tot_num_cols = tot_num_cols;
@@ -183,10 +179,24 @@ row_io_generator::row_io_generator(const std::vector<row_block> &blocks,
 
 matrix_io_generator::ptr matrix_io_generator::create(
 		const std::vector<row_block> &_blocks, size_t tot_num_rows,
-		size_t tot_num_cols, int file_id, int gen_id, int num_gens)
+		size_t tot_num_cols, int file_id, const row_block_mapper &mapper)
 {
 	return matrix_io_generator::ptr(new row_io_generator(_blocks,
-				tot_num_rows, tot_num_cols, file_id, gen_id, num_gens));
+				tot_num_rows, tot_num_cols, file_id, mapper));
+}
+
+row_block_mapper::row_block_mapper(size_t num_rbs, int gen_id, int num_gens,
+		size_t range_size)
+{
+	size_t i = gen_id * range_size;
+	// We now need to jump to the next row block that belongs to
+	// the current I/O generator.
+	for (; i < num_rbs; i += range_size * num_gens) {
+		struct rb_range range;
+		range.idx = i;
+		range.num = std::min(range_size, num_rbs - i);
+		ranges.push_back(range);
+	}
 }
 
 }

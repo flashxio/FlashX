@@ -101,6 +101,7 @@ class sparse_matrix;
 
 /*
  * This represents a minimal row block that we can access from disks.
+ * It's used for the matrix partitioned in one dimension.
  */
 class row_block
 {
@@ -112,6 +113,37 @@ public:
 
 	off_t get_offset() const {
 		return off;
+	}
+};
+
+/*
+ * This maps row blocks to different I/O generators. It also defines how
+ * row blocks are distributed across threads.
+ */
+class row_block_mapper
+{
+public:
+	/*
+	 * A range of row blocks that are accessed together.
+	 */
+	struct rb_range
+	{
+		// The index of the row block in array.
+		off_t idx;
+		// The number of row blocks in the range.
+		size_t num;
+	};
+private:
+	std::vector<rb_range> ranges;
+public:
+	row_block_mapper(size_t num_rbs, int gen_id, int num_gens, size_t range_size);
+
+	size_t get_num_ranges() const {
+		return ranges.size();
+	}
+
+	rb_range get_range(off_t idx) const {
+		return ranges[idx];
 	}
 };
 
@@ -131,7 +163,7 @@ public:
 	 */
 	static matrix_io_generator::ptr create(
 			const std::vector<row_block> &_blocks, size_t tot_num_rows,
-			size_t tot_num_cols, int file_id, int gen_id, int num_gens);
+			size_t tot_num_cols, int file_id, const row_block_mapper &mapper);
 
 	// Get the next I/O access in the current worker thread.
 	virtual matrix_io get_next_io() = 0;
