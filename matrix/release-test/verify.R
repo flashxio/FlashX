@@ -546,8 +546,8 @@ stopifnot(sum(fm.conv.FM2R(fm.res) == res) == length(res))
 
 # Test on a sparse matrix
 print("load sparse matrix")
-ig <- read.graph("data/wiki-Vote.txt", directed=TRUE)
-fg <- fg.load.graph("data/wiki.adj-v4", "data/wiki.index-v4")
+ig <- read.graph("wiki-Vote1.txt", directed=TRUE)
+fg <- fg.load.graph("wiki-Vote1.txt", directed=TRUE)
 fm <- fm.get.matrix(fg)
 adj.m <- get.adjacency(ig)
 stopifnot(!fm.is.sym(fm))
