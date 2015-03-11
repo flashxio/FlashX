@@ -232,6 +232,7 @@ b2d_io_generator::b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
 {
 	this->tot_num_cols = idx->get_header().get_num_cols();
 	this->file_id = file_id;
+	this->brow_off = 0;
 	pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
 	for (size_t i = 0; i < mapper.get_num_ranges(); i++) {
 		struct block_row brow;
@@ -247,6 +248,7 @@ b2d_io_generator::b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
 	}
 	// Sort the block rows based on the size of block rows.
 	std::sort(brows.begin(), brows.end());
+	this->num_brows = brows.size();
 }
 
 matrix_io b2d_io_generator::get_next_io()
