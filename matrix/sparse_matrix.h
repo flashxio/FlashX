@@ -216,6 +216,14 @@ public:
 	}
 };
 
+/*
+ * This is a base class for a sparse matrix. It provides a set of functions
+ * to perform computation on the sparse matrix. Currently, it has matrix
+ * vector multiplication and matrix matrix multiplication.
+ * We assume the sparse matrix is stored in external memory. If the matrix
+ * is in memory, we can use in_mem_io to access the sparse matrix in memory
+ * while reusing all the existing code for computation.
+ */
 class sparse_matrix
 {
 	// Whether the matrix is represented by the FlashGraph format.
@@ -226,31 +234,22 @@ class sparse_matrix
 	// If the matrix is stored in the native format and is partitioned
 	// in two dimensions, we need to know the block size.
 	block_2d_size block_size;
-	safs::file_io_factory::shared_ptr factory;
 protected:
 	// This constructor is used for the sparse matrix stored
 	// in the FlashGraph format.
-	sparse_matrix(safs::file_io_factory::shared_ptr factory, size_t num_vertices,
-			bool symmetric) {
-		this->factory = factory;
+	sparse_matrix(size_t num_vertices, bool symmetric) {
 		this->nrows = num_vertices;
 		this->ncols = num_vertices;
 		this->symmetric = symmetric;
 		this->is_fg = true;
 	}
 
-	sparse_matrix(safs::file_io_factory::shared_ptr factory, size_t nrows,
-			size_t ncols, bool symmetric,
+	sparse_matrix(size_t nrows, size_t ncols, bool symmetric,
 			const block_2d_size &_block_size): block_size(_block_size) {
 		this->symmetric = symmetric;
 		this->is_fg = false;
 		this->nrows = nrows;
 		this->ncols = ncols;
-		this->factory = factory;
-	}
-
-	safs::file_io_factory::shared_ptr get_io_factory() const {
-		return factory;
 	}
 public:
 	typedef std::shared_ptr<sparse_matrix> ptr;
@@ -258,9 +257,37 @@ public:
 	virtual ~sparse_matrix() {
 	}
 
+	/*
+	 * This creates a sparse matrix sotred in the FlashGraph format.
+	 */
 	static ptr create(fg::FG_graph::ptr);
+	/*
+	 * This create a symmetric sparse matrix partitioned in 2D dimensions.
+	 */
+	static ptr create(SpM_2d_index::ptr, SpM_2d_storage::ptr);
+	/*
+	 * This creates an asymmetric sparse matrix partitioned in 2D dimensions.
+	 */
+	static ptr create(SpM_2d_index::ptr index, SpM_2d_storage::ptr mat,
+			SpM_2d_index::ptr t_index, SpM_2d_storage::ptr t_mat);
 
-	virtual void compute(task_creator::ptr creator) const = 0;
+	/*
+	 * When customizing computatin on a sparse matrix (regardless of
+	 * the storage format and the computation), we need to define two things:
+	 * how data is accessed and what computation runs on the data fetched
+	 * from the external memory. matrix_io_generator defines data access
+	 * and compute_task defines the computation.
+	 */
+	void compute(task_creator::ptr creator) const;
+	/*
+	 * This method defines how data in the matrix is accessed.
+	 * Since we need to perform computation in parallel, we need to have
+	 * a matrix I/O generator for each thread.
+	 */
+	virtual void init_io_gens(
+			std::vector<matrix_io_generator::ptr> &io_gens) const = 0;
+
+	virtual safs::file_io_factory::shared_ptr get_io_factory() const = 0;
 
 	size_t get_num_rows() const {
 		return nrows;
@@ -272,10 +299,6 @@ public:
 
 	bool is_symmetric() const {
 		return symmetric;
-	}
-
-	int get_file_id() const {
-		return factory->get_file_id();
 	}
 
 	virtual void transpose() = 0;

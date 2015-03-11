@@ -24,6 +24,8 @@
 
 #include <memory>
 
+#include "io_request.h"
+
 #include "vertex.h"
 #include "sparse_matrix_format.h"
 
@@ -117,6 +119,8 @@ public:
 	}
 };
 
+class SpM_2d_index;
+
 /*
  * This maps row blocks to different I/O generators. It also defines how
  * row blocks are distributed across threads.
@@ -136,9 +140,18 @@ public:
 	};
 private:
 	std::vector<rb_range> ranges;
+
+	void init(size_t num_rbs, int gen_id, int num_gens, size_t range_size);
 public:
 	row_block_mapper(const std::vector<row_block> &rblocks, int gen_id,
-			int num_gens, size_t range_size);
+			int num_gens, size_t range_size) {
+		// The last row block in the vector indicates the end of the row block
+		// vector, so the true number of row blocks is one fewer.
+		size_t num_rbs = rblocks.size() - 1;
+		init(num_rbs, gen_id, num_gens, range_size);
+	}
+	row_block_mapper(const SpM_2d_index &index, int gen_id, int num_gens,
+			size_t range_size);
 
 	size_t get_num_ranges() const {
 		return ranges.size();

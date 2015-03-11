@@ -21,6 +21,7 @@
 
 #include "log.h"
 #include "native_file.h"
+#include "in_mem_io.h"
 
 #include "sparse_matrix_format.h"
 #include "matrix_config.h"
@@ -160,7 +161,14 @@ SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
 		return SpM_2d_storage::ptr();
 	}
 	fclose(f);
-	return ptr(new SpM_2d_storage(std::unique_ptr<char[]>(data), index));
+	return ptr(new SpM_2d_storage(std::unique_ptr<char[]>(data), index,
+				mat_file));
+}
+
+safs::file_io_factory::shared_ptr SpM_2d_storage::create_io_factory() const
+{
+	return safs::file_io_factory::shared_ptr(new safs::in_mem_io_factory(
+				data.get(), mat_file_id, mat_name));
 }
 
 }

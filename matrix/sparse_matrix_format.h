@@ -23,6 +23,11 @@
 #include "vertex.h"
 #include "matrix_header.h"
 
+namespace safs
+{
+	class file_io_factory;
+}
+
 namespace fm
 {
 
@@ -251,13 +256,18 @@ public:
 
 class SpM_2d_storage
 {
+	std::string mat_name;
+	int mat_file_id;
+
 	std::unique_ptr<char[]> data;
 	SpM_2d_index::ptr index;
 
 	SpM_2d_storage(std::unique_ptr<char[]> data,
-			SpM_2d_index::ptr index) {
+			SpM_2d_index::ptr index, const std::string mat_name) {
 		this->data = std::move(data);
 		this->index = index;
+		this->mat_name = mat_name;
+		this->mat_file_id = -1;
 	}
 public:
 	typedef std::shared_ptr<SpM_2d_storage> ptr;
@@ -277,6 +287,8 @@ public:
 	}
 
 	void verify() const;
+
+	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 };
 
 }

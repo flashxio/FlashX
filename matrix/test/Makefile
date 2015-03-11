@@ -22,10 +22,13 @@ CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLA
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lz -lnuma -laio
 
-all: test-SpMV test-mem_matrix test-EM_matrix test-mem_vector el2al
+all: test-fg_SpMV test-2d_SpMV test-mem_matrix test-EM_matrix test-mem_vector el2al
 
-test-SpMV: test-SpMV.o ../libFMatrix.a
-	$(CXX) -o test-SpMV test-SpMV.o $(LDFLAGS)
+test-fg_SpMV: test-fg_SpMV.o ../libFMatrix.a
+	$(CXX) -o test-fg_SpMV test-fg_SpMV.o $(LDFLAGS)
+
+test-2d_SpMV: test-2d_SpMV.o ../libFMatrix.a
+	$(CXX) -o test-2d_SpMV test-2d_SpMV.o $(LDFLAGS)
 
 test-mem_vector: test-mem_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector test-mem_vector.o $(LDFLAGS)
@@ -43,7 +46,8 @@ clean:
 	rm -f *.d
 	rm -f *.o
 	rm -f *~
-	rm test-SpMV
+	rm test-fg_SpMV
+	rm test-2d_SpMV
 	rm test-mem_matrix
 	rm test-mem_vector
 	rm test-EM_matrix

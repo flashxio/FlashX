@@ -30,6 +30,34 @@ namespace fm
 
 matrix_config matrix_conf;
 
+void sparse_matrix::compute(task_creator::ptr creator) const
+{
+	int num_workers = matrix_conf.get_num_threads();
+	int num_nodes = safs::params.get_num_nodes();
+	std::vector<matrix_worker_thread::ptr> workers(num_workers);
+	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
+	init_io_gens(io_gens);
+#ifdef PROFILER
+	if (!fg::graph_conf.get_prof_file().empty())
+		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
+#endif
+	for (int i = 0; i < num_workers; i++) {
+		int node_id = i % num_nodes;
+		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
+				get_io_factory(), io_gens, creator);
+		t->start();
+		workers[i] = t;
+	}
+	for (int i = 0; i < num_workers; i++)
+		workers[i]->join();
+#ifdef PROFILER
+	if (!fg::graph_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
+}
+
+///////////// The code for sparse matrix of the FlashGraph format //////////////
+
 void fg_row_compute_task::run(char *buf, size_t size)
 {
 	assert(this->buf == buf);
@@ -54,9 +82,11 @@ class fg_sparse_sym_matrix: public sparse_matrix
 {
 	// This works like the index of the sparse matrix.
 	std::vector<row_block> blocks;
+	safs::file_io_factory::shared_ptr factory;
 
 	fg_sparse_sym_matrix(safs::file_io_factory::shared_ptr factory,
-			size_t nrows): sparse_matrix(factory, nrows, true) {
+			size_t nrows): sparse_matrix(nrows, true) {
+		this->factory = factory;
 	}
 public:
 	static ptr create(fg::FG_graph::ptr);
@@ -65,7 +95,12 @@ public:
 	virtual void transpose() {
 	}
 
-	virtual void compute(task_creator::ptr creator) const;
+	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
+		return factory;
+	}
+
+	virtual void init_io_gens(
+			std::vector<matrix_io_generator::ptr> &io_gens) const;
 };
 
 sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg)
@@ -106,36 +141,15 @@ sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 	return sparse_matrix::ptr(m);
 }
 
-void fg_sparse_sym_matrix::compute(task_creator::ptr creator) const
+void fg_sparse_sym_matrix::init_io_gens(
+		std::vector<matrix_io_generator::ptr> &io_gens) const
 {
-	int num_workers = matrix_conf.get_num_threads();
-	int num_nodes = safs::params.get_num_nodes();
-	std::vector<matrix_worker_thread::ptr> workers(num_workers);
-	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
-	for (int i = 0; i < num_workers; i++) {
-		row_block_mapper mapper(blocks, i, num_workers,
+	for (size_t i = 0; i < io_gens.size(); i++) {
+		row_block_mapper mapper(blocks, i, io_gens.size(),
 				matrix_conf.get_rb_io_size());
 		io_gens[i] = matrix_io_generator::create(blocks, get_num_rows(),
-				get_num_cols(), get_file_id(), mapper);
+				get_num_cols(), factory->get_file_id(), mapper);
 	}
-
-#ifdef PROFILER
-	if (!fg::graph_conf.get_prof_file().empty())
-		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
-#endif
-	for (int i = 0; i < num_workers; i++) {
-		int node_id = i % num_nodes;
-		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
-				get_io_factory(), io_gens, creator);
-		t->start();
-		workers[i] = t;
-	}
-	for (int i = 0; i < num_workers; i++)
-		workers[i]->join();
-#ifdef PROFILER
-	if (!fg::graph_conf.get_prof_file().empty())
-		ProfilerStop();
-#endif
 }
 
 /*
@@ -148,20 +162,27 @@ class fg_sparse_asym_matrix: public sparse_matrix
 	std::vector<row_block> out_blocks;
 	// in_blocks index the transpose of the matrix.
 	std::vector<row_block> in_blocks;
+	safs::file_io_factory::shared_ptr factory;
 	bool transposed;
 
 	fg_sparse_asym_matrix(safs::file_io_factory::shared_ptr factory,
-			size_t nrows): sparse_matrix(factory, nrows, false) {
+			size_t nrows): sparse_matrix(nrows, false) {
 		transposed = false;
+		this->factory = factory;
 	}
 public:
 	static ptr create(fg::FG_graph::ptr);
+
+	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
+		return factory;
+	}
 
 	virtual void transpose() {
 		transposed = !transposed;
 	}
 
-	virtual void compute(task_creator::ptr creator) const;
+	virtual void init_io_gens(
+			std::vector<matrix_io_generator::ptr> &io_gens) const;
 };
 
 sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg)
@@ -212,36 +233,16 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg)
 	return sparse_matrix::ptr(m);
 }
 
-void fg_sparse_asym_matrix::compute(task_creator::ptr creator) const
+void fg_sparse_asym_matrix::init_io_gens(
+		std::vector<matrix_io_generator::ptr> &io_gens) const
 {
-	int num_workers = matrix_conf.get_num_threads();
-	int num_nodes = safs::params.get_num_nodes();
-	std::vector<matrix_worker_thread::ptr> workers(num_workers);
-	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
-	for (int i = 0; i < num_workers; i++) {
+	for (size_t i = 0; i < io_gens.size(); i++) {
 		row_block_mapper mapper(transposed ? in_blocks : out_blocks,
-				i, num_workers, matrix_conf.get_rb_io_size());
+				i, io_gens.size(), matrix_conf.get_rb_io_size());
 		io_gens[i] = matrix_io_generator::create(
 				transposed ? in_blocks : out_blocks, get_num_rows(),
-				get_num_cols(), get_file_id(), mapper);
+				get_num_cols(), factory->get_file_id(), mapper);
 	}
-#ifdef PROFILER
-	if (!fg::graph_conf.get_prof_file().empty())
-		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
-#endif
-	for (int i = 0; i < num_workers; i++) {
-		int node_id = i % num_nodes;
-		matrix_worker_thread::ptr t = matrix_worker_thread::create(i, node_id,
-				get_io_factory(), io_gens, creator);
-		t->start();
-		workers[i] = t;
-	}
-	for (int i = 0; i < num_workers; i++)
-		workers[i]->join();
-#ifdef PROFILER
-	if (!fg::graph_conf.get_prof_file().empty())
-		ProfilerStop();
-#endif
 }
 
 sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg)
@@ -251,6 +252,88 @@ sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg)
 		return fg_sparse_asym_matrix::create(fg);
 	else
 		return fg_sparse_sym_matrix::create(fg);
+}
+
+/////////////// The code for native 2D-partitioned sparse matrix ///////////////
+
+class block_sparse_matrix: public sparse_matrix
+{
+	SpM_2d_index::ptr index;
+	SpM_2d_storage::ptr mat;
+	safs::file_io_factory::shared_ptr factory;
+public:
+	block_sparse_matrix(SpM_2d_index::ptr index,
+			SpM_2d_storage::ptr mat): sparse_matrix(
+				index->get_header().get_num_rows(),
+				index->get_header().get_num_cols(),
+				true, index->get_header().get_2d_block_size()) {
+		this->index = index;
+		this->mat = mat;
+		factory = mat->create_io_factory();
+	}
+
+	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
+		return factory;
+	}
+
+	// Nothing should happen for a symmetric matrix.
+	virtual void transpose() {
+	}
+
+	virtual void init_io_gens(
+			std::vector<matrix_io_generator::ptr> &io_gens) const {
+		for (size_t i = 0; i < io_gens.size(); i++) {
+			row_block_mapper mapper(*index, i, io_gens.size(), 1);
+			io_gens[i] = matrix_io_generator::create(index,
+					factory->get_file_id(), mapper);
+		}
+	}
+};
+
+class block_sparse_asym_matrix: public sparse_matrix
+{
+	block_sparse_matrix::ptr mat;
+	block_sparse_matrix::ptr t_mat;
+public:
+	block_sparse_asym_matrix(SpM_2d_index::ptr index, SpM_2d_storage::ptr mat,
+			SpM_2d_index::ptr t_index, SpM_2d_storage::ptr t_mat): sparse_matrix(
+				index->get_header().get_num_rows(),
+				index->get_header().get_num_cols(),
+				false, index->get_header().get_2d_block_size()) {
+		this->mat = block_sparse_matrix::ptr(new block_sparse_matrix(index, mat));
+		this->t_mat = block_sparse_matrix::ptr(new block_sparse_matrix(t_index,
+					t_mat));
+	}
+
+	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
+		return mat->get_io_factory();
+	}
+
+	// Nothing should happen for a symmetric matrix.
+	virtual void transpose() {
+		block_sparse_matrix::ptr tmp = mat;
+		mat = t_mat;
+		t_mat = tmp;
+	}
+
+	virtual void init_io_gens(
+			std::vector<matrix_io_generator::ptr> &io_gens) const {
+		mat->init_io_gens(io_gens);
+	}
+};
+
+sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
+		SpM_2d_storage::ptr mat)
+{
+	return sparse_matrix::ptr(new block_sparse_matrix(index, mat));
+}
+
+sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
+		SpM_2d_storage::ptr mat, SpM_2d_index::ptr t_index,
+		SpM_2d_storage::ptr t_mat)
+{
+	return sparse_matrix::ptr(new block_sparse_asym_matrix(index, mat,
+				t_index, t_mat));
 }
 
 static std::atomic<size_t> init_count;
