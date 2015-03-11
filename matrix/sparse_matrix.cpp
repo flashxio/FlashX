@@ -179,6 +179,7 @@ public:
 
 	virtual void transpose() {
 		transposed = !transposed;
+		sparse_matrix::transpose();
 	}
 
 	virtual void init_io_gens(
@@ -314,6 +315,7 @@ public:
 		block_sparse_matrix::ptr tmp = mat;
 		mat = t_mat;
 		t_mat = tmp;
+		sparse_matrix::transpose();
 	}
 
 	virtual void init_io_gens(

@@ -301,7 +301,11 @@ public:
 		return symmetric;
 	}
 
-	virtual void transpose() = 0;
+	virtual void transpose() {
+		size_t tmp = nrows;
+		nrows = ncols;
+		ncols = tmp;
+	}
 
 	template<class T>
 	task_creator::ptr get_multiply_creator(type_mem_vector<T> &in,
