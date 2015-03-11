@@ -27,4 +27,5 @@ add_library(safs STATIC
 	wpaio.cpp
 	direct_comp_access.cpp
 	comp_io_scheduler.cpp
+	in_mem_io.cpp
 )
