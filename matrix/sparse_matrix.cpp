@@ -30,7 +30,7 @@ namespace fm
 
 matrix_config matrix_conf;
 
-void row_compute_task::run(char *buf, size_t size)
+void fg_row_compute_task::run(char *buf, size_t size)
 {
 	assert(this->buf == buf);
 	assert(this->buf_size == size);
@@ -50,14 +50,13 @@ void row_compute_task::run(char *buf, size_t size)
 /*
  * Sparse square symmetric matrix. It is partitioned in rows.
  */
-class sparse_sym_matrix: public sparse_matrix
+class fg_sparse_sym_matrix: public sparse_matrix
 {
 	// This works like the index of the sparse matrix.
 	std::vector<row_block> blocks;
 
-	sparse_sym_matrix(safs::file_io_factory::shared_ptr factory,
-			size_t nrows): sparse_matrix(factory, nrows, nrows, true,
-				part_dim_t::ROW) {
+	fg_sparse_sym_matrix(safs::file_io_factory::shared_ptr factory,
+			size_t nrows): sparse_matrix(factory, nrows, true) {
 	}
 public:
 	static ptr create(fg::FG_graph::ptr);
@@ -69,7 +68,7 @@ public:
 	virtual void compute(task_creator::ptr creator) const;
 };
 
-sparse_matrix::ptr sparse_sym_matrix::create(fg::FG_graph::ptr fg)
+sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 {
 	// Initialize vertex index.
 	fg::vertex_index::ptr index = fg->get_index_data();
@@ -77,7 +76,7 @@ sparse_matrix::ptr sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 	assert(!index->get_graph_header().is_directed_graph());
 
 	fg::vsize_t num_vertices = index->get_num_vertices();
-	sparse_sym_matrix *m = new sparse_sym_matrix(fg->get_graph_io_factory(
+	fg_sparse_sym_matrix *m = new fg_sparse_sym_matrix(fg->get_graph_io_factory(
 				safs::REMOTE_ACCESS), num_vertices);
 
 	// Generate the matrix index from the vertex index.
@@ -107,7 +106,7 @@ sparse_matrix::ptr sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 	return sparse_matrix::ptr(m);
 }
 
-void sparse_sym_matrix::compute(task_creator::ptr creator) const
+void fg_sparse_sym_matrix::compute(task_creator::ptr creator) const
 {
 	int num_workers = matrix_conf.get_num_threads();
 	int num_nodes = safs::params.get_num_nodes();
@@ -142,7 +141,7 @@ void sparse_sym_matrix::compute(task_creator::ptr creator) const
 /*
  * Sparse asymmetric square matrix. It is partitioned in rows.
  */
-class sparse_asym_matrix: public sparse_matrix
+class fg_sparse_asym_matrix: public sparse_matrix
 {
 	// These work like the index of the sparse matrix.
 	// out_blocks index the original matrix.
@@ -151,9 +150,8 @@ class sparse_asym_matrix: public sparse_matrix
 	std::vector<row_block> in_blocks;
 	bool transposed;
 
-	sparse_asym_matrix(safs::file_io_factory::shared_ptr factory,
-			size_t nrows): sparse_matrix(factory, nrows, nrows, false,
-				part_dim_t::ROW) {
+	fg_sparse_asym_matrix(safs::file_io_factory::shared_ptr factory,
+			size_t nrows): sparse_matrix(factory, nrows, false) {
 		transposed = false;
 	}
 public:
@@ -166,7 +164,7 @@ public:
 	virtual void compute(task_creator::ptr creator) const;
 };
 
-sparse_matrix::ptr sparse_asym_matrix::create(fg::FG_graph::ptr fg)
+sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg)
 {
 	// Initialize vertex index.
 	fg::vertex_index::ptr index = fg->get_index_data();
@@ -174,7 +172,7 @@ sparse_matrix::ptr sparse_asym_matrix::create(fg::FG_graph::ptr fg)
 	assert(index->get_graph_header().is_directed_graph());
 
 	fg::vsize_t num_vertices = index->get_num_vertices();
-	sparse_asym_matrix *m = new sparse_asym_matrix(fg->get_graph_io_factory(
+	fg_sparse_asym_matrix *m = new fg_sparse_asym_matrix(fg->get_graph_io_factory(
 				safs::REMOTE_ACCESS), num_vertices);
 
 	if (index->is_compressed()) {
@@ -214,7 +212,7 @@ sparse_matrix::ptr sparse_asym_matrix::create(fg::FG_graph::ptr fg)
 	return sparse_matrix::ptr(m);
 }
 
-void sparse_asym_matrix::compute(task_creator::ptr creator) const
+void fg_sparse_asym_matrix::compute(task_creator::ptr creator) const
 {
 	int num_workers = matrix_conf.get_num_threads();
 	int num_nodes = safs::params.get_num_nodes();
@@ -250,9 +248,9 @@ sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg)
 {
 	const fg::graph_header &header = fg->get_graph_header();
 	if (header.is_directed_graph())
-		return sparse_asym_matrix::create(fg);
+		return fg_sparse_asym_matrix::create(fg);
 	else
-		return sparse_sym_matrix::create(fg);
+		return fg_sparse_sym_matrix::create(fg);
 }
 
 static std::atomic<size_t> init_count;

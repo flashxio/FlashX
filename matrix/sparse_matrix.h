@@ -50,21 +50,24 @@ public:
 	virtual compute_task::ptr create(const matrix_io &) const = 0;
 };
 
-class row_compute_task: public compute_task
+/*
+ * This task performs computation on a sparse matrix in the FlashGraph format.
+ */
+class fg_row_compute_task: public compute_task
 {
 	matrix_io io;
 	off_t off;
 	char *buf;
 	size_t buf_size;
 public:
-	row_compute_task(const matrix_io &_io): io(_io) {
+	fg_row_compute_task(const matrix_io &_io): io(_io) {
 		off_t orig_off = io.get_loc().get_offset();
 		off = ROUND_PAGE(orig_off);
 		buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
 		buf = (char *) valloc(buf_size);
 	}
 
-	~row_compute_task() {
+	~fg_row_compute_task() {
 		free(buf);
 	}
 	virtual void run(char *buf, size_t size);
@@ -75,14 +78,18 @@ public:
 	}
 };
 
+/*
+ * This task performs matrix vector multiplication on a sparse matrix
+ * in the FlashGraph format.
+ */
 template<class T>
-class row_multiply_task: public row_compute_task
+class fg_row_multiply_task: public fg_row_compute_task
 {
 	const type_mem_vector<T> &input;
 	type_mem_vector<T> &output;
 public:
-	row_multiply_task(const type_mem_vector<T> &_input, type_mem_vector<T> &_output,
-			const matrix_io &_io): row_compute_task(_io), input(
+	fg_row_multiply_task(const type_mem_vector<T> &_input, type_mem_vector<T> &_output,
+			const matrix_io &_io): fg_row_compute_task(_io), input(
 				_input), output(_output) {
 	}
 
@@ -90,7 +97,7 @@ public:
 };
 
 template<class T>
-void row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
+void fg_row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 {
 	T res = 0;
 	for (size_t i = 0; i < v.get_num_edges(); i++) {
@@ -101,30 +108,23 @@ void row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 }
 
 template<class T>
-class row_multiply_creator: public task_creator
+class fg_row_multiply_creator: public task_creator
 {
 	const type_mem_vector<T> &input;
 	type_mem_vector<T> &output;
 
-	row_multiply_creator(const type_mem_vector<T> &_input,
+	fg_row_multiply_creator(const type_mem_vector<T> &_input,
 			type_mem_vector<T> &_output): input(_input), output(_output) {
 	}
 public:
 	static task_creator::ptr create(const type_mem_vector<T> &_input,
 			type_mem_vector<T> &_output) {
-		return task_creator::ptr(new row_multiply_creator<T>(_input, _output));
+		return task_creator::ptr(new fg_row_multiply_creator<T>(_input, _output));
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new row_multiply_task<T>(input, output, io));
+		return compute_task::ptr(new fg_row_multiply_task<T>(input, output, io));
 	}
-};
-
-enum part_dim_t
-{
-	ROW,
-	COL,
-	BOTH,
 };
 
 class sparse_matrix
@@ -133,16 +133,15 @@ class sparse_matrix
 	size_t ncols;
 	bool symmetric;
 	safs::file_io_factory::shared_ptr factory;
-	// On which dimension(s) the matrix is partitioned.
-	part_dim_t part_dim;
 protected:
-	sparse_matrix(safs::file_io_factory::shared_ptr factory, size_t nrows,
-			size_t ncols, bool symmetric, part_dim_t part_dim) {
+	// This constructor is used for the sparse matrix stored
+	// in the FlashGraph format.
+	sparse_matrix(safs::file_io_factory::shared_ptr factory, size_t num_vertices,
+			bool symmetric) {
 		this->factory = factory;
-		this->nrows = nrows;
-		this->ncols = ncols;
+		this->nrows = num_vertices;
+		this->ncols = num_vertices;
 		this->symmetric = symmetric;
-		this->part_dim = part_dim;
 	}
 
 	safs::file_io_factory::shared_ptr get_io_factory() const {
@@ -174,11 +173,13 @@ public:
 		return factory->get_file_id();
 	}
 
-	part_dim_t get_part_dim() const {
-		return part_dim;
-	}
-
 	virtual void transpose() = 0;
+
+	template<class T>
+	task_creator::ptr get_multiply_creator(type_mem_vector<T> &in,
+			type_mem_vector<T> &out) const {
+		return fg_row_multiply_creator<T>::create(in, out);
+	}
 
 	template<class T>
 	typename type_mem_vector<T>::ptr multiply(typename type_mem_vector<T>::ptr in) const {
@@ -190,7 +191,7 @@ public:
 		}
 		else {
 			typename type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(nrows);
-			compute(row_multiply_creator<T>::create(*in, *ret));
+			compute(get_multiply_creator<T>(*in, *ret));
 			return ret;
 		}
 	}
@@ -224,7 +225,7 @@ public:
 						mem_dense_matrix::cast(col_m->get_cols(col_idx)));
 				typename type_mem_vector<T>::ptr out_col = type_mem_vector<T>::create(
 						mem_dense_matrix::cast(ret->get_cols(col_idx)));
-				compute(row_multiply_creator<T>::create(*in_col, *out_col));
+				compute(get_multiply_creator<T>(*in_col, *out_col));
 			}
 			return ret;
 		}
