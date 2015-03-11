@@ -38,6 +38,9 @@ namespace fg
 class in_mem_graph
 {
 	size_t graph_size;
+	// This data structure owns the byte array. Due to the API compatibility,
+	// we use a raw pointer. TODO we should use a smart pointer here
+	// in the future.
 	char *graph_data;
 	int graph_file_id;
 	std::string graph_file_name;
@@ -73,8 +76,6 @@ public:
 	void dump(const std::string &file) const;
 
 	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
-
-	friend class in_mem_io;
 };
 
 }
