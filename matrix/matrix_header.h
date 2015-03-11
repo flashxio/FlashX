@@ -51,6 +51,11 @@ class block_2d_size
 	uint16_t nrow_log;
 	uint16_t ncol_log;
 public:
+	block_2d_size() {
+		nrow_log = 0;
+		ncol_log = 0;
+	}
+
 	block_2d_size(size_t num_rows, size_t num_cols) {
 		nrow_log = log2(num_rows);
 		ncol_log = log2(num_cols);

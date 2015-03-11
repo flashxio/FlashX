@@ -107,6 +107,71 @@ void fg_row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 	output.set(v.get_id(), res);
 }
 
+/*
+ * This task performs matrix vector multiplication on a sparse matrix in
+ * a native format with 2D partitioning.
+ */
+template<class T>
+class block_multiply_task: public compute_task
+{
+	matrix_io io;
+	block_2d_size block_size;
+	off_t off;
+	char *buf;
+	size_t buf_size;
+
+	const type_mem_vector<T> &input;
+	type_mem_vector<T> &output;
+
+	void run_on_row_part(const sparse_row_part &rpart, size_t start_row_idx,
+			size_t start_col_idx) {
+		size_t row_idx = start_row_idx + rpart.get_rel_row_idx();
+		size_t num_non_zeros = rpart.get_num_non_zeros();
+		T sum = 0;
+		for (size_t i = 0; i < num_non_zeros; i++) {
+			size_t col_idx = start_col_idx + rpart.get_rel_col_idx(i);
+			sum += input.get(col_idx);
+		}
+		output.set(row_idx, output.get(row_idx) + sum);
+	}
+
+	void run_on_block(const sparse_block_2d &block) {
+		row_part_iterator it = block.get_iterator();
+		size_t start_col_idx
+			= block.get_block_col_idx() * block_size.get_num_cols();
+		size_t start_row_idx
+			= block.get_block_row_idx() * block_size.get_num_rows();
+		while (it.has_next())
+			run_on_row_part(it.next(), start_row_idx, start_col_idx);
+	}
+public:
+	block_multiply_task(const type_mem_vector<T> &_input,
+			type_mem_vector<T> &_output, const matrix_io &_io,
+			const block_2d_size &_block_size): io(_io), block_size(
+				_block_size), input(_input), output(_output) {
+		off_t orig_off = io.get_loc().get_offset();
+		off = ROUND_PAGE(orig_off);
+		buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
+		buf = (char *) valloc(buf_size);
+	}
+
+	~block_multiply_task() {
+		free(buf);
+	}
+
+	virtual void run(char *buf, size_t size) {
+		block_row_iterator it((const sparse_block_2d *) buf,
+				(const sparse_block_2d *) (buf + size));
+		while (it.has_next())
+			run_on_block(it.next());
+	}
+
+	virtual safs::io_request get_request() const {
+		return safs::io_request(buf, safs::data_loc_t(io.get_loc().get_file_id(),
+					off), buf_size, READ);
+	}
+};
+
 template<class T>
 class fg_row_multiply_creator: public task_creator
 {
@@ -127,11 +192,40 @@ public:
 	}
 };
 
+template<class T>
+class b2d_multiply_creator: public task_creator
+{
+	const type_mem_vector<T> &input;
+	type_mem_vector<T> &output;
+	block_2d_size block_size;
+
+	b2d_multiply_creator(const type_mem_vector<T> &_input,
+			type_mem_vector<T> &_output, const block_2d_size &_block_size): input(
+				_input), output(_output), block_size(_block_size) {
+	}
+public:
+	static task_creator::ptr create(const type_mem_vector<T> &_input,
+			type_mem_vector<T> &_output, const block_2d_size &_block_size) {
+		return task_creator::ptr(new b2d_multiply_creator<T>(_input, _output,
+					_block_size));
+	}
+
+	virtual compute_task::ptr create(const matrix_io &io) const {
+		return compute_task::ptr(new block_multiply_task<T>(input, output,
+					io, block_size));
+	}
+};
+
 class sparse_matrix
 {
+	// Whether the matrix is represented by the FlashGraph format.
+	bool is_fg;
 	size_t nrows;
 	size_t ncols;
 	bool symmetric;
+	// If the matrix is stored in the native format and is partitioned
+	// in two dimensions, we need to know the block size.
+	block_2d_size block_size;
 	safs::file_io_factory::shared_ptr factory;
 protected:
 	// This constructor is used for the sparse matrix stored
@@ -142,6 +236,17 @@ protected:
 		this->nrows = num_vertices;
 		this->ncols = num_vertices;
 		this->symmetric = symmetric;
+		this->is_fg = true;
+	}
+
+	sparse_matrix(safs::file_io_factory::shared_ptr factory, size_t nrows,
+			size_t ncols, bool symmetric,
+			const block_2d_size &_block_size): block_size(_block_size) {
+		this->symmetric = symmetric;
+		this->is_fg = false;
+		this->nrows = nrows;
+		this->ncols = ncols;
+		this->factory = factory;
 	}
 
 	safs::file_io_factory::shared_ptr get_io_factory() const {
@@ -178,7 +283,10 @@ public:
 	template<class T>
 	task_creator::ptr get_multiply_creator(type_mem_vector<T> &in,
 			type_mem_vector<T> &out) const {
-		return fg_row_multiply_creator<T>::create(in, out);
+		if (is_fg)
+			return fg_row_multiply_creator<T>::create(in, out);
+		else
+			return b2d_multiply_creator<T>::create(in, out, block_size);
 	}
 
 	template<class T>

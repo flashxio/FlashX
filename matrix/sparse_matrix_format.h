@@ -60,6 +60,10 @@ public:
 		return num_non_zeros;
 	}
 
+	size_t get_rel_col_idx(size_t idx) const {
+		return rel_col_idxs[idx];
+	}
+
 	void add(const block_2d_size &block_size, size_t cidx) {
 		rel_col_idxs[num_non_zeros] = cidx & block_size.get_ncol_mask();
 		num_non_zeros++;
