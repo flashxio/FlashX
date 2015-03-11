@@ -22,6 +22,8 @@
 
 #include "vertex.h"
 #include "matrix_header.h"
+#include "mem_vector.h"
+#include "vector_vector.h"
 
 namespace safs
 {
@@ -254,6 +256,8 @@ public:
 	}
 };
 
+class vector_vector;
+
 class SpM_2d_storage
 {
 	std::string mat_name;
@@ -274,6 +278,8 @@ public:
 
 	static ptr load(const std::string &mat_file,
 			SpM_2d_index::ptr index);
+	static ptr create(const matrix_header &header, const vector_vector &vv,
+			SpM_2d_index::ptr index);
 
 	block_row_iterator get_block_row_it(size_t idx) const {
 		char *start = data.get() + index->get_block_row_off(idx);
@@ -290,6 +296,19 @@ public:
 
 	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 };
+
+/*
+ * This function creates a 2D-partitioned matrix from a vector of adjacency
+ * lists. The matrix and its index are kept in memory.
+ */
+std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
+		vector_vector::ptr adjs, const block_2d_size &block_size);
+/*
+ * This function creates a 2D-partitioned matrix from a vector of adjacency
+ * lists and stores the matrix and its index in files.
+ */
+void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
+		const std::string &mat_file, const std::string &mat_idx_file);
 
 }
 

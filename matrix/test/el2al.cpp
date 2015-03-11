@@ -35,7 +35,6 @@
 #include "mem_data_frame.h"
 #include "mem_vector.h"
 #include "vector_vector.h"
-#include "factor.h"
 #include "sparse_matrix_format.h"
 
 using namespace fm;
@@ -203,120 +202,6 @@ public:
 	}
 };
 
-class set_2d_label_operate: public type_set_operate<factor_value_t>
-{
-	block_2d_size block_size;
-public:
-	set_2d_label_operate(const block_2d_size &_size): block_size(_size) {
-	}
-
-	virtual void set(factor_value_t *arr, size_t num_eles, off_t row_idx,
-			off_t col_idx) const {
-		assert(col_idx == 0);
-		for (size_t i = 0; i < num_eles; i++)
-			arr[i] = (row_idx + i) / block_size.get_num_rows();
-	}
-};
-
-class part_2d_apply_operate: public gr_apply_operate<sub_vector_vector>
-{
-	size_t row_len;
-	block_2d_size block_size;
-public:
-	part_2d_apply_operate(const block_2d_size &_size,
-			size_t row_len): block_size(_size) {
-		this->row_len = row_len;
-	}
-
-	void run(const void *key, const sub_vector_vector &val,
-			mem_vector &out) const;
-
-	const scalar_type &get_key_type() const {
-		return get_scalar_type<factor_value_t>();
-	}
-
-	const scalar_type &get_output_type() const {
-		return get_scalar_type<char>();
-	}
-
-	size_t get_num_out_eles() const {
-		return 1;
-	}
-};
-
-void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
-		mem_vector &out) const
-{
-	size_t block_height = block_size.get_num_rows();
-	size_t block_width = block_size.get_num_cols();
-	size_t num_blocks = ceil(((double) row_len) / block_width);
-	factor_value_t block_row_id = *(const factor_value_t *) key;
-	printf("block row id: %d, #blocks: %ld\n", block_row_id, num_blocks);
-	size_t tot_num_non_zeros = 0;
-	size_t max_row_parts = 0;
-	for (size_t i = 0; i < val.get_num_vecs(); i++) {
-		const fg::ext_mem_undirected_vertex *v
-			= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(i);
-		assert(v->get_id() / block_height == (size_t) block_row_id);
-		tot_num_non_zeros += v->get_num_edges();
-		// I definitely over estimate the number of row parts.
-		// If a row doesn't have many non-zero entries, I assume that
-		// the non-zero entries distribute evenly across all row parts.
-		max_row_parts += std::min(num_blocks, v->get_num_edges());
-	}
-
-	std::vector<size_t> neigh_idxs(val.get_num_vecs());
-	// The maximal size of a block.
-	size_t max_block_size
-		// Even if a block is empty, its header still exists. The size is
-		// accurate.
-		= sizeof(sparse_block_2d) * num_blocks
-		// The size for row part headers is highly over estimated.
-		+ sizeof(sparse_row_part) * max_row_parts
-		// The size is accurate.
-		+ sparse_row_part::get_col_entry_size() * tot_num_non_zeros;
-	out.resize(max_block_size);
-	size_t curr_size = 0;
-	// The maximal size of a row part.
-	size_t max_row_size = sparse_row_part::get_size(block_width);
-	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[max_row_size]);
-	size_t num_non_zeros = 0;
-	for (size_t col_idx = 0; col_idx < row_len; col_idx += block_width) {
-		sparse_block_2d *block
-			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
-					block_row_id, col_idx / block_width);
-		for (size_t row_idx = 0; row_idx < val.get_num_vecs(); row_idx++) {
-			const fg::ext_mem_undirected_vertex *v
-				= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(row_idx);
-			// If the vertex has no more edges left.
-			if (neigh_idxs[row_idx] >= v->get_num_edges())
-				continue;
-			assert(v->get_neighbor(neigh_idxs[row_idx]) >= col_idx);
-			// If the vertex has no edges that fall in the range.
-			if (v->get_neighbor(neigh_idxs[row_idx]) >= col_idx + block_width)
-				continue;
-
-			sparse_row_part *part = new (buf.get()) sparse_row_part(row_idx);
-			size_t idx = neigh_idxs[row_idx];
-			for (; idx < v->get_num_edges()
-					&& v->get_neighbor(idx) < col_idx + block_width; idx++)
-				part->add(block_size, v->get_neighbor(idx));
-			assert(part->get_size() <= max_row_size);
-			neigh_idxs[row_idx] = idx;
-			num_non_zeros += part->get_num_non_zeros();
-			assert(block->get_size() + part->get_size()
-					<= max_block_size - curr_size);
-			block->append(*part);
-		}
-		// Only the non-empty blocks exist in a block row.
-		if (!block->is_empty()) {
-			curr_size += block->get_size();
-			block->verify(block_size);
-		}
-	}
-	out.resize(curr_size);
-}
-
 void verify_2d_matrix(const std::string &mat_file, const std::string &mat_idx_file)
 {
 	SpM_2d_index::ptr idx = SpM_2d_index::load(mat_idx_file);
@@ -336,61 +221,11 @@ void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
 	size_t block_height
 		= ((size_t) std::numeric_limits<unsigned short>::max()) + 1;
 	block_2d_size block_size(block_height, block_height);
-	factor f(ceil(((double) num_vertices) / block_size.get_num_rows()));
-	factor_vector::ptr labels = factor_vector::create(f, num_vertices);
-	labels->set_data(set_2d_label_operate(block_size));
-	vector_vector::ptr res = out_adjs->groupby(*labels,
-			part_2d_apply_operate(block_size, num_vertices));
-
-	matrix_header mheader(matrix_type::SPARSE, 0, num_vertices, num_vertices,
-			matrix_layout_t::L_ROW_2D, prim_type::P_BOOL, block_size);
-	FILE *f_2d = fopen(mat_file.c_str(), "w");
-	if (f_2d == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
-			% mat_file % strerror(errno);
-		return;
-	}
-	fwrite(&mheader, sizeof(mheader), 1, f_2d);
-	bool ret = mem_vector::cast(res->cat())->export2(f_2d);
-	assert(ret);
-	fclose(f_2d);
-
-	// Construct the index file of the adjacency matrix.
-	std::vector<off_t> offsets(res->get_num_vecs() + 1);
-	off_t off = sizeof(mheader);
-	for (size_t i = 0; i < res->get_num_vecs(); i++) {
-		offsets[i] = off;
-		off += res->get_length(i);
-	}
-	offsets[res->get_num_vecs()] = off;
-	SpM_2d_index::ptr mindex = SpM_2d_index::create(mheader, offsets);
-	mindex->dump(mat_idx_file);
+	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file);
 	verify_2d_matrix(mat_file, mat_idx_file);
 
 	// Construct the transpose of the adjacency matrix.
-	f_2d = fopen(t_mat_file.c_str(), "w");
-	if (f_2d == NULL) {
-		BOOST_LOG_TRIVIAL(error) << boost::format("open %1%: %2%")
-			% t_mat_file % strerror(errno);
-		return;
-	}
-	fwrite(&mheader, sizeof(mheader), 1, f_2d);
-	res = in_adjs->groupby(*labels, part_2d_apply_operate(block_size,
-				num_vertices));
-	ret = mem_vector::cast(res->cat())->export2(f_2d);
-	assert(ret);
-	fclose(f_2d);
-
-	// Construct the index file of the adjacency matrix.
-	assert(offsets.size() == res->get_num_vecs() + 1);
-	off = sizeof(mheader);
-	for (size_t i = 0; i < res->get_num_vecs(); i++) {
-		offsets[i] = off;
-		off += res->get_length(i);
-	}
-	offsets[res->get_num_vecs()] = off;
-	mindex = SpM_2d_index::create(mheader, offsets);
-	mindex->dump(t_mat_idx_file);
+	export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file);
 	verify_2d_matrix(t_mat_file, t_mat_idx_file);
 }
 
