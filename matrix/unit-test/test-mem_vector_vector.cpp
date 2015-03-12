@@ -1,8 +1,10 @@
+#include <boost/foreach.hpp>
+
 #include "mem_vector.h"
 #include "bulk_operate.h"
 #include "data_frame.h"
 #include "factor.h"
-#include "vector_vector.h"
+#include "mem_vector_vector.h"
 
 using namespace fm;
 
@@ -77,7 +79,94 @@ void test_groupby()
 	printf("There are %ld vectors\n", vv->get_num_vecs());
 }
 
+vector::ptr create_mem_vec(size_t len)
+{
+	type_mem_vector<int>::ptr v = type_mem_vector<int>::create(len);
+	for (size_t i = 0; i < len; i++)
+		v->set(i, random());
+	return v;
+}
+
+vector_vector::ptr create_mem_vv(size_t num_vecs, size_t max_vec_len)
+{
+	std::vector<vector::ptr> vecs(num_vecs);
+	for (size_t i = 0; i < vecs.size(); i++)
+		vecs[i] = create_mem_vec(random() % max_vec_len);
+
+	type_mem_vector_vector<int>::ptr vv = type_mem_vector_vector<int>::create();
+	vv->append(vecs.begin(), vecs.end());
+	return vv;
+}
+
+void verify_data(const char *buf1, const char *buf2, size_t len)
+{
+	for (size_t i = 0; i < len; i++)
+		assert(buf1[i] == buf2[i]);
+}
+
+void test_append_vecs()
+{
+	std::vector<vector::ptr> vecs(1000);
+	for (size_t i = 0; i < vecs.size(); i++)
+		vecs[i] = create_mem_vec(random() % 1000);
+
+	type_mem_vector_vector<int>::ptr vv1 = type_mem_vector_vector<int>::create();
+	BOOST_FOREACH(vector::ptr v, vecs)
+		vv1->append(*v);
+	assert(vv1->get_num_vecs() == vecs.size());
+	for (size_t i = 0; i < vecs.size(); i++) {
+		assert(vv1->get_length(i) == vecs[i]->get_length());
+		verify_data(vv1->get_raw_arr(i), mem_vector::cast(vecs[i])->get_raw_arr(),
+				vecs[i]->get_length() * vecs[i]->get_entry_size());
+	}
+
+	type_mem_vector_vector<int>::ptr vv2 = type_mem_vector_vector<int>::create();
+	vv2->append(vecs.begin(), vecs.end());
+	assert(vv2->get_num_vecs() == vecs.size());
+	for (size_t i = 0; i < vecs.size(); i++) {
+		assert(vv2->get_length(i) == vecs[i]->get_length());
+		verify_data(vv2->get_raw_arr(i), mem_vector::cast(vecs[i])->get_raw_arr(),
+				vecs[i]->get_length() * vecs[i]->get_entry_size());
+	}
+}
+
+void test_append_vvs()
+{
+	std::vector<vector::ptr> vvs(1000);
+	std::vector<size_t> vec_lens;
+	std::vector<const char *> vec_data;
+	for (size_t i = 0; i <vvs.size(); i++) {
+		vector_vector::ptr vv = create_mem_vv(100, 1000);
+		vvs[i] = vv;
+		for (size_t j = 0; j < vv->get_num_vecs(); j++) {
+			vec_lens.push_back(vv->get_length(j));
+			vec_data.push_back(vv->get_raw_arr(j));
+		}
+	}
+
+	type_mem_vector_vector<int>::ptr vv1 = type_mem_vector_vector<int>::create();
+	BOOST_FOREACH(vector::ptr vv, vvs)
+		vv1->append(*vv);
+	assert(vv1->get_num_vecs() == vec_lens.size());
+	for (size_t i = 0; i < vec_lens.size(); i++) {
+		assert(vv1->get_length(i) == vec_lens[i]);
+		verify_data(vv1->get_raw_arr(i), vec_data[i],
+				vv1->get_length(i) * vv1->get_entry_size());
+	}
+
+	type_mem_vector_vector<int>::ptr vv2 = type_mem_vector_vector<int>::create();
+	vv2->append(vvs.begin(), vvs.end());
+	assert(vv2->get_num_vecs() == vec_lens.size());
+	for (size_t i = 0; i < vec_lens.size(); i++) {
+		assert(vv2->get_length(i) == vec_lens[i]);
+		verify_data(vv2->get_raw_arr(i), vec_data[i],
+				vv2->get_length(i) * vv2->get_entry_size());
+	}
+}
+
 int main()
 {
 	test_groupby();
+	test_append_vecs();
+	test_append_vvs();
 }

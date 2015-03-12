@@ -73,6 +73,21 @@ protected:
 		this->data = data;
 		this->capacity = size;
 	}
+
+	const char *get_raw_data() const {
+		return data.get();
+	}
+
+	size_t get_num_bytes(off_t idx) const {
+		return vec_offs[idx + 1] - vec_offs[idx];
+	}
+
+	void append_mem_vector(const mem_vector &vec);
+	void append_mem_vectors(std::vector<vector::ptr>::const_iterator vec_it,
+			std::vector<vector::ptr>::const_iterator vec_end);
+	void append_mem_vv(const mem_vector_vector &vv);
+	void append_mem_vvs(std::vector<vector::ptr>::const_iterator vec_it,
+			std::vector<vector::ptr>::const_iterator vec_end);
 public:
 	typedef std::shared_ptr<mem_vector_vector> ptr;
 

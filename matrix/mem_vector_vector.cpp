@@ -37,10 +37,95 @@ void mem_vector_vector::expand(size_t min)
 	data = new_data;
 }
 
+void mem_vector_vector::append_mem_vector(const mem_vector &mem_vec)
+{
+	vector::resize(get_num_vecs() + 1);
+	size_t vec_num_bytes = mem_vec.get_length() * mem_vec.get_entry_size();
+	if (get_num_bytes() + vec_num_bytes > capacity)
+		expand(get_num_bytes() + vec_num_bytes);
+	assert(get_num_bytes() + vec_num_bytes <= capacity);
+	memcpy(get_end(), mem_vec.get_raw_arr(), vec_num_bytes);
+	off_t new_off = get_num_bytes() + vec_num_bytes;
+	vec_offs.push_back(new_off);
+}
+
+void mem_vector_vector::append_mem_vectors(
+		std::vector<vector::ptr>::const_iterator vec_it,
+		std::vector<vector::ptr>::const_iterator vec_end)
+{
+	size_t tot_bytes = 0;
+	for (auto it = vec_it; it != vec_end; it++)
+		tot_bytes += (*it)->get_length() * (*it)->get_type().get_size();
+	vector::resize(get_num_vecs() + (vec_end - vec_it));
+	if (get_num_bytes() + tot_bytes > capacity)
+		expand(get_num_bytes() + tot_bytes);
+
+	for (auto it = vec_it; it != vec_end; it++) {
+		const mem_vector &mem_vec = (const mem_vector &) **it;
+		size_t vec_num_bytes = mem_vec.get_length() * mem_vec.get_type().get_size();
+		assert(get_num_bytes() + vec_num_bytes <= capacity);
+		memcpy(get_end(), mem_vec.get_raw_arr(), vec_num_bytes);
+		off_t new_off = get_num_bytes() + vec_num_bytes;
+		vec_offs.push_back(new_off);
+	}
+}
+
+void mem_vector_vector::append_mem_vv(const mem_vector_vector &vv)
+{
+	// Copy all data in `vv' to this vector vector.
+	size_t vv_num_bytes = vv.get_num_bytes();
+	if (get_num_bytes() + vv_num_bytes > capacity)
+		expand(get_num_bytes() + vv_num_bytes);
+	assert(get_num_bytes() + vv_num_bytes <= capacity);
+	memcpy(get_end(), vv.get_raw_data(), vv_num_bytes);
+
+	// Construct the offset metadata of this vector vector.
+	size_t num_vecs = vv.get_num_vecs();
+	vector::resize(get_num_vecs() + num_vecs);
+	off_t off_end = get_num_bytes();
+	for (size_t i = 0; i < num_vecs; i++) {
+		off_end += vv.get_num_bytes(i);
+		vec_offs.push_back(off_end);
+	}
+}
+
+void mem_vector_vector::append_mem_vvs(
+		std::vector<vector::ptr>::const_iterator vec_it,
+		std::vector<vector::ptr>::const_iterator vec_end)
+{
+	size_t tot_bytes = 0;
+	size_t tot_num_vecs = 0;
+	for (auto it = vec_it; it != vec_end; it++) {
+		mem_vector_vector &vv = (mem_vector_vector &) **it;
+		tot_bytes += vv.get_num_bytes();
+		tot_num_vecs += vv.get_num_vecs();
+	}
+	vector::resize(get_num_vecs() + tot_num_vecs);
+	if (get_num_bytes() + tot_bytes > capacity)
+		expand(get_num_bytes() + tot_bytes);
+
+	for (auto it = vec_it; it != vec_end; it++) {
+		const mem_vector_vector &vv = (const mem_vector_vector &) **it;
+		size_t vv_num_bytes = vv.get_num_bytes();
+		assert(get_num_bytes() + vv_num_bytes <= capacity);
+		memcpy(get_end(), vv.get_raw_data(), vv_num_bytes);
+
+		off_t off_end = get_num_bytes();
+		size_t num_vecs = vv.get_num_vecs();
+		for (size_t i = 0; i < num_vecs; i++) {
+			off_end += vv.get_num_bytes(i);
+			vec_offs.push_back(off_end);
+		}
+	}
+}
+
 bool mem_vector_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end)
 {
-	size_t tot_bytes = 0;
+	if (vec_it == vec_end)
+		return true;
+
+	bool is_vv = is_vector_vector(**vec_it);
 	for (auto it = vec_it; it != vec_end; it++) {
 		if (!(*it)->is_in_mem()) {
 			BOOST_LOG_TRIVIAL(error)
@@ -51,20 +136,16 @@ bool mem_vector_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 			BOOST_LOG_TRIVIAL(error) << "The two vectors don't have the same type";
 			return false;
 		}
-		tot_bytes += (*it)->get_length() * (*it)->get_type().get_size();
+		if (is_vv != is_vector_vector(**it)) {
+			BOOST_LOG_TRIVIAL(error) << "Not all vectors contain the same";
+			return false;
+		}
 	}
+	if (is_vv)
+		append_mem_vvs(vec_it, vec_end);
+	else
+		append_mem_vectors(vec_it, vec_end);
 
-	vector::resize(get_num_vecs() + (vec_end - vec_it));
-	if (get_num_bytes() + tot_bytes > capacity)
-		expand(get_num_bytes() + tot_bytes);
-	for (auto it = vec_it; it != vec_end; it++) {
-		const mem_vector &mem_vec = (const mem_vector &) **it;
-		size_t vec_num_bytes = mem_vec.get_length() * mem_vec.get_type().get_size();
-		assert(get_num_bytes() + vec_num_bytes <= capacity);
-		memcpy(get_end(), mem_vec.get_raw_arr(), vec_num_bytes);
-		off_t new_off = get_num_bytes() + vec_num_bytes;
-		vec_offs.push_back(new_off);
-	}
 	return true;
 }
 
@@ -80,15 +161,11 @@ bool mem_vector_vector::append(const vector &vec)
 		return false;
 	}
 
-	vector::resize(get_num_vecs() + 1);
-	const mem_vector &mem_vec = (const mem_vector &) vec;
-	size_t vec_num_bytes = mem_vec.get_length() * mem_vec.get_entry_size();
-	if (get_num_bytes() + vec_num_bytes > capacity)
-		expand(get_num_bytes() + vec_num_bytes);
-	assert(get_num_bytes() + vec_num_bytes <= capacity);
-	memcpy(get_end(), mem_vec.get_raw_arr(), vec_num_bytes);
-	off_t new_off = get_num_bytes() + vec_num_bytes;
-	vec_offs.push_back(new_off);
+	if (is_vector_vector(vec))
+		append_mem_vv((const mem_vector_vector &) vec);
+	else
+		append_mem_vector((const mem_vector &) vec);
+
 	return true;
 }
 

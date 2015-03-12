@@ -47,8 +47,12 @@ public:
 
 	typedef std::shared_ptr<vector_vector> ptr;
 
+	static bool is_vector_vector(const vector &vec) {
+		return vec.get_entry_size() == 0;
+	}
+
 	static ptr cast(vector::ptr vec) {
-		if (vec->get_entry_size() != 0) {
+		if (!is_vector_vector(*vec)) {
 			BOOST_LOG_TRIVIAL(error) << "This isn't a vector of vectors";
 			return ptr();
 		}
