@@ -96,7 +96,7 @@ public:
 	}
 
 	virtual size_t get_length(off_t idx) const {
-		return vec_offs[idx + 1] - vec_offs[idx];
+		return (vec_offs[idx + 1] - vec_offs[idx]) / get_type().get_size();
 	}
 	virtual const char*get_raw_arr(off_t idx) const {
 		return data.get() + vec_offs[idx];
