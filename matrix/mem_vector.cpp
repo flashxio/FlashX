@@ -206,6 +206,7 @@ data_frame::ptr mem_vector::groupby(const gr_apply_operate<mem_vector> &op,
 	off_t *end_par_starts = std::unique(par_starts, par_starts + num_omp + 1);
 	int num_parts = end_par_starts - par_starts - 1;
 	std::vector<data_frame::ptr> sub_results(num_parts);
+#pragma omp parallel for
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = par_starts[i];
 		off_t end = par_starts[i + 1];
@@ -214,6 +215,9 @@ data_frame::ptr mem_vector::groupby(const gr_apply_operate<mem_vector> &op,
 				with_val);
 	}
 
+	// TODO This isn't a good way to merge the subvectors.
+	// If we know the length of the output, we can preallocate memory and
+	// write the result to the preallocated memory directly.
 	data_frame::ptr ret = sub_results[0];
 	if (num_parts > 1)
 		ret->append(sub_results.begin() + 1, sub_results.end());
