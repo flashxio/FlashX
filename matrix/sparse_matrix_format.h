@@ -204,8 +204,8 @@ public:
 
 	const sparse_block_2d &next() {
 		const sparse_block_2d *orig = block;
-		block = (const sparse_block_2d *) ((const char *) block)
-			+ block->get_size();
+		block = (const sparse_block_2d *) (((const char *) block)
+			+ block->get_size());
 		return *orig;
 	}
 };
