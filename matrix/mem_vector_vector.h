@@ -38,6 +38,7 @@ class mem_vector_vector: public vector_vector
 		}
 	};
 
+	// The last offset is the end of the last vector.
 	std::vector<off_t> vec_offs;
 
 	// The start pointer to the data
@@ -63,6 +64,14 @@ protected:
 		vec_offs.push_back(0);
 		capacity = 1024;
 		data = std::shared_ptr<char>((char *) malloc(capacity), deleter());
+	}
+
+	mem_vector_vector(std::shared_ptr<char> data,
+			size_t size, const std::vector<off_t> &offs): vector_vector(
+				offs.size() - 1, true) {
+		this->vec_offs = offs;
+		this->data = data;
+		this->capacity = size;
 	}
 public:
 	typedef std::shared_ptr<mem_vector_vector> ptr;
@@ -92,9 +101,19 @@ class type_mem_vector_vector: public mem_vector_vector
 {
 	type_mem_vector_vector() {
 	}
+
+	type_mem_vector_vector(std::shared_ptr<char> data,
+			size_t size, const std::vector<off_t> &offs): mem_vector_vector(
+				data, size, offs) {
+	}
 public:
 	static ptr create() {
 		return ptr(new type_mem_vector_vector<T>());
+	}
+
+	static ptr create(std::shared_ptr<char> data,
+			size_t size, const std::vector<off_t> &offs) {
+		return ptr(new type_mem_vector_vector<T>(data, size, offs));
 	}
 
 	virtual const scalar_type &get_type() const {

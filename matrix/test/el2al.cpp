@@ -202,44 +202,16 @@ public:
 	}
 };
 
-void verify_2d_matrix(const std::string &mat_file, const std::string &mat_idx_file)
-{
-	SpM_2d_index::ptr idx = SpM_2d_index::load(mat_idx_file);
-	SpM_2d_storage::ptr mat = SpM_2d_storage::load(mat_file, idx);
-	mat->verify();
-}
-
-void create_2d_matrix(vector_vector::ptr out_adjs, vector_vector::ptr in_adjs,
-		size_t num_vertices, const std::string &mat_name)
-{
-	std::string mat_file = mat_name + ".mat";
-	std::string mat_idx_file = mat_name + ".mat_idx";
-	std::string t_mat_file = mat_name + "_t.mat";
-	std::string t_mat_idx_file = mat_name + "_t.mat_idx";
-
-	// Construct 2D partitioning of the adjacency matrix.
-	size_t block_height
-		= ((size_t) std::numeric_limits<unsigned short>::max()) + 1;
-	block_2d_size block_size(block_height, block_height);
-	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file);
-	verify_2d_matrix(mat_file, mat_idx_file);
-
-	// Construct the transpose of the adjacency matrix.
-	export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file);
-	verify_2d_matrix(t_mat_file, t_mat_idx_file);
-}
-
 int main(int argc, char *argv[])
 {
-	if (argc < 4) {
-		fprintf(stderr, "el2al edge_file graph_file matrix_file\n");
+	if (argc < 3) {
+		fprintf(stderr, "el2al edge_file graph_file\n");
 		return -1;
 	}
 
 	std::string file_name = argv[1];
 	std::string adj_file = std::string(argv[2]) + ".adj";
 	std::string index_file = std::string(argv[2]) + ".index";
-	std::string mat_name = std::string(argv[3]);
 	std::vector<std::string> files;
 	files.push_back(file_name);
 
@@ -322,6 +294,5 @@ int main(int argc, char *argv[])
 	assert(ret);
 	fclose(f_graph);
 
-	create_2d_matrix(out_adjs, in_adjs, num_vertices, mat_name);
 	return 0;
 }
