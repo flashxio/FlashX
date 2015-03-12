@@ -25,6 +25,8 @@ namespace fm
 void matrix_header::init(matrix_type mat_type, size_t entry_size, size_t nrows,
 		size_t ncols, matrix_layout_t layout, prim_type data_type)
 {
+	memset(u.page, 0, sizeof(u.page));
+
 	u.d.magic_number = MAGIC_NUMBER;
 	u.d.version_number = CURR_VERSION;
 	u.d.type = mat_type;
