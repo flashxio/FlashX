@@ -137,9 +137,15 @@ void SpM_2d_storage::verify() const
 	block_2d_size block_size = index->get_header().get_2d_block_size();
 	for (size_t i = 0; i < get_num_block_rows(); i++) {
 		block_row_iterator brow_it = get_block_row_it(i);
+		long prev_block_col_idx = -1;
+		size_t num_blocks = 0;
 		while (brow_it.has_next()) {
 			const sparse_block_2d &block = brow_it.next();
+			assert(block.get_block_row_idx() == i);
+			assert((long) block.get_block_col_idx() > prev_block_col_idx);
+			prev_block_col_idx = block.get_block_col_idx();
 			block.verify(block_size);
+			num_blocks++;
 		}
 	}
 }
@@ -246,7 +252,6 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 	size_t block_width = block_size.get_num_cols();
 	size_t num_blocks = ceil(((double) row_len) / block_width);
 	factor_value_t block_row_id = *(const factor_value_t *) key;
-	printf("block row id: %d, #blocks: %ld\n", block_row_id, num_blocks);
 	size_t tot_num_non_zeros = 0;
 	size_t max_row_parts = 0;
 	for (size_t i = 0; i < val.get_num_vecs(); i++) {
