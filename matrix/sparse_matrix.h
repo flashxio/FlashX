@@ -160,8 +160,12 @@ public:
 	}
 
 	virtual void run(char *buf, size_t size) {
-		block_row_iterator it((const sparse_block_2d *) buf,
-				(const sparse_block_2d *) (buf + size));
+		off_t orig_off = io.get_loc().get_offset();
+		off_t local_off = orig_off - ROUND_PAGE(orig_off);
+		assert(local_off + io.get_size() <= size);
+		const sparse_block_2d *block = (const sparse_block_2d *) (buf + local_off);
+		block_row_iterator it(block,
+				(const sparse_block_2d *) (buf + local_off + io.get_size()));
 		while (it.has_next())
 			run_on_block(it.next());
 	}
