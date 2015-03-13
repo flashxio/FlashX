@@ -83,12 +83,12 @@ public:
  * in the FlashGraph format.
  */
 template<class T>
-class fg_row_multiply_task: public fg_row_compute_task
+class fg_row_spmv_task: public fg_row_compute_task
 {
 	const type_mem_vector<T> &input;
 	type_mem_vector<T> &output;
 public:
-	fg_row_multiply_task(const type_mem_vector<T> &_input, type_mem_vector<T> &_output,
+	fg_row_spmv_task(const type_mem_vector<T> &_input, type_mem_vector<T> &_output,
 			const matrix_io &_io): fg_row_compute_task(_io), input(
 				_input), output(_output) {
 	}
@@ -97,7 +97,7 @@ public:
 };
 
 template<class T>
-void fg_row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
+void fg_row_spmv_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 {
 	T res = 0;
 	for (size_t i = 0; i < v.get_num_edges(); i++) {
@@ -112,7 +112,7 @@ void fg_row_multiply_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
  * a native format with 2D partitioning.
  */
 template<class T>
-class block_multiply_task: public compute_task
+class block_spmv_task: public compute_task
 {
 	matrix_io io;
 	block_2d_size block_size;
@@ -145,7 +145,7 @@ class block_multiply_task: public compute_task
 			run_on_row_part(it.next(), start_row_idx, start_col_idx);
 	}
 public:
-	block_multiply_task(const type_mem_vector<T> &_input,
+	block_spmv_task(const type_mem_vector<T> &_input,
 			type_mem_vector<T> &_output, const matrix_io &_io,
 			const block_2d_size &_block_size): io(_io), block_size(
 				_block_size), input(_input), output(_output) {
@@ -155,7 +155,7 @@ public:
 		buf = (char *) valloc(buf_size);
 	}
 
-	~block_multiply_task() {
+	~block_spmv_task() {
 		free(buf);
 	}
 
@@ -177,45 +177,45 @@ public:
 };
 
 template<class T>
-class fg_row_multiply_creator: public task_creator
+class fg_row_spmv_creator: public task_creator
 {
 	const type_mem_vector<T> &input;
 	type_mem_vector<T> &output;
 
-	fg_row_multiply_creator(const type_mem_vector<T> &_input,
+	fg_row_spmv_creator(const type_mem_vector<T> &_input,
 			type_mem_vector<T> &_output): input(_input), output(_output) {
 	}
 public:
 	static task_creator::ptr create(const type_mem_vector<T> &_input,
 			type_mem_vector<T> &_output) {
-		return task_creator::ptr(new fg_row_multiply_creator<T>(_input, _output));
+		return task_creator::ptr(new fg_row_spmv_creator<T>(_input, _output));
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new fg_row_multiply_task<T>(input, output, io));
+		return compute_task::ptr(new fg_row_spmv_task<T>(input, output, io));
 	}
 };
 
 template<class T>
-class b2d_multiply_creator: public task_creator
+class b2d_spmv_creator: public task_creator
 {
 	const type_mem_vector<T> &input;
 	type_mem_vector<T> &output;
 	block_2d_size block_size;
 
-	b2d_multiply_creator(const type_mem_vector<T> &_input,
+	b2d_spmv_creator(const type_mem_vector<T> &_input,
 			type_mem_vector<T> &_output, const block_2d_size &_block_size): input(
 				_input), output(_output), block_size(_block_size) {
 	}
 public:
 	static task_creator::ptr create(const type_mem_vector<T> &_input,
 			type_mem_vector<T> &_output, const block_2d_size &_block_size) {
-		return task_creator::ptr(new b2d_multiply_creator<T>(_input, _output,
+		return task_creator::ptr(new b2d_spmv_creator<T>(_input, _output,
 					_block_size));
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new block_multiply_task<T>(input, output,
+		return compute_task::ptr(new block_spmv_task<T>(input, output,
 					io, block_size));
 	}
 };
@@ -315,9 +315,9 @@ public:
 	task_creator::ptr get_multiply_creator(type_mem_vector<T> &in,
 			type_mem_vector<T> &out) const {
 		if (is_fg)
-			return fg_row_multiply_creator<T>::create(in, out);
+			return fg_row_spmv_creator<T>::create(in, out);
 		else
-			return b2d_multiply_creator<T>::create(in, out, block_size);
+			return b2d_spmv_creator<T>::create(in, out, block_size);
 	}
 
 	template<class T>
