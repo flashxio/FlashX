@@ -108,54 +108,26 @@ void fg_row_spmv_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 }
 
 /*
- * This task performs matrix vector multiplication on a sparse matrix in
- * a native format with 2D partitioning.
+ * A compute task runs on a 2D-partitioned block of a sparse matrix.
  */
-template<class T>
-class block_spmv_task: public compute_task
+class block_compute_task: public compute_task
 {
 	matrix_io io;
-	block_2d_size block_size;
 	off_t off;
 	char *buf;
 	size_t buf_size;
-
-	const type_mem_vector<T> &input;
-	type_mem_vector<T> &output;
-
-	void run_on_row_part(const sparse_row_part &rpart, size_t start_row_idx,
-			size_t start_col_idx) {
-		size_t row_idx = start_row_idx + rpart.get_rel_row_idx();
-		size_t num_non_zeros = rpart.get_num_non_zeros();
-		T sum = 0;
-		for (size_t i = 0; i < num_non_zeros; i++) {
-			size_t col_idx = start_col_idx + rpart.get_rel_col_idx(i);
-			sum += input.get(col_idx);
-		}
-		output.set(row_idx, output.get(row_idx) + sum);
-	}
-
-	void run_on_block(const sparse_block_2d &block) {
-		row_part_iterator it = block.get_iterator();
-		size_t start_col_idx
-			= block.get_block_col_idx() * block_size.get_num_cols();
-		size_t start_row_idx
-			= block.get_block_row_idx() * block_size.get_num_rows();
-		while (it.has_next())
-			run_on_row_part(it.next(), start_row_idx, start_col_idx);
-	}
+protected:
+	block_2d_size block_size;
 public:
-	block_spmv_task(const type_mem_vector<T> &_input,
-			type_mem_vector<T> &_output, const matrix_io &_io,
-			const block_2d_size &_block_size): io(_io), block_size(
-				_block_size), input(_input), output(_output) {
+	block_compute_task(const matrix_io &_io, const block_2d_size &_block_size): io(
+			_io), block_size(_block_size) {
 		off_t orig_off = io.get_loc().get_offset();
 		off = ROUND_PAGE(orig_off);
 		buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
 		buf = (char *) valloc(buf_size);
 	}
 
-	~block_spmv_task() {
+	~block_compute_task() {
 		free(buf);
 	}
 
@@ -173,6 +145,84 @@ public:
 	virtual safs::io_request get_request() const {
 		return safs::io_request(buf, safs::data_loc_t(io.get_loc().get_file_id(),
 					off), buf_size, READ);
+	}
+
+	virtual void run_on_block(const sparse_block_2d &block) = 0;
+};
+
+template<class T>
+class block_spmm_task: public block_compute_task
+{
+	const mem_row_dense_matrix &input;
+	mem_row_dense_matrix &output;
+
+	void run_on_row_part(const sparse_row_part &rpart, size_t start_row_idx,
+			size_t start_col_idx) {
+		size_t row_idx = start_row_idx + rpart.get_rel_row_idx();
+		size_t num_non_zeros = rpart.get_num_non_zeros();
+		size_t row_width = output.get_num_cols();
+		T *dest_row = (T *) output.get_row(row_idx);
+		for (size_t i = 0; i < num_non_zeros; i++) {
+			size_t col_idx = start_col_idx + rpart.get_rel_col_idx(i);
+			const T *src_row = (const T *) input.get_row(col_idx);
+			for (size_t j = 0; j < row_width; j++)
+				dest_row[j] += src_row[j];
+		}
+	}
+public:
+	block_spmm_task(const mem_row_dense_matrix &_input,
+			mem_row_dense_matrix &_output, const matrix_io &_io,
+			const block_2d_size &_block_size): block_compute_task(_io,
+				_block_size), input(_input), output(_output) {
+	}
+
+	void run_on_block(const sparse_block_2d &block) {
+		row_part_iterator it = block.get_iterator();
+		size_t start_col_idx
+			= block.get_block_col_idx() * block_size.get_num_cols();
+		size_t start_row_idx
+			= block.get_block_row_idx() * block_size.get_num_rows();
+		while (it.has_next())
+			run_on_row_part(it.next(), start_row_idx, start_col_idx);
+	}
+};
+
+/*
+ * This task performs matrix vector multiplication on a sparse matrix in
+ * a native format with 2D partitioning.
+ */
+template<class T>
+class block_spmv_task: public block_compute_task
+{
+	const type_mem_vector<T> &input;
+	type_mem_vector<T> &output;
+
+	void run_on_row_part(const sparse_row_part &rpart, size_t start_row_idx,
+			size_t start_col_idx) {
+		size_t row_idx = start_row_idx + rpart.get_rel_row_idx();
+		size_t num_non_zeros = rpart.get_num_non_zeros();
+		T sum = 0;
+		for (size_t i = 0; i < num_non_zeros; i++) {
+			size_t col_idx = start_col_idx + rpart.get_rel_col_idx(i);
+			sum += input.get(col_idx);
+		}
+		output.set(row_idx, output.get(row_idx) + sum);
+	}
+public:
+	block_spmv_task(const type_mem_vector<T> &_input,
+			type_mem_vector<T> &_output, const matrix_io &_io,
+			const block_2d_size &_block_size): block_compute_task(_io,
+				_block_size), input(_input), output(_output) {
+	}
+
+	void run_on_block(const sparse_block_2d &block) {
+		row_part_iterator it = block.get_iterator();
+		size_t start_col_idx
+			= block.get_block_col_idx() * block_size.get_num_cols();
+		size_t start_row_idx
+			= block.get_block_row_idx() * block_size.get_num_rows();
+		while (it.has_next())
+			run_on_row_part(it.next(), start_row_idx, start_col_idx);
 	}
 };
 
@@ -220,6 +270,31 @@ public:
 	}
 };
 
+template<class T>
+class b2d_spmm_creator: public task_creator
+{
+	const mem_row_dense_matrix &input;
+	mem_row_dense_matrix &output;
+	block_2d_size block_size;
+
+	b2d_spmm_creator(const mem_row_dense_matrix &_input,
+			mem_row_dense_matrix &_output, const block_2d_size &_block_size): input(
+				_input), output(_output), block_size(_block_size) {
+		assert(input.get_num_cols() == output.get_num_cols());
+	}
+public:
+	static task_creator::ptr create(const mem_row_dense_matrix &_input,
+			mem_row_dense_matrix &_output, const block_2d_size &_block_size) {
+		return task_creator::ptr(new b2d_spmm_creator<T>(_input, _output,
+					_block_size));
+	}
+
+	virtual compute_task::ptr create(const matrix_io &io) const {
+		return compute_task::ptr(new block_spmm_task<T>(input, output,
+					io, block_size));
+	}
+};
+
 /*
  * This is a base class for a sparse matrix. It provides a set of functions
  * to perform computation on the sparse matrix. Currently, it has matrix
@@ -249,12 +324,24 @@ class sparse_matrix
 	}
 
 	template<class T>
+	task_creator::ptr get_multiply_creator(const mem_row_dense_matrix &in,
+			mem_row_dense_matrix &out) const {
+		assert(!is_fg);
+		return b2d_spmm_creator<T>::create(in, out, block_size);
+	}
+
+	template<class T>
 	dense_matrix::ptr multiply_matrix(mem_row_dense_matrix::ptr row_m) const {
+		size_t ncol = row_m->get_num_cols();
+		mem_row_dense_matrix::ptr ret = mem_row_dense_matrix::create(
+				get_num_rows(), ncol, sizeof(T));
+		compute(get_multiply_creator<T>(*row_m, *ret));
+		return ret;
 	}
 
 	template<class T>
 	dense_matrix::ptr multiply_matrix(mem_col_dense_matrix::ptr col_m) const {
-		size_t ncol = in->get_num_cols();
+		size_t ncol = col_m->get_num_cols();
 		mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
 				get_num_rows(), ncol, sizeof(T));
 		std::vector<off_t> col_idx(1);
