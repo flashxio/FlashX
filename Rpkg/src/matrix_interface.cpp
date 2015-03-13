@@ -41,7 +41,8 @@ template<class EntryType>
 dense_matrix::ptr create_dense_matrix(size_t nrow, size_t ncol,
 		matrix_layout_t layout, EntryType initv)
 {
-	dense_matrix::ptr m = dense_matrix::create(nrow, ncol, sizeof(EntryType),
+	dense_matrix::ptr m = dense_matrix::create(nrow, ncol,
+			get_scalar_type<EntryType>(),
 			// TODO let's just use in-memory dense matrix first.
 			layout, true);
 	m->set_data(set_const_operate<EntryType>(initv));
@@ -627,7 +628,7 @@ static const bulk_uoperate *get_uop(SEXP pfun, prim_type type)
 	return op;
 }
 
-static prim_type get_scalar_type(SEXP obj)
+static prim_type get_prim_type(SEXP obj)
 {
 	if (R_is_integer(obj))
 		return prim_type::P_INTEGER;
@@ -651,7 +652,8 @@ RcppExport SEXP R_FM_mapply2(SEXP pfun, SEXP po1, SEXP po2)
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
 
-	const bulk_operate *op = get_op(pfun, m1->get_type(), m2->get_type());
+	const bulk_operate *op = get_op(pfun, m1->get_type().get_type(),
+			m2->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
@@ -704,7 +706,8 @@ RcppExport SEXP R_FM_mapply2_AE(SEXP pfun, SEXP po1, SEXP po2)
 	bool is_vec = is_vector(obj1);
 	dense_matrix::ptr m1 = get_matrix<dense_matrix>(obj1);
 
-	const bulk_operate *op = get_op(pfun, m1->get_type(), get_scalar_type(po2));
+	const bulk_operate *op = get_op(pfun, m1->get_type().get_type(),
+			get_prim_type(po2));
 	if (op == NULL)
 		return R_NilValue;
 
@@ -772,7 +775,8 @@ RcppExport SEXP R_FM_mapply2_EA(SEXP pfun, SEXP po1, SEXP po2)
 	bool is_vec = is_vector(obj2);
 	dense_matrix::ptr m2 = get_matrix<dense_matrix>(obj2);
 
-	const bulk_operate *op = get_op(pfun, get_scalar_type(po1), m2->get_type());
+	const bulk_operate *op = get_op(pfun, get_prim_type(po1),
+			m2->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
@@ -812,7 +816,7 @@ RcppExport SEXP R_FM_sapply(SEXP pfun, SEXP pobj)
 	bool is_vec = is_vector(obj);
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj);
 
-	const bulk_uoperate *op = get_uop(pfun, m->get_type());
+	const bulk_uoperate *op = get_uop(pfun, m->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
@@ -850,7 +854,8 @@ RcppExport SEXP R_FM_agg(SEXP pfun, SEXP pobj)
 
 	dense_matrix::ptr m = get_matrix<dense_matrix>(obj1);
 	// For aggregation, the left and right operands have the same type.
-	const bulk_operate *op = get_op(pfun, m->get_type(), m->get_type());
+	const bulk_operate *op = get_op(pfun, m->get_type().get_type(),
+			m->get_type().get_type());
 	if (op == NULL)
 		return R_NilValue;
 
@@ -891,7 +896,7 @@ RcppExport SEXP R_FM_typeof(SEXP pmat)
 	}
 	else {
 		dense_matrix::ptr mat = get_matrix<dense_matrix>(pmat);
-		switch(mat->get_type()) {
+		switch(mat->get_type().get_type()) {
 			case prim_type::P_BOOL:
 				ret[0] = Rcpp::String("logical");
 				break;
