@@ -21,19 +21,13 @@ int main(int argc, char *argv[])
 {
 	if (argc < 4) {
 		fprintf(stderr,
-				"test conf_file matrix_file index_file [t_matrix_file t_index_file]\n");
+				"test conf_file matrix_file index_file\n");
 		exit(1);
 	}
 
 	std::string conf_file = argv[1];
 	std::string matrix_file = argv[2];
 	std::string index_file = argv[3];
-	std::string t_matrix_file;
-	std::string t_index_file;
-	if (argc == 6) {
-		t_matrix_file = argv[4];
-		t_index_file = argv[5];
-	}
 	signal(SIGINT, int_handler);
 
 	struct timeval start, end;
@@ -43,15 +37,7 @@ int main(int argc, char *argv[])
 	SpM_2d_index::ptr index = SpM_2d_index::load(index_file);
 	SpM_2d_storage::ptr mat_store = SpM_2d_storage::load(matrix_file, index);
 
-	sparse_matrix::ptr mat;
-	if (t_matrix_file.empty())
-		mat = sparse_matrix::create(index, mat_store);
-	else {
-		SpM_2d_index::ptr t_index = SpM_2d_index::load(t_index_file);
-		mat = sparse_matrix::create(index, mat_store, t_index,
-				SpM_2d_storage::load(t_matrix_file, t_index));
-	}
-
+	sparse_matrix::ptr mat = sparse_matrix::create(index, mat_store);
 	type_mem_vector<double>::ptr in_vec
 		= type_mem_vector<double>::create(mat->get_num_cols());
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
