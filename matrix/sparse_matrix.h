@@ -238,6 +238,36 @@ class sparse_matrix
 	// If the matrix is stored in the native format and is partitioned
 	// in two dimensions, we need to know the block size.
 	block_2d_size block_size;
+
+	template<class T>
+	task_creator::ptr get_multiply_creator(type_mem_vector<T> &in,
+			type_mem_vector<T> &out) const {
+		if (is_fg)
+			return fg_row_spmv_creator<T>::create(in, out);
+		else
+			return b2d_spmv_creator<T>::create(in, out, block_size);
+	}
+
+	template<class T>
+	dense_matrix::ptr multiply_matrix(mem_row_dense_matrix::ptr row_m) const {
+	}
+
+	template<class T>
+	dense_matrix::ptr multiply_matrix(mem_col_dense_matrix::ptr col_m) const {
+		size_t ncol = in->get_num_cols();
+		mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
+				get_num_rows(), ncol, sizeof(T));
+		std::vector<off_t> col_idx(1);
+		for (size_t i = 0; i < ncol; i++) {
+			col_idx[0] = i;
+			typename type_mem_vector<T>::ptr in_col = type_mem_vector<T>::create(
+					mem_dense_matrix::cast(col_m->get_cols(col_idx)));
+			typename type_mem_vector<T>::ptr out_col = type_mem_vector<T>::create(
+					mem_dense_matrix::cast(ret->get_cols(col_idx)));
+			compute(get_multiply_creator<T>(*in_col, *out_col));
+		}
+		return ret;
+	}
 protected:
 	// This constructor is used for the sparse matrix stored
 	// in the FlashGraph format.
@@ -312,15 +342,6 @@ public:
 	}
 
 	template<class T>
-	task_creator::ptr get_multiply_creator(type_mem_vector<T> &in,
-			type_mem_vector<T> &out) const {
-		if (is_fg)
-			return fg_row_spmv_creator<T>::create(in, out);
-		else
-			return b2d_spmv_creator<T>::create(in, out, block_size);
-	}
-
-	template<class T>
 	typename type_mem_vector<T>::ptr multiply(typename type_mem_vector<T>::ptr in) const {
 		if (in->get_length() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
@@ -347,27 +368,11 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "SpMM doesn't support EM dense matrix";
 			return dense_matrix::ptr();
 		}
-		else if (in->store_layout() == matrix_layout_t::L_ROW) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "SpMM doesn't support row-wise dense matrix";
-			return dense_matrix::ptr();
-		}
-		else {
-			size_t ncol = in->get_num_cols();
-			mem_col_dense_matrix::ptr col_m = mem_col_dense_matrix::cast(in);
-			mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
-					get_num_rows(), ncol, sizeof(T));
-			std::vector<off_t> col_idx(1);
-			for (size_t i = 0; i < ncol; i++) {
-				col_idx[0] = i;
-				typename type_mem_vector<T>::ptr in_col = type_mem_vector<T>::create(
-						mem_dense_matrix::cast(col_m->get_cols(col_idx)));
-				typename type_mem_vector<T>::ptr out_col = type_mem_vector<T>::create(
-						mem_dense_matrix::cast(ret->get_cols(col_idx)));
-				compute(get_multiply_creator<T>(*in_col, *out_col));
-			}
-			return ret;
-		}
+
+		if (in->store_layout() == matrix_layout_t::L_ROW)
+			return multiply_matrix<T>(mem_row_dense_matrix::cast(in));
+		else
+			return multiply_matrix<T>(mem_col_dense_matrix::cast(in));
 	}
 };
 
