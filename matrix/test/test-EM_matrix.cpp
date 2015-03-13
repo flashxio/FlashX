@@ -57,9 +57,9 @@ EM_dense_matrix::ptr test_EM_inner_prod(size_t nrow, size_t ncol)
 	bool exist = EM_dense_matrix::exist(matrix_name);
 
 	EM_col_dense_matrix::ptr em = EM_col_dense_matrix::create(nrow, ncol,
-			sizeof(double), matrix_name);
+			get_scalar_type<double>(), matrix_name);
 	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
-			ncol, ncol, sizeof(double));
+			ncol, ncol, get_scalar_type<double>());
 
 	// Init the big external-memory matrix
 	if (!exist)
@@ -86,9 +86,9 @@ EM_dense_matrix::ptr test_EM_inner_prod(size_t nrow, size_t ncol)
 mem_dense_matrix::ptr test_IM_inner_prod(size_t nrow, size_t ncol)
 {
 	mem_col_dense_matrix::ptr big_im = mem_col_dense_matrix::create(
-			nrow, ncol, sizeof(double));
+			nrow, ncol, get_scalar_type<double>());
 	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
-			ncol, ncol, sizeof(double));
+			ncol, ncol, get_scalar_type<double>());
 	// Init the big in-memory matrix
 	big_im->set_data(set_col_operate(big_im->get_num_cols()));
 	small_im->serial_set_data(set_col_operate(small_im->get_num_cols()));

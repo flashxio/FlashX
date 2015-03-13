@@ -38,7 +38,7 @@ class mem_dense_matrix: public dense_matrix
 {
 protected:
 	mem_dense_matrix(size_t nrow, size_t ncol,
-			size_t entry_size): dense_matrix(nrow, ncol, entry_size, true) {
+			const scalar_type &type): dense_matrix(nrow, ncol, type, true) {
 	}
 
 	virtual bool verify_inner_prod(const dense_matrix &m,
@@ -95,10 +95,10 @@ class mem_row_dense_matrix: public mem_dense_matrix
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
 
 	mem_row_dense_matrix(size_t nrow, size_t ncol,
-			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
+			const scalar_type &type): mem_dense_matrix(nrow, ncol, type) {
 		if (nrow * ncol > 0) {
 			data = std::shared_ptr<char>(
-					(char *) memalign(PAGE_SIZE, nrow * ncol * entry_size),
+					(char *) memalign(PAGE_SIZE, nrow * ncol * type.get_size()),
 					deleter());
 			assert(data);
 		}
@@ -115,18 +115,18 @@ class mem_row_dense_matrix: public mem_dense_matrix
 	const mem_col_dense_matrix &get_t_mat() const;
 
 protected:
-	mem_row_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
+	mem_row_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
 			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
-				entry_size) {
+				type) {
 		this->data = data;
 	}
 public:
 	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
 
-	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
-		return ptr(new mem_row_dense_matrix(nrow, ncol, entry_size));
+	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
+		return ptr(new mem_row_dense_matrix(nrow, ncol, type));
 	}
-	static ptr create(size_t nrow, size_t ncol, size_t entry_size, FILE *f);
+	static ptr create(size_t nrow, size_t ncol, const scalar_type &type, FILE *f);
 	static ptr cast(dense_matrix::ptr);
 	static ptr cast(mem_dense_matrix::ptr);
 
@@ -192,15 +192,15 @@ class mem_col_dense_matrix: public mem_dense_matrix
 	std::shared_ptr<char> data;
 
 	mem_col_dense_matrix(std::shared_ptr<char> data, size_t nrow, size_t ncol,
-			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
+			const scalar_type &type): mem_dense_matrix(nrow, ncol, type) {
 		this->data = data;
 	}
 
 	mem_col_dense_matrix(size_t nrow, size_t ncol,
-			size_t entry_size): mem_dense_matrix(nrow, ncol, entry_size) {
+			const scalar_type &type): mem_dense_matrix(nrow, ncol, type) {
 		if (nrow * ncol > 0) {
 			data = std::shared_ptr<char>(
-					(char *) memalign(PAGE_SIZE, nrow * ncol * entry_size),
+					(char *) memalign(PAGE_SIZE, nrow * ncol * type.get_size()),
 					deleter());
 			assert(data);
 		}
@@ -212,23 +212,23 @@ class mem_col_dense_matrix: public mem_dense_matrix
 	void get_row(size_t idx, char *arr) const;
 
 protected:
-	mem_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
+	mem_col_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
 			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
-				entry_size) {
+				type) {
 		this->data = data;
 	}
 public:
 	typedef std::shared_ptr<mem_col_dense_matrix> ptr;
 
 	static ptr create(std::shared_ptr<char> data, size_t nrow, size_t ncol,
-			size_t entry_size) {
-		return ptr(new mem_col_dense_matrix(data, nrow, ncol, entry_size));
+			const scalar_type &type) {
+		return ptr(new mem_col_dense_matrix(data, nrow, ncol, type));
 	}
 
-	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
-		return ptr(new mem_col_dense_matrix(nrow, ncol, entry_size));
+	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
+		return ptr(new mem_col_dense_matrix(nrow, ncol, type));
 	}
-	static ptr create(size_t nrow, size_t ncol, size_t entry_size, FILE *f);
+	static ptr create(size_t nrow, size_t ncol, const scalar_type &type, FILE *f);
 
 	static ptr cast(dense_matrix::ptr);
 	static ptr cast(mem_dense_matrix::ptr);
@@ -294,9 +294,11 @@ class type_mem_dense_matrix
 
 	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout) {
 		if (layout == matrix_layout_t::L_COL)
-			m = mem_col_dense_matrix::create(nrow, ncol, sizeof(EntryType));
+			m = mem_col_dense_matrix::create(nrow, ncol,
+					get_scalar_type<EntryType>());
 		else if (layout == matrix_layout_t::L_ROW)
-			m = mem_row_dense_matrix::create(nrow, ncol, sizeof(EntryType));
+			m = mem_row_dense_matrix::create(nrow, ncol,
+					get_scalar_type<EntryType>());
 		else
 			assert(0);
 	}
@@ -304,9 +306,11 @@ class type_mem_dense_matrix
 	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const type_set_operate<EntryType> &op, bool parallel) {
 		if (layout == matrix_layout_t::L_COL)
-			m = mem_col_dense_matrix::create(nrow, ncol, sizeof(EntryType));
+			m = mem_col_dense_matrix::create(nrow, ncol,
+					get_scalar_type<EntryType>());
 		else if (layout == matrix_layout_t::L_ROW)
-			m = mem_row_dense_matrix::create(nrow, ncol, sizeof(EntryType));
+			m = mem_row_dense_matrix::create(nrow, ncol,
+					get_scalar_type<EntryType>());
 		else
 			assert(0);
 		if (parallel)
@@ -332,7 +336,7 @@ public:
 	}
 
 	static ptr create(mem_dense_matrix::ptr m) {
-		assert(m->get_entry_size() == sizeof(EntryType));
+		assert(m->get_type() == get_scalar_type<EntryType>());
 		return ptr(new type_mem_dense_matrix<EntryType>(m));
 	}
 

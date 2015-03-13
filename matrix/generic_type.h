@@ -177,6 +177,8 @@ const scalar_type &get_scalar_type()
 	return t;
 }
 
+const scalar_type &get_scalar_type(prim_type type);
+
 /**
  * This class defines a generic type for a scalar variable.
  * It shouldn't be used in an array because it has a lot of overhead.

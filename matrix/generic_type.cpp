@@ -46,15 +46,32 @@ mem_vector_vector::ptr scalar_type_impl<T>::create_mem_vec_vec() const
 	return type_mem_vector_vector<T>::create();
 }
 
-template class scalar_type_impl<bool>;
-template class scalar_type_impl<char>;
-template class scalar_type_impl<short>;
-template class scalar_type_impl<int>;
-template class scalar_type_impl<long>;
-template class scalar_type_impl<float>;
-template class scalar_type_impl<double>;
-template class scalar_type_impl<unsigned short>;
-template class scalar_type_impl<unsigned int>;
-template class scalar_type_impl<unsigned long>;
+const scalar_type &get_scalar_type(prim_type type)
+{
+	switch(type) {
+		case P_CHAR:
+			return get_scalar_type<char>();
+		case P_SHORT:
+			return get_scalar_type<short>();
+		case P_INTEGER:
+			return get_scalar_type<int>();
+		case P_LONG:
+			return get_scalar_type<long>();
+		case P_FLOAT:
+			return get_scalar_type<float>();
+		case P_DOUBLE:
+			return get_scalar_type<double>();
+		case P_BOOL:
+			return get_scalar_type<bool>();
+		case P_USHORT:
+			return get_scalar_type<unsigned short>();
+		case P_UINT:
+			return get_scalar_type<unsigned int>();
+		case P_ULONG:
+			return get_scalar_type<unsigned long>();
+		default:
+			throw invalid_arg_exception("invalid prim type");
+	}
+}
 
 }

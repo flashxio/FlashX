@@ -26,6 +26,7 @@
 
 #include "generic_type.h"
 #include "matrix_header.h"
+#include "generic_type.h"
 
 namespace fm
 {
@@ -45,14 +46,23 @@ class dense_matrix
 {
 	size_t nrow;
 	size_t ncol;
-	size_t entry_size;
 	bool in_mem;
+	// This is kind of redundant because we can always get the entry size
+	// from the type. However, getting the entry size of the type requires
+	// to call a virtual method. Storing the entry size here can avoid
+	// the function call. It doesn't increase the size of the data structure
+	// due to the data alignment by the compiler.
+	int entry_size;
+	// The type is a reference. It makes the dense matrix object uncopiable.
+	// Maybe this is what we want.
+	const scalar_type &type;
 protected:
-	dense_matrix(size_t nrow, size_t ncol, size_t entry_size, bool in_mem) {
+	dense_matrix(size_t nrow, size_t ncol, const scalar_type &_type,
+			bool in_mem): type(_type) {
 		this->nrow = nrow;
 		this->ncol = ncol;
-		this->entry_size = entry_size;
 		this->in_mem = in_mem;
+		this->entry_size = type.get_size();
 	}
 	virtual bool verify_aggregate(const bulk_operate &op, scalar_variable &res) const;
 	virtual bool verify_inner_prod(const dense_matrix &m,
@@ -63,7 +73,7 @@ protected:
 public:
 	typedef std::shared_ptr<dense_matrix> ptr;
 
-	static ptr create(size_t nrow, size_t ncol, size_t entry_size,
+	static ptr create(size_t nrow, size_t ncol, const scalar_type &type,
 			matrix_layout_t layout, bool in_mem);
 	static ptr load(const std::string &file_name);
 
@@ -106,25 +116,13 @@ public:
 		return in_mem;
 	}
 
-	/*
-	 * Right now we can only verify the type by looking at the entry size.
-	 * TODO we might need to verify it more thoroughly.
-	 */
 	template<class T>
 	bool is_type() const {
-		return sizeof(T) == get_entry_size();
+		return type.get_type() == fm::get_type<T>();
 	}
 
-	prim_type get_type() const {
-		// TODO this is a temporary solution.
-		switch(get_entry_size()) {
-			case sizeof(bool): return prim_type::P_BOOL;
-			case sizeof(int): return prim_type::P_INTEGER;
-			case sizeof(double): return prim_type::P_DOUBLE;
-			default:
-					fprintf(stderr, "wrong type");
-					return prim_type::NUM_TYPES;
-		}
+	const scalar_type &get_type() const {
+		return type;
 	}
 
 	/**

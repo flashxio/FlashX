@@ -47,7 +47,7 @@ public:
 void test_fetch_set()
 {
 	EM_col_dense_matrix::ptr m = EM_col_dense_matrix::create(1024 * 1024, 5,
-			sizeof(double));
+			get_scalar_type<double>());
 	m->set_data(set_col_operate(5));
 
 	size_t num_rows = 1024 * 8;
@@ -87,11 +87,11 @@ public:
 void test_inner_prod()
 {
 	EM_col_dense_matrix::ptr em = EM_col_dense_matrix::create(1024 * 1024, 5,
-			sizeof(double));
+			get_scalar_type<double>());
 	mem_col_dense_matrix::ptr big_im = mem_col_dense_matrix::create(
-			em->get_num_rows(), em->get_num_cols(), sizeof(double));
+			em->get_num_rows(), em->get_num_cols(), get_scalar_type<double>());
 	mem_col_dense_matrix::ptr small_im = mem_col_dense_matrix::create(
-			em->get_num_cols(), em->get_num_cols(), sizeof(double));
+			em->get_num_cols(), em->get_num_cols(), get_scalar_type<double>());
 
 	// Init the big external-memory matrix
 	em->set_data(set_col_operate(em->get_num_cols()));

@@ -36,6 +36,7 @@ namespace fm
 {
 
 class data_frame;
+class scalar_type;
 
 template<class T> class type_mem_vector;
 
@@ -46,8 +47,8 @@ class mem_vector: public vector
 
 protected:
 	mem_vector(mem_dense_matrix::ptr data);
-	mem_vector(size_t length, size_t entry_size);
-	mem_vector(std::shared_ptr<char> data, size_t len, size_t entry_size);
+	mem_vector(size_t length, const scalar_type &type);
+	mem_vector(std::shared_ptr<char> data, size_t len, const scalar_type &type);
 
 	mem_dense_matrix::ptr get_data() const {
 		return data;
@@ -82,6 +83,9 @@ public:
 	virtual mem_vector::ptr get(type_mem_vector<off_t> &idxs) const;
 
 	virtual bool equals(const mem_vector &vec) const;
+	virtual const scalar_type &get_type() const {
+		return data->get_type();
+	}
 
 	bool verify_groupby(const gr_apply_operate<mem_vector> &op) const;
 	std::shared_ptr<data_frame> serial_groupby(
@@ -119,7 +123,7 @@ class type_mem_vector: public mem_vector
 
 protected:
 	type_mem_vector(std::shared_ptr<char> data, size_t len): mem_vector(
-			data, len, sizeof(T)) {
+			data, len, get_scalar_type<T>()) {
 		sorted = false;
 	}
 
@@ -127,7 +131,7 @@ protected:
 		sorted = false;
 	}
 
-	type_mem_vector(size_t length): mem_vector(length, sizeof(T)) {
+	type_mem_vector(size_t length): mem_vector(length, get_scalar_type<T>()) {
 		sorted = false;
 	}
 public:
@@ -269,10 +273,6 @@ public:
 		else
 			return std::static_pointer_cast<const vector>(
 					ret->get_sub_vec(start, get_length()));
-	}
-
-	virtual const scalar_type &get_type() const {
-		return get_scalar_type<T>();
 	}
 
 	T max() const {

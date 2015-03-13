@@ -147,7 +147,7 @@ bool EM_col_matrix_accessor::fetch_submatrix(size_t start_row, size_t sub_nrow,
 
 	subcol_struct::ptr subcol = subcol_struct::ptr(new subcol_struct());
 	subcol->subm = mem_col_dense_matrix::create(sub_nrow, sub_ncol,
-			m.get_entry_size());
+			m.get_type());
 	for (size_t i = 0; i < sub_ncol; i++) {
 		sub_accessors[start_col + i]->fetch_subvec(subcol->subm->get_col(i),
 				start_row, sub_nrow,
@@ -377,7 +377,7 @@ dense_matrix::ptr EM_col_dense_matrix::inner_prod(const dense_matrix &m,
 		return dense_matrix::ptr();
 
 	EM_col_dense_matrix::ptr res = EM_col_dense_matrix::create(
-			get_num_rows(), m.get_num_cols(), right_op.output_entry_size());
+			get_num_rows(), m.get_num_cols(), right_op.get_output_type());
 	std::vector<submatrix_loc> all_locs;
 	split_matrix(all_locs);
 	submatrix_gen::ptr gen = submatrix_gen::ptr(new submatrix_gen(all_locs));
@@ -473,7 +473,7 @@ void EM_col_dense_matrix::set_data(const set_operate &op)
 	for (size_t i = 0; i < nrow; i += COL_CHUNK_SIZE) {
 		size_t chunk_size = std::min(COL_CHUNK_SIZE, nrow);
 		mem_dense_matrix::ptr mem_m = mem_col_dense_matrix::create(
-				chunk_size, ncol, get_entry_size());
+				chunk_size, ncol, get_type());
 		mem_m->serial_set_data(op);
 		accessor->set_submatrix(i, 0, mem_m);
 		while ((size_t) accessor->num_pending_reqs() > 2 * ncol)

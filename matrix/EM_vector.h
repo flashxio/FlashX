@@ -89,6 +89,7 @@ public:
 	void wait4all();
 };
 
+// TODO this class needs to be rewritten to inherit the vector class.
 class EM_vector
 {
 	bool named;

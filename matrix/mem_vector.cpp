@@ -49,21 +49,21 @@ mem_vector::mem_vector(mem_dense_matrix::ptr data): vector(
 }
 
 mem_vector::mem_vector(std::shared_ptr<char> data, size_t length,
-		size_t entry_size): vector(length, entry_size, true)
+		const scalar_type &type): vector(length, type.get_size(), true)
 {
 	// Maybe the column form may be more useful.
 	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(data, length,
-			1, entry_size);
+			1, type);
 	this->arr = tmp->get_col(0);
 	this->data = std::static_pointer_cast<mem_dense_matrix>(tmp);
 }
 
-mem_vector::mem_vector(size_t length, size_t entry_size): vector(length,
-		entry_size, true)
+mem_vector::mem_vector(size_t length, const scalar_type &type): vector(length,
+		type.get_size(), true)
 {
 	// Maybe the column form may be more useful.
 	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(length,
-			1, entry_size);
+			1, type);
 	this->arr = tmp->get_col(0);
 	this->data = std::static_pointer_cast<mem_dense_matrix>(tmp);
 }
@@ -280,7 +280,7 @@ bool mem_vector::resize(size_t new_length)
 	// We realloate memory regardless of whether we increase or decrease
 	// the length of the vector.
 	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(new_length,
-			1, get_entry_size());
+			1, get_type());
 	if (tmp == NULL) {
 		BOOST_LOG_TRIVIAL(error) << "can't allocate memory to resize the vector";
 		return false;

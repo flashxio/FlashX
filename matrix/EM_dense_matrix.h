@@ -80,7 +80,7 @@ class EM_dense_matrix: public dense_matrix
 {
 protected:
 	EM_dense_matrix(size_t nrow, size_t ncol,
-			size_t entry_size): dense_matrix(nrow, ncol, entry_size, false) {
+			const scalar_type &type): dense_matrix(nrow, ncol, type, false) {
 	}
 public:
 	typedef std::shared_ptr<EM_dense_matrix> ptr;
@@ -107,24 +107,24 @@ class EM_col_dense_matrix: public EM_dense_matrix
 	EM_vector::ptr data;
 
 	EM_col_dense_matrix(size_t nrow, size_t ncol,
-			size_t entry_size): EM_dense_matrix(nrow, ncol, entry_size) {
-		data = EM_vector::create(nrow * ncol, entry_size);
+			const scalar_type &type): EM_dense_matrix(nrow, ncol, type) {
+		data = EM_vector::create(nrow * ncol, type.get_size());
 	}
 
-	EM_col_dense_matrix(size_t nrow, size_t ncol, size_t entry_size,
-			const std::string &name): EM_dense_matrix(nrow, ncol, entry_size) {
-		data = EM_vector::create(nrow * ncol, entry_size, name);
+	EM_col_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
+			const std::string &name): EM_dense_matrix(nrow, ncol, type) {
+		data = EM_vector::create(nrow * ncol, type.get_size(), name);
 	}
 
 	void split_matrix(std::vector<submatrix_loc> &locs) const;
 public:
-	static ptr create(size_t nrow, size_t ncol, size_t entry_size) {
-		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size));
+	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
+		return ptr(new EM_col_dense_matrix(nrow, ncol, type));
 	}
 
-	static ptr create(size_t nrow, size_t ncol, size_t entry_size,
+	static ptr create(size_t nrow, size_t ncol, const scalar_type &type,
 			const std::string &name) {
-		return ptr(new EM_col_dense_matrix(nrow, ncol, entry_size, name));
+		return ptr(new EM_col_dense_matrix(nrow, ncol, type, name));
 	}
 
 	virtual bool write2file(const std::string&) const {

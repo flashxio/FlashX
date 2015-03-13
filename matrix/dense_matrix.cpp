@@ -120,13 +120,13 @@ bool dense_matrix::verify_apply(apply_margin margin, const arr_apply_operate &op
 }
 
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
-		size_t entry_size, matrix_layout_t layout, bool in_mem)
+		const scalar_type &type, matrix_layout_t layout, bool in_mem)
 {
 	if (in_mem) {
 		if (layout == matrix_layout_t::L_ROW)
-			return mem_row_dense_matrix::create(nrow, ncol, entry_size);
+			return mem_row_dense_matrix::create(nrow, ncol, type);
 		else
-			return mem_col_dense_matrix::create(nrow, ncol, entry_size);
+			return mem_col_dense_matrix::create(nrow, ncol, type);
 	}
 	else {
 		if (layout == matrix_layout_t::L_ROW) {
@@ -134,14 +134,14 @@ dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 			return dense_matrix::ptr();
 		}
 		else
-			return EM_col_dense_matrix::create(nrow, ncol, entry_size);
+			return EM_col_dense_matrix::create(nrow, ncol, type);
 	}
 }
 
 bool dense_matrix::write_header(FILE *f) const
 {
 	matrix_header header(DENSE, get_entry_size(), get_num_rows(),
-			get_num_cols(), store_layout(), get_type());
+			get_num_cols(), store_layout(), get_type().get_type());
 
 	size_t ret = fwrite(&header, sizeof(header), 1, f);
 	if (ret == 0) {
@@ -179,16 +179,17 @@ dense_matrix::ptr dense_matrix::load(const std::string &file_name)
 		return dense_matrix::ptr();
 	}
 
-	size_t entry_size = header.get_entry_size();
 	size_t nrow = header.get_num_rows();
 	size_t ncol = header.get_num_cols();
 	dense_matrix::ptr m;
 	if (header.get_layout() == matrix_layout_t::L_ROW)
 		m = std::static_pointer_cast<dense_matrix>(
-				mem_row_dense_matrix::create(nrow, ncol, entry_size, f));
+				mem_row_dense_matrix::create(nrow, ncol,
+					get_scalar_type(header.get_data_type()), f));
 	else if (header.get_layout() == matrix_layout_t::L_COL)
 		m = std::static_pointer_cast<dense_matrix>(
-				mem_col_dense_matrix::create(nrow, ncol, entry_size, f));
+				mem_col_dense_matrix::create(nrow, ncol,
+					get_scalar_type(header.get_data_type()), f));
 	else
 		BOOST_LOG_TRIVIAL(error) << "wrong matrix data layout";
 

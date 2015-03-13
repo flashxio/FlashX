@@ -334,7 +334,7 @@ class sparse_matrix
 	dense_matrix::ptr multiply_matrix(mem_row_dense_matrix::ptr row_m) const {
 		size_t ncol = row_m->get_num_cols();
 		mem_row_dense_matrix::ptr ret = mem_row_dense_matrix::create(
-				get_num_rows(), ncol, sizeof(T));
+				get_num_rows(), ncol, get_scalar_type<T>());
 		compute(get_multiply_creator<T>(*row_m, *ret));
 		return ret;
 	}
@@ -343,7 +343,7 @@ class sparse_matrix
 	dense_matrix::ptr multiply_matrix(mem_col_dense_matrix::ptr col_m) const {
 		size_t ncol = col_m->get_num_cols();
 		mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
-				get_num_rows(), ncol, sizeof(T));
+				get_num_rows(), ncol, get_scalar_type<T>());
 		std::vector<off_t> col_idx(1);
 		for (size_t i = 0; i < ncol; i++) {
 			col_idx[0] = i;
