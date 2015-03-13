@@ -21,11 +21,6 @@
  */
 
 #include <memory>
-#if defined(_OPENMP)
-#include <parallel/algorithm>
-#else
-#include <algorithm>
-#endif
 
 #include <boost/format.hpp>
 
@@ -44,11 +39,18 @@ class mem_vector: public vector
 {
 	char *arr;
 	mem_dense_matrix::ptr data;
+	bool sorted;
 
 protected:
 	mem_vector(mem_dense_matrix::ptr data);
 	mem_vector(size_t length, const scalar_type &type);
 	mem_vector(std::shared_ptr<char> data, size_t len, const scalar_type &type);
+	mem_vector(const mem_vector &vec): vector(vec.get_length(), vec.get_entry_size(),
+			true) {
+		this->arr = vec.arr;
+		this->data = vec.data;
+		this->sorted = vec.sorted;
+	}
 
 	mem_dense_matrix::ptr get_data() const {
 		return data;
@@ -87,6 +89,10 @@ public:
 		return data->get_type();
 	}
 
+	virtual bool is_sorted() const {
+		return sorted;
+	}
+
 	bool verify_groupby(const gr_apply_operate<mem_vector> &op) const;
 	std::shared_ptr<data_frame> serial_groupby(
 			const gr_apply_operate<mem_vector> &op, bool with_val) const;
@@ -106,6 +112,24 @@ public:
 	virtual vector::ptr deep_copy() const;
 
 	bool export2(FILE *f) const;
+
+	void set_data(const set_operate &op) {
+		get_data()->set_data(op);
+		sorted = get_type().get_sorter().is_sorted(get_raw_arr(),
+				get_length(), false);
+	}
+
+	virtual vector::ptr sort_with_index();
+
+	virtual void sort() {
+		get_type().get_sorter().sort(get_raw_arr(), get_length(), false);
+		sorted = true;
+	}
+
+	virtual void serial_sort() {
+		get_type().get_sorter().serial_sort(get_raw_arr(), get_length(), false);
+		sorted = true;
+	}
 };
 
 /**
@@ -115,8 +139,6 @@ public:
 template<class T>
 class type_mem_vector: public mem_vector
 {
-	bool sorted;
-
 	virtual mem_vector::ptr create_int(size_t length) const {
 		return mem_vector::ptr(new type_mem_vector<T>(length));
 	}
@@ -124,15 +146,15 @@ class type_mem_vector: public mem_vector
 protected:
 	type_mem_vector(std::shared_ptr<char> data, size_t len): mem_vector(
 			data, len, get_scalar_type<T>()) {
-		sorted = false;
 	}
 
 	type_mem_vector(mem_dense_matrix::ptr data): mem_vector(data) {
-		sorted = false;
 	}
 
 	type_mem_vector(size_t length): mem_vector(length, get_scalar_type<T>()) {
-		sorted = false;
+	}
+
+	type_mem_vector(const type_mem_vector<T> &vec): mem_vector(vec) {
 	}
 public:
 	typedef std::shared_ptr<type_mem_vector<T> > ptr;
@@ -180,99 +202,16 @@ public:
 		return ((T *) get_raw_arr())[idx];
 	}
 
-	bool equals(const mem_vector &vec) const {
-		const type_mem_vector<T> &t_vec = (const type_mem_vector<T> &) vec;
-		for (size_t i = 0; i < t_vec.get_length(); i++)
-			if (t_vec.get(i) != this->get(i))
-				return false;
-		return true;
-	}
-
 	void set(off_t idx, T v) {
 		((T *) get_raw_arr())[idx] = v;
 	}
 
-	virtual void set_data(const type_set_operate<T> &op) {
-		get_data()->set_data(op);
-		T *start = (T *) get_raw_arr();
-		sorted = std::is_sorted(start, start + get_length());
-	}
-
-	virtual bool is_sorted() const {
-		return sorted;
-	}
-
-	virtual vector::ptr sort_with_index() {
-		struct indexed_entry {
-			T val;
-			off_t idx;
-			bool operator<(const indexed_entry &e) const {
-				return val < e.val;
-			}
-		};
-		std::unique_ptr<indexed_entry[]> entries
-			= std::unique_ptr<indexed_entry[]>(new indexed_entry[get_length()]);
-		for (size_t i = 0; i < get_length(); i++) {
-			entries[i].val = get(i);
-			entries[i].idx = i;
-		}
-
-		indexed_entry *start = entries.get();
-		indexed_entry *end = start + get_length();
-#if defined(_OPENMP)
-		__gnu_parallel::sort(start, end);
-#else
-		std::sort(start, end);
-#endif
-		type_mem_vector<off_t>::ptr indexes
-			= type_mem_vector<off_t>::create(get_length());
-		for (size_t i = 0; i < get_length(); i++) {
-			set(i, start[i].val);
-			indexes->set(i, start[i].idx);
-		}
-		sorted = true;
-		return indexes;
-	}
-
-	virtual void sort() {
-		T *start = (T *) get_raw_arr();
-		T *end = start + get_length();
-#if defined(_OPENMP)
-		__gnu_parallel::sort(start, end);
-#else
-		std::sort(start, end);
-#endif
-		sorted = true;
-	}
-
-	virtual void serial_sort() {
-		T *start = (T *) get_raw_arr();
-		T *end = start + get_length();
-		std::sort(start, end);
-		sorted = true;
-	}
-
 	virtual vector::ptr shallow_copy() {
-		type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(get_data());
-		ret->sorted = this->sorted;
-		// The vector might be a sub vector.
-		off_t start = get_sub_start();
-		if (start == 0)
-			return std::static_pointer_cast<vector>(ret);
-		else
-			return ret->get_sub_vec(start, get_length());
+		return vector::ptr(new type_mem_vector<T>(*this));
 	}
 
 	virtual vector::const_ptr shallow_copy() const {
-		type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(get_data());
-		ret->sorted = this->sorted;
-		// The vector might be a sub vector.
-		off_t start = get_sub_start();
-		if (start == 0)
-			return std::static_pointer_cast<const vector>(ret);
-		else
-			return std::static_pointer_cast<const vector>(
-					ret->get_sub_vec(start, get_length()));
+		return vector::const_ptr(new type_mem_vector<T>(*this));
 	}
 
 	T max() const {

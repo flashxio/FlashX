@@ -42,6 +42,7 @@ mem_vector::mem_vector(mem_dense_matrix::ptr data): vector(
 		data->get_num_rows() == 1 ? data->get_num_cols(): data->get_num_rows(),
 		data->get_entry_size(), true)
 {
+	this->sorted = false;
 	this->data = data;
 	// The data buffer is the first row or column of the matrix, so
 	// the shape of the matrix doesn't matter.
@@ -51,6 +52,7 @@ mem_vector::mem_vector(mem_dense_matrix::ptr data): vector(
 mem_vector::mem_vector(std::shared_ptr<char> data, size_t length,
 		const scalar_type &type): vector(length, type.get_size(), true)
 {
+	this->sorted = false;
 	// Maybe the column form may be more useful.
 	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(data, length,
 			1, type);
@@ -61,6 +63,7 @@ mem_vector::mem_vector(std::shared_ptr<char> data, size_t length,
 mem_vector::mem_vector(size_t length, const scalar_type &type): vector(length,
 		type.get_size(), true)
 {
+	this->sorted = false;
 	// Maybe the column form may be more useful.
 	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(length,
 			1, type);
@@ -384,6 +387,8 @@ bool mem_vector::equals(const mem_vector &vec) const
 {
 	if (vec.get_length() != this->get_length())
 		return false;
+	else if (vec.get_type() != this->get_type())
+		return false;
 	else
 		return memcmp(this->arr, vec.arr,
 				get_length() * get_entry_size()) == 0;
@@ -442,6 +447,16 @@ vector::ptr create_vector<double>(double start, double end,
 		= type_mem_vector<double>::create(n);
 	v->get_data()->set_data(seq_set_operate<double>(n, start, stride));
 	return std::static_pointer_cast<vector>(v);
+}
+
+vector::ptr mem_vector::sort_with_index()
+{
+	type_mem_vector<off_t>::ptr indexes
+		= type_mem_vector<off_t>::create(get_length());
+	get_type().get_sorter().sort_with_index(get_raw_arr(),
+			(off_t *) indexes->get_raw_arr(), get_length(), false);
+	sorted = true;
+	return indexes;
 }
 
 }

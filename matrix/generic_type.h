@@ -24,6 +24,8 @@
 
 #include <memory>
 
+#include "sorter.h"
+
 namespace fm
 {
 
@@ -135,6 +137,7 @@ public:
 	virtual std::shared_ptr<mem_vector_vector> create_mem_vec_vec() const = 0;
 	virtual prim_type get_type() const = 0;
 	virtual size_t get_size() const = 0;
+	virtual const sorter &get_sorter() const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
 		return get_type() == type.get_type();
@@ -160,6 +163,11 @@ public:
 	virtual std::shared_ptr<mem_vector> create_mem_vec(std::shared_ptr<char> data,
 			size_t num_bytes) const;
 	virtual std::shared_ptr<mem_vector_vector> create_mem_vec_vec() const;
+
+	virtual const sorter &get_sorter() const {
+		static type_sorter<T> sort;
+		return sort;
+	}
 
 	virtual prim_type get_type() const {
 		return fm::get_type<T>();
