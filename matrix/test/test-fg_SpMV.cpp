@@ -55,10 +55,10 @@ int main(int argc, char *argv[])
 	sparse_matrix::ptr m = sparse_matrix::create(fg);
 	gettimeofday(&start, NULL);
 	type_mem_vector<double>::ptr out = m->multiply<double>(in_vec);
+	gettimeofday(&end, NULL);
 	double sum = 0;
 	for (size_t i = 0; i < fg_m->get_num_cols(); i++)
 		sum += out->get(i);
-	gettimeofday(&end, NULL);
 	printf("sum of input: %lf, sum of product: %lf, it takes %.3f seconds\n",
 			in->sum(), sum, time_diff(start, end));
 	destroy_flash_matrix();
