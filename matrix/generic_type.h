@@ -118,6 +118,7 @@ class basic_ops;
 class agg_ops;
 class mem_vector;
 class mem_vector_vector;
+class scatter_gather;
 
 /**
  * This interface defines a scalar type and the operations related to the type.
@@ -138,6 +139,7 @@ public:
 	virtual prim_type get_type() const = 0;
 	virtual size_t get_size() const = 0;
 	virtual const sorter &get_sorter() const = 0;
+	virtual const scatter_gather &get_sg() const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
 		return get_type() == type.get_type();
@@ -168,6 +170,8 @@ public:
 		static type_sorter<T> sort;
 		return sort;
 	}
+
+	virtual const scatter_gather &get_sg() const;
 
 	virtual prim_type get_type() const {
 		return fm::get_type<T>();

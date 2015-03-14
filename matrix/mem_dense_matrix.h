@@ -133,6 +133,12 @@ public:
 	~mem_row_dense_matrix() {
 	}
 
+	/*
+	 * This method converts this row-marjor dense matrix to a column-major
+	 * dense matrix. Nothing else is changed.
+	 */
+	std::shared_ptr<mem_col_dense_matrix> get_col_store() const;
+
 	virtual bool write2file(const std::string &file_name) const;
 
 	virtual dense_matrix::ptr shallow_copy() const;
@@ -235,6 +241,12 @@ public:
 
 	~mem_col_dense_matrix() {
 	}
+
+	/*
+	 * This method converts this column-marjor dense matrix to a row-major
+	 * dense matrix. Nothing else is changed.
+	 */
+	std::shared_ptr<mem_row_dense_matrix> get_row_store() const;
 
 	virtual bool write2file(const std::string &file_name) const;
 

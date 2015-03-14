@@ -142,10 +142,33 @@ void test4()
 				sub_m->get_entry_size() * sub_m->get_num_rows()) == 0);
 }
 
+void test5()
+{
+	printf("test conv col-wise to row-wise, row-wise to col-wise\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(10000, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	mem_col_dense_matrix::ptr col_m
+		= mem_col_dense_matrix::cast(m1->get_matrix());
+	mem_row_dense_matrix::ptr row_m = col_m->get_row_store();
+	I_mem_dense_matrix::ptr c1 = I_mem_dense_matrix::create(col_m);
+	I_mem_dense_matrix::ptr c2 = I_mem_dense_matrix::create(row_m);
+	for (size_t i = 0; i < col_m->get_num_rows(); i++) {
+		for (size_t j = 0; j < col_m->get_num_cols(); j++)
+			assert(c1->get(i, j) == c2->get(i, j));
+	}
+	col_m = row_m->get_col_store();
+	c1 = I_mem_dense_matrix::create(col_m);
+	c2 = I_mem_dense_matrix::create(row_m);
+	for (size_t i = 0; i < col_m->get_num_rows(); i++)
+		for (size_t j = 0; j < col_m->get_num_cols(); j++)
+			assert(c1->get(i, j) == c2->get(i, j));
+}
+
 int main()
 {
 	test1();
 	test2();
 	test3();
 	test4();
+	test5();
 }

@@ -592,6 +592,39 @@ public:
 	virtual size_t get_num_out_eles() const = 0;
 };
 
+class scatter_gather
+{
+public:
+	virtual void scatter(const char *arr, std::vector<char *> &arrs) const = 0;
+	virtual void gather(const std::vector<const char *> &arrs,
+			char *arr) const = 0;
+};
+
+template<class T>
+class type_scatter_gather: public scatter_gather
+{
+public:
+	virtual void scatter(const char *arr, std::vector<char *> &arrs) const {
+		const T *t_arr = (const T *) arr;
+		for (size_t i = 0; i < arrs.size(); i++)
+			*(T *) arrs[i] = t_arr[i];
+	}
+
+	virtual void gather(const std::vector<const char *> &arrs,
+			char *arr) const {
+		T *t_arr = (T *) arr;
+		for (size_t i = 0; i < arrs.size(); i++)
+			t_arr[i] = *(const T *) arrs[i];
+	}
+};
+
+template<class T>
+const scatter_gather &scalar_type_impl<T>::get_sg() const
+{
+	static type_scatter_gather<T> sg;
+	return sg;
+}
+
 }
 
 #endif

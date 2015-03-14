@@ -854,6 +854,29 @@ void mem_col_dense_matrix::get_row(size_t row_idx, char *arr) const
 				entry_size);
 }
 
+mem_row_dense_matrix::ptr mem_col_dense_matrix::get_row_store() const
+{
+	// TODO it works for tall column-wise matrix.
+	assert(!is_wide());
+	mem_row_dense_matrix::ptr ret = mem_row_dense_matrix::create(get_num_rows(),
+			get_num_cols(), get_type());
+
+	size_t entry_size = get_entry_size();
+#pragma omp parallel
+	{
+		std::vector<const char *> col_ptrs(get_num_cols());
+#pragma omp for
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			off_t off = entry_size * i;
+			for (size_t j = 0; j < get_num_cols(); j++)
+				col_ptrs[j] = this->get_col(j) + off;
+
+			get_type().get_sg().gather(col_ptrs, ret->get_row(i));
+		}
+	}
+	return ret;
+}
+
 dense_matrix::ptr mem_row_dense_matrix::shallow_copy() const
 {
 	// The data array is read-only. It's safe to have two matrices reference
@@ -1207,6 +1230,29 @@ const mem_col_dense_matrix &mem_row_dense_matrix::get_t_mat() const
 	if (mutable_this->t_mat == NULL)
 		mutable_this->t_mat = mem_col_dense_matrix::cast(transpose());
 	return *t_mat;
+}
+
+mem_col_dense_matrix::ptr mem_row_dense_matrix::get_col_store() const
+{
+	// TODO it works for tall row-wise matrix.
+	assert(!is_wide());
+	mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(get_num_rows(),
+			get_num_cols(), get_type());
+
+	size_t entry_size = get_entry_size();
+#pragma omp parallel
+	{
+		std::vector<char *> col_ptrs(get_num_cols());
+#pragma omp for
+		for (size_t i = 0; i < get_num_rows(); i++) {
+			off_t off = entry_size * i;
+			for (size_t j = 0; j < get_num_cols(); j++)
+				col_ptrs[j] = ret->get_col(j) + off;
+
+			get_type().get_sg().scatter(get_row(i), col_ptrs);
+		}
+	}
+	return ret;
 }
 
 }
