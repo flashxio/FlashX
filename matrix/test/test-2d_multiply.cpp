@@ -25,9 +25,20 @@ void test_SpMV(sparse_matrix::ptr mat)
 		= type_mem_vector<double>::create(mat->get_num_cols());
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
 		in_vec->set(i, i);
+
+	// Initialize the output vector and allocate pages for it.
 	gettimeofday(&start, NULL);
-	type_mem_vector<double>::ptr out = mat->multiply<double>(in_vec);
+	type_mem_vector<double>::ptr out
+		= type_mem_vector<double>::create(mat->get_num_rows());
+	out->get_data()->reset_data();
 	gettimeofday(&end, NULL);
+	printf("initialize a vector of %ld entries takes %.3f seconds\n",
+			out->get_length(), time_diff(start, end));
+
+	gettimeofday(&start, NULL);
+	mat->multiply<double>(*in_vec, *out);
+	gettimeofday(&end, NULL);
+
 	double in_sum = 0;
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
 		in_sum += in_vec->get(i);
@@ -65,8 +76,15 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 				mat_width, matrix_layout_t::L_ROW);
 	in->get_matrix()->set_data(mat_init_operate(in->get_num_rows(),
 				in->get_num_cols()));
+
+	// Initialize the output matrix and allocate pages for it.
+	type_mem_dense_matrix<double>::ptr out
+		= type_mem_dense_matrix<double>::create(mat->get_num_rows(),
+				mat_width, matrix_layout_t::L_ROW);
+	out->get_matrix()->reset_data();
+
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr out = mat->multiply<double>(in->get_matrix());
+	mat->multiply<double>(*in->get_matrix(), *out->get_matrix());
 	gettimeofday(&end, NULL);
 	printf("it takes %.3f seconds\n", time_diff(start, end));
 }

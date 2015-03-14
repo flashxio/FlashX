@@ -40,8 +40,13 @@ int main(int argc, char *argv[])
 		in->set(i, i);
 	printf("sum of input: %lf\n", in->sum());
 
+	gettimeofday(&start, NULL);
 	fg::FG_vector<double>::ptr fg_out = fg::FG_vector<double>::create(
 			fg_m->get_num_rows());
+	gettimeofday(&end, NULL);
+	printf("initialize FG_vector of %ld entries takes %.3f seconds\n",
+			fg_out->get_size(), time_diff(start, end));
+
 	gettimeofday(&start, NULL);
 	fg_m->multiply<double>(*in, *fg_out);
 	gettimeofday(&end, NULL);

@@ -315,7 +315,7 @@ class sparse_matrix
 	block_2d_size block_size;
 
 	template<class T>
-	task_creator::ptr get_multiply_creator(type_mem_vector<T> &in,
+	task_creator::ptr get_multiply_creator(const type_mem_vector<T> &in,
 			type_mem_vector<T> &out) const {
 		if (is_fg)
 			return fg_row_spmv_creator<T>::create(in, out);
@@ -331,29 +331,24 @@ class sparse_matrix
 	}
 
 	template<class T>
-	dense_matrix::ptr multiply_matrix(mem_row_dense_matrix::ptr row_m) const {
-		size_t ncol = row_m->get_num_cols();
-		mem_row_dense_matrix::ptr ret = mem_row_dense_matrix::create(
-				get_num_rows(), ncol, get_scalar_type<T>());
-		compute(get_multiply_creator<T>(*row_m, *ret));
-		return ret;
+	void multiply_matrix(const mem_row_dense_matrix &row_m,
+			mem_row_dense_matrix &ret) const {
+		compute(get_multiply_creator<T>(row_m, ret));
 	}
 
 	template<class T>
-	dense_matrix::ptr multiply_matrix(mem_col_dense_matrix::ptr col_m) const {
-		size_t ncol = col_m->get_num_cols();
-		mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
-				get_num_rows(), ncol, get_scalar_type<T>());
+	void multiply_matrix(const mem_col_dense_matrix &col_m,
+			mem_col_dense_matrix &ret) const {
+		size_t ncol = col_m.get_num_cols();
 		std::vector<off_t> col_idx(1);
 		for (size_t i = 0; i < ncol; i++) {
 			col_idx[0] = i;
 			typename type_mem_vector<T>::ptr in_col = type_mem_vector<T>::create(
-					mem_dense_matrix::cast(col_m->get_cols(col_idx)));
+					mem_dense_matrix::cast(col_m.get_cols(col_idx)));
 			typename type_mem_vector<T>::ptr out_col = type_mem_vector<T>::create(
-					mem_dense_matrix::cast(ret->get_cols(col_idx)));
+					mem_dense_matrix::cast(ret.get_cols(col_idx)));
 			compute(get_multiply_creator<T>(*in_col, *out_col));
 		}
-		return ret;
 	}
 protected:
 	// This constructor is used for the sparse matrix stored
@@ -429,6 +424,18 @@ public:
 	}
 
 	template<class T>
+	bool multiply(const type_mem_vector<T> &in, type_mem_vector<T> &out) const {
+		if (in.get_length() != ncols) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"the input vector has wrong length %1%. matrix ncols: %2%")
+				% in.get_length() % ncols;
+			return false;
+		}
+		compute(get_multiply_creator<T>(in, out));
+		return true;
+	}
+
+	template<class T>
 	typename type_mem_vector<T>::ptr multiply(typename type_mem_vector<T>::ptr in) const {
 		if (in->get_length() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
@@ -438,8 +445,42 @@ public:
 		}
 		else {
 			typename type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(nrows);
-			compute(get_multiply_creator<T>(*in, *ret));
+			multiply<T>(*in, *ret);
 			return ret;
+		}
+	}
+
+	template<class T>
+	bool multiply(const dense_matrix &in, dense_matrix &out) const {
+		if (in.get_num_rows() != ncols
+				|| in.get_num_cols() != out.get_num_cols()
+				|| out.get_num_rows() != this->get_num_rows()) {
+			BOOST_LOG_TRIVIAL(error) <<
+					"the input and output matrix have incompatible dimensions";
+			return false;
+		}
+		else if (!in.is_in_mem() || !out.is_in_mem()) {
+			BOOST_LOG_TRIVIAL(error) << "SpMM doesn't support EM dense matrix";
+			return false;
+		}
+
+		if (in.store_layout() == matrix_layout_t::L_ROW) {
+			if (out.store_layout() != matrix_layout_t::L_ROW) {
+				BOOST_LOG_TRIVIAL(error) << "wrong matrix layout for output matrix";
+				return false;
+			}
+			multiply_matrix<T>((const mem_row_dense_matrix &) in,
+					(mem_row_dense_matrix &) out);
+			return true;
+		}
+		else {
+			if (out.store_layout() != matrix_layout_t::L_COL) {
+				BOOST_LOG_TRIVIAL(error) << "wrong matrix layout for output matrix";
+				return false;
+			}
+			multiply_matrix<T>((const mem_col_dense_matrix &) in,
+					(mem_col_dense_matrix &) out);
+			return true;
 		}
 	}
 
@@ -456,10 +497,18 @@ public:
 			return dense_matrix::ptr();
 		}
 
-		if (in->store_layout() == matrix_layout_t::L_ROW)
-			return multiply_matrix<T>(mem_row_dense_matrix::cast(in));
-		else
-			return multiply_matrix<T>(mem_col_dense_matrix::cast(in));
+		if (in->store_layout() == matrix_layout_t::L_ROW) {
+			mem_row_dense_matrix::ptr ret = mem_row_dense_matrix::create(
+					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
+			multiply_matrix<T>((const mem_row_dense_matrix &) *in, *ret);
+			return ret;
+		}
+		else {
+			mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
+					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
+			multiply_matrix<T>((const mem_col_dense_matrix &) *in, *ret);
+			return ret;
+		}
 	}
 };
 
