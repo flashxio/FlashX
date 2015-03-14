@@ -19,8 +19,8 @@
 
 #include "vertex_index.h"
 
-#include "sparse_matrix_format.h"
 #include "mem_vector_vector.h"
+#include "fm_utils.h"
 
 using namespace fm;
 

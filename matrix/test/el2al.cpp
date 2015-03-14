@@ -35,7 +35,7 @@
 #include "mem_data_frame.h"
 #include "mem_vector.h"
 #include "vector_vector.h"
-#include "sparse_matrix_format.h"
+#include "fm_utils.h"
 
 using namespace fm;
 
@@ -112,96 +112,6 @@ size_t edge_parser::parse(const std::vector<std::string> &lines,
 	return froms->get_length();
 }
 
-/*
- * This applies to a vector of values corresponding to the same key,
- * and generates an adjacency list.
- */
-class adj_apply_operate: public gr_apply_operate<data_frame>
-{
-	fg::edge_type etype;
-public:
-	adj_apply_operate(fg::edge_type etype) {
-		this->etype = etype;
-	}
-
-	void run(const void *key, const data_frame &val, mem_vector &out) const;
-
-	const scalar_type &get_key_type() const {
-		return get_scalar_type<fg::vertex_id_t>();
-	}
-
-	const scalar_type &get_output_type() const {
-		return get_scalar_type<char>();
-	}
-
-	size_t get_num_out_eles() const {
-		return 1;
-	}
-};
-
-void adj_apply_operate::run(const void *key, const data_frame &val,
-		mem_vector &out) const
-{
-	fg::vertex_id_t vid = *(const fg::vertex_id_t *) key;
-	if (vid == fg::INVALID_VERTEX_ID) {
-		out.resize(0);
-		return;
-	}
-
-	// Right now, we just assume there aren't attributes.
-	size_t edge_data_size = 0;
-	assert(val.get_num_vecs() == 2);
-
-	assert(out.is_type<char>());
-	const type_mem_vector<fg::vertex_id_t> *vec;
-	if (etype == fg::edge_type::OUT_EDGE)
-		vec = (const type_mem_vector<fg::vertex_id_t> *) &val.get_vec_ref("dest");
-	else
-		vec = (const type_mem_vector<fg::vertex_id_t> *) &val.get_vec_ref("source");
-
-	// I added an invalid edge for each vertex.
-	// The invalid edge is the maximal integer.
-	fg::vsize_t num_edges = vec->get_length() - 1;
-	// TODO we actually don't need to alloate memory multiple times.
-	std::unique_ptr<fg::vertex_id_t[]> edge_buf
-		= std::unique_ptr<fg::vertex_id_t[]>(new fg::vertex_id_t[num_edges]);
-	size_t edge_idx = 0;
-	for (size_t i = 0; i < vec->get_length(); i++) {
-		if (vec->get(i) == fg::INVALID_VERTEX_ID)
-			continue;
-		edge_buf[edge_idx++] = vec->get(i);
-	}
-	assert(edge_idx == num_edges);
-	std::sort(edge_buf.get(), edge_buf.get() + num_edges);
-	size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
-			edge_data_size);
-	out.resize(size);
-
-	// Even if we generate a directed, we still can use undirected vertex to
-	// store one type of edges of a vertex.
-	fg::in_mem_undirected_vertex<> v(vid, edge_data_size > 0);
-	for (size_t i = 0; i < num_edges; i++)
-		v.add_edge(fg::edge<>(vid, edge_buf[i]));
-	fg::ext_mem_undirected_vertex::serialize(v, out.get_raw_arr(), size, etype);
-}
-
-class count_agg_operate: public agg_operate
-{
-public:
-	virtual void run(size_t num_eles, const void *in, void *output) const {
-		fg::vsize_t *out = (fg::vsize_t *) output;
-		out[0] = num_eles - 1;
-	}
-
-	virtual const scalar_type &get_input_type() const {
-		return get_scalar_type<fg::vertex_id_t>();
-	}
-
-	virtual const scalar_type &get_output_type() const {
-		return get_scalar_type<fg::vsize_t>();
-	}
-};
-
 int main(int argc, char *argv[])
 {
 	if (argc < 3) {
@@ -244,35 +154,42 @@ int main(int argc, char *argv[])
 	new_df->add_vec(parser.get_col_name(0), rep_vec);
 	df->append(new_df);
 
-	df->sort("dest");
-	assert(df->is_sorted("dest"));
-	type_mem_vector<fg::vsize_t>::ptr num_in_edges
-		= type_mem_vector<fg::vsize_t>::cast(df->get_vec("dest")->groupby(
-			count_agg_operate(), false)->get_vec("agg"));
-	adj_apply_operate in_adj_op(fg::edge_type::IN_EDGE);
-	vector_vector::ptr in_adjs = df->groupby("dest", in_adj_op);
-	printf("There are %ld adjacency lists and they use %ld bytes in total\n",
+	// For in-edge adjacency lists, all edges share the same destination vertex
+	// should be stored together.
+	mem_data_frame::ptr tmp = mem_data_frame::create();
+	tmp->add_vec("dest", df->get_vec("dest"));
+	tmp->add_vec("source", df->get_vec("source"));
+	df = tmp;
+	vector_vector::ptr in_adjs = fm::create_1d_matrix(df);
+	printf("There are %ld in-edge adjacency lists and they use %ld bytes in total\n",
 			in_adjs->get_num_vecs(), in_adjs->get_tot_num_entries());
 
-	df->sort("source");
-	assert(df->is_sorted("source"));
-	type_mem_vector<fg::vsize_t>::ptr num_out_edges
-		= type_mem_vector<fg::vsize_t>::cast(df->get_vec("source")->groupby(
-			count_agg_operate(), false)->get_vec("agg"));
-	adj_apply_operate out_adj_op(fg::edge_type::OUT_EDGE);
-	vector_vector::ptr out_adjs = df->groupby("source", out_adj_op);
-	printf("There are %ld adjacency lists and they use %ld bytes in total\n",
+	// For out-edge adjacency lists, all edges share the same source vertex
+	// should be stored together.
+	tmp = mem_data_frame::create();
+	tmp->add_vec("source", df->get_vec("source"));
+	tmp->add_vec("dest", df->get_vec("dest"));
+	df = tmp;
+	vector_vector::ptr out_adjs = create_1d_matrix(df);
+	printf("There are %ld out-edge adjacency lists and they use %ld bytes in total\n",
 			out_adjs->get_num_vecs(), out_adjs->get_tot_num_entries());
 
+	assert(out_adjs->get_num_vecs() == in_adjs->get_num_vecs());
 	size_t num_vertices = out_adjs->get_num_vecs();
+	type_mem_vector<fg::vsize_t>::ptr num_in_edges
+		= type_mem_vector<fg::vsize_t>::create(num_vertices);
+	type_mem_vector<fg::vsize_t>::ptr num_out_edges
+		= type_mem_vector<fg::vsize_t>::create(num_vertices);
+	for (size_t i = 0; i < num_vertices; i++) {
+		num_in_edges->set(i, in_adjs->get_length(i));
+		num_out_edges->set(i, out_adjs->get_length(i));
+	}
 	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
 
 	// Construct the vertex index.
 	// The vectors that contains the numbers of edges have the length of #V + 1
 	// because we add -1 to the edge lists artificially and the last entries
 	// are the number of vertices.
-	assert(num_in_edges->get_length() - 1 == num_vertices);
-	assert(num_out_edges->get_length() - 1 == num_vertices);
 	fg::cdirected_vertex_index::ptr vindex
 		= fg::cdirected_vertex_index::construct(num_vertices,
 				(const fg::vsize_t *) num_in_edges->get_raw_arr(),

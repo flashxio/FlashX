@@ -297,19 +297,6 @@ public:
 	std::shared_ptr<safs::file_io_factory> create_io_factory() const;
 };
 
-/*
- * This function creates a 2D-partitioned matrix from a vector of adjacency
- * lists. The matrix and its index are kept in memory.
- */
-std::pair<SpM_2d_index::ptr, SpM_2d_storage::ptr> create_2d_matrix(
-		vector_vector::ptr adjs, const block_2d_size &block_size);
-/*
- * This function creates a 2D-partitioned matrix from a vector of adjacency
- * lists and stores the matrix and its index in files.
- */
-void export_2d_matrix(vector_vector::ptr adjs, const block_2d_size &block_size,
-		const std::string &mat_file, const std::string &mat_idx_file);
-
 }
 
 #endif
