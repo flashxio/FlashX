@@ -187,7 +187,10 @@ SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 	}
 
 	size_t size = sizeof(header) + vec->get_length();
-	char *data = new char[size];
+	// The sparse matrix multiplication accesses data in pages. We have to
+	// make sure the array that stores the sparse matrix is aligned to
+	// page size.
+	char *data = new char[ROUNDUP(size, PAGE_SIZE)];
 	*(matrix_header *) data = header;
 	memcpy(data + sizeof(header), vec->get_raw_arr(), vec->get_length());
 	return ptr(new SpM_2d_storage(std::unique_ptr<char[]>(data), index,
