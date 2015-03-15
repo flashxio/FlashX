@@ -423,6 +423,10 @@ public:
 		ncols = tmp;
 	}
 
+	/*
+	 * This version of SpMV allows users to provide the output vector.
+	 * It requires users to initialize the output vector.
+	 */
 	template<class T>
 	bool multiply(const type_mem_vector<T> &in, type_mem_vector<T> &out) const {
 		if (in.get_length() != ncols) {
@@ -435,6 +439,9 @@ public:
 		return true;
 	}
 
+	/*
+	 * This version of SpMV allocates the output vector.
+	 */
 	template<class T>
 	typename type_mem_vector<T>::ptr multiply(typename type_mem_vector<T>::ptr in) const {
 		if (in->get_length() != ncols) {
@@ -445,11 +452,16 @@ public:
 		}
 		else {
 			typename type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(nrows);
+			ret->get_data()->reset_data();
 			multiply<T>(*in, *ret);
 			return ret;
 		}
 	}
 
+	/*
+	 * This version of SpMM allows users to provide the output matrix.
+	 * It requires users to initialize the output matrix.
+	 */
 	template<class T>
 	bool multiply(const dense_matrix &in, dense_matrix &out) const {
 		if (in.get_num_rows() != ncols
@@ -484,6 +496,9 @@ public:
 		}
 	}
 
+	/*
+	 * This version of SpMM allocates the output matrix.
+	 */
 	template<class T>
 	dense_matrix::ptr multiply(dense_matrix::ptr in) const {
 		if (in->get_num_rows() != ncols) {
@@ -500,12 +515,14 @@ public:
 		if (in->store_layout() == matrix_layout_t::L_ROW) {
 			mem_row_dense_matrix::ptr ret = mem_row_dense_matrix::create(
 					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
+			ret->reset_data();
 			multiply_matrix<T>((const mem_row_dense_matrix &) *in, *ret);
 			return ret;
 		}
 		else {
 			mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
 					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
+			ret->reset_data();
 			multiply_matrix<T>((const mem_col_dense_matrix &) *in, *ret);
 			return ret;
 		}
