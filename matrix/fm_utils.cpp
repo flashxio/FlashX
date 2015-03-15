@@ -122,9 +122,6 @@ vector_vector::ptr create_1d_matrix(data_frame::ptr df)
 	std::string sort_vec_name = df->get_vec_name(0);
 	df->sort(sort_vec_name);
 	assert(df->is_sorted(sort_vec_name));
-	type_mem_vector<fg::vsize_t>::ptr num_non_zeros
-		= type_mem_vector<fg::vsize_t>::cast(df->get_vec(sort_vec_name)->groupby(
-			count_agg_operate(), false)->get_vec("agg"));
 	adj_apply_operate adj_op;
 	return df->groupby(sort_vec_name, adj_op);
 }
