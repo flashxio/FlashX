@@ -6,6 +6,7 @@
 ../unit-test/test-mem_matrix
 ../unit-test/test-mem_vector
 ../unit-test/test-mem_vector_vector
+../unit-test/test-sparse_matrix
 
 wget http://snap.stanford.edu/data/wiki-Vote.txt.gz
 gunzip wiki-Vote.txt.gz
