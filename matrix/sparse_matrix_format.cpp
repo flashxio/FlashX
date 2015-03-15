@@ -180,7 +180,7 @@ SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 		return SpM_2d_storage::ptr();
 	}
 	mem_vector::ptr vec = mem_vector::cast(vv.cat());
-	if (vec->get_type().get_type() == get_type<char>()) {
+	if (vec->get_type().get_type() != get_type<char>()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The vector of vectors contains a wrong type of data";
 		return SpM_2d_storage::ptr();
