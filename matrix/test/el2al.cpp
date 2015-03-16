@@ -181,8 +181,12 @@ int main(int argc, char *argv[])
 	type_mem_vector<fg::vsize_t>::ptr num_out_edges
 		= type_mem_vector<fg::vsize_t>::create(num_vertices);
 	for (size_t i = 0; i < num_vertices; i++) {
-		num_in_edges->set(i, in_adjs->get_length(i));
-		num_out_edges->set(i, out_adjs->get_length(i));
+		num_in_edges->set(i,
+				fg::ext_mem_undirected_vertex::vsize2num_edges(
+					in_adjs->get_length(i), 0));
+		num_out_edges->set(i,
+				fg::ext_mem_undirected_vertex::vsize2num_edges(
+					out_adjs->get_length(i), 0));
 	}
 	fg::graph_header header(fg::graph_type::DIRECTED, num_vertices, num_edges, 0);
 
