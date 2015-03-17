@@ -143,6 +143,7 @@ public:
 
 class part_2d_apply_operate: public gr_apply_operate<sub_vector_vector>
 {
+	// The row length (aka. the total number of columns) of the matrix.
 	size_t row_len;
 	block_2d_size block_size;
 public:
@@ -193,6 +194,9 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 		// Even if a block is empty, its header still exists. The size is
 		// accurate.
 		= sizeof(sparse_block_2d) * num_blocks
+		// Each block has an empty row part in the end to indicate the end
+		// of the block.
+		+ sparse_row_part::get_size(0) * num_blocks
 		// The size for row part headers is highly over estimated.
 		+ sizeof(sparse_row_part) * max_row_parts
 		// The size is accurate.
@@ -203,10 +207,12 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 	size_t max_row_size = sparse_row_part::get_size(block_width);
 	std::unique_ptr<char[]> buf = std::unique_ptr<char[]>(new char[max_row_size]);
 	size_t num_non_zeros = 0;
+	// Iterate columns. Actually it strides instead of iterating all columns.
 	for (size_t col_idx = 0; col_idx < row_len; col_idx += block_width) {
 		sparse_block_2d *block
 			= new (out.get_raw_arr() + curr_size) sparse_block_2d(
 					block_row_id, col_idx / block_width);
+		// Iterate the vectors in the vector_vector one by one.
 		for (size_t row_idx = 0; row_idx < val.get_num_vecs(); row_idx++) {
 			const fg::ext_mem_undirected_vertex *v
 				= (const fg::ext_mem_undirected_vertex *) val.get_raw_arr(row_idx);
@@ -220,18 +226,23 @@ void part_2d_apply_operate::run(const void *key, const sub_vector_vector &val,
 
 			sparse_row_part *part = new (buf.get()) sparse_row_part(row_idx);
 			size_t idx = neigh_idxs[row_idx];
+			rp_edge_iterator edge_it = part->get_edge_iterator();
 			for (; idx < v->get_num_edges()
-					&& v->get_neighbor(idx) < col_idx + block_width; idx++)
-				part->add(block_size, v->get_neighbor(idx));
-			assert(part->get_size() <= max_row_size);
+					&& v->get_neighbor(idx) < col_idx + block_width; idx++) {
+				edge_it.append(block_size, v->get_neighbor(idx));
+			}
+			size_t local_nnz = edge_it.get_offset();
+			assert(local_nnz <= block_width);
 			neigh_idxs[row_idx] = idx;
-			num_non_zeros += part->get_num_non_zeros();
-			assert(block->get_size() + part->get_size()
+			num_non_zeros += local_nnz;
+			assert(block->get_size() + sparse_row_part::get_size(local_nnz)
 					<= max_block_size - curr_size);
-			block->append(*part);
+			block->append(*part, sparse_row_part::get_size(local_nnz));
 		}
 		// Only the non-empty blocks exist in a block row.
 		if (!block->is_empty()) {
+			// After we finish adding rows to a block, we need to finalize it.
+			block->finalize();
 			curr_size += block->get_size();
 			block->verify(block_size);
 		}

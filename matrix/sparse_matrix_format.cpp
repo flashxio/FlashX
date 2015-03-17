@@ -31,27 +31,33 @@ namespace fm
 
 void sparse_block_2d::verify(const block_2d_size &block_size) const
 {
-	row_part_iterator it = get_iterator();
 	size_t rel_row_id = 0;
 	size_t num_rows = 0;
-	while (it.has_next()) {
-		const sparse_row_part &part = it.next();
-		assert(part.get_num_non_zeros() <= block_size.get_num_cols());
-		if (part.get_rel_row_idx() > 0)
-			assert(rel_row_id < part.get_rel_row_idx());
-		rel_row_id = part.get_rel_row_idx();
+	rp_edge_iterator it = get_first_edge_iterator();
+	while (!is_block_end(it)) {
+		size_t num_nz = 0;
+		while (it.has_next()) {
+			num_nz++;
+			it.next();
+		}
+		assert(num_nz <= block_size.get_num_cols());
+		if (it.get_rel_row_idx() > 0)
+			assert(rel_row_id < it.get_rel_row_idx());
+		rel_row_id = it.get_rel_row_idx();
 		num_rows++;
+		it = get_next_edge_iterator(it);
 	}
 	assert(num_rows <= block_size.get_num_rows());
 }
 
-void sparse_block_2d::append(const sparse_row_part &part)
+void sparse_block_2d::append(const sparse_row_part &part, size_t part_size)
 {
 	char *end = row_parts + rparts_size;
-	memcpy(end, &part, part.get_size());
-	assert(((size_t) rparts_size) + part.get_size()
+
+	memcpy(end, &part, part_size);
+	assert(((size_t) rparts_size) + part_size
 			<= std::numeric_limits<uint32_t>::max());
-	rparts_size += part.get_size();
+	rparts_size += part_size;
 }
 
 SpM_2d_index::ptr SpM_2d_index::create(const matrix_header &header,

@@ -34,12 +34,63 @@ namespace fm
 {
 
 /*
+ * This iterates the edges in a row part.
+ */
+class rp_edge_iterator
+{
+	uint16_t rel_row_idx;
+	uint16_t *rel_col_idx_start;
+	uint16_t *rel_col_idx_p;
+public:
+	rp_edge_iterator(uint16_t rel_row_idx, uint16_t *rel_col_idx_start) {
+		this->rel_row_idx = rel_row_idx;
+		this->rel_col_idx_start = rel_col_idx_start;
+		this->rel_col_idx_p = rel_col_idx_start;
+	}
+
+	size_t get_rel_row_idx() const {
+		return rel_row_idx;
+	}
+
+	off_t get_offset() const {
+		return rel_col_idx_p - rel_col_idx_start;
+	}
+
+	bool has_next() const {
+		// The highest bit of the relative col idx has to be 0.
+		return *rel_col_idx_p <= (size_t) std::numeric_limits<int16_t>::max();
+	};
+
+	// This returns the relative column index.
+	size_t get_curr() const {
+		return *rel_col_idx_p;
+	}
+
+	// This returns the relative column index.
+	size_t next() {
+		size_t ret = *rel_col_idx_p;
+		rel_col_idx_p++;
+		return ret;
+	}
+
+	void append(const block_2d_size &block_size, size_t col_idx) {
+		*rel_col_idx_p = col_idx & block_size.get_ncol_mask();
+		assert(*rel_col_idx_p <= (size_t) std::numeric_limits<int16_t>::max());
+		rel_col_idx_p++;
+	}
+
+	const char *get_curr_addr() const {
+		return (const char *) rel_col_idx_p;
+	}
+};
+
+/*
  * This stores part of a row. It doesn't contain any attributes.
  */
 class sparse_row_part
 {
+	static const int num_bits = sizeof(uint16_t) * 8;
 	uint16_t rel_row_idx;
-	uint16_t num_non_zeros;
 	uint16_t rel_col_idxs[0];
 
 	// The row part can only be allocated in the heap. The copy constructor
@@ -51,68 +102,26 @@ public:
 	}
 
 	static size_t get_col_entry_size() {
-		return sizeof(uint16_t);
+		return sizeof(rel_col_idxs[0]);
 	}
 
 	sparse_row_part(uint16_t rel_row_idx) {
 		this->rel_row_idx = rel_row_idx;
-		num_non_zeros = 0;
+		// The highest bit indicates that a new row part starts.
+		this->rel_row_idx |= 1 << (num_bits - 1);
 	}
 
 	size_t get_rel_row_idx() const {
-		return rel_row_idx;
-	}
-
-	size_t get_num_non_zeros() const {
-		return num_non_zeros;
+		static const int mask = (1 << (num_bits - 1)) - 1;
+		return rel_row_idx & mask;
 	}
 
 	size_t get_rel_col_idx(size_t idx) const {
 		return rel_col_idxs[idx];
 	}
 
-	void add(const block_2d_size &block_size, size_t cidx) {
-		rel_col_idxs[num_non_zeros] = cidx & block_size.get_ncol_mask();
-		num_non_zeros++;
-	}
-
-	size_t get_size() const {
-		return get_size(num_non_zeros);
-	}
-};
-
-/*
- * This iterates row parts in a 2D-partitioned block. It only allows reads.
- */
-class row_part_iterator
-{
-	size_t curr_idx;
-	const char *curr_row_part;
-	const char *rpart_end;
-public:
-	row_part_iterator(const char *row_part_start, size_t rparts_size) {
-		curr_idx = 0;
-		curr_row_part = row_part_start;
-		rpart_end = row_part_start + rparts_size;
-	}
-
-	size_t get_row_idx() const {
-		return curr_idx;
-	}
-
-	bool has_next() const {
-		return curr_row_part < rpart_end;
-	}
-
-	const sparse_row_part &get_curr() const {
-		return *(sparse_row_part *) curr_row_part;
-	}
-
-	const sparse_row_part &next() {
-		const char *orig = curr_row_part;
-		curr_row_part += get_curr().get_size();
-		curr_idx++;
-		return *(sparse_row_part *) orig;
+	rp_edge_iterator get_edge_iterator() {
+		return rp_edge_iterator(get_rel_row_idx(), rel_col_idxs);
 	}
 };
 
@@ -160,18 +169,37 @@ public:
 		return sizeof(*this) + get_rparts_size();
 	}
 
-	row_part_iterator get_iterator() const {
-		return row_part_iterator(row_parts, get_rparts_size());
+	bool is_block_end(const rp_edge_iterator &it) const {
+		size_t off = it.get_curr_addr() - row_parts;
+		return off
+			// There is an empty row in the end of a block to indicate
+			// the end of the block. We should subtract it.
+			>= rparts_size - sparse_row_part::get_size(0);
 	}
 
-	void append(const sparse_row_part &part);
+	rp_edge_iterator get_first_edge_iterator() const {
+		// Discard the const qualifier
+		// TODO I should make a const edge iterator
+		sparse_row_part *rp = (sparse_row_part *) row_parts;
+		return rp->get_edge_iterator();
+	}
+
+	rp_edge_iterator get_next_edge_iterator(const rp_edge_iterator &it) const {
+		assert(!it.has_next());
+		// TODO I should make a const edge iterator
+		sparse_row_part *rp = (sparse_row_part *) it.get_curr_addr();
+		return rp->get_edge_iterator();
+	}
+
+	void append(const sparse_row_part &part, size_t part_size);
 
 	/*
-	 * Calculate the offset (in bytes) of the current row
-	 * in this 2D partitioned block.
+	 * We need to add an empty row in the end, so the edge iterator can
+	 * notice the end of the last row.
 	 */
-	size_t get_byte_off(const row_part_iterator &it) const {
-		return ((char *) &it.get_curr()) - ((char *) this);
+	void finalize() {
+		sparse_row_part end(std::numeric_limits<uint16_t>::max());
+		append(end, sparse_row_part::get_size(0));
 	}
 
 	void verify(const block_2d_size &block_size) const;

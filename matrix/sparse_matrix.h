@@ -156,18 +156,18 @@ class block_spmm_task: public block_compute_task
 	const mem_row_dense_matrix &input;
 	mem_row_dense_matrix &output;
 
-	void run_on_row_part(const sparse_row_part &rpart, size_t start_row_idx,
-			size_t start_col_idx) {
-		size_t row_idx = start_row_idx + rpart.get_rel_row_idx();
-		size_t num_non_zeros = rpart.get_num_non_zeros();
+	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
+			size_t start_row_idx, size_t start_col_idx) {
+		size_t row_idx = start_row_idx + it.get_rel_row_idx();
 		size_t row_width = output.get_num_cols();
 		T *dest_row = (T *) output.get_row(row_idx);
-		for (size_t i = 0; i < num_non_zeros; i++) {
-			size_t col_idx = start_col_idx + rpart.get_rel_col_idx(i);
+		while (it.has_next()) {
+			size_t col_idx = start_col_idx + it.next();
 			const T *src_row = (const T *) input.get_row(col_idx);
 			for (size_t j = 0; j < row_width; j++)
 				dest_row[j] += src_row[j];
 		}
+		return it;
 	}
 public:
 	block_spmm_task(const mem_row_dense_matrix &_input,
@@ -177,13 +177,15 @@ public:
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
-		row_part_iterator it = block.get_iterator();
 		size_t start_col_idx
 			= block.get_block_col_idx() * block_size.get_num_cols();
 		size_t start_row_idx
 			= block.get_block_row_idx() * block_size.get_num_rows();
-		while (it.has_next())
-			run_on_row_part(it.next(), start_row_idx, start_col_idx);
+		rp_edge_iterator it = block.get_first_edge_iterator();
+		while (!block.is_block_end(it)) {
+			it = run_on_row_part(it, start_row_idx, start_col_idx);
+			it = block.get_next_edge_iterator(it);
+		}
 	}
 };
 
@@ -197,16 +199,16 @@ class block_spmv_task: public block_compute_task
 	const type_mem_vector<T> &input;
 	type_mem_vector<T> &output;
 
-	void run_on_row_part(const sparse_row_part &rpart, size_t start_row_idx,
-			size_t start_col_idx) {
-		size_t row_idx = start_row_idx + rpart.get_rel_row_idx();
-		size_t num_non_zeros = rpart.get_num_non_zeros();
+	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
+			size_t start_row_idx, size_t start_col_idx) {
+		size_t row_idx = start_row_idx + it.get_rel_row_idx();
 		T sum = 0;
-		for (size_t i = 0; i < num_non_zeros; i++) {
-			size_t col_idx = start_col_idx + rpart.get_rel_col_idx(i);
+		while (it.has_next()) {
+			size_t col_idx = start_col_idx + it.next();
 			sum += input.get(col_idx);
 		}
 		output.set(row_idx, output.get(row_idx) + sum);
+		return it;
 	}
 public:
 	block_spmv_task(const type_mem_vector<T> &_input,
@@ -216,13 +218,15 @@ public:
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
-		row_part_iterator it = block.get_iterator();
 		size_t start_col_idx
 			= block.get_block_col_idx() * block_size.get_num_cols();
 		size_t start_row_idx
 			= block.get_block_row_idx() * block_size.get_num_rows();
-		while (it.has_next())
-			run_on_row_part(it.next(), start_row_idx, start_col_idx);
+		rp_edge_iterator it = block.get_first_edge_iterator();
+		while (!block.is_block_end(it)) {
+			it = run_on_row_part(it, start_row_idx, start_col_idx);
+			it = block.get_next_edge_iterator(it);
+		}
 	}
 };
 
