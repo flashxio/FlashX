@@ -182,8 +182,7 @@ int main(int argc, char *argv[])
 	std::string mat_file = mat_name + ".mat";
 	std::string mat_idx_file = mat_name + ".mat_idx";
 
-	size_t block_height
-		= ((size_t) std::numeric_limits<unsigned short>::max()) + 1;
+	size_t block_height = block_max_num_rows;
 	block_2d_size block_size(block_height, block_height);
 	fg::vertex_index::ptr vindex = fg::vertex_index::load(index_file);
 

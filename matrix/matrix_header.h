@@ -46,6 +46,9 @@ enum matrix_layout_t
 	L_ROW_2D,
 };
 
+static const size_t block_max_num_rows = ((size_t) std::numeric_limits<int16_t>::max()) + 1;
+static const size_t block_max_num_cols = ((size_t) std::numeric_limits<int16_t>::max()) + 1;
+
 class block_2d_size
 {
 	uint16_t nrow_log;
@@ -57,6 +60,8 @@ public:
 	}
 
 	block_2d_size(size_t num_rows, size_t num_cols) {
+		assert(num_rows <= block_max_num_rows);
+		assert(num_cols <= block_max_num_cols);
 		nrow_log = log2(num_rows);
 		ncol_log = log2(num_cols);
 		assert((1 << nrow_log) == num_rows);
