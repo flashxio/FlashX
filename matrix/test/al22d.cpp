@@ -171,19 +171,24 @@ struct deleter
 int main(int argc, char *argv[])
 {
 	if (argc < 4) {
-		fprintf(stderr, "el2al graph_file index_file matrix_name\n");
+		fprintf(stderr, "el2al graph_file index_file matrix_name [block_height [block_width]]\n");
 		return -1;
 	}
 
 	std::string graph_file = std::string(argv[1]);
 	std::string index_file = std::string(argv[2]);
 	std::string mat_name = std::string(argv[3]);
+	size_t block_height
+		= ((size_t) std::numeric_limits<unsigned short>::max()) + 1;
+	size_t block_width = block_height;
+	if (argc >= 5)
+		block_width = block_height = std::atoi(argv[4]);
+	if (argc >= 6)
+		block_width = std::atoi(argv[5]);
 
 	std::string mat_file = mat_name + ".mat";
 	std::string mat_idx_file = mat_name + ".mat_idx";
 
-	size_t block_height
-		= ((size_t) std::numeric_limits<unsigned short>::max()) + 1;
 	block_2d_size block_size(block_height, block_height);
 	fg::vertex_index::ptr vindex = fg::vertex_index::load(index_file);
 
