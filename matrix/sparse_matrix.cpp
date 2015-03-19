@@ -24,11 +24,197 @@
 #include "matrix_worker_thread.h"
 #include "matrix_io.h"
 #include "matrix_config.h"
+#include "hilbert_curve.h"
 
 namespace fm
 {
 
 matrix_config matrix_conf;
+
+/*
+ * This processes the blocks in the their original order.
+ * It can process an arbitrary number of blocks.
+ */
+class seq_exec_order: public block_exec_order
+{
+public:
+	virtual bool is_valid_size(size_t height, size_t width) const {
+		return true;
+	}
+
+	virtual bool exec(block_compute_task &task,
+			std::vector<const sparse_block_2d *> &blocks) const {
+		BOOST_FOREACH(const sparse_block_2d *b, blocks)
+			// We allow null blocks.
+			if (b)
+				task.run_on_block(*b);
+		return true;
+	}
+};
+
+/*
+ * This class processes the blocks in the hilbert order.
+ * The hilbert order gives us very high CPU cache hits regardless of
+ * the CPU cache size. It's kind of like cache oblivious algorithms,
+ * but this is not completely cache oblivious because it still relies on
+ * a right block size to generate a reasonable amount of cache hits.
+ */
+class hilbert_exec_order: public block_exec_order
+{
+	struct coordinate_order
+	{
+		std::pair<off_t, off_t> coo;
+		size_t order;
+		bool operator<(const coordinate_order &o) const {
+			return this->order < o.order;
+		}
+	};
+
+	size_t n;
+	std::vector<coordinate_order> hilbert_orders;
+public:
+	hilbert_exec_order(size_t n);
+
+	virtual bool is_valid_size(size_t height, size_t width) const {
+		return n == height && n == width;
+	}
+
+	virtual bool exec(block_compute_task &task,
+			std::vector<const sparse_block_2d *> &blocks) const;
+};
+
+hilbert_exec_order::hilbert_exec_order(size_t n)
+{
+	this->n = n;
+	for (size_t i = 0; i < n; i++) {
+		for (size_t j = 0; j < n; j++) {
+			coordinate_order o;
+			o.coo.first = i;
+			o.coo.second = j;
+			o.order = hilbert_xy2d(n, i, j);
+			hilbert_orders.push_back(o);
+		}
+	}
+	assert(hilbert_orders.size() == n * n);
+	// Order the coordinates ascendingly.
+	std::sort(hilbert_orders.begin(), hilbert_orders.end());
+}
+
+/*
+ * Process the blocks in the hilbert order.
+ * Here I assume all blocks are in a square so there are n^2 blocks
+ * in the vector. Furthermore, the blocks are organized in the row major
+ * in the original matrix.
+ */
+bool hilbert_exec_order::exec(block_compute_task &task,
+		std::vector<const sparse_block_2d *> &blocks) const
+{
+	if (blocks.size() != hilbert_orders.size()) {
+		BOOST_LOG_TRIVIAL(error) << "The number of blocks need to be n^2";
+		return false;
+	}
+
+	BOOST_FOREACH(coordinate_order o, hilbert_orders) {
+		size_t row_idx = o.coo.first;
+		size_t col_idx = o.coo.second;
+		size_t idx = row_idx * n + col_idx;
+		// We allow null blocks. There must be n^2 blocks in the vector.
+		// If there are empty blocks in the square, we have to put a null
+		// in the place to indicate the empty block.
+		if (blocks[idx])
+			task.run_on_block(*blocks[idx]);
+	}
+	return true;
+}
+
+block_compute_task::block_compute_task(const matrix_io &_io,
+		const sparse_matrix &mat, block_exec_order::ptr order): io(
+			_io), block_size(mat.get_block_size())
+{
+	size_t num_block_rows
+		= ceil(((double) io.get_num_rows()) / block_size.get_num_rows());
+	if (order->is_valid_size(num_block_rows, num_block_rows))
+		this->exec_order = order;
+	else
+		this->exec_order = block_exec_order::ptr(new seq_exec_order());
+
+	off_t orig_off = io.get_loc().get_offset();
+	off = ROUND_PAGE(orig_off);
+	buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
+	buf = (char *) valloc(buf_size);
+
+	// The last entry in the vector indicates the end of the last block row.
+	block_rows.resize(num_block_rows + 1);
+	assert(io.get_top_left().get_row_idx() % block_size.get_num_rows() == 0);
+	// The first block row.
+	off_t block_row_idx
+		= io.get_top_left().get_row_idx() / block_size.get_num_rows();
+	std::vector<off_t> block_row_idxs(num_block_rows + 1);
+	for (size_t i = 0; i < block_row_idxs.size(); i++)
+		block_row_idxs[i] = block_row_idx + i;
+	std::vector<off_t> block_row_offs;
+	mat.get_block_row_offs(block_row_idxs, block_row_offs);
+	assert(io.get_loc().get_offset() == block_row_offs[0]);
+	for (size_t i = 0; i < num_block_rows; i++) {
+		// The offset of the block row in the buffer.
+		off_t local_off = block_row_offs[i] - off;
+		block_rows[i] = buf + local_off;
+	}
+	block_rows[num_block_rows] = buf + block_row_offs[num_block_rows] - off;
+}
+
+/*
+ * A block compute task processes data in multiple block rows.
+ * It's up to us in what order we should process the blocks in these block rows.
+ */
+void block_compute_task::run(char *buf, size_t size)
+{
+	off_t orig_off = io.get_loc().get_offset();
+	off_t local_off = orig_off - ROUND_PAGE(orig_off);
+	assert(local_off + io.get_size() <= size);
+
+	// We access data in super blocks.
+	// A super block is a set of blocks organized in a square or
+	// a nearly square.
+	size_t num_blocks = block_rows.size() - 1;
+	std::vector<block_row_iterator> its;
+	for (size_t i = 0; i < block_rows.size(); i++) {
+		its.emplace_back((const sparse_block_2d *) block_rows[i],
+				(const sparse_block_2d *) block_rows[i + 1]);
+	}
+	std::vector<const sparse_block_2d *> blocks(num_blocks * num_blocks);
+	// The column index of a super block (in blocks).
+	size_t sb_col_idx = 0;
+	bool has_blocks;
+	do {
+		has_blocks = false;
+		// Get a super block.
+		for (size_t i = 0; i < num_blocks; i++) {
+			for (size_t j = 0; j < num_blocks; j++) {
+				size_t idx = i * num_blocks + j;
+				// If the block row doesn't have blocks left, we should fill
+				// the corresponding location with NULL.
+				if (!its[i].has_next()) {
+					blocks[idx] = NULL;
+					continue;
+				}
+				const sparse_block_2d &b = its[i].get_curr();
+				assert(b.get_block_col_idx() >= sb_col_idx + j);
+				if (b.get_block_col_idx() == sb_col_idx + j) {
+					blocks[idx] = &b;
+					its[i].next();
+				}
+				else
+					blocks[idx] = NULL;
+			}
+			// As long as there is a block left in a block row, we need to
+			// go through the process again.
+			has_blocks |= its[i].has_next();
+		}
+		sb_col_idx += num_blocks;
+		exec_order->exec(*this, blocks);
+	} while (has_blocks);
+}
 
 void sparse_matrix::compute(task_creator::ptr creator) const
 {
@@ -80,6 +266,7 @@ void fg_row_compute_task::run(char *buf, size_t size)
  */
 class fg_sparse_sym_matrix: public sparse_matrix
 {
+	block_2d_size block_size;
 	// This works like the index of the sparse matrix.
 	std::vector<row_block> blocks;
 	safs::file_io_factory::shared_ptr factory;
@@ -101,6 +288,20 @@ public:
 
 	virtual void init_io_gens(
 			std::vector<matrix_io_generator::ptr> &io_gens) const;
+
+	virtual const block_2d_size &get_block_size() const {
+		return block_size;
+	}
+
+	virtual void get_block_row_offs(const std::vector<off_t> &block_row_idxs,
+			std::vector<off_t> &offs) const {
+		throw unsupported_exception(
+				"get_block_row_offs isn't supported in fg_sparse_sym_matrix");
+	}
+
+	virtual block_exec_order::ptr get_multiply_order() const {
+		return block_exec_order::ptr(new seq_exec_order());
+	}
 };
 
 sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg)
@@ -157,6 +358,7 @@ void fg_sparse_sym_matrix::init_io_gens(
  */
 class fg_sparse_asym_matrix: public sparse_matrix
 {
+	block_2d_size block_size;
 	// These work like the index of the sparse matrix.
 	// out_blocks index the original matrix.
 	std::vector<row_block> out_blocks;
@@ -184,6 +386,20 @@ public:
 
 	virtual void init_io_gens(
 			std::vector<matrix_io_generator::ptr> &io_gens) const;
+
+	virtual const block_2d_size &get_block_size() const {
+		return block_size;
+	}
+
+	virtual void get_block_row_offs(const std::vector<off_t> &block_row_idxs,
+			std::vector<off_t> &offs) const {
+		throw unsupported_exception(
+				"get_block_row_offs isn't supported in fg_sparse_asym_matrix");
+	}
+
+	virtual block_exec_order::ptr get_multiply_order() const {
+		return block_exec_order::ptr(new seq_exec_order());
+	}
 };
 
 sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg)
@@ -259,18 +475,31 @@ sparse_matrix::ptr sparse_matrix::create(fg::FG_graph::ptr fg)
 
 class block_sparse_matrix: public sparse_matrix
 {
+	// If the matrix is stored in the native format and is partitioned
+	// in two dimensions, we need to know the block size.
+	block_2d_size block_size;
 	SpM_2d_index::ptr index;
 	SpM_2d_storage::ptr mat;
 	safs::file_io_factory::shared_ptr factory;
+	// We may want to access multiple block rows. When a block is small,
+	// we can process the data in the sparse matrix in super blocks to
+	// increase the CPU cache hits.
+	size_t num_block_rows;
+	// In the number of rows.
+	// 128K performs better than 64K.
+	static const int super_block_size = 128 * 1024;
 public:
 	block_sparse_matrix(SpM_2d_index::ptr index,
 			SpM_2d_storage::ptr mat): sparse_matrix(
 				index->get_header().get_num_rows(),
-				index->get_header().get_num_cols(),
-				true, index->get_header().get_2d_block_size()) {
+				index->get_header().get_num_cols(), true), block_size(
+				index->get_header().get_2d_block_size()) {
 		this->index = index;
 		this->mat = mat;
 		factory = mat->create_io_factory();
+		assert(block_size.get_num_rows() <= super_block_size);
+		assert(super_block_size % block_size.get_num_rows() == 0);
+		this->num_block_rows = super_block_size / block_size.get_num_rows();
 	}
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
@@ -284,23 +513,41 @@ public:
 	virtual void init_io_gens(
 			std::vector<matrix_io_generator::ptr> &io_gens) const {
 		for (size_t i = 0; i < io_gens.size(); i++) {
-			row_block_mapper mapper(*index, i, io_gens.size(), 1);
+			row_block_mapper mapper(*index, i, io_gens.size(), num_block_rows);
 			io_gens[i] = matrix_io_generator::create(index,
 					factory->get_file_id(), mapper);
 		}
+	}
+
+	virtual const block_2d_size &get_block_size() const {
+		return block_size;
+	}
+
+	virtual void get_block_row_offs(const std::vector<off_t> &block_row_idxs,
+			std::vector<off_t> &offs) const {
+		offs.resize(block_row_idxs.size());
+		for (size_t i = 0; i < block_row_idxs.size(); i++)
+			offs[i] = index->get_block_row_off(block_row_idxs[i]);
+	}
+
+	virtual block_exec_order::ptr get_multiply_order() const {
+		return block_exec_order::ptr(new hilbert_exec_order(num_block_rows));
 	}
 };
 
 class block_sparse_asym_matrix: public sparse_matrix
 {
+	// If the matrix is stored in the native format and is partitioned
+	// in two dimensions, we need to know the block size.
+	block_2d_size block_size;
 	block_sparse_matrix::ptr mat;
 	block_sparse_matrix::ptr t_mat;
 public:
 	block_sparse_asym_matrix(SpM_2d_index::ptr index, SpM_2d_storage::ptr mat,
 			SpM_2d_index::ptr t_index, SpM_2d_storage::ptr t_mat): sparse_matrix(
 				index->get_header().get_num_rows(),
-				index->get_header().get_num_cols(),
-				false, index->get_header().get_2d_block_size()) {
+				index->get_header().get_num_cols(), false), block_size(
+				index->get_header().get_2d_block_size()) {
 		this->mat = block_sparse_matrix::ptr(new block_sparse_matrix(index, mat));
 		this->t_mat = block_sparse_matrix::ptr(new block_sparse_matrix(t_index,
 					t_mat));
@@ -321,6 +568,19 @@ public:
 	virtual void init_io_gens(
 			std::vector<matrix_io_generator::ptr> &io_gens) const {
 		mat->init_io_gens(io_gens);
+	}
+
+	virtual const block_2d_size &get_block_size() const {
+		return block_size;
+	}
+
+	virtual void get_block_row_offs(const std::vector<off_t> &block_row_idxs,
+			std::vector<off_t> &offs) const {
+		mat->get_block_row_offs(block_row_idxs, offs);
+	}
+
+	virtual block_exec_order::ptr get_multiply_order() const {
+		return mat->get_multiply_order();
 	}
 };
 

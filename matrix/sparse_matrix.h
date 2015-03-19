@@ -107,11 +107,31 @@ void fg_row_spmv_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 	output.set(v.get_id(), res);
 }
 
+class block_compute_task;
+
+/*
+ * The interface for processing blocks.
+ */
+class block_exec_order
+{
+public:
+	typedef std::shared_ptr<block_exec_order> ptr;
+
+	virtual bool is_valid_size(size_t height, size_t width) const = 0;
+
+	// The vector of blocks should be from multiple block rows.
+	virtual bool exec(block_compute_task &task,
+			std::vector<const sparse_block_2d *> &blocks) const = 0;
+};
+
 /*
  * A compute task runs on a 2D-partitioned block of a sparse matrix.
  */
 class block_compute_task: public compute_task
 {
+	block_exec_order::ptr exec_order;
+	// The block rows in the buffer.
+	std::vector<char *> block_rows;
 	matrix_io io;
 	off_t off;
 	char *buf;
@@ -119,28 +139,14 @@ class block_compute_task: public compute_task
 protected:
 	block_2d_size block_size;
 public:
-	block_compute_task(const matrix_io &_io, const block_2d_size &_block_size): io(
-			_io), block_size(_block_size) {
-		off_t orig_off = io.get_loc().get_offset();
-		off = ROUND_PAGE(orig_off);
-		buf_size = ROUNDUP_PAGE(orig_off - off + io.get_size());
-		buf = (char *) valloc(buf_size);
-	}
+	block_compute_task(const matrix_io &_io, const sparse_matrix &mat,
+			block_exec_order::ptr order);
 
 	~block_compute_task() {
 		free(buf);
 	}
 
-	virtual void run(char *buf, size_t size) {
-		off_t orig_off = io.get_loc().get_offset();
-		off_t local_off = orig_off - ROUND_PAGE(orig_off);
-		assert(local_off + io.get_size() <= size);
-		const sparse_block_2d *block = (const sparse_block_2d *) (buf + local_off);
-		block_row_iterator it(block,
-				(const sparse_block_2d *) (buf + local_off + io.get_size()));
-		while (it.has_next())
-			run_on_block(it.next());
-	}
+	virtual void run(char *buf, size_t size);
 
 	virtual safs::io_request get_request() const {
 		return safs::io_request(buf, safs::data_loc_t(io.get_loc().get_file_id(),
@@ -172,8 +178,8 @@ class block_spmm_task: public block_compute_task
 public:
 	block_spmm_task(const mem_row_dense_matrix &_input,
 			mem_row_dense_matrix &_output, const matrix_io &_io,
-			const block_2d_size &_block_size): block_compute_task(_io,
-				_block_size), input(_input), output(_output) {
+			const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
+				_io, mat, order), input(_input), output(_output) {
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
@@ -213,8 +219,8 @@ class block_spmv_task: public block_compute_task
 public:
 	block_spmv_task(const type_mem_vector<T> &_input,
 			type_mem_vector<T> &_output, const matrix_io &_io,
-			const block_2d_size &_block_size): block_compute_task(_io,
-				_block_size), input(_input), output(_output) {
+			const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
+				_io, mat, order), input(_input), output(_output) {
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
@@ -255,22 +261,20 @@ class b2d_spmv_creator: public task_creator
 {
 	const type_mem_vector<T> &input;
 	type_mem_vector<T> &output;
-	block_2d_size block_size;
+	const sparse_matrix &mat;
+	block_exec_order::ptr order;
 
 	b2d_spmv_creator(const type_mem_vector<T> &_input,
-			type_mem_vector<T> &_output, const block_2d_size &_block_size): input(
-				_input), output(_output), block_size(_block_size) {
-	}
+			type_mem_vector<T> &_output, const sparse_matrix &_mat);
 public:
 	static task_creator::ptr create(const type_mem_vector<T> &_input,
-			type_mem_vector<T> &_output, const block_2d_size &_block_size) {
-		return task_creator::ptr(new b2d_spmv_creator<T>(_input, _output,
-					_block_size));
+			type_mem_vector<T> &_output, const sparse_matrix &mat) {
+		return task_creator::ptr(new b2d_spmv_creator<T>(_input, _output, mat));
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new block_spmv_task<T>(input, output,
-					io, block_size));
+		return compute_task::ptr(new block_spmv_task<T>(input, output, io, mat,
+					order));
 	}
 };
 
@@ -279,23 +283,20 @@ class b2d_spmm_creator: public task_creator
 {
 	const mem_row_dense_matrix &input;
 	mem_row_dense_matrix &output;
-	block_2d_size block_size;
+	const sparse_matrix &mat;
+	block_exec_order::ptr order;
 
 	b2d_spmm_creator(const mem_row_dense_matrix &_input,
-			mem_row_dense_matrix &_output, const block_2d_size &_block_size): input(
-				_input), output(_output), block_size(_block_size) {
-		assert(input.get_num_cols() == output.get_num_cols());
-	}
+			mem_row_dense_matrix &_output, const sparse_matrix &_mat);
 public:
 	static task_creator::ptr create(const mem_row_dense_matrix &_input,
-			mem_row_dense_matrix &_output, const block_2d_size &_block_size) {
-		return task_creator::ptr(new b2d_spmm_creator<T>(_input, _output,
-					_block_size));
+			mem_row_dense_matrix &_output, const sparse_matrix &mat) {
+		return task_creator::ptr(new b2d_spmm_creator<T>(_input, _output, mat));
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
 		return compute_task::ptr(new block_spmm_task<T>(input, output,
-					io, block_size));
+					io, mat, order));
 	}
 };
 
@@ -314,9 +315,6 @@ class sparse_matrix
 	size_t nrows;
 	size_t ncols;
 	bool symmetric;
-	// If the matrix is stored in the native format and is partitioned
-	// in two dimensions, we need to know the block size.
-	block_2d_size block_size;
 
 	template<class T>
 	task_creator::ptr get_multiply_creator(const type_mem_vector<T> &in,
@@ -324,14 +322,14 @@ class sparse_matrix
 		if (is_fg)
 			return fg_row_spmv_creator<T>::create(in, out);
 		else
-			return b2d_spmv_creator<T>::create(in, out, block_size);
+			return b2d_spmv_creator<T>::create(in, out, *this);
 	}
 
 	template<class T>
 	task_creator::ptr get_multiply_creator(const mem_row_dense_matrix &in,
 			mem_row_dense_matrix &out) const {
 		assert(!is_fg);
-		return b2d_spmm_creator<T>::create(in, out, block_size);
+		return b2d_spmm_creator<T>::create(in, out, *this);
 	}
 
 	template<class T>
@@ -364,8 +362,7 @@ protected:
 		this->is_fg = true;
 	}
 
-	sparse_matrix(size_t nrows, size_t ncols, bool symmetric,
-			const block_2d_size &_block_size): block_size(_block_size) {
+	sparse_matrix(size_t nrows, size_t ncols, bool symmetric) {
 		this->symmetric = symmetric;
 		this->is_fg = false;
 		this->nrows = nrows;
@@ -408,6 +405,22 @@ public:
 			std::vector<matrix_io_generator::ptr> &io_gens) const = 0;
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const = 0;
+	/*
+	 * Get the block size.
+	 * For a row-major or column-major matrix, a block has only one row
+	 * or one column.
+	 */
+	virtual const block_2d_size &get_block_size() const = 0;
+	/*
+	 * Get the offsets of the block rows.
+	 */
+	virtual void get_block_row_offs(const std::vector<off_t> &block_row_idxs,
+			std::vector<off_t> &offs) const = 0;
+	/*
+	 * The subclass defines the order of processing a set of blocks when
+	 * multiplying this sparse matrix with a dense matrix.
+	 */
+	virtual block_exec_order::ptr get_multiply_order() const = 0;
 
 	size_t get_num_rows() const {
 		return nrows;
@@ -532,6 +545,23 @@ public:
 		}
 	}
 };
+
+template<class T>
+b2d_spmv_creator<T>::b2d_spmv_creator(const type_mem_vector<T> &_input,
+		type_mem_vector<T> &_output, const sparse_matrix &_mat): input(
+			_input), output(_output), mat(_mat)
+{
+	order = mat.get_multiply_order();
+}
+
+template<class T>
+b2d_spmm_creator<T>::b2d_spmm_creator(const mem_row_dense_matrix &_input,
+		mem_row_dense_matrix &_output, const sparse_matrix &_mat): input(
+			_input), output(_output), mat(_mat)
+{
+	assert(input.get_num_cols() == output.get_num_cols());
+	order = mat.get_multiply_order();
+}
 
 void init_flash_matrix(config_map::ptr configs);
 void destroy_flash_matrix();

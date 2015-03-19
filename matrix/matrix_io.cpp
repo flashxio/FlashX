@@ -188,6 +188,7 @@ class b2d_io_generator: public matrix_io_generator
 	struct block_row {
 		// The Id of the block row.
 		uint32_t row_block_id;
+		uint32_t num_block_rows;
 		// The offset of the block row on the disks.
 		off_t off;
 		// The size of the block row on the disks.
@@ -237,13 +238,11 @@ b2d_io_generator::b2d_io_generator(SpM_2d_index::ptr idx, int file_id,
 	for (size_t i = 0; i < mapper.get_num_ranges(); i++) {
 		struct block_row brow;
 		row_block_mapper::rb_range range = mapper.get_range(i);
-		// block row is much larger now, so we only need to have one block row
-		// in a range.
-		assert(range.num == 1);
 		brow.row_block_id = range.idx;
+		brow.num_block_rows = range.num;
 		brow.off = idx->get_block_row_off(range.idx);
 		brow.size = idx->get_block_row_off(
-				range.idx + 1) - idx->get_block_row_off(range.idx);
+				range.idx + range.num) - idx->get_block_row_off(range.idx);
 		brows.push_back(brow);
 	}
 	// Sort the block rows based on the size of block rows.
@@ -261,8 +260,8 @@ matrix_io b2d_io_generator::get_next_io()
 		block_row brow = brows[brow_off++];
 		matrix_loc mat_loc(brow.row_block_id * block_size.get_num_rows(), 0);
 		safs::data_loc_t data_loc(file_id, brow.off);
-		ret = matrix_io(mat_loc, block_size.get_num_rows(), tot_num_cols,
-				data_loc, brow.size);
+		ret = matrix_io(mat_loc, block_size.get_num_rows() * brow.num_block_rows,
+				tot_num_cols, data_loc, brow.size);
 	}
 	pthread_spin_unlock(&lock);
 	return ret;
@@ -279,8 +278,8 @@ matrix_io b2d_io_generator::steal_io()
 		num_brows--;
 		matrix_loc mat_loc(brow.row_block_id * block_size.get_num_rows(), 0);
 		safs::data_loc_t data_loc(file_id, brow.off);
-		ret = matrix_io(mat_loc, block_size.get_num_rows(), tot_num_cols,
-				data_loc, brow.size);
+		ret = matrix_io(mat_loc, block_size.get_num_rows() * brow.num_block_rows,
+				tot_num_cols, data_loc, brow.size);
 	}
 	pthread_spin_unlock(&lock);
 	return ret;
