@@ -23,7 +23,8 @@ LDFLAGS := $(OMP_FLAG) -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsa
 LDFLAGS += -lstxxl -lnuma -lz -laio
 
 all: test_io_gen test-mem_matrix test-EM_vector test-EM_matrix	\
-	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix
+	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
+	test-hilbert
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -49,6 +50,9 @@ test-EM_matrix: test-EM_matrix.o ../libFMatrix.a
 test-sparse_matrix: test-sparse_matrix.o ../libFMatrix.a
 	$(CXX) -o test-sparse_matrix test-sparse_matrix.o $(LDFLAGS)
 
+test-hilbert: test-hilbert.o ../libFMatrix.a
+	$(CXX) -o test-hilbert test-hilbert.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -61,5 +65,6 @@ clean:
 	rm -f test-EM_vector
 	rm -f test-EM_matrix
 	rm -f test-sparse_matrix
+	rm -f test-hilbert
 
 -include $(DEPS) 
