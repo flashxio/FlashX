@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
 	std::string mat_file = mat_name + ".mat";
 	std::string mat_idx_file = mat_name + ".mat_idx";
 
-	block_2d_size block_size(block_height, block_height);
+	block_2d_size block_size(block_height, block_width);
 	fg::vertex_index::ptr vindex = fg::vertex_index::load(index_file);
 
 	FILE *f = fopen(graph_file.c_str(), "r");
