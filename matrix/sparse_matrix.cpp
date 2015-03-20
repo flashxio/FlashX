@@ -216,13 +216,14 @@ void block_compute_task::run(char *buf, size_t size)
 	} while (has_blocks);
 }
 
-void sparse_matrix::compute(task_creator::ptr creator) const
+void sparse_matrix::compute(task_creator::ptr creator,
+		size_t num_block_rows) const
 {
 	int num_workers = matrix_conf.get_num_threads();
 	int num_nodes = safs::params.get_num_nodes();
 	std::vector<matrix_worker_thread::ptr> workers(num_workers);
 	std::vector<matrix_io_generator::ptr> io_gens(num_workers);
-	init_io_gens(io_gens);
+	init_io_gens(num_block_rows, io_gens);
 #ifdef PROFILER
 	if (!fg::graph_conf.get_prof_file().empty())
 		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
@@ -286,7 +287,7 @@ public:
 		return factory;
 	}
 
-	virtual void init_io_gens(
+	virtual void init_io_gens(size_t num_block_rows,
 			std::vector<matrix_io_generator::ptr> &io_gens) const;
 
 	virtual const block_2d_size &get_block_size() const {
@@ -299,7 +300,8 @@ public:
 				"get_block_row_offs isn't supported in fg_sparse_sym_matrix");
 	}
 
-	virtual block_exec_order::ptr get_multiply_order() const {
+	virtual block_exec_order::ptr get_multiply_order(
+			size_t num_block_rows, size_t num_block_cols) const {
 		return block_exec_order::ptr(new seq_exec_order());
 	}
 };
@@ -342,7 +344,7 @@ sparse_matrix::ptr fg_sparse_sym_matrix::create(fg::FG_graph::ptr fg)
 	return sparse_matrix::ptr(m);
 }
 
-void fg_sparse_sym_matrix::init_io_gens(
+void fg_sparse_sym_matrix::init_io_gens(size_t num_block_rows,
 		std::vector<matrix_io_generator::ptr> &io_gens) const
 {
 	for (size_t i = 0; i < io_gens.size(); i++) {
@@ -384,7 +386,7 @@ public:
 		sparse_matrix::transpose();
 	}
 
-	virtual void init_io_gens(
+	virtual void init_io_gens(size_t num_block_rows,
 			std::vector<matrix_io_generator::ptr> &io_gens) const;
 
 	virtual const block_2d_size &get_block_size() const {
@@ -397,7 +399,8 @@ public:
 				"get_block_row_offs isn't supported in fg_sparse_asym_matrix");
 	}
 
-	virtual block_exec_order::ptr get_multiply_order() const {
+	virtual block_exec_order::ptr get_multiply_order(
+			size_t num_block_rows, size_t num_block_cols) const {
 		return block_exec_order::ptr(new seq_exec_order());
 	}
 };
@@ -450,7 +453,7 @@ sparse_matrix::ptr fg_sparse_asym_matrix::create(fg::FG_graph::ptr fg)
 	return sparse_matrix::ptr(m);
 }
 
-void fg_sparse_asym_matrix::init_io_gens(
+void fg_sparse_asym_matrix::init_io_gens(size_t num_block_rows,
 		std::vector<matrix_io_generator::ptr> &io_gens) const
 {
 	for (size_t i = 0; i < io_gens.size(); i++) {
@@ -481,13 +484,6 @@ class block_sparse_matrix: public sparse_matrix
 	SpM_2d_index::ptr index;
 	SpM_2d_storage::ptr mat;
 	safs::file_io_factory::shared_ptr factory;
-	// We may want to access multiple block rows. When a block is small,
-	// we can process the data in the sparse matrix in super blocks to
-	// increase the CPU cache hits.
-	size_t num_block_rows;
-	// In the number of rows.
-	// 128K performs better than 64K.
-	static const int super_block_size = 128 * 1024;
 public:
 	block_sparse_matrix(SpM_2d_index::ptr index,
 			SpM_2d_storage::ptr mat): sparse_matrix(
@@ -497,9 +493,6 @@ public:
 		this->index = index;
 		this->mat = mat;
 		factory = mat->create_io_factory();
-		assert(block_size.get_num_rows() <= super_block_size);
-		assert(super_block_size % block_size.get_num_rows() == 0);
-		this->num_block_rows = super_block_size / block_size.get_num_rows();
 	}
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
@@ -510,7 +503,7 @@ public:
 	virtual void transpose() {
 	}
 
-	virtual void init_io_gens(
+	virtual void init_io_gens(size_t num_block_rows,
 			std::vector<matrix_io_generator::ptr> &io_gens) const {
 		for (size_t i = 0; i < io_gens.size(); i++) {
 			row_block_mapper mapper(*index, i, io_gens.size(), num_block_rows);
@@ -530,7 +523,18 @@ public:
 			offs[i] = index->get_block_row_off(block_row_idxs[i]);
 	}
 
-	virtual block_exec_order::ptr get_multiply_order() const {
+	virtual block_exec_order::ptr get_multiply_order(
+			size_t num_block_rows, size_t num_block_cols) const {
+		if (num_block_rows != num_block_cols) {
+			BOOST_LOG_TRIVIAL(error) << "hilbert order requires a square.";
+			return block_exec_order::ptr();
+		}
+		double log2_nbr = log2(num_block_rows);
+		if (log2_nbr != floor(log2_nbr)) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "hilbert order requires a dimension of 2^n";
+			return block_exec_order::ptr();
+		}
 		return block_exec_order::ptr(new hilbert_exec_order(num_block_rows));
 	}
 };
@@ -565,9 +569,9 @@ public:
 		sparse_matrix::transpose();
 	}
 
-	virtual void init_io_gens(
+	virtual void init_io_gens(size_t num_block_rows,
 			std::vector<matrix_io_generator::ptr> &io_gens) const {
-		mat->init_io_gens(io_gens);
+		mat->init_io_gens(num_block_rows, io_gens);
 	}
 
 	virtual const block_2d_size &get_block_size() const {
@@ -579,8 +583,9 @@ public:
 		mat->get_block_row_offs(block_row_idxs, offs);
 	}
 
-	virtual block_exec_order::ptr get_multiply_order() const {
-		return mat->get_multiply_order();
+	virtual block_exec_order::ptr get_multiply_order(
+			size_t num_block_rows, size_t num_block_cols) const {
+		return mat->get_multiply_order(num_block_rows, num_block_cols);
 	}
 };
 

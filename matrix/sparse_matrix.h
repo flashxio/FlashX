@@ -301,6 +301,28 @@ public:
 };
 
 /*
+ * The non-zero entries in a sparse matrix are organized in blocks.
+ * When multiplying the sparse matrix with other dense matrices, we traverse
+ * the blocks in a certain order to increase CPU cache hits. To do so, we
+ * need to group multiple adjacent blocks in a super block, which has
+ * the same number of rows and columns. The size of the super block directly
+ * affects CPU cache hits and is affected by the size of the dense matrix.
+ * This function estimates the super block size in terms of the number of
+ * block rows. The goal is to have the rows of the dense matrix involved
+ * in the computation of the super block always in the CPU cache.
+ * `entry_size' is the size of a row in the dense matrix.
+ */
+static inline size_t cal_super_block_size(const block_2d_size &block_size,
+		size_t entry_size)
+{
+	// 1MB gives the best performance.
+	// Maybe the reason is that I run eight threads in a processor, which has
+	// a L3 cache of 8MB. Therefore, each thread gets 1MB in L3.
+	size_t size = 1024 * 1024 / entry_size / block_size.get_num_rows();
+	return std::max(size, 1UL);
+}
+
+/*
  * This is a base class for a sparse matrix. It provides a set of functions
  * to perform computation on the sparse matrix. Currently, it has matrix
  * vector multiplication and matrix matrix multiplication.
@@ -335,7 +357,9 @@ class sparse_matrix
 	template<class T>
 	void multiply_matrix(const mem_row_dense_matrix &row_m,
 			mem_row_dense_matrix &ret) const {
-		compute(get_multiply_creator<T>(row_m, ret));
+		compute(get_multiply_creator<T>(row_m, ret),
+				cal_super_block_size(get_block_size(),
+					sizeof(T) * row_m.get_num_cols()));
 	}
 
 	template<class T>
@@ -349,7 +373,9 @@ class sparse_matrix
 					mem_dense_matrix::cast(col_m.get_cols(col_idx)));
 			typename type_mem_vector<T>::ptr out_col = type_mem_vector<T>::create(
 					mem_dense_matrix::cast(ret.get_cols(col_idx)));
-			compute(get_multiply_creator<T>(*in_col, *out_col));
+			compute(get_multiply_creator<T>(*in_col, *out_col),
+				cal_super_block_size(get_block_size(),
+					sizeof(T) * col_m.get_num_cols()));
 		}
 	}
 protected:
@@ -394,14 +420,18 @@ public:
 	 * how data is accessed and what computation runs on the data fetched
 	 * from the external memory. matrix_io_generator defines data access
 	 * and compute_task defines the computation.
+	 * `num_block_rows' will affect the behavior of matrix_io_generator.
+	 * More explanation of `num_block_rows' is seen in the comments of
+	 * `init_io_gens'.
 	 */
-	void compute(task_creator::ptr creator) const;
+	void compute(task_creator::ptr creator, size_t num_block_rows) const;
 	/*
 	 * This method defines how data in the matrix is accessed.
 	 * Since we need to perform computation in parallel, we need to have
 	 * a matrix I/O generator for each thread.
+	 * `num_block_rows' defines how many block rows are accessed in an I/O.
 	 */
-	virtual void init_io_gens(
+	virtual void init_io_gens(size_t num_block_rows,
 			std::vector<matrix_io_generator::ptr> &io_gens) const = 0;
 
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const = 0;
@@ -419,8 +449,10 @@ public:
 	/*
 	 * The subclass defines the order of processing a set of blocks when
 	 * multiplying this sparse matrix with a dense matrix.
+	 * All blocks are organized in a rectangular area.
 	 */
-	virtual block_exec_order::ptr get_multiply_order() const = 0;
+	virtual block_exec_order::ptr get_multiply_order(
+			size_t num_block_rows, size_t num_block_cols) const = 0;
 
 	size_t get_num_rows() const {
 		return nrows;
@@ -452,7 +484,8 @@ public:
 				% in.get_length() % ncols;
 			return false;
 		}
-		compute(get_multiply_creator<T>(in, out));
+		compute(get_multiply_creator<T>(in, out),
+				cal_super_block_size(get_block_size(), sizeof(T)));
 		return true;
 	}
 
@@ -551,7 +584,8 @@ b2d_spmv_creator<T>::b2d_spmv_creator(const type_mem_vector<T> &_input,
 		type_mem_vector<T> &_output, const sparse_matrix &_mat): input(
 			_input), output(_output), mat(_mat)
 {
-	order = mat.get_multiply_order();
+	size_t sb_size = cal_super_block_size(mat.get_block_size(), sizeof(T));
+	order = mat.get_multiply_order(sb_size, sb_size);
 }
 
 template<class T>
@@ -559,8 +593,10 @@ b2d_spmm_creator<T>::b2d_spmm_creator(const mem_row_dense_matrix &_input,
 		mem_row_dense_matrix &_output, const sparse_matrix &_mat): input(
 			_input), output(_output), mat(_mat)
 {
+	size_t sb_size = cal_super_block_size(mat.get_block_size(),
+			sizeof(T) * input.get_num_cols());
 	assert(input.get_num_cols() == output.get_num_cols());
-	order = mat.get_multiply_order();
+	order = mat.get_multiply_order(sb_size, sb_size);
 }
 
 void init_flash_matrix(config_map::ptr configs);
