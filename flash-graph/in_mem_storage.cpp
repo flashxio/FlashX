@@ -39,6 +39,13 @@ using namespace safs;
 namespace fg
 {
 
+struct deleter
+{
+	void operator()(char *buf) const {
+		free(buf);
+	}
+};
+
 in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 {
 	native_file local_f(file_name);
@@ -50,7 +57,7 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 
 	in_mem_graph::ptr graph = in_mem_graph::ptr(new in_mem_graph());
 	graph->graph_size = size;
-	graph->graph_data = (char *) malloc(size);
+	graph->graph_data = std::shared_ptr<char>((char *) malloc(size), deleter());
 	assert(graph->graph_data);
 	graph->graph_file_name = file_name;
 	BOOST_LOG_TRIVIAL(info) << boost::format("load a graph of %1% bytes")
@@ -59,11 +66,11 @@ in_mem_graph::ptr in_mem_graph::load_graph(const std::string &file_name)
 	FILE *fd = fopen(file_name.c_str(), "r");
 	if (fd == NULL)
 		throw io_exception(std::string("can't open ") + file_name);
-	if (fread(graph->graph_data, size, 1, fd) != 1)
+	if (fread(graph->graph_data.get(), size, 1, fd) != 1)
 		throw io_exception(std::string("can't read from ") + file_name);
 	fclose(fd);
 
-	graph_header *header = (graph_header *) graph->graph_data;
+	graph_header *header = (graph_header *) graph->graph_data.get();
 	header->verify();
 
 	return graph;
@@ -77,8 +84,10 @@ in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 	in_mem_graph::ptr graph = in_mem_graph::ptr(new in_mem_graph());
 	graph->graph_size = io_factory->get_file_size();
 	size_t num_pages = ROUNDUP_PAGE(graph->graph_size) / PAGE_SIZE;
-	int ret = posix_memalign((void **) &graph->graph_data, PAGE_SIZE,
+	char *graph_buf = NULL;
+	int ret = posix_memalign((void **) &graph_buf, PAGE_SIZE,
 			num_pages * PAGE_SIZE);
+	graph->graph_data = std::shared_ptr<char>(graph_buf);
 	BOOST_VERIFY(ret == 0);
 	graph->graph_file_name = file_name;
 
@@ -92,12 +101,12 @@ in_mem_graph::ptr in_mem_graph::load_safs_graph(const std::string &file_name)
 	for (off_t off = 0; (size_t) off < graph->graph_size; off += MAX_IO_SIZE) {
 		data_loc_t loc(io_factory->get_file_id(), off);
 		size_t req_size = min(MAX_IO_SIZE, graph->graph_size - off);
-		io_request req(graph->graph_data + off, loc, req_size, READ);
+		io_request req(graph_buf + off, loc, req_size, READ);
 		io->access(&req, 1);
 		io->wait4complete(1);
 	}
 
-	graph_header *header = (graph_header *) graph->graph_data;
+	graph_header *header = (graph_header *) graph_buf;
 	header->verify();
 
 	return graph;
@@ -116,7 +125,7 @@ void in_mem_graph::dump(const std::string &file) const
 		perror("fopen");
 		abort();
 	}
-	BOOST_VERIFY(fwrite(graph_data, graph_size, 1, f));
+	BOOST_VERIFY(fwrite(graph_data.get(), graph_size, 1, f));
 
 	fclose(f);
 }

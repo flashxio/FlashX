@@ -750,6 +750,12 @@ public:
 
 class mem_graph_store
 {
+	struct deleter {
+		void operator()(char *buf) {
+			delete [] buf;
+		}
+	};
+
 	size_t buf_cap;
 	size_t buf_bytes;
 	char *buf;
@@ -813,12 +819,12 @@ public:
 		buf_bytes += store.get_size();
 	}
 
-	char *reset() {
+	std::shared_ptr<char> reset() {
 		char *tmp = buf;
 		buf = NULL;
 		buf_cap = 0;
 		buf_bytes = 0;
-		return tmp;
+		return std::shared_ptr<char>(tmp, deleter());
 	}
 };
 

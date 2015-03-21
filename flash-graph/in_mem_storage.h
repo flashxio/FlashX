@@ -39,14 +39,13 @@ class in_mem_graph
 {
 	size_t graph_size;
 	// This data structure owns the byte array. Due to the API compatibility,
-	// we use a raw pointer. TODO we should use a smart pointer here
+	// we use a raw pointer.
 	// in the future.
-	char *graph_data;
+	std::shared_ptr<char> graph_data;
 	int graph_file_id;
 	std::string graph_file_name;
 
 	in_mem_graph() {
-		graph_data = NULL;
 		graph_size = 0;
 		graph_file_id = -1;
 	}
@@ -57,7 +56,8 @@ public:
 	 * in_mem_graph takes the memory buffer and is responsible to free it
 	 * afterwards.
 	 */
-	static ptr create(const std::string &graph_name, char *buf, size_t size) {
+	static ptr create(const std::string &graph_name, std::shared_ptr<char> buf,
+			size_t size) {
 		in_mem_graph *g = new in_mem_graph();
 		g->graph_size = size;
 		g->graph_data = buf;
@@ -68,10 +68,6 @@ public:
 
 	static ptr load_graph(const std::string &graph_file);
 	static ptr load_safs_graph(const std::string &graph_file);
-
-	~in_mem_graph() {
-		free(graph_data);
-	}
 
 	void dump(const std::string &file) const;
 
