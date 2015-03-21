@@ -25,7 +25,12 @@
 namespace fm
 {
 
-static const int MAX_PENDING_IOS = 32;
+/*
+ * Matrix I/O is much larger than graph I/O in general, so we can use
+ * a very small number of pending I/Os. 2 is enough to overlap I/O and
+ * computation.
+ */
+static const int MAX_PENDING_IOS = 2;
 
 class matrix_io_callback: public safs::callback
 {
