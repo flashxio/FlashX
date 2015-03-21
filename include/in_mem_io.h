@@ -35,8 +35,7 @@ namespace safs
 class in_mem_io: public io_interface
 {
 	// The I/O interface doesn't own the byte array.
-	// TODO we should use a smart pointer here.
-	char *data;
+	std::shared_ptr<char> data;
 	int file_id;
 	fifo_queue<io_request> req_buf;
 	comp_io_scheduler::ptr comp_io_sched;
@@ -47,7 +46,7 @@ class in_mem_io: public io_interface
 	void process_req(const io_request &req);
 	void process_computes();
 public:
-	in_mem_io(char *data, int file_id, thread *t);
+	in_mem_io(std::shared_ptr<char> data, int file_id, thread *t);
 
 	virtual int get_file_id() const {
 		return file_id;
@@ -79,7 +78,7 @@ public:
 	virtual io_status access(char *buf, off_t off, ssize_t size,
 			int access_method) {
 		assert(access_method == READ);
-		memcpy(buf, data + off, size);
+		memcpy(buf, data.get() + off, size);
 		return IO_OK;
 	}
 
@@ -92,11 +91,10 @@ public:
 class in_mem_io_factory: public file_io_factory
 {
 	// The I/O interface doesn't own the byte array.
-	// TODO we should use a smart pointer here.
-	char *data;
+	std::shared_ptr<char> data;
 	int file_id;
 public:
-	in_mem_io_factory(char *data, int file_id,
+	in_mem_io_factory(std::shared_ptr<char> data, int file_id,
 			const std::string file_name): file_io_factory(file_name) {
 		this->data = data;
 		this->file_id = file_id;

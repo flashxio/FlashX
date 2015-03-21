@@ -133,7 +133,7 @@ void in_mem_io::process_req(const io_request &req)
 {
 	assert(req.get_req_type() == io_request::USER_COMPUTE);
 	in_mem_byte_array byte_arr(req,
-			data + ROUND_PAGE(req.get_offset()), *array_allocator);
+			data.get() + ROUND_PAGE(req.get_offset()), *array_allocator);
 	user_compute *compute = req.get_compute();
 	compute->run(byte_arr);
 	comp_io_sched->post_comp_process(compute);
@@ -165,7 +165,7 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 		}
 		else {
 			assert(req.get_req_type() == io_request::BASIC_REQ);
-			memcpy(req.get_buf(), data + req.get_offset(), req.get_size());
+			memcpy(req.get_buf(), data.get() + req.get_offset(), req.get_size());
 			io_request *reqs[1];
 			reqs[0] = &req;
 			if (this->have_callback())
@@ -176,7 +176,7 @@ void in_mem_io::access(io_request *requests, int num, io_status *)
 	comp_io_sched->gc_computes();
 }
 
-in_mem_io::in_mem_io(char *data, int file_id,
+in_mem_io::in_mem_io(std::shared_ptr<char> data, int file_id,
 		thread *t): io_interface(t), req_buf(get_node_id(), 1024)
 {
 	this->data = data;
