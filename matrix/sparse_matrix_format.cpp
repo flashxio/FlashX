@@ -21,6 +21,7 @@
 
 #include "log.h"
 #include "native_file.h"
+#include "safs_file.h"
 #include "in_mem_io.h"
 
 #include "sparse_matrix_format.h"
@@ -112,6 +113,30 @@ off_t SpM_2d_index::get_block_row_off(size_t idx) const
 		return -1;
 	}
 	return offs[idx];
+}
+
+SpM_2d_index::ptr SpM_2d_index::safs_load(const std::string &idx_file)
+{
+	safs::file_io_factory::shared_ptr io_fac = safs::create_io_factory(
+			idx_file, safs::GLOBAL_CACHE_ACCESS);
+	if (io_fac == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io factory for %1%") % idx_file;
+		return SpM_2d_index::ptr();
+	}
+
+	safs::io_interface::ptr io = create_io(io_fac, thread::get_curr_thread());
+	if (io == NULL) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"can't create io instance for %1%") % idx_file;
+		return SpM_2d_index::ptr();
+	}
+
+	size_t size = safs::safs_file(safs::get_sys_RAID_conf(),
+			idx_file).get_size();
+	char *data = (char *) malloc(size);
+	io->access(data, 0, size, READ);
+	return ptr((SpM_2d_index *) data, deleter());
 }
 
 SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)

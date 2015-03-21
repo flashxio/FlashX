@@ -2,6 +2,8 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#include "io_interface.h"
+#include "safs_file.h"
 #include "sparse_matrix.h"
 #include "matrix/FG_sparse_matrix.h"
 
@@ -108,10 +110,22 @@ int main(int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	SpM_2d_index::ptr index = SpM_2d_index::load(index_file);
-	SpM_2d_storage::ptr mat_store = SpM_2d_storage::load(matrix_file, index);
+	SpM_2d_index::ptr index;
+	safs::safs_file idx_f(safs::get_sys_RAID_conf(), index_file);
+	if (idx_f.exist())
+		index = SpM_2d_index::safs_load(index_file);
+	else
+		index = SpM_2d_index::load(index_file);
 
-	sparse_matrix::ptr mat = sparse_matrix::create(index, mat_store);
+	sparse_matrix::ptr mat;
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), matrix_file);
+	if (mat_f.exist())
+		mat = sparse_matrix::create(index, safs::create_io_factory(
+					matrix_file, safs::REMOTE_ACCESS));
+	else
+		mat = sparse_matrix::create(index,
+				SpM_2d_storage::load(matrix_file, index));
+
 	if (mat_width == 1)
 		test_SpMV(mat);
 	else

@@ -493,6 +493,15 @@ public:
 		factory = mat->create_io_factory();
 	}
 
+	block_sparse_matrix(SpM_2d_index::ptr index,
+			safs::file_io_factory::shared_ptr factory): sparse_matrix(
+				index->get_header().get_num_rows(),
+				index->get_header().get_num_cols(), true), block_size(
+				index->get_header().get_2d_block_size()) {
+		this->index = index;
+		this->factory = factory;
+	}
+
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
 		return factory;
 	}
@@ -555,6 +564,18 @@ public:
 					t_mat));
 	}
 
+	block_sparse_asym_matrix(SpM_2d_index::ptr index,
+			safs::file_io_factory::shared_ptr mat_io_fac,
+			SpM_2d_index::ptr t_index,
+			safs::file_io_factory::shared_ptr t_mat_io_fac): sparse_matrix(
+				index->get_header().get_num_rows(),
+				index->get_header().get_num_cols(), false), block_size(
+				index->get_header().get_2d_block_size()) {
+		this->mat = block_sparse_matrix::ptr(new block_sparse_matrix(index, mat_io_fac));
+		this->t_mat = block_sparse_matrix::ptr(new block_sparse_matrix(t_index,
+					t_mat_io_fac));
+	}
+
 	virtual safs::file_io_factory::shared_ptr get_io_factory() const {
 		return mat->get_io_factory();
 	}
@@ -599,6 +620,21 @@ sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
 {
 	return sparse_matrix::ptr(new block_sparse_asym_matrix(index, mat,
 				t_index, t_mat));
+}
+
+sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
+			safs::file_io_factory::shared_ptr mat_io_fac)
+{
+	return sparse_matrix::ptr(new block_sparse_matrix(index, mat_io_fac));
+}
+
+sparse_matrix::ptr sparse_matrix::create(SpM_2d_index::ptr index,
+			safs::file_io_factory::shared_ptr mat_io_fac,
+			SpM_2d_index::ptr t_index,
+			safs::file_io_factory::shared_ptr t_mat_io_fac)
+{
+	return sparse_matrix::ptr(new block_sparse_asym_matrix(index, mat_io_fac,
+				t_index, t_mat_io_fac));
 }
 
 static std::atomic<size_t> init_count;

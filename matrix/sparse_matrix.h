@@ -406,13 +406,26 @@ public:
 	static ptr create(fg::FG_graph::ptr);
 	/*
 	 * This create a symmetric sparse matrix partitioned in 2D dimensions.
+	 * The sparse matrix is stored in memory.
 	 */
 	static ptr create(SpM_2d_index::ptr, SpM_2d_storage::ptr);
 	/*
 	 * This creates an asymmetric sparse matrix partitioned in 2D dimensions.
+	 * The sparse matrix is stored in memory.
 	 */
 	static ptr create(SpM_2d_index::ptr index, SpM_2d_storage::ptr mat,
 			SpM_2d_index::ptr t_index, SpM_2d_storage::ptr t_mat);
+
+	/*
+	 * These two functions creates a sparse matrix partitioned in 2D dimensions
+	 * from the data stored in SAFS.
+	 */
+	static ptr create(SpM_2d_index::ptr index,
+			safs::file_io_factory::shared_ptr mat_io_fac);
+	static ptr create(SpM_2d_index::ptr index,
+			safs::file_io_factory::shared_ptr mat_io_fac,
+			SpM_2d_index::ptr t_index,
+			safs::file_io_factory::shared_ptr t_mat_io_fac);
 
 	/*
 	 * When customizing computatin on a sparse matrix (regardless of

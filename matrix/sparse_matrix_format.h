@@ -275,6 +275,7 @@ public:
 	static ptr create(const matrix_header &header,
 			const std::vector<off_t> &offs);
 	static ptr load(const std::string &idx_file);
+	static ptr safs_load(const std::string &idx_file);
 
 	size_t get_num_block_rows() const;
 	void dump(const std::string &file) const;
