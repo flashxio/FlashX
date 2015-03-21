@@ -301,10 +301,6 @@ unsigned compute_kmeans(const double* matrix, double* clusters,
 		exit(-1);
 	}
 
-#ifdef PROFILER
-	ProfilerStart(PROF_FILE_LOC);
-#endif
-
 	/*** Begin VarInit of data structures ***/
 	memset(cluster_assignments, -1, 
 			sizeof(cluster_assignments[0])*NUM_ROWS);
