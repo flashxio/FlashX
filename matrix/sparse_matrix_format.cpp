@@ -141,19 +141,21 @@ SpM_2d_index::ptr SpM_2d_index::safs_load(const std::string &idx_file)
 
 SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)
 {
-	size_t size = safs::native_file(idx_file).get_size();
-	char *data = (char *) malloc(size);
 	FILE *f = fopen(idx_file.c_str(), "r");
 	if (f == NULL) {
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
 			% idx_file % strerror(errno);
 		return SpM_2d_index::ptr();
 	}
+
+	size_t size = safs::native_file(idx_file).get_size();
+	char *data = (char *) malloc(size);
 	size_t ret = fread(data, size, 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't read %1%: %2%")
 			% idx_file % strerror(errno);
 		fclose(f);
+		free(data);
 		return SpM_2d_index::ptr();
 	}
 
