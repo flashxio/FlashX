@@ -482,7 +482,6 @@ class block_sparse_matrix: public sparse_matrix
 	// in two dimensions, we need to know the block size.
 	block_2d_size block_size;
 	SpM_2d_index::ptr index;
-	SpM_2d_storage::ptr mat;
 	safs::file_io_factory::shared_ptr factory;
 public:
 	block_sparse_matrix(SpM_2d_index::ptr index,
@@ -491,7 +490,6 @@ public:
 				index->get_header().get_num_cols(), true), block_size(
 				index->get_header().get_2d_block_size()) {
 		this->index = index;
-		this->mat = mat;
 		factory = mat->create_io_factory();
 	}
 

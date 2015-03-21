@@ -158,7 +158,9 @@ SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
 			SpM_2d_index::ptr index)
 {
 	size_t size = safs::native_file(mat_file).get_size();
-	char *data = new char[size];
+	char *data = NULL;
+	int mret = posix_memalign((void **) &data, PAGE_SIZE, size);
+	BOOST_VERIFY(mret == 0);
 	FILE *f = fopen(mat_file.c_str(), "r");
 	if (f == NULL) {
 		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
@@ -173,8 +175,8 @@ SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
 		return SpM_2d_storage::ptr();
 	}
 	fclose(f);
-	return ptr(new SpM_2d_storage(std::unique_ptr<char[]>(data), index,
-				mat_file));
+	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
+				index, mat_file));
 }
 
 SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
@@ -196,17 +198,20 @@ SpM_2d_storage::ptr SpM_2d_storage::create(const matrix_header &header,
 	// The sparse matrix multiplication accesses data in pages. We have to
 	// make sure the array that stores the sparse matrix is aligned to
 	// page size.
-	char *data = new char[ROUNDUP(size, PAGE_SIZE)];
+	char *data = NULL;
+	int ret = posix_memalign((void **) &data, PAGE_SIZE,
+			ROUNDUP(size, PAGE_SIZE));
+	BOOST_VERIFY(ret == 0);
 	*(matrix_header *) data = header;
 	memcpy(data + sizeof(header), vec->get_raw_arr(), vec->get_length());
-	return ptr(new SpM_2d_storage(std::unique_ptr<char[]>(data), index,
-				"anonymous"));
+	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
+				index, "anonymous"));
 }
 
 safs::file_io_factory::shared_ptr SpM_2d_storage::create_io_factory() const
 {
 	return safs::file_io_factory::shared_ptr(new safs::in_mem_io_factory(
-				data.get(), mat_file_id, mat_name));
+				data, mat_file_id, mat_name));
 }
 
 }

@@ -288,15 +288,21 @@ class vector_vector;
 
 class SpM_2d_storage
 {
+	struct deleter {
+		void operator()(char *p) const {
+			free(p);
+		}
+	};
+
 	std::string mat_name;
 	int mat_file_id;
 
-	std::unique_ptr<char[]> data;
+	std::shared_ptr<char> data;
 	SpM_2d_index::ptr index;
 
-	SpM_2d_storage(std::unique_ptr<char[]> data,
+	SpM_2d_storage(std::shared_ptr<char> data,
 			SpM_2d_index::ptr index, const std::string mat_name) {
-		this->data = std::move(data);
+		this->data = data;
 		this->index = index;
 		this->mat_name = mat_name;
 		this->mat_file_id = -1;
