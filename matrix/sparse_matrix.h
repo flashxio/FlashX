@@ -85,10 +85,10 @@ public:
 template<class T>
 class fg_row_spmv_task: public fg_row_compute_task
 {
-	const type_mem_vector<T> &input;
-	type_mem_vector<T> &output;
+	const mem_vector &input;
+	mem_vector &output;
 public:
-	fg_row_spmv_task(const type_mem_vector<T> &_input, type_mem_vector<T> &_output,
+	fg_row_spmv_task(const mem_vector &_input, mem_vector &_output,
 			const matrix_io &_io): fg_row_compute_task(_io), input(
 				_input), output(_output) {
 	}
@@ -102,9 +102,9 @@ void fg_row_spmv_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
 	T res = 0;
 	for (size_t i = 0; i < v.get_num_edges(); i++) {
 		fg::vertex_id_t id = v.get_neighbor(i);
-		res += input.get(id);
+		res += input.get<T>(id);
 	}
-	output.set(v.get_id(), res);
+	output.set<T>(v.get_id(), res);
 }
 
 class block_compute_task;
@@ -202,8 +202,8 @@ public:
 template<class T>
 class block_spmv_task: public block_compute_task
 {
-	const type_mem_vector<T> &input;
-	type_mem_vector<T> &output;
+	const mem_vector &input;
+	mem_vector &output;
 
 	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
 			size_t start_row_idx, size_t start_col_idx) {
@@ -211,14 +211,14 @@ class block_spmv_task: public block_compute_task
 		T sum = 0;
 		while (it.has_next()) {
 			size_t col_idx = start_col_idx + it.next();
-			sum += input.get(col_idx);
+			sum += input.get<T>(col_idx);
 		}
-		output.set(row_idx, output.get(row_idx) + sum);
+		output.set<T>(row_idx, output.get<T>(row_idx) + sum);
 		return it;
 	}
 public:
-	block_spmv_task(const type_mem_vector<T> &_input,
-			type_mem_vector<T> &_output, const matrix_io &_io,
+	block_spmv_task(const mem_vector &_input,
+			mem_vector &_output, const matrix_io &_io,
 			const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
 				_io, mat, order), input(_input), output(_output) {
 	}
@@ -239,15 +239,20 @@ public:
 template<class T>
 class fg_row_spmv_creator: public task_creator
 {
-	const type_mem_vector<T> &input;
-	type_mem_vector<T> &output;
+	const mem_vector &input;
+	mem_vector &output;
 
-	fg_row_spmv_creator(const type_mem_vector<T> &_input,
-			type_mem_vector<T> &_output): input(_input), output(_output) {
+	fg_row_spmv_creator(const mem_vector &_input,
+			mem_vector &_output): input(_input), output(_output) {
 	}
 public:
-	static task_creator::ptr create(const type_mem_vector<T> &_input,
-			type_mem_vector<T> &_output) {
+	static task_creator::ptr create(const mem_vector &_input,
+			mem_vector &_output) {
+		if (_input.get_type() != get_scalar_type<T>()
+				|| _output.get_type() != get_scalar_type<T>()) {
+			BOOST_LOG_TRIVIAL(error) << "wrong vector type in spmv creator";
+			return task_creator::ptr();
+		}
 		return task_creator::ptr(new fg_row_spmv_creator<T>(_input, _output));
 	}
 
@@ -259,16 +264,21 @@ public:
 template<class T>
 class b2d_spmv_creator: public task_creator
 {
-	const type_mem_vector<T> &input;
-	type_mem_vector<T> &output;
+	const mem_vector &input;
+	mem_vector &output;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
-	b2d_spmv_creator(const type_mem_vector<T> &_input,
-			type_mem_vector<T> &_output, const sparse_matrix &_mat);
+	b2d_spmv_creator(const mem_vector &_input,
+			mem_vector &_output, const sparse_matrix &_mat);
 public:
-	static task_creator::ptr create(const type_mem_vector<T> &_input,
-			type_mem_vector<T> &_output, const sparse_matrix &mat) {
+	static task_creator::ptr create(const mem_vector &_input,
+			mem_vector &_output, const sparse_matrix &mat) {
+		if (_input.get_type() != get_scalar_type<T>()
+				|| _output.get_type() != get_scalar_type<T>()) {
+			BOOST_LOG_TRIVIAL(error) << "wrong vector type in spmv creator";
+			return task_creator::ptr();
+		}
 		return task_creator::ptr(new b2d_spmv_creator<T>(_input, _output, mat));
 	}
 
@@ -291,6 +301,11 @@ class b2d_spmm_creator: public task_creator
 public:
 	static task_creator::ptr create(const mem_row_dense_matrix &_input,
 			mem_row_dense_matrix &_output, const sparse_matrix &mat) {
+		if (_input.get_type() != get_scalar_type<T>()
+				|| _output.get_type() != get_scalar_type<T>()) {
+			BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
+			return task_creator::ptr();
+		}
 		return task_creator::ptr(new b2d_spmm_creator<T>(_input, _output, mat));
 	}
 
@@ -340,8 +355,8 @@ class sparse_matrix
 	bool symmetric;
 
 	template<class T>
-	task_creator::ptr get_multiply_creator(const type_mem_vector<T> &in,
-			type_mem_vector<T> &out) const {
+	task_creator::ptr get_multiply_creator(const mem_vector &in,
+			mem_vector &out) const {
 		if (is_fg)
 			return fg_row_spmv_creator<T>::create(in, out);
 		else
@@ -370,9 +385,9 @@ class sparse_matrix
 		std::vector<off_t> col_idx(1);
 		for (size_t i = 0; i < ncol; i++) {
 			col_idx[0] = i;
-			typename type_mem_vector<T>::ptr in_col = type_mem_vector<T>::create(
+			mem_vector::ptr in_col = mem_vector::create(
 					mem_dense_matrix::cast(col_m.get_cols(col_idx)));
-			typename type_mem_vector<T>::ptr out_col = type_mem_vector<T>::create(
+			mem_vector::ptr out_col = mem_vector::create(
 					mem_dense_matrix::cast(ret.get_cols(col_idx)));
 			compute(get_multiply_creator<T>(*in_col, *out_col),
 				cal_super_block_size(get_block_size(),
@@ -491,7 +506,7 @@ public:
 	 * It requires users to initialize the output vector.
 	 */
 	template<class T>
-	bool multiply(const type_mem_vector<T> &in, type_mem_vector<T> &out) const {
+	bool multiply(const mem_vector &in, mem_vector &out) const {
 		if (in.get_length() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
 					"the input vector has wrong length %1%. matrix ncols: %2%")
@@ -507,15 +522,15 @@ public:
 	 * This version of SpMV allocates the output vector.
 	 */
 	template<class T>
-	typename type_mem_vector<T>::ptr multiply(typename type_mem_vector<T>::ptr in) const {
+	mem_vector::ptr multiply(mem_vector::ptr in) const {
 		if (in->get_length() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
 					"the input vector has wrong length %1%. matrix ncols: %2%")
 				% in->get_length() % ncols;
-			return typename type_mem_vector<T>::ptr();
+			return mem_vector::ptr();
 		}
 		else {
-			typename type_mem_vector<T>::ptr ret = type_mem_vector<T>::create(nrows);
+			mem_vector::ptr ret = mem_vector::create(nrows, get_scalar_type<T>());
 			ret->get_data()->reset_data();
 			multiply<T>(*in, *ret);
 			return ret;
@@ -594,8 +609,8 @@ public:
 };
 
 template<class T>
-b2d_spmv_creator<T>::b2d_spmv_creator(const type_mem_vector<T> &_input,
-		type_mem_vector<T> &_output, const sparse_matrix &_mat): input(
+b2d_spmv_creator<T>::b2d_spmv_creator(const mem_vector &_input,
+		mem_vector &_output, const sparse_matrix &_mat): input(
 			_input), output(_output), mat(_mat)
 {
 	size_t sb_size = cal_super_block_size(mat.get_block_size(), sizeof(T));

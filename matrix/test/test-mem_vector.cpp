@@ -2,13 +2,12 @@
 
 using namespace fm;
 
-mem_vector::ptr get(const type_mem_vector<int> &vec, type_mem_vector<off_t> &idxs)
+mem_vector::ptr get(const mem_vector &vec, mem_vector &idxs)
 {
-	type_mem_vector<int>::ptr ret
-		= type_mem_vector<int>::create(idxs.get_length());
+	mem_vector::ptr ret = mem_vector::create(idxs.get_length(), vec.get_type());
 #pragma omp parallel for
 	for (size_t i = 0; i < idxs.get_length(); i++) {
-		off_t idx = idxs.get(i);
+		off_t idx = idxs.get<off_t>(i);
 		// Check if it's out of the range.
 		if (idx < 0 && (size_t) idx >= vec.get_length()) {
 			BOOST_LOG_TRIVIAL(error)
@@ -16,7 +15,7 @@ mem_vector::ptr get(const type_mem_vector<int> &vec, type_mem_vector<off_t> &idx
 			continue;
 		}
 
-		ret->set(i, vec.get(idx));
+		ret->set(i, vec.get<int>(idx));
 	}
 	return std::static_pointer_cast<mem_vector>(ret);
 }
@@ -28,16 +27,15 @@ mem_vector::ptr get(const type_mem_vector<int> &vec, type_mem_vector<off_t> &idx
 void test_permute()
 {
 	printf("test permutation\n");
-	type_mem_vector<int>::ptr vec = type_mem_vector<int>::create(1000000000);
+	mem_vector::ptr vec = mem_vector::create(1000000000, get_scalar_type<int>());
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random());
-	type_mem_vector<int>::ptr clone = type_mem_vector<int>::cast(vec->deep_copy());
+	mem_vector::ptr clone = mem_vector::cast(vec->deep_copy());
 	assert(clone->equals(*vec));
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(
-			vec->sort_with_index());
+	mem_vector::ptr idxs = mem_vector::cast(vec->sort_with_index());
 	gettimeofday(&end, NULL);
 	printf("sort takes %fseconds\n", time_diff(start, end));
 

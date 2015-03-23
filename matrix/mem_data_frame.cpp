@@ -38,8 +38,7 @@ vector_vector::ptr mem_data_frame::groupby(const std::string &col_name,
 		// If the column where we group by isn't sorted, we'll create a copy
 		// of this data frame and sort on the replicated data frame.
 		sorted_col = mem_vector::cast(col.deep_copy());
-		type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(
-				sorted_col->sort_with_index());
+		mem_vector::ptr idxs = mem_vector::cast(sorted_col->sort_with_index());
 
 		sorted_df = mem_data_frame::create();
 		sorted_df->add_vec(col_name, sorted_col);
@@ -107,8 +106,7 @@ bool mem_data_frame::sort(const std::string &col_name)
 	if (sorted_col->is_sorted())
 		return true;
 
-	type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(
-			sorted_col->sort_with_index());
+	mem_vector::ptr idxs = mem_vector::cast(sorted_col->sort_with_index());
 	for (size_t i = 0; i < get_num_vecs(); i++) {
 		mem_vector::ptr mem_vec = mem_vector::cast(get_vec(i));
 		if (mem_vec == sorted_col)

@@ -28,14 +28,12 @@ void sum_apply_operate::run(const void *key, const data_frame &val,
 {
 	assert(val.get_num_vecs() == 2);
 	assert(out.is_type<long>());
-	const type_mem_vector<int> &vec
-		= (const type_mem_vector<int> &) val.get_vec_ref(1);
+	const mem_vector &vec = (const mem_vector &) val.get_vec_ref(1);
 	long sum = 0;
 	for (size_t i = 0; i < vec.get_length(); i++)
-		sum += vec.get(i);
-	type_mem_vector<long> &t_out = (type_mem_vector<long> &) out;
+		sum += vec.get<int>(i);
 	out.resize(1);
-	t_out.set(0, sum);
+	out.set<long>(0, sum);
 }
 
 class copy_apply_operate: public gr_apply_operate<data_frame>
@@ -61,29 +59,27 @@ void copy_apply_operate::run(const void *key, const data_frame &val,
 {
 	assert(val.get_num_vecs() == 2);
 	assert(out.is_type<int>());
-	const type_mem_vector<int> &vec
-		= (const type_mem_vector<int> &) val.get_vec_ref(1);
-	type_mem_vector<int> &t_out = (type_mem_vector<int> &) out;
+	const mem_vector &vec = (const mem_vector &) val.get_vec_ref(1);
 	out.resize(vec.get_length());
 	for (size_t i = 0; i < vec.get_length(); i++)
-		t_out.set(i, vec.get(i));
+		out.set<int>(i, vec.get<int>(i));
 }
 
 void test_groupby()
 {
 	mem_data_frame::ptr df = mem_data_frame::create();
 	size_t length = 1000000;
-	type_mem_vector<int>::ptr vec1 = type_mem_vector<int>::create(length);
+	mem_vector::ptr vec1 = mem_vector::create(length, get_scalar_type<int>());
 	for (size_t i = 0; i < vec1->get_length(); i++)
-		vec1->set(i, random() % 1000);
-	type_mem_vector<int>::ptr vec2 = type_mem_vector<int>::create(length);
+		vec1->set<int>(i, random() % 1000);
+	mem_vector::ptr vec2 = mem_vector::create(length, get_scalar_type<int>());
 	for (size_t i = 0; i < vec2->get_length(); i++)
-		vec2->set(i, random() % 1000);
+		vec2->set<int>(i, random() % 1000);
 
 	std::map<int, long> map;
 	for (size_t i = 0; i < length; i++) {
-		int v1 = vec1->get(i);
-		int v2 = vec2->get(i);
+		int v1 = vec1->get<int>(i);
+		int v2 = vec2->get<int>(i);
 		auto it = map.find(v1);
 		// New value
 		if (it == map.end())
@@ -96,16 +92,16 @@ void test_groupby()
 
 	sum_apply_operate sum_op;
 	vector_vector::ptr vv = df->groupby("vec1", sum_op);
-	type_mem_vector<long>::ptr v = type_mem_vector<long>::cast(vv->cat());
+	mem_vector::ptr v = mem_vector::cast(vv->cat());
 	assert(map.size() == v->get_length());
 	size_t idx = 0;
 	for (auto it = map.begin(); it != map.end(); it++, idx++) {
-		assert(it->second == v->get(idx));
+		assert(it->second == v->get<long>(idx));
 	}
 
 	copy_apply_operate copy_op;
 	vv = df->groupby("vec1", copy_op);
-	type_mem_vector<int>::ptr v1 = type_mem_vector<int>::cast(vv->cat());
+	mem_vector::ptr v1 = mem_vector::cast(vv->cat());
 	assert(vec1->get_length() == v1->get_length());
 }
 

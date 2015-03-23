@@ -56,12 +56,12 @@ public:
 	}
 };
 
-class factor_vector: public type_mem_vector<factor_value_t>
+class factor_vector: public mem_vector
 {
 	factor f;
 
-	factor_vector(const factor &_f,
-			size_t len): type_mem_vector<factor_value_t>(len), f(_f) {
+	factor_vector(const factor &_f, size_t len): mem_vector(len,
+			get_scalar_type<factor_value_t>()), f(_f) {
 	}
 public:
 	typedef std::shared_ptr<factor_vector> ptr;

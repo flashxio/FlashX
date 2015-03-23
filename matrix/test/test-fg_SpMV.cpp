@@ -53,17 +53,17 @@ int main(int argc, char *argv[])
 	printf("sum of input: %lf, sum of FG product: %lf, it takes %.3f seconds\n",
 			in->sum(), fg_out->sum(), time_diff(start, end));
 
-	type_mem_vector<double>::ptr in_vec
-		= type_mem_vector<double>::create(fg_m->get_num_cols());
+	mem_vector::ptr in_vec = mem_vector::create(fg_m->get_num_cols(),
+			get_scalar_type<double>());
 	for (size_t i = 0; i < fg_m->get_num_cols(); i++)
 		in_vec->set(i, i);
 	sparse_matrix::ptr m = sparse_matrix::create(fg);
 	gettimeofday(&start, NULL);
-	type_mem_vector<double>::ptr out = m->multiply<double>(in_vec);
+	mem_vector::ptr out = m->multiply<double>(in_vec);
 	gettimeofday(&end, NULL);
 	double sum = 0;
 	for (size_t i = 0; i < fg_m->get_num_cols(); i++)
-		sum += out->get(i);
+		sum += out->get<double>(i);
 	printf("sum of input: %lf, sum of product: %lf, it takes %.3f seconds\n",
 			in->sum(), sum, time_diff(start, end));
 	destroy_flash_matrix();

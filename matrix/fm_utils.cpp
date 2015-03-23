@@ -62,8 +62,8 @@ void adj_apply_operate::run(const void *key, const data_frame &val,
 	assert(out.is_type<char>());
 	// The data frame is sorted based on the first vector and now we need
 	// to access the entries in the second vector.
-	const type_mem_vector<fg::vertex_id_t> &vec
-		= (const type_mem_vector<fg::vertex_id_t> &) val.get_vec_ref(1);
+	const mem_vector &vec = (const mem_vector &) val.get_vec_ref(1);
+	assert(vec.get_type() == get_scalar_type<fg::vertex_id_t>());
 
 	// I added an invalid edge for each vertex.
 	// The invalid edge is the maximal integer.
@@ -73,9 +73,9 @@ void adj_apply_operate::run(const void *key, const data_frame &val,
 		= std::unique_ptr<fg::vertex_id_t[]>(new fg::vertex_id_t[num_edges]);
 	size_t edge_idx = 0;
 	for (size_t i = 0; i < vec.get_length(); i++) {
-		if (vec.get(i) == fg::INVALID_VERTEX_ID)
+		if (vec.get<fg::vertex_id_t>(i) == fg::INVALID_VERTEX_ID)
 			continue;
-		edge_buf[edge_idx++] = vec.get(i);
+		edge_buf[edge_idx++] = vec.get<fg::vertex_id_t>(i);
 	}
 	assert(edge_idx == num_edges);
 	std::sort(edge_buf.get(), edge_buf.get() + num_edges);

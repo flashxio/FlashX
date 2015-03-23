@@ -63,7 +63,7 @@ public:
 void test_groupby()
 {
 	printf("test groupby\n");
-	type_mem_vector<int>::ptr vec = type_mem_vector<int>::create(1000000);
+	mem_vector::ptr vec = mem_vector::create(1000000, get_scalar_type<int>());
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random() % 1000);
 	data_frame::ptr res = vec->groupby(adj_apply(), false);
@@ -81,9 +81,9 @@ void test_groupby()
 
 vector::ptr create_mem_vec(size_t len)
 {
-	type_mem_vector<int>::ptr v = type_mem_vector<int>::create(len);
+	mem_vector::ptr v = mem_vector::create(len, get_scalar_type<int>());
 	for (size_t i = 0; i < len; i++)
-		v->set(i, random());
+		v->set<int>(i, random());
 	return v;
 }
 

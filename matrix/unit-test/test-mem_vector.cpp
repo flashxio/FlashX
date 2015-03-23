@@ -30,16 +30,16 @@ public:
 void test_groupby()
 {
 	printf("test groupby\n");
-	type_mem_vector<int>::ptr vec = type_mem_vector<int>::create(1000000);
+	mem_vector::ptr vec = mem_vector::create(1000000, get_scalar_type<int>());
 	for (size_t i = 0; i < vec->get_length(); i++)
-		vec->set(i, random() % 1000);
+		vec->set<int>(i, random() % 1000);
 	count_impl<int> count;
 	data_frame::ptr res = vec->groupby(count, true);
 	printf("size: %ld\n", res->get_num_entries());
 
 	std::map<int, size_t> ele_counts;
 	for (size_t i = 0; i < vec->get_length(); i++) {
-		int val = vec->get(i);
+		int val = vec->get<int>(i);
 		auto it = ele_counts.find(val);
 		if (it == ele_counts.end())
 			ele_counts.insert(std::pair<int, size_t>(val, 1));
@@ -47,13 +47,11 @@ void test_groupby()
 			it->second++;
 	}
 
-	type_mem_vector<int>::ptr vals = type_mem_vector<int>::cast(
-			res->get_vec("val"));
-	type_mem_vector<size_t>::ptr aggs = type_mem_vector<size_t>::cast(
-			res->get_vec("agg"));
+	mem_vector::ptr vals = mem_vector::cast(res->get_vec("val"));
+	mem_vector::ptr aggs = mem_vector::cast(res->get_vec("agg"));
 	for (size_t i = 0; i < vals->get_length(); i++) {
-		int val = vals->get(i);
-		size_t count = aggs->get(i);
+		int val = vals->get<int>(i);
+		size_t count = aggs->get<size_t>(i);
 		auto it = ele_counts.find(val);
 		assert(it != ele_counts.end());
 		assert(it->second == count);
@@ -63,12 +61,12 @@ void test_groupby()
 void test_append()
 {
 	printf("test append\n");
-	type_mem_vector<int>::ptr res = type_mem_vector<int>::create(16);
+	mem_vector::ptr res = mem_vector::create(16, get_scalar_type<int>());
 	size_t tot_len = res->get_length();
 	std::vector<vector::ptr> vecs(16);
 	for (size_t i = 0; i < vecs.size(); i++) {
 		vecs[i] = std::static_pointer_cast<vector>(
-				type_mem_vector<int>::create(32));
+				mem_vector::create(32, get_scalar_type<int>()));
 		tot_len += vecs[i]->get_length();
 	}
 	res->append(vecs.begin(), vecs.end());
@@ -78,14 +76,13 @@ void test_append()
 void test_sort()
 {
 	printf("test sort\n");
-	type_mem_vector<int>::ptr vec = type_mem_vector<int>::create(1000000);
+	mem_vector::ptr vec = mem_vector::create(1000000, get_scalar_type<int>());
 	for (size_t i = 0; i < vec->get_length(); i++)
 		vec->set(i, random() % 1000);
-	type_mem_vector<int>::ptr clone = type_mem_vector<int>::cast(vec->deep_copy());
+	mem_vector::ptr clone = mem_vector::cast(vec->deep_copy());
 	assert(clone->equals(*vec));
 
-	type_mem_vector<off_t>::ptr idxs = type_mem_vector<off_t>::cast(
-			vec->sort_with_index());
+	mem_vector::ptr idxs = mem_vector::cast(vec->sort_with_index());
 	mem_vector::ptr sorted = clone->mem_vector::get(*idxs);
 	assert(sorted->equals(*vec));
 }

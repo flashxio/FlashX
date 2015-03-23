@@ -65,10 +65,10 @@ public:
 size_t edge_parser::parse(const std::vector<std::string> &lines,
 		data_frame &df) const
 {
-	type_mem_vector<fg::vertex_id_t>::ptr froms
-		= type_mem_vector<fg::vertex_id_t>::create(lines.size());
-	type_mem_vector<fg::vertex_id_t>::ptr tos
-		= type_mem_vector<fg::vertex_id_t>::create(lines.size());
+	mem_vector::ptr froms = mem_vector::create(lines.size(),
+			get_scalar_type<fg::vertex_id_t>());
+	mem_vector::ptr tos = mem_vector::create(lines.size(),
+			get_scalar_type<fg::vertex_id_t>());
 	for (size_t i = 0; i < lines.size(); i++) {
 		const char *line = lines[i].c_str();
 		int len = strlen(line);
@@ -131,9 +131,8 @@ int main(int argc, char *argv[])
 	printf("There are %ld edges\n", num_edges);
 	fg::vertex_id_t max_vid = 0;
 	for (size_t i = 0; i < df->get_num_vecs(); i++) {
-		type_mem_vector<fg::vertex_id_t>::ptr vec
-			= type_mem_vector<fg::vertex_id_t>::cast(df->get_vec(i));
-		max_vid = std::max(max_vid, vec->max());
+		mem_vector::ptr vec = mem_vector::cast(df->get_vec(i));
+		max_vid = std::max(max_vid, vec->max<fg::vertex_id_t>());
 	}
 	printf("max id: %d\n", max_vid);
 
@@ -176,10 +175,10 @@ int main(int argc, char *argv[])
 
 	assert(out_adjs->get_num_vecs() == in_adjs->get_num_vecs());
 	size_t num_vertices = out_adjs->get_num_vecs();
-	type_mem_vector<fg::vsize_t>::ptr num_in_edges
-		= type_mem_vector<fg::vsize_t>::create(num_vertices);
-	type_mem_vector<fg::vsize_t>::ptr num_out_edges
-		= type_mem_vector<fg::vsize_t>::create(num_vertices);
+	mem_vector::ptr num_in_edges = mem_vector::create(num_vertices,
+			get_scalar_type<fg::vsize_t>());
+	mem_vector::ptr num_out_edges = mem_vector::create(num_vertices,
+			get_scalar_type<fg::vsize_t>());
 	for (size_t i = 0; i < num_vertices; i++) {
 		num_in_edges->set(i,
 				fg::ext_mem_undirected_vertex::vsize2num_edges(

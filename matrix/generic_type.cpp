@@ -30,14 +30,14 @@ template<class T>
 mem_vector::ptr scalar_type_impl<T>::create_mem_vec(
 		size_t length) const
 {
-	return type_mem_vector<T>::create(length);
+	return mem_vector::create(length, get_scalar_type<T>());
 }
 
 template<class T>
 mem_vector::ptr scalar_type_impl<T>::create_mem_vec(std::shared_ptr<char> data,
 			size_t num_bytes) const
 {
-	return type_mem_vector<T>::create(data, num_bytes);
+	return mem_vector::create(data, num_bytes, get_scalar_type<T>());
 }
 
 template<class T>

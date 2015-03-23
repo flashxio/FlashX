@@ -33,8 +33,6 @@ namespace fm
 class data_frame;
 class scalar_type;
 
-template<class T> class type_mem_vector;
-
 class mem_vector: public vector
 {
 	char *arr;
@@ -55,13 +53,35 @@ protected:
 	mem_dense_matrix::ptr get_data() const {
 		return data;
 	}
-
-	virtual std::shared_ptr<mem_vector> create_int(size_t length) const = 0;
 public:
 	typedef std::shared_ptr<mem_vector> ptr;
 	typedef std::shared_ptr<const mem_vector> const_ptr;
 	static ptr cast(vector::ptr vec);
 	static const_ptr cast(vector::const_ptr vec);
+
+	static ptr create(std::shared_ptr<char> data, size_t num_bytes,
+			const scalar_type &type) {
+		if (num_bytes % type.get_size() != 0) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "The data array has a wrong number of bytes";
+			return mem_vector::ptr();
+		}
+		size_t len = num_bytes / type.get_size();
+		return ptr(new mem_vector(data, len, type));
+	}
+
+	static ptr create(mem_dense_matrix::ptr data) {
+		if (data->get_num_rows() > 1 && data->get_num_cols() > 1) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "Can't convert a matrix with more than one row/column into a vector";
+			return ptr();
+		}
+		return ptr(new mem_vector(data));
+	}
+
+	static ptr create(size_t length, const scalar_type &type) {
+		return ptr(new mem_vector(length, type));
+	}
 
 	mem_dense_matrix::ptr get_data() {
 		return data;
@@ -82,7 +102,7 @@ public:
 	const char *get(off_t idx) const {
 		return arr + idx * get_entry_size();
 	}
-	virtual mem_vector::ptr get(type_mem_vector<off_t> &idxs) const;
+	virtual mem_vector::ptr get(const mem_vector &idxs) const;
 
 	virtual bool equals(const mem_vector &vec) const;
 	virtual const scalar_type &get_type() const {
@@ -111,6 +131,14 @@ public:
 	virtual bool expose_sub_vec(off_t start, size_t length);
 	virtual vector::ptr deep_copy() const;
 
+	virtual vector::ptr shallow_copy() {
+		return vector::ptr(new mem_vector(*this));
+	}
+
+	virtual vector::const_ptr shallow_copy() const {
+		return vector::const_ptr(new mem_vector(*this));
+	}
+
 	bool export2(FILE *f) const;
 
 	void set_data(const set_operate &op) {
@@ -130,90 +158,18 @@ public:
 		get_type().get_sorter().serial_sort(get_raw_arr(), get_length(), false);
 		sorted = true;
 	}
-};
 
-/**
- * This vector implementation is a wrapper on a in-memory single-column
- * or single-row dense matrix.
- */
-template<class T>
-class type_mem_vector: public mem_vector
-{
-	virtual mem_vector::ptr create_int(size_t length) const {
-		return mem_vector::ptr(new type_mem_vector<T>(length));
-	}
-
-protected:
-	type_mem_vector(std::shared_ptr<char> data, size_t len): mem_vector(
-			data, len, get_scalar_type<T>()) {
-	}
-
-	type_mem_vector(mem_dense_matrix::ptr data): mem_vector(data) {
-	}
-
-	type_mem_vector(size_t length): mem_vector(length, get_scalar_type<T>()) {
-	}
-
-	type_mem_vector(const type_mem_vector<T> &vec): mem_vector(vec) {
-	}
-public:
-	typedef std::shared_ptr<type_mem_vector<T> > ptr;
-
-	static ptr create(std::shared_ptr<char> data, size_t num_bytes) {
-		if (num_bytes % sizeof(T) != 0) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "The data array has a wrong number of bytes";
-			return type_mem_vector<T>::ptr();
-		}
-		size_t len = num_bytes / sizeof(T);
-		return ptr(new type_mem_vector(data, len));
-	}
-
-	static ptr create(mem_dense_matrix::ptr data) {
-		if (data->get_num_rows() > 1 && data->get_num_cols() > 1) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Can't convert a matrix with more than one row/column into a vector";
-			return ptr();
-		}
-		else if (!data->is_type<T>()) {
-			BOOST_LOG_TRIVIAL(error) << "The matrix has a wrong data type";
-			return ptr();
-		}
-		return ptr(new type_mem_vector<T>(data));
-	}
-
-	static ptr create(size_t length) {
-		return ptr(new type_mem_vector<T>(length));
-	}
-
-	static ptr cast(vector::ptr vec) {
-		if (!vec->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error) << "the vector isn't in memory";
-			return ptr();
-		}
-		if (!vec->is_type<T>()) {
-			BOOST_LOG_TRIVIAL(error) << "the vector isn't of the right type";
-			return ptr();
-		}
-		return std::static_pointer_cast<type_mem_vector<T> >(vec);
-	}
-
+	template<class T>
 	T get(off_t idx) const {
-		return ((T *) get_raw_arr())[idx];
+		return *(const T*) get(idx);
 	}
 
+	template<class T>
 	void set(off_t idx, T v) {
-		((T *) get_raw_arr())[idx] = v;
+		*(T*) get(idx) = v;
 	}
 
-	virtual vector::ptr shallow_copy() {
-		return vector::ptr(new type_mem_vector<T>(*this));
-	}
-
-	virtual vector::const_ptr shallow_copy() const {
-		return vector::const_ptr(new type_mem_vector<T>(*this));
-	}
-
+	template<class T>
 	T max() const {
 		static basic_ops_impl<T, T, T> ops;
 		scalar_variable_impl<T> res;
@@ -266,10 +222,9 @@ vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
 	long n = (end - start) / stride;
 	// We need to count the start element.
 	n++;
-	typename type_mem_vector<EntryType>::ptr v
-		= type_mem_vector<EntryType>::create(n);
+	mem_vector::ptr v = mem_vector::create(n, get_scalar_type<EntryType>());
 	v->get_data()->set_data(seq_set_operate<EntryType>(n, start, stride));
-	return std::static_pointer_cast<vector>(v);
+	return v;
 }
 
 template<>
@@ -301,10 +256,9 @@ template<class EntryType>
 vector::ptr create_vector(size_t length, EntryType initv)
 {
 	// TODO let's just use in-memory dense matrix first.
-	typename type_mem_vector<EntryType>::ptr v
-		= type_mem_vector<EntryType>::create(length);
+	mem_vector::ptr v = mem_vector::create(length, get_scalar_type<EntryType>());
 	v->get_data()->set_data(set_const_operate<EntryType>(initv));
-	return std::static_pointer_cast<vector>(v);
+	return v;
 }
 
 }

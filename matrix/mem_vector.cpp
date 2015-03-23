@@ -130,7 +130,7 @@ data_frame::ptr mem_vector::serial_groupby(const gr_apply_operate<mem_vector> &o
 		agg = output_type.create_mem_vec_vec();
 	mem_vector::ptr val;
 	if (with_val)
-		val = this->create_int(16);
+		val = mem_vector::ptr(new mem_vector(16, get_type()));
 	size_t idx = 0;
 	// Discard the const qualifier.
 	mem_vector::ptr copy = mem_vector::cast(
@@ -394,12 +394,17 @@ bool mem_vector::equals(const mem_vector &vec) const
 				get_length() * get_entry_size()) == 0;
 }
 
-mem_vector::ptr mem_vector::get(type_mem_vector<off_t> &idxs) const
+mem_vector::ptr mem_vector::get(const mem_vector &idxs) const
 {
-	mem_vector::ptr ret = create_int(idxs.get_length());
+	if (idxs.get_type() != get_scalar_type<off_t>()) {
+		BOOST_LOG_TRIVIAL(error) << "The index vector isn't of the off_t type";
+		return mem_vector::ptr();
+	}
+
+	mem_vector::ptr ret = mem_vector::create(idxs.get_length(), get_type());
 #pragma omp parallel for
 	for (size_t i = 0; i < idxs.get_length(); i++) {
-		off_t idx = idxs.get(i);
+		off_t idx = idxs.get<off_t>(i);
 		// Check if it's out of the range.
 		if (idx < 0 && idx >= this->get_length()) {
 			BOOST_LOG_TRIVIAL(error)
@@ -443,16 +448,15 @@ vector::ptr create_vector<double>(double start, double end,
 	// We need to count the start element.
 	n++;
 
-	typename type_mem_vector<double>::ptr v
-		= type_mem_vector<double>::create(n);
+	mem_vector::ptr v = mem_vector::create(n, get_scalar_type<double>());
 	v->get_data()->set_data(seq_set_operate<double>(n, start, stride));
 	return std::static_pointer_cast<vector>(v);
 }
 
 vector::ptr mem_vector::sort_with_index()
 {
-	type_mem_vector<off_t>::ptr indexes
-		= type_mem_vector<off_t>::create(get_length());
+	mem_vector::ptr indexes = mem_vector::create(get_length(),
+			get_scalar_type<off_t>());
 	get_type().get_sorter().sort_with_index(get_raw_arr(),
 			(off_t *) indexes->get_raw_arr(), get_length(), false);
 	sorted = true;

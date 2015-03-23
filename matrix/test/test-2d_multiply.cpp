@@ -23,15 +23,15 @@ void test_SpMV(sparse_matrix::ptr mat)
 {
 	printf("test sparse matrix vector multiplication\n");
 	struct timeval start, end;
-	type_mem_vector<double>::ptr in_vec
-		= type_mem_vector<double>::create(mat->get_num_cols());
+	mem_vector::ptr in_vec = mem_vector::create(mat->get_num_cols(),
+			get_scalar_type<double>());
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
-		in_vec->set(i, i);
+		in_vec->set<double>(i, i);
 
 	// Initialize the output vector and allocate pages for it.
 	gettimeofday(&start, NULL);
-	type_mem_vector<double>::ptr out
-		= type_mem_vector<double>::create(mat->get_num_rows());
+	mem_vector::ptr out = mem_vector::create(mat->get_num_rows(),
+			get_scalar_type<double>());
 	out->get_data()->reset_data();
 	gettimeofday(&end, NULL);
 	printf("initialize a vector of %ld entries takes %.3f seconds\n",
@@ -43,10 +43,10 @@ void test_SpMV(sparse_matrix::ptr mat)
 
 	double in_sum = 0;
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
-		in_sum += in_vec->get(i);
+		in_sum += in_vec->get<double>(i);
 	double out_sum = 0;
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
-		out_sum += out->get(i);
+		out_sum += out->get<double>(i);
 	printf("sum of input: %lf, sum of product: %lf, it takes %.3f seconds\n",
 			in_sum, out_sum, time_diff(start, end));
 }
