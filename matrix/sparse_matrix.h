@@ -318,7 +318,8 @@ static inline size_t cal_super_block_size(const block_2d_size &block_size,
 	// 1MB gives the best performance.
 	// Maybe the reason is that I run eight threads in a processor, which has
 	// a L3 cache of 8MB. Therefore, each thread gets 1MB in L3.
-	size_t size = 1024 * 1024 / entry_size / block_size.get_num_rows();
+	size_t size = matrix_conf.get_cpu_cache_size() / entry_size
+		/ block_size.get_num_rows();
 	return std::max(size, 1UL);
 }
 

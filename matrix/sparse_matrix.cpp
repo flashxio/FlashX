@@ -542,7 +542,10 @@ public:
 				<< "hilbert order requires a dimension of 2^n";
 			return block_exec_order::ptr();
 		}
-		return block_exec_order::ptr(new hilbert_exec_order(num_block_rows));
+		if (matrix_conf.use_hilbert_order())
+			return block_exec_order::ptr(new hilbert_exec_order(num_block_rows));
+		else
+			return block_exec_order::ptr(new seq_exec_order());
 	}
 };
 

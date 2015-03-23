@@ -44,6 +44,11 @@ class matrix_config
 	int rb_io_size;
 	// For 1D partition, the size of a matrix I/O stolen from another thread.
 	int rb_steal_io_size;
+	// The size of CPU cache that can be used by a thread. It affects
+	// the super block size.
+	int cpu_cache_size;
+	// Indicate whether the hilbert order is enabled.
+	bool hilbert_order;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -55,6 +60,8 @@ public:
 		row_block_size = 1024;
 		rb_io_size = 1024;
 		rb_steal_io_size = 1;
+		cpu_cache_size = 1024 * 1024;
+		hilbert_order = true;
 	}
 
 	/**
@@ -118,6 +125,22 @@ public:
 	int get_rb_steal_io_size() const {
 		return rb_steal_io_size;
 	}
+
+	size_t get_cpu_cache_size() const {
+		return cpu_cache_size;
+	}
+
+	bool use_hilbert_order() const {
+		return hilbert_order;
+	}
+
+	void set_cpu_cache_size(size_t size) {
+		cpu_cache_size = size;
+	}
+
+	void set_hilbert_order(bool hilbert) {
+		hilbert_order = hilbert;
+	}
 };
 
 inline void matrix_config::print_help()
@@ -129,6 +152,8 @@ inline void matrix_config::print_help()
 	printf("\trow_block_size: the size of a row block (the number of rows)\n");
 	printf("\trb_io_size: the size of a matrix I/O in 1D (the number of row blocks)\n");
 	printf("\trb_steal_io_size: the size of a stolen matrix I/O(the number of row blocks)\n");
+	printf("\tcpu_cache_size: the cpu cache size that can be used by a thread\n");
+	printf("\thilbert_order: use the hilbert order\n");
 }
 
 inline void matrix_config::print()
@@ -140,6 +165,8 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\trow_block_size: " << row_block_size;
 	BOOST_LOG_TRIVIAL(info) << "\trb_io_size" << rb_io_size;
 	BOOST_LOG_TRIVIAL(info) << "\trb_steal_io_size" << rb_steal_io_size;
+	BOOST_LOG_TRIVIAL(info) << "\tcpu_cache_size" << cpu_cache_size;
+	BOOST_LOG_TRIVIAL(info) << "\thilbert_order" << hilbert_order;
 }
 
 inline void matrix_config::init(config_map::ptr map)
@@ -152,6 +179,8 @@ inline void matrix_config::init(config_map::ptr map)
 	map->read_option_int("row_block_size", row_block_size);
 	map->read_option_int("rb_io_size", rb_io_size);
 	map->read_option_int("rb_steal_io_size", rb_steal_io_size);
+	map->read_option_int("cpu_cache_size", cpu_cache_size);
+	map->read_option_bool("hilbert_order", hilbert_order);
 }
 
 extern matrix_config matrix_conf;

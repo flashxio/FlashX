@@ -91,21 +91,53 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 	printf("it takes %.3f seconds\n", time_diff(start, end));
 }
 
+void print_usage()
+{
+	fprintf(stderr, "test conf_file matrix_file index_file [options]\n");
+	fprintf(stderr,
+			"-w matrix_width: the number of columns of the dense matrix\n");
+	fprintf(stderr, "-o exec_order: hilbert or seq\n");
+	fprintf(stderr, "-c cache_size: cpu cache size\n");
+	exit(1);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 4) {
 		fprintf(stderr,
-				"test conf_file matrix_file index_file [width]\n");
+				"test conf_file matrix_file index_file [options]\n");
 		exit(1);
 	}
 
-	std::string conf_file = argv[1];
-	std::string matrix_file = argv[2];
-	std::string index_file = argv[3];
 	size_t mat_width = 1;
-	if (argc >= 5)
-		mat_width = atoi(argv[4]);
+	std::string exec_order = "hilbert";
+	size_t cpu_cache_size = 1024 * 1024;
+	int opt;
+	while ((opt = getopt(argc, argv, "w:o:c:")) != -1) {
+		switch (opt) {
+			case 'w':
+				mat_width = atoi(optarg);
+				break;
+			case 'o':
+				exec_order = optarg;
+				break;
+			case 'c':
+				cpu_cache_size = atoi(optarg);
+				break;
+			default:
+				print_usage();
+				abort();
+		}
+	}
+
+	std::string conf_file = argv[argc - 3];
+	std::string matrix_file = argv[argc - 2];
+	std::string index_file = argv[argc - 1];
 	signal(SIGINT, int_handler);
+
+	if (exec_order == "seq")
+		matrix_conf.set_hilbert_order(false);
+	matrix_conf.set_cpu_cache_size(cpu_cache_size);
 
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
