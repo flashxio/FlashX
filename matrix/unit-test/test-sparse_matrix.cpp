@@ -37,9 +37,9 @@ data_frame::ptr create_rand_el()
 		edges.insert(e);
 	}
 	printf("There are %ld edges\n", edges.size());
-	mem_vector::ptr sources = mem_vector::create(edges.size(),
+	NUMA_vector::ptr sources = NUMA_vector::create(edges.size(),
 			get_scalar_type<fg::vertex_id_t>());
-	mem_vector::ptr dests = mem_vector::create(edges.size(),
+	NUMA_vector::ptr dests = NUMA_vector::create(edges.size(),
 			get_scalar_type<fg::vertex_id_t>());
 	size_t idx = 0;
 	BOOST_FOREACH(edge_t e, edges) {
@@ -72,15 +72,14 @@ void test_spmv(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	size_t num_rows = spm->get_num_rows();
 	printf("test_spmv: the sparse matrix has %ld rows and %ld cols\n",
 			num_rows, num_cols);
-	mem_vector::ptr in = mem_vector::create(num_cols, get_scalar_type<int>());
+	NUMA_vector::ptr in = NUMA_vector::create(num_cols, get_scalar_type<int>());
 	for (size_t i = 0; i < num_cols; i++)
 		in->set(i, 1);
-	mem_vector::ptr out = spm->multiply<int>(in);
-	int *int_raw_arr = (int *) out->get_raw_arr();
+	NUMA_vector::ptr out = spm->multiply<int>(in);
 	assert(out->get_length() == num_rows);
 	assert(degrees.size() == num_rows);
 	for (size_t i = 0; i < num_rows; i++)
-		assert(int_raw_arr[i] == degrees[i]);
+		assert(out->get<int>(i) == degrees[i]);
 }
 
 void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,

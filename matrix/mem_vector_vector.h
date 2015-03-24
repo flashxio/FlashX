@@ -109,6 +109,9 @@ public:
 	virtual std::shared_ptr<vector> cat() const;
 	virtual vector_vector::ptr groupby(const factor_vector &labels,
 			const gr_apply_operate<sub_vector_vector> &op) const;
+	virtual void reset_data() {
+		memset(data.get(), 0, capacity);
+	}
 };
 
 template<class T>

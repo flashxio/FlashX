@@ -49,6 +49,8 @@ class matrix_config
 	int cpu_cache_size;
 	// Indicate whether the hilbert order is enabled.
 	bool hilbert_order;
+	// The number of NUMA nodes.
+	int num_nodes;
 public:
 	/**
 	 * \brief The default constructor that set all configurations to
@@ -62,6 +64,7 @@ public:
 		rb_steal_io_size = 1;
 		cpu_cache_size = 1024 * 1024;
 		hilbert_order = true;
+		num_nodes = 1;
 	}
 
 	/**
@@ -141,6 +144,10 @@ public:
 	void set_hilbert_order(bool hilbert) {
 		hilbert_order = hilbert;
 	}
+
+	int get_num_nodes() const {
+		return num_nodes;
+	}
 };
 
 inline void matrix_config::print_help()
@@ -154,6 +161,7 @@ inline void matrix_config::print_help()
 	printf("\trb_steal_io_size: the size of a stolen matrix I/O(the number of row blocks)\n");
 	printf("\tcpu_cache_size: the cpu cache size that can be used by a thread\n");
 	printf("\thilbert_order: use the hilbert order\n");
+	printf("\tnum_nodes: The number of NUMA nodes\n");
 }
 
 inline void matrix_config::print()
@@ -167,6 +175,7 @@ inline void matrix_config::print()
 	BOOST_LOG_TRIVIAL(info) << "\trb_steal_io_size" << rb_steal_io_size;
 	BOOST_LOG_TRIVIAL(info) << "\tcpu_cache_size" << cpu_cache_size;
 	BOOST_LOG_TRIVIAL(info) << "\thilbert_order" << hilbert_order;
+	BOOST_LOG_TRIVIAL(info) << "\tnum_nodes" << num_nodes;
 }
 
 inline void matrix_config::init(config_map::ptr map)
@@ -181,6 +190,7 @@ inline void matrix_config::init(config_map::ptr map)
 	map->read_option_int("rb_steal_io_size", rb_steal_io_size);
 	map->read_option_int("cpu_cache_size", cpu_cache_size);
 	map->read_option_bool("hilbert_order", hilbert_order);
+	map->read_option_int("num_nodes", num_nodes);
 }
 
 extern matrix_config matrix_conf;

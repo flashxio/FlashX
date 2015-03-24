@@ -26,6 +26,7 @@
 #include "matrix_io.h"
 #include "io_interface.h"
 #include "mem_vector.h"
+#include "NUMA_vector.h"
 
 namespace fm
 {
@@ -85,10 +86,10 @@ public:
 template<class T>
 class fg_row_spmv_task: public fg_row_compute_task
 {
-	const mem_vector &input;
-	mem_vector &output;
+	const NUMA_vector &input;
+	NUMA_vector &output;
 public:
-	fg_row_spmv_task(const mem_vector &_input, mem_vector &_output,
+	fg_row_spmv_task(const NUMA_vector &_input, NUMA_vector &_output,
 			const matrix_io &_io): fg_row_compute_task(_io), input(
 				_input), output(_output) {
 	}
@@ -202,23 +203,22 @@ public:
 template<class T>
 class block_spmv_task: public block_compute_task
 {
-	const mem_vector &input;
-	mem_vector &output;
+	const NUMA_vector &input;
+	NUMA_vector &output;
 
 	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
-			size_t start_row_idx, size_t start_col_idx) {
-		size_t row_idx = start_row_idx + it.get_rel_row_idx();
+			const T *in_arr, T *out_arr) {
 		T sum = 0;
 		while (it.has_next()) {
-			size_t col_idx = start_col_idx + it.next();
-			sum += input.get<T>(col_idx);
+			size_t rel_col_idx = it.next();
+			sum += in_arr[rel_col_idx];
 		}
-		output.set<T>(row_idx, output.get<T>(row_idx) + sum);
+		out_arr[it.get_rel_row_idx()] += sum;
 		return it;
 	}
 public:
-	block_spmv_task(const mem_vector &_input,
-			mem_vector &_output, const matrix_io &_io,
+	block_spmv_task(const NUMA_vector &_input,
+			NUMA_vector &_output, const matrix_io &_io,
 			const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
 				_io, mat, order), input(_input), output(_output) {
 	}
@@ -229,8 +229,14 @@ public:
 		size_t start_row_idx
 			= block.get_block_row_idx() * block_size.get_num_rows();
 		rp_edge_iterator it = block.get_first_edge_iterator();
+		const char *in_buf = input.get_sub_arr(start_col_idx,
+				start_col_idx + block_size.get_num_cols());
+		char *out_buf = output.get_sub_arr(start_row_idx,
+				start_row_idx + block_size.get_num_rows());
+		assert(in_buf);
+		assert(out_buf);
 		while (!block.is_block_end(it)) {
-			it = run_on_row_part(it, start_row_idx, start_col_idx);
+			it = run_on_row_part(it, (const T *) in_buf, (T *) out_buf);
 			it = block.get_next_edge_iterator(it);
 		}
 	}
@@ -239,15 +245,15 @@ public:
 template<class T>
 class fg_row_spmv_creator: public task_creator
 {
-	const mem_vector &input;
-	mem_vector &output;
+	const NUMA_vector &input;
+	NUMA_vector &output;
 
-	fg_row_spmv_creator(const mem_vector &_input,
-			mem_vector &_output): input(_input), output(_output) {
+	fg_row_spmv_creator(const NUMA_vector &_input,
+			NUMA_vector &_output): input(_input), output(_output) {
 	}
 public:
-	static task_creator::ptr create(const mem_vector &_input,
-			mem_vector &_output) {
+	static task_creator::ptr create(const NUMA_vector &_input,
+			NUMA_vector &_output) {
 		if (_input.get_type() != get_scalar_type<T>()
 				|| _output.get_type() != get_scalar_type<T>()) {
 			BOOST_LOG_TRIVIAL(error) << "wrong vector type in spmv creator";
@@ -264,16 +270,16 @@ public:
 template<class T>
 class b2d_spmv_creator: public task_creator
 {
-	const mem_vector &input;
-	mem_vector &output;
+	const NUMA_vector &input;
+	NUMA_vector &output;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
-	b2d_spmv_creator(const mem_vector &_input,
-			mem_vector &_output, const sparse_matrix &_mat);
+	b2d_spmv_creator(const NUMA_vector &_input,
+			NUMA_vector &_output, const sparse_matrix &_mat);
 public:
-	static task_creator::ptr create(const mem_vector &_input,
-			mem_vector &_output, const sparse_matrix &mat) {
+	static task_creator::ptr create(const NUMA_vector &_input,
+			NUMA_vector &_output, const sparse_matrix &mat) {
 		if (_input.get_type() != get_scalar_type<T>()
 				|| _output.get_type() != get_scalar_type<T>()) {
 			BOOST_LOG_TRIVIAL(error) << "wrong vector type in spmv creator";
@@ -355,8 +361,8 @@ class sparse_matrix
 	bool symmetric;
 
 	template<class T>
-	task_creator::ptr get_multiply_creator(const mem_vector &in,
-			mem_vector &out) const {
+	task_creator::ptr get_multiply_creator(const NUMA_vector &in,
+			NUMA_vector &out) const {
 		if (is_fg)
 			return fg_row_spmv_creator<T>::create(in, out);
 		else
@@ -378,6 +384,7 @@ class sparse_matrix
 					sizeof(T) * row_m.get_num_cols()));
 	}
 
+#if 0
 	template<class T>
 	void multiply_matrix(const mem_col_dense_matrix &col_m,
 			mem_col_dense_matrix &ret) const {
@@ -394,6 +401,7 @@ class sparse_matrix
 					sizeof(T) * col_m.get_num_cols()));
 		}
 	}
+#endif
 protected:
 	// This constructor is used for the sparse matrix stored
 	// in the FlashGraph format.
@@ -506,7 +514,7 @@ public:
 	 * It requires users to initialize the output vector.
 	 */
 	template<class T>
-	bool multiply(const mem_vector &in, mem_vector &out) const {
+	bool multiply(const NUMA_vector &in, NUMA_vector &out) const {
 		if (in.get_length() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
 					"the input vector has wrong length %1%. matrix ncols: %2%")
@@ -522,16 +530,17 @@ public:
 	 * This version of SpMV allocates the output vector.
 	 */
 	template<class T>
-	mem_vector::ptr multiply(mem_vector::ptr in) const {
+	NUMA_vector::ptr multiply(NUMA_vector::ptr in) const {
 		if (in->get_length() != ncols) {
 			BOOST_LOG_TRIVIAL(error) << boost::format(
 					"the input vector has wrong length %1%. matrix ncols: %2%")
 				% in->get_length() % ncols;
-			return mem_vector::ptr();
+			return NUMA_vector::ptr();
 		}
 		else {
-			mem_vector::ptr ret = mem_vector::create(nrows, get_scalar_type<T>());
-			ret->get_data()->reset_data();
+			NUMA_vector::ptr ret = NUMA_vector::create(nrows,
+					in->get_num_nodes(), get_scalar_type<T>());
+			ret->reset_data();
 			multiply<T>(*in, *ret);
 			return ret;
 		}
@@ -569,8 +578,10 @@ public:
 				BOOST_LOG_TRIVIAL(error) << "wrong matrix layout for output matrix";
 				return false;
 			}
+#if 0
 			multiply_matrix<T>((const mem_col_dense_matrix &) in,
 					(mem_col_dense_matrix &) out);
+#endif
 			return true;
 		}
 	}
@@ -599,18 +610,20 @@ public:
 			return ret;
 		}
 		else {
+#if 0
 			mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
 					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
 			ret->reset_data();
 			multiply_matrix<T>((const mem_col_dense_matrix &) *in, *ret);
 			return ret;
+#endif
 		}
 	}
 };
 
 template<class T>
-b2d_spmv_creator<T>::b2d_spmv_creator(const mem_vector &_input,
-		mem_vector &_output, const sparse_matrix &_mat): input(
+b2d_spmv_creator<T>::b2d_spmv_creator(const NUMA_vector &_input,
+		NUMA_vector &_output, const sparse_matrix &_mat): input(
 			_input), output(_output), mat(_mat)
 {
 	// We only handle the case the element size is 2^n.

@@ -23,16 +23,16 @@ void test_SpMV(sparse_matrix::ptr mat)
 {
 	printf("test sparse matrix vector multiplication\n");
 	struct timeval start, end;
-	mem_vector::ptr in_vec = mem_vector::create(mat->get_num_cols(),
+	NUMA_vector::ptr in_vec = NUMA_vector::create(mat->get_num_cols(),
 			get_scalar_type<double>());
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
 		in_vec->set<double>(i, i);
 
 	// Initialize the output vector and allocate pages for it.
 	gettimeofday(&start, NULL);
-	mem_vector::ptr out = mem_vector::create(mat->get_num_rows(),
+	NUMA_vector::ptr out = NUMA_vector::create(mat->get_num_rows(),
 			get_scalar_type<double>());
-	out->get_data()->reset_data();
+	out->reset_data();
 	gettimeofday(&end, NULL);
 	printf("initialize a vector of %ld entries takes %.3f seconds\n",
 			out->get_length(), time_diff(start, end));
