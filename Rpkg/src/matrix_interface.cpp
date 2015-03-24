@@ -109,7 +109,7 @@ RcppExport SEXP R_FM_create_rand(SEXP pn, SEXP pmin, SEXP pmax)
 	}
 
 	// TODO let's just use in-memory dense matrix first.
-	type_mem_vector<double>::ptr v = type_mem_vector<double>::create(n);
+	mem_vector::ptr v = mem_vector::create(n, get_scalar_type<double>());
 	dense_matrix::ptr m = v->get_data();
 	GetRNGstate();
 	m->set_data(rand_set_operate<double>(min, max));
@@ -199,21 +199,21 @@ static basic_ops &get_inner_prod_right_ops(const bulk_operate &left_ops)
 static SEXP SpMV(sparse_matrix::ptr matrix, dense_matrix::ptr right_mat)
 {
 	if (right_mat->is_type<double>()) {
-		type_mem_vector<double>::ptr in_vec = type_mem_vector<double>::create(
-				mem_dense_matrix::cast(right_mat));
+		mem_vector::ptr in_vec = mem_vector::create(mem_dense_matrix::cast(
+					right_mat));
 		if (in_vec == NULL)
 			return R_NilValue;
 
-		type_mem_vector<double>::ptr out_vec = matrix->multiply<double>(in_vec);
+		mem_vector::ptr out_vec = matrix->multiply<double>(in_vec);
 		return create_FMR_vector(out_vec->get_data(), "");
 	}
 	else if (right_mat->is_type<int>()) {
-		type_mem_vector<int>::ptr in_vec = type_mem_vector<int>::create(
-				mem_dense_matrix::cast(right_mat));
+		mem_vector::ptr in_vec = mem_vector::create(mem_dense_matrix::cast(
+					right_mat));
 		if (in_vec == NULL)
 			return R_NilValue;
 
-		type_mem_vector<int>::ptr out_vec = matrix->multiply<int>(in_vec);
+		mem_vector::ptr out_vec = matrix->multiply<int>(in_vec);
 		return create_FMR_vector(out_vec->get_data(), "");
 	}
 	else {
@@ -292,11 +292,11 @@ RcppExport SEXP R_FM_conv_matrix(SEXP pmat, SEXP pnrow, SEXP pncol, SEXP pbyrow)
 }
 
 template<class T, class RType>
-void copy_FM2Rvector(const type_mem_vector<T> &vec, RType *r_arr)
+void copy_FM2Rvector(const mem_vector &vec, RType *r_arr)
 {
 	size_t length = vec.get_length();
 	for (size_t i = 0; i < length; i++) {
-		r_arr[i] = vec.get(i);
+		r_arr[i] = vec.get<T>(i);
 	}
 }
 
@@ -316,7 +316,7 @@ template<class T, class RType>
 void copy_FM2R_mem(mem_dense_matrix::ptr mem_mat, bool is_vec, RType *ret)
 {
 	if (is_vec) {
-		typename type_mem_vector<T>::ptr mem_vec = type_mem_vector<T>::create(mem_mat);
+		mem_vector::ptr mem_vec = mem_vector::create(mem_mat);
 		copy_FM2Rvector<T>(*mem_vec, ret);
 	}
 	else
@@ -412,14 +412,16 @@ RcppExport SEXP R_FM_conv_RVec2FM(SEXP pobj)
 {
 	if (R_is_real(pobj)) {
 		Rcpp::NumericVector vec(pobj);
-		type_mem_vector<double>::ptr fm_vec = type_mem_vector<double>::create(vec.size());
+		mem_vector::ptr fm_vec = mem_vector::create(vec.size(),
+				get_scalar_type<double>());
 		for (size_t i = 0; i < fm_vec->get_length(); i++)
 			fm_vec->set(i, vec[i]);
 		return create_FMR_vector(fm_vec->get_data(), "");
 	}
 	else if (R_is_integer(pobj)) {
 		Rcpp::IntegerVector vec(pobj);
-		type_mem_vector<int>::ptr fm_vec = type_mem_vector<int>::create(vec.size());
+		mem_vector::ptr fm_vec = mem_vector::create(vec.size(),
+				get_scalar_type<int>());
 		for (size_t i = 0; i < fm_vec->get_length(); i++)
 			fm_vec->set(i, vec[i]);
 		return create_FMR_vector(fm_vec->get_data(), "");
