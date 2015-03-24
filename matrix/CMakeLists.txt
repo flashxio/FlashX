@@ -24,4 +24,5 @@ add_library(FMatrix STATIC
 	vector.cpp
 	matrix_header.cpp
 	sparse_matrix_format.cpp
+	hilbert_curve.cpp
 )
