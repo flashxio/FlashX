@@ -613,6 +613,8 @@ b2d_spmv_creator<T>::b2d_spmv_creator(const mem_vector &_input,
 		mem_vector &_output, const sparse_matrix &_mat): input(
 			_input), output(_output), mat(_mat)
 {
+	// We only handle the case the element size is 2^n.
+	assert(1 << ((size_t) log2(sizeof(T))) == sizeof(T));
 	size_t sb_size = cal_super_block_size(mat.get_block_size(), sizeof(T));
 	order = mat.get_multiply_order(sb_size, sb_size);
 }
@@ -622,8 +624,17 @@ b2d_spmm_creator<T>::b2d_spmm_creator(const mem_row_dense_matrix &_input,
 		mem_row_dense_matrix &_output, const sparse_matrix &_mat): input(
 			_input), output(_output), mat(_mat)
 {
+	// We only handle the case the element size is 2^n.
+	assert(1 << ((size_t) log2(sizeof(T))) == sizeof(T));
+	// Hilbert curve requires that there are 2^n block rows and block columns.
+	// If the input matrix doesn't have 2^n columns, we have to find a number
+	// of 2^n that is close to the number of columns in the input matrix
+	// to calculate the super block size, so that the super block has 2^n
+	// block rows and columns.
+	size_t num_cols = input.get_num_cols();
+	num_cols = 1 << ((size_t) log2(num_cols));
 	size_t sb_size = cal_super_block_size(mat.get_block_size(),
-			sizeof(T) * input.get_num_cols());
+			sizeof(T) * num_cols);
 	assert(input.get_num_cols() == output.get_num_cols());
 	order = mat.get_multiply_order(sb_size, sb_size);
 }
