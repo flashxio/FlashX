@@ -53,14 +53,18 @@ int main(int argc, char *argv[])
 	printf("sum of input: %lf, sum of FG product: %lf, it takes %.3f seconds\n",
 			in->sum(), fg_out->sum(), time_diff(start, end));
 
-	NUMA_vector::ptr in_vec = NUMA_vector::create(fg_m->get_num_cols(),
-			get_scalar_type<double>());
-	for (size_t i = 0; i < fg_m->get_num_cols(); i++)
-		in_vec->set<double>(i, i);
 	sparse_matrix::ptr m = sparse_matrix::create(fg);
+	NUMA_vector::ptr in_vec = NUMA_vector::create(m->get_num_cols(),
+			get_scalar_type<double>());
+	for (size_t i = 0; i < m->get_num_cols(); i++)
+		in_vec->set<double>(i, i);
+	NUMA_vector::ptr out = NUMA_vector::create(m->get_num_rows(),
+			get_scalar_type<double>());
+
 	gettimeofday(&start, NULL);
-	NUMA_vector::ptr out = m->multiply<double>(in_vec);
+	m->multiply<double>(*in_vec, *out);
 	gettimeofday(&end, NULL);
+
 	double sum = 0;
 	for (size_t i = 0; i < fg_m->get_num_cols(); i++)
 		sum += out->get<double>(i);
