@@ -2,6 +2,7 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#include "matrix_config.h"
 #include "sparse_matrix.h"
 #include "matrix/FG_sparse_matrix.h"
 
@@ -47,9 +48,17 @@ int main(int argc, char *argv[])
 	printf("initialize FG_vector of %ld entries takes %.3f seconds\n",
 			fg_out->get_size(), time_diff(start, end));
 
+#ifdef PROFILER
+	if (!fg::graph_conf.get_prof_file().empty())
+		ProfilerStart(fg::graph_conf.get_prof_file().c_str());
+#endif
 	gettimeofday(&start, NULL);
 	fg_m->multiply<double>(*in, *fg_out);
 	gettimeofday(&end, NULL);
+#ifdef PROFILER
+	if (!fg::graph_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
 	printf("sum of input: %lf, sum of FG product: %lf, it takes %.3f seconds\n",
 			in->sum(), fg_out->sum(), time_diff(start, end));
 
@@ -61,9 +70,17 @@ int main(int argc, char *argv[])
 	NUMA_vector::ptr out = NUMA_vector::create(m->get_num_rows(),
 			get_scalar_type<double>());
 
+#ifdef PROFILER
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStart(matrix_conf.get_prof_file().c_str());
+#endif
 	gettimeofday(&start, NULL);
 	m->multiply<double>(*in_vec, *out);
 	gettimeofday(&end, NULL);
+#ifdef PROFILER
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
 
 	double sum = 0;
 	for (size_t i = 0; i < fg_m->get_num_cols(); i++)

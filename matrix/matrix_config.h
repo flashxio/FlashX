@@ -154,7 +154,7 @@ inline void matrix_config::print_help()
 {
 	printf("Configuration parameters in matrix operations.\n");
 	printf("\tthreads: the number of threads processing the matrix\n");
-	printf("\tprof_file: the output file containing CPU profiling\n");
+	printf("\tFM_prof_file: the output file containing CPU profiling\n");
 	printf("\tin_mem_matrix: indicate whether to load the entire matrix to memory in advance\n");
 	printf("\trow_block_size: the size of a row block (the number of rows)\n");
 	printf("\trb_io_size: the size of a matrix I/O in 1D (the number of row blocks)\n");
@@ -168,7 +168,7 @@ inline void matrix_config::print()
 {
 	BOOST_LOG_TRIVIAL(info) << "Configuration parameters in matrix operations.";
 	BOOST_LOG_TRIVIAL(info) << "\tthreads: " << num_threads;
-	BOOST_LOG_TRIVIAL(info) << "\tprof_file: " << prof_file;
+	BOOST_LOG_TRIVIAL(info) << "\tFM_prof_file: " << prof_file;
 	BOOST_LOG_TRIVIAL(info) << "\tin_mem_matrix: " << _in_mem_matrix;
 	BOOST_LOG_TRIVIAL(info) << "\trow_block_size: " << row_block_size;
 	BOOST_LOG_TRIVIAL(info) << "\trb_io_size" << rb_io_size;
@@ -183,7 +183,7 @@ inline void matrix_config::init(config_map::ptr map)
 	map->read_option_int("threads", num_threads);
 	if (!power2(num_threads))
 		throw fg::conf_exception("The number of worker threads has to be 2^n");
-	map->read_option("prof_file", prof_file);
+	map->read_option("FM_prof_file", prof_file);
 	map->read_option_bool("in_mem_matrix", _in_mem_matrix);
 	map->read_option_int("row_block_size", row_block_size);
 	map->read_option_int("rb_io_size", rb_io_size);

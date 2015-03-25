@@ -2,6 +2,7 @@
 #ifdef PROFILER
 #include <gperftools/profiler.h>
 #endif
+#include "matrix_config.h"
 #include "io_interface.h"
 #include "safs_file.h"
 #include "sparse_matrix.h"
@@ -13,7 +14,7 @@ void int_handler(int sig_num)
 {
 #ifdef PROFILER
 	printf("stop profiling\n");
-	if (!fg::graph_conf.get_prof_file().empty())
+	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStop();
 #endif
 	exit(0);
@@ -37,9 +38,17 @@ void test_SpMV(sparse_matrix::ptr mat)
 	printf("initialize a vector of %ld entries takes %.3f seconds\n",
 			out->get_length(), time_diff(start, end));
 
+#ifdef PROFILER
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStart(matrix_conf.get_prof_file().c_str());
+#endif
 	gettimeofday(&start, NULL);
 	mat->multiply<double>(*in_vec, *out);
 	gettimeofday(&end, NULL);
+#ifdef PROFILER
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
 
 	double in_sum = 0;
 	for (size_t i = 0; i < mat->get_num_cols(); i++)
@@ -85,9 +94,17 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 				mat_width, matrix_layout_t::L_ROW);
 	out->get_matrix()->reset_data();
 
+#ifdef PROFILER
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStart(matrix_conf.get_prof_file().c_str());
+#endif
 	gettimeofday(&start, NULL);
 	mat->multiply<double>(*in->get_matrix(), *out->get_matrix());
 	gettimeofday(&end, NULL);
+#ifdef PROFILER
+	if (!matrix_conf.get_prof_file().empty())
+		ProfilerStop();
+#endif
 	printf("it takes %.3f seconds\n", time_diff(start, end));
 }
 
