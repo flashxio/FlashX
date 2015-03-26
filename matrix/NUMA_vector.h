@@ -28,6 +28,7 @@
 #include "bulk_operate.h"
 #include "vector.h"
 #include "matrix_config.h"
+#include "raw_data_array.h"
 
 namespace fm
 {
@@ -49,40 +50,7 @@ class NUMA_vector: public vector
 	const size_t numa_log;
 	const size_t numa_mask;
 
-	class raw_data_array {
-		int node_id;
-		size_t num_bytes;
-		std::shared_ptr<char> data;
-	public:
-		raw_data_array() {
-			node_id = -1;
-			num_bytes = 0;
-		}
-
-		raw_data_array(size_t num_bytes, int node_id);
-
-		void reset_data() {
-			memset(data.get(), 0, num_bytes);
-		}
-
-		size_t get_num_bytes() const {
-			return num_bytes;
-		}
-
-		char *get_raw() {
-			return data.get();
-		}
-
-		const char *get_raw() const {
-			return data.get();
-		}
-
-		int get_node_id() const {
-			return node_id;
-		}
-	};
-
-	std::vector<raw_data_array> data;
+	std::vector<detail::raw_data_array> data;
 	const scalar_type &type;
 
 	/*

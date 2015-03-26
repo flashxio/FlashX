@@ -17,41 +17,15 @@
  * limitations under the License.
  */
 
-#include <numa.h>
-
 #include <boost/format.hpp>
 
 #include "common.h"
 
 #include "NUMA_vector.h"
+#include "data_frame.h"
 
 namespace fm
 {
-
-namespace
-{
-
-class deleter
-{
-	size_t size;
-public:
-	deleter(size_t size) {
-		this->size = size;
-	}
-
-	void operator()(char *addr) {
-		numa_free(addr, size);
-	}
-};
-
-}
-
-NUMA_vector::raw_data_array::raw_data_array(size_t num_bytes, int node_id)
-{
-	this->num_bytes = num_bytes;
-	void *addr = numa_alloc_onnode(num_bytes, node_id);
-	data = std::shared_ptr<char>((char *) addr, deleter(num_bytes));
-}
 
 NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
 		const scalar_type &_type): vector(length, _type.get_size(),
@@ -64,7 +38,7 @@ NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
 	num_eles_per_node = ROUNDUP(num_eles_per_node, range_size);
 	size_t size_per_node = num_eles_per_node * type.get_size();
 	for (size_t node_id = 0; node_id < num_nodes; node_id++)
-		data[node_id] = raw_data_array(size_per_node, node_id);
+		data[node_id] = detail::raw_data_array(size_per_node, node_id);
 }
 
 void NUMA_vector::reset_data()
