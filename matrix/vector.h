@@ -76,7 +76,6 @@ public:
 	}
 
 	virtual const scalar_type &get_type() const = 0;
-	virtual bool set_sub_vec(off_t start, const vector &vec) = 0;
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const = 0;
 	virtual void reset_data() = 0;
 	/*

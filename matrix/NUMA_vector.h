@@ -83,11 +83,6 @@ public:
 		return type;
 	}
 
-	virtual bool set_sub_vec(off_t start, const vector &vec) {
-		// TODO
-		assert(0);
-	}
-
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
 	virtual bool expose_sub_vec(off_t start, size_t length);
 

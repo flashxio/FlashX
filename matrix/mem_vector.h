@@ -39,6 +39,7 @@ class mem_vector: public vector
 	mem_dense_matrix::ptr data;
 	bool sorted;
 
+	vector::ptr get_sub_vec(off_t start, size_t length);
 protected:
 	mem_vector(mem_dense_matrix::ptr data);
 	mem_vector(size_t length, const scalar_type &type);
@@ -124,9 +125,8 @@ public:
 			std::vector<vector::ptr>::const_iterator vec_end);
 	virtual bool append(const vector &vec);
 	virtual bool resize(size_t new_length);
-	virtual bool set_sub_vec(off_t start, const vector &vec);
+	bool set_sub_vec(off_t start, const vector &vec);
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
-	virtual vector::ptr get_sub_vec(off_t start, size_t length);
 	size_t get_sub_start() const;
 	virtual bool expose_sub_vec(off_t start, size_t length);
 	virtual vector::ptr deep_copy() const;

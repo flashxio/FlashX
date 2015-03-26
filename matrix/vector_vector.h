@@ -78,10 +78,6 @@ public:
 		throw unsupported_exception("resize");
 	}
 
-	virtual bool set_sub_vec(off_t start, const vector &vec) {
-		throw unsupported_exception("set_sub_vec");
-	}
-
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const {
 		throw unsupported_exception("get_sub_vec");
 	}
