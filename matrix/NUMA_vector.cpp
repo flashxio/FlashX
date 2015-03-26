@@ -69,4 +69,73 @@ char *NUMA_vector::get_sub_arr(off_t start, off_t end)
 	return (char *) const_this->get_sub_arr(start, end);
 }
 
+vector::const_ptr NUMA_vector::get_sub_vec(off_t start, size_t length) const
+{
+	// TODO
+	assert(0);
+}
+
+bool NUMA_vector::expose_sub_vec(off_t start, size_t length)
+{
+	// TODO
+	assert(0);
+}
+
+bool NUMA_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
+		std::vector<vector::ptr>::const_iterator vec_end)
+{
+	// TODO
+	assert(0);
+}
+
+bool NUMA_vector::append(const vector &vec)
+{
+	// TODO
+	assert(0);
+}
+
+void NUMA_vector::sort()
+{
+	// TODO
+	assert(0);
+}
+
+vector::ptr NUMA_vector::sort_with_index()
+{
+	// TODO
+	assert(0);
+}
+
+bool NUMA_vector::is_sorted() const
+{
+	// TODO
+	assert(0);
+}
+
+// It should return data frame instead of vector.
+data_frame::ptr NUMA_vector::groupby(const gr_apply_operate<mem_vector> &op,
+		bool with_val) const
+{
+	// TODO
+	assert(0);
+}
+
+vector::ptr NUMA_vector::deep_copy() const
+{
+	// TODO
+	assert(0);
+}
+
+vector::ptr NUMA_vector::shallow_copy()
+{
+	// TODO
+	assert(0);
+}
+
+vector::const_ptr NUMA_vector::shallow_copy() const
+{
+	// TODO
+	assert(0);
+}
+
 }

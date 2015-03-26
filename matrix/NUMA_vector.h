@@ -88,63 +88,24 @@ public:
 		assert(0);
 	}
 
-	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const {
-		// TODO
-		assert(0);
-	}
-
-	virtual bool expose_sub_vec(off_t start, size_t length) {
-		// TODO
-		assert(0);
-	}
+	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
+	virtual bool expose_sub_vec(off_t start, size_t length);
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
-			std::vector<vector::ptr>::const_iterator vec_end) {
-		// TODO
-		assert(0);
-	}
+			std::vector<vector::ptr>::const_iterator vec_end);
+	virtual bool append(const vector &vec);
 
-	virtual bool append(const vector &vec) {
-		// TODO
-		assert(0);
-	}
-
-	virtual void sort() {
-		// TODO
-		assert(0);
-	}
-
-	virtual vector::ptr sort_with_index() {
-		// TODO
-		assert(0);
-	}
-
-	virtual bool is_sorted() const {
-		// TODO
-		assert(0);
-	}
+	virtual void sort();
+	virtual vector::ptr sort_with_index();
+	virtual bool is_sorted() const;
 
 	// It should return data frame instead of vector.
 	virtual std::shared_ptr<data_frame> groupby(
-			const gr_apply_operate<mem_vector> &op, bool with_val) const {
-		// TODO
-		assert(0);
-	}
+			const gr_apply_operate<mem_vector> &op, bool with_val) const;
 
-	virtual vector::ptr deep_copy() const {
-		// TODO
-		assert(0);
-	}
-
-	virtual vector::ptr shallow_copy() {
-		// TODO
-		assert(0);
-	}
-
-	virtual vector::const_ptr shallow_copy() const {
-		// TODO
-		assert(0);
-	}
+	virtual vector::ptr deep_copy() const;
+	virtual vector::ptr shallow_copy();
+	virtual vector::const_ptr shallow_copy() const;
 
 	virtual void reset_data();
 
