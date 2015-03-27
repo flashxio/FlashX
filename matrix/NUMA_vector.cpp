@@ -30,15 +30,19 @@
 namespace fm
 {
 
+template<class T>
+T ceil_divide(T v1, T v2)
+{
+	return ceil(((double) v1) / v2);
+}
+
 NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
 		const scalar_type &_type): vector(length, _type.get_size(),
-			true), numa_log(log2(num_nodes)), numa_mask(
-				(1 << numa_log) - 1), type(_type)
+			true), mapper(num_nodes), type(_type)
 {
-	assert(num_nodes == 1UL << numa_log);
 	data.resize(num_nodes);
-	size_t num_eles_per_node = ceil(((double) length) / num_nodes);
-	num_eles_per_node = ROUNDUP(num_eles_per_node, range_size);
+	size_t num_eles_per_node = ceil_divide(length, num_nodes);
+	num_eles_per_node = ROUNDUP(num_eles_per_node, mapper.get_range_size());
 	size_t size_per_node = num_eles_per_node * type.get_size();
 	for (size_t node_id = 0; node_id < num_nodes; node_id++)
 		data[node_id] = detail::raw_data_array(size_per_node, node_id);
@@ -52,16 +56,15 @@ void NUMA_vector::reset_data()
 
 const char *NUMA_vector::get_sub_arr(off_t start, off_t end) const
 {
-	off_t rid1 = start >> range_size_log;
-	off_t rid2 = (end - 1) >> range_size_log;
 	// The start and end needs to fall into the same range.
-	if (rid1 != rid2) {
+	if (mapper.get_logical_range_id(start)
+			!= mapper.get_logical_range_id(end - 1)) {
 		BOOST_LOG_TRIVIAL(error) << boost::format(
 				"[%1%, %2%) isn't in the same range") % start % end;
 		return NULL;
 	}
 
-	std::pair<int, size_t> loc = map2data(start);
+	std::pair<int, size_t> loc = mapper.map2physical(start);
 	size_t off = loc.second * get_entry_size();
 	return data[loc.first].get_raw() + off;
 }
@@ -103,12 +106,6 @@ bool NUMA_vector::append(const vector &vec)
 {
 	// TODO
 	assert(0);
-}
-
-template<class T>
-T ceil_divide(T v1, T v2)
-{
-	return ceil(((double) v1) / v2);
 }
 
 namespace
@@ -157,10 +154,11 @@ public:
 		off_t to_start_eles = to_off / vec.get_entry_size();
 		size_t to_num_eles = to_size / vec.get_entry_size();
 		for (size_t rel_off = 0; rel_off < to_num_eles;
-				rel_off += vec.get_range_size()) {
-			size_t from_off = vec.map2logical(node_id, to_start_eles + rel_off);
+				rel_off += vec.get_mapper().get_range_size()) {
+			size_t from_off = vec.get_mapper().map2logical(node_id,
+					to_start_eles + rel_off);
 			size_t num_eles = std::min(to_num_eles - rel_off,
-					vec.get_range_size());
+					vec.get_mapper().get_range_size());
 			assert(from_off + num_eles <= vec.get_length());
 			memcpy(to_buf + (to_start_eles + rel_off) * vec.get_entry_size(),
 					from_buf + from_off * vec.get_entry_size(),
@@ -181,7 +179,7 @@ void NUMA_vector::sort()
 	std::vector<arr_pair> arrs;
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
-	std::vector<size_t> local_lens = get_local_lengths();
+	std::vector<size_t> local_lens = mapper.cal_local_lengths(get_length());
 	// We first split data into multiple partitions and sort each partition
 	// independently.
 	for (size_t i = 0; i < data.size(); i++) {
@@ -227,16 +225,16 @@ void NUMA_vector::copy_from(const char *buf, size_t num_bytes)
 		= matrix_conf.get_num_threads() / matrix_conf.get_num_nodes();
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
-	std::vector<size_t> local_lens = get_local_lengths();
+	std::vector<size_t> local_lens = mapper.cal_local_lengths(get_length());
 	for (size_t i = 0; i < data.size(); i++) {
 		size_t num_local_bytes = local_lens[i] * get_entry_size();
 		// The number of ranges in array of the node.
-		size_t nranges = ceil_divide(local_lens[i], range_size);
+		size_t nranges = ceil_divide(local_lens[i], mapper.get_range_size());
 		// The number of ranges a thread should get.
 		size_t nranges_per_thread = ceil_divide(nranges, nthreads_per_node);
 		// The number of bytes a thread should get.
 		size_t nbytes_per_thread
-			= nranges_per_thread * range_size * get_entry_size();
+			= nranges_per_thread * mapper.get_range_size() * get_entry_size();
 		for (size_t j = 0; j < nthreads_per_node; j++) {
 			if (num_local_bytes <= nbytes_per_thread * j)
 				continue;
@@ -288,23 +286,6 @@ vector::const_ptr NUMA_vector::shallow_copy() const
 {
 	// TODO
 	assert(0);
-}
-
-std::vector<size_t> NUMA_vector::get_local_lengths() const
-{
-	std::vector<size_t> ret(data.size());
-	size_t last_range_id = get_length() >> range_size_log;
-	size_t last_range_size = get_length() & range_mask;
-	auto phy_loc = map2data(last_range_id << range_size_log);
-	ret[phy_loc.first] = phy_loc.second + last_range_size;
-	size_t range_off = last_range_id << range_size_log;
-	for (size_t i = 0; i < data.size() - 1 && range_off >= range_size; i++) {
-		range_off -= range_size;
-		phy_loc = map2data(range_off);
-		assert(ret[phy_loc.first] == 0);
-		ret[phy_loc.first] = phy_loc.second + range_size;
-	}
-	return ret;
 }
 
 }

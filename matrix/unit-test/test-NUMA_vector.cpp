@@ -12,15 +12,16 @@ void test_mapping()
 {
 	NUMA_vector::ptr vec = NUMA_vector::create((random() % num_eles) + num_eles,
 			num_nodes, get_scalar_type<long>());
-	std::vector<size_t> lens = vec->get_local_lengths();
+	std::vector<size_t> lens = vec->get_mapper().cal_local_lengths(
+			vec->get_length());
 	size_t tot_len = 0;
 	for (size_t i = 0; i < lens.size(); i++)
 		tot_len += lens[i];
 	assert(tot_len == vec->get_length());
 
 	for (size_t i = 0; i < vec->get_length(); i++) {
-		std::pair<int, size_t> phy_loc = vec->map2data(i);
-		size_t loc = vec->map2logical(phy_loc.first, phy_loc.second);
+		std::pair<int, size_t> phy_loc = vec->get_mapper().map2physical(i);
+		size_t loc = vec->get_mapper().map2logical(phy_loc.first, phy_loc.second);
 		assert(loc == i);
 	}
 }
