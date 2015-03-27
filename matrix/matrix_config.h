@@ -145,6 +145,14 @@ public:
 		hilbert_order = hilbert;
 	}
 
+	void set_num_threads(int nthreads) {
+		this->num_threads = nthreads;
+	}
+
+	void set_num_nodes(int num_nodes) {
+		this->num_nodes = num_nodes;
+	}
+
 	int get_num_nodes() const {
 		return num_nodes;
 	}

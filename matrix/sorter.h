@@ -20,6 +20,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #if defined(_OPENMP)
 #include <parallel/algorithm>
 #else
@@ -37,6 +38,8 @@ public:
 			bool decreasing) const = 0;
 	virtual void sort(char *data, size_t num, bool decreasing) const = 0;
 	virtual void serial_sort(char *data, size_t num, bool decreasing) const = 0;
+	virtual void merge(std::vector<std::pair<char *, char *> > &arrs,
+			char *output, size_t out_num) const = 0;
 };
 
 template<class T>
@@ -59,6 +62,8 @@ public:
 			bool decreasing) const;
 	virtual void sort(char *data, size_t num, bool decreasing) const;
 	virtual void serial_sort(char *data, size_t num, bool decreasing) const;
+	virtual void merge(std::vector<std::pair<char *, char *> > &arrs,
+			char *output, size_t out_num) const;
 };
 
 template<class T>
@@ -147,6 +152,18 @@ void type_sorter<T>::serial_sort(char *data1, size_t num, bool decreasing) const
 		std::sort(start, end, entry_greater);
 	else
 		std::sort(start, end, entry_less);
+}
+
+template<class T>
+void type_sorter<T>::merge(std::vector<std::pair<char *, char *> > &raw_arrs,
+		char *output, size_t out_num) const
+{
+	std::vector<std::pair<T *, T *> > arrs(raw_arrs.size());
+	for (size_t i = 0; i < arrs.size(); i++)
+		arrs[i] = std::pair<T *, T *>((T *) raw_arrs[i].first,
+				(T *) raw_arrs[i].second);
+	__gnu_parallel::multiway_merge(arrs.begin(), arrs.end(), (T *) output,
+			out_num, entry_less);
 }
 
 }

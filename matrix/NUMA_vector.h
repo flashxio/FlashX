@@ -53,20 +53,6 @@ class NUMA_vector: public vector
 	std::vector<detail::raw_data_array> data;
 	const scalar_type &type;
 
-	/*
-	 * This function is to map the linear index in the vector to the physical
-	 * location of the data. This function is a little expensive if it's
-	 * invoked for every element.
-	 */
-	std::pair<int, size_t> map2data(size_t idx) const {
-		size_t tmp_idx = idx >> range_size_log;
-		size_t range_idx = idx & range_mask;
-		int node_id = tmp_idx & numa_mask;
-		tmp_idx = tmp_idx >> numa_log;
-		return std::pair<int, size_t>(node_id,
-				(tmp_idx << range_size_log) + range_idx);
-	}
-
 	NUMA_vector(size_t length, size_t num_nodes, const scalar_type &type);
 public:
 	typedef std::shared_ptr<NUMA_vector> ptr;
@@ -104,11 +90,22 @@ public:
 
 	virtual void reset_data();
 
+	size_t get_range_size() const {
+		return range_size;
+	}
+
+	bool is_sub_vec() const;
+
 	/*
 	 * Get a subarray in [start, end), which must be in the same range.
 	 */
 	const char *get_sub_arr(off_t start, off_t end) const;
 	char *get_sub_arr(off_t start, off_t end);
+
+	/*
+	 * This copies a piece of contiguous memory to the NUMA vector.
+	 */
+	void copy_from(const char *buf, size_t num_bytes);
 
 	size_t get_num_nodes() const {
 		return data.size();
@@ -135,6 +132,42 @@ public:
 	void set(off_t idx, T v) {
 		*(T*) get(idx) = v;
 	}
+
+	/*
+	 * This function maps the logical location in the vector to the physical
+	 * location of the data. This function is a little expensive if it's
+	 * invoked for every element.
+	 */
+	std::pair<int, size_t> map2data(size_t idx) const {
+		size_t tmp_idx = idx >> range_size_log;
+		size_t range_idx = idx & range_mask;
+		int node_id = tmp_idx & numa_mask;
+		tmp_idx = tmp_idx >> numa_log;
+		return std::pair<int, size_t>(node_id,
+				(tmp_idx << range_size_log) + range_idx);
+	}
+
+	/*
+	 * This method maps the offset in a raw array to the logical location
+	 * in the vector.
+	 */
+	size_t map2logical(int node_id, size_t local_off) const {
+		size_t off_in_range = local_off & range_mask;
+		size_t range_id = local_off >> range_size_log;
+		// The number of elements in the previous ranges on all NUMA nodes.
+		return range_id * range_size * data.size()
+			// The number of elements in the same range but on the NUMA nodes
+			// in front of the current node.
+			+ range_size * node_id
+			// The number of elements in this range on the same NUMA node.
+			+ off_in_range;
+	}
+
+	/*
+	 * This method calculates the number of elements stored in each local
+	 * array.
+	 */
+	std::vector<size_t> get_local_lengths() const;
 };
 
 }

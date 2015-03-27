@@ -24,7 +24,7 @@ LDFLAGS += -lstxxl -lnuma -lz -laio
 
 all: test_io_gen test-mem_matrix test-EM_vector test-EM_matrix	\
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
-	test-hilbert
+	test-hilbert test-NUMA_vector test-sorter
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -34,6 +34,9 @@ test-mem_matrix: test-mem_matrix.o ../libFMatrix.a
 
 test-mem_vector: test-mem_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector test-mem_vector.o $(LDFLAGS)
+
+test-NUMA_vector: test-NUMA_vector.o ../libFMatrix.a
+	$(CXX) -o test-NUMA_vector test-NUMA_vector.o $(LDFLAGS)
 
 test-mem_vector_vector: test-mem_vector_vector.o ../libFMatrix.a
 	$(CXX) -o test-mem_vector_vector test-mem_vector_vector.o $(LDFLAGS)
@@ -53,6 +56,9 @@ test-sparse_matrix: test-sparse_matrix.o ../libFMatrix.a
 test-hilbert: test-hilbert.o ../libFMatrix.a
 	$(CXX) -o test-hilbert test-hilbert.o $(LDFLAGS)
 
+test-sorter: test-sorter.o ../libFMatrix.a
+	$(CXX) -o test-sorter test-sorter.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -60,11 +66,13 @@ clean:
 	rm -f test_io_gen
 	rm -f test-mem_matrix
 	rm -f test-mem_vector
+	rm -f test-NUMA_vector
 	rm -f test-mem_vector_vector
 	rm -f test-data_frame
 	rm -f test-EM_vector
 	rm -f test-EM_matrix
 	rm -f test-sparse_matrix
 	rm -f test-hilbert
+	rm -f test-sorter
 
 -include $(DEPS) 

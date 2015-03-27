@@ -14,6 +14,10 @@ echo "unit test on in-memory vector of vectors"
 ../unit-test/test-mem_vector_vector
 echo "unit test on sparse matrix"
 ../unit-test/test-sparse_matrix
+echo "unit test on NUMA vector"
+../unit-test/test-NUMA_vector
+echo "unit test on sorter"
+../unit-test/test-sorter
 
 rm -f wiki-Vote.txt.gz
 wget http://snap.stanford.edu/data/wiki-Vote.txt.gz
