@@ -47,6 +47,7 @@ public:
 
 raw_data_array::raw_data_array(size_t num_bytes, int node_id)
 {
+	this->node_id = node_id;
 	this->num_bytes = num_bytes;
 	void *addr = numa_alloc_onnode(num_bytes, node_id);
 	data = std::shared_ptr<char>((char *) addr, deleter(num_bytes));
