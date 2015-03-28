@@ -36,6 +36,13 @@ NUMA_row_tall_dense_matrix::NUMA_row_tall_dense_matrix(size_t nrow, size_t ncol,
 				local_lens[node_id] * ncol * get_entry_size(), node_id);
 }
 
+char *NUMA_row_tall_dense_matrix::get_row(off_t row_idx)
+{
+	auto phy_loc = mapper.map2physical(row_idx);
+	return data[phy_loc.first].get_raw()
+		+ phy_loc.second * get_num_cols() * get_entry_size();
+}
+
 const char *NUMA_row_tall_dense_matrix::get_row(off_t row_idx) const
 {
 	auto phy_loc = mapper.map2physical(row_idx);

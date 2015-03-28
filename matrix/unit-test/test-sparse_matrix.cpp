@@ -8,6 +8,8 @@ using namespace fm;
 
 typedef std::pair<fg::vertex_id_t, fg::vertex_id_t> edge_t;
 
+int num_nodes = 1;
+
 struct hash_edge
 {
 	size_t operator()(const edge_t &e) const {
@@ -37,9 +39,9 @@ data_frame::ptr create_rand_el()
 		edges.insert(e);
 	}
 	printf("There are %ld edges\n", edges.size());
-	NUMA_vector::ptr sources = NUMA_vector::create(edges.size(),
+	mem_vector::ptr sources = mem_vector::create(edges.size(),
 			get_scalar_type<fg::vertex_id_t>());
-	NUMA_vector::ptr dests = NUMA_vector::create(edges.size(),
+	mem_vector::ptr dests = mem_vector::create(edges.size(),
 			get_scalar_type<fg::vertex_id_t>());
 	size_t idx = 0;
 	BOOST_FOREACH(edge_t e, edges) {
@@ -89,25 +91,27 @@ void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	size_t num_rows = idx->get_header().get_num_rows();
 	printf("test_spmm: the sparse matrix has %ld rows and %ld cols\n",
 			num_rows, num_cols);
-	type_mem_dense_matrix<int>::ptr in_mat
-		= type_mem_dense_matrix<int>::create(num_cols, 10, matrix_layout_t::L_ROW);
+	NUMA_row_tall_dense_matrix::ptr in_mat
+		= NUMA_row_tall_dense_matrix::create(num_cols, 10, num_nodes,
+				get_scalar_type<int>());
 	int val = 0;
 	for (size_t i = 0; i < in_mat->get_num_rows(); i++)
 		for (size_t j = 0; j < in_mat->get_num_cols(); j++)
 			in_mat->set(i, j, val++);
 	sparse_matrix::ptr spm = sparse_matrix::create(idx, mat);
 
-	type_mem_dense_matrix<int>::ptr out1 = type_mem_dense_matrix<int>::create(
-			mem_dense_matrix::cast(spm->multiply<int>(in_mat->get_matrix())));
-	mem_col_dense_matrix::ptr in_col_mat
-		= mem_row_dense_matrix::cast(in_mat->get_matrix())->get_col_store();
-	type_mem_dense_matrix<int>::ptr out2 = type_mem_dense_matrix<int>::create(
-			mem_dense_matrix::cast(spm->multiply<int>(in_col_mat)));
-	assert(out1->get_num_rows() * out1->get_num_cols()
-			== out2->get_num_rows() * out2->get_num_cols());
-	for (size_t i = 0; i < out1->get_num_rows(); i++)
-		for (size_t j = 0; j < out1->get_num_cols(); j++)
-			assert(out1->get(i, j) == out2->get(i, j));
+	NUMA_row_tall_dense_matrix::ptr out1 = NUMA_row_tall_dense_matrix::cast(
+			spm->multiply<int>(in_mat));
+
+	for (size_t i = 0; i < in_mat->get_num_cols(); i++) {
+		NUMA_vector::ptr in_vec = NUMA_vector::create(num_cols, num_nodes,
+				get_scalar_type<int>());
+		for (size_t j = 0; j < num_rows; j++)
+			in_vec->set<int>(j, in_mat->get<int>(j, i));
+		NUMA_vector::ptr out_vec = spm->multiply<int>(in_vec);
+		for (size_t j = 0; j < num_rows; j++)
+			assert(out_vec->get<int>(j) == out1->get<int>(j, i));
+	}
 }
 
 int main()

@@ -64,8 +64,15 @@ public:
 	}
 
 	const char *get_row(off_t row_idx) const;
+	char *get_row(off_t row_idx);
 	const char *get_rows(off_t row_start, off_t row_end) const;
 	char *get_rows(off_t row_start, off_t row_end);
+
+	template<class T>
+	void set(size_t row_idx, size_t col_idx, T val) {
+		char *row = get_row(row_idx);
+		*(T *) (row + col_idx * get_entry_size()) = val;
+	}
 
 	template<class T>
 	T get(size_t row_idx, size_t col_idx) const {
