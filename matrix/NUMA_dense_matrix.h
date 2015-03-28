@@ -50,6 +50,15 @@ public:
 		return ptr(new NUMA_row_tall_dense_matrix(nrow, ncol, num_nodes, type));
 	}
 
+	static ptr cast(dense_matrix::ptr mat) {
+		if (!mat->is_in_mem()) {
+			BOOST_LOG_TRIVIAL(error) << "the matrix isn't in memory";
+			return ptr();
+		}
+		// TODO how do we make sure it's a NUMA matrix?
+		return std::static_pointer_cast<NUMA_row_tall_dense_matrix>(mat);
+	}
+
 	size_t get_num_nodes() const {
 		return data.size();
 	}

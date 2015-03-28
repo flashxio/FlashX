@@ -610,15 +610,13 @@ public:
 		}
 
 		if (in->store_layout() == matrix_layout_t::L_ROW) {
-			// TODO how are we going to tell the difference between mem_dense_matrix
-			// and NUMA dense matrix.
-			const NUMA_row_tall_dense_matrix &in_mat
-				= (const NUMA_row_tall_dense_matrix &) *in;
+			NUMA_row_tall_dense_matrix::ptr in_mat
+				= NUMA_row_tall_dense_matrix::cast(in);
 			NUMA_row_tall_dense_matrix::ptr ret = NUMA_row_tall_dense_matrix::create(
-					get_num_rows(), in->get_num_cols(), in_mat.get_num_nodes(),
+					get_num_rows(), in->get_num_cols(), in_mat->get_num_nodes(),
 					get_scalar_type<T>());
 			ret->reset_data();
-			multiply_matrix<T>(in_mat, *ret);
+			multiply_matrix<T>(*in_mat, *ret);
 			return ret;
 		}
 		else {
