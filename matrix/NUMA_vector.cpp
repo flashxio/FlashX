@@ -50,8 +50,7 @@ NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
 
 void NUMA_vector::reset_data()
 {
-	for (size_t i = 0; i < data.size(); i++)
-		data[i].reset_data();
+	reset_arrays(data);
 }
 
 const char *NUMA_vector::get_sub_arr(off_t start, off_t end) const
@@ -129,41 +128,26 @@ public:
 };
 
 /*
- * This task is to copy some data in the from buffer to the to buffer.
+ * This task is to copy some data in the from buffer to the right ranges.
  */
-class copy_task: public thread_task
+class copy_operate: public detail::set_range_operate
 {
 	const char *from_buf;
-	char *to_buf;
-	off_t to_off;
-	size_t to_size;
-	int node_id;
-	const NUMA_vector &vec;
+	size_t entry_size;
+	const detail::NUMA_mapper &mapper;
 public:
-	// `to_off' and `to_size' are in the number of bytes.
-	copy_task(const char *from_buf, char *to_buf, off_t to_off, size_t to_size,
-			int node_id, const NUMA_vector &_vec): vec(_vec) {
+	copy_operate(const detail::NUMA_mapper &_mapper, size_t entry_size,
+			const char *from_buf): mapper(_mapper) {
+		this->entry_size = entry_size;
 		this->from_buf = from_buf;
-		this->to_buf = to_buf;
-		this->to_off = to_off;
-		this->to_size = to_size;
-		this->node_id = node_id;
 	}
 
-	void run() {
-		off_t to_start_eles = to_off / vec.get_entry_size();
-		size_t to_num_eles = to_size / vec.get_entry_size();
-		for (size_t rel_off = 0; rel_off < to_num_eles;
-				rel_off += vec.get_mapper().get_range_size()) {
-			size_t from_off = vec.get_mapper().map2logical(node_id,
-					to_start_eles + rel_off);
-			size_t num_eles = std::min(to_num_eles - rel_off,
-					vec.get_mapper().get_range_size());
-			assert(from_off + num_eles <= vec.get_length());
-			memcpy(to_buf + (to_start_eles + rel_off) * vec.get_entry_size(),
-					from_buf + from_off * vec.get_entry_size(),
-					num_eles * vec.get_entry_size());
-		}
+	virtual void set(char *buf, size_t size, off_t local_off,
+			int node_id) const {
+		assert(size % entry_size == 0);
+		assert(local_off % entry_size == 0);
+		size_t from_off = mapper.map2logical(node_id, local_off / entry_size);
+		memcpy(buf, from_buf + from_off * entry_size, size);
 	}
 };
 
@@ -220,33 +204,8 @@ void NUMA_vector::copy_from(const char *buf, size_t num_bytes)
 	assert(num_bytes % get_entry_size() == 0);
 	assert(num_bytes / get_entry_size() == get_length());
 
-	// The number of threads per NUMA node.
-	size_t nthreads_per_node
-		= matrix_conf.get_num_threads() / matrix_conf.get_num_nodes();
-	detail::mem_thread_pool::ptr mem_threads
-		= detail::mem_thread_pool::get_global_mem_threads();
-	std::vector<size_t> local_lens = mapper.cal_local_lengths(get_length());
-	for (size_t i = 0; i < data.size(); i++) {
-		size_t num_local_bytes = local_lens[i] * get_entry_size();
-		// The number of ranges in array of the node.
-		size_t nranges = ceil_divide(local_lens[i], mapper.get_range_size());
-		// The number of ranges a thread should get.
-		size_t nranges_per_thread = ceil_divide(nranges, nthreads_per_node);
-		// The number of bytes a thread should get.
-		size_t nbytes_per_thread
-			= nranges_per_thread * mapper.get_range_size() * get_entry_size();
-		for (size_t j = 0; j < nthreads_per_node; j++) {
-			if (num_local_bytes <= nbytes_per_thread * j)
-				continue;
-			// The number of bytes a thread actually gets.
-			size_t local_nbytes = std::min(nbytes_per_thread,
-					num_local_bytes - nbytes_per_thread * j);
-			mem_threads->process_task(data[i].get_node_id(),
-					new copy_task(buf, data[i].get_raw(), nbytes_per_thread * j,
-						local_nbytes, data[i].get_node_id(), *this));
-		}
-	}
-	mem_threads->wait4complete();
+	copy_operate cp(mapper, get_entry_size(), buf);
+	set_array_ranges(mapper, get_length(), get_entry_size(), cp, data);
 }
 
 vector::ptr NUMA_vector::sort_with_index()
