@@ -3,8 +3,8 @@
 #include "mem_worker_thread.h"
 
 const size_t num_eles = 1024 * 1024 * 10;
-const size_t num_nodes = 4;
-const size_t nthreads = 32;
+size_t num_nodes = 1;
+size_t nthreads = 8;
 
 using namespace fm;
 
@@ -52,10 +52,15 @@ void test_sort()
 		assert(raw_arr[i] == vec->get<long>(i));
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+	if (argc >= 3) {
+		num_nodes = atoi(argv[1]);
+		nthreads = atoi(argv[2]);
+	}
+
 	matrix_conf.set_num_nodes(num_nodes);
-	matrix_conf.set_num_threads(32);
+	matrix_conf.set_num_threads(nthreads);
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 			nthreads / num_nodes);
 	test_mapping();

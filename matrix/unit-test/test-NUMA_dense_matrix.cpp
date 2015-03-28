@@ -3,8 +3,8 @@
 
 using namespace fm;
 
-const int num_nodes = 4;
-const int num_threads = 32;
+int num_nodes = 1;
+int num_threads = 8;
 
 class set_row_operate: public type_set_operate<long>
 {
@@ -42,8 +42,13 @@ void test_init()
 	}
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+	if (argc >= 3) {
+		num_nodes = atoi(argv[1]);
+		num_threads = atoi(argv[2]);
+	}
+
 	matrix_conf.set_num_nodes(num_nodes);
 	matrix_conf.set_num_threads(num_threads);
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
