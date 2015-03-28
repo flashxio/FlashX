@@ -27,6 +27,7 @@
 #include "io_interface.h"
 #include "mem_vector.h"
 #include "NUMA_vector.h"
+#include "NUMA_dense_matrix.h"
 
 namespace fm
 {
@@ -160,25 +161,25 @@ public:
 template<class T>
 class block_spmm_task: public block_compute_task
 {
-	const mem_row_dense_matrix &input;
-	mem_row_dense_matrix &output;
+	const NUMA_row_tall_dense_matrix &input;
+	NUMA_row_tall_dense_matrix &output;
 
 	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
-			size_t start_row_idx, size_t start_col_idx) {
-		size_t row_idx = start_row_idx + it.get_rel_row_idx();
+			const T *in_rows, T *out_rows) {
+		size_t row_idx = it.get_rel_row_idx();
 		size_t row_width = output.get_num_cols();
-		T *dest_row = (T *) output.get_row(row_idx);
+		T *dest_row = out_rows + row_width * row_idx;
 		while (it.has_next()) {
-			size_t col_idx = start_col_idx + it.next();
-			const T *src_row = (const T *) input.get_row(col_idx);
+			size_t col_idx = it.next();
+			const T *src_row = in_rows + row_width * col_idx;
 			for (size_t j = 0; j < row_width; j++)
 				dest_row[j] += src_row[j];
 		}
 		return it;
 	}
 public:
-	block_spmm_task(const mem_row_dense_matrix &_input,
-			mem_row_dense_matrix &_output, const matrix_io &_io,
+	block_spmm_task(const NUMA_row_tall_dense_matrix &_input,
+			NUMA_row_tall_dense_matrix &_output, const matrix_io &_io,
 			const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
 				_io, mat, order), input(_input), output(_output) {
 	}
@@ -188,9 +189,13 @@ public:
 			= block.get_block_col_idx() * block_size.get_num_cols();
 		size_t start_row_idx
 			= block.get_block_row_idx() * block_size.get_num_rows();
+		const char *in_rows = input.get_rows(start_col_idx,
+				start_col_idx + block_size.get_num_cols());
+		char *out_rows = output.get_rows(start_row_idx,
+				start_row_idx + block_size.get_num_rows());
 		rp_edge_iterator it = block.get_first_edge_iterator();
 		while (!block.is_block_end(it)) {
-			it = run_on_row_part(it, start_row_idx, start_col_idx);
+			it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
 			it = block.get_next_edge_iterator(it);
 		}
 	}
@@ -297,16 +302,16 @@ public:
 template<class T>
 class b2d_spmm_creator: public task_creator
 {
-	const mem_row_dense_matrix &input;
-	mem_row_dense_matrix &output;
+	const NUMA_row_tall_dense_matrix &input;
+	NUMA_row_tall_dense_matrix &output;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
-	b2d_spmm_creator(const mem_row_dense_matrix &_input,
-			mem_row_dense_matrix &_output, const sparse_matrix &_mat);
+	b2d_spmm_creator(const NUMA_row_tall_dense_matrix &_input,
+			NUMA_row_tall_dense_matrix &_output, const sparse_matrix &_mat);
 public:
-	static task_creator::ptr create(const mem_row_dense_matrix &_input,
-			mem_row_dense_matrix &_output, const sparse_matrix &mat) {
+	static task_creator::ptr create(const NUMA_row_tall_dense_matrix &_input,
+			NUMA_row_tall_dense_matrix &_output, const sparse_matrix &mat) {
 		if (_input.get_type() != get_scalar_type<T>()
 				|| _output.get_type() != get_scalar_type<T>()) {
 			BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
@@ -370,15 +375,15 @@ class sparse_matrix
 	}
 
 	template<class T>
-	task_creator::ptr get_multiply_creator(const mem_row_dense_matrix &in,
-			mem_row_dense_matrix &out) const {
+	task_creator::ptr get_multiply_creator(const NUMA_row_tall_dense_matrix &in,
+			NUMA_row_tall_dense_matrix &out) const {
 		assert(!is_fg);
 		return b2d_spmm_creator<T>::create(in, out, *this);
 	}
 
 	template<class T>
-	void multiply_matrix(const mem_row_dense_matrix &row_m,
-			mem_row_dense_matrix &ret) const {
+	void multiply_matrix(const NUMA_row_tall_dense_matrix &row_m,
+			NUMA_row_tall_dense_matrix &ret) const {
 		compute(get_multiply_creator<T>(row_m, ret),
 				cal_super_block_size(get_block_size(),
 					sizeof(T) * row_m.get_num_cols()));
@@ -569,8 +574,10 @@ public:
 				BOOST_LOG_TRIVIAL(error) << "wrong matrix layout for output matrix";
 				return false;
 			}
-			multiply_matrix<T>((const mem_row_dense_matrix &) in,
-					(mem_row_dense_matrix &) out);
+			// TODO how are we going to tell the difference between mem_dense_matrix
+			// and NUMA dense matrix.
+			multiply_matrix<T>((const NUMA_row_tall_dense_matrix &) in,
+					(NUMA_row_tall_dense_matrix &) out);
 			return true;
 		}
 		else {
@@ -603,10 +610,15 @@ public:
 		}
 
 		if (in->store_layout() == matrix_layout_t::L_ROW) {
-			mem_row_dense_matrix::ptr ret = mem_row_dense_matrix::create(
-					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
+			// TODO how are we going to tell the difference between mem_dense_matrix
+			// and NUMA dense matrix.
+			const NUMA_row_tall_dense_matrix &in_mat
+				= (const NUMA_row_tall_dense_matrix &) *in;
+			NUMA_row_tall_dense_matrix::ptr ret = NUMA_row_tall_dense_matrix::create(
+					get_num_rows(), in->get_num_cols(), in_mat.get_num_nodes(),
+					get_scalar_type<T>());
 			ret->reset_data();
-			multiply_matrix<T>((const mem_row_dense_matrix &) *in, *ret);
+			multiply_matrix<T>(in_mat, *ret);
 			return ret;
 		}
 		else {
@@ -633,8 +645,8 @@ b2d_spmv_creator<T>::b2d_spmv_creator(const NUMA_vector &_input,
 }
 
 template<class T>
-b2d_spmm_creator<T>::b2d_spmm_creator(const mem_row_dense_matrix &_input,
-		mem_row_dense_matrix &_output, const sparse_matrix &_mat): input(
+b2d_spmm_creator<T>::b2d_spmm_creator(const NUMA_row_tall_dense_matrix &_input,
+		NUMA_row_tall_dense_matrix &_output, const sparse_matrix &_mat): input(
 			_input), output(_output), mat(_mat)
 {
 	// We only handle the case the element size is 2^n.

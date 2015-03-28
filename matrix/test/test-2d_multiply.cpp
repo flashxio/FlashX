@@ -6,6 +6,7 @@
 #include "io_interface.h"
 #include "safs_file.h"
 #include "sparse_matrix.h"
+#include "NUMA_dense_matrix.h"
 #include "matrix/FG_sparse_matrix.h"
 
 using namespace fm;
@@ -82,24 +83,25 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 {
 	printf("test sparse matrix dense matrix multiplication\n");
 	struct timeval start, end;
-	type_mem_dense_matrix<double>::ptr in
-		= type_mem_dense_matrix<double>::create(mat->get_num_cols(),
-				mat_width, matrix_layout_t::L_ROW);
-	in->get_matrix()->set_data(mat_init_operate(in->get_num_rows(),
-				in->get_num_cols()));
+	NUMA_row_tall_dense_matrix::ptr in
+		= NUMA_row_tall_dense_matrix::create(mat->get_num_cols(),
+				mat_width, matrix_conf.get_num_nodes(),
+				get_scalar_type<double>());
+	in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
 
 	// Initialize the output matrix and allocate pages for it.
-	type_mem_dense_matrix<double>::ptr out
-		= type_mem_dense_matrix<double>::create(mat->get_num_rows(),
-				mat_width, matrix_layout_t::L_ROW);
-	out->get_matrix()->reset_data();
+	NUMA_row_tall_dense_matrix::ptr out
+		= NUMA_row_tall_dense_matrix::create(mat->get_num_rows(),
+				mat_width, matrix_conf.get_num_nodes(),
+				get_scalar_type<double>());
+	out->reset_data();
 
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())
 		ProfilerStart(matrix_conf.get_prof_file().c_str());
 #endif
 	gettimeofday(&start, NULL);
-	mat->multiply<double>(*in->get_matrix(), *out->get_matrix());
+	mat->multiply<double>(*in, *out);
 	gettimeofday(&end, NULL);
 #ifdef PROFILER
 	if (!matrix_conf.get_prof_file().empty())

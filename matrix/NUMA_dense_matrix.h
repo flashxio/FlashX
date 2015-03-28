@@ -50,7 +50,13 @@ public:
 		return ptr(new NUMA_row_tall_dense_matrix(nrow, ncol, num_nodes, type));
 	}
 
+	size_t get_num_nodes() const {
+		return data.size();
+	}
+
 	const char *get_row(off_t row_idx) const;
+	const char *get_rows(off_t row_start, off_t row_end) const;
+	char *get_rows(off_t row_start, off_t row_end);
 
 	template<class T>
 	T get(size_t row_idx, size_t col_idx) const {

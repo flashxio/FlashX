@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include <boost/format.hpp>
+
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
 
@@ -39,6 +41,29 @@ const char *NUMA_row_tall_dense_matrix::get_row(off_t row_idx) const
 	auto phy_loc = mapper.map2physical(row_idx);
 	return data[phy_loc.first].get_raw()
 		+ phy_loc.second * get_num_cols() * get_entry_size();
+}
+
+const char *NUMA_row_tall_dense_matrix::get_rows(off_t row_start,
+		off_t row_end) const
+{
+	if (mapper.get_logical_range_id(row_start)
+			!= mapper.get_logical_range_id(row_end - 1)) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"[%1%, %2%) isn't in the same range") % row_start % row_end;
+		return NULL;
+	}
+	return get_row(row_start);
+}
+
+char *NUMA_row_tall_dense_matrix::get_rows(off_t row_start, off_t row_end)
+{
+	if (mapper.get_logical_range_id(row_start)
+			!= mapper.get_logical_range_id(row_end - 1)) {
+		BOOST_LOG_TRIVIAL(error) << boost::format(
+				"[%1%, %2%) isn't in the same range") % row_start % row_end;
+		return NULL;
+	}
+	return (char *) get_row(row_start);
 }
 
 namespace
