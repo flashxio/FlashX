@@ -18,6 +18,8 @@ echo "unit test on NUMA vector"
 ../unit-test/test-NUMA_vector
 echo "unit test on sorter"
 ../unit-test/test-sorter
+echo "unit test on NUMA dense matrix"
+../unit-test/test-NUMA_dense_matrix
 
 rm -f wiki-Vote.txt.gz
 wget http://snap.stanford.edu/data/wiki-Vote.txt.gz
