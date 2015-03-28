@@ -184,16 +184,10 @@ void NUMA_vector::sort()
 	mem_threads->wait4complete();
 	assert(arrs.size() <= (size_t) matrix_conf.get_num_threads());
 
-	for (size_t i = 0; i < arrs.size(); i++) {
-		size_t len = ((long) (arrs[i].second - arrs[i].first)) / get_entry_size();
-		assert(get_type().get_sorter().is_sorted(arrs[i].first, len, false));
-	}
-
 	// Now we should merge the array parts together.
 	size_t tot_num_bytes = get_length() * get_entry_size();
 	std::unique_ptr<char[]> tmp(new char[tot_num_bytes]);
 	get_type().get_sorter().merge(arrs, tmp.get(), get_length());
-	assert(get_type().get_sorter().is_sorted(tmp.get(), get_length(), false));
 
 	// We need to copy the result back.
 	copy_from(tmp.get(), tot_num_bytes);
