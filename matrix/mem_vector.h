@@ -183,7 +183,7 @@ public:
 };
 
 template<class T>
-class seq_set_operate: public set_operate
+class seq_set_operate: public type_set_operate<T>
 {
 	long n;
 	T from;
@@ -195,19 +195,14 @@ public:
 		this->by = by;
 	}
 
-	virtual void set(void *raw_arr, size_t num_eles, off_t row_idx,
+	virtual void set(T *arr, size_t num_eles, off_t row_idx,
 			off_t col_idx) const {
-		T *arr = (T *) raw_arr;
 		// We are initializing a single-column matrix.
 		T v = from + row_idx * by;
 		for (size_t i = 0; i < num_eles; i++) {
 			arr[i] = v;
 			v += by;
 		}
-	}
-
-	virtual size_t entry_size() const {
-		return sizeof(T);
 	}
 };
 
@@ -236,7 +231,7 @@ vector::ptr create_vector<double>(double start, double end,
 		double stride);
 
 template<class EntryType>
-class set_const_operate: public set_operate
+class set_const_operate: public type_set_operate<EntryType>
 {
 	EntryType v;
 public:
@@ -244,15 +239,10 @@ public:
 		this->v = v;
 	}
 
-	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+	virtual void set(EntryType *arr, size_t num_eles, off_t row_idx,
 			off_t col_idx) const {
-		EntryType *ele_p = (EntryType *) arr;
 		for (size_t i = 0; i < num_eles; i++)
-			ele_p[i] = v;
-	}
-
-	virtual size_t entry_size() const {
-		return sizeof(EntryType);
+			arr[i] = v;
 	}
 };
 

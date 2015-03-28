@@ -461,7 +461,7 @@ class set_operate
 public:
 	virtual void set(void *arr, size_t num_eles, off_t row_idx,
 			off_t col_idx) const = 0;
-	virtual size_t entry_size() const = 0;
+	virtual const scalar_type &get_type() const = 0;
 };
 
 template<class T>
@@ -474,8 +474,9 @@ class type_set_operate: public set_operate
 public:
 	virtual void set(T *arr, size_t num_eles, off_t row_idx,
 			off_t col_idx) const = 0;
-	virtual size_t entry_size() const {
-		return sizeof(T);
+
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
 	}
 };
 
