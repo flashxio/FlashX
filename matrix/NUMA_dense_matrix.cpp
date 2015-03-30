@@ -101,6 +101,24 @@ public:
 	}
 };
 
+class set_col_operate: public set_operate
+{
+	const set_operate &op;
+	size_t col_idx;
+public:
+	set_col_operate(const set_operate &_op, size_t col_idx): op(_op) {
+		this->col_idx = col_idx;
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx, off_t) const {
+		op.set(arr, num_eles, row_idx, this->col_idx);
+	}
+
+	virtual const scalar_type &get_type() const {
+		return op.get_type();
+	}
+};
+
 }
 
 void NUMA_row_tall_dense_matrix::set_data(const set_operate &op)
@@ -118,6 +136,43 @@ dense_matrix::ptr NUMA_row_tall_dense_matrix::deep_copy() const
 		ret->data[i] = ret->data[i].deep_copy();
 	}
 	return dense_matrix::ptr(ret);
+}
+
+NUMA_col_tall_dense_matrix::NUMA_col_tall_dense_matrix(size_t nrow,
+		size_t ncol, int num_nodes, const scalar_type &type): dense_matrix(
+			nrow, ncol, type, true)
+{
+	data.resize(ncol);
+	for (size_t i = 0; i < ncol; i++)
+		data[i] = NUMA_vector::create(nrow, num_nodes, type);
+}
+
+void NUMA_col_tall_dense_matrix::set_data(const set_operate &op)
+{
+	for (size_t i = 0; i < data.size(); i++)
+		data[i]->set_data(set_col_operate(op, i));
+}
+
+dense_matrix::ptr NUMA_col_tall_dense_matrix::deep_copy() const
+{
+	NUMA_col_tall_dense_matrix *ret = new NUMA_col_tall_dense_matrix(*this);
+	for (size_t i = 0; i < ret->data.size(); i++)
+		ret->data[i] = NUMA_vector::cast(ret->data[i]->deep_copy());
+	return dense_matrix::ptr(ret);
+}
+
+dense_matrix::ptr NUMA_col_tall_dense_matrix::inner_prod(const dense_matrix &m,
+		const bulk_operate &left_op, const bulk_operate &right_op) const
+{
+	// TODO
+	assert(0);
+}
+
+dense_matrix::ptr NUMA_col_tall_dense_matrix::mapply2(const dense_matrix &m,
+		const bulk_operate &op) const
+{
+	// TODO
+	assert(0);
 }
 
 }
