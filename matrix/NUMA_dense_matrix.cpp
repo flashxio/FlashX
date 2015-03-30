@@ -110,4 +110,14 @@ void NUMA_row_tall_dense_matrix::set_data(const set_operate &op)
 	set_array_ranges(mapper, get_num_rows(), row_size, set_row, data);
 }
 
+dense_matrix::ptr NUMA_row_tall_dense_matrix::deep_copy() const
+{
+	NUMA_row_tall_dense_matrix *ret = new NUMA_row_tall_dense_matrix(*this);
+	for (size_t i = 0; i < ret->data.size(); i++) {
+		// TODO we should do this in parallel.
+		ret->data[i] = ret->data[i].deep_copy();
+	}
+	return dense_matrix::ptr(ret);
+}
+
 }

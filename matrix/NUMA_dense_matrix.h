@@ -40,6 +40,13 @@ class NUMA_row_tall_dense_matrix: public dense_matrix
 	detail::NUMA_mapper mapper;
 	std::vector<detail::raw_data_array> data;
 
+	// The copy constructor performs shallow copy.
+	NUMA_row_tall_dense_matrix(const NUMA_row_tall_dense_matrix &mat): dense_matrix(
+			mat.get_num_rows(), mat.get_num_cols(), mat.get_type(),
+			true), mapper(mat.get_num_nodes()) {
+		this->data = mat.data;
+	}
+
 	NUMA_row_tall_dense_matrix(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type);
 public:
@@ -100,10 +107,7 @@ public:
 		assert(0);
 	}
 
-	virtual dense_matrix::ptr deep_copy() const {
-		// TODO
-		assert(0);
-	}
+	virtual dense_matrix::ptr deep_copy() const;
 
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const {
 		BOOST_LOG_TRIVIAL(error) << "NUMA matrix doesn't support conv2";
