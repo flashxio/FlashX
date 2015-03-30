@@ -203,13 +203,17 @@ public:
 	 */
 	virtual const char *get_raw() const = 0;
 	/**
-	 * The size of the type.
+	 * The type.
 	 */
-	virtual size_t get_size() const = 0;
+	virtual const scalar_type &get_type() const = 0;
 	/**
 	 * Set the value of the scalar variable in the raw representation.
 	 */
 	virtual bool set_raw(const char *v, int size) = 0;
+
+	virtual size_t get_size() const {
+		return get_type().get_size();
+	}
 };
 
 template<class T>
@@ -221,8 +225,8 @@ public:
 		return (const char *) &v;
 	}
 
-	virtual size_t get_size() const {
-		return sizeof(T);
+	virtual const scalar_type &get_type() const {
+		return get_scalar_type<T>();
 	}
 
 	virtual bool set_raw(const char *v, int size) {
