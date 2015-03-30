@@ -99,6 +99,10 @@ public:
 	 * elements assigned to each NUMA node.
 	 */
 	std::vector<size_t> cal_local_lengths(size_t len) const;
+
+	bool operator!=(const NUMA_mapper &map) const {
+		return this->numa_log != map.numa_log;
+	}
 };
 
 }

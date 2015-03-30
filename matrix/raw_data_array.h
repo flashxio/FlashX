@@ -106,6 +106,10 @@ public:
 	int get_node_id() const {
 		return node_id;
 	}
+
+	raw_data_array deep_copy() const;
+
+	bool copy_from(const raw_data_array &arr);
 };
 
 class NUMA_mapper;

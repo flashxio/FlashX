@@ -36,6 +36,16 @@ T ceil_divide(T v1, T v2)
 	return ceil(((double) v1) / v2);
 }
 
+NUMA_vector::ptr NUMA_vector::cast(vector::ptr vec)
+{
+	if (!vec->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error) << "The vector isn't in memory";
+		return NUMA_vector::ptr();
+	}
+	// TODO How do I tell it's a NUMA vector?
+	return std::static_pointer_cast<NUMA_vector>(vec);
+}
+
 NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
 		const scalar_type &_type): vector(length, _type.get_size(),
 			true), mapper(num_nodes), type(_type)
@@ -51,6 +61,38 @@ NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
 void NUMA_vector::reset_data()
 {
 	reset_arrays(data);
+}
+
+namespace
+{
+
+class set_ele_operate: public detail::set_range_operate
+{
+	const set_operate &op;
+	const detail::NUMA_mapper &mapper;
+	size_t entry_size;
+public:
+	set_ele_operate(const set_operate &_op, const detail::NUMA_mapper &_mapper,
+			size_t entry_size): op(_op), mapper(_mapper) {
+		this->entry_size = entry_size;
+	}
+
+	void set(char *buf, size_t size, off_t local_off, int node_id) const {
+		assert(local_off % entry_size == 0);
+		assert(size % entry_size == 0);
+		size_t num_eles = size / entry_size;
+		size_t local_ele_idx = local_off / entry_size;
+		size_t global_ele_idx = mapper.map2logical(node_id, local_ele_idx);
+		op.set(buf, num_eles, global_ele_idx, 0);
+	}
+};
+
+}
+
+void NUMA_vector::set_data(const set_operate &op)
+{
+	set_ele_operate set_ele(op, mapper, get_entry_size());
+	set_array_ranges(mapper, get_length(), get_entry_size(), set_ele, data);
 }
 
 const char *NUMA_vector::get_sub_arr(off_t start, off_t end) const
@@ -202,6 +244,26 @@ void NUMA_vector::copy_from(const char *buf, size_t num_bytes)
 	set_array_ranges(mapper, get_length(), get_entry_size(), cp, data);
 }
 
+bool NUMA_vector::copy_from(const NUMA_vector &vec)
+{
+	if (type != vec.type) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't copy from a vector of different type";
+		return false;
+	}
+
+	if (mapper != vec.mapper) {
+		BOOST_LOG_TRIVIAL(error) << "The vector has different NUMA setup";
+		return false;
+	}
+
+	// TODO we should do it in parallel.
+	for (size_t i = 0; i < data.size(); i++)
+		if (data[i].copy_from(vec.data[i]))
+			return false;
+	return true;
+}
+
 vector::ptr NUMA_vector::sort_with_index()
 {
 	assert(!is_sub_vec());
@@ -225,8 +287,10 @@ data_frame::ptr NUMA_vector::groupby(const gr_apply_operate<mem_vector> &op,
 
 vector::ptr NUMA_vector::deep_copy() const
 {
-	// TODO
-	assert(0);
+	NUMA_vector *ret = new NUMA_vector(*this);
+	for (size_t i = 0; i < data.size(); i++)
+		ret->data[i] = data[i].deep_copy();
+	return vector::ptr(ret);
 }
 
 vector::ptr NUMA_vector::shallow_copy()
@@ -239,6 +303,43 @@ vector::const_ptr NUMA_vector::shallow_copy() const
 {
 	// TODO
 	assert(0);
+}
+
+bool NUMA_vector::dot_prod(const NUMA_vector &vec, scalar_variable &res) const
+{
+	if (get_type() != vec.get_type() || get_type() != res.get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The type isn't compatible";
+		return false;
+	}
+
+	if (mapper != vec.mapper) {
+		BOOST_LOG_TRIVIAL(error) << "The two vectors have different NUMA mappers";
+		return false;
+	}
+
+	if (get_length() != vec.get_length()) {
+		BOOST_LOG_TRIVIAL(error) << "The two vectors have different lengths";
+		return false;
+	}
+
+	const bulk_operate &multiply = get_type().get_basic_ops().get_multiply();
+	const bulk_operate &add = get_type().get_basic_ops().get_add();
+	std::vector<size_t> local_lens = mapper.cal_local_lengths(get_length());
+	std::unique_ptr<char[]> agg_buf(new char[data.size() * get_entry_size()]);
+	// TODO this is a very inefficient implementation.
+	for (size_t i = 0; i < data.size(); i++) {
+		std::unique_ptr<char[]> multiply_buf(
+				new char[local_lens[i] * get_entry_size()]);
+		multiply.runAA(local_lens[i], data[i].get_raw(), vec.data[i].get_raw(),
+				multiply_buf.get());
+		add.runA(local_lens[i], multiply_buf.get(),
+				agg_buf.get() + get_entry_size() * i);
+	}
+	char final_agg[get_entry_size()];
+	add.runA(data.size(), agg_buf.get(), final_agg);
+	res.set_raw(final_agg, get_entry_size());
+
+	return true;
 }
 
 }

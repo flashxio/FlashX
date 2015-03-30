@@ -48,6 +48,12 @@ class NUMA_vector: public vector
 	std::vector<detail::raw_data_array> data;
 	const scalar_type &type;
 
+	// The copy constructor performs shallow copy.
+	NUMA_vector(const NUMA_vector &vec): vector(vec.get_length(),
+			vec.get_entry_size(), true), mapper(vec.mapper), type(vec.type) {
+		data = vec.data;
+	}
+
 	NUMA_vector(size_t length, size_t num_nodes, const scalar_type &type);
 public:
 	typedef std::shared_ptr<NUMA_vector> ptr;
@@ -59,6 +65,8 @@ public:
 	static ptr create(size_t length, size_t num_nodes, const scalar_type &type) {
 		return ptr(new NUMA_vector(length, num_nodes, type));
 	}
+
+	static ptr cast(vector::ptr vec);
 
 	virtual const scalar_type &get_type() const {
 		return type;
@@ -78,12 +86,14 @@ public:
 	// It should return data frame instead of vector.
 	virtual std::shared_ptr<data_frame> groupby(
 			const gr_apply_operate<mem_vector> &op, bool with_val) const;
+	virtual bool dot_prod(const NUMA_vector &vec, scalar_variable &res) const;
 
 	virtual vector::ptr deep_copy() const;
 	virtual vector::ptr shallow_copy();
 	virtual vector::const_ptr shallow_copy() const;
 
 	virtual void reset_data();
+	void set_data(const set_operate &op);
 
 	bool is_sub_vec() const;
 
@@ -97,6 +107,7 @@ public:
 	 * This copies a piece of contiguous memory to the NUMA vector.
 	 */
 	void copy_from(const char *buf, size_t num_bytes);
+	bool copy_from(const NUMA_vector &vec);
 
 	size_t get_num_nodes() const {
 		return data.size();
