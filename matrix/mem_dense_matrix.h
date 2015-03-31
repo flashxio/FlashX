@@ -63,6 +63,16 @@ public:
 
 	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
+
+	template<class T>
+	T get(size_t row, size_t col) const {
+		return *(const T *) get(row, col);
+	}
+
+	template<class T>
+	void set(size_t row, size_t col, T val) {
+		*(T *) get(row, col) = val;
+	}
 };
 
 class mem_row_dense_matrix;
