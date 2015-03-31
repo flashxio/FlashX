@@ -65,7 +65,7 @@ void verify_result(const I_mem_dense_matrix &m1, const I_mem_dense_matrix &m2)
 			assert(m1.get(i, j) == m2.get(i, j));
 }
 
-void test1()
+void test_multiply_col()
 {
 	printf("Test multiplication on tall matrix stored column wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
@@ -83,7 +83,21 @@ void test1()
 	verify_result(*res1, *correct);
 }
 
-void test2()
+void test_agg_col()
+{
+	printf("Test aggregation on tall matrix stored column wise\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	const bulk_operate &op
+		= m1->get_matrix()->get_type().get_basic_ops().get_add();
+	scalar_variable::ptr res = m1->get_matrix()->aggregate(op);
+	assert(res->get_type() == m1->get_matrix()->get_type());
+	int sum = *(int *) res->get_raw();
+	int num_eles = m1->get_num_rows() * m1->get_num_cols();
+	assert(sum == (num_eles - 1) * num_eles / 2);
+}
+
+void test_multiply_wide_row()
 {
 	printf("Test multiplication on wide matrix stored row wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(10, 100,
@@ -101,7 +115,7 @@ void test2()
 	verify_result(*res1, *correct);
 }
 
-void test3()
+void test_multiply_tall_row()
 {
 	printf("Test multiplication on tall matrix stored row wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
@@ -119,7 +133,21 @@ void test3()
 	verify_result(*res1, *correct);
 }
 
-void test4()
+void test_agg_row()
+{
+	printf("Test aggregation on tall matrix stored row wise\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_ROW, set_row_operate(10));
+	const bulk_operate &op
+		= m1->get_matrix()->get_type().get_basic_ops().get_add();
+	scalar_variable::ptr res = m1->get_matrix()->aggregate(op);
+	assert(res->get_type() == m1->get_matrix()->get_type());
+	int sum = *(int *) res->get_raw();
+	int num_eles = m1->get_num_rows() * m1->get_num_cols();
+	assert(sum == (num_eles - 1) * num_eles / 2);
+}
+
+void test_submatrix()
 {
 	printf("test submatrix of a column-wise matrix\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
@@ -142,7 +170,59 @@ void test4()
 				sub_m->get_entry_size() * sub_m->get_num_rows()) == 0);
 }
 
-void test5()
+void test_agg_sub_col()
+{
+	printf("Test aggregation on a column-wise submatrix\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	mem_col_dense_matrix::ptr col_m
+		= mem_col_dense_matrix::cast(m1->get_matrix());
+	std::vector<off_t> idxs(3);
+	idxs[0] = 1;
+	idxs[1] = 5;
+	idxs[2] = 3;
+	mem_col_dense_matrix::ptr sub_m
+		= mem_col_dense_matrix::cast(col_m->get_cols(idxs));
+	assert(sub_m != NULL);
+
+	const bulk_operate &op = sub_m->get_type().get_basic_ops().get_add();
+	scalar_variable::ptr res = sub_m->aggregate(op);
+	assert(res->get_type() == sub_m->get_type());
+	size_t sum = *(int *) res->get_raw();
+	size_t ncol = m1->get_num_cols();
+	size_t nrow = m1->get_num_rows();
+	size_t sub_ncol = sub_m->get_num_cols();
+	size_t expected = sub_ncol * ncol * (nrow - 1) * nrow / 2;
+	for (size_t i = 0; i < idxs.size(); i++)
+		expected += idxs[i] * nrow;
+	assert(sum == expected);
+}
+
+void test_agg_sub_row()
+{
+	printf("Test aggregation on a row-wise submatrix\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	mem_col_dense_matrix::ptr col_m
+		= mem_col_dense_matrix::cast(m1->get_matrix());
+	std::vector<off_t> idxs(3);
+	idxs[0] = 1;
+	idxs[1] = 5;
+	idxs[2] = 3;
+	mem_col_dense_matrix::ptr sub_col_m
+		= mem_col_dense_matrix::cast(col_m->get_cols(idxs));
+	mem_row_dense_matrix::ptr sub_row_m
+		= mem_row_dense_matrix::cast(sub_col_m->transpose());
+
+	const bulk_operate &op = sub_col_m->get_type().get_basic_ops().get_add();
+	scalar_variable::ptr col_res = sub_col_m->aggregate(op);
+	assert(col_res->get_type() == sub_col_m->get_type());
+	scalar_variable::ptr row_res = sub_row_m->aggregate(op);
+	assert(row_res->get_type() == sub_row_m->get_type());
+	assert(*(int *) col_res->get_raw() == *(int *) row_res->get_raw());
+}
+
+void test_conv_row_col()
 {
 	printf("test conv col-wise to row-wise, row-wise to col-wise\n");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(10000, 10,
@@ -166,9 +246,13 @@ void test5()
 
 int main()
 {
-	test1();
-	test2();
-	test3();
-	test4();
-	test5();
+	test_multiply_col();
+	test_agg_col();
+	test_multiply_wide_row();
+	test_multiply_tall_row();
+	test_agg_row();
+	test_submatrix();
+	test_agg_sub_col();
+	test_agg_sub_row();
+	test_conv_row_col();
 }

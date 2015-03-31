@@ -78,7 +78,7 @@ void test_sort()
 	printf("test sort\n");
 	mem_vector::ptr vec = mem_vector::create(1000000, get_scalar_type<int>());
 	for (size_t i = 0; i < vec->get_length(); i++)
-		vec->set(i, random() % 1000);
+		vec->set<int>(i, random() % 1000);
 	mem_vector::ptr clone = mem_vector::cast(vec->deep_copy());
 	assert(clone->equals(*vec));
 
@@ -87,9 +87,22 @@ void test_sort()
 	assert(sorted->equals(*vec));
 }
 
+void test_max()
+{
+	mem_vector::ptr vec = mem_vector::create(1000000, get_scalar_type<int>());
+	int max = 0;
+	for (size_t i = 0; i < vec->get_length(); i++) {
+		int v = random() % 1000;
+		vec->set<int>(i, v);
+		max = std::max(max, v);
+	}
+	assert(vec->max<int>() == max);
+}
+
 int main()
 {
 	test_sort();
 	test_append();
 	test_groupby();
+	test_max();
 }
