@@ -160,6 +160,15 @@ public:
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			const arr_apply_operate &op) const = 0;
 
+	dense_matrix::ptr multiply(const dense_matrix &mat) const {
+		return inner_prod(mat, get_type().get_basic_ops().get_multiply(),
+				get_type().get_basic_ops().get_add());
+	}
+
+	dense_matrix::ptr add(const dense_matrix &mat) const {
+		return this->mapply2(mat, get_type().get_basic_ops().get_add());
+	}
+
 	template<class T>
 	dense_matrix::ptr multiply_scalar(T val) const {
 		assert(get_type() == get_scalar_type<T>());
