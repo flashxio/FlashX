@@ -119,6 +119,7 @@ class agg_ops;
 class mem_vector;
 class mem_vector_vector;
 class scatter_gather;
+class scalar_variable;
 
 /**
  * This interface defines a scalar type and the operations related to the type.
@@ -140,6 +141,7 @@ public:
 	virtual size_t get_size() const = 0;
 	virtual const sorter &get_sorter() const = 0;
 	virtual const scatter_gather &get_sg() const = 0;
+	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
 		return get_type() == type.get_type();
@@ -165,6 +167,7 @@ public:
 	virtual std::shared_ptr<mem_vector> create_mem_vec(std::shared_ptr<char> data,
 			size_t num_bytes) const;
 	virtual std::shared_ptr<mem_vector_vector> create_mem_vec_vec() const;
+	virtual std::shared_ptr<scalar_variable> create_scalar() const;
 
 	virtual const sorter &get_sorter() const {
 		static type_sorter<T> sort;
@@ -198,6 +201,7 @@ const scalar_type &get_scalar_type(prim_type type);
 class scalar_variable
 {
 public:
+	typedef std::shared_ptr<scalar_variable> ptr;
 	/**
 	 * Get the raw representation of the type.
 	 */
@@ -221,6 +225,10 @@ class scalar_variable_impl: public scalar_variable
 {
 	T v;
 public:
+	scalar_variable_impl() {
+		v = 0;
+	}
+
 	virtual const char *get_raw() const {
 		return (const char *) &v;
 	}
