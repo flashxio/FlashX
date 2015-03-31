@@ -175,10 +175,10 @@ public:
 
 	template<class T>
 	T max() const {
-		static basic_ops_impl<T, T, T> ops;
-		scalar_variable_impl<T> res;
-		get_data()->aggregate(*ops.get_op(basic_ops::op_idx::MAX), res);
-		return res.get();
+		const bulk_operate &max_op = *get_type().get_basic_ops().get_op(
+				basic_ops::op_idx::MAX);
+		scalar_variable::ptr res = get_data()->aggregate(max_op);
+		return *(T *) res->get_raw();
 	}
 };
 

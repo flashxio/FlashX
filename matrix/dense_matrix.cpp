@@ -58,8 +58,7 @@ bool dense_matrix::verify_inner_prod(const dense_matrix &m,
 	return true;
 }
 
-bool dense_matrix::verify_aggregate(const bulk_operate &op,
-		scalar_variable &res) const
+bool dense_matrix::verify_aggregate(const bulk_operate &op) const
 {
 	if (op.left_entry_size() != op.right_entry_size()
 			|| op.left_entry_size() != op.output_entry_size()) {
@@ -71,12 +70,6 @@ bool dense_matrix::verify_aggregate(const bulk_operate &op,
 	if (this->get_entry_size() != op.left_entry_size()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "The matrix entry size is different from the operator";
-		return false;
-	}
-
-	if (res.get_size() != op.left_entry_size()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The result entry size is different from the operator";
 		return false;
 	}
 	return true;

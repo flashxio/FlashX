@@ -413,8 +413,7 @@ void EM_col_dense_matrix::reset_data()
 	assert(0);
 }
 
-bool EM_col_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_variable &res) const
+scalar_variable::ptr EM_col_dense_matrix::aggregate(const bulk_operate &op) const
 {
 	// TODO
 	assert(0);

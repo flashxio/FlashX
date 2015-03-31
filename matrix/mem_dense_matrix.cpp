@@ -211,7 +211,8 @@ public:
 		return dense_matrix::ptr();
 	}
 
-	virtual bool aggregate(const bulk_operate &op, scalar_variable &res) const;
+
+	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
@@ -308,7 +309,7 @@ public:
 		return dense_matrix::ptr();
 	}
 
-	virtual bool aggregate(const bulk_operate &op, scalar_variable &res) const;
+	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
@@ -326,23 +327,24 @@ public:
 	}
 };
 
-bool mem_sub_col_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_variable &res) const
+scalar_variable::ptr mem_sub_col_dense_matrix::aggregate(
+		const bulk_operate &op) const
 {
-	if (!verify_aggregate(op, res))
-		return false;
+	if (!verify_aggregate(op))
+		return scalar_variable::ptr();
 
+	scalar_variable::ptr res = op.get_output_type().create_scalar();
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
-	char *raw_arr = (char *) malloc(res.get_size() * ncol);
+	char *raw_arr = (char *) malloc(res->get_size() * ncol);
 	// TODO parallel
 	for (size_t i = 0; i < ncol; i++)
-		op.runA(nrow, get_col(i), raw_arr + res.get_size() * i);
-	char raw_res[res.get_size()];
+		op.runA(nrow, get_col(i), raw_arr + res->get_size() * i);
+	char raw_res[res->get_size()];
 	op.runA(ncol, raw_arr, raw_res);
 	free(raw_arr);
-	res.set_raw(raw_res, res.get_size());
-	return true;
+	res->set_raw(raw_res, res->get_size());
+	return res;
 }
 
 dense_matrix::ptr mem_sub_col_dense_matrix::mapply2(const dense_matrix &m,
@@ -382,23 +384,24 @@ dense_matrix::ptr mem_sub_col_dense_matrix::transpose() const
 			get_type(), data, orig_col_idxs);
 }
 
-bool mem_sub_row_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_variable &res) const
+scalar_variable::ptr mem_sub_row_dense_matrix::aggregate(
+		const bulk_operate &op) const
 {
-	if (!verify_aggregate(op, res))
-		return false;
+	if (!verify_aggregate(op))
+		return scalar_variable::ptr();
 
+	scalar_variable::ptr res = op.get_output_type().create_scalar();
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
-	char *raw_arr = (char *) malloc(res.get_size() * nrow);
+	char *raw_arr = (char *) malloc(res->get_size() * nrow);
 	// TODO parallel
 	for (size_t i = 0; i < nrow; i++)
-		op.runA(ncol, get_row(i), raw_arr + res.get_size() * i);
-	char raw_res[res.get_size()];
+		op.runA(ncol, get_row(i), raw_arr + res->get_size() * i);
+	char raw_res[res->get_size()];
 	op.runA(nrow, raw_arr, raw_res);
 	free(raw_arr);
-	res.set_raw(raw_res, res.get_size());
-	return true;
+	res->set_raw(raw_res, res->get_size());
+	return res;
 }
 
 dense_matrix::ptr mem_sub_row_dense_matrix::mapply2(const dense_matrix &m,
@@ -656,19 +659,19 @@ dense_matrix::ptr mem_col_dense_matrix::inner_prod(const dense_matrix &m,
 	return std::static_pointer_cast<dense_matrix>(res);
 }
 
-bool mem_col_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_variable &res) const
+scalar_variable::ptr mem_col_dense_matrix::aggregate(const bulk_operate &op) const
 {
-	if (!verify_aggregate(op, res))
+	if (!verify_aggregate(op))
 		return false;
 
+	scalar_variable::ptr res = op.get_output_type().create_scalar();
 	size_t ncol = this->get_num_cols();
 	size_t nrow = this->get_num_rows();
-	char raw_arr[res.get_size()];
+	char raw_arr[res->get_size()];
 	// TODO parallel
 	op.runA(nrow * ncol, data.get(), raw_arr);
-	res.set_raw(raw_arr, res.get_size());
-	return true;
+	res->set_raw(raw_arr, res->get_size());
+	return res;
 }
 
 dense_matrix::ptr mem_col_dense_matrix::mapply2(const dense_matrix &m,
@@ -1137,10 +1140,9 @@ dense_matrix::ptr mem_row_dense_matrix::inner_prod(const dense_matrix &m,
 	return std::static_pointer_cast<dense_matrix>(res);
 }
 
-bool mem_row_dense_matrix::aggregate(const bulk_operate &op,
-		scalar_variable &res) const
+scalar_variable::ptr mem_row_dense_matrix::aggregate(const bulk_operate &op) const
 {
-	return get_t_mat().aggregate(op, res);
+	return get_t_mat().aggregate(op);
 }
 
 dense_matrix::ptr mem_row_dense_matrix::mapply2(const dense_matrix &m,
