@@ -167,6 +167,26 @@ void test_multiply_tall_row()
 	verify_result(*res1, *correct);
 }
 
+void test_copy()
+{
+	printf("Test copy on column-wise matrices\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_COL);
+	m1->get_matrix()->reset_data();
+	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	bool ret = m1->get_matrix()->copy_from(*m2->get_matrix());
+	assert(ret);
+
+	mem_dense_matrix::ptr col_m1
+		= mem_dense_matrix::cast(m1->get_matrix());
+	mem_dense_matrix::ptr col_m2
+		= mem_dense_matrix::cast(m2->get_matrix());
+	for (size_t i = 0; i < col_m1->get_num_rows(); i++)
+		for (size_t j = 0; j < col_m1->get_num_cols(); j++)
+			assert(col_m1->get<int>(i, j) == col_m2->get<int>(i, j));
+}
+
 void test_agg_row()
 {
 	printf("Test aggregation on tall matrix stored row wise\n");
@@ -202,6 +222,32 @@ void test_submatrix()
 	for (size_t i = 0; i < idxs.size(); i++)
 		assert(memcmp(sub_m->get_col(i), col_m->get_col(idxs[i]),
 				sub_m->get_entry_size() * sub_m->get_num_rows()) == 0);
+}
+
+void test_copy_sub()
+{
+	printf("Test copy on column-wise sub-matrices\n");
+	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 3,
+			matrix_layout_t::L_COL);
+	mem_dense_matrix::ptr mem_m1
+		= mem_dense_matrix::cast(m1->get_matrix());
+	mem_m1->reset_data();
+	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+
+	std::vector<off_t> idxs(3);
+	idxs[0] = 1;
+	idxs[1] = 5;
+	idxs[2] = 3;
+	mem_dense_matrix::ptr sub_m = mem_dense_matrix::cast(
+			mem_col_dense_matrix::cast(m2->get_matrix())->get_cols(idxs));
+	bool ret = mem_m1->copy_from(*sub_m);
+	assert(ret);
+	assert(sub_m->get_num_cols() == m1->get_num_cols());
+
+	for (size_t i = 0; i < mem_m1->get_num_rows(); i++)
+		for (size_t j = 0; j < mem_m1->get_num_cols(); j++)
+			assert(mem_m1->get<int>(i, j) == sub_m->get<int>(i, j));
 }
 
 void test_agg_sub_col()
@@ -286,8 +332,10 @@ int main()
 	test_agg_col();
 	test_multiply_wide_row();
 	test_multiply_tall_row();
+	test_copy();
 	test_agg_row();
 	test_submatrix();
+	test_copy_sub();
 	test_agg_sub_col();
 	test_agg_sub_row();
 	test_conv_row_col();
