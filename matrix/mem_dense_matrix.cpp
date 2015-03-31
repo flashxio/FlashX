@@ -183,27 +183,6 @@ public:
 			<< "serial_set_data() isn't supported in a sub_col_matrix";
 	}
 
-	virtual bool set_cols(const mem_col_dense_matrix &m,
-			const std::vector<off_t> &idxs) {
-		// TODO
-		BOOST_LOG_TRIVIAL(error)
-			<< "set_cols() isn't supported in a sub_col_matrix";
-		return false;
-	}
-	virtual bool set_col(const char *buf, size_t size, size_t col) {
-		// TODO
-		BOOST_LOG_TRIVIAL(error)
-			<< "set_col() isn't supported in a sub_col_matrix";
-		return false;
-	}
-
-	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const {
-		// TODO
-		BOOST_LOG_TRIVIAL(error)
-			<< "get_cols() isn't supported in a sub_col_matrix";
-		return false;
-	}
-
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			const arr_apply_operate &op) const {
 		// TODO
@@ -212,6 +191,7 @@ public:
 	}
 
 
+	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const;
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const;
@@ -386,6 +366,23 @@ dense_matrix::ptr mem_sub_col_dense_matrix::transpose() const
 {
 	return mem_sub_row_dense_matrix::create(get_num_cols(), get_num_rows(),
 			get_type(), data, orig_col_idxs);
+}
+
+dense_matrix::ptr mem_sub_col_dense_matrix::get_cols(
+		const std::vector<off_t> &idxs) const
+{
+	std::vector<off_t> direct_idxs(idxs.size());
+	for (size_t i = 0; i < idxs.size(); i++) {
+		if ((size_t) idxs[i] >= get_num_cols()) {
+			BOOST_LOG_TRIVIAL(error)
+				<< "a column index is out of bounds\n";
+			return dense_matrix::ptr();
+		}
+		direct_idxs[i] = orig_col_idxs[idxs[i]];
+	}
+
+	return mem_sub_col_dense_matrix::create(get_num_rows(),
+			idxs.size(), get_type(), data, direct_idxs);
 }
 
 scalar_variable::ptr mem_sub_row_dense_matrix::aggregate(
