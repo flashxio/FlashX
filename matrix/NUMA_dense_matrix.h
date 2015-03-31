@@ -102,6 +102,11 @@ public:
 
 	virtual void set_data(const set_operate &op);
 
+	virtual bool copy_from(const dense_matrix &mat) {
+		// TODO
+		assert(0);
+	}
+
 	virtual bool write2file(const std::string &file_name) const {
 		// TODO
 		assert(0);
@@ -210,6 +215,11 @@ public:
 	}
 
 	virtual void set_data(const set_operate &op);
+
+	virtual bool copy_from(const dense_matrix &mat) {
+		// TODO
+		assert(0);
+	}
 
 	virtual bool write2file(const std::string &file_name) const {
 		// TODO

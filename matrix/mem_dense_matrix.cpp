@@ -301,6 +301,10 @@ public:
 		BOOST_LOG_TRIVIAL(error)
 			<< "serial_set_data() isn't supported in a sub_col_matrix";
 	}
+	virtual bool copy_from(const dense_matrix &mat) {
+		// TODO
+		assert(0);
+	}
 
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			const arr_apply_operate &op) const {
@@ -590,6 +594,30 @@ void mem_col_dense_matrix::set_data(const set_operate &op)
 #pragma omp parallel for
 	for (size_t i = 0; i < ncol; i++)
 		op.set(get_col(i), nrow, 0, i);
+}
+
+bool mem_col_dense_matrix::copy_from(const dense_matrix &mat)
+{
+	if (!mat.is_in_mem() || mat.store_layout() != matrix_layout_t::L_COL) {
+		BOOST_LOG_TRIVIAL(error) << "can only copy from the in-mem column matrix";
+		return false;
+	}
+	if (get_num_rows() != mat.get_num_rows()
+			|| get_num_cols() != mat.get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't copy from a matrix with incompatible dimensions";
+		return false;
+	}
+	if (get_type() != mat.get_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't copy from a matrix with incompatible type";
+		return false;
+	}
+
+	const mem_col_dense_matrix &col_m = (const mem_col_dense_matrix &) mat;
+	for (size_t i = 0; i < get_num_cols(); i++)
+		set_col(col_m.get_col(i), get_num_rows() * get_entry_size(), i);
+	return true;
 }
 
 dense_matrix::ptr mem_col_dense_matrix::serial_inner_prod(const dense_matrix &m,
@@ -956,6 +984,12 @@ void mem_row_dense_matrix::set_data(const set_operate &op)
 #pragma omp parallel for
 	for (size_t i = 0; i < nrow; i++)
 		op.set(get_row(i), ncol, i, 0);
+}
+
+bool mem_row_dense_matrix::copy_from(const dense_matrix &mat)
+{
+	// TODO
+	assert(0);
 }
 
 bool mem_row_dense_matrix::verify_inner_prod(const dense_matrix &m,

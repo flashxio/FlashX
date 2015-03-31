@@ -147,6 +147,7 @@ public:
 
 	virtual void set_data(const set_operate &op);
 	virtual void reset_data();
+	virtual bool copy_from(const dense_matrix &mat);
 	virtual dense_matrix::ptr shallow_copy() const;
 	virtual dense_matrix::ptr deep_copy() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;

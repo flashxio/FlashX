@@ -413,6 +413,12 @@ void EM_col_dense_matrix::reset_data()
 	assert(0);
 }
 
+bool EM_col_dense_matrix::copy_from(const dense_matrix &mat)
+{
+	// TODO
+	assert(0);
+}
+
 scalar_variable::ptr EM_col_dense_matrix::aggregate(const bulk_operate &op) const
 {
 	// TODO

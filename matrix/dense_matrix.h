@@ -146,6 +146,7 @@ public:
 
 	virtual void reset_data() = 0;
 	virtual void set_data(const set_operate &op) = 0;
+	virtual bool copy_from(const dense_matrix &mat) = 0;
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
