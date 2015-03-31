@@ -159,6 +159,13 @@ public:
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const = 0;
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			const arr_apply_operate &op) const = 0;
+
+	template<class T>
+	dense_matrix::ptr multiply_scalar(T val) const {
+		assert(get_type() == get_scalar_type<T>());
+		return this->sapply(bulk_uoperate_impl<multiply_uop<T>, T, T>(
+					multiply_uop<T>(val)));
+	}
 };
 
 }

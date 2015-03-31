@@ -57,18 +57,77 @@ public:
 template<class OpType, class InType, class OutType>
 class bulk_uoperate_impl: public bulk_uoperate
 {
+	OpType op;
 public:
+	bulk_uoperate_impl() {
+	}
+
+	bulk_uoperate_impl(const OpType &_op): op(_op) {
+	}
+
 	virtual void runA(size_t num_eles, const void *in_arr1,
 			void *output_arr1) const {
 		const InType *in_arr = (const InType *) in_arr1;
 		OutType *output_arr = (OutType *) output_arr1;
-		OpType op;
 		for (size_t i = 0; i < num_eles; i++)
 			output_arr[i] = op(in_arr[i]);
 	}
 
 	virtual const scalar_type &get_input_type() const;
 	virtual const scalar_type &get_output_type() const;
+};
+
+/*
+ * These following classes turn the binary operators into unary operators.
+ */
+template<class T>
+struct multiply_uop
+{
+	T val;
+	multiply_uop(T val) {
+		this->val = val;
+	}
+	T operator()(const T &e) const {
+		return e * val;
+	}
+};
+
+template<class T>
+struct add_uop
+{
+	T val;
+	add_uop(T val) {
+		this->val = val;
+	}
+	T operator()(const T &e) const {
+		return e + val;
+	}
+};
+
+template<class T>
+struct sub_uop
+{
+	T val;
+	sub_uop(T val) {
+		this->val = val;
+	}
+	T operator()(const T &e) const {
+		return e - val;
+	}
+};
+
+template<class T>
+struct divide_uop
+{
+	T val;
+	divide_uop(T val) {
+		this->val = val;
+	}
+	double operator()(const T &e) const {
+		double d1 = e;
+		double d2 = val;
+		return d1 / d2;
+	}
 };
 
 /**
@@ -224,25 +283,25 @@ template<class InType, class OutType>
 class basic_uops_impl: public basic_uops
 {
 	struct uop_neg {
-		OutType operator()(const InType &e) {
+		OutType operator()(const InType &e) const {
 			return -e;
 		}
 	};
 
 	struct uop_sqrt {
-		double operator()(const InType &e) {
+		double operator()(const InType &e) const {
 			return std::sqrt(e);
 		}
 	};
 
 	struct uop_abs {
-		OutType operator()(const InType &e) {
+		OutType operator()(const InType &e) const {
 			return std::abs(e);
 		}
 	};
 
 	struct uop_not {
-		bool operator()(const bool &e) {
+		bool operator()(const bool &e) const {
 			return !e;
 		}
 	};
@@ -350,19 +409,19 @@ template<class LeftType, class RightType, class ResType>
 class basic_ops_impl: public basic_ops
 {
 	struct multiply {
-		ResType operator()(const LeftType &e1, const RightType &e2) {
+		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 * e2;
 		}
 	};
 
 	struct add {
-		ResType operator()(const LeftType &e1, const RightType &e2) {
+		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 + e2;
 		}
 	};
 
 	struct sub {
-		ResType operator()(const LeftType &e1, const RightType &e2) {
+		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 - e2;
 		}
 	};
@@ -370,7 +429,7 @@ class basic_ops_impl: public basic_ops
 	// Division is special. Its output should be float point.
 	// Therefore, we convert both input values to float point.
 	struct divide {
-		double operator()(const LeftType &e1, const RightType &e2) {
+		double operator()(const LeftType &e1, const RightType &e2) const {
 			double d1 = e1;
 			double d2 = e2;
 			return d1 / d2;
@@ -378,7 +437,7 @@ class basic_ops_impl: public basic_ops
 	};
 
 	struct min {
-		ResType operator()(const LeftType &e1, const RightType &e2) {
+		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			if (e1 < e2)
 				return e1;
 			else
@@ -387,7 +446,7 @@ class basic_ops_impl: public basic_ops
 	};
 
 	struct max {
-		ResType operator()(const LeftType &e1, const RightType &e2) {
+		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			if (e1 > e2)
 				return e1;
 			else
@@ -396,25 +455,25 @@ class basic_ops_impl: public basic_ops
 	};
 
 	struct pow {
-		ResType operator()(const LeftType &e1, const RightType &e2) {
+		ResType operator()(const LeftType &e1, const RightType &e2) const {
 			return std::pow(e1, e2);
 		}
 	};
 
 	struct eq {
-		bool operator()(const LeftType &e1, const RightType &e2) {
+		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 == e2;
 		}
 	};
 
 	struct gt {
-		bool operator()(const LeftType &e1, const RightType &e2) {
+		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 > e2;
 		}
 	};
 
 	struct ge {
-		bool operator()(const LeftType &e1, const RightType &e2) {
+		bool operator()(const LeftType &e1, const RightType &e2) const {
 			return e1 >= e2;
 		}
 	};
