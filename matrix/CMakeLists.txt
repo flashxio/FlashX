@@ -25,4 +25,9 @@ add_library(FMatrix STATIC
 	matrix_header.cpp
 	sparse_matrix_format.cpp
 	hilbert_curve.cpp
+	NUMA_dense_matrix.cpp
+	NUMA_vector.cpp
+	NUMA_mapper.cpp
+	raw_data_array.cpp
+	mem_worker_thread.cpp
 )
