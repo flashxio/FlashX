@@ -222,6 +222,16 @@ void test_submatrix()
 	for (size_t i = 0; i < idxs.size(); i++)
 		assert(memcmp(sub_m->get_col(i), col_m->get_col(idxs[i]),
 				sub_m->get_entry_size() * sub_m->get_num_rows()) == 0);
+
+	std::vector<off_t> idxs2(2);
+	idxs2[0] = 0;
+	idxs2[1] = 1;
+	mem_col_dense_matrix::ptr subsub_m = mem_col_dense_matrix::cast(sub_m->get_cols(idxs2));
+	assert(subsub_m != NULL);
+	assert(subsub_m->get_num_cols() == idxs2.size());
+	for (size_t i = 0; i < idxs2.size(); i++)
+		assert(memcmp(subsub_m->get_col(i), col_m->get_col(idxs[i]),
+					col_m->get_entry_size() * col_m->get_num_rows()) == 0);
 }
 
 void test_copy_sub()
