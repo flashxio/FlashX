@@ -84,13 +84,13 @@ public:
  * This task performs matrix vector multiplication on a sparse matrix
  * in the FlashGraph format.
  */
-template<class T>
+template<class T, class VectorType>
 class fg_row_spmv_task: public fg_row_compute_task
 {
-	const NUMA_vector &input;
-	NUMA_vector &output;
+	const VectorType &input;
+	VectorType &output;
 public:
-	fg_row_spmv_task(const NUMA_vector &_input, NUMA_vector &_output,
+	fg_row_spmv_task(const VectorType &_input, VectorType &_output,
 			const matrix_io &_io): fg_row_compute_task(_io), input(
 				_input), output(_output) {
 	}
@@ -98,15 +98,16 @@ public:
 	void run_on_row(const fg::ext_mem_undirected_vertex &v);
 };
 
-template<class T>
-void fg_row_spmv_task<T>::run_on_row(const fg::ext_mem_undirected_vertex &v)
+template<class T, class VectorType>
+void fg_row_spmv_task<T, VectorType>::run_on_row(
+		const fg::ext_mem_undirected_vertex &v)
 {
 	T res = 0;
 	for (size_t i = 0; i < v.get_num_edges(); i++) {
 		fg::vertex_id_t id = v.get_neighbor(i);
-		res += input.get<T>(id);
+		res += *(T *) input.get(id);
 	}
-	output.set<T>(v.get_id(), res);
+	*(T *) output.get(v.get_id()) = res;
 }
 
 class block_compute_task;
@@ -247,28 +248,30 @@ public:
 	}
 };
 
-template<class T>
+template<class T, class VectorType>
 class fg_row_spmv_creator: public task_creator
 {
-	const NUMA_vector &input;
-	NUMA_vector &output;
+	const VectorType &input;
+	VectorType &output;
 
-	fg_row_spmv_creator(const NUMA_vector &_input,
-			NUMA_vector &_output): input(_input), output(_output) {
+	fg_row_spmv_creator(const VectorType &_input,
+			VectorType &_output): input(_input), output(_output) {
 	}
 public:
-	static task_creator::ptr create(const NUMA_vector &_input,
-			NUMA_vector &_output) {
+	static task_creator::ptr create(const VectorType &_input,
+			VectorType &_output) {
 		if (_input.get_type() != get_scalar_type<T>()
 				|| _output.get_type() != get_scalar_type<T>()) {
 			BOOST_LOG_TRIVIAL(error) << "wrong vector type in spmv creator";
 			return task_creator::ptr();
 		}
-		return task_creator::ptr(new fg_row_spmv_creator<T>(_input, _output));
+		return task_creator::ptr(new fg_row_spmv_creator<T, VectorType>(
+					_input, _output));
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new fg_row_spmv_task<T>(input, output, io));
+		return compute_task::ptr(new fg_row_spmv_task<T, VectorType>(input,
+					output, io));
 	}
 };
 
@@ -365,13 +368,16 @@ class sparse_matrix
 	size_t ncols;
 	bool symmetric;
 
+	template<class T, class VectorType>
+	task_creator::ptr get_fg_multiply_creator(const VectorType &in,
+			VectorType &out) const {
+		return fg_row_spmv_creator<T, VectorType>::create(in, out);
+	}
+
 	template<class T>
 	task_creator::ptr get_multiply_creator(const NUMA_vector &in,
 			NUMA_vector &out) const {
-		if (is_fg)
-			return fg_row_spmv_creator<T>::create(in, out);
-		else
-			return b2d_spmv_creator<T>::create(in, out, *this);
+		return b2d_spmv_creator<T>::create(in, out, *this);
 	}
 
 	template<class T>
@@ -401,7 +407,7 @@ class sparse_matrix
 					mem_dense_matrix::cast(col_m.get_cols(col_idx)));
 			mem_vector::ptr out_col = mem_vector::create(
 					mem_dense_matrix::cast(ret.get_cols(col_idx)));
-			compute(get_multiply_creator<T>(*in_col, *out_col),
+			compute(get_fg_multiply_creator<T, mem_vector>(*in_col, *out_col),
 				cal_super_block_size(get_block_size(),
 					sizeof(T) * col_m.get_num_cols()));
 		}
@@ -526,7 +532,27 @@ public:
 				% in.get_length() % ncols;
 			return false;
 		}
-		compute(get_multiply_creator<T>(in, out),
+		if (is_fg)
+			compute(get_fg_multiply_creator<T, NUMA_vector>(in, out),
+					cal_super_block_size(get_block_size(), sizeof(T)));
+		else
+			compute(get_multiply_creator<T>(in, out),
+					cal_super_block_size(get_block_size(), sizeof(T)));
+		return true;
+	}
+
+	template<class T>
+	bool multiply(const mem_vector &in, mem_vector &out) const {
+		if (in.get_length() != ncols) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"the input vector has wrong length %1%. matrix ncols: %2%")
+				% in.get_length() % ncols;
+			return false;
+		}
+		// We currently only support FG sparse matrix for mem_vector.
+		// The code is mainly for testing.
+		assert(is_fg);
+		compute(get_fg_multiply_creator<T, mem_vector>(in, out),
 				cal_super_block_size(get_block_size(), sizeof(T)));
 		return true;
 	}
