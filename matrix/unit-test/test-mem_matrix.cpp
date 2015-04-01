@@ -258,6 +258,34 @@ void test_copy_sub()
 	for (size_t i = 0; i < mem_m1->get_num_rows(); i++)
 		for (size_t j = 0; j < mem_m1->get_num_cols(); j++)
 			assert(mem_m1->get<int>(i, j) == sub_m->get<int>(i, j));
+
+	mem_dense_matrix::ptr copy_m = mem_dense_matrix::cast(sub_m->deep_copy());
+	assert(copy_m->get_num_cols() == idxs.size());
+	for (size_t i = 0; i < copy_m->get_num_rows(); i++)
+		for (size_t j = 0; j < copy_m->get_num_cols(); j++)
+			assert(copy_m->get<int>(i, j) == sub_m->get<int>(i, j));
+}
+
+void test_set_data_sub()
+{
+	printf("Test set data on a column-wise sub-matrix\n");
+	I_mem_dense_matrix::ptr m = I_mem_dense_matrix::create(100, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	std::vector<off_t> idxs(3);
+	idxs[0] = 1;
+	idxs[1] = 5;
+	idxs[2] = 3;
+	mem_dense_matrix::ptr sub_m = mem_dense_matrix::cast(
+			mem_col_dense_matrix::cast(m->get_matrix())->get_cols(idxs));
+	sub_m->reset_data();
+	for (size_t i = 0; i < sub_m->get_num_rows(); i++)
+		for (size_t j = 0; j < sub_m->get_num_cols(); i++)
+			assert(sub_m->get<int>(i, j) == 0);
+	sub_m->set_data(set_col_operate(sub_m->get_num_cols()));
+	int val = 0;
+	for (size_t i = 0; i < sub_m->get_num_rows(); i++)
+		for (size_t j = 0; j < sub_m->get_num_cols(); i++)
+			assert(sub_m->get<int>(i, j) == val++);
 }
 
 void test_agg_sub_col()
