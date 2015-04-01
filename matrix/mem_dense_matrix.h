@@ -308,6 +308,17 @@ public:
 		return matrix_layout_t::L_COL;
 	}
 
+	template<class T>
+	void scale_cols(const std::vector<T> &vals) {
+		assert(vals.size() == get_num_cols());
+		assert(get_type() == get_scalar_type<T>());
+		for (size_t i = 0; i < get_num_cols(); i++) {
+			T *col = (T *) get_col(i);
+			for (size_t j = 0; j < get_num_rows(); j++)
+				col[j] *= vals[i];
+		}
+	}
+
 	friend class mem_row_dense_matrix;
 };
 
