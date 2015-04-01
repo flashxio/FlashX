@@ -259,7 +259,7 @@ bool NUMA_vector::copy_from(const NUMA_vector &vec)
 
 	// TODO we should do it in parallel.
 	for (size_t i = 0; i < data.size(); i++)
-		if (data[i].copy_from(vec.data[i]))
+		if (!data[i].copy_from(vec.data[i]))
 			return false;
 	return true;
 }

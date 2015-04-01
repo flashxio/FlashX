@@ -68,7 +68,8 @@ void test_copy()
 
 	NUMA_vector::ptr vec1 = NUMA_vector::create(vec->get_length(), num_nodes,
 			get_scalar_type<long>());
-	vec1->copy_from(*vec);
+	bool ret = vec1->copy_from(*vec);
+	assert(ret);
 	assert(vec1->get_length() == vec->get_length());
 	for (size_t i = 0; i < vec->get_length(); i++)
 		assert(vec1->get<long>(i) == vec->get<long>(i));
