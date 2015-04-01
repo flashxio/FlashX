@@ -190,4 +190,17 @@ dense_matrix::ptr dense_matrix::load(const std::string &file_name)
 	return m;
 }
 
+double dense_matrix::norm2() const
+{
+	// TODO this is an inefficient implementation.
+	dense_matrix::ptr sq_mat = this->mapply2(
+			*this, get_type().get_basic_ops().get_multiply());
+	scalar_variable::ptr res = sq_mat->aggregate(
+			sq_mat->get_type().get_basic_ops().get_add());
+	double ret = 0;
+	res->get_type().get_basic_uops().get_op(
+			basic_uops::op_idx::SQRT)->runA(1, res->get_raw(), &ret);
+	return ret;
+}
+
 }

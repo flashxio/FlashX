@@ -176,6 +176,8 @@ public:
 		return this->sapply(bulk_uoperate_impl<multiply_uop<T>, T, T>(
 					multiply_uop<T>(val)));
 	}
+
+	double norm2() const;
 };
 
 }
