@@ -558,6 +558,20 @@ public:
 		}
 	}
 
+	template<class T>
+	mem_vector::ptr multiply(mem_vector::ptr in) const {
+		if (in->get_length() != ncols) {
+			BOOST_LOG_TRIVIAL(error) << boost::format(
+					"the input vector has wrong length %1%. matrix ncols: %2%")
+				% in->get_length() % ncols;
+			return mem_vector::ptr();
+		}
+		mem_vector::ptr ret = mem_vector::create(nrows, get_scalar_type<T>());
+		ret->reset_data();
+		multiply<T>(*in, *ret);
+		return ret;
+	}
+
 	/*
 	 * This version of SpMM allows users to provide the output matrix.
 	 * It requires users to initialize the output matrix.
