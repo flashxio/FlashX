@@ -149,38 +149,10 @@ public:
 		return dense_matrix::ptr();
 	}
 
-	virtual dense_matrix::ptr deep_copy() const {
-		// TODO
-		BOOST_LOG_TRIVIAL(error)
-			<< "deep_copy() isn't supported in a sub_col_matrix";
-		return dense_matrix::ptr();
-	}
-
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const {
 		// TODO
 		BOOST_LOG_TRIVIAL(error) << "conv2() isn't supported in a sub_col_matrix";
 		return dense_matrix::ptr();
-	}
-
-	virtual void reset_data() {
-		// TODO
-		BOOST_LOG_TRIVIAL(error)
-			<< "reset_data() isn't supported in a sub_col_matrix";
-	}
-	virtual void set_data(const set_operate &op) {
-		// TODO
-		BOOST_LOG_TRIVIAL(error)
-			<< "set_data() isn't supported in a sub_col_matrix";
-	}
-	virtual void serial_reset_data() {
-		// TODO
-		BOOST_LOG_TRIVIAL(error)
-			<< "serial_reset_data() isn't supported in a sub_col_matrix";
-	}
-	virtual void serial_set_data(const set_operate &op) {
-		// TODO
-		BOOST_LOG_TRIVIAL(error)
-			<< "serial_set_data() isn't supported in a sub_col_matrix";
 	}
 
 	virtual dense_matrix::ptr apply(apply_margin margin,
@@ -190,6 +162,9 @@ public:
 		return dense_matrix::ptr();
 	}
 
+	virtual void reset_data();
+	virtual void serial_reset_data();
+	virtual dense_matrix::ptr deep_copy() const;
 
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const;
@@ -310,6 +285,27 @@ public:
 		return data.get() + orig_row * get_num_cols() * get_entry_size();
 	}
 };
+
+void mem_sub_col_dense_matrix::reset_data()
+{
+	// TODO parallel
+	serial_reset_data();
+}
+
+void mem_sub_col_dense_matrix::serial_reset_data()
+{
+	size_t col_size = get_num_rows() * get_entry_size();
+	for (size_t i = 0; i < get_num_cols(); i++)
+		memset(get_col(i), 0, col_size);
+}
+
+dense_matrix::ptr mem_sub_col_dense_matrix::deep_copy() const
+{
+	mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
+			get_num_rows(), get_num_cols(), get_type());
+	ret->copy_from(*this);
+	return ret;
+}
 
 scalar_variable::ptr mem_sub_col_dense_matrix::aggregate(
 		const bulk_operate &op) const
