@@ -667,13 +667,12 @@ public:
 			return ret;
 		}
 		else {
-#if 0
+			mem_col_dense_matrix::ptr in_mat = mem_col_dense_matrix::cast(in);
 			mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
 					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
 			ret->reset_data();
-			multiply_matrix<T>((const mem_col_dense_matrix &) *in, *ret);
+			multiply_matrix<T>(*in_mat, *ret);
 			return ret;
-#endif
 		}
 	}
 };
