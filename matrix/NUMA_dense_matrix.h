@@ -105,16 +105,19 @@ public:
 	virtual bool copy_from(const dense_matrix &mat) {
 		// TODO
 		assert(0);
+		return false;
 	}
 
 	virtual bool write2file(const std::string &file_name) const {
 		// TODO
 		assert(0);
+		return false;
 	}
 
 	virtual dense_matrix::ptr shallow_copy() const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 	virtual dense_matrix::ptr deep_copy() const;
@@ -127,34 +130,40 @@ public:
 	virtual dense_matrix::ptr transpose() const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const {
 		// TODO
 		assert(0);
+		return scalar_variable::ptr();
 	}
 
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
 			const bulk_operate &op) const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			const arr_apply_operate &op) const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 };
 
@@ -219,16 +228,19 @@ public:
 	virtual bool copy_from(const dense_matrix &mat) {
 		// TODO
 		assert(0);
+		return false;
 	}
 
 	virtual bool write2file(const std::string &file_name) const {
 		// TODO
 		assert(0);
+		return false;
 	}
 
 	virtual dense_matrix::ptr shallow_copy() const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 	virtual dense_matrix::ptr deep_copy() const;
@@ -241,6 +253,7 @@ public:
 	virtual dense_matrix::ptr transpose() const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
@@ -249,6 +262,7 @@ public:
 	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const {
 		// TODO
 		assert(0);
+		return scalar_variable::ptr();
 	}
 
 	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
@@ -257,12 +271,14 @@ public:
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			const arr_apply_operate &op) const {
 		// TODO
 		assert(0);
+		return dense_matrix::ptr();
 	}
 
 };
