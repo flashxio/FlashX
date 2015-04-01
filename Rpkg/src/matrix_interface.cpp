@@ -69,7 +69,7 @@ RcppExport SEXP R_FM_create_vector(SEXP plen, SEXP pinitv)
 }
 
 template<class T>
-class rand_set_operate: public set_operate
+class rand_set_operate: public type_set_operate<T>
 {
 	const T min;
 	const T max;
@@ -82,16 +82,11 @@ public:
 	rand_set_operate(T _min, T _max): min(_min), max(_max) {
 	}
 
-	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+	virtual void set(T *arr, size_t num_eles, off_t row_idx,
 			off_t col_idx) const {
-		T *darr = (T *) arr;
 		for (size_t i = 0; i < num_eles; i++) {
-			darr[i] = gen_rand();
+			arr[i] = gen_rand();
 		}
-	}
-
-	virtual size_t entry_size() const {
-		return sizeof(T);
 	}
 };
 
@@ -835,9 +830,10 @@ template<class T, class ReturnType>
 ReturnType matrix_agg(const dense_matrix &mat, const bulk_operate &op)
 {
 	ReturnType ret(1);
-	scalar_variable_impl<T> res;
-	if (mat.aggregate(op, res)) {
-		ret[0] = res.get();
+	scalar_variable::ptr res = mat.aggregate(op);
+	assert(res->get_type() == get_scalar_type<T>());
+	if (res != NULL) {
+		ret[0] = *(const T *) res->get_raw();
 		return ret;
 	}
 	else {
