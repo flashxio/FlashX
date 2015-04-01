@@ -394,25 +394,6 @@ class sparse_matrix
 				cal_super_block_size(get_block_size(),
 					sizeof(T) * row_m.get_num_cols()));
 	}
-
-#if 0
-	template<class T>
-	void multiply_matrix(const mem_col_dense_matrix &col_m,
-			mem_col_dense_matrix &ret) const {
-		size_t ncol = col_m.get_num_cols();
-		std::vector<off_t> col_idx(1);
-		for (size_t i = 0; i < ncol; i++) {
-			col_idx[0] = i;
-			mem_vector::ptr in_col = mem_vector::create(
-					mem_dense_matrix::cast(col_m.get_cols(col_idx)));
-			mem_vector::ptr out_col = mem_vector::create(
-					mem_dense_matrix::cast(ret.get_cols(col_idx)));
-			compute(get_fg_multiply_creator<T, mem_vector>(*in_col, *out_col),
-				cal_super_block_size(get_block_size(),
-					sizeof(T) * col_m.get_num_cols()));
-		}
-	}
-#endif
 protected:
 	// This constructor is used for the sparse matrix stored
 	// in the FlashGraph format.
@@ -617,6 +598,32 @@ public:
 #endif
 			return true;
 		}
+	}
+
+	template<class T>
+	bool multiply_matrix(const mem_col_dense_matrix &in,
+			mem_col_dense_matrix &out) const {
+		if (in.get_num_rows() != ncols
+				|| in.get_num_cols() != out.get_num_cols()
+				|| out.get_num_rows() != this->get_num_rows()) {
+			BOOST_LOG_TRIVIAL(error) <<
+					"the input and output matrix have incompatible dimensions";
+			return false;
+		}
+		size_t ncol = in.get_num_cols();
+		std::vector<off_t> col_idx(1);
+		assert(is_fg);
+		for (size_t i = 0; i < ncol; i++) {
+			col_idx[0] = i;
+			mem_vector::ptr in_col = mem_vector::create(
+					mem_dense_matrix::cast(in.get_cols(col_idx)));
+			mem_vector::ptr out_col = mem_vector::create(
+					mem_dense_matrix::cast(out.get_cols(col_idx)));
+			compute(get_fg_multiply_creator<T, mem_vector>(*in_col, *out_col),
+				cal_super_block_size(get_block_size(),
+					sizeof(T) * in.get_num_cols()));
+		}
+		return true;
 	}
 
 	/*
