@@ -24,7 +24,7 @@ LDFLAGS += -lstxxl -lnuma -lz -laio -lcblas
 
 all: test_io_gen test-mem_matrix test-EM_vector test-EM_matrix	\
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
-	test-hilbert test-NUMA_vector test-sorter test-NUMA_dense_matrix
+	test-hilbert test-NUMA_vector test-sorter test-NUMA_dense_matrix test-rand_gen
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -62,6 +62,9 @@ test-hilbert: test-hilbert.o ../libFMatrix.a
 test-sorter: test-sorter.o ../libFMatrix.a
 	$(CXX) -o test-sorter test-sorter.o $(LDFLAGS)
 
+test-rand_gen: test-rand_gen.o ../libFMatrix.a
+	$(CXX) -o test-rand_gen test-rand_gen.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -78,5 +81,6 @@ clean:
 	rm -f test-sparse_matrix
 	rm -f test-hilbert
 	rm -f test-sorter
+	rm -f test-rand_gen
 
 -include $(DEPS) 

@@ -120,6 +120,7 @@ class mem_vector;
 class mem_vector_vector;
 class scatter_gather;
 class scalar_variable;
+class rand_gen;
 
 /**
  * This interface defines a scalar type and the operations related to the type.
@@ -142,6 +143,10 @@ public:
 	virtual const sorter &get_sorter() const = 0;
 	virtual const scatter_gather &get_sg() const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
+	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+			const scalar_variable &max) const = 0;
+	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+			const scalar_variable &max, const scalar_variable &seed) const = 0;
 
 	virtual bool operator==(const scalar_type &type) const {
 		return get_type() == type.get_type();
@@ -168,6 +173,10 @@ public:
 			size_t num_bytes) const;
 	virtual std::shared_ptr<mem_vector_vector> create_mem_vec_vec() const;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const;
+	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+			const scalar_variable &max) const;
+	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
+			const scalar_variable &max, const scalar_variable &seed) const;
 
 	virtual const sorter &get_sorter() const {
 		static type_sorter<T> sort;
@@ -227,6 +236,10 @@ class scalar_variable_impl: public scalar_variable
 public:
 	scalar_variable_impl() {
 		v = 0;
+	}
+
+	scalar_variable_impl(T v) {
+		this->v = v;
 	}
 
 	virtual const char *get_raw() const {

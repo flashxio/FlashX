@@ -22,6 +22,7 @@
 #include "generic_type.h"
 #include "mem_vector.h"
 #include "mem_vector_vector.h"
+#include "rand_gen.h"
 
 namespace fm
 {
@@ -50,6 +51,25 @@ template<class T>
 mem_vector_vector::ptr scalar_type_impl<T>::create_mem_vec_vec() const
 {
 	return type_mem_vector_vector<T>::create();
+}
+
+template<class T>
+rand_gen::ptr scalar_type_impl<T>::create_rand_gen(const scalar_variable &min,
+		const scalar_variable &max) const
+{
+	scalar_variable_impl<T> &t_min = (scalar_variable_impl<T> &) min;
+	scalar_variable_impl<T> &t_max = (scalar_variable_impl<T> &) max;
+	return rand_gen::create<T>(t_min.get(), t_max.get());
+}
+
+template<class T>
+rand_gen::ptr scalar_type_impl<T>::create_rand_gen(const scalar_variable &min,
+		const scalar_variable &max, const scalar_variable &seed) const
+{
+	scalar_variable_impl<T> &t_min = (scalar_variable_impl<T> &) min;
+	scalar_variable_impl<T> &t_max = (scalar_variable_impl<T> &) max;
+	scalar_variable_impl<T> &t_seed = (scalar_variable_impl<T> &) seed;
+	return rand_gen::create<T>(t_min.get(), t_max.get(), t_seed.get());
 }
 
 const scalar_type &get_scalar_type(prim_type type)
