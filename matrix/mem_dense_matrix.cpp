@@ -20,6 +20,7 @@
 #if defined(_OPENMP)
 #include <omp.h>
 #endif
+#include <cblas.h>
 
 #include <atomic>
 
@@ -182,6 +183,13 @@ public:
 	virtual const char *get_col(size_t col) const {
 		off_t orig_col = orig_col_idxs[col];
 		return data.get() + orig_col * get_num_rows() * get_entry_size();
+	}
+
+	virtual mem_col_dense_matrix::ptr get_config_matrix() const {
+		mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
+				get_num_rows(), get_num_cols(), get_type());
+		ret->copy_from(*this);
+		return ret;
 	}
 };
 
@@ -898,6 +906,54 @@ mem_row_dense_matrix::ptr mem_col_dense_matrix::get_row_store() const
 			get_type().get_sg().gather(col_ptrs, ret->get_row(i));
 		}
 	}
+	return ret;
+}
+
+dense_matrix::ptr mem_col_dense_matrix::gemm(const dense_matrix &Amat,
+		const dense_matrix &Bmat, const scalar_variable &alpha,
+		const scalar_variable &beta) const
+{
+	if (Amat.get_num_cols() != Bmat.get_num_rows()
+			|| this->get_num_rows() != Amat.get_num_rows()
+			|| this->get_num_cols() != Bmat.get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrices for gemm don't have compatible dimension";
+		return dense_matrix::ptr();
+	}
+	if (!Amat.is_in_mem() || Amat.store_layout() != matrix_layout_t::L_COL
+			|| !Bmat.is_in_mem() || Bmat.store_layout() != matrix_layout_t::L_COL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The A and B matrix needs to be column-major";
+		return dense_matrix::ptr();
+	}
+	if (get_type() != get_scalar_type<double>()
+			|| Amat.get_type() != get_scalar_type<double>()
+			|| Bmat.get_type() != get_scalar_type<double>()
+			|| alpha.get_type() != get_scalar_type<double>()
+			|| beta.get_type() != get_scalar_type<double>()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrices aren't of double type";
+		return dense_matrix::ptr();
+	}
+
+	const scalar_variable_impl<double> &d_alpha
+		= (const scalar_variable_impl<double> &) alpha;
+	const scalar_variable_impl<double> &d_beta
+		= (const scalar_variable_impl<double> &) beta;
+	mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
+			this->get_num_rows(), this->get_num_cols(), get_type());
+	ret->copy_from(*this);
+	mem_col_dense_matrix::ptr col_Amat
+		= dynamic_cast<const mem_col_dense_matrix &>(Amat).get_contig_matrix();
+	mem_col_dense_matrix::ptr col_Bmat
+		= dynamic_cast<const mem_col_dense_matrix &>(Bmat).get_contig_matrix();
+	printf("dgemm\n");
+	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, Amat.get_num_rows(),
+			Bmat.get_num_cols(), Amat.get_num_cols(), d_alpha.get(),
+			(double *) col_Amat->data.get(), Amat.get_num_rows(),
+			(double *) col_Bmat->data.get(), Bmat.get_num_rows(),
+			d_beta.get(), (double *) ret->data.get(), ret->get_num_rows());
+
 	return ret;
 }
 

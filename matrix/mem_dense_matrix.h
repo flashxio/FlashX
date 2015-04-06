@@ -200,6 +200,11 @@ public:
  */
 class mem_col_dense_matrix: public mem_dense_matrix
 {
+	struct matrix_empty_deleter {
+		void operator()(mem_col_dense_matrix *mat) const {
+		}
+	};
+
 	struct deleter {
 		void operator()(char *p) const{
 			free(p);
@@ -308,6 +313,12 @@ public:
 		return matrix_layout_t::L_COL;
 	}
 
+	virtual mem_col_dense_matrix::ptr get_contig_matrix() const {
+		// TODO discard constant qualifer.
+		return mem_col_dense_matrix::ptr(
+				const_cast<mem_col_dense_matrix *>(this), matrix_empty_deleter());
+	}
+
 	template<class T>
 	void scale_cols(const std::vector<T> &vals) {
 		assert(vals.size() == get_num_cols());
@@ -318,6 +329,9 @@ public:
 				col[j] *= vals[i];
 		}
 	}
+
+	dense_matrix::ptr gemm(const dense_matrix &Amat, const dense_matrix &Bmat,
+			const scalar_variable &alpha, const scalar_variable &beta) const;
 
 	friend class mem_row_dense_matrix;
 };

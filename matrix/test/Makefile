@@ -20,7 +20,7 @@ include ../../Makefile.common
 OMP_FLAG = -fopenmp
 CXXFLAGS += -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
 LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
-LDFLAGS += -lstxxl -lz -lnuma -laio
+LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas
 
 all: test-fg_SpMV test-2d_multiply test-mem_matrix test-EM_matrix test-mem_vector	\
 	el2al al22d test-sort

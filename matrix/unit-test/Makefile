@@ -20,7 +20,7 @@ include ../../Makefile.common
 OMP_FLAG = -fopenmp
 CXXFLAGS := -g -std=c++0x -I../../include -I../../libcommon -I../../flash-graph -I.. $(OMP_FLAG)
 LDFLAGS := $(OMP_FLAG) -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
-LDFLAGS += -lstxxl -lnuma -lz -laio
+LDFLAGS += -lstxxl -lnuma -lz -laio -lcblas
 
 all: test_io_gen test-mem_matrix test-EM_vector test-EM_matrix	\
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
