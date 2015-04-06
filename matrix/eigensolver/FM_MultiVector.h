@@ -36,6 +36,24 @@
 
 static int MV_id;
 
+namespace fm
+{
+
+template<>
+void mem_col_dense_matrix::scale_cols(const std::vector<double> &vals)
+{
+	assert(vals.size() == get_num_cols());
+	assert(get_type() == get_scalar_type<double>());
+	std::vector<long double> ld_vals(vals.begin(), vals.end());
+	for (size_t i = 0; i < get_num_cols(); i++) {
+		double *col = (double *) get_col(i);
+		for (size_t j = 0; j < get_num_rows(); j++)
+			col[j] = ld_vals[i] * col[j];
+	}
+}
+
+}
+
 template<class ScalarType>
 class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 {
@@ -73,26 +91,6 @@ class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 		}
 	}
 
-	void verify() const {
-//		int len = ep_mat->GlobalLength();
-//		assert((size_t) ep_mat->NumVectors() == mat->get_num_cols());
-//		assert((size_t) len == mat->get_num_rows());
-//		double max = 0;
-//		for (int i = 0; i < ep_mat->NumVectors(); i++) {
-//			for (int j = 0; j < len; j++) {
-//				double v1 = (*ep_mat)[i][j];
-//				double v2 = *(double *) mat->get(j, i);
-//				if (abs(v1 - v2) > 0) {
-//					printf("%g\n", *(double *) mat->get(0, 0));
-//					fprintf(stderr, "%s: %d, %d: %g\n", name.c_str(), i, j, abs(v1 - v2));
-//				}
-//				assert(abs(v1 - v2) == 0);
-//				max = std::max(max, abs(v1 - v2));
-//			}
-//		}
-//		printf("max diff: %g\n", max);
-	}
-
 	FM_MultiVector(const std::string &extra) {
 		char name_buf[128];
 		snprintf(name_buf, sizeof(name_buf), "MV-%d", MV_id++);
@@ -111,6 +109,19 @@ public:
 		char name_buf[128];
 		snprintf(name_buf, sizeof(name_buf), "MV-%d", MV_id++);
 		this->name = name_buf;
+	}
+
+	void verify() const {
+		int len = ep_mat->GlobalLength();
+		assert((size_t) ep_mat->NumVectors() == mat->get_num_cols());
+		assert((size_t) len == mat->get_num_rows());
+		for (int i = 0; i < ep_mat->NumVectors(); i++) {
+			for (int j = 0; j < len; j++) {
+				double v1 = (*ep_mat)[i][j];
+				double v2 = *(double *) mat->get(j, i);
+				assert(abs(v1 - v2) == 0);
+			}
+		}
 	}
 
 	fm::mem_col_dense_matrix &get_data() {
@@ -261,28 +272,20 @@ public:
 			const Anasazi::MultiVec<ScalarType>& A, 
 			const Teuchos::SerialDenseMatrix<int,ScalarType>& B, ScalarType beta) {
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
+		printf("this = %g * A * B + %g * this\n", alpha, beta);
 		this->verify();
-		fm::mem_row_dense_matrix::ptr aB = fm::mem_row_dense_matrix::create(
+		fm::mem_col_dense_matrix::ptr Bmat = fm::mem_col_dense_matrix::create(
 				B.numRows(), B.numCols(), fm::get_scalar_type<ScalarType>());
 		for (int i = 0; i < B.numRows(); i++) {
-			for (int j = 0; j < B.numCols(); j++) {
-				if (alpha == 1)
-					aB->set<ScalarType>(i, j, B(i, j));
-				else
-					aB->set<ScalarType>(i, j, B(i, j) * alpha);
-			}
+			for (int j = 0; j < B.numCols(); j++)
+				Bmat->set<ScalarType>(i, j, B(i, j));
 		}
-		fm::dense_matrix::ptr aAB = fm_A.mat->multiply(*aB);
-		if (beta == 0)
-			this->mat->copy_from(*aAB);
-		else if (beta == 1)
-			this->mat->copy_from(*aAB->add(*this->mat));
-		else {
-			fm::dense_matrix::ptr bThis = this->mat->multiply_scalar(beta);
-			this->mat->copy_from(*aAB->add(*bThis));
-		}
+		fm::scalar_variable_impl<double> alpha_var;
+		alpha_var.set(alpha);
+		fm::scalar_variable_impl<double> beta_var;
+		beta_var.set(beta);
+		this->mat->copy_from(*this->mat->gemm(*fm_A.mat, *Bmat, alpha_var, beta_var));
 		this->ep_mat->MvTimesMatAddMv(alpha, *fm_A.ep_mat, B, beta);
-		this->sync_ep2fm();
 		fm_A.verify();
 		this->verify();
 	}
