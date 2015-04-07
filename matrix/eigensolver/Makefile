@@ -1,6 +1,6 @@
 include ../../Makefile.common
 
-all: BlockDavidsonFM
+all: BlockDavidsonTpetra BlockDavidsonFM
 
 OMP_FLAG = -fopenmp
 CXXFLAGS += -I.. -I../../include -I../../libcommon -I../../flash-graph $(OMP_FLAG)
@@ -12,12 +12,16 @@ LDFLAGS := -lepetra -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics
 		 -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lz -lnuma -laio
 
+BlockDavidsonTpetra: BlockDavidsonTpetra.o
+	$(CXX) BlockDavidsonTpetra.o -o BlockDavidsonTpetra $(LDFLAGS)
+
 BlockDavidsonFM: BlockDavidsonFM.o
 	$(CXX) BlockDavidsonFM.o -o BlockDavidsonFM $(LDFLAGS)
 
 clean:
 	rm *~
 	rm *.o
+	rm BlockDavidsonTpetra
 	rm BlockDavidsonFM
 
 -include $(DEPS) 
