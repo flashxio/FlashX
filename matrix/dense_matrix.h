@@ -56,6 +56,7 @@ class dense_matrix
 	// The type is a reference. It makes the dense matrix object uncopiable.
 	// Maybe this is what we want.
 	const scalar_type &type;
+	void _init_rand(const scalar_variable &min, const scalar_variable &max);
 protected:
 	dense_matrix(size_t nrow, size_t ncol, const scalar_type &_type,
 			bool in_mem): type(_type) {
@@ -178,6 +179,13 @@ public:
 	}
 
 	double norm2() const;
+	template<class T>
+	void init_rand(T _min, T _max) {
+		assert(get_scalar_type<T>() == get_type());
+		scalar_variable_impl<T> min(_min);
+		scalar_variable_impl<T> max(_max);
+		_init_rand(min, max);
+	}
 };
 
 }

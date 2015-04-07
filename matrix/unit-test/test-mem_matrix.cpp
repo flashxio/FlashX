@@ -362,6 +362,21 @@ void test_conv_row_col()
 			assert(c1->get(i, j) == c2->get(i, j));
 }
 
+void test_rand_init()
+{
+	D_mem_dense_matrix::ptr m = D_mem_dense_matrix::create(1000, 10,
+			matrix_layout_t::L_COL);
+	m->get_matrix()->init_rand<double>(-1.0, 1.0);
+	double sum = 0;
+	for (size_t i = 0; i < m->get_num_rows(); i++)
+		for (size_t j = 0; j < m->get_num_cols(); j++) {
+			double v = m->get(i, j);
+			assert(v >= -1.0 && v <= 1.0);
+			sum += v;
+		}
+	printf("sum: %f\n", sum);
+}
+
 int main()
 {
 	test_multiply_scalar();
@@ -377,4 +392,5 @@ int main()
 	test_agg_sub_col();
 	test_agg_sub_row();
 	test_conv_row_col();
+	test_rand_init();
 }

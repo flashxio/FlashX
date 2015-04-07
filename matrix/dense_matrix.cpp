@@ -24,6 +24,7 @@
 #include "mem_dense_matrix.h"
 #include "EM_dense_matrix.h"
 #include "generic_type.h"
+#include "rand_gen.h"
 
 namespace fm
 {
@@ -201,6 +202,75 @@ double dense_matrix::norm2() const
 	res->get_type().get_basic_uops().get_op(
 			basic_uops::op_idx::SQRT)->runA(1, res->get_raw(), &ret);
 	return ret;
+}
+
+namespace
+{
+
+/*
+ * This class set elements in a container randomly.
+ * set_operate can't change its own state and has to be thread-safe when
+ * running on multiple threads. However, random generators aren't
+ * thread-safe, so we have to create a random generator for each thread.
+ */
+class rand_init: public set_operate
+{
+	class rand_gen_wrapper {
+		rand_gen::ptr gen;
+	public:
+		rand_gen_wrapper(rand_gen::ptr gen) {
+			this->gen = gen;
+		}
+
+		rand_gen &get_gen() {
+			return *gen;
+		}
+	};
+
+	pthread_key_t gen_key;
+	const scalar_type &type;
+	const scalar_variable &min;
+	const scalar_variable &max;
+
+	rand_gen &get_rand_gen() const {
+		void *addr = pthread_getspecific(gen_key);
+		if (addr == NULL)
+			addr = new rand_gen_wrapper(type.create_rand_gen(min, max));
+		rand_gen_wrapper *wrapper = (rand_gen_wrapper *) addr;
+		return wrapper->get_gen();
+	}
+
+	static void destroy_rand_gen(void *gen) {
+		rand_gen_wrapper *wrapper = (rand_gen_wrapper *) gen;
+		delete wrapper;
+		printf("destroy rand gen\n");
+	}
+public:
+	rand_init(const scalar_type &_type, const scalar_variable &_min,
+			const scalar_variable &_max): type(_type), min(_min), max(_max) {
+		int ret = pthread_key_create(&gen_key, destroy_rand_gen);
+		assert(ret == 0);
+	}
+
+	~rand_init() {
+		pthread_key_delete(gen_key);
+	}
+
+	virtual void set(void *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		get_rand_gen().gen(arr, num_eles);
+	}
+	virtual const scalar_type &get_type() const {
+		return get_rand_gen().get_type();
+	}
+};
+
+}
+
+void dense_matrix::_init_rand(const scalar_variable &min,
+		const scalar_variable &max)
+{
+	set_data(rand_init(get_type(), min, max));
 }
 
 }
