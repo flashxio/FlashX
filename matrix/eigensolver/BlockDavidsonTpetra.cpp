@@ -3,6 +3,9 @@
 // implementation of the Block Davidson method.
 
 #include "sparse_matrix.h"
+#include "vertex.h"
+#include "in_mem_storage.h"
+#include "io_interface.h"
 
 // Include header for block Davidson eigensolver
 #include "AnasaziBlockDavidsonSolMgr.hpp"
@@ -13,6 +16,8 @@
 #include "Tpetra_Map.hpp"
 #include "Tpetra_MultiVector.hpp"
 #include "Tpetra_DefaultPlatform.hpp"
+#include "Tpetra_CrsMatrix_decl.hpp"
+#include "Tpetra_CrsMatrix_def.hpp"
 
 // ****************************************************************************
 // BEGIN MAIN ROUTINE
@@ -20,71 +25,72 @@
 
 using namespace fm;
 
+using Teuchos::RCP;
+using Teuchos::rcp;
+using std::cerr;
+using std::cout;
+using std::endl;
+
 std::atomic<size_t> iter_no;
 
+typedef fg::vsize_t local_ordinal_type;
+typedef fg::vsize_t global_ordinal_type;
+
 typedef Tpetra::DefaultPlatform::DefaultPlatformType::NodeType  Node;
-typedef Tpetra::MultiVector<double, size_t, size_t, Node> MV;
+typedef Tpetra::MultiVector<double, global_ordinal_type, global_ordinal_type, Node> MV;
+typedef Tpetra::Operator<double, global_ordinal_type, global_ordinal_type, Node> OP;
+typedef Anasazi::OperatorTraits<double, MV, OP> OPT;
 
-class FMTp_Operator//: public Anasazi::Operator<double>
+typedef Tpetra::Map<local_ordinal_type, global_ordinal_type, Node> map_type;
+typedef Tpetra::CrsMatrix<double, local_ordinal_type, global_ordinal_type> crs_matrix_type;
+
+size_t edge_data_size = 0;
+
+RCP<crs_matrix_type> create_csr(fg::in_mem_graph::ptr g, RCP<map_type> map)
 {
-	sparse_matrix::ptr mat;
-public:
-	FMTp_Operator(sparse_matrix::ptr mat) {
-		this->mat = mat;
+	safs::io_interface::ptr io = create_io(g->create_io_factory(),
+			thread::get_curr_thread());
+	const size_t numMyElements = map->getNodeNumElements ();
+
+	// Create a Tpetra sparse matrix whose rows have distribution given by the Map.
+	RCP<crs_matrix_type> A (new crs_matrix_type (map, 0));
+
+	const size_t vheader_size = fg::ext_mem_undirected_vertex::get_header_size();
+	char vheader_buf[vheader_size];
+	const fg::ext_mem_undirected_vertex *vheader
+		= (const fg::ext_mem_undirected_vertex *) vheader_buf;
+	off_t off = fg::graph_header::get_header_size();
+	// Fill the sparse matrix, one row at a time.
+	for (local_ordinal_type lclRow = 0;
+			lclRow < static_cast<local_ordinal_type> (numMyElements); ++lclRow) {
+		io->access(vheader_buf, off, vheader_size, READ);
+		fg::vsize_t num_edges = vheader->get_num_edges();
+		assert(num_edges > 0);
+		size_t size = fg::ext_mem_undirected_vertex::num_edges2vsize(num_edges,
+				edge_data_size);
+		std::unique_ptr<char[]> buf(new char[size]);
+		io->access(buf.get(), off, size, READ);
+
+		const fg::ext_mem_undirected_vertex *v
+			= (const fg::ext_mem_undirected_vertex *) buf.get();
+		std::vector<global_ordinal_type> cols(num_edges);
+		std::vector<double> vals(num_edges);
+		for (fg::vsize_t i = 0; i < num_edges; i++) {
+			cols[i] = v->get_neighbor(i);
+			vals[i] = 1;
+		}
+		const global_ordinal_type gblRow = map->getGlobalElement (lclRow);
+		A->insertGlobalValues (gblRow, cols, vals);
+		off += size;
 	}
 
-	virtual void Apply(const MV &x, MV &y) const;
-
-	size_t get_num_cols() const {
-		return mat->get_num_cols();
-	}
-
-	size_t get_num_rows() const {
-		return mat->get_num_rows();
-	}
-};
-
-void FMTp_Operator::Apply(const MV &x, MV &y) const
-{
-	printf("SpMM %ld columns\n", x.getNumVectors());
-	assert(x.getGlobalLength() == mat->get_num_cols());
-	assert(y.getGlobalLength() == mat->get_num_rows());
-	mem_vector::ptr in = mem_vector::create(mat->get_num_cols(),
-			get_scalar_type<double>());
-	mem_vector::ptr out = mem_vector::create(mat->get_num_rows(),
-			get_scalar_type<double>());
-	for (size_t i = 0; i < x.getNumVectors(); i++) {
-		memcpy(in->get_raw_arr(), x.getData(i).getRawPtr(),
-				in->get_length() * sizeof(double));
-		mat->multiply<double>(*in, *out);
-		memcpy(y.getDataNonConst(i).getRawPtr(), out->get_raw_arr(),
-				out->get_length() * sizeof(double));
-	}
+	// Tell the sparse matrix that we are done adding entries to it.
+	A->fillComplete ();
+	return A;
 }
 
-namespace Anasazi
+int main (int argc, char *argv[])
 {
-
-template<>
-class OperatorTraits <double, MV, FMTp_Operator>
-{
-public:
-	static void Apply(const FMTp_Operator &Op, const MV &x, MV &y) {
-		iter_no++;
-		Op.Apply(x, y);
-	}
-};
-
-}
-
-int
-main (int argc, char *argv[])
-{
-	using Teuchos::RCP;
-	using Teuchos::rcp;
-	using std::cerr;
-	using std::cout;
-	using std::endl;
 
 	if (argc < 5) {
 		fprintf(stderr, "eigensolver conf_file graph_file index_file nev\n");
@@ -105,7 +111,6 @@ main (int argc, char *argv[])
 	//     of an operator; an Ifpack preconditioner is another example.
 	//
 	// Here, Scalar is double, MV is Tpetra::MultiVector, and OP is FMTp_Operator.
-	typedef FMTp_Operator OP;
 	typedef Anasazi::MultiVecTraits<double, MV> MVT;
 	typedef Tpetra::DefaultPlatform::DefaultPlatformType Platform;
 
@@ -116,8 +121,6 @@ main (int argc, char *argv[])
 	init_flash_matrix(configs);
 
 	fg::FG_graph::ptr fg = fg::FG_graph::create(graph_file, index_file, configs);
-	sparse_matrix::ptr m = sparse_matrix::create(fg);
-	RCP<FMTp_Operator> A = rcp(new FMTp_Operator(m));
 
 	// Set eigensolver parameters.
 	const double tol = 1.0e-12; // convergence tolerance
@@ -127,8 +130,9 @@ main (int argc, char *argv[])
 
 	Platform &platform = Tpetra::DefaultPlatform::getDefaultPlatform();
 	RCP<const Teuchos::Comm<int> > comm = platform.getComm();
-	RCP<Tpetra::Map<size_t, size_t, Node> > Map
-		= rcp (new Tpetra::Map<size_t, size_t, Node>(m->get_num_cols(), 0, comm));
+	RCP<map_type> Map = rcp (new map_type(
+				fg->get_graph_header().get_num_vertices(), 0, comm));
+	RCP<crs_matrix_type> A = create_csr(fg->get_graph_data(), Map);
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
 	RCP<MV> ivec = rcp (new MV (Map, (size_t) blockSize));
@@ -197,7 +201,7 @@ main (int argc, char *argv[])
 		for (int i=0; i<sol.numVecs; ++i) {
 			T(i,i) = evals[i].realpart;
 		}
-		A->Apply (*evecs, tempAevec);
+		OPT::Apply( *A, *evecs, tempAevec ); 
 		MVT::MvTimesMatAddMv (-1.0, *evecs, T, 1.0, tempAevec);
 		MVT::MvNorm (tempAevec, normR);
 	}
