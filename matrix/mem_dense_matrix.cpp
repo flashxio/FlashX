@@ -30,6 +30,7 @@
 
 #include "mem_dense_matrix.h"
 #include "generic_type.h"
+#include "mem_vector.h"
 
 namespace fm
 {
@@ -746,13 +747,17 @@ dense_matrix::ptr mem_col_dense_matrix::apply(apply_margin margin,
 		size_t out_ncol = op.get_num_out_eles();
 		mem_row_dense_matrix::ptr res = mem_row_dense_matrix::create(out_nrow,
 				out_ncol, op.get_output_type());
+		// We view this row-major matrix as a vector and each row is a subvector.
+		mem_vector::ptr res_vec = res->flatten(true);
 		// TODO this might be a very large array.
-		char *tmp_arr = (char *) malloc(ncol * get_entry_size());
+		mem_vector::ptr tmp_vec = mem_vector::create(ncol, get_type());
 		for (size_t i = 0; i < nrow; i++) {
-			get_row(i, tmp_arr);
-			op.run(tmp_arr, ncol, res->get_row(i));
+			get_row(i, tmp_vec->get_raw_arr());
+			bool ret = res_vec->expose_sub_vec(i * res->get_num_cols(),
+					res->get_num_cols());
+			assert(ret);
+			op.run(*tmp_vec, *res_vec);
 		}
-		free(tmp_arr);
 		return res;
 	}
 	// Each operation runs on a column
@@ -761,8 +766,15 @@ dense_matrix::ptr mem_col_dense_matrix::apply(apply_margin margin,
 		size_t out_ncol = ncol;
 		mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(out_nrow,
 				out_ncol, op.get_output_type());
-		for (size_t i = 0; i < ncol; i++)
-			op.run(get_col(i), nrow, res->get_col(i));
+		// We view the input and output matrices as vectors and each column
+		// is a subvector.
+		mem_vector::ptr in_vec = flatten(false);
+		mem_vector::ptr res_vec = res->flatten(false);
+		for (size_t i = 0; i < ncol; i++) {
+			in_vec->expose_sub_vec(i * get_num_rows(), get_num_rows());
+			res_vec->expose_sub_vec(i * res->get_num_rows(), res->get_num_rows());
+			op.run(*in_vec, *res_vec);
+		}
 		return res;
 	}
 }
@@ -907,6 +919,18 @@ mem_row_dense_matrix::ptr mem_col_dense_matrix::get_row_store() const
 		}
 	}
 	return ret;
+}
+
+mem_vector::ptr mem_col_dense_matrix::flatten(bool byrow) const
+{
+	if (!byrow)
+		return mem_vector::create(data,
+				get_num_rows() * get_num_cols() * get_entry_size(),
+				get_type());
+	else {
+		mem_row_dense_matrix::ptr row_mat = get_row_store();
+		return row_mat->flatten(true);
+	}
 }
 
 dense_matrix::ptr mem_col_dense_matrix::gemm(const dense_matrix &Amat,
@@ -1279,6 +1303,18 @@ bool mem_row_dense_matrix::write2file(const std::string &file_name) const
 	}
 	fclose(f);
 	return true;
+}
+
+mem_vector::ptr mem_row_dense_matrix::flatten(bool byrow) const
+{
+	if (byrow)
+		return mem_vector::create(data,
+				get_num_rows() * get_num_cols() * get_entry_size(),
+				get_type());
+	else {
+		mem_col_dense_matrix::ptr col_mat = get_col_store();
+		return col_mat->flatten(false);
+	}
 }
 
 mem_row_dense_matrix::ptr mem_row_dense_matrix::create(size_t nrow, size_t ncol,

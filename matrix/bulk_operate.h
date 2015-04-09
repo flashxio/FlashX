@@ -614,11 +614,10 @@ public:
 		this->num_out_eles = num_out_eles;
 	}
 	/*
-	 * This virtual method accepts an input array of the predefined length
-	 * and stores the result in an output array of the predefined length.
+	 * This virtual method accepts an input array and stores the result
+	 * in an output array.
 	 */
-	virtual void run(const void *input, size_t num_in_eles,
-			void *output) const = 0;
+	virtual void run(const mem_vector &in, mem_vector &out) const = 0;
 
 	virtual const scalar_type &get_input_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;

@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "mem_dense_matrix.h"
+#include "mem_vector.h"
 
 using namespace fm;
 
@@ -364,6 +365,7 @@ void test_conv_row_col()
 
 void test_rand_init()
 {
+	printf("test rand init\n");
 	D_mem_dense_matrix::ptr m = D_mem_dense_matrix::create(1000, 10,
 			matrix_layout_t::L_COL);
 	m->get_matrix()->init_rand<double>(-1.0, 1.0);
@@ -375,6 +377,110 @@ void test_rand_init()
 			sum += v;
 		}
 	printf("sum: %f\n", sum);
+}
+
+void test_flatten()
+{
+	printf("test flatten a matrix to a vector\n");
+	I_mem_dense_matrix::ptr m = I_mem_dense_matrix::create(10000, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	mem_vector::ptr vec = m->get_matrix()->flatten(true);
+	for (size_t i = 0; i < vec->get_length(); i++)
+		assert((size_t) vec->get<int>(i) == i);
+
+	m = I_mem_dense_matrix::create(10000, 10, matrix_layout_t::L_ROW,
+			set_row_operate(10));
+	vec = m->get_matrix()->flatten(true);
+	for (size_t i = 0; i < vec->get_length(); i++)
+		assert((size_t) vec->get<int>(i) == i);
+
+	m = I_mem_dense_matrix::create(10000, 10, matrix_layout_t::L_COL,
+			set_col_operate(10));
+	vec = m->get_matrix()->flatten(false);
+	for (size_t i = 0; i < vec->get_length(); i++) {
+		size_t row_idx = i % m->get_num_rows();
+		size_t col_idx = i / m->get_num_rows();
+		assert((size_t) vec->get<int>(i) == row_idx * m->get_num_cols() + col_idx);
+	}
+
+	m = I_mem_dense_matrix::create(10000, 10, matrix_layout_t::L_ROW,
+			set_row_operate(10));
+	vec = m->get_matrix()->flatten(false);
+	for (size_t i = 0; i < vec->get_length(); i++) {
+		size_t row_idx = i % m->get_num_rows();
+		size_t col_idx = i / m->get_num_rows();
+		assert((size_t) vec->get<int>(i) == row_idx * m->get_num_cols() + col_idx);
+	}
+}
+
+class time2_apply_operate: public arr_apply_operate
+{
+public:
+	time2_apply_operate(size_t num_out_eles): arr_apply_operate(num_out_eles) {
+	}
+	virtual void run(const mem_vector &in, mem_vector &out) const {
+		assert(out.get_length() == get_num_out_eles());
+		for (size_t i = 0; i < get_num_out_eles(); i++)
+			out.set<int>(i, in.get<int>(i) * 2);
+	}
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<int>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<int>();
+	}
+};
+
+void test_apply()
+{
+	printf("test applying to a matrix\n");
+	I_mem_dense_matrix::ptr m = I_mem_dense_matrix::create(10000, 10,
+			matrix_layout_t::L_COL, set_col_operate(10));
+	size_t out_num_cols = m->get_num_cols() / 2;
+	mem_dense_matrix::ptr res = mem_dense_matrix::cast(
+			m->get_matrix()->apply(apply_margin::MAR_ROW,
+			time2_apply_operate(out_num_cols)));
+	assert(res->get_num_rows() == m->get_num_rows());
+	assert(res->get_num_cols() == out_num_cols);
+	for (size_t i = 0; i < res->get_num_rows(); i++) {
+		for (size_t j = 0; j < res->get_num_cols(); j++)
+			assert(m->get(i, j) * 2 == res->get<int>(i, j));
+	}
+
+	m = I_mem_dense_matrix::create(10000, 10, matrix_layout_t::L_ROW,
+			set_row_operate(10));
+	res = mem_dense_matrix::cast(m->get_matrix()->apply(apply_margin::MAR_ROW,
+				time2_apply_operate(out_num_cols)));
+	printf("output matrix: %ld, %ld\n", res->get_num_rows(), res->get_num_cols());
+	assert(res->get_num_rows() == m->get_num_rows());
+	assert(res->get_num_cols() == out_num_cols);
+	for (size_t i = 0; i < res->get_num_rows(); i++) {
+		for (size_t j = 0; j < res->get_num_cols(); j++)
+			assert(m->get(i, j) * 2 == res->get<int>(i, j));
+	}
+
+	m = I_mem_dense_matrix::create(10000, 10, matrix_layout_t::L_COL,
+			set_col_operate(10));
+	size_t out_num_rows = m->get_num_rows() / 2;
+	res = mem_dense_matrix::cast(m->get_matrix()->apply(apply_margin::MAR_COL,
+			time2_apply_operate(out_num_rows)));
+	assert(res->get_num_rows() == out_num_rows);
+	assert(res->get_num_cols() == m->get_num_cols());
+	for (size_t i = 0; i < res->get_num_rows(); i++) {
+		for (size_t j = 0; j < res->get_num_cols(); j++)
+			assert(m->get(i, j) * 2 == res->get<int>(i, j));
+	}
+
+	m = I_mem_dense_matrix::create(10000, 10, matrix_layout_t::L_ROW,
+			set_row_operate(10));
+	res = mem_dense_matrix::cast(m->get_matrix()->apply(apply_margin::MAR_COL,
+				time2_apply_operate(out_num_rows)));
+	assert(res->get_num_rows() == out_num_rows);
+	assert(res->get_num_cols() == m->get_num_cols());
+	for (size_t i = 0; i < res->get_num_rows(); i++) {
+		for (size_t j = 0; j < res->get_num_cols(); j++)
+			assert(m->get(i, j) * 2 == res->get<int>(i, j));
+	}
 }
 
 int main()
@@ -393,4 +499,6 @@ int main()
 	test_agg_sub_row();
 	test_conv_row_col();
 	test_rand_init();
+	test_flatten();
+	test_apply();
 }

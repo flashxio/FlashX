@@ -48,6 +48,8 @@ public:
 
 	static ptr cast(dense_matrix::ptr m);
 
+	virtual std::shared_ptr<mem_vector> flatten(bool byrow) const = 0;
+
 	virtual const char *get(size_t row, size_t col) const = 0;
 
 	/*
@@ -155,6 +157,7 @@ public:
 	virtual dense_matrix::ptr deep_copy() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
 	virtual dense_matrix::ptr transpose() const;
+	virtual std::shared_ptr<mem_vector> flatten(bool byrow) const;
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
@@ -270,6 +273,7 @@ public:
 	virtual dense_matrix::ptr deep_copy() const;
 	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
 	virtual dense_matrix::ptr transpose() const;
+	virtual std::shared_ptr<mem_vector> flatten(bool byrow) const;
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
