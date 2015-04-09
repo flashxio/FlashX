@@ -50,7 +50,7 @@ scalar_variable::ptr scalar_type_impl<T>::create_scalar() const
 template<class T>
 mem_vector_vector::ptr scalar_type_impl<T>::create_mem_vec_vec() const
 {
-	return type_mem_vector_vector<T>::create();
+	return mem_vector_vector::create(get_scalar_type<T>());
 }
 
 template<class T>

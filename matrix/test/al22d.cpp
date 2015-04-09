@@ -205,8 +205,8 @@ int main(int argc, char *argv[])
 	read_data(out_data.get(), out_size, 1, out_off, f);
 	std::vector<off_t> out_offs(vindex->get_num_vertices() + 1);
 	init_out_offs(vindex, out_offs);
-	mem_vector_vector::ptr out_adjs = type_mem_vector_vector<char>::create(
-			out_data, out_size, out_offs);
+	mem_vector_vector::ptr out_adjs = mem_vector_vector::create(
+			out_data, out_size, out_offs, get_scalar_type<char>());
 
 	// Construct 2D partitioning of the adjacency matrix.
 	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file);
@@ -224,8 +224,8 @@ int main(int argc, char *argv[])
 		read_data(in_data.get(), in_size, 1, in_off, f);
 		std::vector<off_t> in_offs(vindex->get_num_vertices() + 1);
 		init_in_offs(vindex, in_offs);
-		mem_vector_vector::ptr in_adjs = type_mem_vector_vector<char>::create(
-				in_data, in_size, in_offs);
+		mem_vector_vector::ptr in_adjs = mem_vector_vector::create(
+				in_data, in_size, in_offs, get_scalar_type<char>());
 
 		// Construct 2D partitioning of the adjacency matrix.
 		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file);

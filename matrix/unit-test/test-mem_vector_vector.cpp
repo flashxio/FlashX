@@ -93,7 +93,7 @@ vector_vector::ptr create_mem_vv(size_t num_vecs, size_t max_vec_len)
 	for (size_t i = 0; i < vecs.size(); i++)
 		vecs[i] = create_mem_vec(random() % max_vec_len);
 
-	type_mem_vector_vector<int>::ptr vv = type_mem_vector_vector<int>::create();
+	mem_vector_vector::ptr vv = mem_vector_vector::create(get_scalar_type<int>());
 	vv->append(vecs.begin(), vecs.end());
 	return vv;
 }
@@ -110,7 +110,7 @@ void test_append_vecs()
 	for (size_t i = 0; i < vecs.size(); i++)
 		vecs[i] = create_mem_vec(random() % 1000);
 
-	type_mem_vector_vector<int>::ptr vv1 = type_mem_vector_vector<int>::create();
+	mem_vector_vector::ptr vv1 = mem_vector_vector::create(get_scalar_type<int>());
 	BOOST_FOREACH(vector::ptr v, vecs)
 		vv1->append(*v);
 	assert(vv1->get_num_vecs() == vecs.size());
@@ -120,7 +120,7 @@ void test_append_vecs()
 				vecs[i]->get_length() * vecs[i]->get_entry_size());
 	}
 
-	type_mem_vector_vector<int>::ptr vv2 = type_mem_vector_vector<int>::create();
+	mem_vector_vector::ptr vv2 = mem_vector_vector::create(get_scalar_type<int>());
 	vv2->append(vecs.begin(), vecs.end());
 	assert(vv2->get_num_vecs() == vecs.size());
 	for (size_t i = 0; i < vecs.size(); i++) {
@@ -144,7 +144,7 @@ void test_append_vvs()
 		}
 	}
 
-	type_mem_vector_vector<int>::ptr vv1 = type_mem_vector_vector<int>::create();
+	mem_vector_vector::ptr vv1 = mem_vector_vector::create(get_scalar_type<int>());
 	BOOST_FOREACH(vector::ptr vv, vvs)
 		vv1->append(*vv);
 	assert(vv1->get_num_vecs() == vec_lens.size());
@@ -154,7 +154,7 @@ void test_append_vvs()
 				vv1->get_length(i) * vv1->get_entry_size());
 	}
 
-	type_mem_vector_vector<int>::ptr vv2 = type_mem_vector_vector<int>::create();
+	mem_vector_vector::ptr vv2 = mem_vector_vector::create(get_scalar_type<int>());
 	vv2->append(vvs.begin(), vvs.end());
 	assert(vv2->get_num_vecs() == vec_lens.size());
 	for (size_t i = 0; i < vec_lens.size(); i++) {
