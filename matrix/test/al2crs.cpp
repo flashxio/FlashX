@@ -22,15 +22,9 @@
 #include "mem_vector_vector.h"
 #include "fm_utils.h"
 #include "fg_utils.h"
+#include "crs_header.h"
 
 using namespace fm;
-
-void verify_2d_matrix(const std::string &mat_file, const std::string &mat_idx_file)
-{
-	SpM_2d_index::ptr idx = SpM_2d_index::load(mat_idx_file);
-	SpM_2d_storage::ptr mat = SpM_2d_storage::load(mat_file, idx);
-	mat->verify();
-}
 
 void read_data(char *data, size_t size, size_t num, off_t off, FILE *stream)
 {
@@ -47,27 +41,83 @@ struct deleter
 	}
 };
 
+class adj2crs_apply_operate: public arr_apply_operate
+{
+public:
+	adj2crs_apply_operate(): arr_apply_operate(0) {
+	}
+	virtual void run(const mem_vector &in, mem_vector &out) const;
+
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<char>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<crs_idx_t>();
+	}
+};
+
+void adj2crs_apply_operate::run(const mem_vector &in, mem_vector &out) const
+{
+	const fg::ext_mem_undirected_vertex *v
+		= (const fg::ext_mem_undirected_vertex *) in.get_raw_arr();
+	size_t num_edges = v->get_num_edges();
+	out.resize(num_edges);
+	for (size_t i = 0; i < num_edges; i++)
+		out.set<crs_idx_t>(i, v->get_neighbor(i));
+}
+
+void export_crs(mem_vector_vector::ptr adjs, const std::string &output_file)
+{
+	mem_vector_vector::ptr col_idxs = mem_vector_vector::cast(
+			adjs->apply(adj2crs_apply_operate()));
+	mem_vector::ptr col_vec = mem_vector::cast(col_idxs->flatten());
+	std::vector<crs_idx_t> offs(adjs->get_num_vecs() + 1);
+	for (size_t i = 0; i < adjs->get_num_vecs(); i++) {
+		offs[i + 1] = offs[i] + col_idxs->get_length(i);
+	}
+
+	FILE *f = fopen(output_file.c_str(), "w");
+	if (f == NULL) {
+		fprintf(stderr, "can't open %s: %s\n", output_file.c_str(), strerror(errno));
+		exit(1);
+	}
+
+	// This is an adjacency matrix of a graph, so it has the same number of
+	// rows and columns.
+	crs_header header(adjs->get_num_vecs(), adjs->get_num_vecs(),
+			col_vec->get_length());
+	size_t ret = fwrite(&header, sizeof(header), 1, f);
+	if (ret == 0) {
+		fprintf(stderr, "can't write header: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	ret = fwrite(offs.data(), offs.size() * sizeof(offs[0]), 1, f);
+	if (ret == 0) {
+		fprintf(stderr, "can't write the row pointers: %s\n", strerror(errno));
+		exit(1);
+	}
+	ret = fwrite(col_vec->get_raw_arr(),
+			col_vec->get_length() * col_vec->get_entry_size(), 1, f);
+	if (ret == 0) {
+		fprintf(stderr, "can't write col idx: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	fclose(f);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 4) {
-		fprintf(stderr, "el2al graph_file index_file matrix_name [block_height [block_width]]\n");
+		fprintf(stderr, "el2crs graph_file index_file crs_file\n");
 		return -1;
 	}
 
 	std::string graph_file = std::string(argv[1]);
 	std::string index_file = std::string(argv[2]);
-	std::string mat_name = std::string(argv[3]);
-	size_t block_height = block_max_num_rows;
-	size_t block_width = block_height;
-	if (argc >= 5)
-		block_width = block_height = std::atoi(argv[4]);
-	if (argc >= 6)
-		block_width = std::atoi(argv[5]);
+	std::string crs_file = std::string(argv[3]);
 
-	std::string mat_file = mat_name + ".mat";
-	std::string mat_idx_file = mat_name + ".mat_idx";
-
-	block_2d_size block_size(block_height, block_width);
 	fg::vertex_index::ptr vindex = fg::vertex_index::load(index_file);
 
 	FILE *f = fopen(graph_file.c_str(), "r");
@@ -87,14 +137,11 @@ int main(int argc, char *argv[])
 	mem_vector_vector::ptr out_adjs = mem_vector_vector::create(
 			out_data, out_size, out_offs, get_scalar_type<char>());
 
-	// Construct 2D partitioning of the adjacency matrix.
-	export_2d_matrix(out_adjs, block_size, mat_file, mat_idx_file);
-	verify_2d_matrix(mat_file, mat_idx_file);
+	export_crs(out_adjs, crs_file);
 	out_adjs = NULL;
 
 	if (vindex->get_graph_header().is_directed_graph()) {
-		std::string t_mat_file = mat_name + "_t.mat";
-		std::string t_mat_idx_file = mat_name + "_t.mat_idx";
+		std::string t_crs_file = std::string("t_") + crs_file;
 
 		size_t in_size = get_in_size(vindex);
 		off_t in_off = get_in_off(vindex);
@@ -106,9 +153,7 @@ int main(int argc, char *argv[])
 		mem_vector_vector::ptr in_adjs = mem_vector_vector::create(
 				in_data, in_size, in_offs, get_scalar_type<char>());
 
-		// Construct 2D partitioning of the adjacency matrix.
-		export_2d_matrix(in_adjs, block_size, t_mat_file, t_mat_idx_file);
-		verify_2d_matrix(t_mat_file, t_mat_idx_file);
+		export_crs(in_adjs, t_crs_file);
 	}
 
 	fclose(f);

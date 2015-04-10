@@ -23,7 +23,7 @@ LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsaf
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas
 
 all: test-fg_SpMV test-2d_multiply test-mem_matrix test-EM_matrix test-mem_vector	\
-	el2al al22d test-sort
+	el2al al22d al2crs test-sort
 
 test-fg_SpMV: test-fg_SpMV.o ../libFMatrix.a
 	$(CXX) -o test-fg_SpMV test-fg_SpMV.o $(LDFLAGS)
@@ -43,8 +43,11 @@ test-EM_matrix: test-EM_matrix.o ../libFMatrix.a
 el2al: el2al.o ../libFMatrix.a
 	$(CXX) -o el2al el2al.o $(LDFLAGS)
 
-al22d: al22d.o ../libFMatrix.a
-	$(CXX) -o al22d al22d.o $(LDFLAGS)
+al22d: al22d.o fg_utils.o ../libFMatrix.a
+	$(CXX) -o al22d al22d.o fg_utils.o $(LDFLAGS)
+
+al2crs: al2crs.o fg_utils.o ../libFMatrix.a
+	$(CXX) -o al2crs al2crs.o fg_utils.o $(LDFLAGS)
 
 test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
@@ -60,6 +63,7 @@ clean:
 	rm test-EM_matrix
 	rm el2al
 	rm al22d
+	rm al2crs
 	rm test-sort
 
 -include $(DEPS) 
