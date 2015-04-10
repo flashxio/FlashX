@@ -106,6 +106,7 @@ void verify_data(const char *buf1, const char *buf2, size_t len)
 
 void test_append_vecs()
 {
+	printf("test appending vectors\n");
 	std::vector<vector::ptr> vecs(1000);
 	for (size_t i = 0; i < vecs.size(); i++)
 		vecs[i] = create_mem_vec(random() % 1000);
@@ -132,6 +133,7 @@ void test_append_vecs()
 
 void test_append_vvs()
 {
+	printf("test append vector vectors\n");
 	std::vector<vector::ptr> vvs(1000);
 	std::vector<size_t> vec_lens;
 	std::vector<const char *> vec_data;
@@ -164,9 +166,70 @@ void test_append_vvs()
 	}
 }
 
+class time2_apply_operate: public arr_apply_operate
+{
+public:
+	time2_apply_operate(): arr_apply_operate(0) {
+	}
+	virtual void run(const mem_vector &in, mem_vector &out) const {
+		out.resize(in.get_length());
+		for (size_t i = 0; i < out.get_length(); i++)
+			out.set<long>(i, in.get<int>(i) * 2);
+	}
+	virtual const scalar_type &get_input_type() const {
+		return get_scalar_type<int>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<long>();
+	}
+};
+
+void test_flatten()
+{
+	printf("test flatten a sub vector vector\n");
+	mem_vector_vector::ptr vv = mem_vector_vector::cast(create_mem_vv(100, 1000));
+	mem_vector::ptr vec = mem_vector::cast(vv->flatten());
+	assert(memcmp(vec->get_raw_arr(), vv->get_raw_arr(0),
+				vec->get_length() * vec->get_entry_size()) == 0);
+
+	mem_vector_vector::const_ptr sub_vv = vv->get_sub_vec_vec(10, 20);
+	mem_vector::ptr sub_vec = mem_vector::cast(sub_vv->flatten());
+	off_t sub_off = 0;
+	for (int i = 0; i < 10; i++)
+		sub_off += vv->get_length(i);
+	off_t sub_len = 0;
+	for (int i = 10; i < 30; i++)
+		sub_len += vv->get_length(i);
+	assert(sub_vec->get_length() == sub_len);
+	for (size_t i = 0; i < sub_vec->get_length(); i++)
+		assert(sub_vec->get<int>(i) == vec->get<int>(i + sub_off));
+	assert(memcmp(sub_vec->get_raw_arr(), vv->get_raw_arr(10),
+				sub_vec->get_length() * sub_vec->get_entry_size()) == 0);
+}
+
+void test_apply()
+{
+	printf("test apply to each vector\n");
+	mem_vector_vector::ptr vv = mem_vector_vector::cast(create_mem_vv(100, 1000));
+	vector_vector::ptr vv2 = vv->serial_apply(time2_apply_operate());
+	mem_vector::ptr vec = mem_vector::cast(vv->flatten());
+	mem_vector::ptr vec2 = mem_vector::cast(vv2->flatten());
+	assert(vec->get_length() == vec2->get_length());
+	for (size_t i = 0; i < vec->get_length(); i++)
+		assert(vec->get<int>(i) * 2 == vec2->get<long>(i));
+
+	vv2 = vv->apply(time2_apply_operate());
+	vec2 = mem_vector::cast(vv2->flatten());
+	assert(vec->get_length() == vec2->get_length());
+	for (size_t i = 0; i < vec->get_length(); i++)
+		assert(vec->get<int>(i) * 2 == vec2->get<long>(i));
+}
+
 int main()
 {
 	test_groupby();
 	test_append_vecs();
 	test_append_vvs();
+	test_flatten();
+	test_apply();
 }

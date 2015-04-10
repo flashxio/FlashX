@@ -106,6 +106,8 @@ public:
 	}
 	virtual vector_vector::ptr groupby(const factor_vector &labels,
 			const gr_apply_operate<sub_vector_vector> &op) const = 0;
+	virtual vector_vector::ptr apply(const arr_apply_operate &op) const = 0;
+	virtual vector::ptr flatten() const = 0;
 
 	virtual vector::ptr deep_copy() const {
 		// TODO

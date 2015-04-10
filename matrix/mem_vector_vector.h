@@ -39,6 +39,7 @@ class mem_vector_vector: public vector_vector
 	};
 
 	const scalar_type &type;
+	// The offsets (in #bytes) of the vectors in the data array.
 	// The last offset is the end of the last vector.
 	std::vector<off_t> vec_offs;
 
@@ -88,10 +89,27 @@ protected:
 	void append_mem_vectors(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end);
 	void append_mem_vv(const mem_vector_vector &vv);
-	void append_mem_vvs(std::vector<vector::ptr>::const_iterator vec_it,
-			std::vector<vector::ptr>::const_iterator vec_end);
+	void append_mem_vvs(std::vector<vector_vector::ptr>::const_iterator vec_it,
+			std::vector<vector_vector::ptr>::const_iterator vec_end);
 public:
 	typedef std::shared_ptr<mem_vector_vector> ptr;
+	typedef std::shared_ptr<const mem_vector_vector> const_ptr;
+
+	static ptr cast(vector_vector::ptr vec) {
+		if (!vec->is_in_mem()) {
+			BOOST_LOG_TRIVIAL(error) << "This vector vector isn't in memory";
+			return ptr();
+		}
+		return std::static_pointer_cast<mem_vector_vector>(vec);
+	}
+
+	static const_ptr cast(vector_vector::const_ptr vec) {
+		if (!vec->is_in_mem()) {
+			BOOST_LOG_TRIVIAL(error) << "This vector vector isn't in memory";
+			return const_ptr();
+		}
+		return std::static_pointer_cast<const mem_vector_vector>(vec);
+	}
 
 	static ptr create(const scalar_type &type) {
 		return ptr(new mem_vector_vector(type));
@@ -116,6 +134,8 @@ public:
 	virtual const char*get_raw_arr(off_t idx) const {
 		return data.get() + vec_offs[idx];
 	}
+	virtual mem_vector_vector::const_ptr get_sub_vec_vec(off_t start,
+			size_t len) const;
 
 	bool append(const vector &vec);
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
@@ -124,9 +144,12 @@ public:
 	virtual std::shared_ptr<vector> cat() const;
 	virtual vector_vector::ptr groupby(const factor_vector &labels,
 			const gr_apply_operate<sub_vector_vector> &op) const;
+	virtual vector_vector::ptr apply(const arr_apply_operate &op) const;
+	virtual vector_vector::ptr serial_apply(const arr_apply_operate &op) const;
 	virtual void reset_data() {
 		memset(data.get(), 0, capacity);
 	}
+	virtual vector::ptr flatten() const;
 };
 
 }

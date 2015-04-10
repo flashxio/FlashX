@@ -90,8 +90,8 @@ void mem_vector_vector::append_mem_vv(const mem_vector_vector &vv)
 }
 
 void mem_vector_vector::append_mem_vvs(
-		std::vector<vector::ptr>::const_iterator vec_it,
-		std::vector<vector::ptr>::const_iterator vec_end)
+		std::vector<vector_vector::ptr>::const_iterator vec_it,
+		std::vector<vector_vector::ptr>::const_iterator vec_end)
 {
 	size_t tot_bytes = 0;
 	size_t tot_num_vecs = 0;
@@ -126,6 +126,7 @@ bool mem_vector_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 		return true;
 
 	bool is_vv = is_vector_vector(**vec_it);
+	std::vector<vector_vector::ptr> vvs;
 	for (auto it = vec_it; it != vec_end; it++) {
 		if (!(*it)->is_in_mem()) {
 			BOOST_LOG_TRIVIAL(error)
@@ -140,9 +141,11 @@ bool mem_vector_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 			BOOST_LOG_TRIVIAL(error) << "Not all vectors contain the same";
 			return false;
 		}
+		if (is_vector_vector(**it))
+			vvs.push_back(vector_vector::cast(*it));
 	}
 	if (is_vv)
-		append_mem_vvs(vec_it, vec_end);
+		append_mem_vvs(vvs.begin(), vvs.end());
 	else
 		append_mem_vectors(vec_it, vec_end);
 
@@ -226,6 +229,82 @@ vector_vector::ptr mem_vector_vector::groupby(const factor_vector &labels,
 	data_frame::ptr df = labels.groupby(
 			sorted_gr_label_operate(labels, op, *this), false);
 	return vector_vector::cast(df->get_vec("agg"));
+}
+
+vector_vector::ptr mem_vector_vector::apply(const arr_apply_operate &op) const
+{
+	int num_parts = std::min((size_t) get_num_omp_threads(), get_num_vecs());
+	std::vector<vector_vector::ptr> vvs(num_parts);
+	size_t part_num_vecs = ceil(((double) get_num_vecs()) / num_parts);
+#pragma omp parallel for
+	for (int i = 0; i < num_parts; i++) {
+		// TODO Here I divide the vector_vector evenly in terms of the number
+		// of vectors in each partition. It potentially has load balancing
+		// problems.
+		off_t start = part_num_vecs * i;
+		off_t end = std::min(part_num_vecs * (i + 1), get_num_vecs());
+		// When there aren't many vectors, this may happen.
+		if (end <= start)
+			continue;
+		mem_vector_vector::const_ptr sub_vv = this->get_sub_vec_vec(start,
+				end - start);
+		vvs[i] = mem_vector_vector::cast(sub_vv)->serial_apply(op);
+	}
+
+	mem_vector_vector::ptr ret = mem_vector_vector::cast(vvs[0]);
+	// It's possible that some threads didn't generate results.
+	// It's guaranteed that the non-empty results are in the front.
+	int num_non_empty = 0;
+	for (int i = 0; i < num_parts; i++) {
+		if (vvs[i]) {
+			assert(i == num_non_empty);
+			num_non_empty++;
+		}
+	}
+	if (num_parts > 1)
+		ret->append_mem_vvs(vvs.begin() + 1, vvs.begin() + num_non_empty);
+	return ret;
+}
+
+vector_vector::ptr mem_vector_vector::serial_apply(
+		const arr_apply_operate &op) const
+{
+	const scalar_type &output_type = op.get_output_type();
+	mem_vector_vector::ptr ret = mem_vector_vector::create(output_type);
+	mem_vector::ptr vec = mem_vector::cast(this->flatten());
+	mem_vector::ptr buf = output_type.create_mem_vec(1);
+	// It's possible that this is a sub-vector.
+	off_t off = vec->get_sub_start();
+	for (size_t i = 0; i < get_num_vecs(); i++) {
+		// TODO the off is the absolute offset in the vector.
+		vec->expose_sub_vec(off, this->get_length(i));
+		off += this->get_length(i);
+		op.run(*vec, *buf);
+		ret->append(*buf);
+	}
+	return ret;
+}
+
+mem_vector_vector::const_ptr mem_vector_vector::get_sub_vec_vec(off_t start,
+		size_t len) const
+{
+	std::vector<off_t> offs(vec_offs.begin() + start,
+			// The last entry shows the end of the last vector.
+			vec_offs.begin() + start + len + 1);
+	return mem_vector_vector::ptr(new mem_vector_vector(data, capacity, offs,
+				get_type()));
+}
+
+vector::ptr mem_vector_vector::flatten() const
+{
+	assert(vec_offs.size() > 1);
+	size_t tot_len = vec_offs.back() / get_type().get_size();
+	size_t off = vec_offs.front() / get_type().get_size();
+	mem_vector::ptr ret = mem_vector::create(data, vec_offs.back(), type);
+	// This might be a sub vector vector.
+	if (vec_offs.front() > 0)
+		ret->expose_sub_vec(off, tot_len - off);
+	return ret;
 }
 
 }
