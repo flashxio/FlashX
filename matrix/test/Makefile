@@ -23,7 +23,7 @@ LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsaf
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas
 
 all: test-fg_SpMV test-2d_multiply test-mem_matrix test-EM_matrix test-mem_vector	\
-	el2al al22d al2crs test-sort test-mkl_multiply
+	el2al al22d al2crs test-sort test-mkl_multiply test-tpetra_multiply
 
 test-fg_SpMV: test-fg_SpMV.o ../libFMatrix.a
 	$(CXX) -o test-fg_SpMV test-fg_SpMV.o $(LDFLAGS)
@@ -52,6 +52,12 @@ al2crs: al2crs.o fg_utils.o ../libFMatrix.a
 test-sort: test-sort.o ../libFMatrix.a
 	$(CXX) -o test-sort test-sort.o $(LDFLAGS)
 
+LDTRILINOS = -ltpetra -lteuchoscomm -lteuchoskokkoscomm -lteuchosnumerics -lteuchosparameterlist		\
+		-lteuchoscore -lkokkoscore -lkokkoscontainers -lteuchoskokkoscompat
+
+test-tpetra_multiply: test-tpetra_multiply.o ../libFMatrix.a
+	$(CXX) -o test-tpetra_multiply test-tpetra_multiply.o $(LDFLAGS) $(LDTRILINOS)
+
 test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 	$(CXX) -O3 -c test-mkl_multiply.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
 
@@ -71,6 +77,7 @@ clean:
 	rm al22d
 	rm al2crs
 	rm test-sort
+	rm test-tpetra_multiply
 	rm test-mkl_multiply
 
 -include $(DEPS) 
