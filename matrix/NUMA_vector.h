@@ -46,11 +46,10 @@ class NUMA_vector: public vector
 	detail::NUMA_mapper mapper;
 
 	std::vector<detail::raw_data_array> data;
-	const scalar_type &type;
 
 	// The copy constructor performs shallow copy.
 	NUMA_vector(const NUMA_vector &vec): vector(vec.get_length(),
-			vec.get_entry_size(), true), mapper(vec.mapper), type(vec.type) {
+			vec.get_type(), true), mapper(vec.mapper) {
 		data = vec.data;
 	}
 
@@ -67,10 +66,6 @@ public:
 	}
 
 	static ptr cast(vector::ptr vec);
-
-	virtual const scalar_type &get_type() const {
-		return type;
-	}
 
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
 	virtual bool expose_sub_vec(off_t start, size_t length);

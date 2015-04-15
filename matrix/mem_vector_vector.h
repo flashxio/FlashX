@@ -38,7 +38,6 @@ class mem_vector_vector: public vector_vector
 		}
 	};
 
-	const scalar_type &type;
 	// The offsets (in #bytes) of the vectors in the data array.
 	// The last offset is the end of the last vector.
 	std::vector<off_t> vec_offs;
@@ -62,16 +61,15 @@ class mem_vector_vector: public vector_vector
 	}
 
 protected:
-	mem_vector_vector(const scalar_type &_type): vector_vector(0,
-			true), type(_type) {
+	mem_vector_vector(const scalar_type &type): vector_vector(0, type, true) {
 		vec_offs.push_back(0);
 		capacity = 1024;
 		data = std::shared_ptr<char>((char *) malloc(capacity), deleter());
 	}
 
 	mem_vector_vector(std::shared_ptr<char> data, size_t size,
-			const std::vector<off_t> &offs, const scalar_type &_type): vector_vector(
-				offs.size() - 1, true), type(_type) {
+			const std::vector<off_t> &offs, const scalar_type &type): vector_vector(
+				offs.size() - 1, type, true) {
 		this->vec_offs = offs;
 		this->data = data;
 		this->capacity = size;
@@ -118,10 +116,6 @@ public:
 	static ptr create(std::shared_ptr<char> data, size_t size,
 			const std::vector<off_t> &offs, const scalar_type &type) {
 		return ptr(new mem_vector_vector(data, size, offs, type));
-	}
-
-	virtual const scalar_type &get_type() const {
-		return type;
 	}
 
 	virtual size_t get_tot_num_entries() const {

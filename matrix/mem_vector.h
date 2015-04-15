@@ -44,7 +44,7 @@ protected:
 	mem_vector(mem_dense_matrix::ptr data);
 	mem_vector(size_t length, const scalar_type &type);
 	mem_vector(std::shared_ptr<char> data, size_t len, const scalar_type &type);
-	mem_vector(const mem_vector &vec): vector(vec.get_length(), vec.get_entry_size(),
+	mem_vector(const mem_vector &vec): vector(vec.get_length(), vec.get_type(),
 			true) {
 		this->arr = vec.arr;
 		this->data = vec.data;
@@ -106,9 +106,6 @@ public:
 	virtual mem_vector::ptr get(const mem_vector &idxs) const;
 
 	virtual bool equals(const mem_vector &vec) const;
-	virtual const scalar_type &get_type() const {
-		return data->get_type();
-	}
 
 	virtual bool is_sorted() const {
 		return sorted;

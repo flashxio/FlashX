@@ -34,11 +34,23 @@ class agg_operate;
 class vector
 {
 	size_t length;
-	size_t entry_size;
+	const scalar_type &type;
 	bool in_mem;
+	// This is used to avoid virtual function call.
+	int entry_size;
 
 protected:
-	vector(size_t length, size_t entry_size, bool in_mem) {
+	vector(size_t length, const scalar_type &_type, bool in_mem): type(_type) {
+		this->length = length;
+		this->entry_size = type.get_size();
+		this->in_mem = in_mem;
+	}
+
+	/*
+	 * This is used for vector vector because its entry size isn't fixed.
+	 */
+	vector(size_t length, size_t entry_size, const scalar_type &_type,
+			bool in_mem): type(_type) {
 		this->length = length;
 		this->entry_size = entry_size;
 		this->in_mem = in_mem;
@@ -69,13 +81,15 @@ public:
 	size_t get_entry_size() const {
 		return entry_size;
 	}
+	const scalar_type &get_type() const {
+		return type;
+	}
 
 	virtual bool resize(size_t new_length) {
 		this->length = new_length;
 		return true;
 	}
 
-	virtual const scalar_type &get_type() const = 0;
 	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const = 0;
 	virtual void reset_data() = 0;
 	/*

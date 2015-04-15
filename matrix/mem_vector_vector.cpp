@@ -300,7 +300,7 @@ vector::ptr mem_vector_vector::flatten() const
 	assert(vec_offs.size() > 1);
 	size_t tot_len = vec_offs.back() / get_type().get_size();
 	size_t off = vec_offs.front() / get_type().get_size();
-	mem_vector::ptr ret = mem_vector::create(data, vec_offs.back(), type);
+	mem_vector::ptr ret = mem_vector::create(data, vec_offs.back(), get_type());
 	// This might be a sub vector vector.
 	if (vec_offs.front() > 0)
 		ret->expose_sub_vec(off, tot_len - off);

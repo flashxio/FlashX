@@ -40,7 +40,7 @@ static char *get_matrix_raw_data(mem_dense_matrix &data)
 mem_vector::mem_vector(mem_dense_matrix::ptr data): vector(
 		// The length of the vector is the size of the dimension that isn't 1.
 		data->get_num_rows() == 1 ? data->get_num_cols(): data->get_num_rows(),
-		data->get_entry_size(), true)
+		data->get_type(), true)
 {
 	this->sorted = false;
 	this->data = data;
@@ -50,7 +50,7 @@ mem_vector::mem_vector(mem_dense_matrix::ptr data): vector(
 }
 
 mem_vector::mem_vector(std::shared_ptr<char> data, size_t length,
-		const scalar_type &type): vector(length, type.get_size(), true)
+		const scalar_type &type): vector(length, type, true)
 {
 	this->sorted = false;
 	// Maybe the column form may be more useful.
@@ -61,7 +61,7 @@ mem_vector::mem_vector(std::shared_ptr<char> data, size_t length,
 }
 
 mem_vector::mem_vector(size_t length, const scalar_type &type): vector(length,
-		type.get_size(), true)
+		type, true)
 {
 	this->sorted = false;
 	// Maybe the column form may be more useful.

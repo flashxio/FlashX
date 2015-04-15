@@ -47,8 +47,7 @@ NUMA_vector::ptr NUMA_vector::cast(vector::ptr vec)
 }
 
 NUMA_vector::NUMA_vector(size_t length, size_t num_nodes,
-		const scalar_type &_type): vector(length, _type.get_size(),
-			true), mapper(num_nodes), type(_type)
+		const scalar_type &type): vector(length, type, true), mapper(num_nodes)
 {
 	data.resize(num_nodes);
 	size_t num_eles_per_node = ceil_divide(length, num_nodes);
@@ -246,7 +245,7 @@ void NUMA_vector::copy_from(const char *buf, size_t num_bytes)
 
 bool NUMA_vector::copy_from(const NUMA_vector &vec)
 {
-	if (type != vec.type) {
+	if (get_type() != vec.get_type()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "can't copy from a vector of different type";
 		return false;

@@ -42,7 +42,8 @@ class factor_vector;
 class vector_vector: public vector
 {
 public:
-	vector_vector(size_t length, bool in_mem): vector(length, 0, in_mem) {
+	vector_vector(size_t length, const scalar_type &type,
+			bool in_mem): vector(length, 0, type, in_mem) {
 	}
 
 	typedef std::shared_ptr<vector_vector> ptr;
@@ -71,8 +72,6 @@ public:
 	 * Catenate all vectors into a single vector.
 	 */
 	virtual std::shared_ptr<vector> cat() const = 0;
-
-	virtual const scalar_type &get_type() const = 0;
 
 	virtual bool resize(size_t new_length) {
 		throw unsupported_exception("resize");
