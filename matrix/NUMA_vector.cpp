@@ -117,9 +117,6 @@ char *NUMA_vector::get_sub_arr(off_t start, off_t end)
 
 bool NUMA_vector::is_sub_vec() const
 {
-	for (size_t i = 0; i < data.size(); i++)
-		if (!data[i].has_entire_array())
-			return true;
 	return false;
 }
 

@@ -107,27 +107,19 @@ raw_data_array::raw_data_array(size_t num_bytes, int node_id)
 	this->num_bytes = num_bytes;
 	void *addr = numa_alloc_onnode(num_bytes, node_id);
 	data = std::shared_ptr<char>((char *) addr, deleter(num_bytes));
-	start = data.get();
-	num_used_bytes = num_bytes;
 }
 
 raw_data_array raw_data_array::deep_copy() const
 {
-	assert(has_entire_array());
 	raw_data_array ret(*this);
 	void *addr = numa_alloc_onnode(num_bytes, node_id);
 	memcpy(addr, this->data.get(), num_bytes);
 	ret.data = std::shared_ptr<char>((char *) addr, deleter(num_bytes));
-	ret.start = data.get();
 	return ret;
 }
 
 bool raw_data_array::copy_from(const raw_data_array &arr)
 {
-	if (!has_entire_array() || !arr.has_entire_array()) {
-		BOOST_LOG_TRIVIAL(error) << "copy_from doesn't work on sub array";
-		return false;
-	}
 	if (num_bytes != arr.num_bytes) {
 		BOOST_LOG_TRIVIAL(error) << "copy from an array of different length";
 		return false;
