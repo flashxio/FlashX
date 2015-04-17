@@ -124,6 +124,18 @@ void test_resize()
 		assert(vec->get<int>(i) == copy->get<int>(i));
 }
 
+void test_get_sub()
+{
+	printf("test get sub\n");
+	mem_vector::ptr vec = mem_vector::cast(create_vector<int>(1, 10000, 2));
+	mem_vector::ptr idxs = mem_vector::create(1000, get_scalar_type<off_t>());
+	for (size_t i = 0; i < idxs->get_length(); i++)
+		idxs->set<off_t>(i, random() % idxs->get_length());
+	mem_vector::ptr res = vec->get(*idxs);
+	for (size_t i = 0; i < res->get_length(); i++)
+		assert(res->get<int>(i) == vec->get<int>(idxs->get<off_t>(i)));
+}
+
 int main()
 {
 	test_sort();
@@ -131,4 +143,5 @@ int main()
 	test_groupby();
 	test_max();
 	test_resize();
+	test_get_sub();
 }

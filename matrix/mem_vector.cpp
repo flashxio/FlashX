@@ -91,7 +91,6 @@ data_frame::ptr mem_vector::serial_groupby(const gr_apply_operate<mem_vector> &o
 	mem_vector::ptr val;
 	if (with_val)
 		val = mem_vector::ptr(new mem_vector(16, get_type()));
-	size_t idx = 0;
 	// Discard the const qualifier.
 	mem_vector::ptr copy = mem_vector::cast(
 			const_cast<mem_vector *>(sorted_vec)->shallow_copy());
@@ -99,27 +98,24 @@ data_frame::ptr mem_vector::serial_groupby(const gr_apply_operate<mem_vector> &o
 	off_t copy_sub_start = copy->get_sub_start();
 	assert(copy->get_raw_arr() == sorted_vec->get_raw_arr());
 	mem_vector::ptr one_agg = output_type.create_mem_vec(1);
+	std::vector<const char *> val_locs;
 	while (loc < sorted_vec->get_length()) {
 		size_t curr_length = sorted_vec->get_length() - loc;
 		const char *curr_ptr = sorted_vec->get_raw_arr() + get_entry_size() * loc;
 		size_t rel_end;
 		find_next.run(curr_length, curr_ptr, &rel_end);
-		if (with_val && idx >= val->get_length()) {
-			val->resize(val->get_length() * 2);
-		}
 		copy->expose_sub_vec(loc + copy_sub_start, rel_end);
 		assert(curr_ptr == copy->get_raw_arr());
 		op.run(curr_ptr, *copy, *one_agg);
-		// TODO there might be some overhead here.
-		// We should really enable bulk operation here.
 		agg->append(*one_agg);
 		if (with_val)
-			memcpy(val->get(idx), curr_ptr, get_entry_size());
-		idx++;
+			val_locs.push_back(curr_ptr);
 		loc += rel_end;
 	}
-	if (with_val)
-		val->resize(idx);
+	if (with_val) {
+		val->resize(val_locs.size());
+		val->set(val_locs);
+	}
 	mem_data_frame::ptr ret = mem_data_frame::create();
 	if (with_val)
 		ret->add_vec("val", std::static_pointer_cast<vector>(val));
@@ -325,19 +321,30 @@ mem_vector::ptr mem_vector::get(const mem_vector &idxs) const
 	}
 
 	mem_vector::ptr ret = mem_vector::create(idxs.get_length(), get_type());
+	int num_threads = get_num_omp_threads();
+	size_t part_len = ceil(((double) idxs.get_length()) / num_threads);
 #pragma omp parallel for
-	for (size_t i = 0; i < idxs.get_length(); i++) {
-		off_t idx = idxs.get<off_t>(i);
-		// Check if it's out of the range.
-		if (idx < 0 && idx >= this->get_length()) {
-			BOOST_LOG_TRIVIAL(error)
-				<< boost::format("%1% is out of range") % idx;
+	for (int k = 0; k < num_threads; k++) {
+		size_t start = k * part_len;
+		size_t end = std::min((k + 1) * part_len, idxs.get_length());
+		size_t local_len = end >= start ? end - start : 0;
+		if (local_len == 0)
 			continue;
-		}
 
-		char *dst = ret->get(i);
-		const char *src = this->get(idx);
-		memcpy(dst, src, get_entry_size());
+		std::vector<const char *> src_locs(local_len);
+		for (size_t i = 0; i < local_len; i++) {
+			off_t idx = idxs.get<off_t>(i + start);
+			// Check if it's out of the range.
+			if (idx < 0 && idx >= this->get_length()) {
+				BOOST_LOG_TRIVIAL(error)
+					<< boost::format("%1% is out of range") % idx;
+				continue;
+			}
+
+			src_locs[i] = this->get(idx);
+		}
+		get_type().get_sg().gather(src_locs,
+				ret->arr + start * ret->get_entry_size());
 	}
 	return ret;
 }
@@ -380,8 +387,8 @@ vector::ptr mem_vector::sort_with_index()
 {
 	mem_vector::ptr indexes = mem_vector::create(get_length(),
 			get_scalar_type<off_t>());
-	get_type().get_sorter().sort_with_index(get_raw_arr(),
-			(off_t *) indexes->get_raw_arr(), get_length(), false);
+	get_type().get_sorter().sort_with_index(arr,
+			(off_t *) indexes->arr, get_length(), false);
 	sorted = true;
 	return indexes;
 }
@@ -390,7 +397,7 @@ void mem_vector::set_data(const set_operate &op)
 {
 	// I assume this is column-wise matrix.
 	// TODO parallel.
-	op.set(get_raw_arr(), get_length(), 0, 0);
+	op.set(arr, get_length(), 0, 0);
 	sorted = get_type().get_sorter().is_sorted(get_raw_arr(),
 			get_length(), false);
 }

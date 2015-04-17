@@ -42,6 +42,9 @@ class mem_vector: public vector
 	detail::raw_data_array data;
 	bool sorted;
 
+	const char *get(off_t idx) const {
+		return arr + idx * get_entry_size();
+	}
 protected:
 	mem_vector(size_t length, const scalar_type &type);
 	mem_vector(const detail::raw_data_array &data, size_t len, const scalar_type &type);
@@ -78,13 +81,6 @@ public:
 		return arr;
 	}
 
-	char *get(off_t idx) {
-		return arr + idx * get_entry_size();
-	}
-
-	const char *get(off_t idx) const {
-		return arr + idx * get_entry_size();
-	}
 	virtual mem_vector::ptr get(const mem_vector &idxs) const;
 
 	virtual bool equals(const mem_vector &vec) const;
@@ -125,23 +121,30 @@ public:
 	virtual vector::ptr sort_with_index();
 
 	virtual void sort() {
-		get_type().get_sorter().sort(get_raw_arr(), get_length(), false);
+		get_type().get_sorter().sort(arr, get_length(), false);
 		sorted = true;
 	}
 
 	virtual void serial_sort() {
-		get_type().get_sorter().serial_sort(get_raw_arr(), get_length(), false);
+		get_type().get_sorter().serial_sort(arr, get_length(), false);
 		sorted = true;
+	}
+
+	void set(const std::vector<const char *> &locs) {
+		assert(locs.size() <= get_length());
+		get_type().get_sg().gather(locs, arr);
 	}
 
 	template<class T>
 	T get(off_t idx) const {
-		return *(const T*) get(idx);
+		const T *eles = (const T *) arr;
+		return eles[idx];
 	}
 
 	template<class T>
 	void set(off_t idx, T v) {
-		*(T*) get(idx) = v;
+		T *eles = (T *) arr;
+		eles[idx] = v;
 	}
 
 	template<class T>
