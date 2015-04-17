@@ -29,7 +29,6 @@ namespace fm
 mem_vector::mem_vector(const detail::raw_data_array &data, size_t length,
 		const scalar_type &type): vector(length, type, true)
 {
-	this->sorted = false;
 	this->data = data;
 	this->arr = this->data.get_raw();
 }
@@ -37,7 +36,6 @@ mem_vector::mem_vector(const detail::raw_data_array &data, size_t length,
 mem_vector::mem_vector(size_t length, const scalar_type &type): vector(length,
 		type, true), data(length * type.get_size())
 {
-	this->sorted = false;
 	this->arr = data.get_raw();
 }
 
@@ -389,7 +387,6 @@ vector::ptr mem_vector::sort_with_index()
 			get_scalar_type<off_t>());
 	get_type().get_sorter().sort_with_index(arr,
 			(off_t *) indexes->arr, get_length(), false);
-	sorted = true;
 	return indexes;
 }
 
@@ -398,8 +395,6 @@ void mem_vector::set_data(const set_operate &op)
 	// I assume this is column-wise matrix.
 	// TODO parallel.
 	op.set(arr, get_length(), 0, 0);
-	sorted = get_type().get_sorter().is_sorted(get_raw_arr(),
-			get_length(), false);
 }
 
 scalar_variable::ptr mem_vector::aggregate(const bulk_operate &op) const

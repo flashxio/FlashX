@@ -40,7 +40,6 @@ class mem_vector: public vector
 {
 	char *arr;
 	detail::raw_data_array data;
-	bool sorted;
 
 	const char *get(off_t idx) const {
 		return arr + idx * get_entry_size();
@@ -52,7 +51,6 @@ protected:
 			true) {
 		this->arr = vec.arr;
 		this->data = vec.data;
-		this->sorted = vec.sorted;
 	}
 public:
 	typedef std::shared_ptr<mem_vector> ptr;
@@ -86,7 +84,8 @@ public:
 	virtual bool equals(const mem_vector &vec) const;
 
 	virtual bool is_sorted() const {
-		return sorted;
+		return get_type().get_sorter().is_sorted(get_raw_arr(),
+				get_length(), false);
 	}
 
 	bool verify_groupby(const gr_apply_operate<mem_vector> &op) const;
@@ -122,12 +121,10 @@ public:
 
 	virtual void sort() {
 		get_type().get_sorter().sort(arr, get_length(), false);
-		sorted = true;
 	}
 
 	virtual void serial_sort() {
 		get_type().get_sorter().serial_sort(arr, get_length(), false);
-		sorted = true;
 	}
 
 	void set(const std::vector<const char *> &locs) {
