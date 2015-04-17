@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include "common.h"
+
 #include "mem_vector.h"
 #include "mem_data_frame.h"
 #include "mem_vector_vector.h"
@@ -24,51 +26,19 @@
 namespace fm
 {
 
-static char *get_matrix_raw_data(mem_dense_matrix &data)
-{
-	char *arr = NULL;
-	// TODO this may not work with submatrix.
-	if (data.store_layout() == matrix_layout_t::L_ROW)
-		arr = ((mem_row_dense_matrix &) data).get_row(0);
-	else if (data.store_layout() == matrix_layout_t::L_COL)
-		arr = ((mem_col_dense_matrix &) data).get_col(0);
-	else
-		BOOST_LOG_TRIVIAL(error) << "wrong matrix layout";
-	return arr;
-}
-
-mem_vector::mem_vector(mem_dense_matrix::ptr data): vector(
-		// The length of the vector is the size of the dimension that isn't 1.
-		data->get_num_rows() == 1 ? data->get_num_cols(): data->get_num_rows(),
-		data->get_type(), true)
-{
-	this->sorted = false;
-	this->data = data;
-	// The data buffer is the first row or column of the matrix, so
-	// the shape of the matrix doesn't matter.
-	arr = get_matrix_raw_data(*data);
-}
-
-mem_vector::mem_vector(std::shared_ptr<char> data, size_t length,
+mem_vector::mem_vector(const detail::raw_data_array &data, size_t length,
 		const scalar_type &type): vector(length, type, true)
 {
 	this->sorted = false;
-	// Maybe the column form may be more useful.
-	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(data, length,
-			1, type);
-	this->arr = tmp->get_col(0);
-	this->data = std::static_pointer_cast<mem_dense_matrix>(tmp);
+	this->data = data;
+	this->arr = this->data.get_raw();
 }
 
 mem_vector::mem_vector(size_t length, const scalar_type &type): vector(length,
-		type, true)
+		type, true), data(length * type.get_size())
 {
 	this->sorted = false;
-	// Maybe the column form may be more useful.
-	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(length,
-			1, type);
-	this->arr = tmp->get_col(0);
-	this->data = std::static_pointer_cast<mem_dense_matrix>(tmp);
+	this->arr = data.get_raw();
 }
 
 mem_vector::ptr mem_vector::cast(vector::ptr vec)
@@ -269,28 +239,19 @@ bool mem_vector::resize(size_t new_length)
 	if (new_length == get_length())
 		return true;
 
-	size_t tot_len = data->get_num_rows() * data->get_num_cols();
+	size_t tot_len = data.get_num_bytes() / get_type().get_size();
 	// We don't want to reallocate memory when shrinking the vector.
 	if (new_length < tot_len) {
 		return vector::resize(new_length);
 	}
 
 	// Keep the old information of the vector.
-	mem_dense_matrix::ptr old_data = data;
+	detail::raw_data_array old_data = data;
 	char *old_arr = arr;
 	size_t old_length = get_length();
 
-	// We realloate memory regardless of whether we increase or decrease
-	// the length of the vector.
-	mem_col_dense_matrix::ptr tmp = mem_col_dense_matrix::create(new_length,
-			1, get_type());
-	if (tmp == NULL) {
-		BOOST_LOG_TRIVIAL(error) << "can't allocate memory to resize the vector";
-		return false;
-	}
-
-	this->arr = tmp->get_col(0);
-	this->data = std::static_pointer_cast<mem_dense_matrix>(tmp);
+	this->data = detail::raw_data_array(new_length * get_type().get_size());
+	this->arr = this->data.get_raw();
 	memcpy(arr, old_arr, std::min(old_length, new_length) * get_entry_size());
 	return vector::resize(new_length);
 }
@@ -327,7 +288,7 @@ vector::ptr mem_vector::get_sub_vec(off_t start, size_t length)
 	mem_vector::ptr mem_vec = mem_vector::cast(this->shallow_copy());
 	mem_vec->resize(length);
 	mem_vec->arr = this->get_raw_arr() + start * get_entry_size();
-	mem_vec->data = this->get_data();
+	mem_vec->data = this->data;
 	return mem_vec;
 }
 
@@ -344,18 +305,18 @@ vector::const_ptr mem_vector::get_sub_vec(off_t start, size_t length) const
 	mem_vector::ptr mem_vec = mem_vector::cast(mutable_this->shallow_copy());
 	mem_vec->resize(length);
 	mem_vec->arr = mutable_this->get_raw_arr() + start * get_entry_size();
-	mem_vec->data = mutable_this->get_data();
+	mem_vec->data = mutable_this->data;
 	return std::static_pointer_cast<const vector>(mem_vec);
 }
 
 size_t mem_vector::get_sub_start() const
 {
-	return (arr - get_matrix_raw_data(*data)) / get_entry_size();
+	return (arr - data.get_raw()) / get_entry_size();
 }
 
 bool mem_vector::expose_sub_vec(off_t start, size_t length)
 {
-	size_t tot_len = data->get_num_rows() * data->get_num_cols();
+	size_t tot_len = data.get_num_bytes() / get_type().get_size();
 	if (start + length > tot_len) {
 		exit(1);
 		BOOST_LOG_TRIVIAL(error) << "expose_sub_vec: out of range";
@@ -363,24 +324,19 @@ bool mem_vector::expose_sub_vec(off_t start, size_t length)
 	}
 
 	resize(length);
-	arr = get_matrix_raw_data(*data) + start * get_entry_size();
+	arr = data.get_raw() + start * get_entry_size();
 	return true;
 }
 
 vector::ptr mem_vector::deep_copy() const
 {
-	assert(get_raw_arr() == get_matrix_raw_data(*data));
+	assert(get_raw_arr() == data.get_raw());
 	// We need to discard the const from the "this" pointer.
 	mem_vector *mutable_this = (mem_vector *) this;
 	mem_vector::ptr mem_vec = mem_vector::cast(mutable_this->shallow_copy());
-	mem_vec->data = mem_dense_matrix::cast(data->deep_copy());
-	if (mem_vec->data->store_layout() == matrix_layout_t::L_ROW)
-		mem_vec->arr = mem_row_dense_matrix::cast(mem_vec->data)->get_row(0);
-	else if (mem_vec->data->store_layout() == matrix_layout_t::L_COL)
-		mem_vec->arr = mem_col_dense_matrix::cast(mem_vec->data)->get_col(0);
-	else
-		BOOST_LOG_TRIVIAL(error) << "wrong matrix layout";
-	return std::static_pointer_cast<vector>(mem_vec);
+	mem_vec->data = data.deep_copy();
+	mem_vec->arr = mem_vec->data.get_raw();
+	return mem_vec;
 }
 
 bool mem_vector::equals(const mem_vector &vec) const
@@ -449,7 +405,7 @@ vector::ptr create_vector<double>(double start, double end,
 	n++;
 
 	mem_vector::ptr v = mem_vector::create(n, get_scalar_type<double>());
-	v->get_data()->set_data(seq_set_operate<double>(n, start, stride));
+	v->set_data(seq_set_operate<double>(n, start, stride));
 	return std::static_pointer_cast<vector>(v);
 }
 
@@ -461,6 +417,25 @@ vector::ptr mem_vector::sort_with_index()
 			(off_t *) indexes->get_raw_arr(), get_length(), false);
 	sorted = true;
 	return indexes;
+}
+
+void mem_vector::set_data(const set_operate &op)
+{
+	// I assume this is column-wise matrix.
+	// TODO parallel.
+	op.set(get_raw_arr(), get_length(), 0, 0);
+	sorted = get_type().get_sorter().is_sorted(get_raw_arr(),
+			get_length(), false);
+}
+
+scalar_variable::ptr mem_vector::aggregate(const bulk_operate &op) const
+{
+	scalar_variable::ptr res = op.get_output_type().create_scalar();
+	char raw_res[res->get_size()];
+	// TODO parallel.
+	op.runA(get_length(), get_raw_arr(), raw_res);
+	res->set_raw(raw_res, res->get_size());
+	return res;
 }
 
 }

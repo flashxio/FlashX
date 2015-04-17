@@ -122,11 +122,11 @@ class mem_sub_col_dense_matrix: public mem_col_dense_matrix
 {
 	// The data buffer is referenced in the parent class.
 	// but this class also needs to access the data buffer.
-	std::shared_ptr<char> data;
+	detail::raw_data_array data;
 	std::vector<off_t> orig_col_idxs;
 
 	mem_sub_col_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
-			std::shared_ptr<char> data,
+			const detail::raw_data_array &data,
 			const std::vector<off_t> &col_idxs): mem_col_dense_matrix(nrow, ncol,
 				type, data) {
 		this->orig_col_idxs = col_idxs;
@@ -136,7 +136,7 @@ public:
 	typedef std::shared_ptr<mem_sub_col_dense_matrix> ptr;
 
 	static ptr create(size_t nrow, size_t ncol, const scalar_type &type,
-			std::shared_ptr<char> data, const std::vector<off_t> &col_idxs) {
+			const detail::raw_data_array &data, const std::vector<off_t> &col_idxs) {
 		return ptr(new mem_sub_col_dense_matrix(nrow, ncol, type, data,
 					col_idxs));
 	}
@@ -178,15 +178,15 @@ public:
 
 	virtual char *get_col(size_t col) {
 		off_t orig_col = orig_col_idxs[col];
-		return data.get() + orig_col * get_num_rows() * get_entry_size();
+		return data.get_raw() + orig_col * get_num_rows() * get_entry_size();
 	}
 
 	virtual const char *get_col(size_t col) const {
 		off_t orig_col = orig_col_idxs[col];
-		return data.get() + orig_col * get_num_rows() * get_entry_size();
+		return data.get_raw() + orig_col * get_num_rows() * get_entry_size();
 	}
 
-	virtual mem_col_dense_matrix::ptr get_config_matrix() const {
+	virtual mem_col_dense_matrix::ptr get_contig_matrix() const {
 		mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
 				get_num_rows(), get_num_cols(), get_type());
 		ret->copy_from(*this);
@@ -202,11 +202,11 @@ class mem_sub_row_dense_matrix: public mem_row_dense_matrix
 {
 	// The data buffer is referenced in the parent class.
 	// but this class also needs to access the data buffer.
-	std::shared_ptr<char> data;
+	detail::raw_data_array data;
 	std::vector<off_t> orig_row_idxs;
 
 	mem_sub_row_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
-			std::shared_ptr<char> data,
+			const detail::raw_data_array &data,
 			const std::vector<off_t> &row_idxs): mem_row_dense_matrix(nrow, ncol,
 				type, data) {
 		this->orig_row_idxs = row_idxs;
@@ -216,7 +216,7 @@ public:
 	typedef std::shared_ptr<mem_sub_row_dense_matrix> ptr;
 
 	static ptr create(size_t nrow, size_t ncol, const scalar_type &type,
-			std::shared_ptr<char> data, const std::vector<off_t> &row_idxs) {
+			const detail::raw_data_array &data, const std::vector<off_t> &row_idxs) {
 		return ptr(new mem_sub_row_dense_matrix(nrow, ncol, type, data,
 					row_idxs));
 	}
@@ -286,12 +286,12 @@ public:
 
 	char *get_row(size_t row) {
 		size_t orig_row = orig_row_idxs[row];
-		return data.get() + orig_row * get_num_cols() * get_entry_size();
+		return data.get_raw() + orig_row * get_num_cols() * get_entry_size();
 	}
 
 	const char *get_row(size_t row) const {
 		size_t orig_row = orig_row_idxs[row];
-		return data.get() + orig_row * get_num_cols() * get_entry_size();
+		return data.get_raw() + orig_row * get_num_cols() * get_entry_size();
 	}
 };
 
@@ -530,12 +530,8 @@ dense_matrix::ptr mem_col_dense_matrix::shallow_copy() const
 
 dense_matrix::ptr mem_col_dense_matrix::deep_copy() const
 {
-	size_t num_bytes = get_num_rows() * get_num_cols() * get_entry_size();
-	std::shared_ptr<char> new_data = std::shared_ptr<char>(
-			(char *) memalign(PAGE_SIZE, num_bytes), deleter());
-	memcpy(new_data.get(), data.get(), num_bytes);
 	return dense_matrix::ptr(new mem_col_dense_matrix(get_num_rows(),
-				get_num_cols(), get_type(), new_data));
+				get_num_cols(), get_type(), data.deep_copy()));
 }
 
 dense_matrix::ptr mem_col_dense_matrix::conv2(size_t nrow, size_t ncol,
@@ -569,8 +565,7 @@ dense_matrix::ptr mem_col_dense_matrix::transpose() const
 
 void mem_col_dense_matrix::serial_reset_data()
 {
-	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
-	memset(data.get(), 0, tot_bytes);
+	data.reset_data();
 }
 
 void mem_col_dense_matrix::serial_set_data(const set_operate &op)
@@ -586,7 +581,7 @@ void mem_col_dense_matrix::reset_data()
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 #pragma omp parallel for
 	for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
-		memset(data.get() + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
+		memset(data.get_raw() + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 }
 
 void mem_col_dense_matrix::set_data(const set_operate &op)
@@ -699,7 +694,7 @@ scalar_variable::ptr mem_col_dense_matrix::aggregate(const bulk_operate &op) con
 	size_t nrow = this->get_num_rows();
 	char raw_arr[res->get_size()];
 	// TODO parallel
-	op.runA(nrow * ncol, data.get(), raw_arr);
+	op.runA(nrow * ncol, data.get_raw(), raw_arr);
 	res->set_raw(raw_arr, res->get_size());
 	return res;
 }
@@ -717,7 +712,7 @@ dense_matrix::ptr mem_col_dense_matrix::mapply2(const dense_matrix &m,
 	size_t nrow = get_num_rows();
 	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow, ncol,
 			op.get_output_type());
-	op.runAA(ncol * nrow, data.get(), col_m.data.get(), res->data.get());
+	op.runAA(ncol * nrow, data.get_raw(), col_m.data.get_raw(), res->data.get_raw());
 	return res;
 }
 
@@ -728,7 +723,7 @@ dense_matrix::ptr mem_col_dense_matrix::sapply(const bulk_uoperate &op) const
 	size_t nrow = get_num_rows();
 	mem_col_dense_matrix::ptr res = mem_col_dense_matrix::create(nrow, ncol,
 			op.get_output_type());
-	op.runA(ncol * nrow, data.get(), res->data.get());
+	op.runA(ncol * nrow, data.get_raw(), res->data.get_raw());
 	return res;
 }
 
@@ -872,13 +867,8 @@ mem_col_dense_matrix::ptr mem_col_dense_matrix::create(size_t nrow, size_t ncol,
 		const scalar_type &type, FILE *f)
 {
 	size_t mat_size = nrow * ncol * type.get_size();
-	std::shared_ptr<char> data = std::shared_ptr<char>((char *) memalign(
-				PAGE_SIZE, mat_size), deleter());
-	if (data == NULL) {
-		BOOST_LOG_TRIVIAL(error) << "can't allocate memory for the matrix";
-		return mem_col_dense_matrix::ptr();
-	}
-	size_t ret = fread(data.get(), mat_size, 1, f);
+	detail::raw_data_array data(mat_size);
+	size_t ret = fread(data.get_raw(), mat_size, 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< boost::format("can't read %1% bytes from the file") % mat_size;
@@ -974,9 +964,9 @@ dense_matrix::ptr mem_col_dense_matrix::gemm(const dense_matrix &Amat,
 	printf("dgemm\n");
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, Amat.get_num_rows(),
 			Bmat.get_num_cols(), Amat.get_num_cols(), d_alpha.get(),
-			(double *) col_Amat->data.get(), Amat.get_num_rows(),
-			(double *) col_Bmat->data.get(), Bmat.get_num_rows(),
-			d_beta.get(), (double *) ret->data.get(), ret->get_num_rows());
+			(double *) col_Amat->data.get_raw(), Amat.get_num_rows(),
+			(double *) col_Bmat->data.get_raw(), Bmat.get_num_rows(),
+			d_beta.get(), (double *) ret->data.get_raw(), ret->get_num_rows());
 
 	return ret;
 }
@@ -991,12 +981,8 @@ dense_matrix::ptr mem_row_dense_matrix::shallow_copy() const
 
 dense_matrix::ptr mem_row_dense_matrix::deep_copy() const
 {
-	size_t num_bytes = get_num_rows() * get_num_cols() * get_entry_size();
-	std::shared_ptr<char> new_data = std::shared_ptr<char>(
-			(char *) memalign(PAGE_SIZE, num_bytes), deleter());
-	memcpy(new_data.get(), data.get(), num_bytes);
 	return dense_matrix::ptr(new mem_row_dense_matrix(get_num_rows(),
-				get_num_cols(), get_type(), new_data));
+				get_num_cols(), get_type(), data.deep_copy()));
 }
 
 dense_matrix::ptr mem_row_dense_matrix::conv2(size_t nrow, size_t ncol,
@@ -1030,8 +1016,7 @@ dense_matrix::ptr mem_row_dense_matrix::transpose() const
 
 void mem_row_dense_matrix::serial_reset_data()
 {
-	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
-	memset(data.get(), 0, tot_bytes);
+	data.reset_data();
 }
 
 void mem_row_dense_matrix::serial_set_data(const set_operate &op)
@@ -1047,7 +1032,7 @@ void mem_row_dense_matrix::reset_data()
 	size_t tot_bytes = get_num_rows() * get_num_cols() * get_entry_size();
 #pragma omp parallel for
 	for (size_t i = 0; i < tot_bytes; i += PAGE_SIZE)
-		memset(data.get() + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
+		memset(data.get_raw() + i, 0, std::min(tot_bytes - i, (size_t) PAGE_SIZE));
 }
 
 void mem_row_dense_matrix::set_data(const set_operate &op)
@@ -1321,13 +1306,8 @@ mem_row_dense_matrix::ptr mem_row_dense_matrix::create(size_t nrow, size_t ncol,
 		const scalar_type &type, FILE *f)
 {
 	size_t mat_size = nrow * ncol * type.get_size();
-	std::shared_ptr<char> data = std::shared_ptr<char>((char *) memalign(
-				PAGE_SIZE, mat_size), deleter());
-	if (data == NULL) {
-		BOOST_LOG_TRIVIAL(error) << "can't allocate memory for the matrix";
-		return mem_row_dense_matrix::ptr();
-	}
-	size_t ret = fread(data.get(), mat_size, 1, f);
+	detail::raw_data_array data(mat_size);
+	size_t ret = fread(data.get_raw(), mat_size, 1, f);
 	if (ret == 0) {
 		BOOST_LOG_TRIVIAL(error)
 			<< boost::format("can't read %1% bytes from the file") % mat_size;

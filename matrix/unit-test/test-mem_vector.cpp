@@ -1,3 +1,5 @@
+#include <map>
+
 #include "mem_vector.h"
 #include "bulk_operate.h"
 #include "data_frame.h"

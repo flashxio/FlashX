@@ -26,57 +26,42 @@
 
 #include "generic_type.h"
 #include "vector_vector.h"
+#include "raw_data_array.h"
 
 namespace fm
 {
 
 class mem_vector_vector: public vector_vector
 {
-	struct deleter {
-		void operator()(char *p) const{
-			free(p);
-		}
-	};
-
 	// The offsets (in #bytes) of the vectors in the data array.
 	// The last offset is the end of the last vector.
 	std::vector<off_t> vec_offs;
 
-	// The start pointer to the data
-	std::shared_ptr<char> data;
-	// The capacity of the data array in bytes.
-	size_t capacity;
-
-	/*
-	 * This method expends the data array so it has at least `min' bytes.
-	 */
-	void expand(size_t min);
+	detail::raw_data_array data;
 
 	size_t get_num_bytes() const {
 		return vec_offs.back();
 	}
 
 	char *get_end() {
-		return data.get() + get_num_bytes();
+		return data.get_raw() + get_num_bytes();
 	}
 
 protected:
-	mem_vector_vector(const scalar_type &type): vector_vector(0, type, true) {
+	mem_vector_vector(const scalar_type &type): vector_vector(0, type,
+			true), data(1024) {
 		vec_offs.push_back(0);
-		capacity = 1024;
-		data = std::shared_ptr<char>((char *) malloc(capacity), deleter());
 	}
 
-	mem_vector_vector(std::shared_ptr<char> data, size_t size,
+	mem_vector_vector(const detail::raw_data_array &data,
 			const std::vector<off_t> &offs, const scalar_type &type): vector_vector(
 				offs.size() - 1, type, true) {
 		this->vec_offs = offs;
 		this->data = data;
-		this->capacity = size;
 	}
 
 	const char *get_raw_data() const {
-		return data.get();
+		return data.get_raw();
 	}
 
 	size_t get_num_bytes(off_t idx) const {
@@ -113,9 +98,9 @@ public:
 		return ptr(new mem_vector_vector(type));
 	}
 
-	static ptr create(std::shared_ptr<char> data, size_t size,
+	static ptr create(const detail::raw_data_array &data,
 			const std::vector<off_t> &offs, const scalar_type &type) {
-		return ptr(new mem_vector_vector(data, size, offs, type));
+		return ptr(new mem_vector_vector(data, offs, type));
 	}
 
 	virtual size_t get_tot_num_entries() const {
@@ -126,7 +111,7 @@ public:
 		return (vec_offs[idx + 1] - vec_offs[idx]) / get_type().get_size();
 	}
 	virtual const char*get_raw_arr(off_t idx) const {
-		return data.get() + vec_offs[idx];
+		return data.get_raw() + vec_offs[idx];
 	}
 	virtual mem_vector_vector::const_ptr get_sub_vec_vec(off_t start,
 			size_t len) const;
@@ -141,7 +126,7 @@ public:
 	virtual vector_vector::ptr apply(const arr_apply_operate &op) const;
 	virtual vector_vector::ptr serial_apply(const arr_apply_operate &op) const;
 	virtual void reset_data() {
-		memset(data.get(), 0, capacity);
+		data.reset_data();
 	}
 	virtual vector::ptr flatten() const;
 };

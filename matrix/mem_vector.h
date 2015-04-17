@@ -24,8 +24,11 @@
 
 #include <boost/format.hpp>
 
-#include "mem_dense_matrix.h"
+#include "log.h"
+#include "common.h"
+
 #include "vector.h"
+#include "raw_data_array.h"
 
 namespace fm
 {
@@ -36,23 +39,18 @@ class scalar_type;
 class mem_vector: public vector
 {
 	char *arr;
-	mem_dense_matrix::ptr data;
+	detail::raw_data_array data;
 	bool sorted;
 
 	vector::ptr get_sub_vec(off_t start, size_t length);
 protected:
-	mem_vector(mem_dense_matrix::ptr data);
 	mem_vector(size_t length, const scalar_type &type);
-	mem_vector(std::shared_ptr<char> data, size_t len, const scalar_type &type);
+	mem_vector(const detail::raw_data_array &data, size_t len, const scalar_type &type);
 	mem_vector(const mem_vector &vec): vector(vec.get_length(), vec.get_type(),
 			true) {
 		this->arr = vec.arr;
 		this->data = vec.data;
 		this->sorted = vec.sorted;
-	}
-
-	mem_dense_matrix::ptr get_data() const {
-		return data;
 	}
 public:
 	typedef std::shared_ptr<mem_vector> ptr;
@@ -60,7 +58,7 @@ public:
 	static ptr cast(vector::ptr vec);
 	static const_ptr cast(vector::const_ptr vec);
 
-	static ptr create(std::shared_ptr<char> data, size_t num_bytes,
+	static ptr create(const detail::raw_data_array &data, size_t num_bytes,
 			const scalar_type &type) {
 		if (num_bytes % type.get_size() != 0) {
 			BOOST_LOG_TRIVIAL(error)
@@ -71,21 +69,8 @@ public:
 		return ptr(new mem_vector(data, len, type));
 	}
 
-	static ptr create(mem_dense_matrix::ptr data) {
-		if (data->get_num_rows() > 1 && data->get_num_cols() > 1) {
-			BOOST_LOG_TRIVIAL(error)
-				<< "Can't convert a matrix with more than one row/column into a vector";
-			return ptr();
-		}
-		return ptr(new mem_vector(data));
-	}
-
 	static ptr create(size_t length, const scalar_type &type) {
 		return ptr(new mem_vector(length, type));
-	}
-
-	mem_dense_matrix::ptr get_data() {
-		return data;
 	}
 
 	char *get_raw_arr() {
@@ -117,6 +102,7 @@ public:
 	using vector::groupby;
 	virtual std::shared_ptr<data_frame> groupby(
 			const gr_apply_operate<mem_vector> &op, bool with_val) const;
+	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const;
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
 			std::vector<vector::ptr>::const_iterator vec_end);
@@ -129,7 +115,7 @@ public:
 	virtual vector::ptr deep_copy() const;
 
 	virtual void reset_data() {
-		data->reset_data();
+		data.reset_data();
 	}
 
 	virtual vector::ptr shallow_copy() {
@@ -142,11 +128,7 @@ public:
 
 	bool export2(FILE *f) const;
 
-	void set_data(const set_operate &op) {
-		get_data()->set_data(op);
-		sorted = get_type().get_sorter().is_sorted(get_raw_arr(),
-				get_length(), false);
-	}
+	void set_data(const set_operate &op);
 
 	virtual vector::ptr sort_with_index();
 
@@ -174,7 +156,7 @@ public:
 	T max() const {
 		const bulk_operate &max_op = *get_type().get_basic_ops().get_op(
 				basic_ops::op_idx::MAX);
-		scalar_variable::ptr res = get_data()->aggregate(max_op);
+		scalar_variable::ptr res = aggregate(max_op);
 		return *(T *) res->get_raw();
 	}
 };
@@ -219,7 +201,7 @@ vector::ptr create_vector(EntryType start, EntryType end, EntryType stride)
 	// We need to count the start element.
 	n++;
 	mem_vector::ptr v = mem_vector::create(n, get_scalar_type<EntryType>());
-	v->get_data()->set_data(seq_set_operate<EntryType>(n, start, stride));
+	v->set_data(seq_set_operate<EntryType>(n, start, stride));
 	return v;
 }
 
@@ -243,12 +225,15 @@ public:
 	}
 };
 
+/*
+ * Create a vector filled with a constant value.
+ */
 template<class EntryType>
 vector::ptr create_vector(size_t length, EntryType initv)
 {
 	// TODO let's just use in-memory dense matrix first.
 	mem_vector::ptr v = mem_vector::create(length, get_scalar_type<EntryType>());
-	v->get_data()->set_data(set_const_operate<EntryType>(initv));
+	v->set_data(set_const_operate<EntryType>(initv));
 	return v;
 }
 

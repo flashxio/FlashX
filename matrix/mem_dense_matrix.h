@@ -30,9 +30,12 @@
 #include "bulk_operate.h"
 #include "matrix_config.h"
 #include "matrix_header.h"
+#include "raw_data_array.h"
 
 namespace fm
 {
+
+class mem_vector;
 
 class mem_dense_matrix: public dense_matrix
 {
@@ -85,13 +88,7 @@ class mem_col_dense_matrix;
  */
 class mem_row_dense_matrix: public mem_dense_matrix
 {
-	struct deleter {
-		void operator()(char *p) const{
-			free(p);
-		}
-	};
-
-	std::shared_ptr<char> data;
+	detail::raw_data_array data;
 
 	void inner_prod_wide(const dense_matrix &m, const bulk_operate &left_op,
 			const bulk_operate &right_op, mem_row_dense_matrix &res) const;
@@ -108,12 +105,8 @@ class mem_row_dense_matrix: public mem_dense_matrix
 
 	mem_row_dense_matrix(size_t nrow, size_t ncol,
 			const scalar_type &type): mem_dense_matrix(nrow, ncol, type) {
-		if (nrow * ncol > 0) {
-			data = std::shared_ptr<char>(
-					(char *) memalign(PAGE_SIZE, nrow * ncol * type.get_size()),
-					deleter());
-			assert(data);
-		}
+		if (nrow * ncol > 0)
+			data = detail::raw_data_array(nrow * ncol * type.get_size());
 	}
 
 	std::shared_ptr<mem_col_dense_matrix> t_mat;
@@ -128,7 +121,7 @@ class mem_row_dense_matrix: public mem_dense_matrix
 
 protected:
 	mem_row_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
-			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
+			const detail::raw_data_array &data): mem_dense_matrix(nrow, ncol,
 				type) {
 		this->data = data;
 	}
@@ -176,11 +169,11 @@ public:
 	virtual dense_matrix::ptr apply(apply_margin margin, const arr_apply_operate &op) const;
 
 	virtual char *get_row(size_t row) {
-		return data.get() + row * get_num_cols() * get_entry_size();
+		return data.get_raw() + row * get_num_cols() * get_entry_size();
 	}
 
 	virtual const char *get_row(size_t row) const {
-		return data.get() + row * get_num_cols() * get_entry_size();
+		return data.get_raw() + row * get_num_cols() * get_entry_size();
 	}
 
 	virtual char *get(size_t row, size_t col) {
@@ -203,32 +196,12 @@ public:
  */
 class mem_col_dense_matrix: public mem_dense_matrix
 {
-	struct matrix_empty_deleter {
-		void operator()(mem_col_dense_matrix *mat) const {
-		}
-	};
-
-	struct deleter {
-		void operator()(char *p) const{
-			free(p);
-		}
-	};
-
-	std::shared_ptr<char> data;
-
-	mem_col_dense_matrix(std::shared_ptr<char> data, size_t nrow, size_t ncol,
-			const scalar_type &type): mem_dense_matrix(nrow, ncol, type) {
-		this->data = data;
-	}
+	detail::raw_data_array data;
 
 	mem_col_dense_matrix(size_t nrow, size_t ncol,
 			const scalar_type &type): mem_dense_matrix(nrow, ncol, type) {
-		if (nrow * ncol > 0) {
-			data = std::shared_ptr<char>(
-					(char *) memalign(PAGE_SIZE, nrow * ncol * type.get_size()),
-					deleter());
-			assert(data);
-		}
+		if (nrow * ncol > 0)
+			data = detail::raw_data_array(nrow * ncol * type.get_size());
 	}
 
 	// This method constructs the specified row in a preallocated array.
@@ -238,16 +211,16 @@ class mem_col_dense_matrix: public mem_dense_matrix
 
 protected:
 	mem_col_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
-			std::shared_ptr<char> data): mem_dense_matrix(nrow, ncol,
+			const detail::raw_data_array &data): mem_dense_matrix(nrow, ncol,
 				type) {
 		this->data = data;
 	}
 public:
 	typedef std::shared_ptr<mem_col_dense_matrix> ptr;
 
-	static ptr create(std::shared_ptr<char> data, size_t nrow, size_t ncol,
+	static ptr create(const detail::raw_data_array &data, size_t nrow, size_t ncol,
 			const scalar_type &type) {
-		return ptr(new mem_col_dense_matrix(data, nrow, ncol, type));
+		return ptr(new mem_col_dense_matrix(nrow, ncol, type, data));
 	}
 
 	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
@@ -298,11 +271,11 @@ public:
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
 
 	virtual char *get_col(size_t col) {
-		return data.get() + col * get_num_rows() * get_entry_size();
+		return data.get_raw() + col * get_num_rows() * get_entry_size();
 	}
 
 	virtual const char *get_col(size_t col) const {
-		return data.get() + col * get_num_rows() * get_entry_size();
+		return data.get_raw() + col * get_num_rows() * get_entry_size();
 	}
 
 	virtual char *get(size_t row, size_t col) {
@@ -318,9 +291,8 @@ public:
 	}
 
 	virtual mem_col_dense_matrix::ptr get_contig_matrix() const {
-		// TODO discard constant qualifer.
-		return mem_col_dense_matrix::ptr(
-				const_cast<mem_col_dense_matrix *>(this), matrix_empty_deleter());
+		return mem_col_dense_matrix::create(data, get_num_rows(),
+				get_num_cols(), get_type());
 	}
 
 	template<class T>

@@ -29,6 +29,10 @@
 namespace fm
 {
 
+class set_operate;
+class bulk_operate;
+class scalar_variable;
+
 namespace detail
 {
 
@@ -50,7 +54,7 @@ public:
 		num_bytes = 0;
 	}
 
-	raw_data_array(size_t num_bytes, int node_id);
+	raw_data_array(size_t num_bytes, int node_id = -1);
 
 	/*
 	 * Get the number of bytes allocated.
@@ -78,6 +82,8 @@ public:
 	raw_data_array deep_copy() const;
 
 	bool copy_from(const raw_data_array &arr);
+
+	void expand(size_t min);
 };
 
 class NUMA_mapper;

@@ -614,6 +614,7 @@ public:
 		}
 	}
 
+#if 0
 	template<class T>
 	bool multiply_matrix(const mem_col_dense_matrix &in,
 			mem_col_dense_matrix &out) const {
@@ -625,20 +626,17 @@ public:
 			return false;
 		}
 		size_t ncol = in.get_num_cols();
-		std::vector<off_t> col_idx(1);
 		assert(is_fg);
 		for (size_t i = 0; i < ncol; i++) {
-			col_idx[0] = i;
-			mem_vector::ptr in_col = mem_vector::create(
-					mem_dense_matrix::cast(in.get_cols(col_idx)));
-			mem_vector::ptr out_col = mem_vector::create(
-					mem_dense_matrix::cast(out.get_cols(col_idx)));
+			mem_vector::ptr in_col = in.get_col(i);
+			mem_vector::ptr out_col = out.get_col(i);
 			compute(get_fg_multiply_creator<T, mem_vector>(*in_col, *out_col),
 				cal_super_block_size(get_block_size(),
 					sizeof(T) * in.get_num_cols()));
 		}
 		return true;
 	}
+#endif
 
 	/*
 	 * This version of SpMM allocates the output matrix.
@@ -671,7 +669,9 @@ public:
 			mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
 					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
 			ret->reset_data();
+#if 0
 			multiply_matrix<T>(*in_mat, *ret);
+#endif
 			return ret;
 		}
 	}

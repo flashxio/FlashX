@@ -20,6 +20,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include "common.h"
+
 #include "mem_vector_vector.h"
 #include "mem_vector.h"
 #include "data_frame.h"
@@ -28,22 +30,13 @@
 namespace fm
 {
 
-void mem_vector_vector::expand(size_t min)
-{
-	for (; capacity < min; capacity *= 2);
-	std::shared_ptr<char> new_data = std::shared_ptr<char>(
-			(char *) malloc(capacity), deleter());
-	memcpy(new_data.get(), data.get(), get_num_bytes());
-	data = new_data;
-}
-
 void mem_vector_vector::append_mem_vector(const mem_vector &mem_vec)
 {
 	vector::resize(get_num_vecs() + 1);
 	size_t vec_num_bytes = mem_vec.get_length() * mem_vec.get_entry_size();
-	if (get_num_bytes() + vec_num_bytes > capacity)
-		expand(get_num_bytes() + vec_num_bytes);
-	assert(get_num_bytes() + vec_num_bytes <= capacity);
+	if (get_num_bytes() + vec_num_bytes > data.get_num_bytes())
+		data.expand(get_num_bytes() + vec_num_bytes);
+	assert(get_num_bytes() + vec_num_bytes <= data.get_num_bytes());
 	memcpy(get_end(), mem_vec.get_raw_arr(), vec_num_bytes);
 	off_t new_off = get_num_bytes() + vec_num_bytes;
 	vec_offs.push_back(new_off);
@@ -57,13 +50,13 @@ void mem_vector_vector::append_mem_vectors(
 	for (auto it = vec_it; it != vec_end; it++)
 		tot_bytes += (*it)->get_length() * (*it)->get_type().get_size();
 	vector::resize(get_num_vecs() + (vec_end - vec_it));
-	if (get_num_bytes() + tot_bytes > capacity)
-		expand(get_num_bytes() + tot_bytes);
+	if (get_num_bytes() + tot_bytes > data.get_num_bytes())
+		data.expand(get_num_bytes() + tot_bytes);
 
 	for (auto it = vec_it; it != vec_end; it++) {
 		const mem_vector &mem_vec = (const mem_vector &) **it;
 		size_t vec_num_bytes = mem_vec.get_length() * mem_vec.get_type().get_size();
-		assert(get_num_bytes() + vec_num_bytes <= capacity);
+		assert(get_num_bytes() + vec_num_bytes <= data.get_num_bytes());
 		memcpy(get_end(), mem_vec.get_raw_arr(), vec_num_bytes);
 		off_t new_off = get_num_bytes() + vec_num_bytes;
 		vec_offs.push_back(new_off);
@@ -74,9 +67,9 @@ void mem_vector_vector::append_mem_vv(const mem_vector_vector &vv)
 {
 	// Copy all data in `vv' to this vector vector.
 	size_t vv_num_bytes = vv.get_num_bytes();
-	if (get_num_bytes() + vv_num_bytes > capacity)
-		expand(get_num_bytes() + vv_num_bytes);
-	assert(get_num_bytes() + vv_num_bytes <= capacity);
+	if (get_num_bytes() + vv_num_bytes > data.get_num_bytes())
+		data.expand(get_num_bytes() + vv_num_bytes);
+	assert(get_num_bytes() + vv_num_bytes <= data.get_num_bytes());
 	memcpy(get_end(), vv.get_raw_data(), vv_num_bytes);
 
 	// Construct the offset metadata of this vector vector.
@@ -101,13 +94,13 @@ void mem_vector_vector::append_mem_vvs(
 		tot_num_vecs += vv.get_num_vecs();
 	}
 	vector::resize(get_num_vecs() + tot_num_vecs);
-	if (get_num_bytes() + tot_bytes > capacity)
-		expand(get_num_bytes() + tot_bytes);
+	if (get_num_bytes() + tot_bytes > data.get_num_bytes())
+		data.expand(get_num_bytes() + tot_bytes);
 
 	for (auto it = vec_it; it != vec_end; it++) {
 		const mem_vector_vector &vv = (const mem_vector_vector &) **it;
 		size_t vv_num_bytes = vv.get_num_bytes();
-		assert(get_num_bytes() + vv_num_bytes <= capacity);
+		assert(get_num_bytes() + vv_num_bytes <= data.get_num_bytes());
 		memcpy(get_end(), vv.get_raw_data(), vv_num_bytes);
 
 		off_t off_end = get_num_bytes();
@@ -174,7 +167,7 @@ bool mem_vector_vector::append(const vector &vec)
 
 vector::ptr mem_vector_vector::cat() const
 {
-	mem_vector::ptr ret = get_type().create_mem_vec(data, get_num_bytes());
+	mem_vector::ptr ret = mem_vector::create(data, get_num_bytes(), get_type());
 	return std::static_pointer_cast<vector>(ret);
 }
 
@@ -291,7 +284,7 @@ mem_vector_vector::const_ptr mem_vector_vector::get_sub_vec_vec(off_t start,
 	std::vector<off_t> offs(vec_offs.begin() + start,
 			// The last entry shows the end of the last vector.
 			vec_offs.begin() + start + len + 1);
-	return mem_vector_vector::ptr(new mem_vector_vector(data, capacity, offs,
+	return mem_vector_vector::ptr(new mem_vector_vector(data, offs,
 				get_type()));
 }
 

@@ -135,8 +135,6 @@ public:
 	virtual const basic_ops &get_basic_ops() const = 0;
 	virtual const agg_ops &get_agg_ops() const = 0;
 	virtual std::shared_ptr<mem_vector> create_mem_vec(size_t length) const = 0;
-	virtual std::shared_ptr<mem_vector> create_mem_vec(std::shared_ptr<char> data,
-			size_t num_bytes) const = 0;
 	virtual std::shared_ptr<mem_vector_vector> create_mem_vec_vec() const = 0;
 	virtual prim_type get_type() const = 0;
 	virtual size_t get_size() const = 0;
@@ -169,8 +167,6 @@ public:
 	virtual const agg_ops &get_agg_ops() const;
 
 	virtual std::shared_ptr<mem_vector> create_mem_vec(size_t length) const;
-	virtual std::shared_ptr<mem_vector> create_mem_vec(std::shared_ptr<char> data,
-			size_t num_bytes) const;
 	virtual std::shared_ptr<mem_vector_vector> create_mem_vec_vec() const;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const;
 	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,

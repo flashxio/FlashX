@@ -35,13 +35,6 @@ mem_vector::ptr scalar_type_impl<T>::create_mem_vec(
 }
 
 template<class T>
-mem_vector::ptr scalar_type_impl<T>::create_mem_vec(std::shared_ptr<char> data,
-			size_t num_bytes) const
-{
-	return mem_vector::create(data, num_bytes, get_scalar_type<T>());
-}
-
-template<class T>
 scalar_variable::ptr scalar_type_impl<T>::create_scalar() const
 {
 	return scalar_variable::ptr(new scalar_variable_impl<T>());

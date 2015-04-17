@@ -18,6 +18,7 @@
  */
 
 #include <numa.h>
+#include <malloc.h>
 
 #include "thread.h"
 
@@ -25,6 +26,7 @@
 #include "raw_data_array.h"
 #include "NUMA_mapper.h"
 #include "matrix_config.h"
+#include "bulk_operate.h"
 
 namespace fm
 {
@@ -41,11 +43,11 @@ T ceil_divide(T v1, T v2)
 	return ceil(((double) v1) / v2);
 }
 
-class deleter
+class NUMA_deleter
 {
 	size_t size;
 public:
-	deleter(size_t size) {
+	NUMA_deleter(size_t size) {
 		this->size = size;
 	}
 
@@ -53,6 +55,25 @@ public:
 		numa_free(addr, size);
 	}
 };
+
+class aligned_deleter
+{
+public:
+	void operator()(char *addr) {
+		free(addr);
+	}
+};
+
+std::shared_ptr<char> memalloc_node(int node_id, size_t num_bytes)
+{
+	if (node_id >= 0) {
+		void *addr = numa_alloc_onnode(num_bytes, node_id);
+		return std::shared_ptr<char>((char *) addr, NUMA_deleter(num_bytes));
+	}
+	else
+		return std::shared_ptr<char>((char *) memalign(PAGE_SIZE, num_bytes),
+				aligned_deleter());
+}
 
 class reset_data_task: public thread_task
 {
@@ -105,16 +126,14 @@ raw_data_array::raw_data_array(size_t num_bytes, int node_id)
 {
 	this->node_id = node_id;
 	this->num_bytes = num_bytes;
-	void *addr = numa_alloc_onnode(num_bytes, node_id);
-	data = std::shared_ptr<char>((char *) addr, deleter(num_bytes));
+	data = memalloc_node(node_id, num_bytes);
 }
 
 raw_data_array raw_data_array::deep_copy() const
 {
 	raw_data_array ret(*this);
-	void *addr = numa_alloc_onnode(num_bytes, node_id);
-	memcpy(addr, this->data.get(), num_bytes);
-	ret.data = std::shared_ptr<char>((char *) addr, deleter(num_bytes));
+	ret.data = memalloc_node(get_node_id(), num_bytes);
+	memcpy(ret.data.get(), this->data.get(), num_bytes);
 	return ret;
 }
 
@@ -128,11 +147,23 @@ bool raw_data_array::copy_from(const raw_data_array &arr)
 	return true;
 }
 
+void raw_data_array::expand(size_t min)
+{
+	size_t new_num_bytes = num_bytes;
+	for (; new_num_bytes < min; new_num_bytes *= 2);
+	std::shared_ptr<char> new_data;
+	new_data = memalloc_node(get_node_id(), new_num_bytes);
+	memcpy(new_data.get(), data.get(), num_bytes);
+	num_bytes = new_num_bytes;
+	data = new_data;
+}
+
 void reset_arrays(std::vector<raw_data_array> &arrs)
 {
 	mem_thread_pool::ptr mem_threads
 		= mem_thread_pool::get_global_mem_threads();
 	for (size_t i = 0; i < arrs.size(); i++) {
+		assert(arrs[i].get_node_id() >= 0);
 		mem_threads->process_task(arrs[i].get_node_id(),
 				new reset_data_task(arrs[i].get_raw(), arrs[i].get_num_bytes()));
 	}
@@ -164,6 +195,7 @@ void set_array_ranges(const NUMA_mapper &mapper, size_t length,
 			// The number of bytes a thread actually gets.
 			size_t local_nbytes = std::min(nbytes_per_thread,
 					num_local_bytes - nbytes_per_thread * j);
+			assert(arrs[i].get_node_id() >= 0);
 			mem_threads->process_task(arrs[i].get_node_id(),
 					new set_data_task(arrs[i].get_raw(), nbytes_per_thread * j,
 						local_nbytes, arrs[i].get_node_id(), set_range,
