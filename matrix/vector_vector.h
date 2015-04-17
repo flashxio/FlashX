@@ -77,7 +77,7 @@ public:
 		throw unsupported_exception("resize");
 	}
 
-	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const {
+	virtual vector::ptr get_sub_vec(off_t start, size_t length) const {
 		throw unsupported_exception("get_sub_vec");
 	}
 	virtual bool expose_sub_vec(off_t start, size_t length) {
@@ -112,11 +112,7 @@ public:
 		// TODO
 		throw unsupported_exception("deep_copy");
 	}
-	virtual vector::ptr shallow_copy() {
-		// TODO
-		throw unsupported_exception("shallow_copy");
-	}
-	virtual vector::const_ptr shallow_copy() const {
+	virtual vector::ptr shallow_copy() const {
 		// TODO
 		throw unsupported_exception("shallow_copy");
 	}

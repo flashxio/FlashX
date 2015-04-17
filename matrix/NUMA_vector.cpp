@@ -120,7 +120,7 @@ bool NUMA_vector::is_sub_vec() const
 	return false;
 }
 
-vector::const_ptr NUMA_vector::get_sub_vec(off_t start, size_t length) const
+vector::ptr NUMA_vector::get_sub_vec(off_t start, size_t length) const
 {
 	// TODO
 	assert(0);
@@ -289,13 +289,7 @@ vector::ptr NUMA_vector::deep_copy() const
 	return vector::ptr(ret);
 }
 
-vector::ptr NUMA_vector::shallow_copy()
-{
-	// TODO
-	assert(0);
-}
-
-vector::const_ptr NUMA_vector::shallow_copy() const
+vector::ptr NUMA_vector::shallow_copy() const
 {
 	// TODO
 	assert(0);

@@ -51,16 +51,6 @@ mem_vector::ptr mem_vector::cast(vector::ptr vec)
 	return std::static_pointer_cast<mem_vector>(vec);
 }
 
-mem_vector::const_ptr mem_vector::cast(vector::const_ptr vec)
-{
-	if (!vec->is_in_mem()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "can't cast a non-in-mem vector to in-mem vector";
-		return mem_vector::const_ptr();
-	}
-	return std::static_pointer_cast<const mem_vector>(vec);
-}
-
 bool mem_vector::verify_groupby(const gr_apply_operate<mem_vector> &op) const
 {
 	if (op.get_key_type() != get_type()) {
@@ -183,7 +173,7 @@ data_frame::ptr mem_vector::groupby(const gr_apply_operate<mem_vector> &op,
 	for (int i = 0; i < num_parts; i++) {
 		off_t start = par_starts[i];
 		off_t end = par_starts[i + 1];
-		vector::const_ptr sub_vec = sorted_vec->get_sub_vec(start, end - start);
+		vector::ptr sub_vec = sorted_vec->get_sub_vec(start, end - start);
 		sub_results[i] = mem_vector::cast(sub_vec)->serial_groupby(op,
 				with_val);
 	}
@@ -274,7 +264,7 @@ bool mem_vector::resize(size_t new_length)
 	return vector::resize(new_length);
 }
 
-vector::ptr mem_vector::get_sub_vec(off_t start, size_t length)
+vector::ptr mem_vector::get_sub_vec(off_t start, size_t length) const
 {
 	if (start + length > get_length()) {
 		BOOST_LOG_TRIVIAL(error) << "get_sub_vec: out of range";
@@ -283,26 +273,9 @@ vector::ptr mem_vector::get_sub_vec(off_t start, size_t length)
 
 	mem_vector::ptr mem_vec = mem_vector::cast(this->shallow_copy());
 	mem_vec->resize(length);
-	mem_vec->arr = this->get_raw_arr() + start * get_entry_size();
 	mem_vec->data = this->data;
+	mem_vec->arr = mem_vec->data.get_raw() + start * get_entry_size();
 	return mem_vec;
-}
-
-vector::const_ptr mem_vector::get_sub_vec(off_t start, size_t length) const
-{
-	if (start + length > get_length()) {
-		BOOST_LOG_TRIVIAL(error) << "get_sub_vec: out of range";
-		return vector::ptr();
-	}
-
-	// We need to discard the const from the "this" pointer.
-	mem_vector *mutable_this = (mem_vector *) this;
-
-	mem_vector::ptr mem_vec = mem_vector::cast(mutable_this->shallow_copy());
-	mem_vec->resize(length);
-	mem_vec->arr = mutable_this->get_raw_arr() + start * get_entry_size();
-	mem_vec->data = mutable_this->data;
-	return std::static_pointer_cast<const vector>(mem_vec);
 }
 
 size_t mem_vector::get_sub_start() const
@@ -327,9 +300,7 @@ bool mem_vector::expose_sub_vec(off_t start, size_t length)
 vector::ptr mem_vector::deep_copy() const
 {
 	assert(get_raw_arr() == data.get_raw());
-	// We need to discard the const from the "this" pointer.
-	mem_vector *mutable_this = (mem_vector *) this;
-	mem_vector::ptr mem_vec = mem_vector::cast(mutable_this->shallow_copy());
+	mem_vector::ptr mem_vec = mem_vector::cast(this->shallow_copy());
 	mem_vec->data = data.deep_copy();
 	mem_vec->arr = mem_vec->data.get_raw();
 	return mem_vec;

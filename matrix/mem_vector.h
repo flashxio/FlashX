@@ -42,7 +42,6 @@ class mem_vector: public vector
 	detail::raw_data_array data;
 	bool sorted;
 
-	vector::ptr get_sub_vec(off_t start, size_t length);
 protected:
 	mem_vector(size_t length, const scalar_type &type);
 	mem_vector(const detail::raw_data_array &data, size_t len, const scalar_type &type);
@@ -54,9 +53,7 @@ protected:
 	}
 public:
 	typedef std::shared_ptr<mem_vector> ptr;
-	typedef std::shared_ptr<const mem_vector> const_ptr;
 	static ptr cast(vector::ptr vec);
-	static const_ptr cast(vector::const_ptr vec);
 
 	static ptr create(const detail::raw_data_array &data, size_t num_bytes,
 			const scalar_type &type) {
@@ -108,7 +105,7 @@ public:
 			std::vector<vector::ptr>::const_iterator vec_end);
 	virtual bool append(const vector &vec);
 	virtual bool resize(size_t new_length);
-	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
+	virtual vector::ptr get_sub_vec(off_t start, size_t length) const;
 	size_t get_sub_start() const;
 	virtual bool expose_sub_vec(off_t start, size_t length);
 	virtual vector::ptr deep_copy() const;
@@ -117,12 +114,8 @@ public:
 		data.reset_data();
 	}
 
-	virtual vector::ptr shallow_copy() {
+	virtual vector::ptr shallow_copy() const {
 		return vector::ptr(new mem_vector(*this));
-	}
-
-	virtual vector::const_ptr shallow_copy() const {
-		return vector::const_ptr(new mem_vector(*this));
 	}
 
 	bool export2(FILE *f) const;

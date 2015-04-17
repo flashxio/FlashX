@@ -239,7 +239,7 @@ vector_vector::ptr mem_vector_vector::apply(const arr_apply_operate &op) const
 		// When there aren't many vectors, this may happen.
 		if (end <= start)
 			continue;
-		mem_vector_vector::const_ptr sub_vv = this->get_sub_vec_vec(start,
+		mem_vector_vector::ptr sub_vv = this->get_sub_vec_vec(start,
 				end - start);
 		vvs[i] = mem_vector_vector::cast(sub_vv)->serial_apply(op);
 	}
@@ -278,7 +278,7 @@ vector_vector::ptr mem_vector_vector::serial_apply(
 	return ret;
 }
 
-mem_vector_vector::const_ptr mem_vector_vector::get_sub_vec_vec(off_t start,
+mem_vector_vector::ptr mem_vector_vector::get_sub_vec_vec(off_t start,
 		size_t len) const
 {
 	std::vector<off_t> offs(vec_offs.begin() + start,

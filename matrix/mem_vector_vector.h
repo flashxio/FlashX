@@ -76,7 +76,6 @@ protected:
 			std::vector<vector_vector::ptr>::const_iterator vec_end);
 public:
 	typedef std::shared_ptr<mem_vector_vector> ptr;
-	typedef std::shared_ptr<const mem_vector_vector> const_ptr;
 
 	static ptr cast(vector_vector::ptr vec) {
 		if (!vec->is_in_mem()) {
@@ -84,14 +83,6 @@ public:
 			return ptr();
 		}
 		return std::static_pointer_cast<mem_vector_vector>(vec);
-	}
-
-	static const_ptr cast(vector_vector::const_ptr vec) {
-		if (!vec->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error) << "This vector vector isn't in memory";
-			return const_ptr();
-		}
-		return std::static_pointer_cast<const mem_vector_vector>(vec);
 	}
 
 	static ptr create(const scalar_type &type) {
@@ -113,7 +104,7 @@ public:
 	virtual const char*get_raw_arr(off_t idx) const {
 		return data.get_raw() + vec_offs[idx];
 	}
-	virtual mem_vector_vector::const_ptr get_sub_vec_vec(off_t start,
+	virtual mem_vector_vector::ptr get_sub_vec_vec(off_t start,
 			size_t len) const;
 
 	bool append(const vector &vec);

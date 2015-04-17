@@ -57,7 +57,6 @@ protected:
 	}
 public:
 	typedef std::shared_ptr<vector> ptr;
-	typedef std::shared_ptr<const vector> const_ptr;
 
 	virtual ~vector() {
 	}
@@ -90,7 +89,7 @@ public:
 		return true;
 	}
 
-	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const = 0;
+	virtual vector::ptr get_sub_vec(off_t start, size_t length) const = 0;
 	virtual void reset_data() = 0;
 	/*
 	 * This method exposes a portition of the vector to users.
@@ -120,8 +119,7 @@ public:
 	/**
 	 * This only copies all members of the vector object.
 	 */
-	virtual vector::ptr shallow_copy() = 0;
-	virtual vector::const_ptr shallow_copy() const = 0;
+	virtual vector::ptr shallow_copy() const = 0;
 };
 
 }

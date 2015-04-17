@@ -67,7 +67,7 @@ public:
 
 	static ptr cast(vector::ptr vec);
 
-	virtual vector::const_ptr get_sub_vec(off_t start, size_t length) const;
+	virtual vector::ptr get_sub_vec(off_t start, size_t length) const;
 	virtual bool expose_sub_vec(off_t start, size_t length);
 
 	virtual bool append(std::vector<vector::ptr>::const_iterator vec_it,
@@ -84,8 +84,7 @@ public:
 	virtual bool dot_prod(const NUMA_vector &vec, scalar_variable &res) const;
 
 	virtual vector::ptr deep_copy() const;
-	virtual vector::ptr shallow_copy();
-	virtual vector::const_ptr shallow_copy() const;
+	virtual vector::ptr shallow_copy() const;
 
 	virtual void reset_data();
 	void set_data(const set_operate &op);

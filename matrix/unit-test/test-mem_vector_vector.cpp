@@ -193,7 +193,7 @@ void test_flatten()
 	assert(memcmp(vec->get_raw_arr(), vv->get_raw_arr(0),
 				vec->get_length() * vec->get_entry_size()) == 0);
 
-	mem_vector_vector::const_ptr sub_vv = vv->get_sub_vec_vec(10, 20);
+	mem_vector_vector::ptr sub_vv = vv->get_sub_vec_vec(10, 20);
 	mem_vector::ptr sub_vec = mem_vector::cast(sub_vv->flatten());
 	off_t sub_off = 0;
 	for (int i = 0; i < 10; i++)
