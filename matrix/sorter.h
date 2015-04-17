@@ -33,7 +33,7 @@ namespace fm
 class sorter
 {
 public:
-	virtual bool is_sorted(char *data, size_t num, bool decreasing) const = 0;
+	virtual bool is_sorted(const char *data, size_t num, bool decreasing) const = 0;
 	virtual void sort_with_index(char *data, off_t *offs, size_t num,
 			bool decreasing) const = 0;
 	virtual void sort(char *data, size_t num, bool decreasing) const = 0;
@@ -57,7 +57,7 @@ class type_sorter: public sorter
 	} entry_greater;
 
 public:
-	virtual bool is_sorted(char *data, size_t num, bool decreasing) const;
+	virtual bool is_sorted(const char *data, size_t num, bool decreasing) const;
 	virtual void sort_with_index(char *data, off_t *offs, size_t num,
 			bool decreasing) const;
 	virtual void sort(char *data, size_t num, bool decreasing) const;
@@ -67,7 +67,7 @@ public:
 };
 
 template<class T>
-bool type_sorter<T>::is_sorted(char *data1, size_t num, bool decreasing) const
+bool type_sorter<T>::is_sorted(const char *data1, size_t num, bool decreasing) const
 {
 	T *data = (T *) data1;
 	if (decreasing)
