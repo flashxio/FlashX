@@ -14,7 +14,8 @@ public:
 	virtual void run(const void *key, const mem_vector &val,
 			mem_vector &vec) const {
 		vec.resize(val.get_length());
-		vec.set_sub_vec(0, val);
+		memcpy(vec.get_raw_arr(), val.get_raw_arr(),
+				val.get_length() * val.get_entry_size());
 	}
 
 	virtual const scalar_type &get_key_type() const {

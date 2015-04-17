@@ -82,6 +82,11 @@ public:
 	raw_data_array deep_copy() const;
 
 	bool copy_from(const raw_data_array &arr);
+	/*
+	 * Copy the data in the buffer to the start location.
+	 * @start and @size are in the number of bytes.
+	 */
+	bool set_sub_arr(off_t start, const char *arr, size_t size);
 
 	void expand(size_t min);
 };

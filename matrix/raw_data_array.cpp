@@ -158,6 +158,16 @@ void raw_data_array::expand(size_t min)
 	data = new_data;
 }
 
+bool raw_data_array::set_sub_arr(off_t start, const char *buf, size_t size)
+{
+	if (start + size > get_num_bytes()) {
+		BOOST_LOG_TRIVIAL(error) << "set_sub_arr: out of range";
+		return false;
+	}
+	memcpy(data.get() + start, buf, size);
+	return true;
+}
+
 void reset_arrays(std::vector<raw_data_array> &arrs)
 {
 	mem_thread_pool::ptr mem_threads

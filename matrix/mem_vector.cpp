@@ -209,14 +209,21 @@ bool mem_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 				<< "Not support appending an ext-mem vector to an in-mem vector";
 			return false;
 		}
+		if (get_type() != (*it)->get_type()) {
+			BOOST_LOG_TRIVIAL(error) << "The two vectors don't have the same type";
+			return false;
+		}
 	}
 
 	// Merge all results to a single vector.
-	off_t loc = this->get_length();
+	off_t loc = this->get_length() + get_sub_start();
 	this->resize(tot_res_size);
 	for (auto it = vec_it; it != vec_end; it++) {
 		assert(loc + (*it)->get_length() <= this->get_length());
-		this->set_sub_vec(loc, **it);
+		const mem_vector &mem_vec = (const mem_vector &) **it;
+		bool ret = data.set_sub_arr(loc * get_entry_size(),
+				mem_vec.get_raw_arr(), mem_vec.get_length() * get_entry_size());
+		assert(ret);
 		loc += (*it)->get_length();
 	}
 	return true;
@@ -224,14 +231,25 @@ bool mem_vector::append(std::vector<vector::ptr>::const_iterator vec_it,
 
 bool mem_vector::append(const vector &vec)
 {
-	off_t loc = this->get_length();
+	if (!vec.is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Not support setting a subvector from ext-mem vector";
+		return false;
+	}
+	if (get_type() != vec.get_type()) {
+		BOOST_LOG_TRIVIAL(error) << "The two vectors don't have the same type";
+		return false;
+	}
+	off_t loc = this->get_length() + get_sub_start();
 	// TODO We might want to over expand a little, so we don't need to copy
 	// the memory again and again.
 	// TODO if this is a sub_vector, what should we do?
+	assert(get_sub_start() == 0);
 	this->resize(vec.get_length() + get_length());
 	assert(loc + vec.get_length() <= this->get_length());
-	this->set_sub_vec(loc, vec);
-	return true;
+	const mem_vector &mem_vec = (const mem_vector &) vec;
+	return data.set_sub_arr(loc * get_entry_size(), mem_vec.get_raw_arr(),
+			mem_vec.get_length() * get_entry_size());
 }
 
 bool mem_vector::resize(size_t new_length)
@@ -254,28 +272,6 @@ bool mem_vector::resize(size_t new_length)
 	this->arr = this->data.get_raw();
 	memcpy(arr, old_arr, std::min(old_length, new_length) * get_entry_size());
 	return vector::resize(new_length);
-}
-
-bool mem_vector::set_sub_vec(off_t start, const vector &vec)
-{
-	if (!vec.is_in_mem()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "Not support setting a subvector from ext-mem vector";
-		return false;
-	}
-	if (get_type() != vec.get_type()) {
-		BOOST_LOG_TRIVIAL(error) << "The two vectors don't have the same type";
-		return false;
-	}
-	if (start + vec.get_length() > get_length()) {
-		BOOST_LOG_TRIVIAL(error) << "set_sub_vec: out of range";
-		return false;
-	}
-
-	const mem_vector &mem_vec = (const mem_vector &) vec;
-	memcpy(get_raw_arr() + start * get_entry_size(), mem_vec.get_raw_arr(),
-			mem_vec.get_length() * mem_vec.get_entry_size());
-	return true;
 }
 
 vector::ptr mem_vector::get_sub_vec(off_t start, size_t length)
