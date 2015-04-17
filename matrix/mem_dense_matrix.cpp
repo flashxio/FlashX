@@ -120,9 +120,6 @@ public:
  */
 class mem_sub_col_dense_matrix: public mem_col_dense_matrix
 {
-	// The data buffer is referenced in the parent class.
-	// but this class also needs to access the data buffer.
-	detail::raw_data_array data;
 	std::vector<off_t> orig_col_idxs;
 
 	mem_sub_col_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
@@ -130,7 +127,6 @@ class mem_sub_col_dense_matrix: public mem_col_dense_matrix
 			const std::vector<off_t> &col_idxs): mem_col_dense_matrix(nrow, ncol,
 				type, data) {
 		this->orig_col_idxs = col_idxs;
-		this->data = data;
 	}
 public:
 	typedef std::shared_ptr<mem_sub_col_dense_matrix> ptr;
@@ -177,13 +173,11 @@ public:
 	virtual dense_matrix::ptr transpose() const;
 
 	virtual char *get_col(size_t col) {
-		off_t orig_col = orig_col_idxs[col];
-		return data.get_raw() + orig_col * get_num_rows() * get_entry_size();
+		return mem_col_dense_matrix::get_col(orig_col_idxs[col]);
 	}
 
 	virtual const char *get_col(size_t col) const {
-		off_t orig_col = orig_col_idxs[col];
-		return data.get_raw() + orig_col * get_num_rows() * get_entry_size();
+		return mem_col_dense_matrix::get_col(orig_col_idxs[col]);
 	}
 
 	virtual mem_col_dense_matrix::ptr get_contig_matrix() const {
@@ -200,9 +194,6 @@ public:
  */
 class mem_sub_row_dense_matrix: public mem_row_dense_matrix
 {
-	// The data buffer is referenced in the parent class.
-	// but this class also needs to access the data buffer.
-	detail::raw_data_array data;
 	std::vector<off_t> orig_row_idxs;
 
 	mem_sub_row_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
@@ -210,7 +201,6 @@ class mem_sub_row_dense_matrix: public mem_row_dense_matrix
 			const std::vector<off_t> &row_idxs): mem_row_dense_matrix(nrow, ncol,
 				type, data) {
 		this->orig_row_idxs = row_idxs;
-		this->data = data;
 	}
 public:
 	typedef std::shared_ptr<mem_sub_row_dense_matrix> ptr;
@@ -285,13 +275,11 @@ public:
 	virtual dense_matrix::ptr transpose() const;
 
 	char *get_row(size_t row) {
-		size_t orig_row = orig_row_idxs[row];
-		return data.get_raw() + orig_row * get_num_cols() * get_entry_size();
+		return mem_row_dense_matrix::get_row(orig_row_idxs[row]);
 	}
 
 	const char *get_row(size_t row) const {
-		size_t orig_row = orig_row_idxs[row];
-		return data.get_raw() + orig_row * get_num_cols() * get_entry_size();
+		return mem_row_dense_matrix::get_row(orig_row_idxs[row]);
 	}
 };
 
@@ -370,7 +358,7 @@ dense_matrix::ptr mem_sub_col_dense_matrix::sapply(const bulk_uoperate &op) cons
 dense_matrix::ptr mem_sub_col_dense_matrix::transpose() const
 {
 	return mem_sub_row_dense_matrix::create(get_num_cols(), get_num_rows(),
-			get_type(), data, orig_col_idxs);
+			get_type(), get_data(), orig_col_idxs);
 }
 
 dense_matrix::ptr mem_sub_col_dense_matrix::get_cols(
@@ -387,7 +375,7 @@ dense_matrix::ptr mem_sub_col_dense_matrix::get_cols(
 	}
 
 	return mem_sub_col_dense_matrix::create(get_num_rows(),
-			idxs.size(), get_type(), data, direct_idxs);
+			idxs.size(), get_type(), get_data(), direct_idxs);
 }
 
 scalar_variable::ptr mem_sub_row_dense_matrix::aggregate(
@@ -443,7 +431,7 @@ dense_matrix::ptr mem_sub_row_dense_matrix::sapply(const bulk_uoperate &op) cons
 dense_matrix::ptr mem_sub_row_dense_matrix::transpose() const
 {
 	return mem_sub_col_dense_matrix::create(get_num_cols(),
-			get_num_rows(), get_type(), data, orig_row_idxs);
+			get_num_rows(), get_type(), get_data(), orig_row_idxs);
 }
 
 bool mem_dense_matrix::verify_inner_prod(const dense_matrix &m,

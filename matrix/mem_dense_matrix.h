@@ -125,6 +125,10 @@ protected:
 				type) {
 		this->data = data;
 	}
+
+	const detail::raw_data_array &get_data() const {
+		return data;
+	}
 public:
 	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
 
@@ -220,6 +224,10 @@ protected:
 			const detail::raw_data_array &data): mem_dense_matrix(nrow, ncol,
 				type) {
 		this->data = data;
+	}
+
+	const detail::raw_data_array &get_data() const {
+		return data;
 	}
 public:
 	typedef std::shared_ptr<mem_col_dense_matrix> ptr;
