@@ -863,22 +863,6 @@ bool mem_col_dense_matrix::write2file(const std::string &file_name) const
 	return true;
 }
 
-mem_col_dense_matrix::ptr mem_col_dense_matrix::create(size_t nrow, size_t ncol,
-		const scalar_type &type, FILE *f)
-{
-	size_t mat_size = nrow * ncol * type.get_size();
-	detail::raw_data_array data(mat_size);
-	size_t ret = fread(data.get_raw(), mat_size, 1, f);
-	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't read %1% bytes from the file") % mat_size;
-		return mem_col_dense_matrix::ptr();
-	}
-
-	return mem_col_dense_matrix::ptr(new mem_col_dense_matrix(nrow, ncol,
-				type, data));
-}
-
 void mem_col_dense_matrix::get_row(size_t row_idx, char *arr) const
 {
 	size_t ncol = get_num_cols();
@@ -1046,8 +1030,38 @@ void mem_row_dense_matrix::set_data(const set_operate &op)
 
 bool mem_row_dense_matrix::copy_from(const dense_matrix &mat)
 {
-	// TODO
-	assert(0);
+	if (!mat.is_in_mem() || mat.store_layout() != matrix_layout_t::L_ROW) {
+		BOOST_LOG_TRIVIAL(error) << "can only copy from the in-mem row matrix";
+		return false;
+	}
+	if (get_num_rows() != mat.get_num_rows()
+			|| get_num_cols() != mat.get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't copy from a matrix with incompatible dimensions";
+		return false;
+	}
+	if (get_type() != mat.get_type()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't copy from a matrix with incompatible type";
+		return false;
+	}
+
+	const mem_row_dense_matrix &row_m = (const mem_row_dense_matrix &) mat;
+	for (size_t i = 0; i < get_num_rows(); i++)
+		set_row(row_m.get_row(i), get_num_cols() * get_entry_size(), i);
+	return true;
+}
+
+bool mem_row_dense_matrix::set_row(const char *buf, size_t size, size_t row)
+{
+	if (size != get_entry_size() * get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "set_row: has a different row length";
+		return false;
+	}
+
+	memcpy(get_row(row), buf, size);
+	return true;
 }
 
 bool mem_row_dense_matrix::verify_inner_prod(const dense_matrix &m,
@@ -1300,22 +1314,6 @@ mem_vector::ptr mem_row_dense_matrix::flatten(bool byrow) const
 		mem_col_dense_matrix::ptr col_mat = get_col_store();
 		return col_mat->flatten(false);
 	}
-}
-
-mem_row_dense_matrix::ptr mem_row_dense_matrix::create(size_t nrow, size_t ncol,
-		const scalar_type &type, FILE *f)
-{
-	size_t mat_size = nrow * ncol * type.get_size();
-	detail::raw_data_array data(mat_size);
-	size_t ret = fread(data.get_raw(), mat_size, 1, f);
-	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't read %1% bytes from the file") % mat_size;
-		return mem_row_dense_matrix::ptr();
-	}
-
-	return mem_row_dense_matrix::ptr(new mem_row_dense_matrix(nrow, ncol,
-				type, data));
 }
 
 mem_col_dense_matrix &mem_row_dense_matrix::get_t_mat()

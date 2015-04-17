@@ -91,6 +91,7 @@ void test_sort()
 
 void test_max()
 {
+	printf("test max\n");
 	mem_vector::ptr vec = mem_vector::create(1000000, get_scalar_type<int>());
 	int max = 0;
 	for (size_t i = 0; i < vec->get_length(); i++) {
@@ -101,10 +102,33 @@ void test_max()
 	assert(vec->max<int>() == max);
 }
 
+void test_resize()
+{
+	printf("test resize\n");
+	mem_vector::ptr vec = mem_vector::cast(create_vector<int>(1, 10000, 2));
+	mem_vector::ptr copy = mem_vector::cast(vec->deep_copy());
+	copy->resize(100);
+	size_t min_len = std::min(copy->get_length(), vec->get_length());
+	for (size_t i = 0; i < min_len; i++)
+		assert(vec->get<int>(i) == copy->get<int>(i));
+
+	copy->resize(200);
+	// The semantics don't guarantee that this works, but it works with
+	// the current implementation
+	min_len = std::min(copy->get_length(), vec->get_length());
+	for (size_t i = 0; i < min_len; i++)
+		assert(vec->get<int>(i) == copy->get<int>(i));
+
+	copy->resize(20000);
+	for (size_t i = 0; i < min_len; i++)
+		assert(vec->get<int>(i) == copy->get<int>(i));
+}
+
 int main()
 {
 	test_sort();
 	test_append();
 	test_groupby();
 	test_max();
+	test_resize();
 }

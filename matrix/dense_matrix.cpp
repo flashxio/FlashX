@@ -175,15 +175,21 @@ dense_matrix::ptr dense_matrix::load(const std::string &file_name)
 
 	size_t nrow = header.get_num_rows();
 	size_t ncol = header.get_num_cols();
+	const scalar_type &type = get_scalar_type(header.get_data_type());
+	size_t mat_size = nrow * ncol * type.get_size();
+	detail::raw_data_array data(mat_size);
+	ret = fread(data.get_raw(), mat_size, 1, f);
+	if (ret == 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< boost::format("can't read %1% bytes from the file") % mat_size;
+		return dense_matrix::ptr();
+	}
+
 	dense_matrix::ptr m;
 	if (header.get_layout() == matrix_layout_t::L_ROW)
-		m = std::static_pointer_cast<dense_matrix>(
-				mem_row_dense_matrix::create(nrow, ncol,
-					get_scalar_type(header.get_data_type()), f));
+		m = mem_row_dense_matrix::create(data, nrow, ncol, type);
 	else if (header.get_layout() == matrix_layout_t::L_COL)
-		m = std::static_pointer_cast<dense_matrix>(
-				mem_col_dense_matrix::create(nrow, ncol,
-					get_scalar_type(header.get_data_type()), f));
+		m = mem_col_dense_matrix::create(data, nrow, ncol, type);
 	else
 		BOOST_LOG_TRIVIAL(error) << "wrong matrix data layout";
 

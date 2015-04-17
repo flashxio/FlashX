@@ -168,14 +168,15 @@ void test_multiply_tall_row()
 	verify_result(*res1, *correct);
 }
 
-void test_copy()
+void test_copy(matrix_layout_t layout)
 {
-	printf("Test copy on column-wise matrices\n");
+	printf("Test copy on %s matrices\n",
+			layout == matrix_layout_t::L_COL ? "column-wise" : "row-wise");
 	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(100, 10,
-			matrix_layout_t::L_COL);
+			layout);
 	m1->get_matrix()->reset_data();
 	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(100, 10,
-			matrix_layout_t::L_COL, set_col_operate(10));
+			layout, set_col_operate(10));
 	bool ret = m1->get_matrix()->copy_from(*m2->get_matrix());
 	assert(ret);
 
@@ -245,6 +246,16 @@ void test_copy_sub()
 	mem_m1->reset_data();
 	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(100, 10,
 			matrix_layout_t::L_COL, set_col_operate(10));
+
+	mem_dense_matrix::ptr tmp = mem_dense_matrix::cast(
+			m2->get_matrix()->deep_copy());
+	assert(tmp->get_num_rows() == m2->get_num_rows());
+	assert(tmp->get_num_cols() == m2->get_num_cols());
+	for (size_t i = 0; i < tmp->get_num_rows(); i++) {
+		for (size_t j = 0; j < tmp->get_num_cols(); j++) {
+			assert(tmp->get<int>(i, j) == m2->get(i, j));
+		}
+	}
 
 	std::vector<off_t> idxs(3);
 	idxs[0] = 1;
@@ -483,6 +494,24 @@ void test_apply()
 	}
 }
 
+void test_io()
+{
+	printf("test read/write matrix to a file\n");
+	mem_dense_matrix::ptr orig_mat = mem_row_dense_matrix::create(
+			1000, 10, get_scalar_type<int>());
+	orig_mat->set_data(set_row_operate(10));
+	std::string out_file = tmpnam(NULL);
+	orig_mat->write2file(out_file);
+
+	mem_dense_matrix::ptr read_mat = mem_dense_matrix::cast(dense_matrix::load(out_file));
+	assert(read_mat);
+	for (size_t i = 0; i < orig_mat->get_num_rows(); i++) {
+		for (size_t j = 0; j < orig_mat->get_num_cols(); j++)
+			assert(orig_mat->get<int>(i, j) == read_mat->get<int>(i, j));
+	}
+	unlink(out_file.c_str());
+}
+
 int main()
 {
 	test_multiply_scalar();
@@ -491,7 +520,8 @@ int main()
 	test_agg_col();
 	test_multiply_wide_row();
 	test_multiply_tall_row();
-	test_copy();
+	test_copy(matrix_layout_t::L_COL);
+	test_copy(matrix_layout_t::L_ROW);
 	test_agg_row();
 	test_submatrix();
 	test_copy_sub();
@@ -501,4 +531,5 @@ int main()
 	test_rand_init();
 	test_flatten();
 	test_apply();
+	test_io();
 }

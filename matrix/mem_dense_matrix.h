@@ -128,10 +128,14 @@ protected:
 public:
 	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
 
+	static ptr create(const detail::raw_data_array &data, size_t nrow, size_t ncol,
+			const scalar_type &type) {
+		return ptr(new mem_row_dense_matrix(nrow, ncol, type, data));
+	}
+
 	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
 		return ptr(new mem_row_dense_matrix(nrow, ncol, type));
 	}
-	static ptr create(size_t nrow, size_t ncol, const scalar_type &type, FILE *f);
 	static ptr cast(dense_matrix::ptr);
 	static ptr cast(mem_dense_matrix::ptr);
 
@@ -167,6 +171,8 @@ public:
 			const bulk_operate &op) const;
 	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
 	virtual dense_matrix::ptr apply(apply_margin margin, const arr_apply_operate &op) const;
+
+	virtual bool set_row(const char *buf, size_t size, size_t row);
 
 	virtual char *get_row(size_t row) {
 		return data.get_raw() + row * get_num_cols() * get_entry_size();
@@ -226,7 +232,6 @@ public:
 	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
 		return ptr(new mem_col_dense_matrix(nrow, ncol, type));
 	}
-	static ptr create(size_t nrow, size_t ncol, const scalar_type &type, FILE *f);
 
 	static ptr cast(dense_matrix::ptr);
 	static ptr cast(mem_dense_matrix::ptr);
