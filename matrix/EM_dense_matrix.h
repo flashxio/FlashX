@@ -19,6 +19,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#if 0
 
 #include <memory>
 #include <boost/format.hpp>
@@ -208,5 +209,7 @@ EM_dense_matrix::ptr multiply(EM_dense_matrix &m1, dense_matrix &m2)
 }
 
 }
+
+#endif
 
 #endif

@@ -87,6 +87,7 @@ void test_spmv(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 		const std::vector<size_t> &degrees)
 {
+#if 0
 	size_t num_cols = idx->get_header().get_num_cols();
 	size_t num_rows = idx->get_header().get_num_rows();
 	printf("test_spmm: the sparse matrix has %ld rows and %ld cols\n",
@@ -112,6 +113,7 @@ void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 		for (size_t j = 0; j < num_rows; j++)
 			assert(out_vec->get<int>(j) == out1->get<int>(j, i));
 	}
+#endif
 }
 
 int main()

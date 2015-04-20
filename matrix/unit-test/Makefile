@@ -22,9 +22,10 @@ CXXFLAGS := -g -std=c++0x -I../../include -I../../libcommon -I../../flash-graph 
 LDFLAGS := $(OMP_FLAG) -L../ -lFMatrix -L../../flash-graph -lgraph -L../../libsafs -lsafs -L../../libcommon -lcommon $(LDFLAGS)
 LDFLAGS += -lstxxl -lnuma -lz -laio -lcblas
 
-all: test_io_gen test-mem_matrix test-EM_vector test-EM_matrix	\
+all: test_io_gen test-mem_matrix test-EM_vector	\
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
-	test-hilbert test-NUMA_vector test-sorter test-NUMA_dense_matrix test-rand_gen
+	test-hilbert test-NUMA_vector test-sorter test-rand_gen	\
+	test-local_matrix_store test-mem_matrix_store
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)
@@ -65,6 +66,12 @@ test-sorter: test-sorter.o ../libFMatrix.a
 test-rand_gen: test-rand_gen.o ../libFMatrix.a
 	$(CXX) -o test-rand_gen test-rand_gen.o $(LDFLAGS)
 
+test-local_matrix_store: test-local_matrix_store.o ../libFMatrix.a
+	$(CXX) -o test-local_matrix_store test-local_matrix_store.o $(LDFLAGS)
+
+test-mem_matrix_store: test-mem_matrix_store.o ../libFMatrix.a
+	$(CXX) -o test-mem_matrix_store test-mem_matrix_store.o $(LDFLAGS)
+
 clean:
 	rm -f *.d
 	rm -f *.o
@@ -82,5 +89,7 @@ clean:
 	rm -f test-hilbert
 	rm -f test-sorter
 	rm -f test-rand_gen
+	rm -f test-local_matrix_store
+	rm -f test-mem_matrix_store
 
 -include $(DEPS) 

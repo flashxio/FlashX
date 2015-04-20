@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#if 0
+
 #include <boost/foreach.hpp>
 
 #include "io_interface.h"
@@ -490,3 +492,5 @@ void EM_col_dense_matrix::set_data(const set_operate &op)
 const size_t EM_col_dense_matrix::COL_CHUNK_SIZE = 1024 * 1024;
 
 }
+
+#endif

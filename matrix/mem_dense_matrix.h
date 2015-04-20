@@ -31,6 +31,7 @@
 #include "matrix_config.h"
 #include "matrix_header.h"
 #include "raw_data_array.h"
+#include "mem_matrix_store.h"
 
 namespace fm
 {
@@ -39,290 +40,72 @@ class mem_vector;
 
 class mem_dense_matrix: public dense_matrix
 {
-protected:
-	mem_dense_matrix(size_t nrow, size_t ncol,
-			const scalar_type &type): dense_matrix(nrow, ncol, type, true) {
-	}
-
-	virtual bool verify_inner_prod(const dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
 	typedef std::shared_ptr<mem_dense_matrix> ptr;
+private:
+	mem_dense_matrix(detail::matrix_store::const_ptr store): dense_matrix(store) {
+	}
+
+	static ptr _create_rand(const scalar_variable &min, const scalar_variable &max,
+			size_t nrow, size_t ncol, matrix_layout_t layout);
+	static ptr _create_const(const scalar_variable &val, size_t nrow, size_t ncol,
+			matrix_layout_t layout);
+
+	void inner_prod_tall(const detail::mem_matrix_store &m,
+			const bulk_operate &left_op, const bulk_operate &right_op,
+			detail::mem_matrix_store &res) const;
+	void inner_prod_wide(const detail::mem_matrix_store &m,
+			const bulk_operate &left_op, const bulk_operate &right_op,
+			detail::mem_matrix_store &res) const;
+	bool verify_inner_prod(const dense_matrix &m,
+			const bulk_operate &left_op, const bulk_operate &right_op) const;
+public:
+	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type);
+	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type, const set_operate &op);
+
+	template<class T>
+	static ptr create_rand(T _min, T _max, size_t nrow, size_t ncol,
+			matrix_layout_t layout) {
+		scalar_variable_impl<T> min(_min);
+		scalar_variable_impl<T> max(_max);
+		return _create_rand(min, max, nrow, ncol, layout);
+	}
+
+	template<class T>
+	static ptr create_const(T _val, size_t nrow, size_t ncol,
+			matrix_layout_t layout) {
+		scalar_variable_impl<T> val(_val);
+		return _create_const(val, nrow, ncol, layout);
+	}
 
 	static ptr cast(dense_matrix::ptr m);
 
-	virtual std::shared_ptr<mem_vector> flatten(bool byrow) const = 0;
+	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
+	virtual dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;
 
-	virtual const char *get(size_t row, size_t col) const = 0;
+	virtual dense_matrix::ptr transpose() const;
 
+	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
+			const bulk_operate &left_op, const bulk_operate &right_op) const;
+	virtual std::shared_ptr<scalar_variable> aggregate(
+			const bulk_operate &op) const;
 	/*
-	 * We need to provide a set of serial versions of the methods below.
-	 * The EM matrix uses customized threads to parallelize the computation
-	 * and overlap computation and I/O, and uses the IM matrix to perform
-	 * computation. Therefore, the IM matrix need to expose the interface
-	 * for serial implementations of the methods.
+	 * A subclass should define this method for element-wise operations.
 	 */
-
-	virtual void serial_reset_data() = 0;
-	virtual void serial_set_data(const set_operate &op) = 0;
-
-	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op) const = 0;
+	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
+			const bulk_operate &op) const;
+	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
+	virtual dense_matrix::ptr apply(apply_margin margin,
+			const arr_apply_operate &op) const;
 
 	template<class T>
 	T get(size_t row, size_t col) const {
-		return *(const T *) get(row, col);
+		const detail::mem_matrix_store &store
+			= (const detail::mem_matrix_store &) get_data();
+		return store.get<T>(row, col);
 	}
-
-	template<class T>
-	void set(size_t row, size_t col, T val) {
-		*(T *) get(row, col) = val;
-	}
-};
-
-class mem_row_dense_matrix;
-class mem_col_dense_matrix;
-
-/*
- * This class defines an in-memory dense matrix with data organized in rows.
- */
-class mem_row_dense_matrix: public mem_dense_matrix
-{
-	detail::raw_data_array data;
-
-	void inner_prod_wide(const dense_matrix &m, const bulk_operate &left_op,
-			const bulk_operate &right_op, mem_row_dense_matrix &res) const;
-	void inner_prod_tall(const dense_matrix &m, const bulk_operate &left_op,
-			const bulk_operate &right_op, mem_row_dense_matrix &res) const;
-	void serial_inner_prod_wide(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op,
-			mem_row_dense_matrix &res) const;
-	void serial_inner_prod_tall(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op,
-			mem_row_dense_matrix &res) const;
-	virtual bool verify_inner_prod(const dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const;
-
-	mem_row_dense_matrix(size_t nrow, size_t ncol,
-			const scalar_type &type): mem_dense_matrix(nrow, ncol, type) {
-		if (nrow * ncol > 0)
-			data = detail::raw_data_array(nrow * ncol * type.get_size());
-	}
-
-	std::shared_ptr<mem_col_dense_matrix> t_mat;
-	/*
-	 * This method returns a column-wise matrix on the same data, so we can
-	 * use the column-wise matrix to access the data and perform computation.
-	 * None of the methods in this class can change the metadata (nrow,
-	 * ncol, etc), so we can cache the column-wise matrix.
-	 */
-	mem_col_dense_matrix &get_t_mat();
-	const mem_col_dense_matrix &get_t_mat() const;
-
-protected:
-	mem_row_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
-			const detail::raw_data_array &data): mem_dense_matrix(nrow, ncol,
-				type) {
-		this->data = data;
-	}
-
-	const detail::raw_data_array &get_data() const {
-		return data;
-	}
-public:
-	typedef std::shared_ptr<mem_row_dense_matrix> ptr;
-
-	static ptr create(const detail::raw_data_array &data, size_t nrow, size_t ncol,
-			const scalar_type &type) {
-		return ptr(new mem_row_dense_matrix(nrow, ncol, type, data));
-	}
-
-	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
-		return ptr(new mem_row_dense_matrix(nrow, ncol, type));
-	}
-	static ptr cast(dense_matrix::ptr);
-	static ptr cast(mem_dense_matrix::ptr);
-
-	~mem_row_dense_matrix() {
-	}
-
-	/*
-	 * This method converts this row-marjor dense matrix to a column-major
-	 * dense matrix. Nothing else is changed.
-	 */
-	std::shared_ptr<mem_col_dense_matrix> get_col_store() const;
-
-	virtual bool write2file(const std::string &file_name) const;
-
-	virtual dense_matrix::ptr shallow_copy() const;
-	virtual dense_matrix::ptr deep_copy() const;
-	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
-	virtual dense_matrix::ptr transpose() const;
-	virtual std::shared_ptr<mem_vector> flatten(bool byrow) const;
-
-	virtual void reset_data();
-	virtual void set_data(const set_operate &op);
-	virtual void serial_reset_data();
-	virtual void serial_set_data(const set_operate &op);
-	virtual bool copy_from(const dense_matrix &mat);
-
-	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const;
-	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
-			const bulk_operate &op) const;
-	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
-	virtual dense_matrix::ptr apply(apply_margin margin, const arr_apply_operate &op) const;
-
-	virtual bool set_row(const char *buf, size_t size, size_t row);
-
-	virtual char *get_row(size_t row) {
-		return data.get_raw() + row * get_num_cols() * get_entry_size();
-	}
-
-	virtual const char *get_row(size_t row) const {
-		return data.get_raw() + row * get_num_cols() * get_entry_size();
-	}
-
-	virtual char *get(size_t row, size_t col) {
-		return get_row(row) + col * get_entry_size();
-	}
-
-	virtual const char *get(size_t row, size_t col) const {
-		return get_row(row) + col * get_entry_size();
-	}
-
-	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::L_ROW;
-	}
-
-	friend class mem_col_dense_matrix;
-};
-
-/*
- * This class defines an in-memory dense matrix with data organized in columns.
- */
-class mem_col_dense_matrix: public mem_dense_matrix
-{
-	detail::raw_data_array data;
-
-	mem_col_dense_matrix(size_t nrow, size_t ncol,
-			const scalar_type &type): mem_dense_matrix(nrow, ncol, type) {
-		if (nrow * ncol > 0)
-			data = detail::raw_data_array(nrow * ncol * type.get_size());
-	}
-
-	// This method constructs the specified row in a preallocated array.
-	// It is used internally, so the array should have the right length
-	// to keep a row.
-	void get_row(size_t idx, char *arr) const;
-
-protected:
-	mem_col_dense_matrix(size_t nrow, size_t ncol, const scalar_type &type,
-			const detail::raw_data_array &data): mem_dense_matrix(nrow, ncol,
-				type) {
-		this->data = data;
-	}
-
-	const detail::raw_data_array &get_data() const {
-		return data;
-	}
-public:
-	typedef std::shared_ptr<mem_col_dense_matrix> ptr;
-
-	static ptr create(const detail::raw_data_array &data, size_t nrow, size_t ncol,
-			const scalar_type &type) {
-		return ptr(new mem_col_dense_matrix(nrow, ncol, type, data));
-	}
-
-	static ptr create(size_t nrow, size_t ncol, const scalar_type &type) {
-		return ptr(new mem_col_dense_matrix(nrow, ncol, type));
-	}
-
-	static ptr cast(dense_matrix::ptr);
-	static ptr cast(mem_dense_matrix::ptr);
-
-	~mem_col_dense_matrix() {
-	}
-
-	/*
-	 * This method converts this column-marjor dense matrix to a row-major
-	 * dense matrix. Nothing else is changed.
-	 */
-	std::shared_ptr<mem_row_dense_matrix> get_row_store() const;
-
-	virtual bool write2file(const std::string &file_name) const;
-
-	virtual dense_matrix::ptr shallow_copy() const;
-	virtual dense_matrix::ptr deep_copy() const;
-	virtual dense_matrix::ptr conv2(size_t nrow, size_t ncol, bool byrow) const;
-	virtual dense_matrix::ptr transpose() const;
-	virtual std::shared_ptr<mem_vector> flatten(bool byrow) const;
-
-	virtual void reset_data();
-	virtual void set_data(const set_operate &op);
-	virtual void serial_reset_data();
-	virtual void serial_set_data(const set_operate &op);
-	virtual bool copy_from(const dense_matrix &mat);
-
-	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual dense_matrix::ptr serial_inner_prod(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op) const;
-	virtual scalar_variable::ptr aggregate(const bulk_operate &op) const;
-	virtual dense_matrix::ptr mapply2(const dense_matrix &m,
-			const bulk_operate &op) const;
-	virtual dense_matrix::ptr sapply(const bulk_uoperate &op) const;
-	virtual dense_matrix::ptr apply(apply_margin margin, const arr_apply_operate &op) const;
-
-	virtual bool set_cols(const mem_col_dense_matrix &m,
-			const std::vector<off_t> &idxs);
-	virtual bool set_col(const char *buf, size_t size, size_t col);
-
-	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
-
-	virtual char *get_col(size_t col) {
-		return data.get_raw() + col * get_num_rows() * get_entry_size();
-	}
-
-	virtual const char *get_col(size_t col) const {
-		return data.get_raw() + col * get_num_rows() * get_entry_size();
-	}
-
-	virtual char *get(size_t row, size_t col) {
-		return get_col(col) + row * get_entry_size();
-	}
-
-	virtual const char *get(size_t row, size_t col) const {
-		return get_col(col) + row * get_entry_size();
-	}
-
-	virtual matrix_layout_t store_layout() const {
-		return matrix_layout_t::L_COL;
-	}
-
-	virtual mem_col_dense_matrix::ptr get_contig_matrix() const {
-		return mem_col_dense_matrix::create(data, get_num_rows(),
-				get_num_cols(), get_type());
-	}
-
-	template<class T>
-	void scale_cols(const std::vector<T> &vals) {
-		assert(vals.size() == get_num_cols());
-		assert(get_type() == get_scalar_type<T>());
-		for (size_t i = 0; i < get_num_cols(); i++) {
-			T *col = (T *) get_col(i);
-			for (size_t j = 0; j < get_num_rows(); j++)
-				col[j] *= vals[i];
-		}
-	}
-
-	dense_matrix::ptr gemm(const dense_matrix &Amat, const dense_matrix &Bmat,
-			const scalar_variable &alpha, const scalar_variable &beta) const;
-
-	friend class mem_row_dense_matrix;
 };
 
 template<class EntryType>
@@ -331,30 +114,14 @@ class type_mem_dense_matrix
 	mem_dense_matrix::ptr m;
 
 	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout) {
-		if (layout == matrix_layout_t::L_COL)
-			m = mem_col_dense_matrix::create(nrow, ncol,
-					get_scalar_type<EntryType>());
-		else if (layout == matrix_layout_t::L_ROW)
-			m = mem_row_dense_matrix::create(nrow, ncol,
-					get_scalar_type<EntryType>());
-		else
-			assert(0);
+		m = mem_dense_matrix::create(nrow, ncol, layout,
+				get_scalar_type<EntryType>());
 	}
 
 	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const type_set_operate<EntryType> &op, bool parallel) {
-		if (layout == matrix_layout_t::L_COL)
-			m = mem_col_dense_matrix::create(nrow, ncol,
-					get_scalar_type<EntryType>());
-		else if (layout == matrix_layout_t::L_ROW)
-			m = mem_row_dense_matrix::create(nrow, ncol,
-					get_scalar_type<EntryType>());
-		else
-			assert(0);
-		if (parallel)
-			m->set_data(op);
-		else
-			m->serial_set_data(op);
+			const type_set_operate<EntryType> &op) {
+		m = mem_dense_matrix::create(nrow, ncol, layout,
+				get_scalar_type<EntryType>(), op);
 	}
 
 	type_mem_dense_matrix(mem_dense_matrix::ptr m) {
@@ -368,9 +135,8 @@ public:
 	}
 
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const type_set_operate<EntryType> &op, bool parallel = false) {
-		return ptr(new type_mem_dense_matrix<EntryType>(nrow, ncol, layout,
-					op, parallel));
+			const type_set_operate<EntryType> &op) {
+		return ptr(new type_mem_dense_matrix<EntryType>(nrow, ncol, layout, op));
 	}
 
 	static ptr create(mem_dense_matrix::ptr m) {
@@ -386,12 +152,10 @@ public:
 		return m->get_num_cols();
 	}
 
-	void set(size_t row, size_t col, const EntryType &v) {
-		*(EntryType *) m->get(row, col) = v;
-	}
-
 	EntryType get(size_t row, size_t col) const {
-		return *(EntryType *) m->get(row, col);
+		const detail::mem_matrix_store &mem_store
+			= (const detail::mem_matrix_store &) m->get_data();
+		return mem_store.get<EntryType>(row, col);
 	}
 
 	const mem_dense_matrix::ptr get_matrix() const {
@@ -401,40 +165,6 @@ public:
 
 typedef type_mem_dense_matrix<int> I_mem_dense_matrix;
 typedef type_mem_dense_matrix<double> D_mem_dense_matrix;
-
-template<class LeftType, class RightType, class ResType>
-mem_dense_matrix::ptr multiply(mem_col_dense_matrix &m1, mem_dense_matrix &m2)
-{
-	basic_ops_impl<LeftType, RightType, ResType> ops;
-	return mem_dense_matrix::cast(
-			m1.serial_inner_prod(m2, ops.get_multiply(), ops.get_add()));
-}
-
-template<class LeftType, class RightType, class ResType>
-mem_dense_matrix::ptr par_multiply(mem_col_dense_matrix &m1, mem_dense_matrix &m2)
-{
-	return mem_dense_matrix::cast(m1.multiply(m2));
-}
-
-template<class LeftType, class RightType, class ResType>
-typename type_mem_dense_matrix<ResType>::ptr  multiply(
-		type_mem_dense_matrix<LeftType> &m1,
-		type_mem_dense_matrix<RightType> &m2)
-{
-	basic_ops_impl<LeftType, RightType, ResType> ops;
-	return type_mem_dense_matrix<ResType>::create(mem_dense_matrix::cast(
-				m1.get_matrix()->serial_inner_prod(*m2.get_matrix(), ops.get_multiply(),
-					ops.get_add())));
-}
-
-template<class LeftType, class RightType, class ResType>
-typename type_mem_dense_matrix<ResType>::ptr par_multiply(
-		type_mem_dense_matrix<LeftType> &m1,
-		type_mem_dense_matrix<RightType> &m2)
-{
-	return type_mem_dense_matrix<ResType>::create(mem_dense_matrix::cast(
-				m1.get_matrix()->multiply(*m2.get_matrix())));
-}
 
 }
 

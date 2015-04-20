@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#if 0
+
 #include <boost/format.hpp>
 
 #include "NUMA_dense_matrix.h"
@@ -176,3 +178,5 @@ dense_matrix::ptr NUMA_col_tall_dense_matrix::mapply2(const dense_matrix &m,
 }
 
 }
+
+#endif

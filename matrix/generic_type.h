@@ -121,6 +121,7 @@ class mem_vector_vector;
 class scatter_gather;
 class scalar_variable;
 class rand_gen;
+class set_operate;
 
 /**
  * This interface defines a scalar type and the operations related to the type.
@@ -140,6 +141,7 @@ public:
 	virtual size_t get_size() const = 0;
 	virtual const sorter &get_sorter() const = 0;
 	virtual const scatter_gather &get_sg() const = 0;
+	virtual const set_operate &get_set_const(const scalar_variable &val) const = 0;
 	virtual std::shared_ptr<scalar_variable> create_scalar() const = 0;
 	virtual std::shared_ptr<rand_gen> create_rand_gen(const scalar_variable &min,
 			const scalar_variable &max) const = 0;
@@ -180,6 +182,7 @@ public:
 	}
 
 	virtual const scatter_gather &get_sg() const;
+	virtual const set_operate &get_set_const(const scalar_variable &val) const;
 
 	virtual prim_type get_type() const {
 		return fm::get_type<T>();

@@ -9,6 +9,7 @@
 #include "mem_dense_matrix.h"
 #include "sparse_matrix.h"
 
+#if 0
 using namespace fm;
 
 class set_col_operate: public type_set_operate<double>
@@ -102,6 +103,8 @@ mem_dense_matrix::ptr test_IM_inner_prod(size_t nrow, size_t ncol)
 	return im_res;
 }
 
+#endif
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
@@ -109,6 +112,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+#if 0
 	std::string conf_file = argv[1];
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
@@ -117,4 +121,5 @@ int main(int argc, char *argv[])
 	test_IM_inner_prod(1024 * 1024 * 120, 5);
 
 	destroy_flash_matrix();
+#endif
 }

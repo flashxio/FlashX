@@ -116,85 +116,19 @@ bool dense_matrix::verify_apply(apply_margin margin, const arr_apply_operate &op
 dense_matrix::ptr dense_matrix::create(size_t nrow, size_t ncol,
 		const scalar_type &type, matrix_layout_t layout, bool in_mem)
 {
-	if (in_mem) {
-		if (layout == matrix_layout_t::L_ROW)
-			return mem_row_dense_matrix::create(nrow, ncol, type);
-		else
-			return mem_col_dense_matrix::create(nrow, ncol, type);
-	}
+	if (in_mem)
+		return mem_dense_matrix::create(nrow, ncol, layout, type);
 	else {
+		return dense_matrix::ptr();
+#if 0
 		if (layout == matrix_layout_t::L_ROW) {
 			fprintf(stderr, "EM row dense matrix isn't supported\n");
 			return dense_matrix::ptr();
 		}
 		else
 			return EM_col_dense_matrix::create(nrow, ncol, type);
+#endif
 	}
-}
-
-bool dense_matrix::write_header(FILE *f) const
-{
-	matrix_header header(DENSE, get_entry_size(), get_num_rows(),
-			get_num_cols(), store_layout(), get_type().get_type());
-
-	size_t ret = fwrite(&header, sizeof(header), 1, f);
-	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't write header: %2%") % strerror(errno);
-		return false;
-	}
-	return true;
-}
-
-dense_matrix::ptr dense_matrix::load(const std::string &file_name)
-{
-	matrix_header header;
-
-	FILE *f = fopen(file_name.c_str(), "r");
-	if (f == NULL) {
-		fclose(f);
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't open %1%: %2%")
-			% file_name % strerror(errno);
-		return dense_matrix::ptr();
-	}
-
-	size_t ret = fread(&header, sizeof(header), 1, f);
-	if (ret == 0) {
-		fclose(f);
-		BOOST_LOG_TRIVIAL(error) << boost::format("can't read header from %1%: %2%")
-			% file_name % strerror(errno);
-		return dense_matrix::ptr();
-	}
-
-	header.verify();
-	if (header.is_sparse()) {
-		fclose(f);
-		BOOST_LOG_TRIVIAL(error) << "The matrix to be loaded is sparse";
-		return dense_matrix::ptr();
-	}
-
-	size_t nrow = header.get_num_rows();
-	size_t ncol = header.get_num_cols();
-	const scalar_type &type = get_scalar_type(header.get_data_type());
-	size_t mat_size = nrow * ncol * type.get_size();
-	detail::raw_data_array data(mat_size);
-	ret = fread(data.get_raw(), mat_size, 1, f);
-	if (ret == 0) {
-		BOOST_LOG_TRIVIAL(error)
-			<< boost::format("can't read %1% bytes from the file") % mat_size;
-		return dense_matrix::ptr();
-	}
-
-	dense_matrix::ptr m;
-	if (header.get_layout() == matrix_layout_t::L_ROW)
-		m = mem_row_dense_matrix::create(data, nrow, ncol, type);
-	else if (header.get_layout() == matrix_layout_t::L_COL)
-		m = mem_col_dense_matrix::create(data, nrow, ncol, type);
-	else
-		BOOST_LOG_TRIVIAL(error) << "wrong matrix data layout";
-
-	fclose(f);
-	return m;
 }
 
 double dense_matrix::norm2() const
@@ -252,8 +186,8 @@ class rand_init: public set_operate
 		printf("destroy rand gen\n");
 	}
 public:
-	rand_init(const scalar_type &_type, const scalar_variable &_min,
-			const scalar_variable &_max): type(_type), min(_min), max(_max) {
+	rand_init(const scalar_variable &_min, const scalar_variable &_max): type(
+			_min.get_type()), min(_min), max(_max) {
 		int ret = pthread_key_create(&gen_key, destroy_rand_gen);
 		assert(ret == 0);
 	}
@@ -273,10 +207,30 @@ public:
 
 }
 
-void dense_matrix::_init_rand(const scalar_variable &min,
-		const scalar_variable &max)
+mem_dense_matrix::ptr mem_dense_matrix::_create_rand(const scalar_variable &min,
+		const scalar_variable &max, size_t nrow, size_t ncol,
+		matrix_layout_t layout)
 {
-	set_data(rand_init(get_type(), min, max));
+	assert(min.get_type() == max.get_type());
+	detail::mem_matrix_store::ptr store;
+	if (layout == matrix_layout_t::L_COL)
+		store = detail::mem_col_matrix_store::create(nrow, ncol, min.get_type());
+	else
+		store = detail::mem_row_matrix_store::create(nrow, ncol, min.get_type());
+	store->set_data(rand_init(min, max));
+	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
+}
+
+mem_dense_matrix::ptr mem_dense_matrix::_create_const(const scalar_variable &val,
+		size_t nrow, size_t ncol, matrix_layout_t layout)
+{
+	detail::mem_matrix_store::ptr store;
+	if (layout == matrix_layout_t::L_COL)
+		store = detail::mem_col_matrix_store::create(nrow, ncol, val.get_type());
+	else
+		store = detail::mem_row_matrix_store::create(nrow, ncol, val.get_type());
+	store->set_data(val.get_type().get_set_const(val));
+	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 
 }

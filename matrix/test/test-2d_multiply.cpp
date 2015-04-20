@@ -81,6 +81,7 @@ public:
 
 void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 {
+#if 0
 	printf("test sparse matrix dense matrix multiplication\n");
 	struct timeval start, end;
 	NUMA_row_tall_dense_matrix::ptr in
@@ -108,6 +109,7 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 		ProfilerStop();
 #endif
 	printf("it takes %.3f seconds\n", time_diff(start, end));
+#endif
 }
 
 void print_usage()

@@ -28,6 +28,7 @@
 #include "mem_vector.h"
 #include "NUMA_vector.h"
 #include "NUMA_dense_matrix.h"
+#include "dense_matrix.h"
 
 namespace fm
 {
@@ -159,6 +160,8 @@ public:
 	virtual void run_on_block(const sparse_block_2d &block) = 0;
 };
 
+#if 0
+
 template<class T>
 class block_spmm_task: public block_compute_task
 {
@@ -201,6 +204,8 @@ public:
 		}
 	}
 };
+
+#endif
 
 /*
  * This task performs matrix vector multiplication on a sparse matrix in
@@ -302,6 +307,8 @@ public:
 	}
 };
 
+#if 0
+
 template<class T>
 class b2d_spmm_creator: public task_creator
 {
@@ -328,6 +335,8 @@ public:
 					io, mat, order));
 	}
 };
+
+#endif
 
 /*
  * The non-zero entries in a sparse matrix are organized in blocks.
@@ -380,6 +389,7 @@ class sparse_matrix
 		return b2d_spmv_creator<T>::create(in, out, *this);
 	}
 
+#if 0
 	template<class T>
 	task_creator::ptr get_multiply_creator(const NUMA_row_tall_dense_matrix &in,
 			NUMA_row_tall_dense_matrix &out) const {
@@ -394,6 +404,7 @@ class sparse_matrix
 				cal_super_block_size(get_block_size(),
 					sizeof(T) * row_m.get_num_cols()));
 	}
+#endif
 protected:
 	// This constructor is used for the sparse matrix stored
 	// in the FlashGraph format.
@@ -590,6 +601,8 @@ public:
 			return false;
 		}
 
+		return false;
+#if 0
 		if (in.store_layout() == matrix_layout_t::L_ROW) {
 			if (out.store_layout() != matrix_layout_t::L_ROW) {
 				BOOST_LOG_TRIVIAL(error) << "wrong matrix layout for output matrix";
@@ -612,6 +625,7 @@ public:
 #endif
 			return true;
 		}
+#endif
 	}
 
 #if 0
@@ -654,6 +668,8 @@ public:
 			return dense_matrix::ptr();
 		}
 
+		return dense_matrix::ptr();
+#if 0
 		if (in->store_layout() == matrix_layout_t::L_ROW) {
 			NUMA_row_tall_dense_matrix::ptr in_mat
 				= NUMA_row_tall_dense_matrix::cast(in);
@@ -674,6 +690,7 @@ public:
 #endif
 			return ret;
 		}
+#endif
 	}
 };
 
@@ -688,6 +705,7 @@ b2d_spmv_creator<T>::b2d_spmv_creator(const NUMA_vector &_input,
 	order = mat.get_multiply_order(sb_size, sb_size);
 }
 
+#if 0
 template<class T>
 b2d_spmm_creator<T>::b2d_spmm_creator(const NUMA_row_tall_dense_matrix &_input,
 		NUMA_row_tall_dense_matrix &_output, const sparse_matrix &_mat): input(
@@ -707,6 +725,7 @@ b2d_spmm_creator<T>::b2d_spmm_creator(const NUMA_row_tall_dense_matrix &_input,
 	assert(input.get_num_cols() == output.get_num_cols());
 	order = mat.get_multiply_order(sb_size, sb_size);
 }
+#endif
 
 void init_flash_matrix(config_map::ptr configs);
 void destroy_flash_matrix();

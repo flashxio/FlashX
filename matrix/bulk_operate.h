@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <assert.h>
+
 #include <memory>
 #include <vector>
 #include <cmath>
@@ -539,6 +541,22 @@ public:
 	}
 };
 
+template<class T>
+class const_set_operate: public type_set_operate<T>
+{
+	T val;
+public:
+	const_set_operate(T val) {
+		this->val = val;
+	}
+
+	virtual void set(T *arr, size_t num_eles, off_t row_idx,
+			off_t col_idx) const {
+		for (size_t i = 0; i < num_eles; i++)
+			arr[i] = val;
+	}
+};
+
 template<class OpType, class InType, class OutType>
 const scalar_type &bulk_uoperate_impl<OpType, InType, OutType>::get_input_type() const
 {
@@ -648,6 +666,8 @@ public:
 
 	virtual const scalar_type &get_key_type() const = 0;
 	virtual const scalar_type &get_output_type() const = 0;
+	// This method tells how many elements output for a key. If it's unknown
+	// or isn't fixed, it should return 0.
 	virtual size_t get_num_out_eles() const = 0;
 };
 
@@ -682,6 +702,16 @@ const scatter_gather &scalar_type_impl<T>::get_sg() const
 {
 	static type_scatter_gather<T> sg;
 	return sg;
+}
+
+template<class T>
+const set_operate &scalar_type_impl<T>::get_set_const(const scalar_variable &val) const
+{
+	assert(val.get_type() == get_scalar_type<T>());
+	const scalar_variable_impl<T> &t_val
+		= static_cast<const scalar_variable_impl<T> &>(val);
+	static const_set_operate<T> op(t_val.get());
+	return op;
 }
 
 }
