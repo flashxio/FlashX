@@ -76,6 +76,20 @@ public:
 		return matrix_store::const_ptr();
 	}
 
+	virtual std::pair<size_t, size_t> get_portion_size() const {
+		assert(0);
+		return std::pair<size_t, size_t>(0, 0);
+	}
+
+	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const {
+		assert(0);
+		return std::shared_ptr<const local_matrix_store>();
+	}
+	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id) {
+		assert(0);
+		return std::shared_ptr<local_matrix_store>();
+	}
+
 	template<class Type>
 	Type get(size_t row, size_t col) const {
 		return *(const Type *) get(row, col);

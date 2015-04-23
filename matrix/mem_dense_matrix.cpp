@@ -37,11 +37,6 @@
 namespace fm
 {
 
-/*
- * We partition a matrix for parallel.
- */
-const size_t PART_SIZE = 64 * 1024;
-
 mem_dense_matrix::ptr mem_dense_matrix::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type)
 {
@@ -121,17 +116,22 @@ void mem_dense_matrix::inner_prod_tall(const detail::mem_matrix_store &m,
 		detail::mem_matrix_store &res) const
 {
 	// We assume the right matrix is small, so we don't need to partition it.
-	detail::local_matrix_store::const_ptr local_right = m.get_portion(
-			0, m.get_num_rows(), 0, m.get_num_cols());
+	detail::local_matrix_store::const_ptr local_right = m.get_portion(0);
+	assert(local_right->get_num_rows() == m.get_num_rows()
+			&& local_right->get_num_cols() == m.get_num_cols());
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
+	size_t num_chunks = this_store.get_num_portions();
+	assert(this_store.get_portion_size().first == res.get_portion_size().first);
 #pragma omp parallel for
-	for (size_t row_idx = 0; row_idx < get_num_rows(); row_idx += PART_SIZE) {
-		size_t local_nrow = std::min(PART_SIZE, get_num_rows() - row_idx);
-		detail::local_matrix_store::const_ptr local_store = this_store.get_portion(
-				row_idx, local_nrow, 0, this_store.get_num_cols());
-		detail::local_matrix_store::ptr local_res = res.get_portion(
-				row_idx, local_nrow, 0, res.get_num_cols());
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::const_ptr local_store
+			= this_store.get_portion(i);
+		detail::local_matrix_store::ptr local_res = res.get_portion(i);
+		assert(local_store->get_global_start_row()
+				== local_res->get_global_start_row());
+		assert(local_store->get_global_start_col()
+				== local_res->get_global_start_col());
 		local_res->reset_data();
 		detail::inner_prod(*local_store, *local_right, left_op, right_op,
 				*local_res);
@@ -148,6 +148,8 @@ void mem_dense_matrix::inner_prod_wide(const detail::mem_matrix_store &m,
 
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
+	size_t num_chunks = this_store.get_num_portions();
+	assert(this_store.get_portion_size().second == res.get_portion_size().first);
 #pragma omp parallel
 	{
 		detail::local_matrix_store::ptr local_m;
@@ -161,12 +163,14 @@ void mem_dense_matrix::inner_prod_wide(const detail::mem_matrix_store &m,
 						nrow, m.get_num_cols(), right_op.get_output_type()));
 		local_m->reset_data();
 #pragma omp for
-		for (size_t col_idx = 0; col_idx < get_num_cols(); col_idx += PART_SIZE) {
-			size_t local_ncol = std::min(PART_SIZE, get_num_cols() - col_idx);
-			detail::local_matrix_store::const_ptr local_store = this_store.get_portion(
-					0, this_store.get_num_rows(), col_idx, local_ncol);
-			detail::local_matrix_store::const_ptr local_store2 = m.get_portion(
-					col_idx, local_ncol, 0, m.get_num_cols());
+		for (size_t i = 0; i < num_chunks; i++) {
+			detail::local_matrix_store::const_ptr local_store
+				= this_store.get_portion(i);
+			detail::local_matrix_store::const_ptr local_store2 = m.get_portion(i);
+			assert(local_store->get_global_start_row()
+					== local_store2->get_global_start_col());
+			assert(local_store->get_global_start_col()
+					== local_store2->get_global_start_row());
 			detail::inner_prod(*local_store, *local_store2, left_op, right_op,
 					*local_m);
 		}
@@ -175,8 +179,9 @@ void mem_dense_matrix::inner_prod_wide(const detail::mem_matrix_store &m,
 
 	// Aggregate the results from omp threads.
 	res.reset_data();
-	detail::local_matrix_store::ptr local_res = res.get_portion(
-			0, res.get_num_rows(), 0, res.get_num_cols());
+	detail::local_matrix_store::ptr local_res = res.get_portion(0);
+	assert(local_res->get_num_rows() == res.get_num_rows()
+			&& local_res->get_num_cols() == res.get_num_cols());
 	for (int j = 0; j < nthreads; j++)
 		detail::mapply2(*local_res, *local_ms[j], right_op, *local_res);
 }
@@ -187,41 +192,31 @@ scalar_variable::ptr mem_dense_matrix::aggregate(const bulk_operate &op) const
 		return scalar_variable::ptr();
 	scalar_variable::ptr res = op.get_output_type().create_scalar();
 	char *raw_arr;
-	size_t num_parts;
 
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
+	size_t num_chunks = this_store.get_num_portions();
 	if (is_wide()) {
-		num_parts = ceil(((double) get_num_cols()) / PART_SIZE);
-		raw_arr = (char *) malloc(res->get_size() * num_parts);
+		raw_arr = (char *) malloc(res->get_size() * num_chunks);
 #pragma omp parallel for
-		for (size_t col_idx = 0; col_idx < get_num_cols(); col_idx += PART_SIZE) {
-			size_t local_ncol = std::min(PART_SIZE, get_num_cols() - col_idx);
-			detail::local_matrix_store::const_ptr local_store = this_store.get_portion(
-					0, this_store.get_num_rows(), col_idx, local_ncol);
-			size_t part_off = col_idx / PART_SIZE;
-			assert(part_off < num_parts);
-			detail::aggregate(*local_store, op,
-					raw_arr + part_off * get_entry_size());
+		for (size_t i = 0; i < num_chunks; i++) {
+			detail::local_matrix_store::const_ptr local_store
+				= this_store.get_portion(i);
+			detail::aggregate(*local_store, op, raw_arr + i * get_entry_size());
 		}
 	}
 	else {
-		num_parts = ceil(((double) get_num_rows()) / PART_SIZE);
-		raw_arr = (char *) malloc(res->get_size() * num_parts);
+		raw_arr = (char *) malloc(res->get_size() * num_chunks);
 #pragma omp parallel for
-		for (size_t row_idx = 0; row_idx < get_num_rows(); row_idx += PART_SIZE) {
-			size_t local_nrow = std::min(PART_SIZE, get_num_rows() - row_idx);
-			detail::local_matrix_store::const_ptr local_store = this_store.get_portion(
-					row_idx, local_nrow, 0, this_store.get_num_cols());
-			size_t part_off = row_idx / PART_SIZE;
-			assert(part_off < num_parts);
-			detail::aggregate(*local_store, op,
-					raw_arr + part_off * get_entry_size());
+		for (size_t i = 0; i < num_chunks; i++) {
+			detail::local_matrix_store::const_ptr local_store
+				= this_store.get_portion(i);
+			detail::aggregate(*local_store, op, raw_arr + i * get_entry_size());
 		}
 	}
 
 	char raw_res[res->get_size()];
-	op.runA(num_parts, raw_arr, raw_res);
+	op.runA(num_chunks, raw_arr, raw_res);
 	free(raw_arr);
 	res->set_raw(raw_res, res->get_size());
 	return res;
@@ -243,35 +238,50 @@ dense_matrix::ptr mem_dense_matrix::mapply2(const dense_matrix &m,
 		= dynamic_cast<const detail::mem_matrix_store &>(m.get_data());
 	detail::mem_matrix_store::ptr res;
 	if (store_layout() == matrix_layout_t::L_COL)
-		res = detail::mem_col_matrix_store::create(nrow, ncol, op.get_output_type());
+		res = detail::mem_col_matrix_store::create(nrow, ncol,
+				op.get_output_type());
 	else
-		res = detail::mem_row_matrix_store::create(nrow, ncol, op.get_output_type());
+		res = detail::mem_row_matrix_store::create(nrow, ncol,
+				op.get_output_type());
 
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
+	size_t num_chunks = this_store.get_num_portions();
 	if (is_wide()) {
+		assert(this_store.get_portion_size().second
+				== mem_mat.get_portion_size().second);
+		assert(this_store.get_portion_size().second
+				== res->get_portion_size().second);
 #pragma omp parallel for
-		for (size_t col_idx = 0; col_idx < get_num_cols(); col_idx += PART_SIZE) {
-			size_t local_ncol = std::min(PART_SIZE, get_num_cols() - col_idx);
-			detail::local_matrix_store::const_ptr local_store = this_store.get_portion(
-					0, this_store.get_num_rows(), col_idx, local_ncol);
-			detail::local_matrix_store::const_ptr local_store2 = mem_mat.get_portion(
-					0, mem_mat.get_num_rows(), col_idx, local_ncol);
-			detail::local_matrix_store::ptr local_res = res->get_portion(
-					0, res->get_num_rows(), col_idx, local_ncol);
+		for (size_t i = 0; i < num_chunks; i++) {
+			detail::local_matrix_store::const_ptr local_store
+				= this_store.get_portion(i);
+			detail::local_matrix_store::const_ptr local_store2
+				= mem_mat.get_portion(i);
+			detail::local_matrix_store::ptr local_res = res->get_portion(i);
+			assert(local_store->get_global_start_col()
+					== local_store2->get_global_start_col());
+			assert(local_store->get_global_start_col()
+					== local_res->get_global_start_col());
 			detail::mapply2(*local_store, *local_store2, op, *local_res);
 		}
 	}
 	else {
+		assert(this_store.get_portion_size().first
+				== mem_mat.get_portion_size().first);
+		assert(this_store.get_portion_size().first
+				== res->get_portion_size().first);
 #pragma omp parallel for
-		for (size_t row_idx = 0; row_idx < get_num_rows(); row_idx += PART_SIZE) {
-			size_t local_nrow = std::min(PART_SIZE, get_num_rows() - row_idx);
-			detail::local_matrix_store::const_ptr local_store = this_store.get_portion(
-					row_idx, local_nrow, 0, this_store.get_num_cols());
-			detail::local_matrix_store::const_ptr local_store2 = mem_mat.get_portion(
-					row_idx, local_nrow, 0, mem_mat.get_num_cols());
-			detail::local_matrix_store::ptr local_res = res->get_portion(
-					row_idx, local_nrow, 0, res->get_num_cols());
+		for (size_t i = 0; i < num_chunks; i++) {
+			detail::local_matrix_store::const_ptr local_store
+				= this_store.get_portion(i);
+			detail::local_matrix_store::const_ptr local_store2
+				= mem_mat.get_portion(i);
+			detail::local_matrix_store::ptr local_res = res->get_portion(i);
+			assert(local_store->get_global_start_row()
+					== local_store2->get_global_start_row());
+			assert(local_store->get_global_start_row()
+					== local_res->get_global_start_row());
 			detail::mapply2(*local_store, *local_store2, op, *local_res);
 		}
 	}
@@ -284,31 +294,38 @@ dense_matrix::ptr mem_dense_matrix::sapply(const bulk_uoperate &op) const
 	size_t ncol = this->get_num_cols();
 	detail::mem_matrix_store::ptr res;
 	if (store_layout() == matrix_layout_t::L_COL)
-		res = detail::mem_col_matrix_store::create(nrow, ncol, op.get_output_type());
+		res = detail::mem_col_matrix_store::create(nrow, ncol,
+				op.get_output_type());
 	else
-		res = detail::mem_row_matrix_store::create(nrow, ncol, op.get_output_type());
+		res = detail::mem_row_matrix_store::create(nrow, ncol,
+				op.get_output_type());
 
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
+	size_t num_chunks = this_store.get_num_portions();
 	if (is_wide()) {
+		assert(this_store.get_portion_size().second
+				== res->get_portion_size().second);
 #pragma omp parallel for
-		for (size_t col_idx = 0; col_idx < get_num_cols(); col_idx += PART_SIZE) {
-			size_t local_ncol = std::min(PART_SIZE, get_num_cols() - col_idx);
-			detail::local_matrix_store::const_ptr local_store = this_store.get_portion(
-					0, this_store.get_num_rows(), col_idx, local_ncol);
-			detail::local_matrix_store::ptr local_res = res->get_portion(
-					0, this_store.get_num_rows(), col_idx, local_ncol);
+		for (size_t i = 0; i < num_chunks; i++) {
+			detail::local_matrix_store::const_ptr local_store
+				= this_store.get_portion(i);
+			detail::local_matrix_store::ptr local_res = res->get_portion(i);
+			assert(local_res->get_global_start_col()
+					== local_store->get_global_start_col());
 			detail::sapply(*local_store, op, *local_res);
 		}
 	}
 	else {
+		assert(this_store.get_portion_size().first
+				== res->get_portion_size().first);
 #pragma omp parallel for
-		for (size_t row_idx = 0; row_idx < get_num_rows(); row_idx += PART_SIZE) {
-			size_t local_nrow = std::min(PART_SIZE, get_num_rows() - row_idx);
-			detail::local_matrix_store::const_ptr local_store = this_store.get_portion(
-					row_idx, local_nrow, 0, this_store.get_num_cols());
-			detail::local_matrix_store::ptr local_res = res->get_portion(
-					row_idx, local_nrow, 0, res->get_num_cols());
+		for (size_t i = 0; i < num_chunks; i++) {
+			detail::local_matrix_store::const_ptr local_store
+				= this_store.get_portion(i);
+			detail::local_matrix_store::ptr local_res = res->get_portion(i);
+			assert(local_res->get_global_start_row()
+					== local_store->get_global_start_row());
 			detail::sapply(*local_store, op, *local_res);
 		}
 	}

@@ -30,68 +30,26 @@ namespace fm
 namespace detail
 {
 
-/*
- * We partition a matrix for parallel.
- */
-const size_t PART_SIZE = 64 * 1024;
+const size_t mem_matrix_store::CHUNK_SIZE = 64 * 1024;
 
-
-void mem_matrix_store::reset_data()
+local_matrix_store::ptr mem_col_matrix_store::get_portion(size_t id)
 {
+	// For a wide matrix
 	if (is_wide()) {
-#pragma omp parallel for
-		for (size_t col_idx = 0; col_idx < get_num_cols(); col_idx += PART_SIZE) {
-			size_t local_ncol = std::min(PART_SIZE, get_num_cols() - col_idx);
-			local_matrix_store::ptr local_store = get_portion(
-					0, get_num_rows(), col_idx, local_ncol);
-			local_store->reset_data();
-		}
-	}
-	else {
-#pragma omp parallel for
-		for (size_t row_idx = 0; row_idx < get_num_rows(); row_idx += PART_SIZE) {
-			size_t local_nrow = std::min(PART_SIZE, get_num_rows() - row_idx);
-			local_matrix_store::ptr local_store = get_portion(
-					row_idx, local_nrow, 0, get_num_cols());
-			local_store->reset_data();
-		}
-	}
-}
-
-void mem_matrix_store::set_data(const set_operate &op)
-{
-	if (is_wide()) {
-#pragma omp parallel for
-		for (size_t col_idx = 0; col_idx < get_num_cols(); col_idx += PART_SIZE) {
-			size_t local_ncol = std::min(PART_SIZE, get_num_cols() - col_idx);
-			local_matrix_store::ptr local_store = get_portion(
-					0, get_num_rows(), col_idx, local_ncol);
-			local_store->set_data(op);
-		}
-	}
-	else {
-#pragma omp parallel for
-		for (size_t row_idx = 0; row_idx < get_num_rows(); row_idx += PART_SIZE) {
-			size_t local_nrow = std::min(PART_SIZE, get_num_rows() - row_idx);
-			local_matrix_store::ptr local_store = get_portion(
-					row_idx, local_nrow, 0, get_num_cols());
-			local_store->set_data(op);
-		}
-	}
-}
-
-local_matrix_store::ptr mem_col_matrix_store::get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols)
-{
-	assert(start_row + num_rows <= get_num_rows());
-	assert(start_col + num_cols <= get_num_cols());
-	if (num_rows == this->get_num_rows()) {
-		assert(start_row == 0);
+		size_t start_col = id * CHUNK_SIZE;
+		size_t start_row = 0;
+		size_t num_rows = get_num_rows();
+		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
 		return local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
 					start_row, start_col, get_col(start_col),
 					num_rows, num_cols, get_type()));
 	}
+	// For a tall matrix
 	else {
+		size_t start_row = id * CHUNK_SIZE;
+		size_t start_col = 0;
+		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
+		size_t num_cols = get_num_cols();
 		std::vector<char *> cols(num_cols);
 		for (size_t i = 0; i < num_cols; i++)
 			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
@@ -100,18 +58,24 @@ local_matrix_store::ptr mem_col_matrix_store::get_portion(off_t start_row,
 	}
 }
 
-local_matrix_store::const_ptr mem_col_matrix_store::get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const
+local_matrix_store::const_ptr mem_col_matrix_store::get_portion(size_t id) const
 {
-	assert(start_row + num_rows <= get_num_rows());
-	assert(start_col + num_cols <= get_num_cols());
-	if (num_rows == this->get_num_rows()) {
-		assert(start_row == 0);
+	// For a wide matrix
+	if (is_wide()) {
+		size_t start_col = id * CHUNK_SIZE;
+		size_t start_row = 0;
+		size_t num_rows = get_num_rows();
+		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
 		return local_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
 					start_row, start_col, get_col(start_col),
 					num_rows, num_cols, get_type()));
 	}
+	// For a tall matrix
 	else {
+		size_t start_row = id * CHUNK_SIZE;
+		size_t start_col = 0;
+		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
+		size_t num_cols = get_num_cols();
 		std::vector<const char *> cols(num_cols);
 		for (size_t i = 0; i < num_cols; i++)
 			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
@@ -120,18 +84,24 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(off_t start_row,
 	}
 }
 
-local_matrix_store::ptr mem_row_matrix_store::get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols)
+local_matrix_store::ptr mem_row_matrix_store::get_portion(size_t id)
 {
-	assert(start_row + num_rows <= get_num_rows());
-	assert(start_col + num_cols <= get_num_cols());
-	if (num_cols == this->get_num_cols()) {
-		assert(start_col == 0);
+	// For a tall matrix
+	if (!is_wide()) {
+		size_t start_row = id * CHUNK_SIZE;
+		size_t start_col = 0;
+		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
+		size_t num_cols = get_num_cols();
 		return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
 					start_row, start_col, get_row(start_row),
 					num_rows, num_cols, get_type()));
 	}
+	// For a wide matrix
 	else {
+		size_t start_col = id * CHUNK_SIZE;
+		size_t start_row = 0;
+		size_t num_rows = get_num_rows();
+		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
 		std::vector<char *> rows(num_rows);
 		for (size_t i = 0; i < num_rows; i++)
 			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
@@ -140,18 +110,24 @@ local_matrix_store::ptr mem_row_matrix_store::get_portion(off_t start_row,
 	}
 }
 
-local_matrix_store::const_ptr mem_row_matrix_store::get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const
+local_matrix_store::const_ptr mem_row_matrix_store::get_portion(size_t id) const
 {
-	assert(start_row + num_rows <= get_num_rows());
-	assert(start_col + num_cols <= get_num_cols());
-	if (num_cols == this->get_num_cols()) {
-		assert(start_col == 0);
+	// For a tall matrix
+	if (!is_wide()) {
+		size_t start_row = id * CHUNK_SIZE;
+		size_t start_col = 0;
+		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
+		size_t num_cols = get_num_cols();
 		return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
 					start_row, start_col, get_row(start_row),
 					num_rows, num_cols, get_type()));
 	}
+	// For a wide matrix
 	else {
+		size_t start_col = id * CHUNK_SIZE;
+		size_t start_row = 0;
+		size_t num_rows = get_num_rows();
+		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
 		std::vector<const char *> rows(num_rows);
 		for (size_t i = 0; i < num_rows; i++)
 			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
@@ -160,11 +136,24 @@ local_matrix_store::const_ptr mem_row_matrix_store::get_portion(off_t start_row,
 	}
 }
 
-local_matrix_store::ptr mem_sub_col_matrix_store::get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols)
+local_matrix_store::ptr mem_sub_col_matrix_store::get_portion(size_t id)
 {
-	assert(start_row + num_rows <= get_num_rows());
-	assert(start_col + num_cols <= get_num_cols());
+	size_t start_col, start_row, num_rows, num_cols;
+	// For a wide matrix
+	if (is_wide()) {
+		start_col = id * CHUNK_SIZE;
+		start_row = 0;
+		num_rows = get_num_rows();
+		num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
+	}
+	// For a tall matrix
+	else {
+		start_row = id * CHUNK_SIZE;
+		start_col = 0;
+		num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
+		num_cols = get_num_cols();
+	}
+
 	std::vector<char *> cols(num_cols);
 	for (size_t i = 0; i < num_cols; i++)
 		cols[i] = get_col(i + start_col) + start_row * get_entry_size();
@@ -172,11 +161,24 @@ local_matrix_store::ptr mem_sub_col_matrix_store::get_portion(off_t start_row,
 				start_row, start_col, cols, num_rows, get_type()));
 }
 
-local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const
+local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(size_t id) const
 {
-	assert(start_row + num_rows <= get_num_rows());
-	assert(start_col + num_cols <= get_num_cols());
+	size_t start_col, start_row, num_rows, num_cols;
+	// For a wide matrix
+	if (is_wide()) {
+		start_col = id * CHUNK_SIZE;
+		start_row = 0;
+		num_rows = get_num_rows();
+		num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
+	}
+	// For a tall matrix
+	else {
+		start_row = id * CHUNK_SIZE;
+		start_col = 0;
+		num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
+		num_cols = get_num_cols();
+	}
+
 	std::vector<const char *> cols(num_cols);
 	for (size_t i = 0; i < num_cols; i++)
 		cols[i] = get_col(i + start_col) + start_row * get_entry_size();
@@ -184,11 +186,24 @@ local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(off_t start_
 				start_row, start_col, cols, num_rows, get_type()));
 }
 
-local_matrix_store::ptr mem_sub_row_matrix_store::get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols)
+local_matrix_store::ptr mem_sub_row_matrix_store::get_portion(size_t id)
 {
-	assert(start_row + num_rows <= get_num_rows());
-	assert(start_col + num_cols <= get_num_cols());
+	size_t start_col, start_row, num_rows, num_cols;
+	// For a wide matrix
+	if (is_wide()) {
+		start_col = id * CHUNK_SIZE;
+		start_row = 0;
+		num_rows = get_num_rows();
+		num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
+	}
+	// For a tall matrix
+	else {
+		start_row = id * CHUNK_SIZE;
+		start_col = 0;
+		num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
+		num_cols = get_num_cols();
+	}
+
 	std::vector<char *> rows(num_rows);
 	for (size_t i = 0; i < num_rows; i++)
 		rows[i] = get_row(i + start_row) + start_col * get_entry_size();
@@ -196,11 +211,24 @@ local_matrix_store::ptr mem_sub_row_matrix_store::get_portion(off_t start_row,
 				start_row, start_col, rows, num_cols, get_type()));
 }
 
-local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const
+local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(size_t id) const
 {
-	assert(start_row + num_rows <= get_num_rows());
-	assert(start_col + num_cols <= get_num_cols());
+	size_t start_col, start_row, num_rows, num_cols;
+	// For a wide matrix
+	if (is_wide()) {
+		start_col = id * CHUNK_SIZE;
+		start_row = 0;
+		num_rows = get_num_rows();
+		num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
+	}
+	// For a tall matrix
+	else {
+		start_row = id * CHUNK_SIZE;
+		start_col = 0;
+		num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
+		num_cols = get_num_cols();
+	}
+
 	std::vector<const char *> rows(num_rows);
 	for (size_t i = 0; i < num_rows; i++)
 		rows[i] = get_row(i + start_row) + start_col * get_entry_size();

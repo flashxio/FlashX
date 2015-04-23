@@ -38,6 +38,11 @@ class local_matrix_store;
 class mem_matrix_store: public matrix_store
 {
 protected:
+	/*
+	 * We partition a matrix for parallel.
+	 */
+	static const size_t CHUNK_SIZE;
+
 	bool write_header(FILE *f) const;
 public:
 	typedef std::shared_ptr<mem_matrix_store> ptr;
@@ -51,17 +56,17 @@ public:
 			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
 	}
 
-	virtual void reset_data();
-	virtual void set_data(const set_operate &op);
-
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
-	virtual std::shared_ptr<const local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const = 0;
-	virtual std::shared_ptr<local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) = 0;
 
 	virtual bool write2file(const std::string &file_name) const = 0;
+
+	virtual std::pair<size_t, size_t> get_portion_size() const {
+		if (is_wide())
+			return std::pair<size_t, size_t>(get_num_rows(), CHUNK_SIZE);
+		else
+			return std::pair<size_t, size_t>(CHUNK_SIZE, get_num_cols());
+	}
 
 	template<class T>
 	T get(size_t row, size_t col) const {
@@ -126,10 +131,8 @@ public:
 		return get_col(col) + row * get_entry_size();
 	}
 
-	virtual std::shared_ptr<const local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols);
+	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
+	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
 	virtual matrix_store::const_ptr transpose() const;
 
@@ -206,10 +209,8 @@ public:
 		return get_row(row) + col * get_entry_size();
 	}
 
-	virtual std::shared_ptr<const local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols);
+	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
+	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
 	virtual matrix_store::const_ptr transpose() const;
 
@@ -264,10 +265,8 @@ public:
 		return mem_col_matrix_store::get_col(orig_col_idxs[col]);
 	}
 
-	virtual std::shared_ptr<const local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols);
+	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
+	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
 	virtual matrix_store::const_ptr transpose() const;
 
@@ -316,10 +315,8 @@ public:
 		return mem_row_matrix_store::get_row(orig_row_idxs[row]);
 	}
 
-	virtual std::shared_ptr<const local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols) const;
-	virtual std::shared_ptr<local_matrix_store> get_portion(off_t start_row,
-			size_t num_rows, off_t start_col, size_t num_cols);
+	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
+	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
 	virtual matrix_store::const_ptr transpose() const;
 
