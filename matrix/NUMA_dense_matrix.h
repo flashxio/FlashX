@@ -23,7 +23,7 @@
 #include "raw_data_array.h"
 #include "NUMA_mapper.h"
 #include "NUMA_vector.h"
-#include "matrix_store.h"
+#include "mem_matrix_store.h"
 
 namespace fm
 {
@@ -31,11 +31,11 @@ namespace fm
 namespace detail
 {
 
-class NUMA_matrix_store: public matrix_store
+class NUMA_matrix_store: public mem_matrix_store
 {
 protected:
 	NUMA_matrix_store(size_t nrow, size_t ncol,
-			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
+			const scalar_type &type): mem_matrix_store(nrow, ncol, type) {
 	}
 public:
 	typedef std::shared_ptr<NUMA_matrix_store> ptr;
@@ -47,17 +47,9 @@ public:
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			matrix_layout_t layout, const scalar_type &type);
 
-	virtual char *get(size_t row_idx, size_t col_idx) = 0;
-	virtual const char *get(size_t row_idx, size_t col_idx) const = 0;
-
-	template<class T>
-	void set(size_t row_idx, size_t col_idx, T val) {
-		*(T *) get(row_idx, col_idx) = val;
-	}
-
-	template<class T>
-	T get(size_t row_idx, size_t col_idx) const {
-		return *(const T *) get(row_idx, col_idx);
+	virtual bool write2file(const std::string &file_name) const {
+		assert(0);
+		return false;
 	}
 };
 
@@ -95,20 +87,7 @@ public:
 		return ptr(new NUMA_row_tall_matrix_store(nrow, ncol, num_nodes, type));
 	}
 
-	static ptr cast(matrix_store::ptr mat) {
-		if (!mat->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error) << "the matrix isn't in memory";
-			return ptr();
-		}
-		if (mat->store_layout() != matrix_layout_t::L_ROW) {
-			BOOST_LOG_TRIVIAL(error) << "the matrix isn't row major";
-			return ptr();
-		}
-		// TODO how do we make sure it's a NUMA matrix?
-		return std::static_pointer_cast<NUMA_row_tall_matrix_store>(mat);
-	}
-
-	size_t get_num_nodes() const {
+	int get_num_nodes() const {
 		return data.size();
 	}
 
@@ -170,20 +149,7 @@ public:
 		return ptr(new NUMA_col_tall_matrix_store(nrow, ncol, num_nodes, type));
 	}
 
-	static ptr cast(matrix_store::ptr mat) {
-		if (!mat->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error) << "the matrix isn't in memory";
-			return ptr();
-		}
-		if (mat->store_layout() != matrix_layout_t::L_COL) {
-			BOOST_LOG_TRIVIAL(error) << "the matrix isn't col major";
-			return ptr();
-		}
-		// TODO how do we make sure it's a NUMA matrix?
-		return std::static_pointer_cast<NUMA_col_tall_matrix_store>(mat);
-	}
-
-	size_t get_num_nodes() const {
+	int get_num_nodes() const {
 		return data[0]->get_num_nodes();
 	}
 
@@ -242,7 +208,7 @@ public:
 		return ptr(new NUMA_row_wide_matrix_store(store));
 	}
 
-	size_t get_num_nodes() const {
+	int get_num_nodes() const {
 		return store.get_num_nodes();
 	}
 
@@ -298,7 +264,7 @@ public:
 		return ptr(new NUMA_col_wide_matrix_store(store));
 	}
 
-	size_t get_num_nodes() const {
+	int get_num_nodes() const {
 		return store.get_num_nodes();
 	}
 

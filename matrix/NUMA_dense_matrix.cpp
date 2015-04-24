@@ -31,23 +31,27 @@ namespace detail
 
 NUMA_matrix_store::ptr NUMA_matrix_store::cast(matrix_store::ptr store)
 {
-	if (!store->is_in_mem()) {
+	mem_matrix_store::ptr mem_store = mem_matrix_store::cast(store);
+	if (mem_store == NULL)
+		return NUMA_matrix_store::ptr();
+	if (mem_store->get_num_nodes() < 0) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "cast to NUMA matrix: the matrix isn't in memory";
+			<< "cast to NUMA matrix: the matrix isn't stored in NUMA memory";
 		return NUMA_matrix_store::ptr();
 	}
-	// TODO we need to test if it's a NUMA matrix.
 	return std::static_pointer_cast<NUMA_matrix_store>(store);
 }
 
 NUMA_matrix_store::const_ptr NUMA_matrix_store::cast(matrix_store::const_ptr store)
 {
-	if (!store->is_in_mem()) {
+	mem_matrix_store::const_ptr mem_store = mem_matrix_store::cast(store);
+	if (mem_store == NULL)
+		return NUMA_matrix_store::const_ptr();
+	if (mem_store->get_num_nodes() < 0) {
 		BOOST_LOG_TRIVIAL(error)
-			<< "cast to NUMA matrix: the matrix isn't in memory";
+			<< "cast to NUMA matrix: the matrix isn't stored in NUMA memory";
 		return NUMA_matrix_store::const_ptr();
 	}
-	// TODO we need to test if it's a NUMA matrix.
 	return std::static_pointer_cast<const NUMA_matrix_store>(store);
 }
 

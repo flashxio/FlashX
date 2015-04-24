@@ -56,6 +56,10 @@ public:
 			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
 	}
 
+	virtual int get_num_nodes() const {
+		return -1;
+	}
+
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
 
