@@ -25,7 +25,7 @@ LDFLAGS += -lstxxl -lnuma -lz -laio -lcblas
 all: test_io_gen test-mem_matrix test-EM_vector	\
 	test-mem_vector test-data_frame test-mem_vector_vector test-sparse_matrix	\
 	test-hilbert test-NUMA_vector test-sorter test-rand_gen	\
-	test-local_matrix_store test-mem_matrix_store
+	test-local_matrix_store test-mem_matrix_store test-NUMA_dense_matrix
 
 test_io_gen: test_io_gen.o ../libFMatrix.a
 	$(CXX) -o test_io_gen test_io_gen.o $(LDFLAGS)

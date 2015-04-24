@@ -132,6 +132,10 @@ public:
 	const detail::NUMA_mapper &get_mapper() const {
 		return mapper;
 	}
+
+	size_t get_portion_size() const {
+		return mapper.get_range_size();
+	}
 };
 
 }

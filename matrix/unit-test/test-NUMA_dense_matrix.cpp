@@ -1,7 +1,9 @@
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
+#include "local_matrix_store.h"
 
 using namespace fm;
+using namespace fm::detail;
 
 int num_nodes = 1;
 int num_threads = 8;
@@ -45,88 +47,138 @@ public:
 	}
 };
 
-void test_row_mat_init()
+void test_init1(NUMA_matrix_store &store)
 {
-	NUMA_row_tall_dense_matrix::ptr mat = NUMA_row_tall_dense_matrix::create(
-			10000000, 10, num_nodes, get_scalar_type<long>());
-	mat->reset_data();
-	for (size_t i = 0; i < mat->get_num_rows(); i++) {
-		for (size_t j = 0; j < mat->get_num_cols(); j++)
-			assert(mat->get<long>(i, j) == 0);
+	store.reset_data();
+#pragma omp parallel for
+	for (size_t i = 0; i < store.get_num_rows(); i++) {
+		for (size_t j = 0; j < store.get_num_cols(); j++)
+			assert(store.get<long>(i, j) == 0);
 	}
 
-	set_row_operate op(mat->get_num_cols());
-	mat->set_data(op);
-	size_t val = 0;
-	for (size_t i = 0; i < mat->get_num_rows(); i++) {
-		for (size_t j = 0; j < mat->get_num_cols(); j++) {
-			assert(mat->get<long>(i, j) == val);
-			val++;
+	if (store.store_layout() == matrix_layout_t::L_ROW)
+		store.set_data(set_row_operate(store.get_num_cols()));
+	else
+		store.set_data(set_col_operate(store.get_num_cols()));
+#pragma omp parallel for
+	for (size_t i = 0; i < store.get_num_rows(); i++) {
+		for (size_t j = 0; j < store.get_num_cols(); j++)
+			assert(store.get<long>(i, j) == i * store.get_num_cols() + j);
+	}
+}
+
+void test_init()
+{
+	NUMA_matrix_store::ptr mat;
+
+	printf("test init on row tall\n");
+	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
+			matrix_layout_t::L_ROW, get_scalar_type<long>());
+	test_init1(*mat);
+
+	printf("test init on col tall\n");
+	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
+			matrix_layout_t::L_COL, get_scalar_type<long>());
+	test_init1(*mat);
+
+	printf("test init on row wide\n");
+	mat = NUMA_matrix_store::create(10, 10000000, num_nodes,
+			matrix_layout_t::L_ROW, get_scalar_type<long>());
+	test_init1(*mat);
+
+	printf("test init on col wide\n");
+	mat = NUMA_matrix_store::create(10, 10000000, num_nodes,
+			matrix_layout_t::L_COL, get_scalar_type<long>());
+	test_init1(*mat);
+}
+
+void test_portion1(NUMA_matrix_store &store)
+{
+	std::pair<size_t, size_t> portion_size = store.get_portion_size();
+	if (store.store_layout() == matrix_layout_t::L_ROW)
+		store.set_data(set_row_operate(store.get_num_cols()));
+	else
+		store.set_data(set_col_operate(store.get_num_cols()));
+#pragma omp parallel for
+	for (size_t k = 0; k < store.get_num_portions(); k++) {
+		local_matrix_store::ptr portion = store.get_portion(k);
+		if (store.is_wide()) {
+			assert(portion->get_global_start_row() == 0);
+			assert(portion->get_global_start_col() == k * portion_size.second);
 		}
-	}
-}
-
-void test_row_mat_deep_copy()
-{
-	NUMA_row_tall_dense_matrix::ptr mat = NUMA_row_tall_dense_matrix::create(
-			10000000, 10, num_nodes, get_scalar_type<long>());
-	mat->set_data(set_row_operate(mat->get_num_cols()));
-
-	NUMA_row_tall_dense_matrix::ptr mat1
-		= NUMA_row_tall_dense_matrix::cast(mat->deep_copy());
-	NUMA_row_tall_dense_matrix::ptr mat2
-		= NUMA_row_tall_dense_matrix::cast(mat->deep_copy());
-	mat->set_data(set_rand());
-
-	assert(mat1->get_num_rows() == mat->get_num_rows());
-	assert(mat1->get_num_cols() == mat->get_num_cols());
-	assert(mat2->get_num_rows() == mat->get_num_rows());
-	assert(mat2->get_num_cols() == mat->get_num_cols());
-	for (size_t i = 0; i < mat1->get_num_rows(); i++)
-		for (size_t j = 0; j < mat1->get_num_cols(); j++)
-			assert(mat1->get<long>(i, j) == mat2->get<long>(i, j));
-}
-
-void test_col_mat_init()
-{
-	NUMA_col_tall_dense_matrix::ptr mat = NUMA_col_tall_dense_matrix::create(
-			10000000, 10, num_nodes, get_scalar_type<long>());
-	mat->reset_data();
-	for (size_t i = 0; i < mat->get_num_rows(); i++) {
-		for (size_t j = 0; j < mat->get_num_cols(); j++)
-			assert(mat->get<long>(i, j) == 0);
-	}
-
-	set_col_operate op(mat->get_num_cols());
-	mat->set_data(op);
-	size_t val = 0;
-	for (size_t i = 0; i < mat->get_num_rows(); i++) {
-		for (size_t j = 0; j < mat->get_num_cols(); j++) {
-			assert(mat->get<long>(i, j) == val);
-			val++;
+		else {
+			assert(portion->get_global_start_row() == k * portion_size.first);
+			assert(portion->get_global_start_col() == 0);
 		}
+		for (size_t i = 0; i < portion->get_num_rows(); i++)
+			for (size_t j = 0; j < portion->get_num_cols(); j++) {
+				long expected = (portion->get_global_start_row()
+						+ i) * store.get_num_cols()
+					+ portion->get_global_start_col() + j;
+				assert(portion->get<long>(i, j) == expected);
+			}
 	}
 }
 
-void test_col_mat_deep_copy()
+void test_portion()
 {
-	NUMA_col_tall_dense_matrix::ptr mat = NUMA_col_tall_dense_matrix::create(
-			10000000, 10, num_nodes, get_scalar_type<long>());
-	mat->set_data(set_col_operate(mat->get_num_cols()));
+	NUMA_matrix_store::ptr mat;
 
-	NUMA_col_tall_dense_matrix::ptr mat1
-		= NUMA_col_tall_dense_matrix::cast(mat->deep_copy());
-	NUMA_col_tall_dense_matrix::ptr mat2
-		= NUMA_col_tall_dense_matrix::cast(mat->deep_copy());
-	mat->set_data(set_rand());
+	printf("test get portion on row tall\n");
+	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
+			matrix_layout_t::L_ROW, get_scalar_type<long>());
+	test_portion1(*mat);
 
-	assert(mat1->get_num_rows() == mat->get_num_rows());
-	assert(mat1->get_num_cols() == mat->get_num_cols());
-	assert(mat2->get_num_rows() == mat->get_num_rows());
-	assert(mat2->get_num_cols() == mat->get_num_cols());
-	for (size_t i = 0; i < mat1->get_num_rows(); i++)
-		for (size_t j = 0; j < mat1->get_num_cols(); j++)
-			assert(mat1->get<long>(i, j) == mat2->get<long>(i, j));
+	printf("test get portion on col tall\n");
+	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
+			matrix_layout_t::L_COL, get_scalar_type<long>());
+	test_portion1(*mat);
+
+	printf("test get portion on row wide\n");
+	mat = NUMA_matrix_store::create(10, 10000000, num_nodes,
+			matrix_layout_t::L_ROW, get_scalar_type<long>());
+	test_portion1(*mat);
+
+	printf("test get portion on col wide\n");
+	mat = NUMA_matrix_store::create(10, 10000000, num_nodes,
+			matrix_layout_t::L_COL, get_scalar_type<long>());
+	test_portion1(*mat);
+}
+
+void test_transpose1(const NUMA_matrix_store &m1, const NUMA_matrix_store &m2)
+{
+	assert(m1.get_num_rows() == m2.get_num_cols());
+	assert(m1.get_num_cols() == m2.get_num_rows());
+#pragma omp parallel for
+	for (size_t i = 0; i < m1.get_num_rows(); i++)
+		for (size_t j = 0; j < m1.get_num_cols(); j++)
+			assert(m1.get<int>(i, j) == m2.get<int>(j, i));
+}
+
+void test_transpose()
+{
+	// Test on local buffer matrix.
+	NUMA_matrix_store::ptr mat;
+
+	printf("test transpose on row tall\n");
+	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
+			matrix_layout_t::L_ROW, get_scalar_type<long>());
+	test_transpose1(*mat, *NUMA_matrix_store::cast(mat->transpose()));
+
+	printf("test transpose on col tall\n");
+	mat = NUMA_matrix_store::create(10000000, 10, num_nodes,
+			matrix_layout_t::L_COL, get_scalar_type<long>());
+	test_transpose1(*mat, *NUMA_matrix_store::cast(mat->transpose()));
+
+	printf("test transpose on row wide\n");
+	mat = NUMA_matrix_store::create(10, 10000000, num_nodes,
+			matrix_layout_t::L_ROW, get_scalar_type<long>());
+	test_transpose1(*mat, *NUMA_matrix_store::cast(mat->transpose()));
+
+	printf("test transpose on col wide\n");
+	mat = NUMA_matrix_store::create(10, 10000000, num_nodes,
+			matrix_layout_t::L_COL, get_scalar_type<long>());
+	test_transpose1(*mat, *NUMA_matrix_store::cast(mat->transpose()));
 }
 
 int main(int argc, char *argv[])
@@ -140,8 +192,7 @@ int main(int argc, char *argv[])
 	matrix_conf.set_num_threads(num_threads);
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 			num_threads / num_nodes);
-	test_row_mat_init();
-	test_row_mat_deep_copy();
-	test_col_mat_init();
-	test_col_mat_deep_copy();
+	test_portion();
+	test_init();
+	test_transpose();
 }

@@ -17,19 +17,64 @@
  * limitations under the License.
  */
 
-#if 0
-
 #include <boost/format.hpp>
 
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
+#include "local_matrix_store.h"
 
 namespace fm
 {
 
-NUMA_row_tall_dense_matrix::NUMA_row_tall_dense_matrix(size_t nrow, size_t ncol,
-		int num_nodes, const scalar_type &type): dense_matrix(nrow, ncol,
-			type, true), mapper(num_nodes)
+namespace detail
+{
+
+NUMA_matrix_store::ptr NUMA_matrix_store::cast(matrix_store::ptr store)
+{
+	if (!store->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "cast to NUMA matrix: the matrix isn't in memory";
+		return NUMA_matrix_store::ptr();
+	}
+	// TODO we need to test if it's a NUMA matrix.
+	return std::static_pointer_cast<NUMA_matrix_store>(store);
+}
+
+NUMA_matrix_store::const_ptr NUMA_matrix_store::cast(matrix_store::const_ptr store)
+{
+	if (!store->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "cast to NUMA matrix: the matrix isn't in memory";
+		return NUMA_matrix_store::const_ptr();
+	}
+	// TODO we need to test if it's a NUMA matrix.
+	return std::static_pointer_cast<const NUMA_matrix_store>(store);
+}
+
+NUMA_matrix_store::ptr NUMA_matrix_store::create(size_t nrow, size_t ncol,
+		int num_nodes, matrix_layout_t layout, const scalar_type &type)
+{
+	if (layout == matrix_layout_t::L_ROW) {
+		if (nrow > ncol)
+			return NUMA_row_tall_matrix_store::create(nrow, ncol, num_nodes,
+					type);
+		else
+			return NUMA_row_wide_matrix_store::create(nrow, ncol, num_nodes,
+					type);
+	}
+	else {
+		if (nrow > ncol)
+			return NUMA_col_tall_matrix_store::create(nrow, ncol, num_nodes,
+					type);
+		else
+			return NUMA_col_wide_matrix_store::create(nrow, ncol, num_nodes,
+					type);
+	}
+}
+
+NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
+		int num_nodes, const scalar_type &type): NUMA_matrix_store(nrow, ncol,
+			type), mapper(num_nodes)
 {
 	data.resize(num_nodes);
 	std::vector<size_t> local_lens = mapper.cal_local_lengths(nrow);
@@ -38,21 +83,21 @@ NUMA_row_tall_dense_matrix::NUMA_row_tall_dense_matrix(size_t nrow, size_t ncol,
 				local_lens[node_id] * ncol * get_entry_size(), node_id);
 }
 
-char *NUMA_row_tall_dense_matrix::get_row(off_t row_idx)
+char *NUMA_row_tall_matrix_store::get_row(off_t row_idx)
 {
 	auto phy_loc = mapper.map2physical(row_idx);
 	return data[phy_loc.first].get_raw()
 		+ phy_loc.second * get_num_cols() * get_entry_size();
 }
 
-const char *NUMA_row_tall_dense_matrix::get_row(off_t row_idx) const
+const char *NUMA_row_tall_matrix_store::get_row(off_t row_idx) const
 {
 	auto phy_loc = mapper.map2physical(row_idx);
 	return data[phy_loc.first].get_raw()
 		+ phy_loc.second * get_num_cols() * get_entry_size();
 }
 
-const char *NUMA_row_tall_dense_matrix::get_rows(off_t row_start,
+const char *NUMA_row_tall_matrix_store::get_rows(off_t row_start,
 		off_t row_end) const
 {
 	if (mapper.get_logical_range_id(row_start)
@@ -64,7 +109,7 @@ const char *NUMA_row_tall_dense_matrix::get_rows(off_t row_start,
 	return get_row(row_start);
 }
 
-char *NUMA_row_tall_dense_matrix::get_rows(off_t row_start, off_t row_end)
+char *NUMA_row_tall_matrix_store::get_rows(off_t row_start, off_t row_end)
 {
 	if (mapper.get_logical_range_id(row_start)
 			!= mapper.get_logical_range_id(row_end - 1)) {
@@ -75,108 +120,115 @@ char *NUMA_row_tall_dense_matrix::get_rows(off_t row_start, off_t row_end)
 	return (char *) get_row(row_start);
 }
 
-namespace
-{
-
-class set_row_operate: public detail::set_range_operate
-{
-	const set_operate &op;
-	const detail::NUMA_mapper &mapper;
-	size_t num_cols;
-	size_t entry_size;
-public:
-	set_row_operate(const set_operate &_op, const detail::NUMA_mapper &_mapper,
-			size_t num_cols, size_t entry_size): op(_op), mapper(_mapper) {
-		this->num_cols = num_cols;
-		this->entry_size = entry_size;
-	}
-
-	void set(char *buf, size_t size, off_t local_off, int node_id) const {
-		size_t row_size = num_cols * entry_size;
-		assert(local_off % row_size == 0);
-		assert(size % row_size == 0);
-		size_t num_rows = size / row_size;
-		size_t local_row_idx = local_off / row_size;
-		size_t global_row_idx = mapper.map2logical(node_id, local_row_idx);
-		for (size_t i = 0; i < num_rows; i++)
-			op.set(buf + i * row_size, num_cols, global_row_idx + i, 0);
-	}
-};
-
-class set_col_operate: public set_operate
-{
-	const set_operate &op;
-	size_t col_idx;
-public:
-	set_col_operate(const set_operate &_op, size_t col_idx): op(_op) {
-		this->col_idx = col_idx;
-	}
-
-	virtual void set(void *arr, size_t num_eles, off_t row_idx, off_t) const {
-		op.set(arr, num_eles, row_idx, this->col_idx);
-	}
-
-	virtual const scalar_type &get_type() const {
-		return op.get_type();
-	}
-};
-
-}
-
-void NUMA_row_tall_dense_matrix::set_data(const set_operate &op)
-{
-	size_t row_size = get_num_cols() * get_entry_size();
-	set_row_operate set_row(op, mapper, get_num_cols(), get_entry_size());
-	set_array_ranges(mapper, get_num_rows(), row_size, set_row, data);
-}
-
-dense_matrix::ptr NUMA_row_tall_dense_matrix::deep_copy() const
-{
-	NUMA_row_tall_dense_matrix *ret = new NUMA_row_tall_dense_matrix(*this);
-	for (size_t i = 0; i < ret->data.size(); i++) {
-		// TODO we should do this in parallel.
-		ret->data[i] = ret->data[i].deep_copy();
-	}
-	return dense_matrix::ptr(ret);
-}
-
-NUMA_col_tall_dense_matrix::NUMA_col_tall_dense_matrix(size_t nrow,
-		size_t ncol, int num_nodes, const scalar_type &type): dense_matrix(
-			nrow, ncol, type, true)
+NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
+		size_t ncol, int num_nodes, const scalar_type &type): NUMA_matrix_store(
+			nrow, ncol, type)
 {
 	data.resize(ncol);
 	for (size_t i = 0; i < ncol; i++)
 		data[i] = NUMA_vector::create(nrow, num_nodes, type);
 }
 
-void NUMA_col_tall_dense_matrix::set_data(const set_operate &op)
+matrix_store::const_ptr NUMA_row_tall_matrix_store::transpose() const
 {
-	for (size_t i = 0; i < data.size(); i++)
-		data[i]->set_data(set_col_operate(op, i));
+	return NUMA_col_wide_matrix_store::create_transpose(*this);
 }
 
-dense_matrix::ptr NUMA_col_tall_dense_matrix::deep_copy() const
+matrix_store::const_ptr NUMA_col_tall_matrix_store::transpose() const
 {
-	NUMA_col_tall_dense_matrix *ret = new NUMA_col_tall_dense_matrix(*this);
-	for (size_t i = 0; i < ret->data.size(); i++)
-		ret->data[i] = NUMA_vector::cast(ret->data[i]->deep_copy());
-	return dense_matrix::ptr(ret);
+	return NUMA_row_wide_matrix_store::create_transpose(*this);
 }
 
-dense_matrix::ptr NUMA_col_tall_dense_matrix::inner_prod(const dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const
+matrix_store::const_ptr NUMA_row_wide_matrix_store::transpose() const
 {
-	// TODO
-	assert(0);
+	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(store));
 }
 
-dense_matrix::ptr NUMA_col_tall_dense_matrix::mapply2(const dense_matrix &m,
-		const bulk_operate &op) const
+matrix_store::const_ptr NUMA_col_wide_matrix_store::transpose() const
 {
-	// TODO
-	assert(0);
+	return matrix_store::const_ptr(new NUMA_row_tall_matrix_store(store));
+}
+
+local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
+		size_t id) const
+{
+	size_t start_row = id * mapper.get_range_size();
+	size_t start_col = 0;
+	size_t num_rows = std::min(get_num_rows() - start_row,
+			mapper.get_range_size());
+	size_t num_cols = get_num_cols();
+	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
+				start_row, start_col, get_row(start_row), num_rows, num_cols,
+				get_type()));
+}
+
+local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
+{
+	size_t start_row = id * mapper.get_range_size();
+	size_t start_col = 0;
+	size_t num_rows = std::min(get_num_rows() - start_row,
+			mapper.get_range_size());
+	size_t num_cols = get_num_cols();
+	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
+				start_row, start_col, get_row(start_row), num_rows, num_cols,
+				get_type()));
+}
+
+local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
+		size_t id) const
+{
+	assert(!data.empty());
+	size_t chunk_size = data.front()->get_portion_size();
+	size_t start_row = id * chunk_size;
+	size_t start_col = 0;
+	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
+	size_t num_cols = get_num_cols();
+	std::vector<const char *> cols(num_cols);
+	for (size_t i = 0; i < num_cols; i++)
+		cols[i] = data[i + start_col]->get_sub_arr(start_row,
+				start_row + num_rows);
+	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
+				start_row, start_col, cols, num_rows, get_type()));
+}
+
+local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
+{
+	assert(!data.empty());
+	size_t chunk_size = data.front()->get_portion_size();
+	size_t start_row = id * chunk_size;
+	size_t start_col = 0;
+	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
+	size_t num_cols = get_num_cols();
+	std::vector<char *> cols(num_cols);
+	for (size_t i = 0; i < num_cols; i++)
+		cols[i] = data[i + start_col]->get_sub_arr(start_row,
+				start_row + num_rows);
+	return local_matrix_store::ptr(new local_ref_col_matrix_store(
+				start_row, start_col, cols, num_rows, get_type()));
+}
+
+local_matrix_store::const_ptr NUMA_row_wide_matrix_store::get_portion(
+		size_t id) const
+{
+	return local_matrix_store::cast(store.get_portion(id)->transpose());
+}
+
+local_matrix_store::ptr NUMA_row_wide_matrix_store::get_portion(size_t id)
+{
+	return local_matrix_store::cast(store.get_portion(id)->transpose());
+}
+
+local_matrix_store::const_ptr NUMA_col_wide_matrix_store::get_portion(
+		size_t id) const
+{
+	return local_matrix_store::cast(store.get_portion(id)->transpose());
+}
+
+local_matrix_store::ptr NUMA_col_wide_matrix_store::get_portion(size_t id)
+{
+	return local_matrix_store::cast(store.get_portion(id)->transpose());
 }
 
 }
 
-#endif
+}
