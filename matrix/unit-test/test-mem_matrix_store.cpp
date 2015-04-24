@@ -253,9 +253,9 @@ void test_transpose()
 int main()
 {
 	test_reset(1000);
-	test_reset(10000);
+	test_reset(1000000);
 	test_set(1000);
-	test_set(10000);
+	test_set(1000000);
 	test_sub_col_matrix();
 	test_sub_row_matrix();
 	test_io();
