@@ -26,6 +26,146 @@ namespace fm
 namespace detail
 {
 
+matrix_store::const_ptr local_buf_col_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_buf_row_matrix_store(data,
+				get_global_start_col(), get_global_start_row(),
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::ptr local_buf_col_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_buf_row_matrix_store(data,
+				get_global_start_col(), get_global_start_row(),
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::const_ptr local_buf_row_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_buf_col_matrix_store(data,
+				get_global_start_col(), get_global_start_row(),
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::ptr local_buf_row_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_buf_col_matrix_store(data,
+				get_global_start_col(), get_global_start_row(),
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::const_ptr local_ref_contig_col_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_ref_contig_row_matrix_store(
+				get_global_start_col(), get_global_start_row(), data,
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::ptr local_ref_contig_col_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_ref_contig_row_matrix_store(
+				get_global_start_col(), get_global_start_row(), data,
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::const_ptr local_ref_contig_row_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_ref_contig_col_matrix_store(
+				get_global_start_col(), get_global_start_row(), data,
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::ptr local_ref_contig_row_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_ref_contig_col_matrix_store(
+				get_global_start_col(), get_global_start_row(), data,
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::const_ptr local_ref_col_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_ref_row_matrix_store(
+				get_global_start_col(), get_global_start_row(), cols,
+				get_num_rows(), get_type()));
+}
+
+matrix_store::ptr local_ref_col_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_ref_row_matrix_store(
+				get_global_start_col(), get_global_start_row(), cols,
+				get_num_rows(), get_type()));
+}
+
+matrix_store::const_ptr local_ref_row_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_ref_col_matrix_store(
+				get_global_start_col(), get_global_start_row(), rows,
+				get_num_cols(), get_type()));
+}
+
+matrix_store::ptr local_ref_row_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_ref_col_matrix_store(
+				get_global_start_col(), get_global_start_row(), rows,
+				get_num_cols(), get_type()));
+}
+
+matrix_store::const_ptr local_cref_contig_col_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
+				get_global_start_col(), get_global_start_row(), data,
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::ptr local_cref_contig_col_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_cref_contig_row_matrix_store(
+				get_global_start_col(), get_global_start_row(), data,
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::const_ptr local_cref_contig_row_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
+				get_global_start_col(), get_global_start_row(), data,
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::ptr local_cref_contig_row_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_cref_contig_col_matrix_store(
+				get_global_start_col(), get_global_start_row(), data,
+				get_num_cols(), get_num_rows(), get_type()));
+}
+
+matrix_store::const_ptr local_cref_col_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_cref_row_matrix_store(
+				get_global_start_col(), get_global_start_row(), cols,
+				get_num_rows(), get_type()));
+}
+
+matrix_store::ptr local_cref_col_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_cref_row_matrix_store(
+				get_global_start_col(), get_global_start_row(), cols,
+				get_num_rows(), get_type()));
+}
+
+matrix_store::const_ptr local_cref_row_matrix_store::transpose() const
+{
+	return matrix_store::const_ptr(new local_cref_col_matrix_store(
+				get_global_start_col(), get_global_start_row(), rows,
+				get_num_cols(), get_type()));
+}
+
+matrix_store::ptr local_cref_row_matrix_store::transpose()
+{
+	return matrix_store::ptr(new local_cref_col_matrix_store(
+				get_global_start_col(), get_global_start_row(), rows,
+				get_num_cols(), get_type()));
+}
+
 void local_row_matrix_store::reset_data()
 {
 	size_t ncol = get_num_cols();

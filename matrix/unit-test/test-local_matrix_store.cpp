@@ -412,6 +412,87 @@ void test_inner_prod(size_t long_dim)
 	test_inner_prod1(m1, m2);
 }
 
+void test_transpose1(const local_matrix_store &m1, const local_matrix_store &m2)
+{
+	assert(m1.get_num_rows() == m2.get_num_cols());
+	assert(m1.get_num_cols() == m2.get_num_rows());
+	assert(m1.get_global_start_row() == m2.get_global_start_col());
+	assert(m1.get_global_start_col() == m2.get_global_start_row());
+	for (size_t i = 0; i < m1.get_num_rows(); i++)
+		for (size_t j = 0; j < m1.get_num_cols(); j++)
+			assert(m1.get<int>(i, j) == m2.get<int>(j, i));
+}
+
+void test_transpose(size_t long_dim)
+{
+	printf("test transpose on local matrix, long dim: %ld\n", long_dim);
+	// Test on local buffer matrix.
+	std::shared_ptr<local_col_matrix_store> m1;
+	std::shared_ptr<local_row_matrix_store> m2;
+	std::shared_ptr<local_col_matrix_store> m3;
+	std::shared_ptr<local_row_matrix_store> m4;
+
+	m1 = std::shared_ptr<local_col_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>()));
+	test_transpose1(*m1, *local_matrix_store::cast(m1->transpose()));
+
+	m2 = std::shared_ptr<local_row_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>()));
+	test_transpose1(*m2, *local_matrix_store::cast(m2->transpose()));
+
+	m3 = std::shared_ptr<local_col_matrix_store>(new local_ref_contig_col_matrix_store(0, 0,
+				m1->get_raw_arr(), long_dim, 10, get_scalar_type<int>()));
+	test_transpose1(*m3, *local_matrix_store::cast(m3->transpose()));
+
+	m4 = std::shared_ptr<local_row_matrix_store>(new local_ref_contig_row_matrix_store(0, 0,
+				m1->get_raw_arr(), 10, long_dim, get_scalar_type<int>()));
+	test_transpose1(*m4, *local_matrix_store::cast(m4->transpose()));
+
+	{
+		std::vector<char *> cols(m1->get_num_cols());
+		for (size_t i = 0; i < cols.size(); i++)
+			cols[i] = m1->get_col(i);
+		m3 = std::shared_ptr<local_col_matrix_store>(new local_ref_col_matrix_store(0, 0,
+					cols, m1->get_num_rows(), get_scalar_type<int>()));
+		test_transpose1(*m3, *local_matrix_store::cast(m3->transpose()));
+	}
+
+	{
+		std::vector<char *> rows(m2->get_num_rows());
+		for (size_t i = 0; i < rows.size(); i++)
+			rows[i] = m2->get_row(i);
+		m4 = std::shared_ptr<local_row_matrix_store>(new local_ref_row_matrix_store(0, 0,
+					rows, m2->get_num_cols(), get_scalar_type<int>()));
+		test_transpose1(*m4, *local_matrix_store::cast(m4->transpose()));
+	}
+
+	m3 = std::shared_ptr<local_col_matrix_store>(new local_cref_contig_col_matrix_store(0, 0,
+				m1->get_raw_arr(), long_dim, 10, get_scalar_type<int>()));
+	test_transpose1(*m3, *local_matrix_store::cast(m3->transpose()));
+
+	m4 = std::shared_ptr<local_row_matrix_store>(new local_cref_contig_row_matrix_store(0, 0,
+				m1->get_raw_arr(), 10, long_dim, get_scalar_type<int>()));
+	test_transpose1(*m4, *local_matrix_store::cast(m4->transpose()));
+
+	{
+		std::vector<const char *> cols(m1->get_num_cols());
+		for (size_t i = 0; i < cols.size(); i++)
+			cols[i] = m1->get_col(i);
+		m3 = std::shared_ptr<local_col_matrix_store>(new local_cref_col_matrix_store(0, 0,
+					cols, m1->get_num_rows(), get_scalar_type<int>()));
+		test_transpose1(*m3, *local_matrix_store::cast(m3->transpose()));
+	}
+
+	{
+		std::vector<const char *> rows(m2->get_num_rows());
+		for (size_t i = 0; i < rows.size(); i++)
+			rows[i] = m2->get_row(i);
+		m4 = std::shared_ptr<local_row_matrix_store>(new local_cref_row_matrix_store(0, 0,
+					rows, m2->get_num_cols(), get_scalar_type<int>()));
+		test_transpose1(*m4, *local_matrix_store::cast(m4->transpose()));
+	}
+}
+
 int main()
 {
 	test_reset(1000);
@@ -426,4 +507,5 @@ int main()
 	test_sapply(10000);
 	test_inner_prod(1000);
 	test_inner_prod(10000);
+	test_transpose(10000);
 }

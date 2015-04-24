@@ -51,6 +51,16 @@ public:
 	typedef std::shared_ptr<local_matrix_store> ptr;
 	typedef std::shared_ptr<const local_matrix_store> const_ptr;
 
+	static ptr cast(matrix_store::ptr store) {
+		// TODO do I need to check the store object.
+		return std::static_pointer_cast<local_matrix_store>(store);
+	}
+
+	static const_ptr cast(matrix_store::const_ptr store) {
+		// TODO do I need to check the store object.
+		return std::static_pointer_cast<const local_matrix_store>(store);
+	}
+
 	local_matrix_store(off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type): matrix_store(
 				nrow, ncol, true, type) {
@@ -71,10 +81,8 @@ public:
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
 
-	virtual matrix_store::const_ptr transpose() const {
-		assert(0);
-		return matrix_store::const_ptr();
-	}
+	virtual matrix_store::const_ptr transpose() const = 0;
+	virtual matrix_store::ptr transpose() = 0;
 
 	virtual std::pair<size_t, size_t> get_portion_size() const {
 		assert(0);
@@ -168,6 +176,13 @@ public:
 			data = raw_data_array(nrow * ncol * type.get_size());
 	}
 
+	local_buf_col_matrix_store(const raw_data_array &data,
+			off_t global_start_row, off_t global_start_col, size_t nrow,
+			size_t ncol, const scalar_type &type): local_col_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type) {
+		this->data = data;
+	}
+
 	virtual bool read_only() const {
 		return false;
 	}
@@ -186,6 +201,9 @@ public:
 	virtual char *get_col(size_t col) {
 		return data.get_raw() + col * get_num_rows() * get_entry_size();
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -200,6 +218,13 @@ public:
 				global_start_row, global_start_col, nrow, ncol, type) {
 		if (nrow * ncol > 0)
 			data = raw_data_array(nrow * ncol * type.get_size());
+	}
+
+	local_buf_row_matrix_store(const raw_data_array &data,
+			off_t global_start_row, off_t global_start_col, size_t nrow,
+			size_t ncol, const scalar_type &type): local_row_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type) {
+		this->data = data;
 	}
 
 	virtual bool read_only() const {
@@ -221,6 +246,9 @@ public:
 	virtual char *get_row(size_t row) {
 		return data.get_raw() + row * get_num_cols() * get_entry_size();
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -256,6 +284,9 @@ public:
 	virtual char *get_col(size_t col) {
 		return data + col * get_num_rows() * get_entry_size();
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -292,6 +323,9 @@ public:
 	virtual char *get_row(size_t row) {
 		return data + row * get_num_cols() * get_entry_size();
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -327,6 +361,9 @@ public:
 	virtual char *get_col(size_t col) {
 		return cols[col];
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -363,6 +400,9 @@ public:
 	virtual char *get_row(size_t row) {
 		return rows[row];
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -399,6 +439,9 @@ public:
 		assert(0);
 		return NULL;
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -435,6 +478,9 @@ public:
 		assert(0);
 		return NULL;
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -471,6 +517,9 @@ public:
 		assert(0);
 		return NULL;
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
@@ -507,6 +556,9 @@ public:
 		assert(0);
 		return NULL;
 	}
+
+	virtual matrix_store::const_ptr transpose() const;
+	virtual matrix_store::ptr transpose();
 };
 
 /*
