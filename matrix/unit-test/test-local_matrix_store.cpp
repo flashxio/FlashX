@@ -18,27 +18,29 @@ void test_reset(size_t long_dim)
 	printf("test reset on local matrix, long dim: %ld\n", long_dim);
 	// Test on local buffer matrix.
 	test_reset1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 	test_reset1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored contiguously.
 	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::shared_ptr<local_row_matrix_store> row_store(new local_buf_row_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	test_reset1(std::shared_ptr<local_matrix_store>(
 				new local_ref_contig_col_matrix_store(0, 0,
-					col_store->get_raw_arr(), long_dim, 10, get_scalar_type<int>())));
+					col_store->get_raw_arr(), long_dim, 10,
+					get_scalar_type<int>(), -1)));
 	test_reset1(std::shared_ptr<local_matrix_store>(
 				new local_ref_contig_row_matrix_store(0, 0,
-					row_store->get_raw_arr(), long_dim, 10, get_scalar_type<int>())));
+					row_store->get_raw_arr(), long_dim, 10,
+					get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored non-contiguously.
 	col_store = std::shared_ptr<local_col_matrix_store>(new local_buf_col_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	row_store = std::shared_ptr<local_row_matrix_store>(new local_buf_row_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::vector<char *> cols(col_store->get_num_cols());
 	for (size_t i = 0; i < cols.size(); i++)
 		cols[i] = col_store->get_col(i);
@@ -46,11 +48,11 @@ void test_reset(size_t long_dim)
 	for (size_t i = 0; i < rows.size(); i++)
 		rows[i] = row_store->get_row(i);
 	test_reset1(std::shared_ptr<local_matrix_store>(
-				new local_ref_col_matrix_store(0, 0,
-					cols, col_store->get_num_rows(), get_scalar_type<int>())));
+				new local_ref_col_matrix_store(0, 0, cols,
+					col_store->get_num_rows(), get_scalar_type<int>(), -1)));
 	test_reset1(std::shared_ptr<local_matrix_store>(
-				new local_ref_row_matrix_store(0, 0,
-					rows, row_store->get_num_cols(), get_scalar_type<int>())));
+				new local_ref_row_matrix_store(0, 0, rows,
+					row_store->get_num_cols(), get_scalar_type<int>(), -1)));
 }
 
 class set_col_operate: public type_set_operate<int>
@@ -127,27 +129,29 @@ void test_set(size_t long_dim)
 	printf("test set on local matrix, long dim: %ld\n", long_dim);
 	// Test on local buffer matrix.
 	test_set1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 	test_set1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored contiguously.
 	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::shared_ptr<local_row_matrix_store> row_store(new local_buf_row_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	test_set1(std::shared_ptr<local_matrix_store>(
 				new local_ref_contig_col_matrix_store(0, 0,
-					col_store->get_raw_arr(), long_dim, 10, get_scalar_type<int>())));
+					col_store->get_raw_arr(), long_dim, 10,
+					get_scalar_type<int>(), -1)));
 	test_set1(std::shared_ptr<local_matrix_store>(
 				new local_ref_contig_row_matrix_store(0, 0,
-					row_store->get_raw_arr(), long_dim, 10, get_scalar_type<int>())));
+					row_store->get_raw_arr(), long_dim, 10,
+					get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored non-contiguously.
 	col_store = std::shared_ptr<local_col_matrix_store>(new local_buf_col_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	row_store = std::shared_ptr<local_row_matrix_store>(new local_buf_row_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::vector<char *> cols(col_store->get_num_cols());
 	for (size_t i = 0; i < cols.size(); i++)
 		cols[i] = col_store->get_col(i);
@@ -155,19 +159,21 @@ void test_set(size_t long_dim)
 	for (size_t i = 0; i < rows.size(); i++)
 		rows[i] = row_store->get_row(i);
 	test_set1(std::shared_ptr<local_matrix_store>(
-				new local_ref_col_matrix_store(0, 0,
-					cols, col_store->get_num_rows(), get_scalar_type<int>())));
+				new local_ref_col_matrix_store(0, 0, cols,
+					col_store->get_num_rows(), get_scalar_type<int>(), -1)));
 	test_set1(std::shared_ptr<local_matrix_store>(
-				new local_ref_row_matrix_store(0, 0,
-					rows, row_store->get_num_cols(), get_scalar_type<int>())));
+				new local_ref_row_matrix_store(0, 0, rows,
+					row_store->get_num_cols(), get_scalar_type<int>(), -1)));
 
 	// Test on local const reference matrix to a matrix stored contiguously.
 	verify_set(std::shared_ptr<local_matrix_store>(
 				new local_cref_contig_col_matrix_store(0, 0,
-					col_store->get_raw_arr(), long_dim, 10, get_scalar_type<int>())));
+					col_store->get_raw_arr(), long_dim, 10,
+					get_scalar_type<int>(), -1)));
 	verify_set(std::shared_ptr<local_matrix_store>(
 				new local_cref_contig_row_matrix_store(0, 0,
-					row_store->get_raw_arr(), long_dim, 10, get_scalar_type<int>())));
+					row_store->get_raw_arr(), long_dim, 10,
+					get_scalar_type<int>(), -1)));
 
 	// Test on local const reference matrix to a matrix stored non-contiguously.
 	std::vector<const char *> const_cols(col_store->get_num_cols());
@@ -177,11 +183,11 @@ void test_set(size_t long_dim)
 	for (size_t i = 0; i < const_rows.size(); i++)
 		const_rows[i] = row_store->get_row(i);
 	verify_set(std::shared_ptr<local_matrix_store>(
-				new local_cref_col_matrix_store(0, 0,
-					const_cols, row_store->get_num_rows(), get_scalar_type<int>())));
+				new local_cref_col_matrix_store(0, 0, const_cols,
+					row_store->get_num_rows(), get_scalar_type<int>(), -1)));
 	verify_set(std::shared_ptr<local_matrix_store>(
-				new local_cref_row_matrix_store(0, 0,
-					const_rows, row_store->get_num_cols(), get_scalar_type<int>())));
+				new local_cref_row_matrix_store(0, 0, const_rows,
+					row_store->get_num_cols(), get_scalar_type<int>(), -1)));
 }
 
 void test_agg1(std::shared_ptr<local_matrix_store> store)
@@ -203,15 +209,15 @@ void test_aggregate(size_t long_dim)
 	printf("test aggregate on local matrix, long dim: %ld\n", long_dim);
 	// Test on local buffer matrix.
 	test_agg1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 	test_agg1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored non-contiguously.
 	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::shared_ptr<local_row_matrix_store> row_store(new local_buf_row_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::vector<char *> cols(col_store->get_num_cols());
 	for (size_t i = 0; i < cols.size(); i++)
 		cols[i] = col_store->get_col(i);
@@ -219,11 +225,11 @@ void test_aggregate(size_t long_dim)
 	for (size_t i = 0; i < rows.size(); i++)
 		rows[i] = row_store->get_row(i);
 	test_agg1(std::shared_ptr<local_matrix_store>(
-				new local_ref_col_matrix_store(0, 0,
-					cols, col_store->get_num_rows(), get_scalar_type<int>())));
+				new local_ref_col_matrix_store(0, 0, cols,
+					col_store->get_num_rows(), get_scalar_type<int>(), -1)));
 	test_agg1(std::shared_ptr<local_matrix_store>(
-				new local_ref_row_matrix_store(0, 0,
-					rows, row_store->get_num_cols(), get_scalar_type<int>())));
+				new local_ref_row_matrix_store(0, 0, rows,
+					row_store->get_num_cols(), get_scalar_type<int>(), -1)));
 }
 
 void test_mapply21(std::shared_ptr<local_matrix_store> store)
@@ -233,13 +239,13 @@ void test_mapply21(std::shared_ptr<local_matrix_store> store)
 		store->set_data(set_col_operate(store->get_num_cols()));
 		res = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 				0, 0, store->get_num_rows(), store->get_num_cols(),
-				get_scalar_type<int>()));
+				get_scalar_type<int>(), -1));
 	}
 	else {
 		store->set_data(set_row_operate(store->get_num_cols()));
 		res = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 				0, 0, store->get_num_rows(), store->get_num_cols(),
-				get_scalar_type<int>()));
+				get_scalar_type<int>(), -1));
 	}
 
 	const bulk_operate &op = store->get_type().get_basic_ops().get_add();
@@ -254,15 +260,15 @@ void test_mapply2(size_t long_dim)
 	printf("test mapply2 on local matrix, long dim: %ld\n", long_dim);
 	// Test on local buffer matrix.
 	test_mapply21(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 	test_mapply21(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored non-contiguously.
 	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::shared_ptr<local_row_matrix_store> row_store(new local_buf_row_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::vector<char *> cols(col_store->get_num_cols());
 	for (size_t i = 0; i < cols.size(); i++)
 		cols[i] = col_store->get_col(i);
@@ -270,11 +276,11 @@ void test_mapply2(size_t long_dim)
 	for (size_t i = 0; i < rows.size(); i++)
 		rows[i] = row_store->get_row(i);
 	test_mapply21(std::shared_ptr<local_matrix_store>(
-				new local_ref_col_matrix_store(0, 0,
-					cols, col_store->get_num_rows(), get_scalar_type<int>())));
+				new local_ref_col_matrix_store(0, 0, cols,
+					col_store->get_num_rows(), get_scalar_type<int>(), -1)));
 	test_mapply21(std::shared_ptr<local_matrix_store>(
-				new local_ref_row_matrix_store(0, 0,
-					rows, row_store->get_num_cols(), get_scalar_type<int>())));
+				new local_ref_row_matrix_store(0, 0, rows,
+					row_store->get_num_cols(), get_scalar_type<int>(), -1)));
 }
 
 void test_sapply1(std::shared_ptr<local_matrix_store> store)
@@ -284,13 +290,13 @@ void test_sapply1(std::shared_ptr<local_matrix_store> store)
 		store->set_data(set_col_operate(store->get_num_cols()));
 		res = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 				0, 0, store->get_num_rows(), store->get_num_cols(),
-				get_scalar_type<int>()));
+				get_scalar_type<int>(), -1));
 	}
 	else {
 		store->set_data(set_row_operate(store->get_num_cols()));
 		res = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 				0, 0, store->get_num_rows(), store->get_num_cols(),
-				get_scalar_type<int>()));
+				get_scalar_type<int>(), -1));
 	}
 
 	const bulk_uoperate &op = *store->get_type().get_basic_uops().get_op(
@@ -306,15 +312,15 @@ void test_sapply(size_t long_dim)
 	printf("test sapply on local matrix, long dim: %ld\n", long_dim);
 	// Test on local buffer matrix.
 	test_sapply1(std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 	test_sapply1(std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>())));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1)));
 
 	// Test on local reference matrix to a matrix stored non-contiguously.
 	std::shared_ptr<local_col_matrix_store> col_store(new local_buf_col_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::shared_ptr<local_row_matrix_store> row_store(new local_buf_row_matrix_store(
-				0, 0, long_dim, 10, get_scalar_type<int>()));
+				0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	std::vector<char *> cols(col_store->get_num_cols());
 	for (size_t i = 0; i < cols.size(); i++)
 		cols[i] = col_store->get_col(i);
@@ -322,11 +328,11 @@ void test_sapply(size_t long_dim)
 	for (size_t i = 0; i < rows.size(); i++)
 		rows[i] = row_store->get_row(i);
 	test_sapply1(std::shared_ptr<local_matrix_store>(
-				new local_ref_col_matrix_store(0, 0,
-					cols, col_store->get_num_rows(), get_scalar_type<int>())));
+				new local_ref_col_matrix_store(0, 0, cols,
+					col_store->get_num_rows(), get_scalar_type<int>(), -1)));
 	test_sapply1(std::shared_ptr<local_matrix_store>(
-				new local_ref_row_matrix_store(0, 0,
-					rows, row_store->get_num_cols(), get_scalar_type<int>())));
+				new local_ref_row_matrix_store(0, 0, rows,
+					row_store->get_num_cols(), get_scalar_type<int>(), -1)));
 }
 
 std::shared_ptr<local_matrix_store> naive_multiply(const local_matrix_store &m1,
@@ -334,7 +340,7 @@ std::shared_ptr<local_matrix_store> naive_multiply(const local_matrix_store &m1,
 {
 	std::shared_ptr<local_matrix_store> res(new local_buf_col_matrix_store(
 				0, 0, m1.get_num_rows(), m2.get_num_cols(),
-				get_scalar_type<int>()));
+				get_scalar_type<int>(), -1));
 	for (size_t i = 0; i < m1.get_num_rows(); i++) {
 		for (size_t j = 0; j < m2.get_num_cols(); j++) {
 			int sum = 0;
@@ -355,13 +361,13 @@ void test_inner_prod1(std::shared_ptr<local_matrix_store> m1,
 		m1->set_data(set1_col_operate());
 		res = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 				0, 0, m1->get_num_rows(), m2->get_num_cols(),
-				get_scalar_type<int>()));
+				get_scalar_type<int>(), -1));
 	}
 	else {
 		m1->set_data(set1_row_operate());
 		res = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 				0, 0, m1->get_num_rows(), m2->get_num_cols(),
-				get_scalar_type<int>()));
+				get_scalar_type<int>(), -1));
 	}
 
 	if (m2->store_layout() == matrix_layout_t::L_COL)
@@ -388,27 +394,27 @@ void test_inner_prod(size_t long_dim)
 	std::shared_ptr<local_matrix_store> m2;
 
 	m1 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>()));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	m2 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, 10, 10, get_scalar_type<int>()));
+					0, 0, 10, 10, get_scalar_type<int>(), -1));
 	test_inner_prod1(m1, m2);
 
 	m1 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>()));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, 10, 10, get_scalar_type<int>()));
+					0, 0, 10, 10, get_scalar_type<int>(), -1));
 	test_inner_prod1(m1, m2);
 
 	m1 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, 10, long_dim, get_scalar_type<int>()));
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
 	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>()));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	test_inner_prod1(m1, m2);
 
 	m1 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>()));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, 10, 10, get_scalar_type<int>()));
+					0, 0, 10, 10, get_scalar_type<int>(), -1));
 	test_inner_prod1(m1, m2);
 }
 
@@ -433,19 +439,19 @@ void test_transpose(size_t long_dim)
 	std::shared_ptr<local_row_matrix_store> m4;
 
 	m1 = std::shared_ptr<local_col_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>()));
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	test_transpose1(*m1, *local_matrix_store::cast(m1->transpose()));
 
 	m2 = std::shared_ptr<local_row_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, 10, long_dim, get_scalar_type<int>()));
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
 	test_transpose1(*m2, *local_matrix_store::cast(m2->transpose()));
 
 	m3 = std::shared_ptr<local_col_matrix_store>(new local_ref_contig_col_matrix_store(0, 0,
-				m1->get_raw_arr(), long_dim, 10, get_scalar_type<int>()));
+				m1->get_raw_arr(), long_dim, 10, get_scalar_type<int>(), -1));
 	test_transpose1(*m3, *local_matrix_store::cast(m3->transpose()));
 
 	m4 = std::shared_ptr<local_row_matrix_store>(new local_ref_contig_row_matrix_store(0, 0,
-				m1->get_raw_arr(), 10, long_dim, get_scalar_type<int>()));
+				m1->get_raw_arr(), 10, long_dim, get_scalar_type<int>(), -1));
 	test_transpose1(*m4, *local_matrix_store::cast(m4->transpose()));
 
 	{
@@ -453,7 +459,7 @@ void test_transpose(size_t long_dim)
 		for (size_t i = 0; i < cols.size(); i++)
 			cols[i] = m1->get_col(i);
 		m3 = std::shared_ptr<local_col_matrix_store>(new local_ref_col_matrix_store(0, 0,
-					cols, m1->get_num_rows(), get_scalar_type<int>()));
+					cols, m1->get_num_rows(), get_scalar_type<int>(), -1));
 		test_transpose1(*m3, *local_matrix_store::cast(m3->transpose()));
 	}
 
@@ -462,16 +468,16 @@ void test_transpose(size_t long_dim)
 		for (size_t i = 0; i < rows.size(); i++)
 			rows[i] = m2->get_row(i);
 		m4 = std::shared_ptr<local_row_matrix_store>(new local_ref_row_matrix_store(0, 0,
-					rows, m2->get_num_cols(), get_scalar_type<int>()));
+					rows, m2->get_num_cols(), get_scalar_type<int>(), -1));
 		test_transpose1(*m4, *local_matrix_store::cast(m4->transpose()));
 	}
 
 	m3 = std::shared_ptr<local_col_matrix_store>(new local_cref_contig_col_matrix_store(0, 0,
-				m1->get_raw_arr(), long_dim, 10, get_scalar_type<int>()));
+				m1->get_raw_arr(), long_dim, 10, get_scalar_type<int>(), -1));
 	test_transpose1(*m3, *local_matrix_store::cast(m3->transpose()));
 
 	m4 = std::shared_ptr<local_row_matrix_store>(new local_cref_contig_row_matrix_store(0, 0,
-				m1->get_raw_arr(), 10, long_dim, get_scalar_type<int>()));
+				m1->get_raw_arr(), 10, long_dim, get_scalar_type<int>(), -1));
 	test_transpose1(*m4, *local_matrix_store::cast(m4->transpose()));
 
 	{
@@ -479,7 +485,7 @@ void test_transpose(size_t long_dim)
 		for (size_t i = 0; i < cols.size(); i++)
 			cols[i] = m1->get_col(i);
 		m3 = std::shared_ptr<local_col_matrix_store>(new local_cref_col_matrix_store(0, 0,
-					cols, m1->get_num_rows(), get_scalar_type<int>()));
+					cols, m1->get_num_rows(), get_scalar_type<int>(), -1));
 		test_transpose1(*m3, *local_matrix_store::cast(m3->transpose()));
 	}
 
@@ -488,7 +494,7 @@ void test_transpose(size_t long_dim)
 		for (size_t i = 0; i < rows.size(); i++)
 			rows[i] = m2->get_row(i);
 		m4 = std::shared_ptr<local_row_matrix_store>(new local_cref_row_matrix_store(0, 0,
-					rows, m2->get_num_cols(), get_scalar_type<int>()));
+					rows, m2->get_num_cols(), get_scalar_type<int>(), -1));
 		test_transpose1(*m4, *local_matrix_store::cast(m4->transpose()));
 	}
 }

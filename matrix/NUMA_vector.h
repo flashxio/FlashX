@@ -92,6 +92,14 @@ public:
 	bool is_sub_vec() const;
 
 	/*
+	 * Get the node id where the data specified by `off' is located.
+	 */
+	int get_node_id(off_t off) const {
+		auto phy_loc = mapper.map2physical(off);
+		return phy_loc.first;
+	}
+
+	/*
 	 * Get a subarray in [start, end), which must be in the same range.
 	 */
 	const char *get_sub_arr(off_t start, off_t end) const;

@@ -47,6 +47,8 @@ class local_matrix_store: public matrix_store
 {
 	off_t global_start_row;
 	off_t global_start_col;
+	// Which node the matrix data is stored.
+	int node_id;
 public:
 	typedef std::shared_ptr<local_matrix_store> ptr;
 	typedef std::shared_ptr<const local_matrix_store> const_ptr;
@@ -62,10 +64,15 @@ public:
 	}
 
 	local_matrix_store(off_t global_start_row, off_t global_start_col,
-			size_t nrow, size_t ncol, const scalar_type &type): matrix_store(
-				nrow, ncol, true, type) {
+			size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): matrix_store(nrow, ncol, true, type) {
 		this->global_start_row = global_start_row;
 		this->global_start_col = global_start_col;
+		this->node_id = node_id;
+	}
+
+	int get_node_id() const {
+		return node_id;
 	}
 
 	off_t get_global_start_row() const {
@@ -113,8 +120,9 @@ class local_col_matrix_store: public local_matrix_store
 {
 public:
 	local_col_matrix_store(off_t global_start_row, off_t global_start_col,
-			size_t nrow, size_t ncol, const scalar_type &type): local_matrix_store(
-				global_start_row, global_start_col, nrow, ncol, type) {
+			size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_matrix_store(global_start_row, global_start_col,
+				nrow, ncol, type, node_id) {
 	}
 
 	virtual void reset_data();
@@ -140,8 +148,9 @@ class local_row_matrix_store: public local_matrix_store
 {
 public:
 	local_row_matrix_store(off_t global_start_row, off_t global_start_col,
-			size_t nrow, size_t ncol, const scalar_type &type): local_matrix_store(
-				global_start_row, global_start_col, nrow, ncol, type) {
+			size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_matrix_store(global_start_row, global_start_col,
+				nrow, ncol, type, node_id) {
 	}
 
 	virtual void reset_data();
@@ -170,16 +179,17 @@ class local_buf_col_matrix_store: public local_col_matrix_store
 	raw_data_array data;
 public:
 	local_buf_col_matrix_store(off_t global_start_row, off_t global_start_col,
-			size_t nrow, size_t ncol, const scalar_type &type): local_col_matrix_store(
-				global_start_row, global_start_col, nrow, ncol, type) {
+			size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_col_matrix_store(global_start_row, global_start_col,
+				nrow, ncol, type, node_id) {
 		if (nrow * ncol > 0)
 			data = raw_data_array(nrow * ncol * type.get_size());
 	}
 
 	local_buf_col_matrix_store(const raw_data_array &data,
 			off_t global_start_row, off_t global_start_col, size_t nrow,
-			size_t ncol, const scalar_type &type): local_col_matrix_store(
-				global_start_row, global_start_col, nrow, ncol, type) {
+			size_t ncol, const scalar_type &type, int node_id): local_col_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
@@ -214,16 +224,17 @@ class local_buf_row_matrix_store: public local_row_matrix_store
 	raw_data_array data;
 public:
 	local_buf_row_matrix_store(off_t global_start_row, off_t global_start_col,
-			size_t nrow, size_t ncol, const scalar_type &type): local_row_matrix_store(
-				global_start_row, global_start_col, nrow, ncol, type) {
+			size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_row_matrix_store(global_start_row, global_start_col,
+				nrow, ncol, type, node_id) {
 		if (nrow * ncol > 0)
 			data = raw_data_array(nrow * ncol * type.get_size());
 	}
 
 	local_buf_row_matrix_store(const raw_data_array &data,
 			off_t global_start_row, off_t global_start_col, size_t nrow,
-			size_t ncol, const scalar_type &type): local_row_matrix_store(
-				global_start_row, global_start_col, nrow, ncol, type) {
+			size_t ncol, const scalar_type &type, int node_id): local_row_matrix_store(
+				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
@@ -260,9 +271,9 @@ class local_ref_contig_col_matrix_store: public local_col_matrix_store
 	char *data;
 public:
 	local_ref_contig_col_matrix_store(off_t global_start_row, off_t global_start_col,
-			char *data, size_t nrow, size_t ncol,
-			const scalar_type &type): local_col_matrix_store(global_start_row,
-				global_start_col, nrow, ncol, type) {
+			char *data, size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_col_matrix_store(global_start_row,
+				global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
@@ -298,9 +309,9 @@ class local_ref_contig_row_matrix_store: public local_row_matrix_store
 	char *data;
 public:
 	local_ref_contig_row_matrix_store(off_t global_start_row, off_t global_start_col,
-			char *data, size_t nrow, size_t ncol,
-			const scalar_type &type): local_row_matrix_store(global_start_row,
-				global_start_col, nrow, ncol, type) {
+			char *data, size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_row_matrix_store(global_start_row,
+				global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
@@ -337,9 +348,9 @@ class local_ref_col_matrix_store: public local_col_matrix_store
 	std::vector<char *> cols;
 public:
 	local_ref_col_matrix_store(off_t global_start_row, off_t global_start_col,
-			const std::vector<char *> &cols, size_t nrow,
-			const scalar_type &type): local_col_matrix_store(global_start_row,
-				global_start_col, nrow, cols.size(), type) {
+			const std::vector<char *> &cols, size_t nrow, const scalar_type &type,
+			int node_id): local_col_matrix_store(global_start_row,
+				global_start_col, nrow, cols.size(), type, node_id) {
 		this->cols = cols;
 	}
 
@@ -375,9 +386,9 @@ class local_ref_row_matrix_store: public local_row_matrix_store
 	std::vector<char *> rows;
 public:
 	local_ref_row_matrix_store(off_t global_start_row, off_t global_start_col,
-			const std::vector<char *> &rows, size_t ncol,
-			const scalar_type &type): local_row_matrix_store(global_start_row,
-				global_start_col, rows.size(), ncol, type) {
+			const std::vector<char *> &rows, size_t ncol, const scalar_type &type,
+			int node_id): local_row_matrix_store(global_start_row,
+				global_start_col, rows.size(), ncol, type, node_id) {
 		this->rows = rows;
 	}
 
@@ -414,9 +425,9 @@ class local_cref_contig_col_matrix_store: public local_col_matrix_store
 	const char *data;
 public:
 	local_cref_contig_col_matrix_store(off_t global_start_row, off_t global_start_col,
-			const char *data, size_t nrow, size_t ncol,
-			const scalar_type &type): local_col_matrix_store(global_start_row,
-				global_start_col, nrow, ncol, type) {
+			const char *data, size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_col_matrix_store(global_start_row,
+				global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
@@ -453,9 +464,9 @@ class local_cref_contig_row_matrix_store: public local_row_matrix_store
 	const char *data;
 public:
 	local_cref_contig_row_matrix_store(off_t global_start_row, off_t global_start_col,
-			const char *data, size_t nrow, size_t ncol,
-			const scalar_type &type): local_row_matrix_store(global_start_row,
-				global_start_col, nrow, ncol, type) {
+			const char *data, size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_row_matrix_store(global_start_row,
+				global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
 	}
 
@@ -493,8 +504,9 @@ class local_cref_col_matrix_store: public local_col_matrix_store
 public:
 	local_cref_col_matrix_store(off_t global_start_row, off_t global_start_col,
 			const std::vector<const char *> &cols, size_t nrow,
-			const scalar_type &type): local_col_matrix_store(global_start_row,
-				global_start_col, nrow, cols.size(), type) {
+			const scalar_type &type, int node_id): local_col_matrix_store(
+				global_start_row, global_start_col, nrow, cols.size(), type,
+				node_id) {
 		this->cols = cols;
 	}
 
@@ -532,8 +544,9 @@ class local_cref_row_matrix_store: public local_row_matrix_store
 public:
 	local_cref_row_matrix_store(off_t global_start_row, off_t global_start_col,
 			const std::vector<const char *> &rows, size_t ncol,
-			const scalar_type &type): local_row_matrix_store(global_start_row,
-				global_start_col, rows.size(), ncol, type) {
+			const scalar_type &type, int node_id): local_row_matrix_store(
+				global_start_row, global_start_col, rows.size(), ncol, type,
+				node_id) {
 		this->rows = rows;
 	}
 

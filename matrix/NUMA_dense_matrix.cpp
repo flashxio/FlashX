@@ -161,9 +161,10 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 	size_t num_rows = std::min(get_num_rows() - start_row,
 			mapper.get_range_size());
 	size_t num_cols = get_num_cols();
+	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
 				start_row, start_col, get_row(start_row), num_rows, num_cols,
-				get_type()));
+				get_type(), phy_loc.first));
 }
 
 local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
@@ -173,9 +174,10 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
 	size_t num_rows = std::min(get_num_rows() - start_row,
 			mapper.get_range_size());
 	size_t num_cols = get_num_cols();
+	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
 				start_row, start_col, get_row(start_row), num_rows, num_cols,
-				get_type()));
+				get_type(), phy_loc.first));
 }
 
 local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
@@ -187,12 +189,16 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 	size_t start_col = 0;
 	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
 	size_t num_cols = get_num_cols();
+	assert(!data.empty());
+	int node_id = data.front()->get_node_id(start_row);
 	std::vector<const char *> cols(num_cols);
-	for (size_t i = 0; i < num_cols; i++)
+	for (size_t i = 0; i < num_cols; i++) {
 		cols[i] = data[i + start_col]->get_sub_arr(start_row,
 				start_row + num_rows);
+		assert(node_id == data[i + start_col]->get_node_id(start_row));
+	}
 	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
-				start_row, start_col, cols, num_rows, get_type()));
+				start_row, start_col, cols, num_rows, get_type(), node_id));
 }
 
 local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
@@ -203,12 +209,16 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
 	size_t start_col = 0;
 	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
 	size_t num_cols = get_num_cols();
+	assert(!data.empty());
+	int node_id = data.front()->get_node_id(start_row);
 	std::vector<char *> cols(num_cols);
-	for (size_t i = 0; i < num_cols; i++)
+	for (size_t i = 0; i < num_cols; i++) {
 		cols[i] = data[i + start_col]->get_sub_arr(start_row,
 				start_row + num_rows);
+		assert(node_id == data[i + start_col]->get_node_id(start_row));
+	}
 	return local_matrix_store::ptr(new local_ref_col_matrix_store(
-				start_row, start_col, cols, num_rows, get_type()));
+				start_row, start_col, cols, num_rows, get_type(), node_id));
 }
 
 local_matrix_store::const_ptr NUMA_row_wide_matrix_store::get_portion(

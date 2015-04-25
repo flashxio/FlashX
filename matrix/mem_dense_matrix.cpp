@@ -143,15 +143,17 @@ void mem_dense_matrix::inner_prod_wide(const detail::mem_matrix_store &m,
 	assert(this_store.get_portion_size().second == res.get_portion_size().first);
 #pragma omp parallel
 	{
+		// TODO we need to get the real node id.
+		int node_id = -1;
 		detail::local_matrix_store::ptr local_m;
 		if (res.store_layout() == matrix_layout_t::L_COL)
 			local_m = detail::local_matrix_store::ptr(
-					new detail::local_buf_col_matrix_store(0, 0,
-						nrow, m.get_num_cols(), right_op.get_output_type()));
+					new detail::local_buf_col_matrix_store(0, 0, nrow,
+						m.get_num_cols(), right_op.get_output_type(), node_id));
 		else
 			local_m = detail::local_matrix_store::ptr(
-					new detail::local_buf_row_matrix_store(0, 0,
-						nrow, m.get_num_cols(), right_op.get_output_type()));
+					new detail::local_buf_row_matrix_store(0, 0, nrow,
+						m.get_num_cols(), right_op.get_output_type(), node_id));
 		local_m->reset_data();
 #pragma omp for
 		for (size_t i = 0; i < num_chunks; i++) {
