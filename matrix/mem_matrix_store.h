@@ -59,6 +59,9 @@ public:
 			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
 	}
 
+	virtual void reset_data();
+	virtual void set_data(const set_operate &op);
+
 	virtual int get_num_nodes() const {
 		return -1;
 	}
@@ -70,6 +73,11 @@ public:
 			const std::vector<off_t> &idxs) const = 0;
 	virtual matrix_store::const_ptr get_rows(
 			const std::vector<off_t> &idxs) const = 0;
+
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t id) const = 0;
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t id) = 0;
 
 	virtual bool write2file(const std::string &file_name) const = 0;
 
