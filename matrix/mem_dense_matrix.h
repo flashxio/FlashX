@@ -47,9 +47,9 @@ private:
 	}
 
 	static ptr _create_rand(const scalar_variable &min, const scalar_variable &max,
-			size_t nrow, size_t ncol, matrix_layout_t layout);
+			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes);
 	static ptr _create_const(const scalar_variable &val, size_t nrow, size_t ncol,
-			matrix_layout_t layout);
+			matrix_layout_t layout, int num_nodes);
 
 	void inner_prod_tall(const detail::mem_matrix_store &m,
 			const bulk_operate &left_op, const bulk_operate &right_op,
@@ -60,27 +60,35 @@ private:
 	bool verify_inner_prod(const dense_matrix &m,
 			const bulk_operate &left_op, const bulk_operate &right_op) const;
 public:
+	/*
+	 * We may create a matrix optimized for SMP, and we may also create a matrix
+	 * optimized for NUMA. By default, it creates a SMP matrix.
+	 */
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type);
+			const scalar_type &type, int num_nodes = -1);
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const scalar_type &type, const set_operate &op);
+			const scalar_type &type, const set_operate &op, int num_nodes = -1);
 
 	template<class T>
 	static ptr create_rand(T _min, T _max, size_t nrow, size_t ncol,
-			matrix_layout_t layout) {
+			matrix_layout_t layout, int num_nodes = -1) {
 		scalar_variable_impl<T> min(_min);
 		scalar_variable_impl<T> max(_max);
-		return _create_rand(min, max, nrow, ncol, layout);
+		return _create_rand(min, max, nrow, ncol, layout, num_nodes);
 	}
 
 	template<class T>
 	static ptr create_const(T _val, size_t nrow, size_t ncol,
-			matrix_layout_t layout) {
+			matrix_layout_t layout, int num_nodes = -1) {
 		scalar_variable_impl<T> val(_val);
-		return _create_const(val, nrow, ncol, layout);
+		return _create_const(val, nrow, ncol, layout, num_nodes);
 	}
 
 	static ptr cast(dense_matrix::ptr m);
+
+	int get_num_nodes() const {
+		return ((const detail::mem_matrix_store &) get_data()).get_num_nodes();
+	}
 
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;
 	virtual dense_matrix::ptr get_rows(const std::vector<off_t> &idxs) const;

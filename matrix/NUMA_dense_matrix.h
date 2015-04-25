@@ -47,6 +47,17 @@ public:
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			matrix_layout_t layout, const scalar_type &type);
 
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const {
+		assert(0);
+		return matrix_store::const_ptr();
+	}
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		assert(0);
+		return matrix_store::const_ptr();
+	}
+
 	virtual bool write2file(const std::string &file_name) const {
 		assert(0);
 		return false;

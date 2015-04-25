@@ -22,6 +22,7 @@
 #include "dense_matrix.h"
 #include "bulk_operate.h"
 #include "mem_dense_matrix.h"
+#include "NUMA_dense_matrix.h"
 #include "EM_dense_matrix.h"
 #include "generic_type.h"
 #include "rand_gen.h"
@@ -209,26 +210,20 @@ public:
 
 mem_dense_matrix::ptr mem_dense_matrix::_create_rand(const scalar_variable &min,
 		const scalar_variable &max, size_t nrow, size_t ncol,
-		matrix_layout_t layout)
+		matrix_layout_t layout, int num_nodes)
 {
 	assert(min.get_type() == max.get_type());
-	detail::mem_matrix_store::ptr store;
-	if (layout == matrix_layout_t::L_COL)
-		store = detail::mem_col_matrix_store::create(nrow, ncol, min.get_type());
-	else
-		store = detail::mem_row_matrix_store::create(nrow, ncol, min.get_type());
+	detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
+			nrow, ncol, layout, min.get_type(), num_nodes);
 	store->set_data(rand_init(min, max));
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 
 mem_dense_matrix::ptr mem_dense_matrix::_create_const(const scalar_variable &val,
-		size_t nrow, size_t ncol, matrix_layout_t layout)
+		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes)
 {
-	detail::mem_matrix_store::ptr store;
-	if (layout == matrix_layout_t::L_COL)
-		store = detail::mem_col_matrix_store::create(nrow, ncol, val.get_type());
-	else
-		store = detail::mem_row_matrix_store::create(nrow, ncol, val.get_type());
+	detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
+			nrow, ncol, layout, val.get_type(), num_nodes);
 	store->set_data(val.get_type().get_set_const(val));
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }

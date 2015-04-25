@@ -33,29 +33,25 @@
 #include "mem_vector.h"
 #include "local_matrix_store.h"
 #include "mem_matrix_store.h"
+#include "NUMA_dense_matrix.h"
 
 namespace fm
 {
 
 mem_dense_matrix::ptr mem_dense_matrix::create(size_t nrow, size_t ncol,
-		matrix_layout_t layout, const scalar_type &type)
+		matrix_layout_t layout, const scalar_type &type, int num_nodes)
 {
-	detail::matrix_store::ptr store;
-	if (layout == matrix_layout_t::L_ROW)
-		store = detail::mem_row_matrix_store::create(nrow, ncol, type);
-	else
-		store = detail::mem_col_matrix_store::create(nrow, ncol, type);
+	detail::matrix_store::ptr store = detail::mem_matrix_store::create(
+			nrow, ncol, layout, type, num_nodes);
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 
 mem_dense_matrix::ptr mem_dense_matrix::create(size_t nrow, size_t ncol,
-		matrix_layout_t layout, const scalar_type &type, const set_operate &op)
+		matrix_layout_t layout, const scalar_type &type, const set_operate &op,
+		int num_nodes)
 {
-	detail::matrix_store::ptr store;
-	if (layout == matrix_layout_t::L_ROW)
-		store = detail::mem_row_matrix_store::create(nrow, ncol, type);
-	else
-		store = detail::mem_col_matrix_store::create(nrow, ncol, type);
+	detail::matrix_store::ptr store = detail::mem_matrix_store::create(
+			nrow, ncol, layout, type, num_nodes);
 	store->set_data(op);
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
@@ -63,9 +59,9 @@ mem_dense_matrix::ptr mem_dense_matrix::create(size_t nrow, size_t ncol,
 dense_matrix::ptr mem_dense_matrix::get_cols(const std::vector<off_t> &idxs) const
 {
 	if (store_layout() == matrix_layout_t::L_COL) {
-		const detail::mem_col_matrix_store &col_store
-			= dynamic_cast<const detail::mem_col_matrix_store &>(get_data());
-		return dense_matrix::ptr(new mem_dense_matrix(col_store.get_cols(idxs)));
+		const detail::mem_matrix_store &store
+			= static_cast<const detail::mem_matrix_store &>(get_data());
+		return dense_matrix::ptr(new mem_dense_matrix(store.get_cols(idxs)));
 	}
 	else
 		return dense_matrix::ptr();
@@ -74,9 +70,9 @@ dense_matrix::ptr mem_dense_matrix::get_cols(const std::vector<off_t> &idxs) con
 dense_matrix::ptr mem_dense_matrix::get_rows(const std::vector<off_t> &idxs) const
 {
 	if (store_layout() == matrix_layout_t::L_ROW) {
-		const detail::mem_row_matrix_store &row_store
-			= dynamic_cast<const detail::mem_row_matrix_store &>(get_data());
-		return dense_matrix::ptr(new mem_dense_matrix(row_store.get_rows(idxs)));
+		const detail::mem_matrix_store &store
+			= static_cast<const detail::mem_matrix_store &>(get_data());
+		return dense_matrix::ptr(new mem_dense_matrix(store.get_rows(idxs)));
 	}
 	else
 		return dense_matrix::ptr();
@@ -93,14 +89,9 @@ dense_matrix::ptr mem_dense_matrix::inner_prod(const dense_matrix &m,
 	if (!verify_inner_prod(m, left_op, right_op))
 		return dense_matrix::ptr();
 
-	detail::mem_matrix_store::ptr res;
-	if (store_layout() == matrix_layout_t::L_COL)
-		res = detail::mem_col_matrix_store::create(get_num_rows(),
-				m.get_num_cols(), right_op.get_output_type());
-	else
-		res = detail::mem_row_matrix_store::create(get_num_rows(),
-				m.get_num_cols(), right_op.get_output_type());
-
+	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+			get_num_rows(), m.get_num_cols(), store_layout(),
+			right_op.get_output_type(), get_num_nodes());
 	const detail::mem_matrix_store &mem_m
 		= dynamic_cast<const detail::mem_matrix_store &>(m.get_data());
 	if (is_wide())
@@ -236,13 +227,8 @@ dense_matrix::ptr mem_dense_matrix::mapply2(const dense_matrix &m,
 	// TODO be careful of NUMA.
 	const detail::mem_matrix_store &mem_mat
 		= dynamic_cast<const detail::mem_matrix_store &>(m.get_data());
-	detail::mem_matrix_store::ptr res;
-	if (store_layout() == matrix_layout_t::L_COL)
-		res = detail::mem_col_matrix_store::create(nrow, ncol,
-				op.get_output_type());
-	else
-		res = detail::mem_row_matrix_store::create(nrow, ncol,
-				op.get_output_type());
+	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+			nrow, ncol, store_layout(), op.get_output_type(), get_num_nodes());
 
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
@@ -292,13 +278,8 @@ dense_matrix::ptr mem_dense_matrix::sapply(const bulk_uoperate &op) const
 {
 	size_t nrow = this->get_num_rows();
 	size_t ncol = this->get_num_cols();
-	detail::mem_matrix_store::ptr res;
-	if (store_layout() == matrix_layout_t::L_COL)
-		res = detail::mem_col_matrix_store::create(nrow, ncol,
-				op.get_output_type());
-	else
-		res = detail::mem_row_matrix_store::create(nrow, ncol,
-				op.get_output_type());
+	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+			nrow, ncol, store_layout(), op.get_output_type(), get_num_nodes());
 
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
@@ -317,6 +298,9 @@ dense_matrix::ptr mem_dense_matrix::sapply(const bulk_uoperate &op) const
 		}
 	}
 	else {
+		if (this_store.get_portion_size().first != res->get_portion_size().first)
+			printf("%ld, %ld\n", this_store.get_portion_size().first,
+					res->get_portion_size().first);
 		assert(this_store.get_portion_size().first
 				== res->get_portion_size().first);
 #pragma omp parallel for

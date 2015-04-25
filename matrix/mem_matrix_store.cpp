@@ -23,6 +23,7 @@
 
 #include "mem_matrix_store.h"
 #include "local_matrix_store.h"
+#include "NUMA_dense_matrix.h"
 
 namespace fm
 {
@@ -31,6 +32,20 @@ namespace detail
 {
 
 const size_t mem_matrix_store::CHUNK_SIZE = 64 * 1024;
+
+mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
+		matrix_layout_t layout, const scalar_type &type, int num_nodes)
+{
+	if (num_nodes < 0) {
+		if (layout == matrix_layout_t::L_ROW)
+			return detail::mem_row_matrix_store::create(nrow, ncol, type);
+		else
+			return detail::mem_col_matrix_store::create(nrow, ncol, type);
+	}
+	else
+		return detail::NUMA_matrix_store::create(nrow, ncol, num_nodes,
+				layout, type);
+}
 
 local_matrix_store::ptr mem_col_matrix_store::get_portion(size_t id)
 {

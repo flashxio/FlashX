@@ -52,6 +52,9 @@ public:
 	static ptr cast(matrix_store::ptr store);
 	static const_ptr cast(matrix_store::const_ptr store);
 
+	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
+			const scalar_type &type, int num_nodes);
+
 	mem_matrix_store(size_t nrow, size_t ncol,
 			const scalar_type &type): matrix_store(nrow, ncol, true, type) {
 	}
@@ -62,6 +65,11 @@ public:
 
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
+
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const = 0;
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const = 0;
 
 	virtual bool write2file(const std::string &file_name) const = 0;
 
@@ -141,6 +149,10 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		return matrix_store::const_ptr();
+	}
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
@@ -218,6 +230,10 @@ public:
 
 	virtual matrix_store::const_ptr transpose() const;
 
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const {
+		return matrix_store::const_ptr();
+	}
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 
 	virtual matrix_layout_t store_layout() const {
@@ -275,6 +291,10 @@ public:
 	virtual matrix_store::const_ptr transpose() const;
 
 	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		return matrix_store::const_ptr();
+	}
 };
 
 /*
@@ -324,6 +344,10 @@ public:
 
 	virtual matrix_store::const_ptr transpose() const;
 
+	virtual matrix_store::const_ptr get_cols(
+			const std::vector<off_t> &idxs) const {
+		return matrix_store::const_ptr();
+	}
 	virtual matrix_store::const_ptr get_rows(const std::vector<off_t> &idxs) const;
 };
 

@@ -65,7 +65,7 @@ public:
 	}
 };
 
-size_t long_dim = 100000;
+size_t long_dim = 10000000;
 
 /*
  * This is a naive implementation of matrix multiplication.
@@ -79,6 +79,7 @@ mem_dense_matrix::ptr naive_multiply(const mem_dense_matrix &m1,
 			get_scalar_type<int>());
 	detail::mem_matrix_store &res_store
 		= (detail::mem_matrix_store &) res->get_data();
+#pragma omp parallel for
 	for (size_t i = 0; i < m1.get_num_rows(); i++) {
 		for (size_t j = 0; j < m2.get_num_cols(); j++) {
 			int sum = 0;
@@ -96,60 +97,69 @@ void verify_result(const mem_dense_matrix &m1, const mem_dense_matrix &m2)
 	assert(m1.get_num_rows() == m2.get_num_rows());
 	assert(m1.get_num_cols() == m2.get_num_cols());
 
+#pragma omp parallel for
 	for (size_t i = 0; i < m1.get_num_rows(); i++)
 		for (size_t j = 0; j < m1.get_num_cols(); j++)
 			assert(m1.get<int>(i, j) == m2.get<int>(i, j));
 }
 
-void test_multiply_scalar()
+void test_multiply_scalar(int num_nodes)
 {
 	printf("Test scalar multiplication\n");
 	mem_dense_matrix::ptr orig = mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10));
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10),
+			num_nodes);
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->multiply_scalar(10));
 	detail::mem_matrix_store &orig_store1
 		= (detail::mem_matrix_store &) orig->get_data();
 	detail::mem_matrix_store &res_store1
 		= (detail::mem_matrix_store &) res->get_data();
+#pragma omp parallel for
 	for (size_t i = 0; i < res_store1.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
 			assert(res_store1.get<int>(i, j) == orig_store1.get<int>(i, j) * 10);
 
 	orig = mem_dense_matrix::create(long_dim, 10, matrix_layout_t::L_ROW,
-			get_scalar_type<int>(), set_row_operate(10));
+			get_scalar_type<int>(), set_row_operate(10), num_nodes);
 	res = mem_dense_matrix::cast(orig->multiply_scalar(10));
 	detail::mem_matrix_store &orig_store2
 		= (detail::mem_matrix_store &) orig->get_data();
 	detail::mem_matrix_store &res_store2
 		= (detail::mem_matrix_store &) res->get_data();
+#pragma omp parallel for
 	for (size_t i = 0; i < res_store2.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store2.get_num_cols(); j++)
 			assert(res_store2.get<int>(i, j) == orig_store2.get<int>(i, j) * 10);
 }
 
-void test_ele_wise()
+void test_ele_wise(int num_nodes)
 {
 	printf("Test element-wise operations\n");
 	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10));
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10),
+			num_nodes);
 	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10));
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10),
+			num_nodes);
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(m1->add(*m2));
 	detail::mem_matrix_store &res_store = (detail::mem_matrix_store &) res->get_data();
 	detail::mem_matrix_store &m1_store
 		= (detail::mem_matrix_store &) m1->get_data();
+#pragma omp parallel for
 	for (size_t i = 0; i < res_store.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store.get_num_cols(); j++)
 			assert(res_store.get<int>(i, j) == m1_store.get<int>(i, j) * 2);
 }
 
-void test_multiply_col()
+void test_multiply_col(int num_nodes)
 {
 	printf("Test multiplication on tall matrix stored column wise\n");
 	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10));
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10),
+			num_nodes);
 	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(10, 9,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9));
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9),
+			num_nodes);
 	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on col_matrix\n");
@@ -157,12 +167,12 @@ void test_multiply_col()
 	verify_result(*res1, *correct);
 }
 
-void test_agg_col()
+void test_agg_col(int num_nodes)
 {
 	printf("Test aggregation on tall matrix stored column wise\n");
 	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(long_dim, 10,
 			matrix_layout_t::L_COL, get_scalar_type<size_t>(),
-			set_col_long_operate(10));
+			set_col_long_operate(10), num_nodes);
 	const bulk_operate &op
 		= m1->get_type().get_basic_ops().get_add();
 	scalar_variable::ptr res = m1->aggregate(op);
@@ -172,14 +182,15 @@ void test_agg_col()
 	assert(sum == (num_eles - 1) * num_eles / 2);
 }
 
-void test_multiply_wide_row()
+void test_multiply_wide_row(int num_nodes)
 {
 	printf("Test multiplication on wide matrix stored row wise\n");
 	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(10, long_dim,
 			matrix_layout_t::L_ROW, get_scalar_type<int>(),
-			set_row_operate(long_dim));
+			set_row_operate(long_dim), num_nodes);
 	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(long_dim, 9,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9));
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9),
+			num_nodes);
 	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on row_matrix X col_matrix\n");
@@ -187,13 +198,15 @@ void test_multiply_wide_row()
 	verify_result(*res1, *correct);
 }
 
-void test_multiply_tall_row()
+void test_multiply_tall_row(int num_nodes)
 {
 	printf("Test multiplication on tall matrix stored row wise\n");
 	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_ROW, get_scalar_type<int>(), set_col_operate(10));
+			matrix_layout_t::L_ROW, get_scalar_type<int>(), set_col_operate(10),
+			num_nodes);
 	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(10, 9,
-			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9));
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9),
+			num_nodes);
 	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on row_matrix\n");
@@ -201,12 +214,12 @@ void test_multiply_tall_row()
 	verify_result(*res1, *correct);
 }
 
-void test_agg_row()
+void test_agg_row(int num_nodes)
 {
 	printf("Test aggregation on tall matrix stored row wise\n");
 	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(long_dim, 10,
 			matrix_layout_t::L_ROW, get_scalar_type<size_t>(),
-			set_row_long_operate(10));
+			set_row_long_operate(10), num_nodes);
 	const bulk_operate &op
 		= m1->get_type().get_basic_ops().get_add();
 	scalar_variable::ptr res = m1->aggregate(op);
@@ -216,12 +229,12 @@ void test_agg_row()
 	assert(sum == (num_eles - 1) * num_eles / 2);
 }
 
-void test_agg_sub_col()
+void test_agg_sub_col(int num_nodes)
 {
 	printf("Test aggregation on a column-wise submatrix\n");
 	mem_dense_matrix::ptr col_m = mem_dense_matrix::create(long_dim, 10,
 			matrix_layout_t::L_COL, get_scalar_type<size_t>(),
-			set_col_long_operate(10));
+			set_col_long_operate(10), num_nodes);
 	std::vector<off_t> idxs(3);
 	idxs[0] = 1;
 	idxs[1] = 5;
@@ -242,12 +255,12 @@ void test_agg_sub_col()
 	assert(sum == expected);
 }
 
-void test_agg_sub_row()
+void test_agg_sub_row(int num_nodes)
 {
 	printf("Test aggregation on a row-wise submatrix\n");
 	mem_dense_matrix::ptr col_m = mem_dense_matrix::create(long_dim, 10,
 			matrix_layout_t::L_COL, get_scalar_type<size_t>(),
-			set_col_long_operate(10));
+			set_col_long_operate(10), num_nodes);
 	std::vector<off_t> idxs(3);
 	idxs[0] = 1;
 	idxs[1] = 5;
@@ -295,7 +308,7 @@ void test_rand_init()
 {
 	printf("test rand init\n");
 	mem_dense_matrix::ptr m = mem_dense_matrix::create_rand<double>(-1.0, 1.0,
-			long_dim, 10, matrix_layout_t::L_COL);
+			long_dim / 100, 10, matrix_layout_t::L_COL);
 	double sum = 0;
 	for (size_t i = 0; i < m->get_num_rows(); i++)
 		for (size_t j = 0; j < m->get_num_cols(); j++) {
@@ -416,15 +429,22 @@ void test_apply()
 
 int main()
 {
-	test_multiply_scalar();
-	test_ele_wise();
-	test_multiply_col();
-	test_agg_col();
-	test_multiply_wide_row();
-	test_multiply_tall_row();
-	test_agg_row();
-	test_agg_sub_col();
-	test_agg_sub_row();
+	test_multiply_scalar(-1);
+	test_multiply_scalar(4);
+	test_ele_wise(-1);
+	test_ele_wise(4);
+	test_multiply_col(-1);
+	test_multiply_col(4);
+	test_agg_col(-1);
+	test_agg_col(4);
+	test_multiply_wide_row(-1);
+	test_multiply_wide_row(4);
+	test_multiply_tall_row(-1);
+	test_multiply_tall_row(4);
+	test_agg_row(-1);
+	test_agg_row(4);
+	test_agg_sub_col(-1);
+	test_agg_sub_row(-1);
 	test_rand_init();
 #if 0
 	test_conv_row_col();
