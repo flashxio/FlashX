@@ -71,26 +71,25 @@ void test_eigen(size_t nrow, size_t ncol, size_t right_ncol)
  * This multiplies a tall column-wise matrix with a small column-wise matrix.
  */
 template<class Type>
-typename type_mem_dense_matrix<Type>::ptr test_MM1(size_t nrow, size_t ncol,
-		size_t right_ncol)
+mem_dense_matrix::ptr test_MM1(size_t nrow, size_t ncol, size_t right_ncol)
 {
 	struct timeval start, end;
 
 	printf("inner product of tall col-wise matrix: M(%ld x %ld) * M(%ld %ld)\n",
 			nrow, ncol, ncol, right_ncol);
 	gettimeofday(&start, NULL);
-	typename type_mem_dense_matrix<Type>::ptr m1
-		= type_mem_dense_matrix<Type>::create(nrow, ncol,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m1
+		= mem_dense_matrix::create(nrow, ncol, matrix_layout_t::L_COL,
+				get_scalar_type<Type>(), set_col_operate(ncol));
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to construct input column matrix\n",
 			time_diff(start, end));
-	typename type_mem_dense_matrix<Type>::ptr m2
-		= type_mem_dense_matrix<Type>::create(ncol, right_ncol,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m2
+		= mem_dense_matrix::create(ncol, right_ncol, matrix_layout_t::L_COL,
+				get_scalar_type<Type>(), set_col_operate(ncol));
 
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr res1 = m1->get_matrix()->multiply(*m2->get_matrix());
+	dense_matrix::ptr res1 = m1->multiply(*m2);
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply column matrix in parallel\n",
 			time_diff(start, end));
@@ -99,33 +98,32 @@ typename type_mem_dense_matrix<Type>::ptr test_MM1(size_t nrow, size_t ncol,
 	printf("The result matrix has %ld rows and %ld columns\n",
 			res1->get_num_rows(), res1->get_num_cols());
 
-	return type_mem_dense_matrix<Type>::create(mem_dense_matrix::cast(res1));
+	return mem_dense_matrix::cast(res1);
 }
 
 /*
  * This multiplies a tall row-wise matrix with a small column-wise matrix.
  */
 template<class Type>
-typename type_mem_dense_matrix<Type>::ptr test_MM1_5(size_t nrow, size_t ncol,
-		size_t right_ncol)
+mem_dense_matrix::ptr test_MM1_5(size_t nrow, size_t ncol, size_t right_ncol)
 {
 	struct timeval start, end;
 
 	printf("inner product of tall row-wise matrix: M(%ld x %ld) * M(%ld %ld)\n",
 			nrow, ncol, ncol, right_ncol);
 	gettimeofday(&start, NULL);
-	typename type_mem_dense_matrix<Type>::ptr m1
-		= type_mem_dense_matrix<Type>::create(nrow, ncol,
-				matrix_layout_t::L_ROW, set_row_operate(ncol));
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(nrow, ncol,
+				matrix_layout_t::L_ROW, get_scalar_type<Type>(),
+				set_row_operate(ncol));
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to construct input row matrix\n",
 			time_diff(start, end));
-	typename type_mem_dense_matrix<Type>::ptr m2
-		= type_mem_dense_matrix<Type>::create(ncol, right_ncol,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(ncol, right_ncol,
+				matrix_layout_t::L_COL, get_scalar_type<Type>(),
+				set_col_operate(ncol));
 
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr res1 = m1->get_matrix()->multiply(*m2->get_matrix());
+	dense_matrix::ptr res1 = m1->multiply(*m2);
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply row matrix in parallel\n",
 			time_diff(start, end));
@@ -134,7 +132,7 @@ typename type_mem_dense_matrix<Type>::ptr test_MM1_5(size_t nrow, size_t ncol,
 	printf("The result matrix has %ld rows and %ld columns\n",
 			res1->get_num_rows(), res1->get_num_cols());
 
-	return type_mem_dense_matrix<Type>::create(mem_dense_matrix::cast(res1));
+	return mem_dense_matrix::cast(res1);
 }
 
 /*
@@ -142,35 +140,33 @@ typename type_mem_dense_matrix<Type>::ptr test_MM1_5(size_t nrow, size_t ncol,
  * column-wise matrix. It should give us the best performance.
  */
 template<class Type>
-typename type_mem_dense_matrix<Type>::ptr test_MM2(size_t nrow, size_t ncol,
-		size_t right_ncol)
+mem_dense_matrix::ptr test_MM2(size_t nrow, size_t ncol, size_t right_ncol)
 {
 	struct timeval start, end;
 
 	printf("test tall row-wise matrix (best case): M(%ld x %ld) * M(%ld %ld)\n",
 			nrow, ncol, ncol, right_ncol);
 	gettimeofday(&start, NULL);
-	typename type_mem_dense_matrix<Type>::ptr m1
-		= type_mem_dense_matrix<Type>::create(nrow, ncol,
-				matrix_layout_t::L_ROW, set_row_operate(ncol));
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(nrow, ncol,
+				matrix_layout_t::L_ROW, get_scalar_type<Type>(),
+				set_row_operate(ncol));
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to construct input row matrix\n",
 			time_diff(start, end));
-	typename type_mem_dense_matrix<Type>::ptr m2
-		= type_mem_dense_matrix<Type>::create(ncol, right_ncol,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(ncol, right_ncol,
+				matrix_layout_t::L_COL, get_scalar_type<Type>(),
+				set_col_operate(ncol));
 	
-	typename type_mem_dense_matrix<Type>::ptr res_m
-		= type_mem_dense_matrix<Type>::create(nrow, right_ncol,
-				matrix_layout_t::L_ROW);
+	mem_dense_matrix::ptr res_m = mem_dense_matrix::create(nrow, right_ncol,
+				matrix_layout_t::L_ROW, get_scalar_type<Type>());
 
 	gettimeofday(&start, NULL);
 	const detail::mem_row_matrix_store &row_m
-		= (const detail::mem_row_matrix_store &) m1->get_matrix()->get_data();
+		= (const detail::mem_row_matrix_store &) m1->get_data();
 	const detail::mem_col_matrix_store &col_m
-		= (const detail::mem_col_matrix_store &) m2->get_matrix()->get_data();
+		= (const detail::mem_col_matrix_store &) m2->get_data();
 	const detail::mem_row_matrix_store &res_row_m
-		= (const detail::mem_row_matrix_store &) res_m->get_matrix()->get_data();
+		= (const detail::mem_row_matrix_store &) res_m->get_data();
 #pragma omp parallel for
 	for (size_t i = 0; i < nrow; i++) {
 		const Type *in_row = (const Type *) row_m.get_row(i);
@@ -193,35 +189,33 @@ typename type_mem_dense_matrix<Type>::ptr test_MM2(size_t nrow, size_t ncol,
  * directly. So this implementation potentially generates many CPU cache misses.
  */
 template<class Type>
-typename type_mem_dense_matrix<Type>::ptr test_MM3(size_t nrow, size_t ncol,
-		size_t right_ncol)
+mem_dense_matrix::ptr test_MM3(size_t nrow, size_t ncol, size_t right_ncol)
 {
 	struct timeval start, end;
 
 	printf("test tall col-wise matrix (bad impl): M(%ld x %ld) * M(%ld %ld)\n",
 			nrow, ncol, ncol, right_ncol);
 	gettimeofday(&start, NULL);
-	typename type_mem_dense_matrix<Type>::ptr m1
-		= type_mem_dense_matrix<Type>::create(nrow, ncol,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(nrow, ncol,
+				matrix_layout_t::L_COL, get_scalar_type<Type>(),
+				set_col_operate(ncol));
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to construct input column matrix\n",
 			time_diff(start, end));
-	typename type_mem_dense_matrix<Type>::ptr m2
-		= type_mem_dense_matrix<Type>::create(ncol, right_ncol,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(ncol, right_ncol,
+				matrix_layout_t::L_COL, get_scalar_type<Type>(),
+				set_col_operate(ncol));
 	
-	typename type_mem_dense_matrix<Type>::ptr res_m
-		= type_mem_dense_matrix<Type>::create(nrow, right_ncol,
-				matrix_layout_t::L_COL);
+	mem_dense_matrix::ptr res_m = mem_dense_matrix::create(nrow, right_ncol,
+				matrix_layout_t::L_COL, get_scalar_type<Type>());
 
 	gettimeofday(&start, NULL);
 	const detail::mem_col_matrix_store &left_m
-		= (const detail::mem_col_matrix_store &) m1->get_matrix()->get_data();
+		= (const detail::mem_col_matrix_store &) m1->get_data();
 	const detail::mem_col_matrix_store &right_m
-		= (const detail::mem_col_matrix_store &) m2->get_matrix()->get_data();
+		= (const detail::mem_col_matrix_store &) m2->get_data();
 	const detail::mem_col_matrix_store &res_col_m
-		= (const detail::mem_col_matrix_store &) res_m->get_matrix()->get_data();
+		= (const detail::mem_col_matrix_store &) res_m->get_data();
 #pragma omp parallel for
 	for (size_t i = 0; i < nrow; i++) {
 		for (size_t j = 0; j < right_ncol; j++) {
@@ -241,25 +235,25 @@ typename type_mem_dense_matrix<Type>::ptr test_MM3(size_t nrow, size_t ncol,
 }
 
 template<class Type>
-typename type_mem_dense_matrix<Type>::ptr test_MV1(size_t nrow, size_t ncol)
+mem_dense_matrix::ptr test_MV1(size_t nrow, size_t ncol)
 {
 	printf("test a tall col-wise matrix: M(%ld x %ld) * v(%ld)\n",
 			nrow, ncol, ncol);
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	typename type_mem_dense_matrix<Type>::ptr m1
-		= type_mem_dense_matrix<Type>::create(nrow, ncol,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(nrow, ncol,
+				matrix_layout_t::L_COL, get_scalar_type<Type>(),
+				set_col_operate(ncol));
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to construct input column matrix\n",
 			time_diff(start, end));
-	typename type_mem_dense_matrix<Type>::ptr m2
-		= type_mem_dense_matrix<Type>::create(ncol, 1,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(ncol, 1,
+				matrix_layout_t::L_COL, get_scalar_type<Type>(),
+				set_col_operate(ncol));
 
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr res1 = m1->get_matrix()->multiply(*m2->get_matrix());
+	dense_matrix::ptr res1 = m1->multiply(*m2);
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply column matrix in parallel\n",
 			time_diff(start, end));
@@ -267,29 +261,29 @@ typename type_mem_dense_matrix<Type>::ptr test_MV1(size_t nrow, size_t ncol)
 	assert(res1->get_num_cols() == m2->get_num_cols());
 	printf("The result matrix has %ld rows and %ld columns\n",
 			res1->get_num_rows(), res1->get_num_cols());
-	return type_mem_dense_matrix<Type>::create(mem_dense_matrix::cast(res1));
+	return mem_dense_matrix::cast(res1);
 }
 
 template<class Type>
-typename type_mem_dense_matrix<Type>::ptr test_MV2(size_t nrow, size_t ncol)
+mem_dense_matrix::ptr test_MV2(size_t nrow, size_t ncol)
 {
 	printf("test a wide row-wise matrix: M(%ld x %ld) * v(%ld)\n",
 			nrow, ncol, ncol);
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	typename type_mem_dense_matrix<Type>::ptr m1
-		= type_mem_dense_matrix<Type>::create(nrow, ncol,
-				matrix_layout_t::L_ROW, set_row_operate(ncol));
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(nrow, ncol,
+				matrix_layout_t::L_ROW, get_scalar_type<Type>(),
+				set_row_operate(ncol));
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to construct input row matrix\n",
 			time_diff(start, end));
-	typename type_mem_dense_matrix<Type>::ptr m2
-		= type_mem_dense_matrix<Type>::create(ncol, 1,
-				matrix_layout_t::L_COL, set_col_operate(ncol));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(ncol, 1,
+				matrix_layout_t::L_COL, get_scalar_type<Type>(),
+				set_col_operate(ncol));
 
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr res1 = m1->get_matrix()->multiply(*m2->get_matrix());
+	dense_matrix::ptr res1 = m1->multiply(*m2);
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply row matrix in parallel\n",
 			time_diff(start, end));
@@ -297,19 +291,18 @@ typename type_mem_dense_matrix<Type>::ptr test_MV2(size_t nrow, size_t ncol)
 	assert(res1->get_num_cols() == m2->get_num_cols());
 	printf("The result matrix has %ld rows and %ld columns\n",
 			res1->get_num_rows(), res1->get_num_cols());
-	return type_mem_dense_matrix<Type>::create(mem_dense_matrix::cast(res1));
+	return mem_dense_matrix::cast(res1);
 }
 
 template<class Type>
-void check_result(typename type_mem_dense_matrix<Type>::ptr m1,
-		typename type_mem_dense_matrix<Type>::ptr m2)
+void check_result(mem_dense_matrix::ptr m1, mem_dense_matrix::ptr m2)
 {
 	assert(m1->get_num_rows() == m2->get_num_rows());
 	assert(m1->get_num_cols() == m2->get_num_cols());
 #pragma omp parallel for
 	for (size_t i = 0; i < m1->get_num_rows(); i++) {
 		for (size_t j = 0; j < m1->get_num_cols(); j++) {
-			assert(m1->get(i, j) == m2->get(i, j));
+			assert(m1->get<Type>(i, j) == m2->get<Type>(i, j));
 		}
 	}
 }
@@ -320,8 +313,8 @@ void matrix_mul_tests()
 	size_t ncol = 20;
 	printf("Multiplication of a large and tall matrix and a small square matrix\n");
 	test_eigen<double>(nrow, ncol, ncol);
-	D_mem_dense_matrix::ptr res1;
-	D_mem_dense_matrix::ptr res2;
+	mem_dense_matrix::ptr res1;
+	mem_dense_matrix::ptr res2;
 	res1 = test_MM1<double>(nrow, ncol, ncol);
 	res2 = test_MM1_5<double>(nrow, ncol, ncol);
 	check_result<double>(res1, res2);

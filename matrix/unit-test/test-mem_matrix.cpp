@@ -71,18 +71,19 @@ size_t long_dim = 100000;
  * This is a naive implementation of matrix multiplication.
  * It should be correct
  */
-I_mem_dense_matrix::ptr naive_multiply(const I_mem_dense_matrix &m1,
-		const I_mem_dense_matrix &m2)
+mem_dense_matrix::ptr naive_multiply(const mem_dense_matrix &m1,
+		const mem_dense_matrix &m2)
 {
-	I_mem_dense_matrix::ptr res = I_mem_dense_matrix::create(
-			m1.get_num_rows(), m2.get_num_cols(), matrix_layout_t::L_ROW);
+	mem_dense_matrix::ptr res = mem_dense_matrix::create(
+			m1.get_num_rows(), m2.get_num_cols(), matrix_layout_t::L_ROW,
+			get_scalar_type<int>());
 	detail::mem_matrix_store &res_store
-		= (detail::mem_matrix_store &) res->get_matrix()->get_data();
+		= (detail::mem_matrix_store &) res->get_data();
 	for (size_t i = 0; i < m1.get_num_rows(); i++) {
 		for (size_t j = 0; j < m2.get_num_cols(); j++) {
 			int sum = 0;
 			for (size_t k = 0; k < m1.get_num_cols(); k++) {
-				sum += m1.get(i, k) * m2.get(k, j);
+				sum += m1.get<int>(i, k) * m2.get<int>(k, j);
 			}
 			res_store.set<int>(i, j, sum);
 		}
@@ -90,22 +91,21 @@ I_mem_dense_matrix::ptr naive_multiply(const I_mem_dense_matrix &m1,
 	return res;
 }
 
-void verify_result(const I_mem_dense_matrix &m1, const I_mem_dense_matrix &m2)
+void verify_result(const mem_dense_matrix &m1, const mem_dense_matrix &m2)
 {
 	assert(m1.get_num_rows() == m2.get_num_rows());
 	assert(m1.get_num_cols() == m2.get_num_cols());
 
 	for (size_t i = 0; i < m1.get_num_rows(); i++)
 		for (size_t j = 0; j < m1.get_num_cols(); j++)
-			assert(m1.get(i, j) == m2.get(i, j));
+			assert(m1.get<int>(i, j) == m2.get<int>(i, j));
 }
 
 void test_multiply_scalar()
 {
 	printf("Test scalar multiplication\n");
-	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, set_col_operate(10));
-	mem_dense_matrix::ptr orig = mem_dense_matrix::cast(m1->get_matrix());
+	mem_dense_matrix::ptr orig = mem_dense_matrix::create(long_dim, 10,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10));
 	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->multiply_scalar(10));
 	detail::mem_matrix_store &orig_store1
 		= (detail::mem_matrix_store &) orig->get_data();
@@ -115,9 +115,8 @@ void test_multiply_scalar()
 		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
 			assert(res_store1.get<int>(i, j) == orig_store1.get<int>(i, j) * 10);
 
-	m1 = I_mem_dense_matrix::create(long_dim, 10, matrix_layout_t::L_ROW,
-			set_row_operate(10));
-	orig = mem_dense_matrix::cast(m1->get_matrix());
+	orig = mem_dense_matrix::create(long_dim, 10, matrix_layout_t::L_ROW,
+			get_scalar_type<int>(), set_row_operate(10));
 	res = mem_dense_matrix::cast(orig->multiply_scalar(10));
 	detail::mem_matrix_store &orig_store2
 		= (detail::mem_matrix_store &) orig->get_data();
@@ -131,15 +130,14 @@ void test_multiply_scalar()
 void test_ele_wise()
 {
 	printf("Test element-wise operations\n");
-	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, set_col_operate(10));
-	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, set_col_operate(10));
-	mem_dense_matrix::ptr res = mem_dense_matrix::cast(
-			m1->get_matrix()->add(*m2->get_matrix()));
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(long_dim, 10,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(long_dim, 10,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10));
+	mem_dense_matrix::ptr res = mem_dense_matrix::cast(m1->add(*m2));
 	detail::mem_matrix_store &res_store = (detail::mem_matrix_store &) res->get_data();
 	detail::mem_matrix_store &m1_store
-		= (detail::mem_matrix_store &) m1->get_matrix()->get_data();
+		= (detail::mem_matrix_store &) m1->get_data();
 	for (size_t i = 0; i < res_store.get_num_rows(); i++)
 		for (size_t j = 0; j < res_store.get_num_cols(); j++)
 			assert(res_store.get<int>(i, j) == m1_store.get<int>(i, j) * 2);
@@ -148,16 +146,14 @@ void test_ele_wise()
 void test_multiply_col()
 {
 	printf("Test multiplication on tall matrix stored column wise\n");
-	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_COL, set_col_operate(10));
-	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(10, 9,
-			matrix_layout_t::L_COL, set_col_operate(9));
-	I_mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(long_dim, 10,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(10, 9,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9));
+	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on col_matrix\n");
-	dense_matrix::ptr res_mat = m1->get_matrix()->multiply(*m2->get_matrix());
-	I_mem_dense_matrix::ptr res1
-		= I_mem_dense_matrix::create(mem_dense_matrix::cast(res_mat));
+	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2));
 	verify_result(*res1, *correct);
 }
 
@@ -179,32 +175,29 @@ void test_agg_col()
 void test_multiply_wide_row()
 {
 	printf("Test multiplication on wide matrix stored row wise\n");
-	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(10, long_dim,
-			matrix_layout_t::L_ROW, set_row_operate(long_dim));
-	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(long_dim, 9,
-			matrix_layout_t::L_COL, set_col_operate(9));
-	I_mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(10, long_dim,
+			matrix_layout_t::L_ROW, get_scalar_type<int>(),
+			set_row_operate(long_dim));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(long_dim, 9,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9));
+	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on row_matrix X col_matrix\n");
-	dense_matrix::ptr res_mat = m1->get_matrix()->multiply(*m2->get_matrix());
-	I_mem_dense_matrix::ptr res1
-		= I_mem_dense_matrix::create(mem_dense_matrix::cast(res_mat));
+	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2));
 	verify_result(*res1, *correct);
 }
 
 void test_multiply_tall_row()
 {
 	printf("Test multiplication on tall matrix stored row wise\n");
-	I_mem_dense_matrix::ptr m1 = I_mem_dense_matrix::create(long_dim, 10,
-			matrix_layout_t::L_ROW, set_col_operate(10));
-	I_mem_dense_matrix::ptr m2 = I_mem_dense_matrix::create(10, 9,
-			matrix_layout_t::L_COL, set_col_operate(9));
-	I_mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create(long_dim, 10,
+			matrix_layout_t::L_ROW, get_scalar_type<int>(), set_col_operate(10));
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create(10, 9,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(9));
+	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on row_matrix\n");
-	dense_matrix::ptr res_mat = m1->get_matrix()->multiply(*m2->get_matrix());
-	I_mem_dense_matrix::ptr res1
-		= I_mem_dense_matrix::create(mem_dense_matrix::cast(res_mat));
+	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2));
 	verify_result(*res1, *correct);
 }
 

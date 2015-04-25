@@ -108,64 +108,6 @@ public:
 	}
 };
 
-template<class EntryType>
-class type_mem_dense_matrix
-{
-	mem_dense_matrix::ptr m;
-
-	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout) {
-		m = mem_dense_matrix::create(nrow, ncol, layout,
-				get_scalar_type<EntryType>());
-	}
-
-	type_mem_dense_matrix(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const type_set_operate<EntryType> &op) {
-		m = mem_dense_matrix::create(nrow, ncol, layout,
-				get_scalar_type<EntryType>(), op);
-	}
-
-	type_mem_dense_matrix(mem_dense_matrix::ptr m) {
-		this->m = m;
-	}
-public:
-	typedef std::shared_ptr<type_mem_dense_matrix<EntryType> > ptr;
-
-	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout) {
-		return ptr(new type_mem_dense_matrix<EntryType>(nrow, ncol, layout));
-	}
-
-	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
-			const type_set_operate<EntryType> &op) {
-		return ptr(new type_mem_dense_matrix<EntryType>(nrow, ncol, layout, op));
-	}
-
-	static ptr create(mem_dense_matrix::ptr m) {
-		assert(m->get_type() == get_scalar_type<EntryType>());
-		return ptr(new type_mem_dense_matrix<EntryType>(m));
-	}
-
-	size_t get_num_rows() const {
-		return m->get_num_rows();
-	}
-
-	size_t get_num_cols() const {
-		return m->get_num_cols();
-	}
-
-	EntryType get(size_t row, size_t col) const {
-		const detail::mem_matrix_store &mem_store
-			= (const detail::mem_matrix_store &) m->get_data();
-		return mem_store.get<EntryType>(row, col);
-	}
-
-	const mem_dense_matrix::ptr get_matrix() const {
-		return m;
-	}
-};
-
-typedef type_mem_dense_matrix<int> I_mem_dense_matrix;
-typedef type_mem_dense_matrix<double> D_mem_dense_matrix;
-
 }
 
 #endif
