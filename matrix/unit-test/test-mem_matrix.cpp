@@ -2,6 +2,7 @@
 
 #include "mem_dense_matrix.h"
 #include "mem_vector.h"
+#include "mem_worker_thread.h"
 
 using namespace fm;
 
@@ -427,22 +428,31 @@ void test_apply()
 
 #endif
 
-int main()
+int main(int argc, char *argv[])
 {
+	int num_nodes = 1;
+	int num_threads = 8;
+	if (argc >= 3) {
+		num_nodes = atoi(argv[1]);
+		num_threads = atoi(argv[2]);
+	}
+	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
+			num_threads / num_nodes);
+
 	test_multiply_scalar(-1);
-	test_multiply_scalar(4);
+	test_multiply_scalar(num_nodes);
 	test_ele_wise(-1);
-	test_ele_wise(4);
+	test_ele_wise(num_nodes);
 	test_multiply_col(-1);
-	test_multiply_col(4);
+	test_multiply_col(num_nodes);
 	test_agg_col(-1);
-	test_agg_col(4);
+	test_agg_col(num_nodes);
 	test_multiply_wide_row(-1);
-	test_multiply_wide_row(4);
+	test_multiply_wide_row(num_nodes);
 	test_multiply_tall_row(-1);
-	test_multiply_tall_row(4);
+	test_multiply_tall_row(num_nodes);
 	test_agg_row(-1);
-	test_agg_row(4);
+	test_agg_row(num_nodes);
 	test_agg_sub_col(-1);
 	test_agg_sub_row(-1);
 	test_rand_init();

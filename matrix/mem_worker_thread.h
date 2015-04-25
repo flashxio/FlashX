@@ -30,6 +30,20 @@ namespace fm
 namespace detail
 {
 
+class pool_task_thread: public task_thread
+{
+	int pool_thread_id;
+public:
+	pool_task_thread(int pool_thread_id, const std::string &name,
+			int node): task_thread(name, node) {
+		this->pool_thread_id = pool_thread_id;
+	}
+
+	int get_pool_thread_id() const {
+		return pool_thread_id;
+	}
+};
+
 /*
  * This is designed to replace openmp for parallelization while respecting
  * NUMA data locality.
@@ -37,7 +51,7 @@ namespace detail
 class mem_thread_pool
 {
 	std::vector<size_t> ntasks_per_node;
-	std::vector<std::vector<std::shared_ptr<task_thread> > > threads;
+	std::vector<std::vector<std::shared_ptr<pool_task_thread> > > threads;
 
 	mem_thread_pool(int num_nodes, int nthreads_per_node);
 public:
@@ -48,6 +62,14 @@ public:
 
 	static ptr create(int num_nodes, int nthreads_per_node) {
 		return ptr(new mem_thread_pool(num_nodes, nthreads_per_node));
+	}
+
+	size_t get_num_nodes() const {
+		return ntasks_per_node.size();
+	}
+	size_t get_num_threads() const {
+		assert(!threads.empty());
+		return threads.size() * threads.front().size();
 	}
 
 	void process_task(int node_id, thread_task *task);

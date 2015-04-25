@@ -34,8 +34,8 @@ mem_thread_pool::mem_thread_pool(int num_nodes, int nthreads_per_node)
 		for (int j = 0; j < nthreads_per_node; j++) {
 			std::string name
 				= std::string("mem-worker-") + itoa(i) + "-" + itoa(j);
-			threads[i][j] = std::shared_ptr<task_thread>(new task_thread(
-						name, i));
+			threads[i][j] = std::shared_ptr<pool_task_thread>(
+					new pool_task_thread(i * nthreads_per_node + j, name, i));
 			threads[i][j]->start();
 		}
 	}

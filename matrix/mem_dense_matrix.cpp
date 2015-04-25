@@ -34,6 +34,7 @@
 #include "local_matrix_store.h"
 #include "mem_matrix_store.h"
 #include "NUMA_dense_matrix.h"
+#include "mem_worker_thread.h"
 
 namespace fm
 {
@@ -102,6 +103,34 @@ dense_matrix::ptr mem_dense_matrix::inner_prod(const dense_matrix &m,
 	return dense_matrix::ptr(new mem_dense_matrix(res));
 }
 
+namespace
+{
+
+class inner_prod_tall_task: public thread_task
+{
+	detail::local_matrix_store::const_ptr local_right;
+	detail::local_matrix_store::const_ptr local_store;
+	detail::local_matrix_store::ptr local_res;
+	const bulk_operate &left_op;
+	const bulk_operate &right_op;
+public:
+	inner_prod_tall_task(detail::local_matrix_store::const_ptr local_store,
+			detail::local_matrix_store::const_ptr local_right,
+			const bulk_operate &_left_op, const bulk_operate &_right_op,
+			detail::local_matrix_store::ptr local_res): left_op(
+				_left_op), right_op(_right_op) {
+		this->local_right = local_right;
+		this->local_store = local_store;
+		this->local_res = local_res;
+	}
+	void run() {
+		detail::inner_prod(*local_store, *local_right, left_op, right_op,
+				*local_res);
+	}
+};
+
+}
+
 void mem_dense_matrix::inner_prod_tall(const detail::mem_matrix_store &m,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		detail::mem_matrix_store &res) const
@@ -114,7 +143,8 @@ void mem_dense_matrix::inner_prod_tall(const detail::mem_matrix_store &m,
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
 	size_t num_chunks = this_store.get_num_portions();
 	assert(this_store.get_portion_size().first == res.get_portion_size().first);
-#pragma omp parallel for
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
 	for (size_t i = 0; i < num_chunks; i++) {
 		detail::local_matrix_store::const_ptr local_store
 			= this_store.get_portion(i);
@@ -123,52 +153,106 @@ void mem_dense_matrix::inner_prod_tall(const detail::mem_matrix_store &m,
 				== local_res->get_global_start_row());
 		assert(local_store->get_global_start_col()
 				== local_res->get_global_start_col());
+		assert(local_store->get_node_id() == local_res->get_node_id());
 		local_res->reset_data();
-		detail::inner_prod(*local_store, *local_right, left_op, right_op,
-				*local_res);
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new inner_prod_tall_task(local_store, local_right,
+					left_op, right_op, local_res));
 	}
+	mem_threads->wait4complete();
+}
+
+namespace
+{
+
+class inner_prod_wide_task: public thread_task
+{
+	detail::local_matrix_store::const_ptr local_store;
+	detail::local_matrix_store::const_ptr local_store2;
+	const bulk_operate &left_op;
+	const bulk_operate &right_op;
+	const detail::mem_matrix_store &res;
+	std::vector<detail::local_matrix_store::ptr> &local_ms;
+public:
+	inner_prod_wide_task(detail::local_matrix_store::const_ptr local_store,
+			detail::local_matrix_store::const_ptr local_store2,
+			const bulk_operate &_left_op, const bulk_operate &_right_op,
+			const detail::mem_matrix_store &_res,
+			std::vector<detail::local_matrix_store::ptr> &_local_ms): left_op(
+				_left_op), right_op(_right_op), res(_res), local_ms(_local_ms) {
+		this->local_store = local_store;
+		this->local_store2 = local_store2;
+	}
+
+	void run();
+};
+
+void inner_prod_wide_task::run()
+{
+	detail::pool_task_thread *curr
+		= dynamic_cast<detail::pool_task_thread *>(thread::get_curr_thread());
+	int thread_id = curr->get_pool_thread_id();
+	detail::local_matrix_store::ptr local_m = local_ms[thread_id];
+	if (local_m == NULL) {
+		int node_id = curr->get_node_id();
+		if (res.store_layout() == matrix_layout_t::L_COL)
+			local_m = detail::local_matrix_store::ptr(
+					new detail::local_buf_col_matrix_store(0, 0,
+						res.get_num_rows(), res.get_num_cols(),
+						right_op.get_output_type(), node_id));
+		else
+			local_m = detail::local_matrix_store::ptr(
+					new detail::local_buf_row_matrix_store(0, 0,
+						res.get_num_rows(), res.get_num_cols(),
+						right_op.get_output_type(), node_id));
+		local_m->reset_data();
+		local_ms[thread_id] = local_m;
+	}
+	detail::inner_prod(*local_store, *local_store2, left_op, right_op,
+			*local_m);
+}
+
 }
 
 void mem_dense_matrix::inner_prod_wide(const detail::mem_matrix_store &m,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		detail::mem_matrix_store &res) const
 {
-	size_t nrow = this->get_num_rows();
-	int nthreads = get_num_omp_threads();
-	std::vector<detail::local_matrix_store::ptr> local_ms(nthreads);
+	assert(this->get_num_rows() == res.get_num_rows());
+	assert(m.get_num_cols() == res.get_num_cols());
 
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
 	size_t num_chunks = this_store.get_num_portions();
 	assert(this_store.get_portion_size().second == res.get_portion_size().first);
-#pragma omp parallel
-	{
-		// TODO we need to get the real node id.
-		int node_id = -1;
-		detail::local_matrix_store::ptr local_m;
-		if (res.store_layout() == matrix_layout_t::L_COL)
-			local_m = detail::local_matrix_store::ptr(
-					new detail::local_buf_col_matrix_store(0, 0, nrow,
-						m.get_num_cols(), right_op.get_output_type(), node_id));
-		else
-			local_m = detail::local_matrix_store::ptr(
-					new detail::local_buf_row_matrix_store(0, 0, nrow,
-						m.get_num_cols(), right_op.get_output_type(), node_id));
-		local_m->reset_data();
-#pragma omp for
-		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::const_ptr local_store
-				= this_store.get_portion(i);
-			detail::local_matrix_store::const_ptr local_store2 = m.get_portion(i);
-			assert(local_store->get_global_start_row()
-					== local_store2->get_global_start_col());
-			assert(local_store->get_global_start_col()
-					== local_store2->get_global_start_row());
-			detail::inner_prod(*local_store, *local_store2, left_op, right_op,
-					*local_m);
-		}
-		local_ms[get_omp_thread_num()] = local_m;
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	int nthreads = mem_threads->get_num_threads();
+	std::vector<detail::local_matrix_store::ptr> local_ms(nthreads);
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::const_ptr local_store
+			= this_store.get_portion(i);
+		detail::local_matrix_store::const_ptr local_store2 = m.get_portion(i);
+		assert(local_store->get_global_start_row()
+				== local_store2->get_global_start_col());
+		assert(local_store->get_global_start_col()
+				== local_store2->get_global_start_row());
+		assert(local_store->get_node_id() == local_store2->get_node_id());
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new inner_prod_wide_task(local_store, local_store2,
+					left_op, right_op, res, local_ms));
 	}
+	mem_threads->wait4complete();
 
 	// Aggregate the results from omp threads.
 	res.reset_data();
@@ -179,40 +263,93 @@ void mem_dense_matrix::inner_prod_wide(const detail::mem_matrix_store &m,
 		detail::mapply2(*local_res, *local_ms[j], right_op, *local_res);
 }
 
+namespace
+{
+
+class aggregate_task: public thread_task
+{
+	detail::local_matrix_store::const_ptr local_store;
+	const bulk_operate &op;
+	char *local_res;
+public:
+	aggregate_task(detail::local_matrix_store::const_ptr local_store,
+			const bulk_operate &_op, char *local_res): op(_op) {
+		this->local_store = local_store;
+		this->local_res = local_res;
+	}
+
+	void run() {
+		detail::aggregate(*local_store, op, local_res);
+	}
+};
+
+}
+
 scalar_variable::ptr mem_dense_matrix::aggregate(const bulk_operate &op) const
 {
 	if (!verify_aggregate(op))
 		return scalar_variable::ptr();
 	scalar_variable::ptr res = op.get_output_type().create_scalar();
-	char *raw_arr;
 
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
 	size_t num_chunks = this_store.get_num_portions();
-	if (is_wide()) {
-		raw_arr = (char *) malloc(res->get_size() * num_chunks);
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::const_ptr local_store
-				= this_store.get_portion(i);
-			detail::aggregate(*local_store, op, raw_arr + i * get_entry_size());
-		}
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	std::unique_ptr<char[]> raw_arr(new char[res->get_size() * num_chunks]);
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::const_ptr local_store
+			= this_store.get_portion(i);
+
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new aggregate_task(local_store, op,
+					raw_arr.get() + i * op.output_entry_size()));
 	}
-	else {
-		raw_arr = (char *) malloc(res->get_size() * num_chunks);
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::const_ptr local_store
-				= this_store.get_portion(i);
-			detail::aggregate(*local_store, op, raw_arr + i * get_entry_size());
-		}
-	}
+	mem_threads->wait4complete();
 
 	char raw_res[res->get_size()];
-	op.runA(num_chunks, raw_arr, raw_res);
-	free(raw_arr);
+	op.runA(num_chunks, raw_arr.get(), raw_res);
 	res->set_raw(raw_res, res->get_size());
 	return res;
+}
+
+namespace
+{
+
+class mapply2_task: public thread_task
+{
+	detail::local_matrix_store::const_ptr local_store;
+	detail::local_matrix_store::const_ptr local_store2;
+	detail::local_matrix_store::ptr local_res;
+	const bulk_operate &op;
+public:
+	mapply2_task(detail::local_matrix_store::const_ptr local_store,
+			detail::local_matrix_store::const_ptr local_store2,
+			const bulk_operate &_op,
+			detail::local_matrix_store::ptr local_res): op(_op) {
+		this->local_store = local_store;
+		this->local_store2 = local_store2;
+		this->local_res = local_res;
+	}
+
+	void run() {
+		assert(local_store->get_global_start_col()
+				== local_store2->get_global_start_col());
+		assert(local_store->get_global_start_col()
+				== local_res->get_global_start_col());
+		assert(local_store->get_global_start_row()
+				== local_store2->get_global_start_row());
+		assert(local_store->get_global_start_row()
+				== local_res->get_global_start_row());
+		detail::mapply2(*local_store, *local_store2, op, *local_res);
+	}
+};
+
 }
 
 dense_matrix::ptr mem_dense_matrix::mapply2(const dense_matrix &m,
@@ -226,7 +363,6 @@ dense_matrix::ptr mem_dense_matrix::mapply2(const dense_matrix &m,
 	size_t nrow = this->get_num_rows();
 	size_t ncol = this->get_num_cols();
 
-	// TODO be careful of NUMA.
 	const detail::mem_matrix_store &mem_mat
 		= dynamic_cast<const detail::mem_matrix_store &>(m.get_data());
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
@@ -240,40 +376,60 @@ dense_matrix::ptr mem_dense_matrix::mapply2(const dense_matrix &m,
 				== mem_mat.get_portion_size().second);
 		assert(this_store.get_portion_size().second
 				== res->get_portion_size().second);
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::const_ptr local_store
-				= this_store.get_portion(i);
-			detail::local_matrix_store::const_ptr local_store2
-				= mem_mat.get_portion(i);
-			detail::local_matrix_store::ptr local_res = res->get_portion(i);
-			assert(local_store->get_global_start_col()
-					== local_store2->get_global_start_col());
-			assert(local_store->get_global_start_col()
-					== local_res->get_global_start_col());
-			detail::mapply2(*local_store, *local_store2, op, *local_res);
-		}
 	}
 	else {
 		assert(this_store.get_portion_size().first
 				== mem_mat.get_portion_size().first);
 		assert(this_store.get_portion_size().first
 				== res->get_portion_size().first);
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::const_ptr local_store
-				= this_store.get_portion(i);
-			detail::local_matrix_store::const_ptr local_store2
-				= mem_mat.get_portion(i);
-			detail::local_matrix_store::ptr local_res = res->get_portion(i);
-			assert(local_store->get_global_start_row()
-					== local_store2->get_global_start_row());
-			assert(local_store->get_global_start_row()
-					== local_res->get_global_start_row());
-			detail::mapply2(*local_store, *local_store2, op, *local_res);
-		}
 	}
+
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::const_ptr local_store
+			= this_store.get_portion(i);
+		detail::local_matrix_store::const_ptr local_store2
+			= mem_mat.get_portion(i);
+		detail::local_matrix_store::ptr local_res = res->get_portion(i);
+
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new mapply2_task(local_store, local_store2, op, local_res));
+	}
+	mem_threads->wait4complete();
 	return mem_dense_matrix::ptr(new mem_dense_matrix(res));
+}
+
+namespace
+{
+
+class sapply_task: public thread_task
+{
+	detail::local_matrix_store::const_ptr local_store;
+	detail::local_matrix_store::ptr local_res;
+	const bulk_uoperate &op;
+public:
+	sapply_task(detail::local_matrix_store::const_ptr local_store,
+			const bulk_uoperate &_op,
+			detail::local_matrix_store::ptr local_res): op(_op) {
+		this->local_store = local_store;
+		this->local_res = local_res;
+	}
+
+	void run() {
+		assert(local_store->get_global_start_col()
+				== local_res->get_global_start_col());
+		assert(local_store->get_global_start_row()
+				== local_res->get_global_start_row());
+		detail::sapply(*local_store, op, *local_res);
+	}
+};
+
 }
 
 dense_matrix::ptr mem_dense_matrix::sapply(const bulk_uoperate &op) const
@@ -286,35 +442,29 @@ dense_matrix::ptr mem_dense_matrix::sapply(const bulk_uoperate &op) const
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
 	size_t num_chunks = this_store.get_num_portions();
-	if (is_wide()) {
+	if (is_wide())
 		assert(this_store.get_portion_size().second
 				== res->get_portion_size().second);
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::const_ptr local_store
-				= this_store.get_portion(i);
-			detail::local_matrix_store::ptr local_res = res->get_portion(i);
-			assert(local_res->get_global_start_col()
-					== local_store->get_global_start_col());
-			detail::sapply(*local_store, op, *local_res);
-		}
-	}
-	else {
-		if (this_store.get_portion_size().first != res->get_portion_size().first)
-			printf("%ld, %ld\n", this_store.get_portion_size().first,
-					res->get_portion_size().first);
+	else
 		assert(this_store.get_portion_size().first
 				== res->get_portion_size().first);
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			detail::local_matrix_store::const_ptr local_store
-				= this_store.get_portion(i);
-			detail::local_matrix_store::ptr local_res = res->get_portion(i);
-			assert(local_res->get_global_start_row()
-					== local_store->get_global_start_row());
-			detail::sapply(*local_store, op, *local_res);
-		}
+
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::const_ptr local_store
+			= this_store.get_portion(i);
+		detail::local_matrix_store::ptr local_res = res->get_portion(i);
+
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new sapply_task(local_store, op, local_res));
 	}
+	mem_threads->wait4complete();
 	return dense_matrix::ptr(new mem_dense_matrix(res));
 }
 
