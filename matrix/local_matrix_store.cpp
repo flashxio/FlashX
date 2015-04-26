@@ -189,6 +189,25 @@ void local_row_matrix_store::set_data(const set_operate &op)
 				get_global_start_col());
 }
 
+bool local_row_matrix_store::copy_from(const local_matrix_store &store)
+{
+	assert(store.store_layout() == matrix_layout_t::L_ROW);
+	assert(store.get_type() == this->get_type());
+
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	// If the store has data stored contiguously.
+	if (get_raw_arr() && store.get_raw_arr())
+		memcpy(get_raw_arr(), store.get_raw_arr(), nrow * ncol * get_entry_size());
+	else {
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		for (size_t i = 0; i < nrow; i++)
+			memcpy(get_row(i), row_store.get_row(i), ncol * get_entry_size());
+	}
+	return true;
+}
+
 void local_col_matrix_store::reset_data()
 {
 	size_t ncol = get_num_cols();
@@ -210,6 +229,25 @@ void local_col_matrix_store::set_data(const set_operate &op)
 	for (size_t i = 0; i < ncol; i++)
 		op.set(get_col(i), nrow, get_global_start_row(),
 				get_global_start_col() + i);
+}
+
+bool local_col_matrix_store::copy_from(const local_matrix_store &store)
+{
+	assert(store.store_layout() == matrix_layout_t::L_COL);
+	assert(store.get_type() == this->get_type());
+
+	size_t ncol = get_num_cols();
+	size_t nrow = get_num_rows();
+	// If the store has data stored contiguously.
+	if (get_raw_arr() && store.get_raw_arr())
+		memcpy(get_raw_arr(), store.get_raw_arr(), nrow * ncol * get_entry_size());
+	else {
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		for (size_t i = 0; i < ncol; i++)
+			memcpy(get_col(i), col_store.get_col(i), nrow * get_entry_size());
+	}
+	return true;
 }
 
 namespace

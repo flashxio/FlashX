@@ -108,6 +108,9 @@ public:
 	virtual dense_matrix::ptr apply(apply_margin margin,
 			const arr_apply_operate &op) const;
 
+	dense_matrix::ptr gemm(const dense_matrix &Amat, const dense_matrix &Bmat,
+			const scalar_variable &alpha, const scalar_variable &beta) const;
+
 	template<class T>
 	T get(size_t row, size_t col) const {
 		const detail::mem_matrix_store &store

@@ -88,6 +88,8 @@ public:
 	virtual const char *get(size_t row, size_t col) const = 0;
 	virtual char *get(size_t row, size_t col) = 0;
 
+	virtual bool copy_from(const local_matrix_store &store) = 0;
+
 	virtual matrix_store::const_ptr transpose() const = 0;
 	virtual matrix_store::ptr transpose() = 0;
 
@@ -127,6 +129,7 @@ public:
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
+	virtual bool copy_from(const local_matrix_store &store);
 
 	virtual const char *get_col(size_t col) const = 0;
 	virtual char *get_col(size_t col) = 0;
@@ -155,6 +158,7 @@ public:
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
+	virtual bool copy_from(const local_matrix_store &store);
 
 	virtual const char *get_row(size_t row) const = 0;
 	virtual char *get_row(size_t row) = 0;

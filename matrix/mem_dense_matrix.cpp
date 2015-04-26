@@ -556,54 +556,6 @@ mem_row_dense_matrix::ptr mem_col_dense_matrix::get_row_store() const
 	return ret;
 }
 
-dense_matrix::ptr mem_col_dense_matrix::gemm(const dense_matrix &Amat,
-		const dense_matrix &Bmat, const scalar_variable &alpha,
-		const scalar_variable &beta) const
-{
-	if (Amat.get_num_cols() != Bmat.get_num_rows()
-			|| this->get_num_rows() != Amat.get_num_rows()
-			|| this->get_num_cols() != Bmat.get_num_cols()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The matrices for gemm don't have compatible dimension";
-		return dense_matrix::ptr();
-	}
-	if (!Amat.is_in_mem() || Amat.store_layout() != matrix_layout_t::L_COL
-			|| !Bmat.is_in_mem() || Bmat.store_layout() != matrix_layout_t::L_COL) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The A and B matrix needs to be column-major";
-		return dense_matrix::ptr();
-	}
-	if (get_type() != get_scalar_type<double>()
-			|| Amat.get_type() != get_scalar_type<double>()
-			|| Bmat.get_type() != get_scalar_type<double>()
-			|| alpha.get_type() != get_scalar_type<double>()
-			|| beta.get_type() != get_scalar_type<double>()) {
-		BOOST_LOG_TRIVIAL(error)
-			<< "The matrices aren't of double type";
-		return dense_matrix::ptr();
-	}
-
-	const scalar_variable_impl<double> &d_alpha
-		= (const scalar_variable_impl<double> &) alpha;
-	const scalar_variable_impl<double> &d_beta
-		= (const scalar_variable_impl<double> &) beta;
-	mem_col_dense_matrix::ptr ret = mem_col_dense_matrix::create(
-			this->get_num_rows(), this->get_num_cols(), get_type());
-	ret->copy_from(*this);
-	mem_col_dense_matrix::ptr col_Amat
-		= dynamic_cast<const mem_col_dense_matrix &>(Amat).get_contig_matrix();
-	mem_col_dense_matrix::ptr col_Bmat
-		= dynamic_cast<const mem_col_dense_matrix &>(Bmat).get_contig_matrix();
-	printf("dgemm\n");
-	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, Amat.get_num_rows(),
-			Bmat.get_num_cols(), Amat.get_num_cols(), d_alpha.get(),
-			(double *) col_Amat->data.get_raw(), Amat.get_num_rows(),
-			(double *) col_Bmat->data.get_raw(), Bmat.get_num_rows(),
-			d_beta.get(), (double *) ret->data.get_raw(), ret->get_num_rows());
-
-	return ret;
-}
-
 mem_col_dense_matrix::ptr mem_row_dense_matrix::get_col_store() const
 {
 	// TODO it works for tall row-wise matrix.
@@ -627,5 +579,168 @@ mem_col_dense_matrix::ptr mem_row_dense_matrix::get_col_store() const
 	return ret;
 }
 #endif
+
+namespace
+{
+
+class dgemm_task: public thread_task
+{
+	detail::local_matrix_store::const_ptr local_store;
+	detail::local_matrix_store::const_ptr local_Astore;
+	detail::local_matrix_store::const_ptr local_Bstore;
+	detail::local_matrix_store::ptr local_res;
+	double alpha;
+	double beta;
+public:
+	dgemm_task(detail::local_matrix_store::const_ptr local_store,
+			detail::local_matrix_store::const_ptr local_Astore,
+			detail::local_matrix_store::const_ptr local_Bstore,
+			detail::local_matrix_store::ptr local_res,
+			double alpha, double beta) {
+		this->local_store = local_store;
+		this->local_Astore = local_Astore;
+		this->local_Bstore = local_Bstore;
+		this->local_res = local_res;
+		this->alpha = alpha;
+		this->beta = beta;
+	}
+
+	void run();
+};
+
+void dgemm_task::run()
+{
+	const double *Amat = (const double *) local_Astore->get_raw_arr();
+	const double *Bmat = (const double *) local_Bstore->get_raw_arr();
+	double *res_mat = (double *) local_res->get_raw_arr();
+	if (Amat == NULL) {
+		detail::local_matrix_store::ptr tmp(
+				new detail::local_buf_col_matrix_store(
+					local_Astore->get_global_start_row(),
+					local_Astore->get_global_start_col(),
+					local_Astore->get_num_rows(), local_Astore->get_num_cols(),
+					local_Astore->get_type(), local_Astore->get_node_id()));
+		tmp->copy_from(*local_Astore);
+		local_Astore = tmp;
+		Amat = (const double *) local_Astore->get_raw_arr();
+		assert(Amat);
+	}
+	if (Bmat == NULL) {
+		detail::local_matrix_store::ptr tmp(
+				new detail::local_buf_col_matrix_store(
+					local_Bstore->get_global_start_row(),
+					local_Bstore->get_global_start_col(),
+					local_Bstore->get_num_rows(), local_Bstore->get_num_cols(),
+					local_Bstore->get_type(), local_Bstore->get_node_id()));
+		tmp->copy_from(*local_Bstore);
+		local_Bstore = tmp;
+		Bmat = (const double *) local_Bstore->get_raw_arr();
+		assert(Bmat);
+	}
+	detail::local_matrix_store::ptr orig_res_store;
+	if (res_mat == NULL) {
+		orig_res_store = local_res;
+		detail::local_matrix_store::ptr tmp(
+				new detail::local_buf_col_matrix_store(
+					local_res->get_global_start_row(),
+					local_res->get_global_start_col(),
+					local_res->get_num_rows(), local_res->get_num_cols(),
+					local_res->get_type(), local_res->get_node_id()));
+		if (beta != 0)
+			tmp->copy_from(*local_store);
+		local_res = tmp;
+		res_mat = (double *) local_res->get_raw_arr();
+		assert(res_mat);
+	}
+	else {
+		if (beta != 0)
+			local_res->copy_from(*local_store);
+	}
+	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			local_Astore->get_num_rows(), local_Bstore->get_num_cols(),
+			local_Astore->get_num_cols(), alpha, Amat,
+			local_Astore->get_num_rows(), Bmat, local_Bstore->get_num_rows(),
+			beta, res_mat, local_res->get_num_rows());
+	if (orig_res_store)
+		orig_res_store->copy_from(*local_res);
+}
+
+}
+
+dense_matrix::ptr mem_dense_matrix::gemm(const dense_matrix &Amat,
+		const dense_matrix &Bmat, const scalar_variable &alpha,
+		const scalar_variable &beta) const
+{
+	if (Amat.get_num_cols() != Bmat.get_num_rows()
+			|| this->get_num_rows() != Amat.get_num_rows()
+			|| this->get_num_cols() != Bmat.get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrices for gemm don't have compatible dimension";
+		return dense_matrix::ptr();
+	}
+	if (!Amat.is_in_mem() || Amat.store_layout() != matrix_layout_t::L_COL
+			|| !Bmat.is_in_mem() || Bmat.store_layout() != matrix_layout_t::L_COL
+			|| store_layout() != matrix_layout_t::L_COL) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The A and B matrix needs to be column-major";
+		return dense_matrix::ptr();
+	}
+	if (get_type() != get_scalar_type<double>()
+			|| Amat.get_type() != get_scalar_type<double>()
+			|| Bmat.get_type() != get_scalar_type<double>()
+			|| alpha.get_type() != get_scalar_type<double>()
+			|| beta.get_type() != get_scalar_type<double>()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "The matrices aren't of double type";
+		return dense_matrix::ptr();
+	}
+
+	const detail::mem_matrix_store &Amat_store
+		= static_cast<const detail::mem_matrix_store &>(Amat.get_data());
+	const detail::mem_matrix_store &Bmat_store
+		= static_cast<const detail::mem_matrix_store &>(Bmat.get_data());
+	const detail::mem_matrix_store &this_store
+		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
+	const scalar_variable_impl<double> &d_alpha
+		= static_cast<const scalar_variable_impl<double> &>(alpha);
+	const scalar_variable_impl<double> &d_beta
+		= static_cast<const scalar_variable_impl<double> &>(beta);
+	detail::mem_matrix_store::ptr res_store = detail::mem_matrix_store::create(
+			this->get_num_rows(), this->get_num_cols(),
+			matrix_layout_t::L_COL, get_type(), get_num_nodes());
+
+	// We assume the right matrix is small, so we don't need to partition it.
+	detail::local_matrix_store::const_ptr local_Bstore = Bmat_store.get_portion(0);
+	assert(local_Bstore->get_num_rows() == Bmat_store.get_num_rows()
+			&& local_Bstore->get_num_cols() == Bmat_store.get_num_cols());
+	size_t num_chunks = this_store.get_num_portions();
+	assert(this_store.get_portion_size().first == Amat_store.get_portion_size().first);
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::const_ptr local_store
+			= this_store.get_portion(i);
+		detail::local_matrix_store::const_ptr local_Astore
+			= Amat_store.get_portion(i);
+		detail::local_matrix_store::ptr local_res = res_store->get_portion(i);
+		assert(local_store->get_global_start_row()
+				== local_res->get_global_start_row());
+		assert(local_store->get_global_start_col()
+				== local_res->get_global_start_col());
+		assert(local_store->get_node_id() == local_res->get_node_id());
+
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new dgemm_task(local_store, local_Astore, local_Bstore,
+					local_res, d_alpha.get(), d_beta.get()));
+	}
+	mem_threads->wait4complete();
+
+	return dense_matrix::ptr(new mem_dense_matrix(res_store));
+}
 
 }

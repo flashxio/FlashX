@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <cblas.h>
 
 #include "mem_dense_matrix.h"
 #include "mem_vector.h"
@@ -428,6 +429,39 @@ void test_apply()
 
 #endif
 
+void test_dgemm(double beta)
+{
+	printf("test dgemm\n");
+	double alpha = 1;
+	mem_dense_matrix::ptr m1 = mem_dense_matrix::create_rand<double>(-1.0, 1.0,
+			long_dim, 10, matrix_layout_t::L_COL);
+	mem_dense_matrix::ptr m2 = mem_dense_matrix::create_rand<double>(-1.0, 1.0,
+			10, 9, matrix_layout_t::L_COL);
+	mem_dense_matrix::ptr m3 = mem_dense_matrix::create_const<double>(1,
+			long_dim, 9, matrix_layout_t::L_COL);
+	mem_dense_matrix::ptr res = mem_dense_matrix::cast(m3->gemm(*m1, *m2,
+			scalar_variable_impl<double>(alpha), scalar_variable_impl<double>(beta)));
+
+	double *Amat = (double *) dynamic_cast<const detail::mem_matrix_store &>(
+			m1->get_data()).get(0, 0);
+	double *Bmat = (double *) dynamic_cast<const detail::mem_matrix_store &>(
+			m2->get_data()).get(0, 0);
+	std::unique_ptr<double[]> res_mat(
+			new double[res->get_num_rows() * res->get_num_cols()]);
+	memcpy(res_mat.get(),
+			dynamic_cast<const detail::mem_matrix_store &>(m3->get_data()).get(0, 0),
+			res->get_num_rows() * res->get_num_cols() * res->get_entry_size());
+	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+			m1->get_num_rows(), m2->get_num_cols(), m1->get_num_cols(),
+			alpha, Amat, m1->get_num_rows(), Bmat, m2->get_num_rows(),
+			beta, res_mat.get(), res->get_num_rows());
+#pragma omp parallel for
+	for (size_t i = 0; i < res->get_num_rows(); i++) {
+		for (size_t j = 0; j < res->get_num_cols(); j++)
+			assert(res->get<double>(i, j) == res_mat[i + j * res->get_num_rows()]);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	int num_nodes = 1;
@@ -461,4 +495,6 @@ int main(int argc, char *argv[])
 	test_flatten();
 	test_apply();
 #endif
+	test_dgemm(0);
+	test_dgemm(1);
 }
