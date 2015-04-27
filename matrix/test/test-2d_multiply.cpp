@@ -81,18 +81,17 @@ public:
 
 void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 {
-#if 0
 	printf("test sparse matrix dense matrix multiplication\n");
 	struct timeval start, end;
-	NUMA_row_tall_dense_matrix::ptr in
-		= NUMA_row_tall_dense_matrix::create(mat->get_num_cols(),
+	detail::NUMA_row_tall_matrix_store::ptr in
+		= detail::NUMA_row_tall_matrix_store::create(mat->get_num_cols(),
 				mat_width, matrix_conf.get_num_nodes(),
 				get_scalar_type<double>());
 	in->set_data(mat_init_operate(in->get_num_rows(), in->get_num_cols()));
 
 	// Initialize the output matrix and allocate pages for it.
-	NUMA_row_tall_dense_matrix::ptr out
-		= NUMA_row_tall_dense_matrix::create(mat->get_num_rows(),
+	detail::NUMA_row_tall_matrix_store::ptr out
+		= detail::NUMA_row_tall_matrix_store::create(mat->get_num_rows(),
 				mat_width, matrix_conf.get_num_nodes(),
 				get_scalar_type<double>());
 	out->reset_data();
@@ -109,7 +108,6 @@ void test_SpMM(sparse_matrix::ptr mat, size_t mat_width)
 		ProfilerStop();
 #endif
 	printf("it takes %.3f seconds\n", time_diff(start, end));
-#endif
 }
 
 void print_usage()

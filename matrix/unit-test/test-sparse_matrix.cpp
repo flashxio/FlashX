@@ -87,13 +87,12 @@ void test_spmv(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 		const std::vector<size_t> &degrees)
 {
-#if 0
 	size_t num_cols = idx->get_header().get_num_cols();
 	size_t num_rows = idx->get_header().get_num_rows();
 	printf("test_spmm: the sparse matrix has %ld rows and %ld cols\n",
 			num_rows, num_cols);
-	NUMA_row_tall_dense_matrix::ptr in_mat
-		= NUMA_row_tall_dense_matrix::create(num_cols, 10, num_nodes,
+	detail::mem_matrix_store::ptr in_mat
+		= detail::NUMA_row_tall_matrix_store::create(num_cols, 10, num_nodes,
 				get_scalar_type<int>());
 	int val = 0;
 	for (size_t i = 0; i < in_mat->get_num_rows(); i++)
@@ -101,8 +100,8 @@ void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 			in_mat->set(i, j, val++);
 	sparse_matrix::ptr spm = sparse_matrix::create(idx, mat);
 
-	NUMA_row_tall_dense_matrix::ptr out1 = NUMA_row_tall_dense_matrix::cast(
-			spm->multiply<int>(in_mat));
+	detail::mem_matrix_store::ptr out1
+		= detail::mem_matrix_store::cast(spm->multiply<int>(in_mat));
 
 	for (size_t i = 0; i < in_mat->get_num_cols(); i++) {
 		NUMA_vector::ptr in_vec = NUMA_vector::create(num_cols, num_nodes,
@@ -113,7 +112,6 @@ void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 		for (size_t j = 0; j < num_rows; j++)
 			assert(out_vec->get<int>(j) == out1->get<int>(j, i));
 	}
-#endif
 }
 
 int main()
