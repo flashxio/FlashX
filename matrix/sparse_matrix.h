@@ -29,6 +29,7 @@
 #include "NUMA_vector.h"
 #include "NUMA_dense_matrix.h"
 #include "dense_matrix.h"
+#include "local_matrix_store.h"
 
 namespace fm
 {
@@ -163,8 +164,11 @@ public:
 template<class T>
 class block_spmm_task: public block_compute_task
 {
-	const detail::NUMA_row_tall_matrix_store &input;
-	detail::NUMA_row_tall_matrix_store &output;
+	const detail::mem_matrix_store &input;
+	detail::mem_matrix_store &output;
+
+	detail::local_row_matrix_store::const_ptr in_part;
+	detail::local_row_matrix_store::ptr out_part;
 
 	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
 			const T *in_rows, T *out_rows) {
@@ -179,9 +183,25 @@ class block_spmm_task: public block_compute_task
 		}
 		return it;
 	}
+
+	// Get the portion required by SpMM in the input and output matrices.
+	void init_part(size_t in_row, size_t out_row) {
+		size_t in_part_size = input.get_portion_size().first;
+		size_t out_part_size = output.get_portion_size().first;
+		size_t in_part_id = in_row / in_part_size;
+		size_t out_part_id = out_row / out_part_size;
+		if (in_part == NULL || (size_t) in_part->get_global_start_row()
+				!= in_part_id * in_part_size)
+			in_part = detail::local_row_matrix_store::cast(
+					input.get_portion(in_part_id));
+		if (out_part == NULL || (size_t) out_part->get_global_start_row()
+				!= out_part_id * out_part_size)
+			out_part = detail::local_row_matrix_store::cast(
+					output.get_portion(out_part_id));
+	}
 public:
-	block_spmm_task(const detail::NUMA_row_tall_matrix_store &_input,
-			detail::NUMA_row_tall_matrix_store &_output, const matrix_io &_io,
+	block_spmm_task(const detail::mem_matrix_store &_input,
+			detail::mem_matrix_store &_output, const matrix_io &_io,
 			const sparse_matrix &mat,
 			block_exec_order::ptr order): block_compute_task(
 				_io, mat, order), input(_input), output(_output) {
@@ -192,10 +212,16 @@ public:
 			= block.get_block_col_idx() * block_size.get_num_cols();
 		size_t start_row_idx
 			= block.get_block_row_idx() * block_size.get_num_rows();
-		const char *in_rows = input.get_rows(start_col_idx,
-				start_col_idx + block_size.get_num_cols());
-		char *out_rows = output.get_rows(start_row_idx,
-				start_row_idx + block_size.get_num_rows());
+		init_part(start_col_idx, start_row_idx);
+
+		// Get the contiguous rows in the input and output matrices.
+		size_t in_row_start = start_col_idx - in_part->get_global_start_row();
+		size_t out_row_start = start_row_idx - out_part->get_global_start_row();
+		const char *in_rows = in_part->get_rows(in_row_start,
+				in_row_start + block_size.get_num_cols());
+		char *out_rows = out_part->get_rows(out_row_start,
+				out_row_start + block_size.get_num_rows());
+
 		rp_edge_iterator it = block.get_first_edge_iterator();
 		while (!block.is_block_end(it)) {
 			it = run_on_row_part(it, (const T *) in_rows, (T *) out_rows);
@@ -307,16 +333,16 @@ public:
 template<class T>
 class b2d_spmm_creator: public task_creator
 {
-	const detail::NUMA_row_tall_matrix_store &input;
-	detail::NUMA_row_tall_matrix_store &output;
+	const detail::mem_matrix_store &input;
+	detail::mem_matrix_store &output;
 	const sparse_matrix &mat;
 	block_exec_order::ptr order;
 
-	b2d_spmm_creator(const detail::NUMA_row_tall_matrix_store &_input,
-			detail::NUMA_row_tall_matrix_store &_output, const sparse_matrix &_mat);
+	b2d_spmm_creator(const detail::mem_matrix_store &_input,
+			detail::mem_matrix_store &_output, const sparse_matrix &_mat);
 public:
-	static task_creator::ptr create(const detail::NUMA_row_tall_matrix_store &_input,
-			detail::NUMA_row_tall_matrix_store &_output, const sparse_matrix &mat) {
+	static task_creator::ptr create(const detail::mem_matrix_store &_input,
+			detail::mem_matrix_store &_output, const sparse_matrix &mat) {
 		if (_input.get_type() != get_scalar_type<T>()
 				|| _output.get_type() != get_scalar_type<T>()) {
 			BOOST_LOG_TRIVIAL(error) << "wrong matrix type in spmm creator";
@@ -383,18 +409,10 @@ class sparse_matrix
 	}
 
 	template<class T>
-	task_creator::ptr get_multiply_creator(const detail::NUMA_row_tall_matrix_store &in,
-			detail::NUMA_row_tall_matrix_store &out) const {
+	task_creator::ptr get_multiply_creator(const detail::mem_matrix_store &in,
+			detail::mem_matrix_store &out) const {
 		assert(!is_fg);
 		return b2d_spmm_creator<T>::create(in, out, *this);
-	}
-
-	template<class T>
-	void multiply_matrix(const detail::NUMA_row_tall_matrix_store &row_m,
-			detail::NUMA_row_tall_matrix_store &ret) const {
-		compute(get_multiply_creator<T>(row_m, ret),
-				cal_super_block_size(get_block_size(),
-					sizeof(T) * row_m.get_num_cols()));
 	}
 protected:
 	// This constructor is used for the sparse matrix stored
@@ -541,45 +559,11 @@ public:
 	}
 
 	/*
-	 * This version of SpMV allocates the output vector.
-	 */
-	template<class T>
-	NUMA_vector::ptr multiply(NUMA_vector::ptr in) const {
-		if (in->get_length() != ncols) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"the input vector has wrong length %1%. matrix ncols: %2%")
-				% in->get_length() % ncols;
-			return NUMA_vector::ptr();
-		}
-		else {
-			NUMA_vector::ptr ret = NUMA_vector::create(nrows,
-					in->get_num_nodes(), get_scalar_type<T>());
-			ret->reset_data();
-			multiply<T>(*in, *ret);
-			return ret;
-		}
-	}
-
-	template<class T>
-	mem_vector::ptr multiply(mem_vector::ptr in) const {
-		if (in->get_length() != ncols) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"the input vector has wrong length %1%. matrix ncols: %2%")
-				% in->get_length() % ncols;
-			return mem_vector::ptr();
-		}
-		mem_vector::ptr ret = mem_vector::create(nrows, get_scalar_type<T>());
-		ret->reset_data();
-		multiply<T>(*in, *ret);
-		return ret;
-	}
-
-	/*
 	 * This version of SpMM allows users to provide the output matrix.
 	 * It requires users to initialize the output matrix.
 	 */
 	template<class T>
-	bool multiply(const dense_matrix &in, dense_matrix &out) const {
+	bool multiply(const detail::matrix_store &in, detail::matrix_store &out) const {
 		if (in.get_num_rows() != ncols
 				|| in.get_num_cols() != out.get_num_cols()
 				|| out.get_num_rows() != this->get_num_rows()) {
@@ -591,93 +575,18 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "SpMM doesn't support EM dense matrix";
 			return false;
 		}
-
-		return false;
-		if (in.store_layout() == matrix_layout_t::L_ROW) {
-			if (out.store_layout() != matrix_layout_t::L_ROW) {
-				BOOST_LOG_TRIVIAL(error) << "wrong matrix layout for output matrix";
-				return false;
-			}
-			// TODO how are we going to tell the difference between mem_dense_matrix
-			// and NUMA dense matrix.
-			multiply_matrix<T>((const detail::NUMA_row_tall_matrix_store &) in,
-					(detail::NUMA_row_tall_matrix_store &) out);
-			return true;
-		}
-		else {
-			if (out.store_layout() != matrix_layout_t::L_COL) {
-				BOOST_LOG_TRIVIAL(error) << "wrong matrix layout for output matrix";
-				return false;
-			}
-#if 0
-			multiply_matrix<T>((const mem_col_dense_matrix &) in,
-					(mem_col_dense_matrix &) out);
-#endif
-			return true;
-		}
-	}
-
-	template<class T>
-	bool multiply_matrix(const detail::mem_col_matrix_store &in,
-			detail::mem_col_matrix_store &out) const {
-		if (in.get_num_rows() != ncols
-				|| in.get_num_cols() != out.get_num_cols()
-				|| out.get_num_rows() != this->get_num_rows()) {
-			BOOST_LOG_TRIVIAL(error) <<
-					"the input and output matrix have incompatible dimensions";
+		else if (in.store_layout() != matrix_layout_t::L_ROW
+				|| out.store_layout() != matrix_layout_t::L_ROW) {
+			BOOST_LOG_TRIVIAL(error) << "the dense matrix isn't row major.";
 			return false;
 		}
-		size_t ncol = in.get_num_cols();
-		assert(is_fg);
-		for (size_t i = 0; i < ncol; i++) {
-			mem_vector::ptr in_col = in.get_col(i);
-			mem_vector::ptr out_col = out.get_col(i);
-			compute(get_fg_multiply_creator<T, mem_vector>(*in_col, *out_col),
+
+		compute(get_multiply_creator<T>(
+					dynamic_cast<const detail::mem_matrix_store &>(in),
+					dynamic_cast<detail::mem_matrix_store &>(out)),
 				cal_super_block_size(get_block_size(),
 					sizeof(T) * in.get_num_cols()));
-		}
 		return true;
-	}
-
-	/*
-	 * This version of SpMM allocates the output matrix.
-	 */
-	template<class T>
-	detail::matrix_store::ptr multiply(detail::matrix_store::ptr in) const {
-		if (in->get_num_rows() != ncols) {
-			BOOST_LOG_TRIVIAL(error) << boost::format(
-					"the input matrix has wrong #rows %1%. matrix ncols: %2%")
-				% in->get_num_rows() % ncols;
-			return detail::matrix_store::ptr();
-		}
-		else if (!in->is_in_mem()) {
-			BOOST_LOG_TRIVIAL(error) << "SpMM doesn't support EM dense matrix";
-			return detail::matrix_store::ptr();
-		}
-
-		if (in->store_layout() == matrix_layout_t::L_ROW) {
-			detail::NUMA_row_tall_matrix_store::ptr in_mat
-				= detail::NUMA_row_tall_matrix_store::cast(in);
-			detail::NUMA_row_tall_matrix_store::ptr ret
-				= detail::NUMA_row_tall_matrix_store::create(
-					get_num_rows(), in->get_num_cols(), in_mat->get_num_nodes(),
-					get_scalar_type<T>());
-			ret->reset_data();
-			multiply_matrix<T>(*in_mat, *ret);
-			return ret;
-		}
-		else {
-			detail::mem_col_matrix_store::ptr in_mat
-				= detail::mem_col_matrix_store::cast(in);
-			detail::mem_col_matrix_store::ptr ret
-				= detail::mem_col_matrix_store::create(
-					get_num_rows(), in->get_num_cols(), get_scalar_type<T>());
-			ret->reset_data();
-#if 0
-			multiply_matrix<T>(*in_mat, *ret);
-#endif
-			return ret;
-		}
 	}
 };
 
@@ -693,9 +602,8 @@ b2d_spmv_creator<T>::b2d_spmv_creator(const NUMA_vector &_input,
 }
 
 template<class T>
-b2d_spmm_creator<T>::b2d_spmm_creator(
-		const detail::NUMA_row_tall_matrix_store &_input,
-		detail::NUMA_row_tall_matrix_store &_output,
+b2d_spmm_creator<T>::b2d_spmm_creator(const detail::mem_matrix_store &_input,
+		detail::mem_matrix_store &_output,
 		const sparse_matrix &_mat): input(_input), output(_output), mat(_mat)
 {
 	// We only handle the case the element size is 2^n.

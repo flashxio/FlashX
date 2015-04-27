@@ -77,7 +77,8 @@ void test_spmv(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	NUMA_vector::ptr in = NUMA_vector::create(num_cols, get_scalar_type<int>());
 	for (size_t i = 0; i < num_cols; i++)
 		in->set(i, 1);
-	NUMA_vector::ptr out = spm->multiply<int>(in);
+	NUMA_vector::ptr out = NUMA_vector::create(num_rows, get_scalar_type<int>());
+	spm->multiply<int>(*in, *out);
 	assert(out->get_length() == num_rows);
 	assert(degrees.size() == num_rows);
 	for (size_t i = 0; i < num_rows; i++)
@@ -101,14 +102,18 @@ void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 	sparse_matrix::ptr spm = sparse_matrix::create(idx, mat);
 
 	detail::mem_matrix_store::ptr out1
-		= detail::mem_matrix_store::cast(spm->multiply<int>(in_mat));
+		= detail::NUMA_row_tall_matrix_store::create(num_rows, 10, num_nodes,
+				get_scalar_type<int>());
+	spm->multiply<int>(*in_mat, *out1);
 
 	for (size_t i = 0; i < in_mat->get_num_cols(); i++) {
 		NUMA_vector::ptr in_vec = NUMA_vector::create(num_cols, num_nodes,
 				get_scalar_type<int>());
 		for (size_t j = 0; j < num_rows; j++)
 			in_vec->set<int>(j, in_mat->get<int>(j, i));
-		NUMA_vector::ptr out_vec = spm->multiply<int>(in_vec);
+		NUMA_vector::ptr out_vec = NUMA_vector::create(num_rows, num_nodes,
+				get_scalar_type<int>());
+		spm->multiply<int>(*in_vec, *out_vec);
 		for (size_t j = 0; j < num_rows; j++)
 			assert(out_vec->get<int>(j) == out1->get<int>(j, i));
 	}

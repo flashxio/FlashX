@@ -22,6 +22,8 @@
 
 #include <memory>
 
+#include "log.h"
+
 #include "matrix_store.h"
 #include "raw_data_array.h"
 
@@ -150,6 +152,24 @@ public:
 class local_row_matrix_store: public local_matrix_store
 {
 public:
+	typedef std::shared_ptr<local_row_matrix_store> ptr;
+	typedef std::shared_ptr<const local_row_matrix_store> const_ptr;
+
+	static ptr cast(local_matrix_store::ptr store) {
+		if (store->store_layout() != matrix_layout_t::L_ROW) {
+			BOOST_LOG_TRIVIAL(error) << "the local matrix store isn't row major";
+			return ptr();
+		}
+		return std::static_pointer_cast<local_row_matrix_store>(store);
+	}
+	static const_ptr cast(local_matrix_store::const_ptr store) {
+		if (store->store_layout() != matrix_layout_t::L_ROW) {
+			BOOST_LOG_TRIVIAL(error) << "the local matrix store isn't row major";
+			return const_ptr();
+		}
+		return std::static_pointer_cast<const local_row_matrix_store>(store);
+	}
+
 	local_row_matrix_store(off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_matrix_store(global_start_row, global_start_col,
@@ -162,6 +182,8 @@ public:
 
 	virtual const char *get_row(size_t row) const = 0;
 	virtual char *get_row(size_t row) = 0;
+	virtual const char *get_rows(size_t row_start, size_t row_end) const = 0;
+	virtual char *get_rows(size_t row_start, size_t row_end) = 0;
 
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_ROW;
@@ -262,6 +284,19 @@ public:
 		return data.get_raw() + row * get_num_cols() * get_entry_size();
 	}
 
+	virtual const char *get_rows(size_t row_start, size_t row_end) const {
+		if (row_end > get_num_rows())
+			return NULL;
+		else
+			return get_row(row_start);
+	}
+	virtual char *get_rows(size_t row_start, size_t row_end) {
+		if (row_end > get_num_rows())
+			return NULL;
+		else
+			return get_row(row_start);
+	}
+
 	virtual matrix_store::const_ptr transpose() const;
 	virtual matrix_store::ptr transpose();
 };
@@ -329,6 +364,19 @@ public:
 
 	virtual char *get_raw_arr() {
 		return data;
+	}
+
+	virtual const char *get_rows(size_t row_start, size_t row_end) const {
+		if (row_end > get_num_rows())
+			return NULL;
+		else
+			return get_row(row_start);
+	}
+	virtual char *get_rows(size_t row_start, size_t row_end) {
+		if (row_end > get_num_rows())
+			return NULL;
+		else
+			return get_row(row_start);
 	}
 
 	virtual const char *get_row(size_t row) const {
@@ -408,6 +456,13 @@ public:
 		return NULL;
 	}
 
+	virtual const char *get_rows(size_t row_start, size_t row_end) const {
+		return NULL;
+	}
+	virtual char *get_rows(size_t row_start, size_t row_end) {
+		return NULL;
+	}
+
 	virtual const char *get_row(size_t row) const {
 		return rows[row];
 	}
@@ -484,12 +539,22 @@ public:
 	virtual const char *get_row(size_t row) const {
 		return data + row * get_num_cols() * get_entry_size();
 	}
+	virtual const char *get_rows(size_t row_start, size_t row_end) const {
+		if (row_end > get_num_rows())
+			return NULL;
+		else
+			return get_row(row_start);
+	}
 
 	virtual char *get_raw_arr() {
 		assert(0);
 		return NULL;
 	}
 	virtual char *get_row(size_t row) {
+		assert(0);
+		return NULL;
+	}
+	virtual char *get_rows(size_t row_start, size_t row_end) {
 		assert(0);
 		return NULL;
 	}
@@ -561,6 +626,9 @@ public:
 	virtual const char *get_row(size_t row) const {
 		return rows[row];
 	}
+	virtual const char *get_rows(size_t row_start, size_t row_end) const {
+		return NULL;
+	}
 
 	virtual const char *get_raw_arr() const {
 		return NULL;
@@ -570,6 +638,10 @@ public:
 		return NULL;
 	}
 	virtual char *get_row(size_t row) {
+		assert(0);
+		return NULL;
+	}
+	virtual char *get_rows(size_t row_start, size_t row_end) {
 		assert(0);
 		return NULL;
 	}
