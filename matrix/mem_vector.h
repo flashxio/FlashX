@@ -40,10 +40,6 @@ class mem_vector: public vector
 {
 	char *arr;
 	detail::raw_data_array data;
-
-	const char *get(off_t idx) const {
-		return arr + idx * get_entry_size();
-	}
 protected:
 	mem_vector(size_t length, const scalar_type &type);
 	mem_vector(const detail::raw_data_array &data, size_t len, const scalar_type &type);
@@ -130,6 +126,10 @@ public:
 	void set(const std::vector<const char *> &locs) {
 		assert(locs.size() <= get_length());
 		get_type().get_sg().gather(locs, arr);
+	}
+
+	const char *get(off_t idx) const {
+		return arr + idx * get_entry_size();
 	}
 
 	template<class T>

@@ -743,4 +743,63 @@ dense_matrix::ptr mem_dense_matrix::gemm(const dense_matrix &Amat,
 	return dense_matrix::ptr(new mem_dense_matrix(res_store));
 }
 
+namespace
+{
+
+class scale_col_task: public thread_task
+{
+	detail::local_matrix_store::const_ptr local_store;
+	const mem_vector &vals;
+	detail::local_matrix_store::ptr local_res;
+public:
+	scale_col_task(detail::local_matrix_store::const_ptr local_store,
+			const mem_vector &_vals,
+			detail::local_matrix_store::ptr local_res): vals(_vals) {
+		this->local_store = local_store;
+		this->local_res = local_res;
+	}
+
+	void run() {
+		assert(local_store->get_global_start_col()
+				== local_res->get_global_start_col());
+		assert(local_store->get_global_start_row()
+				== local_res->get_global_start_row());
+		detail::scale_cols(*local_store, vals, *local_res);
+	}
+};
+
+}
+
+dense_matrix::ptr mem_dense_matrix::scale_cols(const mem_vector &vals) const
+{
+	assert(!is_wide());
+	assert(get_num_cols() == vals.get_length());
+	size_t nrow = this->get_num_rows();
+	size_t ncol = this->get_num_cols();
+	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+			nrow, ncol, store_layout(), get_type(), get_num_nodes());
+
+	const detail::mem_matrix_store &this_store
+		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
+	size_t num_chunks = this_store.get_num_portions();
+
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::const_ptr local_store
+			= this_store.get_portion(i);
+		detail::local_matrix_store::ptr local_res = res->get_portion(i);
+
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new scale_col_task(local_store, vals, local_res));
+	}
+	mem_threads->wait4complete();
+	return dense_matrix::ptr(new mem_dense_matrix(res));
+}
+
 }

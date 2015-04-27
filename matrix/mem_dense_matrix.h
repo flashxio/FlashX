@@ -110,6 +110,7 @@ public:
 
 	dense_matrix::ptr gemm(const dense_matrix &Amat, const dense_matrix &Bmat,
 			const scalar_variable &alpha, const scalar_variable &beta) const;
+	dense_matrix::ptr scale_cols(const mem_vector &vals) const;
 
 	template<class T>
 	T get(size_t row, size_t col) const {

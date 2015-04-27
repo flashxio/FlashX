@@ -19,6 +19,7 @@
 
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
+#include "mem_vector.h"
 
 namespace fm
 {
@@ -521,6 +522,32 @@ void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		assert(res.store_layout() == matrix_layout_t::L_COL);
 		inner_prod_col_tall((const local_col_matrix_store &) m1, m2, left_op, right_op,
 				(local_col_matrix_store &) res);
+	}
+}
+
+void scale_cols(const local_matrix_store &store, const mem_vector &vals,
+		local_matrix_store &res)
+{
+	assert(res.store_layout() == store.store_layout());
+	size_t ncol = store.get_num_cols();
+	size_t nrow = store.get_num_rows();
+	const bulk_operate &op = store.get_type().get_basic_ops().get_multiply();
+	if (store.store_layout() == matrix_layout_t::L_ROW) {
+		const local_row_matrix_store &row_store
+			= (const local_row_matrix_store &) store;
+		local_row_matrix_store &row_res = (local_row_matrix_store &) res;
+		for (size_t i = 0; i < nrow; i++)
+			op.runAA(ncol, row_store.get_row(i), vals.get_raw_arr(),
+					row_res.get_row(i));
+	}
+	else {
+		assert(store.store_layout() == matrix_layout_t::L_COL);
+		const local_col_matrix_store &col_store
+			= (const local_col_matrix_store &) store;
+		local_col_matrix_store &col_res = (local_col_matrix_store &) res;
+		for (size_t i = 0; i < ncol; i++)
+			op.runAE(nrow, col_store.get_col(i), vals.get(i),
+					col_res.get_col(i));
 	}
 }
 

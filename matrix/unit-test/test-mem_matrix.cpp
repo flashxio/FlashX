@@ -462,6 +462,41 @@ void test_dgemm(double beta)
 	}
 }
 
+void test_scale_cols(int num_nodes)
+{
+	printf("Test scale cols\n");
+	mem_dense_matrix::ptr orig = mem_dense_matrix::create(long_dim, 10,
+			matrix_layout_t::L_COL, get_scalar_type<int>(), set_col_operate(10),
+			num_nodes);
+	mem_vector::ptr vals = mem_vector::create(orig->get_num_cols(),
+			orig->get_type());
+	for (size_t i = 0; i < vals->get_length(); i++)
+		vals->set<int>(i, i);
+	mem_dense_matrix::ptr res = mem_dense_matrix::cast(orig->scale_cols(*vals));
+	detail::mem_matrix_store &orig_store1
+		= (detail::mem_matrix_store &) orig->get_data();
+	detail::mem_matrix_store &res_store1
+		= (detail::mem_matrix_store &) res->get_data();
+#pragma omp parallel for
+	for (size_t i = 0; i < res_store1.get_num_rows(); i++)
+		for (size_t j = 0; j < res_store1.get_num_cols(); j++)
+			assert(res_store1.get<int>(i, j)
+					== orig_store1.get<int>(i, j) * vals->get<int>(j));
+
+	orig = mem_dense_matrix::create(long_dim, 10, matrix_layout_t::L_ROW,
+			get_scalar_type<int>(), set_row_operate(10), num_nodes);
+	res = mem_dense_matrix::cast(orig->scale_cols(*vals));
+	detail::mem_matrix_store &orig_store2
+		= (detail::mem_matrix_store &) orig->get_data();
+	detail::mem_matrix_store &res_store2
+		= (detail::mem_matrix_store &) res->get_data();
+#pragma omp parallel for
+	for (size_t i = 0; i < res_store2.get_num_rows(); i++)
+		for (size_t j = 0; j < res_store2.get_num_cols(); j++)
+			assert(res_store2.get<int>(i, j)
+					== orig_store2.get<int>(i, j) * vals->get<int>(j));
+}
+
 int main(int argc, char *argv[])
 {
 	int num_nodes = 1;
@@ -473,6 +508,8 @@ int main(int argc, char *argv[])
 	detail::mem_thread_pool::init_global_mem_threads(num_nodes,
 			num_threads / num_nodes);
 
+	test_scale_cols(-1);
+	test_scale_cols(num_nodes);
 	test_multiply_scalar(-1);
 	test_multiply_scalar(num_nodes);
 	test_ele_wise(-1);

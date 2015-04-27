@@ -589,6 +589,8 @@ void sapply(const local_matrix_store &store, const bulk_uoperate &op,
 void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		const bulk_operate &left_op, const bulk_operate &right_op,
 		local_matrix_store &res);
+void scale_cols(const local_matrix_store &m1, const mem_vector &vals,
+		local_matrix_store &m2);
 
 }
 
