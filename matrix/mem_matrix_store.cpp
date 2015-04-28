@@ -20,10 +20,12 @@
 #include <boost/format.hpp>
 
 #include "log.h"
+#include "thread.h"
 
 #include "mem_matrix_store.h"
 #include "local_matrix_store.h"
 #include "NUMA_dense_matrix.h"
+#include "mem_worker_thread.h"
 
 namespace fm
 {
@@ -530,42 +532,73 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 	return std::static_pointer_cast<mem_row_matrix_store>(store);
 }
 
+namespace
+{
+
+class reset_task: public thread_task
+{
+	detail::local_matrix_store::ptr local_store;
+public:
+	reset_task(detail::local_matrix_store::ptr local_store) {
+		this->local_store = local_store;
+	}
+
+	void run() {
+		local_store->reset_data();
+	}
+};
+
+class set_task: public thread_task
+{
+	detail::local_matrix_store::ptr local_store;
+	const set_operate &op;
+public:
+	set_task(detail::local_matrix_store::ptr local_store,
+			const set_operate &_op): op(_op) {
+		this->local_store = local_store;
+	}
+
+	void run() {
+		local_store->set_data(op);
+	}
+};
+
+}
+
 void mem_matrix_store::reset_data()
 {
 	size_t num_chunks = get_num_portions();
-	if (is_wide()) {
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			local_matrix_store::ptr local_store = get_portion(i);
-			local_store->reset_data();
-		}
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::ptr local_store = get_portion(i);
+
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id, new reset_task(local_store));
 	}
-	else {
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			local_matrix_store::ptr local_store = get_portion(i);
-			local_store->reset_data();
-		}
-	}
+	mem_threads->wait4complete();
 }
 
 void mem_matrix_store::set_data(const set_operate &op)
 {
 	size_t num_chunks = get_num_portions();
-	if (is_wide()) {
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			local_matrix_store::ptr local_store = get_portion(i);
-			local_store->set_data(op);
-		}
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::ptr local_store = get_portion(i);
+
+		int node_id = local_store->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id, new set_task(local_store, op));
 	}
-	else {
-#pragma omp parallel for
-		for (size_t i = 0; i < num_chunks; i++) {
-			local_matrix_store::ptr local_store = get_portion(i);
-			local_store->set_data(op);
-		}
-	}
+	mem_threads->wait4complete();
 }
 
 }
