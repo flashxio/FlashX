@@ -23,7 +23,7 @@ LDFLAGS := $(OMP_FLAG) -L.. -lFMatrix -L../../flash-graph -lgraph -L../../libsaf
 LDFLAGS += -lstxxl -lz -lnuma -laio -lcblas
 
 all: test-fg_SpMV test-2d_multiply test-mem_matrix test-EM_matrix test-mem_vector	\
-	el2al al22d al2crs test-sort test-mkl_multiply test-tpetra_multiply
+	el2al al22d al2crs test-sort test-mkl_multiply test-tpetra_multiply test-mkl_dgemm
 
 test-fg_SpMV: test-fg_SpMV.o ../libFMatrix.a
 	$(CXX) -o test-fg_SpMV test-fg_SpMV.o $(LDFLAGS)
@@ -62,7 +62,13 @@ test-mkl_multiply.o: test-mkl_multiply.cpp crs_header.h
 	$(CXX) -O3 -c test-mkl_multiply.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
 
 test-mkl_multiply: test-mkl_multiply.o
-	$(CXX) -o test-mkl_multiply test-mkl_multiply.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lmkl_sequential -lm -fopenmp
+	$(CXX) -o test-mkl_multiply test-mkl_multiply.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp
+
+test-mkl_dgemm.o: test-mkl_dgemm.cpp
+	$(CXX) -O3 -c test-mkl_dgemm.cpp -I/home/zhengda/intel/mkl/include/ -I. -fopenmp
+
+test-mkl_dgemm: test-mkl_dgemm.o
+	$(CXX) -o test-mkl_dgemm test-mkl_dgemm.o -L/home/zhengda/intel/mkl/lib/intel64/ -lmkl_intel_ilp64 -lmkl_gnu_thread -lmkl_core -lm -fopenmp -lm
 
 clean:
 	rm -f *.d
