@@ -124,6 +124,7 @@ public:
 		this->local_res = local_res;
 	}
 	void run() {
+		local_res->reset_data();
 		detail::inner_prod(*local_store, *local_right, left_op, right_op,
 				*local_res);
 	}
@@ -154,7 +155,6 @@ void mem_dense_matrix::inner_prod_tall(const detail::mem_matrix_store &m,
 		assert(local_store->get_global_start_col()
 				== local_res->get_global_start_col());
 		assert(local_store->get_node_id() == local_res->get_node_id());
-		local_res->reset_data();
 		int node_id = local_store->get_node_id();
 		// If the local matrix portion is not assigned to any node, 
 		// assign the tasks in round robin fashion.
