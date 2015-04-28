@@ -216,11 +216,13 @@ public:
 
 		// Get the contiguous rows in the input and output matrices.
 		size_t in_row_start = start_col_idx - in_part->get_global_start_row();
+		size_t in_row_end = std::min(in_row_start + block_size.get_num_cols(),
+				in_part->get_num_rows());
 		size_t out_row_start = start_row_idx - out_part->get_global_start_row();
-		const char *in_rows = in_part->get_rows(in_row_start,
-				in_row_start + block_size.get_num_cols());
-		char *out_rows = out_part->get_rows(out_row_start,
-				out_row_start + block_size.get_num_rows());
+		size_t out_row_end = std::min(out_row_start + block_size.get_num_rows(),
+				out_part->get_num_rows());
+		const char *in_rows = in_part->get_rows(in_row_start, in_row_end);
+		char *out_rows = out_part->get_rows(out_row_start, out_row_end);
 
 		rp_edge_iterator it = block.get_first_edge_iterator();
 		while (!block.is_block_end(it)) {
