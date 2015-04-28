@@ -29,14 +29,10 @@ namespace detail
 size_t matrix_store::get_num_portions() const
 {
 	std::pair<size_t, size_t> chunk_size = get_portion_size();
-	if (is_wide()) {
-		assert(chunk_size.first == get_num_rows());
+	if (is_wide())
 		return ceil(((double) get_num_cols()) / chunk_size.second);
-	}
-	else {
-		assert(chunk_size.second == get_num_cols());
+	else
 		return ceil(((double) get_num_rows()) / chunk_size.first);
-	}
 }
 
 }
