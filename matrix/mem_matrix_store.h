@@ -26,6 +26,8 @@
 namespace fm
 {
 
+class mem_vector;
+
 namespace detail
 {
 
@@ -162,6 +164,9 @@ public:
 		return matrix_store::const_ptr();
 	}
 
+	virtual std::shared_ptr<mem_vector> get_col_vec(size_t col);
+	virtual std::shared_ptr<const mem_vector> get_col_vec(size_t col) const;
+
 	virtual matrix_layout_t store_layout() const {
 		return matrix_layout_t::L_COL;
 	}
@@ -292,6 +297,9 @@ public:
 			const std::vector<off_t> &idxs) const {
 		return matrix_store::const_ptr();
 	}
+
+	virtual std::shared_ptr<mem_vector> get_col_vec(size_t col);
+	virtual std::shared_ptr<const mem_vector> get_col_vec(size_t col) const;
 };
 
 /*

@@ -50,6 +50,8 @@ protected:
 	}
 public:
 	typedef std::shared_ptr<mem_vector> ptr;
+	typedef std::shared_ptr<const mem_vector> const_ptr;
+
 	static ptr cast(vector::ptr vec);
 
 	static ptr create(const detail::raw_data_array &data, size_t num_bytes,

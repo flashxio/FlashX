@@ -77,7 +77,7 @@ NUMA_matrix_store::ptr NUMA_matrix_store::create(size_t nrow, size_t ncol,
 }
 
 NUMA_row_tall_matrix_store::NUMA_row_tall_matrix_store(size_t nrow, size_t ncol,
-		int num_nodes, const scalar_type &type): NUMA_matrix_store(nrow, ncol,
+		int num_nodes, const scalar_type &type): NUMA_row_matrix_store(nrow, ncol,
 			type), mapper(num_nodes)
 {
 	data.resize(num_nodes);
@@ -125,7 +125,7 @@ char *NUMA_row_tall_matrix_store::get_rows(off_t row_start, off_t row_end)
 }
 
 NUMA_col_tall_matrix_store::NUMA_col_tall_matrix_store(size_t nrow,
-		size_t ncol, int num_nodes, const scalar_type &type): NUMA_matrix_store(
+		size_t ncol, int num_nodes, const scalar_type &type): NUMA_col_matrix_store(
 			nrow, ncol, type)
 {
 	data.resize(ncol);

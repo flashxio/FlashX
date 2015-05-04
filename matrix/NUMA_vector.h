@@ -56,6 +56,7 @@ class NUMA_vector: public vector
 	NUMA_vector(size_t length, size_t num_nodes, const scalar_type &type);
 public:
 	typedef std::shared_ptr<NUMA_vector> ptr;
+	typedef std::shared_ptr<const NUMA_vector> const_ptr;
 
 	static ptr create(size_t length, const scalar_type &type) {
 		return ptr(new NUMA_vector(length, matrix_conf.get_num_nodes(), type));
