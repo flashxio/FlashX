@@ -15,8 +15,8 @@ LDFLAGS += -lstxxl -lz -lnuma -laio
 BlockDavidsonTpetra: BlockDavidsonTpetra.o
 	$(CXX) BlockDavidsonTpetra.o -o BlockDavidsonTpetra $(LDFLAGS)
 
-BlockDavidsonFM: BlockDavidsonFM.o
-	$(CXX) BlockDavidsonFM.o -o BlockDavidsonFM $(LDFLAGS)
+BlockDavidsonFM: BlockDavidsonFM.o block_dense_matrix.o
+	$(CXX) BlockDavidsonFM.o block_dense_matrix.o -o BlockDavidsonFM $(LDFLAGS)
 
 clean:
 	rm *~

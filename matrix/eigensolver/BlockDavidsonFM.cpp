@@ -17,6 +17,8 @@
 
 using namespace fm;
 
+std::atomic<size_t> iter_no;
+
 class FM_Operator//: public Anasazi::Operator<double>
 {
 	sparse_matrix::ptr mat;
@@ -27,8 +29,9 @@ public:
 
 	virtual void Apply(const FM_MultiVector<double>& x,
 			FM_MultiVector<double>& y) const {
-		printf("SpMM %d columns\n", x.GetNumberVecs());
-		mat->multiply_matrix<double>(x.get_data(), y.get_data());
+		printf("SpMM: y(%s) = A * x(%s)\n", y.get_name().c_str(), x.get_name().c_str());
+		block_multi_vector::sparse_matrix_multiply<double>(*mat, *x.get_data(),
+				*y.get_data());
 		y.sync_fm2ep();
 
 //		assert((size_t) x.GetGlobalLength() == mat->get_num_cols());
@@ -38,9 +41,10 @@ public:
 //		mem_vector::ptr out = mem_vector::create(mat->get_num_rows(),
 //				get_scalar_type<double>());
 //		for (int i = 0; i < x.GetNumberVecs(); i++) {
-//			memcpy(in->get_raw_arr(), x.get_data()[i], in->get_length() * sizeof(double));
+//			memcpy(in->get_raw_arr(), x.get_ep_mv()[i], in->get_length() * sizeof(double));
+//			out->reset_data();
 //			mat->multiply<double>(*in, *out);
-//			memcpy(y.get_data()[i], out->get_raw_arr(), out->get_length() * sizeof(double));
+//			memcpy(y.get_ep_mv()[i], out->get_raw_arr(), out->get_length() * sizeof(double));
 //		}
 //		y.sync_ep2fm();
 	}
@@ -66,6 +70,7 @@ public:
 	 */
 	static void Apply ( const FM_Operator& Op,
 			const FM_MultiVector<double>& x, FM_MultiVector<double>& y ) {
+		iter_no++;
 		Op.Apply(x,y);
 	}
 
@@ -123,7 +128,7 @@ main (int argc, char *argv[])
 
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
-	RCP<MV> ivec = rcp (new MV (A->get_num_cols(), blockSize));
+	RCP<MV> ivec = rcp (new MV (A->get_num_cols(), blockSize, blockSize));
 	ivec->Random ();
 
 	// Create the eigenproblem.  This object holds all the stuff about
@@ -184,7 +189,7 @@ main (int argc, char *argv[])
 	std::vector<double> normR (sol.numVecs);
 	if (sol.numVecs > 0) {
 		Teuchos::SerialDenseMatrix<int,double> T (sol.numVecs, sol.numVecs);
-		MV tempAevec (A->get_num_rows(), sol.numVecs);
+		MV tempAevec (A->get_num_rows(), sol.numVecs, evecs->get_block_size());
 		T.putScalar (0.0);
 		for (int i=0; i<sol.numVecs; ++i) {
 			T(i,i) = evals[i].realpart;
@@ -209,6 +214,8 @@ main (int argc, char *argv[])
 			<< endl;
 	}
 	cout << "------------------------------------------------------" << endl;
+	cout << "#iterations: " << iter_no << endl;
+	cout << "#col writes: " << num_col_writes << endl;
 
 	return 0;
 }
