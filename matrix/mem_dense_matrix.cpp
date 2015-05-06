@@ -259,8 +259,12 @@ void mem_dense_matrix::inner_prod_wide(const detail::mem_matrix_store &m,
 	detail::local_matrix_store::ptr local_res = res.get_portion(0);
 	assert(local_res->get_num_rows() == res.get_num_rows()
 			&& local_res->get_num_cols() == res.get_num_cols());
-	for (int j = 0; j < nthreads; j++)
-		detail::mapply2(*local_res, *local_ms[j], right_op, *local_res);
+	for (int j = 0; j < nthreads; j++) {
+		// It's possible that the local matrix store doesn't exist
+		// because the input matrix is very small.
+		if (local_ms[j])
+			detail::mapply2(*local_res, *local_ms[j], right_op, *local_res);
+	}
 }
 
 namespace
