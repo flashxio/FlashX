@@ -4,6 +4,7 @@
 
 #include "sparse_matrix.h"
 #include "vertex.h"
+#include "vertex_index.h"
 #include "in_mem_storage.h"
 #include "io_interface.h"
 
@@ -27,6 +28,7 @@ using namespace fm;
 
 using Teuchos::RCP;
 using Teuchos::rcp;
+using Teuchos::ArrayRCP;
 using std::cerr;
 using std::cout;
 using std::endl;
@@ -46,14 +48,33 @@ typedef Tpetra::CrsMatrix<double, local_ordinal_type, global_ordinal_type> crs_m
 
 size_t edge_data_size = 0;
 
-RCP<crs_matrix_type> create_csr(fg::in_mem_graph::ptr g, RCP<map_type> map)
+ArrayRCP<size_t> getNumEntriesPerRow(fg::vertex_index::ptr index,
+		size_t &num_rows)
+{
+	fg::in_mem_query_vertex_index::ptr query_index
+		= fg::in_mem_query_vertex_index::create(index, false);
+
+	ArrayRCP<size_t> numEntries(index->get_num_vertices());
+	for (size_t i = 0; i < index->get_num_vertices(); i++)
+		numEntries[i] = query_index->get_num_edges(i, fg::edge_type::IN_EDGE);
+
+	num_rows = index->get_num_vertices();
+	return numEntries;
+}
+
+RCP<crs_matrix_type> create_crs(fg::in_mem_graph::ptr g,
+		fg::vertex_index::ptr index, RCP<map_type> map)
 {
 	safs::io_interface::ptr io = create_io(g->create_io_factory(),
 			thread::get_curr_thread());
 	const size_t numMyElements = map->getNodeNumElements ();
 
+	size_t numRows;
+	ArrayRCP<const size_t> numEntriesPerRow = getNumEntriesPerRow(index, numRows);
+	assert(numRows == numMyElements);
 	// Create a Tpetra sparse matrix whose rows have distribution given by the Map.
-	RCP<crs_matrix_type> A (new crs_matrix_type (map, 0));
+	RCP<crs_matrix_type> A (new crs_matrix_type (map, numEntriesPerRow,
+				Tpetra::ProfileType::StaticProfile));
 
 	const size_t vheader_size = fg::ext_mem_undirected_vertex::get_header_size();
 	char vheader_buf[vheader_size];
@@ -132,7 +153,7 @@ int main (int argc, char *argv[])
 	RCP<const Teuchos::Comm<int> > comm = platform.getComm();
 	RCP<map_type> Map = rcp (new map_type(
 				fg->get_graph_header().get_num_vertices(), 0, comm));
-	RCP<crs_matrix_type> A = create_csr(fg->get_graph_data(), Map);
+	RCP<crs_matrix_type> A = create_crs(fg->get_graph_data(), fg->get_index_data(), Map);
 	// Create a set of initial vectors to start the eigensolver.
 	// This needs to have the same number of columns as the block size.
 	RCP<MV> ivec = rcp (new MV (Map, (size_t) blockSize));
