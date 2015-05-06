@@ -13,6 +13,7 @@ using namespace fm;
 
 using Teuchos::RCP;
 using Teuchos::rcp;
+using Teuchos::ArrayRCP;
 using std::cerr;
 using std::cout;
 using std::endl;
@@ -27,20 +28,44 @@ typedef Tpetra::CrsMatrix<double, local_ordinal_type, global_ordinal_type> crs_m
 
 size_t edge_data_size = 0;
 
-RCP<crs_matrix_type> create_crs(fg::in_mem_graph::ptr g, RCP<map_type> map)
+ArrayRCP<size_t> getNumEntriesPerRow(fg::vertex_index::ptr index,
+		size_t &num_rows)
+{
+	fg::in_mem_query_vertex_index::ptr query_index
+		= fg::in_mem_query_vertex_index::create(index, false);
+
+	ArrayRCP<size_t> numEntries(index->get_num_vertices());
+	for (size_t i = 0; i < index->get_num_vertices(); i++)
+		numEntries[i] = query_index->get_num_edges(i, fg::edge_type::IN_EDGE);
+
+	num_rows = index->get_num_vertices();
+	return numEntries;
+}
+
+RCP<crs_matrix_type> create_crs(fg::in_mem_graph::ptr g,
+		fg::vertex_index::ptr index, RCP<map_type> map)
 {
 	safs::io_interface::ptr io = create_io(g->create_io_factory(),
 			thread::get_curr_thread());
 	const size_t numMyElements = map->getNodeNumElements ();
 
+	printf("Get #entries per row\n");
+	size_t numRows;
+	ArrayRCP<const size_t> numEntriesPerRow = getNumEntriesPerRow(index, numRows);
+	assert(numRows == numMyElements);
+	printf("allocate CRS matrix\n");
 	// Create a Tpetra sparse matrix whose rows have distribution given by the Map.
-	RCP<crs_matrix_type> A (new crs_matrix_type (map, 0));
+	RCP<crs_matrix_type> A (new crs_matrix_type (map, numEntriesPerRow,
+				Tpetra::ProfileType::StaticProfile));
 
+	printf("fill the CRS matrix\n");
 	const size_t vheader_size = fg::ext_mem_undirected_vertex::get_header_size();
 	char vheader_buf[vheader_size];
 	const fg::ext_mem_undirected_vertex *vheader
 		= (const fg::ext_mem_undirected_vertex *) vheader_buf;
 	off_t off = fg::graph_header::get_header_size();
+	std::vector<global_ordinal_type> cols;
+	std::vector<double> vals;
 	// Fill the sparse matrix, one row at a time.
 	for (local_ordinal_type lclRow = 0;
 			lclRow < static_cast<local_ordinal_type> (numMyElements); ++lclRow) {
@@ -54,13 +79,16 @@ RCP<crs_matrix_type> create_crs(fg::in_mem_graph::ptr g, RCP<map_type> map)
 
 		const fg::ext_mem_undirected_vertex *v
 			= (const fg::ext_mem_undirected_vertex *) buf.get();
-		std::vector<global_ordinal_type> cols(num_edges);
-		std::vector<double> vals(num_edges);
+		cols.resize(num_edges);
+		vals.resize(num_edges);
 		for (fg::vsize_t i = 0; i < num_edges; i++) {
 			cols[i] = v->get_neighbor(i);
+			assert(cols[i] < numRows);
 			vals[i] = 1;
 		}
+		assert(num_edges == numEntriesPerRow[lclRow]);
 		const global_ordinal_type gblRow = map->getGlobalElement (lclRow);
+		assert(gblRow < numRows);
 		A->insertGlobalValues (gblRow, cols, vals);
 		off += size;
 	}
@@ -78,10 +106,11 @@ void test_tpetra(fg::FG_graph::ptr fg)
 	RCP<const Teuchos::Comm<int> > comm = platform.getComm();
 	RCP<map_type> Map = rcp (new map_type(
 				fg->get_graph_header().get_num_vertices(), 0, comm));
+
 	printf("start to convert FG format to CSR format\n");
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	RCP<crs_matrix_type> A = create_crs(fg->get_graph_data(), Map);
+	RCP<crs_matrix_type> A = create_crs(fg->get_graph_data(), fg->get_index_data(), Map);
 	gettimeofday(&end, NULL);
 	printf("conversion takes %.3f seconds\n", time_diff(start, end));
 
@@ -91,7 +120,7 @@ void test_tpetra(fg::FG_graph::ptr fg)
 		RCP<MV> res = rcp(new MV(Map, num_vecs));
 		evecs->randomize ();
 
-		printf("start SpMM\n");
+		printf("start SpMM, A has %ld rows and %ld cols\n", A->getGlobalNumRows(), A->getGlobalNumCols());
 		struct timeval start, end;
 		gettimeofday(&start, NULL);
 		A->apply (*evecs, *res, Teuchos::NO_TRANS);
