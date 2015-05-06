@@ -42,6 +42,7 @@ class mem_dense_matrix: public dense_matrix
 {
 public:
 	typedef std::shared_ptr<mem_dense_matrix> ptr;
+	typedef std::shared_ptr<const mem_dense_matrix> const_ptr;
 private:
 	mem_dense_matrix(detail::matrix_store::const_ptr store): dense_matrix(store) {
 	}
@@ -68,6 +69,9 @@ public:
 			const scalar_type &type, int num_nodes = -1);
 	static ptr create(size_t nrow, size_t ncol, matrix_layout_t layout,
 			const scalar_type &type, const set_operate &op, int num_nodes = -1);
+	static ptr create(detail::mem_matrix_store::const_ptr store) {
+		return ptr(new mem_dense_matrix(store));
+	}
 
 	template<class T>
 	static ptr create_rand(T _min, T _max, size_t nrow, size_t ncol,
@@ -85,9 +89,14 @@ public:
 	}
 
 	static ptr cast(dense_matrix::ptr m);
+	static const_ptr cast(dense_matrix::const_ptr m);
 
 	int get_num_nodes() const {
 		return ((const detail::mem_matrix_store &) get_data()).get_num_nodes();
+	}
+
+	virtual dense_matrix::ptr clone() const {
+		return ptr(new mem_dense_matrix(get_raw_store()));
 	}
 
 	virtual dense_matrix::ptr get_cols(const std::vector<off_t> &idxs) const;

@@ -532,6 +532,16 @@ mem_dense_matrix::ptr mem_dense_matrix::cast(dense_matrix::ptr m)
 	return std::static_pointer_cast<mem_dense_matrix>(m);
 }
 
+mem_dense_matrix::const_ptr mem_dense_matrix::cast(dense_matrix::const_ptr m)
+{
+	if (!m->is_in_mem()) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "Can't cast an EM matrix to mem_dense_matrix";
+		return mem_dense_matrix::const_ptr();
+	}
+	return std::static_pointer_cast<const mem_dense_matrix>(m);
+}
+
 #if 0
 mem_row_dense_matrix::ptr mem_col_dense_matrix::get_row_store() const
 {

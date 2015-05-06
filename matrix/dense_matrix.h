@@ -45,7 +45,7 @@ enum apply_margin
 
 /*
  * This class represents a dense matrix and is able to perform computation
- * on the matrix. However, this class can't modify the matrix. The only
+ * on the matrix. However, this class can't modify the matrix data. The only
  * way to modify the matrix is to have the pointer point to another matrix.
  */
 class dense_matrix
@@ -56,6 +56,10 @@ protected:
 	dense_matrix(detail::matrix_store::const_ptr store) {
 		this->store = store;
 	}
+	detail::matrix_store::const_ptr get_raw_store() const {
+		return store;
+	}
+
 	virtual bool verify_aggregate(const bulk_operate &op) const;
 	virtual bool verify_inner_prod(const dense_matrix &m,
 		const bulk_operate &left_op, const bulk_operate &right_op) const;
@@ -64,6 +68,7 @@ protected:
 	virtual bool verify_apply(apply_margin margin, const arr_apply_operate &op) const;
 public:
 	typedef std::shared_ptr<dense_matrix> ptr;
+	typedef std::shared_ptr<const dense_matrix> const_ptr;
 
 	static ptr create(size_t nrow, size_t ncol, const scalar_type &type,
 			matrix_layout_t layout, bool in_mem);
@@ -108,10 +113,25 @@ public:
 		return get_type() == get_scalar_type<T>();
 	}
 
+	/*
+	 * We can't change the matrix data that it points to, but we can change
+	 * the pointer in the class so that it can point to another matrix data.
+	 */
+	void assign(const dense_matrix &mat) {
+		store = mat.store;
+	}
+
 	virtual dense_matrix::ptr get_cols(
 			const std::vector<off_t> &idxs) const = 0;
 	virtual dense_matrix::ptr get_rows(
 			const std::vector<off_t> &idxs) const = 0;
+	/*
+	 * Clone the matrix.
+	 * The class can't modify the matrix data that it points to, but it
+	 * can modify the pointer. If someone changes in the pointer in the cloned
+	 * matrix, it doesn't affect the current matrix.
+	 */
+	virtual dense_matrix::ptr clone() const = 0;
 
 	virtual dense_matrix::ptr transpose() const = 0;
 
