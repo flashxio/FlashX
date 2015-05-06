@@ -512,6 +512,13 @@ mem_col_matrix_store::const_ptr mem_col_matrix_store::cast(matrix_store::const_p
 			<< "cast to col matrix: the matrix isn't in memory";
 		return mem_col_matrix_store::const_ptr();
 	}
+	mem_matrix_store::const_ptr mem_store
+		= std::static_pointer_cast<const mem_matrix_store>(store);
+	if (mem_store->get_num_nodes() >= 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't cast from a NUMA matrix store";
+		return mem_col_matrix_store::const_ptr();
+	}
 	if (store->store_layout() != matrix_layout_t::L_COL) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "cast to col matrix: the matrix has to be column major";
@@ -526,6 +533,13 @@ mem_col_matrix_store::ptr mem_col_matrix_store::cast(matrix_store::ptr store)
 	if (!store->is_in_mem()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "cast to col matrix: the matrix isn't in memory";
+		return mem_col_matrix_store::ptr();
+	}
+	mem_matrix_store::ptr mem_store
+		= std::static_pointer_cast<mem_matrix_store>(store);
+	if (mem_store->get_num_nodes() >= 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't cast from a NUMA matrix store";
 		return mem_col_matrix_store::ptr();
 	}
 	if (store->store_layout() != matrix_layout_t::L_COL) {
@@ -544,6 +558,13 @@ mem_row_matrix_store::const_ptr mem_row_matrix_store::cast(matrix_store::const_p
 			<< "cast to col matrix: the matrix isn't in memory";
 		return mem_row_matrix_store::const_ptr();
 	}
+	mem_matrix_store::const_ptr mem_store
+		= std::static_pointer_cast<const mem_matrix_store>(store);
+	if (mem_store->get_num_nodes() >= 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't cast from a NUMA matrix store";
+		return mem_row_matrix_store::const_ptr();
+	}
 	if (store->store_layout() != matrix_layout_t::L_ROW) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "cast to row matrix: the matrix has to be row major";
@@ -558,6 +579,13 @@ mem_row_matrix_store::ptr mem_row_matrix_store::cast(matrix_store::ptr store)
 	if (!store->is_in_mem()) {
 		BOOST_LOG_TRIVIAL(error)
 			<< "cast to col matrix: the matrix isn't in memory";
+		return mem_row_matrix_store::ptr();
+	}
+	mem_matrix_store::ptr mem_store
+		= std::static_pointer_cast<mem_matrix_store>(store);
+	if (mem_store->get_num_nodes() >= 0) {
+		BOOST_LOG_TRIVIAL(error)
+			<< "can't cast from a NUMA matrix store";
 		return mem_row_matrix_store::ptr();
 	}
 	if (store->store_layout() != matrix_layout_t::L_ROW) {
