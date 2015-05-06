@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+#include <cblas.h>
+
 #include "local_matrix_store.h"
 #include "bulk_operate.h"
 #include "mem_vector.h"
@@ -525,19 +527,75 @@ void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 	}
 }
 
+namespace
+{
+
+/*
+ * There are rounding error problems when multiplying float-points.
+ * We deal with float-point multiplication specially to reduce rounding error.
+ */
+class double_multiply_operate: public bulk_operate
+{
+public:
+	virtual void runAA(size_t num_eles, const void *left_arr,
+			const void *right_arr, void *output_arr) const {
+		const double *a = static_cast<const double *>(left_arr);
+		const double *b = static_cast<const double *>(right_arr);
+		double *c = static_cast<double *>(output_arr);
+		for (size_t i = 0; i < num_eles; i++)
+			c[i] = ((long double) a[i]) * b[i];
+	}
+	virtual void runAE(size_t num_eles, const void *left_arr,
+			const void *right, void *output_arr) const {
+		double a = *static_cast<const double *>(right);
+		const double *x = static_cast<const double *>(left_arr);
+		double *c = static_cast<double *>(output_arr);
+		cblas_dcopy(num_eles, x, 1, c, 1);
+		cblas_dscal(num_eles, a, c, 1);
+	}
+	virtual void runEA(size_t num_eles, const void *left,
+			const void *right_arr, void *output_arr) const {
+		double a = *static_cast<const double *>(left);
+		const double *x = static_cast<const double *>(right_arr);
+		double *c = static_cast<double *>(output_arr);
+		cblas_dcopy(num_eles, x, 1, c, 1);
+		cblas_dscal(num_eles, a, c, 1);
+	}
+	virtual void runA(size_t num_eles, const void *left_arr,
+			void *output) const {
+		assert(0);
+	}
+
+	virtual const scalar_type &get_left_type() const {
+		return get_scalar_type<double>();
+	}
+	virtual const scalar_type &get_right_type() const {
+		return get_scalar_type<double>();
+	}
+	virtual const scalar_type &get_output_type() const {
+		return get_scalar_type<double>();
+	}
+};
+
+double_multiply_operate dm_op;
+
+}
+
 void scale_cols(const local_matrix_store &store, const mem_vector &vals,
 		local_matrix_store &res)
 {
 	assert(res.store_layout() == store.store_layout());
 	size_t ncol = store.get_num_cols();
 	size_t nrow = store.get_num_rows();
-	const bulk_operate &op = store.get_type().get_basic_ops().get_multiply();
+	const bulk_operate *op = &store.get_type().get_basic_ops().get_multiply();
+	if (store.get_type() == get_scalar_type<double>())
+		op = &dm_op;
 	if (store.store_layout() == matrix_layout_t::L_ROW) {
 		const local_row_matrix_store &row_store
 			= (const local_row_matrix_store &) store;
 		local_row_matrix_store &row_res = (local_row_matrix_store &) res;
 		for (size_t i = 0; i < nrow; i++)
-			op.runAA(ncol, row_store.get_row(i), vals.get_raw_arr(),
+			op->runAA(ncol, row_store.get_row(i), vals.get_raw_arr(),
 					row_res.get_row(i));
 	}
 	else {
@@ -546,7 +604,7 @@ void scale_cols(const local_matrix_store &store, const mem_vector &vals,
 			= (const local_col_matrix_store &) store;
 		local_col_matrix_store &col_res = (local_col_matrix_store &) res;
 		for (size_t i = 0; i < ncol; i++)
-			op.runAE(nrow, col_store.get_col(i), vals.get(i),
+			op->runAE(nrow, col_store.get_col(i), vals.get(i),
 					col_res.get_col(i));
 	}
 }
