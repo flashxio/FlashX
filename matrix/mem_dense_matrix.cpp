@@ -788,6 +788,7 @@ dense_matrix::ptr mem_dense_matrix::scale_cols(const mem_vector &vals) const
 {
 	assert(!is_wide());
 	assert(get_num_cols() == vals.get_length());
+	assert(get_type() == vals.get_type());
 	size_t nrow = this->get_num_rows();
 	size_t ncol = this->get_num_cols();
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
