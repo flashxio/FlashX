@@ -129,6 +129,43 @@ public:
 	}
 };
 
+namespace detail
+{
+
+class local_matrix_store;
+
+class portion_mapply_op
+{
+	size_t out_num_rows;
+	size_t out_num_cols;
+	const scalar_type &type;
+public:
+	portion_mapply_op(size_t out_num_rows, size_t out_num_cols,
+			const scalar_type &_type): type(_type) {
+		this->out_num_rows = out_num_rows;
+		this->out_num_cols = out_num_cols;
+	}
+
+	virtual void run(
+			const std::vector<std::shared_ptr<const local_matrix_store> > &ins,
+			local_matrix_store &out) const = 0;
+
+	size_t get_out_num_rows() const {
+		return out_num_rows;
+	}
+	size_t get_out_num_cols() const {
+		return out_num_cols;
+	}
+	const scalar_type &get_output_type() const {
+		return type;
+	}
+};
+
+mem_dense_matrix::ptr mapply_portion(
+		const std::vector<mem_dense_matrix::const_ptr> &mats,
+		const portion_mapply_op &op);
+}
+
 }
 
 #endif

@@ -817,4 +817,82 @@ dense_matrix::ptr mem_dense_matrix::scale_cols(const mem_vector &vals) const
 	return dense_matrix::ptr(new mem_dense_matrix(res));
 }
 
+namespace detail
+{
+
+namespace
+{
+
+class mapply_task: public thread_task
+{
+	std::vector<detail::local_matrix_store::const_ptr> local_stores;
+	detail::local_matrix_store::ptr local_res;
+	const portion_mapply_op &op;
+public:
+	mapply_task(
+			const std::vector<detail::local_matrix_store::const_ptr> &local_stores,
+			const portion_mapply_op &_op,
+			detail::local_matrix_store::ptr local_res): op(_op) {
+		this->local_stores = local_stores;
+		this->local_res = local_res;
+	}
+
+	void run() {
+		op.run(local_stores, *local_res);
+	}
+};
+
+}
+
+mem_dense_matrix::ptr mapply_portion(
+		const std::vector<mem_dense_matrix::const_ptr> &mats,
+		const portion_mapply_op &op)
+{
+	assert(mats.size() >= 1);
+	size_t num_chunks = mats.front()->get_data().get_num_portions();
+	std::pair<size_t, size_t> first_size
+		= mats.front()->get_data().get_portion_size();
+	// It works for tall matrices.
+	assert(!mats.front()->is_wide());
+	assert(op.get_out_num_rows() == mats.front()->get_num_rows());
+	for (size_t i = 1; i < mats.size(); i++) {
+		assert(first_size.first == mats[i]->get_data().get_portion_size().first);
+		assert(mats[i]->store_layout() == mats.front()->store_layout());
+		assert(mats[i]->get_num_nodes() == mats.front()->get_num_nodes());
+		assert(mats[i]->get_num_rows() == mats.front()->get_num_rows());
+	}
+	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
+			op.get_out_num_rows(), op.get_out_num_cols(),
+			mats.front()->store_layout(), op.get_output_type(),
+			mats.front()->get_num_nodes());
+
+	std::vector<const detail::mem_matrix_store *> mem_stores(mats.size());
+	std::vector<detail::local_matrix_store::const_ptr> local_stores(mats.size());
+	for (size_t i = 0; i < mem_stores.size(); i++)
+		mem_stores[i] = dynamic_cast<const detail::mem_matrix_store *>(
+				&mats[i]->get_data());
+
+	detail::mem_thread_pool::ptr mem_threads
+		= detail::mem_thread_pool::get_global_mem_threads();
+	for (size_t i = 0; i < num_chunks; i++) {
+		detail::local_matrix_store::ptr local_res = res->get_portion(i);
+		for (size_t j = 0; j < local_stores.size(); j++) {
+			local_stores[j] = mem_stores[j]->get_portion(i);
+			assert(local_res->get_node_id() == local_stores[j]->get_node_id());
+		}
+
+		int node_id = local_res->get_node_id();
+		// If the local matrix portion is not assigned to any node, 
+		// assign the tasks in round robin fashion.
+		if (node_id < 0)
+			node_id = i % mem_threads->get_num_nodes();
+		mem_threads->process_task(node_id,
+				new mapply_task(local_stores, op, local_res));
+	}
+	mem_threads->wait4complete();
+	return mem_dense_matrix::create(res);
+}
+
+}
+
 }
