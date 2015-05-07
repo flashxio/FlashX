@@ -123,6 +123,24 @@ public:
 class local_col_matrix_store: public local_matrix_store
 {
 public:
+	typedef std::shared_ptr<local_col_matrix_store> ptr;
+	typedef std::shared_ptr<const local_col_matrix_store> const_ptr;
+
+	static ptr cast(local_matrix_store::ptr store) {
+		if (store->store_layout() != matrix_layout_t::L_COL) {
+			BOOST_LOG_TRIVIAL(error) << "the local matrix store isn't col major";
+			return ptr();
+		}
+		return std::static_pointer_cast<local_col_matrix_store>(store);
+	}
+	static const_ptr cast(local_matrix_store::const_ptr store) {
+		if (store->store_layout() != matrix_layout_t::L_COL) {
+			BOOST_LOG_TRIVIAL(error) << "the local matrix store isn't col major";
+			return const_ptr();
+		}
+		return std::static_pointer_cast<const local_col_matrix_store>(store);
+	}
+
 	local_col_matrix_store(off_t global_start_row, off_t global_start_col,
 			size_t nrow, size_t ncol, const scalar_type &type,
 			int node_id): local_matrix_store(global_start_row, global_start_col,
