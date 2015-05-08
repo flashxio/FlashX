@@ -140,6 +140,52 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(size_t id) const
 	}
 }
 
+local_matrix_store::const_ptr mem_row_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (start_row + num_rows > get_num_rows()
+			|| start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		return local_matrix_store::const_ptr();
+	}
+	int node_id = -1;
+	if (start_col == 0 && num_cols == get_num_cols())
+		return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
+					start_row, start_col, get_row(start_row),
+					num_rows, num_cols, get_type(), node_id));
+	else {
+		std::vector<const char *> rows(num_rows);
+		for (size_t i = 0; i < num_rows; i++)
+			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
+		return local_matrix_store::const_ptr(new local_cref_row_matrix_store(
+					start_row, start_col, rows, num_cols, get_type(), node_id));
+	}
+}
+
+local_matrix_store::ptr mem_row_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols)
+{
+	if (start_row + num_rows > get_num_rows()
+			|| start_col + num_cols > get_num_cols()) {
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		return local_matrix_store::ptr();
+	}
+	int node_id = -1;
+	if (start_col == 0 && num_cols == get_num_cols())
+		return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
+					start_row, start_col, get_row(start_row),
+					num_rows, num_cols, get_type(), node_id));
+	else {
+		std::vector<char *> rows(num_rows);
+		for (size_t i = 0; i < num_rows; i++)
+			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
+		return local_matrix_store::ptr(new local_ref_row_matrix_store(
+					start_row, start_col, rows, num_cols, get_type(), node_id));
+	}
+}
+
 local_matrix_store::ptr mem_row_matrix_store::get_portion(size_t id)
 {
 	int node_id = -1;
