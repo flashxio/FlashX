@@ -101,8 +101,7 @@ public:
 	}
 
 	int get_num_nodes() const {
-		return -1;
-//		return fm::matrix_conf.get_num_nodes();
+		return fm::matrix_conf.get_num_nodes();
 	}
 
 	const fm::scalar_type &get_type() const {
