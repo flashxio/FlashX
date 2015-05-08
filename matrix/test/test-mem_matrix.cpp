@@ -107,37 +107,6 @@ mem_dense_matrix::ptr test_MM2(size_t nrow, size_t ncol, size_t right_ncol)
 	return mem_dense_matrix::cast(res1);
 }
 
-mem_dense_matrix::ptr test_dgemm(size_t nrow, size_t ncol, size_t right_ncol)
-{
-	struct timeval start, end;
-
-	printf("dgemm of tall col-wise matrix: M(%ld x %ld) * M(%ld %ld)\n",
-			nrow, ncol, ncol, right_ncol);
-	gettimeofday(&start, NULL);
-	mem_dense_matrix::ptr m1
-		= mem_dense_matrix::create(nrow, ncol, matrix_layout_t::L_COL,
-				get_scalar_type<double>(), set_col_operate(ncol), num_nodes);
-	gettimeofday(&end, NULL);
-	printf("It takes %.3f seconds to construct input column matrix\n",
-			time_diff(start, end));
-	mem_dense_matrix::ptr m2
-		= mem_dense_matrix::create(ncol, right_ncol, matrix_layout_t::L_COL,
-				get_scalar_type<double>(), set_col_operate(ncol), num_nodes);
-	mem_dense_matrix::ptr res_m
-		= mem_dense_matrix::create(nrow, right_ncol, matrix_layout_t::L_COL,
-				get_scalar_type<double>(), num_nodes);
-	scalar_variable_impl<double> alpha(1);
-	scalar_variable_impl<double> beta(0);
-
-	gettimeofday(&start, NULL);
-	res_m->gemm(*m1, *m2, alpha, beta);
-	gettimeofday(&end, NULL);
-	printf("It takes %.3f seconds to multiply column matrix in parallel\n",
-			time_diff(start, end));
-
-	return res_m;
-}
-
 #if 0
 /*
  * This multiplies a large column-wise matrix with a small column-wise matrix
@@ -270,7 +239,6 @@ void matrix_mul_tests()
 	printf("Multiplication of a large and tall matrix and a small square matrix\n");
 	mem_dense_matrix::ptr res1;
 	mem_dense_matrix::ptr res2;
-	res2 = test_dgemm(nrow, ncol, ncol);
 	res1 = test_MM1<double>(nrow, ncol, ncol);
 	res2 = test_MM2<double>(nrow, ncol, ncol);
 	check_result<double>(res1, res2);
