@@ -29,10 +29,12 @@
 #include "matrix_config.h"
 #include "generic_type.h"
 
+#ifdef FM_VERIFY
 #include "Epetra_MultiVector.h"
 #include "Epetra_SerialComm.h"
 #include "Epetra_Map.h"
 #include "AnasaziEpetraAdapter.hpp"
+#endif
 #include "block_dense_matrix.h"
 
 static int MV_id;
@@ -44,7 +46,9 @@ class FM_MultiVector: public Anasazi::MultiVec<ScalarType>
 {
 	std::string name;
 	block_multi_vector::ptr mat;
+#ifdef FM_VERIFY
 	std::shared_ptr<Anasazi::EpetraMultiVec> ep_mat;
+#endif
 
 	static void verify(const fm::mem_dense_matrix &mat1,
 			const fm::mem_dense_matrix &mat2) {
@@ -66,11 +70,13 @@ public:
 		mat = block_multi_vector::create(num_rows, num_cols, block_size,
 				fm::get_scalar_type<ScalarType>());
 
+#ifdef FM_VERIFY
 		Epetra_SerialComm Comm;
 		Teuchos::RCP<Epetra_Map> Map = Teuchos::rcp (
 				new Epetra_Map((int) num_rows, 0, Comm));
 		ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
 				new Anasazi::EpetraMultiVec(*Map, num_cols));
+#endif
 
 		char name_buf[128];
 		snprintf(name_buf, sizeof(name_buf), "MV-%d", MV_id++);
@@ -78,6 +84,7 @@ public:
 	}
 
 	void verify() const {
+#ifdef FM_VERIFY
 		int len = ep_mat->GlobalLength();
 		assert((size_t) ep_mat->NumVectors() == mat->get_num_cols());
 		assert((size_t) len == mat->get_num_rows());
@@ -92,8 +99,10 @@ public:
 				assert(abs(v1 - v2) == 0);
 			}
 		}
+#endif
 	}
 
+#ifdef FM_VERIFY
 	Anasazi::EpetraMultiVec &get_ep_mv() {
 		return *ep_mat;
 	}
@@ -101,6 +110,7 @@ public:
 	const Anasazi::EpetraMultiVec &get_ep_mv() const {
 		return *ep_mat;
 	}
+#endif
 
 	block_multi_vector::ptr get_data() {
 		return mat;
@@ -122,6 +132,7 @@ public:
 	}
 
 	void sync_ep2fm() {
+#ifdef FM_VERIFY
 		assert(mat->get_num_cols() == (size_t) ep_mat->NumVectors());
 		// This is a temporary solution.
 		for (size_t i = 0; i < mat->get_num_blocks(); i++) {
@@ -138,13 +149,16 @@ public:
 			}
 			mat->set_block(i, fm::mem_dense_matrix::create(col_store));
 		}
+#endif
 	}
 
 	void sync_fm2ep() {
+#ifdef FM_VERIFY
 		for (int i = 0; i < ep_mat->NumVectors(); i++) {
 			memcpy((*ep_mat)[i], mat->get_col_raw(i),
 					mat->get_num_rows() * mat->get_entry_size());
 		}
+#endif
 	}
 
 	std::string get_name() const {
@@ -174,8 +188,10 @@ public:
 		std::string extra = std::string("(deep copy from ") + get_name() + ")";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
 		ret->mat = this->mat->clone();
+#ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
 				dynamic_cast<Anasazi::EpetraMultiVec *>(ep_mat->CloneCopy()));
+#endif
 		verify();
 		ret->verify();
 		return ret;
@@ -193,8 +209,10 @@ public:
 		std::string extra = std::string("(deep copy from sub ") + get_name() + ")";
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
 		ret->mat = mat->get_cols(index);
+#ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
 				dynamic_cast<Anasazi::EpetraMultiVec *>(ep_mat->CloneCopy(index)));
+#endif
 		verify();
 		ret->verify();
 		return ret;
@@ -212,8 +230,10 @@ public:
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
 		printf("view %s(#cols: %ld)\n", ret->name.c_str(), index.size());
 		ret->mat = mat->get_cols_mirror(index);
+#ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
 				dynamic_cast<Anasazi::EpetraMultiVec *>(ep_mat->CloneViewNonConst(index)));
+#endif
 //		verify((fm::mem_dense_matrix &) *mat->get_cols(offs), *ret->mat);
 //		verify();
 //		ret->verify();
@@ -254,8 +274,10 @@ public:
 		FM_MultiVector<ScalarType> *ret = new FM_MultiVector<ScalarType>(extra);
 		printf("const view %s(#cols: %ld)\n", ret->name.c_str(), index.size());
 		ret->mat = mat->get_cols(index);
+#ifdef FM_VERIFY
 		ret->ep_mat = std::shared_ptr<Anasazi::EpetraMultiVec>(
 				dynamic_cast<Anasazi::EpetraMultiVec *>(ep_mat->CloneViewNonConst(index)));
+#endif
 //		verify();
 		ret->verify();
 		return ret;
@@ -299,7 +321,9 @@ public:
 		fm::scalar_variable_impl<ScalarType> alpha_var(alpha);
 		fm::scalar_variable_impl<ScalarType> beta_var(beta);
 		this->mat->assign(*this->mat->gemm(*fm_A.mat, *Bstore, alpha_var, beta_var));
+#ifdef FM_VERIFY
 		this->ep_mat->MvTimesMatAddMv(alpha, *fm_A.ep_mat, B, beta);
+#endif
 //		sync_ep2fm();
 		fm_A.verify();
 		this->verify();
@@ -316,7 +340,9 @@ public:
 		block_multi_vector::ptr aA = fm_A.mat->multiply_scalar(alpha);
 		block_multi_vector::ptr bB = fm_B.mat->multiply_scalar(beta);
 		this->mat->assign(*aA->add(*bB));
+#ifdef FM_VERIFY
 		this->ep_mat->MvAddMv(alpha, *fm_A.ep_mat, beta, *fm_B.ep_mat);
+#endif
 		fm_A.verify();
 		fm_B.verify();
 		this->verify();
@@ -327,7 +353,9 @@ public:
 		printf("this(%s) *= %g\n", name.c_str(), alpha);
 		num_col_writes += this->GetNumberVecs();
 		mat->assign(*mat->multiply_scalar<ScalarType>(alpha));
+#ifdef FM_VERIFY
 		ep_mat->MvScale(alpha);
+#endif
 		this->verify();
 	}
 
@@ -336,7 +364,9 @@ public:
 		printf("this(%s) *= vec\n", name.c_str());
 		num_col_writes += this->GetNumberVecs();
 		mat->assign(*mat->scale_cols<ScalarType>(alpha));
+#ifdef FM_VERIFY
 		ep_mat->MvScale(alpha);
+#endif
 		this->verify();
 	}
 
@@ -414,7 +444,9 @@ public:
 		size_t block_start = index[0] / mat->get_block_size();
 		for (size_t i = 0; i < num_blocks; i++)
 			this->mat->set_block(block_start + i, fm_A.mat->get_block(i));
+#ifdef FM_VERIFY
 		this->ep_mat->SetBlock(*fm_A.ep_mat, index);
+#endif
 		fm_A.verify();
 		this->verify();
 	}
