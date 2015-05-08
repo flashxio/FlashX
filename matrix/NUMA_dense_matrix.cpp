@@ -243,6 +243,15 @@ local_matrix_store::ptr NUMA_col_wide_matrix_store::get_portion(size_t id)
 	return local_matrix_store::cast(store.get_portion(id)->transpose());
 }
 
+matrix_store::const_ptr NUMA_col_tall_matrix_store::get_cols(
+		const std::vector<off_t> &idxs) const
+{
+	std::vector<NUMA_vector::ptr> wanted(idxs.size());
+	for (size_t i = 0; i < wanted.size(); i++)
+		wanted[i] = data[idxs[i]];
+	return matrix_store::const_ptr(new NUMA_col_tall_matrix_store(wanted));
+}
+
 }
 
 }

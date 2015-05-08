@@ -190,6 +190,13 @@ class NUMA_col_tall_matrix_store: public NUMA_col_matrix_store
 {
 	std::vector<NUMA_vector::ptr> data;
 
+	NUMA_col_tall_matrix_store(
+			const std::vector<NUMA_vector::ptr> &cols): NUMA_col_matrix_store(
+				cols.front()->get_length(), cols.size(),
+				cols.front()->get_type()) {
+		this->data = cols;
+	}
+
 	// The copy constructor performs shallow copy.
 	NUMA_col_tall_matrix_store(
 			const NUMA_col_tall_matrix_store &mat): NUMA_col_matrix_store(
@@ -234,6 +241,8 @@ public:
 	virtual NUMA_vector::const_ptr get_col_vec(size_t col) const {
 		return data[col];
 	}
+
+	virtual matrix_store::const_ptr get_cols(const std::vector<off_t> &idxs) const;
 
 	virtual matrix_store::const_ptr transpose() const;
 
@@ -294,6 +303,10 @@ public:
 	}
 	virtual NUMA_vector::const_ptr get_row_vec(size_t row) const {
 		return store.get_col_vec(row);
+	}
+	virtual matrix_store::const_ptr get_rows(
+			const std::vector<off_t> &idxs) const {
+		return store.get_cols(idxs);
 	}
 
 	virtual matrix_store::const_ptr transpose() const;
