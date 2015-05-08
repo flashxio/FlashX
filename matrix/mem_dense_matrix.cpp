@@ -229,7 +229,6 @@ void mem_dense_matrix::inner_prod_wide(const detail::mem_matrix_store &m,
 	const detail::mem_matrix_store &this_store
 		= dynamic_cast<const detail::mem_matrix_store &>(get_data());
 	size_t num_chunks = this_store.get_num_portions();
-	assert(this_store.get_portion_size().second == res.get_portion_size().first);
 	detail::mem_thread_pool::ptr mem_threads
 		= detail::mem_thread_pool::get_global_mem_threads();
 	int nthreads = mem_threads->get_num_threads();
