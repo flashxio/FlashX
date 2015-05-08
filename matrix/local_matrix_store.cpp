@@ -194,19 +194,42 @@ void local_row_matrix_store::set_data(const set_operate &op)
 
 bool local_row_matrix_store::copy_from(const local_matrix_store &store)
 {
-	assert(store.store_layout() == matrix_layout_t::L_ROW);
+	assert(this->get_num_rows() == store.get_num_rows());
+	assert(this->get_num_cols() == store.get_num_cols());
 	assert(store.get_type() == this->get_type());
 
-	size_t ncol = get_num_cols();
-	size_t nrow = get_num_rows();
-	// If the store has data stored contiguously.
-	if (get_raw_arr() && store.get_raw_arr())
-		memcpy(get_raw_arr(), store.get_raw_arr(), nrow * ncol * get_entry_size());
+	if (store.store_layout() == matrix_layout_t::L_ROW) {
+		size_t ncol = get_num_cols();
+		size_t nrow = get_num_rows();
+		// If the store has data stored contiguously.
+		if (get_raw_arr() && store.get_raw_arr())
+			memcpy(get_raw_arr(), store.get_raw_arr(),
+					nrow * ncol * get_entry_size());
+		else {
+			const local_row_matrix_store &row_store
+				= static_cast<const local_row_matrix_store &>(store);
+			for (size_t i = 0; i < nrow; i++)
+				memcpy(get_row(i), row_store.get_row(i),
+						ncol * get_entry_size());
+		}
+	}
 	else {
-		const local_row_matrix_store &row_store
-			= static_cast<const local_row_matrix_store &>(store);
-		for (size_t i = 0; i < nrow; i++)
-			memcpy(get_row(i), row_store.get_row(i), ncol * get_entry_size());
+		// TODO I should handle wide matrix and tall matrix differently
+		// to minimize virtual function calls.
+		const local_col_matrix_store &col_store
+			= static_cast<const local_col_matrix_store &>(store);
+		std::vector<char *> dest_col(get_num_rows());
+		size_t entry_size = store.get_type().get_size();
+		const scatter_gather &sg = store.get_type().get_sg();
+		for (size_t j = 0; j < store.get_num_rows(); j++)
+			dest_col[j] = this->get_row(j);
+		// This copies from column by column.
+		for (size_t i = 0; i < store.get_num_cols(); i++) {
+			const char *src_col = col_store.get_col(i);
+			sg.scatter(src_col, dest_col);
+			for (size_t j = 0; j < store.get_num_rows(); j++)
+				dest_col[j] += entry_size;
+		}
 	}
 	return true;
 }
@@ -236,19 +259,41 @@ void local_col_matrix_store::set_data(const set_operate &op)
 
 bool local_col_matrix_store::copy_from(const local_matrix_store &store)
 {
-	assert(store.store_layout() == matrix_layout_t::L_COL);
+	assert(this->get_num_rows() == store.get_num_rows());
+	assert(this->get_num_cols() == store.get_num_cols());
 	assert(store.get_type() == this->get_type());
 
-	size_t ncol = get_num_cols();
-	size_t nrow = get_num_rows();
-	// If the store has data stored contiguously.
-	if (get_raw_arr() && store.get_raw_arr())
-		memcpy(get_raw_arr(), store.get_raw_arr(), nrow * ncol * get_entry_size());
+	if (store.store_layout() == matrix_layout_t::L_COL) {
+		size_t ncol = get_num_cols();
+		size_t nrow = get_num_rows();
+		// If the store has data stored contiguously.
+		if (get_raw_arr() && store.get_raw_arr())
+			memcpy(get_raw_arr(), store.get_raw_arr(),
+					nrow * ncol * get_entry_size());
+		else {
+			const local_col_matrix_store &col_store
+				= static_cast<const local_col_matrix_store &>(store);
+			for (size_t i = 0; i < ncol; i++)
+				memcpy(get_col(i), col_store.get_col(i), nrow * get_entry_size());
+		}
+	}
 	else {
-		const local_col_matrix_store &col_store
-			= static_cast<const local_col_matrix_store &>(store);
-		for (size_t i = 0; i < ncol; i++)
-			memcpy(get_col(i), col_store.get_col(i), nrow * get_entry_size());
+		// TODO I should handle wide matrix and tall matrix differently
+		// to minimize virtual function calls.
+		const local_row_matrix_store &row_store
+			= static_cast<const local_row_matrix_store &>(store);
+		std::vector<const char *> src_col(get_num_rows());
+		size_t entry_size = store.get_type().get_size();
+		const scatter_gather &sg = store.get_type().get_sg();
+		for (size_t j = 0; j < store.get_num_rows(); j++)
+			src_col[j] = row_store.get_row(j);
+		// This copies from column by column.
+		for (size_t i = 0; i < store.get_num_cols(); i++) {
+			char *dest_col = this->get_col(i);
+			sg.gather(src_col, dest_col);
+			for (size_t j = 0; j < store.get_num_rows(); j++)
+				src_col[j] += entry_size;
+		}
 	}
 	return true;
 }

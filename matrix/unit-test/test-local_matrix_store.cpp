@@ -499,6 +499,83 @@ void test_transpose(size_t long_dim)
 	}
 }
 
+void test_copy_from1(const local_matrix_store &m1, local_matrix_store &m2)
+{
+	m2.copy_from(m1);
+	for (size_t i = 0; i < m1.get_num_rows(); i++) {
+		for (size_t j = 0; j < m1.get_num_cols(); j++)
+			assert(m1.get<int>(i, j) == m2.get<int>(i, j));
+	}
+}
+
+local_matrix_store::ptr get_cols(local_col_matrix_store::ptr store,
+		size_t num_cols)
+{
+	assert(store->get_num_cols() >= num_cols);
+	std::vector<char *> cols(num_cols);
+	for (size_t i = 0; i < cols.size(); i++)
+		cols[i] = store->get_col(i);
+	return local_matrix_store::ptr(new local_ref_col_matrix_store(0, 0, cols,
+				store->get_num_rows(), store->get_type(), store->get_node_id()));
+}
+
+local_matrix_store::ptr get_rows(local_row_matrix_store::ptr store,
+		size_t num_rows)
+{
+	assert(store->get_num_rows() >= num_rows);
+	std::vector<char *> rows(num_rows);
+	for (size_t i = 0; i < rows.size(); i++)
+		rows[i] = store->get_row(i);
+	return local_matrix_store::ptr(new local_ref_row_matrix_store(0, 0, rows,
+				store->get_num_cols(), store->get_type(), store->get_node_id()));
+}
+
+void test_copy_from(size_t long_dim)
+{
+	printf("test copy from on local matrix, long dim: %ld\n", long_dim);
+	// Test on local buffer matrix.
+	local_matrix_store::ptr m1;
+	local_matrix_store::ptr m2;
+	local_matrix_store::ptr sub_m1;
+	local_matrix_store::ptr sub_m2;
+
+	// For the entire col-major matrix.
+	m1 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	m1->set_data(set_col_operate(m1->get_num_cols()));
+	m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	test_copy_from1(*m1, *m2);
+
+	// For the sub col-major matrix.
+	sub_m1 = get_cols(local_col_matrix_store::cast(m1), m1->get_num_cols() / 2);
+	sub_m2 = get_cols(local_col_matrix_store::cast(m2), m2->get_num_cols() / 2);
+	test_copy_from1(*sub_m1, *sub_m2);
+
+	// For col-major 2 row-major.
+	m2 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	test_copy_from1(*m1, *m2);
+
+	// For the entire row-major matrix.
+	m1 = local_matrix_store::ptr(new local_buf_row_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	m1->set_data(set_row_operate(m1->get_num_cols()));
+	m2 = local_matrix_store::ptr(new local_buf_row_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	test_copy_from1(*m1, *m2);
+
+	// For the sub row-major matrix.
+	sub_m1 = get_rows(local_row_matrix_store::cast(m1), m1->get_num_rows() / 2);
+	sub_m2 = get_rows(local_row_matrix_store::cast(m2), m2->get_num_rows() / 2);
+	test_copy_from1(*sub_m1, *sub_m2);
+
+	// For row-major 2 col-major
+	m2 = local_matrix_store::ptr(new local_buf_col_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	test_copy_from1(*m1, *m2);
+}
+
 int main()
 {
 	test_reset(1000);
@@ -514,4 +591,5 @@ int main()
 	test_inner_prod(1000);
 	test_inner_prod(10000);
 	test_transpose(10000);
+	test_copy_from(1000);
 }
