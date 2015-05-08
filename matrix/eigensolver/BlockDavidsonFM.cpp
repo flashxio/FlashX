@@ -9,6 +9,8 @@
 #include "AnasaziOperator.hpp"
 #include "FM_MultiVector.h"
 
+#include "safs_file.h"
+
 #include "sparse_matrix.h"
 
 // ****************************************************************************
@@ -88,12 +90,12 @@ main (int argc, char *argv[])
 	using std::endl;
 
 	if (argc < 5) {
-		fprintf(stderr, "eigensolver conf_file graph_file index_file nev\n");
+		fprintf(stderr, "eigensolver conf_file matrix_file index_file nev\n");
 		exit(1);
 	}
 
 	std::string conf_file = argv[1];
-	std::string graph_file = argv[2];
+	std::string matrix_file = argv[2];
 	std::string index_file = argv[3];
 	int nev = atoi(argv[4]); // number of eigenvalues for which to solve
 
@@ -116,9 +118,25 @@ main (int argc, char *argv[])
 	config_map::ptr configs = config_map::create(conf_file);
 	init_flash_matrix(configs);
 
-	fg::FG_graph::ptr fg = fg::FG_graph::create(graph_file, index_file, configs);
-	sparse_matrix::ptr m = sparse_matrix::create(fg);
-	RCP<FM_Operator> A = rcp(new FM_Operator(m));
+	// Load index.
+	SpM_2d_index::ptr index;
+	safs::safs_file idx_f(safs::get_sys_RAID_conf(), index_file);
+	if (idx_f.exist())
+		index = SpM_2d_index::safs_load(index_file);
+	else
+		index = SpM_2d_index::load(index_file);
+
+	// Load matrix.
+	sparse_matrix::ptr mat;
+	safs::safs_file mat_f(safs::get_sys_RAID_conf(), matrix_file);
+	if (mat_f.exist())
+		mat = sparse_matrix::create(index, safs::create_io_factory(
+					matrix_file, safs::REMOTE_ACCESS));
+	else
+		mat = sparse_matrix::create(index,
+				SpM_2d_storage::load(matrix_file, index));
+
+	RCP<FM_Operator> A = rcp(new FM_Operator(mat));
 
 	// Set eigensolver parameters.
 	const double tol = 1.0e-8; // convergence tolerance
