@@ -136,7 +136,9 @@ SpM_2d_index::ptr SpM_2d_index::safs_load(const std::string &idx_file)
 			idx_file).get_size();
 	char *data = (char *) malloc(size);
 	io->access(data, 0, size, READ);
-	return ptr((SpM_2d_index *) data, deleter());
+	SpM_2d_index *index = (SpM_2d_index *) data;
+	index->header.verify();
+	return ptr(index, deleter());
 }
 
 SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)
@@ -160,11 +162,15 @@ SpM_2d_index::ptr SpM_2d_index::load(const std::string &idx_file)
 	}
 
 	fclose(f);
-	return ptr((SpM_2d_index *) data, deleter());
+	SpM_2d_index *index = (SpM_2d_index *) data;
+	index->header.verify();
+	return ptr(index, deleter());
 }
 
 void SpM_2d_storage::verify() const
 {
+	matrix_header *header = (matrix_header *) data.get();
+	header->verify();
 	block_2d_size block_size = index->get_header().get_2d_block_size();
 	for (size_t i = 0; i < get_num_block_rows(); i++) {
 		block_row_iterator brow_it = get_block_row_it(i);
@@ -202,6 +208,8 @@ SpM_2d_storage::ptr SpM_2d_storage::load(const std::string &mat_file,
 		return SpM_2d_storage::ptr();
 	}
 	fclose(f);
+	matrix_header *header = (matrix_header *) data;
+	header->verify();
 	return ptr(new SpM_2d_storage(std::shared_ptr<char>(data, deleter()),
 				index, mat_file));
 }
