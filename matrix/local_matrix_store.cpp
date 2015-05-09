@@ -390,27 +390,74 @@ void inner_prod_row_wide(const local_row_matrix_store &m1,
 {
 	size_t ncol = m1.get_num_cols();
 	size_t nrow = m1.get_num_rows();
-	char *tmp_res = (char *) malloc(SUB_CHUNK_SIZE * left_op.output_entry_size());
-	char *tmp_res2 = (char *) malloc(res.get_num_cols() * res.get_entry_size());
+	std::unique_ptr<char[]> tmp_res(
+			new char[SUB_CHUNK_SIZE * left_op.output_entry_size()]);
+	std::unique_ptr<char[]> tmp_res2(
+			new char[res.get_num_cols() * res.get_entry_size()]);
 	for (size_t k = 0; k < ncol; k += SUB_CHUNK_SIZE) {
 		size_t sub_ncol = std::min(SUB_CHUNK_SIZE, ncol - k);
+		// We further split the input matrices into parts.
 		sub_row_matrix_info sub_left(0, nrow, k, sub_ncol, m1);
 		sub_col_matrix_info sub_right(k, sub_ncol, 0, m2.get_num_cols(), m2);
 		for (size_t i = 0; i < sub_left.get_num_rows(); i++) {
 			for (size_t j = 0; j < sub_right.get_num_cols(); j++) {
 				left_op.runAA(sub_ncol, sub_left.get_row(i),
-						sub_right.get_col(j), tmp_res);
-				right_op.runA(sub_ncol, tmp_res,
-						tmp_res2 + res.get_entry_size() * j);
+						sub_right.get_col(j), tmp_res.get());
+				right_op.runA(sub_ncol, tmp_res.get(),
+						tmp_res2.get() + res.get_entry_size() * j);
 			}
 			// This is fine because we assume the input type of the right operator
 			// should be the same as the type of the output matrix.
-			right_op.runAA(sub_right.get_num_cols(), tmp_res2, res.get_row(i),
-					res.get_row(i));
+			right_op.runAA(sub_right.get_num_cols(), tmp_res2.get(),
+					res.get_row(i), res.get_row(i));
 		}
 	}
-	free(tmp_res);
-	free(tmp_res2);
+}
+
+void inner_prod_col_wide(const local_col_matrix_store &m1,
+		const local_col_matrix_store &m2, const bulk_operate &left_op,
+		const bulk_operate &right_op, local_row_matrix_store &res)
+{
+	size_t ncol = m1.get_num_cols();
+	size_t nrow = m1.get_num_rows();
+	size_t left_entry_size = left_op.left_entry_size();
+	std::unique_ptr<char[]> tmp_row(
+			new char[SUB_CHUNK_SIZE * left_op.left_entry_size()]);
+	std::unique_ptr<char[]> tmp_res(
+			new char[SUB_CHUNK_SIZE * left_op.output_entry_size()]);
+	std::unique_ptr<char[]> tmp_res2(
+			new char[res.get_num_cols() * res.get_entry_size()]);
+	std::vector<const char *> sub_left_row;
+	const scatter_gather &sg = m1.get_type().get_sg();
+	for (size_t k = 0; k < ncol; k += SUB_CHUNK_SIZE) {
+		size_t sub_ncol = std::min(SUB_CHUNK_SIZE, ncol - k);
+
+		// Get the pointers of the columns in the left matrix.
+		sub_left_row.resize(sub_ncol);
+		for (size_t i = 0; i < sub_ncol; i++)
+			sub_left_row[i] = m1.get_col(i + k);
+
+		sub_col_matrix_info sub_right(k, sub_ncol, 0, m2.get_num_cols(), m2);
+		for (size_t i = 0; i < nrow; i++) {
+			// Get the pointers to the elements in a row of the left matrix.
+			if (i > 0) {
+				for (size_t j = 0; j < sub_ncol; j++)
+					sub_left_row[j] += left_entry_size;
+			}
+			sg.gather(sub_left_row, tmp_row.get());
+
+			for (size_t j = 0; j < sub_right.get_num_cols(); j++) {
+				left_op.runAA(sub_ncol, tmp_row.get(),
+						sub_right.get_col(j), tmp_res.get());
+				right_op.runA(sub_ncol, tmp_res.get(),
+						tmp_res2.get() + res.get_entry_size() * j);
+			}
+			// This is fine because we assume the input type of the right operator
+			// should be the same as the type of the output matrix.
+			right_op.runAA(sub_right.get_num_cols(), tmp_res2.get(),
+					res.get_row(i), res.get_row(i));
+		}
+	}
 }
 
 /*
@@ -556,19 +603,28 @@ void inner_prod(const local_matrix_store &m1, const local_matrix_store &m2,
 		assert(m2.store_layout() == matrix_layout_t::L_COL);
 		assert(res.store_layout() == matrix_layout_t::L_ROW);
 		if (m1.is_wide())
-			inner_prod_row_wide((const local_row_matrix_store &) m1,
-					(const local_col_matrix_store &) m2, left_op, right_op,
-					(local_row_matrix_store &) res);
+			inner_prod_row_wide(static_cast<const local_row_matrix_store &>(m1),
+					static_cast<const local_col_matrix_store &>(m2), left_op,
+					right_op, static_cast<local_row_matrix_store &>(res));
 		else
-			inner_prod_row_tall((const local_row_matrix_store &) m1,
-					(const local_col_matrix_store &) m2, left_op, right_op,
-					(local_row_matrix_store &) res);
+			inner_prod_row_tall(static_cast<const local_row_matrix_store &>(m1),
+					static_cast<const local_col_matrix_store &>(m2), left_op,
+					right_op, static_cast<local_row_matrix_store &>(res));
 	}
 	else {
-		assert(!m1.is_wide());
-		assert(res.store_layout() == matrix_layout_t::L_COL);
-		inner_prod_col_tall((const local_col_matrix_store &) m1, m2, left_op, right_op,
-				(local_col_matrix_store &) res);
+		if (m1.is_wide()) {
+			assert(m2.store_layout() == matrix_layout_t::L_COL);
+			assert(res.store_layout() == matrix_layout_t::L_ROW);
+			inner_prod_col_wide(static_cast<const local_col_matrix_store &>(m1),
+					static_cast<const local_col_matrix_store &>(m2), left_op,
+					right_op, static_cast<local_row_matrix_store &>(res));
+		}
+		else {
+			assert(res.store_layout() == matrix_layout_t::L_COL);
+			inner_prod_col_tall(static_cast<const local_col_matrix_store &>(m1),
+					m2, left_op, right_op,
+					static_cast<local_col_matrix_store &>(res));
+		}
 	}
 }
 

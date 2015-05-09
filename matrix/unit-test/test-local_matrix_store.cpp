@@ -354,21 +354,22 @@ std::shared_ptr<local_matrix_store> naive_multiply(const local_matrix_store &m1,
 }
 
 void test_inner_prod1(std::shared_ptr<local_matrix_store> m1,
-		std::shared_ptr<local_matrix_store> m2)
+		std::shared_ptr<local_matrix_store> m2, matrix_layout_t res_layout)
 {
 	std::shared_ptr<local_matrix_store> res;
-	if (m1->store_layout() == matrix_layout_t::L_COL) {
+	if (m1->store_layout() == matrix_layout_t::L_COL)
 		m1->set_data(set1_col_operate());
+	else
+		m1->set_data(set1_row_operate());
+
+	if (res_layout == matrix_layout_t::L_COL)
 		res = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 				0, 0, m1->get_num_rows(), m2->get_num_cols(),
 				get_scalar_type<int>(), -1));
-	}
-	else {
-		m1->set_data(set1_row_operate());
+	else
 		res = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 				0, 0, m1->get_num_rows(), m2->get_num_cols(),
 				get_scalar_type<int>(), -1));
-	}
 
 	if (m2->store_layout() == matrix_layout_t::L_COL)
 		m2->set_data(set1_col_operate());
@@ -397,25 +398,31 @@ void test_inner_prod(size_t long_dim)
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	m2 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 					0, 0, 10, 10, get_scalar_type<int>(), -1));
-	test_inner_prod1(m1, m2);
+	test_inner_prod1(m1, m2, m1->store_layout());
 
 	m1 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 					0, 0, 10, 10, get_scalar_type<int>(), -1));
-	test_inner_prod1(m1, m2);
-
-	m1 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
-					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
-	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
-					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
-	test_inner_prod1(m1, m2);
+	test_inner_prod1(m1, m2, m1->store_layout());
 
 	m1 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
 					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
 	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
 					0, 0, 10, 10, get_scalar_type<int>(), -1));
-	test_inner_prod1(m1, m2);
+	test_inner_prod1(m1, m2, m1->store_layout());
+
+	m1 = std::shared_ptr<local_matrix_store>(new local_buf_row_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
+	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	test_inner_prod1(m1, m2, m1->store_layout());
+
+	m1 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, 10, long_dim, get_scalar_type<int>(), -1));
+	m2 = std::shared_ptr<local_matrix_store>(new local_buf_col_matrix_store(
+					0, 0, long_dim, 10, get_scalar_type<int>(), -1));
+	test_inner_prod1(m1, m2, matrix_layout_t::L_ROW);
 }
 
 void test_transpose1(const local_matrix_store &m1, const local_matrix_store &m2)
