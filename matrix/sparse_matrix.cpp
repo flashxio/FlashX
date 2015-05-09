@@ -214,6 +214,83 @@ void block_compute_task::run(char *buf, size_t size)
 		sb_col_idx += num_blocks;
 		exec_order->exec(*this, blocks);
 	} while (has_blocks);
+	// We have process the entire block rows.
+	notify_complete();
+}
+
+block_spmm_task::block_spmm_task(const detail::mem_matrix_store &_input,
+		detail::mem_matrix_store &_output, const matrix_io &io,
+		const sparse_matrix &mat, block_exec_order::ptr order): block_compute_task(
+			io, mat, order), input(_input), output(_output)
+{
+	// We have to make sure the task processes the entire block rows.
+	assert(io.get_num_cols() == mat.get_num_cols());
+}
+
+const char *block_spmm_task::get_in_rows(size_t start_row, size_t num_rows)
+{
+	// Since the task needs to process the entire block rows, it needs
+	// to access many blocks. Each time a user wants to access in_part,
+	// he needs to specify which block is required.
+	size_t in_part_size = input.get_portion_size().first;
+	size_t in_part_id = start_row / in_part_size;
+	if (in_part == NULL || (size_t) in_part->get_global_start_row()
+			!= in_part_id * in_part_size)
+		in_part = detail::local_row_matrix_store::cast(
+				input.get_portion(in_part_id));
+
+	// Get the contiguous rows in the input and output matrices.
+	size_t local_start = start_row - in_part->get_global_start_row();
+	size_t local_end = std::min(local_start + num_rows,
+			in_part->get_num_rows());
+	return in_part->get_rows(local_start, local_end);
+}
+
+char *block_spmm_task::get_out_rows(size_t start_row, size_t num_rows)
+{
+	// out_part only needs to be initialized once because a task only
+	// runs on certain block rows. 
+	size_t block_row_start = get_io().get_top_left().get_row_idx();
+	size_t block_num_rows = std::min(get_io().get_num_rows(),
+			output.get_num_rows() - block_row_start);
+	if (out_part == NULL) {
+		size_t out_part_size = output.get_portion_size().first;
+		size_t out_part_id = block_row_start / out_part_size;
+		// It's guaranteed that all output rows are stored contiguously together.
+		assert((block_row_start + block_num_rows - 1) / out_part_size
+				== out_part_id);
+		// Another difference between in_part and out_part is that out_part
+		// should only cover the 
+		if (output.store_layout() == matrix_layout_t::L_ROW)
+			out_part = detail::local_row_matrix_store::cast(
+					output.get_portion(block_row_start, 0,
+						block_num_rows, output.get_num_cols()));
+		else {
+			// If the output matrix isn't row major, we can't save
+			// the product to the output matrix directly. Instead, we create
+			// a buffer to keep the product temporarily.
+			out_part = detail::local_row_matrix_store::ptr(
+					new detail::local_buf_row_matrix_store(block_row_start, 0,
+						block_num_rows, output.get_num_cols(), output.get_type(),
+						// we allocate the buffer in the local node.
+						-1));
+			out_part->reset_data();
+		}
+	}
+
+	// Get the contiguous rows in the input and output matrices.
+	size_t local_start = start_row - out_part->get_global_start_row();
+	size_t local_end = std::min(local_start + num_rows,
+			out_part->get_num_rows());
+	return out_part->get_rows(local_start, local_end);
+}
+
+void block_spmm_task::notify_complete()
+{
+	if (output.store_layout() == matrix_layout_t::L_COL)
+		output.get_portion(out_part->get_global_start_row(),
+				out_part->get_global_start_col(), out_part->get_num_rows(),
+				out_part->get_num_cols())->copy_from(*out_part);
 }
 
 void sparse_matrix::compute(task_creator::ptr creator,

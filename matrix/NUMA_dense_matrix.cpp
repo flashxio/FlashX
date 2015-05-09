@@ -154,6 +154,46 @@ matrix_store::const_ptr NUMA_col_wide_matrix_store::transpose() const
 }
 
 local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (start_row + num_rows > get_num_rows())
+		return local_matrix_store::const_ptr();
+	// We have to retrieve the entire rows.
+	if (num_cols != get_num_cols() || start_col != 0)
+		return local_matrix_store::const_ptr();
+	// The retrieved rows have to be stored contiguously.
+	// range size has to be 2^n.
+	if (ROUND(start_row, mapper.get_range_size())
+			!= ROUND(start_row + num_rows - 1, mapper.get_range_size()))
+		return local_matrix_store::const_ptr();
+	auto phy_loc = mapper.map2physical(start_row);
+	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
+				start_row, start_col, get_row(start_row), num_rows, num_cols,
+				get_type(), phy_loc.first));
+}
+
+local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols)
+{
+	if (start_row + num_rows > get_num_rows())
+		return local_matrix_store::ptr();
+	// We have to retrieve the entire rows.
+	if (num_cols != get_num_cols() || start_col != 0)
+		return local_matrix_store::ptr();
+	// The retrieved rows have to be stored contiguously.
+	// range size has to be 2^n.
+	if (ROUND(start_row, mapper.get_range_size())
+			!= ROUND(start_row + num_rows - 1, mapper.get_range_size()))
+		return local_matrix_store::ptr();
+	auto phy_loc = mapper.map2physical(start_row);
+	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
+				start_row, start_col, get_row(start_row), num_rows, num_cols,
+				get_type(), phy_loc.first));
+}
+
+local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 		size_t id) const
 {
 	size_t start_row = id * mapper.get_range_size();
@@ -178,6 +218,60 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
 				start_row, start_col, get_row(start_row), num_rows, num_cols,
 				get_type(), phy_loc.first));
+}
+
+local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (start_row + num_rows > get_num_rows())
+		return local_matrix_store::const_ptr();
+	// We have to retrieve the entire rows.
+	if (num_cols != get_num_cols() || start_col != 0)
+		return local_matrix_store::const_ptr();
+	// The retrieved rows have to be stored contiguously.
+	// range size has to be 2^n.
+	size_t chunk_size = data.front()->get_portion_size();
+	if (ROUND(start_row, chunk_size)
+			!= ROUND(start_row + num_rows - 1, chunk_size))
+		return local_matrix_store::const_ptr();
+
+	int node_id = data.front()->get_node_id(start_row);
+	std::vector<const char *> cols(num_cols);
+	for (size_t i = 0; i < num_cols; i++) {
+		cols[i] = data[i + start_col]->get_sub_arr(start_row,
+				start_row + num_rows);
+		assert(node_id == data[i + start_col]->get_node_id(start_row));
+	}
+	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
+				start_row, start_col, cols, num_rows, get_type(), node_id));
+}
+
+local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols)
+{
+	if (start_row + num_rows > get_num_rows())
+		return local_matrix_store::ptr();
+	// We have to retrieve the entire rows.
+	if (num_cols != get_num_cols() || start_col != 0)
+		return local_matrix_store::ptr();
+	// The retrieved rows have to be stored contiguously.
+	// range size has to be 2^n.
+	size_t chunk_size = data.front()->get_portion_size();
+	if (ROUND(start_row, chunk_size)
+			!= ROUND(start_row + num_rows - 1, chunk_size))
+		return local_matrix_store::ptr();
+
+	int node_id = data.front()->get_node_id(start_row);
+	std::vector<char *> cols(num_cols);
+	for (size_t i = 0; i < num_cols; i++) {
+		cols[i] = data[i + start_col]->get_sub_arr(start_row,
+				start_row + num_rows);
+		assert(node_id == data[i + start_col]->get_node_id(start_row));
+	}
+	return local_matrix_store::ptr(new local_ref_col_matrix_store(
+				start_row, start_col, cols, num_rows, get_type(), node_id));
 }
 
 local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(

@@ -85,6 +85,24 @@ void test_spmv(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 		assert(out->get<int>(i) == degrees[i]);
 }
 
+void verify_spmm(sparse_matrix::ptr spm, detail::mem_matrix_store::ptr in_mat,
+		detail::mem_matrix_store::ptr out)
+{
+	size_t num_cols = spm->get_num_cols();
+	size_t num_rows = spm->get_num_rows();
+	for (size_t i = 0; i < in_mat->get_num_cols(); i++) {
+		NUMA_vector::ptr in_vec = NUMA_vector::create(num_cols, num_nodes,
+				get_scalar_type<int>());
+		for (size_t j = 0; j < num_rows; j++)
+			in_vec->set<int>(j, in_mat->get<int>(j, i));
+		NUMA_vector::ptr out_vec = NUMA_vector::create(num_rows, num_nodes,
+				get_scalar_type<int>());
+		spm->multiply<int>(*in_vec, *out_vec);
+		for (size_t j = 0; j < num_rows; j++)
+			assert(out_vec->get<int>(j) == out->get<int>(j, i));
+	}
+}
+
 void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 		const std::vector<size_t> &degrees)
 {
@@ -101,22 +119,16 @@ void test_spmm(SpM_2d_index::ptr idx, SpM_2d_storage::ptr mat,
 			in_mat->set(i, j, val++);
 	sparse_matrix::ptr spm = sparse_matrix::create(idx, mat);
 
-	detail::mem_matrix_store::ptr out1
+	detail::mem_matrix_store::ptr out
 		= detail::NUMA_row_tall_matrix_store::create(num_rows, 10, num_nodes,
 				get_scalar_type<int>());
-	spm->multiply<int>(*in_mat, *out1);
+	spm->multiply<int>(*in_mat, *out);
+	verify_spmm(spm, in_mat, out);
 
-	for (size_t i = 0; i < in_mat->get_num_cols(); i++) {
-		NUMA_vector::ptr in_vec = NUMA_vector::create(num_cols, num_nodes,
+	out = detail::NUMA_col_tall_matrix_store::create(num_rows, 10, num_nodes,
 				get_scalar_type<int>());
-		for (size_t j = 0; j < num_rows; j++)
-			in_vec->set<int>(j, in_mat->get<int>(j, i));
-		NUMA_vector::ptr out_vec = NUMA_vector::create(num_rows, num_nodes,
-				get_scalar_type<int>());
-		spm->multiply<int>(*in_vec, *out_vec);
-		for (size_t j = 0; j < num_rows; j++)
-			assert(out_vec->get<int>(j) == out1->get<int>(j, i));
-	}
+	spm->multiply<int>(*in_mat, *out);
+	verify_spmm(spm, in_mat, out);
 }
 
 int main()

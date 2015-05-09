@@ -165,6 +165,12 @@ public:
 		return std::pair<size_t, size_t>(mapper.get_range_size(), get_num_cols());
 	}
 
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const;
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 
@@ -232,6 +238,12 @@ public:
 				get_num_cols());
 	}
 
+	virtual std::shared_ptr<const local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols) const;
+	virtual std::shared_ptr<local_matrix_store> get_portion(
+			size_t start_row, size_t start_col, size_t num_rows,
+			size_t num_cols);
 	virtual std::shared_ptr<const local_matrix_store> get_portion(size_t id) const;
 	virtual std::shared_ptr<local_matrix_store> get_portion(size_t id);
 

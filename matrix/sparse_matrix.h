@@ -151,6 +151,10 @@ public:
 		free(buf);
 	}
 
+	const matrix_io &get_io() const {
+		return io;
+	}
+
 	virtual void run(char *buf, size_t size);
 
 	virtual safs::io_request get_request() const {
@@ -159,21 +163,57 @@ public:
 	}
 
 	virtual void run_on_block(const sparse_block_2d &block) = 0;
+	virtual void notify_complete() = 0;
 };
 
-template<class T>
 class block_spmm_task: public block_compute_task
 {
 	const detail::mem_matrix_store &input;
 	detail::mem_matrix_store &output;
 
+	/*
+	 * A task is responsible for processing the entire block rows. The data in
+	 * in_part multiplies with the super block and the result is stored
+	 * in out_part.
+	 */
 	detail::local_row_matrix_store::const_ptr in_part;
 	detail::local_row_matrix_store::ptr out_part;
+public:
+	block_spmm_task(const detail::mem_matrix_store &_input,
+			detail::mem_matrix_store &_output, const matrix_io &io,
+			const sparse_matrix &mat, block_exec_order::ptr order);
 
+	const detail::mem_matrix_store &get_in_matrix() const {
+		return input;
+	}
+	const detail::mem_matrix_store &get_out_matrix() const {
+		return output;
+	}
+
+	/*
+	 * Get the rows in the input matrix required by SpMM.
+	 */
+	const char *get_in_rows(size_t in_row, size_t num_rows);
+
+	/*
+	 * Get the rows in the output matrix required by SpMM.
+	 */
+	char *get_out_rows(size_t out_row, size_t num_rows);
+
+	/*
+	 * The entire block rows have been processed, the data in out_part is
+	 * the final result, we can now save it in the output matrix.
+	 */
+	void notify_complete();
+};
+
+template<class T>
+class block_spmm_task_impl: public block_spmm_task
+{
 	rp_edge_iterator run_on_row_part(rp_edge_iterator it,
 			const T *in_rows, T *out_rows) {
 		size_t row_idx = it.get_rel_row_idx();
-		size_t row_width = output.get_num_cols();
+		size_t row_width = get_out_matrix().get_num_cols();
 		T *dest_row = out_rows + row_width * row_idx;
 		while (it.has_next()) {
 			size_t col_idx = it.next();
@@ -183,46 +223,24 @@ class block_spmm_task: public block_compute_task
 		}
 		return it;
 	}
-
-	// Get the portion required by SpMM in the input and output matrices.
-	void init_part(size_t in_row, size_t out_row) {
-		size_t in_part_size = input.get_portion_size().first;
-		size_t out_part_size = output.get_portion_size().first;
-		size_t in_part_id = in_row / in_part_size;
-		size_t out_part_id = out_row / out_part_size;
-		if (in_part == NULL || (size_t) in_part->get_global_start_row()
-				!= in_part_id * in_part_size)
-			in_part = detail::local_row_matrix_store::cast(
-					input.get_portion(in_part_id));
-		if (out_part == NULL || (size_t) out_part->get_global_start_row()
-				!= out_part_id * out_part_size)
-			out_part = detail::local_row_matrix_store::cast(
-					output.get_portion(out_part_id));
-	}
 public:
-	block_spmm_task(const detail::mem_matrix_store &_input,
-			detail::mem_matrix_store &_output, const matrix_io &_io,
+	block_spmm_task_impl(const detail::mem_matrix_store &input,
+			detail::mem_matrix_store &output, const matrix_io &io,
 			const sparse_matrix &mat,
-			block_exec_order::ptr order): block_compute_task(
-				_io, mat, order), input(_input), output(_output) {
+			block_exec_order::ptr order): block_spmm_task(input,
+				output, io, mat, order) {
 	}
 
 	void run_on_block(const sparse_block_2d &block) {
-		size_t start_col_idx
-			= block.get_block_col_idx() * block_size.get_num_cols();
-		size_t start_row_idx
-			= block.get_block_row_idx() * block_size.get_num_rows();
-		init_part(start_col_idx, start_row_idx);
+		size_t in_row_start = block.get_block_col_idx() * block_size.get_num_cols();
+		size_t num_in_rows = std::min(block_size.get_num_cols(),
+				get_in_matrix().get_num_rows() - in_row_start);
+		const char *in_rows = get_in_rows(in_row_start, num_in_rows);
 
-		// Get the contiguous rows in the input and output matrices.
-		size_t in_row_start = start_col_idx - in_part->get_global_start_row();
-		size_t in_row_end = std::min(in_row_start + block_size.get_num_cols(),
-				in_part->get_num_rows());
-		size_t out_row_start = start_row_idx - out_part->get_global_start_row();
-		size_t out_row_end = std::min(out_row_start + block_size.get_num_rows(),
-				out_part->get_num_rows());
-		const char *in_rows = in_part->get_rows(in_row_start, in_row_end);
-		char *out_rows = out_part->get_rows(out_row_start, out_row_end);
+		size_t out_row_start = block.get_block_row_idx() * block_size.get_num_rows();
+		size_t num_out_rows = std::min(block_size.get_num_rows(),
+				get_out_matrix().get_num_rows() - out_row_start);
+		char *out_rows = get_out_rows(out_row_start, num_out_rows);
 
 		rp_edge_iterator it = block.get_first_edge_iterator();
 		while (!block.is_block_end(it)) {
@@ -275,6 +293,9 @@ public:
 			it = run_on_row_part(it, (const T *) in_buf, (T *) out_buf);
 			it = block.get_next_edge_iterator(it);
 		}
+	}
+
+	void notify_complete() {
 	}
 };
 
@@ -354,7 +375,7 @@ public:
 	}
 
 	virtual compute_task::ptr create(const matrix_io &io) const {
-		return compute_task::ptr(new block_spmm_task<T>(input, output,
+		return compute_task::ptr(new block_spmm_task_impl<T>(input, output,
 					io, mat, order));
 	}
 };
@@ -577,8 +598,9 @@ public:
 			BOOST_LOG_TRIVIAL(error) << "SpMM doesn't support EM dense matrix";
 			return false;
 		}
-		else if (in.store_layout() != matrix_layout_t::L_ROW
-				|| out.store_layout() != matrix_layout_t::L_ROW) {
+		// We allow the output matrix in column major.
+		// TODO we should also allow the input matrix to be column-major.
+		else if (in.store_layout() != matrix_layout_t::L_ROW) {
 			BOOST_LOG_TRIVIAL(error) << "the dense matrix isn't row major.";
 			return false;
 		}
