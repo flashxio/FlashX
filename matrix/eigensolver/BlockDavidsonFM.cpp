@@ -6,6 +6,8 @@
 #include "AnasaziBlockDavidsonSolMgr.hpp"
 // Include header for LOBPCG eigensolver
 #include "AnasaziLOBPCGSolMgr.hpp"
+// Include header for block Davidson eigensolver
+#include "AnasaziBlockKrylovSchurSolMgr.hpp"
 
 // Include header to define eigenproblem Ax = \lambda*x
 #include "AnasaziBasicEigenproblem.hpp"
@@ -149,7 +151,7 @@ main (int argc, char *argv[])
 	const int maxIters = 500; // maximum number of iterations
 	int blockSize = -1; // block size (number of eigenvectors processed at once)
 
-	if (solver == "Davidson") {
+	if (solver == "Davidson" || solver == "KrylovSchur") {
 		blockSize = nev + 1;
 	}
 	else if (solver == "LOBPCG") {
@@ -180,18 +182,19 @@ main (int argc, char *argv[])
 		return -1;
 	}
 
+	// Create a ParameterList, to pass parameters into the Block
+	// Davidson eigensolver.
+	Teuchos::ParameterList anasaziPL;
+	anasaziPL.set ("Which", "LM");
+	anasaziPL.set ("Block Size", blockSize);
+	anasaziPL.set ("Convergence Tolerance", tol);
+	anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings +
+			Anasazi::TimingDetails + Anasazi::FinalSummary);
+
 	Anasazi::ReturnType returnCode;
 	if (solver == "Davidson") {
-		// Create a ParameterList, to pass parameters into the Block
-		// Davidson eigensolver.
-		Teuchos::ParameterList anasaziPL;
-		anasaziPL.set ("Which", "LM");
-		anasaziPL.set ("Block Size", blockSize);
 		anasaziPL.set ("Num Blocks", numBlocks);
 		anasaziPL.set ("Maximum Restarts", maxRestarts);
-		anasaziPL.set ("Convergence Tolerance", tol);
-		anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings +
-				Anasazi::TimingDetails + Anasazi::FinalSummary);
 
 		// Create the Block Davidson eigensolver.
 		Anasazi::BlockDavidsonSolMgr<double, MV, OP> anasaziSolver (problem, anasaziPL);
@@ -204,18 +207,25 @@ main (int argc, char *argv[])
 		// you reuse intermediate state, like allocated basis vectors.
 		returnCode = anasaziSolver.solve ();
 	}
+	else if (solver == "KrylovSchur") {
+		anasaziPL.set ("Num Blocks", numBlocks);
+		anasaziPL.set ("Maximum Restarts", maxRestarts);
+
+		// Create the Block Davidson eigensolver.
+		Anasazi::BlockKrylovSchurSolMgr<double, MV, OP> anasaziSolver (problem, anasaziPL);
+
+		// Solve the eigenvalue problem.
+		//
+		// Note that creating the eigensolver is separate from solving it.
+		// After creating the eigensolver, you may call solve() multiple
+		// times with different parameters or initial vectors.  This lets
+		// you reuse intermediate state, like allocated basis vectors.
+		returnCode = anasaziSolver.solve ();
+	}
 	else if (solver == "LOBPCG") {
-		// Create a ParameterList, to pass parameters into the LOBPCG
-		// eigensolver.
-		Teuchos::ParameterList anasaziPL;
-		anasaziPL.set ("Which", "LM");
-		anasaziPL.set ("Block Size", blockSize);
 		anasaziPL.set ("Maximum Iterations", maxIters);
-		anasaziPL.set ("Convergence Tolerance", tol);
 		anasaziPL.set ("Full Ortho", true);
 		anasaziPL.set ("Use Locking", true);
-		anasaziPL.set ("Verbosity", Anasazi::Errors + Anasazi::Warnings +
-				Anasazi::TimingDetails + Anasazi::FinalSummary);
 
 		// Create the LOBPCG eigensolver.
 		Anasazi::LOBPCGSolMgr<double, MV, OP> anasaziSolver (problem, anasaziPL);
