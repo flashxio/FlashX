@@ -41,6 +41,59 @@ public:
 	}
 };
 
+/*
+ * This mirrors some columns in the block of a block_multi_vector.
+ * It only works if each block use NUMA_matrix_store.
+ */
+class mirror_cols_block_multi_vector: public block_multi_vector
+{
+	fm::dense_matrix::ptr mirrored_mat;
+	std::vector<off_t> offs_in_mirror;
+
+	mirror_cols_block_multi_vector(
+			const std::vector<fm::dense_matrix::ptr> &mats,
+			const std::vector<off_t> &offs_in_mirror,
+			fm::dense_matrix::ptr mirrored_mat): block_multi_vector(mats) {
+		this->mirrored_mat = mirrored_mat;
+		this->offs_in_mirror = offs_in_mirror;
+	}
+public:
+	static ptr create(const std::vector<NUMA_vector::ptr> &vecs,
+			const std::vector<off_t> &offs_in_mirror,
+			fm::dense_matrix::ptr mirrored_mat) {
+		std::vector<fm::dense_matrix::ptr> mats(1);
+		mats[0] = fm::mem_dense_matrix::create(
+				detail::NUMA_col_tall_matrix_store::create(vecs));
+		return ptr(new mirror_cols_block_multi_vector(mats, offs_in_mirror,
+					mirrored_mat));
+	}
+
+	virtual void set_block(off_t block_idx, fm::dense_matrix::const_ptr mat) {
+		assert(block_idx == 0);
+		assert(mat->get_num_cols() == get_block_size());
+		mats[block_idx]->assign(*mat);
+
+		detail::NUMA_col_tall_matrix_store &mirrored_numa_mat
+			= const_cast<detail::NUMA_col_tall_matrix_store &>(
+					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
+						mirrored_mat->get_data()));
+		std::vector<NUMA_vector::ptr> cols(mirrored_mat->get_num_cols());
+		for (size_t i = 0; i < cols.size(); i++)
+			cols[i] = mirrored_numa_mat.get_col_vec(i);
+
+		detail::NUMA_col_tall_matrix_store &numa_in_mat
+			= const_cast<detail::NUMA_col_tall_matrix_store &>(
+					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
+						mat->get_data()));
+		for (size_t i = 0; i < mat->get_num_cols(); i++)
+			cols[offs_in_mirror[i]] = numa_in_mat.get_col_vec(i);
+
+		fm::dense_matrix::ptr new_mat = fm::mem_dense_matrix::create(
+				fm::detail::NUMA_col_tall_matrix_store::create(cols));
+		mirrored_mat->assign(*new_mat);
+	}
+};
+
 block_multi_vector::block_multi_vector(
 		const std::vector<fm::dense_matrix::ptr> &mats): type(mats[0]->get_type())
 {
@@ -153,20 +206,48 @@ bool block_multi_vector::resize_block(size_t new_block_size)
 block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		const std::vector<int> &index)
 {
-	if (index.size() % get_block_size() != 0 || index[0] % get_block_size() != 0)
-		resize_block(index.size());
 	// get entire blocks.
-	assert(index.size() % get_block_size() == 0);
-	assert(index[0] % get_block_size() == 0);
-	size_t num_blocks = index.size() / get_block_size();
-	size_t block_start = index[0] / get_block_size();
-	std::vector<fm::dense_matrix::ptr> mats(num_blocks);
-	for (size_t i = 0; i < num_blocks; i++)
-		mats[i] = get_block(i + block_start);
-	mirror_block_multi_vector::ptr ret
-		= mirror_block_multi_vector::create(mats);
-	printf("mirror block [%ld-%ld]\n", block_start, block_start + num_blocks - 1);
-	return ret;
+	if (index.size() % get_block_size() == 0 && index[0] % get_block_size() == 0) {
+		size_t num_blocks = index.size() / get_block_size();
+		size_t block_start = index[0] / get_block_size();
+		std::vector<fm::dense_matrix::ptr> mats(num_blocks);
+		for (size_t i = 0; i < num_blocks; i++)
+			mats[i] = get_block(i + block_start);
+		mirror_block_multi_vector::ptr ret
+			= mirror_block_multi_vector::create(mats);
+		printf("mirror block [%ld-%ld]\n", block_start, block_start + num_blocks - 1);
+		return ret;
+	}
+	else if (index.size() == 1) {
+		size_t block_start = index[0] / get_block_size();
+
+		// Get the relative offsets in a block.
+		std::vector<off_t> idxs_in_block(index.size());
+		idxs_in_block[0] = index[0] % get_block_size();
+		for (size_t i = 1; i < index.size(); i++) {
+			// All columns has to be in the same block.
+			assert(block_start == index[i] / get_block_size());
+			idxs_in_block[i] = index[i] % get_block_size();
+		}
+
+		// Get the columns in the block.
+		fm::dense_matrix::ptr block = get_block(block_start);
+		detail::NUMA_col_tall_matrix_store &numa_block
+			= const_cast<detail::NUMA_col_tall_matrix_store &>(
+					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
+						block->get_data()));
+		std::vector<NUMA_vector::ptr> cols(index.size());
+		for (size_t i = 0; i < cols.size(); i++)
+			cols[i] = numa_block.get_col_vec(idxs_in_block[i]);
+
+		mirror_cols_block_multi_vector::ptr ret
+			= mirror_cols_block_multi_vector::create(cols, idxs_in_block, block);
+		return ret;
+	}
+	else {
+		assert(0);
+		return block_multi_vector::ptr();
+	}
 #if 0
 	else {
 		// otherwise, we can only fetch columns from the same block.
@@ -364,7 +445,6 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 		const scalar_variable &beta) const
 {
 	// The product can only have one block.
-	assert(B.get_num_rows() % block_size == 0);
 	block_multi_vector::ptr vecs= block_multi_vector::create(
 			// mapply_portion can only output one matrix, so `vecs' can
 			// only have one block.
