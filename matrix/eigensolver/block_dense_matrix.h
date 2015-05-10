@@ -64,7 +64,6 @@ class block_multi_vector
 	static void sparse_matrix_multiply(const sp_multiply &multiply,
 			const fm::sparse_matrix &A, const block_multi_vector &X,
 			block_multi_vector &Y);
-	bool resize_block(size_t new_block_size);
 protected:
 	std::vector<fm::dense_matrix::ptr> mats;
 
@@ -79,6 +78,8 @@ public:
 		assert(ncol % block_size == 0);
 		return ptr(new block_multi_vector(nrow, ncol, block_size, type));
 	}
+
+	bool resize_block(size_t new_block_size);
 
 	size_t get_num_rows() const {
 		return num_rows;

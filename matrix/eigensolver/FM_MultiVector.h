@@ -438,7 +438,8 @@ public:
 		printf("this(%s)[%ld vecs] = A(%s)\n", name.c_str(), index.size(), fm_A.name.c_str());
 		num_col_writes += index.size();
 		// We have to set the entire block.
-		assert(index.size() % mat->get_block_size() == 0);
+		if (index.size() % mat->get_block_size() != 0)
+			this->mat->resize_block(index.size());
 		assert(index[0] % mat->get_block_size() == 0);
 		size_t num_blocks = index.size() / mat->get_block_size();
 		size_t block_start = index[0] / mat->get_block_size();
