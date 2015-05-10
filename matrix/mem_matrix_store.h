@@ -63,6 +63,7 @@ public:
 
 	virtual void reset_data();
 	virtual void set_data(const set_operate &op);
+	virtual matrix_store::ptr conv2(matrix_layout_t layout) const;
 
 	virtual int get_num_nodes() const {
 		return -1;
