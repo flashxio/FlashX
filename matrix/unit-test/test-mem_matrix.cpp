@@ -165,7 +165,8 @@ void test_multiply_col(int num_nodes)
 	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on col_matrix\n");
-	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2));
+	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2,
+				m1->store_layout()));
 	verify_result(*res1, *correct);
 }
 
@@ -196,7 +197,8 @@ void test_multiply_wide_row(int num_nodes)
 	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on row_matrix X col_matrix\n");
-	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2));
+	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2,
+				m1->store_layout()));
 	verify_result(*res1, *correct);
 }
 
@@ -212,7 +214,8 @@ void test_multiply_tall_row(int num_nodes)
 	mem_dense_matrix::ptr correct = naive_multiply(*m1, *m2);
 
 	printf("Test multiply on row_matrix\n");
-	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2));
+	mem_dense_matrix::ptr res1 = mem_dense_matrix::cast(m1->multiply(*m2,
+				m1->store_layout()));
 	verify_result(*res1, *correct);
 }
 

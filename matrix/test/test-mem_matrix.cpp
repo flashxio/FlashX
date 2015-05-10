@@ -61,7 +61,7 @@ mem_dense_matrix::ptr test_MM1(size_t nrow, size_t ncol, size_t right_ncol)
 				get_scalar_type<Type>(), set_col_operate(ncol), num_nodes);
 
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr res1 = m1->multiply(*m2);
+	dense_matrix::ptr res1 = m1->multiply(*m2, m1->store_layout());
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply column matrix in parallel\n",
 			time_diff(start, end));
@@ -95,7 +95,7 @@ mem_dense_matrix::ptr test_MM2(size_t nrow, size_t ncol, size_t right_ncol)
 				set_col_operate(ncol), num_nodes);
 
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr res1 = m1->multiply(*m2);
+	dense_matrix::ptr res1 = m1->multiply(*m2, m1->store_layout());
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply row matrix in parallel\n",
 			time_diff(start, end));
@@ -178,7 +178,7 @@ mem_dense_matrix::ptr test_MV1(size_t nrow, size_t ncol)
 				set_col_operate(ncol), num_nodes);
 
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr res1 = m1->multiply(*m2);
+	dense_matrix::ptr res1 = m1->multiply(*m2, m1->store_layout());
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply column matrix in parallel\n",
 			time_diff(start, end));
@@ -208,7 +208,7 @@ mem_dense_matrix::ptr test_MV2(size_t nrow, size_t ncol)
 				set_col_operate(ncol), num_nodes);
 
 	gettimeofday(&start, NULL);
-	dense_matrix::ptr res1 = m1->multiply(*m2);
+	dense_matrix::ptr res1 = m1->multiply(*m2, m1->store_layout());
 	gettimeofday(&end, NULL);
 	printf("It takes %.3f seconds to multiply row matrix in parallel\n",
 			time_diff(start, end));

@@ -105,7 +105,8 @@ public:
 	virtual dense_matrix::ptr transpose() const;
 
 	virtual dense_matrix::ptr inner_prod(const dense_matrix &m,
-			const bulk_operate &left_op, const bulk_operate &right_op) const;
+			const bulk_operate &left_op, const bulk_operate &right_op,
+			matrix_layout_t out_layout) const;
 	virtual std::shared_ptr<scalar_variable> aggregate(
 			const bulk_operate &op) const;
 	/*
@@ -161,7 +162,8 @@ public:
 
 mem_dense_matrix::ptr mapply_portion(
 		const std::vector<mem_dense_matrix::const_ptr> &mats,
-		const portion_mapply_op &op);
+		// A user can specify the layout of the output dense matrix.
+		const portion_mapply_op &op, matrix_layout_t out_layout);
 }
 
 }

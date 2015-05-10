@@ -85,13 +85,14 @@ dense_matrix::ptr mem_dense_matrix::transpose() const
 }
 
 dense_matrix::ptr mem_dense_matrix::inner_prod(const dense_matrix &m,
-		const bulk_operate &left_op, const bulk_operate &right_op) const
+		const bulk_operate &left_op, const bulk_operate &right_op,
+		matrix_layout_t out_layout) const
 {
 	if (!verify_inner_prod(m, left_op, right_op))
 		return dense_matrix::ptr();
 
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
-			get_num_rows(), m.get_num_cols(), store_layout(),
+			get_num_rows(), m.get_num_cols(), out_layout,
 			right_op.get_output_type(), get_num_nodes());
 	const detail::mem_matrix_store &mem_m
 		= dynamic_cast<const detail::mem_matrix_store &>(m.get_data());
@@ -682,7 +683,7 @@ public:
 
 mem_dense_matrix::ptr mapply_portion(
 		const std::vector<mem_dense_matrix::const_ptr> &mats,
-		const portion_mapply_op &op)
+		const portion_mapply_op &op, matrix_layout_t out_layout)
 {
 	assert(mats.size() >= 1);
 	size_t num_chunks = mats.front()->get_data().get_num_portions();
@@ -699,8 +700,7 @@ mem_dense_matrix::ptr mapply_portion(
 	}
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 			op.get_out_num_rows(), op.get_out_num_cols(),
-			mats.front()->store_layout(), op.get_output_type(),
-			mats.front()->get_num_nodes());
+			out_layout, op.get_output_type(), mats.front()->get_num_nodes());
 
 	std::vector<const detail::mem_matrix_store *> mem_stores(mats.size());
 	std::vector<detail::local_matrix_store::const_ptr> local_stores(mats.size());

@@ -404,7 +404,8 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	// I assume B is small enough.
 	vecs->mats[0] = mapply_portion(mats, gemm_op<double>(B,
 				A_num_blocks, C_num_blocks, d_alpha, d_beta,
-				this->get_num_rows(), this->get_num_cols()));
+				this->get_num_rows(), this->get_num_cols()),
+			matrix_layout_t::L_COL);
 	return vecs;
 }
 
@@ -448,7 +449,7 @@ mem_dense_matrix::ptr block_multi_vector::MvTransMv(
 			fm::mem_dense_matrix::ptr tA = fm::mem_dense_matrix::cast(
 					mv.get_block(j)->transpose());
 			fm::mem_dense_matrix::ptr res1 = fm::mem_dense_matrix::cast(
-					tA->multiply(*get_block(i)));
+					tA->multiply(*get_block(i), matrix_layout_t::L_ROW));
 			assert(res->store_layout() == res1->store_layout());
 			detail::local_matrix_store::ptr part = res->get_portion(
 					block_num_rows * j, block_num_cols * i,
