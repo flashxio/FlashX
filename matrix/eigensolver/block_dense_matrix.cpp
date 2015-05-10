@@ -127,14 +127,6 @@ dense_matrix::const_ptr block_multi_vector::get_col(off_t col_idx) const
 	return block->get_cols(offs);
 }
 
-const char *block_multi_vector::get_col_raw(off_t col_idx) const
-{
-	fm::dense_matrix::const_ptr col = get_col(col_idx);
-	const fm::detail::mem_col_matrix_store &col_store
-		= dynamic_cast<const fm::detail::mem_col_matrix_store &>(col->get_data());
-	return col_store.get_col(0);
-}
-
 bool is_same_block(const std::vector<int> &index, size_t block_size)
 {
 	if (index.size() > block_size)

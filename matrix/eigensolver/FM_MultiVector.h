@@ -155,8 +155,11 @@ public:
 	void sync_fm2ep() {
 #ifdef FM_VERIFY
 		for (int i = 0; i < ep_mat->NumVectors(); i++) {
-			memcpy((*ep_mat)[i], mat->get_col_raw(i),
-					mat->get_num_rows() * mat->get_entry_size());
+			fm::dense_matrix::const_ptr col = mat->get_col(i);
+			const fm::detail::mem_matrix_store &col_store
+				= dynamic_cast<const fm::detail::mem_matrix_store &>(col->get_data());
+			for (size_t j = 0; j < col_store.get_num_rows(); j++)
+				(*ep_mat)[i][j] = col_store.get<ScalarType>(j, 0);
 		}
 #endif
 	}
@@ -324,7 +327,6 @@ public:
 #ifdef FM_VERIFY
 		this->ep_mat->MvTimesMatAddMv(alpha, *fm_A.ep_mat, B, beta);
 #endif
-//		sync_ep2fm();
 		fm_A.verify();
 		this->verify();
 	}
@@ -451,7 +453,6 @@ public:
 		num_col_writes += this->GetNumberVecs();
 		mat->init_rand<ScalarType>(-1, 1);
 //		ep_mat->MvRandom();
-//		sync_ep2fm();
 		sync_fm2ep();
 		this->verify();
 	}
