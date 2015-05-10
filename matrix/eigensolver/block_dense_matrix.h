@@ -122,6 +122,8 @@ public:
 		mats[block_idx] = mat->clone();
 	}
 
+	void set_block(const block_multi_vector &mv, const std::vector<int>& index);
+
 	const char *get_col_raw(off_t col_idx) const;
 
 	fm::dense_matrix::const_ptr get_col(off_t col_idx) const;

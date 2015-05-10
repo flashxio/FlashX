@@ -215,6 +215,10 @@ class NUMA_col_tall_matrix_store: public NUMA_col_matrix_store
 public:
 	typedef std::shared_ptr<NUMA_col_tall_matrix_store> ptr;
 
+	static ptr create(const std::vector<NUMA_vector::ptr> &cols) {
+		return ptr(new NUMA_col_tall_matrix_store(cols));
+	}
+
 	static ptr create(size_t nrow, size_t ncol, int num_nodes,
 			const scalar_type &type) {
 		return ptr(new NUMA_col_tall_matrix_store(nrow, ncol, num_nodes, type));

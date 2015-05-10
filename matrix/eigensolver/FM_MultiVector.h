@@ -437,14 +437,7 @@ public:
 		const FM_MultiVector &fm_A = dynamic_cast<const FM_MultiVector &>(A);
 		printf("this(%s)[%ld vecs] = A(%s)\n", name.c_str(), index.size(), fm_A.name.c_str());
 		num_col_writes += index.size();
-		// We have to set the entire block.
-		if (index.size() % mat->get_block_size() != 0)
-			this->mat->resize_block(index.size());
-		assert(index[0] % mat->get_block_size() == 0);
-		size_t num_blocks = index.size() / mat->get_block_size();
-		size_t block_start = index[0] / mat->get_block_size();
-		for (size_t i = 0; i < num_blocks; i++)
-			this->mat->set_block(block_start + i, fm_A.mat->get_block(i));
+		this->mat->set_block(*fm_A.mat, index);
 #ifdef FM_VERIFY
 		this->ep_mat->SetBlock(*fm_A.ep_mat, index);
 #endif

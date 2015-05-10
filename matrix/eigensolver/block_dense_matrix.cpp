@@ -160,9 +160,8 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 		printf("get block [%ld-%ld]\n", block_start, block_start + num_blocks - 1);
 		return ret;
 	}
-	else {
-		// otherwise, we can only fetch columns from the same block.
-		assert(is_same_block(index, block_size));
+	else if (is_same_block(index, block_size)) {
+		// We can only fetch columns from the same block.
 		size_t block_start = index[0] / get_block_size();
 		std::vector<off_t> local_offs(index.size());
 		for (size_t i = 0; i < local_offs.size(); i++)
@@ -171,6 +170,15 @@ block_multi_vector::ptr block_multi_vector::get_cols(const std::vector<int> &ind
 		block_multi_vector::ptr ret = block_multi_vector::create(get_num_rows(),
 				index.size(), index.size(), get_type());
 		ret->set_block(0, get_block(block_start)->get_cols(local_offs));
+		printf("get block [%ld]\n", block_start);
+		return ret;
+	}
+	else {
+		block_multi_vector::ptr ret = block_multi_vector::create(get_num_rows(),
+				index.size(), 1, get_type());
+		for (size_t i = 0; i < index.size(); i++)
+			ret->set_block(i, get_col(index[i]));
+		printf("get column [%d-%d]\n", index.front(), index.back());
 		return ret;
 	}
 }
@@ -218,7 +226,7 @@ block_multi_vector::ptr block_multi_vector::get_cols_mirror(
 		printf("mirror block [%ld-%ld]\n", block_start, block_start + num_blocks - 1);
 		return ret;
 	}
-	else if (index.size() == 1) {
+	else if (is_same_block(index, get_block_size())) {
 		size_t block_start = index[0] / get_block_size();
 
 		// Get the relative offsets in a block.
@@ -532,4 +540,82 @@ mem_dense_matrix::ptr block_multi_vector::MvTransMv(
 		}
 	}
 	return mem_dense_matrix::create(res);
+}
+
+typedef std::vector<std::pair<int, NUMA_vector::ptr> > block_col_set_t;
+
+std::vector<block_col_set_t> get_col_index_blocks(const block_multi_vector &mv,
+		const std::vector<int>& index, size_t block_size)
+{
+	std::vector<block_col_set_t> col_blocks;
+
+	std::set<int> block_set;
+	for (size_t i = 0; i < index.size(); i++) {
+		int col_idx = index[i];
+		size_t block_idx = col_idx / block_size;
+		block_set.insert(block_idx);
+
+		NUMA_vector::ptr col = const_cast<detail::NUMA_col_tall_matrix_store &>(
+					dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
+						mv.get_col(i)->get_data())).get_col_vec(0);
+		// Not in the same block
+		if (col_blocks.empty() || col_blocks.back()[0].first / block_size
+				!= block_idx) {
+			block_col_set_t set(1);
+			set[0] = std::pair<int, NUMA_vector::ptr>(col_idx, col);
+			col_blocks.push_back(set);
+		}
+		else
+			// In the same block.
+			col_blocks.back().push_back(std::pair<int, NUMA_vector::ptr>(
+						col_idx, col));
+	}
+	assert(block_set.size() == col_blocks.size());
+
+	return col_blocks;
+}
+
+void block_multi_vector::set_block(const block_multi_vector &mv,
+		const std::vector<int>& index)
+{
+	// We have to set the entire block.
+	if (index[0] % get_block_size() == 0 && index.size() % get_block_size() == 0) {
+		size_t num_blocks = index.size() / get_block_size();
+		size_t block_start = index[0] / get_block_size();
+		for (size_t i = 0; i < num_blocks; i++)
+			this->set_block(block_start + i, mv.get_block(i));
+	}
+	else {
+		// They should all be in the same block.
+		std::vector<block_col_set_t> col_index_blocks
+			= get_col_index_blocks(mv, index, get_block_size());
+		for (size_t k = 0; k < col_index_blocks.size(); k++) {
+			block_col_set_t block_cols = col_index_blocks[k];
+			int block_idx = block_cols[0].first / get_block_size();
+			std::vector<off_t> offs_in_block(block_cols.size());
+			for (size_t i = 0; i < block_cols.size(); i++) {
+				assert((size_t) block_idx == block_cols[i].first / get_block_size());
+				offs_in_block[i] = block_cols[i].first % get_block_size();
+			}
+
+			// Get all columns in the block.
+			detail::NUMA_col_tall_matrix_store &numa_mat
+				= const_cast<detail::NUMA_col_tall_matrix_store &>(
+						dynamic_cast<const detail::NUMA_col_tall_matrix_store &>(
+							get_block(block_idx)->get_data()));
+			std::vector<NUMA_vector::ptr> cols(numa_mat.get_num_cols());
+			for (size_t i = 0; i < cols.size(); i++)
+				cols[i] = numa_mat.get_col_vec(i);
+
+			// changes some of the columns accordingly.
+			for (size_t i = 0; i < block_cols.size(); i++)
+				cols[offs_in_block[i]] = block_cols[i].second;
+
+			// Create a dense matrix for the block and assign it to the original
+			// block.
+			fm::dense_matrix::ptr new_mat = fm::mem_dense_matrix::create(
+					fm::detail::NUMA_col_tall_matrix_store::create(cols));
+			set_block(block_idx, new_mat);
+		}
+	}
 }
