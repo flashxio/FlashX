@@ -201,22 +201,13 @@ void block_multi_vector::sparse_matrix_multiply(const sp_multiply &multiply,
 		detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
 				Y.get_num_rows(), X.get_block_size(), matrix_layout_t::L_COL,
 				X.get_type(), in.get_num_nodes());
-		if (in.get_num_nodes() > 0) {
-			const detail::NUMA_col_matrix_store &numa_in
-				= dynamic_cast<const detail::NUMA_col_matrix_store &>(in);
-			detail::NUMA_col_matrix_store &numa_res
-				= dynamic_cast<detail::NUMA_col_matrix_store &>(*res);
-			for (size_t j = 0; j < numa_in.get_num_cols(); j++)
-				multiply.run(A, *numa_in.get_col_vec(j), *numa_res.get_col_vec(j));
+		if (in.store_layout() == matrix_layout_t::L_COL) {
+			detail::matrix_store::const_ptr tmp
+				= in.conv2(matrix_layout_t::L_ROW);
+			multiply.run(A, *tmp, *res);
 		}
-		else {
-			const detail::mem_col_matrix_store &numa_in
-				= dynamic_cast<const detail::mem_col_matrix_store &>(in);
-			detail::mem_col_matrix_store &numa_res
-				= dynamic_cast<detail::mem_col_matrix_store &>(*res);
-			for (size_t j = 0; j < numa_in.get_num_cols(); j++)
-				multiply.run(A, *numa_in.get_col_vec(j), *numa_res.get_col_vec(j));
-		}
+		else
+			multiply.run(A, in, *res);
 		Y.set_block(i, mem_dense_matrix::create(res));
 	}
 }
