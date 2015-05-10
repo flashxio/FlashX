@@ -86,6 +86,60 @@ mem_matrix_store::ptr mem_matrix_store::create(size_t nrow, size_t ncol,
 				layout, type);
 }
 
+local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols) const
+{
+	if (start_row + num_rows > get_num_rows()
+			|| start_col + num_cols > get_num_cols()) {
+		printf("start row: %ld, #rows: %ld, #tot rows: %ld\n",
+				start_row, num_rows, get_num_rows());
+		printf("start col: %ld, #cols: %ld, #tot cols: %ld\n",
+				start_col, num_cols, get_num_cols());
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		return local_matrix_store::const_ptr();
+	}
+	int node_id = -1;
+	if (start_row == 0 && num_rows == get_num_rows())
+		return local_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
+					start_row, start_col, get_col(start_col),
+					num_rows, num_cols, get_type(), node_id));
+	else {
+		std::vector<const char *> cols(num_cols);
+		for (size_t i = 0; i < num_cols; i++)
+			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
+		return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
+					start_row, start_col, cols, num_rows, get_type(), node_id));
+	}
+}
+
+local_matrix_store::ptr mem_col_matrix_store::get_portion(
+		size_t start_row, size_t start_col, size_t num_rows,
+		size_t num_cols)
+{
+	if (start_row + num_rows > get_num_rows()
+			|| start_col + num_cols > get_num_cols()) {
+		printf("start row: %ld, #rows: %ld, #tot rows: %ld\n",
+				start_row, num_rows, get_num_rows());
+		printf("start col: %ld, #cols: %ld, #tot cols: %ld\n",
+				start_col, num_cols, get_num_cols());
+		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
+		return local_matrix_store::ptr();
+	}
+	int node_id = -1;
+	if (start_row == 0 && num_rows == get_num_rows())
+		return local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
+					start_row, start_col, get_col(start_col),
+					num_rows, num_cols, get_type(), node_id));
+	else {
+		std::vector<char *> cols(num_cols);
+		for (size_t i = 0; i < num_cols; i++)
+			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
+		return local_matrix_store::ptr(new local_ref_col_matrix_store(
+					start_row, start_col, cols, num_rows, get_type(), node_id));
+	}
+}
+
 local_matrix_store::ptr mem_col_matrix_store::get_portion(size_t id)
 {
 	int node_id = -1;
