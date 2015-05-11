@@ -56,6 +56,10 @@ public:
 
 	raw_data_array(size_t num_bytes, int node_id = -1);
 
+	bool is_empty() const {
+		return num_bytes == 0;
+	}
+
 	/*
 	 * Get the number of bytes allocated.
 	 */

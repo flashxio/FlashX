@@ -237,6 +237,10 @@ public:
 		this->data = data;
 	}
 
+	const raw_data_array &get_data() {
+		return data;
+	}
+
 	virtual bool read_only() const {
 		return false;
 	}
@@ -280,6 +284,10 @@ public:
 			size_t ncol, const scalar_type &type, int node_id): local_row_matrix_store(
 				global_start_row, global_start_col, nrow, ncol, type, node_id) {
 		this->data = data;
+	}
+
+	const raw_data_array &get_data() {
+		return data;
 	}
 
 	virtual bool read_only() const {
@@ -666,6 +674,90 @@ public:
 
 	virtual matrix_store::const_ptr transpose() const;
 	virtual matrix_store::ptr transpose();
+};
+
+class lvirtual_col_matrix_store: public local_col_matrix_store
+{
+public:
+	lvirtual_col_matrix_store(off_t global_start_row, off_t global_start_col,
+			size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_col_matrix_store(global_start_row,
+				global_start_col, nrow, ncol, type, node_id) {
+	}
+
+	virtual bool read_only() const {
+		return true;
+	}
+
+	virtual char *get_raw_arr() {
+		return NULL;
+	}
+
+	virtual char *get(size_t row, size_t col) {
+		return NULL;
+	}
+
+	virtual bool copy_from(const local_matrix_store &store) {
+		return false;
+	}
+
+	virtual void reset_data() {
+	}
+
+	virtual void set_data(const set_operate &op) {
+	}
+
+	virtual matrix_store::ptr transpose() {
+		return matrix_store::ptr();
+	}
+
+	virtual char *get_col(size_t col) {
+		return NULL;
+	}
+};
+
+class lvirtual_row_matrix_store: public local_row_matrix_store
+{
+public:
+	lvirtual_row_matrix_store(off_t global_start_row, off_t global_start_col,
+			size_t nrow, size_t ncol, const scalar_type &type,
+			int node_id): local_row_matrix_store(global_start_row,
+				global_start_col, nrow, ncol, type, node_id) {
+	}
+
+	virtual bool read_only() const {
+		return true;
+	}
+
+	virtual char *get_raw_arr() {
+		return NULL;
+	}
+
+	virtual char *get(size_t row, size_t col) {
+		return NULL;
+	}
+
+	virtual bool copy_from(const local_matrix_store &store) {
+		return false;
+	}
+
+	virtual void reset_data() {
+	}
+
+	virtual void set_data(const set_operate &op) {
+	}
+
+	virtual matrix_store::ptr transpose() {
+		return matrix_store::ptr();
+	}
+
+	virtual char *get_row(size_t row) {
+		return NULL;
+	}
+
+	virtual char *get_rows(size_t row_start, size_t row_end) {
+		return NULL;
+	}
 };
 
 /*

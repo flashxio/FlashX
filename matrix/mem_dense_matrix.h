@@ -162,6 +162,11 @@ public:
 	}
 };
 
+mem_matrix_store::ptr _mapply_portion(
+		const std::vector<mem_dense_matrix::const_ptr> &mats,
+		// A user can specify the layout of the output dense matrix.
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
+
 mem_dense_matrix::ptr mapply_portion(
 		const std::vector<mem_dense_matrix::const_ptr> &mats,
 		// A user can specify the layout of the output dense matrix.
