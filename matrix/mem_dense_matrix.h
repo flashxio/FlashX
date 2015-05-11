@@ -139,6 +139,8 @@ class portion_mapply_op
 	size_t out_num_cols;
 	const scalar_type &type;
 public:
+	typedef std::shared_ptr<const portion_mapply_op> const_ptr;
+
 	portion_mapply_op(size_t out_num_rows, size_t out_num_cols,
 			const scalar_type &_type): type(_type) {
 		this->out_num_rows = out_num_rows;
@@ -163,7 +165,7 @@ public:
 mem_dense_matrix::ptr mapply_portion(
 		const std::vector<mem_dense_matrix::const_ptr> &mats,
 		// A user can specify the layout of the output dense matrix.
-		const portion_mapply_op &op, matrix_layout_t out_layout);
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout);
 }
 
 }

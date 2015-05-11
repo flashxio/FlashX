@@ -685,7 +685,7 @@ public:
 
 mem_dense_matrix::ptr mapply_portion(
 		const std::vector<mem_dense_matrix::const_ptr> &mats,
-		const portion_mapply_op &op, matrix_layout_t out_layout)
+		portion_mapply_op::const_ptr op, matrix_layout_t out_layout)
 {
 	assert(mats.size() >= 1);
 	size_t num_chunks = mats.front()->get_data().get_num_portions();
@@ -693,7 +693,7 @@ mem_dense_matrix::ptr mapply_portion(
 		= mats.front()->get_data().get_portion_size();
 	// It works for tall matrices.
 	assert(!mats.front()->is_wide());
-	assert(op.get_out_num_rows() == mats.front()->get_num_rows());
+	assert(op->get_out_num_rows() == mats.front()->get_num_rows());
 	for (size_t i = 1; i < mats.size(); i++) {
 		assert(first_size.first == mats[i]->get_data().get_portion_size().first);
 		assert(mats[i]->store_layout() == mats.front()->store_layout());
@@ -701,8 +701,8 @@ mem_dense_matrix::ptr mapply_portion(
 		assert(mats[i]->get_num_rows() == mats.front()->get_num_rows());
 	}
 	detail::mem_matrix_store::ptr res = detail::mem_matrix_store::create(
-			op.get_out_num_rows(), op.get_out_num_cols(),
-			out_layout, op.get_output_type(), mats.front()->get_num_nodes());
+			op->get_out_num_rows(), op->get_out_num_cols(),
+			out_layout, op->get_output_type(), mats.front()->get_num_nodes());
 
 	std::vector<const detail::mem_matrix_store *> mem_stores(mats.size());
 	std::vector<detail::local_matrix_store::const_ptr> local_stores(mats.size());
@@ -725,7 +725,7 @@ mem_dense_matrix::ptr mapply_portion(
 		if (node_id < 0)
 			node_id = i % mem_threads->get_num_nodes();
 		mem_threads->process_task(node_id,
-				new mapply_task(local_stores, op, local_res));
+				new mapply_task(local_stores, *op, local_res));
 	}
 	mem_threads->wait4complete();
 	return mem_dense_matrix::create(res);

@@ -473,10 +473,10 @@ block_multi_vector::ptr block_multi_vector::gemm(const block_multi_vector &A,
 	size_t C_num_blocks = d_beta != 0 ? this->get_num_blocks() : 0;
 	assert(A_num_blocks + C_num_blocks == mats.size());
 	// I assume B is small enough.
-	vecs->mats[0] = mapply_portion(mats, gemm_op<double>(B,
+	detail::portion_mapply_op::const_ptr op(new gemm_op<double>(B,
 				A_num_blocks, C_num_blocks, d_alpha, d_beta,
-				this->get_num_rows(), this->get_num_cols()),
-			matrix_layout_t::L_COL);
+				this->get_num_rows(), this->get_num_cols()));
+	vecs->mats[0] = mapply_portion(mats, op, matrix_layout_t::L_COL);
 	return vecs;
 }
 
