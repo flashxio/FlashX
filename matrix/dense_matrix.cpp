@@ -26,6 +26,7 @@
 #include "EM_dense_matrix.h"
 #include "generic_type.h"
 #include "rand_gen.h"
+#include "one_val_matrix_store.h"
 
 namespace fm
 {
@@ -219,12 +220,11 @@ mem_dense_matrix::ptr mem_dense_matrix::_create_rand(const scalar_variable &min,
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 
-mem_dense_matrix::ptr mem_dense_matrix::_create_const(const scalar_variable &val,
+mem_dense_matrix::ptr mem_dense_matrix::_create_const(scalar_variable::ptr val,
 		size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes)
 {
-	detail::mem_matrix_store::ptr store = detail::mem_matrix_store::create(
-			nrow, ncol, layout, val.get_type(), num_nodes);
-	store->set_data(val.get_type().get_set_const(val));
+	detail::mem_matrix_store::ptr store(new detail::one_val_matrix_store(
+				val, nrow, ncol, layout));
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 

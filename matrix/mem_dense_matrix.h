@@ -49,7 +49,7 @@ private:
 
 	static ptr _create_rand(const scalar_variable &min, const scalar_variable &max,
 			size_t nrow, size_t ncol, matrix_layout_t layout, int num_nodes);
-	static ptr _create_const(const scalar_variable &val, size_t nrow, size_t ncol,
+	static ptr _create_const(scalar_variable::ptr val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes);
 
 	void inner_prod_tall(const detail::mem_matrix_store &m,
@@ -84,7 +84,7 @@ public:
 	template<class T>
 	static ptr create_const(T _val, size_t nrow, size_t ncol,
 			matrix_layout_t layout, int num_nodes = -1) {
-		scalar_variable_impl<T> val(_val);
+		scalar_variable::ptr val(new scalar_variable_impl<T>(_val));
 		return _create_const(val, nrow, ncol, layout, num_nodes);
 	}
 

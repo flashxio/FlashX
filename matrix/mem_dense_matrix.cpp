@@ -35,6 +35,7 @@
 #include "mem_matrix_store.h"
 #include "NUMA_dense_matrix.h"
 #include "mem_worker_thread.h"
+#include "one_val_matrix_store.h"
 
 namespace fm
 {
@@ -42,8 +43,9 @@ namespace fm
 mem_dense_matrix::ptr mem_dense_matrix::create(size_t nrow, size_t ncol,
 		matrix_layout_t layout, const scalar_type &type, int num_nodes)
 {
-	detail::matrix_store::ptr store = detail::mem_matrix_store::create(
-			nrow, ncol, layout, type, num_nodes);
+	// If nothing is specified, it creates a zero matrix.
+	detail::mem_matrix_store::ptr store(new detail::one_val_matrix_store(
+				type.create_scalar(), nrow, ncol, layout));
 	return mem_dense_matrix::ptr(new mem_dense_matrix(store));
 }
 
