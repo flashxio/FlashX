@@ -92,10 +92,6 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		printf("start row: %ld, #rows: %ld, #tot rows: %ld\n",
-				start_row, num_rows, get_num_rows());
-		printf("start col: %ld, #cols: %ld, #tot cols: %ld\n",
-				start_col, num_cols, get_num_cols());
 		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
 		return local_matrix_store::const_ptr();
 	}
@@ -119,10 +115,6 @@ local_matrix_store::ptr mem_col_matrix_store::get_portion(
 {
 	if (start_row + num_rows > get_num_rows()
 			|| start_col + num_cols > get_num_cols()) {
-		printf("start row: %ld, #rows: %ld, #tot rows: %ld\n",
-				start_row, num_rows, get_num_rows());
-		printf("start col: %ld, #cols: %ld, #tot cols: %ld\n",
-				start_col, num_cols, get_num_cols());
 		BOOST_LOG_TRIVIAL(error) << "it's out of bounds\n";
 		return local_matrix_store::ptr();
 	}
