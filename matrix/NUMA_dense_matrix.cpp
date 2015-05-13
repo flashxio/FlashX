@@ -170,7 +170,7 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 		return local_matrix_store::const_ptr();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
-				start_row, start_col, get_row(start_row), num_rows, num_cols,
+				get_row(start_row), start_row, start_col, num_rows, num_cols,
 				get_type(), phy_loc.first));
 }
 
@@ -191,7 +191,7 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
-				start_row, start_col, get_row(start_row), num_rows, num_cols,
+				get_row(start_row), start_row, start_col, num_rows, num_cols,
 				get_type(), phy_loc.first));
 }
 
@@ -205,7 +205,7 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 	size_t num_cols = get_num_cols();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
-				start_row, start_col, get_row(start_row), num_rows, num_cols,
+				get_row(start_row), start_row, start_col, num_rows, num_cols,
 				get_type(), phy_loc.first));
 }
 
@@ -218,7 +218,7 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
 	size_t num_cols = get_num_cols();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
-				start_row, start_col, get_row(start_row), num_rows, num_cols,
+				get_row(start_row), start_row, start_col, num_rows, num_cols,
 				get_type(), phy_loc.first));
 }
 
@@ -246,7 +246,8 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		assert(node_id == data[i + start_col]->get_node_id(start_row));
 	}
 	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
-				start_row, start_col, cols, num_rows, get_type(), node_id));
+				cols, start_row, start_col, num_rows, num_cols, get_type(),
+				node_id));
 }
 
 local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(
@@ -273,7 +274,8 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(
 		assert(node_id == data[i + start_col]->get_node_id(start_row));
 	}
 	return local_matrix_store::ptr(new local_ref_col_matrix_store(
-				start_row, start_col, cols, num_rows, get_type(), node_id));
+				cols, start_row, start_col, num_rows, num_cols, get_type(),
+				node_id));
 }
 
 local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
@@ -294,7 +296,8 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		assert(node_id == data[i + start_col]->get_node_id(start_row));
 	}
 	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
-				start_row, start_col, cols, num_rows, get_type(), node_id));
+				cols, start_row, start_col, num_rows, num_cols, get_type(),
+				node_id));
 }
 
 local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
@@ -314,7 +317,8 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
 		assert(node_id == data[i + start_col]->get_node_id(start_row));
 	}
 	return local_matrix_store::ptr(new local_ref_col_matrix_store(
-				start_row, start_col, cols, num_rows, get_type(), node_id));
+				cols, start_row, start_col, num_rows, num_cols, get_type(),
+				node_id));
 }
 
 local_matrix_store::const_ptr NUMA_row_wide_matrix_store::get_portion(

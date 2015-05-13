@@ -29,144 +29,146 @@ namespace fm
 namespace detail
 {
 
+bool local_matrix_store::resize(off_t local_start_row,
+		off_t local_start_col, size_t local_num_rows, size_t local_num_cols)
+{
+	assert(local_start_row + local_num_rows <= get_orig_num_rows()
+			|| local_start_col + local_num_cols <= get_orig_num_cols());
+	this->local_start_row = local_start_row;
+	this->local_start_col = local_start_col;
+	matrix_store::resize(local_num_rows, local_num_cols);
+	return false;
+}
+
+void local_matrix_store::resize_transpose(local_matrix_store &store) const
+{
+	if (get_local_start_row() > 0 || get_local_start_col() > 0
+			|| get_num_rows() < get_orig_num_rows()
+			|| get_num_cols() < get_orig_num_cols()) {
+		struct matrix_info t_info = get_local_transpose_info();
+		store.resize(t_info.start_row, t_info.start_col, t_info.num_rows,
+				t_info.num_cols);
+	}
+}
+
 matrix_store::const_ptr local_buf_col_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_buf_row_matrix_store(data,
-				get_global_start_col(), get_global_start_row(),
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_buf_row_matrix_store,
+		   local_buf_col_matrix_store>(*this);
 }
 
 matrix_store::ptr local_buf_col_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_buf_row_matrix_store(data,
-				get_global_start_col(), get_global_start_row(),
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_buf_row_matrix_store,
+		   local_buf_col_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_buf_row_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_buf_col_matrix_store(data,
-				get_global_start_col(), get_global_start_row(),
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_buf_col_matrix_store,
+		   local_buf_row_matrix_store>(*this);
 }
 
 matrix_store::ptr local_buf_row_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_buf_col_matrix_store(data,
-				get_global_start_col(), get_global_start_row(),
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_buf_col_matrix_store,
+		   local_buf_row_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_ref_contig_col_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_ref_contig_row_matrix_store(
-				get_global_start_col(), get_global_start_row(), data,
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_contig_row_matrix_store,
+		   local_ref_contig_col_matrix_store>(*this);
 }
 
 matrix_store::ptr local_ref_contig_col_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_ref_contig_row_matrix_store(
-				get_global_start_col(), get_global_start_row(), data,
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_ref_contig_row_matrix_store,
+		   local_ref_contig_col_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_ref_contig_row_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_ref_contig_col_matrix_store(
-				get_global_start_col(), get_global_start_row(), data,
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_contig_col_matrix_store,
+		   local_ref_contig_row_matrix_store>(*this);
 }
 
 matrix_store::ptr local_ref_contig_row_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_ref_contig_col_matrix_store(
-				get_global_start_col(), get_global_start_row(), data,
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_ref_contig_col_matrix_store,
+		   local_ref_contig_row_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_ref_col_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_ref_row_matrix_store(
-				get_global_start_col(), get_global_start_row(), cols,
-				get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_row_matrix_store,
+		   local_ref_col_matrix_store>(*this);
 }
 
 matrix_store::ptr local_ref_col_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_ref_row_matrix_store(
-				get_global_start_col(), get_global_start_row(), cols,
-				get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_ref_row_matrix_store,
+		   local_ref_col_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_ref_row_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_ref_col_matrix_store(
-				get_global_start_col(), get_global_start_row(), rows,
-				get_num_cols(), get_type(), get_node_id()));
+	return create_transpose<local_cref_col_matrix_store,
+		   local_ref_row_matrix_store>(*this);
 }
 
 matrix_store::ptr local_ref_row_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_ref_col_matrix_store(
-				get_global_start_col(), get_global_start_row(), rows,
-				get_num_cols(), get_type(), get_node_id()));
+	return create_transpose<local_ref_col_matrix_store,
+		   local_ref_row_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_cref_contig_col_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
-				get_global_start_col(), get_global_start_row(), data,
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_contig_row_matrix_store,
+		   local_cref_contig_col_matrix_store>(*this);
 }
 
 matrix_store::ptr local_cref_contig_col_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_cref_contig_row_matrix_store(
-				get_global_start_col(), get_global_start_row(), data,
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_contig_row_matrix_store,
+		   local_cref_contig_col_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_cref_contig_row_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
-				get_global_start_col(), get_global_start_row(), data,
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_contig_col_matrix_store,
+		   local_cref_contig_row_matrix_store>(*this);
 }
 
 matrix_store::ptr local_cref_contig_row_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_cref_contig_col_matrix_store(
-				get_global_start_col(), get_global_start_row(), data,
-				get_num_cols(), get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_contig_col_matrix_store,
+		   local_cref_contig_row_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_cref_col_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_cref_row_matrix_store(
-				get_global_start_col(), get_global_start_row(), cols,
-				get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_row_matrix_store,
+		   local_cref_col_matrix_store>(*this);
 }
 
 matrix_store::ptr local_cref_col_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_cref_row_matrix_store(
-				get_global_start_col(), get_global_start_row(), cols,
-				get_num_rows(), get_type(), get_node_id()));
+	return create_transpose<local_cref_row_matrix_store,
+		   local_cref_col_matrix_store>(*this);
 }
 
 matrix_store::const_ptr local_cref_row_matrix_store::transpose() const
 {
-	return matrix_store::const_ptr(new local_cref_col_matrix_store(
-				get_global_start_col(), get_global_start_row(), rows,
-				get_num_cols(), get_type(), get_node_id()));
+	return create_transpose<local_cref_col_matrix_store,
+		   local_cref_row_matrix_store>(*this);
 }
 
 matrix_store::ptr local_cref_row_matrix_store::transpose()
 {
-	return matrix_store::ptr(new local_cref_col_matrix_store(
-				get_global_start_col(), get_global_start_row(), rows,
-				get_num_cols(), get_type(), get_node_id()));
+	return create_transpose<local_cref_col_matrix_store,
+		   local_cref_row_matrix_store>(*this);
 }
 
 void local_row_matrix_store::reset_data()

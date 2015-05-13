@@ -98,14 +98,15 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(
 	int node_id = -1;
 	if (start_row == 0 && num_rows == get_num_rows())
 		return local_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
-					start_row, start_col, get_col(start_col),
+					get_col(start_col), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
 	else {
 		std::vector<const char *> cols(num_cols);
 		for (size_t i = 0; i < num_cols; i++)
 			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
 		return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
-					start_row, start_col, cols, num_rows, get_type(), node_id));
+					cols, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 }
 
@@ -121,14 +122,15 @@ local_matrix_store::ptr mem_col_matrix_store::get_portion(
 	int node_id = -1;
 	if (start_row == 0 && num_rows == get_num_rows())
 		return local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
-					start_row, start_col, get_col(start_col),
+					get_col(start_col), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
 	else {
 		std::vector<char *> cols(num_cols);
 		for (size_t i = 0; i < num_cols; i++)
 			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
 		return local_matrix_store::ptr(new local_ref_col_matrix_store(
-					start_row, start_col, cols, num_rows, get_type(), node_id));
+					cols, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 }
 
@@ -142,7 +144,7 @@ local_matrix_store::ptr mem_col_matrix_store::get_portion(size_t id)
 		size_t num_rows = get_num_rows();
 		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
 		return local_matrix_store::ptr(new local_ref_contig_col_matrix_store(
-					start_row, start_col, get_col(start_col),
+					get_col(start_col), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
 	}
 	// For a tall matrix
@@ -155,7 +157,8 @@ local_matrix_store::ptr mem_col_matrix_store::get_portion(size_t id)
 		for (size_t i = 0; i < num_cols; i++)
 			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
 		return local_matrix_store::ptr(new local_ref_col_matrix_store(
-					start_row, start_col, cols, num_rows, get_type(), node_id));
+					cols, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 }
 
@@ -169,7 +172,7 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(size_t id) const
 		size_t num_rows = get_num_rows();
 		size_t num_cols = std::min(get_num_cols() - start_col, CHUNK_SIZE);
 		return local_matrix_store::const_ptr(new local_cref_contig_col_matrix_store(
-					start_row, start_col, get_col(start_col),
+					get_col(start_col), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
 	}
 	// For a tall matrix
@@ -182,7 +185,8 @@ local_matrix_store::const_ptr mem_col_matrix_store::get_portion(size_t id) const
 		for (size_t i = 0; i < num_cols; i++)
 			cols[i] = get_col(i + start_col) + start_row * get_entry_size();
 		return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
-					start_row, start_col, cols, num_rows, get_type(), node_id));
+					cols, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 }
 
@@ -198,14 +202,15 @@ local_matrix_store::const_ptr mem_row_matrix_store::get_portion(
 	int node_id = -1;
 	if (start_col == 0 && num_cols == get_num_cols())
 		return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
-					start_row, start_col, get_row(start_row),
+					get_row(start_row), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
 	else {
 		std::vector<const char *> rows(num_rows);
 		for (size_t i = 0; i < num_rows; i++)
 			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
 		return local_matrix_store::const_ptr(new local_cref_row_matrix_store(
-					start_row, start_col, rows, num_cols, get_type(), node_id));
+					rows, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 }
 
@@ -221,14 +226,15 @@ local_matrix_store::ptr mem_row_matrix_store::get_portion(
 	int node_id = -1;
 	if (start_col == 0 && num_cols == get_num_cols())
 		return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
-					start_row, start_col, get_row(start_row),
+					get_row(start_row), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
 	else {
 		std::vector<char *> rows(num_rows);
 		for (size_t i = 0; i < num_rows; i++)
 			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
 		return local_matrix_store::ptr(new local_ref_row_matrix_store(
-					start_row, start_col, rows, num_cols, get_type(), node_id));
+					rows, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 }
 
@@ -242,7 +248,7 @@ local_matrix_store::ptr mem_row_matrix_store::get_portion(size_t id)
 		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
 		size_t num_cols = get_num_cols();
 		return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
-					start_row, start_col, get_row(start_row),
+					get_row(start_row), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
 	}
 	// For a wide matrix
@@ -255,7 +261,8 @@ local_matrix_store::ptr mem_row_matrix_store::get_portion(size_t id)
 		for (size_t i = 0; i < num_rows; i++)
 			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
 		return local_matrix_store::ptr(new local_ref_row_matrix_store(
-					start_row, start_col, rows, num_cols, get_type(), node_id));
+					rows, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 }
 
@@ -269,7 +276,7 @@ local_matrix_store::const_ptr mem_row_matrix_store::get_portion(size_t id) const
 		size_t num_rows = std::min(get_num_rows() - start_row, CHUNK_SIZE);
 		size_t num_cols = get_num_cols();
 		return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
-					start_row, start_col, get_row(start_row),
+					get_row(start_row), start_row, start_col,
 					num_rows, num_cols, get_type(), node_id));
 	}
 	// For a wide matrix
@@ -282,7 +289,8 @@ local_matrix_store::const_ptr mem_row_matrix_store::get_portion(size_t id) const
 		for (size_t i = 0; i < num_rows; i++)
 			rows[i] = get_row(i + start_row) + start_col * get_entry_size();
 		return local_matrix_store::const_ptr(new local_cref_row_matrix_store(
-					start_row, start_col, rows, num_cols, get_type(), node_id));
+					rows, start_row, start_col, num_rows, num_cols, get_type(),
+					node_id));
 	}
 }
 
@@ -309,7 +317,7 @@ local_matrix_store::ptr mem_sub_col_matrix_store::get_portion(size_t id)
 		cols[i] = get_col(i + start_col) + start_row * get_entry_size();
 	int node_id = -1;
 	return local_matrix_store::ptr(new local_ref_col_matrix_store(
-				start_row, start_col, cols, num_rows, get_type(), node_id));
+				cols, start_row, start_col, num_rows, num_cols, get_type(), node_id));
 }
 
 local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(size_t id) const
@@ -335,7 +343,8 @@ local_matrix_store::const_ptr mem_sub_col_matrix_store::get_portion(size_t id) c
 		cols[i] = get_col(i + start_col) + start_row * get_entry_size();
 	int node_id = -1;
 	return local_matrix_store::const_ptr(new local_cref_col_matrix_store(
-				start_row, start_col, cols, num_rows, get_type(), node_id));
+				cols, start_row, start_col, num_rows, num_cols, get_type(),
+				node_id));
 }
 
 local_matrix_store::ptr mem_sub_row_matrix_store::get_portion(size_t id)
@@ -361,7 +370,8 @@ local_matrix_store::ptr mem_sub_row_matrix_store::get_portion(size_t id)
 		rows[i] = get_row(i + start_row) + start_col * get_entry_size();
 	int node_id = -1;
 	return local_matrix_store::ptr(new local_ref_row_matrix_store(
-				start_row, start_col, rows, num_cols, get_type(), node_id));
+				rows, start_row, start_col, num_rows, num_cols, get_type(),
+				node_id));
 }
 
 local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(size_t id) const
@@ -387,7 +397,8 @@ local_matrix_store::const_ptr mem_sub_row_matrix_store::get_portion(size_t id) c
 		rows[i] = get_row(i + start_row) + start_col * get_entry_size();
 	int node_id = -1;
 	return local_matrix_store::const_ptr(new local_cref_row_matrix_store(
-				start_row, start_col, rows, num_cols, get_type(), node_id));
+				rows, start_row, start_col, num_rows, num_cols, get_type(),
+				node_id));
 }
 
 matrix_store::const_ptr mem_col_matrix_store::transpose() const

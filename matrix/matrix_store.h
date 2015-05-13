@@ -64,6 +64,11 @@ public:
 	virtual ~matrix_store() {
 	}
 
+	void resize(size_t num_rows, size_t num_cols) {
+		this->nrow = num_rows;
+		this->ncol = num_cols;
+	}
+
 	size_t get_num_rows() const {
 		return nrow;
 	}

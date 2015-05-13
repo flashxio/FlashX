@@ -69,12 +69,12 @@ local_matrix_store::const_ptr one_val_matrix_store::get_portion(
 	local_matrix_store::ptr ret;
 	if (layout == matrix_layout_t::L_ROW) {
 		ret = local_matrix_store::ptr(new local_cref_contig_row_matrix_store(
-					start_row, start_col, portion_buf.get(),
+					portion_buf.get(), start_row, start_col,
 					num_rows, num_cols, get_type(), -1));
 	}
 	else if (layout == matrix_layout_t::L_COL) {
 		ret = local_matrix_store::ptr(new local_cref_contig_col_matrix_store(
-					start_row, start_col, portion_buf.get(),
+					portion_buf.get(), start_row, start_col,
 					num_rows, num_cols, get_type(), -1));
 	}
 	return ret;
