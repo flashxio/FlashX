@@ -164,8 +164,9 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 		return local_matrix_store::const_ptr();
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
-	if (ROUND(start_row, mapper.get_range_size())
-			!= ROUND(start_row + num_rows - 1, mapper.get_range_size()))
+	size_t chunk_size = get_portion_size().first;
+	if (ROUND(start_row, chunk_size)
+			!= ROUND(start_row + num_rows - 1, chunk_size))
 		return local_matrix_store::const_ptr();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
@@ -184,8 +185,9 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
-	if (ROUND(start_row, mapper.get_range_size())
-			!= ROUND(start_row + num_rows - 1, mapper.get_range_size()))
+	size_t chunk_size = get_portion_size().first;
+	if (ROUND(start_row, chunk_size)
+			!= ROUND(start_row + num_rows - 1, chunk_size))
 		return local_matrix_store::ptr();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
@@ -196,10 +198,10 @@ local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(
 local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 		size_t id) const
 {
-	size_t start_row = id * mapper.get_range_size();
+	size_t chunk_size = get_portion_size().first;
+	size_t start_row = id * chunk_size;
 	size_t start_col = 0;
-	size_t num_rows = std::min(get_num_rows() - start_row,
-			mapper.get_range_size());
+	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
 	size_t num_cols = get_num_cols();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::const_ptr(new local_cref_contig_row_matrix_store(
@@ -209,10 +211,10 @@ local_matrix_store::const_ptr NUMA_row_tall_matrix_store::get_portion(
 
 local_matrix_store::ptr NUMA_row_tall_matrix_store::get_portion(size_t id)
 {
-	size_t start_row = id * mapper.get_range_size();
+	size_t chunk_size = get_portion_size().first;
+	size_t start_row = id * chunk_size;
 	size_t start_col = 0;
-	size_t num_rows = std::min(get_num_rows() - start_row,
-			mapper.get_range_size());
+	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
 	size_t num_cols = get_num_cols();
 	auto phy_loc = mapper.map2physical(start_row);
 	return local_matrix_store::ptr(new local_ref_contig_row_matrix_store(
@@ -231,7 +233,7 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		return local_matrix_store::const_ptr();
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
-	size_t chunk_size = data.front()->get_portion_size();
+	size_t chunk_size = get_portion_size().first;
 	if (ROUND(start_row, chunk_size)
 			!= ROUND(start_row + num_rows - 1, chunk_size))
 		return local_matrix_store::const_ptr();
@@ -258,7 +260,7 @@ local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(
 		return local_matrix_store::ptr();
 	// The retrieved rows have to be stored contiguously.
 	// range size has to be 2^n.
-	size_t chunk_size = data.front()->get_portion_size();
+	size_t chunk_size = get_portion_size().first;
 	if (ROUND(start_row, chunk_size)
 			!= ROUND(start_row + num_rows - 1, chunk_size))
 		return local_matrix_store::ptr();
@@ -278,7 +280,7 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 		size_t id) const
 {
 	assert(!data.empty());
-	size_t chunk_size = data.front()->get_portion_size();
+	size_t chunk_size = get_portion_size().first;
 	size_t start_row = id * chunk_size;
 	size_t start_col = 0;
 	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
@@ -298,7 +300,7 @@ local_matrix_store::const_ptr NUMA_col_tall_matrix_store::get_portion(
 local_matrix_store::ptr NUMA_col_tall_matrix_store::get_portion(size_t id)
 {
 	assert(!data.empty());
-	size_t chunk_size = data.front()->get_portion_size();
+	size_t chunk_size = get_portion_size().first;
 	size_t start_row = id * chunk_size;
 	size_t start_col = 0;
 	size_t num_rows = std::min(get_num_rows() - start_row, chunk_size);
